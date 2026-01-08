@@ -8,16 +8,39 @@
 type t =
   | Spaces | Newline | EOF
 
-  (* letter or '=' *)
+  (* letter or '=' or '!' (a command) *)
   | Char of char
 
   (* start of address tokens *)
   | Int of int
   | Dot | Dollar
-  | Comma | Semicolon
-  | Plus | Minus | Caret
-  | Slash of string | Question of string
-  | Mark of char
+  | Comma
+  | Plus | Minus
+  <<[[Token.t]] other cases>>
+@
+
+\subsection{Parser state}
+
+<<type [[Parser.state]]>>=
+type state = {
+  stdin: Lexing_.lexbuf;
+  mutable lookahead : Token.t option;
+  <<[[Parser.state]] other fields>>
+}
+@
+
+%XXX move later
+<<[[Parser.state]] other fields>>=
+(* for inserting "virtual" commands to process before stdin *)
+mutable globp: Lexing_.lexbuf option;
+@
+
+<<function [[Parser.init]]>>=
+let init (caps : < Cap.stdin; ..>) : state =
+  { stdin = Lexing.from_channel (Console.stdin caps);
+    lookahead = None;
+    globp = None;
+  }
 @
 
 \subsection{Line addresses}
@@ -28,10 +51,8 @@ type t =
   | Current (* '.' *)
   | Last    (* '$' *)
   | Line of int (* <n> *)
-  | Mark of char (* \a *)
-  | SearchFwd of string (* /.../ *)
-  | SearchBwd of string (* ?...? *)
   | Relative of t * int (* -, +, ^ *)
+  <<[[Address.t]] other cases>>
 @
 %$
 
@@ -80,9 +101,6 @@ let no_line = { offset = Tfile_offset 0; mark = false }
  * alt: call it cursor?
 *)
 type lineno = int
-@
-
-<<type [[Env.regex]]>>=
 @
 
 <<type [[Env.t]]>>=
@@ -198,6 +216,15 @@ let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>)
   }
 @
 
+\subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
+
+\subsection{The lines as file offsets: [[zero]]}
+
+\subsection{Cursors: [[dot]] and [[dol]]}
+
+\subsection{Other globals}
+
+
 
 \section{[[CLI.main()]]}
 
@@ -296,8 +323,38 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
   Exit.OK
 @
 
+\subsection{[[ed -]] and [[vflag]]}
+
+\subsection{[[ed -o]] and [[oflag]]}
+
+\subsection{[[init()]]}
+
+\subsection{[[quit()]]}
+
+
+\section{Displaying and reading text}
+
+\subsection{Displaying text}
+
+\subsection{Reading text}
+
 
 \section{Parsing commands}
+
+<<signature [[Lexer.token]]>>=
+val token: Lexing.lexbuf -> Token.t
+@
+
+<<constant [[Lexer.space]]>>=
+let space = [' ''\t']
+@
+<<constant [[Lexer.letter]]>>=
+let letter = ['a'-'z''A'-'Z''_']
+@
+<<constant [[Lexer.digit]]>>=
+let digit = ['0'-'9']
+@
+%$
 
 <<function [[Lexer.token]]>>=
 rule token = parse
@@ -313,17 +370,18 @@ rule token = parse
 
 
   | ',' { Comma } | ';' { Semicolon }
-  | '+' { Plus } | '-' { Minus } | '^' { Caret }
-  | '\'' ['a'-'z'] as s { Mark s.[1] }
-  | '/'              { Buffer.clear buf; Slash (regexp '/' lexbuf) }
-  | '?'              { Buffer.clear buf; Question (regexp '?' lexbuf) }
+  | '+' { Plus } | '-' { Minus }
 
+  <<[[Lexer.token()]] other cases>>
   | eof { EOF }
 @
 
+
 \section{[[CLI.commands()]] interpreter loop}
 
+%trans: ok enough background to now see code of CLI.commands()
 
+%\subsection{Skeleton}
 
 <<function [[CLI.commands]]>>=
 let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
@@ -465,18 +523,17 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
   Logs.debug (fun m -> m "commands <-");
 @
 
+<<signature [[Address.parse_range]]>>=
+val parse_range: Parser.state -> range
+@
+
+<<signature [[Address.eval_range]]>>=
+val eval_range: Env.t -> range -> Env.lineno * Env.lineno
+@
+
+
+
 \section{[[r]]eading a file: [[r]]}
-
-
-<<signature [[Disk.getline]]>>=
-(* retrieve line in tfile (without trailing '\n') *)
-val getline: Env.t -> Env.lineno -> string
-@
-
-<<signature [[Disk.getfile]]>>=
-(* will return one line (without trailing '\n') or None when reached EOF *)
-val getfile: Env.t -> Chan.i -> (unit -> string option)
-@
 
 <<signature [[Commands.read]]>>=
 (* 'r' *)
@@ -503,22 +560,26 @@ let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
     Error.e_legacy !!file
 @
 
+
+<<signature [[Disk.getfile]]>>=
+(* will return one line (without trailing '\n') or None when reached EOF *)
+val getfile: Env.t -> Chan.i -> (unit -> string option)
+@
+
+
+<<signature [[Disk.getline]]>>=
+(* retrieve line in tfile (without trailing '\n') *)
+val getline: Env.t -> Env.lineno -> string
+@
+
+
+
 \section{[[w]]riting a file: [[w]]}
 
 <<signature [[Commands.write]]>>=
 (* 'w'*)
 val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
 @
-
-<<signature [[Disk.putline]]>>=
-(* store line (with added trailing '\n') in tfile and return its offset *)
-val putline : Env.t -> string -> Env.tfile_offset
-@
-<<signature [[Disk.putfile]]>>=
-(* dual of getfile() but this time writing all the lines, not just one *)
-val putfile: Env.t -> Chan.o -> unit
-@
-
 
 <<function [[Commands.write]]>>=
 (* 'w' *)
@@ -547,6 +608,20 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
     Error.e_legacy !!file
 @
 
+<<signature [[Disk.putfile]]>>=
+(* dual of getfile() but this time writing all the lines, not just one *)
+val putfile: Env.t -> Chan.o -> unit
+@
+
+
+
+<<signature [[Disk.putline]]>>=
+(* store line (with added trailing '\n') in tfile and return its offset *)
+val putline : Env.t -> string -> Env.tfile_offset
+@
+
+
+
 \section{Main commands}
 
 \subsection{[[p]]rinting lines: [[p]]}
@@ -563,22 +638,169 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
 
 \subsection{[[c]]hanging lines: [[c]]}
 
-\subsection{[[m]]oving and copying lines: [[m]] and [[t]]}
+%\subsection{[[m]]oving and copying lines: [[m]] and [[t]]}
 
 
 
 \section{Command addresses}
 
-<<function [[CLI.eval_address]]>>=
+\subsection{Parsing addresses}
+
+<<function [[Address.parse_address]]>>=
+let parse_address (st : Parser.state) : t =
+  let base =
+    match P.peek st with
+    | T.Plus | T.Minus | T.Caret ->
+      (* implicit '.' for leading + - ^ *)
+      Current
+    | _ ->
+        (match P.consume st with
+        | T.Dot -> Current
+        | T.Dollar -> Last
+        | T.Int n -> Line n
+        | T.Mark c -> Mark c
+        | T.Slash r -> SearchFwd r
+        | T.Question r -> SearchBwd r
+        | _ -> P.was_expecting "valid address"
+        )
+  in
+  parse_relatives base st
 @
 
-<<function [[CLI.eval_range]]>>=
+<<function [[Address.parse_range]]>>=
+let parse_range (st : Parser.state) : range =
+  let t1 = P.peek st in
+  (* optional first address *)
+  let first : t option =
+    match t1 with
+    | T.Plus | T.Minus | T.Caret
+    | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
+      ->
+        (* this will consume some tokens in st *)
+        Some (parse_address st)
+    | T.Comma | T.Semicolon ->
+        None
+    | T.EOF | T.Spaces | T.Newline | T.Char _ ->
+        None
+  in
+
+  let t2 = P.peek st in
+  match t2 with
+  | T.Comma | T.Semicolon ->
+      P.consume st |> ignore;
+      let second = 
+        match P.peek st with
+        | T.Plus | T.Minus | T.Caret
+          | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
+          -> parse_address st 
+        (* a missing second address default to '$' *)
+        | T.EOF | T.Spaces | T.Newline | T.Char _ | T.Comma | T.Semicolon 
+          -> Last
+      in
+      {
+         (* a missing first address in a range default to '1' so
+          * a range like "," will be parsed as "1,$"
+          *)
+          addr1 = (match first with Some _ -> first | None -> Some (Line 1)); 
+          addr2 = second;
+          given = true; 
+          set_dot = (t2 = T.Semicolon);
+         }
+  | _ ->
+      (* single address or none *)
+      (match first with
+      | Some a ->
+          { addr1 = None; addr2 = a; given = true; set_dot = false; }
+      | None ->
+          { addr1 = None; addr2 = Current; given = false; set_dot = false; }
+      )
 @
+
+\subsection{Evaluating addresses}
+
+<<function [[Address.eval_address]]>>=
+let rec eval_address (e : Env.t) (adr : t) : Env.lineno =
+  match adr with
+  | Current -> e.dot
+  | Last -> e.dol
+  | Line n -> n
+  | Mark _ -> failwith "TODO: Mark"
+  | SearchFwd _ | SearchBwd _ -> 
+      let dir, re_str = 
+        match adr with 
+        | SearchFwd re -> 1, re
+        | SearchBwd re -> -1, re
+        | _ -> raise (Impossible "cases matched above")
+      in
+      (* less: opti: use SearchFwd of regex instead of str *)
+      let re = Str.regexp re_str in
+      (* starting point *)
+      (* TODO: ed: need to be `a` instead like in C ? *)
+      let a = e.dot in
+      let b = a  in
+      let rec aux (a : Env.lineno) : Env.lineno =
+        let a = a + dir in
+        let a =
+          match () with
+          (* wrap around start/end of buffer *)
+          | _ when a <= 0 -> e.dol
+          | _ when a > e.dol -> 1
+          | _ -> a
+        in
+        match () with
+        | _ when Commands.match_ e re a -> a
+        (* back to starting point and nothing was found *)
+        | _ when a = b ->
+            Error.e_warn (spf "search for %s had no match" re_str)
+        | _ ->
+            aux a
+      in
+      aux a
+
+  | Relative (x, n) -> eval_address e x + n
+@
+
+<<function [[Address.eval_range]]>>=
+let eval_range (e : Env.t) (r : range) : Env.lineno * Env.lineno =
+  Logs.debug (fun m -> m "range = %s" (show_range r));
+
+  let addr2 = eval_address e r.addr2 in
+  let addr1 =
+    match r.addr1 with
+    | None -> addr2
+    | Some a -> eval_address e a
+  in
+  addr1, addr2
+@
+
+
 
 \section{Search and replace}
 
+<<type [[Regex.t]]>>=
+type t = Str.regexp
+@
 
-\subsection{Search as addresses: [[/re/]] and [[?re?]]}
+\subsection{Parsing regexps}
+
+% actually not really parse; loose parsing, just look for /.../
+% handling correctly escaping, a bit like when parsing
+% a string "", dont look what's inside, just look for ending delimiter.
+
+<<[[Token.t]] other cases>>=
+| Slash of string | Question of string
+@
+
+<<[[Lexer.token()]] other cases>>=
+| '/'              { Buffer.clear buf; Slash (regexp '/' lexbuf) }
+| '?'              { Buffer.clear buf; Question (regexp '?' lexbuf) }
+@
+
+
+
+<<signature [[Lexer.regexp]]>>=
+val regexp: char -> Lexing.lexbuf -> string
+@
 
 <<function [[Lexer.regexp]]>>=
 and regexp delim = parse
@@ -611,14 +833,53 @@ and regexp delim = parse
     }
 @
 
+\subsection{Search as addresses: [[/re/]] and [[?re?]]}
+
+%\subsubsection{Evaluating regexp addresses}
+
+<<[[Address.t]] other cases>>=
+| SearchFwd of string (* /.../ *)
+| SearchBwd of string (* ?...? *)
+@
+
+
 \subsection{[[match()]]}
 
-<<function [[CLI.match_]]>>=
+<<function [[Commands.match_]]>>=
+let match_ (e : Env.t) (re : Regex.t) (addr : Env.lineno) : bool =
+  let line = Disk.getline e addr in
+  Regex.match_str re line
 @
+
+%(* val match_str: Regex.t -> string -> bool *)
+<<function [[Regex.match_str]]>>=
+let match_str (re : t) (str: string) : bool =
+  (* old: Str.string_match re line 0, but we need unanchored search *)
+  try
+    Str.search_forward re str 0 |> ignore;
+    true
+   with Not_found -> false
+@
+
 
 \subsection{[[s]]ubstitute: [[s]]}
 
+
 \subsection{Advanced substitutions}
+
+\subsubsection{mar[[k]]: [[k]]}
+
+<<[[Token.t]] other cases>>=
+| Mark of char
+@
+
+<<[[Address.t]] other cases>>=
+| Mark of char (* \a *)
+@
+
+<<[[Lexer.token()]] other cases>>=
+| '\'' ['a'-'z'] as s { Mark s.[1] }
+@
 
 \subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
 
@@ -678,7 +939,40 @@ and global caps (e : Env.t) (pos_or_neg : bool) : unit =
 @
 
 
+<<signature [[Lexer.line]]>>=
+val line: Lexing.lexbuf -> string
+@
+<<function [[Lexer.line]]>>=
+and line = parse
+  | ([^ '\n' ]* as s) '\n' { s }
+  | eof { failwith "eof in Lexer.line()" (* alt: None? *) }
+@
+
+
+
+
 \section{Advanced features}
+
+\subsection{Running a shell command: [[!]]}
+
+
+\subsection{The caret}
+
+% why need that? - not enough?
+<<[[Token.t]] other cases>>=
+| Caret
+@
+<<[[Lexer.token()]] other cases>>=
+| '^' { Caret }
+@
+
+\subsection{The semicolon}
+
+<<[[Token.t]] other cases>>=
+| Semicolon
+@
+
+
 
 \section{Error management}
 
@@ -754,71 +1048,8 @@ let rec parse_relatives (base : t) (st : Parser.state) : t =
   | _ ->
       base
 
-let parse_address (st : Parser.state) : t =
-  let base =
-    match P.peek st with
-    | T.Plus | T.Minus | T.Caret ->
-      (* implicit '.' for leading + - ^ *)
-      Current
-    | _ ->
-        (match P.consume st with
-        | T.Dot -> Current
-        | T.Dollar -> Last
-        | T.Int n -> Line n
-        | T.Mark c -> Mark c
-        | T.Slash r -> SearchFwd r
-        | T.Question r -> SearchBwd r
-        | _ -> P.was_expecting "valid address"
-        )
-  in
-  parse_relatives base st
-
-let parse_range (st : Parser.state) : range =
-  let t1 = P.peek st in
-  (* optional first address *)
-  let first : t option =
-    match t1 with
-    | T.Plus | T.Minus | T.Caret
-    | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
-      ->
-        (* this will consume some tokens in st *)
-        Some (parse_address st)
-    | T.Comma | T.Semicolon ->
-        None
-    | T.EOF | T.Spaces | T.Newline | T.Char _ ->
-        None
-  in
-
-  let t2 = P.peek st in
-  match t2 with
-  | T.Comma | T.Semicolon ->
-      P.consume st |> ignore;
-      let second = 
-        match P.peek st with
-        | T.Plus | T.Minus | T.Caret
-          | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
-          -> parse_address st 
-        (* a missing second address default to '$' *)
-        | T.EOF | T.Spaces | T.Newline | T.Char _ | T.Comma | T.Semicolon 
-          -> Last
-      in
-      {
-         (* a missing first address in a range default to '1' so
-          * a range like "," will be parsed as "1,$"
-          *)
-          addr1 = (match first with Some _ -> first | None -> Some (Line 1)); 
-          addr2 = second;
-          given = true; 
-          set_dot = (t2 = T.Semicolon);
-         }
-  | _ ->
-      (* single address or none *)
-      (match first with
-      | Some a ->
-          { addr1 = None; addr2 = a; given = true; set_dot = false; }
-      | None ->
-          { addr1 = None; addr2 = Current; given = false; set_dot = false; }
-      )
+<<function [[Address.parse_address]]>>
+<<function [[Address.parse_range]]>>
 
 (*****************************************************************************)
 (* Evaluating *)
@@ -826,58 +1057,9 @@ let parse_range (st : Parser.state) : range =
 
 (* TODO? need to pass [[a]] like in C with e.dot and adjust [[a]] as we go
  * like in C? so that /.../ and ?...? start from the right place?
- * alt: could be moved in Address.ml
  *)
-let rec eval_address (e : Env.t) (adr : t) : Env.lineno =
-  match adr with
-  | Current -> e.dot
-  | Last -> e.dol
-  | Line n -> n
-  | Mark _ -> failwith "TODO: Mark"
-  | SearchFwd _ | SearchBwd _ -> 
-      let dir, re_str = 
-        match adr with 
-        | SearchFwd re -> 1, re
-        | SearchBwd re -> -1, re
-        | _ -> raise (Impossible "cases matched above")
-      in
-      (* less: opti: use SearchFwd of regex instead of str *)
-      let re = Str.regexp re_str in
-      (* starting point *)
-      (* TODO: ed: need to be `a` instead like in C ? *)
-      let a = e.dot in
-      let b = a  in
-      let rec aux (a : Env.lineno) : Env.lineno =
-        let a = a + dir in
-        let a =
-          match () with
-          (* wrap around start/end of buffer *)
-          | _ when a <= 0 -> e.dol
-          | _ when a > e.dol -> 1
-          | _ -> a
-        in
-        match () with
-        | _ when Commands.match_ e re a -> a
-        (* back to starting point and nothing was found *)
-        | _ when a = b ->
-            Error.e_warn (spf "search for %s had no match" re_str)
-        | _ ->
-            aux a
-      in
-      aux a
-
-  | Relative (x, n) -> eval_address e x + n
-
-let eval_range (e : Env.t) (r : range) : Env.lineno * Env.lineno =
-  Logs.debug (fun m -> m "range = %s" (show_range r));
-
-  let addr2 = eval_address e r.addr2 in
-  let addr1 =
-    match r.addr1 with
-    | None -> addr2
-    | Some a -> eval_address e a
-  in
-  addr1, addr2
+<<function [[Address.eval_address]]>>
+<<function [[Address.eval_range]]>>
 @
 
 \subsection*{[[CLI.ml]]}
@@ -937,12 +1119,6 @@ let restrict_caps rflag (x : < caps; ..>) =
     method stdout = x#stdout
     method stderr = x#stderr
   end
-
-<<function [[CLI.match_]]>>
-  
-<<function [[CLI.eval_address]]>>
-<<function [[CLI.eval_range]]>>
-
 
 (*****************************************************************************)
 (* Main algorithm *)
@@ -1136,9 +1312,7 @@ open Env
 <<type [[Commands.mode]]>>
 <<function [[Commands.exfile]]>>
 
-let match_ (e : Env.t) (re : Regex.t) (addr : Env.lineno) : bool =
-  let line = Disk.getline e addr in
-  Regex.match_str re line
+<<function [[Commands.match_]]>>
 
 let file_in_current_dir (file : Fpath.t) : bool =
   (* alt: use Unix.realpath, follow symlink and compare to cwd *)
@@ -1466,9 +1640,6 @@ open Fpath_.Operators
 <<type [[Env.lineno]]>>
 [@@deriving show]
 
-(* alt: Re.t *)
-<<type [[Env.regex]]>>
-
 <<type [[Env.t]]>>
 [@@deriving show]
 
@@ -1514,6 +1685,15 @@ let newline (e : Env.t) : unit =
   | T.EOF -> ()
   (* TODO: if special chars pln ? *)
   | t -> Parser.was_expecting_but_got "newline" t
+@
+
+<<signature [[Lexer.filename]]>>=
+val filename: Lexing.lexbuf -> string
+@
+<<function [[Lexer.filename]]>>=
+and filename = parse
+  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
+  | eof { failwith "eof in Lexer.filename()" }
 @
 
 <<function [[In.filename]]>>=
@@ -1640,32 +1820,6 @@ val gety :  Env.t -> string
 let buf = Buffer.create 32
 }
 @
-
-<<constant [[Lexer.space]]>>=
-let space = [' ''\t']
-@
-
-<<constant [[Lexer.letter]]>>=
-let letter = ['a'-'z''A'-'Z''_']
-@
-
-<<constant [[Lexer.digit]]>>=
-let digit = ['0'-'9']
-@
-%$
-
-<<function [[Lexer.line]]>>=
-and line = parse
-  | ([^ '\n' ]* as s) '\n' { s }
-  | eof { failwith "eof in Lexer.line()" (* alt: None? *) }
-@
-
-<<function [[Lexer.filename]]>>=
-and filename = parse
-  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
-  | eof { failwith "eof in Lexer.filename()" }
-@
-
 
 %-------------------------------------------------------------
 
@@ -1818,22 +1972,6 @@ val putd: Env.t -> unit
 
 \subsection*{[[Parser.ml]]}
 
-<<type [[Parser.state]]>>=
-type state = {
-  stdin: Lexing_.lexbuf;
-  (* for inserting "virtual" commands to process before stdin *)
-  mutable globp: Lexing_.lexbuf option;
-  mutable lookahead : Token.t option;
-}
-@
-
-<<function [[Parser.init]]>>=
-let init (caps : < Cap.stdin; ..>) : state =
-  { stdin = Lexing.from_channel (Console.stdin caps);
-    globp = None;
-    lookahead = None;
-  }
-@
 
 <<function [[Parser.was_expecting]]>>=
 let was_expecting (expect : string) =
@@ -1878,19 +2016,6 @@ let consume (st : state) : Token.t =
   | Some t -> st.lookahead <- None; t
   | None -> next_token st
 @
-
-<<function [[Parser.parse_delta]]>>=
-@
-
-<<function [[Parser.parse_relatives]]>>=
-@
-
-<<function [[Parser.parse_address]]>>=
-@
-
-<<function [[Parser.parse_address_range]]>>=
-@
-
 
 %-------------------------------------------------------------
 
@@ -1942,15 +2067,6 @@ module T = Token
 (* Parsing addresses *)
 (*****************************************************************************)
 (* Done in Address.ml *)
-
-<<function [[Parser.parse_delta]]>>
-
-<<function [[Parser.parse_relatives]]>>
-
-<<function [[Parser.parse_address]]>>
-
-
-<<function [[Parser.parse_address_range]]>>
 
 (*****************************************************************************)
 (* Parsing Commands *)
@@ -2026,15 +2142,6 @@ open Common
 
 \subsection*{[[Address.mli]]}
 
-<<signature [[Address.parse_range]]>>=
-val parse_range: Parser.state -> range
-@
-
-<<signature [[Address.eval_range]]>>=
-val eval_range: Env.t -> range -> Env.lineno * Env.lineno
-@
-
-
 %-------------------------------------------------------------
 
 <<Address.mli>>=
@@ -2050,25 +2157,11 @@ val eval_range: Env.t -> range -> Env.lineno * Env.lineno
 
 \subsection*{[[Regex.ml]]}
 
-<<type [[Regex.t]]>>=
-type t = Str.regexp
-@
-
-%(* val match_str: Regex.t -> string -> bool *)
-<<function [[Regex.match_str]]>>=
-let match_str (re : t) (str: string) : bool =
-  (* old: Str.string_match re line 0, but we need unanchored search *)
-  try
-    Str.search_forward re str 0 |> ignore;
-    true
-   with Not_found -> false
-@
-
-
 %-------------------------------------------------------------
 
 <<Regex.ml>>=
 
+(* alt: Re.t *)
 <<type [[Regex.t]]>>
 
 <<function [[Regex.match_str]]>>
@@ -2077,27 +2170,10 @@ let match_str (re : t) (str: string) : bool =
 
 \subsection*{[[Lexer.mli]]}
 
-<<signature [[Lexer.token]]>>=
-val token: Lexing.lexbuf -> Token.t
-@
-
-<<signature [[Lexer.regexp]]>>=
-val regexp: char -> Lexing.lexbuf -> string
-@
-
-<<signature [[Lexer.filename]]>>=
-val filename: Lexing.lexbuf -> string
-@
-
-<<signature [[Lexer.line]]>>=
-val line: Lexing.lexbuf -> string
-@
-
 <<signature [[Lexer.buf]]>>=
 (* ugly: should not be needed outside *)
 val buf: Buffer.t
 @
-
 
 %-------------------------------------------------------------
 
