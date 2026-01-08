@@ -132,6 +132,8 @@ type t = {
   mutable count: int;
   (* set by ?? effect is to Out.printcom() in commands () before the next cmd *)
   mutable pflag: bool;
+  
+
   (* ?? what functions rely on column number set? *)
   mutable col: int;
 
@@ -141,12 +143,14 @@ type t = {
    * used just in Out.putchr() so could be removed almost.
    *)
   oflag: bool;
+  (* new: from GNU ed, "restrited mode" *)
+  rflag: bool;
 }
 @
 
 <<function [[Env.init]]>>=
 let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>) 
-     (vflag : bool) (oflag : bool) : t =
+     (vflag : bool) (oflag : bool) (rflag:  bool) : t =
   let out = if oflag then Console.stderr caps else Console.stdout caps in
   (* will be overwritten possibly in the caller by argv[1] 
    * TODO: works on Linux? /fd/1 exists?
@@ -190,6 +194,7 @@ let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>)
 
     vflag = if oflag then false else vflag;
     oflag;
+    rflag;
   }
 @
 
@@ -229,6 +234,8 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
   let vflag = ref true in
   (* when '-o', the command 'w' will write to stdout (useful for filters) *)
   let oflag = ref false in
+  (* new: restricted ed *)
+  let rflag = ref false in
 
   let level = ref (Some Logs.Warning) in
 
@@ -236,7 +243,9 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
      "-", Arg.Clear vflag,
      " non-interactive mode (opposite of verbose)";
      "-o", Arg.Set oflag,
-     " write output to standard output instead of modifying the file";
+     " write buffer to standard output";
+     "-r", Arg.Set rflag,
+     " restricted mode: no shell commands; edits limited to current directory";
 
      (* new: this is verbose *logging*, different from interactive mode *)
      "-verbose", Arg.Unit (fun () -> level := Some Logs.Info),
@@ -247,25 +256,23 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
      " quiet logging mode";
   ] |> Arg.align
   in
-  (try 
-    Arg.parse_argv argv options (fun t -> args := t::!args) 
-      (spf "usage: %s [options] [file]" argv.(0));
-  with
-  | Arg.Bad msg -> Console.eprint caps msg; raise (Exit.ExitCode 2)
-  | Arg.Help msg -> Console.print caps msg; raise (Exit.ExitCode 0)
-  );
+  (* may raise ExitCode *)
+  Arg_.parse_argv caps argv options (fun t -> args := t::!args) 
+    (spf "usage: %s [options] [file]" argv.(0));
   Logs_.setup !level ();
 
-  let env : Env.t = Env.init caps !vflag !oflag in
+  let caps = restrict_caps !rflag caps in
 
+  let env : Env.t = Env.init caps !vflag !oflag !rflag in
+
+  (* env adjustments *)
   (match !args with
   | [] -> ()
   | [file] -> 
       env.savedfile <- Some (Fpath.v file);
       env.in_.globp <- Some (Lexing.from_string "r")
-  | _::_::_ -> 
-      (* stricter: *)
-      failwith "too many arguments" 
+  (* stricter: *)
+  | _::_::_ -> failwith "too many arguments" 
   );
   if !oflag then env.in_.globp <- Some (Lexing.from_string "a");
   Logs.debug (fun m -> m "env = %s" (Env.show env));
@@ -285,6 +292,7 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
         Out.putchr env '?';
         Out.putst env s;
   done;
+  (* should never reach *)
   Exit.OK
 @
 
@@ -361,7 +369,7 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
          e.count <- e.addr2;
          Out.putd e;
          Out.putchr e '\n';
-      (* new: *)
+      (* new: dumping internal state (useful for debugging) *)
       | 'X' -> 
          In.newline e;
          Unix.fsync e.tfile;
@@ -376,6 +384,7 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
           Commands.read caps e file      
 
       (* writing *)
+
       | 'w' | 'W' ->
          if c = 'W' then e.wrapp <- true;
          (* TODO: if [wW][qQ] *)
@@ -399,16 +408,17 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
          In.newline e;
          Commands.rdelete e e.addr1 e.addr2;
          Commands.append e (In.gettty e) (e.addr1 - 1) |> ignore;
-
       | 's' ->
           Commands.nonzero e;
           Commands.substitute e (e.in_.globp <> None);
 
       (* globals *)
+
       | 'g' -> global caps e true
       | 'v' -> global caps e false
 
       (* other *)
+
       | '!' -> 
          Commands.callunix caps e
 
@@ -442,6 +452,11 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
     | T.EOF ->
        (* old: raise (Exit.ExitCode 0) but bad because we need to get to quit()
         * or to return to global() caller when nested call to commands().
+        * TODO? raise (Exit.ExitCode 2) instead and check whether in nested
+        * commands? so this would force people to use 'q' to quit cleanly
+        * (so an error during quit in a script would fail and would
+        * make the whole script fail when EOF is reached)
+        * or raise EOF and capture it in global() ?
         *)
        done_ := true
     | t -> Parser.was_expecting_but_got "a letter" t
@@ -471,6 +486,9 @@ val read: <Cap.open_in; ..> -> Env.t -> Fpath.t -> unit
 <<function [[Commands.read]]>>=
 (* 'r' *)
 let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
+  (* ocaml-light: see callunix() comment below *)
+  if e.rflag && not (file_in_current_dir file)
+  then Error.e_err (spf "restricted mode on, can't access %s" !!file);
   try 
     file |> FS.with_open_in caps (fun chan ->
         setwide e;
@@ -482,7 +500,7 @@ let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
     )
   with Sys_error str ->
     Logs.err (fun m -> m "Sys_error: %s" str);
-    Error.e !!file
+    Error.e_legacy !!file
 @
 
 \section{[[w]]riting a file: [[w]]}
@@ -505,6 +523,9 @@ val putfile: Env.t -> Chan.o -> unit
 <<function [[Commands.write]]>>=
 (* 'w' *)
 let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
+  (* ocaml-light: see callunix() comment below *)
+  if e.rflag && not (file_in_current_dir file)
+  then Error.e_err (spf "restricted mode on, can't access %s" !!file);
   try 
     file |> FS.with_open_out caps (fun chan ->
         (* TODO: when wq (or do in caller in CLI.ml) *)
@@ -523,7 +544,7 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
     )
   with Sys_error str ->
     Logs.err (fun m -> m "Sys_error: %s" str);
-    Error.e !!file
+    Error.e_legacy !!file
 @
 
 \section{Main commands}
@@ -606,8 +627,7 @@ and regexp delim = parse
 and global caps (e : Env.t) (pos_or_neg : bool) : unit =
 
   e.in_.globp |> Option.iter (fun _ ->
-      Logs.err (fun m -> m "global command already in");
-      Error.e ""
+      Error.e_err "global command already in"
   );
   Commands.setwide e;
   Commands.squeeze e (if e.dol > 0 then 1 else 0);
@@ -670,7 +690,7 @@ exception Error of string
 (* the raise will effectively jump on the exn handler in CLI.main()
  * (emulating the longjmp done in C).
  *)
-let e s =
+let e_legacy s =
   raise (Error s)
 @
 
@@ -840,8 +860,7 @@ let rec eval_address (e : Env.t) (adr : t) : Env.lineno =
         | _ when Commands.match_ e re a -> a
         (* back to starting point and nothing was found *)
         | _ when a = b ->
-            Logs.warn (fun m -> m "search for %s had no match" re_str);
-            Error.e ""
+            Error.e_warn (spf "search for %s had no match" re_str)
         | _ ->
             aux a
       in
@@ -884,21 +903,46 @@ module A = Address
  *  - lots of missing features (&, \1, marks, etc.)
  *
  * Improvements over Plan 9 C version:
+ *  - support -r restricted mode like in GNU ed
+ *  - clearer error messages (via logging)
  *  - far less globals!
  *  - no fixed-size array for saved file, buffers, lines, etc.
  *  - no hard limits on max line size, max size of temp file, 
- *  - clearer error messages (via logging)
 *)
 
+(*****************************************************************************)
+(* Caps *)
+(*****************************************************************************)
+
 <<type [[CLI.caps]]>>
-(*****************************************************************************)
-(* Helpers *)
-(*****************************************************************************)
+
+let restrict_caps rflag (x : < caps; ..>) =
+  object
+    method exec = 
+      if rflag then Error.e_err "!restricted mode on!"
+      else x#exec
+    method open_in file = 
+      if rflag && not (Fpath.is_seg file)
+      then Error.e_err (spf "!restricted mode on, can't read %s!" file)
+      else x#open_in file
+    method open_out file = 
+      if rflag && not (Fpath.is_seg file) &&
+         (* need open_out to delete tmp file in Commands.quit() *)
+         not (file = !!Env.tfname)
+      then Error.e_err (spf "!restricted mode on, can't write %s!" file)
+      else x#open_out file
+    method fork = x#fork
+    method wait = x#wait
+    method stdin = x#stdin
+    method stdout = x#stdout
+    method stderr = x#stderr
+  end
 
 <<function [[CLI.match_]]>>
   
 <<function [[CLI.eval_address]]>>
 <<function [[CLI.eval_range]]>>
+
 
 (*****************************************************************************)
 (* Main algorithm *)
@@ -935,10 +979,8 @@ let setwide (e : Env.t) : unit =
 
 <<function [[Commands.squeeze]]>>=
 let squeeze (e : Env.t) (i : lineno) : unit =
-  if e.addr1 < i || e.addr2 > e.dol || e.addr1 > e.addr2 then begin
-      Logs.warn (fun m -> m "can't squeeze");
-      Error.e "";
-  end
+  if e.addr1 < i || e.addr2 > e.dol || e.addr1 > e.addr2 
+  then Error.e_warn "can't squeeze"
 @
 
 <<function [[Commands.nonzero]]>>=
@@ -948,10 +990,8 @@ let nonzero (e : Env.t) =
 
 <<function [[Commands.setnoaddr]]>>=
 let setnoaddr (e : Env.t) =
-  if e.given then begin
-      Logs.err (fun m -> m "setnoaddr ??");
-      Error.e "";
-  end
+  if e.given
+  then Error.e_err "setnoaddr ??"
 @
 
 <<type [[Commands.mode]]>>=
@@ -1062,8 +1102,7 @@ let quit (caps : <Cap.open_out; ..>) (e : Env.t) : unit =
   if e.vflag && e.fchange && e.dol != 0 then begin
       (* so a second quit will actually quit *)
       e.fchange <- false;
-      Logs.warn (fun m -> m "trying to quit with modified buffer");
-      Error.e ""
+      Error.e_warn "trying to quit with modified buffer"
   end;
   (* alt: could also Unix.close e.tfile *)
   FS.remove caps Env.tfname;
@@ -1100,6 +1139,10 @@ open Env
 let match_ (e : Env.t) (re : Regex.t) (addr : Env.lineno) : bool =
   let line = Disk.getline e addr in
   Regex.match_str re line
+
+let file_in_current_dir (file : Fpath.t) : bool =
+  (* alt: use Unix.realpath, follow symlink and compare to cwd *)
+  Fpath.is_seg !!file
 
 (*****************************************************************************)
 (* append in tfile and adjust e.zero *)
@@ -1176,7 +1219,11 @@ let substitute (e : Env.t) (_inglob: bool) : unit =
 let callunix (caps : <Cap.forkew; ..>) (e: Env.t) : unit =
   setnoaddr e;
   let s = In.gety e in
-
+  (* needed only for ocaml-light who does not support method call
+   * and so can't provide the dynamic caps of CLI.restrict_caps
+   *)
+  if e.rflag 
+  then Error.e_err "restricted mode on";
   (* ed: was calling rc -c but here we reuse (Cap)Sys.command which relies
    * on the default shell
    *)
@@ -1440,7 +1487,17 @@ open Fpath_.Operators
 
 <<exception [[Error.Error]]>>
 
+let e_warn s =
+  Logs.warn (fun m -> m "%s" s);
+  (* ed: to remain backward compatible *)
+  raise (Error "")
+
+let e_err s =
+  Logs.err (fun m -> m "%s" s);
+  raise (Error "")
+
 <<function [[Error.e]]>>
+
 @
 
 
@@ -1470,9 +1527,7 @@ let filename (e : Env.t) (cmd : char) : Fpath.t =
   | T.Newline | T.EOF ->
       (* no file specified, use maybe e.savedfile then *)
       (match e.savedfile with
-      | None when cmd <> 'f' -> 
-            Logs.err (fun m -> m "no savedfile and no filename given");
-            Error.e ""
+      | None when cmd <> 'f' -> Error.e_err "no savedfile and no filename given"
       | None -> failwith "TODO?? what does ed in that case?"
       | Some file -> file
       )
@@ -1782,8 +1837,7 @@ let init (caps : < Cap.stdin; ..>) : state =
 
 <<function [[Parser.was_expecting]]>>=
 let was_expecting (expect : string) =
-  Logs.err (fun m -> m "was expecting %s" expect);
-  Error.e ""
+  Error.e_err (spf "was expecting %s" expect)
 @
 
 <<function [[Parser.was_expecting_but_got]]>>=
