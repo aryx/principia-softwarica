@@ -1,5 +1,8 @@
 \section{Introduction}
 
+% ex: 1,3p for advanced commands with range addresses
+
+
 \section{Core data structures}
 
 \subsection{Token}
@@ -8,10 +11,10 @@
 type t =
   | Spaces | Newline | EOF
 
-  (* letter or '=' or '!' (a command) *)
+  (* letter or '=' or '!' for commands. ex: 'p' *)
   | Char of char
 
-  (* start of address tokens *)
+  (* start of address tokens. ex: "1,3" => [Int 1; Comma; Int 3] *)
   | Int of int
   | Dot | Dollar
   | Comma
@@ -32,14 +35,7 @@ type state = {
   <<[[Parser.state]] other fields>>
 }
 @
-
-% classic peek/consume later
-
-%XXX move later
-<<[[Parser.state]] other fields>>=
-(* for inserting "virtual" commands to process before stdin *)
-mutable globp: Lexing_.lexbuf option;
-@
+% no yacc, classic peek/consume instead and kinda recursive descent
 
 <<function [[Parser.init]]>>=
 let init (caps : < Cap.stdin; ..>) : state =
@@ -48,6 +44,8 @@ let init (caps : < Cap.stdin; ..>) : state =
     globp = None;
   }
 @
+
+
 
 \subsection{Line addresses}
 
@@ -63,29 +61,101 @@ type t =
 %$
 
 <<type [[Address.range]]>>=
-(* What is parsed before a command. For instance 1,3p will be parsed as
+(* What is parsed before a command. For instance 1,3 will be parsed as
  * { addr1 = Some (Line 1); addr2 = Line 3; given = true; set_dot = false}.
  *)
 type range = {
   addr1 : t option;
   addr2 : t;
   given : bool;
-  set_dot : bool;
+  <<[[Address.range]] other fields>>
 }
 @
+% 1p will be parsed as addr1 = None; addr2 = Line 1?
+% , will be parsed as 1,$ actually
 
 
 
 \subsection{The environment}
 %alt: globals
 
+<<type [[Env.t]]>>=
+(* The globals *)
+type t = {
+  <<[[Env.t]] in/out fields>>
+  <<[[Env.t]] temporary file fields>>
+  <<[[Env.t]] zero field>>
+  <<[[Env.t]] cursor fields>>
+  <<[[Env.t]] other fields>>
+  <<[[Env.t]] flag fields>>
+}
+@
+
+<<[[Env.t]] in/out fields>>=
+(* to read the user commands from (and also line input in 'a'/'i' modes) *)
+in_: Parser.state;
+@
+<<[[Env.t]] in/out fields>>=
+(* stdout unless oflag is set in which case it's stderr *)
+out: Out_channel_.t;
+@
+
+
+
+%XXX
+<<[[Env.t]] other fields>>=
+(* did the buffer changed (mostly tested with dol > 0) *)
+mutable fchange: bool;
+@
+<<[[Env.t]] other fields>>=
+(* count #chars read, or number of lines; displayed by Out.putd() *)
+mutable count: int;
+@
+<<[[Env.t]] other fields>>=
+(* set by ?? effect is to Out.printcom() in commands () before the next cmd *)
+mutable pflag: bool;
+@
+<<[[Env.t]] other fields>>=
+(* ?? what functions rely on column number set? *)
+mutable col: int;
+@
+
+\subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
+
 <<constant [[Env.tfname]]>>=
 let tfname = Fpath.v "/tmp/oed.scratch"
+@
+
+<<[[Env.t]] temporary file fields>>=
+(* This is the temporary tfname file, ed backing store!
+ * Note that we can't use the OCaml usual {in/out}_channel type because we
+ * need to both read and write in the temporary file, hence the use of the
+ * more general Unix.file_descr.
+ *)
+tfile : Unix_.file_descr;
+@
+
+<<[[Env.t]] temporary file fields>>=
+(* current write file offset in tfile to append new lines *)
+mutable tline : tfile_offset;
 @
 
 <<type [[Env.tfile_offset]]>>=
 (* offset in tfname file content *)
 type tfile_offset = Tfile_offset of int
+@
+% initialized to 2 (but maybe could be 0 in oed as we use a better
+% offset_and_mark type for the zero elements)
+
+\subsection{The lines as file offsets: [[zero]]}
+
+<<[[Env.t]] zero field>>=
+(* growing array of line offsets in tfile. 1-indexed array but the 0
+ * entry is used as a sentinel. map lineno -> file_offset.
+ * The bool is a mark used to remember a matching line in g/re/x
+ * operations.
+ *)
+mutable zero : offset_and_mark array;
 @
 
 <<type [[Env.offset_and_mark]]>>=
@@ -100,7 +170,10 @@ type offset_and_mark = {
 <<constant [[Env.no_line]]>>=
 let no_line = { offset = Tfile_offset 0; mark = false }
 @
-%TODO? alt: use None
+%TODO? alt: use None, which then remove the need to initialize
+% tline to Tfile_offset 2 (or 1)
+
+\subsection{Cursors: [[dot]] and [[dol]]}
 
 <<type [[Env.lineno]]>>=
 (* ed uses 1-indexed line numbers, but 0 is also used as a special value.
@@ -109,72 +182,165 @@ let no_line = { offset = Tfile_offset 0; mark = false }
 type lineno = int
 @
 
-<<type [[Env.t]]>>=
-(* The globals *)
-type t = {
-  (* to read the user commands from (and also line input in 'a'/'i' modes) *)
-  in_: Parser.state;
-  (* stdout unless oflag is set in which case it's stderr *)
-  out: Out_channel_.t;
-
-  (* This is the temporary tfname file, ed backing store!
-   * Note that we can't use the OCaml usual {in/out}_channel type because we
-   * need to both read and write in the temporary file, hence the use of the
-   * more general Unix.file_descr.
-   *)
-  tfile : Unix_.file_descr;
-  (* current write file offset in tfile to append new lines *)
-  mutable tline : tfile_offset;
-
-  (* growing array of line offsets in tfile. 1-indexed array but the 0
-   * entry is used as a sentinel. map lineno -> file_offset.
-   * The bool is a mark used to remember a matching line in g/re/x
-   * operations.
-   *)
-  mutable zero : offset_and_mark array;
-  (* index entried in zero *)
-  (* current line *)
-  mutable dot: lineno;
-  (* last line (dollar) *)
-  mutable dol: lineno;
-
-  (* for 1,3p commands. See also Address.range, but here we have
-   * concrete line number, not symbolic "addresses".
-   *)
-  mutable addr1: lineno;
-  mutable addr2: lineno;
-  mutable given: bool;
-
-  (* for 'w', 'r', 'f' *)
-  mutable savedfile: Fpath.t option;
-  (* write append, for 'W' *)
-  mutable wrapp : bool;
-  (* did the buffer changed (mostly tested with dol > 0) *)
-  mutable fchange: bool;
-
-  (* count #chars read, or number of lines; displayed by Out.putd() *)
-  mutable count: int;
-  (* set by ?? effect is to Out.printcom() in commands () before the next cmd *)
-  mutable pflag: bool;
-  
-
-  (* ?? what functions rely on column number set? *)
-  mutable col: int;
-
-  (* verbose (a.k.a. interactive) flag, cleared by 'ed -' *)
-  vflag: bool;
-  (* output flag, set by 'ed -o'.
-   * used just in Out.putchr() so could be removed almost.
-   *)
-  oflag: bool;
-  (* new: from GNU ed, "restrited mode" *)
-  rflag: bool;
-}
+<<[[Env.t]] cursor fields>>=
+(* index entried in zero *)
+(* current line *)
+mutable dot: lineno;
+(* last line (dollar) *)
+mutable dol: lineno;
 @
+% when user will use '$' in command, it will be evaluated to this dol
+% lineno.
+
+\subsection{Other globals}
+
+<<[[Env.t]] cursor fields>>=
+(* for 1,3p commands. See also Address.range, but here we have
+ * concrete line number, not symbolic "addresses".
+ *)
+mutable addr1: lineno;
+mutable addr2: lineno;
+mutable given: bool;
+@
+
+
+
+\section{[[CLI.main()]]}
+
+<<toplevel [[Main._1]]>>=
+let _ = 
+  Cap.main (fun (caps : Cap.all_caps) ->
+     let argv = CapSys.argv caps in
+     Exit.exit caps (Exit.catch (fun () -> CLI.main caps argv))
+  )
+@
+
+<<signature [[CLI.main]]>>=
+val main: <caps; ..> ->
+  string array -> Exit.t
+@
+
+<<type [[CLI.caps]]>>=
+type caps = < 
+    Cap.stdin; Cap.stdout; Cap.stderr;
+    Cap.open_in; (* for 'r' *)
+    Cap.open_out; (* for 'w' *)
+    Cap.forkew; (* for '!' *)
+  >
+@
+
+
+% skeleton
+
+<<function [[CLI.main]]>>=
+let main (caps : <caps; ..>) (argv : string array) : Exit.t =
+
+  let args = ref [] in
+  <<[[CLI.main()]] local flags>>
+
+  let options = [
+     <<[[CLI.main()]] local [[options]] elements>>
+  ] |> Arg.align
+  in
+  (* may raise ExitCode *)
+  Arg_.parse_argv caps argv options (fun t -> args := t::!args) 
+    (spf "usage: %s [options] [file]" argv.(0));
+  <<[[CLI.main()]] setup logging after parsed argv>>
+
+  <<[[CLI.main()]] restrict caps>>
+
+  let env : Env.t = Env.init caps !vflag !oflag !rflag in
+
+  <<[[CLI.main()]] env adjustments>>
+
+  while true do
+    (* when neither commands() nor quit() raise Error, then
+     * quit() will proceed and raise Exit.ExitCode which
+     * will exit this loop (and be caught in Main._)
+     *)
+    try (
+        commands caps env;
+        Commands.quit caps env;
+    )
+    with Error.Error s -> 
+        <<[[CLI.main()]] exn handler for [[Error.Error s]]>>
+  done;
+  (* should never reach *)
+  Exit.OK
+@
+
+\subsection{[[ed <file>]] and preloaded commands [[globp]]}
+
+<<[[Env.t]] other fields>>=
+(* for 'w', 'r', 'f' *)
+mutable savedfile: Fpath.t option;
+@
+
+
+%XXX
+<<[[CLI.main()]] env adjustments>>=
+(match !args with
+| [] -> ()
+| [file] -> 
+    env.savedfile <- Some (Fpath.v file);
+    env.in_.globp <- Some (Lexing.from_string "r")
+(* stricter: *)
+| _::_::_ -> failwith "too many arguments" 
+);
+if !oflag then env.in_.globp <- Some (Lexing.from_string "a");
+Logs.debug (fun m -> m "env = %s" (Env.show env));
+@
+
+<<[[Parser.state]] other fields>>=
+(* for inserting "virtual" commands to process before stdin *)
+mutable globp: Lexing_.lexbuf option;
+@
+
+
+
+\subsection{[[ed -]] and [[vflag]]}
+
+<<[[CLI.main()]] local flags>>=
+(* "verbose(interactive)" mode is set by default *)
+let vflag = ref true in
+@
+<<[[CLI.main()]] local [[options]] elements>>=
+"-", Arg.Clear vflag,
+" non-interactive mode (opposite of verbose)";
+@
+
+<<[[Env.t]] flag fields>>=
+(* verbose (a.k.a. interactive) flag, cleared by 'ed -' *)
+vflag: bool;
+@
+
+% put code ex of use of vflag
+
+\subsection{[[ed -o]] and [[oflag]]}
+
+<<[[CLI.main()]] local flags>>=
+(* when '-o', the command 'w' will write to stdout (useful for filters) *)
+let oflag = ref false in
+@
+<<[[CLI.main()]] local [[options]] elements>>=
+"-o", Arg.Set oflag,
+" write buffer to standard output";
+@
+
+<<[[Env.t]] flag fields>>=
+(* output flag, set by 'ed -o'.
+ * used just in Out.putchr() so could be removed almost.
+ *)
+oflag: bool;
+@
+
+
+\subsection{[[init()]]}
 
 <<function [[Env.init]]>>=
 let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>) 
      (vflag : bool) (oflag : bool) (rflag:  bool) : t =
+
   let out = if oflag then Console.stderr caps else Console.stdout caps in
   (* will be overwritten possibly in the caller by argv[1] 
    * TODO: works on Linux? /fd/1 exists?
@@ -222,119 +388,6 @@ let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>)
   }
 @
 
-\subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
-
-\subsection{The lines as file offsets: [[zero]]}
-
-\subsection{Cursors: [[dot]] and [[dol]]}
-
-\subsection{Other globals}
-
-
-
-\section{[[CLI.main()]]}
-
-<<toplevel [[Main._1]]>>=
-let _ = 
-  Cap.main (fun (caps : Cap.all_caps) ->
-     let argv = CapSys.argv caps in
-     Exit.exit caps (Exit.catch (fun () -> CLI.main caps argv))
-  )
-@
-
-<<signature [[CLI.main]]>>=
-val main: <caps; ..> ->
-  string array -> Exit.t
-@
-
-<<type [[CLI.caps]]>>=
-type caps = < 
-    Cap.stdin; Cap.stdout; Cap.stderr;
-    Cap.open_in; (* for 'r' *)
-    Cap.open_out; (* for 'w' *)
-    Cap.forkew; (* for '!' *)
-  >
-@
-
-
-
-<<function [[CLI.main]]>>=
-let main (caps : <caps; ..>) (argv : string array) : Exit.t =
-
-  let args = ref [] in
-
-  (* "verbose(interactive)" mode is set by default *)
-  let vflag = ref true in
-  (* when '-o', the command 'w' will write to stdout (useful for filters) *)
-  let oflag = ref false in
-  (* new: restricted ed *)
-  let rflag = ref false in
-
-  let level = ref (Some Logs.Warning) in
-
-  let options = [
-     "-", Arg.Clear vflag,
-     " non-interactive mode (opposite of verbose)";
-     "-o", Arg.Set oflag,
-     " write buffer to standard output";
-     "-r", Arg.Set rflag,
-     " restricted mode: no shell commands; edits limited to current directory";
-
-     (* new: this is verbose *logging*, different from interactive mode *)
-     "-verbose", Arg.Unit (fun () -> level := Some Logs.Info),
-     " verbose logging mode";
-     "-debug", Arg.Unit (fun () -> level := Some Logs.Debug),
-     " debug logging mode";
-     "-quiet", Arg.Unit (fun () -> level := None),
-     " quiet logging mode";
-  ] |> Arg.align
-  in
-  (* may raise ExitCode *)
-  Arg_.parse_argv caps argv options (fun t -> args := t::!args) 
-    (spf "usage: %s [options] [file]" argv.(0));
-  Logs_.setup !level ();
-
-  let caps = restrict_caps !rflag caps in
-
-  let env : Env.t = Env.init caps !vflag !oflag !rflag in
-
-  (* env adjustments *)
-  (match !args with
-  | [] -> ()
-  | [file] -> 
-      env.savedfile <- Some (Fpath.v file);
-      env.in_.globp <- Some (Lexing.from_string "r")
-  (* stricter: *)
-  | _::_::_ -> failwith "too many arguments" 
-  );
-  if !oflag then env.in_.globp <- Some (Lexing.from_string "a");
-  Logs.debug (fun m -> m "env = %s" (Env.show env));
-
-  while true do
-    (* when neither commands() nor quit() raise Error, then
-     * quit() will proceed and raise Exit.ExitCode which
-     * will exit this loop (and be caught in Main._)
-     *)
-    try (
-        commands caps env;
-        Commands.quit caps env;
-    )
-    with Error.Error s -> 
-        (* ed: was in a separate error_1() function *)
-        (* TODO: reset globals too? *)
-        Out.putchr env '?';
-        Out.putst env s;
-  done;
-  (* should never reach *)
-  Exit.OK
-@
-
-\subsection{[[ed -]] and [[vflag]]}
-
-\subsection{[[ed -o]] and [[oflag]]}
-
-\subsection{[[init()]]}
-
 \subsection{[[quit()]]}
 
 
@@ -342,10 +395,39 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
 
 \subsection{Displaying text}
 
+<<signature [[Out.putchr]]>>=
+val putchr: Env.t -> char -> unit
+@
+<<function [[Out.putchr]]>>=
+let putchr (e : Env.t) (c : char) =
+  (* TODO: if listf *)
+  output_char e.out c;
+  if c = '\n' then flush e.out
+@
+
+<<signature [[Out.putst]]>>=
+val putst: Env.t -> string -> unit
+@
+<<function [[Out.putst]]>>=
+(* pre: str should not contain '\n' ? *)
+let putst (e : Env.t) (str : string) : unit =
+  (* ugly? should set after putchr \n? also who uses col? *)
+  e.col <- 0;
+  (* iterate over str and call putchr to get a chance
+   * for the listf code above
+   *)
+  String.iter (putchr e) str;
+  putchr e '\n';
+  ()
+@
+
+
 \subsection{Reading text}
 
 % consume/peek here?
 % getty here?
+
+
 
 \section{Parsing commands}
 
@@ -377,6 +459,47 @@ rule token = parse
 @
 
 
+<<function [[Parser.next_token]]>>=
+(* Do not use! this is internal! You should use peek() or consume() instead. *)
+let next_token (st : state) : Token.t =
+  let t = 
+    match st.globp with
+    | Some lexbuf ->
+        let t = Lexer.token lexbuf in
+        if t = T.EOF
+        then st.globp <- None;
+        t
+    | None ->
+        Lexer.token st.stdin
+  in
+  Logs.debug (fun m -> m "tok = %s" (Token.show t));
+  t
+@
+
+<<signature [[Parser.peek]]>>=
+val peek : state -> Token.t
+@
+<<function [[Parser.peek]]>>=
+let peek (st : state) : Token.t =
+  match st.lookahead with
+  | Some t -> t
+  | None ->
+      let t = next_token st in
+      st.lookahead <- Some t;
+      t
+@
+
+<<signature [[Parser.consume]]>>=
+val consume: state -> Token.t
+@
+<<function [[Parser.consume]]>>=
+let consume (st : state) : Token.t =
+  match st.lookahead with
+  | Some t -> st.lookahead <- None; t
+  | None -> next_token st
+@
+
+
 \section{[[CLI.commands()]] interpreter loop}
 
 %trans: ok enough background to now see code of CLI.commands()
@@ -386,17 +509,10 @@ rule token = parse
 <<function [[CLI.commands]]>>=
 let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
   Logs.debug (fun m -> m "commands ->");
+
   let done_ = ref false in
-
   while not !done_ do
-
-    if e.pflag then begin
-        e.pflag <- false;
-        e.addr1 <- e.dot;
-        e.addr2 <- e.dot;
-        Commands.printcom e;
-    end;
-
+    <<[[CLI.commands()]], at loop start, if [[pflag]]>>
     let range : Address.range = Address.parse_range e.in_ in
     let (addr1, addr2) = Address.eval_range e range in
     (* TODO: use range.set_dot! *)
@@ -405,86 +521,20 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
     e.given <- range.given;
 
     (match Parser.consume e.in_ with
-
     | T.Char c ->
       (match c with
       (* inspecting *)
-
-      | 'p' | 'P' ->
-         In.newline e;
-         Commands.printcom e;
-      | 'f' ->
-         (* alt: move in Commands.file() *)
-         Commands.setnoaddr e;
-         let file : Fpath.t = In.filename e c in
-         assert (e.savedfile = Some file);
-         Out.putst e !!file;
-      | '=' ->
-         (* alt: move in Commands.print_dot_line_number() *)
-         Commands.setwide e;
-         Commands.squeeze e 0;
-         In.newline e;
-         e.count <- e.addr2;
-         Out.putd e;
-         Out.putchr e '\n';
-      (* new: dumping internal state (useful for debugging) *)
-      | 'X' -> 
-         In.newline e;
-         Unix.fsync e.tfile;
-         Logs.app (fun m -> m "env = %s\ntfile content =\n%s"
-                    (Env.show e)
-                    (FS.cat caps Env.tfname |> String.concat "\n"));
-
+      <<[[CLI.commands()]] match [[c]] inspecting cases>>
       (* reading *)
-
-      | 'r' -> 
-          let file : Fpath.t = In.filename e c in
-          Commands.read caps e file      
-
+      <<[[CLI.commands()]] match [[c]] reading case>>
       (* writing *)
-
-      | 'w' | 'W' ->
-         if c = 'W' then e.wrapp <- true;
-         (* TODO: if [wW][qQ] *)
-         let file : Fpath.t = In.filename e c in
-         Commands.write caps e file;
-
+      <<[[CLI.commands()]] match [[c]] writing cases>>
       (* modifying *)
-
-      | 'a' -> 
-         Logs.info (fun m -> m "append mode");
-         Commands.add e 0
-      | 'i' -> 
-         Logs.info (fun m -> m "insert mode");
-         Commands.add e (-1)
-      | 'd' ->
-         Commands.nonzero e;
-         In.newline e;
-         Commands.rdelete e e.addr1 e.addr2;
-      | 'c' ->
-         Commands.nonzero e;
-         In.newline e;
-         Commands.rdelete e e.addr1 e.addr2;
-         Commands.append e (In.gettty e) (e.addr1 - 1) |> ignore;
-      | 's' ->
-          Commands.nonzero e;
-          Commands.substitute e (e.in_.globp <> None);
-
+      <<[[CLI.commands()]] match [[c]] modifying cases>>
       (* globals *)
-
-      | 'g' -> global caps e true
-      | 'v' -> global caps e false
-
+      <<[[CLI.commands()]] match [[c]] global cases>>
       (* other *)
-
-      | '!' -> 
-         Commands.callunix caps e
-
-      | 'q' | 'Q' ->
-         if c = 'Q' then e.fchange <- false;
-         Commands.setnoaddr e;
-         In.newline e;
-         Commands.quit caps e;
+      <<[[CLI.commands()]] match [[c]] other cases>>
 
       | c -> failwith (spf "unsupported command '%c'" c)
       )
@@ -494,18 +544,7 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
        *)
 
     | T.Newline ->
-        (* print when no command specified, as in 1\n *)
-
-        (* ed: was a1 == nil but simpler to look at given *)
-        if not range.given then begin
-          (* so any subsequent newline will display a successive line *)
-          let a1 = e.dot + 1 in
-          e.addr2 <- a1;
-          e.addr1 <- a1;
-        end;
-        (* note that printcom() will internally set e.dot to e.addr2
-         * TODO: if lastsep = ';' *)
-        Commands.printcom e;
+        <<[[CLI.commands()]] [[Newline]] case>>
 
     | T.EOF ->
        (* old: raise (Exit.ExitCode 0) but bad because we need to get to quit()
@@ -531,14 +570,66 @@ val parse_range: Parser.state -> range
 val eval_range: Env.t -> range -> Env.lineno * Env.lineno
 @
 
-
-
 \section{[[r]]eading a file: [[r]]}
+
+<<[[CLI.commands()]] match [[c]] reading case>>=
+| 'r' -> 
+    let file : Fpath.t = In.filename e c in
+    Commands.read caps e file
+@
+
+<<signature [[In.filename]]>>=
+(* read a filename from stdin or from Env.savedfile otherwise *)
+val filename: Env.t -> char (* 'f' or 'e' or ? *) -> Fpath.t
+@
+
 
 <<signature [[Commands.read]]>>=
 (* 'r' *)
 val read: <Cap.open_in; ..> -> Env.t -> Fpath.t -> unit
 @
+
+<<signature [[Lexer.filename]]>>=
+val filename: Lexing.lexbuf -> string
+@
+<<function [[Lexer.filename]]>>=
+and filename = parse
+  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
+  | eof { failwith "eof in Lexer.filename()" }
+@
+
+<<function [[In.filename]]>>=
+let filename (e : Env.t) (cmd : char) : Fpath.t =
+  (* alt: do it in the caller, clearer; will be incremented
+   * when reading the file in getfile
+   *)
+  e.count <- 0;
+
+  match Parser.consume e.in_ with
+  | T.Newline | T.EOF ->
+      (* no file specified, use maybe e.savedfile then *)
+      (match e.savedfile with
+      | None when cmd <> 'f' -> Error.e_err "no savedfile and no filename given"
+      | None -> failwith "TODO?? what does ed in that case?"
+      | Some file -> file
+      )
+  | T.Spaces ->
+      let str = Lexer.filename e.in_.stdin in
+      if str = ""
+      then Parser.was_expecting "a non empty filename";
+      (match Parser.consume e.in_ with
+      | T.Newline -> 
+            let file = Fpath.v str in
+            if e.savedfile = None || cmd = 'e' || cmd = 'f'
+            then e.savedfile <- Some file;
+            file
+      | t -> Parser.was_expecting_but_got "a newline" t
+      )
+  | t -> Parser.was_expecting_but_got "a newline or space and filename" t
+@
+
+
+
 
 <<function [[Commands.read]]>>=
 (* 'r' *)
@@ -575,6 +666,20 @@ val getline: Env.t -> Env.lineno -> string
 
 
 \section{[[w]]riting a file: [[w]]}
+
+<<[[CLI.commands()]] match [[c]] writing cases>>=
+| 'w' | 'W' ->
+   if c = 'W' then e.wrapp <- true;
+   (* TODO: if [wW][qQ] *)
+   let file : Fpath.t = In.filename e c in
+   Commands.write caps e file;
+@
+
+<<[[Env.t]] other fields>>=
+(* write append, for 'W' *)
+mutable wrapp : bool;
+@
+
 
 <<signature [[Commands.write]]>>=
 (* 'w'*)
@@ -626,17 +731,113 @@ val putline : Env.t -> string -> Env.tfile_offset
 
 \subsection{[[p]]rinting lines: [[p]]}
 
+<<[[CLI.commands()]] match [[c]] inspecting cases>>=
+| 'p' | 'P' ->
+   In.newline e;
+   Commands.printcom e;
+@
+
+<<function [[Commands.printcom]]>>=
+(* 'p' *)
+let printcom (e : Env.t) : unit =
+  nonzero e;
+  for a1 = e.addr1 to e.addr2 do
+    (* TODO: if listn *)
+    Out.putshst e (Disk.getline e a1);
+  done;
+  e.dot <- e.addr2;
+  (* TODO: reset flags *)
+  ()
+@
+
+<<function [[Out.putshst]]>>=
+(* origin: put shell string? *)
+let putshst (e : Env.t) (str : string) : unit =
+  (* no diff between rune and chars in oed *)
+  putst e str
+@
+
+
+<<[[CLI.commands()]] [[Newline]] case>>=
+(* print when no command specified, as in 1\n *)
+
+(* ed: was a1 == nil but simpler to look at given *)
+if not range.given then begin
+  (* so any subsequent newline will display a successive line *)
+  let a1 = e.dot + 1 in
+  e.addr2 <- a1;
+  e.addr1 <- a1;
+end;
+(* note that printcom() will internally set e.dot to e.addr2
+ * TODO: if lastsep = ';' *)
+Commands.printcom e;
+@
+
 \subsection{printing remembered [[f]]ile: [[f]]}
+
+<<[[CLI.commands()]] match [[c]] inspecting cases>>=
+| 'f' ->
+   (* alt: move in Commands.file() *)
+   Commands.setnoaddr e;
+   let file : Fpath.t = In.filename e c in
+   assert (e.savedfile = Some file);
+   Out.putst e !!file;
+@
 
 \subsection{printing line number: [[=]]}
 
+<<[[CLI.commands()]] match [[c]] inspecting cases>>=
+| '=' ->
+   (* alt: move in Commands.print_dot_line_number() *)
+   Commands.setwide e;
+   Commands.squeeze e 0;
+   In.newline e;
+   e.count <- e.addr2;
+   Out.putd e;
+   Out.putchr e '\n';
+@
+
 \subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
+
+<<[[CLI.commands()]] match [[c]] modifying cases>>=
+| 'a' -> 
+   Logs.info (fun m -> m "append mode");
+   Commands.add e 0
+@
+<<[[CLI.commands()]] match [[c]] modifying cases>>=
+| 'i' -> 
+   Logs.info (fun m -> m "insert mode");
+   Commands.add e (-1)
+@
 
 \subsection{[[q]]uitting: [[q]]}
 
+<<[[CLI.commands()]] match [[c]] other cases>>=
+| 'q' | 'Q' ->
+   if c = 'Q' then e.fchange <- false;
+   Commands.setnoaddr e;
+   In.newline e;
+   Commands.quit caps e;
+@
+
 \subsection{[[d]]eleting lines: [[d]]}
 
+<<[[CLI.commands()]] match [[c]] modifying cases>>=
+| 'd' ->
+   Commands.nonzero e;
+   In.newline e;
+   Commands.rdelete e e.addr1 e.addr2;
+@
+
 \subsection{[[c]]hanging lines: [[c]]}
+
+<<[[CLI.commands()]] match [[c]] modifying cases>>=
+| 'c' ->
+   Commands.nonzero e;
+   In.newline e;
+   Commands.rdelete e e.addr1 e.addr2;
+   Commands.append e (In.gettty e) (e.addr1 - 1) |> ignore;
+@
 
 %\subsection{[[m]]oving and copying lines: [[m]] and [[t]]}
 
@@ -876,6 +1077,11 @@ let match_str (re : t) (str: string) : bool =
 
 \subsection{[[s]]ubstitute: [[s]]}
 
+<<[[CLI.commands()]] match [[c]] modifying cases>>=
+| 's' ->
+    Commands.nonzero e;
+    Commands.substitute e (e.in_.globp <> None);
+@
 
 \subsection{Advanced substitutions}
 
@@ -894,6 +1100,11 @@ let match_str (re : t) (str: string) : bool =
 @
 
 \subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
+
+<<[[CLI.commands()]] match [[c]] global cases>>=
+| 'g' -> global caps e true
+| 'v' -> global caps e false
+@
 
 <<function [[CLI.global]]>>=
 (* g/re/cmd, v/re/cmd *)
@@ -967,6 +1178,30 @@ and line = parse
 
 \subsection{Running a shell command: [[!]]}
 
+<<[[CLI.commands()]] match [[c]] other cases>>=
+| '!' -> 
+   Commands.callunix caps e
+@
+
+\subsection{[[ed -r]] and [[rflag]] restricted mode}
+
+<<[[Env.t]] flag fields>>=
+(* new: from GNU ed, "restrited mode" *)
+rflag: bool;
+@
+<<[[CLI.main()]] local flags>>=
+(* new: restricted ed *)
+let rflag = ref false in
+@
+
+<<[[CLI.main()]] local [[options]] elements>>=
+"-r", Arg.Set rflag,
+" restricted mode: no shell commands; edits limited to current directory";
+@
+
+<<[[CLI.main()]] restrict caps>>=
+let caps = restrict_caps !rflag caps in
+@
 
 \subsection{The caret}
 
@@ -984,7 +1219,9 @@ and line = parse
 | Semicolon
 @
 
-
+<<[[Address.range]] other fields>>=
+set_dot : bool;
+@
 
 \section{Error management and logging}
 
@@ -992,7 +1229,7 @@ and line = parse
 exception Error of string
 @
 
-<<function [[Error.e]]>>=
+<<function [[Error.e_legacy]]>>=
 (* the raise will effectively jump on the exn handler in CLI.main()
  * (emulating the longjmp done in C).
  *)
@@ -1000,8 +1237,62 @@ let e_legacy s =
   raise (Error s)
 @
 
+<<[[CLI.main()]] exn handler for [[Error.Error s]]>>=
+(* ed: was in a separate error_1() function *)
+(* TODO: reset globals too? *)
+Out.putchr env '?';
+Out.putst env s;
+@
+% but quite cryptic ... especially because most errors
+% are called via Error.e_legacy "" empty string, hmm
+% with just a '?' displayed
 
 
+
+<<[[CLI.main()]] local flags>>=
+let level = ref (Some Logs.Warning) in
+@
+
+<<[[CLI.main()]] local [[options]] elements>>=
+(* new: this is verbose *logging*, different from interactive mode *)
+"-verbose", Arg.Unit (fun () -> level := Some Logs.Info),
+" verbose logging mode";
+"-debug", Arg.Unit (fun () -> level := Some Logs.Debug),
+" debug logging mode";
+"-quiet", Arg.Unit (fun () -> level := None),
+" quiet logging mode";
+@
+<<[[CLI.main()]] setup logging after parsed argv>>=
+Logs_.setup !level ();
+@
+
+<<function [[Error.e_warn]]>>=
+let e_warn s =
+  Logs.warn (fun m -> m "%s" s);
+  (* ed: to remain backward compatible *)
+  raise (Error "")
+@
+
+<<function [[Error.e_err]]>>=
+let e_err s =
+  Logs.err (fun m -> m "%s" s);
+  raise (Error "")
+@
+
+\section{Debugging support}
+
+% Logging helps a bit.
+% And added a 'X' to dump internal state
+
+<<[[CLI.commands()]] match [[c]] inspecting cases>>=
+(* new: dumping internal state (useful for debugging) *)
+| 'X' -> 
+   In.newline e;
+   Unix.fsync e.tfile;
+   Logs.app (fun m -> m "env = %s\ntfile content =\n%s"
+              (Env.show e)
+              (FS.cat caps Env.tfname |> String.concat "\n"));
+@
 
 
 \section{Extra code}
@@ -1236,19 +1527,15 @@ let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
   aux ()
 @
 
-<<function [[Commands.printcom]]>>=
-(* 'p' *)
-let printcom (e : Env.t) : unit =
-  nonzero e;
-  for a1 = e.addr1 to e.addr2 do
-    (* TODO: if listn *)
-    Out.putshst e (Disk.getline e a1);
-  done;
-  e.dot <- e.addr2;
-  (* TODO: reset flags *)
-  ()
-@
 
+<<[[CLI.commands()]], at loop start, if [[pflag]]>>=
+if e.pflag then begin
+    e.pflag <- false;
+    e.addr1 <- e.dot;
+    e.addr2 <- e.dot;
+    Commands.printcom e;
+end;
+@
 
 
 <<function [[Commands.add]]>>=
@@ -1670,17 +1957,10 @@ open Fpath_.Operators
 
 <<exception [[Error.Error]]>>
 
-let e_warn s =
-  Logs.warn (fun m -> m "%s" s);
-  (* ed: to remain backward compatible *)
-  raise (Error "")
+<<function [[Error.e_warn]]>>
+<<function [[Error.e_err]]>>
 
-let e_err s =
-  Logs.err (fun m -> m "%s" s);
-  raise (Error "")
-
-<<function [[Error.e]]>>
-
+<<function [[Error.e_legacy]]>>
 @
 
 
@@ -1699,44 +1979,6 @@ let newline (e : Env.t) : unit =
   | t -> Parser.was_expecting_but_got "newline" t
 @
 
-<<signature [[Lexer.filename]]>>=
-val filename: Lexing.lexbuf -> string
-@
-<<function [[Lexer.filename]]>>=
-and filename = parse
-  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
-  | eof { failwith "eof in Lexer.filename()" }
-@
-
-<<function [[In.filename]]>>=
-let filename (e : Env.t) (cmd : char) : Fpath.t =
-  (* alt: do it in the caller, clearer; will be incremented
-   * when reading the file in getfile
-   *)
-  e.count <- 0;
-
-  match Parser.consume e.in_ with
-  | T.Newline | T.EOF ->
-      (* no file specified, use maybe e.savedfile then *)
-      (match e.savedfile with
-      | None when cmd <> 'f' -> Error.e_err "no savedfile and no filename given"
-      | None -> failwith "TODO?? what does ed in that case?"
-      | Some file -> file
-      )
-  | T.Spaces ->
-      let str = Lexer.filename e.in_.stdin in
-      if str = ""
-      then Parser.was_expecting "a non empty filename";
-      (match Parser.consume e.in_ with
-      | T.Newline -> 
-            let file = Fpath.v str in
-            if e.savedfile = None || cmd = 'e' || cmd = 'f'
-            then e.savedfile <- Some file;
-            file
-      | t -> Parser.was_expecting_but_got "a newline" t
-      )
-  | t -> Parser.was_expecting_but_got "a newline or space and filename" t
-@
 
 <<function [[In.gety]]>>=
 (* return a line (without trailing '\n') *)
@@ -1796,11 +2038,6 @@ module T = Token
 <<signature [[In.newline]]>>=
 (* check the next token is a newline (or EOF) and consume it *)
 val newline: Env.t -> unit
-@
-
-<<signature [[In.filename]]>>=
-(* read a filename from stdin or from Env.savedfile otherwise *)
-val filename: Env.t -> char (* 'f' or 'e' or ? *) -> Fpath.t
 @
 
 <<signature [[In.gettty]]>>=
@@ -1883,32 +2120,8 @@ open Token
 
 \subsection*{[[Out.ml]]}
 
-<<function [[Out.putchr]]>>=
-let putchr (e : Env.t) (c : char) =
-  (* TODO: if listf *)
-  output_char e.out c;
-  if c = '\n' then flush e.out
-@
 
-<<function [[Out.putst]]>>=
-(* pre: str should not contain '\n' ? *)
-let putst (e : Env.t) (str : string) : unit =
-  (* ugly? should set after putchr \n? also who uses col? *)
-  e.col <- 0;
-  (* iterate over str and call putchr to get a chance
-   * for the listf code above
-   *)
-  String.iter (putchr e) str;
-  putchr e '\n';
-  ()
-@
 
-<<function [[Out.putshst]]>>=
-(* origin: put shell string? *)
-let putshst (e : Env.t) (str : string) : unit =
-  (* no diff between rune and chars in oed *)
-  putst e str
-@
 
 <<function [[Out.putd]]>>=
 (* display e.count *)
@@ -1935,11 +2148,9 @@ open Common
 (*****************************************************************************)
 (* API *)
 (*****************************************************************************)
-
 <<function [[Out.putchr]]>>
 
 <<function [[Out.putst]]>>
-
 <<function [[Out.putshst]]>>
 
 <<function [[Out.putd]]>>
@@ -1947,14 +2158,6 @@ open Common
 
 
 \subsection*{[[Out.mli]]}
-
-<<signature [[Out.putchr]]>>=
-val putchr: Env.t -> char -> unit
-@
-
-<<signature [[Out.putst]]>>=
-val putst: Env.t -> string -> unit
-@
 
 <<signature [[Out.putshst]]>>=
 (* ed: put "shell" string, legacy name, identical to putst for oed *)
@@ -1972,11 +2175,8 @@ val putd: Env.t -> unit
 <<Out.mli>>=
 
 <<signature [[Out.putchr]]>>
-
 <<signature [[Out.putst]]>>
-
 <<signature [[Out.putshst]]>>
-
 
 <<signature [[Out.putd]]>>
 @
@@ -1993,40 +2193,6 @@ let was_expecting (expect : string) =
 <<function [[Parser.was_expecting_but_got]]>>=
 let was_expecting_but_got (expect : string) (tok : Token.t) =
   was_expecting (spf "%s, but got %s" expect (Token.show tok))
-@
-
-<<function [[Parser.next_token]]>>=
-(* Do not use! this is internal! You should use peek() or consume() instead. *)
-let next_token (st : state) : Token.t =
-  let t = 
-    match st.globp with
-    | Some lexbuf ->
-        let t = Lexer.token lexbuf in
-        if t = T.EOF
-        then st.globp <- None;
-        t
-    | None ->
-        Lexer.token st.stdin
-  in
-  Logs.debug (fun m -> m "tok = %s" (Token.show t));
-  t
-@
-
-<<function [[Parser.peek]]>>=
-let peek (st : state) : Token.t =
-  match st.lookahead with
-  | Some t -> t
-  | None ->
-      let t = next_token st in
-      st.lookahead <- Some t;
-      t
-@
-
-<<function [[Parser.consume]]>>=
-let consume (st : state) : Token.t =
-  match st.lookahead with
-  | Some t -> st.lookahead <- None; t
-  | None -> next_token st
 @
 
 %-------------------------------------------------------------
@@ -2099,17 +2265,6 @@ module T = Token
 val init: <Cap.stdin; ..> -> state
 @
 
-<<signature [[Parser.peek]]>>=
-val peek : state -> Token.t
-@
-
-<<signature [[Parser.consume]]>>=
-val consume: state -> Token.t
-@
-
-<<signature [[Parser.parse_address_range]]>>=
-@
-
 <<signature [[Parser.was_expecting]]>>=
 (* internals that are used outside for now *)
 val was_expecting: string -> 'a
@@ -2132,8 +2287,6 @@ open Common
 
 <<signature [[Parser.peek]]>>
 <<signature [[Parser.consume]]>>
-
-<<signature [[Parser.parse_address_range]]>>
 
 <<signature [[Parser.was_expecting]]>>
 <<signature [[Parser.was_expecting_but_got]]>>
