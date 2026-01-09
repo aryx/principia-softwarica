@@ -37,6 +37,10 @@ type state = {
 @
 % no yacc, classic peek/consume instead and kinda recursive descent
 
+<<signature [[Parser.init]]>>=
+val init: <Cap.stdin; ..> -> state
+@
+
 <<function [[Parser.init]]>>=
 let init (caps : < Cap.stdin; ..>) : state =
   { stdin = Lexing.from_channel (Console.stdin caps);
@@ -390,6 +394,24 @@ let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>)
 
 \subsection{[[quit()]]}
 
+<<signature [[Commands.quit]]>>=
+(* 'q' (need open_out to remove Env.tfname from the filesystem) *)
+val quit: < Cap.open_out; ..> -> Env.t -> unit
+@
+
+<<function [[Commands.quit]]>>=
+(* 'q' *)
+let quit (caps : <Cap.open_out; ..>) (e : Env.t) : unit =
+  if e.vflag && e.fchange && e.dol != 0 then begin
+      (* so a second quit will actually quit *)
+      e.fchange <- false;
+      Error.e_warn "trying to quit with modified buffer"
+  end;
+  (* alt: could also Unix.close e.tfile *)
+  FS.remove caps Env.tfname;
+  raise (Exit.ExitCode 0)
+@
+
 
 \section{Displaying and reading text}
 
@@ -427,6 +449,39 @@ let putst (e : Env.t) (str : string) : unit =
 % consume/peek here?
 % getty here?
 
+<<signature [[In.gety]]>>=
+(* return a line (without trailing '\n') *)
+val gety :  Env.t -> string
+@
+
+<<function [[In.gety]]>>=
+(* return a line (without trailing '\n') *)
+let gety (e : Env.t) : string =
+  Lexer.line e.in_.stdin
+@
+
+<<signature [[In.gettty]]>>=
+(* Used to read a set of lines from stdin until a single "." on a line
+ * is entered marking the end of user text input.
+ *)
+val gettty : Env.t -> (unit -> string option)
+@
+
+<<function [[In.gettty]]>>=
+(* Read a line from stdin. Return None when the user entered "." on a single
+ * line meaning the end of interactive input.
+ * This has a similar interface to getfile() so it can be passed to
+ * append().
+ *)
+let gettty (e : Env.t) () : string option =
+  let s = gety e in
+  if s = "."
+  then begin
+    Logs.info (fun m -> m "end of input, back to ed");
+    None
+  end
+  else Some s
+@
 
 
 \section{Parsing commands}
@@ -651,10 +706,65 @@ let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
     Error.e_legacy !!file
 @
 
+<<signature [[Commands.setwide]]>>=
+(* helpers *)
+val setwide: Env.t -> unit
+@
+<<function [[Commands.setwide]]>>=
+let setwide (e : Env.t) : unit =
+  if not e.given then begin
+    e.addr1 <- if e.dol > 0 then 1 else 0;
+    e.addr2 <- e.dol;
+  end;
+  ()
+@
+
+<<signature [[Commands.squeeze]]>>=
+val squeeze: Env.t -> int -> unit
+@
+<<function [[Commands.squeeze]]>>=
+let squeeze (e : Env.t) (i : lineno) : unit =
+  if e.addr1 < i || e.addr2 > e.dol || e.addr1 > e.addr2 
+  then Error.e_warn "can't squeeze"
+@
+
+
+<<type [[Commands.mode]]>>=
+type mode = READ | WRITE
+@
+
+<<function [[Commands.exfile]]>>=
+(* ed: "exit" file =~ close file *)
+let exfile (e : Env.t) (_m : mode) : unit =
+  (* ed: is using passed mode to flush if WRITE but no need in ocaml
+   * because closing the channel will flush any remaining IO.
+   *)
+  if e.vflag then begin
+      Out.putd e;
+      Out.putchr e '\n';
+  end
+@
 
 <<signature [[Disk.getfile]]>>=
 (* will return one line (without trailing '\n') or None when reached EOF *)
 val getfile: Env.t -> Chan.i -> (unit -> string option)
+@
+
+<<function [[Disk.getfile]]>>=
+(* will return one line (without trailing '\n') or None when reached EOF *)
+let getfile (e : Env.t) (chan : Chan.i) () : string option =
+  (* alt: use Stdlib.input_line which does some extra magic around newlines
+   * and EOF we want, because ed also uniformize the lack of newline before EOF
+   * (see the "\\n appended" message below),but we want to to match exactly what
+   * ed does and display the same error message so we need to go lower level
+   * than input_line and use input_char directly.
+   *)
+  try 
+    (* 's' will not have the trailing '\n' *)
+    let s = input_line chan.ic in
+    e.count <- e.count + String.length s + 1 (* to count the new line *);
+    Some s
+  with End_of_file -> None
 @
 
 
@@ -663,6 +773,72 @@ val getfile: Env.t -> Chan.i -> (unit -> string option)
 val getline: Env.t -> Env.lineno -> string
 @
 
+<<function [[Disk.getline]]>>=
+(* dual of putline(), retrieve line in tfile (without trailing '\n') 
+ * ed: was taking an Env.tfile_offset but cleaner to take addr
+ *)
+let getline (e : Env.t) (addr : Env.lineno)  : string =
+  let tl = e.zero.(addr).offset in
+  let Tfile_offset offset = tl in
+  Unix.lseek e.tfile offset Unix.SEEK_SET |> ignore;
+  (* alt: Stdlib.input_line (Unix.in_channel_of_descr ...) but then
+   * need to close it which unfortunately also close the file_descr so
+   * we do our own adhoc input_line below.
+   *)
+  let bytes = Bytes.of_string " " in
+  let rec aux acc =
+    let n = Unix.read e.tfile bytes 0 1 in
+    let c : char = Bytes.get bytes 0 in
+    if n = 1 && c <> '\n'
+    then aux (c::acc)
+    (* no need to add the \n, putshst will add it *)
+    else String_.of_chars (List.rev acc)
+  in
+  aux []
+@
+
+
+<<signature [[Commands.append]]>>=
+(* return number of lines added, but usually ignored by caller *)
+val append: Env.t -> (unit -> string option) -> Env.lineno -> int
+@
+<<function [[Commands.append]]>>=
+(* f can be Disk.getfile() or In.gettty() *)
+let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
+  e.dot <- addr;
+  let nline = ref 0 in
+
+  let rec aux () =
+    match f () with
+    | None -> (* EOF *) !nline
+    | Some str ->
+        if e.dol + 2 >= Array.length e.zero 
+        then begin
+            let oldz = e.zero in
+            let len = Array.length oldz in
+            let newz  = Array.make (len + 512) Env.no_line in
+            Array.blit oldz 0 newz 0 len;
+            e.zero <- newz;
+        end;
+
+        let tl = Disk.putline e str in
+        incr nline;
+
+        e.dol <- e.dol + 1;
+        let a1 = ref e.dol in
+        let a2 = ref (!a1 + 1) in
+        e.dot <- e.dot + 1;
+        let rdot = e.dot in
+        while !a1 > rdot do
+          e.zero.(!a2) <- e.zero.(!a1);
+          decr a2; decr a1;
+        done;
+        e.zero.(rdot) <- {offset = tl; mark = false};
+        (* TODO: update zero *)
+        aux ()
+  in
+  aux ()
+@
 
 
 \section{[[w]]riting a file: [[w]]}
@@ -718,11 +894,36 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
 val putfile: Env.t -> Chan.o -> unit
 @
 
+<<function [[Disk.putfile]]>>=
+(* dual of getfile() but this time writing all the lines, not just one *)
+let putfile (e : Env.t) (chan : Chan.o) : unit =
+  for a1 = e.addr1 to e.addr2 do
+    let l = getline e a1 ^ "\n" in
+    e.count <- e.count + String.length l;
+    output_string chan.oc l;
+  done
+@
+
 
 
 <<signature [[Disk.putline]]>>=
 (* store line (with added trailing '\n') in tfile and return its offset *)
 val putline : Env.t -> string -> Env.tfile_offset
+@
+
+<<function [[Disk.putline]]>>=
+(* store line in tfile and return its offset *)
+let putline (e : Env.t) (line : string) : Env.tfile_offset =
+  e.fchange <- true;
+  let Tfile_offset old_tline = e.tline in
+  Unix.lseek e.tfile old_tline Unix.SEEK_SET |> ignore;
+  (* alt: could use a different terminator like '\0' in C but simpler to
+   * use \n *)
+  let line = line ^ "\n" in
+  let len = String.length line in
+  Unix.write e.tfile (Bytes.of_string line) 0 len |> ignore;
+  e.tline <- Tfile_offset (old_tline + len);
+  Tfile_offset old_tline
 @
 
 
@@ -737,6 +938,29 @@ val putline : Env.t -> string -> Env.tfile_offset
    Commands.printcom e;
 @
 
+<<signature [[Commands.printcom]]>>=
+(* 'p' *)
+val printcom : Env.t -> unit
+@
+
+<<signature [[In.newline]]>>=
+(* check the next token is a newline (or EOF) and consume it *)
+val newline: Env.t -> unit
+@
+
+<<function [[In.newline]]>>=
+let newline (e : Env.t) : unit =
+  match Parser.consume e.in_ with
+  | T.Newline -> ()
+  (* tricky but is useful to treat EOF as a newline sometimes
+   * like for globp "r" but sometimes not in g/re/x globp context so that
+   * it is consumed by commands() leading to returning from commands().
+   *)
+  | T.EOF -> ()
+  (* TODO: if special chars pln ? *)
+  | t -> Parser.was_expecting_but_got "newline" t
+@
+
 <<function [[Commands.printcom]]>>=
 (* 'p' *)
 let printcom (e : Env.t) : unit =
@@ -748,6 +972,19 @@ let printcom (e : Env.t) : unit =
   e.dot <- e.addr2;
   (* TODO: reset flags *)
   ()
+@
+
+<<signature [[Out.putshst]]>>=
+(* ed: put "shell" string, legacy name, identical to putst for oed *)
+val putshst : Env.t -> string -> unit 
+@
+
+<<signature [[Commands.nonzero]]>>=
+val nonzero: Env.t -> unit
+@
+<<function [[Commands.nonzero]]>>=
+let nonzero (e : Env.t) =
+  squeeze e 1
 @
 
 <<function [[Out.putshst]]>>=
@@ -773,6 +1010,16 @@ end;
 Commands.printcom e;
 @
 
+
+<<[[CLI.commands()]], at loop start, if [[pflag]]>>=
+if e.pflag then begin
+    e.pflag <- false;
+    e.addr1 <- e.dot;
+    e.addr2 <- e.dot;
+    Commands.printcom e;
+end;
+@
+
 \subsection{printing remembered [[f]]ile: [[f]]}
 
 <<[[CLI.commands()]] match [[c]] inspecting cases>>=
@@ -782,6 +1029,15 @@ Commands.printcom e;
    let file : Fpath.t = In.filename e c in
    assert (e.savedfile = Some file);
    Out.putst e !!file;
+@
+
+<<signature [[Commands.setnoaddr]]>>=
+val setnoaddr: Env.t -> unit
+@
+<<function [[Commands.setnoaddr]]>>=
+let setnoaddr (e : Env.t) =
+  if e.given
+  then Error.e_err "setnoaddr ??"
 @
 
 \subsection{printing line number: [[=]]}
@@ -797,6 +1053,22 @@ Commands.printcom e;
    Out.putchr e '\n';
 @
 
+<<signature [[Out.putd]]>>=
+(* will print Env.count *)
+val putd: Env.t -> unit
+@
+
+<<function [[Out.putd]]>>=
+(* display e.count *)
+let rec putd (e : Env.t) : unit =
+  let r = e.count mod 10 in
+  e.count <- e.count / 10;
+  if e.count > 0
+  then putd e;
+  putchr e (Char.chr (Char.code '0' + r))
+@
+
+
 \subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
 
 <<[[CLI.commands()]] match [[c]] modifying cases>>=
@@ -808,6 +1080,23 @@ Commands.printcom e;
 | 'i' -> 
    Logs.info (fun m -> m "insert mode");
    Commands.add e (-1)
+@
+
+<<signature [[Commands.add]]>>=
+(* 'a' and 'i' *)
+val add: Env.t -> int -> unit
+@
+
+<<function [[Commands.add]]>>=
+(* used for 'a' and 'i' *)
+let add (e : Env.t) (i : int) =
+  if i <> 0 && (e.given || e.dol > 0) then begin
+     e.addr1 <- e.addr1 - 1;
+     e.addr2 <- e.addr2 - 1;
+  end;
+  squeeze e 0;
+  In.newline e;
+  append e (In.gettty e) e.addr2 |> ignore
 @
 
 \subsection{[[q]]uitting: [[q]]}
@@ -827,6 +1116,32 @@ Commands.printcom e;
    Commands.nonzero e;
    In.newline e;
    Commands.rdelete e e.addr1 e.addr2;
+@
+
+<<signature [[Commands.rdelete]]>>=
+(* 'd' and 'c' *)
+val rdelete: Env.t -> Env.lineno -> Env.lineno -> unit
+@
+
+<<function [[Commands.rdelete]]>>=
+(* used for 'r' and 'c' *)
+let rdelete (e : Env.t) (ad1 : lineno) (ad2 : lineno) =
+  let a1 = ref ad1 in
+  let a2 = ref (ad2 + 1) in
+  let a3 = e.dol in
+  e.dol <- e.dol - (!a2 - !a1);
+  let rec aux () =
+    e.zero.(!a1) <- e.zero.(!a2);
+    incr a1;
+    incr a2;
+    if !a2 <= a3
+    then aux ()
+  in
+  aux ();
+  a1 := ad1;
+  if !a1 > e.dol then a1 := e.dol;
+  e.dot <- !a1;
+  e.fchange <- true
 @
 
 \subsection{[[c]]hanging lines: [[c]]}
@@ -929,6 +1244,33 @@ let parse_range (st : Parser.state) : range =
       )
 @
 
+<<function [[Address.parse_relatives]]>>=
+let rec parse_relatives (base : t) (st : Parser.state) : t =
+  match P.peek st with
+  | T.Plus | T.Minus | T.Caret ->
+      let d = parse_delta st in
+      parse_relatives (Relative (base, d)) st
+  | _ ->
+      base
+@
+
+<<function [[Address.parse_delta]]>>=
+let parse_delta (st : Parser.state) : int =
+  match P.consume st with
+  | T.Plus ->
+      (match P.peek st with
+       | T.Int n -> ignore (P.consume st); n
+       | _ -> 1)
+  | T.Minus ->
+      (match P.peek st with
+       | T.Int n -> ignore (P.consume st); -n
+       | _ -> -1)
+  | T.Caret -> -1
+  | _ ->
+      P.was_expecting "relative operator"
+@
+
+
 \subsection{Evaluating addresses}
 
 <<function [[Address.eval_address]]>>=
@@ -1004,12 +1346,15 @@ type t = Str.regexp
 | Slash of string | Question of string
 @
 
+
 <<[[Lexer.token()]] other cases>>=
 | '/'              { Buffer.clear buf; Slash (regexp '/' lexbuf) }
 | '?'              { Buffer.clear buf; Question (regexp '?' lexbuf) }
 @
 
-
+<<constant [[Lexer.buf]]>>=
+let buf = Buffer.create 32
+@
 
 <<signature [[Lexer.regexp]]>>=
 val regexp: char -> Lexing.lexbuf -> string
@@ -1058,6 +1403,10 @@ and regexp delim = parse
 
 \subsection{[[match()]]}
 
+<<signature [[Commands.match_]]>>=
+val match_: Env.t -> Regex.t -> Env.lineno -> bool
+@
+
 <<function [[Commands.match_]]>>=
 let match_ (e : Env.t) (re : Regex.t) (addr : Env.lineno) : bool =
   let line = Disk.getline e addr in
@@ -1081,6 +1430,48 @@ let match_str (re : t) (str: string) : bool =
 | 's' ->
     Commands.nonzero e;
     Commands.substitute e (e.in_.globp <> None);
+@
+
+<<signature [[Commands.substitute]]>>=
+(* 's' *)
+val substitute: Env.t -> bool (* inglob *) -> unit
+@
+
+<<function [[Commands.substitute]]>>=
+(* used for 's' *)
+let substitute (e : Env.t) (_inglob: bool) : unit =
+  (* TODO: handle inglob *)
+  match Parser.consume e.in_ with
+  (* handle | Question re_str? does not really make sense. *)
+  | Slash re_str ->
+      let re = Str.regexp re_str in
+      (* ugly: *) 
+      Buffer.clear Lexer.buf;
+      let subst_str = Lexer.regexp '/' e.in_.stdin in
+      (* TODO: parse 's/.../.../g' *)
+      In.newline e;
+
+      for a1 = e.addr1 to e.addr2 do
+        let line = Disk.getline e a1 in
+        (* TODO: handle 's/.../.../g' *)
+        if Regex.match_str re line
+        then begin
+           let loc1 = Str.match_beginning () in
+           let loc2 = Str.match_end () in
+           let len = String.length line in
+           
+           let before = String.sub line 0 loc1 in
+           let _matched = String.sub line loc1 (loc2 - loc1) in
+           let after = String.sub line loc2 (len - loc2) in
+           (* TODO: handle & and \1 in subst_str *)
+           let newline = before ^ subst_str ^ after in
+           let tl = Disk.putline e newline in
+           (* TODO: mark? *)
+           e.zero.(a1) <- { offset = tl; mark = false }
+        end
+      done
+
+  | t -> Parser.was_expecting_but_got "a regexp" t
 @
 
 \subsection{Advanced substitutions}
@@ -1183,6 +1574,30 @@ and line = parse
    Commands.callunix caps e
 @
 
+<<signature [[Commands.callunix]]>>=
+(* '!' *)
+val callunix: <Cap.forkew; ..> -> Env.t -> unit
+@
+
+
+<<function [[Commands.callunix]]>>=
+(* '! *)
+let callunix (caps : <Cap.forkew; ..>) (e: Env.t) : unit =
+  setnoaddr e;
+  let s = In.gety e in
+  (* needed only for ocaml-light who does not support method call
+   * and so can't provide the dynamic caps of CLI.restrict_caps
+   *)
+  if e.rflag 
+  then Error.e_err "restricted mode on";
+  (* ed: was calling rc -c but here we reuse (Cap)Sys.command which relies
+   * on the default shell
+   *)
+  let _ret = CapSys.command caps s in
+  if e.vflag
+  then Out.putst e "!"
+@
+
 \subsection{[[ed -r]] and [[rflag]] restricted mode}
 
 <<[[Env.t]] flag fields>>=
@@ -1201,6 +1616,36 @@ let rflag = ref false in
 
 <<[[CLI.main()]] restrict caps>>=
 let caps = restrict_caps !rflag caps in
+@
+
+<<function [[CLI.restrict_caps]]>>=
+let restrict_caps rflag (x : < caps; ..>) =
+  object
+    method exec = 
+      if rflag then Error.e_err "!restricted mode on!"
+      else x#exec
+    method open_in file = 
+      if rflag && not (Fpath.is_seg file)
+      then Error.e_err (spf "!restricted mode on, can't read %s!" file)
+      else x#open_in file
+    method open_out file = 
+      if rflag && not (Fpath.is_seg file) &&
+         (* need open_out to delete tmp file in Commands.quit() *)
+         not (file = !!Env.tfname)
+      then Error.e_err (spf "!restricted mode on, can't write %s!" file)
+      else x#open_out file
+    method fork = x#fork
+    method wait = x#wait
+    method stdin = x#stdin
+    method stdout = x#stdout
+    method stderr = x#stderr
+  end
+@
+
+<<function [[Commands.file_in_current_dir]]>>=
+let file_in_current_dir (file : Fpath.t) : bool =
+  (* alt: use Unix.realpath, follow symlink and compare to cwd *)
+  Fpath.is_seg !!file
 @
 
 \subsection{The caret}
@@ -1279,6 +1724,25 @@ let e_err s =
   raise (Error "")
 @
 
+<<signature [[Parser.was_expecting]]>>=
+(* internals that are used outside for now *)
+val was_expecting: string -> 'a
+@
+<<signature [[Parser.was_expecting_but_got]]>>=
+val was_expecting_but_got: string -> Token.t -> 'a
+@
+
+
+<<function [[Parser.was_expecting]]>>=
+let was_expecting (expect : string) =
+  Error.e_err (spf "was expecting %s" expect)
+@
+
+<<function [[Parser.was_expecting_but_got]]>>=
+let was_expecting_but_got (expect : string) (tok : Token.t) =
+  was_expecting (spf "%s, but got %s" expect (Token.show tok))
+@
+
 \section{Debugging support}
 
 % Logging helps a bit.
@@ -1293,6 +1757,7 @@ let e_err s =
               (Env.show e)
               (FS.cat caps Env.tfname |> String.concat "\n"));
 @
+
 
 
 \section{Extra code}
@@ -1315,7 +1780,6 @@ module T = Token
 (*****************************************************************************)
 (* Types *)
 (*****************************************************************************)
-
 <<type [[Address.t]]>>
 [@@deriving show]
 <<type [[Address.range]]>>
@@ -1324,32 +1788,8 @@ module T = Token
 (*****************************************************************************)
 (* Parsing *)
 (*****************************************************************************)
-
-(*
-val parse_range: state -> Address.range
-*)
-
-let parse_delta (st : Parser.state) : int =
-  match P.consume st with
-  | T.Plus ->
-      (match P.peek st with
-       | T.Int n -> ignore (P.consume st); n
-       | _ -> 1)
-  | T.Minus ->
-      (match P.peek st with
-       | T.Int n -> ignore (P.consume st); -n
-       | _ -> -1)
-  | T.Caret -> -1
-  | _ ->
-      P.was_expecting "relative operator"
-
-let rec parse_relatives (base : t) (st : Parser.state) : t =
-  match P.peek st with
-  | T.Plus | T.Minus | T.Caret ->
-      let d = parse_delta st in
-      parse_relatives (Relative (base, d)) st
-  | _ ->
-      base
+<<function [[Address.parse_delta]]>>
+<<function [[Address.parse_relatives]]>>
 
 <<function [[Address.parse_address]]>>
 <<function [[Address.parse_range]]>>
@@ -1398,30 +1838,9 @@ module A = Address
 (*****************************************************************************)
 (* Caps *)
 (*****************************************************************************)
-
 <<type [[CLI.caps]]>>
 
-let restrict_caps rflag (x : < caps; ..>) =
-  object
-    method exec = 
-      if rflag then Error.e_err "!restricted mode on!"
-      else x#exec
-    method open_in file = 
-      if rflag && not (Fpath.is_seg file)
-      then Error.e_err (spf "!restricted mode on, can't read %s!" file)
-      else x#open_in file
-    method open_out file = 
-      if rflag && not (Fpath.is_seg file) &&
-         (* need open_out to delete tmp file in Commands.quit() *)
-         not (file = !!Env.tfname)
-      then Error.e_err (spf "!restricted mode on, can't write %s!" file)
-      else x#open_out file
-    method fork = x#fork
-    method wait = x#wait
-    method stdin = x#stdin
-    method stdout = x#stdout
-    method stderr = x#stderr
-  end
+<<function [[CLI.restrict_caps]]>>
 
 (*****************************************************************************)
 (* Main algorithm *)
@@ -1444,146 +1863,7 @@ let restrict_caps rflag (x : < caps; ..>) =
 <<signature [[CLI.main]]>>
 @
 
-
 \subsection*{[[Commands.ml]]}
-
-<<function [[Commands.setwide]]>>=
-let setwide (e : Env.t) : unit =
-  if not e.given then begin
-    e.addr1 <- if e.dol > 0 then 1 else 0;
-    e.addr2 <- e.dol;
-  end;
-  ()
-@
-
-<<function [[Commands.squeeze]]>>=
-let squeeze (e : Env.t) (i : lineno) : unit =
-  if e.addr1 < i || e.addr2 > e.dol || e.addr1 > e.addr2 
-  then Error.e_warn "can't squeeze"
-@
-
-<<function [[Commands.nonzero]]>>=
-let nonzero (e : Env.t) =
-  squeeze e 1
-@
-
-<<function [[Commands.setnoaddr]]>>=
-let setnoaddr (e : Env.t) =
-  if e.given
-  then Error.e_err "setnoaddr ??"
-@
-
-<<type [[Commands.mode]]>>=
-type mode = READ | WRITE
-@
-
-<<function [[Commands.exfile]]>>=
-(* ed: "exit" file =~ close file *)
-let exfile (e : Env.t) (_m : mode) : unit =
-  (* ed: is using passed mode to flush if WRITE but no need in ocaml
-   * because closing the channel will flush any remaining IO.
-   *)
-  if e.vflag then begin
-      Out.putd e;
-      Out.putchr e '\n';
-  end
-@
-
-<<function [[Commands.append]]>>=
-(* f can be Disk.getfile() or In.gettty() *)
-let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
-  e.dot <- addr;
-  let nline = ref 0 in
-
-  let rec aux () =
-    match f () with
-    | None -> (* EOF *) !nline
-    | Some str ->
-        if e.dol + 2 >= Array.length e.zero 
-        then begin
-            let oldz = e.zero in
-            let len = Array.length oldz in
-            let newz  = Array.make (len + 512) Env.no_line in
-            Array.blit oldz 0 newz 0 len;
-            e.zero <- newz;
-        end;
-
-        let tl = Disk.putline e str in
-        incr nline;
-
-        e.dol <- e.dol + 1;
-        let a1 = ref e.dol in
-        let a2 = ref (!a1 + 1) in
-        e.dot <- e.dot + 1;
-        let rdot = e.dot in
-        while !a1 > rdot do
-          e.zero.(!a2) <- e.zero.(!a1);
-          decr a2; decr a1;
-        done;
-        e.zero.(rdot) <- {offset = tl; mark = false};
-        (* TODO: update zero *)
-        aux ()
-  in
-  aux ()
-@
-
-
-<<[[CLI.commands()]], at loop start, if [[pflag]]>>=
-if e.pflag then begin
-    e.pflag <- false;
-    e.addr1 <- e.dot;
-    e.addr2 <- e.dot;
-    Commands.printcom e;
-end;
-@
-
-
-<<function [[Commands.add]]>>=
-(* used for 'a' and 'i' *)
-let add (e : Env.t) (i : int) =
-  if i <> 0 && (e.given || e.dol > 0) then begin
-     e.addr1 <- e.addr1 - 1;
-     e.addr2 <- e.addr2 - 1;
-  end;
-  squeeze e 0;
-  In.newline e;
-  append e (In.gettty e) e.addr2 |> ignore
-@
-
-<<function [[Commands.rdelete]]>>=
-(* used for 'r' and 'c' *)
-let rdelete (e : Env.t) (ad1 : lineno) (ad2 : lineno) =
-  let a1 = ref ad1 in
-  let a2 = ref (ad2 + 1) in
-  let a3 = e.dol in
-  e.dol <- e.dol - (!a2 - !a1);
-  let rec aux () =
-    e.zero.(!a1) <- e.zero.(!a2);
-    incr a1;
-    incr a2;
-    if !a2 <= a3
-    then aux ()
-  in
-  aux ();
-  a1 := ad1;
-  if !a1 > e.dol then a1 := e.dol;
-  e.dot <- !a1;
-  e.fchange <- true
-@
-
-<<function [[Commands.quit]]>>=
-(* 'q' *)
-let quit (caps : <Cap.open_out; ..>) (e : Env.t) : unit =
-  if e.vflag && e.fchange && e.dol != 0 then begin
-      (* so a second quit will actually quit *)
-      e.fchange <- false;
-      Error.e_warn "trying to quit with modified buffer"
-  end;
-  (* alt: could also Unix.close e.tfile *)
-  FS.remove caps Env.tfname;
-  raise (Exit.ExitCode 0)
-@
-
 
 %-------------------------------------------------------------
 
@@ -1613,9 +1893,7 @@ open Env
 
 <<function [[Commands.match_]]>>
 
-let file_in_current_dir (file : Fpath.t) : bool =
-  (* alt: use Unix.realpath, follow symlink and compare to cwd *)
-  Fpath.is_seg !!file
+<<function [[Commands.file_in_current_dir]]>>
 
 (*****************************************************************************)
 (* append in tfile and adjust e.zero *)
@@ -1625,130 +1903,34 @@ let file_in_current_dir (file : Fpath.t) : bool =
 (*****************************************************************************)
 (* Commands *)
 (*****************************************************************************)
-
 (* ------------------------------------------------------------------------- *)
 (* Inspecting *)
 (* ------------------------------------------------------------------------- *)
 <<function [[Commands.printcom]]>>
-
 (* ------------------------------------------------------------------------- *)
 (* Reading *)
 (* ------------------------------------------------------------------------- *)
 <<function [[Commands.read]]>>
-
 (* ------------------------------------------------------------------------- *)
 (* Writing *)
 (* ------------------------------------------------------------------------- *)
 <<function [[Commands.write]]>>
-
 (* ------------------------------------------------------------------------- *)
 (* Modifying *)
 (* ------------------------------------------------------------------------- *)
 <<function [[Commands.add]]>>
-
 <<function [[Commands.rdelete]]>>
 
-(* used for 's' *)
-let substitute (e : Env.t) (_inglob: bool) : unit =
-  (* TODO: handle inglob *)
-  match Parser.consume e.in_ with
-  (* handle | Question re_str? does not really make sense. *)
-  | Slash re_str ->
-      let re = Str.regexp re_str in
-      (* ugly: *) 
-      Buffer.clear Lexer.buf;
-      let subst_str = Lexer.regexp '/' e.in_.stdin in
-      (* TODO: parse 's/.../.../g' *)
-      In.newline e;
-
-      for a1 = e.addr1 to e.addr2 do
-        let line = Disk.getline e a1 in
-        (* TODO: handle 's/.../.../g' *)
-        if Regex.match_str re line
-        then begin
-           let loc1 = Str.match_beginning () in
-           let loc2 = Str.match_end () in
-           let len = String.length line in
-           
-           let before = String.sub line 0 loc1 in
-           let _matched = String.sub line loc1 (loc2 - loc1) in
-           let after = String.sub line loc2 (len - loc2) in
-           (* TODO: handle & and \1 in subst_str *)
-           let newline = before ^ subst_str ^ after in
-           let tl = Disk.putline e newline in
-           (* TODO: mark? *)
-           e.zero.(a1) <- { offset = tl; mark = false }
-        end
-      done
-
-  | t -> Parser.was_expecting_but_got "a regexp" t
+<<function [[Commands.substitute]]>>
 
 (* ------------------------------------------------------------------------- *)
 (* Other *)
 (* ------------------------------------------------------------------------- *)
 <<function [[Commands.quit]]>>
-
-(* '! *)
-let callunix (caps : <Cap.forkew; ..>) (e: Env.t) : unit =
-  setnoaddr e;
-  let s = In.gety e in
-  (* needed only for ocaml-light who does not support method call
-   * and so can't provide the dynamic caps of CLI.restrict_caps
-   *)
-  if e.rflag 
-  then Error.e_err "restricted mode on";
-  (* ed: was calling rc -c but here we reuse (Cap)Sys.command which relies
-   * on the default shell
-   *)
-  let _ret = CapSys.command caps s in
-  if e.vflag
-  then Out.putst e "!"
+<<function [[Commands.callunix]]>>
 @
 
 \subsection*{[[Commands.mli]]}
-
-
-<<signature [[Commands.add]]>>=
-(* 'a' and 'i' *)
-val add: Env.t -> int -> unit
-@
-
-<<signature [[Commands.printcom]]>>=
-(* 'p' *)
-val printcom : Env.t -> unit
-@
-
-<<signature [[Commands.rdelete]]>>=
-(* 'd' and 'c' *)
-val rdelete: Env.t -> Env.lineno -> Env.lineno -> unit
-@
-
-<<signature [[Commands.quit]]>>=
-(* 'q' (need open_out to remove Env.tfname from the filesystem) *)
-val quit: < Cap.open_out; ..> -> Env.t -> unit
-@
-
-<<signature [[Commands.setwide]]>>=
-(* helpers *)
-val setwide: Env.t -> unit
-@
-
-<<signature [[Commands.squeeze]]>>=
-val squeeze: Env.t -> int -> unit
-@
-
-<<signature [[Commands.nonzero]]>>=
-val nonzero: Env.t -> unit
-@
-
-<<signature [[Commands.setnoaddr]]>>=
-val setnoaddr: Env.t -> unit
-@
-
-<<signature [[Commands.append]]>>=
-(* return number of lines added, but usually ignored by caller *)
-val append: Env.t -> (unit -> string option) -> Env.lineno -> int
-@
 
 %-------------------------------------------------------------
 
@@ -1760,88 +1942,19 @@ val append: Env.t -> (unit -> string option) -> Env.lineno -> int
 <<signature [[Commands.printcom]]>>
 <<signature [[Commands.rdelete]]>>
 <<signature [[Commands.quit]]>>
-(* 's' *)
-val substitute: Env.t -> bool (* inglob *) -> unit
-(* '!' *)
-val callunix: <Cap.forkew; ..> -> Env.t -> unit
+<<signature [[Commands.substitute]]>>
+<<signature [[Commands.callunix]]>>
 
 <<signature [[Commands.setwide]]>>
 <<signature [[Commands.squeeze]]>>
 <<signature [[Commands.nonzero]]>>
 <<signature [[Commands.setnoaddr]]>>
-val match_: Env.t -> Regex.t -> Env.lineno -> bool
+<<signature [[Commands.match_]]>>
 
 <<signature [[Commands.append]]>>
 @
 
-
 \subsection*{[[Disk.ml]]}
-
-<<function [[Disk.putline]]>>=
-(* store line in tfile and return its offset *)
-let putline (e : Env.t) (line : string) : Env.tfile_offset =
-  e.fchange <- true;
-  let Tfile_offset old_tline = e.tline in
-  Unix.lseek e.tfile old_tline Unix.SEEK_SET |> ignore;
-  (* alt: could use a different terminator like '\0' in C but simpler to
-   * use \n *)
-  let line = line ^ "\n" in
-  let len = String.length line in
-  Unix.write e.tfile (Bytes.of_string line) 0 len |> ignore;
-  e.tline <- Tfile_offset (old_tline + len);
-  Tfile_offset old_tline
-@
-
-<<function [[Disk.getline]]>>=
-(* dual of putline(), retrieve line in tfile (without trailing '\n') 
- * ed: was taking an Env.tfile_offset but cleaner to take addr
- *)
-let getline (e : Env.t) (addr : Env.lineno)  : string =
-  let tl = e.zero.(addr).offset in
-  let Tfile_offset offset = tl in
-  Unix.lseek e.tfile offset Unix.SEEK_SET |> ignore;
-  (* alt: Stdlib.input_line (Unix.in_channel_of_descr ...) but then
-   * need to close it which unfortunately also close the file_descr so
-   * we do our own adhoc input_line below.
-   *)
-  let bytes = Bytes.of_string " " in
-  let rec aux acc =
-    let n = Unix.read e.tfile bytes 0 1 in
-    let c : char = Bytes.get bytes 0 in
-    if n = 1 && c <> '\n'
-    then aux (c::acc)
-    (* no need to add the \n, putshst will add it *)
-    else String_.of_chars (List.rev acc)
-  in
-  aux []
-@
-
-<<function [[Disk.getfile]]>>=
-(* will return one line (without trailing '\n') or None when reached EOF *)
-let getfile (e : Env.t) (chan : Chan.i) () : string option =
-  (* alt: use Stdlib.input_line which does some extra magic around newlines
-   * and EOF we want, because ed also uniformize the lack of newline before EOF
-   * (see the "\\n appended" message below),but we want to to match exactly what
-   * ed does and display the same error message so we need to go lower level
-   * than input_line and use input_char directly.
-   *)
-  try 
-    (* 's' will not have the trailing '\n' *)
-    let s = input_line chan.ic in
-    e.count <- e.count + String.length s + 1 (* to count the new line *);
-    Some s
-  with End_of_file -> None
-@
-
-<<function [[Disk.putfile]]>>=
-(* dual of getfile() but this time writing all the lines, not just one *)
-let putfile (e : Env.t) (chan : Chan.o) : unit =
-  for a1 = e.addr1 to e.addr2 do
-    let l = getline e a1 ^ "\n" in
-    e.count <- e.count + String.length l;
-    output_string chan.oc l;
-  done
-@
 
 %-------------------------------------------------------------
 
@@ -1892,7 +2005,6 @@ open Common
 <<function [[Disk.putfile]]>>
 @
 
-
 \subsection*{[[Disk.mli]]}
 
 %-------------------------------------------------------------
@@ -1905,7 +2017,6 @@ open Common
 <<signature [[Disk.getfile]]>>
 <<signature [[Disk.putfile]]>>
 @
-
 
 \subsection*{[[Env.ml]]}
 
@@ -1948,7 +2059,6 @@ open Fpath_.Operators
 <<function [[Env.init]]>>
 @
 
-
 \subsection*{[[Error.ml]]}
 
 %-------------------------------------------------------------
@@ -1963,45 +2073,7 @@ open Fpath_.Operators
 <<function [[Error.e_legacy]]>>
 @
 
-
 \subsection*{[[In.ml]]}
-
-<<function [[In.newline]]>>=
-let newline (e : Env.t) : unit =
-  match Parser.consume e.in_ with
-  | T.Newline -> ()
-  (* tricky but is useful to treat EOF as a newline sometimes
-   * like for globp "r" but sometimes not in g/re/x globp context so that
-   * it is consumed by commands() leading to returning from commands().
-   *)
-  | T.EOF -> ()
-  (* TODO: if special chars pln ? *)
-  | t -> Parser.was_expecting_but_got "newline" t
-@
-
-
-<<function [[In.gety]]>>=
-(* return a line (without trailing '\n') *)
-let gety (e : Env.t) : string =
-  Lexer.line e.in_.stdin
-@
-
-<<function [[In.gettty]]>>=
-(* Read a line from stdin. Return None when the user entered "." on a single
- * line meaning the end of interactive input.
- * This has a similar interface to getfile() so it can be passed to
- * append().
- *)
-let gettty (e : Env.t) () : string option =
-  let s = gety e in
-  if s = "."
-  then begin
-    Logs.info (fun m -> m "end of input, back to ed");
-    None
-  end
-  else Some s
-@
-
 
 %-------------------------------------------------------------
 
@@ -2021,54 +2093,29 @@ module T = Token
 (*****************************************************************************)
 (* API *)
 (*****************************************************************************)
-
 <<function [[In.newline]]>>
 
 <<function [[In.filename]]>>
 
 <<function [[In.gety]]>>
-  
-
 <<function [[In.gettty]]>>
 @
 
-
 \subsection*{[[In.mli]]}
-
-<<signature [[In.newline]]>>=
-(* check the next token is a newline (or EOF) and consume it *)
-val newline: Env.t -> unit
-@
-
-<<signature [[In.gettty]]>>=
-(* Used to read a set of lines from stdin until a single "." on a line
- * is entered marking the end of user text input.
- *)
-val gettty : Env.t -> (unit -> string option)
-@
-
 
 %-------------------------------------------------------------
 
 <<In.mli>>=
 
 <<signature [[In.newline]]>>
-
 <<signature [[In.filename]]>>
 
-(* return a line (without trailing '\n') *)
-val gety :  Env.t -> string
-
+<<signature [[In.gety]]>>
 <<signature [[In.gettty]]>>
 @
 
 
 \subsection*{[[Lexer.mll]]}
-
-<<constant [[Lexer.buf]]>>=
-let buf = Buffer.create 32
-}
-@
 
 %-------------------------------------------------------------
 
@@ -2085,6 +2132,7 @@ open Token
  *)
 
 <<constant [[Lexer.buf]]>>
+}
 (*****************************************************************************)
 (* Regexps aliases *)
 (*****************************************************************************)
@@ -2120,20 +2168,6 @@ open Token
 
 \subsection*{[[Out.ml]]}
 
-
-
-
-<<function [[Out.putd]]>>=
-(* display e.count *)
-let rec putd (e : Env.t) : unit =
-  let r = e.count mod 10 in
-  e.count <- e.count / 10;
-  if e.count > 0
-  then putd e;
-  putchr e (Char.chr (Char.code '0' + r))
-@
-
-
 %-------------------------------------------------------------
 
 <<Out.ml>>=
@@ -2159,17 +2193,6 @@ open Common
 
 \subsection*{[[Out.mli]]}
 
-<<signature [[Out.putshst]]>>=
-(* ed: put "shell" string, legacy name, identical to putst for oed *)
-val putshst : Env.t -> string -> unit 
-@
-
-<<signature [[Out.putd]]>>=
-(* will print Env.count *)
-val putd: Env.t -> unit
-@
-
-
 %-------------------------------------------------------------
 
 <<Out.mli>>=
@@ -2183,17 +2206,6 @@ val putd: Env.t -> unit
 
 
 \subsection*{[[Parser.ml]]}
-
-
-<<function [[Parser.was_expecting]]>>=
-let was_expecting (expect : string) =
-  Error.e_err (spf "was expecting %s" expect)
-@
-
-<<function [[Parser.was_expecting_but_got]]>>=
-let was_expecting_but_got (expect : string) (tok : Token.t) =
-  was_expecting (spf "%s, but got %s" expect (Token.show tok))
-@
 
 %-------------------------------------------------------------
 
@@ -2224,21 +2236,17 @@ module T = Token
 (* Error management *)
 (*****************************************************************************)
 <<function [[Parser.was_expecting]]>>
-
 <<function [[Parser.was_expecting_but_got]]>>
 
 (*****************************************************************************)
 (* Helpers *)
 (*****************************************************************************)
-
 <<function [[Parser.next_token]]>>
 
 (*****************************************************************************)
 (* peek/consume *)
 (*****************************************************************************)
-         
 <<function [[Parser.peek]]>>
-
 <<function [[Parser.consume]]>>
 
 (*****************************************************************************)
@@ -2261,20 +2269,6 @@ module T = Token
 
 \subsection*{[[Parser.mli]]}
 
-<<signature [[Parser.init]]>>=
-val init: <Cap.stdin; ..> -> state
-@
-
-<<signature [[Parser.was_expecting]]>>=
-(* internals that are used outside for now *)
-val was_expecting: string -> 'a
-@
-
-<<signature [[Parser.was_expecting_but_got]]>>=
-val was_expecting_but_got: string -> Token.t -> 'a
-@
-
-
 %-------------------------------------------------------------
 
 <<Parser.mli>>=
@@ -2292,7 +2286,6 @@ open Common
 <<signature [[Parser.was_expecting_but_got]]>>
 @
 
-
 \subsection*{[[Token.ml]]}
 
 %-------------------------------------------------------------
@@ -2304,7 +2297,6 @@ open Common
 [@@deriving show]
 @
 
-
 \subsection*{[[Address.mli]]}
 
 %-------------------------------------------------------------
@@ -2315,10 +2307,8 @@ open Common
 <<type [[Address.range]]>>
 
 <<signature [[Address.parse_range]]>>
-
 <<signature [[Address.eval_range]]>>
 @
-
 
 \subsection*{[[Regex.ml]]}
 
@@ -2331,7 +2321,6 @@ open Common
 
 <<function [[Regex.match_str]]>>
 @
-
 
 \subsection*{[[Lexer.mli]]}
 
