@@ -6,33 +6,33 @@
 #include "y.tab.h"
 
 /*s: constant [[NSTACK]](hoc) */
-#define	NSTACK	256
+#define NSTACK  256
 /*e: constant [[NSTACK]](hoc) */
 
-static Datum stack[NSTACK];	/* the stack */
-static Datum *stackp;		/* next free spot on stack */
+static Datum stack[NSTACK];     /* the stack */
+static Datum *stackp;           /* next free spot on stack */
 
 /*s: constant [[NPROG]](hoc) */
-#define	NPROG	2000
+#define NPROG   2000
 /*e: constant [[NPROG]](hoc) */
-Inst	prog[NPROG];	/* the machine */
-Inst	*progp;		/* next free spot for code generation */
-Inst	*pc;		/* program counter during execution */
-Inst	*progbase = prog; /* start of current subprogram */
-int	returning;	/* 1 if return stmt seen */
-int	indef;	/* 1 if parsing a func or proc */
+Inst    prog[NPROG];    /* the machine */
+Inst    *progp;         /* next free spot for code generation */
+Inst    *pc;            /* program counter during execution */
+Inst    *progbase = prog; /* start of current subprogram */
+int     returning;      /* 1 if return stmt seen */
+int     indef;  /* 1 if parsing a func or proc */
 
-typedef struct Frame {	/* proc/func call stack frame */
-    Symbol	*sp;	/* symbol table entry */
-    Inst	*retpc;	/* where to resume after return */
-    Datum	*argn;	/* n-th argument on stack */
-    int	nargs;	/* number of arguments */
+typedef struct Frame {  /* proc/func call stack frame */
+    Symbol      *sp;    /* symbol table entry */
+    Inst        *retpc; /* where to resume after return */
+    Datum       *argn;  /* n-th argument on stack */
+    int nargs;  /* number of arguments */
 } Frame;
 /*s: constant [[NFRAME]](hoc) */
-#define	NFRAME	100
+#define NFRAME  100
 /*e: constant [[NFRAME]](hoc) */
-Frame	frame[NFRAME];
-Frame	*fp;		/* frame pointer */
+Frame   frame[NFRAME];
+Frame   *fp;            /* frame pointer */
 
 /*s: function [[initcode]](hoc) */
 void
@@ -68,7 +68,7 @@ pop(void)
 
 /*s: function [[xpop]](hoc) */
 void
-xpop(void)	/* for when no value is wanted */
+xpop(void)      /* for when no value is wanted */
 {
     if (stackp == stack)
         execerror("stack underflow", (char *)0);
@@ -103,13 +103,13 @@ whilecode(void)
     Datum d;
     Inst *savepc = pc;
 
-    execute(savepc+2);	/* condition */
+    execute(savepc+2);  /* condition */
     d = pop();
     while (d.val) {
-        execute(*((Inst **)(savepc)));	/* body */
+        execute(*((Inst **)(savepc)));  /* body */
         if (returning)
             break;
-        execute(savepc+2);	/* condition */
+        execute(savepc+2);      /* condition */
         d = pop();
     }
     if (!returning)
@@ -124,17 +124,17 @@ forcode(void)
     Datum d;
     Inst *savepc = pc;
 
-    execute(savepc+4);		/* precharge */
+    execute(savepc+4);          /* precharge */
     pop();
-    execute(*((Inst **)(savepc)));	/* condition */
+    execute(*((Inst **)(savepc)));      /* condition */
     d = pop();
     while (d.val) {
-        execute(*((Inst **)(savepc+2)));	/* body */
+        execute(*((Inst **)(savepc+2)));        /* body */
         if (returning)
             break;
-        execute(*((Inst **)(savepc+1)));	/* post loop */
+        execute(*((Inst **)(savepc+1)));        /* post loop */
         pop();
-        execute(*((Inst **)(savepc)));	/* condition */
+        execute(*((Inst **)(savepc)));  /* condition */
         d = pop();
     }
     if (!returning)
@@ -147,12 +147,12 @@ void
 ifcode(void) 
 {
     Datum d;
-    Inst *savepc = pc;	/* then part */
+    Inst *savepc = pc;  /* then part */
 
-    execute(savepc+3);	/* condition */
+    execute(savepc+3);  /* condition */
     d = pop();
     if (d.val)
-        execute(*((Inst **)(savepc)));	
+        execute(*((Inst **)(savepc)));  
     else if (*((Inst **)(savepc+1))) /* else part? */
         execute(*((Inst **)(savepc+1)));
     if (!returning)
@@ -162,14 +162,14 @@ ifcode(void)
 
 /*s: function [[define]](hoc) */
 void
-define(Symbol* sp, Formal *f)	/* put func/proc in symbol table */
+define(Symbol* sp, Formal *f)   /* put func/proc in symbol table */
 {
     Fndefn *fd;
     int n;
 
     fd = emalloc(sizeof(Fndefn));
-    fd->code = progbase;	/* start of code */
-    progbase = progp;	/* next code starts here */
+    fd->code = progbase;        /* start of code */
+    progbase = progp;   /* next code starts here */
     fd->formals = f;
     for(n=0; f; f=f->next)
         n++;
@@ -180,7 +180,7 @@ define(Symbol* sp, Formal *f)	/* put func/proc in symbol table */
 
 /*s: function [[call]](hoc) */
 void
-call(void) 		/* call a function */
+call(void)              /* call a function */
 {
     Formal *f;
     Datum *arg;
@@ -195,7 +195,7 @@ call(void) 		/* call a function */
     fp->sp = sp;
     fp->nargs = (int)(uintptr)pc[1];
     fp->retpc = pc + 2;
-    fp->argn = stackp - 1;	/* last argument */
+    fp->argn = stackp - 1;      /* last argument */
     if(fp->nargs != sp->u.defn->nargs)
         execerror(sp->name, "called with wrong number of arguments");
     /* bind formals */
@@ -213,7 +213,7 @@ call(void) 		/* call a function */
         arg++;
     }
     for (i = 0; i < fp->nargs; i++)
-        pop();	/* pop arguments; no longer needed */
+        pop();  /* pop arguments; no longer needed */
     execute(sp->u.defn->code);
     returning = 0;
 }
@@ -221,7 +221,7 @@ call(void) 		/* call a function */
 
 /*s: function [[restore]](hoc) */
 void
-restore(Symbol *sp)	/* restore formals associated with symbol */
+restore(Symbol *sp)     /* restore formals associated with symbol */
 {
     Formal *f;
     Saveval *s;
@@ -229,7 +229,7 @@ restore(Symbol *sp)	/* restore formals associated with symbol */
     f = sp->u.defn->formals;
     while(f){
         s = f->save;
-        if(s == 0)	/* more actuals than formals */
+        if(s == 0)      /* more actuals than formals */
             break;
         f->sym->u = s->val;
         f->sym->type = s->type;
@@ -242,7 +242,7 @@ restore(Symbol *sp)	/* restore formals associated with symbol */
 
 /*s: function [[restoreall]](hoc) */
 void
-restoreall(void)	/* restore all variables in case of error */
+restoreall(void)        /* restore all variables in case of error */
 {
     while(fp>=frame && fp->sp){
         restore(fp->sp);
@@ -254,7 +254,7 @@ restoreall(void)	/* restore all variables in case of error */
 
 /*s: function [[ret]](hoc) */
 static void
-ret(void) 		/* common return from func or proc */
+ret(void)               /* common return from func or proc */
 {
     /* restore formals */
     restore(fp->sp);
@@ -266,12 +266,12 @@ ret(void) 		/* common return from func or proc */
 
 /*s: function [[funcret]](hoc) */
 void
-funcret(void) 	/* return from a function */
+funcret(void)   /* return from a function */
 {
     Datum d;
     if (fp->sp->type == PROCEDURE)
         execerror(fp->sp->name, "(proc) returns value");
-    d = pop();	/* preserve function return value */
+    d = pop();  /* preserve function return value */
     ret();
     push(d);
 }
@@ -279,7 +279,7 @@ funcret(void) 	/* return from a function */
 
 /*s: function [[procret]](hoc) */
 void
-procret(void) 	/* return from a procedure */
+procret(void)   /* return from a procedure */
 {
     if (fp->sp->type == FUNCTION)
         execerror(fp->sp->name,
@@ -389,7 +389,7 @@ verify(Symbol* s)
 
 /*s: function [[eval]](hoc) */
 void
-eval(void)		/* evaluate variable on stack */
+eval(void)              /* evaluate variable on stack */
 {
     Datum d;
     d = pop();
@@ -674,10 +674,10 @@ modeq(void)
 
 /*s: function [[printtop]](hoc) */
 void
-printtop(void)	/* pop top value from stack, print it */
+printtop(void)  /* pop top value from stack, print it */
 {
     Datum d;
-    static Symbol *s;	/* last value computed */
+    static Symbol *s;   /* last value computed */
     if (s == 0)
         s = install("_", VAR, 0.0);
     d = pop();
@@ -688,7 +688,7 @@ printtop(void)	/* pop top value from stack, print it */
 
 /*s: function [[prexpr]](hoc) */
 void
-prexpr(void)	/* print numeric value */
+prexpr(void)    /* print numeric value */
 {
     Datum d;
     d = pop();
@@ -698,7 +698,7 @@ prexpr(void)	/* print numeric value */
 
 /*s: function [[prstr]](hoc) */
 void
-prstr(void)		/* print string value */ 
+prstr(void)             /* print string value */ 
 {
     print("%s", (char *) *pc++);
 }
@@ -706,7 +706,7 @@ prstr(void)		/* print string value */
 
 /*s: function [[varread]](hoc) */
 void
-varread(void)	/* read into variable */
+varread(void)   /* read into variable */
 {
     Datum d;
     extern Biobuf *bin;
@@ -740,7 +740,7 @@ varread(void)	/* read into variable */
 
 /*s: function [[code]](hoc) */
 Inst*
-code(Inst f)	/* install one instruction or operand */
+code(Inst f)    /* install one instruction or operand */
 {
     Inst *oprogp = progp;
     if (progp >= &prog[NPROG])

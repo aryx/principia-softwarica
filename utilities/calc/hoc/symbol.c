@@ -8,14 +8,14 @@ static Symbol *symlist = 0;  /* symbol table: linked list */
 
 /*s: function [[lookup]](hoc) */
 Symbol*
-lookup(char* s)	/* find s in symbol table */
+lookup(char* s) /* find s in symbol table */
 {
     Symbol *sp;
 
     for (sp = symlist; sp != (Symbol *) 0; sp = sp->next)
         if (strcmp(sp->name, s) == 0)
             return sp;
-    return 0;	/* 0 ==> not found */	
+    return 0;   /* 0 ==> not found */   
 }
 /*e: function [[lookup]](hoc) */
 
@@ -38,7 +38,7 @@ install(char* s, int t, double d)  /* install s in symbol table */
 
 /*s: function [[emalloc]](hoc) */
 void*
-emalloc(unsigned n)	/* check return from malloc */
+emalloc(unsigned n)     /* check return from malloc */
 {
     char *p;
 
@@ -51,7 +51,7 @@ emalloc(unsigned n)	/* check return from malloc */
 
 /*s: function [[formallist]](hoc) */
 Formal*
-formallist(Symbol *formal, Formal *list)	/* add formal to list */
+formallist(Symbol *formal, Formal *list)        /* add formal to list */
 {
     Formal *f;
 
