@@ -66,7 +66,7 @@ type t =
 
 <<type [[Address.range]]>>=
 (* What is parsed before a command. For instance 1,3 will be parsed as
- * { addr1 = Some (Line 1); addr2 = Line 3; given = true; set_dot = false}.
+ * { addr1 = Some (Line 1); addr2 = Line 3; given = true; ...}.
  *)
 type range = {
   addr1 : t option;
@@ -75,8 +75,8 @@ type range = {
   <<[[Address.range]] other fields>>
 }
 @
-% 1p will be parsed as addr1 = None; addr2 = Line 1?
-% , will be parsed as 1,$ actually
+% '1p' will be parsed as addr1 = None; addr2 = Line 1?
+% ',' will be parsed as 1,$ actually
 
 
 
@@ -105,25 +105,6 @@ out: Out_channel_.t;
 @
 
 
-
-%XXX
-<<[[Env.t]] other fields>>=
-(* did the buffer changed (mostly tested with dol > 0) *)
-mutable fchange: bool;
-@
-<<[[Env.t]] other fields>>=
-(* count #chars read, or number of lines; displayed by Out.putd() *)
-mutable count: int;
-@
-<<[[Env.t]] other fields>>=
-(* set by ?? effect is to Out.printcom() in commands () before the next cmd *)
-mutable pflag: bool;
-@
-<<[[Env.t]] other fields>>=
-(* ?? what functions rely on column number set? *)
-mutable col: int;
-@
-
 \subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
 
 <<constant [[Env.tfname]]>>=
@@ -131,8 +112,8 @@ let tfname = Fpath.v "/tmp/oed.scratch"
 @
 
 <<[[Env.t]] temporary file fields>>=
-(* This is the temporary tfname file, ed backing store!
- * Note that we can't use the OCaml usual {in/out}_channel type because we
+(* This is the opened temporary tfname file; ed backing store!
+ * Note that we can't use the usual {in/out}_channel OCaml types because we
  * need to both read and write in the temporary file, hence the use of the
  * more general Unix.file_descr.
  *)
@@ -143,6 +124,7 @@ tfile : Unix_.file_descr;
 (* current write file offset in tfile to append new lines *)
 mutable tline : tfile_offset;
 @
+% kind of a log, only append lines, never delete old lines in there
 
 <<type [[Env.tfile_offset]]>>=
 (* offset in tfname file content *)
@@ -154,10 +136,9 @@ type tfile_offset = Tfile_offset of int
 \subsection{The lines as file offsets: [[zero]]}
 
 <<[[Env.t]] zero field>>=
-(* growing array of line offsets in tfile. 1-indexed array but the 0
- * entry is used as a sentinel. map lineno -> file_offset.
- * The bool is a mark used to remember a matching line in g/re/x
- * operations.
+(* Growing array of line offsets in tfile. It is a 1-indexed array but the 0
+ * entry is used as a sentinel. This array maps lineno -> tfile_offset.
+ * The mark is used to remember a matching line in g/re/x operations.
  *)
 mutable zero : offset_and_mark array;
 @
@@ -185,6 +166,7 @@ let no_line = { offset = Tfile_offset 0; mark = false }
 *)
 type lineno = int
 @
+% not to confuse with tfile_offset! This is "user" line numbers.
 
 <<[[Env.t]] cursor fields>>=
 (* index entried in zero *)
@@ -234,7 +216,8 @@ type caps = <
 @
 
 
-% skeleton
+%trans: 
+Here is the [<main>] skeleton.
 
 <<function [[CLI.main]]>>=
 let main (caps : <caps; ..>) (argv : string array) : Exit.t =
@@ -250,11 +233,9 @@ let main (caps : <caps; ..>) (argv : string array) : Exit.t =
   Arg_.parse_argv caps argv options (fun t -> args := t::!args) 
     (spf "usage: %s [options] [file]" argv.(0));
   <<[[CLI.main()]] setup logging after parsed argv>>
-
   <<[[CLI.main()]] restrict caps>>
 
   let env : Env.t = Env.init caps !vflag !oflag !rflag in
-
   <<[[CLI.main()]] env adjustments>>
 
   while true do
@@ -281,7 +262,6 @@ mutable savedfile: Fpath.t option;
 @
 
 
-%XXX
 <<[[CLI.main()]] env adjustments>>=
 (match !args with
 | [] -> ()
@@ -291,8 +271,8 @@ mutable savedfile: Fpath.t option;
 (* stricter: *)
 | _::_::_ -> failwith "too many arguments" 
 );
-if !oflag then env.in_.globp <- Some (Lexing.from_string "a");
-Logs.debug (fun m -> m "env = %s" (Env.show env));
+<<[[CLI.main()]] env adjustments if [[oflag]]>>
+<<[[CLI.main()]] debug env>>
 @
 
 <<[[Parser.state]] other fields>>=
@@ -312,7 +292,6 @@ let vflag = ref true in
 "-", Arg.Clear vflag,
 " non-interactive mode (opposite of verbose)";
 @
-
 <<[[Env.t]] flag fields>>=
 (* verbose (a.k.a. interactive) flag, cleared by 'ed -' *)
 vflag: bool;
@@ -330,13 +309,29 @@ let oflag = ref false in
 "-o", Arg.Set oflag,
 " write buffer to standard output";
 @
-
 <<[[Env.t]] flag fields>>=
 (* output flag, set by 'ed -o'.
  * used just in Out.putchr() so could be removed almost.
  *)
 oflag: bool;
 @
+
+% code for /dev/fd1 here
+
+<<[[Env.init()]] set local [[savedfile]]>>=
+(* will be overwritten possibly in the caller by argv[1] 
+ * TODO: works on Linux? /fd/1 exists?
+ *)
+let savedfile = if oflag then Some (Fpath.v "/fd/1") else None in
+@
+<<[[Env.init()]] set local [[out]]>>=
+let out = if oflag then Console.stderr caps else Console.stdout caps in
+@
+
+<<[[CLI.main()]] env adjustments if [[oflag]]>>=
+if !oflag then env.in_.globp <- Some (Lexing.from_string "a");
+@
+% another preloaded command! append mode!
 
 
 \subsection{[[init()]]}
@@ -345,32 +340,13 @@ oflag: bool;
 let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>) 
      (vflag : bool) (oflag : bool) (rflag:  bool) : t =
 
-  let out = if oflag then Console.stderr caps else Console.stdout caps in
-  (* will be overwritten possibly in the caller by argv[1] 
-   * TODO: works on Linux? /fd/1 exists?
-   *)
-  let savedfile = if oflag then Some (Fpath.v "/fd/1") else None in
+  <<[[Env.init()]] set local [[out]]>>
+  <<[[Env.init()]] set local [[savedfile]]>>
   { 
     in_ = Parser.init caps;
     out;
-
-    tfile =
-      (try
-        Unix.openfile !!tfname [ Unix.O_RDWR; Unix.O_CREAT ] 0o600
-      with Unix.Unix_error (err, s1, s2) ->
-        Logs.err (fun m -> m "%s %s %s" (Unix.error_message err) s1 s2);
-        (* alt: just no try and rely on default exn and backtrace *)
-        (* alt: call Out.putxxx funcs but mutual recursion *)
-        output_string out "?TMP\n";
-        (* ed was doing exits(nil) = exit 0 so we do the same *)
-        raise (Exit.ExitCode 0)
-       );
-    (* sentinel value so that file offsets 0 and 1 are reserved and no
-     * real line offsets in zero[] can have those values
-     * TODO? mark is using a separate bool field now so we could
-     * use Tfile_offset 1 too and so start at 1 (or even 0?) now.
-     *)
-    tline = Tfile_offset 2;
+    <<[[Env.init()]] [[tfile]] field>>
+    <<[[Env.init()]] [[tline]] field>>
 
     zero = Array.make 10 no_line;
     dot = 0;
@@ -392,6 +368,33 @@ let init (caps : < Cap.stdin; Cap.stdout; Cap.stderr; ..>)
   }
 @
 
+% see also oflag => not verbose
+
+<<[[Env.init()]] [[tfile]] field>>=
+tfile =
+  (try
+    Unix.openfile !!tfname [ Unix.O_RDWR; Unix.O_CREAT ] 0o600
+  with Unix.Unix_error (err, s1, s2) ->
+    Logs.err (fun m -> m "%s %s %s" (Unix.error_message err) s1 s2);
+    (* alt: just no try and rely on default exn and backtrace *)
+    (* alt: call Out.putxxx funcs but mutual recursion *)
+    output_string out "?TMP\n";
+    (* ed was doing exits(nil) = exit 0 so we do the same *)
+    raise (Exit.ExitCode 0)
+   );
+@
+
+<<[[Env.init()]] [[tline]] field>>=
+(* sentinel value so that file offsets 0 and 1 are reserved and no
+ * real line offsets in zero[] can have those values
+ * TODO? mark is using a separate bool field now so we could
+ * use Tfile_offset 1 too and so start at 1 (or even 0?) now.
+ *)
+tline = Tfile_offset 2;
+@
+%alt: could be 1 now, no need 1 for mark
+
+
 \subsection{[[quit()]]}
 
 <<signature [[Commands.quit]]>>=
@@ -402,14 +405,24 @@ val quit: < Cap.open_out; ..> -> Env.t -> unit
 <<function [[Commands.quit]]>>=
 (* 'q' *)
 let quit (caps : <Cap.open_out; ..>) (e : Env.t) : unit =
-  if e.vflag && e.fchange && e.dol != 0 then begin
-      (* so a second quit will actually quit *)
-      e.fchange <- false;
-      Error.e_warn "trying to quit with modified buffer"
-  end;
+  <<[[Commands.quit()]] check if modified buffer>>
   (* alt: could also Unix.close e.tfile *)
   FS.remove caps Env.tfname;
   raise (Exit.ExitCode 0)
+@
+
+
+<<[[Env.t]] other fields>>=
+(* did the buffer changed (mostly tested with dol > 0) *)
+mutable fchange: bool;
+@
+
+<<[[Commands.quit()]] check if modified buffer>>=
+if e.vflag && e.fchange && e.dol != 0 then begin
+    (* so a second quit will actually quit *)
+    e.fchange <- false;
+    Error.e_warn "trying to quit with modified buffer"
+end;
 @
 
 
@@ -426,6 +439,7 @@ let putchr (e : Env.t) (c : char) =
   output_char e.out c;
   if c = '\n' then flush e.out
 @
+% use e.out, which can be stdout or stderr depending on -o flag
 
 <<signature [[Out.putst]]>>=
 val putst: Env.t -> string -> unit
@@ -441,6 +455,11 @@ let putst (e : Env.t) (str : string) : unit =
   String.iter (putchr e) str;
   putchr e '\n';
   ()
+@
+
+<<[[Env.t]] other fields>>=
+(* ?? what functions rely on column number set? *)
+mutable col: int;
 @
 
 
@@ -460,6 +479,16 @@ let gety (e : Env.t) : string =
   Lexer.line e.in_.stdin
 @
 
+<<signature [[Lexer.line]]>>=
+val line: Lexing.lexbuf -> string
+@
+<<function [[Lexer.line]]>>=
+and line = parse
+  | ([^ '\n' ]* as s) '\n' { s }
+  | eof { failwith "eof in Lexer.line()" (* alt: None? *) }
+@
+
+
 <<signature [[In.gettty]]>>=
 (* Used to read a set of lines from stdin until a single "." on a line
  * is entered marking the end of user text input.
@@ -477,7 +506,7 @@ let gettty (e : Env.t) () : string option =
   let s = gety e in
   if s = "."
   then begin
-    Logs.info (fun m -> m "end of input, back to ed");
+    <<[[In.gettty()]] log end of input>>
     None
   end
   else Some s
@@ -519,15 +548,10 @@ rule token = parse
 let next_token (st : state) : Token.t =
   let t = 
     match st.globp with
-    | Some lexbuf ->
-        let t = Lexer.token lexbuf in
-        if t = T.EOF
-        then st.globp <- None;
-        t
-    | None ->
-        Lexer.token st.stdin
+    <<[[Parser.next_token()]] match [[globp]] cases>>
+    | None -> Lexer.token st.stdin
   in
-  Logs.debug (fun m -> m "tok = %s" (Token.show t));
+  <<[[Parser.next_token()]] debug token>>
   t
 @
 
@@ -555,6 +579,18 @@ let consume (st : state) : Token.t =
 @
 
 
+
+% not st.stdin this time but passed "virtual" stdin
+<<[[Parser.next_token()]] match [[globp]] cases>>=
+| Some lexbuf ->
+    let t = Lexer.token lexbuf in
+    if t = T.EOF
+    then st.globp <- None;
+    t
+@
+% see ed file, or also when using -  to preload append
+
+
 \section{[[CLI.commands()]] interpreter loop}
 
 %trans: ok enough background to now see code of CLI.commands()
@@ -563,8 +599,7 @@ let consume (st : state) : Token.t =
 
 <<function [[CLI.commands]]>>=
 let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
-  Logs.debug (fun m -> m "commands ->");
-
+  <<[[CLI.commands()]] debug start>>
   let done_ = ref false in
   while not !done_ do
     <<[[CLI.commands()]], at loop start, if [[pflag]]>>
@@ -614,7 +649,7 @@ let rec commands (caps : < Cap.open_in; Cap.open_out; ..>) (e : Env.t) : unit =
     | t -> Parser.was_expecting_but_got "a letter" t
     )
   done;
-  Logs.debug (fun m -> m "commands <-");
+  <<[[CLI.commands()]] debug end>>
 @
 
 <<signature [[Address.parse_range]]>>=
@@ -624,6 +659,8 @@ val parse_range: Parser.state -> range
 <<signature [[Address.eval_range]]>>=
 val eval_range: Env.t -> range -> Env.lineno * Env.lineno
 @
+% for now can assume will return current line, e.dot which is what is
+% returned when no special address are given, as in 'p'
 
 \section{[[r]]eading a file: [[r]]}
 
@@ -635,38 +672,27 @@ val eval_range: Env.t -> range -> Env.lineno * Env.lineno
 
 <<signature [[In.filename]]>>=
 (* read a filename from stdin or from Env.savedfile otherwise *)
-val filename: Env.t -> char (* 'f' or 'e' or ? *) -> Fpath.t
+val filename: Env.t -> char (* 'f' or 'e' or 'r' or ? *) -> Fpath.t
 @
-
 
 <<signature [[Commands.read]]>>=
 (* 'r' *)
 val read: <Cap.open_in; ..> -> Env.t -> Fpath.t -> unit
 @
 
-<<signature [[Lexer.filename]]>>=
-val filename: Lexing.lexbuf -> string
-@
-<<function [[Lexer.filename]]>>=
-and filename = parse
-  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
-  | eof { failwith "eof in Lexer.filename()" }
-@
+\subsection{Reading a [[filename()]]}
+
 
 <<function [[In.filename]]>>=
 let filename (e : Env.t) (cmd : char) : Fpath.t =
-  (* alt: do it in the caller, clearer; will be incremented
-   * when reading the file in getfile
-   *)
-  e.count <- 0;
-
+  <<[[In.filename()]] reset [[count]]>>
   match Parser.consume e.in_ with
   | T.Newline | T.EOF ->
       (* no file specified, use maybe e.savedfile then *)
       (match e.savedfile with
+      | Some file -> file
       | None when cmd <> 'f' -> Error.e_err "no savedfile and no filename given"
       | None -> failwith "TODO?? what does ed in that case?"
-      | Some file -> file
       )
   | T.Spaces ->
       let str = Lexer.filename e.in_.stdin in
@@ -683,15 +709,38 @@ let filename (e : Env.t) (cmd : char) : Fpath.t =
   | t -> Parser.was_expecting_but_got "a newline or space and filename" t
 @
 
+<<signature [[Lexer.filename]]>>=
+val filename: Lexing.lexbuf -> string
+@
+<<function [[Lexer.filename]]>>=
+and filename = parse
+  | [^ '\n' ' ']* { Lexing.lexeme lexbuf }
+  | eof { failwith "eof in Lexer.filename()" }
+@
 
 
+<<[[Env.t]] other fields>>=
+(* count #chars read, or number of lines; displayed by Out.putd() *)
+mutable count: int;
+@
+<<[[In.filename()]] reset [[count]]>>=
+(* alt: do it in the caller, clearer; will be incremented
+ * when reading the file in getfile
+ *)
+e.count <- 0;
+@
+
+
+
+\subsection{[[read()]]}
+
+% passed file from In.filename (coming from user or savedfile
+% set for example when doing 'ed file'
 
 <<function [[Commands.read]]>>=
 (* 'r' *)
 let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
-  (* ocaml-light: see callunix() comment below *)
-  if e.rflag && not (file_in_current_dir file)
-  then Error.e_err (spf "restricted mode on, can't access %s" !!file);
+  <<[[Commands.read()]] restricted mode check>>
   try 
     file |> FS.with_open_in caps (fun chan ->
         setwide e;
@@ -710,6 +759,24 @@ let read (caps : < Cap.open_in; .. >) (e : Env.t) (file : Fpath.t) : unit =
 (* helpers *)
 val setwide: Env.t -> unit
 @
+<<signature [[Commands.squeeze]]>>=
+val squeeze: Env.t -> int -> unit
+@
+
+<<signature [[Disk.getfile]]>>=
+(* will return one line (without trailing '\n') or None when reached EOF *)
+val getfile: Env.t -> Chan.i -> (unit -> string option)
+@
+
+<<signature [[Commands.append]]>>=
+(* return number of lines added, but usually ignored by caller *)
+val append: Env.t -> (unit -> string option) -> Env.lineno -> int
+@
+
+
+
+\subsection{[[setwide()]] and [[squeeze()]]}
+
 <<function [[Commands.setwide]]>>=
 let setwide (e : Env.t) : unit =
   if not e.given then begin
@@ -719,36 +786,67 @@ let setwide (e : Env.t) : unit =
   ()
 @
 
-<<signature [[Commands.squeeze]]>>=
-val squeeze: Env.t -> int -> unit
-@
 <<function [[Commands.squeeze]]>>=
 let squeeze (e : Env.t) (i : lineno) : unit =
   if e.addr1 < i || e.addr2 > e.dol || e.addr1 > e.addr2 
   then Error.e_warn "can't squeeze"
 @
 
+\subsection{[[append()]] and [[getfile()]]}
 
-<<type [[Commands.mode]]>>=
-type mode = READ | WRITE
+<<function [[Commands.append]]>>=
+(* f can be Disk.getfile() or In.gettty() (or even getsub()?) *)
+let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
+  e.dot <- addr;
+  let nline = ref 0 in
+
+  let rec aux () =
+    match f () with
+    | None -> (* EOF *) !nline
+    | Some line ->
+        <<[[Commands.append()]] grow [[zero]] if needed>>
+        let tl = Disk.putline e line in
+        incr nline;
+        e.dol <- e.dol + 1;
+        (* insert new line after e.dot *)
+        e.dot <- e.dot + 1;
+
+        (* shift zero entries from e.dol down to e.dot up one by one *)
+        let a1 = ref e.dol in
+        let a2 = ref (!a1 + 1) in
+        while !a1 > e.dot do
+          e.zero.(!a2) <- e.zero.(!a1);
+          decr a2; decr a1;
+        done;
+        (* finally insert the new line reference in zero *)
+        e.zero.(e.dot) <- {offset = tl; mark = false};
+        aux ()
+  in
+  aux ()
+@
+% can append in middle of file, not always at the end,
+% at addr (env.addr2 usually), so everything after addr must be
+% adjusted
+
+% Figure?
+
+<<signature [[Disk.putline]]>>=
+(* store line (with added trailing '\n') in tfile and return its offset *)
+val putline : Env.t -> string -> Env.tfile_offset
 @
 
-<<function [[Commands.exfile]]>>=
-(* ed: "exit" file =~ close file *)
-let exfile (e : Env.t) (_m : mode) : unit =
-  (* ed: is using passed mode to flush if WRITE but no need in ocaml
-   * because closing the channel will flush any remaining IO.
-   *)
-  if e.vflag then begin
-      Out.putd e;
-      Out.putchr e '\n';
-  end
+
+<<[[Commands.append()]] grow [[zero]] if needed>>=
+if e.dol + 2 >= Array.length e.zero 
+then begin
+    let oldz = e.zero in
+    let len = Array.length oldz in
+    let newz  = Array.make (len + 512) Env.no_line in
+    Array.blit oldz 0 newz 0 len;
+    e.zero <- newz;
+end;
 @
 
-<<signature [[Disk.getfile]]>>=
-(* will return one line (without trailing '\n') or None when reached EOF *)
-val getfile: Env.t -> Chan.i -> (unit -> string option)
-@
 
 <<function [[Disk.getfile]]>>=
 (* will return one line (without trailing '\n') or None when reached EOF *)
@@ -767,78 +865,58 @@ let getfile (e : Env.t) (chan : Chan.i) () : string option =
   with End_of_file -> None
 @
 
+\subsection{[[putline()]]}
 
-<<signature [[Disk.getline]]>>=
-(* retrieve line in tfile (without trailing '\n') *)
-val getline: Env.t -> Env.lineno -> string
+<<function [[Disk.putline]]>>=
+(* store line in tfile and return its offset *)
+let putline (e : Env.t) (line : string) : Env.tfile_offset =
+  e.fchange <- true;
+  let Tfile_offset old_tline = e.tline in
+  Unix.lseek e.tfile old_tline Unix.SEEK_SET |> ignore;
+  (* alt: could use a different terminator like '\0' in C but simpler to
+   * use \n *)
+  let line = line ^ "\n" in
+  let len = String.length line in
+  Unix.write e.tfile (Bytes.of_string line) 0 len |> ignore;
+  e.tline <- Tfile_offset (old_tline + len);
+  Tfile_offset old_tline
 @
 
-<<function [[Disk.getline]]>>=
-(* dual of putline(), retrieve line in tfile (without trailing '\n') 
- * ed: was taking an Env.tfile_offset but cleaner to take addr
- *)
-let getline (e : Env.t) (addr : Env.lineno)  : string =
-  let tl = e.zero.(addr).offset in
-  let Tfile_offset offset = tl in
-  Unix.lseek e.tfile offset Unix.SEEK_SET |> ignore;
-  (* alt: Stdlib.input_line (Unix.in_channel_of_descr ...) but then
-   * need to close it which unfortunately also close the file_descr so
-   * we do our own adhoc input_line below.
+\subsection{[[exfile()]]}
+
+<<type [[Commands.mode]]>>=
+type mode = READ | WRITE
+@
+
+<<function [[Commands.exfile]]>>=
+(* ed: "exit" file =~ close file *)
+let exfile (e : Env.t) (_m : mode) : unit =
+  (* ed: is using passed mode to flush if WRITE but no need in ocaml
+   * because closing the channel will flush any remaining IO.
    *)
-  let bytes = Bytes.of_string " " in
-  let rec aux acc =
-    let n = Unix.read e.tfile bytes 0 1 in
-    let c : char = Bytes.get bytes 0 in
-    if n = 1 && c <> '\n'
-    then aux (c::acc)
-    (* no need to add the \n, putshst will add it *)
-    else String_.of_chars (List.rev acc)
-  in
-  aux []
+  if e.vflag then begin
+      Out.putd e;
+      Out.putchr e '\n';
+  end
+@
+
+<<signature [[Out.putd]]>>=
+(* will print Env.count *)
+val putd: Env.t -> unit
+@
+
+<<function [[Out.putd]]>>=
+(* display e.count *)
+let rec putd (e : Env.t) : unit =
+  let r = e.count mod 10 in
+  e.count <- e.count / 10;
+  if e.count > 0
+  then putd e;
+  putchr e (Char.chr (Char.code '0' + r))
 @
 
 
-<<signature [[Commands.append]]>>=
-(* return number of lines added, but usually ignored by caller *)
-val append: Env.t -> (unit -> string option) -> Env.lineno -> int
-@
-<<function [[Commands.append]]>>=
-(* f can be Disk.getfile() or In.gettty() *)
-let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
-  e.dot <- addr;
-  let nline = ref 0 in
 
-  let rec aux () =
-    match f () with
-    | None -> (* EOF *) !nline
-    | Some str ->
-        if e.dol + 2 >= Array.length e.zero 
-        then begin
-            let oldz = e.zero in
-            let len = Array.length oldz in
-            let newz  = Array.make (len + 512) Env.no_line in
-            Array.blit oldz 0 newz 0 len;
-            e.zero <- newz;
-        end;
-
-        let tl = Disk.putline e str in
-        incr nline;
-
-        e.dol <- e.dol + 1;
-        let a1 = ref e.dol in
-        let a2 = ref (!a1 + 1) in
-        e.dot <- e.dot + 1;
-        let rdot = e.dot in
-        while !a1 > rdot do
-          e.zero.(!a2) <- e.zero.(!a1);
-          decr a2; decr a1;
-        done;
-        e.zero.(rdot) <- {offset = tl; mark = false};
-        (* TODO: update zero *)
-        aux ()
-  in
-  aux ()
-@
 
 
 \section{[[w]]riting a file: [[w]]}
@@ -856,7 +934,6 @@ let append (e : Env.t) (f : unit -> string option) (addr : lineno) : int =
 mutable wrapp : bool;
 @
 
-
 <<signature [[Commands.write]]>>=
 (* 'w'*)
 val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
@@ -865,9 +942,7 @@ val write: <Cap.open_out; ..> -> Env.t -> Fpath.t -> unit
 <<function [[Commands.write]]>>=
 (* 'w' *)
 let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
-  (* ocaml-light: see callunix() comment below *)
-  if e.rflag && not (file_in_current_dir file)
-  then Error.e_err (spf "restricted mode on, can't access %s" !!file);
+  <<[[Commands.write()]] restricted mode check>>
   try 
     file |> FS.with_open_out caps (fun chan ->
         (* TODO: when wq (or do in caller in CLI.ml) *)
@@ -894,6 +969,31 @@ let write (caps : < Cap.open_out; ..>) (e : Env.t) (file : Fpath.t) : unit =
 val putfile: Env.t -> Chan.o -> unit
 @
 
+\subsection{[[putfile()]]}
+
+%(* TODO:
+%  let string_of_chars xs =
+%    (* alt: do that in caller, again cleaner than in filename *)
+%    e.count <- e.count + List.length xs;
+%    failwith "TODO"
+%  in
+%  let rec aux acc
+%    let copt : char option =
+%      try Some (input_char chan.i)
+%      with End_of_file -> None
+%    in
+%    (match copt with
+%    | None -> 
+%        if acc = []
+%        then None
+%        else begin 
+%           Out.putstr e "\\n appended";
+%           Some (('\n'::acc) |> List.rev |> string_of_chars)
+%        end
+%     | Some c -> aux (c::acc)
+%    ...
+%*)
+
 <<function [[Disk.putfile]]>>=
 (* dual of getfile() but this time writing all the lines, not just one *)
 let putfile (e : Env.t) (chan : Chan.o) : unit =
@@ -904,27 +1004,38 @@ let putfile (e : Env.t) (chan : Chan.o) : unit =
   done
 @
 
-
-
-<<signature [[Disk.putline]]>>=
-(* store line (with added trailing '\n') in tfile and return its offset *)
-val putline : Env.t -> string -> Env.tfile_offset
+<<signature [[Disk.getline]]>>=
+(* retrieve line in tfile (without trailing '\n') *)
+val getline: Env.t -> Env.lineno -> string
 @
 
-<<function [[Disk.putline]]>>=
-(* store line in tfile and return its offset *)
-let putline (e : Env.t) (line : string) : Env.tfile_offset =
-  e.fchange <- true;
-  let Tfile_offset old_tline = e.tline in
-  Unix.lseek e.tfile old_tline Unix.SEEK_SET |> ignore;
-  (* alt: could use a different terminator like '\0' in C but simpler to
-   * use \n *)
-  let line = line ^ "\n" in
-  let len = String.length line in
-  Unix.write e.tfile (Bytes.of_string line) 0 len |> ignore;
-  e.tline <- Tfile_offset (old_tline + len);
-  Tfile_offset old_tline
+\subsection{[[getline()]]}
+
+<<function [[Disk.getline]]>>=
+(* dual of putline(), retrieve line in tfile (without trailing '\n') 
+ * ed: was taking an Env.tfile_offset but cleaner to take addr
+ *)
+let getline (e : Env.t) (addr : Env.lineno)  : string =
+  let tl = e.zero.(addr).offset in
+  let Tfile_offset offset = tl in
+  Unix.lseek e.tfile offset Unix.SEEK_SET |> ignore;
+  (* alt: Stdlib.input_line (Unix.in_channel_of_descr ...) but then
+   * need to close it which unfortunately also close the file_descr so
+   * we do our own adhoc input_line below.
+   *)
+  let bytes = Bytes.of_string " " in
+  let rec aux acc =
+    let n = Unix.read e.tfile bytes 0 1 in
+    let c : char = Bytes.get bytes 0 in
+    if n = 1 && c <> '\n'
+    then aux (c::acc)
+    (* no need to add the \n, putshst will add it *)
+    else String_.of_chars (List.rev acc)
+  in
+  aux []
 @
+
+%%\subsection{Write and quit: [[wq]]}
 
 
 
@@ -1020,6 +1131,12 @@ if e.pflag then begin
 end;
 @
 
+<<[[Env.t]] other fields>>=
+(* set by ?? effect is to Out.printcom() in commands () before the next cmd *)
+mutable pflag: bool;
+@
+
+
 \subsection{printing remembered [[f]]ile: [[f]]}
 
 <<[[CLI.commands()]] match [[c]] inspecting cases>>=
@@ -1053,32 +1170,18 @@ let setnoaddr (e : Env.t) =
    Out.putchr e '\n';
 @
 
-<<signature [[Out.putd]]>>=
-(* will print Env.count *)
-val putd: Env.t -> unit
-@
-
-<<function [[Out.putd]]>>=
-(* display e.count *)
-let rec putd (e : Env.t) : unit =
-  let r = e.count mod 10 in
-  e.count <- e.count / 10;
-  if e.count > 0
-  then putd e;
-  putchr e (Char.chr (Char.code '0' + r))
-@
 
 
 \subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
 
 <<[[CLI.commands()]] match [[c]] modifying cases>>=
 | 'a' -> 
-   Logs.info (fun m -> m "append mode");
+   <<[[CLI.commands()]] in [['a']] case, log append mode>>
    Commands.add e 0
 @
 <<[[CLI.commands()]] match [[c]] modifying cases>>=
 | 'i' -> 
-   Logs.info (fun m -> m "insert mode");
+   <<[[CLI.commands()]] in [['i']] case, log insert mode>>
    Commands.add e (-1)
 @
 
@@ -1169,8 +1272,7 @@ let rdelete (e : Env.t) (ad1 : lineno) (ad2 : lineno) =
 | digit+        { Int (int_of_string (Lexing.lexeme lexbuf)) }
 | '.' { Dot } | '$' { Dollar }
 
-
-| ',' { Comma } | ';' { Semicolon }
+| ',' { Comma } 
 | '+' { Plus } | '-' { Minus }
 @
 
@@ -1186,62 +1288,11 @@ let parse_address (st : Parser.state) : t =
         | T.Dot -> Current
         | T.Dollar -> Last
         | T.Int n -> Line n
-        | T.Mark c -> Mark c
-        | T.Slash r -> SearchFwd r
-        | T.Question r -> SearchBwd r
+        <<[[Address.parse_address()]] match consumed token other cases>>
         | _ -> P.was_expecting "valid address"
         )
   in
   parse_relatives base st
-@
-
-<<function [[Address.parse_range]]>>=
-let parse_range (st : Parser.state) : range =
-  let t1 = P.peek st in
-  (* optional first address *)
-  let first : t option =
-    match t1 with
-    | T.Plus | T.Minus | T.Caret
-    | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
-      ->
-        (* this will consume some tokens in st *)
-        Some (parse_address st)
-    | T.Comma | T.Semicolon ->
-        None
-    | T.EOF | T.Spaces | T.Newline | T.Char _ ->
-        None
-  in
-
-  let t2 = P.peek st in
-  match t2 with
-  | T.Comma | T.Semicolon ->
-      P.consume st |> ignore;
-      let second = 
-        match P.peek st with
-        | T.Plus | T.Minus | T.Caret
-          | T.Dot | T.Dollar | T.Int _ | T.Mark _ | T.Slash _ | T.Question _
-          -> parse_address st 
-        (* a missing second address default to '$' *)
-        | T.EOF | T.Spaces | T.Newline | T.Char _ | T.Comma | T.Semicolon 
-          -> Last
-      in
-      {
-         (* a missing first address in a range default to '1' so
-          * a range like "," will be parsed as "1,$"
-          *)
-          addr1 = (match first with Some _ -> first | None -> Some (Line 1)); 
-          addr2 = second;
-          given = true; 
-          set_dot = (t2 = T.Semicolon);
-         }
-  | _ ->
-      (* single address or none *)
-      (match first with
-      | Some a ->
-          { addr1 = None; addr2 = a; given = true; set_dot = false; }
-      | None ->
-          { addr1 = None; addr2 = Current; given = false; set_dot = false; }
-      )
 @
 
 <<function [[Address.parse_relatives]]>>=
@@ -1249,6 +1300,7 @@ let rec parse_relatives (base : t) (st : Parser.state) : t =
   match P.peek st with
   | T.Plus | T.Minus | T.Caret ->
       let d = parse_delta st in
+      (* recurse, one can have multiple ++ -- *)
       parse_relatives (Relative (base, d)) st
   | _ ->
       base
@@ -1265,9 +1317,69 @@ let parse_delta (st : Parser.state) : int =
       (match P.peek st with
        | T.Int n -> ignore (P.consume st); -n
        | _ -> -1)
-  | T.Caret -> -1
+  <<[[Address.parse_delta()]] match consumed token other cases>>
   | _ ->
       P.was_expecting "relative operator"
+@
+
+
+<<function [[Address.parse_range]]>>=
+let parse_range (st : Parser.state) : range =
+  let t1 = P.peek st in
+  (* optional first address *)
+  let first : t option =
+    <<[[Address.parse_range()]] compute optional [[first]] address>>
+  in
+
+  let t2 = P.peek st in
+  match t2 with
+  <<[[Address.parse_range()]] [[Comma]] or [[Semicolon]] case>>
+  | _ ->
+      (* single address or none *)
+      (match first with
+      | Some a ->
+          { addr1 = None; addr2 = a; given = true; set_dot = false; }
+      | None ->
+          (* no addresses given, implicit "." (Current) *)
+          { addr1 = None; addr2 = Current; given = false; set_dot = false; }
+      )
+@
+
+<<[[Address.parse_range()]] compute optional [[first]] address>>=
+match t1 with
+| T.Plus | T.Minus | T.Caret
+| T.Dot | T.Dollar | T.Int _
+| T.Mark _ | T.Slash _ | T.Question _ ->
+    (* this will consume some tokens in st *)
+    Some (parse_address st)
+| T.Comma | T.Semicolon
+| T.EOF | T.Spaces | T.Newline | T.Char _ ->
+    None
+@
+
+<<[[Address.parse_range()]] [[Comma]] or [[Semicolon]] case>>=
+| T.Comma | T.Semicolon ->
+    P.consume st |> ignore;
+    let second = 
+      match P.peek st with
+      | T.Plus | T.Minus | T.Caret
+      | T.Dot | T.Dollar | T.Int _
+      | T.Mark _ | T.Slash _ | T.Question _ ->
+         parse_address st 
+      (* a missing second address default to '$' *)
+      | T.Comma | T.Semicolon 
+      | T.EOF | T.Spaces | T.Newline | T.Char _ ->
+         Last
+    in
+    {
+       (* a missing first address in a range default to '1' so
+        * a range like "," will be parsed as "1,$"
+        *)
+        addr1 = (match first with Some _ -> first | None -> Some (Line 1)); 
+        addr2 = second;
+        given = true; 
+        set_dot = (t2 = T.Semicolon);
+       }
 @
 
 
@@ -1279,45 +1391,13 @@ let rec eval_address (e : Env.t) (adr : t) : Env.lineno =
   | Current -> e.dot
   | Last -> e.dol
   | Line n -> n
-  | Mark _ -> failwith "TODO: Mark"
-  | SearchFwd _ | SearchBwd _ -> 
-      let dir, re_str = 
-        match adr with 
-        | SearchFwd re -> 1, re
-        | SearchBwd re -> -1, re
-        | _ -> raise (Impossible "cases matched above")
-      in
-      (* less: opti: use SearchFwd of regex instead of str *)
-      let re = Str.regexp re_str in
-      (* starting point *)
-      (* TODO: ed: need to be `a` instead like in C ? *)
-      let a = e.dot in
-      let b = a  in
-      let rec aux (a : Env.lineno) : Env.lineno =
-        let a = a + dir in
-        let a =
-          match () with
-          (* wrap around start/end of buffer *)
-          | _ when a <= 0 -> e.dol
-          | _ when a > e.dol -> 1
-          | _ -> a
-        in
-        match () with
-        | _ when Commands.match_ e re a -> a
-        (* back to starting point and nothing was found *)
-        | _ when a = b ->
-            Error.e_warn (spf "search for %s had no match" re_str)
-        | _ ->
-            aux a
-      in
-      aux a
-
   | Relative (x, n) -> eval_address e x + n
+  <<[[Address.eval_address()]] match [[adr]] other cases>>
 @
 
 <<function [[Address.eval_range]]>>=
 let eval_range (e : Env.t) (r : range) : Env.lineno * Env.lineno =
-  Logs.debug (fun m -> m "range = %s" (show_range r));
+  <<[[Address.eval_range]] debug range>>
 
   let addr2 = eval_address e r.addr2 in
   let addr1 =
@@ -1328,7 +1408,8 @@ let eval_range (e : Env.t) (r : range) : Env.lineno * Env.lineno =
   addr1, addr2
 @
 
-
+% so 1,3p => addr1 = 1, addr2 = 3
+% 1p => addr1 = addr2 = 1
 
 \section{Search and replace}
 
@@ -1352,6 +1433,10 @@ type t = Str.regexp
 | '?'              { Buffer.clear buf; Question (regexp '?' lexbuf) }
 @
 
+<<signature [[Lexer.buf]]>>=
+(* ugly: should not be needed outside *)
+val buf: Buffer.t
+@
 <<constant [[Lexer.buf]]>>=
 let buf = Buffer.create 32
 @
@@ -1363,32 +1448,20 @@ val regexp: char -> Lexing.lexbuf -> string
 <<function [[Lexer.regexp]]>>=
 and regexp delim = parse
   | '\\' (_ as c) {
-      Buffer.add_char buf '\\'; Buffer.add_char buf c;
-      regexp delim lexbuf
+      Buffer.add_char buf '\\'; Buffer.add_char buf c; regexp delim lexbuf
     }
   | '/' {
       if delim = '/'
       then Buffer.contents buf
-      else begin
-        Buffer.add_char buf '/';
-        regexp delim lexbuf
-      end
+      else begin Buffer.add_char buf '/'; regexp delim lexbuf end
      }
   | '?' {
       if delim = '?'
       then Buffer.contents buf
-      else begin
-        Buffer.add_char buf '?';
-        regexp delim lexbuf
-      end
+      else begin Buffer.add_char buf '?'; regexp delim lexbuf end
     }
-  | '\n' | eof {
-      failwith "Unterminated regular expression"
-    }
-  | _ as c {
-      Buffer.add_char buf c;
-      regexp delim lexbuf
-    }
+  | '\n' | eof { failwith "Unterminated regular expression" }
+  | _ as c { Buffer.add_char buf c; regexp delim lexbuf }
 @
 
 \subsection{Search as addresses: [[/re/]] and [[?re?]]}
@@ -1400,12 +1473,60 @@ and regexp delim = parse
 | SearchBwd of string (* ?...? *)
 @
 
+<<[[Address.parse_address()]] match consumed token other cases>>=
+| T.Slash r -> SearchFwd r
+| T.Question r -> SearchBwd r
+@
 
-\subsection{[[match()]]}
+<<[[Address.eval_address()]] match [[adr]] other cases>>=
+| SearchFwd _ | SearchBwd _ -> 
+    let dir, re_str = 
+      match adr with 
+      | SearchFwd re -> 1, re
+      | SearchBwd re -> -1, re
+      | _ -> raise (Impossible "cases matched above")
+    in
+    (* less: opti: use SearchFwd of regex instead of str *)
+    let re = Str.regexp re_str in
+
+    (* starting point *)
+    (* TODO: ed: need to be `a` instead like in C ? *)
+    let a = e.dot in
+    let b = a in
+
+    let rec aux (a : Env.lineno) : Env.lineno =
+      let a = a + dir in
+      <<[[Address.eval_address()]] when SearchXxx case, wrap [[a]]>>
+      match () with
+      | _ when Commands.match_ e re a -> a
+      <<[[Address.eval_address()]] when SearchXxx case, when back to start>>
+      | _ ->
+          aux a
+    in
+    aux a
+@
 
 <<signature [[Commands.match_]]>>=
 val match_: Env.t -> Regex.t -> Env.lineno -> bool
 @
+
+<<[[Address.eval_address()]] when SearchXxx case, wrap [[a]]>>=
+let a =
+  match () with
+  (* wrap around start/end of buffer *)
+  | _ when a <= 0 -> e.dol
+  | _ when a > e.dol -> 1
+  | _ -> a
+in
+@
+
+<<[[Address.eval_address()]] when SearchXxx case, when back to start>>=
+(* back to starting point and nothing was found *)
+| _ when a = b ->
+    Error.e_warn (spf "search for %s had no match" re_str)
+@
+
+\subsection{[[match()]]}
 
 <<function [[Commands.match_]]>>=
 let match_ (e : Env.t) (re : Regex.t) (addr : Env.lineno) : bool =
@@ -1423,6 +1544,7 @@ let match_str (re : t) (str: string) : bool =
    with Not_found -> false
 @
 
+%%\subsection{Parsing substitutions}
 
 \subsection{[[s]]ubstitute: [[s]]}
 
@@ -1465,6 +1587,7 @@ let substitute (e : Env.t) (_inglob: bool) : unit =
            let after = String.sub line loc2 (len - loc2) in
            (* TODO: handle & and \1 in subst_str *)
            let newline = before ^ subst_str ^ after in
+
            let tl = Disk.putline e newline in
            (* TODO: mark? *)
            e.zero.(a1) <- { offset = tl; mark = false }
@@ -1482,13 +1605,22 @@ let substitute (e : Env.t) (_inglob: bool) : unit =
 | Mark of char
 @
 
+<<[[Lexer.token()]] other cases>>=
+| '\'' ['a'-'z'] as s { Mark s.[1] }
+@
+
 <<[[Address.t]] other cases>>=
 | Mark of char (* \a *)
 @
 
-<<[[Lexer.token()]] other cases>>=
-| '\'' ['a'-'z'] as s { Mark s.[1] }
+<<[[Address.parse_address()]] match consumed token other cases>>=
+| T.Mark c -> Mark c
 @
+
+<<[[Address.eval_address()]] match [[adr]] other cases>>=
+| Mark _ -> failwith "TODO: Mark"
+@
+
 
 \subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
 
@@ -1553,16 +1685,6 @@ and global caps (e : Env.t) (pos_or_neg : bool) : unit =
 @
 
 
-<<signature [[Lexer.line]]>>=
-val line: Lexing.lexbuf -> string
-@
-<<function [[Lexer.line]]>>=
-and line = parse
-  | ([^ '\n' ]* as s) '\n' { s }
-  | eof { failwith "eof in Lexer.line()" (* alt: None? *) }
-@
-
-
 
 
 \section{Advanced features}
@@ -1579,17 +1701,12 @@ and line = parse
 val callunix: <Cap.forkew; ..> -> Env.t -> unit
 @
 
-
 <<function [[Commands.callunix]]>>=
 (* '! *)
 let callunix (caps : <Cap.forkew; ..>) (e: Env.t) : unit =
   setnoaddr e;
   let s = In.gety e in
-  (* needed only for ocaml-light who does not support method call
-   * and so can't provide the dynamic caps of CLI.restrict_caps
-   *)
-  if e.rflag 
-  then Error.e_err "restricted mode on";
+  <<[[Commands.callunix()]] restricted mode check>>
   (* ed: was calling rc -c but here we reuse (Cap)Sys.command which relies
    * on the default shell
    *)
@@ -1600,18 +1717,17 @@ let callunix (caps : <Cap.forkew; ..>) (e: Env.t) : unit =
 
 \subsection{[[ed -r]] and [[rflag]] restricted mode}
 
-<<[[Env.t]] flag fields>>=
-(* new: from GNU ed, "restrited mode" *)
-rflag: bool;
-@
 <<[[CLI.main()]] local flags>>=
 (* new: restricted ed *)
 let rflag = ref false in
 @
-
 <<[[CLI.main()]] local [[options]] elements>>=
 "-r", Arg.Set rflag,
 " restricted mode: no shell commands; edits limited to current directory";
+@
+<<[[Env.t]] flag fields>>=
+(* new: from GNU ed, "restrited mode" *)
+rflag: bool;
 @
 
 <<[[CLI.main()]] restrict caps>>=
@@ -1648,7 +1764,30 @@ let file_in_current_dir (file : Fpath.t) : bool =
   Fpath.is_seg !!file
 @
 
+
+<<[[Commands.callunix()]] restricted mode check>>=
+(* needed only for ocaml-light who does not support method call
+ * and so can't provide the dynamic caps of CLI.restrict_caps
+ *)
+if e.rflag 
+then Error.e_err "restricted mode on";
+@
+
+<<[[Commands.read()]] restricted mode check>>=
+(* ocaml-light: see callunix() comment below *)
+if e.rflag && not (file_in_current_dir file)
+then Error.e_err (spf "restricted mode on, can't access %s" !!file);
+@
+
+<<[[Commands.write()]] restricted mode check>>=
+(* ocaml-light: see callunix() comment below *)
+if e.rflag && not (file_in_current_dir file)
+then Error.e_err (spf "restricted mode on, can't access %s" !!file);
+@
+
 \subsection{The caret}
+
+% show ex of need
 
 % why need that? - not enough?
 <<[[Token.t]] other cases>>=
@@ -1658,17 +1797,31 @@ let file_in_current_dir (file : Fpath.t) : bool =
 | '^' { Caret }
 @
 
+<<[[Address.parse_delta()]] match consumed token other cases>>=
+| T.Caret -> -1
+@
+
 \subsection{The semicolon}
+
+% show ex of need
 
 <<[[Token.t]] other cases>>=
 | Semicolon
+@
+
+<<[[Lexer.token()]] other cases>>=
+| ';' { Semicolon }
 @
 
 <<[[Address.range]] other fields>>=
 set_dot : bool;
 @
 
+%TODO! finish implem!
+
 \section{Error management and logging}
+
+\subsection{Legacy error management}
 
 <<exception [[Error.Error]]>>=
 exception Error of string
@@ -1676,7 +1829,7 @@ exception Error of string
 
 <<function [[Error.e_legacy]]>>=
 (* the raise will effectively jump on the exn handler in CLI.main()
- * (emulating the longjmp done in C).
+ * ed: we emulate the longjmp done in C.
  *)
 let e_legacy s =
   raise (Error s)
@@ -1692,7 +1845,7 @@ Out.putst env s;
 % are called via Error.e_legacy "" empty string, hmm
 % with just a '?' displayed
 
-
+\subsection{Improved error reporting and logging}
 
 <<[[CLI.main()]] local flags>>=
 let level = ref (Some Logs.Warning) in
@@ -1732,20 +1885,51 @@ val was_expecting: string -> 'a
 val was_expecting_but_got: string -> Token.t -> 'a
 @
 
-
 <<function [[Parser.was_expecting]]>>=
 let was_expecting (expect : string) =
   Error.e_err (spf "was expecting %s" expect)
 @
-
 <<function [[Parser.was_expecting_but_got]]>>=
 let was_expecting_but_got (expect : string) (tok : Token.t) =
   was_expecting (spf "%s, but got %s" expect (Token.show tok))
 @
 
+
+% common pb with ed is people don't even know they are in insert mode
+<<[[CLI.commands()]] in [['a']] case, log append mode>>=
+Logs.info (fun m -> m "append mode");
+@
+<<[[CLI.commands()]] in [['i']] case, log insert mode>>=
+Logs.info (fun m -> m "insert mode");
+@
+<<[[In.gettty()]] log end of input>>=
+Logs.info (fun m -> m "end of input, back to ed");
+@
+
 \section{Debugging support}
 
-% Logging helps a bit.
+% Logging helps a lot already when using -debug
+
+<<[[CLI.main()]] debug env>>=
+Logs.debug (fun m -> m "env = %s" (Env.show env));
+@
+
+<<[[Parser.next_token()]] debug token>>=
+Logs.debug (fun m -> m "tok = %s" (Token.show t));
+@
+
+<<[[Address.eval_range]] debug range>>=
+Logs.debug (fun m -> m "range = %s" (show_range r));
+@
+
+<<[[CLI.commands()]] debug start>>=
+Logs.debug (fun m -> m "commands ->");
+@
+<<[[CLI.commands()]] debug end>>=
+Logs.debug (fun m -> m "commands <-");
+@
+% useful for nested globals commands
+
 % And added a 'X' to dump internal state
 
 <<[[CLI.commands()]] match [[c]] inspecting cases>>=
@@ -1762,9 +1946,17 @@ let was_expecting_but_got (expect : string) (tok : Token.t) =
 
 \section{Extra code}
 
-\subsection*{[[Address.ml]]}
+\subsection*{[[Address.mli]]}
 
-%-------------------------------------------------------------
+<<Address.mli>>=
+<<type [[Address.t]]>>
+<<type [[Address.range]]>>
+
+<<signature [[Address.parse_range]]>>
+<<signature [[Address.eval_range]]>>
+@
+
+\subsection*{[[Address.ml]]}
 
 <<Address.ml>>=
 (* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
@@ -1776,6 +1968,7 @@ module T = Token
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
+(* Parsing and evaluating command addresses *)
 
 (*****************************************************************************)
 (* Types *)
@@ -1807,8 +2000,6 @@ module T = Token
 
 \subsection*{[[CLI.ml]]}
 
-%-------------------------------------------------------------
-
 <<CLI.ml>>=
 (* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
 open Common
@@ -1839,7 +2030,6 @@ module A = Address
 (* Caps *)
 (*****************************************************************************)
 <<type [[CLI.caps]]>>
-
 <<function [[CLI.restrict_caps]]>>
 
 (*****************************************************************************)
@@ -1856,16 +2046,12 @@ module A = Address
 
 \subsection*{[[CLI.mli]]}
 
-%-------------------------------------------------------------
-
 <<CLI.mli>>=
 <<type [[CLI.caps]]>>
 <<signature [[CLI.main]]>>
 @
 
 \subsection*{[[Commands.ml]]}
-
-%-------------------------------------------------------------
 
 <<Commands.ml>>=
 (* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
@@ -1882,7 +2068,6 @@ open Env
 (*****************************************************************************)
 (* Helpers *)
 (*****************************************************************************)
-
 <<function [[Commands.setwide]]>>
 <<function [[Commands.squeeze]]>>
 <<function [[Commands.nonzero]]>>
@@ -1932,10 +2117,7 @@ open Env
 
 \subsection*{[[Commands.mli]]}
 
-%-------------------------------------------------------------
-
 <<Commands.mli>>=
-
 <<signature [[Commands.read]]>>
 <<signature [[Commands.write]]>>
 <<signature [[Commands.add]]>>
@@ -1955,8 +2137,6 @@ open Env
 @
 
 \subsection*{[[Disk.ml]]}
-
-%-------------------------------------------------------------
 
 <<Disk.ml>>=
 (* Copyright 2025 Yoann Padioleau, see copyright.txt *)
@@ -1979,38 +2159,12 @@ open Common
 (* getfile/putfile (from/to savedfile) *)
 (*****************************************************************************)
 <<function [[Disk.getfile]]>>
-  
-(* TODO:
-  let string_of_chars xs =
-    (* alt: do that in caller, again cleaner than in filename *)
-    e.count <- e.count + List.length xs;
-    failwith "TODO"
-  in
-  let rec aux acc
-    let copt : char option =
-      try Some (input_char chan.i)
-      with End_of_file -> None
-    in
-    (match copt with
-    | None -> 
-        if acc = []
-        then None
-        else begin 
-           Out.putstr e "\\n appended";
-           Some (('\n'::acc) |> List.rev |> string_of_chars)
-        end
-     | Some c -> aux (c::acc)
-    ...
-*)
 <<function [[Disk.putfile]]>>
 @
 
 \subsection*{[[Disk.mli]]}
 
-%-------------------------------------------------------------
-
 <<Disk.mli>>=
-
 <<signature [[Disk.putline]]>>
 <<signature [[Disk.getline]]>>
 
@@ -2019,8 +2173,6 @@ open Common
 @
 
 \subsection*{[[Env.ml]]}
-
-%-------------------------------------------------------------
 
 <<Env.ml>>=
 (* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
@@ -2035,7 +2187,6 @@ open Fpath_.Operators
 (*****************************************************************************)
 (* Types and constants *)
 (*****************************************************************************)
-
 (* LATER: use Tmp.with_new_file *)
 <<constant [[Env.tfname]]>>
 
@@ -2061,10 +2212,7 @@ open Fpath_.Operators
 
 \subsection*{[[Error.ml]]}
 
-%-------------------------------------------------------------
-
 <<Error.ml>>=
-
 <<exception [[Error.Error]]>>
 
 <<function [[Error.e_warn]]>>
@@ -2075,8 +2223,6 @@ open Fpath_.Operators
 
 \subsection*{[[In.ml]]}
 
-%-------------------------------------------------------------
-
 <<In.ml>>=
 (* Copyright 2025 Yoann Padioleau, see copyright.txt *)
 open Common
@@ -2086,7 +2232,6 @@ module T = Token
 (* Prelude *)
 (*****************************************************************************)
 (* Additional helpers to read from stdin.
- *
  * alt: could be merged with Parser.ml
  *)
 
@@ -2103,10 +2248,7 @@ module T = Token
 
 \subsection*{[[In.mli]]}
 
-%-------------------------------------------------------------
-
 <<In.mli>>=
-
 <<signature [[In.newline]]>>
 <<signature [[In.filename]]>>
 
@@ -2114,10 +2256,18 @@ module T = Token
 <<signature [[In.gettty]]>>
 @
 
+\subsection*{[[Lexer.mli]]}
+
+<<Lexer.mli>>=
+<<signature [[Lexer.token]]>>
+<<signature [[Lexer.regexp]]>>
+<<signature [[Lexer.filename]]>>
+<<signature [[Lexer.line]]>>
+
+<<signature [[Lexer.buf]]>>
+@
 
 \subsection*{[[Lexer.mll]]}
-
-%-------------------------------------------------------------
 
 <<Lexer.mll>>=
 {
@@ -2130,7 +2280,6 @@ open Token
 (* Splitting the user input in tokens which are then assembled in
  * addresses or commands by Parser.ml
  *)
-
 <<constant [[Lexer.buf]]>>
 }
 (*****************************************************************************)
@@ -2156,19 +2305,13 @@ open Token
 <<function [[Lexer.filename]]>>
 @
 
-
 \subsection*{[[Main.ml]]}
-
-%-------------------------------------------------------------
 
 <<Main.ml>>=
 <<toplevel [[Main._1]]>>
 @
 
-
 \subsection*{[[Out.ml]]}
-
-%-------------------------------------------------------------
 
 <<Out.ml>>=
 (* Copyright 2025 Yoann Padioleau, see copyright.txt *)
@@ -2190,13 +2333,9 @@ open Common
 <<function [[Out.putd]]>>
 @
 
-
 \subsection*{[[Out.mli]]}
 
-%-------------------------------------------------------------
-
 <<Out.mli>>=
-
 <<signature [[Out.putchr]]>>
 <<signature [[Out.putst]]>>
 <<signature [[Out.putshst]]>>
@@ -2204,10 +2343,7 @@ open Common
 <<signature [[Out.putd]]>>
 @
 
-
 \subsection*{[[Parser.ml]]}
-
-%-------------------------------------------------------------
 
 <<Parser.ml>>=
 (* Copyright 2025, 2026 Yoann Padioleau, see copyright.txt *)
@@ -2226,7 +2362,6 @@ module T = Token
 (*****************************************************************************)
 (* Types *)
 (*****************************************************************************)
-
 <<type [[Parser.state]]>>
 [@@deriving show]
 
@@ -2263,13 +2398,9 @@ module T = Token
 (* Parsing Filenames and user text *)
 (*****************************************************************************)
 (* Done in In.ml instead *)
-
 @
 
-
 \subsection*{[[Parser.mli]]}
-
-%-------------------------------------------------------------
 
 <<Parser.mli>>=
 open Common
@@ -2288,8 +2419,6 @@ open Common
 
 \subsection*{[[Token.ml]]}
 
-%-------------------------------------------------------------
-
 <<Token.ml>>=
 (* The tokens *)
 
@@ -2297,48 +2426,12 @@ open Common
 [@@deriving show]
 @
 
-\subsection*{[[Address.mli]]}
-
-%-------------------------------------------------------------
-
-<<Address.mli>>=
-
-<<type [[Address.t]]>>
-<<type [[Address.range]]>>
-
-<<signature [[Address.parse_range]]>>
-<<signature [[Address.eval_range]]>>
-@
 
 \subsection*{[[Regex.ml]]}
 
-%-------------------------------------------------------------
-
 <<Regex.ml>>=
-
 (* alt: Re.t *)
 <<type [[Regex.t]]>>
 
 <<function [[Regex.match_str]]>>
-@
-
-\subsection*{[[Lexer.mli]]}
-
-<<signature [[Lexer.buf]]>>=
-(* ugly: should not be needed outside *)
-val buf: Buffer.t
-@
-
-%-------------------------------------------------------------
-
-<<Lexer.mli>>=
-
-<<signature [[Lexer.token]]>>
-
-<<signature [[Lexer.regexp]]>>
-
-<<signature [[Lexer.filename]]>>
-<<signature [[Lexer.line]]>>
-
-<<signature [[Lexer.buf]]>>
 @
