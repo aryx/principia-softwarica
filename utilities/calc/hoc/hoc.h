@@ -1,5 +1,8 @@
+/*s: hoc/hoc.h */
 typedef void (*Inst)(void);
+/*s: constant [[STOP]](hoc) */
 #define	STOP	(Inst) 0
+/*e: constant [[STOP]](hoc) */
 
 typedef struct Symbol	Symbol;
 typedef union Datum 	Datum;
@@ -9,41 +12,41 @@ typedef struct Fndefn	Fndefn;
 typedef union Symval	Symval;
 
 union Symval { /* value of a symbol */
-	double	val;		/* VAR */
-	double	(*ptr)(double);	/* BLTIN */
-	Fndefn	*defn;		/* FUNCTION, PROCEDURE */
-	char	*str;		/* STRING */
+    double	val;		/* VAR */
+    double	(*ptr)(double);	/* BLTIN */
+    Fndefn	*defn;		/* FUNCTION, PROCEDURE */
+    char	*str;		/* STRING */
 };
 
 struct Symbol {	/* symbol table entry */
-	char	*name;
-	long	type;
-	Symval u;
-	struct Symbol	*next;	/* to link to another */
+    char	*name;
+    long	type;
+    Symval u;
+    struct Symbol	*next;	/* to link to another */
 };
 Symbol	*install(char*, int, double), *lookup(char*);
 
 union Datum {	/* interpreter stack type */
-	double	val;
-	Symbol	*sym;
+    double	val;
+    Symbol	*sym;
 };
 
 struct Saveval {	/* saved value of variable */
-	Symval	val;
-	long		type;
-	Saveval	*next;
+    Symval	val;
+    long		type;
+    Saveval	*next;
 };
 
 struct Formal {	/* formal parameter */
-	Symbol	*sym;
-	Saveval	*save;
-	Formal	*next;
+    Symbol	*sym;
+    Saveval	*save;
+    Formal	*next;
 };
 
 struct Fndefn {	/* formal parameter */
-	Inst	*code;
-	Formal	*formals;
-	int	nargs;
+    Inst	*code;
+    Formal	*formals;
+    int	nargs;
 };
 
 extern	Formal *formallist(Symbol*, Formal*);
@@ -80,3 +83,4 @@ extern	void init(void);
 extern	int yyparse(void);
 extern	void execerror(char*, char*);
 extern	void *emalloc(unsigned);
+/*e: hoc/hoc.h */

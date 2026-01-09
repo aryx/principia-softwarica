@@ -1,3 +1,4 @@
+/*s: calc/hoc.y */
 %{
 #include "hoc.h"
 #define	code2(c1,c2)	code(c1); code(c2)
@@ -388,3 +389,4 @@ defnonly(char *s)	/* warn if illegal definition */
 	if (!indef)
 		execerror(s, "used outside definition");
 }
+/*e: calc/hoc.y */
