@@ -18282,408 +18282,408 @@ geta(char *p)
 <<calc/hoc.y>>=
 %{
 #include "hoc.h"
-#define	code2(c1,c2)	code(c1); code(c2)
-#define	code3(c1,c2,c3)	code(c1); code(c2); code(c3)
+#define code2(c1,c2)    code(c1); code(c2)
+#define code3(c1,c2,c3) code(c1); code(c2); code(c3)
 %}
 %union {
-	Symbol	*sym;	/* symbol table pointer */
-	Inst	*inst;	/* machine instruction */
-	int	narg;	/* number of arguments */
-	Formal	*formals;	/* list of formal parameters */
+        Symbol  *sym;   /* symbol table pointer */
+        Inst    *inst;  /* machine instruction */
+        int     narg;   /* number of arguments */
+        Formal  *formals;       /* list of formal parameters */
 }
-%token	<sym>	NUMBER STRING PRINT VAR BLTIN UNDEF WHILE FOR IF ELSE
-%token	<sym>	FUNCTION PROCEDURE RETURN FUNC PROC READ
-%type	<formals>	formals
-%type	<inst>	expr stmt asgn prlist stmtlist
-%type	<inst>	cond while for if begin end 
-%type	<sym>	procname
-%type	<narg>	arglist
-%right	'=' ADDEQ SUBEQ MULEQ DIVEQ MODEQ
-%left	OR
-%left	AND
-%left	GT GE LT LE EQ NE
-%left	'+' '-'
-%left	'*' '/' '%'
-%left	UNARYMINUS NOT INC DEC
-%right	'^'
+%token  <sym>   NUMBER STRING PRINT VAR BLTIN UNDEF WHILE FOR IF ELSE
+%token  <sym>   FUNCTION PROCEDURE RETURN FUNC PROC READ
+%type   <formals>       formals
+%type   <inst>  expr stmt asgn prlist stmtlist
+%type   <inst>  cond while for if begin end 
+%type   <sym>   procname
+%type   <narg>  arglist
+%right  '=' ADDEQ SUBEQ MULEQ DIVEQ MODEQ
+%left   OR
+%left   AND
+%left   GT GE LT LE EQ NE
+%left   '+' '-'
+%left   '*' '/' '%'
+%left   UNARYMINUS NOT INC DEC
+%right  '^'
 %%
-list:	  /* nothing */
-	| list '\n'
-	| list defn '\n'
-	| list asgn '\n'  { code2(xpop, STOP); return 1; }
-	| list stmt '\n'  { code(STOP); return 1; } 
-	| list expr '\n'  { code2(printtop, STOP); return 1; }
-	| list error '\n' { yyerrok; }
-	;
-asgn:	  VAR '=' expr { code3(varpush,(Inst)$1,assign); $$=$3; }
-	| VAR ADDEQ expr	{ code3(varpush,(Inst)$1,addeq); $$=$3; }
-	| VAR SUBEQ expr	{ code3(varpush,(Inst)$1,subeq); $$=$3; }
-	| VAR MULEQ expr	{ code3(varpush,(Inst)$1,muleq); $$=$3; }
-	| VAR DIVEQ expr	{ code3(varpush,(Inst)$1,diveq); $$=$3; }
-	| VAR MODEQ expr	{ code3(varpush,(Inst)$1,modeq); $$=$3; }
-	;
-stmt:	  expr	{ code(xpop); }
-	| RETURN { defnonly("return"); code(procret); }
-	| RETURN expr
-	        { defnonly("return"); $$=$2; code(funcret); }
-	| PROCEDURE begin '(' arglist ')'
-		{ $$ = $2; code3(call, (Inst)$1, (Inst)$4); }
-	| PRINT prlist	{ $$ = $2; }
-	| while '(' cond ')' stmt end {
-		($1)[1] = (Inst)$5;	/* body of loop */
-		($1)[2] = (Inst)$6; }	/* end, if cond fails */
-	| for '(' cond ';' cond ';' cond ')' stmt end {
-		($1)[1] = (Inst)$5;	/* condition */
-		($1)[2] = (Inst)$7;	/* post loop */
-		($1)[3] = (Inst)$9;	/* body of loop */
-		($1)[4] = (Inst)$10; }	/* end, if cond fails */
-	| if '(' cond ')' stmt end {	/* else-less if */
-		($1)[1] = (Inst)$5;	/* thenpart */
-		($1)[3] = (Inst)$6; }	/* end, if cond fails */
-	| if '(' cond ')' stmt end ELSE stmt end {	/* if with else */
-		($1)[1] = (Inst)$5;	/* thenpart */
-		($1)[2] = (Inst)$8;	/* elsepart */
-		($1)[3] = (Inst)$9; }	/* end, if cond fails */
-	| '{' stmtlist '}'	{ $$ = $2; }
-	;
-cond:	   expr 	{ code(STOP); }
-	;
-while:	  WHILE	{ $$ = code3(whilecode,STOP,STOP); }
-	;
-for:	  FOR	{ $$ = code(forcode); code3(STOP,STOP,STOP); code(STOP); }
-	;
-if:	  IF	{ $$ = code(ifcode); code3(STOP,STOP,STOP); }
-	;
-begin:	  /* nothing */		{ $$ = progp; }
-	;
-end:	  /* nothing */		{ code(STOP); $$ = progp; }
-	;
-stmtlist: /* nothing */		{ $$ = progp; }
-	| stmtlist '\n'
-	| stmtlist stmt
-	;
-expr:	  NUMBER { $$ = code2(constpush, (Inst)$1); }
-	| VAR	 { $$ = code3(varpush, (Inst)$1, eval); }
-	| asgn
-	| FUNCTION begin '(' arglist ')'
-		{ $$ = $2; code3(call,(Inst)$1,(Inst)$4); }
-	| READ '(' VAR ')' { $$ = code2(varread, (Inst)$3); }
-	| BLTIN '(' expr ')' { $$=$3; code2(bltin, (Inst)$1->u.ptr); }
-	| '(' expr ')'	{ $$ = $2; }
-	| expr '+' expr	{ code(add); }
-	| expr '-' expr	{ code(sub); }
-	| expr '*' expr	{ code(mul); }
-	| expr '/' expr	{ code(div); }
-	| expr '%' expr	{ code(mod); }
-	| expr '^' expr	{ code (power); }
-	| '-' expr   %prec UNARYMINUS   { $$=$2; code(negate); }
-	| expr GT expr	{ code(gt); }
-	| expr GE expr	{ code(ge); }
-	| expr LT expr	{ code(lt); }
-	| expr LE expr	{ code(le); }
-	| expr EQ expr	{ code(eq); }
-	| expr NE expr	{ code(ne); }
-	| expr AND expr	{ code(and); }
-	| expr OR expr	{ code(or); }
-	| NOT expr	{ $$ = $2; code(not); }
-	| INC VAR	{ $$ = code2(preinc,(Inst)$2); }
-	| DEC VAR	{ $$ = code2(predec,(Inst)$2); }
-	| VAR INC	{ $$ = code2(postinc,(Inst)$1); }
-	| VAR DEC	{ $$ = code2(postdec,(Inst)$1); }
-	;
-prlist:	  expr			{ code(prexpr); }
-	| STRING		{ $$ = code2(prstr, (Inst)$1); }
-	| prlist ',' expr	{ code(prexpr); }
-	| prlist ',' STRING	{ code2(prstr, (Inst)$3); }
-	;
-defn:	  FUNC procname { $2->type=FUNCTION; indef=1; }
-	    '(' formals ')' stmt { code(procret); define($2, $5); indef=0; }
-	| PROC procname { $2->type=PROCEDURE; indef=1; }
-	    '(' formals ')' stmt { code(procret); define($2, $5); indef=0; }
-	;
-formals:	{ $$ = 0; }
-	| VAR			{ $$ = formallist($1, 0); }
-	| VAR ',' formals	{ $$ = formallist($1, $3); }
-	;
+list:     /* nothing */
+        | list '\n'
+        | list defn '\n'
+        | list asgn '\n'  { code2(xpop, STOP); return 1; }
+        | list stmt '\n'  { code(STOP); return 1; } 
+        | list expr '\n'  { code2(printtop, STOP); return 1; }
+        | list error '\n' { yyerrok; }
+        ;
+asgn:     VAR '=' expr { code3(varpush,(Inst)$1,assign); $$=$3; }
+        | VAR ADDEQ expr        { code3(varpush,(Inst)$1,addeq); $$=$3; }
+        | VAR SUBEQ expr        { code3(varpush,(Inst)$1,subeq); $$=$3; }
+        | VAR MULEQ expr        { code3(varpush,(Inst)$1,muleq); $$=$3; }
+        | VAR DIVEQ expr        { code3(varpush,(Inst)$1,diveq); $$=$3; }
+        | VAR MODEQ expr        { code3(varpush,(Inst)$1,modeq); $$=$3; }
+        ;
+stmt:     expr  { code(xpop); }
+        | RETURN { defnonly("return"); code(procret); }
+        | RETURN expr
+                { defnonly("return"); $$=$2; code(funcret); }
+        | PROCEDURE begin '(' arglist ')'
+                { $$ = $2; code3(call, (Inst)$1, (Inst)$4); }
+        | PRINT prlist  { $$ = $2; }
+        | while '(' cond ')' stmt end {
+                ($1)[1] = (Inst)$5;     /* body of loop */
+                ($1)[2] = (Inst)$6; }   /* end, if cond fails */
+        | for '(' cond ';' cond ';' cond ')' stmt end {
+                ($1)[1] = (Inst)$5;     /* condition */
+                ($1)[2] = (Inst)$7;     /* post loop */
+                ($1)[3] = (Inst)$9;     /* body of loop */
+                ($1)[4] = (Inst)$10; }  /* end, if cond fails */
+        | if '(' cond ')' stmt end {    /* else-less if */
+                ($1)[1] = (Inst)$5;     /* thenpart */
+                ($1)[3] = (Inst)$6; }   /* end, if cond fails */
+        | if '(' cond ')' stmt end ELSE stmt end {      /* if with else */
+                ($1)[1] = (Inst)$5;     /* thenpart */
+                ($1)[2] = (Inst)$8;     /* elsepart */
+                ($1)[3] = (Inst)$9; }   /* end, if cond fails */
+        | '{' stmtlist '}'      { $$ = $2; }
+        ;
+cond:      expr         { code(STOP); }
+        ;
+while:    WHILE { $$ = code3(whilecode,STOP,STOP); }
+        ;
+for:      FOR   { $$ = code(forcode); code3(STOP,STOP,STOP); code(STOP); }
+        ;
+if:       IF    { $$ = code(ifcode); code3(STOP,STOP,STOP); }
+        ;
+begin:    /* nothing */         { $$ = progp; }
+        ;
+end:      /* nothing */         { code(STOP); $$ = progp; }
+        ;
+stmtlist: /* nothing */         { $$ = progp; }
+        | stmtlist '\n'
+        | stmtlist stmt
+        ;
+expr:     NUMBER { $$ = code2(constpush, (Inst)$1); }
+        | VAR    { $$ = code3(varpush, (Inst)$1, eval); }
+        | asgn
+        | FUNCTION begin '(' arglist ')'
+                { $$ = $2; code3(call,(Inst)$1,(Inst)$4); }
+        | READ '(' VAR ')' { $$ = code2(varread, (Inst)$3); }
+        | BLTIN '(' expr ')' { $$=$3; code2(bltin, (Inst)$1->u.ptr); }
+        | '(' expr ')'  { $$ = $2; }
+        | expr '+' expr { code(add); }
+        | expr '-' expr { code(sub); }
+        | expr '*' expr { code(mul); }
+        | expr '/' expr { code(div); }
+        | expr '%' expr { code(mod); }
+        | expr '^' expr { code (power); }
+        | '-' expr   %prec UNARYMINUS   { $$=$2; code(negate); }
+        | expr GT expr  { code(gt); }
+        | expr GE expr  { code(ge); }
+        | expr LT expr  { code(lt); }
+        | expr LE expr  { code(le); }
+        | expr EQ expr  { code(eq); }
+        | expr NE expr  { code(ne); }
+        | expr AND expr { code(and); }
+        | expr OR expr  { code(or); }
+        | NOT expr      { $$ = $2; code(not); }
+        | INC VAR       { $$ = code2(preinc,(Inst)$2); }
+        | DEC VAR       { $$ = code2(predec,(Inst)$2); }
+        | VAR INC       { $$ = code2(postinc,(Inst)$1); }
+        | VAR DEC       { $$ = code2(postdec,(Inst)$1); }
+        ;
+prlist:   expr                  { code(prexpr); }
+        | STRING                { $$ = code2(prstr, (Inst)$1); }
+        | prlist ',' expr       { code(prexpr); }
+        | prlist ',' STRING     { code2(prstr, (Inst)$3); }
+        ;
+defn:     FUNC procname { $2->type=FUNCTION; indef=1; }
+            '(' formals ')' stmt { code(procret); define($2, $5); indef=0; }
+        | PROC procname { $2->type=PROCEDURE; indef=1; }
+            '(' formals ')' stmt { code(procret); define($2, $5); indef=0; }
+        ;
+formals:        { $$ = 0; }
+        | VAR                   { $$ = formallist($1, 0); }
+        | VAR ',' formals       { $$ = formallist($1, $3); }
+        ;
 procname: VAR
-	| FUNCTION
-	| PROCEDURE
-	;
-arglist:  /* nothing */ 	{ $$ = 0; }
-	| expr			{ $$ = 1; }
-	| arglist ',' expr	{ $$ = $1 + 1; }
-	;
+        | FUNCTION
+        | PROCEDURE
+        ;
+arglist:  /* nothing */         { $$ = 0; }
+        | expr                  { $$ = 1; }
+        | arglist ',' expr      { $$ = $1 + 1; }
+        ;
 %%
-	/* end of grammar */
+        /* end of grammar */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <ctype.h>
-char	*progname;
-int	lineno = 1;
-jmp_buf	begin;
-int	indef;
-char	*infile;	/* input file name */
-Biobuf	*bin;		/* input file descriptor */
-Biobuf	binbuf;
-char	**gargv;	/* global argument list */
-int	gargc;
+char    *progname;
+int     lineno = 1;
+jmp_buf begin;
+int     indef;
+char    *infile;        /* input file name */
+Biobuf  *bin;           /* input file descriptor */
+Biobuf  binbuf;
+char    **gargv;        /* global argument list */
+int     gargc;
 
-int c = '\n';	/* global for use by warning() */
+int c = '\n';   /* global for use by warning() */
 
-int	backslash(int), follow(int, int, int);
-void	defnonly(char*), run(void);
-void	warning(char*, char*);
+int     backslash(int), follow(int, int, int);
+void    defnonly(char*), run(void);
+void    warning(char*, char*);
 
-yylex(void)		/* hoc6 */
+yylex(void)             /* hoc6 */
 {
-	while ((c=Bgetc(bin)) == ' ' || c == '\t')
-		;
-	if (c < 0)
-		return 0;
-	if (c == '\\') {
-		c = Bgetc(bin);
-		if (c == '\n') {
-			lineno++;
-			return yylex();
-		}
-	}
-	if (c == '#') {		/* comment */
-		while ((c=Bgetc(bin)) != '\n' && c >= 0)
-			;
-		if (c == '\n')
-			lineno++;
-		return c;
-	}
-	if (c == '.' || isdigit(c)) {	/* number */
-		double d;
-		Bungetc(bin);
-		Bgetd(bin, &d);
-		yylval.sym = install("", NUMBER, d);
-		return NUMBER;
-	}
-	if (isalpha(c) || c == '_' || c >= 0x80) {
-		Symbol *s;
-		char sbuf[100], *p = sbuf;
-		do {
-			if (p >= sbuf + sizeof(sbuf) - 1) {
-				*p = '\0';
-				execerror("name too long", sbuf);
-			}
-			*p++ = c;
-		} while ((c=Bgetc(bin)) >= 0 && (isalnum(c) || c == '_' || c >= 0x80));
-		Bungetc(bin);
-		*p = '\0';
-		if ((s=lookup(sbuf)) == 0)
-			s = install(sbuf, UNDEF, 0.0);
-		yylval.sym = s;
-		return s->type == UNDEF ? VAR : s->type;
-	}
-	if (c == '"') {	/* quoted string */
-		char sbuf[100], *p;
-		for (p = sbuf; (c=Bgetc(bin)) != '"'; p++) {
-			if (c == '\n' || c == Beof)
-				execerror("missing quote", "");
-			if (p >= sbuf + sizeof(sbuf) - 1) {
-				*p = '\0';
-				execerror("string too long", sbuf);
-			}
-			*p = backslash(c);
-		}
-		*p = 0;
-		yylval.sym = (Symbol *)emalloc(strlen(sbuf)+1);
-		strcpy((char*)yylval.sym, sbuf);
-		return STRING;
-	}
-	switch (c) {
-	case '+':	return follow('+', INC, follow('=', ADDEQ, '+'));
-	case '-':	return follow('-', DEC, follow('=', SUBEQ, '-'));
-	case '*':	return follow('=', MULEQ, '*');
-	case '/':	return follow('=', DIVEQ, '/');
-	case '%':	return follow('=', MODEQ, '%');
-	case '>':	return follow('=', GE, GT);
-	case '<':	return follow('=', LE, LT);
-	case '=':	return follow('=', EQ, '=');
-	case '!':	return follow('=', NE, NOT);
-	case '|':	return follow('|', OR, '|');
-	case '&':	return follow('&', AND, '&');
-	case '\n':	lineno++; return '\n';
-	default:	return c;
-	}
+        while ((c=Bgetc(bin)) == ' ' || c == '\t')
+                ;
+        if (c < 0)
+                return 0;
+        if (c == '\\') {
+                c = Bgetc(bin);
+                if (c == '\n') {
+                        lineno++;
+                        return yylex();
+                }
+        }
+        if (c == '#') {         /* comment */
+                while ((c=Bgetc(bin)) != '\n' && c >= 0)
+                        ;
+                if (c == '\n')
+                        lineno++;
+                return c;
+        }
+        if (c == '.' || isdigit(c)) {   /* number */
+                double d;
+                Bungetc(bin);
+                Bgetd(bin, &d);
+                yylval.sym = install("", NUMBER, d);
+                return NUMBER;
+        }
+        if (isalpha(c) || c == '_' || c >= 0x80) {
+                Symbol *s;
+                char sbuf[100], *p = sbuf;
+                do {
+                        if (p >= sbuf + sizeof(sbuf) - 1) {
+                                *p = '\0';
+                                execerror("name too long", sbuf);
+                        }
+                        *p++ = c;
+                } while ((c=Bgetc(bin)) >= 0 && (isalnum(c) || c == '_' || c >= 0x80));
+                Bungetc(bin);
+                *p = '\0';
+                if ((s=lookup(sbuf)) == 0)
+                        s = install(sbuf, UNDEF, 0.0);
+                yylval.sym = s;
+                return s->type == UNDEF ? VAR : s->type;
+        }
+        if (c == '"') { /* quoted string */
+                char sbuf[100], *p;
+                for (p = sbuf; (c=Bgetc(bin)) != '"'; p++) {
+                        if (c == '\n' || c == Beof)
+                                execerror("missing quote", "");
+                        if (p >= sbuf + sizeof(sbuf) - 1) {
+                                *p = '\0';
+                                execerror("string too long", sbuf);
+                        }
+                        *p = backslash(c);
+                }
+                *p = 0;
+                yylval.sym = (Symbol *)emalloc(strlen(sbuf)+1);
+                strcpy((char*)yylval.sym, sbuf);
+                return STRING;
+        }
+        switch (c) {
+        case '+':       return follow('+', INC, follow('=', ADDEQ, '+'));
+        case '-':       return follow('-', DEC, follow('=', SUBEQ, '-'));
+        case '*':       return follow('=', MULEQ, '*');
+        case '/':       return follow('=', DIVEQ, '/');
+        case '%':       return follow('=', MODEQ, '%');
+        case '>':       return follow('=', GE, GT);
+        case '<':       return follow('=', LE, LT);
+        case '=':       return follow('=', EQ, '=');
+        case '!':       return follow('=', NE, NOT);
+        case '|':       return follow('|', OR, '|');
+        case '&':       return follow('&', AND, '&');
+        case '\n':      lineno++; return '\n';
+        default:        return c;
+        }
 }
 
-backslash(int c)	/* get next char with \'s interpreted */
+backslash(int c)        /* get next char with \'s interpreted */
 {
-	static char transtab[] = "b\bf\fn\nr\rt\t";
-	if (c != '\\')
-		return c;
-	c = Bgetc(bin);
-	if (islower(c) && strchr(transtab, c))
-		return strchr(transtab, c)[1];
-	return c;
+        static char transtab[] = "b\bf\fn\nr\rt\t";
+        if (c != '\\')
+                return c;
+        c = Bgetc(bin);
+        if (islower(c) && strchr(transtab, c))
+                return strchr(transtab, c)[1];
+        return c;
 }
 
-follow(int expect, int ifyes, int ifno)	/* look ahead for >=, etc. */
+follow(int expect, int ifyes, int ifno) /* look ahead for >=, etc. */
 {
-	int c = Bgetc(bin);
+        int c = Bgetc(bin);
 
-	if (c == expect)
-		return ifyes;
-	Bungetc(bin);
-	return ifno;
+        if (c == expect)
+                return ifyes;
+        Bungetc(bin);
+        return ifno;
 }
 
 void
-yyerror(char* s)	/* report compile-time error */
+yyerror(char* s)        /* report compile-time error */
 {
 /*rob
-	warning(s, (char *)0);
-	longjmp(begin, 0);
+        warning(s, (char *)0);
+        longjmp(begin, 0);
 rob*/
-	execerror(s, (char *)0);
+        execerror(s, (char *)0);
 }
 
 void
-execerror(char* s, char* t)	/* recover from run-time error */
+execerror(char* s, char* t)     /* recover from run-time error */
 {
-	warning(s, t);
-	Bseek(bin, 0L, 2);		/* flush rest of file */
-	restoreall();
-	longjmp(begin, 0);
+        warning(s, t);
+        Bseek(bin, 0L, 2);              /* flush rest of file */
+        restoreall();
+        longjmp(begin, 0);
 }
 
 void
-fpecatch(void)	/* catch floating point exceptions */
+fpecatch(void)  /* catch floating point exceptions */
 {
-	execerror("floating point exception", (char *) 0);
+        execerror("floating point exception", (char *) 0);
 }
 
 void
-intcatch(void)	/* catch interrupts */
+intcatch(void)  /* catch interrupts */
 {
-	execerror("interrupt", 0);
+        execerror("interrupt", 0);
 }
 
 void
-run(void)	/* execute until EOF */
+run(void)       /* execute until EOF */
 {
-	setjmp(begin);
-	for (initcode(); yyparse(); initcode())
-		execute(progbase);
+        setjmp(begin);
+        for (initcode(); yyparse(); initcode())
+                execute(progbase);
 }
 
 void
-main(int argc, char* argv[])	/* hoc6 */
+main(int argc, char* argv[])    /* hoc6 */
 {
-	static int first = 1;
+        static int first = 1;
 #ifdef YYDEBUG
-	extern int yydebug;
-	yydebug=3;
+        extern int yydebug;
+        yydebug=3;
 #endif
-	progname = argv[0];
-	init();
-	if (argc == 1) {	/* fake an argument list */
-		static char *stdinonly[] = { "-" };
+        progname = argv[0];
+        init();
+        if (argc == 1) {        /* fake an argument list */
+                static char *stdinonly[] = { "-" };
 
-		gargv = stdinonly;
-		gargc = 1;
-	} else if (first) {	/* for interrupts */
-		first = 0;
-		gargv = argv+1;
-		gargc = argc-1;
-	}
-	Binit(&binbuf, 0, OREAD);
-	bin = &binbuf;
-	while (moreinput())
-		run();
-	exits(0);
+                gargv = stdinonly;
+                gargc = 1;
+        } else if (first) {     /* for interrupts */
+                first = 0;
+                gargv = argv+1;
+                gargc = argc-1;
+        }
+        Binit(&binbuf, 0, OREAD);
+        bin = &binbuf;
+        while (moreinput())
+                run();
+        exits(0);
 }
 
 moreinput(void)
 {
-	char *expr;
-	static char buf[64];
-	int fd;
-	static Biobuf b;
+        char *expr;
+        static char buf[64];
+        int fd;
+        static Biobuf b;
 
-	if (gargc-- <= 0)
-		return 0;
-	if (bin && bin != &binbuf)
-		Bterm(bin);
-	infile = *gargv++;
-	lineno = 1;
-	if (strcmp(infile, "-") == 0) {
-		bin = &binbuf;
-		infile = 0;
-		return 1;
-	}
-	if(strncmp(infile, "-e", 2) == 0) {
-		if(infile[2]==0){
-			if(gargc == 0){
-				fprint(2, "%s: no argument for -e\n", progname);
-				return 0;
-			}
-			gargc--;
-			expr = *gargv++;
-		}else
-			expr = infile+2;
-		sprint(buf, "/tmp/hocXXXXXXX");
-		infile = mktemp(buf);
-		fd = create(infile, ORDWR|ORCLOSE, 0600);
-		if(fd < 0){
-			fprint(2, "%s: can't create temp. file: %r\n", progname);
-			return 0;
-		}
-		fprint(fd, "%s\n", expr);
-		/* leave fd around; file will be removed on exit */
-		/* the following looks weird but is required for unix version */
-		bin = &b;
-		seek(fd, 0, 0);
-		Binit(bin, fd, OREAD);
-	} else {
-		bin=Bopen(infile, OREAD);
-		if (bin == 0) {
-			fprint(2, "%s: can't open %s\n", progname, infile);
-			return moreinput();
-		}
-	}
-	return 1;
+        if (gargc-- <= 0)
+                return 0;
+        if (bin && bin != &binbuf)
+                Bterm(bin);
+        infile = *gargv++;
+        lineno = 1;
+        if (strcmp(infile, "-") == 0) {
+                bin = &binbuf;
+                infile = 0;
+                return 1;
+        }
+        if(strncmp(infile, "-e", 2) == 0) {
+                if(infile[2]==0){
+                        if(gargc == 0){
+                                fprint(2, "%s: no argument for -e\n", progname);
+                                return 0;
+                        }
+                        gargc--;
+                        expr = *gargv++;
+                }else
+                        expr = infile+2;
+                sprint(buf, "/tmp/hocXXXXXXX");
+                infile = mktemp(buf);
+                fd = create(infile, ORDWR|ORCLOSE, 0600);
+                if(fd < 0){
+                        fprint(2, "%s: can't create temp. file: %r\n", progname);
+                        return 0;
+                }
+                fprint(fd, "%s\n", expr);
+                /* leave fd around; file will be removed on exit */
+                /* the following looks weird but is required for unix version */
+                bin = &b;
+                seek(fd, 0, 0);
+                Binit(bin, fd, OREAD);
+        } else {
+                bin=Bopen(infile, OREAD);
+                if (bin == 0) {
+                        fprint(2, "%s: can't open %s\n", progname, infile);
+                        return moreinput();
+                }
+        }
+        return 1;
 }
 
 void
-warning(char* s, char* t)	/* print warning message */
+warning(char* s, char* t)       /* print warning message */
 {
-	fprint(2, "%s: %s", progname, s);
-	if (t)
-		fprint(2, " %s", t);
-	if (infile)
-		fprint(2, " in %s", infile);
-	fprint(2, " near line %d\n", lineno);
-	while (c != '\n' && c != Beof)
-		if((c = Bgetc(bin)) == '\n')	/* flush rest of input line */
-			lineno++;
+        fprint(2, "%s: %s", progname, s);
+        if (t)
+                fprint(2, " %s", t);
+        if (infile)
+                fprint(2, " in %s", infile);
+        fprint(2, " near line %d\n", lineno);
+        while (c != '\n' && c != Beof)
+                if((c = Bgetc(bin)) == '\n')    /* flush rest of input line */
+                        lineno++;
 }
 
 void
-defnonly(char *s)	/* warn if illegal definition */
+defnonly(char *s)       /* warn if illegal definition */
 {
-	if (!indef)
-		execerror(s, "used outside definition");
+        if (!indef)
+                execerror(s, "used outside definition");
 }
 @
 
 \subsection{[[calc/hoc/code.c]]}
 
 <<constant [[NSTACK]](hoc)>>=
-#define	NSTACK	256
+#define NSTACK  256
 @
 
 <<constant [[NPROG]](hoc)>>=
-#define	NPROG	2000
+#define NPROG   2000
 @
 
 <<constant [[NFRAME]](hoc)>>=
-#define	NFRAME	100
+#define NFRAME  100
 @
 
 <<function [[initcode]](hoc)>>=
@@ -18720,7 +18720,7 @@ pop(void)
 
 <<function [[xpop]](hoc)>>=
 void
-xpop(void)	/* for when no value is wanted */
+xpop(void)      /* for when no value is wanted */
 {
     if (stackp == stack)
         execerror("stack underflow", (char *)0);
@@ -18755,13 +18755,13 @@ whilecode(void)
     Datum d;
     Inst *savepc = pc;
 
-    execute(savepc+2);	/* condition */
+    execute(savepc+2);  /* condition */
     d = pop();
     while (d.val) {
-        execute(*((Inst **)(savepc)));	/* body */
+        execute(*((Inst **)(savepc)));  /* body */
         if (returning)
             break;
-        execute(savepc+2);	/* condition */
+        execute(savepc+2);      /* condition */
         d = pop();
     }
     if (!returning)
@@ -18776,17 +18776,17 @@ forcode(void)
     Datum d;
     Inst *savepc = pc;
 
-    execute(savepc+4);		/* precharge */
+    execute(savepc+4);          /* precharge */
     pop();
-    execute(*((Inst **)(savepc)));	/* condition */
+    execute(*((Inst **)(savepc)));      /* condition */
     d = pop();
     while (d.val) {
-        execute(*((Inst **)(savepc+2)));	/* body */
+        execute(*((Inst **)(savepc+2)));        /* body */
         if (returning)
             break;
-        execute(*((Inst **)(savepc+1)));	/* post loop */
+        execute(*((Inst **)(savepc+1)));        /* post loop */
         pop();
-        execute(*((Inst **)(savepc)));	/* condition */
+        execute(*((Inst **)(savepc)));  /* condition */
         d = pop();
     }
     if (!returning)
@@ -18799,12 +18799,12 @@ void
 ifcode(void) 
 {
     Datum d;
-    Inst *savepc = pc;	/* then part */
+    Inst *savepc = pc;  /* then part */
 
-    execute(savepc+3);	/* condition */
+    execute(savepc+3);  /* condition */
     d = pop();
     if (d.val)
-        execute(*((Inst **)(savepc)));	
+        execute(*((Inst **)(savepc)));  
     else if (*((Inst **)(savepc+1))) /* else part? */
         execute(*((Inst **)(savepc+1)));
     if (!returning)
@@ -18814,14 +18814,14 @@ ifcode(void)
 
 <<function [[define]](hoc)>>=
 void
-define(Symbol* sp, Formal *f)	/* put func/proc in symbol table */
+define(Symbol* sp, Formal *f)   /* put func/proc in symbol table */
 {
     Fndefn *fd;
     int n;
 
     fd = emalloc(sizeof(Fndefn));
-    fd->code = progbase;	/* start of code */
-    progbase = progp;	/* next code starts here */
+    fd->code = progbase;        /* start of code */
+    progbase = progp;   /* next code starts here */
     fd->formals = f;
     for(n=0; f; f=f->next)
         n++;
@@ -18832,7 +18832,7 @@ define(Symbol* sp, Formal *f)	/* put func/proc in symbol table */
 
 <<function [[call]](hoc)>>=
 void
-call(void) 		/* call a function */
+call(void)              /* call a function */
 {
     Formal *f;
     Datum *arg;
@@ -18847,7 +18847,7 @@ call(void) 		/* call a function */
     fp->sp = sp;
     fp->nargs = (int)(uintptr)pc[1];
     fp->retpc = pc + 2;
-    fp->argn = stackp - 1;	/* last argument */
+    fp->argn = stackp - 1;      /* last argument */
     if(fp->nargs != sp->u.defn->nargs)
         execerror(sp->name, "called with wrong number of arguments");
     /* bind formals */
@@ -18865,7 +18865,7 @@ call(void) 		/* call a function */
         arg++;
     }
     for (i = 0; i < fp->nargs; i++)
-        pop();	/* pop arguments; no longer needed */
+        pop();  /* pop arguments; no longer needed */
     execute(sp->u.defn->code);
     returning = 0;
 }
@@ -18873,7 +18873,7 @@ call(void) 		/* call a function */
 
 <<function [[restore]](hoc)>>=
 void
-restore(Symbol *sp)	/* restore formals associated with symbol */
+restore(Symbol *sp)     /* restore formals associated with symbol */
 {
     Formal *f;
     Saveval *s;
@@ -18881,7 +18881,7 @@ restore(Symbol *sp)	/* restore formals associated with symbol */
     f = sp->u.defn->formals;
     while(f){
         s = f->save;
-        if(s == 0)	/* more actuals than formals */
+        if(s == 0)      /* more actuals than formals */
             break;
         f->sym->u = s->val;
         f->sym->type = s->type;
@@ -18894,7 +18894,7 @@ restore(Symbol *sp)	/* restore formals associated with symbol */
 
 <<function [[restoreall]](hoc)>>=
 void
-restoreall(void)	/* restore all variables in case of error */
+restoreall(void)        /* restore all variables in case of error */
 {
     while(fp>=frame && fp->sp){
         restore(fp->sp);
@@ -18906,7 +18906,7 @@ restoreall(void)	/* restore all variables in case of error */
 
 <<function [[ret]](hoc)>>=
 static void
-ret(void) 		/* common return from func or proc */
+ret(void)               /* common return from func or proc */
 {
     /* restore formals */
     restore(fp->sp);
@@ -18918,12 +18918,12 @@ ret(void) 		/* common return from func or proc */
 
 <<function [[funcret]](hoc)>>=
 void
-funcret(void) 	/* return from a function */
+funcret(void)   /* return from a function */
 {
     Datum d;
     if (fp->sp->type == PROCEDURE)
         execerror(fp->sp->name, "(proc) returns value");
-    d = pop();	/* preserve function return value */
+    d = pop();  /* preserve function return value */
     ret();
     push(d);
 }
@@ -18931,7 +18931,7 @@ funcret(void) 	/* return from a function */
 
 <<function [[procret]](hoc)>>=
 void
-procret(void) 	/* return from a procedure */
+procret(void)   /* return from a procedure */
 {
     if (fp->sp->type == FUNCTION)
         execerror(fp->sp->name,
@@ -19041,7 +19041,7 @@ verify(Symbol* s)
 
 <<function [[eval]](hoc)>>=
 void
-eval(void)		/* evaluate variable on stack */
+eval(void)              /* evaluate variable on stack */
 {
     Datum d;
     d = pop();
@@ -19326,10 +19326,10 @@ modeq(void)
 
 <<function [[printtop]](hoc)>>=
 void
-printtop(void)	/* pop top value from stack, print it */
+printtop(void)  /* pop top value from stack, print it */
 {
     Datum d;
-    static Symbol *s;	/* last value computed */
+    static Symbol *s;   /* last value computed */
     if (s == 0)
         s = install("_", VAR, 0.0);
     d = pop();
@@ -19340,7 +19340,7 @@ printtop(void)	/* pop top value from stack, print it */
 
 <<function [[prexpr]](hoc)>>=
 void
-prexpr(void)	/* print numeric value */
+prexpr(void)    /* print numeric value */
 {
     Datum d;
     d = pop();
@@ -19350,7 +19350,7 @@ prexpr(void)	/* print numeric value */
 
 <<function [[prstr]](hoc)>>=
 void
-prstr(void)		/* print string value */ 
+prstr(void)             /* print string value */ 
 {
     print("%s", (char *) *pc++);
 }
@@ -19358,7 +19358,7 @@ prstr(void)		/* print string value */
 
 <<function [[varread]](hoc)>>=
 void
-varread(void)	/* read into variable */
+varread(void)   /* read into variable */
 {
     Datum d;
     extern Biobuf *bin;
@@ -19392,7 +19392,7 @@ varread(void)	/* read into variable */
 
 <<function [[code]](hoc)>>=
 Inst*
-code(Inst f)	/* install one instruction or operand */
+code(Inst f)    /* install one instruction or operand */
 {
     Inst *oprogp = progp;
     if (progp >= &prog[NPROG])
@@ -19423,26 +19423,26 @@ execute(Inst* p)
 
 <<constant [[NSTACK]](hoc)>>
 
-static Datum stack[NSTACK];	/* the stack */
-static Datum *stackp;		/* next free spot on stack */
+static Datum stack[NSTACK];     /* the stack */
+static Datum *stackp;           /* next free spot on stack */
 
 <<constant [[NPROG]](hoc)>>
-Inst	prog[NPROG];	/* the machine */
-Inst	*progp;		/* next free spot for code generation */
-Inst	*pc;		/* program counter during execution */
-Inst	*progbase = prog; /* start of current subprogram */
-int	returning;	/* 1 if return stmt seen */
-int	indef;	/* 1 if parsing a func or proc */
+Inst    prog[NPROG];    /* the machine */
+Inst    *progp;         /* next free spot for code generation */
+Inst    *pc;            /* program counter during execution */
+Inst    *progbase = prog; /* start of current subprogram */
+int     returning;      /* 1 if return stmt seen */
+int     indef;  /* 1 if parsing a func or proc */
 
-typedef struct Frame {	/* proc/func call stack frame */
-    Symbol	*sp;	/* symbol table entry */
-    Inst	*retpc;	/* where to resume after return */
-    Datum	*argn;	/* n-th argument on stack */
-    int	nargs;	/* number of arguments */
+typedef struct Frame {  /* proc/func call stack frame */
+    Symbol      *sp;    /* symbol table entry */
+    Inst        *retpc; /* where to resume after return */
+    Datum       *argn;  /* n-th argument on stack */
+    int nargs;  /* number of arguments */
 } Frame;
 <<constant [[NFRAME]](hoc)>>
-Frame	frame[NFRAME];
-Frame	*fp;		/* frame pointer */
+Frame   frame[NFRAME];
+Frame   *fp;            /* frame pointer */
 
 <<function [[initcode]](hoc)>>
 
@@ -19551,7 +19551,7 @@ Frame	*fp;		/* frame pointer */
 \subsection{[[calc/hoc/hoc.h]]}
 
 <<constant [[STOP]](hoc)>>=
-#define	STOP	(Inst) 0
+#define STOP    (Inst) 0
 @
 
 
@@ -19561,85 +19561,85 @@ Frame	*fp;		/* frame pointer */
 typedef void (*Inst)(void);
 <<constant [[STOP]](hoc)>>
 
-typedef struct Symbol	Symbol;
-typedef union Datum 	Datum;
-typedef struct Formal	Formal;
-typedef struct Saveval	Saveval;
-typedef struct Fndefn	Fndefn;
-typedef union Symval	Symval;
+typedef struct Symbol   Symbol;
+typedef union Datum     Datum;
+typedef struct Formal   Formal;
+typedef struct Saveval  Saveval;
+typedef struct Fndefn   Fndefn;
+typedef union Symval    Symval;
 
 union Symval { /* value of a symbol */
-    double	val;		/* VAR */
-    double	(*ptr)(double);	/* BLTIN */
-    Fndefn	*defn;		/* FUNCTION, PROCEDURE */
-    char	*str;		/* STRING */
+    double      val;            /* VAR */
+    double      (*ptr)(double); /* BLTIN */
+    Fndefn      *defn;          /* FUNCTION, PROCEDURE */
+    char        *str;           /* STRING */
 };
 
-struct Symbol {	/* symbol table entry */
-    char	*name;
-    long	type;
+struct Symbol { /* symbol table entry */
+    char        *name;
+    long        type;
     Symval u;
-    struct Symbol	*next;	/* to link to another */
+    struct Symbol       *next;  /* to link to another */
 };
-Symbol	*install(char*, int, double), *lookup(char*);
+Symbol  *install(char*, int, double), *lookup(char*);
 
-union Datum {	/* interpreter stack type */
-    double	val;
-    Symbol	*sym;
-};
-
-struct Saveval {	/* saved value of variable */
-    Symval	val;
-    long		type;
-    Saveval	*next;
+union Datum {   /* interpreter stack type */
+    double      val;
+    Symbol      *sym;
 };
 
-struct Formal {	/* formal parameter */
-    Symbol	*sym;
-    Saveval	*save;
-    Formal	*next;
+struct Saveval {        /* saved value of variable */
+    Symval      val;
+    long                type;
+    Saveval     *next;
 };
 
-struct Fndefn {	/* formal parameter */
-    Inst	*code;
-    Formal	*formals;
-    int	nargs;
+struct Formal { /* formal parameter */
+    Symbol      *sym;
+    Saveval     *save;
+    Formal      *next;
 };
 
-extern	Formal *formallist(Symbol*, Formal*);
-extern	double Fgetd(int);
-extern	int moreinput(void);
-extern	void restore(Symbol*);
-extern	void restoreall(void);
-extern	void execerror(char*, char*);
-extern	void define(Symbol*, Formal*), verify(Symbol*);
-extern	Datum pop(void);
-extern	void initcode(void), push(Datum), xpop(void), constpush(void);
-extern	void varpush(void);
-extern	void eval(void), add(void), sub(void), mul(void), div(void), mod(void);
-extern	void negate(void), power(void);
-extern	void addeq(void), subeq(void), muleq(void), diveq(void), modeq(void);
+struct Fndefn { /* formal parameter */
+    Inst        *code;
+    Formal      *formals;
+    int nargs;
+};
 
-extern	Inst *progp, *progbase, prog[], *code(Inst);
-extern	void assign(void), bltin(void), varread(void);
-extern	void prexpr(void), prstr(void);
-extern	void gt(void), lt(void), eq(void), ge(void), le(void), ne(void);
-extern	void and(void), or(void), not(void);
-extern	void ifcode(void), whilecode(void), forcode(void);
-extern	void call(void), arg(void), argassign(void);
-extern	void funcret(void), procret(void);
-extern	void preinc(void), predec(void), postinc(void), postdec(void);
-extern	void execute(Inst*);
-extern	void printtop(void);
+extern  Formal *formallist(Symbol*, Formal*);
+extern  double Fgetd(int);
+extern  int moreinput(void);
+extern  void restore(Symbol*);
+extern  void restoreall(void);
+extern  void execerror(char*, char*);
+extern  void define(Symbol*, Formal*), verify(Symbol*);
+extern  Datum pop(void);
+extern  void initcode(void), push(Datum), xpop(void), constpush(void);
+extern  void varpush(void);
+extern  void eval(void), add(void), sub(void), mul(void), div(void), mod(void);
+extern  void negate(void), power(void);
+extern  void addeq(void), subeq(void), muleq(void), diveq(void), modeq(void);
 
-extern double	Log(double), Log10(double), Gamma(double), Sqrt(double), Exp(double);
-extern double	Asin(double), Acos(double), Sinh(double), Cosh(double), integer(double);
-extern double	Pow(double, double);
+extern  Inst *progp, *progbase, prog[], *code(Inst);
+extern  void assign(void), bltin(void), varread(void);
+extern  void prexpr(void), prstr(void);
+extern  void gt(void), lt(void), eq(void), ge(void), le(void), ne(void);
+extern  void and(void), or(void), not(void);
+extern  void ifcode(void), whilecode(void), forcode(void);
+extern  void call(void), arg(void), argassign(void);
+extern  void funcret(void), procret(void);
+extern  void preinc(void), predec(void), postinc(void), postdec(void);
+extern  void execute(Inst*);
+extern  void printtop(void);
 
-extern	void init(void);
-extern	int yyparse(void);
-extern	void execerror(char*, char*);
-extern	void *emalloc(unsigned);
+extern double   Log(double), Log10(double), Gamma(double), Sqrt(double), Exp(double);
+extern double   Asin(double), Acos(double), Sinh(double), Cosh(double), integer(double);
+extern double   Pow(double, double);
+
+extern  void init(void);
+extern  int yyparse(void);
+extern  void execerror(char*, char*);
+extern  void *emalloc(unsigned);
 @
 
 
@@ -19647,7 +19647,7 @@ extern	void *emalloc(unsigned);
 
 <<function [[init]](hoc)>>=
 void
-init(void)	/* install constants and built-ins in table */
+init(void)      /* install constants and built-ins in table */
 {
     int i;
     Symbol *s;
@@ -19671,54 +19671,54 @@ init(void)	/* install constants and built-ins in table */
 #include "hoc.h"
 #include "y.tab.h"
 
-static struct {		/* Keywords */
-    char	*name;
-    int	kval;
+static struct {         /* Keywords */
+    char        *name;
+    int kval;
 } keywords[] = {
-    "proc",		PROC,
-    "func",		FUNC,
-    "return",	RETURN,
-    "if",		IF,
-    "else",		ELSE,
-    "while",	WHILE,
-    "for",		FOR,
-    "print",	PRINT,
-    "read",		READ,
-    0,		0,
+    "proc",             PROC,
+    "func",             FUNC,
+    "return",   RETURN,
+    "if",               IF,
+    "else",             ELSE,
+    "while",    WHILE,
+    "for",              FOR,
+    "print",    PRINT,
+    "read",             READ,
+    0,          0,
 };
 
-static struct {		/* Constants */
+static struct {         /* Constants */
     char *name;
     double cval;
 } consts[] = {
-    "PI",	 3.14159265358979323846,
-    "E",	 2.71828182845904523536,
+    "PI",        3.14159265358979323846,
+    "E",         2.71828182845904523536,
     "GAMMA", 0.57721566490153286060,  /* Euler */
-    "DEG",	57.29577951308232087680,  /* deg/radian */
+    "DEG",      57.29577951308232087680,  /* deg/radian */
     "PHI",   1.61803398874989484820,  /* golden ratio */
-    0,	 0
+    0,   0
 };
 
-static struct {		/* Built-ins */
+static struct {         /* Built-ins */
     char *name;
-    double	(*func)(double);
+    double      (*func)(double);
 } builtins[] = {
-    "sin",	sin,
-    "cos",	cos,
-    "tan",	tan,
-    "atan",	atan,
-    "asin",	Asin,	/* checks range */
-    "acos", Acos,	/* checks range */
-    "sinh",	Sinh,	/* checks range */
-    "cosh",	Cosh,	/* checks range */
-    "tanh",	tanh,
-    "log",	Log,	/* checks range */
-    "log10", Log10,	/* checks range */
-    "exp",	Exp,	/* checks range */
-    "sqrt",	Sqrt,	/* checks range */
-    "int",	integer,
-    "abs",	fabs,
-    0,	0
+    "sin",      sin,
+    "cos",      cos,
+    "tan",      tan,
+    "atan",     atan,
+    "asin",     Asin,   /* checks range */
+    "acos", Acos,       /* checks range */
+    "sinh",     Sinh,   /* checks range */
+    "cosh",     Cosh,   /* checks range */
+    "tanh",     tanh,
+    "log",      Log,    /* checks range */
+    "log10", Log10,     /* checks range */
+    "exp",      Exp,    /* checks range */
+    "sqrt",     Sqrt,   /* checks range */
+    "int",      integer,
+    "abs",      fabs,
+    0,  0
 };
 
 <<function [[init]](hoc)>>
@@ -19811,7 +19811,7 @@ integer(double x)
 
 <<function [[errcheck]](hoc)>>=
 double
-errcheck(double d, char* s)	/* check result of library call */
+errcheck(double d, char* s)     /* check result of library call */
 {
     if(isNaN(d))
         execerror(s, "argument out of domain");
@@ -19830,7 +19830,7 @@ errcheck(double d, char* s)	/* check result of library call */
 
 #include "hoc.h"
 
-double	errcheck(double, char*);
+double  errcheck(double, char*);
 
 <<function [[Log]](hoc)>>
 <<function [[Log10]](hoc)>>
@@ -19857,14 +19857,14 @@ double	errcheck(double, char*);
 
 <<function [[lookup]](hoc)>>=
 Symbol*
-lookup(char* s)	/* find s in symbol table */
+lookup(char* s) /* find s in symbol table */
 {
     Symbol *sp;
 
     for (sp = symlist; sp != (Symbol *) 0; sp = sp->next)
         if (strcmp(sp->name, s) == 0)
             return sp;
-    return 0;	/* 0 ==> not found */	
+    return 0;   /* 0 ==> not found */   
 }
 @
 
@@ -19887,7 +19887,7 @@ install(char* s, int t, double d)  /* install s in symbol table */
 
 <<function [[emalloc]](hoc)>>=
 void*
-emalloc(unsigned n)	/* check return from malloc */
+emalloc(unsigned n)     /* check return from malloc */
 {
     char *p;
 
@@ -19900,7 +19900,7 @@ emalloc(unsigned n)	/* check return from malloc */
 
 <<function [[formallist]](hoc)>>=
 Formal*
-formallist(Symbol *formal, Formal *list)	/* add formal to list */
+formallist(Symbol *formal, Formal *list)        /* add formal to list */
 {
     Formal *f;
 
