@@ -37,8 +37,10 @@ main(int argc, char **argv)
     case 'p': procs = atoi(EARGF(usage())); break;
     default: usage();
     } ARGEND;
+
     if(argc < 1)
         usage();
+    // else
     
     nargv = malloc(sizeof(char *) * (argc + lines + 1));
     if(nargv == nil)

@@ -20,7 +20,9 @@ main(int argc, char *argv[])
     ARGBEGIN{
     case 'n':   nflg = true; break;
     case 'u':   uflg = true; break;
-    default:    fprint(STDERR, "usage: date [-un] [seconds]\n"); exits("usage");
+    default: 
+       fprint(STDERR, "usage: date [-un] [seconds]\n");
+       exits("usage");
     }ARGEND
 
     if(argc == 1)
