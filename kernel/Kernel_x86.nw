@@ -1,5 +1,6 @@
 \part{Was in Kernel.nw main text}
 
+
 %title: x86 (32 bits) edition
 
 \chapter{Introduction}
@@ -7,6 +8,80 @@
 \section{Requirements}
 
 %one of the item is about the x86 architecture
+\chapter{XXX}
+
+% was in Kernel_extra.nw but then cause error when
+% not including Kernel_x86.nw (for instance syncweb -loc)
+% so moved here
+
+% only run and runv are maybe slightly interesting
+\ifallcode
+<<aux.c>>=
+#include <u.h>
+#include <libc.h>
+#include "../boot/boot.h"
+
+// Note that most of this code is now superseded by $objtype/boot.rc
+
+void
+warning(char *s)
+{
+    char buf[ERRMAX];
+
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    fprint(2, "boot: %s: %s\n", s, buf);
+}
+
+void
+fatal(char *s)
+{
+    char *msg;
+    char buf[ERRMAX];
+
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    msg = smprint("%s: %s", s, buf);
+    fprint(2, "boot: %s\n", msg);
+    exits(msg);         /* this will trigger a panic */
+}
+
+<<function [[runv]]>>
+
+<<function [[run]]>>
+
+
+void bind_safe(char* old, char* new, int flag) {
+  if(bind(old, new, flag) < 0)
+    fatal("bind");
+  return;
+}
+
+//less: could get path in fatal message
+int open_safe(char* path, int flag) {
+  int fd;
+  if((fd = open(path, flag)) < 0) {
+    fatal("open");
+  }
+  return fd;
+}
+
+void print_safe(int fd, char* str) {
+  if(write(fd, str, strlen(str)) < 0) {
+    fatal("print");
+  };
+  return;
+}
+
+void close_safe(int fd) {
+  if(close(fd) < 0) {
+    fatal("close");
+  }
+}
+@
+%$
+\fi
+
 
 \chapter{Overview}
 
@@ -1724,36 +1799,6 @@ void trap(Ureg* ureg)
 @ 
 
 
-<<[[Proc]] scheduling fields>>=
-bool preempted;  /* true if this process hasn't finished the interrupt
-       *  that last preempted it
-       */
-@
-
-% ?? -> <>
-<<function [[preempt]]>>=
-/*
- *  here at the end of non-clock interrupts to see if we should preempt the
- *  current process.
- */
-void
-preempt(void)
-{
-    if(up && up->state == Running)
-      if(up->preempted == false)
-        if(anyhigher())
-          if(!active.exiting){
-              cpu->readied = nil;   /* avoid cooperative scheduling */
-              up->preempted = true;
-              sched();
-              arch_splhi(); // still in interrupt context
-              up->preempted = false;
-          }
-    return;
-}
-@ 
-% servicing an interrupt may have adjusted the readyness of higher priority
-% process so preempt!
 
 
 
@@ -2520,42 +2565,6 @@ arch_checkmmu(virt_addr va, phys_addr pa)
 }
 @
 
-<<function [[checkpages]]>>=
-void
-checkpages(void)
-{
-    int checked;
-    ulong addr, off;
-    Pagetable *p;
-    Page *pg;
-    Segment **sp, **ep, *s;
-    
-    if(up == nil)
-        return;
-
-    checked = 0;
-    // foreach(up->seg)
-    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
-        s = *sp;
-        if(s == nil)
-            continue;
-        qlock(&s->lk);
-        for(addr=s->base; addr<s->top; addr+=BY2PG){
-            off = addr - s->base;
-            p = s->pagedir[off/PAGETABMAPMEM];
-            if(p == nil)
-                continue;
-            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
-            if(pg == nil || pagedout(pg))
-                continue;
-            arch_checkmmu(addr, pg->pa);
-            checked++;
-        }
-        qunlock(&s->lk);
-    }
-    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
-}
-@
 
 \chapter{Scheduling}
 
