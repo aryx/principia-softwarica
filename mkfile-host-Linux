@@ -1,8 +1,5 @@
-MNT=MISC/MNT
-UID=`id -u`
-GID=`id -g`
-# the offset is to skip the sector containing the partition table
-OPTIONS='offset=512,uid='$UID',gid='$GID
+# Linux-specific targets
+
 IMG=dosdisk.img
 #coupling: if you change the size of the image, you need
 # to adjust kernel/init/user/boot/$objtype/boot.rc line about
@@ -20,33 +17,49 @@ disk-pc:V:
 	rm -f $IMG
 	dd 'if=/dev/zero' 'of='x$IMG 'bs=1M' 'count='$IMGSIZE
 	mkfs.vfat x$IMG
+	mcopy -i x$IMG -s -o ROOT/* :: || echo skipped mcopy status
 	cat MISC/pc/bootsector x$IMG > $IMG
 	rm -f x$IMG
-	sudo mount dosdisk.img -t vfat $MNT -o $OPTIONS
-	cp -a ROOT/* $MNT/
-	sudo umount $MNT
 
 disk-pi:V:
 	rm -f $IMG
 	dd 'if=/dev/zero' 'of='x$IMG 'bs=1M' 'count='$IMGSIZE
 	mkfs.vfat x$IMG
+	mcopy -i x$IMG -s -o ROOT/* :: || echo skipped mcopy status
+	mcopy -i x$IMG -s -o MISC/pi/* :: || echo skipped mcopy status
+	mcopy -i x$IMG $KERNEL ::
 	cat MISC/pc/bootsector x$IMG > $IMG
 	rm -f x$IMG
-	sudo mount dosdisk.img -t vfat $MNT -o $OPTIONS
-	cp -a ROOT/* $MNT/
-    cp -a MISC/pi/* $MNT/
-    cp -a $KERNEL $MNT/
-	sudo umount $MNT
+
+
+#alt: to mtools, but less portable and harder to use in docker
+MNT=MISC/MNT
+UID=`id -u`
+GID=`id -g`
+# the offset is to skip the sector containing the partition table
+OPTIONS='offset=512,uid='$UID',gid='$GID
+#alt: disk-pc:
+#       ...
+#	sudo mount dosdisk.img -t vfat $MNT -o $OPTIONS
+#	cp -a ROOT/* $MNT/
+#	sudo umount $MNT
+#alt: disk-pi:
+#       ...
+#	sudo mount dosdisk.img -t vfat $MNT -o $OPTIONS
+#	cp -a ROOT/* $MNT/
+#	cp -a MISC/pi/* $MNT/
+#	cp -a $KERNEL $MNT/
+#	sudo umount $MNT
 
 disksrc:V:
 	sudo mount dosdisk.img -t vfat $MNT -o $OPTIONS
 	rm -rf $MNT/*
 	cp -a ROOT/* $MNT/
-    # not dosdisk.img!
-    cp -a [a-ce-z]* database debuggers $MNT/src || echo some errors are ok 
-    # symlinks not supported on vfat
-    cp include/ALL/* $MNT/src/include/ALL/ || echo some errors are ok 
-    cp -a ROOT $MNT/src/
+	# not dosdisk.img!
+	cp -a [a-ce-z]* database debuggers $MNT/src || echo some errors are ok 
+	# symlinks not supported on vfat
+	cp include/ALL/* $MNT/src/include/ALL/ || echo some errors are ok 
+	cp -a ROOT $MNT/src/
 	sudo umount $MNT
 
 mount:V:
