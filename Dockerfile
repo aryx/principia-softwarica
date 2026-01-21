@@ -16,8 +16,6 @@ RUN mk disk
 # then to use qemu to run plan9 do:
 #    qemu-system-i386 -smp 4 -m 512 -kernel ./9qemu -hda ./dosdisk.img
 
-
-
 # arm
 RUN cp mkconfig.pi mkconfig
 RUN mk && mk install
