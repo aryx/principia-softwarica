@@ -13,13 +13,13 @@ LIBS=\
  lib_networking\
  # used by plumb, iostats, snapfs, screenlock, etc\
  lib_security\
+ # used by compilers/cpp (which is used by pcc), languages/s9\
+ lib_misc/libstdio\
  \
  generators/lex/liblex\
  debuggers/libmach\
  # used by networking/ip, aux/vga/db, etc.\
  database/libndb\
- # used by compilers/cpp (which is used by pcc), languages/s9\
- MISC/APE/libstdio\
 
 #TODO: 
 # lib_audio (empty)
