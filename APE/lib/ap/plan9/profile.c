@@ -19,7 +19,8 @@ typedef long long vlong;
 typedef unsigned long ulong;
 typedef unsigned long long uvlong;
 
-#include	"/sys/include/tos.h"
+// was /sys/include/tos.h
+#include	<tos.h>
 
 extern	void*	sbrk(ulong);
 extern	long	_callpc(void**);
