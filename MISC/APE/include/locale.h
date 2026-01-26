@@ -1,6 +1,6 @@
 #ifndef __LOCALE
 #define __LOCALE
-#pragma lib "/$M/lib/ape/libap.a"
+#pragma lib "libap.a"
 
 #include <stddef.h>
 

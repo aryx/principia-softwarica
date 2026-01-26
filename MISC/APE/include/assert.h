@@ -1,4 +1,4 @@
-#pragma lib "/$M/lib/ape/libap.a"
+#pragma lib "libap.a"
 
 #undef assert
 #ifdef NDEBUG

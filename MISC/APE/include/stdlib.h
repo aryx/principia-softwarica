@@ -1,6 +1,6 @@
 #ifndef __STDLIB_H
 #define __STDLIB_H
-#pragma lib "/$M/lib/ape/libap.a"
+#pragma lib "libap.a"
 
 #include <stddef.h>
 

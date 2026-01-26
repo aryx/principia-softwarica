@@ -1,6 +1,6 @@
 #ifndef __CTYPE
 #define __CTYPE
-#pragma lib "/$M/lib/ape/libap.a"
+#pragma lib "libap.a"
 
 #ifdef __cplusplus
 extern "C" {

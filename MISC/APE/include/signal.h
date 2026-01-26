@@ -1,6 +1,6 @@
 #ifndef __SIGNAL_H
 #define __SIGNAL_H
-#pragma lib "/$M/lib/ape/libap.a"
+#pragma lib "libap.a"
 
 typedef int sig_atomic_t;
 
