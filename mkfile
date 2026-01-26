@@ -34,7 +34,7 @@ PROGRAMS=\
  compilers\
  generators\
  machine\
- MISC/APE/pcc\
+ APE/pcc\
  \
  shells\
  windows\
