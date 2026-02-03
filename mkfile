@@ -5,17 +5,15 @@
 ###############################################################################
 
 LIBS=\
- lib_core\
- lib_math\
- lib_strings\
- lib_graphics\
- lib_gui\
+ lib_core lib_math lib_strings\
+ lib_graphics lib_gui\
  lib_networking\
  # used by plumb, iostats, snapfs, screenlock, etc\
  lib_security\
- # used by compilers/cpp (which is used by pcc), languages/s9\
+ # used by compilers/cpp (which is used by pcc) and languages/s9\
  lib_misc/libstdio\
- \
+ # used by ocaml-light and xix for plan9\
+ APE/lib \
  generators/lex/liblex\
  debuggers/libmach\
  # used by networking/ip, aux/vga/db, etc.\
@@ -71,6 +69,7 @@ TESTS=\
  linkers/8l/tests\
  lib_gui/libpanel/tests\
 
+#TODO:
 # assemblers/5a/tests\
 # need a arm/lib/libc.a\
 # compilers/5c/tests\
