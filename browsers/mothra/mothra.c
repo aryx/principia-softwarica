@@ -10,13 +10,17 @@
 #include <cursor.h>
 #include <panel.h>
 #include <regexp.h>
+
 #include "mothra.h"
 #include "rtext.h"
+
 int debug=0;
 int verbose=0;		/* -v flag causes html errors to be written to file-descriptor 2 */
+
 int defdisplay=1;	/* is the default (initial) display visible? */
 int visxbar=0;	/* horizontal scrollbar visible? */
 int topxbar=0;	/* horizontal scrollbar at top? */
+
 Panel *root;	/* the whole display */
 Panel *alt;	/* the alternate display */
 Panel *alttext;	/* the alternate text window */
@@ -25,7 +29,9 @@ Panel *cururl;	/* label giving the url of the visible text */
 Panel *list;	/* list of previously acquired www pages */
 Panel *msg;	/* message display */
 Panel *menu3;	/* button 3 menu */
+
 char mothra[] = "mothra!";
+
 Cursor patientcurs={
 	0, 0,
 	0x01, 0x80, 0x03, 0xC0, 0x07, 0xE0, 0x07, 0xe0,
@@ -89,7 +95,9 @@ void dolink(Panel *, int, Rtext *);
 void hit3(int, int);
 void mothon(Www *, int);
 void killpix(Www *w);
-char *buttons[]={
+
+// renamed to avoid conflict with event.h typedef buttons
+char *buttons_[]={
 	"alt display",
 	"moth mode",
 	"snarf",
@@ -194,7 +202,7 @@ void mkpanels(void){
 		xflags=PACKS|USERFL;
 	//if(!visxbar)
 	//	xflags|=IGNORE;
-	menu3=plmenu(0, 0, buttons, PACKN|FILLX, hit3);
+	menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
 	root=plpopup(root, EXPAND, 0, 0, menu3);
 		p=plgroup(root, PACKN|FILLX);
 			msg=pllabel(p, PACKN|FILLX, mothra);
