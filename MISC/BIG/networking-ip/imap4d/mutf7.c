@@ -15,9 +15,7 @@
  * /lib/rfc/rfc1642 is obsolete utf-7
  *
  * test sequences from rfc1642
- *	'A≢Α.'		'A&ImIDkQ-.'
- *	'Hi Mom ☺!"	'Hi Mom &Jjo-!'
- *	'日本語'		'&ZeVnLIqe-'
+ *   ... (pad: see comment above in Network_apps_extra.nw)
  */
 
 static uchar mt64d[256];
