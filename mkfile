@@ -65,9 +65,10 @@ TESTS=\
  ROOT/tests\
  lib_graphics/libdraw/tests\
  lib_graphics/libmemdraw/tests\
+ lib_networking/libip/tests\
+ lib_gui/libpanel/tests\
  compilers/8c/tests\
  linkers/8l/tests\
- lib_gui/libpanel/tests\
 
 #TODO:
 # assemblers/5a/tests\
