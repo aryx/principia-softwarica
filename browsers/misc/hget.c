@@ -54,7 +54,7 @@ enum
 	Changed = -3,
 };
 
-int debug;
+bool debug;
 char *ofile;
 
 
@@ -124,7 +124,7 @@ main(int argc, char **argv)
 		ofile = EARGF(usage());
 		break;
 	case 'd':
-		debug = 1;
+		debug = true;
 		break;
 	case 'h':
 		headerprint = 1;
@@ -410,7 +410,7 @@ dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 			if(fprint(cfd, "http://%s%s", u->host, u->page) > 0){
 				while((n = read(cfd, buf, sizeof buf)) > 0){
 					if(debug)
-						write(2, buf, n);
+						write(STDERR, buf, n);
 					write(fd, buf, n);
 				}
 			}else{
@@ -569,7 +569,7 @@ httprcode(int fd)
 	if(n <= 0)
 		return n;
 	if(debug)
-		fprint(2, "%d <- %s\n", fd, buf);
+		fprint(STDERR, "%d <- %s\n", fd, buf);
 	p = strchr(buf, ' ');
 	if(strncmp(buf, "HTTP/", 5) != 0 || p == nil){
 		werrstr("bad response from server");
@@ -666,7 +666,7 @@ getheader(int fd, char *buf, int n)
 		print("%s\n", buf);
 
 	if(debug)
-		fprint(2, "%d <- %s\n", fd, buf);
+		fprint(STDERR, "%d <- %s\n", fd, buf);
 	return p-buf;
 }
 
@@ -949,7 +949,7 @@ ftpcmd(int ctl, char *fmt, ...)
 	s = vseprint(buf, buf + (sizeof(buf)-4) / sizeof(*buf), fmt, arg);
 	va_end(arg);
 	if(debug)
-		fprint(2, "%d -> %s\n", ctl, buf);
+		fprint(STDERR, "%d -> %s\n", ctl, buf);
 	*s++ = '\r';
 	*s++ = '\n';
 	if(write(ctl, buf, s - buf) != s - buf)
@@ -971,7 +971,7 @@ ftprcode(int ctl, char *msg, int len)
 		if(i < 0)
 			break;
 		if(debug)
-			fprint(2, "%d <- %s\n", ctl, msg);
+			fprint(STDERR, "%d <- %s\n", ctl, msg);
 
 		/* stop if not a continuation */
 		rv = strtol(msg, &p, 10);
@@ -1364,7 +1364,7 @@ dfprint(int fd, char *fmt, ...)
 	vseprint(buf, buf+sizeof(buf), fmt, arg);
 	va_end(arg);
 	if(debug)
-		fprint(2, "%d -> %s", fd, buf);
+		fprint(STDERR, "%d -> %s", fd, buf);
 	return fprint(fd, "%s", buf);
 }
 
