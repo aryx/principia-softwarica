@@ -4,6 +4,7 @@
 #include <regexp.h>
 #include <thread.h>
 #include <ctype.h>
+
 #include <plumb.h>
 #include "plumber.h"
 
@@ -415,7 +416,8 @@ include(char *s)
 	t = args[1];
 	fd = open(t, OREAD);
 	if(fd<0 && t[0]!='/' && strncmp(t, "./", 2)!=0 && strncmp(t, "../", 3)!=0){
-		snprint(buf, sizeof buf, "/sys/lib/plumb/%s", t);
+		//old: snprint(buf, sizeof buf, "/sys/lib/plumb/%s", t);
+        snprint(buf, sizeof buf, "/lib/plumb/%s", t);
 		t = buf;
 		fd = open(t, OREAD);
 	}
