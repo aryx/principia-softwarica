@@ -51,18 +51,18 @@ struct Ippkt
 /*s: constant [[IP_HDRSIZE]] */
 #define IP_HDRSIZE	20
 /*e: constant [[IP_HDRSIZE]] */
-/*s: constant IP_UDPPROTO (measure.c) */
+/*s: constant [[IP_UDPPROTO]] (measure.c) */
 #define IP_UDPPROTO	17
-/*e: constant IP_UDPPROTO (measure.c) */
+/*e: constant [[IP_UDPPROTO]] (measure.c) */
 /*s: constant [[IP_MBONEPROTO]] */
 #define IP_MBONEPROTO	4
 /*e: constant [[IP_MBONEPROTO]] */
 /*s: constant [[IP_TCPPROTO]] */
 #define IP_TCPPROTO	6
 /*e: constant [[IP_TCPPROTO]] */
-/*s: constant IP_ILPROTO (measure.c) */
+/*s: constant [[IP_ILPROTO]] (measure.c) */
 #define	IP_ILPROTO	40
-/*e: constant IP_ILPROTO (measure.c) */
+/*e: constant [[IP_ILPROTO]] (measure.c) */
 /*s: constant [[IP_ICMPPROTO]] */
 #define	IP_ICMPPROTO	1
 /*e: constant [[IP_ICMPPROTO]] */
