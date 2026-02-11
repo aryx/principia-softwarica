@@ -125,7 +125,7 @@ dodial(char *dest)
     data = dial(name, 0, devdir, 0);
     if(data < 0)
         fatal("%s: %r", name, 0);
-    fprint(2, "connected to %s on %s\n", name, devdir);
+    fprint(STDERR, "connected to %s on %s\n", name, devdir);
     return data;
 }
 /*e: function [[dodial]] */
