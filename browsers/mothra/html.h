@@ -2,7 +2,7 @@
  * Parameters
  */
 #define	NSTACK	100	/* html grammar is not recursive, so 30 or so should do */
-#define	NHBUF	8192	/* Input buffer size */
+#define	NHBUF	8192 //IOUNIT	/* Input buffer size */
 #define	NPEEKC	3	/* Maximum lookahead */
 #define	NTOKEN	65536	/* Maximum token length */
 #define	NATTR	512	/* Maximum number of attributes of a tag */
@@ -136,6 +136,7 @@ enum{
 	Tag_acronym,
 	Tag_address,
 	Tag_applet,
+	Tag_article,
 	Tag_audio,
 	Tag_b,
 	Tag_base,
@@ -155,6 +156,8 @@ enum{
 	Tag_dt,
 	Tag_em,
 	Tag_embed,
+	Tag_figure,
+	Tag_figcaption,
 	Tag_font,
 	Tag_form,
 	Tag_frame,	/* rm 5.8.97 */

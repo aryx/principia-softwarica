@@ -32,6 +32,39 @@ struct Fontdata{
 	"terminus/unicode.14", 0, 0,
 	"terminus/unicode.16", 0, 0,
 	"terminus/unicode.18", 0, 0,
+
+/* original */
+/*
+	"lucidasans/unicode.7", 0, 0,
+	"lucidasans/unicode.8", 0, 0,
+	"lucidasans/unicode.10", 0, 0,
+	"lucidasans/unicode.13", 0, 0,
+
+	"lucidasans/italicunicode.7", 0, 0,
+	"lucidasans/italicunicode.8", 0, 0,
+	"lucidasans/italicunicode.10", 0, 0,
+	"lucidasans/italicunicode.13", 0, 0,
+
+	"lucidasans/boldunicode.7", 0, 0,
+	"lucidasans/boldunicode.8", 0, 0,
+	"lucidasans/boldunicode.10", 0, 0,
+	"lucidasans/boldunicode.13", 0, 0,
+
+	"lucidasans/typeunicode.7", 0, 0,
+	"pelm/unicode.8", 0, 0,
+	"lucidasans/typeunicode.12", 0, 0,
+	"lucidasans/typeunicode.16", 0, 0,
+*/
+};
+
+static struct{
+	char *prefix;
+	int len;
+}links[]={
+	{"http://", 7},
+	{"https://", 8},
+	{"gemini://", 9},
+	{"ftp://", 6},
 };
 
 Font *pl_whichfont(int f, int s, int *space){
@@ -83,7 +116,7 @@ void pl_popstate(Stack *state){
 }
 
 void pl_linespace(Hglob *g){
-	plrtbitmap(&g->dst->text, 1000000, 0, /**0,*/ linespace, 0, 0);
+	plrtbitmap(&g->dst->text, 1000000, 0, /*0,*/ linespace, 0, 0);
 	g->para=0;
 	g->linebrk=0;
 }
@@ -168,7 +201,7 @@ void pl_htmloutput(Hglob *g, int nsp, char *s, Field *field){
 		flags |= PL_HOT;
 	//if(g->state->strike)
 	//	flags |= PL_STR;
-	plrtstr(&g->dst->text, space, indent, /**voff,*/ f, strdup(s), flags, ap);
+	plrtstr(&g->dst->text, space, indent, /*voff,*/ f, strdup(s), flags, ap);
 	g->para=0;
 	g->linebrk=0;
 	g->dst->changed=1;
@@ -295,12 +328,12 @@ int entchar(int c){
 
 /* return url if text token looks like a hyperlink */
 char *linkify(char *s){
+	int i;
 	if(s == 0 && s[0] == 0)
 		return 0;
-	if(!cistrncmp(s, "http://", 7))
-		return strdup(s);
-	if(!cistrncmp(s, "https://", 8))
-		return strdup(s);
+	for(i = 0; i < nelem(links); i++)
+		if(!cistrncmp(s, links[i].prefix, links[i].len))
+			return strdup(s);
 	if(!cistrncmp(s, "www.", 4)){
 		int d, i;
 
@@ -356,14 +389,17 @@ void pl_rmentities(Hglob *, char *s){
 				while(u<s)
 					*t++=*u++;
 			}
-		}	
-		else *t++=c;
+		}
+		else if((uchar)c == 0xc2 && (uchar)*s == 0xad)
+			s++; /* ignore soft hyphens */
+		else
+			*t++=c;
 	}while(c);
 }
 /*
  * Skip over white space
  */
-char *pl_white(char *s){
+char *pl_whitespace(char *s){
 	while(*s==' ' || *s=='\t' || *s=='\n' || *s=='\r') s++;
 	return s;
 }
@@ -420,19 +456,19 @@ void pl_tagparse(Hglob *g, char *str){
 	g->tag=tagp-tag;
 	if(g->tag==Tag_end) htmlerror(g->name, g->lineno, "no tag %s", name);
 	for(;;){
-		s=pl_white(s);
+		s=pl_whitespace(s);
 		if(*s=='\0'){
 			ap->name=0;
 			return;
 		}
 		ap->name=s;
 		s=pl_word(s);
-		t=pl_white(s);
+		t=pl_whitespace(s);
 		c=*t;
 		*s='\0';
 		for(s=ap->name;*s;s++) if('A'<=*s && *s<='Z') *s+='a'-'A';
 		if(c=='='){
-			s=pl_white(t+1);
+			s=pl_whitespace(t+1);
 			if(*s=='\'' || *s=='"'){
 				ap->value=s+1;
 				s=pl_quote(s);
@@ -704,7 +740,7 @@ void plrdplain(char *name, int fd, Www *dst){
 	plaintext(&g);
 	finish(dst);
 }
-void plrdhtml(char *name, int fd, Www *dst){
+void plrdhtml(char *name, int fd, Www *dst, int killimgs){
 	int tagerr;
 	Stack *sp;
 	char buf[20];
@@ -954,6 +990,8 @@ void plrdhtml(char *name, int fd, Www *dst){
 			g.spacc=0;
 			break;
 		case Tag_div:
+			g.spacc=0;
+			break;
 		case Tag_br:
 		case Tag_wbr:
 			g.spacc=0;
@@ -969,6 +1007,7 @@ void plrdhtml(char *name, int fd, Www *dst){
 			g.state->size=NORMAL;
 			break;
 		case Tag_code:
+		case Tag_samp:
 			g.state->font=CWIDTH;
 			g.state->size=NORMAL;
 			break;
@@ -995,6 +1034,9 @@ void plrdhtml(char *name, int fd, Www *dst){
 			g.state->indent=-40;
 			g.state->font=BOLD;
 			g.spacc=0;
+			break;
+		case Tag_figcaption:
+			g.linebrk=1;
 			break;
 		case Tag_font:
 			/* more to come */
@@ -1050,7 +1092,7 @@ void plrdhtml(char *name, int fd, Www *dst){
 			break;
 		case Tag_hr:
 			g.spacc=0;
-			plrtbitmap(&g.dst->text, 1000000, g.state->margin, /**0,*/ hrule, 0, 0);
+			plrtbitmap(&g.dst->text, 1000000, g.state->margin, /*0,*/ hrule, 0, 0);
 			break;
 		case Tag_key:
 			htmlerror(g.name, g.lineno, "<key> deprecated");
@@ -1087,7 +1129,7 @@ void plrdhtml(char *name, int fd, Www *dst){
 				g.linebrk=0;
 				g.spacc=-1;
 				plrtbitmap(&g.dst->text, 100000,
-					g.state->margin+g.state->indent, /**0,*/ bullet, 0, 0);
+					g.state->margin+g.state->indent, /*0,*/ bullet, 0, 0);
 				break;
 			}
 			break;
@@ -1100,7 +1142,6 @@ void plrdhtml(char *name, int fd, Www *dst){
 		case Tag_xmp:
 			htmlerror(g.name, g.lineno, "<%s> deprecated", tag[g.tag].name);
 		case Tag_pre:
-		case Tag_samp:
 			g.state->indent=0;
 			g.state->pre=1;
 			g.state->font=CWIDTH;
@@ -1190,13 +1231,13 @@ void plrdhtml(char *name, int fd, Www *dst){
 		case Tag_listing:
 		case Tag_menu:
 		case Tag_ol:
-		case Tag_samp:
 		case Tag_title:
 		case Tag_ul:
 		case Tag_xmp:
 		case Tag_table:
 			g.linebrk=1;
 			break;
+		case Tag_article:
 		case Tag_pre:
 			pl_linespace(&g);
 			break;
@@ -1222,7 +1263,8 @@ void plrdhtml(char *name, int fd, Www *dst){
 		}
 		pl_popstate(g.state);
 		*g.tp='\0';
-		getpix(dst->text, dst);
+		if (!killimgs)
+			getpix(dst->text, dst);
 		finish(dst);
 		return;
 	}

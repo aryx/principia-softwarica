@@ -205,6 +205,10 @@ urlget(Url *url, int body)
 	n = strlen(buf);
 	snprint(buf+n, sizeof(buf)-n, "/body");
 	body = open(buf, OREAD);
+	if(body < 0){
+		snprint(buf+n, sizeof(buf)-n, "/errorbody");
+		body = open(buf, OREAD);
+	}
 	close(fd);
 	fd = body;
 	if(fd < 0)
@@ -215,6 +219,9 @@ urlget(Url *url, int body)
 
 	snprint(buf+n, sizeof(buf)-n, "/parsed/fragment");
 	readstr(buf, url->tag, sizeof(url->tag));
+	
+	snprint(buf+n, sizeof(buf)-n, "/contenttype");
+	readstr(buf, url->contenttype, sizeof(url->contenttype));
 
 	snprint(buf+n, sizeof(buf)-n, "/contentencoding");
 	readstr(buf, buf, sizeof(buf));

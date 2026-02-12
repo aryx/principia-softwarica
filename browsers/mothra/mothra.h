@@ -28,6 +28,7 @@ struct Url{
 	char *reltext;
 	char fullname[NNAME];
 	char tag[NNAME];
+	char contenttype[NNAME];
 	int map;		/* is this an image map? */
 };
 struct Www{
@@ -78,7 +79,7 @@ enum{
 };
 
 void finish(Www *w);
-void plrdhtml(char *, int, Www *);
+void plrdhtml(char *, int, Www *, int);
 void plrdplain(char *, int, Www *);
 void htmlerror(char *, int, char *, ...);	/* user-supplied routine */
 void seturl(Url *, char *, char *);
@@ -97,6 +98,7 @@ int Ufmt(Fmt *f);
 #pragma	varargck type "U" char*
 void message(char *, ...);
 int filetype(int, char *, int);
+int mimetotype(char *);
 int snooptype(int);
 void mkfieldpanel(Rtext *);
 void geturl(char *, int, int, int);

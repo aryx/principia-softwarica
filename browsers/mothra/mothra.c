@@ -10,17 +10,14 @@
 #include <cursor.h>
 #include <panel.h>
 #include <regexp.h>
-
 #include "mothra.h"
 #include "rtext.h"
-
 int debug=0;
 int verbose=0;		/* -v flag causes html errors to be written to file-descriptor 2 */
-
+int killimgs=0;	/* should mothra kill images? */
 int defdisplay=1;	/* is the default (initial) display visible? */
 int visxbar=0;	/* horizontal scrollbar visible? */
 int topxbar=0;	/* horizontal scrollbar at top? */
-
 Panel *root;	/* the whole display */
 Panel *alt;	/* the alternate display */
 Panel *alttext;	/* the alternate text window */
@@ -29,9 +26,7 @@ Panel *cururl;	/* label giving the url of the visible text */
 Panel *list;	/* list of previously acquired www pages */
 Panel *msg;	/* message display */
 Panel *menu3;	/* button 3 menu */
-
 char mothra[] = "mothra!";
-
 Cursor patientcurs={
 	0, 0,
 	0x01, 0x80, 0x03, 0xC0, 0x07, 0xE0, 0x07, 0xe0,
@@ -95,13 +90,13 @@ void dolink(Panel *, int, Rtext *);
 void hit3(int, int);
 void mothon(Www *, int);
 void killpix(Www *w);
-
 // renamed to avoid conflict with event.h typedef buttons
 char *buttons_[]={
 	"alt display",
 	"moth mode",
 	"snarf",
 	"paste",
+	"plumb",
 	"search",
 	"save hit",
 	"hit list",
@@ -126,7 +121,7 @@ int subpanel(Panel *obj, Panel *subj){
 	return 0;
 }
 /*
- * Make sure that the keyboard focus is on-view, by adjusting it to
+ * Make sure that the keyboard focus is on-screen, by adjusting it to
  * be the cmd entry if necessary.
  */
 int adjkb(void){
@@ -146,11 +141,11 @@ int adjkb(void){
 	return 0;
 }
 
-void scrolltext(int dy, int whence)
+void scrollpanel(Panel *p, int dy, int whence)
 {
 	Scroll s;
 
-	s = plgetscroll(text);
+	s = plgetscroll(p);
 	switch(whence){
 	case 0:
 		s.pos.y = dy;
@@ -166,7 +161,7 @@ void scrolltext(int dy, int whence)
 		s.pos.y = s.size.y;
 	if(s.pos.y < 0)
 		s.pos.y = 0;
-	plsetscroll(text, s);
+	plsetscroll(p, s);
 }
 
 void sidescroll(int dx, int whence)
@@ -200,6 +195,7 @@ void mkpanels(void){
 		xflags=PACKN|USERFL;
 	else
 		xflags=PACKS|USERFL;
+    //TODO
 	//if(!visxbar)
 	//	xflags|=IGNORE;
 	menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
@@ -314,6 +310,7 @@ void main(int argc, char *argv[]){
 	ARGBEGIN{
 	case 'd': debug=1; break;
 	case 'v': verbose=1; break;
+	case 'k': killimgs=1; break;
 	case 'm':
 		if(mtpt = ARGF())
 			break;
@@ -337,7 +334,7 @@ void main(int argc, char *argv[]){
 	switch(argc){
 	default:
 	Usage:
-		fprint(2, "Usage: %s [-dva] [-m mtpt] [url]\n", argv0);
+		fprint(2, "usage: %s [-dvak] [-m mtpt] [url]\n", argv0);
 		exits("usage");
 	case 0:
 		url=getenv("url");
@@ -404,48 +401,62 @@ void main(int argc, char *argv[]){
 		case Ekeyboard:
 			switch(e.kbdc){
 			default:
+Plkey:
 				adjkb();
 				plkeyboard(e.kbdc);
 				break;
 			case Khome:
-				scrolltext(0, 0);
+				scrollpanel(text, 0, 0);
 				break;
 			case Kup:
-				scrolltext(-text->size.y/4, 1);
+				scrollpanel(text, -text->size.y/4, 1);
 				break;
 			case Kpgup:
-				scrolltext(-text->size.y/2, 1);
+				scrollpanel(text, -text->size.y/2, 1);
 				break;
 			case Kdown:
-				scrolltext(text->size.y/4, 1);
+				scrollpanel(text, text->size.y/4, 1);
 				break;
 			case Kpgdown:
-				scrolltext(text->size.y/2, 1);
+				scrollpanel(text, text->size.y/2, 1);
 				break;
 			case Kend:
-				scrolltext(-text->size.y, 2);
+				scrollpanel(text, -text->size.y, 2);
 				break;
-			//case Kack:
-			//	search();
-			//	break;
+			case Kack:
+				search();
+				break;
 			case Kright:
+				if(plkbfocus)
+					goto Plkey;
 				sidescroll(text->size.x/4, 1);
 				break;
 			case Kleft:
+				if(plkbfocus)
+					goto Plkey;
 				sidescroll(-text->size.x/4, 1);
 				break;
 			}
 			break;
 		case Emouse:
 			mouse=e.mouse;
+			if(mouse.buttons & (8|16) && ptinrect(mouse.xy, list->r) && defdisplay){
+				if(mouse.buttons & 8)
+					scrollpanel(list, list->r.min.y - mouse.xy.y, 1);
+				else
+					scrollpanel(list, mouse.xy.y - list->r.min.y, 1);
+				break;
+			}
 			if(mouse.buttons & (8|16) && ptinrect(mouse.xy, text->r)){
 				if(mouse.buttons & 8)
-					scrolltext(text->r.min.y - mouse.xy.y, 1);
+					scrollpanel(text, text->r.min.y - mouse.xy.y, 1);
 				else
-					scrolltext(mouse.xy.y - text->r.min.y, 1);
+					scrollpanel(text, mouse.xy.y - text->r.min.y, 1);
 				break;
 			}
 			plmouse(root, &mouse);
+			if(mouse.buttons == 1 && root->lastmouse == root)
+				plgrabkb(nil);
 			break;
 		case Eplumb:
 			pm=e.v;
@@ -499,7 +510,7 @@ void eresized(int new){
 	r=view->r;
 	plpack(root, r);
 	plpack(alt, r);
-	pldraw(cmd, view);	/* put cmd box on view for alt display */
+	pldraw(cmd, view);	/* put cmd box on screen for alt display */
 	pldraw(root, view);
 	flushimage(display, 1);
 	drawlock(0);
@@ -673,6 +684,16 @@ void docmd(Panel *p, char *s){
 		if(*s=='\0' && selection)
 			hit3(3, 0);
 		break;
+	case 'd':
+		s = arg(s);
+		if(*s){
+			s = smprint("https://lite.duckduckgo.com/lite/?q=%U&kd=-1", s);
+			if(s != nil)
+				geturl(s, -1, 0, 0);
+			free(s);
+		}else
+			message("Usage: d text");
+		break;
 	case 'g':
 		s = arg(s);
 		if(*s=='\0'){
@@ -695,7 +716,9 @@ void docmd(Panel *p, char *s){
 		mothon(current, !mothmode);
 		break;
 	case 'k':
-		killpix(current);
+		killimgs = !killimgs;
+		if (killimgs)
+			killpix(current);
 		break;
 	case 'w':
 	case 'W':
@@ -779,7 +802,7 @@ void search(void){
 void hiturl(int buttons, char *url, int map){
 	switch(buttons){
 	case 1: geturl(url, -1, 0, map); break;
-	case 2: selurl(url); break;
+	case 2: urlresolve(selurl(url)); break;
 	case 4: message("Button 3 hit on url can't happen!"); break;
 	}
 }
@@ -845,7 +868,7 @@ void gettext(Www *w, int fd, int type){
 		break;
 	case 0:
 		if(type==HTML)
-			plrdhtml(w->url->fullname, fd, w);
+			plrdhtml(w->url->fullname, fd, w, killimgs);
 		else
 			plrdplain(w->url->fullname, fd, w);
 		_exits(0);
@@ -940,6 +963,7 @@ urlstr(Url *url){
 		return url->fullname;
 	return url->reltext;
 }
+
 Url *copyurl(Url *u){
 	Url *v;
 	v=emalloc(sizeof(Url));
@@ -948,11 +972,13 @@ Url *copyurl(Url *u){
 	v->basename = strdup(u->basename);
 	return v;
 }
+
 void freeurl(Url *u){
 	free(u->reltext);
 	free(u->basename);
 	free(u);
 }
+
 void seturl(Url *url, char *urlname, char *base){
 	url->reltext = strdup(urlname);
 	url->basename = strdup(base);
@@ -960,6 +986,7 @@ void seturl(Url *url, char *urlname, char *base){
 	url->tag[0] = 0;
 	url->map = 0;
 }
+
 Url* selurl(char *urlname){
 	Url *last;
 
@@ -999,8 +1026,9 @@ void geturl(char *urlname, int post, int plumb, int map){
 		message("getting %s", selection->fullname);
 		if(mothmode && !plumb)
 			typ = -1;
-		else
+		else if((typ = mimetotype(selection->contenttype)) < 0)
 			typ = snooptype(fd);
+
 		switch(typ){
 		default:
 			if(plumb){
@@ -1130,7 +1158,7 @@ mothon(Www *w, int on)
 			t->next = nil;
 			ap=emalloc(sizeof(Action));
 			ap->link = strdup(a->link);
-			plrtstr(&t->next, 0, 0, /**0,*/ t->font, strdup("->"), PL_HOT, ap);
+			plrtstr(&t->next, 0, 0, /*0,*/ t->font, strdup("->"), PL_HOT, ap);
 			t->next->next = x;
 		} else {
 			if(x) {
@@ -1171,7 +1199,9 @@ void paste(Panel *p){
 	plpaste(p);
 }
 void hit3(int button, int item){
+	char buf[1024];
 	char name[NNAME];
+	char *s;
 	Panel *swap;
 	int fd;
 	USED(button);
@@ -1203,9 +1233,27 @@ void hit3(int button, int item){
 		paste(plkbfocus);
 		break;
 	case 4:
-		search();
+		if(plkbfocus==nil || plkbfocus==cmd){
+			if(text==nil || text->snarf==nil || selection==nil)
+				return;
+			if((s=text->snarf(text))==nil)
+				s=smprint("%s", urlstr(selection));
+		}else
+			if((s=plkbfocus->snarf(plkbfocus))==nil)
+				return;
+		if((fd=plumbopen("send", OWRITE))<0){
+			message("can't plumb");
+			free(s);
+			return;
+		}
+		plumbsendtext(fd, "mothra", nil, getwd(buf, sizeof buf), s);
+		close(fd);
+		free(s);
 		break;
 	case 5:
+		search();
+		break;
+	case 6:
 		if(!selection){
 			message("no url selected");
 			break;
@@ -1225,11 +1273,11 @@ void hit3(int button, int item){
 		fprint(fd, "<p><a href=\"%s\">%s</a>\n", urlstr(selection), urlstr(selection));
 		close(fd);
 		break;
-	case 6:
+	case 7:
 		snprint(name, sizeof(name), "file:%s/hit.html", mkhome());
 		geturl(name, -1, 1, 0);
 		break;
-	case 7:
+	case 8:
 		if(confirm(3))
 			exits(0);
 		break;
