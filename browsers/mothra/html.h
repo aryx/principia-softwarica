@@ -6,24 +6,29 @@
 #define	NPEEKC	3	/* Maximum lookahead */
 #define	NTOKEN	65536	/* Maximum token length */
 #define	NATTR	512	/* Maximum number of attributes of a tag */
+
 typedef struct Pair Pair;
 typedef struct Tag Tag;
 typedef struct Stack Stack;
 typedef struct Hglob Hglob;
 typedef struct Form Form;
 typedef struct Entity Entity;
+
 struct Pair{
 	char *name;
 	char *value;
 };
+
 struct Entity{
 	char *name;
 	Rune value;
 };
+
 struct Tag{
 	char *name;
 	int action;
 };
+
 struct Stack{
 	int tag;		/* html tag being processed */
 	int pre;		/* in preformatted text? */
@@ -38,6 +43,7 @@ struct Stack{
 	int strike;		/* flag of <strike> */
 	int width;		/* size of image */
 	int height;
+
 	char *image;		/* arg of <img> */
 	char *link;		/* arg of <a href=...> */
 	char *name;		/* arg of <a name=...> */
@@ -63,14 +69,17 @@ struct Hglob{
 	int spacc;		/* place to accumulate more spaces */
 				/* if negative, won't accumulate! */
 	int tag;		/* if token type is TAG or END */
+
 	Stack stack[NSTACK];	/* parse stack */
 	Stack *state;		/* parse stack pointer */
+
 	int lineno;		/* input line number */
 	int linebrk;		/* flag set if we require a line-break in output */
 	int para;		/* flag set if we need an indent at the break */
 	char *text;		/* text buffer */
 	char *etext;		/* end of text buffer */
 	Form *form;		/* data for form under construction */
+
 	Www *dst;		/* where the text goes */
 };
 

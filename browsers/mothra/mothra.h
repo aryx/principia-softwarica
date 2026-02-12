@@ -14,6 +14,7 @@ typedef struct Action Action;
 typedef struct Url Url;
 typedef struct Www Www;
 typedef struct Field Field;
+
 struct Action{
 	char *image;
 	Field *field;
@@ -23,6 +24,7 @@ struct Action{
 	int width;
 	int height;
 };
+
 struct Url{
 	char *basename;
 	char *reltext;
@@ -31,6 +33,7 @@ struct Url{
 	char contenttype[NNAME];
 	int map;		/* is this an image map? */
 };
+
 struct Www{
 	Url *url;
 	void *pix;
@@ -39,7 +42,7 @@ struct Www{
 	Rtext *text;
 	int yoffs;
 	int gottitle;		/* title got drawn */
-	int changed;		/* reader sets this every time it updates page */
+	bool changed;		/* reader sets this every time it updates page */
 	int finished;		/* reader sets this when done */
 	int alldone;		/* page will not change further -- used to adjust cursor */
 };
@@ -68,7 +71,8 @@ enum{
 Image *hrule, *bullet, *linespace;
 int chrwidth;		/* nominal width of characters in font */
 Panel *text;		/* Panel displaying the current www page */
-int debug;		/* command line flag */
+
+bool debug;		/* command line flag */
 
 /*
  * HTTP methods
@@ -106,4 +110,5 @@ char *urlstr(Url *);
 int urlpost(Url*, char*);
 int urlget(Url*, int);
 int urlresolve(Url *);
+
 Mouse mouse;

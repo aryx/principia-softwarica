@@ -45,7 +45,7 @@ void getimage(Rtext *t, Www *w){
 		snprint(err, sizeof(err), "[img: %s: %r]", urlstr(url));
 		free(t->text);
 		t->text=strdup(err);
-		w->changed=1;
+		w->changed=true;
 		close(fd);
 		goto Out;
 	}
@@ -81,7 +81,7 @@ void getimage(Rtext *t, Www *w){
 	p->next=w->pix;
 	w->pix=p;
 	t->b=b;
-	w->changed=1;
+	w->changed=true;
 Out:
 	freeurl(url);
 }

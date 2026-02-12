@@ -3,6 +3,7 @@
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
+
 #include "mothra.h"
 
 static int
@@ -117,10 +118,11 @@ fileget(Url *url)
 
 char *mtpt="/mnt/web";
 
-static int
+static fdt
 webclone(Url *url, char *buf, int nbuf)
 {
-	int n, conn, fd;
+	int n, conn;
+    fdt fd;
 
 	snprint(buf, nbuf, "%s/clone", mtpt);
 	if((fd = open(buf, ORDWR)) < 0)
@@ -148,7 +150,8 @@ webclone(Url *url, char *buf, int nbuf)
 
 static int
 readstr(char *path, char *buf, int nbuf){
-	int n, fd;
+	int n;
+    fdt fd;
 
 	n = 0;
 	if((fd = open(path, OREAD)) >= 0){
@@ -236,7 +239,7 @@ urlget(Url *url, int body)
 	return fd;
 }
 
-int
+errorneg1
 urlresolve(Url *url)
 {
 	char buf[1024];

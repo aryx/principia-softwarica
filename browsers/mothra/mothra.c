@@ -10,14 +10,18 @@
 #include <cursor.h>
 #include <panel.h>
 #include <regexp.h>
+
 #include "mothra.h"
 #include "rtext.h"
+
 int debug=0;
 int verbose=0;		/* -v flag causes html errors to be written to file-descriptor 2 */
+
 int killimgs=0;	/* should mothra kill images? */
 int defdisplay=1;	/* is the default (initial) display visible? */
 int visxbar=0;	/* horizontal scrollbar visible? */
 int topxbar=0;	/* horizontal scrollbar at top? */
+
 Panel *root;	/* the whole display */
 Panel *alt;	/* the alternate display */
 Panel *alttext;	/* the alternate text window */
@@ -26,7 +30,9 @@ Panel *cururl;	/* label giving the url of the visible text */
 Panel *list;	/* list of previously acquired www pages */
 Panel *msg;	/* message display */
 Panel *menu3;	/* button 3 menu */
+
 char mothra[] = "mothra!";
+
 Cursor patientcurs={
 	0, 0,
 	0x01, 0x80, 0x03, 0xC0, 0x07, 0xE0, 0x07, 0xe0,
@@ -75,8 +81,8 @@ Cursor mothcurs={
 	 0x0c, 0x30, 0x04, 0x20, 0x00, 0x00, 0x00, 0x00, }
 };
 
-Www *current=0;
-Url *selection=0;
+Www *current=nil;
+Url *selection=nil;
 int mothmode;
 int kickpipe[2];
 
@@ -90,6 +96,7 @@ void dolink(Panel *, int, Rtext *);
 void hit3(int, int);
 void mothon(Www *, int);
 void killpix(Www *w);
+
 // renamed to avoid conflict with event.h typedef buttons
 char *buttons_[]={
 	"alt display",
@@ -379,7 +386,7 @@ void main(int argc, char *argv[]){
 				if(current->url->tag[0])
 					scrollto(current->url->tag);
 				current->finished=0;
-				current->changed=0;
+				current->changed=false;
 				current->alldone=1;
 				message(mothra);
 				donecurs();
@@ -395,7 +402,7 @@ void main(int argc, char *argv[]){
 			if(mouse.buttons==0 && current && current->changed){
 				if(!current->finished)
 					updtext(current);
-				current->changed=0;
+				current->changed=false;
 			}
 			break;
 		case Ekeyboard:
@@ -467,6 +474,7 @@ Plkey:
 		}
 	}
 }
+
 int confirm(int b){
 	Mouse down, up;
 	esetcursor(&confirmcursor);
@@ -475,6 +483,7 @@ int confirm(int b){
 	donecurs();
 	return down.buttons==(1<<(b-1));
 }
+
 void message(char *s, ...){
 	static char buf[1024];
 	char *out;
@@ -486,6 +495,7 @@ void message(char *s, ...){
 	plinitlabel(msg, PACKN|FILLX, buf);
 	if(defdisplay) pldraw(msg, view);
 }
+
 void htmlerror(char *name, int line, char *m, ...){
 	static char buf[1024];
 	char *out;
@@ -499,6 +509,7 @@ void htmlerror(char *name, int line, char *m, ...){
 		fprint(2, "%s\n", buf);
 	}
 }
+
 void eresized(int new){
 	Rectangle r;
 
@@ -515,6 +526,7 @@ void eresized(int new){
 	flushimage(display, 1);
 	drawlock(0);
 }
+
 void *emalloc(int n){
 	void *v;
 	v=malloc(n);
@@ -524,6 +536,7 @@ void *emalloc(int n){
 	setmalloctag(v, getcallerpc(&n));
 	return v;
 }
+
 void nstrcpy(char *to, char *from, int len){
 	strncpy(to, from, len);
 	to[len-1] = 0;
