@@ -1,0 +1,142 @@
+#!/bin/rc -e
+rfork en
+. /sys/lib/git/common.rc
+
+gitup
+
+flagfmt='a:listall, b:baseref ref, r:remove, n:newbr, s:stay, m:merge, M:nomod'
+args='[branch]'
+eval `''{aux/getflags $*} || exec aux/usage
+
+modified=()
+deleted=()
+idxchange=.git/INDEX9.changes
+touch $idxchange
+if(~ $#* 0){
+	if(~ $#listall 0)
+		awk '$1=="branch"{print $2}' < $gitfs/ctl
+	if not
+		cd .git/refs/ && walk -f heads remotes | sort
+	exit
+}
+if(! ~ $#* 1)
+	exec aux/usage
+
+branch=$1
+if(~ $branch refs/heads/*)
+	new=$name
+if not if(~ $branch heads/*)
+	new=refs/$branch
+if not
+	new=refs/heads/$branch
+
+# where are we now?
+orig=`{git/query HEAD}
+origbranch=refs/`{awk '$1=="branch"{print $2}' < $gitfs/ctl}
+
+# if we're switching branches to a branch that doesn't exist,
+# but we have a remote branch that exists upstream, create a
+# new head to mirror it.
+if(~ $#newbr 0){
+	if(! ~ $#baseref 0)
+		die update would clobber $branch with $baseref
+	if(! test -e .git/$new){
+		baseref=`$nl{echo -n $new | sed s@refs/heads/@refs/remotes/origin/@}
+		if(! base=`{git/query $baseref})
+			exit 'bad ref'
+	}
+}
+
+# figure out where we want the new branch to point to
+if (~ $#baseref 1)
+	base=`{git/query $baseref} || exit 'bad ref'
+if not if(~ $#newbr 0)
+	base=`{git/query $new} || exit 'bad ref'
+if not
+	base=`{git/query HEAD} || exit 'bad ref'
+
+modified=`$nl{git/query -c HEAD $base | grep '^[^-]' | subst '^..'}
+deleted=`$nl{git/query -c HEAD $base | grep '^-' | subst '^..'}
+
+# if we remove the current branch without switching, bad things happen
+if(~ $remove 1 && ~ $origbranch $new)
+	die 'cannot remove current branch'
+# if we're not merging, don't clobber existing changes.
+if(~ $#merge 0 && ~ $#remove 0){
+	if(! ~ $#modified 0 || ! ~ $#deleted 0){
+		git/walk -fRMA $modified $deleted || 
+			die 'uncommitted changes would be clobbered'
+	}
+}
+if(~ $remove 1){
+	rm -f .git/$new
+	echo 'removed branch' $new
+	exit
+}
+commit=`{git/query $base} || die 'branch does not exist:' $base
+basedir=`{git/query -p $base}
+dirtypaths=()
+if(! ~ $#modified 0 || ! ~ $#deleted 0)
+	dirtypaths=`$nl{git/walk -cfRMA $modified $deleted}
+if(~ $#dirtypaths 0)
+	cleanpaths=($modified $deleted)
+if not {
+	cleanpaths=()
+	for(p in $modified $deleted)
+		if(! ~ $p $dirtypaths)
+			cleanpaths=($cleanpaths $p)
+}
+
+echo $commit > .git/$new
+
+for(d in $deleted){
+	if(! test -d $d){
+		rm -f $d
+		echo R NOQID 0 $d >> $idxchange
+	}
+}
+
+for(m in $cleanpaths){
+	d=`$nl{basename -d $m}
+	mkdir -p $d
+	# Modifications can turn a file into
+	# a directory, or vice versa, so we
+	# need to delete and copy the files
+	# over.
+	a=dir
+	b=dir
+	if(test -f $m)
+		a=file
+	if(test -f $basedir/tree/$m)
+		b=file
+	if(! ~ $a $b){
+		rm -rf $m
+		echo R NOQID 0 $m >> $idxchange
+	}
+	if(~ $b file){
+		cp -x -- $basedir/tree/$m $m
+		echo T NOQID 0 $m >> $idxchange
+		touch $m
+	}
+}
+
+for(ours in $dirtypaths){
+	common=$gitfs/object/$orig/tree/$ours
+	theirs=$gitfs/object/$base/tree/$ours
+	merge1 $ours $ours $common $theirs
+	st=$status
+	if(! ~ $st '')
+		>[1=2] echo merge failed $ours: $st
+}
+if(~ $new */*)
+	mkdir -p .git/`{basename -d $new}
+if(! ~ $#stay 0){
+	echo $commit > .git/$new
+	exit
+}
+
+cat $idxchange >> .git/INDEX9
+echo ref: $new > .git/HEAD
+echo $new: `{git/query $new}
+rm -f $idxchange
+exit ''

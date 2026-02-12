@@ -1,0 +1,146 @@
+#!/bin/rc
+rfork ne
+. /sys/lib/git/common.rc
+
+diffpath=/tmp/gitimport.$pid.diff
+fn sigexit {
+	rm -f $diffpath
+}
+
+fn apply1 {
+	adate=`{seconds $adate}
+	files=`$nl{patch -np1 < $diffpath}
+	if(! git/walk -q $files){
+		>[1=2] {
+			echo patch would clobber files:
+			git/walk $files
+			exit clobber
+		}
+	}
+	echo applying $msg | sed 1q
+	if(! files=`$nl{patch -p1 < $diffpath})
+		die 'patch failed'
+	for(f in $files){
+		if(test -e $f)
+			git/add $f
+		if not
+			git/add -r $f
+	}
+	git/walk -fRMA $files
+	if(~ $#nocommit 0){
+		if(hash=`{git/save -n $aname -e $amail -N $name -E $email -m $msg -d $adate $parents $files}){
+			echo $hash > $refpath
+			for(f in $files)
+				echo T NOQID 0 $f >> .git/INDEX9
+		}
+	}
+	exit ''
+}
+	
+
+fn apply @{
+	git/fs
+	amail=''
+	aname=''
+	msg=''
+	whoami
+	parents='-p'^`{git/query HEAD}
+	branch=`{git/branch}
+	if(test -e $gitfs/branch/$branch/tree)
+		refpath=.git/refs/$branch
+	if not if(test -e $gitfs/object/$branch/tree)
+		refpath=.git/HEAD
+	if not
+		die 'invalid branch:' $branch
+	awk '
+	function doapply(){
+		if(aname == "" || amail == "" || date == "" || gotmsg == "")
+			exit("missing headers");
+		printf "%s", aname > "/env/aname"
+		printf "%s", amail > "/env/amail"
+		printf "%s", date > "/env/adate"
+		if(system("rc -c apply1") != 0)
+			exit("patch failed");
+		close("/env/aname")
+		close("/env/amail")
+		close("/env/adate")
+		close(ENVIRON["diffpath"])
+		applied = 1
+	}
+	BEGIN{
+		state="headers"
+	}
+	state=="diff" && !/^[-+ @]|^diff|^$/{
+		state="footers";
+		doapply();
+	}
+	state=="footers" && /^⑨$/{
+		state="headers"
+		next
+	}
+	state=="headers" && /^[fF]rom:/ {
+		sub(/^From:[ \t]*/, "", $0);
+		aname=$0;
+		amail=$0;
+		sub(/[ \t]*<.*$/, "", aname);
+		sub(/^[^<]*</, "", amail);
+		sub(/>[^>]*$/, "", amail);
+	}
+	state=="headers" && /^[Dd]ate:/{
+		sub(/^Date:[ \t]*/, "", $0)
+		date=$0
+	}
+	state=="headers" && /^Subject:/{
+		sub(/^Subject:[ \t]*(\[[^\]]*\][ \t]*)*/, "", $0);
+		gotmsg = 1
+		print > "/env/msg"
+	}
+	state=="headers" && /^$/ {
+		state="body"
+	}
+	(state=="headers" || state=="body") && (/^diff / || /^---( |$)/){
+		state="diff"
+		next
+	}
+	state=="body" && /^[ 	]*$/ {
+		empty=1
+		next
+	}
+	state=="body" {
+		if(empty)
+			printf "\n" > "/env/msg"
+		empty=0
+		sub(/[ 	]+$/, "")
+		print > "/env/msg"
+	}
+	state=="diff" {
+		print > ENVIRON["diffpath"]
+	}
+	END{
+		if(!failed && state == "diff" && doapply() != 0){
+			print "unable to apply patch" > "/fd/2"
+			exit("mispatch")
+		}
+	}
+	'
+}
+
+gitup
+
+flagfmt='n:nocommit'; args='file ...'
+eval `''{aux/getflags $*} || exec aux/usage
+
+patches=(/fd/0)
+if(! ~ $#* 0)
+	patches=`{cleanname -d $gitrel $*}
+for(p in $patches){
+	# upas serves the decoded header and body separately,
+	# so we cat them together when applying a upas message.
+	#
+	# this allows mime-encoded or line-wrapped patches.
+	if(test -d $p && test -f $p/header && test -f $p/body)
+		{{cat $p/header; echo; cat $p/body} | apply} || die $status
+	if not
+		apply < $p
+}
+exit ''

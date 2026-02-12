@@ -1,0 +1,68 @@
+#!/bin/rc
+
+. ./util.rc
+
+rm -fr scratch
+mkdir -p scratch
+cd scratch
+
+echo @@ test lca @@
+@{
+	q git/init a
+
+	cd a
+
+	echo 'first' > f
+	q git/add f
+	q git/commit -m base f
+	r=`{git/query HEAD}
+
+	echo 0 > f
+	q git/commit -m a.0 .
+	a=`{git/query HEAD}
+
+	for(i in `{seq 10}){
+		echo $i > f
+		q git/commit -m a.$i .
+	}
+
+	q git/branch -nb $r merge
+	echo x > f
+	q git/commit -m b.0 .
+	b=`{git/query HEAD}
+
+	qq git/merge front
+	q git/commit -m merge .
+	m=`{git/query HEAD}
+
+~ `{git/query $a $m @} $a || die lca a-m
+~ `{git/query $a $b @} $r || die lca a-b
+~ `{git/query $a $r @} $r || die lca a-r
+}
+
+#       a
+#       ↓
+# b→c→d→e→f
+#
+# date order (oldest to newest): f d c b e a
+echo @@ test lca rebase @@
+@{
+	q git/init b
+	cd b
+
+	touch f
+
+	fn commit {
+		git/save -n regress -e regress $* f
+	}
+
+	f=`{commit -m f -d 1}
+	e=`{commit -m e -d 5 -p $f}
+	d=`{commit -m d -d 2 -p $e}
+	c=`{commit -m c -d 3 -p $d}
+	b=`{commit -m b -d 4 -p $c}
+	a=`{commit -m a -d 6 -p $e}
+
+~ `{git/query $a $b @} $e || die lca a-b
+~ `{git/query $b $a @} $e || die lca b-a
+}

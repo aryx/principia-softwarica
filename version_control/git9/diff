@@ -1,0 +1,48 @@
+#!/bin/rc
+rfork ne
+. /sys/lib/git/common.rc
+
+gitup
+
+flagfmt='c:commit branch, s:summarize, u:uncommitted'; args='[file ...]'
+eval `''{aux/getflags $*} || exec aux/usage
+
+bparam=(-b $commit)
+if(~ $#commit 0){
+	commit=HEAD
+	cparam=()
+	bparam=()
+}
+
+files=()
+filt=MAR
+if(~ $#uncommitted 1)
+	filt=MARU
+if(! ~ $#* 0)
+	files=`{cleanname -d $gitrel $*}
+
+branch=`{git/query -p $commit}
+if(~ $summarize 1 || ~ $uncommitted 1){
+	git/walk $bparam -r$gitrel -f$filt $cparam $files
+	exit
+}
+
+showed=()
+mntgen /mnt/scratch
+bind $branch/tree/ /mnt/scratch/a
+bind . /mnt/scratch/b
+for(f in `$nl{git/walk $bparam -c -f$filt $cparam $files}){
+	if(~ $#showed 0){
+		echo diff `{git/query $commit} uncommitted
+		showed=1
+	}
+	cd /mnt/scratch
+	a=a/$f
+	b=b/$f
+	if(! test -f a/$f)
+		a=/dev/null
+	if(! test -f b/$f)
+		b=/dev/null
+	diff -u $a $b
+}
+exit ''

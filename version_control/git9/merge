@@ -1,0 +1,46 @@
+#!/bin/rc -e
+rfork ne
+. /sys/lib/git/common.rc
+
+fn merge{
+	ourbr=$gitfs/object/$1/tree
+	basebr=$gitfs/object/$2/tree
+	theirbr=$gitfs/object/$3/tree
+
+	all=`$nl{{git/query -c $1 $2; git/query -c $2 $3} | sed 's/^..//' | sort | uniq}
+	for(f in $all){
+		ours=$ourbr/$f
+		base=$basebr/$f
+		theirs=$theirbr/$f
+		merge1 ./$f $ours $base $theirs
+	}
+}
+
+gitup
+
+flagfmt=''; args='theirs'
+eval `''{aux/getflags $*} || exec aux/usage
+
+if(! ~ $#* 1)
+	exec aux/usage
+
+theirs=`{git/query $1}
+ours=`{git/query HEAD}
+base=`{git/query $theirs ^ ' ' ^ $ours ^ '@'}
+
+if(~ $base $theirs)
+	die 'nothing to merge, doofus'
+if(! git/walk -q)
+	die 'dirty work tree, refusing to merge'
+if(~ $base $ours){
+	>[1=2] echo 'fast forwarding...'
+	echo $theirs > .git/refs/`{git/branch}
+	git/revert .
+	exit ''
+}
+echo $ours >> .git/merge-parents
+echo $theirs >> .git/merge-parents
+
+merge $ours $base $theirs
+echo 'merge complete: remember to commit'
+exit ''

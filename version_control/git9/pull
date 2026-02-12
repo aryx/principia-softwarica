@@ -1,0 +1,89 @@
+#!/bin/rc -e
+rfork en
+. /sys/lib/git/common.rc
+
+fn update{
+	upstream=$1
+	url=$2
+	dir=$3
+	dflag=()
+	if(! ~ $#debug 0)
+		dflag='-d'
+	heads=`$nl{
+		# safe to split in awk, branch names may not
+		# have spaces or newlines.
+		git/query `$nl{
+			cd .git/refs && \
+			walk -f -emp heads remotes | \
+			sort -rn | \
+			awk '{print $2}'
+		}
+	}
+	if(! ~ $#heads 0)
+		heads='-h'^$heads
+	{git/get $dflag -u $upstream $heads $url >[2=3] || die $status} | awk '
+	/^remote refs\/(heads|tags)\//{
+		ref=$2
+		hash=$3
+		gsub("^refs/heads", "refs/remotes/'$upstream'", ref)
+		outfile = ".git/"ref
+		print outfile > "/env/outfile"
+		system("mkdir -p `$nl{basename -d $outfile}");\
+		close("/env/outfile")
+		print hash > outfile;
+		close(outfile);
+	}
+	' |[3] tr '\x0d' '\x0a'
+}
+
+gitup
+
+flagfmt='d:debug, q:quiet, f:fetchonly,
+	u:upstream upstream'
+args=''
+eval `''{aux/getflags $*} || exec aux/usage
+
+if(~ $#upstream 0)
+	upstream=origin
+remote=`$nl{git/conf 'remote "'$upstream'".url'}
+if(~ $#remote 0){
+	remote=$upstream
+	upstream=THEM
+}
+
+update $upstream $remote
+if (~ $fetchonly 1)
+	exit
+
+local=`{git/branch}
+remote=`{git/branch | subst '^(refs/)?heads' 'remotes/'$upstream}
+
+# we have local commits, but the remote hasn't changed.
+# in this case, we want to keep the local commits untouched.
+if(~ `{git/query HEAD $remote @} `{git/query $remote}){
+	echo 'up to date' >[1=2]
+	exit
+}
+# The remote repository and our HEAD have diverged: we
+# need to merge.
+if(! ~ `{git/query HEAD $remote @} `{git/query HEAD}){
+	>[1=2]{
+		echo ours:	`{git/query HEAD}
+		echo theirs:	`{git/query $remote}
+		echo common:	`{git/query HEAD $remote @}
+		echo git/merge $remote
+	}
+	exit diverged
+}
+
+oldcommit=`{git/query $local}
+newcommit=`{git/query $remote}
+git/branch -mnb $remote $local
+
+# The remote is directly ahead of the local, and we have
+# no local commits that need merging.
+if(~ $#quiet 0){
+	git/log -s -e $oldcommit'..'$newcommit
+	echo $remote':' $oldcommit '=>' $newcommit
+}
+exit ''

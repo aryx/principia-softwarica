@@ -1,0 +1,52 @@
+#!/bin/rc
+
+. ./util.rc
+
+rm -fr scratch
+mkdir -p scratch/repo1
+
+echo @@ file-type change @@
+@{
+	rfork ne
+	cd scratch/repo1
+	repo1=`{pwd}
+	q git/init
+
+	# in repo1:
+	#	create A as a file
+	#	create B as a directory
+	echo A > A
+	mkdir B
+	echo C > B/C
+	q git/add A B/C
+	q git/commit -m 1 A B/C
+
+	cd ..
+	q git/clone $repo1 repo2
+	cd repo2
+	repo2=`{pwd}
+
+	diff -r $repo1/A $repo2/A || exit 'clone fail A'
+	diff -r $repo1/B $repo2/B || exit 'clone fail B'
+
+	cd $repo1
+
+	# in repo1:
+	#	make A into a directory
+	#	make B into a file
+	rm -r A B
+	mkdir A
+	echo B > A/B
+	echo B > B
+	q git/add A/B B
+	q git/commit -m 2 A/B B
+
+	# pull repo2 after file changed to directory in repo1
+	cd $repo2
+	q git/pull
+
+	diff -r $repo1/A $repo2/A || exit 'pull fail A'
+	diff -r $repo1/B $repo2/B || exit 'pull fail B'
+
+	exit ''
+}
