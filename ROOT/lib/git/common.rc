@@ -1,0 +1,122 @@
+nl='
+'
+
+fn die{
+	>[1=2] echo $0: $*
+	exit $"*
+}
+
+fn usage{
+	>[1=2] echo -n 'usage:' $usage
+	exit 'usage'
+}
+
+fn subst {
+	awk '
+	BEGIN{ARGC=0}
+	{sub(ARGV[1], ARGV[2]); print}
+	' $*
+}
+
+fn drop {
+	awk '
+	BEGIN{ARGC=0}
+	{
+		if(index($0, ARGV[1]) == 1)
+			$0=substr($0, length(ARGV[1])+1)
+		print
+	}
+	' $*
+}
+
+fn mergeperm {
+	if(~ $1 /dev/null && cmp $2 $3>/dev/null)
+		status=gone
+	if not if (~ $3 /dev/null && cmp $1 $2>/dev/null)
+		status=gone
+	if not {
+		mergedperms='-x'
+		if(test -x $2){
+			if(test -x $1 -a -x $3)
+				mergedperms='+x'
+		}
+		if not{
+			if(test -x $1 -o -x $3)
+				mergedperms='+x'
+		}
+		status=()
+	}
+}
+
+fn whoami{
+	name=`$nl{git/conf user.name}
+	email=`$nl{git/conf user.email}
+	if(test -f /adm/keys.who){
+		if(~ $name '')
+			name=`$nl{awk -F'|' '$1=="'$user'" {x=$3} END{print x}' </adm/keys.who}
+		if(~ $email '')
+			email=`$nl{awk -F'|' '$1=="'$user'" {x=$5} END{print x}' </adm/keys.who}
+	}
+	if(~ $name '')
+		name=$user
+	if(~ $email '')
+		email=$user@$sysname
+	status=''
+}
+
+# merge1 out ours base theirs
+fn merge1 {@{
+	rfork e
+	n=$pid
+	out=$1
+	ours=$2
+	base=$3
+	theirs=$4
+	tmp=$out.tmp
+	while(test -f $tmp){
+		tmp=$tmp.$n
+		n=`{echo $n + 1 | hoc}
+	}
+
+	if(! test -f $ours)
+		ours=/dev/null
+	if(! test -f $base)
+		base=/dev/null
+	if(! test -f $theirs)
+		theirs=/dev/null
+
+	if(mergeperm $ours $base $theirs){
+		mkdir -p `{basename -d $tmp}
+		if(! merge3 $ours $base $theirs > $tmp)
+			echo merge needed: $out >[1=2]
+		mv $tmp $out
+		git/add $out
+		chmod $mergedperms $out
+	}
+	if not {
+		rm -f $tmp $out
+		git/rm $out
+	}
+}}
+
+fn gitup{
+	gitroot=`{git/conf -r >[2]/dev/null}
+	if(~ $#gitroot 0)
+		die 'not a git repository'
+	gitfs=$gitroot/.git/fs
+	gitrel=`{pwd | drop $gitroot | sed 's@^/@@'}
+	if(~ $#gitrel 0)
+		gitrel='.'
+	if(! cd $gitroot)
+		die cd $gitroot: no repo there
+	startfs=()
+	mkdir -p $gitfs
+	if(! test -e $gitfs/ctl)
+		startfs=true
+	if(! grep -s '^repo '$gitroot'$' $gitfs/ctl >[2]/dev/null)
+		startfs=true
+	if(~ $#startfs 1)
+		git/fs >[1=2]
+	if not
+		status=''
+}
