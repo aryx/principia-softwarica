@@ -586,4 +586,30 @@ extern void     unlockdisplay(Display*);
 extern  int Rfmt(Fmt*);
 extern  int Pfmt(Fmt*);
 
+//----------------------------------------------------------------------------
+// Misc
+//----------------------------------------------------------------------------
+// this was in draw_private.h but it's now also used in libimg/
+/*s: constant [[NMATCH]] */
+/*
+ * Compressed image file parameters and helper routines
+ */
+#define	NMATCH	3		/* shortest match possible */
+/*e: constant [[NMATCH]] */
+/*s: constant [[NRUN]] */
+#define	NRUN	(NMATCH+31)	/* longest match possible */
+/*e: constant [[NRUN]] */
+/*s: constant [[NMEM]] */
+#define	NMEM	1024		/* window size */
+/*e: constant [[NMEM]] */
+/*s: constant [[NDUMP]] */
+#define	NDUMP	128		/* maximum length of dump */
+/*e: constant [[NDUMP]] */
+/*s: constant [[NCBLOCK]] */
+#define	NCBLOCK	6000		/* size of compressed blocks */
+/*e: constant [[NCBLOCK]] */
+
+// used also by libmemdraw/ and libimg/
+int _compblocksize(Rectangle r, int depth);
+
 /*e: include/graphics/draw.h */
