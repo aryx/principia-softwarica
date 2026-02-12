@@ -296,7 +296,7 @@ Cursor sight = {
 };
 
 void
-buttons(int ud)
+buttons_(int ud)
 {
 	while((mouse.buttons==0) != ud)
 		mouse = emouse();
@@ -312,8 +312,8 @@ mesg(char *fmt, ...)
 	va_start(arg, fmt);
 	vseprint(buf, buf+sizeof(buf), fmt, arg);
 	va_end(arg);
-	string(screen, screen->r.min, background, ZP, font, obuf);
-	string(screen, screen->r.min, display->white, ZP, font, buf);
+	string(view, view->r.min, background, ZP, font, obuf);
+	string(view, view->r.min, display->white, ZP, font, buf);
 	strcpy(obuf, buf);
 }
 
@@ -363,15 +363,15 @@ apply(void (*f)(Icon*))
 	Icon *icon;
 
 	esetcursor(&sight);
-	buttons(Down);
+	buttons_(Down);
 	if(mouse.buttons == 4)
 		for(icon = h.first; icon; icon = icon->next)
 			if(ptinrect(mouse.xy, icon->sr)){
-				buttons(Up);
+				buttons_(Up);
 				f(icon);
 				break;
 			}
-	buttons(Up);
+	buttons_(Up);
 	esetcursor(0);
 }
 
@@ -420,15 +420,15 @@ eresized(int new)
 
 	if(new && getwindow(display, Refnone) < 0)
 		sysfatal("can't reattach to window");
-	draw(screen, screen->clipr, background, nil, ZP);
-	r.max.x = screen->r.min.x;
-	r.min.y = screen->r.min.y + font->height + 2*BORDER;
+	draw(view, view->clipr, background, nil, ZP);
+	r.max.x = view->r.min.x;
+	r.min.y = view->r.min.y + font->height + 2*BORDER;
 	for(icon = h.first; icon != nil; icon = icon->next){
 		r.min.x = r.max.x + BORDER;
 		r.max.x = r.min.x + Dx(icon->img->r);
 		r.max.y = r.min.y + Dy(icon->img->r);
-		draw(screen, r, icon->img, nil, ZP);
-		border(screen, r, -BORDER, display->black, ZP);
+		draw(view, r, icon->img, nil, ZP);
+		border(view, r, -BORDER, display->black, ZP);
 		icon->sr = r;
 	}
 	flushimage(display, 1);
@@ -470,7 +470,7 @@ main(int argc, char **argv)
 		sysfatal("reading header: %r");
 
 	initdraw(nil, nil, "ico");
-	background = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, (128<<24)|(128<<16)|(128<<8)|0xFF);
+	background = allocimage(display, Rect(0, 0, 1, 1), view->chan, 1, (128<<24)|(128<<16)|(128<<8)|0xFF);
 
 	einit(Emouse|Ekeyboard);
 

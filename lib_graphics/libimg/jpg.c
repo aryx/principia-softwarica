@@ -37,11 +37,11 @@ eresized(int new)
 	}
 	if(image == nil)
 		return;
-	r = insetrect(screen->clipr, Edge+Border);
+	r = insetrect(view->clipr, Edge+Border);
 	r.max.x = r.min.x+Dx(image->r);
 	r.max.y = r.min.y+Dy(image->r);
-	border(screen, r, -Border, nil, ZP);
-	drawop(screen, r, image, nil, image->r.min, S);
+	border(view, r, -Border, nil, ZP);
+	drawop(view, r, image, nil, image->r.min, S);
 	flushimage(display, 1);
 }
 
@@ -269,7 +269,7 @@ rpt:	array = Breadjpg(&b, colorspace);
 				einit(Ekeyboard|Emouse);
 			inited++;
 		}
-		if(defaultcolor && screen->depth>8 && outchan==CMAP8)
+		if(defaultcolor && view->depth>8 && outchan==CMAP8)
 			outchan = RGB24;
 	}
 	if(outchan == CMAP8)
@@ -311,7 +311,7 @@ rpt:	array = Breadjpg(&b, colorspace);
 		}
 		if((ch=ekbd())=='q' || ch==0x7F || ch==0x04)
 			exits(nil);
-		draw(screen, screen->clipr, display->white, nil, ZP);
+		draw(view, view->clipr, display->white, nil, ZP);
 		image = nil;
 		freeimage(i);
 	}

@@ -156,7 +156,7 @@ luma_rle(Biobuf *bp, uchar *l, int num)
 
 
 static int
-rgba(Biobuf *bp, int bpp, uchar *r, uchar *g, uchar *b, int num)
+rgba_(Biobuf *bp, int bpp, uchar *r, uchar *g, uchar *b, int num)
 {
 	int i;
 	uchar x, y, buf[4];
@@ -210,7 +210,7 @@ rgba_rle(Biobuf *bp, int bpp, uchar *r, uchar *g, uchar *b, int num)
 		if(len & 0x80){
 			len &= 0x7f;
 			len += 1;	/* run of zero is meaningless */
-			if(rgba(bp, bpp, r, g, b, 1) != 1)
+			if(rgba_(bp, bpp, r, g, b, 1) != 1)
 				break;
 			for(i = 0; i < len-1 && got < num; i++){
 				r[i+1] = *r;
@@ -220,7 +220,7 @@ rgba_rle(Biobuf *bp, int bpp, uchar *r, uchar *g, uchar *b, int num)
 		}
 		else{
 			len += 1;	/* raw block of zero is meaningless */
-			if(rgba(bp, bpp, r, g, b, len) != len)
+			if(rgba_(bp, bpp, r, g, b, len) != len)
 				break;
 		}
 		r += len;
@@ -352,7 +352,7 @@ Breadtga(Biobuf *bp)
 	num = h->width*h->height;
 	switch(h->datatype){
 	case 2:
-		if(rgba(bp, h->bpp, r, g, b, num) != num){
+		if(rgba_(bp, h->bpp, r, g, b, num) != num){
 			werrstr("ReadTGA: decode fail - %r\n");
 			goto Error;
 		}

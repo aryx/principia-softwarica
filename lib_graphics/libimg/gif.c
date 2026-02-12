@@ -31,8 +31,8 @@ imager(void)
 	Rectangle r;
 
 	if(allims==nil || allims[0]==nil)
-		return screen->r;
-	r = insetrect(screen->clipr, Edge+Border);
+		return view->r;
+	r = insetrect(view->clipr, Edge+Border);
 	r.max.x = r.min.x+Dx(allims[0]->r);
 	r.max.y = r.min.y+Dy(allims[0]->r);
 	return r;
@@ -50,14 +50,14 @@ eresized(int new)
 	if(allims==nil || allims[which]==nil)
 		return;
 	r = imager();
-	border(screen, r, -Border, nil, ZP);
+	border(view, r, -Border, nil, ZP);
 	r.min.x += allims[which]->r.min.x - allims[0]->r.min.x;
 	r.min.y += allims[which]->r.min.y - allims[0]->r.min.y;
 	if(which > 0 && allimages[which]->gifflags & TRANSP)
-		drawop(screen, r, allims[which], allmasks[which],
+		drawop(view, r, allims[which], allmasks[which],
 			allims[which]->r.min, SoverD);
 	else
-		drawop(screen, r, allims[which], allmasks[which],
+		drawop(view, r, allims[which], allmasks[which],
 			allims[which]->r.min, S);
 	flushimage(display, 1);
 }
@@ -318,7 +318,7 @@ show(int fd, char *name)
 			err = "initdraw";
 			goto Return;
 		}
-		if(defaultcolor && screen->depth>8)
+		if(defaultcolor && view->depth>8)
 			outchan = RGB24;
 	}
 
@@ -380,7 +380,7 @@ show(int fd, char *name)
 		/* loop count has run out */
 		ekbd();
     Out:
-		drawop(screen, screen->clipr, display->white, nil, ZP, S);
+		drawop(view, view->clipr, display->white, nil, ZP, S);
 	}
 	if(n>1 && output)
 		fprint(2, "gif: warning: only writing first image in %d-image GIF %s\n", n, name);
