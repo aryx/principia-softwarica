@@ -33,8 +33,8 @@ main(int argc, char *argv[])
     if(!nflag)
         *p++ = '\n';
 
-    if(write(1, buf, p-buf) < 0){
-        fprint(2, "echo: write error: %r\n");
+    if(write(STDOUT, buf, p-buf) < 0){
+        fprint(STDERR, "echo: write error: %r\n");
         exits("write error");
     }
 
