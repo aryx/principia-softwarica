@@ -1,3 +1,5 @@
+// was in src/cmd/webfs/webget.c before and called webget
+
 /* Example of how to use webfs */
 #include <u.h>
 #include <libc.h>
