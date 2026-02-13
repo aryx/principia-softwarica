@@ -8,6 +8,7 @@
 #include "rtext.h"
 
 typedef struct Fontdata Fontdata;
+
 struct Fontdata{
 	char *name;
 	Font *font;
@@ -820,7 +821,13 @@ void plrdhtml(char *name, int fd, Www *dst, int killimgs){
 			str=pl_getattr(g.attr, "src");
 			if(str && *str){
 				free(g.state->image);
-				g.state->image = strdup(str);
+                g.state->image = strdup(str);
+                //Url x;
+				//seturl(&x, str, "http://iwp9.org");
+                //// TODO: check return code
+				//urlresolve(&x);
+                ////free(str?)
+                //g.state->image = strdup(urlstr(&x));
 			} else {
 				Pair *a;
 

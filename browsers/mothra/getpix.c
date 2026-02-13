@@ -33,10 +33,26 @@ void getimage(Rtext *t, Www *w){
 	ap=t->user;
 	url=emalloc(sizeof(Url));
 	seturl(url, ap->image, w->url->fullname);
+    if(debug)
+        fprint(STDERR, "getimage: %s from %s\n", ap->image, w->url->fullname);
+
+    if(urlresolve(url) < 0) {
+        sysfatal("xxx: %r");
+    };
+    //snprint(url->fullname, sizeof(url->fullname), "%s%s", 
+    //        w->url->fullname,
+    //        ap->image
+    //        );
+    //url->reltext[0] = 0;
+    //url->basename[0] = 0;
+
+    if(debug)
+        fprint(STDERR, "getimage resolved: %s\n", urlstr(url));
+
 	for(p=w->pix;p!=nil; p=p->next)
 		if(strcmp(ap->image, p->name)==0 && ap->width==p->width && ap->height==p->height){
 			t->b = p->b;
-			w->changed=1;
+			w->changed=true;
 			return;
 		}
 	fd=urlget(url, -1);
