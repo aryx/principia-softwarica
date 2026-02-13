@@ -5,7 +5,7 @@
 #include <libc.h>
 
 void
-xfer(int from, int to)
+xfer(fdt from, fdt to)
 {
 	char buf[12*1024];
 	int n;
@@ -27,7 +27,8 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-	int conn, ctlfd, fd, n;
+	int conn, n;
+    fdt ctlfd, fd;
 	char buf[128], *base, *mtpt, *post, *url;
 
 	mtpt = "/mnt/web";
@@ -82,6 +83,6 @@ main(int argc, char **argv)
 	if((fd = open(buf, OREAD)) < 0)
 		sysfatal("open %s: %r", buf);
 
-	xfer(fd, 1);
+	xfer(fd, STDOUT);
 	exits(nil);
 }
