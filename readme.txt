@@ -11,7 +11,6 @@ There are a few other forks of Plan 9:
  - 9atom: http://www.9atom.org/ (DEAD in 2025)
  - Harvey: https://harvey-os.org/ (DEAD in 2025)
  - Jehanne: http://jehanne.io/ (DEAD in 2025)
-
 or close descendants  of Plan 9:
  - Inferno: https://github.com/inferno-os/inferno-os
 
