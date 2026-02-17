@@ -15,12 +15,12 @@ There are a few other forks of Plan 9:
 or close descendants  of Plan 9:
  - Inferno: https://github.com/inferno-os/inferno-os
 
-The specificity of my fork of Plan 9 is to see Plan 9 as a great
-educational platform to learn about programming and computer science.
-The code of Plan 9 is so elegant and small that you
-can realistically understand the whole operating system.
-In fact, I explained the whole code in my Principia Softwarica
-book series (see https://principia-softwarica.org).
+The specificity of my fork is to see Plan 9 as a great educational
+platform to learn about programming and computer science.  The code of
+Plan 9 is so elegant and small that you can realistically understand
+the whole operating system.  In fact, I explained the whole code in my
+Principia Softwarica book series (see
+https://principia-softwarica.org).
 
 This fork, because it is used to support my Principia Softwarica
 book series, contains only the essential programs used by a programmer
