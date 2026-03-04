@@ -13,14 +13,35 @@
 %said-later: see mkenam in plan9 code.
 % Also if need quick and dirty write a file with a few lines => ed!
 % See also \book{Editor} for screen editor.
+%claude:
+[[ed]], short for ``editor,'' is one of the oldest \unix programs,
+originally written by Ken Thompson in the 1970s.
+It is a {line editor}: rather than displaying the whole file on screen
+like [[vi]], Emacs, or \plan's [[sam]] and [[acme]] (see \book{Editor}),
+[[ed]] works one line at a time, accepting commands from standard input
+and printing results to standard output.
+%
+This makes it look primitive compared to modern {screen editors},
+but it has a crucial advantage: it can be scripted.
+You can pipe a sequence of editing commands into [[ed]] from a shell
+script, something that is awkward or impossible with interactive editors.
 
 % s/re/g
 % g/re/p comes from ed!
 % 'wq', 'a', 'i', modes, lots of things in vi coming from ed
 %later: g global re regexp p print
+%claude:
+Many ideas that seem to ``belong'' to other tools actually originated in
+[[ed]]: the [[s/re/replacement/]] syntax used by [[sed]], the [[g/re/p]]
+command that gave [[grep]] its name (``global regular expression print''),
+and commands like [[wq]], [[a]], [[i]] that [[vi]] inherited directly.
 
 % Can already create file content with echo and shell redirection
 % (>, >> for append); can do a lot, but still not as powerful as ed.
+%claude:
+While you can already create and modify files using [[echo]] and shell
+redirection ([[>]], [[>>]]), [[ed]] offers far more power: searching,
+substituting, moving lines, and operating on ranges of lines.
 
 % For tutorial and motivations for the study of ed!
 % see appendix 1 of "Unix programming environment" 
@@ -28,6 +49,10 @@
 % see also its man page for documentation.
 % see also vol72a with 2 tutorials on ed by Brian Kernighan.
 % Quite complex command ...
+%claude:
+For a tutorial introduction to [[ed]], see Appendix~1 of
+``The \unix Programming Environment'' \cite{unix-pike},
+or Kernighan's two tutorials from the Bell Labs technical reports.
 
 \n could cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
@@ -35,6 +60,11 @@
 \section{Motivations: [[mkenam]]}
 
 % ex of powerful ed command used in principia/goken mkenam:
+%claude:
+Here is a real example of [[ed]] used as a code generator in the
+\plan build system. The script below transforms a header file
+([[5.out.h]], containing assembler opcode definitions) into a C
+source file ([[enam.c]], containing a string array of opcode names):
 \begin{verbatim}
 ed - ../5l/5.out.h <<'!'
 v/^	A/d
@@ -60,6 +90,15 @@ Q
 
 % show part of 5.out.h and part of enam.c so can understand goal
 % FIGURE
+%claude:
+The script uses [[ed -]] (quiet mode, suppressing character counts)
+and a shell here-document to feed commands.
+It first deletes lines not starting with [[A]] ([[v/^	A/d]]),
+then uses [[s///]] substitutions to reshape each remaining line
+into a quoted C string, and finally uses [[i]] and [[a]] to wrap
+the result with the array declaration.
+By the end of this chapter, you will understand every command in
+this script.
 
 % also how to do that with other tools? can do with sed? can do with vi/emacs?
 % via a script that can run each time you modify 5.out.h and can be called
@@ -69,6 +108,12 @@ Q
 % key command (actually with emacs you could program macro but
 % how to specify it in script with M-x and other special key combinations!)
 % power of text and of script!
+%claude:
+The key advantage of [[ed]] here is that the editing commands are
+plain text, easily embedded in a shell script or a [[mkfile]] rule.
+Try doing the same in Emacs or [[vi]]---you would need Emacs Lisp
+macros or complex key-sequence recordings, neither of which compose
+well with the shell.
 
 % '-' suppress the printing of character counts by e/r/w
 %  remove verbose/interactive mode (default)
@@ -78,6 +123,12 @@ Q
 
 % Note that unicode-ready editor!
 % (but complexify quite a lot the code unfortunately).
+%claude:
+Note that the \plan version of [[ed]] is Unicode-ready,
+using [[Rune]] throughout for text processing.
+This adds some complexity to the code (conversions between [[char]] and
+[[Rune]], separate buffers for byte I/O vs.\ character manipulation),
+but the overall structure remains simple and elegant.
 
 
 %\section{[[ed]] clones}
@@ -98,8 +149,27 @@ Q
 % So 2 main DS are temp file and array of file offsets
 % representing current state of buffer.
 % FIGURE.
+%claude:
+The data structures in [[ed]] are radically different from modern
+editors.  There is no linked list of lines, no rope, no gap buffer.
+In fact, the content of the file being edited is not even kept in
+memory.
+Instead, all text is stored in a {temporary file} on disk
+([[tfile]]), and the only in-memory data structure is [[zero]],
+an array of integer offsets into that temporary file---one offset
+per line.
+Editing operations like delete and move merely shuffle entries in
+[[zero]]; the temporary file itself only ever grows, never shrinks.
 
 \subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
+
+%claude:
+The temporary file is [[ed]]'s {backing store}.
+[[tfname]] holds its path (e.g., [[/tmp/e000042]]),
+[[tfile]] is the open file descriptor, and [[tline]] tracks the
+current write offset---where the next line will be appended.
+Every operation that adds text (reading a file, appending user input)
+writes to [[tfile]] and records the offset in [[zero]].
 
 <<globals ed.c>>=
 char*   tfname; // temporary filename (/tmp/eXXXX)
@@ -122,6 +192,11 @@ int tline;
 
 %trans: at some point some lines from the temporary file will be copied
 % in a specific file.
+%claude:
+[[savedfile]] remembers the name of the file being edited---the one
+specified on the command line or set by the [[f]] command.
+When you type [[w]], this is the file that gets written.
+
 <<constants ed.c>>=
 FNSIZE  = 128,      /* file name */
 @
@@ -136,6 +211,22 @@ char    savedfile[FNSIZE];
 %$
 
 % main data structure, an array of file offset in temp file for lines
+%claude:
+[[zero]] is the central data structure: a dynamically-growing array
+of [[int]] offsets into [[tfile]], one per line.
+Lines are 1-indexed: [[zero[1]]] is the offset of line~1,
+[[zero[2]]] of line~2, etc. The entry [[zero[0]]] is unused
+(always~0), which is why the array is called ``zero''---it starts
+at the zero-th slot which represents ``before line~1.''
+%
+The crucial insight is that editing operations only modify this
+array of offsets, never the temporary file itself.
+When you delete a line with [[d]], [[ed]] shifts entries in
+[[zero]] down but the text remains in [[tfile]].
+When you read a file with [[r]], [[ed]] appends text to [[tfile]]
+and inserts new offsets into [[zero]].
+The temporary file only grows; it is never compacted.
+
 <<globals ed.c>>=
 ulong   nlall = 128;
 // growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
@@ -180,9 +271,25 @@ int*    zero;
 
 % called zero because zero itself points to zero[0] which
 % is not line1, it's 0.
+%claude:
+Note the [[sizeof(int*)]] in the allocation---this is actually a
+bug (it should be [[sizeof(int)]]), but it is harmless on
+architectures where pointers and ints have the same size.
+On 32-bit systems both are 4~bytes; on 64-bit systems pointers
+are 8~bytes but ints are still 4, so the bug over-allocates
+(wasting memory but never crashing).
 
 \subsection{Cursors: [[dot]] and [[dol]]}
 %alt: Addresses? Line Pointers?
+
+%claude:
+[[dot]] and [[dol]] are pointers into the [[zero]] array.
+Their names match the ed command syntax: [[dot]] is the {current line}
+(what the user refers to as~[[.]]), and [[dol]] is the {last line}
+(what the user refers to as~[[$]], ``dollar'').
+Both are pointers, not indices: [[dot - zero]] gives the
+current line number, and [[dol - zero]] gives the total number
+of lines.  When the buffer is empty, [[dol == zero]].
 
 <<globals ed.c>>=
 // ref<int> in zero array, current line pointer
@@ -210,6 +317,20 @@ int*    dol;
 
 % line input from user? or line output buffer for user?
 % used in putchr() so definitely used for output
+%claude:
+There are two distinct line buffers, which can be confusing.
+[[line]] (70 bytes of [[char]]) is a small output buffer used by
+[<putchr()>] to batch [[write]] system calls---characters accumulate
+in [[line]] and are flushed when a newline is encountered or the
+buffer is nearly full.
+%
+[[linebuf]] ([[LBSIZE]] entries of [[Rune]]) is the main working
+buffer where a single line of edited text is held in Unicode form.
+Functions like [<getfile()>] fill [[linebuf]] from the input file,
+[<putline()>] writes it to [[tfile]], and [<getline()>] reads it back.
+The distinction between [[char]] for I/O and [[Rune]] for text
+manipulation runs throughout the code.
+
 <<globals ed.c>>=
 char    line[70];
 // ref<char> in line (mark end of line usually)
@@ -230,6 +351,13 @@ Rune    linebuf[LBSIZE];
 
 \subsection{Other globals: [[count]], [[col]], etc.}
 
+%claude:
+[[count]] is a general-purpose counter, most often used to track
+the number of characters read or written (displayed by [<exfile()>]
+in verbose mode).
+[[col]] tracks the current output column, used by the [[l]] (list)
+command to wrap long lines.
+
 <<globals ed.c>>=
 long count;
 @
@@ -244,7 +372,10 @@ int col;
 
 \section{[[main()]]}
 % main, init, quit
-
+%claude:
+The [[main]] function initializes buffered console I/O, installs
+a signal handler, processes flags, then enters the main loop:
+[<init()>], [<commands()>], [<quit()>].
 
 <<globals ed.c>>=
 // console buffered input
@@ -292,8 +423,25 @@ main(int argc, char *argv[])
 
 % so when do 'ed foo.txt' -> savedfile = "foo.txt" and start "r" command
 % interpretation, similar to 'ed, and then r foo.txt' as will see soon.
+%claude:
+The most interesting trick in [[main]] is [[globp = L"r"]].
+When a filename argument is given (e.g., [[ed foo.txt]]),
+the filename is copied into [[savedfile]] and [[globp]] is set
+to the string [["r"]].
+Later, when [<commands()>] calls [<getchr()>], it will read from
+[[globp]] before reading from the console, so the first command
+executed is automatically~[[r]]---as if the user had typed
+[[r foo.txt]].
+This elegant trick avoids duplicating file-reading logic in [[main]].
 
 \subsection{[[ed -]] and [[vflag]]}
+
+%claude:
+By default [[ed]] is verbose ([[vflag = true]]):
+it prints character counts after [[r]] and [[w]] operations.
+The [[-]] flag (as in [[ed - foo.txt]]) suppresses this,
+which is what you want when [[ed]] is driven by a script
+(as in the [[mkenam]] example above).
 
 <<globals ed.c>>=
 // verbose (a.k.a. interactive) mode
@@ -311,6 +459,14 @@ if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
 @
 
 \subsection{[[ed -o]] and [[oflag]]}
+
+%claude:
+The [[-o]] flag turns [[ed]] into a filter: it sets [[savedfile]]
+to [[/fd/1]] (\plan's path for stdout), so that [[w]] writes
+to standard output instead of a file.
+It also sets [[globp = L"a"]] to start in append mode immediately,
+and disables verbose output (since character counts would corrupt
+the output stream).
 
 <<globals ed.c>>=
 // output to standard output (instead of editing a file). Useful
@@ -349,6 +505,12 @@ if(oflag) {
 \subsection{[[mktemp()]]}
 
 %mktemp(template)
+%claude:
+[<mktemp()>] generates a unique temporary filename by replacing
+the trailing [[X]]'s in the template with the process ID digits.
+If the resulting file already exists, it tries replacing the first
+digit with [[a]], [[b]], etc.
+
 <<globals ed.c>>=
 // in Linux pid can be very long, so better to have at least 6 X (was 5 before)
 // the mkstemp man page recommends 6 X
@@ -399,6 +561,11 @@ mktemp(char *as)
 %alt: and [[tfile]]? or just [[init()]]?
 
 % continue init work done in main around zero and tfname
+%claude:
+[<init()>] creates (or re-creates) the temporary file and resets
+[[dot]] and [[dol]] to [[zero]] (empty buffer).
+It is called both from [[main]] at startup and from the [[e]] command,
+which is why it closes the previous [[tfile]] first.
 
 <<function [[init]](ed.c)>>=
 /// main | commands('e') -> <>
@@ -425,6 +592,12 @@ init(void)
 <<[[init()]](ed.c) initializing globals>>=
 tline = 2;
 @
+%claude:
+[[tline]] starts at~2, not~0. This ensures that no valid line offset
+is ever~0 (used as ``no line'') or~1 (the low bit is stolen by the
+[[global]] and [[mark]] commands as a flag---see [<global()>] and
+[[k]] later).
+
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
 % but means first 2 bytes of tfile are 0 (first seek will do that)
 % also 2 because 1 is used to represent a mark! Too clever! Too smart
@@ -436,6 +609,13 @@ char    T[] = "TMP";
 
 
 \subsection{[[quit()]]}
+
+%claude:
+[<quit()>] implements the ``are you sure?'' safety net.
+If there are unsaved changes ([[fchange == true]]) and the buffer
+is non-empty, the first [[q]] prints [[?]] and resets [[fchange]],
+so a second [[q]] will actually exit.  The [[Q]] command bypasses
+this by clearing [[fchange]] before calling [<quit()>].
 
 <<globals ed.c>>=
 bool fchange;
@@ -466,6 +646,13 @@ quit(void)
 
 \section{Displaying and reading text}
 % buffered output
+%claude:
+All text output in [[ed]] goes through a small buffering layer:
+[<putchr()>] accumulates characters in the [[line]] buffer and
+flushes with a single [[write]] call when it sees a newline
+(or the buffer is nearly full).
+[<putst()>] and [<putshst()>] are wrappers for printing
+[[char]] strings and [[Rune]] strings respectively.
 
 \subsection{Displaying text}
 
@@ -495,6 +682,14 @@ putst(char *sp)
 
 
 % grrr int vs Rune. ac means?
+%claude:
+[<putchr()>] buffers output in [[line[]]] and flushes on newline
+or when the buffer is nearly full. The [[-5]] margin in the
+comparison accounts for the worst case of [[runetochar()]]:
+a single rune can expand to up to 4~bytes in UTF-8, so the
+check must leave room for one full multi-byte character plus
+the possibility that [[lp]] already advanced past the check.
+
 <<function [[putchr]](ed.c)>>=
 /// error | putst | ... -> <>
 void
@@ -525,12 +720,25 @@ putchr(int ac)
 
 % buffered output, display only when newline (or when > 65 and close
 % to reach line[] limit) -5 because rune can be 4 chars
-
 % oflag here because if -o then save on STDOUT edited data, but
 % putchr is really used for display, not for editing
+%claude:
+Note the [[oflag]] check: when [[-o]] is active, the edited content
+goes to [[STDOUT]], so diagnostic output from [<putchr()>] is
+redirected to [[STDERR]] to avoid corrupting the data stream.
 
 \subsection{Reading text}
 %alt: Readinc characters
+
+%claude:
+Character input is layered through [<getchr()>], which checks
+three sources in order: (1) [[peekc]], a one-character pushback
+used when a character needs to be ``unread''; (2) [[globp]], a
+programmed command string (e.g., [["r"]] injected by [[main]]);
+(3) actual console input via [[Bgetrune]].
+This layering is what makes the [[globp]] trick work---[<commands()>]
+does not need to know whether input comes from the user or from
+a synthetic command.
 
 <<globals ed.c>>=
 //option<char> (0 = None)
@@ -575,8 +783,14 @@ getchr(void)
 %alt: move linebuf[] here as it's first time used?
 
 % called when can enter text until '.\n'
-
 % get line from tty (terminal). small wrapper over the raw gety
+%claude:
+[<gettty()>] reads a line of user input (via [<gety()>]) and checks
+for the special [[.\backslash n]] terminator that ends text-entry mode
+in commands like [[a]] and [[i]].
+[<gety()>] does the actual character-by-character reading into
+[[linebuf]], stopping at a newline.
+
 <<function [[gettty]](ed.c)>>=
 /// main -> commands('a') -> add -> <>
 int
@@ -647,6 +861,12 @@ if(gf)
 \section{[[commands()]] interpreter loop}
 
 %trans: ok, finally commands!
+%claude:
+[<commands()>] is the main interpreter loop.
+It reads an optional address range into [[addr1]]/[[addr2]],
+then dispatches on the command character via a [[switch]].
+Each command ends with [[continue]] to loop back; falling through
+to [[error(Q)]] after the switch handles unknown commands.
 
 <<globals ed.c>>=
 // ref<int>
@@ -697,6 +917,15 @@ case EOF:
 \section{[[r]]eading a file: [[r]]}
 
 % quite tricky, quite long, lots of subsections here.
+%claude:
+Reading a file is the first substantial command, and it involves
+several cooperating functions:
+[<filename()>] parses the filename argument,
+[<setwide()>] sets the address range to the whole buffer,
+[<append()>] inserts lines by calling a callback in a loop,
+[<getfile()>] (the callback) reads one line from the input file
+into [[linebuf]], and [<putline()>] writes [[linebuf]] to [[tfile]]
+and returns the offset to store in [[zero]].
 
 <<globals ed.c>>=
 char    file[FNSIZE];
@@ -749,13 +978,26 @@ caseread:
 % but if read a file after having inserted a few things in the buffer, then
 % still marked as changed? (but in that case means fchange was already
 % at false so why changing it again to false?)
+%claude:
+The [[fchange = c]] at the end is subtle: [[c]] was saved as
+[[(zero != dol)]] before the append, so [[fchange]] is set to true
+only if the buffer already had content.
+Reading the first file into an empty buffer does not count as a
+``change''---this is what lets you [[q]] without being warned
+after just opening a file.
 
 \subsection{Reading a [[filename()]]}
 
 % 'int comm' but really char actually, grrrr
-
 % will modify file[FNSIZE], that can then be further used
 % in commands('r')
+%claude:
+[<filename()>] reads a filename from input and stores it in [[file]].
+If no filename is given (just a newline), it falls back to
+[[savedfile]]---this is how [[r]] with no argument re-reads the
+current file.
+It also updates [[savedfile]] when used from [[e]] or [[f]],
+establishing the ``remembered filename'' for future operations.
 
 <<function [[filename]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -818,6 +1060,13 @@ if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
 
 \subsection{[[setwide()]] and [[squeeze()]]}
 
+%claude:
+[<setwide()>] sets [[addr1]]/[[addr2]] to span the whole buffer
+(line~1 to [[dol]]) when the user did not supply explicit addresses.
+[<squeeze()>] validates that the address range is sane---called
+with~0 when an empty buffer is acceptable (e.g., [[r]]) or~1 when
+at least one line is required (e.g., [[p]]).
+
 <<function [[setwide]](ed.c)>>=
 /// main -> commands('r') -> <>
 void
@@ -854,9 +1103,18 @@ squeeze(int i)
 
 % append(getfile, addr2)
 % and addr2 set to dol
-
 % f can be getfile but also gettty as we will see later.
 % this will add the content of the file after address a
+%claude:
+[<append()>] is the core insertion function. It takes a callback [[f]]
+(either [<getfile()>] for reading files or [<gettty()>] for user input)
+and an address [[a]] (where to insert after).
+For each line that [[f]] returns via [[linebuf]], it calls
+[<putline()>] to write it to [[tfile]], then shifts all entries
+in [[zero]] above the insertion point up by one to make room for
+the new offset.
+This shift is the [[while(a1 > rdot)]] loop---the same
+kind of array insertion you see in any sorted-array implementation.
 
 <<function [[append]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -891,6 +1149,14 @@ append(int (*f)(void), int *a)
 }
 @
 
+%claude:
+When [[zero]] is full, [[realloc]] may move it to a new address.
+Every pointer into the old array---[[addr1]], [[addr2]], [[dol]],
+[[dot]]---must then be adjusted by the same delta ([[a1 - zero]],
+i.e., new base minus old base).  This is a classic C [[realloc]]
+pattern: compute the displacement once, then apply it to all
+pointers that referred to the old allocation.
+
 <<[[append()]] grow [[zero]] if [[zero]] too small>>=
 if((dol-zero) >= nlall) {
 
@@ -912,10 +1178,15 @@ if((dol-zero) >= nlall) {
 % so append() is the only func growing zero?
 
 %alt: \subsection{[[getfile()]]}
-
 %    append(getfile, addr2);
-
 % read a line from iobuf and set linebuf
+%claude:
+[<getfile()>] reads one line from [[iobuf]] into [[linebuf]],
+counting characters in [[count]].
+It replaces the terminating [[\n]] with a null rune (lines
+in [[tfile]] are null-terminated, not newline-terminated).
+It returns~0 on success or [[EOF]] when the file is exhausted.
+
 <<function [[getfile]](ed.c)>>=
 /// main -> commands(c = 'r') -> append(<>, ...) -> <>
 int
@@ -961,6 +1232,13 @@ if(lp >= &linebuf[LBSIZE]) {
 \subsection{[[putline()]] (simplified)}
 
 % put first simpler version without blocks? the one from chatGPT?
+%claude:
+Here is a simplified version of [<putline()>] that shows the
+essential logic: seek to [[tline]] in [[tfile]], write the
+contents of [[linebuf]], advance [[tline]], and return the
+old offset (which [<append()>] stores in [[zero]]).
+The real version (shown in the Optimizations section) uses
+block-based I/O for performance.
 
 %NOT IN ed.c
 <<[[putline()]] simplified>>=
@@ -990,6 +1268,10 @@ putline(void)
 
 % "exit" file
 % om = open mode
+%claude:
+[<exfile()>] (``exit file'') finalizes an I/O operation:
+it flushes the buffer if writing, closes [[io]], and in verbose
+mode prints the character count via [<putd()>].
 
 <<function [[exfile]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1033,6 +1315,11 @@ putd(void)
 
 \section{[[w]]riting a file: [[w]]}
 
+%claude:
+Writing is the dual of reading. [<putfile()>] iterates over the
+address range, fetches each line from [[tfile]] via [<getline()>],
+and writes it to the output file via [[Bputrune]].
+The [[W]] (uppercase) variant opens the file in append mode.
 
 <<globals ed.c>>=
 // write append
@@ -1112,6 +1399,11 @@ putfile(void)
 
 % again, simpler version (thx chatGPT again):
 %
+%claude:
+[<getline()>] is the dual of [<putline()>]: given a line offset [[tl]]
+in [[tfile]], it seeks to that position and reads characters into
+[[linebuf]] until it hits the null terminator.
+Like [<putline()>], the real version uses block-based I/O.
 
 %NOT in ed.c
 <<[[getline()]] simplified>>=
@@ -1135,6 +1427,12 @@ getline(int tl)
 
 
 \subsection{Write and quit: [[wq]]}
+
+%claude:
+The [[w]] command peeks at the next character to detect [[wq]]
+(write and quit) or [[wQ]] (write and force-quit).
+If the next character is neither [[q]] nor [[Q]], it is pushed
+back with [[peekc]] so [<filename()>] can read it.
 
 <<[[commands()]] other locals>>=
 int temp;
@@ -1164,13 +1462,24 @@ if(temp)
 % classic tutorial on 'ed' is to use commands 'a', 'w', and 'q'
 % so we will do that
 % update: first 'p' which helps to understand
+%claude:
+With the reading and writing machinery in place, we can now look
+at the basic editing commands. Most of them are short---often just
+a few lines calling the helper functions we have already seen.
 
 \subsection{[[p]]rinting lines: [[p]]}
 
 % printing 3p   1,$p
 % maybe can show address() powerful args for [[p]]
-
 % see also g/re/p later
+%claude:
+The [[p]] command prints lines in the address range.
+[<printcom()>] iterates from [[addr1]] to [[addr2]], calling
+[<getline()>] to fetch each line from [[tfile]] and
+[<putshst()>] to display it.
+Pressing just Enter (newline with no command) prints the next
+line---the [['\backslash n']] case below advances [[dot]] by one
+and prints.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 <<[[commands]] before [['p']] case>>
@@ -1290,6 +1599,13 @@ case '=':
 
 \subsection{[[a]]ppend and [[i]]nsert: [[a]], [[i]]}
 
+%claude:
+Both [[a]] (append) and [[i]] (insert) use [<add()>], which
+calls [[append(gettty, addr2)]].
+The difference is that [[i]] decrements [[addr1]]/[[addr2]]
+by one, so the new text goes \emph{before} the current line
+instead of after it.
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'a':
     add(0);
@@ -1348,6 +1664,14 @@ setnoaddr(void)
 \subsection{[[d]]eleting lines: [[d]]}
 % delete
 
+%claude:
+[<rdelete()>] (``range delete'') removes lines by shifting
+the [[zero]] entries above [[addr2]] down to overwrite the
+deleted range---the mirror image of the upward shift in
+[<append()>].
+The text remains in [[tfile]] (it is never reclaimed), only
+the offsets in [[zero]] change.
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'd':
     nonzero();
@@ -1384,6 +1708,10 @@ rdelete(int *ad1, int *ad2)
 \subsection{[[c]]hanging lines: [[c]]}
 % change
 
+%claude:
+The [[c]] (change) command is simply delete followed by append:
+it calls [<rdelete()>] then [[append(gettty, addr1-1)]].
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'c':
     nonzero();
@@ -1395,6 +1723,18 @@ case 'c':
 
 \subsection{[[m]]oving and copying lines: [[m]] and [[t]]}
 % 't' because 'c' was already used for change
+
+%claude:
+The [[m]] (move) and [[t]] (copy, since [[c]] was taken) commands
+share the [<move()>] function. For [[t]], the lines are first
+duplicated to the end of the buffer via [[append(getcopy, ...)]],
+then moved.
+%
+The actual move uses a clever {triple-reverse} algorithm:
+to move a block from position~A to position~B, reverse the
+elements from~A to the block, reverse the block, then reverse
+the whole range.  This rearranges [[zero]] entries in-place
+without any temporary storage.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'm':
@@ -1489,6 +1829,13 @@ reverse(int *a1, int *a2)
 % but ed actually quite powerful and can give addresses before
 % the command as 1i or $a (see mkenam.sh) or even 1,3p
 % "each command can be preceded by one or two line numbers ..."
+%claude:
+Until now I have glossed over how [[addr1]] and [[addr2]] are set.
+In [[ed]], most commands can be preceded by one or two {addresses}:
+a line number ([[3p]]), a range ([[1,5d]]), the current line
+([[.p]]), the last line ([[$a]]), or even a search ([[/foo/p]]).
+The address-parsing code runs before the command character is read,
+so every command benefits from the same rich addressing syntax.
 
 \subsection{Reading [[addr1]] and [[addr2]]}
 
@@ -1506,6 +1853,13 @@ char lastsep; // '\n' or ',' or ';'
 @
 
 % let's go
+%claude:
+The address-parsing loop reads addresses separated by [[,]] or [[;]].
+If no addresses are given, [[addr1 = addr2 = dot]] (the current line).
+If only one address is given, both [[addr1]] and [[addr2]] point to it.
+The [[given]] flag records whether the user typed an explicit address,
+so commands like [<setwide()>] can choose appropriate defaults.
+
 <<[[commands()]] read [[addr1]] and [[c]] via [[getchr]]>>=
 c = '\n';
 addr1 = nil;
@@ -1556,6 +1910,24 @@ if(addr1 == nil)
 
 
 \subsection{[[address()]]}
+
+%claude:
+[<address()>] parses a single address expression.
+It starts from [[dot]] and applies offsets: a bare number
+is relative to line~0 (i.e., absolute), [[.]] and [[$]] set
+the base, [[+]] and [[-]] adjust the sign for subsequent
+operands, and [[/re/]] or [[?re?]] search forward or backward.
+The [[default:]] case handles the return: if no operator is
+pending, push the character back and return the computed address.
+%claude:
+The nested [[do]]-[[do]] structure is subtle. The inner loop
+just skips whitespace. The outer loop chains operators: each
+iteration consumes one operand ([[.]], [[$]], a number, or a
+search), and then loops back to see if another [[+]] or [[-]]
+follows. The variable [[nextopand]] tracks whether a trailing
+operator like [[+]] or [[-]] was seen without a following operand,
+in which case the [[default:]] branch adds an implicit [[1]]
+(so [[3+]] means [[3+1]], i.e., line~4).
 
 <<function [[address]](ed.c)>>=
 int*
@@ -1654,9 +2026,22 @@ case '.':
 
 \section{Search and replace}
 % regexp, regular expressions
-
+%claude:
+Search and replace is where [[ed]]'s real power lies.
+The [[/re/]] and [[?re?]] address forms search forward and backward,
+the [[s]] command performs substitutions, and the [[g]] command
+applies commands to all matching lines.
+The actual regular expression engine is in [[libregexp]]
+(see \book{Libcore}); [[ed]] just reads and compiles patterns via
+[<compile()>] and tests matches via [<match()>].
 
 \subsection{Search as addresses: [[/re/]] and [[?re?]]}
+
+%claude:
+When [[/re/]] or [[?re?]] appears as an address, [<address()>]
+compiles the pattern and scans through the buffer line by line,
+wrapping around from [[dol]] to [[zero]] (or vice versa for~[[?]]),
+until a match is found or we return to where we started.
 
 <<[[address()]](ed.c) switch [[c]] cases>>=
 case '?':
@@ -1685,6 +2070,14 @@ case '/':
 
 
 \subsection{Reading and compiling a regexp: [[compile()]]}
+
+%claude:
+[<compile()>] reads a regular expression delimited by [[eof]]
+(typically [[/]] or [[?]]), handles backslash escapes, and passes
+the result to [[regcomp()]] from [[libregexp]].
+If the delimiter is given with no pattern in between, the
+previously compiled [[pattern]] is reused---this is how
+[[//]] means ``repeat the last search.''
 
 <<globals ed.c>>=
 Reprog  *pattern;
@@ -1753,6 +2146,15 @@ if(ep >= expbuf+sizeof(expbuf)) {
 
 \subsection{[[match()]]}
 
+%claude:
+[<match()>] tests whether the given line matches [[pattern]].
+When [[addr]] is non-null, it calls [<getline()>] to load the
+line into [[linebuf]] first; when [[addr]] is null, it retries
+the match from [[loc2]] (the end of the previous match on the
+same line), which is how [[s///g]] finds successive matches.
+On success, [[loc1]] and [[loc2]] bracket the matched region
+in [[linebuf]].
+
 <<constants ed.c>>=
 MAXSUB  = 9,        /* max number of sub reg exp */
 @
@@ -1817,6 +2219,14 @@ subexp[0].s.rsp = loc2;
 \subsection{Reading and compiling a substitution: [[compsub()]]}
 
 % will be called after 's' as in s/foo/bar/
+%claude:
+[<compsub()>] reads the full [[s/re/replacement/]] command.
+It first calls [<compile()>] to handle the left-hand side (the
+pattern), then reads the right-hand side into [[rhsbuf]],
+handling backslash escapes and the [[ESCFLG]] marker for group
+references like [[\1]].
+It returns true if the trailing [[g]] flag is present (global
+substitution on the line).
 
 <<globals ed.c>>=
 Rune    rhsbuf[LBSIZE/sizeof(Rune)];
@@ -1880,6 +2290,19 @@ if(c == '\n' && (!globp || !globp[0])) {
 
 \subsection{[[s]]ubstitute: [[s]]}
 % s//g like sed!
+
+%claude:
+[<substitute()>] is the most complex command. For each line in the
+address range, it calls [<match()>] to find the pattern, then
+[<dosub()>] to build the replacement in [[genbuf]], copying
+everything before [[loc1]], the replacement text (expanding [[&]]
+and [[\1]]--[[\9]] references), and everything after [[loc2]].
+The result is copied back to [[linebuf]] and written to [[tfile]]
+via [<putline()>], replacing the old [[zero]] entry.
+%
+With the [[g]] flag, the match/dosub loop repeats on the same
+line via [[match(nil)]]; the optional skip count ([[s3/re/.../]])
+skips the first [[n-1]] matches.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 's':
@@ -1956,6 +2379,21 @@ subnewa = 0;
 <<globals ed.c>>=
 Rune    genbuf[LBSIZE];
 @
+
+%claude:
+[<dosub()>] builds the replacement in [[genbuf]]:
+it copies [[linebuf]] up to [[loc1]] (the match start),
+expands the replacement string from [[rhsbuf]] (handling [[&]]
+for the whole match and [[\1]]--[[\9]] for subgroups via
+[<place()>]), then appends the rest of [[linebuf]] after [[loc2]].
+Finally it copies [[genbuf]] back to [[linebuf]].
+%claude:
+The line [[loc2 = sp - genbuf + linebuf]] is the trickiest part:
+after assembly, [[sp]] points into [[genbuf]] where the tail
+(post-match text) was copied. This arithmetic converts that
+[[genbuf]] offset back into a [[linebuf]] pointer, so that the
+next call to [[match(nil)]] in the [[g]] flag loop will resume
+searching from the correct position in the updated [[linebuf]].
 
 <<function [[dosub]](ed.c)>>=
 void
@@ -2043,6 +2481,13 @@ if(c == ESCFLG && (c = *rp++) >= '1' && c < MAXSUB+'0') {
 
 \subsubsection{[[u]]ndo substitution: [[u]]}
 
+%claude:
+The [[u]] command provides a minimal undo: it remembers the
+previous [[zero]] entry ([[subolda]]) before the last substitution
+replaced it with [[subnewa]], and swaps it back.
+This only undoes the most recent substitution on a single line---far
+from a general undo facility.
+
 <<globals ed.c>>=
 int subolda;
 @
@@ -2129,6 +2574,14 @@ getsub(void)
 \subsubsection{mar[[k]]: [[k]]}
 
 % mark something
+%claude:
+The [[k]] command marks a line with a lowercase letter ([[ka]]
+through [[kz]]).  The mark is stored in [[names[c-'a']]] as
+the line's [[zero]] entry (with the low bit cleared---since
+that bit is used by [<global()>]).
+The [[']] (apostrophe) address retrieves a marked line by
+scanning [[zero]] for the matching offset.
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'k':
     nonzero();
@@ -2188,7 +2641,30 @@ for(markp = names; markp < &names[26]; )
 
 %g/re/cmd
 % => g/re/p => grep :)
-
+%claude:
+The [[g/re/cmd]] command (and its inverse [[v/re/cmd]]) works in
+two phases. In phase~1, it scans all lines in the address range
+and {marks} those that match (or don't match, for [[v]]) the
+pattern by setting the low bit of their [[zero]] entry
+([[*a1 |= 01]]---this is the ``bit-stealing trick'' that
+[[tline]] starting at~2 makes possible).
+%
+In phase~2, it iterates over [[zero]], and for each marked line,
+clears the mark, sets [[globp]] to the command string (stored in
+[[globuf]]), and calls [<commands()>] recursively.
+The two-phase design is necessary because executing commands can
+change the buffer (e.g., [[g/re/d]] deletes lines), so we cannot
+match and execute at the same time.
+%claude:
+There is an important subtlety in the phase~2 loop: after each
+[[commands()]] call, [[a1]] is reset to [[zero]] (line~2695)
+rather than just incrementing. This is because [<commands()>] may
+call [<append()>], which may [[realloc]] the [[zero]] array, moving
+it to a new address. All saved pointers into the old array become
+dangling. Resetting [[a1 = zero]] picks up the (possibly new) base,
+and the loop re-scans from the beginning---this is safe because
+each executed line has its mark cleared, so it won't be processed
+again.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'g':
@@ -2285,11 +2761,16 @@ global(int k)
 \section{Advanced features}
 
 \subsection{Running a shell command: [[!]]}
-% still M-! on Emacs? 
+% still M-! on Emacs?
 % not that GNU ed has a 'red' variant restricted to not support !
 % (and read files only in current dir)
-
 % not so needed when have multiple windows
+%claude:
+The [[!]] command forks a child process, executes the rest
+of the line via [[/bin/rc -c]], and waits for it to finish.
+In verbose mode it prints [[!]] when the command completes.
+This is less useful on \plan where you typically have multiple
+windows, but essential on a single-terminal system.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case '!':
@@ -2338,6 +2819,14 @@ callunix(void)
 @
 
 \subsection{Advanced [[l]]isting: [[l]]}
+
+%claude:
+The [[l]] (list) command is like [[p]] but makes non-printing
+characters visible: tabs become [[\t]], backspaces [[\b]],
+and other control or high characters are shown as [[\xNNNN]]
+hex escapes.  Long lines are folded at column~72.
+The [[listf]] flag is checked inside [<putchr()>] to trigger
+this special rendering.
 
 <<globals ed.c>>=
 // for displaying special chars, 'l' list flag
@@ -2398,6 +2887,14 @@ char    hex[]   = "0123456789abcdef";
 bool pflag;
 @
 % ????
+%claude:
+The [[pflag]] mechanism lets commands request an automatic print
+after execution. For example, [[s/foo/bar/p]] sets [[pflag]],
+and at the top of the [<commands()>] loop, if [[pflag]] is set,
+[[dot]] is printed before reading the next command.
+The suffixes [[p]], [[l]], and [[n]] can be appended to many commands
+(handled in [<newline()>]).
+
 <<[[commands()]] in for loop, if [[pflag]]>>=
 if(pflag) {
     pflag = false;
@@ -2458,6 +2955,12 @@ if(listn) {
 
 \subsection{[[j]]oining lines: [[j]]}
 
+%claude:
+The [[j]] command concatenates multiple lines into one.
+It copies all lines in the range into [[genbuf]] end-to-end,
+writes the result back as a single line via [<putline()>],
+then deletes the extra lines with [<rdelete()>].
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'j':
     if(!given)
@@ -2495,6 +2998,12 @@ join(void)
 
 
 \subsection{[[b]]rowse: [[b]]}
+
+%claude:
+The [[b]] (browse) command is a paging facility: it prints
+[[bpagesize]] lines (default~20) starting from the current
+address. You can go forward or backward with [[b+]] or [[b-]],
+and change the page size with [[b30]].
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'b':
@@ -2554,6 +3063,12 @@ browse(void)
 \subsection{[[e]]dit remembered file: [[e]]}
 
 % edit, reset savedfile and reset tmpfile and reread
+%claude:
+The [[e]] command re-initializes the editor (calling [<init()>]
+to reset [[tfile]] and [[zero]]) and reads a new file,
+effectively starting a fresh editing session.
+[[E]] is the force variant that skips the unsaved-changes check.
+
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'E':
     fchange = false;
@@ -2575,6 +3090,12 @@ case 'e':
 \subsection{Append-only files}
 
 % move to advanced topics. seems very plan9 specific feature
+%claude:
+\plan supports {append-only files} (the [[DMAPPEND]] mode bit),
+used for log files that can only grow.  [[ed]] checks for this
+flag when opening a file for reading and prints a warning, since
+writing back to such a file would fail.
+
 <<[[commands()]] other locals>>=
 Dir *d;
 @
@@ -2595,8 +3116,24 @@ if((d = dirfstat(io)) != nil){
 % the kernel? So he kinda reimplement one in userland for ed?
 % Also did input and output buffer, which are part of default
 % impleme of standard IO in OCaml no?
+%claude:
+The simplified [<putline()>] and [<getline()>] shown earlier do
+a [[seek]]+[[write]]/[[read]] for every single line.
+The real versions use a userland {block cache}: [<getblock()>]
+maintains two [[BLKSIZE]]-byte buffers ([[ibuff]] for reads,
+[[obuff]] for writes) and only performs actual I/O when the
+requested block is not already cached.
+This was essential on early \unix systems that lacked a kernel
+buffer cache, and it remains a significant optimization when
+editing large files.
 
 \subsection{Optimized [[putline()]]}
+
+%claude:
+The real [<putline()>] writes [[linebuf]] to [[tfile]] through
+[<getblock()>], handling block boundaries: when the current block
+is full ([[nleft == 0]]), it advances to the next block.
+The offset arithmetic with [[tline]] uses block-aligned addresses.
 
 <<globals ed.c>>=
 int nleft;
@@ -2655,9 +3192,25 @@ NBLK    = 8191,     /* max size of temp file */
 @
 
 % read/write per block, probably because faster granularity for IO?
-
 % static ibuff/obuff to avoid some IO sometimes? do batched IO
 % for lines when we needed instead of each time?
+%claude:
+[<getblock()>] is the heart of the block cache.
+It converts a line offset [[atl]] into a block number and
+an offset within that block.
+If the requested block is already in [[ibuff]] (the read cache)
+or [[obuff]] (the write cache), it returns a pointer directly
+into the cached buffer---no I/O needed.
+Otherwise, it evicts the oldest cached block (flushing [[ibuff]]
+to disk via [<blkio()>] if it was modified), loads the new block,
+and returns a pointer into it.
+%claude:
+The [[ichanged]] flag is the dirty bit for [[ibuff]]: when a write
+request ([[iof == OWRITE]]) hits the [[ibuff]] cache, [[ichanged]]
+is set via [[ichanged |= iof]]. Later, if [[ibuff]] must be evicted
+for a read, it is flushed first. The [[obuff]] path has no such
+flag---it is always flushed on eviction because it is only used by
+writes, so it is always dirty.
 
 <<globals ed.c>>=
 int iblock;
@@ -2751,6 +3304,14 @@ getline(int tl)
 
 \subsection{[[gdelete()]]}
 
+%claude:
+The generic [[g/re/cmd]] loop calls [<commands()>] once per
+marked line, which for [[g/re/d]] would result in
+O(n\textsuperscript{2}) shifting in [<rdelete()>].
+[<gdelete()>] special-cases this: it makes a single pass over
+[[zero]], copying unmarked entries down and skipping marked ones,
+achieving O(n) deletion.
+
 <<[[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]]>>=
 /*
  * Special case: g/.../d (avoid n^2 algorithm)
@@ -2788,6 +3349,18 @@ gdelete(void)
 
 
 \section{Error management}
+
+%claude:
+[[ed]]'s error handling is based on [[setjmp]]/[[longjmp]],
+which act as a poor man's exception mechanism.
+Before entering [<commands()>], [[main]] calls [[setjmp(savej)]]
+to save the execution context.
+When [<error()>] is called anywhere in the program, it prints
+[[?]] followed by a short message, resets global state, and
+calls [[longjmp(savej, 1)]] to jump back to just before
+[<commands()>], ready to read the next command.
+This is why [[ed]]'s error messages are so famously cryptic---most
+errors just print [[?]] with an empty string.
 
 \subsection{[[error()]]}
 
@@ -2864,6 +3437,14 @@ EOF = -1,
 
 \subsection{Notes/signals management}
 
+%claude:
+\plan uses {notes} instead of \unix signals.
+On an ``interrupt'' note, [[ed]] prints a newline and
+jumps back to the command loop via [[notejmp]] (the \plan
+equivalent of [[siglongjmp]]).
+On a ``hangup'' note (terminal disconnected), it calls
+[<rescue()>], which saves the buffer to [[ed.hup]] before
+exiting---a safety net so you do not lose unsaved work.
 
 <<globals ed.c>>=
 bool rescuing;
