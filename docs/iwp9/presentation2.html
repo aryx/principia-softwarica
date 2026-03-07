@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Principia Softwarica: Plan 9 Code Explained</title>
+    <meta name="author" content="Yoann Padioleau">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600;700&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Source Sans Pro', sans-serif;
+            min-height: 740px;
+            background: #f5f0e1;
+            color: #222;
+        }
+        .fallback-message {
+            font-family: sans-serif; line-height: 1.3; width: 780px;
+            padding: 10px 10px 0; margin: 20px auto;
+            border: 1px solid #e4c652; border-radius: 10px;
+            background: #fffad5; color: #333;
+        }
+        .impress-supported .fallback-message { display: none; }
+
+        .step {
+            position: relative;
+            width: 900px;
+            padding: 40px;
+            margin: 20px auto;
+            box-sizing: border-box;
+            font-size: 26px;
+            line-height: 1.5;
+            border-radius: 12px;
+        }
+
+        /* All steps dim when inactive, but zone steps stay visible */
+        .step { opacity: 0.15; transition: opacity 0.6s; }
+        .step.active { opacity: 1; }
+        .zone-always { opacity: 0.92 !important; }
+        .zone-always.active { opacity: 1 !important; }
+        /* Title always somewhat visible at overview level */
+        .title-always { opacity: 0.8 !important; }
+        .title-always.active { opacity: 1 !important; }
+
+        /* zone backgrounds */
+        .zone-orange { background: rgba(210, 160, 80, 0.20); border: 3px solid rgba(180, 130, 50, 0.5); }
+        .zone-blue   { background: rgba(100, 160, 210, 0.20); border: 3px solid rgba(80, 140, 190, 0.5); }
+        .zone-green  { background: rgba(100, 190, 160, 0.20); border: 3px solid rgba(80, 170, 140, 0.5); }
+        .zone-motiv  { background: rgba(255, 255, 255, 0.92); border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+        .step h1 {
+            font-size: 56px; font-weight: 700; margin-bottom: 20px;
+            color: #2e7d32; line-height: 1.2;
+        }
+        .step h2 {
+            font-size: 38px; font-weight: 600; margin-bottom: 18px;
+            color: #2e7d32; line-height: 1.2;
+        }
+        .step h3 {
+            font-size: 30px; font-weight: 600; margin-bottom: 12px; color: #555;
+        }
+        .step p { margin-bottom: 12px; }
+        .step ul { margin-left: 25px; margin-bottom: 12px; }
+        .step li { margin-bottom: 6px; }
+
+        .hl { color: #c62828; font-weight: 600; }
+        .hl2 { color: #2e7d32; font-weight: 600; }
+        .dim { color: #888; font-size: 22px; }
+        code {
+            font-family: 'Source Code Pro', monospace;
+            background: rgba(0,0,0,0.06); padding: 1px 6px;
+            border-radius: 3px; font-size: 22px;
+        }
+        .quote {
+            font-style: italic; color: #555; font-size: 30px;
+            margin: 15px 0; padding-left: 18px; border-left: 4px solid #2e7d32;
+        }
+        .punchline { font-size: 30px; font-weight: 600; color: #c62828; margin-top: 15px; }
+        .cmd {
+            font-family: 'Source Code Pro', monospace;
+            background: #2a2a2a; color: #a5d6a7;
+            padding: 12px 16px; border-radius: 8px;
+            font-size: 20px; margin: 10px 0; line-height: 1.6;
+        }
+        .url { font-family: 'Source Code Pro', monospace; color: #1565c0; font-size: 24px; }
+        .comparison { display: flex; gap: 15px; margin: 12px 0; }
+        .comparison > div { flex: 1; padding: 12px; border-radius: 8px; }
+        .col-good { background: rgba(46,125,50,0.08); border: 1px solid rgba(46,125,50,0.2); }
+        .col-bad  { background: rgba(198,40,40,0.06); border: 1px solid rgba(198,40,40,0.15); }
+
+        /* data tables */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 20px; margin: 10px 0; }
+        .data-table th { background: #2e7d32; color: white; padding: 8px 10px; text-align: left; font-weight: 600; }
+        .data-table td { padding: 6px 10px; border-bottom: 1px solid #ddd; }
+        .data-table tr:last-child td { border-bottom: 2px solid #2e7d32; font-weight: 600; }
+        .data-table .cat { color: #555; font-style: italic; }
+        .data-table .num { text-align: right; font-family: 'Source Code Pro', monospace; font-size: 19px; }
+
+        /* repo tree */
+        .repo-tree {
+            font-family: 'Source Code Pro', monospace; font-size: 15px;
+            line-height: 1.35; background: #fff; padding: 12px;
+            border-radius: 8px; border: 1px solid #ddd;
+            column-count: 3; column-gap: 18px;
+        }
+
+        /* noweb example side-by-side */
+        .noweb-side { display: flex; gap: 15px; }
+        .noweb-side > div { flex: 1; }
+        .noweb-src {
+            font-family: 'Source Code Pro', monospace; font-size: 17px;
+            background: #fff; padding: 12px; border-radius: 8px;
+            border: 1px solid #ddd; line-height: 1.5; white-space: pre-wrap;
+        }
+        .noweb-out {
+            font-size: 20px; background: #fff; padding: 12px;
+            border-radius: 8px; border: 1px solid #ddd; line-height: 1.6;
+        }
+
+        /* docker side-by-side */
+        .docker-side { display: flex; gap: 15px; }
+        .docker-side > div { flex: 1; }
+        .docker-file {
+            font-family: 'Source Code Pro', monospace; font-size: 15px;
+            background: #2a2a2a; color: #a5d6a7; padding: 12px;
+            border-radius: 8px; line-height: 1.5; white-space: pre-wrap;
+        }
+
+        /* zone title headers (visible at zoom-out) */
+        .zone-title {
+            text-align: center; font-size: 52px; font-weight: 700;
+            margin: 0 0 20px 0; letter-spacing: -0.5px;
+        }
+        .zone-orange .zone-title { color: #8d6e2f; }
+        .zone-blue .zone-title   { color: #2c6b94; }
+        .zone-green .zone-title  { color: #2e7d5a; }
+
+        /* title step: large scale so it's readable at overview */
+        #title {
+            text-align: center; background: rgba(255,255,255,0.9);
+            border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        #title h1 { font-size: 72px; }
+        #title h2 { font-size: 36px; font-weight: 300; color: #555; }
+
+        /* conclusion */
+        #conclusion {
+            text-align: center; background: rgba(255,255,255,0.95);
+            border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        #conclusion .quote { border-left: none; padding-left: 0; text-align: center; }
+
+        .hint {
+            position: fixed; left: 0; right: 0; bottom: 15px;
+            text-align: center; font-size: 14px; color: #999; z-index: 100;
+        }
+
+        /* invisible camera-position step */
+        .zoom-step { background: none !important; border: none !important; box-shadow: none !important; padding: 0; }
+    </style>
+</head>
+<body class="impress-not-supported">
+
+<div class="fallback-message">
+    <p>Your browser <b>doesn't support impress.js</b>. Try Chrome, Firefox, or Safari.</p>
+</div>
+
+<!--
+    CANVAS MAP (what you see zoomed out):
+    =====================================
+
+    y=-1400   [          TITLE (scale=2.5)            ]
+              [ Principia Softwarica / name / IWP9     ]
+
+    y=200     [ motiv1 ][ motiv2 ][ motiv3 ][ motiv4 ][ motiv5 ]
+              (row of small motivation frames)
+
+    y=1600    [           PRINCIPIA intro              ]
+
+    y=3200    [  ORANGE ZONE  ][  BLUE ZONE  ][  GREEN ZONE  ]
+              [  Table 1      ][  Figure 1   ][  Table 3     ]
+              [  (scale=2)    ][  (scale=2)  ][  (scale=2)   ]
+
+    y=6000+   sub-frames below each zone
+
+    y=9000+   demo / future / conclusion
+-->
+
+<div id="impress" data-transition-duration="800" data-width="1200" data-height="800">
+
+<!-- ================================================================ -->
+<!-- FRAME 1: OVERVIEW — the "canvas" zoomed out                      -->
+<!-- Shows: title at top, 3 colored zones with tables below           -->
+<!-- ================================================================ -->
+<div id="overview" class="step zoom-step" data-x="3200" data-y="1800" data-scale="8">
+</div>
+
+<!-- ================================================================ -->
+<!-- TITLE (large scale = readable at overview zoom level)            -->
+<!-- ================================================================ -->
+<div id="title" class="step title-always" data-x="3200" data-y="-1400" data-scale="2.5">
+    <h1>Principia Softwarica</h1>
+    <h2>Plan 9 Code Explained</h2>
+    <br>
+    <p>Yoann Padioleau &mdash; <em>yoann.padioleau@gmail.com</em></p>
+    <p class="dim">IWP9 &mdash; International Workshop on Plan 9</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- MOTIVATIONS (row of frames between title and zones)              -->
+<!-- ================================================================ -->
+<div id="engineers" class="step zone-motiv" data-x="0" data-y="200" data-scale="1">
+    <h2>The Best Engineers Understand the Stack</h2>
+    <p><span class="hl">Facebook:</span> linker slow, bottleneck for everyone<br>
+    &rarr; most engineers: stuck, accepted it, black box</p>
+    <p>Engineers like <span class="hl">Maurer, Paul Saab</span> who understood
+    the full stack? Most valued. Could debug anything.</p>
+    <p><span class="hl">Rui Ueyama:</span> explained how linkers work,
+    then built <code>mold</code> &mdash; the fastest linker in the world.</p>
+    <p class="punchline">Understand deeply = build better</p>
+</div>
+
+<div id="education" class="step zone-motiv" data-x="1600" data-y="200" data-scale="1">
+    <h2>The Education Gap</h2>
+    <div class="quote">"What happens when you type ls in a terminal window?"</div>
+    <p><span class="hl">Keith Adams</span> &mdash; colleague at Facebook, later
+    Chief Architect at Slack &mdash; used this as his interview question.</p>
+    <p>Simple question. The answer involves: the shell, the C library, the kernel,
+    the graphics stack, the windowing system.<br>
+    <span class="hl">Most engineers can't answer.</span></p>
+    <p>&ldquo;Full stack&rdquo; today = React + Node + cloud<br>
+    <span class="hl2">REAL</span> full stack = compiler, linker, kernel, syscalls</p>
+</div>
+
+<div id="ai-era" class="step zone-motiv" data-x="3200" data-y="200" data-scale="1">
+    <h2>The AI Era Makes This More Important</h2>
+    <p class="punchline">We write less code. We need MORE understanding.</p>
+    <p>AI generates code &mdash; but who evaluates it?<br>
+    Who debugs the segfault? The linker error?</p>
+    <p>AI tools like <code>Claude Code</code> USE the classic commands:<br>
+    <code>grep</code>, <code>ls</code>, <code>diff</code>,
+    <code>awk</code>, <code>gcc</code>, <code>ld</code> &hellip;<br>
+    The AI is a power user of the very programs Principia explains.</p>
+    <p>Writing code = 20%. Understanding = <span class="hl">80%</span>.<br>
+    AI handles the 20%. The 80% becomes everything.</p>
+</div>
+
+<div id="enormous" class="step zone-motiv" data-x="4800" data-y="200" data-scale="1">
+    <h2>But the Stack is Enormous</h2>
+    <table class="data-table" style="width:80%">
+        <tr><td>Linux kernel</td><td class="num"><span class="hl">~40M</span> LOC</td><td class="dim">core ~2M</td></tr>
+        <tr><td>gcc</td><td class="num"><span class="hl">~15M</span> LOC</td><td></td></tr>
+        <tr><td>glibc</td><td class="num"><span class="hl">~1.5M</span> LOC</td><td></td></tr>
+        <tr><td>bash</td><td class="num">~180K LOC</td><td></td></tr>
+        <tr><td>Xorg server</td><td class="num">~500K LOC</td><td class="dim">ecosystem: millions</td></tr>
+        <tr><td>xterm alone</td><td class="num">~88K LOC</td><td></td></tr>
+    </table>
+    <p class="punchline">Each component: more code than ALL of Plan 9</p>
+</div>
+
+<div id="plan9" class="step zone-motiv" data-x="6400" data-y="200" data-scale="1">
+    <h2>Plan 9 &mdash; 100x Less Code</h2>
+    <p><span class="hl2">Thompson, Ritchie, Pike</span> &mdash;
+    Whole OS: <span class="hl2">~183,000 LOC</span></p>
+    <div class="comparison">
+        <div class="col-good">
+            <strong>Plan 9</strong><br>
+            rio = <span class="hl2">8,800</span> LOC<br>
+            terminal &lt; <span class="hl2">1K</span><br>
+            writes to <code>/dev/cons</code>
+        </div>
+        <div class="col-bad">
+            <strong>Linux / X Window</strong><br>
+            Xorg = <span class="hl">millions</span><br>
+            xterm = <span class="hl">88K</span><br>
+            tty, pty, VT100 escapes&hellip;
+        </div>
+    </div>
+    <p class="dim">Ideal teaching OS: Open source, Small, Real, Complete, Coherent, Self-hosting</p>
+</div>
+
+<!-- Bridge: Principia intro (between motivations and zones) -->
+<div id="principia" class="step zone-motiv" data-x="3200" data-y="1600" data-scale="1.2">
+    <h1 style="font-size:48px">Principia Softwarica</h1>
+    <p style="font-size:28px">Research OS &rarr; <span class="hl2">Teaching OS</span></p>
+    <p>Books explaining <span class="hl2">ALL</span> source code of <span class="hl2">ALL</span> essential programs<br>
+    The books <span class="hl">ARE</span> the implementations (literate programs)</p>
+    <p style="font-size:24px">
+    <code>kernel &rarr; compiler &rarr; assembler &rarr; linker</code><br>
+    <code>shell &rarr; libc &rarr; editor &rarr; build system</code><br>
+    <code>debugger &rarr; graphics &rarr; windowing &rarr; networking</code></p>
+</div>
+
+<!-- ================================================================ -->
+<!-- ZOOM BACK: see all 3 zones before diving in                      -->
+<!-- ================================================================ -->
+<div id="see-zones" class="step zoom-step" data-x="3200" data-y="3500" data-scale="5.5">
+</div>
+
+<!-- ================================================================ -->
+<!-- ZONE 1: A SERIES OF BOOKS (orange, left)                         -->
+<!-- Always visible — contains Table 1                                -->
+<!-- ================================================================ -->
+<div id="zone-books" class="step zone-orange zone-always" data-x="-200" data-y="3800" data-scale="2"
+     style="width:1700px; padding:25px;">
+    <div class="zone-title">A Series of Books</div>
+
+    <table class="data-table">
+        <tr>
+            <th>Category</th><th>Book</th><th>Program(s)</th>
+            <th style="text-align:right">LOC</th><th style="text-align:right">LOE</th>
+            <th style="text-align:right">Pages</th>
+        </tr>
+        <tr><td class="cat" rowspan="3">Core system</td>
+            <td>Kernel</td><td><code>9pi</code></td>
+            <td class="num">35,000</td><td class="num">3,200</td><td class="num">732</td></tr>
+        <tr><td>Core libraries</td><td><code>libc libregexp libthread</code></td>
+            <td class="num">19,000</td><td class="num">1,600</td><td class="num">438</td></tr>
+        <tr><td>Shell</td><td><code>rc</code></td>
+            <td class="num">6,500</td><td class="num">1,700</td><td class="num">166</td></tr>
+
+        <tr><td class="cat" rowspan="3">Dev toolchain</td>
+            <td>C compiler</td><td><code>5c libcc</code></td>
+            <td class="num">18,500</td><td class="num">1,900</td><td class="num">471</td></tr>
+        <tr><td>Assembler</td><td><code>5a</code></td>
+            <td class="num">3,600</td><td class="num">4,400</td><td class="num">176</td></tr>
+        <tr><td>Linker</td><td><code>5l</code></td>
+            <td class="num">7,500</td><td class="num">5,400</td><td class="num">296</td></tr>
+
+        <tr><td class="cat" rowspan="4">Dev tools</td>
+            <td>Editor</td><td><code>ed</code></td>
+            <td class="num">1,600</td><td class="num">200</td><td class="num">45</td></tr>
+        <tr><td>Build system</td><td><code>mk</code></td>
+            <td class="num">4,350</td><td class="num">4,050</td><td class="num">197</td></tr>
+        <tr><td>Debuggers</td><td><code>db acid strace libmach</code></td>
+            <td class="num">13,100</td><td class="num">1,000</td><td class="num">321</td></tr>
+        <tr><td>Profilers</td><td><code>prof time kprof stats</code></td>
+            <td class="num">3,900</td><td class="num">350</td><td class="num">102</td></tr>
+
+        <tr><td class="cat" rowspan="2">Graphics</td>
+            <td>Graphics stack</td><td><code>/dev/draw libdraw libmemdraw</code></td>
+            <td class="num">18,500</td><td class="num">3,400</td><td class="num">507</td></tr>
+        <tr><td>Windowing</td><td><code>rio libframe libcomplete</code></td>
+            <td class="num">8,800</td><td class="num">4,000</td><td class="num">289</td></tr>
+
+        <tr><td class="cat">Networking</td>
+            <td>Network stack</td><td><code>/dev/net libip lib9p</code></td>
+            <td class="num">18,300</td><td class="num">4,800</td><td class="num">457</td></tr>
+
+        <tr><td class="cat">Misc</td>
+            <td>CLI utilities</td><td><code>cat ls grep sed diff tar gzip&hellip;</code></td>
+            <td class="num">23,900</td><td class="num">650</td><td class="num">493</td></tr>
+
+        <tr style="background:#f5f0e1">
+            <td colspan="3"><strong>Total</strong></td>
+            <td class="num"><strong>182,550</strong></td>
+            <td class="num"><strong>36,650</strong></td>
+            <td class="num"><strong>4,690</strong></td></tr>
+    </table>
+    <p class="dim" style="text-align:center; font-size:18px">LOC = lines of code; LOE = lines of explanation; Pages = typeset pages</p>
+</div>
+
+<!-- Below zone 1: bookset notes -->
+<div id="bookset-notes" class="step zone-orange" data-x="-200" data-y="6200" data-scale="1">
+    <h3>The Bookset</h3>
+    <p><span class="hl2">15 books</span>, 7 categories, <span class="hl2">183K LOC</span> total<br>
+    ARM architecture (simplest widely-used + Raspberry Pi)<br>
+    LOE/LOC ~1 target &mdash; work in progress</p>
+    <p>The <span class="hl2">Utilities</span> book: <code>cat</code>, <code>ls</code>,
+    <code>grep</code>, <code>sed</code>, <code>diff</code>, <code>tar</code>&hellip;<br>
+    The exact commands AI coding tools run hundreds of times a day.</p>
+</div>
+
+<!-- Literate Programming -->
+<div id="lp" class="step zone-orange" data-x="-200" data-y="7400" data-scale="1">
+    <h2>Literate Programming (Knuth, 1984)</h2>
+    <p>Mix code + documentation<br>
+    Present in order of <span class="hl2">UNDERSTANDING</span>, not compiler order<br>
+    Piece by piece, top-down or bottom-up, separate concerns</p>
+    <p>Tool: <span class="hl2">Noweb</span></p>
+    <div class="cmd">
+&lt;&lt;chunk-name&gt;&gt;=   defines a chunk
+&lt;&lt;chunk-name&gt;&gt;    references a chunk
+Chunks defined incrementally, across chapters</div>
+</div>
+
+<!-- Noweb Example (Table 2) -->
+<div id="noweb-example" class="step zone-orange" data-x="-200" data-y="8800" data-scale="1.2"
+     style="width:1200px;">
+    <h3>Noweb Example</h3>
+    <div class="noweb-side">
+        <div>
+            <strong><code>ToyKernel.nw</code> excerpt</strong>
+            <div class="noweb-src">The [[Proc]] data structure stores info
+about a process. Here are the most
+important fields:
+&lt;&lt;proc.h&gt;&gt;=
+struct Proc {
+  &lt;&lt;essential Proc fields&gt;&gt;
+  &lt;&lt;advanced Proc fields&gt;&gt;
+}
+@
+
+&lt;&lt;essential Proc fields&gt;&gt;=
+  int pid;
+@
+
+The kernel main function:
+&lt;&lt;kernel.c&gt;&gt;=
+void main() {
+  &lt;&lt;initializations&gt;&gt;
+  &lt;&lt;main algorithm&gt;&gt;
+}
+@
+
+We start with a counter:
+&lt;&lt;initializations&gt;&gt;=
+  int cnt = 0;
+@
+
+&lt;&lt;advanced Proc fields&gt;&gt;=
+  Lock l;
+@
+
+&lt;&lt;initializations&gt;&gt;+=
+  cnt++;
+@</div>
+        </div>
+        <div>
+            <strong>Rendered output</strong>
+            <div class="noweb-out">
+                <p>The <code>Proc</code> data structure stores info
+                about a process. Here are the most important fields:</p>
+                <div style="background:#f0f0f0; padding:8px; border-radius:4px; font-family:'Source Code Pro',monospace; font-size:17px; margin:8px 0;">
+                    &laquo;proc.h&raquo; &equiv;<br>
+                    <b>struct</b> Proc {<br>
+                    &nbsp;&nbsp;&laquo;essential Proc fields&raquo;<br>
+                    &nbsp;&nbsp;&laquo;advanced Proc fields&raquo;<br>
+                    }
+                </div>
+                <div style="background:#f0f0f0; padding:8px; border-radius:4px; font-family:'Source Code Pro',monospace; font-size:17px; margin:8px 0;">
+                    &laquo;essential Proc fields&raquo; &equiv;<br>
+                    &nbsp;&nbsp;<b>int</b> pid;
+                </div>
+                <p>The kernel main function:</p>
+                <div style="background:#f0f0f0; padding:8px; border-radius:4px; font-family:'Source Code Pro',monospace; font-size:17px; margin:8px 0;">
+                    &laquo;kernel.c&raquo; &equiv;<br>
+                    <b>void</b> main() {<br>
+                    &nbsp;&nbsp;&laquo;initializations&raquo;<br>
+                    &nbsp;&nbsp;&laquo;main algorithm&raquo;<br>
+                    }
+                </div>
+                <p><code>Proc</code> defined incrementally.<br>
+                <code>main()</code>: important flow highlighted, noise deferred.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Why Books -->
+<div id="why-books" class="step zone-orange" data-x="-200" data-y="10300" data-scale="1">
+    <h2>Why Books?</h2>
+    <div class="quote">"Are books still the best medium in 2026?"</div>
+    <p>Books: teaching for <span class="hl2">~2000 years</span>.
+    Survived radio, TV, internet, MOOCs.</p>
+    <p>Alternatives fall short for large codebases:</p>
+    <ul style="font-size:22px">
+        <li><span class="hl">IDE:</span> compiler order, no narrative, everything at once</li>
+        <li><span class="hl">Videos:</span> can't reference, can't search</li>
+        <li><span class="hl">AI explanation:</span> no coherent narrative, no curated ordering</li>
+    </ul>
+    <p><span class="hl2">Syncweb</span> brings IDE features INTO the book:<br>
+    Cross-references = &ldquo;go to definition&rdquo;<br>
+    Evince thumbnails = hover preview in VS Code</p>
+    <p class="punchline" style="font-size:26px">Narrative of a book + navigation of an IDE</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- ZOOM BACK to see zones before column 2                           -->
+<!-- ================================================================ -->
+<div id="back-to-zones-2" class="step zoom-step" data-x="3200" data-y="3500" data-scale="5.5">
+</div>
+
+<!-- ================================================================ -->
+<!-- ZONE 2: A NEW PLAN 9 FORK (blue, center)                         -->
+<!-- Always visible — contains Figure 1 (repo tree)                   -->
+<!-- ================================================================ -->
+<div id="zone-fork" class="step zone-blue zone-always" data-x="3200" data-y="3800" data-scale="2"
+     style="width:1700px; padding:25px;">
+    <div class="zone-title">A New Plan 9 Fork</div>
+    <p style="text-align:center; font-size:22px; margin-bottom:12px">
+    Original &rarr; split &rarr; reorganize &rarr; split again &mdash; until simple enough to explain<br>
+    <em>&ldquo;Trying to explain something that couldn't be explained &hellip; because it was buggy.&rdquo;</em></p>
+
+    <div class="repo-tree">
+assemblers/
+  5a/
+  8a/
+  Assembler.nw
+builders/
+  mk/
+  Builder.nw
+compilers/
+  5c/
+  8c/
+  cc/
+  Compiler.nw
+debuggers/
+  acid/
+  db/
+  libmach/
+  Debugger.nw
+editors/
+  ed/
+include/
+  libc.h
+  ...
+  u.h
+linkers/
+  5l/
+  8l/
+  Linker.nw
+kernel/
+  arch/
+  concurrency/
+  console/
+  devices/
+  files/
+  filesystems/
+  init/
+  memory/
+  network/
+  processes/
+  syscalls/
+  Kernel.nw
+lib_core/
+  libc/
+  libthread/
+  Libcore.nw
+lib_graphics/
+  libdraw/
+  libmemdraw/
+  libmemlayer/
+  Graphics.nw
+lib_networking/
+  lib9p/
+  libip/
+networking/
+  arp/
+  dhcp/
+  ftp/
+  http/
+  ip/
+  Network.nw
+profilers/
+  Profiler.nw
+shells/
+  rc/
+  Shell.nw
+utilities/
+  archive/
+  byte/
+  calc/
+  compare/
+  files/
+  pipe/
+  text/
+  time/
+  Utilities.nw
+windows/
+  rio/
+  libcomplete/
+  libframe/
+  libplumb/
+  Windows.nw
+mkconfig.pc
+mkconfig.pi
+Dockerfile
+Makefile
+    </div>
+    <p style="text-align:center" class="url">github.com/aryx/principia-softwarica</p>
+</div>
+
+<!-- Below zone 2: fork details -->
+<div id="fork-notes" class="step zone-blue" data-x="3200" data-y="6200" data-scale="1">
+    <h3>Repository Structure</h3>
+    <ul>
+        <li><code>assemblers/5a/</code> not <code>sys/src/cmd/5a</code> &mdash; easier to find</li>
+        <li>Each dir: <code>.nw</code> literate program + generated code</li>
+        <li><code>kernel/</code> with clear subdirs: <code>concurrency/</code>
+            <code>memory/</code> <code>processes/</code></li>
+        <li><code>mkconfig.pc</code> (x86/QEMU) + <code>mkconfig.pi</code> (ARM/RPi)</li>
+    </ul>
+    <p class="punchline">Good strategy to find bugs: try to explain the code in a book.</p>
+</div>
+
+<!-- Syncweb -->
+<div id="syncweb" class="step zone-blue" data-x="3200" data-y="7400" data-scale="1">
+    <h2>Syncweb: Bidirectional LP</h2>
+    <div class="cmd">Classic Noweb:  .nw &rarr;&rarr;&rarr; code   (one way)
+Syncweb:        .nw &lrarr;&lrarr;&lrarr; code   (both ways)</div>
+    <p>Marks + md5 checksums &rarr; detect which side changed<br>
+    Automatic merge or conflict detection</p>
+    <p class="punchline">Solves biggest LP complaint</p>
+    <p class="url">github.com/aryx/syncweb</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- ZOOM BACK to see zones before column 3                           -->
+<!-- ================================================================ -->
+<div id="back-to-zones-3" class="step zoom-step" data-x="3200" data-y="3500" data-scale="5.5">
+</div>
+
+<!-- ================================================================ -->
+<!-- ZONE 3: A NEW DISTRIBUTION (green, right)                        -->
+<!-- Always visible — contains Table 3 (Dockerfiles)                  -->
+<!-- ================================================================ -->
+<div id="zone-distro" class="step zone-green zone-always" data-x="6600" data-y="3800" data-scale="2"
+     style="width:1700px; padding:25px;">
+    <div class="zone-title">A New Distribution</div>
+    <p style="text-align:center; font-size:22px; margin-bottom:12px">
+    Student modifies code &rarr; how to rebuild?<br>
+    Plan 9 C dialect: <code>gcc</code>/<code>clang</code> can't compile it</p>
+    <p style="text-align:center; font-size:22px; margin-bottom:12px">
+    <span class="hl2">goken9cc:</span> Plan 9 compilers built with gcc/clang<br>
+    Cross-compile from Linux/macOS/Windows &rarr; VFAT disk image &rarr; QEMU or RPi</p>
+
+    <div class="docker-side">
+        <div>
+            <strong style="color:#fff">Goken <code>Dockerfile</code></strong>
+            <div class="docker-file"># Build goken on Ubuntu using gcc
+FROM ubuntu:24.04
+
+RUN apt-get install -y gcc libc6-dev byacc
+
+WORKDIR /src
+COPY . .
+
+RUN ./configure
+RUN ./scripts/build-mk.sh
+RUN ./scripts/promote-mk.sh
+
+ENV PATH="/src/bin:${PATH}"
+ENV MKSHELL="/src/bin/rc"
+
+RUN mk
+RUN mk install</div>
+        </div>
+        <div>
+            <strong style="color:#fff">Principia <code>Dockerfile</code></strong>
+            <div class="docker-file"># Build principia for 386 and arm
+FROM padator/goken
+
+WORKDIR /principia
+COPY . .
+
+# 386
+RUN cp mkconfig.pc mkconfig
+RUN mk && mk install
+RUN mk kernel
+# arm
+RUN cp mkconfig.pi mkconfig
+RUN mk && mk install
+RUN mk kernel
+
+# VFAT disk image
+RUN apt-get install -y dosfstools mtools
+RUN dd if=/dev/zero of=tmp.img bs=1M count=512
+RUN mkfs.vfat tmp.img
+RUN mcopy -i tmp.img -s -o ROOT/* ::
+RUN cat MISC/pc/bootsector tmp.img > dosdisk.img</div>
+        </div>
+    </div>
+    <p style="text-align:center" class="url">github.com/aryx/goken9cc</p>
+</div>
+
+<!-- Below zone 3: build commands -->
+<div id="distro-commands" class="step zone-green" data-x="6600" data-y="6200" data-scale="1">
+    <h3>5 Commands: Clone, Build, Run</h3>
+    <div class="cmd">$ git clone https://github.com/aryx/goken9cc
+$ cd goken9cc && docker build -t "padator/goken" .
+$ cd ../principia-softwarica
+$ docker build -t "principia" .
+$ qemu-system-i386 -smp 4 -m 512 \
+    -kernel 9qemu -hda dosdisk.img</div>
+    <p class="dim">Irony: Docker relies on Linux namespaces &mdash; inspired by Plan 9 per-process namespaces</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- DEMO + FUTURE + CONCLUSION (below the zones)                     -->
+<!-- ================================================================ -->
+<div id="demo" class="step zone-motiv" data-x="3200" data-y="8800" data-scale="1.3"
+     style="width:1000px;">
+    <h2>Live Demo: Modify, Rebuild, Boot</h2>
+    <div class="cmd">BEFORE:  $ strace ls &rarr; open = syscall <span style="color:#ef5350; font-weight:bold">6</span></div>
+    <div class="cmd">CHANGE:  $ vi lib_core/libc/9syscall/sys.h
+         #define OPEN <span style="color:#ef5350">6</span>  &rarr;  #define OPEN <span style="color:#a5d6a7; font-weight:bold">42</span></div>
+    <div class="cmd">REBUILD: $ time mk && mk install && mk kernel
+         <span style="color:#a5d6a7; font-weight:bold">&lt; 10 seconds</span></div>
+    <div class="cmd">BOOT:    $ qemu-system-i386 -kernel 9qemu -hda dosdisk.img
+         $ strace ls &rarr; open = syscall <span style="color:#a5d6a7; font-weight:bold">42</span></div>
+    <p class="punchline">"Rebuilt the entire OS in under a minute. Try that with Linux."</p>
+    <p class="dim">That <code>ls</code> went through shell, libc, kernel, graphics, windowing.
+    Every layer &mdash; explained in a Principia book.</p>
+</div>
+
+<div id="future" class="step zone-motiv" data-x="1600" data-y="10000" data-scale="1">
+    <h2>Future Work</h2>
+    <ul>
+        <li>More explanations (LOE/LOC &rarr; 1)<br>
+            <span class="dim">AI could help write explanations for the books</span></li>
+        <li>Self-hosting (build Principia from Principia)</li>
+        <li>Merge goken + principia codebases</li>
+    </ul>
+</div>
+
+<div id="conclusion" class="step" data-x="3200" data-y="11200" data-scale="2">
+    <h2>Principia Softwarica</h2>
+    <p>Principia removes the mental barrier.<br>
+    The stack is not a black box.<br>
+    These programs are not impossible to understand.</p>
+    <p>In other fields, students study the masters.<br>
+    <span class="hl2">Read the masters' code. Understand everything.<br>
+    Become a better engineer.</span></p>
+    <div class="quote">"What happens when you type ls?"<br>
+    After reading Principia: you'll know. Fully.</div>
+    <p class="punchline">Clone it. Build it. Read the books.</p>
+    <p class="url">github.com/aryx/principia-softwarica</p>
+</div>
+
+<!-- FINAL: zoom all the way out to see the full canvas -->
+<div id="overview-end" class="step zoom-step" data-x="3200" data-y="4000" data-scale="10">
+</div>
+
+</div><!-- /impress -->
+
+<div class="hint">
+    <p>Use &larr; &rarr; arrow keys or spacebar to navigate &bull; Press <strong>O</strong> for overview</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/impress/impress.js@2.0.0/js/impress.min.js"></script>
+<script>impress().init();</script>
+
+</body>
+</html>
