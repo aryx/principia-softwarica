@@ -19,7 +19,7 @@ operating system, touching code described in 7 different books
 of the Principia Softwarica series.
 </p>
 
-<h2>Plan 9</h2>
+<h2>The Overview</h2>
 
 <p>
 In Plan 9, the path is remarkably clean.
@@ -30,32 +30,149 @@ then the output flows back up through the kernel to rio (the windowing
 system), which draws the text using the graphics stack.
 </p>
 
-<p><img src="ls-journey.png" alt="Journey of ls through the Plan 9 stack" width="600"></p>
+<p><img src="ls-journey-and-loc.png" alt="Journey of ls through the Plan 9 stack, with LOC annotations" width="600"></p>
 
 <p>
 Each colored box corresponds to a book in the series.
-The labels on the right show which book covers that layer.
+The labels on the right show which book covers that layer,
+and the LOC badges show how small each component is.
 Notice how the output of <code>ls</code> goes through the kernel
 <em>twice</em>: once for the <code>write()</code> system call, and
 again when rio talks to the graphics device via <code>/dev/draw</code>.
 </p>
 
-<h2>Linux comparison</h2>
+<h2>Going Deeper: Two Phases</h2>
 
 <p>
-The same journey on Linux involves significantly more layers
-and more code. The terminal emulator (xterm), the X server,
-the PTY/TTY subsystem, the input subsystem &mdash; each adds
+The journey actually has two distinct phases.
+Phase 1 is what happens <em>before</em> you press Enter:
+each keystroke travels from the keyboard through an interrupt handler,
+through the console device, to rio which virtualizes <code>/dev/cons</code>,
+and finally to the shell which reads the line.
+Phase 2 is the execution: the shell forks, <code>ls</code> runs,
+output flows back through the kernel to rio and the graphics stack.
+</p>
+
+<p><img src="ls-journey-v2.png" alt="Two-phase journey of ls in Plan 9: typing and executing" width="900"></p>
+
+<h3>Linux comparison</h3>
+
+<p>
+The same two phases on Linux involve significantly more layers
+and more code. The input subsystem, the X server, the terminal
+emulator (xterm), the PTY/TTY subsystem &mdash; each adds
 complexity that Plan 9 avoids through its unified design.
+The LOC annotations show why it is impractical to explain a full
+Linux system in a book series: each component is individually
+larger than the entire Plan 9 system combined.
 </p>
 
-<p><img src="ls-journey-linux-v2.png" alt="Journey of ls through the Linux stack" width="700"></p>
+<p><img src="ls-journey-linux-v2.png" alt="Two-phase journey of ls through the Linux stack" width="900"></p>
+
+<h2>Even Deeper: Rio's Thread Architecture</h2>
 
 <p>
-The LOC annotations on the Linux diagram show why it is impractical
-to explain a full Linux system in a book series: the components are
-individually larger than the entire Plan 9 system combined.
+Zooming in further reveals how rio orchestrates the flow internally.
+Rio is a concurrent program with multiple threads communicating
+through channels (Plan 9's equivalent of Go channels &mdash; in fact,
+Go channels were inspired by this very code).
+The keyboard thread receives input, the shell thread manages
+the read/write protocol with the shell process, and the window
+thread handles display updates.
 </p>
+
+<p><img src="ls-journey-v3.png" alt="Journey of ls showing rio's internal thread architecture" width="900"></p>
+
+<h3>Linux comparison</h3>
+
+<p>
+At this level of detail, the Linux path becomes considerably more
+involved. The PTY layer alone (pty driver, n_tty line discipline,
+echo handling) replaces what Plan 9 does elegantly with rio's
+virtual <code>/dev/cons</code>.
+The X server, xterm's VT100 parser, FreeType font rendering,
+and the Xorg compositor each add substantial layers.
+</p>
+
+<p><img src="ls-journey-linux-v3.png" alt="Detailed journey of ls through the Linux stack" width="900"></p>
+
+<h2>Function-Level Detail</h2>
+
+<p>
+At the function level, we can trace the exact call chain.
+On the input side: <code>kbdrepeat()</code> in the kernel feeds
+characters through <code>recv()</code> on a channel to rio's
+<code>keyboardthread</code>, which calls <code>sendcomplete()</code>
+to deliver the character to the window.
+On the output side: rio calls <code>Frsinsert()</code> from
+libframe to lay out text, then <code>stringbg()</code> from
+libdraw, which writes to <code>/dev/draw</code> where the kernel
+composites pixels to the framebuffer.
+</p>
+
+<p><img src="ls-journey-v4.png" alt="Function-level trace of ls in Plan 9" width="900"></p>
+
+<p>
+A key insight at this level: rio goes through the kernel <em>twice</em>.
+On the input path: keyboard interrupt &rarr; <code>/dev/kbdraw</code> &rarr; rio.
+On the output path: rio &rarr; libframe protocol &rarr; <code>/dev/draw</code> &rarr; kernel composites &rarr; framebuffer.
+The font system (<code>cachechars()</code>) keeps glyph caches in user-space (libdraw).
+On cache miss, <code>loadchar()</code> sends subfonts to the kernel via <code>/dev/draw</code> too.
+</p>
+
+<h2>The Full Deep Dive</h2>
+
+<p>
+Finally, here is the complete picture with actual source code
+snippets, data structures, and file paths. This is the level of
+detail you reach after reading through the Principia books.
+Every layer is traced to specific functions, every data flow
+annotated with the relevant code.
+</p>
+
+<div id="zoomable" style="overflow:hidden; cursor:grab; border:1px solid #ccc; max-width:1000px">
+<a href="ls-journey-v5.png"><img id="zoomimg" src="ls-journey-v5.png" alt="Complete source-level trace of ls in Plan 9" width="1000" style="transform-origin:0 0"></a>
+</div>
+<p><small>Scroll to zoom, drag to pan. Or <a href="ls-journey-v5.png">open full size</a>.</small></p>
+
+<script>
+(function() {
+  var container = document.getElementById('zoomable');
+  var img = document.getElementById('zoomimg');
+  if (!container || !img) return;
+  var scale = 1, tx = 0, ty = 0, dragging = false, sx, sy;
+  function apply() { img.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+scale+')'; }
+  container.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var r = container.getBoundingClientRect();
+    var mx = e.clientX - r.left, my = e.clientY - r.top;
+    var oldScale = scale;
+    scale *= e.deltaY < 0 ? 1.15 : 1/1.15;
+    scale = Math.max(1, Math.min(scale, 8));
+    tx = mx - (mx - tx) * scale / oldScale;
+    ty = my - (my - ty) * scale / oldScale;
+    apply();
+  }, {passive: false});
+  container.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
+    container.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    tx = e.clientX - sx; ty = e.clientY - sy;
+    apply();
+  });
+  window.addEventListener('mouseup', function() {
+    dragging = false; container.style.cursor = 'grab';
+  });
+  // Prevent the link from navigating when dragging/zoomed
+  img.parentElement.addEventListener('click', function(e) {
+    if (scale > 1.1) e.preventDefault();
+  });
+})();
+</script>
 
 <hr>
 <p><a href="index.html">Back to Principia Softwarica</a></p>
