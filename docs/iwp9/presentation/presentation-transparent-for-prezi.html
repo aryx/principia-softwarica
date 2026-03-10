@@ -2450,6 +2450,328 @@ $ gcc -c kernel.c &amp;&amp; ld -o kernel kernel.o</div>
 </div>
 
 <hr class="frame-separator">
+<div class="frame-label">How many 400-page books to explain each project? (XKCD-style grid)</div>
+<div class="frame" id="frame-books-comparison" style="max-width:1800px; padding:30px 40px; overflow:visible;">
+    <h2 style="font-size:28px; margin-bottom:6px; text-align:center;">How many 400-page books to explain it all?</h2>
+    <div style="text-align:center; font-size:13px; color:#888; font-family:'Source Code Pro',monospace; margin-bottom:24px;">
+        each <svg width="22" height="16" viewBox="0 0 22 16" style="vertical-align:middle;"><path d="M11 2 C8 2 2 1.5 1 1 L1 13 C2 13.5 8 14 11 14" fill="#a0a0a0" stroke="#666" stroke-width="0.6"/><path d="M11 2 C14 2 20 1.5 21 1 L21 13 C20 13.5 14 14 11 14" fill="#909090" stroke="#666" stroke-width="0.6"/><line x1="11" y1="2" x2="11" y2="14" stroke="#666" stroke-width="0.7"/><path d="M4 5 L9 5.3" stroke="#ccc" stroke-width="0.6"/><path d="M4 7 L9 7.3" stroke="#ccc" stroke-width="0.6"/><path d="M13 5.3 L18 5" stroke="#ccc" stroke-width="0.6"/><path d="M13 7.3 L18 7" stroke="#ccc" stroke-width="0.6"/></svg> = one 400-page book
+    </div>
+    <div style="display:flex; align-items:flex-start; gap:40px; font-family:'Source Code Pro',monospace;">
+        <!-- LEFT: normal-size books -->
+        <div id="books-grid-container" style="flex-shrink:0;"></div>
+        <!-- RIGHT: zoomed-out gcc + Linux kernel -->
+        <div id="books-grid-zoomed" style="flex-shrink:0;"></div>
+    </div>
+    <script>
+    (function() {
+        // [name, numBooks, color, description]
+        const projects = [
+            ['Plan 9 (entire OS)', 15, '#2e7d32', '183K LOC — kernel, shell, compiler, graphics, networking, …'],
+            ['xterm', 7, '#c62828', '88K LOC — just a terminal emulator'],
+            ['bash', 15, '#c62828', '180K LOC — just the shell'],
+            ['vim', 29, '#c62828', '350K LOC — just an editor'],
+            ['X Window', 125, '#c62828', '1.5M LOC — Xorg, libX11, libXrender, libXft, libXext, libXrandr, FreeType, fontconfig, Cairo, …'],
+            ['glibc', 125, '#b71c1c', '1.5M LOC — just the C library'],
+        ];
+
+        const zoomedProjects = [
+            ['gcc', 1250, '#b71c1c', '15M LOC — just the compiler'],
+            ['Linux kernel', 3333, '#7f0000', '40M LOC — just the kernel'],
+        ];
+
+        const COLS = 20;
+        const BW = 22, BH = 16, GAP = 2;
+
+        // Tiny books for zoomed-out view
+        const TBW = 9, TBH = 6, TGAP = 1;
+        const TCOLS = 50;
+
+        function bookSVG(color, w, h) {
+            var dk = shadeColor(color, -30);
+            var pg = shadeColor(color, 80);
+            if (w <= 8) {
+                // tiny: simplified open-book shape
+                return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 7 5">' +
+                    '<path d="M3.5 0.8 C2.5 0.8 0.5 0.5 0 0.3 L0 4.2 C0.5 4.4 2.5 4.6 3.5 4.6" fill="'+color+'" stroke="'+dk+'" stroke-width="0.3"/>' +
+                    '<path d="M3.5 0.8 C4.5 0.8 6.5 0.5 7 0.3 L7 4.2 C6.5 4.4 4.5 4.6 3.5 4.6" fill="'+shadeColor(color,-10)+'" stroke="'+dk+'" stroke-width="0.3"/>' +
+                    '<line x1="3.5" y1="0.8" x2="3.5" y2="4.6" stroke="'+dk+'" stroke-width="0.3"/>' +
+                    '</svg>';
+            }
+            return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 22 16">' +
+                '<path d="M11 2 C8 2 2 1.5 1 1 L1 13 C2 13.5 8 14 11 14" fill="'+color+'" stroke="'+dk+'" stroke-width="0.6"/>' +
+                '<path d="M11 2 C14 2 20 1.5 21 1 L21 13 C20 13.5 14 14 11 14" fill="'+shadeColor(color,-10)+'" stroke="'+dk+'" stroke-width="0.6"/>' +
+                '<line x1="11" y1="2" x2="11" y2="14" stroke="'+dk+'" stroke-width="0.7"/>' +
+                '<path d="M4 5 L9 5.3" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M4 7 L9 7.3" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M4 9 L8 9.2" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M13 5.3 L18 5" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M13 7.3 L18 7" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '</svg>';
+        }
+
+        function shadeColor(hex, amt) {
+            hex = hex.replace('#','');
+            var r = Math.min(255, Math.max(0, parseInt(hex.substring(0,2),16) + amt));
+            var g = Math.min(255, Math.max(0, parseInt(hex.substring(2,4),16) + amt));
+            var b = Math.min(255, Math.max(0, parseInt(hex.substring(4,6),16) + amt));
+            return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+        }
+
+        // === LEFT column: normal-size ===
+        const container = document.getElementById('books-grid-container');
+
+        projects.forEach(function(p, idx) {
+            const name = p[0], count = p[1], color = p[2], desc = p[3];
+            const isPlan9 = idx === 0;
+
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:flex-start; gap:14px; margin-bottom:' + (isPlan9 ? '10px' : '16px') + ';';
+
+            const label = document.createElement('div');
+            label.style.cssText = 'width:150px; text-align:right; padding-top:2px; flex-shrink:0;';
+            label.innerHTML = '<div style="font-weight:700; font-size:14px; color:'+color+';">'+name+'</div>' +
+                '<div style="font-size:10px; color:#888; margin-top:1px;">'+desc+'</div>';
+            row.appendChild(label);
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:'+GAP+'px; max-width:'+(COLS*(BW+GAP))+'px;';
+            for (var i = 0; i < count; i++) {
+                const b = document.createElement('span');
+                b.innerHTML = bookSVG(color, BW, BH);
+                b.style.cssText = 'display:inline-block; line-height:0;';
+                grid.appendChild(b);
+            }
+            row.appendChild(grid);
+
+            const badge = document.createElement('div');
+            badge.style.cssText = 'font-weight:700; font-size:14px; color:'+color+'; padding-top:2px; white-space:nowrap;';
+            badge.textContent = '\u00d7' + count;
+            row.appendChild(badge);
+
+            container.appendChild(row);
+
+            if (isPlan9) {
+                const sep = document.createElement('div');
+                sep.style.cssText = 'border-top:2px dashed #ccc; margin:12px 0 12px 164px; max-width:600px;';
+                container.appendChild(sep);
+                const note = document.createElement('div');
+                note.style.cssText = 'color:#999; font-size:11px; margin-bottom:12px; margin-left:164px;';
+                note.textContent = 'Individual Linux/GNU components \u2193';
+                container.appendChild(note);
+            }
+        });
+
+        // Punchline under left column
+        const punch = document.createElement('div');
+        punch.style.cssText = 'margin-top:20px; border-top:2px solid #2e7d32; padding-top:12px; margin-left:164px; max-width:500px;';
+        punch.innerHTML = '<div style="font-size:14px; color:#2e7d32; font-weight:700;">Principia Softwarica covers ALL of Plan 9 in 15 books.</div>' +
+            '<div style="font-size:12px; color:#888; margin-top:4px;">bash <i>alone</i> would need as many books as the entire Plan 9 OS.</div>';
+        container.appendChild(punch);
+
+        // === RIGHT column: zoomed-out ===
+        const zoomed = document.getElementById('books-grid-zoomed');
+
+        const zoomLabel = document.createElement('div');
+        zoomLabel.style.cssText = 'font-size:12px; color:#999; margin-bottom:12px; text-align:center; font-style:italic;';
+        zoomLabel.textContent = 'same scale, zoomed out \u2193';
+        zoomed.appendChild(zoomLabel);
+
+        zoomedProjects.forEach(function(p, idx) {
+            const name = p[0], count = p[1], color = p[2], desc = p[3];
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'margin-bottom:20px;';
+
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex; align-items:baseline; gap:8px; margin-bottom:4px;';
+            header.innerHTML = '<span style="font-weight:700; font-size:14px; color:'+color+';">'+name+'</span>' +
+                '<span style="font-weight:700; font-size:16px; color:'+color+';">\u00d7' + count.toLocaleString() + ' books</span>' +
+                '<span style="font-size:10px; color:#888;">'+desc+'</span>';
+            wrapper.appendChild(header);
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:'+TGAP+'px; max-width:'+(TCOLS*(TBW+TGAP))+'px;';
+            for (var i = 0; i < count; i++) {
+                const b = document.createElement('span');
+                b.innerHTML = bookSVG(color, TBW, TBH);
+                b.style.cssText = 'display:inline-block; line-height:0;';
+                grid.appendChild(b);
+            }
+            wrapper.appendChild(grid);
+
+            zoomed.appendChild(wrapper);
+        });
+    })();
+    </script>
+</div>
+
+<hr class="frame-separator">
+<div class="frame-label">Books comparison v2 (Prezi zoom layout)</div>
+<div class="frame" id="frame-books-comparison-v2" style="max-width:1800px; padding:30px 40px; overflow:visible;">
+    <div id="booksv2" style="font-family:'Source Code Pro',monospace;"></div>
+    <script>
+    (function() {
+        // === Data ===
+        const topLeft = [
+            ['Plan 9 (entire OS)', 15, '#2e7d32', '183K LOC — kernel, shell, compiler, graphics, networking, …'],
+            ['xterm', 7, '#c62828', '88K LOC — just a terminal emulator'],
+            ['bash', 15, '#c62828', '180K LOC — just the shell'],
+            ['vim', 29, '#c62828', '350K LOC — just an editor'],
+        ];
+        const topRight = [
+            ['X Window', 125, '#c62828', '1.5M LOC — Xorg, libX11, libXrender, libXft, libXext, libXrandr, FreeType, fontconfig, Cairo, …'],
+            ['glibc', 125, '#b71c1c', '1.5M LOC — just the C library'],
+        ];
+        const bottomLeft = [
+            ['gcc', 1250, '#b71c1c', '15M LOC — just the compiler'],
+        ];
+        const bottomRight = [
+            ['Linux kernel', 3333, '#7f0000', '40M LOC — just the kernel'],
+        ];
+
+        // === Sizes ===
+        const BW = 22, BH = 16, GAP = 2, COLS = 20;
+        const TBW = 9, TBH = 6, TGAP = 1, TCOLS = 50;
+
+        function bookSVG(color, w, h) {
+            var dk = shadeColor(color, -30);
+            var pg = shadeColor(color, 80);
+            if (w <= 9) {
+                return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 7 5">' +
+                    '<path d="M3.5 0.8 C2.5 0.8 0.5 0.5 0 0.3 L0 4.2 C0.5 4.4 2.5 4.6 3.5 4.6" fill="'+color+'" stroke="'+dk+'" stroke-width="0.3"/>' +
+                    '<path d="M3.5 0.8 C4.5 0.8 6.5 0.5 7 0.3 L7 4.2 C6.5 4.4 4.5 4.6 3.5 4.6" fill="'+shadeColor(color,-10)+'" stroke="'+dk+'" stroke-width="0.3"/>' +
+                    '<line x1="3.5" y1="0.8" x2="3.5" y2="4.6" stroke="'+dk+'" stroke-width="0.3"/>' +
+                    '</svg>';
+            }
+            return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 22 16">' +
+                '<path d="M11 2 C8 2 2 1.5 1 1 L1 13 C2 13.5 8 14 11 14" fill="'+color+'" stroke="'+dk+'" stroke-width="0.6"/>' +
+                '<path d="M11 2 C14 2 20 1.5 21 1 L21 13 C20 13.5 14 14 11 14" fill="'+shadeColor(color,-10)+'" stroke="'+dk+'" stroke-width="0.6"/>' +
+                '<line x1="11" y1="2" x2="11" y2="14" stroke="'+dk+'" stroke-width="0.7"/>' +
+                '<path d="M4 5 L9 5.3" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M4 7 L9 7.3" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M4 9 L8 9.2" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M13 5.3 L18 5" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '<path d="M13 7.3 L18 7" stroke="'+pg+'" stroke-width="0.6"/>' +
+                '</svg>';
+        }
+
+        function shadeColor(hex, amt) {
+            hex = hex.replace('#','');
+            var r = Math.min(255, Math.max(0, parseInt(hex.substring(0,2),16) + amt));
+            var g = Math.min(255, Math.max(0, parseInt(hex.substring(2,4),16) + amt));
+            var b = Math.min(255, Math.max(0, parseInt(hex.substring(4,6),16) + amt));
+            return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+        }
+
+        function makeGrid(items, bw, bh, gap, cols, container, opts) {
+            opts = opts || {};
+            items.forEach(function(p, idx) {
+                var name = p[0], count = p[1], color = p[2], desc = p[3];
+                var isPlan9 = name.indexOf('Plan 9') >= 0;
+
+                var row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:flex-start; gap:14px; margin-bottom:' + (isPlan9 ? '10px' : '16px') + ';';
+
+                var label = document.createElement('div');
+                label.style.cssText = 'width:' + (opts.labelWidth || 150) + 'px; text-align:right; padding-top:2px; flex-shrink:0;';
+                label.innerHTML = '<div style="font-weight:700; font-size:' + (opts.labelSize || 14) + 'px; color:'+color+';">'+name+'</div>' +
+                    '<div style="font-size:' + (opts.descSize || 10) + 'px; color:#888; margin-top:1px;">'+desc+'</div>';
+                row.appendChild(label);
+
+                var grid = document.createElement('div');
+                grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:'+gap+'px; max-width:'+(cols*(bw+gap))+'px;';
+                for (var i = 0; i < count; i++) {
+                    var b = document.createElement('span');
+                    b.innerHTML = bookSVG(color, bw, bh);
+                    b.style.cssText = 'display:inline-block; line-height:0;';
+                    grid.appendChild(b);
+                }
+                row.appendChild(grid);
+
+                var badge = document.createElement('div');
+                badge.style.cssText = 'font-weight:700; font-size:' + (opts.badgeSize || 14) + 'px; color:'+color+'; padding-top:2px; white-space:nowrap;';
+                badge.textContent = '\u00d7' + count.toLocaleString();
+                row.appendChild(badge);
+
+                container.appendChild(row);
+
+                if (isPlan9) {
+                    var sep = document.createElement('div');
+                    sep.style.cssText = 'border-top:2px dashed #ccc; margin:12px 0 12px ' + ((opts.labelWidth||150)+14) + 'px; max-width:' + (cols*(bw+gap)) + 'px;';
+                    container.appendChild(sep);
+                    var note = document.createElement('div');
+                    note.style.cssText = 'color:#999; font-size:11px; margin-bottom:12px; margin-left:' + ((opts.labelWidth||150)+14) + 'px;';
+                    note.textContent = 'Individual Linux/GNU components \u2193';
+                    container.appendChild(note);
+                }
+            });
+        }
+
+        var root = document.getElementById('booksv2');
+
+        // === Title + legend ===
+        var title = document.createElement('h2');
+        title.style.cssText = 'font-size:28px; margin-bottom:6px; color:#2e7d32;';
+        title.textContent = 'How many 400-page books to explain it all?';
+        root.appendChild(title);
+
+        var legend = document.createElement('div');
+        legend.style.cssText = 'font-size:13px; color:#888; margin-bottom:24px;';
+        legend.innerHTML = 'each <svg width="22" height="16" viewBox="0 0 22 16" style="vertical-align:middle;"><path d="M11 2 C8 2 2 1.5 1 1 L1 13 C2 13.5 8 14 11 14" fill="#a0a0a0" stroke="#666" stroke-width="0.6"/><path d="M11 2 C14 2 20 1.5 21 1 L21 13 C20 13.5 14 14 11 14" fill="#909090" stroke="#666" stroke-width="0.6"/><line x1="11" y1="2" x2="11" y2="14" stroke="#666" stroke-width="0.7"/><path d="M4 5 L9 5.3" stroke="#ccc" stroke-width="0.6"/><path d="M4 7 L9 7.3" stroke="#ccc" stroke-width="0.6"/><path d="M13 5.3 L18 5" stroke="#ccc" stroke-width="0.6"/><path d="M13 7.3 L18 7" stroke="#ccc" stroke-width="0.6"/></svg> = one 400-page book';
+        root.appendChild(legend);
+
+        // === TOP ROW: left (small) + right (X Window, glibc) ===
+        var topRow = document.createElement('div');
+        topRow.style.cssText = 'display:flex; align-items:flex-start; gap:50px;';
+
+        var topLeftDiv = document.createElement('div');
+        topLeftDiv.style.cssText = 'flex-shrink:0;';
+        makeGrid(topLeft, BW, BH, GAP, COLS, topLeftDiv);
+
+        // Punchline under top-left
+        var punch = document.createElement('div');
+        punch.style.cssText = 'margin-top:16px; border-top:2px solid #2e7d32; padding-top:10px; margin-left:164px; max-width:500px;';
+        punch.innerHTML = '<div style="font-size:14px; color:#2e7d32; font-weight:700;">Principia Softwarica covers ALL of Plan 9 in 15 books.</div>' +
+            '<div style="font-size:12px; color:#888; margin-top:4px;">bash <i>alone</i> would need as many books as the entire Plan 9 OS.</div>';
+        topLeftDiv.appendChild(punch);
+
+        var topRightDiv = document.createElement('div');
+        topRightDiv.style.cssText = 'flex-shrink:0;';
+        makeGrid(topRight, BW, BH, GAP, COLS, topRightDiv);
+
+        topRow.appendChild(topLeftDiv);
+        topRow.appendChild(topRightDiv);
+        root.appendChild(topRow);
+
+        // === BOTTOM ROW: gcc (left) + Linux kernel (right), tiny books ===
+        var bottomSep = document.createElement('div');
+        bottomSep.style.cssText = 'border-top:2px dashed #999; margin:30px 0 16px 0;';
+        root.appendChild(bottomSep);
+
+        var bottomNote = document.createElement('div');
+        bottomNote.style.cssText = 'font-size:12px; color:#999; margin-bottom:16px; font-style:italic;';
+        bottomNote.textContent = 'same scale, zoomed out \u2193';
+        root.appendChild(bottomNote);
+
+        var bottomRow = document.createElement('div');
+        bottomRow.style.cssText = 'display:flex; align-items:flex-start; gap:50px;';
+
+        var bottomLeftDiv = document.createElement('div');
+        bottomLeftDiv.style.cssText = 'flex-shrink:0;';
+        makeGrid(bottomLeft, TBW, TBH, TGAP, TCOLS, bottomLeftDiv, {labelWidth:100, labelSize:13, descSize:9, badgeSize:13});
+
+        var bottomRightDiv = document.createElement('div');
+        bottomRightDiv.style.cssText = 'flex-shrink:0;';
+        makeGrid(bottomRight, TBW, TBH, TGAP, TCOLS, bottomRightDiv, {labelWidth:100, labelSize:13, descSize:9, badgeSize:13});
+
+        bottomRow.appendChild(bottomLeftDiv);
+        bottomRow.appendChild(bottomRightDiv);
+        root.appendChild(bottomRow);
+    })();
+    </script>
+</div>
+
+<hr class="frame-separator">
 <p style="color:#999; font-size:14px; text-align:center">End of frames</p>
 
 </body>
