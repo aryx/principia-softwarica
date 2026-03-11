@@ -338,6 +338,8 @@ a ``Hello, world!'' label and a ``done'' button.
 Clicking the button exits the program.
 This is the [[libpanel]] equivalent of a ``hello world.''
 
+%TODO: FIGURE: screenshot
+
 \section{Requirements}
 
 % docs/panel.pdf is good source of information
@@ -1495,6 +1497,12 @@ enum Direction {
 %******************************************************************************
 \label{chap:main}
 
+%claude:
+Before any widget can be drawn, [[libpanel]] needs to allocate
+a set of shared color images used throughout the library for
+drawing borders, backgrounds, and highlights.
+This is done once at startup by [<plinit()>].
+
 \section{[[plinit()]]}
 
 %init.c
@@ -1508,6 +1516,12 @@ error0 plinit(int ldepth){
 @
 %old: I simplified and just call pl_drawinit
 
+%claude:
+The actual work is in [<pl_drawinit()>] below, which allocates
+five shared [[Image]] values: black, white, dark, light, and
+a highlight mask.
+These are used by all widgets for drawing 3D-effect borders
+(light on top-left, dark on bottom-right) and selection highlights.
 
 <<global [[plldepth]]>>=
 static int plldepth;
@@ -1540,11 +1554,22 @@ error0 pl_drawinit(int ldepth){
 % nice allocimagemix! (See \book{Graphics}).
 
 % pl_hilit: it's a mask. used to draw highlight on selected item in lists
+%claude:
+Note [[pl_hilit]]: it is not a color but an alpha mask (50\%
+transparency), used to draw translucent highlights over
+selected items in lists.
 
 %******************************************************************************
 \chapter{Drawing}
 %******************************************************************************
 \label{chap:drawing}
+
+%claude:
+Drawing in [[libpanel]] is a recursive walk down the widget tree:
+starting from the root, each widget draws itself using its
+[[draw]] method, then its children are drawn on top.
+The rest of this chapter covers the shared drawing helpers
+that widgets use to render borders and boxes.
 
 \section{[[pldraw()]]}
 
@@ -1553,6 +1578,12 @@ error0 pl_drawinit(int ldepth){
 % so get passed [[view]] in [[b]] below.
 
 % main -> eresized | ... -> <>
+%claude:
+The entry point [<pldraw()>] takes the root widget and the
+destination [[Image *b]] (typically [[view]], the screen).
+It delegates to [<pl_draw1()>] and then flushes the
+display to make the result visible.
+
 <<function [[pldraw]]>>=
 void pldraw(Panel *p, Image *b){
     pl_draw1(p, b);
@@ -1560,10 +1591,18 @@ void pldraw(Panel *p, Image *b){
 }
 @
 
+%claude:
+The [[flushimage()]] call and the [[display]] global are part of
+\plan's graphics system, explained in the \book{Graphics}.
+
 % can also be called in some hit callback to draw related widgets
 % for example if have a slider and label, when you move the slider
 % you want to update and then redraw the label (you could also
 % simply decide to redraw all from the root).
+%claude:
+[<pl_draw1()>] is the version without the final [[flushimage()]],
+useful when a [[hit]] callback needs to redraw a sibling widget
+(e.g., updating a label after a slider moves) without flushing twice.
 
 <<function [[pl_draw1]]>>=
 void pl_draw1(Panel *p, Image *b){
@@ -1572,13 +1611,20 @@ void pl_draw1(Panel *p, Image *b){
 }
 @
 
+%claude:
+[<pl_drawall()>] is the recursive core: it stores the drawing
+surface in [[p->b]], calls the widget's [[draw]] method,
+then recurses on each child.
+Every widget in the tree ends up sharing the same [[Image *b]]
+(the screen), drawing into its own [[p->r]] rectangle within it.
+
 <<function [[pl_drawall]]>>=
 void pl_drawall(Panel *p, Image *b){
     <<[[pl_drawall()]] if invisible widget>>
     p->b=b;
     // widget-specific method
     p->draw(p);
-    for(p=p->child;p;p=p->next) 
+    for(p=p->child;p;p=p->next)
         // recurse
         pl_draw1(p, b);
 }
@@ -1589,6 +1635,16 @@ void pl_drawall(Panel *p, Image *b){
 
 %ul = upper left
 %lr = lower right
+%claude:
+[<pl_relief()>] draws a 3D {relief} border around a rectangle
+using two colors: [[ul]] (upper-left edges) and [[lr]] (lower-right
+edges).
+When [[ul]] is light and [[lr]] is dark, the widget appears raised;
+swapping them makes it appear sunken.
+The nested loop fills the diagonal corner pixels where the
+horizontal and vertical edges meet.
+
+%TODO: FIGURE: screenshot
 
 <<function [[pl_relief]]>>=
 void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
@@ -1609,9 +1665,34 @@ void pl_relief(Image *b, Image *ul, Image *lr, Rectangle r, int wid){
 %SCREENSHOT where see relief effect thanks to just 2 colors.
 % often white is ul and black is lr (for shadow effect)
 
+%claude:
+The four [[draw()]] calls paint the four edges of the border:
+\begin{verbatim}
+  r.min.x          r.max.x
+  r.min.y +--ul--ul--ul--+
+          |ul            |lr
+          |ul            |lr
+          |ul            |lr
+  r.max.y +--lr--lr--lr--+
+          |<--- wid --->|
+
+          ul = upper-left color (top + left edges)
+          lr = lower-right color (bottom + right edges)
+\end{verbatim}
+The nested loop fills the two diagonal corners (top-right and
+bottom-left) where the [[ul]] and [[lr]] edges meet, painting
+them with [[lr]] to create a clean mitered join.
+
 \section{Drawing boxes}
 
-
+%claude:
+Widgets draw their background and border using [<pl_box()>]
+(filled) or [<pl_outline()>] (border only).
+Both dispatch to [<pl_boxoutline()>], which uses the widget's
+[[state]] ([[UP]], [[DOWN]], [[PASSIVE]], [[FRAME]]) to choose
+the appropriate relief colors and border widths.
+The returned rectangle is the interior area after subtracting
+the border, which is where the widget should draw its content.
 
 <<function [[pl_outline]]>>=
 Rectangle pl_outline(Image *b, Rectangle r, int style){
@@ -1638,6 +1719,11 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, bool fill){
 % extra SPACE!
 \l rename pl_boxgen?
 
+%claude:
+After the relief border, an extra [[SPACE]] pixel of padding
+is subtracted from each side, giving the content a small margin
+inside the border.
+
 <<constant [[SPACE]]>>=
 #define	SPACE	1	/* space inside relief of button or frame */
 @
@@ -1647,6 +1733,13 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, bool fill){
 
 
 
+
+%claude:
+[<pl_boxsize()>] is the inverse: given an interior size and a
+state, it returns how much extra space the border adds.
+[<pl_interior()>] adjusts a point and size inward to account
+for the border, used when a widget needs to know where to
+place its content.
 
 <<function [[pl_boxsize]]>>=
 Vector pl_boxsize(Vector interior, int state){
