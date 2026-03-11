@@ -184,8 +184,12 @@ Like for most books in \principia, I chose a \plan program because
 those programs are simple, small, elegant, open source, and they form together
 a coherent set.
 %
-[[libpanel]] was written by Tom Duff and is used primarily by
+[[libpanel]] was written by Tom Duff specifically to build
 [[mothra]], the \plan web browser.
+As Duff himself notes, ``the design is modeled strongly on
+Ousterhout's Tcl/Tk, except that the programming language is C
+and most of Tcl/Tk's automatic behind-the-scenes recalculation
+and redrawing is missing.''
 In [[libpanel]], widgets are called ``panels''---hence the library name.
 
 %claude:
@@ -590,6 +594,19 @@ the layout of the entire widget tree within the new window
 rectangle [[view->r]], then call [[pldraw()]] to redraw everything.
 These two functions---layout then draw---are the heartbeat of
 [[libpanel]].
+
+%claude:
+An important design principle of [[libpanel]] is that
+\emph{nothing happens automatically}.
+Unlike Tk, where changing a widget's text triggers an automatic
+redisplay, [[libpanel]] requires the application to explicitly call
+[[plpack()]] and [[pldraw()]] whenever something changes.
+If you reinitialize a label with [[plinitlabel()]], you must call
+[[pldraw()]] to see the result. If you add a new widget to the tree,
+you must repack and redraw.
+This makes the library simpler---no observers, no invalidation
+queues---at the cost of putting more responsibility on the
+application programmer.
 
 
 % main | draw?? -> <>
@@ -4211,12 +4228,32 @@ void pl_childspacecanvas(Panel *p, Point *ul, Vector *size){
 
 % radiobutton is already a widget that must be part of a series of widgets.
 
+%claude:
+The previous chapter covered leaf widgets---labels, entries, buttons,
+sliders, and canvases---that have no children.
+This chapter presents the composite widgets whose sole purpose is to
+contain and organize other widgets.
+There are only two: Frame (a container with a visible border) and
+Group (an invisible container).
+Both pass [[0]] as the data size to [[pl_newpanel]] because they
+carry no widget-specific state.
+
 \section{Frame}
 
 % no widget-specific DS for Frame.
 
 %gtk: no hbox and vbox; use the packing argument when packing instead
 % to determine the direction.
+
+%claude:
+A frame is a container that draws a double-relief border around its
+children---the classic ``sunken panel'' look.
+Unlike GTK, which has separate \texttt{HBox} and \texttt{VBox}
+containers, libpanel uses the packing flags ([[PACKN]], [[PACKE]], etc.)
+on the children themselves to control layout direction,
+so a single Frame widget serves both purposes.
+Note the [[LEAF]] flag is \emph{not} set, allowing children to be
+added via subsequent [[pl_newpanel]] calls with this frame as parent.
 
 \subsection{Initializing}
 
@@ -4258,6 +4295,18 @@ void pl_drawframe(Panel *p){
 FRAME
 @
 % like PASSIVE, not really set in Panel.state; just abused by pl_box()
+
+%claude:
+[[FRAME]] is not a real widget state like [[UP]] or [[DOWN]]---it is
+a style constant used only by [[pl_box]] and [[pl_boxoutline]] to draw
+the double-relief border.
+The border consists of two nested relief bands with opposite
+light/dark orientation, creating a raised-then-sunken effect:
+\begin{verbatim}
+  white-black relief (outer, FWID=2 pixels)
+    black-white relief (inner, FWID=2 pixels)
+      light fill (interior)
+\end{verbatim}
 
 <<[[pl_boxoutline()]] switch style cases>>=
 case FRAME:
@@ -4321,6 +4370,15 @@ case FRAME:
 \section{Group}
 
 % Diff with Frame? Not even a frame around the group.
+
+%claude:
+A group is the minimal composite widget: it contains children but
+draws nothing and consumes no border space.
+Its [[getsize]] returns the children's size unchanged, and
+[[childspace]] is a no-op.
+This is useful when you need a logical grouping of widgets for
+layout purposes (e.g., packing several widgets as a unit)
+without any visible decoration.
 
 \subsection{Initializing}
 
