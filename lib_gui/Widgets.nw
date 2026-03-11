@@ -535,8 +535,10 @@ void main(void){
 
 %claude:
 The [[main()]] function first initializes the \plan graphics
-system with [[initdraw()]] and the event library with [[einit()]],
+system with [[initdraw()]] and the event library with [[einit(Emouse)]],
 then initializes [[libpanel]] with [[plinit()]].
+Here [[einit()]] is told we are only interested in mouse events;
+we will see later how to also accept keyboard events.
 %
 Next, it builds a small widget tree: a frame (the root container)
 with two children, a label displaying ``Hello, world!'' and
@@ -558,12 +560,17 @@ void done(Panel *p, buttons buttons){
 % {Callback}.
 
 %claude:
-The [[done()]] function is a {callback}: it is passed as an argument
-to [[plbutton()]] and will be called when the user clicks the button.
+The [[done()]] function is a \co{callback}: it is passed as an argument
+to [[plbutton()]] above and will be called when the user clicks the button.
 This is the basic mechanism for widget-to-application communication
 in [[libpanel]]: the application registers a function pointer,
 and the widget calls it when the appropriate event occurs.
 
+
+%claude:
+I will not comment much on error handling code in the rest of this
+book as it is usually self-explanatory;
+see the appendix for more information on error management.
 
 <<[[main()]] sanity check [[err]]>>=
 if(err < 0)
@@ -574,16 +581,17 @@ if(err < 0)
 % see \book{Windows} ?
 
 %claude:
-The [[eresized()]] function is the bridge between the windowing
+Finally, the [[eresized()]] function is the bridge between the windowing
 system and the widget library. It is called both at startup
 (from [[main()]]) and whenever the user resizes the window
 (called back by the graphics system, see the \book{Windows}).
-%
+%:
 Its job is simple but critical: call [[plpack()]] to recompute
 the layout of the entire widget tree within the new window
 rectangle [[view->r]], then call [[pldraw()]] to redraw everything.
 These two functions---layout then draw---are the heartbeat of
 [[libpanel]].
+
 
 % main | draw?? -> <>
 <<function [[eresized]]>>=
@@ -863,8 +871,45 @@ The final chapters cover advanced topics and the conclusion.
 %******************************************************************************
 \label{chap:core-ds}
 
+\begin{verse}
+\begin{flushright}
+  {\it Show me your code and conceal your data structures, and I shall
+    continue to be mystified. Show me your data structures, and I
+    won't usually need your code; it'll be obvious.\\
+    ~\\
+    Fred Brooks}
+\end{flushright}
+\end{verse}
+
+
+%toc:
+%claude:
+In this chapter, I will present the core data structures of [[libpanel]]:
+the [<Panel>] structure (the central widget type),
+the [<Icon>] type,
+and the {layout style} constants that control how widgets are
+arranged within their parent ([[PACK]], [[PLACE]], [[FILL]]).
+
+%claude:
+All of these are defined in the [[panel.h]] header file.
+The [<Panel>] structure is the heart of the library ---
+every widget, from a simple label to a complex text editor,
+is represented by this single structure.
+
 \section{[[Panel]]}
 \l widget really
+
+%claude:
+The [<Panel>] structure is the universal widget type in [[libpanel]].
+Every widget --- whether a label, a button, a text entry, or a scrollbar ---
+is a [<Panel>].
+%
+The overview chunk below shows its overall shape:
+the two key fields visible here are [[Rectangle r]], which defines
+where the widget is positioned on screen, and [[Image *b]],
+which is the drawing surface.
+The rest of the fields and methods are defined gradually
+in the following subsections.
 
 <<struct [[Panel]]>>=
 struct Panel{
@@ -898,7 +943,21 @@ struct Panel{
 
 %Panel.r is set by plpack() and Panel.b is set by pldraw()
 
+%claude:
+Note that [[Panel.r]] (the rectangle) and [[Panel.b]] (the drawing surface)
+are not set at construction time --- they are filled in later by
+[<plpack()>] and [<pldraw()>] respectively.
+This two-phase initialization reflects the separation between
+layout and drawing described in Chapter~\ref{chap:overview}.
+
 %ctor
+%claude:
+The constructor [<pl_newpanel()>] takes a parent widget and
+an [[ndata]] size parameter (explained later in
+Section~\ref{sec:widget-data}).
+It allocates a [<Panel>], links it into the parent's child list,
+and sets safe defaults for all fields.
+
 <<function [[pl_newpanel]]>>=
 Panel *pl_newpanel(Panel *parent, int ndata){
     Panel *v;
@@ -926,6 +985,12 @@ v->b=nil;
 %dup: Panel.b set by draw, and Panel.r by packing?
 
 %dtor
+%claude:
+The destructor [<plfree()>] recursively frees a widget and all
+its children.
+The chunks it references are defined in the following subsections
+as each field group is introduced.
+
 <<function [[plfree]]>>=
 void plfree(Panel *p){
     <<[[plfree]] locals>>
@@ -940,6 +1005,12 @@ void plfree(Panel *p){
 @
 
 \subsection{Widget flags}
+
+%claude:
+The [[flags]] field is an [[int]] used as a {bitset}.
+Different bits encode different properties: whether the widget is
+a leaf, whether it is invisible, and --- most importantly ---
+the layout style (see Section~\ref{sec:layout-styles}).
 
 <<[[Panel]] other fields>>=
 // LEAF | INVIS | ...
@@ -956,6 +1027,16 @@ v->flags=NOFLAG;
 @
 
 \subsection{A tree of widgets}
+
+%claude:
+Widgets form a tree: each [<Panel>] can have children,
+and each child knows its parent.
+The children are stored as a singly linked list
+(via [[next]] pointers), with [[child]] pointing to the first child
+and [[echild]] pointing to the last (for efficient appending).
+This is the classic {child-sibling} tree representation:
+[[child]] goes ``down'' to the first child,
+[[next]] goes ``right'' to the next sibling.
 
 <<[[Panel]] extra fields>>=
 // option<list<ref_own<Panel>>> (next = Panel.next, tail = Panel.echild)
@@ -983,6 +1064,12 @@ Panel *parent; 			/* No, it's a tree! */
 
 % parent is parameter. Most widgets constructors take the parent
 % as a parameter to "pack" it inside.
+%claude:
+Insertion appends the new widget at the end of the parent's child list,
+using [[echild]] as a tail pointer to avoid traversing the entire list.
+This means children are laid out in the order they were created,
+which is usually the order the programmer wants.
+
 <<[[pl_newpanel()]] set tree fields>>=
 v->next=nil;
 v->child=nil;
@@ -1011,6 +1098,11 @@ for(cp=p->child;cp;cp=ncp){
 
 
 
+%claude:
+Leaf widgets (labels, buttons) cannot have children.
+The [[LEAF]] flag enforces this at construction time:
+[<pl_newpanel()>] refuses to create a child on a leaf widget.
+
 <<constant [[LEAF]]>>=
 #define	LEAF	0x10000		/* newpanel will refuse to attach children */
 @
@@ -1026,6 +1118,18 @@ if(parent && parent->flags&LEAF){
 
 
 \subsection{Widget-specific data}
+\label{sec:widget-data}
+
+%claude:
+Each widget type needs its own private state:
+a label stores a string, a button stores a callback, a text entry
+stores an editable buffer.
+Rather than using a C union (which would make [<Panel>] grow with
+every new widget type), [[libpanel]] uses a [[void *data]] pointer
+and a separate [[free]] method.
+The constructor allocates [[ndata]] bytes for the widget's private
+structure, and each widget type casts [[data]] to its own type
+(e.g., [[LabelData *]]).
 
 <<[[Panel]] widget-specific data>>=
 // union<ref_own<Label|Entry|Button|...>
@@ -1046,10 +1150,16 @@ v->free=nil;
 @
 % ndata is a parameter of [[pl_newpanel()]] and usually a sizeof(WidgetXxx)
 
+%claude:
+Note the order: the widget's [[free]] method is called before
+[[free(p->data)]], because the method may need to access
+[[data]] to release its own resources (e.g., freeing strings
+stored inside a [[LabelData]]).
+
 <<[[plfree()]] free the widget-specific data>>=
-if(p->free) 
+if(p->free)
     p->free(p);
-if(p->data) 
+if(p->data)
     free(p->data);
 @
 % order important here!
@@ -1060,6 +1170,12 @@ if(p->data)
 % For example text entry, or button.
 % Moreover the reaction is different depending on the previous state
 % of the widget.
+%claude:
+Widgets can be in different visual states --- for example, a button
+looks different when pressed ([[DOWN]]) versus released ([[UP]]).
+The [[state]] field tracks this so that the widget can be drawn
+differently depending on whether it is active or not,
+and so that mouse event handling can toggle between states.
 
 <<[[Panel]] other fields>>=
 // enum<Style>
@@ -1081,6 +1197,19 @@ enum{
 
 
 \subsection{Main widget methods}
+
+%claude:
+Here is the {object-oriented programming in~C} at the heart of
+[[libpanel]]: each widget has three function pointers that act
+as {virtual methods}.
+[[draw]] paints the widget,
+[[hit]] handles mouse events,
+and [[type]] handles keyboard events.
+%
+Each widget constructor (e.g., [<pllabel()>], [<plbutton()>])
+fills in these pointers with its own implementation.
+The default values are error-raising stubs set by [<pl_newpanel()>],
+so forgetting to initialize them is caught immediately.
 
 <<[[Panel]] main methods>>=
 void (*draw)(Panel *);				/* draw panel and children */
@@ -1110,6 +1239,19 @@ v->type=pl_typeerror;
 
 \section{[[Icon]]}
 
+%claude:
+Many widgets need to display content that could be either
+text or a bitmap image --- a button might show a label string or
+an icon graphic, and the programmer should not have to use
+a different widget type for each case.
+%
+The [<Icon>] type solves this with a simple trick:
+[[typedef void]] makes [[Icon *]] a generic pointer that can hold
+either an [[Image *]] or a [[char *]],
+with [<pl_drawicon()>] dispatching at runtime.
+This lets widgets like buttons and labels accept either text or image
+content through the same interface.
+
 <<type [[Icon]]>>=
 typedef void Icon;			/* Always used as Icon * -- Image or char */
 @
@@ -1117,8 +1259,31 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 % see pl_drawicon()
 
 \section{Layout styles}
+\label{sec:layout-styles}
+
+%claude:
+Layout in [[libpanel]] is controlled by three orthogonal sets of flags,
+all stored in the [[flags]] field of [<Panel>]:
+{packing} determines which side of the parent a widget is attached to
+(north, south, east, west),
+{placement} determines where within its allocated space the widget
+sits (centered, or pushed to a corner),
+and {filling} determines whether the widget expands to fill
+available space horizontally or vertically.
+%
+This is directly inspired by Tk's {packer} geometry manager
+(see Chapter~\ref{chap:layout}).
+The flags are encoded as bit fields in a single [[int]],
+so they can be combined with bitwise OR.
 
 \subsection{Placement}
+
+%claude:
+Placement controls where a widget sits within the space allocated
+to it by the packer.
+By default, widgets are centered ([[PLACECEN]]).
+The compass directions ([[PLACEN]], [[PLACES]], [[PLACEE]], [[PLACEW]]
+and corners) push the widget to an edge or corner of its allocated rectangle.
 
 <<constant [[PLACE]]>>=
 #define	PLACE	0x01e0		/* which side of its space should the Panel adhere to? */
@@ -1160,6 +1325,14 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 
 % Difference with place? This is to say how multiple children widgets
 % relate to each other.
+%claude:
+Packing determines which side of the parent a widget is attached to
+and, by extension, how sibling widgets divide the available space.
+When a widget is packed to the north ([[PACKN]]), it takes a
+horizontal strip from the top of the remaining space;
+when packed to the east ([[PACKE]]), it takes a vertical strip
+from the right.
+This is the same algorithm as Tk's [[pack]] command.
 
 <<constant [[PACK]]>>=
 #define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
@@ -1188,8 +1361,30 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 #define		PACKCEN	0x0004	/* only used by pulldown */
 @
 
+%claude:
+\begin{verbatim}
+   Parent space                PACKN then PACKN        PACKN then PACKE
+  +-------------+            +-------------+          +-------------+
+  |             |            |  [widget A] |          |  [widget A] |
+  |             |            +-------------+          +------+------+
+  |             |            |  [widget B] |          |      |[B]  |
+  |             |            +-------------+          |      |     |
+  |             |            | (remaining) |          | rest |     |
+  +-------------+            +-------------+          +------+------+
+\end{verbatim}
 
 \subsection{Filling}
+
+%claude:
+Filling controls whether a widget grows to fill its allocated space.
+[[FILLX]] makes the widget expand horizontally,
+[[FILLY]] makes it expand vertically,
+and both can be combined.
+Without these flags, a widget only takes up its ``natural'' size
+(as reported by [<pl_sizereq()>]).
+[[EXPAND]] is stronger: it makes the widget claim all
+\emph{extra} space in the parent, useful for making one widget
+(like a text area) grow while others (like buttons) stay fixed.
 
 <<constant [[FILLX]]>>=
 #define	FILLX	0x0008		/* grow horizontally to fill the available space */
@@ -1204,9 +1399,29 @@ typedef void Icon;			/* Always used as Icon * -- Image or char */
 #define	EXPAND	0x0200		/* use up all extra space in the parent */
 @
 
+%claude:
+\begin{verbatim}
+   No FILL              FILLX               FILLY            FILLX|FILLY
+  +----------+       +----------+       +----------+       +----------+
+  |          |       |          |       | [widget] |       |[widget   |
+  | [widget] |       |[widget  ]|       | [      ] |       |[         |
+  |          |       |          |       | [      ] |       |[         |
+  +----------+       +----------+       +----------+       +----------+
+  widget stays        stretches          stretches          stretches
+  at natural size     horizontally       vertically         both ways
+\end{verbatim}
+
 \subsection{Padding}
 
 % user settable
+%claude:
+Padding adds extra space around a widget:
+[[pad]] is the external padding (space between this widget and its
+neighbors), and [[ipad]] is the internal padding (space between
+the widget's border and its content).
+Both are [[Vector]] (i.e., [[Point]]) values, giving independent
+horizontal and vertical padding.
+
 <<[[Panel]] padding fields>>=
 Vector ipad;				/* extra space inside and outside */
 Vector pad;
@@ -1218,10 +1433,26 @@ v->ipad=Pt(0,0);
 v->pad=Pt(0,0);
 @
 
+%claude:
+\begin{verbatim}
+  +------------------------------------------+
+  |              pad (external)               |
+  |   +----------------------------------+   |
+  |   |          ipad (internal)         |   |
+  |   |   +--------------------------+   |   |
+  |   |   |        content           |   |   |
+  |   |   +--------------------------+   |   |
+  |   +----------------------------------+   |
+  +------------------------------------------+
+\end{verbatim}
+
 %\section{Box styles}
 % meh
 
 \section{[[Direction]]}
+
+%claude:
+Scrollbars and sliders can be oriented horizontally or vertically.
 
 <<enum [[Direction]]>>=
 /*
