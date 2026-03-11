@@ -1037,6 +1037,20 @@ This is the classic {child-sibling} tree representation:
 [[child]] goes ``down'' to the first child,
 [[next]] goes ``right'' to the next sibling.
 
+%claude:
+\begin{verbatim}
+  Example: a frame with three children (label, entry, button)
+
+                      +-------+
+           .parent--->| frame |<---.parent--------------.parent
+           |          +-------+    |                     |
+           |  .child |             |             .echild |
+           |         v             |                     v
+           | +-------+  .next  +-------+  .next  +--------+  .next
+           '-| label | ------> | entry | ------> | button | ------> nil
+             +-------+         +-------+         +--------+
+\end{verbatim}
+
 <<[[Panel]] extra fields>>=
 // option<list<ref_own<Panel>>> (next = Panel.next, tail = Panel.echild)
 Panel *child;
@@ -2700,9 +2714,28 @@ Point pl_getshare(Panel *p){
 % There are other LEAF widgets in other sections, but those are really
 % the basic one.
 
+%claude:
+Now that we have seen the core infrastructure (data structures,
+drawing, events, layout), we can look at the individual widgets.
+This chapter covers the basic {leaf} widgets: labels, text entries,
+and buttons.
+They all have the [[LEAF]] flag set and cannot have children.
+%
+Each widget follows the same pattern: a private data structure
+(e.g., [<Label>], [<Entry>], [<Button>]),
+a constructor that calls [<pl_newpanel()>] and fills in the
+methods,
+and implementations of [[draw]], [[hit]], [[type]], [[getsize]],
+and [[childspace]].
+
 \section{Label}
 
 %example: see hellopanel.c
+%claude:
+A label is the simplest widget: it just displays an [<Icon>]
+(text or image) inside a passive border.
+Its private data stores only the icon and a placement direction
+for positioning the content within the label's rectangle.
 
 <<struct [[Label]]>>=
 struct Label{
@@ -2752,6 +2785,14 @@ void plinitlabel(Panel *v, int flags, Icon *icon){
 }
 @
 
+%claude:
+Recall that [[v->data]] was already allocated by [<pl_newpanel()>]
+with [[sizeof(Label)]] bytes, so [<plinitlabel()>] can cast it
+directly to [[Label *]] and fill in the fields.
+The [[kind]] field is a string used for debugging messages
+(see the Debugging appendix) --- it was already referenced
+by the error message in [<pl_newpanel()>].
+
 % pllabel | <user code> -> <>
 <<function [[plplacelabel]]>>=
 void plplacelabel(Panel *p, int placement){
@@ -2762,6 +2803,12 @@ void plplacelabel(Panel *p, int placement){
 @
 
 \subsection{Drawing}
+
+%claude:
+Drawing a label is straightforward: draw a [[PASSIVE]] box (light
+background, thin border), with [<pl_box()>] (which internally
+calls [<pl_boxoutline()>]), then draw the icon inside it using
+the label's placement setting.
 
 <<function [[pl_drawlabel]]>>=
 void pl_drawlabel(Panel *p){
@@ -2778,8 +2825,14 @@ PASSIVE,
 @
 % abused by pl_box() but not really set in Panel.state
 
-%dup: can now use [[p->r]]! packing has been done, and
-% p->b has been set in caller in pl_draw() (actually in pl_drawall())
+%claude:
+The [[PASSIVE]] case of [<pl_boxoutline()>] (defined in
+Chapter~\ref{chap:drawing}) is shown here because this is
+where it is first used.
+In literate programming, definition chunks can be spread
+across multiple chapters --- [[noweb]] collects all the
+[[pl\_boxoutline() switch style cases]] chunks and assembles
+them into a single switch statement.
 
 <<[[pl_boxoutline()]] switch style cases>>=
 case PASSIVE:
@@ -2795,6 +2848,15 @@ case PASSIVE:
 #define	PWID	1	/* width of label border */
 @
 
+
+
+%claude:
+[<pl_drawicon()>] is the shared helper that actually renders an
+[<Icon>] (text or bitmap) inside a rectangle.
+It computes the offset needed to position the icon according to
+the [[stick]] placement, adjusts the clip rectangle to avoid
+drawing outside the widget's bounds, then calls either
+[[draw()]] (for bitmaps) or [[string()]] (for text).
 
 <<function [[pl_drawicon]]>>=
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
@@ -2818,6 +2880,12 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
 }
 @
 % flags just passed down for the BITMAP thing I think
+
+
+%dup: can now use [[p->r]]! packing has been done, and
+% p->b has been set in caller in pl_draw() (actually in pl_drawall())
+
+
 
 % text is black
 
@@ -2861,6 +2929,9 @@ replclipr(b, b->repl, save);
 \subsection{Reacting}
 
 % no reaction for labels
+%claude:
+Labels do not react to mouse or keyboard events --- the methods
+are no-ops.
 
 <<function [[pl_hitlabel]]>>=
 bool pl_hitlabel(Panel *p, Mouse *m){
@@ -2894,6 +2965,13 @@ case PASSIVE:
 % then for PWID see pl_boxoutline for PASSIVE and 
 % then for SPACE because done for all pl_box() (see end of pl_boxoutline).
 
+%claude:
+The [[childspace]] method is called by [<pl_setrect()>] during
+layout (see Chapter~\ref{chap:layout}) to let the widget adjust
+the interior space available for its children.
+Since a label is a [[LEAF]] widget and has no children, this is
+a no-op.
+
 <<function [[pl_childspacelabel]]>>=
 void pl_childspacelabel(Panel *g, Point *ul, Vector *size){
     USED(g, ul, size);
@@ -2906,6 +2984,13 @@ void pl_childspacelabel(Panel *g, Point *ul, Vector *size){
 \section{Text entry}
 
 %example: ?
+%claude:
+A text entry is a single-line editable field.
+Its private data stores the text buffer ([[entry]]),
+a pointer to the current end of text ([[entp]]),
+a pointer to the end of the allocated buffer ([[eent]]),
+a minimum display size, and a callback for when the user
+presses Enter.
 
 <<struct [[Entry]]>>=
 struct Entry{
@@ -2998,6 +3083,16 @@ ep->hit=hit;
 
 \subsection{Drawing}
 
+%claude:
+The entry is drawn with an [[UP]] box when unfocused and a [[DOWN]]
+box when focused (clicked).
+The [[UP]] style has a light background with a raised border;
+[[DOWN]] reverses the relief to look sunken, signaling that the
+widget is active and accepting input.
+%
+The text is aligned to the left ([[PLACEW]]) if it fits,
+or to the right ([[PLACEE]]) if it overflows, so the end
+of the text (where the user is typing) stays visible.
 
 <<[[plinitentry()]] set extra fields>>=
 v->state=UP;
@@ -3061,6 +3156,14 @@ case DOWN3:
 
 \subsubsection{Drawing secret text}
 
+%claude:
+When a text entry is used for passwords, the actual characters
+should not be visible on screen.
+If the application sets the [[USERFL]] flag on the entry,
+the drawing code replaces every character with [['*']] before
+rendering.
+The internal buffer is unchanged --- only the display is masked.
+
 <<constant [[USERFL]]>>=
 #define USERFL	0x100000	/* start of user flag */
 @
@@ -3082,6 +3185,15 @@ if(s != ep->entry)
 \subsection{Reacting}
 
 % changes [[Panel.state]]!
+%claude:
+When the user clicks on a text entry, the [[hit]] method
+switches the state to [[DOWN]], grabs the keyboard focus
+with [<plgrabkb()>], and enters a tight loop consuming mouse
+events until the button is released.
+The loop is needed because while the left button is held,
+a middle or right click triggers copy/paste operations
+(snarf and paste, see Chapter~\ref{chap:advanced}).
+Without the loop, those chord clicks would be lost.
 
 <<function [[pl_hitentry]]>>=
 bool pl_hitentry(Panel *p, Mouse *m){
@@ -3111,6 +3223,12 @@ bool pl_hitentry(Panel *p, Mouse *m){
 
 % Once widget has focus, every key will go there if user event loop
 % calls plkeyboard().
+%claude:
+The [[type]] method handles keyboard input: Enter triggers the
+callback, printable characters are appended to the buffer
+(with automatic reallocation if needed), and backspace erases
+the last rune.
+
 <<function [[pl_typeentry]]>>=
 void pl_typeentry(Panel *p, Rune c){
     Entry *ep = p->data;
@@ -3235,6 +3353,14 @@ char *plentryval(Panel *p){
 %  callback anyway
 
 \section{Button}
+
+%claude:
+[[libpanel]] has three kinds of buttons --- regular, check, and
+radio --- sharing the same [<Button>] data structure and methods.
+The [[btype]] field distinguishes them.
+They differ mainly in drawing (check buttons have a checkbox,
+radio buttons have a filled square) and in hit behavior
+(check toggles, radio ensures mutual exclusion among siblings).
 
 \subsection{[[Button]]}
 
@@ -3378,6 +3504,15 @@ case BUTTON:
 %    if(m->buttons&OUT){ // mouse leaving the widget
 %    else if(m->buttons&7){ // mouse click inside
 %    else{	/* mouse inside, but no buttons down */ // possibly release
+%claude:
+The button hit handler follows a three-way pattern common to
+many widgets:
+(1) [[OUT]]: the mouse left --- revert to [[UP]];
+(2) buttons pressed: switch to [[DOWN]] and remember which button;
+(3) no buttons (release): if we were [[DOWN]], this is a real click.
+%
+This means dragging out of the button cancels the click ---
+the callback only fires if the user releases \emph{inside} the widget.
 
 <<function [[pl_hitbutton]]>>=
 bool pl_hitbutton(Panel *p, Mouse *m){
@@ -3648,6 +3783,13 @@ if(plldepth==0)
 \fi
 
 \subsubsection{Reacting}
+
+%claude:
+Radio buttons enforce mutual exclusion: when one is selected,
+all sibling radio buttons in the same parent are deselected.
+The code walks the parent's child list looking for other radio
+buttons (identified by checking [[sib->hit==pl_hitbutton]] and
+[[btype==RADIO]]) and clears their [[check]] flag.
 
 <<[[pl_hitbutton()]] other locals>>=
 Panel *sib;
