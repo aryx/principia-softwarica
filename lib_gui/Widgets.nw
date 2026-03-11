@@ -4480,6 +4480,28 @@ void pl_childspacegroup(Panel *p, Point *ul, Vector *size){
 % - text
 %gtk: seems more flexible where can make anything scrollable?
 
+%claude:
+Scrolling is one of the more interesting design problems in a
+widget library because it requires two-way communication between
+a pair of widgets: the {scrollee} (the widget with more content
+than screen space) and the {scroll bar} (the widget the user
+drags to navigate). The scroll bar must tell the scrollee
+``show a different portion,'' and the scrollee must tell the
+scroll bar ``I am now showing this portion of the total.''
+%
+In [[libpanel]], this communication is wired up with a single
+call to [<plscroll()>], which cross-links the two widgets via
+pointer fields in [<Panel>]. After linking, the scrollee and
+scroll bar communicate through method pointers: [[scroll]]
+(from bar to scrollee) and [[setscrollbar]] (from scrollee to bar).
+
+%claude:
+Unlike GTK, where any widget can be made scrollable by placing
+it inside a [[GtkScrolledWindow]], [[libpanel]] only supports
+scrolling for a few specific widget types---lists and text
+widgets---that implement the [[scroll]] method.
+This keeps the design simple but less flexible.
+
 \section{Scrolling fields}
 
 <<[[Panel]] other fields>>=
@@ -4494,6 +4516,25 @@ v->scrollee=nil;
 v->xscroller=nil;
 v->yscroller=nil;
 @
+
+%claude:
+[<plscroll()>] establishes the bidirectional link between a scrollee
+and its scroll bar(s). After this call, the scrollee knows which
+scroll bars to update (via [[xscroller]]/[[yscroller]]),
+and each scroll bar knows which widget to scroll (via [[scrollee]]).
+Either scroller can be [[nil]] if scrolling is not needed in
+that direction---in practice, [[xscroller]] is almost always [[nil]]
+since no current widget scrolls horizontally.
+\begin{verbatim}
+  plscroll(list, nil, scrollbar):
+
+  list                        scrollbar
+  +------------------+        +--------+
+  | yscroller -------+------->|        |
+  |                  |<-------+--scrollee
+  | scroll()         |        | setscrollbar()
+  +------------------+        +--------+
+\end{verbatim}
 
 <<function [[plscroll]]>>=
 void plscroll(Panel *scrollee, Panel *xscroller, Panel *yscroller){
@@ -4528,6 +4569,15 @@ v->scr.size=Pt(0,0);
 
 \section{Scrolling methods}
 
+%claude:
+The two method pointers below implement the two-way protocol.
+[[scroll]] is called \emph{on the scrollee} by the scroll bar
+to say ``the user clicked at position [[val]] of [[len]] in
+the bar.'' The scrollee responds by adjusting what it displays.
+[[setscrollbar]] is called \emph{on the scroll bar} by the scrollee
+to say ``I am now showing items [[lo]] through [[hi]] out of
+[[len]] total.'' The scroll bar responds by redrawing its thumb.
+
 <<[[Panel]] other methods>>=
 void (*scroll)(Panel *, int, buttons, int, int);	/* scroll bar to scrollee */
 void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
@@ -4544,6 +4594,16 @@ v->setscrollbar=pl_setscrollbarerror;
 \section{Scrollable list}
 
 % Not really a composite widget
+
+%claude:
+A list displays a scrollable column of text strings. Rather than
+storing the strings itself, it calls a user-supplied [[gen]]
+callback to fetch each item by index---a pattern sometimes called
+a {virtual list}. This means the list can display data of
+arbitrary size without copying it into a widget-owned buffer.
+%
+The list tracks which range of items is visible ([[lo]] to
+the number that fit on screen) and which item is selected ([[sel]]).
 
 <<struct [[List]]>>=
 struct List{
@@ -4604,6 +4664,13 @@ void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void
 % LEAF but really kinda composite widget. Just hardcoded to have
 % text elements instead of general widgets.
 
+%claude:
+Initialization probes the [[gen]] callback to count the total
+number of items ([[lp->len]]) and, unless [[FILLX]] or [[EXPAND]]
+is set, measures the widest string to determine the minimum width.
+The minimum height is [[nlist * font->height]], where [[nlist]]
+is the number of visible items requested by the caller.
+
 <<[[plinitlist()]] set fields in [[lp]]>>=
 lp->gen=gen;
 lp->hit=hit;
@@ -4652,6 +4719,12 @@ lp->sel=-1;
 
 
 \subsection{Drawing}
+
+%claude:
+Drawing iterates from item [[lo]] to however many items fit
+in the visible rectangle, calling [[gen]] for each item's text
+and rendering it with [<pl_drawicon()>]. The selected item, if
+visible, gets a translucent highlight overlay using [<pl_highlight()>].
 
 <<[[List]] other fields>>=
 Rectangle listr;
@@ -4732,6 +4805,13 @@ void pl_fill(Image *b, Rectangle r){
 
 \subsubsection{Scrollee to scrollbar}
 
+%claude:
+After drawing the visible items, the list notifies its scroll bar
+(if linked) of the current viewport: items [[lo]] through [[hi]]
+out of [[len]] total. This is the scrollee-to-scrollbar direction
+of the protocol---the scroll bar will convert these item indices
+into pixel positions for its thumb.
+
 <<[[pl_liststrings()]] other locals>>=
 Panel *sb = p->yscroller;
 @
@@ -4746,6 +4826,14 @@ if(sb && sb->setscrollbar)
 % use Dy
 
 \subsection{Reacting}
+
+%claude:
+The list's hit handler converts the mouse Y coordinate into an
+item index: [[(m->xy.y - ul.y) / font->height + lo]].
+As the user drags, the selection highlight follows the mouse
+in real time (old selection unhighlighted, new one highlighted).
+The user callback fires only on button release, like a regular
+button.
 
 <<function [[pl_hitlist]]>>=
 int pl_hitlist(Panel *p, Mouse *m){
@@ -4812,6 +4900,19 @@ void pl_childspacelist(Panel *g, Point *ul, Vector *size){
 
 \subsection{Scrollbar to scrollee}
 % redrawing after scroll
+
+%claude:
+This is the other direction of the protocol: when the user clicks
+the scroll bar, the bar calls [[scrollee->scroll()]], which for
+a list is [<pl_scrolllist()>]. The three mouse buttons have
+different semantics, following the \plan convention:
+button~1 (left) scrolls up, button~3 (right) scrolls down,
+and button~2 (middle) jumps to an absolute position.
+%
+After adjusting [[lo]], the function tries to optimize redrawing:
+if the old and new viewports overlap, it copies the overlapping
+portion with [<pl_cpy()>] (a [[draw()]]-based blit) and only
+redraws the newly exposed strip, avoiding a full repaint.
 
 <<[[plinitlist()]] set scrolling fields>>=
 v->scroll=pl_scrolllist;
@@ -4901,6 +5002,18 @@ void pl_cpy(Image *b, Point dst, Rectangle src){
 
 \section{Scroll bar}
 
+%claude:
+The scroll bar is visually similar to a slider---both display a
+dark thumb on a light track using [<pl_sliderupd()>]---but the
+interaction model is very different.
+A slider has a single value and calls the application directly;
+a scroll bar has no value of its own and instead acts as
+a relay, forwarding user clicks to its linked scrollee.
+%
+The scroll bar's direction is inferred from its packing flags:
+packed north or south means horizontal, packed east or west
+means vertical. The [[FILLX]] or [[FILLY]] flag is automatically
+added so the bar stretches along its entire edge.
 
 <<struct [[Scrollbar]]>>=
 struct Scrollbar{
@@ -4956,6 +5069,13 @@ void plinitscrollbar(Panel *v, int flags){
 
 
 
+%claude:
+The scroll bar sets a high priority ([[PRI_SCROLLBAR]]) for hit
+testing. This ensures that when the scroll bar overlaps its scrollee's
+edge (which it always does, since they are packed as siblings),
+the scroll bar wins the hit test. Without this, clicks near
+the bar's edge might go to the scrollee instead.
+
 <<[[plinitscrollbar()]] set extra fields>>=
 v->pri=pl_priscrollbar; // !!
 @
@@ -5009,6 +5129,21 @@ void pl_drawscrollbar(Panel *p){
 % like a slider!
 
 \subsection{Reacting}
+
+%claude:
+The scroll bar hit handler follows the \plan scrolling convention:
+button~1 and~3 provide visual feedback by temporarily shifting
+the thumb (using [<pl_sliderupd()>]) to preview where the
+content will scroll to. The actual scroll happens on button
+\emph{release}, when [[scrollee->scroll()]] is called.
+Button~2 is different: it scrolls immediately (absolute jump),
+calling [[scrollee->scroll()]] on every mouse movement for
+real-time feedback.
+%
+The handler returns [[true]] when the button is still held down,
+which triggers the REMOUSE mechanism (see Chapter~\ref{chap:events})
+so the scroll bar keeps receiving events even if the mouse
+moves outside its rectangle during a drag.
 
 <<function [[pl_hitscrollbar]]>>=
 int pl_hitscrollbar(Panel *g, Mouse *m){
@@ -5109,6 +5244,13 @@ void pl_childspacescrollbar(Panel *p, Point *ul, Vector *size){
 @
 
 \subsection{Scrollee to scrollbar}
+
+%claude:
+When the scrollee redraws (e.g., after scrolling), it calls
+[[setscrollbar]] on its linked scroll bar to update the thumb
+position. The function converts from the scrollee's logical
+coordinates ([[lo]], [[hi]], [[len]]---item indices for a list)
+to the scroll bar's pixel coordinates, then redraws the bar.
 
 <<[[plinitscrollbar()]] set extra fields>>=
 v->setscrollbar=pl_setscrollbarscrollbar;
