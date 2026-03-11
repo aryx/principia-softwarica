@@ -106,11 +106,15 @@ a {widget} library.
 
 %claude:
 Why a widget library?
-Because I think you are a better programmer if
-you fully understand how things work under the hood,
-and the {widget library} is the layer that turns a bare
+A {widget library}, also known as a {GUI toolkit},
+is the layer that turns a bare
 windowing system into something a user can actually interact with:
 buttons, text fields, menus, scroll bars.
+%
+Because I think you are a better programmer if
+you fully understand how things work under the hood,
+and because widget libraries are central to any graphical application,
+I think they deserve a book.
 
 %claude:
 Every graphical application you use---a web browser, an editor, a file
@@ -119,7 +123,24 @@ treat widgets as black boxes, never looking inside to understand
 how a button press gets dispatched, how a scroll bar communicates
 with the list it controls, or how the layout engine decides
 where to place each element on screen.
+
+%claude:
+This is a pity because a widget library, despite its modest
+appearance, contains a surprising number of interesting
+techniques:
+{event-driven programming} with dispatching through a tree,
+a {layout engine} that negotiates sizes in two passes,
+{object-oriented programming in~C} using function pointers
+for polymorphic dispatch,
+and {inter-widget communication} protocols for scrolling.
 %
+These techniques are useful far beyond GUI programming.
+The event dispatch pattern appears in web browsers (the DOM),
+the two-pass layout algorithm is analogous to constraint
+solving, and the OO-in-C pattern is the foundation of
+many C libraries (e.g., GTK's GObject, the Linux kernel's VFS).
+
+%claude:
 Unlike the windowing system (covered in the \book{Windows})
 which multiplexes the screen among processes,
 a widget library operates {within} a single process,
@@ -296,7 +317,7 @@ showing that a widget toolkit does not need to be huge.
 To play with [[libpanel]], you will first need to install
 the \plan fork used in \principia (see \urlinstall).
 Once installed, you can compile and run a small test program
-called [[hellopanel.c]] (described in more detail in Chapter~2)
+called [[hellopanel.c]] (described in more detail in Chapter~\ref{chap:overview})
 with the following commands:
 
 \begin{verbatim}
@@ -344,28 +365,131 @@ who wrote in some sense most of this book.
 %******************************************************************************
 \chapter{Overview}
 %******************************************************************************
+\label{chap:overview}
+
+%claude:
+Before showing the source code of [[libpanel]] in the following chapters,
+I first give an overview in this chapter
+of the general principles of a widget library.
+%
+I also walk through a complete ``hello world'' program
+using [[libpanel]], explain how the code is organized,
+and more generally give the background necessary
+to understand the code I will show later.
 
 \section{Widget library principles}
+
+%claude:
+The following sections explain the core concepts that any
+widget library must address: what a widget is, how user
+input flows through the widget tree, how widgets are
+positioned on screen, and how scrolling works.
+These concepts apply to most widget libraries, not just [[libpanel]].
 
 \subsection{The widget}
 % widget is a contraption of window object
 % or window gadget?
 % \cite?
 
+%claude:
+A {widget} (a contraction of ``window gadget'') is a visual element
+that the user can see and interact with: a button, a label,
+a text entry, a scroll bar, a menu.
+%
+Every widget has at least three responsibilities:
+it must {draw} itself on the screen,
+it must {react} to user input (mouse clicks, key presses),
+and it must report its desired {size} so that the layout engine
+can position it.
+%
+In [[libpanel]], widgets are represented by the [[Panel]] structure.
+Each widget type (label, button, entry, etc.) stores its
+type-specific data inside [[Panel]] and provides its own
+implementations of the draw, react, and size methods.
+This is essentially {object-oriented programming in~C}: the [[Panel]]
+struct acts as a base class with virtual method pointers.
+
 \subsection{The event loop}
 % reactive programming
+
+%claude:
+A graphical application cannot simply execute a sequence of
+instructions and exit---it must wait for the user to do something.
+This leads to a fundamentally different programming model:
+the {event loop}, also known as {event-driven programming}.
+%
+The program sits in an infinite loop, waiting for events
+(mouse movements, button clicks, key presses).
+When an event arrives, the program dispatches it to the
+appropriate widget, which reacts accordingly.
+%
+In [[libpanel]], the event loop is not hidden inside the library;
+it is written explicitly in [[main()]] by the application
+programmer (as shown in [[hellopanel.c]] below).
+The application calls [[event()]] to wait for an event, then
+calls [[plmouse()]] to dispatch it to the widget tree.
+This keeps the library simple: it does not need to manage
+the event loop itself.
 
 \subsection{Layout}
 
 % Packing and placement.
 
+%claude:
+One of the trickiest problems in a widget library is deciding
+where each widget goes and how big it should be.
+This is the job of the {layout engine}.
+%
+In [[libpanel]], layout works in two passes:
+first, each widget reports the size it would like to have
+(bottom-up, from leaves to root);
+then, the available screen rectangle is divided among widgets
+(top-down, from root to leaves).
+%
+[[libpanel]] uses a {packing} model: widgets are packed against
+one side of their parent---north (top), south (bottom),
+east (right), or west (left). The first child packed takes
+its strip of space, and the remaining rectangle is passed to
+the next child. This is similar to Tk's [[pack]] geometry manager.
+
 \subsection{Scrolling}
+
+%claude:
+Scrolling arises when the content of a widget is larger than
+the rectangle allocated to it. The most visible example is a
+list widget: it may contain hundreds of items but only have room
+to display a dozen.
+%
+Scrolling requires cooperation between two widgets: the
+{scrollable widget} (e.g., a list) that knows its total content
+size, and a {scroll bar} that shows the user where they are
+and lets them navigate. The scroll bar must communicate with
+the scrollable widget to say ``show me a different portion,''
+and the scrollable widget must tell the scroll bar ``I am
+now showing this portion of the total.''
+%
+This two-way communication is one of the more interesting
+design problems in a widget library.
 
 
 
 
 
 \section{[[hellopanel.c]]}
+
+%claude:
+This section shows a complete program using [[libpanel]].
+Despite its simplicity, it illustrates all four principles
+from the previous section: it creates widgets (a frame, a label,
+a button), runs an event loop, triggers a layout pass, and
+could easily be extended with scrollable widgets.
+%
+The program structure follows a pattern common to all
+[[libpanel]] applications:
+(1) initialize the graphics system and the library,
+(2) build a widget tree,
+(3) perform an initial layout and draw,
+(4) enter the event loop.
 
 <<lib_gui/libpanel/tests/hellopanel.c>>=
 // source code from panel.pdf introduction
@@ -409,6 +533,22 @@ void main(void){
 
 % No packing specification? so default is PACKN which is top to bottom?
 
+%claude:
+The [[main()]] function first initializes the \plan graphics
+system with [[initdraw()]] and the event library with [[einit()]],
+then initializes [[libpanel]] with [[plinit()]].
+%
+Next, it builds a small widget tree: a frame (the root container)
+with two children, a label displaying ``Hello, world!'' and
+a button labeled ``done.'' The first argument to each constructor
+is the parent widget ([[nil]] for the root, [[root]] for the children),
+so the tree is built implicitly by passing parents to constructors.
+%
+The call to [[eresized(false)]] triggers the initial layout and
+draw. Then the program enters the event loop: [[event()]] blocks
+until a mouse event arrives, and [[plmouse()]] dispatches it
+down the widget tree to the appropriate widget.
+
 <<function [[done]]>>=
 void done(Panel *p, buttons buttons){
     USED(p, buttons);
@@ -416,6 +556,13 @@ void done(Panel *p, buttons buttons){
 }
 @
 % {Callback}.
+
+%claude:
+The [[done()]] function is a {callback}: it is passed as an argument
+to [[plbutton()]] and will be called when the user clicks the button.
+This is the basic mechanism for widget-to-application communication
+in [[libpanel]]: the application registers a function pointer,
+and the widget calls it when the appropriate event occurs.
 
 
 <<[[main()]] sanity check [[err]]>>=
@@ -425,6 +572,18 @@ if(err < 0)
 
 % eresized() is called by main() but also by draw (initdraw sets it up?)
 % see \book{Windows} ?
+
+%claude:
+The [[eresized()]] function is the bridge between the windowing
+system and the widget library. It is called both at startup
+(from [[main()]]) and whenever the user resizes the window
+(called back by the graphics system, see the \book{Windows}).
+%
+Its job is simple but critical: call [[plpack()]] to recompute
+the layout of the entire widget tree within the new window
+rectangle [[view->r]], then call [[pldraw()]] to redraw everything.
+These two functions---layout then draw---are the heartbeat of
+[[libpanel]].
 
 % main | draw?? -> <>
 <<function [[eresized]]>>=
@@ -452,6 +611,69 @@ if(new && getwindow(display, Refnone) == ERROR_NEG1) {
 
 \section{Code organization}
 
+%claude:
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files of [[libpanel]], together with
+the main entities (e.g., structures, functions) the file defines,
+and the corresponding chapter in this document in which the code
+contained in the file is primarily discussed.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcll}
+\toprule
+{\bf Function}                 & {\bf Ch.}                     & {\bf File}       & {\bf Entities}                                  \\
+\otoprule
+core data structures           & \ref{chap:core-ds}            & [[panel.h]]      & [<Panel>] [<Icon>]                              \\
+internal definitions           & \ref{chap:core-ds}            & [[pldefs.h]]     & layout flags, method prototypes                 \\
+\midrule
+initialization                 & \ref{chap:main}               & [[init.c]]       & [<plinit()>]                                    \\
+\midrule
+drawing                        & \ref{chap:drawing}            & [[draw.c]]       & [<pldraw()>] [<pl\_draw()>] [<pl\_relief()>]      \\
+\midrule
+mouse/keyboard dispatch        & \ref{chap:events}             & [[event.c]]      & [<plmouse()>] [<plkeyboard()>] [<plgrabkb()>]   \\
+\midrule
+layout algorithm               & \ref{chap:layout}             & [[pack.c]]       & [<plpack()>] [<pl\_sizereq()>] [<pl\_setrect()>]  \\
+\midrule
+label widget                   & \ref{chap:basic-widgets}      & [[label.c]]      & [<Label>] [<pllabel()>]                         \\
+text entry widget              & \ref{chap:basic-widgets}      & [[entry.c]]      & [<Entry>] [<plentry()>]                         \\
+button widget                  & \ref{chap:basic-widgets}      & [[button.c]]     & [<Button>] [<plbutton()>]                       \\
+slider widget                  & \ref{chap:basic-widgets}      & [[slider.c]]     & [<Slider>] [<plslider()>]                       \\
+canvas widget                  & \ref{chap:basic-widgets}      & [[canvas.c]]     & [<Canvas>] [<plcanvas()>]                       \\
+\midrule
+frame container                & \ref{chap:composite}          & [[frame.c]]      & [<plframe()>]                                   \\
+group container                & \ref{chap:composite}          & [[group.c]]      & [<plgroup()>]                                   \\
+\midrule
+scrolling glue                 & \ref{chap:scrollable}         & [[scroll.c]]     & [<plscroll()>] [<plsetscroll()>]                \\
+scroll bar widget              & \ref{chap:scrollable}         & [[scrollbar.c]]  & [<Scrollbar>] [<plscrollbar()>]                 \\
+scrollable list                & \ref{chap:scrollable}         & [[list.c]]       & [<List>] [<pllist()>]                           \\
+\midrule
+popup menu                     & \ref{chap:menu}               & [[popup.c]]      & [<Popup>] [<plpopup()>]                         \\
+pull-down menu                 & \ref{chap:menu}               & [[pulldown.c]]   & [<Pulldown>] [<plpulldown()>] [<plmenubar()>]   \\
+\midrule
+message widget                 & \ref{chap:text}               & [[message.c]]    & [<Message>] [<plmessage()>]                     \\
+edit widget                    & \ref{chap:text}               & [[edit.c]]       & [<Edit>] [<pledit()>]                           \\
+text view widget               & \ref{chap:text}               & [[textview.c]]   & [<Textview>] [<pltextview()>]                   \\
+text window widget             & \ref{chap:text}               & [[textwin.c]]    &                                                 \\
+rich text                      & \ref{chap:text}               & [[rtext.c]]      & [<pl\_rtfmt()>] [<pl\_rtdraw()>]                  \\
+\midrule
+copy/paste                     & \ref{chap:advanced}           & [[snarf.c]]      & [<plsnarf()>] [<plpaste()>]                     \\
+\midrule
+memory management              & \ref{chap:utilities}          & [[mem.c]]        & [<pl\_emalloc()>] [<pl\_erealloc()>]              \\
+debugging output               & \ref{chap:utilities}          & [[print.c]]      & [<pl\_print()>]                                  \\
+UTF-8 utilities                & \ref{chap:utilities}          & [[utf.c]]        & [<pl\_nextrune()>] [<pl\_runewidth()>]            \\
+\otoprule
+Total                          &                               &                  & $\sim$4000 LOC                                  \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and associated [[libpanel]] source files.}
+\label{tab:code-orga}
+\end{table*}
+
+%claude:
+Every source file includes the same set of headers:
+
 <<[[libpanel]] includes>>=
 #include <u.h>
 #include <libc.h>
@@ -465,6 +687,13 @@ if(new && getwindow(display, Refnone) == ERROR_NEG1) {
 % panel.h = public API
 % pldefs.h = internal API, helper functions
 
+%claude:
+The public API is in [[panel.h]]: this is what application
+programmers include (as in [[hellopanel.c]] above).
+The internal header [[pldefs.h]] contains the private definitions
+used by the library implementation---helper functions, internal
+macros, and the full [[Panel]] structure with its method pointers.
+
 \section{Software architecture}
 
 % plxxx
@@ -472,9 +701,125 @@ if(new && getwindow(display, Refnone) == ERROR_NEG1) {
 % pl_drawxxx
 % pl_hitxxx
 
+%claude:
+Figure~\ref{fig:dataflow} describes the main data flow of [[libpanel]], whereas
+Figure~\ref{fig:controlflow} describes the main control flow.
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+   Application                          libpanel
+  +-------------------+          +---------------------+
+  |                   |          |                      |
+  |  plframe(nil,...) +--------->+  Panel tree          |
+  |  pllabel(root,..) |          |   root               |
+  |  plbutton(root,..)|          |   |-- label          |
+  |                   |          |   `-- button          |
+  |                   |          |                      |
+  |  plpack(root, r)  +--------->+  Layout pass         |
+  |                   |          |   sizereq (bottom-up) |
+  |                   |          |   setrect (top-down)  |
+  |                   |          |                      |
+  |  pldraw(root, b)  +--------->+  Draw pass           |
+  |                   |          |   (top-down)          |
+  |                   |          |                      |
+  |  event(&e)        |  Mouse   |                      |
+  |  plmouse(root, m) +--------->+  Hit dispatch        |
+  |                   |          |   (top-down)          |
+  |                   |<---------+  Callback             |
+  +-------------------+          +---------------------+
+\end{verbatim}
+\caption{Data flow diagram of [[libpanel]].}\label{fig:dataflow}
+\end{figure}
+
+%claude:
+As shown in Figure~\ref{fig:dataflow}, the application builds a tree
+of [<Panel>] widgets using constructors like [<plframe()>], [<pllabel()>],
+and [<plbutton()>]. It then calls [<plpack()>] to compute the layout
+and [<pldraw()>] to render the tree. During the event loop,
+mouse events are dispatched into the tree via [<plmouse()>], which
+finds the target widget and triggers its callback.
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                       eresized()
+                       |       |
+               +-------v--+ +--v------+
+               | plpack() | | pldraw()|
+               +---+------+ +---+----+
+                   |             |
+          +--------+-------+    +---------> pl_draw()
+          |                |                  |
+   +------v------+  +------v------+     +----v-----------+
+   |pl_sizereq() |  |pl_setrect() |     | pl_drawlabel() |
+   | (bottom-up) |  | (top-down)  |     | pl_drawbutton()|
+   +-------------+  +-------------+     | pl_drawframe() |
+                                        | ...            |
+                                        +----------------+
+
+                       event()
+                         |
+                  +------v------+
+                  | plmouse()   |
+                  +------+------+
+                         |
+                   +-----v----+
+                   | pl_hit() |
+                   +-----+----+
+                         |
+                +--------+--------+
+                |                 |
+         +------v------+   +-----v-------+
+         |pl_hitbutton()|  |pl_hitentry()|  ...
+         +------+------+   +-------------+
+                |
+         +------v------+
+         |  callback   |  (e.g., done())
+         +-------------+
+\end{verbatim}
+\caption{Control flow diagram of [[libpanel]].}\label{fig:controlflow}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:controlflow} shows the two main flows triggered
+by the application.
+%
+The first flow is triggered by [<eresized()>] (either at startup or
+when the window is resized): [<plpack()>] runs the two-pass layout
+algorithm---[<pl_sizereq()>] walks the tree bottom-up to collect
+size requests, then [<pl_setrect()>] walks top-down to assign
+rectangles. After layout, [<pldraw()>] walks the tree top-down,
+calling [<pl_draw()>] on each widget, which dispatches to the
+type-specific drawing function (e.g., [<pl_drawlabel()>],
+[<pl_drawbutton()>]).
+%
+The second flow is triggered by a mouse event: [<plmouse()>]
+calls [<pl_hit()>] to find which widget contains the mouse
+coordinates, then dispatches to the type-specific hit handler
+(e.g., [<pl_hitbutton()>]), which may invoke the application's
+callback.
+
+%claude:
+[[libpanel]] uses a consistent naming convention that reveals
+its architecture. Public functions use the [[pl]] prefix:
+[<plinit()>], [<pldraw()>], [<plpack()>], [<plmouse()>], [<plfree()>].
+Widget constructors also use [[pl]]: [<pllabel()>], [<plbutton()>],
+[<plframe()>], [<pllist()>], etc.
+%
+Internal functions (not meant for application programmers) use
+the [[pl_]] prefix with an underscore:
+[<pl_draw()>] is the internal draw dispatcher,
+[<pl_hit()>] is the internal mouse-hit dispatcher,
+[<pl_sizereq()>] and [<pl_setrect()>] are the two layout passes.
+%
+Each widget type provides its own implementations of these
+internal methods. For instance, the button widget provides
+[<pl_drawbutton()>] and [<pl_hitbutton()>]. These are stored
+as function pointers in the [<Panel>] structure, enabling
+{polymorphic dispatch}: calling [<pl_draw()>] on any widget
+automatically calls the right type-specific drawing function.
 
 %\section{Libpanel}
-%% different alloc, different event loop, 
+%% different alloc, different event loop,
 %% and the Panel main data structure
 %
 %\section{Frame}
@@ -488,6 +833,28 @@ if(new && getwindow(display, Refnone) == ERROR_NEG1) {
 
 
 \section{Book structure}
+
+%claude:
+The rest of this book follows the architecture of [[libpanel]].
+%
+Chapter~\ref{chap:core-ds} presents the core data structures, primarily the
+[[Panel]] structure and the widget tree.
+Chapter~\ref{chap:main} covers initialization.
+Chapter~\ref{chap:drawing} covers drawing---how [[pldraw()]] walks the tree
+and renders each widget.
+Chapter~\ref{chap:events} covers event handling---how [[plmouse()]] dispatches
+mouse events to the right widget.
+Chapter~\ref{chap:layout} covers layout---the two-pass algorithm of
+[[plpack()]].
+%
+The following chapters then go through the individual widget types:
+basic widgets (label, entry, button, slider, canvas),
+composite widgets (frame, group),
+scrollable widgets (list, scroll bar),
+menu widgets (popup, pull-down, menu bar),
+and text widgets (message, edit, text view).
+%
+The final chapters cover advanced topics and the conclusion.
 
 %###############################################################################
 
@@ -922,6 +1289,7 @@ error0 pl_drawinit(int ldepth){
 %******************************************************************************
 \chapter{Drawing}
 %******************************************************************************
+\label{chap:drawing}
 
 \section{[[pldraw()]]}
 
@@ -1102,6 +1470,7 @@ case FRAME:
 %******************************************************************************
 \chapter{Events}
 %******************************************************************************
+\label{chap:events}
 
 \section{Mouse events}
 
@@ -1297,6 +1666,7 @@ if(p==plkbfocus)
 %******************************************************************************
 \chapter{Layout}
 %******************************************************************************
+\label{chap:layout}
 
 % eresized -> <>
 <<function [[plpack]]>>=
@@ -1668,6 +2038,7 @@ Point pl_getshare(Panel *p){
 
 %******************************************************************************
 \chapter{Basic Widgets}
+\label{chap:basic-widgets}
 %******************************************************************************
 
 %trans: seen main functions. draw and pack used in hellopanel.c
@@ -2964,6 +3335,7 @@ void pl_childspacecanvas(Panel *p, Point *ul, Vector *size){
 %******************************************************************************
 \chapter{Composite Widgets}
 %******************************************************************************
+\label{chap:composite}
 
 % radiobutton is already a widget that must be part of a series of widgets.
 
@@ -3149,6 +3521,7 @@ void pl_childspacegroup(Panel *p, Point *ul, Vector *size){
 %******************************************************************************
 \chapter{Scrollable Widgets}
 %******************************************************************************
+\label{chap:scrollable}
 
 % In libpanel only a few widgets can be scrolled:
 % - list (of text items)
@@ -3836,6 +4209,7 @@ if(sp->hi>mylen) sp->hi=mylen;
 %******************************************************************************
 \chapter{Menu widgets}
 %******************************************************************************
+\label{chap:menu}
 
 \section{Menu items}
 
@@ -4421,6 +4795,7 @@ default:
 %******************************************************************************
 \chapter{Text Widgets}
 %******************************************************************************
+\label{chap:text}
 
 % seen already Label and Text entry before.
 
