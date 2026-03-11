@@ -5305,9 +5305,26 @@ if(sp->hi>mylen) sp->hi=mylen;
 %******************************************************************************
 \label{chap:menu}
 
+%claude:
+Menus are built from the widget primitives already covered.
+A menu is simply a group of buttons; a popup menu is a container
+that shows one of three menus depending on which mouse button is
+pressed; a pull-down is a button that reveals a menu panel when
+clicked; and a menu bar is a group of pull-downs.
+This layered construction keeps each piece simple while
+enabling the full range of menu behaviors.
+
 \section{Menu items}
 
 % Menu as a series of basic buttons.
+
+%claude:
+A menu is not a new widget type---it is a group of regular buttons
+with two extra fields. Each button stores its [[index]] in the
+menu's item array and a [[menuhit]] callback that receives (buttons,
+index) instead of (panel, buttons). This indirection lets the
+application use a single callback for all menu items, distinguishing
+them by index.
 
 <<[[Button]] other fields>>=
 int index;			/* arg to menuhit */
@@ -5322,6 +5339,15 @@ void (*menuhit)(buttons, int);	/* call back user code on menu item hit */
 \subsection{Initializing}
 
 % flags vs c(hildren)flags
+
+%claude:
+[<plmenu()>] creates a group and populates it with buttons, one per
+item in the null-terminated [[item]] array. Each button uses
+[<pl_hitmenu()>] as its hit callback (not the user's callback directly),
+which extracts the [[index]] and [[menuhit]] from the button's data
+and calls the user's function. The [[cflags]] argument controls how
+the buttons are packed within the group---typically [[PACKN|FILLX]]
+for a vertical menu or [[PACKW]] for a horizontal row.
 
 <<function [[plmenu]]>>=
 Panel *plmenu(Panel *parent, int flags, Icon **item, int cflags, void (*hit)(buttons, int)){
@@ -5391,6 +5417,18 @@ void pl_hitmenu(Panel *p, buttons buttons){
 
 \section{Popup menu}
 
+%claude:
+A popup is an invisible container that intercepts mouse clicks and
+temporarily displays one of three menu panels depending on which
+button is pressed---one panel per mouse button, following the \plan
+convention. The [[pop]] array stores the three panels (any of which
+may be [[nil]] to disable that button).
+%
+The key challenge is that the popup menu must appear on top of
+existing content and disappear cleanly. The popup solves this by
+saving the screen area it will cover into [[save]], drawing the
+menu over it, and restoring the saved image when the menu is dismissed.
+
 <<struct [[Popup]]>>=
 struct Popup{
     Panel *pop[3];			/* what to pop up */
@@ -5407,6 +5445,14 @@ struct Popup{
 % Note that if you want a popup over a text area, then the popup is actually
 % the parent of the text area! hence the priority trick, because pt_inpanel
 % will go through first the parent popup widget and then the text area widget.
+
+%claude:
+The typical usage pattern is that the popup is the \emph{parent} of
+the main content widget. For example, in a text editor, the popup
+contains the edit panel as its child, and the menus as its [[pop]]
+entries. When no button is pressed, mouse events pass through to
+the child. The popup uses [[PRI_POPUP]] priority so that hit testing
+checks it before its child.
 
 \subsection{Initializing}
 
@@ -5451,6 +5497,19 @@ void plinitpopup(Panel *v, int flags, Panel *pop0, Panel *pop1, Panel *pop2){
 \subsection{Reacting}
 % before drawing, because draw only after a mouse click
 
+%claude:
+The popup hit handler is a state machine. In the [[UP]] state,
+it checks which button was pressed and selects the corresponding
+menu from [[pop[0..2]]]. It then packs the menu into the screen
+rectangle, positions it centered on the mouse cursor (using
+[<plmove()>]), saves the area it covers, and draws the menu.
+The state transitions to [[DOWN1]], [[DOWN2]], or [[DOWN3]]
+to remember which button triggered the popup.
+%
+While in a [[DOWNX]] state, subsequent mouse events are
+dispatched to the menu panel (via a recursive [<plmouse()>] call).
+When the button is released, the saved image is restored,
+hiding the menu cleanly.
 
 <<[[Style]] other cases>>=
 DOWN1,
@@ -5643,6 +5702,17 @@ void pl_childspacepopup(Panel *g, Point *ul, Vector *size){
 @
 
 \section{Pull-down}
+
+%claude:
+A pull-down looks like an ordinary button when displayed. When clicked,
+it reveals a menu panel on one side of the button (controlled by
+[[side]]: [[PACKN]] puts the menu above, [[PACKS]] below,
+[[PACKE]] to the right, [[PACKW]] to the left). Like the popup,
+it saves and restores the screen area under the menu.
+%
+Pull-downs are the building blocks for menu bars: an array of
+pull-downs packed horizontally across the top of a window, each
+revealing its menu downward.
 
 <<struct [[Pulldown]]>>=
 struct Pulldown{
@@ -5839,6 +5909,15 @@ void pl_childspacepulldown(Panel *p, Point *ul, Vector *size){
 
 
 \section{Menu bar}
+
+%claude:
+A menu bar is simply a group of pull-down panels. [<plmenubar()>]
+takes a variadic list of (label, menu) pairs, terminated by a
+[[nil]] label, and creates one pull-down for each pair.
+The pull direction is inferred from the packing direction: if
+the bar items are packed east/west (horizontal bar), the menus
+drop down ([[PACKS]]); if packed north/south (vertical bar), the
+menus cascade to the right ([[PACKE]]).
 
 \subsection{Initializing}
 
