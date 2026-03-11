@@ -281,8 +281,6 @@ Qt is even larger than GTK, with millions of lines of code.
 %related:
 %http://runtimelegend.com/rep/lforms/index
 
-%yoann: lineage figure
-
 \begin{figure}[]\centering
 \includegraphics[height=0.45\textheight]{lineage}
 \caption{Widget libraries timeline}
@@ -293,7 +291,6 @@ Qt is even larger than GTK, with millions of lines of code.
 Figure~\ref{fig:lineage} presents a timeline of major widget libraries.
 [[libpanel]] belongs to the \plan branch, highlighted in red.
 
-%yoann: rc represents the best compromise ...
 %claude:
 I think [[libpanel]] represents the best compromise for this book:
 it implements the essential features of a widget library---a widget tree,
@@ -1820,12 +1817,28 @@ case FRAME:
 %******************************************************************************
 \label{chap:events}
 
+%claude:
+Event dispatch is the other half of the widget library (drawing being
+the first).
+The application's event loop receives raw mouse and keyboard events
+from \plan's event system, then calls [<plmouse()>] or
+[<plkeyboard()>] to route them to the right widget.
+
 \section{Mouse events}
 
 % called in event loop with root widget as first parameter
 % (see hellopanel.c)
 
 % <event user loop> -> <>
+%claude:
+[<plmouse()>] is called from the application's event loop
+with the root widget and a [[Mouse]] event.
+It finds which leaf widget contains the mouse position
+using [<pl_ptinpanel()>], then calls that widget's [[hit]] method.
+It also tracks which widget received the last event
+([[lastmouse]]) so it can send an [[OUT]] notification
+when the mouse moves to a different widget.
+
 <<function [[plmouse]]>>=
 void plmouse(Panel *g, Mouse *m){
     Panel* hit;
@@ -1859,6 +1872,13 @@ v->lastmouse=nil;
 @
 % But this is really used only for the root panel?
 
+%claude:
+[<pl_ptinpanel()>] walks the widget tree to find the deepest
+(most leafward) widget whose rectangle contains the mouse point.
+When a child and its parent both contain the point, the one with
+higher {priority} wins --- this is how popup menus can intercept
+events even when they overlap other widgets.
+
 <<function [[pl_ptinpanel]]>>=
 /*
  * Return the most leafward, highest priority panel containing p
@@ -1891,6 +1911,14 @@ Panel *pl_ptinpanel(Point p, Panel *g){
 
 \subsection{Mouse leaving the widget}
 
+%claude:
+When the mouse moves from one widget to another, the old widget
+needs to know --- for example, a button should redraw itself in
+the [[UP]] state.
+Rather than adding a separate ``mouse leave'' method,
+[[libpanel]] reuses the [[hit]] method with an extra [[OUT]] bit
+set in [[Mouse.buttons]].
+Since \plan mice have three buttons (bits 0--2), bit~3 is free.
 
 <<constant [[OUT]]>>=
 /*
@@ -1907,6 +1935,15 @@ m->buttons&=~OUT;
 @
 
 \subsection{[[REMOUSE]]}
+
+%claude:
+Sometimes a widget needs to keep receiving mouse events even after
+the cursor leaves its rectangle --- for example, when dragging a
+scrollbar thumb.
+The [[hit]] method signals this by returning [[true]], which sets
+the [[REMOUSE]] flag on the root widget.
+On the next event, [<plmouse()>] skips [<pl_ptinpanel()>] and
+sends the event directly to the same widget.
 
 <<constant [[REMOUSE]]>>=
 #define	REMOUSE	0x40000		/* send next mouse event here, even if not inside */
@@ -1929,6 +1966,15 @@ if(g->flags&REMOUSE)
 %pad: I factorized g->lastmouse in earlier setting of local last
 
 \subsection{Hitting priority}
+
+%claude:
+The [[pri]] method is another virtual method on [<Panel>],
+returning an integer priority for hit testing.
+Most widgets use [[PRI_NORMAL]] (0).
+Popup menus use [[PRI_POPUP]] (1) so they receive events
+even when overlapping lower-priority children.
+Scrollbars use [[PRI_SCROLLBAR]] (2) because they sit at the edge
+of their parent and must win over the content area.
 
 <<[[Panel]] other methods>>=
 int (*pri)(Panel *, Point);			/* priority for hitting */
@@ -1974,6 +2020,17 @@ int pl_priscrollbar(Panel *, Point){
 
 \section{Keyboard events}
 
+%claude:
+Keyboard events are simpler than mouse events: there is a single
+global {keyboard focus} widget ([[plkbfocus]]), and all keyboard
+events go to it.
+Focus is set implicitly by mouse interaction --- only widgets
+that accept text input (text entries, text editors) call
+[<plgrabkb()>] in their [[hit]] method to claim the focus.
+Widgets that do not handle keyboard input (labels, buttons,
+scrollbars) simply never call it.
+
+
 <<global [[plkbfocus]]>>=
 Panel *plkbfocus;			/* the panel in keyboard focus */
 @
@@ -1994,6 +2051,14 @@ void plgrabkb(Panel *g){
 
 
 % <user code> -> <>
+%claude:
+[<plkeyboard()>] is called from the application's event loop
+with a [[Rune]] (a Unicode character, see \book{Libcore}).
+If a widget has the focus, its [[type]] method is called.
+The [[flushimage()]] afterwards ensures that any visual changes
+(e.g., a new character appearing in a text entry) are
+immediately displayed.
+
 <<function [[plkeyboard]]>>=
 void plkeyboard(Rune c){
     if(plkbfocus){
@@ -2005,6 +2070,11 @@ void plkeyboard(Rune c){
 @
 
 % A rune! See \book{Libcore}
+
+%claude:
+When a widget is freed, the focus must be cleared if it
+pointed to that widget, otherwise [<plkeyboard()>] would
+dereference a dangling pointer.
 
 <<[[plfree()]] if [[plkbfocus]]>>=
 if(p==plkbfocus)
