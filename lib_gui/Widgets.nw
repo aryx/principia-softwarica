@@ -5972,9 +5972,29 @@ default:
 
 % seen already Label and Text entry before.
 
+%claude:
+The basic widgets chapter covered labels (single-line, non-interactive)
+and text entries (single-line, editable). This chapter presents three
+more text widgets that handle longer or richer content:
+Message (multi-line with word wrapping),
+Edit (scrollable editable text window), and
+Textview (scrollable formatted text with mixed fonts, images, and
+embedded panels).
+The chapter also covers [[Rtext]], the linked-list data structure
+used by Textview to represent formatted text.
+
 \section{Message}
 % Label are on a single line.
 % Messages are on multiple lines with line-wrapping!
+
+%claude:
+A message widget is like a label, but for longer text: it wraps
+at word boundaries to fit within a specified width. As Tom Duff
+notes in the [[libpanel]] manual, ``labels are intended for short
+pieces of text such as titles; message panels display longer pieces
+of text, such as error messages or dialog box verbiage, on multiple
+lines with wrapping at word boundaries.''
+Like labels, messages are non-interactive (hit and type are no-ops).
 
 <<struct [[Message]]>>=
 struct Message{
@@ -6018,6 +6038,13 @@ void plinitmessage(Panel *v, int flags, int wid, char *msg){
 @
 
 \subsection{Drawing}
+
+%claude:
+The drawing function [<pl_textmsg()>] implements a simple word-wrapping
+algorithm: it scans forward word by word, accumulating pixel widths,
+and breaks to a new line when the next word would exceed the available
+width. If a single word is wider than the entire line, it is placed
+alone on its line (it may overflow, since messages do not hyphenate).
 
 <<function [[pl_drawmessage]]>>=
 void pl_drawmessage(Panel *p){
@@ -6124,6 +6151,19 @@ void pl_childspacemessage(Panel *p, Point *ul, Vector *size){
 
 \section{Edit}
 \l adv topics?
+
+%claude:
+The edit widget is a scrollable, editable text window---the
+most complex widget in [[libpanel]]. It delegates most of
+the heavy lifting to a [[Textwin]] object (defined in
+[[textwin.c]]), which handles the actual text buffer,
+selection, and rendering. The edit widget itself is a thin
+wrapper that connects [[Textwin]] to the [[Panel]] interface.
+%
+The edit widget supports mouse-based text selection, keyboard
+editing (backspace, delete, Escape for cut), chord-based
+cut/paste (buttons 1+2 for cut, buttons 1+3 for paste),
+and scrolling via a linked scroll bar.
 
 <<struct [[Edit]]>>=
 struct Edit{
@@ -6469,6 +6509,20 @@ void plemove(Panel *p, Point d){
 
 \section{Text view}
 
+%claude:
+A text view displays scrollable, multi-font formatted text
+interspersed with images and embedded panels---it is the widget
+used by [[mothra]] to render web pages. The content is
+represented as a linked list of [[Rtext]] nodes (see the Rich
+Text section below), each describing a piece of text with a
+specific font, or a bitmap, or an inline sub-panel.
+%
+The text view reformats its content when the window width changes
+(via [<pl_rtfmt()>]), computing line breaks and positions for
+each [[Rtext]] node. Drawing then simply iterates through the
+formatted list, rendering only nodes visible in the current
+viewport.
+
 <<struct [[Textview]]>>=
 struct Textview{
     void (*hit)(Panel *, int, Rtext *); /* call back to user on hit */
@@ -6623,6 +6677,27 @@ void pl_childspacetextview(Panel *g, Point *ul, Vector *size){
 \section{Completion}
 
 \section{Rich text}
+
+%claude:
+[[Rtext]] (``rich text'') is the data structure that feeds the
+text view widget. Each node in the linked list represents one
+displayable element: either a string (with a font), a bitmap
+image, or an inline [[Panel]]. The [[b]], [[p]], and [[text]]
+fields form a discriminated union: if [[b]] is non-nil, it is
+an image; else if [[p]] is non-nil, it is an inline panel; else
+[[text]] is a string rendered with [[font]].
+%
+The [[space]] and [[indent]] fields control layout: [[space]]
+is the horizontal gap before this node if it is on the same line
+as its predecessor, and [[indent]] is the indentation if it starts
+a new line. Setting [[space]] to zero prevents a line break
+between adjacent nodes (useful for multi-font words).
+The [[flags]] field marks whether a node is mouse-sensitive
+([[PL_HOT]]) or selected ([[PL_SEL]]).
+%
+Three convenience constructors---[<plrtstr()>], [<plrtbitmap()>],
+and [<plrtpanel()>]---create nodes of each type and append them
+to a list.
 
 <<struct [[Rtext]]>>=
 struct Rtext{
