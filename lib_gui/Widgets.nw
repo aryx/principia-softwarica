@@ -3823,6 +3823,14 @@ case RADIO:
 
 \section{Slider}
 
+%claude:
+A slider is a rectangular region that the user can drag to select a value.
+It can be either horizontal or vertical---the direction is inferred
+from the aspect ratio of the minimum size passed at creation time.
+The slider's value is stored in screen coordinates (pixels), not
+in application-domain units; the conversion between logical values
+and pixel positions happens in [[plsetslider]] and in the hit callback.
+
 <<struct [[Slider]]>>=
 struct Slider{
     // enum<Direction>
@@ -3841,6 +3849,11 @@ buttons buttons;
 @
 % this one is less needed I think as we call the callback at clicking
 % time, not release time
+%claude:
+The [[buttons]] field records which mouse button is currently pressed,
+so the hit callback can distinguish between button~1, 2, and~3 drags.
+This is less critical than for buttons since the callback fires continuously
+during drag rather than once on release.
 
 \subsection{Initializing}
 
@@ -3880,6 +3893,22 @@ void plinitslider(Panel *v, int flags, Vector size, void (*hit)(Panel *, buttons
 
 
 \subsection{Drawing}
+
+%claude:
+The slider is drawn as three adjacent rectangles: light, dark, light.
+The dark region represents the current value.
+For a horizontal slider, the dark band starts at the left edge and extends
+to [[val]]; for a vertical slider, it starts at [[val]] measured from
+the top and extends to the bottom (the vertical coordinate is flipped
+so that ``up'' means a higher value):
+\begin{verbatim}
+  Horizontal:              Vertical:
+  +------+----+-------+   +-------+  <- r.min.y
+  |light |dark| light |   | light |
+  +------+----+-------+   +-------+  <- r.max.y - val
+  ^      ^    ^       ^   | dark  |
+  r.min.x lo  hi  r.max.x +-------+  <- r.max.y
+\end{verbatim}
 
 <<function [[pl_drawslider]]>>=
 void pl_drawslider(Panel *p){
@@ -3924,7 +3953,12 @@ void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
     draw(b, r3, pl_light, nil, ZP);
 }
 @
+%claude:
 % r1 = left/top, r2 = slider, r3 = right/bottom
+The three rectangles are carved from the slider's interior by
+splitting along [[lo]] and [[hi]]: [[r1]] is the region before the
+thumb, [[r2]] is the thumb itself (drawn dark), and [[r3]] is the
+region after.
 
 <<[[pl_sliderupd()]] sanitize [[lo]] and [[hi]]>>=
 if(lo<0) lo=0;
@@ -3932,6 +3966,26 @@ if(hi<=lo) hi=lo+1;
 @
 
 \subsection{Reacting}
+
+%claude:
+Unlike buttons, sliders fire the user callback immediately on each
+mouse movement while a button is pressed, not on release.
+This gives real-time feedback---essential for scroll bars
+and volume controls where the user expects to see the effect as they drag.
+The hit handler converts the mouse position to a pixel offset within
+the slider's interior:
+\begin{verbatim}
+  Horizontal slider:
+  +--[===|===========]--+
+  ^  ^   ^               ^
+  |  ul  m->xy.x         |
+  p->r.min            p->r.max
+
+  val = m->xy.x - ul.x
+  len = size.x
+\end{verbatim}
+For vertical sliders, the Y axis is flipped so that moving the
+mouse up increases the value: [[val = ul.y + size.y - m->xy.y]].
 
 <<function [[pl_hitslider]]>>=
 bool pl_hitslider(Panel *p, Mouse *m){
@@ -3969,6 +4023,10 @@ bool pl_hitslider(Panel *p, Mouse *m){
 }
 @
 % for slider we do not wait for the release event, we pass it directly
+%claude:
+The callback receives both [[val]] (current position in pixels) and
+[[len]] (total length in pixels), so the application can compute
+a ratio without needing to query the widget's geometry.
 
 
 <<[[pl_hitslider()]] when button, set [[sp->val]] and [[len]]>>=
@@ -4013,6 +4071,12 @@ void pl_childspaceslider(Panel *g, Point *ul, Vector *size){
 
 \subsection{Other methods}
 
+%claude:
+[[plsetslider]] is the programmatic counterpart of dragging:
+it converts a logical value/range pair into the pixel coordinate
+stored in [[val]], scaling proportionally to the widget's current
+screen size.
+
 <<function [[plsetslider]]>>=
 void plsetslider(Panel *p, int value, int range){
     Slider *sp = p->data;
@@ -4033,6 +4097,18 @@ else if(value>range) value=range;
 \section{Canvas}
 % Not a composite widget actually. More a Drawing Area you can
 % configure yourself.
+
+%claude:
+Canvas is the ``escape hatch'' of the widget library.
+Unlike every other widget, canvas does not implement its own drawing
+or hit-testing logic. Instead, it stores user-supplied function pointers
+for both [[draw]] and [[hit]], delegating all behavior to the application.
+This makes it the equivalent of GTK's \texttt{DrawingArea} or Tk's
+\texttt{Canvas}---a blank rectangular region where the application
+can render arbitrary graphics and handle raw mouse events.
+The widget itself has no intrinsic size ([[pl_getsizecanvas]] returns zero),
+so the application must use [[EXPAND]] flags or padding to give it
+screen space.
 
 <<struct [[Canvas]]>>=
 struct Canvas{
@@ -4116,6 +4192,10 @@ Vector pl_getsizecanvas(Panel *p, Vector children){
 @
 % so empty? by default yes, so need to use EXPAND or FIXED
 % or non-zero ipad to get a non-empty canvas
+%claude:
+Because the intrinsic size is zero, the canvas is invisible unless
+the caller sets [[EXPAND]] flags (to fill available space) or uses
+internal padding to force a minimum size.
 
 <<function [[pl_childspacecanvas]]>>=
 void pl_childspacecanvas(Panel *p, Point *ul, Vector *size){
