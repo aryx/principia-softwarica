@@ -2086,7 +2086,22 @@ if(p==plkbfocus)
 %******************************************************************************
 \label{chap:layout}
 
+%claude:
+Layout is a two-pass process.
+The first pass, [<pl_sizereq()>], walks the tree {bottom-up}:
+each widget computes how much space it needs, based on its
+content and its children's requests.
+The second pass, [<pl_setrect()>], walks the tree {top-down}:
+starting from the available window rectangle, each widget
+is assigned an actual position and size, and the remaining
+space is divided among its children according to the packing flags.
+
 % eresized -> <>
+%claude:
+The entry point [<plpack()>] runs both passes in sequence.
+It is called from [[eresized()]] with [[view->r]] as the
+available rectangle.
+
 <<function [[plpack]]>>=
 void plpack(Panel *p, Rectangle where){
     pl_sizereq(p);
@@ -2105,6 +2120,14 @@ void plpack(Panel *p, Rectangle where){
 \section{Layout fields}
 
 % Saw layout DS (flags) before.
+%claude:
+Each widget stores three size-related vectors.
+[[sizereq]] is the total space the widget requests (children +
+own decoration + padding).
+[[childreq]] is the combined size of all children (computed by
+[<pl_sizesibs()>]).
+[[size]] is the final allocated size after the top-down pass
+adjusts for available space, filling, and expansion.
 
 <<[[Panel]] layout fields>>=
 Vector sizereq;					/* size requested by this Panel */
@@ -2140,6 +2163,13 @@ v->size=Pt(0,0);
 \section{Computing sizes: [[pl_sizereq()]]}
 
 % Step 1.
+%claude:
+The bottom-up pass first recurses into all children, then
+computes [[childreq]] by combining the children's sizes
+according to their packing direction (via [<pl_sizesibs()>]),
+and finally asks the widget itself how much space it needs
+around its children (via the [[getsize]] method).
+Padding is added last.
 
 <<function [[pl_sizereq]]>>=
 /*
@@ -2173,8 +2203,29 @@ Vector (*getsize)(Panel *, Vector);		/* return size, given child size */
 v->getsize=pl_getsizeerror;
 @
 
+%claude:
+\begin{verbatim}
+  pl_sizereq(parent):
+
+  1. recurse into children        2. combine children     3. add own decoration
+                                     (pl_sizesibs)           (getsize + padding)
+
+  child A: sizereq = 40x20       childreq = 40x50        sizereq = 44x56
+  child B: sizereq = 30x30           (PACKN: max width,     (+2 border
+              ^                        sum heights)           +2 ipad + pad)
+              |
+         (recursed first)
+\end{verbatim}
 
 \subsection{Packing}
+
+%claude:
+[<pl_sizesibs()>] combines sibling sizes according to their
+packing direction.
+Siblings packed north/south stack vertically: their widths
+are maxed and their heights are summed.
+Siblings packed east/west stack horizontally: the opposite.
+This is a recursive walk over the sibling list.
 
 <<function [[pl_sizesibs]]>>=
 Vector pl_sizesibs(Panel *p){
@@ -2231,6 +2282,17 @@ int pl_max(int a, int b){
 @
 \l replace by MAX macro?
 
+%claude:
+\begin{verbatim}
+  PACKN/PACKS (vertical stacking)     PACKE/PACKW (horizontal stacking)
+
+  +--------+  width = max(A,B)        +----+----+  width = A.x + B.x
+  |   A    |  height = A.y + B.y      |    |    |  height = max(A,B)
+  +--------+                          | A  | B  |
+  |   B    |                          |    |    |
+  +--------+                          +----+----+
+\end{verbatim}
+
 \subsection{Padding}
 
 %ipad and pad are user-defined hooks.
@@ -2239,11 +2301,32 @@ int pl_max(int a, int b){
 p->sizereq=addpt(addpt(p->sizereq, p->ipad), p->pad);
 @
 
+%claude:
+\begin{verbatim}
+  sizereq after getsize():      sizereq after padding:
+  +------------------+          +------------------------+
+  |  widget content  |          | pad                    |
+  |  + children      |    -->   |  +------------------+  |
+  +------------------+          |  | ipad             |  |
+    getsize(childreq)           |  |  +-----------+   |  |
+                                |  |  | content   |   |  |
+                                |  |  +-----------+   |  |
+                                |  +------------------+  |
+                                +------------------------+
+\end{verbatim}
+
 \section{Computing rectangles: [[pl_setrect()]]}
 
 % Step 2.
 
 %    pl_setrect(p, where.min, subpt(where.max, where.min));
+%claude:
+The top-down pass takes an upper-left point ([[ul]]) and available
+space ([[avail]]) and assigns [[p->r]].
+The steps are: start from the requested size, subtract external
+padding, clamp to available space, expand if [[FILLX]]/[[FILLY]]
+flags are set, adjust [[ul]] for placement, set [[p->r]],
+then recurse into children with the remaining interior space.
 
 <<function [[pl_setrect]]>>=
 /*
@@ -2278,6 +2361,21 @@ void pl_setrect(Panel *p, Point ul, Vector avail){
 % will decide where to place the children (but the children were
 % specifying their size independently)
 
+%claude:
+\begin{verbatim}
+  pl_setrect(p, ul, avail):
+
+  ul                          ul (adjusted)
+  +--avail-----------+        +--avail-----------+
+  |                  |        | pad/2            |
+  |                  |   -->  |  +--size------+  |
+  |                  |        |  |  p->r      |  |
+  |                  |        |  +------------+  |
+  +------------------+        +------------------+
+                              then recurse into children
+                              within p->r interior
+\end{verbatim}
+
 \subsection{Padding}
 
 <<[[pl_setrect()]] reduce size for external padding>>=
@@ -2285,6 +2383,19 @@ p->size=subpt(p->sizereq, p->pad);
 ul=addpt(ul, divpt(p->pad, 2));
 avail=subpt(avail, p->pad);
 @
+
+%claude:
+\begin{verbatim}
+  Before padding:               After padding:
+  ul                            ul' = ul + pad/2
+  +----avail----------+         +----avail'-------+
+  |                   |         |  +--size------+ |
+  |  size = sizereq   |   -->   |  |            | |
+  |                   |         |  +------------+ |
+  +-------------------+         +-----------------+
+                                  size = sizereq - pad
+                                  avail' = avail - pad
+\end{verbatim}
 
 \subsection{Filling}
 
@@ -2302,6 +2413,17 @@ if(p->flags&(FILLY|EXPAND))
     p->size.y=avail.y;
 @
 
+%claude:
+\begin{verbatim}
+  No flags:              FILLX:               FILLX|FILLY:
+  +----avail------+     +----avail------+     +----avail------+
+  |               |     |               |     |[size=========]|
+  |  [size]       |     |[size=========]|     |[             ]|
+  |               |     |               |     |[             ]|
+  +---------------+     +---------------+     +---------------+
+  size unchanged        size.x = avail.x     size = avail
+\end{verbatim}
+
 \subsection{Placing}
 
 <<[[pl_setrect()]] adjust origin with placement>>=
@@ -2318,6 +2440,20 @@ case PLACESW:                                ul.y+= avail.y-p->size.y   ; break;
 }
 @
 
+%claude:
+\begin{verbatim}
+  PACKN: child A takes top strip, then B takes next strip
+
+  ul                           newul
+  +----space----------+        +----newspace------+
+  |  child A (PACKN)  |        |  child B         |
+  +-------------------+   -->  |  ...             |
+  |  remaining space  |        +------------------+
+  +-------------------+
+     avail for A:                 space shrinks by A's height
+     (space.x, A.sizereq.y)
+\end{verbatim}
+
 \subsection{Packing the children}
 
 <<[[pl_setrect()]] locals>>=
@@ -2327,6 +2463,14 @@ Point newul;
 Vector newspace;
 @
 
+%claude:
+The child loop allocates space from the parent's interior.
+For each child, based on its packing direction, it carves out
+a strip (horizontal or vertical) for the child and recurses,
+then advances [[ul]] and shrinks [[space]] for the next sibling.
+The [[childspace]] method lets the widget adjust the starting
+point and available space (e.g., a frame shrinks the interior
+to account for its border).
 
 <<[[pl_setrect()]] setting the rectangle of the children>>=
 space=p->size;
@@ -2345,9 +2489,21 @@ for(c=p->child;c;c=c->next){
 @
 
 
+%claude:
+\begin{verbatim}
+  Without childspace:            With childspace (frame):
+  ul                             ul' (shifted inward)
+  +----space----------+          +----space----------+
+  |                   |          | frame border       |
+  |  children fill    |          |  +--space'------+  |
+  |  entire space     |          |  | children     |  |
+  |                   |          |  +--------------+  |
+  +-------------------+          +-------------------+
+\end{verbatim}
+
 <<[[Panel]] packing methods>>=
 /* child ul & size given our size */
-void (*childspace)(Panel *, Point * /**INOUT**/, Vector * /**INOUT**/);	
+void (*childspace)(Panel *, Point * /**INOUT**/, Vector * /**INOUT**/);
 @
 % Most of the time empty an empty method doing nothing.
 % Defined just once for the frame to adjust ul and space used for the frame
@@ -2360,6 +2516,18 @@ v->childspace=pl_childspaceerror;
 
 
 % recurse!
+%claude:
+\begin{verbatim}
+  PACKN: child at top              PACKS: child at bottom
+  ul                               ul (unchanged = newul)
+  +----space.x--------+            +----space.x--------+
+  |  child (at ul)    |            |                   |
+  +-------------------+ <- newul   |  remaining space  |
+  |  remaining space  |            +-------------------+
+  |  (newspace)       |            |  child (at bottom)|
+  +-------------------+            +-------------------+
+\end{verbatim}
+
 <<[[pl_setrect()]] when looping over children, switch packing cases>>=
 case PACKN:
     newul=Pt(ul.x, ul.y+c->sizereq.y);
@@ -2373,6 +2541,17 @@ case PACKS:
         Pt(space.x, c->sizereq.y));
     break;
 @
+
+%claude:
+\begin{verbatim}
+  PACKW: child at left             PACKE: child at right
+  ul         newul                 ul (unchanged = newul)
+  +----+-------------+            +-------------+----+
+  |    |             |            |             |    |
+  | ch |  remaining  |            |  remaining  | ch |
+  |    |  (newspace) |            |  (newspace) |    |
+  +----+-------------+            +-------------+----+
+\end{verbatim}
 
 <<[[pl_setrect()]] when looping over children, switch packing cases>>=
 case PACKW:
@@ -2392,6 +2571,26 @@ case PACKE:
 \subsubsection{Expanding child}
 
 %XXX
+%claude:
+When children have the [[EXPAND]] flag, the leftover space
+([[slack]] = available minus total requested) is distributed
+among them.
+[<pl_getshare()>] counts how many children want to expand in
+each direction, and each one gets an equal fraction of the slack.
+The division is done incrementally (dividing the remaining slack
+by the remaining count) to handle rounding without losing pixels.
+
+%claude:
+\begin{verbatim}
+  Before EXPAND:                 After EXPAND (2 children, both EXPAND):
+  +-----space=100------+         +-----space=100------+
+  |  A (req 30) PACKN  |         |  A (30+20=50) PACKN|
+  +--------------------+         +--------------------+
+  |  B (req 30) PACKN  |         |  B (30+20=50) PACKN|
+  +--------------------+         +--------------------+
+  |  slack = 40        |            slack distributed evenly:
+  +--------------------+            40 / 2 = 20 each
+\end{verbatim}
 
 <<[[pl_setrect()]] locals>>=
 Vector slack, share;
