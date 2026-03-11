@@ -189,9 +189,9 @@ void plfree(Panel *p){
     }
     /*e: [[plfree()]] free the children */
     /*s: [[plfree()]] free the widget-specific data */
-    if(p->free) 
+    if(p->free)
         p->free(p);
-    if(p->data) 
+    if(p->data)
         free(p->data);
     /*e: [[plfree()]] free the widget-specific data */
     free(p);

@@ -370,7 +370,7 @@ void pl_drawall(Panel *p, Image *b){
     p->b=b;
     // widget-specific method
     p->draw(p);
-    for(p=p->child;p;p=p->next) 
+    for(p=p->child;p;p=p->next)
         // recurse
         pl_draw1(p, b);
 }
