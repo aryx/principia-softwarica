@@ -102,7 +102,31 @@ a {widget} library.
 \section{Motivations}
 
 %GUI library vs user interface library vs widget library
-%toolkit vs library vs framework 
+%toolkit vs library vs framework
+
+%claude:
+Why a widget library?
+Because I think you are a better programmer if
+you fully understand how things work under the hood,
+and the {widget library} is the layer that turns a bare
+windowing system into something a user can actually interact with:
+buttons, text fields, menus, scroll bars.
+
+%claude:
+Every graphical application you use---a web browser, an editor, a file
+manager---is built on top of a widget library. Yet most programmers
+treat widgets as black boxes, never looking inside to understand
+how a button press gets dispatched, how a scroll bar communicates
+with the list it controls, or how the layout engine decides
+where to place each element on screen.
+%
+Unlike the windowing system (covered in the \book{Windows})
+which multiplexes the screen among processes,
+a widget library operates {within} a single process,
+organizing its visual elements into a {tree} of nested widgets.
+This tree is the central data structure of any widget library---it
+governs drawing order, event dispatch, and layout computation.
+\l like DOM in HTML
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -110,6 +134,12 @@ Here are a few questions I hope this book will answer:
 \item How does a mouse event get dispatched to the appropriate widget?
 
 \item How does scrolling work? How do widgets communicate with each other?
+
+\item How does a widget library lay out its elements? How does it decide
+the size and position of each widget?
+
+\item How are composite widgets built from simpler ones?
+How does a widget tree get assembled?
 
 \end{itemize}
 
@@ -123,6 +153,38 @@ Here are a few questions I hope this book will answer:
 
 % Widget called a "panel" element.
 
+%claude:
+I will explain in this book the code of the \plan widget library
+[[libpanel]], which contains about 4000 lines of code (LOC).
+[[libpanel]] is written entirely in C.
+
+%claude:
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and they form together
+a coherent set.
+%
+[[libpanel]] was written by Tom Duff and is used primarily by
+[[mothra]], the \plan web browser.
+In [[libpanel]], widgets are called ``panels''---hence the library name.
+
+%claude:
+The \plan windowing system [[rio]] already provides a few
+rudimentary widget-like features:
+[[menuhit()]] for popup menus and [[libframe]] for editable text frames.
+However, these are limited and ad-hoc.
+[[libpanel]] provides a proper widget tree with a uniform
+interface for layout, drawing, and event dispatch---a real
+toolkit rather than a collection of standalone primitives.
+
+%claude:
+At roughly 4000 LOC, [[libpanel]] is tiny compared to mainstream
+widget libraries. GTK is hundreds of thousands of lines;
+Qt is millions. Even the OCaml bindings to GTK ([[lablgtk]])
+contain more code than [[libpanel]] itself, and [[lablgtk]]
+is just a {binding}, not a widget library.
+This extreme conciseness makes [[libpanel]] an ideal subject
+for a book: every line of code can be explained and understood.
+
 \section{Other widget libraries}
 
 Here are a few widget libraries that I considered for this book, but
@@ -130,21 +192,44 @@ which I ultimately discarded:
 \begin{itemize}
 
 \item Xlib
-% not really widget. 
+% not really widget.
 % or X athena widget?
 % helloworld in xlib is terrible, \cite{}
+%claude:
+is not really a widget library---it is the low-level C interface
+to the X~Window system. Writing a ``hello world'' with Xlib
+requires hundreds of lines of boilerplate.
+The Athena widget set (Xaw), built on top of Xlib and the
+Xt Intrinsics, is a proper widget library, but it is tied to
+X~Window's complex client/server architecture.
 
 \item Tcl/Tk
 % really Tk
 % first to set basic elements of GUI?
 % libpanel is kinda c/tK (there is a c/tK in inferno actually)
+%claude:
+(really Tk, the widget library, paired with the Tcl scripting language)
+was one of the first toolkits to establish the basic vocabulary of
+GUI programming: buttons, labels, entries, listboxes, frames, and
+a geometry manager to lay them out. In some ways, [[libpanel]] is
+a C equivalent of Tk---and indeed, Inferno (Plan~9's successor)
+includes a Tk reimplementation in Limbo.
 
 \item GTK
 % panel uses less code than lablgtk which is just a binding ...
+%claude:
+(the GIMP Toolkit) is the dominant open source widget library,
+used by GNOME and many Linux applications. However, GTK is
+enormous: hundreds of thousands of lines, with a complex
+GObject type system to simulate object-oriented programming in C.
 
 \item Qt
 % huge now
 % qt1 of kde1?
+%claude:
+is the other major cross-platform toolkit, written in C++ with
+a custom meta-object compiler (MOC) for signals and slots.
+Qt is even larger than GTK, with millions of lines of code.
 
 \end{itemize}
 
@@ -175,12 +260,73 @@ which I ultimately discarded:
 %related:
 %http://runtimelegend.com/rep/lforms/index
 
+%yoann: lineage figure
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Widget libraries timeline}
+\label{fig:lineage}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major widget libraries.
+[[libpanel]] belongs to the \plan branch, highlighted in red.
+
+%yoann: rc represents the best compromise ...
+%claude:
+I think [[libpanel]] represents the best compromise for this book:
+it implements the essential features of a widget library---a widget tree,
+layout engine, event dispatch, scrolling, and menus---while still having
+a small and understandable codebase (about 4000 LOC).
+
+%claude:
+The widget library lineage goes back to the Xerox Alto and Smalltalk
+in the 1970s, where the MVC (Model-View-Controller) pattern was invented.
+On the industry side, Microsoft has MFC and WPF, Java has AWT and Swing,
+and Apple has Cocoa.
+%
+On the minimal end, Nuklear is a single-header-file GUI library in~C,
+showing that a widget toolkit does not need to be huge.
+[[libpanel]] sits squarely in this minimalist tradition.
+
 \section{Getting started}
 \label{sec:getting-started}
+
+%claude:
+To play with [[libpanel]], you will first need to install
+the \plan fork used in \principia (see \urlinstall).
+Once installed, you can compile and run a small test program
+called [[hellopanel.c]] (described in more detail in Chapter~2)
+with the following commands:
+
+\begin{verbatim}
+1   % cd /lib_gui/libpanel/tests
+2   % mk hellopanel
+3   5c -c hellopanel.c
+4   5l -o hellopanel hellopanel.5
+5   % hellopanel
+\end{verbatim}
+
+%claude:
+Line~2 runs [[mk]] to compile [[hellopanel.c]].
+The \plan C compiler [[5c]] produces an object file [[hellopanel.5]],
+and the linker [[5l]] produces the executable.
+%
+Line~5 runs the program, which opens a window containing
+a ``Hello, world!'' label and a ``done'' button.
+Clicking the button exits the program.
+This is the [[libpanel]] equivalent of a ``hello world.''
 
 \section{Requirements}
 
 % docs/panel.pdf is good source of information
+
+%claude:
+The reader should be familiar with C and with the basics of \plan
+graphics programming as covered in the \book{Graphics} and \book{Windows}.
+In particular, you should understand [[Image]], [[Rectangle]],
+and the [[draw()]] operation from [[libdraw]], as well as
+the [[Mouse]] event structure from [[libevent]].
 
 \section{About this document}
 #include "../docs/latex/About.nw"
