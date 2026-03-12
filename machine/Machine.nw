@@ -1934,17 +1934,57 @@ falls in the unmapped gap), [[5i]] reports a fault---the
 %input: file => fdt => biobuf bi => bin
 %output: bo => bout
 
+%claude:
+%trans: %dup: Assembler.nw
+I now switch from the bottom-up approach of Chapter~\ref{chap:core-ds}
+to a top-down approach;
+%toc:
+indeed, I will describe in the following chapters the main functions
+of [[5i]], starting in this chapter with [<main()>], the entry point
+of the emulator.
+
+\section{[[main()]] skeleton and globals}
+
+%claude:
+%toc:
+The [<main()>] function of [[5i]] performs four tasks:
+it opens the binary file and parses its [[a.out]] header
+([<inithdr()>]),
+it loads the text and data segments into simulated memory
+([<initmemory()>]),
+it builds the initial stack with [[argc]]/[[argv]]
+([<initstk()>]),
+and then it enters the debugger command loop
+([<cmd()>]).
+%
+I will first present the globals used by [[main()]], then
+the function itself, and then each of the initialization
+functions in turn.
+
+%claude:
+The default binary name is [[5.out]], the conventional name
+for ARM executables produced by [[5l]]:
+
 <<global [[file]]>>=
 char*	file = "5.out";
 @
 %less: has to be a global too? used by initstk but could be
 % passed as a parameter.
 
+%claude:
+The file descriptor [[text]] holds the opened binary.
+It must be a global because [<page_of_vaddr()>] needs
+it later for lazy loading of text and data pages:
+
 % fdt binary. Has to be a global? used in page_of_vaddr() for lazy Text access
 <<global [[text]]>>=
 fdt text;
 @
 
+
+%claude:
+The emulator uses buffered I/O ([[Biobuf]] from [[libbio]])
+for its debugger input and output:
 
 % in 5i.c
 <<global [[bxxx]]>>=
@@ -1960,6 +2000,8 @@ Biobuf *bin, *bout;
 % point to bi, bo (was bp);
 %old: was bioout, but more consistent to use bout
 
+%claude:
+The [<main()>] function is straightforward:
 
 <<function [[main]]>>=
 //@Scheck: entry point!
@@ -1996,6 +2038,13 @@ void main(int argc, char **argv)
 @
 %me: better do initmemory() here instead of doing it in initstk()
 
+%claude:
+The argument handling is minimal: after skipping
+[[argv[0]]] (the emulator's own name), [[main()]] takes the
+next argument as the binary filename (defaulting to
+[[5.out]]) and shifts [[argc]]/[[argv]] again so that the
+remaining arguments become the emulated program's arguments,
+which [<initstk()>] will push onto the simulated stack.
 
 % stuff from mach.h:
 %  - mach
@@ -2008,6 +2057,15 @@ void main(int argc, char **argv)
 %  - loadmap()
 
 \section{[[inithdr()]]}
+
+%claude:
+The [<inithdr()>] function uses [[libmach]]'s [<crackhdr()>]
+to parse the [[a.out]] header (see the \book{Debugger} for
+a full description of [[libmach]], and the \book{Linker} for
+the [[a.out]] format).
+The parsed information is stored in the global [<fhdr>]
+structure, which [<initmemory()>] will read to know the
+size and offset of each segment:
 
 % from mach.h
 %less: could mv as a local in main() instead of this global?
@@ -2036,6 +2094,14 @@ inithdr(fdt fd)
 }
 @
 
+%claude:
+After parsing the header, [<inithdr()>] checks that the
+magic number corresponds to an ARM executable ([[FARM]]).
+It then initializes the symbol table (needed by the debugger
+for translating addresses to function names) and the
+[[machdata]] pointer (needed by [[libmach]] for
+architecture-specific operations like disassembly).
+
 
 % need that below?
 \t adv topics? after all useful only when use as debugger?
@@ -2059,6 +2125,20 @@ extern Machdata armmach;
 @
 % need machdata = &armmach? what for?
 
+%claude:
+The last step resolves the {static base register}.
+In the \plan ARM calling convention, [[R12]] (called [[SB]])
+serves as a base pointer for accessing global and static
+data via short offsets (see the \book{Assembler} and
+\book{Linker} for how [[setR12]] is generated and used).
+The code looks up the symbol [["setR12"]] in the binary's
+symbol table and stores its address in [[mach->sb]], so
+that the debugger can resolve global variable addresses.
+The [[machdata]] pointer is set to the ARM-specific function
+table ([[armmach]]), which provides architecture-specific
+operations like disassembly for the debugger commands
+(see Chapter~\ref{chap:debugger}).
+
 <<[[inithdr()]] mach initialisation>>=
 //???
 if (mach->sbreg && lookup(0, mach->sbreg, &s))
@@ -2070,6 +2150,15 @@ machdata = &armmach;
 % =~ kernel loader
 
 % different from boot process here! 5i is special
+
+%claude:
+%trans:
+Now that the header is parsed, [<initmemory()>] can set up
+the simulated address space. This function plays the role
+of the kernel loader (see the \book{Kernel} for the real
+one): it takes the sizes from [<fhdr>] and creates the
+four segments described in Chapter~\ref{chap:core-ds}.
+First, a few constants:
 
 <<enum [[_anon_ (machine/5i/arm.h)]]7>>=
 enum
@@ -2091,6 +2180,16 @@ enum
 % UTZERO unused ... normal?
 % less: could lp split more
 
+%claude:
+[[BY2PG]] (bytes per page, 4096) and [[BY2WD]] (bytes per
+word, 4) are standard \plan kernel constants.
+[[UTZERO]] ([[0x1000]]) is the base address where user
+programs are loaded---the first page is left unmapped so
+that null pointer dereferences cause a fault.
+[[STACKTOP]] ([[0x80000000]], the 2GB mark) is the top of
+the user address space, and [[STACKSIZE]] ([[0x10000]],
+64KB) is the fixed stack size that [[5i]] allocates.
+
 % TODO macro round with (x+BY2PG -1) & (BY2PG - 1)?
 
 %dead:
@@ -2103,6 +2202,20 @@ enum
 
 
 
+
+%claude:
+The function first computes page-aligned boundaries for each
+segment by rounding up sizes to the next multiple of
+[[BY2PG]] (4096). The idiom [[(x + BY2PG-1) & ~(BY2PG-1)]]
+works because [[BY2PG]] is a power of two: adding
+[[BY2PG-1]] ensures any non-aligned value crosses the next
+page boundary, and the mask [[& ~(BY2PG-1)]] clears the
+low 12 bits to snap back to a page start
+(for example, 5000 becomes $(5000 + 4095)\ \&\ \sim4095
+= 9095\ \&\ \texttt{0xFFFFF000} = 8192$, i.e., two pages).
+After computing these boundaries, the function fills in
+the [<Segment>] structures and sets the program counter
+to the entry point from the header:
 
 %less: could use ROUNDUP()
 %less: t -> endpg_text, d -> endpg_data, b -> endpg_bss
@@ -2134,6 +2247,12 @@ initmemory(void)
 Segment *s;
 @
 
+%claude:
+Each segment is initialized the same way: set the type,
+the virtual address range ([[base]]/[[end]]), the file
+offsets (for text and data), and allocate the page table.
+The text segment comes first:
+
 <<[[initmemory()]] Text segment initilisation>>=
 s = &memory.seg[Text];
 s->type = Text;
@@ -2153,6 +2272,9 @@ uintptr	textbase;
 textbase = s->base;
 @
 
+
+%claude:
+The data segment follows immediately after text:
 
 <<[[initmemory()]] Data segment initilisation>>=
 s = &memory.seg[Data];
@@ -2176,6 +2298,10 @@ datasize = fhdr.datsz;
 @
 
 
+%claude:
+BSS follows data. Unlike text and data, it has no file
+content---pages will be zero-filled on first access:
+
 <<[[initmemory()]] Bss segment initilisation>>=
 s = &memory.seg[Bss];
 s->type = Bss;
@@ -2187,6 +2313,10 @@ s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
 %less: d+b-d ??
 
 
+%claude:
+The stack is placed at the top of the address space,
+at a fixed location:
+
 <<[[initmemory()]] Stack segment initilisation>>=
 s = &memory.seg[Stack];
 s->type = Stack;
@@ -2197,6 +2327,38 @@ s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
 % this can't be extended :(
 
 \section{[[initstk()]]}
+
+%claude:
+%trans:
+With the four memory segments in place, the last step before
+entering the debugger is to populate the stack.
+The [<initstk()>] function builds the initial stack layout
+that a \plan process expects after [[exec()]].
+It pushes [[argc]], the [[argv]] pointers, and the argument
+strings into simulated memory, mimicking what the kernel
+would do on a real machine. This is another aspect of
+the user-level emulation: [[5i]] must set up the process
+environment that the emulated program relies on.
+%
+For [[5i helloworld 5.out foo bar]], the stack looks like:
+\begin{verbatim}
+  STACKTOP  +------------------+
+            |       Tos        |  (process info, pid, etc.)
+       tos  +------------------+
+            | "bar\0"          |  argument strings
+            | "foo\0"          |  (packed sequentially)
+            | "helloworld\0"   |  argv[0] = program name
+         ap +------------------+
+            | 0                |  argv terminator (NULL)
+            | ptr to "bar"     |  argv[3]
+            | ptr to "foo"     |  argv[2]
+            | ptr to "hworld"  |  argv[1] = argv[0]
+            +------------------+
+            | argc (= 3)      |
+         sp +------------------+
+            |                  |
+            v  (stack grows down)
+\end{verbatim}
 
 <<function [[initstk]]>>=
 void
@@ -2263,7 +2425,24 @@ initstk(int argc, char *argv[])
 
 \section{[[cmd()]]}
 
+%claude:
+%trans:
+At this point, the binary is loaded, memory is set up,
+and the stack is ready. The emulated ARM processor could
+start running. But instead of executing immediately,
+[[main()]] calls [<cmd()>], which enters the debugger
+command loop. The bulk of this function is described in
+Chapter~\ref{chap:debugger}; here I only show the global
+it uses and a skeleton of its structure.
+
 % pointer or actually the instruction? PC! dot = reg.r[REGPC]
+%claude:
+The global [[dot]] tracks the ``current address'' in the
+debugger, initialized to the program counter. The name
+comes from the [[ed]] editor (see \book{Editor}), where
+[[.]] means ``current line''; the debugger [[db]] reuses the
+same convention for ``current address'':
+
 <<global [[dot]]>>=
 uintptr dot;
 @
@@ -2307,6 +2486,15 @@ case ':':
 @
 
 
+%claude:
+I show [<colon()>] here because it contains the [[:c]]
+(continue) command that actually starts execution---without
+it, the emulator would just sit in the debugger prompt.
+The colon commands handle flow control: [[:c]] to run,
+[[:s]] to single-step, [[:r]] to restart, etc.
+The full set of colon commands is described in
+Chapter~\ref{chap:debugger}.
+
 % most of the code again is in debugger section
 % here we will not use 'addr' at all.
 % colon is for flow control, restart, continue, next, etc
@@ -2334,6 +2522,12 @@ colon(char *addr, char *cp)
     Bprint(bout, "\n");
 }
 @
+
+%claude:
+And here is the [[:c]] case, where we finally see
+the call to [<run()>]---the fetch-decode-execute loop
+that is the heart of the emulator
+(Chapter~\ref{chap:interpreter}):
 
 <<[[colon()]] command cases>>=
 case 'c':
