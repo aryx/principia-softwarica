@@ -5399,7 +5399,27 @@ putmem_v(uintptr addr, uvlong data)
 
 % #include "/sys/src/libc/9syscall/sys.h"
 
+%claude:
+Emulators can intercept the guest program at different levels:
+at the hardware device level (like QEMU's full-system mode),
+at the C library level, or at the system call level.
+[[5i]] operates at the {syscall boundary}---when the emulated ARM
+program executes a [[SWI]] (software interrupt), [[Ssyscall()]]
+dispatches to one of the [[sys*()]] functions below, which
+translate the Plan~9 syscall into the equivalent host OS call.
+This is the same approach used by QEMU's user-mode emulation
+([[qemu-user]]).
+Because [[5i]] traps at the syscall level rather than the device level,
+it does not need to emulate coprocessor registers ([[MCR]], [[MRC]]),
+interrupt controllers, or any other hardware.
 
+%toc:
+In this chapter I will first present the syscall dispatch table
+and the [[Ssyscall()]] entry point, then the [[memio()]] helper
+used to copy data between guest and host memory,
+and finally the individual syscall implementations grouped
+by category: file I/O, memory, directory, namespace, and
+miscellaneous.
 
 <<global [[systab]]>>=
 void	(*systab[])(void) =
@@ -5454,11 +5474,23 @@ void	(*systab[])(void) =
     [ERRSTR]	syserrstr,
 };
 @
-% miss 
+% miss
 %#define	SEMACQUIRE	33
 %#define	SEMRELEASE	34
 %#define	TSEMACQUIRE	35
 
+%claude:
+The [[systab]] array maps syscall numbers (defined in
+[[/sys/src/libc/9syscall/sys.h]]) to handler functions using
+C's designated initializer syntax ([[{[NOP] sysnop, ...}]]).
+The syscalls fall into several groups: process control
+([[RFORK]], [[EXEC]], [[EXITS]], [[AWAIT]]),
+memory ([[BRK]]),
+file I/O ([[OPEN]], [[CLOSE]], [[PREAD]], [[PWRITE]], [[SEEK]]),
+filesystem metadata ([[STAT]], [[CREATE]], [[REMOVE]], [[CHDIR]]),
+namespace manipulation ([[BIND]], [[MOUNT]], [[UNMOUNT]]),
+and miscellaneous ([[PIPE]], [[NOTIFY]], [[DUP]], [[SLEEP]]).
+A few syscalls (semaphores) are missing from this table.
 
 \ifallcode
 <<global [[sysctab]]>>=
@@ -5506,6 +5538,14 @@ char*	sysctab[] =
 \fi
 
 % itab[CSYSCALL].instr = <>
+
+%claude:
+[[Ssyscall()]] is the entry point for all system calls---it is
+registered as the handler for [[CSYSCALL]] in the instruction
+table. The syscall number is passed in [[REGARG]] (R0 in Plan~9's
+ARM calling convention). After bounds-checking, the function
+dispatches through [[systab]] with an indirect call.
+
 <<function [[Ssyscall]]>>=
 void
 Ssyscall(instruction _unused)
@@ -5542,6 +5582,24 @@ Ssyscall(instruction _unused)
 \section{[[memio()]]}
 % to read/write array of bytes, with special handling for strings sometimes
 % not sure why the function is called IO, should be mem_array
+
+%claude:
+[[memio(mb, mem, size, dir)]] copies [[size]] bytes between
+[[mb]], a regular C pointer in [[5i]]'s own address space,
+and [[mem]], a virtual address in the emulated ARM program's
+address space (accessed byte by byte via [[getmem_b()]]/[[putmem_b()]]).
+The [[dir]] parameter selects the direction: [[MemRead]] copies
+from emulated memory to [[mb]], [[MemReadstring]] does the same
+but stops at a null terminator, and [[MemWrite]] goes the other
+direction. If [[mb]] is [[nil]], [[memio()]] allocates a buffer.
+
+%claude:
+For example, when [[sysopen()]] needs the filename, the emulated
+program has it at some ARM virtual address like [[0x2040]];
+[[sysopen()]] calls [[memio(file, 0x2040, 1024, MemReadstring)]]
+which reads byte by byte via [[getmem_b(0x2040)]],
+[[getmem_b(0x2041)]], etc., into [[5i]]'s local
+[[char file[1024]]] that it can then pass to the host [[open()]].
 
 <<enum [[memxxx]]>>=
 // for memio()
@@ -5595,6 +5653,15 @@ memio(char *mb, uintptr mem, int size, int dir)
 
 \section{Nop and errstr syscalls}
 
+%claude:
+The individual [[sys*()]] functions all follow the same pattern:
+read arguments from the guest stack via [[getmem_w()]] at offsets
+from [[REGSP]] (the emulated stack pointer), call the corresponding
+host syscall, store any error in [[errbuf]], and place the return
+value in [[REGRET]] (R0). The offset pattern
+([[REGSP+4]], [[REGSP+8]], ...) reflects the Plan~9 C calling
+convention where arguments are pushed right-to-left on the stack.
+
 <<function [[sysnop]]>>=
 void
 sysnop(void)
@@ -5635,6 +5702,13 @@ syserrstr(void)
 
 \section{Memory syscalls}
 
+%claude:
+[[sysbrk()]] grows or validates the Bss segment. It checks that
+the requested address is above the Data segment and below the Stack,
+then expands the Bss segment's page table if needed via
+[[erealloc()]]. This is the emulated equivalent of the kernel's
+[[brk]] syscall, which adjusts the program's heap limit.
+
 <<function [[sysbrk]]>>=
 void
 sysbrk(void)
@@ -5670,6 +5744,15 @@ sysbrk(void)
 
 
 \section{File and IO syscalls}
+
+%claude:
+The file I/O syscalls are straightforward proxies: they read
+arguments from the guest stack, call the host OS equivalent, and
+return the result. For calls involving buffers (like [[read]]
+and [[write]]), [[memio()]] transfers data between guest and host
+memory. Note the special case in [[sysread()]]: reads from file
+descriptor~0 (stdin) go through [[Bgetc(bin)]] line by line,
+providing an interactive prompt.
 
 <<function [[sysopen]]>>=
 void
@@ -5889,6 +5972,14 @@ sysfstat(void)
 
 \section{Directory syscalls}
 
+%claude:
+The directory and metadata syscalls ([[create]], [[remove]],
+[[stat]], [[fstat]], [[chdir]], [[fd2path]]) are similarly proxied
+to the host. String arguments (filenames, paths) are copied from
+guest memory using [[memio()]] with [[MemReadstring]].
+Structured results like [[stat]] buffers are copied back with
+[[MemWrite]].
+
 <<function [[syscreate]]>>=
 void
 syscreate(void)
@@ -5987,6 +6078,11 @@ syschdir(void)
 
 \section{Namespace syscalls}
 
+%claude:
+Plan~9's namespace syscalls ([[bind]], [[mount]], [[unmount]])
+allow programs to reshape their file namespace---a concept
+unique to Plan~9 with no direct \unix equivalent.
+[[sysbind()]] proxies the host [[bind()]] call.
 
 <<function [[sysbind]]>>=
 void
@@ -6013,6 +6109,14 @@ sysbind(void)
 @
 
 \section{Misc syscalls}
+
+%claude:
+The remaining syscalls handle file descriptor duplication
+([[dup]]), process exit ([[exits]]), sleeping ([[sleep]]),
+pipes ([[pipe]]), and note (signal) handling ([[notify]]).
+[[sysexits()]] is notable: instead of terminating immediately,
+it sets [[count = 1]] to single-step back to the debugger prompt,
+giving the user a chance to inspect final state before exit.
 
 <<function [[sysdup]]>>=
 void
@@ -6125,6 +6229,14 @@ sysnotify(void)
 
 % could also just have a generic undef_syscall
 % so don't need all those duplicated code below
+
+%claude:
+The remaining syscalls---process creation ([[rfork]], [[exec]],
+[[await]]), advanced namespace operations ([[mount]], [[unmount]]),
+segment manipulation, [[rendezvous]], and authentication---are
+stubs that print an error and exit. Since [[5i]] emulates a single
+process, multi-process syscalls like [[rfork]] and [[exec]] are
+not needed for its typical use case (running standalone programs).
 
 <<function [[sysrfork]]>>=
 void
@@ -6300,6 +6412,21 @@ sysfversion(void)
 % interface? special symbols prefix of command (: $ etc)
 % then special char (c b), then sometimes some value arguments
 
+%claude:
+[[5i]] includes a built-in debugger inspired by Plan~9's [[db]]
+(and ultimately by \unix [[adb]]). The debugger uses a terse
+command syntax where a special character prefix identifies
+the command category: [[:]] for execution control (run, step,
+breakpoints), [[$]] for inspection (registers, stack trace,
+profiling), [[?]] and [[/]] for memory display, [[=]] for
+expression evaluation, and [[>]] for register modification.
+
+%toc:
+In this chapter I will present the command parser, the two
+main command families ([[$]] for inspecting and [[:]] for
+controlling), the format and display system, and finally
+the breakpoint mechanism including memory watchpoints.
+
 <<[[cmd()]] locals>>=
 static char *cmdlet = ":$?/=>"; //$
 @
@@ -6325,6 +6452,15 @@ char *a, *cp, *gotint;
 int n, i;
 @
 
+
+%claude:
+The command parser reads a line from stdin, splits it into an
+optional address expression and a command character. If the user
+presses Enter on an empty line, the previous command is repeated---a
+convenience inherited from [[adb]] that makes stepping through
+code effortless.
+The address part may include a comma-separated repeat count
+(e.g., [[main,5:s]] to step~5 times from [[main]]).
 
 <<[[cmd()]] read and parse command and address from user input>>=
 p = buf;
@@ -6564,6 +6700,15 @@ buildargv(char *str, char **args, int max)
 \subsection{Inspecting: [[$]]} %$
 % to dump information
 
+%claude:
+The [[$]] command family is for inspection: [[$r]] dumps registers,
+[[$c]] and [[$C]] print stack traces (with or without locals),
+[[$b]] lists breakpoints, [[$q]] quits, [[$Q]] prints profiling
+summaries, and [[$t]] controls various trace modes (instruction
+trace, syscall trace, call tree trace).
+The [[$i]] subcommands display detailed statistics: instruction
+mix, TLB hit rates, segment sizes, and per-function profiles.
+
 <<function [[dollar]]>>=
 void
 dollar(char *cp)
@@ -6671,6 +6816,11 @@ dollar(char *cp)
 \subsection{Controlling: [[:]]}
 % to alter execution
 
+%claude:
+The [[:]] command family controls execution: [[:r]] resets and
+runs the program (with optional arguments), [[:s]] single-steps
+(with optional count), [[:c]] continues from a breakpoint,
+[[:b]] sets a breakpoint, and [[:d]] deletes one.
 
 <<[[colon()]] locals>>=
 char tbuf[512];
@@ -6729,6 +6879,16 @@ case 's':
 @
 
 \section{Format}
+
+%claude:
+The [[/]] and [[?]] commands display memory at [[dot]] using a
+format string. [[pfmt()]] handles a rich set of format characters
+inherited from [[adb]]: [[o]]/[[O]] for octal, [[d]]/[[D]] for
+decimal, [[x]]/[[X]] for hex, [[b]] for byte, [[c]]/[[C]] for
+character, [[s]]/[[S]] for string, [[i]]/[[I]] for disassembly
+(via [[machdata->das()]]), [[a]] for symbolic address, [[e]] for
+all globals, and [[z]] for source file:line.
+Lowercase letters operate on 2-byte values, uppercase on 4-byte.
 
 <<function [[pfmt]]>>=
 int
@@ -7000,6 +7160,12 @@ setreg(char *addr, char *cp)
 
 %\subsection{Registers}
 
+%claude:
+The dump functions print registers and floating-point state.
+Note that [[dumpfreg()]] and [[dumpdreg()]] are empty stubs---the
+ARM emulator does not implement floating-point registers (see
+Chapter~\ref{chap:advanced}).
+
 <<function [[dumpreg]]>>=
 void
 dumpreg(void)
@@ -7037,6 +7203,13 @@ dumpdreg(void)
 \section{Traces}
 
 %$t[0sic]
+
+%claude:
+[[5i]] supports several trace modes, all toggled via the [[$t]]
+commands: instruction trace ([[$ti]]) prints every executed
+instruction, syscall trace ([[$ts]]) prints every system call
+with arguments and return values (like [[strace]] on Linux),
+and call tree trace ([[$tc]]) prints function entries and returns.
 
 \subsection{Syscalls trace}
 
@@ -7201,6 +7374,16 @@ if(calltree) {
 @
 
 \section{Breakpoints}
+
+%claude:
+The breakpoint system supports both code breakpoints (stop when
+the PC reaches an address) and memory watchpoints (stop on
+read, write, or access to a data address). The [[Equal]] type
+is a conditional watchpoint that triggers when a memory location
+equals a specific value. Breakpoints are stored in a linked list
+and checked on every instruction fetch (code breakpoints) or
+memory access (data watchpoints, via the [[membpt]] flag in
+Chapter~\ref{chap:memory}).
 
 <<enum [[breakpoint_kind]]>>=
 enum breakpoint_kind
@@ -7417,6 +7600,17 @@ if(membpt)
 \chapter{Profiler}
 %******************************************************************************
 \label{chap:profiler}
+
+%claude:
+Since [[5i]] executes every instruction in software, it can
+instrument execution for free. The profiler collects two
+kinds of data: per-instruction-class counts (how many ADDs,
+how many branches, etc.) stored in the [[Inst]] table, and
+per-address counts stored in the [[iprof]] array (indexed by
+[[PC/PROFGRAN]]).
+The [[$Q]] and [[$i]] debugger commands display this data
+as instruction mix summaries, TLB statistics, memory segment
+usage, and per-function hotspot profiles sorted by cycle count.
 
 <<[[Inst]] profiling fields>>=
 // profiling info
@@ -7689,6 +7883,13 @@ iprofile(void)
 
 % see also http://danluu.com/new-cpu-features/
 
+%claude:
+This chapter covers ARM features that [[5i]] does not fully
+implement: system and coprocessor instructions ([[MCR]], [[MRC]]),
+floating-point operations (which use the coprocessor interface),
+host signal handling, and potential optimisations such as JIT
+compilation.
+
 \section{System instructions}
 
 % MCR, MRC, see bcm/l.s
@@ -7760,6 +7961,32 @@ catcher(void *a, char *msg)
 % no conditional exec, big PC-relative branching, etc.
 % ARMv8 manual is 5400 pages though ... but they restrict themselves
 % to a subset (called LEGv8) which is small.
+
+%claude:
+You now know how the \plan [[5i]] ARM emulator works:
+a fetch-decode-execute loop that interprets ARM instructions
+one at a time, with demand-paged memory, syscall-level emulation
+of the host OS, and a built-in debugger and profiler.
+
+%claude:
+The \book{Assembler} explains how ARM instructions are encoded
+into the binary format that [[5i]] decodes, the \book{Linker}
+describes the [[a.out]] executable format that [[5i]] loads,
+and the \book{Compiler} shows how C code is compiled into the
+ARM instructions that [[5i]] executes.
+The \book{Debugger} covers [[libmach]], the library that [[5i]]
+uses for symbol table access and disassembly.
+Finally, the \book{Kernel} implements the real versions of the
+syscalls that [[5i]] emulates in Chapter~\ref{chap:syscalls}.
+
+%claude:
+In the real world, the ARM architecture has moved on to ARMv8
+(now called Aarch64), a cleaner 64-bit design that drops some of
+ARMv6's complexities---notably conditional execution of every
+instruction. Hennessy and Patterson's latest textbook uses a
+subset of ARMv8 called LEGv8 for this reason. But the principles
+remain the same, and [[5i]]'s ~3000 lines of C remain a
+remarkably clear window into what a CPU actually does.
 
 
 %###############################################################################
