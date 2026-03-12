@@ -121,9 +121,7 @@ Tom Duff
 \tableofcontents
 \endgroup
 
-%******************************************************************************
-% Body
-%******************************************************************************
+%###############################################################################
 
 %******************************************************************************
 \chapter{Introduction}
@@ -213,6 +211,14 @@ Total                          &                               &                
 %old: unix.c, win32.c (and plan9.c): removed, we need to handle only one OS
 %update: for goken I restored plan9.c and unix.c actually
 
+%claude:
+Every source file in [[rc]] includes the same set of headers.
+[[rc.h]] defines the main data structures ([<Tree>], [<Code>], [<Word>], [<Var>]),
+[[exec.h]] defines the execution data structures ([<Thread>], [<List>], [<Redir>]),
+[[fns.h]] contains all function prototypes,
+[[getflags.h]] provides the command-line flag parsing API,
+and [[io.h]] defines the buffered IO layer.
+
 <<includes>>=
 #include "rc.h"
 #include "exec.h"
@@ -225,8 +231,15 @@ Total                          &                               &                
 
 \section{Software architecture}
 
-%toc: before presenting soft archi of rc itself, useful to see context
+%yoann: toc: before presenting soft archi of rc itself, useful to see context
 % and how rc fits in the big picture.
+%claude:
+Before describing the internal architecture of [[rc]] itself,
+I will first present the broader context in which [[rc]] operates:
+the command-line user interface and the other system components
+(kernel, device drivers, terminal) that [[rc]] interacts with.
+Then I will describe [[rc]]'s own components and trace the
+execution of a simple command through them.
 
 \subsection{The command-line user interface}
 \n terminal, shell, login
@@ -301,16 +314,22 @@ write characters in [[/dev/cons]].
 
 \t separate program! huge innovation.
 
-\begin{verbatim}
+%claude:
+A key \unix innovation is that the shell is a regular user program,
+not part of the kernel.  When the kernel boots, it starts an initial
+process whose stdin and stdout are connected to [[/dev/cons]].
+Every process forked from it inherits this connection, including [[rc]].
+Because the shell is just a program, you can replace it---or run
+a different shell inside the current one---without changing the kernel.
 
-\t stdin stdout regular program
-%plan9:
-\t under \plan kernel run rc (see \book{Kernel} and Section{boot.rc}).
-%unix:
-\t Under \unix run init, then login, then shell in terminal. Even virtual
-\t  terminal in Linux, 
-\t under windowing system like rio also virtual terminals connected
-\t stdin and stdout of process (see \book{Windows}).
+%\t stdin stdout regular program
+%%plan9:
+%\t under \plan kernel run rc (see \book{Kernel} and Section{boot.rc}).
+%%unix:
+%\t Under \unix run init, then login, then shell in terminal. Even virtual
+%\t  terminal in Linux, 
+%\t under windowing system like rio also virtual terminals connected
+%\t stdin and stdout of process (see \book{Windows}).
 % Figure X presents archi for plan9.
 
 % shell = stuff around a kernel in a coquillage.
@@ -333,8 +352,6 @@ write characters in [[/dev/cons]].
 % line editing not shell
 % \footnote not libreadline raw mode, completion
 
-
-\end{verbatim}
 
 \subsection{[[rc]]'s components}
 
@@ -457,7 +474,7 @@ By default, [<nextc()>] reads characters from the standard input, and
 so it waits for the characters you type in a terminal.
 \n old: "on the command-line" but better terminal, more precise
 \n or script
-Once you finished to enter a command with a {newline},
+Once you finish entering a command with a {newline},
 \l can be something else when command on multiple lines because skipnl
 [<yyparse()>] will call [<compile()>] with the tree it built during
 parsing as an argument.
@@ -477,7 +494,7 @@ Note that before modifying [<runq>], [<start()>] first links
 the newly created thread with the old thread (through the
 [<Thread.ret>] field). 
 %
-Moreover,[<compile()>] adds the bytecode [<Xreturn()>] at the end of
+Moreover, [<compile()>] adds the bytecode [<Xreturn()>] at the end of
 \l also called if error after yyparse, 
 \l also exn mechanism?
 the series of bytecodes deriving from your command.
@@ -555,27 +572,24 @@ the bytecodes I mentioned before:
 %
 I will explain [<Xmark()>] and [<Xword()>] later in this document.
 
-\begin{verbatim}
+%% It is interesting to understand the full trace of a simple command
+%% through the multiple layers of the software stack.
+%% Here is again the trace of the command [[ls /<newline>]] 
+%% entered in a terminal:
+%
+%\t full trace ls\n 
+%\begin{enumerate}
+%\item After [[rc]] displayed its prompt,
+%\t 1 shell read(), sysread, connected to /dev/cons, consread
+%\t blocked (see \book{kernel})
+%
+%\t item l
+%
+%\t item s space /
+%
+%\t item newline
+%\end{enumerate}
 
-% It is interesting to understand the full trace of a simple command
-% through the multiple layers of the software stack.
-% Here is again the trace of the command [[ls /<newline>]] 
-% entered in a terminal:
-
-\t full trace ls\n 
-\begin{enumerate}
-\item After [[rc]] displayed its prompt,
-\t 1 shell read(), sysread, connected to /dev/cons, consread
-\t blocked (see \book{kernel})
-
-\t item l
-
-\t item s space /
-
-\t item newline
-\end{enumerate}
-
-\end{verbatim}
 
 %\subsection{Trace of a pipe}
 % later
@@ -677,11 +691,37 @@ The bytecode is a data structure used both by the compiler and interpreter.
 %toc:
 The following sections will present the remaining data structures
 of the interpreter part of [[rc]]: 
-the thread, and the variable.
 \l which is  by a list of words.
+the thread, and the variable,
+which is itself defined by a list of words.
 
 
 \section{[[Token]]}
+
+%trans:
+%claude:
+As mentioned in the previous chapter,
+the first step of the compilation pipeline is to transform
+a stream of characters into a stream of {tokens} (also called {lexemes}).
+A token groups one or more characters that logically belong together
+(e.g., [[while]] is a single keyword token, not five character tokens).
+%
+The lexer [<yylex()>] (described in Chapter~\ref{chap:lexing})
+is responsible for this transformation.
+
+%toc:
+The token kinds in [[rc]] are declared below using
+the [[yacc]] syntax [[\%token]] (see \book{Compiler}).
+%
+I have grouped them in categories:
+the keyword tokens ([[FOR]], [[WHILE]], [[IF]], etc.),
+the operator tokens ([[REDIR]], [[PIPE]], [[ANDAND]], etc.),
+and the catch-all [[WORD]] token for anything else
+(e.g., command names, arguments, numbers, or file paths).
+%
+Note that some single-character operators like [['$']], [[';']], or [['=']]
+do not have a dedicated token kind; the lexer simply returns their
+ASCII value directly (see [<yylex()>] and [<pcmd()>]).
 
 <<token declarations>>=
 %token FOR IN WHILE IF NOT SWITCH FN
@@ -708,6 +748,34 @@ the thread, and the variable.
 
 \section{Abstract syntax [[Tree]]}
 % rc has a command language!
+
+%trans:
+%claude:
+The second step of the compilation pipeline transforms the stream
+of tokens into an {abstract syntax tree} (AST).
+The parser [<yyparse()>] (described in Chapter~\ref{chap:parsing})
+is responsible for this transformation.
+%
+[[rc]] has a {\em command language}: it has variables, control flow
+statements ([[if]], [[while]], [[for]], [[switch]]),
+functions ([[fn]]),
+and operators (pipes, redirections, etc.).
+All those constructs are represented in the AST using the
+[[Tree]] structure below.
+
+%toc:
+The [[Tree]] structure is a generic tree node with a [[type]] field
+indicating what kind of node it is (e.g., a [[PIPE]], an [[IF]],
+a [[WORD]], or even a single character like [[';']] for sequencing),
+a [[str]] field to store the string content of the token
+(e.g., the command name or the variable name),
+and up to three children.
+%
+Three children are enough to represent all the constructs of [[rc]]:
+for example, an [[if]] uses [[child[0]]] for the condition,
+[[child[1]]] for the then-body, and leaves [[child[2]]] unused.
+A [[for]] uses all three: [[child[0]]] for the variable,
+[[child[1]]] for the list, and [[child[2]]] for the body.
 
 <<struct [[Tree]]>>=
 struct Tree {
@@ -742,13 +810,21 @@ struct Tree {
 % type is token kind, or character.
 % Introduced also a few more token without syntax but part of enum.
 
+%trans:
+%claude:
+The parser also introduces a few extra node types
+that do not correspond to tokens produced by the lexer,
+but that are useful to structure the AST.
+For example, [[SIMPLE]] represents a simple command with its arguments,
+and [[ARGLIST]] groups those arguments into a list.
+
 <<token declarations>>=
 /* not used in syntax */
-%token SIMPLE 
+%token SIMPLE
 %token ARGLIST WORDS
-%token BRACE PAREN 
+%token BRACE PAREN
 @
-% why BRACE and not keep '{' 
+% why BRACE and not keep '{'
 %ocaml: use directly list for ARGLIST, WORDS, and use list also
 %  for BRACE and PAREN
 \l looks not like Abstract Syntax Tree if carry BRACE and PARENS in AST
@@ -758,6 +834,14 @@ struct Tree {
 
 
 % populated in newtree() (which is called to build AST in yyparse())
+%trans:
+%claude:
+All tree nodes allocated during parsing are linked together
+in a global list [[treenodes]] through the [[Tree.next]] field below.
+This makes it easy to free all nodes at once
+(via [<freenodes()>]) after the tree has been compiled to bytecodes
+in [<Xrdcmds()>], instead of having to walk the tree recursively.
+
 <<global [[treenodes]]>>=
 // list<ref_own<Tree>> (next = Tree.next)
 tree *treenodes;
@@ -771,6 +855,13 @@ tree *treenodes;
 tree	*next;
 @
 
+
+%trans:
+%claude:
+The functions below are used by the parser to build AST nodes.
+[<newtree()>] allocates a fresh node and links it into [<treenodes>].
+The convenience wrappers [<tree1()>], [<tree2()>], and [<tree3()>]
+create a node with a given type and one, two, or three children respectively.
 
 <<function [[newtree]]>>=
 /*
@@ -873,6 +964,13 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 % opti but useful because get lots of empty commands
 % for instance when if() {\n ... \n} then get already two
 % empty command for the two newlines.
+%trans:
+%claude:
+The special case below is an optimization for the sequencing operator [[';']]:
+if one side of a sequence is empty (which happens frequently since each
+newline produces an empty command), [<tree3()>] simply returns the
+other side instead of creating a useless node.
+
 <<[[tree3]] if some empty sequence>>=
 if(type==';'){
     if(c0==nil)
@@ -890,6 +988,18 @@ if(type==';'){
 % shell = interpreter. Actually source -> AST -> bytecode
 % and then bytecode interpreter, a bit like an actual processor
 % (or Java). A little stack based interpreter.
+%trans:
+%claude:
+The third step of the compilation pipeline transforms the AST
+into a series of {bytecodes}.
+The function [<compile()>] (described in Chapter~\ref{chap:compile-interpret})
+is responsible for this transformation,
+and stores the resulting bytecodes in the global [<codebuf>] below.
+%
+Like Java or Python, [[rc]] does not interpret the AST directly
+but compiles it first into a lower-level representation that
+is then interpreted by a small stack-based virtual machine
+(described in Chapter~\ref{chap:main}).
 
 <<global [[codebuf]]>>=
 // growing_array<ref_own<Code>>
@@ -898,6 +1008,20 @@ code *codebuf;				/* compiler output */
 %ocaml: maybe could just interpret from AST itself.
 % not sure needs this intermediate bytecode data structure
 %ocaml: ugly to use a global again. Better compile returns codebuf
+
+%toc:
+%claude:
+A bytecode is represented by the [[Code]] union below.
+Each element in the [<codebuf>] array is either:
+a function pointer [[f]] (the bytecode itself, e.g., [<Xsimple>], [<Xpipe>]),
+an integer [[i]] (used for jump offsets or file descriptor numbers),
+or a string [[s]] (used for inline string arguments like
+in [<Xword>]).
+%
+The first element of any code vector is always a reference count integer,
+managed by [<codecopy()>] and [<codefree()>] below.
+This reference counting is needed because bytecode vectors can be shared,
+for instance when a function is defined with [[fn]].
 
 <<struct [[Code]]>>=
 /*
@@ -1061,7 +1185,30 @@ if(p->f==Xfalse || p->f==Xtrue
 % Still thread is maybe confusing.
 % Maybe rename Program? but true that contains code, and pc!
 % So it is a unit of execution (then maybe thread is a good name).
+%trans:
+%claude:
+Once the bytecodes are compiled, [[rc]] needs a data structure
+to keep track of the current execution state.
+This is the role of the [[Thread]] structure.
+A [[Thread]] is similar to a stack frame in a regular program:
+it contains a pointer to a code vector ([[code]])
+and a program counter ([[pc]]) indexing the next bytecode to execute.
+%
+The name ``thread'' might be confusing since these are not
+OS-level threads or processes. They are {\em units of execution}
+inside the [[rc]] interpreter.
+When a bytecode like [<Xpipe()>] or [<Xasync()>] needs to run
+commands concurrently, it creates actual OS processes (with [[fork()]]),
+but within the interpreter itself, threads are managed as a stack.
 
+%toc:
+The global [<runq>] (for ``run queue'') points to the top of this stack
+of threads. Threads are linked through the [[ret]] field:
+when the current thread finishes (via [<Xreturn()>]),
+[[rc]] pops it and resumes the thread pointed to by [[ret]].
+%
+At the bottom of the stack sits the bootstrap thread, which
+loops forever reading new commands via [<Xrdcmds()>].
 
 <<struct [[Thread]]>>=
 struct Thread {
@@ -1095,6 +1242,16 @@ thread *ret;		/* who continues when this finishes */
 % freethread()? with reference count handling?
 
 % important one!!
+%trans:
+%claude:
+The most important field of a thread is [[argv]], the {argument stack}.
+It is a list of lists of words: bytecodes like [<Xmark()>] push
+a new empty list on this stack, and [<Xword()>] pushes
+a word onto the current list.
+When a bytecode like [<Xsimple()>] needs to run a command,
+it pops the top list from [[argv]] and uses it as the command
+and its arguments.
+
 <<[[Thread]] other fields>>=
 // list<list<ref_own<word>>> (next = List.next)
 struct List *argv;		/* argument stack */
@@ -1108,6 +1265,15 @@ struct List *argv;		/* argument stack */
 
 % really intepreter small language, have locals!
 % TODO rename local -> locals?
+%trans:
+%claude:
+Each thread also has a list of {local variables}.
+These are created by the [[local]] builtin or by constructs like [[for]]
+that bind a variable for the duration of a block.
+When looking up a variable with [<vlook()>], [[rc]] first
+searches the current thread's locals before falling back to
+the global variable table.
+
 <<[[Thread]] other fields>>=
 // list<ref_own<Var>> (next = Var.next)
 struct Var *local;		/* list of local variables */
@@ -1121,14 +1287,29 @@ struct Var *local;		/* list of local variables */
 
 
 
-\section{Words and lists of words}
 % in appendix?
+\section{Words and lists of words}
 
 %trans:
 % saw argv in Thread before, list, but really list
 % of sequence of words, so see words first.
+%claude:
+I mentioned the [[argv]] field in the [[Thread]] structure above,
+which is a list of lists of words.
+Let me now present the [[Word]] and [[List]] structures
+that make up this two-level list.
 
 \subsection{[[Word]]s}
+
+%toc:
+%claude:
+A [[Word]] is simply a string with a [[next]] pointer,
+forming a linked list. This is the fundamental data type
+in [[rc]]: a command like [[ls -l /tmp]] is represented
+as a list of three words.
+%
+Variables in [[rc]] can also hold multiple values
+(e.g., [[x=(a b c)]]), which are represented as a list of words.
 
 <<struct [[Word]]>>=
 /*
@@ -1145,6 +1326,13 @@ struct Word {
 % could define W = nil so avoid those (word*)nil
 %dup: similar to the one in Make.nw?
 %ocaml: just use list
+
+%trans:
+%claude:
+The functions below provide the usual linked-list operations
+for word lists: [<newword()>] allocates a new word and prepends it
+to a list, [<count()>] returns the length,
+[<copywords()>] duplicates a list, and [<freewords()>] deallocates it.
 
 <<function [[newword]]>>=
 word*
@@ -1173,6 +1361,14 @@ count(word *w)
 @
 %ocaml: List.length
 
+
+%claude:
+[<copynwords()>] and [<copywords()>] use the classic C
+{pointer-to-pointer tail linking} idiom: [[end]] starts as [[&v]]
+(address of the head pointer), and after each node is created,
+it advances to [[&(*end)->next]] (address of the new node's
+[[next]] field). This avoids special-casing the first element
+and builds the list in forward order without reversing at the end.
 
 <<function [[copynwords]]>>=
 word*
@@ -1245,6 +1441,16 @@ freelist(word *w)
 \subsection{[[List]] of sequence of words}
 
 % used in Thread for argv.
+%trans:
+%claude:
+The [[List]] structure adds one more level of indirection on top
+of word lists. It is used for [[Thread.argv]], the argument stack:
+each element in this stack is a [[List]] node containing a word list.
+%
+For example, when the interpreter processes [[ls -l /tmp]],
+the bytecodes [<Xmark()>] and [<Xword()>] will first push
+the words [[ls]], [[-l]], [[/tmp]] onto a word list, and
+this word list sits inside a [[List]] node on the [[argv]] stack.
 
 <<struct [[List]]>>=
 struct List {
@@ -1264,10 +1470,26 @@ struct List {
 %  and [[gvar]]
 
 % saw 'local' vars in Thread before?
+%trans:
+%claude:
+I already mentioned local variables in [[Thread.local]] above.
+Let me now present the [[Var]] structure itself and the global
+variable table.
+%toc:
+Variables are needed whenever you write something like [[x=1]] or
+[[path=(/bin /usr/bin)]] in the shell. They are also used
+internally by [[rc]] for special variables like [[status]]
+(the exit status of the last command) or [[*]]
+(the script arguments).
 
 % what need vars for?
 % when do X=1 in shell.
 % also for setting status of special variable like "status".
+%toc:
+A [[Var]] has a [[name]] (the variable name as a string),
+a [[val]] (the variable value as a list of words, since
+in [[rc]] all variables can hold multiple values),
+and a [[next]] pointer for chaining in hash buckets or local lists.
 
 <<struct [[Var]]>>=
 struct Var {
@@ -1290,6 +1512,15 @@ var	*next;		/* next on hash or local list */
 % like for other soft, or use VarNil?
 
 
+
+%claude:
+The main interface to the variable system consists of
+[<setvar()>] to assign a value, and [<vlook()>] to look up
+a variable by name.
+%
+[<vlook()>] first searches the local variables of the current
+thread (stored in [[runq->local]]), then falls back to the
+global variable table via [<gvlook()>].
 
 <<function [[setvar]]>>=
 void
@@ -1324,6 +1555,12 @@ vlook(char *name)
 
 
 
+%claude:
+Global variables are stored in a simple hash table of 521 buckets,
+with chaining through [[Var.next]] for collisions.
+[<gvlook()>] looks up a global variable and automatically
+creates it (with a [[nil]] value) if it does not exist yet.
+
 <<constant [[NVAR]]>>=
 #define	NVAR	521
 @
@@ -1331,12 +1568,11 @@ vlook(char *name)
 <<global [[gvar]]>>=
 // map<string, ref_own<Var>> (next = Var.next in bucket list)
 var *gvar[NVAR];		/* hash for globals */
-@
 % vs locals
+@
 %ocaml: use Hashtbl
-
-
 % populate if not already there
+
 <<function [[gvlook]]>>=
 var*
 gvlook(char *name)
@@ -1405,14 +1641,23 @@ newvar(char *name, var *next)
 
 \section{Overview}
 
+%toc:
+%claude:
+The [<main()>] function of [[rc]] performs four tasks:
+it processes the command-line arguments,
+it initializes the shell (keywords, traps, environment),
+it sets up the bootstrap bytecodes and the initial thread,
+and then it enters the bytecode interpreter loop.
+%
+I will present here a simplified version of the bootstrap;
+the actual bootstrap code (which sources [[rcmain]]) is
+described in Chapter~\ref{chap:initialization-real}.
+
 <<[[main()]] locals>>=
 code bootstrap[17];
 @
-\swdefs{bootstrap}
 % indeed 17 lines below about bootstrap. A bit ugly though
-
 % see Chapter X for actual boostrap. I will simplify for now.
-
 % mv comment back in Extra? less confusing with actual bootstrap vs simple one
 %/*
 % * get command line flags.
@@ -1422,6 +1667,7 @@ code bootstrap[17];
 % * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
 % * start interpreting code
 % */
+\swdefs{bootstrap}
 
 <<function main (rc/exec.c)>>=
 void main(int argc, char *argv[])
@@ -1439,9 +1685,16 @@ void main(int argc, char *argv[])
 }
 @
 
-\section{Command-line arguments processing}
 % [[getflags()]]
+\section{Command-line arguments processing}
 
+%claude:
+[[rc]] accepts many flags (e.g., [[-i]] for interactive mode,
+[[-l]] for login mode, [[-e]] for exit-on-error).
+Flags are stored in a global array indexed by the flag character,
+where a non-nil entry means the flag is set.
+Some flags like [[-c]] and [[-m]] take a string argument,
+which is why [[flag]] stores string arrays rather than simple booleans.
 
 <<global [[flag]]>>=
 // map<char, option<array<string>>>
@@ -1487,30 +1740,50 @@ if(argc==-1)
 % interpret?
 
 \subsection{Login mode: [[rc -l]]}
+
 % or nothing but - in argv0
+%claude:
+When the kernel starts [[rc]] as a login shell, it sets [[argv[0]]]
+to [["-rc"]] (starting with a dash) rather than passing an explicit [[-l]] flag.
+This is a \unix convention: the code below detects this and
+sets [[flag['l']]] accordingly, so that [[rc]] will later
+source the user's profile ([[~$home/lib/profile]]).
 
 <<[[main()]] argc argv processing, modify flags>>=
 if(argv[0][0]=='-')
     flag['l'] = flagset;
-@
 % if -l or first char is - then means login shell.
 % so read $home/lib/profile
+@
 
-\subsection{Interactive mode: [[rc -i]]}
 % or nothing but can detect Isatty
+\subsection{Interactive mode: [[rc -i]]}
 
 %history: also in bourne shell
-
+%claude:
+Interactive mode determines whether [[rc]] will display a prompt
+and handle signals differently (e.g., not exiting on [[^C]]).
+%
+The logic below is subtle: [[rc]] is interactive by default
+when no script file is given ([[argc==1]]) and standard input
+is a terminal. The [[-I]] flag forces non-interactive mode
+(useful when piping commands into [[rc]] from another program).
 % mv later? advanced feature? hmm interactive is important notion.
+
 <<[[main()]] argc argv processing, modify flags>>=
 if(flag['I'])
     flag['i'] = nil;
-else 
-    if(flag['i']==nil && argc==1 && Isatty(STDIN)) 
+else
+    if(flag['i']==nil && argc==1 && Isatty(STDIN))
        flag['i'] = flagset;
 @
 
 % interactive mode if no arguments!
+%claude:
+Under \plan, there is no [[isatty()]] system call.
+Instead, [<Isatty()>] checks whether the file descriptor
+corresponds to [[/dev/cons]] (the console device)
+by inspecting its path with [[fd2path()]].
 
 <<function [[Isatty]]>>=
 bool
@@ -1540,12 +1813,22 @@ Isatty(fdt fd)
 \section{Initialization}
 
 % put back global err here, with its Io type?
+%claude:
+The initialization first sets up [[err]], a buffered IO handle
+for standard error (see Appendix~\ref{chap:utilities} for [<openfd()>]).
+Then it initializes three subsystems:
+[<kinit()>] registers the shell keywords ([[if]], [[for]], etc.)
+so the lexer can recognize them,
+[<Trapinit()>] sets up the signal handler (see Chapter~\ref{chap:signals}),
+and [<Vinit()>] reads the process environment
+(from [[/env]]) and populates the global variable table
+(see Chapter~\ref{chap:environment}).
 
 <<[[main()]] initialisation>>=
 err = openfd(STDERR);
-@
 % err = openfd, use buffered IO lib, see appendix for error management.
 %ocaml: stderr already use buffered IO.
+@
 
 <<[[main()]] initialisation>>=
 kinit();    // initialize keywords
@@ -1557,19 +1840,33 @@ Vinit();    // read environment variables and add them in gvar
 
 \section{Bootstrapping bytecodes (simplified)}
 
+%claude:
+As mentioned earlier, [[rc]] does not start by compiling source code;
+it starts by {\em interpreting} a small series of hand-crafted bytecodes
+called the {bootstrap}.
+%
+In its simplest form, the bootstrap just contains [<Xrdcmds>],
+the bytecode that reads a command, compiles it, and starts
+a new thread to execute it.
+The first element is the reference count (set to 1), and
+the last element is a zero sentinel marking the end of the code vector.
+%
+The actual bootstrap is more complex (see Chapter~\ref{chap:initialization-real}):
+it sources the [[rcmain]] initialization script, which sets up
+the default [[\$path]] and runs the user's profile.
+
 \ifallcode
 <<[[main()]] locals>>=
 int i;
 @
 \fi
-
-
 % simplified bootstrap:
 % Xrdcmds (which will call yyparse()->compile()->outcode()
 %  which will read a line, compile it, and add a Xreturn
 %when want to experiment with simplified bootstrap
 % (don't forget to also modify mkfile and put 'rc2' for TARG
 %OPTIONAL
+
 <<[[main()]] initialize [[boostrap]] (simplified)>>=
 memset(bootstrap, 0, sizeof bootstrap);
 
@@ -1584,15 +1881,24 @@ bootstrap[i].i = 0;
 %ocaml: no need end of list, no need reference count
 
 \section{Setting [[runq]]}
+
 % [[start()]]
+%claude:
+[<start()>] creates a new thread and pushes it on top of [<runq>].
+The program counter starts at 1 (not 0) because element 0 of
+any code vector is reserved for the reference count.
+%
+Note how [<start()>] links the new thread to the old [<runq>]
+through [[p->ret = runq]]: this is how the interpreter
+knows where to resume after the current thread finishes.
 
 <<[[main()]] initialize [[runq]] with bootstrap code>>=
 start(bootstrap, 1, (var *)nil);
-@
 % starts at 1; 0 is for the reference count
-
+@
 % modify runq! usually called with pc = 1
 % main | Xrdcmds | ??? -> <>
+
 <<function [[start]]>>=
 void
 start(code *c, int pc, var *local)
@@ -1638,6 +1944,14 @@ start(code *c, int pc, var *local)
 \section{Setting [[runq->argv]]}
 
 % now that runq set.
+%claude:
+Now that [<runq>] is set, [<main()>] populates its argument stack
+with the command-line arguments. These arguments are pushed
+in reverse order because [<pushword()>] prepends to the list,
+so the first argument ends up at the top.
+%
+The actual bootstrap code will later assign this list to [[\$*]]
+(the script arguments variable).
 
 <<global [[argv0]]>>=
 /*
@@ -1672,6 +1986,13 @@ for(i = argc-1; i!=0; --i)
 % Xsimple so this bytecode look at runq->argv)
 
 % main | Xmark ->  <>
+%claude:
+[<pushlist()>] pushes a new empty word list onto [[runq->argv]],
+and [<pushword()>] adds a word to the current top list.
+These two functions are the main interface for building
+the argument stack and are used extensively by bytecodes
+like [<Xmark()>] and [<Xword()>].
+
 <<function [[pushlist]]>>=
 void
 pushlist(void)
@@ -1704,6 +2025,17 @@ pushword(char *wd)
 
 \section{Bytecode interpreter loop}
 
+%claude:
+The heart of [[rc]] is this infinite loop.
+It increments the program counter, then calls the function pointer
+at the previous position. The increment-then-call-at-minus-one
+pattern is a common idiom: the [[pc]] is advanced {\em before}
+calling the bytecode function, so that if the bytecode needs to read
+inline arguments (e.g., a string after [<Xword>]), it can
+read them at [[runq->code[runq->pc]]] and advance [[pc]] itself.
+%
+Between bytecodes, the loop also checks for pending signals (traps).
+
 <<[[main()]] interpreter loop>>=
 for(;;){
     <<[[main()]] debug runq in interpreter loop>>
@@ -1717,10 +2049,9 @@ for(;;){
 %ocaml: how sure that a function? not typesafe.
 
 
-\section{Reading commands: [[Xrdcmds()]]}
 \n the REPL? not just Xrdcmds, the loop is in main and print in program
-
 % X(bytecode) read commands
+\section{Reading commands: [[Xrdcmds()]]}
 
 % Xrdcmds =~ REPL, but not really
 %  read (yylex+yyparse),
@@ -1728,8 +2059,25 @@ for(;;){
 %  print? hmm partly in yylex for the prompt, the rest the program does it
 %  loop? kinda because do a pc-- below so do its own loop
 %  inside the enclosing interpreter loop
-
+%claude:
+[<Xrdcmds()>] is the bytecode that implements the
+read-eval loop of [[rc]].
+It calls [<yyparse()>] to read and compile one command line,
+then calls [<start()>] to push a new thread executing
+the compiled bytecodes.
+%
+The key subtlety is the [[--p->pc]] before [<start()>]:
+this makes the bootstrap thread re-execute [<Xrdcmds()>]
+when the command thread finishes (via [<Xreturn()>]).
+This is how [[rc]] loops forever reading commands without
+an explicit loop in the bootstrap bytecodes themselves.
+%
+Note that [<yyparse()>] internally calls [<compile()>],
+which modifies the global [<codebuf>]. So when [<Xrdcmds()>]
+calls [[start(codebuf, ...)]],  it starts a thread on the freshly
+compiled bytecodes.
 % should be called Xrdline though.
+
 <<function [[Xrdcmds]]>>=
 void
 Xrdcmds(void)
@@ -1782,33 +2130,45 @@ bool iflag;		/* interactive? */
 % who sets cmdfd? see below.
 
 %OPTIONAL (really?)
+%claude:
+Each thread also carries input-related fields: [[cmdfd]] is
+the buffered IO handle from which the lexer reads characters,
+[[cmdfile]] is the filename (for error messages), and
+[[iflag]] determines whether this thread displays a prompt.
+%
+These are per-thread fields (not globals) because the [[.]] (dot)
+builtin and [[-c]] flag create new threads that read from
+different sources (a script file, a string), and each
+thread needs its own input state.
+
 <<[[main()]] initialize [[runq]] with bootstrap code>>=
 runq->cmdfd = openfd(STDIN); // reading from stdin
 runq->cmdfile = "<stdin>";
 runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
-@
 % eof set to false in start()
 % cmdfile setting is not necessary, but it's used in yyerror() so why not set it
-
 % for iflag, why not always use global? why need an extra field?
 %  someone can alter iflag?
-
 % those fields can be changed when do '.' ? to source a script?
 % or when -c ? This is why they are fields and not globals?
+@
 
 % note that start() reset those fields.
-
+%claude:
+When [<yyparse()>] returns an error, the behavior depends
+on the mode. In non-interactive mode (or on a genuine EOF),
+[[rc]] closes the input and returns to the parent thread.
+In interactive mode, it simply prints a newline after an
+interrupt ([[^C]]) and goes back to read the next command.
 % where cmdfd is used? in yylex() getnextc(), called from yyparse()
-
-
 % when execute a script, cmdfd is the fd for the script, but not
 % that yyparse still parse one line at a time, and so Xrdcmds
 % will read one line, compile it, execute, and then go to other line.
 % Also means that if modify script while running, might have weird
 % behavior.
-
 %XXX
 % C-d generates an EOF?
+
 <<[[Xrdcmds()]] if yyparse() returned an error>>=
 if(error){
     if(!p->iflag  ||  p->eof && !Eintr()){
@@ -1837,21 +2197,47 @@ if(error){
 %******************************************************************************
 \chapter{Input}
 %******************************************************************************
-\label{chap:input}
 % so Lexing chapter cleaner
+\label{chap:input}
 
 %trans: before yyparse, see routines used by yylex, called from yyparse.
+%toc:
+%claude:
+Before describing the lexer, I will present the input routines
+it relies on. These routines handle reading characters from
+the current input source (terminal or script file), managing
+the prompt, and providing the one-character lookahead
+that the lexer needs.
 
 \section{Overview}
 
 % main -> Xrdcmds -> yyparse() -> yylex() -> nextc() -> getnextc() 
 %  which use runq->cmdfd to read stuff.
+%claude:
+The call chain for reading input is:
+[[yylex()]] $\rightarrow$ [[nextc()]] $\rightarrow$ [[getnext()]]
+$\rightarrow$ [[rchr(runq->cmdfd)]].
+%
+[<getnext()>] reads a raw character and handles
+escaped newlines (for multi-line commands) and prompt display.
+[<nextc()>] adds a one-character lookahead on top of [<getnext()>],
+and [<advance()>] consumes that lookahead.
 
 
 \section{Reading a character: [[getnext()]]}
 
 % why return an int and not a char? because unicode? then use Rune!
 % yylex -> nextc -> <>
+%claude:
+[<getnext()>] reads one character from the current thread's
+input stream ([[runq->cmdfd]]).
+Besides the actual read (via [<rchr()>], the buffered IO
+read function), it handles three concerns:
+returning a previously peeked character ([[peekc]]),
+displaying the prompt before blocking on input,
+and converting escaped newlines ([[\<newline>]]) into spaces
+to support multi-line commands.
+
 <<function [[getnext]]>>=
 /*
  * read a character from the input stream
@@ -1956,6 +2342,17 @@ if(peekc!=EOF){
 
 % so $prompt is actually a 2 words list, first word = original
 % and second word when it's a multiline command?
+%claude:
+In [[rc]], the [[\$prompt]] variable is a two-element list:
+the first element is the main prompt (e.g., [["\% "]]),
+and the second element is the continuation prompt displayed
+when a command spans multiple lines (e.g., [["\t"]]).
+%
+The prompt is displayed just before reading a character,
+not at the end of executing a command.
+This is done through the global [[doprompt]] flag, which
+is set to [[true]] after each newline (or EOF) and reset
+to [[false]] after the prompt is printed.
 
 <<global [[doprompt]]>>=
 bool doprompt = true;
@@ -1990,6 +2387,15 @@ if(doprompt)
 @
 % remember that set to true in global at startup.
 % so first character read we will get a prompt.
+
+%claude:
+The subtlety in [<pprompt()>] is that after printing the current
+prompt string, it switches [[promptstr]] to the {\em second}
+element of [[\$prompt]] (the continuation prompt).
+This way, if the lexer needs more input for a multi-line
+command, the next call to [<pprompt()>] will display
+the continuation prompt instead of the main one.
+The main prompt is restored in [<Xrdcmds()>] before each new command.
 
 <<function [[pprompt]]>>=
 void
@@ -2052,6 +2458,17 @@ doprompt = true;
 \section{Looking ahead: [[nextc()]] and [[advance()]]}
 
 % often need look ahead in lexing (or the dual: backtracking)
+%claude:
+Lexers often need to look one character ahead to decide
+what token to produce. For example, when the lexer sees [[\&]],
+it must peek at the next character to decide whether it is
+a lone [[\&]] (background operator) or part of [[\&\&]] (logical and).
+%
+[<nextc()>] provides this lookahead by caching the next character
+in the global [[future]]. Multiple calls to [<nextc()>] return
+the same character until [<advance()>] is called to consume it.
+The helper [<nextis()>] combines both: it checks whether the next
+character matches, and consumes it if so.
 
 <<global [[future]]>>=
 int future = EOF;
@@ -2120,11 +2537,16 @@ nextis(int c)
 
 %trans:
 % now lexer, yylex, called from yyparse.
-
 % why not using lex? they like yacc but not lex apparently
 % (because lex != flex? or because of multiline editing tricks
 % that may be harder to implement with lex?)
-
+%claude:
+The lexer of [[rc]] is hand-written (not generated by [[lex]]),
+which gives more control over subtle interactions
+with the rest of the shell, at the cost of some complexity.
+%
+The main function is [<yylex()>], called by the [[yacc]]-generated
+parser whenever it needs the next token.
 
 \section{[[yylex()]]}
 
@@ -2137,6 +2559,20 @@ nextis(int c)
 %   function def or call vs array subscript
 % - special handling of [] after redirection and
 %   parsing and AST building inside lexer (hmmm)
+%claude:
+The structure of [<yylex()>] is a switch on the next character.
+After skipping whitespace, it dispatches on the character read:
+operators and special characters are handled as individual cases,
+and anything else is treated as a word character.
+%
+There are a few lexing subtleties worth noting:
+newlines are sometimes skipped (via [<skipnl()>]) after certain
+operators to support multi-line commands;
+keywords like [[if]] and [[for]] are recognized as keywords
+only in command position (not as arguments);
+and the [[(]] character is handled specially depending on
+whether it follows a [[\$]] (array subscript) or not
+(grouping/function definition).
 
 <<function [[yylex]]>>=
 //@Scheck: called from yyparse()
@@ -2213,6 +2649,13 @@ char tok[NTOK + UTFmax];
 
 \section{Spaces and comments ([['#']])}
 
+%claude:
+[<skipwhite()>] skips spaces, tabs, and comments.
+In [[rc]], comments start with [[#]] and extend to the end of the line.
+Note that the [[incomm]] global is needed by [<getnext()>]:
+inside a comment, a backslash-newline should {\em not} be treated
+as a line continuation.
+
 <<global [[incomm]]>>=
 bool incomm;
 @
@@ -2255,20 +2698,31 @@ skipwhite(void)
 
 % will be covered by general code later returning single
 % char.
-
 % command terminator
-
 % subtle! called from grammar, weird
 % normally newlines marks the end of a command line to be processed.
 % but when use |, &&, ||, it is common to enter a newline
 % but this newline should be considered a whitespace to skip.
 % But sometimes not. So sometimes in the lexer
 % there are calls to skipnl to consume those whitespace and newlines
-
 % Do that when knows a newline can not terminate a command because
 % we are waiting for something else, for instance with binary operators
 % like ||, &&, even |.
 % We dont want the next newline to be derived as empty command
+%claude:
+In [[rc]], a newline normally acts as a command terminator
+(like [[;]] in C). However, after certain operators like
+[[|]], [[&&]], or [[||]], a newline should be ignored because
+the user is clearly continuing the command on the next line.
+%
+[<skipnl()>] is called by the lexer after those operators
+to consume any whitespace and newlines until meaningful input arrives.
+This is why you can write things like:
+\begin{verbatim}
+  ls |
+  wc -l
+\end{verbatim}
+and have it work as expected.
 
 <<function [[skipnl]]>>=
 void
@@ -2294,6 +2748,16 @@ skipnl(void)
 
 \section{Operators ([['&']], [['&&']], [['|']], [['||']], [['<']], [['>']], [['$']], \ldots)}
 
+%claude:
+Each operator is handled as a case in the main switch of [<yylex()>].
+For multi-character operators like [[&&]] or [[||]], the lexer
+uses [<nextis()>] to check the second character. Note
+that after binary operators like [[&&]], [[||]], and [[|]],
+the lexer calls [<skipnl()>] so that newlines are treated
+as whitespace, allowing the command to continue on the next line.
+%
+The [[lastdol]] flag tracks whether the previous token was [[\$]],
+which affects how [[(]] is lexed (see Section~\ref{sec:array-subscript}).
 
 <<[[yylex()]] switch c cases>>=
 case '&':
@@ -2483,6 +2947,18 @@ if(!wordchr(c)){
 \section{Quoted strings ([['...']])}
 \label{sec:quoting}
 
+%claude:
+In [[rc]], strings are quoted with single quotes.
+To include a literal single quote inside a quoted string,
+you double it: [['it''s']] produces [[it's]].
+%
+The [[inquote]] flag is needed by [<getnext()>] because
+inside a quoted string, backslash-newline should {\em not}
+be treated as a line continuation.
+%
+The [[lastword]] flag tracks whether the previous token
+was a word, which the grammar uses to decide whether
+adjacent tokens should be concatenated (e.g., [[a^b]]).
 
 <<global [[inquote]]>>=
 bool inquote;
@@ -2561,6 +3037,17 @@ token(char *str, int type)
 
 \section{Keywords and identifiers ([[if]], [[for]], [[while]], [[switch]], [[fn]], \ldots )}
 
+%claude:
+When the lexer encounters a word character (anything not an operator
+or whitespace), it reads characters until a non-word character appears.
+After a [[\$]], only identifier characters ([[idchr]]) are accepted,
+which excludes slashes and other path characters.
+%
+Once the word is assembled, [<klook()>] checks whether it matches
+a keyword. Keywords are stored in a small hash table initialized
+by [<kinit()>] at startup. If the word is a keyword,
+[<klook()>] returns the appropriate token type; otherwise it
+returns [[WORD]].
 
 <<[[yylex()]] if c is a word character>>=
 for(;;){
@@ -2675,10 +3162,22 @@ kenter(int type, char *name)
 
 \section{Array subscript ([[<arr>(<n>)]])}
 % and automatic carret
+\label{sec:array-subscript}
 
 % ( vs SUB. Call? vs array subscript.
 % need two tokens otherwise ambiguity in grammar?
-% 
+%claude:
+This is one of the trickiest parts of the lexer.
+When a word is immediately followed by [[(]], as in [[\$x(1)]],
+it must be treated as an array subscript ([[SUB]]) rather
+than a regular parenthesis.
+%
+Additionally, when two words are adjacent without whitespace
+(e.g., [[-x\$flag]]), the lexer inserts an implicit [[^]]
+(caret, the concatenation operator) between them.
+Without this, the lexer would produce three separate tokens
+and there would be no way to distinguish [[-x\$flag]] (one argument)
+from [[-x \$flag]] (two arguments).
 
 <<[[yylex()]] other locals>>=
 int d = nextc();
@@ -2735,6 +3234,21 @@ if(lastword){
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
 %(compared to ocamlyacc can have actions in the middle, and those actions
 % count as indexable elements for the $xxx numbering ($1, $2, etc))
+%claude:
+The parser of [[rc]] is written using [[yacc]]
+(see \book{Compiler} for an introduction to [[yacc]]).
+The grammar is quite compact, which reflects the simplicity
+of the [[rc]] language.
+%
+The top-level rule [[rc]] parses a single line: either
+an empty line (EOF), or a [[line]] followed by a newline.
+When a complete line is parsed, the action calls [<compile()>]
+to transform the AST into bytecodes.
+%
+Note that newlines have a semantic role in [[rc]]:
+they terminate commands (like [[;]] in C). This is what
+makes the shell convenient for interactive use --- you do not
+need an explicit semicolon to run a command.
 
 <<rc/syn.y>>=
 %{
@@ -2845,6 +3359,19 @@ rc:
 \section{Simple commands ([[<cmd> <arg1>...<argn>]]) }
 
 % a line can have a single command (stmt)
+%toc:
+%claude:
+The grammar is layered:
+a [[line]] is one or more [[cmd]]s separated by [[;]] or [[&]],
+a [[cmd]] is a [[simple]] command (or a control flow statement),
+and a [[simple]] command is a [[first]] word followed by zero
+or more [[word]] arguments.
+%
+The distinction between [[first]] and [[word]] is important:
+a [[first]] cannot be a keyword, so that [[if]] in command
+position is recognized as a keyword, but [[echo if]]
+treats [[if]] as a regular word argument.
+
 <<line rule>>=
 line:   
     cmd
@@ -2930,6 +3457,17 @@ words:
 
 
 
+%claude:
+[<simplemung()>] wraps a simple command in a [[SIMPLE]] node
+and also stores a string representation of the whole
+command in [[Tree.str]]. This string is used later to
+store function definitions in the environment
+(see Chapter~\ref{chap:environment}).
+%
+It also ``percolates'' redirections to the root of the subtree,
+so that the bytecode generator can handle them before
+executing the command.
+
 <<function [[simplemung]]>>=
 /*
  * Add a SIMPLE node at the root of t and percolate all the redirections
@@ -2979,9 +3517,22 @@ for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
 % actually operators are at different levels, line rule, cmd rule,
 % simple rule and so have different priotities.
 % redirection is lower, then pipe and logic operators, then sequence
+%claude:
+Operators are spread across different grammar levels,
+which implicitly defines their priorities.
+Sequencing ([[;]] and [[&]]) is at the [[line]] level (lowest priority),
+logical operators ([[&&]], [[||]]) and pipes ([[|]]) are at the
+[[cmd]] level, and redirections are at the [[simple]] level
+(highest priority, closest to the command words).
 
 \subsection{Sequences ([[';']], [['&']])}
+
 \t and async execution!
+%claude:
+The [[;]] operator sequences two commands.
+The [[&]] operator runs a command asynchronously (in the background)
+and is treated as a unary postfix operator:
+[[x & y]] is parsed as [[(x&); y]].
 
 % known as Joining in csh terminology.
 
@@ -3053,9 +3604,19 @@ tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
 % Fundamental type is list of string. No int, no float, just strings.
 % So fundamental operator is string matching ~.
 % Can be used for arithmetic too,  if(~ $#xxx 0)
-
 %csh: had expression grammar, so could do $i < 365
 %sh: ugly external 'test' program and '[' but need for -gt, -lt
+%claude:
+The [[~]] (twiddle) operator is the fundamental comparison
+operator in [[rc]]. Since all values in [[rc]] are strings
+(or lists of strings), there are no arithmetic comparisons;
+instead, [[~]] performs pattern matching:
+[[~ \$x foo*]] tests whether [[\$x]] matches the pattern [[foo*]].
+It can also be used for simple equality tests (without wildcards)
+and even for counting: [[~ \$\#list 0]] tests if a list is empty.
+%
+This is a major simplification compared to the Bourne shell,
+which relies on the external [[test]] program (or [[[]]]).
 
 <<cmd rule other cases>>=
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
@@ -3085,6 +3646,14 @@ tree* mung2(tree *t, tree *c0, tree *c1)
 \subsection{Redirections  ([['>']], [['<']])}
 
 % at level of simple, below cmd, so higher prio than ||, &&, ;, etc
+%claude:
+Redirections are at the [[simple]] level in the grammar,
+which means they bind tighter than pipes and logical operators.
+A command can have multiple redirections (e.g., [[ls < foo > bar]]),
+and they can appear mixed with arguments.
+The [[simplemung()]] function later percolates them to
+the root of the AST subtree.
+
 <<simple rule other cases>>=
 |   simple redir        {$$=tree2(ARGLIST, $1, $2);}
 @
@@ -3147,7 +3716,19 @@ tree* epimung(tree *comp, tree *epi)
 % really need to support that?
 %ocaml: do not support that
 
-\section{Control flow statements ([[if]], [[if not]], [[while]], [[switch]], [[for]])} 
+\section{Control flow statements ([[if]], [[if not]], [[while]], [[switch]], [[for]])}
+
+%claude:
+Note that [[rc]] uses [[if not]] instead of [[else]].
+This is because [[rc]] is an interactive language: when you type
+[[if(test) cmd<newline>]], the shell must execute the command
+immediately --- it cannot wait to see if an [[else]] follows
+on the next line. By using [[if not]] as a separate command,
+there is no ambiguity.
+%
+The [[for]] loop has two forms: [[for(x in a b c)]]
+iterates over the explicit list, and [[for(x)]] iterates
+over [[\$*]] (the script arguments).
 
 <<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
@@ -3223,35 +3804,56 @@ cmdsan:
 
 \section{Functions ([[fn]])}
 
+%claude:
+Function definition in [[rc]] uses [[fn name \{body\}]].
+The second form, [[fn name]] without a body, {\em deletes}
+the function definition.
+%
+Note that [[words]] (not just a single word) is accepted
+as the function name: this allows defining a function
+for multiple names at once (e.g., [[fn sigint sighup \{...\}]]
+to handle multiple signals with the same handler).
+
 <<cmd rule other cases>>=
 |   FN words brace  {$$=tree2(FN, $2, $3);}
 |   FN words        {$$=tree1(FN, $2);}
-@
 %$
 % words? fn with multiple words? can define alias on the same line?
 %ocaml: could be at line level? also why allow words here?
-
 % second line is for delfn. if type
 % fn foo   without anything, then means delete the function.
+@
 
 \section{Variables ([[<x> = ...]])}
 
 % definitions
+%claude:
+Variable assignment in [[rc]] is written [[x=value]].
+The interesting aspect is that an assignment can be followed
+by a command: [[x=value cmd]] makes the assignment local
+to that command only. When [[cmd]] is empty, the assignment is global.
+%
+The assignment appears {\em before} the command, following
+the Bourne shell convention (which was itself motivated by
+programs like [[make]] that accept [[x=y]] on the command line).
+%
+The [[\%prec BANG]] directive tells [[yacc]] to resolve
+ambiguities (e.g., [[x=1 ls \&\& echo done]]) using
+the priority of [[BANG]], giving assignment lower priority
+than pipes but higher than logical operators.
 
 <<cmd rule other cases>>=
-|   assign cmd %prec BANG   
+|   assign cmd %prec BANG
       {$$=mung3($1, $1->child[0], $1->child[1], $2);}
-@
 % just add cmd as third child of =
 % remember that cmd can be empty. In fact, if empty the semantic
 % of the assignment changes. The binding is not just for the current command.
-
 % why this syntax? why before?
 % Bourne says that cc, make have x=y in its argument, so have to
 % do assign before cmd.
-
 % explain %prec?
 % if remove it then get ambiguity with cmd && cmd.
+@
 %60: shift/reduce conflict (shift 51, reduce 22) on TAndAnd
 %60: shift/reduce conflict (shift 52, reduce 22) on TOrOr
 %60: shift/reduce conflict (shift 53, reduce 22) on TPipe
@@ -3310,12 +3912,18 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 
 \section{Lists ([[(...)]])}
 
+%claude:
+In [[rc]], parentheses create lists: [[(a b c)]] is a list
+of three words. This is how you assign multiple values
+to a variable: [[x=(a b c)]].
+Lists are first-class values in [[rc]], which is one of its main
+improvements over the Bourne shell.
+
 <<comword rule other cases>>=
 |   '(' words ')'   {$$=tree1(PAREN, $2);}
-@
 %$
-
 % a bit hard to call it word then ... when it is really a list of words.
+@
 
 
 
@@ -3339,21 +3947,46 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 \n  because it helps to see the code generated from a tree.
 \n We could also group with the related parsing, but maybe it would
 \n  be too much, and parsing can be understood in isolation.
+%toc:
+%claude:
+I merged bytecode generation and interpretation in one chapter
+because it helps to see the bytecodes generated from a given AST node
+together with the functions that interpret those bytecodes.
+We could also group them with the related parsing, but the parser
+can be understood in isolation.
 
 \section{Overview}
 
 % recall main flow: main() -> ... -> Xrdcmds() -> yyparse() -> compile()
+%claude:
+Recall the main flow:
+[<main()>] $\rightarrow$ [<Xrdcmds()>] $\rightarrow$ [<yyparse()>]
+$\rightarrow$ [<compile()>].
+%
+After [<yyparse()>] builds the AST, it calls [<compile()>]
+which walks the tree and emits bytecodes into [<codebuf>].
+The bytecodes are then interpreted by the main loop in [<main()>].
 
 \subsection{[[emitxxx()]]}
 
 % see codebuf in Core DS chapter (could be moved here too)
 
+%claude:
+The emit functions append elements to [<codebuf>],
+growing it as needed. There are three variants: [<emitf()>]
+for function pointers (the bytecodes), [<emiti()>] for integers
+(jump offsets, file descriptors), and [<emits()>] for strings
+(inline arguments like the string after [<Xword>]).
+%
+[[codep]] is the current write position in the buffer, and
+[[ncode]] is the allocated capacity.
+
 <<global [[codep]]>>=
 // idx in codebuf
 int codep;
 @
-
 % for the emitxxx() to realloc when necessary
+
 <<global [[ncode]]>>=
 int ncode;
 @
@@ -3390,8 +4023,17 @@ int morecode(void)
 
 \subsection{[[compile()]]}
 
-
+%claude:
+[<compile()>] allocates a fresh code buffer, then calls
+[<outcode()>] to recursively walk the AST and emit bytecodes.
+It appends [<Xreturn>] at the end so that when the bytecodes
+finish executing, the interpreter returns to the previous thread.
+%
+Note that [<compile()>] is called for {\em each line} entered
+interactively (or each line of a script). So each line gets
+its own bytecode sequence ending with [<Xreturn>].
 % modify codebuf!
+
 <<function [[compile]]>>=
 //@Scheck: called from syn.y
 error0 compile(tree *t)
@@ -3431,6 +4073,15 @@ if(nerror){
 \subsection{[[outcode()]]}
 
 %ugly
+%claude:
+[<outcode()>] is the main recursive function that walks the AST
+and emits bytecodes. It switches on the node type and
+emits the appropriate sequence of bytecodes for each construct.
+%
+The [[eflag]] parameter propagates the [[-e]] flag (exit on error):
+when set, an [<Xeflag>] bytecode is emitted after certain commands
+to check if they failed and exit accordingly.
+
 <<constant c0 (rc/code.c)>>=
 #define	c0	t->child[0]
 @
@@ -3477,8 +4128,19 @@ outcode(tree *t, bool eflag)
 % - dealing with argv
 % - dealing with return status
 % - dealing with subprocesses
-
+%claude:
+Before describing the compilation of specific AST nodes,
+let me present the bytecodes used to manage the argument stack.
+%
+Most compilation schemes follow the same pattern:
+emit [<Xmark>] to start a new word list on [[argv]],
+emit a series of [<Xword>] to push words onto it, then
+emit a bytecode (like [<Xsimple>]) that consumes the list.
+%
+For example, [[ls -l /tmp]] compiles to:
+[[Xmark]], [[Xword "ls"]], [[Xword "-l"]], [[Xword "/tmp"]], [[Xsimple]].
 % used for each word in the compiled command
+
 <<function [[Xword]]>>=
 void
 Xword(void)
@@ -3557,6 +4219,14 @@ if(p==nil)
 \subsection{Process status management}
 
 % was $$ in bash
+%claude:
+The exit status of the last command is stored in the
+[[\$status]] variable. [<setstatus()>] sets it, and
+[<getstatus()>] and [<truestatus()>] read it.
+%
+In [[rc]], a status is a string (not an integer like in the
+Bourne shell). An empty string or the string [["0"]] means success;
+anything else means failure.
 
 <<function [[setstatus]]>>=
 void
@@ -3592,12 +4262,17 @@ truestatus(void)
 %  but if error in one of then then should return an error.
 % so if return string is empty, or contains only 0 or |, then fine
 
-\subsection{Subprocesses management}
 % children
+\subsection{Subprocesses management}
 
 \t why need waitpids? anyway do Waitfor(pid, ...) in Xsimple
 \t so why need also to record the current set of child process?
 \t it's annoying because in each child then you need clearwaitpids
+%claude:
+[[rc]] keeps track of all child processes it has spawned
+in the [[waitpids]] array. This is needed for the [[wait]]
+builtin (which waits for all children) and for proper
+cleanup when [[rc]] exits.
 
 <<global [[waitpids]]>>=
 // growing_array<pid> (but really a list)
@@ -3657,13 +4332,22 @@ havewaitpid(int pid)
 }
 @
 
-\section{Simple commands}
 % or builtins or functions
-
+\section{Simple commands}
 
 \subsection{Bytecode generation}
 
 % SIMPLE node built in simplemung()
+%claude:
+A [[SIMPLE]] command compiles to: [<Xmark>] (start a new
+word list), followed by the bytecodes for the arguments
+(which push words onto the stack), followed by [<Xsimple>]
+(which pops the word list and executes the command).
+%
+Note that [[ARGLIST]] and [[WORDS]] emit their children
+in reverse order: since [<Xword>] prepends to the word list,
+emitting the last word first ensures the list ends up
+in the correct order.
 
 <<[[outcode()]] cases>>=
 case SIMPLE:
@@ -3717,6 +4401,25 @@ else if(p->f==Xword || p->f==Xdelhere)
 \subsection{[[Xsimple()]]}
 
 % * Xsimple(args)			run command and wait
+%claude:
+[<Xsimple()>] is the bytecode that executes a simple command.
+It is the heart of [[rc]] and handles three cases, in order:
+%
+\begin{enumerate}
+\item If the command name matches a shell {\em function}
+  (defined with [[fn]]), it runs the function's bytecodes
+  in a new thread.
+\item If the command name matches a {\em builtin}
+  (e.g., [[cd]], [[exit]], [[.]]{}), it calls the corresponding
+  C function directly (without forking).
+\item Otherwise, it forks a child process with [<execforkexec()>]
+  and waits for it to finish.
+\end{enumerate}
+%
+The [[while(Waitfor(...) < 0)]] loop retries the wait
+if it was interrupted by a signal (e.g., [[^C]]): the signal
+kills the child, but the parent still needs to reap it.
+
 <<function [[Xsimple]]>>=
 void
 Xsimple(void)
@@ -3814,8 +4517,20 @@ Xerror1(char *s)
 
 \subsection{Fork}
 
-
+%claude:
+[<execforkexec()>] implements the fundamental [[fork]]+[[exec]]+[[wait]]
+pattern that is the essence of a shell.
+It forks a child process, and in the child, calls [<execexec()>]
+to replace the child with the actual command.
+If [[exec]] fails (e.g., the command does not exist),
+the child exits with an error; the parent continues normally.
+%
+The [[pushword("exec")]] before [<execexec()>] is a trick:
+[<execexec()>] is also used as the [[exec]] builtin, where
+[[exec]] appears as the first word in [[argv]]. Here we add
+it artificially so [<execexec()>] can [[popword()]] it uniformly.
 % fundamental of a shell! fork exec wait
+
 <<function [[execforkexec]]>>=
 int
 execforkexec(void)
@@ -3895,6 +4610,18 @@ if(runq->argv->words==nil){
 \subsection{[[$path]] management}
 %$
 \label{sec:path-management}
+
+%claude:
+When the command name starts with [[/]], [[./]], [[../]],
+or [[#]] (device path in \plan), it is treated as an
+absolute path and no search is performed.
+Otherwise, [<searchpath()>] returns the list of directories
+in [[\$path]] to try.
+%
+[<Execute()>] then iterates over these directories,
+prepending each to the command name and calling [[exec()]].
+If [[exec()]] fails, it tries the next directory.
+This is the standard \unix path search mechanism.
 
 <<function [[searchpath]]>>=
 word*
@@ -3994,8 +4721,16 @@ mkargv(word *a)
 \subsection{Wait}
 
 % In the mean time, in the parent process
-
+%claude:
+Back in the parent process, [<Waitfor()>] loops calling [[wait()]]
+until it reaps the child with the expected [[pid]].
+If [[wait()]] returns a different child (from a background process
+started with [[&]]), its status is recorded but the loop continues.
+%
+If [[wait()]] is interrupted by a signal, [<Waitfor()>] returns
+[[-1]], and the caller ([[Xsimple]]) retries.
 % Xsimple -> <>
+
 <<function [[Waitfor]]>>=
 int
 Waitfor(int pid, bool _persist)
@@ -4061,6 +4796,10 @@ exitnext(void){
 
 \subsection{Basic sequence}
 
+%claude:
+The sequencing operator [[;]] simply emits the bytecodes
+of both children one after the other.
+
 <<[[outcode()]] cases>>=
 case ';':
     outcode(c0, eflag);
@@ -4073,6 +4812,19 @@ case ';':
 
 
 \subsection{Logical operators}
+
+%claude:
+[[&&]] and [[||]] use a forward jump technique.
+For [[cmd1 \&\& cmd2]], the compiler emits:
+the bytecodes of [[cmd1]], then [<Xtrue>] followed by a
+placeholder jump offset, then the bytecodes of [[cmd2]].
+After emitting [[cmd2]], [<stuffdot()>] patches the placeholder
+with the actual address, so [<Xtrue>] can jump past [[cmd2]]
+if the status is false.
+%
+[<Xtrue>] and [<Xfalse>] are symmetric:
+[<Xtrue>] jumps if the status is {\em false} (skip the second command),
+and [<Xfalse>] jumps if the status is {\em true}.
 
 <<[[outcode()]] locals>>=
 int p;
@@ -4154,6 +4906,16 @@ Xbang(void)
 
 \subsection{String matching}
 
+%claude:
+The [[~]] operator pushes two word lists onto [[argv]]
+(the subject and the patterns), then calls [<Xmatch>].
+Two [<Xmark>] bytecodes are needed because both the subject
+and the patterns can be multi-word (e.g., if they come from
+variable expansion), and they must be kept separate.
+%
+[<Xmatch()>] converts the subject words to a single string
+(joining with spaces), then tries each pattern word
+against it using [<match()>] (described in Chapter~\ref{chap:globbing}).
 
 <<[[outcode()]] cases>>=
 case TWIDDLE:
@@ -4224,22 +4986,33 @@ list2str(word *words)
 %\subsection{Trace of a redirection}
 % ls > foo
 % can also be  {ls; echo bar} > foo
-
 % actually memorize info that will need to redirect. open file
 % but do not do yet the redir. Need to wait to be in forked of
 % simple command, just before the exec, and then apply the redirection
 % information.
 % (but then need to popredir)
-
-
 % note that when we see a redirection command, we can not
 % redirect yet our own stdout and stdin. We need to do that
 % in the child process we fork that runs a simple command.
 % So when we see a redir, we need to store in the thread
 % future redirections we will need to do in the child process.
-
-
 % Then at some point we execute those redirections:
+%claude:
+Redirections in [[rc]] are handled in two phases.
+When the interpreter encounters a redirection bytecode
+(e.g., [<Xwrite>]), it opens the target file and pushes
+a [[Redir]] record onto the thread's redirection stack.
+But it does {\em not} actually redirect the file descriptors yet.
+%
+The actual redirection happens later, in [<execexec()>]
+(inside the forked child process), just before [[exec()]]:
+[<doredir()>] walks the redirection stack and performs
+the [[dup()]] and [[close()]] calls.
+%
+This two-phase design is necessary because the parent shell
+must not modify its own file descriptors; only the child
+(which is about to be replaced by [[exec()]]) should have
+its stdin/stdout/stderr redirected.
 <<[[execexec()]] perform the redirections>>=
 doredir(runq->redir);
 @
@@ -4531,8 +5304,21 @@ turfredir();
 \subsection{Pipe}
 
 % arguably the most important operator
-
 %\subsubsection{Trace of a pipe}
+%claude:
+Pipes are arguably the most important operator in a shell.
+For [[cmd1 | cmd2]], three processes are involved:
+the parent (the [[rc]] interpreter), a child running [[cmd1]],
+and the parent running [[cmd2]] in a new thread.
+%
+The left side ([[cmd1]]) runs in a forked child process.
+The right side ([[cmd2]]) runs in the parent's new thread.
+This asymmetry means that the right side can modify
+the shell's state (e.g., variable assignments), while
+the left side cannot.
+%
+The compiled bytecodes contain two jump offsets: one for
+the right side's code, and one for the parent's [<Xpipewait>].
 
 % when do   % ls | wc -l, what happens?
 % first bootstrapped thread t1, 
@@ -4785,6 +5571,17 @@ concstatus(char *s, char *t)
 
 \subsection{Asynchronous execution}
 
+%claude:
+The [[&]] operator runs a command in the background.
+The child's stdin is redirected to [[/dev/null]]
+(so it does not compete with the shell for terminal input),
+and the child is put in a new note group ([[RFNOTEG]])
+so that interrupts sent to the shell do not kill it.
+%
+The parent records the child's PID in [[\$apid]]
+(for ``asynchronous PID''), allowing the user to wait for
+it later or send signals to it.
+
 <<[[outcode()]] cases>>=
 case '&':
     emitf(Xasync);
@@ -4869,6 +5666,17 @@ Xexit(void)
 \subsection{[[if]]}
 
 % remember than in rc there is   'if ( )' and 'if not' for else.
+%claude:
+The [[if]] compilation uses the same forward-jump technique
+as [[&&]]: emit the condition, then [<Xif>] with a jump offset
+to skip the body if the condition is false.
+%
+The [<Xwastrue>] bytecode at the end resets the [[ifnot]] flag.
+This flag is how [[rc]] connects [[if]] and [[if not]]:
+[<Xif>] sets [[ifnot]] to [[true]], and [<Xifnot>] checks it
+to decide whether to execute the else-body.
+If any other command is executed between [[if]] and [[if not]],
+[<Xwastrue>] resets the flag, making [[if not]] a no-op.
 
 <<[[outcode()]] cases>>=
 case IF:
@@ -4958,6 +5766,14 @@ if(t->type!=NOT && t->type!=';')
 
 \subsection{[[while]]}
 
+%claude:
+The [[while]] loop compiles to: the condition bytecodes,
+[<Xtrue>] (jump out if false), the body bytecodes,
+[<Xjump>] (jump back to the condition).
+%
+If the condition is empty (e.g., [[while()]]),
+an [<Xsettrue>] bytecode is emitted to make it loop forever.
+
 <<[[outcode()]] cases>>=
 case WHILE:
     q = codep;
@@ -4992,6 +5808,16 @@ Xjump(void)
 \subsection{[[for]]}
 
 % why Xmark?
+%claude:
+The [[for]] loop is more complex. It first evaluates
+the list to iterate over (or expands [[\$*]] if no list
+is given), creates a local variable for the loop variable
+(via [<Xlocal>]), and then loops with [<Xfor>].
+%
+[<Xfor()>] pops the next word from the list, assigns it
+to the local variable, and executes the body.
+When the list is exhausted, it jumps past the body
+and [<Xunlocal>] removes the local binding.
 
 <<[[outcode()]] cases>>=
 case FOR:
@@ -5212,6 +6038,14 @@ case BRACE:
 
 \section{Functions}
 
+%claude:
+In [[rc]], functions are stored in variables:
+the [[Var]] structure has an [[fn]] field pointing to
+the function's bytecode vector and a [[pc]] field
+indicating where in that vector the function body starts.
+This design unifies functions and variables in the same
+namespace and allows functions to be exported
+to the environment (see Chapter~\ref{chap:environment}).
 
 <<[[Var]] other fields>>=
 code	*fn;		/* pointer to function's code vector */
@@ -5220,13 +6054,22 @@ bool	fnchanged;
 @
 %ocaml: put in another type, not with Var
 
-
-
-\subsection{Function definitions ([[fn <foo> { ... }]])}
 % defs
+\subsection{Function definitions ([[fn <foo> { ... }]])}
 
 % * Xfn(name){... Xreturn}			define function
 % * Xdelfn(name)				delete function definition
+%claude:
+When defining a function with [[fn foo \{body\}]],
+[<Xfn>] stores the current code vector (via [<codecopy>])
+in the variable named [[foo]].
+This is why bytecode vectors are reference-counted:
+the function's code vector is shared with the code that
+defined it.
+%
+When [[fn foo]] is used without a body, [<Xdelfn>] deletes
+the function by setting [[v->fn]] to [[nil]].
+
 <<[[outcode()]] cases>>=
 case FN:
     emitf(Xmark);
@@ -5317,6 +6160,17 @@ Xdelfn(void)
 
 \subsection{Function uses ([[<foo>(...)]])}
 
+%claude:
+When [<Xsimple()>] detects that the command name matches
+a function, it calls [<execfunc()>].
+This function pops the command arguments from [[argv]],
+starts a new thread with the function's bytecodes,
+and binds the arguments to a local [[\$*]] variable.
+%
+This is how function arguments work in [[rc]]:
+inside a function, [[\$*]] contains the arguments passed
+to the function, shadowing the script's global [[\$*]].
+
 <<[[Xsimple()]] other locals>>=
 var *v;
 @
@@ -5348,10 +6202,23 @@ execfunc(var *func)
 
 \subsection{Variable definitions ([[<x>=...]])}
 
+%claude:
+Variable assignment has two modes:
+when followed by a command (e.g., [[x=1 cmd]]),
+the assignment is local to that command (using [<Xlocal>]/[<Xunlocal>]);
+when standalone (e.g., [[x=1]]), it is global (using [<Xassign>]).
+%
+The code detects which mode by following the chain of [['=']] nodes
+through [[child[2]]]: if it eventually reaches a non-assignment
+node, there is a command and the assignments are local.
+%
+Multiple chained assignments like [[A=b C=d cmd]] are supported:
+each creates a local binding, and they are all unlocalized
+after the command finishes.
+
 <<[[outcode()]] locals>>=
 tree *tt;
 @
-
 % note that can have A=b C=d cmd
 % so to know if it's a local or global assignment, we need to look
 % at the very right after the '=' nodes.
@@ -5458,6 +6325,16 @@ Xunlocal(void)
 
 \subsection{Variable uses ([[$<x>]])} %$
 
+%claude:
+[<Xdol()>] (dollar) handles variable expansion.
+It looks up the variable name and pushes its value
+(a list of words) onto the argument stack.
+%
+A subtle feature: if the variable name is a number
+(e.g., [[\$1]], [[\$2]]), [<Xdol()>] treats it as a positional
+parameter, indexing into [[\$*]] instead of looking up
+a named variable.
+
 <<[[outcode()]] cases>>=
 case '$': //$
     emitf(Xmark);
@@ -5550,6 +6427,17 @@ Xcount(void)
 %ocaml: factorize in a vlook_varname_or_index with code for Xdol?
 % a bit hard to factorize, different logic
 
+
+%claude:
+Subscripting ([[\$x(2)]] or [[\$x(2-5)]]) extracts elements
+from a list variable by index or range.
+[<subwords()>] does the heavy lifting: it parses each subscript
+(which can be a single number or a [[n-m]] range, where a bare
+[[n-]] means ``from~n to the end''), walks [[n-1]] links into
+the variable's value list, and calls [<copynwords()>] to extract
+the slice. The recursion on [[sub->next]] handles multiple
+subscripts like [[\$x(1 3 5)]], accumulating results in reverse
+so the final list comes out in the right order.
 
 <<[[outcode()]] cases>>=
 case SUB:
@@ -5699,11 +6587,24 @@ conclist(word *lp, word *rp, word *tail)
 %******************************************************************************
 \label{chap:builtins}
 
-
+%claude:
+Shell builtins are commands that must be executed inside the
+shell process itself, rather than in a forked child.
+The most obvious example is [[cd]]: if it were an external
+program, the [[chdir()]] would happen in the child process
+and the parent (the shell) would remain in the old directory.
 
 \section{Overview}
 
 % called from Xsimple when first word is actually recognized as a builtin
+%claude:
+Builtins are stored in a simple array of name/function pairs.
+When [<Xsimple()>] detects that the command name matches
+a builtin, it calls the corresponding function directly.
+%
+The [[builtin]] keyword allows bypassing a function
+that shadows a builtin: [[builtin cd]] always calls the
+builtin [[cd]], even if a function named [[cd]] exists.
 
 <<struct [[Builtin]]>>=
 struct Builtin {
@@ -5770,6 +6671,16 @@ if(strcmp(a->word, "builtin")==0){
 
 \section{[[$ cd]]}
 %$
+
+%claude:
+[[cd]] with no argument changes to [[\$home]].
+With one argument, it searches the [[\$cdpath]] directories
+(similar to how [[\$path]] works for commands).
+When the directory is found via [[\$cdpath]], [[cd]] prints
+the resolved path so the user knows where they ended up.
+%
+Under [[rio]], [[cd]] also writes the new directory
+to [[/dev/wdir]] so the window manager can track it.
 
 <<function [[execcd]]>>=
 void
@@ -5903,9 +6814,18 @@ execexit(void)
 @
 
 \section{[[$ .]]}
-%$ 
+%$
 
-
+%claude:
+The [[.]] (dot) builtin sources a script: it reads and
+executes the commands from a file in the current shell
+(without forking a new process).
+This is how [[rc]] loads initialization files like
+[[rcmain]] and the user's profile.
+%
+It creates a new thread whose [[cmdfd]] reads from
+the sourced file, so [<Xrdcmds()>] will read commands
+from that file instead of the terminal.
 
 <<function [[execdot]]>>=
 void
@@ -6047,6 +6967,13 @@ if(first){
 
 % TODO What is the point of eval? the interpreter loop is already an
 % eval that does call Xrdcmds ...
+%claude:
+[[eval]] takes a string and executes it as a command.
+This is useful when the command to execute is constructed
+dynamically (e.g., from a variable).
+It joins the arguments into a single string, then
+creates a new thread reading from that string
+(via [<opencore()>], which creates a buffered IO from memory).
 
 <<function [[execeval]]>>=
 void
@@ -6130,10 +7057,30 @@ execwait(void)
 %******************************************************************************
 \label{chap:environment}
 
+%claude:
+Under \plan, the environment is not passed via the [[envp]]
+parameter of [[main()]] as in \unix. Instead, each environment
+variable is stored as a file under [[/env/]]: the variable
+[[\$path]] is stored in [[/env/path]]. This is a more elegant
+design because child processes automatically inherit the
+environment through the namespace, and changes are visible
+to all processes sharing the same namespace.
+%
+[[rc]] must synchronize its internal variable table
+with these files in both directions: [<Updenv()>] writes
+changed variables to [[/env/]], and [<Vinit()>] reads
+variables from [[/env/]] at startup.
+
 \section{[[Updenv()]]}
 
 % called from Xsimple() and Execute()
 % why double? anyway with 'changed' field it should be ok
+%claude:
+[<Updenv()>] iterates over all global and local variables
+and writes any that have changed (with [[v->changed == true]])
+to the [[/env/]] filesystem. The [[changed]] flag
+avoids redundant writes.
+
 <<function [[Updenv]]>>=
 void
 Updenv(void)
@@ -6212,6 +7159,15 @@ addenv(var *v)
 \section{[[Vinit()]]}
 
 % main -> <>
+%claude:
+[<Vinit()>] reads the [[/env/]] directory at startup and
+populates the global variable table.
+Each environment file contains the variable's words
+separated by null bytes. [<Vinit()>] reads the file,
+splits on nulls, and calls [<setvar()>] for each variable.
+It then resets the [[changed]] flag so that [<Updenv()>]
+does not write them back immediately.
+
 <<function [[Vinit]]>>=
 void
 Vinit(void)
@@ -6282,9 +7238,21 @@ fdt envdir;
 \label{chap:signals}
 
 % code of nohup utility?
-
-
 % C-d generate an Xsimple (exit 1) ?
+%claude:
+Under \plan, signals are called {\em notes}.
+When a note is received (e.g., an interrupt from [[^C]]),
+the kernel calls the handler registered by [<Trapinit()>].
+%
+The handler does not execute the trap function immediately
+(which would be unsafe in the middle of interpreting bytecodes).
+Instead, it increments a counter ([[ntrap]]) and the main
+interpreter loop checks this counter after each bytecode
+(see the [[handing trap if necessary]] chunk in [<main()>]).
+%
+Users can define signal handlers with [[fn sigint \{...\}]],
+[[fn sighup \{...\}]], etc. If no handler is defined,
+the default behavior applies (usually terminating the process).
 
 <<constant [[NSIG]]>>=
 #define	NSIG	32
@@ -6470,10 +7438,22 @@ ntrap = 0;	/* avoid double-interrupts during blocked writes */
 
 % see main() comment:
 % * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
-
 %main() -> bootstrap -> execdot -> Xreadcmds() -> yyparse() -> compile() -> outcode() -> back to interpreter loop with new codebuf (chained to bootstrap)
-
+%claude:
+The actual bootstrap is more complex than the simplified version
+shown in Chapter~\ref{chap:main}.
+It performs two operations encoded as hand-crafted bytecodes:
+first, it assigns the command-line arguments to [[\$*]]
+(with [[*=(argv)]]),
+then it executes [[. rcmain \$*]] to source the initialization script.
+%
+The bootstrap is essentially the bytecode equivalent of:
+\begin{verbatim}
+  *=(argv)
+  . /rc/lib/rcmain $*
+\end{verbatim}
 %OPTIONAL
+
 <<[[main()]] initialize [[boostrap]]>>=
 memset(bootstrap, 0, sizeof bootstrap);
 
@@ -6515,6 +7495,14 @@ bootstrap[i].i = 0;
 \section{Intitialization script and [[rc -m /path/to/rcmain]]}
 
 %plan9.c
+%claude:
+The default initialization script is [[/rc/lib/rcmain]],
+which sets up [[\$path]] and, for login shells,
+sources the user's [[~\$home/lib/profile]].
+The [[-m]] flag allows overriding this path, which
+is useful during system bootstrap when the standard
+[[rcmain]] may not be available yet.
+
 <<global [[Rcmain]]>>=
 char *Rcmain = "/rc/lib/rcmain";
 @
@@ -6563,26 +7551,49 @@ setvar("rcname", newword(argv[0], (word *)nil));
 %******************************************************************************
 \chapter{Globbing}
 %******************************************************************************
-\label{chap:globbing}
 \n could be in advanced topics, but important feature in a shell
-
 % patterns. wildcards.
+\label{chap:globbing}
 
 % Give responsibility to shell to interpter '*' not program
 
-%history: 
+%history:
 % was actually an external program in osh: glob (with also if, and goto)
-
 %pro: factorize functionality
 %cons: ugly corners (see Unix Haters Handbook)
-
-
 % handle * expansion (before was delegated to another program called glob)
 % also ? and []
 % note that different from regexp, does not do .* because .
 % used too much in filename for extension, so *.c is better than .*\\.c
+%claude:
+Globbing (also called wildcard expansion or pathname expansion)
+is one of the key features of a shell: when you write [[ls *.c]],
+the shell expands [[*.c]] into the list of matching filenames
+{\em before} passing them to [[ls]].
+%
+This is a deliberate design choice: the expansion is done
+by the shell, not by the individual programs, which
+factorizes the functionality.
+%history:
+In the original Unix shell, globbing was actually handled
+by a separate external program called [[glob]].
+%
+The glob patterns [[*]], [[?]], and [[[\ldots]]] are different
+from regular expressions: [[*]] matches any string
+(not ``any number of the preceding character''), and [[?]]
+matches any single character. This is more practical
+for filenames, where [[*.c]] is more natural than the
+regex [[.*\textbackslash{}.c]].
 
 \section{Lexing globbing characters}
+
+%claude:
+Glob characters ([[*]], [[?]], [[[]]) are marked during lexing
+by inserting a [[GLOB]] byte ([[\textbackslash{}001]]) before them.
+This way, the rest of the shell can distinguish a literal [[*]]
+(inside quotes, no [[GLOB]] prefix) from a wildcard [[*]]
+(with a [[GLOB]] prefix). The [<deglob()>] function removes
+these markers when they are no longer needed.
 
 <<constant [[GLOB]]>>=
 /*
@@ -6595,7 +7606,6 @@ setvar("rcname", newword(argv[0], (word *)nil));
  */
 #define	GLOB	'\001'
 @
-
 
 <<[[yylex()]] when c is a word character, if glob character>>=
 if(c=='*' || c=='[' || c=='?' || c==GLOB)
@@ -6620,6 +7630,13 @@ addtok(char *p, int val)
 % diff with addutf()?
 
 \section{Expanding globbing characters}
+
+%claude:
+The expansion happens at runtime, not at compile time.
+The [<Xglob>] bytecode (emitted after evaluating
+command arguments) scans the word list in [[argv]]
+and replaces any word containing [[GLOB]] markers with
+the list of matching filenames from the filesystem.
 
 <<global [[globv]]>>=
 struct Word *globv;
@@ -6676,6 +7693,17 @@ Xglob(void)
 @
 
 \section{[[glob()]]}
+
+%claude:
+[<glob()>] takes a pattern string and pushes all matching
+filenames onto [[globv]]. If no files match, the original
+pattern (with [[GLOB]] markers removed) is kept as-is.
+%
+[<globdir()>] is the recursive workhorse: it scans
+the pattern for the first component containing a metacharacter,
+reads the corresponding directory, and recurses for
+each matching entry. The results are sorted alphabetically
+by [<globsort()>].
 
 <<global [[globname]]>>=
 char *globname;
@@ -6857,6 +7885,29 @@ unicode(uchar *p)
 @
 
 \section{[[match()]]}
+
+%claude:
+[<matchfn()>] is the entry point called from [<glob()>].
+It enforces one subtle rule: the dot-files [[.]] and [[..]]
+are only matched if the pattern explicitly starts with a dot.
+This prevents [[*]] from matching [[.]] and [[..]], which would
+cause recursive globbing to loop or produce confusing results.
+
+The actual matching is done by [<match()>], which walks the
+pattern and the string in lockstep.
+Non-[[GLOB]] bytes must match literally.
+[[GLOB]] bytes introduce the special characters:
+[[*]] tries every possible suffix via recursion (backtracking),
+[[?]] matches exactly one UTF-8 character, and
+[[\lbrack...\rbrack]] matches a character class with optional
+ranges ([[a-z]]) and complement ([[~]]).
+Note that [[rc]] uses [[~]] instead of [[^]] for complement
+inside character classes, since [[^]] is already the
+concatenation operator.
+
+The [[stop]] parameter is [[/]]: a single glob pattern
+is matched one path component at a time by [<globdir()>],
+so [[match()]] stops at slashes rather than consuming them.
 
 <<function [[matchfn]]>>=
 /*
@@ -7085,6 +8136,19 @@ Closedir(int f)
 %******************************************************************************
 \label{chap:advanced-topics}
 
+%claude:
+In this chapter I present features that are not essential
+for understanding the core architecture of [[rc]], but that
+are important in practice.  Many of these features---here
+documents, command substitution, process substitution, general
+redirections---are what make a shell truly useful for scripting.
+
+%claude:
+Note that in Plan~9, many shell-like features that other
+systems implement inside the shell are instead provided by
+the window manager [[rio]]: command-line editing, history,
+filename completion, and job control.
+This keeps [[rc]] simple.
 
 %\section{Shell-like features implemented outside [[rc]]}
 % job control: multiple windows
@@ -7100,6 +8164,13 @@ Closedir(int f)
 \label{sec:rc-c}
 
 %history: also in bourne shell
+%claude:
+The [[-c]] flag lets you pass a command string directly
+on the command line, as in [[rc -c 'echo hello']].
+This is how other programs (like [[mk]], see the Build book)
+invoke the shell to execute a recipe:
+they build a command string and pass it via [[-c]]
+rather than writing it to a temporary file.
 
 <<[[main()]] initialisation>>=
 setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
@@ -7120,6 +8191,22 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 
 
 % so need add it just in Xsimple, for simple commands (as man page says)
+
+%claude:
+The [[-e]] flag makes [[rc]] exit immediately when a simple
+command fails (returns non-null status).
+This is extremely important for build systems:
+[[mk]] (see the Build book) invokes [[rc -e]] for
+recipes, so that a failure in any command---especially inside
+a loop iterating over subdirectories---stops the entire build
+rather than silently continuing.
+
+Note that [[-e]] is a command-line flag, not a [[set]] option,
+so you cannot enable it from within a script.
+The check is only inserted after simple commands, not after
+control flow constructs like [[if]] or [[||]], since a false
+condition in [[if(test ...)]] should not abort the script.
+
 <<[[outcode()]] emit Xeflag after Xsimple>>=
 if(eflag)
     emitf(Xeflag);
@@ -7147,7 +8234,7 @@ else
 void
 Xeflag(void)
 {
-    if(eflagok && !truestatus()) 
+    if(eflagok && !truestatus())
         Xexit();
 }
 @
@@ -7160,7 +8247,24 @@ Xeflag(void)
 
 % very very useful feature!
 
+%claude:
+The [[eflagok]] guard prevents [[-e]] from triggering during
+startup (while sourcing [[rcmain]]).
+It is set to true only after the first [[dot]] command
+finishes, so initialization errors do not cause an immediate
+exit.
+
 \section{Unicode}
+
+%claude:
+Plan~9 was the birthplace of UTF-8, and [[rc]] handles
+Unicode transparently.  The key insight is that UTF-8 is
+self-synchronizing: the lexer can consume multi-byte runes
+by reading the first byte (which encodes the length)
+and then pulling the appropriate number of continuation bytes.
+[<addutf()>] does exactly this during lexing: after [[addtok]]
+stores the first byte, it reads continuation bytes by checking
+the leading-bit pattern.
 
 <<function [[addutf]]>>=
 char*
@@ -7188,13 +8292,11 @@ addutf(char *p, int c)
 
 \section{Advanced constructs}
 
-
-
 \subsection{Subshell: [[@ <cmd>]]}
 
 % why need that? () not enough? { } not enough?
 % no because side effect done in { } will be propagated, e.g., cd!
-% any side effect in command such as setting variables will not be seen 
+% any side effect in command such as setting variables will not be seen
 % in parent process.
 
 % see mkfile for plan9:
@@ -7206,6 +8308,28 @@ addutf(char *p, int c)
 %	}
 \t also why -e does not work here!! does not stop!! because in subshell?
 
+%claude:
+The [[@]] operator runs a command in a child process,
+so that side effects like [[cd]] or variable assignments
+do not affect the parent.  Braces [[{...}]] group commands
+but execute them in the current process---so [[{cd /tmp; ls}]]
+would change the parent's directory.  With [[@{cd /tmp; ls}]],
+the directory change is confined to the subshell.
+
+This is particularly useful in [[mkfile]] recipes that iterate
+over subdirectories:
+\begin{verbatim}
+    for(i in $DIRS) @{
+        cd $i
+        mk $MKFLAGS $stem
+    }
+\end{verbatim}
+
+The implementation is straightforward: fork, run the body
+in the child (which will [[Xexit]]),
+and [[Waitfor]] in the parent.  The forward-jump
+past the body (via [[stuffdot]]) lets the parent skip
+the child's code.
 
 <<token declarations>>=
 %token SUBSHELL /** @ */
@@ -7276,6 +8400,29 @@ Xsubshell(void)
 % in one file. Can have a script with a database (see example
 % of 'tel' command in Bourne paper) included in the file.
 % can mv around the script. no problem.
+
+%claude:
+Here documents let you embed multi-line data directly
+in a script, avoiding external file dependencies.
+The syntax [[<<TAG]] reads input until a line matching
+[[TAG]] appears.  This is an ancestor of the ``bundle''
+idea: program and data in one file, easy to move around.
+
+The implementation is clever: during parsing, [[heredoc()]]
+creates a temporary file (in [[/tmp]]) and records the
+tag and filename in a linked list.  After the entire
+command line is parsed and compiled, [[readhere()]] goes
+back and reads the here-document bodies from the input,
+writing them to those temporary files.  This two-phase
+approach is necessary because a command line can have
+multiple here documents (e.g., [[cmd <<A <<B]]), and
+the bodies appear after the full command line.
+
+If the here-tag was not quoted, variable substitution
+is performed via [<psubst()>]; otherwise the text is
+copied literally.  The temporary files are cleaned up
+by emitting [[Xdelhere]] bytecodes that [[remove()]]
+them after use.
 
 <<constant [[HERE]]>>=
 #define	HERE	4
@@ -7505,6 +8652,11 @@ pstrs(io *f, word *a)
 
 \subsection{Read-write redirections: [[<> <file>]]}
 
+%claude:
+The [[<>]] operator opens a file for both reading and
+writing ([[ORDWR]]), useful for in-place modification
+of files.
+
 <<constant [[RDWR]]>>=
 #define RDWR	7
 @
@@ -7559,6 +8711,19 @@ Xrdwr(void)
 % fancy lexing redirect, see rc manual
 
 % Lexing
+
+%claude:
+The basic redirections [[>]] and [[<]] always use
+file descriptors~1 and~0 respectively.
+The bracket syntax [[>[2]]] or [[<[3]]] lets you redirect
+any file descriptor.  For example, [[echo error >[2] /tmp/log]]
+redirects stderr.
+
+The lexer handles the bracket syntax inline: after seeing
+[[>]] or [[<]], if a [[\lbrack]] follows, it reads the
+file descriptor number.  If it then sees [[=]], the
+redirection becomes a [[DUP]] (file descriptor duplication
+or closing) rather than a file redirection.
 
 <<[[yylex()]] in switch when redirection character, if bracket after>>=
 if(nextis('[')){
@@ -7618,6 +8783,19 @@ if(nextis('[')){
 
 % so can print on stderr with echo in kmem.rc:
 %	echo 'usage: kmem [kernel]' >[1=2]
+
+%claude:
+The [[DUP]] construct performs [[dup2]] between file descriptors.
+[[>[1=2]]] makes fd~1 point to the same destination as fd~2
+(so stdout goes to stderr).
+[[>[1=]]] (with nothing after the equals) closes fd~1.
+This is cleaner than the Bourne shell's [[2>\&1]] syntax.
+
+Like other redirections, the implementation uses the
+two-phase approach: [[Xdup]] pushes a [[RDUP]] record
+onto the redir stack (undone by [[Xpopredir]] afterward),
+and the actual [[dup2]] happens in [[doredir()]] when
+a child process is forked.
 
 <<token declarations>>=
 %token DUP
@@ -7703,7 +8881,11 @@ case RCLOSE:
 
 % see man/1/rc:
 
-
+%claude:
+Just as general redirections extend [[>]] and [[<]] with
+bracket syntax, pipes can also specify which file descriptors
+to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
+(stderr) to [[cmd2]]'s stdin.
 
 \subsection{Command output as a file: \texttt{'<\{<cmd>\}'}}
 
@@ -7711,12 +8893,30 @@ case RCLOSE:
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
 @
 
+
 % see man/1/rc:
 % cmp <{old} <{new}
 
 % it is in comword rule because really it resolved in a filename
 % to /dev/fd/xxx connected to output of command.
 
+%claude:
+Process substitution (called ``command output as a file'' in
+Plan~9) lets you use a command's output as if it were
+a file.  [[cmp <{old} <{new}]] runs the two commands
+and passes their outputs as filenames to [[cmp]].
+
+This appears in the [[comword]] rule because it
+really resolves to a filename ([[/dev/fd/N]]) connected
+to the command's output via a pipe.
+The implementation forks a child that runs the command
+with its stdout (or stdin for [[>{}]]) connected to
+one end of a pipe, while the parent pushes the filename
+[[/fd/N]] (the other end) as a word onto the argv stack.
+
+<<comword rule other cases>>=
+|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
+@
 
 <<token declarations>>=
 %token PIPEFD 
@@ -7798,6 +8998,18 @@ Xpipefd(void)
 
 % by using `{} instead of ``
 % it allows to easily nest (see Design chapter in rc paper).
+
+%claude:
+Command substitution captures a command's stdout as a list
+of words.  The Bourne shell uses backticks [[`cmd`]],
+which cannot nest; [[rc]] uses [[`{cmd}]] with braces,
+which nests naturally.
+
+The output is split into words using [[$ifs]]
+(inter-field separators, defaulting to space, tab, newline).
+The implementation forks a child connected via a pipe;
+the parent reads the output, splits on [[$ifs]] characters,
+and pushes the resulting word list onto the argv stack.
 
 <<comword rule other cases>>=
 |   '`' brace       {$$=tree1('`', $2);}
@@ -7899,12 +9111,24 @@ Xbackq(void)
 
 \subsection{Stringification of variables: [[$"<foo>]]} %$
 
+% no ending "? No, it is used for stringification of a variable.
+% a list2str.
+
+%claude:
+The [[$"]] operator converts a list variable into a single
+string with spaces between elements.
+If [[$x]] is [[(a b c)]], then [[$"x]] is [[a b c]]
+as a single word.
+This is the inverse of [[$ifs]]-splitting in command
+substitution: command substitution splits strings into
+lists, while [[$"]] joins lists back into strings.
+
 <<comword rule other cases>>=
 |   '"' word        {$$=tree1('"', $2);}
-@
 %$
 % no ending "? No, it is used for stringification of a variable.
 % a list2str.
+@
 
 <<[[outcode()]] cases>>=
 case '"':
@@ -7959,6 +9183,14 @@ Xqdol(void)
 
 % has read? How can you read from a script?
 
+%claude:
+These builtins could in principle be external programs
+(like [[echo]] and [[test]] are), but they need access
+to shell internals: [[exec]] replaces the shell process,
+[[whatis]] inspects variables and functions, [[rfork]]
+manipulates namespaces, [[flag]] queries command-line flags,
+and [[shift]] modifies [[$*]].
+
 \subsection{[[$ exec]]}
 %$
 
@@ -7967,9 +9199,27 @@ Xqdol(void)
 % I was not sure you really need that builtin, but
 % many scripts use it.
 
+%claude:
+The [[exec]] builtin replaces the current shell process
+with the given command (no fork).
+It is called from [<Xsimple()>] when the first word
+of the command is [[exec]].
 
 \subsection{[[$ whatis]]}
 %$
+
+%claude:
+[<execwhatis()>] is the shell's introspection tool.
+Given a name, it checks (in order): is it a variable?
+a function? a builtin? an executable on [[$path]]?
+It prints the definition in a form that can be fed back
+to [[rc]]---variables as [[x=value]], functions as
+[[fn name \{body\}]], builtins as [[builtin name]].
+
+The subtle [[mapfd()]] helper is needed because [[whatis]]
+writes to fd~1, but fd~1 might have been redirected;
+[[mapfd]] walks the redir stack to find where fd~1
+actually points.
 
 <<function [[execwhatis]]>>=
 void
@@ -8089,6 +9339,17 @@ Executable(char *file)
 %$
 
 %rfork
+%claude:
+The [[rfork]] builtin exposes Plan~9's [[rfork(2)]]
+system call, which selectively shares or unshares
+resources between parent and child.
+The flags control which namespaces to copy or clear:
+[[n]]/[[N]] for the mount namespace, [[e]]/[[E]] for
+environment, [[s]] for note group, [[f]]/[[F]] for
+file descriptors.
+This is the Plan~9 equivalent of Linux containers
+and namespaces---but from 1992.
+
 <<function [[execnewpgrp]]>>=
 void
 execnewpgrp(void)
@@ -8144,6 +9405,13 @@ execnewpgrp(void)
 \subsection{[[$ flag]]}
 %$
 
+%claude:
+The [[flag]] builtin queries and sets [[rc]]'s own
+command-line flags at runtime.
+[[flag e +]] enables [[-e]] (exit on error),
+[[flag e -]] disables it, and [[flag e]] alone tests
+whether it is set (via the exit status).
+
 <<function [[execflag]]>>=
 void
 execflag(void)
@@ -8177,6 +9445,12 @@ execflag(void)
 
 \subsection{[[$ shift]]}
 %$
+
+%claude:
+[[shift]] removes the first [[n]] elements (default~1)
+from [[$*]], the positional parameters.
+It modifies the variable in place by walking the linked
+list and freeing the removed nodes.
 
 <<function [[execshift]]>>=
 void
@@ -8214,6 +9488,18 @@ execshift(void)
 
 \subsection{[[$ finit]]}
 %$
+
+%claude:
+The [[finit]] builtin re-reads function definitions
+from the [[/env]] filesystem.  This is Plan~9-specific:
+when another process (e.g., a parent shell) defines a
+function, it appears as a file [[/env/fn\#name]].
+[[finit]] scans [[/env]] for these [[fn\#]] files
+and executes them to import the function definitions
+into the current shell.  It uses a small hand-crafted
+bytecode loop ([[rdfns]]) similar to the bootstrap
+code, with [[Xrdfn]] reading one function file per
+iteration.
 
 <<global [[rdfns]]>>=
 union Code rdfns[4];
@@ -8292,7 +9578,7 @@ Xrdfn(void)
 \label{chap:conclusion}
 
 % connection to other books:
-% Lex and Yacc to understand what is generated from grammar files. 
+% Lex and Yacc to understand what is generated from grammar files.
 % Kernel to understand what is behind fork, exec, wait, chdir.
 % Compiler for deeper.
 
@@ -8305,13 +9591,103 @@ Xrdfn(void)
 %  - history with arrow keys
 %    (rio has kinda, just go up in the window and copy paste)
 %  - history search (C-r)
-%  - aliases 
+%  - aliases
 %    (just use fn and saves them somewhere so persistent)
 %  - pushd/popd (but could be functions?)
 %  - job control (bg, fg)
 %    (but can do  'wait $apid')
 %  - C-z??? bourne says early-sh had 'wait is interruptible'
 %  - fish features!
+
+%claude:
+You now know how the \plan shell [[rc]] works,
+to the smallest details, and more generally how many
+shells work.
+
+Despite being only about 6700 lines of C (plus a small Yacc grammar),
+[[rc]] implements a complete programming language:
+a hand-written lexer, a Yacc parser, a bytecode compiler,
+and a bytecode interpreter---the same architecture found
+in much larger language implementations like Python or Java.
+%
+Along the way, you have seen how [[rc]] uses only a handful
+of system calls---[[rfork()]], [[exec()]], [[wait()]], [[pipe()]],
+[[open()]], [[close()]], [[dup()]]---to implement
+pipes, redirections, subshells, and background jobs.
+%
+The beauty of the \unix process model is that these
+few primitives are enough to build a surprisingly powerful
+command-line environment.
+
+\section{Connections to other books}
+
+A shell sits at the intersection of many topics covered
+in other books of \principia:
+
+\begin{itemize}
+
+\item The \book{Kernel} explains what lies behind
+the system calls you have seen throughout this book:
+[[rfork()]], [[exec()]], [[wait()]], [[chdir()]],
+and the [[/env]] and [[/dev/cons]] device files.
+%
+Understanding the kernel will deepen your understanding
+of how pipes are implemented at the OS level,
+how the [[#!]] shebang mechanism works,
+and how signals (notes) are delivered.
+
+\item The \book{Compiler} uses the same compilation
+pipeline as [[rc]]---lexing, parsing, bytecode generation---but
+for the C language and targeting real machine code rather
+than a bytecode interpreter.
+%
+Having seen [[rc]]'s simpler compiler first
+should make the C compiler easier to follow.
+
+\item The \book{Generators} (Lex and Yacc) explains
+what the [[yacc]]-generated parser in [[rc]] actually does
+behind the scenes: the shift-reduce algorithm, the parse tables,
+and the interaction between [[yylex()]] and [[yyparse()]].
+
+\item The \book{Builder} describes [[mk]], the \plan
+build system, which relies heavily on [[rc]] for executing
+recipes.
+%
+Features like [[-e]] (exit on error) and [[-c]] (command from string)
+exist largely because [[mk]] needs them.
+
+\end{itemize}
+
+\section{Missing features}
+
+[[rc]] is deliberately minimal.
+Many features that other shells provide are instead
+handled by the \plan window manager [[rio]]:
+
+\begin{itemize}
+\item {\em Command-line editing and history:}
+Under [[rio]], you can scroll back in the terminal window
+and copy-paste previous commands.
+There is no need for a readline library.
+
+\item {\em Filename completion:}
+Provided by [[rio]]'s terminal, not by [[rc]] itself.
+
+\item {\em Job control ([[bg]], [[fg]], [[C-z]]):}
+Less necessary when you have multiple windows.
+The [[&]] operator and [[wait \$apid]] cover most use cases.
+
+\item {\em Aliases:}
+Not needed because [[fn]] (functions) serve the same purpose
+and are stored persistently in the environment.
+\end{itemize}
+
+This separation of concerns---keeping the shell simple
+and letting the terminal handle interactive features---is
+a characteristic \plan design decision.
+It contrasts with shells like [[bash]] or [[zsh]],
+which include tens of thousands of lines of code
+for features that [[rc]] delegates elsewhere.
 
 
 %******************************************************************************
