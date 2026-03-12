@@ -4869,7 +4869,38 @@ case 7:	/* coprocessor crap */ // and syscall
 % of page faults, device interrupts, etc.
 % see also Syscalls chapter.
 
+%claude:
+The previous chapter showed how the interpreter decodes and executes
+each ARM instruction. Many of those instructions---loads, stores,
+instruction fetches---need to access memory. In a real ARM processor,
+the MMU translates virtual addresses to physical addresses and
+handles page faults. In [[5i]], the emulator proxies memory itself:
+virtual addresses from the emulated program map to host memory
+obtained via [[malloc()]] (stored in [[Segment.table]], introduced in
+Chapter~\ref{chap:core_ds}).
+
+%toc:
+In this chapter I will first present [[page_of_vaddr()]], the central
+function that translates a virtual address to a host pointer, including
+demand-loading pages on first access (page faults).
+I will then describe the TLB simulation used for profiling,
+the instruction fetch path [[ifetch()]] with its cache,
+and finally the [[getmem]] and [[putmem]] families that the
+interpreter calls for load and store instructions.
+
 \section{[[page_of_vaddr()]]}
+
+%claude:
+[[page_of_vaddr()]] is the memory system's core function.
+Given a virtual address, it walks the segment array looking for
+the segment that contains that address, then indexes into the
+segment's page table ([[s->table]]) to find the corresponding
+host pointer.
+If the page has already been allocated (the pointer is non-nil),
+it returns immediately. Otherwise, this is a {page fault}: the
+emulator allocates a new page and fills it according to the segment
+type---reading from the executable for Text and Data, or
+zero-filling for Bss and Stack.
 
 <<function [[page_of_vaddr]]>>=
 void*
@@ -4914,6 +4945,17 @@ page_of_vaddr(uintptr addr)
 
 % demand loading
 
+%claude:
+The page fault handler implements {demand loading}: pages are only
+read from the executable file when first accessed, not all at once
+at startup. This mirrors how a real OS kernel handles page faults.
+
+%claude:
+For the Text segment, the handler allocates a fresh page with [[emalloc()]]
+and reads the corresponding page from the executable file. The file
+offset is computed from the segment's [[fileoff]] base plus the page
+index times [[BY2PG]].
+
 <<[[page_of_vaddr()]] page fault, switch segment type cases>>=
 case Text:
     *p = emalloc(BY2PG);
@@ -4923,6 +4965,12 @@ case Text:
         fatal(true, "page_of_vaddr text read");
     return *p;
 @
+
+%claude:
+The Data segment is similar but has an extra subtlety: the last page
+of initialised data may extend past [[s->fileend]], into the region
+that should be zero-filled. The code reads what it can from the
+file, then [[memset]]s the remainder of the page to zero.
 
 <<[[page_of_vaddr()]] page fault, switch segment type cases>>=
 case Data:
@@ -4941,6 +4989,10 @@ case Data:
     return *p;
 @
 
+%claude:
+Bss and Stack pages need no file I/O---they are simply allocated
+and implicitly zero-filled (since [[emalloc()]] calls [[memset(, 0, )]]).
+
 <<[[page_of_vaddr()]] page fault, switch segment type cases>>=
 case Bss:
 case Stack:
@@ -4954,6 +5006,14 @@ case Stack:
 
 % just to gather stats, which is useful
 % so 5i can also be a very special kind of profiler.
+
+%claude:
+Since [[5i]] proxies memory via host [[malloc()]], it does not actually
+need a TLB for address translation. The TLB here is a {simulation}:
+it tracks which pages the emulated program accesses and records
+hit/miss statistics. This turns [[5i]] into a cache/TLB profiler---one
+can experiment with different TLB sizes and observe miss rates
+without modifying any hardware.
 
 <<struct [[Tlb]]>>=
 struct Tlb
@@ -4988,6 +5048,13 @@ if(tlb.on)
 @
 
 % just for stats
+
+%claude:
+[[dotlb()]] simulates a TLB lookup. It masks the address down to
+page granularity, then searches the TLB array for a match. On a
+miss, it evicts a random entry---a simple but reasonable
+approximation of real TLB replacement policies.
+
 <<function [[dotlb]]>>=
 void
 dotlb(uintptr vaddr)
@@ -5010,6 +5077,14 @@ dotlb(uintptr vaddr)
 
 
 \section{[[ifetch()]]}
+
+%claude:
+[[ifetch()]] fetches a single ARM instruction from the emulated
+program's text segment. It first checks alignment (ARM instructions
+must be word-aligned), then updates the profiling counter and
+instruction cache, looks up the page via [[page_of_vaddr()]], and
+finally reassembles the 32-bit instruction from four bytes in
+little-endian order.
 
 <<function [[ifetch]]>>=
 instruction
@@ -5036,6 +5111,14 @@ ifetch(uintptr addr)
 \section{The instruction cache}
 
 % again, can be useful for 5i to acts as a kind of profiler
+
+%claude:
+Like the TLB, the instruction cache is a simulation for profiling
+purposes---[[5i]] does not need a cache to function.
+The [[Icache]] structure holds a configurable line size, a tag array,
+and a pluggable hash function. Note however that [[updateicache()]]
+is currently a stub ([[USED(addr)]]), so the icache infrastructure
+is present but inactive for ARM.
 
 <<struct [[Icache]]>>=
 struct Icache
@@ -5075,6 +5158,24 @@ updateicache(uintptr addr)
 % half-word
 % word
 % vlong
+
+%claude:
+The [[getmem]] family provides typed memory reads at byte ([[_b]]),
+half-word ([[_h]]), word ([[_w]]), and double-word ([[_v]]) granularity.
+These are the functions called by the load instructions
+in Chapter~\ref{chap:interpreter}.
+Each function translates the virtual address to a host pointer
+via [[page_of_vaddr()]], then reassembles the value from individual
+bytes in little-endian order.
+
+%claude:
+For multi-byte reads, alignment matters: if the address is
+properly aligned, the bytes are guaranteed to be within a single
+page, so a single [[page_of_vaddr()]] call suffices. For unaligned
+accesses ([[getmem_h]] and [[getmem_w]]), the code first reads
+the aligned word, then rotates the bytes to produce the correct
+result---a clever trick that avoids dealing with cross-page
+boundaries.
 
 <<function [[getmem_b]]>>=
 byte
@@ -5157,6 +5258,13 @@ getmem_v(uintptr addr)
 
 
 % ??? seems used only by debugger and format
+
+%claude:
+[[getmem_2]] and [[getmem_4]] are byte-by-byte variants used by
+the debugger and disassembler rather than by the instruction
+interpreter. They build the result one byte at a time via
+[[getmem_b()]], shifting bytes into place.
+
 <<function [[getmem_2]]>>=
 ulong
 getmem_2(uintptr addr)
@@ -5190,6 +5298,14 @@ getmem_4(uintptr addr)
 % see also memio() in Syscall chapter
 
 \section{[[putmem_xxx()]]}
+
+%claude:
+The [[putmem]] family is the write counterpart to [[getmem]].
+Unlike the getmem functions, the putmem variants for half-words
+and words do \emph{not} handle unaligned addresses---they
+report an alignment error instead. This is stricter than the
+read side, matching the ARM architecture where unaligned stores
+trap.
 
 <<function [[putmem_b]]>>=
 void
