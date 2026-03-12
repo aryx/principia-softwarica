@@ -911,6 +911,25 @@ For the 32-bit value [[0x12345678]] stored at address [[0x100]]:
                         LSB                    MSB
 \end{verbatim}
 
+\subsection{Two's complement}
+
+%claude:
+Like all modern processors, ARM uses {two's complement}
+to represent signed integers: a negative number $-n$ is
+stored as $2^{32} - n$, so $-1$ is [[0xFFFFFFFF]] and
+$-10$ is [[0xFFFFFFF6]].
+The beauty of this encoding is that the hardware [[ADD]]
+instruction works identically for signed and unsigned
+operands---the bit pattern of the result is the same
+either way.
+The difference only matters when interpreting
+{overflow}: adding two large unsigned numbers may carry
+past $2^{32}$, while adding two positive signed numbers may
+wrap around to a negative result.
+ARM tracks both cases via separate flags ([[C]] for
+carry, [[V]] for signed overflow), but only updates them
+when the [[S]] bit is set (see Chapter~\ref{chap:interpreter}).
+
 %\subsection{Advanced}
 
 % recently:
@@ -2527,7 +2546,15 @@ colon(char *addr, char *cp)
 And here is the [[:c]] case, where we finally see
 the call to [<run()>]---the fetch-decode-execute loop
 that is the heart of the emulator
-(Chapter~\ref{chap:interpreter}):
+(Chapter~\ref{chap:interpreter}).
+The global [[count]] controls how many instructions to
+execute; setting it to 0 is a trick: [<run()>] uses a
+[[do \ldots while(--count)]] loop, so 0 wraps to a
+negative value and the loop runs effectively forever
+(until a breakpoint or syscall stops it).
+The [[atbpt]] flag is cleared so that the ``stopped at
+breakpoint'' message is not printed unless an actual
+breakpoint is hit during execution.
 
 <<[[colon()]] command cases>>=
 case 'c':
@@ -2543,14 +2570,69 @@ case 'c':
 %******************************************************************************
 \label{chap:interpreter}
 
+%claude:
+%toc:
+This chapter describes the heart of [[5i]]: the instruction
+interpreter. It begins with the binary format of ARM
+instructions, then presents the fetch-decode-execute loop
+([<run()>]) and the decoder ([<arm_class()>]),
+and then covers each category of instructions:
+arithmetic and logic, memory access (load/store),
+control flow (branches), and conditional execution.
+
 \section{Instruction binary format}
 
 % see refcard ARM, with color codes so can see repetitive patterns.
 
+%claude:
+Every ARM instruction is exactly 4 bytes, with a regular
+structure: the top 4 bits encode the {condition code}
+(Section~\ref{sec:condexec}), the next 3 bits select the
+instruction ``class'' (the {addressing mode}: register/register,
+immediate/register, etc.), and the remaining bits encode
+opcodes, register numbers ([[Rd]], [[Rn]], [[Rm]], [[Rs]]),
+shift amounts, and immediates.
+For example, a data-processing instruction like
+[[ADD R2, R3, R1]] (R1 = R2 + R3 in \plan syntax) is
+encoded as:
+\begin{verbatim}
+  31  28 27 25 24 21 20 19 16 15 12 11        4 3   0
+  +------+-----+------+--+------+------+--------+------+
+  | cond |class| opcode| S|  Rn  |  Rd  | shift  |  Rm  |
+  +------+-----+------+--+------+------+--------+------+
+  | 1110 | 000 | 0100  | 0| 0010 | 0001 | 00000000| 0011 |
+  +------+-----+------+--+------+------+--------+------+
+    AL    r,r,r   ADD   -   R2     R1    no shift    R3
+
+  = 0xE0821003
+
+  cond:   condition code (0xe = always)
+  class:  000 = register/register    (arm_class)
+  opcode: 0100 = ADD                 (dpex)
+  S:      set condition flags?
+  Rn:     first source register
+  Rd:     destination register
+  shift:  barrel shifter control     (shift)
+  Rm:     second source register
+\end{verbatim}
+%
+The ARM ISA has a lot of symmetry.
+The code in [[5i]] exploits this by factoring the
+interpretation along several axes:
+[<arm_class()>] is the full decoder---it starts from
+the 3-bit class field (bits 25--27) but refines further
+within each class to produce a final opcode index into
+[<itab>],
+[<dpex()>] dispatches on the arithmetic/logic opcode
+(bits 21--24: AND, ADD, ORR, \ldots),
+[<shift()>] handles the barrel shifter operand,
+and the [[S]] bit is tested ad hoc to decide whether
+to update condition flags.
+
 % 4 bytes fixed-length instructions (simple)
 % - 4bits COND for everything (pink), see conditional execution section below
-% - 3bits for opcode "class", and then more bits, variable length, 
-%   a bit complex for more opcodes (orange and yellow), 
+% - 3bits for opcode "class", and then more bits, variable length,
+%   a bit complex for more opcodes (orange and yellow),
 % - 4 bits registers, 0, 1, 2, 3, 4 times (Rn, Rd, Rs, Rm), so up to 16 bits,
 %    or offsets (blue, green)
 % - special config bits here and there (purple)
@@ -2571,13 +2653,30 @@ case 'c':
 
 \section{[[run()]]}
 
+%claude:
+The [<run()>] function is the fetch-decode-execute loop.
+It runs for [[count]] instructions (as explained in the
+[[:c]] case above, [[count]] is set to 0 for continuous
+execution).
+
 % often set to 0 and because of do while(--count) will actually go in
 % negative value!. They should use MAX_INT instead of 0. cleaner.
 <<global [[count]]>>=
 int count;
 @
 
-
+%claude:
+The loop uses four internal registers stored in [[reg]]
+that mirror the stages of the pipeline:
+[[ar]] holds the current program counter,
+[[instr]] holds the fetched 32-bit instruction word,
+[[instr_opcode]] holds the decoded opcode index
+(as returned by [<arm_class()>]),
+and [[ip]] points to the corresponding [<Inst>] entry
+in the dispatch table.
+These are not architectural ARM registers visible to
+the program, but internal bookkeeping for the interpreter
+(analogous to hidden pipeline registers in real hardware):
 
 % Those registers could be outside reg, in another DS; they
 % are not visible registers. But maybe inside the processor
@@ -2601,7 +2700,9 @@ Inst*		ip;    // &itab[reg.instr_opcode]
 %note: I renamed class to instr_opcode now that we consider more this an
 % opcode. I also renamed ir to instr.
 
-
+%claude:
+The loop itself is compact---the entire emulator fits
+in a few lines:
 
 % main -> cmd -> colon -> <> -> armclass!!
 <<function [[run]]>>=
@@ -2640,6 +2741,20 @@ run(void)
 % places (hmm a bit ugly, maybe simpler to put this +=4 in the few
 % Ixxx we have anyway).
 
+%claude:
+Each iteration: {fetch} the instruction word from memory
+([<ifetch()>]), {decode} it into an opcode index
+([<arm_class()>]), check the ARM condition code to decide
+whether to {execute}, and if so, dispatch through the
+[[itab]] function pointer.
+The program counter always advances by 4 (fixed-length
+instructions), even for branches---branch handlers
+compensate by subtracting 4 from [[REGPC]] so the
+net effect is correct.
+I will now describe [<arm_class()>], then the individual
+instruction handlers, and finally the conditional execution
+mechanism.
+
 % should switch to mips model with Iexec()?
 
 % will describe conditional execution now.
@@ -2648,6 +2763,19 @@ run(void)
 
 
 \section{[[arm_class()]]}
+
+%claude:
+%trans:
+The [<arm_class()>] function is the decoder: given a 32-bit
+instruction word, it returns an index into [<itab>].
+Despite its name, it does more than extract the ARM
+``class'' (bits 25--27): it uses the class as a first-level
+switch, then examines additional bits within each case
+to produce the final opcode index (e.g., distinguishing
+[[ADD]] from [[SUB]], or word loads from byte loads).
+The code mirrors the structure of [[libmach/5db.c]]
+(the ARM disassembler), but simplified since [[5i]] only
+needs to handle executable instructions:
 
 % those 3 bits are mostly for operand style big categories (r/r/r, i/r/r, etc)
 % copy paste from libmach/5db.c, but simplified as don't need
@@ -2685,6 +2813,17 @@ arm_class(instruction w)
 
 \section{Arithmetic and logic}
 
+%claude:
+%trans:
+With the decode loop and [<arm_class()>] in place, I now
+describe the instruction handlers themselves.
+Each handler follows the same pattern: extract register
+numbers and operands from the instruction word using
+bit shifts and masks, perform the operation, and optionally
+update the condition flags.
+I start with arithmetic and logic because they form the
+bulk of the instruction set.
+
 % always same pattern: extract components from opcode (e.g.
 % special opcode for special register in instruction), shift, and,
 % and then perform operation on registers, memory, or internal registers.
@@ -2694,6 +2833,23 @@ arm_class(instruction w)
 % at least for the first time we see that we can have a named
 % section about it, to repeat what was done in the arm_class section
 
+%claude:
+The 16 data-processing opcodes (AND, EOR, SUB, \ldots, MVN)
+are numbered 0--15, matching their encoding in bits 21--24
+of the instruction word.
+For each opcode, there are four addressing mode variants,
+laid out as consecutive blocks of 16 in [[itab]]:
+[[CARITH0]] = 0 (register/register),
+[[CARITH1]] = 16 (shifted register),
+[[CARITH2]] = 32 (register-shifted register),
+and [[CARITH3]] = 48 (immediate).
+So for example [[OADD]] (= 4) with a shifted operand
+becomes [[OADD + CARITH1]] = $4 + 16 = 20$, which indexes
+directly into the [[Idp1]] entry in [[itab]].
+This $16 \times 4 = 64$ block fills indices 0--63.
+Multiplication ([[OMUL]] = 64) starts right after,
+since it does not follow the same data-processing pattern
+and needs its own handler:
 
 <<arith/logic opcodes>>=
 OAND = 0,
@@ -2791,6 +2947,16 @@ CARITH2 = 32, // r<>r, r, r
 \t what about I, R, R ??? CARITH3!! class 1
 
 \subsection{Multiplication}
+
+%claude:
+I start with multiplication rather than the general
+data-processing instructions because [<Imul>] covers
+a single operation, making it the simplest example
+of the handler pattern: extract register fields, perform
+the operation, done. The general [[Idp]]/[[dpex]] machinery
+that follows is more involved because it must handle 16
+different opcodes across multiple addressing modes.
+
 \l how fast multiplication in hardware?
 
 <<[[itab]] elements>>=
@@ -2818,6 +2984,19 @@ Imul(instruction inst)
     <<[[Imul()]] trace>>
 }
 @
+
+%claude:
+Note how [<Imul>] writes its result directly into the
+global [[reg.r[rd]]] by side effect---there is no return
+value. All instruction handlers work this way: they
+read from and write to the global [[reg]] structure.
+Also note that [<Imul>] rejects [[REGPC]] as any operand
+(calling [<undef()>]), since it makes no sense to jump
+to an address that is the result of a multiplication.
+The general data-processing handlers ([<Idp0>] etc.)
+will need to handle [[REGPC]] specially, as we will see
+shortly.
+
 % no need to r[REGPC]-=4 here, REGPC can not be rd, because
 % does not make sense to jump to some code that is the result
 % of a multiplication
@@ -2832,6 +3011,12 @@ if(trace)
         reg.r[rd]);
 @
 \fi
+
+%claude:
+[[MLA]] (multiply and accumulate) adds a third source
+register: [[Rd = Rm * Rs + Rn]].
+This is useful for array indexing, where you need a base
+address plus an index multiplied by the element size:
 
 % multiply and accumulate
 <<function [[Imula]]>>=
@@ -2867,6 +3052,17 @@ if(trace)
 
 
 \subsection{[[Idp()]] and [[dpex()]]}
+
+%claude:
+The three [[Idp]] functions ([<Idp0>], [<Idp1>], [<Idp2>])
+handle the three addressing mode variants.
+They all extract the register operands, compute [[o1]] and
+[[o2]] (applying a shift for [[Idp1]]/[[Idp2]]),
+then call [<dpex()>] which switches on the actual arithmetic
+opcode to perform the operation.
+This factoring keeps the code compact:
+$16 \times 3 = 48$ [[itab]] entries map to just 3 [[Idp]]
+functions plus one shared [<dpex()>].
 
 <<[[itab]] elements>>=
 //r,r,r
@@ -2917,6 +3113,24 @@ Idp0(instruction inst)
 @
 % -4 because will be incremented back in run()
 
+%claude:
+Unlike [<Imul>], the [[Idp]] handlers allow [[REGPC]]
+as a source or destination, which requires two
+compensations for the ARM pipeline.
+When reading [[REGPC]] as a source, the handler adds
+8\footnote{On real ARM hardware, the 3-stage pipeline
+(fetch, decode, execute) means that by the time an
+instruction executes, the PC has advanced two steps,
+so reading it yields the current instruction's address
+$+ 8$. In [[5i]], [[reg.r[REGPC]]] still holds the current
+instruction's address (the [[+= 4]] happens at the end of
+the loop), so the handler must add 8 explicitly to match
+what the compiled code expects.}.
+When writing [[REGPC]] as a destination (e.g.,
+[[MOV R14, R15]] for a return), the handler subtracts 4
+to compensate for the [[REGPC += 4]] at the end of
+[<run()>]:
+
 <<adjust o1 if rn is REGPC>>=
 if(rn == REGPC)
     o1 += 8;
@@ -2943,6 +3157,13 @@ if(trace)
 
 
 
+%claude:
+The [<dpex()>] function (``data processing execute'')
+is where the actual arithmetic or logic operation happens.
+It takes the two operands [[o1]] and [[o2]] (already
+extracted and shifted by the caller) and switches on
+the 4-bit opcode to perform the right operation:
+
 % dpex? means?
 % note local cbit != reg.cbit
 <<function [[dpex]]>>=
@@ -2961,6 +3182,14 @@ dpex(instruction inst, long o1, long o2, int rd)
 % mov in arith? seems redundant with load/store no?
 
 \subsection{Boolean logic}
+
+%claude:
+%trans:
+We are now ready to see the concrete execution of each
+operation. The following subsections fill in the cases
+of the [[dpex()]] switch introduced above. I start with
+the boolean operations, which are the simplest---each is
+a one-line C expression:
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case  OAND:
@@ -2984,9 +3213,44 @@ case OBIC:
     cbit = true;
     break;
 @
+
+%claude:
+As mentioned in the introduction, there is something
+slightly circular about using C's [[&]] operator to
+explain the ARM [[AND]] instruction---after all,
+[[&]] is itself compiled down to an [[AND]] instruction.
+But this is the nature of an emulator written in a
+high-level language: the host's operations give meaning
+to the target's operations.
+
 % cheat a bit :) use & to explain OAND
 
 \subsection{[[S]] bit}
+
+%claude:
+In ARM, arithmetic instructions only update the condition
+flags (zero, negative, carry, overflow) when the [[S]] bit
+(bit 20) is set---written [[ADD.S]] in [[5a]] syntax
+(or [[ADDS]] in standard ARM syntax) vs.\ plain [[ADD]].
+This gives the compiler fine-grained control over flag
+updates and is what makes conditional execution
+(Section~\ref{sec:condexec}) practical.
+Consider this example:
+\begin{verbatim}
+  CMP    R0, #10       @ sets flags (R0 - 10)
+  ADD    R1, R2, R3    @ R3 = R1 + R2, does NOT touch flags
+  MOV.GT R3, R1        @ if R0 > 10, R1 = R3
+\end{verbatim}
+[[CMP]] (Section~\ref{sec:comparisons}) is really [[SUB]]
+with the [[S]] bit always set and the result discarded---it
+only sets the flags.
+The key is that the plain [[ADD]] on the next line does
+\emph{not} disturb the flags, so the conditional [[MOV.GT]]
+still tests the result of the [[CMP]] and can use the
+value computed by [[ADD]].
+On x86, every arithmetic instruction sets the flags,
+so you cannot interleave computation between a comparison
+and a conditional instruction this way.
 
 <<constant [[Sbit]]>>=
 Sbit		= 1<<20,
@@ -3017,6 +3281,22 @@ int	cout;
 \t but forgot implement instructions reading the flags? MRS?, MSR?
 
 \subsection{Addition and overflow}
+\label{sec:addoverflow}
+
+%claude:
+Addition is more complex than boolean operations because
+of the {carry} flag.
+As explained in Chapter~\ref{chap:overview}, the same
+[[ADD]] instruction works for both signed and unsigned
+integers thanks to two's complement, but overflow
+detection differs between the two interpretations.
+The carry bit detects unsigned overflow: the [[XCAST]]
+macro promotes both operands to 64 bits before adding,
+and if bit 32 of the result is set, the addition carried
+past $2^{32}$.
+Like the other operations, the flags are only updated
+when the [[S]] bit is set.
+
 % carry? overflow?
 
 % concepts: carry, overflow, signed/unsigned, complement 2 notations
@@ -3060,6 +3340,24 @@ case OADD:
 
 
 \subsection{[[shift()]]}
+
+%claude:
+A distinctive feature of the ARM ISA is the {barrel shifter}:
+one operand of any data-processing instruction can be shifted
+or rotated before the operation, at no extra cost.
+The shift type ([[st]], 2 bits) selects logical left, logical
+right, arithmetic right, or rotate right; the shift count
+([[sc]]) comes from either an immediate or a register.
+This is motivated by how common ``multiply by a small
+power of two and add'' is in real code: array indexing
+([[a[i]]] becomes base + index $\times$ element size),
+pointer arithmetic, and address computation all follow
+this pattern.
+On x86 you would need a separate shift instruction
+followed by an add; on ARM,
+[[ADD R1<<2, R2, R3]] (R3 = R1 shifted left by 2
+plus R2, i.e., index $\times$ 4 + base) is a single
+instruction.
 
 <<[[itab]] elements>>=
 // r<>#, r, r
@@ -3226,6 +3524,25 @@ shift(long v, int st, int sc, bool isreg)
 }
 @
 
+%claude:
+The distinction between logical right (case 1) and
+arithmetic right (case 2) is subtle but important.
+Both shift bits to the right, but they differ in what
+fills the vacated high bits.
+Logical right shift fills with zeros---it treats the
+value as unsigned, so shifting [[0xFF000000]] right by 8
+gives [[0x00FF0000]].
+Arithmetic right shift fills with copies of the sign bit
+---it preserves the sign of a two's complement number,
+so shifting [[-256]] ([[0xFFFFFF00]]) right by 8 gives
+[[-1]] ([[0xFFFFFFFF]]) instead of a large positive number.
+In C, this corresponds to the difference between
+[[(ulong)v >> sc]] (logical) and [[(long)v >> sc]]
+(arithmetic), which is exactly what the code does.
+There is no ``arithmetic left'' because left shift is the
+same for signed and unsigned values---zeros always fill
+the low bits.
+
 \t why no arith left? why so many more xx right? See Assembler.
 
 % ???
@@ -3255,6 +3572,24 @@ if(sc == 0) {
 % >>
 
 \subsection{Immediate values}
+
+%claude:
+The fourth addressing mode embeds a small constant directly
+in the instruction word (class 1, i.e., bit 25 set).
+The immediate is encoded as an 8-bit value rotated right
+by twice a 4-bit field.
+The ``twice'' doubles the range of rotation positions:
+with 4 bits you can encode 0--15, but multiplying by 2
+gives even rotations 0, 2, 4, \ldots, 30, reaching any
+even bit position in the 32-bit word.
+There is no real loss from skipping odd rotations, because
+an 8-bit pattern at an odd position can usually be
+represented by adjusting the 8-bit value with an even
+rotation instead.
+This clever encoding can represent many common constants
+(powers of two, byte masks like [[0xFF00]], page-aligned
+values) in just 12 bits:
+
 % Small immediate values?
 % Useful opti. Without it for things like x = x + 1
 % would require more ? STORE?
@@ -3340,6 +3675,26 @@ if(trace)
 % so ADD $0, PC, LINK;  will save in REGLINK PC + 8!
 
 \subsection{64 bits target (signed/unsigned) multiplication}
+
+%claude:
+%trans:
+Multiplying two 32-bit numbers can produce a result that
+does not fit in 32 bits.
+In C, this happens whenever the compiler needs to support
+[[long long]] (64-bit) arithmetic on a 32-bit architecture,
+or even with plain [[int]] multiplication when the result
+is used in a wider context (e.g., [[size_t a = b * c]]
+where overflow must be detected).
+We already saw this problem in [[5i]] itself: the
+[[XCAST]] macro in Section~\ref{sec:addoverflow} promotes
+32-bit operands to 64 bits to detect carry on addition.
+The long multiply instructions ([[MULLU]], [[MULL]], etc.)
+handle this by storing the 64-bit result across two
+registers ([[Rd]] for the high half, [[Rn]] for the low
+half). The signed ([[MULL]]) and unsigned ([[MULLU]])
+variants differ in how they extend the operands before
+multiplying.
+
 \l adv topics?
 % not really 64 bits multiplication,
 % more 32 bits multiply but can store 64 bit result!
@@ -3419,6 +3774,21 @@ if(trace)
 
 \subsection{Misc instructions}
 
+%claude:
+The remaining data-processing cases are less common.
+[[CMN]] (compare negative) is like [[CMP]] but adds
+instead of subtracting.
+[[RSB]] (reverse subtract) computes [[o2 - o1]] instead
+of [[o1 - o2]], useful when the immediate is the value
+you want to subtract from.
+[[ADC]], [[SBC]], and [[RSC]] (add/subtract with carry)
+are left unimplemented---the \plan compiler [[5c]] never
+generates them.
+Finally, [[MOV]] and [[MVN]] (move / move negated) set a
+register to a value or its bitwise complement; despite
+their names, they live in the arithmetic opcode space
+rather than in load/store.
+
 % ifallcode?
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
@@ -3465,6 +3835,15 @@ case OMVN:
 
 
 \section{Memory}
+
+%claude:
+%trans:
+The memory section handles load and store instructions.
+Like arithmetic, the opcode space is factored along two
+axes: the data size (word, byte, half-word, signed byte)
+and the addressing mode (immediate offset vs.\ register
+offset). The same [[CMEM_BASIS + CMEMn]] indexing scheme
+maps all variants into a contiguous region of [[itab]].
 
 % conventions: B, BU, W, H
 
@@ -3537,6 +3916,27 @@ if(w & (1<<24)) {
 
 \subsection{Memory swap}
 
+%claude:
+As with multiplication in the arithmetic section,
+I present [[SWP]] before the general load/store because
+it is simpler: it just swaps a register value with a
+memory location in a single atomic operation.
+On real hardware, atomicity matters for implementing
+[[_tas()]] (test-and-set) on multiprocessor systems;
+in [[5i]]'s single-processor emulation, the atomicity
+is trivially guaranteed.
+%
+The [[bbit]] (bit 22) selects between word and byte
+variants.
+The byte variant is called [[SWPBU]] (not [[SWPB]])
+because loading a byte into a 32-bit register always
+zero-extends---the ``U'' stands for unsigned.
+In load/store, there is a distinction between [[MOVB]]
+(sign-extend, for [[signed char]]) and [[MOVBU]]
+(zero-extend, for [[unsigned char]]), but for swap
+only the unsigned variant exists since sign extension
+makes no sense for an atomic exchange.
+
 % not that useful, but ensured to be atomic so used to implement _tas!!
 % indeed when multi processor need to sync, they share something, memory
 % but each have independent register, so way to sync is via swap.
@@ -3575,7 +3975,11 @@ Iswap(instruction inst)
 }
 @
 
-
+%claude:
+The [<getmem_b>]/[<getmem_w>] and [<putmem_b>]/[<putmem_w>]
+functions translate virtual addresses to the simulated
+memory and perform the actual read or write.
+They are described in Chapter~\ref{chap:memory}.
 
 \ifallcode
 <<[[Iswap()]] trace>>=
@@ -3602,6 +4006,16 @@ if(trace) {
 
 \subsection{Load/store}
 
+%claude:
+%trans:
+With [[Iswap]] as a warm-up, we are now ready for
+the general load/store handler [<Imem1>], which is the
+most complex instruction handler in [[5i]].
+It must handle all combinations of load vs.\ store,
+word vs.\ byte, immediate vs.\ register offset,
+pre- vs.\ post-indexing, and optional write-back---all
+controlled by individual bits in the instruction word:
+
 <<[[itab]] elements>>=
 // load/store w/ub i,r
 [OLDW +CMEM0] =  { Imem1,		"MOVW",	Imem },
@@ -3617,6 +4031,28 @@ if(trace) {
 [OSTW +CMEM1] =  { Imem1,		"MOVW",	Imem },
 [OSTB +CMEM1] =  { Imem1,		"MOVB",	Imem },
 @
+
+%claude:
+The function first extracts six single-bit flags from
+the instruction word, each controlling one axis of
+variation:
+\begin{itemize}
+\item [[bit25]]: offset is a (shifted) register or an immediate?
+\item [[prebit]]: add the offset before (pre-indexing) or after
+  (post-indexing) the memory access?
+\item [[ubit]]: offset is positive (up) or negative (down)?
+\item [[bbit]]: transfer a byte or a word?
+\item [[wbit]]: write the computed address back into [[Rn]]?
+\item [[lbit]]: load (LDR) or store (STR)?
+\end{itemize}
+%
+The pre/post-indexing and write-back modes are how ARM
+implements stack push/pop and auto-increment addressing
+in a single instruction.
+For example, [[MOVW.P \#4(R13), R15]] (see the
+\book{Assembler}) uses post-indexing: it loads from
+[[R13]], then increments [[R13]] by 4---effectively a
+``pop'' in one instruction.
 
 <<function [[Imem1]]>>=
 /*
@@ -3691,14 +4127,28 @@ Imem1(instruction inst)
     <<[[Imem1()]] trace>>
 }
 @
+
+%claude:
+The flow is: compute the offset (from an immediate or a
+shifted register), apply the sign ([[ubit]]), compute the
+effective address (adding the offset before or after the
+access depending on [[prebit]]), perform the load or store
+([[lbit]]), and finally write back the updated address to
+[[Rn]] if post-indexing or if [[wbit]] is set.
+The last line ([[if(!prebit || wbit)]]) captures both
+post-indexing (which always writes back) and pre-indexing
+with explicit write-back---the original code used a
+double negation ([[if(!(prebit \&\& !wbit))]]) which is
+equivalent but harder to read.
+
 % >> >> >>
 %old: I introduced bool for the xxbit
 % I renamed pbit to prebit as just p is ambiguous (pre or post?)
-% and changed the double negation 
+% and changed the double negation
 %    if(!(prebit && !wbit))
 %        reg.r[rn] += off;
 
-% see Assembler. 
+% see Assembler.
 % MOVW.P #4(R13), R15, for RET  .P = post indexing (and implicit write)
 % TEXT foo, $8 ->  MOVW.W	R14,-12(R13)
 
@@ -3885,6 +4335,32 @@ if(trace) {
 
 
 \subsection{Multi registers load/store}
+
+%claude:
+[[LDM]]/[[STM]] (load/store multiple, called [[MOVM]]
+in \plan syntax) transfer a set of registers to/from
+memory in a single instruction, selected by a 16-bit
+bitmask.
+The \plan compiler [[5c]] generates [[MOVM]] for function
+prologues and epilogues: in the \plan calling convention,
+the callee is responsible for saving any registers that
+are in use by the caller and that it will clobber.
+[[STM]] pushes these registers onto the stack at entry,
+[[LDM]] restores them at return
+(see the \book{Compiler} and \book{Assembler}).
+For example, a function that uses [[R1]] through [[R4]]
+would begin with [[MOVM.DB.W [R1-R4], (R13)]] (push R1--R4
+onto the stack, decrementing R13) and end with
+[[MOVM.IA.W (R13), [R1-R4]]] (pop them back, incrementing
+R13).
+The suffixes control the direction and timing:
+[[.D]]/[[.I]] = decrement/increment ([[ubit]]),
+[[.B]]/[[.A]] = before/after the transfer ([[prebit]]),
+and [[.W]] = write back the final address into [[Rn]]
+([[wbit]]).
+So [[.DB]] means ``decrement before each store''
+(stack grows down), and [[.IA]] means ``increment after
+each load'' (stack grows back up).
 \l advanced topic? like I did in Assembler.nw?
 
 <<memory opcodes>>=
@@ -3985,6 +4461,16 @@ if(trace) {
 
 \section{Control flow}
 
+%claude:
+%trans:
+ARM has only two branch instructions: [[B]] (branch) and
+[[BL]] (branch and link, i.e., function call).
+There is no separate ``conditional branch'' like x86's
+[[JNE]]/[[JEQ]]---any branch (or any instruction) can be
+made conditional via the condition code field
+(Section~\ref{sec:condexec}), so a conditional branch
+is simply [[B.EQ]], [[B.GT]], etc.
+
 \subsection{Opcode extraction}
 
 <<branching opcodes>>=
@@ -4010,6 +4496,14 @@ CBRANCH = 86,
 [OB]  =  { Ib,	"B",	Ibranch },
 @
 
+%claude:
+The branch offset is a 24-bit signed value, shifted left
+by 2 (since instructions are word-aligned), giving a
+range of $\pm$32MB.
+The [[+8]] accounts for the ARM pipeline: the PC is two
+instructions ahead when the branch executes.
+The [[-4]] compensates for the [[REGPC += 4]] at the end
+of [<run()>]:
 
 <<function [[Ib]]>>=
 void
@@ -4044,6 +4538,15 @@ if(trace)
 
 
 \subsection{Branch and link}
+
+%claude:
+[[BL]] (branch and link) is the function call instruction:
+it saves the return address in the link register
+([[R14]]) before branching.
+The callee must save [[R14]] to the stack if it makes
+further calls; leaf functions (see the \book{Linker} for
+how the linker optimizes them) can return with a simple
+[[MOV R14, R15]]:
 
 <<[[itab]] elements>>=
 [OBL] =  { Ibl,	"BL",	Ibranch },
@@ -4082,6 +4585,20 @@ if(trace)
 
 
 \subsection{Comparisons}
+\label{sec:comparisons}
+
+%claude:
+%trans:
+Comparisons are the bridge between arithmetic and
+conditional execution: they set the flags that subsequent
+conditionally-executed instructions will test.
+[[CMP]] is actually [[SUB]] with the [[S]] bit always set
+and the result discarded---it only updates [[cc1]] and
+[[cc2]]. This is why [[OSUB]] falls through to [[OCMP]]
+in the code below: both compute the same flags, but
+[[SUB]] also stores the result in [[Rd]].
+Similarly, [[TST]] is [[AND]] with the result discarded,
+and [[TEQ]] is [[EOR]] with the result discarded.
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case OSUB:
@@ -4118,7 +4635,28 @@ case  OTEQ:
 
 
 \subsection{ARM Conditional execution}
+\label{sec:condexec}
 % see later?? when talk about Branch? hmm but need also for CMP
+
+%claude:
+ARM's most distinctive feature is {conditional execution}:
+every instruction has a 4-bit condition code in bits 28--31.
+Before executing, the processor checks this condition
+against the current flags (set by a previous [[CMP]],
+[[TST]], or any [[S]]-suffixed instruction). If the
+condition is false, the instruction is skipped.
+This avoids short branches for simple if/else sequences,
+which was important on early ARM cores without branch
+prediction.
+%
+The implementation in [[5i]] is unusual: instead of
+maintaining N/Z/C/V flags like real hardware, it stores
+the two comparison operands ([[cc1]], [[cc2]]) and the
+comparison type ([[compare_op]]), then re-evaluates the
+condition on each instruction. This is slower but simpler
+than tracking individual flags.
+The condition [[0xe]] (``always'') means unconditional
+execution---most instructions use this.
 
 % see ARM wikipedia page.
 % Useful because have a very simple branching instruction.
@@ -4264,6 +4802,14 @@ runtst(void)
 % keyboard and display emulation? no, done via software interrupt
 
 \section{Software interrupt}
+
+%claude:
+The [[SWI]] (software interrupt) instruction is how user
+programs make system calls. In a real ARM, it would trap
+to the kernel; in [[5i]], it dispatches to [<Ssyscall()>]
+which emulates the system call by proxying it to the
+host OS (see Chapter~\ref{chap:syscalls}).
+
 % software interrupt aka syscall
 % see chapter
 
