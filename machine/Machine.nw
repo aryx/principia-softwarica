@@ -109,6 +109,7 @@ with code from\\
 
 %******************************************************************************
 \chapter{Introduction}
+\label{chap:intro}
 %******************************************************************************
 
 The goal of this book is to present with full details the source code of
@@ -406,6 +407,21 @@ system called NNIX, but nobody has ever written it.
 \n actually knuth asked for someone to write it for a long time on his homepage
 \l their interpreter mixal? MDK? dead? or just for MIX and not updated to MMIX?
 
+\item TinyEMU\furl{https://bellard.org/tinyemu/}
+is a RISC-V and x86 system emulator also written by Fabrice Bellard
+(the author of QEMU). Unlike QEMU, TinyEMU was designed from the
+start to be small and simple while remaining complete enough to
+boot Linux. It targets RISC-V, a modern open-source RISC architecture
+that is gaining momentum as a successor to ARM in the embedded
+and academic worlds.
+\plan has even been ported to RISC-V, so TinyEMU would have been
+a tempting alternative to [[5i]] for this book.
+TinyEMU is also the engine behind
+JSLinux\furl{https://bellard.org/jslinux/}, which runs Linux
+in a web browser by compiling the emulator to WebAssembly.
+However, at around 40~000 LOC, TinyEMU is still an order of
+magnitude larger than [[5i]]'s 3000~LOC.
+
 \end{itemize}
 \l lots of other emulators, see the comment in the .tex
 
@@ -605,7 +621,21 @@ who wrote in some sense most of this book.
 
 %******************************************************************************
 \chapter{Overview}
+\label{chap:overview}
 %******************************************************************************
+
+%claude:
+%trans: %dup: Assembler.nw
+Before showing the source code of [[5i]] in the following chapters,
+%toc:
+I first give an overview in this chapter
+of the general principles of a computer and its processor,
+of the ARM architecture emulated by [[5i]],
+and of the structure of the emulator itself.
+%
+I also define terms, explain how the code is organized,
+and more generally give the background necessary
+to understand the code I will show later.
 
 \section{Computer principles}
 \n machine/computer/processor
@@ -617,6 +647,37 @@ who wrote in some sense most of this book.
 % as keyboard, mouse, screen.
 % (see Principia.nw appendix)
 
+%claude:
+A {computer} in its most general sense consists of a {processor},
+{memory}, and {input/output devices} (keyboard, screen, disk, network).
+The processor executes instructions; memory stores both the
+instructions and the data they operate on; and I/O devices
+connect the machine to the outside world.
+
+%claude:
+\begin{verbatim}
+          +-----------------------------------+
+          |            Processor              |
+          |  +----------+   +-------------+   |
+          |  | Control  |   | Arithmetic  |   |
+          |  |  Unit    |   | Logic Unit  |   |
+          |  +----------+   +-------------+   |
+          |        |   Registers   |          |
+          +--------+---------------+----------+
+                   |               |
+               +---+---+-----------+---+
+               |          Bus          |
+               +---+-------+-----------+
+                   |       |
+          +--------+--+  +-+----------+
+          |  Memory   |  | I/O devices|
+          | (RAM)     |  | keyboard   |
+          |           |  | screen     |
+          | instrs +  |  | disk       |
+          |  data     |  | network    |
+          +-----------+  +------------+
+\end{verbatim}
+
 \subsection{Von Newmann architecture}
 
 % stored program concept origin:
@@ -626,14 +687,14 @@ who wrote in some sense most of this book.
 % http://www.nature.com/nature/journal/v547/n7662/full/547159a.html
 
 % Stored-program concept. Universal computer, interpreter, for very simple
-% machine language.  
+% machine language.
 
 % What goes in processor? in this machine language?
 % (like universal turing machine reading 7-tuple on tape and interpreting)
 
-% arithmetic. 
-% jumps. 
-% memory read/write. 
+% arithmetic.
+% jumps.
+% memory read/write.
 % IO.
 
 % memory access (load/store archi on ARM) (Imem)
@@ -642,13 +703,69 @@ who wrote in some sense most of this book.
 % interrupt for external device (avoid attente active) (Isyscall)
 % floating optional (Ifloat?)
 
+%claude:
+The key idea of the {Von Neumann architecture} is the
+{stored-program concept}: instructions and data live in the
+same memory. The processor reads an instruction from memory,
+executes it, and moves to the next one. This is essentially
+what a {universal Turing machine} does---it reads a program
+from its tape and interprets it---except that a real processor
+provides a richer instruction set than a Turing machine's
+simple read/write/move operations.
+
+%claude:
+What goes into this instruction set? Most processors provide
+four broad categories of instructions:
+{arithmetic and logic} (add, subtract, multiply, AND, OR, shift),
+{memory access} (load a value from memory into a register,
+store a register back to memory),
+{control flow} (branch to a different instruction, conditionally
+or unconditionally), and
+{system instructions} (trigger a software interrupt to enter
+the kernel).
+Some processors also include {floating-point} instructions,
+though historically these were handled by a separate coprocessor.
+On ARM, memory access follows a {load/store} discipline:
+arithmetic instructions operate only on registers, never
+directly on memory.
+
 \subsection{Instruction format}
+
+%claude:
+Every instruction must be encoded as a sequence of bits---the
+{binary format} that the processor reads from memory.
+On the ARM, all instructions are exactly 32~bits (4~bytes) wide,
+which greatly simplifies decoding compared to variable-length
+architectures like x86.
+Within those 32~bits, different bit fields encode the {opcode}
+(which operation to perform), the {operands} (which registers
+or immediate values to use), and on ARM, a {condition code}
+that makes every instruction conditionally executable.
+
+%claude:
+Here is the layout of a MIPS R-type instruction, which
+illustrates the general idea:
+\begin{verbatim}
+  31      26 25    21 20    16 15    11 10     6 5       0
+  +--------+--------+--------+--------+--------+--------+
+  | opcode |   rs   |   rt   |   rd   | shamt  |  funct |
+  +--------+--------+--------+--------+--------+--------+
+    6 bits   5 bits   5 bits   5 bits   5 bits   6 bits
+\end{verbatim}
+%
+The [[opcode]] selects the instruction family, [[rs]] and [[rt]]
+are the two source registers, [[rd]] is the destination register,
+and [[funct]] refines the operation (e.g., add vs.\ subtract).
+ARM uses a similar fixed-width scheme but devotes the top four
+bits to a condition code, which makes every instruction
+conditionally executable---an unusual feature among RISC
+architectures.
 
 \subsection{Hardware versus software}
 
 % in hardware because? Well cos related to hardware, e.g.
 % for devices (keyboard, mouse, screen, but also of course memory).
-% Also for basic computation like arithmetic 
+% Also for basic computation like arithmetic
 % and conditional/jmp (stored program)
 %
 % in hardware also because in soft could be too slow
@@ -662,16 +779,57 @@ who wrote in some sense most of this book.
 %  and storing things in memory."
 %
 
+%claude:
+Why are certain operations implemented in hardware rather than
+in software? The obvious reason is speed: 32-bit addition in
+a single clock cycle is vastly faster than simulating it with
+a loop of bit operations. But there is a subtler criterion:
+an operation belongs in hardware when it is used so frequently
+and so universally that the silicon cost is justified.
+Arithmetic and branching are the most basic examples.
+Floating-point was long considered optional (it was a separate
+coprocessor chip on early machines), but became standard as
+scientific and graphics workloads grew.
+Some instructions exist specifically to support the compiler
+(stack push/pop) or the kernel (save/restore all registers
+on context switch).
+
 \subsection{IO}
 
-% If just memory, boring. Need effects too! visible effects! Output 
+% If just memory, boring. Need effects too! visible effects! Output
 % And need interactive, Input.
 
 % Memory mapped IO or special IO instruction.
 
+%claude:
+A processor that can only compute on memory is useless without
+a way to interact with the outside world.
+{Input/Output} (I/O) is what makes a computer more than a
+calculator: it connects the processor to keyboards, screens,
+disks, and networks.
+There are two main approaches to I/O: {memory-mapped I/O},
+where device registers appear at special memory addresses
+(the approach used by ARM and \plan), and dedicated I/O
+instructions (the approach used by x86 with its [[in]]/[[out]]
+instructions).
+Note that [[5i]] does not emulate I/O devices---it handles
+only the software interrupt that triggers system calls.
+
 \subsection{Interrupts}
 
 % interrupts are also important. interrupt table. external world.
+
+%claude:
+{Interrupts} allow external devices (a keyboard press, a timer
+tick, a disk completion) to notify the processor asynchronously,
+without the processor having to continuously poll each device.
+When an interrupt occurs, the processor suspends the current
+program, saves its state, and jumps to a handler address found
+in an {interrupt vector table}.
+Software can also trigger interrupts explicitly via a {software
+interrupt} instruction (called [[SWI]] on ARM), which is the
+mechanism used to make {system calls}---and the only ``system''
+instruction that [[5i]] actually emulates.
 
 \subsection{Virtual memory}
 
@@ -689,15 +847,73 @@ who wrote in some sense most of this book.
 %related: debugging hardware support (by abusing virtual memory trap general
 %  mechanism again)
 
+%claude:
+{Virtual memory} is a hardware mechanism that gives each process
+the illusion of having its own private address space.
+The minimal hardware support required is a {TLB}
+(Translation Lookaside Buffer) that maps virtual addresses to
+physical addresses, and a {page fault} interrupt when a mapping
+is missing. The kernel handles the fault by updating the page
+tables and resuming the program.
+Virtual memory is closely tied to {protection}: the hardware
+enforces a distinction between {kernel mode} and {user mode},
+preventing user programs from accessing each other's memory or
+the kernel's data structures.
+None of this is emulated by [[5i]], which runs entirely in
+user space on the host---see \book{Kernel} for the full story.
+
 \subsection{Endianess}
 
 % format and endianess: little endian = least significant bytes
 % in the smallest address
 %
 
+%claude:
+{Endianness} determines the order in which the bytes of a
+multi-byte value are stored in memory.
+In a {little-endian} machine, the least significant byte is
+stored at the lowest address; in a {big-endian} machine, the
+most significant byte comes first.
+ARM is technically {bi-endian}---it can operate in either
+mode---but in practice (and in \plan) it runs little-endian.
+
+%yoann: why the industry complicates itself by having 2 formats? little-endian seems logic, why they invented big-endian?
+
+%claude:
+Big-endian is actually the more natural format for humans:
+the number [[0x12345678]] is stored as [[12 34 56 78]] in
+memory, in the same left-to-right order we write it.
+Network protocols (TCP/IP) adopted big-endian early on---hence
+the term ``network byte order''---and so did Motorola (68000)
+and IBM (System/360).
+Little-endian, on the other hand, is more convenient for hardware:
+adding one byte to a value at a given address does not change
+the address of the least significant byte, which simplifies
+variable-width arithmetic.
+Intel chose little-endian for the 8080 and x86, and ARM followed.
+The split persists because neither format is strictly superior,
+and once an architecture picks one, backward compatibility locks
+it in.
+
+%claude:
+For the 32-bit value [[0x12345678]] stored at address [[0x100]]:
+\begin{verbatim}
+                addr:  0x100  0x101  0x102  0x103
+                       +------+------+------+------+
+  Big-endian:          | 0x12 | 0x34 | 0x56 | 0x78 |
+  (Motorola, network)  +------+------+------+------+
+                        MSB                    LSB
+
+                addr:  0x100  0x101  0x102  0x103
+                       +------+------+------+------+
+  Little-endian:       | 0x78 | 0x56 | 0x34 | 0x12 |
+  (Intel, ARM)         +------+------+------+------+
+                        LSB                    MSB
+\end{verbatim}
+
 %\subsection{Advanced}
 
-% recently: 
+% recently:
 % - vector computation (SIMD)
 % - graphics processing unit (GPU)
 % - virtualization
@@ -717,14 +933,49 @@ who wrote in some sense most of this book.
 
 % =~ interpreter.
 
+%claude:
+An emulator is essentially an {interpreter} for machine code:
+it reads an instruction, decodes it, executes the corresponding
+operation on simulated state (registers, memory), and advances
+to the next instruction. This is exactly the fetch-decode-execute
+loop that a real processor performs in hardware---except that
+[[5i]] does it in a C [[while]] loop.
+%
+The term ``emulator'' (as opposed to ``simulator'') sometimes
+implies that the goal is to run real programs, not just to model
+timing or performance. [[5i]] does not simulate the pipeline,
+caches, or cycle counts of a real ARM processor---it only
+reproduces the functional behavior, which is all that matters
+for running programs correctly.
+
 
 \section{[[5i]] interfaces}
 
+%claude:
+I just described the general principles behind emulation.
+I will now focus on the practical interface of [[5i]]:
+how to invoke it from the command line, and how to use
+its built-in debugger to inspect program execution.
+
 \subsection{Command-line interface}
 
-\subsection{Debugger interface}
-
+%claude:
+The command-line interface of [[5i]] is minimal:
 \begin{verbatim}
+5i [5.out] [arg1 arg2 ...]
+\end{verbatim}
+%
+The first argument is the ARM binary to execute (defaulting
+to [[5.out]], the conventional name for ARM executables in \plan).
+Any remaining arguments are passed to the emulated program
+as its [[argv]].
+%
+Unlike [[rc]] or [[mk]], [[5i]] takes no flags---there
+are no options to toggle.
+The emulator simply loads the binary, initializes
+memory and the stack, and drops into its debugger prompt.
+
+\subsection{Debugger interface}
 
 % actually provides a debugger interface a la 'db'
 %
@@ -749,36 +1000,156 @@ who wrote in some sense most of this book.
 %:s to step
 %and then just RET to repeat the last cmd
 
-\end{verbatim}
+%claude:
+Rather than running the program immediately, [[5i]] starts
+in an interactive debugger---a simplified version of the
+\plan debugger [[db]] (see the \book{Debugger}).
+At the prompt, you enter commands to control execution
+and inspect state.
+The most important commands are:
+\begin{itemize}
+\item [[:c]] --- continue (run the program until it exits or
+  hits a breakpoint)
+\item [[:s]] --- single-step one instruction
+\item [[$r]] --- dump all registers
+\item [[$t]] --- toggle instruction tracing
+\item [[$q]] --- quit the emulator
+\item [[?]] and [[/]] --- examine memory (text and data respectively)
+\end{itemize}
+
+%claude:
+Pressing \textsc{return} on an empty line repeats the last
+command, which is especially useful when single-stepping:
+you type [[:s]] once, then just keep pressing \textsc{return}.
+
+%claude:
+A particularly useful combination is [[$t]] followed by [[:c]]:
+this runs the program while printing every instruction as it
+executes, producing a complete execution trace.
+This is invaluable for debugging---you can see exactly which
+instructions were executed before a crash, without needing
+to set breakpoints.
+
+%claude:
+You can also examine specific addresses.
+For example, [[main?i]] disassembles the instructions
+at the address of [[main]], while [[exit?iii]]
+disassembles three instructions starting at [[exit]].
+The [[?]] modifier reads from the text segment and
+[[/]] from the data segment, following the same convention
+as [[db]].
 
 \section{[[helloworld]]}
 
 % show actual instructions this time, with concrete values
 
+%claude:
+To make things concrete, here is a minimal [[helloworld.s]]
+program in \plan ARM assembly (Asm5):
+<<helloworld.s>>=
+TEXT main(SB), $0
+    MOVW $1, R0          /* fd = stdout */
+    MOVW $str(SB), R1    /* buf */
+    MOVW $14, R2         /* count */
+    SWI  $0              /* pwrite() syscall */
+    RET
+
+DATA str(SB)/14, $"hello, world\n"
+GLOBL str(SB), $14
+@
+
+%claude:
+This is the same [[helloworld.s]] discussed in the
+\book{Assembler}. The difference is the perspective:
+the Assembler book explains how [[5a]] translates the
+source text into machine code, while here we care about
+what happens when [[5i]] executes it.
+%
+After assembling with [[5a]] and linking with [[5l]],
+we can run it under [[5i]]:
+\begin{verbatim}
+% 5a helloworld.s
+% 5l -o 5.out helloworld.5
+% 5i 5.out
+5i
+:c
+hello, world
+%
+\end{verbatim}
+
+%claude:
+Despite its simplicity, this program exercises most of the
+principles described in the previous sections.
+For each instruction, [[5i]] performs the fetch-decode-execute
+loop: it reads four bytes from simulated memory at the program
+counter address, decodes the opcode and operands, and dispatches
+to the corresponding C function.
+%
+The three [[MOVW]] instructions each write an immediate value
+into a register---[[5i]] simply stores the value into the
+appropriate slot of its [[reg.r]] array.
+The [[SWI]] instruction is more interesting: rather than
+forwarding it to a real ARM interrupt handler, [[5i]] intercepts
+it and translates the system call into a host [[pwrite()]]---this
+is the user-level emulation strategy described earlier, where
+the emulator handles system calls by calling the equivalent
+host OS function.
+Finally, [[RET]] sets the program counter to the return address
+stored in the link register, and the emulator exits when
+it detects the program has finished.
+
 \section{Input binary executable}
 % special here, emulator like qemu take disk image,
 % and boot process.
 
+%claude:
+The input to [[5i]] is a \plan [[a.out]] executable---the
+same binary that the kernel loader would load on a real
+ARM machine.
+This is much simpler than a full-system emulator like QEMU,
+which takes an entire disk image and must emulate the boot
+process, BIOS, and device initialization.
+Because [[5i]] is a user-level emulator, it only needs
+the executable itself: an [[a.out]] header followed by
+the text (code) and data segments containing ARM machine
+instructions and initialized data.
+%
+The [[a.out]] format is fully described in the \book{Linker},
+where it is the output; here it is the input.
+The layout is straightforward:
 \begin{verbatim}
-
- a.out (unix/plan9) header, and then ARM.
-
- for a compiled helloworld.c, there are actually lots
- of instructions involved, print is complicated, _main vs main,
- and probably other stuff. Could be good to have a 
- simplified helloworld.s first where do very little.
-
-
-TODO: have a disassembler? could be interesting to show
- some example of binary and what Assembly it corresponds too.
- libmach does that no?
-
-TODO: could also show some assembly and show the binary
- For instance can see AB that does the +8 implicitly.
- so if want to jump to next instruction there will be actually
- a -4 in the value of AB.
-
+  +-------------------+
+  | a.out header      |  magic, sizes, entry point (32 bytes)
+  +-------------------+
+  | Text segment      |  ARM instructions
+  +-------------------+
+  | Data segment      |  initialized data
+  +-------------------+
+  | Symbol table      |  (optional, for debugger)
+  +-------------------+
 \end{verbatim}
+%
+[[5i]] uses [[libmach]]'s [[crackhdr()]] function to parse
+the header and extract the segment sizes and entry point,
+then loads the text and data segments into simulated memory.
+
+
+% a.out (unix/plan9) header, and then ARM.
+%
+% for a compiled helloworld.c, there are actually lots
+% of instructions involved, print is complicated, _main vs main,
+% and probably other stuff. Could be good to have a 
+% simplified helloworld.s first where do very little.
+%
+%
+%TODO: have a disassembler? could be interesting to show
+% some example of binary and what Assembly it corresponds too.
+% libmach does that no?
+%
+%TODO: could also show some assembly and show the binary
+% For instance can see AB that does the +8 implicitly.
+% so if want to jump to next instruction there will be actually
+% a -4 in the value of AB.
 
 \section{The ARM architecture}
 
@@ -786,33 +1157,135 @@ TODO: could also show some assembly and show the binary
 
 % see arm-opcode.svg in this directory?
 
-\begin{verbatim}
+%claude:
+ARM is a {RISC} (Reduced Instruction Set Computer) architecture,
+originally designed at Acorn Computers in 1985.
+Compared to x86, it has a small, regular instruction set:
+all instructions are 32~bits wide, there are 16 general-purpose
+registers, and memory access is restricted to explicit
+load/store instructions.
+%
+ARM has a few distinctive features that the emulator must handle.
+Every instruction carries a 4-bit {condition code} field,
+allowing conditional execution without branching---a design
+choice that compensates for the lack of branch prediction
+in early ARM processors.\footnote{The idea is that a short
+[[if]]/[[else]] can be compiled without any branch instruction:
+both sides are emitted sequentially, each guarded by opposite
+condition codes. On a simple pipeline with no branch predictor,
+this avoids the costly pipeline flush that a mispredicted branch
+would cause. However, it wastes instruction slots when the
+condition is false---the processor still fetches and decodes the
+instruction, only to discard it. As ARM processors grew more
+sophisticated and acquired good branch predictors, conditional
+execution became a net loss: it uses up four precious bits in
+every instruction (the condition field) and prevents
+out-of-order execution from speculating past the guarded
+instructions. ARM64 (AArch64) accordingly dropped pervasive
+conditional execution, keeping only a few conditional
+select/compare instructions instead.}
+There is no dedicated [[CALL]]/[[RET]] instruction pair:
+function calls use [[BL]] (Branch and Link), which saves
+the return address in the link register ([[R14]]),
+and returning is simply a branch back to that register.
 
-ARM ISA format
-see ARM wikipedia page!
-endianess: actually bi-endian, but little endian by default, 
- hence va[0] | va[1] >> 8, etc
+%claude:
+ARM is technically {bi-endian}---it can operate in either
+byte order---but in practice (and in \plan) it runs
+little-endian. This matters for the emulator: when [[5i]]
+fetches a 32-bit instruction from memory, it reconstructs
+it as [[va[0] | va[1]<<8 | va[2]<<16 | va[3]<<24]],
+reading the least significant byte first.
 
- a few weird stuff:
-  - conditional execution format to compensate for lack of branch
-    prediction, see wikipedia euclid example
-  - no CALL/RET? do via B or BL (could also do ADD PC I think)
+%claude:
+The ARM instruction set has a high degree of symmetry:
+arithmetic operations share a common encoding format with
+regular bit fields for the opcode, condition code, and operands.
+This regularity means that [[5i]]'s instruction decoder is
+not a giant [[switch]] with hundreds of cases; instead, it
+factors out common patterns like the shifter operand and
+the condition check, reflecting the structure of the hardware
+itself.
 
- lots of symetries and repetitions, see instruction format section
+%claude:
+The specific ARM variant emulated by [[5i]] corresponds
+roughly to ARMv4, the architecture of the StrongARM
+processors that \plan originally targeted.
+This is also close to the ARMv6 used by the original
+Raspberry Pi, which makes [[5i]] a useful tool for
+understanding code running on that platform.
 
- raspberry = ARMv6? 
+%claude:
+Finally, because [[5i]] decodes binary instructions by
+extracting bit fields, its source code is full of C
+bit manipulation idioms: shifts ([[<<]], [[>>]]),
+masks ([[& 0xf]]), and sign extension.
+These patterns will be a recurring theme throughout
+this book.
 
-section{C}
- refresher on bit manip?
- w&1< <7, x& ~(BYPG-1), 31< <7, x> >25 & 0xf, etc
-
-http://blogs.msdn.com/b/ntdebugging/archive/2013/11/22/understanding-arm-assembly-part-1.aspx
-
- ex of assembly? how put 1 into register1?
-
-\end{verbatim}
+%
+%ARM ISA format
+%see ARM wikipedia page!
+%endianess: actually bi-endian, but little endian by default, 
+% hence va[0] | va[1] >> 8, etc
+%
+% a few weird stuff:
+%  - conditional execution format to compensate for lack of branch
+%    prediction, see wikipedia euclid example
+%  - no CALL/RET? do via B or BL (could also do ADD PC I think)
+%
+% lots of symetries and repetitions, see instruction format section
+%
+% raspberry = ARMv6? 
+%
+%section{C}
+% refresher on bit manip?
+% w&1< <7, x& ~(BYPG-1), 31< <7, x> >25 & 0xf, etc
+%
+%http://blogs.msdn.com/b/ntdebugging/archive/2013/11/22/understanding-arm-assembly-part-1.aspx
+%
+% ex of assembly? how put 1 into register1?
 
 \section{Code organization}
+
+%claude:
+The source code of [[5i]] is split into about a dozen files,
+all sharing a common header.
+Table~\ref{tab:code-orga} gives an overview.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcll}
+\toprule
+{\bf Function}                 & {\bf Ch.}                      & {\bf File}         & {\bf Entities}                              \\
+\otoprule
+data structures, prototypes    & \ref{chap:core-ds}             & [[arm.h]]          & [<Registers>] [<Memory>] [<Icache>]         \\
+\midrule
+entry point, loading           & \ref{chap:main}                & [[5i.c]]           & [<main()>] [<initmemory()>] [<initstk()>]   \\
+instruction interpreter        & \ref{chap:interpreter}         & [[run.c]]          & [<run()>] [<armclass()>]                    \\
+\midrule
+memory emulation               & \ref{chap:memory}              & [[mem.c]]          & [<getmem\_w()>] [<putmem\_w()>]             \\
+instruction cache              & \ref{chap:memory}              & [[icache.c]]       &                                             \\
+syscall emulation              & \ref{chap:syscalls}            & [[syscall.c]]      & [<dosyscall()>]                             \\
+\midrule
+breakpoints                    & \ref{chap:debugger}            & [[bpt.c]]          & [<brkchk()>]                                \\
+symbol lookup                  & \ref{chap:debugger}            & [[symbols.c]]      &                                             \\
+debugger commands              & \ref{chap:debugger}            & [[cmd.c]]          & [<cmd()>]                                   \\
+profiling/statistics           & \ref{chap:profiler}            & [[stats.c]]        & [<iprofile()>]                              \\
+\midrule
+globals                        & \ref{chap:utilities}           & [[globals.c]]      &                                             \\
+utilities                      & \ref{chap:utilities}           & [[utils.c]]        &                                             \\
+\otoprule
+Total                          &                                &                    & $\sim$3000 LOC                              \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Source files of [[5i]].}
+\label{tab:code-orga}
+\end{table*}
+
+%claude:
+Every source file includes the same set of headers:
 
 <<basic includes>>=
 #include <u.h>
@@ -824,57 +1297,182 @@ http://blogs.msdn.com/b/ntdebugging/archive/2013/11/22/understanding-arm-assembl
 @
 % need mach.h in most of those files???
 
-\begin{verbatim}
 
-arm.h: DS, forward decl (a dat.h + fns.h)
-
- mach.h for very little I think, could probably remove it of most files
-
-utilities:
-utils.c:
-globals.c:
-
-hardware:
-mem.c:
-icache.c: instruction cache (nop)
-syscall.c: supported syscalls emulation (just proxy)
-
-debugger stuff:
-bpt.c: breakpoints
-symbols.c:
-cmd.c:
-stats.c:
-
-main stuff:
-run.c
-5i.c
-
-\end{verbatim}
+%arm.h: DS, forward decl (a dat.h + fns.h)
+%
+% mach.h for very little I think, could probably remove it of most files
+%
+%utilities:
+%utils.c:
+%globals.c:
+%
+%hardware:
+%mem.c:
+%icache.c: instruction cache (nop)
+%syscall.c: supported syscalls emulation (just proxy)
+%
+%debugger stuff:
+%bpt.c: breakpoints
+%symbols.c:
+%cmd.c:
+%stats.c:
+%
+%main stuff:
+%run.c
+%5i.c
 
 \section{Software architecture}
 
+%claude:
+Figure~\ref{fig:dataflow} describes the main data flow of [[5i]], whereas
+Figure~\ref{fig:controlflow} describes the main control flow.
+
+\begin{figure}[!tbp]\centering
 \begin{verbatim}
-
- Use libmach a bit: crackhdr(), symbol map.
- But archi is so simple that no need parsing: just read ulong (instruction)
- so 4 bytes from the file.
- Then decompose instruction and dispatch.
-
- I think some of the algo like dpex(), arm_class, really emulate
- the algorithm of the machine itself. The code is factorized.
- it's not just a giant switch for each opcode, things in the ARM
- are better structured, with some repetition.
-
- note that no deps to 5.out.h here, it's the final binary format,
- not the plan9 object ARM format.
-
-
- machine language, binary format of instruction,
- opcode, operands, semantic. interpreter.
-
+a.out binary --> a.out header --> memory segments --> instructions --> effects
+  (file)        (crackhdr)      (text, data, bss,   (fetch 4 bytes   (register
+                                 stack)               + decode)        + memory
+                                                                       changes)
 \end{verbatim}
+\caption{Data flow diagram of [[5i]].}\label{fig:dataflow}
+\end{figure}
+
+%claude:
+As shown by Figure~\ref{fig:dataflow}, [[5i]] reads an [[a.out]]
+binary file, parses its header with [<crackhdr()>] from [[libmach]],
+loads the text and data segments into simulated memory, and then
+repeatedly fetches 32-bit instructions from that memory.
+Each instruction is decoded and produces effects on the simulated
+registers and memory---the fetch-decode-execute loop.
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                          +------------+
+                          |    main    |
+                          +-----+------+
+                                |
+             +-----------+------+-------+-----------+
+             |           |              |           |
+      +------v-----+ +---v----+  +------v-----+ +--v---+
+      | crackhdr() | |initstk | | initmemory | | cmd  |
+      +------------+ +--------+  +------------+ +--+---+
+                                                    |
+                                            +-------v--------+
+                                            |   debugger     |
+                                            | command loop   |
+                                            +-------+--------+
+                                                    | :c
+                                            +-------v--------+
+                                           (  run() main loop )
+                                            +-------+--------+
+                                                    |
+                          +----------+--------------+---+-----------+
+                          |          |              |   |           |
+                   +------v---+ +---v------+ +-----v-+ | +--------v-------+
+                   | armclass | | Lots of  | | dpex  | | | condpass (cond  |
+                   | (decode) | | Iop_xxx  | |(data  | | |  code check)   |
+                   +----------+ | handlers | | proc) | | +----------------+
+                                +----+-----+ +-------+ |
+                                     |                  |
+                          +----------+----------+       |
+                          |          |          |       |
+                   +------v-+  +----v---+  +---v----+  |
+                   |getmem_w|  |putmem_w|  |getmem_b|  |
+                   +--------+  +--------+  +--------+  |
+                       memory emulation                 |
+                                                        |
+                                                 +------v------+
+                                                 | dosyscall() |
+                                                 +------+------+
+                                                        |
+                           +----------+---------+-------+------+
+                           |          |         |       |      |
+                    +------v+  +------v+  +-----v-+ +--v---+ +v------+
+                    | open  |  | read  |  | write | | fork | | exec  | ...
+                    +-------+  +-------+  +-------+ +------+ +-------+
+                         host OS syscalls (proxied)
+\end{verbatim}
+\caption{Control flow diagram of [[5i]].}\label{fig:controlflow}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:controlflow} shows the control flow starting
+from [<main()>] at the top.
+After loading the binary ([<crackhdr()>]), initializing memory
+([<initmemory()>]), and building the initial stack ([<initstk()>]),
+[[main()]] enters the debugger command loop ([<cmd()>]).
+When the user types [[:c]], the interpreter loop [<run()>]
+takes over, fetching and executing instructions one at a time.
+%
+Each instruction passes through [<armclass()>] for decoding, then
+dispatches to the appropriate handler (one of many [[Iop_xxx]]
+functions). Arithmetic and logic handlers update the register
+file directly. Load/store handlers go through the memory
+emulation layer ([<getmem_w()>], [<putmem_w()>], etc.).
+The [[SWI]] instruction triggers [<dosyscall()>], which
+translates the ARM system call into the equivalent host OS call
+(open, read, write, fork, exec, etc.).
+
+%claude:
+Compared to the other tools in \principia, the architecture
+of [[5i]] is remarkably simple. There is no complex parsing
+stage---unlike the assembler or compiler, which must tokenize
+and parse source text, the emulator just reads a [[ulong]]
+(4~bytes) from memory. The ARM instruction format is regular
+enough that [<armclass()>] can decode it with a few shifts
+and masks, then dispatch through a function pointer table.
+%
+Note also that [[5i]] works with the final binary executable
+format ([[a.out]]), not the \plan object format ([[5.out]]);
+it has no dependency on [[5.out.h]].
+
+
+% Use libmach a bit: crackhdr(), symbol map.
+% But archi is so simple that no need parsing: just read ulong (instruction)
+% so 4 bytes from the file.
+% Then decompose instruction and dispatch.
+%
+% I think some of the algo like dpex(), arm_class, really emulate
+% the algorithm of the machine itself. The code is factorized.
+% it's not just a giant switch for each opcode, things in the ARM
+% are better structured, with some repetition.
+%
+% note that no deps to 5.out.h here, it's the final binary format,
+% not the plan9 object ARM format.
+%
+%
+% machine language, binary format of instruction,
+% opcode, operands, semantic. interpreter.
+
 
 \section{Book structure}
+
+%claude:
+You now have enough background to understand the source code of [[5i]].
+The rest of the book is organized as follows.
+%
+I will start by describing the core data structures of [[5i]]
+in Chapter~\ref{chap:core-ds}: the register file, memory
+segments, and instruction cache.
+%
+Then, Chapter~\ref{chap:main} presents [<main()>], which
+loads the binary, initializes memory and the stack, and
+enters the debugger command loop.
+%
+Chapter~\ref{chap:interpreter} is the heart of the book:
+it describes the instruction interpreter---the
+fetch-decode-execute loop and the handlers for each
+ARM instruction class (arithmetic, memory, branches, etc.).
+%
+Chapter~\ref{chap:memory} covers the memory emulation layer,
+and Chapter~\ref{chap:syscalls} explains how [[5i]] intercepts
+system calls and translates them into host OS calls.
+%
+Chapter~\ref{chap:debugger} presents the built-in debugger,
+and Chapter~\ref{chap:profiler} the simple instruction profiler.
+%
+Finally, the appendices contain debugging support, error
+management, and utility functions.
 
 %###############################################################################
 
@@ -882,6 +1480,7 @@ run.c
 %******************************************************************************
 \chapter{Core Data Structures}
 %******************************************************************************
+\label{chap:core-ds}
 
 \section{[[Instruction]] and [[Opcode]]}
 
@@ -1134,6 +1733,7 @@ struct Segment
 %******************************************************************************
 \chapter{[[main()]]}
 %******************************************************************************
+\label{chap:main}
 
 %input: file => fdt => biobuf bi => bin
 %output: bo => bout
@@ -1551,6 +2151,7 @@ case 'c':
 %******************************************************************************
 \chapter{Instruction Interpreter}
 %******************************************************************************
+\label{chap:interpreter}
 
 \section{Instruction binary format}
 
@@ -3319,6 +3920,7 @@ case 7:	/* coprocessor crap */ // and syscall
 %******************************************************************************
 \chapter{Memory}
 %******************************************************************************
+\label{chap:memory}
 
 % we proxy memory ourselves, so virtual mem address correspond
 % to process mem address got via malloc (see Segment.table).
@@ -3732,6 +4334,7 @@ putmem_v(uintptr addr, uvlong data)
 %******************************************************************************
 \chapter{Syscalls Emulation}
 %******************************************************************************
+\label{chap:syscalls}
 
 % emulation/proxy at syscall level.
 % Qemu is at hardware device level
@@ -4638,6 +5241,7 @@ sysfversion(void)
 %******************************************************************************
 \chapter{Debugger}
 %******************************************************************************
+\label{chap:debugger}
 
 \section{Overview}
 
@@ -5760,6 +6364,7 @@ if(membpt)
 %******************************************************************************
 \chapter{Profiler}
 %******************************************************************************
+\label{chap:profiler}
 
 <<[[Inst]] profiling fields>>=
 // profiling info
@@ -6028,6 +6633,7 @@ iprofile(void)
 %******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
+\label{chap:advanced}
 
 % see also http://danluu.com/new-cpu-features/
 
@@ -6090,6 +6696,7 @@ catcher(void *a, char *msg)
 %******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
+\label{chap:conclusion}
 
 
 % next book, assembler, linker, compiler.
@@ -6110,6 +6717,7 @@ catcher(void *a, char *msg)
 %******************************************************************************
 \chapter{Debugging}
 %******************************************************************************
+\label{chap:debugging}
 % the emulator itself, to debug it! debug the debugger!
 
 <<global [[trace]]>>=
@@ -6164,6 +6772,7 @@ static	char*	cond[16] =
 %******************************************************************************
 \chapter{Error Management}
 %******************************************************************************
+\label{chap:error}
 
 <<function [[fatal]]>>=
 void
@@ -6207,6 +6816,7 @@ undef(instruction inst)
 %******************************************************************************
 \chapter{Utilities}
 %******************************************************************************
+\label{chap:utilities}
 
 \section{Memory Management}
 
@@ -6248,6 +6858,7 @@ erealloc(void *a, ulong oldsize, ulong size)
 %******************************************************************************
 \chapter{Extra Code}
 %******************************************************************************
+\label{chap:extra}
 
 #include "Machine_extra.nw"
 
