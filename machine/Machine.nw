@@ -1,17 +1,18 @@
 \documentclass[12pt]{report}
-%12pt, twocolumn, landscape
 
 %last:
 % - https://xnacly.me/posts/2025/building-a-minimal-viable-armv7-emulator/
 % - QEMU internals: https://airbus-seclab.github.io/qemu_blog/
 % - RiscV in Racket: http://guillaume.baierouge.fr/2021/04/23/simulating-digital-circuits-in-racket/a-risc-v-core-in-racket/index.html
 
+\input{../docs/latex/Packages}
+\input{../docs/latex/Noweb}
+\input{../docs/latex/Config}
+\input{../docs/latex/Macros}
+
 %******************************************************************************
 % Prelude
 %******************************************************************************
-\newif\iffinal
-\newif\ifverbose
-\finaltrue\verbosetrue % see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -56,37 +57,6 @@
 % - aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
-
-%------------------------------------------------------------------------------
-% Packages
-%------------------------------------------------------------------------------
-
-\usepackage{xspace}
-\usepackage{verbatim}
-%note: required by noweblatexpad for the \t \l \n in this file
-\usepackage{fancyvrb}
-\usepackage{url}
-\usepackage{hyperref}
- \hypersetup{colorlinks=true}
-\usepackage[pageref]{backref}
- \def\backref{{\footnotesize cited page(s)}~}
-\usepackage{booktabs} 
- \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
-\usepackage{graphicx}
-
-\input{../docs/latex/Config}
-\usepackage{../docs/latex/noweb}
- \noweboptions{footnotesizecode,nomargintag}
- %note: allow chunk on different pages, less white space at bottom of pages
- \def\nwendcode{\endtrivlist \endgroup}
- \let\nwdocspar=\par
-\usepackage{../docs/latex/syncweb}
-
-%------------------------------------------------------------------------------
-% Macros
-%------------------------------------------------------------------------------
-
-\input{../docs/latex/Macros}
 
 %------------------------------------------------------------------------------
 % Config
@@ -135,18 +105,18 @@ with code from\\
 \tableofcontents
 \endgroup
 
-%******************************************************************************
-% Body
-%******************************************************************************
+%###############################################################################
 
+%******************************************************************************
 \chapter{Introduction}
+%******************************************************************************
 
 The goal of this book is to present with full details the source code of
 a {processor emulator}.
 
 \section{Motivations}
 
-Why a processor emulator? 
+Why a processor emulator?
 Because I think you are a better programmer if
 you fully understand how things work under the hood,
 and the {processor} is really at the bottom of what is under the hood.
@@ -155,23 +125,39 @@ and the {processor} is really at the bottom of what is under the hood.
 
 Every other books in \principia will describe programs
 that ultimately runs on a concrete machine. For the
-assembler and linker, I will even describe programs that 
+assembler and linker, I will even describe programs that
 generate {binary codes} for a specific architecture (the ARM).
-\n actually in plan9 the assembler does not generate ARM code, 
+\n actually in plan9 the assembler does not generate ARM code,
 \n (but it still generates binary code specific to a machine)
 It is thus useful, especially to understand the
-assembler, linker, and also compiler, 
+assembler, linker, and also compiler,
 \n especially in plan9 where the arch specific stuff is spread in those 3 things
-to have somewhere the full description of the 
-{instruction set} of an architecture (ISA): 
+to have somewhere the full description of the
+{instruction set} of an architecture (ISA):
 its binary format, {mnemonic names}, and also semantics.
 %
 In fact, the hardware can also be seen as a kind of software: a processor
 is an {interpreter} for a low-level language, and so
 it is also {\em softwarica} material. The binary format
-of some instructions and their semantics can be described 
+of some instructions and their semantics can be described
 simply by explaining the code of an interpreter: a processor emulator.
 \l concrete machine, virtual machine.
+
+%claude:
+Even if most programmers never write an emulator, understanding how
+a processor works at this level has immediate practical value.
+When debugging a crash, the backtrace makes more sense if you understand
+how the stack frame is laid out in memory and how the link register
+saves the return address.
+When optimizing hot loops, knowing which operations the hardware
+can do in a single instruction---and which require multi-step
+sequences---guides better decisions than any profiler alone.
+%
+And when reading the other books in \principia,
+this book serves as a companion to \book{Assembler} and
+\book{Linker}---providing the ISA reference that those books
+assume---expressed as a literate program rather than as
+a 2000-page architecture reference manual.
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -263,11 +249,11 @@ Note that [[5i]] is not a complete processor simulator though.
 \l user-level emulator, like apout, like Wine
 It emulates all the basic instructions, and so is
 a good reference for the ARM ISA, but it does not emulate
-low-level things such as 
-hardware interrupts, 
+low-level things such as
+hardware interrupts,
 device interactions (IO),
-coprocessor instructions, 
-kernel and user modes, or 
+coprocessor instructions,
+kernel and user modes, or
 the booting process.
 %
 The only system instruction partially handled is the software
@@ -285,6 +271,13 @@ it can not run a kernel.
 %
 However, I think [[5i]] is a good compromise for our educational purpose.
 
+%claude:
+In other words, [[5i]] is a {user-level} emulator: it simulates
+the CPU as seen by an application, not as seen by the kernel.
+This is the same approach used by tools like QEMU's user-mode
+and, in a different context, Wine---intercept system calls at
+the boundary and let the host OS handle them, rather than
+simulating the entire hardware platform.
 
 Note also that describing a C program, and not a VHDL program, 
 has a few disadvantages. Indeed, to emulate for instance
@@ -314,6 +307,12 @@ by most computers and to better understand the ARM ISA.
 \l as emulate/proxy OS API.
 
 \section{Other emulators}
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Emulators and instruction set simulators timeline}
+\label{fig:lineage}
+\end{figure}
 
 Here are a few emulators that I considered for this book, but
 which I ultimately discarded:
@@ -409,6 +408,16 @@ system called NNIX, but nobody has ever written it.
 
 \end{itemize}
 \l lots of other emulators, see the comment in the .tex
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major emulators
+and instruction set simulators.
+%
+I think [[5i]] represents the best compromise for this book:
+it implements the core of an ARM emulator---instruction decoding,
+register operations, memory access, and system call proxying---while
+remaining small enough (about 3000~LOC) to explain in full.
+
 %industry:
 % - vmware
 % - parallel
@@ -594,7 +603,9 @@ who wrote in some sense most of this book.
 
 
 
+%******************************************************************************
 \chapter{Overview}
+%******************************************************************************
 
 \section{Computer principles}
 \n machine/computer/processor
@@ -868,7 +879,9 @@ run.c
 %###############################################################################
 
 
+%******************************************************************************
 \chapter{Core Data Structures}
+%******************************************************************************
 
 \section{[[Instruction]] and [[Opcode]]}
 
@@ -1118,7 +1131,9 @@ struct Segment
 
 
 
+%******************************************************************************
 \chapter{[[main()]]}
+%******************************************************************************
 
 %input: file => fdt => biobuf bi => bin
 %output: bo => bout
@@ -1533,7 +1548,9 @@ case 'c':
 @
 
 
+%******************************************************************************
 \chapter{Instruction Interpreter}
+%******************************************************************************
 
 \section{Instruction binary format}
 
@@ -3299,7 +3316,9 @@ case 7:	/* coprocessor crap */ // and syscall
 
 
 
+%******************************************************************************
 \chapter{Memory}
+%******************************************************************************
 
 % we proxy memory ourselves, so virtual mem address correspond
 % to process mem address got via malloc (see Segment.table).
@@ -3710,7 +3729,9 @@ putmem_v(uintptr addr, uvlong data)
 
 
 
+%******************************************************************************
 \chapter{Syscalls Emulation}
+%******************************************************************************
 
 % emulation/proxy at syscall level.
 % Qemu is at hardware device level
@@ -4614,7 +4635,9 @@ sysfversion(void)
 
 
 
+%******************************************************************************
 \chapter{Debugger}
+%******************************************************************************
 
 \section{Overview}
 
@@ -5734,7 +5757,9 @@ if(membpt)
     brkchk(addr, Write);
 @
 
+%******************************************************************************
 \chapter{Profiler}
+%******************************************************************************
 
 <<[[Inst]] profiling fields>>=
 // profiling info
@@ -6000,7 +6025,9 @@ iprofile(void)
 
 
 
+%******************************************************************************
 \chapter{Advanced Topics}
+%******************************************************************************
 
 % see also http://danluu.com/new-cpu-features/
 
@@ -6060,7 +6087,9 @@ catcher(void *a, char *msg)
 % atomic instructions
 % transactional memory
 
+%******************************************************************************
 \chapter{Conclusion}
+%******************************************************************************
 
 
 % next book, assembler, linker, compiler.
@@ -6074,10 +6103,13 @@ catcher(void *a, char *msg)
 % to a subset (called LEGv8) which is small.
 
 
+%###############################################################################
 
 \appendix
 
+%******************************************************************************
 \chapter{Debugging}
+%******************************************************************************
 % the emulator itself, to debug it! debug the debugger!
 
 <<global [[trace]]>>=
@@ -6129,7 +6161,9 @@ static	char*	cond[16] =
 % the emulator itself, to optimize it!
 
 
+%******************************************************************************
 \chapter{Error Management}
+%******************************************************************************
 
 <<function [[fatal]]>>=
 void
@@ -6170,7 +6204,9 @@ undef(instruction inst)
 @
 
 
+%******************************************************************************
 \chapter{Utilities}
+%******************************************************************************
 
 \section{Memory Management}
 
@@ -6209,7 +6245,9 @@ erealloc(void *a, ulong oldsize, ulong size)
 
 
 
+%******************************************************************************
 \chapter{Extra Code}
+%******************************************************************************
 
 #include "Machine_extra.nw"
 
