@@ -1482,9 +1482,41 @@ management, and utility functions.
 %******************************************************************************
 \label{chap:core-ds}
 
+\begin{verse}
+\begin{flushright}
+  {\it Show me your code and conceal your data structures, and I shall
+    continue to be mystified. Show me your data structures, and I
+    won't usually need your code; it'll be obvious.\\
+    ~\\
+    Fred Brooks}
+\end{flushright}
+\end{verse}
+
+%claude:
+%toc:
+In this chapter, I will present the core data structures of [[5i]].
+%
+The first two sections describe how [[5i]] represents ARM
+instructions: the raw 32-bit [<instruction>] type, the [<opcode>]
+enumeration, and the [<Inst>] dispatch table that maps opcodes
+to handler functions.
+%
+The following sections describe the machine state that [[5i]]
+simulates: the [<Registers>] structure (the 16 ARM registers)
+and the [<Memory>] structure (the process address space, divided
+into text, data, BSS, and stack segments).
+
 \section{[[Instruction]] and [[Opcode]]}
 
-The ARM uses fixed-length instructions of 4 bytes:
+%claude:
+The ARM uses fixed-length instructions of 4 bytes\footnote{The
+\plan C compilers define [[long]] as 32~bits on every platform,
+including 64-bit architectures---a deliberate choice to keep
+data structures the same size everywhere. Under GCC or Clang,
+however, [[long]] is typically 64~bits on a 64-bit host, so
+[[ulong]] would be 8~bytes instead of~4. Ideally, this code
+should use an explicit [[u32int]] (or [[uint32\_t]]) type to
+avoid any ambiguity.}:
 
 <<typedef instruction>>=
 typedef ulong instruction;
@@ -1492,7 +1524,45 @@ typedef ulong instruction;
 \n so simpler than x86
 \l hmmm should use u32 then no?
 
+%claude:
+This is all that [[5i]] needs to represent an instruction
+in memory: a single 32-bit word. The simplicity of this
+type---compared to the elaborate AST nodes of the compiler
+or the token structures of the assembler---reflects the
+fact that [[5i]] operates on the final, flat binary format.
+All the structure (opcode, operands, condition code) is
+encoded as bit fields within this word.
+
 An ARM instruction is composed of an {opcode} and a few {operands}.
+
+%claude:
+Here is how the 32 bits of an ARM data-processing instruction
+(e.g., [[ADD]], [[SUB]], [[AND]]) are laid out:
+\begin{verbatim}
+  31 28 27 26 25 24    21 20 19  16 15  12 11             0
+  +----+-----+--+-------+--+------+------+----------------+
+  |cond| 0 0 | I| opcode| S|  Rn  |  Rd  |   operand2     |
+  +----+-----+--+-------+--+------+------+----------------+
+   4b    2b  1b   4b    1b   4b     4b        12 bits
+\end{verbatim}
+%
+The [[cond]] field is the condition code that makes every ARM
+instruction conditional. The 4-bit [[opcode]] selects the
+operation (ADD, SUB, etc.), [[Rn]] and [[Rd]] are the source
+and destination registers, and [[operand2]] encodes either
+an immediate value or a shifted register.
+The function [<armclass()>] in [[run.c]] extracts these fields
+with shifts and masks to produce an [<opcode>] index.
+%
+Note that the [[opcode]] enumeration below does not correspond
+directly to the 4-bit opcode field in the ARM instruction.
+In the actual hardware encoding, the opcode is spread across
+several bit fields (the top two bits select the instruction
+class, then the 4-bit opcode refines it within that class),
+and different instruction formats reuse the same bit positions
+for different purposes. The [[enum opcode]] in [[5i]] flattens
+all of this into a single linear index suitable for dispatching
+through [<itab>]:
 
 % machine language = set of operations with opcodes and operands!
 <<enum [[opcode]]>>=
@@ -1518,6 +1588,17 @@ enum opcode {
     OUNDEF   = 89
 };
 @
+
+%claude:
+The opcodes are organized by category---arithmetic/logic,
+memory, branches, syscalls---mirroring the instruction
+categories discussed in Chapter~\ref{chap:overview}.
+The last entry, [[OUNDEF]], is a catch-all for ARM instructions
+that [[5i]] does not implement (e.g., coprocessor instructions,
+or opcodes used only by the kernel). If the interpreter
+encounters one, it reports an error rather than silently
+producing wrong results.
+
 % OXXX sligthly different from AXXX from 5.out.h because here really 
 % concrete instructions. Here some of the order matters.
 % Actually not exactly real opcode value like in the machine, but close to it
@@ -1574,6 +1655,10 @@ enum opcode {
 % conventions: B, BU, W, H
 
 
+%claude:
+For profiling purposes, opcodes are also grouped into
+broader categories:
+
 <<enum [[ixxx]]>>=
 enum opcode_category
 {
@@ -1591,6 +1676,11 @@ enum opcode_category
 
 \section{[[Inst]] and [[itab]]}
 
+%claude:
+Each opcode is associated with an [<Inst>] structure that
+bundles the handler function, a human-readable name (for
+the debugger and profiler), and the broad category:
+
 % rename?
 <<struct [[Inst]]>>=
 struct Inst
@@ -1605,6 +1695,13 @@ struct Inst
 @
 % mini instruction interpreter, big categories, "sub-interpreter"?
 
+%claude:
+The global array [<itab>] maps each [<opcode>] value to
+its [<Inst>] entry. This is the central dispatch table
+of the emulator: after [<armclass()>] decodes an instruction
+into an opcode, the interpreter simply calls
+[[itab[opcode].func(instruction)]] to execute it.
+
 <<global [[itab]]>>=
 //map<enum<opcode>, Inst>
 Inst itab[] =
@@ -1615,6 +1712,12 @@ Inst itab[] =
 @
 % contain an array of instruction pointer ... something translating
 % an actual instruction into something we can execute.
+
+%claude:
+The only entry shown here is [[OUNDEF]], which maps to
+the [<undef()>] error handler. The remaining 88 entries
+(arithmetic, memory, branches, etc.) will be filled in
+gradually in Chapter~\ref{chap:interpreter}.
 
 <<[[itab]] elements>>=
 [OUNDEF] =  { &undef,		"UNDEF", Imisc},
@@ -1627,6 +1730,13 @@ Inst itab[] =
 %  [OMUL] =  { Imul,	"MUL",	Iarith },
 
 \section{[[Registers]] and [[reg]]}
+
+%claude:
+The set of registers is the core state of the simulated processor.
+ARM has 16 general-purpose 32-bit registers ([[R0]]--[[R15]]),
+three of which have a special role: [[R13]] is the stack pointer,
+[[R14]] is the link register (return address for [[BL]]),
+and [[R15]] is the program counter.
 
 % could factorize with arm/ureg.h
 <<struct [[Registers]]>>=
@@ -1646,6 +1756,10 @@ Registers reg;
 % R0 is kinda like the equivalent of AX on x86
 % R15 is 1020 in general, because first page and after a.out header.
 
+%claude:
+The special registers are given symbolic names so the code
+can say [[reg.r[REGPC]]] instead of [[reg.r[15]]]:
+
 <<enum [[regxxx]]>>=
 enum
 {
@@ -1662,10 +1776,26 @@ enum
 % REGARG/REGRET are plan9 conventions, independent of ARM,
 % but because we emulate syscalls we need to understand the API.
 
+%claude:
+Note that [[REGARG]] and [[REGRET]] are both [[R0]]: in the
+\plan calling convention, the first argument to a function
+and its return value share the same register. This is a
+\plan convention, not an ARM requirement, but [[5i]] needs
+to know it because it emulates system calls by reading
+arguments from (and writing results to) these registers.
+
 
 
 
 \section{[[Segment]] and [[memory]]}
+
+%claude:
+The memory model of [[5i]] does not simulate a flat physical
+address space (0 to 4GB) with page tables and a TLB.
+Instead, it directly models the {process virtual memory}
+as the kernel would set it up after [[exec()]]: four
+segments for text (code), data, BSS (uninitialized data),
+and stack.
 
 % part OS emulation now, because when exec the kernel
 % setup some memory segments.
@@ -1698,6 +1828,41 @@ Memory memory;
 % other state of the machine, except more state of the process
 % viewed from the kernel rather than the machine
 
+%claude:
+Here is how the [<Memory>] structure maps to a process's
+virtual address space:
+\begin{verbatim}
+  High addresses
+  +-------------------+ <-- STACKTOP
+  |      Stack        |  memory.seg[Stack]
+  |  (grows down)     |
+  +-------------------+ <-- stack base
+  |                   |
+  |   (unmapped gap)  |
+  |                   |
+  +-------------------+ <-- bss end
+  |       BSS         |  memory.seg[Bss]
+  | (zero-initialized)|
+  +-------------------+ <-- data end = bss base
+  |      Data         |  memory.seg[Data]
+  |(initialized from  |
+  |    a.out file)    |
+  +-------------------+ <-- text end = data base
+  |      Text         |  memory.seg[Text]
+  |  (ARM instructions|
+  |   from a.out file)|
+  +-------------------+ <-- UTZERO (text base)
+  Low addresses
+\end{verbatim}
+
+%claude:
+Each segment knows its virtual address range ([[base]] to [[end]])
+and has a page table---an array of pointers to 4096-byte pages---that
+holds the actual data.
+For the text and data segments, the initial content comes from
+the binary file (hence [[fileoff]]/[[fileend]]), and pages are
+loaded lazily on first access.
+
 <<struct [[Segment]]>>=
 struct Segment
 {
@@ -1720,8 +1885,39 @@ struct Segment
 % for Text and Data the content is actually in the disk binary, hence
 % filexxx
 
-
-
+%claude:
+The [[table]] field deserves some explanation. It is a two-level
+structure: an array of pointers to 4096-byte pages, where each
+page is allocated on demand (initially [[nil]]).
+\begin{verbatim}
+  Segment
+  +------+
+  | base |
+  | end  |
+  | table+----> +--------+--------+--------+--------+-----+
+  +------+      | page 0 | page 1 |  nil   | page 3 | ... |
+                +---+----+---+----+--------+---+----+-----+
+                    |        |                  |
+                    v        v                  v
+                +------+ +------+           +------+
+                |4096  | |4096  |           |4096  |
+                |bytes | |bytes |           |bytes |
+                +------+ +------+           +------+
+\end{verbatim}
+%
+When [<getmem_w()>] or [<putmem_b()>] accesses an address,
+it subtracts the segment's [[base]] to get an offset,
+divides by 4096 to find the page index, and uses the
+remainder as the byte offset within the page.
+A [[nil]] page pointer means the page has not been loaded yet:
+for the text and data segments, this triggers lazy loading
+from the binary file; for BSS and stack, a fresh zero-filled
+page is allocated.
+The segfault case is handled differently: [<page_of_vaddr()>]
+first searches for a segment whose [[base]]--[[end]] range
+contains the address. If no segment matches (e.g., the address
+falls in the unmapped gap), [[5i]] reports a fault---the
+[[nil]] page pointers are never reached in that case.
 
 
 
