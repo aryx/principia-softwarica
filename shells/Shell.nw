@@ -4351,12 +4351,14 @@ if(p==nil)
 % was $$ in bash
 %claude:
 The exit status of the last command is stored in the
-[[\$status]] variable. [<setstatus()>] sets it, and
+[[$status]] variable. [<setstatus()>] sets it, and
 [<getstatus()>] and [<truestatus()>] read it.
 %
 In [[rc]], a status is a string (not an integer like in the
 Bourne shell). An empty string or the string [["0"]] means success;
 anything else means failure.
+This mirrors the \plan system call [[exits()]] (see \book{Kernel}),
+which takes a string argument rather than a numeric exit code.
 
 <<function [[setstatus]]>>=
 void
@@ -4374,6 +4376,44 @@ getstatus(void)
     return status->val ? status->val->word : "";
 }
 @
+
+%claude:
+The [[|]] check in [<truestatus()>] below deserves explanation.
+When a pipeline like [[ls | wc]] finishes, [[rc]] combines the
+exit statuses of all commands into a single string separated
+by [[|]], for example [["0|0"]] if both succeed or
+[["error|0"]] if the first fails.
+So [<truestatus()>] considers a status ``true'' if it contains
+only [[0]] and [[|]] characters---meaning every stage of the
+pipeline succeeded.
+%
+Why not reduce the pipeline status to a single value earlier?
+Because keeping the full string lets the user inspect [[\$status]]
+and see exactly which stage failed (e.g., [["0|error|0"]]
+tells you the middle command had a problem).
+With numeric exit codes (as in \unix), reducing is easy: just
+take the maximum or the last non-zero value.
+But with string statuses, there is no natural way to merge
+[["can't open"]] and [["0"]] into a single meaningful string,
+so [[rc]] preserves them all.
+In [[bash]], [[\$?]] only reports the exit status of the
+{\em last} command in the pipeline---a failure in an earlier
+stage is silently lost.
+[[bash]] later added the [[PIPESTATUS]] array to work around
+this, but it requires explicit use.
+
+%claude:
+This is another example of [[rc]] getting the design right
+from the start, while [[bash]] accumulates workarounds:
+pipeline statuses are visible by default in [[\$status]]
+(vs.\ [[PIPESTATUS]] added later in [[bash]]),
+all variables are automatically exported via [[/env/]]
+(vs.\ the error-prone [[export]] command),
+[[if not]] avoids the parsing ambiguity of [[else]]
+(vs.\ the heavyweight [[if...then...fi]] syntax),
+and string exit statuses naturally carry diagnostic information
+(vs.\ opaque numeric codes that require [[strerror()]] or
+a manual to decode).
 
 <<function [[truestatus]]>>=
 bool
@@ -4465,6 +4505,12 @@ havewaitpid(int pid)
 % or builtins or functions
 \section{Simple commands}
 
+%claude:
+Now that we have seen the helper infrastructure---argument
+stack management, process status, and subprocess tracking---we
+can describe the bytecode generation and interpretation
+for simple commands, which is the core of the shell.
+
 \subsection{Bytecode generation}
 
 % SIMPLE node built in simplemung()
@@ -4527,6 +4573,26 @@ else if(p->f==Xword || p->f==Xdelhere)
          efree((++p)->s);
 @
 
+%yoann: ASCII diagram for a simple command where can see AST with ARGLIST, WORDS, etc on the left and then on the right the corresponding code generation
+%claude:
+For example, [[echo hello world]] produces the following
+AST and bytecodes:
+\begin{verbatim}
+  AST:                          codebuf:
+
+  SIMPLE                        Xmark
+   |                            Xword "world"
+  ARGLIST                       Xword "hello"
+   / \                          Xword "echo"
+  ARGLIST  "world"              Xsimple
+   / \
+  "echo"  "hello"
+\end{verbatim}
+%
+Note how the arguments are emitted in reverse order
+([[ARGLIST]] emits [[c1]] before [[c0]]), so that after
+[<Xword>] prepends each word to the list, [[argv]] ends
+up in the correct order: [[echo]], [[hello]], [[world]].
 
 \subsection{[[Xsimple()]]}
 
@@ -4746,7 +4812,7 @@ When the command name starts with [[/]], [[./]], [[../]],
 or [[#]] (device path in \plan), it is treated as an
 absolute path and no search is performed.
 Otherwise, [<searchpath()>] returns the list of directories
-in [[\$path]] to try.
+in [[$path]] to try.
 %
 [<Execute()>] then iterates over these directories,
 prepending each to the command name and calling [[exec()]].
@@ -4898,6 +4964,18 @@ Waitfor(int pid, bool _persist)
 
 % it is an optimisation then? mv to advanced topics?
 %  when have exit in codebuf?
+%claude:
+If the next bytecode after [<Xsimple>] is [<Xexit>]
+(possibly preceded by [<Xpopredir>] calls), the shell
+is about to exit anyway, so forking a child and waiting
+for it is pointless. In that case, [<Xsimple>] calls
+[<execexec()>] directly, replacing the current process
+with the command. This is the same optimization that
+the [[exec]] builtin provides, applied automatically.
+This matters in practice for scripts like [[rc -c 'ls']]:
+without this optimization, [[rc]] would fork, exec [[ls]]
+in the child, wait, and then exit---wasting a process.
+
 <<[[Xsimple()]] if exitnext()>>=
 if(exitnext()){
     /* fork and wait is redundant */
@@ -4945,7 +5023,7 @@ case ';':
 
 %claude:
 [[&&]] and [[||]] use a forward jump technique.
-For [[cmd1 \&\& cmd2]], the compiler emits:
+For [[cmd1 &\ cmd2]], the compiler emits:
 the bytecodes of [[cmd1]], then [<Xtrue>] followed by a
 placeholder jump offset, then the bytecodes of [[cmd2]].
 After emitting [[cmd2]], [<stuffdot()>] patches the placeholder
@@ -5037,7 +5115,7 @@ Xbang(void)
 \subsection{String matching}
 
 %claude:
-The [[~]] operator pushes two word lists onto [[argv]]
+The \verb+~+ operator pushes two word lists onto [[argv]]
 (the subject and the patterns), then calls [<Xmatch>].
 Two [<Xmark>] bytecodes are needed because both the subject
 and the patterns can be multi-word (e.g., if they come from
@@ -5159,6 +5237,20 @@ p->redir = p->startredir = runq ? runq->redir : nil;
 
 \subsubsection{[[Redir]]}
 
+%claude:
+The [[Redir]] structure records a pending redirection: a [[type]]
+(e.g., [[ROPEN]] for a regular file redirection), a [[from]] file
+descriptor (the one that was opened), and a [[to]] file descriptor
+(the one that should be replaced, such as 1 for stdout).
+The thread's [[redir]] field points to a linked list of these records,
+built up as the interpreter encounters redirection bytecodes.
+%
+The [[startredir]] field in [<start()>] deserves attention:
+when a new thread is created, it inherits its parent's redirection
+stack (so subshells see the parent's redirections), but
+[[startredir]] remembers where the inherited portion ends.
+This way, if an error occurs, the thread can pop only the redirections
+it added, without disturbing the parent's state.
 <<struct [[Redir]]>>=
 struct Redir {
     // enum<redirection_kind_bis>
@@ -5202,6 +5294,16 @@ pushredir(int type, int from, int to)
 
 \subsubsection{[[doredir()]]}
 
+%claude:
+Because [<pushredir()>] prepends each new record to the front of the
+list, the list is in reverse order relative to the command line.
+For [[cmd > foo >[2=1]]], the list has [[>[2=1]]] first, then [[> foo]].
+But the user expects the redirections to be applied left-to-right:
+first redirect stdout to [[foo]], then duplicate fd~2 from fd~1.
+%
+[<doredir()>] solves this by recursing to the end of the list
+before performing any [[dup()]] calls, so the deepest (oldest)
+redirection executes first---restoring the original left-to-right order.
 % execexec -> <>
 <<function [[doredir]]>>=
 void
@@ -5242,6 +5344,16 @@ case ROPEN:
 
 \subsubsection{Bytecode generation}
 
+%claude:
+The bytecode for a [[REDIR]] node first evaluates the filename
+(with globbing), then emits the appropriate redirection bytecode
+(e.g., [<Xwrite>] for [[>]]), followed by the file descriptor number.
+After the redirected command ([[c1]]) finishes, [<Xpopredir>] cleans
+up by closing the opened file descriptor and removing the [[Redir]]
+record from the stack.
+This scoping ensures that in [[cmd1 > foo; cmd2]],
+the redirection applies only to [[cmd1]]---once [[Xpopredir]]
+runs, [[cmd2]] sees the original file descriptors.
 <<[[outcode()]] cases>>=
 case REDIR:
     emitf(Xmark);
@@ -5265,6 +5377,13 @@ case REDIR:
 
 \subsubsection{[[Xwrite()]]}
 
+%claude:
+[<Xwrite()>] handles the [[>]] redirection at runtime.
+It pops the filename from the argv stack, opens (or creates) the file
+with [<Creat()>], and pushes an [[ROPEN]] record mapping the newly
+opened file descriptor to the target fd (typically~1 for stdout,
+read from the bytecode stream).
+The actual [[dup()]] will happen later in [<doredir()>].
 <<[[outcode()]] when REDIR case, switch redirection type cases>>=
 case WRITE:
     emitf(Xwrite);
@@ -5300,6 +5419,14 @@ Xwrite(void)
 @
 
 
+%claude:
+[<Xpopredir()>] is the cleanup counterpart: it pops the top [[Redir]]
+record and, if it was an [[ROPEN]], closes the file descriptor
+that was opened for the redirection.
+This is important because the opened fd (from [[Creat()]] or [[Open()]])
+is a temporary---after [[doredir()]] has [[dup()]]'d it onto the
+target fd in the child process, the parent still holds the original,
+and it must be closed to avoid leaking file descriptors.
 <<function [[Xpopredir]]>>=
 void
 Xpopredir(void)
@@ -5437,18 +5564,58 @@ turfredir();
 %\subsubsection{Trace of a pipe}
 %claude:
 Pipes are arguably the most important operator in a shell.
-For [[cmd1 | cmd2]], three processes are involved:
-the parent (the [[rc]] interpreter), a child running [[cmd1]],
-and the parent running [[cmd2]] in a new thread.
+For [[cmd1 | cmd2]], four processes end up being involved:
+the parent [[rc]], a child [[rc]] that interprets [[cmd1]]'s
+bytecodes, and then each side fork+exec's the actual command
+(e.g., [[ls]] and [[wc]]).
 %
-The left side ([[cmd1]]) runs in a forked child process.
-The right side ([[cmd2]]) runs in the parent's new thread.
+The left side ([[cmd1]]) runs in a forked child [[rc]] process.
+The right side ([[cmd2]]) runs in the parent [[rc]]'s new thread.
 This asymmetry means that the right side can modify
 the shell's state (e.g., variable assignments), while
 the left side cannot.
 %
 The compiled bytecodes contain two jump offsets: one for
 the right side's code, and one for the parent's [<Xpipewait>].
+
+%claude:
+Here is the overall picture for [[ls | wc -l]]:
+\begin{verbatim}
+                          pipe(pfd)
+                              |
+                           fork()
+                         /        \
+                 child rc          parent rc
+                 close(pfd[PRD])   close(pfd[PWR])
+                 redir: PWR->1     redir: PRD->0
+                      |                 |
+                start thread       start thread
+                for "ls"           for "wc -l"
+                      |                 |
+                 Xsimple:          Xsimple:
+                 fork+exec         fork+exec
+                      |                 |
+               +------+------+   +------+------+
+               | process "ls"|   | process "wc"|
+               |  stdout=pfd |   |  stdin=pfd  |
+               +------+------+   +------+------+
+                      |                 |
+                 wait for ls       wait for wc
+                      |                 |
+                  Xexit             Xreturn
+                (child rc exits)   (thread done)
+                                        |
+                                  Xpipewait:
+                                  wait for child rc
+                                  concat statuses
+\end{verbatim}
+%
+The child runs [[cmd1]]'s bytecodes and ends with [[Xexit]]
+(it must terminate, not return to the parent's thread stack).
+The parent creates a new thread for [[cmd2]] that ends with
+[[Xreturn]], then falls through to [<Xpipewait>] which waits
+for the child process and concatenates both exit statuses
+into a pipe status string like [["0|0"]].
 
 % when do   % ls | wc -l, what happens?
 % first bootstrapped thread t1, 
@@ -5708,7 +5875,7 @@ The child's stdin is redirected to [[/dev/null]]
 and the child is put in a new note group ([[RFNOTEG]])
 so that interrupts sent to the shell do not kill it.
 %
-The parent records the child's PID in [[\$apid]]
+The parent records the child's PID in [[$apid]]
 (for ``asynchronous PID''), allowing the user to wait for
 it later or send signals to it.
 
@@ -6190,7 +6357,7 @@ bool	fnchanged;
 % * Xfn(name){... Xreturn}			define function
 % * Xdelfn(name)				delete function definition
 %claude:
-When defining a function with [[fn foo \{body\}]],
+When defining a function with \verb+fn foo {body}+,
 [<Xfn>] stores the current code vector (via [<codecopy>])
 in the variable named [[foo]].
 This is why bytecode vectors are reference-counted:
@@ -6295,11 +6462,11 @@ When [<Xsimple()>] detects that the command name matches
 a function, it calls [<execfunc()>].
 This function pops the command arguments from [[argv]],
 starts a new thread with the function's bytecodes,
-and binds the arguments to a local [[\$*]] variable.
+and binds the arguments to a local [[$*]] variable.
 %
 This is how function arguments work in [[rc]]:
-inside a function, [[\$*]] contains the arguments passed
-to the function, shadowing the script's global [[\$*]].
+inside a function, [[$*]] contains the arguments passed
+to the function, shadowing the script's global [[$*]].
 
 <<[[Xsimple()]] other locals>>=
 var *v;
@@ -6461,8 +6628,8 @@ It looks up the variable name and pushes its value
 (a list of words) onto the argument stack.
 %
 A subtle feature: if the variable name is a number
-(e.g., [[\$1]], [[\$2]]), [<Xdol()>] treats it as a positional
-parameter, indexing into [[\$*]] instead of looking up
+(e.g., [[$1]], [[$2]]), [<Xdol()>] treats it as a positional
+parameter, indexing into [[$*]] instead of looking up
 a named variable.
 
 <<[[outcode()]] cases>>=
@@ -6559,14 +6726,14 @@ Xcount(void)
 
 
 %claude:
-Subscripting ([[\$x(2)]] or [[\$x(2-5)]]) extracts elements
+Subscripting ([[$x(2)]] or [[$x(2-5)]]) extracts elements
 from a list variable by index or range.
 [<subwords()>] does the heavy lifting: it parses each subscript
 (which can be a single number or a [[n-m]] range, where a bare
 [[n-]] means ``from~n to the end''), walks [[n-1]] links into
 the variable's value list, and calls [<copynwords()>] to extract
 the slice. The recursion on [[sub->next]] handles multiple
-subscripts like [[\$x(1 3 5)]], accumulating results in reverse
+subscripts like [[$x(1 3 5)]], accumulating results in reverse
 so the final list comes out in the right order.
 
 <<[[outcode()]] cases>>=
