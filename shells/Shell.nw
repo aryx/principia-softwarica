@@ -2625,7 +2625,7 @@ operators to support multi-line commands;
 keywords like [[if]] and [[for]] are recognized as keywords
 only in command position (not as arguments);
 and the [[(]] character is handled specially depending on
-whether it follows a [[\$]] (array subscript) or not
+whether it follows a [[$]] (array subscript) or not
 (grouping/function definition).
 
 <<function [[yylex]]>>=
@@ -2810,7 +2810,7 @@ that after binary operators like [[&&]], [[||]], and [[|]],
 the lexer calls [<skipnl()>] so that newlines are treated
 as whitespace, allowing the command to continue on the next line.
 %
-The [[lastdol]] flag tracks whether the previous token was [[\$]],
+The [[lastdol]] flag tracks whether the previous token was [[$]],
 which affects how [[(]] is lexed (see Section~\ref{sec:array-subscript}).
 
 <<[[yylex()]] switch c cases>>=
@@ -2873,6 +2873,17 @@ case '>':
 % he even included a grammar in the comment. hmm
 
 
+%yoann: maybe paragraph introducing the redirection code
+%claude:
+Redirections and pipes are the most complex part of the lexer.
+Unlike simple operators like [[&&]] or [[||]] which map directly
+to a token, redirections carry extra information: the type
+([[WRITE]], [[READ]], [[APPEND]], [[HERE]]), and which file
+descriptors are involved ([[fd0]], [[fd1]]).
+The lexer builds a [[Tree]] node right here (rather than
+in the parser), because the bracket syntax [[>[2=1]]]
+requires parsing digits and [[=]] signs that would be
+awkward to express in the [[yacc]] grammar.
 
 <<[[yylex()]] other locals>>=
 char *w = tok;
@@ -2944,8 +2955,18 @@ fdt fd1;	/* details of REDIR PIPE DUP tokens */
 @
 
 
-
-
+%yoann: more explanations
+%claude:
+Each redirection character is handled as a case below.
+For a pipe, [[fd0]] defaults to~1 (stdout of the left command)
+and [[fd1]] to~0 (stdin of the right command), which is the
+standard [[cmd1 | cmd2]] behavior.
+For [[>]], [[fd0]] defaults to~1 (redirect stdout);
+for [[<]], [[fd0]] defaults to~0 (redirect stdin).
+A double [[>>]] sets the type to [[APPEND]].
+These defaults can be overridden with the bracket syntax
+(e.g., [[>[2]]] to redirect stderr);
+see Section~\ref{sec:advanced-redirection}.
 
 <<[[yylex()]] in switch when redirection character, switch c cases>>=
 case '|':
@@ -2962,7 +2983,7 @@ case '>':
         t->rtype = APPEND;
         *w++=c;
     }
-    else 
+    else
         t->rtype = WRITE;
     t->fd0 = 1;
     break;
@@ -3094,7 +3115,7 @@ token(char *str, int type)
 %claude:
 When the lexer encounters a word character (anything not an operator
 or whitespace), it reads characters until a non-word character appears.
-After a [[\$]], only identifier characters ([[idchr]]) are accepted,
+After a [[$]], only identifier characters ([[idchr]]) are accepted,
 which excludes slashes and other path characters.
 %
 Once the word is assembled, [<klook()>] checks whether it matches
@@ -3222,15 +3243,15 @@ kenter(int type, char *name)
 % need two tokens otherwise ambiguity in grammar?
 %claude:
 This is one of the trickiest parts of the lexer.
-When a word is immediately followed by [[(]], as in [[\$x(1)]],
+When a word is immediately followed by [[(]], as in [[$x(1)]],
 it must be treated as an array subscript ([[SUB]]) rather
 than a regular parenthesis.
 %
 Additionally, when two words are adjacent without whitespace
-(e.g., [[-x\$flag]]), the lexer inserts an implicit [[^]]
+(e.g., [[-x$flag]]), the lexer inserts an implicit [[^]]
 (caret, the concatenation operator) between them.
 Without this, the lexer would produce three separate tokens
-and there would be no way to distinguish [[-x\$flag]] (one argument)
+and there would be no way to distinguish [[-x$flag]] (one argument)
 from [[-x \$flag]] (two arguments).
 
 <<[[yylex()]] other locals>>=
