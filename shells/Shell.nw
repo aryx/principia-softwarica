@@ -2231,6 +2231,9 @@ if(error){
 %trans: before yyparse, see routines used by yylex, called from yyparse.
 %toc:
 %claude:
+Recall the main flow from Chapter~\ref{chap:main}:
+[<main()>] $\rightarrow$ [<Xrdcmds()>] $\rightarrow$ [<yyparse()>]
+$\rightarrow$ [<yylex()>].
 Before describing the lexer, I will present the input routines
 it relies on. These routines handle reading characters from
 the current input source (terminal or script file), managing
@@ -2242,9 +2245,18 @@ that the lexer needs.
 % main -> Xrdcmds -> yyparse() -> yylex() -> nextc() -> getnextc() 
 %  which use runq->cmdfd to read stuff.
 %claude:
-The call chain for reading input is:
-[[yylex()]] $\rightarrow$ [[nextc()]] $\rightarrow$ [[getnext()]]
-$\rightarrow$ [[rchr(runq->cmdfd)]].
+The call chain for reading input is shown below:
+\begin{verbatim}
+  yylex()
+    |
+    +---> nextc(); advance()   one-character lookahead (cached in 'future')
+            |
+            +---> getnext()      raw character read + prompt + escaped newlines
+                    |
+                    +---> rchr(runq->cmdfd)    buffered IO read
+                            |
+                            +---> read()       system call (terminal or file)
+\end{verbatim}
 %
 [<getnext()>] reads a raw character and handles
 escaped newlines (for multi-line commands) and prompt display.
@@ -2297,6 +2309,14 @@ getnext(void)
 
 
 \subsection{End-of-file management}
+
+%claude:
+When [<rchr()>] returns [[EOF]], [<getnext()>] sets the
+[[eof]] flag on the current thread. On subsequent calls,
+[<getnext()>] returns [[EOF]] immediately without trying
+to read again. This flag is also checked in [<Xrdcmds()>]
+to decide whether to close the input and return to the
+parent thread (see Chapter~\ref{chap:main}).
 
 <<constant EOF (rc/io.h)>>=
 #define	EOF	(-1)
@@ -2371,8 +2391,8 @@ if(peekc!=EOF){
 % so $prompt is actually a 2 words list, first word = original
 % and second word when it's a multiline command?
 %claude:
-In [[rc]], the [[\$prompt]] variable is a two-element list:
-the first element is the main prompt (e.g., [["\% "]]),
+In [[rc]], the [[$prompt]] variable is a two-element list:
+the first element is the main prompt (e.g., [["% "]]),
 and the second element is the continuation prompt displayed
 when a command spans multiple lines (e.g., [["\t"]]).
 %
@@ -2419,7 +2439,7 @@ if(doprompt)
 %claude:
 The subtlety in [<pprompt()>] is that after printing the current
 prompt string, it switches [[promptstr]] to the {\em second}
-element of [[\$prompt]] (the continuation prompt).
+element of [[$prompt]] (the continuation prompt).
 This way, if the lexer needs more input for a multi-line
 command, the next call to [<pprompt()>] will display
 the continuation prompt instead of the main one.
@@ -2460,6 +2480,12 @@ pprompt(void)
 
 % so can display in prompt which command we are. useful also for history?
 % to run a past command?
+%claude:
+Each thread also tracks the current line number, incremented
+in [<pprompt()>] after each newline. This is used for error
+reporting when running scripts: a syntax error in line~42 of
+a script is much easier to find than one at an unknown location.
+
 <<[[Thread]] other fields>>=
 int lineno;			/* linenumber */
 @
@@ -2488,9 +2514,9 @@ doprompt = true;
 % often need look ahead in lexing (or the dual: backtracking)
 %claude:
 Lexers often need to look one character ahead to decide
-what token to produce. For example, when the lexer sees [[\&]],
+what token to produce. For example, when the lexer sees [[&]],
 it must peek at the next character to decide whether it is
-a lone [[\&]] (background operator) or part of [[\&\&]] (logical and).
+a lone [[&]] (background operator) or part of [[&&]] (logical and).
 %
 [<nextc()>] provides this lookahead by caching the next character
 in the global [[future]]. Multiple calls to [<nextc()>] return
