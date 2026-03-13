@@ -7366,7 +7366,7 @@ execwait(void)
 Under \plan, the environment is not passed via the [[envp]]
 parameter of [[main()]] as in \unix. Instead, each environment
 variable is stored as a file under [[/env/]]: the variable
-[[\$path]] is stored in [[/env/path]]. This is a more elegant
+[[$path]] is stored in [[/env/path]]. This is a more elegant
 design because child processes automatically inherit the
 environment through the namespace, and changes are visible
 to all processes sharing the same namespace.
@@ -7472,6 +7472,11 @@ separated by null bytes. [<Vinit()>] reads the file,
 splits on nulls, and calls [<setvar()>] for each variable.
 It then resets the [[changed]] flag so that [<Updenv()>]
 does not write them back immediately.
+The null byte separator is the only safe choice: unlike
+spaces or newlines, null bytes cannot appear in filenames
+or variable values, so the encoding is unambiguous.
+This is the same insight behind \unix tools like
+[[find -print0]] and [[xargs -0]].
 
 <<function [[Vinit]]>>=
 void
@@ -7542,6 +7547,24 @@ fdt envdir;
 %******************************************************************************
 \label{chap:signals}
 
+%claude:
+Signal handling is critical for a shell because the shell
+sits between the user and every running program.
+When the user presses [[^C]], the interrupt signal is sent
+to all processes in the foreground group---including the shell
+itself. If the shell simply died along with the interrupted
+command, the user would lose their terminal session.
+Instead, the shell must catch the signal, cancel the current
+command, and return to its prompt, ready for the next input.
+%
+Beyond [[^C]], a shell must also handle hangup signals
+(so it can clean up or notify background jobs when a terminal
+disconnects), and let users define their own trap handlers
+for scripting (e.g., cleaning up temporary files on exit).
+See \book{Kernel} for how the kernel delivers notes to processes.
+
+\section{Overview}
+
 % code of nohup utility?
 % C-d generate an Xsimple (exit 1) ?
 %claude:
@@ -7555,8 +7578,8 @@ Instead, it increments a counter ([[ntrap]]) and the main
 interpreter loop checks this counter after each bytecode
 (see the [[handing trap if necessary]] chunk in [<main()>]).
 %
-Users can define signal handlers with [[fn sigint \{...\}]],
-[[fn sighup \{...\}]], etc. If no handler is defined,
+Users can define signal handlers with \verb+fn sigint {...}+,
+\verb+fn sighup {...\}+, etc. If no handler is defined,
 the default behavior applies (usually terminating the process).
 
 <<constant [[NSIG]]>>=
@@ -7613,6 +7636,7 @@ int trap[NSIG];				/* number of outstanding traps per type */
 @
 
 
+\section{Registering handlers: [[Trapinit()]]}
 
 % main() -> Trapinit()
 <<function [[Trapinit]]>>=
@@ -7650,12 +7674,12 @@ Out:
 }
 @
 
+\section{Trap dispatch: [[dotrap()]]}
 
 <<[[main()]] handing trap if necessary in interpreter loop>>=
 if(ntrap)
     dotrap();
 @
-
 
 
 
@@ -7739,18 +7763,24 @@ ntrap = 0;	/* avoid double-interrupts during blocked writes */
 %******************************************************************************
 \label{chap:initialization-real}
 
+%claude:
+In Chapter~\ref{chap:main}, we showed a simplified version of [[main()]]
+to introduce the interpreter loop. This chapter reveals the
+real initialization sequence: how [[rc]] fabricates its own
+bootstrap bytecodes, sources the [[rcmain]] script to set up
+the default environment, and transitions into the
+read-eval-print loop that makes an interactive shell usable.
+
 \section{Actual bootstrapping code}
 
 % see main() comment:
 % * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
 %main() -> bootstrap -> execdot -> Xreadcmds() -> yyparse() -> compile() -> outcode() -> back to interpreter loop with new codebuf (chained to bootstrap)
 %claude:
-The actual bootstrap is more complex than the simplified version
-shown in Chapter~\ref{chap:main}.
-It performs two operations encoded as hand-crafted bytecodes:
-first, it assigns the command-line arguments to [[\$*]]
+The bootstrap performs two operations encoded as hand-crafted bytecodes:
+first, it assigns the command-line arguments to [[$*]]
 (with [[*=(argv)]]),
-then it executes [[. rcmain \$*]] to source the initialization script.
+then it executes [[. rcmain $*]] to source the initialization script.
 %
 The bootstrap is essentially the bytecode equivalent of:
 \begin{verbatim}
@@ -7758,6 +7788,17 @@ The bootstrap is essentially the bytecode equivalent of:
   . /rc/lib/rcmain $*
 \end{verbatim}
 %OPTIONAL
+
+%yoann: here how it looks in corresponding C
+%claude:
+The two-line script above is encoded as a sequence of
+bytecodes filling the [[bootstrap]] array.
+The first group ([[Xmark]], [[Xword "*"]], [[Xassign]])
+assigns the command-line arguments to [[$*]].
+%
+The second group builds the argument list for the [[.]] builtin:
+it pushes [[$*]] (via [[Xdol]]), the path to [[rcmain]],
+and the [[.]] command itself, then calls [[Xsimple]].
 
 <<[[main()]] initialize [[boostrap]]>>=
 memset(bootstrap, 0, sizeof bootstrap);
@@ -7802,8 +7843,8 @@ bootstrap[i].i = 0;
 %plan9.c
 %claude:
 The default initialization script is [[/rc/lib/rcmain]],
-which sets up [[\$path]] and, for login shells,
-sources the user's [[~\$home/lib/profile]].
+which sets up [[$path]] and, for login shells,
+sources the user's [[$home/lib/profile]].
 The [[-m]] flag allows overriding this path, which
 is useful during system bootstrap when the standard
 [[rcmain]] may not be available yet.
@@ -7827,6 +7868,12 @@ rcmain = flag['m'] ? flag['m'][0] : Rcmain;
 \t  I think because rcmain contains call to finit?
 
 \section{Actual environment}
+
+%claude:
+Before entering the interpreter loop, [[rc]] also sets up
+a few built-in variables: [[$pid]] (the shell's own process id,
+useful for creating unique temporary filenames) and
+[[$rcname]] (the name [[rc]] was invoked as, i.e., [[argv[0]]]).
 
 <<global [[mypid]]>>=
 int mypid;
@@ -7882,19 +7929,38 @@ factorizes the functionality.
 %history:
 In the original Unix shell, globbing was actually handled
 by a separate external program called [[glob]].
+In MS-DOS, the opposite approach was taken: wildcards are
+passed unexpanded to each program, which must interpret
+them itself. This is generally worse (every program
+must reimplement the logic), but it does allow commands
+like [[ren *.txt *.bak]] to have a meaning---the program
+sees both patterns and can pair them up, something
+that is impossible when the shell expands both arguments
+independently.
+
 %
-The glob patterns [[*]], [[?]], and [[[\ldots]]] are different
+The glob patterns [[*]], [[?]], and \verb+[]+ are different
 from regular expressions: [[*]] matches any string
 (not ``any number of the preceding character''), and [[?]]
 matches any single character. This is more practical
 for filenames, where [[*.c]] is more natural than the
-regex [[.*\textbackslash{}.c]].
+regex [[.*\.c]].
+
+%toc:
+%claude:
+Globbing touches several phases of the interpreter.
+The lexer marks glob characters with a special escape byte
+so they can be distinguished from literal characters.
+The bytecode generator emits [<Xglob>] instructions at the
+right points. And at runtime, the actual matching is done
+by [<globlist()>], which walks directories and filters
+filenames against the pattern using [<matchfn()>].
 
 \section{Lexing globbing characters}
 
 %claude:
-Glob characters ([[*]], [[?]], [[[]]) are marked during lexing
-by inserting a [[GLOB]] byte ([[\textbackslash{}001]]) before them.
+Glob characters ([[*]], [[?]], \verb+[]+) are marked during lexing
+by inserting a [[GLOB]] byte ([[\001]]) before them.
 This way, the rest of the shell can distinguish a literal [[*]]
 (inside quotes, no [[GLOB]] prefix) from a wildcard [[*]]
 (with a [[GLOB]] prefix). The [<deglob()>] function removes
@@ -8204,9 +8270,9 @@ Non-[[GLOB]] bytes must match literally.
 [[GLOB]] bytes introduce the special characters:
 [[*]] tries every possible suffix via recursion (backtracking),
 [[?]] matches exactly one UTF-8 character, and
-[[\lbrack...\rbrack]] matches a character class with optional
-ranges ([[a-z]]) and complement ([[~]]).
-Note that [[rc]] uses [[~]] instead of [[^]] for complement
+\verb+[...]+ matches a character class with optional
+ranges ([[a-z]]) and complement (\verb+~+).
+Note that [[rc]] uses \verb+~+ instead of [[^]] for complement
 inside character classes, since [[^]] is already the
 concatenation operator.
 
@@ -8437,7 +8503,7 @@ Closedir(int f)
 
 
 %******************************************************************************
-\chapter{Advanced Topics TODO}
+\chapter{Advanced Topics}
 %******************************************************************************
 \label{chap:advanced-topics}
 
@@ -8616,9 +8682,9 @@ addutf(char *p, int c)
 %claude:
 The [[@]] operator runs a command in a child process,
 so that side effects like [[cd]] or variable assignments
-do not affect the parent.  Braces [[{...}]] group commands
-but execute them in the current process---so [[{cd /tmp; ls}]]
-would change the parent's directory.  With [[@{cd /tmp; ls}]],
+do not affect the parent.  Braces \verb+{...}+ group commands
+but execute them in the current process---so \verb+{cd /tmp; ls}+
+would change the parent's directory.  With \verb+@{cd /tmp; ls}+,
 the directory change is confined to the subshell.
 
 This is particularly useful in [[mkfile]] recipes that iterate
@@ -8707,11 +8773,27 @@ Xsubshell(void)
 % can mv around the script. no problem.
 
 %claude:
-Here documents let you embed multi-line data directly
+Here documents let you embed multi-line {\em data} directly
 in a script, avoiding external file dependencies.
 The syntax [[<<TAG]] reads input until a line matching
-[[TAG]] appears.  This is an ancestor of the ``bundle''
-idea: program and data in one file, easy to move around.
+[[TAG]] appears.
+For example, a phone-lookup script can carry its own
+database inline:
+\begin{verbatim}
+  grep $1 <<EOF
+  Alice 555-1234
+  Bob   555-5678
+  EOF
+\end{verbatim}
+%
+The program and its data live in the same file, so the
+script is self-contained and easy to move around.
+A variable would not work as well here: shell variables
+are word lists, so multi-line structure (newlines,
+whitespace, special characters) would be lost.
+A here document feeds the data as a raw byte stream
+to stdin, which is exactly what programs like [[grep]]
+or [[sed]] expect.
 
 The implementation is clever: during parsing, [[heredoc()]]
 creates a temporary file (in [[/tmp]]) and records the
@@ -9025,7 +9107,7 @@ any file descriptor.  For example, [[echo error >[2] /tmp/log]]
 redirects stderr.
 
 The lexer handles the bracket syntax inline: after seeing
-[[>]] or [[<]], if a [[\lbrack]] follows, it reads the
+[[>]] or [[<]], if a \verb+[+ follows, it reads the
 file descriptor number.  If it then sees [[=]], the
 redirection becomes a [[DUP]] (file descriptor duplication
 or closing) rather than a file redirection.
@@ -9094,7 +9176,7 @@ The [[DUP]] construct performs [[dup2]] between file descriptors.
 [[>[1=2]]] makes fd~1 point to the same destination as fd~2
 (so stdout goes to stderr).
 [[>[1=]]] (with nothing after the equals) closes fd~1.
-This is cleaner than the Bourne shell's [[2>\&1]] syntax.
+This is cleaner than the Bourne shell's \verb+2>&1+ syntax.
 
 Like other redirections, the implementation uses the
 two-phase approach: [[Xdup]] pushes a [[RDUP]] record
@@ -9208,7 +9290,7 @@ to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
 %claude:
 Process substitution (called ``command output as a file'' in
 Plan~9) lets you use a command's output as if it were
-a file.  [[cmp <{old} <{new}]] runs the two commands
+a file.  \verb+cmp <{old} <{new}+ runs the two commands
 and passes their outputs as filenames to [[cmp]].
 
 This appears in the [[comword]] rule because it
@@ -9307,7 +9389,7 @@ Xpipefd(void)
 %claude:
 Command substitution captures a command's stdout as a list
 of words.  The Bourne shell uses backticks [[`cmd`]],
-which cannot nest; [[rc]] uses [[`{cmd}]] with braces,
+which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
 which nests naturally.
 
 The output is split into words using [[$ifs]]
@@ -9430,9 +9512,6 @@ lists, while [[$"]] joins lists back into strings.
 
 <<comword rule other cases>>=
 |   '"' word        {$$=tree1('"', $2);}
-%$
-% no ending "? No, it is used for stringification of a variable.
-% a list2str.
 @
 
 <<[[outcode()]] cases>>=
@@ -9519,7 +9598,7 @@ Given a name, it checks (in order): is it a variable?
 a function? a builtin? an executable on [[$path]]?
 It prints the definition in a form that can be fed back
 to [[rc]]---variables as [[x=value]], functions as
-[[fn name \{body\}]], builtins as [[builtin name]].
+\verb+fn name {body}+, builtins as [[builtin name]].
 
 The subtle [[mapfd()]] helper is needed because [[whatis]]
 writes to fd~1, but fd~1 might have been redirected;
@@ -9819,8 +9898,8 @@ execshift(void)
 The [[finit]] builtin re-reads function definitions
 from the [[/env]] filesystem.  This is Plan~9-specific:
 when another process (e.g., a parent shell) defines a
-function, it appears as a file [[/env/fn\#name]].
-[[finit]] scans [[/env]] for these [[fn\#]] files
+function, it appears as a file \verb+/env/fn#name+.
+[[finit]] scans [[/env]] for these \verb+fn#+ files
 and executes them to import the function definitions
 into the current shell.  It uses a small hand-crafted
 bytecode loop ([[rdfns]]) similar to the bootstrap
@@ -10001,7 +10080,7 @@ Provided by [[rio]]'s terminal, not by [[rc]] itself.
 
 \item {\em Job control ([[bg]], [[fg]], [[C-z]]):}
 Less necessary when you have multiple windows.
-The [[&]] operator and [[wait \$apid]] cover most use cases.
+The [[&]] operator and [[wait $apid]] cover most use cases.
 
 \item {\em Aliases:}
 Not needed because [[fn]] (functions) serve the same purpose
@@ -11192,18 +11271,1283 @@ Memcpy(void *a, void *b, long n)
 
 
 %******************************************************************************
-\chapter{Examples of [[rc]] scripts TODO}
+\chapter{Examples of [[rc]] scripts}
 %******************************************************************************
 \label{chap:examples}
 
 \section{[[/rc/lib/rcmain]]}
 \label{sec:rcmain}
 
-\section{[[/home/pad/lib/profile]]}
+%yoann: quick intro to the rcmain file
+%claude:
+This is the initialization script sourced by the bootstrap
+bytecodes (see Chapter~\ref{chap:initialization-real}).
+It sets up default values for [[$home]], [[$ifs]], [[$prompt]],
+and [[$path]], calls [[finit]] to import shell functions
+from the environment, and then dispatches based on how
+[[rc]] was invoked: with [[-c]] (run a command string),
+with [[-i]] (interactive, source the user's profile and
+read from the console), or with a script file argument.
 
-\ifallcode
+\begin{verbatim}
+# rcmain: Plan 9 version
+if(~ $#home 0) home=/
+if(~ $#ifs 0) ifs=' 	
+'
+
+switch($#prompt){
+case 0
+	prompt=('% ' '	')
+case 1
+	prompt=($prompt '	')
+}
+
+if(~ $rcname ?.out) prompt=('broken! ' '	')
+
+if(flag p) path=/bin
+if not{
+	finit
+	if(~ $#path 0) path=(. /bin)
+}
+
+fn sigexit
+
+if(! ~ $#cflag 0){
+	if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
+	status=''
+	eval $cflag
+}
+if not if(flag i){
+	if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
+	status=''
+	if(! ~ $#* 0) . $*
+	. -i '#d/0'
+}
+if not if(~ $#* 0) . '#d/0'
+if not{
+	status=''
+	. $*
+}
+exit $status
+\end{verbatim}
+
+\section{[[/usr/glenda/lib/profile]]}
+
+%yoann: plan9 profile script for login session? give context and where do we source this file in the boot process or in rc?
+%claude:
+This is Glenda's (the default \plan user) login profile,
+sourced by [[rcmain]] when [[rc]] is invoked with the
+[[-l]] (login shell) flag (the [[flag l]] test in [[rcmain]] above).
+It uses [[bind]] to overlay the user's personal [[bin]]
+directories onto [[/bin]] (so user scripts and binaries
+are found automatically), sets up the font and mail
+filesystem ([[upas/fs]]), and then dispatches based on
+[[$service]]: on a terminal, it starts the window
+manager [[rio]]; on a CPU server, it connects to the
+terminal's devices via [[/mnt/term]].
+
+\begin{verbatim}
+bind -a $home/bin/rc /bin
+bind -a $home/bin/$cputype /bin
+bind -c tmp /tmp
+if(! syscall create /tmp/xxx 1 0666 >[2]/dev/null)
+	ramfs	# in case we're running off a cd
+font = /lib/font/bit/pelm/euro.9.font
+upas/fs
+fn cd { builtin cd $* && awd }  # for acme
+switch($service){
+case terminal
+	plumber
+	echo -n accelerated > '#m/mousectl'
+	echo -n 'res 3' > '#m/mousectl'
+	prompt=('term% ' '	')
+	fn term%{ $* }
+	exec rio -i riostart
+case cpu
+	if (test -e /mnt/term/mnt/wsys) { # rio already running
+		bind -a /mnt/term/mnt/wsys /dev
+		if(test -w /dev/label)
+			echo -n $sysname > /dev/label
+	}
+	bind /mnt/term/dev/cons /dev/cons
+	bind /mnt/term/dev/consctl /dev/consctl
+	bind -a /mnt/term/dev /dev
+	prompt=('cpu% ' '	')
+	fn cpu%{ $* }
+	news
+	if (! test -e /mnt/term/mnt/wsys) {	# cpu call from drawterm
+		font=/lib/font/bit/pelm/latin1.8.font
+		exec rio
+	}
+case con
+	prompt=('cpu% ' '	')
+	news
+}
+\end{verbatim}
+
+%******************************************************************************
+\chapter{Shell Companion Utilities}
+%******************************************************************************
+
+%yoann: introduce chapter, also refer Utilities book with more general utilities
+%claude:
+This appendix presents the source code of a few small
+programs that are closely tied to the shell.
+They are too simple to deserve their own book, but
+they are used so frequently in shell scripts and
+interactive sessions that understanding their internals
+is worthwhile.
+For more general \plan utilities, see \book{Utilities}.
+
+\section{[[echo]]}
+
+%yoann: short intro
+%claude:
+[[echo]] concatenates its arguments separated by spaces,
+followed by a newline. The [[-n]] flag suppresses the
+trailing newline. Note that it builds the entire output
+in a single buffer and writes it with one [[write()]] call,
+so the output is atomic---important when multiple processes
+write to the same file descriptor.
+
+<<function [[main]](echo)>>=
+void
+main(int argc, char *argv[])
+{
+    int nflag;
+    int i, len;
+    char *buf, *p;
+
+    nflag = 0;
+    if(argc > 1 && strcmp(argv[1], "-n") == 0)
+        nflag = 1;
+
+    len = 1;
+    for(i = 1+nflag; i < argc; i++)
+        len += strlen(argv[i])+1;
+
+    buf = malloc(len);
+    if(buf == 0)
+        exits("no memory");
+
+    p = buf;
+    for(i = 1+nflag; i < argc; i++){
+        strcpy(p, argv[i]);
+        p += strlen(p);
+        if(i < argc-1)
+            *p++ = ' ';
+    }
+        
+    if(!nflag)
+        *p++ = '\n';
+
+    if(write(1, buf, p-buf) < 0){
+        fprint(2, "echo: write error: %r\n");
+        exits("write error");
+    }
+
+    exits((char *)nil);
+}
+@
+
+\section{[[pwd]]}
+
+%yoann: short intro
+%claude:
+[[pwd]] simply calls [[getwd()]] and prints the result.
+In \plan, the current directory is a per-process kernel
+state, not an environment variable like [[\$PWD]] in some
+\unix shells.
+
+<<function main (misc/pwd.c)>>=
+/*
+ * Print working (current) directory
+ */
+void
+main(int argc, char *argv[])
+{
+    char pathname[512];
+
+    USED(argc, argv);
+    if(getwd(pathname, sizeof(pathname)) == 0) {
+        fprint(2, "pwd: %r\n");
+        exits("getwd");
+    }
+    print("%s\n", pathname);
+    exits(nil);
+}
+@
+
+\section{[[test]]}
+
+%yoann: short intro
+%claude:
+[[test]] evaluates conditional expressions, used heavily
+in shell scripts (e.g., [[if(test -f foo) ...]]).
+It is an external program, not a builtin---unlike in [[bash]]
+where [[test]] and [[[]] are built in.
+The implementation is a small recursive-descent parser
+with three precedence levels: [[-o]] (or), [[-a]] (and),
+and [[!]] (not), followed by the primary tests
+([[-f]], [[-d]], [[-r]], [[-eq]], etc.).
+
+<<function [[EQ]]>>=
+#define EQ(a,b)	((tmp=a)==0?0:(strcmp(tmp,b)==0))
+@
+
+<<global [[ap]]>>=
+int	ap;
+@
+
+<<global [[ac]]>>=
+int	ac;
+@
+
+<<global [[av]]>>=
+char	**av;
+@
+
+<<global [[tmp]]>>=
+static char	*tmp;
+@
+
+<<function main (misc/test.c)>>=
+void
+main(int argc, char *argv[])
+{
+    int r;
+    char *c;
+
+    ac = argc; av = argv; ap = 1;
+    if(EQ(argv[0],"[")) {
+        if(!EQ(argv[--ac],"]"))
+            synbad("] missing","");
+    }
+    argv[ac] = 0;
+    if (ac<=1)
+        exits("usage");
+    r = e();
+    /*
+     * nice idea but short-circuit -o and -a operators may have
+     * not consumed their right-hand sides.
+     */
+    if(false && (c = nxtarg(1)) != nil)
+        synbad("unexpected operator/operand: ", c);
+    exits(r? nil : "false");
+}
+@
+
+<<function [[nxtarg]]>>=
+char *
+nxtarg(int mt)
+{
+    if(ap>=ac){
+        if(mt){
+            ap++;
+            return(0);
+        }
+        synbad("argument expected","");
+    }
+    return(av[ap++]);
+}
+@
+
+<<function [[nxtintarg]]>>=
+bool
+nxtintarg(int *pans)
+{
+    if(ap<ac && isint(av[ap], pans)){
+        ap++;
+        return true;
+    }
+    return false;
+}
+@
+
+<<function [[e]]>>=
+int
+e(void)
+{
+    int p1;
+
+    p1 = e1();
+    if (EQ(nxtarg(1), "-o"))
+        return(p1 || e());
+    ap--;
+    return(p1);
+}
+@
+
+<<function [[e1]]>>=
+int
+e1(void)
+{
+    int p1;
+
+    p1 = e2();
+    if (EQ(nxtarg(1), "-a"))
+        return (p1 && e1());
+    ap--;
+    return(p1);
+}
+@
+
+<<function [[e2]]>>=
+int
+e2(void)
+{
+    if (EQ(nxtarg(0), "!"))
+        return(!e2());
+    ap--;
+    return(e3());
+}
+@
+
+<<function [[e3]]>>=
+bool
+e3(void)
+{
+    int p1, int1, int2;
+    char *a, *p2;
+
+    a = nxtarg(0);
+    if(EQ(a, "(")) {
+        p1 = e();
+        if(!EQ(nxtarg(0), ")"))
+            synbad(") expected","");
+        return(p1);
+    }
+
+    if(EQ(a, "-A"))
+        return(hasmode(nxtarg(0), DMAPPEND));
+
+    if(EQ(a, "-L"))
+        return(hasmode(nxtarg(0), DMEXCL));
+
+    if(EQ(a, "-T"))
+        return(hasmode(nxtarg(0), DMTMP));
+
+    if(EQ(a, "-f"))
+        return(isreg(nxtarg(0)));
+
+    if(EQ(a, "-d"))
+        return(isdir(nxtarg(0)));
+
+    if(EQ(a, "-r"))
+        return(tio(nxtarg(0), 4));
+
+    if(EQ(a, "-w"))
+        return(tio(nxtarg(0), 2));
+
+    if(EQ(a, "-x"))
+        return(tio(nxtarg(0), 1));
+
+    if(EQ(a, "-e"))
+        return(tio(nxtarg(0), 0));
+
+    if(EQ(a, "-c"))
+        return false;
+
+    if(EQ(a, "-b"))
+        return false;
+
+    if(EQ(a, "-u"))
+        return false;
+
+    if(EQ(a, "-g"))
+        return false;
+
+    if(EQ(a, "-s"))
+        return(fsizep(nxtarg(0)));
+
+    if(EQ(a, "-t"))
+        if(ap>=ac)
+            return(isatty(1));
+        else if(nxtintarg(&int1))
+            return(isatty(int1));
+        else
+            synbad("not a valid file descriptor number ", "");
+
+    if(EQ(a, "-n"))
+        return(!EQ(nxtarg(0), ""));
+    if(EQ(a, "-z"))
+        return(EQ(nxtarg(0), ""));
+
+    p2 = nxtarg(1);
+    if (p2==0)
+        return(!EQ(a,""));
+    if(EQ(p2, "="))
+        return(EQ(nxtarg(0), a));
+
+    if(EQ(p2, "!="))
+        return(!EQ(nxtarg(0), a));
+
+    if(EQ(p2, "-older"))
+        return(isolder(nxtarg(0), a));
+
+    if(EQ(p2, "-ot"))
+        return(isolderthan(nxtarg(0), a));
+
+    if(EQ(p2, "-nt"))
+        return(isnewerthan(nxtarg(0), a));
+
+    if(!isint(a, &int1))
+        synbad("unexpected operator/operand: ", p2);
+
+    if(nxtintarg(&int2)){
+        if(EQ(p2, "-eq"))
+            return(int1==int2);
+        if(EQ(p2, "-ne"))
+            return(int1!=int2);
+        if(EQ(p2, "-gt"))
+            return(int1>int2);
+        if(EQ(p2, "-lt"))
+            return(int1<int2);
+        if(EQ(p2, "-ge"))
+            return(int1>=int2);
+        if(EQ(p2, "-le"))
+            return(int1<=int2);
+    }
+
+    synbad("unknown operator ",p2);
+    return false;		/* to shut ken up */
+}
+@
+
+<<function [[tio]]>>=
+bool
+tio(char *a, int f)
+{
+    return access (a, f) >= 0;
+}
+@
+
+<<function [[hasmode]]>>=
+/*
+ * note that the name strings pointed to by Dir members are
+ * allocated with the Dir itself (by the same call to malloc),
+ * but are not included in sizeof(Dir), so copying a Dir won't
+ * copy the strings it points to.
+ */
+bool
+hasmode(char *f, ulong m)
+{
+    bool r;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return false;
+    r = (dir->mode & m) != 0;
+    free(dir);
+    return r;
+}
+@
+
+<<function [[isdir]]>>=
+bool
+isdir(char *f)
+{
+    return hasmode(f, DMDIR);
+}
+@
+
+<<function [[isreg]]>>=
+bool
+isreg(char *f)
+{
+    bool r;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return false;
+    r = (dir->mode & DMDIR) == 0;
+    free(dir);
+    return r;
+}
+@
+
+<<function [[isatty]]>>=
+int
+isatty(int fd)
+{
+    int r;
+    Dir *d1, *d2;
+
+    d1 = dirfstat(fd);
+    d2 = dirstat("/dev/cons");
+    if (d1 == nil || d2 == nil)
+        r = 0;
+    else
+        r = d1->type == d2->type && d1->dev == d2->dev &&
+            d1->qid.path == d2->qid.path;
+    free(d1);
+    free(d2);
+    return r;
+}
+@
+
+<<function [[fsizep]]>>=
+bool
+fsizep(char *f)
+{
+    bool r;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return false;
+    r = dir->length > 0;
+    free(dir);
+    return r;
+}
+@
+
+<<function [[synbad]]>>=
+void
+synbad(char *s1, char *s2)
+{
+    int len;
+
+    write(2, "test: ", 6);
+    if ((len = strlen(s1)) != 0)
+        write(2, s1, len);
+    if ((len = strlen(s2)) != 0)
+        write(2, s2, len);
+    write(2, "\n", 1);
+    exits("bad syntax");
+}
+@
+
+<<function [[isint]]>>=
+int
+isint(char *s, int *pans)
+{
+    char *ep;
+
+    *pans = strtol(s, &ep, 0);
+    return (*ep == 0);
+}
+@
+
+<<function [[isolder]]>>=
+bool
+isolder(char *pin, char *f)
+{
+    int r, rel;
+    ulong n, m;
+    char *p = pin;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return false;
+
+    /* parse time */
+    n = 0;
+    rel = 0;
+    while(*p){
+        m = strtoul(p, &p, 0);
+        switch(*p){
+        case 0:
+            n = m;
+            break;
+        case 'y':
+            m *= 12;
+            /* fall through */
+        case 'M':
+            m *= 30;
+            /* fall through */
+        case 'd':
+            m *= 24;
+            /* fall through */
+        case 'h':
+            m *= 60;
+            /* fall through */
+        case 'm':
+            m *= 60;
+            /* fall through */
+        case 's':
+            n += m;
+            p++;
+            rel = 1;
+            break;
+        default:
+            synbad("bad time syntax, ", pin);
+        }
+    }
+    if (!rel)
+        m = n;
+    else{
+        m = time(0);
+        if (n > m)		/* before epoch? */
+            m = 0;
+        else
+            m -= n;
+    }
+    r = dir->mtime < m;
+    free(dir);
+    return r;
+}
+@
+
+<<function [[isolderthan]]>>=
+int
+isolderthan(char *a, char *b)
+{
+    int r;
+    Dir *ad, *bd;
+
+    ad = dirstat(a);
+    bd = dirstat(b);
+    if (ad == nil || bd == nil)
+        r = 0;
+    else
+        r = ad->mtime > bd->mtime;
+    free(ad);
+    free(bd);
+    return r;
+}
+@
+
+<<function [[isnewerthan]]>>=
+int
+isnewerthan(char *a, char *b)
+{
+    int r;
+    Dir *ad, *bd;
+
+    ad = dirstat(a);
+    bd = dirstat(b);
+    if (ad == nil || bd == nil)
+        r = 0;
+    else
+        r = ad->mtime < bd->mtime;
+    free(ad);
+    free(bd);
+    return r;
+}
+@
+
+\section{[[sh]], the simple shell}
+
+%yoann: intro
+%claude:
+This is a minimal shell, useful during early stages of
+porting \plan to a new architecture when [[rc]] is not
+yet available. It supports basic command execution,
+pipes, redirections, and backgrounding, but has no
+variables, functions, or control flow. Comparing it
+to [[rc]] helps appreciate how much complexity the
+full shell adds.
+
+%/* sh - simple shell - great for early stages of porting */
+
+%TODO? maybe add an explain the sh.c code 
+% (there is another small sh.c I don't remember where)
+% in an appendix?
+
+%helps understand high-level code orga and flow.
+%cmd1 | cmd2 
+%actually does 2 forks, and the interpreter continues! because
+%maybe this pipe is part of a bigger command.
+%
+%also need to return pid in interpreter.
+
+
+<<constant [[MAXLINE]]>>=
+#define MAXLINE 200		/* maximum line length */
+@
+
+<<constant [[WORD]]>>=
+#define WORD 256		/* token code for words */
+@
+
+<<constant [[EOF]]>>=
+#define EOF -1			/* token code for end of file */
+@
+
+<<function [[ispunct]]>>=
+#define ispunct(c)		(c=='|' || c=='&' || c==';' || c=='<' || \
+                 c=='>' || c=='(' || c==')' || c=='\n')
+@
+
+<<function [[isspace]]>>=
+#define isspace(c)		(c==' ' || c=='\t')
+@
+
+<<function [[execute]]>>=
+#define execute(np)		(ignored = (np? (*(np)->op)(np) : 0))
+@
+
+<<struct [[Node]]>>=
+struct Node {			/* parse tree node */
+    int (*op)(Node *); 	/* operator function */
+    Node *args[2];		/* argument nodes */
+    char *argv[100];	/* argument pointers */
+    char *io[3];		/* i/o redirection */
+};
+@
+
+<<global [[nodes]]>>=
+Node	nodes[25];		/* node pool */
+@
+
+<<global [[nfree]]>>=
+Node	*nfree;			/* next available node */
+@
+
+<<global [[strspace]]>>=
+char	strspace[10*MAXLINE];	/* string storage */
+@
+
+<<global [[sfree]]>>=
+char	*sfree;			/* next free character in strspace */
+@
+
+<<global [[t]]>>=
+int	t;			/* current token code */
+@
+
+<<global [[token]]>>=
+char 	*token;			/* current token text (in strspace) */
+@
+
+<<global [[putback]]>>=
+int	putback = 0;		/* lookahead */
+@
+
+<<global [[status]]>>=
+char	status[256];		/* exit status of most recent command */
+@
+
+<<global [[cflag]]>>=
+int	cflag = 0;		/* command is argument to sh */
+@
+
+<<global [[tflag]]>>=
+int	tflag = 0;		/* read only one line */
+@
+
+<<global [[interactive]]>>=
+bool	interactive = false;	/* prompt */
+@
+
+<<global [[cflagp]]>>=
+char	*cflagp;		/* command line for cflag */
+@
+
+<<global [[path]]>>=
+char	*path[] ={"/bin", 0};
+@
+
+<<global [[ignored]]>>=
+int	ignored;
+@
+
+<<function main (sh/sh.c)>>=
+void
+main(int argc, char *argv[])
+{
+    Node *np;
+
+    if(argc>1 && strcmp(argv[1], "-t")==0)
+        tflag++;
+    else if(argc>2 && strcmp(argv[1], "-c")==0){
+        cflag++;
+        cflagp = argv[2];
+    }else if(argc>1){
+        close(0);
+        if(open(argv[1], 0) != 0){
+            error(": can't open", argv[1]);
+            exits("argument");
+        }
+    }else
+        interactive = true;
+    for(;;){
+        if(interactive)
+            fprint(2, "%d$ ", getpid());
+        nfree = nodes;
+        sfree = strspace;
+        if((t=gettoken()) == EOF)
+            break;
+        if(t != '\n')
+            if(np = list())
+                execute(np);
+            else
+                error("syntax error", "");
+        while(t!=EOF && t!='\n')	/* flush syntax errors */
+            t = gettoken();
+    }
+    exits(status);
+}
+@
+
+<<function [[alloc]]>>=
+/* alloc - allocate for op and return a node */
+Node*
+alloc(int (*op)(Node *))
+{
+    if(nfree < nodes+sizeof(nodes)){
+        nfree->op = op;
+        nfree->args[0] = nfree->args[1] = 0;
+        nfree->argv[0] = nfree->argv[1] = 0;
+        nfree->io[0] = nfree->io[1] = nfree->io[2] = 0;
+        return nfree++;
+    }
+    error("node storage overflow", "");
+    exits("node storage overflow");
+    return nil;
+}
+@
+
+% return bool and do side effect of executing command before
+<<function [[builtin]]>>=
+/* builtin - check np for builtin command and, if found, execute it */
+bool
+builtin(Node *np)
+{
+    int n = 0;
+    char name[MAXLINE];
+    Waitmsg *wmsg;
+
+    if(np->argv[1])
+        n = strtoul(np->argv[1], 0, 0);
+    if(strcmp(np->argv[0], "cd") == 0){
+        if(chdir(np->argv[1]? np->argv[1] : "/") == -1)
+            error(": bad directory", np->argv[0]);
+        return true;
+    }else if(strcmp(np->argv[0], "exit") == 0)
+        exits(np->argv[1]? np->argv[1] : status);
+    else if(strcmp(np->argv[0], "bind") == 0){
+        if(np->argv[1]==0 || np->argv[2]==0)
+            error("usage: bind new old", "");
+        else if(bind(np->argv[1], np->argv[2], 0)==-1)
+            error("bind failed", "");
+        return true;
+//#ifdef asdf
+//	}else if(strcmp(np->argv[0], "unmount") == 0){
+//		if(np->argv[1] == 0)
+//			error("usage: unmount [new] old", "");
+//		else if(np->argv[2] == 0){
+//			if(unmount((char *)0, np->argv[1]) == -1)
+//				error("unmount:", "");
+//		}else if(unmount(np->argv[1], np->argv[2]) == -1)
+//			error("unmount", "");
+//		return true;
+//#endif
+    }else if(strcmp(np->argv[0], "wait") == 0){
+        while((wmsg = wait()) != nil){
+            strncpy(status, wmsg->msg, sizeof(status)-1);
+            if(n && wmsg->pid==n){
+                n = 0;
+                free(wmsg);
+                break;
+            }
+            free(wmsg);
+        }
+        if(n)
+            error("wait error", "");
+        return true;
+    }else if(strcmp(np->argv[0], "rfork") == 0){
+        char *p;
+        int mask;
+
+        p = np->argv[1];
+        if(p == 0 || *p == 0)
+            p = "ens";
+        mask = 0;
+
+        while(*p)
+            switch(*p++){
+            case 'n': mask |= RFNAMEG; break;
+            case 'N': mask |= RFCNAMEG; break;
+            case 'e': mask |= RFENVG; break;
+            case 'E': mask |= RFCENVG; break;
+            case 's': mask |= RFNOTEG; break;
+            case 'f': mask |= RFFDG; break;
+            case 'F': mask |= RFCFDG; break;
+            case 'm': mask |= RFNOMNT; break;
+            default: error(np->argv[1], "bad rfork flag");
+            }
+        rfork(mask);
+
+        return OK_1;
+    }else if(strcmp(np->argv[0], "exec") == 0){
+        redirect(np);
+        if(np->argv[1] == (char *) 0)
+            return 1;
+        exec(np->argv[1], &np->argv[1]);
+        n = np->argv[1][0];
+        if(n!='/' && n!='#' && (n!='.' || np->argv[1][1]!='/'))
+            for(n = 0; path[n]; n++){
+                sprint(name, "%s/%s", path[n], np->argv[1]);
+                exec(name, &np->argv[1]);
+            }
+        error(": not found", np->argv[1]);
+        return true;
+    }
+    // no builtin found
+    return false;
+}
+@
+
+<<function [[command]]>>=
+/* command - ( list ) [ ( < | > | >> ) word ]* | simple */
+Node*
+command(void)
+{
+    Node *np;
+
+    if(t != '(')
+        return simple();
+    np = alloc(xsubshell);
+    t = gettoken();
+    if((np->args[0]=list())==0 || t!=')')
+        return nil;
+    while((t=gettoken())=='<' || t=='>')
+        if(!setio(np))
+            return nil;
+    return np;
+}
+@
+
+<<function [[getch]]>>=
+/* getch - get next, possibly pushed back, input character */
+int
+getch(void)
+{
+    unsigned char c;
+    static int done=0;
+
+    if(putback){
+        c = putback;
+        putback = 0;
+    }else if(tflag){
+        if(done || read(0, &c, 1)!=1){
+            done = 1;
+            return EOF;
+        }
+        if(c == '\n')
+            done = 1;
+    }else if(cflag){
+        if(done)
+            return EOF;
+        if((c=*cflagp++) == 0){
+            done = 1;
+            c = '\n';
+        }
+    }else if(read(0, &c, 1) != 1)
+        return EOF;
+    return c;
+}
+@
+
+<<function [[gettoken]]>>=
+/* gettoken - get next token into string space, return token code */
+int
+gettoken(void)
+{
+    int c;
+
+    while((c = getch()) != EOF)
+        if(!isspace(c))
+            break;
+    if(c==EOF || ispunct(c))
+        return c;
+    token = sfree;
+    do{
+        if(sfree >= strspace+sizeof(strspace) - 1){
+            error("string storage overflow", "");
+            exits("string storage overflow");
+        }
+        *sfree++ = c;
+    }while((c=getch()) != EOF && !ispunct(c) && !isspace(c));
+    *sfree++ = 0;
+    putback = c;
+    return WORD;
+}
+@
+
+<<function [[list]]>>=
+/* list - pipeline ( ( ; | & ) pipeline )* [ ; | & ]  (not LL(1), but ok) */
+Node*
+list(void)
+{
+    Node *np, *np1;
+
+    np = alloc(0);
+    if((np->args[1]=pipeline()) == 0)
+        return nil;
+    while(t==';' || t=='&'){
+        np->op = (t==';')? xwait : xnowait;
+        t = gettoken();
+        if(t==')' || t=='\n')	/* tests ~first(pipeline) */
+            break;
+        np1 = alloc(0);
+        np1->args[0] = np;
+        if((np1->args[1]=pipeline()) == 0)
+            return nil;
+        np = np1;
+    }
+    if(np->op == 0)
+        np->op = xwait;
+    return np;
+}
+@
+
+<<function [[error]]>>=
+/* error - print error message s, prefixed by t */
+void
+error(char *s, char *t)
+{
+    char buf[256];
+
+    fprint(2, "%s%s", t, s);
+    errstr(buf, sizeof buf);
+    fprint(2, ": %s\n", buf);
+}
+@
+
+<<function [[pipeline]]>>=
+/* pipeline - command ( | command )* */
+Node*
+pipeline(void)
+{
+    Node *np, *np1;
+
+    if((np=command()) == 0)
+        return nil;
+    while(t == '|'){
+        np1 = alloc(xpipeline);
+        np1->args[0] = np;
+        t = gettoken();
+        if((np1->args[1]=command()) == 0)
+            return nil;
+        np = np1;
+    }
+    return np;
+}
+@
+
+<<function [[redirect]]>>=
+/* redirect - redirect i/o according to np->io[] values */
+void
+redirect(Node *np)
+{
+    int fd;
+
+    if(np->io[0]){
+        if((fd = open(np->io[0], 0)) < 0){
+            error(": can't open", np->io[0]);
+            exits("open");
+        }
+        dup(fd, 0);
+        close(fd);
+    }
+    if(np->io[1]){
+        if((fd = create(np->io[1], 1, 0666L)) < 0){
+            error(": can't create", np->io[1]);
+            exits("create");
+        }
+        dup(fd, 1);
+        close(fd);
+    }
+    if(np->io[2]){
+        if((fd = open(np->io[2], 1)) < 0 && (fd = create(np->io[2], 1, 0666L)) < 0){
+            error(": can't write", np->io[2]);
+            exits("write");
+        }
+        dup(fd, 1);
+        close(fd);
+        seek(1, 0, 2);
+    }
+}
+@
+
+<<function [[setio]]>>=
+/* setio - ( < | > | >> ) word; fill in np->io[] */
+error0
+setio(Node *np)
+{
+    if(t == '<'){
+        t = gettoken();
+        np->io[0] = token;
+    }else if(t == '>'){
+        t = gettoken();
+        if(t == '>'){
+            t = gettoken();
+            np->io[2] = token;
+            }else
+            np->io[1] = token;
+    }else
+        return ERROR_0;
+    if(t != WORD)
+        return ERROR_0;
+    return OK_1;
+}
+@
+
+<<function [[simple]]>>=
+/* simple - word ( [ < | > | >> ] word )* */
+Node*
+simple(void)
+{
+    Node *np;
+    int n = 1;
+
+    if(t != WORD)
+        return nil;
+    np = alloc(xsimple);
+    np->argv[0] = token;
+    while((t = gettoken())==WORD || t=='<' || t=='>')
+        if(t == WORD)
+            np->argv[n++] = token;
+        else if(!setio(np))
+            return nil;
+    np->argv[n] = 0;
+    return np;
+}
+@
+
+<<function [[xpipeline]]>>=
+/* xpipeline - execute cmd | cmd */
+int
+xpipeline(Node *np)
+{
+    int pid, fd[2];
+
+    if(pipe(fd) < 0){
+        error("can't create pipe", "");
+        return 0;
+    }
+    if((pid=fork()) == 0){	/* left side; redirect stdout */
+        dup(fd[1], 1);
+        close(fd[0]);
+        close(fd[1]);
+        execute(np->args[0]);
+        exits(status);
+    }else if(pid == -1){
+        error("can't create process", "");
+        return 0;
+    }
+    if((pid=fork()) == 0){	/* right side; redirect stdin */
+        dup(fd[0], 0);
+        close(fd[0]);
+        close(fd[1]);
+        pid = execute(np->args[1]); /*BUG: this is wrong sometimes*/
+        if(pid > 0)
+            while(waitpid()!=pid)
+                ;
+        exits(nil);
+    }else if(pid == -1){
+        error("can't create process", "");
+        return 0;
+    }
+    close(fd[0]);	/* avoid using up fd's */
+    close(fd[1]);
+    return pid;
+}
+@
+
+<<function [[xsimple]]>>=
+/* xsimple - execute a simple command */
+int
+xsimple(Node *np)
+{
+    char name[MAXLINE];
+    int pid, i;
+
+    if(builtin(np))
+        return 0;
+
+    if(pid = fork()){
+        if(pid == -1)
+            error(": can't create process", np->argv[0]);
+        return pid;
+    }
+    redirect(np);	/* child process */
+    exec(np->argv[0], &np->argv[0]);
+    i = np->argv[0][0];
+
+    if(i!='/' && i!='#' && (i!='.' || np->argv[0][1]!='/'))
+        for(i = 0; path[i]; i++){
+            sprint(name, "%s/%s", path[i], np->argv[0]);
+            exec(name, &np->argv[0]);
+        }
+    error(": not found", np->argv[0]);
+    exits("not found");
+    return -1;		// suppress compiler warnings
+}
+@
+
+<<function [[xsubshell]]>>=
+/* xsubshell - execute (cmd) */
+int
+xsubshell(Node *np)
+{
+    int pid;
+
+    if(pid = fork()){
+        if(pid == -1)
+            error("can't create process", "");
+        return pid;
+    }
+    redirect(np);	/* child process */
+    execute(np->args[0]);
+    exits(status);
+    return -1;		// suppress compiler warnings
+}
+@
+
+<<function [[xnowait]]>>=
+/* xnowait - execute cmd & */
+int
+xnowait(Node *np)
+{
+    int pid;
+
+    execute(np->args[0]);
+    pid = execute(np->args[1]);
+    if(interactive)
+        fprint(2, "%d\n", pid);
+    return 0;
+}
+@
+
+<<function [[xwait]]>>=
+/* xwait - execute cmd ; */
+int xwait(Node *np)
+{
+    int pid;
+    Waitmsg *wmsg;
+
+    execute(np->args[0]);
+    pid = execute(np->args[1]);
+    if(pid > 0){
+        while((wmsg = wait()) != nil){
+            if(wmsg->pid == pid)
+                break;
+            free(wmsg);
+        }
+        if(wmsg == nil)
+            error("wait error", "");
+        else {
+            strncpy(status, wmsg->msg, sizeof(status)-1);
+            free(wmsg);
+        }
+    }
+    return 0;
+}
+@
+
+
+%******************************************************************************
+\chapter{Extra Code}
+%******************************************************************************
+
 #include "Shell_extra.nw"
-\fi
 
 %\chapter{Changelog}
 % code via make loc = 6300 LOC, after full lpized  ? LOC
