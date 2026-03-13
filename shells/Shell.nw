@@ -3303,6 +3303,11 @@ if(lastword){
 %******************************************************************************
 \label{chap:parsing}
 
+%claude:
+Now that we have seen how the lexer produces tokens from the
+input stream, we can describe the parser, which assembles
+those tokens into an abstract syntax tree.
+
 \section{Overview}
 
 % I assume you understand yacc! if not read classic book on lex&yacc
@@ -3324,6 +3329,16 @@ Note that newlines have a semantic role in [[rc]]:
 they terminate commands (like [[;]] in C). This is what
 makes the shell convenient for interactive use --- you do not
 need an explicit semicolon to run a command.
+
+%yoann: small explanation of %union and .y layout
+%claude:
+The [[.y]] file follows the standard [[yacc]] layout:
+a prologue section ([[%{...%}]]) with C includes,
+then declarations ([[\%union]], [[\%token]], [[\%left]], [[\%type]]),
+and finally the grammar rules after [[%%]].
+The [[\%union]] declaration tells [[yacc]] that semantic values
+([[yylval]], [[\$1]], [[\$2]], etc.) are [[Tree]] pointers,
+since every grammar rule builds or passes along AST nodes.
 
 <<rc/syn.y>>=
 %{
@@ -3582,10 +3597,30 @@ for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
 %ocaml: maybe should have redirection allowed only at the end?
 % so then easy to put it also at the root of the AST.
 
+%yoann: ASCII diagram and explanation when do  ls /tmp/x > foo < bar /tmp/y then want to transform in   (> foo (< bar (ls /tmp/x /tmp/y))) in AST
+%claude:
+For example, when parsing [[grep pattern < input > output]],
+the parser first builds a flat [[ARGLIST]] tree with
+the redirections mixed among the arguments.
+Then [<simplemung()>] percolates the redirections up
+to the root, producing an AST where redirections wrap
+the command:
+\begin{verbatim}
+  Before simplemung():            After simplemung():
 
-% when do  ls /tmp/x > foo < bar /tmp/y
-% then want to transform in   (> foo (< bar (ls /tmp/x /tmp/y))) in AST
-
+  SIMPLE                          > "output" fd0=1
+   |                               |
+  ARGLIST                         < "input" fd0=0
+   / \                             |
+  ARGLIST       > "output"        SIMPLE
+   / \                             |
+  ARGLIST  < "input"              ARGLIST
+   / \                             / \
+  "grep"  "pattern"              "grep"  "pattern"
+\end{verbatim}
+%
+This way, the bytecode generator encounters the redirections
+first and can set them up before executing the command.
 
 \section{Operators}
 
@@ -3682,16 +3717,19 @@ tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
 %csh: had expression grammar, so could do $i < 365
 %sh: ugly external 'test' program and '[' but need for -gt, -lt
 %claude:
-The [[~]] (twiddle) operator is the fundamental comparison
+The \verb+~+ (twiddle) operator is the fundamental comparison
 operator in [[rc]]. Since all values in [[rc]] are strings
 (or lists of strings), there are no arithmetic comparisons;
-instead, [[~]] performs pattern matching:
-[[~ \$x foo*]] tests whether [[\$x]] matches the pattern [[foo*]].
+instead, \verb+~+ performs pattern matching:
+\verb+~ $x foo*+ tests whether [[$x]] matches the pattern [[foo*]]%
+\footnote{The [[*]] here is interpreted by the twiddle operator
+itself using [<match()>] (see Chapter~\ref{chap:globbing}),
+not by the shell's globbing mechanism which expands filenames.}.
 It can also be used for simple equality tests (without wildcards)
-and even for counting: [[~ \$\#list 0]] tests if a list is empty.
+and even for counting: \verb+~ $#list 0+ tests if a list is empty.
 %
 This is a major simplification compared to the Bourne shell,
-which relies on the external [[test]] program (or [[[]]]).
+which relies on the external [[test]] program (or \verb+[ ]+).
 
 <<cmd rule other cases>>=
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
@@ -3724,6 +3762,11 @@ tree* mung2(tree *t, tree *c0, tree *c1)
 %claude:
 Redirections are at the [[simple]] level in the grammar,
 which means they bind tighter than pipes and logical operators.
+For example, [[ls | grep bi* > foo]] is parsed as
+[[ls | (grep bi* > foo)]], not [[(ls | grep bi*) > foo]]---the
+redirection applies only to [[grep]], not to the whole pipeline.
+If you want to redirect the output of an entire pipeline,
+you need braces: \verb+{ls | grep bi*} > foo+.
 A command can have multiple redirections (e.g., [[ls < foo > bar]]),
 and they can appear mixed with arguments.
 The [[simplemung()]] function later percolates them to
@@ -3795,15 +3838,32 @@ tree* epimung(tree *comp, tree *epi)
 
 %claude:
 Note that [[rc]] uses [[if not]] instead of [[else]].
-This is because [[rc]] is an interactive language: when you type
-[[if(test) cmd<newline>]], the shell must execute the command
-immediately --- it cannot wait to see if an [[else]] follows
-on the next line. By using [[if not]] as a separate command,
-there is no ambiguity.
+This is because [[rc]] parses and executes one line at a time.
+When the user types [[if(test) cmd]] and presses Enter,
+[[rc]] must parse, compile, and execute this line immediately.
+The problem with [[else]] is that it would need to appear
+on the {\em next} line:
+\begin{verbatim}
+  if(test) cmd1
+  else cmd2
+\end{verbatim}
+But [[rc]] has already fully processed the first line
+before it even sees [[else]]. It cannot retroactively
+turn [[if(test) cmd1]] into the first half of an if/else.
+%
+The Bourne shell solves this with [[if...then...fi]]:
+the explicit [[fi]] terminator tells the parser when the
+[[if]] block ends, so [[else]] can appear unambiguously between
+[[then]] and [[fi]]. But this requires more keywords.
+%
+[[rc]] takes a different approach: [[if not]] is a completely
+separate command that checks the exit status left by the
+previous [[if]]. No lookahead is needed, no extra keywords,
+and each line is self-contained.
 %
 The [[for]] loop has two forms: [[for(x in a b c)]]
 iterates over the explicit list, and [[for(x)]] iterates
-over [[\$*]] (the script arguments).
+over [[$*]] (the script arguments).
 
 <<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
@@ -3880,24 +3940,24 @@ cmdsan:
 \section{Functions ([[fn]])}
 
 %claude:
-Function definition in [[rc]] uses [[fn name \{body\}]].
+Function definition in [[rc]] uses \verb+fn name {body}+.
 The second form, [[fn name]] without a body, {\em deletes}
 the function definition.
 %
 Note that [[words]] (not just a single word) is accepted
 as the function name: this allows defining a function
-for multiple names at once (e.g., [[fn sigint sighup \{...\}]]
+for multiple names at once (e.g., \verb+fn sigint sighup {...\}+
 to handle multiple signals with the same handler).
 
 <<cmd rule other cases>>=
 |   FN words brace  {$$=tree2(FN, $2, $3);}
 |   FN words        {$$=tree1(FN, $2);}
+@
 %$
 % words? fn with multiple words? can define alias on the same line?
 %ocaml: could be at line level? also why allow words here?
 % second line is for delfn. if type
 % fn foo   without anything, then means delete the function.
-@
 
 \section{Variables ([[<x> = ...]])}
 
@@ -3912,14 +3972,15 @@ The assignment appears {\em before} the command, following
 the Bourne shell convention (which was itself motivated by
 programs like [[make]] that accept [[x=y]] on the command line).
 %
-The [[\%prec BANG]] directive tells [[yacc]] to resolve
-ambiguities (e.g., [[x=1 ls \&\& echo done]]) using
+The [[%prec BANG]] directive tells [[yacc]] to resolve
+ambiguities (e.g., [[x=1 ls && echo done]]) using
 the priority of [[BANG]], giving assignment lower priority
 than pipes but higher than logical operators.
 
 <<cmd rule other cases>>=
-|   assign cmd %prec BANG
+|   assign cmd                    %prec BANG
       {$$=mung3($1, $1->child[0], $1->child[1], $2);}
+@
 % just add cmd as third child of =
 % remember that cmd can be empty. In fact, if empty the semantic
 % of the assignment changes. The binding is not just for the current command.
@@ -3928,7 +3989,6 @@ than pipes but higher than logical operators.
 % do assign before cmd.
 % explain %prec?
 % if remove it then get ambiguity with cmd && cmd.
-@
 %60: shift/reduce conflict (shift 51, reduce 22) on TAndAnd
 %60: shift/reduce conflict (shift 52, reduce 22) on TOrOr
 %60: shift/reduce conflict (shift 53, reduce 22) on TPipe
@@ -4018,12 +4078,7 @@ improvements over the Bourne shell.
 \label{chap:compile-interpret}
 
 % or Code generation? or Bytecode generation?
-\n i merged Bytecode Generation and Intepretation in one chapter
-\n  because it helps to see the code generated from a tree.
-\n We could also group with the related parsing, but maybe it would
-\n  be too much, and parsing can be understood in isolation.
 %toc:
-%claude:
 I merged bytecode generation and interpretation in one chapter
 because it helps to see the bytecodes generated from a given AST node
 together with the functions that interpret those bytecodes.
