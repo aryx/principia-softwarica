@@ -99,7 +99,7 @@ struct Panel{
     Vector (*getsize)(Panel *, Vector);		/* return size, given child size */
     /*x: [[Panel]] packing methods */
     /* child ul & size given our size */
-    void (*childspace)(Panel *, Point * /**INOUT**/, Vector * /**INOUT**/);	
+    void (*childspace)(Panel *, Point * /**INOUT**/, Vector * /**INOUT**/);
     /*e: [[Panel]] packing methods */
     /*s: [[Panel]] other methods */
     void (*free)(Panel *);				/* free fields of data when done */
