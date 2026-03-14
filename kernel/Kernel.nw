@@ -143,11 +143,37 @@ a {kernel}.
 
 \section{Motivations}
 
-Why a kernel? 
+Why a kernel?
 Because I think you are a better programmer if
 you fully understand how things work under the hood, and the
 kernel is the program that everything else rely on.
 
+%claude:
+Indeed, every program you write---from a simple [[hello]]
+to a web server---relies on the kernel for its most
+basic operations: reading files, allocating memory,
+communicating with other programs, and even printing
+text on the screen. Understanding what happens below
+those system calls removes an entire layer of mystery
+and gives you a far more accurate mental model of how
+software actually executes on hardware.
+
+%claude:
+Moreover, the kernel is a fascinating program in its own
+right. It must manage {concurrency} (multiple processes
+sharing the CPU), {virtual memory} (giving each process
+the illusion of having all memory for itself), and
+{devices} (keyboards, disks, screens)---all while
+remaining small enough to be trustworthy and fast enough
+to stay out of the way. The tension between generality
+and efficiency produces elegant solutions that are worth
+studying even if you never write kernel code yourself.
+%
+Finally, many concepts introduced by the kernel---locks,
+scheduling, caches, interrupt handling---reappear in
+user-space programs such as databases, web servers, and
+even build systems. Understanding the kernel is thus
+also a way to understand those programs better.
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -203,15 +229,38 @@ processes?
 
 % I chose plan9 kernel. A good basis for the other books.
 % Made by Unix master Ken Thompson! Unix 2.0 (see Principia.nw)
+%claude:
+Like for most books in \principia, I chose a \plan program.
+The \plan kernel, called [[9]], was written by Ken Thompson---the
+creator of \unix---together with Dave Presotto and others at
+Bell Labs. If \unix was ``version~1,'' then \plan is
+``version~2'': a chance to redesign an operating system with
+decades of hindsight. The result is a kernel that is remarkably
+small, clean, and coherent---a good basis for the other
+\principia books that cover \plan's shell, compilers, and
+graphics system.
 
 % I will focus on code of 9 for Raspberry Pi, ARM archi. Simpler archi.
 % Will have (ARM) in section when ARM specific. But most of the code
 % in this book is portable code. The same code is used for x86 and arm.
+%claude:
+I will focus on the code of [[9]] for the Raspberry Pi, which
+uses the ARM architecture. ARM is a RISC design, far simpler
+than x86, making it a better target for a teaching book.
+Sections covering ARM-specific code are marked with ``(ARM)''
+in their title, but most of the code in this book is
+{portable} C---the same source is shared between the ARM
+and x86 ports of [[9]].
 
 %Graphics and network in other books.
+%claude:
+The graphics stack and the networking stack are covered in
+separate \principia volumes (\book{Graphics} and \book{Network}),
+so this book focuses on the kernel's core: processes, memory,
+files, and devices.
 
-%Some disadvantages of 9: 
-% - more general but also probably less efficient, e.g., no buffer cache, 
+%Some disadvantages of 9:
+% - more general but also probably less efficient, e.g., no buffer cache,
 % - graphic stack in the kernel,
 % - hardcoded split for kernel mem vs images mem and user mem,
 % - dupe memory management vs arch mmu?
@@ -227,7 +276,7 @@ which I ultimately discarded:
 %history:
 \item Unix V6 (or its modern incarnation xv6) is too simple;
 there is no graphics, no network.
-% actually I will not cover graphics or network in this book, but I will
+%yoann: actually I will not cover graphics or network in this book, but I will
 % make other books and so want to explain something coherent.
 % Also V6 didn't handle multi processors (but xv6 does though).
 % grokking xv6: http://experiments.oskarth.com/unix00/
@@ -237,7 +286,7 @@ is too simple with no virtual memory for instance
 % and has multi processor support?
 
 \item Minix is fairly small but it does not provide a simple windowing
-system as it relies on X11 (which is far more complicated than plan9
+system as it relies on X11 (which is far more complicated than \plan
 Rio windowing system)
 % minix3 is said to be 13 000 LOC
 
@@ -290,6 +339,24 @@ bigger than \plan equivalent core.
 % learning to do OS from scratch:
 %  - https://github.com/tuhdo/os01
 
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Kernels timeline}
+\label{fig:lineage}
+\end{figure}
+
+%dup: Shell.nw
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major kernels.
+I think [[9]] represents the best compromise for this book:
+it implements the essential features of an operating system
+kernel---processes, virtual memory, file systems, device
+drivers---while still having a small and understandable
+codebase. [[9]] is obviously not as used as the Linux kernel,
+but it is a production-quality kernel that was used to run
+all machines at Bell Labs and that still runs today on hobbyist
+hardware such as the Raspberry Pi.
+
 \section{Getting started}
 
 To get started you first need to get the source of the \plan
@@ -320,6 +387,7 @@ I assume you actually know a lot:
 you'll need to have a good knowledge of 
 the C programming language~\cite{k-r}.
 % see also comp.ps
+%yoann: actually clever C sometimes, so very good knowledge of C, of bit manip in C, C idioms for data structure, bitsets, etc.
 
 \item Operating system: (yep)
 % ref?
@@ -339,7 +407,8 @@ I assume you already know most of the theory; this book is here to
 cover the practice.
 %The details! And they matter!
 
-%other stuff help to understand but not mandatory
+%yoann: other stuff help to understand but not mandatory
+
 \begin{itemize}
 \item The ARM architecture:
 % actually maybe not that much. Mention Raspberry Pi instead of ARM?
@@ -378,6 +447,14 @@ the \plan kernel to the Raspberry Pi machine.
 \chapter{Overview}
 %******************************************************************************
 
+%claude:
+In this chapter, I will give a bird's-eye view of the [[9]] kernel
+before diving into the code in later chapters. I will first
+recall general operating system principles, then present the
+syscall interface of [[9]], the ARM hardware the kernel runs on,
+the memory layout, and finally the overall software architecture
+and boot sequence.
+
 \section{Operating system principles}
 
 An operating system is a program that {manages} other programs.
@@ -409,11 +486,23 @@ whether it's on a disk, network, floppy, etc
 %\item a virtual network (NFS)
 \end{itemize}
 
+%claude:
+The common thread is {virtualization}: each of these
+abstractions gives a process the illusion of exclusive
+access to a resource. Making this illusion work is the
+kernel's main job, and it requires solving several hard
+problems: {concurrency} (multiplexing the CPU safely),
+{memory management} (giving each process its own address
+space), {interrupt handling} (reacting to hardware events),
+and {persistence} (storing data reliably on disk).
+These are exactly the topics the rest of this book
+will cover.
+
 % There is some Lisp machine, Prolog machine, Alto, etc, specialized to run
 % program in one language (see also Oberon).
-% Plan9, unix, and many others have a SHELL and so are also a kind 
+% Plan9, unix, and many others have a SHELL and so are also a kind
 % of universal interpreter.
-%  Unix is universal and have general mechanism 
+%  Unix is universal and have general mechanism
 % (e.g. shell repl, environment to transmit globals, or
 % argv to pass parameter). Universal! Can then have programs
 % written in C/Asm, pascal, prolog, scheme, whatever but launched
@@ -451,9 +540,20 @@ provides to the user programs.
 % Philosphy plan9 is everything is a file server.
 % see 9.ps, excellent introduction to Plan9 advanced features
 % see also docs/doc/ and docs/man/
-
+%claude:
+\plan is the successor to \unix and inherits its philosophy
+that ``everything is a file.'' \plan pushes this further:
+everything is a {file server}. Devices, the console, the
+screen, the process table---all are accessed through
+[[open]]/[[read]]/[[write]]/[[close]], served by in-kernel
+or user-space file servers. This design lets the syscall
+interface remain remarkably small.
 
 % in lib_core/libc/9syscall/ but really part of kernel (interface to kernel)
+%claude:
+The entire interface fits in a single header, [[sys.h]].
+Each syscall is a small integer used as an index into
+a dispatch table (the [[systab]] array shown later).
 <<lib_core/libc/9syscall/sys.h>>=
 #define NOP     0
 <<[[sys.h]] process syscalls>>
@@ -478,16 +578,28 @@ provides to the user programs.
 
 % Only 39!
 %linux: more than 200 now? How many in Linux 0.01?
+%claude:
+Only 39 syscalls! Modern Linux has more than 400.
+The reason \plan can get away with so few is the
+``everything is a file server'' philosophy: operations
+that would require dedicated syscalls in other systems
+(e.g., [[getpid]], [[ioctl]]) are instead handled by
+reading or writing special files.
+
+%yoann: small comment on NOP usefulness and ERRSTR use and interface
 
 % will see in helloraw.c how to use those codes to perform syscall to kernel.
 % will see sys_nop() soon.
-
 
 % use an enum instead in sys.h? but then the script that generates
 %  the .s in libc/ will be a bit more complicated and the syscall numbers
 % are accessed from assembly so need to use #define
 
-
+%claude:
+The process syscalls mirror the \unix model: [[RFORK]] creates
+a new process (a generalization of \unix [[fork]]),
+[[EXEC]] replaces the current program, [[EXITS]] terminates,
+and [[AWAIT]] waits for a child (like \unix [[wait]]).
 <<[[sys.h]] process syscalls>>=
 #define RFORK       1
 #define EXEC        2
@@ -503,6 +615,8 @@ provides to the user programs.
 % unix philosphy!
 % cells are using fork so it must be a good API :)
 
+%yoann: what BRK mean? no malloc/free here? one syscall is enough?
+
 <<[[sys.h]] memory syscalls>>=
 #define BRK     5
 @ 
@@ -517,6 +631,14 @@ provides to the user programs.
 % bound! if the array was in his own segment!
 %todo: bad name btw, not sure what it means
 
+%claude:
+The file syscalls are the workhorses of the interface.
+Because so many things in \plan are files, most of
+the kernel's services are accessed through these five calls.
+Note [[PREAD]] and [[PWRITE]] instead of the traditional
+\unix [[read]]/[[write]]: the [['p']] stands for
+``positional''---they take an explicit file offset, making
+seek-then-read atomic.
 <<[[sys.h]] file syscalls>>=
 #define OPEN        6
 #define CLOSE       7
@@ -532,6 +654,8 @@ provides to the user programs.
 % /dev/cons and ask for 8192 bytes (a buffer), but the kernel will return
 % only the bytes until the newline.
 
+%yoann: small paragraph explaining those syscalls, why all the xSTAT variation? fd2path seems original too
+
 <<[[sys.h]] directory syscalls>>=
 #define CREATE      11
 #define REMOVE      12
@@ -545,17 +669,26 @@ provides to the user programs.
 % why so many stat, ugly a bit. each time variant where take name
 % or file descriptor (the f stands for fd). Could remove maybe.
 
+%plan9 specific! vs general os principles, e.g. namespace so have
+% nice /dev/cons, /dev/draw, which enable easier network and graphics
+%claude:
+The namespace syscalls below are specific to \plan. [[BIND]] and
+[[MOUNT]] let each process customize its own view of the
+file system by overlaying directories or attaching file
+servers at arbitrary mount points. This is what makes
+[[/dev/cons]], [[/dev/draw]], etc.\ work cleanly: each
+process can have its own [[/dev]] populated by different
+servers.
+
 <<[[sys.h]] namespace syscalls>>=
 #define BIND        19
 #define MOUNT       20
 #define UNMOUNT     21
 @
 
-%plan9 specific! vs general os principles, e.g. namespace so have
-% nice /dev/cons, /dev/draw, which enable easier network and graphics
 
 % alternative to namespace and fileservers and uniondir?
-% once go to a "device is a file", and want a clean /dev/cons and 
+% once go to a "device is a file", and want a clean /dev/cons and
 % clean xterm, that means you need to have programs that provides
 % a fake /dev/cons so need easy fileservers and namespace. Union dir
 % then is natural too, goes with having flexible namespace.
@@ -568,6 +701,14 @@ provides to the user programs.
 % alarm very useful, e.g. for timeout in a program
 % SLEEP is also for sleep/wakeup and synchronization?
 \t nsec? =~ gettimeofday? but also at top of user stack?
+
+%claude:
+The IPC syscalls cover several mechanisms.
+[[PIPE]] creates a pipe---one of \unix's greatest inventions.
+[[NOTIFY]]/[[NOTED]] handle {notes}, \plan's equivalent of
+\unix signals. The [[SEG]] family ([[SEGATTACH]],
+[[SEGDETACH]], etc.)\ lets processes attach shared memory
+segments, similar to \unix [[mmap]].
 
 <<[[sys.h]] ipc syscalls>>=
 #define PIPE        26
@@ -586,6 +727,14 @@ provides to the user programs.
 
 % user level concurrency of course, the kernel itself uses
 % lots of concurrency mechanisms (often mimiced also in userland)
+%claude:
+The concurrency syscalls provide low-level primitives for
+user-level synchronization. [[RENDEZVOUS]] is a
+meeting-point mechanism, and [[SEMACQUIRE]]/[[SEMRELEASE]]
+provide kernel-backed semaphores. These are the building
+blocks on top of which the user-level thread library
+([[libthread]]) is implemented.
+
 <<[[sys.h]] concurrency syscalls>>=
 #define RENDEZVOUS  32
 #define SEMACQUIRE  33
@@ -599,6 +748,8 @@ provides to the user programs.
 @
 % meh. Can't do without?
 
+%yoann: security related syscalls?
+
 <<[[sys.h]] security syscalls>>=
 #define FVERSION    37
 #define FAUTH       38
@@ -611,10 +762,17 @@ provides to the user programs.
 %  then abused by file server to provide more services, e.g. for graphics)
 % API access via int 64 (but again the API is also
 % the filesystem layout and different fileservers)
+%claude:
+And that is the entire syscall interface. There is no
+[[getpid]]---a process reads [[/dev/pid]] instead. There
+is no [[ioctl]]---device control is done by writing
+commands to a file. There is no [[select]]---[[libthread]]'s
+[[alt()]] uses [[rendezvous]] instead. The file server
+abstraction absorbs what would otherwise be dozens of
+special-purpose syscalls.
 
-% Easy to add or reorder. Just then need to recompile everything. 
+% Easy to add or reorder. Just then need to recompile everything.
 % It takes 20 seconds. Beautiful.
-
 
 % no SELECT? how does listen to multiple devices at the same time?
 % how alts() in lib_thread can work?
@@ -666,7 +824,93 @@ provides to the user programs.
 % C convention vs syscall convention => R0 store PWRITE.
 
 % show asm so really low level!
-% PWRITE = 
+% PWRITE =
+
+%claude:
+To see the syscall interface concretely, it is always good to
+start with the simplest possible program. Here is a ``Hello World''
+that uses [[pwrite()]] directly, without going through libc [[print()]]:
+
+<<helloraw.c>>=
+#include <u.h>
+#include <libc.h>
+
+void main() {
+  pwrite(1, "hello world\n", 12, 0LL);
+  exits(nil);
+}
+@
+
+%claude:
+The [[pwrite()]] call writes 12 bytes to file descriptor [[1]]
+(standard output) at offset~0. Under the hood, [[pwrite()]] is
+a thin assembly wrapper that places the syscall number ([[PWRITE]],
+which is [[9]] from [[sys.h]]) in register [[R0]] and
+executes a [[SWI]] (software interrupt) instruction to trap
+into the kernel.
+%
+The assembly version makes this mechanism fully visible:
+
+<<helloraw.s>>=
+TEXT _main(SB), $20
+        /* pwrite(1, &hello, 12, 0LL) */
+        MOVW $1, R1
+        MOVW R1, 4(R13)
+        MOVW $hello(SB), R1
+        MOVW R1, 8(R13)
+        MOVW $12, R1
+        MOVW R1, 12(R13)
+        MOVW $0, R1
+        MOVW R1, 16(R13)
+        MOVW R1, 20(R13)
+        MOVW $9 /*PWRITE*/, R0
+        SWI $0
+
+        /* exits(0) */
+        MOVW $0, R1
+        MOVW R1, 4(R13)
+        MOVW $3 /*EXITS*/, R0
+        SWI $0
+
+GLOBL   hello(SB), $12
+DATA    hello+0(SB)/12, $"hello world\n"
+@
+%$
+
+%claude:
+To compile and run the C version:
+\begin{verbatim}
+$ 5c helloraw.c
+$ 5l helloraw.5 -o helloraw
+$ ./helloraw
+hello world
+\end{verbatim}
+%claude:
+For the assembly version:
+\begin{verbatim}
+$ 5a helloraw.s
+$ 5l helloraw.5 -o helloraw
+$ ./helloraw
+hello world
+\end{verbatim}
+
+%claude:
+You can also use [[ratrace]], the \plan equivalent of [[strace]],
+to see the syscalls executed by the program:
+\begin{verbatim}
+$ ratrace -c ./helloraw
+...
+Pwrite 9, "hello world\n", 12
+...
+Exits  0
+\end{verbatim}
+%claude:
+This confirms that our small program generates exactly the
+two system calls we expected: [[PWRITE]] and [[EXITS]].
+We will see in Chapters~\ref{chap:interrupts}
+and~\ref{chap:processes} how the kernel handles the [[SWI]]
+instruction, dispatches the syscall number through [[systab]],
+and executes the corresponding kernel function.
 
 \section{[[minishell.c]]}
 
@@ -674,6 +918,44 @@ provides to the user programs.
 % illustrate also relation with shell?
 
 % reopen /dev/cons, pread, pwrite, fork, exec, await, exits, etc.
+%claude:
+A slightly more interesting example is a minimal shell that
+illustrates several syscalls working together:
+
+<<minishell.c>>=
+#include <u.h>
+#include <libc.h>
+
+void main() {
+  char buf[256];
+  char *args[2];
+  int n;
+
+  for(;;) {
+    pwrite(1, "$ ", 2, 0LL);
+    n = pread(0, buf, sizeof(buf)-1, 0LL);
+    if(n <= 0)
+      break;
+    buf[n-1] = '\0';  /* strip newline */
+    args[0] = buf;
+    args[1] = nil;
+    if(rfork(RFPROC|RFFDG) == 0) {
+      exec(buf, args);
+      exits("exec failed");
+    }
+    await(buf, sizeof(buf));
+  }
+  exits(0);
+}
+@
+%$
+
+%claude:
+This program reads commands from standard input, forks a child
+with [[rfork]], loads the requested program with [[exec]], and
+waits for it to finish with [[await]]. Running it under
+[[ratrace]] reveals the full sequence of syscalls for a single
+command---a preview of the machinery this book will explain.
 
 \section{The Raspberry Pi machine (ARM)}
 
@@ -687,6 +969,13 @@ provides to the user programs.
 % See Appendix~\ref{} for code for Raspberry Pi 2 and SMP.
 % In rest when I say Raspberry Pi and ARM is mostly Raspberry Pi 1 Model B
 % and ARMv6!.
+%claude:
+The target hardware for this book is the Raspberry Pi Model~B,
+a cheap hobbyist board designed for education. It is built around
+a Broadcom BCM2835 System-on-Chip (SoC) with an ARM1176JZF-S
+processor implementing the ARMv6 instruction set (32~bits).
+In the rest of this book, ``Raspberry Pi'' and ``ARM'' refer
+specifically to this board and this processor unless noted otherwise.
 
 %x86: PC vs Raspberry Pi?
 
@@ -702,6 +991,12 @@ provides to the user programs.
 
 % Most popular archi in smartphones. Most popular archi in number of devices.
 % More than x86!
+%claude:
+The ARM is a RISC processor, far simpler than the x86 CISC
+architecture. This makes it a better target for a teaching book.
+ARM is also the most popular architecture by number of
+devices shipped---it powers most smartphones---so understanding
+it is useful beyond this book.
 
 %references:
 % - https://en.wikipedia.org/wiki/ARM_architecture
@@ -716,6 +1011,9 @@ provides to the user programs.
 #define BY2WD       4
 @
 %ARM 32 bits
+
+%yoann: what V stands for?
+
 <<constant [[BY2V]](arm)>>=
 #define BY2V        8           /* only used in xalloc.c */
 @
@@ -735,6 +1033,15 @@ provides to the user programs.
 
 \subsubsection{Main registers, [[Ureg]]}
 
+%claude:
+The ARM has 16 general-purpose 32-bit registers ([[R0]]--[[R15]]),
+of which [[R13]] is the stack pointer ([[SP]]), [[R14]] the
+link register (return address), and [[R15]] the program counter
+([[PC]]). The [[Ureg]] structure below captures the full
+register state of a user process. The kernel saves a [[Ureg]]
+on the stack every time it takes control from a user process
+(on a syscall, interrupt, or exception), and restores it when
+returning.
 <<struct [[Ureg]](arm)>>=
 //coupling: do not change the order! some assembly code assumes this order.
 struct Ureg {
@@ -809,6 +1116,16 @@ TEXT getcallerpc(SB), 1, $-4
 % Special register not accessed in normal programs. No need.
 % But important for kernel! State of process regarding ALU flags.
 % Ureg.psr! important. Need to restore it too!
+%claude:
+In addition to the general-purpose registers, the ARM has a
+{Program Status Register} (PSR) that contains both the
+arithmetic flags (negative, zero, carry, overflow) and
+control bits (processor mode, interrupt disable). Normal
+user programs never access the PSR directly, but the kernel
+must save and restore it---this is the [[Ureg.psr]] field---because
+the flags are part of the process state. The control bits
+are critical too: they determine whether the processor is in
+user or supervisor mode, and whether interrupts are enabled.
 
 % http://infocenter.arm.com/help/topic/com.arm.doc.ddi0301h/I2837.html
 % https://www.heyrick.co.uk/armwiki/The_Status_register
@@ -835,8 +1152,17 @@ TEXT getcallerpc(SB), 1, $-4
 % changed by user. Can be changed only when in privileged mode.
 % (the control bits changes also when an exception occurs).
 
-% 4 bits so potentially 16 domains, but really use 2, 
+% 4 bits so potentially 16 domains, but really use 2,
 % user vs supervisor(privileged/protected).
+%claude:
+The low bits of the PSR encode the {processor mode}. The ARM
+supports several modes, but the kernel cares mainly about two:
+user mode ([[PsrMusr]]), where normal programs run with
+restricted privileges, and supervisor mode ([[PsrMsvc]]),
+where the kernel runs with full access to hardware. When
+an exception (e.g., a [[SWI]]) occurs, the processor
+automatically switches to supervisor mode; the kernel must
+switch back to user mode before returning to the user program.
 <<type [[PsrMode]](arm)>>=
 // Last 4 bits of PSR
 #define PsrMusr     0x00000010  /* user mode */
@@ -857,7 +1183,12 @@ TEXT getcallerpc(SB), 1, $-4
 
 
 % PSR controls also interrupts.
-
+%claude:
+The PSR also controls whether interrupts are enabled.
+Setting [[PsrDirq]] disables IRQ interrupts. The kernel
+uses this to protect {critical sections} where it must
+not be preempted---for instance, while manipulating the
+scheduler's run queue.
 <<type [[PsrDisable]](arm)>>=
 #define PsrDirq     0x00000080      /* disable IRQ interrupts */
 <<[[PsrDisable]] other cases(arm)>>
@@ -884,12 +1215,22 @@ TEXT getcallerpc(SB), 1, $-4
 \subsubsection{Exceptions}
 
 %Ureg.type
-%matches closely processor modes actually 
+%matches closely processor modes actually
 % (which is why will abuse PsrMode for that)
 
 % When exception, processor copies CPSR to SPSR,
 % set appropriate CPSR control bits depending on exception
 % set PC to vector address.
+%claude:
+When an {exception} occurs (a syscall via [[SWI]], an
+interrupt, a page fault, etc.), the ARM processor automatically
+saves the current PSR into the SPSR (Saved PSR), switches to
+the appropriate privileged mode, and jumps to a fixed address
+in the {exception vector table}. This table is normally at
+physical address~0, but the kernel configures the ARM to use
+``high vectors'' at [[0xFFFF0000]], which is more convenient
+because it lives in the kernel's virtual address space.
+%yoann1: but then if virtual address then need to use MMU mechanism to resolve physical address space of the exception table? chicken-and-egg?
 
 % vector normally at 0x00000 (physical and virtual?)
 % but more convenient have it higher virtual memory
@@ -910,6 +1251,14 @@ TEXT getcallerpc(SB), 1, $-4
 % and their registers.
 % Regular programs dont use those instructions (generate fault?).
 % Only useful for kernel.
+%claude:
+Beyond the main registers and the PSR, the ARM provides access
+to {coprocessors} that control hardware features such as the
+MMU, caches, and performance counters. Coprocessor registers
+are accessed via special instructions ([[MRC]] to read,
+[[MCR]] to write) and are only available in privileged mode.
+Normal user programs never touch them---they are the kernel's
+private interface to the hardware.
 
 % http://infocenter.arm.com/help/topic/com.arm.doc.ddi0211k/Bihggafj.html
 
@@ -934,6 +1283,13 @@ TEXT getcallerpc(SB), 1, $-4
 \subsubsection{System control coprocessor ([[CpSC]])}
 
 % Most important for kernel.
+%claude:
+The system control coprocessor ([[CpSC]], coprocessor~15) is
+the most important for the kernel. Its registers control the
+MMU ([[CpTTB]] for the page table base, [[CpTLB]] for TLB
+management), report page faults ([[CpFSR]] for fault status,
+[[CpFAR]] for the faulting address), and configure miscellaneous
+features such as caches and the exception vector location.
 
 <<type CpSC primary registers(arm)>>=
 #define CpCONTROL   1           /* miscellaneous control */
@@ -996,15 +1352,32 @@ TEXT getcallerpc(SB), 1, $-4
 
 % See Advanced Topics.
 
+%yoann: introduce complex world of floating point, and maybe say will talk more aobut it later
+
 \subsection{ARM MMU}
 
 % Physical memory and virtual memory.
-% CpTTB, CpTLB, 
+% CpTTB, CpTLB,
 % CpFAR, CpFSR ...
 
 % More about virtual memory in chapter X.
 
 % More about memory layout in Overview section.
+%claude:
+The ARM includes a {Memory Management Unit} (MMU) that
+translates virtual addresses to physical addresses using
+{page tables}. The page table base address is stored in the
+[[CpTTB]] coprocessor register. When a translation fails, the
+MMU generates a fault and records the faulting address in
+[[CpFAR]] and the fault reason in [[CpFSR]]. The kernel uses
+the MMU to give each process its own virtual address space and
+to protect kernel memory from user access. More details on the
+virtual memory system are in Chapter~\ref{chap:virtual-memory}.
+%claude:
+The basic unit of memory managed by the MMU is a {page},
+which on ARM (and on x86) is 4~KiB:
+
+%yoann: maybe ASCII diagram already useful here?
 
 % put BY2PG here cos referenced a few times.
 <<constant [[BY2PG]](arm)>>=
@@ -1023,12 +1396,18 @@ TEXT getcallerpc(SB), 1, $-4
 \subsection{Input/Output devices}
 
 % processors (CPU/GPU) are not everything. Also bus, devices.
-% For Raspberry Pi, 
+% For Raspberry Pi,
 %  - SD card for storage
 %  - USB for keyboard and mouse (and more, like wifi card, camera, etc)
 %  - GPIO
-%  - etc. 
+%  - etc.
 % Will see later those things and how to interact with those devices.
+%claude:
+The Raspberry Pi is more than just a CPU. The BCM2835 SoC
+includes a GPU with framebuffer, a USB controller (for
+keyboard and mouse), an SD card controller (for storage),
+GPIO pins, timers, and an interrupt controller. The kernel
+must initialize and manage all of these devices.
 
 % little endian, big endian, the le2xxx function?
 
@@ -1037,13 +1416,25 @@ TEXT getcallerpc(SB), 1, $-4
 % Yet another way to access external registers. Not coprocessors
 % here but registers in external devices.
 %x86: ins/out special instruction
+%claude:
+On ARM, devices are accessed through {memory-mapped I/O}:
+each device exposes its control registers at fixed physical
+addresses, and the kernel reads and writes them using
+ordinary load/store instructions ([[MOVW]], which is really
+[[LDR]]/[[STR]] under the hood). This is simpler than the
+x86 approach, which uses special [[IN]]/[[OUT]] instructions
+for I/O ports.
+%claude:
+The kernel maps the physical I/O region (starting at
+[[0x20000000]] on the Raspberry Pi~1) to a virtual address
+[[VIRTIO]], so that all device registers are accessed as
+offsets from [[VIRTIO]]:
 
 %example of use:
 % no need MCR, MRC, can use simply MOVW (really LDR/STR under the hood)
 
 % Soc.physio = 0x20000000
 \t define a constant PHYSIO(raspberry pi1)(arm)
-
 
 <<constant [[VIRTIO]](arm)>>=
 #define VIRTIO      0x7E000000      /* i/o registers */
@@ -1066,6 +1457,9 @@ TEXT getcallerpc(SB), 1, $-4
 \l used??
 
 
+%claude:
+The remaining constants define the addresses of specific
+device register blocks, all at fixed offsets from [[VIRTIO]]:
 <<constant [[SYSTIMERS]](arm)>>=
 #define SYSTIMERS (VIRTIO+0x3000)
 @
@@ -1073,7 +1467,6 @@ TEXT getcallerpc(SB), 1, $-4
 #define ARMTIMER (VIRTIO+0xB400)
 @
 %qemu: they do not work. You need to use CpTIMER and ARMLOCAL
-
 
 <<constant [[INTREGS]](arm)>>=
 #define INTREGS     (VIRTIO+0xB200)
@@ -1100,7 +1493,19 @@ TEXT getcallerpc(SB), 1, $-4
 
 \subsubsection{Output device: VideoCore GPU}
 %VideoCore IV.
-%GPU with framebuffer. 
+%GPU with framebuffer.
+%claude:
+The Raspberry Pi's BCM2835 contains a VideoCore~IV GPU that
+is actually more powerful than the ARM CPU itself. The GPU
+manages the screen and provides a {framebuffer}: a region of
+memory where each pixel is represented by a few bytes. The
+kernel writes pixels to this framebuffer, and the GPU
+continuously scans it to produce the video signal.
+%claude:
+Communication between the ARM CPU and the GPU goes through
+a {mailbox} mechanism---a set of hardware registers at
+a fixed address where the ARM can send requests and receive
+responses:
 
 <<constant [[MAILBOX]](arm)>>=
 #define MAILBOX     (VIRTIO+0xB880)
@@ -1110,6 +1515,15 @@ TEXT getcallerpc(SB), 1, $-4
 % example of use:
 %  ???
 
+%claude:
+To set up the framebuffer, the kernel fills an [[Fbinfo]]
+structure with the desired resolution and pixel depth, sends
+its physical address to the GPU via the mailbox, and the GPU
+responds by filling in the [[pitch]], [[base]], and
+[[screensize]] fields. The [[base]] field is the physical
+address of the framebuffer memory that the GPU has allocated.
+Note how the field order in the C struct must exactly match
+the hardware's expected memory layout:
 <<struct [[Fbinfo]](arm)>>=
 // Framebuffer
 // The order matters! the fields match the memory-mapped external registers.
@@ -1128,6 +1542,11 @@ struct Fbinfo {
 @
 %c: easy to match directly the hardware (no need cstruct ocaml package)
 
+%claude:
+The kernel then maps this GPU-allocated physical memory to
+the virtual address [[FRAMEBUFFER]] so it can write pixels
+directly. See the \book{Graphics} for the full story of how
+the windowing system uses this framebuffer.
 <<constant [[FRAMEBUFFER]](arm)>>=
 #define FRAMEBUFFER 0xC0000000      /* video framebuffer */
 @
@@ -1157,6 +1576,8 @@ struct Fbinfo {
 #define GPIOREGS    (VIRTIO+0x200000)
 @
 
+%yoann: maybe ASCII diagram showing "address space" of VIRTIO and how it's used by the different devices. what is the total size of the memory-mapped IO space?
+
 %\subsection{Exceptions}
 
 % put INTREGS here, and HVECTORS
@@ -1167,13 +1588,30 @@ struct Fbinfo {
 
 \section{C and assembly}
 
-
 % compilation scheme of kernel assumes pass parameters in stack,
 % return value in R0 (EAX for x86), and caller save registers it needs
 % after call before calling (so Label structure is simple).
 % hmm unless return a vlong in which case pass an extra pointer
 % to the function for the callee to set the value
 % also assumes structures are 4bytes aligned? see PG_ONSWAP
+%claude:
+The kernel is written almost entirely in C, compiled by
+the \plan C compiler [[5c]] (see the \book{Compiler}).
+A small amount of assembly is necessary for operations that
+C cannot express: saving and restoring registers, switching
+between processor modes, manipulating coprocessor registers,
+and performing the initial boot sequence.
+%claude:
+The calling convention used by [[5c]] is straightforward:
+parameters are passed on the stack, the return value goes
+in [[R0]], and all registers are caller-saved. This simplifies
+the kernel's context-switch code, because the [[Label]]
+structure (shown later) only needs to store [[SP]] and
+[[PC]]---the caller has already saved any registers it
+cares about.
+
+%yoann: ASCII diagram for calling conventions, and also C vs kernel
+% calling convention
 
 % kencc extensions: anon field. e.g. Lock; but sugar, not that important.
 
@@ -1211,7 +1649,11 @@ struct Fbinfo {
 
 % maybe a bit of rappel on bit manip :) 2 complementary arithmetic,
 %  e.g. pa > -KZERO, or in bcm have  pa & ~KSEGM
-
+%claude:
+Kernel code makes heavy use of bit manipulation---rounding
+addresses to page boundaries, extracting bit fields from
+hardware registers, etc. The following macros are used
+throughout the kernel:
 <<portdat.h macros>>=
 #define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
 @
@@ -1266,19 +1708,34 @@ struct Fbinfo {
 
 \section{Code organization}
 
+%claude:
+The kernel source is split across many files organized by
+subsystem: [[core/]], [[concurrency/]], [[memory/]],
+[[processes/]], [[files/]], [[filesystems/]], [[time/]],
+[[interrupts/]], [[devices/]], [[init/]], [[console/]], etc.
+Each subsystem has both portable code (in [[port/]]) and
+architecture-specific code (in [[bcm/]] for ARM).
 
 \subsection{Portable versus arch-specific code}
 
 %pad:
 % I added some arch_ and Arch_ prefix on arch-specific functions/structures
-% called/used from port/. 
+% called/used from port/.
 % I added some arch__ for arch-specific functions not called from port
 % but that have almost the same signatures in different arch. Not called
 % from port because called from arch-specific code (e.g. interrupt code)
 % but in the end provides same functionalities in different archs.
+%claude:
+To make the boundary visible in the code, arch-specific
+functions called from portable code are prefixed with
+[[arch_]] (e.g., [[arch_coherence()]]), and arch-specific
+structures embedded in portable ones with [[Arch_]]
+(e.g., [[Arch_Cpu]], [[Arch_Proc]]).
 
 \subsection{Main headers}
 
+%claude:
+Every kernel source file starts with the same set of includes:
 <<kernel basic includes>>=
 #include <u.h>
 #include "../port/lib.h"
@@ -1343,7 +1800,15 @@ typedef int errorneg1;
 % pad's overlay for better code orga.
 % codemap and codegraph screenshot?
 % graph dependencies? (where remove artificial edges, or use thickness of edge?)
-
+%claude:
+The master header [[dat.h]] pulls in all data-structure
+definitions. In the original \plan source, [[dat.h]] was a
+single long file and all portable code lived in a flat
+[[port/]] directory. I split it into separate
+[[portdat_xxx.h]] headers organized by subsystem
+(concurrency, memory, files, etc.) and created matching
+subdirectories. Reading the include list below is a good
+way to see the overall structure of the kernel:
 <<dat.h includes(arm)>>=
 #include "dat_core.h"                    // Arch_Cpu
 #include "../port/portdat_core.h"        // Cpu!!, Conf, Label
@@ -1638,6 +2103,25 @@ arch_isaconfig = main_arch_isaconfig;
 \section{Software architecture}
 
 % will need a big picture ...
+%claude:
+Unlike a compiler or an assembler, a kernel is not a pipeline
+that transforms an input into an output. It is a {reactive}
+program: it waits for events---syscalls, interrupts, timer
+ticks---handles them, and goes back to sleep.
+%claude:
+The kernel's execution can be understood along three axes.
+First, the {boot sequence}: how the kernel starts from a bare
+machine and ends up with a running user shell.
+Second, the {memory layout}: how physical memory is divided
+between the kernel, user processes, devices, and the
+framebuffer.
+Third, the {steady-state} operation: how syscalls flow from
+user space into the kernel and back, how interrupts propagate
+from hardware to sleeping processes, and how the scheduler
+picks which process runs next.
+The following subsections give an overview of the first two;
+the steady-state operation is the subject of the rest of
+the book.
 
 \subsection{Booting overview (ARM)}
 
@@ -1649,11 +2133,19 @@ arch_isaconfig = main_arch_isaconfig;
 % https://github.com/raspberrypi/firmware
 % https://github.com/christinaa/rpi-open-firmware
 %  https://github.com/puppeh/vc4-toolchain toolchain for open firmwaire
+%claude:
+On the Raspberry Pi, the Broadcom firmware (closed source,
+stored in ROM) loads a bootloader from the SD card, which
+in turn loads the kernel binary at physical address
+[[0x8000]]. The details of this early firmware stage are
+specific to the Broadcom SoC and not very interesting; what
+matters is that all architectures share the same idea of
+bootstrap code loading the kernel into memory at a known
+address.
 
 %x86: very very complicated. Even more when you
-% wanted to have a kernel bigger than a floppy disk 
+% wanted to have a kernel bigger than a floppy disk
 % (see ugly pcboot/ directory)
-
 
 % maybe screenshot of boot sequence? and simple example of use
 % where illustrate that under the hood there is shell process,
@@ -1667,6 +2159,17 @@ arch_isaconfig = main_arch_isaconfig;
 
 % kernel that creates first user process!
 % introduce dichotomy kernel/user
+%claude:
+Once the ARM starts executing the kernel, the boot proceeds
+in three phases: (1)~hardware detection, populating the
+[[Conf]] structure with the amount of physical memory and
+other parameters; (2)~initialization of the kernel environment
+(memory allocators, process table, device drivers); and
+(3)~creation of the first user process, which runs
+[[/boot/boot]]---the program responsible for mounting the
+root file system, setting up the user environment, and
+eventually launching [[init]] and then [[rc]] (the shell).
+See Chapter~\ref{chap:initialization} for the full code.
 
 % See Chapter X for code and full explanations.
 
@@ -1695,13 +2198,24 @@ arch_isaconfig = main_arch_isaconfig;
 % - kernel vs user memory
 %   and even per-process kernel stack kstack, user stack, main kernel stack
 % - dynamic vs static (the static allocator so can bootstrap things)
+%claude:
+Understanding the kernel's memory layout requires thinking
+along several dimensions: {physical} vs.\ {virtual} addresses,
+{kernel} vs.\ {user} memory, and {static} vs.\ {dynamic}
+allocation. On the Raspberry Pi, the physical memory starts
+at address~0. The kernel binary is loaded at physical
+[[0x8000]] (virtual [[KTZERO]]). Everything below [[KZERO]]
+([[0x80000000]]) in the virtual address space belongs to
+user processes; everything at or above [[KZERO]] belongs to
+the kernel. The kernel's virtual addresses are simply the
+physical addresses plus [[KZERO]].
 
 % see kernel/docs/arm/readme.txt
 % Also add Framebuffer in it?
 
 %figure: need precise physical map of memory
-%with first empty page?, 
-%io RAM, vga ram,  then KZERO header, KTZERO, 
+%with first empty page?,
+%io RAM, vga ram,  then KZERO header, KTZERO,
 %code,  data with important globals like xlist, and array holes,
 %palloc with pointer page, and then on top of that confmem area
 
@@ -1717,9 +2231,11 @@ arch_isaconfig = main_arch_isaconfig;
 % actually for 2 processes
 %need also precise virtual map of memory for first handcrafted process?
 
-% maybe figure with the binary composition (a.out header, multiboot header, 
+% maybe figure with the binary composition (a.out header, multiboot header,
 %  code, data, empty bss, etc)
-
+%claude:
+To make the distinction between physical and virtual addresses
+explicit in the code, the following typedefs are used:
 <<pad memory pointer types(arm)>>=
 // physical address
 typedef uintptr phys_addr;
@@ -1758,6 +2274,10 @@ typedef void* user_vp;
 
 
 % in <arch>/mem.h
+%claude:
+The following constants define the virtual address space
+layout. [[KZERO]] at [[0x80000000]] (2~GiB) is the boundary:
+below is user space, above is kernel space.
 <<constant [[KSEG0]](arm)>>=
 #define KSEG0       0x80000000      /* kernel segment */
 @
@@ -1769,6 +2289,12 @@ typedef void* user_vp;
 
 % see words.txt and physical map.
 
+%claude:
+The kernel text (code) starts at [[KTZERO]], which is
+[[KZERO+0x8000]]---because the ARM firmware loads the
+kernel binary at physical [[0x8000]]. The physical memory
+below [[0x8000]] is used for early kernel data structures
+such as the [[Cpu]] structure at [[CPUADDR]]:
 <<constant [[KTZERO]](arm)>>=
 #define KTZERO      (KZERO+0x8000)      /* kernel text start */
 @
@@ -1784,7 +2310,12 @@ typedef void* user_vp;
 % even when have extern register? Because still need to assign this register?
 % but could do MOVW $cpu(SB), R9? so no need hardcoded CPUADDR?
 
-
+%claude:
+On the user side, the address space starts at [[UZERO]] (0).
+The first page is left unmapped so that null pointer
+dereferences cause a fault. User code starts at [[UTZERO]]
+(one page above zero), and the user stack grows downward
+from [[USTKTOP]]:
 <<constant [[UZERO]](arm)>>=
 #define UZERO       0           /* user segment */
 @
@@ -1808,6 +2339,13 @@ typedef void* user_vp;
 % dereference
 
 
+%claude:
+Because the kernel's virtual addresses are simply the physical
+addresses plus [[KZERO]], converting between the two is a
+matter of masking bits. [[PADDR]] strips the high bits to go
+from virtual to physical; [[KADDR]] adds [[KZERO]] to go from
+physical to virtual:
+
 %phys_addr arch_paddr(kern_vp v)
 <<macro [[PADDR]](arm)>>=
 #define PADDR(va)   PTR2UINT(PHYSDRAM | ((uintptr)(va) & ~KSEGM))
@@ -1827,7 +2365,6 @@ typedef void* user_vp;
 #define KSEGM       0xC0000000
 @
 \t simplify, remove KSEGM and PHYSDRAM.
-
 
 %kern_vp arch_kaddr(phys_addr pa)
 <<macro [[KADDR]](arm)>>=
@@ -1898,6 +2435,14 @@ arch_cankaddr(phys_addr pa)
 % kernel vs user code
 
 % show assembly code of a syscall called from helloraw.c?
+%claude:
+We saw in the [[helloraw.s]] example how a user program
+invokes a syscall: it places the syscall number in [[R0]]
+and executes [[SWI \$0]]. On the kernel side, the interrupt
+handler extracts the number from [[R0]] and uses it as an
+index into [[systab]], the syscall dispatch table. Each
+entry in [[systab]] is a function pointer with a uniform
+signature:
 
 % On the kernel side, generic interface for syscalls:
 <<typedef Syscall>>=
@@ -1925,6 +2470,11 @@ extern char *sysctab[];
 %old: was #include "/sys/src/libc/9syscall/sys.h"
 
 % important global!!! dispatch table.
+%claude:
+The [[systab]] array is the central dispatch table. It maps
+each syscall number from [[sys.h]] to the corresponding
+kernel function. This is the only point in the kernel where
+all syscalls are gathered together:
 <<global [[systab]]>>=
 Syscall *systab[] = {
     [NOP]     sysnop,
@@ -1988,8 +2538,51 @@ sysnop(ulong*)
 
 \section{Book structure}
 
-
-
+%claude:
+The rest of the book is organized as follows, in three
+main parts.
+%claude:
+The first part covers the kernel's internal machinery.
+Chapter~\ref{chap:core-ds} presents the core data structures
+([[Conf]], [[Cpu]], [[Label]], etc.).
+Chapter~\ref{chap:concurrency} covers the concurrency
+primitives (locks, [[sleep]]/[[wakeup]], [[Rendez]]).
+Chapter~\ref{chap:memory} explains the physical memory
+allocators.
+Chapter~\ref{chap:processes} describes the [[Proc]] structure
+and process management ([[rfork]], [[exec]], [[exits]]).
+Chapter~\ref{chap:interrupts} shows how the kernel handles
+interrupts and system calls.
+Chapter~\ref{chap:virtual-memory} presents the virtual
+memory system (page tables, page faults, segments).
+Chapter~\ref{chap:scheduling} covers the scheduler.
+Chapter~\ref{chap:time} explains timers and clock management.
+Chapter~\ref{chap:initialization} shows the full boot sequence.
+%claude:
+The second part covers the file system layer.
+Chapter~\ref{chap:files} introduces the [[Chan]] and [[Dev]]
+structures---the kernel's representation of open files and
+device drivers.
+Chapter~\ref{chap:directories} covers directory operations.
+Chapter~\ref{chap:namespaces} explains \plan's per-process
+namespace mechanism ([[bind]], [[mount]]).
+Chapter~\ref{chap:devices} presents the device driver
+framework and the main in-kernel devices.
+Chapter~\ref{chap:queues} describes the [[Queue]] structure
+used for streaming I/O.
+Chapter~\ref{chap:filesystems} covers the on-disk file system.
+%claude:
+The third part covers additional topics.
+Chapter~\ref{chap:ipc} covers inter-process communication
+(pipes, notes, shared segments).
+Chapters~\ref{chap:debugging-support} and~\ref{chap:profiling-support}
+describe the debugging and profiling infrastructure.
+Chapter~\ref{chap:advanced} presents advanced topics that
+crosscut multiple subsystems.
+Chapter~\ref{chap:conclusion} concludes.
+%claude:
+Some appendices present non-functional code: debugging
+helpers, error management, and generic utilities.
 
 
 %###############################################################################
@@ -1997,6 +2590,17 @@ sysnop(ulong*)
 %******************************************************************************
 \chapter{Core Data Structures}
 %******************************************************************************
+\label{chap:core-ds}
+
+\begin{verse}
+\begin{flushright}
+  {\it Show me your code and conceal your data structures, and I shall
+    continue to be mystified. Show me your data structures, and I
+    won't usually need your code; it'll be obvious.\\
+    ~\\
+    Fred Brooks}
+\end{flushright}
+\end{verse}
 
 % mini libc: bool(pad), fdt(pad), Rune (unicode), etc
 
@@ -2006,8 +2610,24 @@ sysnop(ulong*)
 %  - phys_addr, virt_addr, kern_addr
 %  - [[Syscall]] typedef and [[systab]] global.
 
+%claude:
+In this chapter, I will present the core data structures
+of the kernel. Some have already been introduced in the
+Overview: [[Ureg]], the processor modes ([[PsrMode]]),
+the address typedefs, and the syscall dispatch table
+([[systab]]). Here I will cover the remaining structures
+that appear everywhere in the kernel: [[Conf]] (hardware
+configuration), [[Cpu]] (per-processor state), [[Label]]
+(context switch), and [[Ref]] (reference counting).
+
 \section{[[Conf]] and [[conf]]}
 
+%claude:
+The [[Conf]] structure records what the kernel learned
+about the hardware during the boot sequence: how many
+processors, how much physical memory, and how many
+processes to support. It is filled once by [<confinit()>]
+during initialization and then treated as read-only.
 <<struct [[Conf]]>>=
 struct Conf
 {
@@ -2616,6 +3236,7 @@ Soc soc = {
 %******************************************************************************
 \chapter{Concurrency}
 %******************************************************************************
+\label{chap:concurrency}
 
 % Can start by talking about SMP cases where obvious that multiple
 % CPUs access shared meta-data about processes, and so need critical
@@ -3759,6 +4380,7 @@ if(cpu->ilockdepth != 0)
 %******************************************************************************
 \chapter{Memory}
 %******************************************************************************
+\label{chap:memory}
 
 <<[[systab]] memory syscalls>>=
 [BRK]      sysbrk,
@@ -5883,6 +6505,7 @@ out:
 %******************************************************************************
 \chapter{Processes}
 %******************************************************************************
+\label{chap:processes}
 
 <<[[systab]] process syscalls>>=
 [RFORK]     sysrfork,
@@ -7886,6 +8509,7 @@ p->dbgreg = nil;
 %******************************************************************************
 \chapter{Interrupts}
 %******************************************************************************
+\label{chap:interrupts}
 %less: Exceptions?
 %less: (ARM) in title because almost everything is arch-specific?
 
@@ -8936,6 +9560,7 @@ irq(Ureg* ureg)
 %******************************************************************************
 \chapter{Virtual Memory}
 %******************************************************************************
+\label{chap:virtual-memory}
 %less: (ARM) in title? no cos have portable swapping/demand-loading now.
 %less: (page fault) in title? to relate to Interrupt chapter?
 
@@ -11391,6 +12016,7 @@ setswapchan(Chan *c)
 %******************************************************************************
 \chapter{Scheduling}
 %******************************************************************************
+\label{chap:scheduling}
 %less: virtual CPU?
 %less: add (clock interrupt) in title? to relate to Interrupt chapter?
 
@@ -13017,6 +13643,7 @@ TEXT arch_idlehands(SB), $-4
 %******************************************************************************
 \chapter{Time}
 %******************************************************************************
+\label{chap:time}
 \n too important chapter to be put later; works closely with Scheduling.
 \n also then can talk about important timersinit() in Initialization.
 
@@ -14664,6 +15291,7 @@ le2long(long *to, byte *f)
 %******************************************************************************
 \chapter{Initialization}
 %******************************************************************************
+\label{chap:initialization}
 %less: (ARM) in title
 
 % We could distribute the xxxinit functions before. It would help.
@@ -16064,6 +16692,7 @@ startboot(char *argv0, char **argv)
 %******************************************************************************
 \chapter{Files}
 %******************************************************************************
+\label{chap:files}
 
 <<[[systab]] file syscalls>>=
 [OPEN]      sysopen,
@@ -17708,6 +18337,7 @@ if(omode & ORCLOSE)
 %******************************************************************************
 \chapter{Directories}
 %******************************************************************************
+\label{chap:directories}
 
 <<[[systab]] directory syscalls>>=
 [CREATE]    syscreate,
@@ -18837,6 +19467,7 @@ wstat(Chan *c, byte *d, int nd)
 %******************************************************************************
 \chapter{Namespaces}
 %******************************************************************************
+\label{chap:namespaces}
 
 <<[[systab]] namespace syscalls>>=
 [BIND]      sysbind,
@@ -20683,6 +21314,7 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 %******************************************************************************
 \chapter{Devices}
 %******************************************************************************
+\label{chap:devices}
 %less: (ARM) in title
 %less: Keyboard/Screen sections before File/Dir/Namespace sections? hmmm hard.
 
@@ -22098,6 +22730,7 @@ case Kmouse|5:
 %******************************************************************************
 \chapter{[[Queue]]}
 %******************************************************************************
+\label{chap:queues}
 
 % hmmm this is used by kbdq, so it's independent of fs actually
 % could be in separater chapter?
@@ -23317,6 +23950,7 @@ qfull(Queue *q)
 %******************************************************************************
 \chapter{Filesystems}
 %******************************************************************************
+\label{chap:filesystems}
 
 % devices plan9 are actually file servers and so kinda filesystems.
 % but even if the Dev interface encapsulate Devices, fs, vfs, better
@@ -24735,6 +25369,7 @@ QTEXCL = 0x20,    /* type bit for exclusive use files */
 %******************************************************************************
 \chapter{IPC}
 %******************************************************************************
+\label{chap:ipc}
 
 % of course can use fs to communicate between process :)
 % also when fork child inherit fd and can share stuff there
@@ -26553,6 +27188,7 @@ sysrendezvous(ulong* arg)
 %******************************************************************************
 \chapter{Debugging Support}
 %******************************************************************************
+\label{chap:debugging-support}
 %\section{Debugging user processes}
 
 % Should cooperate with Debugger.nw at some point
@@ -27900,6 +28536,7 @@ case CMstartstop:
 %******************************************************************************
 \chapter{Profiling Support}
 %******************************************************************************
+\label{chap:profiling-support}
 %\section{Profiling user processes}
 
 % should cooperate with Profiling.nw at some point
@@ -28316,6 +28953,7 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 %******************************************************************************
 \chapter{Userspace System Programs}
 %******************************************************************************
+\label{chap:userspace}
 
 % can execute them because they are in rootfs, via addrootfile,
 % see mkrootall in mkfile via data2txt
@@ -28444,6 +29082,7 @@ if(indir && *argp==nil) {
 %******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
+\label{chap:advanced}
 
 % [[select()]]? [[alt()]]?
 
@@ -33404,6 +34043,7 @@ hostdomainwrite(char *a, int n)
 %******************************************************************************
 \chapter{Special Fileservers}
 %******************************************************************************
+\label{chap:special-fileservers}
 
 \section{[[Cmdtab]]}
 
@@ -35976,6 +36616,7 @@ case Qrandom:
 %******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
+\label{chap:conclusion}
 
 % already lots of pages ... so network, graphics, security, etc in another volume
 % actually even fs in other volume, and advanced subjects like:
