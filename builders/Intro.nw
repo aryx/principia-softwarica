@@ -682,6 +682,17 @@ To understand the goal of a build system, it is useful to remember
 how programmers were compiling projects before Make was invented.
 \l remember -> imagine? compiling -> maintaining? building?
 %without: %history:
+
+%claude:
+The progression from shell script to build system is not just a
+matter of convenience---it illustrates a fundamental shift from
+{imperative} to {declarative} thinking. A shell script says ``do
+these steps in this order.'' A build system says ``here are the
+relationships between files; figure out what needs updating.''
+The key insight is that by describing {what depends on what}
+rather than {what to do}, the system can automatically determine
+the minimal set of actions needed after any change.
+
 Before Make, programmers were using {shell scripts} to {record} the
 compiling and linking commands for a project. For instance, here
 is one such script called [[make.rc]]\footnote{This script
@@ -727,8 +738,16 @@ used to recompile or link those files.
 
 
 %dup: intro/motiv (but longer version)
-Thus, the goal of a build system is to 
-describe {\em concisely} and 
+%claude:
+The next sentence is the thesis statement of the entire book.
+Each of its three key words---``concisely,'' ``efficiently,'' and
+``dependencies''---maps directly to a major component of [[mk]]:
+the DSL (conciseness), the job scheduler (efficiency), and the
+dependency graph (the central data structure). The rest of this
+chapter unpacks each word in turn.
+
+Thus, the goal of a build system is to
+describe {\em concisely} and
 maintain {\em efficiently}
 {dependencies} between files.
 \l shell is concise but inefficient
@@ -773,6 +792,16 @@ with a {general-purpose language} the solution to a particular problem.
 \l Usually not as expressive as full PL, but trade expressivity for compactness
 \l and also special checks (will see later)
 %trans:
+%claude:
+The author's observation here is subtle and important: the shell
+is already half the solution. It provides concise syntax for
+launching programs, piping, and redirection---exactly what recipes
+need. So [[mk]]'s DSL does not reinvent command execution; it
+only adds the missing piece: a way to declare which files depend
+on which other files. This ``minimal extension'' philosophy---add
+only what the shell cannot express---is a recurring design
+principle throughout [[mk]].
+
 The shell script [[make.rc]] above is already a good solution for (2).
 Indeed, a shell can almost be considered a DSL for running commands:
 \l before grew as full language
@@ -883,6 +912,17 @@ elements in the list of prerequisites are simply separated by spaces.
 
 %\paragraph{Semantic}
 %trans: syntax, now semantic. just like syntax rule is simple, semantic trivial
+%claude:
+The rule semantics look deceptively simple: compare modification
+times. But as the author's TODO notes hint, the full story is
+more subtle. The comparison is not just between a target and its
+immediate prerequisites---[[mk]] must first recursively ensure
+that the prerequisites themselves are up-to-date. This is why
+a DFS is needed (Section~\ref{sec:algo-dfs}): you must reach the
+leaves and work your way back up, because a target can appear
+``up-to-date'' with its direct prerequisites while a transitive
+dependency deep in the graph has changed.
+
 The semantic of a rule is also very simple. [[mk]] will check
 \t recursive: mk will check if target up-to-date with prereqs
 \t  by first checking recursively if prereqs up-to-date with their own prereqs
@@ -1164,7 +1204,20 @@ so you can also use variables such as [[$HOME]] in your [[mkfile]]. %$
 \n or objtype (said later)
 
 
-Note that the term ``variable'' in the context of [[mk]] is slightly 
+%claude:
+The distinction below---that [[mk]] variables are really
+constants---has deep implications for the implementation.
+Because [[mk]] must know all variable values before building
+the dependency graph, it expands variables in targets and
+prerequisites {at parse time}. Recipe variables, however, are
+expanded later by the shell (via environment export), which is
+why [[$target]] and [[$stem]] work in recipes without [[mk]]
+doing string substitution itself. This two-phase expansion is
+the source of much confusion in Make (with its [[=]] vs.\ [[:=]]
+distinction); [[mk]] sidesteps the problem by making all
+definitions single-assignment.
+
+Note that the term ``variable'' in the context of [[mk]] is slightly
 misleading.
 Indeed, in [[mk]], variables are constants.
 \n actually mk-in-ocaml check if override
@@ -1513,9 +1566,20 @@ At this point, running [[mk]] should recompile [[world.c]]
 \end{figure}
 
 
+%claude:
+The choice of DFS over BFS is not arbitrary. A breadth-first
+traversal would visit the root first, then its children, then
+grandchildren---but you cannot decide whether the root needs
+rebuilding until you know the status of every descendant.
+DFS naturally solves this: by going deep first, it reaches
+the leaves (source files), confirms they exist, then
+backtracks, checking timestamps at each level. By the time
+the algorithm returns to a node, all its prerequisites have
+already been visited and their status is known.
+
 Once the graph of dependencies is built,
 \l and not so trivial
-the main algorithm behind [[mk]] is to perform a 
+the main algorithm behind [[mk]] is to perform a
 \l and other build systems?
 {\em depth-first search} (DFS) traversal on this graph.
 \l cite cormen?
@@ -1578,9 +1642,19 @@ the ancestors should now be older than this newly-generated file.
 % \/
 
 %trans:
+%claude:
+The jump from tree to DAG is where build systems earn their
+keep. In a tree, each file appears exactly once, so the DFS
+visits every node once. In a DAG, a shared file like
+[[common.h]] is reachable from multiple branches. A naive DFS
+would visit it multiple times, potentially triggering redundant
+rebuilds. This is why [[mk]] must track which nodes have already
+been visited---the [[MADE]]/[[BeingMade]] status labels introduced
+later in Section~\ref{sec:build-status} serve double duty as both
+build-progress indicators and visited-node markers.
 In the previous examples, the graph was simply a tree. However,
 %
-most build systems support a more general form of graphs: 
+most build systems support a more general form of graphs:
 {\em direct acyclic graphs} (DAGs), where
 the same node can be referenced multiple times from different branches.
 %
@@ -1710,6 +1784,15 @@ to check if two recipes are equivalent.
 
 \end{enumerate}
 
+%claude:
+Approach~(3) is elegant because it cleanly separates {what to
+rebuild} (the master rule with a recipe) from {when to rebuild}
+(additional recipe-less rules that contribute extra prerequisites).
+This separation is what makes automatic dependency generation
+practical: tools like [[gcc -MM]] can emit simple ``target:~header''
+lines without needing to know the compilation recipe, and [[mk]]
+merges them with the master rule at graph-construction time.
+
 [[mk]] supports (1) and (3) but not (2).
 \l I dont think mk supports 2. it is using pointer equality, not string equal
 (3) is more convenient for the programmer because it works well with meta-rules.
@@ -1811,6 +1894,17 @@ parser.h parser.c: parser.y
 \end{verbatim}
 \end{enumerate}
 
+%claude:
+The many-to-one problem is one of the trickiest aspects of build
+system design. A single command ([[yacc]]) produces multiple
+outputs, but the graph models dependencies per-file. If each
+output has its own rule, the build system has no way to know
+that both outputs come from the same invocation, so it runs the
+command twice. The solution---a single rule with multiple
+targets---requires [[mk]] to treat all targets of a rule as a
+unit: when any target is out of date, run the recipe once and
+update the modification times of {all} targets.
+
 However, the semantics for (1) and (2) are different. Indeed,
 with (1), if you modify [[parser.y]], then [[mk]] will
 create two shell processes and execute two times the
@@ -1855,9 +1949,19 @@ as well as the basic algorithm behind a build system (the DFS).
 I will now focus on the efficiency of a build system.
 
 %trans:
+%claude:
+The job scheduler is the third pillar of [[mk]], corresponding
+to the word ``efficiently'' in the thesis statement. Incrementality
+(only rebuilding what changed) is one dimension of efficiency;
+parallelism is another. The key insight is that the dependency
+graph already contains all the information needed for both:
+timestamps tell you {what} to rebuild, and the graph structure
+tells you {what can run concurrently}---two recipes are
+independent if neither target is an ancestor of the other.
+
 A build system maintains dependencies between files efficiently firstly
 by being an {\em incremental} program. Indeed, if you modify
-only one source file, the build system will recompile and 
+only one source file, the build system will recompile and
 relink only what is necessary.
 %
 This is made possible by comparing the modification times of nodes 
@@ -1949,6 +2053,18 @@ Made +------+-+     Made +------+-+
 \label{fig:graph-being-made}
 \end{figure}
 
+
+%claude:
+The three-state machine below ([[NotMade]] $\to$ [[BeingMade]]
+$\to$ [[Made]]) is the key mechanism that ties the DFS to the
+job scheduler. Without [[BeingMade]], the DFS would have to
+block until each recipe finishes---no parallelism. With it,
+the DFS can ``fire and forget'': mark a node [[BeingMade]],
+enqueue its recipe, and continue exploring other branches.
+When the DFS encounters a [[BeingMade]] prerequisite, it knows
+to leave the parent as [[NotMade]]---the parent will be
+reconsidered in the next wave, after the prerequisite's job
+completes and transitions the node to [[Made]].
 
 \label{sec:build-status}
 To keep track of the nodes involved in a job, [[mk]] uses
