@@ -1351,6 +1351,18 @@ For the rule attribute [<REGEXP>] used above, see Section~\ref{sec:regexp}.
 \subsubsection{One target with multiple rules, [[S_TARGET]]}
 \label{sec:indexing-target}
 
+%claude:
+The [[Rule.chain]] field and the [[Rule.next]] field serve
+different purposes and are easy to confuse. [[Rule.next]] links
+{all} rules in the mkfile in order of appearance (a flat list).
+[[Rule.chain]] links only the rules that share the {same target},
+forming a per-target chain stored in the [[S_TARGET]] namespace
+of the symbol table. When [<applyrules()>] looks up a target,
+it follows the [[chain]] to find all rules for that target;
+typically only one (the {master rule}) has a recipe, while
+the others add extra prerequisites (e.g., from [[\texttt{.depend}]]
+files).
+
 It is useful when building the graph of dependencies to quickly
 know the rule associated to a specific target.
 %
@@ -1790,6 +1802,18 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 
 \section{[[Job]]s}
 % and [[jobs]]
+
+%claude:
+A [<Job>] captures everything needed to run a recipe and update
+the graph afterward. It carries more than just the recipe: the
+list of target nodes ([[n]]) is needed so that after the recipe
+completes, [[mk]] can mark all those nodes [<MADE>] and update
+their modification times. The word lists ([[t]] for targets, [[p]]
+for prerequisites) are needed to set the special shell variables
+[[\$target]], [[\$prereq]], and [[\$stem]] before invoking the recipe.
+The separation between the node list and the word lists exists
+because the same information is needed in two forms: nodes for
+graph updates, words for the shell environment.
 
 %trans:
 Finally, the last core data structure of [[mk]] is the
@@ -3395,8 +3419,23 @@ if(r != '\'')
 
 \subsection{Splitting a string in words: [[stow()]]}
 
+%claude:
+[<stow()>] and [<nextword()>] do more than simple splitting on
+whitespace: they also expand variables ([[\$FOO]]) and backtick
+commands ([[`\{cmd\}]]) inline. This is why [<nextword()>] returns
+a {list} of words rather than a single word: expanding a variable
+like [[\$OFILES]] can produce multiple words. The [[restart]] label
+in [<nextword()>] handles re-processing after expansion---a variable's
+value might itself contain variables that need further expansion.
+%claude:
+Crucially, variable expansion inside recipes is {deferred}: the
+recipe text is stored as a raw string and only expanded when
+the recipe is actually executed. This is necessary because special
+variables like [[\$stem]], [[\$target]], and [[\$prereq]] are only
+known at execution time, not at parse time.
+
 %trans:
-After [<rhead()>] found the position of the special character in 
+After [<rhead()>] found the position of the special character in
 the line assembled by [<assline()>],
 %dup: parsing/parse parsing/parse/rhead
 [<rhead()>] calls [[stow()]] to split in multiple words the strings
@@ -4627,6 +4666,14 @@ for instance, the presence of cycles in the graph.
 \section{[[graph()]] and [[applyrules()]]}
 \label{sec:graph-applyrules}
 
+%claude:
+The graph is built {statically} before any recipe is executed.
+This separation is a key design choice: by computing the entire
+dependency graph first, [[mk]] can detect errors (cycles,
+ambiguous rules) before doing any work, and can plan parallel
+execution. GNU Make, by contrast, interleaves graph construction
+with execution, which makes parallelization harder.
+
 [[graph()]] is mostly a wrapper around [<applyrules()>], which is
 the function containing the logic to build the graph of dependencies.
 
@@ -5116,8 +5163,18 @@ subst(char *stem, char *template,   char *dest, int dlen)
 \l generalize to Cache? with node cache, time cache, etc?
 % not really a cache here
 
+%claude:
+The node cache ensures that each file has exactly one [<Node>]
+in the graph. Without it, a header file included by ten source
+files would produce ten separate nodes, and [[mk]] would not
+realize they represent the same file---leading to redundant
+recipe executions and incorrect modification-time tracking.
+The cache also turns the graph from a tree into a proper DAG:
+when [<applyrules()>] encounters a target it has already visited,
+it returns the existing node instead of recursing.
+
 As I mentioned in Section~\ref{sec:dag}, the graph of dependencies
-can be more than a simple tree; it can also be a 
+can be more than a simple tree; it can also be a
 direct acyclic graph (DAG).
 %
 Thus, before creating a new node for a target, [<applyrules()>] 
@@ -5511,6 +5568,20 @@ cnt[r->rule]--;
 \subsection{Ambiguous rules detection}
 \label{sec:ambiguous-checks}
 \l also modify graph to fix things.
+
+%claude:
+A node is ambiguous when it has two arcs with different recipes:
+[[mk]] cannot decide which one to run. The detection uses pointer
+comparison ([[master_rule->recipe != a->r->recipe]]) rather than
+[[strcmp]], which means two rules that happen to have the same
+recipe text are still considered ambiguous unless they were
+literally parsed from the same rule. This is intentional: the
+pointer identity comes from how [[mk]] stores recipes.
+%claude:
+An important refinement: when a simple rule and a meta rule
+both match a target, the simple rule wins (it is more specific).
+This lets users write generic pattern rules while overriding
+them for particular files without triggering an ambiguity error.
 
 %trans:
 The third error [[mk]] can detect is the use of {\em ambiguous rules}.
@@ -6020,6 +6091,23 @@ modified [[world.c]], which should trigger a compilation to regenerate
 % FIGURE displaying a tree of files and see how mk is running some waves 
 % of jobs, and how at each node there is a ready or outofdate boolean value.
 
+%claude:
+[<mk()>] is the heart of the build system. It operates in {waves}:
+each call to [<work()>] performs a DFS looking for outdated files.
+When it finds one whose prerequisites are all [<MADE>], it schedules
+the recipe and marks the node [<BEINGMADE>]. When [<work()>] cannot
+schedule anything (because prerequisites are still [<BEINGMADE>]),
+[<mk()>] calls [<waitup()>] to wait for a running recipe to finish.
+The finished node transitions to [<MADE>], and the next wave of
+[<work()>] can now schedule recipes that depended on it.
+%claude:
+This wave-based approach is what enables parallelism: [<work()>]
+can schedule multiple independent recipes in a single wave
+(up to [[nproclimit]]), and [<waitup()>] reaps whichever finishes
+first. The loop terminates when the root node is no longer
+[<NOTMADE>]---either everything is [<MADE>], or a final
+[<waitup()>] drains the last running job.
+
 %trans:
 Here is the code of [[mk()]]:
 
@@ -6241,6 +6329,17 @@ the other bits.
 
 \section{Exploring the graph: [[work()]]}
 \label{sec:work-waves}
+
+%claude:
+[<work()>] is the DFS traversal that decides what to build.
+For each node, it recurses into children first, then examines
+two booleans: [[weoutofdate]] (is any prerequisite newer than
+this node?) and [[ready]] (are all prerequisites [<MADE>]?).
+A node can be outdated but not ready---for example, if one
+prerequisite is still [<BEINGMADE>] while another has already
+changed. In that case [<work()>] returns without scheduling
+a recipe; the next wave will re-visit the node after the
+pending prerequisite finishes.
 
 [[work()]] below performs a DFS on the graph while looking for
 outdated [<NOTMADE>] nodes:
@@ -10981,16 +11080,9 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 \label{chap:conclusion}
 
 %dup: Assembler.nw
-You now know how the \plan build system [[mk]] works, 
+You now know how the \plan build system [[mk]] works,
 to the smallest details, and more generally how many
 build systems work.
-
-Because [[mk]] relies heavily on the shell [[rc]], 
-the \book{Shell} is the next logical step after this book.
-%
-Many features of [[mk]] are inspired by features from the shell.
-\l ability to do loops, calls programs easily, redirection, pipe, etc.
-% Reuse everything.
 
 % could be nice to have a mk -d session at the end
 % where see how all make sense, the flag values of nodes with 0x4
@@ -11003,7 +11095,7 @@ Many features of [[mk]] are inspired by features from the shell.
 % how to allow :: of GNU make? bad to allow :: in the end? can generate
 %  ambiguity? just agglomerate recipe?
 
-% other important features found in more recent build systems: 
+% other important features found in more recent build systems:
 %  - dependency management
 %    Maven? Cargo, Yarn, and other package-manager/build-system?
 %    true that nice to put a few library names and cargo automatically
@@ -11018,6 +11110,106 @@ Many features of [[mk]] are inspired by features from the shell.
 %    Bazel has this, use fingerprint instead of time to decide whether to
 %    recompile because it's difficult to rely on time when files are distributed
 %    build artifact tracking
+
+%claude:
+At its core, [[mk]] solves a simple problem: given a
+graph of dependencies and a set of recipes, figure out
+what is out of date and rebuild it in the right order.
+%
+Yet this simple idea touches many interesting topics:
+parsing a small declarative language,
+building and traversing a dependency graph,
+detecting cycles,
+comparing file modification times,
+running recipes in parallel while respecting dependencies,
+and pattern-matching with [[%]] rules to avoid repetition.
+
+\section{Connections to other books}
+
+%claude:
+Because [[mk]] relies heavily on the shell [[rc]],
+the \book{Shell} is the next logical step after this book.
+%
+Many features of [[mk]] are inspired by features from the shell:
+\l ability to do loops, calls programs easily, redirection, pipe, etc.
+% Reuse everything.
+the ability to call programs easily, to use pipes
+and redirections, to loop over files, and to use
+variables are all inherited from [[rc]].
+%
+%claude:
+In fact, [[mk]] invokes [[rc -e]] to execute each recipe,
+so understanding how [[rc]] processes [[-e]] and [[-c]] flags
+is directly relevant.
+
+%claude:
+\begin{itemize}
+
+\item The \book{Shell} explains the internals of [[rc]],
+the shell that [[mk]] uses to execute recipes.
+%
+Understanding how [[rc]] handles [[fork()]], [[exec()]],
+pipes, and redirections will clarify what happens
+when [[mk]] runs a recipe.
+
+\item The \book{Kernel} explains the system calls
+behind file modification times ([[stat()]]),
+process management ([[rfork()]], [[exec()]], [[wait()]]),
+and file operations---all of which [[mk]] relies on
+to decide what to rebuild and how.
+
+\item The \book{Compiler} and \book{Assembler}
+describe the tools that [[mk]] orchestrates.
+%
+A typical [[mkfile]] describes how to turn [[.c]] files
+into [[.o]] files (via the compiler) and [[.o]] files
+into executables (via the linker).
+
+\end{itemize}
+
+\section{Beyond [[mk]]}
+
+%claude:
+Modern build systems have added features that [[mk]]
+does not provide:
+
+%claude:
+\begin{itemize}
+
+\item {\em Dependency management:}
+Tools like Cargo, Maven, or Yarn automatically fetch
+and compile external libraries (and their transitive
+dependencies).
+%
+Under the hood, they still use the same incremental
+rebuild logic described in this book, but they add
+a layer of package resolution on top.
+
+\item {\em Content-based rebuilds:}
+[[mk]] uses file modification times to decide what
+is out of date.
+%
+Distributed build systems like Bazel use content
+fingerprints (hashes) instead, because it is difficult
+to rely on timestamps when files are spread across
+many machines.
+
+\item {\em Distributed and cached builds:}
+Bazel and similar tools can distribute compilation
+across many machines and cache build artifacts,
+so that a rebuild can reuse results from a previous
+build on a different machine.
+
+\end{itemize}
+
+%claude:
+Despite these additions, the fundamental algorithm
+remains the same: build a dependency graph,
+find what is out of date, and rebuild in topological order.
+%
+[[mk]] implements this core algorithm cleanly in
+about 4000 lines of C, making it an ideal subject
+to understand the essence of build systems.
 
 
 %******************************************************************************
