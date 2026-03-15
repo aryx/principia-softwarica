@@ -1214,6 +1214,61 @@ user or supervisor mode, and whether interrupts are enabled.
 % those flags.
 
 %yoann: ASCII diagram with PSR and all the bits and meaning, and maybe also all registers together
+%claude:
+Here is the layout of the PSR (both CPSR and SPSR share the
+same format):
+\begin{verbatim}
+  31  30  29  28  27       8   7   6   5   4    0
+ +---+---+---+---+-- ... --+---+---+---+---+-----+
+ | N | Z | C | V |         | I | F |   | T | Mode|
+ +---+---+---+---+-- ... --+---+---+---+---+-----+
+   |   |   |   |             |   |       |   |
+   |   |   |   |             |   |       |   +-- PsrMusr (0x10) = user
+   |   |   |   |             |   |       |       PsrMsvc (0x13) = supervisor
+   |   |   |   |             |   |       |       PsrMirq (0x12) = IRQ
+   |   |   |   |             |   |       |       PsrMabt (0x17) = abort
+   |   |   |   |             |   |       |       etc.
+   |   |   |   |             |   |       |
+   |   |   |   |             |   |       +-- Thumb mode (0=ARM, 1=Thumb)
+   |   |   |   |             |   |
+   |   |   |   |             |   +-- PsrDfiq (0x40): disable FIQ
+   |   |   |   |             |
+   |   |   |   |             +-- PsrDirq (0x80): disable IRQ
+   |   |   |   |
+   |   |   |   +-- V: overflow
+   |   |   +-- C: carry
+   |   +-- Z: zero
+   +-- N: negative
+\end{verbatim}
+%claude:
+And here is the ARM register set, showing which registers are
+{banked} (i.e., the processor has a separate physical copy for
+each mode):
+\begin{verbatim}
+           User/   SVC     IRQ     ABT     FIQ     UND
+           System
+  R0       R0      R0      R0      R0      R0      R0
+  R1       R1      R1      R1      R1      R1      R1
+  ...      ...     ...     ...     ...     ...     ...
+  R7       R7      R7      R7      R7      R7      R7
+  R8       R8      R8      R8      R8      R8_fiq  R8
+  ...      ...     ...     ...     ...     ...     ...
+  R12      R12     R12     R12     R12     R12_fiq R12
+  R13 (SP) R13     R13_svc R13_irq R13_abt R13_fiq R13_und
+  R14 (LR) R14     R14_svc R14_irq R14_abt R14_fiq R14_und
+  R15 (PC) R15     R15     R15     R15     R15     R15
+  CPSR     CPSR    CPSR    CPSR    CPSR    CPSR    CPSR
+           --      SPSR_svc SPSR_irq SPSR_abt SPSR_fiq SPSR_und
+\end{verbatim}
+%claude:
+The banked R13 (SP) and R14 (LR) are why the kernel does
+not need to save those registers explicitly when entering
+an exception handler: the processor automatically switches
+to the banked copies. The [[_vsvc]] handler has its own
+R13_svc (the kernel stack pointer) ready to use, and R14_svc
+holds the return address. The user's R13 and R14 are saved
+later via the [[MOVM.S]] instruction which accesses the
+user-mode registers.
 
 \subsubsection{Processor modes}
 
@@ -2809,7 +2864,7 @@ arch_cankaddr(phys_addr pa)
 %claude:
 We saw in the [[helloraw.s]] example how a user program
 invokes a syscall: it places the syscall number in [[R0]]
-and executes [[SWI \$0]]. On the kernel side, the interrupt
+and executes [[SWI $0]]. On the kernel side, the interrupt
 handler extracts the number from [[R0]] and uses it as an
 index into [[systab]], the syscall dispatch table. Each
 entry in [[systab]] is a function pointer with a uniform
@@ -2881,6 +2936,68 @@ sysnop(ulong*)
 % print is a complex function! printing on the screen is not
 % trivial on Raspberry Pi! See \book{Graphics}?
 
+%yoann: ok maybe detail the trace of a sysnop syscall from C program to nop() with exception vector lookup, who sets this vector lookup, etc.
+%claude:
+To tie everything together, here is the complete trace of
+a [[NOP]] syscall, from the user program down to [[sysnop()]]
+and back:
+\begin{verbatim}
+  USER SPACE                          KERNEL SPACE
+
+  1. nop()
+     libc wrapper:
+       MOVW $0, R0   (NOP=0)
+       SWI $0
+          |
+          | ARM hardware:
+          | - saves PC in R14_svc
+          | - saves CPSR in SPSR_svc
+          | - switches to SVC mode
+          | - jumps to HVECTORS+0x08
+          |   (SWI = vector #2)
+          v
+  2. HVECTORS (0xFFFF0000):
+     vectors[2]: LDR PC, vtable[2]
+          |
+          v
+  3. vtable[2] = _vsvc
+          |
+          v
+  4. _vsvc (assembly):
+     - saves all user regs -> Ureg
+       (on kernel stack)
+     - sets R12 = kernel SB
+     - sets R(CPU), R(UP)
+     - calls arch__syscall(ureg)
+          |
+          v
+  5. arch__syscall (C):
+     - scallnr = ureg->r0  (= 0)
+     - ret = systab[0](sp)
+          |
+          v
+  6. sysnop():
+     - print("Hello World\n")
+     - return 0
+          |
+          v
+  7. back in _vsvc:
+     - restores user regs from Ureg
+     - restores SPSR -> CPSR
+     - RFE (return to user mode)
+          |
+          v
+  8. user program continues
+     after SWI instruction
+\end{verbatim}
+%claude:
+The exception vector table at [[HVECTORS]] is set up by
+[<arch__trapinit()>] during initialization: it copies the
+[[vectors]] code (a series of [[LDR PC]] instructions) and
+the [[vtable]] data (an array of addresses like [[_vsvc]],
+[[_virq]], etc.)\ to the page at [[0xFFFF0000]].
+The [[CpChv]] bit (set during boot) tells the ARM to
+fetch vectors from there instead of from address~0.
 
 % The parameter should be a pointer to the stack to the start of the args?
 \t or args copy in Sargs?
