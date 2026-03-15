@@ -574,10 +574,12 @@ interface remain remarkably small.
 % see also docs/doc/ and docs/man/
 
 %claude:
-The entire interface fits in a single header, [[sys.h]].
-Each syscall is a small integer used as an index into
-a dispatch table (the [[systab]] array shown later).
-%yoann1: in lib_core/libc/9syscall/ but really part of kernel (interface to kernel)
+The entire interface fits in a single header, [[sys.h]],
+which lives in [[lib_core/libc/9syscall/]] alongside the
+auto-generated assembly wrappers---but it is really part
+of the kernel's interface. Each syscall is a small integer
+used as an index into a dispatch table (the [[systab]]
+array shown later).
 
 
 
@@ -1211,6 +1213,7 @@ user or supervisor mode, and whether interrupts are enabled.
 % like B.EQ will do different things, so really need to store/restore
 % those flags.
 
+%yoann: ASCII diagram with PSR and all the bits and meaning, and maybe also all registers together
 
 \subsubsection{Processor modes}
 
@@ -1449,21 +1452,41 @@ chapter.
 The ARM includes a {Memory Management Unit} (MMU) that
 translates virtual addresses to physical addresses using
 {page tables}. The page table base address is stored in the
-[[CpTTB]] coprocessor register. When a translation fails, the
-MMU generates a fault and records the faulting address in
-[[CpFAR]] and the fault reason in [[CpFSR]]. The kernel uses
-the MMU to give each process its own virtual address space and
-to protect kernel memory from user access. More details on the
-virtual memory system are in Chapter~\ref{chap:virtual-memory}.
+[[CpTTB]] coprocessor register---this is a {physical} address,
+since the MMU itself needs to walk the page table before any
+virtual-to-physical translation is available. When a
+translation fails, the MMU generates a fault and records the
+faulting address in [[CpFAR]] and the reason in [[CpFSR]].
+The kernel uses the MMU to give each process its own virtual
+address space and to protect kernel memory from user access.
+More details are in Chapter~\ref{chap:virtual-memory}.
+
 %claude:
-The basic unit of memory managed by the MMU is a {page},
-which on ARM (and on x86) is 4~KiB:
+The ARM MMU supports two {granularities} of mapping.
+An L1 (first-level) table entry can either map a full
+1~MiB {section} directly to a physical address, or point
+to an L2 (second-level) table that maps individual
+4~KiB {pages}:
+\begin{verbatim}
+  L1 entry types:
+    Section  --> maps 1 MiB directly (no L2 table needed)
+    Coarse   --> points to an L2 table (256 entries x 4 KiB = 1 MiB)
+\end{verbatim}
+%claude:
+Sections are efficient for large contiguous mappings (the
+kernel maps all of RAM this way), while pages are needed
+for fine-grained control (individual user pages, the
+exception vector page at [[HVECTORS]]).
+
+%claude:
+The basic unit of memory managed at the finest level is
+a {page}, which on ARM (and on x86) is 4~KiB:
 
 %yoann: maybe ASCII diagram already useful here?
 %claude:
-The MMU translates virtual addresses to physical addresses
-using a two-level page table. The virtual address is split
-into fields that index into the tables:
+When using pages (L1 entry of type Coarse), the MMU
+translates virtual addresses using a two-level walk.
+The virtual address is split into three fields:
 \begin{verbatim}
   31        20 19       12 11          0
  +------------+-----------+------------+
@@ -1478,7 +1501,15 @@ into fields that index into the tables:
   | (4096  |   | (256   |   | page |
   | entries)|  | entries)|  |      |
   +--------+   +--------+   +------+
+     ^
+     |
+   CpTTB register (physical address of L1 table)
 \end{verbatim}
+%claude:
+When using sections (L1 entry of type Section), the L2 step
+is skipped entirely: the L1 entry contains the physical base
+address of a 1~MiB region directly, and bits 19--0 of the
+virtual address become the offset within that region.
 
 % put BY2PG here cos referenced a few times.
 <<constant [[BY2PG]](arm)>>=
@@ -2394,6 +2425,185 @@ physical addresses plus [[KZERO]].
 
 % maybe figure with the binary composition (a.out header, multiboot header,
 %  code, data, empty bss, etc)
+
+%claude:
+The following diagram shows the full virtual address space.
+The kernel and user portions coexist in every process's
+page table (though the kernel portion is shared and
+identical across all processes):
+\begin{verbatim}
+                      ...
+             +---------------------+
+             | exception vectors   |
+ 0xFFFF0000  +---------------------+  <-- HVECTORS
+                      ...
+             +---------------------+
+             | GPU framebuffer     |
+ 0xC0000000  +---------------------+  <-- FRAMEBUFFER
+                      ...
+             +---------------------+
+             | kernel heap         |  xalloc pool (large allocs:
+             |  (grows up)         |   Proc[], Page[], etc.)
+             |                     |  then malloc pool
+             +---------------------+
+             | kernel bss          |
+             +---------------------+
+             | kernel data         |  globals: conf, systab,
+             |                     |  devtab, palloc, procalloc...
+             +---------------------+
+             | kernel text         |  main(), sched(), syscall
+             |                     |  handlers, device drivers...
+ 0x80008000  +---------------------+  <-- KTZERO
+                      ...
+             +---------------------+
+             | Cpu struct          |  per-processor state
+             | + kernel boot stack |  (1 page = CPUSIZE)
+ 0x80002000  +---------------------+  <-- CPUADDR
+                      ...
+ 0x80000000  +=====================+  <-- KZERO
+             |  KERNEL / USER      |
+             |    BOUNDARY         |
+             +=====================+
+                      ...
+             +---------------------+
+             | memory-mapped I/O   |  device registers
+             | (16 MiB = IOSIZE)   |  (SYSTIMERS, INTREGS, ...)
+ 0x7E000000  +---------------------+  <-- VIRTIO
+                      ...
+                 (unmapped gap)
+                      ...
+ 0x20000000  +---------------------+  <-- USTKTOP
+             | user stack          |  grows down
+             |  (8 MiB max)        |  (USTKSIZE)
+             +---------------------+
+                      ...
+             +---------------------+
+             | user heap           |  managed by brk()
+             |  (grows up)         |
+             +---------------------+
+             | user bss            |
+             +---------------------+
+             | user data           |
+             +---------------------+
+             | user text           |
+ 0x00001000  +---------------------+  <-- UTZERO
+             | (unmapped page)     |  null pointer trap
+ 0x00000000  +---------------------+  <-- UZERO
+\end{verbatim}
+%claude:
+A few things to notice. First, the kernel follows the standard
+binary layout---text, then data, then bss---just like a user
+program. The kernel heap (managed by [[xalloc]] and [[malloc]])
+grows upward from the end of bss. Second, the first page at
+address zero is intentionally left unmapped so that null
+pointer dereferences cause an immediate fault. Third, the
+I/O registers ([[VIRTIO]]) sit in the gap between the user
+stack top and [[KZERO]]---they are mapped here for
+convenience, even though they are only accessed by the kernel.
+Fourth, the kernel's data section contains important global
+variables such as [[systab]] (the syscall dispatch table),
+[[devtab]] (the device driver table), [[conf]] (hardware
+configuration), [[palloc]] (the page allocator state), and
+[[procalloc]] (the process table). Finally, the [[Cpu]]
+structure occupies a single page at [[CPUADDR]], below the
+kernel text, in the small gap between [[KZERO]] and
+[[KTZERO]].
+
+%claude:
+The physical memory layout is simpler. The Raspberry Pi~1
+has 512~MiB of RAM from physical [[0x00000000]] to
+[[0x20000000]]. The I/O registers start immediately after,
+at [[0x20000000]] ([[Soc.physio]]). The GPU allocates the
+framebuffer somewhere within the RAM.
+%claude:
+Here is the physical address space:
+\begin{verbatim}
+             +------------------+
+             | I/O registers    |  SYSTIMERS, INTREGS,
+             |  (16 MiB)        |  MAILBOX, USBREGS, ...
+ 0x20000000  +------------------+  PHYSIO
+             |                  |
+             |  free RAM        |  user pages,
+             |  (user pages,    |  GPU framebuffer
+             |   GPU framebuf)  |
+             |                  |
+             +------------------+
+             |  kernel:         |
+             |    bss + heap    |  xalloc, malloc pools
+             +------------------+
+             |    data          |  conf, systab, devtab,
+             |                  |  palloc, procalloc, ...
+             +------------------+
+             |    text          |  main(), sched(), ...
+ 0x00008000  +------------------+
+             | L1 page table    |  16 KiB, 4096 entries
+             |  (CpTTB points   |  (Section or Coarse)
+             |   here)          |
+ 0x00004000  +------------------+
+             | L2 page table    |  for HVECTORS mapping
+ 0x00003000  +------------------+
+             | Cpu struct +     |  per-processor state
+             |  boot stack      |
+ 0x00002000  +------------------+
+             |                  |
+             | vector table     |  exception entry points
+ 0x00000000  +------------------+
+\end{verbatim}
+
+%claude:
+The kernel's [<mmuinit()>] function (Chapter~\ref{chap:initialization})
+fills the L1 page table at physical [[0x4000]] and then the
+boot code stores this address in the [[CpTTB]] register and
+enables the MMU and [[CpChv]] together. Here is what the
+4096-entry L1 table looks like after [<mmuinit()>]:
+\begin{verbatim}
+  L1 page table (at phys 0x4000, pointed to by CpTTB)
+  Each entry covers 1 MiB of virtual address space.
+
+  index   virt range            entry type     maps to phys
+  -----   ----------            ----------     ------------
+  4095    0xFFF0_0000 HVECTORS   Coarse    -->  L2 at 0x3000
+                                                (L2[0] = phys page 0)
+  4094    ...                    Fault          (unmapped)
+   ...     (unmapped)            ...
+  3072    0xC000_0000 FRAMEBUF   Section   -->  GPU-chosen address
+  3071    ...                    Fault          (unmapped)
+   ...     (unmapped)            ...
+  2559    0x9FF0_0000            Section   -->  0x1FF0_0000
+   ...     (kernel RAM, contiguous)
+  2049    0x8010_0000            Section   -->  0x0010_0000
+  2048    0x8000_0000 KZERO      Section   -->  0x0000_0000
+  ====     kernel / user boundary  ==================
+  2031    0x7EF0_0000            Section   -->  0x20F0_0000
+   ...     (I/O registers, 16 entries)
+  2016    0x7E00_0000 VIRTIO     Section   -->  0x2000_0000 PHYSIO
+  2015    ...                    Fault          (unmapped)
+   ...     (unmapped gap)        ...
+   512    0x2000_0000 USTKTOP    Fault          (unmapped)
+   511    0x1FF0_0000            Coarse    -->  per-process L2
+   ...     (user space, per-process)
+     1    0x0010_0000            Coarse    -->  per-process L2
+     0    0x0000_0000 UZERO      Fault          (null trap)
+\end{verbatim}
+%claude:
+The kernel mapping is a simple offset: virtual [[KZERO+x]]
+maps to physical [[x]], using 512 consecutive L1 {Section}
+entries (indices 2048--2559). The L1 table itself, the
+[[Cpu]] structure, and the vector table are all within this
+range, so they are accessible at both their physical
+addresses and at [[KZERO]] plus that address.
+%claude:
+The three special mappings are the I/O registers (16 L1
+sections mapping virtual [[VIRTIO]] to physical [[PHYSIO]]),
+the exception vectors (one L1 Coarse entry at index~4095
+pointing to an L2 table that maps a single 4~KiB page of
+physical~0 to virtual [[HVECTORS]]---the ARM's [[CpChv]]
+bit directs the processor to fetch vectors from
+[[0xFFFF0000]]), and the GPU framebuffer (one L1 section
+at index~3072). User mappings occupy indices 0--511 and
+are filled per-process with Coarse entries pointing to
+L2 tables, so that each process has its own pages.
+
 %claude:
 To make the distinction between physical and virtual addresses
 explicit in the code, the following typedefs are used:
