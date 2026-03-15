@@ -740,6 +740,44 @@ Once the command you ran finished, the shell gets back in control
 and displays another {\em prompt} to indicate that you can type another
 command.
 
+
+%alt: put minishell.c in separate section before or after boot.rc
+
+%yoann: here is minishell, minimal
+%claude:
+To make this concrete, here is a minimal shell in about 20 lines of C.
+It does almost nothing---just reads a command name, forks a process,
+and [[exec]]s the program---but it already captures the essence of what
+a shell is: a loop that reads, forks, execs, and waits.
+
+<<minishell.c>>=
+#include <u.h>
+#include <libc.h>
+
+void main() {
+  char buf[256];
+  char *args[2];
+  int n;
+
+  for(;;) {
+    pwrite(1, "$ ", 2, 0LL);
+    n = pread(0, buf, sizeof(buf)-1, 0LL);
+    if(n <= 0)
+      break;
+    buf[n-1] = '\0';  /* strip newline */
+    args[0] = buf;
+    args[1] = nil;
+    if(rfork(RFPROC|RFFDG) == 0) {
+      exec(buf, args);
+      exits("exec failed");
+    }
+    await(buf, sizeof(buf));
+  }
+  exits(0);
+}
+@
+
+
 \subsection{Redirections}
 
 The second important feature of a shell is to allow to {\em redirect}
@@ -807,7 +845,83 @@ at the higher granularity of programs.
 % to implement pipes and redirections you just need to alter
 % slightly the environment of the forked process, which shows fork's beauty
 
+%yoann: here is minishell2.c, handling basic redirection and pipe
+%claude:
+To support redirections and pipes, one only needs to manipulate
+file descriptors in the forked child before calling [[exec]].
+Here is a second mini-shell that handles [[>]] for output redirection
+and [[|]] for a single pipe:
 
+<<minishell2.c>>=
+#include <u.h>
+#include <libc.h>
+
+void runcmd(char *cmd) {
+  char *args[2];
+  args[0] = cmd;
+  args[1] = nil;
+  exec(cmd, args);
+  exits("exec failed");
+}
+
+void main() {
+  char buf[256];
+  char *p;
+  int n, fd, pfd[2];
+
+  for(;;) {
+    pwrite(1, "$ ", 2, 0LL);
+    n = pread(0, buf, sizeof(buf)-1, 0LL);
+    if(n <= 0)
+      break;
+    buf[n-1] = '\0';
+
+    if((p = strchr(buf, '>')) != nil) {
+      *p++ = '\0';
+      while(*p == ' ') p++;
+      if(rfork(RFPROC|RFFDG) == 0) {
+        fd = create(p, OWRITE, 0666);
+        dup(fd, 1);
+        close(fd);
+        runcmd(buf);
+      }
+      await(buf, sizeof(buf));
+    } else if((p = strchr(buf, '|')) != nil) {
+      *p++ = '\0';
+      while(*p == ' ') p++;
+      pipe(pfd);
+      if(rfork(RFPROC|RFFDG) == 0) {
+        close(pfd[0]);
+        dup(pfd[1], 1);
+        close(pfd[1]);
+        runcmd(buf);
+      }
+      if(rfork(RFPROC|RFFDG) == 0) {
+        close(pfd[1]);
+        dup(pfd[0], 0);
+        close(pfd[0]);
+        runcmd(p);
+      }
+      close(pfd[0]);
+      close(pfd[1]);
+      await(buf, sizeof(buf));
+      await(buf, sizeof(buf));
+    } else {
+      if(rfork(RFPROC|RFFDG) == 0)
+        runcmd(buf);
+      await(buf, sizeof(buf));
+    }
+  }
+  exits(0);
+}
+@
+%claude:
+Notice how little code it takes: the key insight is that [[fork]] gives
+the child its own copy of the file descriptor table, so we can
+[[dup]] a file or pipe end onto stdin or stdout before [[exec]]---and the
+executed program never knows the difference. This is precisely the beauty
+of the [[fork]]/[[exec]] split that the rest of this book will explore
+in detail.
 
 \subsection{Storing commands in a script}
 
