@@ -1240,35 +1240,37 @@ same format):
    |   +-- Z: zero
    +-- N: negative
 \end{verbatim}
+
+
 %claude:
-And here is the ARM register set, showing which registers are
-{banked} (i.e., the processor has a separate physical copy for
-each mode):
-\begin{verbatim}
-           User/   SVC     IRQ     ABT     FIQ     UND
-           System
-  R0       R0      R0      R0      R0      R0      R0
-  R1       R1      R1      R1      R1      R1      R1
-  ...      ...     ...     ...     ...     ...     ...
-  R7       R7      R7      R7      R7      R7      R7
-  R8       R8      R8      R8      R8      R8_fiq  R8
-  ...      ...     ...     ...     ...     ...     ...
-  R12      R12     R12     R12     R12     R12_fiq R12
-  R13 (SP) R13     R13_svc R13_irq R13_abt R13_fiq R13_und
-  R14 (LR) R14     R14_svc R14_irq R14_abt R14_fiq R14_und
-  R15 (PC) R15     R15     R15     R15     R15     R15
-  CPSR     CPSR    CPSR    CPSR    CPSR    CPSR    CPSR
-           --      SPSR_svc SPSR_irq SPSR_abt SPSR_fiq SPSR_und
-\end{verbatim}
-%claude:
-The banked R13 (SP) and R14 (LR) are why the kernel does
-not need to save those registers explicitly when entering
-an exception handler: the processor automatically switches
-to the banked copies. The [[_vsvc]] handler has its own
-R13_svc (the kernel stack pointer) ready to use, and R14_svc
-holds the return address. The user's R13 and R14 are saved
-later via the [[MOVM.S]] instruction which accesses the
-user-mode registers.
+%And here is the ARM register set, showing which registers are
+%{banked} (i.e., the processor has a separate physical copy for
+%each mode):
+%\begin{verbatim}
+%           User/   SVC     IRQ     ABT     FIQ     UND
+%           System
+%  R0       R0      R0      R0      R0      R0      R0
+%  R1       R1      R1      R1      R1      R1      R1
+%  ...      ...     ...     ...     ...     ...     ...
+%  R7       R7      R7      R7      R7      R7      R7
+%  R8       R8      R8      R8      R8      R8_fiq  R8
+%  ...      ...     ...     ...     ...     ...     ...
+%  R12      R12     R12     R12     R12     R12_fiq R12
+%  R13 (SP) R13     R13_svc R13_irq R13_abt R13_fiq R13_und
+%  R14 (LR) R14     R14_svc R14_irq R14_abt R14_fiq R14_und
+%  R15 (PC) R15     R15     R15     R15     R15     R15
+%  CPSR     CPSR    CPSR    CPSR    CPSR    CPSR    CPSR
+%           --      SPSR_svc SPSR_irq SPSR_abt SPSR_fiq SPSR_und
+%\end{verbatim}
+%%claude:
+%The banked R13 (SP) and R14 (LR) are why the kernel does
+%not need to save those registers explicitly when entering
+%an exception handler: the processor automatically switches
+%to the banked copies. The [[_vsvc]] handler has its own
+%[[R13_svc]] (the kernel stack pointer) ready to use, and [[R14_svc]]
+%holds the return address. The user's R13 and R14 are saved
+%later via the [[MOVM.S]] instruction which accesses the
+%user-mode registers.
 
 \subsubsection{Processor modes}
 
@@ -1580,7 +1582,7 @@ virtual address become the offset within that region.
 %c: bitshifting everywhere :) instead of using x / BY2PG use x >> PGSHIFT
 %x86: same
 
-\subsection{Input/Output devices}
+\subsection{Raspberry Pi Input/Output devices}
 
 % processors (CPU/GPU) are not everything. Also bus, devices.
 % For Raspberry Pi,
@@ -2511,7 +2513,7 @@ identical across all processes):
  0x80008000  +---------------------+  <-- KTZERO
                       ...
              +---------------------+
-             | Cpu struct          |  per-processor state
+             | Cpu0 struct         |  CPU 0's state
              | + kernel boot stack |  (1 page = CPUSIZE)
  0x80002000  +---------------------+  <-- CPUADDR
                       ...
@@ -2560,9 +2562,13 @@ variables such as [[systab]] (the syscall dispatch table),
 [[devtab]] (the device driver table), [[conf]] (hardware
 configuration), [[palloc]] (the page allocator state), and
 [[procalloc]] (the process table). Finally, the [[Cpu]]
-structure occupies a single page at [[CPUADDR]], below the
-kernel text, in the small gap between [[KZERO]] and
-[[KTZERO]].
+structure for CPU~0 occupies a single page at [[CPUADDR]],
+below the kernel text, in the small gap between [[KZERO]]
+and [[KTZERO]]. On multi-processor systems (e.g.,
+Raspberry Pi~2), each additional CPU has its own [[Cpu]]
+struct allocated elsewhere; the [[cpus[]]] array and the
+dedicated register [[R10]] allow each processor to find
+its own.
 
 %claude:
 The physical memory layout is simpler. The Raspberry Pi~1
@@ -2597,7 +2603,7 @@ Here is the physical address space:
  0x00004000  +------------------+
              | L2 page table    |  for HVECTORS mapping
  0x00003000  +------------------+
-             | Cpu struct +     |  per-processor state
+             | Cpu0 struct +    |  CPU 0's state
              |  boot stack      |
  0x00002000  +------------------+
              |                  |
@@ -2720,7 +2726,7 @@ The kernel text (code) starts at [[KTZERO]], which is
 [[KZERO+0x8000]]---because the ARM firmware loads the
 kernel binary at physical [[0x8000]]. The physical memory
 below [[0x8000]] is used for early kernel data structures
-such as the [[Cpu]] structure at [[CPUADDR]]:
+such as CPU~0's [[Cpu]] structure at [[CPUADDR]]:
 <<constant [[KTZERO]](arm)>>=
 #define KTZERO      (KZERO+0x8000)      /* kernel text start */
 @
