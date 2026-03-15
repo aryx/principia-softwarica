@@ -1,6 +1,115 @@
 \documentclass[12pt]{report}
 %12pt, twocolumn, landscape
 
+%restructure: focus on acid
+%  1. Introduction                                                                   
+%  2. Overview                                                                  
+%  3. Kernel Support
+%  4. Core Data Structures (acid types, symbols, process state)                     
+%  5. main()       
+%  6. Lexing
+%  7. Parsing (yacc grammar, AST)
+%  8. Evaluator (expression evaluation, built-in functions)
+%  9. Process Control (breakpoints, stepping, through acid primitives)
+%  10. The acid Library (the .acid scripts in conf/)
+%  11. strace
+%  12. Advanced Topics
+%  13. Conclusion
+%  14. Appendix: db code
+%  15. Appendix: libmach code
+
+%  Ch 1 — Introduction (as before, motivations, why acid over db/gdb)     
+%  Ch 2 — Overview (~2 pages)                                                            %  - acid's design philosophy: scriptable debugger with its own language
+%  - Architecture: interpreter + builtins + library scripts
+%  - A simple debugging session
+%  Ch 3 — Kernel Support (reuse existing chapter)
+%  - /proc/x/mem, /proc/x/ctl, /proc/x/note
+%  Ch 4 — Core Data Structures → acid.h, globals.c (430 lines)
+%  - Node (AST node), Store (value union), Value (scoped variable)
+%  - Lsym (symbol table entry with value stack for scoping)
+%  - List (linked list), Type (complex type fields)
+%  - Ptab (process table), Rplace (return context)
+%  - Format specifiers system
+%  - The ~35 opcodes
+%  Ch 5 — main() → main.c (650 lines)
+%  - Command line parsing (-k, -l, -m, -w, -q)
+%  - attachfiles(), readtext() — open executable, load symbols, build maps
+%  - loadmodule() — loading acid scripts
+%  - The REPL loop
+%  - gc() — mark-and-sweep garbage collection
+%  - an(), al(), con() — node/list/constant constructors
+%  Ch 6 — Lexing → lex.c (650 lines)
+%  - yylex() — tokenizer (numbers, strings, identifiers, operators)
+%  - numsym() — hex/binary/float parsing
+%  - enter()/look() — symbol table hash (h = h*3 + c)
+%  - IOstack and pushfile()/pushstr() — nested input sources
+%  - Escape sequences
+%  Ch 7 — Parsing → dbg.y (410 lines)
+%  - Yacc grammar: statements, expressions, function definitions
+%  - Complex types: aggr, union, adt
+%  - List literals: {expr, expr, ...}
+%  - Operator precedence
+%  - Special constructs: head, tail, append, delete, eval, whatis
+%  Ch 8 — Evaluator → exec.c + expr.c (1640 lines)
+%  - execute() — statement dispatcher (if/while/do/return/local)
+%  - expop[] dispatch table — ~40 expression handlers
+%  - Arithmetic, bitwise, logic, comparison (with type coercion int/float)
+%  - oasgn — assignment to variables or memory
+%  - indir()/windir() — memory read/write via maps
+%  - call() — function calls with scope push/pop via unwind()
+%  - ocall — dispatch to builtin vs user-defined
+%  Ch 9 — Lists → list.c (304 lines)
+%  - construct(), addlist(), append(), delete()
+%  - listcmp() — deep comparison
+%  - nthelem(), listlen()
+%  - Stack trace support: listlocals(), listparams(), trlist()
+%  Ch 10 — Complex Types & Dot → dot.c (168 lines)
+%  - odot() — struct member access with offset calculation
+%  - srch() — field lookup in type hierarchy
+%  - defcomplex(), buildtype() — type definition
+%  - decl() — variable type annotation
+%  Ch 11 — Builtins → builtin.c (1412 lines, the biggest file)
+%  - Process control: newproc, start/stop/startstop, kill, setproc
+%  - Symbol access: pcfile, pcline, filepc, fnbound, follow, strace
+%  - I/O: print, printto, file, readfile, rc
+%  - Type/format: fmt, fmtof, fmtsize, atof, atoi, itoa
+%  - Scripting: include, interpret
+%  - patom() — 30+ format codes for value printing
+%  Ch 12 — Process Control → proc.c (300 lines)
+%  - sproc() — set current process, open /proc/PID/mem
+%  - nproc() — fork+exec with "hang" for debugger attach
+%  - msg() — send commands to /proc/PID/ctl
+%  - notes() — read pending signals
+%  - install()/deinstall() — process table management
+%  Ch 13 — Printing & Introspection → print.c (466 lines)
+%  - whatis() — describe symbol (type, format, definition)
+%  - pcode()/pexpr() — pretty-print AST back to acid source
+%  - fundefs() — list all functions
+%  - patom(), blprint() — formatted value output
+%  Ch 14 — The acid Library → conf/ (~2700 lines of acid scripts)
+%  - port (574 lines) — core: stk, step, cont, bpset, src, new
+%  - 386/arm — architecture-specific register access
+%  - kernel (387 lines) — kernel process/channel/segment inspection
+%  - thread (387 lines) — libthread debugging
+%  - truss (283 lines) — system call tracing
+%  - leak/pool/trump — memory debugging
+%  - acme — editor integration
+%  - coverage — code coverage via breakpoints
+%
+%  Ch 15 — libmach (or appendix)
+%  Ch 16 — strace
+%  Ch 17 — Conclusion
+%
+%  Appendix A — db code (current code splits)
+%  Appendix B — Utilities, Error Management
+%
+%  ---
+%  The core acid interpreter (chapters 4-13) is ~6000 lines of C — comparable in size to your
+%  kernel book chapters. The library scripts add another ~2700 lines of acid code which
+%  showcase the language in action. The biggest chapters will be the Evaluator (ch 8) and
+%  Builtins (ch 11).
+
+
 %recent:
 % - https://blog.tartanllama.xyz/writing-a-linux-debugger-setup/
 % - https://www.timdbg.com/posts/writing-a-debugger-from-scratch-part-6/
@@ -114,11 +223,11 @@ Phil Winterbottom
 \tableofcontents
 \endgroup
 
-%******************************************************************************
-% Body
-%******************************************************************************
+%###############################################################################
 
+%******************************************************************************
 \chapter{Introduction}
+%******************************************************************************
 
 The goal of this book is to present in full details the source code of
 a {debugger} and {tracer}.
@@ -133,9 +242,9 @@ work.
 \l history of term "bug", it was an actual bug!
 %  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
 
-\section{\plan{} [[db]] and [[strace]]}
+\section{\plan{} [[acid]] and [[ratrace]]}
 
-% We gonna present db (and maybe acid) and strace (actually was called
+% We gonna present acid and strace (actually was called
 % ratrace). Small programs. Elegant. Simple.
 
 \section{Other debuggers}
@@ -216,7 +325,9 @@ which I ultimately discarded:
 \section{Acknowledgments}
 
 
+%******************************************************************************
 \chapter{Overview}
+%******************************************************************************
 
 \section{Tracer principles}
 
@@ -234,7 +345,7 @@ which I ultimately discarded:
 % no more space in /tmp. Especially when people don't check
 % return error code, at least see the call to create a file in /tmp
 
-\section{[[strace]] services}
+\section{[[ratrace]] services}
 
 % strace -c <cmd>
 % stace <pid> ?
@@ -271,7 +382,7 @@ which I ultimately discarded:
 % Awesome (remember efuns.byte crashes).
 
 
-\section{[[db]] services}
+\section{[[acid]] services}
 
 % see also Machine.nw, which has a similar interface.
 
@@ -362,7 +473,7 @@ exits("usage");
 % (easy thx to the kernel that keep broken process around
 % without wasting disk space in a core dump)
 
-\section{[[acid]] services}
+%\section{[[acid]] services}
 
 %related: python scripts to extend GDB so better display STL vectors
 % and so on?
@@ -422,7 +533,9 @@ exits("usage");
 
 %###############################################################################
 
+%******************************************************************************
 \chapter{Kernel Support}
+%******************************************************************************
 % Context
 
 \section{Memory access: [[/proc/x/mem]]}
@@ -468,7 +581,9 @@ exits("usage");
 % when process crashes, it's still around, and can just run
 % ps; db <pid> to start inspect! really useful.
 
+%******************************************************************************
 \chapter{Core Data Structures}
+%******************************************************************************
 
 \section{Executable format: [[Fhdr]]}
 % generic
@@ -953,7 +1068,9 @@ int nnote;
 
 
 
+%******************************************************************************
 \chapter{[[main()]]}
+%******************************************************************************
 
 <<global [[symfil]]>>=
 char	*symfil = nil;
