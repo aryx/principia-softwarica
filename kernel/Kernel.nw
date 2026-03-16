@@ -8107,16 +8107,24 @@ out:
 %******************************************************************************
 \label{chap:processes}
 
+%claude:
+In this chapter, I will present the process lifecycle: how
+processes are allocated, created ([[rfork]]), loaded with a
+new program ([[exec]]), how a parent waits for children
+([[await]]), and how processes terminate ([[exits]]).
+These four syscalls are the foundation of \plan's process
+model.
+
 <<[[systab]] process syscalls>>=
 [RFORK]     sysrfork,
 [EXEC]      sysexec,
 [AWAIT]     sysawait,
 [EXITS]     sysexits,
-@ 
+@
 
 \section{Overview}
 
-% fork/exec Unix model! 
+% fork/exec Unix model!
 % powerful. Can do pipe easily by forking, modifying env, and then exec.
 
 % plan9 use rfork vs fork because can fork different ressources, not
@@ -8127,7 +8135,29 @@ out:
 
 % await also subtle. Can wait for children and children for parent.
 % Note that wait in parent will remember if children already finished!
-
+%claude:
+\plan inherits the \unix {fork/exec} model: [[rfork]]
+creates a child process (a copy of the parent), and [[exec]]
+replaces the child's memory with a new program. This
+two-step approach is powerful---between the fork and the
+exec, the child can set up pipes, redirect files, or
+modify its namespace before running the new program.
+%claude: %unix:
+\plan generalizes \unix [[fork]] into [[rfork]] (``resource
+fork''): instead of always copying everything, [[rfork]]
+takes flags that independently control which resources to
+copy, share, or create fresh---memory, file descriptors,
+namespace, environment, notes, and rendezvous group.
+A traditional [[fork]] is [[rfork]] with everything copied;
+a thread (shared memory) is [[rfork]] with [[RFMEM]] set.
+Sandboxing is trivial with [[RFNOMNT]].
+%claude:
+There are no {zombie processes} in \plan. When a child
+exits, it writes a {wait message} (containing its exit
+string and resource usage) to the parent's queue and
+immediately dies. The parent collects these messages via
+[[await()]]. If the parent has already exited, the messages
+are simply discarded.
 
 %real-world: Windows sucks for this. no fork/exec but many exec (lack
 % of orthogonality)
@@ -8137,6 +8167,13 @@ out:
 
 %linux: used to be static array. Configured at compile-time?
 %xv6: use static array
+%claude:
+The [[Proc]] structure is large and long-lived, so processes
+are pre-allocated in a pool during boot rather than malloc'd
+on each fork. The pool is an array of [[conf.nproc]] entries
+(up to 2000), allocated by [[xalloc]] during initialization.
+A free list threads through unused entries, and a hash table
+provides fast pid-to-process lookup.
 
 \subsection{Process ID: [[Proc.pid]]}
 
@@ -8154,6 +8191,11 @@ static Counter  pidalloc;
 
 \subsection{[[Procalloc]]}
 
+%claude:
+The process allocator is a simple pool: an [[xalloc]]'ed
+array of [[Proc]] structures ([[arena]]) and a free list
+([[free]]) threaded through [[Proc.qnext]]. When a process
+exits, it is returned to the free list for reuse:
 <<struct [[Procalloc]]>>=
 // Process allocator
 struct Procalloc
@@ -8187,7 +8229,12 @@ static struct Procalloc procalloc;
 \subsection{PID hashing}
 
 % this is used to get from pid to the Proc. For instance
-% useful in /proc/x/... to get the Proc of x. 
+% useful in /proc/x/... to get the Proc of x.
+%claude:
+The kernel needs to look up a [[Proc]] by pid (e.g., when
+accessing [[/proc/x/...]]). A linear scan of the arena
+would be slow, so [[Procalloc]] includes a hash table of
+128 buckets chained through [[Proc.pidhash]]:
 
 <<[[Procalloc]] other fields>>=
 // hash<Proc.pid, ref<Proc>> (next = Proc.pidhash)>
@@ -8265,10 +8312,18 @@ procindex(ulong pid)
 
 \subsection{[[newproc()]]}
 
+%claude:
+[<newproc()>] pops a [[Proc]] from the free list, assigns
+it a fresh pid (by incrementing the global [[pidalloc]]
+counter), and initializes its fields to safe defaults.
+The new process starts in state [[Scheding]]---not
+[[Ready]]---because its segments are not yet set up;
+the caller ([<sysrfork()>] or [<kproc()>]) must finish
+the initialization before calling [<ready()>].
 <<[[Procstate]] cases>>=
 Scheding,
 @
-%used when newproc and in runproc. Rename Newproc? 
+%used when newproc and in runproc. Rename Newproc?
 % why not Ready in runproc instead? because not ready yet to be
 % scheduled!! does not have its segment set.
 
@@ -8351,6 +8406,11 @@ p->rgrp = nil;
 \subsection{No more processes}
 
 % useful feature?
+%claude:
+If the free list is empty when [<newproc()>] is called,
+the kernel sleeps and retries, hoping another process
+will exit soon. If the situation persists, it panics
+and reboots.
 
 <<[[newproc()]] other locals>>=
 char msg[64];
@@ -8429,6 +8489,11 @@ Whinesecs = 10,     /* frequency of out-of-resources printing */
 
 \section{The user}
 
+%claude: %unix:
+In \unix, the process owner is a numeric uid. In \plan, it
+is a string ([[Proc.user]]): typically ``eve'' for the
+system owner. There is no [[/etc/passwd]]---authentication
+is handled per-connection by the file server protocol (9P).
 <<[[Proc]] state fields>>=
 // e.g.. "eve" (no uid/gid in plan9, because of its distributed nature?)
 char  *user;
@@ -8497,6 +8562,13 @@ renameuser(char *old, char *new)
 
 \section{[[sysrfork()]]}
 
+%claude:
+[<sysrfork()>] is the most complex syscall in the kernel.
+It takes a bitmask of flags that independently control
+which resources to fork, share, or create fresh. If
+[[RFPROC]] is set, a new child process is created;
+otherwise, the flags modify the current process's own
+resources (e.g., detach from the parent's namespace).
 <<enum [[rfork]]>>=
 //coupling: with libc.h
 enum Rfork
@@ -8551,6 +8623,13 @@ sysrfork(ulong* arg)
 
 \subsection{Fork: [[RFPROC]]}
 
+%claude:
+When [[RFPROC]] is set, the kernel allocates a new
+process, copies or shares the parent's resources
+according to the other flags, sets up the child's
+kernel stack so it will return~0 from the syscall (via
+[<arch_forkchild()>]), and makes it runnable. The parent
+returns the child's pid.
 <<[[sysrfork()]] other locals>>=
 Proc *p;
 ulong pid;
@@ -8634,6 +8713,11 @@ incref(p->dot);
 \subsection{Memory sharing: [[RFMEM]]}
 
 %linux: clone system call
+%claude:
+If [[RFMEM]] is set, the child shares the parent's data
+and bss segments (thread-like behavior). Otherwise,
+[<dupseg()>] makes copy-on-write copies. The text segment
+is always shared (it is read-only).
 
 <<[[sysrfork()]] other locals>>=
 bool share;
@@ -8661,6 +8745,15 @@ poperror();
 
 %sched structure explained later in Context switch section.
 %The stack will contain value of all user registers.
+%claude:
+[<arch_forkchild()>] is the key architecture-specific piece
+of fork: it sets up the child's kernel stack so that when
+the scheduler picks the child, it will ``return'' from the
+syscall with [[R0]]=0 (the child's return value). It copies
+the parent's saved user registers ([[Ureg]]) onto the child's
+kernel stack and sets [[p->sched]] (the [[Label]]) to
+point to [<arch__forkret>], which restores these registers
+and returns to user mode.
 
 % pass the up->dbgreg of parent process!
 
@@ -8715,6 +8808,41 @@ TEXT arch__forkret(SB), 1, $-4
 @
 %$
 % .S ?? for user banked register ?
+%claude:
+Here is the memory layout after [<arch_forkchild()>] has
+set up the child, showing how the parent and child relate:
+\begin{verbatim}
+  PARENT (up)                         CHILD (p)
+
+  user stack:                         user stack:
+  (shared or COW                      (shared or COW
+   copy of parent)                     copy of parent)
+  +-----------+                       +-----------+
+  |  user     |                       |  user     |
+  |  code/data|                       |  code/data|
+  +-----------+                       +-----------+
+
+  kernel stack (up->kstack, 8 KiB):   kernel stack (p->kstack, 8 KiB):
+  +-----------+ <-- kstack+KSTACK     +-----------+ <-- kstack+KSTACK
+  |  Ureg     |  (saved by _vsvc      |  Ureg     |  (copied from parent,
+  |  r0..r14  |   on syscall entry)   |  r0=0!    |   r0 set to 0)
+  |  type,psr |                       |  type,psr |
+  |  pc       |  (return to user)     |  pc       |  (same user PC)
+  +-----------+ <-- up->dbgreg        +-----------+ <-- p->sched.sp
+  |           |                       |           |
+  |  (used by |                       |  (empty)  |
+  |  syscall  |                       |           |
+  |  handler) |                       |           |
+  +-----------+ <-- kstack            +-----------+ <-- kstack
+
+  up->sched.pc = (in sched code)      p->sched.pc = arch__forkret
+  up->sched.sp = (in sched code)      p->sched.sp = &Ureg on kstack
+
+  When scheduler picks child:
+    1. gotolabel(p->sched) -> jump to arch__forkret
+    2. arch__forkret restores Ureg from kstack
+    3. RFE -> user mode, R0=0 (child sees rfork()=0)
+\end{verbatim}
 
 \subsection{File descriptors: [[RFFDG]], [[RFCFDG]]}
 
@@ -8887,6 +9015,14 @@ if(flag & RFNOTEG)
 \section{[[sysexec()]]}
 
 %http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
+%claude:
+[<sysexec()>] replaces the current process's memory with a
+new program. The steps are: open the executable, read the
+[[a.out]] header, create new text/data/bss segments, build
+the argument list on a temporary stack, free the old
+segments, relocate the stack, and set the PC and SP for
+the new program. Script files starting with [[#!]] are
+handled by re-opening with the interpreter.
 %http://lwn.net/Articles/630727/
 
 <<constant [[AOUT_MAGIC]](arm)>>=
