@@ -576,10 +576,10 @@ interface remain remarkably small.
 %claude:
 The entire interface fits in a single header, [[sys.h]],
 which lives in [[lib_core/libc/9syscall/]] alongside the
-auto-generated assembly wrappers---but it is really part
-of the kernel's interface. Each syscall is a small integer
+auto-generated assembly wrappers. Each syscall is a small integer
 used as an index into a dispatch table (the [[systab]]
 array shown later).
+%yoann1: in lib_core/libc/ because also used by libc it's kernel/libc interface 
 
 
 
@@ -1217,6 +1217,8 @@ user or supervisor mode, and whether interrupts are enabled.
 %claude:
 Here is the layout of the PSR (both CPSR and SPSR share the
 same format):
+%yoann1: what is CPSR/SPSR? they were never introduced
+
 \begin{verbatim}
   31  30  29  28  27       8   7   6   5   4    0
  +---+---+---+---+-- ... --+---+---+---+---+-----+
@@ -1289,6 +1291,9 @@ where the kernel runs with full access to hardware. When
 an exception (e.g., a [[SWI]]) occurs, the processor
 automatically switches to supervisor mode; the kernel must
 switch back to user mode before returning to the user program.
+%yoann1: if the control bit are last 4 bits, why it's 0x00000010 and not 0x00000010 ? why the 1? according to the ASCII diagram it means thumb mode?
+
+
 <<type [[PsrMode]](arm)>>=
 // Last 4 bits of PSR
 #define PsrMusr     0x00000010  /* user mode */
@@ -1562,11 +1567,14 @@ The virtual address is split into three fields:
      |
    CpTTB register (physical address of L1 table)
 \end{verbatim}
+
 %claude:
 When using sections (L1 entry of type Section), the L2 step
 is skipped entirely: the L1 entry contains the physical base
 address of a 1~MiB region directly, and bits 19--0 of the
 virtual address become the offset within that region.
+
+%yoann: maybe ASCII diagram showing the L1 Table and the format of each entry, how bits are used; also show which bits control whether the entry is a section or coarse
 
 % put BY2PG here cos referenced a few times.
 <<constant [[BY2PG]](arm)>>=
@@ -1795,6 +1803,8 @@ as offsets from [[VIRTIO]] ([[0x7E000000]]):
                      +-----------------+
   VIRTIO + IOSIZE    (0x7E000000 + 16 MiB)
 \end{verbatim}
+%yoann1: fix diagram to have high address at the top
+
 %claude:
 The total I/O space is [[IOSIZE]] (16~MiB), though only
 a small fraction of that range is actually used by device
@@ -1831,6 +1841,7 @@ the kernel's context-switch code, because the [[Label]]
 structure (shown later) only needs to store [[SP]] and
 [[PC]]---the caller has already saved any registers it
 cares about.
+%yoann1: remind that not confuse explicit user syscall where save only a few vs interrupt where kernel save all registers
 
 %yoann: ASCII diagram for calling conventions, and also C vs kernel
 % calling convention
@@ -2371,6 +2382,7 @@ picks which process runs next.
 The following subsections give an overview of the first two;
 the steady-state operation is the subject of the rest of
 the book.
+%yoann1: what does steady-state mean? maybe choose another clearer name
 
 \subsection{Booting overview (ARM)}
 
@@ -2646,6 +2658,9 @@ enables the MMU and [[CpChv]] together. Here is what the
      1    0x0010_0000            Coarse    -->  per-process L2
      0    0x0000_0000 UZERO      Fault          (null trap)
 \end{verbatim}
+%yoann1: if entry 0 is set to generate fault, that means all first MB of virtual address space is generating fault, so user program must be loaded above 1MB? but above I see UTZERO at 0x1000 so seems wrong
+
+
 %claude:
 The kernel mapping is a simple offset: virtual [[KZERO+x]]
 maps to physical [[x]], using 512 consecutive L1 {Section}
@@ -2996,6 +3011,9 @@ and back:
   8. user program continues
      after SWI instruction
 \end{verbatim}
+%yoann1: you said before that for syscall only need to save 2 registers in Label, so why here says save all in Ureg?
+
+
 %claude:
 The exception vector table at [[HVECTORS]] is set up by
 [<arch__trapinit()>] during initialization: it copies the
@@ -3004,6 +3022,9 @@ the [[vtable]] data (an array of addresses like [[_vsvc]],
 [[_virq]], etc.)\ to the page at [[0xFFFF0000]].
 The [[CpChv]] bit (set during boot) tells the ARM to
 fetch vectors from there instead of from address~0.
+%yoann1: _vsvc stands for?
+
+%yoann: explain R(CPU) R(UP), explain a bit R12/SB (refer to linker book maybe)
 
 % The parameter should be a pointer to the stack to the start of the args?
 \t or args copy in Sargs?
@@ -3032,21 +3053,34 @@ fetch vectors from there instead of from address~0.
 
 \subsection{FAQ}
 
-% trace of syscall through the stack
+%yoann: explain FAQ section as easy to be confused with complex virtual vs physical, kernel vs user, and some arch-specific requirement vs free design decision hard to understand
+
+%yoann: imagine a list of questions the reader could have
+
 
 \subsection{NSFAQ}
 
-% HVector is specific address, but systab is another one, how
-% force systab to be HVector?
-% actually systab is not exception table but syscall table, different concepts
+%yoann: explain "not-so-frequently asked question"
 
-% Why kernel vs user  virtual space divide? why can't have user-space to
+%yoann: HVector is specific address, but systab is another one, how force systab to be HVector? answer = actually systab is not exception table but syscall table, different concepts?
+
+%yoann: Why kernel vs user  virtual space divide? why can't have user-space to
 % be all of 4GB virtual address space and have kernel be different?
 % (I think xv6 RISCV actually does that)
 
-% can we have a page fault inside a page fault handler? Does kernel
+%yoann: can we have a page fault inside a page fault handler? Does kernel
 % rely on TLB and MMU to access its own data structure? Can kernel memory
 % be swapped?
+
+%yoann: why VIRTIO mapped between user and kernel? why not above KZERO instead?
+
+%yoann: Why CPUAddr below kernel? to reuse space below 0x8000 for something useful?
+% alternatives?
+
+%yoann: SWI $0, other value used?  SWI $1?
+
+
+%yoann: maybe after all of this say that many things seem complicated and very arch-specific but say actually many things are the same across arch; list the essential things the kernel needs to organize and setup and even if concrete address can vary, the concept are very similar
 
 \section{Book structure}
 
@@ -3221,7 +3255,6 @@ char* getconf(char *name)
 % see also confegrp
 
 \section{[[Cpu]] and [[cpu]]}
-%(ARM)
 
 <<struct [[Cpu]]>>=
 //coupling: do not change the order of the first 4 fields! 
@@ -3391,7 +3424,6 @@ struct Active active;
 
 
 \section{[[Proc]] and [[up]]}
-%(ARM)
 
 % the big one
 
