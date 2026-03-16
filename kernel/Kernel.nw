@@ -622,10 +622,13 @@ production---here it just prints ``Hello World'' for
 testing purposes.
 %
 The [[ERRSTR]] syscall at position~39
-is the error-reporting mechanism: \plan does not use
-[[errno]] like \unix, but instead stores error messages
-as strings that user programs retrieve via [[errstr()]].
-%yoann1: say that cleaner; one of those things cleaning up UNIX
+is \plan's error-reporting mechanism.
+%claude: %unix:
+Unlike \unix, which uses opaque numeric error codes
+(where you need a man page to find out what [[ENOENT]]
+means), \plan uses human-readable error strings that
+programs retrieve via [[errstr()]]---one of the many
+small cleanups \plan made over \unix.
 
 % will see in helloraw.c how to use those codes to perform syscall to kernel.
 % will see sys_nop() soon.
@@ -648,8 +651,23 @@ and [[AWAIT]] waits for a child (like \unix [[wait]]).
 @
 
 %yoann: maybe say again cleaning up Unix/Linux where no need fork() and clone() but instead more general mechanism RFORK (resource fork) where can fork or share many resources (memory, fds, env, etc.) so clone is just RFORK with memory not forked but shared
+%claude: %unix:
+\plan cleans up \unix here too. Instead of having
+separate [[fork()]] and [[clone()]] syscalls (as Linux
+does), \plan has a single [[RFORK]] (``resource fork'')
+that takes flags specifying which resources to copy and
+which to share: memory, file descriptors, environment,
+namespace, etc. A traditional [[fork]] is [[RFORK]] with
+everything copied; a thread (shared memory) is [[RFORK]]
+with memory shared.
 
 %yoann: EXITS is another cleaning, does not take error code but clearer string so no need man page to describe each time mapping from error code to actual meaning
+%claude: %unix:
+Similarly, [[EXITS]] takes an error {string} (or [[nil]]
+for success), not a numeric exit code. The parent reads
+this string via [[AWAIT]]. No need to memorize that
+exit code~2 means ``file not found''---the string says
+it directly.
 
 % for EXITS it generates _exits assembly function, not exits
 %  because exits is a C function in libc/port/atexit.c
@@ -693,7 +711,11 @@ Note [[PREAD]] and [[PWRITE]] instead of the traditional
 \unix [[read]]/[[write]]: the [['p']] stands for
 ``positional''---they take an explicit file offset, making
 seek-then-read atomic.
-%yoann1: again a cleaning up of UNIX thx to decades of hindsight
+%claude: %unix:
+This is another cleanup: in \unix, [[read]] and [[seek]]
+are separate syscalls, so a concurrent [[seek]]+[[read]]
+from two threads can race. \plan avoids this by combining
+them into a single [[pread]] call.
 
 <<[[sys.h]] file syscalls>>=
 #define OPEN        6
@@ -722,7 +744,12 @@ is a \plan addition that returns the file name associated
 with an open file descriptor---useful because in \plan,
 with per-process namespaces, a file descriptor is often
 more reliable than a path.
-%yoann1: maybe for CREATE mention in a footnote CREAT and regrets of Ken Thompson regarding CREAT without E
+%claude: %unix:
+Note [[CREATE]] with the full spelling---in \unix, the
+syscall was famously called [[creat]] without the final
+`e'. When asked what he would change about \unix, Ken
+Thompson once answered: ``I'd spell creat with an e.''
+\plan finally fixed this.
 
 <<[[sys.h]] directory syscalls>>=
 #define CREATE      11
@@ -1084,8 +1111,14 @@ it is useful beyond this book.
 %  (slides, small, very good)
 % - http://embedded-xinu.readthedocs.io/en/latest/arm/index.html
 
-ARM is a 32 bits architecture, hence the constant definition below ``bytes per word``.
-%yoann1: maybe explain what "word" mean in OS context and why it means the things going in registers? I'm not sure about the origin of the word.
+ARM is a 32 bits architecture, hence the constant definition below ``bytes per word''.
+%claude:
+A {word} is the natural unit of data for a processor---the
+size of a general-purpose register and typically the width
+of the data bus. The term dates back to early computing
+where a ``word'' was the fundamental chunk of data a
+machine could process in one operation. On a 32-bit ARM,
+a word is 4~bytes.
 
 <<constant [[BY2WD]](arm)>>=
 #define BY2WD       4
@@ -1093,9 +1126,12 @@ ARM is a 32 bits architecture, hence the constant definition below ``bytes per w
 
 %yoann: what V stands for?
 %claude:
-[[BY2V]] stands for ``bytes per vlong'' (a 64-bit value,
-8~bytes on a 32-bit ARM).
-%yoann1: explain vlong "very long" ? actually long on 64 bits archs with gcc is already 64bits, but on plan9 long is always 32 bits, so long long (or vlong) is 64 bits.
+[[BY2V]] stands for ``bytes per vlong.'' A [[vlong]]
+(``very long'') is \plan's name for a 64-bit integer.
+In \plan, [[long]] is always 32~bits regardless of the
+architecture (unlike [[gcc]] where [[long]] is 64~bits
+on 64-bit systems). So [[vlong]] (equivalent to C99's
+[[long long]]) is 8~bytes.
 
 <<constant [[BY2V]](arm)>>=
 #define BY2V        8           /* only used in xalloc.c */
@@ -1315,7 +1351,12 @@ distinguishes ``32-bit modes'' from legacy 26-bit modes).
 Bits 3--0 select the specific mode. 
 
 Bit~5 (the T~bit) selects Thumb vs.\ ARM instruction mode.
-%yoann1: explain more what is Thumb and how we will not really care about it in this book
+%claude:
+Thumb is a compact 16-bit instruction encoding that ARM
+processors can use to reduce code size. The \plan kernel
+does not use Thumb mode---all kernel and user code runs
+in ARM mode (32-bit instructions)---so we can ignore the
+T~bit in this book.
 
 
 
@@ -1371,6 +1412,15 @@ scheduler's run queue.
 \subsubsection{Exceptions}
 
 %yoann: maybe define Exception vs Interrupt vs IRQ terms
+%claude:
+A note on terminology: the ARM uses the word {exception}
+as the general term for any event that diverts the processor
+from normal execution. This includes {interrupts} (external
+hardware signals, called {IRQ} for Interrupt Request),
+{software interrupts} (the [[SWI]] instruction used for
+syscalls), and {aborts} (page faults, undefined instructions).
+Each exception type has its own entry in the vector table
+and its own processor mode.
 
 %Ureg.type
 %matches closely processor modes actually
@@ -1380,26 +1430,29 @@ scheduler's run queue.
 % set appropriate CPSR control bits depending on exception
 % set PC to vector address.
 %claude:
-When an {exception} occurs (a syscall via [[SWI]], an
-interrupt, a page fault, etc.), the ARM processor automatically
-saves the current PSR into the SPSR (Saved PSR), switches to
+When an exception occurs, the ARM processor automatically
+saves the current CPSR into the SPSR, switches to
 the appropriate privileged mode, and jumps to a fixed address
 in the {exception vector table}. This table is normally at
 physical address~0, but the kernel configures the ARM (via the
 [[CpChv]] bit in the system control register) to use
-``high vectors'' at [[0xFFFF0000]], which is more convenient
-because it lives in the kernel's virtual address space.
-%yoann1: and because 0 will be used for null pointer "detection" in user program
+``high vectors'' at [[0xFFFF0000]]. This is more convenient
+both because it lives in the kernel's virtual address space,
+and because it frees physical address~0 for the null pointer
+trap (the first page of user virtual memory is left unmapped).
 
 %yoann: HVECTORS is virtual address. Must mapped to physical 0. Need CpChv (later).
-Of course, using a virtual address means the MMU must already
-be enabled and the page tables must map [[0xFFFF0000]] to the
-physical memory containing the vector table. This is not a
-chicken-and-egg problem: the kernel sets up the page tables
-and the vector table first (while still using physical
-addresses or identity-mapped memory during early boot), then
-enables the MMU, and only then switches to high vectors.
-%yoann1: so hardware itself when exception/irq is relying on MMU coprocessor (see next section) to translate the virtual 0xFFFF0000 to the appropriate physical memory?
+%claude:
+Of course, [[0xFFFF0000]] is a virtual address, so once
+the MMU is enabled the hardware itself relies on the MMU
+to translate it to the physical memory containing the vector
+code. This is not a chicken-and-egg problem: the kernel sets
+up the page tables and copies the vector code to physical
+page~0 first (while still using physical addresses or
+identity-mapped memory during early boot), then enables the
+MMU and [[CpChv]] together. From that point on, any
+exception causes the ARM to fetch the handler from virtual
+[[0xFFFF0000]], which the MMU translates to physical~0.
 
 <<constant [[HVECTORS]](arm)>>=
 #define HVECTORS    0xffff0000
@@ -2028,7 +2081,7 @@ The kernel source is split across many files organized by
 subsystem: [[core/]], [[concurrency/]], [[memory/]],
 [[processes/]], [[files/]], [[filesystems/]], [[time/]],
 [[interrupts/]], [[devices/]], [[init/]], [[console/]], etc.
-%yoann1: actually say maps to some of the chapters in this book
+These directories map directly to the chapters in this book.
 
 Each subsystem has both portable code (in [[port/]]) and
 architecture-specific code (in [[bcm/]] for ARM).
@@ -2423,9 +2476,10 @@ arch_isaconfig = main_arch_isaconfig;
 %claude:
 Unlike a compiler or an assembler, a kernel is not a pipeline
 that transforms an input into an output. It is a {reactive}
-program: it waits for events---syscalls, interrupts, timer
-ticks---handles them, and goes back to sleep.
-%yoann1: actually kernel "sleep" while user-program executes
+program: while user programs run, the kernel is dormant.
+It only wakes up when an event occurs---a syscall, an
+interrupt, a timer tick---handles it, and then lets
+the user program resume.
 
 %claude:
 The kernel's execution can be understood along three axes.
