@@ -5540,17 +5540,42 @@ that sets all of this up.
 %******************************************************************************
 \label{chap:memory}
 
+%claude:
+From the user's point of view, memory is simple: call
+[[brk()]] (or [[malloc()]]) and get memory. Behind this
+simple interface lies a hierarchy of allocators, each
+solving a different problem.
+
 <<[[systab]] memory syscalls>>=
 [BRK]      sysbrk,
-@ 
+@
 
-% Looks so simple from user point of view :) just brk()! 
+% Looks so simple from user point of view :) just brk()!
 % but behind there are lots of machinery to make this possible.
 
 %http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/
 
 \section{Overview}
 % kernel vs user memory
+
+%claude:
+Memory management has a bootstrapping problem: you need
+memory to track which memory is free, but you do not have
+an allocator yet. The kernel solves this in layers:
+\begin{enumerate}
+\item The boot code detects available physical memory and
+records it in [[Conf.mem]] (a few [[Confmem]] banks).
+\item [[xalloc()]] carves large, long-lived structures out
+of those banks: the process table ([[Proc]] array), the
+page table ([[Page]] array), and the kernel [[malloc]] pool.
+\item [[malloc()]] provides fine-grained allocation from
+the pool that [[xalloc]] set aside for it.
+\item [[palloc]] manages the remaining physical pages for
+user processes. When a user calls [[brk()]], the kernel
+allocates pages from [[palloc]] and maps them into the
+process's virtual address space via [[Segment]]s and
+[[Pagetable]]s.
+\end{enumerate}
 
 %allocation memory kinds:
 % - static and initialized (data) in binary itself! "allocated" by 
@@ -5609,16 +5634,72 @@ that sets all of this up.
 % memory here can be only before MAXKPA.
 
 % start with Confmem, huge bank, now we want to use some memory.
-% draw figure with idea. Draw also figures with many holes in memory. 
+% draw figure with idea. Draw also figures with many holes in memory.
 % Can't support too much fragmentation (no compact() function)
 
 % alternatives? why not just free bitmaps? instead we use
 % free (linked) list below (and also for pages)
+%claude:
+[[xalloc()]] is the bottom-level allocator. It manages
+the raw physical memory banks from [[Conf.mem]] using a
+simple first-fit, non-compacting algorithm. It is called
+only during initialization to allocate a few large,
+long-lived structures---the [[Proc]] array, the [[Page]]
+array, and the [[malloc]] pool---that will never be freed.
+This simplicity is deliberate: [[xalloc]] tracks free
+memory as a sorted linked list of ``holes'' with a
+fixed-size array of entries, so it cannot handle heavy
+fragmentation, but it does not need to.
 
 \subsection{[[Xalloc]]}
 
 %\subsection{[[Hole]]}
 
+%claude:
+The [[Xalloc]] structure manages free memory as a sorted
+linked list of [[Hole]]s. Each [[Hole]] describes a
+contiguous region of free memory (between [[addr]] and
+[[top]]). The [[Hole]] entries themselves are pre-allocated
+in a fixed-size array ([[hole[Nhole]]]), and those not
+currently describing a free region are kept in a separate
+``unused slots'' list.
+%claude:
+Here is the layout after initialization (one memory bank)
+and after two allocations:
+\begin{verbatim}
+  After xinit() with one Confmem bank:
+
+    hole[0]:  addr=A  top=B  size=B-A   (the whole free bank)
+    hole[1..127]: unused
+
+    sorted_holes --> hole[0] --> nil
+    unused_slots --> hole[1] --> hole[2] --> ... --> hole[127] --> nil
+
+    Physical memory:
+         B  +---------------------------+
+            |     free (one big hole)   |
+         A  +---------------------------+
+
+  After xalloc(s1) and xalloc(s2):
+
+    hole[0]:  addr=A+s1+s2  top=B  size=B-A-s1-s2  (shrunk)
+
+    sorted_holes --> hole[0] --> nil
+
+    Physical memory:
+         B  +---------------------------+
+            |  free (hole[0], shrunk)   |
+            +---------------------------+
+            | Xhdr | data2 (s2 bytes)  |   <-- second xalloc
+            +---------------------------+
+            | Xhdr | data1 (s1 bytes)  |   <-- first xalloc
+         A  +---------------------------+
+\end{verbatim}
+%claude:
+Allocations grow upward from the bottom of the hole; the
+hole shrinks from below. Each allocation is prefixed with
+an [[Xhdr]] containing the size and a magic number (for
+corruption detection via [[xmerge()]]).
 
 <<struct [[Hole]]>>=
 struct Hole
@@ -5676,6 +5757,8 @@ enum
 
 \subsection{[[xlists]]}
 
+%claude:
+There is a single global instance of [[Xalloc]]:
 <<global [[xlists]]>>=
 static Xalloc   xlists;
 @
@@ -5696,6 +5779,12 @@ static Xalloc   xlists;
 
 \subsection{[[Xhdr]]}
 
+%claude:
+Each block returned by [[xalloc()]] is preceded by an
+[[Xhdr]] header that records its size and a magic number.
+The magic number ([[0x484F4C45]], which spells ``HOLE'' in
+ASCII) lets [[xmerge()]] detect memory corruption when
+a block is freed:
 <<struct [[Xhdr]]>>=
 // What is the connection with Hole? A Hole that get used will gets
 // its top and size decremented, and this newly allocated part will describe
@@ -5723,6 +5812,12 @@ struct Xhdr
 
 \subsection{[[xalloc()]]}
 
+%claude:
+[<xalloc()>] walks the sorted hole list looking for the
+first hole large enough (first-fit). It then carves the
+requested amount from the bottom of the hole, prepends
+an [[Xhdr]], and shrinks the hole. If the hole is fully
+consumed, it is moved back to the unused slots list.
 <<function [[xalloc]]>>=
 kern_vp
 xalloc(ulong size)
@@ -5808,6 +5903,14 @@ if(x->magix != Magichole) {
 % This may have to allocate a new Hole from the free list.
 % called by xinit! This is the function that actually got memory
 % from Confmem.
+%claude:
+[<xhole()>] is the inverse of [<xalloc()>]: it adds a
+region of free memory to the sorted hole list. It tries to
+merge with adjacent holes (if the new region's bottom
+touches an existing hole's top, or vice versa) to avoid
+fragmentation. This is also the function called by
+[<xinit()>] to seed the allocator with the initial
+[[Confmem]] banks.
 <<function [[xhole]]>>=
 void
 xhole(phys_addr addr, ulong size)
@@ -5949,6 +6052,15 @@ if(a == nilptr)
 
 
 \section{Memory pools}
+
+%claude:
+[[xalloc]] is too coarse for general use---it can only
+handle a small number of holes. The kernel needs a
+finer-grained allocator for the many small, short-lived
+structures it creates during normal operation (channel
+tables, path strings, etc.). This is provided by the
+[[Pool]] allocator, which manages arenas obtained from
+[[xalloc]] and subdivides them using a best-fit algorithm.
 
 \subsection{[[Pool]]}
 % pool allocation, aka arena?
@@ -6145,6 +6257,13 @@ ppanic(Pool *p, char *fmt, ...)
 % the memcpy, memmove, functions of libc use malloc? probably not
 
 % This is for more short-lived or shorter structure.
+%claude:
+The kernel's [[malloc()]] and [[free()]] are thin wrappers
+around [[poolalloc()]]/[[poolfree()]] on the [[mainmem]]
+pool. Unlike user-space [[malloc]], the kernel version
+always zeroes the memory (via [[memset]]) and can
+optionally record the caller's PC in a tag area for
+debugging (when [[Npadlong]] is nonzero).
 
 \subsection{[[malloc()]]}
 
@@ -6366,6 +6485,12 @@ if(Npadlong !=0 && size != 0)
 % from OS point of view the user malloc granularity is
 % done via brk at a page level. malloc is actually
 % done in libc on top of brk (cf insa and aubourg :) )
+%claude:
+User-space [[malloc()]] is entirely in the C library (in
+[[lib_core/libc/port/malloc.c]]). It uses the same [[Pool]]
+allocator but backed by [[brk()]] instead of [[xalloc()]].
+The kernel only sees page-granularity requests via [[brk()]];
+the library subdivides those pages for the user.
 
 % in lib_core/libc/port/malloc.c 
 
@@ -6386,8 +6511,47 @@ if(Npadlong !=0 && size != 0)
 
 % Page will be building blocks for memory for user. We'll see later that
 % they have a huge number of use.
+%claude:
+The previous allocators ([[xalloc]], [[Pool]], [[malloc]])
+manage kernel memory. User memory is managed differently:
+the unit of allocation is a 4~KiB {page}, and the kernel
+tracks every physical page with a [[Page]] metadata
+structure. The [[Palloc]] structure maintains a free list
+of all available pages. When a user calls [[brk()]] or
+triggers a page fault, the kernel takes a page from
+[[palloc]] and maps it into the process's address space.
+%claude:
+Here is the relationship between the allocators:
+\begin{verbatim}
+  Physical memory (one Confmem bank):
+
+       +--------------------------------------------+
+       | user pages (managed by palloc)             |
+       |  each page has a Page struct in palloc.pages|
+       +--------------------------------------------+
+       | kernel malloc pool (Pool/mainmem)          |
+       +--------------------------------------------+
+       | Page[] array (xalloc'ed)                   |
+       +--------------------------------------------+
+       | Proc[] array (xalloc'ed)                   |
+       +--------------------------------------------+
+       | kernel text + data + bss                   |
+  0x8000 +------------------------------------------+
+       | L1/L2 tables, Cpu struct                   |
+  0x0  +--------------------------------------------+
+\end{verbatim}
 
 \subsection{[[Page]]}
+
+%claude:
+A [[Page]] is the metadata for one 4~KiB physical page.
+The kernel allocates one [[Page]] for every physical page
+available for user processes---this is a large array
+([[palloc.pages]]), xalloc'ed during initialization. The
+key fields are [[pa]] (the physical address of the page,
+set once and never changed) and [[ref]] (the reference
+count, because pages can be shared between processes via
+copy-on-write):
 
 <<struct [[Page]]>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
@@ -6457,6 +6621,13 @@ enum Modref
 
 \subsection{[[Palloc]]}
 
+%claude:
+The [[Palloc]] is a singleton that manages the free page
+list. Free pages are kept in a doubly-linked list
+(through [[Page.next]]/[[Page.prev]]), ordered so that the
+most recently used page is at the head and the least
+recently used at the tail. This LRU ordering is used by
+the swapper to decide which pages to evict first.
 <<struct [[Palloc]]>>=
 // Page Allocator (singleton)
 struct Palloc
@@ -6709,6 +6880,35 @@ pagechaintail(Page *p)
 
 
 \section{[[Segment]] and [[Pagetable]]}
+
+%claude:
+A [[Segment]] represents a contiguous region of a process's
+virtual address space (text, data, bss, or stack). Each
+segment contains a two-level {page directory} that maps
+virtual addresses within the segment to physical [[Page]]s.
+This is the kernel's {software} page table---separate from
+the ARM's {hardware} L1/L2 page table, although the two
+must be kept in sync.
+%claude:
+Here is the structure:
+\begin{verbatim}
+  Proc
+   |
+   +-- seg[NSEG]:  array of Segment pointers
+         |
+         +-- seg[SG_TEXT]  --> Segment (base=UTZERO, top=...)
+         +-- seg[SG_DATA]  --> Segment (base=..., top=...)
+         +-- seg[SG_BSS]   --> Segment (base=..., top=...)
+         +-- seg[SG_STACK] --> Segment (base=USTKTOP-USTKSIZE, top=USTKTOP)
+                                 |
+                                 +-- map[]:  array of Pagetable pointers
+                                       |
+                                       +-- Pagetable
+                                             |
+                                             +-- pages[]:  array of Page pointers
+                                                   |
+                                                   +-- Page (pa=..., va=...)
+\end{verbatim}
 
 <<enum [[segtype]]>>=
 /* Segment types */
@@ -7438,6 +7638,14 @@ case Qsegment:
 
 \section{[[sysbrk()]]}
 
+%claude:
+This is the only memory-related syscall. When a user
+program calls [[brk(addr)]], the kernel extends (or
+shrinks) the BSS segment to the requested address by
+allocating (or freeing) pages from [[palloc]] and
+updating the segment's page directory. The user-space
+[[malloc()]] library calls [[brk()]] when it needs more
+memory from the kernel.
 <<syscall brk>>=
 // int brk(void*);
 long
