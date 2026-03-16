@@ -3425,12 +3425,12 @@ helpers, error management, and generic utilities.
 %claude:
 In this chapter, I will present the core data structures
 of the kernel. Some have already been introduced in the
-Overview: [[Ureg]], the processor modes ([[PsrMode]]),
+Overview: [<Ureg>], the processor modes ([[PsrMode]]),
 the address typedefs, and the syscall dispatch table
-([[systab]]). Here I will cover the remaining structures
-that appear everywhere in the kernel: [[Conf]] (hardware
-configuration), [[Cpu]] (per-processor state), [[Label]]
-(context switch), and [[Ref]] (reference counting).
+([<systab>]). Here I will cover the remaining structures
+that appear everywhere in the kernel: [<Conf>] (hardware
+configuration), [<Cpu>] (per-processor state), [<Label>]
+(context switch), and [<Ref>] (reference counting).
 
 \section{[[Conf]] and [[conf]]}
 
@@ -3464,13 +3464,24 @@ struct Conf
 % one after the kernel bss. On the bcm they just have 1.
 % Note that confinit() excludes the physical memory used by the kernel
 % because we will use mem for giving memory to kernel heap or user.
+%claude:
+The [[mem]] array holds up to 4 [[Confmem]] entries for
+non-contiguous regions of available physical memory. On the
+Raspberry Pi there is just one bank; on a PC there can be two
+(one below and one above the kernel binary). [<confinit()>]
+excludes the memory occupied by the kernel itself.
 
 <<global [[conf]]>>=
 Conf conf;
-@ 
+@
 % who sets this? auto detection? used after initialization?
 %datalog: should not be used after finished main initialisation!
 
+%claude:
+Each [[Confmem]] describes one memory bank---its physical
+base address and the number of usable pages. These entries
+are later consumed by the memory allocators ([[xalloc]] and
+[[palloc]]):
 <<struct [[Confmem]]>>=
 // memory "bank"
 struct Confmem
@@ -3522,6 +3533,19 @@ char* getconf(char *name)
 
 \section{[[Cpu]] and [[cpu]]}
 
+%claude:
+The [[Cpu]] structure holds the per-processor state: which
+process is currently running, the clock tick count, MMU
+state, and a small kernel stack used during boot and
+interrupts. On a uniprocessor Raspberry Pi~1 there is
+a single [[Cpu]] at [[CPUADDR]]; on a multiprocessor
+system each CPU has its own.
+%claude:
+The first fields have a fixed layout because assembly code
+accesses them by hardcoded offsets. The [[stack[1]]] at
+the end is a C idiom: the actual stack extends to the
+end of the [[CPUSIZE]] page, so the array's ``one element''
+is really the start of a much larger area.
 <<struct [[Cpu]]>>=
 //coupling: do not change the order of the first 4 fields! 
 // Some assembly code assumes this order.
@@ -3606,19 +3630,27 @@ struct Arch_Cpu {
 %  that? if there was a special instruction like MYCPUID then could
 %  make cpu a macro to cpus[MYCPUID()]. Could also use one register
 %  to hold it and so have something like extern register Cpu* cpu;
-%  This is actually the case on some archi like bcm. 
+%  This is actually the case on some archi like bcm.
 %     extern register Mach* m;			/* R10 */
 %  for sure this is a technique leading to a local value and different
 %  in each processor.
 %  But on PC we can't do that because there is not enough registers to
-%  spare. 
+%  spare.
 %  So cpu is a variable holding an addr that points to an area that
 %  is different on each processor, thx to a trick involving the page table.
 % could also have instead of cpu and cpus have cpus and a Int *mycpu; where
 % mycpu points to the per-processor memory area and hold the value
 % of the processor, but then each access to cpu will be more costly
 % than a direct access as it's done above.
-
+%claude:
+The [[cpu]] global must be per-processor: on a multiprocessor
+system, each CPU must see its own [[Cpu]] structure. On ARM,
+this is achieved by dedicating register [[R10]]---the [[5c]]
+compiler's [[extern register]] extension reserves [[R10]]
+so it is never used for anything else. Each processor sets
+its [[R10]] to point to its own [[Cpu]] during boot.
+On x86, where registers are scarce, a different trick
+involving the page table is used instead.
 <<global [[cpu]](arm)>>=
 extern register Cpu* cpu;           /* R10 */
 @
@@ -3692,7 +3724,19 @@ struct Active active;
 \section{[[Proc]] and [[up]]}
 
 % the big one
-
+%claude:
+The [[Proc]] structure is the largest and most important data
+structure in the kernel---it is what the kernel knows about
+a process. Each running program has one [[Proc]] containing
+its state, memory map, open files, scheduling priority,
+parent/child relationships, notes (signals), error handling
+context, and much more.
+%claude:
+The structure is organized in sections (visible in the
+comment banners below), each corresponding roughly to a
+chapter in this book. We will only show the overview here;
+the individual fields are introduced gradually in their
+respective chapters.
 <<struct [[Proc]]>>=
 struct Proc
 {
@@ -3768,12 +3812,16 @@ struct Arch_Proc
 %old: PMMU
 
 <<[[Proc]] state fields>>=
-// enum<Procstate> 
+// enum<Procstate>
 int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
 @
 
 % see Proc.pid also later.
-
+%claude:
+A process is always in one of the following states. The
+most important ones are [[Running]] (executing on a CPU),
+[[Ready]] (runnable, waiting for the scheduler to pick it),
+and [[Wakeme]] (sleeping, waiting for an event):
 <<enum [[procstate]]>>=
 /* Process states, Proc.state */
 enum Procstate
@@ -3816,6 +3864,10 @@ char *statename[] =
 % but maybe could put some of the state thing later in Proc section of
 % Process chapter
 
+%claude:
+Like [[cpu]], the [[up]] pointer (``user process'') is
+per-processor: it points to the [[Proc]] currently running
+on this CPU. On ARM it is stored in [[R9]]:
 <<global [[up]](arm)>>=
 extern register Proc* up;           /* R9 */
 @
@@ -3832,9 +3884,24 @@ extern register Proc* up;           /* R9 */
 % and proc->fd[]? in title?
 
 % everything is a file/Chan :)
-% diff with file descriptor? fd = index in chan table (fgrp), 
+% diff with file descriptor? fd = index in chan table (fgrp),
 % chan = opened/active file
-
+%claude:
+A [[Chan]] (``channel'') is the kernel's representation of
+an {open file}. It is the internal object behind a user's
+file descriptor---the file descriptor is just an integer
+index into a per-process table of [[Chan]] pointers.
+Because everything in \plan is a file, channels are used
+everywhere: for real files on disk, for device control
+files like [[/dev/cons]], for network connections, for
+mounted file servers, etc.
+%claude:
+The key fields are [[type]] (which device driver owns this
+channel), [[dev]] (a device-specific sub-identifier),
+[[qid]] (the file's unique identity on that device, like
+an inode number), [[path]] (the file name), [[offset]]
+(the current read/write position), and [[mode]] (read,
+write, or both):
 <<struct [[Chan]]>>=
 struct Chan
 {
@@ -3881,6 +3948,13 @@ Chan  *dot; // The current directory
 
 % rob pike: "q for unique"
 % qid =~ inode =~ internal representation of a file on a filesystem(fileserver)
+%claude:
+A [[Qid]] (``q'' for ``unique'') is \plan's equivalent of
+a \unix inode number: it uniquely identifies a file within a
+device or file server. The [[path]] field is the unique
+identifier, [[vers]] is a version number for cache
+invalidation, and [[type]] distinguishes files from
+directories:
 <<struct [[Qid]]>>=
 struct Qid
 {
@@ -3975,7 +4049,37 @@ eqchantdqid(Chan *a, int type, int dev, Qid qid, bool skipvers)
 
 % open take a Chan? how bootstrap? how to get an handle to a file
 % you want to open? first attach to get Chan from root?
-
+%claude:
+A [[Dev]] is a {device driver}---or more precisely, a
+{file server} implemented in the kernel. Each [[Dev]]
+provides a set of methods ([[open]], [[read]], [[write]],
+[[close]], etc.)\ that implement the file interface for
+a particular kind of resource: the console ([[devcons]]),
+the process table ([[devproc]]), the root file system
+([[devroot]]), the SD card ([[devsd]]), etc. The single
+character [[dc]] (e.g., [['c']] for console, [['p']] for
+proc) identifies the device in \plan's [[#c]], [[#p]]
+naming convention.
+%claude: %unix:
+In \unix, devices are identified by {major} and {minor}
+numbers---opaque integers that require a lookup table to
+understand. \plan replaces the major number with a
+human-readable Unicode character (a [[Rune]]): [['c']] for
+the console, [['p']] for the process table, [['e']] for the
+environment, etc. You can see these characters in
+\plan's device path syntax: [[#c]] for the console device,
+[[#p]] for the proc device. This is much clearer than
+memorizing that major~4 means the console. And because
+[[Rune]] is a Unicode code point (not an ASCII byte),
+\plan can support more than 256 different device drivers
+if needed.
+%claude:
+The global [[devtab]] is an array of pointers to all the
+[[Dev]] structures compiled into the kernel---it is the
+registry of all available device drivers. When a [[Chan]]
+is opened on a device, [[Chan.type]] is the index into
+[[devtab]], so that [[devtab[c->type]->read()]] calls the
+right driver's read method.
 <<struct [[Dev]]>>=
 struct Dev
 {
@@ -4015,6 +4119,12 @@ Dev** devtab = nil;
 
 \section{[[Soc]] and [[soc]] (ARM)}
 
+%claude:
+The [[Soc]] structure captures the hardware specifics of
+the System-on-Chip: how much DRAM, where the I/O registers
+start, and various MMU and bus parameters. It is the single
+place where the differences between Raspberry Pi~1 and Pi~2
+are recorded:
 <<struct [[Soc]](arm)>>=
 struct Soc {            /* SoC dependent configuration */
     ulong   dramsize;
