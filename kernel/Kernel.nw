@@ -575,11 +575,13 @@ interface remain remarkably small.
 
 %claude:
 The entire interface fits in a single header, [[sys.h]],
-which lives in [[lib_core/libc/9syscall/]] alongside the
-auto-generated assembly wrappers. Each syscall is a small integer
-used as an index into a dispatch table (the [[systab]]
-array shown later).
-%yoann1: in lib_core/libc/ because also used by libc it's kernel/libc interface 
+which lives in [[lib_core/libc/9syscall/]]---it is shared
+between the kernel and the C library because it defines
+the interface between them. The same directory also
+contains the auto-generated assembly wrappers (one per
+syscall) that user programs link against. Each syscall is
+a small integer used as an index into a dispatch table
+(the [[systab]] array shown later).
 
 
 
@@ -1215,9 +1217,12 @@ user or supervisor mode, and whether interrupts are enabled.
 
 %yoann: ASCII diagram with PSR and all the bits and meaning, and maybe also all registers together
 %claude:
-Here is the layout of the PSR (both CPSR and SPSR share the
-same format):
-%yoann1: what is CPSR/SPSR? they were never introduced
+The ARM actually has two copies of the PSR. The {CPSR}
+(Current Program Status Register) reflects the current state.
+The {SPSR} (Saved Program Status Register) is a shadow copy
+that the processor fills automatically when entering an
+exception: it saves the old CPSR so the handler can restore
+it when returning. Both have the same layout:
 
 \begin{verbatim}
   31  30  29  28  27       8   7   6   5   4    0
@@ -1291,7 +1296,12 @@ where the kernel runs with full access to hardware. When
 an exception (e.g., a [[SWI]]) occurs, the processor
 automatically switches to supervisor mode; the kernel must
 switch back to user mode before returning to the user program.
-%yoann1: if the control bit are last 4 bits, why it's 0x00000010 and not 0x00000010 ? why the 1? according to the ASCII diagram it means thumb mode?
+Note that the mode field is actually 5~bits wide (bits 4--0),
+not 4. Bit~4 is always set in the defined modes (it
+distinguishes ``32-bit modes'' from legacy 26-bit modes),
+and bits 3--0 select the specific mode. Bit~5 (the T~bit)
+is separate---it selects Thumb vs.\ ARM instruction mode
+and is not part of the mode field.
 
 
 <<type [[PsrMode]](arm)>>=
@@ -1575,6 +1585,34 @@ address of a 1~MiB region directly, and bits 19--0 of the
 virtual address become the offset within that region.
 
 %yoann: maybe ASCII diagram showing the L1 Table and the format of each entry, how bits are used; also show which bits control whether the entry is a section or coarse
+%claude:
+The lowest 2 bits of each L1 entry determine its type:
+\begin{verbatim}
+  L1 entry (32 bits):
+
+  Fault (bits[1:0] = 00):  unmapped, any access causes a fault
+  +-----------------------------------------------------------+
+  |                     ignored                         | 0 0 |
+  +-----------------------------------------------------------+
+
+  Coarse (bits[1:0] = 01):  points to an L2 table
+  +-----------------------------------------------------------+
+  | L2 table base address (phys, 1 KiB aligned) | dom | 0 | 1 |
+  +-----------------------------------------------------------+
+   31                                         10  8-5   2   0
+
+  Section (bits[1:0] = 10):  maps 1 MiB directly
+  +-----------------------------------------------------------+
+  | phys base (1 MiB aligned) | flags | AP  | dom | C B | 1 0 |
+  +-----------------------------------------------------------+
+   31                      20  19-12  11-10  8-5   3  2   1  0
+\end{verbatim}
+%claude:
+The [[Section]] type is used for the kernel's RAM mapping
+(512 entries covering 512~MiB) and the I/O register mapping.
+The [[Coarse]] type is used for the exception vectors at
+[[HVECTORS]] and for user-process pages, where fine-grained
+4~KiB mapping is needed.
 
 % put BY2PG here cos referenced a few times.
 <<constant [[BY2PG]](arm)>>=
@@ -1778,32 +1816,31 @@ the windowing system uses this framebuffer.
 The following diagram summarizes the I/O register layout
 as offsets from [[VIRTIO]] ([[0x7E000000]]):
 \begin{verbatim}
-  VIRTIO + 0x000000  +-----------------+
-                     |   (base)        |
-  VIRTIO + 0x003000  +-----------------+
-                     | SYSTIMERS       |
-  VIRTIO + 0x007000  +-----------------+
-                     | DMAREGS         |
-  VIRTIO + 0x100000  +-----------------+
-                     | POWERREGS       |
-  VIRTIO + 0x200000  +-----------------+
-                     | GPIOREGS        |
-  VIRTIO + 0x215000  +-----------------+
-                     | AUXREGS (UART)  |
-  VIRTIO + 0x300000  +-----------------+
-                     | EMMCREGS (SD)   |
-  VIRTIO + 0x980000  +-----------------+
-                     | USBREGS         |
-  VIRTIO + 0xB200    +-----------------+
-                     | INTREGS         |
-  VIRTIO + 0xB400    +-----------------+
-                     | ARMTIMER        |
-  VIRTIO + 0xB880    +-----------------+
-                     | MAILBOX (GPU)   |
-                     +-----------------+
   VIRTIO + IOSIZE    (0x7E000000 + 16 MiB)
+                     +-----------------+
+                     | MAILBOX (GPU)   |
+  VIRTIO + 0xB880    +-----------------+
+                     | ARMTIMER        |
+  VIRTIO + 0xB400    +-----------------+
+                     | INTREGS         |
+  VIRTIO + 0xB200    +-----------------+
+                     | USBREGS         |
+  VIRTIO + 0x980000  +-----------------+
+                     | EMMCREGS (SD)   |
+  VIRTIO + 0x300000  +-----------------+
+                     | AUXREGS (UART)  |
+  VIRTIO + 0x215000  +-----------------+
+                     | GPIOREGS        |
+  VIRTIO + 0x200000  +-----------------+
+                     | POWERREGS       |
+  VIRTIO + 0x100000  +-----------------+
+                     | DMAREGS         |
+  VIRTIO + 0x007000  +-----------------+
+                     | SYSTIMERS       |
+  VIRTIO + 0x003000  +-----------------+
+                     |   (base)        |
+  VIRTIO + 0x000000  +-----------------+
 \end{verbatim}
-%yoann1: fix diagram to have high address at the top
 
 %claude:
 The total I/O space is [[IOSIZE]] (16~MiB), though only
@@ -1840,8 +1877,13 @@ in [[R0]], and all registers are caller-saved. This simplifies
 the kernel's context-switch code, because the [[Label]]
 structure (shown later) only needs to store [[SP]] and
 [[PC]]---the caller has already saved any registers it
-cares about.
-%yoann1: remind that not confuse explicit user syscall where save only a few vs interrupt where kernel save all registers
+cares about. Note that this [[Label]] (just [[SP]]+[[PC]])
+is used for voluntary context switches between kernel
+threads. When the kernel takes control from a user process
+(via a syscall or interrupt), it saves {all} registers
+into a [[Ureg]] on the kernel stack---because the user
+did not follow any calling convention that the kernel
+could rely on.
 
 %yoann: ASCII diagram for calling conventions, and also C vs kernel
 % calling convention
@@ -2380,9 +2422,8 @@ user space into the kernel and back, how interrupts propagate
 from hardware to sleeping processes, and how the scheduler
 picks which process runs next.
 The following subsections give an overview of the first two;
-the steady-state operation is the subject of the rest of
-the book.
-%yoann1: what does steady-state mean? maybe choose another clearer name
+the normal operation (once the system is up and running)
+is the subject of the rest of the book.
 
 \subsection{Booting overview (ARM)}
 
@@ -2653,12 +2694,21 @@ enables the MMU and [[CpChv]] together. Here is what the
   2015    ...                    Fault          (unmapped)
    ...     (unmapped gap)        ...
    512    0x2000_0000 USTKTOP    Fault          (unmapped)
-   511    0x1FF0_0000            Coarse    -->  per-process L2
-   ...     (user space, per-process)
-     1    0x0010_0000            Coarse    -->  per-process L2
-     0    0x0000_0000 UZERO      Fault          (null trap)
+   511    0x1FF0_0000            Fault initially, then
+   ...     (user space)          Coarse when process mapped
+     1    0x0010_0000            (filled on demand by
+     0    0x0000_0000 UZERO      arch_putmmu / fixfault)
 \end{verbatim}
-%yoann1: if entry 0 is set to generate fault, that means all first MB of virtual address space is generating fault, so user program must be loaded above 1MB? but above I see UTZERO at 0x1000 so seems wrong
+%claude:
+The user entries (indices 0--511) start as Fault after
+[<mmuinit()>]. They are filled on demand by [<arch_putmmu()>]
+when a process is created or when a page fault occurs: each
+entry becomes a Coarse pointer to a per-process L2 table.
+Within the first MiB (entry~0), the L2 table maps pages
+starting at [[UTZERO]] ([[0x1000]]) but leaves page~0
+permanently unmapped---this is the null pointer trap.
+So it is not the entire first MiB that is inaccessible,
+only the first 4~KiB page.
 
 
 %claude:
@@ -3011,7 +3061,17 @@ and back:
   8. user program continues
      after SWI instruction
 \end{verbatim}
-%yoann1: you said before that for syscall only need to save 2 registers in Label, so why here says save all in Ureg?
+%claude:
+Note the distinction between [[Ureg]] and [[Label]]: when
+entering the kernel from user space (step~4), [[_vsvc]]
+saves {all} user registers into a [[Ureg]] because the user
+program did not follow any calling convention---its registers
+could hold anything. Later, if the kernel decides to context
+switch to another process (a voluntary switch between kernel
+threads), it uses [[Label]], which saves only [[SP]] and
+[[PC]]---because kernel code follows the caller-save
+convention and the caller has already saved any registers
+it needs.
 
 
 %claude:
@@ -3022,9 +3082,24 @@ the [[vtable]] data (an array of addresses like [[_vsvc]],
 [[_virq]], etc.)\ to the page at [[0xFFFF0000]].
 The [[CpChv]] bit (set during boot) tells the ARM to
 fetch vectors from there instead of from address~0.
-%yoann1: _vsvc stands for?
+The ``v'' in [[_vsvc]] stands for ``vector'' and ``svc''
+for the supervisor call (SWI) exception. Similarly,
+[[_virq]] handles IRQ interrupts, [[_vdabt]] handles
+data aborts, etc.
 
 %yoann: explain R(CPU) R(UP), explain a bit R12/SB (refer to linker book maybe)
+%claude:
+A few things about the registers used in step~4. [[R(CPU)]]
+is [[R10]], which by convention always holds a pointer to the
+current processor's [[Cpu]] structure---this is the
+[[extern register Cpu* cpu]] declaration seen earlier.
+[[R(UP)]] is [[R9]], which holds a pointer to the current
+process's [[Proc]] structure ([[up]] for ``user process'').
+[[R12]] is the {static base} register ([[SB]]), used by
+the \plan C compiler to access global variables (see the
+\book{Linker} for details). The kernel must reload [[R12]]
+because the user program may have used it for something
+else.
 
 % The parameter should be a pointer to the stack to the start of the args?
 \t or args copy in Sargs?
@@ -3054,33 +3129,138 @@ fetch vectors from there instead of from address~0.
 \subsection{FAQ}
 
 %yoann: explain FAQ section as easy to be confused with complex virtual vs physical, kernel vs user, and some arch-specific requirement vs free design decision hard to understand
+%claude:
+The overview above introduced many addresses, registers,
+tables, and mappings. It is easy to be confused, especially
+because some aspects are imposed by the ARM hardware (e.g.,
+the exception vector mechanism, the PSR layout, the MMU
+page table format) while others are design decisions made
+by the \plan kernel authors (e.g., the value of [[KZERO]],
+the placement of [[VIRTIO]], the [[systab]] dispatch table).
+The following questions and answers try to clarify the most
+common sources of confusion.
 
 %yoann: imagine a list of questions the reader could have
+
+%yoann: HVector is specific address, but systab is another one, how force systab to be HVector? answer = actually systab is not exception table but syscall table, different concepts?
+%claude:
+{\bf Q: The exception vector table is at [[HVECTORS]] and the
+syscall table is [[systab]]. How are they related?}
+%claude:
+A: They are different things. The exception vector table at
+[[HVECTORS]] is a hardware mechanism: when a [[SWI]]
+instruction executes, the ARM jumps to a fixed address in
+this table. That entry loads the address of [[_vsvc]] from
+[[vtable]]. Then [[_vsvc]] (assembly code) extracts the
+syscall number from [[R0]] and calls [[arch__syscall()]]
+(C code), which finally indexes into [[systab]] to find the
+right kernel function. So [[HVECTORS]] is the hardware
+entry point, and [[systab]] is the software dispatch table---they
+are connected by the chain of code in between.
+
+%yoann: SWI $0, other value used?  SWI $1?
+%claude:
+{\bf Q: Why [[SWI \$0]]? Does the argument to [[SWI]] matter?}
+%claude:
+A: On \plan, the argument to [[SWI]] is ignored.  The syscall
+number is passed in [[R0]] instead. The [[SWI]] instruction
+is used purely for its side effect of trapping into supervisor
+mode. Some other operating systems encode the syscall number
+in the [[SWI]] argument, but \plan chose the simpler approach
+of using a register.
+
+%yoann: Why kernel vs user  virtual space divide? why can't have user-space to
+% be all of 4GB virtual address space and have kernel be different?
+% (I think xv6 RISCV actually does that)
+%claude:
+{\bf Q: Why split the 4~GiB address space between kernel and user?
+Could each have its own full 4~GiB?}
+%claude:
+A: Some systems do give user space the full address range and
+switch page tables entirely when entering the kernel (xv6 on
+RISC-V does this). The \plan approach---putting the kernel in
+the upper half of every process's address space---means that
+a syscall or interrupt does not need to switch page tables.
+The kernel's code and data are always mapped and immediately
+accessible. The trade-off is that user programs get only 2~GiB
+of virtual space instead of 4~GiB, but on a machine with
+512~MiB of physical RAM this is not a practical limitation.
+
+%yoann: can we have a page fault inside a page fault handler? Does kernel
+% rely on TLB and MMU to access its own data structure? Can kernel memory
+% be swapped?
+%claude:
+{\bf Q: Can a page fault occur inside the kernel? Can kernel
+memory be swapped out?}
+%claude:
+A: The kernel's own pages are never swapped and are always
+mapped (via the L1 section entries set up by [<mmuinit()>]).
+So the kernel does not page-fault when accessing its own data
+structures. A page fault can only occur for user-space
+addresses. However, a page fault {can} occur while the kernel
+is executing a syscall on behalf of a user process---for
+example, when the kernel copies data from a user buffer
+(the user's page might not be resident). The fault handler
+recognizes this case and handles it.
+
+%yoann: why VIRTIO mapped between user and kernel? why not above KZERO instead?
+%claude:
+{\bf Q: Why is [[VIRTIO]] mapped below [[KZERO]], in the gap
+between user space and kernel space?}
+%claude:
+A: The kernel RAM mapping ([[KZERO+x]] = physical [[x]])
+covers exactly [[Soc.dramsize]] (512~MiB), filling L1
+entries 2048--2559. Placing the I/O registers above
+[[KZERO]] would require additional L1 entries in the kernel
+region, which would overlap with the simple offset mapping.
+Putting them at [[0x7E000000]] (below [[KZERO]]) avoids
+this conflict. User processes cannot access these pages
+because the L1 entries are set with kernel-only permissions.
+
+%yoann: Why CPUAddr below kernel? to reuse space below 0x8000 for something useful?
+% alternatives?
+%claude:
+{\bf Q: Why is [[CPUADDR]] at [[0x2000]], below the kernel text
+at [[0x8000]]?}
+%claude:
+A: The ARM firmware loads the kernel binary at physical
+[[0x8000]]. The memory below that is unused by the binary,
+so the kernel reuses it for the [[Cpu]] structure (at
+[[0x2000]]), the L2 page table (at [[0x3000]]), and the L1
+page table (at [[0x4000]]--[[0x8000]]). This avoids wasting
+the 32~KiB gap that the firmware leaves.
 
 
 \subsection{NSFAQ}
 
 %yoann: explain "not-so-frequently asked question"
-
-%yoann: HVector is specific address, but systab is another one, how force systab to be HVector? answer = actually systab is not exception table but syscall table, different concepts?
-
-%yoann: Why kernel vs user  virtual space divide? why can't have user-space to
-% be all of 4GB virtual address space and have kernel be different?
-% (I think xv6 RISCV actually does that)
-
-%yoann: can we have a page fault inside a page fault handler? Does kernel
-% rely on TLB and MMU to access its own data structure? Can kernel memory
-% be swapped?
-
-%yoann: why VIRTIO mapped between user and kernel? why not above KZERO instead?
-
-%yoann: Why CPUAddr below kernel? to reuse space below 0x8000 for something useful?
-% alternatives?
-
-%yoann: SWI $0, other value used?  SWI $1?
+%claude:
+The following are more subtle questions that may not occur
+to every reader on first reading, but that help deepen the
+understanding of the kernel's design.
+\l TODO: add more NSFAQ as they come up
 
 
 %yoann: maybe after all of this say that many things seem complicated and very arch-specific but say actually many things are the same across arch; list the essential things the kernel needs to organize and setup and even if concrete address can vary, the concept are very similar
+%claude:
+Much of this chapter may seem complicated and very
+ARM-specific. But the essential concepts are the same
+across architectures. Every kernel needs to:
+\begin{itemize}
+\item split the address space between kernel and user,
+\item set up page tables (or their equivalent) so the MMU
+can translate virtual to physical addresses,
+\item place an exception/interrupt vector table at a known
+address,
+\item save and restore user registers on kernel entry/exit,
+\item dispatch syscalls through a table of function pointers,
+\item reserve memory for per-CPU state.
+\end{itemize}
+The concrete addresses ([[KZERO]], [[HVECTORS]], etc.), the
+register conventions ([[R10]] for [[cpu]], [[R9]] for [[up]]),
+and the page table format (L1 sections, L2 pages) are
+ARM-specific details, but the architecture of the kernel
+would look very similar on x86 or RISC-V.
 
 \section{Book structure}
 
