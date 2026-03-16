@@ -3177,14 +3177,32 @@ of using a register.
 Could each have its own full 4~GiB?}
 %claude:
 A: Some systems do give user space the full address range and
-switch page tables entirely when entering the kernel (xv6 on
-RISC-V does this). The \plan approach---putting the kernel in
-the upper half of every process's address space---means that
-a syscall or interrupt does not need to switch page tables.
-The kernel's code and data are always mapped and immediately
-accessible. The trade-off is that user programs get only 2~GiB
-of virtual space instead of 4~GiB, but on a machine with
-512~MiB of physical RAM this is not a practical limitation.
+switch page tables entirely when entering the kernel. For
+example, xv6 on RISC-V maintains a separate kernel page table
+(with direct virtual=physical mapping) and per-process user
+page tables. On every syscall or interrupt, xv6 switches the
+page table base register from the user's table to the kernel's.
+To make this switch possible, both tables map a single
+{trampoline} page at the same high virtual address---this is
+where the switching code runs.
+%claude:
+The \plan approach is different and simpler: the kernel is
+mapped in the upper half of {every} process's page table.
+A syscall or interrupt does not need to switch page tables
+at all---the kernel's code and data are always mapped and
+immediately accessible. The trade-off is that user programs
+get only 2~GiB of virtual space instead of 4~GiB, but on
+a machine with 512~MiB of physical RAM this is not a
+practical limitation. The benefits are: trap entry is
+faster (no TLB flush from a page table switch), no
+trampoline is needed, and the kernel can access user
+memory directly (e.g., syscall arguments on the user
+stack, buffer addresses) without switching page tables
+first. The kernel still needs to validate user pointers
+(e.g., check they are below [[KZERO]], handle page
+faults), but the shared mapping makes the common case
+simpler than with separate page tables where even
+reading a user byte requires a special copy routine.
 
 %yoann: can we have a page fault inside a page fault handler? Does kernel
 % rely on TLB and MMU to access its own data structure? Can kernel memory
