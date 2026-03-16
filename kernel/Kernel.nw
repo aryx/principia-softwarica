@@ -240,8 +240,7 @@ Bell Labs. If \unix was ``version~1,'' then \plan is
 ``version~2'': a chance to redesign an operating system with
 decades of hindsight. The result is a kernel that is remarkably
 small, clean, and coherent---a good basis for the other
-\principia books that cover \plan's shell, compilers, and
-graphics system.
+\principia books.
 
 %yoann: I will focus on code of 9 for Raspberry Pi, ARM archi. Simpler archi.
 % Will have (ARM) in section when ARM specific. But most of the code
@@ -287,9 +286,10 @@ there is no graphics, no network.
 Even though this book also does not cover graphics or networking
 (those are in \book{Graphics} and \book{Network}), the
 kernel presented here is the same one that supports those
-subsystems. I want the books in \principia to form a
-coherent set, so it is important to present a kernel that
-is complete enough to run a real system, not a toy.
+subsystems. 
+%I want the books in \principia to form a
+%coherent set, so it is important to present a kernel that
+%is complete enough to run a real system, not a toy.
 
 \item XINU has a network stack but the kernel itself
 is too simple with no virtual memory for instance
@@ -370,7 +370,7 @@ hardware such as the Raspberry Pi.
 \section{Getting started}
 
 To get started you first need to get the source of the \plan
-version described in this book. See \urlprincipia.
+version described in this book. See \urlinstall.
 %
 Then you need to compile using a regular C compiler (e.g. gcc)
 the \plan C cross compilers written by Ken Thompson: \urlgoken.
@@ -406,12 +406,7 @@ arithmetic, C idioms for implementing data structures
 tagged structures), and subtle interactions with the hardware.
 A very good knowledge of C is required.
 
-\item Operating system: (yep)
-% ref?
-% OS vs kernel. Used interchanbly here.
-\end{itemize}
-
-
+\item Operating system:
 This book is not an introduction to operating systems. The goal
 of this book is to explain with full details a kernel but we assume
 you already have a vague idea of how an operating system
@@ -423,6 +418,10 @@ works and so that you are familiar with concepts such as
 I assume you already know most of the theory; this book is here to
 cover the practice.
 %The details! And they matter!
+% ref?
+% OS vs kernel. Used interchanbly here.
+\end{itemize}
+
 
 %yoann: other stuff help to understand but not mandatory
 %claude:
@@ -432,10 +431,10 @@ The following are helpful but not strictly required:
 \item The ARM architecture: some familiarity with the ARM
 processor helps for the architecture-specific chapters,
 but most of the kernel code is portable C. The
-\book{Machine} and \book{Assembler} can serve as
+\book{Emulator} and \book{Assembler} can serve as
 references.
 % actually maybe not that much. Mention Raspberry Pi instead of ARM?
-% see \book{Machine}? help, but \book{Machine} does not emulate everything
+% see \book{Emulator}? help, but \book{Emulator} does not emulate everything
 % like MMU or coprocessors, so less useful.
 
 \item Assembly: a few key routines (context switch, interrupt
@@ -574,14 +573,14 @@ interface remain remarkably small.
 % see also docs/doc/ and docs/man/
 
 %claude:
-The entire interface fits in a single header, [[sys.h]],
+The entire interface fits in a small single header, [[sys.h]],
 which lives in [[lib_core/libc/9syscall/]]---it is shared
 between the kernel and the C library because it defines
 the interface between them. The same directory also
 contains the auto-generated assembly wrappers (one per
 syscall) that user programs link against. Each syscall is
 a small integer used as an index into a dispatch table
-(the [[systab]] array shown later).
+(the [<systab>] array shown later).
 
 
 
@@ -626,6 +625,7 @@ The [[ERRSTR]] syscall at position~39
 is the error-reporting mechanism: \plan does not use
 [[errno]] like \unix, but instead stores error messages
 as strings that user programs retrieve via [[errstr()]].
+%yoann1: say that cleaner; one of those things cleaning up UNIX
 
 % will see in helloraw.c how to use those codes to perform syscall to kernel.
 % will see sys_nop() soon.
@@ -639,12 +639,18 @@ The process syscalls mirror the \unix model: [[RFORK]] creates
 a new process (a generalization of \unix [[fork]]),
 [[EXEC]] replaces the current program, [[EXITS]] terminates,
 and [[AWAIT]] waits for a child (like \unix [[wait]]).
+
 <<[[sys.h]] process syscalls>>=
 #define RFORK       1
 #define EXEC        2
 #define EXITS       3
 #define AWAIT       4
 @
+
+%yoann: maybe say again cleaning up Unix/Linux where no need fork() and clone() but instead more general mechanism RFORK (resource fork) where can fork or share many resources (memory, fds, env, etc.) so clone is just RFORK with memory not forked but shared
+
+%yoann: EXITS is another cleaning, does not take error code but clearer string so no need man page to describe each time mapping from error code to actual meaning
+
 % for EXITS it generates _exits assembly function, not exits
 %  because exits is a C function in libc/port/atexit.c
 %old: TODO ugly! change it. Put EXIT here?)
@@ -687,6 +693,8 @@ Note [[PREAD]] and [[PWRITE]] instead of the traditional
 \unix [[read]]/[[write]]: the [['p']] stands for
 ``positional''---they take an explicit file offset, making
 seek-then-read atomic.
+%yoann1: again a cleaning up of UNIX thx to decades of hindsight
+
 <<[[sys.h]] file syscalls>>=
 #define OPEN        6
 #define CLOSE       7
@@ -714,6 +722,7 @@ is a \plan addition that returns the file name associated
 with an open file descriptor---useful because in \plan,
 with per-process namespaces, a file descriptor is often
 more reliable than a path.
+%yoann1: maybe for CREATE mention in a footnote CREAT and regrets of Ken Thompson regarding CREAT without E
 
 <<[[sys.h]] directory syscalls>>=
 #define CREATE      11
@@ -1018,7 +1027,8 @@ void main() {
 %$
 
 %claude:
-This program reads commands from standard input, forks a child
+This program reads commands from standard input (file descriptor [[0]]),
+forks a child
 with [[rfork]], loads the requested program with [[exec]], and
 waits for it to finish with [[await]]. Running it under
 [[ratrace]] reveals the full sequence of syscalls for a single
@@ -1074,15 +1084,18 @@ it is useful beyond this book.
 %  (slides, small, very good)
 % - http://embedded-xinu.readthedocs.io/en/latest/arm/index.html
 
+ARM is a 32 bits architecture, hence the constant definition below ``bytes per word``.
+%yoann1: maybe explain what "word" mean in OS context and why it means the things going in registers? I'm not sure about the origin of the word.
+
 <<constant [[BY2WD]](arm)>>=
 #define BY2WD       4
 @
-%ARM 32 bits
 
 %yoann: what V stands for?
 %claude:
 [[BY2V]] stands for ``bytes per vlong'' (a 64-bit value,
 8~bytes on a 32-bit ARM).
+%yoann1: explain vlong "very long" ? actually long on 64 bits archs with gcc is already 64bits, but on plan9 long is always 32 bits, so long long (or vlong) is 64 bits.
 
 <<constant [[BY2V]](arm)>>=
 #define BY2V        8           /* only used in xalloc.c */
@@ -1296,16 +1309,18 @@ where the kernel runs with full access to hardware. When
 an exception (e.g., a [[SWI]]) occurs, the processor
 automatically switches to supervisor mode; the kernel must
 switch back to user mode before returning to the user program.
-Note that the mode field is actually 5~bits wide (bits 4--0),
-not 4. Bit~4 is always set in the defined modes (it
-distinguishes ``32-bit modes'' from legacy 26-bit modes),
-and bits 3--0 select the specific mode. Bit~5 (the T~bit)
-is separate---it selects Thumb vs.\ ARM instruction mode
-and is not part of the mode field.
+The mode field is 5~bits wide (bits 4--0),
+but Bit~4 is always set in the defined modes (it
+distinguishes ``32-bit modes'' from legacy 26-bit modes).
+Bits 3--0 select the specific mode. 
+
+Bit~5 (the T~bit) selects Thumb vs.\ ARM instruction mode.
+%yoann1: explain more what is Thumb and how we will not really care about it in this book
+
 
 
 <<type [[PsrMode]](arm)>>=
-// Last 4 bits of PSR
+// Last 5 bits of PSR
 #define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
 <<[[PsrMode]] other cases(arm)>>
@@ -1355,6 +1370,8 @@ scheduler's run queue.
 
 \subsubsection{Exceptions}
 
+%yoann: maybe define Exception vs Interrupt vs IRQ terms
+
 %Ureg.type
 %matches closely processor modes actually
 % (which is why will abuse PsrMode for that)
@@ -1372,6 +1389,9 @@ physical address~0, but the kernel configures the ARM (via the
 [[CpChv]] bit in the system control register) to use
 ``high vectors'' at [[0xFFFF0000]], which is more convenient
 because it lives in the kernel's virtual address space.
+%yoann1: and because 0 will be used for null pointer "detection" in user program
+
+%yoann: HVECTORS is virtual address. Must mapped to physical 0. Need CpChv (later).
 Of course, using a virtual address means the MMU must already
 be enabled and the page tables must map [[0xFFFF0000]] to the
 physical memory containing the vector table. This is not a
@@ -1379,19 +1399,12 @@ chicken-and-egg problem: the kernel sets up the page tables
 and the vector table first (while still using physical
 addresses or identity-mapped memory during early boot), then
 enables the MMU, and only then switches to high vectors.
-
-% vector normally at 0x00000 (physical and virtual?)
-% but more convenient have it higher virtual memory
+%yoann1: so hardware itself when exception/irq is relying on MMU coprocessor (see next section) to translate the virtual 0xFFFF0000 to the appropriate physical memory?
 
 <<constant [[HVECTORS]](arm)>>=
 #define HVECTORS    0xffff0000
 @
-% virtual address. Must be mapped to physical 0
-% Need CpChv (see later).
-
 % will contain notably callback for SWI!
-
-% when SWI then processor change CPSR (and before also save in SPSR)
 
 \subsection{ARM coprocessors}
 
@@ -2015,6 +2028,8 @@ The kernel source is split across many files organized by
 subsystem: [[core/]], [[concurrency/]], [[memory/]],
 [[processes/]], [[files/]], [[filesystems/]], [[time/]],
 [[interrupts/]], [[devices/]], [[init/]], [[console/]], etc.
+%yoann1: actually say maps to some of the chapters in this book
+
 Each subsystem has both portable code (in [[port/]]) and
 architecture-specific code (in [[bcm/]] for ARM).
 
@@ -2410,6 +2425,8 @@ Unlike a compiler or an assembler, a kernel is not a pipeline
 that transforms an input into an output. It is a {reactive}
 program: it waits for events---syscalls, interrupts, timer
 ticks---handles them, and goes back to sleep.
+%yoann1: actually kernel "sleep" while user-program executes
+
 %claude:
 The kernel's execution can be understood along three axes.
 First, the {boot sequence}: how the kernel starts from a bare
@@ -2611,15 +2628,18 @@ I/O registers ([[VIRTIO]]) sit in the gap between the user
 stack top and [[KZERO]]---they are mapped here for
 convenience, even though they are only accessed by the kernel.
 Fourth, the kernel's data section contains important global
-variables such as [[systab]] (the syscall dispatch table),
-[[devtab]] (the device driver table), [[conf]] (hardware
-configuration), [[palloc]] (the page allocator state), and
-[[procalloc]] (the process table). Finally, the [[Cpu]]
-structure for CPU~0 occupies a single page at [[CPUADDR]],
-below the kernel text, in the small gap between [[KZERO]]
-and [[KTZERO]]. On multi-processor systems (e.g.,
+variables such as [<systab>] (the syscall dispatch table),
+[<devtab>] (the device driver table), [<conf>] (hardware
+configuration), [<palloc>] (the page allocator state), and
+[<procalloc>] (the process table). Finally, the [<Cpu>]
+structure for CPU~0 occupies a single page at [<CPUADDR>],
+below the kernel text, in the small gap between [<KZERO>]
+and [<KTZERO>]. 
+
+%claude:
+On multi-processor systems (e.g.,
 Raspberry Pi~2), each additional CPU has its own [[Cpu]]
-struct allocated elsewhere; the [[cpus[]]] array and the
+struct allocated elsewhere; the [<cpus>]] array and the
 dedicated register [[R10]] allow each processor to find
 its own.
 
@@ -3091,10 +3111,10 @@ data aborts, etc.
 %claude:
 A few things about the registers used in step~4. [[R(CPU)]]
 is [[R10]], which by convention always holds a pointer to the
-current processor's [[Cpu]] structure---this is the
-[[extern register Cpu* cpu]] declaration seen earlier.
+current processor's [<Cpu>] structure---this is the
+[[extern register Cpu* cpu]] declaration we will see soon.
 [[R(UP)]] is [[R9]], which holds a pointer to the current
-process's [[Proc]] structure ([[up]] for ``user process'').
+process's [<Proc>] structure ([<up>] for ``user process'').
 [[R12]] is the {static base} register ([[SB]]), used by
 the \plan C compiler to access global variables (see the
 \book{Linker} for details). The kernel must reload [[R12]]
@@ -3160,7 +3180,7 @@ are connected by the chain of code in between.
 
 %yoann: SWI $0, other value used?  SWI $1?
 %claude:
-{\bf Q: Why [[SWI \$0]]? Does the argument to [[SWI]] matter?}
+{\bf Q: Why [[SWI $0]]? Does the argument to [[SWI]] matter?}
 %claude:
 A: On \plan, the argument to [[SWI]] is ignored.  The syscall
 number is passed in [[R0]] instead. The [[SWI]] instruction
@@ -3191,9 +3211,9 @@ mapped in the upper half of {every} process's page table.
 A syscall or interrupt does not need to switch page tables
 at all---the kernel's code and data are always mapped and
 immediately accessible. The trade-off is that user programs
-get only 2~GiB of virtual space instead of 4~GiB, but on
+get only 2~GiB of virtual space instead of 4~GiB (but on
 a machine with 512~MiB of physical RAM this is not a
-practical limitation. The benefits are: trap entry is
+practical limitation). The benefits are: trap entry is
 faster (no TLB flush from a page table switch), no
 trampoline is needed, and the kernel can access user
 memory directly (e.g., syscall arguments on the user
