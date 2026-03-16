@@ -4170,10 +4170,31 @@ Soc soc = {
 % This is why lots of the concurrency issues arised first
 % for OS programmers long before the other.
 
-% In fact with input devices, even more source of concurrency! 
+% In fact with input devices, even more source of concurrency!
 
 % for userspace concurrency, see IPC chapter;
 % here this is kernel concurrency!
+%claude:
+In this chapter, I will present the concurrency primitives
+used inside the kernel. These are foundational building
+blocks---almost every chapter that follows will use locks,
+interrupt disabling, or sleep/wakeup.
+%claude:
+Kernels were arguably the first concurrent programs, long
+before user-level threads and multicore CPUs existed. Even
+on a uniprocessor, the kernel is inherently concurrent:
+a syscall can be interrupted at any point by a hardware
+interrupt (a timer tick, a keyboard press, a disk
+completion), and the interrupt handler may access the same
+data structures the syscall was modifying. On a
+multiprocessor, the situation is worse---two CPUs can
+execute kernel code simultaneously. Concurrency bugs in the
+kernel are especially dangerous because they can corrupt
+the data structures that all processes depend on.
+%claude:
+This chapter covers the kernel's own concurrency mechanisms.
+User-level concurrency (semaphores, rendezvous) is covered
+in Chapter~\ref{chap:ipc}.
 
 %Torvalds on semaphore vs spinlocks and mutual exclusion in general
 % http://yarchive.net/comp/linux/semaphores.html
@@ -4182,6 +4203,39 @@ Soc soc = {
 
 
 \section{Critical regions}
+
+%claude:
+A {critical region} is a section of code that accesses shared
+data and must not be executed by two threads of control at the
+same time. If two paths of execution read and modify the same
+data structure concurrently (for instance, the scheduler's
+run queue), the result is a {race condition}---the data
+structure can end up in an inconsistent state, leading to
+crashes or subtle corruption.
+%claude:
+In the kernel, the concurrent ``threads'' are not user-level
+threads but different paths of execution that can interleave:
+\begin{itemize}
+\item A syscall executing on behalf of process~A can be
+interrupted by a timer tick, which triggers the scheduler,
+which switches to process~B, which makes its own syscall.
+\item On a multiprocessor, two CPUs can execute two different
+syscalls simultaneously.
+\item An interrupt handler can fire while the kernel is in the
+middle of modifying a data structure that the handler also
+needs.
+\end{itemize}
+%claude:
+The kernel uses a hierarchy of mechanisms to protect critical
+regions, from coarsest to finest:
+[[arch_splhi()]] (disable all interrupts---the simplest but
+most heavy-handed),
+[[Lock]] (a spin lock using [[arch_tas()]]),
+[[ILock]] (a spin lock that also disables interrupts, to
+avoid deadlock with interrupt handlers),
+[[QLock]] (a lock where waiters sleep instead of spinning),
+and [[RWLock]] (a readers/writer lock).
+The following sections present each in turn.
 
 % There are different code/data "regions": 
 % - user code and user data
@@ -4231,9 +4285,23 @@ Soc soc = {
 
 % In a uniprocessor, you can do all the concurrency in the kernel
 % by just using slphi/spllo. But it does not scale to SMP.
-%smp: for smp You want finer-grained locks than splhi. 
+%smp: for smp You want finer-grained locks than splhi.
 % Still important also in SMP to have splhi.
-
+%claude:
+The simplest way to protect a critical region is to disable
+interrupts: if no interrupt can fire, no other code can
+run on this processor. The ``spl'' name is a legacy from
+\unix, standing for ``Set Priority Level.''
+[[arch_splhi()]] disables IRQ interrupts by setting the
+[[PsrDirq]] bit in the CPSR; [[arch_spllo()]] re-enables
+them. [[arch_splhi()]] returns the old CPSR value so
+[[arch_splx()]] can restore it later.
+%claude:
+On a uniprocessor, [[arch_splhi()]] is sufficient for all
+mutual exclusion. But it does not scale to SMP: disabling
+interrupts on one CPU does not prevent another CPU from
+executing kernel code. For SMP, finer-grained locks are
+needed.
 <<function [[arch_splhi]](arm)>>=
 // bool   arch_splhi(void);
 TEXT arch_splhi(SB), 1, $-4
@@ -4313,6 +4381,20 @@ ulong splpc;      /* pc of last caller to arch_splhi */
 % in different processors.
 
 % TAS is the building block of concurrency primitives.
+%claude:
+{Test-and-set} is the hardware primitive on which all
+spin locks are built. [[arch_tas()]] atomically writes~1
+into a memory word and returns the old value. If the old
+value was~0, the caller has acquired the lock; if it was
+already~1, someone else holds it.
+%claude:
+On the Raspberry Pi~1, atomicity is achieved with the
+[[SWPW]] (swap word) instruction, which performs the
+read-modify-write in a single indivisible operation.
+On the Pi~2 (ARMv7, SMP), a different mechanism using
+[[LDREX]]/[[STREX]] is needed because [[SWPW]] is
+deprecated and does not provide the memory ordering
+guarantees required for multiprocessor correctness.
 
 % call we will see later as arch_tas(&lock->key)
 <<function [[arch_tas]](raspberry pi1)(arm)>>=
@@ -4356,6 +4438,13 @@ TEXT    arch_tas(SB), $-4
 % useful to have something faster on certain architecture)
 
 % x for exclusive? was better ainc, for atomic inc?
+%claude:
+The other fundamental atomic operation is
+increment/decrement. These are used for reference counting
+(e.g., [[Ref]]). On the uniprocessor Pi~1, the
+implementation is trivial: disable interrupts, modify the
+counter, re-enable. On SMP, a more sophisticated
+approach using [[LDREX]]/[[STREX]] would be needed.
 
 % (lock -> inccnt) | _allocb -> <>
 <<function [[arch_xinc]](raspberry pi1)(arm)>>=
@@ -4394,11 +4483,24 @@ arch_xdec(long *p)
 
 \section{Spin [[Lock]]}
 
-% arch_splhi good, but need finer granularity! 
+% arch_splhi good, but need finer granularity!
 % Also does not really handle concurrency when have SMP.
 % arch_tas can be building block for more complex critical regions.
-
-
+%claude:
+A [[Lock]] (spin lock) is built on top of [[arch_tas()]].
+Unlike [[arch_splhi()]], a spin lock provides mutual
+exclusion across CPUs, not just against interrupts on one
+CPU. The caller spins in a tight loop until the lock
+becomes available. Spin locks are appropriate for very
+short critical regions (a few lines of code) where the
+wait is expected to be brief.
+%claude:
+On a uniprocessor, a spin lock still serves a purpose:
+while a process holds a lock, the kernel prevents it from
+being scheduled out (via [[Proc.nlocks]]), which effectively
+protects the critical region from other processes. However,
+a spin lock on a uniprocessor does {not} protect against
+interrupts---for that, [[ILock]] (next section) is needed.
 <<struct [[Lock]]>>=
 // a.k.a Spinlock
 struct Lock
@@ -4569,10 +4671,25 @@ l->cpu = CPUS(cpu->cpuno);
 
 \section{Uninterruptable [[ILock]]}
 
+%claude:
+An [[ILock]] is a spin lock that also disables interrupts
+before acquiring the lock. This is necessary when a data
+structure is accessed both from normal kernel code (syscalls)
+and from interrupt handlers. Without disabling interrupts,
+a deadlock can occur: a syscall acquires the lock, an
+interrupt fires on the same CPU, the interrupt handler tries
+to acquire the same lock, and spins forever because the
+interrupted syscall is the one holding it.
+%claude:
+[[ILock]] solves this by calling [[arch_splhi()]] before
+[[arch_tas()]], and saving the old interrupt state in
+[[Lock.sr]] so [[iunlock()]] can restore it. In practice,
+[[ILock]] is used for structures accessed from interrupt
+handlers: the timer list, device driver queues, etc.
 <<struct [[ILock]]>>=
 typedef Lock ILock;
 @
-% Who uses Ilock in practice? the global timers! 
+% Who uses Ilock in practice? the global timers!
 % device drivers?
 
 % do we always use a Lock in a consistent way? In some cases I hope so
@@ -4702,7 +4819,22 @@ if(l->isilock)
 %ocaml: similar to mutex.mli
 
 % when QLock vs just Lock?
-
+%claude:
+A [[QLock]] (queuing lock, also known as a {mutex}) is a
+lock where the caller goes to {sleep} instead of spinning
+when the lock is not available. This is important for
+critical regions that may take a long time---for instance,
+I/O operations or file system lookups. Spinning for
+milliseconds would waste CPU time; sleeping lets the
+scheduler run other processes.
+%claude:
+The waiting processes form a queue ([[head]]/[[tail]]),
+linked through [[Proc.qnext]]. When the lock holder calls
+[[qunlock()]], it wakes the first waiter in the queue.
+The internal coordination uses a [[Lock]] (spin lock) to
+protect the queue itself, but the spin is only held for
+the few instructions needed to enqueue or dequeue---the
+actual wait is a sleep.
 <<struct [[QLock]]>>=
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
 // a.k.a Mutex
@@ -4870,7 +5002,14 @@ canqlock(QLock *q)
 %  reader1; writer2; done1; done2
 %  reader1; writer2; reader2; ???
 % You dont want to strave writers, or readers.
-
+%claude:
+An [[RWlock]] allows multiple simultaneous readers or a
+single exclusive writer. This is useful for data structures
+that are read frequently but modified rarely, such as mount
+tables ([[Mhead]]), process groups ([[Pgrp]]), and
+environment groups ([[Egrp]]). The implementation is
+subtle: it must avoid starving either readers or writers,
+and like [[QLock]], waiters sleep rather than spin.
 <<struct [[RWlock]]>>=
 struct RWlock
 {
@@ -5094,6 +5233,22 @@ canrlock(RWlock *q)
 
 \section{Atomic [[Ref]]erences and [[Counter]]}
 
+%claude:
+We already saw [[arch_xinc()]]/[[arch_xdec()]], which
+atomically adjust a raw counter. [[Ref]] wraps a counter
+with a [[Lock]] instead of using [[arch_xinc]] directly.
+This is arguably redundant---[[arch_xdec()]] already
+returns the new value, which is all [[decref()]] needs.
+The [[Lock]] does allow [[decref()]] to atomically check
+for underflow and panic, but the main reason is likely
+historical: [[Ref]] is portable code (in [[port/]]) that
+predates the arch-specific atomic operations, and using
+a [[Lock]] keeps it independent of any particular
+architecture's atomic primitives.
+%claude:
+Many kernel objects (pages, channels, segments) embed a
+[[Ref]] for reference counting---the object is freed when
+[[decref()]] returns~0.
 <<struct [[Ref]]>>=
 // For reference counting shared things (e.g. a Page)
 struct Ref
@@ -5144,8 +5299,21 @@ typedef struct Ref Counter;
 
 % Very easy to shoot yourself in the foot! Some bad interactions
 % between spinlock, qlock, and ilocks.
+%claude:
+Concurrency bugs are notoriously hard to find, so the
+kernel includes several runtime checks to catch common
+mistakes: unlocking from the wrong process, sleeping
+while holding a spin lock, or taking a qlock while
+interrupts are disabled.
 
 \subsection{[[Lock.p]]}
+
+%claude:
+Each [[Lock]] records which process acquired it (in
+[[Lock.p]]). On unlock, the kernel checks that the same
+process is releasing it---a mismatch indicates a bug
+(for instance, a context switch that should not have
+happened while the lock was held):
 
 <<[[Lock]] debugging fields>>=
 // option<ref<Proc>>, None when key == 0
@@ -5181,6 +5349,22 @@ l->p = up;
 
 \subsection{[[Proc.nlocks]]}
 
+%claude:
+[[Proc.nlocks]] counts how many spin locks the current
+process holds. This is crucial: a process holding a spin
+lock must not be scheduled out, because the lock protects
+a critical region that must complete without interruption.
+The scheduler checks [[nlocks]] and delays rescheduling
+until all locks are released. Similarly, [[qlock()]]
+checks [[nlocks]] and prints a warning if a process tries
+to sleep while holding a spin lock---that would deadlock,
+because no other process could run to release the lock.
+%claude:
+Note that [[nlocks]] itself uses [[arch_xinc()]]/[[arch_xdec()]]
+(via [[inccnt()]]/[[deccnt()]]) rather than
+[[incref()]]/[[decref()]], because the latter use
+[[lock()]]/[[unlock()]]---which would modify [[nlocks]],
+creating a circular dependency.
 <<[[Proc]] synchronization fields>>=
 // As long as the current process hold spinlocks (to kernel data structures),
 // we will not schedule another process in sched() or unlock(); 
@@ -5238,10 +5422,18 @@ if(up != nil && up->nlocks.ref)
 
 \subsection{[[Cpu.ilockdepth]]}
 
+%claude:
+[[Cpu.ilockdepth]] counts how many [[ILock]]s are held
+on this CPU. Like [[nlocks]], it is checked in [[qlock()]]:
+sleeping while holding an [[ILock]] (with interrupts
+disabled) would deadlock the entire CPU, because the
+timer interrupt that drives the scheduler could not fire.
+No atomic operation is needed here because interrupts are
+already disabled when [[ilockdepth]] is modified.
 <<[[Cpu]] other fields>>=
 int ilockdepth;
-@ 
-% could rename nilocks? 
+@
+% could rename nilocks?
 
 % no need atomic increment/decrement below
 % because used by only one cpu at a time! and no interrupt concurrency
@@ -5267,7 +5459,7 @@ if(cpu->ilockdepth != 0)
 
 \section{Synchronization}
 % different from critical regions
-% what if want to do producer/consumer? 
+% what if want to do producer/consumer?
 % consumer has to wait for producer to produce. How do that
 % with the locking stuff we have seen before? Enough?
 
@@ -5278,16 +5470,44 @@ if(cpu->ilockdepth != 0)
 % some calls to sched()/ready()
 
 % see sleep.ps in plan9 documents
+%claude:
+The locking primitives above provide {mutual exclusion}:
+preventing two threads from accessing the same data at the
+same time. But they do not solve {synchronization}: how does
+a process wait for something to happen (e.g., a disk read
+to complete, a pipe to have data)? For that, the kernel
+needs a way to put a process to sleep and wake it up later.
 
 \subsection{Rendez-vous}
 % sleep/wakeup?
+%claude:
+The fundamental synchronization mechanism in the kernel is
+[[sleep()]]/[[wakeup()]], built around the [[Rendez]]
+structure (a ``rendezvous point''). A process calls
+[[sleep()]] with a condition function; if the condition is
+not yet true, the process is put to sleep. Later, when
+another process or an interrupt handler makes the condition
+true, it calls [[wakeup()]] to resume the sleeper.
+The full code is in Chapter~\ref{chap:processes}.
 
 \subsection{Producer/Consumer Queue}
 %IO Queue
 % will see later
+%claude:
+The I/O [[Queue]] structure (Chapter~\ref{chap:queues})
+uses [[sleep()]]/[[wakeup()]] to implement producer/consumer
+synchronization: a reader sleeps when the queue is empty,
+a writer sleeps when it is full, and each wakes the other.
 
 \subsection{Semaphore}
 % those are actually used for user-level locks, see libcore/libc/port/lock.c
+%claude:
+The kernel also provides semaphores ([[SEMACQUIRE]]/[[SEMRELEASE]]
+syscalls), but these are primarily for {user-level}
+synchronization. The C library's [[Lock]] and [[QLock]]
+(in [[libcore/libc/port/lock.c]]) are implemented on top
+of these kernel semaphores. Inside the kernel itself,
+the spin locks and qlocks described above are used instead.
 
 
 
