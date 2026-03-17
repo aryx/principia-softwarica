@@ -2,13 +2,15 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: global [[output]] */
+/*s: global [[output]](time.c) */
 char	output[4096];
-/*e: global [[output]] */
+/*e: global [[output]](time.c) */
+
+//forward decl
 void	add(char*, ...);
 void	notifyf(void*, char*);
 
-/*s: function [[error]] */
+/*s: function [[error]](time.c) */
 static void
 error(char *s)
 {
@@ -16,8 +18,8 @@ error(char *s)
     fprint(2, "time: %s: %r\n", s);
     exits(s);
 }
-/*e: function [[error]] */
-/*s: function [[main]] */
+/*e: function [[error]](time.c) */
+/*s: function [[main]](time.c) */
 void
 main(int argc, char *argv[])
 {
@@ -80,8 +82,8 @@ main(int argc, char *argv[])
     fprint(2, "%s\n", output);
     exits(w->msg);
 }
-/*e: function [[main]] */
-/*s: function [[add]] */
+/*e: function [[main]](time.c) */
+/*s: function [[add]](time.c) */
 void
 add(char *a, ...)
 {
@@ -95,8 +97,8 @@ add(char *a, ...)
     va_end(arg);
     beenhere++;
 }
-/*e: function [[add]] */
-/*s: function [[notifyf]] */
+/*e: function [[add]](time.c) */
+/*s: function [[notifyf]](time.c) */
 void
 notifyf(void *a, char *s)
 {
@@ -105,5 +107,5 @@ notifyf(void *a, char *s)
         noted(NCONT);
     noted(NDFLT);
 }
-/*e: function [[notifyf]] */
+/*e: function [[notifyf]](time.c) */
 /*e: misc/time.c */
