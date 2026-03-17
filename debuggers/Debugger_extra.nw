@@ -1921,6 +1921,8 @@ enum dissembler_type
     AI386,
     AI8086,			/* oh god */
     AARM,
+    AMIPS,
+    AMIPSCO,		/* native mips */
 };
 @
 %
@@ -1944,6 +1946,7 @@ enum object_file_type
 {
     Obj386 = 0,			/* .8 */
     ObjArm,			/* .5 */
+    ObjMips,		/* .v */
 
     Maxobjtype,
 };
@@ -1986,7 +1989,8 @@ enum object_file_type
 /*
  *	Supported architectures:
  *		i386,
- *		arm
+ *		arm,
+ *              mips
  */
 
 <<enum [[executable_type]]>>
@@ -2024,7 +2028,7 @@ typedef	void	(*Tracer)(Map*, uvlong, uvlong, Symbol*);
 extern	int	asstype;	/* dissembler type - machdata.c */
 extern	Machdata *machdata;	/* jump vector - machdata.c */
 
-Map*		attachproc(int, int, int, Fhdr*);
+Map*		attachproc(int /*pidt*/, int, int, Fhdr*);
 int		beieee80ftos(char*, int, void*);
 int		beieeesftos(char*, int, void*);
 int		beieeedftos(char*, int, void*);
@@ -4204,6 +4208,15 @@ ExecTable exectab[] =
         sizeof(Exec),
         beswal,
         common },
+    { V_MAGIC,                 /* Mips v.out */
+        "mips plan 9 executable BE",
+        "mips plan 9 dlm BE",
+        FMIPS,
+        1,
+        &mmips,
+        sizeof(Exec),
+        beswal,
+        adotout },
 
     { 0 },
 };
@@ -4350,6 +4363,11 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *hp)
         mach = &marm;
         fp->type = FARM;
         fp->name = "arm ELF32 executable";
+        break;
+    case MIPS:
+        mach = &mmips;
+        fp->type = FMIPS;
+        fp->name = "mips ELF32 executable";
         break;
     default:
         return 0;
@@ -4646,6 +4664,7 @@ typedef struct {
             uvlong hdr[1];
         };
         Ehdr;			/* elf.h */
+        //TODO: struct mipsexec;       /* bootexec.h */
     } e;
     long dummy;			/* padding to ensure extra long */
 } ExecHdr;
@@ -4667,6 +4686,7 @@ static	uvlong	_round(uvlong, ulong);
 //PAD: removed many archi
 extern	Mach	mi386;
 extern	Mach	marm;
+extern	Mach	mmips;
 
 <<global [[exectab]]>>
 
@@ -7476,6 +7496,7 @@ static Obj	obj[] =
 {			/* functions to identify and parse each type of obj */
     [ObjArm]	"arm .5",	_is5, _read5,
     [Obj386]	"386 .8",	_is8, _read8,
+    [ObjMips]  "mips .v",      _isv, _readv,
     [Maxobjtype]	0, 0
 };
 @
@@ -7789,8 +7810,10 @@ objreset(void)
 int			/* in [$OS].c */ //$
   _is5(char*),
   _is8(char*),
+  _isv(char*),
   _read5(Biobuf*, Prog*),
   _read8(Biobuf*, Prog*);
+  _readv(Biobuf*, Prog*);
 
 
 typedef struct Obj	Obj;
@@ -7868,6 +7891,12 @@ Machtab	machines[] =
         AARM,
         &marm,
         &armmach,	},
+    {	"mips",				/*plan 9 mips*/
+ FMIPS,
+ FMIPSB,
+ AMIPS,
+ &mmips,
+ &mipsmach, 	},
     {	0		},		/*the terminator*/
 };
 @
@@ -7906,6 +7935,7 @@ machbyname(char *name)
 {
     Machtab *mp;
 
+    // choose a default if no name given
     if (!name) {
         asstype = AARM;
         machdata = &armmach;
@@ -7938,8 +7968,8 @@ typedef	struct machtab Machtab;
 
 <<struct [[machtab]]>>
 
-extern	Mach		mi386, marm;
-extern	Machdata	i386mach, armmach;
+extern	Mach		mi386, marm, mmips;
+extern	Machdata	i386mach, armmach, mipsmach;
 
 <<global [[machines]]>>
 
@@ -13439,7 +13469,7 @@ installbuiltin(void)
 void
 dosysr1(Node *r, Node*)
 {
-    extern int sysnop(void);
+    extern int nop(void);
     
     r->op = OCONST;
     r->type = TINT;

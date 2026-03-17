@@ -43,11 +43,11 @@ Machtab	machines[] =
         &marm,
         &armmach,	},
     {	"mips",				/*plan 9 mips*/
-	FMIPS,
-	FMIPSB,
-	AMIPS,
-	&mmips,
-	&mipsmach, 	},
+ FMIPS,
+ FMIPSB,
+ AMIPS,
+ &mmips,
+ &mipsmach, 	},
     {	0		},		/*the terminator*/
 };
 /*e: global [[machines]] */
