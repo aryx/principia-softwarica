@@ -17,7 +17,6 @@ error(char *s)
     exits(s);
 }
 /*e: function [[error]] */
-
 /*s: function [[main]] */
 void
 main(int argc, char *argv[])
@@ -82,7 +81,6 @@ main(int argc, char *argv[])
     exits(w->msg);
 }
 /*e: function [[main]] */
-
 /*s: function [[add]] */
 void
 add(char *a, ...)
@@ -98,8 +96,6 @@ add(char *a, ...)
     beenhere++;
 }
 /*e: function [[add]] */
-
-
 /*s: function [[notifyf]] */
 void
 notifyf(void *a, char *s)
