@@ -5854,11 +5854,12 @@ the spin locks and qlocks described above are used instead.
 The kernel's central job is to give each process the
 illusion of having the entire machine to itself. This
 part covers the mechanisms that make this illusion work:
-physical memory allocation, process creation and
-management, interrupt and syscall handling, virtual memory
-(page tables and page faults), scheduling (which process
-runs when), time keeping, and finally the boot sequence
-that sets all of this up.
+virtual memory (page tables and page faults) backed by
+a physical page allocator, process creation and management,
+interrupt and syscall handling (the boundary between the
+virtual and real machines), scheduling (virtualizing the
+CPU so each process gets its turn), time keeping, and
+finally the boot sequence that sets all of this up.
 
 %******************************************************************************
 \chapter{Memory}
@@ -5998,7 +5999,7 @@ own metadata---the [[xlists]] global, containing the
 (layer~0), so it needs no memory allocation to get started.
 %claude:
 [[xalloc]] is called only during initialization to allocate
-a few large, long-lived structures---the [<Proc>] array,
+a few large, long-lived structures---the [[Proc]] array,
 the [<Page>] array, and the [[malloc]] pool---that will
 never be freed. This simplicity is deliberate: the
 fixed-size hole array cannot handle heavy fragmentation,
@@ -6008,16 +6009,76 @@ but it does not need to.
 
 \subsubsection{[[Xalloc]]}
 
-%\subsection{[[Hole]]}
-
 %claude:
 The [[Xalloc]] structure manages free memory as a sorted
-linked list of [[Hole]]s. Each [[Hole]] describes a
+linked list of [[Hole]]s. 
+
+%\subsection{[[Xalloc]]}
+
+<<struct [[Xalloc]]>>=
+// Long lived data structure allocator (singleton)
+struct Xalloc
+{
+    // array<Hole> where each Hole is linked to another hole
+    Hole  hole[Nhole];
+  
+    // list<ref<Hole>> (next = Hole.next) list of free hole entries (addr=top=size=0)
+    Hole* unused_slots; 
+
+    // list<ref<Hole>> (next = Hole.next) memory holes, sorted by their top addr
+    Hole* sorted_holes; 
+  
+    // extra
+    Lock;
+};
+@
+%old: I renamed fields: flist -> unused_slots, table -> sorted_hole
+% note that the hole entry is free means the metadata is free.
+% a used hole in sorted_holes means actually the hole entry is valid
+% and describe some free memory there
+%c: bootstrapped global array in Data section.
+
+<<[[Hole]] extra fields>>=
+Hole* next; // list<ref<Hole>> of Xalloc.sorted_holes or Xalloc.unused_slots
+@
+
+<<constants holes>>=
+enum
+{
+    Nhole   = 128,
+    <<constant [[Magichole]]>>
+};
+@
+
+
+%claude:
+Each [[Hole]] describes a
 contiguous region of free memory (between [[addr]] and
 [[top]]). The [[Hole]] entries themselves are pre-allocated
 in a fixed-size array ([[hole[Nhole]]]), and those not
 currently describing a free region are kept in a separate
 ``unused slots'' list.
+
+%\subsection{[[Hole]]}
+
+<<struct [[Hole]]>>=
+struct Hole
+{
+    // between addr and top the memory is free, this is the "hole"
+    phys_addr addr; 
+    phys_addr top; 
+    ulong size; // top - addr (in bytes)
+
+    // Extra
+    <<[[Hole]] extra fields>>
+};
+@
+\t phys_addr? I dont think so, it's a kern_addr!
+%c: impossible to define memory allocator in ocaml! need to resort to C!
+%phys_addr should be all < MAXKPA
+% they could use kern_addr, it would be simpler, require less conversions
+
+
 %claude:
 Here is the layout after initialization (one memory bank)
 and after two allocations:
@@ -6056,59 +6117,13 @@ hole shrinks from below. Each allocation is prefixed with
 an [[Xhdr]] containing the size and a magic number (for
 corruption detection via [[xmerge()]]).
 
-<<struct [[Hole]]>>=
-struct Hole
-{
-    // between addr and top the memory is free, this is the "hole"
-    phys_addr addr; 
-    phys_addr top; 
-    ulong size; // top - addr (in bytes)
-
-    // Extra
-    <<[[Hole]] extra fields>>
-};
-@
-\t phys_addr? I dont think so, it's a kern_addr!
-%c: impossible to define memory allocator in ocaml! need to resort to C!
-%phys_addr should be all < MAXKPA
-% they could use kern_addr, it would be simpler, require less conversions
-
-%\subsection{[[Xalloc]]}
-
-<<struct [[Xalloc]]>>=
-// Long lived data structure allocator (singleton)
-struct Xalloc
-{
-    // array<Hole> where each Hole is linked to another hole
-    Hole  hole[Nhole];
-  
-    // list<ref<Hole>> (next = Hole.next) list of free hole entries (addr=top=size=0)
-    Hole* unused_slots; 
-
-    // list<ref<Hole>> (next = Hole.next) memory holes, sorted by their top addr
-    Hole* sorted_holes; 
-  
-    // extra
-    Lock;
-};
-@
-%old: I renamed fields: flist -> unused_slots, table -> sorted_hole
-% note that the hole entry is free means the metadata is free.
-% a used hole in sorted_holes means actually the hole entry is valid
-% and describe some free memory there
-%c: bootstrapped global array in Data section.
-
-<<[[Hole]] extra fields>>=
-Hole* next; // list<ref<Hole>> of Xalloc.sorted_holes or Xalloc.unused_slots
-@
-
-<<constants holes>>=
-enum
-{
-    Nhole   = 128,
-    Magichole = 0x484F4C45,     /* HOLE */
-};
-@
+%yoann: say that if s1 is freeed, then there will then be two holes
+%claude:
+If the first allocation (s1) is later freed via
+[[xfree()]], the sorted hole list would then contain two
+holes---the gap left by s1 and the original remaining
+free space at the top---which is why [[xalloc]] needs
+a list of holes rather than a single pointer.
 
 \subsubsection{[[xlists]]}
 
@@ -6143,6 +6158,7 @@ Each block returned by [[xalloc()]] is preceded by an
 The magic number ([[0x484F4C45]], which spells ``HOLE'' in
 ASCII) lets [[xmerge()]] detect memory corruption when
 a block is freed:
+
 <<struct [[Xhdr]]>>=
 // What is the connection with Hole? A Hole that get used will gets
 // its top and size decremented, and this newly allocated part will describe
@@ -6159,6 +6175,10 @@ struct Xhdr
 @
 %c: idiom again for unspecified data block
 
+<<constant [[Magichole]]>>=
+Magichole = 0x484F4C45,     /* HOLE */
+@
+
 % so Confmem will be essentially a succession of either Xhdr, or
 % some free mem represented by a used slot Hole.
 
@@ -6173,7 +6193,7 @@ struct Xhdr
 %yoann: trans, we saw data structures, now ready for xalloc
 
 %claude:
-[<xalloc()>] walks the sorted hole list looking for the
+[[xalloc()]] walks the sorted hole list looking for the
 first hole large enough (first-fit). It then carves the
 requested amount from the bottom of the hole, prepends
 an [[Xhdr]], and shrinks the hole. If the hole is fully
@@ -6267,7 +6287,7 @@ if(x->magix != Magichole) {
 % called by xinit! This is the function that actually got memory
 % from Confmem.
 %claude:
-[<xhole()>] is the inverse of [<xalloc()>]: it adds a
+[[hole()]] is the inverse of [<xalloc()>]: it adds a
 region of free memory to the sorted hole list. It tries to
 merge with adjacent holes (if the new region's bottom
 touches an existing hole's top, or vice versa) to avoid
@@ -6421,9 +6441,9 @@ if(a == nilptr)
 [[xalloc]] is too coarse for general use---it can only
 handle a small number of holes (128). The kernel needs a
 finer-grained allocator for the many small, short-lived
-structures it creates during normal operation (channel
+structures it creates (and free) during normal operation (channel
 tables, path strings, etc.). This is provided by the
-[[Pool]] allocator, which manages arenas obtained from
+[[Pool]] allocator, which manages {arenas} obtained from
 [[xalloc]] and subdivides them using a best-fit algorithm.
 
 \subsection{[[Pool]]}
@@ -6437,7 +6457,8 @@ not in the kernel, because the same allocation machinery is
 shared between the kernel's [[malloc()]] and the user-space
 [[malloc()]] in libc---only the backing allocator differs
 ([[xalloc]] for the kernel, [[brk]] for user space).
-The full definition is shown below as a verbatim excerpt:
+The full definition is shown below as a verbatim excerpt but see
+the \book{Libcore} for more information:
 
 \begin{verbatim}
 
@@ -6545,19 +6566,49 @@ punlock(Pool *p)
 }
 @
 
-\subsection{[[pmainmem()]]}
+\subsection{[[pmainmem]]}
 
 %yoann: explain pmainmem. Again static allocated in Data section in layer0 to help boostrap
 %claude:
 The two pool instances, [[pmainmem]] (for general kernel
-allocations, 4~MB max) and [[pimagmem]] (for graphics
-image data, 16~MB max), are statically allocated in the
-data section---another layer~0 bootstrap. Their [[alloc]]
-callback is [[xalloc]], so when the pool needs more memory
-it asks [[xalloc]] for a new arena. Note that arenas are
-never returned to [[xalloc]] (no [[xfree]] call), so the
-pools only grow---which is fine because it avoids
-fragmentation in [[xalloc]]'s hole list.
+allocations, 4~MB) and [[pimagmem]] (for graphics
+image data, 16~MB, see \book{Graphics}), have their [[Pool]]
+structures statically allocated in the data section---another
+layer~0 bootstrap (the pool structures themselves, not the
+memory they manage).
+
+%claude:
+Their [[alloc]] callback is [[xalloc]], so when the pool
+needs more memory it asks [[xalloc]] for a new arena.
+The 4~MB [[maxsize]] is a cap, not a reservation---Pool
+only requests arenas as needed, leaving the remaining
+[[xalloc]] memory available for other direct allocations
+(the [[Proc]] array, the [[Page]] array, etc.). Here is
+how the kernel memory looks after initialization:
+\begin{verbatim}
+  xalloc-managed kernel memory (kernelpercent of RAM):
+
+              +---------------------------+
+              | free (xalloc hole)        |
+              +---------------------------+
+              | pmainmem arena 2          |  (Pool, on demand)
+              +---------------------------+
+              | pimagmem arena 1          |  (Pool, on demand)
+              +---------------------------+
+              | pmainmem arena 1          |  (Pool, on demand)
+              +---------------------------+
+              | Page array                |  (direct xalloc)
+              +---------------------------+
+              | Proc array (~6 MB)        |  (direct xalloc)
+              +---------------------------+
+\end{verbatim}
+Arenas from different pools and direct [[xalloc]] calls
+can interleave---the order depends on when each allocation
+happens during boot and normal operation.
+%claude:
+Arenas are never returned to [[xalloc]] (no [[xfree]]
+call), so the pools only grow, which avoids fragmentation
+in [[xalloc]]'s hole list.
 
 % note that no xfree() or xhole() here ... so it always grow
 % (which is good for the fragmentation issue of xalloc anyway)
@@ -6629,10 +6680,13 @@ Pool*   imagmem = &pimagmem;
 callbacks. They are called by the pool allocator code (in
 libc) when it detects corruption or wants to log warnings.
 Because the pool lock is held when these are called,
-they cannot print directly---[[print()]] might try to
-allocate, which would deadlock. Instead, [[poolprint()]]
-appends to the message buffer in [[Private]], and
-[[punlock()]] prints it after releasing the lock:
+they cannot print directly---[[print()]] calls [[write()]]
+which may acquire locks internally, risking deadlock.
+Instead, [[poolprint()]] uses [[vseprint()]] (which does
+not allocate or take locks) to append to the message buffer
+in [[Private]], and [[punlock()]] prints it after releasing
+the lock:
+
 <<function [[poolprint]]>>=
 /*
  * because we can't print while we're holding the locks, 
@@ -6682,7 +6736,7 @@ The kernel's [[malloc()]] and [[free()]] are thin wrappers
 around [[poolalloc()]]/[[poolfree()]] on the [[mainmem]]
 pool. Unlike user-space [[malloc]], the kernel version
 always zeroes the memory (via [[memset]]) and can
-optionally record the caller's PC in a tag area for
+optionally record the caller's PC in a {tag} area for
 debugging (when [[Npadlong]] is nonzero).
 
 \subsection{[[malloc()]]}
@@ -6703,7 +6757,6 @@ malloc(ulong size)
 @
 % memset 0 by default for kernel memory! used in a few places.
 
-% will set Npadlong later.
 
 %\subsection{[[free()]]}
 
@@ -7037,6 +7090,14 @@ struct Page
 %c: char! to optimize and have a compact structure layout (what does 5c though?)
 %linux: avoid redundant? use directly MMU to store this info?
 
+%yoann: say this structure must remain small; you don't want 2KB of metadata about a 4KB page, wasting 1/3 of memory on bookkeeping data structures
+%claude:
+This structure must remain compact: there is one [[Page]]
+per physical page in the system, so if [[Page]] were
+2~KiB, a third of memory would be wasted on bookkeeping
+for 4~KiB pages. In practice, [[Page]] is only a few
+dozen bytes.
+
 % use 'ref', will be used to share, copy on write!
 % note that pa is constant! set once and for all in pageinit and that's it
 \l pages also used for kernel stuff? like page table?
@@ -7059,15 +7120,17 @@ struct Page
 
 %yoann: explain use of those bits
 %claude:
-These are {software} modified/referenced bits (the ARM MMU
+The constants below are {software} modified/referenced bits (the ARM MMU
 does not provide hardware dirty bits like x86 does).
 [[PG_REF]] is set the first time a page is accessed (in
-[<fixfault()>]); [[PG_MOD]] is set when a page is written.
-The swapper uses these bits to decide what to do when
-reclaiming a page: if [[PG_MOD]] is not set, the page is
-clean and can be discarded (or retrieved from the image
-cache) without writing it to swap. If [[PG_REF]] is set,
-the page was recently used and should be kept longer.
+[<fixfault()>]); [[PG_MOD]] is set when a page is
+written.\footnote{How can the kernel track user-space
+memory accesses? By initially mapping pages as invalid
+(or read-only for writes). When the user program touches
+the page, the MMU generates a page fault, giving the
+kernel a chance to set [[PG_REF]] or [[PG_MOD]] before
+mapping the page with the actual permissions.}
+
 <<enum [[modref]]>>=
 enum Modref 
 {
@@ -7079,6 +7142,12 @@ enum Modref
 @
 %c: nice bitset (more efficient than ocaml record)
 % TODO LP split, put just PG_NOTHING for now?
+
+The swapper uses these bits to decide what to do when
+reclaiming a page: if [[PG_MOD]] is not set, the page is
+clean and can be discarded (or retrieved from the image
+cache) without writing it to swap. If [[PG_REF]] is set,
+the page was recently used and should be kept longer.
 
 % PG_REF is set in fixfault when access for the first time the page
 %  why useful?
@@ -7126,33 +7195,6 @@ struct Palloc
 % no need store it forever in Palloc.
 %linux: avoid redundant? use directly MMU to store this info?
 
-% Why need double linked list?
-
-<<global [[palloc]]>>=
-// Page allocator
-struct Palloc palloc;
-@
-
-
-<<[[Palloc]] capacity fields>>=
-Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
-// sum of mem.npage (which should be conf.upages)
-ulong user;     /* how many user pages */
-@
-% not sure why need that in palloc itself. pageinit could use
-% a Confmem directly.
-
-<<struct [[Pallocmem]]>>=
-// memory banks for user memory, similar to Confmem (and RMap)
-struct Pallocmem
-{
-    phys_addr base;
-    ulong npage;
-};
-@
-\l could merge with Confmem, because kbase and klimit could be removed
-%ocaml: just use of pair
-
 
 <<[[Page]] extra fields>>=
 // list<ref<Page>> Palloc.head, or Proc.mmuused or Proc.mmufree, or in mfreeseg
@@ -7166,6 +7208,47 @@ Page  *prev;
 %c: can save even more space by reusing pointer for many lists!
 
 
+%explain: Why need double linked list? just need head, tail, and next, why also prev?
+
+<<global [[palloc]]>>=
+// Page allocator
+struct Palloc palloc;
+@
+
+
+%yoann: explain those fields, seems redundant with Confmem
+%claude:
+[[Palloc]] has its own [[Pallocmem]] array, which looks
+redundant with [[Confmem]]. The difference is that
+[[Confmem]] describes all physical memory (including
+the kernel's portion), while [[Pallocmem]] describes
+only the user pages---the subset left after the kernel
+has taken its share via [[xalloc]]. The [[user]] field
+is the total count of user pages across all banks.
+
+<<[[Palloc]] capacity fields>>=
+Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
+// sum of mem.npage (which should be conf.upages)
+ulong user;     /* how many user pages */
+@
+% not sure why need that in palloc itself. pageinit could use
+% a Confmem directly.
+
+
+<<struct [[Pallocmem]]>>=
+// memory banks for user memory, similar to Confmem (and RMap)
+struct Pallocmem
+{
+    phys_addr base;
+    ulong npage;
+};
+@
+\l could merge with Confmem, because kbase and klimit could be removed
+%ocaml: just use of pair
+
+
+
+
 %yoann: how big are those allocator metadata? On 512 MB, how much is used
 % for bookkeeping by the kernel? how big is Proc array, Page array, Pool pmainmem for kernel? How many memory remaining for actual user?
 %claude:
@@ -7173,8 +7256,8 @@ How much memory does all this bookkeeping consume? By
 default, [<confinit()>] gives 80\% of physical pages to user
 space and 20\% to the kernel. On a 512~MiB Raspberry Pi,
 that is roughly 100~MiB for the kernel side: the [[Proc]]
-array (about 6~MiB for 2000 processes at ~3~KiB each), the
-[[Page]] array (one [[Page]] struct per user page), the
+array (about 6~MiB for 2000 processes at ~3~KiB each), 
+the [[Page]] array (one [[Page]] struct per user page), the
 [[mainmem]] pool (4~MiB), the [[imagmem]] pool (16~MiB for
 graphics), etc. The remaining ~400~MiB is managed by
 [[palloc]] as user pages.
@@ -7183,7 +7266,7 @@ graphics), etc. The remaining ~400~MiB is managed by
 
 %yoann: explain signature and when is used newpage()
 %claude:
-[<newpage()>] allocates a physical page from [[palloc]].
+[[newpage()]] allocates a physical page from [[palloc]].
 The [[clear]] flag requests the page be zeroed (needed for
 bss and stack pages). The [[s]] parameter is the segment
 the page belongs to---it may be set to [[nil]] on return
@@ -7230,11 +7313,28 @@ newpage(bool clear, Segment **s, user_addr va)
 %old: was storing highwater in intermediate hw, useful?
 \l rename alloc_page?
 
+%yoann: explain code of newpage() a bit, the subtle parts
+%claude:
+The subtle part is the [[if(s)]]/[[qunlock]] dance: if
+the caller holds a segment lock ([[*s != nil]]), it must
+be released before sleeping (to avoid deadlock), and
+re-acquired after waking up. But while asleep, another
+process may have invalidated the segment, so [[*s]] is
+set to [[nil]] to signal the caller to retry.
+
 % Why need lock the page? anyway we are the only one using it for now.
 % The ref is set to 1. Just for concistency?
 
 % what if no more free pages? see highwater stuff
 
+%yoann: explain Arch_KMap
+%claude:
+The [[Arch_KMap]] is needed to temporarily map the
+physical page into the kernel's virtual address space
+so [[memset()]] can zero it. On ARM with less than
+2~GiB of RAM, all physical memory is accessible via
+the [[KZERO]] offset, so this is trivial; on machines
+with more memory, a temporary mapping is required.
 
 <<[[newpage()]] other locals>>=
 Arch_KMap *k;
@@ -7255,6 +7355,11 @@ if(clear) {
 % 4Go or close to 4Go in which case have not enough virtual memspace to
 % use the pa+KZERO trick (see advanced topics chapter)
 
+%yoann: maybe transition paragraph saying following functions are mostly about double linked list management in palloc around prev/next head/tail fields
+%claude:
+The following functions manage [[palloc]]'s doubly-linked
+free page list via the [[prev]]/[[next]] pointers in
+[[Page]] and the [[head]]/[[tail]] pointers in [[Palloc]]:
 
 <<function [[pageunchain]]>>=
 // assumes palloc is held
@@ -7377,42 +7482,23 @@ A [[Segment]] represents a contiguous region of a process's
 virtual address space (text, data, bss, or stack). Each
 segment contains a two-level {page directory} that maps
 virtual addresses within the segment to physical [[Page]]s.
-This is the kernel's {software} page table---separate from
-the ARM's {hardware} L1/L2 page table, although the two
+These are the kernel's {segment tables}---separate from
+the ARM's {hardware} L1/L2 page tables, although the two
 must be kept in sync.
-Why maintain a software page table when the hardware already
-has one? Because the hardware page table is
+
+%claude:
+Why maintain segment tables when the hardware already
+has page tables? Because the hardware tables are
 architecture-specific (different format on ARM vs.\ x86),
 while [[Segment]]/[[Pagetable]] are portable. They also
 store information the hardware does not: reference counts
 (for shared pages and copy-on-write), swap addresses (for
 paged-out pages), and segment types (text vs.\ data vs.\
-stack). The cost is extra memory, but the software tables
+stack). The cost is extra memory, but the segment tables
 are sparse (only populated on demand via page faults), so
 the overhead is proportional to the pages actually used,
 not to the full address space.
 
-
-%claude:
-Here is the structure:
-\begin{verbatim}
-  Proc
-   |
-   +-- seg[NSEG]:  array of Segment pointers
-         |
-         +-- seg[SG_TEXT]  --> Segment (base=UTZERO, top=...)
-         +-- seg[SG_DATA]  --> Segment (base=..., top=...)
-         +-- seg[SG_BSS]   --> Segment (base=..., top=...)
-         +-- seg[SG_STACK] --> Segment (base=USTKTOP-USTKSIZE, top=USTKTOP)
-                                 |
-                                 +-- map[]:  array of Pagetable pointers
-                                       |
-                                       +-- Pagetable
-                                             |
-                                             +-- pages[]:  array of Page pointers
-                                                   |
-                                                   +-- Page (pa=..., va=...)
-\end{verbatim}
 
 <<enum [[segtype]]>>=
 /* Segment types */
@@ -7447,6 +7533,12 @@ static char *sname[]={
 
 \subsection{[[Segment]]}
 
+%yoann: quick paragraph, not repeating what was said before though
+%claude:
+Each segment tracks its virtual address range
+([[base]]--[[top]]) and owns a [[pagedir]] array of
+[<Pagetable>] pointers:
+
 <<struct [[Segment]]>>=
 // smalloc'ed by newseg()
 struct Segment
@@ -7475,6 +7567,29 @@ struct Segment
 % but probably they avoid redundant and use directly MMU to store the
 % info stored in pagedir and pagetab.
 \l size -> nb_pages
+
+
+%claude:
+Here is the structure:
+\begin{verbatim}
+  Proc
+   |
+   +-- seg[NSEG]:  array of Segment pointers
+         |
+         +-- seg[SG_TEXT]  --> Segment (base=UTZERO, top=...)
+         +-- seg[SG_DATA]  --> Segment (base=..., top=...)
+         +-- seg[SG_BSS]   --> Segment (base=..., top=...)
+         +-- seg[SG_STACK] --> Segment (base=USTKTOP-USTKSIZE, top=USTKTOP)
+                                 |
+                                 +-- map[]:  array of Pagetable pointers
+                                       |
+                                       +-- Pagetable
+                                             |
+                                             +-- pages[]:  array of Page pointers
+                                                   |
+                                                   +-- Page (pa=..., va=...)
+\end{verbatim}
+
 
 %pagedir is a Kind of a page directory table. 
 % (Points to smallpagedir if small enough)
@@ -7615,6 +7730,12 @@ ptalloc(void)
 % note that use kernel memory here! and then we will user memory for the actual
 % pages
 
+%yoann: say see first use of smalloc!
+%claude:
+Note the use of [[smalloc()]]---a sleeping variant of
+[[malloc()]] that blocks if memory is not available
+instead of returning [[nil]].
+
 % first point over last, last to first, so sure iteration will not do anything
 % C idiom.
 
@@ -7676,6 +7797,12 @@ ptcpy(Pagetable *old)
 
 \subsection{[[newseg()]]}
 
+%yoann: transition paragraph, saying we saw newpage(), Segment, etc., now ready for newseg()
+%claude:
+We have seen [<newpage()>] for allocating physical pages,
+and the [[Segment]] and [<Pagetable>] data structures.
+Now we can see how a new segment is created:
+
 %yoann: introduce signature and context of use of newseg()
 %claude:
 [<newseg()>] creates a new [[Segment]] of the given type
@@ -7728,6 +7855,11 @@ newseg(int type, user_addr base, ulong size)
 % that fixfault will operate on.
 
 % Prepare for some growth. Opti so no need realloc.
+
+%yoann: another use of smalloc() above, will go to sleep if no free memory yet
+%claude:
+Again [[smalloc()]] is used, so if the kernel is low
+on memory the caller will sleep until some is freed.
 
 <<[[newseg()]] sanity check size>>=
 if(size > (PAGEDIRSIZE*PAGETABSIZE))
@@ -7785,6 +7917,15 @@ if(s == nil)
 
 \subsection{[[smallpagedir]]}
 
+%yoann: explain what is smallpagedir (an optimization? useful in which context?)
+%claude:
+As a small optimization, each [[Segment]] embeds a
+fixed-size [[smallpagedir]] array. If the segment is
+small enough (at most [[SMALLPAGEDIRSIZE]] entries),
+[[pagedir]] points to this embedded array, avoiding
+an extra [[smalloc()]] call. Most segments are small
+enough to benefit from this.
+
 <<[[Segment]] other fields>>=
 // array<option<ref_own<Pagetable>>
 Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
@@ -7814,6 +7955,14 @@ if(s->pagedir == s->smallpagedir) {
 
 
 \subsection{Adding a page to a segment: [[segpage()]]}
+
+%yoann: explain when need to add a page? (for brk to bss segment for example, but more?)
+%claude:
+[[segpage()]] attaches a physical [[Page]] to a segment's
+page table at the virtual address stored in [[p->va]].
+It is called during process creation ([<userinit()>]),
+page fault handling ([<fixfault()>]), and segment growth
+([<ibrk()>] for the bss).
 
 % used by userinit(), explain well relation between a Page and a segment
 \l rename attach_page_to_segment?
@@ -7855,6 +8004,16 @@ if(p->va < s->base || p->va >= s->top)
 
 \subsection{Process segments}
 
+%yoann: transition paragraph, saw SG_TEXT/... before, how TSEG below differ? why the 2 constants?
+%claude:
+We saw [[SG_TEXT]], [[SG_DATA]], etc.\ above---those are
+segment {types} stored in [[Segment.type]]. The [[Procseg]]
+enum below is different: it defines {slot indices} into
+[[Proc.seg[]]], the per-process array of segment pointers.
+[[TSEG]] is the slot for the text segment, [[DSEG]] for
+data, etc. A process always has the four core slots, plus
+extra slots for [[segattach()]]'d shared memory:
+
 \subsubsection{[[Procseg]]}
 
 <<enum [[procseg]]>>=
@@ -7883,6 +8042,11 @@ enum Procseg
 % a bit weird that SSEG first, but some code assumes that as they do
 % for i from SSEG to BSEG.
 
+%yoann: explain, finally we see how Segment and Proc relates!
+%claude:
+And here is the field that ties it all together---the
+[[seg[]]] array in [[Proc]], indexed by [[Procseg]]:
+
 <<[[Proc]] memory fields>>=
 // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed? ref_counted?
 Segment *seg[NSEG];
@@ -7897,6 +8061,14 @@ QLock seglock;  /* locked whenever seg[] changes */
 % another kernel process so can run on another CPU.
 
 \subsubsection{[[seg()]]}
+
+%yoann: explain, "segment of addr" ? used in which context?
+%claude:
+Given a virtual address, [[seg()]] finds which segment
+it belongs to by scanning [[up->seg[]]]. This is used
+throughout the kernel whenever a user-space address must
+be validated or its segment located (e.g., in page fault
+handling, [[read]]/[[write]] syscalls, debugging):
 
 \l rename segment_of_addr
 % okaddr | ... -> <> 
@@ -7995,6 +8167,15 @@ validaddr(user_addr addr, ulong len, bool write)
 
 %\subsubsection{[[vmemchr()]]}
 
+%yoann: explain goal and signature of vmemchr
+%claude:
+[[vmemchr()]] is a validated [[memchr()]]---it searches
+for character [[c]] in the user buffer starting at [[s]]
+for up to [[n]] bytes, checking that each page is valid
+as it crosses page boundaries. This is needed because a
+user buffer may span multiple pages, some of which might
+not be mapped yet:
+
 % v for verified? validated?
 
 % used by sysexec() and other syscalls
@@ -8038,6 +8219,12 @@ vmemchr(user_vp s, int c, int n)
 
 
 \subsubsection{[[dupseg()]]}
+
+%yoann: explain need for dupseg
+%claude:
+[[dupseg()]] duplicates a segment for [[RFORK]]. Depending
+on the segment type, it either creates a full copy or
+sets up copy-on-write sharing (for data and bss segments):
 
 % Why not passing Segment directly instead of seg array and segno below?
 % Because of the test on TSEG vs SG_DATA (for KImage?)
@@ -8154,6 +8341,13 @@ case SG_BSS:        /* Just copy on write */
 
 
 \subsection{[[/proc/x/segment]]}
+
+%yoann: explain use of /proc/x/segment and/or reference relevant further chapter
+%claude:
+Reading [[/proc/\emph{pid}/segment]] shows the memory
+layout of a process---the base, top, and type of each
+segment. This is implemented in [<devproc>] (see
+Chapter~\ref{chap:processes}):
 
 % will understand later details, but cases below allow to
 % implement access to /proc/x/segment
@@ -8277,6 +8471,13 @@ if(addr < s->base) {
 % the stack cannot go down? stack fixed size then!
 
 \subsection{Extending a segment}
+
+%yoann: trans paragraph, will see first extend and then shrink, both manipulating the Segment.map, pagedir, etc.
+%claude:
+The rest of [[ibrk()]] handles two cases: extending
+a segment (growing [[top]] upward, allocating new
+[[Pagetable]] entries in [[pagedir]]) and shrinking
+it (freeing pages and page tables):
 
 <<[[ibrk()]] other locals>>=
 int mapsize;
