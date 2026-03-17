@@ -11237,6 +11237,31 @@ goes through [[_vxxx]] $\to$ [[_vswitch]] $\to$
 [[arch__trap]], which dispatches based on the exception
 type: page faults, undefined instructions, or hardware
 IRQs.
+\begin{verbatim}
+  SWI (syscall):          Other exceptions:
+
+  user code               user code (or kernel)
+      |                       |
+      v                       v
+  vectors[2]              vectors[x]
+      |                       |
+      v                       v
+  _vsvc                   _vund / _vdabt / _virq / ...
+      |                       |
+      | (save Ureg,           | (save R0-R4, set type)
+      |  set R10/R9)          v
+      v                   _vswitch
+  arch__syscall               | (switch to SVC mode,
+      |                       |  save full Ureg,
+      v                       |  set R10/R9)
+  systab[n]()                 v
+      |                   arch__trap
+      v                       |
+  return to user          dispatch by type:
+                            - PsrMabt -> faultarm (page fault)
+                            - PsrMund -> postnote (signal)
+                            - PsrMirq -> irq()   (devices)
+\end{verbatim}
 
 % exception|interrupt|trap(|signal) > irq | syscall | fault
 
@@ -11381,6 +11406,23 @@ loads [[_vsvc]] from [[vtable[2]]].
 
 \subsection{[[_vsvc()]] (ARM)]}
 
+%claude:
+[[_vsvc]] builds a [[Ureg]] on the kernel stack by pushing
+registers in the right order, then calls [[arch__syscall()]]
+in C. On return, it restores the registers and executes
+[[RFE]] (Return From Exception) to resume user mode.
+The key steps are:
+\begin{verbatim}
+  1. Push ureg->pc (= R14, the return address)
+  2. Push ureg->psr (= SPSR, the saved user CPSR)
+  3. Push ureg->type (= PsrMsvc, to identify this as a syscall)
+  4. Push R0-R14 (all user registers, via MOVM.DB.S)
+  5. Set R12 = kernel SB, R10 = cpu, R9 = up
+  6. Call arch__syscall(ureg)
+  7. Restore R0-R14, SPSR from the Ureg
+  8. RFE -> back to user mode
+\end{verbatim}
+
 <<constant [[CPU]](arm)>>=
 #define CPU     10      /* R10 is cpu-> */
 @
@@ -11452,6 +11494,9 @@ kernel copies them into [[Proc.sargs]] before dispatching.
 This avoids repeated user-space accesses (which could
 fault) and ensures the arguments cannot be modified by
 another thread while the syscall is running.
+[[MAXSYSARG]] is~5 because [[mount()]] has the most
+parameters of any syscall:
+[[mount(fd, afd, mpt, flag, arg)]].
 <<constant [[MAXSYSARG]]>>=
 #define MAXSYSARG  5 /* for mount(fd, afd, mpt, flag, arg) */
 @
@@ -11613,6 +11658,12 @@ arch_userpc(void)
 @
 
 
+%claude:
+Before dispatching, [[arch__syscall()]] checks that the
+[[SWI]] came from user mode---a syscall from kernel mode
+would be a bug. [[arch_userureg()]] tests whether the
+saved processor mode in [[ureg->psr]] is [[PsrMusr]]:
+
 <<[[syscall()]] sanity check call from userspace(arm)>>=
 if(!arch_userureg(ureg))
     panic("syscall: from kernel: pc %#lux r14 %#lux psr %#lux",
@@ -11644,7 +11695,10 @@ builds the full [[Ureg]].
 Each exception type has a tiny entry point that saves
 [[R0]]--[[R4]] to make working room, loads the exception
 type constant into [[R0]], and falls through to
-[[_vswitch]]:
+[[_vswitch]]. Note that each exception mode has its own
+banked R13, so the [[MOVM.IA]] writes to that mode's
+stack---a small scratch area set up during boot, not the
+kernel's SVC stack:
 
 <<function [[_vund]](arm)>>=
 TEXT _vund(SB), 1, $-4          /* undefined */
@@ -11682,7 +11736,20 @@ UND) to SVC mode, because the kernel runs in SVC mode and
 needs access to the SVC-mode stack. But switching modes
 changes the banked R13 and R14, so [[_vswitch]] saves
 them first (SPSR, R14, R13) into general registers
-([[R1]]--[[R3]]), then switches.
+([[R1]]--[[R3]]), then switches:
+\begin{verbatim}
+  In exception mode (e.g., IRQ):
+    R0 = exception type (set by _vxxx)
+    R1 = SPSR (saved user/kernel CPSR)
+    R2 = R14  (interrupted PC)
+    R3 = R13  (pointer to saved R0-R4)
+        |
+        v  switch CPSR to SVC mode
+        |
+  Now in SVC mode:
+    R13 = SVC stack (kernel stack)
+    Build Ureg on this stack, then call arch__trap()
+\end{verbatim}
 %claude:
 It then checks whether the exception interrupted user
 code or kernel code ([[AND.S \$0xf, R1]])---the handling
@@ -11757,6 +11824,18 @@ _userexcep:
 % Only reason?
 
 
+%claude:
+The SVC-mode (kernel) trap path is trickier. Since
+the kernel was already in SVC mode when the exception
+occurred, R13 and R14 were not banked---the saved
+R0--R4 are on the {exception mode's} stack, not the
+SVC stack. The code restores them, then saves {all}
+registers onto the SVC stack. On return, it must also
+overwrite the saved [[R10]] with the current [[R(CPU)]],
+because if a reschedule happened during the trap, this
+processor might now be running a different process
+whose R10 was stale.
+
 <<[[_vswitch]] trap from SVC mode>>=
     MOVM.DB.W [R0-R2], (R13)    /* set ureg->{type, psr, pc}; r13 points to ureg->type  */
     MOVM.IA   (R3), [R0-R4]     /* restore [R0-R4] from previous mode's stack */
@@ -11813,6 +11892,13 @@ handler, and IRQ to the interrupt dispatcher. Before
 returning to user mode, it checks for pending notes
 (signals) and deferred scheduling, just like
 [[arch__syscall()]].
+%claude:
+One subtle detail: the ARM pipeline means the saved PC
+points {past} the faulting instruction. For most exceptions,
+the interrupted PC is at [[ureg->pc - 4]]; for data aborts
+it is [[ureg->pc - 8]] (because the ARM has already
+advanced past the faulting instruction and the one
+after it). The code below corrects for this.
 <<function [[arch__trap]](arm)>>=
 /*
  *  here on all exceptions other than syscall (SWI) and fiq
@@ -11862,6 +11948,13 @@ arch__trap(Ureg *ureg)
 }
 @
 % arch_splhi? who disabled interrupts?
+
+%claude:
+[[arch__kexit()]] is called just before returning from
+the kernel to user space (after both syscalls and
+exceptions). It updates the [[Tos]] structure with the
+current CPU frequency and flushes the write-back cache
+so that user code sees consistent memory.
 
 % kexit for kernel exit because return to user space
 <<function [[arch__kexit]](arm)>>=
@@ -11958,7 +12051,10 @@ A prefetch abort means the CPU tried to fetch an instruction
 from an unmapped or protected address. If it is a valid
 user address, this triggers a page fault (handled by
 [<faultarm()>], which calls the virtual memory system).
-Otherwise, it is a fatal error.
+Otherwise, it is a fatal error. The Instruction Fault
+Status Register ([[IFSR]]) encodes the reason; the code
+extracts a 4-bit fault code by concatenating non-contiguous
+bits (an ARMv6/v7 encoding quirk).
 <<[[trap()]] other locals(arm)>>=
 int x;
 ulong fsr;
@@ -12012,6 +12108,14 @@ instruction is then re-executed. Data aborts can also occur
 when the kernel accesses a user address during a syscall
 (e.g., copying arguments); this case is handled via the
 error/waserror mechanism.
+%claude:
+The Fault Status Register ([[FSR]]) tells the kernel {why}
+the fault occurred. The code extracts a 6-bit fault code
+from the FSR and dispatches on it: translation faults
+(0x5, 0x7) and permission faults (0xd, 0xf) go to the
+page fault handler; domain faults (0x9, 0xb) are access
+violations; alignment faults and external aborts are
+fatal errors.
 <<[[trap()]] other locals(arm)>>=
 virt_addr va; // can be a kern_addr?
 ulong inst;
@@ -12056,6 +12160,14 @@ case 0xf:
     break;
 @
 % last parameter of faultarm is boolean for read, so !writetomem
+
+%claude:
+The page fault handler needs to know whether the faulting
+instruction was a load or a store, to set [[PG_MOD]]
+correctly. [[writetomem()]] decodes the faulting ARM
+instruction: bit~20 distinguishes loads (1) from
+stores (0) for most instructions, and swap instructions
+(detected by a specific bit pattern) always write.
 
 <<function [[writetomem]](arm)>>=
 /*
@@ -12172,6 +12284,15 @@ up to 72 interrupt sources). Each device driver registers
 its handler via [<arch_intrenable()>], and when an IRQ fires,
 [<irq()>] scans the pending bits and dispatches to the
 registered handler.
+%claude:
+The overall pattern is simple: at boot, each device driver
+calls [[arch_intrenable(IRQxxx, handler, arg)]] to register
+itself. At runtime, when a device raises an interrupt,
+the hardware sets a bit in the pending register, the ARM
+jumps to [[_virq]], which builds a [[Ureg]] and calls
+[[arch__trap]], which calls [[irq()]], which walks the
+[[vctl]] list and calls every handler whose pending bit
+is set.
 <<enum [[IRQ]](arm)>>=
 enum IRQ {
     IRQtimer0   = 0, // reserved by GPU?
@@ -12251,7 +12372,10 @@ static Lock vctllock;
 The BCM2835 interrupt controller is accessed via
 memory-mapped registers at [[INTREGS]]. It has separate
 pending/enable/disable registers for ARM-specific and
-GPU-shared interrupts:
+GPU-shared interrupts. The structure fields are laid out
+to match the hardware registers exactly---writing to
+[[GPUenable[0]]] directly enables the corresponding
+interrupt in hardware:
 
 %http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-Interrupt-Controller.html
 
@@ -12337,6 +12461,13 @@ if(v == nil)
 
 \subsection{Basic IRQs (ARM)}
 
+%claude:
+The BCM2835 splits interrupts into two groups: 64 GPU
+interrupts (in [[GPUpending[0..1]]]) and a handful of
+ARM-specific interrupts (in [[ARMpending]], starting at
+number~64). The ARM timer interrupt ([[IRQtimerArm]]) is
+in this second group:
+
 <<[[IRQ]] basic cases(arm)>>=
 IRQbasic    = 64,
 IRQtimerArm = IRQbasic + 0,
@@ -12371,6 +12502,15 @@ case PsrMirq:
     cpu->intr++;
     break;
 @
+
+%claude:
+The dispatch loop is brute-force: walk the entire [[vctl]]
+list and check each handler's pending bit. This is
+acceptable because the list is short (a handful of device
+drivers). If no handler matches, the interrupt is counted
+as spurious. The return value tells [[arch__trap()]]
+whether the clock was among the interrupts, which
+triggers a possible reschedule.
 
 % trap -> <>
 <<function [[irq]](arm)>>=
