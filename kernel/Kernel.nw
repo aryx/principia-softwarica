@@ -10382,10 +10382,28 @@ p->dbgreg = nil;
 %less: Exceptions?
 %less: (ARM) in title because almost everything is arch-specific?
 
+%claude:
+This chapter shows how the kernel handles events that
+interrupt normal execution: system calls (which we already
+traced in the Overview), hardware interrupts (timer, keyboard,
+disk), and faults (page faults, undefined instructions).
+Most of the code is architecture-specific, but the overall
+structure is the same on any architecture: save registers,
+dispatch to a handler, restore registers, return.
+
 \section{Overview}
 
 % fault vs trap vs irq vs interrupt vs exception vs syscall
 % hardware interrupt vs software interrupt
+%claude:
+There are two main paths through this chapter. The
+{syscall path} (a software interrupt via [[SWI]]) goes
+through [[_vsvc]] $\to$ [[arch__syscall]] $\to$
+[[systab[n]]] $\to$ return. The {exception/IRQ path}
+goes through [[_vxxx]] $\to$ [[_vswitch]] $\to$
+[[arch__trap]], which dispatches based on the exception
+type: page faults, undefined instructions, or hardware
+IRQs.
 
 % exception|interrupt|trap(|signal) > irq | syscall | fault
 
@@ -10415,13 +10433,18 @@ p->dbgreg = nil;
 \section{Exceptions (ARM)}
 % and processor modes
 
-% many exceptions matches a  "Processor mode". 
+% many exceptions matches a  "Processor mode".
 % Depending on processor mode, has access to certain registers of ARM or not.
 % When exception change processor mode.
 % (Save also CPSR in SPSR)
 
 % Saw PsrMsvc before used for SWI exception.
-
+%claude:
+We saw [[PsrMusr]] and [[PsrMsvc]] in the Overview.
+Here are the remaining processor modes, one for each
+exception type. Each mode has its own banked R13/R14,
+which is why [[_vswitch]] must save those registers before
+switching to SVC mode:
 <<[[PsrMode]] other cases(arm)>>=
 #define PsrMirq     0x00000012
 #define PsrMabt     0x00000017
@@ -10459,8 +10482,21 @@ static char *trapnames[PsrMask+1] = {
 % and processor will be made error that exceptions should
 % be handled by the entries in this vector.
 
-
 % matches closely the processor mode. Each fault has almost a processor mode.
+%claude:
+The ARM has 8 exception entries at fixed offsets (0x00 for
+reset, 0x04 for undefined, 0x08 for SWI, etc.). Each
+entry is a single instruction that loads the PC from a
+nearby table ([[vtable]]). The [[vectors]] and [[vtable]]
+code below is copied to [[HVECTORS]] ([[0xFFFF0000]]) by
+[<arch__trapinit()>] during boot.
+%claude:
+The indirection through [[vtable]] is necessary because
+the ARM vectors are only one instruction wide---not enough
+room for a full address. Each vector entry does
+[[MOVW 0x18(R15), R15]], which loads the PC from 8
+instructions ahead (where [[vtable]] starts), effectively
+jumping to the handler:
 <<global [[vectors]](arm)>>=
 /*
  *  exception vectors, copied by trapinit() to somewhere useful
@@ -10504,7 +10540,13 @@ TEXT vtable(SB), 1, $-4
 \section{System calls}
 %Software interrupts (a.k.a syscalls)
 
-\subsection{[[_vsvc()]] (ARM)}
+%claude:
+We already traced the syscall path in the Overview chapter.
+Here we see the actual code. The [[SWI]] instruction puts
+the ARM in SVC mode and jumps to [[vectors[2]]], which
+loads [[_vsvc]] from [[vtable[2]]].
+
+\subsection{[[_vsvc()]] (ARM)]}
 
 <<constant [[CPU]](arm)>>=
 #define CPU     10      /* R10 is cpu-> */
@@ -10571,6 +10613,12 @@ TEXT _vsvc(SB), 1, $-4          /* SWI */
 
 \subsection{[[Sargs]]}
 
+%claude:
+The syscall arguments live on the user stack, but the
+kernel copies them into [[Proc.sargs]] before dispatching.
+This avoids repeated user-space accesses (which could
+fault) and ensures the arguments cannot be modified by
+another thread while the syscall is running.
 <<constant [[MAXSYSARG]]>>=
 #define MAXSYSARG  5 /* for mount(fd, afd, mpt, flag, arg) */
 @
@@ -10596,6 +10644,15 @@ p->sargs = up->sargs;
 \subsection{[[arch__syscall()]] (ARM)}
 
 % SWI -> EXCEPTION -> vectors -> vtable -> _vsvc -> <>
+%claude:
+[<arch__syscall()>] is the C-level syscall dispatcher,
+called by [[_vsvc]] with a pointer to the saved [[Ureg]].
+It extracts the syscall number from [[ureg->r0]], copies
+the arguments from the user stack into [[up->sargs]],
+calls [[systab[scallnr]()]], stores the return value in
+[[ureg->r0]], and handles errors. Before returning, it
+checks for pending notes ([[notify]]) and deferred
+scheduling.
 <<function [[arch__syscall]](arm)>>=
 void
 arch__syscall(Ureg* ureg)
@@ -10739,9 +10796,22 @@ arch_userureg(Ureg* ureg)
 
 \section{Exception handlers}
 
+%claude:
+All exceptions other than SWI (which has its own fast
+path via [[_vsvc]]) go through the same two-step
+mechanism: a short handler [[_vxxx]] that saves a few
+registers and records the exception type, then a common
+[[_vswitch]] routine that switches to SVC mode and
+builds the full [[Ureg]].
+
 \subsection{[[_vxxx()]] (ARM)}
 
 % save R0-R4 because will use those registers later
+%claude:
+Each exception type has a tiny entry point that saves
+[[R0]]--[[R4]] to make working room, loads the exception
+type constant into [[R0]], and falls through to
+[[_vswitch]]:
 
 <<function [[_vund]](arm)>>=
 TEXT _vund(SB), 1, $-4          /* undefined */
@@ -10772,7 +10842,20 @@ TEXT _virq(SB), 1, $-4          /* IRQ */
 
 % need save SPSR/R14/R13 because banked registers that will
 % change when switch to SVC mode.
-
+%claude:
+[[_vswitch]] is the heart of the exception mechanism. It
+must switch from the exception's processor mode (IRQ, ABT,
+UND) to SVC mode, because the kernel runs in SVC mode and
+needs access to the SVC-mode stack. But switching modes
+changes the banked R13 and R14, so [[_vswitch]] saves
+them first (SPSR, R14, R13) into general registers
+([[R1]]--[[R3]]), then switches.
+%claude:
+It then checks whether the exception interrupted user
+code or kernel code ([[AND.S \$0xf, R1]])---the handling
+differs because a kernel-mode exception must preserve the
+kernel's R10 (CPU) and R9 (up), and may have been
+nested (an interrupt inside an interrupt handler).
 <<label [[_vswitch]](arm)>>=
     /*
      *  come here with type in R0 and R13 pointing above saved [r0-r4].
@@ -10886,8 +10969,17 @@ _userexcep:
 
 \subsection{[[arch__trap()]] (ARM)}
 
-
 % (_virq |  -> _vswitch) -> <>
+%claude:
+[<arch__trap()>] is the C-level exception dispatcher,
+analogous to [<arch__syscall()>] for system calls. It
+receives the saved [[Ureg]] and dispatches based on
+[[ureg->type]]: data abort and prefetch abort go to the
+page fault handler, undefined instruction to a trap
+handler, and IRQ to the interrupt dispatcher. Before
+returning to user mode, it checks for pending notes
+(signals) and deferred scheduling, just like
+[[arch__syscall()]].
 <<function [[arch__trap]](arm)>>=
 /*
  *  here on all exceptions other than syscall (SWI) and fiq
@@ -10985,6 +11077,12 @@ if(rem < 256) {
 
 \subsection{Undefined instruction fault (ARM)}
 
+%claude:
+An undefined instruction in user mode sends a note to the
+process (which can handle it or die). In kernel mode, it
+is a bug and causes a panic. The handler also checks for
+floating-point instructions, which may trap if the FPU
+was not enabled for this process.
 <<[[trap()]] other locals(arm)>>=
 char buf[ERRMAX];
 @
@@ -11022,6 +11120,12 @@ if (ureg->pc & 3) {
 
 \subsection{Prefetch fault (ARM)}
 
+%claude:
+A prefetch abort means the CPU tried to fetch an instruction
+from an unmapped or protected address. If it is a valid
+user address, this triggers a page fault (handled by
+[<faultarm()>], which calls the virtual memory system).
+Otherwise, it is a fatal error.
 <<[[trap()]] other locals(arm)>>=
 int x;
 ulong fsr;
@@ -11064,6 +11168,17 @@ TEXT ifsrget(SB), 1, $-4            /* instruction fault status */
 
 \subsection{Data fault (ARM)}
 
+%claude:
+A data abort is the most common exception: it fires when
+a load or store accesses an unmapped page. This is the
+entry point for {demand paging}---the page fault handler
+([<faultarm()>]) checks whether the address belongs to
+a valid segment, allocates a page if needed, fills it
+from disk or zeros it, and returns. The faulting
+instruction is then re-executed. Data aborts can also occur
+when the kernel accesses a user address during a syscall
+(e.g., copying arguments); this case is handled via the
+error/waserror mechanism.
 <<[[trap()]] other locals(arm)>>=
 virt_addr va; // can be a kern_addr?
 ulong inst;
@@ -11215,6 +11330,15 @@ case 0x18:      /* imprecise parity or ecc err */
 
 \section{IRQs (ARM)}
 
+%claude:
+Hardware interrupts (IRQs) come from external devices:
+the timer, USB controller, SD card, UART, etc. On the
+Raspberry Pi, the BCM2835 has an interrupt controller at
+[[INTREGS]] with three 32-bit pending registers (covering
+up to 72 interrupt sources). Each device driver registers
+its handler via [<arch_intrenable()>], and when an IRQ fires,
+[<irq()>] scans the pending bits and dispatches to the
+registered handler.
 <<enum [[IRQ]](arm)>>=
 enum IRQ {
     IRQtimer0   = 0, // reserved by GPU?
@@ -11241,6 +11365,12 @@ enum IRQ {
 
 \subsection{[[Vctl]] (ARM)}
 
+%claude:
+A [[Vctl]] (``vector control'') records one registered
+interrupt handler: which IRQ number it handles, the
+hardware register and bitmask to check whether this IRQ
+is pending, the handler function, and its argument. All
+registered handlers form a linked list ([[vctl]]):
 <<struct [[Vctl]](arm)>>=
 struct Vctl {
     // enum<IRQ>
@@ -11284,6 +11414,11 @@ static Lock vctllock;
 \subsection{[[Intregs]] (ARM)}
 
 % INTREGS!
+%claude:
+The BCM2835 interrupt controller is accessed via
+memory-mapped registers at [[INTREGS]]. It has separate
+pending/enable/disable registers for ARM-specific and
+GPU-shared interrupts:
 
 %http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-Interrupt-Controller.html
 
@@ -11311,6 +11446,12 @@ struct Intregs {
 
 \subsection{[[arch_intrenable()]] (ARM)}
 
+%claude:
+Device drivers call [<arch_intrenable()>] during
+initialization to register their interrupt handler. It
+allocates a [[Vctl]], records the handler and the
+appropriate pending register/mask, and enables the
+interrupt in the hardware controller:
 <<macro [[arch_intrenable]](arm)>>=
 #define arch_intrenable(i, f, a, b, n) irqenable((i), (f), (a))
 @
@@ -11381,7 +11522,15 @@ else if(irq >= IRQbasic){
 \subsection{[[irq()]] (ARM)}
 
 % when exception, where is stored the exception number?
-% 
+%
+%claude:
+[<irq()>] is called from [[arch__trap]] when the exception
+type is [[PsrMirq]]. It walks the [[vctl]] list and, for
+each handler whose pending bit is set, calls the handler.
+It returns [[true]] if a clock interrupt was among
+them---the caller uses this to decide whether to trigger
+a reschedule (the clock is what drives preemptive
+scheduling).
 
 <<[[trap()]] switch exception type cases(arm)>>=
 case PsrMirq:
