@@ -8662,28 +8662,29 @@ model.
 % await also subtle. Can wait for children and children for parent.
 % Note that wait in parent will remember if children already finished!
 %claude:
-\plan inherits the \unix {fork/exec} model: [[rfork]]
+\plan inherits the \unix\ {fork/exec} model: [[rfork]]
 creates a child process (a copy of the parent), and [[exec]]
 replaces the child's memory with a new program. This
 two-step approach is powerful---between the fork and the
 exec, the child can set up pipes, redirect files, or
 modify its namespace before running the new program.
 %claude: %unix:
-\plan generalizes \unix [[fork]] into [[rfork]] (``resource
+\plan generalizes \unix\ [[fork]] into [[rfork]] (``resource
 fork''): instead of always copying everything, [[rfork]]
 takes flags that independently control which resources to
 copy, share, or create fresh---memory, file descriptors,
 namespace, environment, notes, and rendezvous group.
 A traditional [[fork]] is [[rfork]] with everything copied;
 a thread (shared memory) is [[rfork]] with [[RFMEM]] set.
-Sandboxing is trivial with [[RFNOMNT]].
-%claude:
-There are no {zombie processes} in \plan. When a child
-exits, it writes a {wait message} (containing its exit
-string and resource usage) to the parent's queue and
-immediately dies. The parent collects these messages via
-[[await()]]. If the parent has already exited, the messages
-are simply discarded.
+Sandboxing is trivial with [[RFNOMNT]]: the child gets a
+fresh namespace where [[mount]] and [[bind]] are forbidden,
+so it cannot reach any file server the parent does not
+explicitly pass. This achieves what Linux needs [[chroot]]
+jails or Docker containers for---but as a simple flag to
+[[rfork]], with no extra kernel infrastructure.
+
+
+
 
 %real-world: Windows sucks for this. no fork/exec but many exec (lack
 % of orthogonality)
@@ -8702,6 +8703,13 @@ A free list threads through unused entries, and a hash table
 provides fast pid-to-process lookup.
 
 \subsection{Process ID: [[Proc.pid]]}
+
+%yoann: explain pid is fundamental and need be unique so pidalloc below and use Counter (Ref) for exclusive access
+%claude:
+Every process needs a unique identifier. The [[pid]] field
+holds it, and [[pidalloc]] (a [[Counter]], i.e., a [[Ref]])
+ensures uniqueness: each [[newproc()]] call atomically
+increments it to get a fresh value.
 
 <<[[Proc]] state fields>>=
 ulong pid;
@@ -8722,6 +8730,7 @@ The process allocator is a simple pool: an [[xalloc]]'ed
 array of [[Proc]] structures ([[arena]]) and a free list
 ([[free]]) threaded through [[Proc.qnext]]. When a process
 exits, it is returned to the free list for reuse:
+
 <<struct [[Procalloc]]>>=
 // Process allocator
 struct Procalloc
@@ -8812,6 +8821,12 @@ pidunhash(Proc *p)
 @ 
 %ocaml: Hashtbl.remove
 
+%yoann: explain goal of procindex
+%claude:
+[[procindex()]] translates a pid into an index in the
+[[procalloc.arena]] array. It is used by [[devproc]] to
+implement [[/proc/\emph{pid}/...]]:
+
 <<function [[procindex]]>>=
 int
 procindex(ulong pid)
@@ -8839,13 +8854,14 @@ procindex(ulong pid)
 \subsection{[[newproc()]]}
 
 %claude:
-[<newproc()>] pops a [[Proc]] from the free list, assigns
+[[newproc()]] pops a [[Proc]] from the free list, assigns
 it a fresh pid (by incrementing the global [[pidalloc]]
 counter), and initializes its fields to safe defaults.
 The new process starts in state [[Scheding]]---not
 [[Ready]]---because its segments are not yet set up;
 the caller ([<sysrfork()>] or [<kproc()>]) must finish
 the initialization before calling [<ready()>].
+
 <<[[Procstate]] cases>>=
 Scheding,
 @
@@ -8893,7 +8909,14 @@ memset(p->seg, nilptr, sizeof p->seg);
 @
 % seen before
 
-
+%yoann: explain the debugging fields below and where they are used
+%claude:
+Two string fields help with debugging and the [[ps]]
+command: [[psstate]] is a human-readable description of
+what the process is doing (e.g., ``New'', ``PageOut'', or
+the name of the syscall it is blocked in), and [[text]]
+is the name of the executable. Both appear in
+[[/proc/\emph{pid}/status]].
 
 <<[[Proc]] state fields>>=
 // some debugging information, e.g. "New", "PageOut", or name of syscall
@@ -8960,6 +8983,13 @@ while((p = procalloc.free) == nil) {
 }
 @
 
+%yoann: explain resrcwait call here (defined below)
+%claude:
+[[resrcwait()]] (defined later in this chapter) prints
+a warning and sleeps for 300~ms before retrying---it is
+the kernel's standard ``resource temporarily unavailable''
+back-off.
+
 <<function [[noprocpanic]]>>=
 void
 noprocpanic(char *msg)
@@ -9020,6 +9050,14 @@ In \unix, the process owner is a numeric uid. In \plan, it
 is a string ([[Proc.user]]): typically ``eve'' for the
 system owner. There is no [[/etc/passwd]]---authentication
 is handled per-connection by the file server protocol (9P).
+In \plan, file permissions also use strings: [[struct Dir]]
+has [[uid]] and [[gid]] fields that are character strings,
+not numeric ids. The file server itself decides whether
+to grant access by comparing the connection's authenticated
+user name against these strings---there is no kernel-level
+uid/gid translation.
+
+
 <<[[Proc]] state fields>>=
 // e.g.. "eve" (no uid/gid in plan9, because of its distributed nature?)
 char  *user;
@@ -9039,6 +9077,12 @@ char  *user;
 kstrdup(&p->user, "*nouser");
 @
 
+%yoann: explain hostownerwrite() context of use
+%claude:
+[[hostownerwrite()]] is called during boot (from
+[[boot.rc]]) to set the ``host owner''---the user who
+owns the terminal. This is the \plan equivalent of
+setting the system's primary user account.
 
 % in boot.rc set hostname
 <<function [[hostownerwrite]]>>=
@@ -9107,6 +9151,7 @@ enum Rfork
     RFNAMEG     = (1<<0), // copy namespace (if unset then share)
     RFENVG      = (1<<1), // copy environment variables (if unset then share)
     RFFDG       = (1<<2), // copy file descriptor table (if unset then share)
+
     RFCNAMEG    = (1<<10), // clean new namespace
     RFCENVG     = (1<<11), // clean new empty environment variables
     RFCFDG      = (1<<12), // clean new file descriptor table
@@ -9215,6 +9260,15 @@ return pid;
 % anyway dbreg is a pointer to up->ureg (see arch__syscall)
 
 
+%yoann: explain ready() and sched() fundamental calls above, and also arch_forkchild() (defined further below)
+%claude:
+The [[ready(p)]] call puts the child on the run queue,
+and [[sched()]] immediately reschedules---the parent may
+or may not continue first. The [[arch_forkchild()]] call
+(defined further below) sets up the child's kernel stack
+so that when the scheduler picks it, it returns from
+[[rfork]] with a return value of~0 (how the child knows
+it is the child).
 
 % ready! sched!! see chapter{scheduling}
 
@@ -9450,6 +9504,15 @@ else {
 \subsection{Rendezvous group: [[RFREND]]}
 % mv later?
 
+%yoann: quickly explain what Rendezvous are for and reference chapter~X, and explain why need share (or not) such a resource
+%claude:
+Rendezvous is \plan's lightweight IPC mechanism: two
+processes that share a rendezvous group can synchronize
+by calling [[rendezvous()]] with a matching tag (see
+Chapter~\ref{chap:ipc}). [[RFREND]] gives the child
+a fresh group, isolating it from the parent's rendezvous
+partners.
+
 <<[[sysrfork()]] new or share rendezvous group>>=
 if(flag & RFREND)
     p->rgrp = newrgrp();
@@ -9461,6 +9524,14 @@ else {
 
 \subsection{Note group: [[RFNOTEG]]}
 %mv later?
+
+%yoann: quickly explain what nodeid are for and reference chapter~X and explain why need to share (or not) such a resource
+%claude:
+Notes are \plan's equivalent of \unix\ signals (see
+Chapter~\ref{chap:interrupts}). Processes that share a
+note group can send notes to each other; [[RFNOTEG]]
+gives the child its own group, so notes sent to the
+parent's group will not reach the child.
 
 <<[[sysrfork()]] share or not note group>>=
 if((flag&RFNOTEG) == 0)
@@ -9591,7 +9662,11 @@ re-opening with the interpreter.
 
 % struct Exec = binary header in include/a.out.h
 
-
+%yoann: explain that the chain described above lead to a corresponding series of locals with the corresponding type
+%claude:
+The logical chain---filename string $\to$ channel $\to$
+binary header $\to$ segments---is reflected in the
+local variables:
 
 % logical chain: string -> tc -> exec -> segment
 <<[[sysexec()]] locals>>=
@@ -9728,6 +9803,40 @@ sysexec(ulong* arg)
 @ 
 % why for loop above? because of #! code?
 
+%yoann: say long function, and explain important bits (e.g., namec() call hidden in a chunk actually explained later)
+%claude:
+[[sysexec()]] is one of the longest functions in the
+kernel. The key steps are: open the binary via
+[<namec()>] (the name-to-channel resolution function,
+covered in Chapter~\ref{chap:namespaces}), read its
+header to get the text/data/bss sizes, tear down the
+old segments, create new ones, and build the stack.
+
+%yoann: explain the binary layout, maybe ASCII diagram? and remember disk offset and virtual offsets are different
+%claude:
+The binary file (a.out format) starts with an [[Exec]]
+header followed by the text and data sections. On disk
+the layout is contiguous, but in memory the segments are
+placed at different virtual addresses:
+\begin{verbatim}
+  On disk (a.out file):       In memory (virtual):
+
+  +-------------------+
+  | Exec header       |       USTKTOP  +-------------+
+  +-------------------+                | stack        |
+  | text (code)       |           b    +-------------+
+  +-------------------+                | bss (zero)   |
+  | data              |           d    +-------------+
+  +-------------------+                | data         |
+                                  t    +-------------+
+                                       | text (code)  |
+                              UTZERO   +-------------+
+\end{verbatim}
+%claude:
+The constants [[t]], [[d]], [[b]] below are the virtual
+addresses of the boundaries between segments, all
+page-aligned:
+
 <<[[sysexec()]] compute end of text, data, bss segments>>=
 t = UTROUND(UTZERO+sizeof(Exec)+text);
 // data is put at page boundary after text
@@ -9784,6 +9893,13 @@ for(i = SSEG; i <= BSEG; i++) {
 \t no seglock here?
 
 %\subsection{[[arch_procsetup()]] (ARM)}
+
+%yoann: explain arch_procsetup goal
+%claude:
+[[arch_procsetup()]] initializes the architecture-specific
+parts of a process after exec: it sets up the MMU page
+table for the new address space and initializes the
+floating-point state.
 
 % sysexec -> <>
 <<function [[arch_procsetup]](arm)>>=
@@ -9844,7 +9960,30 @@ up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
 
 \subsection{Stack segment}
 
-% complex
+%yoann: maybe explanation and ASCII diagram for stack layout and user stack vs kernel stack
+%claude:
+Each process has two stacks: a {user stack} (in the
+[[SSEG]] segment, growing down from [[USTKTOP]]) and a
+{kernel stack} (the per-process [[kstack]], used during
+syscalls and interrupts). The exec code builds the new
+user stack with the program's arguments:
+\begin{verbatim}
+  USTKTOP  +--------------------+
+           | Tos                |  (time-of-stack info)
+           +--------------------+
+           | argv strings       |  "ls\0" "-l\0" ...
+           +--------------------+
+           | argv[n]=0          |  (nil terminator)
+           | argv[1]            |  (pointer to "-l")
+           | argv[0]            |  (pointer to "ls")
+           +--------------------+
+           | nargs              |  (argument count)
+    SP --> +--------------------+
+           |                    |
+           | (free stack space) |
+           |                    |
+           +--------------------+
+\end{verbatim}
 
 \subsubsection{Arguments count}
 
@@ -9899,7 +10038,7 @@ ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
 \l  that must be resolved?
 %claude:
 Building the new stack is the trickiest part of exec.
-The kernel must write the argument strings and [[argv[]]]
+The kernel must write the argument strings and [[argv]]
 pointers into the new program's stack, but it cannot
 overwrite the current stack---the old program's syscall
 frame is still there. So the kernel creates a {temporary}
@@ -9921,6 +10060,20 @@ final position at [[USTKTOP]].
 @
 %x86: 100
 
+%yoann: maybe ASCII diagram again of memory layout of those kernel stacks
+%claude:
+The kernel allocates a temporary stack segment at
+[[TSTKTOP]] (well below [[USTKTOP]]) so the old and new
+stacks coexist briefly:
+\begin{verbatim}
+  USTKTOP   +--------------------+
+            | old stack (SSEG)   |  <- still in use by syscall
+            +--------------------+
+            |        ...         |
+  TSTKTOP   +--------------------+
+            | temp stack (ESEG)  |  <- new args built here
+            +--------------------+
+\end{verbatim}
 
 <<[[sysexec()]] locals>>=
 ulong spage;
@@ -9955,6 +10108,12 @@ up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
 
 
 \subsubsection{Arguments}
+
+%yoann: again ASCII diagram for that part
+%claude:
+The arguments are copied into the temporary stack in
+two passes: first the string data, then the [[argv]]
+pointer array pointing back into the strings.
 
 <<[[sysexec()]] locals>>=
 char **argv;
@@ -10011,6 +10170,10 @@ if(n>0 && up->args[n-1]!='\0'){
 up->nargs = n;
 @
 
+%yoann: smalloc!
+%claude:
+Note another use of [[smalloc()]] above for the argument
+buffer---it sleeps if memory is unavailable.
 
 \subsubsection{Relocate temporary stack segment}
 
@@ -10057,9 +10220,16 @@ relocateseg(Segment *s, ulong offset)
 
 \subsection{[[arch_execregs()]] (ARM)}
 
-%Tos later in Section X
-
-% Last function call of sysexec:
+%yoann: last function call of sysexec, explain it and explain quickly Tos and say Tos later in Section X
+%claude:
+The final call in [[sysexec()]] is [[arch_execregs()]],
+which sets the user registers ([[PC]] to the entry point,
+[[SP]] to the new stack) so that when the kernel returns
+to user mode, the new program starts. It also reserves
+space at the top of the stack for the [[Tos]] (Time of
+Stack) structure, which the kernel uses to pass timing
+and profiling information to user space (described in
+Chapter~\ref{chap:time}).
 
 % sysexec -> <>
 <<function [[arch_execregs]](arm)>>=
@@ -10117,6 +10287,21 @@ the message is preserved (up to 128 per parent). The
 parent blocks on [[Proc.waitr]] until a message is
 available, then returns it as a formatted string.
 
+%claude:
+There are no {zombie processes} in \plan. When a child
+exits, it writes a {wait message} (containing its exit
+string and resource usage) to the parent's queue and
+immediately dies. The parent collects these messages via
+[[await()]]. If the parent has already exited, the messages
+are simply discarded. In \unix, a zombie is created when
+a child exits but its parent has not yet called [[wait()]]
+---the child's [[Proc]] entry lingers, holding a process
+slot, until the parent collects the exit status. If the
+parent never calls [[wait]], zombies accumulate. \plan
+avoids this entirely: the exit status is copied into the
+parent's wait queue (a bounded buffer, not a [[Proc]]
+slot), and the child's [[Proc]] is freed immediately.
+
 \subsection{Parent and children}
 
 %claude:
@@ -10127,6 +10312,11 @@ for a new process. The [[parentpid]] field solves this---before
 accessing [[parent]], the child checks that
 [[parent->pid == parentpid]]. If not, the parent has died
 and been replaced, so the child acts as an orphan.
+Orphans and zombies are different concepts: a {zombie}
+is a dead child whose exit status has not been collected;
+an {orphan} is a living child whose parent has died.
+\plan has orphans but no zombies.
+
 <<[[Proc]] hierarchy fields>>=
 // option<ref<Proc>> (nil for the boot process)
 Proc  *parent;
@@ -10208,9 +10398,24 @@ struct Waitq
 @ 
 %ocaml: list
 
+%yoann: explain when an actual Waitq is allocated? by child which exits? and where is 128 limit declared in the data structure above?
+%claude:
+A [[Waitq]] entry is allocated (via [[smalloc]]) by the
+dying child in [<pexit()>] and linked into the parent's
+[[Proc.waitq]] list. The 128 limit is enforced by
+[[Proc.nwait]]---if it reaches the maximum, the parent
+must drain some messages before more can be queued.
+
 \subsection{[[sysawait()]]}
 
 % interface is to pass a buffer in which waitmsg will be written
+
+%yoann: transition paragraph, saw data structures now ready for the code
+%claude:
+With the data structures in place, [[sysawait()]] itself
+is straightforward: it sleeps until a [[Waitq]] entry
+appears in the parent's queue, then formats it into the
+user-provided buffer:
 
 <<syscall await>>=
 // int await(char *s, int n);
@@ -10290,6 +10495,13 @@ unlock(&up->exl);
 
 \subsection{Rendez-vous: [[Proc.waitr]]}
 
+%yoann: say we mention Rendez-vous before in Concurrency chapter, here first use, to synchronize parent and child around waitmsg
+%claude:
+Here is the first concrete use of [[Rendez]] (introduced
+in the Concurrency chapter): [[waitr]] is the rendezvous
+point where a parent sleeps in [[sysawait()]] until a
+child exits and wakes it up.
+
 <<[[Proc]] hierarchy fields>>=
 Rendez  waitr;    /* Place to hang out in wait */
 @ 
@@ -10323,7 +10535,16 @@ haswaitq(void *x)
 \t  becomes filled in the mean time, we still have parent wakeing us up
 %bug?
 
-
+%yoann: explain how mutual exclusion and synchronization is realized by sleep; the condition is reexecuted when? does Rendez has a lock to control its access?
+%claude:
+The [[sleep()]] call (from the Concurrency chapter) takes
+a [[Rendez]] and a condition function. It acquires the
+[[Rendez]]'s internal lock, checks the condition, and if
+false, puts the process to sleep. When another process
+calls [[wakeup()]] on the same [[Rendez]], the sleeping
+process is woken and re-checks the condition. Here the
+condition is [[haswaitq()]]---``is there a [[Waitq]] entry
+in my queue?''
 
 \section{[[sysexits()]]}
 
@@ -10331,7 +10552,7 @@ haswaitq(void *x)
 % as anyway will have then to interpret this error code.
 % actually it's an optional string. Can also return nil.
 %claude:
-[<sysexits()>] is a thin wrapper that copies the exit
+[[sysexits()]] is a thin wrapper that copies the exit
 string from user space and calls [<pexit()>], the real
 termination function. The exit string is optional
 ([[nil]] means success). [<pexit()>] never returns---the
@@ -10398,7 +10619,7 @@ if(status){
 % Also in schedinit we will call arch_mmurelease so sounds good
 % to do it from another context?
 %claude:
-[<pexit()>] is the real termination function, and its
+[[pexit()]] is the real termination function, and its
 design is split into two phases for a subtle reason.
 Phase~1 runs on the dying process's own kernel stack:
 it frees resources (file descriptors, namespace, segments),
@@ -10411,6 +10632,25 @@ still using it---it must switch to another stack first.
 The process's state goes through [[Moribund]] (between
 the two phases) and finally [[Dead]].
 
+%yoann: maybe ASCII diagram with those Proc stack, CPU stack (addr = ? CPUADDR+stack+STACKSIZE?)
+%claude:
+The two-phase design is necessary because phase~1 runs
+on the process's own kernel stack ([[Proc.kstack]]),
+which cannot be freed while it is in use. Phase~2 runs
+on the CPU's boot stack (inside the [[Cpu]] structure
+at [[CPUADDR]]):
+\begin{verbatim}
+  Phase 1 (Proc.kstack):       Phase 2 (Cpu.stack):
+
+  kstack+KSTACK                CPUADDR+CPUSIZE
+      +---------------+            +---------------+
+      | pexit() frame |            | schedinit()   |
+      | free fds,     |            | frees kstack  |
+      | segments,     |            | sets Dead      |
+      | namespace...  |            | recycles Proc  |
+      +---------------+            +---------------+
+  kstack                       CPUADDR
+\end{verbatim}
 
 % rename freemem to addbroken? hmmm no
 % sysexits | linkproc | procctl | attachimage <>
@@ -10542,6 +10782,13 @@ case Moribund:
 
 \subsection{Wait message}
 
+%yoann: explain why need another section, didn't we see everything before about parent/child management?
+%claude:
+We saw the data structures for wait messages earlier,
+but the code that {creates} them lives inside
+[[pexit()]]---this is where the dying process builds the
+[[Waitq]] entry and links it into its parent's queue.
+
 \subsubsection{Wait message and your parent}
 
 % this is for my parent
@@ -10563,6 +10810,10 @@ else
 % why add text name and pid in string? pid is already in other wait
 % field. Convenient? Does it allow mk to give nice error messages?
 
+%yoann: another smalloc!
+%claude:
+Again [[smalloc()]]---the dying process may sleep here
+if memory is tight.
 
 <<[[pexit()]] add [[wq]] message in parent process [[p]] waitq>>=
 lock(&p->exl);
@@ -10599,6 +10850,12 @@ if(wq)
 
 \subsubsection{Wait and my (orphan) children}
 
+%yoann: explain section
+%claude:
+When a process exits, it must also deal with its own
+children: wake up anyone waiting on this process's
+[[waitr]], unhash its pid, and discard any uncollected
+wait messages from its own children.
 
 % this is for my (orphan) children
 <<[[pexit()]] wakeup process waiting on waitr and unhash pid>>=
@@ -10626,6 +10883,15 @@ for(f = up->waitq; f; f = next) {
 %ocaml: use gc
 
 \subsection{Freeing resources}
+
+%yoann: explain section
+%claude:
+With the wait message safely queued in the parent,
+the dying process can now free its own resources:
+segments, file descriptors, namespace, environment,
+and rendezvous group. This must happen {after} building
+the wait message, because the exit string lives in one
+of the process's segments.
 
 % must be after built waitq because exitstr in one of the segment
 
@@ -10697,7 +10963,10 @@ does not match [[parentpid]] and skip the wait message
 entirely. The child
 becomes an orphan: no one will collect its exit status.
 If [[RFNOWAIT]] is not set, the parent's [[nchild]] count
-is incremented normally.
+is incremented normally. This is used by programs that
+spawn helper processes they never need to wait for---for
+example, [[rio]] (the window system) and [[lib9p]] use
+[[RFNOWAIT]] when forking worker processes.
 
 <<[[sysrfork()]] wait or not for child>>=
 if(flag&RFNOWAIT)
@@ -10787,9 +11056,20 @@ kproc(char *name, void (*func)(void *), void *arg)
     ready(p);
 }
 @ 
-% but no sched() here like in sysrfork.
 
-% No need segments as the kpfun uses kernel memory.
+%yoann: explain subtle parts in kproc(), and maybe note that no sched() here like in sysrfork.
+%claude:
+Unlike [[sysrfork()]], [[kproc()]] calls [[ready(p)]] but
+not [[sched()]]---it does not voluntarily yield, so the
+new kernel process will run when the scheduler next picks
+it. The [[kp]] flag marks it as a kernel process.
+
+%yoann: explain no need segments as the kpfun uses kernel memory hence this chunk that make sense when see code using it in pexit to guard other code
+%claude:
+Kernel processes have no user segments---they run
+entirely in kernel address space. This is why [[pexit()]]
+checks [[up->kp]] early and skips the parent/child wait
+message machinery:
 
 <<[[pexit()]] if a kernel process, do nothing about parent and child>>=
 if(up->kp) {
@@ -10799,6 +11079,14 @@ if(up->kp) {
 %ocaml: kp has no parent anyway
 
 \subsection{[[arch_kprocchild()]] (ARM)}
+
+%yoann: say similar to arch_xxx for regular user process? but simpler
+%claude:
+[[arch_kprocchild()]] is the kernel-process counterpart of
+[[arch_forkchild()]]---it sets up the child's kernel stack
+so that it starts executing [[func(arg)]] when scheduled.
+It is simpler because there is no user-mode return to
+arrange:
 
 <<function [[arch_kprocchild]](arm)>>=
 /*
@@ -10816,6 +11104,13 @@ arch_kprocchild(Proc *p, void (*func)(void*), void *arg)
 }
 @
 %x86: almost identical except KSTACK-BY2WD
+
+%yoann: remind where linkproc is used and assigned
+%claude:
+[[linkproc()]] is the entry point for all kernel
+processes---[[arch_kprocchild()]] sets the child's [[PC]]
+to [[linkproc]] above. It calls the actual function,
+then [[pexit()]] when it returns:
 
 <<function [[linkproc]](arm)>>=
 /*
@@ -10843,12 +11138,15 @@ linkproc(void)
 % see also section on notifications
 %claude:
 Processes can be controlled from outside by writing
-commands to [[/proc/\#/ctl]]. For example,
+commands to [[/proc/#/ctl]]. For example,
 [[echo kill > /proc/42/ctl]] sends a ``sys: killed'' note
-to process~42. This is how the shell implements job
-control and how administrators kill runaway processes.
+to process~42. This is how the shell implements job control
+and how administrators kill runaway processes.
 The full [[/proc]] file system is covered in
-Chapter~\ref{chap:devices}.
+Chapter~\ref{chap:devices}. The shell [[rc]] itself does
+not use [[/proc/\emph{pid}/ctl]] directly---it sends
+notes via [[postnote()]]---but tools like [[kill(1)]]
+and [[slay(1)]] do write to [[ctl]].
 
 % TODO: How implement C-z on plan9? how shell can stop user process?
 % actually on linux C-z is something interpreted by the tty maybe,
@@ -10861,6 +11159,15 @@ Chapter~\ref{chap:devices}.
 <<[[Procctl]] cases>>=
 Proc_exitme,
 @
+
+%yoann: explain this Procctl enum and reference where it's defined. maybe say ok to not fully understand because /proc is explained later, but shown here because use the helper (e.g., pexit) defined in this chapter
+%claude:
+The [[Procctl]] enum values correspond to commands that
+can be written to [[/proc/\emph{pid}/ctl]]. The full
+[[/proc]] device is covered in Chapter~\ref{chap:devices},
+but [[procctl()]] is shown here because its cases use
+[[pexit()]] and other helpers defined in this chapter.
+It is fine to skim this code for now.
 
 <<[[procctl()]] [[Proc_exitme]] case>>=
 case Proc_exitme:
