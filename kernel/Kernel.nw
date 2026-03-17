@@ -216,6 +216,7 @@ processes?
 %tags used for recurring themes:
 %x86: how ARM code relates to x86 (same/similar/very-different)
 %real-world: 
+%unix: improvement by plan9 over unix thx to decades of hindsight
 %linux: how similar stuff works in Linux
 %xv6: how done in xv6 (and probably Unix v6)
 %ocaml: stuff better in ocaml than in C
@@ -242,7 +243,9 @@ processes?
 Like for most books in \principia, I chose a \plan program.
 The \plan kernel, called [[9]], was written by Ken Thompson---the
 creator of \unix---together with Dave Presotto and others at
-Bell Labs. If \unix was ``version~1,'' then \plan is
+Bell Labs. 
+%unix:
+If \unix was ``version~1,'' then \plan is
 ``version~2'': a chance to redesign an operating system with
 decades of hindsight. The result is a kernel that is remarkably
 small, clean, and coherent---a good basis for the other
@@ -569,7 +572,7 @@ provides to the user programs.
 %claude:
 \plan is the successor to \unix and inherits its philosophy
 that ``everything is a file.'' \plan pushes this further:
-everything is a {file server}. Devices, the console, the
+``everything is a {file server}''. Devices, the console, the
 screen, the process table---all are accessed through
 [[open]]/[[read]]/[[write]]/[[close]], served by in-kernel
 or user-space file servers. This design lets the syscall
@@ -581,7 +584,7 @@ interface remain remarkably small.
 %claude:
 The entire interface fits in a small single header, [[sys.h]],
 which lives in [[lib_core/libc/9syscall/]]---it is shared
-between the kernel and the C library because it defines
+between the kernel and the C library (see \book{Libcore}) because it defines
 the interface between them. The same directory also
 contains the auto-generated assembly wrappers (one per
 syscall) that user programs link against. Each syscall is
@@ -630,7 +633,7 @@ testing purposes.
 The [[ERRSTR]] syscall at position~39
 is \plan's error-reporting mechanism.
 %claude: %unix:
-Unlike \unix, which uses opaque numeric error codes
+Unlike \unix, which uses the opaque numeric error code [[errno]]
 (where you need a man page to find out what [[ENOENT]]
 means), \plan uses human-readable error strings that
 programs retrieve via [[errstr()]]---one of the many
@@ -645,9 +648,9 @@ small cleanups \plan made over \unix.
 
 %claude:
 The process syscalls mirror the \unix model: [[RFORK]] creates
-a new process (a generalization of \unix [[fork]]),
+a new process (a generalization of \unix\ [[fork]]),
 [[EXEC]] replaces the current program, [[EXITS]] terminates,
-and [[AWAIT]] waits for a child (like \unix [[wait]]).
+and [[AWAIT]] waits for a child (like \unix\ [[wait]]).
 
 <<[[sys.h]] process syscalls>>=
 #define RFORK       1
@@ -691,7 +694,7 @@ which moves the boundary between the data segment and free
 memory. The name comes from the traditional \unix term for
 the end of the process's data area.
 There is no [[malloc]] or [[free]] syscall---those are
-implemented entirely in user space (in the C library) on
+implemented entirely in user space (in the C library, see \book{Libcore}) on
 top of [[brk]]. The library requests large chunks of memory
 from the kernel via [[brk]] and then subdivides them.
 
@@ -714,7 +717,7 @@ The file syscalls are the workhorses of the interface.
 Because so many things in \plan are files, most of
 the kernel's services are accessed through these five calls.
 Note [[PREAD]] and [[PWRITE]] instead of the traditional
-\unix [[read]]/[[write]]: the [['p']] stands for
+\unix\ [[read]]/[[write]]: the [['p']] stands for
 ``positional''---they take an explicit file offset, making
 seek-then-read atomic.
 %claude: %unix:
@@ -809,7 +812,7 @@ The IPC syscalls cover several mechanisms.
 [[NOTIFY]]/[[NOTED]] handle {notes}, \plan's equivalent of
 \unix signals. The [[SEG]] family ([[SEGATTACH]],
 [[SEGDETACH]], etc.)\ lets processes attach shared memory
-segments, similar to \unix [[mmap]].
+segments, similar to \unix\ [[mmap]].
 
 <<[[sys.h]] ipc syscalls>>=
 #define PIPE        26
@@ -952,7 +955,11 @@ void main() {
 
 %claude:
 The [[pwrite()]] call writes 12 bytes to file descriptor [[1]]
-(standard output) at offset~0. Under the hood, [[pwrite()]] is
+(standard output) at offset~0.\footnote{The [[0LL]]
+suffix makes the offset a 64-bit [[long long]], because
+\plan's [[pwrite]] takes a 64-bit file offset, allowing
+files larger than 4~GiB.}
+Under the hood, [[pwrite()]] is
 a thin assembly wrapper that places the syscall number ([[PWRITE]],
 which is [[9]] from [[sys.h]]) in register [[R0]] and
 executes a [[SWI]] (software interrupt) instruction to trap
@@ -982,9 +989,11 @@ TEXT _main(SB), $20
         SWI $0
 
 GLOBL   hello(SB), $12
-DATA    hello+0(SB)/12, $"hello world\n"
+DATA    hello+0(SB)/8, $"hello wo"
+DATA    hello+8(SB)/4, $"rld\n"
 @
-%$
+% Plan 9 assembler DATA directives can only initialize up to 8 bytes at a time,
+% so a 12-byte string must be split across two DATA statements.
 
 %claude:
 To compile and run the C version:
@@ -1685,6 +1694,22 @@ The [[Section]] type is used for the kernel's RAM mapping
 The [[Coarse]] type is used for the exception vectors at
 [[HVECTORS]] and for user-process pages, where fine-grained
 4~KiB mapping is needed.
+
+%yoann: maybe explain a few bits, dom, flags, AP, C B that are useful to understand
+%claude:
+A few of the bit fields in these entries are worth knowing
+about now. [[AP]] (Access Permission, bits~11--10) controls
+whether the page is readable/writable by user code or only
+by the kernel---this is how user/kernel memory protection is
+enforced. [[dom]] (domain, bits~8--5) selects one of 16
+{domains}; the domain register then says whether accesses to
+that domain are checked (``client''), unchecked (``manager''),
+or faulted (``no access''), providing a coarse-grained
+override. The [[C]] and [[B]] bits (bits~3 and~2) control
+caching: [[C]]=1 enables the data cache, [[B]]=1 enables
+write buffering. Kernel RAM is mapped with both set
+(write-back cached); I/O registers are mapped with both
+clear (uncached, so reads/writes go directly to hardware).
 
 % put BY2PG here cos referenced a few times.
 <<constant [[BY2PG]](arm)>>=
@@ -2487,6 +2512,20 @@ It only wakes up when an event occurs---a syscall, an
 interrupt, a timer tick---handles it, and then lets
 the user program resume.
 
+%yoann: monolithic kernel, but thx to 9P lots of user-space file-servers so ideas from microkernel too; In fact the all kernel is pretty small at 30K LOC.
+%claude:
+The \plan kernel is {monolithic}---device drivers,
+the file system switch, memory management, and scheduling
+all run in kernel space. But thanks to the 9P protocol,
+much functionality that would live in the kernel on
+other systems is pushed out to user-space file servers
+(e.g., the window system [[rio]], the authentication
+agent [[factotum]], the file server [[fossil]]). This
+borrows a key idea from {microkernel} designs: keep the
+kernel small and move services to user space. In fact,
+the entire kernel is only about 30\,000 lines of
+C---remarkably small for a complete operating system.
+
 %claude:
 The kernel's execution can be understood along three axes.
 First, the {boot sequence}: how the kernel starts from a bare
@@ -2516,7 +2555,10 @@ is the subject of the rest of the book.
 On the Raspberry Pi, the Broadcom firmware (closed source,
 stored in ROM) loads a bootloader from the SD card, which
 in turn loads the kernel binary at physical address
-[[0x8000]]. The details of this early firmware stage are
+[[0x8000]]. The bootloader reads a configuration file
+([[config.txt]]) from the SD card's boot partition, which
+specifies the path to the kernel binary.
+The details of this early firmware stage are
 specific to the Broadcom SoC and not very interesting; what
 matters is that all architectures share the same idea of
 bootstrap code loading the kernel into memory at a known
@@ -2582,12 +2624,75 @@ Understanding the kernel's memory layout requires thinking
 along several dimensions: {physical} vs.\ {virtual} addresses,
 {kernel} vs.\ {user} memory, and {static} vs.\ {dynamic}
 allocation. On the Raspberry Pi, the physical memory starts
-at address~0. The kernel binary is loaded at physical
-[[0x8000]] (virtual [[KTZERO]]). Everything below [[KZERO]]
+at address~0.\footnote{On some architectures, physical
+memory does not start at~0---for example, on many x86
+systems the first megabyte is reserved for legacy BIOS
+structures. But on the Raspberry Pi's ARM SoC, physical
+RAM genuinely begins at address~0.}
+The kernel binary is loaded at physical
+[[0x8000]] (virtual [[KTZERO]]).\footnote{Why [[0x8000]]
+and not~0? Address~0 is reserved for the ARM exception
+vector table. But the vectors only occupy a few dozen
+bytes, so why not [[0x1000]]? The [[0x8000]] address is
+a Broadcom firmware convention---the firmware uses the
+memory below [[0x8000]] for its own data structures
+during boot. The kernel in turn uses some of this space
+(e.g., [[CPUADDR]] at [[0x2000]]) for early kernel
+structures like the first [[Cpu]].}
+Everything below [[KZERO]]
 ([[0x80000000]]) in the virtual address space belongs to
 user processes; everything at or above [[KZERO]] belongs to
 the kernel. The kernel's virtual addresses are simply the
 physical addresses plus [[KZERO]].
+
+
+% in <arch>/mem.h
+%claude:
+The following constants define the virtual address space
+layout. [[KZERO]] at [[0x80000000]] (2~GiB) is the boundary:
+below is user space, above is kernel space.
+<<constant [[KSEG0]](arm)>>=
+#define KSEG0       0x80000000      /* kernel segment */
+@
+\t remove KSEG0? why talk about segments on ARM?? no segmentation.
+<<constant [[KZERO]](arm)>>=
+#define KZERO       KSEG0           /* kernel address space */
+@
+% 2Go.
+
+<<constant [[KTZERO]](arm)>>=
+#define KTZERO      (KZERO+0x8000)      /* kernel text start */
+@
+% ARM firmware (=~ bios) loads kernel file at 0x8000 (physical).
+% (will use physical memory before for kernel data structures, e.g. cpu).
+
+
+
+%claude:
+On the user side, the address space starts at [[UZERO]] (0).
+The first page is left unmapped so that null pointer
+dereferences cause a fault. User code starts at [[UTZERO]]
+(one page above zero), and the user stack grows downward
+from [[USTKTOP]]:
+<<constant [[UZERO]](arm)>>=
+#define UZERO       0           /* user segment */
+@
+<<constant [[UTZERO]](arm)>>=
+#define UTZERO      (UZERO+BY2PG)       /* user text start */
+@
+%x86: same
+
+% BY2PG in Overview now (= 1 Page (4Ko))
+
+<<constant [[USTKTOP]](arm)>>=
+#define USTKTOP     0x20000000      /* user segment end +1 */
+@
+\l that's it? only 512 MB for virtual space?
+
+<<constant [[USTKSIZE]](arm)>>=
+#define USTKSIZE    (8*1024*1024)       /* user stack size */
+@
+
 
 % see kernel/docs/arm/readme.txt
 % Also add Framebuffer in it?
@@ -2635,8 +2740,8 @@ identical across all processes):
              +---------------------+
              | kernel bss          |
              +---------------------+
-             | kernel data         |  globals: conf, systab,
-             |                     |  devtab, palloc, procalloc...
+             | kernel data         |  globals: conf, systab, devtab,
+             |                     |  xlists, palloc, procalloc...
              +---------------------+
              | kernel text         |  main(), sched(), syscall
              |                     |  handlers, device drivers...
@@ -2699,7 +2804,7 @@ and [<KTZERO>].
 %claude:
 On multi-processor systems (e.g.,
 Raspberry Pi~2), each additional CPU has its own [[Cpu]]
-struct allocated elsewhere; the [<cpus>]] array and the
+struct allocated elsewhere; the [<cpus>] array and the
 dedicated register [[R10]] allow each processor to find
 its own.
 
@@ -2850,19 +2955,6 @@ typedef void* user_vp;
 
 
 
-% in <arch>/mem.h
-%claude:
-The following constants define the virtual address space
-layout. [[KZERO]] at [[0x80000000]] (2~GiB) is the boundary:
-below is user space, above is kernel space.
-<<constant [[KSEG0]](arm)>>=
-#define KSEG0       0x80000000      /* kernel segment */
-@
-\t remove KSEG0? why talk about segments on ARM?? no segmentation.
-<<constant [[KZERO]](arm)>>=
-#define KZERO       KSEG0           /* kernel address space */
-@
-% 2Go.
 
 % see words.txt and physical map.
 
@@ -2872,11 +2964,6 @@ The kernel text (code) starts at [[KTZERO]], which is
 kernel binary at physical [[0x8000]]. The physical memory
 below [[0x8000]] is used for early kernel data structures
 such as CPU~0's [[Cpu]] structure at [[CPUADDR]]:
-<<constant [[KTZERO]](arm)>>=
-#define KTZERO      (KZERO+0x8000)      /* kernel text start */
-@
-% ARM firmware (=~ bios) loads kernel file at 0x8000 (physical).
-% (will use physical memory before for kernel data structures, e.g. cpu).
 
 %put CPUADDR here because we talk about it later with cpu and cpus
 <<constant [[CPUADDR]](arm)>>=
@@ -2887,30 +2974,6 @@ such as CPU~0's [[Cpu]] structure at [[CPUADDR]]:
 % even when have extern register? Because still need to assign this register?
 % but could do MOVW $cpu(SB), R9? so no need hardcoded CPUADDR?
 
-%claude:
-On the user side, the address space starts at [[UZERO]] (0).
-The first page is left unmapped so that null pointer
-dereferences cause a fault. User code starts at [[UTZERO]]
-(one page above zero), and the user stack grows downward
-from [[USTKTOP]]:
-<<constant [[UZERO]](arm)>>=
-#define UZERO       0           /* user segment */
-@
-<<constant [[UTZERO]](arm)>>=
-#define UTZERO      (UZERO+BY2PG)       /* user text start */
-@
-%x86: same
-
-% BY2PG in Overview now (= 1 Page (4Ko))
-
-<<constant [[USTKTOP]](arm)>>=
-#define USTKTOP     0x20000000      /* user segment end +1 */
-@
-\l that's it? only 512 MB for virtual space?
-
-<<constant [[USTKSIZE]](arm)>>=
-#define USTKSIZE    (8*1024*1024)       /* user stack size */
-@
 
 % because first page will be marked as protected to detect null pointer
 % dereference
@@ -3029,6 +3092,19 @@ typedef long Syscall(ulong*); // user_wp? or copied in Sargs?
 % need also ADT for return value though and special matching return value.
 %c: very generic interface and later cast (but good in the end?)
 
+%yoann: explain more this ulong*, when use pwrite there is actually 4 arguments and now only one
+%claude:
+The [[ulong*]] parameter is a pointer into the user's stack,
+where the syscall arguments have been laid out as a flat
+array of machine words. For example, [[pwrite(fd, buf, n, off)]]
+has four arguments, but on the kernel side they all arrive
+as consecutive [[ulong]] values starting at this pointer:
+[[arg[0]]] is the file descriptor, [[arg[1]]] the buffer
+address, [[arg[2]]] the count, and [[arg[3]]] (possibly
+two words for a 64-bit offset) the file position.
+Each [[sys*()]] function casts and extracts what it needs
+from this generic array.
+
 % parameter = pointer in stack of user, start of array of parameters
 % Different syscalls have different parameters, so use ulong*
 % very generic pointer here.
@@ -3075,6 +3151,11 @@ Syscall *systab[] = {
 int nsyscall = nelem(systab);
 @
 
+%yoann: here is the simplest syscall, useful for testing purpose
+%claude:
+Here is the simplest possible syscall, useful for testing
+that the whole trap-and-dispatch machinery works end to end:
+
 <<syscall nop>>=
 // void nop(void);
 long
@@ -3106,41 +3187,46 @@ and back:
           | - switches to SVC mode
           | - jumps to HVECTORS+0x08
           |   (SWI = vector #2)
-          v
-  2. HVECTORS (0xFFFF0000):
-     vectors[2]: LDR PC, vtable[2]
           |
-          v
-  3. vtable[2] = _vsvc
-          |
-          v
-  4. _vsvc (assembly):
-     - saves all user regs -> Ureg
-       (on kernel stack)
-     - sets R12 = kernel SB
-     - sets R(CPU), R(UP)
-     - calls arch__syscall(ureg)
-          |
-          v
-  5. arch__syscall (C):
-     - scallnr = ureg->r0  (= 0)
-     - ret = systab[0](sp)
-          |
-          v
-  6. sysnop():
-     - print("Hello World\n")
-     - return 0
-          |
-          v
-  7. back in _vsvc:
-     - restores user regs from Ureg
-     - restores SPSR -> CPSR
-     - RFE (return to user mode)
-          |
+          +------------------------->  2. HVECTORS (0xFFFF0000):
+                                          vectors[2]: LDR PC, vtable[2]
+                                               |
+                                               v
+                                       3. vtable[2] = _vsvc
+                                               |
+                                               v
+                                       4. _vsvc (assembly):
+                                          - saves user regs -> Ureg
+                                            (on kernel stack)
+                                          - sets R12 = kernel SB
+                                          - sets R(CPU), R(UP)
+                                          - calls arch__syscall(ureg)
+                                               |
+                                               v
+                                       5. arch__syscall (C):
+                                          - scallnr = ureg->r0  (= 0)
+                                          - sp = user stack pointer
+                                            (the ulong* in Syscall)
+                                          - ret = systab[0](sp)
+                                               |
+                                               v
+                                       6. sysnop(ulong*):
+                                          - print("Hello World\n")
+                                          - return 0
+                                               |
+                                               v
+                                       7. back in _vsvc:
+                                          - restores user regs from Ureg
+                                          - restores SPSR -> CPSR
+                                          - RFE (return to user mode)
+          |                                    |
+          +<-----------------------------------+
           v
   8. user program continues
      after SWI instruction
 \end{verbatim}
+
+
 %claude:
 Note the distinction between [[Ureg]] and [[Label]]: when
 entering the kernel from user space (step~4), [[_vsvc]]
@@ -3247,7 +3333,9 @@ number is passed in [[R0]] instead. The [[SWI]] instruction
 is used purely for its side effect of trapping into supervisor
 mode. Some other operating systems encode the syscall number
 in the [[SWI]] argument, but \plan chose the simpler approach
-of using a register.
+of using a register. Similarly, Linux on x86 uses [[int 0x80]]
+(or the faster [[syscall]] instruction on x86-64) to trap
+into the kernel, with the syscall number passed in [[EAX]].
 
 %yoann: Why kernel vs user  virtual space divide? why can't have user-space to
 % be all of 4GB virtual address space and have kernel be different?
@@ -3502,6 +3590,44 @@ struct Confmem
 % will use that later! set in main() in confinit(), and use for xalloc, and palloc
 % Pallocmem is a slice of Confmem.
 
+%yoann: maybe ASCIII diagram of Conf and Confmem bank for Raspberry Pi? Is the bank define the free RAM after the kernel binary? What are the values then?
+%claude:
+On the Raspberry Pi, there is typically a single memory
+bank. The [[base]] is the start of usable physical RAM
+(after the kernel binary and its static allocations),
+and [[npage]] is the number of free pages. For example,
+on a Pi~1 with 512~MiB of RAM:
+\begin{verbatim}
+  Physical memory:
+
+  0x1FFF_FFFF +---------------------------+
+              |                           |
+              |  Confmem bank 0           |
+              |  base = ~end              |
+              |  npage = remaining pages  |
+              |                           |
+        ~end  +---------------------------+
+              |  kernel text+data+bss     |
+      0x8000  +---------------------------+
+              |  firmware / Cpu struct     |
+      0x0000  +---------------------------+
+\end{verbatim}
+%claude:
+The exact values depend on the kernel binary size and
+are computed at boot time by [[confinit()]].
+
+%yoann: explain a bit kernel arguments and how passed by bootloader and what is kernelpercent (actually it will be more 20% I think than 60)
+%claude:
+The bootloader passes configuration parameters to the
+kernel as key-value string pairs (similar to a Linux
+kernel command line). These are stored in the [[confname]]
+and [[confval]] parallel arrays. One important parameter
+is [[*kernelpercent*]], which controls what fraction of
+physical memory the kernel reserves for its own dynamic
+allocations (via [<xalloc>]). The default in the code
+is~60\%, but in practice a value around~20\% is more
+typical---most memory should be available for user
+processes.
 
 <<globals confname and confvar>>=
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
@@ -3546,12 +3672,7 @@ state, and a small kernel stack used during boot and
 interrupts. On a uniprocessor Raspberry Pi~1 there is
 a single [[Cpu]] at [[CPUADDR]]; on a multiprocessor
 system each CPU has its own.
-%claude:
-The first fields have a fixed layout because assembly code
-accesses them by hardcoded offsets. The [[stack[1]]] at
-the end is a C idiom: the actual stack extends to the
-end of the [[CPUSIZE]] page, so the array's ``one element''
-is really the start of a much larger area.
+
 <<struct [[Cpu]]>>=
 //coupling: do not change the order of the first 4 fields! 
 // Some assembly code assumes this order.
@@ -3585,6 +3706,26 @@ struct Cpu
 % There it acually makes sense to use the Mach name because they speak 
 % about a machine.
 
+%claude:
+The first fields have a fixed layout because assembly code
+accesses them by hardcoded offsets. The [[stack[1]]] at
+the end is a C idiom: the actual stack extends to the
+end of the [[CPUSIZE]] page, so the array's ``one element''
+is really the start of a much larger area.
+
+% not that the stack actually is until CPUSIZE
+<<constant [[CPUSIZE]](arm)>>=
+#define CPUSIZE BY2PG
+@
+% will see lots of code like $(CPUADDR+CPUSIZE)
+%x86: same
+
+
+%yoann: more on ticks and hz in chapter~X
+%claude:
+We will see more about ticks and the clock in the
+Interrupts chapter (Chapter~\ref{chap:interrupts}).
+
 <<[[Cpu]] time fields>>=
 ulong ticks;      /* of the clock since boot time */
 @
@@ -3606,13 +3747,15 @@ int cpumhz; // cpuhz / 1_000_000
 
 
 
-
-% not that the stack actually is until CPUSIZE
-<<constant [[CPUSIZE]](arm)>>=
-#define CPUSIZE BY2PG
-@
-% will see lots of code like $(CPUADDR+CPUSIZE)
-%x86: same
+%yoann: explain Cpu actually portable code, but obviously has arch specific fields too; also Kencc ext above where no need to give name to field, just 'struct Arch_Cpu;'
+%claude:
+The [[Cpu]] structure shown above is portable across all
+architectures. But each architecture also has specific
+fields (MMU state, floating-point context, etc.) that
+are gathered in [[Arch_Cpu]]. Thanks to a Ken~C compiler
+extension, [[struct Arch_Cpu;]] can be embedded in [[Cpu]]
+without giving it a field name---its fields are accessed
+directly as if they were part of [[Cpu]] itself.
 
 <<struct [[Arch_Cpu]](arm)>>=
 //coupling: do not change the first field! Some assembly code assumes this order
@@ -3650,13 +3793,21 @@ struct Arch_Cpu {
 % than a direct access as it's done above.
 %claude:
 The [[cpu]] global must be per-processor: on a multiprocessor
-system, each CPU must see its own [[Cpu]] structure. On ARM,
-this is achieved by dedicating register [[R10]]---the [[5c]]
+system, each CPU must see its own [[Cpu]] structure.
+Since each processor has its own set of registers,
+a dedicated register is a natural way to hold
+per-processor state.
+On ARM, this is achieved by dedicating register [[R10]]---the [[5c]]
 compiler's [[extern register]] extension reserves [[R10]]
 so it is never used for anything else. Each processor sets
 its [[R10]] to point to its own [[Cpu]] during boot.
+Note that [[R10]] is only reserved in kernel code, not in
+user-space programs; it is a kernel convention. That is why
+[[_vsvc]] sets [[R(CPU)]] early upon entering kernel mode
+(visible in the syscall trace diagram above).
 On x86, where registers are scarce, a different trick
 involving the page table is used instead.
+
 <<global [[cpu]](arm)>>=
 extern register Cpu* cpu;           /* R10 */
 @
@@ -3705,6 +3856,18 @@ Cpu* cpus[MAXCPUS];
 %old: MACHP
 %smp:
 
+%yoann: explain Active and why need this given we already have cpus; seems redundant
+%claude:
+The [[Active]] structure tracks global multiprocessor
+state that does not belong to any single [[Cpu]]. The
+[[cpus]] bitmap records which processors are online,
+and [[exiting]] signals a system-wide shutdown. While
+[[cpus[]]] (the array) gives access to each processor's
+[[Cpu]] structure, [[Active]] answers a different question:
+which processors are alive, and is the system shutting down?
+It also carries a [[Lock]] to serialize concurrent updates
+from multiple CPUs.
+
 <<struct [[Active]]>>=
 struct Active
 {
@@ -3736,7 +3899,8 @@ structure in the kernel---it is what the kernel knows about
 a process. Each running program has one [[Proc]] containing
 its state, memory map, open files, scheduling priority,
 parent/child relationships, notes (signals), error handling
-context, and much more.
+context, and much more. It is one of the largest
+structures in the kernel.
 %claude:
 The structure is organized in sections (visible in the
 comment banners below), each corresponding roughly to a
@@ -3809,6 +3973,13 @@ struct Proc
 % apparently this uses 3004 bytes ... huge. procalloc is 6Mo!
 
 
+%yoann: like for Cpu and Arch_Cpu, has also arch-specific proc field we will detail later
+%claude:
+Just as [[Cpu]] has an [[Arch_Cpu]], [[Proc]] embeds an
+anonymous [[struct Arch_Proc]] for architecture-specific
+fields (on ARM, this is the per-process MMU state).
+We will detail these fields later.
+
 <<struct [[Arch_Proc]](arm)>>=
 struct Arch_Proc
 {
@@ -3816,6 +3987,12 @@ struct Arch_Proc
 };
 @
 %old: PMMU
+
+%yoann: give transition, first maybe most important field, state!
+%claude:
+Perhaps the most important field in [[Proc]] is its
+{state}---whether the process is running, ready to run,
+sleeping, or dead:
 
 <<[[Proc]] state fields>>=
 // enum<Procstate>
@@ -3873,10 +4050,16 @@ char *statename[] =
 %claude:
 Like [[cpu]], the [[up]] pointer (``user process'') is
 per-processor: it points to the [[Proc]] currently running
-on this CPU. On ARM it is stored in [[R9]]:
+on this CPU. On ARM it is stored in [[R9]]. The [[5c]]
+compiler assigns [[extern register]] variables to registers
+in decreasing order: the first declaration gets [[R10]]
+(which is [[cpu]]), the second gets [[R9]] (which is [[up]]),
+and a third would get [[R8]], and so on.
 <<global [[up]](arm)>>=
 extern register Proc* up;           /* R9 */
 @
+
+
 %smp: in a register again because convenient per-processor storage area
 %xv6: use 'proc' for that
 %ocaml: use Cpu.proc (but slower)
@@ -3903,7 +4086,9 @@ files like [[/dev/cons]], for network connections, for
 mounted file servers, etc.
 %claude:
 The key fields are [[type]] (which device driver owns this
-channel), [[dev]] (a device-specific sub-identifier),
+channel), [[dev]] (a device-specific sub-identifier---together
+[[type]] and [[dev]] play the role of \unix's major and
+minor device numbers),
 [[qid]] (the file's unique identity on that device, like
 an inode number), [[path]] (the file name), [[offset]]
 (the current read/write position), and [[mode]] (read,
@@ -3940,6 +4125,13 @@ struct Chan
 
 % type =~ major, and dev =~ minor
 
+%yoann: explain a few Proc fields have the Chan type
+%claude:
+Every process holds a few [[Chan]] pointers directly
+in its [[Proc]] structure. The two most fundamental ones
+are [[slash]] (the root of the process's namespace) and
+[[dot]] (its current directory):
+
 <<[[Proc]] files fields>>=
 // ref<Chan>
 Chan  *slash; // The root! used by namec()
@@ -3973,6 +4165,19 @@ struct Qid
 };
 @ 
 %coupling: this structure ir also defined in libc.h
+
+%yoann: explain maybe more path that is a number where one would expect a string, and vers that is unusual
+%claude:
+Despite its name, [[path]] is not a string but a 64-bit
+integer---it is a unique numeric identifier for a file
+within a device, much like a \unix inode number. The name
+is confusing because [[Chan]] also has a separate [[path]]
+field (of type [[Path*]]) that holds the actual string
+pathname. The [[vers]] field is more unusual: it is a
+version number that the file server increments whenever
+the file's content changes. The kernel uses it for cache
+invalidation---if a cached [[Qid]] has a stale [[vers]],
+the kernel knows it must re-read the file's metadata.
 
 % uvlong for path? need that many unique identifier on one device?
 
@@ -4069,7 +4274,9 @@ naming convention.
 %claude: %unix:
 In \unix, devices are identified by {major} and {minor}
 numbers---opaque integers that require a lookup table to
-understand. \plan replaces the major number with a
+understand. Accessing a device requires creating special
+files with [[mknod]] and a populated [[/dev]] directory.
+\plan replaces the major number with a
 human-readable Unicode character (a [[Rune]]): [['c']] for
 the console, [['p']] for the process table, [['e']] for the
 environment, etc. You can see these characters in
@@ -4077,15 +4284,12 @@ environment, etc. You can see these characters in
 [[#p]] for the proc device. This is much clearer than
 memorizing that major~4 means the console. And because
 [[Rune]] is a Unicode code point (not an ASCII byte),
-\plan can support more than 256 different device drivers
-if needed.
-%claude:
-The global [[devtab]] is an array of pointers to all the
-[[Dev]] structures compiled into the kernel---it is the
-registry of all available device drivers. When a [[Chan]]
-is opened on a device, [[Chan.type]] is the index into
-[[devtab]], so that [[devtab[c->type]->read()]] calls the
-right driver's read method.
+\plan can support more than 256 different device drivers.
+While [[Chan.type]] is still a numeric index internally
+(into [[devtab]]), the user-visible name uses the
+character from [[Dev.dc]]---so the human never sees the
+number.
+
 <<struct [[Dev]]>>=
 struct Dev
 {
@@ -4100,6 +4304,14 @@ struct Dev
 %  "By combining the operations in a single atomic call, they more closely
 %   match the 9P protocol"
 % does it match 9p? I guess it closely match 9p
+
+%claude:
+The global [[devtab]] is an array of pointers to all the
+[[Dev]] structures compiled into the kernel---it is the
+registry of all available device drivers. When a [[Chan]]
+is opened on a device, [[Chan.type]] is the index into
+[[devtab]], so that [[devtab[c->type]->read()]] calls the
+right driver's read method.
 
 <<global [[devtab]]>>=
 // array<ref_own<Dev>>
