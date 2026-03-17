@@ -8846,6 +8846,13 @@ set up the child, showing how the parent and child relate:
 
 \subsection{File descriptors: [[RFFDG]], [[RFCFDG]]}
 
+%claude:
+The next subsections handle resource sharing. They all
+follow the same three-way pattern: if the ``G'' flag is
+set, {copy} the parent's resource; if the ``CG'' flag is
+set, create a {clean} (empty) one; if neither, {share}
+the parent's (just increment the reference count). The
+two flags are mutually exclusive.
 <<[[sysrfork()]] sanity check flags, clean or copy>>=
 if((flag & (RFFDG|RFCFDG)) == (RFFDG|RFCFDG))
     error(Ebadarg);
@@ -8867,6 +8874,11 @@ else {
 
 \subsection{Namespace: [[RFNAMEG]], [[RFCNAMEG]]}
 
+%claude:
+Same pattern as file descriptors, but for the process's
+view of the file system (the {namespace}). [[RFNOMNT]] is
+an additional flag that, when set, prevents the child from
+mounting anything---useful for sandboxing untrusted programs.
 <<[[sysrfork()]] sanity check flags, clean or copy>>=
 if((flag & (RFNAMEG|RFCNAMEG)) == (RFNAMEG|RFCNAMEG))
     error(Ebadarg);
@@ -8931,6 +8943,15 @@ if((flag&RFNOTEG) == 0)
 
 \subsection{Process sharing settings (no [[RFPROC]])}
 
+%claude:
+When [[RFPROC]] is {not} set, [[rfork]] does not create a
+child. Instead, it modifies the current process's own
+resources---for example, a program can call
+[[rfork(RFNAMEG)]] to get its own private copy of the
+namespace before mounting something, without forking a
+new process. The code below mirrors the RFPROC branch
+but operates on [[up]] instead of a new [[p]], and must
+carefully close the old resource groups after switching.
 <<[[sysrfork()]] other locals>>=
 Fgrp *ofg;
 Pgrp *opg;
@@ -9016,13 +9037,22 @@ if(flag & RFNOTEG)
 
 %http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
 %claude:
-[<sysexec()>] replaces the current process's memory with a
-new program. The steps are: open the executable, read the
-[[a.out]] header, create new text/data/bss segments, build
-the argument list on a temporary stack, free the old
-segments, relocate the stack, and set the PC and SP for
-the new program. Script files starting with [[#!]] are
-handled by re-opening with the interpreter.
+[<sysexec()>] is the second half of the fork/exec pair.
+It replaces the current process's memory image with a new
+program loaded from a file. This is a complex operation
+because the old program's memory must be freed while
+building the new one---and if anything goes wrong (bad
+binary, out of memory), the process must survive with its
+old image intact.
+%claude:
+The logical chain is:
+file name $\to$ open channel $\to$ read [[a.out]] header
+$\to$ create text/data/bss segments $\to$ count arguments
+$\to$ build arguments on temporary stack $\to$ free old
+segments $\to$ relocate stack to final position $\to$ set
+PC and SP $\to$ return to user mode in new program.
+Script files starting with [[#!]] are handled by
+re-opening with the interpreter.
 %http://lwn.net/Articles/630727/
 
 <<constant [[AOUT_MAGIC]](arm)>>=
@@ -9245,6 +9275,12 @@ arch_procsetup(Proc* p)
 
 \subsection{Text segment}
 
+%claude:
+The text (code) segment is {shared} and {demand-loaded}:
+the pages are not read from disk now but will be faulted
+in on first access. If another process is already running
+the same executable, the text pages are shared via a
+cache image.
 <<[[sysexec()]] set Text segment>>=
 /* Text.  Shared. Attaches to cache image if possible */
 <<[[sysexec()]] get text segment ts via demand loading on tc>>
@@ -9265,6 +9301,10 @@ up->seg[DSEG] = s;
 
 \subsection{Bss segment}
 
+%claude:
+The bss is the simplest: it starts where data ends, and
+its pages are zero-filled on demand by the page fault
+handler---no disk I/O needed.
 <<[[sysexec()]] set Bss segment>>=
 /* BSS. Zero fill on demand */
 up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
@@ -9331,6 +9371,16 @@ ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
 \l why need add this stack segment in Proc.seg? because need to
 \l  access and write into it and so generate real page fault
 \l  that must be resolved?
+%claude:
+Building the new stack is the trickiest part of exec.
+The kernel must write the argument strings and [[argv[]]]
+pointers into the new program's stack, but it cannot
+overwrite the current stack---the old program's syscall
+frame is still there. So the kernel creates a {temporary}
+stack segment at a different virtual address ([[TSTKTOP]]),
+builds the arguments there, and only after the old
+segments are freed does it relocate this segment to its
+final position at [[USTKTOP]].
 
 % Temporary STacK TOP
 <<constant [[TSTKTOP]](arm)>>=
@@ -9521,16 +9571,36 @@ arch_execregs(user_addr entry, ulong ssize, ulong nargs)
 
 % can have race where parent is calling wait too late
 %  and the child already terminated?
-% NO! you wait for child already terminated!! 
+% NO! you wait for child already terminated!!
 % but kernel records only last 128 finished children.
 
 % can have zombies in plan9? no ... if parent exit
 % and have blocked children (on a pipe) then those children
 % will never finish? no they should finish because the fd of the pipe
 % will have been closed
+%claude:
+We now look at the parent's side of process termination
+before seeing the child's ([[sysexits()]]). It is easier
+to understand the exit code once you know what the parent
+expects to receive.
+%claude:
+When a child exits, it leaves a {wait message} in the
+parent's queue ([[Proc.waitq]]). There is no race: even
+if the child exits before the parent calls [[await()]],
+the message is preserved (up to 128 per parent). The
+parent blocks on [[Proc.waitr]] until a message is
+available, then returns it as a formatted string.
 
 \subsection{Parent and children}
 
+%claude:
+Each process keeps a pointer to its parent and a count
+of living children. But the [[parent]] pointer alone is
+not safe: if the parent exits, its [[Proc]] slot is reused
+for a new process. The [[parentpid]] field solves this---before
+accessing [[parent]], the child checks that
+[[parent->pid == parentpid]]. If not, the parent has died
+and been replaced, so the child acts as an orphan.
 <<[[Proc]] hierarchy fields>>=
 // option<ref<Proc>> (nil for the boot process)
 Proc  *parent;
@@ -9562,6 +9632,14 @@ ulong parentpid;
 
 \subsection{[[Waitmsg]] and [[Waitq]]}
 
+%claude:
+This is the data structure behind \plan's ``no zombies''
+design. Instead of keeping the dead child's [[Proc]]
+around (as \unix does with zombie processes), the child
+writes a small [[Waitmsg]] (containing its pid, CPU
+time, and exit string) to the parent's [[waitq]] and
+then frees its [[Proc]] immediately. The parent collects
+these messages at its leisure via [[await()]].
 <<[[Proc]] hierarchy fields>>=
 // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
 Waitq *waitq;   /* Exited processes wait children */
@@ -9726,6 +9804,12 @@ haswaitq(void *x)
 % return a string! far more useful than an exit code
 % as anyway will have then to interpret this error code.
 % actually it's an optional string. Can also return nil.
+%claude:
+[<sysexits()>] is a thin wrapper that copies the exit
+string from user space and calls [<pexit()>], the real
+termination function. The exit string is optional
+([[nil]] means success). [<pexit()>] never returns---the
+process is destroyed.
 
 % semantic of exits? what happens if still have children?
 % the children will still be there! the parent closes all its
@@ -9787,6 +9871,19 @@ if(status){
 % in theory get rid of schedinit, but maybe it's more elegant that way.
 % Also in schedinit we will call arch_mmurelease so sounds good
 % to do it from another context?
+%claude:
+[<pexit()>] is the real termination function, and its
+design is split into two phases for a subtle reason.
+Phase~1 runs on the dying process's own kernel stack:
+it frees resources (file descriptors, namespace, segments),
+builds the wait message for the parent, and wakes the
+parent up. Phase~2 runs on the {CPU's main stack} (inside
+[<schedinit()>]): it releases the MMU state and returns
+the [[Proc]] to the free pool. The split is necessary
+because the process cannot free its own kernel stack while
+still using it---it must switch to another stack first.
+The process's state goes through [[Moribund]] (between
+the two phases) and finally [[Dead]].
 
 
 % rename freemem to addbroken? hmmm no
@@ -9886,7 +9983,14 @@ if(p == nil) {
 
 \subsection{[[pexit()]] and [[schedinit()]]}
 
-% pexit -> sched (when up <> nil) -> schedinit 
+% pexit -> sched (when up <> nil) -> schedinit
+%claude:
+Here is phase~2: [<pexit()>] set the state to [[Moribund]]
+and called [<sched()>], which jumped to [<schedinit()>] on
+the CPU's main stack. Now [<schedinit()>] finishes the
+cleanup: release the MMU state, push the [[Proc]] back
+onto the free list, and unlock the locks that [<pexit()>]
+was holding. 
 <<[[schedinit()]] switch process state cases>>=
 case Moribund:
     up->state = Dead;
@@ -10053,11 +10157,20 @@ if(pgrp)
 
 \subsection{No waiting for child: [[RFNOWAIT]]}
 
-% now that have seen sysawait and sysexits, can understand 
+% now that have seen sysawait and sysexits, can understand
 % code of special sysrfork option RFNOWAIT
 %linux: nohup?
 
 % code subtle below.
+%claude:
+Now that we have seen [[sysawait()]] and [[pexit()]], we
+can understand the [[RFNOWAIT]] flag in [[sysrfork()]].
+When set, [[parentpid]] is cleared to~0, so when the
+child exits, [<pexit()>] will see that [[parent->pid !=
+parentpid]] and skip the wait message entirely. The child
+becomes an orphan: no one will collect its exit status.
+If [[RFNOWAIT]] is not set, the parent's [[nchild]] count
+is incremented normally.
 
 <<[[sysrfork()]] wait or not for child>>=
 if(flag&RFNOWAIT)
@@ -10075,10 +10188,21 @@ else {
 
 \section{Kernel processes}
 
-% Examples of kernel processes? 
-%  - page collector (pager), 
+% Examples of kernel processes?
+%  - page collector (pager),
 %  - closing channel collector (clunker?)
 %  - dead process collector?? (hmm, maybe done by sched() instead)
+%claude:
+Not all processes run user programs. The kernel creates
+a few background {kernel processes} for housekeeping
+tasks: the pager (reclaims pages when memory is low),
+the alarm handler, etc. A kernel process has no user
+segments---it runs entirely in kernel memory. It is
+created by [<kproc()>], which is simpler than [<sysrfork()>]:
+it calls [<newproc()>], sets [[kp=true]], stores the
+entry function in [[kpfun]], and makes the process
+runnable. When scheduled, the process enters [<linkproc()>],
+which enables interrupts and calls the function.
 
 <<[[Proc]] other fields>>=
 bool kp;   /* true if a kernel process */
@@ -10190,6 +10314,14 @@ linkproc(void)
 % see /proc, /proc/x/ctl, procctl()
 % see section on Debugging where explain procctl
 % see also section on notifications
+%claude:
+Processes can be controlled from outside by writing
+commands to [[/proc/\#/ctl]]. For example,
+[[echo kill > /proc/42/ctl]] sends a ``sys: killed'' note
+to process~42. This is how the shell implements job
+control and how administrators kill runaway processes.
+The full [[/proc]] file system is covered in
+Chapter~\ref{chap:devices}.
 
 % TODO: How implement C-z on plan9? how shell can stop user process?
 % actually on linux C-z is something interpreted by the tty maybe,
