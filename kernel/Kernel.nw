@@ -4396,7 +4396,11 @@ Soc soc = {
 In this chapter, I will present the concurrency primitives
 used inside the kernel. These are foundational building
 blocks---almost every chapter that follows will use locks,
-interrupt disabling, or sleep/wakeup.
+interrupt disabling, or sleep/wakeup. In fact, we already
+encountered [<Lock>] (in [<Active>]) and [<Ref>] (in
+[<Chan>]) in the previous chapter without explaining
+them---they are defined here.
+
 %claude:
 Kernels were arguably the first concurrent programs, long
 before user-level threads and multicore CPUs existed. Even
@@ -4580,13 +4584,31 @@ TEXT arch_islo(SB), 1, $-4
 %$
 
 
-
+%yoann: explain goal of this code, and maybe recall CPUADDR and CPU fields layout in ASCII diagram and second CPU field introduced below
+%claude:
+When [[arch_splhi()]] disables interrupts, it also records
+{who} called it, for debugging. Since [[Cpu]] lives at
+the fixed address [[CPUADDR]], the assembly code can
+store the caller's return address ([[R14]]) directly
+into the second field of [[Cpu]] at offset~4:
+\begin{verbatim}
+  CPUADDR+CPUSIZE  +--------------------+
+                   | stack[1] ...       |
+                   +--------------------+
+                   | ...                |
+                   +--------------------+
+  CPUADDR+0x04     | splpc              |  <- saved here
+                   +--------------------+
+  CPUADDR          | cpuno              |
+                   +--------------------+
+\end{verbatim}
 
 <<[[arch_splxxx()]] save caller information(arm)>>=
 MOVW    $(CPUADDR+4), R2        /* save caller pc in Cpu */
 MOVW    R14, 0(R2)
 @
 %$
+
 <<[[Cpu]] second field>>=
 // must be second field at 0x04, used by arch_splhi()
 ulong splpc;      /* pc of last caller to arch_splhi */
@@ -4601,14 +4623,47 @@ ulong splpc;      /* pc of last caller to arch_splhi */
 % TAS is the building block of concurrency primitives.
 %claude:
 {Test-and-set} is the hardware primitive on which all
-spin locks are built. [[arch_tas()]] atomically writes~1
-into a memory word and returns the old value. If the old
-value was~0, the caller has acquired the lock; if it was
-already~1, someone else holds it.
+spin locks are built. The idea is simple: atomically
+write~1 into a memory word and return the old value.
+If the old value was~0, the caller has acquired the lock;
+if it was already~1, someone else holds it. In C terms,
+[[lock()]] will call [[if(arch_tas(\&l->key) == 0)]].
 %claude:
-On the Raspberry Pi~1, atomicity is achieved with the
-[[SWPW]] (swap word) instruction, which performs the
-read-modify-write in a single indivisible operation.
+The key word is ``atomically.'' On a RISC architecture
+like ARM, a naive implementation would need two separate
+instructions---a load and a store:
+\begin{verbatim}
+  // hypothetical broken arch_tas:
+  MOVW  0(R1), R0       // load key into R0
+  MOVW  $1, 0(R1)       // store 1 into key
+  RET                    // return old value in R0
+\end{verbatim}
+But an interrupt can fire between the load and the store:
+\begin{verbatim}
+  Process A (syscall):    Process B (interrupt handler):
+
+  MOVW 0(R1), R0
+    (reads key=0)
+                          <--- timer interrupt fires --->
+                          MOVW 0(R1), R0
+                            (reads key=0, A hasn't stored yet)
+                          MOVW $1, 0(R1)
+                            (sets key=1)
+                          R0==0 -> if() succeeds
+                          ... enters critical section ...
+                          ... done, returns from interrupt ...
+
+  MOVW $1, 0(R1)
+    (sets key=1)
+  R0==0 -> if() succeeds
+  ... also enters critical section! BUG
+\end{verbatim}
+Both see [[key]]=0 and both believe they acquired the lock.
+%claude:
+On the Raspberry Pi~1, the solution is the [[SWPW]]
+(swap word) instruction, which performs the load-and-store
+in a single indivisible operation---the interrupt sees
+either the state before or after, never in between.
 On the Pi~2 (ARMv7, SMP), a different mechanism using
 [[LDREX]]/[[STREX]] is needed because [[SWPW]] is
 deprecated and does not provide the memory ordering
@@ -4626,6 +4681,9 @@ TEXT    arch_tas(SB), $-4
 % For Pi1 only concurrency issue is kernel code interrupted,
 % so SWPW just ensure atomic instruction so interrupt will be done
 % either before or after SWPW
+
+%yoann: maybe explain scenario where don't use SWPW but 2 different MOVW and with scneario possible that with interrupt or something else one gets race
+
 
 %smp:
 % See Section~\ref{smp} for arch_tas() handling multiple processors!
@@ -4719,6 +4777,11 @@ being scheduled out (via [[Proc.nlocks]]), which effectively
 protects the critical region from other processes. However,
 a spin lock on a uniprocessor does {not} protect against
 interrupts---for that, [[ILock]] (next section) is needed.
+Note that [[Lock]] itself is portable, architecture-independent
+code (in [[port/]])---it provides mutual exclusion on any
+architecture, uniprocessor or multiprocessor, by relying
+on the arch-specific [[arch_tas()]] primitive we just saw.
+
 <<struct [[Lock]]>>=
 // a.k.a Spinlock
 struct Lock
@@ -4800,6 +4863,29 @@ lock(Lock *l)
 % another process will not be scheduled and so will not have
 % the opportunity to modify runq.
 
+%yoann: again maybe ASCII diagram showing lock needs for arch_tas and the value of the key field
+%claude:
+The connection between [[lock()]] and [[arch_tas()]] is
+straightforward:
+\begin{verbatim}
+  lock(&l):
+    arch_tas(&l->key)
+         |
+         v
+    +----------+
+    | key: 0   |  -> arch_tas returns 0, key set to 1: got it!
+    +----------+
+    | key: 1   |  -> arch_tas returns 1, key stays 1: spin...
+    +----------+
+\end{verbatim}
+
+%yoann: explain debugging fields below
+%claude:
+For debugging, each [[Lock]] also records the program
+counter of the caller who acquired it ([[pc]]) and the
+CPU that holds it. Similarly, each [[Proc]] remembers its
+[[lastlock]], making it easier to diagnose deadlocks or
+lock-ordering violations:
 
 <<[[Lock]] debugging fields>>=
 // for debugging, the caller who did the lock()
@@ -4830,6 +4916,11 @@ l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
 @
 %other bugfix on forgot update l->cpu in for loop for same code
 %ocaml: use sentinel for up so need if(up)
+
+%yoann: transition paragraph to explain (simpler) unlock
+%claude:
+Unlocking is much simpler than locking---no atomicity
+is needed. The lock holder simply zeroes [[key]]:
 
 <<function [[unlock]]>>=
 void
@@ -5094,6 +5185,13 @@ Proc  *qnext;   /* next process on queue for a QLock */
 Queueing, // see qlock()
 @
 
+%yoann: seen data structure, now ready for qlock() function itself and explain
+%claude:
+With the data structure in place, the [[qlock()]] function
+itself is straightforward. If the lock is free, take it
+immediately. Otherwise, add the current process to the
+wait queue and go to sleep:
+
 <<function [[qlock]]>>=
 void
 qlock(QLock *q)
@@ -5224,8 +5322,8 @@ canqlock(QLock *q)
 An [[RWlock]] allows multiple simultaneous readers or a
 single exclusive writer. This is useful for data structures
 that are read frequently but modified rarely, such as mount
-tables ([[Mhead]]), process groups ([[Pgrp]]), and
-environment groups ([[Egrp]]). The implementation is
+tables ([<Mhead>]), process groups ([<Pgrp>]), and
+environment groups ([<Egrp>]). The implementation is
 subtle: it must avoid starving either readers or writers,
 and like [[QLock]], waiters sleep rather than spin.
 <<struct [[RWlock]]>>=
@@ -5258,6 +5356,12 @@ struct RWlock
 <<[[RWlock]] debugging fields>>=
 kern_addr wpc;    /* pc of writer */
 @
+
+%yoann: explain
+%claude:
+Like [[QLock]], waiting for a read lock or a write lock
+puts the process into a dedicated state so the scheduler
+knows why it is blocked:
 
 <<[[Procstate]] cases>>=
 QueueingR, // see rlock()
@@ -5339,6 +5443,10 @@ runlock(RWlock *q)
 % when can have still readers but no waiting process?
 % when multiple readers came in, in which case we let them pass all!
 % they can use concurrently the data structure.
+
+%yoann: explain
+%claude:
+Writers wait separately from readers:
 
 <<[[Procstate]] cases>>=
 QueueingW, // see wlock()
@@ -5453,20 +5561,16 @@ canrlock(RWlock *q)
 
 %claude:
 We already saw [[arch_xinc()]]/[[arch_xdec()]], which
-atomically adjust a raw counter. [[Ref]] wraps a counter
+atomically adjust a raw counter. [[Ref]] below wraps a counter
 with a [[Lock]] instead of using [[arch_xinc]] directly.
-This is arguably redundant---[[arch_xdec()]] already
-returns the new value, which is all [[decref()]] needs.
-The [[Lock]] does allow [[decref()]] to atomically check
-for underflow and panic, but the main reason is likely
+This may seem redundant. However,
+the [[Lock]] does allow [[decref()]] to additionnally and atomically check
+for underflow and panic. But the main reason is likely
 historical: [[Ref]] is portable code (in [[port/]]) that
 predates the arch-specific atomic operations, and using
 a [[Lock]] keeps it independent of any particular
 architecture's atomic primitives.
-%claude:
-Many kernel objects (pages, channels, segments) embed a
-[[Ref]] for reference counting---the object is freed when
-[[decref()]] returns~0.
+
 <<struct [[Ref]]>>=
 // For reference counting shared things (e.g. a Page)
 struct Ref
@@ -5506,6 +5610,11 @@ decref(Ref *r)
 }
 @ 
 
+%claude:
+Many kernel objects (pages, channels, segments) embed a
+[[Ref]] for reference counting---the object is freed when
+[[decref()]] returns~0.
+
 <<struct [[Counter]]>>=
 typedef struct Ref Counter;
 @ 
@@ -5522,7 +5631,11 @@ Concurrency bugs are notoriously hard to find, so the
 kernel includes several runtime checks to catch common
 mistakes: unlocking from the wrong process, sleeping
 while holding a spin lock, or taking a qlock while
-interrupts are disabled.
+interrupts are disabled. We already saw several safeguards
+earlier: [[Lock.pc]] and [[Proc.lastlock]] recording who
+acquired a lock, [[Lock.cpu]] tracking which processor
+holds it, and [[splpc]] in [[Cpu]] remembering who disabled
+interrupts. This section covers additional checks.
 
 \subsection{[[Lock.p]]}
 
