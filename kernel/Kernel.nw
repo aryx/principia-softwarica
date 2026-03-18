@@ -42570,6 +42570,109 @@ Raspberry Pi, run user programs, manage memory, handle
 interrupts, and serve files. Everything else is built
 on top of the mechanisms you now understand.
 
+\section{Beyond the \plan kernel}
+
+%claude:
+The \plan kernel is intentionally minimal---and that
+minimalism is a feature, not a limitation. Modern
+production kernels like Linux, macOS/XNU, and Windows
+NT make different trade-offs, not always for the
+better. Here is how they compare:
+\begin{itemize}
+
+\item \emph{Scheduling}: \plan uses a simple
+multi-level priority scheduler that is easy to
+understand and reason about.
+Linux's EEVDF (formerly CFS) scheduler uses a
+virtual-runtime red-black tree with cgroups for
+hierarchical resource control---powerful for
+cloud workloads, but the scheduler alone is
+tens of thousands of lines of code and a
+frequent source of regressions.
+macOS uses a Mach-derived scheduler with
+separate ``clutch'' groups for efficiency and
+performance cores on Apple Silicon.
+
+\item \emph{Virtual memory}: \plan's demand-paged
+virtual memory with a simple [[Page]] free list is
+straightforward and predictable.
+Linux adds huge pages (2\,MB/1\,GB),
+NUMA-aware allocation, memory cgroups, Kernel
+Same-page Merging (KSM), and memory compaction---each
+solving real problems at datacenter scale,
+but collectively creating a memory subsystem so
+complex that even kernel developers struggle to
+understand all its interactions.
+
+\item \emph{Security}: \plan's security model---per-process
+namespaces and the [[factotum]] authentication
+agent---is conceptually elegant and was ahead of
+its time. Linux has since added mandatory access
+controls (SELinux, AppArmor), fine-grained POSIX
+capabilities, seccomp-BPF syscall filtering, and
+ASLR. macOS adds code signing and sandboxing.
+Notably, Linux's namespace mechanism---the
+foundation of containers---was directly inspired
+by \plan's [[rfork(RFNOMNT)]],
+a vindication of \plan's design.
+
+\item \emph{Containers and virtualization}:
+\plan's [[rfork]] flags were doing namespace
+isolation before ``containers'' existed as a
+concept. Modern container runtimes (Docker,
+Kubernetes) build on Linux namespaces combined
+with cgroups, overlay file systems, and seccomp
+policies. On the virtualization side, Linux's KVM
+turns the kernel itself into a hypervisor---a
+domain \plan never entered, consistent with its
+philosophy of doing fewer things well.
+
+\item \emph{File systems}: \plan's approach of
+delegating file systems to user-space 9P servers
+is architecturally clean---crashes in a file
+server cannot panic the kernel, and new file
+systems need no kernel modifications. The
+trade-off is the lack of an in-kernel caching
+layer comparable to Linux's page cache, dentry
+cache, and inode cache. Linux also supports
+journaling (ext4, XFS) and copy-on-write snapshots
+(ZFS, btrfs) directly in the kernel, gaining
+performance at the cost of kernel complexity.
+Linux's FUSE, which allows user-space file
+systems, is in some ways a rediscovery of the
+9P model.
+
+\item \emph{Networking}: the \plan IP stack is
+a clean, readable implementation. Linux adds
+zero-copy networking, TCP offload, eBPF for
+programmable in-kernel packet processing, and
+XDP for line-rate packet filtering---driven by
+datacenter demands where every microsecond
+matters and where \plan's simplicity would
+genuinely be insufficient.
+
+\item \emph{Device model}: \plan's static [[Dev]]
+table is refreshingly simple---adding a device
+means adding one entry. Linux's dynamic model with
+sysfs, udev, device tree, and power management
+(suspend/resume, runtime PM) reflects the reality
+of supporting thousands of hardware devices, but
+the driver subsystem alone dwarfs the entire \plan
+kernel.
+
+\end{itemize}
+
+%claude:
+The pattern is consistent: features that \plan
+pioneered (per-process namespaces, user-space file
+servers, a unified file-based interface) have been
+partially adopted by mainstream systems, often with
+considerably more complexity. The \plan kernel shows
+that a complete, working kernel can be built from a
+small set of well-chosen abstractions. Understanding
+it gives you the conceptual foundation on which the
+additional engineering of production kernels is built.
+
 % From Chris McGee on 9fans:
 %I like the idea of focusing on the functionality, not specific
 %software, that could go into a 5th edition. It seems that stepping
