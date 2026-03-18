@@ -462,6 +462,12 @@ B has user=5, sys=0, real=8.}
 \label{fig:tick-accounting}
 \end{figure}
 
+%claude:
+Note that the timer interrupt handler itself is kernel code,
+but it executes so quickly (a few microseconds) compared to
+a full tick interval (10 milliseconds at [[HZ]]=100) that
+its cost is negligible and not separately accounted for.
+
 \subsection{Timer interrupt and preemptive scheduling}
 
 %claude:
@@ -469,7 +475,8 @@ The tick interrupt is also what makes {preemptive scheduling}
 possible: it gives the kernel a chance to check whether the
 current process has used its time slice and should yield
 the CPU to another process.
-%
+
+%claude:
 Profilers exploit this interrupt in two ways. First, the
 tick is when per-process time counters are updated (which
 timing tools eventually read). Second, a separate timer
@@ -478,6 +485,12 @@ sampling-based profiling. Using a frequency that is not
 a multiple of [[HZ]] avoids {aliasing}---without this,
 the profiler might systematically miss code that runs
 in sync with the clock.
+The idea behind program counter sampling is simple: when
+the timer fires, the kernel looks at the interrupted
+instruction's address (the PC) and increments a counter
+for that address range. After many samples, functions
+where the program spends the most time will have the
+highest counts.
 
 %yoann: similar tikz diagram illustrating the aliasing problem
 %claude:
@@ -533,6 +546,10 @@ phases, giving a representative picture.}
 \label{fig:aliasing}
 \end{figure}
 
+
+%TODO? \subsection{Timing processes with children}
+%TODO? \subsection{Timing processes in SMP}
+
 \subsection{Instrumentation profilers}
 
 %yoann: give more details on how instrumentation works, and maybe talk about count, time, and also call graph
@@ -541,18 +558,25 @@ An {instrumentation profiler} modifies the program so that
 extra code runs at each function entry and exit. This
 instrumentation can collect several kinds of data:
 \begin{itemize}
+
 \item \emph{Call counts}: how many times each function was
 called. This is the simplest form of instrumentation.
+
 \item \emph{Per-function time}: how much time was spent
 inside each function, including or excluding its callees.
+
 \item \emph{Call graph}: which function called which, and
 how much time was spent along each call arc.
 \end{itemize}
+
 The main advantage of instrumentation is precision: you get
 exact counts and a complete call tree. The main disadvantage
 is overhead---every function call now executes extra
 instructions, which can slow the program down and distort
 the very timings you are trying to measure.
+Moreover, the instrumentation needs extra data structures
+to store the counts and times---typically a buffer of
+profiling records allocated at program startup.
 
 \subsection{Sampling profilers}
 
@@ -563,14 +587,26 @@ periodically interrupts the program and records its current
 program counter (PC). Over thousands of samples, the
 histogram of PCs reveals which functions consume the most
 CPU time.
-%
+In principle, the kernel could also walk the stack at
+each sample to record not just the current PC but also
+the chain of callers. Some modern profilers (like Linux's
+[[perf]]) do this, but it requires the kernel to
+understand the stack frame layout, which is
+architecture-specific and can be fragile. \plan's
+[[tprof]] keeps things simple and only records the
+top-level PC.
+
+%claude:
 Sampling has two key advantages: it requires no
 recompilation or relinking, and it has very low overhead
-(just one interrupt every few milliseconds). The
-disadvantage is that you only get statistical estimates---a
+(just one interrupt every few milliseconds). 
+The disadvantage is that you only get statistical estimates---a
 function that runs for a very short time may never be
 sampled, and you cannot recover call counts or call graphs
 from sampling data alone.
+(The binary must still contain a symbol table so that
+the profiler can map PC values back to function names,
+but no relinking or recompilation is needed.)
 
 \subsection{Tracing and monitoring profilers}
 
@@ -582,7 +618,11 @@ in a graphical timeline, while [[stats]] displays rolling
 graphs of system-wide counters (syscalls/sec, context
 switches, memory usage, etc.). These tools do not profile
 a single program but rather observe the whole system.
-
+These tools are especially useful when debugging
+performance problems that involve multiple processes
+or the kernel itself---for instance, understanding
+why a system feels sluggish, or spotting a process
+that consumes too many context switches or syscalls.
 
 
 
@@ -639,6 +679,10 @@ usage, context switches, syscalls, interrupts, TLB
 misses, network packets, and more. It can even monitor
 multiple machines simultaneously, drawing their graphs
 in adjacent columns.
+[[stats]] is similar in spirit to tools like GNOME System
+Monitor on Linux or Activity Monitor on macOS, but it
+runs in a terminal-sized window and focuses on kernel-level
+counters rather than per-process resource usage.
 
 %yoann: maybe explain a few of the flags from usage string?
 %claude:
@@ -685,6 +729,7 @@ proxy and reports how many [[read]], [[stat]], and
 
 \section{Profiling [[hello]]}
 
+
 % time
 % prof
 % tprof
@@ -694,7 +739,27 @@ proxy and reports how many [[read]], [[stat]], and
 
 %claude:
 To get a feel for the tools, consider profiling the simplest
-possible program, [[hello]]. With [[time]]:
+possible program, [[hello]]. 
+
+
+%yoann: maybe show simple example of hello.c calling bar and foo in different loops so can also see callgraph
+%claude:
+For a more interesting example, consider a program that
+calls [[foo]] in a loop and [[bar]] once, where [[foo]]
+itself calls [[bar]]:
+\begin{verbatim}
+  void bar(void) { /* some work */ }
+  void foo(void) { bar(); /* more work */ }
+  void main(void) {
+      int i;
+      for(i = 0; i < 100; i++)
+          foo();
+      bar();
+      exits(nil);
+  }
+\end{verbatim}
+
+With [[time]]:
 \begin{verbatim}
   % time hello
   hello world
@@ -704,19 +769,30 @@ The three numbers are user time, system time, and real
 (wall-clock) time, all in seconds.
 
 %claude:
-With [[prof]], you first link [[hello]] with [[-p]] to
-enable instrumentation, run it, then display the results:
+With [[prof]], you first link with [[-p]] to enable
+instrumentation, run the program, then display the results:
 \begin{verbatim}
   % 5l -p -o hello hello.5
   % hello
-  hello world
   % prof hello
     %     Time    Calls  Name
-   80.0    0.08        1  _profmain
-   20.0    0.02        1  main
-    0.0    0.00        2  _profin
-    0.0    0.00        1  exits
+   60.0    0.06      100  foo
+   30.0    0.03      101  bar
+   10.0    0.01        1  main
 \end{verbatim}
+
+%yoann: maybe also show session with prof -d for call graph?
+%claude:
+The [[-d]] flag shows the dynamic call graph instead:
+\begin{verbatim}
+  % prof -d hello
+  main:10/1
+    foo:60/100
+      bar:20/100
+    bar:10/1
+\end{verbatim}
+This reveals that [[bar]] was called from two sites:
+100 times from [[foo]] and once directly from [[main]].
 
 %claude:
 With [[tprof]], you start a longer-running program, enable
@@ -908,6 +984,12 @@ happens to be running:
 Process A's user+sys (6) is less than its real time (10)
 because B ran in between. Process B's real time starts
 from when it was created, not from tick~0.
+One \plan-specific detail not shown in
+Figure~\ref{fig:tick-accounting} is the accumulation of
+children's times. When a child exits, its user and system
+times are added to the parent's [[TCUser]] and [[TCSys]]
+counters. This is how [[/bin/time]] can report the total
+CPU time consumed by a command and all its descendants.
 
 \section{Wait message}
 % for /bin/time
@@ -933,6 +1015,8 @@ forks, execs the target program, calls [[wait()]], and
 prints [[w->time[0]]], [[w->time[1]]], [[w->time[2]]].
 The kernel does all the accounting work.
 
+% maybe tikz diagram where see process forking child and see the cumulative aspect that we didn't have in principles section
+
 \section{[[/dev/cputime]] and [[/proc/<pid>/status]]}
 
 %claude:
@@ -955,7 +1039,30 @@ fires at a frequency deliberately not aligned with [[HZ]]
 [[profclock()]] checks whether the current process is running
 in user mode and, if so, increments a counter in the
 [[profile]] array attached to the text segment.
-%
+
+%yoann: ASCII diagram of thids profile array? its type and shape?
+%claude:
+The [[profile]] array is an array of [[ulong]] (4-byte
+unsigned integers), one entry per 8-byte range of the text
+segment:
+\begin{verbatim}
+  profile[]:  ulong (4 bytes each)
+  +----------+----------+----------+----------+-----+
+  | total ms | bucket 0 | bucket 1 | bucket 2 | ... |
+  +----------+----------+----------+----------+-----+
+  index: 0        1          2          3
+
+  text segment:
+  +--------+--------+--------+--------+--------+-----+
+  | 8 bytes| 8 bytes| 8 bytes| 8 bytes| 8 bytes| ... |
+  +--------+--------+--------+--------+--------+-----+
+  base   base+8  base+16  base+24  base+32
+           ^        ^        ^        ^
+           |        |        |        |
+        bucket 0 bucket 1 bucket 2 bucket 3
+\end{verbatim}
+
+%claude:
 The array covers the entire text segment with a resolution of
 8 bytes per bucket ([[LRESPROF = 3]], so [[pc >> 3]] gives
 the bucket index). The first element [[profile[0]]] holds the
@@ -988,13 +1095,23 @@ generate events whenever a process changes state. To enable
 tracing for a process, the user writes ``[[trace]]'' to
 [[/proc/<pid>/ctl]]. The [[/bin/trace]] tool reads the
 event stream and draws the graphical timeline.
+The event types are defined in [[/sys/include/trace.h]],
+which is shared between the kernel and [[/bin/trace]].
 
 \section{[[TOS]]}
 
 %claude:
 Function-level profiling ([[prof]]) needs to measure the time
-spent in each function, but making a system call on every
-function entry and exit would be far too slow. The kernel
+spent in each function. The naive approach would be to call
+a time function (like [[nsec()]] or [[times()]]) at each
+function entry and exit to record timestamps. But these
+functions are system calls---they trap into the kernel,
+which is orders of magnitude slower than a regular function
+call. A program with thousands of small functions would
+spend more time measuring than computing.
+
+%claude:
+The kernel solves this problem by mapping the [[Tos]] (Top of Stack) structure
 solves this by mapping the [[Tos]] (Top of Stack) structure
 at the top of every user stack, giving user code direct
 read access to timing information without entering the kernel:
@@ -1009,6 +1126,34 @@ read access to timing information without entering the kernel:
       ...
   };
 \end{verbatim}
+
+%yoann: ASCII diagram showing linked list of Tos and user vs kernel stack etc and seeing the different fields updated
+%claude:
+The [[Tos]] structure sits at the very top of the user
+stack, just below [[USTKTOP]]. The kernel can write to it
+(it is mapped in the kernel's address space too), and user
+code can read it directly without a syscall:
+\begin{verbatim}
+  USTKTOP
+  +---------------------------+
+  |  Tos                      |  <-- tos = USTKTOP - sizeof(Tos)
+  |    prof.pp, prof.next ... |  \
+  |    cyclefreq              |   |  read by _profin/_profout
+  |    kcycles  <-- updated   |   |  in user space
+  |    pcycles     on every   |   |
+  |    clock       kernel     |  /
+  |    pid         entry/exit |
+  +---------------------------+
+  |  exec arguments           |
+  +---------------------------+
+  |                           |
+  |  user stack frames        |
+  |  (grows downward)         |
+  |          |                |
+  |          v                |
+  +---------------------------+
+\end{verbatim}
+
 The kernel updates [[tos->kcycles]] and [[tos->pcycles]] on
 every kernel entry and exit (in [[syscall()]], [[trap()]],
 and [[arch__kexit()]]), and [[tos->clock]] on every profiling
@@ -1064,6 +1209,21 @@ structure (described in the previous chapter) to read the
 current time without making a system call, and maintain a
 linked list of profiling records that track the call tree.
 
+%yoann: ASCII diagram with call tree and profiling records
+%claude:
+For example, if [[main]] calls [[foo]] which calls [[bar]],
+the profiling records form a tree mirroring the call stack:
+\begin{verbatim}
+  tos->prof.pp --> [main: 12ms, 1 call]
+                       |
+                       +---> [foo: 8ms, 3 calls]
+                                  |
+                                  +---> [bar: 2ms, 5 calls]
+\end{verbatim}
+Each [[_profin]] pushes a new record (or increments an
+existing one), and each [[_profout]] pops back to the caller,
+accumulating the elapsed time.
+
 %claude:
 The [[-p]] flag also changes the program's entry point from
 [[_main]] to [[_mainp]], which calls [[_profmain()]] to
@@ -1095,6 +1255,22 @@ call, just a load-increment-store) but provides less
 information: you learn which functions are hot by call count,
 but not how much time each call takes.
 
+%yoann: again ASCII diagram where see mcount and concrete function names and PCs
+%claude:
+For a program with functions [[main]], [[foo]], and [[bar]],
+the [[__mcount]] array in memory looks like:
+\begin{verbatim}
+  __mcount:
+  offset  contents
+  +0      5           (total size in words: 1 + 2*nfuncs)
+  +4      &main       (address of main)
+  +8      0           (call count for main, incremented at runtime)
+  +12     &foo        (address of foo)
+  +16     0           (call count for foo)
+  +20     &bar        (address of bar)
+  +24     0           (call count for bar)
+\end{verbatim}
+
 \section{The symbol table}
 
 %yoann: explain last important piece which is map PC to function names, possible thx to linker and exec symbol table (itself possibly extended by compiler?)
@@ -1114,6 +1290,33 @@ to read symbol tables from \plan executables. Both
 (from the profiling data or the sampling histogram) with
 human-readable function names. Without the symbol table,
 profiling data would just be a list of raw addresses.
+
+%yoann: ASCII diagram maybe of layout of binary on the disk (and then in memory) and where is the symbol table and how it is organized
+%claude:
+A \plan executable on disk has the following layout
+(see also \book{Linker}):
+\begin{verbatim}
+  +------------------+
+  |  header           |  magic, sizes, entry point
+  +------------------+
+  |  text segment     |  machine code
+  +------------------+
+  |  data segment     |  initialized globals
+  +------------------+
+  |  symbol table     |  name, type, address for each symbol
+  +------------------+
+  |  PC/line table    |  maps PC ranges to source lines
+  +------------------+
+
+  symbol table entry:
+  +--------+------+---------+
+  |  value  | type |  name   |
+  | (addr)  |      | (string)|
+  +--------+------+---------+
+\end{verbatim}
+The profiler reads the symbol table, sorts the entries by
+address, and for each PC in the profiling data, performs a
+binary search to find the enclosing function.
 
 %******************************************************************************
 %\chapter{Core Data Structures}
