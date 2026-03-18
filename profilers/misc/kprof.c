@@ -49,24 +49,30 @@ compar(void *va, void *vb)
 void
 main(int argc, char *argv[])
 {
-    int fd;
+    fdt fd;
+    Fhdr f;
+    Dir *d;
+    Biobuf outbuf;
+    ulong *data;
+    /*s: [[main()]](kprof.c) other locals */
     long i, j, k, n;
     char *name;
-    ulong *data;
     vlong tbase;
     ulong sum;
     long delta;
     Symbol s;
-    Biobuf outbuf;
-    Fhdr f;
-    Dir *d;
     struct COUNTER *cp;
+    /*e: [[main()]](kprof.c) other locals */
 
+    /*s: [[main()]](kprof.c) sanity check [[argc]] and print usage */
     if(argc != 3)
         error(0, "usage: kprof text data");
+    /*e: [[main()]](kprof.c) sanity check [[argc]] and print usage */
+
     /*
      * Read symbol table
      */
+    /*s: [[main()]](kprof.c) read symbol table */
     fd = open(argv[1], OREAD);
     if(fd < 0)
         error(1, argv[1]);
@@ -77,9 +83,12 @@ main(int argc, char *argv[])
     if (syminit(fd, &f) < 0)
         error(1, "syminit");
     close(fd);
+    /*e: [[main()]](kprof.c) read symbol table */
+
     /*
      * Read timing data
      */
+    /*s: [[main()]](kprof.c) read profile data */
     fd = open(argv[2], OREAD);
     if(fd < 0)
         error(1, argv[2]);
@@ -97,6 +106,9 @@ main(int argc, char *argv[])
     close(fd);
     for(i=0; i<n; i++)
         data[i] = beswal(data[i]);
+    /*e: [[main()]](kprof.c) read profile data */
+
+    /*s: [[main()]](kprof.c) display profile data */
     delta = data[0]-data[1];
     print("total: %ld	in kernel text: %ld	outside kernel text: %ld\n",
         data[0], delta, data[1]);
@@ -148,6 +160,8 @@ main(int argc, char *argv[])
                 100LL*cp[k].time/delta,
                 (1000LL*cp[k].time/delta)%10,
                 cp[k].name);
+    /*e: [[main()]](kprof.c) display profile data */
+
     exits(0);
 }
 /*e: function main (misc/kprof.c) */
