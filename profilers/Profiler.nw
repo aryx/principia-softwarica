@@ -540,19 +540,126 @@ Chapter~\ref{chap:conclusion} concludes.
 \label{chap:kernel-support}
 
 %coupling: imitate Profiling support chapter in Kernel.nw
+
+%claude:
+In this chapter, I will summarize the kernel infrastructure
+that the profiling tools rely on. The full details can be
+found in \book{Kernel}; here I present just enough to
+understand the code
+in later chapters.
+
 \section{Wait message}
 % for /bin/time
+
+%claude:
+The simplest form of profiling---timing a command---requires
+almost no special kernel support. Each process maintains
+five time counters (user, system, real, cumulative child user,
+cumulative child system), incremented by [[accountime()]] on
+every clock tick. When a process exits, [[pexit()]] packages
+three values (user, system, real) into the [[Waitmsg]]
+structure that the parent receives via [[wait()]]:
+\begin{verbatim}
+  struct Waitmsg {
+      ...
+      ulong time[3];  /* user, sys, real (ms) */
+      ...
+  };
+\end{verbatim}
+The [[/bin/time]] command simply forks, execs the target
+program, calls [[wait()]], and prints [[w->time[0]]],
+[[w->time[1]]], [[w->time[2]]]. The kernel does all the
+accounting work.
 
 \section{[[/dev/cputime]] and [[/proc/#/status]]}
 % for?
 
+%claude:
+While [[Waitmsg]] only gives timing for completed processes,
+[[/dev/cputime]] and [[/proc/\emph{pid}/status]] expose the
+same five counters for running processes. [[/dev/cputime]]
+returns the counters of the calling process; [[/proc/\emph{pid}/status]]
+returns those of any process. Both convert from kernel ticks
+to milliseconds via [[TK2MS()]]. The real-time counter is
+stored as the tick count at process creation, so the actual
+elapsed time is computed on-the-fly as
+[[CPUS(0)->ticks - p->time[TReal]]].
+
 \section{[[/proc/x/profile]]}
 % for /bin/tprof?
+
+%claude:
+Tick-based profiling ([[tprof]]) uses a periodic timer that
+fires at a frequency deliberately not aligned with [[HZ]]
+(to avoid aliasing with other periodic events). On each tick,
+[[profclock()]] checks whether the current process is running
+in user mode and, if so, increments a counter in the
+[[profile]] array attached to the text segment.
+%
+The array covers the entire text segment with a resolution of
+8 bytes per bucket ([[LRESPROF = 3]], so [[pc >> 3]] gives
+the bucket index). The first element [[profile[0]]] holds the
+total execution time in milliseconds; subsequent elements
+hold per-bucket times.
+%
+The profile data is attached to the \emph{segment}, not the
+process, so multi-threaded programs sharing the same text
+accumulate a single combined profile.
+%
+To activate profiling, the user writes ``[[profile]]'' to
+[[/proc/\emph{pid}/ctl]], which allocates the [[profile]]
+array. The [[/bin/tprof]] tool then reads
+[[/proc/\emph{pid}/profile]] and correlates the buckets
+with symbol information from the binary.
 
 \section{[[/proc/trace]]}
 % for /bin/trace
 
+%claude:
+The [[/proc/trace]] file provides a stream of scheduler
+events for processes that have tracing enabled. Each event
+is a [[Traceevent]] structure containing a process ID, an
+event type ([[SReady]], [[SRun]], [[SDead]], [[SSleep]],
+or [[SUser]]), and a timestamp.
+%
+The events are stored in a kernel-side circular buffer. Hooks
+in [[ready()]], [[runproc()]], [[sleep()]], and [[pexit()]]
+generate events whenever a process changes state. To enable
+tracing for a process, the user writes ``[[trace]]'' to
+[[/proc/\emph{pid}/ctl]]. The [[/bin/trace]] tool reads the
+event stream and draws the graphical timeline.
+
 \section{[[TOS]]}
+
+%claude:
+Function-level profiling ([[prof]]) needs to measure the time
+spent in each function, but making a system call on every
+function entry and exit would be far too slow. The kernel
+solves this by mapping the [[Tos]] (Top of Stack) structure
+at the top of every user stack, giving user code direct
+read access to timing information without entering the kernel:
+\begin{verbatim}
+  struct Tos {
+      struct { ... } prof;  /* profiling linked list */
+      uvlong cyclefreq;     /* cycle counter frequency */
+      vlong  kcycles;       /* cycles in kernel */
+      vlong  pcycles;       /* cycles in process */
+      ulong  clock;         /* millisecond clock */
+      ulong  pid;
+      ...
+  };
+\end{verbatim}
+The kernel updates [[tos->kcycles]] and [[tos->pcycles]] on
+every kernel entry and exit (in [[syscall()]], [[trap()]],
+and [[arch__kexit()]]), and [[tos->clock]] on every profiling
+tick. The profiling runtime library
+([[lib_core/libc/profile.c]]) reads these fields to compute
+per-function times entirely in user space.
+%
+The [[prof]] field in [[Tos]] holds the linked list of
+profiling records that the linker's instrumentation code
+([[_profin]]/[[_profout]]) maintains. When the program exits,
+the runtime writes this data to [[prof.<pid>]].
 
 %******************************************************************************
 \chapter{Linker Support}
