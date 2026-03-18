@@ -23,6 +23,7 @@ enum Rfork
     RFNAMEG     = (1<<0), // copy namespace (if unset then share)
     RFENVG      = (1<<1), // copy environment variables (if unset then share)
     RFFDG       = (1<<2), // copy file descriptor table (if unset then share)
+
     RFCNAMEG    = (1<<10), // clean new namespace
     RFCENVG     = (1<<11), // clean new empty environment variables
     RFCFDG      = (1<<12), // clean new file descriptor table

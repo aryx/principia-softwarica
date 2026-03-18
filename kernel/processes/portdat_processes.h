@@ -382,7 +382,7 @@ struct Proc
 // State
 //--------------------------------------------------------------------
     /*s: [[Proc]] state fields */
-    // enum<Procstate> 
+    // enum<Procstate>
     int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
     /*x: [[Proc]] state fields */
     ulong pid;

@@ -245,7 +245,9 @@ struct Segment
 enum
 {
     Nhole   = 128,
+    /*s: constant [[Magichole]] */
     Magichole = 0x484F4C45,     /* HOLE */
+    /*e: constant [[Magichole]] */
 };
 /*e: constants holes */
 

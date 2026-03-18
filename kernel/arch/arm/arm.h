@@ -8,7 +8,7 @@
  * Program Status Registers
  */
 /*s: type [[PsrMode]](arm) */
-// Last 4 bits of PSR
+// Last 5 bits of PSR
 #define PsrMusr     0x00000010  /* user mode */
 #define PsrMsvc     0x00000013  /* `protected mode for OS' */
 /*s: [[PsrMode]] other cases(arm) */

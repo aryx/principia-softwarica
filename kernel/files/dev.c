@@ -65,6 +65,7 @@ devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, DirEntry 
 /*s: function [[devgen]] */
 /*
  * (here, Devgen is the prototype; devgen is the function in dev.c.)
+ *
  * 
  * a Devgen is expected to return the directory entry for ".."
  * if you pass it s==DEVDOTDOT (-1).  otherwise...
