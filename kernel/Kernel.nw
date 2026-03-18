@@ -15337,7 +15337,7 @@ setswapchan(Chan *c)
 \section{Overview}
 
 % In essence the main role of an OS is to manage programs and so in essence
-% it is first and foremost a scheduler! 
+% it is first and foremost a scheduler!
 
 % Key function is sched() (and its twin schedinit()).
 
@@ -15354,8 +15354,33 @@ setswapchan(Chan *c)
 % see also section in Debugging about /bin/trace that allows to
 % trace scheduler events
 
+%claude:
+The scheduler decides which process runs next. Its
+central function is [[sched()]] (and its twin
+[[schedinit()]]). The chapter has two halves:
+{cooperative scheduling}, where kernel code voluntarily
+calls [[sched()]] or [[sleep()]]/[[wakeup()]] to yield
+the processor; and {preemptive scheduling}, where the
+clock interrupt forces a context switch after a time
+quantum (100~ms by default). Both halves ultimately
+funnel through the same mechanism: save the current
+process's context, pick the next one from the run queue,
+and restore its context.
+%claude:
+Processes are organized into priority queues. The
+scheduler always picks the highest-priority ready process,
+but priorities are dynamically adjusted to prevent
+starvation.
+
 \section{Process priority}
 %adjustable priority actually
+
+%claude:
+There are 20 priority levels ([[Npriq]]). Normal user
+processes start at priority~10 ([[PriNormal]]), kernel
+processes at~13 ([[PriKproc]]). Higher numbers mean
+higher priority. The priority can be adjusted at
+runtime via [[/proc/\emph{pid}/ctl]]:
 
 <<constant [[Npriq]]>>=
 Npriq   = 20,   /* number of scheduler priority levels */
@@ -15467,6 +15492,25 @@ up->priority = up->basepri;
 
 
 \section{The [[runq]]ueue}
+
+%claude:
+The run queue is an array of [[Nrq]] queues, one per
+priority level. Each queue is a FIFO linked list of
+[[Proc]] pointers. The bitmap [[runvec]] has bit~$i$ set
+if [[runq[i]]] is non-empty, allowing [[runproc()]] to
+quickly find the highest-priority non-empty queue:
+\begin{verbatim}
+  runq[19]:  (highest priority)
+  runq[18]:
+    ...
+  runq[13]:  kproc1 -> kproc2
+    ...
+  runq[10]:  proc_A -> proc_B -> proc_C
+    ...
+  runq[0]:   (lowest priority)
+
+  runvec = ... 0010_0000_0100_0000_0000  (bits 10, 13 set)
+\end{verbatim}
 
 <<constant [[Nrq]]>>=
 Nrq   = Npriq+2,  /* number of priority levels including real time */
@@ -15646,6 +15690,14 @@ if(p->state != Ready)
 
 \subsection{[[sched()]]}
 
+%claude:
+[[sched()]] is the central function. When called with
+[[up != nil]] (a running process wants to yield), it saves
+the current process's context and jumps to [[schedinit()]].
+When called with [[up == nil]] (from [[schedinit()]], on
+the CPU's boot stack), it picks the next process via
+[[runproc()]] and jumps to it.
+
 % The main function!
 % Will be called by many kernel code to call the scheduler to schedule
 % another process, so when up is not nil. Will also be called
@@ -15733,6 +15785,17 @@ if(cpu->ilockdepth)
 
 
 \subsection{[[schedinit()]]}
+
+%claude:
+[[schedinit()]] runs on the CPU's boot stack (set up
+during initialization). It calls [[arch_setlabel()]] to
+save the CPU's ``return here'' point in [[cpu->sched]],
+then handles the outgoing process (putting it back on
+the run queue if [[Running]], freeing it if [[Moribund]]),
+and falls through to [[sched()]] with [[up == nil]].
+When [[sched()]] later finds a new process, it calls
+[[arch_gotolabel(\&cpu->sched)]] to return here.
+
 \l mv in Initialization chapter?
 
 <<[[Cpu]] other fields>>=
@@ -15778,6 +15841,14 @@ schedinit(void)     /* never returns */
 
 
 \subsection{[[runproc()]]}
+
+%claude:
+[[runproc()]] finds the next process to run. It scans
+the run queue from highest to lowest priority, looking
+for a process with CPU affinity to this processor (or
+any process on a second pass). If no process is ready,
+it calls [[arch_idlehands()]] to halt the CPU until an
+interrupt arrives.
 
 % at this point there should be no Running! only some Ready
 
@@ -15876,6 +15947,15 @@ p->lastcpu = up->lastcpu;
 
 %http://blog.tsunanet.net/2010/11/how-long-does-it-take-to-make-context.html
 
+%claude:
+A context switch saves one process's execution state and
+restores another's. Unlike the full register save done
+by [[_vsvc]] on a syscall (saving all 15 registers into
+a [[Ureg]]), a kernel-to-kernel context switch only needs
+to save [[SP]] and [[PC]]---because kernel code follows
+the calling convention, and the compiler has already saved
+any registers it needs.
+
 \subsection{[[Label]]}
 
 <<struct [[Label]]>>=
@@ -15914,6 +15994,15 @@ char  *kstack;  /* known to l.s */
 
 \subsection{Kernel stacks}
 
+%claude:
+Each process has its own 8~KiB kernel stack ([[kstack]]),
+allocated once when the [[Proc]] is first used and
+reused across process lifetimes. This per-process stack
+is where syscall handlers, page fault handlers, and
+[[sched()]] run. It is separate from the CPU's boot
+stack (inside the [[Cpu]] structure), which is used only
+by [[schedinit()]].
+
 % Saw Proc.kstack just before.
 
 <<[[newproc()]] set fields of [[p]]>>=
@@ -15940,6 +16029,15 @@ if(p->kstack == nil)
 
 \subsection{[[arch_gotolabel()]] (ARM)}
 
+%claude:
+[[arch_setlabel()]] saves [[SP]] and [[PC]] into a
+[[Label]] and returns~0. [[arch_gotolabel()]] restores
+them and returns~1. This is the kernel's equivalent of
+C's [[setjmp]]/[[longjmp]]---it is how the scheduler
+switches between processes. The different return values
+let the caller distinguish ``just saved'' from
+``resumed after being switched out'':
+
 <<function [[arch_gotolabel]](arm)>>=
 TEXT arch_gotolabel(SB), 1, $-4
     MOVW    0(R0), R13      /* sp */
@@ -15965,6 +16063,39 @@ TEXT arch_setlabel(SB), 1, $-4
 % 1 when comes back from a gotolabel
 
 \subsection{[[sched()]] and [[schedinit()]] dance}
+
+%claude:
+The interplay between [[sched()]] and [[schedinit()]] is
+the trickiest part of the scheduler. Here is the flow
+when a running process calls [[sched()]]:
+\begin{verbatim}
+  Process A's kstack:         CPU's boot stack:
+
+  1. sched() called
+     arch_setlabel(&up->sched)
+     returns 0 (first time)
+         |
+         v
+  2. arch_gotolabel(&cpu->sched)
+     ----jumps to-------->  3. schedinit() resumes
+                               up->state == Running
+                               -> ready(up)
+                               up = nil
+                               -> sched()
+                                    |
+                                    v
+                            4. p = runproc()
+                               (picks process B)
+                               arch_gotolabel(&p->sched)
+                               ----jumps to-------->
+                                                  Process B resumes
+                                                  from its setlabel
+\end{verbatim}
+%claude:
+When process~A is eventually picked again by [[runproc()]],
+[[arch_gotolabel(\&A->sched)]] returns~1 (into step~1
+above), and [[sched()]] calls [[arch_procrestore()]] and
+returns---process~A continues where it left off.
 
 % at some point up will be set and the kernel will code
 % sched():
@@ -16034,6 +16165,16 @@ case Running:
 
 \subsection{Delayed [[sched()]]}
 
+%claude:
+A process holding spin locks must not be switched out---the
+lock would remain held, potentially deadlocking other
+CPUs. So when [[sched()]] is called while [[up->nlocks > 0]],
+it increments [[delaysched]] and returns immediately. The
+actual reschedule happens later, when [[unlock()]] sees
+[[delaysched > 0]] and calls [[sched()]] after releasing
+the last lock. As a safety valve, if [[delaysched]]
+exceeds~20 (a lock was probably leaked), the scheduler
+forces a switch anyway.
 
 <<[[sched()]] when up, possibly increment delaysched and return>>=
 /*
@@ -16125,6 +16266,14 @@ if(up->delaysched){
 
 \subsection{[[arch_mmuswitch()]] (ARM)}
 
+%claude:
+On each context switch, [[arch_mmuswitch()]] installs
+the new process's hardware page tables. It clears the
+user portion of the L1, repopulates it from the
+process's [[mmul2]] list, and invalidates the TLB.
+If the pager modified the process's pages while it was
+asleep ([[newtlb]] flag), the L2 pages are also cleared.
+
 <<[[Cpu]] [[Arch]] mmu fields(arm)>>=
 int mmupid;
 @
@@ -16176,6 +16325,11 @@ arch_mmuswitch(Proc* proc)
 
 \subsection{[[arch_procsave()]] (ARM)}
 
+%claude:
+[[arch_procsave()]] saves architecture-specific state
+before a context switch (floating-point registers, cycle
+counters). [[arch_procrestore()]] restores them when the
+process resumes:
 
 <<function [[arch_procsave]](arm)>>=
 /*
@@ -16209,6 +16363,13 @@ arch_procrestore(Proc* p)
 
 \section{Cooperative scheduling}
 
+%claude:
+In cooperative scheduling, a process voluntarily gives up
+the CPU by calling [[sched()]], [[sleep()]], or [[yield()]].
+This is the most common path: syscalls that block (waiting
+for I/O, a lock, or a child process) call [[sleep()]] on
+a [[Rendez]], which calls [[sched()]] internally.
+
 \subsection{[[yield()]]}
 
 % syssleep (when sleep 0) -> <>
@@ -16228,6 +16389,15 @@ yield(void)
 % not really used.
 
 \subsection{[[ready()]]}
+
+%claude:
+[[ready()]] puts a process on the run queue at its
+current priority. It is called from many places:
+[[schedinit()]] (when the current process is preempted),
+[[wakeup()]] (when a sleeping process's condition becomes
+true), [[qunlock()]] (when a waiting process gets the
+lock), [[sysrfork()]] (for the child), and [[kproc()]]
+(for new kernel processes).
 
 <<[[Procstate]] cases>>=
 Ready,
@@ -16314,6 +16484,14 @@ cpu->readied = nil;
 % sleep/wakeup have a condition attached to it, and so a rendez vous,
 % sched and ready are just altruistic, give back without asking.
 
+%claude:
+A [[Rendez]] (rendezvous point) is a condition variable
+for kernel code. It pairs a sleeping process ([[r->p]])
+with a lock. [[sleep()]] puts the current process to
+sleep on a [[Rendez]] if a condition is false;
+[[wakeup()]] wakes it when the condition becomes true.
+This is how all blocking in the kernel works: waiting
+for a page, a lock, a child exit, a pipe read, etc.
 
 <<struct [[Rendez]]>>=
 struct Rendez
@@ -16351,6 +16529,15 @@ Lock  rlock;    /* sync sleep/wakeup with postnote */
 
 \subsection{[[sleep()]]}
 
+%claude:
+[[sleep()]] checks the condition function [[f(arg)]].
+If true (or a note is pending), it returns immediately.
+Otherwise, it sets the process state to [[Wakeme]],
+records the [[Rendez]], and performs a context switch
+(the same [[arch_setlabel]]/[[arch_gotolabel]] dance as
+[[sched()]]). The locks on both the [[Rendez]] and the
+process's [[rlock]] are held while committing to sleep,
+then released just before jumping to [[schedinit()]].
 
 <<[[Procstate]] cases>>=
 Wakeme,
@@ -16450,6 +16637,13 @@ if(r->p){
 
 \subsection{[[wakeup()]]}
 
+%claude:
+[[wakeup()]] checks if anyone is sleeping on the
+[[Rendez]]. If so, it clears the [[Rendez]] link, calls
+[[ready()]] to put the process back on the run queue,
+and returns the process. The woken process will resume
+inside [[sleep()]] at the [[arch_setlabel]] return point:
+
 <<function [[wakeup]]>>=
 /*
  *  Expects that only one process can call wakeup for any given Rendez.
@@ -16493,9 +16687,18 @@ if(p->state != Wakeme || p->r != r){
 
 \section{Preemptive scheduling}
 
+%claude:
+Cooperative scheduling is not enough---a CPU-bound process
+that never calls [[sleep()]] would monopolize the
+processor. Preemptive scheduling uses the clock interrupt
+(firing [[Arch_HZ]] times per second, i.e., every 10~ms)
+to force context switches. Each process gets a time
+quantum of 100~ms ([[Arch_HZ/10]] ticks); when the
+quantum expires, [[hzsched()]] sets [[delaysched]] to
+trigger a reschedule at the next safe point.
+
 % Number of times per second we want to get a clock interrupt.
 % At each clock interrupt, a counter is incremented called a tick.
-
 
 <<constant [[Arch_HZ]](arm)>>=
 #define Arch_HZ     100         /* clock frequency */
@@ -16506,6 +16709,18 @@ if(p->state != Wakeme || p->r != r){
 
 
 \subsection{[[hzsched()]]}
+
+%claude:
+[[hzsched()]] is called from [[hzclock()]] on every timer
+tick while a process is running. It checks two conditions
+for preemption: is there a higher-priority process ready
+([[anyhigher()]])? or has the current process's quantum
+expired ([[cpu->ticks > cpu->schedticks]])? If either is
+true, it sets [[delaysched]] rather than calling
+[[sched()]] directly---because we are inside an interrupt
+handler and cannot safely switch context here. The actual
+switch happens when the interrupt returns and checks
+[[delaysched]].
 
 <<[[Cpu]] other fields>>=
 ulong schedticks;   /* next forced context switch */
@@ -16566,6 +16781,12 @@ if(p == cpu->readied) {
 
 \subsection{[[hzclock()]]}
 
+%claude:
+[[hzclock()]] is the clock interrupt handler, called
+100 times per second. It increments [[cpu->ticks]],
+accounts CPU time to the current process, checks alarms,
+and calls [[hzsched()]] to decide whether to preempt.
+
 % ?timerintr? -> <>
 <<clock callback hzclock>>=
 void
@@ -16619,6 +16840,13 @@ if(active.exiting) {
 
 
 \section{Customized scheduling}
+
+%claude:
+A process can be {wired} to a specific CPU via
+[[echo wired \emph{n} > /proc/\emph{pid}/ctl]]. Once
+wired, [[runproc()]] will only run it on that CPU.
+This is used for I/O-intensive processes that benefit
+from cache locality on a particular processor:
 
 <<[[Proc]] scheduling fields>>=
 Cpu  *wired;
@@ -16695,6 +16923,19 @@ if(wm)
 % always take the process with higher priority. This would prevent
 % other process to run at all. So we need to adjust the priority
 % gradually.
+
+%claude:
+A fixed-priority scheduler would starve low-priority
+processes. To prevent this, the kernel dynamically
+adjusts each process's priority based on how much CPU
+time it has used recently. [[updatecpu()]] decays the
+process's CPU usage counter, and [[reprioritize()]]
+maps that usage to a priority level. Processes that have
+used a lot of CPU time recently get a lower priority;
+those that have been sleeping get a higher one. This
+ensures that I/O-bound processes (which sleep often)
+remain responsive, while CPU-bound processes gradually
+drop in priority.
 
 \subsection{[[reprioritize()]]}
 
@@ -16919,6 +17160,13 @@ balancetime = t;
 
 
 \section{Halting (ARM)}
+
+%claude:
+When [[runproc()]] finds no ready process, it calls
+[[arch_idlehands()]], which enables interrupts and
+executes the ARM [[WFI]] (Wait For Interrupt) instruction.
+The CPU halts until the next interrupt (typically the
+clock) arrives, saving power:
 
 % runproc -> <>
 <<function [[arch_idlehands]](raspberry pi1)(arm)>>=
