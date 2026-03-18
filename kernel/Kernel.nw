@@ -12561,7 +12561,7 @@ irq(Ureg* ureg)
 
 \section{Overview}
 
-% What a system would look like (including for a programmer) without 
+% What a system would look like (including for a programmer) without
 % virtual memory?
 
 % Virtual memory, via the indirection trick, enables many things:
@@ -12584,21 +12584,46 @@ irq(Ureg* ureg)
 % different levels:
 % - hardware:  TLB, mmupd+mmupt (called originally L1/L2 on bcm/)
 % - software: Segment itself have pagedir, pagetab,
-%   and Cpu has pdproto, and Proc has mmupd ... 
+%   and Cpu has pdproto, and Proc has mmupd ...
 % => complex.
 
-% glossary: 
+% glossary:
 % PD (page directory), PDE (page directory entry), PDX (page directory idx)
 % PT (page table),     PTE (page table entry),     PTX (page table index)
 %pad: I added that? or original code was abusing PTE for everything?
 
-\section{The ARM MMU (ARM)} 
+%claude:
+This chapter connects the interrupt machinery of the
+previous chapter to the memory structures of the Memory
+chapter. When a process accesses an unmapped page, the ARM
+MMU generates a data abort (or prefetch abort), which
+reaches [[arch__trap()]] and dispatches to [<faultarm()>].
+The page fault handler then walks the software segment
+tables to decide what to do: allocate a zero page (bss),
+load from disk (demand loading), copy a shared page
+(copy on write), or page in from swap.
+%claude:
+The chapter is organized in layers: first the ARM MMU
+constants and hardware page table manipulation
+([[arch_putmmu]]), then the portable page fault handler
+([[fault]]/[[fixfault]]), then the higher-level mechanisms
+built on top: copy on write, the page cache, demand
+loading from executables, and swapping.
+
+\section{The ARM MMU (ARM)}
 
 %http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0211k/Caceaije.html
 
 % L1 = PD
 % L2 = PT
 %pad: rename cos confusing with L1/L2 instruction/data cache of machine
+
+%claude:
+We saw the ARM's two-level page table structure in the
+Overview chapter. Here are the macros that extract the
+L1 index (bits~31--20, selecting one of 4096 entries in
+the page directory) and the L2 index (bits~19--12,
+selecting one of 256 entries in a page table):
 
 <<macro [[L1X]](arm)>>=
 #define L1X(va)     FEXT((va), 20, 12)
@@ -12616,6 +12641,12 @@ irq(Ureg* ureg)
 \t factorize? hmm but L1X above can rely on pointer arithmetic for the shift 2
 
 
+
+%claude:
+The L1 entry type determines the granularity of the
+mapping. [[Section]] maps 1~MiB directly (used for kernel
+RAM). [[Coarse]] points to an L2 table of 256 entries,
+each mapping a 4~KiB page (used for user process pages):
 
 <<type [[PageDirGranularity]](arm)>>=
 #define Coarse      (Mbz|1)         /* L1 */
@@ -12645,6 +12676,14 @@ irq(Ureg* ureg)
 
 
 
+
+%claude:
+The Domain Access Control ([[DAC]]) and Access Permission
+([[AP]]) bits together control who can access a page.
+[[Client]] means the MMU checks the AP bits; [[Manager]]
+means the domain bypasses all permission checks.
+For AP: [[Krw]] = kernel read/write only,
+[[Uro]] = user read-only, [[Urw]] = user read/write:
 
 <<type [[DAC]](arm)>>=
 #define Client      1           /* DAC */
@@ -12701,17 +12740,31 @@ l2ap(int ap)
 @
 
 
-\section{Pagination and [[mmupd]]/[[mmupt]] (ARM)} 
+\section{Pagination and [[mmupd]]/[[mmupt]] (ARM)}
 %http://wiki.osdev.org/Paging
 
 %trans:
 % Saw hardware spec for MMU. Now how used and adapted by plan9.
 
-% Each time switch process, they have different pages they use, 
+% Each time switch process, they have different pages they use,
 % so will need to empty tlb and reassign based on per-process info?
 
 % sections: MMUPD section (=~ Segment), MMUPT section (=~ Pagetable)
 
+%claude:
+Now we see how \plan uses the ARM MMU hardware. Each CPU
+has a single L1 page directory ([[cpu->mmul1]]), shared
+between the kernel (upper half, mapped with [[Section]]
+entries during boot and never changed) and the current
+user process (lower half, populated on demand by
+[[arch_putmmu()]] and cleared on context switch by
+[[mmul1empty()]]).
+%claude:
+Each process keeps its own list of L2 page table pages
+in [[Proc.mmul2]]. When the scheduler switches to a new
+process, [[arch_mmuswitch()]] invalidates the old user
+mappings from the L1 and the TLB; the new process's
+pages are faulted in on demand.
 
 <<[[Cpu]] [[Arch]] mmu fields(arm)>>=
 PTE*    mmul1;      /* l1 for this processor */
@@ -12728,6 +12781,13 @@ typedef u32int      PTE;
 %mmul1 contains entries for the page directory entries for the kernel
 % and exception vector. Only a certain range of entries is used
 % for the user process.
+
+%claude:
+[[L1lo]] and [[L1hi]] delimit the range of L1 entries
+used for user-space mappings. Only entries between
+[[L1lo]] (index~0, at [[UZERO]]) and [[L1hi]]
+(just past [[USTKTOP]]) are cleared on context switch;
+the kernel entries above [[KZERO]] are left untouched:
 
 <<constant [[L1lo]](arm)>>=
 L1lo        = UZERO/MiB,        /* L1X(UZERO)? */
@@ -12769,6 +12829,13 @@ Page*   mmul2;
 
 
 
+
+%claude:
+When a process dies ([[Moribund]] state), [[schedinit()]]
+calls [[arch_mmurelease()]] to free all its hardware page
+table resources: the L2 pages are zeroed and returned to
+the free page list, the L1 user entries are cleared, and
+the TLB is invalidated.
 
 % schedinit (when Moribund) -> <>
 <<function [[arch_mmurelease]](arm)>>=
@@ -12919,6 +12986,12 @@ mmul1empty(void)
 
 
 
+%claude:
+When the pager modifies a process's page tables (e.g.,
+swapping out a page), it sets [[newtlb]] to signal
+that the process must flush its TLB entries next time
+it runs. [[arch_flushmmu()]] forces an immediate flush:
+
 <<[[Proc]] memory fields>>=
 bool newtlb;   /* Pager has changed my pte's, I must flush */
 @ 
@@ -12946,7 +13019,28 @@ arch_flushmmu(void)
 % can it be kernel address? I don't think so. should panic in that case
 % at least to understand.
 
+%claude:
+This is where interrupt handling meets memory management.
+When a data abort or prefetch abort reaches [[arch__trap()]],
+it calls [[faultarm()]] with the faulting address. The
+call chain is:
+\begin{verbatim}
+  faultarm(ARM) -> fault(portable) -> fixfault(portable)
+                                          -> arch_putmmu(ARM)
+\end{verbatim}
+%claude:
+The ARM-specific code extracts the faulting address and
+determines read vs.\ write; the portable code decides
+what to do about it.
+
 \subsection{[[faultarm()]] (ARM)}
+
+%claude:
+[[faultarm()]] is the ARM-specific wrapper: it calls the
+portable [[fault()]] function with the faulting address.
+If [[fault()]] returns an error in user mode, a note is
+posted (the process can handle it or will be killed);
+if it is a kernel fault, the system panics.
 
 % virt_addr here? can be from kernel??
 
@@ -12989,6 +13083,14 @@ faultarm(Ureg *ureg, virt_addr va, bool user, bool read)
 % insyscall saving? means can have trap in a syscall itself?
 
 \subsection{[[fault()]]}
+
+%claude:
+The portable [[fault()]] function finds which segment
+contains the faulting address (via [<seg()>]) and calls
+[[fixfault()]] to resolve it. The [[for(;;)]] loop
+handles the case where [[fixfault()]] returns an error
+because the segment was invalidated while waiting for
+I/O---it simply retries.
 
 % ret_code2?
 % virt_addr here! can be from kernel??
@@ -13034,6 +13136,24 @@ fault(virt_addr addr, bool read)
 % why loop?
 
 \subsection{[[fixfault()]]}
+
+%claude:
+[[fixfault()]] is the heart of virtual memory. It walks
+the software segment tables to find (or create) the
+[[Page]] for the faulting address, then calls
+[[arch_putmmu()]] to install the mapping in the hardware
+page table. What it does depends on the segment type:
+\begin{verbatim}
+  SG_TEXT:  demand-load from executable (read-only)
+  SG_BSS:  allocate a zero-filled page
+  SG_STACK: allocate a zero-filled page
+  SG_DATA:  demand-load, or copy-on-write if shared
+\end{verbatim}
+%claude:
+The [[PTEVALID]], [[PTERONLY]], and [[PTEWRITE]] flags
+are software-defined bits that [[fixfault()]] passes to
+[[arch_putmmu()]], which translates them into the
+hardware AP bits ([[Uro]] or [[Urw]]):
 
 % properties of 1 page, 1 byte
 % PTE = page table entry, so spec about one page (also for entries in PD)
@@ -13147,8 +13267,18 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 % BSS filled with 0! very important and different from Linux.
 
 \subsection{[[arch_putmmu()]] (ARM)}
-% and back to ARM specific. 
+% and back to ARM specific.
 % faultarm(ARM) -> fault -> fixfault -> arch_putmmu(ARM)
+
+%claude:
+[[arch_putmmu()]] installs a mapping in the hardware page
+table. If the L1 entry for this virtual address is
+[[Fault]] (no L2 table yet), it allocates a page for the
+L2 table (reusing one from the per-process [[mmul2cache]]
+if available). It then writes the L2 entry with the
+physical page address and the appropriate permission bits,
+and invalidates the TLB entry for this address so the
+MMU picks up the new mapping.
 
 \t rename pa argument below to mmupte
 % fixfault -> <>
@@ -13264,6 +13394,12 @@ arch_checkmmu(virt_addr va, phys_addr pa)
 }
 @
 
+%claude:
+[[arch_kmap()]] makes a physical page accessible to the
+kernel. On ARM with less than 2~GiB RAM, this is trivial:
+add [[KZERO]] to get the virtual address. [[arch_kunmap()]]
+flushes the cache for that page:
+
 <<function [[arch_kmap]](arm)>>=
 Arch_KMap*
 arch_kmap(Page *p) {
@@ -13284,6 +13420,23 @@ arch_kunmap(Arch_KMap *k)
 
 
 \section{Copy on write}
+
+%claude:
+When [[rfork]] duplicates a data segment, it does not
+immediately copy all pages. Instead, both parent and child
+share the same physical pages, marked read-only. When
+either process writes to a shared page, the write triggers
+a permission fault. [[fixfault()]] sees that the page has
+[[ref > 1]] (multiple users), allocates a fresh page,
+copies the content, and gives the writer the private copy
+with write permission. This is {copy on write} (COW)---it
+avoids copying pages that are never modified.
+%claude:
+There is a subtlety: if the segment has only one user
+([[s->ref == 1]]) and the access is a read, the page can
+be mapped read-only without copying, even if [[conf.copymode]]
+would normally trigger a copy. This optimization is
+controlled by [[conf.copymode]]:
 
 <<[[Conf]] other fields>>=
 int copymode; /* 0 is copy on write, 1 is copy on reference */
@@ -13315,6 +13468,10 @@ if(ref > 1){
 
 
 % memmove? should be called memcopy no? also rename f -> src, t -> dst?
+%claude:
+[[copypage()]] performs the actual page copy via
+temporary kernel mappings ([[arch_kmap]]):
+
 <<function [[copypage]]>>=
 void
 copypage(Page *f, Page *t)
@@ -13334,6 +13491,18 @@ copypage(Page *f, Page *t)
 % less: mv in Memory section? but it's an optimisation that we can delay to explain.
 % less: have a section Sharing? Text Sharing? put here all forms of Sharing? Kimage
 % bad name, call it Text Data cache? Text Data Sharing? but it's used for many things
+
+%claude:
+The {page cache} avoids redundant disk reads. When the
+kernel loads a page from an executable (demand loading)
+or from the swap file, it registers the page in a hash
+table keyed by (image, disk address). If the same page
+is needed again---e.g., two instances of [[rc]] sharing
+the same text---[[lookpage()]] finds it in the cache
+instead of reading from disk. Pages in the cache can be
+simultaneously in use (referenced by a segment) or free
+(on [[palloc]]'s free list but still in the hash table,
+ready to be reclaimed if needed before being recycled).
 
 % When we load(pagein) a page from the Text of a binary, this page now
 % contains a "cache" of a portion of a file. If we do another exec
@@ -13382,6 +13551,11 @@ copypage(Page *f, Page *t)
 % system so it's file server that have cache.
 
 
+%claude:
+Each [[Page]] can be associated with a [[KImage]] (an
+open executable or the swap file) and a disk address
+([[daddr]]). Together, these form the cache key:
+
 <<[[Page]] other fields>>=
 // option<ref<Kimage>>
 KImage  *image;     /* Associated binary image or swap image */
@@ -13427,6 +13601,12 @@ Page  *hash; /* Image hash chains */
 
 % assume p->daddr has been set and then call cachepage(p, image).
 %todo: always called with a locked page too? do the !canlock trick and panic?
+%claude:
+[[cachepage()]] adds a page to the cache after loading
+it from disk. [[lookpage()]] searches the cache before
+attempting a disk read. [[uncachepage()]] removes a page
+when it is recycled for a different purpose:
+
 <<function [[cachepage]]>>=
 void
 cachepage(Page *p, KImage *i)
@@ -13454,7 +13634,12 @@ cachepage(Page *p, KImage *i)
 % who calls cachepage? when we load the page from disc in pio()
 
 
-%!! find it back!
+%claude:
+[[lookpage()]] searches the hash table for a cached page.
+If found and the page was free (ref was~0), it unchains
+it from the free list---the page is now in use again
+without any disk I/O:
+
 <<function [[lookpage]]>>=
 Page *
 lookpage(KImage *i, ulong daddr)
@@ -13572,6 +13757,23 @@ cachedel(KImage *i, ulong daddr)
 \section{Demand loading}
 % and text/data sharing
 
+%claude:
+When [[sysexec()]] creates the text and data segments,
+it does not load any pages from disk. Instead, the segment
+tables are left empty ([[nil]] page entries), and the
+segment records which file to read from ([[Segment.image]],
+[[Segment.fstart]], [[Segment.flen]]). When the process
+first touches a page, [[fixfault()]] sees [[*pte == nil]],
+calls [[pio()]] to load the page from the executable on
+disk, and installs it. This is {demand loading}---pages
+are loaded only when actually accessed.
+%claude:
+Demand loading also enables {text sharing}: if two
+processes run the same executable, [[attachimage()]] finds
+the existing [[KImage]] in the image cache and shares its
+segment. The pages loaded by the first process are found
+via [[lookpage()]] by the second, avoiding duplicate reads.
+
 % idea is to set to nil the PageOrSwap* entries in Pagetable or even
 % to nil the Pagetable* entries in pagedir of Segment.
 % then if segment is attached to an image (binary) then we load
@@ -13583,6 +13785,14 @@ cachedel(KImage *i, ulong daddr)
 % needed, and ld does some form of deadcode removal?)
 
 \subsection{[[Kimage]] and the image cache}
+
+%claude:
+A [[KImage]] wraps a [[Chan]] (open file handle) to an
+executable binary or the swap file. It also holds a back
+pointer to the [[Segment]] that uses it, enabling text
+sharing: when a second process execs the same binary,
+[[attachimage()]] finds the existing [[KImage]] and
+shares its segment (and thus its already-loaded pages):
 
 <<struct [[KImage]]>>=
 // a KImage is essentially a channel to an executable or swapfile
@@ -13643,6 +13853,12 @@ static struct Imagealloc imagealloc;
 
 
 \subsection{[[Segment]] and [[KImage]]}
+
+%claude:
+Each segment that supports demand loading has a pointer
+to its [[KImage]] and records the file offset ([[fstart]])
+and length ([[flen]]) of the segment's data within the
+executable:
 
 <<[[Segment]] other fields>>=
 KImage  *image;   /* text in file attached to this segment */
@@ -13747,6 +13963,15 @@ ushort  type;     /* Device type of owning channel */
 
 
 
+%claude:
+[[attachimage()]] is called by [[sysexec()]] to find or
+create a [[KImage]] for the executable. It searches the
+image hash table by [[Qid]]---if the same binary is
+already cached (from a previous or concurrent exec), the
+existing [[KImage]] and its shared segment are reused.
+Otherwise, a fresh [[KImage]] is allocated from the free
+list and a new segment is created.
+
 % code if exec() related to attachimage here?
 
 <<[[Segment]] other fields>>=
@@ -13820,6 +14045,12 @@ data2txt(Segment *s)
 
 \subsection{Paging in}
 
+%claude:
+A page table entry is ``paged out'' if it is either
+[[nil]] (never loaded---demand loading) or marked as
+a swap address ([[onswap]]). In both cases, [[pio()]]
+must read data from disk before the page can be used:
+
 <<function [[pagedout]]>>=
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
 @
@@ -13837,6 +14068,18 @@ if(pagedout(*pte))
 @
 
 
+
+%claude:
+[[pio()]] (``page I/O'') loads a page from disk. It
+first checks the page cache ([[lookpage()]])---if the
+page is already cached, no I/O is needed. Otherwise, it
+allocates a fresh page, reads the data from the
+executable's channel (or the swap file), and adds the
+page to the cache. The segment lock ([[s->lk]]) is
+released during the I/O to avoid blocking other
+processes; this creates a race (another process might
+fault on the same page), which is handled by rechecking
+after re-acquiring the lock.
 
 % called by fixfault
 % actually p is more SwapOrNil than PageOrSwap
@@ -13966,8 +14209,15 @@ faulterror(char *s, Chan *c, bool freemem)
 
 \subsection{[[duppage()]]}
 
-%??? don't get duppage
-
+%claude:
+[[duppage()]] handles a subtle case in copy-on-write.
+When a page has [[ref == 1]] but is cached (has an
+[[image]]), the page is about to be modified---but the
+cache still holds a reference to the original content.
+[[duppage()]] makes a copy of the page for the cache,
+so the original can be safely modified. This preserves
+the invariant that cached pages always reflect their
+disk content.
 
 <<[[fixfault()]] if one ref and page has an image>>=
 if(ref == 1 && lkp->image){
@@ -14075,6 +14325,15 @@ retry:
 
 
 \subsection{Collecting images}
+
+%claude:
+When a segment is freed ([[putseg()]]) and it was the
+last reference, the [[KImage]] is detached (its [[s]]
+pointer set to [[nil]]) and its reference count
+decremented. If the [[KImage]] itself reaches zero
+references, it is removed from the image hash table
+and returned to the free list. Channel closing is
+deferred to avoid blocking while holding spin locks.
 
 <<[[putseg()]] other locals>>=
 KImage *img;
@@ -14246,6 +14505,21 @@ imagereclaim(void)
 
 \section{Swapping}
 
+%claude:
+When physical memory runs low, the kernel must evict
+pages to disk to make room. This is {swapping} (or
+{paging out}). The evicted page's content is written to a
+{swap file}, and the page table entry is replaced with
+the swap address. When the process touches that page
+again, a page fault triggers [[pio()]] to read it back.
+%claude:
+The swap subsystem mirrors the page allocator: where
+[[Palloc]] manages physical pages, [[Swapalloc]] manages
+slots in the swap file. Each slot is one page (4~KiB),
+and the [[swmap]] array is a reference count for each
+slot (because forked processes can share swap entries
+via copy-on-write).
+
 \subsection{[[Swapalloc]]}
 
 % Palloc.pages contains refs to pages in physical memory allocated to user.
@@ -14334,6 +14608,12 @@ newswap(void)
 
 \subsection{[[/dev/swap]]}
 
+%claude:
+Reading [[/dev/swap]] gives a summary of all the memory
+subsystems we have seen: total physical memory, page size,
+kernel vs.\ user pages, swap usage, and [[malloc]] pool
+sizes. It is a convenient diagnostic:
+
 % good way to summary all we've seen
 <<[[consread()]] cases>>=
 case Qswap:
@@ -14357,6 +14637,15 @@ case Qswap:
 @
 
 \subsection{[[PageOrSwap]]}
+
+%claude:
+How does a page table entry indicate ``this page is on
+swap''? By a clever encoding trick: since [[Page*]]
+pointers are word-aligned, their lowest bit is always~0.
+Setting bit~0 ([[PG_ONSWAP]]) marks the value as a
+swap address instead of a [[Page]] pointer. The remaining
+bits encode the offset in the swap file. This is the
+[[PageOrSwap]] type---a union disguised as a pointer:
 
 % now that have a swap "page", essentially an offet in swapfile
 % at page boundary, how store that in pagetable, segment, etc?
@@ -14440,6 +14729,18 @@ swapcount(ulong daddr)
 
 \subsection{Swapping plan}
 
+%claude:
+When the pager decides to evict a page, [[pagepte()]]
+handles the details per segment type. For text pages,
+eviction is free: the page is simply discarded (it can
+be demand-loaded again from the executable). For data,
+bss, and stack pages, the content must be written to the
+swap file: [[pagepte()]] allocates a swap slot, caches
+the page under the swap image (so a concurrent fault
+can find it during the write), replaces the [[Page*]]
+in the page table with the swap address, and adds the
+page to [[iolist]] for the actual disk write.
+
 % pte is a pte in a pagetable of a pagedir of a segment of type type
 % bad name of function? swappte better?
 <<function [[pagepte]]>>=
@@ -14515,6 +14816,14 @@ static  int ioptr;
 
 
 
+%claude:
+[[pageout()]] walks a segment's page tables looking for
+pages to evict. It uses an aging algorithm: each page
+records when it was last referenced ([[gen]]). Pages
+older than [[genage]] are candidates for eviction.
+Recently referenced pages ([[PG_REF]] set) get their
+generation reset, giving them a second chance.
+
 % rename, too close to pagedout, pageout_segment?
 <<function [[pageout]]>>=
 static void
@@ -14589,6 +14898,16 @@ out:
 
 
 \subsection{The [[pager]]}
+
+%claude:
+The {pager} is a kernel process (started by [[kproc()]]
+during initialization) that runs when free memory drops
+below [[swapalloc.highwater]]. When [[newpage()]] cannot
+find enough free pages, it calls [[kickpager()]] to wake
+the pager, which scans all processes' segments looking
+for old pages to evict. Once enough pages are freed, the
+pager goes back to sleep. This is the classic ``page
+daemon'' found in all \unix-like systems.
 
 % when swap is kicked in?
 
