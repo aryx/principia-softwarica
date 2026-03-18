@@ -21,7 +21,8 @@
 
 %thx to codemap/codegraph:
 
-%thx to this manual, better understand X11?:
+%thx to this manual, better understand profiling:
+% - better understand user vs sys vs real
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Kernel.nw skeleton
@@ -187,6 +188,7 @@ GNU [[gprof]], part of the [[binutils]] package, is a
 reimplementation of the original BSD tool that follows the
 same design (compiler-inserted call arcs plus PC sampling)
 and reads the same [[gmon.out]] file format.
+%yoann1: maybe say how big are gprof and GNU gprof?
 
 \item OProfile is a system-wide statistical profiler for Linux
 that uses hardware {performance counters} when available.
@@ -342,22 +344,128 @@ close to real time. A program that does lots of I/O will
 have high system time. A program that sleeps or waits for
 input will have real time much larger than user + system.
 
-\subsection{Ticks and preemptive scheduling}
+\subsection{Ticks}
 
-%yoann: expain what are ticks, and how tick frequency and timer interrupt help profilers
 %claude:
-The kernel keeps time using a periodic {timer interrupt}
-called the {clock tick}. On each tick (typically at a
-frequency called [[HZ]], e.g., 100 or 1000 times per second),
-the kernel interrupts whatever is running, increments a
-global tick counter, and updates the current process's
-time accounting: if the process was in user mode, its user
-time is incremented; if in kernel mode, its system time.
-%
-This same mechanism is what makes {preemptive scheduling}
-possible: the tick interrupt gives the kernel a chance to
-check whether the current process has used its time slice
-and should yield the CPU.
+How does the kernel actually measure these times? It uses
+a periodic {timer interrupt} called the {clock tick}. On
+each tick (at a frequency called [[HZ]], e.g., 100 or 1000
+times per second), the kernel interrupts whatever is
+running and updates the current process's time accounting:
+if the process was in user mode, its user time is
+incremented; if in kernel mode, its system time.
+
+%yoann: ASCII diagram with interleaving process A and B, ticks, and maybe syscall between 2 ticks (are half-tick counted?)
+%claude:
+This tick-based accounting is coarse-grained: the kernel
+simply checks [[p->insyscall]] when the tick fires and
+increments user or system time accordingly. If a short
+syscall starts and finishes between two ticks, it is never
+seen in kernel mode and the time goes to user. Conversely,
+if the tick fires during a syscall, the entire tick counts
+as system time.
+(The [[Tos]] structure used by [[prof]] provides a
+separate, cycle-accurate mechanism via [[kcycles]] and
+[[pcycles]]---but that is for per-function profiling, not
+for the user/sys/real counters.)
+%yoann1: maybe reference the figure that gives concrete example
+
+
+\begin{figure}[h]\centering
+\begin{tikzpicture}[xscale=1.0, yscale=1]
+  % Row heights
+  \def\atop{2.0}  \def\abot{1.4}
+  \def\btop{0.6}  \def\bbot{0.0}
+  \def\amid{1.7}
+  \def\bmid{0.3}
+
+  % tick marks and numbers (below everything)
+  \foreach \i in {0,1,...,12} {
+    \draw[gray!50, dashed] (\i, \btop) -- (\i, \atop);
+    \node[below, font=\scriptsize] at (\i, \bbot) {\i};
+  }
+
+  % ---- Process A ----
+  \node[left, font=\small\bfseries] at (-0.1, \amid) {A};
+  % user ticks 0--1.6 (before short syscall)
+  \fill[blue!25] (0,\abot) rectangle (1.6,\atop);
+  \node[font=\scriptsize] at (0.8, \amid) {user};
+  % short syscall 1.6--1.9 (within tick 1-2, invisible to accounting)
+  \fill[red!40] (1.6,\abot) rectangle (1.9,\atop);
+  % user 1.9--2.3 (back to user, then read() at 2.3)
+  \fill[blue!25] (1.9,\abot) rectangle (2.3,\atop);
+  % read() syscall: sys from 2.3 to 4.2 (spans ticks 3,4 then blocks)
+  \fill[red!25] (2.3,\abot) rectangle (4.2,\atop);
+  \node[font=\scriptsize] at (3.2, \amid) {sys};
+  % sleep 4.2--9.2 (A is blocked waiting for I/O)
+  \fill[gray!12] (4.2,\abot) rectangle (9.2,\atop);
+  \node[font=\scriptsize, gray] at (6.7, \amid) {sleep};
+  % wakeup: sys from 9.2 to 9.7 (returns mid-tick)
+  \fill[red!25] (9.2,\abot) rectangle (9.7,\atop);
+  % user from 9.7 to 12
+  \fill[blue!25] (9.7,\abot) rectangle (12,\atop);
+  \node[font=\scriptsize] at (10.8, \amid) {user};
+
+  % ---- Process B ----
+  \node[left, font=\small\bfseries] at (-0.1, \bmid) {B};
+  % not running 0--4.2
+  \fill[gray!12] (0,\bbot) rectangle (4.2,\btop);
+  \node[font=\scriptsize, gray] at (2, \bmid) {not running};
+  % user ticks 4.2--9.2
+  \fill[green!25] (4.2,\bbot) rectangle (9.2,\btop);
+  \node[font=\scriptsize] at (6.7, \bmid) {user};
+  % not running 9.2--12
+  \fill[gray!12] (9.2,\bbot) rectangle (12,\btop);
+
+  % ---- Annotations ----
+  % short syscall
+  \draw[->, thick] (1.75, \atop+0.15) -- (1.75, \atop+0.02);
+  \node[above, font=\scriptsize, align=center] at (1.75, \atop+0.15)
+    {short syscall\\(not seen as sys!)};
+  % read() enters kernel
+  \draw[->, thick] (2.3, \abot-0.15) -- (2.3, \abot-0.02);
+  \node[below, font=\scriptsize] at (2.3, \abot-0.15) {[[read()]]};
+  % blocks (slightly after tick 4)
+  \draw[->, thick] (4.2, \abot-0.15) -- (4.2, \abot-0.02);
+  \node[below, font=\scriptsize] at (4.2, \abot-0.15) {blocks};
+  % wakes up (slightly after tick 9)
+  \draw[->, thick] (9.2, \abot-0.15) -- (9.2, \abot-0.02);
+  \node[below, font=\scriptsize] at (9.2, \abot-0.15) {wakes up};
+  % returns mid-tick (stagger lower to avoid overlap)
+  \draw[->, thick] (9.7, \abot-0.15) -- (9.7, \abot-0.02);
+  \node[below, font=\scriptsize] at (9.7, \abot-0.45) {returns};
+
+  % outline boxes for clarity
+  \draw (0,\abot) rectangle (12,\atop);
+  \draw (0,\bbot) rectangle (12,\btop);
+
+  % legend
+  \fill[blue!25] (0.5,-1.0) rectangle (1.0,-0.7);
+  \node[right, font=\scriptsize] at (1.0,-0.85) {user};
+  \fill[red!25] (3.0,-1.0) rectangle (3.5,-0.7);
+  \node[right, font=\scriptsize] at (3.5,-0.85) {sys (kernel)};
+  \fill[gray!12] (6.0,-1.0) rectangle (6.5,-0.7);
+  \node[right, font=\scriptsize] at (6.5,-0.85) {sleep / not running};
+\end{tikzpicture}
+\caption{Tick-based time accounting with two interleaved processes.
+Ticks are numbered 0--12 along the bottom. The short syscall between
+ticks~1 and~2 is invisible to tick accounting (counted as user).
+The [[read()]] blocks shortly after tick~4 and A wakes up
+shortly after tick~9. The syscall returns at~9.7, but tick~10
+is counted as user because [[insyscall]] is already false
+when it fires.
+After tick~12: A has user=5, sys=2, real=12;
+B has user=5, sys=0, real=8.}
+\label{fig:tick-accounting}
+\end{figure}
+
+\subsection{Timer interrupt and preemptive scheduling}
+
+%claude:
+The tick interrupt is also what makes {preemptive scheduling}
+possible: it gives the kernel a chance to check whether the
+current process has used its time slice and should yield
+the CPU to another process.
 %
 Profilers exploit this interrupt in two ways. First, the
 tick is when per-process time counters are updated (which
