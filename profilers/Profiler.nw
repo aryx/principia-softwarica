@@ -654,7 +654,9 @@ the program's symbol table. For each function, it prints
 the percentage of time spent there, the absolute time, and
 the call count. The [[-d]] flag prints the dynamic call
 graph instead, showing the tree of calls indented by depth.
-%yoann1: say default to prof.out but in practice prof.pid so need pass in argv[1]
+The profiling runtime writes its data to [[prof.<pid>]]
+(not [[prof.out]]), so in practice you pass the filename
+as a second argument: [[prof 5.out prof.123]].
 
 %claude:
 [[tprof]] works differently: it reads
@@ -1446,8 +1448,9 @@ main(int argc, char *argv[])
 The three time values in [[Waitmsg]] are in milliseconds.
 The formatting divides by 1000 for the integer part and
 extracts hundredths from the remainder, appending [[u]]
-(user), [[s]] (system), or [[r]] (real).
-%yoann1: maybe concrete ex, like if get user = 15050 => will display ?
+(user), [[s]] (system), or [[r]] (real). For example,
+if [[w->time[0]]] is 15050 (milliseconds), the output
+is [[15.05u]] (15050/1000 = 15, (15050\%1000)/10 = 5).
 
 <<global [[output]](time.c)>>=
 char	output[4096];
@@ -1645,19 +1648,43 @@ long	ndata;
 @
 % related to Data and data global
 
+
+%yoann: ASCII diagram of Data for funcs.c of the Overview chapter with main, foo, bar
+%claude:
+For the example program from
+Section~\ref{sec:profiling-hello} where [[main]] calls
+[[foo]] 100 times and [[bar]] once, and [[foo]] calls
+[[bar]], the [[data]] array encodes the following tree:
+\begin{verbatim}
+  data[0]:  pc=main   count=1   time=100  down=1  right=FFFF
+  data[1]:  pc=foo    count=100 time=80   down=3  right=2
+  data[2]:  pc=bar    count=1   time=10   down=FFFF right=FFFF
+  data[3]:  pc=bar    count=100 time=20   down=FFFF right=FFFF
+
+  Tree:     main (100ms, 1 call)
+              |
+              +--down--> foo (80ms, 100 calls)
+              |            |
+              |            +--down--> bar (20ms, 100 calls)
+              |
+              +--right--> bar (10ms, 1 call)
+\end{verbatim}
+
+%yoann: ASCII diagram of profin/profout data structures leading to Data via profdump
+%claude:
+At runtime, [[_profin()]] and [[_profout()]] maintain a
+linked list of [[Plink]] records (stored in [[Tos.prof]])
+that track the current call chain. When the program exits,
+[[_profmain()]] calls [[_profdump()]] which serializes
+this linked list into the flat [[Data]] array written to
+[[prof.<pid>]].
+
+
 %claude:
 The [<Acc>] structure is used to accumulate a flat
 per-function summary from the tree: for each function,
 it records the function's name, address, total
 \emph{self} time (excluding callees), and call count.
-
-<<struct [[Pc]]>>=
-struct Pc
-{
-    Pc	*next;
-    ulong	pc;
-};
-@
 
 <<struct [[Acc]]>>=
 struct Acc
@@ -1670,6 +1697,22 @@ struct Acc
 @
 <<global [[acc]]>>=
 Acc*	acc;
+@
+
+
+%yoann: explain Pc
+%claude:
+The [<Pc>] structure is only used by [<graph()>] to
+detect recursion when printing the call graph with
+[[-d]]. It forms a linked list of PCs representing the
+current call chain during the tree walk.
+
+<<struct [[Pc]]>>=
+struct Pc
+{
+    Pc	*next;
+    ulong	pc;
+};
 @
 
 
@@ -1940,6 +1983,25 @@ plot(void)
 }
 @
 
+%yoann: ASCII diagram where see Data and acc for funcs.c and expected output
+%claude:
+For the [[foo]]/[[bar]] example, after [<sum()>] walks
+the tree, the [[acc]] array contains self times
+(total minus children):
+\begin{verbatim}
+  acc[]:
+  name   pc       ms    calls
+  main   0x1000   10    1       (100 - 80 - 10 = 10)
+  foo    0x1040   60    100     (80 - 20 = 60)
+  bar    0x1080   30    101     (20 + 10 = 30)
+
+  After qsort (ascending by ms) and printing (descending):
+    %     Time    Calls  Name
+   60.0    0.060     100  foo
+   30.0    0.030     101  bar
+   10.0    0.010       1  main
+\end{verbatim}
+
 <<global [[ms]]>>=
 ulong	ms;
 @
@@ -1996,6 +2058,22 @@ sum(ulong i)
     return time + sum(data[i].right);
 }
 @
+
+%yoann: ASCII diagram of sum on tree traversal and expected result
+%claude:
+The traversal of [<sum()>] for the example tree proceeds
+as follows:
+\begin{verbatim}
+  sum(0) -- main: time=100
+    |  sum(1) -- foo: time=80      (down from main)
+    |    |  sum(3) -- bar: time=20 (down from foo)
+    |    |  return 20
+    |    dtime=20, self=80-20=60 -> acc[foo]+=60
+    |    sum(2) -- bar: time=10    (right from foo)
+    |    dtime=0,  self=10-0=10  -> acc[bar]+=10
+    |    return 80+10=90
+    dtime=90, self=100-90=10     -> acc[main]+=10
+\end{verbatim}
 
 <<[[sum()]] sanity check [[i]]>>=
 if(i >= ndata){
