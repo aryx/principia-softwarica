@@ -82,6 +82,52 @@ a few {profilers}.
 Why a profiler? Because I think you are a better programmer if
 you fully understand how things work under the hood.
 
+%claude:
+Indeed, writing correct code is only half the job---making it
+fast enough is the other half.
+A profiler tells you \emph{where} your program actually spends
+its time, replacing guesswork with measurement.
+Without a profiler, programmers often optimize the wrong
+function, or worse, make the code harder to read for no
+measurable gain.
+As the saying goes: ``premature optimization is the root
+of all evil''~(Knuth), but \emph{informed} optimization,
+guided by profiling data, is simply good engineering.
+
+%claude:
+Moreover, understanding how a profiler works gives you
+insight into the interplay between user programs, the
+compiler toolchain, and the kernel.
+A profiler like [[prof]] relies on the linker to
+instrument function calls, while [[tprof]] relies on
+the kernel to sample the program counter at regular
+intervals.
+Studying these tools therefore ties together concepts
+from \book{Linker} and \book{Kernel}.
+
+Here are a few questions I hope this book will answer:
+\begin{itemize}
+
+\item How do you measure the time spent by a program?
+What is the difference between {user time}, {system time},
+and {real time} (wall-clock time)?
+
+\item How does a {sampling profiler} work?
+How does the kernel periodically record where a program
+is executing?
+
+\item How does an {instrumenting profiler} work?
+What code does the linker insert at function entry and exit
+to record call counts and timing?
+
+\item How can you trace system calls and visualize
+system-wide activity in real time?
+
+\item What is the role of the [[/proc]] filesystem
+and the [[TOS]] (Top of Stack) structure in supporting
+profiling on \plan?
+
+\end{itemize}
 
 \section{The \plan profilers: [[prof]], [[tprof]], [[trace]], [[stats]]}
 % and kprof, and iostats
@@ -89,6 +135,27 @@ you fully understand how things work under the hood.
 % as opposed to most books in principia, here a collection of programs.
 % why so many?
 
+%claude:
+Unlike most books in \principia, which focus on a single program
+(one assembler, one linker, one shell), this book covers a
+\emph{collection} of small profiling tools.
+The reason is that profiling is not a single problem but a
+spectrum: you might want to time an entire command ([[time]]),
+identify which functions are hot ([[prof]], [[tprof]]),
+trace individual system calls ([[trace]]),
+monitor system-wide resource usage ([[stats]]),
+or measure the I/O cost of a file server ([[iostats]]).
+Each tool addresses a different point on that spectrum,
+and each is small enough---a few hundred lines of C---that
+together they still form a manageable codebase.
+
+%claude:
+Like for most books in \principia, I chose \plan programs because
+those programs are simple, small, elegant, open source, and they
+form together a coherent set.
+The \plan profilers total roughly 3000 lines of code,
+compared to the tens of thousands of lines in Linux's [[perf]]
+tool alone.
 
 \section{Other profilers}
 
@@ -99,16 +166,37 @@ which I ultimately discarded:
 %history:
 % ?? prof?
 
-\item gprof
+\item [[gprof]]~\cite{gprof} is the classic \unix profiler.
+%claude:
+It combines instrumentation (the compiler inserts code at each
+function entry to record call arcs) with statistical sampling
+(the kernel periodically interrupts the program to record its
+program counter). The combination gives both call counts and
+time estimates per function.
+[[gprof]] was introduced with 4.2BSD and became the standard
+profiling tool on \unix systems for decades.
+The \plan [[prof]] tool works on a similar principle but is
+simpler, relying on the linker rather than the compiler for
+instrumentation.
 
-\item oprofile
+\item OProfile is a system-wide statistical profiler for Linux
+that uses hardware {performance counters} when available.
 % dean?
+%claude:
+Unlike [[gprof]], which requires recompiling the target program,
+OProfile can profile any running program, including the kernel
+itself, with low overhead.
 
-\item perf
+\item [[perf]] is the modern Linux profiling framework.
 % huge on Linux
 % perf for haskell profiling:
 % https://www.fpcomplete.com/user/bitonic/perf-for-low-level-profiling
 % http://jvns.ca/blog/2016/03/12/how-does-perf-work-and-some-questions/
+%claude:
+It subsumes most of what OProfile and [[gprof]] do, and
+adds tracing, hardware counter access, and visualization.
+However, the [[perf]] codebase is enormous---tens of thousands
+of lines of C---making it unsuitable for a teaching book.
 
 \end{itemize}
 
@@ -119,11 +207,48 @@ which I ultimately discarded:
 
 %https://hackernoon.com/usr-bin-time-not-the-command-you-think-you-know-34ac03e55cc3#.v96gngqz2
 
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Profilers timeline}
+\label{fig:lineage}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major profiling
+tools. The \plan profilers are small and self-contained, making
+them ideal for a teaching book. They cover the three main
+profiling approaches---timing ([[time]]), instrumentation
+([[prof]]), and sampling ([[tprof]])---plus system-wide
+monitoring ([[stats]], [[trace]]) and I/O tracing ([[iostats]]),
+all in a fraction of the code found in modern tools like [[perf]].
+
 \section{Getting started}
+
+%claude:
+To get started you first need to get the source of the \plan
+version described in this book. See \urlinstall.
+%
+Then you need to compile the \plan toolchain (compiler, assembler,
+linker) and the profiling programs described in this book:
+[[time]], [[prof]], [[tprof]], [[trace]], [[stats]], and [[iostats]].
+%
+To use [[prof]], you must link your target program with the
+[[-p]] flag so that the linker inserts profiling instrumentation.
+The [[tprof]] tool instead relies on kernel support
+([[/proc/\emph{pid}/profile]]) and requires no special linking.
 
 \section{Requirements}
 
 % see man page time, prof, tprof, stats, iostats
+
+%claude:
+This book assumes familiarity with C and with \plan's basic
+conventions (the [[/proc]] filesystem, the [[Waitmsg]] structure,
+the [[rfork]] system call).
+Readers who have gone through \book{Kernel} will find the
+kernel-support chapter straightforward; readers who have read
+\book{Linker} will immediately understand how [[5l -p]]
+instruments function calls.
 
 \section{About this document}
 #include "../docs/latex/About.nw"
