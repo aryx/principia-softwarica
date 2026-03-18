@@ -85,5 +85,4 @@ newvar(char *name, var *next)
     return v;
 }
 /*e: function [[newvar]] */
-
 /*e: rc/var.c */

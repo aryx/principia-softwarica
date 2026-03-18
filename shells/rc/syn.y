@@ -17,9 +17,9 @@
 %token WORD /** anything else (e.g. foo, --help, 42, /a/b/c, etc) */
 /*x: token declarations */
 /* not used in syntax */
-%token SIMPLE 
+%token SIMPLE
 %token ARGLIST WORDS
-%token BRACE PAREN 
+%token BRACE PAREN
 /*x: token declarations */
 %token PCMD
 /*x: token declarations */
@@ -103,7 +103,7 @@ cmd:
 |   FN words brace  {$$=tree2(FN, $2, $3);}
 |   FN words        {$$=tree1(FN, $2);}
 /*x: cmd rule other cases */
-|   assign cmd %prec BANG   
+|   assign cmd                    %prec BANG
       {$$=mung3($1, $1->child[0], $1->child[1], $2);}
 /*x: cmd rule other cases */
 |   SUBSHELL cmd        {$$=mung1($1, $2);}
