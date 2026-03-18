@@ -17216,6 +17216,21 @@ TEXT arch_idlehands(SB), $-4
 
 \section{Overview (arm)}
 
+%claude:
+This chapter covers the kernel's time infrastructure:
+how hardware timers generate interrupts, how the kernel
+multiplexes a single hardware timer into many software
+timers, and the time-related syscalls ([[sleep]] and
+[[alarm]]). We saw [[hzclock()]] in the Scheduling chapter;
+here we see how it gets called and what else runs on
+each clock tick.
+%claude:
+The Raspberry Pi has several hardware timers running at
+different frequencies. The kernel uses system timer~3
+(1~MHz, 64-bit) for [[hzclock]] interrupts and
+[[fastticks]], and the ARM timer (250~MHz, 32-bit)
+for performance measurement.
+
 % Saw Arch_HZ in Scheduling chapter. and hzclock().
 % Will see here how call hzclock() and other time related capabilities
 % for processes.
@@ -17249,6 +17264,11 @@ TEXT arch_idlehands(SB), $-4
 
 \section{Time units}
 
+%claude:
+The kernel uses several time units internally. The
+conversion between them is a frequent source of bugs, so
+the author introduced explicit typedefs:
+
 \subsection{Seconds}
 
 <<type [[Txxx]]>>=
@@ -17268,6 +17288,13 @@ typedef vlong   Tnano; // nanoseconds
 @
 
 \subsection{Ticks}
+
+%claude:
+A {tick} is the kernel's basic time unit: [[cpu->ticks]]
+is incremented once per [[hzclock()]] interrupt, i.e.,
+[[Arch_HZ]] times per second (every 10~ms on the
+Raspberry Pi). Ticks are coarse but cheap to read.
+The [[TK2MS]] macro converts ticks to milliseconds:
 
 % ticks, fastticks, perfticks, cycles, lcycles, grrr
 
@@ -17336,6 +17363,13 @@ if(ms >= 1000000000 / Arch_HZ)
 %ocaml: can do better?
 
 \subsection{Fastticks (ARM)}
+
+%claude:
+{Fastticks} are much finer-grained than ticks: on the
+Raspberry Pi, the system timer runs at 1~MHz, so one
+fasttick is one microsecond (vs.\ 10~ms for a tick---10,000
+times finer). Fastticks are used for the software timer
+system ([[Timer.twhen]]) and for precise time measurement.
 
 % Finer grained than ticks. So can do decision on granularity finer
 % than a tick difference (10ms on Raspberry Pi).
@@ -17423,6 +17457,16 @@ if(hz)
 
 
 \section{Clock interrupt (ARM)}
+
+%claude:
+The clock interrupt is the heartbeat of the kernel.
+On the Raspberry Pi, system timer~3 fires an IRQ
+([[IRQclock]]) which calls [[clockintr()]]. This
+dismisses the interrupt by writing to the timer's
+control/status register, then calls the portable
+[[timerintr()]] which processes all elapsed software
+timers (including [[hzclock]]).
+
 % see also Time chapter
 
 
@@ -17489,6 +17533,15 @@ clockintr(Ureg *ureg, void*)
 %  but have many processes, many timer needs, so need map
 %  all of that on very limited hardware power.
 
+%claude:
+The hardware provides a single compare register per timer
+channel---it can only trigger at one point in time. But the
+kernel needs many independent timers (for [[sleep]],
+alarms, periodic callbacks, etc.). The solution is a
+sorted linked list of software [[Timer]] structures: only
+the earliest one is programmed into the hardware. When it
+fires, [[timerintr()]] processes it and programs the next.
+
 \subsection{[[Timer]]}
 
 <<struct [[Timer]]>>=
@@ -17535,6 +17588,12 @@ enum Timermode
 
 \subsection{[[Timers]] and CPU [[timers]]}
 
+%claude:
+Each CPU has its own sorted timer list ([[timers[cpuno]]]),
+so timers fire on the CPU that created them. The list
+is protected by an [[ILock]] (not a regular [[Lock]])
+because timer manipulation happens in interrupt context:
+
 <<struct [[Timers]]>>=
 struct Timers
 {
@@ -17571,6 +17630,12 @@ static Timers timers[MAXCPUS];
 
 
 \subsection{[[tadd()/tdel()]]}
+
+%claude:
+[[tadd()]] inserts a timer into the sorted list (by
+[[twhen]]). If the new timer becomes the head (earliest),
+it returns the new deadline so the caller can reprogram
+the hardware. [[tdel()]] removes a timer:
 
 % timeradd | timerintr | addclock0link -> <>
 <<function [[tadd]]>>=
@@ -17685,6 +17750,13 @@ if (tt == nil)
 
 \subsection{[[timeradd()//timerdel()]]}
 
+%claude:
+[[timeradd()]] and [[timerdel()]] are the public
+interface. They lock the [[Timer]] first, then the
+[[Timers]] list (respecting the lock ordering), and call
+[[tadd()]]/[[tdel()]]. If the new timer becomes the
+earliest, [[arch_timerset()]] is called to reprogram
+the hardware:
 
 % tsleep | timersinit | edfun | edfready -> <>
 <<function [[timeradd]]>>=
@@ -17764,6 +17836,13 @@ timerdel(Timer *dt)
 
 \subsection{[[arch_timerset()]] (arm)}
 
+%claude:
+[[arch_timerset()]] programs the hardware timer to fire
+at the given fasttick value by writing to system timer~3's
+compare register ([[c3]]). The period is clamped to avoid
+either firing too fast (overwhelming the CPU) or too slow
+(missing the next [[hzclock]]):
+
 % Saw clockinterrupt before and SYSTIMERS
 
 % timeradd -> <>
@@ -17806,6 +17885,13 @@ MinPeriod   = SystimerFreq / (100*Arch_HZ),
 
 \subsection{[[timerintr()]]}
 
+%claude:
+[[timerintr()]] is the portable timer interrupt handler.
+It walks the sorted timer list, popping and calling every
+timer whose [[twhen]] has passed. Periodic timers are
+re-added to the list after firing. [[hzclock()]] is
+called last (via the [[callhzclock]] flag) to ensure all
+other timer callbacks complete first:
 
 % clockintr(arm) | i8253clock(x86) -> <>
 <<interrupt callback timerintr>>=
@@ -17911,6 +17997,15 @@ if (--count <= 0) {
 @
 
 \subsection{Clock callbacks: [[addclock0link()]]}
+
+%claude:
+[[addclock0link()]] registers a periodic callback on
+CPU~0's timer list. Device drivers use this to run
+polling functions at regular intervals (e.g., checking
+the Ethernet controller, updating the console). If
+[[ms]] is~0, the callback runs at the [[hzclock]]
+frequency (every 10~ms):
+
 % very important! used a lot.
 
 <<function [[addclock0link]]>>=
@@ -17963,6 +18058,13 @@ if(ms == 0)
 
 \subsection{Delay (ARM)}
 
+%claude:
+[[arch_delay()]] and [[arch_microdelay()]] are busy-wait
+loops used by device drivers that need to wait for
+hardware to respond (e.g., after writing a control
+register). They spin-wait on the system timer counter---no
+interrupt is involved:
+
 % This is used in kernel code itself. Sometimes need to wait
 % (especially in device drivers, when interact with some devices?)
 
@@ -17999,6 +18101,16 @@ clock_arch_delay(Tms n)
 
 
 \section{[[syssleep()]]}
+
+%claude:
+The [[sleep(ms)]] syscall puts the calling process to
+sleep for [[ms]] milliseconds. It works by combining the
+[[Rendez]]/[[sleep()]]/[[wakeup()]] mechanism from the
+Scheduling chapter with a one-shot timer: [[tsleep()]]
+adds a timer that will call [[twakeup()]] after the
+requested delay, then calls [[sleep()]] with a condition
+that is always false (so the process sleeps until the
+timer wakes it).
 
 <<[[Proc]] synchronization fields>>=
 Rendez  sleepr;    /* place for syssleep/debug/tsleep */
@@ -18126,6 +18238,16 @@ twakeup(Ureg*, Timer *t)
 
 \section{Alarms}
 
+%claude:
+Alarms are a simpler, coarser mechanism than timers.
+The [[alarm(ms)]] syscall arranges for a ``sys: alarm''
+note to be posted to the calling process after [[ms]]
+milliseconds. Unlike [[sleep()]], the process continues
+running---the note arrives asynchronously, like a \unix\
+[[SIGALRM]]. Alarms are stored as a sorted linked list
+of [[Proc]] pointers, checked on every [[hzclock()]]
+tick by [[checkalarms()]]:
+
 <<struct [[Alarms]]>>=
 struct Alarms
 {
@@ -18248,6 +18370,14 @@ if(when == 0)       /* ticks have wrapped to 0? */
 
 \subsection{[[alarmkproc()]]}
 
+%claude:
+The alarm kernel process runs in an infinite loop: it
+sleeps until [[checkalarms()]] (called from [[hzclock()]])
+wakes it, then walks the sorted alarm list posting
+``alarm'' notes to processes whose alarm time has passed.
+The indirection through a kernel process avoids doing
+the [[postnote()]] work inside the interrupt handler:
+
 <<global [[alarmr]]>>=
 static Rendez alarmr;
 @ 
@@ -18299,6 +18429,12 @@ alarmkproc(void*)
 
 \subsection{[[checkalarms()]]}
 
+%claude:
+[[checkalarms()]] is called on every clock tick. It just
+checks whether the earliest alarm has expired and, if so,
+wakes up [[alarmkproc()]] to do the actual work. This
+keeps the interrupt handler fast:
+
 <<[[hzclock()]] check the alarms>>=
 checkalarms();
 @
@@ -18327,6 +18463,17 @@ checkalarms(void)
 
 
 \section{Time of day}
+
+%claude:
+The time of day (wall clock) is maintained by the [[TOD]]
+structure, which converts fastticks into nanoseconds since
+the epoch using a fixed-point multiplier. The multiplier
+is calibrated from [[cpu->cpuhz]] (the fasttick frequency).
+A periodic callback ([[todfix]]) prevents the 64-bit
+intermediate values from overflowing, and [[todset()]]
+allows the time to be adjusted gradually (via a delta
+applied over several ticks) to avoid jumps.
+
 \t separate from Time? Less important for understand in first chapters
 
 % see big comment at beginning of tod.c, in Kernel_extra.nw
@@ -18619,6 +18766,13 @@ mk64fract(uvlong to, uvlong from)
 %}
 
 \section{[[/dev/time]]}
+
+%claude:
+Reading [[/dev/time]] returns the current time in seconds
+since the epoch (used by [[date(1)]]). Writing to it
+sets the time---this is how the system clock is
+initialized from the network or a real-time clock at boot:
+
 % for bin/date,
 % but can also set the time if you write into it
 
@@ -18841,6 +18995,13 @@ le2long(long *to, byte *f)
 
 
 \section{Watchdog}
+
+%claude:
+A {watchdog timer} is a hardware safety net: if the kernel
+does not periodically ``pet'' it (reset its counter), the
+hardware assumes the system is hung and forces a reboot.
+On the Raspberry Pi, the watchdog is also used to trigger
+a deliberate reboot via [[arch_reboot()]].
 
 % used in raspberry PI
 % useful automatic reboot when something get completely stuck?
