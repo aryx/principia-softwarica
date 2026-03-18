@@ -658,6 +658,11 @@ The profiling runtime writes its data to [[prof.<pid>]]
 (not [[prof.out]]), so in practice you pass the filename
 as a second argument: [[prof 5.out prof.123]].
 
+<<[[main()]](tprof.c) sanity check argc and print usage>>=
+if(argc != 2 && argc != 3)
+    error(false, "usage: tprof pid [binary]");
+@
+
 %claude:
 [[tprof]] works differently: it reads
 [[/proc/<pid>/profile]], which contains
@@ -864,6 +869,7 @@ profiling, and then read the sampling data:
    15.0    1.50  sort
    10.0    1.00  main
 \end{verbatim}
+%yoann1: recall that with rc $apid is pid of process just launched in background
 
 %claude:
 With [[iostats]], you see the 9P traffic:
@@ -2288,7 +2294,244 @@ case 'r':
 \label{chap:tprof}
 % use /proc/pid/profile
 
-\section{Data structures}
+%yoann: small transition paragraph
+
+\section{Example: [[longrun.c]]}
+
+%yoann: remember usage of tprof, profile on /proc/<pid>/ctl and then tprof pid
+%claude:
+Since [[tprof]] samples a running process, we need a
+program that runs long enough to collect meaningful data.
+Here is a simple example with two functions that do
+different amounts of work, interleaved with [[sleep]]
+calls to keep the program running long enough:
+
+<<longrun.c>>=
+#include <u.h>
+#include <libc.h>
+
+long compute1(void) {
+    long i, sum = 0;
+    for(i = 0; i < 20000000; i++)
+        sum += i;
+    return sum;
+}
+long compute2(void) {
+    long i, sum = 0;
+    for(i = 0; i < 10000000; i++)
+        sum += i;
+    return sum;
+}
+void main(void) {
+    int i;
+    for(i = 0; i < 10000; i++){
+        compute1();
+        compute2();
+        sleep(100);  /* 100 ms */
+    }
+    exits(nil);
+}
+@
+
+%claude:
+To profile this program with [[tprof]]:
+\begin{verbatim}
+  % 8c longrun.c && 8l -o longrun longrun.8
+  % longrun &
+  % echo profile > /proc/$apid/ctl
+  % # ... wait a few seconds ...
+  % tprof $apid
+  total: 80
+  TEXT 00001000
+      ms      %   sym
+      60   75.0   compute1
+      20   25.2   compute2
+  % ...
+  % tprof $apid
+  total: 3650
+  TEXT 00001000
+      ms      %   sym
+      2790   76.4   compute1
+      860    23.5   compute2
+\end{verbatim}
+The profile shows [[compute1]] taking roughly three times
+as much time as [[compute2]]---more than the expected 2:1
+ratio of loop counts. The [[sleep]] calls between
+iterations may affect the ratio: [[compute1]] runs right
+after [[sleep]] returns (cold cache), while [[compute2]]
+benefits from the cache warmed by [[compute1]].
+Note that [[sleep]] does not appear at all---because
+[[sleep]] blocks the process, the kernel does not sample
+its PC during that time. Only code that is actually
+running on the CPU gets sampled.
+
+%claude:
+[[tprof]] is the sampling-based counterpart to [[prof]].
+Instead of reading instrumentation data from a
+[[prof.<pid>]] file, it reads the PC histogram from
+[[/proc/<pid>/profile]], which the kernel populates
+via [[profclock()]] (see Chapter~\ref{chap:kernel-support}).
+The tool must be run while the target process is still
+alive, since the profile data lives in the process's
+text segment.
+
+\section{[[main()]]}
+
+%claude:
+Like [[prof]], [[main()]] has three phases: read the
+symbol table (from [[/proc/<pid>/text]] or a given
+binary), read the profile data (from
+[[/proc/<pid>/profile]]), and display the results.
+The key difference from [[prof]] is that the profile
+data is a flat array of counters (one per 8-byte bucket),
+not a call tree.
+
+<<function main (misc/tprof.c)>>=
+void
+main(int argc, char *argv[])
+{
+    // for symbol table
+    fdt fd; // /proc/<pid>/text and then /proc/<pid>/profile
+    Fhdr f;
+    // for profile data
+    char filebuf[128], *file; // /proc/<pid>/profile
+    Dir *d;
+    ulong *data; // profile content
+    // for output
+    Biobuf outbuf;
+    <<[[main()]](tprof.c) other locals>>=
+
+    <<[[main()]](tprof.c) sanity check argc and print usage>>
+
+    /*
+     * Read symbol table
+     */
+    <<[[main()]](tprof.c) read symbol table>>
+
+    /*
+     * Read timing data
+     */
+    <<[[main()]](tprof.c) read timing data>>
+
+    <<[[main()]](tprof.c) displaying profile>>
+
+    exits(nil);
+}
+@
+
+
+<<[[main()]](tprof.c) other locals>>=
+long i, j, k, n;
+char *name;
+ulong tbase, sum;
+long delta;
+Symbol s;
+struct COUNTER *cp;
+@
+
+<<[[main()]](tprof.c) sanity check [[fd]]>>=
+if(fd < 0)
+    error(true, file);
+@
+
+<<[[main()]](tprof.c) sanity check [[f.type]]>>=
+if (f.type == FNONE)
+    error(false, "text file not an a.out");
+@
+
+<<[[main()]](tprof.c) sanity check [[d]]>>=
+if(d == nil)
+    error(true, "stat");
+@
+
+<<[[main()]](tprof.c) sanity check [[n]]>>=
+if(n < 2)
+    error(false, "data file too short");
+@
+
+<<[[main()]](tprof.c) sanity check [[data]]>>=
+if(data == nil)
+    error(true, "malloc");
+@
+
+
+
+\section{Reading the symbol table from the binary}
+% again, similar to syms() in prof.c
+
+%claude:
+The symbol table loading is almost identical to [<syms()>]
+in [[prof.c]]. The only difference is that [[tprof]]
+can read the binary directly from [[/proc/<pid>/text]]
+(a convenient \plan feature: each process exports its
+executable via the [[proc]] filesystem), so there is no
+need to know the executable's path on disk.
+
+<<[[main()]](tprof.c) read symbol table>>=
+if(argc == 2){
+    file = filebuf;
+    snprint(filebuf, sizeof filebuf, "/proc/%s/text", argv[1]);
+}else
+    file = argv[2];
+
+fd = open(file, OREAD);
+<<[[main()]](tprof.c) sanity check [[fd]]>>
+
+if (!crackhdr(fd, &f))
+    error(true, "read text header");
+<<[[main()]](tprof.c) sanity check [[f.type]]>>
+
+machbytype(f.type);
+if (syminit(fd, &f) < 0)
+    error(true, "syminit");
+close(fd);
+@
+
+\section{Reading the profile data from [[/proc/<pid>/profile]]}
+
+%claude:
+The profile data is a flat array of [[ulong]] values.
+As described in Chapter~\ref{chap:kernel-support},
+[[data[0]]] holds the total execution time in milliseconds,
+and [[data[j]]] holds the time spent in the 8-byte range
+starting at [[tbase + (j-2)*PCRES]] (where [[tbase]]
+is the page-aligned start of the text segment). The data
+must be byte-swapped since the kernel writes in
+big-endian format.
+
+
+<<[[main()]](tprof.c) read timing data>>=
+file = smprint("/proc/%s/profile", argv[1]);
+fd = open(file, OREAD);
+<<[[main()]](tprof.c) sanity check [[fd]]>>
+free(file);
+
+d = dirfstat(fd);
+<<[[main()]](tprof.c) sanity check [[d]]>>
+
+n = d->length/sizeof(data[0]);
+<<[[main()]](tprof.c) sanity check [[n]]>>
+data = malloc(d->length);
+<<[[main()]](tprof.c) sanity check [[data]]>>
+if(read(fd, data, d->length) < 0)
+    error(true, "text read");
+close(fd);
+
+for(i=0; i<n; i++)
+    data[i] = machdata->swal(data[i]);
+@
+
+\section{Displaying profile}
+
+%claude:
+The display logic walks the symbol table and the profile
+array in parallel. For each function (identified by a
+pair of consecutive symbol addresses), it sums the
+profile buckets that fall within that function's address
+range. Functions with non-zero sample counts are
+collected into [<COUNTER>] records, sorted by time, and
+printed. The [[PCRES]] constant (8) matches the kernel's
+[[LRESPROF]] bucket size.
 
 <<constant PCRES (misc/tprof.c)>>=
 #define	PCRES	8
@@ -2302,132 +2545,57 @@ struct COUNTER
 };
 @
 
-\section{[[main()]]}
 
-<<function main (misc/tprof.c)>>=
-void
-main(int argc, char *argv[])
-{
-    int fd;
-    long i, j, k, n;
-    Dir *d;
-    char *name;
-    ulong *data;
-    ulong tbase, sum;
-    long delta;
-    Symbol s;
-    Biobuf outbuf;
-    Fhdr f;
-    struct COUNTER *cp;
-    char filebuf[128], *file;
+<<[[main()]](tprof.c) displaying profile>>=
+delta = data[0]-data[1];
+print("total: %ld\n", data[0]);
+if(data[0] == nil)
+    exits(nil);
+// else
+if (!textsym(&s, 0))
+    error(0, "no text symbols");
 
-    if(argc != 2 && argc != 3)
-        error(0, "usage: tprof pid [binary]");
-    /*
-     * Read symbol table
-     */
-    if(argc == 2){
-        file = filebuf;
-        snprint(filebuf, sizeof filebuf, "/proc/%s/text", argv[1]);
-    }else
-        file = argv[2];
+tbase = s.value & ~(mach->pgsize-1);	/* align down to page */
 
-    fd = open(file, OREAD);
-    if(fd < 0)
-        error(1, file);
+print("TEXT %.8lux\n", tbase);
 
-    if (!crackhdr(fd, &f))
-        error(1, "read text header");
-    if (f.type == FNONE)
-        error(0, "text file not an a.out");
-    machbytype(f.type);
-    if (syminit(fd, &f) < 0)
-        error(1, "syminit");
-    close(fd);
-    /*
-     * Read timing data
-     */
-    file = smprint("/proc/%s/profile", argv[1]);
-    fd = open(file, OREAD);
-    if(fd < 0)
-        error(1, file);
-    free(file);
-    d = dirfstat(fd);
-    if(d == nil)
-        error(1, "stat");
-    n = d->length/sizeof(data[0]);
-    if(n < 2)
-        error(0, "data file too short");
-    data = malloc(d->length);
-    if(data == 0)
-        error(1, "malloc");
-    if(read(fd, data, d->length) < 0)
-        error(1, "text read");
-    close(fd);
-
-    for(i=0; i<n; i++)
-        data[i] = machdata->swal(data[i]);
-
-    delta = data[0]-data[1];
-    print("total: %ld\n", data[0]);
-    if(data[0] == 0)
-        exits(0);
-    if (!textsym(&s, 0))
-        error(0, "no text symbols");
-    tbase = s.value & ~(mach->pgsize-1);	/* align down to page */
-    print("TEXT %.8lux\n", tbase);
-    /*
-     * Accumulate counts for each function
-     */
-    cp = 0;
-    k = 0;
-    for (i = 0, j = (s.value-tbase)/PCRES+2; j < n; i++) {
-        name = s.name;		/* save name */
-        if (!textsym(&s, i))	/* get next symbol */
-            break;
-        sum = 0;
-        while (j < n && j*PCRES < s.value-tbase)
-            sum += data[j++];
-        if (sum) {
-            cp = realloc(cp, (k+1)*sizeof(struct COUNTER));
-            if (cp == 0)
-                error(1, "realloc");
-            cp[k].name = name;
-            cp[k].time = sum;
-            k++;
-        }
+/*
+ * Accumulate counts for each function
+ */
+cp = 0;
+k = 0;
+for (i = 0, j = (s.value-tbase)/PCRES+2; j < n; i++) {
+    name = s.name;		/* save name */
+    if (!textsym(&s, i))	/* get next symbol */
+        break;
+    sum = 0;
+    while (j < n && j*PCRES < s.value-tbase)
+        sum += data[j++];
+    if (sum) {
+        cp = realloc(cp, (k+1)*sizeof(struct COUNTER));
+        if (cp == 0)
+            error(1, "realloc");
+        cp[k].name = name;
+        cp[k].time = sum;
+        k++;
     }
-    if (!k)
-        error(0, "no counts");
-    cp[k].time = 0;			/* "etext" can take no time */
-    /*
-     * Sort by time and print
-     */
-    qsort(cp, k, sizeof(struct COUNTER), compar);
-    Binit(&outbuf, 1, OWRITE);
-    Bprint(&outbuf, "    ms      %%   sym\n");
-    while(--k>=0)
-        Bprint(&outbuf, "%6ld\t%3lld.%lld\t%s\n",
-                cp[k].time,
-                100LL*cp[k].time/delta,
-                (1000LL*cp[k].time/delta)%10,
-                cp[k].name);
-    exits(0);
 }
-@
+if (!k)
+    error(0, "no counts");
+cp[k].time = 0;			/* "etext" can take no time */
 
-<<function error (misc/tprof.c)>>=
-static void
-error(int perr, char *s)
-{
-    fprint(2, "tprof: %s", s);
-    if(perr){
-        fprint(2, ": ");
-        perror(0);
-    }else
-        fprint(2, "\n");
-    exits(s);
-}
+/*
+ * Sort by time and print
+ */
+qsort(cp, k, sizeof(struct COUNTER), compar);
+Binit(&outbuf, 1, OWRITE);
+Bprint(&outbuf, "    ms      %%   sym\n");
+while(--k>=0)
+    Bprint(&outbuf, "%6ld\t%3lld.%lld\t%s\n",
+            cp[k].time,
+            100LL*cp[k].time/delta,
+            (1000LL*cp[k].time/delta)%10,
+            cp[k].name);
 @
 
 <<function compar (misc/tprof.c)>>=
@@ -2445,6 +2613,23 @@ compar(void *va, void *vb)
     return 1;
 }
 @
+
+
+\section{Error management}
+<<function error (misc/tprof.c)>>=
+static void
+error(bool perr, char *s)
+{
+    fprint(STDERR, "tprof: %s", s);
+    if(perr){
+        fprint(STDERR, ": ");
+        perror(0);
+    }else
+        fprint(STDERR, "\n");
+    exits(s);
+}
+@
+
 
 %******************************************************************************
 \chapter{Profiling the Kernel: [[/bin/kprof]]}
