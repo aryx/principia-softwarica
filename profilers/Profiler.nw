@@ -675,11 +675,18 @@ To enable sampling, you first write ``[[profile]]'' to
 [[/proc/<pid>/ctl]], let the program run, then
 run [[tprof <pid>]] while the process is still alive.
 
+
+<<[[main()]](kprof.c) sanity check [[argc]] and print usage>>=
+if(argc != 3)
+    error(0, "usage: kprof text data");
+@
+
 %claude:
 [[kprof]] is a variant of [[prof]] that profiles the
 kernel itself. It reads the data accumulated by the
 [[kprof(3)]] device ([[/dev/kpdata]]), which records
 one count per clock tick per 8-byte range of kernel text.
+%yoann1: looks more like a variant of tprof than prof
 
 \section{[[trace]] and [[stats]] graphical user interfaces}
 
@@ -2636,113 +2643,104 @@ error(bool perr, char *s)
 %******************************************************************************
 \label{chap:kprof}
 
+%claude:
+[[kprof]] is essentially the same program as [[tprof]],
+but for the kernel instead of a user process. It reads
+the profile data from [[/dev/kpdata]] (the [[kprof(3)]]
+device) and the symbol table from the kernel binary
+(e.g., [[/386/9pcdisk]] or [[/arm/9]]).
+The usage is:
+\begin{verbatim}
+  % bind -a '#K' /dev
+  % echo start > /dev/kpctl
+  % # ... run workload ...
+  % echo stop > /dev/kpctl
+  % kprof /arm/9 /dev/kpdata
+\end{verbatim}
+
+%claude:
+The code is nearly identical to [[tprof.c]]. The main
+differences are: (1)~the symbol table comes from a file
+on disk (the kernel binary) rather than [[/proc/<pid>/text]],
+(2)~the text base address is [[mach->kbase]] (the
+kernel's load address) rather than a page-aligned user
+text address, and (3)~the output distinguishes time spent
+``in kernel text'' from time spent ``outside kernel text''
+(e.g., in user mode or idle).
+
 <<function main (misc/kprof.c)>>=
 void
 main(int argc, char *argv[])
 {
-    int fd;
-    long i, j, k, n;
-    char *name;
-    ulong *data;
-    vlong tbase;
-    ulong sum;
-    long delta;
-    Symbol s;
-    Biobuf outbuf;
+    fdt fd;
     Fhdr f;
     Dir *d;
-    struct COUNTER *cp;
+    Biobuf outbuf;
+    ulong *data;
+    <<[[main()]](kprof.c) other locals>>
 
-    if(argc != 3)
-        error(0, "usage: kprof text data");
+    <<[[main()]](kprof.c) sanity check [[argc]] and print usage>>
+
     /*
      * Read symbol table
      */
-    fd = open(argv[1], OREAD);
-    if(fd < 0)
-        error(1, argv[1]);
-    if (!crackhdr(fd, &f))
-        error(1, "read text header");
-    if (f.type == FNONE)
-        error(0, "text file not an a.out");
-    if (syminit(fd, &f) < 0)
-        error(1, "syminit");
-    close(fd);
+    <<[[main()]](kprof.c) read symbol table>>
+
     /*
      * Read timing data
      */
-    fd = open(argv[2], OREAD);
-    if(fd < 0)
-        error(1, argv[2]);
-    d = dirfstat(fd);
-    if(d == nil)
-        error(1, "stat");
-    n = d->length/sizeof(data[0]);
-    if(n < 2)
-        error(0, "data file too short");
-    data = malloc(d->length);
-    if(data == 0)
-        error(1, "malloc");
-    if(read(fd, data, d->length) < 0)
-        error(1, "text read");
-    close(fd);
-    for(i=0; i<n; i++)
-        data[i] = beswal(data[i]);
-    delta = data[0]-data[1];
-    print("total: %ld	in kernel text: %ld	outside kernel text: %ld\n",
-        data[0], delta, data[1]);
-    if(data[0] == 0)
-        exits(0);
-    if (!textsym(&s, 0))
-        error(0, "no text symbols");
+    <<[[main()]](kprof.c) read profile data>>
 
-    tbase = mach->kbase;
-    if(tbase != s.value & ~0xFFF)
-        print("warning: kbase %.8llux != tbase %.8llux\n",
-            tbase, s.value&~0xFFF);
-    print("KTZERO %.8llux PGSIZE %dKb\n", tbase, mach->pgsize/1024);
-    /*
-     * Accumulate counts for each function
-     */
-    cp = 0;
-    k = 0;
-    for (i = 0, j = 2; j < n; i++) {
-        name = s.name;		/* save name */
-        if (!textsym(&s, i))	/* get next symbol */
-            break;
-        s.value -= tbase;
-        s.value /= PCRES;
-        sum = 0;
-        while (j < n && j < s.value)
-            sum += data[j++];
-        if (sum) {
-            cp = realloc(cp, (k+1)*sizeof(struct COUNTER));
-            if (cp == 0)
-                error(1, "realloc");
-            cp[k].name = name;
-            cp[k].time = sum;
-            k++;
-        }
-    }
-    if (!k)
-        error(0, "no counts");
-    cp[k].time = 0;			/* "etext" can take no time */
-    /*
-     * Sort by time and print
-     */
-    qsort(cp, k, sizeof(struct COUNTER), compar);
-    Binit(&outbuf, 1, OWRITE);
-    Bprint(&outbuf, "ms	  %%	sym\n");
-    while(--k>=0)
-        Bprint(&outbuf, "%ld\t%3lld.%lld\t%s\n",
-                cp[k].time,
-                100LL*cp[k].time/delta,
-                (1000LL*cp[k].time/delta)%10,
-                cp[k].name);
+    <<[[main()]](kprof.c) display profile data>>
+
     exits(0);
 }
 @
 
+
+<<[[main()]](kprof.c) other locals>>=
+long i, j, k, n;
+char *name;
+vlong tbase;
+ulong sum;
+long delta;
+Symbol s;
+struct COUNTER *cp;
+@
+
+
+<<[[main()]](kprof.c) read symbol table>>=
+fd = open(argv[1], OREAD);
+if(fd < 0)
+    error(1, argv[1]);
+if (!crackhdr(fd, &f))
+    error(1, "read text header");
+if (f.type == FNONE)
+    error(0, "text file not an a.out");
+if (syminit(fd, &f) < 0)
+    error(1, "syminit");
+close(fd);
+@
+
+<<[[main()]](kprof.c) read profile data>>=
+fd = open(argv[2], OREAD);
+if(fd < 0)
+    error(1, argv[2]);
+d = dirfstat(fd);
+if(d == nil)
+    error(1, "stat");
+n = d->length/sizeof(data[0]);
+if(n < 2)
+    error(0, "data file too short");
+data = malloc(d->length);
+if(data == 0)
+    error(1, "malloc");
+if(read(fd, data, d->length) < 0)
+    error(1, "text read");
+close(fd);
+for(i=0; i<n; i++)
+    data[i] = beswal(data[i]);
+@
 
 <<constant [[PCRES]]>>=
 #define	PCRES	8
@@ -2754,6 +2752,61 @@ struct COUNTER
     char 	*name;		/* function name */
     long	time;		/* ticks spent there */
 };
+@
+
+
+<<[[main()]](kprof.c) display profile data>>=
+delta = data[0]-data[1];
+print("total: %ld	in kernel text: %ld	outside kernel text: %ld\n",
+    data[0], delta, data[1]);
+if(data[0] == 0)
+    exits(0);
+if (!textsym(&s, 0))
+    error(0, "no text symbols");
+
+tbase = mach->kbase;
+if(tbase != s.value & ~0xFFF)
+    print("warning: kbase %.8llux != tbase %.8llux\n",
+        tbase, s.value&~0xFFF);
+print("KTZERO %.8llux PGSIZE %dKb\n", tbase, mach->pgsize/1024);
+/*
+ * Accumulate counts for each function
+ */
+cp = 0;
+k = 0;
+for (i = 0, j = 2; j < n; i++) {
+    name = s.name;		/* save name */
+    if (!textsym(&s, i))	/* get next symbol */
+        break;
+    s.value -= tbase;
+    s.value /= PCRES;
+    sum = 0;
+    while (j < n && j < s.value)
+        sum += data[j++];
+    if (sum) {
+        cp = realloc(cp, (k+1)*sizeof(struct COUNTER));
+        if (cp == 0)
+            error(1, "realloc");
+        cp[k].name = name;
+        cp[k].time = sum;
+        k++;
+    }
+}
+if (!k)
+    error(0, "no counts");
+cp[k].time = 0;			/* "etext" can take no time */
+/*
+ * Sort by time and print
+ */
+qsort(cp, k, sizeof(struct COUNTER), compar);
+Binit(&outbuf, 1, OWRITE);
+Bprint(&outbuf, "ms	  %%	sym\n");
+while(--k>=0)
+    Bprint(&outbuf, "%ld\t%3lld.%lld\t%s\n",
+            cp[k].time,
+            100LL*cp[k].time/delta,
+            (1000LL*cp[k].time/delta)%10,
+            cp[k].name);
 @
 
 <<function error (misc/kprof.c)>>=
