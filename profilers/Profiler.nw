@@ -30,11 +30,11 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 % - read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the file before
-% - TODO nullify, boolify, typeify,    scheckify
-% - TODO aspecify advanced features!
-% - TODO add figures
-% - TODO add explanations
+% - distribute parts of the file before
+% - SEMI nullify, boolify, typeify,    scheckify
+% - SEMI aspecify advanced features!
+% - SEMI add figures
+% - SEMI add explanations
 
 \begin{document}
 %******************************************************************************
@@ -55,22 +55,19 @@ with code from\\
 Ken Thompson and
 Rob Pike
 }
-% prof/tprof/kprof/time: Ken Thompson (part of his compiler toolchain)
-% stats: Rob Pike (graphical tools were his domain)
+% prof/tprof/kprof/time: Ken Thompson probably (part of his compiler toolchain)
+% stats: Rob Pike probably (graphical tools were his domain)
 % trace: unclear, maybe Sape Mullender (real-time Plan 9 work)
 % iostats: unclear, maybe Dave Presotto or Sean Dorward (file server infra)
 
 \maketitle 
-%\onecolumn
 \hrule
 \input{../docs/latex/Copyright}
 \input{../docs/latex/CopyrightPlan9}
 \hrule
-%\twocolumn
 
 \begingroup
 \hypersetup{linkcolor=blue}
-% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
 \tableofcontents
 \endgroup
 
@@ -287,13 +284,8 @@ architecture and code organization.
 
 \section{Profiler principles}
 
-%Jon Bentley's toy profiler
-% see programming pearl
-%see also my profiling OCaml poor's man profiler -profile!
-
 %See profiler section in Kernel.nw
 %lib_core/libc/profile.c!! tos.h!!
-
 % see include/libc.h prof() and enum prof
 
 %back of the enveloppe:
@@ -304,7 +296,9 @@ architecture and code organization.
 There are two fundamental approaches to profiling.
 The first is {instrumentation}: the toolchain (compiler or
 linker) inserts extra code at each function entry and exit to
-record call counts and elapsed time. This is what \plan's
+record call counts and elapsed time.
+%
+This is what \plan's
 [[prof]] does---the linker [[5l -p]] inserts calls to
 [[_profin]] and [[_profout]] around every function.
 The result is a precise call tree with exact counts, but
@@ -315,7 +309,9 @@ The second approach is {sampling}: the kernel periodically
 interrupts the running program (typically on each clock tick)
 and records its current program counter. After enough
 samples, the histogram reveals where the program spends
-most of its time. This is what [[tprof]] does, via the
+most of its time.
+%
+This is what [[tprof]] does, via the
 [[/proc/<pid>/profile]] file. Sampling has low overhead
 but gives only statistical estimates---it cannot tell you
 how many times a function was called, only how often the
@@ -552,6 +548,11 @@ phases, giving a representative picture.}
 
 \subsection{Instrumentation profilers}
 
+%Jon Bentley's toy profiler
+% see programming pearl
+%see also my profiling OCaml poor's man profiler -profile!
+
+
 %yoann: give more details on how instrumentation works, and maybe talk about count, time, and also call graph
 %claude:
 An {instrumentation profiler} modifies the program so that
@@ -629,6 +630,8 @@ that consumes too many context switches or syscalls.
 
 \section{[[time]] command-line interface}
 
+% simplest: time command (or time /path/to/command)
+
 <<[[main()]](time.c) usage if no args>>=
 if(argc <= 1){
     fprint(2, "usage: time command\n");
@@ -651,6 +654,7 @@ the program's symbol table. For each function, it prints
 the percentage of time spent there, the absolute time, and
 the call count. The [[-d]] flag prints the dynamic call
 graph instead, showing the tree of calls indented by depth.
+%yoann1: say default to prof.out but in practice prof.pid so need pass in argv[1]
 
 %claude:
 [[tprof]] works differently: it reads
@@ -751,25 +755,41 @@ proxy and reports how many [[read]], [[stat]], and
 
 %claude:
 To get a feel for the tools, consider profiling the simplest
-possible program, [[hello]]. 
+possible program, [[hello.c]]:
+
+% now in ROOT/tests/prof/hello.c
+<<hello.c>>=
+#include <u.h>
+#include <libc.h>
+
+void main() {
+  print("hello world\n");
+  exits(nil);
+}
+@
 
 
 %yoann: maybe show simple example of hello.c calling bar and foo in different loops so can also see callgraph
 %claude:
 For a more interesting example, consider a program that
 calls [[foo]] in a loop and [[bar]] once, where [[foo]]
-itself calls [[bar]]:
-\begin{verbatim}
-  void bar(void) { /* some work */ }
-  void foo(void) { bar(); /* more work */ }
-  void main(void) {
-      int i;
-      for(i = 0; i < 100; i++)
-          foo();
-      bar();
-      exits(nil);
-  }
-\end{verbatim}
+itself calls [[bar]] as in [[funcs.c]]:
+
+% now in ROOT/tests/prof/funcs.c
+<<funcs.c>>=
+#include <u.h>
+#include <libc.h>
+
+void bar(void) { /* some work */ }
+void foo(void) { bar(); /* more work */ }
+void main(void) {
+    int i;
+    for(i = 0; i < 100; i++)
+        foo();
+    bar();
+    exits(nil);
+}
+@
 
 With [[time]]:
 \begin{verbatim}
@@ -785,23 +805,45 @@ With [[prof]], you first link with [[-p]] to enable
 instrumentation, run the program, then display the results:
 \begin{verbatim}
   % 5l -p -o hello hello.5
-  % hello
-  % prof hello
-    %     Time    Calls  Name
-   60.0    0.06      100  foo
-   30.0    0.03      101  bar
-   10.0    0.01        1  main
+  % ./hello
+  hello world
+  % prof hello hello.42
+     %     Time    Calls  Name
+   80.0    0.004       1  main
+   20.0    0.001       1  libc_print
+    0.0    0.000       1  memset
+    0.0    0.000       1  getpid
+    0.0    0.000       1  read
+...
 \end{verbatim}
+
+For [[funcs]] we get instead:
+
+\begin{verbatim}
+  % 5l -p -o funcs funcs.5
+  % ./funcs
+  % prof funcs funcs.42
+    %     Time    Calls  Name
+  100.0   0.003       1  main
+    0.0   0.000       1  memset
+    0.0   0.000     101  bar
+    0.0   0.000     100  foo
+...
+\end{verbatim}
+
 
 %yoann: maybe also show session with prof -d for call graph?
 %claude:
 The [[-d]] flag shows the dynamic call graph instead:
 \begin{verbatim}
-  % prof -d hello
-  main:10/1
-    foo:60/100
-      bar:20/100
-    bar:10/1
+  % prof -d funcs funcs.42
+  main:3
+  . foo:0/100
+  .   bar:0/100
+  . bar:0
+  . getpid:0
+  .   memset:0
+...
 \end{verbatim}
 This reveals that [[bar]] was called from two sites:
 100 times from [[foo]] and once directly from [[main]].
@@ -1403,6 +1445,7 @@ The three time values in [[Waitmsg]] are in milliseconds.
 The formatting divides by 1000 for the integer part and
 extracts hundredths from the remainder, appending [[u]]
 (user), [[s]] (system), or [[r]] (real).
+%yoann1: maybe concrete ex, like if get user = 15050 => will display ?
 
 <<global [[output]](time.c)>>=
 char	output[4096];
@@ -1421,7 +1464,7 @@ add(char *a, ...)
     va_start(arg, a);
     vseprint(output+strlen(output), output+sizeof(output), a, arg);
     va_end(arg);
-    beenhere++;
+    beenhere = true;
 }
 @
 
@@ -1500,6 +1543,14 @@ Besides the timing data, [[time]] also prints the command
 line (truncated to 4 arguments) and, if the child exited
 with an error, the exit status string.
 
+See for instance:
+\begin{verbatim}
+% time ls /xxx
+ls: /xxx: '/xxx' file does not exit
+0.00u 0.01s 0.02r     ls /xxx # status= errors
+% 
+\end{verbatim}
+
 <<[[main()]](time.c) other locals>>=
 int i;
 char *p;
@@ -1539,6 +1590,8 @@ if(w->msg[0]){
 \label{chap:prof}
 
 \section{Data structures}
+
+% this must be same data structures generated by linker but here we read them
 
 <<struct [[Data]]>>=
 struct Data
