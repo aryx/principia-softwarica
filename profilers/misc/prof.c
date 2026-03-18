@@ -13,6 +13,7 @@ struct Data
 {
     ushort	down;
     ushort	right;
+
     ulong	pc;
     ulong	count;
     ulong	time;
@@ -38,6 +39,7 @@ struct Acc
 /*e: struct [[Acc]] */
 
 /*s: global [[data]] */
+// ref_own<array<Data> (len = ndata)
 Data*	data;
 /*e: global [[data]] */
 /*s: global [[acc]] */
@@ -50,6 +52,7 @@ ulong	ms;
 long	nsym;
 /*e: global [[nsym]] */
 /*s: global [[ndata]] */
+// len(data)
 long	ndata;
 /*e: global [[ndata]] */
 /*s: global [[dflag]] */
@@ -82,39 +85,54 @@ main(int argc, char *argv[])
 {
     char *s;
 
+    /*s: [[main()]](prof.c) adjust [[tabstop]] */
     s = getenv("tabstop");
     if(s!=nil && strtol(s,0,0)>0)
         tabstop = strtol(s,0,0);
+    /*e: [[main()]](prof.c) adjust [[tabstop]] */
+
     ARGBEGIN{
+    /*s: [[main()]](prof.c) command-line parsing */
     case 'v':
         verbose = 1;
         break;
+    /*x: [[main()]](prof.c) command-line parsing */
     case 'd':
         dflag = 1;
         break;
+    /*x: [[main()]](prof.c) command-line parsing */
     case 'r':
         rflag = 1;
         break;
+    /*e: [[main()]](prof.c) command-line parsing */
     default:
-        fprint(2, "usage: prof [-dr] [8.out] [prof.out]\n");
+        /*s: [[main()]](prof.c) print usage and exit */
+        fprint(STDERR, "usage: prof [-dr] [8.out] [prof.out]\n");
         exits("usage");
+        /*e: [[main()]](prof.c) print usage and exit */
     }ARGEND
-    Binit(&bout, 1, OWRITE);
+
+    Binit(&bout, STDOUT, OWRITE);
+
     if(argc > 0)
         syms(argv[0]);
     else
         syms(defaout());
+
     if(argc > 1)
         datas(argv[1]);
     else
         datas("prof.out");
+
     if(ndata){
+        /*s: [[main()]](prof.c) if [[dflag]] */
         if(dflag)
             graph(0, data[0].down, 0);
+        /*e: [[main()]](prof.c) if [[dflag]] */
         else
             plot();
     }
-    exits(0);
+    exits(nil);
 }
 /*e: function main (misc/prof.c) */
 
@@ -155,22 +173,27 @@ void
 syms(char *cout)
 {
     Fhdr f;
-    int fd;
+    fdt fd;
 
-    if((fd = open(cout, 0)) < 0){
+    fd = open(cout, 0);
+    /*s: [[syms()]] sanity check [[fd]] */
+    if(fd < 0){
         perror(cout);
         exits("open");
     }
+    /*e: [[syms()]] sanity check [[fd]] */
     if (!crackhdr(fd, &f)) {
-        fprint(2, "can't read text file header\n");
+        fprint(STDERR, "can't read text file header\n");
         exits("read");
     }
+    /*s: [[syms()]] sanity check [[f.type]] */
     if (f.type == FNONE) {
-        fprint(2, "text file not an a.out\n");
+        fprint(STDERR, "text file not an a.out\n");
         exits("file type");
     }
+    /*e: [[syms()]] sanity check [[f.type]] */
     if (syminit(fd, &f) < 0) {
-        fprint(2, "syminit: %r\n");
+        fprint(STDERR, "syminit: %r\n");
         exits("syms");
     }
     close(fd);
@@ -181,27 +204,34 @@ syms(char *cout)
 void
 datas(char *dout)
 {
-    int fd;
+    fdt fd;
     Dir *d;
     int i;
 
-    if((fd = open(dout, 0)) < 0){
+    fd = open(dout, 0);
+    /*s: [[datas()]] sanity check [[fd]] */
+    if(fd < 0){
         perror(dout);
         exits("open");
     }
+    /*e: [[datas()]] sanity check [[fd]] */
     d = dirfstat(fd);
+    /*s: [[datas()]] sanity check [[d]] */
     if(d == nil){
         perror(dout);
         exits("stat");
     }
+    /*e: [[datas()]] sanity check [[d]] */
     ndata = d->length/sizeof(data[0]);
     data = malloc(ndata*sizeof(Data));
+    /*s: [[datas()]] sanity check [[data]] */
     if(data == 0){
-        fprint(2, "prof: can't malloc data\n");
+        fprint(STDERR, "prof: can't malloc data\n");
         exits("data malloc");
     }
+    /*e: [[datas()]] sanity check [[data]] */
     if(read(fd, data, d->length) != d->length){
-        fprint(2, "prof: can't read data file\n");
+        fprint(STDERR, "prof: can't read data file\n");
         exits("data read");
     }
     free(d);
@@ -232,10 +262,12 @@ graph(int ind, ulong i, Pc *pc)
     long time, count, prgm;
     Pc lpc;
 
+    /*s: [[graph()]] sanity check [[i]] */
     if(i >= ndata){
-        fprint(2, "prof: index out of range %ld [max %ld]\n", i, ndata);
+        fprint(STDERR, "prof: index out of range %ld [max %ld]\n", i, ndata);
         return;
     }
+    /*e: [[graph()]] sanity check [[i]] */
     count = data[i].count;
     time = data[i].time;
     prgm = data[i].pc;
@@ -252,6 +284,7 @@ graph(int ind, ulong i, Pc *pc)
         return;
     lpc.next = pc;
     lpc.pc = prgm;
+
     if(!rflag){
         while(pc){
             if(pc->pc == prgm){
@@ -262,6 +295,7 @@ graph(int ind, ulong i, Pc *pc)
             pc = pc->next;
         }
     }
+
     graph(ind+1, data[i].down, &lpc);
 }
 /*e: function [[graph]] */
@@ -297,14 +331,19 @@ sum(ulong i)
     int k;
     static int indent;
 
+    /*s: [[sum()]] sanity check [[i]] */
     if(i >= ndata){
-        fprint(2, "prof: index out of range %ld [max %ld]\n", i, ndata);
+        fprint(STDERR, "prof: index out of range %ld [max %ld]\n", i, ndata);
         return 0;
     }
+    /*e: [[sum()]] sanity check [[i]] */
+
     j = symind(data[i].pc);
     time = data[i].time;
     if(time < 0)
         time += data[0].time;
+
+    /*s: [[sum()]] if [[verbose]] */
     if (verbose){
         for(k = 0; k < indent; k++)
             print("	");
@@ -314,6 +353,7 @@ sum(ulong i)
         else
             print("	0x%lux\n", data[i].pc);
     }
+    /*e: [[sum()]] if [[verbose]] */
     dtime = 0;
     if(data[i].down != 0xFFFF){
         indent++;
@@ -340,19 +380,24 @@ plot(void)
 
     for (nsym = 0; textsym(&s, nsym); nsym++) {
         acc = realloc(acc, (nsym+1)*sizeof(Acc));
+        /*s: [[plot()]] sanity check [[acc]] */
         if(acc == 0){
             fprint(2, "prof: malloc fail\n");
             exits("acc malloc");
         }
+        /*e: [[plot()]] sanity check [[acc]] */
         acc[nsym].name = s.name;
         acc[nsym].pc = s.value;
         acc[nsym].calls = acc[nsym].ms = 0;
     }
+
     sum(data[0].down);
     qsort(acc, nsym, sizeof(Acc), acmp);
+
     Bprint(&bout, "  %%     Time     Calls  Name\n");
     if(ms == 0)
         ms = 1;
+
     while (--nsym >= 0) {
         if(acc[nsym].calls)
             Bprint(&bout, "%4.1f %8.3f %8lud\t%s\n",
