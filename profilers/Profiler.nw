@@ -627,7 +627,14 @@ that consumes too many context switches or syscalls.
 
 
 
-%\section{[[time]] command-line interface}
+\section{[[time]] command-line interface}
+
+<<[[main()]](time.c) usage if no args>>=
+if(argc <= 1){
+    fprint(2, "usage: time command\n");
+    exits("usage");
+}
+@
 
 \section{[[prof]] and [[tprof]] command-line interfaces}
 %\section{[[kprof]] command-line interface}
@@ -1332,44 +1339,37 @@ binary search to find the enclosing function.
 
 % time: most basic perf tool! and super useful!
 
+\section{[[main()]]}
+
+%yoann: as said in previous section, Waitmsg, fork/exec/wait is all you need
+
 <<function [[main]](time.c)>>=
 void
 main(int argc, char *argv[])
 {
-    int i;
     Waitmsg *w;
     long l;
-    char *p;
-    char err[ERRMAX];
+    <<[[main()]](time.c) other locals>>
 
-    if(argc <= 1){
-        fprint(2, "usage: time command\n");
-        exits("usage");
-    }
+    <<[[main()]](time.c) usage if no args>>
 
     switch(fork()){
+    case 0:
+        // in child
+        exec(argv[1], &argv[1]);
+
+        <<[[main()]](time.c) in child after [[exec]]>>
+        error(argv[1]);
     case -1:
         error("fork");
-    case 0:
-        exec(argv[1], &argv[1]);
-        if(argv[1][0] != '/' && strncmp(argv[1], "./", 2) &&
-           strncmp(argv[1], "../", 3)){
-            sprint(output, "/bin/%s", argv[1]);
-            exec(output, &argv[1]);
-        }
-        error(argv[1]);
     }
+    // else, in parent
 
     notify(notifyf);
 
     loop:
     w = wait();
-    if(w == nil){
-        errstr(err, sizeof err);
-        if(strcmp(err, "interrupted") == 0)
-            goto loop;
-        error("wait");
-    }
+    <<[[main()]](time.c) if [[w == nil]]>>
     l = w->time[0];
     add("%ld.%.2ldu", l/1000, (l%1000)/10);
     l = w->time[1];
@@ -1377,31 +1377,25 @@ main(int argc, char *argv[])
     l = w->time[2];
     add("%ld.%.2ldr", l/1000, (l%1000)/10);
     add("\t");
-    for(i=1; i<argc; i++){
-        add("%s", argv[i], 0);
-        if(i>4){
-            add("...");
-            break;
-        }
-    }
-    if(w->msg[0]){
-        p = utfrune(w->msg, ':');
-        if(p && p[1])
-            p++;
-        else
-            p = w->msg;
-        add(" # status=%s", p);
-    }
-    fprint(2, "%s\n", output);
+
+    <<[[main()]](time.c) display also argv>>
+    <<[[main()]](time.c) display also wait message and status>>
+    fprint(STDERR, "%s\n", output);
     exits(w->msg);
 }
 @
+
+
+<<global [[output]](time.c)>>=
+char	output[4096];
+@
+
 
 <<function [[add]](time.c)>>=
 void
 add(char *a, ...)
 {
-    static int beenhere=0;
+    static bool beenhere=false;
     va_list arg;
 
     if(beenhere)
@@ -1410,6 +1404,41 @@ add(char *a, ...)
     vseprint(output+strlen(output), output+sizeof(output), a, arg);
     va_end(arg);
     beenhere++;
+}
+@
+
+
+<<[[main()]](time.c) in child after [[exec]]>>=
+if(argv[1][0] != '/' && strncmp(argv[1], "./", 2) &&
+   strncmp(argv[1], "../", 3)){
+    sprint(output, "/bin/%s", argv[1]);
+    exec(output, &argv[1]);
+}
+@
+
+\section{[[error management()]]}
+
+<<[[main()]](time.c) other locals>>=
+char err[ERRMAX];
+@
+
+<<function [[error]](time.c)>>=
+static void
+error(char *s)
+{
+
+    fprint(STDERR, "time: %s: %r\n", s);
+    exits(s);
+}
+@
+
+
+<<[[main()]](time.c) if [[w == nil]]>>=
+if(w == nil){
+    errstr(err, sizeof err);
+    if(strcmp(err, "interrupted") == 0)
+        goto loop;
+    error("wait");
 }
 @
 
@@ -1424,19 +1453,35 @@ notifyf(void *a, char *s)
 }
 @
 
-<<global [[output]](time.c)>>=
-char	output[4096];
+
+\section{Extra display}
+
+<<[[main()]](time.c) other locals>>=
+int i;
+char *p;
 @
 
-<<function [[error]](time.c)>>=
-static void
-error(char *s)
-{
-
-    fprint(2, "time: %s: %r\n", s);
-    exits(s);
+<<[[main()]](time.c) display also argv>>=
+for(i=1; i<argc; i++){
+    add("%s", argv[i], 0);
+    if(i>4){
+        add("...");
+        break;
+    }
 }
 @
+
+<<[[main()]](time.c) display also wait message and status>>=
+if(w->msg[0]){
+    p = utfrune(w->msg, ':');
+    if(p && p[1])
+        p++;
+    else
+        p = w->msg;
+    add(" # status=%s", p);
+}
+@
+
 
 %******************************************************************************
 \chapter{Displaying Profiling Data: [[/bin/prof]]}
