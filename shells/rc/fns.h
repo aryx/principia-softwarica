@@ -74,12 +74,7 @@ bool	match(void*, void*, int);
 void *emalloc(long);
 void efree(void *);
 void	Memcpy(void*, void*, long);
-long	Read(int, void*, long);
-long	Write(int, void*, long);
-long	Seek(int, long, long);
-void	Unlink(char*);
 int	Creat(char*);
-int	Dup(int, int);
 int	Opendir(char*);
 int	Readdir(int, void*, int);
 void	Closedir(int);
@@ -89,5 +84,4 @@ void	inttoascii(char*, long);
 void	panic(char*, int);
 void	yyerror(char*);
 void	Exit(char*, char*);
-
 /*e: rc/fns.h */

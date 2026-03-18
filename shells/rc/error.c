@@ -41,5 +41,4 @@ Abort(void)
     Exit("aborting", __LOC__);
 }
 /*e: function [[Abort]] */
-
 /*e: rc/error.c */

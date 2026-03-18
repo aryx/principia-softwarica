@@ -90,5 +90,4 @@ freelist(word *w)
     }
 }
 /*e: function [[freelist]] */
-
 /*e: rc/words.c */

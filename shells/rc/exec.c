@@ -85,7 +85,7 @@ Xappend(void)
         Xerror("can't open");
         return;
     }
-    Seek(f, 0L, 2);
+    seek(f, 0L, SEEK__END);
     pushredir(ROPEN, f, runq->code[runq->pc].i);
     runq->pc++;
     poplist();
@@ -130,7 +130,7 @@ Xdup(void)
 void
 Xeflag(void)
 {
-    if(eflagok && !truestatus()) 
+    if(eflagok && !truestatus())
         Xexit();
 }
 /*e: function [[Xeflag]] */
@@ -784,7 +784,7 @@ Xrdcmds(void)
 void
 Xdelhere(void)
 {
-    Unlink(runq->code[runq->pc++].s);
+    remove(runq->code[runq->pc++].s);
 }
 /*e: function [[Xdelhere]] */
 

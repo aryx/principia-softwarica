@@ -82,8 +82,8 @@ flush(io *f)
     }
     else{
         n = f->bufp-f->buf;
-        if(n && Write(f->fd, f->buf, n) != n){
-            Write(2, "Write error\n", 12);
+        if(n && write(f->fd, f->buf, n) != n){
+            write(2, "Write error\n", 12);
             if(ntrap)
                 dotrap();
         }
@@ -156,7 +156,7 @@ int
 emptybuf(io *f)
 {
     int n;
-    if(f->fd==-1 || (n = Read(f->fd, f->buf, NBUF))<=0) return EOF;
+    if(f->fd==-1 || (n = read(f->fd, f->buf, NBUF))<=0) return EOF;
     f->bufp = f->buf;
     f->ebuf = f->buf + n;
     return *f->bufp++;

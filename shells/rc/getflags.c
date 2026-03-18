@@ -2,7 +2,7 @@
 #include "getflags.h"
 
 extern void	Exit(char*, char*);
-extern long	Write(int, void*, long);
+
 
 static void reverse(char**, char**);
 static int scanflag(int, char*);
@@ -274,7 +274,7 @@ errc(int c)
 {
     *bufp++=c;
     if(bufp==&buf[NBUF] || c=='\n'){
-        Write(2, buf, bufp-buf);
+        write(2, buf, bufp-buf);
         bufp = buf;
     }
 }

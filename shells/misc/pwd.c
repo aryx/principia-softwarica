@@ -13,7 +13,7 @@ main(int argc, char *argv[])
 
     USED(argc, argv);
     if(getwd(pathname, sizeof(pathname)) == 0) {
-        fprint(STDERR, "pwd: %r\n");
+        fprint(2, "pwd: %r\n");
         exits("getwd");
     }
     print("%s\n", pathname);

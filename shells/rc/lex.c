@@ -266,7 +266,7 @@ int yylex(void)
                 t->rtype = APPEND;
                 *w++=c;
             }
-            else 
+            else
                 t->rtype = WRITE;
             t->fd0 = 1;
             break;

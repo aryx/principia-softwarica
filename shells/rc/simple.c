@@ -118,13 +118,13 @@ doredir(redir *rp)
         /*s: [[doredir()]] switch redir type cases */
         case ROPEN:
             if(rp->from != rp->to){
-                Dup(rp->from, rp->to);
+                dup(rp->from, rp->to);
                 close(rp->from);
             }
             break;
         /*x: [[doredir()]] switch redir type cases */
         case RDUP:
-            Dup(rp->from, rp->to);
+            dup(rp->from, rp->to);
             break;
         /*x: [[doredir()]] switch redir type cases */
         case RCLOSE:
@@ -195,5 +195,4 @@ execcmds(io *f)
     runq->iflast = false;
 }
 /*e: function [[execcmds]] */
-
 /*e: rc/simple.c */

@@ -26,5 +26,4 @@ searchpath(char *w)
     return path;
 }
 /*e: function [[searchpath]] */
-
 /*e: rc/path.c */

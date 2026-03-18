@@ -34,5 +34,4 @@ code *codebuf;				/* compiler output */
 /*s: global [[eflagok]] */
 bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
 /*e: global [[eflagok]] */
-
 /*e: rc/globals.c */

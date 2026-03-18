@@ -120,5 +120,4 @@ void execexec(void);
 void execcmds(io *);
 // processes.c
 int  execforkexec(void);
-
 /*e: rc/exec.h */

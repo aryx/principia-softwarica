@@ -42,8 +42,8 @@ void main(int argc, char *argv[])
     /*x: [[main()]] argc argv processing, modify flags */
     if(flag['I'])
         flag['i'] = nil;
-    else 
-        if(flag['i']==nil && argc==1 && Isatty(STDIN)) 
+    else
+        if(flag['i']==nil && argc==1 && Isatty(STDIN))
            flag['i'] = flagset;
     /*e: [[main()]] argc argv processing, modify flags */
 
@@ -124,5 +124,4 @@ void main(int argc, char *argv[])
     /*e: [[main()]] interpreter loop */
 }
 /*e: function main (rc/exec.c) */
-
 /*e: rc/main.c */

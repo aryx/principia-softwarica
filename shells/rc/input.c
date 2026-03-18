@@ -239,6 +239,4 @@ klook(char *name)
     return t;
 }
 /*e: function [[klook]] */
-
-
 /*e: rc/input.c */

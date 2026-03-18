@@ -124,7 +124,6 @@ e1(void)
     return(p1);
 }
 /*e: function [[e1]] */
-
 /*s: function [[e2]] */
 int
 e2(void)
@@ -135,7 +134,6 @@ e2(void)
     return(e3());
 }
 /*e: function [[e2]] */
-
 /*s: function [[e3]] */
 bool
 e3(void)
@@ -284,7 +282,6 @@ isdir(char *f)
     return hasmode(f, DMDIR);
 }
 /*e: function [[isdir]] */
-
 /*s: function [[isreg]] */
 bool
 isreg(char *f)
@@ -424,7 +421,6 @@ isolder(char *pin, char *f)
     return r;
 }
 /*e: function [[isolder]] */
-
 /*s: function [[isolderthan]] */
 int
 isolderthan(char *a, char *b)
@@ -443,7 +439,6 @@ isolderthan(char *a, char *b)
     return r;
 }
 /*e: function [[isolderthan]] */
-
 /*s: function [[isnewerthan]] */
 int
 isnewerthan(char *a, char *b)

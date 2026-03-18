@@ -564,5 +564,4 @@ builtin builtins[] = {
     0
 };
 /*e: global [[builtins]] */
-
 /*e: rc/builtins.c */

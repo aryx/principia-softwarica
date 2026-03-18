@@ -198,5 +198,4 @@ Xreturn(void)
         Exit(getstatus(), __LOC__);
 }
 /*e: function [[Xreturn]] */
-
 /*e: rc/executils.c */

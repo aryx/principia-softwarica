@@ -159,5 +159,4 @@ tree* simplemung(tree *t)
     return t;
 }
 /*e: function [[simplemung]] */
-
 /*e: rc/tree.c */

@@ -254,5 +254,4 @@ extern int lastc;
 extern bool lastword;
 // error.c
 extern int nerror;	/* number of errors encountered during compilation */
-
 /*e: rc/rc.h */

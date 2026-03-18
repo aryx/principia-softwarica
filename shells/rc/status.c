@@ -51,5 +51,4 @@ concstatus(char *s, char *t)
     return v;
 }
 /*e: function [[concstatus]] */
-
 /*e: rc/status.c */

@@ -502,5 +502,4 @@ Closedir(int f)
     close(f);
 }
 /*e: function [[Closedir]] */
-
 /*e: rc/plan9.c */

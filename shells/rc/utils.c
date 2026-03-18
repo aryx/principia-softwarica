@@ -10,35 +10,12 @@
 // Opendir, Closedir and so on are back in plan9.c
 
 /*s: function [[Unlink]] */
-void
-Unlink(char *name)
-{
-    remove(name);
-}
 /*e: function [[Unlink]] */
-
 /*s: function [[Write]] */
-long
-Write(int fd, void *buf, long cnt)
-{
-    return write(fd, buf, cnt);
-}
 /*e: function [[Write]] */
-
 /*s: function [[Read]] */
-long
-Read(int fd, void *buf, long cnt)
-{
-    return read(fd, buf, cnt);
-}
 /*e: function [[Read]] */
-
 /*s: function [[Seek]] */
-long
-Seek(int fd, long cnt, long whence)
-{
-    return seek(fd, cnt, whence);
-}
 /*e: function [[Seek]] */
 
 /*s: function [[Creat]] */
@@ -50,11 +27,6 @@ Creat(char *file)
 /*e: function [[Creat]] */
 
 /*s: function [[Dup]] */
-int
-Dup(int a, int b)
-{
-    return dup(a, b);
-}
 /*e: function [[Dup]] */
 
 
@@ -118,5 +90,4 @@ inttoascii(char *s, long n)
     *bp='\0';
 }
 /*e: function [[inttoascii]] */
-
 /*e: rc/utils.c */
