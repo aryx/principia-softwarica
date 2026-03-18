@@ -51,8 +51,13 @@ Yoann Padioleau\\
 \texttt{yoann.padioleau@gmail.com}\\
 \\
 with code from\\
-??
+Ken Thompson and
+Rob Pike
 }
+% prof/tprof/kprof/time: Ken Thompson (part of his compiler toolchain)
+% stats: Rob Pike (graphical tools were his domain)
+% trace: unclear, maybe Sape Mullender (real-time Plan 9 work)
+% iostats: unclear, maybe Dave Presotto or Sean Dorward (file server infra)
 
 \maketitle 
 %\onecolumn
@@ -262,6 +267,15 @@ instruments function calls.
 %******************************************************************************
 \chapter{Overview}
 %******************************************************************************
+\label{chap:overview}
+
+%claude:
+In this chapter, I will give a bird's-eye view of the \plan
+profiling tools before diving into the code in later chapters.
+I will first recall general profiling principles, then present
+the command-line interfaces of each tool, show a sample
+profiling session, and finally describe the software
+architecture and code organization.
 
 \section{Profiler principles}
 
@@ -278,6 +292,36 @@ instruments function calls.
 % - see jeff's dean big number everyone should now
 % - http://www.eecs.berkeley.edu/~rcs/research/interactive_latency.html
 
+%claude:
+There are two fundamental approaches to profiling.
+The first is {instrumentation}: the toolchain (compiler or
+linker) inserts extra code at each function entry and exit to
+record call counts and elapsed time. This is what \plan's
+[[prof]] does---the linker [[5l -p]] inserts calls to
+[[_profin]] and [[_profout]] around every function.
+The result is a precise call tree with exact counts, but
+the overhead can be significant.
+
+%claude:
+The second approach is {sampling}: the kernel periodically
+interrupts the running program (typically on each clock tick)
+and records its current program counter. After enough
+samples, the histogram reveals where the program spends
+most of its time. This is what [[tprof]] does, via the
+[[/proc/\emph{pid}/profile]] file. Sampling has low overhead
+but gives only statistical estimates---it cannot tell you
+how many times a function was called, only how often the
+CPU was found executing within it.
+
+%claude:
+The \plan profiling tools also include a third category:
+{tracing} and {monitoring}. [[trace]] shows real-time
+scheduler events (process switches, deadlines, releases)
+in a graphical timeline, while [[stats]] displays rolling
+graphs of system-wide counters (syscalls/sec, context
+switches, memory usage, etc.). These tools do not profile
+a single program but rather observe the whole system.
+
 
 
 
@@ -287,7 +331,52 @@ instruments function calls.
 \section{[[prof]] and [[tprof]] command-line interfaces}
 %\section{[[kprof]] command-line interface}
 
+%claude:
+[[prof]] reads a profile data file ([[prof.\emph{pid}]])
+produced by an instrumented program and correlates it with
+the program's symbol table. For each function, it prints
+the percentage of time spent there, the absolute time, and
+the call count. The [[-d]] flag prints the dynamic call
+graph instead, showing the tree of calls indented by depth.
+
+%claude:
+[[tprof]] works differently: it reads
+[[/proc/\emph{pid}/profile]], which contains
+interrupt-time samples of the program counter collected
+by the kernel. Since sampling cannot track calls,
+[[tprof]] has no [[-d]] (call graph) option---it only
+reports time per function.
+To enable sampling, you first write ``[[profile]]'' to
+[[/proc/\emph{pid}/ctl]], let the program run, then
+run [[tprof \emph{pid}]] while the process is still alive.
+
+%claude:
+[[kprof]] is a variant of [[prof]] that profiles the
+kernel itself. It reads the data accumulated by the
+[[kprof(3)]] device ([[/dev/kpdata]]), which records
+one count per clock tick per 8-byte range of kernel text.
+
 \section{[[trace]] and [[stats]] graphical user interfaces}
+
+%claude:
+[[trace]] and [[stats]] are graphical programs that display
+system activity in real time.
+[[trace]] reads events from [[/proc/trace]] and draws a
+timeline for each traced process: colored blocks show
+when a process is running, and arrows mark scheduling
+events (releases, deadlines, yields, overruns).
+The user can zoom in and out with [[+]]/[[-]] and pause
+with [[p]].
+
+%claude:
+[[stats]] reads counters from kernel pseudo-files
+([[#c/sysstat]], [[#c/swap]], [[/net/ether0/0/stats]])
+and plots rolling graphs updated once per second.
+It can display dozens of metrics: system load, memory
+usage, context switches, syscalls, interrupts, TLB
+misses, network packets, and more. It can even monitor
+multiple machines simultaneously, drawing their graphs
+in adjacent columns.
 
 <<function usage (misc/stats.c)>>=
 void
@@ -300,7 +389,21 @@ usage(void)
 
 \section{[[iostats]] filesystem interface}
 
-
+%claude:
+[[iostats]] takes yet another approach: it is a
+user-level {file server} that interposes itself between a
+program and the regular file server, intercepting all 9P
+messages. When the program exits, [[iostats]] prints a
+report showing how much data was read and written, the
+number and latency of each 9P message type, and a
+per-file I/O summary.
+This is a classic \plan design: instead of adding
+tracing hooks inside the kernel, you insert a proxy file
+server in the namespace.
+%
+For example, [[iostats ls]] runs [[ls]] through the
+proxy and reports how many [[read]], [[stat]], and
+[[open]] messages that simple command generates.
 
 \section{Profiling [[hello]]}
 
@@ -311,7 +414,70 @@ usage(void)
 % stats
 % iostats
 
+%claude:
+To get a feel for the tools, consider profiling the simplest
+possible program, [[hello]]. With [[time]], you would run:
+\begin{verbatim}
+  time hello
+\end{verbatim}
+and see something like [[0.00u 0.00s 0.01r]]---user time,
+system time, and real (wall-clock) time, all in seconds.
+%
+With [[prof]], you would first link [[hello]] with
+[[-p]] to enable instrumentation, run it to produce a
+[[prof.\emph{pid}]] file, then run [[prof hello]] to see
+which functions were called and how long they took.
+%
+With [[tprof]], you would start [[hello]] (or a
+longer-running variant), enable profiling via
+[[/proc/\emph{pid}/ctl]], and then run
+[[tprof \emph{pid}]] to see the sampling histogram.
+%
+With [[iostats hello]], you would see the 9P messages
+generated by [[hello]]'s call to [[write]] on
+[[/dev/cons]].
+
 \section{Code organization}
+
+%claude:
+Table~\ref{tab:code-orga} presents the source files of
+the profiling tools, together with the main entities
+(e.g., structures, functions) each file defines and the
+corresponding chapter in which its code is discussed.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Function}                 & {\bf Ch.}                     & {\bf File}        & {\bf Entities}                                       & {\bf LOC} \\
+\otoprule
+timing a command               & \ref{chap:time}               & [[misc/time.c]]   & [<main()>] [<add()>]                                 & 111 \\
+\midrule
+profiling data structures      & \ref{chap:prof}               & [[misc/prof.c]]   & [<Data>] [<Pc>] [<Acc>]                              & 414 \\
+profiling display              & \ref{chap:prof}               & [[misc/prof.c]]   & [<main()>] [<syms()>] [<graph()>] [<plot()>]         &     \\
+\midrule
+sampling profiler              & \ref{chap:tprof}              & [[misc/tprof.c]]  & [<main()>] [[COUNTER]]                               & 159 \\
+\midrule
+kernel profiler                & \ref{chap:kprof}              & [[misc/kprof.c]]  & [<main()>] [[COUNTER]]                               & 154 \\
+\midrule
+trace data structures          & \ref{chap:trace}              & [[misc/trace.c]]  & [<TEvent>] [<Task>]                                  & 841 \\
+trace GUI                      & \ref{chap:trace}              & [[misc/trace.c]]  & [<threadmain()>] [<doevent()>] [<drawtrace()>]       &     \\
+\midrule
+stats data structures          & \ref{chap:stats}              & [[misc/stats.c]]  & [<Graph>] [<Machine>]                                & 1622 \\
+stats GUI                      & \ref{chap:stats}              & [[misc/stats.c]]  & [<main()>] [<mkcol()>]                               &     \\
+\midrule
+iostats data structures        & \ref{chap:iostats}            & [[iostats/statfs.h]] & [[Fid]] [[Stats]] [[Rpc]]                         & 174 \\
+iostats file server            & \ref{chap:iostats}            & [[iostats/iostats.c]] & [[main()]]                                       & 638 \\
+9P message handling            & \ref{chap:iostats}            & [[iostats/statsrv.c]] & [[rread()]] [[rwrite()]]                         & 726 \\
+iostats globals                & \ref{chap:iostats}            & [[iostats/globals.c]] &                                                  & 45 \\
+\otoprule
+Total                          &                               &                   &                                                      & 4884 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and source files of the profiling tools.}
+\label{tab:code-orga}
+\end{table*}
 
 \section{Software Architecture}
 
@@ -323,13 +489,51 @@ usage(void)
 
 %prof
 
+%claude:
+The profiling infrastructure spans three layers of the
+system. At the bottom, the \emph{kernel} provides the raw
+data: the [[Waitmsg.time]] array (user/sys/real times for
+[[time]]), the [[/proc/\emph{pid}/profile]] file (PC
+sampling histogram for [[tprof]]), [[/proc/trace]]
+(scheduler events for [[trace]]), and
+[[/dev/kpdata]] (kernel PC histogram for [[kprof]]).
+%
+In the middle, the \emph{linker} ([[5l -p]]) instruments
+programs by inserting calls to [[_profin]]/[[_profout]]
+at function entry and exit, and the runtime library
+([[lib_core/libc/profile.c]]) manages the profiling
+buffer and writes [[prof.\emph{pid}]] on exit.
+%
+At the top, the \emph{user-space tools} presented in this
+book read this data, correlate it with symbol tables, and
+present it to the programmer.
+
 \section{Book structure}
+
+%claude:
+The rest of the book is organized as follows.
+Chapters~\ref{chap:kernel-support} and~\ref{chap:linker-support}
+describe the infrastructure that the profiling tools depend on:
+how the kernel exposes timing data and PC histograms, and how
+the linker instruments function calls.
+%
+Then each tool gets its own chapter:
+[[time]] (Chapter~\ref{chap:time}, the simplest tool),
+[[prof]] (Chapter~\ref{chap:prof}, instrumentation-based profiling),
+[[tprof]] (Chapter~\ref{chap:tprof}, sampling-based profiling),
+[[kprof]] (Chapter~\ref{chap:kprof}, kernel profiling),
+[[trace]] (Chapter~\ref{chap:trace}, real-time scheduler visualization),
+[[stats]] (Chapter~\ref{chap:stats}, system-wide monitoring),
+and [[iostats]] (Chapter~\ref{chap:iostats}, 9P tracing file server).
+%
+Chapter~\ref{chap:conclusion} concludes.
 
 %###############################################################################
 
 %******************************************************************************
 \chapter{Kernel Support}
 %******************************************************************************
+\label{chap:kernel-support}
 
 %coupling: imitate Profiling support chapter in Kernel.nw
 \section{Wait message}
@@ -349,6 +553,7 @@ usage(void)
 %******************************************************************************
 \chapter{Linker Support}
 %******************************************************************************
+\label{chap:linker-support}
 
 % 5l -p or -p1, instrument
 % for /bin/prof
@@ -367,6 +572,7 @@ usage(void)
 %******************************************************************************
 \chapter{Timing a Command: [[/bin/time]]}
 %******************************************************************************
+\label{chap:time}
 
 % time: most basic perf tool! and super useful!
 
@@ -479,6 +685,7 @@ error(char *s)
 %******************************************************************************
 \chapter{Displaying Profiling Data: [[/bin/prof]]}
 %******************************************************************************
+\label{chap:prof}
 
 \section{Data structures}
 
@@ -896,6 +1103,7 @@ defaout(void)
 %******************************************************************************
 \chapter{Multiprocess profiler: [[/bin/tprof]]}
 %******************************************************************************
+\label{chap:tprof}
 % use /proc/pid/profile
 
 \section{Data structures}
@@ -1059,6 +1267,7 @@ compar(void *va, void *vb)
 %******************************************************************************
 \chapter{Profiling the Kernel: [[/bin/kprof]]}
 %******************************************************************************
+\label{chap:kprof}
 
 <<function main (misc/kprof.c)>>=
 void
@@ -1214,6 +1423,7 @@ compar(void *va, void *vb)
 %******************************************************************************
 \chapter{Show real-time Behavior: [[/bin/trace]]}
 %******************************************************************************
+\label{chap:trace}
 
 \section{Data structures}
 
@@ -1960,6 +2170,7 @@ timeconv(Fmt *f)
 %******************************************************************************
 \chapter{System Monitoring [[/bin/stats]]}
 %******************************************************************************
+\label{chap:stats}
 
 \section{Data structures}
 
@@ -2375,12 +2586,14 @@ main(int argc, char *argv[])
 %******************************************************************************
 \chapter{IO Monitoring: [[/bin/iostats]]}
 %******************************************************************************
+\label{chap:iostats}
 % file server! classic plan9!
 
 
 %******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
+\label{chap:conclusion}
 
 %###############################################################################
 
@@ -2393,6 +2606,7 @@ main(int argc, char *argv[])
 %\chapter{Utilities}
 
 \chapter{Extra Code}
+\label{chap:extra}
 
 #include "Profiler_extra.nw"
 
