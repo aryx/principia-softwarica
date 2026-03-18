@@ -1,4 +1,6 @@
 /*s: rc/getflags.c */
+#include <u.h>
+#include <libc.h>
 #include "getflags.h"
 
 extern void	Exit(char*, char*);
