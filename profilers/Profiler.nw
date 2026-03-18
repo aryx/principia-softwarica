@@ -476,6 +476,60 @@ a multiple of [[HZ]] avoids {aliasing}---without this,
 the profiler might systematically miss code that runs
 in sync with the clock.
 
+%yoann: similar tikz diagram illustrating the aliasing problem
+%claude:
+\begin{figure}[h]\centering
+\begin{tikzpicture}[xscale=0.55, yscale=1]
+  % ---- Common: program execution pattern (repeats every 4 ticks) ----
+  \def\yhi{3.6} \def\ylo{3.0}
+  \def\drawpattern#1{
+    % repeating pattern: compute(3) then io(1)
+    \foreach \base in {0,4,8,12,16} {
+      \fill[blue!25] (\base,#1-0.3) rectangle (\base+3,#1+0.3);
+      \fill[orange!25] (\base+3,#1-0.3) rectangle (\base+4,#1+0.3);
+    }
+  }
+
+  % ---- Top: aliased sampling (profclock = HZ, samples at every tick) ----
+  \node[left, font=\small\bfseries, align=right] at (-0.3, 1.7) {bad:\\same freq};
+  \drawpattern{1.7}
+  % HZ ticks
+  \foreach \i in {0,1,...,20} {
+    \draw[gray!40, dashed] (\i, 1.1) -- (\i, 2.3);
+  }
+  % samples land at 0,4,8,12,16 (always at start of compute)
+  \foreach \i in {0,4,8,12,16} {
+    \draw[->, red, thick] (\i, 2.5) -- (\i, 2.05);
+  }
+  \node[above, font=\scriptsize, red] at (8, 2.5) {samples always hit same phase};
+
+  % ---- Bottom: non-aliased sampling (profclock = 113/HZ, offset) ----
+  \node[left, font=\small\bfseries, align=right] at (-0.3, 0.0) {good:\\diff freq};
+  \drawpattern{0.0}
+  \foreach \i in {0,1,...,20} {
+    \draw[gray!40, dashed] (\i, -0.6) -- (\i, 0.6);
+  }
+  % samples at non-aligned positions (roughly every 3.5 ticks)
+  \foreach \x in {0, 3.5, 7.1, 10.6, 14.2, 17.7} {
+    \draw[->, green!50!black, thick] (\x, 0.8) -- (\x, 0.35);
+  }
+  \node[above, font=\scriptsize, green!50!black] at (8, 0.8) {samples walk across phases};
+
+  % legend
+  \fill[blue!25] (3,-1.2) rectangle (4,-0.9);
+  \node[right, font=\scriptsize] at (4,-1.05) {compute};
+  \fill[orange!25] (8,-1.2) rectangle (9,-0.9);
+  \node[right, font=\scriptsize] at (9,-1.05) {I/O};
+\end{tikzpicture}
+\caption{The aliasing problem. Top: when the profiling timer fires
+at the same frequency as the program's repeating pattern, every
+sample hits the same phase (here, always ``compute''), missing
+the I/O portion entirely. Bottom: using a different frequency
+(e.g., 113 instead of 100), samples gradually walk across all
+phases, giving a representative picture.}
+\label{fig:aliasing}
+\end{figure}
+
 \subsection{Instrumentation profilers}
 
 %yoann: give more details on how instrumentation works, and maybe talk about count, time, and also call graph
@@ -1037,6 +1091,11 @@ This strategy has lower overhead than [[5l -p]] (no function
 call, just a load-increment-store) but provides less
 information: you learn which functions are hot by call count,
 but not how much time each call takes.
+
+\section{The symbol table}
+
+%yoann: explain last important piece which is map PC to function names, possible thx to linker and exec symbol table (itself possibly extended by compiler?)
+
 
 %******************************************************************************
 %\chapter{Core Data Structures}
