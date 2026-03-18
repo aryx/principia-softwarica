@@ -669,9 +669,71 @@ the runtime writes this data to [[prof.<pid>]].
 % 5l -p or -p1, instrument
 % for /bin/prof
 
+%claude:
+In this chapter, I will summarize how the linker [[5l]]
+instruments programs for profiling. The full details can be
+found in \book{Linker}; here I present just enough to
+understand how [[prof]] gets its data.
+
+%claude:
+Surprisingly, in \plan profiling is enabled by a flag of
+the \emph{linker} ([[5l -p]]), not the compiler. This is
+possible because the linker operates on the instruction
+stream and can insert extra instructions after [[TEXT]]
+(function entry) and before [[RET]] (function return).
+The linker supports two profiling strategies, selected
+by [[5l -p]] (the default) or [[5l -p -1]].
+
 \section{[[5l -p]]}
 
+%claude:
+The default strategy ([[5l -p]]) measures the \emph{time
+spent in each function}. The linker inserts a [[BL _profin]]
+call right after every [[TEXT]] instruction and a
+[[BL _profout]] call right before every [[RET]]:
+\begin{verbatim}
+  TEXT foo(SB), $0       TEXT foo(SB), $0
+                   ->    BL _profin(SB)
+  ...                    ...
+                         BL _profout(SB)
+  RET              ->    RET
+\end{verbatim}
+The [[_profin()]] and [[_profout()]] functions are implemented
+in [[lib_core/libc/profile.c]]. They use the [[Tos]]
+structure (described in the previous chapter) to read the
+current time without making a system call, and maintain a
+linked list of profiling records that track the call tree.
+
+%claude:
+The [[-p]] flag also changes the program's entry point from
+[[_main]] to [[_mainp]], which calls [[_profmain()]] to
+initialize the profiling data structures before entering
+[[main()]]. When the program exits, the runtime writes
+the accumulated data to [[prof.<pid>]], which [[/bin/prof]]
+then reads.
+
 \section{[[5l -p1]]}
+
+%claude:
+The simpler strategy ([[5l -p -1]]) only counts \emph{how
+many times each function is called}, without measuring time.
+The linker allocates a global array [[__mcount]] where each
+function gets two 4-byte entries: one for the function's
+address and one for the call count. After each [[TEXT]]
+instruction, the linker inserts three instructions that
+load the counter, increment it, and store it back:
+\begin{verbatim}
+  TEXT foo(SB), $0       TEXT foo(SB), $0
+                   ->    MOVW __mcount+8(SB), R11
+                         ADD  $1, R11
+  ...                    MOVW R11, __mcount+8(SB)
+                         ...
+  RET              ->    RET
+\end{verbatim}
+This strategy has lower overhead than [[5l -p]] (no function
+call, just a load-increment-store) but provides less
+information: you learn which functions are hot by call count,
+but not how much time each call takes.
 
 %******************************************************************************
 %\chapter{Core Data Structures}
