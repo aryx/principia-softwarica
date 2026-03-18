@@ -84,11 +84,11 @@ a few {profilers}.
 
 \section{Motivations}
 
-Why a profiler? Because I think you are a better programmer if
-you fully understand how things work under the hood.
+%Why a profiler? Because I think you are a better programmer if
+%you fully understand how things work under the hood.
 
 %claude:
-Indeed, writing correct code is only half the job---making it
+Writing correct code is only half the job---making it
 fast enough is the other half.
 A profiler tells you \emph{where} your program actually spends
 its time, replacing guesswork with measurement.
@@ -100,7 +100,7 @@ of all evil''~(Knuth), but \emph{informed} optimization,
 guided by profiling data, is simply good engineering.
 
 %claude:
-Moreover, understanding how a profiler works gives you
+Understanding how a profiler works gives you
 insight into the interplay between user programs, the
 compiler toolchain, and the kernel.
 A profiler like [[prof]] relies on the linker to
@@ -149,7 +149,7 @@ spectrum: you might want to time an entire command ([[time]]),
 identify which functions are hot ([[prof]], [[tprof]]),
 trace individual system calls ([[trace]]),
 monitor system-wide resource usage ([[stats]]),
-or measure the I/O cost of a file server ([[iostats]]).
+or measure the I/O cost of a program ([[iostats]]).
 Each tool addresses a different point on that spectrum,
 and each is small enough---a few hundred lines of C---that
 together they still form a manageable codebase.
@@ -183,6 +183,10 @@ profiling tool on \unix systems for decades.
 The \plan\ [[prof]] tool works on a similar principle but is
 simpler, relying on the linker rather than the compiler for
 instrumentation.
+GNU [[gprof]], part of the [[binutils]] package, is a
+reimplementation of the original BSD tool that follows the
+same design (compiler-inserted call arcs plus PC sampling)
+and reads the same [[gmon.out]] file format.
 
 \item OProfile is a system-wide statistical profiler for Linux
 that uses hardware {performance counters} when available.
@@ -313,6 +317,98 @@ but gives only statistical estimates---it cannot tell you
 how many times a function was called, only how often the
 CPU was found executing within it.
 
+
+\subsection{User time vs system time vs real time}
+
+%yoann: trans paragraph saying before saying profilers, a few concepts to understand
+%claude:
+Before diving into the profiling tools themselves, it is
+worth clarifying a few concepts that come up repeatedly.
+
+%yoann: explain those concepts and how they differ
+%claude:
+When you time a program, three numbers are reported:
+{user time}, {system time}, and {real time} (also called
+wall-clock time).
+User time is the time the CPU spent executing the program's
+own code. System time is the time the CPU spent in the
+kernel on behalf of the program (handling system calls,
+page faults, etc.). Real time is the elapsed time from
+start to finish, including time the program spent waiting
+(for I/O, for the scheduler to give it a turn, etc.).
+%
+A program that does heavy computation will have user time
+close to real time. A program that does lots of I/O will
+have high system time. A program that sleeps or waits for
+input will have real time much larger than user + system.
+
+\subsection{Ticks and preemptive scheduling}
+
+%yoann: expain what are ticks, and how tick frequency and timer interrupt help profilers
+%claude:
+The kernel keeps time using a periodic {timer interrupt}
+called the {clock tick}. On each tick (typically at a
+frequency called [[HZ]], e.g., 100 or 1000 times per second),
+the kernel interrupts whatever is running, increments a
+global tick counter, and updates the current process's
+time accounting: if the process was in user mode, its user
+time is incremented; if in kernel mode, its system time.
+%
+This same mechanism is what makes {preemptive scheduling}
+possible: the tick interrupt gives the kernel a chance to
+check whether the current process has used its time slice
+and should yield the CPU.
+%
+Profilers exploit this interrupt in two ways. First, the
+tick is when per-process time counters are updated (which
+timing tools eventually read). Second, a separate timer
+at a different frequency can sample the program counter for
+sampling-based profiling. Using a frequency that is not
+a multiple of [[HZ]] avoids {aliasing}---without this,
+the profiler might systematically miss code that runs
+in sync with the clock.
+
+\subsection{Instrumentation profilers}
+
+%yoann: give more details on how instrumentation works, and maybe talk about count, time, and also call graph
+%claude:
+An {instrumentation profiler} modifies the program so that
+extra code runs at each function entry and exit. This
+instrumentation can collect several kinds of data:
+\begin{itemize}
+\item \emph{Call counts}: how many times each function was
+called. This is the simplest form of instrumentation.
+\item \emph{Per-function time}: how much time was spent
+inside each function, including or excluding its callees.
+\item \emph{Call graph}: which function called which, and
+how much time was spent along each call arc.
+\end{itemize}
+The main advantage of instrumentation is precision: you get
+exact counts and a complete call tree. The main disadvantage
+is overhead---every function call now executes extra
+instructions, which can slow the program down and distort
+the very timings you are trying to measure.
+
+\subsection{Sampling profilers}
+
+%yoann: give more details on how sampling works
+%claude:
+A {sampling profiler} takes a different approach: it
+periodically interrupts the program and records its current
+program counter (PC). Over thousands of samples, the
+histogram of PCs reveals which functions consume the most
+CPU time.
+%
+Sampling has two key advantages: it requires no
+recompilation or relinking, and it has very low overhead
+(just one interrupt every few milliseconds). The
+disadvantage is that you only get statistical estimates---a
+function that runs for a very short time may never be
+sampled, and you cannot recover call counts or call graphs
+from sampling data alone.
+
+\subsection{Tracing and monitoring profilers}
+
 %claude:
 The \plan profiling tools also include a third category:
 {tracing} and {monitoring}. [[trace]] shows real-time
@@ -346,6 +442,7 @@ interrupt-time samples of the program counter collected
 by the kernel. Since sampling cannot track calls,
 [[tprof]] has no [[-d]] (call graph) option---it only
 reports time per function.
+
 To enable sampling, you first write ``[[profile]]'' to
 [[/proc/<pid>/ctl]], let the program run, then
 run [[tprof <pid>]] while the process is still alive.
@@ -377,6 +474,21 @@ usage, context switches, syscalls, interrupts, TLB
 misses, network packets, and more. It can even monitor
 multiple machines simultaneously, drawing their graphs
 in adjacent columns.
+
+%yoann: maybe explain a few of the flags from usage string?
+%claude:
+The lower-case flags select which metrics to display.
+The most commonly used are
+[[-l]] for system load (the default),
+[[-m]] for memory usage,
+[[-c]] for context switches per second,
+[[-s]] for syscalls per second,
+[[-i]] for interrupts per second, and
+[[-e]] for network packets.
+Upper-case flags control the display:
+[[-S]] sets a scale factor,
+[[-L]] switches to logarithmic axes, and
+[[-Y]] adds value markers along the y axis.
 
 <<function usage (misc/stats.c)>>=
 void
@@ -417,29 +529,55 @@ proxy and reports how many [[read]], [[stat]], and
 
 %claude:
 To get a feel for the tools, consider profiling the simplest
-possible program, [[hello]]. With [[time]], you would run:
+possible program, [[hello]]. With [[time]]:
 \begin{verbatim}
-  time hello
+  % time hello
+  hello world
+  0.00u 0.00s 0.01r    hello
 \end{verbatim}
-and see something like [[0.00u 0.00s 0.01r]]---user time,
-system time, and real (wall-clock) time, all in seconds.
+The three numbers are user time, system time, and real
+(wall-clock) time, all in seconds.
 
 %claude:
-With [[prof]], you would first link [[hello]] with
-[[-p]] to enable instrumentation, run it to produce a
-[[prof.<pid>]] file, then run [[prof hello]] to see
-which functions were called and how long they took.
+With [[prof]], you first link [[hello]] with [[-p]] to
+enable instrumentation, run it, then display the results:
+\begin{verbatim}
+  % 5l -p -o hello hello.5
+  % hello
+  hello world
+  % prof hello
+    %     Time    Calls  Name
+   80.0    0.08        1  _profmain
+   20.0    0.02        1  main
+    0.0    0.00        2  _profin
+    0.0    0.00        1  exits
+\end{verbatim}
 
 %claude:
-With [[tprof]], you would start [[hello]] (or a
-longer-running variant), enable profiling via
-[[/proc/<pid>/ctl]], and then run
-[[tprof <pid>]] to see the sampling histogram.
+With [[tprof]], you start a longer-running program, enable
+profiling, and then read the sampling data:
+\begin{verbatim}
+  % longrun &
+  % echo profile > /proc/$apid/ctl
+  % # ... let it run ...
+  % tprof $apid
+    %     Time  Name
+   45.0    4.50  compute
+   30.0    3.00  process
+   15.0    1.50  sort
+   10.0    1.00  main
+\end{verbatim}
 
 %claude:
-With [[iostats hello]], you would see the 9P messages
-generated by [[hello]]'s call to [[write]] on
-[[/dev/cons]].
+With [[iostats]], you see the 9P traffic:
+\begin{verbatim}
+  % iostats hello
+  hello world
+  read     32 bytes, 1 ops     ...
+  write    12 bytes, 1 ops     ...
+  protocol 48 bytes
+  rpc       4
+\end{verbatim}
 
 \section{Code organization}
 
@@ -512,6 +650,34 @@ At the top, the \emph{user-space tools} presented in this
 book read this data, correlate it with symbol tables, and
 present it to the programmer.
 
+
+%yoann: maybe ASCII diagram where can see the layers
+%claude:
+\begin{verbatim}
+  +-------------------------------------------------------+
+  | User-space tools (this book)                          |
+  |                                                       |
+  |  time    prof    tprof   kprof   trace  stats  iostats|
+  +---+-------+--------+------+-------+------+------+----+
+      |       |        |      |       |      |      |
+      |  reads|   reads|  reads|  reads| reads| 9P   |
+      |       |        |      |       |      | proxy |
+  +---v-------v--------v------v-------v------v------v----+
+  | Kernel                                                |
+  |                                                       |
+  |  Waitmsg  Tos   /proc/   /dev/  /proc/  #c/    (none)|
+  |  .time[]       <pid>/   kpdata  trace   sysstat      |
+  |                profile                  swap         |
+  +---^-------^--------^------^--------------------------+
+      |       |        |      |
+  +---+-------+--------+------+--------------------------+
+  | Linker (5l -p)                                        |
+  |                                                       |
+  | _profin/_profout    profclock   devkprof               |
+  | instrumentation     sampling   kernel sampling        |
+  +------------------------------------------------------+
+\end{verbatim}
+
 \section{Book structure}
 
 %claude:
@@ -548,6 +714,36 @@ found in \book{Kernel}; here I present just enough to
 understand the code
 in later chapters.
 
+\section{Ticks, [[HZ]], and times}
+
+%yoann: give more implementation point of view on Ticks than in the Overview chapter, and maybe ASCII diagram where see how interleaved processes get their user/sys/real time updated correctly even if they didn't run the all time on the processor
+%claude:
+In \plan, the clock interrupt fires at a frequency [[HZ]]
+(typically 100 on ARM). On each tick, the kernel calls
+[[accountime()]], which checks the [[insyscall]] flag
+of the current process to decide whether to increment
+[[p->time[TUser]]] or [[p->time[TSys]]]. Real time is
+tracked differently: [[p->time[TReal]]] stores the global
+tick count at process creation, so elapsed real time is
+computed as [[CPUS(0)->ticks - p->time[TReal]]].
+
+%claude:
+Consider two processes A and B interleaved on a single CPU.
+Each tick, the kernel attributes time to whichever process
+happens to be running:
+\begin{verbatim}
+  tick:  1    2    3    4    5    6    7    8    9   10
+  CPU:  [  A-user  ][ A-sys ][ B-user ][ A-user ][ B ]
+         +u        +u  +s  +s   +u  +u   +u  +u   +u
+
+  After tick 10:
+    A: user=4  sys=2  real=10 (created at tick 0)
+    B: user=3  sys=0  real=5  (created at tick 5)
+\end{verbatim}
+Process A's user+sys (6) is less than its real time (10)
+because B ran in between. Process B's real time starts
+from when it was created, not from tick~0.
+
 \section{Wait message}
 % for /bin/time
 
@@ -566,26 +762,25 @@ structure that the parent receives via [[wait()]]:
       ...
   };
 \end{verbatim}
-The [[/bin/time]] command simply forks, execs the target
-program, calls [[wait()]], and prints [[w->time[0]]],
-[[w->time[1]]], [[w->time[2]]]. The kernel does all the
-accounting work.
 
-\section{[[/dev/cputime]] and [[/proc/#/status]]}
-% for?
+The [[/bin/time]] command (Chapter~\ref{chap:time}) simply
+forks, execs the target program, calls [[wait()]], and
+prints [[w->time[0]]], [[w->time[1]]], [[w->time[2]]].
+The kernel does all the accounting work.
+
+\section{[[/dev/cputime]] and [[/proc/<pid>/status]]}
 
 %claude:
-While [[Waitmsg]] only gives timing for completed processes,
-[[/dev/cputime]] and [[/proc/<pid>/status]] expose the
-same five counters for running processes. [[/dev/cputime]]
-returns the counters of the calling process; [[/proc/<pid>/status]]
-returns those of any process. Both convert from kernel ticks
-to milliseconds via [[TK2MS()]]. The real-time counter is
-stored as the tick count at process creation, so the actual
-elapsed time is computed on-the-fly as
-[[CPUS(0)->ticks - p->time[TReal]]].
+While [[Waitmsg]] only gives timing for \emph{completed}
+processes, these two files expose the same five counters
+for \emph{running} processes.
+[[/dev/cputime]] returns the counters of the calling
+process (user, sys, real, child user, child sys, all in
+milliseconds). [[/proc/<pid>/status]] returns those of
+any process, which is useful for monitoring long-running
+programs without waiting for them to exit.
 
-\section{[[/proc/x/profile]]}
+\section{[[/proc/<pid>/profile]]}
 % for /bin/tprof?
 
 %claude:
