@@ -20587,10 +20587,29 @@ and the on-disk file system.
 %pike: interface is not everything is a file, but everything is
 % a file server interface!
 
+%claude:
+In this chapter, I present the file-related system calls:
+[[sysopen()]], [[sysclose()]], [[syspread()]], [[syspwrite()]], and [[sysseek()]].
+In \plan, files are the universal abstraction --- not just for
+storage but for devices, network connections, and system services.
+The key data structures were introduced in Chapter~\ref{chap:core_ds}:
+[[\hlink{Chan}]] is the kernel's representation of an open file,
+[[\hlink{Dev}]] defines the file server interface, and
+[[devtab]] maps device types to their method tables.
+This chapter shows how user-visible file descriptors connect
+to channels, how the syscalls dispatch through the device table,
+and how the [[\hlink{Path}]] structure tracks human-readable filenames.
 
 \section{[[Chan]]nels}
 
 % see chapter 3 to recall main fields of Chan (type, dev, qid,  path, etc)
+
+%claude:
+A [[\hlink{Chan}]] carries a [[flag]] bitset that tracks its lifecycle state.
+The two fundamental flags are [[COPEN]] (the channel has been opened for I/O
+via a device's [[open()]] method) and [[CFREE]] (the channel is on the free
+list and available for reuse). Other flags like [[CCEXEC]] and [[CRCLOSE]]
+are added later via the open mode bits.
 
 <<enum [[channelflag]]>>=
 /*
@@ -20614,8 +20633,15 @@ ushort  flag;
 @
 % see also the 'mode' field of enum<open>
 
-
-
+%claude:
+Channels are managed by a custom allocator rather than
+being individually malloced and freed. The [[\hlink{Chanalloc}]] structure
+maintains two linked lists: [[free]] holds recycled channels ready for reuse,
+and [[list]] holds every channel ever allocated (used for debugging and
+the [[fid]] counter). Channels are never truly freed back to the heap ---
+once allocated, they cycle between the free list and active use. This
+avoids the cost of repeated [[malloc]]/[[free]] pairs for what is one of
+the most frequently allocated kernel objects.
 
 <<struct [[Chanalloc]]>>=
 // Channel allocator
@@ -20652,6 +20678,15 @@ struct Chanalloc chanalloc;
 
 
 % used by devattach(), devclone() (itself called from devwalk())
+
+%claude:
+[[\hlink{newchan}]] first tries the free list; if empty, it allocates
+a fresh channel and assigns it a unique [[fid]] (used by the mount
+device [[devmnt]] to multiplex 9P sessions). The channel is initialized
+with [[type]] 0 (the root device), so if an error occurs before
+the caller associates it with a real device, [[cclose()]] will call
+[[rootclose()]], which is a no-op --- a safe default.
+
 <<constructor [[newchan]]>>=
 Chan*
 newchan(void)
@@ -20732,6 +20767,12 @@ chanfree(Chan *c)
 
 % usually call via c = uniquechan(c); hence the cclose below
 % less: mv closer to where it's used
+%claude:
+[[\hlink{uniquechan}]] implements copy-on-write for channels: if the
+channel has multiple references, it clones it to get an exclusive copy.
+This is needed before operations that modify the channel in place
+(like [[open]] or [[create]]).
+
 <<function [[uniquechan]]>>=
 /*
  * Make sure we have the only copy of c.  (Copy on write.)
@@ -20755,6 +20796,13 @@ uniquechan(Chan *c)
 % mv elsewhere? In Namespace? but we will use devtab below 
 
 % see chapter 3 too, Dev and devtab global
+
+%claude:
+Each device driver provides a standard [[attach()]] method.
+Most drivers implement it by calling the generic helper [[\hlink{devattach}]],
+which allocates a fresh channel, sets its [[type]] to the
+index of the driver in [[devtab]], and constructs a path string
+like ``\verb|#c|'' or ``\verb|#I|'' from the device's rune character.
 
 % ex of attach? they call devattach no? namec('#/', ...) will call devattach
 % of the root device
@@ -20806,6 +20854,14 @@ devno(Rune c, bool user)
 % why fds? otherwise have to pass a string to each operations.
 % also allow redirection trick with the fd0, fd1 convention
 
+%claude:
+A file descriptor is simply an integer index into the [[fd]] array
+of an [[\hlink{Fgrp}]] (file descriptor group). Each slot is either
+[[nil]] (unused) or a reference-counted pointer to a [[\hlink{Chan}]].
+The array grows dynamically in [[DELTAFD]] increments, capped at 5000.
+The [[\hlink{Fgrp}]] itself is reference-counted and stored in [[Proc.fgrp]],
+allowing processes created with [[RFFDG]] to share file descriptor tables.
+
 <<struct [[Fgrp]]>>=
 struct Fgrp
 {
@@ -20831,6 +20887,17 @@ Fgrp  *fgrp;    /* File descriptor group */
 % todo: could define such a function no?
 
 % a kind of constructor when pass nil as parameter
+
+%claude:
+[[\hlink{dupfgrp}]] serves double duty: called with [[nil]] it acts
+as a constructor (allocating a fresh table of [[DELTAFD]] slots),
+and called with an existing [[\hlink{Fgrp}]] it duplicates the table,
+incrementing the reference count on each channel.
+This is the function behind [[RFFDG]]: when a child process gets
+its own file descriptor group, all current fds are shared (via
+reference counting on the channels), but future opens in either
+process are independent.
+
 <<function [[dupfgrp]]>>=
 Fgrp*
 dupfgrp(Fgrp *f)
@@ -20912,6 +20979,13 @@ closefgrp(Fgrp *f)
 @ 
 
 % allocate new fd for freshly opened channel, e.g. in sysopen()
+
+%claude:
+[[\hlink{newfd}]] assigns a channel to the lowest available file descriptor.
+It scans the [[fd]] array for a nil slot via [[\hlink{findfreefd}]],
+growing the array if needed. The fd table uses the same amortized growth
+strategy (allocate in [[DELTAFD]]-sized chunks) seen throughout the kernel.
+
 <<function [[newfd]]>>=
 int
 newfd(Chan *c)
@@ -21017,6 +21091,15 @@ unlockfgrp(Fgrp *f)
 
 \section{[[sysopen()]], [[sysclose()]]}
 
+%claude:
+The open syscall is deceptively simple: it calls [[\hlink{namec}]] to
+resolve the filename into a channel (walking through mount points and
+device tables), then assigns that channel to the lowest available fd.
+The heavy lifting is in [[namec()]] (presented later in this chapter) and
+in the device's [[open()]] method. Close is even simpler: it checks
+the fd is valid via [[\hlink{fdtochan}]], then calls [[\hlink{fdclose}]]
+which removes it from the table and decrements the channel's reference count.
+
 % this is also in libc.h
 <<enum [[open]]>>=
 enum OpenFlags {
@@ -21087,7 +21170,15 @@ sysclose(ulong* arg)
 }
 @
 
-% the mode parameter is either -1 or OREAD|OWRITE|ORDRW, or 
+%claude:
+[[\hlink{fdtochan}]] converts a user-space file descriptor integer into
+a kernel [[\hlink{Chan}]] pointer, with bounds checking and optional
+access mode validation. The [[mode]] parameter of [[-1]] means ``skip
+mode checking''. When [[iref]] is true, it increments the channel's
+reference count so the caller can safely use the channel even if
+another thread closes the fd concurrently.
+
+% the mode parameter is either -1 or OREAD|OWRITE|ORDRW, or
 % openmode(omode) (in dupopen)
 <<function [[fdtochan]]>>=
 Chan*
@@ -21180,6 +21271,13 @@ fdclose(int fd, int flag)
 void  (*close)(Chan*);
 @
 
+%claude:
+[[\hlink{cclose}]] is the central channel destructor. It decrements the
+reference count; if it reaches zero, it calls the device's [[close()]]
+method (wrapped in [[waserror]] since the close may involve I/O to a
+remote file server that could fail) and then returns the channel to the
+free list via [[\hlink{chanfree}]].
+
 <<function [[cclose]]>>=
 void
 chan_cclose(Chan *c)
@@ -21211,6 +21309,23 @@ chan_cclose(Chan *c)
 % and
 %    c = namec((char*)arg[0], Aopen, arg[1], 0); in sysopen
 % LP aspectize different places where call namec()?
+
+%claude:
+[[\hlink{namec}]] (``name to channel'') is the central function that
+translates a file path string into a [[\hlink{Chan}]]. It is called by
+every file syscall: [[sysopen()]], [[syscreate()]], [[sysstat()]], [[sysremove()]],
+[[sysbind()]], [[syschdir()]], and [[sysexec()]].
+The [[amode]] parameter ([[Aopen]], [[Acreate]], [[Aremove]], [[Aaccess]],
+[[Atodir]], [[Abind]], [[Amount]]) tells [[namec()]] what the caller
+intends to do with the result, which affects how mount points
+are traversed.
+The overall flow is: (1)~pick a starting channel
+([[up->slash]] for ``/'', [[up->dot]] for relative paths,
+or a device attach for ``\#'' paths),
+(2)~parse the name into path elements,
+(3)~call [[\hlink{walk}]] to resolve those elements through devices
+and mount points, and
+(4)~call the device's [[open()]] or [[create()]] method.
 
 <<[[sysexec()]] call namec() to get a channel in tc from file>>=
 tc = namec(file, Aopen, OEXEC, 0);
@@ -21413,6 +21528,14 @@ int len, n, t;
 
 \subsection{Checking valid filename string}
 
+%claude:
+Before parsing, [[namec()]] validates the filename string: it must
+be shorter than $2^{16}$ bytes (to fit in a 9P string field) and
+must not contain control characters or other ``frog'' characters.
+The [[dup]] variant copies the string out of user space before
+the second scan, preventing a malicious thread from modifying the
+string after validation.
+
 % seems always called with slashok=true
 <<function [[validnamedup]]>>=
 char*
@@ -21514,6 +21637,14 @@ char isfrog[256]={
 % Size must be Runeself, s/0x7f/Runeself - 1/ ?
 
 \subsection{Parsing filename}
+
+%claude:
+Before walking, [[namec()]] parses the path string into an
+[[\hlink{Elemlist}]]: an array of individual name components
+(``usr'', ``pad'', ``foo.c'') with offsets back into the original string
+for error reporting. The [[mustbedir]] flag records whether
+the path ended with ``/'', which means the final element must
+be a directory.
 
 % used internally by namec()
 <<struct [[Elemlist]]>>=
@@ -21644,6 +21775,11 @@ skipslash(char *name)
 
 \subsection{Error management}
 
+%claude:
+When [[namec()]] fails partway through a path, it constructs an error
+message showing the prefix of the path that was successfully resolved,
+helping the user identify which component was not found.
+
 <<[[namec()]] locals>>=
 char tmperrbuf[ERRMAX];
 @
@@ -21729,7 +21865,17 @@ nameerror(char *name, char *err)
 \t NO I think, so important zero-copy principle here! kernel can look
 \t  in the user process address space easily!
 
-% put offset field here? 
+%claude:
+\plan\ uses [[pread]] and [[pwrite]] (with an explicit offset) rather
+than separate [[read]]/[[write]]/[[seek]] syscalls.
+This matches the 9P protocol, where every read and write message
+carries an offset, making the operations atomic and stateless.
+When the offset argument is [[~0ULL]] (``no offset''), the kernel
+falls back to maintaining the channel's internal [[c->offset]].
+The actual I/O dispatches through [[devtab[c->type]->read()]] or
+[[devtab[c->type]->write()]], reaching the appropriate device driver.
+
+% put offset field here?
 
 <<syscall pread>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
@@ -21900,6 +22046,14 @@ write(ulong *arg, vlong *offp)
 
 \section{[[sysseek()]]}
 
+%claude:
+There is no [[seek]] method in the [[\hlink{Dev}]] interface --- seek
+is handled entirely by the kernel by updating [[c->offset]].
+The device never needs to know about seeks because it receives
+the offset on every read and write call. For type-2 seeks
+(from end of file), the kernel calls [[stat()]] to learn the file length.
+Directories have restricted seek: you can only rewind to offset 0.
+
 % because return vlong and not just a long, arg[0] is a ref
 % to write into the vlong (need probably look at cc to understand?)
 % note that the mkfile in 9syscall/ has some special handling for seek
@@ -21990,6 +22144,16 @@ sseek(ulong *arg)
 
 
 \section{Collecting unclosed files}
+
+%claude:
+When a process exits, [[\hlink{closefgrp}]] iterates over all open file
+descriptors and calls [[\hlink{cclose}]] on each. But closing a channel
+that refers to a remote file server (via the mount device) can block
+or even deadlock --- for instance, if the file server is the
+dying process itself. If a kill signal arrives during this teardown,
+[[\hlink{forceclosefgrp}]] hands the remaining unclosed channels to
+a background ``clunk queue'' served by a dedicated kernel process,
+breaking the deadlock.
 
 <<[[Proc]] files fields>>=
 Fgrp  *closingfgrp; /* used during teardown */
@@ -22131,6 +22295,15 @@ closeproc(void*)
 
 \section{Special opening modes}
 
+%claude:
+Two optional flags can be OR'd into the open mode:
+[[OCEXEC]] causes the fd to be automatically closed when the process
+calls [[exec()]] (preventing fd leaks into child programs), and
+[[ORCLOSE]] causes the file to be removed when the fd is closed
+(useful for temporary files). These flags are stored in the
+channel's [[flag]] field as [[CCEXEC]] and [[CRCLOSE]] respectively,
+since [[c->mode]] only holds the base access mode.
+
 \subsection{Close on exec}
 
 % useful for what?
@@ -22227,6 +22400,19 @@ if(omode & ORCLOSE)
 
 \section{Overview}
 
+%claude:
+This chapter covers the directory-related syscalls: [[create]], [[remove]],
+[[chdir]], [[fd2path]], [[stat]]/[[fstat]], and [[wstat]]/[[fwstat]].
+Directories in \plan\ are not fundamentally different from files ---
+they are channels whose [[qid.type]] has the [[QTDIR]] bit set.
+The kernel enforces a few directory-specific rules (no writing,
+no exec, restricted seek), but most directory operations are
+delegated to device drivers via the same [[\hlink{Dev}]] method table.
+This chapter also presents the [[\hlink{Path}]] structure for tracking
+human-readable pathnames, the [[\hlink{walk}]] function that resolves
+path elements one by one through device drivers, and the
+[[\hlink{DirEntry}]] structure (\plan's equivalent of \unix's [[struct stat]]).
+
 % not that called often, but helps illustrate QTDIR introduced in chapter 3
 <<function [[error_if_not_dir]]>>=
 void
@@ -22267,6 +22453,18 @@ if((amode == Aopen) && (omode & OEXEC) && (c->qid.type & QTDIR))
 % mv later?
 
 % see Path *path; in Chan
+
+%claude:
+Every [[\hlink{Chan}]] carries a [[\hlink{Path}]] that records the
+human-readable filename used to reach it (e.g., ``/usr/pad/foo.c'').
+The path is needed for [[fd2path()]] (the \plan\ equivalent of
+``pwd'' for arbitrary fds) and for good error messages.
+One might think the kernel could reconstruct the path by walking
+``..'' back to the root, but mount points make that impossible ---
+the ``..'' of a mounted directory leads to a different place than
+the ``..'' of the underlying device. So the path must be
+tracked explicitly as the name is resolved. [[\hlink{Path}]] is
+reference-counted and uses copy-on-write via [[\hlink{uniquepath}]].
 
 <<struct [[Path]]>>=
 struct Path
@@ -22389,6 +22587,14 @@ uniquepath(Path *p)
 
 
 % called from walk(), namec(), so maybe put after walk?
+
+%claude:
+[[\hlink{addelem}]] appends a path element to a [[\hlink{Path}]], growing
+the string buffer if needed. For ``..'' it calls [[\hlink{fixdotdotname}]]
+to clean the path in place. The [[from]] parameter records the
+mount point channel at this position (or nil), which is stored
+in the [[mtpt]] array for later ``..'' handling.
+
 <<function [[addelem]]>>=
 static Path*
 addelem(Path *p, char *s, Chan *from)
@@ -22491,6 +22697,14 @@ fixdotdotname(Path *p)
 
 % taking a list of names allows to do multiple walks at once, so avoid too
 % many roundtrips to file server
+
+%claude:
+The [[walk]] [[\hlink{Dev}]] method takes an array of path element names
+and walks through them as far as possible within one device. It
+returns a [[\hlink{Walkqid}]] containing the cloned channel and an
+array of [[Qid]]s for each element successfully walked. Taking
+multiple names in a single call avoids a 9P round-trip per path element.
+
 <<[[Dev]] methods>>=
 Walkqid*(*walk)(Chan*, Chan*, char**, int);
 @
@@ -22553,6 +22767,19 @@ bool sharppath;
 % another big function ... namec() and walk() are complicated
 % called by namec():  if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
 % s/ntry/next?
+
+%claude:
+The kernel-level [[\hlink{walk}]] is the mount-point-aware layer above the
+device walk method. Its loop processes batches of path elements: it
+calls the device's walk for a run of names (stopping before any ``..''
+element), then checks each intermediate [[Qid]] for mount points via
+[[\hlink{findmount}]]. When it hits a mount point mid-path, it crosses to the
+mounted channel and continues walking in the new device. The ``..''
+element is handled specially: it may need to uncross a mount point
+via [[\hlink{undomount}]], returning to the channel that was originally
+mounted upon. The [[didmount]] flag tracks which side of a mount
+point the current channel is on.
+
 <<function [[walk]]>>=
 /*
  * Either walks all the way or not at all.  No partial results in *cp.
@@ -22773,6 +23000,17 @@ cclone(Chan *c)
 
 \section{[[syscreate()]]}
 
+%claude:
+The [[create]] syscall is structurally similar to [[open]], but calls
+[[namec()]] with [[Acreate]] mode. The interesting complexity is
+in the [[namec()]] Acreate case, which must handle the
+``create/create race'': if two processes try to create the same file
+simultaneously, one [[create(5)]] 9P message will succeed and the
+other will fail. The losing process retries with [[open+OTRUNC]]
+instead, providing the expected semantics where
+[[create]] on an existing file truncates it. The [[OEXCL]] flag
+lets applications that care about atomicity get the raw
+``fail if exists'' behavior.
 
 <<syscall create>>=
 // int create(char *file, int omode, ulong perm);
@@ -22952,6 +23190,15 @@ OEXCL = 0x1000,  /* or'ed in, exclusive create */
 
 \section{[[sysremove()]]}
 
+%claude:
+Remove takes a filename, resolves it via [[namec()]] with [[Aremove]],
+and calls the device's [[remove()]] method. Removing a mount point
+is explicitly disallowed --- the ambiguity of whether to remove the
+mount point or the mounted channel is resolved by simply forbidding it.
+After [[remove()]], the channel's type is reset to 0 (root device)
+because the 9P remove clunks the fid, so the channel must not
+call the original device's [[close()]] again.
+
 <<[[Dev]] methods>>=
 void  (*remove)(Chan*);
 @
@@ -22994,6 +23241,10 @@ sysremove(ulong* arg)
 
 \section{[[syschdir()]]}
 
+%claude:
+Changing directory is simple: resolve the path via [[namec()]] with
+[[Atodir]] mode (which verifies it is a directory), then replace [[up->dot]].
+
 % could put dot Proc field here and LP split its use before
 
 <<syscall chdir>>=
@@ -23026,6 +23277,14 @@ case Atodir:
 % the understanding of domount()
 
 \section{[[sysfd2path()]] (a.k.a [[pwd()]])}
+
+%claude:
+[[fd2path]] returns the full pathname associated with an open file
+descriptor. This is why the kernel must track [[\hlink{Path}]] objects
+on every channel --- without them, there would be no way to answer
+``what file is fd 3 pointing to?''. The implementation is trivial:
+look up the fd, return [[c->path->s]].
+
 % does a realpath? plan9 has symlinks?
 
 <<syscall fd2path>>=
@@ -23065,6 +23324,13 @@ chanpath(Chan *c)
 % also in libc.h (but called Dir there)
 % so if change fields here, need to change also in libc.h but
 % there are code like direntry_setname that compute offsets so safer to not change
+
+%claude:
+Where \unix\ uses numeric [[uid]]/[[gid]], \plan\ uses string usernames
+directly in [[\hlink{DirEntry}]], eliminating the need for [[/etc/passwd]].
+The structure is serialized into a platform-independent wire format
+matching the 9P stat message.
+
 <<struct [[DirEntry]]>>=
 struct DirEntry {
   /* system-modified data */
@@ -23152,6 +23418,13 @@ offsetof_name_direntry(byte *p, int *n)
 
 \section{[[sysstat()]]}
 
+%claude:
+The [[stat]]/[[fstat]] syscalls call the device's [[stat()]] method to
+fill a buffer with a serialized [[\hlink{DirEntry}]]. After getting the
+raw stat, [[sysstat()]] rewrites the name field to match the last
+component of the path the user supplied, since the device may
+return a different name after crossing mount points.
+
 <<[[Dev]] methods>>=
 int (*stat)(Chan*, byte*, int);
 @
@@ -23237,6 +23510,12 @@ int (*wstat)(Chan*, byte*, int);
 @
 
 
+
+%claude:
+The [[wstat]] syscalls modify file metadata. The kernel validates the
+stat buffer and checks that mount points cannot be renamed (to avoid
+ambiguity about what is being renamed --- the mount point or the
+mounted channel).
 
 <<syscall wstat>>=
 // int wstat(char *name, byte *edir, int nedir);
@@ -23346,7 +23625,7 @@ wstat(Chan *c, byte *d, int nd)
 [BIND]      sysbind,
 [MOUNT]     sysmount,
 [UNMOUNT]   sysunmount,
-@ 
+@
 
 \section{Overview}
 
@@ -23355,6 +23634,16 @@ wstat(Chan *c, byte *d, int nd)
 
 % before and after mount point, 'from', 'to'. you go through a mount point.
 % "being on the left part, right part of a mount point".
+
+%claude:
+Namespaces are \plan's most distinctive kernel feature. Each process has
+its own namespace --- a private view of the file hierarchy, defined by a
+mount table ([[\hlink{Pgrp}]]). The [[bind]] and [[mount]] syscalls modify
+this table, and [[\hlink{namec}]] consults it when resolving paths.
+A mount point pairs a ``from'' channel ([[\hlink{Mhead}]]) with one or more
+``to'' channels ([[\hlink{Mount}]] list). Union mounts allow multiple
+directories to appear merged at a single path, ordered by
+[[MBEFORE]], [[MAFTER]], or replaced entirely with [[MREPL]].
 
 % also in libc.h
 <<enum [[mount]]>>=
@@ -23376,6 +23665,13 @@ enum MountFlags {
 
 % relation with PL namespace concept? module A = Xxx.Yyyy.Zzz similar?
 
+%claude:
+An [[\hlink{Mhead}]] stores the ``from'' channel (the directory being
+mounted upon) and a linked list of [[\hlink{Mount}]] structures representing
+what is mounted there. For a simple bind or mount, there is one
+[[\hlink{Mount}]] entry. For a union mount, there are multiple entries
+in the list, and the order matters: when walking a name through a
+union directory, the kernel tries each mount's channel in list order.
 
 \section{Mount point}
 
@@ -23446,6 +23742,9 @@ putmhead(Mhead *m)
 % does not call mountfree(m->mount)? who owns the mount then? closepgrp()
 % the main pb is that should put a counter on Mount ...
 
+%claude:
+A [[\hlink{Mount}]] holds the ``to'' channel and flags.
+The [[MBEFORE]]/[[MAFTER]] ordering is implicit in list position.
 
 <<struct [[Mount]]>>=
 struct Mount
@@ -23513,6 +23812,13 @@ mountfree(Mount *m)
 
 \section{Mount table}
 
+%claude:
+The mount table [[\hlink{Pgrp}]] (``process group'') is the per-process
+namespace. It is a hash table of [[\hlink{Mhead}]] entries, keyed
+by [[qid.path]]. When [[\hlink{namec}]] encounters a directory, it checks
+this table for mount points. The [[Pgrp]] is reference-counted;
+processes created with [[RFNAMEG]] get their own copy.
+
 % rename?
 <<struct [[Pgrp]]>>=
 // Mount table, aka Namespace, aka process group
@@ -23539,6 +23845,12 @@ Pgrp  *pgrp;    /* Process group for namespace */
 @
 
 
+
+%claude:
+The mount table hash has only 32 buckets ([[MNTHASH]]), indexed by the
+low bits of [[qid.path]]. Collisions are handled by chaining
+[[\hlink{Mhead}]] entries via [[Mhead.hash]]. The small size is adequate
+because mount tables are typically small (a few dozen entries at most).
 
 <<function [[MOUNTH]]>>=
 enum
@@ -23631,7 +23943,14 @@ closepgrp(Pgrp *p)
 % alternative is hardcoded list of drivers and huge populated /dev/
 % via major/minor special file as in Linux
 
-
+%claude:
+The ``\#'' prefix in path names is how the kernel bootstraps the
+namespace. A path like ``\verb|#c|'' directly attaches to the console
+device driver, bypassing the mount table entirely. During boot,
+[[init0()]] uses [[bind("\#c", "/dev", MREPL)]] to make device drivers
+accessible at conventional paths. This is \plan's alternative to
+\unix's major/minor device numbers and static [[/dev]] entries ---
+here the namespace is constructed dynamically by bind commands.
 
 <<[[namec()]] locals>>=
 Rune r;
@@ -23679,6 +23998,9 @@ Chan* (*attach)(char*);
 % ex: bind("#c", "/dev", MREPL), kinda major/minor mode of Linux
 % ex: bind("/root/386/bin", "/bin", MREPL), kinda symlinks
 
+%claude:
+Both [[bind]] and [[mount]] go through [[\hlink{bindmount}]], which
+resolves two paths and calls [[\hlink{cmount}]] to insert a mount point.
 
 <<syscall bind>>=
 // int bind(char *to, char *from, int flag);
@@ -23785,6 +24107,15 @@ int order;
 @
 
 % big function again
+
+%claude:
+[[\hlink{cmount}]] looks up [[old]]'s qid in the mount table hash; if no
+[[\hlink{Mhead}]] exists, it creates one. Then it inserts a new
+[[\hlink{Mount}]] according to the flag: [[MREPL]] replaces the existing
+list, [[MBEFORE]] prepends, [[MAFTER]] appends. For union mounts on a
+fresh [[\hlink{Mhead}]], the original channel is also added to the list so
+the union includes the original directory contents.
+
 <<function [[cmount]]>>=
 int
 cmount(Chan *new, Chan *old, int flag, char *spec)
@@ -23867,6 +24198,13 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
 
 
 \section{[[/proc/#/ns]]}
+
+%claude:
+A process's namespace can be inspected by reading [[/proc/\#/ns]],
+which produces a sequence of [[bind]] and [[mount]] commands that
+reconstruct the namespace. The [[\hlink{mntscan}]] function walks the
+mount table hash in [[mountid]] order (not hash order), so the output
+is deterministic and reflects the temporal ordering of mounts.
 
 <<struct [[Mntwalk]]>>=
 struct Mntwalk              /* state for /proc/#/ns */
@@ -24010,6 +24348,11 @@ mntscan(Mntwalk *mw, Proc *p)
 % have seen how to create mount point, and mount table, now
 % see when access it: via namec()
 
+%claude:
+[[\hlink{findmount}]] looks up a channel's qid in the [[\hlink{Pgrp}]] hash
+and returns the first mount's ``to'' channel. [[\hlink{domount}]] wraps it
+and also updates the [[\hlink{Path}]] mount point array for ``..'' handling.
+
 <<[[namec()]] locals>>=
 Mhead *m;
 Path *path;
@@ -24127,6 +24470,15 @@ domount(Chan **cp, Mhead **mp, Path **path)
 
 
 \section{Path mount points and [[..]]}
+
+%claude:
+The trickiest part of namespace handling is ``..'' (dot-dot). If
+[[/usr]] is a mount point, then ``[[cd /usr/pad; cd ..]]'' should return
+to [[/]], not to the root of whatever device is mounted on [[/usr]].
+Each [[\hlink{Path}]] carries an [[mtpt]] array that records, for each
+path element, the ``from'' channel of any mount point crossed. When
+[[\hlink{walk}]] processes ``..'',[[\hlink{undomount}]] uses this array
+to return to the channel that was mounted upon.
 
 <<[[Path]] mtpt fields>>=
 // array<option<ref_counted<Chan>>, nil for elements which are not mount point
@@ -24253,6 +24605,15 @@ undomount(Chan *c, Path *path)
 
 \section{Union mount}
 
+%claude:
+Union mounts allow multiple directories to appear merged at a single
+mount point. When walking a name through a union directory, if the
+first mount's device walk fails (the name is not found there),
+[[\hlink{walk}]] tries the next mount in the list, and so on.
+Reading a union directory is handled by [[\hlink{unionread}]], which
+reads from each mount's channel in sequence, advancing to the next
+when one is exhausted.
+
 % seen already list of Mount in Mhead with next field in Mount and MBEFORE, MAFTER.
 
 \subsection{Union walk}
@@ -24334,6 +24695,13 @@ if(old->umh)
 
 
 \subsection{[[syspread()]] for directories}
+
+%claude:
+Reading a directory on a mount point requires extra bookkeeping.
+The channel has two offsets: [[c->offset]] (user-visible) and
+[[c->devoffset]] (what the device sees), because [[\hlink{mountfix}]]
+rewrites entries to reflect the current namespace, changing sizes.
+Overflow entries are saved in [[c->dirrock]] for the next read.
 
 <<[[Chan]] other fields>>=
 vlong devoffset;    /* in underlying device; see read */
@@ -24464,6 +24832,12 @@ unionrewind(Chan *c)
 
 \subsection{[[MCREATE]]}
 
+%claude:
+In a union directory, only the mount entry with the [[MCREATE]] flag
+can receive new files. [[\hlink{createdir}]] walks the union mount
+list to find it. This is why [[bind -c]] exists: without the
+[[-c]] flag, you cannot create files in the mounted directory.
+
 <<[[namec()]] Acreate case, if cnew is a mountpoint>>=
 if(!sharppath && findmount(&cnew, &m, c->type, c->dev, c->qid))
     cnew = createdir(cnew, m);
@@ -24501,6 +24875,13 @@ createdir(Chan *c, Mhead *m)
 
 
 \subsection{Union of union}
+
+%claude:
+When binding a union directory onto another location, [[\hlink{cmount}]]
+must copy the entire union mount list from the source, so the new
+location inherits all the union members. The [[umh]] field on a channel
+records the [[\hlink{Mhead}]] that produced this channel, so
+[[\hlink{cmount}]] can walk the source union's mount chain.
 
 <<[[namec()]] set c->umh in Abind if mounted point>>=
     if(c->umh != nil)
@@ -24565,6 +24946,12 @@ if(umh != nil && umh->mount != nil){
 \section{Sandboxing}
 % can also do chroot with sysbind + noattach no?
 
+%claude:
+The [[noattach]] flag provides namespace sandboxing: when set via
+[[RFNOMNT]], the process cannot mount new file servers or access
+most ``\#'' device paths. Only safe devices (pipes, fds, environment,
+console, proc) are allowed through.
+
 <<[[Pgrp]] other fields>>=
 bool noattach;
 @
@@ -24617,6 +25004,11 @@ if(flag & RFNOMNT)
 @
 
 \section{[[sysmount()]]}
+
+%claude:
+While [[bind]] connects two local paths, [[mount]] connects a file
+descriptor (typically a pipe to a file server) to a path, using the
+mount device ([[devmnt]]) to speak 9P over the fd.
 
 %ex of cmd? with spec?
 
@@ -24689,6 +25081,10 @@ MCACHE = 0x0010,  /* cache some data */
 
 
 \section{[[sysumount()]]}
+
+%claude:
+[[\hlink{cunmount}]] searches the [[\hlink{Pgrp}]] hash and removes
+either the entire mount point or a specific entry from the union list.
 
 % ex of umount? can unbind #c from /dev for instance?
 
@@ -24865,6 +25261,15 @@ pgrpinsert(Mount **order, Mount *m)
 
 
 % used by sysrfork
+
+%claude:
+[[\hlink{pgrpcpy}]] duplicates a namespace for [[RFNAMEG]]. It walks the
+entire mount table hash, cloning every [[\hlink{Mhead}]] and [[\hlink{Mount}]].
+The tricky part is preserving the [[mountid]] order: mount ids are
+allocated globally and must increase monotonically, so the copy
+collects all old mounts in sorted order via [[\hlink{pgrpinsert}]] and then
+assigns new ids in the same sequence.
+
 <<function [[pgrpcpy]]>>=
 /*
  * pgrpcpy MUST preserve the mountid allocation order of the parent group
@@ -25203,12 +25608,12 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 
 % will talk about PC version because simpler (for once).
 
-% interrupt i8042intr 
+% interrupt i8042intr
 % -> kbdputsc (accumulate, handle special keys) sc for scan code
 % -> kbdputc (which adjust kbd circular buffer);
 
-% interrupt kbdcclock 
-% -> echo() 
+% interrupt kbdcclock
+% -> echo()
 % -> qproduce(kbdq) (and echoscreen()!)
 
 % types:
@@ -25221,6 +25626,34 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 % then transformed by a table in a rune, then
 % transformed by a series of bytes (utf8)!
 
+%claude:
+Keyboard input passes through a multi-stage pipeline before reaching
+a user process. When you press a key, the hardware generates a
+{scan code} (a raw byte identifying the physical key). The keyboard
+interrupt handler calls [kbdputsc] which translates that scan code
+into a {Rune} (a Unicode code point) by looking it up in one of several
+tables depending on the modifier state (Shift, Ctrl, Alt, Altgr).
+The Rune is then passed to [kbdputc], which converts it to UTF-8 bytes
+and stores them in a circular buffer ([[kbd.istage]]).
+A periodic clock callback ([kbdputcclock]) drains that buffer,
+calling [echo] which both echoes characters to the screen and
+enqueues them into [[kbdq]] via [qproduce].
+The pipeline looks like this:
+%claude:
+\begin{verbatim}
+  hardware    interrupt         clock tick        process reads
+    key  --> i8042intr --> kbdputsc --> kbdputc --> kbdputcclock --> echo
+              scan code    Rune         UTF-8       |              |
+              (1 byte)     (32-bit)     (1-4 bytes) |              |
+                                        into        v              v
+                                        istage[]  echoscreen()   qproduce(kbdq)
+\end{verbatim}
+%claude:
+The reason for the intermediate [[istage]] circular buffer and the
+clock-driven drain is to amortize the cost of queue operations:
+calling [qproduce] on every single keystroke interrupt would be
+wasteful, so instead characters accumulate at interrupt time and
+get flushed in batch every 22~ms by the clock.
 
 \subsection{Scan code}
 
@@ -25228,6 +25661,18 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 % (but they are actually decomposed back in individual chars later)
 
 % http://www.computer-engineering.org/ps2keyboard/
+
+%claude:
+The scan code tables map raw hardware bytes to Unicode code points
+(Runes). Special keys like Shift, Ctrl, and arrow keys cannot be
+represented as normal characters, so they are assigned values in
+Unicode's {Private Use Area} (starting at [[0xF000]]).
+This is a clever trick: modifier keys and function keys live in the
+same Rune space as regular characters, so the entire translation
+can be done with a single array lookup rather than complex
+conditional logic. The [[Nscan]] constant is 128 because the
+8th bit of a scan code encodes key-up vs.\ key-down, leaving
+7 bits for the key identity.
 
 \t same than keyboard.h?
 <<enum [[specialkey]]>>=
@@ -25380,6 +25825,17 @@ struct Kbscan {
 % because the scancode is processed, but /dev/kbd (see 9front)
 % allows to intercept just the press of Shift/Control/Alt/...
 
+%claude:
+The [[Kbscan]] structure tracks the current modifier key state for
+the scan code state machine. When a Shift key-down event arrives,
+[[kbscan->shift]] is set to true; when the key-up event arrives,
+it is cleared. The next regular key press then consults these flags
+to pick the right translation table ([[kbtab]], [[kbtabshift]],
+[[kbtabctrl]], or [[kbtabaltgr]]).
+The [[kbscans]] array has two entries: one for the built-in
+keyboard ([[KbInt]]) and one for an external USB keyboard
+([[KbExt]]), so each can track its modifier state independently.
+
 <<enum [[kbscan]]>>=
 /* kbscans indices */
 enum KbscanKind {
@@ -25400,10 +25856,19 @@ Kbscan kbscans[KbNscans]; /* kernel and external scan code state */
 
 %x86: kbdenable intr, i8042intr, kbdputsc(Int)
 
-
-
-
 % i8042intr -> <> -> kbdputc
+
+%claude:
+[kbdputsc] is the heart of the scan code state machine. It takes a
+raw byte from the hardware interrupt and converts it to a Rune.
+The high bit of the byte indicates key-up (release) vs.\ key-down
+(press). For key-up events, only modifier keys matter -- releasing
+a regular key has no effect, since we already processed it on
+key-down. For key-down events of modifier keys (Ctrl, Shift, Alt,
+Caps), the function updates the [[Kbscan]] state without producing
+any character. Only non-modifier key-down events result in a call
+to [kbdputc] to deposit the character.
+
 <<function [[kbdputsc]]>>=
 /*
  * Scan code processing
@@ -25545,6 +26010,18 @@ if(c > sizeof kbtab){
 % The esc1 esc2 here are not related to the Esc key.
 % The actual Esc key generates scan code 0x01
 
+%claude:
+Despite the name, this subsection has nothing to do with the Esc key
+(which is just scan code [[0x01]]). The ``esc'' here refers to
+{escape sequences} in the PS/2 scan code protocol: certain keys
+(arrow keys, Home, End, etc.) generate multi-byte sequences prefixed
+by [[0xe0]] (2-byte) or [[0xe1]] (3-byte). The state machine in
+[kbdputsc] handles this by setting [[esc1]] or [[esc2]] flags when
+it sees the prefix byte and returning immediately, then on the
+next interrupt it uses [[kbtabesc1]] instead of [[kbtab]] for the
+lookup. This is why arrow keys like Left and Right appear in
+[[kbtabesc1]] rather than in the main [[kbtab]].
+
 \l bcm/kbd.c was also defining a kbtabshiftesc1, not sure needed
 
 <<global [[kbtabesc1]]>>=
@@ -25602,6 +26079,15 @@ if(kbscan->esc1){
 
 \subsection{[[kbd]]}
 
+%claude:
+The [[ConsKbd]] structure is the staging area between the keyboard
+interrupt and the queue system. Its [[istage]] circular buffer
+accumulates UTF-8 bytes deposited by [kbdputc] at interrupt time.
+The circular buffer uses three pointers: [[iw]] (write position),
+[[ir]] (read position), and [[ie]] (end sentinel). This is a classic
+lock-free single-producer single-consumer ring buffer -- the interrupt
+handler writes at [[iw]] and the clock callback reads from [[ir]].
+
 <<struct [[ConsKbd]]>>=
 struct ConsKbd
 {
@@ -25634,6 +26120,18 @@ static struct ConsKbd kbd =
 @ 
 
 % called from raw kbd functions in previous section
+%claude:
+[kbdputc] bridges the Rune world and the byte world. It takes the
+Rune produced by [kbdputsc] and converts it to UTF-8 via [[runetochar]],
+then writes those bytes into the [[istage]] circular buffer.
+This is where the [[/dev/cons]] interface becomes UTF-8 encoded --
+even though the keyboard hardware deals in scan codes and the
+internal processing uses 32-bit Runes, what reaches user processes
+through the queue is a stream of UTF-8 bytes.
+Note the use of [[ilock]] rather than [[qlock]]: this function runs
+at interrupt time, so it must use a spin lock rather than a
+sleeping mutex.
+
 <<function [[kbdputc]]>>=
 /*
  *  Put character, possibly a rune, into kbd at interrupt time.
@@ -25675,6 +26173,16 @@ kbdputc(Rune ch)
 
 % runetochar! (runetoutf8) this is where /dev/cons interface will be utf8!
 
+%claude:
+[kbdputcclock] is called every 22~ms from the clock interrupt. It
+drains the [[istage]] circular buffer by calling [echo] on whatever
+bytes have accumulated. The wraparound case (when [[iw < ir]])
+requires two calls to [echo]: one for the tail of the buffer
+(from [[ir]] to [[ie]]) and one for the head (from [[istage]] to
+[[iw]]). There is no explicit lock here because the clock callback
+and the keyboard interrupt are carefully ordered: the clock reads
+[[iw]] once into a local variable, creating a consistent snapshot.
+
 <<clock callback kbdputcclock>>=
 /*
  *  we save up input characters till clock time to reduce
@@ -25715,6 +26223,18 @@ addclock0link(kbdputcclock, 22);
 \subsection{[[echo()]]}
 
 % double role! to add in kbdq and print on screen
+
+%claude:
+[echo] serves a dual purpose: it enqueues the keyboard bytes into
+[[kbdq]] via [qproduce] so that processes reading [[/dev/cons]]
+can consume them, and it echoes them back to the screen via the
+[[screenputs]] hook so the user can see what they typed.
+The [[screenputs]] function pointer is initially [[nil]] and gets
+set later when the graphics subsystem initializes (e.g., to
+[[swconsole_screenputs]] for framebuffer output or [[cgascreenputs]]
+on x86). In raw mode, echoing is suppressed -- the characters still
+go into [[kbdq]], but nothing is displayed, which is exactly what
+programs like [[rio]] need when they handle their own display.
 
 <<function [[echo]]>>=
 static void
@@ -25977,6 +26497,14 @@ fbblank(bool blank)
 
 % far cleaner than /dev/tty on linux!
 
+%claude:
+The console device exposes keyboard input and screen output through
+the file system as [[/dev/cons]] and [[/dev/consctl]]. Reading
+[[/dev/cons]] in cooked mode gives line-edited input: the kernel
+buffers characters until a newline or Control-D, handling backspace
+and Control-U (kill line) internally. This is much cleaner than
+Unix's layered tty/pty/termios system -- in \plan, all line
+discipline lives in this single device driver.
 
 % What C-D actually do:
 %https://utcc.utoronto.ca/~cks/space/blog/unix/TypingEOFEffects
@@ -26019,6 +26547,17 @@ static Dirtab consdir[]={
 \subsection{Buffered input}
 
 % see chapter later for queue IO
+%claude:
+The console uses a {two-queue} design. Raw keystrokes arrive in
+[[kbdq]] (the ``unprocessed'' queue, fed by [echo] via [qproduce]).
+When a process reads [[/dev/cons]] in cooked mode, the [consread]
+code pulls bytes one at a time from [[kbdq]], applies line editing
+(backspace, Control-U, newline detection), and when a complete line
+is ready, writes it into [[lineq]] (the ``processed'' queue).
+The process then reads from [[lineq]]. In raw mode, this two-stage
+pipeline is short-circuited: bytes go from [[kbdq]] directly to
+the reader without line editing.
+
 <<global [[kbdq]]>>=
 Queue*  kbdq;           /* unprocessed console input */
 @ 
@@ -26058,6 +26597,17 @@ int x;      /* index into line */
 @
 
 %!!! this is an important one!
+%claude:
+This is the core of console input. The outer [[while]] loop
+spins until [[lineq]] has data. Inside, it reads one byte at a time
+from [[kbdq]] and implements a simple line editor: backspace
+decrements the index, Control-U resets it to zero, newline marks
+the line as complete (sets [[send]]), and Control-D sends whatever
+has been accumulated (even if empty, which the reader sees as EOF).
+When [[send]] is true or the line buffer is full, the accumulated
+bytes are written to [[lineq]] in one shot. This batching means a
+[[read]] on [[/dev/cons]] always returns a complete line in cooked mode.
+
 <<[[consread()]] Qcons case>>=
 case Qcons:
     qlock(&kbd);
@@ -26121,6 +26671,13 @@ case Qcons:
 % and because rio actually create a new /dev/cons I think!
 
 %!!! this is an important one!
+%claude:
+Writing to [[/dev/cons]] calls [putstrn0], which dispatches to
+whatever output backend is active: the [[screenputs]] hook for
+display output, [[kmesg]] for the kernel message buffer, or
+the serial port. The data is copied to a local buffer first
+to avoid page faults while holding locks inside the output path.
+
 <<[[conswrite()]] Qcons case>>=
 case Qcons:
     /*
@@ -26470,6 +27027,17 @@ Dev consdevtab = {
 
 % who needs raw input? well rio, efuns!
 
+%claude:
+Raw mode is controlled by writing ``[[rawon]]'' or ``[[rawoff]]''
+to [[/dev/consctl]]. When raw mode is active, [consread] bypasses
+line editing entirely: each byte from [[kbdq]] is passed straight
+through without waiting for a newline, and [echo] skips the screen
+echo. The [[ctl]] reference count tracks how many processes have
+[[/dev/consctl]] open; when the last one closes it, raw mode is
+automatically turned off. This is important because programs like
+[[rio]] that need raw keyboard input must not leave the console
+in a broken state if they crash.
+
 <<[[ConsKbd]] other fields>>=
 bool raw;        /* true if we shouldn't process input */
 Ref ctl;        /* number of opens to the control file */
@@ -26542,6 +27110,14 @@ case Qconsctl:
 % some text which are entered just like they were entered
 % through the keyboard. So strong mouse<->keyboard interaction.
 
+%claude:
+The keyboard and mouse are tightly coupled in \plan. The [[Kbscan]]
+structure tracks mouse button state alongside modifier keys because
+some keyboards generate mouse button events (e.g., via USB HID).
+When the scan code falls in the [[Kmouse]] range, [kbdputsc] updates
+the [[buttons]] bitmask and calls the [[kbdmouse]] hook, which
+injects the event into the mouse device driver.
+
 <<[[Kbscan]] other fields>>=
 int buttons;
 @
@@ -26608,6 +27184,29 @@ case Kmouse|5:
 % hmmm this is used by kbdq, so it's independent of fs actually
 % could be in separater chapter?
 
+%claude:
+Queues are the kernel's general-purpose buffering mechanism for
+I/O data flow. Unlike simple byte ring buffers, these queues are
+{block-based}: data is stored in linked lists of [[Block]] structures,
+each containing a contiguous byte range. This design is optimized
+for networking where data arrives in packets that should not be
+split unnecessarily. Queues provide flow control (back-pressure
+when a producer is faster than a consumer), support both
+{message mode} (preserving packet boundaries) and {stream mode}
+(treating data as a byte stream), and offer two APIs: a
+process-context API ([qread]/[qwrite]) that can sleep, and an
+interrupt-context API ([qproduce]/[qconsume]) that never blocks.
+%claude:
+The state bits encode the queue's current condition. The two
+most important for flow control are [[Qstarve]] and [[Qflow]]:
+[[Qstarve]] is set by the consumer when it finds an empty queue,
+signaling the producer to wake it up when data arrives;
+[[Qflow]] is set by the producer when the queue exceeds its limit,
+signaling it to stop and wait. [[Qmsg]] changes the read semantics:
+in stream mode, partial blocks can be returned; in message mode,
+each read returns exactly one block (or discards excess data),
+preserving packet boundaries for protocols like UDP.
+
 <<enum [[queuestate]]>>=
 /* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
 enum QueueState
@@ -26621,6 +27220,18 @@ enum QueueState
   Qkick   = (1<<5), /* always call the kick routine after qwrite */
 };
 @
+
+%claude:
+The [[Queue]] structure uses separate locks for different
+concerns. The embedded [[Lock]] (a spin lock) protects the block
+list and state bits -- it is used with [[ilock]]/[[iunlock]] so it
+can be held at interrupt level. The [[rlock]] and [[wlock]] QLocks
+(sleeping mutexes) serialize multiple reader or writer processes
+respectively. The [[Rendez]] variables [[rr]] and [[wr]] are the
+sleep/wakeup rendezvous points for blocked readers and writers.
+The [[kick]] callback is called when the queue drains below the
+flow control threshold, which is used by network drivers to
+restart hardware transmission.
 
 <<struct [[Queue]]>>=
 struct Queue
@@ -26670,6 +27281,14 @@ pullupqueue(Queue *q, int n)
 }
 @
 
+
+%claude:
+[qwrite] is the process-context write API. It breaks the data into
+[[Maxatomic]]-sized chunks, wraps each in a [[Block]], and calls
+[qbwrite] which handles flow control and sleeping. In message mode
+([[Qmsg]]), only the first chunk is sent -- the loop exits after one
+iteration -- preserving the message as a single block. In stream mode,
+all chunks are sent sequentially.
 
 <<function [[qwrite]]>>=
 /*
@@ -26808,6 +27427,17 @@ qdiscard(Queue *q, int len)
 }
 @
 
+
+%claude:
+[qproduce] and [qconsume] are the interrupt-safe queue API.
+They use [[ilock]] (spin lock with interrupts disabled) instead of
+[[qlock]] (sleeping mutex), so they can be called from interrupt
+handlers. [qconsume] copies data out of the first block. If the
+queue is empty it returns [[-1]] and sets [[Qstarve]] rather than
+blocking -- an interrupt handler cannot sleep. These are the
+functions used by the keyboard driver ([echo] calls [qproduce]
+to feed [[kbdq]]) and by network device drivers that process
+packets at interrupt time.
 
 <<function [[qconsume]]>>=
 /*
@@ -26990,6 +27620,14 @@ qpassnolim(Queue *q, Block *b)
 @
 
 
+%claude:
+[qproduce] is the interrupt-safe counterpart of [qbwrite]. It
+allocates a block with [[iallocb]] (the interrupt-safe allocator
+that does not sleep), copies the data in, and appends it to the
+queue. If the queue is full, it returns [[-1]] and sets [[Qflow]]
+rather than blocking. If a consumer was starved (waiting for data),
+it clears [[Qstarve]] and wakes it up.
+
 <<function [[qproduce]]>>=
 int
 qproduce(Queue *q, void *vp, int len)
@@ -27099,6 +27737,16 @@ qcopy(Queue *q, int len, ulong offset)
 @
 
 
+%claude:
+[qopen] creates a new queue. The [[limit]] parameter sets the
+flow control threshold: when the total allocated bytes exceed this
+limit, producers get back-pressured. The [[msg]] parameter is
+actually the initial state bits -- passing [[Qmsg]] here creates a
+message-mode queue. The [[kick]] callback, if provided, is called
+whenever the queue drains below the flow control mark, giving
+network drivers a chance to restart hardware transmission.
+The queue starts in [[Qstarve]] state because there is no data yet.
+
 <<function [[qopen]]>>=
 /*
  *  called by non-interrupt code
@@ -27157,6 +27805,16 @@ notempty(void *a)
 }
 @
 
+
+%claude:
+[qwait] implements the sleep/wakeup protocol for readers.
+It is called with the queue's spin lock held. If the queue is empty,
+it sets [[Qstarve]], drops the lock, and sleeps on the [[rr]]
+rendezvous until [notempty] returns true. When it wakes up, it
+re-acquires the lock and checks again (the loop handles spurious
+wakeups). For closed queues, the [[eof]] counter allows up to 3
+reads to return 0 (EOF) before returning an error, matching the
+Unix convention that EOF can be read multiple times.
 
 <<function [[qwait]]>>=
 /*
@@ -27277,6 +27935,15 @@ qwakeup_iunlock(Queue *q)
 }
 @
 
+
+%claude:
+[qbread] and [qread] are the process-context read API. They acquire
+[[rlock]] to serialize readers, then call [qwait] which sleeps on
+[[rr]] until data arrives or the queue is closed. A key difference
+between message and stream mode appears here: in stream mode, if
+the first block is larger than requested, it is split and the
+remainder is put back with [qputback]; in message mode, excess
+data is silently discarded, preserving packet boundaries.
 
 <<function [[qbread]]>>=
 /*
@@ -27435,6 +28102,17 @@ qnotfull(void *a)
 @
 
 
+%claude:
+[qbwrite] is the workhorse behind [qwrite]. It handles the full
+lifecycle: check for closed/bypass queues, append the block,
+wake up starved readers, call the [[kick]] callback for network
+drivers, and then -- critically -- block the writer if the queue
+exceeds its limit. The flow control sleep happens \emph{after}
+the data is queued, not before. This is deliberate: it ensures that
+9P flush messages and SSL records are fully queued before the
+process can be interrupted, preventing partial writes from
+corrupting protocol state.
+
 <<function [[qbwrite]]>>=
 /*
  *  add a block to a queue obeying flow control
@@ -27543,6 +28221,14 @@ qbwrite(Queue *q, Block *b)
 @
 
 
+%claude:
+[qiwrite] is a special variant used by [[print()]] and other kernel
+output functions. Unlike [qbwrite], it does not use [[qlock]]
+because it may be called from interrupt context or from contexts
+where no process is running (e.g., during boot). It also uses
+[[iallocb]] instead of [[allocb]] and has a hardcoded 16KB limit
+to prevent runaway kernel messages from consuming all memory.
+
 <<function [[qiwrite]]>>=
 /*
  *  used by print() to write to a queue.  Since we may be arch_splhi or not in
@@ -27626,6 +28312,17 @@ qfree(Queue *q)
 }
 @
 
+
+%claude:
+[qclose] and [qhangup] both mark a queue as [[Qclosed]], but they
+differ in an important way: [qclose] immediately frees all queued
+blocks (hard close), while [qhangup] leaves the data in place so
+the consumer can drain remaining bytes before seeing the hangup
+(graceful shutdown). The [[eof]] counter in [qwait] allows
+a closed queue to be read a few times before returning an error,
+giving the reader a chance to process the final data.
+[qreopen] reverses a close, restoring the queue to its initial
+state -- this is used when a network connection is recycled.
 
 <<function [[qclose]]>>=
 /*
@@ -27831,6 +28528,22 @@ qfull(Queue *q)
 % form of file servers and can have inkernel file servers which are
 % really like filesystems in other OSes.
 
+%claude:
+In Plan 9, every device driver implements the [[Dev]] interface, which
+is essentially a file server interface. This chapter covers two in-kernel
+``filesystems'' --- the root device ([[#/]]) and the boot device --- plus the
+generic helper functions ([devdir], [devgen], [devwalk], [devstat],
+[devdirread]) that factor out the boilerplate every driver needs to
+present its files as a directory tree. The chapter ends with [[Block]],
+the I/O buffer structure used by queues and networking.
+
+%claude:
+[[Dirtab]] is a compact in-memory directory entry used by device drivers
+to describe their synthetic files. Unlike a full [[DirEntry]] (which is
+the on-the-wire 9P format), [[Dirtab]] contains just the fields a driver
+needs to enumerate its files: a name, a [[Qid]], a length, and permissions.
+The [devgen] family of helpers iterate over arrays of [[Dirtab]] entries to
+implement walk, stat, and directory reads.
 
 % used by devgenxxx helpers
 <<struct [[Dirtab]]>>=
@@ -27864,6 +28577,21 @@ struct Dirtab
 % nice trick! (data2txt or data2s?)
 
 %#/
+
+%claude:
+The root device ([[#/]]) is the in-kernel filesystem that provides the
+top-level directory structure: [[/dev]], [[/proc]], [[/bin]], [[/env]],
+[[/net]], [[/srv]], and so on. These are not real directories on disk ---
+they are just entries in a static array that serve as mount points. When
+the system boots, other devices and file servers get bound onto these
+directories (e.g., [[#c]] onto [[/dev]], [[#p]] onto [[/proc]]).
+%claude:
+Notice how many of the [[Dev]] methods delegate to default implementations
+([[devinit]], [[devshutdown]], [[devcreate]], [[devbread]], [[devbwrite]],
+[[devremove]], [[devwstat]]). The root device only needs custom
+implementations for [[rootreset]] (to populate the directory entries),
+[[rootread]]/[[rootwrite]] (to serve file content), and the walk/stat/open
+methods that use its specific [[Dirtab]] arrays.
 
 <<global [[rootdevtab]]>>=
 Dev rootdevtab = {
@@ -27899,6 +28627,13 @@ enum
 };
 @
 
+
+%claude:
+The root device stores its files in two parallel arrays: [[dir]] holds
+the [[Dirtab]] entries (names, Qids, permissions) and [[data]] holds
+pointers to file contents. The [[Dirlist]] groups these arrays together
+with counters. There are two instances: [[rootlist]] for the root
+directory and [[bootlist]] for [[/boot/]].
 
 <<struct [[Dirlist]]>>=
 struct Dirlist
@@ -27979,6 +28714,13 @@ addrootdir(char *name)
 @
 
 
+%claude:
+[rootreset] is called once at boot to populate the root directory
+with the standard Plan 9 top-level directories. These are all
+empty directories that will later be populated via [[bind]] and [[mount]]
+operations. For example, [[/dev]] will have [[#c]] (the console device)
+bound onto it, [[/proc]] will get [[#p]], and so on.
+
 <<method rootreset>>=
 static void
 rootreset(void)
@@ -27998,6 +28740,15 @@ rootreset(void)
 %pad: I added sys; at some point I was adding ksys to not conflict
 % with plan9 use of sys, but now that I've changed the mkfile to use
 % TOP and ROOT I can use sys again (like in Linux)
+
+%claude:
+[rootgen] is the [[Devgen]] callback for the root device. It dispatches
+on the Qid path to decide whether to list root directories or boot
+files. When called with [[Qdir]] it delegates to [devgen] with the
+[[rootlist]] table; when called with [[Qboot]] it uses [[bootlist]].
+For individual files (the default case), it computes an index by
+subtracting the base Qid and looks up the corresponding [[Dirtab]] entry
+directly.
 
 <<function [[rootgen]]>>=
 static int
@@ -28100,6 +28851,20 @@ rootread(Chan *c, void *buf, long n, vlong off)
 
 \section{The [[/boot/]] filesystem}
 
+%claude:
+The [[/boot/]] filesystem is a second in-kernel file store, separate
+from the root directory. At link time, essential binaries (the [[boot]]
+program, [[/bin/rc]], [[/bin/ls]], etc.) are converted to C data arrays
+by [[data2s]] and registered via [addbootfile]. This gives the kernel a
+minimal set of executables it needs to bootstrap without any external
+storage --- enough to run the [[boot]] script, which then mounts the
+real filesystem and [[bind]]s everything into place.
+%claude:
+Note how [[bootlist.base]] is set to [[Qboot]] (0x1000), ensuring that
+boot file Qids live in a different range from root directory Qids. This
+lets [rootgen] distinguish which [[Dirlist]] to consult based solely on
+the Qid path.
+
 <<globals bootdir, bootdata, bootlist>>=
 static Dirtab bootdir[Nbootfiles] = {
   {
@@ -28141,6 +28906,13 @@ addbootfile(char *name, byte *contents, ulong len)
 
 \section{Helpers}
 
+%claude:
+The [[dev.c]] helper functions --- [devdir], [devgen], [devwalk], [devstat],
+[devdirread], [devopen] --- implement the generic walk/stat/read-directory
+logic once, parameterized by a [[Dirtab]] array and a [[Devgen]] callback.
+A typical device driver just declares its file table as a static [[Dirtab]]
+array and passes it to these helpers.
+
 <<[[Qidtype]] cases>>=
 QTMOUNT = 0x10,    /* type bit for mounted channel */
 @
@@ -28168,9 +28940,19 @@ devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, DirEntry 
 
 
 
+%claude:
+The long comment before [devgen] documents a subtle tension in the
+[[Devgen]] interface. Rule (i) says a generator should list a directory's
+children; rule (ii) says it should list siblings. [devgen] follows
+rule (i) only when [[c]] is the root directory; otherwise it follows (ii).
+When [[name]] is non-nil, [devgen] does a linear search by name (for walks);
+when [[name]] is nil and [[s]] is a numeric index, it returns the s-th entry
+(for directory reads).
+
 <<function [[devgen]]>>=
 /*
  * (here, Devgen is the prototype; devgen is the function in dev.c.)
+ *
  * 
  * a Devgen is expected to return the directory entry for ".."
  * if you pass it s==DEVDOTDOT (-1).  otherwise...
@@ -28255,6 +29037,14 @@ devclone(Chan *c)
 }
 @
 
+
+%claude:
+[devwalk] is the generic walk implementation. Given a channel [[c]] and
+path components [[name]], it clones [[c]] into [[nc]], then walks each
+component by calling the [[Devgen]] callback. On partial success (some
+but not all names walked), it drops the clone and returns just the Qids
+reached so far --- the 9P layer uses this to decide whether to retry
+with a different mount point.
 
 <<function [[devwalk]]>>=
 Walkqid*
@@ -28354,6 +29144,13 @@ Done:
 @
 
 
+%claude:
+[devstat] iterates the [[Devgen]] to find the entry matching [[c]]'s Qid
+path, then serializes it with [[convD2M]]. If the generator never finds
+a match and [[c]] is a directory, it fabricates a minimal entry from
+[[c->qid]] and [[c->path]] --- this handles the case where the generator
+follows rule (i) but [devstat] needs rule (ii).
+
 <<function [[devstat]]>>=
 int
 devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
@@ -28409,6 +29206,14 @@ DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
 <<[[Chan]] other fields>>=
 int dri;      /* devdirread index */
 @
+
+%claude:
+[devdirread] is the generic [[read]] implementation for directories.
+It iterates the [[Devgen]] starting from [[c->dri]] (the saved read index),
+serializing entries with [[convD2M]] until the output buffer is full or
+the generator returns $-1$. The [[dri]] field in [[Chan]] remembers the
+position across successive [[read]] calls, so the user-space [[dirread]]
+library function can consume directory entries incrementally.
 
 <<function [[devdirread]]>>=
 long
@@ -28504,6 +29309,13 @@ long  (*bwrite)(Chan*, Block*, ulong);
 @
 % bread is called from doread() in devmnt
 
+%claude:
+[devbread] and [devbwrite] are default [[Dev]] methods that bridge
+between the block-oriented interface (used by [[devmnt]] for 9P
+communication) and the byte-oriented [[read]]/[[write]] methods that
+most devices implement. They allocate or consume a [[Block]], calling
+the device's [[read]] or [[write]] method on its data region.
+
 <<function [[devbread]]>>=
 Block*
 devbread(Chan *c, long n, ulong offset)
@@ -28554,6 +29366,13 @@ devbwrite(Chan *c, Block *bp, ulong offset)
 
 \section{[[Block]]}
 
+%claude:
+A [[Block]] is the fundamental I/O buffer in Plan 9, used by queues,
+pipes, and the networking stack. Data lives between [[rp]] (read pointer)
+and [[wp]] (write pointer), with header space before [[rp]] that lets
+protocol layers prepend headers without copying. Blocks chain via [[next]]
+for scatter/gather I/O.
+
 <<enum [[blockflag]]>>=
 /* flag values */
 enum BlockFlags
@@ -28597,6 +29416,13 @@ struct Block
 // possible alternative fix: git show 2342e706e42d1e6653c51cc1433f44816cf53fe6
 #define BLOCKALIGN  32          /* only used in allocb.c */
 @
+
+%claude:
+[_allocb] allocates a [[Block]] and its data buffer in a single
+[[mallocz]] call. The data region is aligned to [[BLOCKALIGN]] (32 bytes
+for DMA compatibility). The key subtlety is that [[rp]] starts near the
+end of the buffer, leaving [[Hdrspc]] at the front so protocol layers
+can prepend headers by decrementing [[rp]] without copying.
 
 <<function [[_allocb]]>>=
 static Block*
@@ -28644,6 +29470,13 @@ msize(void *v)
 }
 @
 
+
+%claude:
+[allocb] is for process context: it panics if memory is exhausted.
+[iallocb] below is for interrupt context: it returns nil on failure
+and tracks memory against a quota ([[conf.ialloc]]) to prevent interrupt
+handlers from consuming all memory. Blocks from [iallocb] are flagged
+[[BINTR]] so [freeb] can decrement the interrupt allocation counter.
 
 <<function [[allocb]]>>=
 Block*
@@ -28728,6 +29561,13 @@ iallocb(int size)
 }
 @
 
+
+%claude:
+[freeb] uses atomic reference counting: [[arch_xdec]] returns the new
+count, and only the caller who decrements to zero actually frees.
+Before freeing, it poisons all pointers with [[Bdead]] --- a debugging
+aid that makes use-after-free crash immediately with a recognizable
+address rather than silently corrupting data.
 
 <<function [[freeb]]>>=
 void
@@ -28821,6 +29661,15 @@ freeblist(Block *b)
 }
 @
 
+
+%claude:
+[padblock] ensures there is enough space to prepend (positive [[size]])
+or append (negative [[size]]) data to a block. If the existing header
+or trailer space is sufficient, it simply adjusts [[rp]] or does nothing.
+Otherwise it allocates a new block, copies the data, and frees the old
+one. This is the function that makes the ``prepend headers without
+copying'' design work in practice --- when the initial header space
+runs out, [padblock] transparently reallocates.
 
 <<function [[padblock]]>>=
 /*
@@ -28937,6 +29786,12 @@ concatblock(Block *bp)
 }
 @
 
+
+%claude:
+[pullupblock] consolidates the first [[n]] bytes of a block chain into
+a single contiguous block. Protocol processing often needs to examine
+a fixed-size header (e.g., an IP header) without it being split across
+blocks.
 
 <<function [[pullupblock]]>>=
 /*
@@ -29261,6 +30116,14 @@ multiple subsystems.
 % finally debugging is a form of IPC, the debugger communicate/control
 % the debuggee process
 
+%claude:
+Plan 9 provides several IPC mechanisms beyond the filesystem (which is
+itself an IPC mechanism via [[read]]/[[write]] on shared channels).
+This chapter covers notes (the Plan 9 equivalent of Unix signals, but
+string-based), pipes (bidirectional, unlike Unix), shared memory segments,
+user-level semaphores with kernel backing, and rendezvous (a lightweight
+synchronization primitive for exchanging values between processes).
+
 <<[[systab]] ipc syscalls>>=
 [NOTIFY]    sysnotify,
 [NOTED]     sysnoted,
@@ -29283,6 +30146,15 @@ multiple subsystems.
 @ 
 
 \section{Notes (signals)}
+
+%claude: %unix:
+Notes are Plan 9's replacement for Unix signals. Instead of numbered
+signals ([[SIGSEGV]], [[SIGPIPE]]), notes are arbitrary strings like
+[["sys: trap: fault read addr=0x0"]]. A process registers a handler
+via [[notify(handler)]]; when a note arrives, the kernel builds a
+``note frame'' on the user stack containing saved registers and the
+note string, then redirects execution to the handler. The handler
+calls [[noted(NCONT)]] to resume or [[noted(NDFLT)]] to terminate.
 
 <<enum [[notekind]]>>=
 enum NoteKind
@@ -29309,6 +30181,13 @@ Counter noteidalloc;
 @ 
 
 
+
+%claude:
+Each process has a circular buffer of up to [[NNOTE]] (5) pending notes.
+The [[flag]] field distinguishes user-posted notes ([[NUser]]) from system
+notes ([[NExit]], [[NDebug]]). System notes with no handler cause immediate
+termination; user notes without a handler also terminate, but a handler
+can intercept them.
 
 <<struct [[Note]]>>=
 // a kind of Unix signal
@@ -29351,6 +30230,11 @@ if(up->notepending) {
 
 
 
+
+%claude:
+The note machinery in [[Proc]] tracks several states: [[notify]] is the
+user handler, [[notified]] prevents recursive delivery, [[notepending]]
+wakes sleeping processes, and [[ureg]] saves registers for [[noted()]].
 
 <<[[Proc]] notes fields>>=
 Note  note[NNOTE];
@@ -29412,6 +30296,14 @@ if(scallnr != RFORK && (up->procctl || up->nnote))
 @
 %x86: call arch_splhi inside the if (bug in bcm/?)
 
+%claude:
+The [[NFrame]] is the activation record that [arch__notify] builds on the
+user stack. It contains a copy of the [[Ureg]] (so the handler can inspect
+and modify registers), the note message string, and a pointer to the
+previous [[NFrame]] ([[old]]) for nested notes. The [[ip]] field is set to
+zero, acting as a return address that will cause a fault if the handler
+tries to return normally instead of calling [[noted()]].
+
 <<struct [[NFrame]](arm)>>=
 struct NFrame {
     uintptr ip;
@@ -29423,6 +30315,15 @@ struct NFrame {
 };
 @
 
+
+%claude:
+[arch__notify] is the heart of note delivery. It builds an [[NFrame]]
+on the user stack containing the saved [[Ureg]], the note message, and
+the handler address, then overwrites the trap frame's PC and SP so
+that returning to user mode jumps to the handler. The handler receives
+[[(ureg*, msg)]] as arguments and calls [[noted()]] to return control.
+If the process is already notified, has no handler, or the handler
+address is invalid, the process is killed.
 
 <<function [[arch__notify]](arm)>>=
 /*
@@ -29531,6 +30432,13 @@ if(scallnr == NOTED)
 @
 
 
+%claude:
+[arch__noted] restores process state after the note handler finishes.
+[[NCONT]]/[[NRSTR]] restore saved registers and pop the note frame.
+[[NSAVE]] re-enters the handler (for coroutine-like handling). [[NDFLT]]
+terminates the process. The PSR is masked to prevent user code from
+escalating to kernel mode by modifying the saved status register.
+
 <<function [[arch__noted]](arm)>>=
 /*
  *   Return user to state before notify()
@@ -29610,6 +30518,15 @@ arch__noted(Ureg* cur, uintptr arg0)
 
 
 \subsection{[[postnote()]]}
+
+%claude:
+[postnote] is one of the trickiest functions in the kernel due to lock
+ordering. To wake a sleeping process, it needs both [[p->rlock]] and
+the [[Rendez]] lock, but [sleep] acquires them in the opposite order.
+The solution is a retry loop: acquire [[p->rlock]], try [[canlock(r)]],
+and if that fails, drop [[p->rlock]], call [[sched()]], and retry.
+The second half handles rendezvous: if the target is blocked in
+[sysrendezvous], it gets pulled out of the hash table and made ready.
 
 <<function [[postnote]]>>=
 /*
@@ -29702,6 +30619,15 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
 % Note that plan9 pipes are bidirectional! (unix pipes are unidirectional).
 % Can use a single pipe for two-way communications
 
+%claude: %unix:
+Plan 9 pipes are bidirectional: both ends can read and write. A pipe is
+a pair of [[Queue]]s: writing to [[fd[0]]] enqueues on [[q[1]]] (which
+[[fd[1]]] reads from), and vice versa. A single pipe suffices for two-way
+communication, whereas Unix requires two.
+%claude:
+[syspipe] creates a pipe by attaching to the pipe device ([[#|]]),
+cloning the channel, then walking each clone to [[data]] and [[data1]].
+
 <<syscall pipe>>=
 // int pipe(int fd[2]);
 long
@@ -29781,6 +30707,13 @@ if(devtab[c->type]->dc == '|')
 % have pipe syscall and device, both useful? the syscall
 % anyway calls the device, and named pipe
 % can be done only via the device
+
+%claude:
+The [[Pipe]] structure holds two [[Queue]]s and reference counts. The
+[[qref]] array tracks how many open channels reference each side; when
+a side's reference count drops to zero, the opposite queue is hung up
+(sending EOF to readers) and the local queue is closed. This cross-wiring
+is key to bidirectional pipes: closing one end signals the other.
 
 <<struct [[Pipe]]>>=
 struct Pipe
@@ -30065,6 +30998,12 @@ pipeopen(Chan *c, int omode)
 @
 
 
+%claude:
+[pipeclose] implements the cross-hangup semantics: when the last
+reference to [[data]] closes, it hangs up [[q[1]]] (sending EOF to
+readers of [[data1]]) and closes [[q[0]]]. When both sides reach zero
+references, the queues are reopened for potential reuse.
+
 <<method pipeclose>>=
 static void
 pipeclose(Chan *c)
@@ -30163,6 +31102,12 @@ pipebread(Chan *c, long n, ulong offset)
 }
 @
 
+
+%claude:
+Note the cross-wiring in [pipewrite]: writing to [[Qdata0]] enqueues
+on [[q[1]]], and writing to [[Qdata1]] enqueues on [[q[0]]]. If the
+write fails (the other end is closed), a [["sys: write on closed pipe"]]
+note is posted --- the Plan 9 equivalent of Unix's [[SIGPIPE]].
 
 <<method pipewrite>>=
 /*
@@ -30267,6 +31212,14 @@ Dev pipedevtab = {
 % shared segment? and so semaphore? libc_thread?
 % can have semaphore without segments?
 
+%claude:
+Shared memory segments are created via [[segattach()]], which maps a
+named physical memory region ([[Physseg]]) into the process's address
+space. Multiple processes can attach the same segment to share memory.
+The semaphore syscalls ([[semacquire]], [[semrelease]]) operate on
+addresses within shared segments, providing the kernel-side backing for
+user-level locks.
+
 \subsection{Segment}
 
 <<[[Segtype]] other flags>>=
@@ -30328,6 +31281,15 @@ syssegattach(ulong* arg)
 <<hook [[_globalsegattach]]>>=
 Segment* (*_globalsegattach)(Proc*, char*);
 @
+
+%claude:
+[segattach] first tries to find a globally registered segment with
+the matching name (via the [[_globalsegattach]] hook). If none exists,
+it searches the [[physseg]] table for a matching [[Physseg]], finds a
+free slot in the process's segment array, and uses [isoverlap] to
+locate a non-conflicting virtual address range (growing downward from
+the stack). This is how device drivers expose memory-mapped hardware
+to user space.
 
 <<function [[segattach]]>>=
 ulong
@@ -30523,6 +31485,14 @@ if(s->ref > 1)
 @
 
 % seems really expensive
+%claude:
+When a shared segment is modified (e.g., pages freed via [[mfreeseg]]),
+all processes sharing it must flush their TLB entries. [procflushseg]
+iterates over all processes and CPUs, setting [[newtlb]] and
+[[flushmmu]] flags. It then busy-waits for each CPU to take a clock
+interrupt and perform the flush --- an expensive but necessary operation
+for multiprocessor correctness.
+
 <<function [[procflushseg]]>>=
 /*
  *  wait till all processes have flushed their mmu
@@ -30646,6 +31616,14 @@ syssegflush(ulong* arg)
 \subsection{Semaphore}
 
 % and show code of libcore/libc/port/lock.c! that uses that
+
+%claude:
+Plan 9's semaphores are a hybrid user/kernel design. The semaphore
+value lives in user memory (shared segment), and the fast path uses
+compare-and-swap entirely in user space. Only when a process must block
+does it enter the kernel via [[semacquire()]], which enqueues a [[Sema]]
+on the segment's wait list and calls [sleep]. This gives spin-lock
+performance in the uncontended case with proper blocking when needed.
 
 <<struct [[Sema]]>>=
 // user level semaphores, used to implement user-level lock, 
@@ -30798,6 +31776,14 @@ semawoke(void *p)
 }
 @ 
 
+
+%claude:
+The [semacquire] loop is subtle: after enqueuing itself on the wait
+list, the process sets [[phore.waiting = true]], calls [[coherence()]]
+to ensure the write is visible, then tries [[canacquire]] one more time.
+This recheck prevents a lost-wakeup race where [[semrelease]] could run
+between the failed [[canacquire]] and the [sleep]. If a note interrupts
+the sleep, the function cleans up and re-raises the error via [nexterror].
 
 <<function [[semacquire]]>>=
 /* Acquire semaphore (subtract 1). */
@@ -30958,6 +31944,13 @@ syssemrelease(ulong* arg)
 % it's more for synchro than for IPC but they
 % actually exchange a value there!
 
+%claude:
+[[rendezvous()]] is a lightweight synchronization primitive that also
+exchanges a value. Two processes call [[rendezvous(tag, value)]] with the
+same tag: the first to arrive sleeps in a hash table; when the second
+arrives, they swap values and both continue. The [[Rgrp]] (rendezvous
+group) scopes which processes can rendezvous with each other.
+
 <<function [[REND]]>>=
 enum
 {
@@ -31016,6 +32009,13 @@ closergrp(Rgrp *r)
 <<[[Procstate]] cases>>=
 Rendezvous,
 @
+
+%claude:
+[sysrendezvous] searches the hash table for a process with the same
+tag. If found, it swaps values and wakes the sleeper. If not found,
+the caller inserts itself into the hash chain, sets state to
+[[Rendezvous]], and calls [[sched()]] to sleep until a partner arrives.
+A return value of [[~0]] indicates interruption (e.g., by a note).
 
 <<syscall rendezvous>>=
 // void* rendezvous(void* tag, void* value);
