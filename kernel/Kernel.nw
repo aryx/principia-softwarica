@@ -19022,6 +19022,15 @@ a deliberate reboot via [[arch_reboot()]].
 
 \section{Booting the kernel}
 
+%claude:
+The boot process has three stages: the Broadcom firmware
+loads the kernel binary at physical [[0x8000]], the assembly
+startup code ([[_start]]) sets up a minimal environment
+(SVC mode, stack, basic page tables), and then [[main()]]
+in C initializes every kernel subsystem we have seen in
+the previous chapters---memory, processes, devices, timers
+---and creates the first user process.
+
 %related: https://people.kernel.org/linusw/how-the-arm32-kernel-starts
 
 \subsection{Loading the kernel in physical memory (ARM)}
@@ -19035,6 +19044,14 @@ a deliberate reboot via [[arch_reboot()]].
 
 
 \subsection{First instructions (ARM)}
+
+%claude:
+The very first instructions set up the minimum needed to
+run C code: the static base register [[R12]] (adjusted
+for physical addresses since the MMU is still off), SVC
+mode with interrupts disabled, and a stack at the top of
+the [[Cpu]] structure at [[CPUADDR]]. Then it jumps to
+[[armstart]] to set up the page tables:
 
 % Setup the base pointer, stack pointer, supervisor mode.
 
@@ -19081,6 +19098,26 @@ TEXT _start(SB), 1, $-4
 
 
 \subsection{Basic pagination (ARM)}
+
+%claude:
+Before calling C [[main()]], [[armstart]] sets up a
+minimal page table so that the MMU can be enabled.
+It first disables the MMU and caches, clears the memory
+between [[CPUADDR]] and [[KTZERO]] (which will hold the
+[[Cpu]] struct and the L1/L2 tables), then calls
+[[mmuinit()]] to populate the L1 page directory with
+three sets of mappings:
+\begin{verbatim}
+  1. RAM at KZERO:  pa 0 -> va KZERO  (Section entries)
+  2. Identity map:  pa 0 -> va 0      (so PC works after MMU on)
+  3. I/O at VIRTIO: pa soc.physio -> va VIRTIO
+  4. Vectors:       pa 0 -> va HVECTORS (via L2, Coarse entry)
+\end{verbatim}
+%claude:
+After enabling the MMU and caches, [[armstart]] adjusts
+[[R12]] (SB) and [[R13]] (SP) to their virtual (KZERO)
+addresses and jumps to [[_startpg]], which calls C
+[[main()]].
 
 <<function [[armstart]](raspberry pi1)(arm)>>=
 TEXT armstart(SB), 1, $-4
@@ -19227,6 +19264,19 @@ TEXT _startpg(SB), 1, $-4
 
 \section{Kernel initialization (ARM)}
 
+%claude:
+[[main()]] initializes every kernel subsystem in the right
+order---a chicken-and-egg problem, since each subsystem
+depends on others. The sequence is roughly:
+(1)~CPU and memory detection,
+(2)~kernel memory allocator ([[xinit]]),
+(3)~console output ([[uartconsinit]], [[screeninit]]),
+(4)~exception vectors and clock interrupts,
+(5)~process and page allocators ([[procinit]], [[pageinit]]),
+(6)~device drivers ([[chandevreset]]),
+(7)~first user process ([[userinit]]),
+(8)~enter the scheduler ([[schedinit]]).
+
 <<function [[main]](arm)>>=
 void
 main(void)
@@ -19308,6 +19358,14 @@ extern  char  end[];
 @ 
 
 \subsection{[[cpu]] initialization}
+
+%claude:
+[[arch__cpu0init()]] initializes the boot CPU's [[Cpu]]
+structure: sets [[cpuno]] to~0, registers it in the
+[[cpus]] array, and clears [[up]] (no process running
+yet). [[machon()]] then marks this CPU as active in the
+[[Active]] bitmap so the scheduler knows it exists:
+
 % not portable code, because (arm), but in practice most archi have same code
 % and manipulate only port data-structure
 
@@ -19393,6 +19451,11 @@ cputype2name(char *buf, int size)
 
 \subsection{Memory detection (ARM)}
 
+%claude:
+The Raspberry Pi does not have a BIOS memory map like
+x86. Instead, [[getramsize()]] queries the Broadcom
+GPU via the mailbox interface ([[vcreq]]) to find the
+base and limit of ARM-accessible RAM:
 
 <<function [[getramsize]](arm)>>=
 /*
@@ -19413,6 +19476,14 @@ getramsize(Confmem *mem)
 
 
 \subsection{[[conf]] initialization (ARM)}
+
+%claude:
+[[arch__confinit()]] determines how much physical memory
+is available (via the Broadcom mailbox interface),
+splits it into kernel and user portions (80\% user by
+default), and computes the sizes of all the large kernel
+data structures: the [[Proc]] array, [[Page]] array,
+[[KImage]] array, swap map, and [[malloc]] pools.
 
 <<[[main()]] parsing options and boot arguments(arm)>>=
 //optionsinit("/boot/boot boot"); // setup values for getconf() 
@@ -19549,6 +19620,14 @@ else if(p != nil)
 
 \subsection{Exception vector initialization (ARM)}
 
+%claude:
+[[arch__trapinit()]] copies the [[vectors]] and [[vtable]]
+code (from the Interrupts chapter) to [[HVECTORS]]
+([[0xFFFF0000]]), disables all interrupts, and sets up
+scratch stacks for each exception mode (IRQ, ABT, UND)
+so that [[_vxxx]] handlers have somewhere to save
+[[R0]]--[[R4]]:
+
 <<struct [[Vpage0]](arm)>>=
 /*
  *   Layout at virtual address KZERO (double mapped at HVECTORS).
@@ -19652,6 +19731,13 @@ TEXT setr13(SB), 1, $-4
 
 \subsection{Clock initialization (ARM)}
 
+%claude:
+[[clockinit()]] measures the CPU frequency by timing
+cycles against the 1~MHz system timer, then registers
+[[clockintr]] as the handler for [[IRQtimer3]]. After
+this, the hardware will generate an interrupt when
+system timer~3's compare register matches the counter:
+
 % http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
 
 % 9 use system time compare register number 3 (tn->c3).
@@ -19705,6 +19791,13 @@ clockinit(void)
 
 \subsection{Timer initialization}
 
+%claude:
+[[timersinit()]] creates the periodic timer that drives
+[[hzclock()]]. The timer's [[tf]] callback is set to
+[[nil]], which [[timerintr()]] interprets as ``call
+[[hzclock()]]''. This is the timer that makes the kernel
+tick:
+
 % note that portable code.
 
 <<global [[timersinited]]>>=
@@ -19739,6 +19832,13 @@ timersinit(void)
 
 
 \subsection{Virtual memory initialisation (ARM)}
+
+%claude:
+[[mmuinit1()]] finishes what [[mmuinit()]] started: it
+records the L1 table in [[cpu->mmul1]] and removes the
+identity mapping of physical address~0 that was needed
+only while the MMU was being enabled:
+
 % part 2
 
 % main -> <>
@@ -19763,6 +19863,14 @@ mmuinit1(void *a)
 
 
 \subsection{Memory initialisation}
+
+%claude:
+The memory initialization functions allocate the large
+kernel data structures using [[xalloc]] from the Memory
+chapter. [[xinit()]] splits physical memory between the
+kernel ([[xhole]]) and user pages ([[palloc.mem]]).
+Then [[procinit()]], [[pageinit()]], [[swapinit()]], and
+[[imageinit()]] each allocate their respective arrays:
 
 %setup kernel memory xlists and also palloc.mem which is all about user memory
 
@@ -19974,6 +20082,14 @@ if (imagealloc.free == nil)
 
 \subsection{Device initialisation}
 
+%claude:
+[[chandevreset()]] iterates over [[devtab]] and calls
+each device driver's [[reset()]] method. This is where
+most hardware is discovered and initialized: the USB
+controller, SD card, Ethernet, console, etc. A second
+pass via [[chandevinit()]] (called later from [[init0()]])
+runs each driver's [[init()]] method in a process context:
+
 <<function [[chandevreset]]>>=
 void
 chandevreset(void)
@@ -20053,6 +20169,19 @@ getfirmware(void)
 
 
 \section{The first process (ARM)}
+
+%claude:
+[[arch__userinit()]] creates the first process by hand---there
+is no parent to [[rfork]] from. It allocates a [[Proc]],
+creates a text segment containing [[initcode]] (a tiny
+assembly program that calls [[exec("/boot/boot")]]),
+creates a stack segment, sets [[sched.pc]] to [[init0]]
+(the kernel-side startup code), and calls [[ready()]].
+When [[schedinit()]] picks this process, it jumps to
+[[init0]], which sets up the root namespace ([[/]]),
+initializes environment variables, starts the alarm
+kernel process, and finally calls [[arch_touser()]] to
+drop into user mode and execute [[initcode]].
 
 % kernel code part of first process: init0
 % user code part of first process: initcode, which will then exec boot/boot!
@@ -20393,6 +20522,16 @@ startboot(char *argv0, char **argv)
 
 
 \section{Booting the user}
+
+%claude:
+Once [[arch_touser()]] drops into user mode, [[initcode]]
+calls [[exec("/boot/boot")]], which replaces the first
+process with the boot program. [[boot.rc]] is a simple
+[[rc]] script that mounts the root file system, sets up
+the user environment, and eventually launches [[init]]
+and then the shell. At this point, the kernel is fully
+operational---all the machinery from the previous chapters
+is running.
 
 % See section on Userspace system programs.
 % when arrive here, we got the first process executing! and a working kernel!
