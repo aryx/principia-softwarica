@@ -112,7 +112,7 @@ add(char *a, ...)
     va_start(arg, a);
     vseprint(output+strlen(output), output+sizeof(output), a, arg);
     va_end(arg);
-    beenhere++;
+    beenhere = true;
 }
 /*e: function [[add]](time.c) */
 /*s: function [[notifyf]](time.c) */
