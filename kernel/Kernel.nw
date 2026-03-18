@@ -32083,8 +32083,27 @@ sysrendezvous(ulong* arg)
 % the control you need a way to stop him (if it does not stop by himself
 % because of a suicide error in which case have core dumps(broken process))
 % For instance before it gets to his second syscall you got a chance
-% to print the trace of the first syscall. 
+% to print the trace of the first syscall.
 
+%claude:
+In this chapter, I will present the kernel infrastructure that makes
+debuggers and system call tracers possible. Building a tool like
+[[/bin/db]] (the Plan 9 debugger) or [[/bin/strace]] requires three
+capabilities from the kernel: the ability to \emph{stop} another
+process, the ability to \emph{inspect} its memory and registers, and
+the ability to \emph{resume} it. In \plan, all of these are provided
+through the [[/proc]] filesystem---there is no [[ptrace()]] system
+call as in \unix. The debugger simply reads and writes files like
+[[/proc/\emph{pid}/mem]], [[/proc/\emph{pid}/regs]], and
+[[/proc/\emph{pid}/ctl]].
+
+%claude:
+Breakpoints are implemented using the ARM BKPT instruction.
+When the processor hits this instruction, it triggers a prefetch
+fault, and the trap handler recognizes it as a debug event.
+For user-mode breakpoints, the kernel posts a ``sys: breakpoint''
+note to the process, which the debugger can intercept. A kernel-mode
+breakpoint is a fatal error.
 
 <<[[trap()]] when undefined instruction, if breakpoint(arm)>>=
 if(seg(up, ureg->pc, false) != nil &&
@@ -32135,6 +32154,18 @@ arch_setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 
 % can then do 'db <pid>' and start debug!
 
+%claude:
+Instead of writing core dumps to disk like \unix, Plan 9 keeps
+a crashed process alive in the [[Broken]] state. The process
+retains its address space and registers intact, so a debugger
+can attach to it with [[db \emph{pid}]] and do post-mortem analysis
+without any intermediate file. This is both more convenient (no
+multi-megabyte core files) and more faithful (the entire process
+state is preserved, not just what the kernel chose to dump).
+The kernel limits broken processes to [[NBROKEN]] (4) at a time;
+when a new one arrives and the table is full, the oldest is
+evicted and allowed to finish dying.
+
 <<[[Procstate]] cases>>=
 Broken,
 @
@@ -32170,6 +32201,18 @@ if(!freemem)
 
 
 % when call via pexit(exitstr, freemem=false)
+
+%claude:
+When [[addbroken()]] is called (from [[pexit()]] with [[freemem]]
+false), the process is suspended in the [[Broken]] state and added
+to the fixed-size [[broken]] array. If the array is full, the oldest
+broken process is evicted by calling [[ready()]] on it, which resumes
+its [[pexit()]] and lets it finally free its resources and die.
+Killing a broken process (via ``kill'' in its ctl file) calls
+[[unbreak()]], which also readies it to resume dying. The
+[[freebroken()]] function is a last-resort call from the pager when
+memory is critically low.
+
 <<function [[addbroken]]>>=
 void
 addbroken(Proc *p)
@@ -32245,6 +32288,17 @@ freebroken(void)
 
 % multi usage: strace, debugger
 
+%claude:
+The [[Stopped]] state is the foundation for all debugging. A process
+enters this state when [[procctl()]] is called with [[Proc_stopme]].
+But a process can only stop \emph{itself}---the kernel cannot
+arbitrarily suspend a running process on another CPU. Instead,
+the debugger writes ``stop'' to [[/proc/\emph{pid}/ctl]], which
+sets the target's [[procctl]] field to [[Proc_stopme]]. This field
+is checked at the next trap or system call return (via [[notify()]]),
+at which point the process stops itself. This is similar to how
+notes (signals) are delivered---they are deferred until a safe point.
+
 <<[[Procstate]] cases>>=
 Stopped,
 @
@@ -32274,7 +32328,15 @@ int procctl;  /* Control for /proc debugging */
 %    then at the entry the syscall sets the process to Stopme,
 %    but actually Proc_tracesyscall needed a stopped process to begin with
 
-
+%claude:
+The [[procctl()]] function is where a process actually stops itself.
+It is called from [[notify()]] on return from a trap or system call,
+so it runs in the context of the process being controlled (always
+[[up]]). For [[Proc_stopme]], the process sets its state to
+[[Stopped]], wakes up any waiting debugger via [[pdbg->sleepr]],
+and calls [[sched()]] to give up the CPU. It will remain in the
+scheduler's stopped list until the debugger writes ``start'' to
+its ctl file.
 
 <<function [[procctl]]>>=
 /*
@@ -32360,6 +32422,15 @@ QLock debug;    /* to access debugging elements */ // used for many things
 % one process communicating/controlling another process
 
 
+%claude:
+The [[procstopwait()]] function is the debugger's half of the
+stop/resume handshake. The debugger (caller) sets the target's
+[[procctl]] field, then sleeps on its own [[sleepr]] rendez
+until the target actually reaches the [[Stopped]] state. The
+[[pdbg]] field records who is debugging whom, so only one
+debugger can control a process at a time. When the target
+stops (in [[procctl()]]), it wakes up the sleeping debugger.
+
 <<function [[procstopwait]]>>=
 // assumes p->debug is held
 void
@@ -32431,6 +32502,16 @@ qunlock(&p->debug);
 %   check if procctl, call notify() which then call procctl() which
 %   will effectively stop ls!
 
+%claude:
+To debug a program from the start, the debugger uses the ``hang''
+mechanism. The sequence is: fork a child, write ``hang'' to the
+child's ctl file, then let the child exec the target program.
+During [[sysexec()]], the kernel sees [[up->hang]] and sets
+[[procctl]] to [[Proc_stopme]], so the child stops before executing
+its first instruction. The debugger can then set breakpoints,
+inspect the initial state, and resume with ``start''. The hang
+flag is inherited across [[rfork]], so [[strace]] can trace
+children of the traced process as well.
 
 <<[[Proc]] debugger fields>>=
 bool hang;   /* hang at next exec for debug */
@@ -32484,6 +32565,16 @@ case CMwaitstop:
 
 \section{Inspecting process memory: [[/proc/x/mem]]}
 % inspect and modify!
+
+%claude:
+Reading [[/proc/\emph{pid}/mem]] lets a debugger inspect another
+process's address space. Reads at offsets below [[KZERO]] go through
+[[procctlmemio()]], which walks the target's page tables and
+temporarily maps the physical page into kernel space to copy the data.
+Writes require the process to be stopped first. If the debugger
+writes to a text segment, the kernel first converts it to a data
+segment via [[text2data()]]---this is copy-on-write for code, needed
+because text segments may be shared across processes.
 
 <<[[procread()]] cases>>=
 case Qmem:
@@ -32671,7 +32762,37 @@ text2data(Proc *p, Segment *s)
 % show sequence diagram? cos complex.
 % why abuse notify()?
 
-% alternative approach? 
+% alternative approach?
+
+%claude:
+System call tracing uses a ping-pong protocol between the tracer
+and the traced process. The tracer writes ``startsyscall'' to
+[[/proc/\emph{pid}/ctl]], which readies the traced process and
+immediately sleeps waiting for it to stop again. The traced process
+runs until its next syscall entry, where it formats the syscall
+name and arguments into [[syscalltrace]], sets itself to
+[[Proc_stopme]], and stops. The tracer wakes up, reads
+[[/proc/\emph{pid}/syscall]], then writes ``startsyscall'' again to
+let the traced process execute the actual syscall. The process
+stops a second time after the syscall completes, allowing the
+tracer to read the return value. Here is the sequence:
+\begin{verbatim}
+  tracer                         traced (ls)
+    |                               |
+    |-- "startsyscall" --> ready    |
+    |   (sleep on sleepr)          |
+    |                          run until syscall
+    |                          format args
+    |                          stop (wakeup tracer)
+    |   read /proc/pid/syscall <---|
+    |-- "startsyscall" --> ready    |
+    |   (sleep on sleepr)          |
+    |                          execute syscall
+    |                          format return value
+    |                          stop (wakeup tracer)
+    |   read /proc/pid/syscall <---|
+    |         ... repeat ...        |
+\end{verbatim}
 
 <<[[Procctl]] cases>>=
 Proc_tracesyscall,
@@ -32778,8 +32899,14 @@ case Qsyscall:
 
 
 
-
-
+%claude:
+The [[syscallfmt()]] and [[sysretfmt()]] functions format system
+call entries and exits as human-readable strings for [[strace]].
+Each syscall number has a custom case that knows how to decode
+its specific argument types---strings are read from user space
+and quoted, pointers are shown as hex, file descriptors as
+integers. The result is stored in [[up->syscalltrace]], which
+the tracer reads via [[/proc/\emph{pid}/syscall]].
 
 <<function [[syscallfmt]]>>=
 void
@@ -33152,7 +33279,19 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
 % /proc/trace contains events from the kernel scheduler
 % I think it's useful to debug multi-process programs
 % or to debug the scheduler itself.
-% not sure it's that useful for general debugging. 
+% not sure it's that useful for general debugging.
+
+%claude:
+The [[/proc/trace]] file provides a stream of scheduler events
+for processes that have tracing enabled. Each event records a
+process ID, an event type ([[SReady]], [[SRun]], [[SDead]],
+[[SSleep]], or [[SUser]]), and a timestamp. The events are
+stored in a circular buffer of [[Nevents]] (16384) entries.
+The tracing hooks are scattered throughout the scheduler:
+in [[ready()]], [[runproc()]], [[sleep()]], and [[pexit()]].
+To avoid races, each hook copies the [[proctrace]] function
+pointer to a local variable before calling it---if the pointer
+were read twice, it could become nil between the check and the call.
 
 <<[[Proc]] debugger fields>>=
 bool trace;    /* process being traced? */
@@ -33386,6 +33525,16 @@ if(QID(c->qid) == Qtrace){
 % by user to generate a fault => when execute and reach breakpoint
 % we will be given back the hand. => efficient!
 
+%claude:
+The debugger [[db]] sets breakpoints by writing a BKPT instruction
+into the target's text segment via [[/proc/\emph{pid}/mem]] (after
+stopping the process and converting text to data with [[text2data()]]).
+When the process resumes and hits that address, the hardware
+faults, the trap handler recognizes the BKPT opcode, and a
+``sys: breakpoint'' note is posted. Since the debugger is waiting
+on the target's ctl file, it wakes up and can inspect the state.
+This is efficient because the breakpoint check happens in hardware,
+not on every instruction.
 
 \section{Other}
 
@@ -33423,7 +33572,27 @@ case CMstartstop:
 
 % should cooperate with Profiling.nw at some point
 
+%claude:
+In this chapter, I will present two forms of profiling support
+in the kernel: timing and sampling. The timing infrastructure
+tracks how much CPU time each process spends in user mode vs kernel
+mode, reported via [[/dev/cputime]] and [[/proc/\emph{pid}/status]].
+The sampling infrastructure ([[/bin/tprof]]) uses a periodic timer to
+record which instruction the program is executing, building a
+coverage histogram over the text segment. A third mechanism,
+[[/bin/prof]], requires cooperation between the compiler, linker,
+and kernel through the [[Tos]] structure at the top of the user stack.
+
 \section{[[/dev/cputime]] and [[/proc/#/status]]}
+
+%claude:
+Each process tracks five time counters: user time, system time,
+real (wall-clock) time, and cumulative user/system time of
+children. The counters are incremented by [[accountime()]], which is
+called on every clock tick and checks [[p->insyscall]] to decide
+whether to attribute the tick to user or system time. The real time
+is stored as the tick count at process creation, so the actual
+elapsed time is computed on-the-fly as [[CPUS(0)->ticks - p->time[TReal]]].
 
 <<enum [[proctimer]]>>=
 enum Proctime 
@@ -33505,6 +33674,14 @@ for(i = 0; i < 5; i++) {
 
 %https://hackernoon.com/usr-bin-time-not-the-command-you-think-you-know-34ac03e55cc3#.v96gngqz2
 
+%claude:
+The [[/bin/time]] command is trivially simple because the kernel
+already includes timing information in the wait message that
+a parent receives when a child exits. The [[Waitmsg]] carries
+three values---user, system, and real time---which [[pexit()]]
+computes from the process's counters. The [[TCUser]] and [[TCSys]]
+fields accumulate the children's times, so the reported values
+include all descendants, just like \unix's [[/usr/bin/time]].
 
 % actually waitmsg has time info, so /bin/time is pretty simple
 <<[[Waitmsg]] time field>>=
@@ -33543,10 +33720,25 @@ wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
 % oprofile, frequency count, sampling based
 % tprof? why t? tickprof? meh
 
-% coverage data for Text segment! 
+% coverage data for Text segment!
 % profile[0] will be total time in ms.
-% profile[xxx] where xxx corresponds to parts of the program 
+% profile[xxx] where xxx corresponds to parts of the program
 % that has been executed, also in ms
+
+%claude:
+Tick-based profiling ([[tprof]]) works by sampling: a periodic timer
+fires at a frequency deliberately not aligned with [[HZ]] (to avoid
+aliasing), checks what PC the user process is executing, and
+increments a counter in the [[profile]] array attached to the text
+segment. The array covers the entire text segment with a resolution
+of $2^3 = 8$ bytes per bucket ([[LRESPROF]]).
+The profile is stored in the segment rather than the process so that
+multi-threaded programs sharing the same text accumulate a single
+combined profile. The first element [[profile[0]]] holds total
+execution time in milliseconds; subsequent elements hold per-bucket
+times. The [[/bin/tprof]] tool reads [[/proc/\emph{pid}/profile]]
+and correlates the buckets with symbol information from the binary.
+
 <<[[Segment]] other fields>>=
 kern_wp  profile;  /* Tick profile area */ // for TSEG only
 @
@@ -33661,6 +33853,19 @@ case Qprofile:
 % can't have a compiled program do things like I do in Common.profile_code and
 % do a syscall to each funcall to get the time ... would be far too slow.
 % so need fast access to time in userspace! enter tos
+
+%claude:
+Function-level profiling ([[prof]]) requires cooperation between the
+compiler, linker, and kernel. The compiler instruments each function
+entry with profiling code, and the linker allocates profiling data
+structures. But making a system call on every function call would be
+far too slow, so the kernel provides the [[Tos]] (Top of Stack)
+structure mapped at the top of every user stack. This structure gives
+user code direct read access to cycle counts and a millisecond clock
+without entering the kernel. The kernel updates [[tos->kcycles]]
+and [[tos->pcycles]] on every kernel entry/exit, and [[tos->clock]]
+on every profiling tick, so the profiling library can compute
+accurate per-function times entirely in user space.
 % note: other stuff we would like to put in tos to optimize kernel<->user comm?
 
 <<struct [[Tos]]>>=
@@ -33840,6 +34045,16 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 % can execute them because they are in rootfs, via addrootfile,
 % see mkrootall in mkfile via data2txt
 
+%claude:
+This short chapter covers the handful of programs that the kernel
+needs to get from bare hardware to a running shell. These programs
+are compiled into the kernel image itself (via the root filesystem)
+so they are available before any external storage is mounted.
+The most important mechanism here is the ``sharpbang'' ([[#!]])
+support in [[sysexec()]], which is needed because the boot script
+[[boot.rc]] is an [[rc]] script, and [[sysexec()]] must recognize
+the [[#!]] header to invoke the interpreter.
+
 \section{[[/boot/boot]]}
 
 % boot.rc now!! no need complex boot.c
@@ -33859,6 +34074,15 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 \subsection{[[#!]]}
 % hmm not sure right section. Maybe should be put in advanced topics?
 %update: now that I use boot.rc, we need it more here actually!
+
+%claude:
+When [[sysexec()]] reads the file header and finds [[#!]] instead of
+a valid binary magic number, it parses the interpreter path and
+arguments from the first line with [[shargs()]], then restarts the
+exec with the interpreter as the target and the original script
+as an argument. The [[indir]] flag prevents recursive sharpbang
+processing---you cannot have a script whose interpreter is itself
+a script.
 
 <<[[sysexec()]] locals>>=
 char line[sizeof(Exec)];
@@ -33970,11 +34194,32 @@ if(indir && *argp==nil) {
 
 % other: Serial line, SCSI, see Kernel_extra.nw
 
+%claude:
+In this chapter, I cover the remaining advanced aspects of the kernel:
+floating point management, CPU caches, the memory model, SMP support
+for the Raspberry Pi~2, real-time scheduling, and the 9P fileserver
+protocol. These topics were deferred from earlier chapters because
+they add complexity on top of the core mechanisms already presented.
+
 \section{Floating point}
 
 \subsection{[[FPSaveStatus]]}
 
 %trans: see hardware support for float later. Here how plan9 adapts that.
+
+%claude:
+The kernel uses {lazy floating point context switching}: the FPU is
+kept disabled by default, and only enabled when a process actually
+executes a floating point instruction. This avoids the cost of
+saving and restoring 32 double-precision registers on every context
+switch for processes that never use floating point.
+The [[FPSaveStatus]] enum tracks where each process stands in this
+lifecycle: [[FPinit]] means the process has never used the FPU,
+[[FPactive]] means the FPU is currently on for this process,
+and [[FPinactive]] means the FPU state has been saved and the
+hardware disabled. The [[FPillegal]] bit is or'd in during note
+(signal) handling to prevent note handlers from corrupting the
+interrupted code's FPU state.
 
 <<enum [[fpsavestatus]]>>=
 /*
@@ -33997,9 +34242,14 @@ enum FPSaveStatus
 % was used before but with VFP3 I do not need that anymore
 
 % If process does not use any float registers, then no need to save them!
-% So kinda opti?  
+% So kinda opti?
 
-
+%claude:
+Each process carries an [[fpstate]] field that the scheduler hooks
+consult to decide whether FPU registers need saving or restoring.
+New processes start in [[FPinit]], and a forked child inherits the
+parent's state minus the [[FPillegal]] bit so it is not penalized
+for something the parent did in a note handler.
 
 <<[[Proc]] other fields>>=
 // enum<FPSaveStatus>
@@ -34075,6 +34325,26 @@ enum {
 \subsection{Floating point hooks}
 % many of those hooks seems portable ... so I removed the (ARM)
 
+%claude:
+The lazy FPU scheme plugs into the scheduler through a set of hooks
+called at key process lifecycle points. The flow is:
+%claude:
+\begin{verbatim}
+  procsave()  ──> fpuprocsave()    save FPU if FPactive, mark FPinactive
+  procrestore() -> fpuprocrestore() (no-op: restored lazily on fault)
+  sysrfork()  ──> fpusysrfork()   save parent's FPU before fork
+  forkchild() ──> fpusysrforkchild() copy state to child
+  sysexec()   ──> fpusysprocsetup() reset to FPinit, disable FPU
+\end{verbatim}
+%claude:
+The key insight is that [fpuprocrestore] is intentionally empty.
+Rather than eagerly restoring FPU state when a process is rescheduled,
+the kernel leaves the FPU disabled. If the process tries to use
+floating point, it triggers an ``undefined instruction'' trap, and
+[fpuemu] restores the state at that point. This means processes
+that were using FPU before being descheduled but happen not to use
+it in their next quantum pay zero cost.
+
 <<[[arch_forkchild()]] floating point(arm)>>=
 fpusysrforkchild(p, cureg, up);
 @
@@ -34115,6 +34385,16 @@ fpusysprocsetup(Proc *p)
 /* TODO: save and restore VFPv3 FP state once 5[cal] know the new registers.*/
 fpuprocsave(p);
 @
+
+%claude:
+When a process is about to be descheduled, [fpuprocsave] saves the
+FPU registers only if the process was actively using them. A dying
+process ([[Moribund]]) gets its FPU cleared outright since its state
+will never be needed again. The subtle point in the comment is that
+[fpsave] cannot handle pending unmasked exceptions here because
+[postnote] requires the process lock, which [sleep] may already
+hold. Instead, exception handling is deferred until the process
+runs again and triggers a new FPU fault.
 
 <<function [[fpuprocsave]](arm)>>=
 /*
@@ -34186,6 +34466,15 @@ fpusysrfork(Ureg*)
 @
 
 % fpuprocsave | fpusysrfork -> <>
+
+%claude:
+The actual register save loop iterates over all FPU registers
+(16 for VFPv2, 32 for VFPv3), reading each via [fpsavereg] which
+dynamically constructs a VSTR instruction. The FPSCR (floating point
+status and control register) is saved as both [[status]] and
+[[control]] so that pending exception flags and configuration bits
+are preserved separately.
+
 <<function [[fpsave]](arm)>>=
 /* should only be called if p->fpstate == FPactive */
 void
@@ -34204,6 +34493,16 @@ fpsave(Arch_FPsave *fps)
 
 
 
+
+%claude:
+Note handlers are forbidden from using the FPU because their
+execution is interposed between the interrupted code and its eventual
+resumption. If a note handler used floating point, it would silently
+corrupt the interrupted code's FPU registers. The [[FPillegal]] bit
+enforces this: [fpunotify] sets it before delivering the note, and
+if the handler tries to execute an FP instruction, [fpuemu] will
+see the bit and post an error note. When the handler finishes,
+[fpunoted] clears the bit.
 
 <<function [[fpunotify]](arm)>>=
 /*
@@ -34244,6 +34543,14 @@ fpunoted(void)
 
 \subsection{ARM floating point coprocessors (ARM)}
 
+%claude:
+On ARM, floating point is accessed through coprocessors 10 (single
+precision) and 11 (double precision). The kernel detects whether
+the hardware implements VFPv2 (16 registers) or VFPv3 (32 registers)
+and records this in [[cpu->fpnregs]]. This fork of Plan~9 relies
+on the compiler ([[5l -f]]) generating native VFP3 instructions,
+so the old software FPU emulation code (fpiarm.c) has been removed.
+
 <<[[Coprocessors]] other cases(arm)>>=
 #define CpFP        10          /* float FP, VFP cfg. */
 #define CpDFP       11          /* double FP */
@@ -34282,6 +34589,18 @@ ulong   fpscr;          /* sw copy */
 
 
 \subsection{[[coproc.c]] (ARM)}
+
+%claude:
+The ARM architecture does not provide general-purpose instructions to
+read and write individual VFP registers by index. Instead, the kernel
+uses a remarkable trick: it constructs a VMRS or VMSR instruction at
+runtime by writing the machine code into a local array, then calls
+that array as a function pointer. The [[setupfpctlop]] function
+patches the register number into the instruction encoding, flushes
+the data cache so the new instruction is visible to the instruction
+fetcher, and invalidates the instruction cache. This
+self-modifying-code technique avoids needing 32 separate
+save/restore functions.
 
 <<function [[setupfpctlop]](arm)>>=
 /* fp coproc control */
@@ -34408,6 +34727,15 @@ fpsavereg(int fpreg, uvlong *fpp)
 
 \subsection{[[vfp.c]] (ARM)}
 
+%claude:
+This subsection contains the VFP3 initialization and configuration
+code. The key function is [havefp], which probes the coprocessor
+access control register to determine what floating point hardware
+is present, then reads the FPSID register to distinguish VFPv2
+from VFPv3. The [fpon]/[fpoff] functions enable and disable
+the FPU by writing the Fpexc (exception) register, while [fpcfg]
+sets the default FPSCR configuration: denormals-are-zero (Dn),
+flush-to-zero (Fz), and round-to-nearest (FPRNR).
 
 <<enum [[_anon_]]([[(processes/arm/vfp3.c)2(arm)]])>>=
 /* fp control regs.  most are read-only */
@@ -34733,6 +35061,17 @@ condok(int cc, int c)
 #define ISVFPOP(cp, op) (((cp) == CpDFP || (cp) == CpFP) && ISCPOP(op))
 @
 
+%claude:
+When a user process executes a floating point instruction with the FPU
+disabled, the CPU raises an ``undefined instruction'' exception. The
+trap handler calls [fpuemu], which is the entry point for the lazy
+FPU scheme. It checks whether the faulting instruction is actually a
+VFP operation (using [[ISVFPOP]]), and if so calls [mathemu] to
+enable the FPU and let the instruction be retried. The [fpstuck]
+function is a debugging safeguard: if the same process faults
+repeatedly at the same PC, something is wrong and the kernel panics
+rather than looping forever.
+
 <<function [[fpuemu]](arm)>>=
 /* only called to deal with user-mode instruction faults */
 int
@@ -34802,6 +35141,16 @@ rv = fpuemu(ureg);
 
 
 \subsection{[[mathxxx()]] (ARM)}
+
+%claude:
+The [mathemu] function implements the FPU state machine. On [[FPinit]]
+(first-ever use), it calls [fpinit] to configure the hardware from
+scratch. On [[FPinactive]] (previously saved state), it checks for
+pending exceptions before restoring---if there are exceptions,
+it delivers a note to the process instead of restoring. On
+[[FPactive]] (FPU already on), the fault is a genuine illegal
+instruction. After handling any state transition, [fpclear] clears
+pending exceptions so the retried instruction starts clean.
 
 <<function [[mathnote]](arm)>>=
 static void
@@ -34916,6 +35265,18 @@ case Qfpregs:
 
 %http://duartes.org/gustavo/blog/post/intel-cpu-caches/
 
+%claude:
+CPU caches are small fast memories that sit between the processor
+and main RAM. The ARM has separate L1 caches for instructions (I-cache)
+and data (D-cache), which means code modifications (like the
+self-modifying FPU trick above, or writing exception vectors)
+require explicit cache maintenance: the D-cache must be written
+back so the new data reaches memory, and the I-cache must be
+invalidated so the processor fetches the updated instructions.
+The kernel must also manage caches around MMU operations, because
+changing page tables can make cached virtual-to-physical translations
+stale.
+
 \subsection{Instruction and data cache (ARM)}
 
 % L1, L2. Split data vs instruction cache. Related is TLB.
@@ -34959,6 +35320,17 @@ ORR $(CpCdcache|CpCicache), R0
 
 \subsection{Cache policy}
 % write-through, write-back
+
+%claude:
+The cache can operate in write-through mode (every store goes
+immediately to memory) or write-back mode (stores stay in the cache
+and are written to memory later). Write-back is more efficient but
+requires explicit ``writeback'' operations before other bus masters
+(DMA, other CPUs) need to see the data. The [[Buffered]] and
+[[Cached]] page table entry attributes select write-back caching
+for normal DRAM pages. Memory-mapped I/O regions must not be
+cached, since reading a device register should always go to the
+hardware, not return a stale cached value.
 
 % Cache/write-bufffer because cache for reading, but also cache/postpone
 % writing with write-buffer.
@@ -35014,6 +35386,11 @@ u32int  l2ptedramattrs;
 % with cache as virtual address may now correspond to something else.
 % Also issue about VIRTIO space that should not be cached.
 
+%claude:
+On ARMv6, ISB and DSB are implemented via MCR instructions to
+coprocessor~7, not as dedicated instructions. ISB invalidates the
+instruction prefetch buffer, DSB drains the write buffer. They
+are combined into the [[BARRIERS]] macro used in boot code.
 
 <<instruction ISB(arm)>>=
 #define ISB \
@@ -35030,6 +35407,19 @@ u32int  l2ptedramattrs;
 % D for data
 
 \subsection{Cache operations (ARM)}
+
+%claude:
+The ARM cache operations are accessed through MCR/MRC instructions
+to coprocessor 7 ([[CpCACHE]]). The terminology is confusing:
+ARM's ``flush'' means invalidate (discard cached data without
+writing back), and ``clean'' means writeback (push dirty data to
+memory). The operations come in three granularities: entire cache
+([[CpCACHEall]]), single cache line by virtual address
+([[CpCACHEse]]), and by set/way index ([[CpCACHEsi]]).
+The kernel provides C-callable wrappers: [[cachedwb]] (writeback),
+[[cachedwbinv]] (writeback + invalidate), [[cachedwbse]]
+(writeback a range), [[cacheiinv]] (invalidate I-cache), and
+[[cacheuwbinv]] (unified: writeback D-cache + invalidate I-cache).
 
 <<type CpCACHE secondary registers(arm)>>=
 /*
@@ -35072,7 +35462,18 @@ u32int  l2ptedramattrs;
 
 % x vs xinv
 % x vs xse
-% => 
+% =>
+
+%claude:
+The cache operations are called throughout the kernel at points where
+coherency between caches, memory, and the MMU must be maintained.
+The most common pattern is after modifying page table entries:
+[[cachedwbse]] writes back the modified PTEs so the MMU's page
+table walker sees them. Before an MMU switch ([[arch_mmuswitch]]),
+[[cacheuwbinv]] flushes everything because virtual addresses are
+about to change meaning. The self-modifying FPU code calls
+[[cachedwbse]] followed by [[cacheiinv]] to ensure the dynamically
+constructed instructions reach the I-cache.
 
 <<[[arch_mmuswitch()]] write back and invalidate cache before switch(arm)>>=
 /* write back dirty and invalidate l1 caches */
@@ -35278,6 +35679,18 @@ TEXT cacheiinv(SB), 1, $-4
 % more depending whether a load/store references data already in the cache.
 % If not in the cache, then will process further instructions.
 
+%claude:
+Modern processors do not necessarily perform memory operations in
+program order. The CPU may reorder loads and stores for performance,
+and with SMP the situation is worse because each processor has its
+own cache. {Memory barriers} force ordering: a Data Synchronization
+Barrier (DSB) ensures all preceding stores are visible before any
+following ones, and an Instruction Synchronization Barrier (ISB)
+flushes the instruction pipeline. The kernel's [arch_coherence]
+function issues both barriers and is called at critical points:
+after releasing a lock (so other processors see the unlocked state),
+around interrupt dispatch, and after compare-and-swap operations.
+
 \subsection{[[arch_coherence()]]}
 
 <<[[unlock()]] after modified key, call coherence>>=
@@ -35347,6 +35760,16 @@ if (r)
 
 % Raspberry Pi 2 has 4 processors. Cortex-a7 (used in many smartphones).
 
+%claude:
+The Raspberry Pi~2 uses a BCM2836 SoC with four Cortex-A7 cores,
+1~GB of RAM, and peripheral I/O remapped to 0x3F000000 (versus
+0x20000000 on the Pi~1). Most of the kernel is portable between
+Pi~1 and Pi~2, but SMP support, the different cache line size
+(64 bytes vs 32), the generic ARM timer, per-CPU local registers,
+and the LDREX/STREX atomic instructions are Pi~2-specific.
+The [[Soc]] structure captures these hardware differences so the
+same kernel source can target both machines.
+
 <<global [[soc]](raspberry pi2)(arm)>>=
 Soc soc = {
     .dramsize   = 1024*MiB,
@@ -35399,6 +35822,14 @@ Soc soc = {
 @
 
 \subsection{MMU}
+
+%claude:
+On the Pi~2, page table entries for DRAM include additional
+attributes: write-allocate (so cache lines are allocated on writes,
+not just reads) and sharable (so the cache coherency protocol
+keeps the entry consistent across CPUs). These are critical for
+SMP correctness---without the sharable bit, one CPU's cache could
+hold stale data that another CPU has modified.
 
 <<type [[PageTableEntryAttribute2]](arm)>>=
 #define L1wralloc   (1<<12)         /* L1 TEX */
@@ -35461,6 +35892,14 @@ l2ap(int ap)
 
 
 \subsection{Local registers}
+
+%claude:
+The BCM2836 adds per-CPU ``local'' registers at physical address
+0x40000000, above the main 1~GB RAM. These include per-CPU mailboxes
+used to start secondary processors during boot: CPU~0 writes the
+entry point address into a secondary CPU's [[startcpu]] mailbox,
+and that CPU begins executing at that address. The mailboxes are
+also used for inter-processor interrupts.
 
 <<struct [[Mbox]](arm)>>=
 /*
@@ -35560,6 +35999,16 @@ if(pa)
 
 \section{SMP (ARM)}
 
+%claude:
+Adding SMP support to the kernel requires changes at many levels:
+the boot sequence must start secondary processors, each processor
+needs its own [[Cpu]] structure and page tables, locks must use
+atomic instructions (LDREX/STREX instead of SWP), memory barriers
+must be inserted around lock operations, and the timer/interrupt
+subsystems must handle per-CPU local interrupts. The overall
+structure remains the same---each CPU ends up calling [schedinit]
+and picking up processes from the shared run queue.
+
 \subsection{Initialization adjustments}
 
 % Same 'loading the kernel in memory' and 'first instructions' in [[_start]].
@@ -35568,6 +36017,16 @@ if(pa)
 \subsubsection{Basic pagination cpu0}
 
 % Some of adjustments below are not SMP related but because of Pi2 specifics.
+
+%claude:
+The Pi~2 boot sequence for CPU~0 is almost identical to the Pi~1:
+disable MMU and caches, clear the page table area, call [mmuinit],
+then enable the MMU and jump to virtual addresses. The main
+difference is that the SMP coherency bit ([[CpACsmp]]) must be set
+in the auxiliary control register before enabling caches, so that
+L1 caches participate in the hardware coherency protocol.
+The very first thing [[armstart]] does is read the CPU ID: if this
+is not CPU~0, it branches to [[reset]] for secondary CPU startup.
 
 % _start -> <>
 <<function [[armstart]](raspberry pi2)(arm)>>=
@@ -35728,6 +36187,17 @@ TEXT _startpg(SB), 1, $-4
 
 \subsubsection{Starting the other processors}
 
+%claude:
+After CPU~0 finishes its initialization and starts the first user
+process, it calls [launchinit] to bring up the secondary CPUs.
+For each secondary CPU, [launchinit] allocates a [[Cpu]] structure
+and a fresh L1 page table (cloned from CPU~0's), then calls
+[startcpus]. The startup handshake uses the BCM2836 mailbox
+mechanism: CPU~0 writes the physical address of [cpureset] into
+the target CPU's mailbox, which wakes it up. A per-CPU lock
+synchronizes the handshake---CPU~0 locks it before starting the
+CPU and waits for the secondary to unlock it once running.
+
 <<[[main()]] start the other processors(arm)>>=
 launchinit(getncpus());
 @
@@ -35859,6 +36329,15 @@ startcpu(uint xcpu)
 
 \subsubsection{Basic pagination other cpus}
 
+%claude:
+Secondary CPUs wake up executing at the physical address written
+to their mailbox. The [cpureset] code is similar to CPU~0's
+[[armstart]] but must find its own [[Cpu]] structure: it reads
+its CPU ID, indexes into the [[cpus]] array (set up by [launchinit]),
+and uses that CPU's pre-allocated L1 page table. After enabling
+the MMU, it adds KZERO to all registers to switch into virtual
+address space, then jumps to [[_startpg2]].
+
 <<function [[cpureset]](raspberry pi2)(arm)>>=
 /*
  * startup entry for cpu(s) other than 0
@@ -35980,6 +36459,15 @@ TEXT _startpg2(SB), 1, $-4
 % No need to do confinit, xinit, etc.
 % Just need setup information for your own processor
 
+%claude:
+The C entry point for secondary CPUs is much simpler than [[main]]:
+there is no need to initialize memory pools, the device table, or
+the first user process---all of that was done by CPU~0. Each
+secondary CPU just needs to finalize its own MMU, set up its
+trap vectors and local timer, then call [schedinit] to enter the
+scheduler loop and start running processes. The [[unlock]] of
+[[startlock]] signals to CPU~0 that this CPU is ready.
+
 % Assumes cpu has been set, its mmul1 set (see launchinit?)
 
 <<function [[cpustart]](raspberry pi2)(arm)>>=
@@ -36067,6 +36555,11 @@ TEXT cpidget(SB), 1, $-4            /* main ID */
 
 \subsubsection{Halting}
 
+%claude:
+When a CPU has nothing to run, [arch_idlehands] could use WFI (Wait
+For Interrupt) to save power. However, WFI is disabled on the Pi~2
+because local timer interrupts can be lost, causing the CPU to hang.
+
 <<function [[arch_idlehands]](raspberry pi2)(arm)>>=
 TEXT arch_idlehands(SB), $-4
     MOVW    CPSR, R3
@@ -36095,6 +36588,15 @@ TEXT arch_idlehands(SB), $-4
 
 \subsection{Setting [[cpu]]}
 
+%claude:
+On a uniprocessor, the [[cpu]] pointer lives at a fixed address
+([[CPUADDR]]) and never changes. With SMP, each exception handler
+must figure out which CPU it is running on and load the correct
+[[Cpu]] pointer. The CPUID macro reads the multiprocessor ID
+register, and the result indexes into the [[cpus]] array.
+This code appears in both [[_vsvc]] (syscall entry) and
+[[_vswitch]] (trap from user mode).
+
 <<[[_vsvc()]] set cpu register(arm)>>=
 CPUID(R1)
 SLL $2, R1          /* convert to word index */
@@ -36118,6 +36620,18 @@ MOVW.EQ $CPUADDR, R0        /* paranoia: use CPUADDR if 0 */
 % If trap from kernel code, no need set R(CPU)
 
 \subsection{Concurrency adjustments}
+
+%claude:
+The Pi~1's [arch_tas] uses the SWP instruction, which is deprecated
+on ARMv7 and does not work correctly on multiprocessors. The Pi~2
+replaces it with the LDREX/STREX (load/store exclusive) pair, which
+provides true atomic compare-and-swap via the cache coherency
+protocol. LDREX loads a value and marks the cache line as
+``exclusive''; STREX stores a new value only if the line is still
+exclusive, returning success or failure. If another CPU touched
+the same cache line in between, STREX fails and the code retries.
+DMB (data memory barrier) instructions bracket the sequence to
+ensure proper ordering.
 
 <<instruction LDREX(arm)>>=
 #define LDREX(fp,t)   WORD $(0xe<<28|0x01900f9f | (fp)<<16 | (t)<<12)
@@ -36168,6 +36682,14 @@ tas0:
 %$
 
 \subsection{Timer adjustments}
+
+%claude:
+On the Pi~1, there is a single system timer shared by the one CPU.
+On the Pi~2, CPU~0 still uses the system timer, but the secondary
+CPUs use the ARM generic timer (a per-CPU countdown timer accessed
+via coprocessor 14). CPU~0 configures the prescaler to produce a
+1~MHz tick, and each secondary CPU enables its own local timer
+interrupt via [arch_intrenable] with the [[IRQcntpns]] vector.
 
 <<constant [[Localctl]](arm)>>=
 Localctl    = 0x00,
@@ -36235,6 +36757,16 @@ TEXT arm_arch_coherence(SB), $-4
 
 \subsection{Cache adjustments}
 \l not really related to SMP? Mv in Raspberry Pi2 section?
+
+%claude:
+The Cortex-A7's cache line is 64 bytes (vs 32 on the ARM1176 in Pi~1),
+and the cache operations use the ARMv7 set/way interface rather
+than the simpler whole-cache MCR instructions. The [wholecache]
+routine iterates over all sets and ways at a given cache level,
+calling a function pointer (writeback, invalidate, or both) for
+each set/way combination. This is necessary because the ARMv7
+architecture removed the ``invalidate entire data cache'' operation
+to prevent accidental data loss in multi-core systems.
 
 <<constant CACHELINESZ(raspberry pi2)(ram)>>=
 #define CACHELINESZ 64
@@ -36527,6 +37059,15 @@ inner:
 
 \subsection{IRQ adjustments}
 
+%claude:
+The Pi~2 adds per-CPU local interrupts (timer, mailbox) that are
+separate from the shared peripheral interrupts. These local IRQs
+start at number 96 ([[IRQlocal]]) and are routed through per-CPU
+pending/enable registers in the ARM local register block, rather
+than the shared [[Intregs]] used for peripheral interrupts.
+Each [[Vctl]] gains a [[cpu]] field to record which processor
+the interrupt handler was registered on.
+
 <<[[IRQ]] local cases(arm)>>=
 IRQlocal    = 96,
 IRQcntps    = IRQlocal + 0,
@@ -36604,8 +37145,25 @@ MCR CpSC, 0, R1, C(CpCLD), C(CpCLDena), CpCLDenapmnc
 % other: vmap? for devices? framebuffer related?
 % 9atom also provides patches for PAE support and amd64 support
 
+%claude:
+This section covers virtual memory features beyond the basic
+page fault handler presented in Chapter~\ref{chap:vm}: page
+coloring (a cache optimization), physical memory segments (for
+memory-mapped I/O), and the [[flushme]] mechanism for maintaining
+instruction cache coherency when text pages are modified.
+
 \subsection{Page coloring}
 \t seems unused in bcm/ too, so remove again?
+
+%claude:
+{Page coloring} is a technique to reduce cache conflicts in
+virtually-indexed caches. By assigning pages to ``colors'' based on
+their physical address, the kernel ensures that pages mapped at
+different virtual addresses do not compete for the same cache lines.
+On the ARM, the data cache is set-associative rather than
+direct-mapped, so coloring is less important---[[NCOLOR]] is set
+to~1, effectively disabling it. The machinery remains in the code
+because other architectures (like MIPS) benefit from it.
 
 <<[[Page]] other fields>>=
 // int [0..NCOLOR[
@@ -36629,6 +37187,15 @@ color = (color+1)%NCOLOR;
 @
 
 
+
+%claude:
+Each page carries a per-CPU [[cachectl]] array that tracks whether
+the instruction cache needs to be invalidated when the page is
+mapped. [[PG_TXTFLUSH]] is set by [pio] whenever a text segment
+page is written (e.g., during [sysexec]). When [arch_putmmu]
+maps this page, it checks [[cachectl]] and calls [[cacheiinv]]
+if needed. The [[flushme]] flag on a [[Segment]] controls which
+segments participate in this mechanism.
 
 <<enum [[Cachectl]]>>=
 enum Cachectl {
@@ -36732,6 +37299,20 @@ if(s->flushme)
 @
 
 \subsection{Extra segment types}
+
+%claude:
+Beyond the standard text/data/bss/stack segments,
+Plan~9 supports [[SG_SHARED]] (memory shared between processes
+via [syssegattach]) and [[SG_PHYSICAL]] (direct mapping of
+physical memory, used for memory-mapped I/O like the VGA
+framebuffer). Both are handled specially during [dupseg]:
+they share the same [[Segment]] object rather than copying,
+since the whole point is that multiple processes see the same
+memory. For [[SG_PHYSICAL]], the page fault handler
+([fixfault]) creates pages whose physical addresses map
+directly to the device's physical memory, and marks them
+uncached ([[PTEUNCACHED]]) so reads and writes go straight
+to hardware.
 
 <<[[Segtype]] other cases>>=
 SG_SHARED = 04,
@@ -36844,6 +37425,14 @@ case SG_PHYSICAL:
     }
     break;
 @
+
+%claude:
+For [[SG_PHYSICAL]] segments, the page fault handler does not allocate
+real memory. Instead, it creates a [[Page]] whose physical address
+maps directly to the device's physical address (computed from the
+segment's base PA plus the offset). The page is marked
+[[PTEUNCACHED]] so that reads and writes bypass the CPU cache and
+go directly to the hardware.
 
 <<[[fixfault()]] [[SG_PHYSICAL]] case>>=
 case SG_PHYSICAL:
@@ -37028,6 +37617,17 @@ pagenumber(Page *p)
 % FIQ Really useful? Faster because of the banked registers? Or useful
 % just because provide a two level interrupt system?
 
+%claude:
+ARM provides two interrupt levels: IRQ (normal) and FIQ (fast).
+FIQ has higher priority than IRQ and can preempt IRQ handlers.
+It also has its own banked registers (R8--R12), so a FIQ handler
+can execute without saving and restoring those registers, reducing
+latency. In this kernel, FIQ is used exclusively for USB
+interrupts ([[IRQfiq = IRQusb]]), and only one interrupt source
+can be routed to FIQ at a time. The [[_vfiq]] handler builds a
+full [[Ureg]] on the FIQ stack and calls the C function [fiq],
+which dispatches to the registered handler.
+
 \subsection{Exception [[PsrMfiq]] and associated processor mode}
 
 <<[[PsrMode]] other cases(arm)>>=
@@ -37128,6 +37728,12 @@ assert((*enable & v->mask) == 0);
 
 \subsection{[[fiq()]]}
 
+%claude:
+Unlike IRQ dispatch which walks a linked list of handlers, FIQ
+dispatch is trivial: there is at most one FIQ source, stored in
+the global [[vfiq]]. The [[ureg->pc -= 4]] adjustment is the
+standard ARM convention for interrupt return address correction.
+
 <<function [[fiq]](arm)>>=
 /*
  * called direct from lexception.s to handle fiq interrupt.
@@ -37180,6 +37786,13 @@ TEXT splfhi(SB), 1, $-4
 %void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
 %@
 %dead? Does not seem called by anything.
+
+%claude:
+Power management on the Raspberry Pi is handled through the
+VideoCore mailbox interface (see [vcreq]). The kernel can
+turn individual peripherals on or off by sending a
+[[TagSetpower]] request. Currently only [[PowerUsb]] is
+used in practice.
 
 <<enum [[Power]](arm)>>=
 enum {
@@ -37264,6 +37877,20 @@ arch_validalign(uintptr addr, unsigned align)
 
 \section{Real-time scheduling}
 
+%claude:
+Plan~9 includes an {Earliest Deadline First} (EDF) real-time
+scheduler, configurable through [[/proc/x/ctl]] commands
+([[period]], [[deadline]], [[cost]], [[admit]], [[expel]]).
+An admitted EDF process is guaranteed a CPU time budget (C)
+within each period (T), with a deadline (D) by which the budget
+must be consumed. EDF processes run at priorities above all
+best-effort processes ([[PriEdf]] and [[PriRelease]] are above
+[[Npriq]]). The scheduler hooks into the normal scheduling path:
+[runproc] checks if the selected process is EDF and calls
+[edfrun] to start a deadline timer, [sched] skips priority
+adjustment for EDF processes, and [ready] calls [edfready]
+to handle release timing.
+
 <<[[Priority]] cases for real-time priority>>=
 PriRelease  = Npriq,  /* released edf processes */
 PriEdf    = Npriq+1,  /* active edf processes */
@@ -37318,6 +37945,12 @@ if (up->edf && (up->edf->flags & Admitted))
     edfyield();
 else
 @
+
+%claude:
+EDF parameters are set by writing commands to [[/proc/x/ctl]]:
+``period 10ms'', ``cost 2ms'', ``deadline 8ms'', then ``admit'' to
+activate the schedule. The kernel checks C <= D <= T
+before running the schedulability test.
 
 <<[[procctlreq()]] optional real-time commands>>=
 /* real time */
@@ -37402,6 +38035,15 @@ ulong readytime;  /* time process came ready */
 Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
 @
 
+%claude:
+On a uniprocessor, if a real-time process spins on a lock held by
+a lower-priority process, the lower-priority process will never get
+to run and release the lock---classic priority inversion. The fix is
+to set the EDF deadline to ``now'', which causes the real-time
+process to be descheduled at the next scheduling point, giving the
+lock holder a chance to run. On a multiprocessor, this is not
+needed because the lock holder may be running on another CPU.
+
 <<[[lock()]] optional priority-inversion for real-time process>>=
 if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
     /*
@@ -37431,6 +38073,16 @@ enum EdfFlags
 };
 @ 
 
+
+%claude:
+The [[Edf]] structure stores both the task parameters (period~T,
+deadline~D, cost~C) and the per-instance state (current release
+time~r, current deadline~d, remaining slice~S). It also embeds
+a [[Timer]] (via anonymous inclusion) so the scheduler can set
+deadline and release timers directly. The [[testDelta]]/[[testtime]]
+fields are used only during the admission test, which simulates
+the schedule to verify that adding a new real-time task will not
+cause any existing task to miss its deadline.
 
 <<struct [[Edf]]>>=
 struct Edf {
@@ -37469,6 +38121,20 @@ struct Edf {
 @ 
 
 \subsection*{[[processes/edf.c]]}
+
+%claude:
+The EDF implementation centers on three interrupt-driven callbacks:
+[deadlineintr] fires when a process has consumed its time slice
+and forces a reschedule, [releaseintr] fires at the start of a
+new period to make the process eligible again, and [release]
+resets the per-period bookkeeping (remaining slice~S, new
+deadline~d). The [edfadmit] function performs an offline
+schedulability test before admitting a new real-time task:
+it simulates the combined schedule of all admitted tasks to
+verify that no deadlines will be missed. Sporadic tasks (those
+with the [[Sporadic]] flag) are released at most once per period,
+while periodic tasks are released at fixed intervals regardless
+of when they last ran.
 
 \ifallcode
 <<edf.c debugging macro>>=
@@ -38196,6 +38862,18 @@ SInte,		/* Interrupt end */
 
 % devmnt.c, devsrv.c
 
+%claude:
+When a file server is mounted on a directory, the kernel forwards
+file operations (open, read, write, walk) to the server via the
+9P protocol. The [[Mnt]] structure represents a connection to a
+file server: it holds the transport channel ([[c]]), the negotiated
+message size, and a queue of pending RPCs. The key design is
+{multiplexing}: multiple processes can have files open on the same
+server, but 9P messages must be serialized onto a single connection.
+The [[rip]] (reader in progress) field gates access---only one
+process reads replies at a time, dispatching replies to other
+waiting processes via [mountmux].
+
 \subsection{[[Mnt]]}
 
 <<struct [[Mnt]]>>=
@@ -38337,6 +39015,14 @@ muxclose(Mnt *m)
 
 \subsection{[[MntRpc]]}
 
+%claude:
+Each in-flight 9P request is represented by an [[Mntrpc]]. It pairs
+the outgoing [[Fcall]] (request) with the space for the incoming
+reply, plus a [[Rendez]] for the requesting process to sleep on
+while waiting. The [[flushed]] pointer supports the 9P flush
+protocol: if a process is interrupted, the kernel sends a
+[[Tflush]] to cancel the original request.
+
 <<struct [[Mntrpc]]>>=
 struct Mntrpc
 {
@@ -38365,6 +39051,14 @@ struct Mntrpc
 <<[[ChannelFlag]] cases>>=
 CMSG  = 0x0002,   /* the message channel for a mount */
 @
+
+%claude:
+Before any 9P operations can proceed, the client and server must
+agree on a protocol version and maximum message size through the
+[[Tversion]]/[[Rversion]] exchange. This is the only 9P message
+that is not multiplexed---it must be the first message on a new
+connection. After the handshake, [mntversion] allocates the
+[[Mnt]] structure and attaches it to the channel via [[c->mux]].
 
 % ? -> <>
 <<function [[mntversion]]>>=
@@ -38526,6 +39220,14 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
 \subsection{[[mountrpc()]]}
 
+%claude:
+The [mountrpc]/[mountio] pair implements the core RPC mechanism.
+[mountio] serializes the [[Fcall]], writes it to the server channel,
+then enters the reader gate: processes take turns being the
+``reader in progress'' ([[rip]]). The reader calls [mntrpcread]
+to receive a reply, then [mountmux] to match the reply's tag to
+the correct waiting [[Mntrpc]] and wake up that process.
+
 <<function [[mountrpc]]>>=
 void
 mountrpc(Mnt *m, Mntrpc *r)
@@ -38622,6 +39324,13 @@ mountio(Mnt *m, Mntrpc *r)
 @
 
 \subsection{[[devmnt]]}
+
+%claude:
+The mount device ([[devmnt]]) implements the kernel's 9P client.
+Its methods translate [[Chan]] operations into 9P messages, send
+them via [mountrpc], and convert the replies back. [mntattach]
+sends [[Tattach]] to establish a session, and [mntwalk] sends
+[[Twalk]] to navigate the remote file tree.
 
 \subsubsection{[[mntattach()]]}
 
@@ -38782,6 +39491,22 @@ mntwalk(Chan *c, Chan *nc, char **name, int nname)
 
 \section{Security}
 
+%claude:
+Plan~9 security is based on a per-process user identity string
+([[up->user]]) rather than numeric UIDs. The ``host owner''
+([[eve]]) is the privileged user, analogous to root on Unix.
+The [iseve] function checks whether the current process is
+running as the host owner. Authentication is handled outside the
+kernel via the [[fauth]]/[[fversion]] system calls, which set up
+an authenticated channel to a file server---the kernel itself does
+not implement any authentication protocol but provides the
+plumbing for user-space auth servers.
+%claude:
+A notable security feature is that any process can
+become ``none'' (the unprivileged identity) by writing to
+[[/dev/user]], but no process can become anyone else. This
+one-way transition provides a simple sandboxing mechanism.
+
 <<global [[eve]]>>=
 char    *eve;
 @
@@ -38931,6 +39656,21 @@ hostdomainwrite(char *a, int n)
 
 % kind of replacment for ioctl
 
+%claude:
+In this chapter, I will present the various special-purpose
+fileservers that the kernel provides: [[/env/]] for environment
+variables, [[/proc/]] for process inspection and control,
+[[/fd/]] for file descriptor access, [[/sys/]] for system
+configuration, and [[/dev/]] for miscellaneous devices.
+Each is implemented as a device driver following the [[Dev]]
+interface described in the Devices chapter. But first, the
+[[Cmdtab]] infrastructure---Plan 9's replacement for [[ioctl()]].
+Instead of cryptic numeric ioctl codes, device control files
+accept human-readable text commands like ``stop'' or ``hang''.
+The [[parsecmd()]] function tokenizes the command string into a
+[[Cmdbuf]], and [[lookupcmd()]] matches the first word against
+a table of [[Cmdtab]] entries, validating the argument count.
+
 <<struct [[Cmdtab]]>>=
 struct Cmdtab
 {
@@ -39075,7 +39815,25 @@ ncmdfield(char *p, int n)
 % in every langage globals are a convenient way to transmit info
 % from function down the line. Same here. except done in a universal way.
 
+%claude:
+In \plan, environment variables are not an in-process data structure
+as in \unix---they are files in the [[/env/]] filesystem. Each
+variable is a separate file; reading it gives the value, writing
+it sets it. This means any program in any language can access
+environment variables through the standard file API, and tools
+like [[cat]] and [[echo]] can inspect and modify them.
+The variables are grouped per-process in an [[Egrp]] (environment
+group), which can be shared or copied across [[rfork]].
+
 \subsection{[[Egrp]]}
+
+%claude:
+An [[Evalue]] pairs a name with a byte array value. The value is
+typically a string but can be arbitrary bytes. The [[Egrp]] holds a
+dynamically-sized array of [[Evalue]] pointers, reference-counted
+so that processes sharing an environment group (via [[RFENVG]])
+see the same variables. The [[envcpy()]] function performs a deep
+copy when a process gets its own environment group.
 
 <<struct [[Evalue]]>>=
 struct Evalue
@@ -39174,6 +39932,15 @@ envcpy(Egrp *to, Egrp *from)
 \subsection{[[/env/]]}
 
 %#e
+
+%claude:
+The [[ksetenv()]] function lets the kernel set environment variables
+during initialization. It works by opening a file through [[namec()]]
+using the device shorthand [[#e]] (or [[#ec]] for configuration
+variables) and writing the value to it---the kernel uses its own
+filesystem interface to talk to the environment device, treating
+itself as just another client.
+
 <<function [[ksetenv]]>>=
 /*
  *  to let the kernel set environment variables
@@ -39221,6 +39988,19 @@ Dev envdevtab = {
 \section{[[/proc/]]}
 %#p
 
+%claude:
+The [[/proc]] filesystem (device letter [[#p]]) is the most complex
+special fileserver in the kernel. Each running process appears as
+a directory [[/proc/\emph{pid}/]] containing files for inspection
+and control: [[ctl]] for sending commands, [[mem]] for reading/writing
+the address space, [[status]] for state information, [[note]] for
+posting notifications, [[regs]]/[[fpregs]] for register access,
+[[wait]] for collecting child exit statuses, [[syscall]] for tracing
+output, and [[profile]] for tick profiling data. The qid encoding
+packs both the file type (5 bits) and the process slot number
+(26 bits) into the path, with the pid in the version field for
+consistency checking.
+
 \subsection{[[/proc/x/ctl]]}
 
 \subsection{[[/proc/x/mem]]}
@@ -39230,6 +40010,13 @@ Dev envdevtab = {
 \subsection{[[/proc/x/args]]}
 
 \subsection{[[/proc/x/wait]]}
+
+%claude:
+Reading [[/proc/\emph{pid}/wait]] is an alternative to the
+[[await()]] system call for collecting child exit statuses.
+The [[qwaitr]] lock ensures only one reader can block waiting
+for children at a time---if a second reader tries, it gets an
+``in use'' error.
 
 <<[[Proc]] hierarchy fields>>=
 QLock qwaitr;
@@ -39295,6 +40082,13 @@ poperror();
 \subsection{Other [[/proc/x/xxx]]}
 
 \subsection{XXX}
+
+%claude:
+The [[procmode]] field controls the default permissions for files
+in a process's [[/proc]] directory. When [[procmode]] is 0, the
+per-file defaults from [[procdir]] apply. A process can also set
+[[privatemem]] to prevent anyone from reading its memory or
+posting notes---useful for processes handling sensitive data.
 
 <<[[Proc]] other fields>>=
 ulong procmode; /* proc device default file mode */
@@ -39393,6 +40187,14 @@ enum
 };
 @
 
+%claude:
+The [[procdir]] table defines the files visible in each
+[[/proc/\emph{pid}/]] directory, and the [[proccmd]] table below
+defines the text commands accepted by the [[ctl]] file. Files with
+permission 0000 use the process's [[procmode]] as their default;
+[[status]], [[fd]], and [[ns]] are world-readable (0444) because
+tools like [[ps]] need to read them for any process.
+
 <<global [[procdir]]>>=
 /*
  * Status, fd, and ns are left fully readable (0444) because of their use in debugging,
@@ -39453,6 +40255,15 @@ Cmdtab proccmd[] = {
     CMevent,        "event",        1,
 };
 @
+
+%claude:
+The qid encoding for [[/proc]] is cleverly packed: the low 5 bits
+of the path identify which file within the process directory
+(e.g., [[Qctl]], [[Qmem]], [[Qstatus]]), while the upper bits
+encode the process slot number. The version field carries the pid,
+so stale channels to dead-and-reallocated process slots can be
+detected. The [[QID()]], [[SLOT()]], and [[PID()]] macros
+extract these components.
 
 <<devproc QXXX macros>>=
 /*
@@ -39542,6 +40353,16 @@ Ureg kur;
 Waitq *wq;
 @
 % LP distribute
+
+%claude:
+The [[procread()]] function is a large switch on the file type
+extracted from the channel's qid. Most cases follow a similar
+pattern: validate that the target process still exists (comparing
+[[p->pid]] against [[PID(c->qid)]]), lock [[p->debug]] if needed,
+format the requested data into a buffer, and copy it to the caller.
+The [[Qstatus]] case assembles a fixed-format string with the
+process name, user, state, time counters, memory usage, and
+priority---this is what [[/bin/ps]] reads.
 
 <<method procread>>=
 static long
@@ -39709,6 +40530,17 @@ arch_setkernur(Ureg* ureg, Proc* p)
 
 
 
+%claude:
+The [[procwrite()]] method handles writes to [[/proc/\emph{pid}/ctl]]
+(dispatched to [[procctlreq()]]), [[/proc/\emph{pid}/note]]
+(posting notifications to another process), [[/proc/\emph{pid}/noteid]]
+(changing the note group for signal broadcasting),
+[[/proc/\emph{pid}/regs]] (modifying registers of a stopped
+process), and [[/proc/\emph{pid}/mem]] (writing into the
+process's address space). The [[Qnotepg]] case is handled
+specially---it uses a remembered note group ID stored in the
+channel, not the target process's current group.
+
 <<method procwrite>>=
 static long
 procwrite(Chan *c, void *va, long n, vlong off)
@@ -39820,6 +40652,13 @@ procwrite(Chan *c, void *va, long n, vlong off)
 }
 @
 
+%claude:
+The [[pgrpnote()]] function broadcasts a note (notification) to
+all processes sharing a note group---Plan 9's equivalent of
+sending a signal to a process group. Writing to
+[[/proc/\emph{pid}/notepg]] triggers this, delivering the
+message to every non-kernel process with the matching [[noteid]].
+
 <<function [[pgrpnote]]>>=
 void
 pgrpnote(ulong noteid, char *a, long n, int flag)
@@ -39853,6 +40692,15 @@ pgrpnote(ulong noteid, char *a, long n, int flag)
 }
 @ 
 
+
+%claude:
+The [[procopen()]] method enforces per-file access policies:
+[[Qtext]] and [[Qprofile]] are read-only, [[Qnote]] and [[Qmem]]
+are forbidden if the process has set [[privatemem]], and the
+``none'' user is blocked from most files via [[nonone()]]. The
+[[Qtext]] case is special---it returns a channel to the
+executable's binary file, not a synthetic proc file, allowing
+debuggers to read symbol tables.
 
 <<method procopen>>=
 static Chan*
@@ -39959,6 +40807,12 @@ procopen(Chan *c, int omode)
 @
 
 
+%claude:
+The [[procwstat()]] method allows changing the owner and default
+permissions of proc files. This is how [[chmod +w /proc/96/mem]]
+works to allow a debugger to write to a process's memory. Only the
+process owner or the host owner ([[eve]]) can change these settings.
+
 <<method procwstat>>=
 static int
 procwstat(Chan *c, byte *db, int n)
@@ -40057,6 +40911,14 @@ procfdprint(Chan *c, int fd, int w, char *s, int ns)
 }
 @
 
+%claude:
+The [[procgen()]] function generates directory entries for the
+[[/proc]] filesystem. At the top level ([[/proc/]]), it generates
+one entry per process (named by pid). Within each process directory,
+it generates entries from the [[procdir]] table. The permissions
+are computed from both the table defaults and the process's
+[[procmode]], so a process can restrict access to its own proc files.
+
 <<function [[procgen]]>>=
 static int
 procgen(Chan *c, char *name, Dirtab *tab, int, int s, DirEntry *dp)
@@ -40145,6 +41007,12 @@ procgen(Chan *c, char *name, Dirtab *tab, int, int s, DirEntry *dp)
 @
 
 
+
+%claude:
+The [[nonone()]] function implements a security policy: the ``none''
+user (the Plan 9 equivalent of ``nobody'') cannot inspect or control
+other processes. This prevents a compromised network server running
+as none from using [[/proc]] to attack other processes on the system.
 
 <<function [[nonone]]>>=
 /*
@@ -40411,6 +41279,14 @@ parsetime(vlong *rt, char *s)
 @
 
 
+%claude:
+The [[procctlreq()]] function is the central dispatch for all
+[[/proc/\emph{pid}/ctl]] commands. It parses the text command
+using [[parsecmd()]]/[[lookupcmd()]] against the [[proccmd]] table,
+then switches on the command index. The function assumes the caller
+holds [[p->debug]], which serializes all control operations on a
+given process.
+
 <<function [[procctlreq]]>>=
 // assumes p->debug is held
 void
@@ -40488,6 +41364,15 @@ procctlreq(Proc *p, char *va, int n)
 % this is actually used more than I thought. I think during
 % booting it's used. todo: why?
 
+%claude:
+The [[/fd/]] device (also known as [[devdup]]) exposes the current
+process's file descriptors as files. Opening [[/fd/0]] gives you
+a new reference to file descriptor 0. This is used during
+boot to set up standard I/O: the boot script opens the console
+device and then uses [[/fd/0]], [[/fd/1]], [[/fd/2]] to wire up
+stdin, stdout, and stderr. The [[dup()]] system call below provides
+programmatic access to the same functionality.
+
 \subsection{[[sysdup()]]}
 
 \l diff between dup fd1 fd2  and close fd2; and reopening the same
@@ -40496,6 +41381,13 @@ procctlreq(Proc *p, char *va, int n)
 <<[[systab]] special file syscalls>>=
 [DUP]       sysdup,
 @ 
+
+%claude:
+The [[dup()]] system call duplicates a file descriptor. If [[newfd]]
+is -1, a new descriptor is allocated. Otherwise, the specified
+slot is used, and any existing channel there is closed \emph{after}
+the dup---this ordering matters for idioms like
+[[date > #d/1]] where stdout is being replaced.
 
 <<syscall dup>>=
 // int dup(int oldfd, int newfd);
@@ -40560,6 +41452,16 @@ sysdup(ulong* arg)
 % if it depends on up then /dev; /sys should be for global system settings
 
 % hmm should maybe use sys_ to not confuse with syscalls
+
+%claude:
+The [[/sys/]] device (device letter [[#k]]) provides system-wide
+configuration files that are independent of any particular process:
+the OS version string, the system name, the host owner, the list
+of registered device drivers, and a reboot/halt interface. Unlike
+[[/dev/]] files which may return per-process information (e.g.,
+[[/dev/pid]]), [[/sys/]] files represent global system state. The
+distinction is: if the value depends on [[up]], it goes in [[/dev]];
+if it is a machine-wide setting, it goes in [[/sys]].
 
 <<devsys.c enum Qxxx>>=
 enum{
@@ -40816,6 +41718,16 @@ case Qdrivers:
 
 \subsection{[[/sys/reboot]]}
 
+%claude:
+Writing ``halt'', ``reboot'', or ``panic'' to [[/sys/reboot]]
+triggers a system shutdown. The reboot path is particularly
+interesting on multi-core systems: the kernel must migrate to
+CPU~0 (the boot processor), shut down all other CPUs, disable
+interrupts and caches, then copy a small trampoline
+([[rebootcode.s]]) to a fixed physical address. This trampoline
+turns off the MMU and copies the new kernel image to its
+load address before jumping to it.
+
 <<devsys.c enum Qxxx cases>>=
 Qreboot,
 @
@@ -40908,6 +41820,13 @@ bool ispanic;    /* shutdown in response to a panic */
 
 
 % arch_reboot -> <>
+
+%claude:
+The shutdown sequence calls each device driver's [[shutdown()]]
+method in reverse order of initialization. This gives devices a
+chance to flush buffers, complete pending I/O, and put hardware
+into a safe state before the system halts or reboots.
+
 <<function [[chandevshutdown]]>>=
 void
 chandevshutdown(void)
@@ -40994,6 +41913,16 @@ shutdown(int ispanic)
 bool rebooting;    /* just idle cpus > 0 */
 @
 
+
+%claude:
+The reboot function must carefully dismantle the running kernel:
+first it migrates to CPU~0, copies the reboot trampoline to a
+fixed physical address, shuts down all other CPUs, devices, and
+interrupts, then calls the trampoline which turns off the MMU
+and copies the new kernel image to its final location in physical
+memory before jumping to the entry point. The trampoline itself
+must be position-independent and work without virtual memory,
+since it disables the MMU before doing the copy.
 
 <<function [[arch_reboot]](arm)>>=
 /*
@@ -41254,6 +42183,14 @@ TEXT cachesoff(SB), 1, $-4
 % see /dev/kprof in Profiling section
 % (see also lots of /sys that used to be under /dev)
 
+%claude:
+The [[/dev/]] device (device letter [[#c]], for ``cons'') is a
+grab-bag of per-process and miscellaneous files. Some files return
+per-process values ([[/dev/pid]], [[/dev/ppid]], [[/dev/user]],
+[[/dev/cputime]]), while others provide system services
+([[/dev/random]], [[/dev/null]], [[/dev/zero]], [[/dev/time]]).
+The console ([[/dev/cons]]) was covered in the Devices chapter;
+here we see the remaining files.
 
 <<devcons.c enum Qxxx cases>>=
 Qbintime,
@@ -41293,6 +42230,18 @@ randominit();
 
 
 \subsection{[[/dev/random]]}
+
+%claude:
+The random number generator uses two layers. The outer layer
+([[nrand()]]) is a simple linear congruential generator seeded
+from the inner layer. The inner layer ([[/dev/random]]) collects
+entropy from timing jitter: a dedicated kernel process
+([[kgenrandom]]) busy-loops incrementing a counter, and a periodic
+clock callback ([[randomclock]]) samples that counter to extract
+unpredictable bits. The idea is that the exact count depends on
+cache behavior, interrupts, and scheduling---all sources of
+genuine randomness. The entropy is accumulated in a circular buffer
+([[rb]]) using a producer/consumer pattern.
 
 <<global [[randn]]>>=
 static  ulong   randn;
