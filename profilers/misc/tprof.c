@@ -18,14 +18,14 @@ struct COUNTER
 
 /*s: function error (misc/tprof.c) */
 static void
-error(int perr, char *s)
+error(bool perr, char *s)
 {
-    fprint(2, "tprof: %s", s);
+    fprint(STDERR, "tprof: %s", s);
     if(perr){
-        fprint(2, ": ");
+        fprint(STDERR, ": ");
         perror(0);
     }else
-        fprint(2, "\n");
+        fprint(STDERR, "\n");
     exits(s);
 }
 /*e: function error (misc/tprof.c) */
@@ -49,24 +49,33 @@ compar(void *va, void *vb)
 void
 main(int argc, char *argv[])
 {
-    int fd;
-    long i, j, k, n;
+    // for symbol table
+    fdt fd; // /proc/<pid>/text and then /proc/<pid>/profile
+    Fhdr f;
+    // for profile data
+    char filebuf[128], *file; // /proc/<pid>/profile
     Dir *d;
+    ulong *data; // profile content
+    // for output
+    Biobuf outbuf;
+    /*s: [[main()]](tprof.c) other locals */
+    long i, j, k, n;
     char *name;
-    ulong *data;
     ulong tbase, sum;
     long delta;
     Symbol s;
-    Biobuf outbuf;
-    Fhdr f;
     struct COUNTER *cp;
-    char filebuf[128], *file;
+    /*e: [[main()]](tprof.c) other locals */
 
+    /*s: [[main()]](tprof.c) sanity check argc and print usage */
     if(argc != 2 && argc != 3)
-        error(0, "usage: tprof pid [binary]");
+        error(false, "usage: tprof pid [binary]");
+    /*e: [[main()]](tprof.c) sanity check argc and print usage */
+
     /*
      * Read symbol table
      */
+    /*s: [[main()]](tprof.c) read symbol table */
     if(argc == 2){
         file = filebuf;
         snprint(filebuf, sizeof filebuf, "/proc/%s/text", argv[1]);
@@ -74,49 +83,73 @@ main(int argc, char *argv[])
         file = argv[2];
 
     fd = open(file, OREAD);
+    /*s: [[main()]](tprof.c) sanity check [[fd]] */
     if(fd < 0)
-        error(1, file);
+        error(true, file);
+    /*e: [[main()]](tprof.c) sanity check [[fd]] */
 
     if (!crackhdr(fd, &f))
-        error(1, "read text header");
+        error(true, "read text header");
+    /*s: [[main()]](tprof.c) sanity check [[f.type]] */
     if (f.type == FNONE)
-        error(0, "text file not an a.out");
+        error(false, "text file not an a.out");
+    /*e: [[main()]](tprof.c) sanity check [[f.type]] */
+
     machbytype(f.type);
     if (syminit(fd, &f) < 0)
-        error(1, "syminit");
+        error(true, "syminit");
     close(fd);
+    /*e: [[main()]](tprof.c) read symbol table */
+
     /*
      * Read timing data
      */
+    /*s: [[main()]](tprof.c) read timing data */
     file = smprint("/proc/%s/profile", argv[1]);
     fd = open(file, OREAD);
+    /*s: [[main()]](tprof.c) sanity check [[fd]] */
     if(fd < 0)
-        error(1, file);
+        error(true, file);
+    /*e: [[main()]](tprof.c) sanity check [[fd]] */
     free(file);
+
     d = dirfstat(fd);
+    /*s: [[main()]](tprof.c) sanity check [[d]] */
     if(d == nil)
-        error(1, "stat");
+        error(true, "stat");
+    /*e: [[main()]](tprof.c) sanity check [[d]] */
+
     n = d->length/sizeof(data[0]);
+    /*s: [[main()]](tprof.c) sanity check [[n]] */
     if(n < 2)
-        error(0, "data file too short");
+        error(false, "data file too short");
+    /*e: [[main()]](tprof.c) sanity check [[n]] */
     data = malloc(d->length);
-    if(data == 0)
-        error(1, "malloc");
+    /*s: [[main()]](tprof.c) sanity check [[data]] */
+    if(data == nil)
+        error(true, "malloc");
+    /*e: [[main()]](tprof.c) sanity check [[data]] */
     if(read(fd, data, d->length) < 0)
-        error(1, "text read");
+        error(true, "text read");
     close(fd);
 
     for(i=0; i<n; i++)
         data[i] = machdata->swal(data[i]);
+    /*e: [[main()]](tprof.c) read timing data */
 
+    /*s: [[main()]](tprof.c) displaying profile */
     delta = data[0]-data[1];
     print("total: %ld\n", data[0]);
     if(data[0] == 0)
-        exits(0);
+        exits(nil);
+    // else
     if (!textsym(&s, 0))
         error(0, "no text symbols");
+
     tbase = s.value & ~(mach->pgsize-1);	/* align down to page */
+
     print("TEXT %.8lux\n", tbase);
+
     /*
      * Accumulate counts for each function
      */
@@ -141,6 +174,7 @@ main(int argc, char *argv[])
     if (!k)
         error(0, "no counts");
     cp[k].time = 0;			/* "etext" can take no time */
+
     /*
      * Sort by time and print
      */
@@ -153,7 +187,9 @@ main(int argc, char *argv[])
                 100LL*cp[k].time/delta,
                 (1000LL*cp[k].time/delta)%10,
                 cp[k].name);
-    exits(0);
+    /*e: [[main()]](tprof.c) displaying profile */
+
+    exits(nil);
 }
 /*e: function main (misc/tprof.c) */
 /*e: misc/tprof.c */
