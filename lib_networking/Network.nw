@@ -144,12 +144,23 @@ a {network stack}.
 
 Why a network stack? Because I think you are a better programmer if
 you fully understand how things work under the hood.
-% and nowaday, internet is everything. Most programs use networks. 
+% and nowaday, internet is everything. Most programs use networks.
 % even remote app back with browser.
 
 %history?
 % Alto again? precursor?
 % Then internet.
+
+%claude:
+Nowadays, nearly every program communicates over a network.
+Web browsers, databases, chat applications, cloud services---they
+all depend on the network stack to deliver data reliably between
+machines. Yet most programmers treat the network as a black box:
+they call [[dial()]] or [[connect()]] and trust that packets
+will arrive. Understanding the internals of a network stack
+removes that mystery and gives you a much better mental model
+for diagnosing network problems, writing performant servers,
+and understanding protocols.
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -181,32 +192,90 @@ unreliable physical network?
 % talk also about ndb and ipconfig applications?
 % maybe telnet?
 
+%claude:
+I will explain in this book the code of the \plan network stack,
+which is implemented entirely in the kernel behind the
+[[/net/]] file interface. The stack includes Ethernet, IP,
+ARP, routing, UDP, IL (\plan's own reliable transport protocol),
+and TCP. In total, the networking code is roughly
+10\,000 lines of C.
+%
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and they form
+together a coherent set.
+%
+The \plan network stack has an unusual and elegant property:
+every network connection is a directory of files. Opening a
+connection means creating a directory under [[/net/tcp/]] or
+[[/net/udp/]], and communicating means reading and writing files
+in that directory. There are no sockets, no [[ioctl]]---just
+the same [[open]]/[[read]]/[[write]] interface used for everything
+else in \plan.
+%
+Another advantage is that \plan includes IL (Internet Link), a
+reliable transport protocol simpler than TCP. IL conveys the
+essential ideas of reliable communication---sequence numbers,
+acknowledgments, retransmission---without TCP's complexity
+(window scaling, congestion control, urgent data, etc.), making
+it an ideal teaching vehicle.
+
 \section{Other network stacks}
 
 Here are a few network stacks that I considered for this book, but
 which I ultimately discarded:
 \begin{itemize}
 
-\item DataKit
+%claude:
+\item DataKit was Bell Labs' packet-switching network,
+a precursor to the internet within AT\&T. Its ideas influenced
+\plan's networking, but DataKit itself is no longer in use.
 % unix ancestor? mentioned in Unix Readers
 
-\item XINU
+\item XINU's network stack is educational but too simple---it
+lacks features like routing and a complete TCP implementation.
 
-\item Linux
+\item The Linux network stack is production-quality and
+heavily optimized, but enormous. Even the core IP/TCP code
+(excluding drivers) is hundreds of thousands of lines.
 
-\item BSD
+\item The BSD network stack (especially FreeBSD's) has an
+excellent reputation and was the reference implementation of
+TCP/IP for decades. Windows even adopted a fork of the BSD
+stack at one point.
 % FreeBSD especially have strong reputation regarding its network stack.
 % apparently Windows rewrite his network stack with a fork of BSD stack
 % (can, license is quite permissive)
 % see infomagic 94, slacksrc/n/tcpip/BSD lots of sources for lots of network
 % programs
+However, like Linux, it is far too large for a book.
 
-\item Minix
+\item Minix has a network stack, but it runs as a separate
+user-space server (microkernel architecture), making it
+harder to compare with \plan's in-kernel approach.
 
-\item Mirage
+\item Mirage\furl{https://github.com/mirage/mirage-tcpip}
+is a TCP/IP stack written in OCaml as a unikernel library.
+An interesting modern approach, but the OCaml code is
+harder to relate to the C-based stacks most programmers
+encounter.
 % https://github.com/mirage/mirage-tcpip
 
 \end{itemize}
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Network stacks timeline}
+\label{fig:lineage}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major network
+stack implementations.
+%
+I think the \plan network stack represents the best compromise
+for this book: it implements the essential protocols (Ethernet,
+IP, ARP, UDP, IL, TCP) in a clean, readable codebase, with the
+added elegance of the [[/net/]] file interface.
 
 %tutorial TCP/IP 1993?
 %https://tools.ietf.org/html/rfc1180
@@ -240,16 +309,26 @@ which I ultimately discarded:
 % alternative is put it on floppy disk or CDs (that's how Linux was
 % originally distributed).
 
+%claude:
+To test the network stack, you need \plan running under QEMU
+with networking enabled:
 \begin{verbatim}
-$ qemu-system-i386 -smp 4 -m 512 -kernel $KERNEL -hda dosdisk.img -serial mon:stdio -net nic -net user
+$ qemu-system-i386 -smp 4 -m 512 -kernel $KERNEL \
+    -hda dosdisk.img -serial mon:stdio -net nic -net user
 \end{verbatim}
 % -net nic -net user
 
-% then in plan9:
+%claude:
+The [[-net nic -net user]] flags tell QEMU to emulate a network
+card and provide a virtual network where the guest (\plan) gets
+IP address [[10.0.2.15]], the gateway is [[10.0.2.2]], and a
+DNS server is at [[10.0.2.3]].
 
+%claude:
+The quickest way to get networking up inside \plan is:
 % short version:
 \begin{verbatim}
-$ ipconfig # ask IP address via DHCP
+$ ipconfig
 $ dns -r
 $ cs
 $ hget http://www.google.com
@@ -258,31 +337,35 @@ $ hget http://www.google.com
 % plan9.png screenshot used in Principia.nw
 % but I have pbs with ping :( can't even ping 8.8.8.8) but 9front too
 % for hget to work you also need the 'cs' before (connexion server?)
+%
+[[ipconfig]] obtains an IP address via DHCP.
+[[dns -r]] starts a DNS resolver.
+[[cs]] starts the connection server, which translates
+network addresses for programs like [[hget]].
+Finally, [[hget]] fetches a web page---if this works,
+the entire stack (Ethernet, IP, TCP, DNS) is functional.
 
 %alt to dhcp:
 % ipconfig -g <gateway-ip> ether /net/ether0 <your-ip> <subnet-mask>
 % ipconfig -g 10.0.2.2 ether /net/ether0 10.0.2.15 255.255.255.0
 
+%claude:
+To explore the network state in more detail, you can
+inspect the [[/net/]] files directly:
 % long version
 \begin{verbatim}
-$ ipconfig # ask IP address via DHCP
+$ ipconfig
 $ cat /net/ipifc/0/status
 device /net/ether0 ... 10.0.2.15 /120 10.0.2.0
-...
-$ ping 10.0.2.15 # localhost, yourself
+$ ping 10.0.2.15
 0: 2900microsec
 1: ...
+$ ping 10.0.2.2
 ...
-31: ...
-$ ping 10.0.2.0 # ??
-...
-$ ping 10.0.2.2 # host
 $ cat /net/iproute
 0.0.0.0 /96 10.0.2.2 4 none -
 ...
 $ cat /net/arp
-...
-$ cat /net/iproute
 ...
 $ cat /net/ndb
 ...
@@ -302,6 +385,19 @@ $ cat /net/ndb
 % cat /net/ndb
 %  you should see the dns at 10.0.2.3
 
+%claude:
+[[/net/ipifc/0/status]] shows the network interface
+configuration: which Ethernet device it is bound to and
+which IP address was assigned. [[ping]] tests connectivity
+by sending ICMP packets. [[/net/iproute]] displays the
+routing table, [[/net/arp]] shows the ARP cache (MAC-to-IP
+mappings learned from the local network), and [[/net/ndb]]
+contains the network database (DNS server address, etc.).
+All of these are just files you can [[cat]]---no special
+diagnostic commands needed.
+
+%claude:
+DNS resolution can be tested interactively with [[dnsquery]]:
 \begin{verbatim}
 $ dns -r
  starting dns resolver on 10.0.2.15's /net
@@ -313,10 +409,17 @@ www.google.com ip 216.58.204.132
 % the -r seems to be important. otherwise hget http://iwp9.org/ does
 % not work for example
 
+%claude:
+You can even make raw TCP connections with [[telnet]] using
+\plan's network address syntax \verb+proto!host!port+:
 \begin{verbatim}
 $ telnet tcp!216.58.204.132!80
 GET
 \end{verbatim}
+%
+This opens a TCP connection to Google's IP on port 80
+and sends a bare HTTP [[GET]] request---you should see
+HTML content in response.
 
 % => get possible html content!
 % GET / HTTP/1.0
@@ -324,7 +427,10 @@ GET
 
 % ex of IP: iwp9.org: 168.235.82.121
 
-
+%claude:
+For a higher-level test, [[hget]] fetches a URL.
+It requires the connection server [[cs]] to translate
+hostnames:
 \begin{verbatim}
 $ cs
 $ hget http://www.google.com
@@ -334,15 +440,26 @@ $ hget http://www.google.com
 % or telnet;  telnet tcp!www.google.com!80 didn't work before
 % cs
 
-
-
+%claude:
+Finally, for a full web browsing experience under \plan,
+you need several cooperating file servers:
 % want web!
 \begin{verbatim}
-$ plumber # mount in /mnt/plumb
-$ webcookies # mount in /mnt/webcookies
-$ webfs # mount in /mnt/web
-$ abaco # web browser relying on /mnt/web webfs services
+$ plumber
+$ webcookies
+$ webfs
+$ abaco
 \end{verbatim}
+%
+[[plumber]] handles inter-application message routing
+(mounted on [[/mnt/plumb]]),
+[[webcookies]] manages HTTP cookies
+(mounted on [[/mnt/webcookies]]),
+[[webfs]] provides a file-system interface to the web
+(mounted on [[/mnt/web]]),
+and [[abaco]] is the actual web browser that reads from
+[[webfs]]. This is the \plan philosophy in action:
+each service is a separate file server, composed together.
 
 \section{Requirements}
 
@@ -363,6 +480,28 @@ $ abaco # web browser relying on /mnt/web webfs services
 % il.ps
 % ip(8?)
 
+%claude:
+Because this book is made of C source code, you will need
+a good knowledge of the C programming language~\cite{k-r}.
+The networking code makes heavy use of byte-level manipulation
+(packing and unpacking packet headers) and concurrent
+programming (kernel processes handling incoming packets).
+%
+This book is not an introduction to computer networking.
+I assume you have a basic understanding of concepts such as
+IP addresses, ports, TCP, UDP, Ethernet, and the layered
+protocol model. Books like Tanenbaum's {\em Computer
+Networks}~\cite{tannenbaum-networks} or Kurose and Ross's
+{\em Computer Networking: A Top-Down Approach} provide
+excellent introductions.
+%
+Reading the \book{Kernel} is strongly recommended: the
+network stack runs inside the kernel and uses its facilities
+(devices, [[sleep]]/[[wakeup]], kernel processes).
+The historical paper {\em The Organization of Networks in
+Plan~9}~\cite{network-plan9} is also a useful reference for
+the design decisions behind [[/net/]].
+
 \section{About this document}
 #include "../docs/latex/About.nw"
 
@@ -381,7 +520,23 @@ people from Bell Labs.
 \chapter{Overview}
 %******************************************************************************
 
+%claude:
+Before showing the source code of the \plan network stack in
+the following chapters, I first give an overview of the general
+principles of networking, describe the [[/net/]] file interface,
+and explain how the code is organized.
+
 \section{Networking principles}
+
+%claude:
+Networking solves a fundamental problem: how to let two
+programs on different machines communicate. The solution
+involves multiple layers of abstraction, from the physical
+signals on a wire to the reliable byte streams that
+applications use. The following subsections present these
+layers bottom-up, from local networks to reliable
+transport---the same order in which the \plan network
+stack processes packets.
 
 \subsection{Local area networking}
 
@@ -390,6 +545,15 @@ people from Bell Labs.
 % old: ipx?
 
 %\subsection{Physical layer}
+
+%claude:
+A {local area network} (LAN) connects machines that are
+physically close---in the same room, building, or campus.
+The dominant LAN technology is {Ethernet}, where each
+machine has a unique hardware address (the {MAC address})
+and sends data as {frames} on a shared medium. Every machine
+on the LAN sees every frame, but only the one with the
+matching destination MAC address accepts it.
 
 \subsection{Packets and frames}
 
@@ -402,6 +566,19 @@ people from Bell Labs.
 % need packets for ethernet as you write to everybody on the "backbone",
 % and need fairness.
 % (need packet even more for internetworking)
+
+%claude:
+Data is sent over networks in discrete chunks called
+{packets} (at the IP level) or {frames} (at the Ethernet
+level). This is necessary because the network is a shared
+resource: if one machine sent a continuous stream, no other
+machine could transmit. Fixed-size packets ensure fairness.
+%
+The whole idea of the network abstraction is to provide
+what appears to be a continuous stream of data on top of
+these fixed-size packets---similar to how a file system
+provides the illusion of continuous files on top of
+fixed-size disk blocks.
 
 
 \subsection{Internetworking and gateways}
@@ -419,17 +596,44 @@ people from Bell Labs.
 %\subsection{Physical versus logical address}
 % DNS
 
+%claude:
+A LAN only connects nearby machines. To communicate across
+LANs, we need {internetworking}: a virtual network built
+on top of physical networks. The {Internet Protocol} (IP)
+assigns each machine a logical address (the {IP address})
+and uses {gateways} (routers) to forward packets between
+networks.
+%
+This is analogous to virtual memory: just as the kernel
+builds a virtual address space on top of physical memory,
+the IP layer builds a virtual global network on top of
+physical local networks. MAC addresses are the ``physical
+addresses'' and IP addresses are the ``virtual addresses.''
+
 \subsection{Reliable communication}
 
 % packets even more important here. cos unreliable. and need more fairness.
 % backbone used by many.
 
-% general datagram and specific fragments, 
+% general datagram and specific fragments,
 % to abstract away from particular physical link constraints.
 
 % tcp: because route can be complex, and can use different routes,
 % so can arrive in different order, so need protocol, ack, retransmit,
 % reorder, etc. Tricky.
+
+%claude:
+IP provides no guarantees: packets can be lost, duplicated,
+reordered, or corrupted. A {reliable transport protocol}
+(like TCP or \plan's IL) adds the machinery to provide
+an ordered, reliable byte stream on top of this unreliable
+foundation. The key mechanisms are {sequence numbers}
+(to detect reordering and loss), {acknowledgments}
+(to confirm receipt), and {retransmission timers}
+(to resend lost packets). Getting this right is one of
+the trickiest parts of a network stack, because the
+protocol must handle arbitrarily delayed, duplicated,
+and reordered packets.
 
 \subsection{Network stack}
 
@@ -438,8 +642,40 @@ people from Bell Labs.
 % and to provide different encoding protocols providing different
 % kinds of services. Also goal is to provide means to configure.
 
+%claude:
+The {network stack} is the software that implements all
+these layers. Its main job is {multiplexing} on the send
+side (many processes share one network device) and
+{demultiplexing} on the receive side (incoming packets
+must be dispatched to the right process based on addresses
+and port numbers). It also provides different protocols
+offering different levels of service: UDP for simple
+unreliable datagrams, TCP/IL for reliable streams.
+
 \subsection{Layers}
 % OSI
+
+%claude:
+Network stacks are organized in {layers}, each building
+on the one below:
+\begin{verbatim}
+  +-------------------------------+
+  |  Applications (telnet, hget)  |
+  +-------------------------------+
+  |  Transport (TCP, UDP, IL)     |
+  +-------------------------------+
+  |  Internet (IP, ICMP)          |
+  +-------------------------------+
+  |  Link (Ethernet, ARP)         |
+  +-------------------------------+
+  |  Physical (NIC hardware)      |
+  +-------------------------------+
+\end{verbatim}
+%
+Each layer adds its own header to the data (encapsulation)
+and strips it on the receiving side. The \plan network
+stack follows this layered structure closely, with each
+protocol implemented as a [[Proto]] module.
 
 
 
@@ -458,6 +694,22 @@ people from Bell Labs.
 % /net/ipfc/clone and then /net/ipfc/x/ctl
 % /net/arp
 % /net/iproute
+
+%claude:
+In \plan, every kernel service is accessed through files,
+and networking is no exception. A network connection is
+a directory of files under [[/net/]]. To open a TCP
+connection, you read [[/net/tcp/clone]] (which allocates
+a new conversation directory, say [[/net/tcp/0/]]),
+write a [[connect]] command to [[/net/tcp/0/ctl]],
+and then read and write data through [[/net/tcp/0/data]].
+%
+This contrasts with the \unix socket interface, where
+connections are created with [[socket()]], configured with
+[[ioctl()]] or [[setsockopt()]], and accessed through a
+special file descriptor type. In \plan, there is no special
+API---just [[open]], [[read]], [[write]], and [[close]]
+on regular files.
 
 % maybe can put early the 
 %    echo 'bind ether /net/ether0' > /net/ipifc/x/ctl
@@ -513,6 +765,99 @@ people from Bell Labs.
 
 % dial?
 % client/server?
+
+%claude:
+Networking is fundamentally about two programs communicating,
+so our hello world needs two sides: a {server} that listens
+for connections and a {client} that connects and sends data.
+Here is a minimal client that sends [[hello world]] over TCP:
+
+%claude:
+\begin{verbatim}
+/* helloclient.c */
+#include <u.h>
+#include <libc.h>
+
+void
+main(void)
+{
+    int fd;
+
+    fd = dial("tcp!localhost!9999", nil, nil, nil);
+    if(fd < 0)
+        sysfatal("dial: %r");
+    write(fd, "hello world\n", 12);
+    close(fd);
+    exits(nil);
+}
+\end{verbatim}
+
+%claude:
+The [[dial()]] function from [[libc]] takes a network address
+in \plan's \verb+proto!host!port+ syntax and returns a file
+descriptor for the connection. Under the hood, [[dial]]
+opens [[/net/tcp/clone]] to allocate a conversation, writes
+a [[connect]] command to the [[ctl]] file, and returns the
+[[data]] file descriptor. The programmer sees only a simple
+[[open]]$\to$[[write]]$\to$[[close]] sequence.
+
+%claude:
+Here is the corresponding server:
+
+%claude:
+\begin{verbatim}
+/* helloserver.c */
+#include <u.h>
+#include <libc.h>
+
+void
+main(void)
+{
+    int acfd, lcfd, dfd;
+    char adir[40], ldir[40], buf[128];
+    int n;
+
+    acfd = announce("tcp!*!9999", adir);
+    if(acfd < 0)
+        sysfatal("announce: %r");
+    for(;;){
+        lcfd = listen(adir, ldir);
+        if(lcfd < 0)
+            sysfatal("listen: %r");
+        dfd = accept(lcfd, ldir);
+        if(dfd < 0){
+            close(lcfd);
+            continue;
+        }
+        n = read(dfd, buf, sizeof(buf)-1);
+        if(n > 0){
+            buf[n] = '\0';
+            print("received: %s", buf);
+        }
+        close(dfd);
+        close(lcfd);
+    }
+}
+\end{verbatim}
+
+%claude:
+[[announce()]] binds to port 9999 on all interfaces
+([[*]]), [[listen()]] waits for an incoming connection,
+and [[accept()]] returns a data file descriptor for the
+new conversation. The server then reads from this file
+descriptor, prints what it received, and loops. Again,
+under the hood, these functions are just reading and
+writing files in [[/net/tcp/]]---the same interface
+we explored in the Getting started section.
+
+%claude:
+To test, run the server in one window and the client
+in another:
+\begin{verbatim}
+[window 1]$ helloserver
+[window 2]$ helloclient
+[window 1] received: hello world
+\end{verbatim}
 
 %\section{[[ping]], [[traceroute]], etc}
 % or maybe ipconfig, dns, cs,   and telnet?
