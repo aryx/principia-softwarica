@@ -154,6 +154,23 @@ How is implemented [[alt()]] without [[select()]] in the kernel?
 
 \section{Other core libraries}
 
+Here are a few core libraries that I considered for this book, but
+which I ultimately discarded:
+\begin{itemize}
+
+\item GNU Libc
+% huge, can't be linked statically
+
+% musl
+
+\item dietlibc
+%dead?
+
+\item microlibc
+
+\end{itemize}
+
+
 \begin{figure}[]\centering
 \includegraphics[height=0.45\textheight]{lineage}
 \caption{C standard libraries timeline}
@@ -181,22 +198,6 @@ I think the \plan core libraries represent the best compromise
 for this book: they cover the essential components---memory allocation,
 string manipulation, buffered I/O, Unicode, and threading---while
 remaining small enough to explain in full detail.
-
-Here are a few core libraries that I considered for this book, but
-which I ultimately discarded:
-\begin{itemize}
-
-\item GNU Libc
-% huge, can't be linked statically
-
-% musl
-
-\item dietlibc
-%dead?
-
-\item microlibc
-
-\end{itemize}
 
 % The one from Plauger's book "The Standard C Library"? Full implem?
 % The one from "C interfaces and implementations"
@@ -1937,7 +1938,7 @@ runestrstr(Rune *s1, Rune *s2)
 @
 
 
-\section{UTF}
+\section{UTF8}
 
 % use typedef utf here? utf* s?
 <<function [[utflen]]>>=
@@ -2237,6 +2238,13 @@ readn(fdt f, void *av, long n)
 @
 
 \t why need that? read not good?
+
+
+%******************************************************************************
+\chapter{Buffered IO}
+%******************************************************************************
+
+%libbio/
 
 %******************************************************************************
 \chapter{Directories and File Paths}
@@ -3030,6 +3038,8 @@ canlock(Lock *l)
 % see atom.s
 
 \section{Waiting queues}
+%alt: sleeping Lock
+
 % But Lock is already a waiting lock no? with semacquire?
 % But at least here let access/manipulate the queue?
 
@@ -5913,8 +5923,7 @@ struct Alt {
 @
 
 
-\section{[[main()]]}
-% and threadmain()
+\section{[[main()]] and [[threadmain()]]}
 
 <<global [[mainp]]>>=
 // ref<ref<Proc>
@@ -11277,6 +11286,117 @@ _profmain(void)
 @
 
 
+\section{[[_profdump()]]}
+
+% where is it?? it's what generates the command.<pid> for prof to use?
+
+<<function [[_profdump]]>>=
+// called by??
+void
+_profdump(void)
+{
+    int f;
+    long n;
+    Plink *p;
+    char *vp;
+    char filename[64];
+
+    if (_tos->prof.what == 0)
+        return; /* No profiling */
+    if (_tos->prof.pid != 0 && _tos->pid != _tos->prof.pid)
+        return; /* Not our process */
+    if(perr)
+        fprint(2, "%lud Prof errors\n", perr);
+    _tos->prof.pp = nil;
+    if (_tos->prof.pid)
+        snprint(filename, sizeof filename - 1, "prof.%ld", _tos->prof.pid);
+    else
+        snprint(filename, sizeof filename - 1, "prof.out");
+    f = create(filename, 1, 0666);
+    if(f < 0) {
+        perror("create prof.out");
+        return;
+    }
+    _tos->prof.pid = ~0;    /* make sure data gets dumped once */
+    switch(_tos->prof.what){
+    case Profkernel:
+        cycles((uvlong*)&_tos->prof.first->time);
+        _tos->prof.first->time = _tos->prof.first->time + _tos->pcycles;
+        break;
+    case Profuser:
+        cycles((uvlong*)&_tos->prof.first->time);
+        _tos->prof.first->time = _tos->prof.first->time - _tos->kcycles;
+        break;
+    case Proftime:
+        cycles((uvlong*)&_tos->prof.first->time);
+        break;
+    case Profsample:
+        _tos->prof.first->time = _tos->clock;
+        break;
+    }
+    vp = (char*)_tos->prof.first;
+
+    for(p = _tos->prof.first; p <= _tos->prof.next; p++) {
+
+        /*
+         * short down
+         */
+        n = 0xffff;
+        if(p->down)
+            n = p->down - _tos->prof.first;
+        vp[0] = n>>8;
+        vp[1] = n;
+
+        /*
+         * short right
+         */
+        n = 0xffff;
+        if(p->link)
+            n = p->link - _tos->prof.first;
+        vp[2] = n>>8;
+        vp[3] = n;
+        vp += 4;
+
+        /*
+         * long pc
+         */
+        n = p->pc;
+        vp[0] = n>>24;
+        vp[1] = n>>16;
+        vp[2] = n>>8;
+        vp[3] = n;
+        vp += 4;
+
+        /*
+         * long count
+         */
+        n = p->count;
+        vp[0] = n>>24;
+        vp[1] = n>>16;
+        vp[2] = n>>8;
+        vp[3] = n;
+        vp += 4;
+
+        /*
+         * vlong time
+         */
+        if (havecycles){
+            n = (vlong)(p->time / (vlong)khz);
+        }else
+            n = p->time;
+
+        vp[0] = n>>24;
+        vp[1] = n>>16;
+        vp[2] = n>>8;
+        vp[3] = n;
+        vp += 4;
+    }
+    write(f, (char*)_tos->prof.first, vp - (char*)_tos->prof.first);
+    close(f);
+}
+@
+
+
 \section{[[cputime()]]}
 
 % in 9sys/
@@ -11306,6 +11426,8 @@ cputime(void)
 % ref_own<string> returned
 
 \section{[[getuser()]]}
+
+% very different in plan9, no uid/gid (why? because distributed context?)
 
 <<function [[getuser]]>>=
 char*
@@ -11554,18 +11676,169 @@ struct IOchunk {
 %******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
+\label{chap:conclusion}
 
+%claude:
+You now know how the \plan core libraries work,
+to the smallest details, and more generally how many
+C standard libraries work.
 
+%claude:
+This book has covered the infrastructure that every
+\plan program depends on: the [[_main()]] startup
+code that runs before [[main()]], the [[Pool]]
+memory allocator behind [[malloc()]]/[[free()]], the
+UTF-8 string functions and [[Rune]] type for Unicode,
+buffered I/O with [[Biobuf]], the
+[[rfork()]]/[[exec()]]/[[wait()]] process model,
+the cooperative thread scheduler in [[libthread]]
+with its [[Channel]]-based communication, the [[dial()]]
+networking interface, and the [[libregexp]] regular
+expression engine. Across all of these, the code
+is compact and direct---the entire set of libraries
+fits in a modest amount of C and a little ARM
+assembly.
 
+\section{Connections to other books}
+
+%claude:
+The core libraries are the foundation on which
+every other program in \principia is built:
+
+%claude:
+\begin{itemize}
+
+\item \book{Kernel}: the kernel implements the
+system calls that the libraries wrap---[[sbrk()]]
+for the memory allocator, [[rfork()]] and
+[[exec()]] for processes, [[open()]]/[[read()]]/[[write()]]
+for I/O. The kernel also shares the [[Pool]]
+allocator with user space.
+
+\item \book{Shell}: [[rc]] uses the process model
+([[rfork]], [[exec]], [[wait]], [[pipe]]) extensively.
+Understanding the library wrappers clarifies what
+the shell does at the system call level.
+
+\item \book{Windows}: [[rio]] uses [[libthread]]
+for its multi-threaded architecture, with procs,
+threads, and channels as the concurrency primitives
+described in this book.
+
+\item \book{Compiler}: [[5c]] compiles code that
+links against these libraries. The calling
+conventions, stack layout, and register usage
+described in the assembly chapter directly affect
+how library functions are called.
+
+\item \book{Linker}: [[5l]] links the library
+object files into executables. The startup code
+([[_main]]) and the profiling hooks
+([[_profin]]/ [[_profout]]) are defined in the
+libraries but inserted by the linker.
+
+\item \book{Debugger}: [[libmach]], also part of
+the core libraries, provides the executable
+parsing and disassembly that the debugger uses.
+
+\end{itemize}
+
+\section{Beyond the \plan core libraries}
+
+%claude:
+Modern C libraries and runtime systems are
+considerably larger. Here are some of the areas
+where they differ:
+\begin{itemize}
+
+\item \emph{Memory allocators}: the \plan [[Pool]]
+allocator is a straightforward first-fit allocator
+with red-zone poisoning for debugging. Production
+allocators like jemalloc (FreeBSD, Firefox),
+tcmalloc (Google), and mimalloc (Microsoft) use
+thread-local caches, size-segregated freelists, and
+arena-based allocation to minimize contention in
+multi-threaded programs. These are some of the most
+performance-critical pieces of infrastructure in
+modern systems.
+
+\item \emph{Thread libraries}: [[libthread]]
+implements cooperative (non-preemptive) user-level
+threads multiplexed onto OS processes. POSIX
+pthreads provides preemptive kernel-level threads
+with mutexes, condition variables, and
+read-write locks. Go's goroutine scheduler takes a
+hybrid approach: user-level goroutines are
+multiplexed onto OS threads by a work-stealing
+scheduler, combining the lightweight creation of
+[[libthread]] with the preemptive scheduling of
+pthreads.
+
+\item \emph{Asynchronous I/O}: [[libthread]]'s
+model is synchronous---threads block on I/O and the
+scheduler switches to another thread. Modern systems
+provide [[epoll]] (Linux), [[kqueue]] (BSD/macOS),
+and [[io_uring]] (Linux) for handling thousands of
+concurrent connections efficiently without
+a thread per connection.
+
+\item \emph{Unicode and internationalization}:
+\plan pioneered UTF-8 (it was invented for \plan
+by Ken Thompson and Rob Pike), and [[libc]]'s
+[[Rune]] type handles Unicode code points cleanly.
+Modern libraries like ICU go much further with
+locale-aware collation, text segmentation,
+bidirectional text, and complex script shaping---the
+infrastructure needed for worldwide
+internationalization.
+
+\item \emph{Standard library scope}: the \plan
+[[libc]] is intentionally small. The C standard
+library (C11/C23) specifies threads, atomics,
+complex math, and wide character support. Beyond C,
+languages like Rust, Go, and Python ship standard
+libraries with collections, HTTP clients, JSON
+parsers, cryptography, and more---entire ecosystems
+that \plan leaves to separate libraries or external
+tools.
+
+\item \emph{Networking}: \plan's [[dial()]] provides
+a clean, protocol-independent interface for
+establishing connections. Modern systems add TLS
+as a baseline requirement, HTTP/2 and HTTP/3 (QUIC)
+protocol support, and DNS-over-HTTPS---reflecting
+a world where network security is no longer
+optional.
+
+\end{itemize}
+
+%claude:
+The \plan core libraries show that the essential
+building blocks of systems programming---memory
+allocation, string handling, process management,
+concurrency, and I/O---can be implemented clearly
+in a modest amount of code. Modern libraries are
+larger because they optimize for different
+constraints (multi-core scalability, thousands of
+concurrent connections, worldwide
+internationalization), but the core abstractions
+remain recognizable.
 
 %******************************************************************************
 
 \appendix
 
+\chapter{Assembly optimizations (ARM)}
+
+% memset in assembly
+% getcallerpc
+% _main, etc.
+
 \chapter{Extra Code}
 
 #include "Libcore_extra.nw"
 \ifallcode
+% runebase.c big unicode list
 #include "Libcore_big.nw"
 \fi
 #include "Libcore_arm.nw"
@@ -11603,6 +11876,4 @@ This index is generated automatically.
 %******************************************************************************
 % Postlude
 %******************************************************************************
-
 \end{document}
-

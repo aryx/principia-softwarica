@@ -16337,19 +16337,147 @@ case SSTRING:
 \label{chap:conclusion}
 
 %dup: Assembler.nw
+%claude:
 You now know how the \plan ARM linker [[5l]] works,
-to the smallest details, and more generally how many 
+to the smallest details, and more generally how many
 linkers work.
 
-\l next step? kernel/loader. 
+\l next step? kernel/loader.
 \l debugger which uses libmach. profiler.
 
+%claude:
+The \plan linker is unusual in that it does far more
+than traditional linkers: it loads AST-based object
+files from the assembler, performs symbol resolution,
+generates actual ARM machine code, adds debugging
+support (line numbers, symbol tables), instruments
+functions for profiling, and finally writes a
+self-contained a.out executable. In most toolchains,
+machine code generation belongs to the assembler---here
+it belongs to the linker, which makes [[5l]] both a
+linker and a code generator.
+%
+Along the way, you have seen recurring patterns:
+the [[Sym]] hash table reused from [[5a]], the
+[[Prog]] linked list as the central intermediate
+representation, multi-pass processing to resolve
+addresses and patch branches, and the [[autosize()]]
+mechanism that adjusts stack frames after the code
+is fully known.
 
+\section{Connections to other books}
+
+%claude:
+\begin{itemize}
+
+\item \book{Assembler}: [[5a]] produces the
+AST-based object files that [[5l]] reads. The two
+tools share data structures ([[Prog]], [[Adr]],
+[[Sym]]) and form two halves of the same pipeline.
+
+\item \book{Compiler}: [[5c]] also produces
+object files in the same format. The linker does
+not distinguish between code written in C and code
+written in assembly---both arrive as serialized
+[[Prog]] lists.
+
+\item \book{Kernel}: the kernel binary is the
+most important output of [[5l]]. The kernel's
+boot sequence relies on the memory layout that
+[[5l]] produces: text, data, and BSS segments
+at specific addresses.
+
+\item \book{Debugger}: the debugger uses [[libmach]]
+to read the symbol table and line number information
+that [[5l]] embeds in the executable, enabling
+source-level debugging.
+
+\item \book{Profiler}: the [[-p]] flag instruments
+every function with [[_profin]]/[[_profout]] calls
+for [[prof]], and the [[-p -1]] flag inserts
+[[__mcount]] calls for call counting.
+
+\item \book{Libcore}: covers [[libmach]], the library
+that parses the a.out executable format and symbol
+tables that [[5l]] generates.
+
+\end{itemize}
+
+\section{Beyond the \plan linker}
 
 %\section{Limitations/Bugs}
 % - large procedure not handled for now (not sure why the constraint)
 
+%claude:
+Modern linkers operate in a very different context
+from [[5l]]. Here are some of the features they
+provide:
+\begin{itemize}
 
+\item \emph{Relocatable object files}: most linkers
+(GNU [[ld]], LLVM [[lld]], the macOS linker) work
+with relocatable object files (ELF, Mach-O, COFF)
+that already contain machine code with relocation
+entries. The linker patches addresses but does not
+generate machine code. [[5l]]'s approach of
+generating machine code from an AST is unique and
+keeps the assembler simpler, at the cost of a more
+complex linker.
+
+\item \emph{Dynamic linking}: [[5l]] produces
+static executables only. Modern systems rely heavily
+on shared libraries ([[.so]], [[.dylib]], [[.dll]])
+loaded at runtime by a dynamic linker ([[ld.so]]).
+This requires position-independent code (PIC),
+Global Offset Tables (GOT), Procedure Linkage
+Tables (PLT), and a runtime symbol resolver---substantial
+machinery that \plan avoids entirely.
+
+\item \emph{Link-time optimization (LTO)}: LLVM and
+GCC can pass intermediate representation (LLVM IR
+or GIMPLE) through the linker, enabling whole-program
+optimizations across compilation units: inlining,
+dead code elimination, and interprocedural analysis.
+This is one of the most impactful compiler
+optimizations in modern toolchains.
+
+\item \emph{Linker scripts}: GNU [[ld]] supports a
+scripting language for controlling memory layout,
+section placement, and symbol assignments. This is
+essential for embedded systems and kernel development
+where precise control over the memory map is needed.
+[[5l]] handles layout through command-line flags
+([[-T]], [[-R]]) and conventions instead.
+
+\item \emph{Speed}: linking large C++ projects can
+take tens of seconds with GNU [[ld]]. Google's
+[[gold]] and LLVM's [[lld]] were written specifically
+for speed, using parallel section merging and
+memory-mapped I/O. [[mold]], a newer linker, pushes
+this further with aggressive parallelism, linking
+large binaries in under a second.
+
+\item \emph{Debug information}: [[5l]] emits a simple
+symbol table and line number table in \plan's own
+format. Modern linkers process DWARF debug
+information---a complex standard supporting
+variables, types, inlined functions, and
+optimized-out values---and can merge gigabytes of
+debug data from large builds.
+
+\end{itemize}
+
+%claude:
+The core job of a linker---resolving symbols and
+laying out sections into an executable---has not
+changed since the earliest systems. [[5l]] does this
+in about 10\,000 lines of C while also serving as
+the machine code generator. Modern linkers are
+larger because they handle dynamic linking, complex
+executable formats, and whole-program optimization,
+but the fundamental algorithms (symbol lookup, address
+patching, section layout) are the same ones you have
+studied in this book.
 
 %###############################################################################
 

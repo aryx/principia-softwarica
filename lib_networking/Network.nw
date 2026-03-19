@@ -1,5 +1,4 @@
 \documentclass[12pt]{report}
-%12pt, twocolumn, landscape
 
 %TODO? add ipconfig/, ndb/ also here? ipconfig, dns, and cs
 % are required first before being able to do anything with the
@@ -13,13 +12,6 @@
 % - https://www.networksfromscratch.com/ by Seth Archer Brown
 % - https://levelup.gitconnected.com/content-delivery-network-cnd-explained-in-simple-words-674e971b06c3
 
-%******************************************************************************
-% Prelude
-%******************************************************************************
-\newif\iffinal
-\newif\ifverbose
-\finaltrue\verbosefalse % see also other newif in Macros.tex
-
 %ugly: temporary fix because of the use of special chars
 \usepackage[utf8]{inputenc}
 \DeclareUnicodeCharacter{2079}{\ensuremath{^{9}}}
@@ -28,6 +20,15 @@
 \DeclareUnicodeCharacter{207F}{\ensuremath{^{n}}}
 \DeclareUnicodeCharacter{2208}{\ensuremath{\in}}
 \DeclareUnicodeCharacter{2264}{<=}
+
+\input{../docs/latex/Packages}
+\input{../docs/latex/Noweb}
+\input{../docs/latex/Config}
+\input{../docs/latex/Macros}
+
+%******************************************************************************
+% Prelude
+%******************************************************************************
 
 %------------------------------------------------------------------------------
 %history: 
@@ -90,15 +91,6 @@
 % - TODO add explanations
 
 %------------------------------------------------------------------------------
-% Packages
-%------------------------------------------------------------------------------
-
-\input{../docs/latex/Packages}
-\input{../docs/latex/Noweb}
-\input{../docs/latex/Config}
-\input{../docs/latex/Macros}
-
-%------------------------------------------------------------------------------
 % Config
 %------------------------------------------------------------------------------
 \allcodefalse
@@ -127,17 +119,13 @@ Dave Presotto and Phil Winterbottom\\
 
 
 \maketitle 
-%\onecolumn
 \hrule
 \input{../docs/latex/Copyright}
 \input{../docs/latex/CopyrightPlan9}
 \hrule
-%\twocolumn
-
 
 \begingroup
 \hypersetup{linkcolor=blue}
-% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
 \tableofcontents
 \endgroup
 
@@ -10108,15 +10096,138 @@ case 6:
 %******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
+\label{chap:conclusion}
+
+%claude:
+You now know how the \plan network stack works,
+to the smallest details, and more generally how many
+network stacks work.
+
+%claude:
+The \plan network stack is implemented entirely in the
+kernel as a set of protocol modules behind the
+[[/net/]] file interface. Each protocol (Ethernet, IP,
+ARP, UDP, IL, TCP) registers a [[Proto]] structure with
+connect, announce, receive, and close methods---the same
+device-polymorphism pattern used throughout the \plan
+kernel. A network connection is a directory under
+[[/net/<proto>/<conv>/]] with [[data]], [[ctl]],
+[[status]], and other files, so programs interact with
+the network by reading and writing files rather than
+through a special socket API.
+%
+Along the way, you have seen how the stack is layered:
+Ethernet frames carry IP datagrams, IP datagrams carry
+UDP or IL or TCP segments, and each layer demultiplexes
+incoming packets to the right conversation based on
+addresses and port numbers. You have also seen the
+fundamental problem of reliable communication---how IL
+(and TCP) provide ordered, reliable byte streams over an
+unreliable packet network using sequence numbers,
+acknowledgments, retransmission timers, and flow control.
+
+\section{Connections to other books}
+
+%claude:
+\begin{itemize}
+
+\item \book{Kernel}: the network stack runs inside the
+kernel and uses its facilities: [[Dev]] for the
+[[/net/]] device, [[sleep]]/[[wakeup]] for blocking on
+connections, [[kproc]] for protocol processing threads,
+and the [[Ipifc]] structure to manage network interfaces.
+
+\item \book{Libcore}: the user-space [[dial()]] function
+in [[libc]] opens connections through [[/net/]]. The
+chapter on networking in \book{Libcore} covers the
+user-facing API; this book covers what happens inside
+the kernel when [[dial()]] writes to a [[ctl]] file.
+
+\item \book{Windows}: [[rio]]'s 9P file server
+demonstrates how the file-server pattern that the
+network stack uses ([[clone]], [[ctl]], [[data]] files)
+appears throughout \plan.
+
+\item \book{Shell}: [[rc]] scripts use programs like
+[[hget]] and [[telnet]] that connect through
+[[/net/tcp/]]. The [[listen1]] script pattern for
+writing network servers uses [[announce]] and [[accept]]
+on [[/net/]] files.
+
+\end{itemize}
+
+\section{Beyond the \plan network stack}
+
+%claude:
+The \plan network stack implements the core protocols
+cleanly but is small compared to modern networking
+subsystems. Here are some areas where they differ:
+\begin{itemize}
+
+\item \emph{TCP}: the \plan TCP implementation is
+functional but basic. Modern TCP implementations
+(Linux, FreeBSD) include decades of refinements:
+selective acknowledgment (SACK), window scaling,
+congestion control algorithms (Cubic, BBR), TCP
+Fast Open, and Explicit Congestion Notification
+(ECN). These optimizations make a large difference
+at scale---BBR alone can double throughput on lossy
+links.
+
+\item \emph{Congestion control}: \plan's IL protocol
+uses a simple retransmission timer. Modern congestion
+control is a rich field: algorithms like BBR model the
+network's bandwidth and round-trip time to avoid both
+underutilization and congestion collapse. This is one
+of the most actively researched areas in networking.
+
+\item \emph{Zero-copy and kernel bypass}: for
+high-performance networking, Linux provides
+[[sendfile()]], [[splice()]], and [[io_uring]] to
+avoid copying data between kernel and user space.
+DPDK and RDMA bypass the kernel entirely, giving
+user-space programs direct access to the NIC for
+microsecond-level latency.
+
+\item \emph{Programmable networking}: Linux's eBPF
+allows inserting custom programs at various points
+in the network stack---packet filtering, load
+balancing, traffic shaping---without modifying kernel
+code. XDP (eXpress Data Path) processes packets
+before they enter the stack, enabling line-rate
+packet processing.
+
+\item \emph{TLS and QUIC}: TLS (Transport Layer
+Security) is now expected on nearly all connections.
+QUIC (HTTP/3) combines transport and encryption into
+a single UDP-based protocol with faster connection
+setup and better performance on lossy networks. The
+\plan network stack has basic SSL support but nothing
+comparable.
+
+\item \emph{IPv6}: the \plan stack includes some IPv6
+support, but modern stacks must handle dual-stack
+operation, IPv6 extension headers, neighbor discovery,
+and the transition mechanisms needed for a world that
+is still migrating from IPv4.
+
+\end{itemize}
+
+%claude:
+The fundamentals are the same everywhere: layered
+protocols, packet demultiplexing, reliable delivery
+through acknowledgments and retransmission. The \plan
+network stack presents these ideas clearly, with the
+added elegance of exposing everything through the file
+system. Modern stacks are larger because they optimize
+for datacenter-scale throughput and a security landscape
+that did not exist when \plan was designed.
 
 
 
+%###############################################################################
 
-
-
-%******************************************************************************
 \appendix
-%******************************************************************************
 
 %******************************************************************************
 \chapter{Debugging}
