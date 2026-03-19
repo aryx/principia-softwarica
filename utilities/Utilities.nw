@@ -394,7 +394,19 @@ default:
 
 \section{Code organization}
 
+%claude:
+Each utility is a standalone C program, typically between
+50 and 500 lines, in its own source file under the appropriate
+directory. There are no shared libraries between utilities
+besides [[libc]] and [[libbio]]---each program is self-contained.
+
 \section{Software architecture}
+
+%claude:
+Every utility includes the same two \plan headers: [[u.h]] for
+basic type definitions and [[libc.h]] for the system call
+interface and standard library functions. This is the minimal
+``include preamble'' shared by all \plan C programs.
 
 <<plan9 includes>>=
 #include <u.h>
@@ -405,6 +417,14 @@ default:
 
 \section{Book structure}
 
+%claude:
+The chapters are organized by function: file manipulation,
+search and replace, text processing, comparison, archiving,
+pipes, bytes, calculators, and miscellaneous. Within each
+chapter, simpler utilities come first (e.g., [[cat]] before
+[[ls]]), letting the reader build up familiarity with the
+common patterns before encountering the more complex programs.
+
 %###############################################################################
 
 %******************************************************************************
@@ -413,6 +433,13 @@ default:
 
 % could be part of the shell as builtins (in fact busybox/ash does that?)
 
+%claude:
+This chapter covers the utilities that manipulate files and
+directories---the bread and butter of any operating system's
+command-line environment. Most of these programs are thin
+wrappers around one or two system calls, which makes them
+a good introduction to the \plan system call interface.
+
 \section{[[cat]]}
 % see also pr(1), print listing
 
@@ -420,6 +447,13 @@ default:
 
 % 'cat' for concatenate but can be used also with single file to see its content
 % and also without for copy stdin to stdout (usecase?)
+
+%claude:
+Let's start with the simplest utility. [[cat]] (short for
+``concatenate'') reads files sequentially and writes them to
+standard output. Despite its simplicity, it demonstrates the
+fundamental pattern shared by most utilities: if arguments are
+given, process each one; otherwise, process standard input.
 
 
 %syscall: open, read, write, close
@@ -450,6 +484,12 @@ main(int argc, char *argv[])
 @
 % %r is cool plan9 extension for errstr
 
+%claude:
+The actual copy loop is the classic [[read]]/[[write]] pair
+in a fixed-size buffer. Notice the careful error checking:
+a short write (where [[write]] returns less than [[n]]) is
+treated as a fatal error, and a negative [[read]] return is
+reported separately from end-of-file (which returns zero).
 <<function [[cat]]>>=
 void
 cat(fdt f, char *origin)
@@ -471,6 +511,14 @@ cat(fdt f, char *origin)
 % pretty big. > 1000 LOC
 % first show minimal ls, then separate subsection for advanced usage
 
+%claude:
+[[ls]] is the most complex utility in this chapter, at over
+300 lines. The architecture is a two-phase design: first, collect
+all directory entries into a global [[dirbuf]] array of [[NDir]]
+structures, then sort and format them for output. This separation
+allows the sorting and formatting logic to be independent of
+the directory traversal.
+
 <<[[main]](ls.c) default case with usage>>=
 fprint(STDERR, "usage: ls [-dlmnpqrstuFQT] [file ...]\n");
 exits("usage");
@@ -478,6 +526,11 @@ exits("usage");
 
 %syscall: dirstat?
 
+%claude:
+Each [[NDir]] pairs a [[Dir]] structure (returned by the kernel's
+[[dirstat]] or [[dirreadall]]) with an optional path prefix,
+used when listing files from multiple directories on the
+command line.
 <<struct [[NDir]]>>=
 struct NDir
 {
@@ -535,6 +588,16 @@ main(int argc, char *argv[])
 @
 
 \subsection*{Basic listing}
+
+%claude:
+The [[ls]] function fills the global [[dirbuf]] array.
+For directories, it calls [[dirreadall]] to get all entries at
+once, then stores them with the directory name as prefix (when
+listing multiple paths). For plain files, it stores the single
+[[Dir]] entry directly. Note that [[output]] is called between
+directories---this ensures entries from different directories
+appear in separate sorted groups, matching the behavior users
+expect from \verb+ls dir1 dir2+.
 
 % fill dirbuf for output() to work
 <<function [[ls]]>>=
@@ -731,6 +794,14 @@ format(Dir *db, char *name)
 
 \subsection*{Advanced listings}
 
+%claude:
+[[ls]] supports 14 flags, each stored as a simple boolean.
+The flags control sorting ([[-t]] for time, [[-r]] for reverse,
+[[-n]] to suppress sorting), output format ([[-l]] for long,
+[[-s]] for size in KB, [[-q]] for qid, [[-m]] for last modifier),
+and filtering ([[-d]] to not descend into directories, [[-p]] to
+suppress the path prefix, [[-F]] to append a type indicator).
+
 <<global flags ls.c>>=
 // ??
 bool dflag;
@@ -876,6 +947,13 @@ asciitime(long l)
 
 \section{[[touch]]}
 
+%claude:
+[[touch]] updates a file's modification time, creating the
+file if it doesn't exist (unless [[-c]] is given). It
+demonstrates the [[dirwstat]] system call, which is \plan's
+way of modifying file metadata---the counterpart to \unix's
+[[utime]] and [[chmod]] combined into a single operation.
+
 % -c for nocreate if file not exist in the first place
 <<function [[usage]](touch.c)>>=
 void
@@ -929,6 +1007,16 @@ main(int argc, char **argv)
 
 %nulldir?
 %stbuff stat buffer?
+
+%claude:
+The [[touch]] function first tries [[dirwstat]] to update the
+modification time of an existing file. [[nulldir]] initializes
+a [[Dir]] structure so that all fields are ``don't care''
+(filled with \verb+~0+ values), and then only [[mtime]] is
+set to the desired time. If [[dirwstat]] fails (file doesn't
+exist) and [[-c]] was not given, [[touch]] creates the file
+with [[OEXCL]] to avoid overwriting an existing file that
+appeared between the failed [[dirwstat]] and the [[create]].
 <<function [[touch]]>>=
 error1
 touch(bool nocreate, char *name)
@@ -956,6 +1044,11 @@ touch(bool nocreate, char *name)
 @
 
 \section{[[mkdir]]}
+
+%claude:
+[[mkdir]] creates directories using the [[create]] system call
+with the [[DMDIR]] flag---in \plan, there is no separate
+[[mkdir]] system call.
 
 % -p for creating intermediate dirs (p for parent dirs)
 <<function [[usage]](mkdir.c)>>=
@@ -1013,6 +1106,13 @@ main(int argc, char *argv[])
 @
 
 % return value used from mkdirp but not from main
+
+%claude:
+The [[-p]] flag triggers [[mkdirp]], which walks the path
+from left to right, temporarily replacing each \verb+/+ with
+a null byte to create each intermediate directory. This is the
+same technique used by GNU \verb+mkdir -p+. If any intermediate
+directory already exists, it is silently skipped.
 <<function [[makedir]]>>=
 errorneg1
 makedir(char *s)
@@ -1056,6 +1156,10 @@ mkdirp(char *s)
 
 %syscall: remove
 
+%claude:
+[[rm]] first tries a simple [[remove]] system call on each
+argument. If that fails and [[-r]] is set, it checks whether
+the path is a directory and recurses into it with [[rmdir_]].
 <<global [[ignerr]](rm.c)>>=
 // for 'rm -f'
 bool ignerr = false;
@@ -1104,6 +1208,14 @@ main(int argc, char *argv[])
 }
 @
 
+%claude:
+Recursive deletion uses a two-pass strategy over the directory
+entries: the first pass tries to [[remove]] every entry (files and
+empty directories will succeed), marking successful removals by
+clearing the [[QTDIR]] bit. The second pass recurses into any
+remaining subdirectories that couldn't be removed in the first
+pass. This avoids unnecessary recursion for the common case of
+flat directories.
 <<function [[rmdir]]>>=
 /*
  * f is a non-empty directory. Remove its contents and then it.
@@ -1177,6 +1289,12 @@ err(char *f)
 \section{[[cp]]}
 \l what about [[ecp]] in plan9?
 
+%claude:
+[[cp]] copies files. The interesting details are the
+[[samefile]] check (comparing qid paths and device numbers to
+prevent copying a file onto itself) and the optional metadata
+preservation flags: [[-x]] preserves time and mode, [[-g]]
+preserves group, and [[-u]] preserves owner (and implies [[-g]]).
 
 %syscall: read, write
 
@@ -1386,6 +1504,16 @@ samefile(Dir *a, char *an, char *bn)
 
 %syscall: ??? actually no rename syscall so read and copy? slow?
 % loss of opportunity? or dirwstat() ?
+
+%claude:
+[[mv]] has a subtle strategy. \plan has no [[rename]] system
+call, so [[mv]] first tries to rename the file using
+[[dirwstat]] to change its name field---this only works if the
+source and destination are on the same file server directory.
+If that fails (different directories or different servers),
+[[mv]] falls back to a full copy-then-remove. This fallback
+means [[mv]] across file servers works but is slow, while
+same-directory renames are instantaneous.
 
 <<function [[main]](mv.c)>>=
 void
@@ -1637,6 +1765,17 @@ hardremove(char *a)
 
 %syscall: dirwstat
 
+%claude:
+[[chmod]] accepts either an octal mode or a symbolic
+specification like \verb+ug+w+. The symbolic parser in
+[[parsemode]] builds a mask (which bits to change) and a mode
+(what to set them to), then applies them with the expression
+\verb+(old & ~mask) | (mode & mask)+.
+%
+Note the \plan-specific mode bits: [[DMAPPEND]] (append-only),
+[[DMEXCL]] (exclusive-use), and [[DMTMP]] (temporary), which
+have no direct \unix counterpart.
+
 <<macros chmod.c>>=
 #define U(x) (x<<6)
 #define G(x) (x<<3)
@@ -1871,6 +2010,15 @@ main(int argc, char *argv[])
 
 \section{[[wc]]}
 
+%claude:
+[[wc]] counts lines, words, runes, bad runes, and characters.
+The \plan version adds [[-r]] (rune count) and [[-b]] (bad rune
+count) to the traditional \unix [[-lwc]] flags, reflecting
+\plan's native UTF-8 support. The counting loop uses
+[[Bgetrune]] from the buffered I/O library to decode UTF-8
+one rune at a time, and the word-counting state machine
+toggles between [[Space]] and [[Word]] on whitespace transitions.
+
 % default to 0 or false thx to plan9 memset(0) of data section
 % but unix does the same?
 <<globals wc.c>>=
@@ -2012,11 +2160,28 @@ report(uvlong nline, uvlong nword, uvlong nrune, uvlong nbadr, uvlong nchar, cha
 % now more advanced semantic search and replace tools, IDE, but still
 % grep/sed are great
 
+%claude:
+This chapter covers the search and replace utilities, from the
+foundational [[grep]] to [[sed]] and [[tr]]. Even with modern
+IDEs offering semantic search, these tools remain indispensable
+for quick searches across large codebases and for scripted
+text transformations.
+
 \section{[[grep]]}
 
 \l also show code of libregexp here? Maybe better than in Libcore.nw ?
-% semgrep! the grandfather of semgrep! -e, -f ! 
+% semgrep! the grandfather of semgrep! -e, -f !
 % and itself the child of ed g re p
+
+%claude:
+The name [[grep]] comes from the [[ed]] command \verb+g/re/p+
+(``globally search for a regular expression and print''). The
+\plan [[grep]] has its own built-in regexp engine rather than
+using [[libregexp]]---it includes a yacc grammar for parsing
+regular expressions and a DFA-based matching engine for speed.
+The [[-e]] and [[-f]] flags allow specifying patterns on the
+command line or reading them from a file, a design that
+influenced tools like Semgrep decades later.
 
 <<function [[usage]](grep)>>=
 void
@@ -2056,6 +2221,20 @@ enum
 @
 
 \subsection{Data structures}
+
+%claude:
+The regexp is represented as a linked list of [[Re]] nodes,
+each tagged with a type. [[Tclass]] matches a character range
+([[lo]] to [[hi]]), [[Tor]] represents alternation, [[Talt]]
+represents a branch point (used for repetition), [[Tbegin]]
+and [[Tend]] anchor to line boundaries, and [[Tcase]] is an
+optimization that dispatches on the first byte through a
+256-entry lookup table.
+%
+The [[Re2]] structure is a pair of [[beg]]/[[end]] pointers
+used during parsing---the [[end]] pointer collects
+unresolved [[next]] links that [[patchnext]] will later
+fill in, similar to backpatching in a compiler.
 
 % =~ AST
 <<struct [[Re]](grep)>>=
@@ -2125,6 +2304,13 @@ State*  state0;
 Re2 topre;
 @
 
+%claude:
+The [[U]] union overlays two uses of the same 32\,KB buffer: during
+parsing, it holds the character class string being constructed
+by the lexer; during matching, its [[pre]]/[[buf]] pair implements
+a sliding window over the input. When a line spans multiple reads,
+the end of the previous buffer is shifted into [[pre]] so the
+full matching line can be printed.
 <<union [[U]](grep)>>=
 union U
 {
@@ -2149,6 +2335,11 @@ union U u;
 @
 
 \subsection{[[main()]]}
+
+%claude:
+Flags are stored in a 256-entry [[char]] array indexed by the flag
+character itself---a common \plan idiom that avoids a separate
+boolean for each flag.
 
 <<globals grep>>=
 char    flags[256];
@@ -2242,6 +2433,13 @@ char    *pattern;
 ushort  gen;
 @
 
+%claude:
+[[str2top]] compiles a pattern string into the regexp graph.
+It calls [[yyparse]] (the yacc-generated parser), which builds
+a [[Re2]] graph from the input. Multiple patterns (from
+repeated [[-e]] or newline-separated patterns in [[-f]]) are
+combined with [[re2or]], so the engine matches any of them.
+
 % str to pattern
 <<function [[str2top]](grep)>>=
 void
@@ -2300,6 +2498,12 @@ yyerror(char *e, ...)
 
 
 
+%claude:
+[[grep]] uses a custom bump allocator ([[mal]]) that grabs
+memory from [[sbrk]] in large hunks and hands it out
+sequentially. Since [[grep]] never frees anything---it
+allocates the regexp graph, builds the DFA states, and then
+exits---this is both faster and simpler than [[malloc]].
 <<function [[mal]](grep)>>=
 void*
 mal(int n)
@@ -2357,6 +2561,14 @@ ral(int type)
 
 % how does [[ed]] parse a regexp?? does not need yacc?
 
+%claude:
+The regexp parser is split into a hand-written lexer
+([[yylex]]) and a yacc grammar. The lexer handles escape
+sequences, character classes (delimited by \verb+[]+), and
+special characters like \verb+*+, \verb+|+, \verb+^+, and
+\verb+$+. The \verb+literal+ flag (set by a leading \verb+*+
+in the grammar) disables metacharacter interpretation, treating
+everything as a literal character.
 
 % main -> str2top -> yyparse -> yylex
 
@@ -2531,6 +2743,18 @@ getrec(void)
 
 \subsection{Regexp grammar}
 
+%claude:
+The grammar builds the regexp graph bottom-up using the [[Re2]]
+pair of begin/end pointers. Concatenation ([[re2cat]]) patches the
+end of the first subexpression to the beginning of the second.
+Alternation ([[re2or]]) creates a [[Tor]] node whose [[next]] and
+[[alt]] pointers lead to the two branches. Kleene star ([[re2star]])
+creates a [[Talt]] loop back to the subexpression's beginning.
+%
+The top-level [[prog]] rule wraps the user's pattern in
+\verb+.*pattern.*[^\n]+ so that [[grep]] can find the pattern
+anywhere within a line.
+
 <<grep grammar type decl>>=
 %type   <re>    expr prog
 %type   <re>    expr0 expr1 expr2 expr3 expr4
@@ -2702,6 +2926,15 @@ re2char(int c0, int c1)
 
 \subsection{[[initstate_()]]}
 
+%claude:
+[[initstate_]] converts the parsed regexp graph into the initial
+DFA state. It first calls [[addcase]], which optimizes large
+alternations by building a 256-entry dispatch table (a [[Tcase]]
+node) when the number of alternatives exceeds [[Caselim]].
+This turns character-class matching from a linear scan into
+a constant-time table lookup---critical for patterns like
+\verb+[a-zA-Z]+.
+
 <<function [[initstate]](grep)>>=
 State*
 initstate_(Re *r)
@@ -2769,6 +3002,22 @@ addcase(Re *r)
 @
 
 \subsection{[[search()]]}
+
+%claude:
+The search loop is the performance-critical core. It reads
+raw bytes into the buffer and steps through them one at a time,
+advancing the DFA state via the [[next]] transition table. When
+a state's [[next]] entry is null, [[increment]] computes and
+caches the transition lazily---this is DFA construction on
+demand, avoiding the exponential blowup of building the full
+DFA up front.
+%
+The loop is duplicated: one copy for normal matching and one for
+case-insensitive ([[-i]]) matching with inline lowercasing.
+This duplication avoids a per-character branch on the [[-i]] flag,
+which matters when scanning millions of bytes. The use of
+[[goto]] instead of function calls keeps everything in a tight
+loop with no call overhead.
 
 <<function [[search]](grep)>>=
 int
@@ -3152,6 +3401,20 @@ loop:
 
 % awk -F: '{print $1, $2}' /etc/passwd
 
+%claude:
+This is Brian Kernighan's ``one true awk,'' the reference
+implementation by one of the language's three creators (Aho,
+Weinberger, Kernighan). Unlike the other utilities in this
+book, [[awk]] is a complete programming language with variables,
+arrays, functions, and control flow. It bridges the gap between
+simple line-oriented tools like [[grep]]/[[sed]] and full
+programming languages like C or Perl (which [[awk]] directly
+influenced).
+%
+The implementation follows the classic interpreter pattern:
+a yacc grammar parses the program into an AST of [[Node]]
+trees, then [[run]] walks the tree to execute it.
+
 \section{Introduction}
 
 \section{Data structures}
@@ -3161,6 +3424,17 @@ loop:
 \subsection{Symbol table}
 
 \section{[[main()]]}
+
+%claude:
+The [[main]] function parses command-line options manually
+(not using \plan's [[ARGBEGIN]]---this code uses standard C
+conventions since it predates and is independent of the \plan
+library). After processing flags and initializing the symbol
+table, it calls [[yyparse]] to compile the program, then
+[[run(winner)]] to execute the resulting AST. The [[winner]]
+variable holds the root [[PROGRAM]] node, which links the
+[[BEGIN]] block, the main pattern-action list, and the
+[[END]] block.
 
 <<function [[main]](awk)>>=
 int main(int argc, char *argv[])
@@ -3300,6 +3574,15 @@ Node    *arglist = 0;   /* list of args for current function */
 @
 
 \section{Lexer}
+
+%claude:
+The lexer handles [[awk]]'s C-like syntax with a few twists:
+newlines are significant tokens (they can terminate statements),
+\verb+\\+ followed by a newline is a line continuation, and
+the lexer must distinguish between \verb+/+ as division and
+\verb+/+ as a regex delimiter using context (the [[reg]] flag).
+The bracket/brace/parenthesis counters detect unbalanced
+delimiters early.
 
 <<union directive awkgram.y>>=
 %union {
@@ -3515,6 +3798,19 @@ int yylex(void)
 @
 
 \section{Grammar}
+
+%claude:
+The [[awk]] grammar is a full expression language with
+C-style operator precedence. Pattern-action rules
+([[pa_stat]]) are the core: a pattern optionally followed
+by a brace-delimited action. When the action is omitted,
+the default is to print the current record. [[BEGIN]] and
+[[END]] blocks are collected separately into [[beginloc]]
+and [[endloc]] lists.
+%
+Note the [[CAT]] (string concatenation) operator, which has
+no explicit syntax---two adjacent expressions are concatenated,
+a feature unique to [[awk]] among C-family languages.
 
 <<type directives awkgram.y>>=
 %type   <p> pas pattern ppattern plist pplist patlist prarg term re
@@ -3912,11 +4208,27 @@ while:
 %******************************************************************************
 % super useful too for a programmer
 
+%claude:
+Comparison utilities are essential programmer tools: [[cmp]]
+for byte-level comparison (useful in regression tests that
+snapshot output), [[comm]] for comparing sorted lists, and
+[[diff]] for the line-by-line differences that underpin
+every version control system.
+
 \section{[[cmp]]}
 % part of posix?
 
 % useful utility for regression testing for example for a programmer
 % where compare output to snapshot.
+
+%claude:
+[[cmp]] compares two files byte by byte. The main loop reads
+both files into 64\,KB buffers and uses [[memcmp]] for fast
+bulk comparison. Only when [[memcmp]] detects a difference
+does it fall into the slower byte-by-byte loop to report
+the exact position. The [[-s]] flag suppresses all output
+(useful in scripts that only check the exit status), and [[-l]]
+prints every differing byte position.
 
 <<function [[usage]](cmp.c)>>=
 static void
@@ -4086,6 +4398,14 @@ seekoff(fdt fd, char *name, char **argv)
 % part of posix
 
 % "select or reject lines common to two sorted files" in comm(1) man page
+
+%claude:
+[[comm]] compares two sorted files and produces three columns:
+lines only in file~1, lines only in file~2, and lines in both.
+The flags [[-1]], [[-2]], [[-3]] suppress the corresponding column.
+The implementation is a simple merge of two sorted streams:
+compare the current lines, output the smaller one to its
+column, and advance that file.
 
 <<[[main]] label [[usage]] (comm.c)>>=
 Usage:
@@ -4316,6 +4636,11 @@ copy(Biobuf *ibuf, char *lbuf, int n)
 % Also super useful for the programmer. A bit less now with git and
 % github but back in the day open source software distributed via .tar.gz
 
+%claude:
+Before version control systems like git, open source software
+was distributed as \verb+.tar.gz+ archives. Even today, [[tar]]
+remains fundamental for packaging, backups, and deployment.
+This chapter also covers [[gzip]] for compression.
 
 \section{[[tar]]}
 
@@ -4324,6 +4649,15 @@ copy(Biobuf *ibuf, char *lbuf, int n)
 
 %for tar:
 % ocaml-tar in mirage
+
+%claude:
+[[tar]] (``tape archiver'') concatenates files into a single
+archive stream. The format is simple: each file is preceded
+by a 512-byte header containing the file name, size, mode,
+and checksum, followed by the file data padded to a 512-byte
+boundary. Despite originating from tape backup workflows (hence
+the name), this format became the universal distribution format
+for \unix software.
 
 <<function [[usage]](tar.c)>>=
 static void
@@ -4374,6 +4708,19 @@ Debug = 0,
 @
 
 \subsubsection{[[Hdr]]}
+
+%claude:
+The [[Hdr]] union overlays raw 512-byte data with the named
+header fields. All numeric fields (mode, uid, size, mtime)
+are stored as ASCII octal strings---a design choice that makes
+archives human-readable with [[cat]] but limits the original
+format to files under 8\,GB. The [[Binsize]] flag in [[size[0]]]
+signals a non-standard ``base 256'' encoding for larger files,
+a GNU extension.
+%
+The POSIX ustar extension adds [[magic]], [[uname]], [[gname]],
+and [[prefix]] fields, allowing longer path names (up to 255
+characters by combining [[prefix]] and [[name]]).
 
 <<constants tar.c>>=
 Tblock = 512,
@@ -4900,8 +5247,21 @@ case '-':
 % (but code of deflate (gzip) is slightly bigger than of inflate (gunzip))
 % note that the actual compression/decompression code is in libflate
 % in libcore; here it's mostly CLI wrapper. Gzip is essentially
-% a thin wrapper around the deflate algorithm. See RFC 1952 (gzip) 
+% a thin wrapper around the deflate algorithm. See RFC 1952 (gzip)
 % and RFC 1951 (deflate)
+
+%claude:
+[[gzip]] is a thin CLI wrapper around [[libflate]]'s deflate
+implementation (see \book{Libcore}). The gzip format
+(RFC~1952) is simple: a fixed header with magic bytes, a
+compression method (always deflate), optional file name and
+timestamp, the compressed data, and a trailing CRC-32 plus
+original size. The [[gzip]] function writes this header
+byte by byte, calls [[deflate]] to compress the data, then
+appends the CRC and size footer.
+%
+The [[crcread]] callback computes the CRC incrementally as
+data is read, avoiding a separate pass over the input.
 
 <<function [[usage]](gzip.c)>>=
 void
@@ -5593,6 +5953,11 @@ get4(Biobuf *b)
 \chapter{Time}
 %******************************************************************************
 
+%claude:
+This chapter covers [[date]] and [[cal]], two simple utilities
+dealing with time. [[date]] prints or converts timestamps;
+[[cal]] prints a calendar for a given month or year.
+
 \section{[[date]]}
 
 %bugfix: this used to segfault in goken because ctime() has
@@ -5641,6 +6006,13 @@ main(int argc, char *argv[])
 \section{[[cal]]}
 
 % $ cal november 1977 => can see the day I am born :)
+
+%claude:
+[[cal]] computes calendars using the [[jan1]] function, which
+calculates the day of the week for January~1 of any year
+using Gregorian and Julian calendar rules. The code even handles
+the 1752 calendar reform, when September lost 11 days as
+Britain switched from the Julian to the Gregorian calendar.
 
 <<constants cal.c>>=
 char    dayw[] =
@@ -5976,11 +6348,23 @@ pstr(char *str, int n)
 %******************************************************************************
 %alt: Pipe filters
 
+%claude:
+These utilities are designed to be stages in a pipeline:
+[[tee]] duplicates a stream, [[p]] paginates it, and [[mc]]
+columnates it. They embody the \unix philosophy of small
+programs composed through pipes.
+
 \section{[[tee]]}
 
 % Read from stdin and write on stdout AND on a file (or files).
 % Useful for logging a command while also seeing its output
 % as  in     <cmd> | tee log.txt
+
+%claude:
+[[tee]] reads from standard input and writes to both standard
+output and one or more files simultaneously---named after a
+T-shaped pipe fitting. The implementation is a simple
+read loop that writes each buffer to every open file descriptor.
 
 <<global flags(tee.c)>>=
 // append mode
@@ -6069,6 +6453,14 @@ intignore(void *a, char *msg)
 
 \section{paginate: [[p]] ([[more]], [[less]])}
 % p for page for paginate
+
+%claude:
+[[p]] is \plan's pager, equivalent to \unix's [[more]].
+It displays output one screenful at a time, reading
+interactive commands from [[/dev/cons]] (or [[/dev/tty]] on
+\unix). This dual-input design---data from stdin, commands
+from the console---is why [[p]] opens [[/dev/cons]] directly
+rather than reading commands from stdin.
 
 <<constant [[DEF]](p.c)>>=
 #define DEF 22  /* lines in chunk: 3*DEF == 66, #lines per nroff page */
@@ -6174,6 +6566,15 @@ printfile(fdt f)
 \section{columnate: [[mc]]}
 % columnate
 % multi column print
+
+%claude:
+[[mc]] (multi-column) reformats a list of items into
+columns, filling top-to-bottom then left-to-right. It
+computes the maximum word width, divides the terminal width
+by that to determine how many columns fit, then prints each
+row by sampling every [[nlines]]-th word. This is the
+utility behind the multi-column output of commands like
+\verb+ls | mc+ in \plan.
 
 % good defaults
 <<constants mc.c>>=
@@ -6460,6 +6861,14 @@ nexttab(int col)
 \section{[[sort]]}
 % and [[join]] ?
 
+%claude:
+[[sort]] is one of the most important \unix utilities---combined
+with [[uniq]], [[join]], and [[comm]], it turns the shell into a
+crude relational database. The ability to sort arbitrarily large
+files by multiple keys, merge pre-sorted files, and eliminate
+duplicates makes it a fundamental building block for data
+processing pipelines.
+
 %https://medium.com/galileo-onwards/an-ode-to-the-shell-6717f57afc2e
 
 %Projection via cut, awk;
@@ -6495,6 +6904,14 @@ nexttab(int col)
 \section{[[uniq]]}
 
 % remove duplicate. Usually preceded by | sort | uniq in a pipe chain
+
+%claude:
+[[uniq]] removes consecutive duplicate lines from sorted input.
+The modes are: [[-d]] to print only duplicates, [[-u]] to print
+only unique lines, and [[-c]] to prefix each line with its
+repeat count. The comparison uses a two-buffer ping-pong:
+read into [[b1]], then [[b2]], compare, and output whichever
+buffer has a new unique value.
 
 <<globals uniq.c>>=
 int fields  = 0;
@@ -6685,6 +7102,14 @@ skip(char *s)
 % power of xargs!
 % also can do stuff in parallel!! xargs -p 20  grep foo
 
+%claude:
+[[xargs]] reads arguments from standard input and executes a
+command with those arguments---essential for turning the output
+of one command into arguments for another
+(\verb+find | grep .c | xargs ls -l+). The [[-p]] flag enables
+parallel execution by forking multiple child processes, and
+[[-n]] controls how many input lines are batched per invocation.
+
 <<function [[usage]](xargs.c)>>=
 void
 usage(void)
@@ -6774,6 +7199,11 @@ dowait(void)
 \chapter{Bytes}
 %******************************************************************************
 
+%claude:
+This chapter covers utilities that work at the byte level:
+hex dumpers, the byte-level copy tool [[dd]], and [[split]]
+for breaking large files into pieces.
+
 \section{[[xd]]}
 % hexadecimal dumper?
 
@@ -6791,6 +7221,13 @@ dowait(void)
 % useful when too big to fit in one floppy :)
 % or when more than 4GB at some point
 % I used it recently on macOS
+
+%claude:
+[[split]] divides a file into pieces of [[n]] lines each (default
+1000), naming them [[xaa]], [[xab]], etc. The [[-e]] flag enables
+regex-based splitting: a new file starts whenever a line matches
+the pattern, and if the regex contains a capture group, that
+group becomes the output file name.
 
 <<function [[usage]](split.c)>>=
 void
@@ -7052,6 +7489,14 @@ matchfile(Resub *match)
 % dc, a bit like ed but for calc
 % then bc actually preprocessor for dc and calls dc
 
+%claude:
+This chapter covers the calculator utilities: [[hoc]] for
+floating-point arithmetic, [[dc]] for arbitrary-precision
+computation with a stack-based (reverse Polish) interface, and
+[[bc]] which provides a C-like syntax that compiles down to
+[[dc]]. The [[dc]]/[[bc]] pair is one of the oldest language
+implementations in \unix, predating even the C compiler.
+
 \section{[[hoc]]}
 % just interpreter around 'double' C type. No arbitrary precision integers
 % like dc so simpler.
@@ -7063,7 +7508,29 @@ matchfile(Resub *match)
 
 \subsection{Introduction}
 
+%claude:
+[[dc]] (``desk calculator'') is an arbitrary-precision calculator
+using reverse Polish notation: operands are pushed onto a stack,
+and operators pop their arguments and push the result. The
+implementation is essentially a stack machine interpreter with
+its own memory management, where numbers are stored as
+variable-length byte strings in [[Blk]] structures.
+
 \subsection{Data structures}
+
+%claude:
+A [[Blk]] is [[dc]]'s fundamental data type: a resizable byte
+buffer with separate read and write cursors. Numbers are stored
+in these buffers as sequences of base-100 digits (each byte
+holds a digit from 0 to 99), with the scale factor appended as
+the last byte. The extensive macro API ([[sgetc]], [[sputc]],
+[[sbackc]], etc.) turns [[Blk]] into a bidirectional stream,
+allowing [[dc]] to process digits from either end.
+%
+The [[Wblk]] is the same concept at a higher level: a resizable
+array of [[Blk]] pointers, used for the operand stack. [[Sym]]
+nodes form a free list for named variables (registers [[a]]
+through [[z]]).
 
 % ??
 <<struct [[Blk]](dc.c)>>=
@@ -7219,6 +7686,14 @@ sfree = &symlst[0];
 @
 
 \subsection{[[commnds()]]}
+
+%claude:
+The main command loop reads one character at a time: digits
+(including hex \verb+A+-\verb+F+) are accumulated into a number
+and pushed onto the stack, while operators are dispatched through
+a large switch statement. This is the heart of the reverse Polish
+interpreter---no parsing is needed because the notation is
+unambiguous.
 
 <<[[commnds()]] locals (dc.c)>>=
 int c;
@@ -8424,6 +8899,15 @@ command(void)
 
 % actually bc is calling dc! bc is a preprocessor for dc!
 
+%claude:
+[[bc]] is not an independent calculator---it is a compiler that
+translates C-like infix expressions into [[dc]] commands. The
+yacc grammar parses assignments, control flow ([[if]], [[while]],
+[[for]]), and function definitions, then emits [[dc]] instructions
+as strings via [[bundle]]. The output is piped directly to [[dc]]
+for execution, making [[bc]] a textbook example of a source-to-source
+translator.
+
 
 %XXX
 <<globals bc.y>>=
@@ -9291,9 +9775,19 @@ lora:
 %******************************************************************************
 
 %\section{[[dirname]]}
-% part of posix 
+% part of posix
+
+%claude:
+This chapter collects small utilities that don't fit neatly
+into the other categories.
 
 \section{[[basename]]}
+
+%claude:
+[[basename]] extracts the filename from a path by stripping
+the directory prefix and an optional suffix. With [[-d]], it
+does the opposite: it strips the filename and returns the
+directory (like \unix's [[dirname]]).
 
 <<function [[main]](basename.c)>>=
 void
