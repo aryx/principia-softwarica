@@ -441,9 +441,16 @@ to learn, one place to look things up, and fast compilation
 \chapter{Core Types and Data Structures}
 %******************************************************************************
 
+%claude:
+This chapter presents the fundamental type definitions from
+[[u.h]] and [[libc.h]] that every \plan C program relies on.
+These headers establish the vocabulary of types---from basic
+integers and booleans to Unicode runes and file descriptors---that
+the rest of the library builds upon.
+
 \section{Basic types}
 
-% void, int, double, 
+% void, int, double,
 % pointer, void*!
 % signed vs unsigned, different int size, etc.
 % All defined in Compiler.nw but libcore define a few aliases in u.h.
@@ -462,6 +469,13 @@ enum _bool {
 
 
 \subsection{Integers}
+
+%claude:
+\plan defines shorthand aliases for unsigned types and
+fixed-width integers. The [[vlong]] type (``very long'')
+provides 64-bit integers on 32-bit architectures where
+[[long]] is only 32~bits---a perennial source of porting
+bugs when moving C code between architectures.
 
 <<type [[uxxx]]>>=
 typedef unsigned short  ushort;
@@ -521,6 +535,13 @@ union FPdbleword
 %http://reedbeta.com/blog/programmers-intro-to-unicode/
 
 \subsubsection{ASCII characters}
+
+%claude:
+Character classification uses a 256-entry lookup table
+([[_ctype]]) where each byte is a bitmask of properties:
+upper, lower, digit, space, punctuation, control. The
+[[isalpha]], [[isdigit]], etc.\ macros index into this table,
+making classification a single array lookup with no branches.
 
 % type (unsigned) char
 
@@ -621,6 +642,14 @@ tolower(int c)
 
 % char =~ byte
 
+%claude:
+A [[Rune]] is \plan's name for a Unicode code point---a 21-bit
+integer that can represent any character. The term was coined
+by Rob Pike and Ken Thompson when they designed UTF-8 at
+Bell Labs. In \plan, [[char]] means a byte and [[Rune]] means
+a character; the UTF-8 functions convert between the two
+representations.
+
 <<type [[Rune]]>>=
 typedef uint        Rune;
 @
@@ -644,6 +673,14 @@ Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
 % diff with Rune? why we have some utfxxx and runexxx functions/?
 % utf-8 is compact encoding of unicode characters (runes).
 
+%claude:
+UTF-8 is the variable-length encoding of runes into byte
+sequences (1 to 4 bytes). \plan was the first operating
+system with native UTF-8 support throughout the entire system.
+The key constants are: [[UTFmax]] (4~bytes, the maximum
+encoding length), [[Runeself]] (0x80, below which UTF-8 is
+identical to ASCII), and [[Runeerror]] (the replacement
+character for invalid sequences).
 
 <<constant [[UTFmax]]>>=
 UTFmax      = 4,        /* maximum bytes per rune */
@@ -663,6 +700,12 @@ Runeerror   = 0xFFFD,   /* decoding error in UTF */
 
 \subsection{Pointers}
 
+%claude:
+\plan uses [[nil]] instead of C's [[NULL]], defined simply as
+\verb+((void*)0)+. The [[uintptr]] type is an integer wide
+enough to hold a pointer---critical for code that needs to
+do arithmetic on addresses.
+
 <<constant [[nil]]>>=
 #define nil     ((void*)0)
 @
@@ -679,6 +722,15 @@ typedef uchar byte;
 % and byte*
 
 \subsection{Arrays}
+
+%claude:
+[[nelem]] computes the number of elements in a statically
+allocated array at compile time---a safer alternative to
+hardcoding array sizes. The [[qsort]] implementation below
+uses the classic quicksort algorithm with a median-of-three
+pivot selection (sampling at 1/6, 1/2, and 5/6 of the array)
+and tail-call optimization on the larger partition to limit
+stack depth.
 
 <<function [[nelem]]>>=
 #define nelem(x)    (sizeof(x)/sizeof((x)[0]))
@@ -825,6 +877,14 @@ qsorts(char *a, long n, Sort *p)
 
 \subsection{Functions}
 
+%claude:
+The variadic argument macros ([[va_start]], [[va_arg]], [[va_end]])
+are defined directly in terms of pointer arithmetic on the
+stack frame, specific to the \plan C compiler's calling
+convention. The [[va_start]] macro handles the case where
+small types (less than 4 bytes) are promoted to [[int]] on
+the stack.
+
 <<type [[va_list]]>>=
 typedef char*   va_list;
 @
@@ -866,6 +926,11 @@ typedef char*   va_list;
 % fmt =~ for structured output
 
 \section{Files}
+
+%claude:
+File descriptors are small integers returned by [[open]] and
+[[create]]. The [[fdt]] typedef makes function signatures more
+readable than bare [[int]].
 
 <<type [[fdt]]>>=
 typedef int fdt; // file descriptor type
@@ -921,7 +986,14 @@ struct Tm {
 
 \section{Collections}
 
-% collection types (not really :( ) 
+%claude:
+Notably absent from \plan's [[libc]] is any standard collection
+type---no hash tables, linked lists, or dynamic arrays. Programs
+implement their own as needed using raw pointers and arrays.
+This minimalism keeps the library small but means that common
+data structures are reimplemented throughout the codebase.
+
+% collection types (not really :( )
 
 % Surprisingly libc does not prescribe any collection Ds.
 % This is why lots of \plan programs have duplicate code to
@@ -957,7 +1029,22 @@ struct Tm {
 
 %real-world: crt0 for "C runtime 0"?
 
+%claude:
+Every \plan program starts in [[_main]], the C runtime entry
+point (analogous to [[crt0]] on \unix). This chapter also
+covers the argument parsing macros and the [[exits]] function
+that handles cleanup callbacks before termination.
+
 \section{Command-line arguments: [[ARGBEGIN()]], [[ARGEND()]]}
+
+%claude:
+[[ARGBEGIN]]/[[ARGEND]] are the standard \plan idiom for
+parsing command-line flags. The macro expands to a [[for]]
+loop that scans each argument starting with \verb+-+, decoding
+flag characters one at a time with [[chartorune]] (so flags
+can be Unicode). The special argument \verb+--+ terminates
+flag processing. [[ARGF]] and [[EARGF]] extract the next
+argument for flags that take a value.
 
 <<signature global argv0>>=
 extern char *argv0;
@@ -1007,6 +1094,14 @@ extern char *argv0;
 % compatible with previous programs already using exits() in their code.
 
 \section{[[exits()]]}
+
+%claude:
+[[exits]] runs registered cleanup callbacks before calling
+the [[_exits]] system call. The [[onex]] table stores up to
+33 callback/pid pairs. The pid field exists because after
+[[rfork(RFMEM)]], parent and child share memory (including
+[[onex]]) but should only run their own callbacks---each
+process checks [[getpid()]] before invoking a handler.
 
 % profile is turned off around this function
 <<function [[exits]]>>=
@@ -1090,6 +1185,13 @@ atexit(void (*f)(void))
 % lib_core/libc/9syscall/*.s and dispatcher in kernel for the sysxxx().
 % FIGURE copy one in Principia.nw?
 
+%claude:
+System calls are the boundary between user space and the kernel.
+Each system call is a small assembly stub (in [[9syscall/*.s]])
+that loads the syscall number into a register and executes a
+software interrupt. The kernel's dispatcher (see \book{Kernel})
+then routes to the appropriate [[sysxxx()]] handler.
+
 
 %******************************************************************************
 \chapter{Memory Area Operations}
@@ -1098,6 +1200,15 @@ atexit(void (*f)(void))
 % Lots of functions defined in assembly, so maximal control, maximal opti.
 % Important cos used a lot.
 % But also many portable (slower) implem in libc/port/
+
+%claude:
+These functions operate on raw memory regions. The portable
+C implementations shown here are straightforward byte-at-a-time
+loops, but in practice the real implementations are hand-written
+in assembly (in [[libc/arm/]]) to move data in 32-bit or
+larger chunks for performance. [[memmove]] handles overlapping
+regions by detecting when the source overlaps the destination
+and copying backwards in that case.
 
 <<function [[memset]]>>=
 void*
@@ -1210,6 +1321,14 @@ memchr(void *ap, int c, ulong n)
 \chapter{Memory Management}
 %******************************************************************************
 
+%claude:
+This chapter covers the memory allocator: from the [[sbrk]]
+system call that extends the heap, through the pool-based
+allocator that manages free blocks, to the [[malloc]]/[[free]]
+interface that programs use. The allocator organizes memory
+into arenas obtained from [[sbrk]], with free blocks managed
+in a binary tree for efficient best-fit allocation.
+
 %https://blog.learngoprogramming.com/a-visual-guide-to-golang-memory-allocator-from-ground-up-e132258453ed
 
 %http://marek.vavrusa.com/c/memory/2015/02/20/memory/
@@ -1255,6 +1374,14 @@ memchr(void *ap, int c, ulong n)
 
 % in 9sys/
 
+%claude:
+[[sbrk]] extends the process's data segment by [[n]] bytes.
+The [[bloc]] pointer tracks the current end of the heap
+(initialized to [[end]], the linker-defined symbol marking
+the end of BSS). The rounding expression
+the rounding expression (add [[Round]], then mask off the low bits)
+aligns the allocation to an 8-byte boundary.
+
 <<global [[bloc]]>>=
 // starting point for the heap, after the text, data, and bss.
 static  char    *bloc = { end };
@@ -1288,6 +1415,16 @@ enum
 \section{Data structures}
 
 \subsection{[[Pool]]}
+
+%claude:
+The [[Pool]] structure is the allocator's central object. It
+tracks the total and current memory usage, holds the free-block
+tree ([[freeroot]]) and the arena list ([[arenalist]]), and
+provides function pointers for customization: [[alloc]] obtains
+new memory from the OS, [[lock]]/[[unlock]] provide thread
+safety, and [[panic]] handles out-of-memory conditions.
+The flag bits enable debugging features like paranoid checking
+and allocation logging.
 
 <<type [[Pool]]>>=
 struct Pool {
@@ -1377,9 +1514,20 @@ Pool *mainmem = &sbrkmem;
 Pool *imagmem = &sbrkmem;
 @
 
-\subsection{XXX}
+\subsection{Block headers and free list}
 
 % in pool.c
+
+%claude:
+Every allocated block is preceded by a [[Bhdr]] (block header)
+containing a magic number and the block's total size. Free blocks
+extend this with left/right/next/prev pointers to form a
+balanced binary tree of free blocks. The magic numbers
+([[ALLOC_MAGIC]], [[FREE_MAGIC]], [[NOT_MAGIC]], etc.) detect
+heap corruption---writing past the end of an allocation will
+overwrite the next block's magic, which the allocator checks
+on every operation. The [[Btail]] structure at the end of each
+block provides bidirectional traversal.
 
 <<struct [[Bhdr]]>>=
 struct Bhdr {
@@ -1526,6 +1674,13 @@ static uchar datamagic[] = { 0xFE, 0xF1, 0xF0, 0xFA };
 
 \section{[[malloc()]]}
 
+%claude:
+[[malloc]] is a thin wrapper around [[poolalloc]]. When
+[[Npadlong]] is non-zero (debugging mode), extra space is
+allocated before the returned pointer to store the caller's
+PC---[[getcallerpc]] records who called [[malloc]], which
+is invaluable for tracking down memory leaks.
+
 <<function [[malloc]]>>=
 void*
 malloc(ulong size)
@@ -1568,6 +1723,14 @@ free(void *v)
 
 % Note that there is also a libstring/ but seems unused.
 
+%claude:
+This chapter covers string manipulation at two levels: plain
+C strings (null-terminated byte arrays for ASCII) and rune
+strings (for Unicode). The plain C functions are the familiar
+[[strlen]], [[strcmp]], [[strcpy]], etc. The rune functions
+provide the same operations on arrays of [[Rune]] values, plus
+the UTF-8 encoding/decoding functions that convert between the two.
+
 %\section{Conversions}
 % see Mathematics section and Parsing subsections
 
@@ -1576,6 +1739,13 @@ free(void *v)
 % C strings. end of string marked with null character.
 
 % copy, search, len, etc.
+
+%claude:
+Note how [[strlen]] is implemented in terms of [[strchr]]:
+it searches for the null terminator and returns the distance.
+Similarly, [[strcat]] uses [[strchr]] to find the end of the
+destination string, then calls [[strcpy]]. This layering
+keeps each function minimal.
 
 <<function [[strlen]]>>=
 long
@@ -1750,6 +1920,14 @@ strstr(char *s1, char *s2)
 
 \section{Runes}
 
+%claude:
+The rune functions mirror the C string functions but operate
+on [[Rune]] arrays: [[runestrlen]], [[runestrcmp]], etc.
+The [[_runebsearch]] function performs binary search on the
+Unicode character property tables (stored as sorted arrays
+of rune ranges), used by [[isalpharune]], [[istitlerune]],
+and similar classification functions.
+
 %see utf.ps
 
 %https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/
@@ -1812,6 +1990,15 @@ _runebsearch(Rune c, Rune *t, int n, int ne)
 
 \subsection{Conversion}
 
+%claude:
+[[chartorune]] and [[runetochar]] convert between UTF-8 byte
+sequences and runes. The encoding uses prefix bits to indicate
+the sequence length: a leading byte starting with 0 is ASCII
+(1~byte), 110 means 2~bytes, 1110 means 3~bytes, and 11110
+means 4~bytes. Continuation bytes always start with 10.
+The decoder validates that sequences are not overlong
+(e.g., encoding ASCII as a 2-byte sequence) and rejects
+surrogate code points, returning [[Runeerror]] for invalid input.
 
 <<macro [[Bit]]>>=
 #define Bit(i) (7-(i))
@@ -2255,6 +2442,13 @@ enum Fmt_flag {
 
 %https://swtch.com/~rsc/regexp/
 
+%claude:
+[[libregexp]] provides the shared regular expression library
+used by programs that don't have their own engine (unlike
+[[grep]], which has a built-in DFA matcher for speed). The
+library uses an NFA-based approach, as described in Russ
+Cox's well-known articles on regular expression matching.
+
 \section{Data structures}
 
 \section{Advanced topics}
@@ -2265,7 +2459,25 @@ enum Fmt_flag {
 
 % See file descriptor type in core DS.
 
+%claude:
+File I/O in \plan is built on five system calls: [[open]],
+[[create]], [[read]], [[write]], and [[close]]. The \plan
+interface differs from \unix in a few ways: there is no
+separate [[creat]] call (use [[create]]), [[read]] and [[write]]
+are implemented as wrappers around [[pread]]/[[pwrite]] (which
+take an explicit offset, making them atomic for concurrent
+access), and file modes include \plan-specific bits like
+[[OEXCL]] (exclusive create) and [[ORCLOSE]] (remove on close).
+
 \section{Data structures}
+
+%claude:
+The [[Qid]] (unique identifier) is how \plan identifies files
+across the entire system. Every file server assigns each file
+a unique [[path]] (a 64-bit number), a [[vers]] (version,
+incremented on each modification), and a [[type]] byte
+indicating whether it's a directory, append-only, etc. Two
+files are identical if and only if they have the same [[Qid]].
 
 <<type [[Open_flag]]>>=
 // enum Open_flag, open parameter
@@ -2332,6 +2544,13 @@ enum Seek_cursor {
 
 \section{[[read()]], [[write()]]}
 
+%claude:
+[[read]] and [[write]] are thin wrappers around [[pread]] and
+[[pwrite]] with an offset of $-1$, meaning ``use the current
+file offset.'' The positional variants are the real system
+calls in \plan; the traditional [[read]]/[[write]] are
+convenience functions.
+
 <<function [[read]]>>=
 long
 read(fdt fd, void *buf, long n)
@@ -2349,6 +2568,13 @@ write(fdt fd, void *buf, long n)
 @
 
 \section{[[readn()]], [[writen()]]}
+
+%claude:
+[[readn]] loops until exactly [[n]] bytes have been read or
+EOF is reached. This is necessary because [[read]] may return
+fewer bytes than requested (a ``short read''), especially when
+reading from pipes or network connections. [[readn]] guarantees
+the caller gets the full amount.
 
 <<function [[readn]]>>=
 long
@@ -2381,9 +2607,27 @@ readn(fdt f, void *av, long n)
 
 %libbio/
 
+%claude:
+[[libbio]] provides buffered I/O, similar in purpose to
+\unix's [[stdio]] but with a cleaner interface. The [[Biobuf]]
+structure wraps a file descriptor with a buffer, providing
+efficient character-at-a-time reading ([[Bgetc]], [[Bgetrune]]),
+line reading ([[Brdline]]), and formatted output ([[Bprint]]).
+Unlike [[stdio]], [[libbio]] is designed for \plan's UTF-8
+strings from the ground up.
+
 %******************************************************************************
 \chapter{Directories and File Paths}
 %******************************************************************************
+
+%claude:
+The [[Dir]] structure is \plan's file metadata representation,
+equivalent to \unix's [[struct stat]] but richer: it includes
+string fields for owner ([[uid]]), group ([[gid]]), and last
+modifier ([[muid]]), plus the [[Qid]] for unique identification.
+The [[dirstat]]/[[dirwstat]] functions convert between the
+kernel's wire format and this C structure using [[convM2D]]
+and [[convD2M]].
 
 \section{Data structures: [[Dir]]}
 
@@ -2447,6 +2691,16 @@ nulldir(Dir *d)
 \section{Syscalls: [[create()]], [[chdir()]], etc}
 
 \section{[[xxxfstat()]]}
+
+%claude:
+[[dirfstat]] and [[dirstat]] allocate a [[Dir]] structure and
+fill it by calling the underlying [[fstat]]/[[stat]] system
+calls. The two-pass loop handles the case where the initial
+buffer is too small: the first call returns the required size,
+and the second call succeeds with a properly sized buffer.
+The string fields in [[Dir]] point into memory allocated
+immediately after the structure itself, so a single [[free]]
+releases everything.
 
 <<enum [[_anon_ (9sys/dirfstat.c)]]>>=
 enum
@@ -2785,6 +3039,16 @@ access(char *name, int mode)
 %******************************************************************************
 % plan9 specific, not in goken
 
+%claude:
+\plan's namespace is a per-process view of the file system
+that can be customized with [[bind]] and [[mount]]. [[bind]]
+makes one directory appear at another location; [[mount]]
+attaches a 9P file server to a mount point. The [[MBEFORE]]
+and [[MAFTER]] flags create union directories where multiple
+file trees are stacked at the same path---a powerful mechanism
+that replaces \unix's \verb+PATH+ variable, shared libraries,
+and much of the role of environment variables.
+
 <<type [[Namespace_flag]]>>=
 // enum Namespace_flag, mount/bind parameter
 #define	MREPL	0x0000	/* mount replaces object */
@@ -2809,6 +3073,12 @@ access(char *name, int mode)
 
 % see TM in core DS now
 
+%claude:
+This chapter covers the time-related functions: system calls
+for sleeping and setting alarms, time-of-day functions, timezone
+handling, and conversions between epoch seconds and the [[Tm]]
+structure.
+
 \section{Syscalls: [[sleep()]], [[alarm()]], etc}
 
 \section{Time and day}
@@ -2816,6 +3086,13 @@ access(char *name, int mode)
 
 
 \section{Time zones and [[localtime()]]}
+
+%claude:
+[[localtime]] converts epoch seconds to a [[Tm]] structure in
+the local timezone. It reads the timezone from
+[[/env/timezone]] (lazily, on first call), applies the standard
+offset, then checks whether daylight saving time is active
+by scanning the [[dlpairs]] array of start/end timestamps.
 
 <<function [[localtime]]>>=
 Tm*
@@ -2885,6 +3162,15 @@ asctime(Tm *t)
 @
 
 \section{[[time()]]}
+
+%claude:
+[[time]] first tries the [[nsec]] system call (nanosecond
+precision), falling back to [[oldtime]] which reads
+[[/dev/time]] as a file. The fallback is notable: because
+[[/dev/time]] is a regular file, a [[fork]] with shared
+file descriptors creates a race on the file offset, so
+[[oldtime]] retries up to 100 times if the read returns
+zero bytes.
 
 <<function [[time]]>>=
 long
@@ -3011,6 +3297,16 @@ tm2sec(Tm *tm)
 % Windows does not have fork ...
 % cite usenix paper saying fork is bad and obsolete: "A fork in the road"
 
+%claude:
+\plan replaces \unix's [[fork]] with [[rfork]] (``resource fork''),
+which takes a bitmask specifying exactly which resources to
+share or copy: file descriptors ([[RFFDG]]), namespace
+([[RFNAMEG]]), environment ([[RFENVG]]), memory ([[RFMEM]]),
+and note group ([[RFNOTEG]]). This single call subsumes
+\unix's [[fork]], [[clone]], [[vfork]], and [[pthread_create]],
+providing fine-grained control over what the child process
+inherits.
+
 <<type [[Rfork_flag]]>>=
 /* rfork */
 enum Rfork_flags
@@ -3037,6 +3333,12 @@ enum Rfork_flags
 
 \section{[[fork()]]}
 
+%claude:
+The convenience [[fork]] function calls [[rfork]] with the
+traditional \unix semantics: create a new process
+([[RFPROC]]) with copied file descriptors ([[RFFDG]]) and a
+new rendezvous group ([[RFREND]]).
+
 <<function [[fork]]>>=
 int
 fork(void)
@@ -3062,6 +3364,13 @@ execl(char *f, ...)
 % see later? for parent-child IPC?
 
 \section{[[getpid()]]}
+
+%claude:
+In \plan, [[getpid]] reads [[#c/pid]] (the console device's
+pid file) rather than making a system call. This is typical
+of \plan's ``everything is a file'' design: process information
+is exposed through the file system rather than through
+specialized system calls.
 
 <<function [[getpid]]>>=
 int
@@ -3102,6 +3411,14 @@ getppid(void)
 \chapter{Concurrency}
 %******************************************************************************
 
+%claude:
+When processes share memory via [[rfork(RFMEM)]], they need
+synchronization primitives. This chapter covers the building
+blocks: spin locks, queuing locks, and read-write locks.
+The higher-level abstractions (channels and cooperative threads)
+are built on top of these in [[libthread]], covered in a
+later chapter.
+
 \section{Syscalls: [[rendezvous()]], etc}
 
 % plan9 has shared memory processes. rfork(RFMEM)
@@ -3119,6 +3436,15 @@ getppid(void)
 \section{Locks}
 
 % diff with kernel's lock data structures? dupes?
+
+%claude:
+The [[Lock]] uses a two-level strategy similar to Linux
+futexes: [[ainc]] (atomic increment) tries to acquire the
+lock without entering the kernel. If the lock was uncontested
+(key went from 0 to 1), we're done. Only if another process
+already holds it do we call [[semacquire]] to block in the
+kernel. This fast path avoids the cost of a system call in
+the common uncontested case.
 
 <<type [[Lock]]>>=
 struct Lock {
@@ -3179,6 +3505,13 @@ canlock(Lock *l)
 % But at least here let access/manipulate the queue?
 
 % diff with kernel's lock data structures? dupes?
+
+%claude:
+[[QLock]] (queuing lock) is a higher-level lock that maintains
+an explicit queue of waiters. Unlike [[Lock]] which may spin,
+[[QLock]] puts contending threads to sleep in FIFO order,
+ensuring fairness. The [[QLp]] nodes form a linked list of
+waiting processes.
 
 <<type [[QLock]]>>=
 struct QLock {
@@ -3279,6 +3612,13 @@ canqlock(QLock *q)
 
 
 \section{Read-write locks}
+
+%claude:
+[[RWLock]] allows multiple concurrent readers but exclusive
+writers. When a writer is waiting, new readers queue behind
+it to prevent writer starvation. The [[wunlock]] function
+wakes either the next writer or a batch of consecutive
+readers from the wait queue.
 
 <<type [[RWLock]]>>=
 struct RWLock {
@@ -3587,9 +3927,25 @@ typedef long    jmp_buf[2];
 %******************************************************************************
 % 9P and RPC? fcall.h
 
+%claude:
+\plan provides several IPC mechanisms: pipes for byte
+streams, notes (signals) for asynchronous notification,
+the [[await]] system call for parent-child communication via
+exit strings, and shared memory segments. This chapter also
+covers the 9P protocol marshalling functions used to
+communicate with file servers.
+
 \section{Syscalls: [[pipe()]], [[notify()]], [[await()]], [[segattach()]]}
 
 \section{Helpers}
+
+%claude:
+[[getfields]] splits a string into fields by replacing
+separator characters with null bytes---a destructive tokenizer
+used to parse text-based protocols. The [[mflag]] parameter
+controls whether consecutive separators produce empty fields
+(like \verb+awk+'s default) or are merged into one (like
+\verb+awk -F+).
 
 % use string to communicate between processes. strings can encode
 % a protocol. So need functions that decode a string.
@@ -5158,6 +5514,19 @@ convD2M(Dir *d, uchar *buf, uint nbuf)
 
 % history of libthread in plan9
 % https://swtch.com/~rsc/thread/
+
+%claude:
+[[libthread]] provides cooperative threads (``green threads'')
+and channels for structured concurrency, directly inspiring
+Go's goroutines and channels. In \plan's terminology, a
+``proc'' is an OS-level process (created with [[rfork(RFMEM)]]),
+while a ``thread'' is a cooperatively-scheduled coroutine
+within a proc. Because threads within the same proc never
+run concurrently, they don't need locks to access shared data---a
+major simplification over preemptive threading. Channels provide
+type-safe, blocking communication between threads, and [[alt]]
+enables waiting on multiple channels simultaneously (like Go's
+[[select]]).
 
 \section{Overview}
 
@@ -8530,6 +8899,16 @@ chanprint(Channel *c, char *fmt, ...)
 
 % More in Network.nw, here just wrappers.
 
+%claude:
+\plan's network API is radically different from \unix sockets.
+Instead of a [[socket]]/[[bind]]/[[listen]]/[[accept]] sequence,
+networking is done through the file system: [[dial("tcp!host!port")]]
+opens a connection by writing to [[/net/tcp/clone]], and
+[[announce]] listens by reading from [[/net/tcp/*/listen]].
+The [[NetConnInfo]] structure holds the parsed connection
+metadata (local/remote addresses, service names), all obtained
+by reading files under the connection directory.
+
 <<type [[NetConnInfo]]>>=
 struct NetConnInfo {
     char    *dir;       /* connection directory */
@@ -9066,6 +9445,15 @@ _dial_string_parse(char *str, DS *ds)
 
 % "Computer Approximations, by Hart, Chenney, Lawson, ...
 % lib by Sun with all those s_xxx.c, w_xxx.c (see kernel-snowflake/lib/m/)
+
+%claude:
+The math library provides the standard transcendental functions
+([[sin]], [[cos]], [[exp]], [[log]], [[sqrt]], etc.) plus
+integer arithmetic helpers. Many implementations use polynomial
+approximations from Hart et al.'s {\em Computer Approximations}.
+The integer division and modulus routines ([[_div]], [[_mod]])
+are in assembly because the ARM has no hardware divide
+instruction (see \book{Assembler}).
 
 \section{Basics}
 
@@ -10741,6 +11129,13 @@ log10(double arg)
 %entire book on random number generation:
 %http://luc.devroye.org/rnbookindex.html
 
+%claude:
+[[lrand]] uses an additive feedback shift register (a
+lagged Fibonacci generator) for fast pseudo-random numbers.
+For cryptographic randomness, [[truerand]] reads from
+[[/dev/random]], which in the kernel collects entropy from
+hardware sources.
+
 <<function [[rand]]>>=
 int
 rand(void)
@@ -10865,6 +11260,14 @@ muldiv(long a, long b, long c)
 %******************************************************************************
 % libflate
 
+%claude:
+[[libflate]] implements the deflate/inflate algorithms
+(RFC~1951) used by [[gzip]] and [[gunzip]]. The library
+provides a callback-based streaming interface: the caller
+supplies read and write functions, and [[deflate]]/[[inflate]]
+process data in chunks without loading the entire file into
+memory.
+
 % BIG!
 
 %******************************************************************************
@@ -10881,6 +11284,17 @@ muldiv(long a, long b, long c)
 % list of fixed errors. Then perror() to display string for it.
 % Plan9 rethinked that, like for exits(char*s) insead  of exit(int)
 % and introduced not error number but per-process error string!
+
+%claude:
+\plan replaces \unix's [[errno]] (an integer error code) with
+a per-process error {\em string} of up to 128 characters.
+The [[errstr]] system call swaps the current error string with
+a buffer provided by the caller---passing an empty buffer
+reads and clears the error. The [[%r]] format verb in
+[[print]]/[[fprint]] outputs the current error string,
+and [[werrstr]] sets it. This design avoids the fixed,
+enumerated error codes of \unix and allows file servers to
+return descriptive error messages.
 
 %TODO: errno
 %    if(getwd(pathname, sizeof(pathname)) == 0) {
@@ -11070,6 +11484,14 @@ _sysfatalimpl(char *fmt, va_list arg)
 
 % Seen some debugging support before, for memory pool.
 
+%claude:
+Debugging support includes [[syslog]] for writing to
+[[/sys/log/]] files, [[assert]] for compile-time invariants,
+and the memory allocator's built-in corruption detection
+(magic numbers, caller PC recording). The [[abort]] function
+generates a segmentation fault to produce a core dump for
+post-mortem analysis with [[acid]] (see \book{Debugger}).
+
 \section{Logging}
 
 <<function [[syslog]]>>=
@@ -11204,6 +11626,15 @@ eqdirdev(Dir *a, Dir *b)
 % arm/main9p.s
 
 % see times() function in Libcore_extra.nw that access /dev/cputime
+
+%claude:
+When a program is linked with \verb+5l -p+, the linker inserts
+calls to [[_profin]] and [[_profout]] at every function entry
+and exit (see \book{Linker} and \book{Profiler}). These
+functions maintain a call tree of [[Plink]] nodes, recording
+the caller PC and invocation count. [[_profdump]] writes this
+data to a file that the [[prof]] command reads to produce
+human-readable profiles.
 
 <<type [[Prof]]>>=
 enum Profiling {
@@ -11559,6 +11990,14 @@ cputime(void)
 %******************************************************************************
 
 % ref_own<string> returned
+
+%claude:
+\plan identifies users by name strings rather than numeric
+uid/gid pairs. [[getuser]] reads the current user name from
+[[/dev/user]], reflecting the ``everything is a file'' design.
+In a distributed environment where different file servers may
+have different user databases, string-based identities are
+more flexible than numeric IDs.
 
 \section{[[getuser()]]}
 
