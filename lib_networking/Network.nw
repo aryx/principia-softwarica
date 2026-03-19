@@ -936,12 +936,30 @@ in another:
 
 % Lots of DS, really a lot.
 
+%claude:
+The networking stack has many interconnected data structures.
+This chapter introduces them all before diving into the
+code that uses them. The key hierarchy is:
+[[Fs]] (the IP stack instance) contains [[Proto]]cols (UDP, TCP,
+IL, etc.), each of which manages a set of [[Conv]]ersations
+(individual connections). On the hardware side, [[Ipifc]]
+(IP interface) binds an IP address to a physical [[Medium]]
+(like Ethernet), which connects to an [[Ether]] controller.
+
 \section{IP addresses}
 % machine identifier
-% Universal identifiers, 
+% Universal identifiers,
 
 % universal, inter-network
 %note: later in HTTP section we will see URL, even more universal/general
+
+%claude:
+Internally, all IP addresses are stored in the 16-byte IPv6
+format ([[IPaddrlen]] = 16). IPv4 addresses are embedded using
+the standard IPv4-mapped IPv6 prefix: the first 10 bytes are
+zero, then two \verb+0xff+ bytes, then the 4-byte IPv4 address.
+The [[isv4]], [[v4tov6]], and [[v6tov4]] functions convert
+between the two representations.
 
 <<constant [[IPv4addrlen]]>>=
 IPv4addrlen=	4,
@@ -1063,6 +1081,16 @@ enum ip_version {
 
 \subsection{Network class and network identifier}
 
+%claude:
+The original IP address scheme divided the 32-bit address into
+a network identifier and a host identifier. The split point
+depends on the ``class'' (determined by the first 2 bits):
+class~A has 8~bits of network and 24~bits of host, class~B has
+16/16, and class~C has 24/8. The [[defmask]] function returns
+the appropriate subnet mask for each class. While classless
+routing (CIDR) has largely replaced this scheme, the code
+still supports it as a default.
+
 % "conceptually an internet address is a pair (netid, hostid)
 % where netid identifies a network, and hostid identifies a host
 % on that network" xinu book
@@ -1173,6 +1201,14 @@ ipaddr IPnoaddr;
 
 \section{IP header}
 
+%claude:
+The [[Ip4hdr]] structure maps directly to the on-the-wire
+IPv4 packet header. All multi-byte fields use [[uchar]]
+arrays rather than [[ushort]] or [[ulong]] to avoid byte-order
+issues---the network byte order is always big-endian, and
+using raw bytes with explicit accessor macros ([[nhgets]],
+[[hnputs]], etc.) keeps the code portable.
+
 <<struct [[Ip4hdr]]>>=
 /* on the wire packet header */
 struct Ip4hdr
@@ -1202,9 +1238,17 @@ struct Ip4hdr
 
 % /net/ipifc/...
 
-% this will associate an IP (logical address) to a 
+% this will associate an IP (logical address) to a
 % physical device (physical address)
 
+%claude:
+An [[Ipifc]] (IP interface) binds one or more IP addresses
+to a physical device. For example, the command
+\verb+echo 'bind ether /net/ether0' > /net/ipifc/0/ctl+
+connects an IP interface to an Ethernet controller. Each
+interface can have multiple logical addresses ([[Iplifc]]
+nodes), which is essential for gateways that bridge
+different networks.
 
 \subsection{User side}
 
@@ -1396,6 +1440,15 @@ Iplifc  *next;
 % general interface
 
 % see that it's pointed by Ipifc above
+
+%claude:
+The [[Medium]] structure is an interface (in the OOP sense)
+for physical network types. It provides method pointers for
+binding to an interface, writing packets ([[bwrite]]), resolving
+addresses ([[ares]]), and handling multicast. The
+[[ethermedium]] global is the concrete implementation for
+Ethernet, with its 14-byte header, 1514-byte MTU, and 6-byte
+MAC addresses.
 
 <<struct Medium (kernel)>>=
 struct Medium
@@ -1653,6 +1706,14 @@ void  (*shutdown)(Ether*);  /* shutdown hardware before reboot */
 \subsection{[[Fs]] and [[ipfs]]}
 % rename? Slashnetfs?
 
+%claude:
+[[Fs]] is the root of the entire IP stack. It holds a
+pointer to the [[IP]] fragment reassembly state, an array
+of registered protocols ([[p]]), the ARP cache, the routing
+tables, and the network database. The global [[ipfs]] array
+allows multiple independent IP stacks (indexed by device
+number), though in practice only one is used.
+
 <<struct Fs (kernel)>>=
 /*
  *  one per IP protocol stack
@@ -1736,7 +1797,7 @@ Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
 \subsection{[[IP]] fragments and IP statistics}
 %todo: rename, bad name, ip_fragments?
 
-% Fragments because idea of IP is to have packets, 
+% Fragments because idea of IP is to have packets,
 % So IP abstract away physical capacity. You just have to care
 % about a standard Datagram maximum size, and IP will do the rest.
 
@@ -1745,6 +1806,15 @@ Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
 % (but this is different from TCP, because here it's done
 % in one hop, so it's reliable. No reordering needed, the fragments
 % will arrive in order).
+
+%claude:
+The [[IP]] structure manages IP-level state: fragment
+reassembly and MIB-II statistics. When a packet exceeds
+the MTU of a network link, IP splits it into fragments
+that are independently routed and reassembled at the
+destination. The [[Fragment4]] pool is a pre-allocated
+free list of fragment tracking structures, linked through
+[[next]] pointers.
 
 <<struct IP (kernel)>>=
 /* an instance of IP */
@@ -1876,6 +1946,16 @@ static char *statnames[] =
 
 % /net/<proto>/
 
+%claude:
+A [[Proto]] is a protocol implementation registered with
+the IP stack. It provides methods for creating and closing
+connections ([[create]], [[close]]), establishing communication
+([[connect]], [[announce]]), and receiving packets ([[rcv]]).
+Each protocol manages an array of conversations and has a
+protocol number ([[ipproto]]) used to dispatch incoming packets---the
+[[t2p]] table in [[Fs]] maps the protocol field in IP headers
+to the correct [[Proto]].
+
 <<struct Proto (kernel)>>=
 /*
  *  one per multiplexed protocol
@@ -2004,6 +2084,18 @@ char*   (*bind)(Conv*, char**, int);
 
 % A bit like a Channel (accessed indirectly via Chan->dev, ipfs and the qid)
 % Big structure ... a bit like Proc for Kernel.nw, central structure.
+
+%claude:
+A [[Conv]] (conversation) represents one network connection,
+identified by the 4-tuple of local IP, local port, remote IP,
+and remote port. It is the central structure of the stack---the
+equivalent of a \unix socket. Each conversation has a read
+queue ([[rq]]) for incoming data and a write queue ([[wq]])
+for outgoing data, plus a state machine tracking whether the
+connection is idle, connecting, or established. Conversations
+are exposed as directories under [[/net/<proto>/<n>/]] with
+[[data]], [[ctl]], [[local]], [[remote]], and [[status]] files.
+
 <<struct Conv (kernel)>>=
 /*
  *  one per conversation directory
@@ -2503,6 +2595,15 @@ Lroot=    10,
 \chapter{Initialization}
 %******************************************************************************
 
+%claude:
+Initializing the network stack is a two-stage process.
+First, the kernel mounts the IP device ([[bind #I /net]])
+which creates the [[Fs]] structure and initializes all
+protocols, ARP, and fragment tracking. Then, the Ethernet
+device is mounted ([[bind #l /net]]) to provide the physical
+transport. On the user side, [[ipconfig]] configures the
+IP address and routes, typically via DHCP.
+
 \section{Kernel side}
 
 \subsection{Mounting the ip device}
@@ -2755,6 +2856,17 @@ etherattach(char* spec)
 % and how the kernel then dispatch internally the command to the right
 % protocol, to the right method, to the right medium.
 
+%claude:
+In \plan, all network operations go through the file system.
+The [[ipdevtab]] is a kernel device that serves the [[/net]]
+file tree. When a user program opens [[/net/tcp/clone]], the
+kernel calls [[ipopen]] which allocates a new conversation.
+Writing \verb+connect 10.0.0.1!80+ to the [[ctl]] file triggers
+[[ipwrite]], which dispatches to the protocol's [[connect]]
+method. Reading from [[data]] dequeues packets from [[rq]].
+This chapter traces how file operations are dispatched
+through the [[/net]] hierarchy to the protocol implementations.
+
 \section{IP device}
 
 <<global [[ipdevtab]]>>=
@@ -2800,6 +2912,13 @@ ipremove(Chan*)
 
 
 \subsection{[[/net]] hierarchy and [[ipwalk()]]}
+
+%claude:
+[[ipgen]] generates the directory listing for each level of
+the [[/net]] hierarchy. The Qid encoding packs the protocol
+index, conversation index, and file type into a single 64-bit
+identifier, allowing [[ipgen]] to determine from any Qid
+what level of the tree it's at and what entries to show.
 
 <<function [[ipwalk]]>>=
 static Walkqid*
@@ -4135,6 +4254,17 @@ Dev etherdevtab = {
 
 % code of ipconfig also here?
 
+%claude:
+Network configuration in \plan is done through the [[/net/ipifc]]
+pseudo-protocol---it reuses the same [[Proto]]/[[Conv]] mechanism
+as real protocols, but instead of carrying data, its
+[[ctl]] commands configure IP interfaces. Writing
+\verb+bind ether /net/ether0+ to [[/net/ipifc/0/ctl]]
+associates an Ethernet device with an IP interface, and
+\verb+add 10.0.0.2+ assigns an IP address. This elegant
+reuse of the protocol abstraction avoids introducing a
+separate configuration mechanism.
+
 \section{[[/net/ipifc/]] protocol}
 
 % (ab)use the protocol scheme to also configure.
@@ -5278,8 +5408,13 @@ ipifcclose(Conv *c)
 
 % ethernet address on top of (CS)MA.
 
-
-
+%claude:
+Ethernet is the physical transport layer---the actual wire (or
+radio) that carries bits between machines on the same local
+network. Each Ethernet device has a 48-bit MAC address
+(6~bytes), and frames have a simple header: destination MAC,
+source MAC, and a 2-byte type field that identifies the
+payload (0x0800 for IPv4, 0x0806 for ARP).
 
 \section{Ethernet addresses}
 
@@ -5384,6 +5519,15 @@ struct Etherpkt
 %******************************************************************************
 
 % RFC 79, Internet Protocol
+
+%claude:
+IP (Internet Protocol) provides the logical addressing layer
+that enables communication across different physical networks.
+While Ethernet moves frames between machines on the same wire,
+IP routes packets between arbitrary machines by hopping through
+gateways. This chapter covers address parsing, packet output
+([[ipoput4]]), packet input ([[ipiput4]]), and fragment
+reassembly.
 
 \section{IP addresses}
 
@@ -5537,6 +5681,15 @@ equivip4(ipv4 a, ipv4 b)
 
 % fault tolerance! important
 
+%claude:
+The IP checksum is a one's-complement sum of all 16-bit words
+in the header. It detects bit errors in transit at the cost
+of a simple computation. The protocol checksum
+([[ptclcsum]]) handles the trickier case of computing the
+checksum over a chain of [[Block]]s that may not be
+contiguous in memory, carefully tracking whether the current
+block starts at an odd or even byte boundary.
+
 <<function [[ptclcsum]]>>=
 ushort
 ptclcsum(Block *bp, int offset, int len)
@@ -5684,6 +5837,15 @@ ipfragallo4(IP *ip)
 
 \subsection{Writing: [[ipoput4()]]}
 % IP out-put v4
+
+%claude:
+[[ipoput4]] is the single exit point for all outgoing IPv4
+packets. It fills in the IP header (version, TTL, TOS),
+looks up the route to determine the outgoing interface and
+gateway, and either sends the packet directly (if it fits
+in one frame) or fragments it if it exceeds the MTU. The
+final [[bwrite]] call on the medium sends the packet out
+the physical interface.
 
 % syswrite(..., /net/x/y/data) -> udpkick | ... -> <>
 % assume bp has already an IP header with many fields already set (e.g. dst)
@@ -5942,6 +6104,16 @@ if(waserror()){
 @
 
 \subsection{Reading: [[ipiput4()]]}
+
+%claude:
+[[ipiput4]] is called when an IP packet arrives from the
+network. It validates the header checksum, checks whether
+the packet is addressed to this machine ([[ipforme]]),
+reassembles fragments if needed, then dispatches to the
+appropriate protocol handler via [[Fsrcvpcol]] (which looks
+up the protocol number in [[f->t2p]]). If the packet is
+not for us, it is either forwarded (if this machine is a
+gateway) or dropped.
 
 % here you don't know what is the destination conversation! As opposed to
 % ipoput, here there is not yet any associated Conv.
@@ -6409,6 +6581,15 @@ else if(strcmp(argv[0], "reassemble") == 0){
 \chapter{Finding Machines Locally: ARP}
 %******************************************************************************
 
+%claude:
+ARP (Address Resolution Protocol) answers the question:
+``I know the IP address of the machine I want to reach on
+my local network; what is its Ethernet MAC address?'' The
+ARP cache maps IP addresses to MAC addresses, with entries
+that expire and are refreshed. When a cache miss occurs,
+ARP broadcasts a request on the local network and queues
+the outgoing packet in [[hold]] until the reply arrives.
+
 <<[[Fs(kernel)]] arp fields>>=
 Arp *arp;
 @
@@ -6714,6 +6895,16 @@ arpwrite(Fs *fs, char *s, int len)
 
 % Have seen already the Route DS in Core DS chapter
 % and the v4root forest in Fs.
+
+%claude:
+While ARP handles local delivery, routing handles
+inter-network delivery: given a destination IP, which gateway
+should the packet be forwarded to? The routing table is
+stored as a forest of ternary search trees (left, mid, right),
+indexed by a hash of the destination address. [[v4lookup]]
+searches this tree to find the matching route, which provides
+both the next-hop gateway address and the outgoing interface.
+Results are cached per-conversation to avoid repeated lookups.
 
 \section{[[v4lookup()]]}
 
@@ -7991,6 +8182,15 @@ ipifcremroute(Fs *f, int vers, uchar *addr, uchar *mask)
 % Essentially IP + port if you look at UDP headers and the difference with
 % just the IP header
 
+%claude:
+UDP (User Datagram Protocol) adds port numbers on top of
+IP---that's essentially all it does. There is no connection
+establishment, no reliability, no ordering guarantee. A UDP
+packet is an IP packet with an 8-byte header containing source
+port, destination port, length, and checksum. This simplicity
+makes UDP the right choice for DNS queries, NTP, streaming,
+and other applications where speed matters more than reliability.
+
 \section{Protocol initialisation}
 
 % ipattach -> ipgetfs -> <> (as ipprotoinit[i] <- ...)
@@ -8372,6 +8572,13 @@ udpannounce(Conv *c, char** argv, int argc)
 
 \subsection{Writing: [[udpkick()]]}
 
+%claude:
+[[udpkick]] prepends a UDP header (source port, destination
+port, length, checksum) to the data block, then calls
+[[ipoput4]] to send it as an IP packet. The ``kick'' name
+comes from the queue model: writing to a conversation's
+[[data]] file enqueues a block, and the kick function is
+called to actually transmit it.
 
 % ??? -> <> (as x->??   <- udpcreate <- ...)
 <<function [[udpkick]]>>=
@@ -8449,6 +8656,13 @@ udpkick(void *x, Block *bp)
 
 \subsection{Reading: [[udpiput()]]}
 % read, iput
+
+%claude:
+[[udpiput]] is called by [[ipiput4]] when an incoming packet
+has protocol type UDP. It extracts the source and destination
+ports from the UDP header, looks up the matching conversation,
+and enqueues the data on that conversation's read queue.
+If no matching conversation is found, the packet is dropped.
 
 %TODO LP split
 % -> <> (as x->rcv)
@@ -8948,6 +9162,17 @@ case 7:
 % see il.ps
 
 %was in 9legacy since it has been deleted of recent plan9
+
+%claude:
+IL (Internet Link) is \plan's lightweight reliable transport
+protocol, simpler than TCP. It provides reliable, sequenced
+delivery with congestion control, but without TCP's complexity
+(no sliding windows, no Nagle algorithm, no slow start).
+IL was designed for the local area networks common in Bell
+Labs, where packet loss is rare and latency is low. It has
+since been deprecated in favor of TCP for wider compatibility,
+but the code remains as an elegant example of a minimal
+reliable protocol.
 
 \section{Protocol initialisation}
 
@@ -10033,6 +10258,15 @@ if(argc > 1){
 
 % RFC 793, Transmission Control Protocol
 
+%claude:
+TCP (Transmission Control Protocol) is the heavy-duty reliable
+transport: it provides ordered, byte-stream delivery with
+flow control, congestion avoidance, and retransmission.
+The implementation is the most complex protocol in the stack,
+with a state machine (SYN, ESTABLISHED, FIN-WAIT, etc.),
+sliding windows, round-trip time estimation, and Van Jacobson's
+congestion control algorithms.
+
 <<function [[tcpinit]]>>=
 void
 tcpinit(Fs *fs)
@@ -10069,6 +10303,14 @@ tcpinit(Fs *fs)
 \chapter{Applications}
 %******************************************************************************
 
+%claude:
+With the protocol stack in place, this chapter surveys the
+applications built on top of it: remote shell access (Telnet,
+[[cpu]]), file transfer (TFTP), and mail. In \plan, the most
+important network application is arguably [[cpu]], which
+exports your local namespace to a remote machine---the
+opposite of traditional remote login.
+
 %\section{ipconfig, dns, cs} ? or in appendix?
 
 \section{Remote shell: Telnet}
@@ -10094,6 +10336,13 @@ tcpinit(Fs *fs)
 %critique of RPC:
 %https://www.cs.vu.nl/~ast/publications/euteco-1988.pdf
 
+%claude:
+9P is \plan's file protocol---the wire format for all file
+operations (open, read, write, stat, etc.). Every file server
+in \plan speaks 9P, and [[mount]] connects a 9P-speaking
+server to the local namespace. The marshalling code for 9P
+messages ([[convS2M]], [[convM2S]]) is in \book{Libcore}.
+
 % See Libcore.nw
 
 %******************************************************************************
@@ -10101,6 +10350,14 @@ tcpinit(Fs *fs)
 %******************************************************************************
 % the logical conclusion for all of that.
 
+%claude:
+[[exportfs]] is the logical culmination of \plan's ``everything
+is a file'' design: it serves a local namespace over the
+network via 9P, allowing a remote machine to access your files,
+devices, and even your window system. Combined with [[cpu]],
+which exports {\em your} namespace to a {\em remote} CPU, this
+inverts the traditional client-server model---your local
+context follows you to any machine on the network.
 
 % con and exportfs
 % NFS like?
@@ -10110,6 +10367,15 @@ tcpinit(Fs *fs)
 %******************************************************************************
 % code of ndb/ here and of dns and cs?
 %TODO? move earlier? pretty fundamental
+
+%claude:
+DNS translates human-readable names (like \verb+google.com+)
+into IP addresses. In \plan, name resolution goes through
+the connection server ([[cs]]), which reads the local network
+database ([[/lib/ndb/local]]) and queries DNS servers as
+needed. The [[dial]] function from \book{Libcore} calls
+[[cs]] transparently, so most programs never interact with
+DNS directly.
 
 %******************************************************************************
 \chapter{Security}
@@ -10135,6 +10401,15 @@ tcpinit(Fs *fs)
 %******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
+
+%claude:
+This chapter covers advanced networking features that cut
+across the protocol layers: flow control and congestion
+avoidance, IPv6 support, broadcast and multicast addressing.
+The broadcast code adds multiple self-cache entries---subnet
+broadcast, network broadcast, and the global broadcast
+address---so that [[ipforme]] can recognize packets destined
+for any of these addresses.
 
 \section{Flow Control}
 % congestion, van jacobson algorithm?
@@ -10586,6 +10861,14 @@ that did not exist when \plan was designed.
 %******************************************************************************
 \chapter{Debugging}
 %******************************************************************************
+
+%claude:
+Network debugging relies heavily on formatted output of
+addresses and headers. The [[eipfmt]] function registers
+format verbs for [[print]]: [[%E]] for Ethernet MAC addresses
+(like \verb+00:11:22:33:44:55+), [[%I]] for IP addresses
+(like \verb+10.0.0.2+ or IPv6 with \verb+::+ elision),
+and [[%M]] for subnet masks.
 
 \section{Dumpers}
 
@@ -11048,6 +11331,15 @@ case Qsnoop:
 % like I did in Graphics.nw and the VGA driver
 % with again a classic device, the NE2000! (I even got it, like for the cirrus)
 % alt: Intel Pro/1000  but far bigger
+
+%claude:
+The NE2000 is a classic Ethernet card based on the National
+Semiconductor DP8390 chip---one of the simplest Ethernet
+controllers, which makes it ideal for learning. QEMU emulates
+it, so this is the driver used by the \principia system.
+The driver manages a ring buffer of pages on the card for
+receiving packets, and uses programmed I/O (port reads/writes)
+to transfer data between the card and system memory.
 
 \section{Data structures}
 
