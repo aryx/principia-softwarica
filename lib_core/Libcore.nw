@@ -122,6 +122,22 @@ you fully understand how things work under the hood.
 % Finally Thread scheduler. Again if implement lang, and not unusual,
 % Erlang, Elixir, Clojure, etc need know very well this stuff.
 
+%claude:
+The core libraries are linked into every C program. They are
+the code that runs before [[main()]], the code behind
+[[malloc()]] and [[free()]], the code that turns
+[[print()]] into system calls.
+%
+Some components are surprisingly deep. The memory allocator,
+for instance, is performance-critical enough that companies
+like Google and Facebook employ engineers to design custom
+allocators (jemalloc, tcmalloc). Unicode string handling,
+which most programmers take for granted, involves non-trivial
+encoding and decoding logic---and \plan invented UTF-8.
+A cooperative thread scheduler, as found in [[libthread]],
+is the same kind of mechanism used inside language runtimes
+for Erlang, Go, and many others.
+
 Here are a few questions I hope this book will answer:
 \begin{itemize}
 
@@ -141,7 +157,7 @@ How is implemented [[alt()]] without [[select()]] in the kernel?
 %TODO? add libbio? add libstring?
 %TODO: add libcii ? so have collections at least?
 
-% gonna present core libs of plan9, its libc of course, 
+% gonna present core libs of plan9, its libc of course,
 % but also its thread libraries,
 % regexp, memory managment, unicode, etc.
 % most of the generally useful and generic building blocks for regular
@@ -151,6 +167,18 @@ How is implemented [[alt()]] without [[select()]] in the kernel?
 %see soft archi in Principia and all the boxes for the libc
 
 % also libbio/ (used by a few programs), libstring/ (but seems unused)
+
+%claude:
+I will explain in this book the code of the \plan core libraries:
+[[libc]] (the C standard library), [[libbio]] (buffered I/O),
+[[libregexp]] (regular expressions), [[libflate]] (compression),
+and [[libthread]] (cooperative threads with channels).
+Together, these libraries total roughly 15\,000 lines of C
+and a few hundred lines of ARM assembly.
+%
+Like for most books in \principia, I chose \plan libraries because
+they are simple, small, elegant, open source, and they form
+together a coherent set.
 
 \section{Other core libraries}
 
@@ -236,10 +264,40 @@ remaining small enough to explain in full detail.
 % cd /test/5c
 % 5l explictly linking C library?
 
+%claude:
+The core libraries are normally compiled as part of the
+full \plan build (see \urlinstall). To cross-compile the
+ARM libraries from a Linux or macOS host:
+\begin{verbatim}
+$ cd lib_core/libc
+$ objtype=arm mk all
+\end{verbatim}
+%
+The linker [[5l]] automatically links [[libc]] into every
+program, so you do not need to specify it explicitly.
+To use [[libthread]] or [[libregexp]], pass them on the
+[[5l]] command line:
+\begin{verbatim}
+$ 5c myprogram.c
+$ 5l -lthread myprogram.5
+\end{verbatim}
 
 \section{Requirements}
 
 % see intro(2), overview of many libs
+
+%claude:
+Because this book is made of C source code, you will need
+a good knowledge of the C programming language~\cite{k-r}.
+Some library code makes heavy use of pointer arithmetic and
+bit manipulation (especially the memory allocator), so
+comfort with low-level C is important.
+%
+Reading the \book{Kernel} is helpful but not required: the
+kernel implements the system calls that the libraries wrap,
+and understanding both sides gives a fuller picture. The
+\book{Assembler} is useful for the few routines written in
+ARM assembly (e.g., [[memset]], [[getcallerpc]]).
 % (just like intro(1) is overview of utilities)
 
 \section{About this document}
@@ -258,6 +316,11 @@ remaining small enough to explain in full detail.
 \chapter{Overview}
 %******************************************************************************
 
+%claude:
+Before showing the source code of the \plan core libraries in
+the following chapters, I first give an overview of the general
+principles of a C standard library, describe the [[libc.h]]
+interface, and explain how the code is organized.
 
 \section{Principles}
 %\section{Core components}
@@ -265,25 +328,85 @@ remaining small enough to explain in full detail.
 \subsection{Core versus non-core}
 % what is core?
 
+%claude:
+What makes a library ``core''? A core library is one that
+nearly every program depends on, whether explicitly or not.
+The memory allocator is core because even simple variable
+declarations may allocate memory. The string functions are
+core because text processing is ubiquitous. The system call
+wrappers are core because they are the only way to talk to
+the kernel.
+%
+By contrast, libraries like [[libregexp]] (regular expressions)
+or [[libflate]] (compression) are used by many programs but
+not by all. I include them in this book because they are small,
+self-contained, and illustrate interesting algorithms---but
+they are not ``core'' in the same way as [[libc]].
+
 \subsection{User/kernel bridge, system calls}
 
 % each chapter has first section syscall and then build utilities
 %  on top of it
 %missing syscalls not covered yet: exec, dup, fversion, fauth
 
+%claude:
+A recurring pattern in this book is the two-layer structure
+of each facility: a thin {system call wrapper} at the bottom,
+and higher-level {library functions} on top. For example,
+the memory chapter starts with [[sbrk()]] (the syscall that
+extends the process's data segment) and then builds
+[[malloc()]]/[[free()]] on top. The I/O chapter starts with
+[[open()]]/[[read()]]/[[write()]] and then builds [[Biobuf]]
+buffered I/O on top. Understanding both layers---what the
+kernel provides and what the library adds---is key to
+understanding how C programs really work.
+
 \subsection{Memory allocator}
 % some parts of code are not allowed to call malloc because calls
 % from kernel!
 
+%claude:
+The memory allocator deserves special attention. It is one of
+the few library components that is also used {\em inside the
+kernel}---the \plan kernel shares the same [[Pool]] allocator
+with user-space programs. This means the allocator code must
+be careful: it cannot call [[malloc()]] itself (that would be
+circular), and certain kernel paths must avoid allocation
+entirely because they run with interrupts disabled.
+
 \subsection{Zero-cost abstractions}
 % if slow, everything is slow
 
+%claude:
+Core library code must be fast. Every program pays the cost
+of [[malloc()]], [[memcpy()]], and [[print()]], so any
+inefficiency is multiplied across the entire system. This is
+why some routines (like [[memset]] and [[memmove]]) are
+implemented in hand-written assembly for the critical path,
+even though C versions exist. The principle is: the
+abstractions that the library provides should cost nothing
+(or very close to nothing) compared to doing the same work
+by hand.
 
 
 \section{[[libc.h]] interface}
 % in \plan no hundreds of header files (stdio.h, unistd.h, stdlib.h...)
 % mostly just libc.h (and u.h).
 % other header files are for other libraries: thread.h, regexp.h, draw.h, etc.
+
+%claude:
+In \plan, there are no dozens of header files ([[stdio.h]],
+[[unistd.h]], [[stdlib.h]], [[string.h]], etc.) as in
+POSIX. Instead, almost everything is declared in a single
+header: [[libc.h]]. This, together with [[u.h]] (which
+defines basic types), is all that most \plan programs include.
+Separate headers exist only for separate libraries:
+[[thread.h]] for [[libthread]], [[regexp.h]] for
+[[libregexp]], [[draw.h]] for [[libdraw]], etc.
+%
+This simplicity is deliberate: one header means one interface
+to learn, one place to look things up, and fast compilation
+(no redundant header processing).
 
 
 \section{Code organization}
