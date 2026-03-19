@@ -2380,6 +2380,15 @@ in practice.
 \chapter{Core Data Structures}
 \label{chap:core-ds}
 
+%claude:
+This chapter presents the foundational types of the graphics
+library. The key insight is that \plan uses a small number
+of versatile abstractions---[[Point]], [[Rectangle]],
+[[Image]], [[Display]], and [[Screen]]---that compose to
+handle everything from simple drawing to overlapping windows.
+Colors, masks, backgrounds, and even fonts are all represented
+as [[Image]]s.
+
 \begin{verse}
 \begin{flushright}
   {\it Show me your code and conceal your data structures, and I shall
@@ -2419,6 +2428,17 @@ is the kernel equivalent of [[Display]], which is defined in [[draw.h]].
 
 % see addpt(2)
 % http://blog.golang.org/go-image-package
+
+%claude:
+[[Point]] and [[Rectangle]] use integer coordinates (pixels),
+not floating-point---this is the RasterOp imaging model rather
+than the PostScript model. Coordinates grow right and down, with
+(0,0) at the top-left. A key convention: [[Rectangle.max]] is
+the first point {\em outside} the rectangle, so
+[[Rect(0,0,100,100)]] contains pixels 0 through 99 and has
+width 100. This half-open interval convention (like array
+indexing) simplifies arithmetic: [[Dx(r)]] is simply
+[[r.max.x - r.min.x]].
 
 \subsection{[[Point]]}
 
@@ -2711,13 +2731,24 @@ rectXrect(Rectangle r, Rectangle s)
 % and [[display]]
 
 %trans: saw in overview chapter, /dev/draw files, and client/server archi.
-% need client and server DS. 
+% need client and server DS.
 %clients have Server and server has Client.
 
 % Display server.
 
 % connection to device, and client handler!
 % initdraw()
+
+%claude:
+[[Display]] is the user-side connection to the graphics
+server: it holds file descriptors to [[/dev/draw/x/ctl]]
+and [[/dev/draw/x/data]], a command buffer for batching
+drawing operations, and references to commonly used images
+(black, white, opaque, transparent). The [[display]] global
+is set by [[initdraw]] and used implicitly by all drawing
+functions. On the kernel side, [[Client]] is the server's
+per-client state, mapping image IDs to kernel [[DImage]]
+structures through a hash table.
 
 \subsection{[[Display]] and [[display]]}
 
@@ -3951,6 +3982,15 @@ enum Drawop
 
 % different from command line where done by kernel with stdin/stdout
 
+%claude:
+Initializing the graphics system is more complex than
+command-line programs where the kernel sets up stdin/stdout
+automatically. Here, both the kernel and the user-level
+library must cooperate: the kernel sets up the frame buffer
+and the [[/dev/draw]] device, while the user calls
+[[initdraw]] to open a connection, allocate the initial
+screen image, and set up fonts.
+
 \section{Kernel side}
 % part1
 % also kinda "Server side". Actually mount and bind are user side
@@ -5149,9 +5189,20 @@ if(disp == nil)
 % some kind of RPC and protocol
 
 % in initdisplay, open /dev/draw/new and then
-% read from it. All of that served by draw device (kinda of a server) 
+% read from it. All of that served by draw device (kinda of a server)
 % which we will see now.
 
+%claude:
+All drawing operations are marshalled into byte-encoded
+commands written to [[/dev/draw/x/data]]. The library
+functions ([[line]], [[draw]], [[ellipse]], etc.) don't
+draw directly---they encode their arguments into a command
+buffer and [[flushimage]] writes the buffer to the kernel.
+The [[drawdevtab]] device then dispatches each command byte
+(e.g., \verb+'d'+ for draw, \verb+'L'+ for line) to the
+corresponding [[memdraw]] operation in the kernel. This
+client/server architecture via the file system means
+drawing can work across the network transparently.
 
 \section{The [[draw]] filesystem}
 
@@ -6047,6 +6098,17 @@ drawmesg(Client *client, void *av, int n)
 
 % see Image IO later, individual pixels! raster images.
 
+%claude:
+Images are the universal abstraction in [[draw]]: the screen
+is an image, colors are 1x1 replicated images, masks are
+images, font glyphs are images, and even windows are images
+with special properties. [[allocimage]] creates a new image
+in the display server (kernel) and returns a handle; all
+subsequent operations on that image go through the
+user/kernel bridge. The [[repl]] flag creates a tiled
+image that repeats infinitely---this is how a single-pixel
+color image can fill any rectangle.
+
 \section{Allocation}
 
 % already one allocated for you! the screen, image id 0.
@@ -6727,6 +6789,14 @@ if(ddst == nil)
 
 % annoying? why need that? leaky abstraction?
 % cos cant hide remote feature of /dev/draw a la X11?
+
+%claude:
+Drawing commands are buffered in user space and only sent
+to the kernel when [[flushimage]] is called. This batching
+is critical for performance---without it, every [[draw]] call
+would require a system call. Programs typically call
+[[flushimage(display, 1)]] once per event loop iteration,
+after all drawing is done.
 
 \subsection{API}
 
@@ -7439,6 +7509,17 @@ if(checkname && !drawgoodname(d))
 % aka bitblt aka RasterOp
 
 \section{[[draw()]]}
+
+%claude:
+[[draw]] is the fundamental graphics primitive---all other
+drawing functions are ultimately expressed in terms of it.
+It copies pixels from [[src]] to [[dst]] within rectangle
+[[r]], masked by [[mask]]. This is the generalized Porter-Duff
+compositing operation. A solid color fill is
+\verb+draw(dst, r, color, nil, ZP)+; a masked copy is
+\verb+draw(dst, r, src, mask, pt)+. The flexibility of using
+images for colors, masks, and patterns means that gradients,
+tiling, and translucency all use the same [[draw]] call.
 
 % draw() is fundamental op!
 % very flexible.
@@ -9365,6 +9446,15 @@ bsrc.alpha += sadelta;
 \chapter{Drawing Shapes}
 \label{chap:drawing-shapes}
 
+%claude:
+This chapter covers the shape-drawing functions: lines,
+ellipses, arcs, and filled polygons. Unlike systems that use
+a path-construction model (PostScript, Cairo), \plan's drawing
+API is stateless---each call specifies all parameters directly.
+The rasterization algorithms decompose every shape into
+horizontal spans of pixels, which are then filled using
+the [[draw]] primitive.
+
 %trans:
 % seen draw rectangle which is actually basic block to draw any shape!
 % Indeed in the end any figure is made of a set of rectangle!
@@ -11092,9 +11182,20 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 \chapter{Fonts}
 \label{chap:fonts}
 
+%claude:
+Fonts in \plan are bitmap-based (not outline/vector), stored
+as images containing pre-rendered glyphs at a fixed size.
+A font file lists ranges of Unicode code points, each mapped
+to a {\em subfont}---a single image containing all the glyphs
+for that range. Subfonts are loaded on demand and cached, so
+only the character ranges actually used consume memory. The
+[[string]] function draws text by looking up each rune in the
+font cache, finding the glyph's rectangle within the subfont
+image, and copying it to the destination.
+
 \l how to draw text in diagonal? can? cairo can.
 
-% fonts are a special kind of pictures 
+% fonts are a special kind of pictures
 % (bezier? or raster? raster here but could be bezier)
 
 % Show simple test code showing use of font.
@@ -12043,6 +12144,15 @@ if(f == nil)
 % and rune
 
 %https://engineering.eventbrite.com/its-2015-and-drawing-text-is-still-hard-webgl-threejs/
+
+%claude:
+The [[string]] function draws text by iterating over each
+rune, loading the corresponding subfont glyph into the
+kernel cache if needed ([[cachechars]]), and then issuing
+a batch draw command that copies all the cached glyphs at
+once. The returned [[Point]] is the position where the next
+character would go, so consecutive [[string]] calls chain
+naturally.
 
 \subsection{API}
 
@@ -14016,6 +14126,16 @@ packinfo(Fontchar *fc, uchar *p, int n)
 \chapter{Image IO}
 \label{chap:image-io}
 
+%claude:
+Images live in the display server (kernel), so loading an
+image from disk requires transferring pixel data across the
+user/kernel boundary. [[loadimage]] sends raw pixel data in
+chunks (limited by the command buffer size), while
+[[readimage]] reads \plan's native image file format (which
+includes a text header with dimensions and channel format,
+followed by optionally compressed pixel data). The
+compression uses a simple run-length scheme.
+
 %trans:
 % seen before API calls to image IO functions:
 %  - loadimage() in getdefont(), load image (subfont) in memory to kernel
@@ -14781,9 +14901,17 @@ Err1:
 %trans: why talk about input in book mostly about output (Graphics)?
 % because one important input, mouse, strongly related to Graphics
 % (historically too).
-% Actually mouse has also some output feedback: the cursor! 
+% Actually mouse has also some output feedback: the cursor!
 % (ok can have cursor in text mode with gpm, but not the same)
 
+%claude:
+Input devices (mouse and keyboard) are accessed through
+[[/dev/mouse]] and [[/dev/cons]], providing a text-based
+protocol that programs can read directly. The [[Mousectl]]
+and [[Keyboardctl]] structures wrap these file descriptors
+with a thread that continuously reads events and makes them
+available through channels ([[Channel]] from [[libthread]]),
+enabling a concurrent, non-blocking event model.
 
 % event vs thread model
 
@@ -15968,6 +16096,17 @@ closekeyboard(Keyboardctl *kc)
 
 \chapter{Overlapping Layers}
 \label{chap:overlapping-windows}
+
+%claude:
+Layers (called ``windows'' in the API) are images that can
+overlap each other, with the system automatically managing
+what is visible and what is hidden. When a layer is partially
+occluded, drawing operations are clipped to the visible
+portion, and the hidden pixels are saved in a backing store
+so they can be restored when the layer is brought to front.
+This is the building block that [[rio]] uses to implement
+its window management, but any program can create layers
+(e.g., [[acme]] uses them for its panels).
 
 % kind of window.
 % but not process associated, so better use term layer, but in the end
@@ -18823,6 +18962,15 @@ return n;
 
 \chapter{Windowing System Support}
 \label{chap:windowing-support}
+
+%claude:
+This chapter covers the [[initdraw]] machinery that
+connects an application to the windowing system ([[rio]]).
+When a program calls [[initdraw]], it negotiates with
+[[rio]] to get a [[view]] image (its window) and a
+[[screen]] (a [[Screen]] structure for creating sub-layers).
+The [[gengetwindow]] function handles window resize events
+by re-reading the window image from [[/dev/winname]].
 
 %trans:
 % Saw windows chapter before. Can be used for regular app. e.g., acme.
@@ -26953,6 +27101,13 @@ have studied in this book.
 
 \appendix
 
+%claude:
+The debugging support includes formatted printing of
+graphics types ([[%P]] for points, [[%R]] for rectangles),
+image statistics via [[/dev/draw/x/ctl]], and the ability
+to read back pixel data with [[unloadimage]] for
+inspection.
+
 \chapter{Debugging}
 \label{chap:debugging-appendix}
 
@@ -27319,6 +27474,13 @@ char Ewrongname[] =     "wrong name for image";
 
 
 
+
+%claude:
+The graphics math library provides fixed-point arithmetic
+for the rasterizer (avoiding floating-point for speed on
+the ARM), integer square root, and the [[icossin]] function
+that returns cosine and sine scaled by a large integer to
+avoid floats in the ellipse and arc drawing code.
 
 \chapter{Mathematics}
 \label{chap:math}
