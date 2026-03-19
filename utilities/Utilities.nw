@@ -140,11 +140,65 @@ such as [[grep]] and [[sed]].
 % cite great book by Kernighan on Software tools, lots of string processing tools
 %  but use ratfor instead of C
 
-% cite also "Unix programming environment" by Pike and Kernighan 
+% cite also "Unix programming environment" by Pike and Kernighan
 % The code of most of the utilities used in this book are shown in this book!
-\cite{unix-pike}
+
+%claude:
+Why utilities? Because they are the programmer's toolbox.
+The command-line interface is where most programmers spend
+a significant part of their time, composing small programs
+through pipes and scripts to accomplish tasks that would
+require hundreds of lines in a regular programming language.
+
+%claude:
+Moreover, many utilities are interesting programs in their
+own right: [[grep]] contains a regular expression engine,
+[[diff]] implements an elegant longest-common-subsequence
+algorithm, [[awk]] is a complete programming language,
+and [[ed]] is a line editor whose command language survives
+in [[sed]] and [[vi]] to this day.
+%
+Kernighan and Plauger's {\em Software Tools}~\cite{software-tools}
+and Kernighan and Pike's {\em The UNIX Programming
+Environment}~\cite{unix-pike} are classic books built around
+the same idea: the best way to learn programming is to study
+real, useful programs.
+
+Here are a few questions I hope this book will answer:
+\begin{itemize}
+
+\item How does [[grep]] search for patterns in files?
+How does a regular expression engine work?
+
+\item How does [[diff]] compute the differences between
+two files? What algorithm does it use?
+
+\item How does [[awk]] parse and execute a small programming
+language?
+
+\item How does [[ed]], the line editor, manage a text buffer
+and apply editing commands?
+
+\item How does [[tar]] pack and unpack archives?
+
+\item What is the common structure shared by most utilities?
+How do they parse command-line flags and process input?
+
+\end{itemize}
 
 \section{The \plan utilities}
+
+%claude:
+I will explain in this book the code of the \plan command-line
+utilities: file operations ([[ls]], [[cp]], [[mkdir]]),
+the line editor [[ed]], pattern matching ([[grep]], [[sed]]),
+text processing ([[awk]]), file comparison ([[diff]], [[cmp]]),
+process management, archiving ([[tar]], [[ar]]), and many
+others. Each utility is typically a few hundred lines of C.
+%
+Like for most books in \principia, I chose \plan programs because
+they are simple, small, elegant, open source, and they form
+together a coherent set.
 
 \section{Other utilities}
 
@@ -155,7 +209,7 @@ such as [[grep]] and [[sed]].
 % suckless version in C: http://git.suckless.org/sbase/tree/README
 
 % in Rust: https://github.com/uutils/coreutils/
-% in Go: https://github.com/polegone/gonix   https://github.com/gomoni/gonix 
+% in Go: https://github.com/polegone/gonix   https://github.com/gomoni/gonix
 % in Javascript: https://github.com/dthree/cash/
 
 % - busybox
@@ -166,9 +220,82 @@ such as [[grep]] and [[sed]].
 
 % Lisp machine, Oberon, where REPL instead of separate CLI tools.
 
+%claude:
+Here are a few alternative implementations of \unix utilities:
+\begin{itemize}
+
+\item GNU coreutils\furl{https://www.gnu.org/software/coreutils/}
+is the standard set of utilities on Linux.
+The GNU versions add many features (long options,
+internationalization, extensions) compared to the \plan
+versions, at the cost of being much larger.
+
+\item BusyBox\furl{https://busybox.net/} packs hundreds of
+utilities into a single statically linked binary, aimed at
+embedded systems and Docker containers. About 256\,000 LOC
+in total, though this includes far more than core utilities:
+a shell ([[ash]]), networking servers, and util-linux tools.
+
+\item Toybox\furl{http://www.landley.net/toybox/} is a
+BSD-licensed BusyBox alternative, used in Android.
+
+\item sbase\furl{https://core.suckless.org/sbase/} is a
+suckless-style reimplementation in minimal C, in the same
+spirit as the \plan utilities.
+
+\item Rust coreutils\furl{https://github.com/uutils/coreutils}
+is a rewrite in Rust, aiming for GNU compatibility.
+Despite using an arguably higher-level language, the
+project totals about 130\,000 LOC---a measure of how much
+code GNU compatibility requires.
+
+\end{itemize}
+
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Unix utilities timeline}
+\label{fig:lineage}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major \unix
+utility implementations.
+%
+The \plan utilities represent the best compromise for this book:
+they are direct descendants of the original \unix tools, cleaned
+up over decades by the same people who wrote the originals
+(Ken Thompson, Rob Pike, Dennis Ritchie), and small enough
+to explain in full.
 
 \section{Getting started}
 \label{sec:getting-started}
+
+%claude:
+The utilities described in this book can be tested in
+several environments. Under the \plan fork used in
+\principia (see \urlinstall), they are available directly.
+They are also part of
+Goken9cc\furl{https://github.com/aryx/goken9cc}, where
+they can be compiled natively on Linux, macOS, and Windows
+using gcc or clang---similar to
+plan9port\furl{https://9fans.github.io/plan9port/},
+Russ Cox's port of \plan user-space tools.
+This means you can experiment with them on your regular
+machine without setting up a full \plan system.
+
+%claude:
+Here is a quick session under \plan:
+\begin{verbatim}
+$ echo hello world | wc -w
+      2
+$ ls /dev | grep cons
+cons
+consctl
+$ echo 'hello world' | sed 's/world/plan9/'
+hello plan9
+$ echo '2+3' | bc
+5
+\end{verbatim}
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -183,6 +310,13 @@ such as [[grep]] and [[sed]].
 \chapter{Overview}
 %******************************************************************************
 
+%claude:
+Before showing the source code of the \plan utilities in the
+following chapters, I first give an overview of the general
+principles behind \unix command-line tools, describe the
+common patterns they share, and explain how the code is
+organized.
+
 \section{Utilities principles}
 % Unix philosophy: do one thing, separation of concern, minimalist
 % CLI args and while(<>) of Perl style.
@@ -195,12 +329,59 @@ such as [[grep]] and [[sed]].
 % list of utilities specified in POSIX 1002.3
 % see MISC/BIG/ape_cmd/README
 
+%claude:
+The \unix philosophy, as articulated by Doug McIlroy, is:
+{\em write programs that do one thing and do it well;
+write programs to work together; write programs to handle
+text streams, because that is a universal interface.}
+%
+This philosophy shapes every utility in this book.
+Each program is small and focused: [[cat]] concatenates files,
+[[grep]] searches for patterns, [[wc]] counts lines. Alone,
+each is trivial. Composed through pipes, they become powerful:
+\begin{verbatim}
+$ ls /sys/src | grep '\.c$' | wc -l
+\end{verbatim}
+%
+counts all C source files in a directory, using three programs
+that know nothing about each other.
+
+%claude:
+Most utilities follow the same structure: parse command-line
+flags, then for each input file (or standard input if none
+is given), read the input, process it, and write the result
+to standard output. Errors go to standard error. This
+uniformity is what makes pipes and scripts work---each
+program can be a stage in a pipeline without any special
+adaptation.
+
 \section{Command-line interfaces}
 
 % -x flags, using one short letter (no GNU long opt and getopt stuff)
 % a bit more cryptic but also simpler and discourage too many
 % flags actually.
 % CLI library is very simple, 3 macros in libc.h!
+
+%claude:
+\plan utilities use single-letter flags (e.g., [[-l]], [[-n]])
+rather than GNU-style long options (\verb+--recursive+,
+\verb+--line-number+). This is more cryptic but also simpler,
+and it discourages adding too many flags---if you run out of
+letters, your program is probably too complex.
+%
+The CLI parsing library in \plan is minimal: just three
+macros in [[libc.h]] ([[ARGBEGIN]], [[ARGEND]], [[ARGC]]),
+compared to GNU's [[getopt_long]] with its option structs
+and tables. A typical usage pattern:
+\begin{verbatim}
+ARGBEGIN{
+case 'n':
+    nflag = true;
+    break;
+default:
+    usage();
+} ARGEND
+\end{verbatim}
 
 \section{Code organization}
 
