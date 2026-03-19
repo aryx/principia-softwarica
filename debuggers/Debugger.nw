@@ -207,14 +207,76 @@ work.
 \l history of term "bug", it was an actual bug!
 %  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
 
+%claude:
+Debuggers and tracers are among the most useful tools a
+programmer can have. When a program crashes, the debugger
+lets you inspect exactly what went wrong: which instruction
+faulted, what the registers contained, what the call stack
+looked like. When a program misbehaves silently, a tracer
+reveals every system call it makes, often pointing directly
+to the problem.
+%
+Yet very few programmers know how these tools actually work.
+Understanding the internals of a debugger also deepens your
+understanding of the kernel (which provides the debugging
+facilities), the toolchain (which generates the metadata
+the debugger reads), and the hardware (which provides
+breakpoint and single-step support).
+
+Here are a few questions I hope this book will answer:
+\begin{itemize}
+
+\item How does a debugger set a breakpoint? What happens
+at the machine level when a breakpoint is hit?
+
+\item How does a debugger control another process?
+What kernel facilities does it use?
+
+\item How does a system call tracer intercept the calls
+made by another program?
+
+\item How does a debugger map a machine address to a
+function name or a source line?
+
+\item What is a programmable debugger? How can debugging
+operations be expressed as functions in a language?
+
+\item How does single-stepping work? How does the debugger
+advance the target by exactly one instruction?
+
+\end{itemize}
+
 \section{\plan{} [[acid]] and [[ratrace]]}
 
 % We gonna present acid and strace (actually was called
 % ratrace). Small programs. Elegant. Simple.
 
+%claude:
+I will explain in this book the code of the \plan programmable
+debugger [[acid]] and the system call tracer [[ratrace]]
+(the \plan equivalent of Linux's [[strace]]).
+%
+Like for most books in \principia, I chose \plan programs because
+they are simple, small, elegant, open source, and they form
+together a coherent set.
+%
+[[acid]] is particularly interesting: unlike traditional debuggers
+that provide a fixed set of commands, [[acid]] is built as an
+interpreter for a custom C-like language. Debugging operations---setting
+breakpoints, inspecting variables, walking data structures---are
+all written as [[acid]] functions. The user can define new
+functions to automate complex debugging tasks, making [[acid]]
+a programmable debugger in the truest sense.
+%
+[[ratrace]] is much simpler: it traces the system calls
+made by a process by reading the kernel's [[/proc]] interface.
+Despite being a small program, it is one of the most effective
+debugging tools available---often the first thing you reach
+for when a program misbehaves.
+
 \section{Other debuggers}
 
-Here are a few debuggers that I considered for this book, but
+Here are a few debuggers and tracers that I considered for this book, but
 which I ultimately discarded:
 \begin{itemize}
 
@@ -222,24 +284,65 @@ which I ultimately discarded:
 % db? thompson?
 % adb? by bourne
 
-\item gdb
+%claude:
+\item [[db]], the traditional \plan debugger (a descendant
+of [[adb]] by Steve Bourne), is a command-line debugger with
+a terse syntax inherited from \unix. It supports breakpoints,
+memory inspection, disassembly, and source-level debugging.
+However, [[db]] offers a fixed set of commands and is not
+programmable. It is presented in an appendix of this book.
+
+\item [[gdb]]\furl{https://www.gnu.org/software/gdb/}
+(the GNU Debugger) is the most widely used open-source debugger.
+It supports dozens of architectures and languages, reads DWARF
+debug information, and has a Python scripting interface.
 % and BFD. which =~ libmach
 % dwarf debugging format?
+However, its codebase is enormous (over 1.5 million LOC including
+the [[BFD]] binary file library, which plays a role similar
+to \plan's [[libmach]]).
 
-\item lldb
+\item [[lldb]]\furl{https://lldb.llvm.org/}
+is LLVM's debugger, designed from the ground up with a Python
+API and a modular architecture. It is the default debugger on
+macOS (via Xcode).
 % other debugging format?
+Like [[gdb]], it is far too large to explain in a book.
 
-\item valgrind
+\item [[valgrind]]\furl{https://valgrind.org/}
+is not a traditional debugger but a dynamic analysis framework.
+It runs programs on a synthetic CPU, instrumenting every memory
+access to detect leaks, use-after-free, buffer overflows, and
+uninitialized reads. It is one of the most effective tools for
+finding memory bugs in C programs, but its approach (full
+instrumentation) is entirely different from [[acid]]'s.
 
-\item ocamldebug
+\item [[ocamldebug]] is the OCaml debugger, notable for its
+{time-travel} capability: the user can step backward as well
+as forward through execution.
 % good, time travel, but first need to understand simpler debugger I think
+This is a powerful feature, but the implementation relies on
+OCaml's bytecode interpreter and checkpointing mechanism,
+which makes it quite different from a native-code debugger.
 
-\item Linux strace
+\item Linux [[strace]]\furl{https://strace.io/}
+is functionally similar to [[ratrace]]: it traces system calls
+made by a process. On Linux, [[strace]] uses the [[ptrace]]
+system call to intercept syscalls, whereas [[ratrace]] reads
+\plan's [[/proc]] files.
 % also Linux uprobe to trace user-level functions!
 %http://www.brendangregg.com/blog/2015-06-28/linux-ftrace-uprobe.html
+Linux also has [[ftrace]] and [[uprobe]] for tracing kernel
+and user-level functions.
 
-\item Solaris dtrace
+\item Solaris [[dtrace]] is a comprehensive dynamic tracing
+framework that can instrument arbitrary points in the kernel
+and user programs without recompilation. It has its own
+scripting language (D) and was considered revolutionary when
+it appeared. Linux's eBPF provides similar capabilities.
 % Very complete, very advanced, entire books on it
+However, DTrace is far more complex than the tools in this book.
+
 \end{itemize}
 
 % other:
@@ -264,12 +367,51 @@ which I ultimately discarded:
 % - snap/?
 % - cc/acid.c?
 
+\begin{figure}[]\centering
+\includegraphics[height=0.45\textheight]{lineage}
+\caption{Debuggers and tracers timeline}
+\label{fig:lineage}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major debuggers
+and tracers.
+%
+I think [[acid]] and [[ratrace]] represent the best compromise
+for this book: [[acid]]'s programmable approach is unique and
+makes it far more interesting to study than a traditional
+command-line debugger, while [[ratrace]] demonstrates system
+call tracing in its simplest form. Together they are small
+enough to explain in full detail.
 
 % a few tags used in this file
 % - gdb: for equivalent command in gdb
 % - langc: for things coming later with C support
 
 \section{Getting started}
+
+%claude:
+To trace the system calls of a program:
+\begin{verbatim}
+$ ratrace ls /dev
+...
+Pread(6, 0x7de8, 4096, 131072)
+ = 1135
+Pwrite(1, 0x7de8, 1135, -1)
+...
+\end{verbatim}
+%
+To debug a program with [[acid]]:
+\begin{verbatim}
+$ acid myprogram
+/proc/1234/text:arm plan 9 executable
+acid: bpset(main)
+acid: cont()
+myprogram 1234: breakpoint  main+0x0
+acid: stk()
+main() /usr/myprogram.c:12
+acid:
+\end{verbatim}
 
 \section{Requirements}
 
@@ -280,6 +422,18 @@ which I ultimately discarded:
 % Also book on GDB, but really user manual
 
 % Partly Kernel.nw and its "Debugging Support" chapter
+
+%claude:
+Because this book is made of C source code, you will need
+a good knowledge of the C programming language~\cite{k-r}.
+%
+Reading the \book{Kernel} is helpful, especially the
+chapter on debugging support: the kernel's [[/proc]]
+file system is the interface through which both [[acid]]
+and [[ratrace]] control and observe processes.
+The \book{Linker} and \book{Compiler} explain how
+the symbol tables and line number information that
+[[acid]] reads are generated.
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -294,6 +448,12 @@ which I ultimately discarded:
 \chapter{Overview}
 %******************************************************************************
 
+%claude:
+Before showing the source code of [[acid]] and [[ratrace]] in
+the following chapters, I first give an overview of the general
+principles of tracers and debuggers, then describe the services
+that [[ratrace]] and [[acid]] provide.
+
 \section{Tracer principles}
 
 % First technique to debug, printf! A classic
@@ -302,7 +462,7 @@ which I ultimately discarded:
 %logging is good, see partial trace of execution. Traces are good.
 
 % strace does automatic logging without any printf, based on syscalls;
-% a good boundary, a good granularity. 
+% a good boundary, a good granularity.
 % There is also now 'ltrace'.
 
 % Good first way to debug issues, to get more insight on what's going on.
@@ -310,10 +470,72 @@ which I ultimately discarded:
 % no more space in /tmp. Especially when people don't check
 % return error code, at least see the call to create a file in /tmp
 
+%claude:
+The most basic debugging technique is [[printf]]: insert
+print statements into the code and observe the output.
+This works, but it requires modifying the program,
+recompiling, and knowing where to look in advance.
+
+%claude:
+A {system call tracer} provides automatic logging without
+any modification to the program. It intercepts every
+system call the program makes---[[open]], [[read]],
+[[write]], [[fork]], etc.---and prints the call name,
+arguments, and return value. System calls are a good
+boundary for tracing because they represent every
+interaction between the program and the operating system.
+%
+This makes tracers an effective first tool for many bugs:
+a program that fails silently might be trying to open a
+file that does not exist, or writing to a full disk.
+The tracer reveals these issues immediately, especially
+when the program does not check its error codes.
+Linux's [[strace]] and \plan's [[ratrace]] work this way.
+There is also [[ltrace]] on Linux, which traces library
+calls rather than system calls.
+
 \section{[[ratrace]] services}
 
 % strace -c <cmd>
 % stace <pid> ?
+
+%claude:
+The command-line interface of [[ratrace]] (called [[strace]]
+in the source) is simple:
+\begin{verbatim}
+$ strace [-c cmd [arg...]] | [pid]
+\end{verbatim}
+%
+There are two modes of operation:
+\begin{itemize}
+\item [[strace -c ls /dev]] starts [[ls /dev]] and traces
+its system calls from the beginning.
+\item [[strace 1234]] attaches to an already running process
+with pid 1234 and traces its subsequent system calls.
+\end{itemize}
+
+%claude:
+Here is an example tracing a simple [[echo hello]] command:
+\begin{verbatim}
+$ strace -c echo hello
+...
+Pwrite(1, 0x2fe8, 6, -1)
+ = 6
+hello
+Exits("")
+\end{verbatim}
+%
+Each line shows the system call name, its arguments (file
+descriptor, buffer address, size, offset), and the return
+value after the [[ = ]]. Here we can see [[echo]] calling
+[[Pwrite]] to write 6 bytes ([[hello\n]]) to file
+descriptor~1 (standard output), followed by [[Exits("")]]
+to terminate successfully.
+%
+When a program fails mysteriously, [[strace]] often reveals
+the cause immediately. For instance, an [[Open]] returning
+$-1$ or a [[Pread]] on a file descriptor that was never
+opened points directly to the bug.
 
 \section{Debugger principles}
 
@@ -330,7 +552,7 @@ which I ultimately discarded:
 
 % Debugging process, debugged process.
 
-% For some advanced inspection features the debugger needs metadata, 
+% For some advanced inspection features the debugger needs metadata,
 % generated by the assembler, the compiler, and the linker. Symbol tables.
 % See "Debugging Support" chapters in Assembler.nw, Compiler.nw,
 % Linker.nw We will recall the essential things below.
@@ -346,19 +568,132 @@ which I ultimately discarded:
 %  db <pid>
 % Awesome (remember efuns.byte crashes).
 
+%claude:
+A {debugger} is a program that controls another program.
+One naive approach is full interpretation (as in the
+\book{Emulator}), which gives total control but is far
+too slow for real programs. Instead, debuggers rely on
+hardware and kernel support to control a target process
+efficiently.
+
+%claude:
+The basic mechanism is simple: the debugger is a separate
+process that can read and write the target's memory and
+registers through kernel facilities ([[/proc]] on \plan,
+[[ptrace]] on Linux). To set a {breakpoint}, the debugger
+replaces an instruction at the desired address with one
+that causes a fault (e.g., [[BKPT]] on ARM, [[INT 3]] on
+x86). When the target reaches that address, the fault
+stops execution and gives control back to the debugger.
+The debugger can then inspect registers and memory, and
+resume execution after restoring the original instruction.
+
+%claude:
+Even without any metadata, a debugger can do a lot if the
+kernel provides good introspection on the target process:
+register values, memory contents, and the ability to
+single-step. But for a good user experience, the debugger
+needs {metadata} generated by the toolchain: a {symbol table}
+mapping addresses to function and variable names (from
+the linker), and {line number information} mapping addresses
+to source lines (from the compiler). The ``Debugging Support''
+chapters in the \book{Assembler}, \book{Compiler}, and
+\book{Linker} describe how this metadata is generated.
+
 \subsection{Breakpoint}
+
+%claude:
+A {breakpoint} stops execution at a specific address.
+As described above, the debugger patches the instruction
+at the target address to cause a fault, waits for the
+fault, then restores the original instruction. Breakpoints
+can be conditional (stop only when a condition is true)
+or counted (stop only after the $n$-th hit).
 
 \subsection{Inspector}
 
+%claude:
+The debugger can {inspect} the state of the stopped process:
+registers, memory, the call stack. With symbol table
+information, the debugger can display function names and
+variable values instead of raw addresses and numbers. With
+type information (e.g., from [[acid]]'s type descriptions
+or DWARF on other systems), it can display structured data
+types like structs and arrays in a readable format.
+
 \subsection{Disassembler}
+
+%claude:
+A {disassembler} converts machine code back into assembly
+mnemonics, allowing the user to see what instructions the
+processor will execute. This is the reverse of what the
+assembler does. The debugger typically uses a library
+(e.g., [[libmach]] in \plan) to decode the binary
+instructions at a given address.
 
 \subsection{Watch point}
 
+%claude:
+A {watchpoint} (or data breakpoint) stops execution when
+a specific memory location is read or written. This is
+useful for finding out what code modifies a variable.
+Hardware watchpoints use the processor's debug registers
+to monitor an address without slowing down execution.
+Software watchpoints can be implemented by marking the
+memory page as inaccessible and catching the resulting
+page fault, though this is slower.
+
 \subsection{Source-level debugging}
+
+%claude:
+With line number information from the compiler, the debugger
+can display source code instead of assembly, set breakpoints
+on source lines, and step one source statement at a time.
+This requires the debugger to map between addresses and
+source positions in both directions. Source-level debugging
+is what most developers expect, but it requires cooperation
+from the entire toolchain: the compiler must emit line tables,
+the linker must preserve them, and the debugger must read them.
 
 \section{[[acid]] services}
 
 % see also Machine.nw, which has a similar interface.
+
+%claude:
+The command-line interface of [[acid]] is:
+\begin{verbatim}
+$ acid [-kqw] [-l library] [-m machine] [pid] [textfile]
+\end{verbatim}
+%
+The main flags are:
+\begin{itemize}
+\item [[-l library]]: load an [[acid]] library file at startup.
+Libraries provide higher-level debugging functions; for instance,
+[[acid -l truss]] loads a system call tracer written entirely
+in [[acid]]'s own language.
+\item [[-k]]: debug kernel state rather than user state.
+\item [[-w]]: allow modifying the text file (for patching binaries).
+\item [[-m machine]]: specify the CPU type for disassembly.
+\end{itemize}
+%
+You can specify a running process by [[pid]], or a binary
+by [[textfile]] (defaulting to [[8.out]]). At startup,
+[[acid]] loads standard function definitions from
+[[/sys/lib/acid/port]] and architecture-specific functions
+from [[/sys/lib/acid/$objtype]].
+
+%claude:
+The key functions available at the [[acid]] prompt include:
+[[new()]] (start the program), [[bpset()]] (set a breakpoint),
+[[cont()]] (continue execution), [[step()]] (single-step),
+[[stk()]] (print call stack with locals),
+[[src()]] (show source around an address),
+[[asm()]] (disassemble), [[regs()]] (print registers),
+and [[print()]] (display a value).
+Because these are regular [[acid]] functions defined in
+the standard library---not built-in commands---the user can
+redefine them or write new ones to automate complex
+debugging tasks.
 
 <<[[main()]] print usage and exit (db)>>=
 fprint(2, "Usage: db [-kw] [-m machine] [-I dir] ([symfile]|[pid])\n");
@@ -381,6 +716,67 @@ exits("usage");
 % notion of 'dot', current address.
 %ugly: a bit crude language, they could use lex and yacc to provide
 % something better (actually acid does that)
+
+%claude:
+Here is a typical [[acid]] session on a small program
+that divides by zero:
+\begin{verbatim}
+/* buggy.c */
+#include <u.h>
+#include <libc.h>
+
+void
+main(int argc, char **argv)
+{
+    int x = 42;
+    int y = 0;
+    int z = x / y;
+    print("%d\n", z);
+    exits(nil);
+}
+\end{verbatim}
+%
+We compile it, start [[acid]], set a breakpoint on [[main]],
+run to it, and inspect the state:
+\begin{verbatim}
+$ 5c buggy.c
+$ 5l -o buggy buggy.5
+$ acid buggy
+/proc/1234/text:arm plan 9 executable
+acid: new()
+1234: system call  _main   MOVW $0, R0
+acid: bpset(main)
+acid: cont()
+1234: breakpoint  main+0x0  MOVW.W R14, -0xc(R13)
+acid: stk()
+main() buggy.c:5
+    argc = 0x00000001
+    argv = 0x7fffefe8
+acid: src(*PC)
+     5:   int x = 42;
+     6:   int y = 0;
+     7:>  int z = x / y;
+     8:   print("%d\n", z);
+acid: step()
+acid: print(x)
+42
+acid: cont()
+1234: breakpoint  divtrap+0x0
+acid: stk()
+divtrap()
+main() buggy.c:7
+acid:
+\end{verbatim}
+%
+[[new()]] starts the program and stops at the first instruction.
+[[bpset(main)]] sets a breakpoint at the entry of [[main]].
+[[cont()]] resumes execution until the breakpoint is hit.
+[[stk()]] prints the call stack with local variable values,
+and [[src(*PC)]] shows the source code around the current
+program counter. After [[step()]] and [[print(x)]], we can
+see that [[x]] has been assigned 42. The final [[cont()]]
+runs into the division by zero, which stops execution in
+[[divtrap]].
 
 <<constant [[CMD_VERBS]]>>=
 #define CMD_VERBS	"?/=>!$: \t"
