@@ -88,6 +88,27 @@ its return value to the caller?
 
 % now use for RISC-V too! richard miller's slides?
 
+%claude:
+I will explain in this book the code of the \plan ARM C compiler
+[[5c]], written by Ken Thompson, which contains about 15\,000 lines
+of C (plus a small Yacc grammar for parsing).
+%
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and
+they form together a coherent set.
+
+%claude:
+[[5c]] is unusual among C compilers: it has no intermediate
+representation, no control-flow graph, and no SSA form. Instead,
+it works by a series of tree transformations on the AST, generating
+assembly instructions directly. This makes it harder to optimize
+aggressively, but also makes it remarkably easy to follow---each
+phase is a straightforward tree walk.
+%
+A nice bonus is that [[5c]] includes lint-like checks
+(e.g., ``variable set but not used'') that catch common mistakes
+at compile time.
+
 \section{Other compilers}
 
 Here are a few compilers that I considered for this book, but
@@ -196,19 +217,34 @@ which I ultimately discarded:
 % need to use 5l? not like gcc where can create executable directly
 % because it calls ld under the hood. But here Unix spirit! one thing only!
 
+%claude:
+Unlike [[gcc]], which invokes the assembler and linker
+automatically, [[5c]] only compiles---you must call the
+linker [[5l]] separately to produce an executable:
+\begin{verbatim}
+$ 5c hello.c
+$ 5l hello.5
+$ 5.out
+Hello World
+\end{verbatim}
+%
+You can also use [[5c -S]] to see the assembly output
+without generating an object file, which is useful for
+understanding what the compiler does.
+
 \section{Requirements}
 
 % actually the code presented below is written in C so you
 % need to understand C :) hmmm
 
-% You need to have a vague idea of how works a compiler. 
+% You need to have a vague idea of how works a compiler.
 % Have read Dragon book. Appel. Or other books.
 % Many compiler books. Dragon, Engineering a compiler, modern compiler, ...
-% so know what is an 
-% Abstract syntax tree (AST), 
-% lexer, 
-% parser, 
-% type system, 
+% so know what is an
+% Abstract syntax tree (AST),
+% lexer,
+% parser,
+% type system,
 % ...
 
 %``the compiler assumes you've know your Aho and Ullman either by'
@@ -226,6 +262,17 @@ which I ultimately discarded:
 
 % Incremental compiler in 22 steps in scheme
 % http://scheme2006.cs.uchicago.edu/11-ghuloum.pdf
+
+%claude:
+This book assumes you know C well enough to read the compiler's
+source code (which is itself written in C). Some familiarity
+with compiler concepts---ASTs, lexers, parsers, type systems---is
+helpful but not strictly required, as the Principles section above
+provides the essential background.
+%
+Reading the \book{Assembler} or \book{Emulator} first is recommended,
+as [[5c]] generates ARM assembly directly (there is no intermediate
+representation), so understanding the target helps.
 
 \section{About this document}
 \input{../docs/latex/About}
@@ -252,9 +299,20 @@ who wrote in some sense most of this book.
 \chapter{Overview}
 %******************************************************************************
 
+%trans:
+%claude:
+Before showing the source code of [[5c]] in the following chapters,
+I first give an overview in this chapter
+of the general principles of a compiler,
+of its command-line interface,
+and of the input and output formats.
+%
+I also define terms and more generally give the background necessary
+to understand the code I will show later.
+
 \section{Compiler principles}
 
-% from high level to low level (asm). 
+% from high level to low level (asm).
 
 % Many books on compiler. I will be short here.
 
@@ -264,13 +322,60 @@ who wrote in some sense most of this book.
 % principles of frontend and backend.
 % (We will focus mostly on the backend)
 
+%claude:
+A compiler translates a high-level language into a low-level one.
+In the case of [[5c]], the input is C and the output is ARM
+assembly (in \plan's AST-based object format).
+%
+There are many books on compiler construction---the ``Dragon
+Book''~\cite{dragon-book}, Appel's ``Modern Compiler
+Implementation''~\cite{appel}, and others.
+I will be brief here and focus on the aspects most relevant
+to understanding [[5c]].
+
+%claude:
+Compilers are traditionally divided into a {\em frontend}
+(parsing and analysis) and a {\em backend} (code generation
+and optimization). The following diagram shows the main
+phases of a typical compiler:
+
+%claude:
+\begin{verbatim}
+  Source    Lexer    Parser     Checker     Code Gen   Optimizer
+    |         |        |          |            |          |
+    v         v        v          v            v          v
+  text --> tokens --> AST --> typed AST --> assembly --> assembly
+                                              (opt)
+          <--- Frontend --->              <--- Backend --->
+\end{verbatim}
+
+%claude:
+[[5c]] follows this structure, though it blurs some boundaries:
+parsing and code generation are interleaved (each function is
+compiled immediately after parsing), and there is no separate
+intermediate representation between the AST and the assembly
+instruction list.
+
 \subsection{Frontend}
 
-% Frontend is classic and present in other books like Assembler, 
+% Frontend is classic and present in other books like Assembler,
 % or Make, or Shell.
 % Lexing (regexps), (preprocessing), parsing (grammar), AST.
 % (even though 5c does a lot in parsing; does not separate concern so well).
 % Tracking position for good error reports.
+
+%claude:
+The frontend transforms source text into a structured
+representation. It consists of three phases:
+{\em lexing} (breaking text into tokens), {\em preprocessing}
+(handling [[#include]], [[#define]], and [[#ifdef]]),
+and {\em parsing} (building an abstract syntax tree from
+the token stream according to C's grammar).
+%
+If you have read the \book{Assembler} or \book{Shell},
+you have already seen all three phases---the same techniques
+(hand-written lexer, macro expansion, grammar-driven parsing)
+appear in [[5c]], applied to the more complex syntax of C.
 
 \subsection{Scope resolution}
 % Resolving, naming.
@@ -285,20 +390,42 @@ who wrote in some sense most of this book.
 % Goal of naming is to associate to the use of an entity the right
 % definition.
 
+%claude:
+C has nested blocks, and a variable in an inner block can
+shadow a variable of the same name in an outer block. C also
+has type aliases ([[typedef]]), structure tags, enumeration
+constants, and labels---all in partially overlapping namespaces.
+The goal of scope resolution is to associate each {\em use}
+of a name with the correct {\em definition}. This is done
+through the symbol table, which tracks the current scope
+and allows declarations to be pushed and popped as the
+compiler enters and exits blocks.
+
 \subsection{Use/def checking}
 
 % For many things! related to naming.
-% 3 important checks: use-of-undefined, redefined, unused. 
+% 3 important checks: use-of-undefined, redefined, unused.
 
-% for many entities: 
+% for many entities:
 %  - labels
 %  - locals
-% could also for: 
+% could also for:
 %  - globals
 %  - function defs
 %  - typedefs
 %  - struct defs
 %  - enums.
+
+%claude:
+Closely related to scope resolution, use/def checking
+catches three kinds of errors: {\em use of undefined}
+entities (referencing a variable that was never declared),
+{\em redefinition} (declaring the same name twice in the
+same scope), and {\em unused} definitions (declaring
+something that is never referenced). [[5c]] performs
+these checks for labels, local variables, and parameters,
+and additionally includes dataflow checks for variables
+that are set but never used.
 
 \subsection{Type checking}
 
@@ -307,7 +434,7 @@ who wrote in some sense most of this book.
 
 % - types! typechecking! (5c even adds some simple dataflow checks!)
 %   so can type check arguments vs parameters, their numbers, array access,
-%   field access, more restricted register indexing (xxx) -> *xxx but only 
+%   field access, more restricted register indexing (xxx) -> *xxx but only
 %   if makes sense.
 %   (still have lots of room to improve even more, C could be more typed!
 %    see rust, and ocaml).
@@ -316,10 +443,25 @@ who wrote in some sense most of this book.
 
 % lvalue/rvalue annotating here?
 
+%claude:
+Since C is a statically typed language, the compiler must
+verify that operations are applied to compatible types: that
+function arguments match parameters, that array indices are
+integers, that pointer dereferences apply to pointers, and
+so on. The type checker also annotates each AST node with
+its type, which the backend needs to generate correctly
+sized instructions (a [[char]] move vs.\ a [[long]] move,
+integer vs.\ floating-point arithmetic).
+%
+The type checker also classifies expressions as {\em lvalues}
+(locations that can be assigned to) or {\em rvalues}
+(values that can only be read), which determines what
+operations are legal on each expression.
+
 \subsection{Backend}
 
 % Assembly is essentially:
-%  - simple arith with registers and memory instructions 
+%  - simple arith with registers and memory instructions
 %  - labels and jmps
 %  - simple stack (when you have to manually handle locals, params, and calls)
 %  - simple data structure, bytes
@@ -331,9 +473,28 @@ who wrote in some sense most of this book.
 
 %https://kristerw.blogspot.com/2017/08/the-structure-of-gcc-back-end.html
 
+%claude:
+The backend's job is to translate the typed AST into assembly
+instructions. Assembly is a much simpler language than C:
+arithmetic on registers, memory loads and stores, labels
+and jumps, and a manually managed stack. The compiler must
+bridge the gap between C's structured constructs and this
+flat instruction sequence. This bridge can be understood
+as three translations, which I call {\em labelization},
+{\em linearization}, and {\em frameization}.
+
 \subsection{Labelization}
 
 % - statements, more structured forms than jmp.
+
+%claude:
+C has structured control flow: [[if]]/[[else]], [[while]],
+[[for]], [[switch]], [[break]], [[continue]], [[return]].
+Assembly has only labels and conditional/unconditional jumps.
+{\em Labelization} is the translation from one to the other:
+an [[if(cond) A else B]] becomes a conditional branch past
+[[A]] to [[B]], with a label at the join point. A [[while]]
+loop becomes a backward jump to the condition test.
 
 \subsection{Linearization}
 % registerization
@@ -342,12 +503,44 @@ who wrote in some sense most of this book.
 % - same for data, complex decomposed into smaller bytes, with symbolic names
 %   for subparts, e.g. fields.
 
+%claude:
+C expressions can be arbitrarily nested: [[x + y * z - f(a, b)]].
+Assembly instructions operate on at most two or three registers
+at a time. {\em Linearization} decomposes complex expressions
+into a sequence of simple instructions, allocating temporary
+registers for intermediate results. For example, [[x + y * z]]
+becomes: load [[y]] into a register, multiply by [[z]], add [[x]].
+%
+The same applies to data: a C struct with nested fields is
+decomposed into byte-level accesses at computed offsets.
+
 \subsection{Frameization}
 
 % - parameters, arguments, locals, more structured forms than just plain stack
 % => see codegen: tag
 
+%claude:
+C has function parameters, local variables, and return values.
+Assembly has only the stack pointer and registers. {\em Frameization}
+is the mapping between the two: the compiler assigns each local
+variable and parameter an offset within the function's {\em stack
+frame}, generates code to set up the frame on entry (adjusting
+the stack pointer), and tears it down on exit. The
+{\em calling convention} defines which registers hold arguments,
+where the return value goes, and which registers must be saved
+and restored across calls.
+
 \subsection{Optimizations}
+
+%claude:
+After generating assembly, the compiler can improve it.
+[[5c]] performs two levels of optimization: {\em AST-level}
+transformations (constant folding, strength reduction,
+algebraic simplification) and {\em assembly-level}
+optimizations (register allocation across basic blocks,
+and peephole optimization to eliminate redundant instructions).
+These are modest compared to what GCC or LLVM do, but
+they are effective and easy to understand.
 
 
 \section{[[5c]] command-line interface}
@@ -357,6 +550,9 @@ who wrote in some sense most of this book.
 % source language: C
 % implementation language: C
 % target language: assembly ARM
+
+%claude:
+The main flags of [[5c]] fall into a few categories:
 
 % not put here originally: 
 % -g (in genxxx()) print lhs and rhs in many contexts
@@ -436,7 +632,7 @@ who wrote in some sense most of this book.
 % Still can declare things before things are defined. ex:
 % struct Foo x; .... struct Foo { ... };
 
-% TODO add __LINE__? 
+% TODO add __LINE__?
 % TODO add check for code not using return value (e.g.
 %  in xdecl rule where call dodecl() which returns a node).
 
@@ -456,9 +652,19 @@ who wrote in some sense most of this book.
 % memory allocator in itself.
 % Still, need some ASM for essential stuff like system calls :) (SWI).
 
+%claude:
+[[5c]] compiles mostly ANSI C (C89), with a few \plan
+extensions such as anonymous structs/unions and the
+[[#pragma]] directives for format-string checking
+and safe linking. C is a systems programming
+language---pointers, explicit memory management, and
+bit manipulation are central---and [[5c]] must handle
+all of these, including the many dark corners of C's
+syntax and semantics.
+
 \subsection{C innovations}
 
-% innovation of C vs fortran/pascal/algol? 
+% innovation of C vs fortran/pascal/algol?
 %  - pointer arithmetic? (but also a bad thing to have such wild pointers)
 %    in some sense compilers such as Tiger are using pointers, but internally,
 %    and C exposed them to the language while also providing some form
@@ -481,6 +687,14 @@ who wrote in some sense most of this book.
 
 % put code for helloworld.c generated code?
 
+%claude:
+Like [[5a]], [[5c]] generates object files in \plan's AST-based
+format (not machine code). The output is essentially a serialized
+list of assembly instructions---the same [[Prog]] structures
+that the \book{Assembler} describes. The linker [[5l]] then
+performs the actual machine code generation. You can use
+[[5c -S]] to see the assembly in textual form.
+
 \section{The ARM architecture}
 
 % does not really need to understand much.
@@ -498,4 +712,28 @@ who wrote in some sense most of this book.
 % y = &x
 % MOVW $x(SB), R0
 % MOVW R0, y(SB)
+
+%claude:
+You do not need deep knowledge of the ARM architecture to
+read this book. The \plan assembler [[5a]] abstracts away
+many hardware details with pseudo registers ([[FP]], [[SP]],
+[[SB]]) and virtual instructions ([[MOVW]], [[RET]]).
+A few instructions are enough to see how C maps to assembly:
+\begin{verbatim}
+  C code             ARM assembly (Asm5)
+  ------             -------------------
+  x = 1;             MOVW $1, R0
+                     MOVW R0, x(SB)
+
+  y = &x;            MOVW $x(SB), R0
+                     MOVW R0, y(SB)
+
+  z = x + y;         MOVW x+0(FP), R0
+                     MOVW y+4(FP), R1
+                     ADD  R1, R0
+                     MOVW R0, z-4(SP)
+\end{verbatim}
+%
+The \book{Assembler} explains the full instruction set and
+addressing modes in detail.
 
