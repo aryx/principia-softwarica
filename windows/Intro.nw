@@ -2237,10 +2237,29 @@ After a window application reads the [['r']] character
 in [[/mnt/wsys/mouse]],
 it is the responsibility of the programmer to call [[getwindow()]],
 %
-which  is a function similar to the [[gengetwindow()]] function I mentioned
+which internally calls [[gengetwindow()]], the function I mentioned
 before. % Section X
-[[getwindow()]] also reads [[/dev/winname]].
-This file should contain a new string
+%claude:
+[[getwindow()]] is a thin wrapper around [[gengetwindow()]] that
+supplies the default arguments: it constructs the [[/dev/winname]]
+path from the display and passes the global [[view]] and [[screen]]
+pointers. [[gengetwindow()]] is the lower-level function that does
+the actual work---reading [[/dev/winname]], fetching the named
+image, allocating a screen and window on it---but takes all
+these as explicit parameters.
+%claude:
+Why not just call [[initdraw()]] again after a resize?
+Because [[initdraw()]] does far more than fetching the window image:
+it reopens the display connection ([[/dev/draw]]),
+reinitializes fonts, and rewrites the window label.
+All of that is unnecessary after a resize---the display is still
+connected, the fonts are still loaded. Only the window image
+changed (because [[rio]] allocated a new layer with the new
+dimensions). [[getwindow()]] is the surgical version that
+refreshes just the one thing that changed.
+%
+[[getwindow()]] reads [[/dev/winname]],
+which should now contain a new string
 corresponding to a new public image with the new dimension of the window.
 %
 Then, [[getwindow()]] grabs the reference to this new public image in which
@@ -2351,7 +2370,7 @@ applications launched from the shell, unless the user used redirections
 %
 Remember that
 the [[printf()]] function from the C library internally does some 
-[[write(1, ...)]]m
+[[write(1, ...)]]
 \l see \book{Libcore}
 and the [[scanf()]] function internally does some 
 [[read(0, ...)]].
@@ -2493,10 +2512,14 @@ and Chapter~\ref{chap:advanced} will give more details about those files):
 
 \begin{itemize}
 
-\item [[/mnt/wsys/winid]]: This read-only file contains a 
+\item [[/mnt/wsys/winid]]: This read-only file contains a
 number unique to each window, the {\em window identifier}.
-This identifier is useful in conjunction with [[/mnt/wsys/wsys/]] 
+This identifier is useful in conjunction with [[/mnt/wsys/wsys/]]
 presented below.
+Remember that each window process sees its own [[/mnt/wsys/]] files
+thanks to the per-process namespace---just like each window sees
+a different [[/mnt/wsys/cons]] (bound to [[/dev/cons]]),
+each window sees a different [[/mnt/wsys/winid]] returning its own identifier.
 
 \item [[/mnt/wsys/label]]:
 [[rio]] does not use title bars, but each window can write a string
@@ -2509,8 +2532,10 @@ the menu lists all the hidden windows by their labels
 
 \item [[/mnt/wsys/screen]]: This read-only file contains an image
 \l dynamic image
-(in the \plan image format) representing the content of the screen
+(in the \plan image format) representing the content of the whole screen
 at the moment [[/mnt/wsys/screen]] was read.
+Unlike the other [[/mnt/wsys/]] files, this one is not per-window:
+every window sees the same whole-screen image.
 Thanks to this file, it is very easy to take screenshots in \plan.
 \l no need fancy app! lens.c uses it too.
 \l can use that for accessibilty?
@@ -2518,6 +2543,7 @@ Thanks to this file, it is very easy to take screenshots in \plan.
 
 \item [[/mnt/wsys/window]]: This read-only file contains
 also an image, but representing only the content of the window.
+This one {\em is} per-window, unlike [[/mnt/wsys/screen]].
 
 \item [[/mnt/wsys/text]]: This read-only file is useful
 only for textual windows. It contains a full dump of the text
