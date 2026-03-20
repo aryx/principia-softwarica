@@ -2395,16 +2395,30 @@ In this chapter, I will present the core data structures of [[rio]],
 % windows, and fileserver keep track of opened files.
 which are essentially:
 % globals to device handler, Window, and filesystem.
-TODO
+%claude:
+the device handles for the display, the mouse, and the keyboard
+(like any graphical application);
+the [[Window]] structure, the central data structure of a windowing system,
+grouping graphics, input, process, and text information for each window;
+and the [[Filsys]] and [[Fid]] structures that support [[rio]]'s role as a
+{filesystem server}, maintaining per-client file state for the 9P protocol.
 
 
 \section{Device handles}
 
 \subsection{Output device: [[display]] and [[view]]}
 
-% rio is first a graphical app, like other graphical app. 
+% rio is first a graphical app, like other graphical app.
 % So use display, view, etc. See Graphics.nw and draw.h and initdraw called
 % early in main().
+%claude:
+Like any graphical application under \plan, [[rio]] uses the
+global [[display]] (set by [[initdraw()]]) to communicate with the
+display server, and the global [[view]] which represents the portion of
+the screen that [[rio]] owns (the full screen, unless running recursively
+inside another [[rio]]).
+In turn, [[rio]] will provide each of its client windows with their own
+[[view]]---a sub-portion of [[rio]]'s screen.
 
 %Display	*display; // set by initdraw()
 %display =~ /dev/draw handler
@@ -2442,6 +2456,13 @@ Rectangle	viewr;
 \subsection{Input devices: [[mousectl]] and [[keyboardctl]]}
 
 % rio is a graphical app which uses the keyboard and mouse.
+%claude:
+Just as [[rio]] needs a display for output, it needs handles for its
+input devices. [[Mousectl]] and [[Keyboardctl]] (defined in [[mouse.h]]
+and [[keyboard.h]]) are wrappers that internally create a separate proc
+to read synchronously from [[/dev/mouse]] and [[/dev/cons]], then
+forward events through a channel. This lets [[rio]] receive input
+without blocking its other threads.
 
 % structure defined in mouse.h
 <<global [[mousectl]]>>=
@@ -2482,6 +2503,16 @@ Mouse	*mouse;
 % rio rely on big support in Graphics.nw to manage overlapping
 % images, which is big building block for windowing systems (but still
 % a lot remains)
+%claude:
+A [[Screen]] (from [[draw.h]]) is the graphics library's support for
+{overlapping images}---it manages the z-order and repainting of layers
+that overlap each other.
+[[rio]] allocates a [[Screen]] on top of [[view]] to serve as the
+desktop: every window will be a layer on this screen.
+The [[background]] and [[red]] globals are
+color images (in \plan, everything is an [[Image]], including colors).
+The red color is used to highlight window borders during move/resize
+operations.
 
 <<global [[desktop]]>>=
 Screen	*desktop;
@@ -2533,11 +2564,27 @@ Image	*red;
 % Note that also have window type in Graphics.nw, which is really
 % Image with additional methods. Those window/images will be used
 % for graphical part, but need more fields, not just graphic part
-% to handle windows. 
+% to handle windows.
 
 % Window is server side info about client window. On the client
 % side, no real notion of window. Just a graphical app that thinks
 % it runs outside of rio. have just display and view (via /dev/winname).
+%claude:
+The [[Window]] structure is the central data structure of [[rio]], much
+like [[Proc]] in the kernel.
+It is the server-side representation of a client window---the client
+application itself has no notion of a ``window''; it simply sees a
+display and a [[view]] image through [[/dev/winname]].
+%claude:
+The structure groups together nine categories of fields:
+an ID and label (visible through [[/mnt/wsys/winid]] and [[/mnt/wsys/label]]),
+graphics (the window's image and screen coordinates),
+mouse and keyboard channels (for receiving dispatched input events),
+control (for window management messages like resize or delete),
+a link to the external process running in the window,
+configuration flags, and finally the fields specific to
+textual windows (the text buffer, cursors, and frame rendering)
+or graphical windows (where the application draws directly).
 
 <<struct [[Window]]>>=
 struct Window
@@ -2689,6 +2736,14 @@ QLock;
 
 \subsection{[[windows]]}
 
+%claude:
+The global [[windows]] array is the essence of the windowing system:
+it holds all the managed windows.
+The [[topped]] counter is a logical timestamp---each time a window
+gets the focus, it receives the current [[topped]] value (then incremented).
+This allows [wpointto] to find the topmost window at a given point
+by comparing [[topped]] values across all overlapping windows.
+
 % grown in wmk()
 <<global [[window]]>>=
 // growing_array<ref_own<Window>> (size = nwindow+1)
@@ -2767,6 +2822,16 @@ bool	mouseopen;
 \subsection{Textual windows}
 
 % of course it has text!
+%claude:
+A textual window (the default, used as a terminal) maintains a rune
+buffer ([[r]]/[[nr]]) holding the full text content, two cursor positions
+([[q0]]/[[q1]]) for the selection, an origin ([[org]]) indicating which
+rune starts the visible portion, and an ``output point'' ([[qh]]) that
+separates text already sent by the application from text typed by the
+user.
+The [[Frame]] structure (from the frame library) handles the rendering
+of visible text---wrapping, selection highlighting, and scrollbar
+interaction.
 
 <<[[Window]] textual window fields>>=
 <<[[Window]] textual window fields, text data>>
@@ -2878,6 +2943,15 @@ bool	scrolling;
 % rio is also a filesystem server! not just graphical app.
 % rio uses plan9 ability to have regular process act as filesystem (server).
 % userspace filesystem.
+%claude:
+[[rio]] is not just a graphical application---it is also a
+{filesystem server}.
+In \plan, any process can act as a filesystem server by listening on a pipe
+for {9P} messages (see the \book{Network}).
+[[rio]] serves the [[/mnt/wsys/]] namespace: when a client application
+opens [[/mnt/wsys/cons]] or [[/mnt/wsys/mouse]], those accesses are
+translated into 9P messages sent through a pipe to [[rio]], which
+dispatches them to the appropriate window.
 
 \subsection{[[FilSys]] and [[filsys]]}
 
@@ -2885,6 +2959,14 @@ bool	scrolling;
 % interface is essentialy a pipe! a server waiting for clients.
 % (named pipe? no, no need yet, pipe here is between rio and filsys?
 %  or kinda named pipe, but managed by mount and srv??)
+%claude:
+The [[Filsys]] structure holds the two ends of a pipe ([[cfd]] for
+the client side, [[sfd]] for the server side), the user name
+(for security checks), a hash table of [[Fid]] entries tracking
+per-client file state, and a channel to the worker allocator.
+The client side of the pipe is published in [[/srv/rio.user.pid]]
+so that child processes (and any process that mounts it) can
+communicate with [[rio]]'s filesystem server.
 
 <<struct [[Filsys]]>>=
 struct Filsys
@@ -2943,6 +3025,15 @@ Fid		*next;
 % or a walk. The server then needs to remember what this fid was about.
 
 % when userspace filesystem, have notion of fid, Fcall message.
+%claude:
+A {fid} is a 9P concept: a 32-bit handle the client uses to refer
+to a file on the server, similar to a file descriptor but at the
+protocol level.
+The server must maintain state for each fid (whether it is open, in what
+mode, which [[Qid]] identifies the underlying file).
+The [[Fid.w]] field closes the circle: once a fid is associated
+with a [[Qid]] (during attach or walk), the server can resolve it
+back to the corresponding [[Window]].
 
 <<struct [[Fid]]>>=
 struct Fid
@@ -3045,13 +3136,25 @@ Window	*w;
 
 \subsection{Workers and jobs: [[Xfid]]}
 
+%claude:
+The filesystem server proc ([[filsysproc]]) reads 9P requests from the
+pipe, but it cannot process them all synchronously---multiple windows and
+client processes may be making concurrent requests.
+So [[filsysproc]] acts as a {master} that dispatches each request to a
+{worker} thread.
+The [[Xfid]] (``extended fid'') structure combines the incoming parsed
+request ([[Fcall]]) with a channel to a worker thread. The master sends
+a function pointer through [[Xfid.c]], telling the worker what operation
+to execute. Workers are pooled via the [[cxfidalloc]]/[[cxfidfree]]
+channels to avoid creating a new thread for every request.
+
 <<[[Filsys]] other fields>>=
 // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
 Channel	*cxfidalloc;	/* chan(Xfid*) */
 @
 %ocaml: not sure we need an arena of worker, can create thread each time
 % (too slow?)
- 
+
 
 % saw server will receive 9p request on pipe while reading filsys.sfd.
 % But potentially multiple windows, multiple processes
@@ -3114,16 +3217,26 @@ struct Xfid
 
 % See Network.nw and plan9 RPC via 9p messages.
 % Any process can be a filesystem server for another process.
-% so can do mount /srv/rio.user.pid /mnt/wsys 43 
+% so can do mount /srv/rio.user.pid /mnt/wsys 43
 % and now the namespace /mnt/wsys/ will be served by the process
 %  on the other side of the pipe in /src/rio.user.pid
 
-% see docs/man/5/* 
+% see docs/man/5/*
 
 % if mount cfd /mnt/wsys, then access from process (or child/execed process
 %  which will inherit namespace) to files under /mnt/wsys/ will send
 %  messages on cfd which will be processed by other side of pipe
 %  and dispatched to right method.
+%claude:
+The [[fcall]] dispatch table maps 9P message types
+([[Tattach]], [[Twalk]], [[Topen]], [[Tread]], [[Twrite]], etc.)
+to handler functions.
+When a client process opens, reads, or writes a file under
+[[/mnt/wsys/]], the kernel translates that into a 9P message
+(prefixed with [[T]] for ``transmit''), which [[filsysproc]]
+dispatches through this table. The handler may return [[nil]] if it
+delegates work to a worker thread, or the [[Xfid]] back if the
+worker can be reused immediately.
 
 \t could just pass Xfid no? anyway Fid and Filsys are inside Xfid.
 
@@ -3198,6 +3311,16 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 
 % see Libcore.nw, quick refresh on threads in plan9 and
 % fact that main is then threadmain.
+%claude:
+The entry point is [[threadmain()]] (not [[main()]]): the thread library
+provides its own [[main()]] that sets up the cooperative scheduler and a
+first proc, then calls [[threadmain()]] as its initial thread.
+The initialization follows three phases matching [[rio]]'s three roles:
+first as a graphical application (connecting to the display, mouse, and
+keyboard), then as a concurrent application (creating channels and threads),
+and finally as a filesystem server (setting up the 9P pipe and workers).
+Once everything is ready, [[threadmain()]] blocks on [[exitchan]],
+waiting for the user to select ``Exit'' from the right-click menu.
 
 % main? -> <>
 <<function [[threadmain]]>>=
@@ -3263,6 +3386,13 @@ if(filsys == nil)
 % a graphical application!
 
 % see Graphics.nw
+%claude:
+The graphics initialization is almost identical to [[hellorio.c]]:
+[[rio]] calls [[geninitdraw()]] to connect to the display server,
+then allocates a [[Screen]] on top of [[view]] to serve as the
+desktop for overlapping windows.
+The call to [[iconinit()]] allocates the grey background and the
+red color used to highlight borders during window operations.
 
 <<[[main()]] graphics initializations>>=
 if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
@@ -3347,6 +3477,14 @@ if(keyboardctl == nil)
 % threads communicate and synchronized between each other through
 % messages on channels
 %alt: locks or mutex or semaphores or monitor
+%claude:
+[[rio]]'s threads communicate exclusively through channels rather than
+shared variables protected by locks.
+The [[exitchan]] is the simplest example: [[threadmain()]] blocks
+on a [[recv()]] on this channel, and the mouse thread sends a
+message when the user selects ``Exit''.
+Many more channels will be created later---each new window gets its own
+set of channels for keyboard, mouse, and control messages.
 
 <<global [[exitchan]]>>=
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
@@ -3369,10 +3507,18 @@ exitchan     = chancreate(sizeof(int), 0);
 
 \section{Threads creation}
 
+%claude:
+[[main()]] creates only two threads at startup: one for the keyboard
+and one for the mouse. These are {dispatcher} threads that listen for
+input events and route them to the appropriate window thread.
+Additional threads are created dynamically: each new window gets its
+own [[winctl]] thread, the worker allocator gets a thread, and each
+filesystem worker gets a thread.
+
 <<constant [[STACK]]>>=
 #define	STACK	8192
 @
-%ocaml: default value that can grows 
+%ocaml: default value that can grows
 
 
 <<[[main()]] threads creation>>=
@@ -3394,6 +3540,13 @@ threadcreate(mousethread, nil, STACK);
 \section{Filesystem server initialization}
 
 %    filsys = filsysinit(xfidinit());
+%claude:
+The filesystem server is initialized by first creating the worker
+allocator ([[xfidinit()]]), then setting up the server itself
+([[filsysinit()]]).
+[[filsysinit()]] creates the two-way pipe that will carry 9P messages
+between clients and the server, then spawns [[filsysproc]] as a
+separate proc (not a thread, because it blocks on [[read()]] of the pipe).
 
 \subsection{[[filsysinit()]]}
 
@@ -3557,6 +3710,22 @@ xfidinit(void)
 
 %ocaml: need less proc. No need for ioproc and filsysproc.
 % But need a process for the winshell!
+%claude:
+A windowing system is fundamentally a {reactive} program: it must respond
+to mouse movements, keyboard presses, window management requests, and
+filesystem operations, all happening concurrently.
+[[rio]] handles this with a producer/consumer architecture built on
+threads and channels.
+Two dispatcher threads (keyboard and mouse) listen for
+hardware events and route them to the appropriate window thread.
+Each window has its own thread ([[winctl]]) that processes events in
+its own event loop.
+The filesystem server runs as a separate proc
+(because it blocks on I/O) and dispatches 9P requests to worker threads.
+%claude:
+This is similar to how the kernel handles interrupts and processes:
+each thread blocks waiting on a channel, and the scheduler yields
+to whichever thread has work to do.
 
 \section{Keyboard thread}
 
@@ -3573,6 +3742,14 @@ xfidinit(void)
 % Channel* Keyboardctl.c; // Graphics.nw
 
 % listen/dispatch architecture.
+%claude:
+The keyboard thread is a simple {demultiplexer}: it receives runes from
+the I/O proc (via [[keyboardctl->c]]) and forwards them to the current
+window's [[ck]] channel. The double-buffering trick (alternating between
+[[buf[0]]] and [[buf[1]]]) avoids overwriting the sent buffer before
+the receiver has consumed it, since [[sendp()]] transmits a pointer.
+The [[nbrecv()]] loop batches multiple pending keystrokes into a single
+message for efficiency.
 
 % main -> threadcreate -> <>  (as ?? in threadcreate(<>) <- main)
 <<function [[keyboardthread]]>>=
@@ -3643,6 +3820,14 @@ keyboardthread(void*)
 % seen event type for hellorio, here event types for
 % mouse thread. listen to multiple channels at the same time
 % and can emit on multiple channels when target is ready to receive.
+%claude:
+The mouse thread is more complex than the keyboard thread because
+mouse events have a dual nature: some belong to the application (e.g.,
+left-click for text selection) and some belong to the window manager
+(e.g., right-click for the system menu, border clicks for move/resize).
+The thread must decide for each event whether to {dispatch} it to the
+window thread ([[sending = true]]) or handle it locally as a windowing
+system operation.
 
 <<enum [[Mxxx]]>>=
 enum {
@@ -3776,6 +3961,15 @@ Selborder		= 4,	/* border of selected window */
 % when set sending to true? what are the conditions to relay mouse events?
 % when inside and scroll, left click, or opened mouse
 % if not opened then middle and right click are intercepted.
+%claude:
+A mouse event is forwarded to the window when: the cursor is inside
+the window and either it is a left-click (used for text selection in
+textual windows), or [[mouseopen]] is set (meaning the application
+opened [[/mnt/wsys/mouse]] and wants raw mouse events), or automatic
+scrolling is active.
+When [[mouseopen]] is not set, middle-click and right-click
+are intercepted by the mouse thread for window management actions
+(the edit menu and the system menu).
 
 <<[[mousethread()]] set sending to true for some conditions>>=
 if(inside && 
@@ -3830,6 +4024,15 @@ if(mouse->buttons == 0){
 
 
 \subsection{Windowing system mouse events}
+
+%claude:
+When a mouse event is not forwarded to the application, the mouse thread
+handles it as a windowing system operation. It first determines which
+window is under the cursor with [wpointto], then dispatches based on
+the button pressed: left-click on an unfocused window brings it to the
+front, middle-click opens the edit menu (cut/paste),
+and right-click opens the system menu (New/Resize/Move/Delete/Hide/Exit).
+Clicking on a window's border initiates a move or resize operation.
 
 <<[[mousethread()]] locals>>=
 Window *w;
@@ -3961,6 +4164,17 @@ Drain:
 % ctl listening from rio window manager
 
 % special device file listening (/dev/cons) but will see that later
+%claude:
+Each window has its own [[winctl]] thread that runs an [[alt()]] event
+loop listening on multiple channels simultaneously:
+keyboard events (from the keyboard thread),
+mouse events (from the mouse thread),
+control messages (from the window manager),
+and additional channels for the virtual device files
+([[/mnt/wsys/cons]], [[/mnt/wsys/mouse]], etc.)
+that will be presented in later chapters.
+This is the ``active object'' pattern: each window is an independent
+concurrent entity processing its own event stream.
 
 <<enum [[Wxxx]]>>=
 enum { 
@@ -4219,6 +4433,13 @@ case WCtl:
 
 % why a process? because block on fs->sfd! would block everything else.
 %ocaml: can be a thread thx to ThreadUnix.
+%claude:
+The filesystem server runs as a separate {proc} rather than a thread
+because it blocks on [[read()]] of the pipe---and a blocking thread
+would freeze all other threads in the same proc.
+Each incoming 9P request is parsed, the fid is looked up, and the
+request is dispatched through the [[fcall]] table to the appropriate
+handler.
 
 <<global [[messagesize]]>>=
 int	messagesize = 8192+IOHDRSZ;	/* good start */
@@ -4392,9 +4613,27 @@ if(strncmp(x->req.version, "9P2000", 6) != 0)
 
 
 
+%claude:
+The protocol between [[filsysproc]] and the worker allocator is a
+two-step handshake: [[filsysproc]] sends [[nil]] on [[cxfidalloc]]
+to request a worker, then receives the [[Xfid]] pointer back on the
+same channel. The returned [[Xfid]] may be a recycled one or a freshly
+allocated one with a new worker thread. After dispatching through
+[[fcall]], if the handler returns non-nil, the worker can be reused
+immediately; if it returns nil, the handler is still running
+asynchronously in the worker thread.
+
 \section{[[Xfid]] allocator thread}
 
 %ocaml: create each time a new thread so no need arena allocator
+%claude:
+The allocator thread manages a pool (arena) of [[Xfid]] worker handles.
+When [[filsysproc]] requests a worker (Alloc), the allocator either
+recycles one from the free list or creates a new one with its own
+[[xfidctl]] thread. When a worker finishes (Free), it is returned to
+the free list. The two free lists serve different purposes: [[xfid]]
+tracks all ever-allocated workers, while [[xfidfree]] tracks currently
+idle ones.
 
 <<enum [[Xxxx]]>>=
 enum { 
@@ -4501,6 +4740,12 @@ if(x->flushtag != -1)
 % =~ workers which will handle a file request
 
 % thread callback ...
+%claude:
+Each worker thread is an elegant loop: it blocks on [[recvp()]] waiting
+for a function pointer, then calls it. This is essentially receiving
+``code to execute'' through a channel---the \plan equivalent of a
+{closure}. After execution, the worker decrements its reference count
+and returns itself to the free pool if nobody else holds a reference.
 <<function [[xfidctl]]>>=
 void
 xfidctl(void *arg)
@@ -4544,6 +4789,13 @@ xfidctl(void *arg)
 
 %trans: before heart of rio and windows management,
 % easier part, cursors.
+%claude:
+Before diving into the heart of window management, I will cover
+the simpler topic of cursor handling.
+[[rio]] uses different cursor shapes to provide visual feedback about
+what operation is possible: a cross for creating windows, a box for
+moving, a gunsight for deleting, and directional arrows when hovering
+over window borders and corners.
 
 \section{Cursor graphics}
 
@@ -4630,6 +4882,14 @@ Cursor query = {
 % ???
 
 \subsection{Border and corner cursors}
+
+%claude:
+When the mouse hovers over a window border, [[rio]] shows a
+directional cursor indicating which edge or corner is under the mouse.
+The [[corners]] array maps the 3x3 grid of possible positions
+(top-left, top, top-right, left, center, right, bottom-left, bottom,
+bottom-right) to the corresponding cursor. The center entry is [[nil]]
+because the center is inside the window, not on the border.
 
 <<global corners (windows/rio/data.c)>>=
 Cursor *corners[9] = {
@@ -4756,6 +5016,15 @@ Cursor l = {
 \section{Setting the cursor}
 
 % rio cursor, window management, vs app cursor!
+%claude:
+Cursor management involves a tension between [[rio]] (which wants to show
+border cursors and operation cursors) and client applications (which can
+set their own cursor via [[/dev/cursor]]).
+[cornercursor] resolves this: if the mouse is on a window border,
+it shows the appropriate directional cursor; otherwise it defers to
+the window's own cursor via [wsetcursor].
+The [[menuing]] flag prevents cursor changes during system menu
+operations, when [[rio]] must keep control of the cursor.
 
 \subsection{[[riosetcursor()]]}
 
@@ -4916,14 +5185,28 @@ wsetcursor(Window *w, bool force)
 % - filsys, listening pipe, mount can create new window
 % - /srv/riowctl.user.pid
 
-% They all trigger then messages send to the appropriate window thread 
+% They all trigger then messages send to the appropriate window thread
 % via wsendctlmsg(w->cctl).
+%claude:
+In \plan, the window manager and the window server are the same program,
+unlike X11 where they are separate.
+All window management paths converge to the same mechanism: sending a
+[[Wctlmesg]] to the target window's [[cctl]] channel, where its
+[[winctl]] thread will process it.
 
 \section{Right-click system menu}
 
 % so most of this chapter is from mousethread() context!
 % but will at some point send some Wctlmesg to the window thread
 % which will do the modifications.
+%claude:
+The right-click menu (``system menu'') is the primary user interface for
+window management. It offers: New (create a window), Resize, Move, Delete,
+Hide, and Exit. Hidden windows also appear as extra menu entries, allowing
+the user to unhide them.
+Most of this code runs in the mouse thread's context, but the actual
+modifications are performed by sending [[Wctlmesg]] messages to the
+target window's thread.
 
 <<[[mousethread()]] right click under certain conditions>>=
 button3menu();
@@ -5053,6 +5336,14 @@ case Exit:
 
 \section{Window borders click}
 
+%claude:
+When the mouse is on a window's border and a button is pressed, the
+mouse thread initiates a move or resize operation directly, without
+going through the right-click menu. Left or middle click on the border
+triggers [bandsize] (resize), while right-click triggers [drag] (move).
+The result is sent as a [[Reshaped]] or [[Moved]] message to the
+window's [[winctl]] thread.
+
 <<[[mousethread()]] locals>>=
 bool moving = false;
 @
@@ -5110,6 +5401,17 @@ if(moving && (mouse->buttons&7)){
 
 
 \section{[[Wctlmesg]]}
+
+%claude:
+The [[Wctlmesg]] structure is the message type sent from the mouse thread
+(or other sources) to a window's [[winctl]] thread through its [[cctl]]
+channel.
+The message carries the operation type (Reshaped, Moved, etc.),
+a rectangle (for operations that change geometry), and an optional
+image (the new window layer after a resize or move).
+Note the past tense in the enum names (Reshaped, not Reshape)---the
+image has already been allocated by the time the message arrives; the
+window thread just needs to adopt it.
 
 <<enum [[wctlmesgkind]]>>=
 enum ControlMessage	/* control messages */
@@ -5202,6 +5504,15 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 % most important operation. Link with draw.
 % Link with external process.
 % Start from the mouse!
+%claude:
+Window creation is the most important operation in [[rio]]---it ties
+together all the subsystems: graphics (allocating a layer on the
+desktop), concurrency (creating a new [[winctl]] thread), the filesystem
+(mounting [[/mnt/wsys]] for the new window), and processes (forking
+a shell).
+When the user selects ``New'' from the system menu, [[sweep()]] lets
+them draw a rectangle, then [[new()]] creates everything needed for the
+new window.
 
 <<[[button3menu()]] cases>>=
 case New:
@@ -5222,6 +5533,15 @@ case New:
 % otherwise, process already there, just need create window.
 % who call new with pid != 0? when external process such as a shell
 % want to access rio (via mount /srv/rio.user.pid ...) see chapter X
+%claude:
+[new] orchestrates the creation of a window in several steps:
+allocate channels, build the [[Window]] structure with [wmk],
+add it to the global [[windows]] array, create a [[winctl]] thread,
+fork a shell process (if [[pid == 0]]), and register the window's
+name in the graphics layer system.
+When [[pid]] is non-zero, the calling process already exists (e.g.,
+an external program that mounted [[/srv/rio.user.pid]])
+and just needs a window created for it.
 
 %ctor!
 % ((right click -> button3menu()) | wctlnew()) -> <>
@@ -5472,6 +5792,16 @@ else
 
 \subsection{Window process creation: [[winshell()]]}
 
+%claude:
+For each new window, [[rio]] forks a new process ([[winshell]]) that
+will [[exec]] a shell (usually [[rc -i]]).
+Before exec'ing, [[winshell]] must set up the correct {namespace}:
+it calls [[rfork(RFNAMEG|RFFDG|RFENVG)]] to get a private copy of
+the namespace, file descriptors, and environment variables, then
+mounts [[rio]]'s filesystem so that the child's [[/dev/cons]],
+[[/dev/mouse]], and other files are served by [[rio]]'s window.
+This is the key mechanism: the shell thinks it is talking to normal
+device files, but those files are actually virtual files served by [[rio]].
 
 <<global [[rcargv]]>>=
 char *rcargv[] = { "rc", "-i", nil };
@@ -5632,6 +5962,16 @@ wsetpid(Window *w, int pid, bool dolabel)
 
 \subsection{Namespace adjustments: [[filsysmount()]]}
 
+%claude:
+This is the key step that makes [[rio]]'s virtualization work.
+[[filsysmount()]] mounts [[rio]]'s client pipe onto [[/mnt/wsys]],
+passing the window ID as the mount spec so that [[rio]] knows which
+window the client belongs to. Then it binds [[/mnt/wsys]] before
+[[/dev]], so that [[/dev/cons]], [[/dev/mouse]], etc.\ resolve to
+[[rio]]'s virtual files rather than the real device files.
+After that, the child process simply opens [[/dev/cons]] for
+stdin and stdout---but these are now served by [[rio]].
+
 <<[[winshell()]] adjust namespace>>=
 err = filsysmount(filsys, w->id);
 <<[[winshell()]] sanity check err filsysmount>>
@@ -5736,6 +6076,13 @@ if(err < 0){
 % but need to make image public! % so client can find it.
 %alt: could pass info via putenv? but anyway have already
 % a mechanism /dev/xxx so why not use it.
+%claude:
+The namespace adjustments handle [[/dev/cons]] and [[/dev/mouse]] but
+not [[/dev/draw]]---virtualizing the drawing protocol would be too slow.
+Instead, the client directly talks to the display server but needs to
+find its window's image. [wsetname] publishes the window's image under
+a unique name (e.g., [[window.3.0]]), and the client discovers it
+through [[/dev/winname]] via [[geninitdraw()]] (see the \book{Graphics}).
 
 <<[[Window]] id fields>>=
 uint		namecount;
@@ -5790,6 +6137,15 @@ fprint(STDERR, "rio: setname failed: %s\n", err);
 
 \subsection{Mouse action [[sweep()]]}
 % and layer creation
+
+%claude:
+[sweep] lets the user interactively draw a rectangle for the new window.
+It shows a cross cursor, waits for the right button to be pressed,
+then tracks the mouse while the button is held, allocating and freeing
+temporary window images to give visual feedback.
+Once the button is released, the temporary image is replaced by a final
+one with [[Refbackup]] (so the graphics library saves what is underneath
+for proper overlapping).
 
 <<global [[menuing]]>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
@@ -5929,6 +6285,12 @@ Rescue:
 % via mouse
 
 % put code of mousethread related to window focus here!!
+%claude:
+Clicking on an unfocused window brings it to the front via [wtop],
+which calls [[topwindow()]] (from the graphics library) to raise the
+image layer, then [wcurrent] to update the global [[input]] pointer
+and repaint the border colors---the focused window gets a different
+border color than unfocused ones.
 
 <<[[mousethread()]] click on unfocused window, set w>>=
 w = wtop(mouse->xy);
@@ -6030,6 +6392,15 @@ Unselborder		= 1,	/* border of unselected window */
 % via menu
 
 % 2 steps, Deleted, and then Exited
+%claude:
+Deleting a window is a two-phase process. First, [[rio]] sends a
+``hangup'' note to the window's process group (via [[notefd]]) and
+starts a timeout proc. If the process exits cleanly, the window
+transitions from Deleted to Exited and the [[winctl]] thread terminates.
+If the process does not exit within the timeout, [[deletethread]] forces
+cleanup.
+This careful approach avoids blocking the window manager thread while
+waiting for a potentially unresponsive process.
 
 <<[[button3menu()]] cases>>=
 case Delete:
@@ -6368,6 +6739,12 @@ if(mouse->buttons!=4 && w != nil){	/* cancel */
 
 \section{Window move}
 % via menu, see also via border click
+%claude:
+Moving a window is a two-step mouse action: first [pointto] lets the
+user select which window to move (by showing a gunsight cursor),
+then [drag] tracks the mouse while redrawing a rubber-band border
+to show the new position. When the button is released, the old
+image content is copied into a new window at the destination.
 
 <<[[button3menu()]] cases>>=
 case Move:
@@ -6514,6 +6891,13 @@ drawedge(Image **bp, Rectangle r)
 
 \section{Window resize}
 % via menu, or via mouse on border directly
+%claude:
+Resizing reuses [sweep] to let the user draw a new rectangle, then
+sends a [[Reshaped]] message.
+In the [[wctlmesg]] handler, Moved and Reshaped share the same code
+path: [wresize] replaces the window's image, re-publishes the name
+(so the client can reconnect via [[getwindow()]]), and triggers a
+reflow of the text content for textual windows.
 
 <<[[button3menu()]] cases>>=
 case Reshape:
@@ -6776,6 +7160,13 @@ cornerpt(Rectangle r, Point p, int which)
 \section{Window visibility}
 \label{sec:window-hide}
 % via menu
+%claude:
+Hiding a window is an elegant trick: the window's on-screen layer image
+is replaced with a plain in-memory image (via [[allocimage]], not
+[[allocwindow]]). Since it is no longer a layer, it does not appear on
+screen, but the window's content is preserved. The hidden window is added
+to the [[hidden]] array and appears as an extra entry in the right-click
+system menu so the user can unhide it later.
 
 <<[[button3menu()]] cases>>=
 case Hide:
@@ -6949,8 +7340,21 @@ wunhide(int h)
 % mount is in kernel and does the right thing when the argument
 % is a filedescriptor.
 
-% Require Kernel.nw and Network.nw for this chapter. 
+% Require Kernel.nw and Network.nw for this chapter.
 % I assume a lot.
+%claude:
+Until now I have presented an application that can create rectangles on
+the screen, move and resize them. But for those rectangles to become
+real {windows}, they need a filesystem server that virtualizes the device
+files ([[/dev/cons]], [[/dev/mouse]], etc.) for each client process.
+%claude:
+This chapter presents the 9P operations that [[rio]] implements:
+[[attach]] (connecting a client to a window), [[walk]] (navigating
+to a file), [[open]], [[read]], [[write]], [[stat]], and [[clunk]].
+Each operation has two layers: a [[filsysxxx()]] function that runs
+in the [[filsysproc]] context and handles the fast path, and an
+[[xfidxxx()]] function that runs in a worker thread for operations that
+may block (like reading [[/dev/cons]] when no data is available).
 
 % so then what happens?
 % filsysproc is reading on fs->sfd, server side of the pipe
@@ -6971,6 +7375,12 @@ wunhide(int h)
 \section{Additional data structures}
 
 \subsection{[[Qxxx]]}
+%claude:
+Each virtual file under [[/mnt/wsys/]] is identified by a [[Qid]]
+whose path encodes both the window ID and the file type ([[Qxxx]]).
+The [[QID]], [[WIN]], and [[FILE]] macros pack and unpack these two
+pieces of information into a single integer. This lets the server
+quickly determine which window and which device file a request targets.
 
 % Saw before
 %<<[[Fid]] other fields>> =
@@ -7059,6 +7469,16 @@ Dirtab	*dir;
 %trans: before seeing attach/... client transmited request
 % (Txxx), see utility function to answer to client (Rxxx).
 % see docs/man/5/intro, +1 trick, Rerror, etc.
+%claude:
+Before examining the individual 9P operations, here is the utility
+function used to send replies. In 9P, the reply message type is always
+the request type plus one ([[Tattach]] \(\to\) [[Rattach]], etc.), unless
+there is an error in which case it is [[Rerror]].
+The response is sent through [[fs->sfd]], the server side of the pipe.
+Even though multiple threads may call [filsysrespond] concurrently,
+the kernel guarantees that writes of complete messages to a pipe
+are atomic, and the tag/fid fields let the kernel match replies to
+their requests.
 
 % ... -> <>  called from many Xfid threads, and some filsysxxx too
 <<function [[filsysrespond]]>>=
@@ -7123,6 +7543,14 @@ if(err){
 %ocaml: separate function for error, not abusing filsysrespond last arg
 
 \section{Attach}
+
+%claude:
+Attach is the first 9P operation a client performs after mounting.
+The mount spec string (e.g., ``2'') carries the window ID,
+which [xfidattach] uses to look up the corresponding [[Window]].
+This associates the client's fid with a specific window, so that
+subsequent walk/read/write operations on that fid know which
+window they target.
 
 \subsection{[[filsysattach()]]}
 
@@ -7279,6 +7707,12 @@ if(w == nil){
 
 % Walk is complex.
 % Clone, walk, multiple elements in one request. Subtle API.
+%claude:
+Walk translates a file path (e.g., ``cons'' or ``mouse'') into a fid
+associated with the correct [[Qid]]. Unlike Unix's one-component-at-a-time
+[[namei]], 9P Walk sends all path elements in a single message for
+network efficiency. The server must redo part of the kernel's path
+resolution work, looking up each name in [[dirtab]].
 
 % Note that because union dir, normal that many of requests to walk
 % should fail. For instance [draw;new] for nwnames should fail!
@@ -7887,15 +8321,34 @@ filsyswstat(Filsys *fs, Xfid *x, Fid*)
 \chapter{Virtual Devices}
 %******************************************************************************
 \label{chap:virtual-devices}
-% [[/mnt/wsys/...]] 
+% [[/mnt/wsys/...]]
 
 % remember that /mnt/wsys is unioned in /dev/ so access to /dev/mouse
 % in client is really /mnt/wsys/mouse handled by rio.
+%claude:
+This chapter presents the virtual device files that [[rio]] serves
+under [[/mnt/wsys/]]. Because [[/mnt/wsys]] is bound before
+[[/dev]], accesses to [[/dev/mouse]], [[/dev/cons]], etc.\ from client
+applications are intercepted by [[rio]].
+For each device, the implementation involves two sides:
+the {producer} side (where the [[winctl]] thread
+offers data when it has events to report) and the {consumer} side
+(where the [[xfidread]] worker thread blocks until data is available,
+then formats it as a textual response for the client).
 
 \section{[[/mnt/wsys/mouse]]}
 \n simpler than cons
 
 % more a graphical window device.
+%claude:
+The mouse virtual device uses a ``channel of channels'' pattern: when
+a client reads [[/dev/mouse]], the [[xfidread]] worker sends a
+[[Mousereadmesg]] containing a reply channel to the [[winctl]] thread.
+The [[winctl]] thread, which knows the current mouse state, then sends
+the actual [[Mouse]] data through this reply channel.
+This two-step handshake ensures the client gets the freshest mouse
+state at the moment it is ready to consume it, rather than a stale
+queued value.
 
 <<[[qid]] cases>>=
 Qmouse,
@@ -8058,6 +8511,16 @@ case Movemouse:
 \section{[[/mnt/wsys/cons]]}
 
 % quite complicated
+%claude:
+The console device is the most complex virtual device because it mediates
+between two asynchronous worlds: the client process reading/writing bytes,
+and the [[winctl]] thread managing runes.
+Unlike the mouse, the console uses two channels inside the
+[[Consreadmesg]]: [[c1]] to pass the read buffer from the worker to
+[[winctl]], and [[c2]] to pass the filled data back.
+The two-channel protocol is needed because the byte/rune
+boundary does not always align---a multibyte UTF-8 rune
+may span two reads, requiring partial rune bookkeeping.
 
 <<[[qid]] cases>>=
 Qcons,
@@ -8445,10 +8908,19 @@ if(n == 0){
 \label{chap:graphical-windows}
 
 % Graphical windows use /dev/draw (and /mnt/wsys/winname), /mnt/wsys/mouse.
-% They do not write in /mnt/wsys/cons (instead they use 
+% They do not write in /mnt/wsys/cons (instead they use
 %  stringxxx API from draw.h)
 % they care optionally about /mnt/wsys/consctl and /mnt/wys/cons
 %  for reading from the keyboard in "raw" mode.
+%claude:
+A graphical window is one where the application draws directly using
+the [[draw]] API rather than using [[/dev/cons]] for text I/O.
+The key difference is [[mouseopen]]: when the application opens
+[[/mnt/wsys/mouse]], [[rio]] stops intercepting middle-click and
+right-click for its own menus and forwards all mouse events to the
+application. Graphical applications may also request ``raw'' keyboard
+mode via [[/dev/consctl]], receiving keystrokes immediately rather than
+after a newline.
 
 \section{Graphical window setup}
 
@@ -9086,6 +9558,21 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 
 % terminal emulator has a lot in common with an editor.
 % Code of efuns is similar for many things.
+%claude:
+A textual window is [[rio]]'s terminal emulator.
+The challenge is to let command-line programs (like [[rc]]) work
+unmodified---they just read and write [[/dev/cons]]---while providing
+richer services like mouse text selection, cut/copy/paste,
+and scrolling.
+This is possible because [[/dev/cons]] is virtualized: writes from
+the application insert text at the {output point} ([[qh]]), while the
+user can independently navigate and select text with the mouse.
+%claude:
+A textual window is essentially a simple editor, with a data model
+(the rune buffer [[r]]/[[nr]]), cursors ([[q0]], [[q1]], [[qh]]),
+a viewport ([[org]]), and a rendering engine (the [[Frame]] library
+that handles text layout, wrapping, and selection highlighting).
+Much of this code is similar to [[efuns]] (see the \book{Efuns}).
 
 \l put most stuff of libframe in appendix
 
@@ -9203,6 +9690,16 @@ Scrollgap 		= 4,	/* gap right of scroll bar */
 % Also handle unicode with possible variable-size chars (but
 % do that efficiently by storing widths in boxes).
 %ocaml: but should be simpler. code of frinsert is really long.
+%claude:
+The Frame library (used by both [[rio]] and [[sam]]) is a text rendering
+engine that handles line wrapping, tab expansion, cursor display, text
+selection highlighting, and efficient incremental updates when characters
+are inserted or deleted.
+Despite the name ``frame'' (which might suggest a window border),
+it is really a {text widget}.
+The library works with ``boxes'' ([[Frbox]])---runs of characters that
+share the same width---to efficiently handle variable-width Unicode
+characters without measuring each one individually during rendering.
 
 \subsection{[[Frame]]}
 
@@ -9978,6 +10475,14 @@ f->p1 = 0;
 % A bit like in Efuns.nw, except even simpler than gap buffer ...
 % when insert, runemove everytime. Fortunatnely terminal
 % usually updated at the very end, not in the middle, so it's ok.
+%claude:
+When text is inserted (either from keyboard input or application output),
+[winsert] moves the runes after the insertion point to make space, copies
+the new runes in, then adjusts all the cursor positions ([[q0]], [[q1]],
+[[qh]], [[org]]) that fall after the insertion point.
+This is simpler than a gap buffer (as in [[efuns]]) because a terminal
+usually inserts at the end, not in the middle, so the [[runemove]] cost
+is acceptable.
 
 % return q0 but might have been modified since winsert
 %  can get rid of some lines when too much memory space is used
@@ -10112,6 +10617,15 @@ if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
 
 
 \section{Content rendering}
+
+%claude:
+The rendering pipeline converts rune insertions and deletions into
+incremental screen updates.
+The key function is [frinsert], which is the most complex function in the
+frame library: it must scan the new text into boxes, figure out where
+existing text will shift, and only redraw the affected portion of the
+screen rather than repainting everything.
+The complementary [frdelete] removes characters and collapses the display.
 
 \subsection{[[frinsert()]]}
 
@@ -11498,6 +12012,17 @@ frredraw(Frame *f)
 \section{Keyboard events}
 \n keyboard before mouse event here
 
+%claude:
+In a textual window, keyboard input goes through two modes.
+In the normal {buffered} mode, characters are inserted at [[q0]] and
+accumulated until the user presses Enter, at which point the text
+between the output point ([[qh]]) and the newline is sent to the
+application via [[/dev/cons]].
+In {raw} mode, characters are sent immediately without waiting for a
+newline.
+Special keys (Delete, arrows, Home/End, Tab) are intercepted and handled
+directly by [[rio]] rather than being passed through.
+
 \subsection{Text input queue}
 
 % it's between w->qh and w->nr!
@@ -11977,6 +12502,16 @@ free(s);
 
 \section{Application output events}
 
+%claude:
+When the application writes to [[/dev/cons]], the data arrives at
+the [[winctl]] thread through the [[conswrite]] channel.
+The thread inserts the new runes at the output point ([[qh]]), advances
+[[qh]], and updates the display.
+If automatic scrolling is enabled, [wshow] scrolls the viewport to keep
+[[qh]] visible. Otherwise, new output may accumulate off-screen
+(indicated by the scrollbar), and the [[WCwrite]] alternative is
+temporarily disabled to avoid buffering too much invisible text.
+
 \subsection{[[/mnt/wsys/cons]] writing part2}
 
 % when process writes on /dev/cons, then need update text.
@@ -12102,6 +12637,13 @@ for(i=0; i<nr; i++) {
 
 % no producer/consumer here, just click generating action,
 % textual windows do not read /mnt/wsys/mouse
+%claude:
+In a textual window (when [[mouseopen]] is false), mouse clicks are
+handled locally by [[rio]] rather than forwarded to the application.
+The middle-click opens an edit menu (cut/paste/snarf/plumb/send/scroll),
+while left-click selects text and interacts with the scrollbar.
+These provide the terminal editing features that make [[rio]] more than
+just a dumb terminal.
 
 \subsection{Middle click menu}
 
@@ -12550,10 +13092,20 @@ wcontents(Window *w, int *ip)
 \chapter{Windowing System Files}
 %******************************************************************************
 \label{chap:window-files}
-%[[/mnt/wsys/...]] 
+%[[/mnt/wsys/...]]
 
 % more the reflective part of rio, a bit like /proc for the kernel.
 % (well winname is more important than that though)
+%claude:
+Beyond the virtual device files ([[/mnt/wsys/cons]], [[/mnt/wsys/mouse]])
+that emulate hardware devices, [[rio]] serves several control and
+introspection files.
+These are the ``reflective'' part of [[rio]], analogous to how
+[[/proc]] lets programs inspect and control kernel processes.
+[[/mnt/wsys/winid]] and [[/mnt/wsys/label]] expose window identity,
+[[/mnt/wsys/wctl]] allows programmatic window manipulation, and
+[[/mnt/wsys/wsys/]] is the entry point for creating new windows
+from external programs.
 
 \section{[[/mnt/wsys/winid]]}
 
@@ -12761,6 +13313,13 @@ if(FILE(qid) == Qwsysdir)
 \label{sec:mnt-wsys-wctl}
 % Adv topics? Debugging support chapter?
 % allow to command an app? a la watir/selenium/... ?
+%claude:
+The [[wctl]] file is the programmatic interface to window management.
+Reading it returns the window's current geometry and state;
+writing it lets programs create, resize, move, or delete windows
+from the command line or scripts. This is how tools like [[wctl(1)]]
+interact with [[rio]]---by writing commands like ``resize'' or ``move''
+to this file.
 
 
 <<[[Window]] other fields>>=
@@ -13108,6 +13667,13 @@ writewctl(Xfid *x, char *err)
 %******************************************************************************
 \label{chap:advanced}
 
+%claude:
+This chapter covers features that go beyond [[rio]]'s basic operation:
+external access to [[rio]]'s filesystem ([[/srv/rio.user.pid]]),
+command-line window control ([[/srv/riowctl.user.pid]]),
+recursive [[rio]], and terminal editing features like snarf/paste,
+plumbing, auto-completion, and word selection.
+
 \section{External mount: [[/srv/rio.user.pid]]}
 % essentially a published pipe? so dont have
 % to be children of process who created the pipe
@@ -13115,7 +13681,7 @@ writewctl(Xfid *x, char *err)
 % special fileserver; general mechanism!)
 
 % this make fileserver accessible more easily to external
-% processes. 
+% processes.
 
 % like a named pipe?
 
@@ -13125,6 +13691,14 @@ writewctl(Xfid *x, char *err)
 % in child process where mount(filesys->cfd, ...) and
 % so have access to file descriptor. But for external?
 % enter the /srv mechanism of plan9 to publish those things.
+%claude:
+[[filsysinit()]] publishes the client end of the pipe in
+[[/srv/rio.user.pid]]. This is \plan's equivalent of a named pipe:
+any process can mount this file to gain access to [[rio]]'s filesystem,
+even if it is not a child of [[rio]].
+By mounting with the spec ``new ...'', an external program can create
+a new window for itself---this is what [[newwindow()]] from the
+\book{Graphics} uses.
 
 % mount $sys ... 
 
@@ -13728,6 +14302,13 @@ wbottomme(Window *w)
 
 % actually it works without doing much thing!
 % because use /dev/xxx too!
+%claude:
+Because [[rio]] is itself a regular graphical application that uses
+[[/dev/draw]], [[/dev/mouse]], and [[/dev/cons]], it can run inside
+another instance of [[rio]]---each nested [[rio]] sees virtualized
+devices from its parent. The main additional code needed is handling
+the resize event from the parent [[rio]], so that the inner [[rio]] can
+reposition all its windows within the new boundaries.
 
 <<[[Mxxx]] cases>>=
 MReshape,
@@ -13834,6 +14415,14 @@ if(w->deleted)
 
 
 \section{Advanced terminal editing}
+
+%claude:
+[[rio]]'s terminal goes beyond a simple dumb terminal by providing
+editor-like features: cut/copy/paste (``snarf'' in \plan terminology),
+plumbing (inter-application message passing), auto-completion,
+and intelligent word selection.
+These features are accessed through the middle-click menu and
+special key bindings.
 
 \subsection{Snarf}
 \label{sec:snarf}
