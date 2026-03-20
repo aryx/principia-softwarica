@@ -4810,6 +4810,15 @@ over window borders and corners.
 
 % arrow? default in ?
 
+%claude:
+Each cursor is a [[Cursor]] structure with a hotspot offset and two
+16x16 bitmaps: the first is the mask (set bits), the second is the
+actual image (clear bits). The [[crosscursor]] appears during window
+creation ([[sweep]]), [[boxcursor]] during window moves ([[drag]]),
+[[sightcursor]] when ``Delete'' is selected from the system menu,
+[[whitearrow]] in holding mode, and [[query]] for unknown states.
+The default arrow cursor lives in the draw library, not in [[rio]].
+
 <<global crosscursor (windows/rio/data.c)>>=
 Cursor crosscursor = {
     {-7, -7},
@@ -5032,6 +5041,13 @@ operations, when [[rio]] must keep control of the cursor.
 
 \subsection{[[riosetcursor()]]}
 
+%claude:
+Since changing the cursor requires a write to [[/dev/cursor]]---a system
+call---[[riosetcursor]] caches the last cursor set and skips the write
+if it has not changed. The [[force]] parameter bypasses this
+optimization for cases where the cursor may have been changed externally
+(e.g., after a window gains focus and needs to reassert its cursor).
+
 <<global [[lastcursor]]>>=
 Cursor	*lastcursor;
 @
@@ -5058,6 +5074,14 @@ riosetcursor(Cursor *p, bool force)
 
 
 \subsection{[[cornercursor()]]}
+
+%claude:
+This is the main cursor dispatch function, called from [[mousethread]]
+on every mouse move. It checks whether the mouse is on the window
+border via [[winborder]] (point inside [[screenr]] but outside the
+inset rectangle): if so, it picks the appropriate directional cursor
+from the [[corners]] array; otherwise it falls through to
+[[wsetcursor]], which shows the application's cursor or the default arrow.
 
 % mousethread -> <>
 <<function [[cornercursor]]>>=
@@ -5088,6 +5112,14 @@ winborder(Window *w, Point xy)
 %ocaml: pt_on_frame, and put it with pt_inside_frame
 
 % cornercursor -> <>
+%claude:
+The [[whichcorner]] function maps a point on the window border to an
+index in the 3x3 [[corners]] array. The [[portion]] helper divides
+each axis into three zones using a hardcoded 20-pixel threshold:
+near the start (0), in the middle (1), or near the end (2). The
+result [[3*j + i]] gives the flat array index corresponding to
+the grid position (top-left = 0, top = 1, ..., bottom-right = 8).
+
 <<function [[whichcorner]]>>=
 int
 whichcorner(Window *w, Point p)
@@ -5119,6 +5151,15 @@ portion(int x, int lo, int hi)
 %ocaml: type
 
 \subsection{[[wsetcursor()]]}
+
+%claude:
+Each window stores its application-requested cursor in the [[cursor]]
+field, with [[cursorp]] acting as an option: when non-nil, it points
+to [[cursor]] (meaning the app set a custom cursor); when nil, the
+default arrow is used. The [[wsetcursor]] function checks whether the
+mouse is actually over this window via [[wpointto]] and whether a
+system menu operation is in progress via [[menuing]], ensuring that
+[[rio]]'s own cursor shapes take priority during window management.
 
 <<[[Window]] mouse fields>>=
 Cursor		cursor;
@@ -5657,8 +5698,16 @@ if(cm==nil || ck==nil || cctl==nil)
 \subsection{[[Window]] allocation: [[wmk()]]}
 
 % active object, monitor
+%claude:
+[wmk] is the constructor for the [[Window]] structure. It assigns a
+unique [[id]] (monotonically increasing) and a [[topped]] counter that
+tracks stacking order---higher values mean more recently focused.
+The initial [[incref]] at the end is subtle: it prevents the window
+from being freed before the child process has finished mounting
+[[rio]]'s filesystem. The matching [[decref]] happens in [winshell]
+after [[filsysmount]] completes (via [wclose]).
 
-%ctor 
+%ctor
 <<function [[wmk]]>>=
 Window*
 wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
@@ -6333,6 +6382,15 @@ wtop(Point pt)
 % topwindow not enough? no because border is actually drawn
 % by window manager
 
+%claude:
+[wcurrent] updates the global [[input]] pointer (the focused window)
+and repaints both the old and new focus windows via [wrepaint].
+The repaint is necessary because [[rio]] draws different border colors
+for focused versus unfocused windows---the focused window gets
+[[titlecol]] (dark grey-green) and unfocused ones get [[lighttitlecol]]
+(pale grey-green). If the window is in text mode, [wrepaint] also
+redraws the text content because the foreground/background colors
+may differ for the focused window.
 
 % new | wtop | ... -> <>
 <<function [[wcurrent]]>>=
@@ -6414,6 +6472,14 @@ case Delete:
 
 \subsection{[[delete()]]}
 
+%claude:
+[delete] is the menu handler: it calls [pointto] with [[wait=true]]
+(wait for the user to complete the click), then sends a [[Deleted]]
+control message to the selected window's [[winctl]] thread.
+The actual cleanup is asynchronous---the [[winctl]] thread handles
+the message by sending a hangup note to the process group and
+starting a timeout.
+
 <<function [[delete]]>>=
 void
 delete(void)
@@ -6448,6 +6514,14 @@ bool	deleted;
 % hence timeout below.
 
 
+%claude:
+The [[Deleted]] handler writes ``hangup'' to [[notefd]]
+([[/proc/<pid>/notepg]]), which sends a note (Plan 9's equivalent of a
+signal) to the entire process group. Then it kicks off
+[[deletetimeoutproc]] as a safety net and calls [wclosewin] to remove
+the window from the screen immediately. The window's thread does not
+exit yet---it waits for the [[Exited]] message that comes later when
+all filesystem references are closed.
 
 <<[[wctlmesg()]] cases>>=
 case Deleted:
@@ -6468,6 +6542,15 @@ if(w->deleted)
     break;
 @
 % how can happen? because can receive cmd from multiple places?
+
+%claude:
+[wclosewin] handles the immediate visual cleanup: it marks the window
+as [[deleted]], clears the focus if this was the active window, removes
+it from the [[hidden]] array (in case it was hidden), removes it from
+the global [[windows]] array with [[memmove]], and frees the layer image
+so it disappears from the screen. Note that the [[Window]] struct itself
+is not freed here---that happens later in the [[Exited]] handler, after
+the child process has terminated.
 
 % wctlmesg | wclose -> <>
 <<function [[wclosewin]]>>=
@@ -6517,6 +6600,17 @@ wclosewin(Window *w)
 \subsection{[[deletetimeoutproc()]] and [[deletethread()]]}
 
 \t not sure we need that, does already freeimage in wclosewin
+%claude:
+The timeout mechanism handles clients that hold a reference to the
+window image (via [[nameimage]]) and refuse to let go.
+[[deletetimeoutproc]] is a separate process (not a thread) because
+[[sleep]] is blocking. After 750ms it sends the window name on
+[[deletechan]]. The [[deletethread]] on the other end looks up the
+image by name and, if the client still holds it, moves it off-screen
+with [[originwindow]] so at least it is invisible. The [[freeimage]]
+that follows drops the reference obtained by [[namedimage]], but the
+client may still hold its own reference---the image only truly
+disappears when all references are gone.
 
 % process
 <<function [[deletetimeoutproc]]>>=
@@ -6585,6 +6679,20 @@ deletethread(void*)
 
 \subsection{[[Deleted]] and [[Exited]]}
 
+%claude:
+The second phase of deletion uses reference counting. Each mount of
+[[rio]]'s filesystem increments the window's reference count (in
+[[xfidattach]]), and each clunk decrements it (via [[winclosechan]]).
+When the last reference drops to zero, [wclose] sends the [[Exited]]
+message, which triggers the final cleanup: freeing the frame, closing
+the note file descriptor, freeing all channels, and freeing the
+[[Window]] struct itself.
+%claude:
+The [[winclosechan]] channel bridges the filesystem server process
+and the main thread group. The filesystem process cannot directly
+manipulate window state (different thread group), so it sends the
+window pointer on this channel, and [[winclosethread]] calls [wclose]
+in the correct context.
 
 \t who send to that?
 <<global [[winclosechan]]>>=
@@ -6694,6 +6802,15 @@ case Exited:
 % wait = wait for release. In case of delete we wait,
 %  but for move pointto() is only the first step so we don't
 %  want a release here.
+%claude:
+[pointto] is the shared ``pick a window'' gesture used by Delete, Move,
+and Resize. It changes the cursor to a gunsight, waits for the user to
+click, and returns the window under the cursor (or [[nil]] if the user
+clicked on the background or with the wrong button).
+The [[wait]] parameter controls whether the function waits for the
+button to be released before returning. Delete passes [[true]] (wait
+for a full click), while Move passes [[false]] because the same button
+press will continue into the [drag] phase.
 
 % delete(true) | move -> <>
 <<function [[pointto]]>>=
@@ -6758,6 +6875,14 @@ case Move:
 
 \subsection{[[move()]]}
 
+%claude:
+The move flow is: [pointto] (with [[wait=false]]) to select the window,
+then [drag] to track the mouse and produce a new image at the
+destination, then a [[Moved]] control message. The [[Moved]] case in
+[[wctlmesg]] shares its handler with [[Reshaped]]---a move is just a
+reshape where the dimensions stay the same and the old content is
+copied over.
+
 <<function [[move]]>>=
 void
 move(void)
@@ -6785,6 +6910,19 @@ move(void)
 \subsection{Mouse action [[drag()]]}
 
 % assumes already has done a pointto
+%claude:
+[drag] implements the visual feedback loop for moving a window.
+It computes [[dm]], the offset from the mouse to the window's top-left
+corner, so the window follows the cursor at the same relative position
+where the user grabbed it. While the button is held, [drawborder] draws
+a red rubber-band outline at the current position. On release, a new
+window image is allocated at the final position and the old content is
+copied into it with [[draw]].
+%claude:
+If the user releases the wrong button (anything other than a clean release),
+the move is cancelled: the cursor is moved back to its original position
+([[om]]) and [[nil]] is returned.
+
 % move | mousethread -> <>
 <<function [[drag]]>>=
 Image*
@@ -6848,6 +6986,13 @@ if(mouse->buttons!=0 || ni==nil){
 @
 
 % drawborder does delete previous image if there was one
+%claude:
+[drawborder] draws a rubber-band rectangle using four separate edge
+images (not a single rectangle), because a single layer would obscure
+the window content underneath. Using four thin strips keeps the interior
+transparent. [drawedge] optimizes updates: if the edge dimensions have
+not changed (as in a move), it simply repositions the existing image
+with [[originwindow]] rather than freeing and reallocating.
 
 % drag | bandsize -> <>
 <<function [[drawborder]]>>=
@@ -6911,6 +7056,14 @@ case Reshape:
 
 \subsection{[[resize()]]}
 
+%claude:
+[resize] is almost identical to [move]: select a window with [pointto],
+draw a new rectangle with [sweep], and send a [[Reshaped]] message.
+The key difference is that [pointto] uses [[wait=true]] here (the user
+completes one click to select, then does a separate sweep gesture),
+and [sweep] lets the user define an entirely new rectangle rather than
+dragging the existing one.
+
 <<function [[resize]]>>=
 void
 resize(void)
@@ -6970,6 +7123,16 @@ bool	 	resized;
 % a bit ugly
 \t put in Resize event section?
 
+%claude:
+[wresize] swaps the window's image. If this is a move (or the
+dimensions are unchanged), the old content is copied into the new
+image with [[draw]]. The old image is freed, and [wsetname] publishes
+the new image under an incremented name so the client can reconnect
+via [[getwindow()]]. The [[resized]] flag and [[mouse.counter]]
+increment ensure the client gets a resize event on its next
+[[/dev/mouse]] read, which prompts it to call [[getwindow()]] to
+pick up the new image.
+
 <<function [[wresize]]>>=
 void
 wresize(Window *w, Image *i, bool move)
@@ -7007,6 +7170,19 @@ wresize(Window *w, Image *i, bool move)
 \subsection{Mouse action [[bandsize()]]}
 
 % with left or middle click, other way to resize.
+%claude:
+[bandsize] is the alternative resize gesture triggered by clicking
+on a window's border (rather than using the menu). It determines
+which corner or edge the user grabbed via [whichcorner], snaps the
+cursor to that corner with [cornerpt] and [wmovemouse], then enters
+a tracking loop where [whichrect] computes the new rectangle by
+anchoring the opposite corner/edge and letting the grabbed one follow
+the mouse. This feels like ``pulling'' a corner to resize.
+%claude:
+The minimum size check ([[Dx < 100]] or [[Dy < 3*font->height]])
+prevents the user from shrinking a window below a usable size.
+The ``movement threshold'' check ([[abs(p.x-startp.x) + abs(p.y-startp.y) <= 1]])
+prevents an accidental click on the border from triggering a resize.
 
 % mousethread -> <>
 <<function [[bandsize]]>>=
@@ -7087,6 +7263,14 @@ wmovemouse(Window *w, Point p)
     moveto(mousectl, p);
 }
 @
+
+%claude:
+[whichrect] and [cornerpt] use a 3x3 grid encoding (from [whichcorner]):
+0=top-left, 1=top-edge, 2=top-right, 3=left-edge, 5=right-edge,
+6=bottom-left, 7=bottom-edge, 8=bottom-right (4 would be the center,
+which is never used). [cornerpt] snaps the cursor to the actual corner
+or edge position, and [whichrect] computes a new rectangle by moving
+only the grabbed edge/corner while the opposite side stays fixed.
 
 % bandsize -> <>
 <<function [[whichrect]]>>=
@@ -7195,6 +7379,12 @@ hide(void)
 
 \subsection{[[hidden]]}
 
+%claude:
+The [[hidden]] array is a simple fixed-size list of currently hidden
+windows. Its contents are appended to the right-click system menu
+(after the standard New/Reshape/Move/Delete/Hide entries), giving
+the user a way to bring hidden windows back. The menu entries show
+each window's [[label]] (typically ``rc <pid>'').
 
 <<global [[hidden]]>>=
 // array<ref<Window>> (size valid = nhidden)
@@ -7211,6 +7401,16 @@ int		nhidden;
 
 
 
+
+%claude:
+The hiding trick is in the choice of [[allocimage]] versus
+[[allocwindow]]: [whide] allocates a plain in-memory image (not a
+layer on the desktop) and sends a [[Reshaped]] message with it.
+The [[Reshaped]] handler in [[wctlmesg]] calls [wresize], which
+swaps the window's image---so the window now draws to an off-screen
+buffer. The old layer image is freed, making the window disappear.
+The window's thread continues to run normally, just drawing to an
+invisible image.
 
 % return -1, 0, 1, used in switch somewhere (but not in hide())
 <<function [[whide]]>>=
@@ -7270,6 +7470,15 @@ menu3str[i+Hidden] = nil;
 \subsection{[[unhide()]]}
 % could be call show, but already uses wshow for something else
 %ocaml: use show, because have module so no ambiguity with Terminal.show
+
+%claude:
+Unhiding reverses the trick: [wunhide] allocates a real layer (via
+[[allocwindow]]) and sends a [[Reshaped]] message. The [[Reshaped]]
+handler swaps the off-screen image for the new on-screen layer,
+publishes it via [wsetname], and the window reappears.
+The menu integration is handled by the [[default]] case in the
+[[button3menu]] switch---any menu index past the standard entries
+corresponds to a hidden window.
 
 <<[[button3menu()]] cases>>=
 default:
@@ -7733,6 +7942,14 @@ resolution work, looking up each name in [[dirtab]].
 
 % complicated ...
 
+%claude:
+The walk function is the most intricate 9P operation because it must
+handle several cases in one routine: simple name lookup (scanning
+[[dirtab]] for ``cons'' or ``mouse''), fid cloning (when [[fid]] and
+[[newfid]] differ), and ``..'' navigation. The key design choice is
+that [[qid]] and [[dir]] are kept in local variables during the walk
+and only committed to [[f]] if every path component succeeds---a
+partial walk must not corrupt the fid state.
 
 <<function [[filsyswalk]]>>=
 static
@@ -7804,6 +8021,15 @@ continue;
 
 \subsection{Cloning [[fid]]}
 
+%claude:
+When a Walk message carries a [[newfid]] different from [[fid]], the
+server must clone the fid before walking it. This is how the kernel
+implements operations like [[open]] without losing the directory fid:
+it first clones the fid via a walk, then opens the clone. The clone
+copies the window reference and bumps [[incref]] so the window stays
+alive. After cloning, [[f]] is reassigned to [[nf]] so the rest of the
+walk operates on the new fid.
+
 <<[[filsyswalk()]] other locals>>=
 Fid *nf = nil;
 @
@@ -7836,6 +8062,10 @@ if(nf->busy)
 
 \subsection{[[..]]}
 
+%claude:
+Walking ``..'' always returns to the window's root directory ([[Qdir]]),
+since the [[rio]] namespace is only one level deep---there are no
+subdirectories under [[/mnt/wsys/]].
 
 <<[[filsyswalk()]] if dotdot>>=
 if(strcmp(x->req.wname[i], "..") == 0){
@@ -7897,6 +8127,15 @@ if(i == MAXWELEM){
 % adv topics now
 
 \section{Open}
+
+%claude:
+Open illustrates the two-layer pattern clearly. The [[filsysopen()]]
+fast path only validates permissions---it checks the requested mode
+against the [[dirtab]] entry's permission bits, rejecting [[OEXEC]]
+and [[ORCLOSE]] since [[rio]] does not support executing or
+remove-on-close for its virtual files. The actual per-device open
+logic (e.g., setting [[mouseopen]] or [[ctlopen]]) runs in the
+[[xfidopen()]] worker thread, which has access to the window state.
 
 \subsection{[[filsysopen()]]}
 
@@ -8059,6 +8298,13 @@ xfidclose(Xfid *x)
 % by reading the fid of a directory.
 % See Qdir: case in filsysread
 
+%claude:
+Read is where the two-layer split pays off the most. Directory reads
+(listing the files under [[/mnt/wsys/]]) can be handled entirely in the
+[[filsysproc]] context by iterating over [[dirtab]]---no window state
+is needed. But reading a device file like [[/dev/mouse]] or [[/dev/cons]]
+requires blocking until data is available, so it must be dispatched
+to an [[xfidread()]] worker thread.
 
 \subsection{[[filsysread()]]}
 
@@ -8111,6 +8357,15 @@ if(b == nil)
 \subsection{Reading a directory}
 
 % important case! Qdir! (Qwsysdir will be explained later)
+
+%claude:
+To read a directory, the server iterates over [[dirtab]] and calls
+[[dostat()]] on each entry, which serializes a [[Dir]] structure into
+the 9P wire format via [[convD2M]]. The [[o]] and [[e]] variables
+implement offset-based pagination: the server formats all entries but
+only copies those whose cumulative offset falls within the requested
+range. This is needed because 9P directory reads must be deterministic
+and restartable from any byte offset.
 
 <<[[filsysread()]] other locals>>=
 Dirtab *d;
@@ -8169,6 +8424,15 @@ xfidread(Xfid *x)
 % see read(2) API?
 
 \section{Write}
+
+%claude:
+Write is the simplest 9P operation at the [[filsys]] layer: since
+there is no way to write to a directory (the kernel rejects that
+before it reaches the server), [[filsyswrite()]] can unconditionally
+dispatch to the [[xfidwrite()]] worker. All the interesting logic---converting
+bytes to runes for [[Qcons]], parsing mouse warp coordinates for
+[[Qmouse]], interpreting control messages for [[Qconsctl]]---lives
+in the per-device cases of [[xfidwrite()]].
 
 \subsection{[[filsyswrite()]]}
 
@@ -8473,6 +8737,16 @@ case Qmouse:
 % can move the mouse programatically :)
 % but it needs to have the focus apparently and be visible
 
+%claude:
+Writing to [[/dev/mouse]] lets a program warp the cursor
+programmatically, but only under strict conditions: the window must
+have focus ([[w==input]]) and be visible on screen. The write data
+must start with ``m'' followed by the x and y coordinates. The actual
+cursor movement is routed through [[wsendctlmesg]] with
+[[Movemouse]], so it goes through the [[winctl]] thread and respects the
+[[sweeping]] guard---you cannot warp the mouse while the user is in
+the middle of a window management operation.
+
 <<[[xfidwrite()]] other locals>>=
 char *p;
 Point pt;
@@ -8641,6 +8915,15 @@ case Qcons:
 % on the terminal,
 % then we wait for conswrite to get the go from winctl.
 
+%claude:
+Console writing follows the same channel handshake as reading, but
+the data flows in the opposite direction: the client's bytes go from
+[[xfidwrite]] to [[winctl]]. A critical subtlety is that the data
+must be converted from UTF-8 bytes to complete runes before being
+sent, because [[winctl]] works in rune space---it cannot display half
+a multibyte character. The [[Conswritemesg]] carries a single channel
+[[cw]] through which the rune array is passed.
+
 <<[[Window]] other fields>>=
 // chan<Conswritemesg> (listener = xfidwrite(Qcons), sender = winctl)
 Channel		*conswrite;	/* chan(Conswritemesg) */
@@ -8725,6 +9008,20 @@ case Qcons:
 % but this time it must be Rune! cant pass half rune to winctl
 % as it will not be able to display it. So need
 % to remember in Fid partial runes.
+
+%claude:
+The file interface deals in bytes, but the display works in runes.
+A UTF-8 character can be up to [[UTFmax]] (4) bytes, and a single
+[[write]] system call may split a multibyte character across two
+calls. To handle this, each [[Fid]] keeps a small buffer [[rpart]]
+of leftover bytes from the previous write. On the next write, these
+bytes are prepended to the new data before rune conversion.
+%claude:
+The conversion pipeline works in two passes: [[cvttorunes]] converts
+the bulk of the data (stopping [[UTFmax]] bytes before the end), then
+a [[fullrune]] loop picks up any remaining complete runes at the tail.
+Whatever bytes are left over---an incomplete rune at the end---are
+stashed back into [[rpart]] for next time.
 
 <<[[Fid]] other fields>>=
 uchar	rpart[UTFmax];
@@ -8818,6 +9115,15 @@ case Qconsctl:
 % will see later writing on consctl, why we need it
 
 \section{[[/mnt/wsys/cursor]]}
+
+%claude:
+The cursor device lets a client application set a custom cursor shape.
+Writing the binary cursor data (hotspot offset plus two 2x16 bitmaps)
+stores it in [[w->cursor]] and points [[w->cursorp]] at it; writing less
+than the required [[2*4+2*2*16]] bytes clears the custom cursor,
+reverting to the default arrow. Closing the file also clears it.
+This is how programs like [[acme]] show a crosshair cursor over the
+tag line but revert to the arrow elsewhere.
 
 <<[[qid]] cases>>=
 Qcursor,
@@ -9052,6 +9358,15 @@ case Rawoff:
 
 
 \section{Mouse events}
+
+%claude:
+The mouse event delivery system uses a circular queue per window
+to buffer click/release events, but only the latest position for
+move events. This is because missing a click matters (the user
+expected an action), but missing intermediate moves does not (only
+the final position matters). The [[counter]]/[[lastcounter]] pair
+tracks whether there is a new event: if they differ, the client gets
+the latest state on the next [[read]].
 
 %alt: special APIs for graphical client to access mouse? that
 % request directly to window manager?
@@ -9451,6 +9766,14 @@ if(i)
 
 \section{Resize events}
 
+%claude:
+When a window is resized, the client must be notified so it can
+redraw. The notification is piggybacked on the mouse event stream:
+[[wresize]] sets [[w->resized = true]] and increments
+[[w->mouse.counter]]. When the application reads [[/mnt/wsys/mouse]],
+the response has a ``r'' prefix instead of ``m'', signaling a resize.
+The application calls [[getwindow()]] to remap the new window image.
+
 % actually abuse the mouse device for that, a big ugly.
 \l should have a /dev/resize, would be cleaner
 
@@ -9463,6 +9786,14 @@ if(w->resized)
 
 
 \section{[[/mnt/wsys/window]]}
+
+%claude:
+Reading [[/mnt/wsys/window]] returns the window's image ID and
+rectangle (in the same ``12 12 12 12 id'' text format used by
+[[/dev/draw]]). This is how [[getwindow()]] in the draw library
+reconnects to a window image after a resize: it reads this file
+to learn the new window dimensions, then uses the image ID
+to obtain a reference from the draw device.
 
 % simple
 
@@ -9994,6 +10325,17 @@ f->ticked = false;
 
 \subsection{Frame boxes}
 
+%claude:
+The frame's content is stored as an array of {boxes} ([[Frbox]]).
+A box is either a run of regular characters (with a [[ptr]] to the
+UTF-8 bytes and a [[wid]] giving the total pixel width) or a
+special break character like a newline or tab (indicated by
+[[nrune < 0]]). Boxes exist because measuring character widths is
+expensive: by grouping characters into runs, the frame only needs
+to compute widths when boxes are created, not on every redraw.
+When text is inserted or deleted, the affected boxes are split or
+merged, keeping the rest of the array untouched.
+
 <<[[Frame]] box fields>>=
 // growing_array<Frbox> (size = nalloc, unused after nbox)
 Frbox	*box;
@@ -10454,6 +10796,15 @@ _frdrawtext(Frame *f, Point pt, Image *text, Image *back)
 
 \subsection{Frame selection}
 
+%claude:
+The frame tracks a selection range ([[p0]], [[p1]]) in character
+coordinates relative to the frame origin. The selection is rendered
+by painting the background of the selected range with [[cols[HIGH]]]
+(highlight color) and the text with [[cols[HTEXT]]]. The
+[frdrawsel] functions handle the common case of extending or
+shrinking a selection incrementally (e.g., as the user drags the mouse),
+only repainting the changed region.
+
 <<[[Frame]] text fields>>=
 ulong	p0, p1;		/* selection */
 @
@@ -10673,6 +11024,35 @@ int npts;
 <<constant [[DELTA]]>>=
 #define	DELTA	25
 @
+
+%claude:
+The [[frinsert]] function is the heart of the frame library and its most
+complex routine. It inserts new runes into the display without redrawing
+everything, working in three phases:
+%claude:
+\textbf{Phase 1: bxscan.}
+The new runes ([[sp]] to [[ep]]) are converted into boxes in a temporary
+[[frame]] structure. [[bxscan]] walks the rune sequence, grouping
+consecutive printable characters into text boxes and creating special
+boxes for tabs and newlines. It also computes [[ppt0]]/[[ppt1]]---the
+pixel coordinates where the insertion will appear on screen.
+%claude:
+\textbf{Phase 2: x-alignment.}
+After inserting text, every existing box after the insertion point shifts
+right. The loop starting at ``Find point where old and new x's line up''
+walks forward through existing boxes, tracking two points: [[pt0]] (where
+each box \emph{is} now) and [[pt1]] (where it \emph{will be} after insertion).
+It records both positions in the [[pts]] array.
+The loop terminates when [[pt1.x==pt0.x]]---meaning the old and new
+layouts have realigned (because a line wrap puts both back to the left
+margin)---or when [[pt1]] falls off the bottom of the frame.
+%claude:
+\textbf{Phase 3: move down.}
+The final loop walks backward through [[pts]], using [[draw]] to blit each
+box from its old position ([[pts[i].pt0]]) to its new position ([[pts[i].pt1]]).
+Going backward avoids overwriting source pixels before they are copied.
+After the moves, the newly inserted text is drawn into the gap left behind,
+and the box array is spliced to include the new boxes from [[bxscan]].
 
 <<function [[frinsert]]>>=
 void
@@ -10976,6 +11356,19 @@ runeindex(uchar *p, int n)
 
 \subsubsection{[[bxscan()]]}
 
+%claude:
+The [[bxscan]] function converts a sequence of runes into the frame's
+internal box representation, populating the static [[frame]] structure.
+The outer loop creates one box per iteration: if the current rune is a
+tab or newline, it gets a special box ([[nrune == -1]]) with [[bc]] set
+to the character; otherwise, consecutive printable characters are
+accumulated into a temporary UTF-8 buffer ([[tmp]]) until a tab, newline,
+or buffer overflow is reached, then stored as a text box.
+The function stops after filling [[maxlines]] worth of newlines---there
+is no point scanning text that would fall off the bottom of the frame.
+Finally, [[_frdraw]] lays out the boxes starting at [[*ppt]] and returns
+the endpoint, which becomes [[pt1]] in [[frinsert]].
+
 <<constant [[TMPSIZE]]>>=
 #define	TMPSIZE	256
 @
@@ -11199,6 +11592,15 @@ _frmergebox(Frame *f, int bn)		/* merge bn and bn+1 */
 
 \subsection{[[frdelete()]]}
 
+%claude:
+[[\hlink{frdelete}]] is the inverse of [[frinsert]]: it removes
+characters [[p0]] through [[p1]] from the display and collapses
+the remaining text upward. Like [[frinsert]], it works incrementally:
+it finds the point where the shifted text's x-coordinate aligns with
+the original, copies the intermediate boxes leftward with [[draw()]],
+and then fills the vacated area at the bottom with background color.
+The result is returned as the number of lines gained (which the caller
+uses to decide whether to fill in text from below the viewport).
 
 <<function [[frdelete]]>>=
 int
@@ -11322,6 +11724,13 @@ frdelete(Frame *f, ulong p0, ulong p1)
 
 \subsection{[[wshow()]]}
 
+%claude:
+[[\hlink{wshow}]] ensures that position [[q0]] is visible on screen. If
+[[q0]] is already within the viewport ([[org]] to [[org + nchars]]),
+it just redraws the scrollbar. Otherwise, it recomputes [[org]] to
+center [[q0]] in the viewport and calls [[wsetorigin]] to reflow
+the display from the new origin.
+
 % Window.nchars is in Frame!
 
 % show text where can see q0.
@@ -11361,6 +11770,17 @@ wscrdraw(w);
 \l why in wmk? could be in caller. Anyway, wmk before
 % set scrollbar and frame, but does not draw them I think.
 
+
+%claude:
+The scrollbar is drawn into a scratch image ([[scrtmp]]) and then
+blitted to the window, avoiding flicker. The bar occupies the
+[[scrollr]] rectangle on the left of the window. The
+``thumb'' (the white portion indicating the viewport position)
+is computed by [[\hlink{scrpos}]], which maps the character range
+[[org..org+nchars]] onto the scrollbar height proportionally to
+[[nr]] (total characters). The border color fills the non-thumb
+area, creating a visual distinction between the portion of the
+document above and below the current view.
 
 % wshow | wmk | wsetorigin -> <>
 <<function [[wscrdraw]]>>=
@@ -11498,6 +11918,14 @@ if(scrtmp == nil)
 @
 
 \subsection{Drawing the tick: [[frtick()]]}
+
+%claude:
+The tick (text cursor) is drawn by saving the pixels underneath
+into [[tickback]], then drawing the tick image on top. To remove
+the tick, the saved pixels are restored. This save/restore approach
+is faster than redrawing the text, but it means the tick must be
+removed before any text operation that changes the display under it,
+and redrawn afterward.
 
 <<[[frinsert()]] remove tick>>=
 if(f->p0 == f->p1)
@@ -11650,6 +12078,17 @@ nbytes(char *s0, int nr)
 
 \subsection{Moving the frame origin}
 
+%claude:
+When the viewport must change (because the target position is
+off-screen), [[\hlink{wsetorigin}]] updates [[org]] and incrementally
+adjusts the frame. If the new origin is close to the old one, it
+uses [[frdelete]] or [[frinsert]] at position~0 to shift the content
+rather than redrawing everything. Only when the shift is too large
+does it clear the frame and rebuild from scratch. The [[exact]] flag
+controls whether [[org]] must be a line boundary: when false (e.g.,
+during incremental scrolling), the function searches forward for
+the nearest newline to avoid starting mid-line.
+
 % complicated again ...
 
 <<[[wshow()]] else, when q0 is out of scope>>=
@@ -11783,6 +12222,18 @@ wfill(Window *w)
 
 
 \subsection{Selecting}
+
+%claude:
+[[\hlink{wsetselect}]] updates the selection ([[q0]], [[q1]]) and repaints
+only the changed portions. It converts the buffer-wide positions
+([[q0]], [[q1]]) to frame-local positions ([[p0]], [[p1]]) by
+subtracting [[org]], then compares against the old selection to
+minimize redrawing. If the new and old selections overlap, it only
+paints the delta (the parts that changed from selected to unselected
+or vice versa). [[\hlink{frselect}]] is the interactive selection
+loop: it tracks the mouse while button~1 is held down, extending or
+shrinking the selection as the cursor moves. If the cursor goes above
+or below the frame, it triggers scrolling via the [[scroll]] callback.
 
 <<function [[wsetselect]]>>=
 void
@@ -12075,6 +12526,15 @@ wshow(w, q0+1);
 % similar to graphical window, except condition
 % not just have raw char, now check for newline
 
+%claude:
+In cooked (non-raw) mode, the application's [[read]] of [[/dev/cons]] should
+block until the user types a complete line. The event loop implements this
+by scanning from [[qh]] to [[nr]] looking for a newline or EOT
+([['\004']]). Only when one is found does it enable the [[WCread]]
+alternative (setting it to [[CHANSND]]). This is the classic line
+discipline: characters are buffered and editable until Enter commits
+the whole line.
+
 <<[[winctl()]] alts adjustments, revert to CHANSND if newline in queue>>=
 /* this code depends on NL and EOT fitting in a single byte */
 /* kind of expensive for each loop; worth precomputing? */
@@ -12129,6 +12589,17 @@ if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
 \subsection{Navigation keys}
 % can help to understand q0, qh, etc
 
+%claude:
+The navigation keys move the viewport or the cursor within the rune
+buffer. Scrolling keys (Down, Up, Page Down, Page Up) compute a new
+[[org]] position---the index into [[w->r]] of the first visible character---and
+call [[wsetorigin]] to shift the viewport. Arrow keys (Left, Right)
+instead move the selection point [[q0]]/[[q1]] character by character and
+call [[wshow]] to ensure the cursor stays visible.
+These keys are only active when [[mouseopen]] is false, that is,
+when [[rio]] is acting as a terminal rather than forwarding raw input
+to a graphical application.
+
 <<[[wkeyctl()]] when mouse not opened and navigation keys>>=
 if(!w->mouseopen)
 switch(r){
@@ -12164,6 +12635,16 @@ case Kend:
 
 % maxlines is very bad name.
 % use nblines instead?
+
+%claude:
+All three downward-scrolling keys---Down arrow, mouse scroll, and Page
+Down---share the [[case_Down]] target. They differ only in how many lines
+to scroll: Down moves by a third of the visible area, Page Down by two thirds,
+and mouse scroll by a small fixed amount.
+The trick is converting a line count [[n]] into a character offset:
+[[frcharofpt]] takes a pixel coordinate (the Y position [[n]] lines below
+the top of the frame) and returns the character index at that point,
+which becomes the new [[org]].
 
 <<[[wkeyctl()]] when mouse not opened, switch key cases>>=
 case Kdown:
@@ -12270,6 +12751,16 @@ case 0x01:	/* ^A: beginning of line */
     return;
 @
 
+%claude:
+The function [[wbswidth]] (``backspace width'') computes how many
+characters to erase backward from [[q0]]. Despite its name, the
+parameter [[c]] selects the mode: [[0x08]] erases exactly one character,
+[[0x15]] erases back to the beginning of the line (or to [[qh]]),
+and [[0x17]] erases back to the previous word boundary.
+The word-erase logic uses a two-phase approach: first skip non-alphanumeric
+characters (the ``skipping'' phase), then eat alphanumeric characters
+until hitting a non-alphanumeric one.
+
 % why this name? wbswidth? what's the parameter? it's not really used.
 <<function [[wbswidth]]>>=
 int
@@ -12303,6 +12794,15 @@ wbswidth(Window *w, Rune c)
 
 
 \subsection{Special keys}
+
+%claude:
+The three erase keys---\verb+^H+ (backspace), \verb+^U+ (kill line),
+and \verb+^W+ (kill word)---all flow through the same handler.
+They call [[wbswidth]] to compute how many characters to erase,
+then [[wdelete]] to remove them from the rune buffer.
+The key distinction is that none of these can erase past the output
+point [[qh]]: the guard [[w->q0==w->qh]] prevents the user from
+deleting text that the application wrote.
 
 \subsubsection{Delete}
 
@@ -12359,6 +12859,15 @@ if(q0 < w->org){
 @
 
 
+
+%claude:
+The [[wdelete]] function mirrors [[winsert]]: it removes runes from the
+buffer by shifting the tail left with [[runemove]], then carefully adjusts
+all four cursor positions ([[q0]], [[q1]], [[qh]], [[org]]). The adjustment
+logic must handle every case---the deleted range might be entirely before,
+entirely after, or overlapping each cursor.
+If the deletion affects visible text (between [[org]] and [[org+nchars]]),
+it calls [[frdelete]] and [[wfill]] to update the display incrementally.
 
 <<function [[wdelete]]>>=
 void
@@ -12425,6 +12934,17 @@ if(q0 < w->org + frm->nchars){
 
 \subsubsection{Interrupt}
 
+%claude:
+When the user types the Delete key (rune [[0x7F]]), [[rio]] sends
+an interrupt note to the child process by writing [["interrupt"]]
+to [[w->notefd]].
+This must happen in a separate [[proc]] because the child might be
+dying at the same time and trying to print its exit status, which
+would deadlock if the note were sent from the window thread
+(the kernel holds [[p->debug]] during process death).
+Before sending the interrupt, [[qh]] is advanced to the end of
+the buffer so the shell prompt appears cleanly after the interrupted
+command.
 
 % how generate this 0x7F rune?
 % #define ... Del=        0x7F, in Kernel.nw
@@ -12600,6 +13120,16 @@ Rune *bp, *tp, *up;
 int initial;
 uint qh;
 @
+%claude:
+When application output contains backspace characters ([[\b]]),
+they must be interpreted before insertion---the output should overwrite
+previous characters, not display literal backspaces.
+The code scans for the first [[\b]], then builds a filtered copy in [[tp]]
+where each backspace cancels the previous character (by decrementing [[up]]).
+If backspaces at the start of the output would erase characters already
+in the buffer (counted by [[initial]]), those are deleted from the
+window via [[wdelete]].
+
 <<[[winctl()]] when WCwrite, if runes contains backspace>>=
 bp = rp;
 for(i=0; i<nr; i++) {
@@ -12658,6 +13188,19 @@ button2menu(winput);
 
 % active only on actual window, not like right menu
 % mousethread -> event loop -> <>(winput)
+
+%claude:
+The [[button2menu]] function displays the edit menu using [[menuhit]]
+and dispatches the selected action. The menu offers six operations:
+Cut (delete selection and copy to snarf buffer), Paste (insert snarf
+buffer contents), Snarf (copy selection without deleting), Plumb
+(send selection to the plumber), Send (inject selection as if
+typed, useful for resending commands), and Scroll (toggle automatic
+scrolling). The window is reference-counted ([[incref]]/[[wclose]])
+to prevent it from being freed while the menu is displayed.
+After the menu action, a [[Wakeup]] message is sent to the
+window's control thread to ensure it reprocesses any pending events.
+
 <<function [[button2menu]]>>=
 void
 button2menu(Window *w)
@@ -12712,6 +13255,16 @@ enum
 
 
 \subsection{Other clicks}
+
+%claude:
+When the mouse is not inside the scrollbar, [[wmousectl]] dispatches
+based on which button was pressed. Left-click (button 1) triggers
+text selection via [[wselect]]; middle and right clicks were already
+intercepted by [[mousethread]] for the menu and window management,
+so they do not normally reach here. Mouse buttons 4 and 5 (the
+scroll wheel) are translated into synthetic [[Kscrolloneup]] and
+[[Kscrollonedown]] key events, which is an elegant reuse---the scroll
+wheel behaves identically to the keyboard scroll keys.
 
 <<[[winctl()]] WMouse case if not mouseopen>>=
 wmousectl(w);
@@ -12774,6 +13327,17 @@ if(w->deleted)
 \section{Automatic scrolling mode}
 % hard to put in adv topics, this global is pretty important
 
+%claude:
+When [[w->scrolling]] is true, the window automatically keeps the output
+point visible---each time the application writes, [[wshow(w, w->qh)]]
+scrolls the viewport to follow. When false (the default), the user can
+scroll freely and new output accumulates off-screen without disturbing
+the view.
+The middle-click menu toggles this flag with [[w->scrolling ^= 1]] and, if
+scrolling was just enabled, immediately jumps to the end of the buffer.
+The menu text dynamically switches between ``scroll'' and ``noscroll'' to
+reflect the current state.
+
 <<[[button2menu()]] menu2str adjustments for scrolling>>=
 if(w->scrolling)
     menu2str[Scroll] = "noscroll";
@@ -12790,6 +13354,16 @@ case Scroll:
 % go to the end
 
 \section{Scroll bar interaction}
+
+%claude:
+The scrollbar is not just a position indicator---the user can click on
+it to scroll. Left-click scrolls up (moving the viewport toward the
+beginning of the text), right-click scrolls down, and middle-click
+jumps to the absolute position proportional to the click's Y coordinate.
+The [[Frame.scroll]] callback is set to [[wscroll]] during window
+creation; when [[frselect]] detects the mouse outside the frame,
+it calls this callback to scroll the text while maintaining the
+selection.
 
 % saw drawing of scroll bar before, showing where we are in the
 % "file", but can also click on scrollbar!
@@ -12835,6 +13409,25 @@ if(ptinrect(w->mc.xy, w->scrollr)){
 @
 
 % if ptinrect scrollr
+
+%claude:
+The [[wscroll]] function implements the classic Plan 9 three-button
+scrollbar protocol in a continuous tracking loop.
+Button 1 (left) scrolls up: the click's Y position within the scrollbar
+determines how many lines to move backward (via [[wbacknl]]).
+Button 3 (right) scrolls down: the Y position selects a line in the
+visible frame, and that line becomes the new top of the viewport.
+Button 2 (middle) performs absolute positioning: the Y coordinate is
+mapped proportionally to a character offset in the entire buffer, giving
+a ``jump to percentage'' behavior.
+%claude:
+The loop constrains the mouse to the scrollbar's X center (using
+[[wmovemouse]]) and continues scrolling as long as the button is held.
+For buttons 1 and 3, a debounce delay on the first click prevents
+accidental rapid scrolling, followed by repeated scrolling at 100ms
+intervals via [[wscrsleep]].
+The special-case arithmetic for [[w->nr > 1024*1024]] avoids
+integer overflow when computing [[p0]] for very large buffers.
 
 <<function [[wscroll]]>>=
 void
@@ -12928,6 +13521,14 @@ freescrtemps(void)
 
 
 
+%claude:
+The [[wscrsleep]] helper provides the auto-repeat delay for scrollbar
+dragging. It uses [[alt]] to wait for either a timer expiry or a mouse
+event. If the mouse moves more than 2 pixels vertically or changes
+buttons, it returns early so [[wscroll]] can process the new position;
+otherwise it waits the full [[dt]] milliseconds before returning,
+letting [[wscroll]] scroll another increment.
+
 <<function [[wscrsleep]]>>=
 void
 wscrsleep(Window *w, uint dt)
@@ -12973,6 +13574,16 @@ wscrsleep(Window *w, uint dt)
 
 
 
+
+%claude:
+The [[framescroll]] callback is invoked by the frame library's
+[[frselect]] when the user drags a selection past the top or bottom
+of the frame. It bridges the generic frame library (which knows nothing
+about windows) to the window-specific [[wframescroll]], which shifts
+[[org]] by [[dl]] lines and extends the selection to track the drag.
+A negative [[dl]] scrolls up, positive scrolls down. The selection
+is anchored at [[selectq]] (the initial click point) and stretched
+to the new viewport edge.
 
 <<function [[framescroll]]>>=
 /*
@@ -13020,6 +13631,15 @@ wframescroll(Window *w, int dl)
 
 \section{Resize}
 
+%claude:
+When a window is resized, the frame must be re-initialized with the new
+rectangle. A pure move (no size change) takes the fast path:
+[[frsetrects]] just updates the frame's coordinates without re-laying
+out the text. A true resize must clear and reinitialize the frame,
+recompute the scrollbar rectangle, repaint the background, refill
+the visible text with [[wfill]], and redraw the selection and scrollbar.
+This is essentially the same setup as [[wmk]] when creating a new
+window.
 
 % similar code to wmk textual settings
 <<[[wresize()]] textual window updates>>=
@@ -13052,6 +13672,14 @@ else{
 
 \section{[[/mnt/wsys/text]]}
 % interesting to understand structure!
+
+%claude:
+The [[/mnt/wsys/text]] file exposes the entire contents of a window's
+rune buffer as a read-only byte stream. Reading it returns a UTF-8
+encoding of [[w->r[0..w->nr]]]. This is useful for programs that want
+to inspect what a terminal window currently contains---for example, a
+script could read its own window's text to implement command history or
+auto-completion.
 
 <<[[qid]] cases>>=
 Qtext,
@@ -13113,6 +13741,11 @@ from external programs.
 
 \section{[[/mnt/wsys/winid]]}
 
+%claude:
+Reading [[/mnt/wsys/winid]] returns the numeric window ID.
+Programs use this to construct paths like [[/mnt/wsys/wsys/N/wctl]]
+to control a specific window.
+
 <<[[qid]] cases>>=
 Qwinid,
 @
@@ -13133,6 +13766,12 @@ case Qwinid:
 
 
 \section{[[/mnt/wsys/label]]}
+
+%claude:
+The label is a user-settable string that identifies the window in the
+system menu's hidden windows list. Unlike X11 title bars, [[rio]]
+windows have no visible title---Pike considers title bars a waste of
+screen space. The label exists purely for programmatic identification.
 
 <<[[qid]] cases>>=
 Qlabel,
@@ -13179,6 +13818,13 @@ case Qlabel:
 
 \section{[[/mnt/wsys/screen]]}
 
+%claude:
+Reading [[/mnt/wsys/screen]] returns the screen image's ID and
+rectangle in the same format as [[/dev/window]]. This lets
+applications discover the full desktop geometry (useful for
+positioning windows or for drawing operations that span the
+entire display).
+
 % read only
 
 <<[[qid]] cases>>=
@@ -13202,6 +13848,16 @@ case Qscreen:
 % it with the Qwindow case
 
 \section{[[/mnt/wsys/wsys/]]}
+
+%claude:
+The [[/mnt/wsys/wsys/]] directory is the entry point for external
+programs to access other windows. Each existing window appears as a
+numbered subdirectory (by window ID) containing the same virtual device
+files ([[cons]], [[mouse]], etc.) as [[/mnt/wsys/]]. Walking to
+[[/mnt/wsys/wsys/N]] switches the fid's window context to window~N,
+allowing a program to read another window's text or control it via
+[[wctl]]. This is how the [[wctl(1)]] command can create, resize,
+or delete windows from a script.
 
 % https://github.com/sdhand/x11fs
 
@@ -13525,6 +14181,16 @@ case WWread:
 
 
 \subsection{Writing (controlling windows)}
+
+%claude:
+Writing to [[wctl]] accepts commands like ``new'', ``resize'',
+``move'', ``delete'', ``hide'', ``unhide'', ``top'', ``bottom'',
+``scroll'', ``noscroll'', and ``set''. The [[parsewctl]] function
+tokenizes the command string and extracts the rectangle, window ID,
+and other parameters. Commands that affect window geometry
+([[Move]], [[Resize]]) use the same [[wsendctlmesg]] path as mouse
+operations---the window thread handles all geometry changes uniformly,
+regardless of whether they came from the mouse or the filesystem.
 
 <<[[xfidwrite()]] cases>>=
 case Qwctl:
