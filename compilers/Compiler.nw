@@ -196,6 +196,20 @@ Ken Thompson
 %  mac.c = macro (embedded cpp)
 % globals.c, utils.c, compat.c
 
+%claude:
+The source is split into two layers: a portable front-end
+in [[cc/]] (shared by all architectures) and a back-end in [[5c/]]
+(ARM-specific code generation). The front-end contains
+the lexer ([[lex.c]]), the embedded preprocessor ([[mac.c]]),
+the yacc grammar ([[cc.y]]), declaration handling ([[dcl.c]]),
+type-checking ([[com.c]]), and helpers ([[sub.c]], [[globals.c]]).
+The back-end in [[5c/]] has the ARM code generator ([[cgen.c]], [[sgen.c]]),
+the peephole optimizer ([[peep.c]]), the register allocator ([[reg.c]]),
+and multiplication/division strength-reduction ([[mul.c]], [[div.c]]).
+There is no [[lex]] tool: the lexer is hand-written, partly for
+speed and partly to handle Unicode identifiers directly.
+The yacc grammar, however, does use [[yacc]].
+
 % sub.c = subroutines, helpers to build ast (and more?)
 
 % bits.c
@@ -256,9 +270,39 @@ Ken Thompson
 % Really do things gradually, like a stream. Generate code after
 % each function. Kinda a one-pass compiler.
 
+%claude:
+Unlike a textbook compiler with separate preprocessing,
+parsing, type-checking, optimization, and code-generation passes,
+[[5c]] is essentially a \emph{one-pass} compiler: it preprocesses,
+parses, type-checks, and generates assembly for each function
+in a single streaming pass. The call chain is:
+
+\begin{verbatim}
+  main -> compile -> yyparse -> yylex -> macxxx   (lex + cpp)
+                             -> codgen -> gen(stmt) -> cgen(expr)
+                                       -> regopt -> peep
+                  -> gclean -> outcode             (emit .5 file)
+\end{verbatim}
+
+%claude:
+Each function's code is emitted immediately after it is parsed,
+so the compiler never holds the entire program in memory.
+Toplevel globals are collected and emitted at the end by [[gclean]].
+There is no control-flow graph and no intermediate language:
+code generation walks the AST directly and produces ARM
+instructions into a linked list. Optimizations happen at two
+levels: AST-level rewrites (constant folding, strength reduction)
+and assembly-level passes (register allocation, peephole).
+
+%claude:
+The central data structure is the symbol table, which does far
+more than name resolution: it tracks types, storage classes,
+stack offsets, and scope nesting for every identifier, struct tag,
+and label in the program.
+
 % Key data structure is symbol table! Used to hold declarations.
 % Hold the declarations in the current scope! Manage scope.
-% label use/def, struct use/def, var use/def, types, offsets, 
+% label use/def, struct use/def, var use/def, types, offsets,
 % everything (too much in my opinion).
 
 % AST level opti, assembly level opti
@@ -285,8 +329,19 @@ Ken Thompson
 
 \section{Book structure}
 
-
-
+%claude:
+The book follows the compiler's own pipeline. After this
+introduction and the core data structures (Chapter~2),
+we trace the flow of a C source file through [[main]] (Chapter~3),
+input buffering (Chapter~4), lexing (Chapter~5),
+preprocessing (Chapter~6), and parsing (Chapter~7).
+The type-checker is covered in Chapter~8, followed by
+ARM assembly generation (Chapter~9) and object file output
+(Chapter~10). Two chapters cover optimizations: AST-level
+rewrites like constant folding (Chapter~11) and assembly-level
+passes including register allocation and peephole optimization
+(Chapter~12). The remaining chapters cover linking support,
+debugging metadata, profiling, and advanced C features.
 
 
 %###############################################################################
@@ -312,6 +367,17 @@ block structure.
 
 %FIGURE: AST concept, tree of expression 1+2*3, with OCONST, OADD, OMUL.
 % simple.
+
+%claude:
+The AST uses a single [[Node]] type for expressions, statements,
+and declarations alike --- a uniform binary tree where [[left]]
+and [[right]] carry different meanings depending on the node kind
+([[op]]). For instance, [[OADD]] uses them as arithmetic operands,
+while [[OLIST]] chains them as a linked list of statements.
+This generic structure is compact but means that many fields
+(type, storage class, register hints) are only meaningful for
+certain node kinds; the dumper [[prtree]] in the Debugging
+chapter is the best guide to which fields apply where.
 
 <<enum [[node_kind]]>>=
 enum Node_kind
@@ -552,6 +618,18 @@ Node	znode;
 
 
 \section{[[Type]] system}
+
+%claude:
+Types in [[5c]] are not AST nodes: they form a separate graph
+of [[Type]] structures linked by [[link]] (for the ``next level,''
+e.g. the pointed-to type of a pointer) and [[down]] (for
+lists of children, e.g. the fields of a struct or the parameters
+of a function). Composite types like [[TIND]] (pointer),
+[[TARRAY]], [[TFUNC]], and [[TSTRUCT]]/[[TUNION]] chain their
+components through these links. The basic scalar types
+([[TCHAR]] through [[TUVLONG]], [[TFLOAT]], [[TDOUBLE]]) are
+pre-allocated at startup in the global [[types]] array and
+shared by reference.
 
 <<enum [[type_kind]]>>=
 enum Type_kind
@@ -874,6 +952,16 @@ enum Qualifier
 
 \section{[[Storage_class]]}
 
+%claude:
+Storage class is an attribute of the \emph{variable}, not of its type
+(unlike qualifiers such as [[const]]). It determines where
+a variable lives --- on the stack ([[CAUTO]], [[CPARAM]]),
+in a global segment ([[CGLOBL]], [[CSTATIC]]), or resolved
+at link time ([[CEXTERN]]). The storage class is first
+assigned during declaration parsing and may be adjusted later:
+for example, [[extern int x]] followed by [[int x = 1]]
+in the same file promotes the symbol from [[CEXTERN]] to [[CGLOBL]].
+
 % for declaration nodes at first, but then also when refer an entity
 % in which case its class is copied from the symbol table to the node.
 <<enum [[storage_class]]>>=
@@ -968,6 +1056,18 @@ long	width; // ewidth[Type.etype]
 
 \section{[[Sym]]bols and [[hash]] table}
 % another symbol table!
+
+%claude:
+The [[Sym]] structure is the compiler's universal name-to-information
+map. A single [[Sym]] can simultaneously hold data for several
+C namespaces --- identifiers ([[type]], [[class]], [[offset]]),
+struct/union tags ([[suetag]]), labels ([[label]]), and even
+preprocessor macros ([[macro]]) --- because C allows the same
+spelling to name a variable and a struct tag at the same time.
+The ``value'' fields are not in a union; which ones are meaningful
+depends on the [[Decl]] entry that put this symbol in scope.
+All symbols live in a flat hash table ([[hash]]), and scope
+nesting is managed by the separate [[Decl]] stack.
 
 \subsection{[[Sym]]}
 
@@ -1301,6 +1401,19 @@ syminit(Sym *s)
 
 \section{Declarations, namespaces, and scope: [[Decl]]}
 % nested scope
+
+%claude:
+C has three separate namespaces --- identifiers, struct/union/enum
+tags, and labels --- and lexical scoping with nested blocks.
+The [[Decl]] structure implements both. The global [[dclstack]]
+is a stack of [[Decl]] entries separated by [[DMARK]] sentinels.
+When the parser enters a block ([[markdcl]]), it pushes a [[DMARK]]
+and bumps the [[blockno]] counter. Each new declaration pushes
+a [[DAUTO]], [[DSUE]], or [[DLABEL]] entry that \emph{saves} the
+symbol's old value fields (type, offset, storage class) before
+overwriting them. When the block ends ([[revertdcl]]), the stack
+is popped back to the [[DMARK]], restoring every shadowed symbol
+to its previous meaning.
 
 % the different "namespaces"
 <<enum [[dxxx]]>>=
@@ -1671,6 +1784,17 @@ d->varlineno = s->varlineno;
 
 % see also enum of 5.out.h with REGRET, REGARG, REGSP, REGTMP
 
+%claude:
+The compiler's output is a linked list of [[Prog]] structures,
+each representing one ARM instruction (or pseudo-instruction
+like [[TEXT]], [[DATA]], [[GLOBL]]). Each [[Prog]] has a
+``from'' and ``to'' [[Adr]] operand, mirroring the two-address
+format of Plan~9 assembly. The [[lineno]] field ties each
+instruction back to the C source line that generated it,
+which is essential for the debugger. This is the same [[Prog]]
+structure used by the assembler and linker (see
+\book{Assembler} and \book{Linker}).
+
 <<struct [[Prog]](arm)>>=
 struct	Prog
 {
@@ -1960,6 +2084,15 @@ default:
 
 \section{[[compile()]]}
 
+%claude:
+[[compile]] is the heart of the driver: it sets up include paths,
+opens the output [[.5]] object file, initializes the I/O stack
+for the embedded preprocessor, and calls [[yyparse]] to parse the
+entire source file. After parsing completes, [[gclean]] emits
+[[AGLOBL]] pseudo-instructions for all toplevel globals and
+writes the final object file via [[outcode]]. The function
+returns [[nerrors]], so [[main]] can exit with the right status.
+
 <<global [[outbuf]]>>=
 Biobuf	outbuf;
 @
@@ -2124,6 +2257,13 @@ if(p = getenv("INCLUDE")) {
 \section{[[gclean()]]}
 % mv earlier? just after compile?
 
+%claude:
+While [[codgen]] emits code for each function during parsing,
+[[gclean]] runs after [[yyparse]] returns to emit the globals.
+It walks the compiler's symbol state, generates [[AGLOBL]]
+pseudo-instructions for every global variable, appends a
+final [[AEND]] marker, and then calls [[outcode]] to serialize
+the entire instruction list into the [[.5]] object file.
 
 <<function [[gclean]](arm)>>=
 /// main -> compile -> yyparse; <>
@@ -2689,6 +2829,18 @@ case '/':
 
 \section{Keywords and identifiers}
 
+%claude:
+Keywords and user identifiers share the same code path.
+At startup, [[cinit]] inserts all C keywords into the hash
+table with their token codes (e.g., [[if]] $\to$ [[LIF]],
+[[int]] $\to$ [[LINT]] with type [[TINT]]). When [[yylex]]
+encounters an alphabetic token, it looks it up in the hash
+table: keywords return their pre-set [[lexical]] field,
+while ordinary identifiers return [[LNAME]]. This is also
+where the typedef trick lives: if [[lookup]] returns a
+symbol whose storage class is [[CTYPEDEF]], the lexer returns
+[[LTYPE]] instead of [[LNAME]], resolving the classic
+C parsing ambiguity.
 
 <<global [[itab]]>>=
 struct
@@ -2872,6 +3024,17 @@ if(s->class == CTYPEDEF || s->class == CTYPESTR)
 
 \section{Operators}
 
+%claude:
+Multi-character operators ([[+=]], [[>>]], [[&&]], etc.) are
+recognized by a peek-ahead pattern: after reading the first
+character, the lexer reads one more via [[GETC]]. If the
+two-character sequence matches an operator, it returns
+the corresponding token immediately. Otherwise the second
+character is saved in [[c1]] and becomes [[peekc]] at the end
+of [[yylex]], and the single-character token is returned.
+Single-character operators like [[*]] and [[&]] are returned
+as their ASCII value, which yacc handles directly.
+
 <<[[yylex()]] switch c cases>>=
 case '*':
     c1 = GETC();
@@ -2992,6 +3155,15 @@ case '^':
 
 
 \section{Numbers}
+
+%claude:
+Number lexing must determine not just the numeric value but also
+the C type of the constant: [[int]], [[unsigned int]], [[long]],
+[[vlong]], [[float]], or [[double]]. The suffix letters ([[U]],
+[[L]], [[LL]], [[F]]) and the magnitude of the value both
+influence the choice. The [[Numxxx]] bitset tracks which
+suffixes have been seen, and [[convvtox]] truncates the value
+to the width of the chosen type, warning on overflow.
 
 <<[[yylex()]] before switch, if isxxx>>=
 if(isdigit(c))
@@ -3658,6 +3830,13 @@ The preprocessor handles \verb+#include+, \verb+#define+
 
 \section{[[mactab]] and [[domacro()]] dispatch}
 
+%claude:
+When [[yylex]] sees a [[#]] at the start of a line, it calls
+[[domacro]], which reads the directive name via [[getsym]]
+and dispatches through the [[mactab]] table. The [[ifdef]]/[[ifndef]]/[[else]]
+entries have [[nil]] function pointers and are handled specially
+by [[macif]] with a numeric argument (0, 1, or 2).
+
 <<[[yylex()]] switch c cases>>=
 case '#':
     domacro();
@@ -3933,6 +4112,17 @@ if(i >= maxinclude){
 
 \subsection{Tracing origin and [[Hist]]}
 
+%claude:
+Because the preprocessor flattens \verb+#include+s into a single
+stream, [[lineno]] is a global counter that keeps incrementing
+across file boundaries. To report errors in the right file,
+the compiler maintains a [[Hist]] linked list that records
+each ``push'' (\verb+#include+ opens a file) and ``pop'' (EOF
+returns to the parent). Given a global line number, the
+error printer walks this list to reconstruct the
+``file:line'' pair. The \verb+#line+ directive also creates
+[[Hist]] entries with an explicit offset.
+
 % Once you include file, you can not just give a line number for
 % an error. You need also the file in which the error occur.
 % We have only seen lineno in Core Ds, but in fact global line number
@@ -4198,6 +4388,17 @@ for(;;) {
 @
 
 \section{[[#define]]}
+
+%claude:
+Macros are stored as strings in [[Sym.macro]]. The first byte
+encodes the parameter count (0 = object-like, $n+1$ = function-like
+with $n$ parameters), with the [[VARMAC]] bit for variadic macros.
+In the body, parameter references are encoded as [[#a]], [[#b]], etc.,
+limiting macros to 25 parameters. During expansion, [[macexpand]]
+extracts the actual arguments, then performs textual substitution
+of these encoded markers. A subtle feature: inside string literals
+in macro bodies, parameter references are also substituted ---
+this is why [[5c]] does not need a separate stringify operator.
 
 \subsection{[[-D]]}
 
@@ -4568,6 +4769,17 @@ if(c == '#') // escape # by adding an extra #
 
 \subsection{Macro Expansion}
 
+%claude:
+Macro expansion reuses the I/O stack: [[macexpand]] writes
+the expanded text into a new [[Io]] buffer, which is then
+pushed onto [[iostack]]. The lexer's next [[GETC]] calls
+will read from this buffer, and when it is exhausted,
+[[filbuf]] pops it and resumes the previous input.
+This naturally handles nested macros: if the expanded
+text contains another macro name, [[yylex]] will call
+[[macexpand]] again, pushing yet another [[Io]] buffer.
+The [[pushdepth]] limit prevents runaway recursion.
+
 <<[[yylex()]] in talph case, if macro symbol>>=
 if(s->macro) {
     newio();
@@ -4854,6 +5066,15 @@ macund(void)
 % ugly to do macend here.
 
 \section{[[#ifdef]]}
+
+%claude:
+Conditional compilation is handled by [[macif]], which uses
+a numeric argument to distinguish [[#ifdef]] (0), [[#ifndef]] (1),
+and [[#else]] (2). When a condition is false, the skip loop
+reads characters without interpretation, tracking the nesting
+depth of [[#ifdef]]/[[#endif]] pairs so it can find the matching
+[[#endif]] or [[#else]]. Note that [[5c]] does not support the
+full [[#if]] constant-expression form --- only [[#ifdef]]/[[#ifndef]].
 
 % 0 = ifdef, 1 = ifndef, 2 = else, see mactab and domacro()
 <<function [[macif]]>>=
@@ -5207,6 +5428,18 @@ prog:
 
 
 \section{Declarations and definitions, part one}
+
+%claude:
+C declaration syntax splits a type across two places:
+the ``base type'' (e.g., [[int]], [[struct Foo]]) comes first,
+then the ``declarator'' wraps it in pointers, arrays, and
+function signatures (e.g., [[*f(int)]]).
+The parser handles this in two phases: first the type keywords
+are collected into [[lasttype]]/[[lastclass]], then [[dodecl]]
+is called for each declarator to build the final [[Type]] and
+install it in the symbol table. The grammar has four kinds
+of declarators: external (globals/functions), automatic (locals),
+parameter, and abstract (used in casts and [[sizeof]]).
 
 <<declarator rules>>=
 <<external declarator rules>>
@@ -5620,6 +5853,16 @@ if(lastdcltype == T || lastdcltype->etype != TFUNC) {
 
 
 \section{Statements}
+
+%claude:
+Statements are straightforward: the [[stmnt]] rule matches
+[[if]], [[while]], [[for]], [[switch]], [[return]], [[break]],
+[[continue]], and [[goto]], building the expected AST nodes.
+The statement list is built with [[OLIST]] nodes, then reversed
+by [[invert]] (since yacc's left-recursive rules produce the
+list backwards). Blocks call [[markdcl]]/[[revertdcl]] to
+manage scope, and labels (including [[case]]) are interleaved
+into the statement list.
 % block, labels, stmts
 
 
@@ -5940,6 +6183,15 @@ label:
 
 
 \section{Expressions}
+
+%claude:
+The expression grammar uses a precedence hierarchy:
+[[expr]] (comma) $\to$ [[cexpr]] (assignment) $\to$ binary operators
+with yacc-declared precedences $\to$ [[uexpr]] (unary prefix)
+$\to$ [[pexpr]] (primary: names, constants, parenthesized expressions,
+postfix operators). Array access [[a[i]]] is immediately
+desugared into [[*(a+i)]], and [[a->f]] into [[(*a).f]], so
+the AST has fewer node kinds than the surface syntax suggests.
 
 <<expressions rules>>=
 <<expr rule>>
@@ -6698,6 +6950,15 @@ OSIZE,
 
 \section{Initializers and designators}
 
+%claude:
+Initializers handle both simple expressions ([[int x = 1]])
+and nested brace-lists ([[int a[] = \{1, 2, 3\}]]).
+Designators ([[.field]] and [[[index]]]) allow targeting specific
+elements, following C99 syntax. The heavy lifting is done by
+[[doinit]], which recursively walks the type structure and the
+initializer list, emitting [[ADATA]] pseudo-instructions
+to lay out the initial values in the object file.
+
 % this is a sort of C extension, because you could do
 % int x;  and the later in main 'x = ...' (especially if you
 % support Struct and Array constructor in expressions).
@@ -6815,6 +7076,17 @@ if(t == T)
 
 \section{Types and storage classes}
 % Complex.
+
+%claude:
+C's type syntax allows keywords in any order ([[unsigned long int]]
+equals [[int long unsigned]]), so the parser cannot directly build
+a [[Type]] from a single grammar rule. Instead, it collects keywords
+as bits in a [[Bxxx]] bitset via the [[types]] and [[tname]] rules.
+The function [[simplet]] then resolves the combination into a
+concrete [[Type_kind]] (e.g., [[TULONG]]). Storage classes
+([[auto]], [[static]], [[extern]]) and qualifiers ([[const]],
+[[volatile]]) are tracked in the same bitset but extracted
+separately into [[lastclass]] and the type's [[garb]] field.
 
 %context:
 % cast:  '(' tlist abdecor ')' xuexpr
@@ -7353,6 +7625,17 @@ simpleg(long b)
 
 \subsection{Structures and unions}
 
+%claude:
+Structure and union parsing must handle forward declarations
+([[struct Foo *p]] before [[Foo]] is defined), recursive types,
+and scoped redefinitions. The key function is [[dotag]]: it
+looks up the tag name in the symbol table, and if the tag
+is new or in a different scope, allocates an incomplete [[Type]]
+whose [[link]] is [[T]] (nil). The [[link]] is filled in later
+when the body is parsed. The [[snap]] function resolves these
+incomplete pointers after the fact, since different variables
+may hold copies that did not share the same [[Type]] pointer.
+
 % Not so simple when need to handle scope.
 
 %http://blog.robertelder.org/magical-world-of-structs-typedefs-scoping/
@@ -7728,6 +8011,14 @@ void edecl(int c, Type *t, Sym *s)
 % them together with Type.down.
 
 \subsection{Enums}
+
+%claude:
+Enum values are resolved at parse time: [[doenum]] evaluates
+each constant expression, assigns the value to the symbol's
+[[vconst]] field, and uses [[xdecl]] to give the symbol type
+[[TENUM]]. Later, [[tcomo]] replaces [[ONAME]] references to
+enum symbols with [[OCONST]] nodes, so by the time code
+generation runs, enums have been completely eliminated.
 
 % I explained Type.TENUM, and Type.link of it point to actual type.
 
@@ -8550,6 +8841,15 @@ if(n != Z)
 
 \section{Storage resolution}
 
+%claude:
+C allows the same global name to be declared multiple times
+(e.g., [[extern int x]] in a header, then [[int x = 1]] in
+a source file). The compiler must merge these declarations,
+checking for consistency and adjusting the storage class.
+The function [[xdecl]] handles this: if a symbol was previously
+[[CEXTERN]] and is now being defined, it is promoted to [[CGLOBL]].
+If the types conflict, an error is issued.
+
 % not really checking, but can make mistake here, can have conflict,
 % so simple thing to check that is not grammar related.
 
@@ -8680,6 +8980,18 @@ if(s->block == autobn)
 \section{Typechecking helpers}
 
 \subsection{Overview}
+
+%claude:
+Type checking in [[5c]] uses two distinct notions:
+\emph{equality} ([[sametype]]), which checks structural identity
+of two types, and \emph{compatibility} ([[tcompat]]), which
+checks whether a value of one type can be used where another
+is expected (with implicit conversions). Compatibility is
+specified by policy tables ([[tadd]], [[tsub]], [[trel]], [[tcast]], etc.)
+that enumerate which type combinations are legal for each
+operator. The main entry point for expression type-checking
+is [[tcom]], which is called from [[complex]] during code
+generation.
 
 % remember Node.type!
 
@@ -9152,6 +9464,16 @@ if(n->op != OCAST)
 
 \subsection{Compatibility policies: [[txxx]]}
 
+%claude:
+Each C operator has its own compatibility policy --- a bitset
+array indexed by [[Type_kind]] that specifies which type
+combinations are legal. For example, [[tadd]] allows
+integer+integer, integer+pointer, and pointer+integer but
+not pointer+pointer; [[tsub]] additionally allows
+pointer$-$pointer (which yields an integer offset).
+[[tcompat]] looks up both operand types in the policy table
+and calls [[stcompat]] for the detailed structural check.
+
 % will call stcompat with different compatibilitie policies
 
 
@@ -9427,6 +9749,19 @@ addaddr:
 % in the other and vice versa depending on context.
 
 \section{Typechecking expressions}
+
+%claude:
+[[tcomo]] is the expression type-checker: a large switch on
+the node's [[op]] that recursively checks children, applies
+[[tcompat]] with the right policy for each operator, inserts
+implicit [[OCAST]] nodes when the types differ, and annotates
+[[n->type]] with the result type. For arithmetic, [[arith]]
+handles the ``usual arithmetic conversions'' (widening
+both operands to the same type). For pointer arithmetic,
+the compiler must scale the integer operand by the pointed-to
+type's width. For struct access ([[ODOT]]), [[tcomd]] walks
+the type's field list to find the named field.
+
 \n try same order than in Parsing
 
 <<[[tcomo()]] switch node kind cases>>=
@@ -9793,6 +10128,16 @@ case OLSHR:
 
 
 \subsection{Arithmetic conversions}
+
+%claude:
+[[arith]] implements C's ``usual arithmetic conversions'':
+when a binary operator has operands of different types, both
+are widened to a common type. The hierarchy is roughly
+char $<$ short $<$ int $<$ long $<$ vlong, with unsigned types
+winning over signed types of the same width. For pointer
+arithmetic ([[p + i]]), [[arith]] scales the integer operand
+by the size of the pointed-to type (e.g., multiplying by 4
+for [[int*]]).
 
 <<function [[arith]]>>=
 /// tcomo -> <>
@@ -10512,6 +10857,15 @@ long	tindir[1] =
 % in OADDR first.
 
 \subsection{Field accesses}
+
+%claude:
+For [[a.field]], the type-checker first verifies that [[a]]
+is a struct or union (via [[tcompat]] with [[tdot]]), then
+[[tcomd]] searches the type's field list for the named field
+(using [[dotsearch]], which also searches unnamed embedded
+structs). If found, the node is rewritten: the field's
+byte offset is encoded into the node, and [[n->type]] is set
+to the field's type.
 
 <<[[tcomo()]] switch node kind cases>>=
 case ODOT:
@@ -11355,6 +11709,16 @@ tcopy(Type *t)
 
 \section{Lint checking}
 
+%claude:
+[[5c]] includes several lint-like checks that go beyond type
+safety: unused variables ([[Sym.aused]]) and unused labels
+are detected at scope exit in [[revertdcl]], ``set but not used''
+warnings catch dead stores, constant [[if]] conditions are
+flagged, and unreachable code after [[return]]/[[goto]] is
+warned about. The [[SET]] and [[USED]] macros allow programmers
+to silence specific warnings. These checks are scattered across
+the parser, type-checker, and code generator.
+
 % good checks :) used/set ! good warnings. gcc sucks, it does not even
 % have that (or it's not by default maybe).
 
@@ -12021,6 +12385,17 @@ by [[outcode]].
 
 \section{[[pc]], [[p]], and [[nextpc()]]}
 
+%claude:
+Instructions are allocated one at a time by [[nextpc]],
+which appends a new [[Prog]] to the linked list (via [[p->link]])
+and assigns it a virtual program counter. The global [[p]]
+always points to the most recently emitted instruction,
+and [[pc]] is the running counter. Branch targets are
+expressed as [[Prog]] pointers, which are later resolved
+into offsets by [[outcode]]. This list-based representation
+makes it easy to insert, delete, and rearrange instructions
+during the optimization passes.
+
 % as we visit we will create new ASM instructions, linked
 % together that will be then serialized and written to a file
 % (see outcode()). So nextpc() is here to create those new instruction
@@ -12121,6 +12496,16 @@ p->as = AEND;
 
 
 \section{Functions: [[codgen()]]}
+
+%claude:
+[[codgen]] is called from the yacc action for each function
+definition. It emits a [[TEXT]] pseudo-instruction for the
+function prologue (recording the stack frame size), calls
+[[gen]] to compile the body, appends a [[RET]], and then
+runs the optimization passes ([[regopt]] and [[peep]]).
+The stack frame size in the [[TEXT]] instruction is
+backpatched after [[gen]] returns, because local variables
+may be allocated during code generation.
 
 % Finally! codgen! called from yyparse.
 
@@ -12313,6 +12698,14 @@ patch(Prog *op, long pc)
 
 \subsection{Offset}
 
+%claude:
+Local variables are assigned stack offsets during declaration
+parsing (in [[adecl]]). [[autoffset]] grows as locals are declared;
+[[stkoff]] records the maximum, which becomes the frame size
+in the [[TEXT]] instruction. Because [[autoffset]] is saved/restored
+by [[markdcl]]/[[revertdcl]], locals in independent blocks can
+reuse the same stack slots---a simple space optimization.
+
 % stkoff, autoffset, Node.xoffset, lots of stuff done
 % at parsing time.
 
@@ -12381,6 +12774,18 @@ long	xoffset;
 \section{Statements: [[gen()]]}
 \n do not mimic parsing chapter subsections; show simple stuff first.
 
+%claude:
+[[gen]] is a recursive switch on the statement's [[op]]: it
+handles sequences ([[OLIST]]), conditionals ([[OIF]]), loops
+([[OWHILE]], [[ODWHILE]], [[OFOR]]), jumps ([[ORETURN]],
+[[OBREAK]], [[OCONTINUE]]), [[switch]], labels, and [[goto]].
+Control flow uses the ``branch and patch'' idiom: [[gbranch]]
+emits a branch with an unresolved target, and [[patch]] fills
+in the destination once the target address is known.
+For boolean expressions in conditions, [[bcomplex]] generates
+short-circuit evaluation code directly using conditional
+branches rather than materializing a boolean value.
+
 % cc2/pgen.c
 <<function [[gen]]>>=
 /// codgen -> <>
@@ -12423,6 +12828,25 @@ rloop:
 % a;b is like a,b
 
 \subsection{Conditionals}
+
+%claude:
+An [[if]]/[[else]] is compiled as: evaluate the condition
+via [[bcomplex]] (which emits a conditional branch), generate
+the ``then'' body, emit an unconditional branch past the ``else''
+body, patch the conditional branch to the ``else'' body, generate
+the ``else'' body, and patch the unconditional branch to the
+end. Without an [[else]], the unconditional branch is omitted.
+The pattern in pseudo-assembly is:
+
+\begin{verbatim}
+  <condition code>
+  ABxx   else_label     (conditional branch from bcomplex)
+  <then body>
+  AB     end_label      (skip else)
+else_label:
+  <else body>
+end_label:
+\end{verbatim}
 
 %\subsubsection{Code generation}
 
@@ -12569,6 +12993,14 @@ if(n->type == T) {
 
 \subsection{Labels and goto}
 
+%claude:
+Labels and gotos share a common [[Node]] (created by [[dcllabel]]
+during parsing): the label definition records a [[pc]] value,
+and a [[goto]] branches to it. Forward gotos---where the label
+has not yet been seen---use the ``branch and patch'' idiom:
+emit a branch with an unresolved target, then when the label
+is defined, backpatch the branch's destination.
+
 % abuse complex to represent whether the label is defined.
 
 % Label and goto connected to the same intermediate OXXX during
@@ -12663,6 +13095,16 @@ if(suppress)
 
 \subsection{Loops}
 
+%claude:
+Loop code generation uses two global variables, [[breakpc]] and
+[[continpc]], to record the branch targets for [[break]] and
+[[continue]]. Before compiling the loop body, the current
+values are saved and new ones are set; after the body, they
+are restored. This works because C forbids cross-function
+jumps, so the save/restore stack aligns with lexical nesting.
+The general pattern for [[while(cond) body]] is:
+emit condition, branch-if-false to after, emit body, branch
+back to condition, patch the false-branch.
 
 \n mv later? but break and continue gotos used also for
 \n regular algo of a loop, so maybe good keep it here.
@@ -13119,6 +13561,13 @@ regret(Node *n/*OUT*/, Node *nn/*IN*/)
 
 \section{Register allocation}
 
+%claude:
+During code generation, the compiler tracks which registers are
+in use via the [[reg]] reference-count array. [[regalloc]]
+finds a free register and marks it busy; [[regfree]] releases it.
+This is a simple local allocator --- the global register
+promotion pass ([[regopt]]) runs later as a separate optimization.
+
 % seen in regret(): nodreg(), regfree() and reg[r]
 
 % in \book{Assembler}, REGARG (R0), REGRET (R0), REGTMP (R11)
@@ -13271,6 +13720,17 @@ if(reg[i] <= 0)
 \section{Typechecking, expliciting, annotating, and rewriting: [[complex()]]}
 % unsugaring -> expliciting?
 
+%claude:
+[[complex]] is the main entry point for preparing an expression
+for code generation. It runs four passes in sequence:
+[[tcom]] type-checks and annotates each node with its type
+(inserting implicit casts and resolving enum values);
+[[comma]] hoists comma operators so side-effects happen in order;
+[[ccom]] performs AST-level rewrites (constant folding, identity
+elimination, [[*\&x]] $\to$ [[x]]); and [[xcom]] classifies each
+node's ``addressability'' and estimates its register cost.
+Only after [[complex]] has run can [[cgen]] generate code.
+
 % complex? compile lexical?
 <<function [[complex]]>>=
 /// dodecl (array size) | doenum (evconst) | codgen | bcomplex -> <>
@@ -13314,9 +13774,22 @@ complex(Node *n)
 
 \section{Addressability and complexity: [[xcom()]]}
 
+%claude:
+[[xcom]] is the instruction selector: it walks each expression
+bottom-up, classifying how ``addressable'' each subexpression
+is. The addressability values encode ARM addressing modes:
+20 = immediate constant (\verb+$value+),
+10 = memory name (\verb+name+),
+11 = register,
+12 = indirect register (\verb+*(reg)+offset+).
+Values below 10 mean the expression needs to be computed into
+a register first. [[xcom]] also estimates the ``complexity''
+(number of registers needed), which [[cgen]] uses to decide
+which subtree to evaluate first to minimize register pressure.
+
 %TODO: see also docs/compiler.pdf by Ken! Lots of info in section 5 on implem
 % addressability is whether an expr can "fit" in address part of
-% processor instruction. 
+% processor instruction.
 
 % "xcom, [...] is machine-dependent [...]. it assigns an
 % index of complexity to a sub-expression, which is usually expressed
@@ -13585,6 +14058,17 @@ case OFUNC:
 
 \section{Memory moves}
 %alt: Basic expressions
+
+%claude:
+The lowest-level code generation primitives are [[gmove]]
+(emit a [[MOV]] between two addressable nodes, handling type
+conversions), [[gins]] (emit an arbitrary instruction from
+two node operands), and [[naddr]] (translate a [[Node]]'s
+addressability into an [[Adr]] operand for a [[Prog]]).
+These three functions are the bridge between the AST world
+and the instruction world: [[cgen]] decomposes expressions
+into register-sized pieces, and these functions produce
+the actual [[Prog]] instructions.
 
 %trans:
 % at some point, 5c will generate simpler expressions
@@ -14245,6 +14729,18 @@ if(o != Z && o->op == OREGISTER) {
 \section{Expressions: [[cgen()]]}
 % mimic parsing chapter subsection?
 
+%claude:
+[[cgen]] compiles an expression into a destination node [[nn]]
+(typically a register allocated by [[regalloc]]). It works
+by cases on the expression's [[op]], using the addressability
+and complexity annotations from [[xcom]] to decide the
+evaluation order. The key invariant is: evaluate the more
+complex subtree first (into a register), then combine it
+with the simpler subtree using a single instruction. For
+binary operations, [[gopcode]] generates the appropriate
+ARM arithmetic instruction. Assignments use [[gmove]] to
+transfer a value to the destination's address.
+
 <<[[gen()]] switch node kind cases>>=
 default:
     complex(n);
@@ -14700,6 +15196,15 @@ if(l->complex >= r->complex) {
 
 \subsubsection{[[gopcode()]]}
 
+%claude:
+[[gopcode]] translates a node-level operation ([[OADD]], [[OSUB]],
+etc.) into the corresponding ARM opcode ([[AADD]], [[ASUB]], etc.)
+and emits it via [[gins]]. ARM's three-operand format
+([[ADD R1, R2, R3]]) means that [[gopcode]] takes three node
+arguments: two sources and a destination. The function also
+handles operator-specific special cases like using [[RSB]]
+(reverse subtract) when the operand order allows it.
+
 % from, to, but ARM supports arith operator with 3 operands
 % as ADD R1, R2, R3, so can leverage that.
 
@@ -15030,6 +15535,14 @@ case OASLDIV:
 
 \subsection{Assignments part 1}
 
+%claude:
+Assignment code generation has two main paths: if the
+left-hand side is directly addressable (a simple variable,
+global, or indexed access), [[gmove]] can emit a single [[MOV]]
+from the right-hand side. Otherwise, the left-hand side
+must be evaluated into a register to get its address first,
+then the right-hand side is moved to that indirect location.
+
 <<[[cgenrel()]] switch node kind cases>>=
 case OAS:
     <<[[cgenrel()]] when OAS, if bitfield assignment>>
@@ -15086,6 +15599,15 @@ if(r->complex >= FNX && nn == Z)
 \t why this code?
 
 \subsection{Pointers}
+
+%claude:
+Pointer operations use [[lcgen]] (``lvalue cgen''), which
+computes the \emph{address} of an expression rather than
+its value. For [[OADDR(\&x)]], [[lcgen]] returns the address
+of [[x]]; for [[OIND(*p)]], [[cgen]] generates the load
+through the pointer. [[lcgen]] is also used on the left side
+of assignments when the destination is not directly addressable.
+
 % mv earlier? simpler than OAS?
 
 \subsubsection{Getting the address, [[lcgen()]]}
@@ -15508,6 +16030,14 @@ if(r->op == OCONST)
 
 \subsection{Field accesses}
 
+%claude:
+By the time code generation runs, [[a.field]] has been
+converted by [[tcomd]] into an address computation:
+the field's byte offset is added to the struct's base address,
+and the node's type is set to the field's type. The [[ODOT]]
+node becomes an [[OIND]] (indirect load) with the computed
+offset, so [[cgen]] handles it like any other pointer dereference.
+
 <<[[tcomd()]] convert field access in offset>>=
 makedot(n, t, o);
 @
@@ -15925,6 +16455,15 @@ reglpcgen(Node *n, Node *nn, int f)
 
 \subsection{Cast}
 
+%claude:
+A cast is a two-step conversion: the source value is loaded
+into a register typed as the source type, then moved to a
+register typed as the destination type. The [[gmove]] call
+between the two registers handles the actual conversion
+(sign extension, truncation, int$\leftrightarrow$float).
+If the types are the same width and signedness, the cast
+is optimized away.
+
 <<[[cgenrel()]] switch node kind cases>>=
 case OCAST:
     <<[[cgenrel()]] nullwarn check if nn is null>>
@@ -16045,6 +16584,14 @@ long	ncast[NTYPE] =
 
 \subsection{Ternary expressions}
 
+%claude:
+The ternary operator [[a ? b : c]] is compiled like an
+[[if]]/[[else]] that produces a value: evaluate the
+condition with [[bcgen]], generate code for the ``then''
+branch into the destination register, branch past the
+``else'' branch, generate code for the ``else'' branch
+into the same destination, and patch the branch targets.
+
 <<[[cgenrel()]] switch node kind cases>>=
 case OCOND:
     bcgen(l, true);
@@ -16154,6 +16701,19 @@ pre:
 
 
 \section{Boolean expressions}
+
+%claude:
+Boolean expressions ([[&&]], [[||]], comparisons) are compiled
+differently from arithmetic: instead of producing a value
+in a register, they produce a \emph{branch}. [[boolgen]]
+generates code that evaluates the expression and ends with
+a conditional branch ([[ABxx]]) whose target is later filled
+by [[patch]]. This enables short-circuit evaluation:
+[[a && b]] generates code for [[a]], branches to ``false''
+if zero, then evaluates [[b]]. The [[bcomplex]] wrapper
+in the statement generator uses this to wire boolean
+expressions directly into [[if]]/[[while]] control flow
+without materializing a temporary boolean value.
 
 % idea is to generate code to evaluate expression
 % and finish by an ABxxx that can be patched to jmp
@@ -17887,6 +18447,13 @@ void sualign(Type *t)
 
 \subsection{Switch}
 
+%claude:
+Switch compilation first generates the body (collecting
+case labels into a [[Case]] list), then emits the dispatch
+code at the branch point saved by the initial [[gbranch]].
+The dispatch can be a binary search ([[swit1]]) for sparse
+cases or a jump table ([[swit2]]) for dense ranges,
+chosen by heuristic.
 
 <<[[gen()]] locals>>=
 Case *cn;
@@ -18595,6 +19162,16 @@ and often eliminate entire subtrees.
 
 \subsection{General rewrites: [[ccom()]]}
 
+%claude:
+[[ccom]] performs a bottom-up pass over the AST, applying
+algebraic simplifications: [[*(\&x)]] becomes [[x]],
+[[x + 0]] or [[x * 1]] become [[x]], [[x * 0]] becomes [[0]]
+(if no side effects), [[x / 0]] is a compile-time error,
+and when both operands are constants, [[evconst]] folds
+the expression. The function also canonicalizes commutative
+operations so that the more complex operand is on the left
+(to help [[cgen]]'s register allocation heuristic).
+
 % mostly partial evaluation when have constants involved
 % in operations.
 
@@ -19290,6 +19867,14 @@ case OCOND:
 
 \subsection{Constant evaluation: [[evconst()]]}
 
+%claude:
+[[evconst]] folds constant subexpressions at compile time:
+[[3 + 4]] becomes [[7]], [[sizeof(int)]] becomes [[4]], etc.
+It is called by [[ccom]] when both children of a binary
+node are constants. Beyond optimization, constant folding
+is required for array sizes and enum values, which must
+be compile-time constants in C.
+
 % Necessary also for typechecking arrays, enumeration constant resolution,
 % but true that could force programmer to write simple constants
 % for those things. 
@@ -19869,6 +20454,14 @@ if(nn != Z)
 
 \subsection{Addition, or, etc.}
 
+%claude:
+When one operand of an addition or bitwise operation is
+a small constant, the code generator can use ARM's immediate
+operand mode instead of loading the constant into a register
+first. This subsection handles this optimization by checking
+if the right operand is a constant that fits in the ARM
+immediate field (an 8-bit value rotated by an even number
+of bits).
 
 <<[[cgenrel()]] when OADD/OAND/etc, if r is OCONST>>=
 /*
@@ -19908,6 +20501,16 @@ case ONE:
 % nothing to do with complexity really
 
 \subsection{Multiplication}
+
+%claude:
+When one operand of a multiply is a known constant, the compiler
+can replace the multiplication with a sequence of shifts and
+adds (strength reduction). The function [[mulcon]] tries to find
+such a decomposition using a precomputed table of shift/add
+``programs.'' For example, multiply by 5 becomes
+[[ADD R0<<2, R0, R1]] (shift left 2 and add). Similarly,
+[[divcon]] replaces constant division by multiplication by
+a magic reciprocal.
 
 <<[[cgenrel()]] when OMUL/OLMUL, mulcon opportunity>>=
 if(o == OMUL || o == OLMUL) {
@@ -20702,6 +21305,15 @@ int	hintabsize;
 \section{Associative-commutative arithmetic optimisations}
 % see also 5c -m, print add/mul/sub trees
 
+%claude:
+[[acom]] implements the classic associative-commutative
+rearrangement from Aho and Ullman: it flattens a tree of
+additions or multiplications into a flat list of [[Term]]s,
+then recombines them to expose common factors and simplify
+the arithmetic. For example, [[c1*i + c1*c2*j]] is
+transformed into [[c1*(i + c2*j)]], saving a multiplication.
+This is particularly useful for array index calculations,
+where the compiler can factor out the element size.
 
 % "acom is Aho and Ullman's acommute (with all the exercises done).
 % basically it does code improvements taking advantage of
@@ -21285,6 +21897,18 @@ regaalloc1(Node *n, Node *nn)
 \section{Register allocation optimisations}
 % 5c -r? registerization
 
+%claude:
+The register allocator is a post-pass that promotes
+frequently-used local variables from the stack into registers.
+It runs in 9 passes: passes 1--3 build liveness information
+using a dataflow analysis over the instruction list, pass 4
+estimates the ``cost'' (benefit) of registerizing each variable,
+pass 5 assigns registers to the most profitable variables,
+and passes 6--9 rewrite the instructions to use the assigned
+registers. The allocator works on [[Var]] and [[Reg]] structures
+that map variables to registers and track which registers are
+available.
+
 % big one
 
 \subsection{[[regopt()]]}
@@ -21450,6 +22074,12 @@ noretval(int n)
 
 \subsection{Pass 1}
 
+%claude:
+Pass 1 builds the control-flow graph: for each instruction,
+it creates a [[Reg]] node recording which variables are used
+and which are set (defined). It also identifies the ``log5''
+sampling points for estimating loop nesting depth.
+
 <<[[regopt()]] pass 1>>=
 /*
  * pass 1
@@ -21575,6 +22205,11 @@ npc = val;
 
 \subsection{Pass 2}
 
+%claude:
+Pass 2 resolves branch targets: each branch instruction's
+pc offset is converted into a pointer to the corresponding
+[[Reg]] node, and successor/predecessor links are built.
+
 <<[[regopt()]] pass 2>>=
 /*
  * pass 2
@@ -21632,6 +22267,13 @@ loopit(firstr, npc);
 
 \subsection{Pass 3}
 
+%claude:
+Pass 3 is the liveness dataflow: starting from [[RET]]
+instructions (where no variables are live-out), it propagates
+use/set information backwards through the control-flow graph
+until a fixed point is reached. The result is that each
+[[Reg]] node knows which variables are live at that point.
+
 <<[[regopt()]] pass 3>>=
     /*
      * pass 3
@@ -21663,6 +22305,13 @@ loop11:
 
 
 \subsection{Pass 4}
+
+%claude:
+Pass 4 propagates register/variable synchronization forward:
+it determines for each point in the program which variables
+currently hold the same value as which registers. This is
+needed so that when a variable is promoted to a register,
+the allocator knows where the register's value is still valid.
 
 <<[[regopt()]] pass 4>>=
     /*
@@ -21712,6 +22361,13 @@ loop2:
 @
 
 \subsection{pass 5}
+
+%claude:
+Pass 5 identifies ``regions'' --- connected portions of the
+program where a variable is live --- and computes the cost
+(benefit) of registerizing each variable, weighted by loop
+nesting depth. Variables with the highest benefit-to-cost
+ratio are chosen for register promotion.
 
 <<[[regopt()]] pass 5>>=
     /*
@@ -21778,6 +22434,12 @@ brk:
 @
 
 \subsection{pass 6}
+
+%claude:
+Pass 6 assigns physical registers to the most profitable
+regions (sorted by cost from pass 5) and rewrites the
+instructions: memory references to the promoted variable
+are replaced with register references.
 
 <<[[regopt()]] pass 6>>=
 /*
@@ -21894,6 +22556,14 @@ if(r1 != R) {
 
 
 \subsection{[[Bits]]}
+
+%claude:
+[[Bits]] is a fixed-size bitset used by the register allocator
+to track variable liveness. Each bit corresponds to a
+[[Var]] (a candidate for registerization). The dataflow
+analysis uses set operations ([[bor]], [[band]], [[bnum]])
+on these bitsets to propagate ``live-in'' and ``live-out''
+information through the control-flow graph.
 
 <<constant [[BITS]]>>=
 #define	BITS	5
@@ -22959,6 +23629,15 @@ BtoF(long b)
 
 
 \section{Peephole optimizer: [[peep()]]}
+
+%claude:
+The peephole optimizer scans the instruction list looking
+for small patterns that can be improved: redundant moves
+([[MOV R1,R2; MOV R2,R1]] $\to$ [[MOV R1,R2]]),
+constant propagation (replacing a register with its known
+constant value), copy propagation (bypassing intermediate
+copies), and ARM-specific tricks like folding shifts into
+operands. It iterates until no more improvements are found.
 
 % local opti, looking at the code like in a peep hole
 
@@ -24474,6 +25153,15 @@ predicate(void)
 
 \section{Dominators}
 
+%claude:
+The register allocator needs to identify loops so it can
+weight variables used inside loops more heavily (promoting
+them to registers saves more when the code executes many times).
+The [[postorder]] function computes a reverse postorder
+numbering of the control-flow graph, then the dominator
+algorithm (Hecht-Ullman) finds loop headers --- any node
+with a predecessor it dominates marks a loop back-edge.
+
 <<function [[postorder]]>>=
 /*
  * find looping structure
@@ -24597,6 +25285,15 @@ bad:
 
 
 \section{Safe linking with type signatures: [[5c -T]]}
+
+%claude:
+When invoked with \verb+-T+, the compiler computes a hash
+of each external symbol's type and embeds it in the object file.
+The linker can then verify that all compilation units agree
+on the types of shared symbols, catching mismatches between
+a header's declaration and the actual definition. This is
+similar to OCaml's interface checksums.
+
 % md5sum like in ocaml!
 
 % signature! for safe linking
@@ -24922,6 +25619,16 @@ parameter values and local variables by name.
 %less: need special flags for that?
 
 \section{Acid debugger metadata: [[5c -a]]}
+
+%claude:
+With \verb+-a+, the compiler outputs [[acid]] function definitions
+to standard output instead of an object file. These definitions
+describe the layout of each structure (field names, offsets,
+sizes) and each function's parameters and locals, allowing
+[[acid]] to interpret raw memory as typed C values. For
+structures, the generated acid code can print each field
+by name; for functions, it emits [[complex]] declarations
+that match the stack frame layout.
 
 
 % 5c -a to print acid declarations
@@ -25332,6 +26039,13 @@ acidmember(Type *t, long off, int flag)
 
 \section{Pickle: [[5c -Z]]}
 
+%claude:
+With \verb+-Z+, the compiler generates C code for
+serializing (``pickling'') and deserializing structures,
+automating the creation of marshalling functions from
+type definitions. This is a \plan extension that avoids
+hand-written serialization code for IPC and file formats.
+
 % ?? automatic marshalling? thrift?
 
 % 5c -Z
@@ -25647,6 +26361,14 @@ useful for writing assembly code that accesses C structures.
 \chapter{Profiling Support}
 %******************************************************************************
 
+%claude:
+Profiling is enabled by default: each [[TEXT]] pseudo-instruction
+is emitted without the [[NOPROF]] flag, so the linker inserts
+a call to [[_profin]] at function entry (see \book{Profiler}).
+The \verb+#pragma profile off+ directive sets [[NOPROF]] on
+subsequent functions, disabling profiling for hot inner loops
+or interrupt handlers where the overhead is unacceptable.
+
 % actually always true, only way to disable it is via pragma locally
 <<global [[profileflg]]>>=
 bool	profileflg;
@@ -25709,6 +26431,17 @@ if(debug['f'])
 %******************************************************************************
 \chapter{Advanced Topics TODO}
 %******************************************************************************
+
+%claude:
+This chapter collects C language features and compiler extensions
+that are orthogonal to the main compilation pipeline: automatic
+type conversions (functions to pointers, arrays to pointers),
+bitfields, old-style prototypes, and kencc-specific extensions
+like unnamed struct elements, struct constructors,
+\verb+extern register+ for per-processor storage, [[typestr]]
+for type reflection, and [[signof]] for signature reflection.
+It also covers floats, 64-bit integer operations, endianness,
+and miscellaneous optimizations like \verb+#pragma pack+.
 
 % got some "counter too large errors for now, so I commented the whole section
 
@@ -25884,6 +26617,15 @@ case OADDR:	/* volatile */
 @
 
 \subsection{Bitfields}
+
+%claude:
+Bitfield support is spread across parsing (tracking the current
+bit position within a storage word via [[firstbit]]/[[lastbit]]),
+type-checking (using [[Type.shift]] and [[Type.nbits]] to
+locate the field within its word), and code generation
+(emitting shift/mask sequences to extract or store the field).
+The complexity comes from packing adjacent bitfields into the
+same machine word while respecting alignment.
 
 %\subsubsection{Parsing}
 
@@ -26469,6 +27211,16 @@ if(!debug['B'])
 
 \section{C extensions}
 
+%claude:
+\plan's compiler extends ANSI C with several useful features:
+unnamed struct/union elements (fields are promoted to the
+enclosing struct), struct constructors (literals like
+[[(Point)\{1, 2\}]]), \verb+extern register+ for per-processor
+storage (used for the [[up]] pointer to the current process),
+[[typestr]] for runtime type reflection, and [[signof]] for
+type signature strings. These extensions are used pervasively
+in the \plan kernel and libraries.
+
 % see cc/c99.txt for list of things implemented by kencc
 
 \subsection{Typing extensions: [[typeext()]]}
@@ -26550,6 +27302,15 @@ if(st->etype == TIND && vconst(l) == 0) {
 
 
 \subsection{Unnamed structure elements}
+
+%claude:
+\plan extends C with unnamed struct/union fields: writing
+[[Lock;]] inside a struct definition embeds all of [[Lock]]'s
+fields directly, like poor man's inheritance. The [[dotsearch]]
+function recursively searches embedded types when resolving
+a field access, so [[p->lock]] works even though [[lock]] is
+a field of the embedded [[Lock]], not of the enclosing struct.
+
 % aka Anonymous field? Poor's man inheritance?
 
 %ex:
@@ -26894,6 +27655,16 @@ case OSTRUCT:
 @
 
 \subsection{Per-processor storage: [[extern register]]}
+
+%claude:
+The \verb+extern register+ storage class reserves a hardware
+register for a global variable that is private to each processor.
+The \plan kernel uses this for the [[up]] pointer (current process)
+and [[m]] pointer (current machine): by keeping them in dedicated
+registers, context-switch code simply changes which physical
+processor is running, and each processor sees its own [[up]]/[[m]]
+without any memory access.
+
 % useful for ARM kernel (bcm/), where mach and up are in registers
 %  and so are perfectly local to each processor! per-processor storage
 
@@ -27563,6 +28334,14 @@ if(n->type->width < 0) {
 
 \subsection{Format's arguments checking}
 
+%claude:
+With \verb+#pragma argcheck+, the compiler can verify that
+[[printf]]-style format strings match their arguments at
+compile time --- similar to gcc's \verb+__attribute__((format))+
+or OCaml's type-safe [[Printf]]. The compiler parses the
+format string, extracts the expected types for each [[%d]],
+[[%s]], etc., and checks them against the actual argument types.
+
 <<enum [[fxxx]]>>=
 enum fxxx
 {
@@ -28006,6 +28785,15 @@ newprot(Sym *m, Type *t, char *s)
 
 \section{Floats}
 
+%claude:
+Floating-point support is spread across all compiler phases:
+lexing (parsing float literals), typing (implicit int$\to$float
+conversions), and code generation (ARM VFP instructions for
+arithmetic, loads/stores, and conversions). The type system
+distinguishes [[TFLOAT]] (32-bit) and [[TDOUBLE]] (64-bit),
+with implicit widening from float to double in mixed
+expressions.
+
 %\subsubsection{Parsing}
 % I left code to deal with float in Lexing and parsing chapter.
 % I aspecitized typing code and code generation.
@@ -28399,6 +29187,15 @@ case TVLONG:
 
 
 \section{64 bits operations}
+
+%claude:
+The ARM is a 32-bit processor, so 64-bit [[vlong]] operations
+require synthesis from pairs of 32-bit instructions. [[com64]]
+rewrites [[vlong]] expressions in the AST into sequences of
+32-bit operations on the high and low halves, and the code
+generator ([[bool64]], [[cgen64]]) emits the corresponding
+instruction pairs. This is similar to how a modern compiler's
+lowering pass handles types wider than the native word size.
 
 % related to complex values
 
@@ -31341,7 +32138,7 @@ enum os				/* also in ../{8a,5a,0a}.h */
 #include "Compiler_extra.nw"
 \ifallcode
 %commented for syncweb -loc
-%#include "Compiler_x86.nw"
+#include "Compiler_x86.nw"
 \fi
 
 %\chapter{Changelog}
