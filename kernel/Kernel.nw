@@ -12883,6 +12883,17 @@ TEXT mmuinvalidate(SB), 1, $-4
 
 
 
+%claude:
+[[mmul2empty()]] walks the per-process list of L2 page
+table pages. For each one, it sets the corresponding L1
+entry to [[Fault]] so the MMU will fault on any access
+to that region. When [[clear]] is true (process exit),
+the L2 page contents are also zeroed. The freed pages
+are not returned to [[palloc]] immediately---they are
+spliced onto [[mmul2cache]] for reuse by the same process,
+avoiding the cost of allocating fresh pages on the next
+context switch.
+
 %dtor
 <<function [[mmul2empty]](arm)>>=
 static void
@@ -13595,6 +13606,16 @@ Page  *hash; /* Image hash chains */
 @
 % rename next? hashnext?
 
+%claude:
+Note that a page can be simultaneously in the page cache
+and on the free list. When a process exits, its text
+pages are freed ([[ref]] goes to~0) but remain in the
+cache. If another process execs the same binary before
+those pages are recycled, [[lookpage()]] finds them and
+bumps [[ref]] back to~1---avoiding a disk read. This is
+why [[putpage()]] places pages with images at the tail
+of the free list: they are the last to be recycled,
+maximizing the chance of a cache hit.
 % note that a page can be used and in the page cache, or free and in the page cache
 
 
@@ -13719,6 +13740,17 @@ uncachepage(Page *p)
 
 
 
+%claude:
+[[cachedel()]] removes a page from the cache by
+(image, daddr) key rather than by [[Page]] pointer. It
+is used by [[pagepte()]] when allocating a swap slot:
+if a stale cache entry already exists at that swap
+address (from a previous eviction cycle), it must be
+cleared before the slot is reused. The double-check
+pattern (test, lock, retest) handles the race where
+another thread modifies the page between the hash
+lookup and the page lock:
+
 % used by pagepte(), the image is always a swapimage.
 % different signature than uncachepage because for swap daddr we don't have
 % like for Page the information contained in the Page so we must pass
@@ -13812,6 +13844,15 @@ struct KImage
 % What is the point of this vs just having Chan? why need this wrapper?
 % because for page cache we need to keep them around in a careful way?
 
+
+%claude:
+[[Imagealloc]] is a fixed-size pool of [[KImage]]
+structures. The hash table maps [[Qid]] paths to cached
+images, enabling [[attachimage()]] to find an existing
+image for an executable. The free list holds unused
+[[KImage]] slots. When the free list is empty,
+[[imagereclaim()]] evicts pages from the page cache,
+which may free their associated [[KImage]] structures:
 
 %todo: invalidate Kimage when text changes?
 
@@ -13984,6 +14025,17 @@ ulong flen;   /* length of segment in file */
 KImage *img;
 @
 
+%claude:
+Here is how [[sysexec()]] sets up demand loading. It
+calls [[attachimage()]] which either finds a cached
+[[KImage]] for this executable or creates a new one.
+The text segment's [[fstart]] is~0 (text starts at the
+beginning of the binary, after the [[Exec]] header) and
+[[flen]] covers the header plus text bytes. The data
+segment's [[fstart]] is set just past the text, so
+[[pio()]] reads from the right offset when a data page
+is first touched:
+
 <<[[sysexec()]] get text segment ts via demand loading on tc>>=
 /* attachimage returns a locked cache image */
 img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
@@ -14006,6 +14058,12 @@ s->flen = data;
 @
 
 
+%claude:
+When [[rfork]] duplicates a data segment, the new
+segment inherits the parent's [[KImage]] reference and
+file offsets, so demand loading still works for pages
+that have not yet been touched:
+
 <<[[dupseg()]] [[SG_DATA]] case, attach image to new segment n>>=
 incref(s->image); // how sure non nil? data always attached to an img
 n->image = s->image;
@@ -14017,7 +14075,15 @@ n->flen = s->flen;
 
 
 
-% This is why we need to have both SG_xxx and Txxx? 
+%claude:
+There is a subtle case when duplicating the text segment
+slot ([[TSEG]]): the process may hold it as an [[SG_DATA]]
+segment (from a previous [[exec]] that shared text via
+[[KImage]]). [[data2txt()]] converts it back to [[SG_TEXT]]
+with proper demand-loading attributes so the child can
+share the read-only text pages:
+
+% This is why we need to have both SG_xxx and Txxx?
 % because can have a TEXT and SG_DATA?
 <<[[dupseg()]] when [[SG_DATA]], if Text segment>>=
 if(segno == TSEG){ // why not SG_TEXT then?
@@ -14358,6 +14424,15 @@ if(img)
 
 
 
+%claude:
+[[putimage()]] decrements the [[KImage]] reference count.
+When it reaches zero, the image is removed from the hash
+table and returned to the free list. Closing the
+underlying [[Chan]] is deferred into [[imagealloc.freechan]]
+because [[cclose()]] can block (it may involve I/O to
+a file server), and we are holding spin locks at this
+point:
+
 % called by putseg and also by uncachepage
 <<destructor [[putimage]]>>=
 void
@@ -14424,6 +14499,12 @@ int szfreechan; /* size of freechan array */
 QLock fcreclaim;  /* mutex on reclaiming free channels */
 @
 
+%claude:
+[[imagechanreclaim()]] drains the deferred channel close
+queue. It is called at the start of [[attachimage()]], a
+safe point where no spin locks are held. The [[fcreclaim]]
+qlock ensures only one thread does the cleanup:
+
 % called from attachimage to I guess close the channels of other closed images
 % a bit weird?
 <<function [[imagechanreclaim]]>>=
@@ -14459,6 +14540,15 @@ imagechanreclaim(void)
 @
 
 
+
+%claude:
+[[imagereclaim()]] is the last resort when [[attachimage()]]
+cannot find a free [[KImage]] structure. It walks the free
+page list from the tail (where [[putpage()]] places pages
+that still have cache associations), uncaching up to 1000
+pages. Each [[uncachepage()]] call decrements the image's
+reference count, potentially freeing the [[KImage]] for
+reuse:
 
 <<function [[imagereclaim]]>>=
 static void
@@ -14528,6 +14618,17 @@ via copy-on-write).
 % How will adjust segment pagetables to point to swap pages?
 % how store meta-data about swap pages? simply address in swapimage?
 
+%claude:
+[[Swapalloc]] mirrors [[Palloc]] for the swap file.
+Where [[Palloc.pages]] tracks physical pages,
+[[Swapalloc.swmap]] is a byte array where each entry is a
+reference count for the corresponding 4~KiB slot in the
+swap file. A byte suffices because a single swap slot is
+shared at most by 254 processes (copy-on-write forks).
+The [[last]] pointer speeds allocation by remembering
+where the previous scan stopped, so [[newswap()]] does
+not always search from the beginning.
+
 % lp split?
 <<struct [[Swapalloc]]>>=
 // Swap allocator (singleton)
@@ -14570,6 +14671,13 @@ ulong nswap;    /* number of swap pages */
 
 
 
+%claude:
+The swap file is represented as a [[KImage]] just like
+executable binaries, which lets the page cache machinery
+work uniformly for both demand loading and swap-in. The
+[[notext]] flag distinguishes it: [[swapimage]] has no
+associated text file, just a raw swap device:
+
 % at the beginning empty ... especially swapinit() set swaping.notext to true
 % rename KImage?
 <<global [[swapimage]]>>=
@@ -14578,6 +14686,14 @@ KImage  swapimage;
 
 
 
+
+%claude:
+[[newswap()]] allocates a slot in the swap file by
+scanning [[swmap]] for a zero entry (unused slot) starting
+from [[last]]. It sets the reference count to~1 and
+returns the byte offset in the swap file (slot index times
+[[BY2PG]]). If no free slots remain, it returns [[~0]]
+and the pager gives up on this page:
 
 % return offsset in swapfile, daddr
 % todo: introduce typedef?
@@ -14667,6 +14783,15 @@ typedef Page PageOrSwap;
 @
 
 
+
+%claude:
+[[putswap()]], [[dupswap()]], and [[swapcount()]] manage
+the reference counts in [[swmap]]. [[putswap()]]
+decrements the count and frees the slot when it reaches
+zero, updating [[last]] so the freed slot is found
+quickly by [[newswap()]]. [[dupswap()]] increments
+the count when [[ptcpy()]] duplicates a page table entry
+that points to swap (i.e., during [[rfork]]):
 
 % bad type ... it's really not a pointer to a Page ...
 <<function [[putswap]]>>=
@@ -14914,6 +15039,17 @@ daemon'' found in all \unix-like systems.
 <<[[newpage()]] other locals>>=
 bool dontalloc;
 @
+%claude:
+When free memory is below [[highwater]], [[newpage()]]
+must wait for the pager to free pages. But it cannot
+hold the segment lock while sleeping---that would
+deadlock, since the pager needs to lock segments to
+evict their pages. So [[newpage()]] drops the segment
+lock (setting [[*s = nil]]) and returns [[nil]] after
+the pager runs. The caller ([[fixfault()]]) detects the
+[[nil]] segment, returns an error, and [[fault()]]'s
+[[for(;;)]] loop retries with fresh locks.
+
 <<[[newpage()]] loop waiting freecount > highwater>>=
 for(;;) {
     if(palloc.freecount > swapalloc.highwater)
@@ -14967,6 +15103,15 @@ if(palloc.freememr.p != nil)
 % will see later sleep and wakeup!
 
 
+%claude:
+Notice the hysteresis between [[highwater]] and
+[[headroom]]: [[newpage()]] blocks when free pages drop
+below [[highwater]] (5\% of user pages), but the pager
+keeps running until free pages rise above [[headroom]]
+(6.25\%). This gap prevents the system from oscillating
+between ``need pages'' and ``have enough''---the pager
+frees a batch of pages before going back to sleep.
+
 <<function [[hasfreepages]]>>=
 int
 hasfreepages(void*)
@@ -14980,6 +15125,12 @@ hasfreepages(void*)
 
 
 
+
+%claude:
+[[kickpager()]] lazily creates the pager kernel process
+on first call, then simply wakes it up on subsequent
+calls. This avoids running the pager at all on systems
+that never run low on memory:
 
 <<function [[kickpager]]>>=
 void
@@ -14996,6 +15147,19 @@ kickpager(void)
 }
 @
 
+
+%claude:
+The pager's main loop is a round-robin scan over all
+processes. Each iteration advances to the next process
+and calls [[pageout()]] on each of its segments. For
+non-text segments, the evicted pages are batched in
+[[iolist]] and then written to the swap file by
+[[executeio()]]. After a full pass through the process
+table, [[gentick()]] updates the generation clock and
+recalculates the average page age, which adjusts the
+eviction threshold for the next pass. When no swap file
+is configured, the pager falls back to [[killbig()]]---it
+simply kills the largest process.
 
 <<function [[pager]]>>=
 static void
@@ -15104,6 +15268,18 @@ case CMnoswap:
 
 
 
+%claude:
+Before evicting pages from a segment, the pager must
+ensure that no processor has stale TLB entries pointing
+to those pages. [[canflush()]] checks whether all
+processes sharing this segment can be paged---i.e., they
+are not currently running on any CPU. [[canpage()]]
+does the actual check: if [[p->cpu == nil]], the process
+is not running and its [[newtlb]] flag is set so the
+TLB will be flushed before it resumes. If the process
+is currently executing, the pager skips this segment
+rather than blocking.
+
 <<function [[canflush]]>>=
 static bool
 canflush(Proc *p, Segment *s)
@@ -15162,6 +15338,17 @@ canpage(Proc *p)
 
 
 
+%claude:
+The page aging algorithm uses a simple generation clock.
+Each page records the [[genclock]] value when it was last
+referenced ([[PG_REF]] set). [[gentick()]] advances the
+clock and computes [[genage]] as the average age of all
+pages examined in the last pass. Pages older than
+[[genage]] are eviction candidates---this is an adaptive
+threshold that automatically adjusts to the workload:
+under heavy memory pressure many pages are old, so
+[[genage]] is high and eviction is more aggressive.
+
 % generation, see later
 <<function [[gentick]]>>=
 static void
@@ -15191,6 +15378,14 @@ ulong gen;      /* Generation counter for swap */
 
 \subsection{Paging out}
 % Paging out, writing
+
+%claude:
+[[executeio()]] writes the batch of evicted pages to the
+swap file. It sorts the pages by [[daddr]] first, so the
+writes are sequential on disk (minimizing seek time on
+spinning disks). After each page is written, its extra
+reference (added by [[pagepte()]]) is dropped and the
+page is freed via [[putpage()]].
 
 % called by pager once it has found some pages to swap, so cool
 % cos page is a kernel process, so this can happen in the background
@@ -15262,6 +15457,17 @@ pageiocomp(void *a, void *b)
 
 \subsection{Setting up the swap file}
 
+%claude:
+The swap file is configured at runtime by writing to
+[[/dev/swap]]. The boot scripts open a file (typically
+on the local disk) and write its file descriptor number
+to [[/dev/swap]], which calls [[setswapchan()]]. Writing
+``start'' just kicks the pager without changing the
+swap file. This late-binding approach means swapping
+is optional---embedded systems can run without a swap
+file, and the pager will fall back to killing processes
+when memory runs out.
+
 <<[[conswrite()]] cases>>=
 case Qswap:
     if(n >= sizeof buf)
@@ -15283,6 +15489,14 @@ case Qswap:
     break;
 @
 
+
+%claude:
+[[setswapchan()]] installs the swap file channel. If the
+device is not a mount ([[L'M']]), it stats the file to
+check its size and may reduce [[conf.nswap]] if the file
+is smaller than the pre-allocated swap map. The swap
+file can only be replaced when all swap slots are free
+(no pages currently swapped out):
 
 <<function [[setswapchan]]>>=
 void
@@ -18522,6 +18736,12 @@ VLNUMSIZE=  22,
 
 
 
+%claude:
+[[todinit()]] bootstraps the wall clock. It reads the fasttick counter
+once (which also fills in [[tod.hz]], the fasttick frequency), computes
+the multipliers, and registers [[todfix()]] as a periodic callback
+(every 100~ms) to prevent overflow in the tick-to-nanosecond conversion.
+
 <<function [[todinit]]>>=
 void
 todinit(void)
@@ -18538,6 +18758,14 @@ todinit(void)
 @ 
 \l should have two functions instead of doing 2 things at once with
 \l  this arch_fastticks here
+
+%claude:
+[[todsetfreq()]] precomputes the fixed-point multipliers used by [[todget()]]
+and friends. The key idea is to avoid floating-point arithmetic in the kernel:
+[[mk64fract(TODFREQ, f)]] produces a 64-bit fraction whose upper 32 bits
+are the integer part and lower 32 bits are the fractional part, so
+multiplying by it and shifting right 31 gives an accurate conversion
+from fastticks to nanoseconds without any division at runtime.
 
 <<function [[todsetfreq]]>>=
 /*
@@ -18560,6 +18788,15 @@ todsetfreq(vlong f)
 }
 @ 
 
+
+%claude:
+[[todset()]] has two modes. When [[t >= 0]], it sets the time absolutely
+(used at boot or when writing [[/dev/time]]): [[tod.off]] becomes the
+new epoch offset and [[tod.last]] is reset to the current fasttick.
+When [[t < 0]], it sets up a gradual correction: over the next [[n]]
+clock ticks, [[delta]] nanoseconds will be spread evenly so the clock
+smoothly drifts to the correct time instead of jumping. This prevents
+applications that measure elapsed time from seeing negative intervals.
 
 <<function [[todset]]>>=
 /*
@@ -18598,6 +18835,16 @@ todset(vlong t, vlong delta, int n)
     iunlock(&tod);
 }
 @ 
+
+%claude:
+[[todget()]] is the workhorse: it reads the current fasttick, applies
+the fixed-point multiplier to convert to nanoseconds, adds the epoch
+offset, and applies any in-progress delta correction. The monotonicity
+guarantee ([[x >= tod.lasttime]]) ensures time never goes backward even
+if the fasttick counter wraps or the delta is negative. The optional
+[[ticksp]] output gives callers the raw fasttick value synchronized with
+the nanosecond reading, which is important for [[/dev/time]] and
+[[/dev/bintime]].
 
 % sysnsec | ?? -> <>
 <<function [[todget]]>>=
@@ -18654,6 +18901,14 @@ todget(vlong *ticksp)
 }
 @ 
 
+
+%claude:
+[[todfix()]] is called every 100~ms by the clock callback. Its job is
+to ``rebase'' the time-of-day calculation. Without it, the difference
+[[ticks - tod.last]] would grow unboundedly, and the multiplication
+[[diff * tod.multiplier]] would eventually overflow 64 bits. By
+periodically converting the accumulated ticks into nanoseconds and
+folding them into [[tod.off]], the [[diff]] stays small.
 
 <<function [[todfix]]>>=
 /*
@@ -18729,6 +18984,15 @@ ns2fastticks(uvlong ns)
     return res;
 }
 @ 
+
+%claude:
+[[mk64fract()]] builds a fixed-point multiplier for the ratio
+[[to/from]]. Shifting [[to]] left by 32 before dividing puts the
+fractional bits in the low 32 bits. The companion [[arch_mul64fract()]]
+multiplies a 64-bit value by this fraction and shifts right 31, giving
+the effect of multiplying by [[to/from]] without any floating-point.
+For example, [[mk64fract(1000000000, 1000000)]] produces a multiplier
+that converts microsecond ticks to nanoseconds.
 
 <<function [[mk64fract]]>>=
 /*
@@ -18842,6 +19106,22 @@ writetime(char *buf, int n)
 @
 
 \section{[[/dev/bintime]]}
+
+%claude:
+[[/dev/bintime]] is the binary counterpart of [[/dev/time]]. Instead of
+a text string, it returns three little-endian 64-bit integers: nanoseconds
+since the epoch, the fasttick counter, and the fasttick frequency. Because
+[[nsec]] and [[ticks]] come from the same [[todget()]] call, they are
+synchronized---userspace can use the pair to convert between the two
+time bases without kernel round-trips.
+%claude:
+Writing to [[/dev/bintime]] supports three commands, selected by a
+one-byte prefix: [['n']] sets the time absolutely (nanoseconds),
+[['d']] applies a gradual delta correction over a period (used by NTP
+daemons), and [['f']] recalibrates the fasttick frequency. The
+[[le2vlong]]/[[vlong2le]] helpers handle byte-order conversion using
+[[uvorder]], a constant whose byte representation encodes the mapping
+from little-endian to native order.
 
 <<[[consread()]] cases>>=
 case Qbintime:
@@ -19277,6 +19557,25 @@ depends on others. The sequence is roughly:
 (7)~first user process ([[userinit]]),
 (8)~enter the scheduler ([[schedinit]]).
 
+%claude:
+The ordering reflects hard dependencies. You cannot call
+[[print()]] until the UART is initialized, so console
+setup must come before any diagnostic output. You cannot
+allocate memory with [[xalloc()]] until [[xinit()]] has
+carved physical memory into kernel and user pools, so
+[[xinit()]] must precede [[procinit()]], [[pageinit()]],
+and [[imageinit()]]. Interrupts must be disabled
+([[arch__trapinit()]]) before the clock is started
+([[clockinit()]]), otherwise a timer interrupt could fire
+before the handler is installed. Device drivers
+([[chandevreset()]]) come after the process and page
+allocators because some drivers allocate memory during
+[[reset()]]. And [[userinit()]] must be the very last
+step before [[schedinit()]], because it calls [[ready()]]
+on the first process---if the scheduler ran before
+everything else was initialized, that process would
+crash.
+
 <<function [[main]](arm)>>=
 void
 main(void)
@@ -19364,7 +19663,19 @@ extern  char  end[];
 structure: sets [[cpuno]] to~0, registers it in the
 [[cpus]] array, and clears [[up]] (no process running
 yet). [[machon()]] then marks this CPU as active in the
-[[Active]] bitmap so the scheduler knows it exists:
+[[Active]] bitmap so the scheduler knows it exists.
+
+%claude:
+Notice that [[conf.ncpu]] is set to~0 here and only
+incremented inside [[machon()]], which is called separately
+after [[mmuinit1()]]. This separation matters: the CPU
+structure must be fully initialized before calling
+[[mmuinit1()]] (which stores the L1 page table pointer
+in [[cpu->mmul1]]), and the CPU must only be marked as
+schedulable after the MMU setup is complete. Setting
+[[up]] to [[nil]] is critical---any trap or interrupt
+before [[userinit()]] creates the first process would
+see that no process is running.
 
 % not portable code, because (arm), but in practice most archi have same code
 % and manipulate only port data-structure
@@ -19401,6 +19712,13 @@ arch__cpuinit(void)
 % done later:   //machon(m->cpuno);
 %old: m0 -> cpu0
 %dead:        cpu->delayloop = m0->delayloop;
+
+%claude:
+[[machon()]] is the gate that makes a CPU visible to
+the scheduler. It sets the CPU's bit in [[active.cpus]]
+and increments [[conf.ncpu]] under a lock---the lock
+matters for SMP, where secondary CPUs call [[machon()]]
+concurrently after their own initialization.
 
 % now wait that mmuinit1 has been called.
 <<function [[machon]](arm)>>=
@@ -19484,6 +19802,29 @@ splits it into kernel and user portions (80\% user by
 default), and computes the sizes of all the large kernel
 data structures: the [[Proc]] array, [[Page]] array,
 [[KImage]] array, swap map, and [[malloc]] pools.
+
+%claude:
+The function works in two phases. First, it carves the
+kernel image out of the physical memory map: [[pa]] is set
+to the physical address just past [[end]] (the linker
+symbol marking the end of BSS), and any memory region
+containing the kernel has its base bumped past [[pa]].
+This ensures the kernel's own code and data are never
+handed out by [[xalloc()]].
+
+%claude:
+Second, it computes the sizes of every large array the
+kernel will allocate. The formulas are empirical: 5~extra
+process slots per megabyte of RAM, 3~swap slots per
+physical page, and a fixed 200 image cache headers.
+The key subtlety is the [[kmem]] calculation at the
+end: after reserving 80\% of pages for users, the
+remaining 20\% must fit all the kernel arrays
+([[Page]], [[Proc]], [[KImage]], swap map) plus the
+[[malloc]] heap. The function subtracts the array sizes
+from [[kmem]] to find how much is left for [[mainmem]]
+and [[imagmem]]---the two memory pools used by
+[[malloc()]] and [[smalloc()]].
 
 <<[[main()]] parsing options and boot arguments(arm)>>=
 //optionsinit("/boot/boot boot"); // setup values for getconf() 
@@ -19626,7 +19967,21 @@ code (from the Interrupts chapter) to [[HVECTORS]]
 ([[0xFFFF0000]]), disables all interrupts, and sets up
 scratch stacks for each exception mode (IRQ, ABT, UND)
 so that [[_vxxx]] handlers have somewhere to save
-[[R0]]--[[R4]]:
+[[R0]]--[[R4]].
+
+%claude:
+ARM has a fixed exception vector table at either address~0
+or [[0xFFFF0000]] (high vectors, selected by the [[CpChv]]
+bit set during boot). The [[Vpage0]] structure mirrors
+the hardware layout: 8~branch instructions followed by
+8~target addresses. [[memmove]] copies both from the
+linker-placed originals into the high-vector page, then
+a cache flush ensures the instruction cache sees the new
+code. The [[intrsoff()]] call writes all-ones to the
+Broadcom interrupt controller's disable registers,
+masking every interrupt source---they will be selectively
+re-enabled later as individual drivers register handlers
+via [[arch_intrenable()]].
 
 <<struct [[Vpage0]](arm)>>=
 /*
@@ -19687,6 +20042,17 @@ intrsoff(void)
 
 
 
+%claude:
+ARM has banked [[R13]] (SP) registers: each processor
+mode (IRQ, ABT, UND, SVC) has its own private [[R13]].
+When an interrupt fires, the CPU switches to IRQ mode
+and uses IRQ's [[R13]]---if it was never initialized,
+the handler would corrupt random memory. [[setr13()]]
+temporarily switches to each mode, installs the 5-word
+scratch area from the [[Cpu]] structure as that mode's
+[[R13]], then switches back. The SVC stack was already
+set up by [[_start]].
+
 <<[[arch__trapinit()]] set stack for other exception/processor-modes>>=
 setr13(PsrMirq, cpu->sirq);
 setr13(PsrMabt, cpu->sabt);
@@ -19736,7 +20102,27 @@ TEXT setr13(SB), 1, $-4
 cycles against the 1~MHz system timer, then registers
 [[clockintr]] as the handler for [[IRQtimer3]]. After
 this, the hardware will generate an interrupt when
-system timer~3's compare register matches the counter:
+system timer~3's compare register matches the counter.
+
+%claude:
+The frequency measurement is a neat calibration trick.
+The Broadcom system timer runs at a known 1~MHz, so
+the code waits for the counter to advance by exactly
+10,000 ticks (10~ms) and counts how many CPU cycles
+elapse during that window. Since 10,000 microseconds
+is 1/100th of a second, multiplying the cycle count
+by~100 gives [[cpuhz]]. This is necessary because the
+ARM clock frequency can be set by [[config.txt]] and
+is not a compile-time constant.
+
+%claude:
+Note that [[clockinit()]] only enables the hardware
+interrupt source---it does not start the periodic
+tick. That happens in [[timersinit()]], which creates
+a [[Timer]] structure and calls [[timeradd()]] to
+program the compare register. The two-step design
+separates hardware setup (architecture-specific) from
+the timer policy (portable code).
 
 % http://embedded-xinu.readthedocs.io/en/latest/arm/rpi/BCM2835-System-Timer.html
 
@@ -19837,7 +20223,13 @@ timersinit(void)
 [[mmuinit1()]] finishes what [[mmuinit()]] started: it
 records the L1 table in [[cpu->mmul1]] and removes the
 identity mapping of physical address~0 that was needed
-only while the MMU was being enabled:
+only while the MMU was being enabled. The identity map
+was a bootstrapping trick: when the MMU is first turned
+on, the next instruction fetch uses virtual addresses,
+so the code must be mapped at its current physical address
+too. Now that we are running in KZERO space, the identity
+map is a security hole---clearing it ensures that virtual
+address~0 is unmapped, so null pointer dereferences fault.
 
 % part 2
 
@@ -19870,7 +20262,22 @@ kernel data structures using [[xalloc]] from the Memory
 chapter. [[xinit()]] splits physical memory between the
 kernel ([[xhole]]) and user pages ([[palloc.mem]]).
 Then [[procinit()]], [[pageinit()]], [[swapinit()]], and
-[[imageinit()]] each allocate their respective arrays:
+[[imageinit()]] each allocate their respective arrays.
+
+%claude:
+The split works as follows. [[arch__confinit()]] already
+decided that 20\% of pages go to the kernel and 80\% to
+users. [[xinit()]] walks the [[conf.mem]] array and for
+each contiguous region, feeds the first [[kpages]] worth
+to [[xhole()]] (the kernel free list), and records the
+rest in [[palloc.mem]] (the user page pool). After
+[[xinit()]], [[xalloc()]] can hand out kernel memory, and
+[[procinit()]], [[pageinit()]], [[swapinit()]], and
+[[imageinit()]] each call [[xalloc()]] to grab their
+arrays. [[pageinit()]] then threads the user pages into
+[[palloc]]'s doubly-linked free list and prints the
+familiar ``128M memory: 26M kernel data, 102M user,
+307M swap'' diagnostic.
 
 %setup kernel memory xlists and also palloc.mem which is all about user memory
 
@@ -20088,7 +20495,17 @@ each device driver's [[reset()]] method. This is where
 most hardware is discovered and initialized: the USB
 controller, SD card, Ethernet, console, etc. A second
 pass via [[chandevinit()]] (called later from [[init0()]])
-runs each driver's [[init()]] method in a process context:
+runs each driver's [[init()]] method in a process context.
+
+%claude:
+The two-pass design ([[reset]] then [[init]]) exists
+because [[reset()]] runs during [[main()]] before any
+process exists---it cannot sleep or use [[waserror()]].
+[[init()]] runs later inside [[init0()]], where there
+is a real process context with a kernel stack and error
+labels. Drivers that need to sleep during initialization
+(e.g., waiting for USB enumeration) must defer that
+work to [[init()]].
 
 <<function [[chandevreset]]>>=
 void
@@ -20183,6 +20600,20 @@ initializes environment variables, starts the alarm
 kernel process, and finally calls [[arch_touser()]] to
 drop into user mode and execute [[initcode]].
 
+%claude:
+This is the most delicate piece of the boot sequence,
+because the first process has no parent to inherit from.
+Every subsequent process is created by [[rfork]], which
+copies segments, file descriptors, and namespace from
+a parent. Here, everything must be built from scratch:
+a fresh process group, environment group, file descriptor
+group, and rendez group. The process gets two segments---a
+text segment with the hand-assembled [[initcode]] and a
+stack segment---and two program counters: [[sched.pc]]
+points to [[init0]] (the kernel-side setup that will run
+first), and the user-mode entry point is
+[[UTZERO+0x20]] (set by [[arch_touser()]]).
+
 % kernel code part of first process: init0
 % user code part of first process: initcode, which will then exec boot/boot!
 
@@ -20276,6 +20707,21 @@ arch__userinit(void)
 % to make it bigger.
 % also maybe cause use segattach for a new seg and put the stack there?
 
+%claude:
+[[init0()]] is the kernel-side half of the first process.
+When the scheduler picks the process created by
+[[userinit()]], it ``returns'' to [[init0]] via the
+saved [[sched.pc]]. The function runs in kernel mode
+with interrupts initially disabled. Its job is to build
+the minimal environment that [[startboot()]] will need:
+a root namespace ([[up->slash]]), device driver
+second-phase initialization ([[chandevinit()]]),
+environment variables like [[cputype]] and [[service]],
+and the [[alarmkproc]] kernel thread. Only then does
+[[arch_touser(sp)]] fake a return-from-interrupt to
+drop into user mode at [[UTZERO+0x20]], where
+[[initcode]] calls [[exec("/boot/boot")]].
+
 % rename init_kernel_part? will be the code at the very top
 % of the stack! that should eventually IRET to user code
 % set by userinit to sched.pc
@@ -20361,6 +20807,20 @@ void  (*init)(void);
 % when forking? maybe could remove
 
 
+%claude:
+[[arch_touser()]] is the ceremony that crosses the
+kernel/user boundary for the very first time. It cannot
+simply branch to user code, because the CPU must switch
+from SVC mode to USR mode and simultaneously set the
+user stack pointer. The trick is to fake a
+return-from-interrupt: it loads [[sp]] into the
+user-mode [[R13]] (via the [[.S]] suffix which accesses
+banked registers), sets [[SPSR]] to user mode, pushes
+[[UTZERO+0x20]] as the return address, and executes
+[[RFE]]---which atomically loads [[PC]] from the stack
+and [[CPSR]] from [[SPSR]], dropping to user mode.
+The [[0x20]] offset skips the Plan~9 a.out header.
+
 % MOVM.S  (R13), [R13] !!
 % kernel vs user R13?  .S?
 
@@ -20404,11 +20864,26 @@ TEXT arch_touser(SB), 1, $-4
 
 
 
+%claude:
+[[initcode]] is a tiny user-mode program compiled
+separately and embedded in the kernel as a byte array.
+It is the very first code to run in user space. On ARM,
+the entry point is in assembly ([[init9.s]]) because
+[[R12]] (the static base register) must be set before
+any C code can access globals---and doing that in C
+would pull in the full C runtime. The assembly stub
+sets [[R12]], then calls [[startboot()]], which opens
+[[/dev/cons]] for file descriptors~0, 1, and~2, binds
+essential device trees ([[#c]], [[#e]], [[#s]]) into
+the namespace, and calls [[exec("/boot/boot")]].
+After this [[exec]], the first process is running
+[[boot.rc]]---the kernel's work is done.
+
 % code of initcode here! generated by a trick in a .h! chicken and egg
 
 % get rid of that? have just initcode.c that do the _main? why this extra
-%  complexity? because of portability again, they have init9.c, 
-% but also init9.s in other architecture, and so the common part 
+%  complexity? because of portability again, they have init9.c,
+% but also init9.s in other architecture, and so the common part
 % is having a startboot() but before you need to setup a few things
 % like the proper stack registers (see bcm init9.s)
 
@@ -20532,6 +21007,19 @@ the user environment, and eventually launches [[init]]
 and then the shell. At this point, the kernel is fully
 operational---all the machinery from the previous chapters
 is running.
+
+%claude:
+Notice how [[startboot()]] carefully bootstraps the
+namespace before calling [[exec]]. It opens [[#c/cons]]
+three times to create file descriptors~0, 1, and~2
+(stdin, stdout, stderr)---without these, [[boot.rc]]
+could not print anything. Then it binds [[#c]] (the
+console device) into [[/dev]], [[#ec]] and [[#e]] (the
+environment devices) into [[/env]], and [[#s]] (the
+srv device) into [[/srv]]. These binds build just enough
+of the conventional namespace for [[rc]] to function.
+The full namespace---with [[/proc]], [[/net]], and the
+root file system---is assembled later by [[boot.rc]].
 
 % See section on Userspace system programs.
 % when arrive here, we got the first process executing! and a working kernel!
@@ -21235,6 +21723,15 @@ if(iref)
     cclose(c);
 @
 
+%claude:
+[[\hlink{fdclose}]] removes a channel from the fd table and closes it.
+The [[flag]] parameter supports selective closing: when non-zero
+(e.g., [[CCEXEC]]), only fds whose channel has that flag set are
+closed. This is how ``close on exec'' works --- [[sysexec()]] calls
+[[fdclose(i, CCEXEC)]] for every fd. After clearing the slot,
+[[fdclose]] walks backward to update [[maxfd]], keeping it accurate
+so that [[closefgrp()]] does not scan empty slots.
+
 <<function [[fdclose]]>>=
 void
 fdclose(int fd, int flag)
@@ -21904,6 +22401,18 @@ long  (*read)(Chan*, void*, long, vlong);
 @
 % user_addr? not always! see sysexec, we pass the address of a kernel local
 
+%claude:
+The internal [[read()]] function handles two cases depending on the
+channel type. For regular files, it dispatches directly to the device's
+[[read()]] method. For directories ([[QTDIR]]), the logic is more
+involved: the kernel must track two offsets --- [[c->offset]] counts
+bytes as the user sees them (after mount table rewriting by [[mountfix()]]),
+while [[c->devoffset]] counts bytes as the device sees them. This dual
+accounting is needed because [[mountfix()]] can change the size of
+directory entries (rewriting their names to reflect bind/mount
+translations), so the user-visible byte count diverges from the
+device-level byte count. The [[cclose()]] at the end releases the extra
+reference taken by [[fdtochan()]] with [[iref]] true.
 
 <<function [[read]]>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
@@ -21988,6 +22497,17 @@ syspwrite(ulong* arg)
 <<[[Dev]] methods>>=
 long  (*write)(Chan*, void*, long, vlong);
 @
+
+%claude:
+The [[write()]] function uses an optimistic offset strategy: it
+advances [[c->offset]] by the requested count [[n]] before calling
+the device, then rolls back if the device wrote fewer bytes than
+requested. This differs from [[read()]], which advances the offset
+after the device call. The asymmetry exists because a partial write
+is a normal condition (the caller may retry), while a partial read
+means the data simply was not there. Writing to a directory is
+forbidden --- unlike reads, which return serialized directory entries,
+there is no meaningful write operation on a directory.
 
 <<function [[write]]>>=
 // long pwrite(int fd, void *buf, long nbytes, vlong offset);
@@ -22201,6 +22721,14 @@ forceclosefgrp(void)
 
 
 
+%claude:
+The [[\hlink{Clunkq}]] is a simple producer-consumer queue: dying
+processes enqueue channels via [[ccloseq()]], and background kernel
+processes ([[closeproc]]) dequeue and close them. The [[nqueued]] and
+[[nclosed]] counters are for debugging. The [[QLock]] serializes
+consumer access (only one [[closeproc]] drains at a time), while the
+[[Rendez]] lets the consumer sleep when the queue is empty.
+
 <<struct [[Clunkq]]>>=
 /*
  * Queue a chan to be closed by one of the clunk procs.
@@ -22221,6 +22749,13 @@ struct Clunkq {
 struct Clunkq clunkq;
 @
 
+
+%claude:
+[[\hlink{ccloseq}]] (``close, queued'') is the deferred variant of
+[[cclose()]]. Instead of calling the device's [[close()]] method
+directly --- which might block talking to a remote file server ---
+it enqueues the channel on the clunk queue. If no [[closeproc]]
+worker is sleeping, it spawns a new one.
 
 <<function [[ccloseq]]>>=
 void
@@ -22258,6 +22793,14 @@ clunkwork(void*)
 }
 @
 
+%claude:
+The [[closeproc]] worker is a self-managing kernel process: [[ccloseq()]]
+spawns one via [[kproc()]] only if [[wakeup()]] finds no existing
+sleeper, so workers are created on demand. Each worker loops draining
+the queue; if it finds nothing after a 5-second timeout, it exits
+via [[pexit()]]. This means the system only spends a kernel process
+slot on clunk work when there is actual work to do, and the worker
+disappears when idle.
 
 <<function [[closeproc]]>>=
 void
@@ -23898,6 +24441,12 @@ newpgrp(void)
 @ 
 
 
+%claude:
+When a process group's reference count drops to zero, [[\hlink{closepgrp}]]
+walks every bucket in the hash, closing all ``from'' channels and
+freeing all mount chains. The lock ordering ([[debug]] then [[ns]])
+must be respected even during cleanup.
+
 <<destructor [[closepgrp]]>>=
 void
 closepgrp(Pgrp *p)
@@ -24298,6 +24847,14 @@ int2flag(int flag, char *s)
     *s = '\0';
 }
 @
+
+%claude:
+[[\hlink{mntscan}]] iterates through the mount table in [[mountid]]
+order. Since the hash table has no inherent ordering, it does a
+full scan on every call, finding the mount entry with the smallest
+[[mountid]] greater than the last one returned. This is $O(n^2)$
+overall but namespaces are small, and it avoids holding locks across
+reads.
 
 <<function [[mntscan]]>>=
 void
@@ -24749,6 +25306,15 @@ if(c->umc != nil){
 @
 
 
+%claude:
+[[\hlink{unionread}]] reads a union directory by iterating through the
+mount list. It lazily opens each mount's channel ([[c->umc]]) as
+needed and reads until empty, then advances to the next mount via
+[[c->uri]]. If a mount's device raises an error, that component is
+silently skipped---a pragmatic choice since one bad server should not
+break the whole union. The [[umqlock]] serializes reads because the
+state ([[uri]], [[umc]]) is shared across concurrent readers.
+
 <<function [[unionread]]>>=
 long
 unionread(Chan *c, virt_vp va, long n)
@@ -25030,6 +25596,14 @@ struct Bogus bogus;
 @
 % union for attach, attach should take a byte*, not char* really
 
+%claude:
+The mount case is more complex than bind. It converts the file
+descriptor [[fd]] into a channel, then attaches to the mount
+device ([[#M]]) which will speak 9P over that channel. The
+[[afd]] parameter is an optional authentication channel. The
+[[spec]] string lets you select a subtree from the remote server
+(e.g., mounting just [[/usr]] from a file server).
+
 <<[[bindmount()]] if ismount>>=
 if(ismount){
     validaddr((ulong)spec, 1, false);
@@ -25136,6 +25710,13 @@ if(mnt->umh)    /* should not happen */
     print("cunmount newp extra umh %p has %p\n", mnt, mnt->umh);
 @
 
+%claude:
+[[\hlink{cunmount}]] has two modes: if [[mounted]] is nil, it removes the
+entire mount point (the [[\hlink{Mhead}]] and all its mounts). If
+[[mounted]] is given, it removes only that specific entry from the
+union list. When the last entry in a union is removed, the
+[[\hlink{Mhead}]] itself is cleaned up.
+
 <<function [[cunmount]]>>=
 void
 cunmount(Chan *mnt, Chan *mounted)
@@ -25212,6 +25793,13 @@ cunmount(Chan *mnt, Chan *mounted)
 
 \section{XTODO}
 
+%claude:
+Each [[\hlink{Mount}]] gets a globally unique [[mountid]] from
+a counter. This serves two purposes: [[\hlink{mntscan}]] uses
+it to iterate the mount table in creation order (for [[/proc/\#/ns]]),
+and [[\hlink{pgrpcpy}]] uses it to preserve ordering when
+duplicating a namespace for [[RFNAMEG]]. The [[order]] and [[copy]]
+fields are scratch pointers used only during [[\hlink{pgrpcpy}]].
 
 % put in union mount section?
 <<[[Mount]] other fields>>=
@@ -25355,6 +25943,16 @@ int mrock;
 QLock rockqlock;
 @
 
+%claude:
+The ``rock'' mechanism handles a subtle problem with directory reads
+across mount points. [[\hlink{mountfix}]] rewrites directory entries
+to reflect the current namespace (e.g., changing device-relative names
+to mount-relative names), which can change entry sizes. If the
+rewritten entries overflow the user buffer, the excess is stashed in
+[[c->dirrock]] and returned on the next [[read]] call via
+[[\hlink{mountrockread}]]. The name ``rock'' comes from Plan 9 slang
+for a stash of saved state.
+
 <<function [[mountrock]]>>=
 /*
  * Mountfix might have caused the fixed results of the directory read
@@ -25452,9 +26050,20 @@ mountrewind(Chan *c)
 @
 
 
+%claude:
+[[\hlink{mountfix}]] is the postprocessor for directory reads.
+For each entry in the read buffer, it checks if that entry
+corresponds to a mount point. If so, it re-stats the mounted
+channel to get fresh metadata (size, permissions, modification
+time) while preserving the original name. This is necessary
+because a directory listing of [[/dev]] should show the attributes
+of the mounted device files, not the underlying directory entries.
+The buffer surgery (shifting entries to accommodate size changes)
+can overflow into the ``rock'' buffer via [[\hlink{mountrock}]].
+
 <<function [[mountfix]]>>=
 /*
- * Rewrite the results of a directory read to reflect current 
+ * Rewrite the results of a directory read to reflect current
  * name space bindings and mounts.  Specifically, replace
  * directory entries for bind and mount points with the results
  * of statting what is mounted there.  Except leave the old names.
@@ -26376,11 +26985,34 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 
 % will talk about PC version because simpler (for once).
 
+%claude:
+The screen subsystem provides the low-level text output that the
+console device dispatches to via the [[screenputs]] function pointer.
+On x86, this is straightforward CGA text-mode output---writing
+character/attribute pairs to a memory-mapped buffer at [[0xB8000]].
+On ARM, there is no hardware text mode, so the kernel must negotiate
+a framebuffer with the VideoCore GPU through a mailbox protocol,
+then render characters in software (covered in \book{Graphics}).
+
 \subsection{Text output on a PC (x86)}
 
 % simple, cga
 
 \subsection{Text output on a Raspberry Pi (ARM)}
+
+%claude:
+On the Raspberry Pi, the CPU does not have direct access to the
+display hardware. Instead, it communicates with the VideoCore GPU
+through a {mailbox interface}: a shared memory buffer at a fixed
+physical address ([[VCBUFFER]] at [[0x3400]]) where the CPU writes
+a framebuffer request (resolution, color depth) and the GPU writes
+back the physical address of the allocated framebuffer. The kernel
+then calls [mmukmap] to map that physical framebuffer into the
+kernel's virtual address space at the [[FRAMEBUFFER]] address, creating
+1~MiB section entries in the L1 page table. This two-pass approach
+in [[mmukmap]]---first checking that no existing mappings conflict,
+then installing the new entries---avoids accidentally clobbering
+live mappings.
 
 <<constant [[VCBUFFER]](arm)>>=
 #define VCBUFFER    (KZERO+0x3400)      /* videocore mailbox buffer */
@@ -26721,6 +27353,25 @@ putstrn0(char *str, int n, bool usewrite)
 
 \subsection{[[print()]], [[iprint()]], [[pprint()]]}
 
+%claude:
+The kernel has three distinct print functions, each tailored to a
+different context. [[print]] is the normal one: it formats into
+a stack buffer and calls [putstrn0] with [[usewrite]] false, meaning
+output goes to the screen and serial port but not through the file
+system. [[iprint]] (interrupt print) is for use in interrupt handlers
+and other contexts where locks may already be held: it raises the
+interrupt priority level with [[arch_splhi]], uses a try-lock on
+[[iprintlock]] rather than blocking, and outputs directly to screen,
+serial, and the kernel message buffer. The try-lock with a bounded
+retry loop (1000 attempts with 100~$\mu$s delays) is a pragmatic
+compromise---on multiprocessor systems it prevents interleaved output
+without risking deadlock if the lock holder has crashed.
+[[pprint]] (process print) is different altogether: it writes to
+the calling process's stderr (file descriptor~2) through the normal
+device write path, prepending the process name and pid. This is how
+the kernel reports per-process errors (e.g., ``[[db 43: unknown qid]]'')
+to the right terminal window rather than the system console.
+
 \subsubsection{[[print()]]}
 
 <<constant [[PRINTSIZE]]>>=
@@ -26872,6 +27523,16 @@ devcons_pprint(char *fmt, ...)
 @ 
 
 \subsection{[[/dev/cons]]}
+
+%claude:
+The console device driver follows the standard \plan device interface:
+a [[Dev]] structure populated with method pointers for each file
+operation. Most methods delegate to generic helpers ([[devopen]],
+[[devgen]], [[devdirread]]) with the real logic concentrated in
+[[consread]] and [[conswrite]], which switch on [[c->qid.path]]
+to dispatch to the right sub-file handler ([[Qcons]], [[Qconsctl]],
+[[Quser]], [[Qnull]], etc.). The device character [[`c']] identifies
+this as the console device in the [[devtab]] array.
 
 <<method consinit>>=
 static void
@@ -27162,6 +27823,16 @@ case Kmouse|5:
 
 \subsection{PS2 mouse (x86)}
 
+%claude:
+The PS2 mouse on x86 shares the i8042 keyboard controller: the
+auxiliary port (port [[0x60]]/[[0x64]]) delivers 3-byte mouse packets
+that encode button state and relative X/Y deltas. On ARM, there is
+no PS2 hardware; the mouse is a USB HID device handled by the USB
+stack, which converts USB reports into the same internal mouse
+event format.
+
+
+
 \subsection{USB mouse (ARM)}
 
 
@@ -27173,7 +27844,14 @@ case Kmouse|5:
 
 % see also devpipe.c and devdup.c, devmnt.c, devsrv.c
 
-
+%claude:
+Beyond the keyboard, screen, console, and mouse, the kernel includes
+several other device drivers exposed through [[/dev]]: [[devpipe]]
+for in-kernel pipes, [[devdup]] for file descriptor manipulation,
+[[devmnt]] for mounted file systems, [[devsrv]] for the service
+registry, and [[devaudio]] for sound. Each follows the same [[Dev]]
+interface pattern, making them interchangeable from the file system's
+perspective.
 
 
 %******************************************************************************
@@ -27329,6 +28007,13 @@ qwrite(Queue *q, void *vp, int len)
 @
 
 
+
+%claude:
+[[\hlink{qget}]] is a non-blocking dequeue for interrupt context:
+it returns the first block or nil (setting [[Qstarve]] so the
+producer knows to wake the consumer later). If the queue drops
+below half its limit, it clears [[Qflow]] and wakes the producer.
+The half-limit hysteresis prevents oscillation at the boundary.
 
 <<function [[qget]]>>=
 /*
@@ -27512,6 +28197,13 @@ qconsume(Queue *q, void *vp, int len)
 }
 @
 
+
+%claude:
+[[\hlink{qpass}]] and [[\hlink{qpassnolim}]] append an entire block
+list to a queue at interrupt level. [[qpass]] drops the list if the
+queue is full (returning [[-1]]), while [[qpassnolim]] always
+accepts. These are used by network drivers that have already
+allocated blocks and want to hand them off without copying.
 
 <<function [[qpass]]>>=
 int
@@ -28795,6 +29487,13 @@ rootgen(Chan *c, char *name, Dirtab*, int, int s, DirEntry *dp)
         return 1;
     }
 }
+
+%claude:
+[rootread] dispatches on the Qid. For directories ([[Qdir]] or [[Qboot]])
+it delegates to [devdirread] with [rootgen]. For regular files, it
+computes an index from the Qid path, looks up the [[data]] array, and
+copies bytes. The content of root files comes from the [[data2s]] tool
+that converts binaries into C arrays at link time.
 @
 
 %if(t < 0){
@@ -29012,6 +29711,12 @@ devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, DirEntry *dp)
 
 
 
+
+%claude:
+[devclone] creates a new [[Chan]] that copies [[c]]'s type, device
+number, Qid, and auxiliary pointer. The clone must not be open
+([[COPEN]])---cloning is only used during [[walk]], before the file
+is opened.
 
 <<function [[devclone]]>>=
 Chan*
@@ -29247,6 +29952,15 @@ devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
 }
 @
 
+%claude:
+[devpermcheck] implements Plan 9's simplified permission model.
+There are only three categories: the file owner, the host owner
+([[eve]]), and everyone else. The [[access]] array maps the four open
+modes ([[OREAD]], [[OWRITE]], [[ORDWR]], [[OEXEC]]) to the corresponding
+permission bits (0400, 0200, 0600, 0100). Shifting the file's permission
+bits left by 0, 3, or 6 positions aligns the relevant group's bits
+with the check mask.
+
 <<function [[devpermcheck]]>>=
 /*
  * error(Eperm) if open permission not granted for up->user.
@@ -29270,6 +29984,13 @@ devpermcheck(char *fileuid, ulong perm, int omode)
         error(Eperm);
 }
 @
+
+%claude:
+[devopen] iterates the generator to find the entry matching [[c]]'s Qid,
+checks permissions via [devpermcheck], then marks the channel as open.
+If the generator exhausts without finding a match (e.g., for a directory
+not explicitly listed), it skips the permission check---directories are
+always readable. Directories may only be opened for reading.
 
 <<function [[devopen]]>>=
 Chan*
@@ -29401,6 +30122,17 @@ struct Block
   ushort  checksum;   /* IP checksum of complete packet (minus media header) */
 };
 @
+
+%claude:
+The layout of a [[Block]] buffer is:
+%
+%  base        rp           wp        lim
+%  |--header---|---data------|--free---|
+%
+The region before [[rp]] is header space ([[Hdrspc]] bytes). Protocol
+layers prepend headers by decrementing [[rp]], avoiding copies.
+[[BLEN]] gives the number of data bytes; [[BALLOC]] gives the total
+allocated size.
 
 <<function [[BLEN]]>>=
 #define BLEN(s) ((s)->wp - (s)->rp)
@@ -30074,6 +30806,14 @@ bl2mem(byte *p, Block *b, int n)
 % explain RPC? 9p
 
 %Ramfs, dossrv
+
+%claude:
+The chapters that follow (IPC, Special Fileservers) cover
+the more complex in-kernel file servers---[[devpipe]], [[devsrv]],
+[[devmnt]]---that layer on top of the [[Dev]] interface to provide
+rich inter-process communication. The [[Fcall]] structure (covered
+in \book{Libcore}) is the 9P message format used by [[devmnt]] to
+communicate with external file servers.
 
 \section{[[Fcall]]}
 
@@ -30829,6 +31569,12 @@ pipeattach(char *spec)
 @
 
 
+%claude:
+[pipegen] is the custom directory generator for the pipe device. Unlike
+most devices that report static sizes from [[Dirtab]], pipes report the
+current queue length for [[data]] and [[data1]] --- so [[stat]] reflects
+how many bytes are buffered and waiting to be read.
+
 <<function [[pipegen]]>>=
 static int
 pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, DirEntry *dp)
@@ -30864,6 +31610,13 @@ pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, DirEntry *dp)
 }
 @
 
+
+%claude:
+[pipewalk] delegates to [[devwalk]] but must bump the pipe's reference
+count when the walk clones the channel. If the original channel was
+already open, the per-side [[qref]] count is also incremented --- this
+matters because [pipeclose] uses [[qref]] to decide when to hang up the
+opposite end.
 
 <<method pipewalk>>=
 static Walkqid*
@@ -30925,6 +31678,11 @@ pipestat(Chan *c, byte *db, int n)
 @
 
 
+%claude:
+[pipewstat] only allows the host owner ([[eve]]) to change the
+pipe's permissions. Ownership changes are rejected --- pipe endpoints
+have no meaningful owner identity.
+
 <<method pipewstat>>=
 static int
 pipewstat(Chan* c, byte* db, int n)
@@ -30958,6 +31716,13 @@ pipewstat(Chan* c, byte* db, int n)
 @
 
 
+
+%claude:
+[pipeopen] increments the per-side reference count ([[qref]]) that
+tracks how many open file descriptors reference each endpoint. The
+[[iounit]] is set to [[qiomaxatomic]], advertising the maximum size of
+an atomic write --- writes up to this size are guaranteed not to be
+interleaved with writes from other processes.
 
 <<method pipeopen>>=
 /*
@@ -31237,6 +32002,13 @@ for(i = BSEG+1; i < NSEG; i++) {
 }
 @
 
+%claude:
+[[segbrk]] extends a user-created segment (not text, data, or stack).
+It locates the segment containing [[saddr]], verifies it is a custom
+segment type, then delegates to [[ibrk]] which grows its virtual
+address range. This lets user programs manage their own heaps in
+attached shared segments.
+
 <<syscall segbrk>>=
 // void* segbrk(void *saddr, void *addr);
 long
@@ -31396,6 +32168,15 @@ isoverlap(Proc *p, ulong va, int len)
 @
 
 
+%claude:
+[segdetach] unmaps a previously attached segment from the process's
+address space. It acquires both the process segment lock and the
+individual segment lock, finds the segment containing the given address,
+then calls [putseg] to decrement the reference count. The stack segment
+([[SSEG]]) cannot be detached. The final [[arch_flushmmu]] is essential:
+without it, stale TLB entries could allow continued access to the
+detached memory.
+
 <<syscall segdetach>>=
 // int segdetach(void *addr);
 long
@@ -31444,6 +32225,12 @@ found:
 }
 @ 
 
+
+%claude:
+[[segfree]] releases pages within a segment without detaching the segment
+itself. This is useful for returning memory to the system while keeping
+the virtual address range reserved. The address boundaries are page-aligned
+(rounding [[from]] up and [[to]] down), so only complete pages are freed.
 
 <<syscall segfree>>=
 // int segfree(void *va, ulong len);
@@ -31557,6 +32344,13 @@ bool flushmmu;   /* make current proc flush it's mmu state */
 
 
 
+%claude:
+[[segflush]] invalidates the instruction cache for a range of addresses.
+This is needed on architectures with separate instruction and data caches
+(like ARM) after modifying code in memory --- for example, a JIT compiler
+or dynamic linker must call [[segflush]] before executing newly written
+instructions. The function walks the page tables chunk by chunk, marking
+pages for cache flush via [[ptflush]].
 
 <<syscall segflush>>=
 long
@@ -31682,7 +32476,13 @@ cas32(void* addr, u32int old, u32int new)
 
 \subsubsection{[[semxxx()]]}
 
-
+%claude:
+The semaphore wait list is a doubly-linked circular list rooted at
+[[s->sema]]. Each waiting process has a stack-allocated [[Sema]] node
+linked into this list. [[semqueue]] inserts at the tail (before the
+sentinel), [[semdequeue]] removes, and [[semwakeup]] walks the list
+looking for waiters on a specific address. Note that [[Sema]] embeds
+a [[Rendez]], so each waiter has its own sleep/wakeup rendezvous point.
 
 <<function [[semqueue]]>>=
 /* Add semaphore p with addr a to list in seg. */
@@ -31822,6 +32622,12 @@ semacquire(Segment *s, long *addr, bool block)
 }
 @ 
 
+
+%claude:
+[tsemacquire] adds a timeout to the acquire loop. It uses [[tsleep]]
+instead of [[sleep]] and tracks elapsed time via CPU ticks. The
+[[ms]] budget is decremented each iteration, so multiple spurious
+wakeups are handled correctly.
 
 <<function [[tsemacquire]]>>=
 /* Acquire semaphore or time-out */
@@ -39689,6 +40495,15 @@ struct Cmdbuf
 };
 @
 
+%claude:
+The [<parsecmd>] function uses a single-allocation trick: the
+[[Cmdbuf]] struct, the array of string pointers, and the copy
+of the command text are all packed into one [[smalloc]] call.
+The layout in memory is: [[Cmdbuf]] header, then [[nf]] [[char*]]
+pointers (for [[cb->f]]), then the [[n+1]] byte string copy
+(for [[cb->buf]]). This avoids multiple allocations and simplifies
+cleanup---a single [[free(cb)]] releases everything.
+
 <<function [[parsecmd]]>>=
 /*
  *  parse a command written to a device
@@ -39752,6 +40567,14 @@ cmderror(Cmdbuf *cb, char *s)
 }
 @
 
+
+%claude:
+The [<lookupcmd>] function scans the command table linearly,
+matching on the first word of the parsed command. A table entry
+with [[cmd]] set to [["*"]] acts as a wildcard catch-all, matching
+any command---useful for devices that accept freeform input. If
+[[narg]] is non-zero, the argument count must match exactly;
+a zero [[narg]] means the command is variadic.
 
 <<function [[lookupcmd]]>>=
 /*
@@ -40003,11 +40826,41 @@ consistency checking.
 
 \subsection{[[/proc/x/ctl]]}
 
+%claude:
+Writing text commands to [[/proc/\emph{pid}/ctl]] controls a
+process: ``kill'', ``stop'', ``start'', ``hang'', ``private'',
+and others. The commands are parsed by [<procctlreq>] using the
+[[Cmdtab]] infrastructure. This is how [[kill]] works in Plan 9---it
+writes ``kill'' to the target's ctl file rather than sending a
+numeric signal.
+
 \subsection{[[/proc/x/mem]]}
+
+%claude:
+Reading and writing [[/proc/\emph{pid}/mem]] provides direct access
+to the process's virtual address space. This is how debuggers like
+[[acid]] read variables, set breakpoints, and patch running code.
+The kernel translates the file offset into a virtual address, walks
+the process's segment table to find the corresponding page, and
+copies the data. If [[privatemem]] is set, access is denied.
 
 \subsection{[[/proc/x/status]]}
 
+%claude:
+Reading [[/proc/\emph{pid}/status]] returns a fixed-format string
+containing the process name, user, state, CPU times, memory usage,
+and priority---this is what [[ps]] reads. The format is an array
+of fixed-width fields rather than whitespace-separated text,
+so [[ps]] can parse it without ambiguity even when process names
+contain spaces.
+
 \subsection{[[/proc/x/args]]}
+
+%claude:
+The [[args]] file contains the process's command-line arguments,
+as they were at [[exec]] time. A process can also write to its
+own [[args]] file to change its display name in [[ps]]---useful
+for daemons that want to advertise their current state.
 
 \subsection{[[/proc/x/wait]]}
 
@@ -40080,6 +40933,14 @@ qunlock(&up->qwaitr);
 poperror();
 @
 \subsection{Other [[/proc/x/xxx]]}
+
+%claude:
+The remaining [[/proc]] files include [[note]] (for posting
+and reading notifications), [[noteid]]/[[notepg]] (for note group
+management), [[regs]]/[[fpregs]]/[[kregs]] (for register
+inspection), [[ns]] (for namespace listings), [[segment]] (for
+memory segment info), and [[text]] (which returns a channel to
+the executable binary, allowing debuggers to read symbol tables).
 
 \subsection{XXX}
 
@@ -41035,6 +41896,15 @@ nonone(Proc *p)
 @
 % security!!
 
+%claude:
+The [<procfds>] function generates the content of [[/proc/\emph{pid}/fd]],
+listing all open file descriptors with their mode, device type, qid,
+offset, and path. It formats into a local buffer first to avoid
+holding the [[Fgrp]] lock while copying to user space---a common
+pattern in the kernel to minimize lock hold times. The two-pass
+approach over the fd array (first to compute the widest qid field,
+then to format) ensures aligned columns in the output.
+
 <<function [[procfds]]>>=
 static int
 procfds(Proc *p, char *va, int count, long offset)
@@ -41146,7 +42016,13 @@ procargs(Proc *p, char *buf, int nbuf)
 
 
 
-
+%claude:
+The [<proctext>] function is unusual: instead of returning synthetic
+data, it returns a clone of the channel to the process's executable
+binary. This lets debuggers read the symbol table and text
+segment directly from the on-disk image, which is more efficient
+than reading through [[/proc/\emph{pid}/mem]] and avoids issues
+with demand-paged text segments that may not be fully resident.
 
 <<function [[proctext]]>>=
 Chan*
@@ -41624,6 +42500,14 @@ case Qconfig:
 
 \subsection{[[/ys/hosthowner]], [[/sys/hostdomain]]}
 
+%claude:
+The host owner ([[eve]]) is Plan 9's equivalent of root---the
+user who ``owns'' the machine. Reading [[/sys/hostowner]] returns
+this name, and only [[eve]] can change it. The host domain
+identifies the authentication domain. These are writable because
+the boot process sets them up after the kernel starts, and an
+administrator may need to change them.
+
 <<devsys.c enum Qxxx cases>>=
 Qhostowner,
 Qhostdomain,
@@ -41687,6 +42571,13 @@ case Qsysname:
 @
 
 \subsection{[[/sys/drivers]]}
+
+%claude:
+Reading [[/sys/drivers]] lists all registered device drivers with
+their device letter and name---e.g., ``[[#c cons]]'',
+``[[#e env]]'', ``[[#p proc]]''. This is useful for discovering
+what devices are compiled into the kernel without knowing the
+configuration at build time.
 
 <<devsys.c enum Qxxx cases>>=
 Qdrivers,
