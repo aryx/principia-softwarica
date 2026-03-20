@@ -981,7 +981,7 @@ by a dashed rectangle.
   |             |          v         +-----------+    +---------+  |
  /dev/cons  /dev/mouse /dev/draw/1  /mnt/wsys/mouse  /mnt/wsys/cons|
      ^          ^          |        /mnt/wsys/cons^         | ^    |
-     |          |          |        /dev/draw/2 ^ |         | |    |
+     |          |          |        /dev/draw/3 ^ |         | |    |
      |          |          |             |      | |         | |    |
 +----+----------+----------v-------------v------+-+---------v-+----v--+
 |    |          |          |    Kernel   |       <---------------->   |
@@ -1650,7 +1650,7 @@ application so that this application can draw in this new layer.
 As mentioned in Section~\ref{sec:winname}, each window application is
 connected directly to the [[draw]] device,
 as shown in Figure~\ref{fig:soft-archi-threads} with
-the [[hellorio process]] connected to [[draw]] via [[/dev/draw/2/]].
+the [[hellorio process]] connected to [[draw]] via [[/dev/draw/3/]].
 %dup: overview/interface/fs/screen
 The drawing operations by the window application do not go through
 a virtual [[/mnt/wsys/draw]] file that would be managed by [[rio]]
@@ -2076,7 +2076,7 @@ in Section~\ref{sec:trace-mouse-click} and Section~\ref{sec:trace-key-press}.
 However, for efficiency reasons, with [[rio]] the window applications 
 are connected directly to the [[draw]] device, 
 as shown in Figure~\ref{fig:soft-archi-threads} with
-the [[hellorio]] process connected to [[draw]] via [[/dev/draw/2/]].
+the [[hellorio]] process connected to [[draw]] via [[/dev/draw/3/]].
 %
 This simplifies the trace of a drawing operation, 
 \n well memlayer is complicated
@@ -2116,81 +2116,75 @@ window application draws on the screen.
 
 %yoann: ASCII diagram again illustrating the explanations that comes below
 %claude:
-Unlike input events, drawing operations bypass [[rio]]'s fileserver
-entirely. The window application talks directly to [[draw]]
-in the kernel, through a named layer.
+The trace unfolds chronologically in four phases:
+\begin{enumerate}
+\item {\bf [[rio]] starts up}: [[rio]] calls [[initdraw()]] and
+obtains a reference to the display image (stored in [[view]]).
+\item {\bf A new window is created}: [[rio]] allocates a layer
+on [[view]] and gives it a public name (e.g., [["window.2"]]).
+\item {\bf [[hellorio]] connects}: [[hellorio]] calls [[initdraw()]],
+reads [[/mnt/wsys/winname]] to discover the layer name,
+and grabs a reference to it (also stored in its own [[view]]).
+\item {\bf [[hellorio]] draws}: [[hellorio]] calls [[draw(view, ...)]],
+which goes directly to the [[draw]] device---bypassing [[rio]]'s
+fileserver entirely.
+\end{enumerate}
+%claude:
+The traces below are simplified; certain explanations
+about the [[draw]] protocol are contained in the \book{Graphics}.
+\l moreover for full explanations, read the following chapters!
+%claude:
+The following diagram illustrates those four phases.
 Note that the draw client number ([[/dev/draw/3/]]) is unrelated
 to the window identifier in the layer name ([[window.2]])---it
 simply depends on the order in which processes connect to [[draw]]:
 \begin{verbatim}
                   rio                          draw (kernel)
               +----------+                  +----------------+
-              |          |   allocwindow()  |                |
-              |  new() --+----------------->| layer          |
+  Phase 1:    |          |   initdraw()     |                |
+  rio starts  |          +----------------->| "noborder..."  |
+              |          |    -> view       | (display image) |
+              |          |                  |                |
+  Phase 2:    |          |   allocwindow()  |                |
+  new window  |  new() --+----------------->| layer          |
               |          |   nameimage()    | "window.2"     |
               |          +----------------->| (on desktop)   |
               +----------+                  |                |
                                             |    ^           |
   hellorio                                  |    |           |
- +----------+   initdraw()                  |    |           |
- |          +------------------------------->    |           |
- |          |   open /dev/draw/new -> 3     |    |           |
- |          |   read /dev/winname           |    |           |
- |          |    -> "window.2"              |    |           |
+ +----------+                               |    |           |
+  Phase 3:   |   initdraw()                 |    |           |
+  hellorio   |          +------------------>|    |           |
+  connects   |          | /dev/draw/new->3  |    |           |
+ |          |   /dev/winname->"window.2"    |    |           |
  |          |   namedimage("window.2")      |    |           |
  |          +------------------------------->    |           |
  |          |    -> view                    |                |
- |          |                               |                |
- |          |   draw(view, ...)             |                |
- |          +------------------------------>| draw in layer  |
- |          |   /dev/draw/3/data            |   -> screen    |
+  Phase 4:   |                              |                |
+  hellorio   |   draw(view, ...)            |                |
+  draws     +------------------------------>| draw in layer  |
+ |          |   /dev/draw/3/data            |                |
  +----------+                               +----------------+
 \end{verbatim}
 
-\subsubsection{Graphics initialization}
+\subsubsection{Phase 1: [[rio]] starts up}
 
-Before being able to call drawing functions from [[draw.h]],
-[[hellorio]] must first connect to the [[draw]] device with [[initdraw()]]
-(see the \book{Graphics}).
-%
-This is similar to what [[hellorio]] did 
-in the trace of a mouse click with [[initmouse()]], and 
-in the trace of a key press with [[initkeyboard()]].
+%claude:
+The goal of this phase is for [[rio]] to obtain a reference
+to the display image, stored in the global [[view]].
+This is the image on which [[rio]] will later create layers
+for each window.
 %rio-reflection
-In fact, [[rio]] itself also calls at startup those [[initxxx()]] functions.
-In the case of [[rio]], all those functions connect to real [[/dev/]] devices,
-not virtual devices under [[/mnt/wsys/]].
-%
-The graphics initialization of [[hellorio]] 
-relies actually on two calls done previously by [[rio]]:
-
-\begin{enumerate}
-\item The call to [[initdraw()]], which sets the global [[view]],
-during the initialization of [[rio]]
+Note that [[rio]] itself is a graphical application;
+it calls [[initdraw()]] just like [[hellorio]] does.
+The difference is that [[rio]] connects to the real [[/dev/]] devices,
+not virtual devices under [[/mnt/wsys/]]\footnote{Unless
+[[rio]] is run recursively inside one of its own windows,
+in which case it also sees virtual devices from the parent [[rio]]
+(see Section~\ref{sec:recursive-rio}).}.
 \n hard to not talk about rio graphics init. Harder than for mouse and keyboard
 \n  because layer created is based on view, so need to explain view.
 
-\item The call to [[allocwindow()]] to create a new layer,
-using [[view]] as the base layer,
-during the creation by [[rio]] of the new terminal window 
-from where [[hellorio]] will be eventially launched
-
-\end{enumerate}
-
-Thanks to those two previous calls, the call to [[initdraw()]] in 
-[[hellorio]] can fetch a reference to the layer created by [[rio]].
-\n need more, need also nameimage, namespace, and lots of stuff
-
-The following paragraphs will give more details about those steps
-by describing the traces of those steps.
-%
-However, those traces will be partial. Indeed, I will omit 
-certain explanations that are contained in the \book{Graphics}.
-\l moreover for full explanations, read the following chapters!
-
-
-
-\paragraph{[[rio]] and [[initdraw()]]}
 The trace of [[initdraw()]] in [[rio]] is as follows:
 
 \begin{enumerate}
@@ -2263,8 +2257,13 @@ Moreover, after [[initmouse()]], [[rio]] enables also the user to use the mouse.
 
 
 
-\paragraph{[[rio]] and [[allocwindow()]]}
+\subsubsection{Phase 2: a new window is created}
 \l [[alloclayer()]]
+
+%claude:
+The goal of this phase is for [[rio]] to create a layer for the
+new window and make it accessible by giving it a public name.
+
 The trace leading to the creation of a new layer is as follows:
 
 \begin{enumerate}
@@ -2325,7 +2324,7 @@ Finally, the kernel returns the new image identifier to [[rio]].
 field of the [[Window]] structure allocated for the new window.
 \l abuse image identifier for Image, but in essence that's what it is
 %
-[[rio]] creates also a new name for this layer, e.g. [["window.1"]]. 
+[[rio]] creates also a new name for this layer, e.g. [["window.2"]].
 and stores it in the [[Window.name]] field.
 %
 [[rio]] then calls [[nameimage()]] with [[Window.img]] and [[Window.name]]
@@ -2336,7 +2335,7 @@ written in [[/dev/draw/1/data]].
 
 \item The kernel parses the [[nameimage()]] command
 and adds in a global hash table in the kernel an association between
-[["window.1"]] and the layer created previously.
+[["window.2"]] and the layer created previously.
 
 \end{enumerate}
 
@@ -2362,19 +2361,27 @@ to calls to drawing functions taking [[Window.img]] as an argument
 At some point, you can launch [[hellorio]] from
 this terminal window by typing the name of the command in the shell.
 
-\paragraph{[[hellorio]] and [[initdraw()]]} Here is finally the trace
-of [[initdraw()]] in [[hellorio]]:
+\subsubsection{Phase 3: [[hellorio]] connects to the layer}
+
+%claude:
+The goal of this phase is for [[hellorio]] to discover and grab
+a reference to the layer that [[rio]] created in Phase~2.
+The key difference with Phase~1 is that [[/dev/winname]] now
+resolves through [[rio]]'s fileserver (because of the namespace
+set up in Phase~2), not directly through the [[draw]] device.
+
+Here is the trace of [[initdraw()]] in [[hellorio]]:
 
 \begin{enumerate}
 
 \item When [[hellorio]] starts, it also calls [[initdraw()]]
 (like [[rio]] did), which opens [[/dev/draw/new]].
 %
-Since [[hellorio]] is the second application to open this file,
-the kernel returns a file handler to [[/dev/draw/2/ctl]].
+The kernel returns a file handler to a new [[/dev/draw/]] directory
+(e.g., [[/dev/draw/3/ctl]]).
 %
 This is why in Figure~\ref{fig:soft-archi-threads},
-the [[hellorio]] process is connected to the [[/dev/draw/2]] directory.
+the [[hellorio]] process is connected to [[/dev/draw/3/]].
 %dup: merge step 1,2,3 of trace of initdraw for rio
 
 \item [[initdraw()]] calls [[gengetwindow()]], which opens
@@ -2410,15 +2417,15 @@ compares the window identifier stored in [[Window.id]] and the window
 identifier in the 9P request (which was originally passed to [[mount()]]
 in the parent process of [[hellorio]], see Section~\ref{sec:new-namespace}).
 %
-Finally, the worker thread returns [["window.1"]], the content
+Finally, the worker thread returns [["window.2"]], the content
 of [[Window.name]] for the window from where [[hellorio]] was launched.
 \n then return to fileserver proc, write in pipe, etc. see trace mouse click
 
 \item [[initdraw()]] then calls [[namedimage()]] to grab
-a reference to the image named [["window.1"]].
+a reference to the image named [["window.2"]].
 %
-The kernel creates a new image identifier, 
-find the image corresponding to [["window.1"]] by looking in a global
+The kernel creates a new image identifier,
+find the image corresponding to [["window.2"]] by looking in a global
 hash table (this image is the layer created by [[rio]] above), 
 internally links the new image identifier to this image, and finally
 returns the new image identifier.
@@ -2431,11 +2438,19 @@ of the [[hellorio]] process.
 \end{enumerate}
 
 This concludes the graphics initialization for [[hellorio]].
+%claude:
+At this point, [[hellorio]]'s [[view]] and [[rio]]'s [[Window.img]]
+both refer to the same layer in the kernel---exactly as shown
+in the diagram at the beginning of this section.
 
 \l originwindow()?? !! physical to logical!! maybe better delay to later
 \l mouseopen! change things for rio!
 
-\subsubsection{Graphics operation}
+\subsubsection{Phase 4: [[hellorio]] draws}
+
+%claude:
+This is the simplest phase: [[hellorio]] draws directly to [[draw]]
+in the kernel, with no involvement from [[rio]]'s fileserver.
 
 %trans: %dup: (adapted, screen -> window) trace rio
 Once [[hellorio]] called [[initdraw()]], it can draw things in
@@ -2451,14 +2466,14 @@ function in [[hellorio.c]] (see Section~\ref{sec:hellorio-skeleton}):
 \begin{enumerate}
 
 \item When [[hellorio]] calls [[draw()]], the call is translated
-by [[libdraw]] in a command written in [[/dev/draw/2/data]]. 
+by [[libdraw]] in a command written in [[/dev/draw/3/data]].
 \n actually need wait until flushimage()
 The [[view]] argument is reduced to its image identifier.
 
-\item The kernel resolves the access to [[/dev/draw/2/data]] to
+\item The kernel resolves the access to [[/dev/draw/3/data]] to
 a method of the [[draw]] device. This method parses
 the [[draw()]] command and fetches the image associated
-to the image identifier written in [[/dev/draw/2/data]]. 
+to the image identifier written in [[/dev/draw/3/data]]. 
 \n DImage, vs Memimage, vs Memlayer
 \n image identifier local to each client of draw, but not important to know
 %
