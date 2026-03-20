@@ -26,10 +26,6 @@ LIBS=\
 # Programs
 ###############################################################################
 
-#TODO: skipped, pb rm segfault
-# windows\
-#TODO: need unset NPROC otherwise pb in libap.a
-
 PROGRAMS=\
  assemblers\
  linkers\
@@ -39,6 +35,7 @@ PROGRAMS=\
  APE/pcc\
  \
  shells\
+ windows\
  \
  builders\
  debuggers\
