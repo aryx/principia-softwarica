@@ -2545,6 +2545,16 @@ divpt(Point a, int b)
 
 % rectangle defined by two point, upper-left and lower right.
 
+%claude:
+A [[Rectangle]] is defined by two corners: [[min]] (top-left, included)
+and [[max]] (bottom-right, excluded). This half-open convention means
+that [[Dx(r)]] and [[Dy(r)]] give the width and height directly,
+and two adjacent rectangles sharing an edge have no overlap and no gap.
+The [[canonrect]] function normalizes a rectangle whose corners
+may have been given in the wrong order---useful after interactive
+operations like rubber-band selection where the user can drag in
+any direction.
+
 <<struct [[Rectangle]]>>=
 struct Rectangle
 {
@@ -2649,6 +2659,15 @@ Rectangle ZR;
 % height
 
 % arith too
+
+%claude:
+The [[rectaddpt]] and [[rectsubpt]] functions translate a rectangle
+by a vector---add a [[Point]] to slide the rectangle across the screen.
+The containment tests [[ptinrect]], [[rectinrect]], and [[rectXrect]]
+use strict less-than for [[max]] (since [[max]] is the first point
+{\em outside} the rectangle). Note that [[rectXrect]] tests whether
+two rectangles overlap, which is fundamental for clipping and for
+determining which windows need repainting.
 
 <<function [[rectaddpt]]>>=
 Rectangle
@@ -2868,10 +2887,20 @@ Image   *transparent;
 
 \subsection{[[Client]]}
 
-% kernel side. Graphics server have a set of clients. 
+% kernel side. Graphics server have a set of clients.
 % need to represent those clients.
 
-\l rename KClient! 
+\l rename KClient!
+
+%claude:
+Each process that opens [[/dev/draw/new]] gets a [[Client]]
+in the kernel. The central field is the [[dimage]] hash table
+that maps integer IDs to [[DImage]] pointers---this is how the
+kernel finds the right [[Memimage]] when a drawing command
+arrives with an image ID. The hash uses chaining via
+[[DImage.next]], with 32 buckets. [[drawlookup]] walks the
+chain to resolve an ID.
+
 <<struct [[Client]]>>=
 struct Client
 {
@@ -2944,6 +2973,17 @@ drawlookup(Client *client, int id, bool checkname)
 
 % this is needed only because draw is a display server. It does not have
 % to be though. rio could multiplex /dev/draw.
+
+%claude:
+[[KDraw]] is the top-level kernel structure for the entire
+draw device---a singleton stored in [[sdraw]]. It manages
+a growing array of [[Client]] pointers (one per connected
+process) and a [[clientid]] counter that serves as a gensym
+for unique client IDs. The [[drawnewclient]] function scans
+for a free slot (a nil entry) or grows the array by one.
+Note that [[Client.slot]] (the array index) differs from
+[[Client.clientid]] (the monotonically increasing ID): slots
+can be reused after a client disconnects, but IDs never are.
 
 <<struct [[KDraw]]>>=
 struct KDraw
@@ -3059,6 +3099,17 @@ if(cp == nil)
 % Display.image! here is Image.
 % The screen is an image (id = 0).
 
+%claude:
+[[Image]] is the user-side handle to a server-held image. The key
+field is [[id]]---since images live in kernel memory, the client
+refers to them by integer ID in all drawing commands. The [[r]] and
+[[clipr]] rectangles control the image's extent and clipping region,
+while [[repl]] enables tiling: a 1x1 replicated image with a huge
+[[clipr]] acts as a uniform color that can fill any area. The
+[[chan]] field encodes the pixel format (e.g., [[RGBA32]],
+[[GREY1]]), and [[display]] points back to the connection so that
+drawing functions can buffer commands through [[display->buf]].
+
 <<struct [[Image]]>>=
 struct Image
 {
@@ -3165,6 +3216,20 @@ int     imageid;
 % Equivalent of Image but on kernel side. Very similar fields
 % to Image.
 
+%claude:
+[[Memimage]] is the kernel-side equivalent of [[Image]]: it has
+the same geometry fields ([[r]], [[clipr]], [[chan]], [[depth]])
+but also a [[data]] pointer to the actual pixel buffer. Where
+[[Image]] is just a handle with an [[id]], [[Memimage]] holds
+the real pixels. Multiple [[Memimage]]s can share the same
+[[Memdata]]---for instance, all windows share the screen's pixel
+buffer but each has its own rectangle into it.
+%
+The [[flags]] field packs several booleans: [[Frepl]] for
+replication, [[Fgrey]] and [[Falpha]] derived from the channel
+format, and [[Fbytes]] indicating all channels are 8-bit wide
+(enabling faster byte-at-a-time code paths).
+
 <<struct [[Memimage]]>>=
 struct Memimage
 {
@@ -3268,6 +3333,19 @@ Memimage *memopaque;
 
 \subsection{[[Memdata]]}
 
+%claude:
+[[Memdata]] holds the raw pixel buffer. The [[base]] pointer
+is the pool-allocated address; [[bdata]] points to the first
+actual pixel byte, past a back-pointer word and a debug word.
+This indirection exists because the image memory pool can
+compact: when the pool moves a block, it follows the
+back-pointer at [[base]] to find and patch the [[Memdata]]
+that owns it (see [[memimagemove]]).
+%
+The [[ref]] count tracks how many [[Memimage]]s share this
+buffer---the screen's [[Memdata]] may be referenced by
+dozens of window images simultaneously.
+
 <<struct [[Memdata]]>>=
 /*
  * Memdata is allocated from main pool, but .data from the image pool.
@@ -3325,6 +3403,14 @@ ulong	width;	/* width in words of a single scan line */
 \t  rectangle which do not start at 0,0
 \l rename wwidth? vs bwidth?
 
+%claude:
+[[byteaddr]] computes the address of the byte containing pixel
+$(x, y)$ in a [[Memimage]]. The formula starts from
+\verb+data->bdata + zero+ (which gives the address of pixel (0,0),
+even when the rectangle doesn't start there), then advances by
+whole scan lines ($y \times$ [[width]] words) and a horizontal
+offset that depends on the pixel depth.
+
 % libmemdraw/alloc.c
 <<function [[byteaddr]]>>=
 byte*
@@ -3350,6 +3436,17 @@ byteaddr(Memimage *i, Point p)
 
 % put in core DS chapter? merge with screen.h gscreen no?
 % the frame buffer!! (at least call like that in error msg when nil)
+
+%claude:
+The kernel maintains two global [[Memimage]] pointers to the
+screen. [[gscreen]] is the VGA driver's view, set by
+[[screensize]]; [[screenimage]] is [[devdraw]]'s view, set
+by [[initscreenimage]]. They share the same underlying
+[[gscreendata]], a statically-allocated [[Memdata]] whose
+[[bdata]] either points directly to the hardware frame buffer
+(when the GPU maps video RAM into memory) or to a software
+buffer that gets copied to the hardware on flush.
+
 <<global [[screenimage]]>>=
 Memimage    *screenimage;
 @
@@ -3414,7 +3511,7 @@ Memdata gscreendata;
 % and screendimage
 
 % Saw memimage but in fact as we saw before client instead have
-% DImage cache. 
+% DImage cache.
 
 % Why yet another intermediate? Because need id only because of
 % kernel/user need. Memimage has no id. Here need kernel wrapper
@@ -3427,6 +3524,15 @@ Memdata gscreendata;
 % why D? For Draw Image. Cos have Image, Memimage (memdraw),
 % and DImage for kernel stuff. Indeed can use lots of the graphics
 % stack independently of the kernel and draw device.
+
+%claude:
+[[DImage]] is the kernel's per-client wrapper around a [[Memimage]].
+It adds the [[id]] that clients use to refer to images and a
+[[ref]] count. The extra level of indirection is necessary because
+different clients may refer to the same underlying [[Memimage]]
+(e.g., the screen) with different IDs. The naming convention
+reflects the three layers: [[Image]] (user library), [[Memimage]]
+(kernel memory drawing), [[DImage]] (kernel device/draw layer).
 
 <<struct [[DImage]]>>=
 /*
@@ -3494,6 +3600,18 @@ if(d == nil)
 
 \section{Channels}
 \label{sec:channels}
+
+%claude:
+A ``channel'' descriptor encodes the pixel format of an image
+as a packed 32-bit integer. Each 8-bit nibble pair stores a
+component type (red, green, blue, alpha, grey, or color-map)
+and its bit width. For example, [[RGBA32]] is four nibble pairs
+encoding 8 bits each for R, G, B, and A. The [[CHAN1]]--[[CHAN4]]
+macros build these descriptors at compile time, while
+[[chantodepth]] sums the bit widths to get the total bits per
+pixel. This compact encoding avoids the need for a separate
+struct and makes it easy to iterate over channels with a
+shift loop.
 
 <<type [[channels]]>>=
 typedef ulong channels;
@@ -3639,6 +3757,20 @@ if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
 
 
 \section{Colors}
+
+%claude:
+Colors are represented as 32-bit [[rgba]] values with 8 bits each
+for red, green, blue, and alpha, packed in that order (R in the
+high byte, A in the low byte). Notice that [[DBlack]] is
+\verb+0x000000FF+---fully opaque black---while [[DTransparent]]
+is \verb+0x00000000+---fully transparent. The alpha byte is 0xFF
+for all the named colors because they are meant to be fully opaque.
+%
+The conversion functions [[imgtorgba]] and [[rgbatoimg]] translate
+between this canonical [[rgba]] format and whatever pixel format
+a given image uses (e.g., [[RGB16]], [[CMAP8]]). They iterate
+over the channel descriptor, extracting or packing each component
+according to its type and bit width.
 
 <<type [[rgba]]>>=
 typedef ulong rgba;
@@ -3837,6 +3969,15 @@ rgbatoimg(Memimage *img, rgba rgba)
 \subsection{[[memfillcolor()]]}
 \n illustrate well many things
 
+%claude:
+[[memfillcolor]] fills an entire image with a single color.
+It first converts the [[rgba]] value to the image's native pixel
+format via [[rgbatoimg]], then replicates the bit pattern to fill
+a full 32-bit word (for images with depth less than 32, the same
+pixel value is duplicated to pack multiple pixels per word),
+and finally uses [[memsetl]] to blast the value across every
+scan line.
+
 % drawmesg(allocate) | membrush | bellipse | memarc | memlalloc | ... -> <>
 <<function [[memfillcolor]]>>=
 void
@@ -3916,6 +4057,21 @@ for(d=i->depth; d<32; d*=2)
 % slides where images are arguments of draw(), like slide 9
 
 %\subsection{[[Drawop]]}
+
+%claude:
+The [[Drawop]] enum defines the 12 Porter-Duff compositing
+operators. Each operator is encoded as a 4-bit mask combining
+four elementary operations: ``source where destination exists''
+([[SinD]]), ``destination where source exists'' ([[DinS]]),
+``source where destination is absent'' ([[SoutD]]), and
+``destination where source is absent'' ([[DoutS]]).
+%
+The default [[SoverD]] (source over destination) is the classic
+painter's algorithm: draw the source on top, keeping the
+destination only where the source is transparent.
+Tom Duff---who also designed the [[rc]] shell---co-authored
+the original Porter-Duff paper, so this compositing algebra
+is a natural fit for \plan.
 
 <<[[Client]] drawing state fields>>=
 // enum<Drawop>
@@ -3999,6 +4155,14 @@ screen image, and set up fonts.
 
 % complex flow, maybe need a control flow Figure?
 
+%claude:
+On the kernel side, initialization proceeds in two phases.
+First, the VGA driver calls [[screensize]] to set up the frame
+buffer ([[gscreen]] and [[gscreendata]]). Then, when the
+[[draw]] device is bound to [[/dev]], [[drawattach]] calls
+[[initscreenimage]] to wrap that frame buffer in a [[DImage]]
+and make it available as [[screenimage]].
+
 \subsection{Binding the VGA device (x86)}
 % [[vgascreen]], (-> vga_screen)
 %x86
@@ -4019,6 +4183,16 @@ screen image, and set up fonts.
 %  run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
 
 \t rename vga_screensize?
+
+%claude:
+[[screensize]] is called by the VGA control program
+(\verb+aux/vga -l 1024x768x8+) to configure the display
+resolution. It allocates (or points to) the frame buffer memory,
+wraps it in a [[Memimage]] via [[allocmemimaged]], and stores
+the result in the [[gscreen]] global. The final
+[[memimagedraw]] fills the screen with black---the first
+thing drawn after boot.
+
 % ???aux/vga -> <>
 % vgascreen.c
 <<function [[screensize]](x86)>>=
@@ -4088,6 +4262,15 @@ if(gscreen == nil)
 @
 
 \subsubsection{Soft screen vs frame buffer (x86)}
+
+%claude:
+The frame buffer can be set up in two ways. If the VGA
+driver provides a physical address ([[scr->paddr]]),
+[[gscreendata.bdata]] points directly to the mapped video
+RAM---writes go straight to the hardware. Otherwise,
+[[screensize]] allocates a ``soft screen'' in regular kernel
+memory and sets [[scr->useflush]] so that [[drawflush]] knows
+it must copy the buffer to the hardware explicitly.
 
 <<[[screensize()]] set [[gscreendata.bdata]]>>=
 if(scr->paddr == 0){
@@ -4171,6 +4354,16 @@ memimageinit();
 % not sure why called from screensize as the things it sets are size
 %  independent. Maybe it could be called from vga?
 
+%claude:
+[[memimageinit]] creates the four fundamental 1x1 replicated
+images used throughout the graphics system: [[memzeros]] (all
+bits 0) and [[memones]] (all bits 1), then aliases them as
+[[memblack]]/[[memwhite]] and [[memtransparent]]/[[memopaque]].
+These tiny images, combined with the [[Frepl]] flag and
+a near-infinite [[clipr]], act as universal solid colors
+and masks. It also installs the [[memimagemove]] callback
+so the memory pool can relocate image data during compaction.
+
 % screensize | main_test -> <>
 % when call to screensize in the kernel? when switch to graphic mode via vgactl?
 <<function [[memimageinit]]>>=
@@ -4228,6 +4421,15 @@ didinit = true;
 
 % need understand pool allocator in Libcore.nw
 
+%claude:
+When the image pool compacts memory, allocated blocks move.
+[[memimagemove]] is the callback that patches pointers after
+a move: it reads the back-pointer at the start of the block
+to find the [[Memdata]] that owns it, then updates both
+[[md->base]] and [[md->bdata]]. This is why every image
+allocation stores a back-pointer as the first word of the
+data block.
+
 <<[[memimageinit()]] set image pool allocator move>>=
 if(  strcmp(imagmem->name, "Image") == 0 
   || strcmp(imagmem->name, "image") == 0
@@ -4275,6 +4477,13 @@ if(md->base != from){
 %  bind_safe("#i", "/dev", MAFTER); // devdraw
 % after vga device has been installed (so attachscreen can work)
 
+%claude:
+When the kernel binds the draw device to [[/dev]]
+(\verb+bind #i /dev+), [[drawattach]] is called. It invokes
+[[initscreenimage]] to wrap the VGA driver's [[gscreen]] in a
+[[DImage]] and make it available as [[screenimage]]---the
+image ID 0 that every client gets when it opens
+[[/dev/draw/new]].
 
 % ??sysbind?? -> <> (drawdevtab.attach = <> <- toplevel)
 <<function [[drawattach]]>>=
@@ -4325,6 +4534,15 @@ dunlock(void)
 %  if multi process.
 
 \subsubsection{[[initscreenimage()]]}
+
+%claude:
+[[initscreenimage]] is the bridge between the VGA layer and
+the draw device. [[makescreenimage]] does the heavy lifting:
+it creates a [[Memdata]] pointing to the frame buffer (via
+[[arch_attachscreen]]), wraps it in a [[Memimage]], and wraps
+that in a [[DImage]]. The result is stored in the static
+[[screendimage]], and [[screendimage->image]] becomes the
+global [[screenimage]].
 
 % drawattach -> <>
 <<function [[initscreenimage]]>>=
@@ -4598,6 +4816,15 @@ if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
 %\section{Channels and alpha}
 
 \t mv with Memimage? or with Channel section? too many stuff here.
+
+%claude:
+[[memsetchan]] parses the channel descriptor and fills in the
+per-channel lookup tables ([[shift]], [[mask]], [[nbits]])
+that the pixel I/O routines use to extract individual color
+components from a packed pixel word. It also sets the
+convenience flags ([[Fgrey]], [[Falpha]], [[Fcmap]], [[Fbytes]])
+that fast paths check to avoid the full generic code.
+
 % allocmemimage -> allocmemimaged -> <>
 %less: mv in Alloc section?
 <<function [[memsetchan]]>>=
@@ -4732,6 +4959,14 @@ if(di == nil){
 % the interface between screen.h and devdraw, between
 % screenimage  and gscreen (and gscreendata).
 
+%claude:
+[[arch_attachscreen]] is the thin interface between the VGA
+driver and [[devdraw]]. It simply returns the frame buffer
+pointer ([[gscreendata.bdata]]) and fills in the screen
+parameters from [[gscreen]]---which was set up earlier by
+[[screensize]]. This is the point where the two initialization
+paths (VGA and [[devdraw]]) connect.
+
 % /// makescreenimage -> <>
 % vgascreen.c
 <<function [[attachscreen]](x86)>>=
@@ -4777,6 +5012,16 @@ if(gscreen == nil || gscreendata.bdata == nil)
 
 
 \section{Client side}
+
+%claude:
+On the client side, [[initdraw]] is the single entry point
+that applications call to get started. It binds [[/dev/draw]]
+if needed, then delegates to [[initdisplay]] which opens
+[[/dev/draw/new]], reads the screen image parameters from the
+control file, and sets up the [[Display]] structure with its
+command buffer. The first real API calls happen at the end
+of [[initdisplay]]: allocating [[display->white]] and
+[[display->black]] as 1x1 replicated [[GREY1]] images.
 
 \subsection{[[initdraw()]]}
 
@@ -4836,6 +5081,18 @@ if(display == nil)
 \t initdisplay is not enough to get a graphical window! 
 
 \subsection{[[initdisplay()]]}
+
+%claude:
+[[initdisplay]] is the real workhorse. It opens
+[[/dev/draw/new]] (which triggers [[drawopen(Qnew)]] in
+the kernel, allocating a new [[Client]]), reads 12 fields
+of ASCII-formatted image info from the control file (image ID,
+channel format, replication flag, rectangle, clip rectangle),
+and constructs the user-side [[Image]] and [[Display]]
+structures from them. The command buffer ([[disp->buf]]) is
+allocated here---all subsequent drawing commands will be
+marshalled into this buffer until [[flushimage]] writes it
+to [[/dev/draw/x/data]].
 
 % get connection and first automatically allocated image in d->image
 
@@ -5206,6 +5463,16 @@ drawing can work across the network transparently.
 
 \section{The [[draw]] filesystem}
 
+%claude:
+The draw device presents a three-level filesystem:
+[[/dev/draw/]] at the top, one numbered directory per client
+([[/dev/draw/0/]], [[/dev/draw/1/]], ...), and within each
+client directory four files: [[ctl]] (read image info,
+write commands), [[data]] (drawing command stream),
+[[colormap]], and [[refresh]]. The Qid encoding packs the
+file type in the low 4 bits and the client slot number in
+the upper bits, so [[drawgen]] can reconstruct which client
+and which file is being accessed from any Qid.
 
 % 'i' below so bind #i
 
@@ -5294,6 +5561,14 @@ enum
 \subsection{[[drawwalk()]]}
 
 % when do ls (see Kernel.nw)
+
+%claude:
+[[drawwalk]] and [[drawgen]] implement the filesystem namespace.
+[[drawgen]] is the callback that produces directory entries:
+at the top level it returns ``draw'' and ``winname'', at the
+second level ``new'' plus one entry per active client, and at
+the third level the four per-client files. This is how
+\verb+ls /dev/draw/+ works.
 
 <<function [[drawwalk]]>>=
 static Walkqid*
@@ -5501,6 +5776,14 @@ drawclientofpath(ulong path)
 
 % quite generic, specifics detailed later
 
+%claude:
+[[drawopen]] handles the creation of new clients: when a
+process opens [[/dev/draw/new]], it calls [[drawnewclient]]
+to allocate a [[Client]] and rewrite the channel's Qid to
+point to the new client's [[ctl]] file. Opening other files
+([[data]], [[refresh]]) increments the client's reference
+count.
+
 <<function [[drawopen]]>>=
 static Chan*
 drawopen(Chan *c, int omode)
@@ -5550,6 +5833,13 @@ poperror();
 
 
 \subsection{[[drawclose()]]}
+
+%claude:
+When the last file descriptor for a client is closed
+([[decref]] reaches 0), [[drawclose]] frees all the
+client's resources: named images, screens, and the entire
+[[DImage]] hash table. It then calls [[drawflush]] to
+erase any visible windows that belonged to the dead client.
 
 <<function [[drawclose]]>>=
 static void
@@ -5693,6 +5983,13 @@ if(waserror()){
 
 % but really it could be only one file, /dev/draw
 % if rio could multiplex it.
+
+%claude:
+This section details the behavior of each [[/dev/draw/]] file.
+Opening [[new]] allocates a [[Client]] and redirects to its
+[[ctl]]; reading [[ctl]] returns ASCII image info (12 fields
+of 11 characters each); writing to [[data]] dispatches drawing
+commands via [[drawmesg]].
 
 \subsection{Opening [[/dev/draw/new]]}
 
@@ -5868,6 +6165,19 @@ case Qdata:
 % which correspond to what we call the Draw message protocol.
 % Each section below present a step in this protocol.
 
+%claude:
+Every drawing operation follows a five-step pipeline:
+(1)~the application calls an API function (e.g., [[line]]),
+(2)~the library marshalls arguments into a byte buffer using
+[[BPLONG]]/[[BPSHORT]] and [[bufimage]],
+(3)~[[drawwrite]] dispatches to [[drawmesg]] which unmarshalls
+with [[BGLONG]]/[[BGSHORT]] and calls the kernel algorithm,
+(4)~the algorithm operates on [[Memimage]] pixels, and
+(5)~optionally, a hardware hook flushes changes to the display.
+This protocol uses about 20 single-letter command codes
+(\verb+'d'+ for draw, \verb+'L'+ for line, \verb+'b'+ for
+allocate, etc.)---compared to over 120 in X11.
+
 \subsection{Step 1: API function}
 
 % first API.
@@ -5877,7 +6187,7 @@ case Qdata:
 %real-world: =~ Xlib layer
 
 \subsection{Step 2: marshalling}
-% This is also called serializing. 
+% This is also called serializing.
 % (Java says marshalling is serializing the data and the code itself)
 
 % ex line code to marshall with use of BGSHORT, bufimage, etc.
@@ -5888,6 +6198,14 @@ case Qdata:
 % File interface is nice but limited in the end. Or maybe can just
 % write a thrift like tool on top of the file interface that generates
 % most of the boilerplate at least.
+
+%claude:
+The marshalling layer packs arguments into a byte buffer in
+little-endian order. [[BPLONG]] and [[BPSHORT]] write values;
+[[BGLONG]] and [[BGSHORT]] read them back. [[bufimage]]
+reserves space in the display's command buffer, flushing it
+to the kernel via [[doflush]] (a [[write]] to [[/dev/draw/x/data]])
+when the buffer is full.
 
 % G = Get, P = Put
 % B = Binary? Bytes? Buffer?
@@ -6001,6 +6319,16 @@ if(nn != n){
 % also called demarshalling, or deserializing
 
 %real-world: =~ Xserver
+
+%claude:
+[[drawmesg]] is the kernel-side dispatcher: a single
+[[while]] loop that consumes the byte stream written to
+[[/dev/draw/x/data]], dispatching on the first byte of each
+command. Each [[case]] unmarshalls the arguments, resolves
+image IDs to [[DImage]]s via [[drawlookup]], and calls the
+corresponding [[memdraw]] function. The variable [[m]]
+tracks how many bytes each command consumed so the loop
+can advance to the next one.
 
 <<[[drawmesg()]] locals>>=
 byte *a;
@@ -6116,6 +6444,17 @@ color image can fill any rectangle.
 
 % allocimage(2)
 
+%claude:
+[[allocimage]] follows the standard drawing protocol:
+the library marshalls a \verb+'b'+ command with the new
+image's parameters (rectangle, channel format, replication
+flag, initial fill color) into the display buffer. On the
+kernel side, [[drawmesg]] allocates a [[Memimage]] via
+[[allocmemimage]], installs it in the client's [[DImage]]
+hash, and fills it with the requested color. The client
+gets back an [[Image]] handle with a fresh ID. Freeing
+sends an \verb+'f'+ command.
+
 \subsection{API}
 
 % remember in initdisplay first API calls!
@@ -6159,6 +6498,16 @@ freeimage(Image *i)
 
 
 \subsection{Marshalling}
+
+%claude:
+[[_allocimage]] encodes 51 bytes: command letter \verb+'b'+,
+image ID (client-allocated), screen ID, refresh flag,
+channel descriptor, replication flag, two rectangles (r and
+clipr), and the fill color. If replication is requested,
+[[clipr]] is set to a huge rectangle so the 1x1 image tiles
+everywhere. The flush after encoding is synchronous---the
+library needs to know immediately if the kernel rejected
+the allocation.
 
 % ai usually nil
 %ctor
@@ -6448,6 +6797,14 @@ case 'f':
 
 \subsection{Algorithm}
 
+%claude:
+[[allocmemimage]] allocates both the metadata ([[Memdata]],
+[[Memimage]]) and the pixel buffer from the kernel's image
+pool. The layout at [[md->base]] is: a back-pointer to the
+[[Memdata]] (for pool compaction), a debug word (caller PC),
+then the pixel data. [[drawinstall]] wraps the result in a
+[[DImage]] and inserts it into the client's hash table.
+
 % allocimage -> _allocimage -> ... -> drawmesg -> <>
 %Memdata and then Memimage ctor
 % should be called once automatically when one creates a new connection no?
@@ -6661,6 +7018,16 @@ if(dimage->ref < 0)
 % Note that the repl bit is used only when the image is used as a source.
 % This is why the clipping code for dst and src is a bit different.
 
+%claude:
+Clipping restricts drawing to a sub-rectangle of an image
+---nothing outside [[clipr]] is modified. Replication tiles
+a small image to fill the plane: a replicated image with
+[[repl=true]] and a huge [[clipr]] logically covers the
+entire coordinate space. The two features interact:
+drawing code first clips to [[clipr]], then, if the image
+is not replicated, also clips to [[r]]. [[rectclip]]
+computes the intersection of two rectangles in place,
+returning false if they don't overlap.
 
 <<[[_allocimage()]] set clipr>>=
 if(repl)
@@ -7654,6 +8021,14 @@ insetrect(Rectangle r, int n)
 
 \subsection{Marshalling}
 
+%claude:
+The \verb+'d'+ command encodes three image IDs (destination,
+source, mask), a destination rectangle, and two source points.
+If the compositing operator is not the default [[SoverD]], a
+preceding \verb+'O'+ command sets it. On the kernel side,
+[[drawmesg]] resolves the IDs to [[Memimage]] pointers and
+calls [[memdraw]].
+
 <<function [[draw1]]>>=
 static void
 draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
@@ -7835,6 +8210,17 @@ case 'O':
 %  many optis.
 % draw() is very flexible and so it is quite complicated to implement.
 % So we will simplify and show simple and general path first.
+
+%claude:
+The algorithm goes through two layers. [[memdraw]] checks
+whether the destination or source has a window layer (in
+which case it must handle overlapping windows and
+backing stores). For simple images it delegates to
+[[memimagedraw]], which clips the source and destination
+rectangles, then scans line by line, compositing each pixel
+according to the Porter-Duff operator. [[Memdrawparam]]
+packages all the draw parameters to avoid passing a dozen
+arguments through the call chain.
 
 \subsubsection{[[memdraw()]]}
 
@@ -8039,6 +8425,16 @@ if(mask == nil || mask->data == nil)
 
 % see draw(2) and explanation of draw() to understand
 %  what clipping is done. Quite long description actually.
+
+%claude:
+[[drawclip]] is one of the most intricate functions in the
+graphics system. It must reconcile three potentially different
+coordinate systems (destination, source, mask), accounting for
+replication and clipping on each. The destination rectangle is
+clipped against the destination's [[clipr]] and [[r]]; then
+the source and mask rectangles are adjusted to stay the same
+size and are slid into their respective [[r]] if replicated.
+If any resulting rectangle is empty, the draw is a no-op.
 
 \subsection{[[drawclip()]]}
 
@@ -9066,6 +9462,17 @@ struct Buffer {
 
 % reading for src and dst (will see reading for mask later).
 
+%claude:
+The pixel I/O functions abstract away the differences between
+image formats. [[readfn]] selects the appropriate reader
+based on the image's depth and channel layout: [[readbyte]]
+for 8-bit-per-channel images (the fast path---it can return
+pointers directly into the image data without copying), and
+specialized readers for sub-byte depths and color-mapped
+formats. Each reader returns a [[Buffer]] with separate
+pointers for red, green, blue, and alpha channels, plus a
+[[delta]] stride between pixels.
+
 <<function [[readfn]]>>=
 static Readfn*
 readfn(Memimage *img)
@@ -9157,6 +9564,13 @@ static uchar ones = 0xff;
 
 % Will call that only for dst, so code is simpler. No need handle repl
 % for instance.
+
+%claude:
+[[writefn]] only writes to the destination, so it doesn't
+need to handle replication. It converts the per-channel
+[[Buffer]] back into the destination's pixel format, packing
+the R/G/B/A bytes according to the channel descriptor's
+shift and mask tables.
 
 <<function [[writefn]]>>=
 static Writefn*
@@ -9475,6 +9889,14 @@ the [[draw]] primitive.
 
 \section{Lines}
 
+%claude:
+A line is drawn by building a rectangular ``brush'' of the
+specified radius around the endpoint, then sweeping it along
+the line using the [[_memimageline]] algorithm. The [[end0]]
+and [[end1]] parameters control line caps: square (default),
+disc (rounded), or arrow. If the line is perfectly horizontal
+or vertical, a fast path just calls [[draw]] directly.
+
 \subsection{API}
 
 <<function [[line]]>>=
@@ -9587,6 +10009,18 @@ if(j < 0)
 @
 
 \subsection{Algorithm}
+
+%claude:
+Line drawing goes through two layers: [[memline]] in
+[[memlayer/]] delegates to [[_memimageline]] in [[memdraw/]]
+if the destination has no window layer; otherwise it uses
+[[layerop]] to split the line across visible and hidden
+regions. [[_memimageline]] first clips against both
+source and destination, determines if the line is more
+horizontal or vertical, and handles the simple case (axis-aligned
+lines) with a single [[memdraw]] call. For arbitrary
+angles, it builds a thick-line polygon by computing the
+perpendicular offsets at each end, then fills it.
 
 % memlayer/
 <<function [[memline]]>>=
@@ -9854,6 +10288,17 @@ return;
 % put polygon in separate section?
 
 % actually used as we have seen before for general case of (thick) line drawing.
+
+%claude:
+Polygon drawing uses a scan-line algorithm: the edges are
+sorted by Y coordinate, and for each scan line the active
+edges are tracked to determine the horizontal spans to fill.
+The marshalling uses delta-encoded coordinates
+([[addcoord]]) to compress the point array---if a delta
+fits in 7 signed bits, only one byte is sent; otherwise
+three. [[fillpoly]] fills the interior (using either
+even-odd or non-zero winding rule), while [[poly]] draws
+the outline as a series of connected line segments.
 
 \subsection{API}
 
@@ -10585,6 +11030,16 @@ zcompare(void *a, void *b)
 
 \section{Ellipses}
 
+%claude:
+Ellipses are drawn with an incremental algorithm that
+walks the ellipse boundary pixel by pixel, similar to
+Bresenham's circle algorithm but generalized for two
+different semi-axes. Filled ellipses use horizontal scan
+lines between the two halves; outlined ellipses fill between
+an inner and outer ellipse to create the thick border.
+Very thick, skinny ellipses fall back to brushing with
+circles (slower but correct).
+
 % libmemdraw/ellipse.c
 %/*
 % * ellipse(dst, c, a, b, t, src, sp)
@@ -11242,6 +11697,16 @@ image, and copying it to the destination.
 % Hinting information = hacks to adjust glyphs at small pixel sizes
 % Advanced topic.
 
+%claude:
+The data structures form a two-level hierarchy: [[Font]]
+holds the top-level description (height, ascent, list of
+[[Cachefont]] ranges), while [[Subfont]] holds the actual
+glyph image and per-character metrics ([[Fontchar]]).
+Subfonts are loaded on demand and cached: [[Font.cache]]
+is a circular buffer of recently used glyph entries, so
+a typical program touching only ASCII never loads the
+CJK subfonts.
+
 \section{Font files formats}
 
 % show content of unicode.font where see list of subfonts ranges.
@@ -11274,6 +11739,13 @@ image, and copying it to the destination.
 \section{Additional data structures}
 
 \subsection{[[Font]] and [[font]]}
+
+%claude:
+A [[Font]] combines a height/ascent pair with an array
+of [[Cachefont]] entries specifying Unicode ranges and
+their subfont filenames. The global [[font]] and
+[[display->defaultfont]] are set by [[initdraw]] from
+the font name passed to it (defaulting to the system font).
 
 <<struct [[Font]]>>=
 struct Font
@@ -12747,6 +13219,18 @@ if(++n > 10){
 
 % cachechars(2)
 
+%claude:
+The character cache avoids reloading glyph images for every
+[[string]] call. [[Font.cache]] is a hash table of
+[[Cacheinfo]] entries, keyed by rune, with a small linear
+probe window ([[NFLOOK]]). The kernel maintains a
+corresponding cache image ([[DImage.fchar]]) where the actual
+glyph bitmaps are stored side by side. When [[cachechars]]
+finds a rune is not cached, it loads the subfont, copies the
+glyph into the cache image, and updates both user-side and
+kernel-side tables. An LRU age counter evicts old entries
+when the cache is full.
+
 <<enum [[misc]]>>=
 enum
 {
@@ -13529,6 +14013,15 @@ if(f->age == 65536){
 %trans:
 % use bits->id in loadchar message, assume there was a subf loaded.
 
+%claude:
+Subfonts are cached in [[Font.subf]], a growing array of
+[[Cachesubf]] entries. Each entry links a [[Cachefont]]
+(the spec for a Unicode range) to an actual [[Subfont]]
+(the loaded glyph image). Subfonts are loaded on first
+access and evicted when the cache is full, using the same
+LRU age mechanism as the character cache. [[agefont]]
+periodically renormalizes ages to prevent overflow.
+
 \subsection{Subfont cache: [[Cachesubf]]}
 
 <<[[Font]] subfont cache fields>>=
@@ -14155,6 +14648,15 @@ compression uses a simple run-length scheme.
 % =~ readimage but from memory instead of file
 % rename Loading pixels instead?
 
+%claude:
+[[loadimage]] transfers raw pixel data from user memory to
+a server-held image. Because the command buffer has limited
+size, it sends the data in horizontal strips---each strip
+as a \verb+'y'+ command with the image ID, a sub-rectangle,
+and the pixel bytes. On the kernel side, [[memload]] copies
+the bytes into the [[Memimage]]'s data buffer, optionally
+decompressing them.
+
 \subsection{API}
 
 % assumes already done allocimage. Image format then is really just
@@ -14604,9 +15106,18 @@ if(ndata < l*Dy(r))
 
 \section{Image format}
 
+%claude:
+The \plan image file format is a text header (channel
+format string, rectangle) followed by pixel data, optionally
+compressed. The compression is a simple scheme: a byte $<128$
+means ``copy the next $n+1$ literal bytes''; a byte $\ge 128$
+means ``repeat the next byte $n-127$ times''. [[readimage]]
+reads a file in this format, creating an [[Image]] and loading
+its pixels via [[cloadimage]] (compressed load).
+
 % image(6) format.
 % A bit like format when read /dev/draw/x/ctl image spec for the format.
-% get id, chan as str, rectangle, etc. Each time get number of 
+% get id, chan as str, rectangle, etc. Each time get number of
 % 11 chars and newline.
 
 % different dimensions:
@@ -14920,6 +15431,16 @@ enabling a concurrent, non-blocking event model.
 %example:
 % show toy app code using mouse? which calls initmouse (non-event version)
 % and then readmouse(), draw coords, and quit when middle click.
+
+%claude:
+The mouse interface follows the same pattern as other \plan
+devices: a text-based [[/dev/mouse]] file where each read
+returns a character ('m' for move, 'r' for resize) followed
+by coordinates and button state. [[Mousectl]] wraps this in
+a dedicated I/O thread that continuously reads mouse events
+and sends them on a [[Channel]], so the application can use
+[[alt]] to multiplex between mouse, keyboard, and other
+event sources without blocking.
 
 \subsection{[[/dev/mouse]] interface}
 
@@ -15256,6 +15777,18 @@ moveto(Mousectl *m, Point pt)
 
 
 \section{Cursor}
+
+%claude:
+The mouse cursor is a small image (16x16 pixels on \plan)
+that the graphics system must composite onto the screen at
+the current mouse position and remove when the mouse moves.
+Since drawing operations might touch the area under the
+cursor, every [[memimagedraw]] call must check whether the
+cursor overlaps the affected rectangle and temporarily hide
+it ([[swcursoravoid]]). The software cursor implementation
+saves and restores the pixels under the cursor using two
+small [[Memimage]]s.
+
 
 % Cursor is very low-level actually. This is why sometimes everything
 % is frozen and the only thing that still works is the cursor
@@ -15851,13 +16384,20 @@ swcursor_move(Point p)
 \section{Keyboard}
 \n put mouse first because the mouse is more related to graphical app
 
-% In graphical app need different model for keyboard too. 
+% In graphical app need different model for keyboard too.
 % Dont want synchrone key reading. Can not use scanf.
 % Need similar archi that for mouse, and then can
 % use alt().
 
 %related: big-bang function in racket/htdp
 
+%claude:
+Keyboard input follows the same pattern as the mouse:
+a [[Keyboardctl]] structure with a dedicated I/O thread reading
+[[/dev/cons]] in raw mode (via [[/dev/consctl]]) and sending
+runes on a [[Channel]]. Special keys (arrows, function keys,
+etc.) are mapped to runes in the private Unicode space
+starting at [[0xF000]].
 
 \subsection{[[/dev/cons]] and [[/dev/consctl]] interfaces}
 
@@ -16196,6 +16736,16 @@ its window management, but any program can create layers
 
 
 \section{Additional data structures}
+
+%claude:
+The layer system introduces several new types.
+[[Screen]] (user-side) and [[Memscreen]] (kernel-side) represent
+a ``desktop''---the base image on which layers are stacked.
+[[Memlayer]] is attached to each [[Memimage]] that participates
+in the layer stack, linking it into a doubly-linked list
+ordered front-to-back. Each layer optionally has a [[save]]
+image (the backing store) that preserves pixels hidden by
+layers in front.
 
 \subsection{Base layer: [[Screen]] (and [[Memscreen]])}
 \n use BaseLayer, more consistent with Photoshop, and base image gives
@@ -17024,8 +17574,15 @@ if(this->ref < 0)
 % A window is an Image! It just needs to be connected to a Screen/Desktop
 
 % Window really a special kind of Memimage with logical coord
-% over underlying shared big image and save image. 
+% over underlying shared big image and save image.
 
+%claude:
+Creating a layer is done with [[allocwindow]], which calls
+[[_allocimage]] with a non-zero [[screenid]]. On the kernel
+side, this triggers [[memlalloc]] which allocates a
+[[Memimage]] with a [[Memlayer]] attached, links it into
+the screen's front-to-back list, and optionally creates a
+backing-store image ([[save]]) for the hidden portions.
 
 \subsection{API}
 
@@ -17410,6 +17967,14 @@ memlfree(Memimage *i)
 
 
 \section{Layer stack manipulation}
+
+%claude:
+[[memltofront]] and [[memltorear]] reorder layers in the
+stack, which requires repainting: bringing a layer to front
+means uncovering it (restoring from its backing store) and
+covering the layers behind it (saving their newly hidden
+pixels). [[memlhide]] and [[memlexpose]] do the actual
+pixel shuffling between the screen and the backing stores.
 
 \subsection{API}
 
@@ -17822,6 +18387,16 @@ r->layer->front = f;
 
 \section{Layer visibility}
 
+%claude:
+[[memlhide]] saves a layer's visible pixels into its
+backing store before another layer covers them.
+[[memlexpose]] does the reverse: it paints a layer's
+saved pixels back onto the screen when the layer becomes
+visible again. These two functions are the core of the
+layer system's pixel management---every stack reordering
+operation uses them to maintain the invariant that saved
+pixels match what was last drawn.
+
 %trans: seen memlhide and memlexpose before.
 
 \subsection{[[memlhide()]]}
@@ -17918,6 +18493,16 @@ lexposeop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool ins
 % insave?
 
 \section{Layer origin}
+
+%claude:
+[[memlorigin]] moves a layer to a new position on the
+screen by updating its rectangle and adjusting the
+[[Memimage.zero]] field so that the logical coordinate
+system is preserved. This is how [[rio]] moves windows
+around: it calls [[originwindow]] which translates to
+[[memlorigin]], shuffling pixels between the screen and
+the backing store as the old and new positions may
+partially overlap.
 
 % one of the main reason why need adaptations I think later when
 % draw things is the change of origin (the other is because
@@ -18172,6 +18757,18 @@ if(shad == nil)
 
 
 \section{Drawing and Layers}
+
+%claude:
+When drawing to a layered image, every operation must be
+intercepted to handle the case where part of the destination
+is hidden behind other layers. [[_memdraw]] and [[_memline]]
+check whether the destination has a layer; if so, they
+use [[layerop]] to split the operation into visible and
+hidden parts. The visible part draws directly on the screen;
+the hidden part draws on the backing store. This is Pike's
+key optimization over the naive ``shadow bitmap'' approach
+where everything is drawn to the backing store and then
+repainted.
 
 %trans:
 % Most drawing code we presented before for images handle basic images 
@@ -19004,6 +19601,14 @@ by re-reading the window image from [[/dev/winname]].
 
 % every window run will have view and screen set accordingly.
 
+%claude:
+Two globals are set by [[initdraw]] for windowed applications:
+[[view]] is the application's window image (a layer allocated
+by [[rio]]), and [[screen]] is a [[Screen]] on which the
+application can create its own sub-layers. When not running
+under [[rio]], [[view]] is simply [[display->image]] (the
+full physical screen) and [[screen]] is nil.
+
 \subsection{[[view]]}
 
 <<global [[view]]>>=
@@ -19434,7 +20039,17 @@ if(fd < 0)
 \chapter{Non 32-Bits Images TODO}
 \label{chap:non-true-color}
 
-% Actually need Grey1 (many bitmasks), need CMAP (VGA), 
+%claude:
+Most of the graphics system code handles [[RGBA32]] (True Color)
+images, but \plan also supports many other pixel formats:
+[[GREY1]] for masks and fonts, [[CMAP8]] for the VGA palette
+mode, [[RGB16]] for the Raspberry Pi, and various grey
+formats. Supporting these requires bit-level packing and
+unpacking logic, color map lookups, and special fast paths
+in the drawing code for common cases like all-1-bit
+operations.
+
+% Actually need Grey1 (many bitmasks), need CMAP (VGA),
 % need Grey8 (Cursor), need RGB16 (Raspberry), ...
 % So need many of the logic that makes it possible to have
 % images with pixels of different depth and different color arrangments.
@@ -20743,6 +21358,15 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
 \chapter{Advanced Topics TODO}
 \label{chap:advanced}
+
+%claude:
+This chapter collects the more complex or specialized parts
+of the graphics system: arrow-tipped lines, Bezier curves,
+the optimized drawing paths in [[memoptdraw]], the full
+alpha compositing code in [[alphadraw]], the scan-line
+polygon fill algorithm, the color map for 8-bit displays,
+hardware acceleration hooks, events, menus, and window
+resize handling.
 
 %\section{Image naming?} Better before.
 %\section{JPG}
