@@ -52,9 +52,10 @@ BEGIN {
         ch_prose[nchapters] = prose_lines
         nchapters++
     }
-    # Extract chapter name
-    match($0, /\\chapter\{([^}]+)\}/, m)
-    chapter = m[1]
+    # Extract chapter name (POSIX awk compatible)
+    chapter = $0
+    sub(/.*\\chapter\{/, "", chapter)
+    sub(/\}.*/, "", chapter)
     code_lines = 0
     prose_lines = 0
     next

@@ -8138,6 +8138,20 @@ pieces of information into a single integer. This lets the server
 quickly determine which window and which device file a request targets.
 
 %yoann: maybe recall relation between Qid and Fid (and file path)
+%claude:
+Recall that a [[Fid]] is the fileserver's record for one open-file
+session.  The [[fid]] number is assigned by the kernel on behalf
+of the client process, and [[rio]] maintains a [[Fid]] struct
+keyed by that number.  Each [[Fid]] carries a [[qid]] field that
+identifies the actual file: a path like [[/mnt/wsys/cons]] is
+resolved by [[walk]] into a [[Fid]] whose [[qid.path]] encodes
+the window identifier and the device type ([[Qcons]]).
+%claude:
+The reason [[Fid]] and [[Qid]] are kept separate is that multiple
+processes---or the same process twice---can open the same file
+independently, each with its own mode and state.
+The [[Qid]] is the file's identity; the [[Fid]] tracks one
+particular session on that file.
 
 % Saw before
 %<<[[Fid]] other fields>> =
@@ -8161,6 +8175,15 @@ enum Qxxx
 %c: easy int <-> symbolic name
 
 %yoann: say we will see the qid cases gradually in the book, but maybe give already quick idea of the kind of elements there is
+%claude:
+I will introduce each [[Qxxx]] case gradually throughout the book,
+but to give an idea: the enum includes [[Qcons]] (the text
+console), [[Qmouse]] (mouse events), [[Qconsctl]] (console control
+such as raw mode), [[Qcursor]] (custom cursors), [[Qwinname]]
+(the layer name), [[Qwindow]] (the window image), [[Qwctl]]
+(window control commands), [[Qsnarf]] (the clipboard), and a few
+others.  Each corresponds to a virtual device file that appears
+under [[/mnt/wsys/]].
 
 % window id + qxx id  -> final Qid.path
 <<function [[QID]]>>=
@@ -8183,10 +8206,39 @@ enum Qxxx
 %ocaml: use pair instead of 2 macros. filecode vs fileid vs qid
 
 %yoann: maybe ASCII bit diagram with concrete example, like how is /mnt/wsys/cons represented?
+%claude:
+For example, if window~2 opens [[/mnt/wsys/cons]], the [[Qid.path]]
+is built by [[QID(2, Qcons)]].  Since [[Qcons]] is~1 in the enum
+and the window ID is shifted left by 8 bits, the resulting path
+is [[0x201]]:
+\begin{verbatim}
+  qid.path = QID(winid=2, qxxx=Qcons=1)
+           = (2 << 8) | 1
+           = 0x0201
+
+  31            8 7         0
+  +------ ... --+-----------+
+  |  window ID  |   Qxxx    |
+  |     0x02    |   0x01    |
+  +------ ... --+-----------+
+
+  WIN(q)  = (path >> 8) & 0xFFFFFF  ->  2      (window 2)
+  FILE(q) = path & 0xFF             ->  1      (Qcons)
+\end{verbatim}
 
 \subsection{[[dirtab]]}
 
 %yoann: introduce Dirtab dirtab, relation to other data structures
+%claude:
+The [[Dirtab]] structure is a static directory template: it maps
+a file name (e.g., [["cons"]], [["mouse"]]) to its [[Qxxx]] enum
+value and permissions.  The global [[dirtab]] array lists every
+virtual file that appears under each window's directory.
+When the fileserver handles a [[walk]] or [[stat]] request, it
+looks up the target name in [[dirtab]] to find the corresponding
+[[Qxxx]] and permissions.  The [[Fid]] struct points back to
+a [[Dirtab]] entry via its [[dir]] field, so once a file is
+walked to, its metadata is readily available.
 
 <<struct [[Dirtab]]>>=
 struct Dirtab
@@ -8215,6 +8267,10 @@ Dirtab dirtab[]=
 % does d++ to skip '.'
 
 %yoann: say we will see those array elements gradually in the rest of the books
+%claude:
+I will introduce each [[dirtab]] entry---[[mouse]], [[cons]],
+[[consctl]], [[cursor]], [[winname]], and so on---in the chapter
+or section devoted to that virtual device.
 
 <<[[Fid]] other fields>>=
 // ref<Dirtab>
@@ -8244,6 +8300,51 @@ are atomic, and the tag/fid fields let the kernel match replies to
 their requests.
 
 %yoann: maybe sequence ASCII diagram with multiple clients like we did before in Overview chapter and maybe also (or maybe in another diagram) the attach/walk/open/read scenario on virtual device file to see the big picture
+%claude:
+Here is the typical sequence of 9P operations for a window.
+The [[mount()]] is done by the spawning process (before it
+[[exec]]s to [[rc]]), which triggers [[Tattach]].  Later, when
+a client like [[hellorio]] opens [[/dev/cons]], the kernel
+translates each system call into 9P messages on the pipe:
+\begin{verbatim}
+  new window proc    Kernel              rio (filsysproc)    rio (Xfid worker)
+  --------------   ----------           ----------------    -----------------
+     |                |                       |                    |
+  mount(wsys,...)     |                       |                    |
+     +--------------->| Tattach (extra="2")   |                    |
+     |                +---------------------->| filsysattach()     |
+     |                |    Rattach            |  -> new Fid        |
+     |                |<----------------------+                    |
+     |                |                       |                    |
+  exec(rc) -> hellorio                        |                    |
+     |                |                       |                    |
+  open(/dev/cons)     |                       |                    |
+     +--------------->| Twalk (cons)          |                    |
+     |                +---------------------->| filsyswalk()       |
+     |                |    Rwalk              |  -> Fid.qid=Qcons  |
+     |                |<----------------------+                    |
+     |                | Topen                 |                    |
+     |                +---------------------->| filsysopen()       |
+     |                |                       +--- sendp --------->|
+     |                |                       |              xfidopen()
+     |                |    Ropen              |                    |
+     |                |<----------------------------------------------+
+     |                |                       |                    |
+  read(fd)            |                       |                    |
+     +--------------->| Tread                 |                    |
+     |                +---------------------->| filsysread()       |
+     |                |                       +--- sendp --------->|
+     |                |                       |              xfidread()
+     |                |    Rread (data=...)    |              Qcons case
+     |                |<----------------------------------------------+
+     |<---------------+                       |                    |
+     |                |                       |                    |
+\end{verbatim}
+%claude:
+Notice that the lightweight operations ([[attach]], [[walk]]) are
+handled directly by [[filsysproc]], while the heavier ones
+([[open]], [[read]], [[write]]) are dispatched to [[Xfid]] worker
+threads via [[sendp]].
 
 % ... -> <>  called from many Xfid threads, and some filsysxxx too
 <<function [[filsysrespond]]>>=
@@ -8777,6 +8878,11 @@ xfidopen(Xfid *x)
 %old: I put the x->f->w with declaration.
 
 %yoann: say we will see the xfidopen cases gradually, each different behavior for different virtual device file
+%claude:
+I will present the [[xfidopen()]] cases one by one in the chapters
+devoted to each virtual device.  Most files need no special
+open logic, but some do---for instance, opening [[Qmouse]] tells
+[[rio]] that this window is a graphical application.
 
 <<[[xfidxxx()]] respond error if window was deleted>>=
 if(w->deleted){
@@ -8788,6 +8894,18 @@ if(w->deleted){
 \section{Clunk/Close}
 
 %yoann: maybe explain what clunk means, it's unusual word where people expect close for file operations
+%claude:
+In 9P, releasing a file handle is called {clunk}---an English word
+meaning a dull thud, as if dropping something.
+The mapping between [[close()]] and [[Tclunk]] is not quite 1-to-1.
+For example, if a process calls [[dup()]] to duplicate a file
+descriptor, the kernel now has two fds pointing to the same
+underlying channel.  Closing the first fd does {\em not} generate
+a [[Tclunk]]---the kernel only sends [[Tclunk]] to the server when
+the last reference is dropped.  So several [[close()]] calls may
+produce zero or one [[Tclunk]].
+The \plan designers used a distinct name to keep the protocol
+layer separate from the system call layer.
 
 \subsection{[[filsysclunk()]]}
 
@@ -8976,6 +9094,12 @@ xfidread(Xfid *x)
 %ocaml: ADT and exhaustive check so no need default case
 
 %yoann: again say will see the different xfidread cases gradually in rest of the book, one for each different virtual device file
+%claude:
+As with [[xfidopen()]], I will present the [[xfidread()]] cases
+one by one in the chapters devoted to each virtual device file.
+Each case has very different behavior: [[Qcons]] returns buffered
+text, [[Qmouse]] blocks until a mouse event is available,
+[[Qwinname]] returns a short string, and so on.
 
 % off, cnt, very important.
 % actually off not always respected ... Qmouse does not care about off
@@ -9047,6 +9171,12 @@ xfidwrite(Xfid *x)
 \section{Stats}
 
 %yoann: introduce Stats
+%claude:
+The [[stat]] operation returns metadata about a file---name,
+permissions, size, timestamps---similar to Unix's [[stat()]] system
+call.  In [[rio]], the metadata is synthesized on the fly from the
+[[Dirtab]] entry and the window identifier, since none of these
+virtual files exist on disk.
 
 \subsection{[[filsysstat()]]}
 
@@ -9096,6 +9226,15 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
 \section{Forbidden operations}
 
 %yoann: explain what rio fileserver must disallow and why
+%claude:
+Some 9P operations make no sense for [[rio]]'s virtual filesystem.
+A client cannot [[create]] new files---the set of device files
+([[cons]], [[mouse]], etc.) is fixed by [[rio]], not extensible by
+applications.  Likewise, [[remove]] is forbidden because these
+virtual files are not real filesystem entries that can be deleted.
+And [[wstat]] (change metadata) is rejected because the permissions
+and ownership are determined by [[rio]] itself.
+All three simply respond with [[Eperm]].
 
 <<[[fcall]] other methods>>=
 [Tcreate]  = filsyscreate,
