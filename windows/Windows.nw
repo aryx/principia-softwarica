@@ -2654,6 +2654,11 @@ In turn, [[rio]] will provide each of its client windows with their own
 %ocaml: do not use global for display and view,
 % get Draw.init to return them
 
+The [[display]] and [[view]] globals are not defined here because
+they are parts of the [[draw]] library and are declared in [[draw.h]],
+but [[viewr]] below is defined in [[rio]] and is essentially
+an alias for [[view->r]].
+
 <<global [[viewr]]>>=
 Rectangle	viewr;
 @
@@ -2716,21 +2721,24 @@ Mouse	*mouse;
 % images, which is big building block for windowing systems (but still
 % a lot remains)
 %claude:
-A [[Screen]] (from [[draw.h]]) is the graphics library's support for
+A [[Screen]] (from [[window.h]]) is the graphics
+library's support for
 {overlapping images}---it manages the z-order and repainting of layers
 that overlap each other.
 [[rio]] allocates a [[Screen]] on top of [[view]] to serve as the
-desktop: every window will be a layer on this screen.
-The [[background]] and [[red]] globals are
-color images (in \plan, everything is an [[Image]], including colors).
-The red color is used to highlight window borders during move/resize
-operations.
+``desktop'': every window will be a layer on this desktop.
 
 <<global [[desktop]]>>=
 Screen	*desktop;
 @
 %ocaml: again does not need to be a global
 %old: was called wscreen 
+
+%claude:
+The [[background]] and [[red]] globals are
+color images (in \plan, everything is an [[Image]], including colors).
+The red color is used to highlight window borders during move/resize
+operations.
 
 % = allocscreen(screen, background)
 %TODO: rename to screen? or better desktop! or merge with the one in window.h?
@@ -2768,6 +2776,8 @@ Image	*red;
 \section{Windows}
 \label{sec:core-ds-Windows}
 
+%yoann: small paragraph introducing the section
+
 \subsection{[[Window]]}
 
 % Windowing systems is all about managing windows ... so here it is.
@@ -2782,13 +2792,13 @@ Image	*red;
 % side, no real notion of window. Just a graphical app that thinks
 % it runs outside of rio. have just display and view (via /dev/winname).
 %claude:
-The [[Window]] structure is the central data structure of [[rio]], much
-like [[Proc]] in the kernel.
+The [[Window]] structure is the central data structure of [[rio]] (much
+like [[Proc]] in the \book{Kernel}).
 It is the server-side representation of a client window---the client
 application itself has no notion of a ``window''; it simply sees a
 display and a [[view]] image through [[/dev/winname]].
 %claude:
-The structure groups together nine categories of fields:
+The structure below groups together nine categories of fields:
 an ID and label (visible through [[/mnt/wsys/winid]] and [[/mnt/wsys/label]]),
 graphics (the window's image and screen coordinates),
 mouse and keyboard channels (for receiving dispatched input events),
@@ -2858,10 +2868,12 @@ struct Window
 };
 @
 
+
 % all categories are important above. Window is connected
 % to mouse, keyboard, can be controlled, has some id and graphics,
 % is connected to external process, and can be textual or graphical.
 
+%yoann: say we will cover the different fields gradually in this book, but for now most important are id and name;
 
 
 <<[[Window]] id fields>>=
@@ -2870,6 +2882,8 @@ char    name[32]; // visible through /mnt/wsys/winname
 @
 %ocaml: no hardcoded length, flexible string
 \l could rename winname
+
+%yoann: sait global counter for windows id
 
 % counter
 <<global [[id]]>>=
@@ -2924,6 +2938,7 @@ char    *label;   // writable through /mnt/wsys/label
 %  label is actually set by client, and displayed back by rio.
 %  label can be arbitrary size and /dev/label is writable
 
+%yoann: introduce Ref and QLock and why need them (and maybe reference Libcore book)
 
 \t adv topics? all those wclose, wclosechan, incref/decref are subtle
 <<[[Window]] extra fields>>=
@@ -2953,7 +2968,7 @@ The global [[windows]] array is the essence of the windowing system:
 it holds all the managed windows.
 The [[topped]] counter is a logical timestamp---each time a window
 gets the focus, it receives the current [[topped]] value (then incremented).
-This allows [wpointto] to find the topmost window at a given point
+This allows [<wpointto()>] to find the topmost window at a given point
 by comparing [[topped]] values across all overlapping windows.
 
 % grown in wmk()
@@ -2996,6 +3011,8 @@ int	 	topped;
 \label{sec:current}
 \t rename input to current
 
+%yoann: current is similar to up in \book{Kernel}, the current window with the focus
+
 % the current window, the one with the focus, the one
 %  getting for instance the keyboard messages
 <<global [[input]]>>=
@@ -3019,6 +3036,7 @@ Window	*input;
 
 \subsection{Graphical windows}
 
+%yoann: like said before, the way rio knows if app is textual or graphical is whether opened the /dev/mouse device
 
 % important difference we will see later between graphical
 % and textual windows. Many things change accordingly.
@@ -3179,6 +3197,7 @@ per-client file state, and a channel to the worker allocator.
 The client side of the pipe is published in [[/srv/rio.user.pid]]
 so that child processes (and any process that mounts it) can
 communicate with [[rio]]'s filesystem server.
+%yoann1: say "also published" ... because child process don't need this /srv/; it's the fork/exec model of shared fds that ensure child process can communicate with rio
 
 <<struct [[Filsys]]>>=
 struct Filsys
@@ -3238,7 +3257,7 @@ Fid		*next;
 
 % when userspace filesystem, have notion of fid, Fcall message.
 %claude:
-A {fid} is a 9P concept: a 32-bit handle the client uses to refer
+A {fid} (file ID) is a 9P concept: a 32-bit handle the client uses to refer
 to a file on the server, similar to a file descriptor but at the
 protocol level.
 The server must maintain state for each fid (whether it is open, in what
@@ -3246,6 +3265,7 @@ mode, which [[Qid]] identifies the underlying file).
 The [[Fid.w]] field closes the circle: once a fid is associated
 with a [[Qid]] (during attach or walk), the server can resolve it
 back to the corresponding [[Window]].
+%yoann1: explain the concept of Qid maybe too
 
 <<struct [[Fid]]>>=
 struct Fid
@@ -3331,6 +3351,7 @@ newfid(Filsys *fs, int fid)
 % also bad to be both a lookup and create_if_not_there.
 % should be stricter and allows create only at a few places (Attach, Walk)
 
+%yoann: explain this important field, maybe ASCII diagram to relate files with Window with fileserver?
 
 <<[[Fid]] other fields>>=
 Window	*w;
@@ -3449,6 +3470,7 @@ When a client process opens, reads, or writes a file under
 dispatches through this table. The handler may return [[nil]] if it
 delegates work to a worker thread, or the [[Xfid]] back if the
 worker can be reused immediately.
+%yoann1: "When a client process opens, ..."  process? execute instead?
 
 \t could just pass Xfid no? anyway Fid and Filsys are inside Xfid.
 
@@ -3524,7 +3546,7 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 % see Libcore.nw, quick refresh on threads in plan9 and
 % fact that main is then threadmain.
 %claude:
-The entry point is [[threadmain()]] (not [[main()]]): the thread library
+The entry point of [[rio]] is [[threadmain()]] (not [[main()]]): the thread library
 provides its own [[main()]] that sets up the cooperative scheduler and a
 first proc, then calls [[threadmain()]] as its initial thread.
 The initialization follows three phases matching [[rio]]'s three roles:
@@ -3605,6 +3627,7 @@ then allocates a [[Screen]] on top of [[view]] to serve as the
 desktop for overlapping windows.
 The call to [[iconinit()]] allocates the grey background and the
 red color used to highlight borders during window operations.
+%yoann1: why call geninitdraw() instead of initdraw()?
 
 <<[[main()]] graphics initializations>>=
 if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
@@ -3655,6 +3678,8 @@ iconinit(void)
 
 % The windowing system is a graphical application like other graph app!
 % It needs to call initmouse, initkeyboard. 
+
+%yoann: explain why initmouse needs the view as a parameter
 
 % threadmain -> <>
 <<[[main()]] mouse initialisation>>=
@@ -3726,6 +3751,7 @@ input events and route them to the appropriate window thread.
 Additional threads are created dynamically: each new window gets its
 own [[winctl]] thread, the worker allocator gets a thread, and each
 filesystem worker gets a thread.
+%yoann1: remind that those keyboard/mouse threads are different from keyboard/mouse procs created by initmouse() and maybe reference the soft archi figure
 
 <<constant [[STACK]]>>=
 #define	STACK	8192
@@ -3801,6 +3827,8 @@ Rescue:
 %ocaml: need cxfidalloc? because have arena of workers? 
 % what if create each time a new thread? too slow?
 
+%yoann: explain what is 10000 constant above for proccreate, why not reuse STACK constant? different?
+
 % filsysproc later
 
 % user and pid are for
@@ -3809,6 +3837,8 @@ Rescue:
 \l aspectize it
 
 % comm channel is a pipe this time, because it's between processes.
+
+%yoann: explain why need this wrapper for pipe creation and explain #|, why not use PIPE syscall?
 
 <<function [[cexecpipe]]>>=
 /*
@@ -3845,6 +3875,8 @@ cexecpipe(fdt *p0, fdt *p1)
 
 
 \subsection{Worker allocator: [[xfidinit()]]}
+
+%yoann: explain need for worker allocator and maybe ASCII diagram comm with master
 
 %    filsys = filsysinit(xfidinit());
 
@@ -4041,6 +4073,8 @@ The thread must decide for each event whether to {dispatch} it to the
 window thread ([[sending = true]]) or handle it locally as a windowing
 system operation.
 
+%yoann: introduce enum and referene maybe hellorio.c that did something similar and use of alt() even though weird because multiplement element in alt() we don't alt()  just on the IO proc mouse?
+
 <<enum [[Mxxx]]>>=
 enum {
     MMouse,
@@ -4118,6 +4152,7 @@ bool sending = false;
 @
 % application(client) vs system (rio) mouse event!
 
+%yoann: give overview of the code below, important parts (like logical coord, winput) and say will delay details to later because quite complex
 
 <<[[mousethread()]] event loop cases>>=
 case MMouse:
@@ -4240,7 +4275,7 @@ if(mouse->buttons == 0){
 %claude:
 When a mouse event is not forwarded to the application, the mouse thread
 handles it as a windowing system operation. It first determines which
-window is under the cursor with [wpointto], then dispatches based on
+window is under the cursor with [<wpointto>], then dispatches based on
 the button pressed: left-click on an unfocused window brings it to the
 front, middle-click opens the edit menu (cut/paste),
 and right-click opens the system menu (New/Resize/Move/Delete/Hide/Exit).
@@ -4349,7 +4384,7 @@ if(mouse->buttons){
 
 
 
-
+%yoann: explain Drain issue
 
 \t ??? 
 <<[[mousethread()]] Drain label>>=
@@ -4388,6 +4423,10 @@ that will be presented in later chapters.
 This is the ``active object'' pattern: each window is an independent
 concurrent entity processing its own event stream.
 
+%yoann: maybe ASCII diagram with Window thread at the center and conneted threads/channels outside
+
+%yoann: say for now will just focus on key, mouse, ctl "connexions"
+
 <<enum [[Wxxx]]>>=
 enum { 
     WKey, 
@@ -4403,7 +4442,7 @@ enum {
 
 
 
-
+%yoann: introduce winctl and its importance
 
 
 % rename winctlthread? more consistent?
@@ -4468,6 +4507,8 @@ winctl(void *arg)
 
 
 \subsection{Keyboard events listening}
+
+%yoann: introduce first part of comms, keyboard with new Window fields
 
 <<[[Window]] keyboard fields>>=
 // chan<Rune, 20> (listener = winctl, sender = keyboardthread)
@@ -4551,6 +4592,8 @@ if(w->deleted)
 
 \subsection{Mouse events listening}
 
+%yoann: introduce second part
+
 <<[[Window]] mouse fields>>=
 // mc.c = chan<Mouse> (listener = winctl, sender = mousethread)
 Mousectl	mc;
@@ -4595,6 +4638,9 @@ case WMouse:
 
 \subsection{Control events listening}
 % e.g., resize, delete, hide, etc.
+
+%yoann: introduce last part
+
 
 <<[[Window]] control fields>>=
 // chan<Wctlmesg, 20> (listener = winctl, sender = mousethread | ...)
@@ -4773,6 +4819,8 @@ if(fcall[x->req.type] == nil)
 
 
 \subsection{[[filsysversion()]]}
+
+%yoann: transition paragraph, say see first 9p message, version
 
 <<[[fcall]] other methods>>=
 [Tversion] = filsysversion,
@@ -4990,6 +5038,7 @@ xfidctl(void *arg)
 \l how decref cannot be 0?
 \l how can share an xfid?? why need a Ref?
 
+%yoann: maybe give an idea of what kind of code this Xfid thread will be given to execute
 
 
 
@@ -4999,8 +5048,7 @@ xfidctl(void *arg)
 %******************************************************************************
 \label{chap:cursor}
 
-%trans: before heart of rio and windows management,
-% easier part, cursors.
+%yoann: trans: before heart of rio and windows management, easier part, cursors.
 %claude:
 Before diving into the heart of window management, I will cover
 the simpler topic of cursor handling.
@@ -5008,6 +5056,7 @@ the simpler topic of cursor handling.
 what operation is possible: a cross for creating windows, a box for
 moving, a gunsight for deleting, and directional arrows when hovering
 over window borders and corners.
+%yoann1: a cross fo creation? I thought it was a +
 
 \section{Cursor graphics}
 
@@ -5021,7 +5070,11 @@ over window borders and corners.
 %claude:
 Each cursor is a [[Cursor]] structure with a hotspot offset and two
 16x16 bitmaps: the first is the mask (set bits), the second is the
-actual image (clear bits). The [[crosscursor]] appears during window
+actual image (clear bits). 
+%yoann1: what is an "hotspot offset"? maybe ASCII diagram to understand how it works? what is the mask for? for transparency?
+
+%claude:
+The [[crosscursor]] below appears during window
 creation ([[sweep]]), [[boxcursor]] during window moves ([[drag]]),
 [[sightcursor]] when ``Delete'' is selected from the system menu,
 [[whitearrow]] in holding mode, and [[query]] for unknown states.
@@ -5241,10 +5294,10 @@ Cursor l = {
 Cursor management involves a tension between [[rio]] (which wants to show
 border cursors and operation cursors) and client applications (which can
 set their own cursor via [[/dev/cursor]]).
-[cornercursor] resolves this: if the mouse is on a window border,
+[<cornercursor()>] resolves this: if the mouse is on a window border,
 it shows the appropriate directional cursor; otherwise it defers to
-the window's own cursor via [wsetcursor].
-The [[menuing]] flag prevents cursor changes during system menu
+the window's own cursor via [<wsetcursor()>].
+The [<menuing>] flag prevents cursor changes during system menu
 operations, when [[rio]] must keep control of the cursor.
 
 \subsection{[[riosetcursor()]]}
@@ -5425,11 +5478,20 @@ wsetcursor(Window *w, bool force)
 %******************************************************************************
 \label{chap:wm}
 
+%yoann: transition chapter paragraph
 
 \section{Overview}
 
 % In plan9, the window manager is the same program than the window server.
 %alt: separate program as in X11
+
+In \plan, the window manager and the window server are the same program,
+unlike X11 where they are separate.
+All window management paths converge to the same mechanism: sending a
+[[Wctlmesg]] to the target window's [[cctl]] channel, where its
+[[winctl]] thread will process it.
+
+%yoann: introduce the following sections and give high-level view of the whole chapter, maybe with ASCII diagram
 
 % Window management operations can be trigged in different ways:
 % - right click menu (rio/system menu), can create new window
@@ -5441,11 +5503,6 @@ wsetcursor(Window *w, bool force)
 % They all trigger then messages send to the appropriate window thread
 % via wsendctlmsg(w->cctl).
 %claude:
-In \plan, the window manager and the window server are the same program,
-unlike X11 where they are separate.
-All window management paths converge to the same mechanism: sending a
-[[Wctlmesg]] to the target window's [[cctl]] channel, where its
-[[winctl]] thread will process it.
 
 \section{Right-click system menu}
 
@@ -5454,7 +5511,7 @@ All window management paths converge to the same mechanism: sending a
 % which will do the modifications.
 %claude:
 The right-click menu (``system menu'') is the primary user interface for
-window management. It offers: New (create a window), Resize, Move, Delete,
+window management in [[rio]]. It offers: New (create a window), Resize, Move, Delete,
 Hide, and Exit. Hidden windows also appear as extra menu entries, allowing
 the user to unhide them.
 Most of this code runs in the mouse thread's context, but the actual
@@ -5507,6 +5564,8 @@ button3menu(void)
 % Need cooperative threads? Otherwise can have concurrent access to mousectl.fd?
 % No, cos still in mouse_thread context, and readmouse() called from menuhit()
 % will read from the same channel in mousectl.c, not directly from fd.
+
+%yoann: introduce use and importance of this global
 
 <<global [[sweeping]]>>=
 bool	sweeping;
@@ -5574,7 +5633,7 @@ enum RightMenuCommand
 % RightMenuCommands is similar to Wctlmesg but it's not the same.
 
 
-
+%yoann: close the loop with earlier chapter where threadmain block recvr on exitchan; this is the other side
 
 <<[[button3menu()]] cases>>=
 case Exit:
@@ -5593,7 +5652,7 @@ case Exit:
 When the mouse is on a window's border and a button is pressed, the
 mouse thread initiates a move or resize operation directly, without
 going through the right-click menu. Left or middle click on the border
-triggers [bandsize] (resize), while right-click triggers [drag] (move).
+triggers [<bandsize()>] (resize), while right-click triggers [<drag()>] (move).
 The result is sent as a [[Reshaped]] or [[Moved]] message to the
 window's [[winctl]] thread.
 
@@ -5766,6 +5825,7 @@ a shell).
 When the user selects ``New'' from the system menu, [[sweep()]] lets
 them draw a rectangle, then [[new()]] creates everything needed for the
 new window.
+%yoann1: maybe reference the section in Overview chapter giving high-level view of window creation
 
 <<[[button3menu()]] cases>>=
 case New:
@@ -5787,14 +5847,17 @@ case New:
 % who call new with pid != 0? when external process such as a shell
 % want to access rio (via mount /srv/rio.user.pid ...) see chapter X
 %claude:
-[new] orchestrates the creation of a window in several steps:
-allocate channels, build the [[Window]] structure with [wmk],
-add it to the global [[windows]] array, create a [[winctl]] thread,
+[[new()]] orchestrates the creation of a window in several steps:
+allocate channels, build the [[Window]] structure with [<wmk()>],
+add it to the global [<windows>] array, create a [[winctl]] thread,
 fork a shell process (if [[pid == 0]]), and register the window's
 name in the graphics layer system.
+
+%claude:
 When [[pid]] is non-zero, the calling process already exists (e.g.,
 an external program that mounted [[/srv/rio.user.pid]])
 and just needs a window created for it.
+%yoann1: explain more or maybe delay explanation to Advanced topics?
 
 %ctor!
 % ((right click -> button3menu()) | wctlnew()) -> <>
@@ -5907,13 +5970,13 @@ if(cm==nil || ck==nil || cctl==nil)
 
 % active object, monitor
 %claude:
-[wmk] is the constructor for the [[Window]] structure. It assigns a
+[[wmk]] is the constructor for the [<Window>] structure. It assigns a
 unique [[id]] (monotonically increasing) and a [[topped]] counter that
 tracks stacking order---higher values mean more recently focused.
 The initial [[incref]] at the end is subtle: it prevents the window
 from being freed before the child process has finished mounting
-[[rio]]'s filesystem. The matching [[decref]] happens in [winshell]
-after [[filsysmount]] completes (via [wclose]).
+[[rio]]'s filesystem. The matching [[decref]] happens in [<winshell()>]
+after [<filsysmount()>] completes (via [<wclose()>]).
 
 %ctor
 <<function [[wmk]]>>=
@@ -6058,11 +6121,13 @@ For each new window, [[rio]] forks a new process ([[winshell]]) that
 will [[exec]] a shell (usually [[rc -i]]).
 Before exec'ing, [[winshell]] must set up the correct {namespace}:
 it calls [[rfork(RFNAMEG|RFFDG|RFENVG)]] to get a private copy of
-the namespace, file descriptors, and environment variables, then
+the namespace ([[RFNAMEG]]), file descriptors ([[RFFDG]]), and 
+environment variables ([[RFENVG]]), then
 mounts [[rio]]'s filesystem so that the child's [[/dev/cons]],
 [[/dev/mouse]], and other files are served by [[rio]]'s window.
 This is the key mechanism: the shell thinks it is talking to normal
 device files, but those files are actually virtual files served by [[rio]].
+%yoann1: maybe explain private vs shared copy of namespace? and why not share file descriptor? after fork/exec we actually want to reuse the same file descriptor for the pipe to the rio fileserver; so what remains? what is still shared?
 
 <<global [[rcargv]]>>=
 char *rcargv[] = { "rc", "-i", nil };
@@ -6184,6 +6249,8 @@ winshell(void *args)
 %  on stderr (see Shell.nw)
 
 
+
+%yoann: introduce important field
 
 <<[[Window]] process fields>>=
 int		pid;
@@ -6341,8 +6408,8 @@ if(err < 0){
 The namespace adjustments handle [[/dev/cons]] and [[/dev/mouse]] but
 not [[/dev/draw]]---virtualizing the drawing protocol would be too slow.
 Instead, the client directly talks to the display server but needs to
-find its window's image. [wsetname] publishes the window's image under
-a unique name (e.g., [[window.3.0]]), and the client discovers it
+find its window's image. [[wsetname]] publishes the window's image under
+a unique name (e.g., [[window.2.0]]), and the client discovers it
 through [[/dev/winname]] via [[geninitdraw()]] (see the \book{Graphics}).
 
 <<[[Window]] id fields>>=
@@ -6400,13 +6467,15 @@ fprint(STDERR, "rio: setname failed: %s\n", err);
 % and layer creation
 
 %claude:
-[sweep] lets the user interactively draw a rectangle for the new window.
+[[sweep]] lets the user interactively draw a rectangle for the new window.
 It shows a cross cursor, waits for the right button to be pressed,
 then tracks the mouse while the button is held, allocating and freeing
 temporary window images to give visual feedback.
 Once the button is released, the temporary image is replaced by a final
 one with [[Refbackup]] (so the graphics library saves what is underneath
 for proper overlapping).
+
+%yoann: say finally see menuing
 
 <<global [[menuing]]>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
@@ -6547,9 +6616,9 @@ Rescue:
 
 % put code of mousethread related to window focus here!!
 %claude:
-Clicking on an unfocused window brings it to the front via [wtop],
+Clicking on an unfocused window brings it to the front via [[wtop]],
 which calls [[topwindow()]] (from the graphics library) to raise the
-image layer, then [wcurrent] to update the global [[input]] pointer
+image layer, then [<wcurrent()>] to update the global [<input>] pointer
 and repaint the border colors---the focused window gets a different
 border color than unfocused ones.
 
@@ -6591,12 +6660,12 @@ wtop(Point pt)
 % by window manager
 
 %claude:
-[wcurrent] updates the global [[input]] pointer (the focused window)
-and repaints both the old and new focus windows via [wrepaint].
+[[wcurrent()]] updates the global [<input>] pointer (the focused window)
+and repaints both the old and new focus windows via [<wrepaint()>].
 The repaint is necessary because [[rio]] draws different border colors
 for focused versus unfocused windows---the focused window gets
-[[titlecol]] (dark grey-green) and unfocused ones get [[lighttitlecol]]
-(pale grey-green). If the window is in text mode, [wrepaint] also
+[<titlecol>] (dark grey-green) and unfocused ones get [<lighttitlecol>]
+(pale grey-green). If the window is in text mode, [<wrepaint()>] also
 redraws the text content because the foreground/background colors
 may differ for the focused window.
 
@@ -6681,7 +6750,7 @@ case Delete:
 \subsection{[[delete()]]}
 
 %claude:
-[delete] is the menu handler: it calls [pointto] with [[wait=true]]
+[[delete()]] is the menu handler: it calls [<pointto()>] with [[wait=true]]
 (wait for the user to complete the click), then sends a [[Deleted]]
 control message to the selected window's [[winctl]] thread.
 The actual cleanup is asynchronous---the [[winctl]] thread handles
@@ -6726,7 +6795,7 @@ bool	deleted;
 The [[Deleted]] handler writes ``hangup'' to [[notefd]]
 ([[/proc/<pid>/notepg]]), which sends a note (Plan 9's equivalent of a
 signal) to the entire process group. Then it kicks off
-[[deletetimeoutproc]] as a safety net and calls [wclosewin] to remove
+[[deletetimeoutproc]] as a safety net and calls [<wclosewin()>] to remove
 the window from the screen immediately. The window's thread does not
 exit yet---it waits for the [[Exited]] message that comes later when
 all filesystem references are closed.
@@ -6752,10 +6821,10 @@ if(w->deleted)
 % how can happen? because can receive cmd from multiple places?
 
 %claude:
-[wclosewin] handles the immediate visual cleanup: it marks the window
+[[wclosewin()]] handles the immediate visual cleanup: it marks the window
 as [[deleted]], clears the focus if this was the active window, removes
 it from the [[hidden]] array (in case it was hidden), removes it from
-the global [[windows]] array with [[memmove]], and frees the layer image
+the global [<windows>] array with [[memmove]], and frees the layer image
 so it disappears from the screen. Note that the [[Window]] struct itself
 is not freed here---that happens later in the [[Exited]] handler, after
 the child process has terminated.
@@ -6891,7 +6960,7 @@ deletethread(void*)
 The second phase of deletion uses reference counting. Each mount of
 [[rio]]'s filesystem increments the window's reference count (in
 [[xfidattach]]), and each clunk decrements it (via [[winclosechan]]).
-When the last reference drops to zero, [wclose] sends the [[Exited]]
+When the last reference drops to zero, [<wclose()>] sends the [[Exited]]
 message, which triggers the final cleanup: freeing the frame, closing
 the note file descriptor, freeing all channels, and freeing the
 [[Window]] struct itself.
@@ -6899,7 +6968,7 @@ the note file descriptor, freeing all channels, and freeing the
 The [[winclosechan]] channel bridges the filesystem server process
 and the main thread group. The filesystem process cannot directly
 manipulate window state (different thread group), so it sends the
-window pointer on this channel, and [[winclosethread]] calls [wclose]
+window pointer on this channel, and [[winclosethread]] calls [[wclose()]]
 in the correct context.
 
 \t who send to that?
@@ -7011,14 +7080,14 @@ case Exited:
 %  but for move pointto() is only the first step so we don't
 %  want a release here.
 %claude:
-[pointto] is the shared ``pick a window'' gesture used by Delete, Move,
+[[pointto()]] is the shared ``pick a window'' gesture used by Delete, Move,
 and Resize. It changes the cursor to a gunsight, waits for the user to
 click, and returns the window under the cursor (or [[nil]] if the user
 clicked on the background or with the wrong button).
 The [[wait]] parameter controls whether the function waits for the
 button to be released before returning. Delete passes [[true]] (wait
 for a full click), while Move passes [[false]] because the same button
-press will continue into the [drag] phase.
+press will continue into the [<drag()>] phase.
 
 % delete(true) | move -> <>
 <<function [[pointto]]>>=
@@ -7069,9 +7138,9 @@ if(mouse->buttons!=4 && w != nil){	/* cancel */
 \section{Window move}
 % via menu, see also via border click
 %claude:
-Moving a window is a two-step mouse action: first [pointto] lets the
+Moving a window is a two-step mouse action: first [<pointto()>] lets the
 user select which window to move (by showing a gunsight cursor),
-then [drag] tracks the mouse while redrawing a rubber-band border
+then [<drag()>] tracks the mouse while redrawing a rubber-band border
 to show the new position. When the button is released, the old
 image content is copied into a new window at the destination.
 
@@ -7084,8 +7153,8 @@ case Move:
 \subsection{[[move()]]}
 
 %claude:
-The move flow is: [pointto] (with [[wait=false]]) to select the window,
-then [drag] to track the mouse and produce a new image at the
+The move flow is: [<pointto()>] (with [[wait=false]]) to select the window,
+then [<drag()>] to track the mouse and produce a new image at the
 destination, then a [[Moved]] control message. The [[Moved]] case in
 [[wctlmesg]] shares its handler with [[Reshaped]]---a move is just a
 reshape where the dimensions stay the same and the old content is
@@ -7119,10 +7188,10 @@ move(void)
 
 % assumes already has done a pointto
 %claude:
-[drag] implements the visual feedback loop for moving a window.
+[[drag()]] implements the visual feedback loop for moving a window.
 It computes [[dm]], the offset from the mouse to the window's top-left
 corner, so the window follows the cursor at the same relative position
-where the user grabbed it. While the button is held, [drawborder] draws
+where the user grabbed it. While the button is held, [<drawborder()>] draws
 a red rubber-band outline at the current position. On release, a new
 window image is allocated at the final position and the old content is
 copied into it with [[draw]].
@@ -7195,10 +7264,10 @@ if(mouse->buttons!=0 || ni==nil){
 
 % drawborder does delete previous image if there was one
 %claude:
-[drawborder] draws a rubber-band rectangle using four separate edge
+[[drawborder()]] draws a rubber-band rectangle using four separate edge
 images (not a single rectangle), because a single layer would obscure
 the window content underneath. Using four thin strips keeps the interior
-transparent. [drawedge] optimizes updates: if the edge dimensions have
+transparent. [<drawedge()>] optimizes updates: if the edge dimensions have
 not changed (as in a move), it simply repositions the existing image
 with [[originwindow]] rather than freeing and reallocating.
 
@@ -7249,10 +7318,10 @@ drawedge(Image **bp, Rectangle r)
 \section{Window resize}
 % via menu, or via mouse on border directly
 %claude:
-Resizing reuses [sweep] to let the user draw a new rectangle, then
+Resizing reuses [<sweep()>] to let the user draw a new rectangle, then
 sends a [[Reshaped]] message.
 In the [[wctlmesg]] handler, Moved and Reshaped share the same code
-path: [wresize] replaces the window's image, re-publishes the name
+path: [<wresize()>] replaces the window's image, re-publishes the name
 (so the client can reconnect via [[getwindow()]]), and triggers a
 reflow of the text content for textual windows.
 
@@ -7265,11 +7334,11 @@ case Reshape:
 \subsection{[[resize()]]}
 
 %claude:
-[resize] is almost identical to [move]: select a window with [pointto],
-draw a new rectangle with [sweep], and send a [[Reshaped]] message.
-The key difference is that [pointto] uses [[wait=true]] here (the user
+[[resize()]] is almost identical to [<move()>]: select a window with [<pointto()>],
+draw a new rectangle with [<sweep()>], and send a [[Reshaped]] message.
+The key difference is that [<pointto()>] uses [[wait=true]] here (the user
 completes one click to select, then does a separate sweep gesture),
-and [sweep] lets the user define an entirely new rectangle rather than
+and [<sweep()>] lets the user define an entirely new rectangle rather than
 dragging the existing one.
 
 <<function [[resize]]>>=
@@ -7332,9 +7401,9 @@ bool	 	resized;
 \t put in Resize event section?
 
 %claude:
-[wresize] swaps the window's image. If this is a move (or the
+[<wresize()>] swaps the window's image. If this is a move (or the
 dimensions are unchanged), the old content is copied into the new
-image with [[draw]]. The old image is freed, and [wsetname] publishes
+image with [[draw]]. The old image is freed, and [<wsetname()>] publishes
 the new image under an incremented name so the client can reconnect
 via [[getwindow()]]. The [[resized]] flag and [[mouse.counter]]
 increment ensure the client gets a resize event on its next
@@ -7379,11 +7448,11 @@ wresize(Window *w, Image *i, bool move)
 
 % with left or middle click, other way to resize.
 %claude:
-[bandsize] is the alternative resize gesture triggered by clicking
+[[bandsize()]] is the alternative resize gesture triggered by clicking
 on a window's border (rather than using the menu). It determines
-which corner or edge the user grabbed via [whichcorner], snaps the
-cursor to that corner with [cornerpt] and [wmovemouse], then enters
-a tracking loop where [whichrect] computes the new rectangle by
+which corner or edge the user grabbed via [<whichcorner()>], snaps the
+cursor to that corner with [<cornerpt()>] and [<wmovemouse()>], then enters
+a tracking loop where [<whichrect()>] computes the new rectangle by
 anchoring the opposite corner/edge and letting the grabbed one follow
 the mouse. This feels like ``pulling'' a corner to resize.
 %claude:
@@ -7473,11 +7542,11 @@ wmovemouse(Window *w, Point p)
 @
 
 %claude:
-[whichrect] and [cornerpt] use a 3x3 grid encoding (from [whichcorner]):
+[[whichrect]] and [[cornerpt]] use a 3x3 grid encoding (from [<whichcorner()>]):
 0=top-left, 1=top-edge, 2=top-right, 3=left-edge, 5=right-edge,
 6=bottom-left, 7=bottom-edge, 8=bottom-right (4 would be the center,
-which is never used). [cornerpt] snaps the cursor to the actual corner
-or edge position, and [whichrect] computes a new rectangle by moving
+which is never used). [<cornerpt()>] snaps the cursor to the actual corner
+or edge position, and [<whichrect()>] computes a new rectangle by moving
 only the grabbed edge/corner while the opposite side stays fixed.
 
 % bandsize -> <>
@@ -7592,7 +7661,7 @@ The [[hidden]] array is a simple fixed-size list of currently hidden
 windows. Its contents are appended to the right-click system menu
 (after the standard New/Reshape/Move/Delete/Hide entries), giving
 the user a way to bring hidden windows back. The menu entries show
-each window's [[label]] (typically ``rc <pid>'').
+each window's [[label]] (typically [[rc <pid>]]).
 
 <<global [[hidden]]>>=
 // array<ref<Window>> (size valid = nhidden)
@@ -7612,9 +7681,9 @@ int		nhidden;
 
 %claude:
 The hiding trick is in the choice of [[allocimage]] versus
-[[allocwindow]]: [whide] allocates a plain in-memory image (not a
+[[allocwindow]]: [[whide()]] allocates a plain in-memory image (not a
 layer on the desktop) and sends a [[Reshaped]] message with it.
-The [[Reshaped]] handler in [[wctlmesg]] calls [wresize], which
+The [[Reshaped]] handler in [[wctlmesg]] calls [<wresize()>], which
 swaps the window's image---so the window now draws to an off-screen
 buffer. The old layer image is freed, making the window disappear.
 The window's thread continues to run normally, just drawing to an
@@ -7680,10 +7749,10 @@ menu3str[i+Hidden] = nil;
 %ocaml: use show, because have module so no ambiguity with Terminal.show
 
 %claude:
-Unhiding reverses the trick: [wunhide] allocates a real layer (via
+Unhiding reverses the trick: [<wunhide()>] allocates a real layer (via
 [[allocwindow]]) and sends a [[Reshaped]] message. The [[Reshaped]]
 handler swaps the off-screen image for the new on-screen layer,
-publishes it via [wsetname], and the window reappears.
+publishes it via [<wsetname()>], and the window reappears.
 The menu integration is handled by the [[default]] case in the
 [[button3menu]] switch---any menu index past the standard entries
 corresponds to a hidden window.
