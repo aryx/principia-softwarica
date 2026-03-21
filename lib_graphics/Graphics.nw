@@ -8825,6 +8825,17 @@ if(mask->flags & Frepl){
 
 \subsection{[[memoptdraw()]]}
 
+%claude:
+[[memoptdraw]] handles three fast cases:
+(1)~opaque single-pixel source with full mask $\Rightarrow$
+[[memset]] to fill the destination with a uniform value,
+(2)~opaque source with no alpha and full mask $\Rightarrow$
+[[memmove]] to copy pixel data directly between images,
+(3)~all-1-bit images that are bit-aligned $\Rightarrow$
+bitwise byte operations (handled in the Non 32-Bits Images
+chapter). These paths avoid the expensive per-pixel
+compositing of [[alphadraw]].
+
 <<[[memimagedraw()]] try memoptdraw>>=
 /*
  * Optimizations using memmove and memset.
@@ -8996,6 +9007,15 @@ if(dir == -1){
 \t can write simple version when dst and src have simple and
 \t  same chan format? like RGBA32?
 
+%claude:
+[[alphadraw]] is the general compositing workhorse. For each
+scan line of the destination rectangle, it reads a line of
+pixels from source, mask, and destination (via [[readfn]]
+function pointers selected by pixel format), applies the
+Porter-Duff compositing formula (via [[calcfn]]), and writes
+the result back (via [[writefn]]). The scan direction can be
+reversed (bottom-to-top) when source and destination overlap
+to avoid overwriting pixels not yet read.
 
 <<[[alphadraw()]] locals>>=
 Memimage *src, *mask, *dst;
@@ -10602,6 +10622,18 @@ struct Seg
 
 \subsubsection{[[_memfillpolysc()]]}
 
+%claude:
+The scan-line fill algorithm works in three steps:
+(1)~build a sorted edge table from the polygon vertices,
+(2)~for each Y coordinate, maintain an active-edge list sorted
+by X intersection, and
+(3)~fill horizontal spans between consecutive pairs of active
+edges using [[fillline]] (which calls [[memdraw]] with a
+1-pixel-high rectangle). The ``sc'' suffix stands for
+``scaled coordinates''---the algorithm can operate with
+fixed-point sub-pixel precision when [[fixshift]] is non-zero,
+which is used for anti-aliased rendering of thick lines.
+
 <<function [[_memfillpolysc]]>>=
 void
 _memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
@@ -11190,6 +11222,18 @@ if(j < 0)
 % *   where x = b/a
 % */
 
+%claude:
+The ellipse algorithm uses the midpoint method: starting
+at the top of the ellipse, it walks pixel by pixel, choosing
+at each step whether to move horizontally or diagonally
+based on the residual error $e(x,y) = b^2 x^2 + a^2 y^2 - a^2 b^2$.
+The [[State]] structure tracks the accumulated error terms
+to avoid expensive multiplications at each step. For outlined
+(non-filled) ellipses, two ellipses are walked in parallel
+(inner and outer) and the region between them is filled.
+Each row produces a [[fillline]] call (a 1-pixel-high
+[[memdraw]]).
+
 <<struct [[ParamEllipse]]>>=
 struct ParamEllipse {
     Memimage	*dst;
@@ -11442,6 +11486,15 @@ eline(int x0, int y0, int x1, int y1, Param *p)
 
 
 \section{Arcs}
+
+%claude:
+Arcs are partial ellipses: the [[alpha]] parameter specifies
+the starting angle (in degrees times 64) and [[phi]] the
+angular extent. They reuse the ellipse drawing machinery
+via [[doellipse]] with a flag bit set in [[alpha]] to
+distinguish arcs from full ellipses. On the kernel side,
+the ellipse walker skips scan-line segments outside the
+angular range.
 
 \subsection{API}
 
@@ -11928,6 +11981,14 @@ char		ascent;		/* top of image to baseline */
 
 \subsection{Font image cache}
 
+%claude:
+The font image cache is a single wide [[Image]] in the
+display server that stores all recently used glyphs side
+by side. On the kernel side, [[DImage.fchar]] is an array
+of [[FChar]] entries that record the rectangle of each
+cached glyph within this image. When [[_string]] draws text,
+it issues a single batch draw command referencing this cache
+image, avoiding one draw call per character.
 
 <<[[Font]] character cache fields>>=
 // ref_own<Image>, growing image
@@ -11980,6 +12041,14 @@ int     ascent;
 
 \section{Additional (user) initializations}
 % client side only
+
+%claude:
+Font initialization happens during [[geninitdraw]]: the
+default subfont is loaded from the kernel's compiled-in
+font data, and then [[openfont]] reads the font file (e.g.,
+[[/lib/font/bit/lucm/latin1.9.font]]) to build the
+[[Font]] structure with its [[Cachefont]] range table.
+The global [[font]] is set to this default font.
 
 % initdraw() and geninitdraw() take a [[fontname]] parameter.
 % If not set then /env/font is used for default fontname. if nothing
@@ -12366,6 +12435,14 @@ if(font == nil){
 
 
 \section{Font allocation}
+
+%claude:
+[[openfont]] reads a font file and calls [[buildfont]] to
+parse the header (height, ascent) and the list of subfont
+ranges into [[Cachefont]] entries. No subfonts are loaded
+at this point---only the range specifications are stored.
+The actual glyph data is loaded lazily when [[cachechars]]
+encounters a rune for the first time.
 
 \subsection{[[buildfont()]]}
 
@@ -13081,6 +13158,14 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
 % see also chardraw which is an optimisation?
 
 \section{Computing text width}
+
+%claude:
+[[stringwidth]] computes the pixel width of a string without
+drawing it, by summing the [[width]] field of each character's
+[[Cacheinfo]] entry. This is essential for text layout---centering
+text, right-aligning, or deciding where to break lines.
+Like [[_string]], it calls [[cachechars]] to ensure all
+glyphs are loaded.
 
 \subsection{API}
 
@@ -14878,6 +14963,15 @@ if(ndata < l*Dy(r))
 \section{Unloading images from the display server}
 % saving pixels
 
+%claude:
+[[unloadimage]] reads pixel data back from the display
+server into user memory---the reverse of [[loadimage]].
+It works in two steps: first a \verb+'r'+ command is
+written to [[/dev/draw/x/data]] to request the pixel data
+for a rectangle, then the data is read back from the same
+file. Like [[loadimage]], it processes horizontal strips
+to stay within the buffer size.
+
 % read data by reading from /dev/draw/x/data!
 % 2 steps, send read request by writing in /dev/draw/x/data
 % and then read data from /dev/draw/x/data
@@ -15209,6 +15303,14 @@ ulong drawld2chan[] = {
 
 
 \section{Reading images from the disk}
+
+%claude:
+[[readimage]] reads an image file (in \plan's native format),
+creates an [[Image]] via [[allocimage]], and loads the pixel
+data via [[cloadimage]] (compressed) or [[loadimage]] (raw).
+The file format is a text header (channel string, rectangle)
+followed by compressed pixel data in blocks, each preceded
+by a line count and byte count.
 
 % will call loadimage
 
@@ -17082,6 +17184,15 @@ Memimage	*rear;	/* window behind this one*/
 % this Memlayer/window, to hide(save)/expose(restore) other windows.
 
 \section{Base layer allocation}
+
+%claude:
+A [[Screen]] (base layer) is created with [[allocscreen]],
+which takes the target image (where layers will be drawn)
+and a fill image (the background color painted behind
+windows). The kernel creates a [[DScreen]] and a
+[[Memscreen]], linking the target [[Memimage]] to the
+layer management machinery. Public screens can be shared
+across clients; private screens are owned by one client.
 
 \subsection{API}
 
@@ -20085,6 +20196,14 @@ XBGR32  = CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
 % GREY1, used for masks
 
+%claude:
+[[GREY1]] images pack 8 pixels per byte. When source, mask,
+and destination are all [[GREY1]] and bit-aligned, the
+compositing reduces to bitwise operations on whole bytes---much
+faster than the general per-pixel path. The code handles
+left and right edge masks ([[lm]], [[rm]]) for partial bytes,
+and a direction flag to handle overlapping source and
+destination correctly.
 
 % some kind of optimisations
 <<[[memoptdraw()]] if 1 bit mask, src, and dest>>=
@@ -20192,6 +20311,13 @@ if((par->state&(Simplemask|Simplesrc|Replmask|Replsrc))==0
 
 
 \section{Small-depth images}
+
+%claude:
+Images with depth less than 8 bits (1, 2, or 4-bit) pack
+multiple pixels per byte. Extracting a pixel requires computing
+the bit offset within the byte and masking. The [[readnbit]]
+and [[writenbit]] functions handle the packing/unpacking,
+replicating sub-byte values to 8 bits using [[replbit]] tables.
 
 % Each time nbits[] is used in code before, it is handling
 % small depth images (e.g., in writebyte() for alphadraw()).
@@ -20776,6 +20902,15 @@ if(grey){
 
 
 \section{Images with a color map}
+
+%claude:
+[[CMAP8]] images use a palette: each pixel is an 8-bit index
+into a 256-entry color table. \plan's default color map is
+algorithmically generated to distribute colors evenly across
+the RGB cube. The [[cmap2rgb]] and [[rgb2cmap]] functions
+convert between palette indices and RGB values. Color maps
+are stored per-VGA screen in [[VGAscr.colormap]] and can
+be read/written through [[/dev/draw/x/colormap]].
 \label{sec:colormap}
 
 % remember that CMap is enum in core DS.
@@ -21708,7 +21843,13 @@ fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
 \subsection{Bezier curves}
 % spline
 
-
+%claude:
+Bezier curves are drawn by recursive subdivision: the curve
+is split at its midpoint until each segment is flat enough
+to approximate as a straight line, then the resulting points
+are fed to [[fillpoly]] or [[poly]]. No special drawing
+command is needed---Bezier is implemented entirely client-side
+on top of the polygon primitives.
 
 % no special message, it just uses the previous building blocks.
 
@@ -22016,8 +22157,25 @@ _bezsplinepts(Plist *l, Point *pt, int npt)
 
 \section{Advanced compositing}
 
+%claude:
+The general compositing path in [[alphadraw]] reads scan lines
+from source, mask, and destination, composes them pixel by pixel
+using the Porter-Duff operator, and writes the result back.
+This section covers the slow path that handles replicated
+sources (tiling), grey-to-color conversion, sub-byte pixel
+depths, and the full set of compositing operators beyond the
+common [[SoverD]].
+
 \subsection{Reading replicated pixels}
 % tiling?
+
+%claude:
+When the source image is replicated (tiled), the reader must
+wrap around at the edge of [[src->r]]. The general [[readbyte]]
+path extracts each channel via the [[shift]]/[[mask]] tables,
+expands sub-8-bit values to full 8-bit range using the [[replbit]]
+lookup table, and optionally converts RGB to greyscale via
+the [[RGB2K]] luminance formula.
 
 <<[[readbyte]] other locals>>=
 int i;
@@ -22161,6 +22319,16 @@ tablesbuilt = true;
 
 
 \subsection{Other compositing operators}
+
+%claude:
+Each Porter-Duff operator is implemented as a separate code
+path in [[alphadraw]]. The operator bits select which of four
+terms to include: source-in-destination, source-outside-destination,
+destination-in-source, and destination-outside-source. For each
+pixel, the alpha values determine how much of each term contributes.
+The common [[SoverD]] gets the most optimized path; the others
+share a generic per-channel formula.
+
 
 % apparently http.golang.org/go-image-package says that when you
 % have masks, you need less operators and just DoverS and S are useful
@@ -22538,6 +22706,15 @@ mousescrollsize(int maxlines)
 
 % related to mouse too.
 % used in Windows.nw for the wm menus.
+
+%claude:
+The menu system is a self-contained popup widget built entirely
+on top of the drawing primitives. [[menuhit]] creates a temporary
+image, draws the menu items, tracks the mouse to highlight the
+current selection, and returns the chosen item index. The menu
+appears at the mouse position and vanishes when the button is
+released. Scrolling menus handle lists too long to fit on screen
+by adding scroll arrows at the top and bottom.
 
 \subsection{[[Menu]]}
 
@@ -23151,6 +23328,14 @@ if(scrolling && ptinrect(mc->xy, scrollr)){
 
 \section{Selection}
 
+%claude:
+[[getrect]] lets the user rubber-band a rectangle on screen
+by tracking the mouse while a button is held. It draws four
+thin rectangles as a border, saving the pixels underneath
+into temporary images so they can be restored when the
+selection moves. This is used by [[rio]] when the user
+sweeps a new window.
+
 \subsection{[[getrect.c]]}
 
 % =~ sweep() action done by rio, but available for other programs
@@ -23309,8 +23494,18 @@ max(int a, int b)
 
 \section{Event-based IO}
 
+%claude:
+The event library provides an alternative to the
+[[Mousectl]]/[[Keyboardctl]] channel-based model. It uses a
+single master process ([[extract]]) that multiplexes mouse,
+keyboard, and timer events, dispatching them to slave
+processes. Applications call [[event]] to block until the
+next event, or [[ecankbd]]/[[ecanmouse]] to poll.
+This is the older API; the channel-based model
+with [[alt]] is preferred for new code.
+
 % seen before /dev/mouse synchrony issue, and the introduction
-% of ioproc and channel and alt(). 
+% of ioproc and channel and alt().
 
 % Events are an alternative API. 
 % See event(2)
@@ -24481,10 +24676,18 @@ emenuhit(int but, Mouse *m, Menu *menu)
 
 \section{Graphical text mode}
 
+%claude:
+Once the VGA driver switches to graphics mode, the kernel still
+needs a way to display text for panic messages and early boot
+output. The ``software console'' renders characters directly
+onto [[gscreen]] using [[memsubfontwidth]] and
+[[memimagestring]], maintaining a cursor position and scrolling
+when the output reaches the bottom of the screen.
+
 % when do aux/vga it switches to graphic mode, but we still want a console!
 % the kernel still needs a working (*screenputs)(...).
 
-% this used to be a subsection of VGA driver, 
+% this used to be a subsection of VGA driver,
 % but the code seems quite generic and almost independent of VGA
 % so I moved it here.
 
@@ -24866,6 +25069,15 @@ vgablank(VGAscr*, int blank)
 \section{Refresh methods}
 \label{sec:refresh}
 
+%claude:
+When a window is partially hidden and then exposed, the
+graphics system must restore the missing pixels. Two
+refresh methods are supported: [[Refbackup]] saves hidden
+pixels in a backing-store image (automatic, but uses
+memory), and [[Refnone]] does nothing (the application
+must redraw on demand by reading [[/dev/draw/x/refresh]]).
+[[rio]] uses [[Refbackup]] for client windows.
+
 <<[[Client]] other fields>>=
 Refresh*    refresh;
 Rendez      refrend;
@@ -25191,6 +25403,14 @@ memlsetrefresh(Memimage *i, Refreshfn fn, void *ptr)
 
 \section{Concurrency}
 
+%claude:
+Drawing operations are not thread-safe by default. If multiple
+threads or processes share a [[Display]], they must serialize
+access with [[lockdisplay]]/[[unlockdisplay]], which use a
+[[QLock]] on the [[Display]] structure. On the kernel side,
+the global [[drawlock]] ([[dlock]]/[[dunlock]]) protects all
+shared state in [[sdraw]] and the [[Client]] structures.
+
 \subsection{[[lockdisplay()]]}
 
 <<[[Display]] concurrency fields>>=
@@ -25300,6 +25520,18 @@ bool     busy;
 
 
 \section{Optimisations}
+
+%claude:
+The general [[alphadraw]] path handles all cases correctly
+but is slow---it processes each pixel individually through
+channel extraction, compositing, and packing. The drawing
+pipeline tries three increasingly general fast paths before
+falling back to [[alphadraw]]:
+(1)~[[hwdraw]] uses hardware fill/scroll if available,
+(2)~[[memoptdraw]] handles common cases like opaque source
+with full mask using [[memmove]] or [[memset]],
+(3)~[[chardraw]] optimizes the common case of drawing solid-color
+text through a 1-bit mask onto a high-depth destination.
 
 \subsection{[[memimagedraw()]] optimisations}
 
@@ -25463,6 +25695,18 @@ chardraw(Memdrawparam *par)
 @
 
 \subsection{[[alphadraw()]] optimisations}
+
+%claude:
+Even within [[alphadraw]], several sub-cases get specialized
+fast paths. When the source has a small replicated rectangle,
+its pixel data is pre-read once and reused for every scan line.
+When there is no alpha channel in the source, the composition
+simplifies to a direct copy or blend. When the mask is a simple
+1-bit pattern and the destination is deep (8+ bits), the
+[[boolcopyxxx]] and [[boolcalcxxx]] functions use unrolled
+byte loops. The most important path---32-bit [[SoverD]]---gets
+its own dedicated function [[alphacalc]] with inline alpha
+arithmetic.
 
 \subsubsection{Small replicated rectangle}
 
@@ -26084,6 +26328,14 @@ if(q){
 
 \subsection{[[drawchar()]] optimisations}
 
+%claude:
+[[drawchar]] is a kernel-side optimization for the \verb+'x'+
+(draw characters) command. Instead of going through the full
+[[memimagedraw]] pipeline for each glyph, it directly copies
+glyph pixels from the font cache image to the destination,
+exploiting the knowledge that font masks are always [[GREY1]]
+and that the source is typically a solid replicated color.
+
 % (to not confuse with chardraw)
 
 <<[[drawchar()]] other locals>>=
@@ -26115,6 +26367,16 @@ if(arch_ishwimage(dst) && !arch_ishwimage(rdst) && font->image->depth > 1){
 @
 
 \subsection{Flushing bounding boxes}
+
+%claude:
+Rather than flushing the entire screen after each drawing
+operation, the kernel tracks a bounding rectangle of all
+modified pixels ([[flushrect]]). [[addflush]] merges each
+new dirty rectangle into [[flushrect]], but if the waste
+(area of the bounding box not actually touched) exceeds half
+the total area, it flushes the current rectangle and starts
+a new one. This amortizes the cost of hardware transfers
+while keeping the flush area tight.
 
 \subsubsection{Flushing lines}
 
@@ -26358,6 +26620,16 @@ static  int     waste;
 
 
 \subsection{Image compression}
+
+%claude:
+The image compression uses a simple LZ-like scheme operating
+on scan lines. Each output byte is either a literal run
+(byte $< 128$: copy the next $n+1$ bytes verbatim) or a
+back-reference (byte $\ge 128$: repeat $n-125$ bytes from
+a position found by hashing). [[cloadimage]] sends compressed
+data to the kernel via \verb+'Y'+ commands; [[writememimage]]
+compresses scan lines for writing to disk. The match length
+ranges from [[NMATCH]] (3) to [[NRUN]] (34) bytes.
 
 <<constant [[NMATCH]]>>=
 /*
