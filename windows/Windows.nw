@@ -2908,6 +2908,16 @@ static	int	id;
 
 
 %yoann: explain Window.i field
+%claude:
+The [[i]] field holds the window's public image---the rectangle
+of pixels visible on screen.  This is the image returned by
+[[allocwindow()]] in the \book{Graphics} library, and it is named
+after the window (e.g., [["window.2"]]) so that the client application
+can look it up via [[namedimage()]].
+Most of the time [[i]] is a {layer} (a composited image managed by
+the draw device), but when a window is hidden it becomes a plain
+off-screen image, since hidden windows are removed from the layer
+stack entirely.
 
 <<[[Window]] graphics fields>>=
 // ref_own<Image>, public image for the window (name in /dev/winname)
@@ -2921,6 +2931,22 @@ Image	*i;
 % the window is hidden!
 
 %yoann: explain screenr field, maybe give concrete example for hellorio window
+%claude:
+The [[screenr]] field records the window's physical position on
+screen.  The application never sees this value---it works entirely
+in logical coordinates.  When [[rio]] used [[originwindow()]],
+a window's image coordinates ([[i->r]]) could start at (0,0),
+so [[hellorio]] might see [[i->r = (0,0, 400,300)]] while the
+window actually sits at [[screenr = (100,100, 500,400)]] on screen.
+The application draws into [[i]] using logical coordinates, and the
+draw device maps them to the physical screen.  Likewise, [[rio]]
+converts mouse coordinates from physical to logical (as we saw in
+[<mousethread()>]) before forwarding them to the window, so the
+application receives coordinates consistent with its own [[i->r]].
+%claude:
+Today [[originwindow()]] is no longer called, so [[i->r]] and
+[[screenr]] are always equal and the conversion is a no-op,
+but the code still maintains both fields.
 
 <<[[Window]] graphics fields>>=
 /*
@@ -2963,11 +2989,14 @@ mouse thread, the keyboard thread, the window's own [[winctl]] thread,
 and filesystem worker threads---[[Window]] embeds a [[Ref]] for
 reference counting and a [[QLock]] for mutual exclusion.
 The [[Ref]] prevents a window from being freed while another thread
-still holds a pointer to it (e.g., during a middle-click selection).
+still holds a pointer to it---for instance, the mouse thread may be
+partway through a resize or delete operation on a window while a
+filesystem worker thread is simultaneously servicing a read on
+that same window's [[/mnt/wsys/cons]].  Without reference counting,
+the window could be deallocated under the worker's feet.
 The [[QLock]] serializes access to fields that can be modified from
 different threads (see \book{Libcore} for the details of these
 synchronization primitives).
-%yoann1: why middle-click selection example? it's obvious Window should not be freeed after a middle click selection
 
 \t adv topics? all those wclose, wclosechan, incref/decref are subtle
 <<[[Window]] extra fields>>=
@@ -3310,9 +3339,13 @@ assigned by the server and remain stable for a given file.
 The server must maintain state for each fid (whether it is open, in what
 mode, which [[Qid]] identifies the underlying file).
 The [[Fid.w]] field closes the circle: once a fid is associated
-with a [[Qid]] (during attach or walk), the server can resolve it
+with a [[Qid]] (during attach or walk), [[rio]] can resolve it
 back to the corresponding [[Window]].
-%yoann1: the term client and server may be confusing, because really client seems to be the kernel acting on behalf of a graphical/textual application connected to rio
+Note that the 9P ``client'' here is not the application itself---it
+is the kernel acting on behalf of the application.  When [[hellorio]]
+calls [[read()]] on [[/dev/cons]], the kernel translates that into
+a 9P [[Tread]] message sent through the pipe to [[rio]]'s
+[[filsysproc]].
 
 <<struct [[Fid]]>>=
 struct Fid
@@ -4339,6 +4372,43 @@ Selborder		= 4,	/* border of selected window */
 % also abused as an enum with Selborder and Unselborder
 
 %yoann: maybe ASCII diagram where can see xy logical vs mouse->xy physical and the winput->i->r.min and screenr concrete values as examples
+%claude:
+The conversion code above translates mouse coordinates from
+physical screen space to the window's image space.  Originally,
+[[rio]] used [[originwindow()]] to set each window's image origin
+to (0,0), so the application could draw without knowing its screen
+position.  In that design, [[screenr]] held the physical position
+and [[i->r]] started at (0,0):
+\begin{verbatim}
+  screen (view)
+  +------------------------------------------+
+  |                                          |
+  |    screenr = (100,50, 500,350)           |
+  |    i->r    = (0,0, 400,300)              |
+  |    +-------------------------------+     |
+  |    |                               |     |
+  |    |        X  <-- mouse click     |     |
+  |    |                               |     |
+  |    +-------------------------------+     |
+  |                                          |
+  +------------------------------------------+
+
+  mouse->xy = (250, 200)    (physical, from /dev/mouse)
+
+  xy.x = 250 + (0 - 100) = 150
+  xy.y = 200 + (0 - 50)  = 150
+
+  xy = (150, 150)           (logical, sent to hellorio)
+\end{verbatim}
+%claude:
+In the current code, [[originwindow()]] is no longer called
+during normal window creation, so [[i->r]] and [[screenr]] are
+always equal and the conversion is a no-op---the application
+receives raw screen coordinates and draws in those same
+coordinates.  It is unclear why [[originwindow()]] was dropped;
+the conversion code was kept, suggesting the change may not have
+been intentional.
+\t understand why originwindow was dropped
 
 \subsection{Application mouse events}
 
@@ -4670,6 +4740,14 @@ winctl(void *arg)
 \l why plus 1 on NWALT?
 
 %yoann: say will explain deleted later, but in most case after winctl processed an event, it flushes the display because ??
+%claude:
+The [[deleted]] field will be explained in
+Chapter~\ref{chap:window-management}.  Note that after each
+event, [<winctl()>] calls [[flushimage()]] unless the window
+has been deleted.  Most events result in some visual change---text
+appearing, a cursor moving, a border redrawn---and
+[[flushimage()]] batches all pending draw operations into a single
+write to the draw device.
 
 %old: 
 % npart = 0; was there, but better put with local decl.
@@ -4752,6 +4830,14 @@ wkeyctl(Window *w, Rune r)
 %yoann: say will explain gradually wkeyctl cases, a bit complicated because rio allows weird combinations like
 % mouseopen and buffered mode, or not mouseopend and raw mode.
 % In last case we want the special navigation keys to still work.
+%claude:
+I will explain the different cases of [<wkeyctl()>] gradually in later
+chapters.  The logic is not a simple textual-vs-graphical split:
+[[rio]] allows unusual combinations, such as a graphical application
+(mouse opened) that still uses buffered console input, or a textual
+application in raw mode.  In the latter case, [[rio]] still wants
+navigation keys (like arrow keys) to work for scrolling, which is
+why the [[mouseopen]] check comes first.
 
 <<[[wkeyctl()]] sanity check rune>>=
 if(r == 0)
@@ -4776,10 +4862,14 @@ if(w->deleted)
 %claude:
 The second connection is the mouse. Each window embeds a full
 [[Mousectl]] structure whose [[c]] channel receives mouse events
-from [<mousethread()>]. Not every mouse event reaches the window---only
-those that the mouse thread has determined belong to this window
-(as opposed to window-management operations like move or resize).
-%yoann1: why Mousectl? I thought it was the one used by IO proc mouse for initmouse()
+from [<mousethread()>].  This is not the same [[Mousectl]] as the
+one used by [[rio]]'s own IO proc for reading [[/dev/mouse]]---that
+one belongs to [[rio]] itself.  Here, each [[Window]] has its own
+[[Mousectl]] because it needs the same fields (a [[Mouse]], a
+channel [[c]], and a [[resizec]]) to forward events to [<winctl()>].
+Not every mouse event reaches the window---only those that the mouse
+thread has determined belong to this window (as opposed to
+window-management operations like move or resize).
 
 <<[[Window]] mouse fields>>=
 // mc.c = chan<Mouse> (listener = winctl, sender = mousethread)
@@ -4824,6 +4914,12 @@ case WMouse:
 @
 
 %yoann: say as explained before, graphical vs textual app and mouseopen status so chunks explained later
+%claude:
+As explained earlier, the behavior depends on whether the
+application has opened [[/mnt/wsys/mouse]] ([[mouseopen]]).
+Graphical applications receive raw mouse events; textual
+applications get [[rio]]'s built-in text selection and scrolling.
+The details of each case will be covered in later chapters.
 
 % no wmousectl()
 
@@ -4874,7 +4970,12 @@ case WCtl:
 % will see wctlmesg later
 
 %yoann: say will explain later complex lifecycle ofr a window
-
+%claude:
+The full lifecycle of a window---creation, hiding, unhiding,
+and deletion---involves subtle interactions between the window
+thread, the filesystem workers, and the mouse thread.  I will
+explain [<wctlmesg()>] and its cases in
+Chapter~\ref{chap:window-management}.
 
 %\subsection{[[/mnt/wsys/mouse]]  emitting}
 %\subsection{[[/mnt/wsys/cons]] emitting}
@@ -4964,6 +5065,20 @@ filsysproc(void *arg)
 % cases use lookup_fid, not new_fid
 
 %yoann: explain why dynamically allocate each time in for loop? Why not local buf shared and reused instead? explain also maybe CONV2MS so maybe have a bullet list of explanations
+%claude:
+A few points about this loop:
+\begin{itemize}
+\item The buffer is dynamically allocated each iteration rather than
+reused because it is handed off to the [[Xfid]] worker thread
+(via [[x->buf = buf]]).  The worker may still be processing the
+previous request when [[filsysproc]] reads the next one, so each
+request needs its own buffer.
+\item The extra [[UTFmax]] bytes are for [<xfidwrite()>], which may
+need to append a partial rune left over from a previous write.
+\item [[convM2S()]] (``convert Message to Struct'') deserializes the
+raw 9P bytes into an [[Fcall]] structure with typed fields
+([[type]], [[fid]], [[count]], etc.).
+\end{itemize}
 
 %claude:
 The protocol between [[filsysproc]] and the worker allocator is a
@@ -7072,6 +7187,17 @@ Deleted,
 
 
 %yoann: explain deleted field and mention we have seen it before but now you will better understand its role
+%claude:
+We have already seen [[deleted]] used as a guard in [<winctl()>]
+(to skip [[flushimage]]) and in [<wkeyctl()>] (to discard input).
+Now that I present the deletion logic, its role becomes clearer:
+[[deleted]] is set to [[true]] as soon as a [[Deleted]] control
+message is processed, even though the window's thread has not
+exited yet.  During this interval, the window is being torn
+down---its image has been freed, a hangup note has been sent to
+the client---but pending events may still arrive on its channels.
+The [[deleted]] flag lets every handler bail out early rather than
+operate on a half-destroyed window.
 
 <<[[Window]] config fields>>=
 bool	deleted;
@@ -7448,13 +7574,9 @@ case Move:
 \subsection{[[move()]]}
 
 %claude:
-The move flow is: [<pointto()>] (with [[wait=false]]) to select the window,
-then [<drag()>] to track the mouse and produce a new image at the
-destination, then a [[Moved]] control message. The [[Moved]] case in
-[[wctlmesg]] shares its handler with [[Reshaped]]---a move is just a
-reshape where the dimensions stay the same and the old content is
-copied over.
-%yoann1: seems a bit redundant with the previous paragraph; find a better separation
+The [[Moved]] case in [[wctlmesg]] shares its handler with
+[[Reshaped]]---a move is just a reshape where the dimensions stay
+the same and the old content is copied over.
 
 <<function [[move]]>>=
 void
@@ -8135,13 +8257,14 @@ real {windows}, they need a filesystem server that virtualizes the device
 files ([[/dev/cons]], [[/dev/mouse]], etc.) for each client process.
 %claude:
 This chapter presents the 9P operations that [[rio]] implements:
-[[attach]] (connecting a client to a window), [[walk]] (navigating
-to a file), [[open]], [[read]], [[write]], [[stat]], and [[clunk]].
+[[attach]] (where the kernel, on behalf of the application, connects
+to [[filsysproc]] which links the fid to the appropriate [[Window]]),
+[[walk]] (navigating to a file), [[open]], [[read]], [[write]],
+[[stat]], and [[clunk]].
 Each operation has two layers: a [[filsysxxx()]] function that runs
 in the [[filsysproc]] context and handles the fast path, and an
 [[xfidxxx()]] function that runs in a worker thread for operations that
 may block (like reading [[/dev/cons]] when no data is available).
-%yoann1: attach connects a client to a window is confusing when really it's kernel on behalf of application that connects to filsysproc that then link to appropriate Window
 
 % so then what happens?
 % filsysproc is reading on fs->sfd, server side of the pipe
@@ -8461,7 +8584,6 @@ Notice that the lightweight operations ([[attach]], [[walk]]) are
 handled directly by [[filsysproc]], while the heavier ones
 ([[open]], [[read]], [[write]]) are dispatched to [[Xfid]] worker
 threads via [[sendp]].
-%yoann1: maybe better location for this diagram than the section about filsysrespond?
 
 
 \subsection{[[filsysattach()]]}
