@@ -6413,6 +6413,15 @@ sysfversion(void)
 %******************************************************************************
 \label{chap:debugger}
 
+%claude:
+The previous chapters covered the three core functions of [[5i]]:
+instruction interpretation, memory emulation, and system call proxying.
+With those in place, [[5i]] can execute ARM programs.
+But executing is not enough---when something goes wrong, you need
+to inspect and control the execution.
+This chapter presents [[5i]]'s built-in debugger, which provides
+exactly that capability.
+
 \section{Overview}
 
 % interface? special symbols prefix of command (: $ etc)
@@ -7608,8 +7617,14 @@ if(membpt)
 \label{chap:profiler}
 
 %claude:
+The debugger in the previous chapter lets you stop and inspect
+a program. The profiler, presented in this chapter, lets you
+understand where a program spends its time---without stopping it.
+
+%claude:
 Since [[5i]] executes every instruction in software, it can
-instrument execution for free. The profiler collects two
+instrument execution for free: no sampling, no overhead, just
+increment a counter on every fetch. The profiler collects two
 kinds of data: per-instruction-class counts (how many ADDs,
 how many branches, etc.) stored in the [[Inst]] table, and
 per-address counts stored in the [[iprof]] array (indexed by
@@ -7617,6 +7632,16 @@ per-address counts stored in the [[iprof]] array (indexed by
 The [[$Q]] and [[$i]] debugger commands display this data
 as instruction mix summaries, TLB statistics, memory segment
 usage, and per-function hotspot profiles sorted by cycle count.
+
+%claude:
+The profiling data structures are simple. Each entry in the [[Inst]]
+dispatch table carries a [[count]] field (total executions),
+a [[taken]] field (for branches: how often taken), and a
+[[useddelay]] field (historical, for MIPS-style delay slots).
+The [[iprof]] array covers the entire text segment at a granularity
+of [[PROFGRAN]] (4 bytes = 1 instruction), so [[iprof[i]]] counts
+how many times the instruction at address [[textbase + 4*i]] was
+executed.
 
 <<[[Inst]] profiling fields>>=
 // profiling info
@@ -7667,6 +7692,12 @@ int cmdcount;
 int nopcount;
 @
 
+
+%claude:
+[<isum()>] prints the instruction mix: for each instruction class,
+it shows the execution count and percentage, then summarizes
+totals by category (arithmetic, memory, branch, syscall).
+This is the output of the [[$i]] debugger command.
 
 <<function [[isum]]>>=
 void
@@ -7830,6 +7861,13 @@ profcmp(void *va, void *vb)
 }
 @
 
+%claude:
+[<iprofile()>] builds a per-function profile from the [[iprof]]
+array. It walks the symbol table, sums the per-address counts
+within each function, sorts by total count (descending), and
+prints the result. This is the output of the [[$Q]] debugger
+command---the closest thing [[5i]] has to [[prof(1)]].
+
 <<function [[iprofile]]>>=
 void
 iprofile(void)
@@ -7890,15 +7928,23 @@ iprofile(void)
 % see also http://danluu.com/new-cpu-features/
 
 %claude:
-This chapter covers ARM features that [[5i]] does not fully
-implement: system and coprocessor instructions ([[MCR]], [[MRC]]),
-floating-point operations (which use the coprocessor interface),
-host signal handling, and potential optimisations such as JIT
-compilation.
+The previous chapters covered everything [[5i]] implements.
+This chapter briefly describes what [[5i]] does {\em not}
+implement: system and coprocessor instructions, floating-point
+operations, and potential optimizations. It also covers the
+signal handler that lets the user interrupt a running program.
 
 \section{System instructions}
 
 % MCR, MRC, see bcm/l.s
+
+%claude:
+ARM system instructions ([[MCR]], [[MRC]]) transfer data between
+general-purpose registers and coprocessor registers. They are used
+by the kernel to configure the MMU, caches, and interrupt controller.
+Since [[5i]] is a user-mode emulator, it does not implement these
+instructions---they would only appear in kernel code, which [[5i]]
+cannot run.
 
 \section{Coprocessor instructions}
 
@@ -7908,6 +7954,16 @@ compilation.
 % STC, LDC (store coproc, load coproc)
 
 % CDP
+
+%claude:
+ARM uses a generic ``coprocessor'' interface for extensions:
+[[STC]]/[[LDC]] move data between memory and a coprocessor,
+[[CDP]] performs a coprocessor data operation, and [[MCR]]/[[MRC]]
+transfer between ARM and coprocessor registers. In practice,
+the most important coprocessor is CP15 (the system control
+coprocessor for MMU/cache configuration) and CP10/CP11 (the
+VFP floating-point unit). [[5i]] does not implement any of
+these.
 
 \section{Float instructions}
 
@@ -7920,7 +7976,23 @@ compilation.
 
 % float instr actually use coprocessor instructions
 
+%claude:
+ARM floating-point is provided by the VFP (Vector Floating Point)
+coprocessor, accessed through the coprocessor instruction interface.
+[[5i]] does not implement VFP instructions. The \plan C compiler
+[[5c]] handles floating-point through software emulation
+(calling library routines), so most user-mode programs do not
+need hardware float support.
+
 \section{Signals}
+
+%claude:
+When the user presses the interrupt key (usually Delete in \plan),
+the host OS delivers a note to [[5i]]. The [[catcher()]] handler
+sets [[count]] to~1, which causes the interpreter loop to stop
+after the current instruction and return to the debugger prompt.
+If the user interrupts more than five times (e.g., the emulator
+is stuck), [[5i]] exits.
 
 <<[[cmd()]] initialisation>>=
 notify(catcher);
@@ -7948,6 +8020,17 @@ catcher(void *a, char *msg)
 \section{Optimisations}
 % JIT? like in QEMU?
 
+%claude:
+[[5i]] uses pure interpretation: each instruction is decoded
+and dispatched through a function pointer on every execution.
+Modern emulators use dynamic binary translation (as in QEMU)
+or JIT compilation to translate frequently executed blocks
+into native host instructions, achieving speedups of 10--100x.
+Adding such an optimization to [[5i]] would transform its
+architecture significantly---the interpreter loop would become
+a translator that emits host machine code---but the fundamental
+instruction semantics described in this book would remain the same.
+
 %\section{Other}
 % atomic instructions
 % transactional memory
@@ -7962,9 +8045,12 @@ catcher(void *a, char *msg)
 % kernel too. Also debugger and profiler.
 
 %claude:
-You now know how the \plan ARM emulator [[5i]] works,
-to the smallest details, and more generally how many
-emulators and CPU simulators work.
+You now know how the \plan ARM emulator [[5i]] works---from
+the [[a.out]] loader that maps text, data, and BSS segments
+into emulated memory, through the fetch-decode-execute loop
+that dispatches each 32-bit instruction to its handler,
+to the system call proxy that translates ARM [[SWI]]
+traps into host OS calls.
 
 %claude:
 [[5i]] is a user-mode emulator: it interprets ARM
