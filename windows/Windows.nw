@@ -9476,16 +9476,14 @@ then formats it as a textual response for the client).
 \section{[[/mnt/wsys/mouse]]}
 \n simpler than cons
 
-% more a graphical window device.
+%yoann: transition paragraph where say finally see Qid and dirtab cases and say start with mouse because simpler than cons
 %claude:
-The mouse virtual device uses a ``channel of channels'' pattern: when
-a client reads [[/dev/mouse]], the [[xfidread]] worker sends a
-[[Mousereadmesg]] containing a reply channel to the [[winctl]] thread.
-The [[winctl]] thread, which knows the current mouse state, then sends
-the actual [[Mouse]] data through this reply channel.
-This two-step handshake ensures the client gets the freshest mouse
-state at the moment it is ready to consume it, rather than a stale
-queued value.
+We can now see the [<Qid>] and [<dirtab>] entries for each virtual
+device file, along with their [<xfidread()>] and [<xfidwrite()>]
+implementations. I start with the mouse because its protocol is
+simpler than the console's: the mouse only needs to pass a single
+[[Mouse]] value at a time, whereas the console must deal with
+byte/rune conversions and partial characters.
 
 <<[[qid]] cases>>=
 Qmouse,
@@ -9510,6 +9508,40 @@ Qmouse,
 % So if client reads /dev/mouse (after it has been opened of course),
 % then xfidread wait for mouse events to come by listening to mouseread!
 % The winctl itself listen for mouse events on w->mc.c from mousethread
+
+
+% more a graphical window device.
+%claude:
+The mouse virtual device uses a ``channel of channels'' pattern.
+Consider a concrete scenario: the user moves the mouse rapidly,
+generating positions (100,50), (120,55), (140,60), (160,65).
+The [<winctl>] thread sees all four events via [<mousethread>],
+but the client application only calls [[read("/dev/mouse")]] now.
+%claude:
+With a naive direct channel, [<winctl>] would have queued all four
+positions; the client would get the stale (100,50) from the head.
+With the channel-of-channels pattern, no [[Mouse]] value is produced
+until the client asks for one:
+\begin{verbatim}
+  xfidread (worker)                    winctl (window thread)
+  +-----------------+                  +-------------------+
+  |                 |  Mousereadmesg   |  (has seen 4      |
+  | client calls    |  {cm: replyCh}  |   mouse events,   |
+  | read("/dev/     |                 |   current pos is  |
+  |      mouse")    +---------------->|   now 160,65)     |
+  |                 |  w->mouseread    |                   |
+  |                 |                  |                   |
+  |                 | Mouse{160,65}   | send(mrm.cm,      |
+  | recv(replyCh,   |<----------------+   &currentMouse)  |
+  |      &ms)       |  replyCh        |                   |
+  +-----------------+                  +-------------------+
+\end{verbatim}
+%claude:
+The first [[send]] on [[w->mouseread]] is really a synchronization
+message saying ``I am ready to receive.'' Only then does [<winctl>]
+snapshot the freshest mouse state and send it back on the reply
+channel [[mrm.cm]]. The client gets (160,65)---the position that
+matters---instead of a stale queued value.
 
 
 <<[[Window]] other fields>>=
@@ -9613,7 +9645,7 @@ have focus ([[w==input]]) and be visible on screen. The write data
 must start with ``m'' followed by the x and y coordinates. The actual
 cursor movement is routed through [[wsendctlmesg]] with
 [[Movemouse]], so it goes through the [[winctl]] thread and respects the
-[[sweeping]] guard---you cannot warp the mouse while the user is in
+[<sweeping>] guard---you cannot warp the mouse while the user is in
 the middle of a window management operation.
 
 <<[[xfidwrite()]] other locals>>=
@@ -9662,12 +9694,6 @@ case Movemouse:
 The console device is the most complex virtual device because it mediates
 between two asynchronous worlds: the client process reading/writing bytes,
 and the [[winctl]] thread managing runes.
-Unlike the mouse, the console uses two channels inside the
-[[Consreadmesg]]: [[c1]] to pass the read buffer from the worker to
-[[winctl]], and [[c2]] to pass the filled data back.
-The two-channel protocol is needed because the byte/rune
-boundary does not always align---a multibyte UTF-8 rune
-may span two reads, requiring partial rune bookkeeping.
 
 <<[[qid]] cases>>=
 Qcons,
@@ -9679,6 +9705,38 @@ Qcons,
 % utf8! not rune, not char, utf8!
 
 \subsection{Reading part1}
+
+%claude:
+Unlike the mouse, the console uses two channels inside the
+[<Consreadmesg>]: [[c1]] to pass the read buffer from the worker to
+[<winctl>], and [[c2]] to pass the filled data back.
+The two-channel protocol is needed because the worker must first tell
+[<winctl>] how many bytes it can accept (via [[c1]]), and then [<winctl>]
+fills that buffer and returns it (via [[c2]]):
+\begin{verbatim}
+  xfidread (worker)                    winctl (window thread)
+  +-----------------+                  +-------------------+
+  |                 |  Consreadmesg    |                   |
+  | send(consread,  |  {c1, c2}       |                   |
+  |   &crm)         +---------------->| recv(consread,    |
+  |                 |  w->consread     |       &crm)       |
+  |                 |                  |                   |
+  | t = malloc(cnt) |  Stringpair     |                   |
+  | send(c1,        |  {t, cnt}       |                   |
+  |  {t, cnt})      +---------------->| recv(c1, &pair)   |
+  |                 |                  | (fill t with      |
+  |                 |  Stringpair     |  typed runes,     |
+  |                 |  {t, actual_n}  |  converted to     |
+  | recv(c2, &pair) |<----------------+  UTF-8 bytes)     |
+  |                 |                  | send(c2, &pair)   |
+  +-----------------+                  +-------------------+
+\end{verbatim}
+%claude:
+The mouse needs only one reply channel because it always returns a
+fixed-size [[Mouse]] struct. The console, however, must negotiate a
+variable-length byte transfer, and the byte/rune boundary does not
+always align---a multibyte UTF-8 rune may span two reads, requiring
+partial rune bookkeeping.
 
 % So if client reads /dev/cons,
 % then we wait for key event to come to us by listening to consread!
@@ -9787,11 +9845,36 @@ case Qcons:
 %claude:
 Console writing follows the same channel handshake as reading, but
 the data flows in the opposite direction: the client's bytes go from
-[[xfidwrite]] to [[winctl]]. A critical subtlety is that the data
-must be converted from UTF-8 bytes to complete runes before being
-sent, because [[winctl]] works in rune space---it cannot display half
-a multibyte character. The [[Conswritemesg]] carries a single channel
-[[cw]] through which the rune array is passed.
+[<xfidwrite()>] to [<winctl>]. A critical subtlety is that the data
+must be converted from UTF-8 bytes to complete runes \emph{before} being
+sent, because [<winctl>] works in rune space---it cannot display half
+a multibyte character:
+\begin{verbatim}
+  xfidwrite (worker)                   winctl (window thread)
+  +-----------------+                  +-------------------+
+  | client writes   |                  |                   |
+  | "héllo" (bytes) |                  |                   |
+  |                 |                  |                   |
+  | cvttorunes()    |                  |                   |
+  | bytes -> runes  |                  |                   |
+  | (store partial  |                  |                   |
+  |  in f->rpart)   |                  |                   |
+  |                 |  Conswritemesg   |                   |
+  | recv(conswrite, |  {cw}           |                   |
+  |   &cwm)         |<----------------+ send(conswrite,   |
+  |                 |  w->conswrite    |       &cwm)       |
+  |                 |                  |                   |
+  |                 |  Stringpair     |                   |
+  | send(cwm.cw,    |  {runes, nr}    |                   |
+  |  {r, nr})       +---------------->| recv(cw, &pair)   |
+  |                 |                  | (display runes)   |
+  +-----------------+                  +-------------------+
+\end{verbatim}
+%claude:
+Note the reversed initiative compared to reading: for writing, it is
+[<winctl>] that sends the [<Conswritemesg>] first (signaling it is
+ready to accept output), and then the worker sends the rune data
+through the [[cw]] channel.
 
 <<[[Window]] other fields>>=
 // chan<Conswritemesg> (listener = xfidwrite(Qcons), sender = winctl)
@@ -9886,9 +9969,9 @@ calls. To handle this, each [[Fid]] keeps a small buffer [[rpart]]
 of leftover bytes from the previous write. On the next write, these
 bytes are prepended to the new data before rune conversion.
 %claude:
-The conversion pipeline works in two passes: [[cvttorunes]] converts
+The conversion pipeline works in two passes: [[cvttorunes()]] converts
 the bulk of the data (stopping [[UTFmax]] bytes before the end), then
-a [[fullrune]] loop picks up any remaining complete runes at the tail.
+a [[fullrune()]] loop picks up any remaining complete runes at the tail.
 Whatever bytes are left over---an incomplete rune at the end---are
 stashed back into [[rpart]] for next time.
 
@@ -9941,6 +10024,15 @@ while(fullrune(req->data + nb, cnt-nb)){
 
 \section{[[/mnt/wsys/consctl]]}
 
+%yoann: explain consctl case, maybe say simpler
+%claude:
+The [[consctl]] device is much simpler than [[/mnt/wsys/mouse]] or
+[[/mnt/wsys/cons]]: it has no channel-of-channels protocol, no
+reading side, and no data flowing back to the client.
+A client writes control strings like [["rawon"]] or [["holdon"]]
+to change how the console processes input---we will see those
+cases later in the textual windows chapter.
+
 <<[[qid]] cases>>=
 Qconsctl,
 @
@@ -9948,6 +10040,15 @@ Qconsctl,
 { "consctl",	QTFILE,	Qconsctl,	0200 },
 @
 % just write
+
+
+%yoann: similar to mouseopen, but has less implications
+%claude:
+Like [<mouseopen>], [[ctlopen]] enforces exclusive access---only one
+client at a time may open [[/dev/consctl]]. But unlike [[mouseopen]],
+which triggers the switch from textual to graphical mode,
+[[ctlopen]] has no such side effect; it merely gates access to the
+control commands.
 
 <<[[Window]] other fields>>=
 bool	ctlopen;
@@ -10041,6 +10142,15 @@ case Qcursor:
 
 % security issue? can pass wrong screen id to draw operation?
 % anyway, anybody can access the full screen in display->image, hmm
+
+%yoann: maybe reference previous section explaining complex collab between rio and draw and winname and say virtual /dev/winname code is very simple
+%claude:
+Despite the complex collaboration between [[rio]] and [[draw]]
+described in Section~\ref{sec:trace-draw}---involving layers,
+[[namedimage()]], and the four-phase initialization---the virtual
+[[/dev/winname]] device itself is trivially simple: it just returns
+the string in [[w->name]]. All the complexity lives in how that name
+is established and used, not in serving it.
 
 <<[[qid]] cases>>=
 Qwinname,
