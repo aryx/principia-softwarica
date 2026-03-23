@@ -10213,6 +10213,15 @@ after a newline.
 
 \section{Graphical window setup}
 
+%yoann: give overview of what's coming next
+%claude:
+This section covers the setup that transforms a window from textual to
+graphical mode. A graphical application typically calls three library
+functions at startup: [[initdraw()]] to connect to the [[draw]] device,
+[[initmouse()]] to open [[/mnt/wsys/mouse]], and optionally
+[[initkeyboard()]] to write [["rawon"]] on [[/mnt/wsys/consctl]].
+Each of these triggers specific behavior in [[rio]]'s filesystem server.
+
 % We say setup cos not really creation, since most of the time create first
 % textual window and then setup things to become a graphical window
 % (we will see later a way to create directly graphical window
@@ -10224,7 +10233,22 @@ after a newline.
 % connect to /dev/draw and /mnt/wys/winname to get window to draw into.
 % See Graphics.nw
 
+%yoann: say initdraw() serving is not done by rio, so no code here but still important
+%claude:
+The [[initdraw()]] call is handled entirely by the kernel's [[draw]]
+device, not by [[rio]]'s filesystem server---so there is no [[rio]]
+code to show here. However, [[initdraw()]] is a crucial step: it
+establishes the connection to [[/dev/draw]] and reads [[/mnt/wsys/winname]]
+to discover the layer name (see Section~\ref{sec:trace-draw}).
+
 \subsection{[[initmouse()]], mouse-open mode}
+
+%yoann: say will see code now because initmouse() will access /dev/mouse? and be served by rio
+%claude:
+Unlike [[initdraw()]], the [[initmouse()]] call does trigger [[rio]]
+code: it opens [[/mnt/wsys/mouse]], which arrives as an [<xfidopen()>]
+request with [[Qmouse]]. This is where [[rio]] switches the window
+into graphical mode by setting [[mouseopen]] to true.
 
 % graphical apps calls usually also initmouse() which open /mnt/wys/mouse.
 
@@ -10287,6 +10311,19 @@ case Qmouse:
 % actually first thing initkeyboard does is to write
 % rawon on /dev/consctl, see Graphics.ns
 
+%yoann: explain field and code
+%claude:
+The [[rawing]] field tracks whether the window is in raw keyboard
+mode. When an application writes [["rawon"]] to [[/dev/consctl]],
+keystrokes are delivered immediately without waiting for a newline.
+Despite being declared [[bool]], [[rawing]] is actually used as a
+reference count: multiple [["rawon"]] writes increment it, and only
+when the matching [["rawoff"]] brings it back to zero does [[rio]]
+switch modes. This is a dubious design---it is hard to imagine a
+legitimate use case for nested raw mode---but it means a stray
+extra [["rawon"]] will not accidentally cancel raw mode on the first
+[["rawoff"]].
+
 <<[[Window]] config fields>>=
 bool	rawing;
 @
@@ -10338,14 +10375,14 @@ case Rawoff:
 
 \section{Mouse events}
 
+%yoann: introduction paragraph and give overview of section
 %claude:
-The mouse event delivery system uses a circular queue per window
-to buffer click/release events, but only the latest position for
-move events. This is because missing a click matters (the user
-expected an action), but missing intermediate moves does not (only
-the final position matters). The [[counter]]/[[lastcounter]] pair
-tracks whether there is a new event: if they differ, the client gets
-the latest state on the next [[read]].
+This section shows the [<winctl>] side of mouse event delivery---the
+producer/consumer machinery that sits between [<mousethread>] and
+the client's [[read("/dev/mouse")]]. The previous chapter showed the
+[<xfidread()>] side (part~1); here we see part~2: how [<winctl>]
+queues click events, decides when to offer data, and responds on the
+reply channel.
 
 %alt: special APIs for graphical client to access mouse? that
 % request directly to window manager?
@@ -10355,10 +10392,27 @@ the latest state on the next [[read]].
 
 \subsection{Mouse state queue}
 
+%yoann: explain field
+%claude:
+Each window keeps its own [<Mouseinfo>] struct to buffer mouse events
+destined for the client application. This is the producer's staging
+area: [<winctl>] writes into it when it receives events from
+[<mousethread>], and reads from it when the client is ready via the
+channel-of-channels protocol described in the previous chapter.
+
 <<[[Window]] mouse fields>>=
 Mouseinfo	mouse;
 @
 % There is also Window.Mouse which is a ctl and moustate state.
+
+%claude:
+The mouse event delivery system uses a circular queue per window
+to buffer click/release events, but only the latest position for
+move events. This is because missing a click matters (the user
+expected an action), but missing intermediate moves does not (only
+the final position matters). The [[counter]]/[[lastcounter]] pair
+tracks whether there is a new event: if they differ, the client gets
+the latest state on the next [[read]].
 
 <<struct [[Mouseinfo]]>>=
 struct Mouseinfo
@@ -10415,6 +10469,15 @@ struct Mousestate
 % start from actual click -> mousethread listening on
 % channel conntected to ioproc reading /dev/mouse.
 % -> winctl
+
+%yoann: paragraph explanation, producer/consumer model, and say why part2 and where is part1
+%claude:
+This is part~2 of the mouse reading code. Part~1 in the previous
+chapter showed the [<xfidread()>] side---how the worker sends a
+[<Mousereadmesg>] and waits for a reply. Here we see the [<winctl>]
+side: the producer that enqueues click events into
+[[w->mouse.queue]], and the consumer that dequeues them (or snapshots
+the current position) when the client is ready.
 
 \subsubsection{Producer}
 
@@ -10536,7 +10599,26 @@ case WMouseread:
 
 \section{Keyboard events}
 
+%yoann: explanation, and how differ (simpler? more complex?) from mouse events
+%claude:
+Keyboard event delivery for graphical windows is simpler than mouse
+events: there is no circular queue with click/move distinction, no
+[[counter]]/[[lastcounter]] bookkeeping.  Instead, raw keystrokes
+are simply appended to a growing array [[w->raw]] and consumed
+one rune at a time. The complexity here is different---it lies in the
+interaction between raw mode and buffered mode, and in the rune/byte
+conversion when the data reaches the client.
+
 \subsection{Raw keys queue}
+
+%yoann: say when those fields are relevant, and rawon written on /dev/consctl?
+%claude:
+These fields are only relevant when [[w->rawing]] is true, i.e., when
+a client has written [["rawon"]] on [[/mnt/wsys/consctl]]. In that
+mode, [<wkeyctl>] appends each keystroke to [[raw]] instead of
+inserting it into the text buffer. The runes accumulate here until
+the client reads [[/dev/cons]], at which point the [[WCread]] consumer
+in [<winctl>] converts them to UTF-8 bytes and sends them out.
 
 <<[[Window]] graphical window fields>>=
 // growing_array<Rune> (size = Window.nraw)
@@ -10872,6 +10954,7 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 
 % terminal emulator has a lot in common with an editor.
 % Code of efuns is similar for many things.
+
 %claude:
 A textual window is [[rio]]'s terminal emulator.
 The challenge is to let command-line programs (like [[rc]]) work
@@ -10886,7 +10969,7 @@ A textual window is essentially a simple editor, with a data model
 (the rune buffer [[r]]/[[nr]]), cursors ([[q0]], [[q1]], [[qh]]),
 a viewport ([[org]]), and a rendering engine (the [[Frame]] library
 that handles text layout, wrapping, and selection highlighting).
-Much of this code is similar to [[efuns]] (see the \book{Efuns}).
+
 
 \l put most stuff of libframe in appendix
 
