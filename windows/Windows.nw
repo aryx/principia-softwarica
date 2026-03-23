@@ -10185,7 +10185,11 @@ if(n == 0){
 % will use mount anyway, and env var is anyway a fileserver in plan9
 % so simpler to use /mnt/wsys for that too
 
-
+%claude:
+This concludes the generic virtual device code. The behavior of
+[[/mnt/wsys/mouse]] and [[/mnt/wsys/cons]] varies depending on
+whether the window is graphical or textual---the next two chapters
+cover those differences.
 
 
 
@@ -10980,9 +10984,14 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 }
 @
 
-
-
-
+%claude:
+This concludes the graphical window chapter. Graphical windows are
+the simpler case: the application draws directly via [[/dev/draw]],
+and [[rio]]'s role is limited to dispatching mouse and keyboard events.
+The next chapter covers textual windows---[[rio]]'s terminal
+emulator---which is considerably more complex because [[rio]] must
+handle line editing, text rendering, scrolling, and all the subtleties
+of emulating [[/dev/cons]].
 
 
 
@@ -11113,7 +11122,10 @@ appear when the child process (e.g., [[rc]]) writes its prompt to
 [[/dev/cons]], triggering a [[WCwrite]] event.
 %claude:
 The following ASCII diagram shows the initial layout of a textual
-window, with dimensions annotated:
+window, with dimensions annotated.
+[[Sb]] is the scrollbar column ([[Scrollwid]] = 12 pixels wide),
+and [[Sg]] is the gap between the scrollbar and the text frame
+([[Scrollgap]] = 4 pixels wide):
 \begin{verbatim}
   +--+----+--------------------------------------+--+
   |  |    |                                      |  |
@@ -11124,7 +11136,6 @@ window, with dimensions annotated:
   +--+----+--------------------------------------+--+
      Scrollwid=12  Scrollgap=4
 \end{verbatim}
-%yoann1: What Sb and Sg mean?
 
 <<[[wmk()]] textual window settings>>=
 <<[[wmk()]] textual window settings, set scrollbar>>
@@ -15877,22 +15888,28 @@ wcontents(Window *w, int *ip)
 % more the reflective part of rio, a bit like /proc for the kernel.
 % (well winname is more important than that though)
 %claude:
-Beyond the virtual device files ([[/mnt/wsys/cons]], [[/mnt/wsys/mouse]])
-that emulate hardware devices, [[rio]] serves several control and
-introspection files.
-These are the ``reflective'' part of [[rio]], analogous to how
-[[/proc]] lets programs inspect and control kernel processes.
-[[/mnt/wsys/winid]] and [[/mnt/wsys/label]] expose window identity,
-[[/mnt/wsys/wctl]] allows programmatic window manipulation, and
-[[/mnt/wsys/wsys/]] is the entry point for creating new windows
-from external programs.
+The previous chapters covered the virtual device files that emulate
+hardware---[[/mnt/wsys/cons]] for the keyboard, [[/mnt/wsys/mouse]]
+for the mouse, and [[/mnt/wsys/winname]] for graphics.
+Those files make [[rio]] transparent: programs running in a window
+do not even know they are windowed.
+%claude:
+This chapter covers the remaining files under [[/mnt/wsys/]], which
+serve a different purpose. They are the ``reflective'' part of [[rio]],
+analogous to how [[/proc]] lets programs inspect and control kernel
+processes. Through these files, programs can discover their own window
+identity ([[winid]], [[label]]), query the screen ([[screen]]),
+access other windows ([[wsys/]]), and control windows
+programmatically ([[wctl]]).
 
 \section{[[/mnt/wsys/winid]]}
 
 %claude:
-Reading [[/mnt/wsys/winid]] returns the numeric window ID.
-Programs use this to construct paths like [[/mnt/wsys/wsys/N/wctl]]
-to control a specific window.
+Reading [[/mnt/wsys/winid]] returns the numeric window ID as a string.
+A program uses this to discover its own window identity, typically
+to construct paths like [[/mnt/wsys/wsys/N/wctl]] when it needs
+to control a specific window (including its own).
+The implementation is straightforward---a single [[sprint()]]:
 
 <<[[qid]] cases>>=
 Qwinid,
@@ -15916,10 +15933,19 @@ case Qwinid:
 \section{[[/mnt/wsys/label]]}
 
 %claude:
-The label is a user-settable string that identifies the window in the
-system menu's hidden windows list. Unlike X11 title bars, [[rio]]
-windows have no visible title---Pike considers title bars a waste of
-screen space. The label exists purely for programmatic identification.
+The label is a readable and writable string that identifies a window.
+Since [[rio]] windows have no title bar, the label is not displayed on
+screen---it appears only in the system menu's list of hidden windows
+(see Section~\ref{sec:window-hide}), and it can be read by tools
+that query window state via [[wctl]].
+%claude:
+By default, [[initdraw()]] sets the label to the string passed as its
+third argument (e.g., [["Hello Rio"]] in [[hellorio.c]]).
+A program can change its label at any time by writing to
+[[/mnt/wsys/label]].
+The read path returns the label with proper offset handling;
+the write path replaces the entire label (writes at non-zero offsets
+are rejected to keep the implementation simple):
 
 <<[[qid]] cases>>=
 Qlabel,
@@ -15967,11 +15993,17 @@ case Qlabel:
 \section{[[/mnt/wsys/screen]]}
 
 %claude:
-Reading [[/mnt/wsys/screen]] returns the screen image's ID and
-rectangle in the same format as [[/dev/window]]. This lets
-applications discover the full desktop geometry (useful for
-positioning windows or for drawing operations that span the
-entire display).
+Unlike the other [[/mnt/wsys/]] files, [[/mnt/wsys/screen]] is not
+per-window: every window sees the same global screen.
+Reading it returns the image ID and rectangle of the entire display
+in the same format as [[/dev/window]] (see the \book{Graphics}).
+This lets programs discover the full desktop geometry, which is
+useful for positioning new windows or for utilities like
+[[lens]] that operate on the whole screen.
+%claude:
+The implementation delegates to the same [[caseImage]] code path used
+by [[/mnt/wsys/window]], passing [[display->image]] instead of the
+window's own image:
 
 % read only
 
@@ -15998,14 +16030,24 @@ case Qscreen:
 \section{[[/mnt/wsys/wsys/]]}
 
 %claude:
-The [[/mnt/wsys/wsys/]] directory is the entry point for external
-programs to access other windows. Each existing window appears as a
-numbered subdirectory (by window ID) containing the same virtual device
-files ([[cons]], [[mouse]], etc.) as [[/mnt/wsys/]]. Walking to
-[[/mnt/wsys/wsys/N]] switches the fid's window context to window~N,
-allowing a program to read another window's text or control it via
-[[wctl]]. This is how the [[wctl(1)]] command can create, resize,
-or delete windows from a script.
+[[/mnt/wsys/wsys/]] is to windows what [[/proc/]] is to processes:
+a directory whose entries are numbered subdirectories, one per window.
+Listing [[/mnt/wsys/wsys/]] returns the IDs of all existing windows
+(sorted numerically). Walking into [[/mnt/wsys/wsys/N/]] gives access
+to the same virtual device files ([[cons]], [[mouse]], [[wctl]], etc.)
+as [[/mnt/wsys/]], but for window~N instead of the caller's own window.
+%claude:
+This is how the [[wctl(1)]] command can create, resize, or delete
+another window from a script. For example, a status bar program can
+enumerate all windows, read their labels, and display a window list.
+%claude:
+The implementation is interesting because it uses [[filsyswalk()]]
+to detect numeric path components and switch the fid's window context.
+When a walk reaches [[Qwsys]] and the next component is a number,
+the code looks up the window by ID, updates [[f->w]] to point to
+the target window, and continues the walk from [[Qwsysdir]]---at
+that point, the fid behaves as though the client had mounted
+that window's own [[/mnt/wsys/]]:
 
 % https://github.com/sdhand/x11fs
 
@@ -16122,12 +16164,20 @@ if(FILE(qid) == Qwsysdir)
 % Adv topics? Debugging support chapter?
 % allow to command an app? a la watir/selenium/... ?
 %claude:
-The [[wctl]] file is the programmatic interface to window management.
-Reading it returns the window's current geometry and state;
-writing it lets programs create, resize, move, or delete windows
-from the command line or scripts. This is how tools like [[wctl(1)]]
-interact with [[rio]]---by writing commands like ``resize'' or ``move''
-to this file.
+The [[wctl]] file is the programmatic interface to window management,
+the most powerful file in [[/mnt/wsys/]].
+Reading [[wctl]] returns the window's current geometry, focus status,
+and visibility (hidden or visible) as a single line.
+Writing [[wctl]] accepts commands such as [[new]], [[resize]], [[move]],
+[[delete]], [[hide]], [[unhide]], [[top]], [[bottom]], [[scroll]],
+and [[noscroll]].
+%claude:
+This file is how tools like the [[wctl(1)]] command interact with
+[[rio]] from the shell---for example, [[echo resize -r 0 0 640 480 > /mnt/wsys/wctl]]
+resizes the current window.
+Combined with [[/mnt/wsys/wsys/N/wctl]], a script can control any
+window, enabling automation and scripting of window layouts in a way
+that is natural under \plan: everything is a file.
 
 
 <<[[Window]] other fields>>=
@@ -16145,6 +16195,14 @@ Qwctl,
 <<dirtab array elements>>=
 { "wctl",		QTFILE,	Qwctl,		0600 },
 @
+
+%claude:
+Opening [[wctl]] for reading is exclusive: only one reader is allowed
+at a time. As the comment in the code explains, ideally multiple
+readers could all see geometry changes (fan-out), but [[rio]]'s
+channel-based architecture is designed for the [[/dev/cons]] model
+where each reader gets different data. Enforcing exclusivity avoids
+subtle races:
 
 <<[[xfidopen()]] cases>>=
 case Qwctl:
@@ -16192,6 +16250,15 @@ if(w != oi){
 % But Wakeup does nothing actually
 
 \subsection{Reading}
+
+%claude:
+Reading [[wctl]] uses the same producer/consumer pattern as
+[[/mnt/wsys/cons]]: the worker thread (consumer) blocks on
+[[w->wctlread]] until the window thread (producer) sends the current
+geometry. The read blocks until the geometry {\em changes} (a resize,
+move, or focus change sets [[wctlready]] to true and wakes the
+window thread). This makes [[wctl]] useful for programs that want
+to react to window changes---they simply read in a loop.
 
 \subsubsection{Producer}
 
@@ -20109,29 +20176,68 @@ wrefresh(Window *w, Rectangle)
 
 %claude:
 You now know how the \plan windowing system [[rio]]
-works, to the smallest details, and more generally
-how many windowing systems work.
+works---from the hardware interrupt when you click
+the mouse, through the chain of IO procs, threads,
+and channels, all the way to the 9P response that
+unblocks the application.
+More generally, you now understand how a windowing
+system manages multiple windows, dispatches input,
+and provides a transparent environment for
+applications.
 
 %claude:
-[[rio]] is both a window manager and a file server.
+[[rio]] is simultaneously three things: a graphical application
+(it calls [[initdraw()]] and draws on the screen),
+a window manager (it creates, moves, resizes, and deletes windows),
+and a file server (it serves [[/mnt/wsys/]] files through 9P).
 Each window provides virtual [[/dev/cons]],
-[[/dev/mouse]], and [[/dev/draw]] files through 9P,
+[[/dev/mouse]], and [[/dev/winname]] files,
 so programs running inside a window see the same
 interface as programs running on a bare console---they
 do not even need to know they are running in a window.
-This is a powerful idea: multiplexing the user's
-devices through a file system means that windows are
-composable (you can run [[rio]] inside [[rio]]) and
-that any program that reads and writes files
-automatically works in a windowed environment.
-%
-Along the way, you have seen how [[rio]] uses
-threads and channels for concurrency, how the
-window manager handles overlapping windows with
-the layer mechanism from [[libdraw]], how the
-textual window provides terminal emulation with
-scrollback, and how the 9P file server dispatches
-read and write requests to the appropriate window.
+%claude:
+This multiplexer design has remarkable consequences:
+windows are composable (you can run [[rio]] inside [[rio]]),
+any program that reads and writes [[/dev/]] files
+automatically works in a windowed environment, and
+[[rio]] gains network transparency for free through 9P.
+
+\section{Patterns and techniques}
+
+%claude:
+Beyond the specifics of windowing, this book has demonstrated
+several recurring software engineering patterns:
+\begin{itemize}
+
+\item \emph{Active objects}: each window is represented by a thread
+([<winctl()>]) with its own event loop, receiving messages through
+channels. This is a powerful concurrency pattern that avoids locks
+by giving each object its own thread of control.
+
+\item \emph{Master/worker}: the [[fileserver]] proc dispatches 9P
+requests to worker threads, one per open file. The worker allocator
+in [[main-proc]] manages a pool of reusable threads.
+
+\item \emph{Channel-of-channels}: when a worker thread needs mouse
+data, it sends its own reply channel through [[Window.mouseread]].
+The window thread receives this channel and uses it to deliver the
+data. This pattern decouples the requester from the provider.
+
+\item \emph{Producer/consumer with circular buffer}: the
+[[Mouseinfo]] queue buffers mouse events between the mouse thread
+(producer) and the worker thread (consumer), with wrap-around
+indexes.
+
+\item \emph{Cooperative threads with IO procs}: blocking IO is
+offloaded to separate procs (one thread each), which forward events
+through channels. This lets the main proc's cooperatively-scheduled
+threads run without ever blocking on a system call.
+
+\item \emph{Fork/adjust/exec}: window creation follows the classic
+\unix idiom---fork a new process, adjust its namespace (with
+[[mount()]] and [[bind()]]), then exec the shell.
+
+\end{itemize}
 
 \section{Connections to other books}
 
