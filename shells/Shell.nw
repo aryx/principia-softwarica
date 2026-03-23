@@ -10039,9 +10039,11 @@ Xrdfn(void)
 %  - fish features!
 
 %claude:
-You now know how the \plan shell [[rc]] works,
-to the smallest details, and more generally how many
-shells work.
+You now know how the \plan shell [[rc]] works---from the
+lexer that splits input into tokens, through the Yacc parser
+that builds an AST, the bytecode compiler that emits function
+pointers, to the interpreter that executes them via the
+[[fork]]/[[exec]]/[[wait]] system call pattern.
 
 Despite being only about 6700 lines of C (plus a small Yacc grammar),
 [[rc]] implements a complete programming language:
@@ -10057,6 +10059,45 @@ pipes, redirections, subshells, and background jobs.
 The beauty of the \unix process model is that these
 few primitives are enough to build a surprisingly powerful
 command-line environment.
+
+\section{Patterns and techniques}
+
+%claude:
+Beyond the specifics of shell implementation, this book has
+demonstrated several recurring software engineering patterns:
+\begin{itemize}
+
+\item \emph{Compilation pipeline}: [[rc]] follows the classic
+four-stage architecture found in much larger language
+implementations---lexing, parsing, bytecode generation,
+interpretation. Each stage has a clean interface to the next:
+tokens to AST, AST to bytecodes, bytecodes to execution.
+
+\item \emph{Bytecode dispatch}: each bytecode is a function
+pointer ([[Xsimple]], [[Xpipe]], [[Xif]], etc.), and the
+interpreter loop simply calls [[(*pc++)()]]. This pattern
+avoids a giant switch statement and makes the instruction set
+extensible.
+
+\item \emph{Fork/exec/wait}: nearly every command invocation
+follows the same three-step idiom---[[rfork()]] to create a
+child, [[exec()]] to load the program, [[wait()]] in the
+parent to collect the result. Pipes, redirections, and
+background jobs are all variations on this pattern.
+
+\item \emph{I/O redirection via dup}: before [[exec()]],
+the child process manipulates its own file descriptor table
+with [[open()]], [[close()]], and [[dup()]] to redirect
+standard input and output. The target program never knows
+it is reading from a file or a pipe rather than the terminal.
+
+\item \emph{List-based data model}: every value in [[rc]]
+is a list of strings ([[Word]] lists). Variables, command
+arguments, backquote results, and glob expansions all use the
+same representation, which simplifies the interpreter
+considerably.
+
+\end{itemize}
 
 \section{Connections to other books}
 
@@ -10205,6 +10246,14 @@ is the same one you have studied in this book.
 \chapter{Debugging}
 %******************************************************************************
 \label{chap:debugging-appendix}
+
+%claude:
+[[rc]] has several built-in debugging aids. The [[-x]] flag traces
+each simple command before execution (printing the command and its
+arguments). The [[-v]] flag echoes each input line before parsing.
+This appendix presents the code behind these flags, as well as
+the AST pretty-printer used to serialize function bodies into
+the [[/env/]] filesystem.
 
 \section{AST dumper}
 
@@ -10508,6 +10557,15 @@ else
 %******************************************************************************
 \label{chap:error}
 
+%claude:
+[[rc]] has three levels of error response. Syntax and parse errors
+(reported by [[yyerror()]]) are recoverable: [[rc]] prints the error,
+discards the current input line, and returns to the prompt.
+Runtime errors (reported by [[Xerror()]]) set the exit status
+but continue execution. Fatal errors (reported by [[panic()]])
+print a message and call [[abort()]]---these indicate bugs in
+[[rc]] itself, not in the user's script.
+
 <<constant [[ERRMAX]]>>=
 #define ERRMAX 128
 @
@@ -10606,6 +10664,13 @@ Exit(char *stat, char* _LOC)
 \chapter{Utilities}
 %******************************************************************************
 \label{chap:utilities}
+
+%claude:
+This appendix collects the utility code that [[rc]] uses throughout:
+memory allocation wrappers ([[emalloc]], [[erealloc]]),
+the buffered I/O system (the [[io]] structure and its read/write
+functions), command-line flag parsing ([[getflags]]),
+and string conversion helpers.
 
 <<function [[_efgfmt]]>>=
 /* avoid loading any floating-point library code */
