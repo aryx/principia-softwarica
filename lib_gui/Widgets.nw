@@ -1588,6 +1588,14 @@ Note [[pl_hilit]]: it is not a color but an alpha mask (50\%
 transparency), used to draw translucent highlights over
 selected items in lists.
 
+%claude:
+These five images are allocated once and reused by every widget.
+The 3D relief effect that gives buttons and frames their ``raised''
+or ``sunken'' appearance is simply [[pl_light]] on the top-left edges
+and [[pl_dark]] on the bottom-right (or reversed, for a sunken look).
+This is the same technique used in Windows~95, Motif, and early GTK
+widgets.
+
 %******************************************************************************
 \chapter{Drawing}
 %******************************************************************************
@@ -2112,6 +2120,12 @@ dereference a dangling pointer.
 if(p==plkbfocus)
     plkbfocus=nil;
 @
+
+%claude:
+We have now seen the three core operations: drawing (top-down tree
+walk), mouse dispatch (top-down hit test), and keyboard dispatch
+(direct-to-focus). The remaining piece of the infrastructure is
+layout: how does [[libpanel]] decide where each widget goes?
 
 %******************************************************************************
 \chapter{Layout}
@@ -4256,10 +4270,17 @@ The previous chapter covered leaf widgets---labels, entries, buttons,
 sliders, and canvases---that have no children.
 This chapter presents the composite widgets whose sole purpose is to
 contain and organize other widgets.
-There are only two: Frame (a container with a visible border) and
+%claude:
+There are only two: Frame (a container with a visible 3D border) and
 Group (an invisible container).
 Both pass [[0]] as the data size to [[pl_newpanel]] because they
-carry no widget-specific state.
+carry no widget-specific state---their entire purpose is to hold
+children and participate in layout.
+%claude:
+The distinction matters for visual structure: use a frame when you
+want the user to see a group boundary (e.g., a panel of related
+controls), and a group when you just need to pack several widgets
+as a unit without any visible separation.
 
 \section{Frame}
 
@@ -6154,17 +6175,23 @@ void pl_childspacemessage(Panel *p, Point *ul, Vector *size){
 \l adv topics?
 
 %claude:
-The edit widget is a scrollable, editable text window---the
-most complex widget in [[libpanel]]. It delegates most of
-the heavy lifting to a [[Textwin]] object (defined in
-[[textwin.c]]), which handles the actual text buffer,
+While the message widget handles display-only multi-line text,
+the edit widget goes further: it is a scrollable, editable text
+window---the most complex widget in [[libpanel]].
+It delegates most of the heavy lifting to a [[Textwin]] object
+(defined in [[textwin.c]]), which handles the actual text buffer,
 selection, and rendering. The edit widget itself is a thin
 wrapper that connects [[Textwin]] to the [[Panel]] interface.
-%
+%claude:
 The edit widget supports mouse-based text selection, keyboard
 editing (backspace, delete, Escape for cut), chord-based
 cut/paste (buttons 1+2 for cut, buttons 1+3 for paste),
 and scrolling via a linked scroll bar.
+Because [[Textwin]] does most of the work, the edit widget's
+methods are short: [[pl_drawedit()]] creates or reshapes the
+[[Textwin]] and highlights the current selection;
+[[pl_hitedit()]] delegates to [[twselect()]] for mouse tracking;
+[[pl_typeedit()]] delegates to [[twreplace()]] for insertions.
 
 <<struct [[Edit]]>>=
 struct Edit{
@@ -7119,8 +7146,6 @@ void pl_pasteedit(Panel *p, char *s){
 @
 
 
-\section{Rich text}
-
 \section{Hooks}
 
 <<[[Panel]] user-specific fields>>=
@@ -7227,9 +7252,11 @@ for(cp=p->child;cp;cp=cp->next){
 \label{chap:conclusion}
 
 %claude:
-You now know how the \plan widget library [[libpanel]] works,
-to the smallest details, and more generally how many widget
-libraries work.
+You now know how the \plan widget library [[libpanel]] works---from
+the tree of [[Panel]] nodes assembled by the application,
+through the two-pass layout algorithm that assigns positions,
+to the event dispatch that routes a mouse click to the right
+widget's callback.
 
 %claude:
 Despite being only about 4000 lines of C, [[libpanel]]
