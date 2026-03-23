@@ -10641,6 +10641,24 @@ uint		nraw;
 % seen keyboard listening code already in section X.
 
 % winctl -> <>
+%claude:
+When raw mode is active, keystrokes bypass the normal insertion
+path and go directly to the [[raw]] queue via [[waddraw]]. The
+condition [[w->mouseopen || w->q0 == w->nr]] distinguishes two
+cases: in a graphical window ([[mouseopen]]), all raw keys are
+queued unconditionally---the application is fully in charge of
+keyboard handling. In a textual window, only keys typed at the very
+end of the buffer (where [[q0 == nr]]) take the raw path, because the
+user might have moved the cursor backward to edit earlier text, which
+should go through the normal insertion/line-discipline path.
+%claude:
+This subtlety means a textual window with [[rawing == true]] can still
+support partial line editing: the user can click on earlier text, edit
+it with backspace, and only characters typed at the very end go through
+raw mode. In practice this rarely matters because most applications
+that request raw mode also open the mouse (becoming graphical windows),
+but the code handles both cases correctly.
+
 <<[[wkeyctl()]] if rawing>>=
 if(w->rawing && (w->mouseopen || w->q0 == w->nr)){
     waddraw(w, &r, 1);
@@ -10674,6 +10692,14 @@ waddraw(Window *w, Rune *r, int nr)
 
 % realloc at each key press??
 
+
+%claude:
+When the application sends [[Rawoff]], any runes that were accumulated
+in [[w->raw]] during raw mode are replayed through [<wkeyctl>] in
+normal (line-buffered) mode. Since [[rawing]] is now false, [<wkeyctl>]
+will insert them into the text buffer and process special characters
+normally. The one-at-a-time [[runemove]] shift is inefficient but
+the raw queue is typically short.
 
 <<[[wctlmesg()]] When Rawoff, process raw keys in non rawing mode>>=
 while(w->nraw > 0){
@@ -10755,6 +10781,24 @@ int i, c, wid;
 
 
 % keys_out
+%claude:
+The [[WCread]] consumer handles both raw and buffered modes in a
+single loop, distinguished by whether [[w->qh == w->nr]]:
+\begin{itemize}
+\item {\bf Raw mode} ([[w->qh == w->nr]]): runes come from [[w->raw]],
+one at a time. Each rune is converted to UTF-8 bytes via [[runetochar]]
+and the raw queue is shifted left.
+\item {\bf Buffered mode} ([[w->qh < w->nr]]): runes come from the
+text buffer starting at [[qh]]. The [[qh]] pointer advances as runes are
+consumed, and the loop breaks on newline or EOT ([['\004']]).
+\end{itemize}
+%claude:
+In both modes, the rune-to-byte conversion may produce a rune whose
+UTF-8 encoding straddles the byte count boundary requested by the
+client. The partial-rune bookkeeping with [[part]]/[[npart]] saves
+the overflow bytes for the next read---the same pattern used on the
+[<xfidwrite()>] side for the opposite conversion.
+
 <<[[winctl()]] event loop cases>>=
 case WCread:
     recv(crm.c1, &pair);
@@ -10855,6 +10899,14 @@ rectangle (in the same ``12 12 12 12 id'' text format used by
 reconnects to a window image after a resize: it reads this file
 to learn the new window dimensions, then uses the image ID
 to obtain a reference from the draw device.
+%claude:
+The read has two parts, selected by the file offset. At offset~0
+through [[5*12-1]] (60 bytes), it returns a text header with the
+pixel format and the window rectangle. Past that offset,
+[[readwindow]] returns the raw pixel data of the window image
+via [[unloadimage]]---this lets a program capture a screenshot of
+its own window. The [[caseImage]] label is shared with another
+virtual device ([[Qscreen]]), avoiding code duplication.
 
 % simple
 
@@ -10964,12 +11016,63 @@ and scrolling.
 This is possible because [[/dev/cons]] is virtualized: writes from
 the application insert text at the {output point} ([[qh]]), while the
 user can independently navigate and select text with the mouse.
+
 %claude:
 A textual window is essentially a simple editor, with a data model
 (the rune buffer [[r]]/[[nr]]), cursors ([[q0]], [[q1]], [[qh]]),
 a viewport ([[org]]), and a rendering engine (the [[Frame]] library
 that handles text layout, wrapping, and selection highlighting).
+%claude:
+This chapter is the largest in the book because the textual window
+touches every layer: the data model (rune buffer, cursors), the
+rendering engine (the Frame library with its box array, incremental
+insert/delete, and selection painting), the keyboard handler
+(line discipline, navigation, erase keys), the mouse handler
+(selection, menu, scrollbar), and the application output handler
+(backspace processing, flow control).
+The chapter is organized bottom-up: first the Frame widget internals,
+then content modification, then rendering, and finally the event
+handlers (keyboard, output, mouse) that drive everything.
 
+\section{Overview}
+
+%claude:
+The following diagram shows the relationship between the data model
+(the rune buffer) and the view (what the Frame widget displays on screen).
+The rune buffer [[r]] holds all text ever written by the application
+plus what the user has typed. [[org]] is the index of the first
+visible rune; [[frm.nchars]] is how many runes fit in the frame.
+The selection ([[q0]]/[[q1]]) and the output point ([[qh]])
+are indices into this same buffer:
+\begin{verbatim}
+  Rune buffer r[]:
+  +-------+-----+-------+-----------+-----+---------+-------+
+  |       |     |       |           |     |         |       |
+  0      org   q0      q1          qh    nr       maxr
+  |       |     |       |           |     |         |
+  | above |     selected            | input queue   | free  |
+  | scroll|<-- visible in frame --> | (user typed,  |       |
+  | back  |    (frm.nchars runes)   |  not yet sent)|       |
+  +-------+-----+-------+-----------+-----+---------+-------+
+              |                           |
+              v                           v
+  Screen:   +-+--+--------------------------+
+            |S|  |  output   [sel]  typed   |
+            |c|  |  text     ected  text    |
+            |r|  |  from     text   after   |
+            |o|  |  app             qh      |
+            |l|  |                          |
+            |l|  |                          |
+            +-+--+--------------------------+
+         scrollr       Frame (frm)
+\end{verbatim}
+%claude:
+Key invariant: [[org <= qh <= nr]].
+Text before [[qh]] was produced by the application (e.g., a shell prompt);
+text from [[qh]] to [[nr]] was typed by the user and will be sent to the
+application when the user presses Enter.
+The selection ([[q0]]/[[q1]]) can be anywhere---the user might click on
+old output text or on input they have not yet sent.
 
 \l put most stuff of libframe in appendix
 
@@ -10997,6 +11100,32 @@ that handles text layout, wrapping, and selection highlighting).
 % Saw window creation section before. Some additional setup
 % for textual windows we skipped.
 
+%claude:
+This section fills in the textual-window-specific setup that [<wmk()>]
+performs beyond the common window creation seen earlier.
+The three steps are: compute the scrollbar rectangle (left strip),
+initialize the [[Frame]] widget (remaining area to the right),
+and paint the initial background.
+%claude:
+At this point, the rune buffer is empty ([[nr == 0]], [[q0 == q1 == qh == org == 0]])
+because [[emalloc]] zeros the [[Window]] struct. The first content will
+appear when the child process (e.g., [[rc]]) writes its prompt to
+[[/dev/cons]], triggering a [[WCwrite]] event.
+%claude:
+The following ASCII diagram shows the initial layout of a textual
+window, with dimensions annotated:
+\begin{verbatim}
+  +--+----+--------------------------------------+--+
+  |  |    |                                      |  |
+  |  | Sb | Sg |        Frame (frm)              |  | <- Selborder
+  |  |    |    |                                 |  |
+  |  |    |    |  (empty, maxlines rows)         |  |
+  |  |    |    |                                 |  |
+  +--+----+--------------------------------------+--+
+     Scrollwid=12  Scrollgap=4
+\end{verbatim}
+%yoann1: What Sb and Sg mean?
+
 <<[[wmk()]] textual window settings>>=
 <<[[wmk()]] textual window settings, set scrollbar>>
 <<[[wmk()]] textual window settings, set frame>>
@@ -11020,6 +11149,16 @@ draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
 \subsection{Scrollbar}
 
 % saw Window.scrollr in core DS
+
+%claude:
+The scrollbar occupies a [[Scrollwid]] (12 pixel) wide strip on the
+left side of the window, just inside the selection border. Its
+rectangle is stored in [[w->scrollr]] and used in two places: by
+[<wscrdraw()>] for drawing the scrollbar thumb, and by [<wmousectl()>]
+to detect clicks in the scrollbar area (which are dispatched to
+[<wscroll()>] rather than to the text selection code).
+The [[scrolling]] flag controls auto-scroll behavior and is
+initialized from the global [[scrolling]] default.
 
 <<[[wmk()]] textual window settings, set scrollbar>>=
 r = insetrect(w->i->r, Selborder+1);
@@ -11045,6 +11184,17 @@ w->scrolling = scrolling; // autoscroll
 \l bad name frame
 
 % saw Window.frm in core DS
+
+%claude:
+The window's drawable area (inset by [[Selborder]]) is divided into
+a scrollbar on the left ([[Scrollwid]] = 12 pixels wide) and the text
+frame on the right, separated by a [[Scrollgap]] (4 pixel) gap.
+The frame rectangle is passed to [[frinit()]], which clips its
+bottom edge to a whole number of font-height lines and computes
+[[maxlines]]. For a typical 24-line terminal with a 16-pixel font,
+[[maxlines]] would be 24 and the clipped rectangle would be
+$24 \times 16 = 384$ pixels tall, with any leftover pixels below the
+frame unused.
 
 <<[[wmk()]] textual window settings, set frame>>=
 r = insetrect(w->i->r, Selborder+1);
@@ -11094,11 +11244,63 @@ selection highlighting, and efficient incremental updates when characters
 are inserted or deleted.
 Despite the name ``frame'' (which might suggest a window border),
 it is really a {text widget}.
-The library works with ``boxes'' ([[Frbox]])---runs of characters that
-share the same width---to efficiently handle variable-width Unicode
-characters without measuring each one individually during rendering.
+%claude:
+The fundamental design decision is to avoid redrawing the entire text
+whenever a character is inserted or deleted. Instead, the library works
+incrementally: the screen content is represented as a sequence of
+``boxes'' ([[Frbox]]), where each box is a run of characters that share
+the same pixel width. When text is inserted, only the boxes after the
+insertion point need to shift, and only the gap between old and new
+positions needs repainting. This makes single-character insertion (the
+common case when typing) very fast, even with thousands of visible characters.
+%claude:
+The box abstraction also solves the variable-width Unicode problem:
+measuring a character's pixel width requires a font lookup, which is
+expensive. By grouping characters into runs and caching the total width
+in [[Frbox.wid]], the library only measures widths when boxes are created
+or split, not on every rendering pass.
+%claude:
+Here is a concrete example of what the box array looks like for
+a terminal showing two lines:
+\begin{verbatim}
+  Display:   % ls -la /tmp
+             drwxrwxrwt  12 root root 4096 ...
+
+  Box array:
+  [0] nrune=11 ptr="% ls -la /t"  wid=88
+  [1] nrune=2  ptr="mp"           wid=16   (split at line wrap)
+  [2] nrune=-1 bc='\n'            wid=5000 (newline break box)
+  [3] nrune=14 ptr="drwxrwxrwt  1" wid=112
+  ...
+\end{verbatim}
+%claude:
+Text boxes are split at line boundaries (when a box would overflow
+the right margin, [<_frcanfit>] determines how many characters fit
+and [<_frsplitbox>] divides it). Tabs and newlines get their own
+special boxes with [[nrune == -1]].
 
 \subsection{[[Frame]]}
+
+%claude:
+The [[Frame]] struct is the state of a text widget instance. It does
+\emph{not} own the text data (which lives in [[Window.r]])---it only
+knows how to display a slice of it, from [[org]] to [[org + nchars]].
+%claude:
+The key fields fall into five groups:
+\begin{itemize}
+\item {\bf Drawing surface:} [[b]] (the image to draw on), [[r]] (the
+text rectangle, clipped to whole lines), [[entire]] (the full
+rectangle including partial lines).
+\item {\bf Text metrics:} [[nchars]] (how many runes are visible),
+[[nlines]] (how many lines have text), [[maxlines]] (how many lines
+fit).
+\item {\bf Selection:} [[p0]], [[p1]] (frame-local selection range,
+in rune indices relative to [[org]]).
+\item {\bf Cursor:} [[tick]], [[tickback]], [[ticked]] (the text cursor
+image and its save buffer).
+\item {\bf Box array:} [[box]], [[nbox]], [[nalloc]] (the cached layout
+of visible text).
+\end{itemize}
 
 <<struct [[Frame]]>>=
 struct Frame
@@ -11140,6 +11342,18 @@ ushort	nlines;		/* # lines with text */
 
 % libframe/
 % ... -> new -> wmk() -> <>
+%claude:
+Initialization sets the drawing surface, computes how many lines of
+text fit in the rectangle (clipping the bottom to a whole number of
+font-height rows via [<frsetrects>]), zeros the text counters, sets
+up the color palette, and creates the tick cursor image.
+%claude:
+A subtle ordering dependency: the font must be set before
+[[frsetrects]] because [[frsetrects]] uses [[f->font->height]] to
+compute [[maxlines]]. The author notes that reordering these lines
+caused a segfault during development---an easy mistake because the
+dependency is not obvious from the function signatures.
+
 <<function [[frinit]]>>=
 void
 frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
@@ -11202,6 +11416,23 @@ frclear(Frame *f, bool freeall)
 
 \subsection{Frame colors}
 
+%claude:
+The frame uses five colors indexed by [[BACK]], [[HIGH]], [[BORD]],
+[[TEXT]], and [[HTEXT]]:
+\begin{itemize}
+\item [[BACK]] (white): normal text background.
+\item [[HIGH]] (light grey, [[0xCCCCCC]]): background of selected text.
+\item [[BORD]] (medium grey, [[0x999999]]): scrollbar and border fill.
+\item [[TEXT]] (black): normal text foreground.
+\item [[HTEXT]] (black): selected text foreground (same as TEXT in [[rio]]).
+\end{itemize}
+%claude:
+The key visual trick is that when a window loses focus, [<wsetcols>]
+swaps the text color from black to dark grey ([[0x666666]]), giving the
+``inactive window'' appearance without changing any content---only the
+colors in [[frm.cols]] are modified, followed by a [<frredraw()>].
+This is a lightweight way to indicate which window has keyboard focus.
+
 <<[[Frame]] colors>>=
 Image	*cols[NCOL];	/* text and background colors */
 @
@@ -11240,6 +11471,14 @@ if(cols != nil)
 @
 
 
+%claude:
+The colors are allocated once (guarded by [[cols[0] == nil]]) and
+shared by all windows. White background, light grey highlight for
+selected text, medium grey for the border/scrollbar, and black text.
+These are 1x1 pixel images used as tile patterns in [[draw()]] calls---a
+common Plan~9 idiom for solid color fills where the 1x1 image is
+tiled across the destination rectangle by the graphics system.
+
 <<[[wmk()]] colors initialisation>>=
 if(cols[0] == nil){
     cols[BACK] = display->white;
@@ -11262,6 +11501,17 @@ wsetcols(w);
 
 
 % wrepaint | ... -> <>
+%claude:
+The [<wsetcols()>] function implements the visual focus indicator: the
+focused window ([[w == input]]) gets black text, while unfocused
+windows get dark grey text ([[darkgrey]], [[0x666666]]). This is the
+only rendering difference between focused and unfocused windows---the
+background, selection highlight, and border colors remain the same.
+The simplicity of this approach (one color swap plus a repaint) is
+characteristic of [[rio]]'s minimalist design: there are no
+drop shadows, title bar color changes, or border thickness variations
+that other window systems use to indicate focus.
+
 <<function [[wsetcols]]>>=
 void
 wsetcols(Window *w)
@@ -11301,6 +11551,21 @@ darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
 
 \subsection{Frame tick}
 
+%claude:
+The ``tick'' is the text cursor---a narrow 3-pixel-wide image drawn
+at the insertion point ([[q0]]). Rather than repainting the text
+underneath each time the tick moves, [[rio]] saves the pixels under
+the tick into [[tickback]] and restores them when the tick is removed.
+This save/restore approach is the same technique used for the mouse
+cursor in the kernel's graphics layer.
+%claude:
+The [[ticked]] flag tracks whether the tick is currently on screen.
+When the user has an active selection range ([[p0 != p1]]), the tick is
+hidden---there is no blinking cursor inside a highlighted selection.
+The tick reappears when the selection collapses to a point (a single
+click). Note that [[rio]]'s tick does not blink, unlike most modern
+terminals.
+
 <<[[Frame]] tick fields>>=
 Image	*tick;	/* typing tick */
 Image	*tickback;	/* saved image under tick */
@@ -11324,6 +11589,14 @@ if(f->tick == nil && f->cols[BACK] != nil)
 @
 %fr tick width
 
+
+%claude:
+The tick image is built procedurally: a [[FRTICKW]]$\times$height
+image filled with the background color, a 1-pixel vertical line in
+the text color down the center, and small squares at the top and bottom
+to make the ends visible. This creates the classic I-beam cursor shape.
+The [[tickback]] image has the same dimensions and stores whatever
+pixels were under the tick before it was drawn.
 
 <<function [[frinittick]]>>=
 void
@@ -11392,11 +11665,25 @@ The frame's content is stored as an array of {boxes} ([[Frbox]]).
 A box is either a run of regular characters (with a [[ptr]] to the
 UTF-8 bytes and a [[wid]] giving the total pixel width) or a
 special break character like a newline or tab (indicated by
-[[nrune < 0]]). Boxes exist because measuring character widths is
-expensive: by grouping characters into runs, the frame only needs
-to compute widths when boxes are created, not on every redraw.
-When text is inserted or deleted, the affected boxes are split or
-merged, keeping the rest of the array untouched.
+[[nrune < 0]]).
+%claude:
+The box abstraction serves two purposes:
+\begin{enumerate}
+\item {\bf Cached widths:} Measuring character widths requires calling
+into the font subsystem, which involves looking up glyph metrics. By
+grouping characters into runs and storing the total width in
+[[Frbox.wid]], the frame avoids remeasuring characters on every redraw
+or position lookup.
+\item {\bf Efficient updates:} When a character is inserted, only the
+boxes at the insertion point need to be split and adjusted. The rest
+of the array---potentially hundreds of boxes for a full screen of
+text---remains untouched. Similarly, deletion only affects the boxes
+in the deleted range.
+\end{enumerate}
+%claude:
+The box array is a growing array (like a [[vector]] in C++) with
+[[nbox]] used entries and [[nalloc]] total capacity. When boxes are
+added, the array grows by [[SLOP]] (25) entries at a time.
 
 <<[[Frame]] box fields>>=
 // growing_array<Frbox> (size = nalloc, unused after nbox)
@@ -11413,6 +11700,16 @@ f->nalloc = 0;
 
 
 \subsubsection{[[Frbox]]}
+
+%claude:
+A box is either a run of printable characters (when [[nrune >= 0]],
+with [[ptr]] pointing to the UTF-8 bytes and [[wid]] caching the
+total pixel width) or a special break character (when [[nrune < 0]],
+with [[bc]] holding the character---tab or newline---and [[minwid]]
+giving the minimum width for tab stops). The [[wid]] field of a tab
+box is initially set to a large sentinel (5000) and recomputed
+contextually by [[_frnewwid]] based on the current x position and
+tab stop alignment.
 
 <<struct [[Frbox]]>>=
 struct Frbox
@@ -11449,6 +11746,14 @@ struct Frbox
 @
 
 \subsubsection{Adding boxes}
+
+%claude:
+The box array is a dynamic array with slack: [[_fraddbox]] inserts
+[[n]] empty slots at position [[bn]] by shifting everything after it
+up, growing the allocation by [[SLOP]] (25) extra slots to amortize
+future insertions. [[_frdelbox]] is the inverse: it frees the string
+data in the target boxes ([[_frfreebox]]) then closes the gap by
+shifting the tail down ([[_frclosebox]]).
 
 <<constant [[SLOP]]>>=
 #define	SLOP	25
@@ -11558,6 +11863,19 @@ if(n0>=f->nbox || n1>=f->nbox || n1<n0)
 
 \subsection{Frame strings}
 
+%claude:
+Each text box owns a heap-allocated UTF-8 string ([[ptr]]). These
+helpers manage the allocations: [[_frallocstr]] rounds up to 16-byte
+chunks via the ROUNDUP macro (which uses bit masking for efficiency),
+and [[_frinsure]] grows a box's string buffer when a merge or insertion
+would overflow it.
+%claude:
+The 16-byte chunk alignment means small strings waste at most 15 bytes,
+while frequent small operations (splitting and merging boxes) avoid
+calling [[malloc]] every time. This is important because a single
+character insertion can trigger several box splits and merges as the
+frame relays out text around the insertion point.
+
 <<constant CHUNK (windows/libframe/frstr.c)>>=
 #define	CHUNK	16
 @
@@ -11611,9 +11929,54 @@ _frinsure(Frame *f, int bn, unsigned n)
 
 % p = position_rune, bn = box number, pt = point
 
+%claude:
+The frame library works with three coordinate systems that all refer to
+the same character in the visible text:
+\begin{itemize}
+\item A {rune index} ([[p]], [[ulong]]): offset from the start of the
+frame (not from [[w->org]]---that translation is done by the caller).
+For example, [[frm.p0 == 5]] means the selection starts at the 5th visible rune.
+\item A {box number} ([[bn]], [[int]]): which [[Frbox]] in the
+[[f->box]] array contains that rune. A box holds a run of characters
+or a single special character (tab, newline).
+\item A {pixel point} ([[pt]], [[Point]]): the (x,y) coordinate
+on screen where that character is drawn.
+\end{itemize}
+%claude:
+The conversion functions are:
+\begin{itemize}
+\item [[frptofchar(p)]] converts a rune index to a Point (by walking
+boxes and measuring widths). Used to position the tick cursor and to
+compute where selection painting should start.
+\item [[frcharofpt(pt)]] converts a Point to a rune index. Used to
+translate mouse click coordinates into text positions.
+\item [[_frfindbox(p)]] finds the box number for a rune index, splitting
+a box if [[p]] does not fall on a box boundary. Used by [<frinsert>] and
+[<frdelete>] to locate their insertion/deletion point in the box array.
+\end{itemize}
+%claude:
+All three functions walk the box array linearly from the beginning.
+For a frame with [[maxlines]] of 50 and an average of 3--5 boxes per
+line, the walks visit 150--250 boxes---fast enough for interactive use.
+
 \subsubsection{[[frptofchar()]]}
 
 % Frame point of p'th rune (point is upper left corner of rune)
+%claude:
+Given a rune index [[p]], return the pixel Point of its upper-left
+corner. The implementation ([<_frptofcharptb>]) walks the box array
+from box [[bn]], consuming runes from [[p]] as it goes. For each box,
+it first checks for line wrap via [[_frcklinewrap]]: if the box would
+overflow the right margin, the point wraps to the start of the next line.
+%claude:
+If [[p]] falls before this box (i.e., [[p >= NRUNE(b)]]), the box's
+rune count is subtracted from [[p]] and [[_fradvance]] moves the point
+past the box. If [[p]] falls inside this box, the function measures
+individual characters with [[stringnwidth]] to find the exact x offset
+within the box. For ASCII characters ([[r < Runeself]]), the UTF-8
+decoding is a single-byte fast path; multibyte runes go through
+[[chartorune]].
+
 <<function [[frptofchar]]>>=
 Point
 frptofchar(Frame *f, ulong p)
@@ -11705,6 +12068,14 @@ _frcklinewrap0(Frame *f, Point *p, Frbox *b)
 @
 
 % return int option, 0 = None
+%claude:
+Given a box and a starting position, [[_frcanfit]] returns how many
+runes from that box fit before the right margin. For break boxes, it
+is a yes/no check (does [[minwid]] fit?). For text boxes, if the
+whole box fits it returns [[nrune]]; otherwise it measures characters
+one by one from the left until the margin is exceeded, returning the
+count that fits. A return of 0 means the box must wrap to the next line.
+
 <<function [[_frcanfit]]>>=
 int
 _frcanfit(Frame *f, Point pt, Frbox *b)
@@ -11758,6 +12129,20 @@ _frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next 
 \l why not call directly frptofchar?
 
 \subsubsection{[[frcharofpt()]]}
+
+%claude:
+The inverse of [<frptofchar>]: given a pixel Point (typically from a
+mouse click), return the rune index at that position.
+The function works in two passes: first it walks boxes to find the
+right line (comparing [[qt.y]] against [[pt.y]]), then it walks boxes
+on that line to find the right character (comparing [[qt.x]] against
+[[pt.x]]).
+%claude:
+The [[_frgrid]] helper snaps the y coordinate to a line
+boundary so that clicks in the inter-line space (between the baseline
+of one line and the top of the next) map to the correct row. It also
+clamps [[p.x]] to [[r.max.x]], so clicks to the right of the text
+area map to the end of the line.
 
 <<function [[frcharofpt]]>>=
 ulong
@@ -11838,6 +12223,23 @@ if(r == 0)
 % the simple to draw text, just draw the boxes
 
 % frinsert -> <>
+%claude:
+The simplest drawing routine: it walks every box in the frame, checking
+for line wraps via [<_frcklinewrap>], and draws text boxes with
+[[stringbg]] (which renders the string and fills the background in a
+single draw operation, avoiding the flicker that would result from
+clearing the background first and then drawing text on top).
+%claude:
+Break boxes (tabs and newlines) are skipped---their space is filled by
+the caller or by [<frselectpaint>]. Tab boxes have variable width that
+depends on their position, so they are handled by the alignment logic
+elsewhere rather than by this generic draw routine.
+%claude:
+This function is used by [<frinsert>] in Phase~3 to draw the newly
+inserted text into the gap created by shifting existing content down.
+It draws into the temporary [[frame]] structure's box array, not the
+main frame's---the boxes are spliced into the main array afterward.
+
 <<function [[_frdrawtext]]>>=
 void
 _frdrawtext(Frame *f, Point pt, Image *text, Image *back)
@@ -11860,12 +12262,18 @@ _frdrawtext(Frame *f, Point pt, Image *text, Image *back)
 
 %claude:
 The frame tracks a selection range ([[p0]], [[p1]]) in character
-coordinates relative to the frame origin. The selection is rendered
-by painting the background of the selected range with [[cols[HIGH]]]
-(highlight color) and the text with [[cols[HTEXT]]]. The
-[frdrawsel] functions handle the common case of extending or
+coordinates relative to the frame origin (not the buffer origin
+[[w->org]]---the translation is done by [<wsetselect>]).
+When [[p0 == p1]], there is no selection and the tick cursor is shown
+at that position instead.
+%claude:
+The selection is rendered by painting the background of the selected
+range with [[cols[HIGH]]] (light grey) and the text with [[cols[HTEXT]]].
+The [<frdrawsel>] functions handle the common case of extending or
 shrinking a selection incrementally (e.g., as the user drags the mouse),
-only repainting the changed region.
+only repainting the characters that changed between the old and new
+selection boundaries. This avoids repainting the entire selection on
+every mouse movement.
 
 <<[[Frame]] text fields>>=
 ulong	p0, p1;		/* selection */
@@ -11894,12 +12302,26 @@ f->p1 = 0;
 % usually updated at the very end, not in the middle, so it's ok.
 %claude:
 When text is inserted (either from keyboard input or application output),
-[winsert] moves the runes after the insertion point to make space, copies
+[<winsert>] moves the runes after the insertion point to make space, copies
 the new runes in, then adjusts all the cursor positions ([[q0]], [[q1]],
 [[qh]], [[org]]) that fall after the insertion point.
 This is simpler than a gap buffer (as in [[efuns]]) because a terminal
 usually inserts at the end, not in the middle, so the [[runemove]] cost
 is acceptable.
+%claude:
+Here is a walkthrough of what happens when the user types a single
+character `x' at the cursor. The call chain is:
+\begin{enumerate}
+\item [<wkeyctl>] receives the rune from [<winctl>].
+\item [[winsert(w, \&r, 1, w->q0)]] shifts [[r[q0..]]] right by 1,
+inserts `x', increments [[nr]], and bumps [[q0]]/[[q1]] forward.
+\item Since [[q0 >= org]], [[frinsert(\&w->frm, \&r, \&r+1, q0-org)]]
+updates the on-screen box array: it scans `x' into a new one-character
+box ([<bxscan>]), shifts existing boxes right on screen, and draws
+the new character.
+\item [[wshow(w, q0+1)]] checks that the cursor is still visible;
+if it scrolled off the bottom, it adjusts [[org]] via [<wsetorigin>].
+\end{enumerate}
 
 % return q0 but might have been modified since winsert
 %  can get rid of some lines when too much memory space is used
@@ -11919,6 +12341,30 @@ wshow(w, w->q0);
 \subsection{[[winsert()]]}
 
 % wkeyctl -> <>
+%claude:
+The core insertion function. The algorithm is straightforward:
+shift the runes after [[q0]] to the right by [[n]] positions
+(with [[runemove]]), copy the new runes into the gap, then adjust
+all four cursor positions ([[q0]], [[q1]], [[qh]], [[org]]).
+%claude:
+The cursor adjustment is subtle: the [[<=]] vs [[<]] distinction
+matters. [[q0]] and [[q1]] use [[<=]] so that inserting \emph{at}
+the cursor pushes it forward; [[qh]] uses [[<]] so that inserting
+at the output point leaves [[qh]] in place (the newly typed text
+goes \emph{after} [[qh]], which is what you want when typing at
+the prompt). Similarly, [[org]] uses [[<]] so that inserting at the
+viewport start does not shift the view.
+%claude:
+Example: the shell printed ``\$~'' (org=0, qh=2, q0=2, q1=2).
+The user types `a':
+\begin{verbatim}
+  Before:  |$| |       q0=2, qh=2, org=0, nr=2
+  Insert at q0=2:
+  After:   |$| |a|     q0=3 (<=2, bumped), qh=2 (<2, stays), nr=3
+\end{verbatim}
+The cursor moved past `a', but the output point stayed---exactly
+right: `a' is user input waiting to be sent.
+
 <<function [[winsert]]>>=
 uint
 winsert(Window *w, Rune *r, int n, uint q0)
@@ -11983,6 +12429,16 @@ if(n == 0)
 
 \subsection{Growing array}
 
+%claude:
+The rune buffer uses a two-threshold strategy to limit memory.
+When [[nr]] exceeds [[HiWater]] (640K runes, roughly 1.2\,MB), the
+oldest [[HiWater - LoWater]] = 240K runes are discarded at once by
+shifting the array left with [[runemove]] and adjusting all cursors.
+The bulk pruning amortizes the cost of the shift---doing it one rune at
+a time would be prohibitively expensive.
+[[MinWater]] (20K) provides headroom so that a burst of output after
+pruning does not immediately trigger another reallocation.
+
 <<enum [[_anon_ (windows/rio/wind.c)]]>>=
 enum
 {
@@ -11991,6 +12447,13 @@ enum
     MinWater	= 20000,	/* room to leave available when reallocating */
 };
 @
+
+%claude:
+The allocation strategy for the rune buffer uses geometric doubling
+(up to [[HiWater]]) with a [[MinWater]] headroom to minimize
+[[realloc]] calls. For a typical terminal session, the buffer grows
+quickly at first and then stabilizes around [[HiWater]] once pruning
+kicks in.
 
 <<[[winsert()]] grow rune array if reach maxr>>=
 if(w->nr+n > w->maxr){
@@ -12011,6 +12474,16 @@ if(w->nr+n > w->maxr){
 @
 % realloc
 
+
+%claude:
+When the buffer exceeds [[HiWater]], the oldest text is discarded.
+The guard [[q0 >= w->org && q0 >= w->qh]] ensures pruning only
+happens when the insertion is at or after both the viewport and the
+output point---otherwise removing old text could invalidate what the
+user is looking at or what the application is about to read. The
+amount removed is [[min(HiWater - LoWater, min(org, qh))]], so it
+never removes more text than exists before the earlier of the two
+pointers.
 
 <<[[winsert()]] if size of rune array is getting really big>>=
 if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
@@ -12036,13 +12509,39 @@ if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
 \section{Content rendering}
 
 %claude:
-The rendering pipeline converts rune insertions and deletions into
-incremental screen updates.
-The key function is [frinsert], which is the most complex function in the
+The rendering pipeline is the most complex part of the Frame library.
+Its job is to convert rune insertions and deletions into
+\emph{incremental} screen updates---only redrawing the portion of
+the screen that actually changed.
+%claude:
+Why incremental rendering? Because a textual window can easily have
+50--80 lines of visible text, each containing dozens of characters.
+Redrawing all of them on every keystroke would be visibly slow on
+the hardware Plan~9 targets. Instead, inserting one character
+typically only repaints one line (or less), making typing feel instant.
+%claude:
+The key function is [<frinsert>], which is the most complex function in the
 frame library: it must scan the new text into boxes, figure out where
 existing text will shift, and only redraw the affected portion of the
 screen rather than repainting everything.
-The complementary [frdelete] removes characters and collapses the display.
+The complementary [<frdelete>] removes characters and collapses the display.
+%claude:
+The rendering pipeline is driven by six main functions, each building
+on the lower-level ones:
+\begin{verbatim}
+  winsert()/wdelete()     -- modify the rune buffer and cursors
+       |
+       v
+  frinsert()/frdelete()   -- update the box array and screen
+       |
+       +--- bxscan()      -- convert new runes to boxes
+       +--- _frdrawtext() -- draw the new boxes
+       +--- frdrawsel()   -- repaint selection highlighting
+       +--- _frclean()    -- merge adjacent boxes
+       |
+       v
+  wshow() -> wsetorigin() -> wfill()  -- scroll viewport if needed
+\end{verbatim}
 
 \subsection{[[frinsert()]]}
 
@@ -12115,6 +12614,54 @@ box from its old position ([[pts[i].pt0]]) to its new position ([[pts[i].pt1]]).
 Going backward avoids overwriting source pixels before they are copied.
 After the moves, the newly inserted text is drawn into the gap left behind,
 and the box array is spliced to include the new boxes from [[bxscan]].
+%claude:
+Here is a visual example of inserting ``XY'' at position~5 in the text
+``Hello World'', where the line is wide enough to hold everything:
+\begin{verbatim}
+  Before:   |H|e|l|l|o| |W|o|r|l|d|
+            0 1 2 3 4 5 6 7 8 9 ...    (rune indices)
+                       ^
+                   insertion point (p0=5)
+
+  Phase 1 (bxscan):   scan "XY" into temp boxes
+                       ppt0 = pixel of pos 5
+                       ppt1 = pixel of pos 7 (after XY)
+
+  Phase 2 (x-alignment): walk from pos 5 in old layout
+            pt0 = where " World" is now
+            pt1 = where " World" will be (shifted right by width of "XY")
+            Record pairs: pts[0] = {pt0=" ", pt1=" shifted"}
+                          pts[1] = {pt0="W", pt1="W shifted"}
+                          ... until pt1.x == pt0.x (line aligned)
+
+  Phase 3 (move down):  blit boxes backward from old to new positions
+            Then draw "XY" in the gap
+
+  After:    |H|e|l|l|o|X|Y| |W|o|r|l|d|
+\end{verbatim}
+
+%claude:
+Here is the full [[frinsert]] code. It is long and dense, but the
+structure follows the three phases described above.
+%claude:
+The critical invariant is that [[pt0]] always tracks where a box
+\emph{currently} is on screen, while [[pt1]] tracks where it
+\emph{will be} after the insertion. The difference between [[pt1]]
+and [[pt0]] is the pixel displacement caused by the inserted text.
+The [[pts]] array stores (old, new) position pairs for the backward
+copy loop in Phase~3.
+%claude:
+The code handles several edge cases:
+\begin{itemize}
+\item Boxes that must be split because they would straddle a line
+boundary after being shifted right (detected by [[_frcanfit]]).
+\item Text that falls off the bottom of the frame ([[pt1.y == r.max.y]]),
+which is truncated and removed from the box array.
+\item The selection ([[p0]]/[[p1]]) that may need extending when the
+insertion point is within it.
+\item Multi-line shifts, where the bulk text below the alignment point
+is moved with two [[draw]] calls instead of box-by-box blitting.
+\end{itemize}
 
 <<function [[frinsert]]>>=
 void
@@ -12317,6 +12864,24 @@ bool	modified;	/* changed since frselect() */
 
 \subsubsection{[[_frfindbox()]]}
 
+%claude:
+Given a rune index [[q]], find the box that contains it. If [[q]]
+falls in the middle of a box (not on a boundary), [[_frsplitbox]]
+splits that box so that [[q]] becomes a boundary. This ensures that
+[<frinsert>] and [<frdelete>] can splice the box array cleanly at the
+insertion/deletion point.
+%claude:
+The split works by duplicating the box ([[dupbox]]) and then trimming
+each copy from opposite ends: [[truncatebox]] shortens the first copy
+by dropping its last [[n]] characters (keeping the left portion),
+and [[chopbox]] shortens the second copy by dropping its first [[n]]
+characters (keeping the right portion). Both functions recompute
+[[wid]] by calling [[stringwidth]] on the remaining text.
+%claude:
+For example, splitting the box ``Hello'' at position 3 produces
+two boxes: ``Hel'' and ``lo'', each with its own width and string
+allocation.
+
 <<function [[_frfindbox]]>>=
 /* find box containing q and put q on a box boundary */
 int
@@ -12435,6 +13000,22 @@ the endpoint, which becomes [[pt1]] in [[frinsert]].
 #define	TMPSIZE	256
 @
 
+%claude:
+The [[bxscan]] function is the front end of [<frinsert>]'s three-phase
+pipeline. It iterates over the new runes, building boxes in the static
+[[frame]] structure. For each rune, if it is a tab or newline, a
+break box is created with [[nrune == -1]]; otherwise, consecutive
+printable characters are accumulated into a temporary UTF-8 buffer
+[[tmp]] (up to [[TMPSIZE]] bytes), then stored as a text box with
+a heap-allocated copy.
+%claude:
+The function counts newlines and stops after filling [[maxlines]]
+worth of lines---there is no point scanning text that would not fit
+in the frame anyway. Finally, [[_frdraw]] lays out the boxes starting
+at [[*ppt]], splitting any box that does not fit on the current line,
+and returns the endpoint. This endpoint becomes [[pt1]] in
+[<frinsert>]---the coordinate where the new text ends.
+
 <<function [[bxscan]]>>=
 static
 Point
@@ -12503,6 +13084,15 @@ bxscan(Frame *f, Rune *sp, Rune *ep, Point *ppt)
 @
 
 % frinsert -> bxscan -> <>
+%claude:
+The [[_frdraw]] function does a dry-run layout of the boxes in the
+temporary [[frame]], computing where each box would appear on screen.
+It handles line wrapping (splitting boxes that overflow the right
+margin via [[_frsplitbox]]) and tab-stop computation (via
+[[_frnewwid]]). It also truncates boxes that fall below the bottom
+of the frame. The return value is the endpoint---the pixel Point
+after the last box.
+
 <<function [[_frdraw]]>>=
 Point
 _frdraw(Frame *f, Point pt)
@@ -12537,6 +13127,16 @@ _frdraw(Frame *f, Point pt)
     return pt;
 }
 @
+
+%claude:
+Tab width depends on context---a tab at x=100 is a different width
+than one at x=200, because it must align to the next [[maxtab]]
+boundary. [[_frnewwid0]] computes the tab width for a box at position
+[[pt]]: it rounds up to the next tab stop (relative to the left margin),
+ensuring a minimum width of one space character ([[minwid]]) and
+wrapping to the next line if the tab would overflow the right edge.
+[[_frnewwid]] is a thin wrapper that also stores the result in
+[[b->wid]] so subsequent uses of this box get the cached value.
 
 <<function [[_frnewwid]]>>=
 int
@@ -12581,6 +13181,14 @@ _frstrlen(Frame *f, int nb)
 
 \subsubsection{[[_chopframe()]]}
 
+%claude:
+When an insertion causes [[nlines]] to exceed [[maxlines]], the
+frame has overflowed. [[chopframe]] walks forward from the insertion
+point until the pixel position reaches [[f->r.max.y]]
+(the bottom of the frame), counts how many characters fit, then
+deletes all boxes after that point. This truncates the frame to
+exactly [[maxlines]] lines.
+
 <<function [[chopframe]]>>=
 static
 void
@@ -12605,6 +13213,19 @@ chopframe(Frame *f, Point pt, ulong p, int bn)
 @
 
 \subsubsection{[[_frclean()]]}
+
+%claude:
+After an insertion or deletion, the box array may contain adjacent text
+boxes that could be merged---for instance, if a box was split for an
+insertion and the insertion was later deleted. [[_frclean]] scans boxes
+[[n0]] through [[n1]] and merges any pair of adjacent text boxes that
+fit on the same line (their combined width does not exceed the right
+margin). Merging reduces the box count and speeds up future walks.
+%claude:
+The function also walks the remaining boxes to update
+[[lastlinefull]], which indicates whether the last line of text reaches
+the bottom of the frame. This flag is checked by [<wfill>] to decide
+whether more text needs to be loaded from the rune buffer.
 
 <<function [[_frclean]]>>=
 void
@@ -12655,14 +13276,39 @@ _frmergebox(Frame *f, int bn)		/* merge bn and bn+1 */
 \subsection{[[frdelete()]]}
 
 %claude:
-[[\hlink{frdelete}]] is the inverse of [[frinsert]]: it removes
+The [[frdelete]] function is the inverse of [<frinsert>]: it removes
 characters [[p0]] through [[p1]] from the display and collapses
-the remaining text upward. Like [[frinsert]], it works incrementally:
-it finds the point where the shifted text's x-coordinate aligns with
-the original, copies the intermediate boxes leftward with [[draw()]],
-and then fills the vacated area at the bottom with background color.
-The result is returned as the number of lines gained (which the caller
-uses to decide whether to fill in text from below the viewport).
+the remaining text upward. Like [<frinsert>], it works incrementally
+by tracking two positions:
+\begin{itemize}
+\item [[pt0]]: where each surviving box \emph{will be} after deletion
+(shifted left).
+\item [[pt1]]: where each box \emph{currently is}.
+\end{itemize}
+%claude:
+The loop copies boxes from [[pt1]] to [[pt0]] using [[draw]], closing
+the gap left by the deleted text. When the deletion spans multiple
+lines, two bulk [[draw]] calls shift entire line bands upward.
+The vacated area at the bottom (where text used to be but no longer is)
+is filled with the background color.
+%claude:
+The return value is the number of lines freed (old [[nlines]] minus
+new [[nlines]]). The caller uses this to decide whether to call
+[<wfill>] to load more text from the rune buffer into the newly
+available space at the bottom of the frame.
+
+%claude:
+The [[frdelete]] function removes characters [[p0]] through [[p1]].
+Like [<frinsert>], it works by tracking two positions: [[pt0]] (where
+each box will end up after deletion) and [[pt1]] (where it currently
+is). The loop copies boxes from their old positions to their new
+ones, collapsing the gap. When the deletion spans multiple lines,
+two [[draw]] calls shift the bulk text up: one for the partial first
+line and one for the remaining full lines.
+%claude:
+The return value is the number of lines freed, which the caller
+([<wsetorigin>] or [<wdelete>]) uses to decide whether to call [<wfill>]
+to fill in text from below the viewport.
 
 <<function [[frdelete]]>>=
 int
@@ -12787,11 +13433,18 @@ frdelete(Frame *f, ulong p0, ulong p1)
 \subsection{[[wshow()]]}
 
 %claude:
-[[\hlink{wshow}]] ensures that position [[q0]] is visible on screen. If
-[[q0]] is already within the viewport ([[org]] to [[org + nchars]]),
-it just redraws the scrollbar. Otherwise, it recomputes [[org]] to
-center [[q0]] in the viewport and calls [[wsetorigin]] to reflow
-the display from the new origin.
+The [[wshow]] function ensures that position [[q0]] is visible on screen.
+If [[q0]] is already within the viewport ([[org]] to [[org + nchars]]),
+it just redraws the scrollbar (which may have changed if text was
+inserted or deleted). Otherwise, it recomputes [[org]] to place
+[[q0]] near the bottom of the viewport (leaving 4/5 of the screen as
+context above) and calls [<wsetorigin>] to reflow the display from the
+new origin.
+%claude:
+This function is called after every text modification ([[winsert]],
+navigation key, application output with auto-scroll). It is the glue
+that keeps the cursor visible without the caller needing to worry about
+viewport management.
 
 % Window.nchars is in Frame!
 
@@ -12835,14 +13488,23 @@ wscrdraw(w);
 
 %claude:
 The scrollbar is drawn into a scratch image ([[scrtmp]]) and then
-blitted to the window, avoiding flicker. The bar occupies the
-[[scrollr]] rectangle on the left of the window. The
-``thumb'' (the white portion indicating the viewport position)
-is computed by [[\hlink{scrpos}]], which maps the character range
+blitted to the window in a single operation, avoiding flicker from
+intermediate drawing states.
+%claude:
+The ``thumb'' (the white portion indicating the viewport position)
+is computed by [<scrpos>], which maps the character range
 [[org..org+nchars]] onto the scrollbar height proportionally to
 [[nr]] (total characters). The border color fills the non-thumb
-area, creating a visual distinction between the portion of the
-document above and below the current view.
+area, creating a visual distinction: the dark portion above the thumb
+represents text before the viewport, the dark portion below represents
+text after it. When all text fits on screen, the entire scrollbar is
+white.
+%claude:
+An optimization avoids redundant redraws: [[w->lastsr]] caches the
+previous thumb rectangle, and the scrollbar is only repainted if the
+new rectangle differs. This matters because [<wscrdraw>] is called
+on every text change, and most of the time the scrollbar position
+does not change visibly.
 
 % wshow | wmk | wsetorigin -> <>
 <<function [[wscrdraw]]>>=
@@ -12880,6 +13542,21 @@ wscrdraw(Window *w)
 
 
 % FIGURE? where can see r, r1, r2, r3
+
+%claude:
+The [[scrpos]] function maps a character range [[p0..p1]] (the visible
+portion) onto a rectangle within the scrollbar [[r]], proportional to
+the total buffer size [[tot]]. The calculation is straightforward:
+[[q.min.y]] = [[r.min.y]] + [[h * p0 / tot]] and
+[[q.max.y]] = [[r.max.y]] $-$ [[h * (tot - p1) / tot]].
+The thumb (white portion) represents what the user can see; the
+surrounding border-colored area represents text above and below the
+viewport.
+%claude:
+A minimum height of 2 pixels ensures the thumb is always visible even
+for very large buffers. For buffers over 1M characters, the values are
+shifted right by 10 bits before the multiplication to prevent integer
+overflow in the 32-bit arithmetic.
 
 <<function [[scrpos]]>>=
 static
@@ -13001,6 +13678,14 @@ if(f->p0 == f->p1)
 % drawing a tick or restoring what was under the tick
 % (a bit like for the mouse cursor)
 
+%claude:
+The tick drawing is a two-phase operation. When [[ticked]] is true:
+save the pixels at [[pt]] into [[tickback]], then draw the [[tick]]
+image on top. When [[ticked]] is false: restore the saved pixels from
+[[tickback]]. The [[pt.x--]] offset makes the tick visually sit just
+left of the character it precedes. If [[r.max.x]] would exceed the
+frame boundary, it is clamped to prevent drawing outside the frame.
+
 <<function [[frtick]]>>=
 void
 frtick(Frame *f, Point pt, bool ticked)
@@ -13028,6 +13713,20 @@ frtick(Frame *f, Point pt, bool ticked)
 \subsection{Drawing the text and the selection: [[frdrawsel()]]}
 
 % called also to draw what is not selected
+
+%claude:
+Despite the name, [[frdrawsel]] is used for \emph{both} selected and
+unselected regions---the [[issel]] parameter just controls which colors
+are used. When [[p0 == p1]] (no selection range), it draws or erases
+the tick cursor instead.
+%claude:
+The heavy lifting is in [[frdrawsel0]], which walks the box array from
+[[p0]] to [[p1]], painting each box's background rectangle and then
+rendering the text on top with [[stringnbg]]. It handles partial boxes
+(when the region starts or ends mid-box) by advancing the pointer and
+adjusting the rune count. End-of-line fill is done by detecting when
+[[_frcklinewrap]] wraps to a new line and filling the remainder of the
+previous line with the background color.
 
 <<function [[frdrawsel]]>>=
 void
@@ -13057,6 +13756,16 @@ frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
 @
 % pt is point of? p0?
 
+
+%claude:
+The [[frdrawsel0]] workhorse draws a range of text with given
+foreground and background colors. It walks the box array, painting
+each box's background rectangle and rendering text on top. It handles
+three tricky cases: (1)~the region starts mid-box (advance the byte
+pointer and reduce [[nr]]), (2)~the region ends mid-box (reduce [[nr]]
+without advancing), and (3)~line-wrap fill (when wrapping to a new line,
+fill the remainder of the previous line with the background color so
+there is no gap).
 
 <<function [[frdrawsel0]]>>=
 Point
@@ -13139,7 +13848,6 @@ nbytes(char *s0, int nr)
 
 
 \subsection{Moving the frame origin}
-
 %claude:
 When the viewport must change (because the target position is
 off-screen), [[\hlink{wsetorigin}]] updates [[org]] and incrementally
@@ -13153,6 +13861,15 @@ the nearest newline to avoid starting mid-line.
 
 % complicated again ...
 
+%claude:
+When [[q0]] is off-screen, [<wshow>] recenters the viewport.
+It backs up by 4/5 of the visible lines from [[q0]] to find a new
+origin that places [[q0]] near the bottom of the screen---this keeps
+some context above the cursor. The guard against going backward prevents
+a pathological case with very long lines. The [[while]] loop at the
+end handles the rare case where the initial repositioning still does
+not make [[q0]] visible (again, very long lines).
+
 <<[[wshow()]] else, when q0 is out of scope>>=
 else{
     nl = 4 * w->frm.maxlines / 5;
@@ -13165,6 +13882,14 @@ else{
         wsetorigin(w, w->org+1, false);
 }
 @
+
+%claude:
+The [[wbacknl]] function finds the start of the [[n]]th line before
+position [[p]] by scanning backward for newlines. To handle very long
+lines (e.g., a binary file dumped to the terminal), it caps the backward
+scan at 128 characters per line---if no newline is found within 128
+characters, it treats that as a line boundary. This prevents
+pathological performance on single extremely long lines.
 
 <<function [[wbacknl]]>>=
 uint
@@ -13191,6 +13916,25 @@ wbacknl(Window *w, uint p, uint n)
 @
 
 
+
+%claude:
+The [[wsetorigin]] function changes the viewport origin and updates
+the display. It uses three strategies depending on how far the new
+origin is from the old one:
+\begin{itemize}
+\item {\bf Small forward shift} ([[a >= 0]] and [[a < nchars]]):
+call [[frdelete(0, a)]] to remove the top [[a]] characters, which
+shifts everything up. Then [[wfill]] fills in new text at the bottom.
+\item {\bf Small backward shift} ([[a < 0]] and [[-a < nchars]]):
+call [[frinsert]] at position~0 to push existing text down and make
+room for the newly revealed text at the top.
+\item {\bf Large shift}: clear the entire frame and rebuild from scratch.
+\end{itemize}
+%claude:
+When [[exact]] is false (e.g., during incremental scrolling), the
+function searches forward up to 256 characters for a newline, so the
+viewport always starts at a line boundary rather than in the middle
+of a line.
 
 <<function [[wsetorigin]]>>=
 void
@@ -13242,6 +13986,20 @@ ushort	lastlinefull;	/* last line fills frame */
 f->lastlinefull = 0;
 @
 
+
+%claude:
+After a viewport change or deletion, the frame may have empty lines at
+the bottom. [[wfill]] fills them by grabbing runes from [[w->r]] starting
+at [[org + nchars]] (the first rune after what is currently displayed)
+and feeding them to [<frinsert>] in batches of up to 2000 runes.
+%claude:
+The function counts newlines in each batch and stops after inserting
+enough to fill [[maxlines - nlines]] remaining lines. This avoids
+scanning the entire remaining buffer when only a few lines need filling.
+The outer [[do/while]] loop repeats until [[lastlinefull]] is set by
+[<_frclean>] inside [<frinsert>], indicating that the frame is completely
+filled. If the rune buffer is exhausted ([[n == 0]]), the loop also
+terminates---the frame simply has fewer lines than [[maxlines]].
 
 <<function [[wfill]]>>=
 void
@@ -13297,6 +14055,19 @@ loop: it tracks the mouse while button~1 is held down, extending or
 shrinking the selection as the cursor moves. If the cursor goes above
 or below the frame, it triggers scrolling via the [[scroll]] callback.
 
+%claude:
+The [[wsetselect]] function translates buffer-wide coordinates
+[[q0]]/[[q1]] to frame-local [[p0]]/[[p1]] (by subtracting [[org]]
+and clamping to [[nchars]]), then incrementally repaints only the
+portions that changed.
+%claude:
+The four-way comparison is the key optimization: when the user drags
+a selection, each mouse event extends or shrinks one end by a few
+characters. Rather than repainting the entire selection (which could be
+hundreds of characters), [<wsetselect>] identifies which characters
+changed state (selected $\leftrightarrow$ unselected) and repaints only
+those. This makes interactive selection smooth even for large selections.
+
 <<function [[wsetselect]]>>=
 void
 wsetselect(Window *w, uint q0, uint q1)
@@ -13351,6 +14122,32 @@ wsetselect(Window *w, uint q0, uint q1)
 @
 
 
+
+%claude:
+The [[frselect]] function is the interactive selection loop, called
+when button~1 is pressed. It tracks the mouse until the button is
+released, incrementally painting and unpainting the selection as the
+cursor moves.
+%claude:
+The [[reg]] (region) variable is the key state: it tracks whether the
+current endpoint [[p1]] is above ($-1$), at ($0$), or below ($+1$)
+the anchor point [[p0]]. This determines whether extending the selection
+means painting forward or backward. When the user drags past the anchor
+(the region sign flips), the entire old selection is cleared and rebuilt
+in the opposite direction---this prevents visual artifacts.
+%claude:
+If the mouse moves above or below the frame rectangle, the [[scroll]]
+callback (set to [<framescroll>]) fires, scrolling the viewport and
+extending the selection to follow. The [[scrled]] flag prevents a
+double mouse read when scrolling was triggered, since the scroll
+callback may itself consume mouse events.
+%claude:
+The [[do/while]] loop continues as long as the same button is held.
+On each iteration, it compares the new mouse position [[q]] with the
+previous [[p1]] and only repaints the delta---the range between the
+old and new endpoints. This incremental approach means that even a
+large selection being extended by one character only repaints that
+one character.
 
 <<function [[frselect]]>>=
 void
@@ -13441,6 +14238,15 @@ frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
 }
 @
 
+%claude:
+The [[frselectpaint]] helper fills a rectangular region between two
+Points with a solid color. It handles three cases: single-line
+(one rectangle from [[p0]] to [[p1]]), multi-line (fill the end of
+the first line, fill full middle lines, fill the start of the last
+line), and the degenerate case where [[p0]] is at the frame bottom.
+This is used both to highlight the selection background and to clear
+areas after deletions.
+
 <<function [[frselectpaint]]>>=
 void
 frselectpaint(Frame *f, Point p0, Point p1, Image *col)
@@ -13487,12 +14293,33 @@ region(int a, int b)
 
 \subsection{Repainting}
 
+%claude:
+A full repaint is needed when the frame colors change (window
+gains or loses focus). [[frredraw]] redraws all text in three passes:
+unselected text before [[p0]], selected text between [[p0]] and [[p1]],
+and unselected text after [[p1]]. The tick must be removed before
+repainting and restored afterward, because the underlying pixels change.
+
 <<[[wrepaint()]] after updated cols, redraw content if mouse not opened>>=
 if(!w->mouseopen)
     frredraw(&w->frm);
 @
 % need to redraw text with different colors when a window is
 % selected or not.
+
+%claude:
+A full repaint draws the entire frame in three bands using
+[<frdrawsel0>] with the appropriate colors: unselected text before
+[[p0]] (black on white), selected text between [[p0]] and [[p1]]
+(black on light grey), and unselected text after [[p1]] (black on
+white again). The tick must be hidden before repainting and restored
+afterward, because the pixels under it change.
+%claude:
+Full repaints are expensive compared to incremental updates, so they
+are only triggered when the colors themselves change (window
+gaining/losing focus) or when the frame is rebuilt from scratch (after
+a resize). Normal typing and selection use the incremental
+[<frinsert>]/[<frdelete>]/[<frdrawsel>] paths.
 
 <<function [[frredraw]]>>=
 void
@@ -13531,14 +14358,29 @@ frredraw(Frame *f)
 
 %claude:
 In a textual window, keyboard input goes through two modes.
-In the normal {buffered} mode, characters are inserted at [[q0]] and
-accumulated until the user presses Enter, at which point the text
-between the output point ([[qh]]) and the newline is sent to the
-application via [[/dev/cons]].
-In {raw} mode, characters are sent immediately without waiting for a
-newline.
-Special keys (Delete, arrows, Home/End, Tab) are intercepted and handled
-directly by [[rio]] rather than being passed through.
+In the normal {buffered} mode (also called ``cooked'' mode), characters
+are inserted at [[q0]] and accumulated in the rune buffer.
+The user can edit freely---backspace, kill-word, even mouse-select and
+paste---until pressing Enter, at which point the text between the output
+point ([[qh]]) and the newline is sent to the application via
+[[/dev/cons]].
+%claude:
+In {raw} mode (activated by writing [["rawon"]] to [[/dev/consctl]]),
+characters are sent immediately without waiting for a newline.
+Applications like text editors or interactive programs use this mode.
+%claude:
+Special keys (Delete, arrows, Home/End, Tab, \verb+^A+, \verb+^E+)
+are intercepted and handled directly by [[rio]] rather than being
+passed through to the application. This means that even in raw mode,
+arrow keys still work for scrolling the terminal viewport.
+%claude:
+The keyboard event flow is:
+\begin{enumerate}
+\item [<keyboardthread>] receives a rune from the keyboard device.
+\item [<winctl>] dispatches it to [<wkeyctl>].
+\item [<wkeyctl>] checks for raw mode, navigation keys, special keys,
+then falls through to ordinary character insertion.
+\end{enumerate}
 
 \subsection{Text input queue}
 
@@ -13547,8 +14389,42 @@ directly by [[rio]] rather than being passed through.
 % (not necessarily keyboard event actually, can have put text after
 % output point because of copy paste)
 
+%claude:
+There is no separate queue data structure for keyboard input.
+The region [[r[qh..nr]]] \emph{is} the input queue: it contains
+runes that the user typed (or pasted) but that the application has
+not yet consumed via [[read("/dev/cons")]].
+When the user presses Enter, the line discipline (seen in the consumer
+below) scans this region for a newline and sends everything up to
+and including it.
+%claude:
+This design has an elegant consequence: the user's input is visible
+on screen and fully editable before being committed. If you type
+``ls -la'' and realize you meant ``ls -lh'', you can backspace and
+fix it. The application never sees ``ls -la'' followed by
+corrections---it only sees the final ``ls -lh\verb+\n+''. This is
+fundamentally different from raw terminals (and from xterm-style
+terminals that relay every keystroke to the application and rely on
+the application's line-editing library).
 
 \subsection{[[/mnt/wsys/cons]] reading part3}
+
+%claude:
+Part~1 (Virtual Devices chapter) showed the [<xfidread()>] side that
+sends a [<Consreadmesg>] to [<winctl>].
+Part~2 (Graphical Windows chapter) showed how [<winctl>] handles raw
+keystrokes.
+This part~3 covers the textual-window path: how [<wkeyctl>] inserts
+ordinary characters into the rune buffer (producer), and how [<winctl>]
+implements line buffering by scanning for newlines before enabling the
+[[WCread]] alternative (consumer).
+%claude:
+The key difference from raw mode is that the rune buffer
+[[r[qh..nr]]] serves as an editable line buffer. The user can type,
+backspace, \verb+^W+ to erase a word, even use mouse selection and
+paste---all of which modify [[r]] and move [[q0]]. None of these edits
+are visible to the application. Only when a newline appears in
+[[r[qh..nr]]] does the consumer activate and send the committed line.
 
 \subsubsection{Producer}
 
@@ -13596,6 +14472,12 @@ by scanning from [[qh]] to [[nr]] looking for a newline or EOT
 alternative (setting it to [[CHANSND]]). This is the classic line
 discipline: characters are buffered and editable until Enter commits
 the whole line.
+%claude:
+This design means the user can freely edit text they have typed
+(using backspace, \verb+^W+, \verb+^U+, or even mouse selection and
+paste) \emph{before} pressing Enter. The application never sees the
+intermediate edits---only the final committed line. This is a significant
+improvement over a raw terminal where every keystroke is irrevocable.
 
 <<[[winctl()]] alts adjustments, revert to CHANSND if newline in queue>>=
 /* this code depends on NL and EOT fitting in a single byte */
@@ -13653,14 +14535,21 @@ if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
 
 %claude:
 The navigation keys move the viewport or the cursor within the rune
-buffer. Scrolling keys (Down, Up, Page Down, Page Up) compute a new
-[[org]] position---the index into [[w->r]] of the first visible character---and
-call [[wsetorigin]] to shift the viewport. Arrow keys (Left, Right)
-instead move the selection point [[q0]]/[[q1]] character by character and
-call [[wshow]] to ensure the cursor stays visible.
+buffer. They are split into two groups:
+\begin{itemize}
+\item {\bf Scrolling keys} (Down, Up, Page Down, Page Up, scroll wheel):
+these change [[org]] without moving the cursor. The user can scroll through
+output history while their cursor stays at the typing position.
+\item {\bf Arrow keys} (Left, Right): these move the selection point
+[[q0]]/[[q1]] character by character and call [<wshow>] to ensure the
+cursor stays visible. If the cursor moves off-screen, the viewport
+scrolls to follow.
+\end{itemize}
+%claude:
 These keys are only active when [[mouseopen]] is false, that is,
 when [[rio]] is acting as a terminal rather than forwarding raw input
-to a graphical application.
+to a graphical application. In graphical mode, the application handles
+its own keyboard navigation.
 
 <<[[wkeyctl()]] when mouse not opened and navigation keys>>=
 if(!w->mouseopen)
@@ -13697,16 +14586,19 @@ case Kend:
 
 % maxlines is very bad name.
 % use nblines instead?
-
 %claude:
-All three downward-scrolling keys---Down arrow, mouse scroll, and Page
-Down---share the [[case_Down]] target. They differ only in how many lines
-to scroll: Down moves by a third of the visible area, Page Down by two thirds,
-and mouse scroll by a small fixed amount.
+All three downward-scrolling keys---Down arrow, mouse scroll wheel, and Page
+Down---share the [[case_Down]] target via [[goto]]. They differ only in how
+many lines to scroll: Down moves by a third of the visible area, Page Down
+by two thirds, and mouse scroll by a small fixed amount
+([[mousescrollsize]], which is typically 1--3 lines).
+%claude:
 The trick is converting a line count [[n]] into a character offset:
-[[frcharofpt]] takes a pixel coordinate (the Y position [[n]] lines below
+[<frcharofpt>] takes a pixel coordinate (the Y position [[n]] lines below
 the top of the frame) and returns the character index at that point,
-which becomes the new [[org]].
+which becomes the new [[org]] passed to [<wsetorigin>]. The upward
+scrolling keys (Up, Page Up, scroll wheel up) work the same way but
+use [<wbacknl>] to count lines backward instead.
 
 <<[[wkeyctl()]] when mouse not opened, switch key cases>>=
 case Kdown:
@@ -13791,6 +14683,16 @@ case Kright:
 \subsubsection{Line boundaries}
 
 % easy
+%claude:
+\verb+^E+ and \verb+^A+ move the cursor to the end or beginning of
+the current line, following the [[emacs]] convention familiar to Unix
+users. The beginning-of-line case cleverly reuses [[wbswidth]] with
+the \verb+^U+ mode (erase to line start) to compute the backward
+distance, but instead of deleting characters, it just repositions
+[[q0]]. This avoids duplicating the backward-scan logic. Note that
+``beginning of line'' stops at the output point [[qh]]---the user
+cannot move before the prompt.
+
 <<[[wkeyctl()]] when mouse not opened, switch key cases>>=
 case 0x05:	/* ^E: end of line */
     q0 = w->q0;
@@ -13819,9 +14721,17 @@ characters to erase backward from [[q0]]. Despite its name, the
 parameter [[c]] selects the mode: [[0x08]] erases exactly one character,
 [[0x15]] erases back to the beginning of the line (or to [[qh]]),
 and [[0x17]] erases back to the previous word boundary.
-The word-erase logic uses a two-phase approach: first skip non-alphanumeric
-characters (the ``skipping'' phase), then eat alphanumeric characters
-until hitting a non-alphanumeric one.
+%claude:
+The word-erase (\verb+^W+) logic uses a two-phase approach: first skip
+non-alphanumeric characters (the ``skipping'' phase), then eat
+alphanumeric characters until hitting a non-alphanumeric one. For example,
+erasing backward from the cursor in ``\verb+foo   bar|+'' (where
+\verb+|+ is the cursor) first skips the spaces, then eats ``bar'',
+stopping at the space after ``foo''.
+%claude:
+All three modes stop at [[qh]] (the output point), which prevents
+the user from erasing text that the application wrote---only user
+input can be deleted.
 
 % why this name? wbswidth? what's the parameter? it's not really used.
 <<function [[wbswidth]]>>=
@@ -13860,11 +14770,17 @@ wbswidth(Window *w, Rune c)
 %claude:
 The three erase keys---\verb+^H+ (backspace), \verb+^U+ (kill line),
 and \verb+^W+ (kill word)---all flow through the same handler.
-They call [[wbswidth]] to compute how many characters to erase,
-then [[wdelete]] to remove them from the rune buffer.
+They call [<wbswidth>] to compute how many characters to erase,
+then [<wdelete>] to remove them from the rune buffer.
 The key distinction is that none of these can erase past the output
 point [[qh]]: the guard [[w->q0==w->qh]] prevents the user from
 deleting text that the application wrote.
+%claude:
+The flow for backspace is: [<wbswidth>] returns 1, [[q0]] is set to
+[[w->q0 - 1]], then [[wdelete(w, q0, q0+1)]] removes that one rune,
+which in turn calls [<frdelete>] to update the screen. The \verb+^U+
+and \verb+^W+ cases differ only in how many characters [<wbswidth>]
+returns.
 
 \subsubsection{Delete}
 
@@ -13930,6 +14846,19 @@ logic must handle every case---the deleted range might be entirely before,
 entirely after, or overlapping each cursor.
 If the deletion affects visible text (between [[org]] and [[org+nchars]]),
 it calls [[frdelete]] and [[wfill]] to update the display incrementally.
+
+%claude:
+The [[wdelete]] function is the dual of [<winsert>]: it removes runes
+[[q0]] through [[q1]] from the buffer by shifting the tail left with
+[[runemove]], then adjusts all four cursor positions.
+%claude:
+The cursor adjustment is more complex than for insertion because the
+deleted range can partially overlap a cursor. For [[w->q0]] and
+[[w->q1]], if the cursor is inside the deleted range it collapses to
+[[q0]]; if after, it shifts left by [[n]]. For [[w->qh]], overlap
+pulls it back to [[q0]] since the application cannot reference deleted
+text. If the deletion is visible on screen, [<frdelete>] handles the
+display update and [<wfill>] fills any empty space at the bottom.
 
 <<function [[wdelete]]>>=
 void
@@ -14000,13 +14929,13 @@ if(q0 < w->org + frm->nchars){
 When the user types the Delete key (rune [[0x7F]]), [[rio]] sends
 an interrupt note to the child process by writing [["interrupt"]]
 to [[w->notefd]].
-This must happen in a separate [[proc]] because the child might be
-dying at the same time and trying to print its exit status, which
-would deadlock if the note were sent from the window thread
-(the kernel holds [[p->debug]] during process death).
+%claude:
 Before sending the interrupt, [[qh]] is advanced to the end of
-the buffer so the shell prompt appears cleanly after the interrupted
-command.
+the buffer ([[w->qh = w->nr]]). This is important for a clean user
+experience: after the interrupted command exits, the shell will print
+a new prompt. By moving [[qh]] to the end, the prompt will appear
+after all existing text rather than overwriting the middle of the
+buffer. The [[wshow]] then scrolls to make [[qh]] visible.
 
 % how generate this 0x7F rune?
 % #define ... Del=        0x7F, in Kernel.nw
@@ -14029,6 +14958,14 @@ case 0x7F:		/* send interrupt */
 @
 
 % wkeyctl -> proccreate(<>)
+%claude:
+The interrupt must be sent from a separate [[proc]] (not just a
+thread) because the Plan~9 kernel holds [[p->debug]] during process
+death. If the window thread sent the interrupt directly and the child
+was simultaneously dying, the write to [[notefd]] would deadlock on
+[[p->debug]]. Using [[proccreate]] ensures the note is sent from an
+independent process context.
+
 <<function [[interruptproc]]>>=
 /*
  * Need to do this in a separate proc because if process we're interrupting
@@ -14051,6 +14988,17 @@ interruptproc(void *v)
 
 \subsubsection{Tab}
 
+%claude:
+Tab stops are configurable via the [[tabstop]] environment variable
+(defaulting to 4 if not set). The value is stored in pixels as
+[[frm.maxtab]] = [[tabstop]] $\times$ the width of a ``0'' character.
+This means tab alignment adapts automatically to the font---a
+proportional font with narrow characters gets narrower tab stops.
+%claude:
+Tab alignment is computed at drawing time by [<_frnewwid0>]: it rounds
+up the current x position to the next multiple of [[maxtab]] (relative
+to the left margin), ensuring a minimum width of one space ([[minwid]])
+so that tabs always produce visible whitespace.
 
 <<[[Frame]] text fields>>=
 ushort	maxtab;		/* max size of tab, in pixels */
@@ -14090,13 +15038,23 @@ free(s);
 
 %claude:
 When the application writes to [[/dev/cons]], the data arrives at
-the [[winctl]] thread through the [[conswrite]] channel.
+the [<winctl>] thread through the [[conswrite]] channel.
 The thread inserts the new runes at the output point ([[qh]]), advances
 [[qh]], and updates the display.
-If automatic scrolling is enabled, [wshow] scrolls the viewport to keep
-[[qh]] visible. Otherwise, new output may accumulate off-screen
-(indicated by the scrollbar), and the [[WCwrite]] alternative is
-temporarily disabled to avoid buffering too much invisible text.
+%claude:
+If automatic scrolling is enabled, [<wshow>] scrolls the viewport to keep
+[[qh]] visible---the user sees the output appear in real time, like a
+traditional terminal. Otherwise, new output accumulates off-screen;
+the scrollbar thumb shrinks to indicate there is unread text below,
+and the [[WCwrite]] alternative is temporarily disabled to avoid
+unbounded buffering of invisible text (the application blocks on its
+write until the user scrolls to catch up).
+%claude:
+This flow-control mechanism is unique to [[rio]]---most terminal
+emulators let applications write as fast as they want, consuming
+arbitrary amounts of memory. In [[rio]], the back-pressure ensures
+memory usage stays bounded by the [[HiWater]] limit even under heavy
+output.
 
 \subsection{[[/mnt/wsys/cons]] writing part2}
 
@@ -14104,6 +15062,21 @@ temporarily disabled to avoid buffering too much invisible text.
 
 % process output string by writing on /dev/cons!
 % newline too, runes
+
+%claude:
+Part~1 (Virtual Devices chapter) showed how [<xfidwrite()>] converts
+the client's bytes to runes and sends them through the
+channel-of-channels protocol.
+This part~2 is the [<winctl>] consumer: it receives the runes, inserts
+them at the output point [[qh]] via [<winsert>], advances [[qh]] by the
+number of runes inserted, and updates the display.
+%claude:
+Note that application output always inserts at [[qh]], which may be
+before [[q0]] (the user's cursor). This means the user can be
+scrolling through old output or editing their command line while the
+application simultaneously writes new output at a different position
+in the buffer. The cursor positions are adjusted correctly by
+[<winsert>]'s cursor adjustment logic.
 
 \subsubsection{Producer}
 
@@ -14131,6 +15104,16 @@ alts[WCwrite].v = &cwm;
 alts[WCwrite].op = CHANSND;
 @
 
+%claude:
+This is the flow-control gate for application output. When auto-scroll
+is off and the output point [[qh]] has moved past the visible area
+([[qh > org + nchars]]), the [[WCwrite]] alternative is disabled
+([[CHANNOP]]). This causes the application's [[write("/dev/cons")]]
+to block---it cannot produce more output until the user scrolls to
+catch up. This prevents unbounded memory growth from a program that
+produces output faster than the user reads it. With auto-scroll on,
+or in graphical mode, the gate is always open.
+
 <<[[winctl()]] alts adjustments>>=
 if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->frm.nchars)
     alts[WCwrite].op = CHANNOP;
@@ -14152,6 +15135,15 @@ else
 Rune *rp;
 int nr;
 @
+%claude:
+The [[WCwrite]] handler is the consumer side: it receives runes from
+the application (e.g., the shell printing its prompt), processes any
+backspace characters, then inserts at [[qh]] and advances [[qh]].
+The key flow-control mechanism is in the [[alts adjustments]]:
+when auto-scrolling is off and [[qh]] has moved past the visible
+area, [[WCwrite]] is disabled ([[CHANNOP]]) so the application blocks
+on its write---this prevents unbounded buffering of invisible output.
+
 <<[[winctl()]] event loop cases>>=
 case WCwrite:
     recv(cwm.cw, &pair);
@@ -14185,12 +15177,17 @@ uint qh;
 %claude:
 When application output contains backspace characters ([[\b]]),
 they must be interpreted before insertion---the output should overwrite
-previous characters, not display literal backspaces.
+previous characters, not display literal backspaces. This is how
+programs like [[cat -v]] or progress bars that use \verb+\r+ work.
+%claude:
 The code scans for the first [[\b]], then builds a filtered copy in [[tp]]
 where each backspace cancels the previous character (by decrementing [[up]]).
-If backspaces at the start of the output would erase characters already
-in the buffer (counted by [[initial]]), those are deleted from the
-window via [[wdelete]].
+If backspaces at the start of the output reach past the beginning of
+the batch (counted by [[initial]]), they must erase characters already
+in the buffer. These are deleted from the window via [<wdelete>] before
+the filtered text is inserted. For example, if the application writes
+``abc\verb+\b\b+XY'', the buffer receives ``aXY'' (the two backspaces
+erase ``c'' and ``b'', then ``XY'' is inserted).
 
 <<[[winctl()]] when WCwrite, if runes contains backspace>>=
 bp = rp;
@@ -14236,10 +15233,23 @@ for(i=0; i<nr; i++) {
 %claude:
 In a textual window (when [[mouseopen]] is false), mouse clicks are
 handled locally by [[rio]] rather than forwarded to the application.
-The middle-click opens an edit menu (cut/paste/snarf/plumb/send/scroll),
-while left-click selects text and interacts with the scrollbar.
-These provide the terminal editing features that make [[rio]] more than
-just a dumb terminal.
+The three buttons have distinct roles:
+\begin{itemize}
+\item {\bf Left click (button 1):} Text selection. Click to place the
+cursor, drag to select a range, double-click for word selection.
+Clicking in the scrollbar scrolls up.
+\item {\bf Middle click (button 2):} Edit menu with Cut, Paste, Snarf,
+Plumb, Send, and Scroll. Clicking in the scrollbar jumps to an
+absolute position.
+\item {\bf Right click (button 3):} Window management menu (handled by
+[<mousethread>], not by the window). Clicking in the scrollbar scrolls down.
+\end{itemize}
+%claude:
+This three-button protocol gives the terminal rich editing
+capabilities---cut/paste, word selection, scrollback---without
+requiring any support from the application running inside it.
+The application only sees text on [[/dev/cons]]; it has no idea the
+user just selected and pasted something with the mouse.
 
 \subsection{Middle click menu}
 
@@ -14254,11 +15264,20 @@ button2menu(winput);
 %claude:
 The [[button2menu]] function displays the edit menu using [[menuhit]]
 and dispatches the selected action. The menu offers six operations:
-Cut (delete selection and copy to snarf buffer), Paste (insert snarf
-buffer contents), Snarf (copy selection without deleting), Plumb
-(send selection to the plumber), Send (inject selection as if
-typed, useful for resending commands), and Scroll (toggle automatic
-scrolling). The window is reference-counted ([[incref]]/[[wclose]])
+\begin{itemize}
+\item {\bf Cut:} Copy the selection to the snarf buffer and delete it.
+\item {\bf Paste:} Insert the snarf buffer contents at [[q0]].
+\item {\bf Snarf:} Copy the selection to the snarf buffer without deleting
+(equivalent to ``copy'' in other systems).
+\item {\bf Plumb:} Send the selected text to the plumber service, which
+can open files, URLs, or navigate to line numbers based on pattern rules.
+\item {\bf Send:} Inject the selected text as if the user had typed
+it---useful for resending a previous command by selecting it and clicking
+Send.
+\item {\bf Scroll:} Toggle automatic scrolling mode (see below).
+\end{itemize}
+%claude:
+The window is reference-counted ([[incref]]/[[wclose]])
 to prevent it from being freed while the menu is displayed.
 After the menu action, a [[Wakeup]] message is sent to the
 window's control thread to ensure it reprocesses any pending events.
@@ -14321,12 +15340,15 @@ enum
 %claude:
 When the mouse is not inside the scrollbar, [[wmousectl]] dispatches
 based on which button was pressed. Left-click (button 1) triggers
-text selection via [[wselect]]; middle and right clicks were already
-intercepted by [[mousethread]] for the menu and window management,
-so they do not normally reach here. Mouse buttons 4 and 5 (the
-scroll wheel) are translated into synthetic [[Kscrolloneup]] and
-[[Kscrollonedown]] key events, which is an elegant reuse---the scroll
-wheel behaves identically to the keyboard scroll keys.
+text selection via [<wselect>]; middle and right clicks were already
+intercepted by [<mousethread>] for the menu and window management,
+so they do not normally reach here.
+%claude:
+Mouse buttons 4 and 5 (the scroll wheel) are translated into
+synthetic [[Kscrolloneup]] and [[Kscrollonedown]] key events by
+calling [<wkeyctl>]---an elegant reuse that makes the scroll wheel
+behave identically to the keyboard scroll keys, without any
+special-case code in the scrolling logic.
 
 <<[[winctl()]] WMouse case if not mouseopen>>=
 wmousectl(w);
@@ -14388,15 +15410,24 @@ if(w->deleted)
 
 \section{Automatic scrolling mode}
 % hard to put in adv topics, this global is pretty important
-
 %claude:
-When [[w->scrolling]] is true, the window automatically keeps the output
-point visible---each time the application writes, [[wshow(w, w->qh)]]
-scrolls the viewport to follow. When false (the default), the user can
-scroll freely and new output accumulates off-screen without disturbing
-the view.
-The middle-click menu toggles this flag with [[w->scrolling ^= 1]] and, if
-scrolling was just enabled, immediately jumps to the end of the buffer.
+The automatic scrolling mode controls a fundamental usability trade-off:
+should the terminal follow the output (like a traditional terminal), or
+should the user be able to read at their own pace (like a pager)?
+%claude:
+When [[w->scrolling]] is true, the window automatically keeps the
+output point visible---each time the application writes,
+[[wshow(w, w->qh)]] scrolls the viewport to follow. This is useful
+when watching a build log or a long-running command.
+%claude:
+When false (the default), the user can scroll freely and new output
+accumulates off-screen without disturbing the view. The scrollbar
+thumb shrinks as more text piles up below, giving a visual cue that
+there is unread output. This mode is essential for reading a man page
+or examining earlier output while a command is still running.
+%claude:
+The middle-click menu toggles this flag with [[w->scrolling ^= 1]] and,
+if scrolling was just enabled, immediately jumps to the end of the buffer.
 The menu text dynamically switches between ``scroll'' and ``noscroll'' to
 reflect the current state.
 
@@ -14419,13 +15450,24 @@ case Scroll:
 
 %claude:
 The scrollbar is not just a position indicator---the user can click on
-it to scroll. Left-click scrolls up (moving the viewport toward the
-beginning of the text), right-click scrolls down, and middle-click
-jumps to the absolute position proportional to the click's Y coordinate.
-The [[Frame.scroll]] callback is set to [[wscroll]] during window
-creation; when [[frselect]] detects the mouse outside the frame,
-it calls this callback to scroll the text while maintaining the
-selection.
+it to scroll. The three-button protocol follows the Plan~9 convention:
+\begin{itemize}
+\item {\bf Button 1 (left):} Scroll up. The distance depends on where
+in the scrollbar the user clicks---clicking near the top scrolls a
+little, clicking near the bottom scrolls a lot. More precisely, the
+Y offset within the scrollbar determines how many lines to go back.
+\item {\bf Button 2 (middle):} Jump to absolute position. The Y
+coordinate maps proportionally to a character offset in the buffer,
+so clicking at 50\% of the scrollbar height jumps to 50\% of the text.
+\item {\bf Button 3 (right):} Scroll down. The line at the click
+position becomes the new top of the viewport.
+\end{itemize}
+%claude:
+The scrollbar interaction is separate from text selection: the
+[[Frame.scroll]] callback is set to [<wscroll>] during window creation.
+When [<frselect>] detects the mouse dragged outside the frame (above
+or below), it calls this callback to scroll the text while maintaining
+the selection---enabling ``drag to select past the viewport edge''.
 
 % saw drawing of scroll bar before, showing where we are in the
 % "file", but can also click on scrollbar!
@@ -14443,10 +15485,17 @@ bool scrolling = false;
 % != Window.scrolling !! this is when inside scrollbar
 
 % window terminal have scrollbars
+%claude:
+The [[scrolling]] local in [<mousethread>] (not to be confused with
+[[Window.scrolling]] which controls auto-scroll) is a sticky flag: once
+the user clicks inside the scrollbar, subsequent mouse events continue
+to be treated as scroll operations even if the mouse drifts outside
+the scrollbar rectangle. It resets only when all buttons are released.
+
 <<[[mousethread()]] set scrolling>>=
 if(winput->mouseopen)
     scrolling = false;
-else 
+else
   if(scrolling)
     scrolling = mouse->buttons;
   else
@@ -14473,23 +15522,31 @@ if(ptinrect(w->mc.xy, w->scrollr)){
 % if ptinrect scrollr
 
 %claude:
-The [[wscroll]] function implements the classic Plan 9 three-button
-scrollbar protocol in a continuous tracking loop.
-Button 1 (left) scrolls up: the click's Y position within the scrollbar
-determines how many lines to move backward (via [[wbacknl]]).
-Button 3 (right) scrolls down: the Y position selects a line in the
-visible frame, and that line becomes the new top of the viewport.
-Button 2 (middle) performs absolute positioning: the Y coordinate is
-mapped proportionally to a character offset in the entire buffer, giving
-a ``jump to percentage'' behavior.
+The [[wscroll]] function implements the classic Plan~9 three-button
+scrollbar protocol in a continuous tracking loop. While the button
+is held, the mouse is constrained to the scrollbar's X center (using
+[[wmovemouse]]) so it does not drift into the text area. The Y position
+determines the scroll amount differently for each button:
 %claude:
-The loop constrains the mouse to the scrollbar's X center (using
-[[wmovemouse]]) and continues scrolling as long as the button is held.
-For buttons 1 and 3, a debounce delay on the first click prevents
-accidental rapid scrolling, followed by repeated scrolling at 100ms
-intervals via [[wscrsleep]].
-The special-case arithmetic for [[w->nr > 1024*1024]] avoids
-integer overflow when computing [[p0]] for very large buffers.
+For {\bf button~1} (scroll up), the Y offset within the scrollbar
+is converted to a line count: clicking near the top of the scrollbar
+scrolls one line, clicking near the bottom scrolls many lines. This
+count is passed to [<wbacknl>] to find the new [[org]].
+%claude:
+For {\bf button~2} (absolute jump), the Y coordinate maps
+proportionally to a character offset: [[p0 = nr * (y - min) / h]].
+The special-case arithmetic for [[w->nr > 1024*1024]] (shifting by 10
+bits) avoids integer overflow in the [[nr * y]] multiplication for very
+large buffers.
+%claude:
+For {\bf button~3} (scroll down), [<frcharofpt>] is used to find the
+character at the click's Y position in the visible frame, and that
+character becomes the new top of the viewport.
+%claude:
+All three modes use a debounce mechanism: a 200ms [[sleep]] on the
+first click prevents accidental scrolling (e.g., when the user just
+wanted a single scroll step), followed by repeated scrolling at 100ms
+intervals via [<wscrsleep>] for as long as the button is held.
 
 <<function [[wscroll]]>>=
 void
@@ -14584,12 +15641,19 @@ freescrtemps(void)
 
 
 %claude:
-The [[wscrsleep]] helper provides the auto-repeat delay for scrollbar
-dragging. It uses [[alt]] to wait for either a timer expiry or a mouse
-event. If the mouse moves more than 2 pixels vertically or changes
-buttons, it returns early so [[wscroll]] can process the new position;
-otherwise it waits the full [[dt]] milliseconds before returning,
-letting [[wscroll]] scroll another increment.
+The [[wscrsleep]] helper implements the auto-repeat behavior for
+scrollbar dragging. It sets up a two-channel [[alt]]: a timer channel
+and the mouse channel. If the timer fires first (the full [[dt]]
+milliseconds elapsed without mouse activity), the function returns
+and [<wscroll>] scrolls another increment. If a mouse event arrives
+first, it checks whether the mouse moved significantly (more than
+2 pixels vertically) or changed buttons; if so, it returns early so
+[<wscroll>] can react to the new position. Small jitter is ignored.
+%claude:
+This gives the classic ``press and hold to scroll'' behavior: an
+initial 200ms debounce delay (in [<wscroll>]) prevents accidental
+scrolling, then repeated 100ms intervals provide smooth continuous
+scrolling as long as the button is held.
 
 <<function [[wscrsleep]]>>=
 void
@@ -14639,13 +15703,21 @@ wscrsleep(Window *w, uint dt)
 
 %claude:
 The [[framescroll]] callback is invoked by the frame library's
-[[frselect]] when the user drags a selection past the top or bottom
+[<frselect>] when the user drags a selection past the top or bottom
 of the frame. It bridges the generic frame library (which knows nothing
-about windows) to the window-specific [[wframescroll]], which shifts
-[[org]] by [[dl]] lines and extends the selection to track the drag.
-A negative [[dl]] scrolls up, positive scrolls down. The selection
-is anchored at [[selectq]] (the initial click point) and stretched
-to the new viewport edge.
+about windows or rune buffers) to the window-specific [[wframescroll]].
+%claude:
+The [[wframescroll]] function shifts [[org]] by [[dl]] lines and
+extends the selection to track the drag. A negative [[dl]] scrolls up,
+positive scrolls down. The selection is always anchored at [[selectq]]
+(the initial click point, saved by [<wselect>]) and stretched to the
+new viewport edge. This means the user can drag above the frame to
+select text that was previously off-screen---the viewport scrolls to
+reveal it and the selection grows to include it.
+%claude:
+When [[dl == 0]], the function just sleeps briefly via [<wscrsleep>],
+providing the auto-repeat delay when the mouse hovers just above or
+below the frame boundary.
 
 <<function [[framescroll]]>>=
 /*
@@ -14692,16 +15764,25 @@ wframescroll(Window *w, int dl)
 
 
 \section{Resize}
-
 %claude:
 When a window is resized, the frame must be re-initialized with the new
-rectangle. A pure move (no size change) takes the fast path:
-[[frsetrects]] just updates the frame's coordinates without re-laying
-out the text. A true resize must clear and reinitialize the frame,
-recompute the scrollbar rectangle, repaint the background, refill
-the visible text with [[wfill]], and redraw the selection and scrollbar.
-This is essentially the same setup as [[wmk]] when creating a new
-window.
+rectangle. Two cases are handled:
+\begin{itemize}
+\item {\bf Pure move} (size unchanged): the fast path. [[frsetrects]]
+just updates the frame's coordinates without re-laying out the text.
+The box array and all cached widths remain valid.
+\item {\bf True resize}: the full path. The frame is cleared
+([[frclear]]), re-initialized with the new rectangle ([[frinit]]),
+the scrollbar rectangle is recomputed, the background is repainted,
+visible text is refilled with [<wfill>], and the selection and scrollbar
+are redrawn.
+\end{itemize}
+%claude:
+This code is essentially a re-execution of the [<wmk()>] textual
+window setup, which is why the two look so similar. The duplication
+is unfortunate but hard to factor because the resize path must handle
+the existing text content while the creation path starts from an
+empty buffer.
 
 % similar code to wmk textual settings
 <<[[wresize()]] textual window updates>>=
@@ -14734,7 +15815,6 @@ else{
 
 \section{[[/mnt/wsys/text]]}
 % interesting to understand structure!
-
 %claude:
 The [[/mnt/wsys/text]] file exposes the entire contents of a window's
 rune buffer as a read-only byte stream. Reading it returns a UTF-8
@@ -14742,6 +15822,12 @@ encoding of [[w->r[0..w->nr]]]. This is useful for programs that want
 to inspect what a terminal window currently contains---for example, a
 script could read its own window's text to implement command history or
 auto-completion.
+%claude:
+The implementation is trivially simple: [[wcontents]] calls
+[[runetobyte]] to convert the entire rune array to UTF-8, and the
+generic [[Text]] label (shared with [[Qwinname]]) handles offset and
+count arithmetic before responding to the 9P read request. Note that
+the conversion allocates a fresh copy each time---there is no caching.
 
 <<[[qid]] cases>>=
 Qtext,
@@ -16285,6 +17371,22 @@ When the user types Ctrl-U (or uses the menu), the selected text is
 snarfed and then cut---but only if the key is not the interrupt
 character (0x7F), which should just cut without updating the snarf buffer.
 
+%claude:
+Before processing an ordinary character, [<wkeyctl>] first handles
+a special interaction with the snarf buffer: if the user has placed
+the cursor before the output point ([[q0 < qh]]) and types something,
+the text between [[q0]] and [[q1]] is cut (snarfed and deleted) to
+prevent the user from accidentally typing into output that has already
+been sent.
+%claude:
+This ``auto-cut'' behavior is a consequence of a deeper invariant:
+the user's typed input must always be at or after [[qh]]. If the
+user clicks on old output text and starts typing, it would corrupt the
+output if inserted there. Instead, [[rio]] saves the selected text
+to the snarf buffer (so nothing is lost) and moves [[q0]] forward.
+The result is that the typed character appears at the end of the buffer
+where the application expects it.
+
 <<[[wkeyctl()]] snarf and cut if not interrupt key>>=
 if(r != 0x7F){ // 0x7F = Interrupt key
     wsnarf(w);
@@ -17738,6 +18840,25 @@ static uint	selectq;
 @
 
 
+
+%claude:
+The [[wselect]] function handles button~1 click in a textual window.
+It first calls [<frselect>] to do the interactive mouse-tracking
+selection loop, then translates the frame-local selection
+([[frm.p0]]/[[frm.p1]]) back to buffer-wide coordinates by adding
+[[org]].
+%claude:
+If the selection is empty (a single click with no drag), the output
+point [[qh]] may be advanced to [[q0]]. This is the ``click past
+the prompt'' behavior: if the user clicks after the output point,
+[[qh]] advances so that subsequent application reads will include the
+text between the old and new positions. This lets the user ``adopt''
+text by clicking past it---a distinctive [[rio]] interaction.
+%claude:
+If the click is a double-click (detected by comparing with the
+previous click time and position), the selection is expanded to a whole
+word using [[wordclick]]. The word boundaries are determined by the
+character class tables in the Advanced Topics chapter.
 
 <<function [[wselect]]>>=
 void
