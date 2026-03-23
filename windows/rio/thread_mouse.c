@@ -191,7 +191,7 @@ mousethread(void*)
                 /*s: [[mousethread()]] set scrolling */
                 if(winput->mouseopen)
                     scrolling = false;
-                else 
+                else
                   if(scrolling)
                     scrolling = mouse->buttons;
                   else
