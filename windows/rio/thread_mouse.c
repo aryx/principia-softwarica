@@ -112,6 +112,7 @@ resized(void)
 
 
 /*s: function [[mousethread]] */
+// main -> threadcreate(<>, nil) -> <>
 void
 mousethread(void*)
 {

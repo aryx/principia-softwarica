@@ -28,6 +28,7 @@ char	srvwctl[64];
 /*e: global srvwctl (windows/rio/fsys.c) */
 
 /*s: function [[filsysproc]] */
+// main -> filsysinit -> proccreate(<>, fs, ...) -> <>
 static
 void
 filsysproc(void *arg)

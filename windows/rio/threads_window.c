@@ -158,6 +158,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 /*e: function [[wctlmesg]] */
 
 /*s: function [[winctl]] */
+// ... -> new() -> threadcreate(<>, w)
 void
 winctl(void *arg)
 {

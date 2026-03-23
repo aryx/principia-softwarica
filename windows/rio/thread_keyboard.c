@@ -15,6 +15,7 @@
 #include "fns.h"
 
 /*s: function [[keyboardthread]] */
+// main -> threadcreate(<>, nil) -> <>
 void
 keyboardthread(void*)
 {

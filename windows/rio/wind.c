@@ -207,6 +207,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 /*e: function [[wmk]] */
 
 /*s: function [[wsetname]] */
+// mousethread -> new -> <>
 void
 wsetname(Window *w)
 {
