@@ -1418,10 +1418,27 @@ so all [[time]] has to do is fork, exec the target
 command, call [[wait()]], and print the three numbers.
 
 %yoann: put back again simple example on time hello with output
+%claude:
+As a reminder from Section~\ref{sec:profiling-hello}:
+\begin{verbatim}
+  % time hello
+  hello world
+  0.00u 0.00s 0.01r    hello
+\end{verbatim}
+The three numbers are user time, system time, and real time in
+seconds. Even this trivial program takes 10 milliseconds of
+real time (process creation overhead), while its actual user
+and system time round to zero.
 
 \section{[[main()]]}
 
 %yoann: as said in previous section, Waitmsg, fork/exec/wait is all you need
+%claude:
+The implementation follows the classic \unix [[fork]]/[[exec]]/[[wait]]
+pattern: fork a child, exec the target command in the child, and
+in the parent call [[wait()]] to collect the [[Waitmsg]] with
+the timing data. The kernel does all the accounting; [[time]] just
+formats and prints the three numbers.
 
 <<function [[main]](time.c)>>=
 void
@@ -2311,6 +2328,13 @@ case 'r':
 % use /proc/pid/profile
 
 %yoann: small transition paragraph
+%claude:
+While [[prof]] relies on linker instrumentation and reads a
+data file after the program exits, [[tprof]] takes a different
+approach: it reads a live PC histogram from the kernel while
+the program is still running. The implementation is even
+simpler than [[prof]]---just read the profile data, correlate
+with the symbol table, sort, and print.
 
 \section{Example: [[longrun.c]]}
 
@@ -2853,6 +2877,21 @@ compar(void *va, void *vb)
 \chapter{Show real-time Behavior: [[/bin/trace]]}
 %******************************************************************************
 \label{chap:trace}
+
+%claude:
+The profilers presented so far ([[time]], [[prof]], [[tprof]], [[kprof]])
+analyze a single program in isolation. [[trace]] takes a different
+approach: it visualizes the {scheduling behavior} of one or more
+processes in real time, showing when each process runs, sleeps,
+and is ready on a graphical timeline. This makes it invaluable
+for debugging latency issues in concurrent and real-time systems.
+%claude:
+The implementation reads a stream of [[Traceevent]] records from
+[[/proc/trace]] (see Section~\ref{chap:kernel-support}), accumulates
+them per-process, and draws a scrolling timeline where each process
+gets a horizontal row. The main data structures are [[TEvent]]
+(a [[Traceevent]] extended with a display duration) and [[Task]]
+(the per-process state, including the event history and display color).
 
 \section{Data structures}
 
@@ -3601,6 +3640,22 @@ timeconv(Fmt *f)
 %******************************************************************************
 \label{chap:stats}
 
+%claude:
+While the previous tools focus on individual programs, [[stats]] monitors
+the {entire system}: CPU load, memory usage, context switches, syscalls,
+interrupts, network traffic, and more. It reads kernel pseudo-files
+([[#c/sysstat]], [[#c/swap]], [[/net/ether0/0/stats]]) once per
+second and plots rolling graphs, one per selected metric.
+It can even monitor multiple machines simultaneously over the
+network, drawing their graphs in adjacent columns.
+%claude:
+At roughly 1600 lines, [[stats]] is the largest tool in this book,
+mostly because of its graphical display code. The core architecture
+is simple: a [[Machine]] struct holds a network connection to each
+monitored host, and a [[Graph]] struct holds the display state for
+each metric. The main loop reads all machines, updates all graphs,
+and sleeps for one second.
+
 \section{Data structures}
 
 <<constant [[MAXNUM]]>>=
@@ -4018,6 +4073,27 @@ main(int argc, char *argv[])
 \label{chap:iostats}
 % file server! classic plan9!
 
+%claude:
+[[iostats]] is unique among the profiling tools: it is not a
+measurement program but a {proxy file server}. It interposes itself
+between a program and the regular file server, intercepting all 9P
+messages. When the program exits, [[iostats]] prints a report showing
+the count, size, and latency of each 9P message type, plus a per-file
+summary of bytes read and written.
+%claude:
+This is a quintessentially \plan approach to profiling:
+instead of adding tracing hooks inside the kernel, you insert a
+transparent proxy in the namespace. The program being profiled is
+completely unaware---it just opens and reads files as usual, and
+[[iostats]] records every 9P message that passes through.
+%claude:
+The implementation (roughly 1500 lines across [[iostats.c]],
+[[statsrv.c]], and [[statfs.h]]) is structured as a multi-threaded
+9P server. For each 9P message type ([[Tread]], [[Twrite]],
+[[Topen]], etc.), it records a count, total bytes transferred,
+and cumulative time, then forwards the message to the real server.
+On exit, it prints the accumulated statistics.
+The code for [[iostats]] is in [[Profiler\_extra.nw]].
 
 %******************************************************************************
 \chapter{Conclusion}
@@ -4025,9 +4101,11 @@ main(int argc, char *argv[])
 \label{chap:conclusion}
 
 %claude:
-You now know how the \plan profiling tools work,
-to the smallest details, and more generally how many
-profilers work.
+You now know how the \plan profiling tools work---from
+the simple [[fork]]/[[exec]]/[[wait]] pattern of [[time]],
+through the linker-inserted instrumentation of [[prof]],
+the kernel's PC-sampling histogram read by [[tprof]],
+to the real-time graphical displays of [[trace]] and [[stats]].
 
 %claude:
 Despite totaling only about 4900 lines of C, these tools
