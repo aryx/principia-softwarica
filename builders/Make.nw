@@ -515,9 +515,16 @@ Finally, Appendix~\ref{chap:examples} presents examples of [[mkfile]]s.
 \end{verse}
 
 
+%claude:
+Before diving into the algorithms, it is worth understanding the data
+structures that [[mk]] operates on. A build system is fundamentally a
+graph problem, and the data structures below reflect that: rules
+describe edges, nodes represent files, and a symbol table maps
+names to values.
+
 %toc:
 In this chapter, I will present the core data structures of [[mk]]:
-the {symbol table} (containing among other things the value of variables), 
+the {symbol table} (containing among other things the value of variables),
 the {list of rules} and {meta rules},
 the {graph of dependencies},
 and the description of a {job}.
@@ -8374,6 +8381,14 @@ if(f < 0) {
 
 % seen file/line fields in Rule, so can report error accurately.
 
+%claude:
+When a recipe fails, [[mk]] must tell the user what went wrong.
+The complication is that recipes contain variable references
+(e.g., [[$CFLAGS]]) that were expanded before the shell saw them.
+The [<shprint()>] function re-expands a recipe with the current
+environment so that the error message shows the actual command
+that was executed, not the template with unexpanded variables.
+
 \section{Printing jobs: [[shprint()]]}
 \l not sure it can be considered a debugging facility, more mandatory
 
@@ -8811,6 +8826,14 @@ prusage(void)
 \chapter{Advanced Features TODO}
 %******************************************************************************
 \label{chap:advanced}
+
+%claude:
+The earlier chapters covered the core pipeline of [[mk]]: parsing
+rules, building the dependency graph, finding outdated targets,
+and scheduling jobs. This chapter covers features that extend
+that core: regular-expression meta-rules (a more powerful alternative
+to [[%]]-patterns), aggregated targets, virtual targets, parallel
+execution, and the [[mkfile]] inclusion mechanism.
 
 \section{Regular-expression rules: [[:R:]]}
 \label{sec:regexp}
@@ -11083,6 +11106,11 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 You now know how the \plan build system [[mk]] works,
 to the smallest details, and more generally how many
 build systems work.
+%claude:
+You have followed a command like [[mk all]] from the parsing of
+the [[mkfile]], through the construction of the dependency graph,
+the depth-first walk that compares modification times, and finally
+the scheduling of shell jobs to rebuild what is outdated.
 
 % could be nice to have a mk -d session at the end
 % where see how all make sense, the flag values of nodes with 0x4
@@ -11123,6 +11151,57 @@ detecting cycles,
 comparing file modification times,
 running recipes in parallel while respecting dependencies,
 and pattern-matching with [[%]] rules to avoid repetition.
+
+\section{Patterns and techniques}
+
+%claude:
+Beyond the specifics of build systems, this book has
+demonstrated several techniques that apply far beyond [[mk]]:
+\begin{itemize}
+
+\item \emph{Dependency DAG}: the build graph is a directed
+acyclic graph where nodes are files and arcs are
+dependencies. The same structure drives spreadsheet
+recalculation (cells depending on other cells), package
+managers (libraries depending on other libraries), CI/CD
+pipelines (stages depending on earlier stages), and
+reactive UI frameworks (computed values depending on
+observable state). Any time outputs depend on inputs,
+a DAG is the natural model.
+
+\item \emph{DFS with a three-state machine}: [[work()]]
+traverses the graph depth-first, marking each node as
+[[NOTMADE]], [[BEINGMADE]], or [[MADE]]. This three-state
+model enables wavefront parallelism---nodes whose
+prerequisites are all [[MADE]] can execute concurrently.
+The same technique is used in topological sort algorithms,
+garbage collectors (white/grey/black marking), and task
+schedulers wherever work items have dependencies.
+
+\item \emph{Pattern matching with stems}: the [[%]] metarule
+mechanism extracts a stem from a target name and substitutes
+it into prerequisite names. This is a simple form of
+unification---the same idea behind Prolog's pattern matching,
+URL routing in web frameworks (e.g., [[/users/:id/posts]]),
+and generic rules in any system that must apply one template
+to many concrete instances.
+
+\item \emph{Namespaced symbol table}: the same [[Symtab]]
+hash table stores variables, targets, and rules in separate
+namespaces ([[S_VAR]], [[S_TARGET]], etc.). This
+multi-namespace lookup pattern appears in programming language
+scoping (local/global/module), DNS hierarchies, and
+file systems (the same name can exist in different directories).
+
+\item \emph{Declarative specification, imperative execution}:
+the user writes \emph{what} depends on \emph{what}; [[mk]]
+figures out \emph{how} and \emph{when} to rebuild. This
+separation of specification from execution is the core idea
+behind SQL (declare the query, let the optimizer plan it),
+Terraform (declare infrastructure, let the engine converge),
+and constraint solvers.
+
+\end{itemize}
 
 \section{Connections to other books}
 
@@ -11235,6 +11314,12 @@ what all the larger systems are doing underneath.
 \chapter{Debugging}
 %******************************************************************************
 \label{chap:debugging-appendix}
+
+%claude:
+[[mk]] supports three debugging flags ([[mk -d]]) that dump
+internal state at different stages of the pipeline:
+[[D_PARSE]] traces the parser, [[D_GRAPH]] dumps the dependency
+graph, and [[D_EXEC]] traces job execution.
 
 %todo? http://bashdb.sourceforge.net/remake/
 % apparently make with more debugging capabilities
@@ -11498,6 +11583,13 @@ if(DEBUG(D_TRACE))
 %******************************************************************************
 \label{chap:profiling-appendix}
 
+%claude:
+[[mk]] includes optional profiling support, compiled in when
+the [[PROF]] preprocessor symbol is defined. This simply
+enables [[prof(1)]]-style instrumentation on [[mk]] itself,
+which is useful for profiling the build system rather than
+the programs being built.
+
 <<global [[buf]]>>=
 short buf[10000];
 @
@@ -11551,6 +11643,11 @@ symstat(void)
 \chapter{Utilities}
 %******************************************************************************
 \label{chap:utilities}
+
+%claude:
+This appendix collects the utility code used throughout [[mk]]:
+memory allocation wrappers, string buffers ([[Bufblock]]),
+word-list manipulation, and the [[mk -f]] flag handling.
 
 \section{Memory management}
 % Malloc and Realloc now in error management section

@@ -20206,36 +20206,64 @@ automatically works in a windowed environment, and
 
 %claude:
 Beyond the specifics of windowing, this book has demonstrated
-several recurring software engineering patterns:
+several techniques that apply far beyond window managers:
 \begin{itemize}
 
-\item \emph{Active objects}: each window is represented by a thread
-([<winctl()>]) with its own event loop, receiving messages through
-channels. This is a powerful concurrency pattern that avoids locks
-by giving each object its own thread of control.
+\item \emph{Active objects}: each window is a thread
+([<winctl()>]) with its own event loop, receiving messages
+through channels. This pattern---one thread per logical
+entity, communicating by message passing rather than shared
+state---is how Erlang processes work, how actor systems
+(Akka, Orleans) are structured, and how Go services are
+typically organized. It eliminates locks by giving each
+object exclusive ownership of its state.
 
-\item \emph{Master/worker}: the [[fileserver]] proc dispatches 9P
-requests to worker threads, one per open file. The worker allocator
-in [[main-proc]] manages a pool of reusable threads.
+\item \emph{Master/worker dispatch}: the [[fileserver]] proc
+receives 9P requests and dispatches them to a pool of
+reusable worker threads. This is the same architecture used
+by web servers (Nginx worker pool, Apache prefork),
+database connection pools, and thread-pool executors in
+Java and .NET. The pattern decouples request arrival rate
+from processing capacity.
 
-\item \emph{Channel-of-channels}: when a worker thread needs mouse
-data, it sends its own reply channel through [[Window.mouseread]].
-The window thread receives this channel and uses it to deliver the
-data. This pattern decouples the requester from the provider.
+\item \emph{Channel-of-channels}: when a worker needs mouse
+data, it sends its own reply channel through
+[[Window.mouseread]]; the window thread uses that channel to
+deliver the response. This pattern---sending a callback
+address along with a request---is how futures and promises
+work, how RPC systems deliver replies (each request carries
+a reply-to address), and how CSP-style rendezvous protocols
+are built. It decouples the requester from the provider
+without shared state.
 
 \item \emph{Producer/consumer with circular buffer}: the
-[[Mouseinfo]] queue buffers mouse events between the mouse thread
-(producer) and the worker thread (consumer), with wrap-around
-indexes.
+[[Mouseinfo]] queue buffers mouse events with wrap-around
+indexes. This bounded ring buffer is one of the most
+reused data structures in systems programming: it backs
+Unix pipes, kernel log buffers ([[dmesg]]), audio drivers,
+network packet queues, and lock-free queues like LMAX
+Disruptor. The key property is constant-time enqueue and
+dequeue with bounded memory.
 
-\item \emph{Cooperative threads with IO procs}: blocking IO is
-offloaded to separate procs (one thread each), which forward events
-through channels. This lets the main proc's cooperatively-scheduled
-threads run without ever blocking on a system call.
+\item \emph{Async IO offloading}: blocking IO is offloaded
+to separate procs, which forward events through channels.
+This lets the main proc's cooperative threads never block
+on a system call. The same idea drives Node.js (libuv
+offloads blocking IO to a thread pool), Python's asyncio
+(executors for blocking calls), and Go's runtime (network
+poller + goroutine scheduler). The general principle:
+keep the event loop responsive by moving blocking work
+elsewhere.
 
-\item \emph{Fork/adjust/exec}: window creation follows the classic
-\unix idiom---fork a new process, adjust its namespace (with
-[[mount()]] and [[bind()]]), then exec the shell.
+\item \emph{Fork/adjust/exec}: window creation forks a
+new process, adjusts its namespace (with [[mount()]]
+and [[bind()]]), then execs the shell. This three-phase
+pattern---create a context, customize it, then launch---is
+how containers start (create namespace, set up mounts,
+exec the entrypoint), how process supervisors work
+(fork, set resource limits, exec the service), and how
+sandboxes are built (fork, drop privileges, exec the
+untrusted code).
 
 \end{itemize}
 
