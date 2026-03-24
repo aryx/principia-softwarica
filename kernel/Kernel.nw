@@ -276,7 +276,17 @@ files, and devices.
 % - hardcoded split for kernel mem vs images mem and user mem,
 % - dupe memory management vs arch mmu?
 % - other stuff?
-
+%claude:
+That said, \plan's design has trade-offs.
+The ``everything is a file'' philosophy is elegant but can be
+less efficient than specialized interfaces---for instance, \plan
+has no buffer cache for its file servers (unlike Linux's page cache).
+The graphics stack lives in the kernel ([[devdraw]]), which adds
+complexity to a component that could arguably be in user space.
+The physical memory is split between kernel, image cache, and user
+segments with hardcoded ratios, rather than dynamically balanced as
+in Linux. These are conscious trade-offs: \plan optimizes for
+simplicity and uniformity, sometimes at the cost of performance.
 
 \section{Other kernels}
 
@@ -4683,7 +4693,17 @@ TEXT    arch_tas(SB), $-4
 % either before or after SWPW
 
 %yoann: maybe explain scenario where don't use SWPW but 2 different MOVW and with scneario possible that with interrupt or something else one gets race
-
+%claude:
+Why is [[SWPW]] needed instead of a plain [[MOVW]] load followed by
+a [[MOVW]] store? Consider the naive sequence:
+[[MOVW (R1), R0]] then [[MOVW $1, (R1)]].
+If an interrupt fires between those two instructions and the
+interrupt handler (or another processor) also tries to acquire
+the same lock, it will read [[0]] (unlocked), set it to [[1]],
+and proceed---but so will the original code when it resumes.
+Both believe they hold the lock, violating mutual exclusion.
+[[SWPW]] avoids this by atomically swapping the register with memory
+in a single instruction that cannot be interrupted.
 
 %smp:
 % See Section~\ref{smp} for arch_tas() handling multiple processors!
@@ -6253,6 +6273,12 @@ xallocz(ulong size, bool zero)
 \subsection{[[xfree()]]}
 
 %yoann: intro xfree
+%claude:
+[<xfree()>] returns memory to the [[xalloc]] free list. It is
+rarely used in the kernel---most [[xalloc]]'d memory (page tables,
+device registers) is allocated once and never freed. The main
+caller is [[intrdisable()]], which releases interrupt handler
+descriptors when a device is detached.
 
 % this is very rarely used in the kernel
 % why use it at all? apparently in intrdisable, but why they dont
@@ -6353,6 +6379,10 @@ xhole(phys_addr addr, ulong size)
 \subsection{[[xmerge()]]}
 
 %yoann: used by malloc Pool we will see soon
+%claude:
+[<xmerge()>] tries to coalesce two adjacent free blocks into one.
+It is used by the [[malloc]] pool allocator (described next) as
+a callback to reduce fragmentation when blocks are freed.
 
 <<function [[xmerge]]>>=
 bool
@@ -6546,6 +6576,15 @@ plock(Pool *p)
 %  we could not get out of the interrupt? (same reason for nlock?)
 % Works with SMP? Yes because Lock will do mutual exclusion over all
 % processors.
+%claude:
+Note the use of [[ilock()]] (interrupt-disabling lock) rather
+than a plain [[lock()]]. This is necessary because interrupt
+handlers occasionally allocate memory. If an interrupt fires
+while [[malloc]] holds the pool lock, and the handler calls
+[[malloc]] too, it would deadlock. By disabling interrupts
+while the lock is held, [[plock()]] prevents this scenario.
+On SMP, [[ilock()]] also provides mutual exclusion across
+processors.
 
 <<function [[punlock]]>>=
 static void
@@ -6671,6 +6710,15 @@ Pool*   imagmem = &pimagmem;
 
 
 %yoann: explain more pmainmem and pimagmem, and maybe ASCII diagram and where arenas fit in memory layout; also how big will be pool memory for kernel? 4MB? or more?
+%claude:
+The [[maxsize]] values above (4~MB for [[mainmem]], 16~MB for
+[[imagmem]]) are just the static defaults compiled into the binary.
+At boot time, [<arch__confinit()>] overwrites both with [[kmem]],
+the kernel memory left after subtracting space for the [[Page]],
+[[Proc]], and [[KImage]] arrays. On a terminal (non-cpuserver),
+[[imagmem->maxsize]] is also set to [[kmem]], so both pools share
+the same cap and the dynamic allocator balances the load between
+general kernel allocations and graphics images.
 
 \subsection{[[poolprint()]]}
 
@@ -11350,12 +11398,16 @@ code below is copied to [[HVECTORS]] ([[0xFFFF0000]]) by
 [<arch__trapinit()>] during boot.
 %claude:
 The indirection through [[vtable]] is necessary because
-the ARM vectors are only one instruction wide---not enough
-room for a full address. Each vector entry does
+the ARM vectors are only one instruction wide (4 bytes)---not enough
+room for a full 32-bit address. Each vector entry does
 [[MOVW 0x18(R15), R15]], which loads the PC from 8
 instructions ahead (where [[vtable]] starts), effectively
-jumping to the handler:
-%yoann1: maybe reference Linker book on ARM and machine code generation so see that MOVW smallint(R15), R15 can fit in 4 bytes in one instr, but MOVW $_vsvc(SB), R15 (or MOVW _vsvc(SB), R15?) would take 8 bytes or more
+jumping to the handler.
+This works because [[MOVW smallint(R15), R15]] encodes as a single
+4-byte ARM instruction (a PC-relative load with a small offset),
+whereas [[MOVW $_vsvc(SB), R15]] would require 8 bytes or more
+since the full address of [[_vsvc]] is not known until link time
+(see \book{Linker} for details on ARM machine code generation):
 
 <<global [[vectors]](arm)>>=
 /*
@@ -11413,8 +11465,16 @@ loads [[_vsvc]] from [[vtable[2]]].
 registers in the right order, then calls [[arch__syscall()]]
 in C. On return, it restores the registers and executes
 [[RFE]] (Return From Exception) to resume user mode.
+%claude:
+Why the kernel stack? When the ARM enters SVC mode, it
+automatically switches to the SVC-mode stack pointer (R13\_svc).
+This stack pointer was set up earlier during process creation:
+each [[Proc]] has a kernel stack page, and [[arch__kprocchild()]]
+(see Chapter~\ref{chap:processes}) sets [[R13\_svc]] to the top
+of that page. So when a user process does [[SWI]], the hardware
+switches to the per-process kernel stack, and [[_vsvc]] can
+safely push the [[Ureg]] there.
 The key steps are:
-%yoann1: why _vsvc execute on kernel stack? and where this stack is set and the stacker pointer set to point there?
 
 \begin{verbatim}
   1. Push ureg->pc (= R14, the return address)
@@ -26210,6 +26270,18 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 
 % will talk about PC version because simpler (for once).
 % Raspberry Pi forces to talk about USB and complicated. See Appendix.
+
+%claude:
+Device drivers are the largest part of any kernel, but also the
+most repetitive---each one follows the same [[Dev]] interface
+(see Chapter~\ref{chap:filesystems}).
+This chapter presents only a few representative drivers: the
+keyboard (interrupt-driven scan code processing), the screen
+(framebuffer and display initialization), and the console device
+([[devcons]], which ties keyboard input to [[/dev/cons]]).
+For the keyboard and screen, I use the PC (x86) version rather
+than the Raspberry~Pi version, because the PC hardware interface
+is simpler (direct I/O ports vs.\ USB).
 
 \section{The keyboard}
 
@@ -43348,7 +43420,8 @@ case Qrandom:
 You now know how the \plan kernel works, to the smallest
 details: from the first instruction at [[_start]] to the
 scheduler loop, from page faults to pipes, from system
-calls to the 9P protocol.
+calls to the 9P protocol---and more generally how many
+operating system kernels work.
 
 %claude:
 Despite being a complete operating system kernel---with
@@ -45367,6 +45440,11 @@ void werrstr(char *fmt, ...)
 %******************************************************************************
 \chapter{Utilities}
 %******************************************************************************
+
+%claude:
+This appendix collects low-level utility code used throughout the
+kernel: memory area operations ([[memmove]], [[memset]]),
+string functions, and simple data structure helpers.
 
 % have a list, hash, queue, section? with simple macros?
 
