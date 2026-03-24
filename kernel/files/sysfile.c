@@ -495,7 +495,7 @@ mountrewind(Chan *c)
 
 /*s: function [[mountfix]] */
 /*
- * Rewrite the results of a directory read to reflect current 
+ * Rewrite the results of a directory read to reflect current
  * name space bindings and mounts.  Specifically, replace
  * directory entries for bind and mount points with the results
  * of statting what is mounted there.  Except leave the old names.
