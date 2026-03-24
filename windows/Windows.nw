@@ -20190,6 +20190,7 @@ applications.
 (it calls [[initdraw()]] and draws on the screen),
 a window manager (it creates, moves, resizes, and deletes windows),
 and a file server (it serves [[/mnt/wsys/]] files through 9P).
+%
 Each window provides virtual [[/dev/cons]],
 [[/dev/mouse]], and [[/dev/winname]] files,
 so programs running inside a window see the same
@@ -20205,65 +20206,43 @@ automatically works in a windowed environment, and
 \section{Patterns and techniques}
 
 %claude:
-Beyond the specifics of windowing, this book has demonstrated
-several techniques that apply far beyond window managers:
+These techniques apply far beyond window managers:
 \begin{itemize}
 
-\item \emph{Active objects}: each window is a thread
-([<winctl()>]) with its own event loop, receiving messages
-through channels. This pattern---one thread per logical
-entity, communicating by message passing rather than shared
-state---is how Erlang processes work, how actor systems
-(Akka, Orleans) are structured, and how Go services are
-typically organized. It eliminates locks by giving each
-object exclusive ownership of its state.
+\item \emph{Active objects}: one thread per window,
+communicating by message passing. This is how Erlang
+processes and Go services are structured: eliminate locks
+by giving each object exclusive ownership of its state.
 
 \item \emph{Master/worker dispatch}: the [[fileserver]] proc
-receives 9P requests and dispatches them to a pool of
-reusable worker threads. This is the same architecture used
-by web servers (Nginx worker pool, Apache prefork),
-database connection pools, and thread-pool executors in
-Java and .NET. The pattern decouples request arrival rate
-from processing capacity.
+dispatches requests to a pool of reusable workers. The same
+architecture is used by web servers (Nginx, Apache prefork)
+and database connection pools: decouple request arrival
+rate from processing capacity.
 
-\item \emph{Channel-of-channels}: when a worker needs mouse
-data, it sends its own reply channel through
-[[Window.mouseread]]; the window thread uses that channel to
-deliver the response. This pattern---sending a callback
-address along with a request---is how futures and promises
-work, how RPC systems deliver replies (each request carries
-a reply-to address), and how CSP-style rendezvous protocols
-are built. It decouples the requester from the provider
-without shared state.
+\item \emph{Channel-of-channels}: a worker sends its own
+reply channel along with a request; the responder uses that
+channel to deliver data. This is how futures and promises
+work, and how RPC systems deliver replies. It decouples
+requester from provider without shared state.
 
-\item \emph{Producer/consumer with circular buffer}: the
-[[Mouseinfo]] queue buffers mouse events with wrap-around
-indexes. This bounded ring buffer is one of the most
-reused data structures in systems programming: it backs
-Unix pipes, kernel log buffers ([[dmesg]]), audio drivers,
-network packet queues, and lock-free queues like LMAX
-Disruptor. The key property is constant-time enqueue and
-dequeue with bounded memory.
+\item \emph{Circular buffer}: the [[Mouseinfo]] queue
+buffers events with wrap-around indexes. This bounded ring
+buffer backs Unix pipes, kernel log buffers, audio drivers,
+and lock-free queues like LMAX Disruptor---constant-time
+enqueue and dequeue with bounded memory.
 
-\item \emph{Async IO offloading}: blocking IO is offloaded
-to separate procs, which forward events through channels.
-This lets the main proc's cooperative threads never block
-on a system call. The same idea drives Node.js (libuv
-offloads blocking IO to a thread pool), Python's asyncio
-(executors for blocking calls), and Go's runtime (network
-poller + goroutine scheduler). The general principle:
-keep the event loop responsive by moving blocking work
-elsewhere.
+\item \emph{Async IO offloading}: blocking IO is moved to
+separate procs that forward events through channels. The
+same idea drives Node.js (libuv's thread pool) and Go's
+runtime scheduler: keep the event loop responsive by
+moving blocking work elsewhere.
 
-\item \emph{Fork/adjust/exec}: window creation forks a
-new process, adjusts its namespace (with [[mount()]]
-and [[bind()]]), then execs the shell. This three-phase
-pattern---create a context, customize it, then launch---is
-how containers start (create namespace, set up mounts,
-exec the entrypoint), how process supervisors work
-(fork, set resource limits, exec the service), and how
-sandboxes are built (fork, drop privileges, exec the
-untrusted code).
+\item \emph{Fork/adjust/exec}: create a process, customize
+its namespace, then exec. This three-phase pattern is how
+Docker containers start (create namespace, set up mounts,
+exec the entrypoint) and how sandboxes are built (fork,
+drop privileges, exec).
 
 \end{itemize}
 
