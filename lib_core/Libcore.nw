@@ -183,6 +183,11 @@ remain efficient?
 work in a streaming fashion without knowing the entire
 input in advance?
 
+\item What does it mean for a library to be thread-safe?
+What is the difference between a thread-safe function and
+a reentrant function? When processes share memory, what
+happens if two of them call [[malloc()]] at the same time?
+
 \end{itemize}
 \l sinus, cosinus, how when no hardware support?
 
@@ -505,6 +510,33 @@ abstractions that the library provides should cost nothing
 (or very close to nothing) compared to doing the same work
 by hand.
 
+\subsection{Thread safety and reentrancy}
+
+%claude:
+When multiple processes share memory, the library must be
+careful about global state. A function is {thread-safe} if
+it can be called simultaneously from multiple processes (or
+threads) without corrupting shared data---typically by
+protecting global state with locks. A function is {reentrant}
+if it can be safely interrupted mid-execution and called
+again (e.g., from a signal or note handler)---a stronger
+property that requires using no global state at all, only
+stack-local variables and arguments.
+%
+The distinction matters in practice. [[malloc()]] is
+thread-safe (it uses a lock internally), so two processes
+sharing memory can allocate concurrently. But [[malloc()]] is
+not reentrant: if a note handler calls [[malloc()]] while
+[[malloc()]] already holds its lock, the program deadlocks.
+Pure functions like [[strlen()]] or [[sin()]] are both
+thread-safe and reentrant, since they touch no global state.
+Functions like [[atexit()]] and [[syslog()]] are thread-safe
+(they use locks) but not reentrant.
+%
+This distinction explains a recurring pattern in the code:
+locks appear throughout the library to ensure thread safety,
+and note delivery is deferred while critical locks are held
+to avoid reentrancy deadlocks.
 
 \section{[[libc.h]] interface}
 % in \plan no hundreds of header files (stdio.h, unistd.h, stdlib.h...)
@@ -691,7 +723,8 @@ memory allocator, and the allocator itself depends on locks.
 In \plan, [[rfork(RFMEM)]] creates a new process that shares
 its parent's memory---effectively a system-level thread.
 Since two such processes can call [[malloc]] concurrently,
-the allocator must be thread-safe (it uses [[Lock]] internally).
+the allocator must be thread-safe (see the discussion of
+thread safety versus reentrancy in the Principles section).
 More generally, [[libc]] functions that use global state
 (e.g., [[syslog]], [[atexit]]) protect it with locks, making
 \plan's [[libc]] safe for use with shared-memory processes.
@@ -1586,7 +1619,7 @@ could in principle be ported to \plan.
 
 
 %******************************************************************************
-\chapter{[[_main()]]}
+\chapter{[[_main()]] and [[_exits()]]}
 %******************************************************************************
 \label{chap:main}
 
@@ -1600,9 +1633,16 @@ could in principle be ported to \plan.
 
 %claude:
 Every \plan program starts in [[_main]], the C runtime entry
-point (analogous to [[crt0]] on \unix). This chapter also
-covers the argument parsing macros and the [[exits]] function
-that handles cleanup callbacks before termination.
+point. On \unix systems, this role is played by [[crt0]]
+(``C runtime, file 0''---the first object file linked into
+every program). Some \unix systems also have [[crt1]] and
+[[crti]]/[[crtn]] for additional initialization (e.g.,
+constructors, profiling setup), but \plan keeps it simple
+with a single [[_main]] that sets up [[argc]]/[[argv]] and
+calls [[main()]].
+This chapter also covers the argument parsing macros and
+the [[exits]] function that handles cleanup callbacks before
+termination.
 
 \section{Command-line arguments: [[ARGBEGIN()]], [[ARGEND()]]}
 
@@ -1655,12 +1695,44 @@ extern char *argv0;
 #define ARGC()      _argc
 @
 
+%yoann: maybe give quick example of use of those macros and ASCII diagram explaining the state of those _argt _argc and their meaning and evolutions? Whatever to help understand those macros
+%claude:
+A typical use looks like:
+\begin{verbatim}
+  ARGBEGIN{
+  case 'd':  debug = 1;       break;
+  case 'o':  ofile = ARGF();  break;
+  default:   usage();
+  }ARGEND
+\end{verbatim}
+%
+For the command line \verb+prog -d -o foo bar+, the macro
+iterates over \verb+-d+ and \verb+-o+. On each iteration,
+[[_args]] points to the flag characters after the \verb+-+,
+[[_argc]] holds the current flag rune (decoded via
+[[chartorune]]), and [[_argt]] is used by [[ARGF]] to
+extract the flag's argument (\verb+foo+ for \verb+-o+).
+After [[ARGEND]], [[argv]] points to the remaining arguments
+(\verb+bar+) and [[argc]] is updated accordingly.
+
 \section{Syscall: [[_exits()]]}
 
-% ugly but special code in 9syscall/mkfile to rename call to 
+% ugly but special code in 9syscall/mkfile to rename call to
 % EXITS syscall to _exits instead of exits because probably wanted to
 % add special code around _exits after and wanted to be backward
 % compatible with previous programs already using exits() in their code.
+
+%yoann: explain why _exits() and not _exits syscall? Also maybe first syscall so maybe show ARM code generated from 9syscall/ by mkfile?
+%claude:
+The raw system call is called [[_exits]] (with a leading
+underscore) rather than [[exits]] so that the library can
+wrap it with cleanup logic (running [[atexit]] callbacks)
+in the [[exits]] function below. This is a common C
+convention: the underscore marks the raw, unwrapped
+interface. The actual system call stub in [[9syscall/]]
+is a few lines of ARM assembly that load the syscall number
+into a register and execute a [[SWI]] (software interrupt)
+to trap into the kernel.
 
 \section{[[exits()]]}
 
@@ -1690,6 +1762,27 @@ exits(char *s)
 }
 @
 
+%yoann: explain why for loop in decrement instead of increment
+%yoann: explain why called Onex, seems cryptic
+%claude:
+The loop runs in reverse (from [[NEXIT-1]] down to 0) so
+that callbacks are invoked in LIFO order---the last one
+registered runs first, mirroring how constructors and
+destructors are paired in C++. The name [[Onex]] is short
+for ``on exit'' (as in [[atexit]]---``at exit''), and
+[[onex]] is the array of registered callbacks.
+%
+The [[pid == onex[i].pid]] check is important: after
+[[rfork(RFMEM)]], parent and child share the same [[onex]]
+array. Without the check, both processes would run all
+callbacks on exit---flushing the same buffers twice, closing
+the same file descriptors twice, or freeing the same memory
+twice. Most cleanup callbacks are not idempotent, so this
+would crash or corrupt data. The pid check ensures each
+process only runs the callbacks {\em it} registered. A
+child process that needs its own cleanup can call [[atexit]]
+after the fork.
+
 <<global [[onex]]>>=
 Onex onex[NEXIT];
 @
@@ -1710,8 +1803,20 @@ struct Onex{
 <<global [[onexlock]]>>=
 static Lock onexlock;
 @
-% See Section X for concurrency primitives.
 
+%yoann: say See Section X for concurrency primitives.
+%yoann: exlain atexit
+%claude:
+The [[onexlock]] protects the [[onex]] array from concurrent
+access by shared-memory processes (see
+Chapter~\ref{chap:concurrency} for how [[Lock]] works).
+%
+[[atexit]] registers a callback to be called when the
+program exits. It scans the [[onex]] array for an empty
+slot, records the current pid (so that after
+[[rfork(RFMEM)]], only the process that registered the
+callback will run it), and stores the function pointer.
+It returns 1 on success, 0 if the table is full.
 
 <<function [[atexit]]>>=
 int
@@ -6645,8 +6750,12 @@ operations at the bottom, channels and threads at the top.
 
 %claude:
 When processes share memory via [[rfork(RFMEM)]], they need
-synchronization primitives. This chapter covers the building
-blocks: spin locks, queuing locks, and read-write locks.
+synchronization primitives to ensure thread safety (as
+discussed in the Principles section of the Overview).
+This chapter covers the building blocks: spin locks, queuing
+locks, and read-write locks. These are the primitives that
+make [[malloc]], [[atexit]], and other [[libc]] functions
+safe for concurrent use.
 The higher-level abstractions (channels and cooperative threads)
 are built on top of these in [[libthread]], covered in a
 later chapter.
