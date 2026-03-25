@@ -146,7 +146,7 @@ system calls into cheap function calls. And data compression
 is one of those algorithms that seems like magic until you
 see the implementation: Huffman coding plus dictionary-based
 matching, all done in a streaming fashion.
-%yoann1: maybe transition that say we gonna see all those things in this book
+In this book, we will see all of these from the inside.
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -229,10 +229,14 @@ It is a full POSIX-compliant implementation, supporting dozens of
 architectures and locales.
 However, its codebase is enormous: over 1\,000\,000 LOC,
 which is almost two orders of magnitude more code than \plan's
-[[libc]]. It also cannot be linked statically in practice
-(due to [[dlopen]] and NSS), which goes against the spirit of
-understanding how things work at every level.
-%yoann1: what is NSS? why it prevents static linkinig? Also why dlopen goes against understandhing at every level?
+[[libc]]. It also cannot be linked statically in practice:
+[[glibc]] internally uses [[dlopen]] (dynamic loading) for NSS
+(Name Service Switch), a pluggable system that lets
+administrators choose how hostnames, users, and passwords
+are resolved at runtime. Because NSS loads shared libraries,
+any program linked against [[glibc]]---even statically---may
+still need dynamic linking at runtime, making it impossible
+to produce a truly self-contained binary.
 
 \item musl\furl{https://musl.libc.org/} is a lightweight,
 POSIX-compliant C library designed for static linking on Linux.
@@ -246,8 +250,22 @@ C library optimized for small statically-linked executables.
 It is even smaller than musl, but the project appears to be
 largely unmaintained.
 
-\item uClibc
-%yoann1: explain uClibc, possibly its history and relation to other C libs and why not candidate
+\item uClibc\furl{https://uclibc-ng.org/} (originally ``microcontroller
+C library'') was designed for embedded Linux systems with limited
+memory. It is smaller than [[glibc]] (around 30\,000 LOC) and
+supports many architectures, but targets Linux specifically.
+The project was largely dormant for years before being revived
+as uClibc-ng. For embedded use it has been mostly superseded
+by musl.
+
+\item The complete ANSI~C library implementation from Plauger's
+{\em The Standard C Library}~\cite{plauger} is the closest
+predecessor to what this book attempts: a line-by-line
+explanation of every function in a C standard library. Plauger's
+implementation targets the C89 standard and is
+portable across platforms. However, it covers only the ANSI
+subset---no threading, no networking, no Unicode---and
+predates UTF-8 entirely.
 
 \item The C library from Hanson's {\em C Interfaces and
 Implementations}~\cite{cii} provides a well-designed set of
@@ -260,7 +278,7 @@ of an existing [[libc]] rather than replacing it.
 
 
 \begin{figure}[]\centering
-\includegraphics[height=0.45\textheight]{lineage}
+\includegraphics[width=\textwidth]{lineage}
 \caption{C standard libraries timeline}
 \label{fig:lineage}
 \end{figure}
@@ -660,6 +678,24 @@ memory allocator, and the allocator itself depends on locks
 and [[rendezvous]].
 
 %yoann: maybe ASCII diagram with those layers?
+%claude:
+\begin{verbatim}
+  +-----------------------------------------------------------+
+  |  libthread: threads, channels, alt, IO procs              |
+  |  (replaces main, exits, dial, _sysfatal when linked in)   |
+  +------------------+----------------------------------------+
+  |  Core services   |  Pure computation                      |
+  |  malloc/free     |  strings, runes, UTF-8                 |
+  |  Biobuf          |  regexp, math, compression             |
+  |  print/fprint    |  9P marshalling                        |
+  |  qlock, dial     |                                        |
+  +------------------+----------------------------------------+
+  |  System call wrappers (9sys/, 9syscall/)                   |
+  |  open, read, write, rfork, exec, brk, rendezvous, ...     |
+  +-----------------------------------------------------------+
+  |  Kernel                                                    |
+  +-----------------------------------------------------------+
+\end{verbatim}
 
 \section{Book structure}
 
