@@ -10,6 +10,8 @@
 \input{../docs/latex/Config}
 \input{../docs/latex/Macros}
 
+\usepackage[utf8]{inputenc}
+
 % Keep description text on the same page as the \part title
 \usepackage{etoolbox}
 \makeatletter
@@ -901,6 +903,22 @@ An IEEE~754 double-precision float is laid out as follows:
 The [[hi]] word of [[FPdbleword]] contains the sign bit,
 the 11-bit exponent, and the upper 20~bits of the mantissa.
 The [[lo]] word contains the lower 32~bits of the mantissa.
+%
+A double encodes the value $(-1)^S \times 1.M \times 2^{E-1023}$,
+where $S$ is the sign bit, $E$ is the 11-bit exponent (biased
+by 1023 so that an exponent of 0 is stored as 1023), and $M$ is
+the 52-bit mantissa (the fractional part after an implicit
+leading~1). For example:
+\begin{verbatim}
+  Value    S  Exponent (E)  Mantissa (M)   Meaning
+  -----    -  ------------  ------------   -------
+   1.0     0  01111111111   000...000      +1.0 x 2^(1023-1023) = 1.0
+  -1.0     1  01111111111   000...000      -1.0 x 2^0 = -1.0
+   0.5     0  01111111110   000...000      +1.0 x 2^(1022-1023) = 2^-1
+   3.14    0  10000000000   1001000111...  +1.57 x 2^(1024-1023) = 3.14
+   NaN     0  11111111111   000...001      exp all 1s, mantissa != 0
+  +Inf     0  11111111111   000...000      exp all 1s, mantissa = 0
+\end{verbatim}
 
 % in arm/u.h so probably arch specific
 <<type [[FPdbleword]]>>=
@@ -935,7 +953,7 @@ always a byte, a [[Rune]] is always a code point, and the
 
 %claude:
 Character classification uses a 256-entry lookup table
-([[_ctype]]) where each byte is a bitmask of properties:
+([<_ctype>]) where each byte is a bitmask of properties:
 upper, lower, digit, space, punctuation, control. The
 [[isalpha]], [[isdigit]], etc.\ macros index into this table,
 making classification a single array lookup with no branches.
@@ -980,10 +998,13 @@ uchar   _ctype[256] =
 
 %yoann: maybe give example for charater 'A' which values it leads to
 %claude:
-For example, the character \verb+'A'+ has ASCII value 65
-(octal 101), so \verb+_ctype[65]+ is \verb+_U|_X+
-(uppercase and hex digit). This means [[isalpha('A')]]
-tests \verb+(_U|_X) & (_U|_L)+, which is true because
+For example, the character \verb+'A'+ has ASCII value 65.
+To find it in the table above, note that the row/column
+indices are in {\em octal}: 65 decimal is 101 octal, so
+row \verb+/*100*/+ (octal 100 = decimal 64), column~1.
+That entry is \verb+_U|_X+ (uppercase and hex digit).
+This means [[isalpha('A')]] tests
+\verb+(_U|_X) & (_U|_L)+, which is true because
 the [[_U]] bit is set. [[isdigit('A')]] tests
 \verb+(_U|_X) & _N+, which is false.
 
@@ -1072,16 +1093,22 @@ UTF-8 at Bell Labs. In \plan, [[char]] means a byte and
 [[Rune]] means a character; the UTF-8 functions convert
 between the two representations:
 \begin{verbatim}
-  Character    Rune (code point)   UTF-8 bytes     char[]
-  ---------    -----------------   -----------     ------
-  'A'          U+0041 (65)         0x41            {0x41}
-  'e'          U+00E9 (233)        0xC3 0xA9       {0xC3, 0xA9}
-  'zh'         U+4E2D (20013)      0xE4 0xB8 0xAD  {0xE4, 0xB8, 0xAD}
+  Char   Rune (code point)   UTF-8 bytes      char[]
+  ----   -----------------   -----------      ------
+  A           U+0041 (65)       0x41            1 byte
+  e-acute     U+00E9 (233)      0xC3 0xA9       2 bytes
+  Greek beta  U+03B2 (946)      0xCE 0xB2       2 bytes
 \end{verbatim}
 %
-ASCII characters (below 128) are identical in all three
-representations. Above that, a single rune expands to 2--4
-UTF-8 bytes.
+The first example is plain ASCII---a single byte in all
+representations. The second is the French letter \'e
+(e with acute accent)---it looks similar to \verb+e+
+but is a distinct Unicode character (code point 233,
+above the ASCII range of 0--127), requiring 2~bytes
+in UTF-8. The third is the Greek letter $\beta$, also
+2~bytes. Characters from other scripts (Chinese, Japanese,
+Arabic) require 3~bytes, and rare characters (emoji,
+historic scripts) require 4.
 
 <<type [[Rune]]>>=
 typedef uint        Rune;
@@ -1108,8 +1135,20 @@ Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
 
 %claude:
 UTF-8 is the variable-length encoding of runes into byte
-sequences (1 to 4 bytes). \plan was the first operating
-system with native UTF-8 support throughout the entire system.
+sequences (1 to 4 bytes), designed by Ken Thompson and
+Rob Pike. \plan was the first operating system with native
+UTF-8 support throughout the entire system.
+The encoding was designed under strict constraints:
+backward compatibility with ASCII (so existing C programs
+work unchanged), no null bytes inside multi-byte sequences
+(so [[strlen]], [[strcpy]], etc.\ still work),
+self-synchronization (from any byte position, you can find
+the start of the current character by scanning for a byte
+that does not begin with \verb+10+ in binary), and
+byte-order matching code-point order (so [[strcmp]] on
+UTF-8 strings gives the same ordering as comparing code
+points directly).
+%
 The key constants are: [[UTFmax]] (4~bytes, the maximum
 encoding length), [[Runeself]] (0x80, below which UTF-8 is
 identical to ASCII), and [[Runeerror]] (the replacement
@@ -1131,13 +1170,24 @@ Runeerror   = 0xFFFD,   /* decoding error in UTF */
 
 \section{Complex types}
 
+%yoann: transition paragraph
+%claude:
+Beyond the scalar types above, the library defines a few
+macros and typedefs related to pointers, arrays, structures,
+and function calling conventions.
+
 \subsection{Pointers}
 
 %claude:
 \plan uses [[nil]] instead of C's [[NULL]], defined simply as
 \verb+((void*)0)+. The [[uintptr]] type is an integer wide
 enough to hold a pointer---critical for code that needs to
-do arithmetic on addresses.
+do arithmetic on addresses. You cannot do arbitrary arithmetic
+on C pointers directly (e.g., masking the low bits for
+alignment, or XOR-ing two pointers for a hash); you must
+cast to [[uintptr]] first. For example, [[qsort]] checks
+alignment with \verb+((uintptr)va + es) % sizeof(long)+
+to decide whether to use word-sized or byte-sized swaps.
 
 <<constant [[nil]]>>=
 #define nil     ((void*)0)
@@ -1154,21 +1204,34 @@ typedef uchar byte;
 @
 % and byte*
 
-\subsection{Arrays}
+\subsection{Arrays (and [[qsort()]])}
 
 %claude:
-[[nelem]] computes the number of elements in a statically
+[[nelem()]] computes the number of elements in a statically
 allocated array at compile time---a safer alternative to
-hardcoding array sizes. The [[qsort]] implementation below
-uses the classic quicksort algorithm with a median-of-three
-pivot selection (sampling at 1/6, 1/2, and 5/6 of the array)
-and tail-call optimization on the larger partition to limit
-stack depth.
+hardcoding array sizes. 
 
 <<function [[nelem]]>>=
 #define nelem(x)    (sizeof(x)/sizeof((x)[0]))
 @
 
+
+%claude:
+The [[qsort]] implementation uses quicksort. The naive
+version picks the middle element as pivot, but that degrades
+to $O(n^2)$ on certain inputs (e.g., already-sorted arrays).
+This implementation uses a {\em median-of-three} pivot,
+sampling at positions 1/6, 1/2, and 5/6 of the array and
+choosing the median---a good approximation of the true
+median that avoids worst-case behavior on common inputs.
+After partitioning, it recurses on the smaller partition
+and loops on the larger, which limits stack depth to
+$O(\log n)$ even in the worst case.
+%
+Note also the two swap functions: [[swapi]] swaps in
+[[long]]-sized chunks (fast, for aligned data) and [[swapb]]
+swaps byte-by-byte (for unaligned data). [[qsort]] checks
+alignment to choose between them.
 
 <<type [[Sort]]>>=
 typedef
@@ -1305,13 +1368,16 @@ qsorts(char *a, long n, Sort *p)
 \subsection{Structures}
 
 %claude:
-[[offsetof]] computes the byte offset of a field within a
+[[offsetof()]] computes the byte offset of a field within a
 structure at compile time. It works by casting [[nil]] to
 a pointer to the structure and taking the address of the
 field---the resulting address is the offset from zero.
-This macro is used by container-of idioms where you have
-a pointer to a struct member and need to recover a pointer
-to the enclosing struct.
+This macro is used by container-of idioms: given a pointer
+[[p]] to a [[next]] field inside a [[Free]] block, you can
+recover the enclosing struct with
+\verb+(Free*)((char*)p - offsetof(Free, next))+.
+The Linux kernel uses the same pattern extensively via its
+\verb+container_of+ macro.
 
 <<function [[offsetof]]>>=
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
@@ -1319,13 +1385,35 @@ to the enclosing struct.
 
 \subsection{Functions}
 
+%yoann: maybe recall need for va_list and va_xxx first; what is the problem they solve?
 %claude:
-The variadic argument macros ([[va_start]], [[va_arg]], [[va_end]])
-are defined directly in terms of pointer arithmetic on the
-stack frame, specific to the \plan C compiler's calling
-convention. The [[va_start]] macro handles the case where
-small types (less than 4 bytes) are promoted to [[int]] on
-the stack.
+C functions like [[print(char *fmt, ...)]] accept a variable
+number of arguments, but the compiler does not know at compile
+time how many arguments were passed or what their types are.
+The [[va_list]]/[[va_start]]/[[va_arg]]/[[va_end]] macros
+solve this by walking the stack frame manually. On ARM with
+the \plan calling convention, all arguments are pushed onto
+the stack in order, so [[va_list]] is simply a [[char*]]
+pointer into the stack:
+\begin{verbatim}
+  High addresses
+  +----------+
+  | arg N    |  <-- va_arg advances here
+  +----------+
+  | ...      |
+  +----------+
+  | arg 1    |  <-- va_start points here (after 'start')
+  +----------+
+  | start    |  <-- last named parameter
+  +----------+
+  Low addresses
+\end{verbatim}
+%
+[[va_start]] sets the pointer just past the last named
+parameter. Each call to [[va_arg]] reads the value at the
+current position and advances the pointer by the argument's
+size. Small types (1 or 2 bytes) are promoted to 4~bytes
+on the stack, which the macros account for.
 
 <<type [[va_list]]>>=
 typedef char*   va_list;
@@ -1359,7 +1447,13 @@ typedef char*   va_list;
 % More in memory management chapter
 
 \section{Regular expressions}
-% more in Regexp chapter
+
+%yoann: say more in Regexp chapter later, but maybe give quick preview
+%claude:
+The [[Reprog]] type (defined in [[regexp.h]]) is a compiled
+regular expression, and [[Resub]] holds the matched
+subexpressions. The full data structures and algorithms
+are presented in Chapter~\ref{chap:regexp}.
 
 % string, see special chapter
 
@@ -1388,6 +1482,14 @@ typedef int fdt; // file descriptor type
 @
 %pad: I added that, but is in APE also
 
+%yoann: say more File related types, Qid, Dir, etc. but presented gradually later
+%claude:
+Other file-related types---[[Qid]] (unique file identifier),
+[[Dir]] (directory entry with metadata), [[Open_flag]],
+[[Access_flag]]---are defined in [[syscall.h]] and
+presented in Chapter~\ref{chap:fileio} and
+Chapter~\ref{chap:dirs}.
+
 \section{Time}
 % Tm
 
@@ -1398,6 +1500,10 @@ and offset from UTC. It is the same data that \unix's
 [[struct tm]] holds, but \plan adds the [[zone]] and
 [[tzoff]] fields directly rather than relying on external
 globals like [[tzname]].
+For example, March 25, 2026 at 14:30 in Rome would be
+represented with [[hour]]=14, [[mon]]=2 (0-indexed),
+[[year]]=126 (years since 1900), [[zone]]="CET",
+and [[tzoff]]=3600 (one hour east of UTC).
 
 <<type [[Tm]]>>=
 struct Tm {
@@ -1438,7 +1544,7 @@ Threads chapter.
 
 %\subsection{Channels}
 
-\section{[[Fcall]]}
+%\section{[[Fcall]]}
 
 % related to concurrency.
 
@@ -1450,6 +1556,10 @@ type---no hash tables, linked lists, or dynamic arrays. Programs
 implement their own as needed using raw pointers and arrays.
 This minimalism keeps the library small but means that common
 data structures are reimplemented throughout the codebase.
+Hanson's {\em C Interfaces and Implementations}~\cite{cii}
+provides exactly the kind of reusable collections (hash tables,
+sequences, rings, arenas) that \plan's [[libc]] lacks, and
+could in principle be ported to \plan.
 
 % collection types (not really :( )
 
