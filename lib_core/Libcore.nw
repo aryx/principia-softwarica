@@ -79,16 +79,13 @@ Yoann Padioleau\\
 }
 
 \maketitle 
-%\onecolumn
 \hrule
 \input{../docs/latex/Copyright}
 \input{../docs/latex/CopyrightPlan9}
 \hrule
-%\twocolumn
 
 \begingroup
 \hypersetup{linkcolor=blue}
-% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
 \tableofcontents
 \endgroup
 
@@ -103,8 +100,6 @@ a few {core libraries}.
 
 \section{Motivations}
 
-Why core libraries? Because I think you are a better programmer if
-you fully understand how things work under the hood.
 % and code in those libs underly everything.
 % even sometimes kernel!
 
@@ -122,8 +117,10 @@ you fully understand how things work under the hood.
 % Finally Thread scheduler. Again if implement lang, and not unusual,
 % Erlang, Elixir, Clojure, etc need know very well this stuff.
 
+Why core libraries? Because I think you are a better programmer if
+you fully understand how things work under the hood, and
 %claude:
-The core libraries are linked into every C program. They are
+the core libraries are linked into every C program. They are
 the code that runs before [[main()]], the code behind
 [[malloc()]] and [[free()]], the code that turns
 [[print()]] into system calls.
@@ -147,13 +144,26 @@ Here are a few questions I hope this book will answer:
 How is [[malloc()]] implemented? 
 How does it relate to the [[sbrk()]] system call?
 
-\item How does a thread scheduler work? 
+\item How does a thread scheduler work?
 How is implemented [[alt()]] without [[select()]] in the kernel?
+
+\item How is UTF-8 encoded and decoded?
+How do you search for a character in a UTF-8 string
+without accidentally matching a continuation byte?
+
+\item How does [[printf()]]-style formatted output work?
+How can you add your own format verbs?
+
+\item How are [[sin()]], [[cos()]], [[exp()]], and [[sqrt()]]
+computed when the hardware has no floating-point unit?
+
+\item How does a network connection get established
+through the file system, without sockets?
 
 \end{itemize}
 \l sinus, cosinus, how when no hardware support?
 
-\section{The \plan core libraries: [[libc]], [[libregexp]], [[libflate]], and [[libthread]]}
+\section{The \plan core libraries: \texttt{lib\{c,bio,regexp,flate,thread\}}}
 %TODO? add libbio? add libstring?
 %TODO: add libcii ? so have collections at least?
 
@@ -186,15 +196,37 @@ Here are a few core libraries that I considered for this book, but
 which I ultimately discarded:
 \begin{itemize}
 
-\item GNU Libc
+\item GNU Libc\furl{https://www.gnu.org/software/libc/} (also called
+[[glibc]]) is the standard C library on most Linux distributions.
+It is a full POSIX-compliant implementation, supporting dozens of
+architectures and locales.
+However, its codebase is enormous: over 1\,000\,000 LOC,
+which is almost two orders of magnitude more code than \plan's
+[[libc]]. It also cannot be linked statically in practice
+(due to [[dlopen]] and NSS), which goes against the spirit of
+understanding how things work at every level.
 % huge, can't be linked statically
 
+\item musl\furl{https://musl.libc.org/} is a lightweight,
+POSIX-compliant C library designed for static linking on Linux.
+It is much smaller than [[glibc]] (around 90\,000 LOC) and is
+known for clean, readable code. It would have been a reasonable
+alternative to the \plan libraries, but it is still significantly
+larger and is tied to the Linux kernel's system call interface.
 % musl
 
-\item dietlibc
+\item dietlibc\furl{https://www.fefe.de/dietlibc/} is a minimal
+C library optimized for small statically-linked executables.
+It is even smaller than musl, but the project appears to be
+largely unmaintained.
 %dead?
 
-\item microlibc
+\item The C library from Hanson's {\em C Interfaces and
+Implementations}~\cite{cii} provides a well-designed set of
+abstract data types (arenas, lists, tables, rings, sequences)
+that are notably absent from \plan's [[libc]]. However, it is
+a pedagogical library, not a system library---it builds on top
+of an existing [[libc]] rather than replacing it.
 
 \end{itemize}
 
@@ -514,6 +546,14 @@ typedef unsigned long   usize;
 
 \subsection{Floats}
 
+%claude:
+[[FPdbleword]] is a union that overlays a [[double]] with its
+raw bit representation as two 32-bit words. This is essential
+for the math library: functions like [[NaN]], [[isNaN]], and
+[[isInf]] need to inspect or construct the IEEE~754 bit pattern
+directly (exponent, mantissa, sign) rather than treating the
+value as a number.
+
 % in arm/u.h so probably arch specific
 <<type [[FPdbleword]]>>=
 union FPdbleword
@@ -597,6 +637,12 @@ uchar   _ctype[256] =
 #define	isascii(c)	((unsigned char)(c)<=0177)
 @
 
+
+%claude:
+The [[toupper]]/[[tolower]] functions take [[int]] rather than
+[[char]] so they also work with [[Rune]] values (at least in
+the ASCII range). The conversion is a simple offset between
+the uppercase and lowercase ASCII ranges.
 
 % ugly that take an int, because that way compatible with Rune??
 <<function [[toupper]]>>=
@@ -871,6 +917,15 @@ qsorts(char *a, long n, Sort *p)
 
 \subsection{Structures}
 
+%claude:
+[[offsetof]] computes the byte offset of a field within a
+structure at compile time. It works by casting [[nil]] to
+a pointer to the structure and taking the address of the
+field---the resulting address is the offset from zero.
+This macro is used by container-of idioms where you have
+a pointer to a struct member and need to recover a pointer
+to the enclosing struct.
+
 <<function [[offsetof]]>>=
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
 @
@@ -949,6 +1004,14 @@ typedef int fdt; // file descriptor type
 \section{Time}
 % Tm
 
+%claude:
+The [[Tm]] structure holds a broken-down time: year, month,
+day, hour, minute, second, plus the timezone abbreviation
+and offset from UTC. It is the same data that \unix's
+[[struct tm]] holds, but \plan adds the [[zone]] and
+[[tzoff]] fields directly rather than relying on external
+globals like [[tzname]].
+
 <<type [[Tm]]>>=
 struct Tm {
     int sec;
@@ -968,6 +1031,14 @@ struct Tm {
 % some redundant stuff above?
 
 \section{Concurrency}
+
+%claude:
+The concurrency data structures---[[Lock]], [[QLock]], [[RWLock]],
+[[Rendez]]---are defined in this section and covered in detail
+in the Concurrency chapter. The threading structures
+([[Channel]], [[Alt]], [[Thread]], [[Proc]]) are part of
+[[libthread]] and are covered in the Channels and Cooperative
+Threads chapter.
 
 %\subsection{Locks}
 % normal, read-write
@@ -1230,9 +1301,16 @@ memset(void *ap, int c, ulong n)
 % is faster! Accessing full words is faster.
 
 % This is why not optimal code above, and real memset is written in
-% assembly and tries to move by blocks of 32 bits chunk, not 
+% assembly and tries to move by blocks of 32 bits chunk, not
 % 8 bits.
 
+%claude:
+Note that [[memset]] takes an [[int]], not a [[char]]---it
+truncates to a byte when storing. This means
+[[memset(buf, 255, n)]] and [[memset(buf, -1, n)]] produce the
+same result: every byte set to \verb+0xFF+. The parameter is
+[[int]] because passing 32-bit values is more efficient on
+most architectures than passing single bytes.
 
 <<function [[memcpy]]>>=
 void*
@@ -1274,6 +1352,12 @@ back:
 % really bad name
 \t replace every call to memmove to memcpy!
 
+%claude:
+[[memcpy]] is simply an alias for [[memmove]]---both handle
+overlapping regions. In standard C, [[memcpy]] has undefined
+behavior on overlapping memory, but \plan makes the safe
+choice: there is only one implementation, and it always works
+correctly.
 
 <<function [[memcmp]]>>=
 int
@@ -1805,7 +1889,13 @@ strrchr(char *s, int c)
 @
 
 
-%todo: rename temporarily to _strcmp and have a string_equal wrapper 
+%claude:
+[[strcmp]] returns 1, $-1$, or 0 rather than an arbitrary
+positive/negative value. The comparison is done on unsigned
+characters to handle bytes above 0x7F correctly (important
+for UTF-8 strings, where high bytes are common).
+
+%todo: rename temporarily to _strcmp and have a string_equal wrapper
 % and refactor code using spatch!
 
 <<function [[strcmp]]>>=
@@ -1849,6 +1939,14 @@ strcpy(char *s1, char *s2)
 @
 % ???
 
+%claude:
+[[strcpy]] is built on [[memccpy]], which copies bytes until
+it finds the stop character (here, the null terminator) or
+reaches the limit [[N]]. If the string is longer than [[N]]
+bytes, [[memccpy]] returns [[nil]] and the loop advances both
+pointers to try the next chunk---effectively copying in
+10\,000-byte segments until the terminator is found.
+
 % used by strcpy and clones
 <<function [[memccpy]]>>=
 void*
@@ -1871,10 +1969,18 @@ memccpy(void *a1, void *a2, int c, ulong n)
 
 
 
+%claude:
+[[strdup]] allocates memory for a copy of the string. The
+[[setmalloctag]] call records the caller's PC so that memory
+debugging tools attribute the allocation to [[strdup]]'s caller,
+not to [[strdup]] itself---otherwise every leaked string would
+be blamed on [[strdup]] rather than the code that forgot to
+free it.
+
 <<function [[strdup]]>>=
 char*
-strdup(char *s) 
-{  
+strdup(char *s)
+{
     char *ns;
 
     ns = malloc(strlen(s) + 1);
@@ -1916,6 +2022,14 @@ strstr(char *s1, char *s2)
     return 0;
 }
 @
+%claude:
+[[strstr]] is the classic substring search: for each
+occurrence of the first character of [[s2]] in [[s1]], it
+checks whether the rest of [[s2]] follows. This is the
+naive $O(nm)$ algorithm---good enough for the short strings
+typical in system programming, without the complexity of
+Boyer-Moore or KMP.
+
 % a classic interview question :)
 
 \section{Runes}
@@ -2262,6 +2376,14 @@ runestrstr(Rune *s1, Rune *s2)
 
 \section{UTF8}
 
+%claude:
+The UTF-8 functions work on byte strings that may contain
+multi-byte rune encodings. The key optimization is the
+[[Runeself]] test: any byte below 0x80 is ASCII and can be
+handled without calling [[chartorune]]. Since most text in
+practice is ASCII, this fast path avoids the overhead of
+the full decoder for the common case.
+
 % use typedef utf here? utf* s?
 <<function [[utflen]]>>=
 int
@@ -2386,6 +2508,17 @@ utfutf(char *s1, char *s2)
 
 %alt: overloading and show as in haskell
 
+%claude:
+\plan's [[Fmt]] structure is more powerful than \unix's
+[[printf]]: it supports user-defined format verbs via a
+callback mechanism, buffered output to any destination (not
+just file descriptors), and rune-aware formatting. The
+[[flush]] function pointer makes [[Fmt]] work like a closure:
+[[fprint]] flushes to a file descriptor, [[sprint]] flushes
+to a string, and [[Bprint]] flushes through a [[Biobuf]].
+The [[%r]] verb (print the current error string) is a \plan
+extension that replaces the separate [[perror]] pattern.
+
 <<type [[Fmt]]>>=
 struct Fmt {
     uchar   runes;          /* output buffer is runes or chars? */
@@ -2430,6 +2563,13 @@ enum Fmt_flag {
 
 \section{Quoted strings}
 % put in advcanced topics?
+
+%claude:
+\plan uses single-quote quoting for strings that contain
+whitespace or special characters (similar to shell quoting).
+The [[quotestrconv]]/[[unquotestrdup]] functions handle
+conversion to and from this format, used in file names
+and the [[rc]] shell.
 
 \section{Extensible strings}
 
@@ -2541,6 +2681,14 @@ enum Seek_cursor {
 
 % why pread? does seek and read at the same time, so atomic,
 % which is useful for servers.
+
+%claude:
+The fundamental I/O system calls in \plan are [[pread]] and
+[[pwrite]], which take an explicit file offset. Making the
+offset a parameter rather than hidden state in the kernel
+means concurrent readers/writers on the same file descriptor
+don't race on the offset---a critical property for file
+servers that handle multiple clients.
 
 \section{[[read()]], [[write()]]}
 
@@ -2686,7 +2834,13 @@ nulldir(Dir *d)
     d->name = d->uid = d->gid = d->muid = "";
 }
 @
-% ?? sentinel? ~0 to detect unitialized ?
+%claude:
+[[nulldir]] fills a [[Dir]] with ``don't care'' values:
+all bits set to~1, and empty strings for the name fields.
+When passed to [[dirwstat]], only fields that differ from
+this sentinel pattern are actually modified---so you can
+change just the mode of a file without having to know its
+current name, owner, or modification time.
 
 \section{Syscalls: [[create()]], [[chdir()]], etc}
 
@@ -2847,6 +3001,14 @@ getwd(char *buf, int nbuf)
 %TODO: unsafe!
 %time-of-check vs time-of-use (TOCTOU) race condition use mkstemp() instead!
 
+%claude:
+[[mktemp]] has a classic TOCTOU (time-of-check, time-of-use)
+vulnerability: it checks whether a filename exists with
+[[access]], then expects the caller to [[create]] it---but
+another process could create that file in between. The safe
+alternative is [[mkstemp]] (next section), which atomically
+creates and opens the file.
+
 <<function [[mktemp]]>>=
 char*
 mktemp(char *as)
@@ -2887,6 +3049,16 @@ mktemp(char *as)
 
 % cite \plan paper on dotdot?
 
+%claude:
+[[cleanname]] normalizes a file path in place: it removes
+redundant slashes, eliminates \verb+.+ components, and
+resolves \verb+..+ where possible. It also handles \plan's
+\verb+#+ device syntax (e.g., \verb+#c/cons+) by preserving
+the device prefix and treating the rest as a rooted path.
+The two-pass approach first collapses duplicate slashes, then
+processes dot-dot in a single forward scan---the [[d]] pointer
+tracks the output position while [[s]] advances through the
+input.
 
 <<macro [[SEP]]>>=
 #define SEP(x)  ((x)=='/' || (x) == '\0')
@@ -2994,6 +3166,15 @@ cleanname(char *name)
 
 \section{[[access()]]}
 
+%claude:
+[[access]] checks file accessibility by actually trying to
+open the file with the requested mode. For existence checks
+([[AEXIST]]), it uses [[dirstat]] instead. This is different
+from \unix, where [[access]] is a dedicated system call. The
+\plan approach is more honest---it tests exactly what will
+happen when you try to use the file---but it's also more
+expensive, since it opens and immediately closes the file.
+
 <<function [[access]]>>=
 int
 access(char *name, int mode)
@@ -3084,6 +3265,13 @@ structure.
 \section{Time and day}
 % called Time-of-day, not sure  why
 
+%claude:
+\plan's time functions read from the file system rather
+than making specialized system calls. [[/dev/time]] provides
+the seconds since epoch, [[/dev/bintime]] provides nanosecond
+precision, and [[/env/timezone]] provides the local timezone
+rules. The [[nsec]] system call is a newer, more efficient
+alternative to reading [[/dev/bintime]].
 
 \section{Time zones and [[localtime()]]}
 
@@ -3125,6 +3313,15 @@ localtime(long tim)
 }
 @
 
+
+%claude:
+[[asctime]] formats a [[Tm]] into the traditional
+\verb+Thu Jan 01 00:00:00 GMT 1970+ string. It uses a clever
+trick: the day and month names are stored as a single
+concatenated string, and the appropriate 3-character substring
+is located by multiplying the index by~3. The template string
+is initialized with the epoch date, and individual characters
+are overwritten---no [[sprintf]] needed.
 
 % to output time string
 
@@ -3226,6 +3423,14 @@ oldtime(long *tp)
 @
 
 \section{Conversions}
+
+%claude:
+[[tm2sec]] converts a broken-down time back to epoch
+seconds. It accumulates seconds year by year (handling
+leap years via [[yrsize]]), then adds the day-of-year,
+hours, minutes, and seconds. The timezone adjustment
+at the end subtracts the UTC offset, converting local
+time back to absolute time.
 
 <<function [[tm2sec]]>>=
 /*
@@ -3331,6 +3536,15 @@ enum Rfork_flags
 % sysfork(), sysexit(), sysawait(), sysexec()
 % want to run external command? need fork+exec! classic pattern.
 
+%claude:
+The fork/exec pattern is the cornerstone of \unix process
+creation: [[fork]] duplicates the process, then the child
+adjusts file descriptors (for redirection), changes namespace
+(for sandboxing), and finally calls [[exec]] to replace itself
+with a new program. \plan's [[rfork]] makes this even more
+flexible by letting you choose exactly which resources to
+share, copy, or create fresh.
+
 \section{[[fork()]]}
 
 %claude:
@@ -3351,6 +3565,14 @@ fork(void)
 
 \section{[[execl()]]}
 
+%claude:
+[[execl]] is a convenience wrapper around [[exec]] that takes
+a variable number of string arguments instead of an argv array.
+The \verb+&f+1+ trick works because the \plan C compiler
+lays out variadic arguments contiguously on the stack---the
+address after [[f]] is the start of the remaining arguments,
+which form the argv array that [[exec]] expects.
+
 <<function [[execl]]>>=
 int
 execl(char *f, ...)
@@ -3362,6 +3584,14 @@ execl(char *f, ...)
 
 \section{[[wait()]]}
 % see later? for parent-child IPC?
+
+%claude:
+The [[wait]] function (shown in the IPC chapter) parses the
+text returned by the [[await]] system call. In \plan, a
+child process exits with a string, not an integer, so the
+parent receives a text message containing the pid, CPU times,
+and exit string. This is richer than \unix's [[waitpid]]
+which only returns a status integer.
 
 \section{[[getpid()]]}
 
@@ -3432,6 +3662,15 @@ later chapter.
 % see lock(2), rendezvous(2)
 % sleep/wakeup
 
+%claude:
+The [[rendezvous]] system call is \plan's core synchronization
+primitive---two processes calling [[rendezvous]] with the same
+tag exchange a pointer value and both unblock. It is
+simpler than \unix futexes but serves the same purpose:
+efficient kernel-mediated blocking when a userspace spin
+would waste CPU cycles. All the higher-level primitives
+([[QLock]], [[Rendez]], channels) are built on [[rendezvous]]
+plus atomic operations.
 
 \section{Locks}
 
@@ -3497,6 +3736,15 @@ canlock(Lock *l)
 \section{Atomic operations: [[ainc()]] (ARM)}
 
 % see atom.s
+
+%claude:
+[[ainc]] and [[adec]] (atomic increment/decrement) are
+implemented in ARM assembly using the [[LDREX]]/[[STREX]]
+(load-exclusive/store-exclusive) instructions, which provide
+lock-free atomic read-modify-write on the ARM architecture.
+These are the foundation of all higher-level synchronization:
+[[Lock]] uses them for the fast path, and [[Ref]] uses them
+for reference counting.
 
 \section{Waiting queues}
 %alt: sleeping Lock
@@ -3564,6 +3812,14 @@ qlock(QLock *q)
     mp->inuse = 0;
 }
 @
+
+%claude:
+The [[qlock]] function first tries the fast path: if the lock
+is free ([[!q->locked]]), it grabs it and returns. Otherwise,
+it allocates a [[QLp]] node, appends it to the wait queue,
+and blocks via the [[rendezvous]] system call. The
+[[_rendezvousp]] indirection allows [[libthread]] to replace
+the kernel [[rendezvous]] with its own thread-aware version.
 
 %_rendezvousp?
 
@@ -3805,6 +4061,17 @@ wunlock(RWLock *q)
 
 \section{Rendez-vous}
 
+%claude:
+[[Rendez]] is \plan's condition variable: a process can sleep
+on a [[Rendez]] (via [[rsleep]]) until another process wakes
+it (via [[rwakeup]]). Unlike POSIX condition variables, a
+[[Rendez]] is tied to a specific [[QLock]]---the caller must
+hold that lock when calling [[rsleep]], and the lock is
+atomically released while sleeping and reacquired on wakeup.
+The key subtlety in [[rsleep]] is that it passes the [[QLock]]
+to the next waiter before going to sleep, preventing the lock
+from being held by a sleeping process.
+
 <<type [[Rendez]]>>=
 struct Rendez {
     QLock   *l;
@@ -3912,6 +4179,15 @@ rwakeupall(Rendez *r)
 
 \section{Coroutines}
 
+%claude:
+[[jmp_buf]] is the minimal state needed for a context switch:
+just the stack pointer and program counter (two [[long]] values
+on ARM). [[setjmp]] saves SP and PC; [[longjmp]] restores
+them. This is the mechanism behind both [[libthread]]'s
+cooperative scheduling and user-level exception handling.
+The cooperative thread scheduler uses [[setjmp]]/[[longjmp]]
+to switch between threads without involving the kernel.
+
 <<type [[jmp_buf]]>>=
 typedef long    jmp_buf[2];
 @
@@ -3988,10 +4264,26 @@ getfields(char *str, char **args, int max, int mflag, char *set)
 
 
 \section{Parent-child IPC}
-% can pass from parent to child via env, 
+% can pass from parent to child via env,
 % and from child to parent via wait message
 
+%claude:
+In \plan, parent-child communication is asymmetric:
+the parent passes data to the child via environment
+variables (files in [[/env/]]), and the child reports
+its exit status back to the parent via the [[await]]
+system call, which returns a text string containing the
+child's pid, CPU times, and exit message.
+
 \subsection{Wait message}
+
+%claude:
+[[Waitmsg]] wraps the text returned by [[await]] into a
+structured form. The [[wait]] function parses the five
+whitespace-separated fields (pid, three time values, and
+the exit message) and allocates the [[Waitmsg]] and its
+string data in a single [[malloc]] call, so the caller
+only needs one [[free]].
 
 <<type [[Waitmsg]]>>=
 /* keep /sys/src/ape/lib/ap/plan9/sys9.h in sync with this -rsc */
@@ -4057,6 +4349,16 @@ waitpid(void)
 
 
 \subsection{Environment}
+
+%claude:
+In \plan, environment variables are files under [[/env/]].
+[[getenv]] opens [[/env/name]], reads its contents, and returns
+a malloc'd string. Multi-valued variables (like [[path]]) store
+values separated by null bytes; [[getenv]] replaces those nulls
+with spaces to present a single string. [[putenv]] creates or
+overwrites the file. Because the environment is part of the
+namespace, [[rfork(RFCENVG)]] gives a child a clean
+environment, and [[rfork(RFENVG)]] gives it a copy.
 
 % /env/xxx plan9 magic namespace
 <<function [[getenv]]>>=
@@ -4125,6 +4427,16 @@ putenv(char *name, char *val)
 
 \section{Notes}
 
+%claude:
+Notes are \plan's equivalent of \unix signals, but they carry
+a string message instead of a number. When a note arrives,
+the handler can return [[NCONT]] (continue execution),
+[[NDFLT]] (terminate), [[NSAVE]] (save state for later
+restoration), or [[NRSTR]] (restore saved state). The string
+payload makes notes more informative than signals---a note
+might say \verb+"alarm"+ or \verb+"sys: write on closed pipe"+
+rather than just [[SIGALRM]] or [[SIGPIPE]].
+
 <<type [[Note_flag]]>>=
 #define	NCONT	0	/* continue after note */
 #define	NDFLT	1	/* terminate after note */
@@ -4133,6 +4445,13 @@ putenv(char *name, char *val)
 @
 
 \subsection{Posting}
+
+%claude:
+[[postnote]] sends a note to a process or process group by
+writing to [[/proc/pid/note]] or [[/proc/pid/notepg]].
+This is the file-system-based equivalent of \unix's [[kill]]:
+instead of a system call taking a signal number, you write
+a string to a file.
 
 <<type [[PostnoteKind]]>>=
 enum
@@ -4176,6 +4495,15 @@ postnote(int group, int pid, char *note)
 @
 
 \subsection{Notified}
+
+%claude:
+[[atnotify]] registers note handlers, analogous to \unix's
+[[signal]] function. Up to 33 handlers can be registered.
+The actual note-handling function, [[notifier]], tries each
+registered handler in order; the first one that returns
+non-zero ``handles'' the note and execution continues.
+If no handler claims the note, the default action
+([[NDFLT]]) terminates the process.
 
 <<function [[atnotify]]>>=
 int
@@ -4249,7 +4577,21 @@ notifier(void *v, char *s)
 
 \section{Pipes}
 
+%claude:
+\plan pipes are bidirectional (unlike \unix's unidirectional
+pipes) and carry structured 9P messages when used with
+[[mount]]. The [[pipe]] system call returns two file
+descriptors that are endpoints of a two-way communication
+channel.
+
 \section{Shared segments}
+
+%claude:
+[[segattach]] maps a shared memory segment into the process's
+address space. The [[SG_RONLY]] flag makes it read-only, and
+[[SG_CEXEC]] detaches it on [[exec]]. Shared segments are
+the low-level mechanism underlying [[rfork(RFMEM)]]'s
+memory sharing between processes.
 
 <<type [[Segattach_flag]]>>=
 /* Segattch */
@@ -4260,7 +4602,25 @@ notifier(void *v, char *s)
 
 \section{Fileservers}
 
+%claude:
+9P is the protocol that \plan file servers speak. Every file
+operation---open, read, write, stat, walk---is a message in
+this protocol. The [[Fcall]] structure represents a single 9P
+message, and the [[convM2S]]/[[convS2M]] functions convert
+between the wire format (a byte stream) and this C structure.
+Programs that implement file servers (like [[rio]], [[exportfs]],
+or user-level file systems) use these functions heavily.
+
 \subsection{[[Fcall]]}
+
+%claude:
+[[Fcall]] uses a C union to overlay the fields of all message
+types into a single structure. Each 9P message type (Tversion,
+Tattach, Twalk, Tread, etc.) uses a different subset of
+fields. The [[type]] field selects the variant, the [[fid]]
+identifies the file handle, and [[tag]] is a transaction
+identifier that lets clients match responses to requests
+in the face of concurrent operations.
 
 <<type [[Fcall]]>>=
 struct  Fcall
@@ -4373,6 +4733,13 @@ enum FcallType
 % in appendix? true that helps to understand the fields
 % used for each constructor
 
+%claude:
+[[fcallfmt]] is a custom format verb (registered as [[%F]])
+that prints a human-readable representation of any 9P message.
+Each message type has its own format string showing the
+relevant fields. This function is invaluable for debugging
+file servers: you can trace every 9P message with a single
+[[fprint(2, "%F\backslash n", \&f)]].
 
 <<constant [[QIDFMT]]>>=
 #define QIDFMT  "(%.16llux %lud %s)"
@@ -4545,6 +4912,15 @@ qidtype(char *s, uchar t)
 
 \subsection{Marshalling macros}
 
+%claude:
+The [[GBIT]]/[[PBIT]] macros read and write integers in
+little-endian byte order, the wire format of the 9P protocol.
+They work byte-at-a-time to be portable across architectures
+with different native byte orders. The [[BIT8SZ]] through
+[[BIT64SZ]] constants give the wire sizes. [[IOHDRSZ]] is
+the maximum overhead a 9P message header can add beyond the
+payload data.
+
 <<macros GBITxxx>>=
 #define GBIT8(p)    ((p)[0])
 #define GBIT16(p)   ((p)[0]|((p)[1]<<8))
@@ -4581,6 +4957,14 @@ qidtype(char *s, uchar t)
 \subsection{[[readp9msg()]]}
 
 % called from rio for example.
+
+%claude:
+[[read9pmsg]] reads a complete 9P message from a file
+descriptor. It first reads the 4-byte size header, then
+reads exactly that many remaining bytes with [[readn]].
+The two-step read is necessary because 9P is a
+length-prefixed protocol: you must read the size before
+you know how much data to expect.
 
 <<function [[read9pmsg]]>>=
 error0
@@ -4619,6 +5003,17 @@ read9pmsg(fdt fd, void *abuf, uint n)
 \subsection{Parsing}
 
 \subsubsection{String to message, [[convM2S()]]}
+
+%claude:
+[[convM2S]] deserializes a 9P message from its wire format
+into an [[Fcall]] structure. The function is careful about
+buffer overruns: every field extraction checks that enough
+bytes remain before reading. String fields are handled by
+[[gstring]], which performs an in-place trick: it shifts the
+string data down by one byte to overwrite the length prefix,
+making room for a null terminator---so the strings in the
+[[Fcall]] point directly into the input buffer with no extra
+allocation.
 
 <<function [[convM2S]]>>=
 /*
@@ -4943,6 +5338,16 @@ gqid(uchar *p, uchar *ep, Qid *q)
 @
 
 \subsubsection{Message to string, [[convS2M()]]}
+
+%claude:
+[[convS2M]] serializes an [[Fcall]] into the 9P wire format.
+It first calls [[sizeS2M]] to compute the exact output size,
+then writes the header (size, type, tag) and the type-specific
+fields. The [[pstring]] helper writes a length-prefixed string,
+with a subtle optimization: it copies the string data before
+writing the length, so you can serialize a struct whose string
+fields point into the output buffer itself (used when relaying
+9P messages).
 
 <<function [[convS2M]]>>=
 error0
@@ -5346,6 +5751,15 @@ stringsz(char *s)
 
 \subsubsection{String to directory entry, [[convM2D()]]}
 
+%claude:
+[[convM2D]] deserializes a [[Dir]] from the 9P stat format.
+The stat format is a fixed-length header (type, dev, qid,
+mode, times, length) followed by four length-prefixed strings
+(name, uid, gid, muid). The [[strs]] parameter provides
+scratch space where the string data is copied, so the
+resulting [[Dir]]'s string pointers are valid as long as
+that buffer lives.
+
 <<constant [[QIDSZ]]>>=
 #define QIDSZ   (BIT8SZ+BIT32SZ+BIT64SZ)
 @
@@ -5553,6 +5967,14 @@ enables waiting on multiple channels simultaneously (like Go's
 
 \subsection{Code organization}
 
+%claude:
+The library is split between a public API ([[thread.h]])
+and private implementation details ([[threadimpl.h]]).
+The core modules are: [[sched.c]] (the cooperative scheduler),
+[[channel.c]] (channel operations and [[alt]]), [[create.c]]
+(proc/thread creation), and the [[io*.c]] files that provide
+thread-safe wrappers for blocking system calls.
+
 %include/thread.h: public API
 %threadimpl.h: private DS
 
@@ -5602,6 +6024,17 @@ enables waiting on multiple channels simultaneously (like Go's
 % channels are structured in shared memory between processes and
 % threads. Used concurrently.
 
+%claude:
+The architecture has two levels: OS-level processes (procs)
+provide true parallelism via [[rfork(RFMEM)]], while
+user-level threads within each proc are cooperatively
+scheduled using [[setjmp]]/[[longjmp]]. Channels sit in
+shared memory, protected by a single global [[chanlock]],
+and use the [[rendezvous]] system call to block/wake
+threads across proc boundaries. Functions prefixed with
+\verb+_+ are internal; the public API is [[threadcreate]],
+[[proccreate]], [[send]], [[recv]], [[alt]], etc.
+
 \section{A toy example}
 
 % lib_thread/tests/!! example.c! include early
@@ -5609,6 +6042,13 @@ enables waiting on multiple channels simultaneously (like Go's
 \section{Core data structures}
 
 \subsection{Concurrency buiding blocks}
+
+%claude:
+[[Ref]] is a thread-safe reference counter. [[incref]] and
+[[decref]] use atomic operations ([[ainc]]/[[adec]]) so they
+work correctly even when called from different procs sharing
+memory. [[decref]] returns the new count, so the caller can
+free the object when it reaches zero.
 
 <<struct [[Ref]]>>=
 struct Ref {
@@ -5675,11 +6115,27 @@ _xdec(long *p)
 % public API!
 
 %A Channel is a buffered or unbuffered queue for fixed size messages
-% Procs and threads send messages into the channel and recv messages 
+% Procs and threads send messages into the channel and recv messages
 % from the channel
 
 % so really a form of generalized producer/consumer queue!
 % an effective and general concurrency mechanism
+
+%claude:
+A [[Channel]] is a typed, optionally-buffered communication
+pipe between threads. When [[s]] (the buffer capacity) is
+zero, it is unbuffered: a send blocks until a receiver is
+ready, and vice versa---this is a rendezvous. When [[s]] is
+positive, up to [[s]] messages can be queued before the sender
+blocks. The buffer is a circular queue stored in [[v]] (which
+is allocated inline at the end of the struct), with [[f]]
+as the extraction index and [[n]] as the count.
+%
+The [[qentry]] array holds pointers to [[Alt]] structures of
+threads blocked waiting on this channel. A single global
+[[chanlock]] protects all channel metadata---since threads
+within the same proc never run concurrently, this lock only
+contends between procs.
 
 <<struct [[Channel]]>>=
 /*
@@ -5801,6 +6257,15 @@ enum {
 
 
 % public API
+%claude:
+[[chanclose]] marks a channel as closed, then wakes all
+threads that are blocked waiting to send (and receivers if
+the buffer is empty). A closed channel returns an error on
+send but still allows receiving buffered values---exactly
+like Go's closed channels. The two-phase close (state~1
+= closing, state~2 = fully closed) prevents races between
+close and free.
+
 <<function [[chanclose]]>>=
 int
 chanclose(Channel *c)
@@ -5885,6 +6350,17 @@ chanclosing(Channel *c)
 
 % cooperative scheduler building blocks = coroutines = setjmp()!
 % (actually the kernel does the same)
+
+%claude:
+A [[Proc]] represents an OS-level process containing one or
+more cooperative threads. Its [[sched]] jmp\_buf is the
+scheduler's saved context---when a thread yields, it
+[[longjmp]]s to [[p->sched]], and the scheduler picks the
+next ready thread. Each proc maintains two thread queues:
+[[threads]] (all threads in this proc) and [[ready]] (runnable
+threads). The [[splhi]]/[[pending]]/[[nonotes]] fields handle
+note deferral: while holding the channel lock, notes are
+delayed to prevent deadlock.
 
 <<struct [[Proc]]>>=
 struct Proc
@@ -6079,6 +6555,15 @@ struct Execargs
 \subsection{[[Thread]] and [[Tqueue]]}
 % private DS, threadimpl.h
 
+%claude:
+A [[Thread]] is a cooperatively-scheduled coroutine within a
+[[Proc]]. It has its own stack (allocated with [[malloc]]),
+a [[jmp_buf]] for context switching, and state tracking. The
+[[chan]]/[[alt]] fields record which channel operation the
+thread is currently blocked on, used by the scheduler and
+debugger. The stack is filled with \verb+0xFE+ on creation
+so that stack usage can be measured by scanning for untouched
+bytes.
 
 <<struct [[Thread]]>>=
 struct Thread
@@ -6220,6 +6705,16 @@ newthread(Proc *p, void (*f)(void *arg), void *arg, uint stacksize, char *name, 
     return id;
 }
 @
+
+%claude:
+Thread creation sets up a stack frame so that when the
+scheduler [[longjmp]]s to the new thread, it begins
+executing [[launcher386]], which calls the user's function
+and then [[threadexits]]. The [[_threadinitstack]] function
+constructs this initial stack frame manually: it pushes the
+function pointer and argument onto the thread's stack, then
+sets [[JMPBUFPC]] to [[launcher386]] and [[JMPBUFSP]] to
+the top of the prepared stack.
 
 % 386.c
 <<function [[launcher386]]>>=
@@ -6397,6 +6892,16 @@ threadgetname(void)
 % slaves at the same time and get the next event from those slaves.
 % Here is alternative model to event, threads and channels and alt().
 
+%claude:
+[[Alt]] describes one arm of an [[alt]] call---the equivalent
+of one [[case]] in Go's [[select]]. It specifies a channel, a
+pointer to the value buffer, and an operation (send, receive,
+no-op, or end sentinel). The [[CHANNOBLK]] terminator makes
+the [[alt]] non-blocking: if no channel is ready, it returns
+immediately instead of waiting. The [[tag]] and [[entryno]]
+fields are used internally by the [[alt]] implementation to
+coordinate rendezvous between threads.
+
 <<enum [[chanop]]>>=
 /* Channel operations for alt: */
 enum chanop {
@@ -6428,6 +6933,17 @@ struct Alt {
 
 
 \section{[[main()]] and [[threadmain()]]}
+
+%claude:
+When a program uses [[libthread]], the library provides its
+own [[main]] which takes over before the user's code runs.
+It initializes the scheduler, installs thread-aware versions
+of [[_sysfatal]], [[_dial]], and [[_assert]], sets up note
+handling, and then creates a new proc whose first thread
+runs [[threadmain]]---the user's entry point. The [[setjmp]]
+at the top of [[main]] is the return point for the scheduler
+loop: after initialization, [[_schedinit]] runs and never
+returns to [[main]] directly.
 
 <<global [[mainp]]>>=
 // ref<ref<Proc>
@@ -6517,6 +7033,23 @@ mainlauncher(void *arg)
 
 \section{Threads scheduler}
 % similar to Kernel Scheduling chapter
+
+%claude:
+The scheduler is a simple loop: [[_schedinit]] runs in
+each proc, alternating between cleaning up finished threads
+and calling [[_sched]] to pick the next one. [[_sched]]
+saves the current thread's context with [[setjmp]], then
+[[longjmp]]s to the proc's scheduler context. The scheduler
+calls [[runthread]] to dequeue the next ready thread and
+[[longjmp]]s to it. If no threads are ready, [[runthread]]
+blocks the entire proc via [[rendezvous]] until
+[[_threadready]] wakes it.
+%
+The [[yield]] function simply calls [[_sched]], which saves
+the current thread (marking it Ready) and switches to the
+next one. This is the core of cooperative scheduling: a
+thread runs until it explicitly yields, sends/receives on a
+channel, or exits.
 
 <<global [[_psstate]]>>=
 static char *_psstate[] = {
@@ -6756,6 +7289,25 @@ _schedexit(Proc *p)
 \section{[[alt()]]}
 
 % send()/recv() use alt(), so better see alt() first.
+
+%claude:
+[[alt]] is the heart of [[libthread]]'s channel system---even
+[[send]] and [[recv]] are implemented as single-entry [[alt]]
+calls. The algorithm has three phases:
+(1)~scan all channels to see if any operation can proceed
+immediately; if multiple can, select one at random
+([[nrand(++n)]]) for fairness;
+(2)~if nothing is ready and [[CHANNOBLK]] is set, return
+immediately; otherwise enqueue on all channels and block;
+(3)~when woken, dequeue from all channels and return the
+selected entry.
+%
+The [[_procsplhi]]/[[_procsplx]] calls defer note delivery
+while the channel lock is held---if a note handler tried
+to use a channel while we hold [[chanlock]], it would deadlock.
+The [[Intred]] (interrupted) return from [[rendezvous]]
+causes a retry rather than an error, because another thread
+may be about to complete the rendezvous.
 
 % !!!
 <<function [[alt]]>>=
@@ -7124,6 +7676,15 @@ altcopy(void *dst, void *src, int sz)
 % when the other is not ready to receive if have
 % no more space in the queue
 
+%claude:
+All channel operations---[[send]], [[recv]], [[nbsend]],
+[[nbrecv]]---are thin wrappers around [[runop]], which builds
+a two-entry [[Alt]] array and calls [[alt]]. The comment in
+the code acknowledges that a direct implementation would be
+faster, but the simplicity of reusing [[alt]] is preferred.
+For non-blocking variants, the sentinel is [[CHANNOBLK]]
+instead of [[CHANEND]].
+
 \subsection{[[runop]]}
 
 <<function [[runop]]>>=
@@ -7204,6 +7765,15 @@ nbsend(Channel *c, void *v)
 @
 
 \subsection{Typed send and receive}
+
+%claude:
+The typed wrappers ([[sendul]]/[[recvul]], [[sendp]]/[[recvp]])
+add a size check to catch mismatched channel/value types
+at runtime. Without these, sending a [[ulong]] on a
+channel created for pointers would silently corrupt data.
+The [[channelsize]] function aborts if the element size
+doesn't match---a runtime approximation of Go's compile-time
+type checking on channels.
 
 <<function [[channelsize]]>>=
 static void
@@ -7315,6 +7885,23 @@ nbrecvp(Channel *c)
 % threads are cooperative. If one does a syscall such as reading
 % then it hangs the whole process ... so have to put such calls
 % in another process, hence the idea of IO slace processes.
+
+%claude:
+Cooperative threads have a fundamental problem: a blocking
+system call (like [[read]] on a network connection) blocks
+the entire proc, freezing all threads within it. The
+solution is ``IO procs''---dedicated processes that perform
+blocking I/O on behalf of threads. An [[Ioproc]] runs in
+its own process, receives I/O requests via channels, executes
+the blocking call, and sends the result back. The calling
+thread is free to yield while the IO proc is blocked.
+%
+The protocol uses two channels: [[c]] acquires the IO proc,
+and [[creply]] exchanges the data and result. The
+[[xioproc]] function is the IO proc's event loop, and
+[[iocall]] is the client-side helper. The [[io*]] wrappers
+([[ioopen]], [[ioread]], [[iowrite]], etc.) provide a familiar
+API identical to the blocking system calls.
 
 <<function [[ioproc_arg]]>>=
 #define ioproc_arg(io, type)	(va_arg((io)->arg, type))
@@ -7628,6 +8215,17 @@ _iosleep(va_list *arg)
 
 \section{Thread-aware libc}
 
+%claude:
+When [[libthread]] is linked in, several standard library
+functions need thread-aware replacements. [[malloc]] already
+uses locks, but [[_threadmalloc]] adds fatal-on-failure
+semantics and size sanity checks. [[threadexits]] replaces
+[[exits]]---it marks the current thread as moribund and
+yields to the scheduler rather than killing the process.
+[[threadexitsall]] terminates all procs. Similarly, [[exec]]
+must be coordinated through the scheduler because only one
+thread can exec per proc.
+
 \subsection{Memory}
 
 % actually malloc already shared-memory safe as it uses locks.
@@ -7747,6 +8345,14 @@ threadwaitchan(void)
 
 \subsection{Fork}
 
+%claude:
+[[_schedfork]] creates a new OS process that shares memory
+([[RFMEM]]) with the parent. The child process calls
+[[longjmp]] to jump back to [[main]]'s [[setjmp]], which
+re-enters [[_schedinit]] with the new proc as its
+argument---from there, the scheduler takes over and runs
+the new proc's threads.
+
 <<function [[_schedfork]]>>=
 int
 _schedfork(Proc *p)
@@ -7764,6 +8370,15 @@ _schedfork(Proc *p)
 @
 
 \subsection{Exec}
+
+%claude:
+Thread-aware [[exec]] is tricky because [[exec]] replaces
+the entire process, killing all threads within it.
+[[_schedexec]] forks a child process for the exec, and the
+parent waits for it via a pipe: the child closes the write
+end immediately, so if [[exec]] succeeds, the parent's read
+returns 0 bytes (EOF); if it fails, the child writes the
+error message before exiting.
 
 % in main.c, not sure why, could be in a exec.c
 <<function [[_schedexec]]>>=
@@ -7926,6 +8541,13 @@ procexecl(Channel *pidc, char *f, ...)
 
 \subsection{Interruptions}
 
+%claude:
+When a [[rendezvous]] call is interrupted by a note, it
+returns the special value [[Intred]] (\verb+~0+). The
+caller must not treat this as a successful exchange---it
+needs to retry. This is why channel operations loop on
+[[Intred]] throughout the code.
+
 <<constant [[Intred]]>>=
 #define Intred	((void*)~0)		/* interrupted */
 @
@@ -7933,8 +8555,15 @@ procexecl(Channel *pidc, char *f, ...)
 
 \subsection{Notes}
 
-
-
+%claude:
+Thread-aware note handling adds per-process tracking (each
+note handler records the pid of the process that installed
+it) and deferred delivery. When a note arrives while a
+thread holds the channel lock ([[splhi]]), the note is
+queued in a [[Note]] buffer and delivered later via
+[[delayednotes]] when the lock is released. This prevents
+the deadlock that would occur if a note handler tried to
+perform channel operations while the lock is held.
 
 
 
@@ -8114,6 +8743,11 @@ _procsplx(int s)
 
 
 \subsection{Dialing}
+
+%claude:
+The thread-safe [[dial]] replacement uses an IO proc to
+perform the blocking connection in a separate process, so
+other threads in the calling proc can continue running.
 
 <<function [[_iodial]]>>=
 static long
@@ -8369,6 +9003,13 @@ _dial_string_parse(char *str, DS *ds)
 
 %"Thread library functions do not return on failure; if errors occur, the entire program is aborted."
 
+%claude:
+Thread library errors are fatal: rather than returning error
+codes that threads might not check, the library calls
+[[abort]] to crash the program. This philosophy
+(``crash early, crash loudly'') ensures that bugs like
+double-free, stack overflow, or channel misuse are caught
+immediately rather than silently corrupting state.
 
 % call abort() which enter broken state I think by causing a fault
 
@@ -8410,6 +9051,13 @@ _threadassert(char *s)
 
 \section{Debugging}
 
+%claude:
+The threading library has built-in debug tracing controlled
+by [[_threaddebuglevel]], a bitmask of categories (scheduling,
+channels, rendezvous, etc.). Setting
+[[_threaddebuglevel = DBGSCHED|DBGCHAN]] produces a detailed
+trace of every context switch and channel operation---helpful
+for diagnosing deadlocks or starvation.
 
 <<global [[_threaddebuglevel]]>>=
 // biset<enum<dbgxxx>>
@@ -8540,6 +9188,14 @@ skip(char *p)
 
 \subsection{Per  thread private data}
 
+%claude:
+Thread-local storage is provided by [[tprivalloc]]/[[tprivaddr]]:
+each thread has an array of [[NPRIV]] (8) void pointers in
+its [[Thread]] structure. [[tprivalloc]] allocates a slot
+index, and [[tprivaddr]] returns a pointer to that slot
+in the current thread. This is the \plan equivalent of
+POSIX [[pthread_key_create]]/[[pthread_getspecific]].
+
 <<global privlock (libthread/id.c)>>=
 static Lock privlock;
 @
@@ -8614,6 +9270,13 @@ procdata(void)
 @
 
 \subsection{Thread groups}
+
+%claude:
+Thread groups allow killing or interrupting multiple threads
+at once. Each thread inherits its creator's group ID, and
+[[threadkillgrp]] marks all threads in the group as moribund.
+This is useful for cleaning up a set of worker threads when
+a task is cancelled.
 
 <<function [[threadsetgrp]]>>=
 int
@@ -8745,6 +9408,15 @@ threadint(int id)
 
 \subsection{Rendez vous}
 
+%claude:
+[[_threadrendezvous]] is the thread-level replacement for
+the kernel [[rendezvous]] system call. Instead of blocking
+in the kernel, it uses a hash table of waiting threads
+([[_threadrgrp]]): if a matching tag is found, the two
+threads exchange values immediately; otherwise, the current
+thread joins the hash table and yields. This allows threads
+within the same proc to rendezvous without leaving user space.
+
 <<constant [[RENDHASH]]>>=
 RENDHASH = 13,
 @
@@ -8871,6 +9543,11 @@ _threadbreakrendez(void)
 
 \subsection{[[chanprint()]]}
 
+%claude:
+[[chanprint]] formats a string and sends it through a channel
+in a single call---a convenience for the common pattern of
+sending formatted text between threads.
+
 <<function [[chanprint]]>>=
 int
 chanprint(Channel *c, char *fmt, ...)
@@ -8926,7 +9603,24 @@ struct NetConnInfo {
 \section{Example: an echo server}
 % classic, the hello world of network programming? See Stevens book?
 
+%claude:
+A \plan echo server is much shorter than its BSD sockets
+equivalent: [[announce("tcp!*!echo", dir)]] to listen,
+[[listen(dir, newdir)]] to accept, then
+[[read]]/[[write]] on [[accept(ctl, newdir)]]. There is no
+[[socket]], [[bind]], [[setsockopt]], or [[sockaddr_in]]---the
+file system abstraction handles all of that.
+
 \section{[[netmkaddr()]]}
+
+%claude:
+[[netmkaddr]] fills in missing parts of a network address
+using defaults. A full \plan address has the form
+\verb+net!host!service+ (e.g., \verb+tcp!example.com!80+).
+If the user provides just a hostname, [[netmkaddr]] prepends
+the default network and appends the default service. This
+lets programs accept flexible address formats while ensuring
+the result is always a complete dial string.
 
 <<function [[netmkaddr]]>>=
 /*
@@ -8979,6 +9673,21 @@ netmkaddr(char *linear, char *defnet, char *defsrv)
 }
 @
 \section{[[announce()]], [[accept()]], [[listen()]], [[reject()]]}
+
+%claude:
+The server-side API follows \plan's file system model:
+[[announce]] opens [[/net/tcp/clone]] to get a new connection
+directory, then writes \verb+announce addr+ to its control
+file. [[listen]] opens the \verb+listen+ file in that
+directory, which blocks until a client connects. [[accept]]
+opens the \verb+data+ file to get a bidirectional byte stream.
+[[reject]] writes a rejection message to the control file.
+%
+This file-based approach means the entire networking stack
+is accessible through the namespace. A program can
+[[bind]] an alternative network stack (e.g., over TLS)
+to [[/net]] and all network programs automatically use it,
+with no code changes.
 
 <<function [[announce]]>>=
 /*
@@ -9154,6 +9863,16 @@ reject(int ctl, char *dir, char *cause)
 
 
 \section{[[dial()]]}
+
+%claude:
+[[dial]] opens a network connection to a remote address.
+The implementation goes through a function pointer
+([[_dial]]) that [[libthread]] replaces with a thread-safe
+version---the default [[dialimpl]] uses [[rfork]] internally,
+which conflicts with [[libthread]]'s process management.
+The dial string is parsed into network, host, and service
+components, and the connection is established by writing
+to the appropriate files under [[/net]].
 
 <<function [[dial]]>>=
 int
@@ -9457,6 +10176,15 @@ instruction (see \book{Assembler}).
 
 \section{Basics}
 
+%claude:
+The basic math functions are straightforward but note
+that [[abs]] and [[fabs]] have the same C source code
+yet produce very different assembly: [[abs]] uses integer
+comparison and negation, while [[fabs]] uses floating-point
+instructions. [[floor]] and [[ceil]] use [[modf]] to split
+a number into integer and fractional parts, then adjust
+for negative numbers.
+
 <<function [[abs]]>>=
 int
 abs(int a)
@@ -9532,6 +10260,15 @@ ceil(double d)
 % atox vs strtox,  simple vs flexible
 
 \subsection{Parsing}
+
+%claude:
+The ``ato'' prefix stands for ``ASCII to'': [[atoi]] converts
+a string to [[int]], [[atol]] to [[long]]. [[atol]] handles
+three notations: decimal, octal (leading \verb+0+), and
+hexadecimal (leading \verb+0x+). The more flexible [[strtol]]
+adds support for arbitrary bases up to~36, returns a pointer
+past the parsed number (so the caller can continue parsing),
+and detects overflow.
 
 % a means? ascii to int ?
 <<function [[atoi]]>>=
@@ -9709,6 +10446,15 @@ Return:
 
 \subsection{Special numbers}
 
+%claude:
+IEEE~754 floating-point has special values: NaN (not a
+number), positive/negative infinity, and negative zero.
+These functions construct and detect them by manipulating
+the raw bit representation via [[FPdbleword]]. A NaN has
+all exponent bits set ([[NANEXP]] = \verb+2047<<20+) and a
+non-zero mantissa. Infinity has all exponent bits set and
+a zero mantissa. [[isNaN]] exploits the property that NaN
+is the only value not equal to itself.
 
 <<function [[NaN]]>>=
 double
@@ -9816,6 +10562,18 @@ isInf(double d, int sign)
 
 
 \subsection{Parsing}
+
+%claude:
+Parsing a floating-point number from text is surprisingly
+complex. [[strtod]] uses a state machine to handle signs,
+digits, decimal points, and exponents, then converts the
+resulting decimal number to binary using multi-precision
+integer arithmetic (the [[low]]/[[hig]]/[[mid]] arrays).
+The algorithm normalizes the decimal to the range
+$[0.5, 1.0)$, then uses binary search between lower and
+upper bounds to find the closest IEEE~754 representation.
+This avoids the rounding errors that plague simpler
+float-parsing approaches.
 
 <<function [[atof]]>>=
 double
@@ -10372,6 +11130,16 @@ xcmp(char *a, char *b)
 
 \subsection{[[sqrt()]]}
 
+%claude:
+[[sqrt]] uses Newton's method (also known as Heron's method):
+starting from an initial approximation, it iterates
+\verb+temp = 0.5 * (temp + arg/temp)+ which converges
+quadratically---each iteration doubles the number of correct
+digits, so 5 iterations suffice for double precision. The
+initial approximation uses [[frexp]] to extract the mantissa
+and exponent, then applies half the exponent to get close
+to the true square root.
+
 <<function [[sqrt]]>>=
 double
 sqrt(double arg)
@@ -10422,6 +11190,13 @@ sqrt(double arg)
 
 \subsection{[[modf()]]}
 
+%claude:
+[[modf]] splits a double into integer and fractional parts
+by directly masking the IEEE~754 bit representation. The
+exponent determines how many mantissa bits belong to the
+integer part: bits above that threshold are kept for
+\verb+*ip+, and the remainder is the fractional part. This
+is the function that [[floor]] and [[ceil]] rely on.
 
 % used by floor(), ceil() in basics sections
 % (not so basics in the end).
@@ -10498,6 +11273,15 @@ fmod (double x, double y)
 @
 
 \subsection{[[pow()]]}
+
+%claude:
+[[pow]] handles $x^y$ by splitting [[y]] into integer and
+fractional parts. The fractional part is computed as
+$e^{y_1 \ln x}$ (using [[exp]] and [[log]]), while the
+integer part is computed by repeated squaring---much faster
+than calling [[exp]]/[[log]] for the full exponent.
+Special cases include negative bases (only valid for integer
+exponents), zero, and overflow detection.
 
 <<function [[pow]]>>=
 double
@@ -10625,6 +11409,14 @@ double  tab[] =
 
 \section{Trigonometry}
 
+%claude:
+The trigonometric functions ([[sin]], [[cos]], [[tan]],
+[[atan]], [[atan2]]) use polynomial approximations from
+Hart et al.'s tables. The shared [[sinus]] helper first
+reduces the argument to the range $[0, \pi/4]$ using the
+periodicity of sin/cos, then evaluates a rational polynomial
+$p(x)/q(x)$. The coefficients (p0--p4, q0--q3) are chosen
+to give double-precision accuracy over this range.
 
 <<function [[cos]]>>=
 double
@@ -10867,6 +11659,17 @@ atan(double arg)
 
 \section{Logarithms and exponentials}
 
+%claude:
+The [[exp]] and [[log]] functions also use polynomial
+approximations. [[exp]] reduces its argument to the range
+$[0, \ln 2]$ by extracting the integer part as a power of~2
+(applied via [[ldexp]]), then evaluates a rational polynomial
+for the remainder. [[log]] does the reverse: it uses [[frexp]]
+to extract the exponent, then approximates $\ln(x)$ for
+$x \in [0.5, 1.0)$. [[ldexp]] and [[frexp]] manipulate the
+IEEE~754 exponent field directly for exact, fast
+multiplication/division by powers of~2.
+
 \subsection{[[exp()]]}
 
 <<function [[exp]]>>=
@@ -10933,6 +11736,14 @@ exp(double arg)
 
 \subsection{[[ldexp()]]}
 
+%claude:
+[[ldexp]] multiplies a double by $2^n$ by directly adjusting
+the IEEE~754 exponent field. It handles edge cases (zero,
+NaN, infinity, denormals, overflow, underflow) and works in
+a loop when [[n]] is too large for a single exponent
+adjustment. [[frexp]] does the reverse: it extracts the
+exponent and returns the mantissa in $[0.5, 1.0)$. Both
+access the bit representation through [[FPdbleword]].
 
 <<constant MASK (port/frexp.c)>>=
 /*
@@ -11130,6 +11941,15 @@ log10(double arg)
 %http://luc.devroye.org/rnbookindex.html
 
 %claude:
+The PRNG uses a lagged Fibonacci generator with taps at
+positions separated by [[TAP]] within a [[LEN]]-element
+ring buffer. [[srand]] seeds the generator with a linear
+congruential step. [[rand]] returns 15-bit values (for ANSI
+C compatibility), [[lrand]] returns 31-bit values, and
+[[nrand]] returns values in $[0, n)$ with uniform
+distribution (it retries when the raw value would cause
+modulo bias).
+%
 [[lrand]] uses an additive feedback shift register (a
 lagged Fibonacci generator) for fast pseudo-random numbers.
 For cryptographic randomness, [[truerand]] reads from
@@ -11212,6 +12032,12 @@ truerand(void)
 
 
 
+
+%claude:
+[[truerand]] reads from [[/dev/random]], which the kernel
+sources from hardware entropy (interrupt timing, etc.).
+[[fastrand]] uses the weaker [[lrand]] when speed matters
+more than unpredictability.
 
 \section{muldiv}
 
@@ -11323,6 +12149,16 @@ return descriptive error messages.
 
 \section{[[rerrstr()]], [[werrstr()]]}
 
+%claude:
+Because [[errstr]] {\em swaps} the error string (it reads the
+current error and replaces it with the buffer's contents),
+[[rerrstr]] must call it twice: once to read the error into
+a temporary buffer, and again to restore it. This read-without-clear
+pattern is necessary when you want to inspect the error
+without consuming it. [[werrstr]] does the opposite:
+it formats a message into a buffer and swaps it in, setting
+the process's error string.
+
 <<function [[rerrstr]]>>=
 void
 rerrstr(char *buf, uint nbuf)
@@ -11377,6 +12213,14 @@ perror(char *s)
 \section{Error return values}
 % move earlier in core DS chapter?
 
+%claude:
+C has no standard convention for error return values: some
+functions return 0 on error ([[convM2S]]), some return $-1$
+([[open]]), and some return 1 ([[getfields]]). These typedefs
+and constants document the convention used by each function,
+making the code more self-documenting. They were added by the
+author to the \plan source to reduce confusion.
+
 <<type [[errorxxx]]>>=
 // later: unify all of that to be more consistent!
 typedef int error0; // 0 is the error value
@@ -11400,6 +12244,15 @@ typedef int errorn; // 1 or more means error
 %pad: I added that
 
 \section{[[assert()]]}
+
+%claude:
+[[assert]] aborts the program when a condition is false.
+The macro uses the \plan C compiler's implicit stringification
+(the string \verb+"x"+ inside the macro expands to the
+literal text of the condition). The indirection through
+a function pointer [[_assert]] allows [[libthread]] to
+replace the default handler with one that reports the
+thread ID and does thread-safe cleanup.
 
 <<macro [[assert]]>>=
 #define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
@@ -11442,6 +12295,14 @@ abort(void)
 
 
 \section{[[sysfatal()]]}
+
+%claude:
+[[sysfatal]] is the standard way to terminate with an error
+message. It formats the message, prepends the program name
+([[argv0]]), and calls [[exits]]. Like [[_assert]], it goes
+through a function pointer [[_sysfatal]] so [[libthread]]
+can replace it with a thread-aware version that cleans up
+properly.
 
 % wrapper around exits that can format; also use argv0 in output
 <<function [[sysfatal]]>>=
@@ -11493,6 +12354,17 @@ generates a segmentation fault to produce a core dump for
 post-mortem analysis with [[acid]] (see \book{Debugger}).
 
 \section{Logging}
+
+%claude:
+[[syslog]] writes timestamped messages to [[/sys/log/logname]].
+It caches the file descriptor but validates it on each call
+by comparing the [[Dir]] (via [[eqdirdev]]) against the
+cached copy---this detects the case where a [[fork]] has
+closed the fd behind our back. If the log file can't be
+opened and [[cons]] is set, the message goes to the system
+console (\verb+#c/cons+) as a fallback. The error string
+is saved and restored across the call so that logging
+doesn't disturb [[%r]].
 
 <<function [[syslog]]>>=
 /*
@@ -11690,6 +12562,17 @@ static  int havecycles;
 \section{[[_profin()]]}
 % see \book{Linker}
 
+%claude:
+[[_profin]] is called at every function entry. It walks
+down the [[Plink]] tree from the current node ([[pp]])
+looking for a child with a matching PC. If none exists, it
+allocates a new node from the pre-allocated array
+([[prof.first]] through [[prof.last]]). It then records the
+current time using the appropriate measurement method
+(cycle counter, kernel cycles, or clock sample) by
+subtracting it from the node's accumulator---the matching
+subtraction in [[_profout]] will yield the elapsed time.
+
 % pragma profile turned off for those functins
 <<function [[_profin]]>>=
 // Called at every procedure entry when use 5l -p, see Linker.nw
@@ -11806,6 +12689,16 @@ _profinit(int entries, int what)
 
 \section{[[_profmain()]]}
 
+%claude:
+[[_profmain]] is called from the startup code when the
+program was linked with profiling enabled. It reads the
+[[/env/profsize]] and [[/env/proftype]] files to configure
+the number of [[Plink]] entries and the measurement method,
+allocates the profiling buffer with [[sbrk]] (not [[malloc]],
+since the allocator might not be initialized yet), and
+registers [[_profdump]] as an [[atexit]] handler so the
+profile data is written when the program exits.
+
 <<function [[_profmain]]>>=
 // called by _mainp in _main9p.s when 5l -p, see Linker
 void
@@ -11853,6 +12746,15 @@ _profmain(void)
 
 
 \section{[[_profdump()]]}
+
+%claude:
+[[_profdump]] writes the profiling data to a file named
+\verb+prof.<pid>+ (or \verb+prof.out+). The output format
+is a flat array of 16-byte records: a 2-byte child index,
+a 2-byte sibling index, a 4-byte PC, a 4-byte call count,
+and a 4-byte accumulated time. The [[prof]] command
+(see \book{Profiler}) reads this file and combines it with
+the symbol table to produce a human-readable profile.
 
 % where is it?? it's what generates the command.<pid> for prof to use?
 
@@ -11965,6 +12867,13 @@ _profdump(void)
 
 \section{[[cputime()]]}
 
+%claude:
+[[cputime]] returns the total CPU time (user + system +
+children) consumed by the process, in seconds. It reads
+the raw tick counts via [[times]] and sums all four
+components (user time, system time, children's user time,
+children's system time).
+
 % in 9sys/
 <<constant [[HZ]]>>=
 #define HZ  1000
@@ -12028,6 +12937,16 @@ getuser(void)
 \section{Cryptography}
 
 %TODO: put md5sum, sha1sum here
+
+%claude:
+The [[encrypt]]/[[decrypt]] functions implement DES-based
+block encryption, processing 7-byte blocks at a time
+(DES's 56-bit key = 7 bytes). The encryption is done
+in-place, and the buffer must be at least 8 bytes. The
+final partial block is handled by overlapping with the
+previous block. [[netcrypt]] is a helper for the
+authentication protocol: it encrypts a challenge string
+and formats the first 4 bytes as hexadecimal.
 
 <<function [[encrypt]]>>=
 /*
@@ -12108,6 +13027,17 @@ netcrypt(void *key, void *chal)
 @
 
 \section{SSL/TLS}
+
+%claude:
+[[pushssl]] and [[pushtls]] insert encryption layers on
+an existing connection using \plan's SSL/TLS kernel devices
+(\verb+#D/ssl+ and \verb+#a/tls+). They follow the standard
+\plan pattern: open the [[clone]] file to get a new
+channel number, configure it by writing commands to the
+control file (secrets, algorithm, etc.), and return the
+[[data]] file descriptor. The caller's original [[fd]] is
+closed---reads and writes now go through the encrypted
+channel transparently.
 
 <<function [[pushssl]]>>=
 /*
