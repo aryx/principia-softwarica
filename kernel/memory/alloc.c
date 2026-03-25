@@ -1,4 +1,4 @@
-/*s: alloc.c */
+/*s: memory/alloc.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -276,4 +276,4 @@ kstrdup(char **p, char *s)
     free(prev);
 }
 /*e: function [[kstrdup]] */
-/*e: alloc.c */
+/*e: memory/alloc.c */

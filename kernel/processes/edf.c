@@ -1,4 +1,4 @@
-/*s: edf.c */
+/*s: processes/edf.c */
 /* EDF scheduling */
 /*s: kernel basic includes */
 #include <u.h>
@@ -697,4 +697,4 @@ testschedulability(Proc *theproc)
     DPRINT("probably not schedulable\n");
     return "probably not schedulable";
 }
-/*e: edf.c */
+/*e: processes/edf.c */

@@ -1,4 +1,4 @@
-/*s: swap.c */
+/*s: memory/swap.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -488,4 +488,4 @@ setswapchan(Chan *c)
 }
 /*e: function [[setswapchan]] */
 
-/*e: swap.c */
+/*e: memory/swap.c */

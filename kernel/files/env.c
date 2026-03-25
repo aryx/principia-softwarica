@@ -1,4 +1,4 @@
-/*s: env.c */
+/*s: files/env.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -30,4 +30,4 @@ closeegrp(Egrp *eg)
     }
 }
 /*e: function [[closeegrp]] */
-/*e: env.c */
+/*e: files/env.c */

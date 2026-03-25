@@ -1,4 +1,4 @@
-/*s: lib.h */
+/*s: lib/lib.h */
 // coupling: libc.h
 // This file mostly exports code from lib_core/libc/ (linked with the kernel).
 // Those functions are also exported in include/libc.h but they prefered to
@@ -350,4 +350,4 @@ struct Waitmsg
 };
 /*e: struct [[Waitmsg]] */
 
-/*e: lib.h */
+/*e: lib/lib.h */

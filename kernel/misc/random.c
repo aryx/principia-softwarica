@@ -1,4 +1,4 @@
-/*s: random.c */
+/*s: misc/random.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -157,4 +157,4 @@ randomread(void *xp, ulong n)
     return n;
 }
 /*e: function [[randomread]] */
-/*e: random.c */
+/*e: misc/random.c */

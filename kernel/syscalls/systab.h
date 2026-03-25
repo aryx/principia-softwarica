@@ -1,4 +1,4 @@
-/*s: systab.h */
+/*s: syscalls/systab.h */
 // used by systab.c but also by trap.c for certain codes
 #include "../../../../lib_core/libc/9syscall/sys.h"
 
@@ -9,4 +9,4 @@ typedef long Syscall(ulong*); // user_wp? or copied in Sargs?
 extern Syscall *systab[];
 extern int nsyscall;
 extern char *sysctab[];
-/*e: systab.h */
+/*e: syscalls/systab.h */

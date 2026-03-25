@@ -1,4 +1,4 @@
-/*s: syscallfmt.c */
+/*s: syscalls/syscallfmt.c */
 /*
  * Print functions for system call tracing.
  */
@@ -376,4 +376,4 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
     up->syscalltrace = fmtstrflush(&fmt);
 }
 /*e: function [[sysretfmt]] */
-/*e: syscallfmt.c */
+/*e: syscalls/syscallfmt.c */

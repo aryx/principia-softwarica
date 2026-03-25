@@ -1,4 +1,4 @@
-/*s: portdat_forward.h */
+/*s: core/portdat_forward.h */
 typedef struct Alarms Alarms;
 typedef struct Block  Block;
 typedef struct Chan Chan;
@@ -86,4 +86,4 @@ typedef struct Kbscan Kbscan;
 #pragma incomplete Queue
 #pragma incomplete Timers
 /*e: portdat_forward.h pragmas */
-/*e: portdat_forward.h */
+/*e: core/portdat_forward.h */

@@ -1,4 +1,4 @@
-/*s: devmouse.c */
+/*s: devices/mouse/devmouse.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -651,4 +651,4 @@ mouseresize(void)
     wakeup(&mouse.r);
 }
 
-/*e: devmouse.c */
+/*e: devices/mouse/devmouse.c */

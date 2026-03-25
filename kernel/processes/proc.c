@@ -1,4 +1,4 @@
-/*s: proc.c */
+/*s: processes/proc.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -2005,4 +2005,4 @@ procindex(ulong pid)
     return s;
 }
 /*e: function [[procindex]] */
-/*e: proc.c */
+/*e: processes/proc.c */

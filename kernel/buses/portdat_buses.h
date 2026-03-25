@@ -1,4 +1,4 @@
-/*s: portdat_buses.h */
+/*s: buses/portdat_buses.h */
 
 /*s: constant [[NISAOPT]] */
 /*
@@ -113,4 +113,4 @@ extern Dev uartdevtab;
 extern PhysUart* physuart[];
 
 //void (*lprint)(char *, int);
-/*e: portdat_buses.h */
+/*e: buses/portdat_buses.h */

@@ -1,4 +1,4 @@
-/*s: mnt.c */
+/*s: files/mnt.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -245,4 +245,4 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 }
 /*e: function [[mntversion]] */
 
-/*e: mnt.c */
+/*e: files/mnt.c */

@@ -1,4 +1,4 @@
-/*s: allocb.c */
+/*s: files/allocb.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -206,4 +206,4 @@ iallocsummary(void)
     print("ialloc %lud/%lud\n", ialloc.bytes, conf.ialloc);
 }
 /*e: function [[iallocsummary]] */
-/*e: allocb.c */
+/*e: files/allocb.c */

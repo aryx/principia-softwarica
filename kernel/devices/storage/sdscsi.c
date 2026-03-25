@@ -1,4 +1,4 @@
-/*s: sdscsi.c */
+/*s: devices/storage/sdscsi.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -376,4 +376,4 @@ again:
     return rlen;
 }
 
-/*e: sdscsi.c */
+/*e: devices/storage/sdscsi.c */

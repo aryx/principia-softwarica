@@ -1,4 +1,4 @@
-/*s: portdat_devices.h */
+/*s: devices/portdat_devices.h */
 /*
  *  hardware info about a device
  */
@@ -80,4 +80,4 @@ extern bool intellimouse;
 extern QLock	drawlock;
 // for gscreen, gscreendata, see portscreen.h
 
-/*e: portdat_devices.h */
+/*e: devices/portdat_devices.h */

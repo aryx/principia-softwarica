@@ -1,4 +1,4 @@
-/*s: portclock.c */
+/*s: time/portclock.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -369,4 +369,4 @@ ms2tk(ulong ms)
     return (ms * Arch_HZ + 500) / 1000;
 }
 /*e: function [[ms2tk]] */
-/*e: portclock.c */
+/*e: time/portclock.c */

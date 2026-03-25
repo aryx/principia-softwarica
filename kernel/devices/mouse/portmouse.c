@@ -1,4 +1,4 @@
-/*s: portmouse.c */
+/*s: devices/mouse/portmouse.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -192,4 +192,4 @@ kmousectl(Cmdbuf *cb)
     poperror();
 }
 
-/*e: portmouse.c */
+/*e: devices/mouse/portmouse.c */

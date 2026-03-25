@@ -1,4 +1,4 @@
-/*s: devfs.c */
+/*s: filesystems/devfs.c */
 /*
  * File system devices.
  * Follows device config in Ken's file server.
@@ -1296,4 +1296,4 @@ Dev fsdevtab = {
 //    .config   =    devconfig,
 };
 /*e: global [[fsdevtab]] */
-/*e: devfs.c */
+/*e: filesystems/devfs.c */

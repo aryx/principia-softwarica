@@ -1,4 +1,4 @@
-/*s: portdat_memory.c */
+/*s: memory/portdat_memory.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -21,4 +21,4 @@ struct Swapalloc swapalloc;
 KImage  swapimage;
 /*e: global [[swapimage]] */
 
-/*e: portdat_memory.c */
+/*e: memory/portdat_memory.c */

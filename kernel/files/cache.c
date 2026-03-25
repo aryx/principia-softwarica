@@ -1,4 +1,4 @@
-/*s: cache.c */
+/*s: files/cache.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -584,4 +584,4 @@ cwrite(Chan* c, uchar *buf, int len, vlong off)
         p->next = f;
     qunlock(m);
 }
-/*e: cache.c */
+/*e: files/cache.c */

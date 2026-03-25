@@ -1,4 +1,4 @@
-/*s: portfns.c */
+/*s: core/portfns.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -101,4 +101,4 @@ readstr(ulong off, char *buf, ulong n, char *str)
     return n;
 }
 /*e: function [[readstr]] */
-/*e: portfns.c */
+/*e: core/portfns.c */

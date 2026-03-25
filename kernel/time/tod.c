@@ -1,4 +1,4 @@
-/*s: tod.c */
+/*s: time/tod.c */
 // TOD: Time Of Day.
 
 /*s: kernel basic includes */
@@ -282,4 +282,4 @@ mk64fract(uvlong to, uvlong from)
     return (to<<32) / from;
 }
 /*e: function [[mk64fract]] */
-/*e: tod.c */
+/*e: time/tod.c */

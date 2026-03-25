@@ -1,4 +1,4 @@
-/*s: sysfile.c */
+/*s: files/sysfile.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1202,4 +1202,4 @@ sysfwstat(ulong* arg)
 }
 /*e: syscall fwstat */
 
-/*e: sysfile.c */
+/*e: files/sysfile.c */

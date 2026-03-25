@@ -1,4 +1,4 @@
-/*s: portdat_files.h */
+/*s: files/portdat_files.h */
 
 /*s: enum [[blockflag]] */
 /* flag values */
@@ -481,4 +481,4 @@ struct Mntalloc
 };
 /*e: struct [[Mntalloc]] */
 extern struct Mntalloc mntalloc;
-/*e: portdat_files.h */
+/*e: files/portdat_files.h */

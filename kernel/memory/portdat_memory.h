@@ -1,4 +1,4 @@
-/*s: portdat_memory.h */
+/*s: memory/portdat_memory.h */
 
 // see also Arch_KMap in <arch>/ (but used in port)
 
@@ -457,4 +457,4 @@ struct Swapalloc
 };
 /*e: struct [[Swapalloc]] */
 extern struct Swapalloc swapalloc;
-/*e: portdat_memory.h */
+/*e: memory/portdat_memory.h */

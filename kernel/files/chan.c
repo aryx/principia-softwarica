@@ -1,4 +1,4 @@
-/*s: chan.c */
+/*s: files/chan.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1907,4 +1907,4 @@ putmhead(Mhead *m)
 }
 /*e: destructor [[putmhead]] */
 
-/*e: chan.c */
+/*e: files/chan.c */

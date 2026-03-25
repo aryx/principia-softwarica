@@ -1,4 +1,4 @@
-/*s: devcons.c */
+/*s: console/devcons.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1373,4 +1373,4 @@ writebintime(char *buf, int n)
     return n;
 }
 /*e: function [[writebintime]] */
-/*e: devcons.c */
+/*e: console/devcons.c */

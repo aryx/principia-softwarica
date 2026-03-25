@@ -1,4 +1,4 @@
-/*s: portdat_processes.c */
+/*s: processes/portdat_processes.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -18,4 +18,4 @@ void (*kproftimer)(ulong);
 /*s: global [[active]] */
 struct Active active;
 /*e: global [[active]] */
-/*e: portdat_processes.c */
+/*e: processes/portdat_processes.c */

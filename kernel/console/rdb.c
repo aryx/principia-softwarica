@@ -1,4 +1,4 @@
-/*s: rdb.c */
+/*s: console/rdb.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -113,4 +113,4 @@ rdb(void)
     iprint("rdb...");
     arch_callwithureg(talkrdb);
 }
-/*e: rdb.c */
+/*e: console/rdb.c */

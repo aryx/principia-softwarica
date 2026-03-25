@@ -1,4 +1,4 @@
-/*s: devproc.c */
+/*s: devices/sys/devproc.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1815,4 +1815,4 @@ text2data(Proc *p, Segment *s)
     return ps;
 }
 /*e: function [[text2data]] */
-/*e: devproc.c */
+/*e: devices/sys/devproc.c */

@@ -1,4 +1,4 @@
-/*s: ref.c */
+/*s: concurrency/ref.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -35,4 +35,4 @@ decref(Ref *r)
     return x;
 }
 /*e: function [[decref]] */
-/*e: ref.c */
+/*e: concurrency/ref.c */

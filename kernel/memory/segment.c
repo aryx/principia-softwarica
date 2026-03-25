@@ -1,4 +1,4 @@
-/*s: segment.c */
+/*s: memory/segment.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -882,4 +882,4 @@ data2txt(Segment *s)
     return ps;
 }
 /*e: function [[data2txt]] */
-/*e: segment.c */
+/*e: memory/segment.c */

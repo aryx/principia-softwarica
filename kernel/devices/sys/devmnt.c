@@ -1,4 +1,4 @@
-/*s: devmnt.c */
+/*s: devices/sys/devmnt.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -942,4 +942,4 @@ Dev mntdevtab = {
     .wstat    =    mntwstat,
 };
 /*e: global [[mntdevtab]] */
-/*e: devmnt.c */
+/*e: devices/sys/devmnt.c */

@@ -1,4 +1,4 @@
-/*s: devuart.c */
+/*s: buses/devuart.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -761,4 +761,4 @@ uartputs(char *s, int n)
         consuart->phys->putc(consuart, *s);
     }
 }
-/*e: devuart.c */
+/*e: buses/devuart.c */

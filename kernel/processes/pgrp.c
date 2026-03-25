@@ -1,4 +1,4 @@
-/*s: pgrp.c */
+/*s: processes/pgrp.c */
 // Process group, and Namespace.
 
 /*s: kernel basic includes */
@@ -354,4 +354,4 @@ resrcwait(char *reason)
     up->psstate = p;
 }
 /*e: function [[resrcwait]] */
-/*e: pgrp.c */
+/*e: processes/pgrp.c */

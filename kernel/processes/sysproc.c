@@ -1,4 +1,4 @@
-/*s: sysproc.c */
+/*s: processes/sysproc.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1067,4 +1067,4 @@ sysrendezvous(ulong* arg)
 }
 /*e: syscall rendezvous */
 
-/*e: sysproc.c */
+/*e: processes/sysproc.c */

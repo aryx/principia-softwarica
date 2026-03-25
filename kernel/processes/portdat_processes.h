@@ -1,4 +1,4 @@
-/*s: portdat_processes.h */
+/*s: processes/portdat_processes.h */
 
 // in lib.h: Waitmsg, ERRMAX
 
@@ -734,4 +734,4 @@ struct Active
 /*e: struct [[Active]] */
 extern struct Active active;
 
-/*e: portdat_processes.h */
+/*e: processes/portdat_processes.h */

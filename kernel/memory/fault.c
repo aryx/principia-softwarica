@@ -1,4 +1,4 @@
-/*s: fault.c */
+/*s: memory/fault.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -443,4 +443,4 @@ checkpages(void)
     print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
 }
 /*e: function [[checkpages]] */
-/*e: fault.c */
+/*e: memory/fault.c */

@@ -1,4 +1,4 @@
-/*s: portdat_misc.h */
+/*s: misc/portdat_misc.h */
 
 enum misc_constants_portable {
     /* READSTR was 1000, which is way too small for usb's ctl file */
@@ -32,4 +32,4 @@ struct Cmdtab
   int narg; /* expected #args; 0 ==> variadic */
 };
 /*e: struct [[Cmdtab]] */
-/*e: portdat_misc.h */
+/*e: misc/portdat_misc.h */

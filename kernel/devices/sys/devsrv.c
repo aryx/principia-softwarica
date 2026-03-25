@@ -1,4 +1,4 @@
-/*s: devsrv.c */
+/*s: devices/sys/devsrv.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -394,4 +394,4 @@ Dev srvdevtab = {
     .wstat    =    srvwstat,
 };
 /*e: global [[srvdevtab]] */
-/*e: devsrv.c */
+/*e: devices/sys/devsrv.c */

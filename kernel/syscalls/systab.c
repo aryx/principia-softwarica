@@ -1,4 +1,4 @@
-/*s: systab.c */
+/*s: syscalls/systab.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -172,4 +172,4 @@ char *sysctab[] = {
     [TSEMACQUIRE]   "Tsemacquire",
 };
 /*e: global [[sysstab]] */
-/*e: systab.c */
+/*e: syscalls/systab.c */

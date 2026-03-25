@@ -1,4 +1,4 @@
-/*s: alarm.c */
+/*s: time/alarm.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -130,4 +130,4 @@ done:
     return old;
 }
 /*e: function [[procalarm]] */
-/*e: alarm.c */
+/*e: time/alarm.c */

@@ -1,4 +1,4 @@
-/*s: file.c */
+/*s: files/file.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -134,4 +134,4 @@ validstat(byte *s, int n)
 }
 /*e: function [[validstat]] */
 
-/*e: file.c */
+/*e: files/file.c */

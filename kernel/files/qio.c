@@ -1,4 +1,4 @@
-/*s: qio.c */
+/*s: files/qio.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -1567,4 +1567,4 @@ qfull(Queue *q)
 }
 /*e: function [[qfull]] */
 
-/*e: qio.c */
+/*e: files/qio.c */

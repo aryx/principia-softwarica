@@ -1,4 +1,4 @@
-/*s: parse.c */
+/*s: misc/parse.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -123,4 +123,4 @@ lookupcmd(Cmdbuf *cb, Cmdtab *ctab, int nctab)
     return nil;
 }
 /*e: function [[lookupcmd]] */
-/*e: parse.c */
+/*e: misc/parse.c */

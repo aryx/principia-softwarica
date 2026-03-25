@@ -1,4 +1,4 @@
-/*s: portdat_core.h */
+/*s: core/portdat_core.h */
 
 // All those structs used to be in <arch>/dat.h, but many of their fields
 // were used from port/ so I've moved them here (and put the arch-specific
@@ -176,4 +176,4 @@ extern  char  hostdomain[];
 // defined in ???
 extern ulong    kerndate; 
 
-/*e: portdat_core.h */
+/*e: core/portdat_core.h */

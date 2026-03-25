@@ -1,4 +1,4 @@
-/*s: syssema.c */
+/*s: processes/syssema.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -328,4 +328,4 @@ syssemrelease(ulong* arg)
 }
 /*e: syscall semrelease */
 
-/*e: syssema.c */
+/*e: processes/syssema.c */

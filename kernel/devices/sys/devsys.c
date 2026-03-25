@@ -1,4 +1,4 @@
-/*s: devsys.c */
+/*s: devices/sys/devsys.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -347,4 +347,4 @@ Dev sysdevtab = {
 };
 /*e: global [[sysdevtab]] */
 
-/*e: devsys.c */
+/*e: devices/sys/devsys.c */

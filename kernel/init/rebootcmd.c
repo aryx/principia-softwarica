@@ -1,4 +1,4 @@
-/*s: rebootcmd.c */
+/*s: init/rebootcmd.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -175,4 +175,4 @@ rebootcmd(int argc, char *argv[])
 
     panic("return from reboot!");
 }
-/*e: rebootcmd.c */
+/*e: init/rebootcmd.c */

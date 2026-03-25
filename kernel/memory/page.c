@@ -1,4 +1,4 @@
-/*s: page.c */
+/*s: memory/page.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -752,4 +752,4 @@ portcountpagerefs(ulong *ref, int print)
 }
 /*e: function [[portcountpagerefs]] */
 
-/*e: page.c */
+/*e: memory/page.c */

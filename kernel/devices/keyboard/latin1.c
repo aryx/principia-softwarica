@@ -1,4 +1,4 @@
-/*s: latin1.c */
+/*s: devices/keyboard/latin1.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -96,4 +96,4 @@ latin1(Rune* k, int n)
         }
     return -1;
 }
-/*e: latin1.c */
+/*e: devices/keyboard/latin1.c */

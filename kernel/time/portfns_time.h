@@ -1,4 +1,4 @@
-/*s: portfns_time.h */
+/*s: time/portfns_time.h */
 
 // portclock.c
 ulong   tk2ms(ulong);
@@ -44,4 +44,4 @@ ulong  arch_perfticks(void);
 // <arch>/clock.c (called from port but signature not portable across <arch>)
 //void arch_cycles(uvlong*);
 
-/*e: portfns_time.h */
+/*e: time/portfns_time.h */

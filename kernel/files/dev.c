@@ -1,4 +1,4 @@
-/*s: dev.c */
+/*s: files/dev.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -484,4 +484,4 @@ devwstat(Chan*, uchar*, int)
 //    error(Eperm);
 //    return 0;
 //}
-/*e: dev.c */
+/*e: files/dev.c */

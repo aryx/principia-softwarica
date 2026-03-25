@@ -1,4 +1,4 @@
-/*s: sysmemory.c */
+/*s: memory/sysmemory.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -81,4 +81,4 @@ syssegflush(ulong* arg)
     return 0;
 }
 /*e: syscall segflush */
-/*e: sysmemory.c */
+/*e: memory/sysmemory.c */

@@ -1,4 +1,4 @@
-/*s: devdup.c */
+/*s: devices/sys/devdup.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -149,4 +149,4 @@ Dev dupdevtab = {
     .wstat    =    devwstat,
 };
 /*e: global [[dupdevtab]] */
-/*e: devdup.c */
+/*e: devices/sys/devdup.c */

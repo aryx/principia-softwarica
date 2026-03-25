@@ -1,4 +1,4 @@
-/*s: print.c */
+/*s: console/print.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -30,4 +30,4 @@ int _efgfmt(Fmt*)
 {
     return -1;
 }
-/*e: print.c */
+/*e: console/print.c */

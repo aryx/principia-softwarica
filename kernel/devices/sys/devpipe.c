@@ -1,4 +1,4 @@
-/*s: devpipe.c */
+/*s: devices/sys/devpipe.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -471,4 +471,4 @@ Dev pipedevtab = {
     .wstat    =    pipewstat,
 };
 /*e: global [[pipedevtab]] */
-/*e: devpipe.c */
+/*e: devices/sys/devpipe.c */

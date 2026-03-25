@@ -1,4 +1,4 @@
-/*s: pool.c */
+/*s: memory/pool.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -172,4 +172,4 @@ mallocsummary(void)
 }
 /*e: function [[mallosummary]] */
 
-/*e: pool.c */
+/*e: memory/pool.c */

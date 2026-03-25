@@ -1,4 +1,4 @@
-/*s: error.c */
+/*s: core/error.c */
 /*s: global Exxx errors */
 char Emount[] = "inconsistent mount";
 char Eunmount[] = "not mounted";
@@ -56,4 +56,4 @@ char Estalled[] = "endpoint stalled";
 char Esbadstat[] = "invalid directory entry received from server";
 char Enoversion[] = "version not established for mount channel";
 /*e: global Exxx errors */
-/*e: error.c */
+/*e: core/error.c */

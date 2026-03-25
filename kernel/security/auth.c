@@ -1,4 +1,4 @@
-/*s: auth.c */
+/*s: security/auth.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -152,4 +152,4 @@ hostdomainwrite(char *a, int n)
     return n;
 }
 /*e: function [[hostdomainwrite]] */
-/*e: auth.c */
+/*e: security/auth.c */

@@ -1,4 +1,4 @@
-/*s: devenv.c */
+/*s: devices/sys/devenv.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -439,4 +439,4 @@ getconfenv(void)
     return p;
 }
 /*e: function [[getconfenv]] */
-/*e: devenv.c */
+/*e: devices/sys/devenv.c */

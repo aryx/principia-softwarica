@@ -1,4 +1,4 @@
-/*s: devkbmap.c */
+/*s: devices/keyboard/devkbmap.c */
 /*
  *  keyboard map
  */
@@ -180,4 +180,4 @@ Dev kbmapdevtab = {
     .remove = devremove,
     .wstat = devwstat,
 };
-/*e: devkbmap.c */
+/*e: devices/keyboard/devkbmap.c */

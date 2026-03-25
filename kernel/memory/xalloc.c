@@ -1,4 +1,4 @@
-/*s: xalloc.c */
+/*s: memory/xalloc.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -316,4 +316,4 @@ xsummary(void)
     print(" %d bytes free\n", i);
 }
 /*e: function [[xsummary]] */
-/*e: xalloc.c */
+/*e: memory/xalloc.c */

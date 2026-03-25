@@ -1,4 +1,4 @@
-/*s: devkbin.c */
+/*s: devices/keyboard/devkbin.c */
 /*
  *  keyboard scan code input from outside the kernel.
  *  to avoid duplication of keyboard map processing for usb.
@@ -120,4 +120,4 @@ Dev kbindevtab = {
     .remove = devremove,
     .wstat = devwstat,
 };
-/*e: devkbin.c */
+/*e: devices/keyboard/devkbin.c */

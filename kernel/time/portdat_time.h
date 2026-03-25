@@ -1,4 +1,4 @@
-/*s: portdat_time.h */
+/*s: time/portdat_time.h */
 
 /*s: enum [[timermode]] */
 /*
@@ -68,4 +68,4 @@ enum {
 
 #pragma varargck  type  "t"   long
 #pragma varargck  type  "U"   uvlong
-/*e: portdat_time.h */
+/*e: time/portdat_time.h */

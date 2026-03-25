@@ -1,4 +1,4 @@
-/*s: taslock.c */
+/*s: concurrency/taslock.c */
 // TAS: Test And Set
 /*s: kernel basic includes */
 #include <u.h>
@@ -346,4 +346,4 @@ iunlock(Lock *l)
 }
 /*e: function [[iunlock]] */
 
-/*e: taslock.c */
+/*e: concurrency/taslock.c */

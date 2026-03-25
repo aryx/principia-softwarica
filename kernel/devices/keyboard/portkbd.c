@@ -1,4 +1,4 @@
-/*s: portkbd.c */
+/*s: devices/keyboard/portkbd.c */
 /*
  * keyboard input // the portable part
  */
@@ -442,4 +442,4 @@ kbdgetmap(uint offset, int *t, int *sc, Rune *r)
     }
 }
 /*e: function [[kbdgetmap]] */
-/*e: portkbd.c */
+/*e: devices/keyboard/portkbd.c */

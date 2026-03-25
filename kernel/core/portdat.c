@@ -1,4 +1,4 @@
-/*s: portdat.c */
+/*s: core/portdat.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -55,4 +55,4 @@ bool iseve(void) {
 }
 /*e: function [[iseve]] */
 
-/*e: portdat.c */
+/*e: core/portdat.c */

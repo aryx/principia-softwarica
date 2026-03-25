@@ -1,4 +1,4 @@
-/*s: sd.h */
+/*s: devices/storage/sd.h */
 /*
  * Storage Device.
  */
@@ -161,4 +161,4 @@ extern int scsiverify(SDunit*);
 extern int scsionline(SDunit*);
 extern long scsibio(SDunit*, int, int, void*, long, uvlong);
 //extern SDev* scsiid(SDev*, SDifc*);
-/*e: sd.h */
+/*e: devices/storage/sd.h */

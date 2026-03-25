@@ -1,4 +1,4 @@
-/*s: qlock.c */
+/*s: concurrency/qlock.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -296,4 +296,4 @@ canrlock(RWlock *q)
     return false;
 }
 /*e: function [[canrlock]] */
-/*e: qlock.c */
+/*e: concurrency/qlock.c */

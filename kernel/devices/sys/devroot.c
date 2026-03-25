@@ -1,4 +1,4 @@
-/*s: devroot.c */
+/*s: devices/sys/devroot.c */
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -311,4 +311,4 @@ Dev rootdevtab = {
 };
 /*e: global [[rootdevtab]] */
 
-/*e: devroot.c */
+/*e: devices/sys/devroot.c */

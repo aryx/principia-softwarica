@@ -1,4 +1,4 @@
-/*s: portdat_concurrency.h */
+/*s: concurrency/portdat_concurrency.h */
 
 //*****************************************************************************
 // Mutual exclusion
@@ -131,4 +131,4 @@ struct Sema
 /*e: struct [[Sema]] */
 
 // see also Waitq in portdat_processes.h?
-/*e: portdat_concurrency.h */
+/*e: concurrency/portdat_concurrency.h */
