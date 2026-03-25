@@ -169,5 +169,4 @@ _procsplx(int s)
         delayednotes(p, nil);
 }
 /*e: function [[_procsplx]] */
-
 /*e: libthread/note.c */

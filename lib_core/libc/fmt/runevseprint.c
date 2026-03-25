@@ -23,5 +23,4 @@ runevseprint(Rune *buf, Rune *e, char *fmt, va_list args)
     return f.to;
 }
 /*e: function [[runevseprint]] */
-
 /*e: libc/fmt/runevseprint.c */

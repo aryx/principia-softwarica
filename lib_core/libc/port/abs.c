@@ -11,5 +11,4 @@ abs(int a)
     return a;
 }
 /*e: function [[abs]] */
-
 /*e: libc/port/abs.c */

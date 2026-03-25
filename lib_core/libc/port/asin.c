@@ -5,7 +5,6 @@
  *
  * Arctan is called after appropriate range reduction.
  */
-
 #include <u.h>
 #include <libc.h>
 

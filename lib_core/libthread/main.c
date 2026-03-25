@@ -245,5 +245,4 @@ _schedexecwait(void)
     threadexits("procexec");
 }
 /*e: function [[_schedexecwait]] */
-
 /*e: libthread/main.c */

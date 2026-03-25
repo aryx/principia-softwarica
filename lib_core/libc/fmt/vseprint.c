@@ -23,5 +23,4 @@ vseprint(char *buf, char *e, char *fmt, va_list args)
     return f.to;
 }
 /*e: function [[vseprint]] */
-
 /*e: libc/fmt/vseprint.c */

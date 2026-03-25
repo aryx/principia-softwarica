@@ -211,5 +211,4 @@ yield(void)
     _sched();
 }
 /*e: function [[yield]] */
-
 /*e: libthread/sched.c */

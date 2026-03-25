@@ -41,7 +41,6 @@ finished(int hand, int isclient)
 }
 /*e: function [[finished]] */
 
-
 /*s: function [[pushtls]] */
 // given a plain fd and secrets established beforehand, return encrypted connection
 int

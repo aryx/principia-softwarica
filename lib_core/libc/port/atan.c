@@ -12,7 +12,6 @@
 
     coefficients are #5077 from Hart & Cheney. (19.56D)
 */
-
 #include <u.h>
 #include <libc.h>
 
@@ -53,7 +52,6 @@
 #define q0  .89678597403663861962481162e3
 /*e: constant [[q0]] */
 
-
 /*s: function [[xatan]] */
 /*
     xatan evaluates a series valid in the
@@ -72,7 +70,6 @@ xatan(double arg)
     return value*arg;
 }
 /*e: function [[xatan]] */
-
 /*s: function [[satan]] */
 /*
     satan reduces its argument (known to be positive)

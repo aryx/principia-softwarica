@@ -395,5 +395,4 @@ rwakeupall(Rendez *r)
     return i;
 }
 /*e: function [[rwakeupall]] */
-
 /*e: libc/9sys/qlock.c */

@@ -2,7 +2,6 @@
 #include <u.h>
 #include <libc.h>
 
-
 /*s: function [[_sysfatalimpl]] */
 static void
 _sysfatalimpl(char *fmt, va_list arg)

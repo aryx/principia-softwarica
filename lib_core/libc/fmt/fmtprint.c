@@ -3,7 +3,6 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-
 /*s: function [[fmtprint]] */
 /*
  * format a string into the output buffer
@@ -21,5 +20,4 @@ fmtprint(Fmt *f, char *fmt, ...)
     return n;
 }
 /*e: function [[fmtprint]] */
-
 /*e: libc/fmt/fmtprint.c */

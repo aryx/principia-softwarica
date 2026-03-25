@@ -303,5 +303,4 @@ prof(void (*fn)(void*), void *arg, int entries, int what)
 /*e: function [[prof]] */
 
 #pragma profile on
-
 /*e: libc/port/profile.c */

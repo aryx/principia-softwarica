@@ -2,7 +2,6 @@
 #include <u.h>
 #include <libc.h>
 
-
 /*s: function [[oldtime]] */
 /*
  *  After a fork with fd's copied, both fd's are pointing to

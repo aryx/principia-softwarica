@@ -84,5 +84,4 @@ procexecl(Channel *pidc, char *f, ...)
     procexec(pidc, f, &f+1);
 }
 /*e: function [[procexecl]] */
-
 /*e: libthread/exec.c */

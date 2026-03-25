@@ -4,8 +4,8 @@
 
 /*s: function [[strdup]] */
 char*
-strdup(char *s) 
-{  
+strdup(char *s)
+{
     char *ns;
 
     ns = malloc(strlen(s) + 1);

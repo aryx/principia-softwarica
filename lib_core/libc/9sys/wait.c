@@ -33,5 +33,4 @@ wait(void)
     return w;
 }
 /*e: function [[wait]] */
-
 /*e: libc/9sys/wait.c */

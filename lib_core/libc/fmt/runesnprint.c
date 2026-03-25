@@ -15,5 +15,4 @@ runesnprint(Rune *buf, int len, char *fmt, ...)
     return n;
 }
 /*e: function [[runesnprint]] */
-
 /*e: libc/fmt/runesnprint.c */

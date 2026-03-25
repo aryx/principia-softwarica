@@ -2,7 +2,6 @@
 #include <u.h>
 #include <libc.h>
 
-
 /*s: function [[utfutf]] */
 /*
  * Return pointer to first occurrence of s2 in s1,

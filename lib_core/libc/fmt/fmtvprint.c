@@ -3,7 +3,6 @@
 #include <libc.h>
 #include "fmtdef.h"
 
-
 /*s: function [[fmtvprint]] */
 /*
  * format a string into the output buffer
@@ -24,5 +23,4 @@ fmtvprint(Fmt *f, char *fmt, va_list args)
     return n;
 }
 /*e: function [[fmtvprint]] */
-
 /*e: libc/fmt/fmtvprint.c */

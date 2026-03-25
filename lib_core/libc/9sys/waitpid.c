@@ -22,5 +22,4 @@ waitpid(void)
     return atoi(fld[0]);
 }
 /*e: function [[waitpid]] */
-
 /*e: libc/9sys/waitpid.c */

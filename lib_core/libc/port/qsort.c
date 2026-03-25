@@ -2,7 +2,6 @@
 /*
  * qsort -- simple quicksort
  */
-
 #include <u.h>
 
 /*s: type [[Sort]] */

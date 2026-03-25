@@ -170,5 +170,4 @@ _freethread(Thread *t)
     free(t);
 }
 /*e: function [[_freethread]] */
-
 /*e: libthread/create.c */

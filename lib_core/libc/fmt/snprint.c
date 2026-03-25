@@ -15,5 +15,4 @@ snprint(char *buf, int len, char *fmt, ...)
     return n;
 }
 /*e: function [[snprint]] */
-
 /*e: libc/fmt/snprint.c */
