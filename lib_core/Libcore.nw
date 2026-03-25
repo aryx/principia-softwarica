@@ -1715,35 +1715,129 @@ could in principle be ported to \plan.
 
 %claude:
 System calls are the boundary between user space and the kernel.
-Each system call is a small assembly stub (in [[9syscall/*.s]])
-that loads the syscall number into a register and executes a
-software interrupt. The kernel's dispatcher (see \book{Kernel})
-then routes to the appropriate [[sysxxx()]] handler.
+In this chapter I present the \plan syscall table, the assembly
+stubs that invoke them, and the calling convention that ties
+everything together. The kernel side of this bridge is covered
+in the \book{Kernel}.
 
-%yoann: explain more the bridge, maybe show concrete scenario with sysnop with c code, assembly, etc.
+\section{The syscall table}
+
 %claude:
-For example, when a C program calls [[open("foo", OREAD)]],
-the following happens:
-\begin{enumerate}
-\item The C compiler generates a call to [[open]] in
-[[9syscall/open.s]].
-\item The assembly stub loads the syscall number for [[OPEN]]
-into register [[R0]] and executes [[SWI 0]] (software
-interrupt).
-\item The ARM traps into the kernel, which saves the user
-registers and calls [[sysopen()]] in the kernel.
-\item [[sysopen()]] does the real work (namespace lookup,
-permission check, allocating a [[Chan]]) and returns a file
-descriptor.
-\item The kernel restores the user registers and returns to
-the assembly stub, which returns the file descriptor to the
-C caller.
-\end{enumerate}
+The entire \plan kernel interface is defined in a single
+header, [[libc/9syscall/sys.h]], shared between the kernel and the C library.
+Each syscall is a small integer:
+%dup: Kernel.nw
+\begin{verbatim}
+  #define NOP         0
+  /* process */
+  #define RFORK       1
+  #define EXEC        2
+  #define EXITS       3
+  #define AWAIT       4
+  /* memory */
+  #define BRK         5
+  /* files */
+  #define OPEN        6
+  #define CLOSE       7
+  #define PREAD       8
+  #define PWRITE      9
+  #define SEEK       10
+  /* directories */
+  #define CREATE     11
+  #define REMOVE     12
+  ...
+  /* concurrency */
+  #define RENDEZVOUS 32
+  #define SEMACQUIRE 33
+  ...
+  #define ERRSTR     39
+\end{verbatim}
 %
-The code for these stubs is generated automatically by the
-[[mkfile]] in [[9syscall/]]: one \verb+.s+ file per system call,
-all following the same pattern. The system call numbers are
-defined in [[syscall.h]].
+Only 39 syscalls. Modern Linux has over 400. \plan can get
+away with so few because many operations that require
+dedicated syscalls on \unix are done through the file
+system instead: reading [[/dev/user]] instead of
+[[getuid()]], reading [[/env/PATH]] instead of
+[[getenv("PATH")]], writing to [[/proc/pid/note]] instead
+of [[kill()]].
+%
+The grouping matches the structure of this book: each
+chapter in Parts~III and~IV corresponds to one group of
+syscalls.
+
+\section{The assembly stubs}
+
+%claude:
+Each syscall has a tiny assembly stub in [[9syscall/]].
+For example, here is what [[open.s]] looks like on ARM:
+\begin{verbatim}
+  TEXT open(SB), 1, $0
+  MOVW R0, 0(FP)       /* save first arg */
+  MOVW $6, R0          /* OPEN = 6 */
+  SWI $0               /* trap into kernel */
+  RET
+\end{verbatim}
+%
+Every stub follows the same pattern: save the first
+argument (which arrived in [[R0]]) onto the stack frame,
+load the syscall number into [[R0]], execute a software
+interrupt ([[SWI $0]]), and return. The kernel reads the
+arguments from the user's stack frame, and the return
+value comes back in [[R0]].
+%
+These stubs are not written by hand---they are
+{\em generated} by the [[mkfile]] in [[9syscall/]],
+which reads [[sys.h]], extracts each syscall name and
+number, and emits the corresponding assembly file.
+This is a nice example of {code generation}: 40 files
+produced from a 40-line header.
+
+\section{The calling convention}
+
+%claude:
+The full path of a system call looks like this:
+\begin{verbatim}
+  User C code           Library               Kernel
+  -----------           -------               ------
+  fd = open("f", 0) --> open.s: SWI $0  --> sysopen()
+                     <-- return fd       <-- return fd
+\end{verbatim}
+%
+Arguments are passed on the stack using the standard \plan
+C calling convention (see \book{Compiler}). The kernel's
+trap handler saves the user registers, reads the syscall
+number from [[R0]], indexes into the [[systab]]
+dispatch table (see \book{Kernel}), and calls the
+corresponding [[sysxxx()]] function. On return, the
+result is placed in [[R0]] and the kernel restores
+the user registers.
+%
+Errors are signaled by returning $-1$ and setting the
+per-process error string (readable via [[errstr()]]).
+This is different from \unix, where [[errno]] is a global
+variable set by the C library---in \plan, the kernel itself
+sets the error string, and the [[%r]] format verb in
+[[print]] reads it directly.
+
+%yoann: maybe ASCII diagram showing C calling conventions and Kernel convention with Stack layout and special weird opti about R0 instead of in stack for first param
+
+\section{Comparison with \unix}
+
+%claude:
+The \plan syscall interface differs from \unix in several ways:
+\begin{itemize}
+\item {\em Fewer syscalls}: 39 vs.\ 400+ on Linux, because
+file operations replace specialized syscalls.
+\item {\em No [[ioctl]]}: device control is done by reading
+and writing control files (e.g., [[/net/tcp/0/ctl]]).
+\item {\em [[pread]]/[[pwrite]]}: the primary I/O syscalls
+take an explicit offset, making concurrent access safe.
+[[read]]/[[write]] are library wrappers, not syscalls.
+\item {\em [[rfork]] instead of [[fork]]+[[clone]]}: a single
+syscall with flags for fine-grained resource sharing.
+\item {\em String errors}: [[errstr]] instead of [[errno]];
+[[exits(char*)]] instead of [[exit(int)]].
+\end{itemize}
 
 %******************************************************************************
 \chapter{[[_main()]] and [[_exits()]]}
@@ -1773,6 +1867,47 @@ termination.
 
 \section{[[_main()]] (ARM)}
 
+%yoann: explain assembly, and especially weird SB thing (reference Linker book?)
+
+<<libc/arm/main9.s>>=
+#define NPRIVATES	16
+#define NOPROF 1 // see 5.out.h        
+
+arg=0
+sp=13
+sb=12
+
+TEXT	_main(SB), NOPROF, $(16 + NPRIVATES*4)
+	MOVW	$setR12(SB), R(sb)
+	MOVW	R(arg), _tos(SB)
+
+	MOVW	$p-64(SP), R1
+	MOVW	R1, _privates(SB)
+	MOVW	$NPRIVATES, R1
+	MOVW	R1, _nprivates(SB)
+
+	MOVW	$inargv+0(FP), R(arg)
+	MOVW	R(arg), 8(R(sp))
+	MOVW	inargc-4(FP), R(arg)
+	MOVW	R(arg), 4(R(sp))
+
+    // user main()
+	BL	main(SB)
+
+loop:
+	MOVW	$_exitstr<>(SB), R(arg)
+	MOVW	R(arg), 4(R(sp))
+	BL	exits(SB)
+    // unreachable
+    // force loading of div?
+	BL	_div(SB) 
+	B	loop
+
+DATA	_exitstr<>+0(SB)/4, $"main"
+GLOBL	_exitstr<>+0(SB), $5
+@
+
+%yoann: maybe reference _main9p.s when enable profiling
 
 \section{Command-line arguments: [[ARGBEGIN()]], [[ARGEND()]]}
 
@@ -1874,6 +2009,8 @@ for [[EXITS]] into [[R0]], places the argument (the exit
 status string pointer) in [[R1]], and executes [[SWI 0]].
 This is all the user-space code there is---the kernel's
 [[sysexits()]] does the actual process teardown.
+
+%yoann: show actual assembly ARM for _exits.s, we already saw one in previous chapter, it is ok to repeat things once
 
 \section{[[exits()]] and [[atexit()]]}
 
