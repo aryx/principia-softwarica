@@ -9,7 +9,7 @@
 typedef struct Onex Onex;
 /*s: struct [[Onex]] */
 struct Onex{
-    void    (*f)(void);
+    void    (*f)(void); // callback
     int pid;
 };
 /*e: struct [[Onex]] */
