@@ -369,6 +369,8 @@ interface, and explain how the code is organized.
 \section{Principles}
 %\section{Core components}
 
+%yoann: small introduction paragraph
+
 \subsection{Core versus non-core}
 % what is core?
 
@@ -380,12 +382,15 @@ declarations may allocate memory. The string functions are
 core because text processing is ubiquitous. The system call
 wrappers are core because they are the only way to talk to
 the kernel.
+%yoann1: how variable decl can allocate memory via malloc? confusing
+
 %
 By contrast, libraries like [[libregexp]] (regular expressions)
 or [[libflate]] (compression) are used by many programs but
 not by all. I include them in this book because they are small,
 self-contained, and illustrate interesting algorithms---but
 they are not ``core'' in the same way as [[libc]].
+%yoann1: hmm but then why call this book plan9 core libraries?
 
 \subsection{User/kernel bridge, system calls}
 
@@ -458,6 +463,84 @@ to learn, one place to look things up, and fast compilation
 % lib_core/libc/9sys/sys.h (part of Kernel.nw)
 % include/core/libc.h (and syscall.h I created)
 
+%claude:
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files of the \plan core libraries, together with
+the main entities (e.g., structures, functions) the file defines,
+and the corresponding chapters in this document in which the code
+contained in the file is primarily discussed.
+%
+The code is split into several libraries and subdirectories:
+[[libc/port/]] for portable C implementations,
+[[libc/9sys/]] for system call wrappers and OS-specific code,
+[[libc/fmt/]] for formatted output,
+[[libc/arm/]] (or [[libc/386/]]) for architecture-specific assembly,
+[[libbio/]] for buffered I/O, and
+[[libthread/]] for cooperative threads and channels.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Function}                            & {\bf Ch.}                     & {\bf File}        & {\bf Entities}                                        & {\bf LOC} \\
+\otoprule
+basic types                               &                               & [[u.h]]           & [<Rune>] [<FPdbleword>] [<jmp\_buf>]                  & 80 \\
+libc interface                            &                               & [[libc.h]]        & [<Pool>] [<Fmt>] [<Dir>] [<Qid>] [<Fcall>]            & 700 \\
+\midrule
+character classification                  &                               & [[port/ctype.c]]  & [<isalpha>] [<isdigit>]                               & 30 \\
+memory operations                         &                               & [[port/memset.c]] & [<memset>] [<memmove>] [<memcmp>]                     & 90 \\
+C strings                                 &                               & [[port/strlen.c]] & [<strlen>] [<strcmp>] [<strcpy>] [<strdup>]            & 210 \\
+rune strings                              &                               & [[port/rune.c]]   & [<chartorune>] [<runetochar>] [<runestrlen>]          & 330 \\
+UTF-8 strings                             &                               & [[port/utflen.c]] & [<utflen>] [<utfrune>] [<utfutf>]                     & 90 \\
+formatted output                          &                               & [[fmt/dofmt.c]]   & [<fprint>] [<sprint>] [<Fmt>]                         & 1300 \\
+sorting                                   &                               & [[port/qsort.c]]  & [<qsort>]                                             & 130 \\
+\midrule
+heap allocator                            &                               & [[port/pool.c]]   & [<Pool>] [<Bhdr>] [<Free>] [<Arena>]                  & 800 \\
+malloc wrappers                           &                               & [[port/malloc.c]] & [<malloc>] [<free>] [<realloc>]                       & 80 \\
+sbrk                                      &                               & [[9sys/sbrk.c]]   & [<sbrk>]                                              & 20 \\
+\midrule
+file I/O                                  &                               & [[9sys/read.c]]   & [<read>] [<write>] [<readn>]                          & 40 \\
+directory operations                      &                               & [[9sys/dirstat.c]] & [<dirstat>] [<dirfstat>] [<nulldir>]                  & 150 \\
+path manipulation                         &                               & [[port/cleanname.c]] & [<cleanname>] [<access>]                           & 130 \\
+9P marshalling                            &                               & [[9sys/convM2S.c]] & [<convM2S>] [<convS2M>] [<convM2D>] [<convD2M>]      & 700 \\
+9P debugging                              &                               & [[9sys/fcallfmt.c]] & [<fcallfmt>]                                        & 200 \\
+\midrule
+time                                      &                               & [[9sys/time.c]]    & [<time>] [<localtime>] [<asctime>] [<tm2sec>]        & 300 \\
+process management                        &                               & [[9sys/fork.c]]    & [<fork>] [<execl>] [<getpid>] [<wait>]               & 80 \\
+environment                               &                               & [[9sys/getenv.c]]  & [<getenv>] [<putenv>]                                & 60 \\
+locks                                     &                               & [[port/lock.c]]    & [<lock>] [<qlock>] [<rlock>] [<rsleep>]              & 380 \\
+notes                                     &                               & [[port/atnotify.c]] & [<atnotify>] [<postnote>]                           & 70 \\
+networking                                &                               & [[9sys/announce.c]] & [<announce>] [<listen>] [<accept>] [<dial>]          & 500 \\
+\midrule
+error management                          &                               & [[9sys/rerrstr.c]] & [<rerrstr>] [<werrstr>] [<perror>] [<sysfatal>]      & 80 \\
+math                                      &                               & [[port/sin.c]]     & [<sin>] [<cos>] [<exp>] [<log>] [<sqrt>] [<pow>]    & 700 \\
+integer parsing                           &                               & [[port/atol.c]]    & [<atol>] [<strtol>] [<strtod>]                      & 500 \\
+random numbers                            &                               & [[port/lrand.c]]   & [<lrand>] [<nrand>] [<srand>]                        & 80 \\
+cryptography                              &                               & [[port/crypt.c]]   & [<encrypt>] [<decrypt>]                               & 180 \\
+profiling                                 &                               & [[port/profile.c]] & [<\_profin>] [<\_profout>] [<\_profdump>]             & 280 \\
+logging                                   &                               & [[9sys/syslog.c]]  & [<syslog>]                                           & 100 \\
+\midrule
+buffered I/O                              &                               & [[libbio/]]       & [<Bgetc>] [<Brdline>] [<Bprint>]                     & 600 \\
+\midrule
+thread scheduler                          &                               & [[libthread/sched.c]] & [<\_sched>] [<\_schedinit>] [<\_threadready>]     & 250 \\
+thread creation                           &                               & [[libthread/create.c]] & [<threadcreate>] [<proccreate>] [<\_newproc>]    & 200 \\
+channels                                  &                               & [[libthread/channel.c]] & [<chancreate>] [<alt>] [<send>] [<recv>]        & 600 \\
+IO procs                                  &                               & [[libthread/ioproc.c]] & [<ioproc>] [<iocall>] [<ioread>] [<iowrite>]    & 300 \\
+thread-aware libc                         &                               & [[libthread/main.c]] & [<main>] [<threadexits>] [<procexec>]              & 450 \\
+thread notes                              &                               & [[libthread/note.c]] & [<\_threadnote>] [<threadnotify>]                  & 200 \\
+thread debugging                          &                               & [[libthread/debug.c]] & [<\_threaddebug>]                                 & 50 \\
+\otoprule
+Total                                     &                               &                     &                                                     & $\sim$9800 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and associated core library source files.}
+\label{tab:code-orga}
+\end{table*}
+%
+% still remains some backward dependencies between files, for instance
+% malloc.c depends on lock.c (malloc is thread-safe), and the fmt
+% library calls malloc.
 
 \section{Software architecture}
 
@@ -465,13 +548,102 @@ to learn, one place to look things up, and fast compilation
 
 % take common.ml structure for the TOC of this document?
 
+%claude:
+Unlike a compiler or a build system, a library is not a pipeline.
+It is a collection of largely independent components that programs
+link against and call as needed. The ``architecture'' of a C
+library is therefore better understood as a layering:
+%
+\begin{enumerate}
+\item {\em System call wrappers} (in [[9sys/]] and [[9syscall/]])
+provide thin assembly stubs that trap into the kernel for
+[[open]], [[read]], [[write]], [[rfork]], [[exec]], [[brk]],
+[[rendezvous]], etc.
+
+\item {\em Core services} built on those system calls:
+the memory allocator ([[malloc]]/[[free]] on top of [[sbrk]]),
+buffered I/O ([[Biobuf]] on top of [[read]]/[[write]]),
+formatted output ([[print]] on top of [[write]]),
+locking ([[qlock]] on top of [[rendezvous]]),
+and networking ([[dial]]/[[announce]] on top of [[open]]/[[read]]/[[write]]
+to [[/net/]]).
+
+\item {\em Pure computation}: string manipulation, math functions,
+regular expressions, and 9P marshalling.
+These do not use system calls at all (except [[malloc]]
+for memory).
+
+\item {\em [[libthread]]}: a layer on top of everything else,
+providing cooperative threads, channels, and IO procs. When
+linked in, [[libthread]] replaces [[main]], [[exits]],
+[[dial]], [[_assert]], and [[_sysfatal]] with thread-aware
+versions.
+\end{enumerate}
+%
+The key dependency is that nearly everything depends on the
+memory allocator, and the allocator itself depends on locks
+(because [[malloc]] must be safe for [[rfork(RFMEM)]]).
+[[libthread]]'s channels depend on locks, atomic operations,
+and [[rendezvous]].
+
 \section{Book structure}
+
+%trans:
+%claude:
+You now have enough background to understand the source code
+of the \plan core libraries.
+%toc:
+The rest of the book is organized as follows.
+%
+I will start by describing the core types and data structures
+in Chapter~\ref{chap:core-ds},
+including the type aliases in [[u.h]], the [[Rune]] type,
+[[Fmt]], [[Dir]], [[Fcall]], and the concurrency primitives.
+%
+Then, Chapter~\ref{chap:main} will cover [[_main()]], the C runtime
+entry point, the [[ARGBEGIN]]/[[ARGEND]] argument parsing
+macros, and [[exits]].
+%
+The following chapters cover the main facilities of [[libc]],
+roughly one system call family per chapter:
+Chapter~\ref{chap:memops} for memory area operations,
+Chapter~\ref{chap:malloc} for the [[malloc]] allocator,
+Chapter~\ref{chap:strings} for strings (C strings, runes, and UTF-8),
+Chapter~\ref{chap:regexp} for regular expressions,
+Chapter~\ref{chap:fileio} and Chapter~\ref{chap:bufio} for file I/O
+and buffered I/O,
+Chapter~\ref{chap:dirs} for directories and path manipulation,
+Chapter~\ref{chap:namespace} for namespace operations ([[bind]]/[[mount]]),
+Chapter~\ref{chap:time} for time,
+Chapter~\ref{chap:fork} for process management ([[fork]]/[[exec]]/[[wait]]),
+Chapter~\ref{chap:concurrency} for concurrency primitives
+(locks, queuing locks, read-write locks),
+and Chapter~\ref{chap:ipc} for IPC (notes, pipes, 9P marshalling).
+%
+Chapter~\ref{chap:threads}, the largest in the book, covers
+[[libthread]]: the scheduler, channels, [[alt]], IO procs,
+and the thread-aware replacements for standard library
+functions.
+%
+The remaining chapters cover
+networking in Chapter~\ref{chap:network},
+mathematics in Chapter~\ref{chap:math},
+error management in Chapter~\ref{chap:errors},
+debugging support in Chapter~\ref{chap:debugging},
+profiling in Chapter~\ref{chap:profiling},
+and security in Chapter~\ref{chap:security}.
+%
+Chapter~\ref{chap:advanced} presents miscellaneous advanced topics.
+%
+Finally, Chapter~\ref{chap:conclusion} concludes and gives pointers
+to other books in the \principia series.
 
 %###############################################################################
 
 %******************************************************************************
 \chapter{Core Types and Data Structures}
 %******************************************************************************
+\label{chap:core-ds}
 
 %claude:
 This chapter presents the fundamental type definitions from
@@ -487,7 +659,11 @@ the rest of the library builds upon.
 % signed vs unsigned, different int size, etc.
 % All defined in Compiler.nw but libcore define a few aliases in u.h.
 
+%yoann: small paragraph intro
+
 \subsection{Booleans}
+
+%yoann: explain most C programmers abuse int for book, but modern C separate, so I the author extended plan9 libs with those types (not in original plan9). Might be part of c99?
 
 <<type [[bool]]>>=
 typedef int bool;
@@ -508,6 +684,7 @@ fixed-width integers. The [[vlong]] type (``very long'')
 provides 64-bit integers on 32-bit architectures where
 [[long]] is only 32~bits---a perennial source of porting
 bugs when moving C code between architectures.
+%yoann1: mention that gcc/clang actually consider long 64bits on 64bits arch; maybe also explain why need those aliases in the first place?
 
 <<type [[uxxx]]>>=
 typedef unsigned short  ushort;
@@ -553,6 +730,7 @@ for the math library: functions like [[NaN]], [[isNaN]], and
 [[isInf]] need to inspect or construct the IEEE~754 bit pattern
 directly (exponent, mantissa, sign) rather than treating the
 value as a number.
+%yoann1: Maybe ASCII diagram explaining IEEE float format?
 
 % in arm/u.h so probably arch specific
 <<type [[FPdbleword]]>>=
@@ -573,6 +751,8 @@ union FPdbleword
 \subsection{Strings and characters}
 
 %http://reedbeta.com/blog/programmers-intro-to-unicode/
+
+%yoann: small paragraph intro
 
 \subsubsection{ASCII characters}
 
@@ -621,6 +801,8 @@ uchar   _ctype[256] =
 };
 @
 
+%yoann: maybe give example for charater 'A' which values it leads to
+
 
 <<macros isxxx>>=
 #define	isalpha(c)	(_ctype[(unsigned char)(c)]&(_U|_L))
@@ -643,6 +825,7 @@ The [[toupper]]/[[tolower]] functions take [[int]] rather than
 [[char]] so they also work with [[Rune]] values (at least in
 the ASCII range). The conversion is a simple offset between
 the uppercase and lowercase ASCII ranges.
+%yoann1: maybe talk about compiler automatic conversion between char and int and why this code is kinda polymorphic
 
 % ugly that take an int, because that way compatible with Rune??
 <<function [[toupper]]>>=
@@ -676,7 +859,8 @@ tolower(int c)
 @
 
 
-% ???
+%yoann: explain what is the use of this macro?
+
 <<macro [[toascii]]>>=
 #define	toascii(c)	((c)&0177)
 @
@@ -695,6 +879,7 @@ by Rob Pike and Ken Thompson when they designed UTF-8 at
 Bell Labs. In \plan, [[char]] means a byte and [[Rune]] means
 a character; the UTF-8 functions convert between the two
 representations.
+%yoann1: maybe reference Unicode code point, maybe give ASCII diagram of bits and some examples of char vs UTF8 vs Rune (code point)?
 
 <<type [[Rune]]>>=
 typedef uint        Rune;
@@ -1091,6 +1276,7 @@ data structures are reimplemented throughout the codebase.
 %******************************************************************************
 \chapter{[[_main()]]}
 %******************************************************************************
+\label{chap:main}
 
 % arm/main9.s (and main9p.s)
 
@@ -1251,6 +1437,7 @@ atexit(void (*f)(void))
 %******************************************************************************
 \chapter{User/Kernel Bridge}
 %******************************************************************************
+\label{chap:user-kernel}
 
 % sys.h, syscall.h
 % lib_core/libc/9syscall/*.s and dispatcher in kernel for the sysxxx().
@@ -1267,6 +1454,7 @@ then routes to the appropriate [[sysxxx()]] handler.
 %******************************************************************************
 \chapter{Memory Area Operations}
 %******************************************************************************
+\label{chap:memops}
 
 % Lots of functions defined in assembly, so maximal control, maximal opti.
 % Important cos used a lot.
@@ -1404,6 +1592,7 @@ memchr(void *ap, int c, ulong n)
 %******************************************************************************
 \chapter{Memory Management}
 %******************************************************************************
+\label{chap:malloc}
 
 %claude:
 This chapter covers the memory allocator: from the [[sbrk]]
@@ -1800,6 +1989,7 @@ free(void *v)
 %******************************************************************************
 \chapter{Strings}
 %******************************************************************************
+\label{chap:strings}
 
 %todo: introduce a string_equal, and most of the time rewrite
 % strcmp as !string_equal; far more readable!
@@ -2578,6 +2768,7 @@ and the [[rc]] shell.
 %******************************************************************************
 \chapter{Regular Expressions}
 %******************************************************************************
+\label{chap:regexp}
 % libregexp/
 
 %https://swtch.com/~rsc/regexp/
@@ -2596,6 +2787,7 @@ Cox's well-known articles on regular expression matching.
 %******************************************************************************
 \chapter{File IO}
 %******************************************************************************
+\label{chap:fileio}
 
 % See file descriptor type in core DS.
 
@@ -2752,6 +2944,7 @@ readn(fdt f, void *av, long n)
 %******************************************************************************
 \chapter{Buffered IO}
 %******************************************************************************
+\label{chap:bufio}
 
 %libbio/
 
@@ -2767,6 +2960,7 @@ strings from the ground up.
 %******************************************************************************
 \chapter{Directories and File Paths}
 %******************************************************************************
+\label{chap:dirs}
 
 %claude:
 The [[Dir]] structure is \plan's file metadata representation,
@@ -3218,6 +3412,7 @@ access(char *name, int mode)
 %******************************************************************************
 \chapter{Namespace}
 %******************************************************************************
+\label{chap:namespace}
 % plan9 specific, not in goken
 
 %claude:
@@ -3251,6 +3446,7 @@ and much of the role of environment variables.
 %******************************************************************************
 \chapter{Time}
 %******************************************************************************
+\label{chap:time}
 
 % see TM in core DS now
 
@@ -3494,6 +3690,7 @@ tm2sec(Tm *tm)
 %******************************************************************************
 \chapter{Fork, Exec, and Wait}
 %******************************************************************************
+\label{chap:fork}
 %alt: parallelism
 
 % fork/exec, cornerstone of unix philosophy.
@@ -3640,6 +3837,7 @@ getppid(void)
 %******************************************************************************
 \chapter{Concurrency}
 %******************************************************************************
+\label{chap:concurrency}
 
 %claude:
 When processes share memory via [[rfork(RFMEM)]], they need
@@ -4201,6 +4399,7 @@ typedef long    jmp_buf[2];
 %******************************************************************************
 \chapter{IPC}
 %******************************************************************************
+\label{chap:ipc}
 % 9P and RPC? fcall.h
 
 %claude:
@@ -5921,6 +6120,7 @@ convD2M(Dir *d, uchar *buf, uint nbuf)
 %******************************************************************************
 \chapter{Channels and Cooperative Threads}
 %******************************************************************************
+\label{chap:threads}
 
 %https://idea.popcount.org/2017-01-06-select-is-fundamentally-broken/
 
@@ -9572,6 +9772,7 @@ chanprint(Channel *c, char *fmt, ...)
 %******************************************************************************
 \chapter{Network}
 %******************************************************************************
+\label{chap:network}
 %alt: move all of it in Network.nw instead?
 
 % More in Network.nw, here just wrappers.
@@ -10157,6 +10358,7 @@ _dial_string_parse(char *str, DS *ds)
 %******************************************************************************
 \chapter{Mathematics}
 %******************************************************************************
+\label{chap:math}
 
 %http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
 
@@ -12105,6 +12307,7 @@ memory.
 %******************************************************************************
 \chapter{Error Management}
 %******************************************************************************
+\label{chap:errors}
 
 % Unix use errno, an error number, an integer, but ugly cos hardcoded
 % list of fixed errors. Then perror() to display string for it.
@@ -12342,6 +12545,7 @@ _sysfatalimpl(char *fmt, va_list arg)
 %******************************************************************************
 \chapter{Debugging Support}
 %******************************************************************************
+\label{chap:debugging}
 
 % Seen some debugging support before, for memory pool.
 
@@ -12492,6 +12696,7 @@ eqdirdev(Dir *a, Dir *b)
 %******************************************************************************
 \chapter{Profiling Support}
 %******************************************************************************
+\label{chap:profiling}
 
 % see 5l -p -1 -2! See \book{Linker}
 
@@ -12897,6 +13102,7 @@ cputime(void)
 %******************************************************************************
 \chapter{Security}
 %******************************************************************************
+\label{chap:security}
 
 % ref_own<string> returned
 
@@ -13150,6 +13356,7 @@ error:
 %******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
+\label{chap:advanced}
 
 % Seen advanced topics before, for memory pool, thread and channels
 % in their respective chapters.
