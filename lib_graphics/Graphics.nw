@@ -6892,6 +6892,16 @@ if(i == nil){
 
 \subsection{[[Client]] and [[Memimage]] connection, [[DImage]]}
 
+%claude:
+[[drawinstall]] and [[drawuninstall]] manage the client's
+hash table of images. [[drawinstall]] wraps a [[Memimage]] in
+a [[DImage]], assigns the requested ID, and inserts it into
+the [[Client.dimage]] hash by chaining on [[DImage.next]].
+[[drawuninstall]] walks the chain to find and remove the entry,
+then calls [[drawfreedimage]] which decrements the reference
+count and frees the underlying [[Memimage]] when it drops to
+zero.
+
 % drawmesg(allocate) -> <>
 <<function [[drawinstall]]>>=
 Memimage*
@@ -7396,10 +7406,20 @@ arch_flushmemscreen(Rectangle r)
 %alt: ?? could not use FS for that?
 
 
-% used also by rio! (see graphics(2)). 
+% used also by rio! (see graphics(2)).
 % from allocimage(2):
-%  These routines permit unrelated applications sharing a display to share 
+%  These routines permit unrelated applications sharing a display to share
 %  an image; for example they provide the mechanism behind getwindow
+
+%claude:
+Images can be published by name so that unrelated processes
+sharing a [[Display]] can find and attach to them. [[nameimage]]
+registers an image under a string name in the kernel's global
+[[DName]] table; [[namedimage]] looks up a name and returns
+a new [[Image]] handle referring to the same underlying
+[[Memimage]]. This is the mechanism behind [[getwindow]]---the
+windowing system publishes the application's window image
+under a name, and the application retrieves it after a resize.
 
 \subsection{API}
 
@@ -8682,6 +8702,16 @@ drawrepl(Rectangle r, Point p)
 
 
 \section{Replicating}
+
+%claude:
+When an image has [[Frepl]] set, drawing code must tile it
+by wrapping coordinates into the image's [[r]] rectangle.
+[[replicate]] adjusts a source or mask rectangle so that its
+minimum falls within the image bounds, using modular
+arithmetic. Clipping first removes the area outside [[clipr]],
+then replication wraps what remains into the small source
+rectangle, and the drawing loop repeats the pattern as needed.
+
 % part1 because later in alphadraw there is another replication
 %  done via some module and [[% Dy(src->r)]] and also for the mask.
 
@@ -8997,6 +9027,18 @@ if(dir == -1){
 % char, but then black and white. Dont want white to cover! Could
 % have convention that white means special, but more general is
 % notion of alpha! Dnotacolor (or Dnofill)! fully transparent.
+
+%claude:
+[[alphadraw]] is the general-case compositing engine. For
+each scan line, it reads a row of pixels from source, mask,
+and destination, then iterates pixel by pixel applying the
+Porter-Duff formula. The formula for the default [[SoverD]]
+is: $dst = src + dst \times (1 - src_\alpha)$---the source
+overwrites wherever it is opaque, and the destination shows
+through wherever the source is transparent. [[Param]]
+pre-computes per-image information (byte pointers, strides,
+replication parameters) to avoid recomputing them for each
+scan line.
 % And then can have different graduation of transparency! powerful!
 
 % for transparency, drop shadows, and I think also for text anti-aliasing
@@ -11883,6 +11925,17 @@ struct Cachefont
 % which have beneath probably a Subfont.
 
 \subsection{[[Subfont]] and [[Fontchar]]}
+
+%claude:
+A [[Subfont]] is a horizontal strip image containing glyphs
+for a contiguous range of Unicode code points, plus an array
+of [[Fontchar]] metrics---one per character plus a sentinel.
+The glyph for character $c$ occupies pixels from
+$(info[c].x, info[c].top)$ to $(info[c{+}1].x, info[c].bottom)$
+within the [[bits]] image. The [[left]] and [[width]] fields
+adjust how the glyph aligns to the text cursor: [[left]] is
+the offset from the cursor to the glyph's left edge, and
+[[width]] is the advance to the next character's cursor position.
 
 %cachechars(2):
 %"A Subfont is a set of images for a contiguous range of characters,
@@ -15491,6 +15544,16 @@ Err1:
 
 \section{Writing images to the disk}
 
+%claude:
+[[writeimage]] writes an [[Image]] to a file in \plan's
+native image format: a text header (channel, rectangle)
+followed by compressed pixel data. It first unloads the
+pixels from the server with [[unloadimage]], then applies
+run-length compression via [[writeimagefile]]. The
+\verb+topng </dev/screen >screen.png+ idiom does a
+screen grab by reading the screen image and converting the
+format.
+
 %topng </dev/screen >screen.png :) = Grab
 
 % will call unloadimage
@@ -15904,6 +15967,19 @@ small [[Memimage]]s.
 
 
 \subsection{Additionnal data structures}
+
+%claude:
+A [[Cursor]] is a 16x16 two-plane bitmap: [[clr]] (the
+``white'' plane) and [[set]] (the ``black'' plane). Where
+[[set]] has a bit, the pixel is black; where [[clr]] has a bit
+but [[set]] does not, the pixel is white; where neither has a
+bit, the cursor is transparent. The [[offset]] shifts the
+hot-spot relative to the top-left corner.
+%
+The software cursor implementation uses four [[Memimage]]s:
+[[swimg]] and [[swmask]] hold the cursor shape, [[swback]]
+saves the pixels under the cursor, and [[swimg1]]/[[swmask1]]
+are working copies used during drawing.
 
 \subsubsection{[[Cursor]]}
 % and [[cursor]]
@@ -17039,6 +17115,16 @@ struct Memscreen
 
 
 \subsection{Layer (and [[Memlayer]])}
+
+%claude:
+A layer is a [[Memimage]] with a [[Memlayer]] attached. The
+[[Memlayer]] stores the layer's true screen position
+([[screenr]]), a coordinate translation ([[delta]]) so the
+application can draw in logical coordinates starting at
+(0,0), a back-pointer to its [[Memscreen]], and a [[save]]
+image that stores pixels hidden by layers in front. The
+[[clear]] flag is an optimization: when a layer is fully
+visible, drawing operations can skip the save/restore logic.
 
 % Windows are images! They just have a few more operations available to
 % them. But they need to be connected to a desktop.
@@ -18894,12 +18980,26 @@ repainted.
 
 \subsection{Drawing rectangles on overlapping layers}
 
+%claude:
+When [[memdraw]] detects that the source or destination is a
+layer, it translates logical coordinates to screen coordinates
+(adding [[delta]]) and handles three cases: if the source is
+layered, it must read from the save image for hidden parts;
+if the destination is layered, it must draw into the save
+image for hidden parts and onto the screen for visible parts.
+The [[_memlayerop]] function splits the rectangle into
+sub-rectangles that are visible or hidden, recursively walking
+through overlapping layers front to back---RECUR peels off
+the visible strip above, below, left, and right of each
+occluding layer, and what remains (fully covered) goes to
+the backing store.
+
 %trans:
 % seen memdraw() in chapter X. But for simple case where src and
 % dst are simple images, not windows, in which case call
 % the simple memimagedraw().
-% Here adaptations when one of the image is actually a window in which case we 
-% need to translate image coords to actual screen coord and possibly draw in 
+% Here adaptations when one of the image is actually a window in which case we
+% need to translate image coords to actual screen coord and possibly draw in
 % save area instead if destination is a window. We may also have
 % to take pixels from the save area if src is a partially obscured window.
 
@@ -19939,6 +20039,17 @@ if(*winp != nil){
 
 \section{[[/dev/winname]] and [[screenname]]}
 
+%claude:
+[[/dev/winname]] is the glue between the windowing system and
+[[initdraw]]. Reading this file returns [[screenname]]---the
+name of the image that [[gengetwindow]] should look up with
+[[namedimage]]. At boot, [[screenname]] defaults to the bare
+screen image name. When [[rio]] creates a window for an
+application, it publishes the window image under a name and
+sets [[/dev/winname]] accordingly (via its namespace
+virtualization), so the application's [[initdraw]] picks up
+the right window.
+
 % kernel side now.
 
 % default /dev/winname, so gengetwindow works also for bootstrap.
@@ -19995,6 +20106,15 @@ static  int screennameid;
 
 
 \section{[[/dev/label]]}
+
+%claude:
+Where [[/dev/winname]] flows from [[rio]] to the application
+(``here is your window''), [[/dev/label]] flows the other
+way (``here is my name''). [[geninitdraw]] writes the
+application's label to this file, which [[rio]] reads to
+display the window title. The old label is saved and restored
+on [[closedisplay]] so that when a graphical program launched
+inside a terminal exits, the terminal's original label reappears.
 
 %trans:
 % /dev/winname is rio communicating info to client
@@ -20193,6 +20313,16 @@ XBGR32  = CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
 
 \section{1-Bit images}
+
+%claude:
+[[GREY1]] images store one bit per pixel---they are used
+everywhere as masks (font glyphs, cursor shapes). Reading
+and writing individual pixels in sub-byte images requires
+bit-shifting: [[pixelbits]] extracts a pixel's bits from a
+packed word, and [[memoptdraw]] has a fast path for all-1-bit
+operations that uses bitwise byte operations instead of the
+per-pixel compositing loop.
+
 % or bitmasks
 
 % GREY1, used for masks
@@ -20853,6 +20983,14 @@ case 24:
 
 
 \section{Gray-scale images}
+
+%claude:
+Grey-scale images have a single intensity channel instead
+of separate R/G/B. Converting from RGB to grey uses the
+NTSC luminance formula ([[RGB2K]]):
+$0.299r + 0.587g + 0.114b$, approximated with integer
+arithmetic. Converting grey to RGB simply replicates the
+grey value to all three channels.
 
 <<[[imgtorgba()]] switch chan type cases>>=
 case CGrey:
@@ -24678,6 +24816,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
 \section{Graphical text mode}
 
 %claude:
+Before a graphical application starts, the kernel draws text
 Once the VGA driver switches to graphics mode, the kernel still
 needs a way to display text for panic messages and early boot
 output. The ``software console'' renders characters directly
