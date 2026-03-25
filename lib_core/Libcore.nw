@@ -10,6 +10,12 @@
 \input{../docs/latex/Config}
 \input{../docs/latex/Macros}
 
+% Keep description text on the same page as the \part title
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\@endpart}{\vfil\newpage}{\vfil}{}{}
+\makeatother
+
 %******************************************************************************
 % Prelude
 %******************************************************************************
@@ -600,45 +606,43 @@ and [[rendezvous]].
 You now have enough background to understand the source code
 of the \plan core libraries.
 %toc:
-The rest of the book is organized as follows.
+The rest of the book is organized in five parts.
 %
-I will start by describing the core types and data structures
-in Chapter~\ref{chap:core-ds},
-including the type aliases in [[u.h]], the [[Rune]] type,
-[[Fmt]], [[Dir]], [[Fcall]], and the concurrency primitives.
+Part~I ({\em Foundations}) covers the bedrock:
+the core types and data structures in Chapter~\ref{chap:core-ds},
+the C runtime entry point [[_main()]] in Chapter~\ref{chap:main},
+the system call interface in Chapter~\ref{chap:user-kernel},
+and memory management (Chapter~\ref{chap:memops} for low-level
+operations, Chapter~\ref{chap:malloc} for the [[malloc]] allocator).
 %
-Then, Chapter~\ref{chap:main} will cover [[_main()]], the C runtime
-entry point, the [[ARGBEGIN]]/[[ARGEND]] argument parsing
-macros, and [[exits]].
-%
-The following chapters cover the main facilities of [[libc]],
-roughly one system call family per chapter:
-Chapter~\ref{chap:memops} for memory area operations,
-Chapter~\ref{chap:malloc} for the [[malloc]] allocator,
-Chapter~\ref{chap:strings} for strings (C strings, runes, and UTF-8),
-Chapter~\ref{chap:regexp} for regular expressions,
-Chapter~\ref{chap:fileio} and Chapter~\ref{chap:bufio} for file I/O
-and buffered I/O,
-Chapter~\ref{chap:dirs} for directories and path manipulation,
-Chapter~\ref{chap:namespace} for namespace operations ([[bind]]/[[mount]]),
-Chapter~\ref{chap:time} for time,
-Chapter~\ref{chap:fork} for process management ([[fork]]/[[exec]]/[[wait]]),
-Chapter~\ref{chap:concurrency} for concurrency primitives
-(locks, queuing locks, read-write locks),
-and Chapter~\ref{chap:ipc} for IPC (notes, pipes, 9P marshalling).
-%
-Chapter~\ref{chap:threads}, the largest in the book, covers
-[[libthread]]: the scheduler, channels, [[alt]], IO procs,
-and the thread-aware replacements for standard library
-functions.
-%
-The remaining chapters cover
-networking in Chapter~\ref{chap:network},
+Part~II ({\em Data Processing}) covers pure computation:
+strings in Chapter~\ref{chap:strings} (C strings, runes, and UTF-8),
+regular expressions in Chapter~\ref{chap:regexp},
 mathematics in Chapter~\ref{chap:math},
+and compression.
+%
+Part~III ({\em System Services}) covers the library functions
+that wrap system calls, roughly one family per chapter:
+file I/O in Chapter~\ref{chap:fileio},
+buffered I/O in Chapter~\ref{chap:bufio},
+directories in Chapter~\ref{chap:dirs},
+namespace operations in Chapter~\ref{chap:namespace},
+time in Chapter~\ref{chap:time},
+process management in Chapter~\ref{chap:fork},
 error management in Chapter~\ref{chap:errors},
-debugging support in Chapter~\ref{chap:debugging},
-profiling in Chapter~\ref{chap:profiling},
 and security in Chapter~\ref{chap:security}.
+%
+Part~IV ({\em Concurrency and Communication}) covers
+synchronization and IPC:
+locks and queuing locks in Chapter~\ref{chap:concurrency},
+IPC mechanisms (notes, pipes, 9P) in Chapter~\ref{chap:ipc},
+the cooperative thread scheduler and channels in
+Chapter~\ref{chap:threads} (the largest chapter in the book),
+and networking in Chapter~\ref{chap:network}.
+%
+Part~V ({\em Debugging and Profiling}) covers
+the library support for the \plan debugging and profiling tools
+in Chapters~\ref{chap:debugging} and~\ref{chap:profiling}.
 %
 Chapter~\ref{chap:advanced} presents miscellaneous advanced topics.
 %
@@ -646,6 +650,16 @@ Finally, Chapter~\ref{chap:conclusion} concludes and gives pointers
 to other books in the \principia series.
 
 %###############################################################################
+
+\part{Foundations}
+%###############################################################################
+
+%claude:
+This part covers the bedrock that everything else is built on:
+the type system ([[u.h]] and [[libc.h]]), the C runtime entry
+point ([[_main]]), the system call interface to the kernel,
+and memory management---from the raw [[sbrk]] system call
+through the [[Pool]] allocator to [[malloc]]/[[free]].
 
 %******************************************************************************
 \chapter{Core Types and Data Structures}
@@ -2056,6 +2070,19 @@ free(void *v)
 \section{Advanced topics}
 
 
+%###############################################################################
+
+\part{Data Processing}
+%###############################################################################
+
+%claude:
+This part covers the libraries that transform data without
+making system calls: string manipulation at three levels
+(C strings, runes, UTF-8), regular expression matching,
+mathematical functions (trigonometry, logarithms, square roots),
+and data compression. These are pure computation---they
+depend only on the memory allocator from Part~I.
+
 %******************************************************************************
 \chapter{Strings}
 %******************************************************************************
@@ -2853,6 +2880,1970 @@ Cox's well-known articles on regular expression matching.
 \section{Data structures}
 
 \section{Advanced topics}
+
+%******************************************************************************
+\chapter{Mathematics}
+%******************************************************************************
+\label{chap:math}
+
+%http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
+
+% _div and _mod are in Assembler.nw appendix
+
+% "Computer Approximations, by Hart, Chenney, Lawson, ...
+% lib by Sun with all those s_xxx.c, w_xxx.c (see kernel-snowflake/lib/m/)
+
+%claude:
+The math library provides the standard transcendental functions
+([[sin]], [[cos]], [[exp]], [[log]], [[sqrt]], etc.) plus
+integer arithmetic helpers. Many implementations use polynomial
+approximations from Hart et al.'s {\em Computer Approximations}.
+The integer division and modulus routines ([[_div]], [[_mod]])
+are in assembly because the ARM has no hardware divide
+instruction (see \book{Assembler}).
+
+\section{Basics}
+
+%claude:
+The basic math functions are straightforward but note
+that [[abs]] and [[fabs]] have the same C source code
+yet produce very different assembly: [[abs]] uses integer
+comparison and negation, while [[fabs]] uses floating-point
+instructions. [[floor]] and [[ceil]] use [[modf]] to split
+a number into integer and fractional parts, then adjust
+for negative numbers.
+
+<<function [[abs]]>>=
+int
+abs(int a)
+{
+    if(a < 0)
+        return -a;
+    return a;
+}
+@
+
+<<function [[fabs]]>>=
+double
+fabs(double arg)
+{
+
+    if(arg < 0)
+        return -arg;
+    return arg;
+}
+@
+% very different generated assembly than for abs even though code
+% the same, because type different!
+
+%dead:
+%<<function labs>>=
+%long
+%labs(long a)
+%{
+%    if(a < 0)
+%        return -a;
+%    return a;
+%}
+%@
+
+% floor and ceiling in an appartment :)
+
+<<function [[floor]]>>=
+/*
+ * floor and ceil-- greatest integer <= arg
+ * (resp least >=)
+ */
+double
+floor(double d)
+{
+    double fract;
+
+    if(d < 0) {
+        fract = modf(-d, &d);
+        if(fract != 0.0)
+            d += 1;
+        d = -d;
+    } else
+        modf(d, &d);
+    return d;
+}
+@
+% modf?
+
+<<function [[ceil]]>>=
+double
+ceil(double d)
+{
+    return -floor(-d);
+}
+@
+
+
+
+
+
+\section{Integers}
+
+% atox vs strtox,  simple vs flexible
+
+\subsection{Parsing}
+
+%claude:
+The ``ato'' prefix stands for ``ASCII to'': [[atoi]] converts
+a string to [[int]], [[atol]] to [[long]]. [[atol]] handles
+three notations: decimal, octal (leading \verb+0+), and
+hexadecimal (leading \verb+0x+). The more flexible [[strtol]]
+adds support for arbitrary bases up to~36, returns a pointer
+past the parsed number (so the caller can continue parsing),
+and detects overflow.
+
+% a means? ascii to int ?
+<<function [[atoi]]>>=
+int
+atoi(char *s)
+{
+
+    return atol(s);
+}
+@
+% atol and then automatic C compiler cast to int
+
+% support hexa, octal, decimal notations! handle whitespace,
+% handle signs!
+<<function [[atol]]>>=
+long
+atol(char *s)
+{
+    long n;
+    int f, c;
+
+    n = 0;
+    f = 0;
+    while(*s == ' ' || *s == '\t')
+        s++;
+    if(*s == '-' || *s == '+') {
+        if(*s++ == '-')
+            f = 1;
+        while(*s == ' ' || *s == '\t')
+            s++;
+    }
+    if(s[0]=='0' && s[1]) {
+        if(s[1]=='x' || s[1]=='X'){
+            s += 2;
+            for(;;) {
+                c = *s;
+                if(c >= '0' && c <= '9')
+                    n = n*16 + c - '0';
+                else
+                if(c >= 'a' && c <= 'f')
+                    n = n*16 + c - 'a' + 10;
+                else
+                if(c >= 'A' && c <= 'F')
+                    n = n*16 + c - 'A' + 10;
+                else
+                    break;
+                s++;
+            }
+        } else
+            while(*s >= '0' && *s <= '7')
+                n = n*8 + *s++ - '0';
+    } else
+        while(*s >= '0' && *s <= '9')
+            n = n*10 + *s++ - '0';
+    if(f)
+        n = -n;
+    return n;
+}
+@
+
+
+
+
+<<constant [[LONG_MAX]]>>=
+#define LONG_MAX    2147483647L
+@
+
+<<constant [[LONG_MIN]]>>=
+#define LONG_MIN    -2147483648L
+@
+
+% more flexible than atol, can accept stuff after numbers
+% and return pointer after. 
+% Can also use different base?? use? to not force to prefix with 0x or 0o?
+<<function [[strtol]]>>=
+long
+strtol(char *nptr, char **endptr, int base)
+{
+    char *p;
+    long n, nn, m;
+    int c, ovfl, v, neg, ndig;
+
+    p = nptr;
+    neg = 0;
+    n = 0;
+    ndig = 0;
+    ovfl = 0;
+
+    /*
+     * White space
+     */
+    for(;; p++) {
+        switch(*p) {
+        case ' ':
+        case '\t':
+        case '\n':
+        case '\f':
+        case '\r':
+        case '\v':
+            continue;
+        }
+        break;
+    }
+
+    /*
+     * Sign
+     */
+    if(*p=='-' || *p=='+')
+        if(*p++ == '-')
+            neg = 1;
+
+    /*
+     * Base
+     */
+    if(base==0) {
+        base = 10;
+        if(*p == '0') {
+            base = 8;
+            if(p[1]=='x' || p[1]=='X') {
+                p += 2;
+                base = 16;
+            }
+        }
+    } else
+    if(base==16 && *p=='0'){
+        if(p[1]=='x' || p[1]=='X')
+            p += 2;
+    } else
+    if(base<0 || 36<base)
+        goto Return;
+
+    /*
+     * Non-empty sequence of digits
+     */
+    m = LONG_MAX/base;
+    for(;; p++,ndig++){
+        c = *p;
+        v = base;
+        if('0'<=c && c<='9')
+            v = c - '0';
+        else
+        if('a'<=c && c<='z')
+            v = c - 'a' + 10;
+        else
+        if('A'<=c && c<='Z')
+            v = c - 'A' + 10;
+        if(v >= base)
+            break;
+        if(n > m)
+            ovfl = 1;
+        nn = n*base + v;
+        if(nn < n)
+            ovfl = 1;
+        n = nn;
+    }
+
+Return:
+    if(ndig == 0)
+        p = nptr;
+    if(endptr)
+        *endptr = p;
+    if(ovfl){
+        if(neg)
+            return LONG_MIN;
+        return LONG_MAX;
+    }
+    if(neg)
+        return -n;
+    return n;
+}
+@
+
+
+\section{Floats}
+
+\subsection{Special numbers}
+
+%claude:
+IEEE~754 floating-point has special values: NaN (not a
+number), positive/negative infinity, and negative zero.
+These functions construct and detect them by manipulating
+the raw bit representation via [[FPdbleword]]. A NaN has
+all exponent bits set ([[NANEXP]] = \verb+2047<<20+) and a
+non-zero mantissa. Infinity has all exponent bits set and
+a zero mantissa. [[isNaN]] exploits the property that NaN
+is the only value not equal to itself.
+
+<<function [[NaN]]>>=
+double
+NaN(void)
+{
+    FPdbleword a;
+
+    a.hi = NANEXP;
+    a.lo = 1;
+    return a.x;
+}
+@
+
+% FPdbleword defined in core DS chapter.
+
+<<constant [[NANEXP]]>>=
+#define NANEXP  (2047<<20)
+@
+% >>
+% what is the meaning of those numbers? wikipedia?
+
+<<constant [[NANMASK]]>>=
+#define NANMASK (2047<<20)
+@
+% >>
+
+<<function [[isNaN]]>>=
+bool
+isNaN(double d)
+{
+    FPdbleword a;
+
+    a.x = d;
+    if((a.hi & NANMASK) != NANEXP)
+        return false;
+    return !isInf(d, 0);
+}
+@
+
+
+<<constant [[NANSIGN]]>>=
+#define NANSIGN (1<<31)
+@
+% >>
+
+<<function [[Inf]]>>=
+double
+Inf(int sign)
+{
+    FPdbleword a;
+
+    a.hi = NANEXP;
+    a.lo = 0;
+    if(sign < 0)
+        a.hi |= NANSIGN;
+    return a.x;
+}
+@
+
+<<function [[isInf]]>>=
+bool
+isInf(double d, int sign)
+{
+    FPdbleword a;
+
+    a.x = d;
+    if(a.lo != 0)
+        return false;
+    if(a.hi == NANEXP)
+        return sign >= 0;
+    if(a.hi == (NANEXP|NANSIGN))
+        return sign <= 0;
+    return false;
+}
+@
+
+
+
+<<type [[FPxxx]]>>=
+/* VFP FCR */
+#define FPINEX  (1<<12)         /* trap enables for exceptions */
+#define FPUNFL  (1<<11)
+#define FPOVFL  (1<<10)
+#define FPZDIV  (1<<9)
+#define FPINVAL (1<<8)
+#define FPRNR   (0<<22)
+#define FPRZ    (1<<22)
+#define FPRPINF (2<<22)
+#define FPRNINF (3<<22)
+#define FPRMASK (3<<22)
+#define FPPEXT  0
+#define FPPSGL  0
+#define FPPDBL  0
+#define FPPMASK 0
+/* FSR */
+#define FPAINEX (1<<4)          /* accrued exceptions */
+#define FPAUNFL (1<<3)
+#define FPAOVFL (1<<2)
+#define FPAZDIV (1<<1)
+#define FPAINVAL    (1<<0)
+@
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+
+
+\subsection{Parsing}
+
+%claude:
+Parsing a floating-point number from text is surprisingly
+complex. [[strtod]] uses a state machine to handle signs,
+digits, decimal points, and exponents, then converts the
+resulting decimal number to binary using multi-precision
+integer arithmetic (the [[low]]/[[hig]]/[[mid]] arrays).
+The algorithm normalizes the decimal to the range
+$[0.5, 1.0)$, then uses binary search between lower and
+upper bounds to find the closest IEEE~754 representation.
+This avoids the rounding errors that plague simpler
+float-parsing approaches.
+
+<<function [[atof]]>>=
+double
+atof(char *cp)
+{
+    return strtod(cp, nil);
+}
+@
+
+<<function [[strtod]]>>=
+double
+strtod(char *as, char **aas)
+{
+    int na, ona, ex, dp, bp, c, i, flag, state;
+    ulong low[Prec], hig[Prec], mid[Prec], num, den;
+    double d;
+    char *s, a[Ndig];
+
+    flag = 0;   // Fsign, Fesign, Fdpoint
+    na = 0;     // number of digits of a[]
+    dp = 0;     // na of decimal point
+    ex = 0;     // exonent
+
+    state = S0;
+    for(s=as;; s++) {
+        c = *s;
+        if(c >= '0' && c <= '9') {
+            switch(state) {
+            case S0:
+            case S1:
+            case S2:
+                state = S2;
+                break;
+            case S3:
+            case S4:
+                state = S4;
+                break;
+
+            case S5:
+            case S6:
+            case S7:
+                state = S7;
+                ex = ex*10 + (c-'0');
+                continue;
+            }
+            if(na == 0 && c == '0') {
+                dp--;
+                continue;
+            }
+            if(na < Ndig-50)
+                a[na++] = c;
+            continue;
+        }
+        switch(c) {
+        case '\t':
+        case '\n':
+        case '\v':
+        case '\f':
+        case '\r':
+        case ' ':
+            if(state == S0)
+                continue;
+            break;
+        case '-':
+            if(state == S0)
+                flag |= Fsign;
+            else
+                flag |= Fesign;
+        case '+':
+            if(state == S0)
+                state = S1;
+            else
+            if(state == S5)
+                state = S6;
+            else
+                break;  // syntax
+            continue;
+        case '.':
+            flag |= Fdpoint;
+            dp = na;
+            if(state == S0 || state == S1) {
+                state = S3;
+                continue;
+            }
+            if(state == S2) {
+                state = S4;
+                continue;
+            }
+            break;
+        case 'e':
+        case 'E':
+            if(state == S2 || state == S4) {
+                state = S5;
+                continue;
+            }
+            break;
+        }
+        break;
+    }
+
+    /*
+     * clean up return char-pointer
+     */
+    switch(state) {
+    case S0:
+        if(xcmp(s, "nan") == 0) {
+            if(aas != nil)
+                *aas = s+3;
+            goto retnan;
+        }
+    case S1:
+        if(xcmp(s, "infinity") == 0) {
+            if(aas != nil)
+                *aas = s+8;
+            goto retinf;
+        }
+        if(xcmp(s, "inf") == 0) {
+            if(aas != nil)
+                *aas = s+3;
+            goto retinf;
+        }
+    case S3:
+        if(aas != nil)
+            *aas = as;
+        goto ret0;  // no digits found
+    case S6:
+        s--;        // back over +-
+    case S5:
+        s--;        // back over e
+        break;
+    }
+    if(aas != nil)
+        *aas = s;
+
+    if(flag & Fdpoint)
+    while(na > 0 && a[na-1] == '0')
+        na--;
+    if(na == 0)
+        goto ret0;  // zero
+    a[na] = 0;
+    if(!(flag & Fdpoint))
+        dp = na;
+    if(flag & Fesign)
+        ex = -ex;
+    dp += ex;
+    if(dp < -Maxe-Nmant/3)  /* actually -Nmant*log(2)/log(10), but Nmant/3 close enough */
+        goto ret0;  // underflow by exp
+    else
+    if(dp > +Maxe)
+        goto retinf;    // overflow by exp
+
+    /*
+     * normalize the decimal ascii number
+     * to range .[5-9][0-9]* e0
+     */
+    bp = 0;     // binary exponent
+    while(dp > 0)
+        divascii(a, &na, &dp, &bp);
+    while(dp < 0 || a[0] < '5')
+        mulascii(a, &na, &dp, &bp);
+    a[na] = 0;
+
+    /*
+     * very small numbers are represented using
+     * bp = -Bias+1.  adjust accordingly.
+     */
+    if(bp < -Bias+1){
+        ona = na;
+        divby(a, &na, -bp-Bias+1);
+        if(na < ona){
+            memmove(a+ona-na, a, na);
+            memset(a, '0', ona-na);
+            na = ona;
+        }
+        a[na] = 0;
+        bp = -Bias+1;
+    }
+
+    /* close approx by naive conversion */
+    num = 0;
+    den = 1;
+    for(i=0; i<9 && (c=a[i]); i++) {
+        num = num*10 + (c-'0');
+        den *= 10;
+    }
+    low[0] = umuldiv(num, One, den);
+    hig[0] = umuldiv(num+1, One, den);
+    for(i=1; i<Prec; i++) {
+        low[i] = 0;
+        hig[i] = One-1;
+    }
+
+    /* binary search for closest mantissa */
+    for(;;) {
+        /* mid = (hig + low) / 2 */
+        c = 0;
+        for(i=0; i<Prec; i++) {
+            mid[i] = hig[i] + low[i];
+            if(c)
+                mid[i] += One;
+            c = mid[i] & 1;
+            mid[i] >>= 1;
+        }
+        frnorm(mid);
+
+        /* compare */
+        c = fpcmp(a, mid);
+        if(c > 0) {
+            c = 1;
+            for(i=0; i<Prec; i++)
+                if(low[i] != mid[i]) {
+                    c = 0;
+                    low[i] = mid[i];
+                }
+            if(c)
+                break;  // between mid and hig
+            continue;
+        }
+        if(c < 0) {
+            for(i=0; i<Prec; i++)
+                hig[i] = mid[i];
+            continue;
+        }
+
+        /* only hard part is if even/odd roundings wants to go up */
+        c = mid[Prec-1] & (Sigbit-1);
+        if(c == Sigbit/2 && (mid[Prec-1]&Sigbit) == 0)
+            mid[Prec-1] -= c;
+        break;  // exactly mid
+    }
+
+    /* normal rounding applies */
+    c = mid[Prec-1] & (Sigbit-1);
+    mid[Prec-1] -= c;
+    if(c >= Sigbit/2) {
+        mid[Prec-1] += Sigbit;
+        frnorm(mid);
+    }
+    d = 0;
+    for(i=0; i<Prec; i++)
+        d = d*One + mid[i];
+    if(flag & Fsign)
+        d = -d;
+    d = ldexp(d, bp - Prec*Nbits);
+    return d;
+
+ret0:
+    return 0;
+
+retnan:
+    return NaN();
+
+retinf:
+    if(flag & Fsign)
+        return Inf(-1);
+    return Inf(+1);
+}
+@
+
+
+<<enum [[_anon_ (port/strtod.c)]]>>=
+/*
+ * This routine will convert to arbitrary precision
+ * floating point entirely in multi-precision fixed.
+ * The answer is the closest floating point number to
+ * the given decimal number. Exactly half way are
+ * rounded ala ieee rules.
+ * Method is to scale input decimal between .500 and .999...
+ * with external power of 2, then binary search for the
+ * closest mantissa to this decimal number.
+ * Nmant is is the required precision. (53 for ieee dp)
+ * Nbits is the max number of bits/word. (must be <= 28)
+ * Prec is calculated - the number of words of fixed mantissa.
+ */
+enum
+{
+    Nbits   = 28,               // bits safely represented in a ulong
+    Nmant   = 53,               // bits of precision required
+    Bias        = 1022,
+    Prec    = (Nmant+Nbits+1)/Nbits,    // words of Nbits each to represent mantissa
+    Sigbit  = 1<<(Prec*Nbits-Nmant),    // first significant bit of Prec-th word
+    Ndig    = 1500,
+    One = (ulong)(1<<Nbits),
+    Half    = (ulong)(One>>1),
+    Maxe    = 310,
+    Fsign   = 1<<0,     // found -
+    Fesign  = 1<<1,     // found e-
+    Fdpoint = 1<<2,     // found .
+
+    S0  = 0,        // _        _S0 +S1 #S2 .S3
+    S1,         // _+       #S2 .S3
+    S2,         // _+#      #S2 .S4 eS5
+    S3,         // _+.      #S4
+    S4,         // _+#.#    #S4 eS5
+    S5,         // _+#.#e   +S6 #S7
+    S6,         // _+#.#e+  #S7
+    S7,         // _+#.#e+# #S7
+};
+@
+% >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >>
+
+<<struct [[Tab]]>>=
+struct  Tab
+{
+    int bp;
+    int siz;
+    char*   cmp;
+};
+@
+
+
+<<function [[frnorm]]>>=
+static void
+frnorm(ulong *f)
+{
+    int i, c;
+
+    c = 0;
+    for(i=Prec-1; i>0; i--) {
+        f[i] += c;
+        c = f[i] >> Nbits;
+        f[i] &= One-1;
+    }
+    f[0] += c;
+}
+@
+
+<<function [[fpcmp]]>>=
+static int
+fpcmp(char *a, ulong* f)
+{
+    ulong tf[Prec];
+    int i, d, c;
+
+    for(i=0; i<Prec; i++)
+        tf[i] = f[i];
+
+    for(;;) {
+        /* tf *= 10 */
+        for(i=0; i<Prec; i++)
+            tf[i] = tf[i]*10;
+        frnorm(tf);
+        d = (tf[0] >> Nbits) + '0';
+        tf[0] &= One-1;
+
+        /* compare next digit */
+        c = *a;
+        if(c == 0) {
+            if('0' < d)
+                return -1;
+            if(tf[0] != 0)
+                goto cont;
+            for(i=1; i<Prec; i++)
+                if(tf[i] != 0)
+                    goto cont;
+            return 0;
+        }
+        if(c > d)
+            return +1;
+        if(c < d)
+            return -1;
+        a++;
+    cont:;
+    }
+}
+@
+
+
+
+<<function [[_divby]]>>=
+static void
+_divby(char *a, int *na, int b)
+{
+    int n, c;
+    char *p;
+
+    p = a;
+    n = 0;
+    while(n>>b == 0) {
+        c = *a++;
+        if(c == 0) {
+            while(n) {
+                c = n*10;
+                if(c>>b)
+                    break;
+                n = c;
+            }
+            goto xx;
+        }
+        n = n*10 + c-'0';
+        (*na)--;
+    }
+    for(;;) {
+        c = n>>b;
+        n -= c<<b;
+        *p++ = c + '0';
+        c = *a++;
+        if(c == 0)
+            break;
+        n = n*10 + c-'0';
+    }
+    (*na)++;
+xx:
+    while(n) {
+        n = n*10;
+        c = n>>b;
+        n -= c<<b;
+        *p++ = c + '0';
+        (*na)++;
+    }
+    *p = 0;
+}
+@
+% >> >>
+
+<<function [[divby]]>>=
+static void
+divby(char *a, int *na, int b)
+{
+    while(b > 9){
+        _divby(a, na, 9);
+        a[*na] = 0;
+        b -= 9;
+    }
+    if(b > 0)
+        _divby(a, na, b);
+}
+@
+
+<<global [[tab1]]>>=
+static  Tab tab1[] =
+{
+     1,  0, "",
+     3,  1, "7",
+     6,  2, "63",
+     9,  3, "511",
+    13,  4, "8191",
+    16,  5, "65535",
+    19,  6, "524287",
+    23,  7, "8388607",
+    26,  8, "67108863",
+    27,  9, "134217727",
+};
+@
+
+<<function [[divascii]]>>=
+static void
+divascii(char *a, int *na, int *dp, int *bp)
+{
+    int b, d;
+    Tab *t;
+
+    d = *dp;
+    if(d >= nelem(tab1))
+        d = nelem(tab1)-1;
+    t = tab1 + d;
+    b = t->bp;
+    if(memcmp(a, t->cmp, t->siz) > 0)
+        d--;
+    *dp -= d;
+    *bp += b;
+    divby(a, na, b);
+}
+@
+
+<<function [[mulby]]>>=
+static void
+mulby(char *a, char *p, char *q, int b)
+{
+    int n, c;
+
+    n = 0;
+    *p = 0;
+    for(;;) {
+        q--;
+        if(q < a)
+            break;
+        c = *q - '0';
+        c = (c<<b) + n;
+        n = c/10;
+        c -= n*10;
+        p--;
+        *p = c + '0';
+    }
+    while(n) {
+        c = n;
+        n = c/10;
+        c -= n*10;
+        p--;
+        *p = c + '0';
+    }
+}
+@
+% >>
+
+<<global [[tab2]]>>=
+static  Tab tab2[] =
+{
+     1,  1, "",             // dp = 0-0
+     3,  3, "125",
+     6,  5, "15625",
+     9,  7, "1953125",
+    13, 10, "1220703125",
+    16, 12, "152587890625",
+    19, 14, "19073486328125",
+    23, 17, "11920928955078125",
+    26, 19, "1490116119384765625",
+    27, 19, "7450580596923828125",      // dp 8-9
+};
+@
+
+<<function [[mulascii]]>>=
+static void
+mulascii(char *a, int *na, int *dp, int *bp)
+{
+    char *p;
+    int d, b;
+    Tab *t;
+
+    d = -*dp;
+    if(d >= nelem(tab2))
+        d = nelem(tab2)-1;
+    t = tab2 + d;
+    b = t->bp;
+    if(memcmp(a, t->cmp, t->siz) < 0)
+        d--;
+    p = a + *na;
+    *bp -= b;
+    *dp += d;
+    *na += d;
+    mulby(a, p+d, p, b);
+}
+@
+
+<<function [[xcmp]]>>=
+static int
+xcmp(char *a, char *b)
+{
+    int c1, c2;
+
+    while(c1 = *b++) {
+        c2 = *a++;
+        if(isupper(c2))
+            c2 = tolower(c2);
+        if(c1 != c2)
+            return 1;
+    }
+    return 0;
+}
+@
+
+
+
+\subsection{[[sqrt()]]}
+
+%claude:
+[[sqrt]] uses Newton's method (also known as Heron's method):
+starting from an initial approximation, it iterates
+\verb+temp = 0.5 * (temp + arg/temp)+ which converges
+quadratically---each iteration doubles the number of correct
+digits, so 5 iterations suffice for double precision. The
+initial approximation uses [[frexp]] to extract the mantissa
+and exponent, then applies half the exponent to get close
+to the true square root.
+
+<<function [[sqrt]]>>=
+double
+sqrt(double arg)
+{
+    double x, temp;
+    int exp, i;
+
+    if(arg <= 0) {
+        if(arg < 0)
+            return NaN();
+        return 0;
+    }
+    if(isInf(arg, 1))
+        return arg;
+    x = frexp(arg, &exp);
+    while(x < 0.5) {
+        x *= 2;
+        exp--;
+    }
+    /*
+     * NOTE
+     * this wont work on 1's comp
+     */
+    if(exp & 1) {
+        x *= 2;
+        exp--;
+    }
+    temp = 0.5 * (1.0+x);
+
+    while(exp > 60) {
+        temp *= (1L<<30);
+        exp -= 60;
+    }
+    while(exp < -60) {
+        temp /= (1L<<30);
+        exp += 60;
+    }
+    if(exp >= 0)
+        temp *= 1L << (exp/2);
+    else
+        temp /= 1L << (-exp/2);
+    for(i=0; i<=4; i++)
+        temp = 0.5*(temp + arg/temp);
+    return temp;
+}
+@
+% >> >> >> >> >> >>
+
+\subsection{[[modf()]]}
+
+%claude:
+[[modf]] splits a double into integer and fractional parts
+by directly masking the IEEE~754 bit representation. The
+exponent determines how many mantissa bits belong to the
+integer part: bits above that threshold are kept for
+\verb+*ip+, and the remainder is the fractional part. This
+is the function that [[floor]] and [[ceil]] rely on.
+
+% used by floor(), ceil() in basics sections
+% (not so basics in the end).
+
+<<function [[modf]]>>=
+double
+modf(double d, double *ip)
+{
+    FPdbleword x;
+    int e;
+
+    x.x = d;
+    e = (x.hi >> SHIFT) & MASK;
+    if(e == MASK){
+        *ip = d;
+        if(x.lo != 0 || (x.hi & 0xfffffL) != 0) /* NaN */
+            return d;
+        /* +/- Inf */
+        x.hi &= 0x80000000L;
+        return x.x;
+    }
+    if(d < 1) {
+        if(d < 0) {
+            x.x = modf(-d, ip);
+            *ip = -*ip;
+            return -x.x;
+        }
+        *ip = 0;
+        return d;
+    }
+    e -= BIAS;
+    if(e <= SHIFT+1) {
+        x.hi &= ~(0x1fffffL >> e);
+        x.lo = 0;
+    } else
+    if(e <= SHIFT+33)
+        x.lo &= ~(0x7fffffffL >> (e-SHIFT-2));
+    *ip = x.x;
+    return d - x.x;
+}
+@
+\subsection{[[fmod()]]}
+
+
+<<function [[fmod]]>>=
+/*
+ * floating-point mod function without infinity or NaN checking
+ */
+double
+fmod (double x, double y)
+{
+    int sign, yexp, rexp;
+    double r, yfr, rfr;
+
+    if (y == 0)
+        return x;
+    if (y < 0)
+        y = -y;
+    yfr = frexp(y, &yexp);
+    sign = 0;
+    if(x < 0) {
+        r = -x;
+        sign++;
+    } else
+        r = x;
+    while(r >= y) {
+        rfr = frexp(r, &rexp);
+        r -= ldexp(y, rexp - yexp - (rfr < yfr));
+    }
+    if(sign)
+        r = -r;
+    return r;
+}
+@
+
+\subsection{[[pow()]]}
+
+%claude:
+[[pow]] handles $x^y$ by splitting [[y]] into integer and
+fractional parts. The fractional part is computed as
+$e^{y_1 \ln x}$ (using [[exp]] and [[log]]), while the
+integer part is computed by repeated squaring---much faster
+than calling [[exp]]/[[log]] for the full exponent.
+Special cases include negative bases (only valid for integer
+exponents), zero, and overflow detection.
+
+<<function [[pow]]>>=
+double
+pow(double x, double y) /* return x ^ y (exponentiation) */
+{
+    double xy, y1, ye;
+    long i;
+    int ex, ey, flip;
+
+    if(y == 0.0)
+        return 1.0;
+
+    flip = 0;
+    if(y < 0.){
+        y = -y;
+        flip = 1;
+    }
+    y1 = modf(y, &ye);
+    if(y1 != 0.0){
+        if(x <= 0.)
+            goto zreturn;
+        if(y1 > 0.5) {
+            y1 -= 1.;
+            ye += 1.;
+        }
+        xy = exp(y1 * log(x));
+    }else
+        xy = 1.0;
+    if(ye > 0x7FFFFFFF){    /* should be ~0UL but compiler can't convert double to ulong */
+        if(x <= 0.){
+ zreturn:
+            if(x==0. && !flip)
+                return 0.;
+            return NaN();
+        }
+        if(flip){
+            if(y == .5)
+                return 1./sqrt(x);
+            y = -y;
+        }else if(y == .5)
+            return sqrt(x);
+        return exp(y * log(x));
+    }
+    x = frexp(x, &ex);
+    ey = 0;
+    i = ye;
+    if(i)
+        for(;;){
+            if(i & 1){
+                xy *= x;
+                ey += ex;
+            }
+            i >>= 1;
+            if(i == 0)
+                break;
+            x *= x;
+            ex <<= 1;
+            if(x < .5){
+                x += x;
+                ex -= 1;
+            }
+        }
+    if(flip){
+        xy = 1. / xy;
+        ey = -ey;
+    }
+    return ldexp(xy, ey);
+}
+@
+
+% >> >> >> >> 
+
+<<function [[pow10]]>>=
+double
+pow10(int n)
+{
+    int m;
+
+    if(n < 0) {
+        n = -n;
+        if(n < sizeof(tab)/sizeof(tab[0]))
+            return 1/tab[n];
+        m = n/2;
+        return 1/(pow10(m) * pow10(n-m));
+    }
+    if(n < sizeof(tab)/sizeof(tab[0]))
+        return tab[n];
+    m = n/2;
+    return pow10(m) * pow10(n-m);
+}
+@
+
+<<global [[tab]]>>=
+/*
+ * this table might overflow 127-bit exponent representations.
+ * in that case, truncate it after 1.0e38.
+ * it is important to get all one can from this
+ * routine since it is used in atof to scale numbers.
+ * the presumption is that C converts fp numbers better
+ * than multipication of lower powers of 10.
+ */
+static
+double  tab[] =
+{
+    1.0e0,  1.0e1,  1.0e2,  1.0e3,  1.0e4,  1.0e5,  1.0e6,  1.0e7,  1.0e8,  1.0e9, 
+    1.0e10, 1.0e11, 1.0e12, 1.0e13, 1.0e14, 1.0e15, 1.0e16, 1.0e17, 1.0e18, 1.0e19, 
+    1.0e20, 1.0e21, 1.0e22, 1.0e23, 1.0e24, 1.0e25, 1.0e26, 1.0e27, 1.0e28, 1.0e29, 
+    1.0e30, 1.0e31, 1.0e32, 1.0e33, 1.0e34, 1.0e35, 1.0e36, 1.0e37, 1.0e38, 1.0e39, 
+    1.0e40, 1.0e41, 1.0e42, 1.0e43, 1.0e44, 1.0e45, 1.0e46, 1.0e47, 1.0e48, 1.0e49, 
+    1.0e50, 1.0e51, 1.0e52, 1.0e53, 1.0e54, 1.0e55, 1.0e56, 1.0e57, 1.0e58, 1.0e59, 
+    1.0e60, 1.0e61, 1.0e62, 1.0e63, 1.0e64, 1.0e65, 1.0e66, 1.0e67, 1.0e68, 1.0e69, 
+    1.0e70, 1.0e71, 1.0e72, 1.0e73, 1.0e74, 1.0e75, 1.0e76, 1.0e77, 1.0e78, 1.0e79, 
+    1.0e80, 1.0e81, 1.0e82, 1.0e83, 1.0e84, 1.0e85, 1.0e86, 1.0e87, 1.0e88, 1.0e89, 
+    1.0e90, 1.0e91, 1.0e92, 1.0e93, 1.0e94, 1.0e95, 1.0e96, 1.0e97, 1.0e98, 1.0e99, 
+    1.0e100,1.0e101,1.0e102,1.0e103,1.0e104,1.0e105,1.0e106,1.0e107,1.0e108,1.0e109,
+    1.0e110,1.0e111,1.0e112,1.0e113,1.0e114,1.0e115,1.0e116,1.0e117,1.0e118,1.0e119,
+    1.0e120,1.0e121,1.0e122,1.0e123,1.0e124,1.0e125,1.0e126,1.0e127,1.0e128,1.0e129,
+    1.0e130,1.0e131,1.0e132,1.0e133,1.0e134,1.0e135,1.0e136,1.0e137,1.0e138,1.0e139,
+    1.0e140,1.0e141,1.0e142,1.0e143,1.0e144,1.0e145,1.0e146,1.0e147,1.0e148,1.0e149,
+    1.0e150,1.0e151,1.0e152,1.0e153,1.0e154,1.0e155,1.0e156,1.0e157,1.0e158,1.0e159,
+};
+@
+
+
+
+\section{Trigonometry}
+
+%claude:
+The trigonometric functions ([[sin]], [[cos]], [[tan]],
+[[atan]], [[atan2]]) use polynomial approximations from
+Hart et al.'s tables. The shared [[sinus]] helper first
+reduces the argument to the range $[0, \pi/4]$ using the
+periodicity of sin/cos, then evaluates a rational polynomial
+$p(x)/q(x)$. The coefficients (p0--p4, q0--q3) are chosen
+to give double-precision accuracy over this range.
+
+<<function [[cos]]>>=
+double
+cos(double arg)
+{
+    if(arg < 0)
+        arg = -arg;
+    return sinus(arg, 1);
+}
+@
+
+<<function [[sin]]>>=
+double
+sin(double arg)
+{
+    return sinus(arg, 0);
+}
+@
+
+
+
+
+<<constant p0 (port/sin.c)>>=
+#define p0      .1357884097877375669092680e8
+@
+
+<<constant p1 (port/sin.c)>>=
+#define p1     -.4942908100902844161158627e7
+@
+
+<<constant p2 (port/sin.c)>>=
+#define p2      .4401030535375266501944918e6
+@
+
+<<constant p3 (port/sin.c)>>=
+#define p3     -.1384727249982452873054457e5
+@
+
+<<constant p4 (port/sin.c)>>=
+#define p4      .1459688406665768722226959e3
+@
+
+<<constant q0 (port/sin.c)>>=
+#define q0      .8644558652922534429915149e7
+@
+
+<<constant q1 (port/sin.c)>>=
+#define q1      .4081792252343299749395779e6
+@
+
+<<constant q2 (port/sin.c)>>=
+#define q2      .9463096101538208180571257e4
+@
+
+<<constant q3 (port/sin.c)>>=
+#define q3      .1326534908786136358911494e3
+@
+
+% calls modf
+<<function [[sinus]]>>=
+static
+double
+sinus(double arg, int quad)
+{
+    double e, f, ysq, x, y, temp1, temp2;
+    int k;
+
+    x = arg;
+    if(x < 0) {
+        x = -x;
+        quad += 2;
+    }
+    x *= 1/PIO2;    /* underflow? */
+    if(x > 32764) {
+        y = modf(x, &e);
+        e += quad;
+        modf(0.25*e, &f);
+        quad = e - 4*f;
+    } else {
+        k = x;
+        y = x - k;
+        quad += k;
+        quad &= 3;
+    }
+    if(quad & 1)
+        y = 1-y;
+    if(quad > 1)
+        y = -y;
+
+    ysq = y*y;
+    temp1 = ((((p4*ysq+p3)*ysq+p2)*ysq+p1)*ysq+p0)*y;
+    temp2 = ((((ysq+q3)*ysq+q2)*ysq+q1)*ysq+q0);
+    return temp1/temp2;
+}
+@
+
+%http://mooooo.ooo/chebyshev-sine-approximation/
+
+
+
+<<global p0 (port/tan.c)>>=
+static double p0     = -0.1306820264754825668269611177e+5;
+@
+
+<<global p1 (port/tan.c)>>=
+static double p1      = 0.1055970901714953193602353981e+4;
+@
+
+<<global p2 (port/tan.c)>>=
+static double p2     = -0.1550685653483266376941705728e+2;
+@
+
+<<global p3 (port/tan.c)>>=
+static double p3      = 0.3422554387241003435328470489e-1;
+@
+
+<<global [[p4]]>>=
+static double p4      = 0.3386638642677172096076369e-4;
+@
+
+<<global q0 (port/tan.c)>>=
+static double q0     = -0.1663895238947119001851464661e+5;
+@
+
+<<global q1 (port/tan.c)>>=
+static double q1      = 0.4765751362916483698926655581e+4;
+@
+
+<<global q2 (port/tan.c)>>=
+static double q2     = -0.1555033164031709966900124574e+3;
+@
+
+<<function [[tan]]>>=
+double
+tan(double arg)
+{
+    double temp, e, x, xsq;
+    int flag, sign, i;
+
+    flag = 0;
+    sign = 0;
+    if(arg < 0){
+        arg = -arg;
+        sign++;
+    }
+    arg = 2*arg/PIO2;   /* overflow? */
+    x = modf(arg, &e);
+    i = e;
+    switch(i%4) {
+    case 1:
+        x = 1 - x;
+        flag = 1;
+        break;
+
+    case 2:
+        sign = !sign;
+        flag = 1;
+        break;
+
+    case 3:
+        x = 1 - x;
+        sign = !sign;
+        break;
+
+    case 0:
+        break;
+    }
+
+    xsq = x*x;
+    temp = ((((p4*xsq+p3)*xsq+p2)*xsq+p1)*xsq+p0)*x;
+    temp = temp/(((xsq+q2)*xsq+q1)*xsq+q0);
+
+    if(flag) {
+        if(temp == 0)
+            return NaN();
+        temp = 1/temp;
+    }
+    if(sign)
+        temp = -temp;
+    return temp;
+}
+@
+
+
+
+
+<<function [[asin]]>>=
+double
+asin(double arg)
+{
+    double temp;
+    int sign;
+
+    sign = 0;
+    if(arg < 0) {
+        arg = -arg;
+        sign++;
+    }
+    if(arg > 1)
+        return NaN();
+    temp = sqrt(1 - arg*arg);
+    if(arg > 0.7)
+        temp = PIO2 - atan(temp/arg);
+    else
+        temp = atan(arg/temp);
+    if(sign)
+        temp = -temp;
+    return temp;
+}
+@
+
+<<function [[acos]]>>=
+double
+acos(double arg)
+{
+    if(arg > 1 || arg < -1)
+        return NaN();
+    return PIO2 - asin(arg);
+}
+@
+
+
+<<function [[atan]]>>=
+/*
+    atan makes its argument positive and
+    calls the inner routine satan.
+ */
+
+double
+atan(double arg)
+{
+
+    if(arg > 0)
+        return satan(arg);
+    return -satan(-arg);
+}
+@
+
+
+
+\section{Logarithms and exponentials}
+
+%claude:
+The [[exp]] and [[log]] functions also use polynomial
+approximations. [[exp]] reduces its argument to the range
+$[0, \ln 2]$ by extracting the integer part as a power of~2
+(applied via [[ldexp]]), then evaluates a rational polynomial
+for the remainder. [[log]] does the reverse: it uses [[frexp]]
+to extract the exponent, then approximates $\ln(x)$ for
+$x \in [0.5, 1.0)$. [[ldexp]] and [[frexp]] manipulate the
+IEEE~754 exponent field directly for exact, fast
+multiplication/division by powers of~2.
+
+\subsection{[[exp()]]}
+
+<<function [[exp]]>>=
+double
+exp(double arg)
+{
+    double fract, temp1, temp2, xsq;
+    int ent;
+
+    if(arg == 0)
+        return 1;
+    if(arg < -maxf)
+        return 0;
+    if(arg > maxf)
+        return Inf(1);
+
+    arg *= log2e;
+    ent = floor(arg);
+    fract = (arg-ent) - 0.5;
+    xsq = fract*fract;
+    temp1 = ((p2*xsq+p1)*xsq+p0)*fract;
+    temp2 = ((xsq+q2)*xsq+q1)*xsq + q0;
+    return ldexp(sqrt2*(temp2+temp1)/(temp2-temp1), ent);
+}
+@
+
+<<constant [[maxf]]>>=
+#define maxf  10000
+@
+
+<<constant [[log2e]]>>=
+#define log2e  1.4426950408889634073599247
+@
+
+
+<<constant p0 (port/exp.c)>>=
+#define p0  .2080384346694663001443843411e7
+@
+
+<<constant p1 (port/exp.c)>>=
+#define p1  .3028697169744036299076048876e5
+@
+
+<<constant p2 (port/exp.c)>>=
+#define p2  .6061485330061080841615584556e2
+@
+
+<<constant q0 (port/exp.c)>>=
+#define q0  .6002720360238832528230907598e7
+@
+
+<<constant q1 (port/exp.c)>>=
+#define q1  .3277251518082914423057964422e6
+@
+
+<<constant q2 (port/exp.c)>>=
+#define q2  .1749287689093076403844945335e4
+@
+
+
+<<constant [[sqrt2]]>>=
+#define sqrt2  1.4142135623730950488016887
+@
+
+\subsection{[[ldexp()]]}
+
+%claude:
+[[ldexp]] multiplies a double by $2^n$ by directly adjusting
+the IEEE~754 exponent field. It handles edge cases (zero,
+NaN, infinity, denormals, overflow, underflow) and works in
+a loop when [[n]] is too large for a single exponent
+adjustment. [[frexp]] does the reverse: it extracts the
+exponent and returns the mantissa in $[0.5, 1.0)$. Both
+access the bit representation through [[FPdbleword]].
+
+<<constant MASK (port/frexp.c)>>=
+/*
+ * this is big/little endian non-portable
+ * it gets the endian from the FPdbleword
+ * union in u.h.
+ */
+#define MASK    0x7ffL
+@
+
+<<constant [[SHIFT]]>>=
+#define SHIFT   20
+@
+
+<<constant [[BIAS]]>>=
+#define BIAS    1022L
+@
+
+<<constant [[SIG]]>>=
+#define SIG 52
+@
+
+
+% called by fmod
+
+<<function [[ldexp]]>>=
+double
+ldexp(double d, int deltae)
+{
+    int e, bits;
+    FPdbleword x;
+    ulong z;
+
+    if(d == 0)
+        return 0;
+    x.x = d;
+    e = (x.hi >> SHIFT) & MASK;
+    if(deltae >= 0 || e+deltae >= 1){   /* no underflow */
+        e += deltae;
+        if(e >= MASK){      /* overflow */
+            if(d < 0)
+                return Inf(-1);
+            return Inf(1);
+        }
+    }else{  /* underflow gracefully */
+        deltae = -deltae;
+        /* need to shift d right deltae */
+        if(e > 1){      /* shift e-1 by exponent manipulation */
+            deltae -= e-1;
+            e = 1;
+        }
+        if(deltae > 0 && e==1){ /* shift 1 by switch from 1.fff to 0.1ff */
+            deltae--;
+            e = 0;
+            x.lo >>= 1;
+            x.lo |= (x.hi&1)<<31;
+            z = x.hi & ((1<<SHIFT)-1);
+            x.hi &= ~((1<<SHIFT)-1);
+            x.hi |= (1<<(SHIFT-1)) | (z>>1);
+        }
+        while(deltae > 0){      /* shift bits down */
+            bits = deltae;
+            if(bits > SHIFT)
+                bits = SHIFT;
+            x.lo >>= bits;
+            x.lo |= (x.hi&((1<<bits)-1)) << (32-bits);
+            z = x.hi & ((1<<SHIFT)-1);
+            x.hi &= ~((1<<SHIFT)-1);
+            x.hi |= z>>bits;
+            deltae -= bits;
+        }
+    }
+    x.hi &= ~(MASK << SHIFT);
+    x.hi |= (long)e << SHIFT;
+    return x.x;
+}
+@
+% >> >> >> >> >> >> >> >> 
+
+\subsection{[[frexp()]]}
+
+<<function [[frexp]]>>=
+double
+frexp(double d, int *ep)
+{
+    FPdbleword x, a;
+
+    *ep = 0;
+    /* order matters: only isNaN can operate on NaN */
+    if(isNaN(d) || isInf(d, 0) || d == 0)
+        return d;
+    x.x = d;
+    a.x = fabs(d);
+    if((a.hi >> SHIFT) == 0){   /* normalize subnormal numbers */
+        x.x = (double)(1ULL<<SIG) * d;
+        *ep = -SIG;
+    }
+    *ep += ((x.hi >> SHIFT) & MASK) - BIAS;
+    x.hi &= ~(MASK << SHIFT);
+    x.hi |= BIAS << SHIFT;
+    return x.x;
+}
+@
+%$
+
+\subsection{[[log()]]}
+
+
+<<function [[log]]>>=
+double
+log(double arg)
+{
+    double x, z, zsq, temp;
+    int exp;
+
+    if(arg <= 0)
+        return NaN();
+    x = frexp(arg, &exp);
+    while(x < 0.5) {
+        x *= 2;
+        exp--;
+    }
+    if(x < sqrto2) {
+        x *= 2;
+        exp--;
+    }
+
+    z = (x-1) / (x+1);
+    zsq = z*z;
+
+    temp = ((p3*zsq + p2)*zsq + p1)*zsq + p0;
+    temp = temp/(((zsq + q2)*zsq + q1)*zsq + q0);
+    temp = temp*z + exp*log2;
+    return temp;
+}
+@
+
+<<constant [[log2]]>>=
+#define log2    0.693147180559945309e0
+@
+
+<<constant [[ln10o1]]>>=
+#define ln10o1  .4342944819032518276511
+@
+
+<<constant [[sqrto2]]>>=
+#define sqrto2  0.707106781186547524e0
+@
+
+<<constant p0 (port/log.c)>>=
+#define p0      -.240139179559210510e2
+@
+
+<<constant p1 (port/log.c)>>=
+#define p1      0.309572928215376501e2
+@
+
+<<constant p2 (port/log.c)>>=
+#define p2      -.963769093377840513e1
+@
+
+<<constant p3 (port/log.c)>>=
+#define p3      0.421087371217979714e0
+@
+
+<<constant q0 (port/log.c)>>=
+#define q0      -.120069589779605255e2
+@
+
+<<constant q1 (port/log.c)>>=
+#define q1      0.194809660700889731e2
+@
+
+<<constant q2 (port/log.c)>>=
+#define q2      -.891110902798312337e1
+@
+
+
+<<function [[log10]]>>=
+double
+log10(double arg)
+{
+
+    if(arg <= 0)
+        return NaN();
+    return log(arg) * ln10o1;
+}
+@
+
+
+\section{Random numbers}
+% see also Cryptography section later
+
+%entire book on random number generation:
+%http://luc.devroye.org/rnbookindex.html
+
+%claude:
+The PRNG uses a lagged Fibonacci generator with taps at
+positions separated by [[TAP]] within a [[LEN]]-element
+ring buffer. [[srand]] seeds the generator with a linear
+congruential step. [[rand]] returns 15-bit values (for ANSI
+C compatibility), [[lrand]] returns 31-bit values, and
+[[nrand]] returns values in $[0, n)$ with uniform
+distribution (it retries when the raw value would cause
+modulo bias).
+%
+[[lrand]] uses an additive feedback shift register (a
+lagged Fibonacci generator) for fast pseudo-random numbers.
+For cryptographic randomness, [[truerand]] reads from
+[[/dev/random]], which in the kernel collects entropy from
+hardware sources.
+
+<<function [[rand]]>>=
+int
+rand(void)
+{
+    return lrand() & 0x7fff;
+}
+@
+% magic number 0x7fff? to force a positive number on 32 bits arch?
+% what about 64bits arch?
+
+<<function [[lrand]]>>=
+long
+lrand(void)
+{
+    ulong x;
+
+    lock(&lk);
+
+    rng_tap--;
+    if(rng_tap < rng_vec) {
+        if(rng_feed == 0) {
+            isrand(1);
+            rng_tap--;
+        }
+        rng_tap += LEN;
+    }
+    rng_feed--;
+    if(rng_feed < rng_vec)
+        rng_feed += LEN;
+    x = (*rng_feed + *rng_tap) & MASK;
+    *rng_feed = x;
+
+    unlock(&lk);
+
+    return x;
+}
+@
+
+<<global [[lk]]>>=
+static  Lock    lk;
+@
+
+<<global [[rng_vec]]>>=
+static  ulong   rng_vec[LEN];
+@
+
+<<global [[rng_tap]]>>=
+static  ulong*  rng_tap = rng_vec;
+@
+
+<<global [[rng_feed]]>>=
+static  ulong*  rng_feed = 0;
+@
+
+
+<<function [[truerand]]>>=
+ulong
+truerand(void)
+{
+    ulong x;
+    static fdt randfd = -1;
+
+    if(randfd < 0)
+        randfd = open("/dev/random", OREAD|OCEXEC);
+    if(randfd < 0)
+        sysfatal("can't open /dev/random");
+    if(read(randfd, &x, sizeof(x)) != sizeof(x))
+        sysfatal("can't read /dev/random");
+
+    return x;
+}
+@
+
+
+
+
+
+%claude:
+[[truerand]] reads from [[/dev/random]], which the kernel
+sources from hardware entropy (interrupt timing, etc.).
+[[fastrand]] uses the weaker [[lrand]] when speed matters
+more than unpredictability.
+
+\section{muldiv}
+
+<<function [[umuldiv]]>>=
+ulong
+umuldiv(ulong a, ulong b, ulong c)
+{
+    double d;
+
+    d = ((double)a * (double)b) / (double)c;
+    if(d >= 4294967296.)
+        abort();
+    return d;
+}
+@
+
+<<function [[muldiv]]>>=
+long
+muldiv(long a, long b, long c)
+{
+    int s;
+    long v;
+
+    s = 0;
+    if(a < 0) {
+        s = !s;
+        a = -a;
+    }
+    if(b < 0) {
+        s = !s;
+        b = -b;
+    }
+    if(c < 0) {
+        s = !s;
+        c = -c;
+    }
+    v = umuldiv(a, b, c);
+    if(s)
+        v = -v;
+    return v;
+}
+@
+
+%******************************************************************************
+\chapter{Compression}
+%******************************************************************************
+% libflate
+
+%claude:
+[[libflate]] implements the deflate/inflate algorithms
+(RFC~1951) used by [[gzip]] and [[gunzip]]. The library
+provides a callback-based streaming interface: the caller
+supplies read and write functions, and [[deflate]]/[[inflate]]
+process data in chunks without loading the entire file into
+memory.
+
+% BIG!
+
+%******************************************************************************
+%\chapter{Encryption}
+%******************************************************************************
+%alt: Crypto
+% and chksum ? or move to security?
+
+%###############################################################################
+
+\part{System Services}
+%###############################################################################
+
+%claude:
+This part covers the library functions that wrap system
+calls: file I/O and buffered I/O, directory and path
+operations, namespace manipulation ([[bind]]/[[mount]]),
+time, process management ([[fork]]/[[exec]]/[[wait]]),
+error handling, and security. Each chapter follows a
+recurring pattern: first the raw system call, then
+convenience wrappers, then higher-level abstractions
+built on top.
 
 %******************************************************************************
 \chapter{File IO}
@@ -3903,6 +5894,511 @@ getppid(void)
     return atol(b);
 }
 @
+
+%******************************************************************************
+\chapter{Error Management}
+%******************************************************************************
+\label{chap:errors}
+
+% Unix use errno, an error number, an integer, but ugly cos hardcoded
+% list of fixed errors. Then perror() to display string for it.
+% Plan9 rethinked that, like for exits(char*s) insead  of exit(int)
+% and introduced not error number but per-process error string!
+
+%claude:
+\plan replaces \unix's [[errno]] (an integer error code) with
+a per-process error {\em string} of up to 128 characters.
+The [[errstr]] system call swaps the current error string with
+a buffer provided by the caller---passing an empty buffer
+reads and clears the error. The [[%r]] format verb in
+[[print]]/[[fprint]] outputs the current error string,
+and [[werrstr]] sets it. This design avoids the fixed,
+enumerated error codes of \unix and allows file servers to
+return descriptive error messages.
+
+%TODO: errno
+%    if(getwd(pathname, sizeof(pathname)) == 0) {
+%        fprint(2, "pwd: %r\n");
+%        exits("getwd");
+%    }
+% what is %r? last error code from libc function? a bit ugly
+% those == 0 are also ugly.
+
+
+<<constant [[ERRMAX]]>>=
+#define	ERRMAX	128	/* max length of error string */
+@
+
+\section{Syscall: [[errstr()]]}
+
+% error of last system call.
+% but why not return error information from system call directly?
+% because can not use pairs in C ... and return value sometimes already
+% used? not always ...
+
+% kernel swaps value with string passed in, so you want to pass a string buffer
+% with '\0' as first char so after the call to errstr, the errstr in
+% the kernel is reset.
+
+
+\section{[[rerrstr()]], [[werrstr()]]}
+
+%claude:
+Because [[errstr]] {\em swaps} the error string (it reads the
+current error and replaces it with the buffer's contents),
+[[rerrstr]] must call it twice: once to read the error into
+a temporary buffer, and again to restore it. This read-without-clear
+pattern is necessary when you want to inspect the error
+without consuming it. [[werrstr]] does the opposite:
+it formats a message into a buffer and swaps it in, setting
+the process's error string.
+
+<<function [[rerrstr]]>>=
+void
+rerrstr(char *buf, uint nbuf)
+{
+    char tmp[ERRMAX];
+
+    tmp[0] = '\0';
+    errstr(tmp, sizeof tmp);
+
+    utfecpy(buf, buf+nbuf, tmp);
+    errstr(tmp, sizeof tmp);
+}
+@
+% so it keeps the errstr in the kernel
+
+<<function [[werrstr]]>>=
+void
+werrstr(char *fmt, ...)
+{
+    va_list arg;
+    char buf[ERRMAX];
+
+    va_start(arg, fmt);
+    vseprint(buf, buf+ERRMAX, fmt, arg);
+    va_end(arg);
+    errstr(buf, sizeof buf);
+}
+@
+%old: ERRMAX -> sizeof tmp so more consistent with rerrstr
+
+\section{[[perror()]]}
+
+% to print last error code of last system call
+
+% perror() is for unix compatibility.
+
+<<function [[perror]]>>=
+void
+perror(char *s)
+{
+    char buf[ERRMAX];
+
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    if(s && *s)
+        fprint(2, "%s: %s\n", s, buf);
+    else
+        fprint(2, "%s\n", buf);
+}
+@
+
+\section{Error return values}
+% move earlier in core DS chapter?
+
+%claude:
+C has no standard convention for error return values: some
+functions return 0 on error ([[convM2S]]), some return $-1$
+([[open]]), and some return 1 ([[getfields]]). These typedefs
+and constants document the convention used by each function,
+making the code more self-documenting. They were added by the
+author to the \plan source to reduce confusion.
+
+<<type [[errorxxx]]>>=
+// later: unify all of that to be more consistent!
+typedef int error0; // 0 is the error value
+typedef int error1; // 1 is the error value
+typedef int errorneg1; // -1 is the error value
+typedef int errorn; // 1 or more means error
+@
+%pad: I added that
+
+<<constant [[OKxxx]]>>=
+#define OK_0 0
+#define OK_1 1
+@
+%pad: I added that
+
+<<constant [[ERRORxxx]]>>=
+#define ERROR_0 0
+#define ERROR_1 1
+#define ERROR_NEG1 (-1)
+@
+%pad: I added that
+
+\section{[[assert()]]}
+
+%claude:
+[[assert]] aborts the program when a condition is false.
+The macro uses the \plan C compiler's implicit stringification
+(the string \verb+"x"+ inside the macro expands to the
+literal text of the condition). The indirection through
+a function pointer [[_assert]] allows [[libthread]] to
+replace the default handler with one that reports the
+thread ID and does thread-safe cleanup.
+
+<<macro [[assert]]>>=
+#define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
+@
+% note that use x inside a string so implicity strinfify in plan9 cpp
+% (see Compiler.nw)
+
+
+<<global [[_assert]]>>=
+void (*_assert)(char*) = default_assert;
+@
+
+<<function [[default_assert]]>>=
+void
+default_assert(char *s)
+{
+    if(__assert)
+        (*__assert)(s);
+    fprint(2, "assert failed: %s\n", s);
+    abort();
+}
+@
+
+<<global [[__assert]]>>=
+void (*__assert)(char*);
+@
+% used by libthread to point to _theadassert that does ???
+
+
+
+<<function [[abort]]>>=
+void
+abort(void)
+{
+    while(*(int*)0)
+        ;
+}
+@
+% generate segfault
+
+
+\section{[[sysfatal()]]}
+
+%claude:
+[[sysfatal]] is the standard way to terminate with an error
+message. It formats the message, prepends the program name
+([[argv0]]), and calls [[exits]]. Like [[_assert]], it goes
+through a function pointer [[_sysfatal]] so [[libthread]]
+can replace it with a thread-aware version that cleans up
+properly.
+
+% wrapper around exits that can format; also use argv0 in output
+<<function [[sysfatal]]>>=
+void
+sysfatal(char *fmt, ...)
+{
+    va_list arg;
+
+    va_start(arg, fmt);
+    (*_sysfatal)(fmt, arg);
+    va_end(arg);
+}
+@
+
+
+<<global [[_sysfatal]]>>=
+void (*_sysfatal)(char *fmt, va_list arg) = _sysfatalimpl;
+@
+% who changes that? just a hook maybe that one can set?
+
+<<function [[_sysfatalimpl]]>>=
+static void
+_sysfatalimpl(char *fmt, va_list arg)
+{
+    char buf[1024];
+
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    if(argv0)
+        fprint(2, "%s: %s\n", argv0, buf);
+    else
+        fprint(2, "%s\n", buf);
+    exits(buf);
+}
+@
+
+
+%******************************************************************************
+\chapter{Security}
+%******************************************************************************
+\label{chap:security}
+
+% ref_own<string> returned
+
+%claude:
+\plan identifies users by name strings rather than numeric
+uid/gid pairs. [[getuser]] reads the current user name from
+[[/dev/user]], reflecting the ``everything is a file'' design.
+In a distributed environment where different file servers may
+have different user databases, string-based identities are
+more flexible than numeric IDs.
+
+\section{[[getuser()]]}
+
+% very different in plan9, no uid/gid (why? because distributed context?)
+
+<<function [[getuser]]>>=
+char*
+getuser(void)
+{
+    static char user[64];
+    fdt fd;
+    int n;
+
+    fd = open("/dev/user", OREAD);
+    if(fd < 0)
+        return "none";
+    n = read(fd, user, (sizeof user)-1);
+    close(fd);
+    if(n <= 0)
+        strcpy(user, "none");
+    else
+        user[n] = '\0';
+    return user;
+}
+@
+
+
+\section{Cryptography}
+
+%TODO: put md5sum, sha1sum here
+
+%claude:
+The [[encrypt]]/[[decrypt]] functions implement DES-based
+block encryption, processing 7-byte blocks at a time
+(DES's 56-bit key = 7 bytes). The encryption is done
+in-place, and the buffer must be at least 8 bytes. The
+final partial block is handled by overlapping with the
+previous block. [[netcrypt]] is a helper for the
+authentication protocol: it encrypts a challenge string
+and formats the first 4 bytes as hexadecimal.
+
+<<function [[encrypt]]>>=
+/*
+ * destructively encrypt the buffer, which
+ * must be at least 8 characters long.
+ */
+int
+encrypt(void *key, void *vbuf, int n)
+{
+    ulong ekey[32];
+    uchar *buf;
+    int i, r;
+
+    if(n < 8)
+        return 0;
+    key_setup(key, ekey);
+    buf = vbuf;
+    n--;
+    r = n % 7;
+    n /= 7;
+    for(i = 0; i < n; i++){
+        block_cipher(ekey, buf, 0);
+        buf += 7;
+    }
+    if(r)
+        block_cipher(ekey, buf - 7 + r, 0);
+    return 1;
+}
+@
+
+<<function [[decrypt]]>>=
+/*
+ * destructively decrypt the buffer, which
+ * must be at least 8 characters long.
+ */
+int
+decrypt(void *key, void *vbuf, int n)
+{
+    ulong ekey[128];
+    uchar *buf;
+    int i, r;
+
+    if(n < 8)
+        return 0;
+    key_setup(key, ekey);
+    buf = vbuf;
+    n--;
+    r = n % 7;
+    n /= 7;
+    buf += n * 7;
+    if(r)
+        block_cipher(ekey, buf - 7 + r, 1);
+    for(i = 0; i < n; i++){
+        buf -= 7;
+        block_cipher(ekey, buf, 1);
+    }
+    return 1;
+}
+@
+
+
+
+<<function [[netcrypt]]>>=
+int
+netcrypt(void *key, void *chal)
+{
+    uchar buf[8], *p;
+
+    strncpy((char*)buf, chal, 7);
+    buf[7] = '\0';
+    for(p = buf; *p && *p != '\n'; p++)
+        ;
+    *p = '\0';
+    encrypt(key, buf, 8);
+    sprint(chal, "%.2ux%.2ux%.2ux%.2ux", buf[0], buf[1], buf[2], buf[3]);
+    return 1;
+}
+@
+
+\section{SSL/TLS}
+
+%claude:
+[[pushssl]] and [[pushtls]] insert encryption layers on
+an existing connection using \plan's SSL/TLS kernel devices
+(\verb+#D/ssl+ and \verb+#a/tls+). They follow the standard
+\plan pattern: open the [[clone]] file to get a new
+channel number, configure it by writing commands to the
+control file (secrets, algorithm, etc.), and return the
+[[data]] file descriptor. The caller's original [[fd]] is
+closed---reads and writes now go through the encrypted
+channel transparently.
+
+<<function [[pushssl]]>>=
+/*
+ * Since the SSL device uses decimal file descriptors to name channels,
+ * it is impossible for a user-level file server to stand in for the kernel device.
+ * Thus we hard-code #D rather than use /net/ssl.
+ */
+
+int
+pushssl(int fd, char *alg, char *secin, char *secout, int *cfd)
+{
+    char buf[8];
+    char dname[64];
+    int n, data, ctl;
+
+    ctl = open("#D/ssl/clone", ORDWR);
+    if(ctl < 0)
+        return -1;
+    n = read(ctl, buf, sizeof(buf)-1);
+    if(n < 0)
+        goto error;
+    buf[n] = 0;
+    sprint(dname, "#D/ssl/%s/data", buf);
+    data = open(dname, ORDWR);
+    if(data < 0)
+        goto error;
+    if(fprint(ctl, "fd %d", fd) < 0 ||
+       fprint(ctl, "secretin %s", secin) < 0 ||
+       fprint(ctl, "secretout %s", secout) < 0 ||
+       fprint(ctl, "alg %s", alg) < 0){
+        close(data);
+        goto error;
+    }
+    close(fd);
+    if(cfd != 0)
+        *cfd = ctl;
+    else
+        close(ctl);
+    return data;
+error:
+    close(ctl);
+    return -1;
+}
+@
+
+<<function [[pushtls]]>>=
+// given a plain fd and secrets established beforehand, return encrypted connection
+int
+pushtls(int fd, char *hashalg, char *encalg, int isclient, char *secret, char *dir)
+{
+    char buf[8];
+    char dname[64];
+    int n, data, ctl, hand;
+
+    // open a new filter; get ctl fd
+    data = hand = -1;
+    // /net/tls uses decimal file descriptors to name channels, hence a
+    // user-level file server can't stand in for #a; may as well hard-code it.
+    ctl = open("#a/tls/clone", ORDWR);
+    if(ctl < 0)
+        goto error;
+    n = read(ctl, buf, sizeof(buf)-1);
+    if(n < 0)
+        goto error;
+    buf[n] = 0;
+    if(dir)
+        sprint(dir, "#a/tls/%s", buf);
+
+    // get application fd
+    sprint(dname, "#a/tls/%s/data", buf);
+    data = open(dname, ORDWR);
+    if(data < 0)
+        goto error;
+
+    // get handshake fd
+    sprint(dname, "#a/tls/%s/hand", buf);
+    hand = open(dname, ORDWR);
+    if(hand < 0)
+        goto error;
+
+    // speak a minimal handshake
+    if(fprint(ctl, "fd %d 0x301", fd) < 0 ||
+       fprint(ctl, "version 0x301") < 0 ||
+       fprint(ctl, "secret %s %s %d %s", hashalg, encalg, isclient, secret) < 0 ||
+       fprint(ctl, "changecipher") < 0 ||
+       finished(hand, isclient) < 0 ||
+       fprint(ctl, "opened") < 0){
+        close(hand);
+        hand = -1;
+        goto error;
+    }
+    close(ctl);
+    close(hand);
+    close(fd);
+    return data;
+
+error:
+    if(data>=0)
+        close(data);
+    if(ctl>=0)
+        close(ctl);
+    if(hand>=0)
+        close(hand);
+    return -1;
+}
+@
+
+
+%###############################################################################
+
+\part{Concurrency and Communication}
+%###############################################################################
+
+%claude:
+This part covers synchronization and inter-process
+communication: locks and queuing locks for shared-memory
+processes, the IPC mechanisms (notes, pipes, shared segments,
+9P marshalling), the cooperative thread scheduler and
+channel system in [[libthread]], and the network API.
+The progression mirrors the layering: low-level atomic
+operations at the bottom, channels and threads at the top.
 
 %******************************************************************************
 \chapter{Concurrency}
@@ -10424,2193 +12920,18 @@ _dial_string_parse(char *str, DS *ds)
 }
 @
 
+%###############################################################################
 
-%******************************************************************************
-\chapter{Mathematics}
-%******************************************************************************
-\label{chap:math}
-
-%http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
-
-% _div and _mod are in Assembler.nw appendix
-
-% "Computer Approximations, by Hart, Chenney, Lawson, ...
-% lib by Sun with all those s_xxx.c, w_xxx.c (see kernel-snowflake/lib/m/)
+\part{Debugging and Profiling}
+%###############################################################################
 
 %claude:
-The math library provides the standard transcendental functions
-([[sin]], [[cos]], [[exp]], [[log]], [[sqrt]], etc.) plus
-integer arithmetic helpers. Many implementations use polynomial
-approximations from Hart et al.'s {\em Computer Approximations}.
-The integer division and modulus routines ([[_div]], [[_mod]])
-are in assembly because the ARM has no hardware divide
-instruction (see \book{Assembler}).
-
-\section{Basics}
-
-%claude:
-The basic math functions are straightforward but note
-that [[abs]] and [[fabs]] have the same C source code
-yet produce very different assembly: [[abs]] uses integer
-comparison and negation, while [[fabs]] uses floating-point
-instructions. [[floor]] and [[ceil]] use [[modf]] to split
-a number into integer and fractional parts, then adjust
-for negative numbers.
-
-<<function [[abs]]>>=
-int
-abs(int a)
-{
-    if(a < 0)
-        return -a;
-    return a;
-}
-@
-
-<<function [[fabs]]>>=
-double
-fabs(double arg)
-{
-
-    if(arg < 0)
-        return -arg;
-    return arg;
-}
-@
-% very different generated assembly than for abs even though code
-% the same, because type different!
-
-%dead:
-%<<function labs>>=
-%long
-%labs(long a)
-%{
-%    if(a < 0)
-%        return -a;
-%    return a;
-%}
-%@
-
-% floor and ceiling in an appartment :)
-
-<<function [[floor]]>>=
-/*
- * floor and ceil-- greatest integer <= arg
- * (resp least >=)
- */
-double
-floor(double d)
-{
-    double fract;
-
-    if(d < 0) {
-        fract = modf(-d, &d);
-        if(fract != 0.0)
-            d += 1;
-        d = -d;
-    } else
-        modf(d, &d);
-    return d;
-}
-@
-% modf?
-
-<<function [[ceil]]>>=
-double
-ceil(double d)
-{
-    return -floor(-d);
-}
-@
-
-
-
-
-
-\section{Integers}
-
-% atox vs strtox,  simple vs flexible
-
-\subsection{Parsing}
-
-%claude:
-The ``ato'' prefix stands for ``ASCII to'': [[atoi]] converts
-a string to [[int]], [[atol]] to [[long]]. [[atol]] handles
-three notations: decimal, octal (leading \verb+0+), and
-hexadecimal (leading \verb+0x+). The more flexible [[strtol]]
-adds support for arbitrary bases up to~36, returns a pointer
-past the parsed number (so the caller can continue parsing),
-and detects overflow.
-
-% a means? ascii to int ?
-<<function [[atoi]]>>=
-int
-atoi(char *s)
-{
-
-    return atol(s);
-}
-@
-% atol and then automatic C compiler cast to int
-
-% support hexa, octal, decimal notations! handle whitespace,
-% handle signs!
-<<function [[atol]]>>=
-long
-atol(char *s)
-{
-    long n;
-    int f, c;
-
-    n = 0;
-    f = 0;
-    while(*s == ' ' || *s == '\t')
-        s++;
-    if(*s == '-' || *s == '+') {
-        if(*s++ == '-')
-            f = 1;
-        while(*s == ' ' || *s == '\t')
-            s++;
-    }
-    if(s[0]=='0' && s[1]) {
-        if(s[1]=='x' || s[1]=='X'){
-            s += 2;
-            for(;;) {
-                c = *s;
-                if(c >= '0' && c <= '9')
-                    n = n*16 + c - '0';
-                else
-                if(c >= 'a' && c <= 'f')
-                    n = n*16 + c - 'a' + 10;
-                else
-                if(c >= 'A' && c <= 'F')
-                    n = n*16 + c - 'A' + 10;
-                else
-                    break;
-                s++;
-            }
-        } else
-            while(*s >= '0' && *s <= '7')
-                n = n*8 + *s++ - '0';
-    } else
-        while(*s >= '0' && *s <= '9')
-            n = n*10 + *s++ - '0';
-    if(f)
-        n = -n;
-    return n;
-}
-@
-
-
-
-
-<<constant [[LONG_MAX]]>>=
-#define LONG_MAX    2147483647L
-@
-
-<<constant [[LONG_MIN]]>>=
-#define LONG_MIN    -2147483648L
-@
-
-% more flexible than atol, can accept stuff after numbers
-% and return pointer after. 
-% Can also use different base?? use? to not force to prefix with 0x or 0o?
-<<function [[strtol]]>>=
-long
-strtol(char *nptr, char **endptr, int base)
-{
-    char *p;
-    long n, nn, m;
-    int c, ovfl, v, neg, ndig;
-
-    p = nptr;
-    neg = 0;
-    n = 0;
-    ndig = 0;
-    ovfl = 0;
-
-    /*
-     * White space
-     */
-    for(;; p++) {
-        switch(*p) {
-        case ' ':
-        case '\t':
-        case '\n':
-        case '\f':
-        case '\r':
-        case '\v':
-            continue;
-        }
-        break;
-    }
-
-    /*
-     * Sign
-     */
-    if(*p=='-' || *p=='+')
-        if(*p++ == '-')
-            neg = 1;
-
-    /*
-     * Base
-     */
-    if(base==0) {
-        base = 10;
-        if(*p == '0') {
-            base = 8;
-            if(p[1]=='x' || p[1]=='X') {
-                p += 2;
-                base = 16;
-            }
-        }
-    } else
-    if(base==16 && *p=='0'){
-        if(p[1]=='x' || p[1]=='X')
-            p += 2;
-    } else
-    if(base<0 || 36<base)
-        goto Return;
-
-    /*
-     * Non-empty sequence of digits
-     */
-    m = LONG_MAX/base;
-    for(;; p++,ndig++){
-        c = *p;
-        v = base;
-        if('0'<=c && c<='9')
-            v = c - '0';
-        else
-        if('a'<=c && c<='z')
-            v = c - 'a' + 10;
-        else
-        if('A'<=c && c<='Z')
-            v = c - 'A' + 10;
-        if(v >= base)
-            break;
-        if(n > m)
-            ovfl = 1;
-        nn = n*base + v;
-        if(nn < n)
-            ovfl = 1;
-        n = nn;
-    }
-
-Return:
-    if(ndig == 0)
-        p = nptr;
-    if(endptr)
-        *endptr = p;
-    if(ovfl){
-        if(neg)
-            return LONG_MIN;
-        return LONG_MAX;
-    }
-    if(neg)
-        return -n;
-    return n;
-}
-@
-
-
-\section{Floats}
-
-\subsection{Special numbers}
-
-%claude:
-IEEE~754 floating-point has special values: NaN (not a
-number), positive/negative infinity, and negative zero.
-These functions construct and detect them by manipulating
-the raw bit representation via [[FPdbleword]]. A NaN has
-all exponent bits set ([[NANEXP]] = \verb+2047<<20+) and a
-non-zero mantissa. Infinity has all exponent bits set and
-a zero mantissa. [[isNaN]] exploits the property that NaN
-is the only value not equal to itself.
-
-<<function [[NaN]]>>=
-double
-NaN(void)
-{
-    FPdbleword a;
-
-    a.hi = NANEXP;
-    a.lo = 1;
-    return a.x;
-}
-@
-
-% FPdbleword defined in core DS chapter.
-
-<<constant [[NANEXP]]>>=
-#define NANEXP  (2047<<20)
-@
-% >>
-% what is the meaning of those numbers? wikipedia?
-
-<<constant [[NANMASK]]>>=
-#define NANMASK (2047<<20)
-@
-% >>
-
-<<function [[isNaN]]>>=
-bool
-isNaN(double d)
-{
-    FPdbleword a;
-
-    a.x = d;
-    if((a.hi & NANMASK) != NANEXP)
-        return false;
-    return !isInf(d, 0);
-}
-@
-
-
-<<constant [[NANSIGN]]>>=
-#define NANSIGN (1<<31)
-@
-% >>
-
-<<function [[Inf]]>>=
-double
-Inf(int sign)
-{
-    FPdbleword a;
-
-    a.hi = NANEXP;
-    a.lo = 0;
-    if(sign < 0)
-        a.hi |= NANSIGN;
-    return a.x;
-}
-@
-
-<<function [[isInf]]>>=
-bool
-isInf(double d, int sign)
-{
-    FPdbleword a;
-
-    a.x = d;
-    if(a.lo != 0)
-        return false;
-    if(a.hi == NANEXP)
-        return sign >= 0;
-    if(a.hi == (NANEXP|NANSIGN))
-        return sign <= 0;
-    return false;
-}
-@
-
-
-
-<<type [[FPxxx]]>>=
-/* VFP FCR */
-#define FPINEX  (1<<12)         /* trap enables for exceptions */
-#define FPUNFL  (1<<11)
-#define FPOVFL  (1<<10)
-#define FPZDIV  (1<<9)
-#define FPINVAL (1<<8)
-#define FPRNR   (0<<22)
-#define FPRZ    (1<<22)
-#define FPRPINF (2<<22)
-#define FPRNINF (3<<22)
-#define FPRMASK (3<<22)
-#define FPPEXT  0
-#define FPPSGL  0
-#define FPPDBL  0
-#define FPPMASK 0
-/* FSR */
-#define FPAINEX (1<<4)          /* accrued exceptions */
-#define FPAUNFL (1<<3)
-#define FPAOVFL (1<<2)
-#define FPAZDIV (1<<1)
-#define FPAINVAL    (1<<0)
-@
-% >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >>
-
-
-\subsection{Parsing}
-
-%claude:
-Parsing a floating-point number from text is surprisingly
-complex. [[strtod]] uses a state machine to handle signs,
-digits, decimal points, and exponents, then converts the
-resulting decimal number to binary using multi-precision
-integer arithmetic (the [[low]]/[[hig]]/[[mid]] arrays).
-The algorithm normalizes the decimal to the range
-$[0.5, 1.0)$, then uses binary search between lower and
-upper bounds to find the closest IEEE~754 representation.
-This avoids the rounding errors that plague simpler
-float-parsing approaches.
-
-<<function [[atof]]>>=
-double
-atof(char *cp)
-{
-    return strtod(cp, nil);
-}
-@
-
-<<function [[strtod]]>>=
-double
-strtod(char *as, char **aas)
-{
-    int na, ona, ex, dp, bp, c, i, flag, state;
-    ulong low[Prec], hig[Prec], mid[Prec], num, den;
-    double d;
-    char *s, a[Ndig];
-
-    flag = 0;   // Fsign, Fesign, Fdpoint
-    na = 0;     // number of digits of a[]
-    dp = 0;     // na of decimal point
-    ex = 0;     // exonent
-
-    state = S0;
-    for(s=as;; s++) {
-        c = *s;
-        if(c >= '0' && c <= '9') {
-            switch(state) {
-            case S0:
-            case S1:
-            case S2:
-                state = S2;
-                break;
-            case S3:
-            case S4:
-                state = S4;
-                break;
-
-            case S5:
-            case S6:
-            case S7:
-                state = S7;
-                ex = ex*10 + (c-'0');
-                continue;
-            }
-            if(na == 0 && c == '0') {
-                dp--;
-                continue;
-            }
-            if(na < Ndig-50)
-                a[na++] = c;
-            continue;
-        }
-        switch(c) {
-        case '\t':
-        case '\n':
-        case '\v':
-        case '\f':
-        case '\r':
-        case ' ':
-            if(state == S0)
-                continue;
-            break;
-        case '-':
-            if(state == S0)
-                flag |= Fsign;
-            else
-                flag |= Fesign;
-        case '+':
-            if(state == S0)
-                state = S1;
-            else
-            if(state == S5)
-                state = S6;
-            else
-                break;  // syntax
-            continue;
-        case '.':
-            flag |= Fdpoint;
-            dp = na;
-            if(state == S0 || state == S1) {
-                state = S3;
-                continue;
-            }
-            if(state == S2) {
-                state = S4;
-                continue;
-            }
-            break;
-        case 'e':
-        case 'E':
-            if(state == S2 || state == S4) {
-                state = S5;
-                continue;
-            }
-            break;
-        }
-        break;
-    }
-
-    /*
-     * clean up return char-pointer
-     */
-    switch(state) {
-    case S0:
-        if(xcmp(s, "nan") == 0) {
-            if(aas != nil)
-                *aas = s+3;
-            goto retnan;
-        }
-    case S1:
-        if(xcmp(s, "infinity") == 0) {
-            if(aas != nil)
-                *aas = s+8;
-            goto retinf;
-        }
-        if(xcmp(s, "inf") == 0) {
-            if(aas != nil)
-                *aas = s+3;
-            goto retinf;
-        }
-    case S3:
-        if(aas != nil)
-            *aas = as;
-        goto ret0;  // no digits found
-    case S6:
-        s--;        // back over +-
-    case S5:
-        s--;        // back over e
-        break;
-    }
-    if(aas != nil)
-        *aas = s;
-
-    if(flag & Fdpoint)
-    while(na > 0 && a[na-1] == '0')
-        na--;
-    if(na == 0)
-        goto ret0;  // zero
-    a[na] = 0;
-    if(!(flag & Fdpoint))
-        dp = na;
-    if(flag & Fesign)
-        ex = -ex;
-    dp += ex;
-    if(dp < -Maxe-Nmant/3)  /* actually -Nmant*log(2)/log(10), but Nmant/3 close enough */
-        goto ret0;  // underflow by exp
-    else
-    if(dp > +Maxe)
-        goto retinf;    // overflow by exp
-
-    /*
-     * normalize the decimal ascii number
-     * to range .[5-9][0-9]* e0
-     */
-    bp = 0;     // binary exponent
-    while(dp > 0)
-        divascii(a, &na, &dp, &bp);
-    while(dp < 0 || a[0] < '5')
-        mulascii(a, &na, &dp, &bp);
-    a[na] = 0;
-
-    /*
-     * very small numbers are represented using
-     * bp = -Bias+1.  adjust accordingly.
-     */
-    if(bp < -Bias+1){
-        ona = na;
-        divby(a, &na, -bp-Bias+1);
-        if(na < ona){
-            memmove(a+ona-na, a, na);
-            memset(a, '0', ona-na);
-            na = ona;
-        }
-        a[na] = 0;
-        bp = -Bias+1;
-    }
-
-    /* close approx by naive conversion */
-    num = 0;
-    den = 1;
-    for(i=0; i<9 && (c=a[i]); i++) {
-        num = num*10 + (c-'0');
-        den *= 10;
-    }
-    low[0] = umuldiv(num, One, den);
-    hig[0] = umuldiv(num+1, One, den);
-    for(i=1; i<Prec; i++) {
-        low[i] = 0;
-        hig[i] = One-1;
-    }
-
-    /* binary search for closest mantissa */
-    for(;;) {
-        /* mid = (hig + low) / 2 */
-        c = 0;
-        for(i=0; i<Prec; i++) {
-            mid[i] = hig[i] + low[i];
-            if(c)
-                mid[i] += One;
-            c = mid[i] & 1;
-            mid[i] >>= 1;
-        }
-        frnorm(mid);
-
-        /* compare */
-        c = fpcmp(a, mid);
-        if(c > 0) {
-            c = 1;
-            for(i=0; i<Prec; i++)
-                if(low[i] != mid[i]) {
-                    c = 0;
-                    low[i] = mid[i];
-                }
-            if(c)
-                break;  // between mid and hig
-            continue;
-        }
-        if(c < 0) {
-            for(i=0; i<Prec; i++)
-                hig[i] = mid[i];
-            continue;
-        }
-
-        /* only hard part is if even/odd roundings wants to go up */
-        c = mid[Prec-1] & (Sigbit-1);
-        if(c == Sigbit/2 && (mid[Prec-1]&Sigbit) == 0)
-            mid[Prec-1] -= c;
-        break;  // exactly mid
-    }
-
-    /* normal rounding applies */
-    c = mid[Prec-1] & (Sigbit-1);
-    mid[Prec-1] -= c;
-    if(c >= Sigbit/2) {
-        mid[Prec-1] += Sigbit;
-        frnorm(mid);
-    }
-    d = 0;
-    for(i=0; i<Prec; i++)
-        d = d*One + mid[i];
-    if(flag & Fsign)
-        d = -d;
-    d = ldexp(d, bp - Prec*Nbits);
-    return d;
-
-ret0:
-    return 0;
-
-retnan:
-    return NaN();
-
-retinf:
-    if(flag & Fsign)
-        return Inf(-1);
-    return Inf(+1);
-}
-@
-
-
-<<enum [[_anon_ (port/strtod.c)]]>>=
-/*
- * This routine will convert to arbitrary precision
- * floating point entirely in multi-precision fixed.
- * The answer is the closest floating point number to
- * the given decimal number. Exactly half way are
- * rounded ala ieee rules.
- * Method is to scale input decimal between .500 and .999...
- * with external power of 2, then binary search for the
- * closest mantissa to this decimal number.
- * Nmant is is the required precision. (53 for ieee dp)
- * Nbits is the max number of bits/word. (must be <= 28)
- * Prec is calculated - the number of words of fixed mantissa.
- */
-enum
-{
-    Nbits   = 28,               // bits safely represented in a ulong
-    Nmant   = 53,               // bits of precision required
-    Bias        = 1022,
-    Prec    = (Nmant+Nbits+1)/Nbits,    // words of Nbits each to represent mantissa
-    Sigbit  = 1<<(Prec*Nbits-Nmant),    // first significant bit of Prec-th word
-    Ndig    = 1500,
-    One = (ulong)(1<<Nbits),
-    Half    = (ulong)(One>>1),
-    Maxe    = 310,
-    Fsign   = 1<<0,     // found -
-    Fesign  = 1<<1,     // found e-
-    Fdpoint = 1<<2,     // found .
-
-    S0  = 0,        // _        _S0 +S1 #S2 .S3
-    S1,         // _+       #S2 .S3
-    S2,         // _+#      #S2 .S4 eS5
-    S3,         // _+.      #S4
-    S4,         // _+#.#    #S4 eS5
-    S5,         // _+#.#e   +S6 #S7
-    S6,         // _+#.#e+  #S7
-    S7,         // _+#.#e+# #S7
-};
-@
-% >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >>
-
-<<struct [[Tab]]>>=
-struct  Tab
-{
-    int bp;
-    int siz;
-    char*   cmp;
-};
-@
-
-
-<<function [[frnorm]]>>=
-static void
-frnorm(ulong *f)
-{
-    int i, c;
-
-    c = 0;
-    for(i=Prec-1; i>0; i--) {
-        f[i] += c;
-        c = f[i] >> Nbits;
-        f[i] &= One-1;
-    }
-    f[0] += c;
-}
-@
-
-<<function [[fpcmp]]>>=
-static int
-fpcmp(char *a, ulong* f)
-{
-    ulong tf[Prec];
-    int i, d, c;
-
-    for(i=0; i<Prec; i++)
-        tf[i] = f[i];
-
-    for(;;) {
-        /* tf *= 10 */
-        for(i=0; i<Prec; i++)
-            tf[i] = tf[i]*10;
-        frnorm(tf);
-        d = (tf[0] >> Nbits) + '0';
-        tf[0] &= One-1;
-
-        /* compare next digit */
-        c = *a;
-        if(c == 0) {
-            if('0' < d)
-                return -1;
-            if(tf[0] != 0)
-                goto cont;
-            for(i=1; i<Prec; i++)
-                if(tf[i] != 0)
-                    goto cont;
-            return 0;
-        }
-        if(c > d)
-            return +1;
-        if(c < d)
-            return -1;
-        a++;
-    cont:;
-    }
-}
-@
-
-
-
-<<function [[_divby]]>>=
-static void
-_divby(char *a, int *na, int b)
-{
-    int n, c;
-    char *p;
-
-    p = a;
-    n = 0;
-    while(n>>b == 0) {
-        c = *a++;
-        if(c == 0) {
-            while(n) {
-                c = n*10;
-                if(c>>b)
-                    break;
-                n = c;
-            }
-            goto xx;
-        }
-        n = n*10 + c-'0';
-        (*na)--;
-    }
-    for(;;) {
-        c = n>>b;
-        n -= c<<b;
-        *p++ = c + '0';
-        c = *a++;
-        if(c == 0)
-            break;
-        n = n*10 + c-'0';
-    }
-    (*na)++;
-xx:
-    while(n) {
-        n = n*10;
-        c = n>>b;
-        n -= c<<b;
-        *p++ = c + '0';
-        (*na)++;
-    }
-    *p = 0;
-}
-@
-% >> >>
-
-<<function [[divby]]>>=
-static void
-divby(char *a, int *na, int b)
-{
-    while(b > 9){
-        _divby(a, na, 9);
-        a[*na] = 0;
-        b -= 9;
-    }
-    if(b > 0)
-        _divby(a, na, b);
-}
-@
-
-<<global [[tab1]]>>=
-static  Tab tab1[] =
-{
-     1,  0, "",
-     3,  1, "7",
-     6,  2, "63",
-     9,  3, "511",
-    13,  4, "8191",
-    16,  5, "65535",
-    19,  6, "524287",
-    23,  7, "8388607",
-    26,  8, "67108863",
-    27,  9, "134217727",
-};
-@
-
-<<function [[divascii]]>>=
-static void
-divascii(char *a, int *na, int *dp, int *bp)
-{
-    int b, d;
-    Tab *t;
-
-    d = *dp;
-    if(d >= nelem(tab1))
-        d = nelem(tab1)-1;
-    t = tab1 + d;
-    b = t->bp;
-    if(memcmp(a, t->cmp, t->siz) > 0)
-        d--;
-    *dp -= d;
-    *bp += b;
-    divby(a, na, b);
-}
-@
-
-<<function [[mulby]]>>=
-static void
-mulby(char *a, char *p, char *q, int b)
-{
-    int n, c;
-
-    n = 0;
-    *p = 0;
-    for(;;) {
-        q--;
-        if(q < a)
-            break;
-        c = *q - '0';
-        c = (c<<b) + n;
-        n = c/10;
-        c -= n*10;
-        p--;
-        *p = c + '0';
-    }
-    while(n) {
-        c = n;
-        n = c/10;
-        c -= n*10;
-        p--;
-        *p = c + '0';
-    }
-}
-@
-% >>
-
-<<global [[tab2]]>>=
-static  Tab tab2[] =
-{
-     1,  1, "",             // dp = 0-0
-     3,  3, "125",
-     6,  5, "15625",
-     9,  7, "1953125",
-    13, 10, "1220703125",
-    16, 12, "152587890625",
-    19, 14, "19073486328125",
-    23, 17, "11920928955078125",
-    26, 19, "1490116119384765625",
-    27, 19, "7450580596923828125",      // dp 8-9
-};
-@
-
-<<function [[mulascii]]>>=
-static void
-mulascii(char *a, int *na, int *dp, int *bp)
-{
-    char *p;
-    int d, b;
-    Tab *t;
-
-    d = -*dp;
-    if(d >= nelem(tab2))
-        d = nelem(tab2)-1;
-    t = tab2 + d;
-    b = t->bp;
-    if(memcmp(a, t->cmp, t->siz) < 0)
-        d--;
-    p = a + *na;
-    *bp -= b;
-    *dp += d;
-    *na += d;
-    mulby(a, p+d, p, b);
-}
-@
-
-<<function [[xcmp]]>>=
-static int
-xcmp(char *a, char *b)
-{
-    int c1, c2;
-
-    while(c1 = *b++) {
-        c2 = *a++;
-        if(isupper(c2))
-            c2 = tolower(c2);
-        if(c1 != c2)
-            return 1;
-    }
-    return 0;
-}
-@
-
-
-
-\subsection{[[sqrt()]]}
-
-%claude:
-[[sqrt]] uses Newton's method (also known as Heron's method):
-starting from an initial approximation, it iterates
-\verb+temp = 0.5 * (temp + arg/temp)+ which converges
-quadratically---each iteration doubles the number of correct
-digits, so 5 iterations suffice for double precision. The
-initial approximation uses [[frexp]] to extract the mantissa
-and exponent, then applies half the exponent to get close
-to the true square root.
-
-<<function [[sqrt]]>>=
-double
-sqrt(double arg)
-{
-    double x, temp;
-    int exp, i;
-
-    if(arg <= 0) {
-        if(arg < 0)
-            return NaN();
-        return 0;
-    }
-    if(isInf(arg, 1))
-        return arg;
-    x = frexp(arg, &exp);
-    while(x < 0.5) {
-        x *= 2;
-        exp--;
-    }
-    /*
-     * NOTE
-     * this wont work on 1's comp
-     */
-    if(exp & 1) {
-        x *= 2;
-        exp--;
-    }
-    temp = 0.5 * (1.0+x);
-
-    while(exp > 60) {
-        temp *= (1L<<30);
-        exp -= 60;
-    }
-    while(exp < -60) {
-        temp /= (1L<<30);
-        exp += 60;
-    }
-    if(exp >= 0)
-        temp *= 1L << (exp/2);
-    else
-        temp /= 1L << (-exp/2);
-    for(i=0; i<=4; i++)
-        temp = 0.5*(temp + arg/temp);
-    return temp;
-}
-@
-% >> >> >> >> >> >>
-
-\subsection{[[modf()]]}
-
-%claude:
-[[modf]] splits a double into integer and fractional parts
-by directly masking the IEEE~754 bit representation. The
-exponent determines how many mantissa bits belong to the
-integer part: bits above that threshold are kept for
-\verb+*ip+, and the remainder is the fractional part. This
-is the function that [[floor]] and [[ceil]] rely on.
-
-% used by floor(), ceil() in basics sections
-% (not so basics in the end).
-
-<<function [[modf]]>>=
-double
-modf(double d, double *ip)
-{
-    FPdbleword x;
-    int e;
-
-    x.x = d;
-    e = (x.hi >> SHIFT) & MASK;
-    if(e == MASK){
-        *ip = d;
-        if(x.lo != 0 || (x.hi & 0xfffffL) != 0) /* NaN */
-            return d;
-        /* +/- Inf */
-        x.hi &= 0x80000000L;
-        return x.x;
-    }
-    if(d < 1) {
-        if(d < 0) {
-            x.x = modf(-d, ip);
-            *ip = -*ip;
-            return -x.x;
-        }
-        *ip = 0;
-        return d;
-    }
-    e -= BIAS;
-    if(e <= SHIFT+1) {
-        x.hi &= ~(0x1fffffL >> e);
-        x.lo = 0;
-    } else
-    if(e <= SHIFT+33)
-        x.lo &= ~(0x7fffffffL >> (e-SHIFT-2));
-    *ip = x.x;
-    return d - x.x;
-}
-@
-\subsection{[[fmod()]]}
-
-
-<<function [[fmod]]>>=
-/*
- * floating-point mod function without infinity or NaN checking
- */
-double
-fmod (double x, double y)
-{
-    int sign, yexp, rexp;
-    double r, yfr, rfr;
-
-    if (y == 0)
-        return x;
-    if (y < 0)
-        y = -y;
-    yfr = frexp(y, &yexp);
-    sign = 0;
-    if(x < 0) {
-        r = -x;
-        sign++;
-    } else
-        r = x;
-    while(r >= y) {
-        rfr = frexp(r, &rexp);
-        r -= ldexp(y, rexp - yexp - (rfr < yfr));
-    }
-    if(sign)
-        r = -r;
-    return r;
-}
-@
-
-\subsection{[[pow()]]}
-
-%claude:
-[[pow]] handles $x^y$ by splitting [[y]] into integer and
-fractional parts. The fractional part is computed as
-$e^{y_1 \ln x}$ (using [[exp]] and [[log]]), while the
-integer part is computed by repeated squaring---much faster
-than calling [[exp]]/[[log]] for the full exponent.
-Special cases include negative bases (only valid for integer
-exponents), zero, and overflow detection.
-
-<<function [[pow]]>>=
-double
-pow(double x, double y) /* return x ^ y (exponentiation) */
-{
-    double xy, y1, ye;
-    long i;
-    int ex, ey, flip;
-
-    if(y == 0.0)
-        return 1.0;
-
-    flip = 0;
-    if(y < 0.){
-        y = -y;
-        flip = 1;
-    }
-    y1 = modf(y, &ye);
-    if(y1 != 0.0){
-        if(x <= 0.)
-            goto zreturn;
-        if(y1 > 0.5) {
-            y1 -= 1.;
-            ye += 1.;
-        }
-        xy = exp(y1 * log(x));
-    }else
-        xy = 1.0;
-    if(ye > 0x7FFFFFFF){    /* should be ~0UL but compiler can't convert double to ulong */
-        if(x <= 0.){
- zreturn:
-            if(x==0. && !flip)
-                return 0.;
-            return NaN();
-        }
-        if(flip){
-            if(y == .5)
-                return 1./sqrt(x);
-            y = -y;
-        }else if(y == .5)
-            return sqrt(x);
-        return exp(y * log(x));
-    }
-    x = frexp(x, &ex);
-    ey = 0;
-    i = ye;
-    if(i)
-        for(;;){
-            if(i & 1){
-                xy *= x;
-                ey += ex;
-            }
-            i >>= 1;
-            if(i == 0)
-                break;
-            x *= x;
-            ex <<= 1;
-            if(x < .5){
-                x += x;
-                ex -= 1;
-            }
-        }
-    if(flip){
-        xy = 1. / xy;
-        ey = -ey;
-    }
-    return ldexp(xy, ey);
-}
-@
-
-% >> >> >> >> 
-
-<<function [[pow10]]>>=
-double
-pow10(int n)
-{
-    int m;
-
-    if(n < 0) {
-        n = -n;
-        if(n < sizeof(tab)/sizeof(tab[0]))
-            return 1/tab[n];
-        m = n/2;
-        return 1/(pow10(m) * pow10(n-m));
-    }
-    if(n < sizeof(tab)/sizeof(tab[0]))
-        return tab[n];
-    m = n/2;
-    return pow10(m) * pow10(n-m);
-}
-@
-
-<<global [[tab]]>>=
-/*
- * this table might overflow 127-bit exponent representations.
- * in that case, truncate it after 1.0e38.
- * it is important to get all one can from this
- * routine since it is used in atof to scale numbers.
- * the presumption is that C converts fp numbers better
- * than multipication of lower powers of 10.
- */
-static
-double  tab[] =
-{
-    1.0e0,  1.0e1,  1.0e2,  1.0e3,  1.0e4,  1.0e5,  1.0e6,  1.0e7,  1.0e8,  1.0e9, 
-    1.0e10, 1.0e11, 1.0e12, 1.0e13, 1.0e14, 1.0e15, 1.0e16, 1.0e17, 1.0e18, 1.0e19, 
-    1.0e20, 1.0e21, 1.0e22, 1.0e23, 1.0e24, 1.0e25, 1.0e26, 1.0e27, 1.0e28, 1.0e29, 
-    1.0e30, 1.0e31, 1.0e32, 1.0e33, 1.0e34, 1.0e35, 1.0e36, 1.0e37, 1.0e38, 1.0e39, 
-    1.0e40, 1.0e41, 1.0e42, 1.0e43, 1.0e44, 1.0e45, 1.0e46, 1.0e47, 1.0e48, 1.0e49, 
-    1.0e50, 1.0e51, 1.0e52, 1.0e53, 1.0e54, 1.0e55, 1.0e56, 1.0e57, 1.0e58, 1.0e59, 
-    1.0e60, 1.0e61, 1.0e62, 1.0e63, 1.0e64, 1.0e65, 1.0e66, 1.0e67, 1.0e68, 1.0e69, 
-    1.0e70, 1.0e71, 1.0e72, 1.0e73, 1.0e74, 1.0e75, 1.0e76, 1.0e77, 1.0e78, 1.0e79, 
-    1.0e80, 1.0e81, 1.0e82, 1.0e83, 1.0e84, 1.0e85, 1.0e86, 1.0e87, 1.0e88, 1.0e89, 
-    1.0e90, 1.0e91, 1.0e92, 1.0e93, 1.0e94, 1.0e95, 1.0e96, 1.0e97, 1.0e98, 1.0e99, 
-    1.0e100,1.0e101,1.0e102,1.0e103,1.0e104,1.0e105,1.0e106,1.0e107,1.0e108,1.0e109,
-    1.0e110,1.0e111,1.0e112,1.0e113,1.0e114,1.0e115,1.0e116,1.0e117,1.0e118,1.0e119,
-    1.0e120,1.0e121,1.0e122,1.0e123,1.0e124,1.0e125,1.0e126,1.0e127,1.0e128,1.0e129,
-    1.0e130,1.0e131,1.0e132,1.0e133,1.0e134,1.0e135,1.0e136,1.0e137,1.0e138,1.0e139,
-    1.0e140,1.0e141,1.0e142,1.0e143,1.0e144,1.0e145,1.0e146,1.0e147,1.0e148,1.0e149,
-    1.0e150,1.0e151,1.0e152,1.0e153,1.0e154,1.0e155,1.0e156,1.0e157,1.0e158,1.0e159,
-};
-@
-
-
-
-\section{Trigonometry}
-
-%claude:
-The trigonometric functions ([[sin]], [[cos]], [[tan]],
-[[atan]], [[atan2]]) use polynomial approximations from
-Hart et al.'s tables. The shared [[sinus]] helper first
-reduces the argument to the range $[0, \pi/4]$ using the
-periodicity of sin/cos, then evaluates a rational polynomial
-$p(x)/q(x)$. The coefficients (p0--p4, q0--q3) are chosen
-to give double-precision accuracy over this range.
-
-<<function [[cos]]>>=
-double
-cos(double arg)
-{
-    if(arg < 0)
-        arg = -arg;
-    return sinus(arg, 1);
-}
-@
-
-<<function [[sin]]>>=
-double
-sin(double arg)
-{
-    return sinus(arg, 0);
-}
-@
-
-
-
-
-<<constant p0 (port/sin.c)>>=
-#define p0      .1357884097877375669092680e8
-@
-
-<<constant p1 (port/sin.c)>>=
-#define p1     -.4942908100902844161158627e7
-@
-
-<<constant p2 (port/sin.c)>>=
-#define p2      .4401030535375266501944918e6
-@
-
-<<constant p3 (port/sin.c)>>=
-#define p3     -.1384727249982452873054457e5
-@
-
-<<constant p4 (port/sin.c)>>=
-#define p4      .1459688406665768722226959e3
-@
-
-<<constant q0 (port/sin.c)>>=
-#define q0      .8644558652922534429915149e7
-@
-
-<<constant q1 (port/sin.c)>>=
-#define q1      .4081792252343299749395779e6
-@
-
-<<constant q2 (port/sin.c)>>=
-#define q2      .9463096101538208180571257e4
-@
-
-<<constant q3 (port/sin.c)>>=
-#define q3      .1326534908786136358911494e3
-@
-
-% calls modf
-<<function [[sinus]]>>=
-static
-double
-sinus(double arg, int quad)
-{
-    double e, f, ysq, x, y, temp1, temp2;
-    int k;
-
-    x = arg;
-    if(x < 0) {
-        x = -x;
-        quad += 2;
-    }
-    x *= 1/PIO2;    /* underflow? */
-    if(x > 32764) {
-        y = modf(x, &e);
-        e += quad;
-        modf(0.25*e, &f);
-        quad = e - 4*f;
-    } else {
-        k = x;
-        y = x - k;
-        quad += k;
-        quad &= 3;
-    }
-    if(quad & 1)
-        y = 1-y;
-    if(quad > 1)
-        y = -y;
-
-    ysq = y*y;
-    temp1 = ((((p4*ysq+p3)*ysq+p2)*ysq+p1)*ysq+p0)*y;
-    temp2 = ((((ysq+q3)*ysq+q2)*ysq+q1)*ysq+q0);
-    return temp1/temp2;
-}
-@
-
-%http://mooooo.ooo/chebyshev-sine-approximation/
-
-
-
-<<global p0 (port/tan.c)>>=
-static double p0     = -0.1306820264754825668269611177e+5;
-@
-
-<<global p1 (port/tan.c)>>=
-static double p1      = 0.1055970901714953193602353981e+4;
-@
-
-<<global p2 (port/tan.c)>>=
-static double p2     = -0.1550685653483266376941705728e+2;
-@
-
-<<global p3 (port/tan.c)>>=
-static double p3      = 0.3422554387241003435328470489e-1;
-@
-
-<<global [[p4]]>>=
-static double p4      = 0.3386638642677172096076369e-4;
-@
-
-<<global q0 (port/tan.c)>>=
-static double q0     = -0.1663895238947119001851464661e+5;
-@
-
-<<global q1 (port/tan.c)>>=
-static double q1      = 0.4765751362916483698926655581e+4;
-@
-
-<<global q2 (port/tan.c)>>=
-static double q2     = -0.1555033164031709966900124574e+3;
-@
-
-<<function [[tan]]>>=
-double
-tan(double arg)
-{
-    double temp, e, x, xsq;
-    int flag, sign, i;
-
-    flag = 0;
-    sign = 0;
-    if(arg < 0){
-        arg = -arg;
-        sign++;
-    }
-    arg = 2*arg/PIO2;   /* overflow? */
-    x = modf(arg, &e);
-    i = e;
-    switch(i%4) {
-    case 1:
-        x = 1 - x;
-        flag = 1;
-        break;
-
-    case 2:
-        sign = !sign;
-        flag = 1;
-        break;
-
-    case 3:
-        x = 1 - x;
-        sign = !sign;
-        break;
-
-    case 0:
-        break;
-    }
-
-    xsq = x*x;
-    temp = ((((p4*xsq+p3)*xsq+p2)*xsq+p1)*xsq+p0)*x;
-    temp = temp/(((xsq+q2)*xsq+q1)*xsq+q0);
-
-    if(flag) {
-        if(temp == 0)
-            return NaN();
-        temp = 1/temp;
-    }
-    if(sign)
-        temp = -temp;
-    return temp;
-}
-@
-
-
-
-
-<<function [[asin]]>>=
-double
-asin(double arg)
-{
-    double temp;
-    int sign;
-
-    sign = 0;
-    if(arg < 0) {
-        arg = -arg;
-        sign++;
-    }
-    if(arg > 1)
-        return NaN();
-    temp = sqrt(1 - arg*arg);
-    if(arg > 0.7)
-        temp = PIO2 - atan(temp/arg);
-    else
-        temp = atan(arg/temp);
-    if(sign)
-        temp = -temp;
-    return temp;
-}
-@
-
-<<function [[acos]]>>=
-double
-acos(double arg)
-{
-    if(arg > 1 || arg < -1)
-        return NaN();
-    return PIO2 - asin(arg);
-}
-@
-
-
-<<function [[atan]]>>=
-/*
-    atan makes its argument positive and
-    calls the inner routine satan.
- */
-
-double
-atan(double arg)
-{
-
-    if(arg > 0)
-        return satan(arg);
-    return -satan(-arg);
-}
-@
-
-
-
-\section{Logarithms and exponentials}
-
-%claude:
-The [[exp]] and [[log]] functions also use polynomial
-approximations. [[exp]] reduces its argument to the range
-$[0, \ln 2]$ by extracting the integer part as a power of~2
-(applied via [[ldexp]]), then evaluates a rational polynomial
-for the remainder. [[log]] does the reverse: it uses [[frexp]]
-to extract the exponent, then approximates $\ln(x)$ for
-$x \in [0.5, 1.0)$. [[ldexp]] and [[frexp]] manipulate the
-IEEE~754 exponent field directly for exact, fast
-multiplication/division by powers of~2.
-
-\subsection{[[exp()]]}
-
-<<function [[exp]]>>=
-double
-exp(double arg)
-{
-    double fract, temp1, temp2, xsq;
-    int ent;
-
-    if(arg == 0)
-        return 1;
-    if(arg < -maxf)
-        return 0;
-    if(arg > maxf)
-        return Inf(1);
-
-    arg *= log2e;
-    ent = floor(arg);
-    fract = (arg-ent) - 0.5;
-    xsq = fract*fract;
-    temp1 = ((p2*xsq+p1)*xsq+p0)*fract;
-    temp2 = ((xsq+q2)*xsq+q1)*xsq + q0;
-    return ldexp(sqrt2*(temp2+temp1)/(temp2-temp1), ent);
-}
-@
-
-<<constant [[maxf]]>>=
-#define maxf  10000
-@
-
-<<constant [[log2e]]>>=
-#define log2e  1.4426950408889634073599247
-@
-
-
-<<constant p0 (port/exp.c)>>=
-#define p0  .2080384346694663001443843411e7
-@
-
-<<constant p1 (port/exp.c)>>=
-#define p1  .3028697169744036299076048876e5
-@
-
-<<constant p2 (port/exp.c)>>=
-#define p2  .6061485330061080841615584556e2
-@
-
-<<constant q0 (port/exp.c)>>=
-#define q0  .6002720360238832528230907598e7
-@
-
-<<constant q1 (port/exp.c)>>=
-#define q1  .3277251518082914423057964422e6
-@
-
-<<constant q2 (port/exp.c)>>=
-#define q2  .1749287689093076403844945335e4
-@
-
-
-<<constant [[sqrt2]]>>=
-#define sqrt2  1.4142135623730950488016887
-@
-
-\subsection{[[ldexp()]]}
-
-%claude:
-[[ldexp]] multiplies a double by $2^n$ by directly adjusting
-the IEEE~754 exponent field. It handles edge cases (zero,
-NaN, infinity, denormals, overflow, underflow) and works in
-a loop when [[n]] is too large for a single exponent
-adjustment. [[frexp]] does the reverse: it extracts the
-exponent and returns the mantissa in $[0.5, 1.0)$. Both
-access the bit representation through [[FPdbleword]].
-
-<<constant MASK (port/frexp.c)>>=
-/*
- * this is big/little endian non-portable
- * it gets the endian from the FPdbleword
- * union in u.h.
- */
-#define MASK    0x7ffL
-@
-
-<<constant [[SHIFT]]>>=
-#define SHIFT   20
-@
-
-<<constant [[BIAS]]>>=
-#define BIAS    1022L
-@
-
-<<constant [[SIG]]>>=
-#define SIG 52
-@
-
-
-% called by fmod
-
-<<function [[ldexp]]>>=
-double
-ldexp(double d, int deltae)
-{
-    int e, bits;
-    FPdbleword x;
-    ulong z;
-
-    if(d == 0)
-        return 0;
-    x.x = d;
-    e = (x.hi >> SHIFT) & MASK;
-    if(deltae >= 0 || e+deltae >= 1){   /* no underflow */
-        e += deltae;
-        if(e >= MASK){      /* overflow */
-            if(d < 0)
-                return Inf(-1);
-            return Inf(1);
-        }
-    }else{  /* underflow gracefully */
-        deltae = -deltae;
-        /* need to shift d right deltae */
-        if(e > 1){      /* shift e-1 by exponent manipulation */
-            deltae -= e-1;
-            e = 1;
-        }
-        if(deltae > 0 && e==1){ /* shift 1 by switch from 1.fff to 0.1ff */
-            deltae--;
-            e = 0;
-            x.lo >>= 1;
-            x.lo |= (x.hi&1)<<31;
-            z = x.hi & ((1<<SHIFT)-1);
-            x.hi &= ~((1<<SHIFT)-1);
-            x.hi |= (1<<(SHIFT-1)) | (z>>1);
-        }
-        while(deltae > 0){      /* shift bits down */
-            bits = deltae;
-            if(bits > SHIFT)
-                bits = SHIFT;
-            x.lo >>= bits;
-            x.lo |= (x.hi&((1<<bits)-1)) << (32-bits);
-            z = x.hi & ((1<<SHIFT)-1);
-            x.hi &= ~((1<<SHIFT)-1);
-            x.hi |= z>>bits;
-            deltae -= bits;
-        }
-    }
-    x.hi &= ~(MASK << SHIFT);
-    x.hi |= (long)e << SHIFT;
-    return x.x;
-}
-@
-% >> >> >> >> >> >> >> >> 
-
-\subsection{[[frexp()]]}
-
-<<function [[frexp]]>>=
-double
-frexp(double d, int *ep)
-{
-    FPdbleword x, a;
-
-    *ep = 0;
-    /* order matters: only isNaN can operate on NaN */
-    if(isNaN(d) || isInf(d, 0) || d == 0)
-        return d;
-    x.x = d;
-    a.x = fabs(d);
-    if((a.hi >> SHIFT) == 0){   /* normalize subnormal numbers */
-        x.x = (double)(1ULL<<SIG) * d;
-        *ep = -SIG;
-    }
-    *ep += ((x.hi >> SHIFT) & MASK) - BIAS;
-    x.hi &= ~(MASK << SHIFT);
-    x.hi |= BIAS << SHIFT;
-    return x.x;
-}
-@
-%$
-
-\subsection{[[log()]]}
-
-
-<<function [[log]]>>=
-double
-log(double arg)
-{
-    double x, z, zsq, temp;
-    int exp;
-
-    if(arg <= 0)
-        return NaN();
-    x = frexp(arg, &exp);
-    while(x < 0.5) {
-        x *= 2;
-        exp--;
-    }
-    if(x < sqrto2) {
-        x *= 2;
-        exp--;
-    }
-
-    z = (x-1) / (x+1);
-    zsq = z*z;
-
-    temp = ((p3*zsq + p2)*zsq + p1)*zsq + p0;
-    temp = temp/(((zsq + q2)*zsq + q1)*zsq + q0);
-    temp = temp*z + exp*log2;
-    return temp;
-}
-@
-
-<<constant [[log2]]>>=
-#define log2    0.693147180559945309e0
-@
-
-<<constant [[ln10o1]]>>=
-#define ln10o1  .4342944819032518276511
-@
-
-<<constant [[sqrto2]]>>=
-#define sqrto2  0.707106781186547524e0
-@
-
-<<constant p0 (port/log.c)>>=
-#define p0      -.240139179559210510e2
-@
-
-<<constant p1 (port/log.c)>>=
-#define p1      0.309572928215376501e2
-@
-
-<<constant p2 (port/log.c)>>=
-#define p2      -.963769093377840513e1
-@
-
-<<constant p3 (port/log.c)>>=
-#define p3      0.421087371217979714e0
-@
-
-<<constant q0 (port/log.c)>>=
-#define q0      -.120069589779605255e2
-@
-
-<<constant q1 (port/log.c)>>=
-#define q1      0.194809660700889731e2
-@
-
-<<constant q2 (port/log.c)>>=
-#define q2      -.891110902798312337e1
-@
-
-
-<<function [[log10]]>>=
-double
-log10(double arg)
-{
-
-    if(arg <= 0)
-        return NaN();
-    return log(arg) * ln10o1;
-}
-@
-
-
-\section{Random numbers}
-% see also Cryptography section later
-
-%entire book on random number generation:
-%http://luc.devroye.org/rnbookindex.html
-
-%claude:
-The PRNG uses a lagged Fibonacci generator with taps at
-positions separated by [[TAP]] within a [[LEN]]-element
-ring buffer. [[srand]] seeds the generator with a linear
-congruential step. [[rand]] returns 15-bit values (for ANSI
-C compatibility), [[lrand]] returns 31-bit values, and
-[[nrand]] returns values in $[0, n)$ with uniform
-distribution (it retries when the raw value would cause
-modulo bias).
-%
-[[lrand]] uses an additive feedback shift register (a
-lagged Fibonacci generator) for fast pseudo-random numbers.
-For cryptographic randomness, [[truerand]] reads from
-[[/dev/random]], which in the kernel collects entropy from
-hardware sources.
-
-<<function [[rand]]>>=
-int
-rand(void)
-{
-    return lrand() & 0x7fff;
-}
-@
-% magic number 0x7fff? to force a positive number on 32 bits arch?
-% what about 64bits arch?
-
-<<function [[lrand]]>>=
-long
-lrand(void)
-{
-    ulong x;
-
-    lock(&lk);
-
-    rng_tap--;
-    if(rng_tap < rng_vec) {
-        if(rng_feed == 0) {
-            isrand(1);
-            rng_tap--;
-        }
-        rng_tap += LEN;
-    }
-    rng_feed--;
-    if(rng_feed < rng_vec)
-        rng_feed += LEN;
-    x = (*rng_feed + *rng_tap) & MASK;
-    *rng_feed = x;
-
-    unlock(&lk);
-
-    return x;
-}
-@
-
-<<global [[lk]]>>=
-static  Lock    lk;
-@
-
-<<global [[rng_vec]]>>=
-static  ulong   rng_vec[LEN];
-@
-
-<<global [[rng_tap]]>>=
-static  ulong*  rng_tap = rng_vec;
-@
-
-<<global [[rng_feed]]>>=
-static  ulong*  rng_feed = 0;
-@
-
-
-<<function [[truerand]]>>=
-ulong
-truerand(void)
-{
-    ulong x;
-    static fdt randfd = -1;
-
-    if(randfd < 0)
-        randfd = open("/dev/random", OREAD|OCEXEC);
-    if(randfd < 0)
-        sysfatal("can't open /dev/random");
-    if(read(randfd, &x, sizeof(x)) != sizeof(x))
-        sysfatal("can't read /dev/random");
-
-    return x;
-}
-@
-
-
-
-
-
-%claude:
-[[truerand]] reads from [[/dev/random]], which the kernel
-sources from hardware entropy (interrupt timing, etc.).
-[[fastrand]] uses the weaker [[lrand]] when speed matters
-more than unpredictability.
-
-\section{muldiv}
-
-<<function [[umuldiv]]>>=
-ulong
-umuldiv(ulong a, ulong b, ulong c)
-{
-    double d;
-
-    d = ((double)a * (double)b) / (double)c;
-    if(d >= 4294967296.)
-        abort();
-    return d;
-}
-@
-
-<<function [[muldiv]]>>=
-long
-muldiv(long a, long b, long c)
-{
-    int s;
-    long v;
-
-    s = 0;
-    if(a < 0) {
-        s = !s;
-        a = -a;
-    }
-    if(b < 0) {
-        s = !s;
-        b = -b;
-    }
-    if(c < 0) {
-        s = !s;
-        c = -c;
-    }
-    v = umuldiv(a, b, c);
-    if(s)
-        v = -v;
-    return v;
-}
-@
-
-%******************************************************************************
-\chapter{Compression}
-%******************************************************************************
-% libflate
-
-%claude:
-[[libflate]] implements the deflate/inflate algorithms
-(RFC~1951) used by [[gzip]] and [[gunzip]]. The library
-provides a callback-based streaming interface: the caller
-supplies read and write functions, and [[deflate]]/[[inflate]]
-process data in chunks without loading the entire file into
-memory.
-
-% BIG!
-
-%******************************************************************************
-%\chapter{Encryption}
-%******************************************************************************
-%alt: Crypto
-% and chksum ? or move to security?
-
-%******************************************************************************
-\chapter{Error Management}
-%******************************************************************************
-\label{chap:errors}
-
-% Unix use errno, an error number, an integer, but ugly cos hardcoded
-% list of fixed errors. Then perror() to display string for it.
-% Plan9 rethinked that, like for exits(char*s) insead  of exit(int)
-% and introduced not error number but per-process error string!
-
-%claude:
-\plan replaces \unix's [[errno]] (an integer error code) with
-a per-process error {\em string} of up to 128 characters.
-The [[errstr]] system call swaps the current error string with
-a buffer provided by the caller---passing an empty buffer
-reads and clears the error. The [[%r]] format verb in
-[[print]]/[[fprint]] outputs the current error string,
-and [[werrstr]] sets it. This design avoids the fixed,
-enumerated error codes of \unix and allows file servers to
-return descriptive error messages.
-
-%TODO: errno
-%    if(getwd(pathname, sizeof(pathname)) == 0) {
-%        fprint(2, "pwd: %r\n");
-%        exits("getwd");
-%    }
-% what is %r? last error code from libc function? a bit ugly
-% those == 0 are also ugly.
-
-
-<<constant [[ERRMAX]]>>=
-#define	ERRMAX	128	/* max length of error string */
-@
-
-\section{Syscall: [[errstr()]]}
-
-% error of last system call.
-% but why not return error information from system call directly?
-% because can not use pairs in C ... and return value sometimes already
-% used? not always ...
-
-% kernel swaps value with string passed in, so you want to pass a string buffer
-% with '\0' as first char so after the call to errstr, the errstr in
-% the kernel is reset.
-
-
-\section{[[rerrstr()]], [[werrstr()]]}
-
-%claude:
-Because [[errstr]] {\em swaps} the error string (it reads the
-current error and replaces it with the buffer's contents),
-[[rerrstr]] must call it twice: once to read the error into
-a temporary buffer, and again to restore it. This read-without-clear
-pattern is necessary when you want to inspect the error
-without consuming it. [[werrstr]] does the opposite:
-it formats a message into a buffer and swaps it in, setting
-the process's error string.
-
-<<function [[rerrstr]]>>=
-void
-rerrstr(char *buf, uint nbuf)
-{
-    char tmp[ERRMAX];
-
-    tmp[0] = '\0';
-    errstr(tmp, sizeof tmp);
-
-    utfecpy(buf, buf+nbuf, tmp);
-    errstr(tmp, sizeof tmp);
-}
-@
-% so it keeps the errstr in the kernel
-
-<<function [[werrstr]]>>=
-void
-werrstr(char *fmt, ...)
-{
-    va_list arg;
-    char buf[ERRMAX];
-
-    va_start(arg, fmt);
-    vseprint(buf, buf+ERRMAX, fmt, arg);
-    va_end(arg);
-    errstr(buf, sizeof buf);
-}
-@
-%old: ERRMAX -> sizeof tmp so more consistent with rerrstr
-
-\section{[[perror()]]}
-
-% to print last error code of last system call
-
-% perror() is for unix compatibility.
-
-<<function [[perror]]>>=
-void
-perror(char *s)
-{
-    char buf[ERRMAX];
-
-    buf[0] = '\0';
-    errstr(buf, sizeof buf);
-    if(s && *s)
-        fprint(2, "%s: %s\n", s, buf);
-    else
-        fprint(2, "%s\n", buf);
-}
-@
-
-\section{Error return values}
-% move earlier in core DS chapter?
-
-%claude:
-C has no standard convention for error return values: some
-functions return 0 on error ([[convM2S]]), some return $-1$
-([[open]]), and some return 1 ([[getfields]]). These typedefs
-and constants document the convention used by each function,
-making the code more self-documenting. They were added by the
-author to the \plan source to reduce confusion.
-
-<<type [[errorxxx]]>>=
-// later: unify all of that to be more consistent!
-typedef int error0; // 0 is the error value
-typedef int error1; // 1 is the error value
-typedef int errorneg1; // -1 is the error value
-typedef int errorn; // 1 or more means error
-@
-%pad: I added that
-
-<<constant [[OKxxx]]>>=
-#define OK_0 0
-#define OK_1 1
-@
-%pad: I added that
-
-<<constant [[ERRORxxx]]>>=
-#define ERROR_0 0
-#define ERROR_1 1
-#define ERROR_NEG1 (-1)
-@
-%pad: I added that
-
-\section{[[assert()]]}
-
-%claude:
-[[assert]] aborts the program when a condition is false.
-The macro uses the \plan C compiler's implicit stringification
-(the string \verb+"x"+ inside the macro expands to the
-literal text of the condition). The indirection through
-a function pointer [[_assert]] allows [[libthread]] to
-replace the default handler with one that reports the
-thread ID and does thread-safe cleanup.
-
-<<macro [[assert]]>>=
-#define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
-@
-% note that use x inside a string so implicity strinfify in plan9 cpp
-% (see Compiler.nw)
-
-
-<<global [[_assert]]>>=
-void (*_assert)(char*) = default_assert;
-@
-
-<<function [[default_assert]]>>=
-void
-default_assert(char *s)
-{
-    if(__assert)
-        (*__assert)(s);
-    fprint(2, "assert failed: %s\n", s);
-    abort();
-}
-@
-
-<<global [[__assert]]>>=
-void (*__assert)(char*);
-@
-% used by libthread to point to _theadassert that does ???
-
-
-
-<<function [[abort]]>>=
-void
-abort(void)
-{
-    while(*(int*)0)
-        ;
-}
-@
-% generate segfault
-
-
-\section{[[sysfatal()]]}
-
-%claude:
-[[sysfatal]] is the standard way to terminate with an error
-message. It formats the message, prepends the program name
-([[argv0]]), and calls [[exits]]. Like [[_assert]], it goes
-through a function pointer [[_sysfatal]] so [[libthread]]
-can replace it with a thread-aware version that cleans up
-properly.
-
-% wrapper around exits that can format; also use argv0 in output
-<<function [[sysfatal]]>>=
-void
-sysfatal(char *fmt, ...)
-{
-    va_list arg;
-
-    va_start(arg, fmt);
-    (*_sysfatal)(fmt, arg);
-    va_end(arg);
-}
-@
-
-
-<<global [[_sysfatal]]>>=
-void (*_sysfatal)(char *fmt, va_list arg) = _sysfatalimpl;
-@
-% who changes that? just a hook maybe that one can set?
-
-<<function [[_sysfatalimpl]]>>=
-static void
-_sysfatalimpl(char *fmt, va_list arg)
-{
-    char buf[1024];
-
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    if(argv0)
-        fprint(2, "%s: %s\n", argv0, buf);
-    else
-        fprint(2, "%s\n", buf);
-    exits(buf);
-}
-@
-
+This part covers the library support for the tools described
+in the \book{Debugger} and \book{Profiler}: [[syslog]] for
+writing to log files, [[assert]] and [[abort]] for catching
+invariant violations, and the [[_profin]]/[[_profout]]
+functions that the linker inserts at every function entry
+and exit when profiling is enabled.
 
 %******************************************************************************
 \chapter{Debugging Support}
@@ -13167,260 +13488,6 @@ cputime(void)
     return t[0] / (double)HZ;
 }
 @
-
-
-%******************************************************************************
-\chapter{Security}
-%******************************************************************************
-\label{chap:security}
-
-% ref_own<string> returned
-
-%claude:
-\plan identifies users by name strings rather than numeric
-uid/gid pairs. [[getuser]] reads the current user name from
-[[/dev/user]], reflecting the ``everything is a file'' design.
-In a distributed environment where different file servers may
-have different user databases, string-based identities are
-more flexible than numeric IDs.
-
-\section{[[getuser()]]}
-
-% very different in plan9, no uid/gid (why? because distributed context?)
-
-<<function [[getuser]]>>=
-char*
-getuser(void)
-{
-    static char user[64];
-    fdt fd;
-    int n;
-
-    fd = open("/dev/user", OREAD);
-    if(fd < 0)
-        return "none";
-    n = read(fd, user, (sizeof user)-1);
-    close(fd);
-    if(n <= 0)
-        strcpy(user, "none");
-    else
-        user[n] = '\0';
-    return user;
-}
-@
-
-
-\section{Cryptography}
-
-%TODO: put md5sum, sha1sum here
-
-%claude:
-The [[encrypt]]/[[decrypt]] functions implement DES-based
-block encryption, processing 7-byte blocks at a time
-(DES's 56-bit key = 7 bytes). The encryption is done
-in-place, and the buffer must be at least 8 bytes. The
-final partial block is handled by overlapping with the
-previous block. [[netcrypt]] is a helper for the
-authentication protocol: it encrypts a challenge string
-and formats the first 4 bytes as hexadecimal.
-
-<<function [[encrypt]]>>=
-/*
- * destructively encrypt the buffer, which
- * must be at least 8 characters long.
- */
-int
-encrypt(void *key, void *vbuf, int n)
-{
-    ulong ekey[32];
-    uchar *buf;
-    int i, r;
-
-    if(n < 8)
-        return 0;
-    key_setup(key, ekey);
-    buf = vbuf;
-    n--;
-    r = n % 7;
-    n /= 7;
-    for(i = 0; i < n; i++){
-        block_cipher(ekey, buf, 0);
-        buf += 7;
-    }
-    if(r)
-        block_cipher(ekey, buf - 7 + r, 0);
-    return 1;
-}
-@
-
-<<function [[decrypt]]>>=
-/*
- * destructively decrypt the buffer, which
- * must be at least 8 characters long.
- */
-int
-decrypt(void *key, void *vbuf, int n)
-{
-    ulong ekey[128];
-    uchar *buf;
-    int i, r;
-
-    if(n < 8)
-        return 0;
-    key_setup(key, ekey);
-    buf = vbuf;
-    n--;
-    r = n % 7;
-    n /= 7;
-    buf += n * 7;
-    if(r)
-        block_cipher(ekey, buf - 7 + r, 1);
-    for(i = 0; i < n; i++){
-        buf -= 7;
-        block_cipher(ekey, buf, 1);
-    }
-    return 1;
-}
-@
-
-
-
-<<function [[netcrypt]]>>=
-int
-netcrypt(void *key, void *chal)
-{
-    uchar buf[8], *p;
-
-    strncpy((char*)buf, chal, 7);
-    buf[7] = '\0';
-    for(p = buf; *p && *p != '\n'; p++)
-        ;
-    *p = '\0';
-    encrypt(key, buf, 8);
-    sprint(chal, "%.2ux%.2ux%.2ux%.2ux", buf[0], buf[1], buf[2], buf[3]);
-    return 1;
-}
-@
-
-\section{SSL/TLS}
-
-%claude:
-[[pushssl]] and [[pushtls]] insert encryption layers on
-an existing connection using \plan's SSL/TLS kernel devices
-(\verb+#D/ssl+ and \verb+#a/tls+). They follow the standard
-\plan pattern: open the [[clone]] file to get a new
-channel number, configure it by writing commands to the
-control file (secrets, algorithm, etc.), and return the
-[[data]] file descriptor. The caller's original [[fd]] is
-closed---reads and writes now go through the encrypted
-channel transparently.
-
-<<function [[pushssl]]>>=
-/*
- * Since the SSL device uses decimal file descriptors to name channels,
- * it is impossible for a user-level file server to stand in for the kernel device.
- * Thus we hard-code #D rather than use /net/ssl.
- */
-
-int
-pushssl(int fd, char *alg, char *secin, char *secout, int *cfd)
-{
-    char buf[8];
-    char dname[64];
-    int n, data, ctl;
-
-    ctl = open("#D/ssl/clone", ORDWR);
-    if(ctl < 0)
-        return -1;
-    n = read(ctl, buf, sizeof(buf)-1);
-    if(n < 0)
-        goto error;
-    buf[n] = 0;
-    sprint(dname, "#D/ssl/%s/data", buf);
-    data = open(dname, ORDWR);
-    if(data < 0)
-        goto error;
-    if(fprint(ctl, "fd %d", fd) < 0 ||
-       fprint(ctl, "secretin %s", secin) < 0 ||
-       fprint(ctl, "secretout %s", secout) < 0 ||
-       fprint(ctl, "alg %s", alg) < 0){
-        close(data);
-        goto error;
-    }
-    close(fd);
-    if(cfd != 0)
-        *cfd = ctl;
-    else
-        close(ctl);
-    return data;
-error:
-    close(ctl);
-    return -1;
-}
-@
-
-<<function [[pushtls]]>>=
-// given a plain fd and secrets established beforehand, return encrypted connection
-int
-pushtls(int fd, char *hashalg, char *encalg, int isclient, char *secret, char *dir)
-{
-    char buf[8];
-    char dname[64];
-    int n, data, ctl, hand;
-
-    // open a new filter; get ctl fd
-    data = hand = -1;
-    // /net/tls uses decimal file descriptors to name channels, hence a
-    // user-level file server can't stand in for #a; may as well hard-code it.
-    ctl = open("#a/tls/clone", ORDWR);
-    if(ctl < 0)
-        goto error;
-    n = read(ctl, buf, sizeof(buf)-1);
-    if(n < 0)
-        goto error;
-    buf[n] = 0;
-    if(dir)
-        sprint(dir, "#a/tls/%s", buf);
-
-    // get application fd
-    sprint(dname, "#a/tls/%s/data", buf);
-    data = open(dname, ORDWR);
-    if(data < 0)
-        goto error;
-
-    // get handshake fd
-    sprint(dname, "#a/tls/%s/hand", buf);
-    hand = open(dname, ORDWR);
-    if(hand < 0)
-        goto error;
-
-    // speak a minimal handshake
-    if(fprint(ctl, "fd %d 0x301", fd) < 0 ||
-       fprint(ctl, "version 0x301") < 0 ||
-       fprint(ctl, "secret %s %s %d %s", hashalg, encalg, isclient, secret) < 0 ||
-       fprint(ctl, "changecipher") < 0 ||
-       finished(hand, isclient) < 0 ||
-       fprint(ctl, "opened") < 0){
-        close(hand);
-        hand = -1;
-        goto error;
-    }
-    close(ctl);
-    close(hand);
-    close(fd);
-    return data;
-
-error:
-    if(data>=0)
-        close(data);
-    if(ctl>=0)
-        close(ctl);
-    if(hand>=0)
-        close(hand);
-    return -1;
-}
-@
-
 
 
 %******************************************************************************
