@@ -1820,6 +1820,24 @@ sets the error string, and the [[%r]] format verb in
 [[print]] reads it directly.
 
 %yoann: maybe ASCII diagram showing C calling conventions and Kernel convention with Stack layout and special weird opti about R0 instead of in stack for first param
+%claude:
+There is a subtlety in the ARM stubs: the \plan C calling
+convention passes the first argument in [[R0]], but the
+kernel expects all arguments on the stack. So the stub's
+first instruction (\verb+MOVW R0, 0(FP)+) saves [[R0]]
+back onto the stack frame before loading the syscall number
+into [[R0]]. The stack layout during a syscall like
+\verb+open("foo", OREAD)+ looks like:
+\begin{verbatim}
+  +----------+
+  | OREAD    |  4(FP) - second arg
+  +----------+
+  | "foo"    |  0(FP) - first arg (saved from R0)
+  +----------+
+  | ret addr |
+  +----------+
+        R0 = 6 (OPEN)    <- syscall number
+\end{verbatim}
 
 \section{Comparison with \unix}
 
@@ -1868,46 +1886,67 @@ termination.
 \section{[[_main()]] (ARM)}
 
 %yoann: explain assembly, and especially weird SB thing (reference Linker book?)
+%claude:
+The C runtime entry point is written in assembly because it
+must set up the environment before any C code can run.
+The [[SB]] (static base) pseudo-register is a \plan convention:
+it points to the beginning of the program's global data, and
+all global variable accesses go through it (e.g.,
+\verb+_tos(SB)+). The linker resolves [[SB]] references to
+actual addresses (see \book{Linker}).
+%
+The code first initializes [[R12]] (the static base register)
+via [[setR12]], saves the [[_tos]] pointer (the ``top of
+stack'' structure shared with the kernel, used for profiling
+and pid), sets up per-process private storage, then copies
+[[argc]] and [[argv]] from the kernel-provided stack frame
+onto the C stack and calls [[main()]]. If [[main]] returns,
+[[_main]] calls [[exits("main")]] in a loop.
 
 <<libc/arm/main9.s>>=
-#define NPRIVATES	16
+#define NPRIVATES       16
 #define NOPROF 1 // see 5.out.h        
 
 arg=0
 sp=13
 sb=12
 
-TEXT	_main(SB), NOPROF, $(16 + NPRIVATES*4)
-	MOVW	$setR12(SB), R(sb)
-	MOVW	R(arg), _tos(SB)
+TEXT    _main(SB), NOPROF, $(16 + NPRIVATES*4)
+        MOVW    $setR12(SB), R(sb)
+        MOVW    R(arg), _tos(SB)
 
-	MOVW	$p-64(SP), R1
-	MOVW	R1, _privates(SB)
-	MOVW	$NPRIVATES, R1
-	MOVW	R1, _nprivates(SB)
+        MOVW    $p-64(SP), R1
+        MOVW    R1, _privates(SB)
+        MOVW    $NPRIVATES, R1
+        MOVW    R1, _nprivates(SB)
 
-	MOVW	$inargv+0(FP), R(arg)
-	MOVW	R(arg), 8(R(sp))
-	MOVW	inargc-4(FP), R(arg)
-	MOVW	R(arg), 4(R(sp))
+        MOVW    $inargv+0(FP), R(arg)
+        MOVW    R(arg), 8(R(sp))
+        MOVW    inargc-4(FP), R(arg)
+        MOVW    R(arg), 4(R(sp))
 
     // user main()
-	BL	main(SB)
+        BL      main(SB)
 
 loop:
-	MOVW	$_exitstr<>(SB), R(arg)
-	MOVW	R(arg), 4(R(sp))
-	BL	exits(SB)
+        MOVW    $_exitstr<>(SB), R(arg)
+        MOVW    R(arg), 4(R(sp))
+        BL      exits(SB)
     // unreachable
     // force loading of div?
-	BL	_div(SB) 
-	B	loop
+        BL      _div(SB) 
+        B       loop
 
-DATA	_exitstr<>+0(SB)/4, $"main"
-GLOBL	_exitstr<>+0(SB), $5
+DATA    _exitstr<>+0(SB)/4, $"main"
+GLOBL   _exitstr<>+0(SB), $5
 @
 
 %yoann: maybe reference _main9p.s when enable profiling
+%claude:
+When a program is linked with profiling enabled ([[5l -p]]),
+the linker uses [[_main9p.s]] instead, which calls
+[[_profmain()]] before [[main()]] to initialize the
+profiling infrastructure (see Chapter~\ref{chap:profiling}).
 
 \section{Command-line arguments: [[ARGBEGIN()]], [[ARGEND()]]}
 
@@ -2011,6 +2050,20 @@ This is all the user-space code there is---the kernel's
 [[sysexits()]] does the actual process teardown.
 
 %yoann: show actual assembly ARM for _exits.s, we already saw one in previous chapter, it is ok to repeat things once
+%claude:
+Here is the actual ARM stub for [[_exits]], following the
+same pattern as [[open.s]] in Chapter~\ref{chap:user-kernel}:
+\begin{verbatim}
+  TEXT _exits(SB), 1, $0
+  MOVW R0, 0(FP)       /* save exit string pointer */
+  MOVW $3, R0           /* EXITS = 3 */
+  SWI $0                /* trap into kernel */
+  RET                   /* never reached */
+\end{verbatim}
+%
+The [[RET]] is never reached because the kernel destroys
+the process. It is there because the assembler requires
+every [[TEXT]] block to end with a [[RET]].
 
 \section{[[exits()]] and [[atexit()]]}
 
