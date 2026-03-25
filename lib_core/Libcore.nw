@@ -936,22 +936,7 @@ An IEEE~754 double-precision float is laid out as follows:
 The [[hi]] word of [[FPdbleword]] contains the sign bit,
 the 11-bit exponent, and the upper 20~bits of the mantissa.
 The [[lo]] word contains the lower 32~bits of the mantissa.
-%
-A double encodes the value $(-1)^S \times 1.M \times 2^{E-1023}$,
-where $S$ is the sign bit, $E$ is the 11-bit exponent (biased
-by 1023 so that an exponent of 0 is stored as 1023), and $M$ is
-the 52-bit mantissa (the fractional part after an implicit
-leading~1). For example:
-\begin{verbatim}
-  Value    S  Exponent (E)  Mantissa (M)   Meaning
-  -----    -  ------------  ------------   -------
-   1.0     0  01111111111   000...000      +1.0 x 2^(1023-1023) = 1.0
-  -1.0     1  01111111111   000...000      -1.0 x 2^0 = -1.0
-   0.5     0  01111111110   000...000      +1.0 x 2^(1022-1023) = 2^-1
-   3.14    0  10000000000   1001000111...  +1.57 x 2^(1024-1023) = 3.14
-   NaN     0  11111111111   000...001      exp all 1s, mantissa != 0
-  +Inf     0  11111111111   000...000      exp all 1s, mantissa = 0
-\end{verbatim}
+
 
 % in arm/u.h so probably arch specific
 <<type [[FPdbleword]]>>=
@@ -968,6 +953,25 @@ union FPdbleword
 
 % also useful is union { double d; uint64 x}
 % to display internal representation in hex of a double.
+
+
+%claude:
+Recall that a double encodes the value $(-1)^S \times 1.M \times 2^{E-1023}$,
+where $S$ is the sign bit, $E$ is the 11-bit exponent (biased
+by 1023 so that an exponent of 0 is stored as 1023), and $M$ is
+the 52-bit mantissa (the fractional part after an implicit
+leading~1). For example:
+\begin{verbatim}
+  Value    S  Exponent (E)  Mantissa (M)   Meaning
+  -----    -  ------------  ------------   -------
+   1.0     0  01111111111   000...000      +1.0 x 2^(1023-1023) = 1.0
+  -1.0     1  01111111111   000...000      -1.0 x 2^0 = -1.0
+   0.5     0  01111111110   000...000      +1.0 x 2^(1022-1023) = 2^-1
+   3.14    0  10000000000   1001000111...  +1.57 x 2^(1024-1023) = 3.14
+   NaN     0  11111111111   000...001      exp all 1s, mantissa != 0
+  +Inf     0  11111111111   000...000      exp all 1s, mantissa = 0
+\end{verbatim}
+
 
 \subsection{Strings and characters}
 
@@ -1120,9 +1124,15 @@ in \plan where UTF-8 is the native encoding.
 %claude:
 A [[Rune]] is \plan's name for a Unicode code point---a 21-bit
 integer (stored in a 32-bit [[uint]]) that can represent any
-character in the Unicode standard (up to U+10FFFF). The term
+character in the Unicode standard (up to U+10FFFF). The term ``rune''
 was coined by Rob Pike and Ken Thompson when they designed
-UTF-8 at Bell Labs. In \plan, [[char]] means a byte and
+UTF-8 at Bell Labs. The name evokes the ancient Germanic
+runes---symbols that carry meaning in a single glyph,
+just as a [[Rune]] carries a single character regardless
+of how many bytes it takes to encode.
+
+%claude:
+In \plan, [[char]] means a byte and
 [[Rune]] means a character; the UTF-8 functions convert
 between the two representations:
 \begin{verbatim}
@@ -1221,6 +1231,12 @@ alignment, or XOR-ing two pointers for a hash); you must
 cast to [[uintptr]] first. For example, [[qsort]] checks
 alignment with \verb+((uintptr)va + es) % sizeof(long)+
 to decide whether to use word-sized or byte-sized swaps.
+\plan uses [[nil]] rather than C's [[NULL]] because it is
+shorter and, unlike [[NULL]], is always defined as
+\verb+((void*)0)+---some C implementations define [[NULL]]
+as plain \verb+0+, which can cause subtle bugs when passed
+to variadic functions (where the compiler cannot infer that
+an integer~0 should be a pointer).
 
 <<constant [[nil]]>>=
 #define nil     ((void*)0)
@@ -1424,7 +1440,10 @@ C functions like [[print(char *fmt, ...)]] accept a variable
 number of arguments, but the compiler does not know at compile
 time how many arguments were passed or what their types are.
 The [[va_list]]/[[va_start]]/[[va_arg]]/[[va_end]] macros
-solve this by walking the stack frame manually. On ARM with
+solve this by walking the stack frame manually. 
+
+%claude:
+On ARM with
 the \plan calling convention, all arguments are pushed onto
 the stack in order, so [[va_list]] is simply a [[char*]]
 pointer into the stack:
@@ -1472,6 +1491,49 @@ typedef char*   va_list;
         ((list += sizeof(mode)), (mode*)list)[-1])
 @
 
+%yoann: example of use of all those macros together to illustrate and maybe ASCII diagram again
+%claude:
+Here is a complete example showing how these macros are used:
+\begin{verbatim}
+  int sum(int n, ...) {
+      va_list ap;
+      int i, total = 0;
+      va_start(ap, n);       // ap points past n
+      for(i = 0; i < n; i++)
+          total += va_arg(ap, int);  // read and advance
+      va_end(ap);
+      return total;
+  }
+  // call: sum(3, 10, 20, 30) returns 60
+\end{verbatim}
+%
+The call \verb+sum(3, 10, 20, 30)+ produces this stack:
+\begin{verbatim}
+  +------+
+  | 30   |  <-- va_arg(ap, int) third time
+  +------+
+  | 20   |  <-- va_arg(ap, int) second time
+  +------+
+  | 10   |  <-- va_start(ap, n) points here
+  +------+
+  | 3    |  <-- n (last named parameter)
+  +------+
+\end{verbatim}
+%
+Each [[va_arg(ap, int)]] advances [[ap]] by 4~bytes (the
+size of [[int]]) and returns the value at the previous
+position. For a 1-byte [[char]], the macro still advances
+by~4 (because of stack alignment) but reads from the correct
+offset within the 4-byte slot.
+%
+In practice, passing an explicit count is unusual. Real
+variadic functions use other conventions to know when to
+stop: [[print]] uses the format string (each \verb+%+
+verb implies one argument and its type), [[execl]] uses a
+[[nil]] sentinel to mark the end of the argument list, and
+[[EARGF]] in the argument parsing macros uses the structure
+of command-line flags.
+
 %related: getcallerpc
 
 % Fcall here?
@@ -1483,10 +1545,11 @@ typedef char*   va_list;
 
 %yoann: say more in Regexp chapter later, but maybe give quick preview
 %claude:
-The [[Reprog]] type (defined in [[regexp.h]]) is a compiled
-regular expression, and [[Resub]] holds the matched
-subexpressions. The full data structures and algorithms
-are presented in Chapter~\ref{chap:regexp}.
+The regular expression types---[<Reprog>] (a compiled pattern)
+and [<Resub>] (matched subexpressions)---are declared in
+[[regexp.h]] but their internal structure is opaque at this
+point. They will be fully defined and explained in
+Chapter~\ref{chap:regexp}.
 
 % string, see special chapter
 
@@ -1508,6 +1571,15 @@ typedef int fdt; // file descriptor type
 
 % Will see also later Dir data structure and Biobuf further later.
 
+%yoann: introduce also those constants and say that me (the author) replaced many use of bar ints with proper symbolic names to improve readability
+%claude:
+The original \plan code uses bare integers (0, 1, 2) for
+the standard file descriptors. The author added these
+symbolic names to improve readability---writing
+\verb+write(STDERR, ...)+ makes the intent clearer than
+\verb+write(2, ...)+. The same motivation applies to the
+[[fdt]] typedef above.
+
 <<constant [[STDxxx]]>>=
 #define STDIN 0
 #define STDOUT 1
@@ -1517,9 +1589,9 @@ typedef int fdt; // file descriptor type
 
 %yoann: say more File related types, Qid, Dir, etc. but presented gradually later
 %claude:
-Other file-related types---[[Qid]] (unique file identifier),
-[[Dir]] (directory entry with metadata), [[Open_flag]],
-[[Access_flag]]---are defined in [[syscall.h]] and
+Other file-related types---[<Qid>] (unique file identifier),
+[<Dir>] (directory entry with metadata), [<Open_flag>],
+[<Access_flag>]---are defined in [[syscall.h]] and
 presented in Chapter~\ref{chap:fileio} and
 Chapter~\ref{chap:dirs}.
 
@@ -1529,10 +1601,16 @@ Chapter~\ref{chap:dirs}.
 %claude:
 The [[Tm]] structure holds a broken-down time: year, month,
 day, hour, minute, second, plus the timezone abbreviation
-and offset from UTC. It is the same data that \unix's
-[[struct tm]] holds, but \plan adds the [[zone]] and
-[[tzoff]] fields directly rather than relying on external
-globals like [[tzname]].
+and offset from UTC. This is the same data that \unix's
+[[struct tm]] holds, but with a better design: \plan puts
+the timezone name ([[zone]]) and UTC offset ([[tzoff]])
+directly inside the structure, whereas \unix splits them
+into separate globals ([[tzname]], [[timezone]]) that are
+not attached to any particular [[struct tm]]. The \plan
+design means a [[Tm]] is self-contained---you can pass it
+to another function without losing the timezone context.
+
+%claude:
 For example, March 25, 2026 at 14:30 in Rome would be
 represented with [[hour]]=14, [[mon]]=2 (0-indexed),
 [[year]]=126 (years since 1900), [[zone]]="CET",
@@ -1559,12 +1637,11 @@ struct Tm {
 \section{Concurrency}
 
 %claude:
-The concurrency data structures---[[Lock]], [[QLock]], [[RWLock]],
-[[Rendez]]---are defined in this section and covered in detail
-in the Concurrency chapter. The threading structures
-([[Channel]], [[Alt]], [[Thread]], [[Proc]]) are part of
-[[libthread]] and are covered in the Channels and Cooperative
-Threads chapter.
+The concurrency data structures---[<Lock>], [<QLock>], [<RWLock>],
+[<Rendez>]---are declared in [[libc.h]] but will be presented
+in Chapter~\ref{chap:concurrency}. The threading structures
+([<Channel>], [<Alt>], [<Thread>], [<Proc>]) are declared in
+[[thread.h]] and covered in Chapter~\ref{chap:threads}.
 
 %\subsection{Locks}
 % normal, read-write
@@ -1585,14 +1662,23 @@ Threads chapter.
 
 %claude:
 Notably absent from \plan's [[libc]] is any standard collection
-type---no hash tables, linked lists, or dynamic arrays. Programs
-implement their own as needed using raw pointers and arrays.
-This minimalism keeps the library small but means that common
-data structures are reimplemented throughout the codebase.
+type---no hash tables, linked lists, or dynamic arrays. This
+is partly a consequence of C itself: without generics or
+templates, a reusable list library must either use [[void*]]
+(losing type safety and adding indirection) or rely on macros.
+In practice, C systems programmers prefer to embed the
+[[next]] pointer directly inside their structures (as seen
+throughout this book and in the Linux kernel), which gives
+tight control over memory layout and avoids the overhead of
+a generic container. The cost is that each program
+reimplements the same patterns.
+
+%claude:
 Hanson's {\em C Interfaces and Implementations}~\cite{cii}
 provides exactly the kind of reusable collections (hash tables,
 sequences, rings, arenas) that \plan's [[libc]] lacks, and
 could in principle be ported to \plan.
+
 
 % collection types (not really :( )
 
@@ -1619,6 +1705,47 @@ could in principle be ported to \plan.
 
 
 %******************************************************************************
+\chapter{User/Kernel Bridge}
+%******************************************************************************
+\label{chap:user-kernel}
+
+% sys.h, syscall.h
+% lib_core/libc/9syscall/*.s and dispatcher in kernel for the sysxxx().
+% FIGURE copy one in Principia.nw?
+
+%claude:
+System calls are the boundary between user space and the kernel.
+Each system call is a small assembly stub (in [[9syscall/*.s]])
+that loads the syscall number into a register and executes a
+software interrupt. The kernel's dispatcher (see \book{Kernel})
+then routes to the appropriate [[sysxxx()]] handler.
+
+%yoann: explain more the bridge, maybe show concrete scenario with sysnop with c code, assembly, etc.
+%claude:
+For example, when a C program calls [[open("foo", OREAD)]],
+the following happens:
+\begin{enumerate}
+\item The C compiler generates a call to [[open]] in
+[[9syscall/open.s]].
+\item The assembly stub loads the syscall number for [[OPEN]]
+into register [[R0]] and executes [[SWI 0]] (software
+interrupt).
+\item The ARM traps into the kernel, which saves the user
+registers and calls [[sysopen()]] in the kernel.
+\item [[sysopen()]] does the real work (namespace lookup,
+permission check, allocating a [[Chan]]) and returns a file
+descriptor.
+\item The kernel restores the user registers and returns to
+the assembly stub, which returns the file descriptor to the
+C caller.
+\end{enumerate}
+%
+The code for these stubs is generated automatically by the
+[[mkfile]] in [[9syscall/]]: one \verb+.s+ file per system call,
+all following the same pattern. The system call numbers are
+defined in [[syscall.h]].
+
+%******************************************************************************
 \chapter{[[_main()]] and [[_exits()]]}
 %******************************************************************************
 \label{chap:main}
@@ -1643,6 +1770,9 @@ calls [[main()]].
 This chapter also covers the argument parsing macros and
 the [[exits]] function that handles cleanup callbacks before
 termination.
+
+\section{[[_main()]] (ARM)}
+
 
 \section{Command-line arguments: [[ARGBEGIN()]], [[ARGEND()]]}
 
@@ -1726,23 +1856,52 @@ After [[ARGEND]], [[argv]] points to the remaining arguments
 %claude:
 The raw system call is called [[_exits]] (with a leading
 underscore) rather than [[exits]] so that the library can
-wrap it with cleanup logic (running [[atexit]] callbacks)
-in the [[exits]] function below. This is a common C
-convention: the underscore marks the raw, unwrapped
-interface. The actual system call stub in [[9syscall/]]
-is a few lines of ARM assembly that load the syscall number
-into a register and execute a [[SWI]] (software interrupt)
-to trap into the kernel.
-
-\section{[[exits()]]}
+wrap it with cleanup logic (running [<atexit()>] callbacks)
+in the [<exits()>] function below. 
 
 %claude:
-[[exits]] runs registered cleanup callbacks before calling
-the [[_exits]] system call. The [[onex]] table stores up to
+This is actually the only \plan system call that uses this
+underscore convention---most other system calls ([[open]],
+[[read]], [[rfork]], etc.) are used directly without a
+wrapper. [[exits]] is special because it needs to run
+cleanup callbacks before terminating.
+
+%yoann: now that User/Kernel bridge is before, maybe show concrete code of _exits to make things more concrete?
+%claude:
+The assembly stub for [[_exits]] follows the pattern described
+in Chapter~\ref{chap:user-kernel}: it loads the syscall number
+for [[EXITS]] into [[R0]], places the argument (the exit
+status string pointer) in [[R1]], and executes [[SWI 0]].
+This is all the user-space code there is---the kernel's
+[[sysexits()]] does the actual process teardown.
+
+\section{[[exits()]] and [[atexit()]]}
+
+%claude:
+[<exits()>] runs registered cleanup callbacks before calling
+the [[_exits]] system call. The [<onex>] table stores up to
 33 callback/pid pairs. The pid field exists because after
 [[rfork(RFMEM)]], parent and child share memory (including
 [[onex]]) but should only run their own callbacks---each
 process checks [[getpid()]] before invoking a handler.
+
+<<global [[onex]]>>=
+Onex onex[NEXIT];
+@
+<<constant [[NEXIT]]>>=
+#define NEXIT   33
+@
+
+<<struct [[Onex]]>>=
+struct Onex{
+    void    (*f)(void); // callback
+    int pid;
+};
+@
+% Onex.pid because some fork can still share memory
+% but we want each fork to run separate callbacks when really
+% exits.
+
 
 % profile is turned off around this function
 <<function [[exits]]>>=
@@ -1783,22 +1942,6 @@ process only runs the callbacks {\em it} registered. A
 child process that needs its own cleanup can call [[atexit]]
 after the fork.
 
-<<global [[onex]]>>=
-Onex onex[NEXIT];
-@
-<<constant [[NEXIT]]>>=
-#define NEXIT   33
-@
-
-<<struct [[Onex]]>>=
-struct Onex{
-    void    (*f)(void);
-    int pid;
-};
-@
-% Onex.pid because some fork can still share memory
-% but we want each fork to run separate callbacks when really
-% exits.
 
 <<global [[onexlock]]>>=
 static Lock onexlock;
@@ -1811,7 +1954,7 @@ The [[onexlock]] protects the [[onex]] array from concurrent
 access by shared-memory processes (see
 Chapter~\ref{chap:concurrency} for how [[Lock]] works).
 %
-[[atexit]] registers a callback to be called when the
+[[atexit()]] registers a callback to be called when the
 program exits. It scans the [[onex]] array for an empty
 slot, records the current pid (so that after
 [[rfork(RFMEM)]], only the process that registered the
@@ -1850,23 +1993,6 @@ atexit(void (*f)(void))
 %            onex[i].f = 0;
 %}
 %@
-
-%******************************************************************************
-\chapter{User/Kernel Bridge}
-%******************************************************************************
-\label{chap:user-kernel}
-
-% sys.h, syscall.h
-% lib_core/libc/9syscall/*.s and dispatcher in kernel for the sysxxx().
-% FIGURE copy one in Principia.nw?
-
-%claude:
-System calls are the boundary between user space and the kernel.
-Each system call is a small assembly stub (in [[9syscall/*.s]])
-that loads the syscall number into a register and executes a
-software interrupt. The kernel's dispatcher (see \book{Kernel})
-then routes to the appropriate [[sysxxx()]] handler.
-
 
 %******************************************************************************
 \chapter{Memory Area Operations}
