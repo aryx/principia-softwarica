@@ -146,6 +146,7 @@ system calls into cheap function calls. And data compression
 is one of those algorithms that seems like magic until you
 see the implementation: Huffman coding plus dictionary-based
 matching, all done in a streaming fashion.
+%yoann1: maybe transition that say we gonna see all those things in this book
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -231,7 +232,7 @@ which is almost two orders of magnitude more code than \plan's
 [[libc]]. It also cannot be linked statically in practice
 (due to [[dlopen]] and NSS), which goes against the spirit of
 understanding how things work at every level.
-% huge, can't be linked statically
+%yoann1: what is NSS? why it prevents static linkinig? Also why dlopen goes against understandhing at every level?
 
 \item musl\furl{https://musl.libc.org/} is a lightweight,
 POSIX-compliant C library designed for static linking on Linux.
@@ -239,13 +240,14 @@ It is much smaller than [[glibc]] (around 90\,000 LOC) and is
 known for clean, readable code. It would have been a reasonable
 alternative to the \plan libraries, but it is still significantly
 larger and is tied to the Linux kernel's system call interface.
-% musl
 
 \item dietlibc\furl{https://www.fefe.de/dietlibc/} is a minimal
 C library optimized for small statically-linked executables.
 It is even smaller than musl, but the project appears to be
 largely unmaintained.
-%dead?
+
+\item uClibc
+%yoann1: explain uClibc, possibly its history and relation to other C libs and why not candidate
 
 \item The C library from Hanson's {\em C Interfaces and
 Implementations}~\cite{cii} provides a well-designed set of
@@ -517,53 +519,91 @@ The code is split into several libraries and subdirectories:
 \toprule
 {\bf Function}                            & {\bf Ch.}                     & {\bf File}        & {\bf Entities}                                        & {\bf LOC} \\
 \otoprule
-basic types                               &                               & [[u.h]]           & [<Rune>] [<FPdbleword>] [<jmp\_buf>]                  & 80 \\
-libc interface                            &                               & [[libc.h]]        & [<Pool>] [<Fmt>] [<Dir>] [<Qid>] [<Fcall>]            & 700 \\
+% Part I: Foundations
+basic types                               & \ref{chap:core-ds}            & [[arm/u.h]]            & [<Rune>] [<FPdbleword>] [<jmp\_buf>]             & 80 \\
+libc interface                            & \ref{chap:core-ds}            & [[libc.h]]             & [<Fmt>] [<Tm>] [<Lock>] [<QLock>] [<Rendez>]     & 500 \\
+syscall interface                         & \ref{chap:user-kernel}        & [[syscall.h]]          & [<Dir>] [<Qid>] [<Waitmsg>] [<Rfork\_flag>]      & 100 \\
+pool interface                            & \ref{chap:malloc}             & [[pool.h]]             & [<Pool>] [<Pool\_flag>]                           & 100 \\
+character classification                  & \ref{chap:core-ds}            & [[port/ctype.c]]       & [<isalpha>] [<isdigit>] [<toupper>]              & 30 \\
+sorting                                   & \ref{chap:core-ds}            & [[port/qsort.c]]       & [<qsort>]                                        & 130 \\
+memory operations                         & \ref{chap:memops}             & [[port/memset.c]]      & [<memset>] [<memmove>] [<memcmp>]                & 90 \\
+% also: port/memchr.c, port/memccpy.c
+heap allocator                            & \ref{chap:malloc}             & [[port/pool.c]]        & [<Pool>] [<Bhdr>] [<Free>] [<Arena>]             & 800 \\
+malloc wrappers, sbrk                     & \ref{chap:malloc}             & [[port/malloc.c]], [[9sys/sbrk.c]] & [<malloc>] [<free>] [<sbrk>]     & 100 \\
 \midrule
-character classification                  &                               & [[port/ctype.c]]  & [<isalpha>] [<isdigit>]                               & 30 \\
-memory operations                         &                               & [[port/memset.c]] & [<memset>] [<memmove>] [<memcmp>]                     & 90 \\
-C strings                                 &                               & [[port/strlen.c]] & [<strlen>] [<strcmp>] [<strcpy>] [<strdup>]            & 210 \\
-rune strings                              &                               & [[port/rune.c]]   & [<chartorune>] [<runetochar>] [<runestrlen>]          & 330 \\
-UTF-8 strings                             &                               & [[port/utflen.c]] & [<utflen>] [<utfrune>] [<utfutf>]                     & 90 \\
-formatted output                          &                               & [[fmt/dofmt.c]]   & [<fprint>] [<sprint>] [<Fmt>]                         & 1300 \\
-sorting                                   &                               & [[port/qsort.c]]  & [<qsort>]                                             & 130 \\
+% Part II: Data Processing
+C strings                                 & \ref{chap:strings}            & [[port/strlen.c]] etc. & [<strlen>] [<strcmp>] [<strcpy>] [<strdup>]       & 210 \\
+% also: port/str{cat,chr,rchr,ncmp,ncpy,str,pbrk,spn,cspn,tok,ecpy}.c (21 files)
+rune strings                              & \ref{chap:strings}            & [[port/rune.c]]        & [<chartorune>] [<runetochar>] [<runestrlen>]     & 330 \\
+% also: port/rune{strcat,strchr,strcmp,strcpy,strdup,strecpy,strlen,strncat,strncmp,strncpy,strrchr,strstr,type,base,bsearch}.c (16 files)
+UTF-8 strings                             & \ref{chap:strings}            & [[port/utflen.c]] etc. & [<utflen>] [<utfrune>] [<utfutf>]                & 90 \\
+% also: port/utf{ecpy,nlen,rrune}.c, port/u{16,32,64}.c (6 files)
+formatted output                          & \ref{chap:strings}            & [[fmt/dofmt.c]]        & [<fprint>] [<sprint>] [<Fmt>]                    & 1300 \\
+% also: fmt/{fprint,sprint,snprint,seprint,smprint,vfprint,vseprint,vsmprint,vsnprint}.c,
+%   fmt/{fmtstr,fmtprint,fmtvprint,fmtfd,fmtrune,fmtquote,fmtlock,dorfmt,errfmt,fltfmt}.c,
+%   fmt/rune{fmtstr,sprint,snprint,seprint,smprint,vseprint,vsmprint,vsnprint}.c (30 files)
+trigonometry and transcendentals          & \ref{chap:math}               & [[port/sin.c]], [[port/exp.c]] etc. & [<sin>] [<cos>] [<exp>] [<log>] [<sqrt>] & 700 \\
+% also: port/{asin,atan,atan2,cos,tan,sinh,tanh,fabs,floor,fmod,frexp,hypot,nan,pow,pow10}.c (18 files)
+integer and float parsing                 & \ref{chap:math}               & [[port/atol.c]], [[port/strtod.c]] & [<atol>] [<strtol>] [<strtod>]    & 500 \\
+% also: port/{atof,atoll,strtoll,strtoul,strtoull,charstod,muldiv}.c
+random numbers                            & \ref{chap:math}               & [[port/lrand.c]]       & [<lrand>] [<nrand>] [<srand>]                    & 80 \\
+% also: port/{nrand,frand,ntruerand}.c
+regexp interface                          & \ref{chap:regexp}             & [[regexp.h]]             & [<Reprog>] [<Resub>]                           & 40 \\
+regexp compilation                        & \ref{chap:regexp}             & [[libregexp/regcomp.c]]  & [<regcomp>] [<Reinst>]                         & 660 \\
+regexp execution                          & \ref{chap:regexp}             & [[libregexp/regexec.c]] etc. & [<regexec>] [<rregexec>] [<regsub>]       & 540 \\
+% also: libregexp/{rregexec,regsub,rregsub,regaux,regerror}.c (7 files total)
+compression interface                     &                               & [[flate.h]]              & [<LZstate>]                                    & 40 \\
+deflate (compression)                     &                               & [[libflate/deflate.c]]   & [<deflate>] [<Lz77>]                           & 1360 \\
+inflate (decompression)                   &                               & [[libflate/inflate.c]] etc. & [<inflate>] [<crc>] [<adler>]             & 1050 \\
+% also: libflate/{deflateblock,deflatezlib,inflateblock,inflatezlibblock,inflatezlib,crc,adler}.c (11 files total)
 \midrule
-heap allocator                            &                               & [[port/pool.c]]   & [<Pool>] [<Bhdr>] [<Free>] [<Arena>]                  & 800 \\
-malloc wrappers                           &                               & [[port/malloc.c]] & [<malloc>] [<free>] [<realloc>]                       & 80 \\
-sbrk                                      &                               & [[9sys/sbrk.c]]   & [<sbrk>]                                              & 20 \\
+% Part III: System Services
+file I/O                                  & \ref{chap:fileio}             & [[9sys/read.c]]        & [<read>] [<write>] [<readn>]                     & 40 \\
+% also: 9sys/{write,readv,writev}.c
+buffered I/O interface                    & \ref{chap:bufio}              & [[bio.h]]              & [<Biobuf>] [<Biobufhdr>]                         & 50 \\
+buffered I/O init                         & \ref{chap:bufio}              & [[libbio/binit.c]]     & [<Binit>]                                        & 136 \\
+buffered I/O reading                      & \ref{chap:bufio}              & [[libbio/brdline.c]] etc. & [<Brdline>] [<Bgetc>] [<Bgetrune>]           & 310 \\
+buffered I/O writing                      & \ref{chap:bufio}              & [[libbio/bwrite.c]] etc. & [<Bwrite>] [<Bprint>] [<Bputc>]               & 150 \\
+% also: libbio/{brdstr,bbuffered,bfildes,bflush,boffset,bseek,bread,bgetd,bputrune,bvprint}.c (18 files total)
+directory operations                      & \ref{chap:dirs}               & [[9sys/dirstat.c]]     & [<dirstat>] [<dirfstat>] [<nulldir>]              & 150 \\
+% also: 9sys/{dirfwstat,dirwstat,dirread,dirmodefmt}.c
+path manipulation                         & \ref{chap:dirs}               & [[port/cleanname.c]]   & [<cleanname>] [<access>]                         & 130 \\
+% also: 9sys/{access,getwd,mktemp}.c
+time                                      & \ref{chap:time}               & [[9sys/time.c]]        & [<time>] [<localtime>] [<tm2sec>]                & 300 \\
+% also: 9sys/{ctime,times,nsec}.c
+process management                        & \ref{chap:fork}               & [[9sys/fork.c]]        & [<fork>] [<execl>] [<getpid>] [<wait>]           & 80 \\
+% also: 9sys/{getppid,waitpid}.c, port/execl.c
+error management                          & \ref{chap:errors}             & [[9sys/rerrstr.c]]     & [<rerrstr>] [<werrstr>] [<sysfatal>]             & 80 \\
+% also: 9sys/{werrstr,sysfatal}.c, port/{_assert,abort,atexit}.c
+security                                  & \ref{chap:security}           & [[port/crypt.c]], [[9sys/pushssl.c]] & [<encrypt>] [<decrypt>] [<getuser>]& 180 \\
+% also: 9sys/{pushtls,getuser,netcrypt}.c
 \midrule
-file I/O                                  &                               & [[9sys/read.c]]   & [<read>] [<write>] [<readn>]                          & 40 \\
-directory operations                      &                               & [[9sys/dirstat.c]] & [<dirstat>] [<dirfstat>] [<nulldir>]                  & 150 \\
-path manipulation                         &                               & [[port/cleanname.c]] & [<cleanname>] [<access>]                           & 130 \\
-9P marshalling                            &                               & [[9sys/convM2S.c]] & [<convM2S>] [<convS2M>] [<convM2D>] [<convD2M>]      & 700 \\
-9P debugging                              &                               & [[9sys/fcallfmt.c]] & [<fcallfmt>]                                        & 200 \\
+% Part IV: Concurrency and Communication
+locks                                     & \ref{chap:concurrency}        & [[port/lock.c]]        & [<lock>] [<qlock>] [<rlock>] [<rsleep>]          & 380 \\
+% also: port/qlock.c (combined in book), arm/atom.s
+9P marshalling                            & \ref{chap:ipc}                & [[9sys/convM2S.c]]     & [<convM2S>] [<convS2M>] [<convM2D>] [<convD2M>]  & 700 \\
+% also: 9sys/{convS2M,convD2M,read9pmsg}.c
+IPC helpers                               & \ref{chap:ipc}                & [[9sys/fcallfmt.c]] etc. & [<fcallfmt>] [<getenv>] [<postnote>]           & 330 \\
+% also: 9sys/{getenv,putenv,postnote}.c, port/atnotify.c
+thread interface                          & \ref{chap:threads}            & [[thread.h]]           & [<Channel>] [<Alt>] [<Ioproc>] [<Ref>]           & 100 \\
+% also: libthread/threadimpl.h (private: Proc, Thread, Tqueue, Pqueue)
+thread scheduler                          & \ref{chap:threads}            & [[libthread/sched.c]]  & [<\_sched>] [<\_schedinit>] [<\_threadready>]     & 250 \\
+thread creation                           & \ref{chap:threads}            & [[libthread/create.c]] & [<threadcreate>] [<proccreate>] [<\_newproc>]     & 200 \\
+channels                                  & \ref{chap:threads}            & [[libthread/channel.c]] & [<chancreate>] [<alt>] [<send>] [<recv>]        & 600 \\
+IO procs                                  & \ref{chap:threads}            & [[libthread/ioproc.c]] & [<ioproc>] [<iocall>] [<ioread>] [<iowrite>]     & 300 \\
+% also: libthread/io{open,close,read,readn,write,sleep,dial}.c
+thread-aware libc                         & \ref{chap:threads}            & [[libthread/main.c]]   & [<main>] [<threadexits>] [<procexec>]             & 700 \\
+% also: libthread/{exit,exec,note,kill,rendez,id,lib,debug,ref,chanprint,dial}.c (28 files total)
+networking                                & \ref{chap:network}            & [[9sys/announce.c]], [[9sys/dial.c]] & [<announce>] [<listen>] [<dial>]   & 500 \\
+% also: 9sys/{getnetconninfo,setnetmtpt,netmkaddr}.c
 \midrule
-time                                      &                               & [[9sys/time.c]]    & [<time>] [<localtime>] [<asctime>] [<tm2sec>]        & 300 \\
-process management                        &                               & [[9sys/fork.c]]    & [<fork>] [<execl>] [<getpid>] [<wait>]               & 80 \\
-environment                               &                               & [[9sys/getenv.c]]  & [<getenv>] [<putenv>]                                & 60 \\
-locks                                     &                               & [[port/lock.c]]    & [<lock>] [<qlock>] [<rlock>] [<rsleep>]              & 380 \\
-notes                                     &                               & [[port/atnotify.c]] & [<atnotify>] [<postnote>]                           & 70 \\
-networking                                &                               & [[9sys/announce.c]] & [<announce>] [<listen>] [<accept>] [<dial>]          & 500 \\
-\midrule
-error management                          &                               & [[9sys/rerrstr.c]] & [<rerrstr>] [<werrstr>] [<perror>] [<sysfatal>]      & 80 \\
-math                                      &                               & [[port/sin.c]]     & [<sin>] [<cos>] [<exp>] [<log>] [<sqrt>] [<pow>]    & 700 \\
-integer parsing                           &                               & [[port/atol.c]]    & [<atol>] [<strtol>] [<strtod>]                      & 500 \\
-random numbers                            &                               & [[port/lrand.c]]   & [<lrand>] [<nrand>] [<srand>]                        & 80 \\
-cryptography                              &                               & [[port/crypt.c]]   & [<encrypt>] [<decrypt>]                               & 180 \\
-profiling                                 &                               & [[port/profile.c]] & [<\_profin>] [<\_profout>] [<\_profdump>]             & 280 \\
-logging                                   &                               & [[9sys/syslog.c]]  & [<syslog>]                                           & 100 \\
-\midrule
-buffered I/O                              &                               & [[libbio/]]       & [<Bgetc>] [<Brdline>] [<Bprint>]                     & 600 \\
-\midrule
-thread scheduler                          &                               & [[libthread/sched.c]] & [<\_sched>] [<\_schedinit>] [<\_threadready>]     & 250 \\
-thread creation                           &                               & [[libthread/create.c]] & [<threadcreate>] [<proccreate>] [<\_newproc>]    & 200 \\
-channels                                  &                               & [[libthread/channel.c]] & [<chancreate>] [<alt>] [<send>] [<recv>]        & 600 \\
-IO procs                                  &                               & [[libthread/ioproc.c]] & [<ioproc>] [<iocall>] [<ioread>] [<iowrite>]    & 300 \\
-thread-aware libc                         &                               & [[libthread/main.c]] & [<main>] [<threadexits>] [<procexec>]              & 450 \\
-thread notes                              &                               & [[libthread/note.c]] & [<\_threadnote>] [<threadnotify>]                  & 200 \\
-thread debugging                          &                               & [[libthread/debug.c]] & [<\_threaddebug>]                                 & 50 \\
+% Part V: Debugging and Profiling
+logging                                   & \ref{chap:debugging}          & [[9sys/syslog.c]]      & [<syslog>]                                       & 100 \\
+% also: 9sys/sysname.c
+profiling                                 & \ref{chap:profiling}          & [[port/profile.c]]     & [<\_profin>] [<\_profout>] [<\_profdump>]         & 280 \\
+% also: 9sys/cputime.c
 \otoprule
-Total                                     &                               &                     &                                                     & $\sim$9800 \\
+Total                                     &                               &                       &                                                    & $\sim$15000 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -618,6 +658,8 @@ memory allocator, and the allocator itself depends on locks
 (because [[malloc]] must be safe for [[rfork(RFMEM)]]).
 [[libthread]]'s channels depend on locks, atomic operations,
 and [[rendezvous]].
+
+%yoann: maybe ASCII diagram with those layers?
 
 \section{Book structure}
 
