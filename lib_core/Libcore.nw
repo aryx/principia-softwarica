@@ -370,6 +370,12 @@ interface, and explain how the code is organized.
 %\section{Core components}
 
 %yoann: small introduction paragraph
+%claude:
+Every C program, no matter how small, depends on a standard
+library. But what should that library contain? How should it
+be organized? And how does it relate to the operating system
+underneath? In this section I discuss the general principles
+behind the design of a C standard library.
 
 \subsection{Core versus non-core}
 % what is core?
@@ -377,20 +383,21 @@ interface, and explain how the code is organized.
 %claude:
 What makes a library ``core''? A core library is one that
 nearly every program depends on, whether explicitly or not.
-The memory allocator is core because even simple variable
-declarations may allocate memory. The string functions are
+The memory allocator is core because any program that uses
+dynamic data structures---strings, lists, trees---needs
+[[malloc]] and [[free]]. The string functions are
 core because text processing is ubiquitous. The system call
 wrappers are core because they are the only way to talk to
 the kernel.
-%yoann1: how variable decl can allocate memory via malloc? confusing
 
 %
 By contrast, libraries like [[libregexp]] (regular expressions)
 or [[libflate]] (compression) are used by many programs but
-not by all. I include them in this book because they are small,
-self-contained, and illustrate interesting algorithms---but
-they are not ``core'' in the same way as [[libc]].
-%yoann1: hmm but then why call this book plan9 core libraries?
+not by all. They are not ``core'' in the same strict
+sense as [[libc]], but I include them in this book rather
+than giving them their own because they are small,
+self-contained, and naturally complement the core library
+(regexp for input parsing, flate for data compression).
 
 \subsection{User/kernel bridge, system calls}
 
@@ -660,10 +667,25 @@ the rest of the library builds upon.
 % All defined in Compiler.nw but libcore define a few aliases in u.h.
 
 %yoann: small paragraph intro
+%claude:
+C provides a few primitive types ([[int]], [[char]], [[double]],
+pointers), but a standard library typically extends these with
+aliases for portability, convenience, and clarity. This section
+covers the type definitions in [[u.h]] and [[libc.h]]: booleans,
+fixed-width integers, Unicode characters (runes), and
+floating-point bit manipulation.
 
 \subsection{Booleans}
 
 %yoann: explain most C programmers abuse int for book, but modern C separate, so I the author extended plan9 libs with those types (not in original plan9). Might be part of c99?
+%claude:
+Traditional C has no boolean type---programmers use [[int]]
+with 0 for false and non-zero for true. C99 introduced
+\verb+_Bool+ (with \verb+<stdbool.h>+), and C23 made [[bool]]
+a keyword. The original \plan libraries did not define a
+boolean type, but the author added this [[typedef]] to
+make function signatures more readable. Go, \plan's
+spiritual successor, has a proper [[bool]] from the start.
 
 <<type [[bool]]>>=
 typedef int bool;
@@ -680,11 +702,15 @@ enum _bool {
 
 %claude:
 \plan defines shorthand aliases for unsigned types and
-fixed-width integers. The [[vlong]] type (``very long'')
-provides 64-bit integers on 32-bit architectures where
-[[long]] is only 32~bits---a perennial source of porting
-bugs when moving C code between architectures.
-%yoann1: mention that gcc/clang actually consider long 64bits on 64bits arch; maybe also explain why need those aliases in the first place?
+fixed-width integers. The aliases exist because C's standard
+types have platform-dependent sizes: [[long]] is 32~bits
+on 32-bit architectures but 64~bits on 64-bit architectures
+under gcc/clang (the LP64 model), which is a perennial source
+of porting bugs. The [[vlong]] type (``very long'') provides
+a guaranteed 64-bit integer regardless of architecture. The
+[[u8int]], [[u16int]], [[u32int]], [[u64int]] types provide
+explicit widths, similar to C99's \verb+<stdint.h>+ types
+but predating them.
 
 <<type [[uxxx]]>>=
 typedef unsigned short  ushort;
@@ -730,7 +756,19 @@ for the math library: functions like [[NaN]], [[isNaN]], and
 [[isInf]] need to inspect or construct the IEEE~754 bit pattern
 directly (exponent, mantissa, sign) rather than treating the
 value as a number.
-%yoann1: Maybe ASCII diagram explaining IEEE float format?
+An IEEE~754 double-precision float is laid out as follows:
+\begin{verbatim}
+  63  62       52 51                                           0
+ +---+-----------+---------------------------------------------+
+ | S | Exponent  |                  Mantissa                   |
+ | 1 |  11 bits  |                  52 bits                    |
+ +---+-----------+---------------------------------------------+
+       \_ hi word (bits 32-63) _/ \_____ lo word (bits 0-31) _/
+\end{verbatim}
+%
+The [[hi]] word of [[FPdbleword]] contains the sign bit,
+the 11-bit exponent, and the upper 20~bits of the mantissa.
+The [[lo]] word contains the lower 32~bits of the mantissa.
 
 % in arm/u.h so probably arch specific
 <<type [[FPdbleword]]>>=
@@ -753,6 +791,13 @@ union FPdbleword
 %http://reedbeta.com/blog/programmers-intro-to-unicode/
 
 %yoann: small paragraph intro
+%claude:
+Text in C is represented at three levels: bytes (ASCII
+characters), code points (Unicode characters), and encoded
+byte sequences (UTF-8). Most C libraries blur these
+distinctions, but \plan keeps them explicit: a [[char]] is
+always a byte, a [[Rune]] is always a code point, and the
+[[utf*]] functions handle the encoding between them.
 
 \subsubsection{ASCII characters}
 
@@ -802,7 +847,13 @@ uchar   _ctype[256] =
 @
 
 %yoann: maybe give example for charater 'A' which values it leads to
-
+%claude:
+For example, the character \verb+'A'+ has ASCII value 65
+(octal 101), so \verb+_ctype[65]+ is \verb+_U|_X+
+(uppercase and hex digit). This means [[isalpha('A')]]
+tests \verb+(_U|_X) & (_U|_L)+, which is true because
+the [[_U]] bit is set. [[isdigit('A')]] tests
+\verb+(_U|_X) & _N+, which is false.
 
 <<macros isxxx>>=
 #define	isalpha(c)	(_ctype[(unsigned char)(c)]&(_U|_L))
@@ -822,10 +873,12 @@ uchar   _ctype[256] =
 
 %claude:
 The [[toupper]]/[[tolower]] functions take [[int]] rather than
-[[char]] so they also work with [[Rune]] values (at least in
-the ASCII range). The conversion is a simple offset between
-the uppercase and lowercase ASCII ranges.
-%yoann1: maybe talk about compiler automatic conversion between char and int and why this code is kinda polymorphic
+[[char]]. In C, [[char]] is automatically promoted to [[int]]
+when passed to a function, so these work transparently with
+both [[char]] and [[Rune]] arguments---a form of ad-hoc
+polymorphism through C's implicit integer promotions. For
+ASCII-range characters (below 128), the conversion is a simple
+offset between the uppercase and lowercase ranges.
 
 % ugly that take an int, because that way compatible with Rune??
 <<function [[toupper]]>>=
@@ -860,6 +913,12 @@ tolower(int c)
 
 
 %yoann: explain what is the use of this macro?
+%claude:
+[[toascii]] strips the high bit, forcing any byte into the
+7-bit ASCII range (0--127). This is a blunt tool for
+sanitizing input that might contain 8-bit characters, but
+it destroys UTF-8 multi-byte sequences and is rarely useful
+in \plan where UTF-8 is the native encoding.
 
 <<macro [[toascii]]>>=
 #define	toascii(c)	((c)&0177)
@@ -874,12 +933,23 @@ tolower(int c)
 
 %claude:
 A [[Rune]] is \plan's name for a Unicode code point---a 21-bit
-integer that can represent any character. The term was coined
-by Rob Pike and Ken Thompson when they designed UTF-8 at
-Bell Labs. In \plan, [[char]] means a byte and [[Rune]] means
-a character; the UTF-8 functions convert between the two
-representations.
-%yoann1: maybe reference Unicode code point, maybe give ASCII diagram of bits and some examples of char vs UTF8 vs Rune (code point)?
+integer (stored in a 32-bit [[uint]]) that can represent any
+character in the Unicode standard (up to U+10FFFF). The term
+was coined by Rob Pike and Ken Thompson when they designed
+UTF-8 at Bell Labs. In \plan, [[char]] means a byte and
+[[Rune]] means a character; the UTF-8 functions convert
+between the two representations:
+\begin{verbatim}
+  Character    Rune (code point)   UTF-8 bytes     char[]
+  ---------    -----------------   -----------     ------
+  'A'          U+0041 (65)         0x41            {0x41}
+  'e'          U+00E9 (233)        0xC3 0xA9       {0xC3, 0xA9}
+  'zh'         U+4E2D (20013)      0xE4 0xB8 0xAD  {0xE4, 0xB8, 0xAD}
+\end{verbatim}
+%
+ASCII characters (below 128) are identical in all three
+representations. Above that, a single rune expands to 2--4
+UTF-8 bytes.
 
 <<type [[Rune]]>>=
 typedef uint        Rune;
