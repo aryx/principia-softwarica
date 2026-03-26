@@ -745,7 +745,28 @@ address in R14).
 \item [[MOVM.IA.W]] --- move multiple registers
 (increment after, write back); used for fast block copies.
 \end{itemize}
+
+%claude:
+Note that the \plan assembler uses {\em virtual instructions}
+that do not correspond one-to-one with ARM machine
+instructions. The linker translates them into real ARM code.
+For example:
+\begin{itemize}
+\item [[MOVW]] is a generic ``move word''---the linker emits
+[[LDR]] (load from memory), [[STR]] (store to memory),
+[[MOV]] (register-to-register), or [[ADD]] depending on the
+operand types.
+\item [[RET]] is not a real ARM instruction---it is translated
+to \verb+MOV R14, R15+ (copy the link register to the
+program counter).
+\item [[CMP]] with a large constant may be expanded into
+a load from a {literal pool} plus a compare.
+\end{itemize}
 %
+This abstraction means the assembly code in this book reads
+more like pseudocode than raw ARM machine code. See
+\book{Linker} for how the translation works.
+
 ARM instructions can have suffixes that modify their behavior:
 \begin{itemize}
 \item {\em Conditional suffixes}: \verb+.EQ+, \verb+.LT+,
@@ -789,8 +810,10 @@ instruction encoding constraint: load/store instructions
 only support a 12-bit offset ($\sim$4096 bytes). Without
 a base register, accessing a global variable would require
 a multi-instruction sequence to build a full 32-bit address.
-With [[R12]] holding [[INITDAT]], each global access is a
-single instruction: \verb+LDR offset(R12), R1+. This also
+With [[R12]] holding [[INITDAT]], each global access is
+written as \verb+MOVW foo(SB), R1+ in the assembly source,
+and the linker translates it to a single ARM [[LDR]]
+instruction using [[R12]] as the base register. This also
 helps the linker compute instruction sizes during layout,
 since all global references have a predictable encoding
 (see \book{Linker}).
@@ -810,7 +833,7 @@ This is similar to how the linker defines [[etext]],
 [[edata]], and [[end]]---symbols whose addresses mark the
 boundaries between text, data, and BSS. C programs can
 reference these as \verb+extern char end[]+ to find where
-the heap starts (used by [[sbrk]] in
+the heap starts (used by [<sbrk()>] in
 Chapter~\ref{chap:malloc}).
 
 %claude:
@@ -2301,6 +2324,8 @@ counts), and the [[Prof]] structure for profiling data.
 The kernel passes its address in [[R0]].
 See \book{Kernel} for the full definition.
 
+%yoann: transition paragraph say now mostly ready to show ARM code of _main
+
 <<libc/arm/main9.s>>=
 <<constant NPRIVATES(arm)>>
 <<constant NOPROF(arm)>>
@@ -2367,17 +2392,20 @@ kernel's stack layout (accessed via [[FP]]) into the
 positions expected by the C calling convention for calling
 [[main(int argc, char **argv)]]:
 \begin{verbatim}
+  High addresses
   Kernel's layout:                _main's frame (for calling main):
+  +------------------+
+  | argv strings     |
   +------------------+            +------------------+
-  | argv pointers    |            |                  |
+  | argv ptrs (FP+0) |  -------> | &argv   8(R(sp)) |
   +------------------+            +------------------+
-  | argc  (at FP-4)  |  -------> | argc   at 4(SP)  |
-  +------------------+            +------------------+
-  | argv  (at FP+0)  |  -------> | &argv  at 8(SP)  |
+  | argc      (FP-4) |  -------> | argc    4(R(sp)) |
   +------------------+            +------------------+
                                   | (privates)       |
-                                  +------------------+ <-- SP
+                                  +------------------+ <-- R13
+  Low addresses
 \end{verbatim}
+
 %
 The adjustment is needed because [[_main]]'s [[TEXT]]
 directive allocated a new stack frame (for the private
