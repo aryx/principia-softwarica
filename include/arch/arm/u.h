@@ -6,14 +6,12 @@ typedef unsigned char   uchar;
 typedef unsigned long   ulong;
 typedef unsigned int    uint;
 /*e: type [[uxxx]] */
-
 /*s: type [[uxxxint]] */
 typedef unsigned char u8int;
 typedef unsigned short u16int;
 typedef unsigned int    u32int;
 typedef unsigned long long u64int;
 /*e: type [[uxxxint]] */
-
 /*s: type [[xxxvlong]] */
 typedef long long   vlong;
 typedef unsigned long long uvlong;
@@ -105,5 +103,4 @@ typedef char*   va_list;
         ((list += 4), (mode*)list)[-2]:\
         ((list += sizeof(mode)), (mode*)list)[-1])
 /*e: macro [[va_arg]] */
-
 /*e: include/arch/arm/u.h */
