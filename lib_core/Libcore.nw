@@ -594,6 +594,8 @@ conventional roles:
 \begin{verbatim}
   R0          first argument / return value
   R1-R7       general purpose / scratch
+  R8-R10      may be used for extern registers (see below)
+  R11         reserved by linker (REGTMP, for instruction expansion)
   R12         SB (static base) — reserved for global data access
   R13         SP (hardware stack pointer)
   R14         LR (link register — return address)
@@ -603,46 +605,118 @@ conventional roles:
 Assembly files often define aliases for readability:
 \verb+arg=0+, \verb+sp=13+, \verb+sb=12+, so that
 \verb+R(sp)+ means R13 and \verb+R(arg)+ means R0.
+%
+The \plan C compiler supports ``extern register'' variables
+that permanently occupy a high register (R8--R10). The kernel
+uses this for the [[up]] pointer (the current process),
+avoiding a memory load on every access. When extern registers
+are in use, those registers are unavailable for the compiler's
+register allocator.
 
 \subsection{Pseudo-registers}
 
 %claude:
-The \plan assembler introduces three {pseudo-registers} that
-do not correspond to hardware registers---the assembler and
-linker resolve them to actual addresses:
+The \plan assembler introduces three {pseudo-registers}.
+They are called ``pseudo'' because the programmer uses them
+as abstract names, and the assembler/linker resolves them
+to offsets from real hardware registers ([[SB]] maps to
+[[R12]], [[FP]] and [[SP]] map to [[R13]]):
+
 \begin{itemize}
 \item [[SB]] (static base): used to reference global variables.
-\verb+_tos(SB)+ means ``the global variable [[_tos]]''. The
-linker resolves this to an offset from [[R12]].
+The name follows the ARM addressing notation
+\verb+offset(base)+: just as \verb+4(R13)+ means ``the
+word at R13~+~4,'' \verb+_tos(SB)+ means ``the word at
+SB~+~the offset of [[_tos]].'' It is ``static'' because
+global data does not move at runtime (unlike the stack),
+and ``base'' because it is the base address from which all
+globals are reached. The linker resolves [[SB]] to [[R12]].
+
 \item [[FP]] (frame pointer): used to reference the {\em
-caller's} arguments. \verb!x+4(FP)! means ``the second
-argument passed to this function''. The assembler resolves
-this to an offset from [[R13]] based on the frame size.
-\item [[SP]] (pseudo): used to reference the current
-function's {\em local} storage. Not to be confused with
-\verb+R(sp)+ which is the actual hardware R13.
+caller's} arguments. \verb+4(FP)+ means ``the second
+argument passed to this function.'' Offsets go by~4 because
+each 32-bit word occupies 4~bytes: the first argument
+is at \verb+0(FP)+, the second at \verb+4(FP)+, the third
+at \verb+8(FP)+. The assembler resolves [[FP]]
+references to offsets from [[R13]] based on the frame size.
+
+\item [[SP]] (pseudo stack pointer): used to reference the
+current function's {\em local} storage. Not to be confused
+with \verb+R(sp)+ (or equivalently [[R13]]) which is the
+actual hardware stack pointer. In practice they point to the
+same place, but \verb+4(SP)+ is resolved by the assembler
+while \verb+4(R(sp))+ is a raw hardware addressing mode.
 \end{itemize}
 %
-A typical stack frame looks like:
+A typical stack frame for a function with two arguments
+and two local variables looks like:
 \begin{verbatim}
   High addresses
   +------------------+
-  | arg 2            |  8(FP)   -- caller's arguments
+  | arg 2            |  4(FP)   -- caller's arguments
   +------------------+
-  | arg 1            |  4(FP)
+  | arg 1 (or empty) |  0(FP)   -- may be in R0 instead
   +------------------+
-  | return address   |
+  | return address   |           -- saved by BL
   +------------------+
-  | local 2          |  8(SP)   -- current function's locals
+  | local 2          |  4(SP)   -- current function's locals
   +------------------+
-  | local 1          |  4(SP)
+  | local 1          |  0(SP)
   +------------------+  <-- R13 (hardware stack pointer)
   Low addresses
 \end{verbatim}
 
-\subsection{Key directives}
+%claude:
+For a concrete example, consider:
+\begin{verbatim}
+  int bar(int a, int b) {
+      int tmp = a + b;
+      return tmp;
+  }
+\end{verbatim}
+%
+When [[foo]] calls \verb+bar(10, 20)+, the stack looks like:
+\begin{verbatim}
+  +----------+
+  | 20       |  b+4(FP)        second arg, on stack
+  +----------+
+  |          |  a+0(FP)        empty (reserved for first arg)
+  +----------+
+  | ret addr |                  saved by BL instruction
+  +----------+
+  | tmp      |  tmp+0(SP)      local variable
+  +----------+  <-- R13
+
+  R0 = 10    (first argument, passed in register)
+\end{verbatim}
+%
+Note that the names before the offsets ([[a]], [[b]], [[tmp]])
+are for documentation and the debugger's symbol table only---the
+assembler ignores them. What matters is the numeric offset.
+The assembler converts pseudo-register references to concrete
+[[R13]] offsets. For [[bar]], with a frame size of~4 (one
+local), the conversion is:
+\begin{verbatim}
+  Pseudo-register       Concrete (R13-relative)
+  ---------------       -----------------------
+  tmp+0(SP)       -->   0(R13)           local
+  (return addr)         4(R13)
+  a+0(FP)         -->   8(R13)           first arg
+  b+4(FP)         -->   12(R13)          second arg
+\end{verbatim}
+
+\subsection{Key directives and notations}
 
 %claude:
+An important notational convention: the [[\$]] prefix means
+``the address of'' or ``an immediate constant.'' So
+\verb+MOVW foo(SB), R1+ loads the {\em contents} of global
+[[foo]] into [[R1]], while \verb+MOVW $foo(SB), R1+ loads
+the {\em address} of [[foo]] into [[R1]]. Similarly,
+\verb+MOVW $42, R1+ loads the constant~42.
+
+%claude:
+Key assembler directives:
 \begin{itemize}
 \item \verb+TEXT name(SB), flags, $framesize+ --- declares a
 function. The [[framesize]] is how much stack space to
@@ -657,6 +731,27 @@ address in R14).
 \item [[SWI $0]] --- software interrupt (system call trap).
 \item [[MOVM.IA.W]] --- move multiple registers
 (increment after, write back); used for fast block copies.
+\end{itemize}
+%
+ARM instructions can have suffixes that modify their behavior:
+\begin{itemize}
+\item {\em Conditional suffixes}: \verb+.EQ+, \verb+.LT+,
+\verb+.GT+, \verb+.HS+ (higher or same), etc. The
+instruction executes only if the condition flags match. For
+example, \verb+BEQ label+ branches only if the previous
+comparison was equal. This avoids short branches and is
+used extensively in the assembly code.
+\item {\em Post-increment}: \verb+.P+ (or \verb+.W+ for
+write-back). \verb+MOVBU.P 1(R1), R2+ loads a byte from
+[[R1]] and then increments [[R1]] by~1. This combines a
+load and a pointer advance in a single instruction, making
+byte-at-a-time loops more compact.
+\item {\em Byte/halfword}: \verb+.B+ or \verb+.BU+ for
+byte access ([[U]] = unsigned). \verb+MOVBU+ loads a single
+unsigned byte.
+\item {\em Set flags}: \verb+.S+ makes an arithmetic
+instruction set the condition flags. \verb+AND.S+ performs
+a bitwise AND and sets the zero flag.
 \end{itemize}
 
 \subsection{The static base ([[SB]]) and [[setR12]]}
@@ -675,33 +770,54 @@ how a \plan program is laid out in memory:
   +------------------+  <-- entry point
 \end{verbatim}
 %
-The data section comes {\em after} the text section, and its
-address ([[INITDAT]]) depends on the total size of the
-text---which is only known after linking. The \plan solution
-is to encode all global accesses as offsets from [[R12]],
-and initialize [[R12]] at program startup.
+The data section comes {\em after} the text section.
+The reason for using a dedicated register is an ARM
+instruction encoding constraint: load/store instructions
+only support a 12-bit offset ($\sim$4096 bytes). Without
+a base register, accessing a global variable would require
+a multi-instruction sequence to build a full 32-bit address.
+With [[R12]] holding [[INITDAT]], each global access is a
+single instruction: \verb+LDR offset(R12), R1+. This also
+helps the linker compute instruction sizes during layout,
+since all global references have a predictable encoding
+(see \book{Linker}).
+
+%claude:
+But how does the running program learn the value of
+[[INITDAT]]? The linker knows it, but there is no general
+mechanism to pass a constant from the linker to the program.
+The trick is a form of {introspection}: the linker creates
+a symbol called [[setR12]] at offset~0 in the data section,
+so the {\em address} of [[setR12]] equals [[INITDAT]].
+The instruction \verb+MOVW $setR12(SB), R12+ means ``load
+the address of [[setR12]] into [[R12]]'' (recall that
+[[\$]] means ``address of'')---and that address {\em is}
+[[INITDAT]].
 %
-But this creates a chicken-and-egg problem: the very first
-instruction \verb+MOVW $setR12(SB), R12+ needs to load
-[[INITDAT]] into [[R12]]---but that instruction itself uses
-an [[SB]] reference, which needs [[R12]] to already be set!
-The linker handles this as a special case: instead of
-generating an [[R12]]-relative load, it emits an absolute
-load with the [[INITDAT]] value hard-coded into the
-instruction. [[setR12]] is not a real function---it is a
-special symbol whose address {\em is} [[INITDAT]].
-After this bootstrap, all \verb+xxx(SB)+ references work.
-See \book{Linker} for the full mechanism.
+There is still a bootstrap problem: this instruction uses
+an [[SB]] reference, but [[R12]] is not yet set. The linker
+recognizes this specific instruction and emits an absolute
+load (e.g., \verb+MOV $0x7000, R12+) with [[INITDAT]]
+hard-coded, bypassing the normal [[R12]]-relative encoding.
+After this bootstrap (which we will see in [[_main]] in
+Chapter~\ref{chap:main}), all \verb+xxx(SB)+ references
+work. See \book{Linker} for the full details.
 
 \subsection{Calling conventions}
 
 %claude:
 The \plan C calling convention on ARM passes the first
 argument in [[R0]] and the remaining arguments on the
-stack. The return value comes back in [[R0]]. The caller
-reserves space on the stack for {\em all} arguments,
-including the first one---even though it is passed in
-[[R0]]. This leaves an empty slot at \verb+0(FP)+ that
+stack. The return value comes back in [[R0]]. All
+registers are {caller-saved}: a called function may
+freely overwrite any register, so the caller must save
+to the stack any register value it needs after the call.
+There are no callee-saved registers (unlike the standard
+ARM AAPCS convention which preserves R4--R11).
+%
+The caller also reserves space on the stack for {\em all}
+arguments, including the first one---even though it is
+passed in [[R0]]. This leaves an empty slot at \verb+0(FP)+ that
 many functions use to save [[R0]] early on (freeing it
 for other uses):
 \begin{verbatim}
@@ -722,7 +838,10 @@ The callee typically starts with \verb+MOVW R0, 0(FP)+
 to save the first argument into its reserved slot, so
 that all arguments are on the stack in a uniform layout.
 This is why the syscall stubs (Chapter~\ref{chap:user-kernel})
-and [[_main]] both begin with this instruction.
+begin with this instruction. ([[_main]] is a special case:
+[[R0]] holds the [[Tos]] pointer from the kernel, not a
+normal first argument, so it saves [[R0]] to [[_tos(SB)]]
+instead---see Chapter~\ref{chap:main}.)
 
 %claude:
 System calls use a different convention: the syscall number
@@ -2010,7 +2129,7 @@ number, and emits the corresponding assembly file.
 This is a nice example of {code generation}: 40 files
 produced from a 40-line header.
 
-\section{The calling convention (ARM)}
+\section{The calling conventions (ARM)}
 
 %claude:
 The C calling convention (described in
