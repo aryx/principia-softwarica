@@ -479,9 +479,10 @@ foundation that all \plan programs share: [[libc]] itself,
 plus [[libbio]] (buffered I/O), [[libthread]] (cooperative
 threads and channels), [[libregexp]] (regular expressions),
 and [[libflate]] (compression). Together they form the
-common runtime that programs are built on. The graphical libraries ([[libdraw]], [[libmemdraw]])
-are covered in \book{Graphics} and the widget toolkit
-([[libpanel]]) in \book{Widgets}.
+common runtime that programs are built on. The graphical
+libraries ([[libdraw]], [[libmemdraw]]) are covered in
+\book{Graphics} and the widget toolkit ([[libpanel]]) in
+\book{Widgets}.
 
 \subsection{User/kernel bridge, system calls}
 
@@ -1931,10 +1932,12 @@ could in principle be ported to \plan.
 % FIGURE copy one in Principia.nw?
 
 %claude:
-System calls are the boundary between user space and the kernel.
+With the core types defined, we now turn to how the library
+communicates with the kernel. System calls are the boundary
+between user space and the kernel.
 In this chapter I present the \plan syscall table, the assembly
-stubs that invoke them, and the calling convention that ties
-everything together. The kernel side of this bridge is covered
+stubs that invoke them, and how the C and kernel calling
+conventions differ. The kernel side of this bridge is covered
 in the \book{Kernel}.
 
 \section{The syscall table}
@@ -2010,7 +2013,23 @@ produced from a 40-line header.
 \section{The calling convention (ARM)}
 
 %claude:
-The full path of a system call looks like this:
+The C calling convention (described in
+Section~\ref{sec:asm-crash-course}) passes the first argument
+in [[R0]] and the rest on the stack. But the kernel expects
+a {\em different} convention: the syscall number in [[R0]],
+and {\em all} arguments on the stack (including the first).
+The assembly stub bridges these two conventions:
+\begin{verbatim}
+  C convention:             Stub transforms:        Kernel sees:
+  +----------+              +----------+             +----------+
+  | arg2     | 4(FP)        | arg2     | 4(FP)       | arg2     |
+  +----------+              +----------+             +----------+
+  | (empty)  | 0(FP)  -->   | arg1     | 0(FP)  -->  | arg1     |
+  +----------+              +----------+             +----------+
+  R0 = arg1                 R0 = syscall#            R0 = syscall#
+\end{verbatim}
+%
+The full path of a system call then looks like this:
 \begin{verbatim}
   User C code           Library               Kernel
   -----------           -------               ------
@@ -2018,10 +2037,8 @@ The full path of a system call looks like this:
                      <-- return fd       <-- return fd
 \end{verbatim}
 %
-The calling convention is described in
-Section~\ref{sec:asm-crash-course}. The kernel's
-trap handler saves the user registers, reads the syscall
-number from [[R0]], indexes into the [[systab]]
+The kernel's trap handler saves the user registers, reads
+the syscall number from [[R0]], indexes into the [[systab]]
 dispatch table (see \book{Kernel}), and calls the
 corresponding [[sysxxx()]] function. On return, the
 result is placed in [[R0]] and the kernel restores
@@ -2103,7 +2120,11 @@ to the [[Tos]] structure (shared between user and kernel, used
 for profiling and the pid) and places [[argc]] and [[argv]]
 on the stack. The layout before [[_main]] runs:
 \begin{verbatim}
-  High addresses
+  Top of stack segment
+  +------------------+
+  | Tos              |  pid, clock, kcycles, pcycles, Prof
+  +------------------+  <-- R0 points here
+  |   (gap)          |
   +------------------+
   | argv strings     |  "arg0\0arg1\0..."
   +------------------+
@@ -2114,31 +2135,16 @@ on the stack. The layout before [[_main]] runs:
   | argc             |  number of arguments
   +------------------+  <-- SP (stack pointer)
   Low addresses
-
-  R0 = pointer to Tos structure (see below)
 \end{verbatim}
 %
-The name [[Tos]] stands for ``top of stack''---it is a
-structure that the kernel places at the very top of the
-user stack segment, {\em above} the stack itself (not on
-the stack). It is shared between user and kernel and
-contains fields like [[pid]] (process ID), [[clock]]
-(cycle counter for profiling), [[kcycles]]/[[pcycles]]
-(kernel/user cycle counts), and the [[Prof]] structure
-for profiling data. See \book{Kernel} for the full
-definition.
-\begin{verbatim}
-  Top of stack segment
-  +------------------+
-  | Tos              |  pid, clock, kcycles, pcycles, Prof
-  +------------------+  <-- R0 points here
-  |   (gap)          |
-  +------------------+
-  | argv strings     |
-  | argv pointers    |
-  | argc             |
-  +------------------+  <-- SP
-\end{verbatim}
+The [[Tos]] (``top of stack'') structure sits at the very
+top of the user stack segment, {\em above} the stack itself.
+It is shared between user and kernel and contains fields
+like [[pid]] (process ID), [[clock]] (cycle counter for
+profiling), [[kcycles]]/[[pcycles]] (kernel/user cycle
+counts), and the [[Prof]] structure for profiling data.
+The kernel passes its address in [[R0]].
+See \book{Kernel} for the full definition.
 
 <<libc/arm/main9.s>>=
 <<constant NPRIVATES(arm)>>
