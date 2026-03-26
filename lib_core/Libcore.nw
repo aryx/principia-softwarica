@@ -576,6 +576,162 @@ to learn, one place to look things up, and fast compilation
 (no redundant header processing).
 
 
+\section{Crash course: \plan ARM assembly}
+\label{sec:asm-crash-course}
+
+%claude:
+Several chapters in this book include ARM assembly code.
+This section summarizes the key conventions of the \plan
+assembler (see \book{Assembler} and \book{Linker} for the
+full details).
+
+\subsection{Registers}
+
+%claude:
+ARM has 16 registers, [[R0]] through [[R15]]. Some have
+conventional roles:
+\begin{verbatim}
+  R0          first argument / return value
+  R1-R7       general purpose / scratch
+  R12         SB (static base) — reserved for global data access
+  R13         SP (hardware stack pointer)
+  R14         LR (link register — return address)
+  R15         PC (program counter)
+\end{verbatim}
+%
+Assembly files often define aliases for readability:
+\verb+arg=0+, \verb+sp=13+, \verb+sb=12+, so that
+\verb+R(sp)+ means R13 and \verb+R(arg)+ means R0.
+
+\subsection{Pseudo-registers}
+
+%claude:
+The \plan assembler introduces three {pseudo-registers} that
+do not correspond to hardware registers---the assembler and
+linker resolve them to actual addresses:
+\begin{itemize}
+\item [[SB]] (static base): used to reference global variables.
+\verb+_tos(SB)+ means ``the global variable [[_tos]]''. The
+linker resolves this to an offset from [[R12]].
+\item [[FP]] (frame pointer): used to reference the {\em
+caller's} arguments. \verb!x+4(FP)! means ``the second
+argument passed to this function''. The assembler resolves
+this to an offset from [[R13]] based on the frame size.
+\item [[SP]] (pseudo): used to reference the current
+function's {\em local} storage. Not to be confused with
+\verb+R(sp)+ which is the actual hardware R13.
+\end{itemize}
+%
+A typical stack frame looks like:
+\begin{verbatim}
+  High addresses
+  +------------------+
+  | arg 2            |  8(FP)   -- caller's arguments
+  +------------------+
+  | arg 1            |  4(FP)
+  +------------------+
+  | return address   |
+  +------------------+
+  | local 2          |  8(SP)   -- current function's locals
+  +------------------+
+  | local 1          |  4(SP)
+  +------------------+  <-- R13 (hardware stack pointer)
+  Low addresses
+\end{verbatim}
+
+\subsection{Key directives}
+
+%claude:
+\begin{itemize}
+\item \verb+TEXT name(SB), flags, $framesize+ --- declares a
+function. The [[framesize]] is how much stack space to
+reserve for locals (the assembler adjusts R13 on entry).
+\item \verb!DATA sym+offset(SB)/size, $value! --- defines
+initialized global data.
+\item \verb!GLOBL sym+0(SB), $size! --- declares the total
+size of a global symbol.
+\item [[BL]] --- branch and link (function call; saves return
+address in R14).
+\item [[RET]] --- return (branches to R14).
+\item [[SWI $0]] --- software interrupt (system call trap).
+\item [[MOVM.IA.W]] --- move multiple registers
+(increment after, write back); used for fast block copies.
+\end{itemize}
+
+\subsection{The static base ([[SB]]) and [[setR12]]}
+
+%claude:
+Global variables are accessed as offsets from [[R12]]
+(the static base register). To understand why, consider
+how a \plan program is laid out in memory:
+\begin{verbatim}
+  +------------------+
+  | BSS (zeroed)     |  uninitialized globals
+  +------------------+
+  | Data             |  initialized globals ("hello", tables)
+  +------------------+  <-- SB (= R12) points here = INITDAT
+  | Text             |  machine code
+  +------------------+  <-- entry point
+\end{verbatim}
+%
+The data section comes {\em after} the text section, and its
+address ([[INITDAT]]) depends on the total size of the
+text---which is only known after linking. The \plan solution
+is to encode all global accesses as offsets from [[R12]],
+and initialize [[R12]] at program startup.
+%
+But this creates a chicken-and-egg problem: the very first
+instruction \verb+MOVW $setR12(SB), R12+ needs to load
+[[INITDAT]] into [[R12]]---but that instruction itself uses
+an [[SB]] reference, which needs [[R12]] to already be set!
+The linker handles this as a special case: instead of
+generating an [[R12]]-relative load, it emits an absolute
+load with the [[INITDAT]] value hard-coded into the
+instruction. [[setR12]] is not a real function---it is a
+special symbol whose address {\em is} [[INITDAT]].
+After this bootstrap, all \verb+xxx(SB)+ references work.
+See \book{Linker} for the full mechanism.
+
+\subsection{Calling conventions}
+
+%claude:
+The \plan C calling convention on ARM passes the first
+argument in [[R0]] and the remaining arguments on the
+stack. The return value comes back in [[R0]]. The caller
+reserves space on the stack for {\em all} arguments,
+including the first one---even though it is passed in
+[[R0]]. This leaves an empty slot at \verb+0(FP)+ that
+many functions use to save [[R0]] early on (freeing it
+for other uses):
+\begin{verbatim}
+  Caller's stack frame for f(a, b, c):
+
+  +------------------+
+  | c                |  8(FP)   -- third arg (on stack)
+  +------------------+
+  | b                |  4(FP)   -- second arg (on stack)
+  +------------------+
+  | a (empty slot)   |  0(FP)   -- reserved but not filled
+  +------------------+              (a is in R0 instead)
+  | return address   |
+  +------------------+
+\end{verbatim}
+%
+The callee typically starts with \verb+MOVW R0, 0(FP)+
+to save the first argument into its reserved slot, so
+that all arguments are on the stack in a uniform layout.
+This is why the syscall stubs (Chapter~\ref{chap:user-kernel})
+and [[_main]] both begin with this instruction.
+
+%claude:
+System calls use a different convention: the syscall number
+replaces the first argument in [[R0]], and [[SWI $0]] traps
+into the kernel. The kernel reads all arguments from the
+user's stack frame (including the first, which the stub
+saved to \verb+0(FP)+ before overwriting [[R0]] with the
+syscall number). See Chapter~\ref{chap:user-kernel} for
+details.
+
 \section{Code organization}
 
 % lib_core/libc/9sys/sys.h (part of Kernel.nw)
@@ -1284,7 +1440,7 @@ do arithmetic on addresses. You cannot do arbitrary arithmetic
 on C pointers directly (e.g., masking the low bits for
 alignment, or XOR-ing two pointers for a hash); you must
 cast to [[uintptr]] first. For example, [[qsort]] checks
-alignment with \verb+((uintptr)va + es) % sizeof(long)+
+alignment with \verb!((uintptr)va + es) % sizeof(long)!
 to decide whether to use word-sized or byte-sized swaps.
 
 <<type [[uintptr]]>>=
@@ -1839,12 +1995,10 @@ For example, here is what [[open.s]] looks like on ARM:
   RET
 \end{verbatim}
 %
-Every stub follows the same pattern: save the first
-argument (which arrived in [[R0]]) onto the stack frame,
-load the syscall number into [[R0]], execute a software
-interrupt ([[SWI $0]]), and return. The kernel reads the
-arguments from the user's stack frame, and the return
-value comes back in [[R0]].
+Every stub follows the same pattern (see
+Section~\ref{sec:asm-crash-course}): save [[R0]] to its
+reserved slot at \verb+0(FP)+, load the syscall number
+into [[R0]], execute [[SWI $0]], and return.
 %
 These stubs are not written by hand---they are
 {\em generated} by the [[mkfile]] in [[9syscall/]],
@@ -1864,8 +2018,8 @@ The full path of a system call looks like this:
                      <-- return fd       <-- return fd
 \end{verbatim}
 %
-Arguments are passed on the stack using the standard \plan
-C calling convention (see \book{Compiler}). The kernel's
+The calling convention is described in
+Section~\ref{sec:asm-crash-course}. The kernel's
 trap handler saves the user registers, reads the syscall
 number from [[R0]], indexes into the [[systab]]
 dispatch table (see \book{Kernel}), and calls the
@@ -1879,26 +2033,6 @@ This is different from \unix, where [[errno]] is a global
 variable set by the C library---in \plan, the kernel itself
 sets the error string, and the [[%r]] format verb in
 [[print]] reads it directly.
-
-%yoann: maybe ASCII diagram showing C calling conventions and Kernel convention with Stack layout and special weird opti about R0 instead of in stack for first param
-%claude:
-There is a subtlety in the ARM stubs: the \plan C calling
-convention passes the first argument in [[R0]], but the
-kernel expects all arguments on the stack. So the stub's
-first instruction (\verb+MOVW R0, 0(FP)+) saves [[R0]]
-back onto the stack frame before loading the syscall number
-into [[R0]]. The stack layout during a syscall like
-\verb+open("foo", OREAD)+ looks like:
-\begin{verbatim}
-  +----------+
-  | OREAD    |  4(FP) - second arg
-  +----------+
-  | "foo"    |  0(FP) - first arg (saved from R0)
-  +----------+
-  | ret addr |
-  +----------+
-        R0 = 6 (OPEN)    <- syscall number
-\end{verbatim}
 
 \section{Comparison with \unix}
 
@@ -1953,26 +2087,62 @@ termination.
 
 %yoann: explain assembly, and especially weird SB thing (reference Linker book?)
 %claude:
-The C runtime entry point is written in assembly because it
-must set up the environment before any C code can run.
-The [[SB]] (static base) pseudo-register is a \plan convention:
-it points to the beginning of the program's global data, and
-all global variable accesses go through it (e.g.,
-\verb+_tos(SB)+). The linker resolves [[SB]] references to
-actual addresses (see \book{Linker}).
+The C runtime entry point must be written in assembly because
+it sets up things that C code takes for granted: the static
+base register (needed to access any global variable), the
+stack frame (needed for local variables and function calls),
+and the [[argc]]/[[argv]] arguments (which the kernel places
+in a raw format that must be reformatted for C). On \unix,
+the equivalent code ([[crt0]]) also initializes the dynamic
+linker, thread-local storage, and C++ constructors---\plan
+is simpler but the same principle applies.
+
+%claude:
+When the kernel starts a new process, it sets [[R0]] to point
+to the [[Tos]] structure (shared between user and kernel, used
+for profiling and the pid) and places [[argc]] and [[argv]]
+on the stack. The layout before [[_main]] runs:
+\begin{verbatim}
+  High addresses
+  +------------------+
+  | argv strings     |  "arg0\0arg1\0..."
+  +------------------+
+  | argv[N] = nil    |
+  | ...              |
+  | argv[0]          |  pointers to the strings above
+  +------------------+
+  | argc             |  number of arguments
+  +------------------+  <-- SP (stack pointer)
+  Low addresses
+
+  R0 = pointer to Tos structure (see below)
+\end{verbatim}
 %
-The code first initializes [[R12]] (the static base register)
-via [[setR12]], saves the [[_tos]] pointer (the ``top of
-stack'' structure shared with the kernel, used for profiling
-and pid), sets up per-process private storage, then copies
-[[argc]] and [[argv]] from the kernel-provided stack frame
-onto the C stack and calls [[main()]]. If [[main]] returns,
-[[_main]] calls [[exits("main")]] in a loop.
+The name [[Tos]] stands for ``top of stack''---it is a
+structure that the kernel places at the very top of the
+user stack segment, {\em above} the stack itself (not on
+the stack). It is shared between user and kernel and
+contains fields like [[pid]] (process ID), [[clock]]
+(cycle counter for profiling), [[kcycles]]/[[pcycles]]
+(kernel/user cycle counts), and the [[Prof]] structure
+for profiling data. See \book{Kernel} for the full
+definition.
+\begin{verbatim}
+  Top of stack segment
+  +------------------+
+  | Tos              |  pid, clock, kcycles, pcycles, Prof
+  +------------------+  <-- R0 points here
+  |   (gap)          |
+  +------------------+
+  | argv strings     |
+  | argv pointers    |
+  | argc             |
+  +------------------+  <-- SP
+\end{verbatim}
 
 <<libc/arm/main9.s>>=
-#define NPRIVATES       16
-#define NOPROF 1 // see 5.out.h        
-
+<<constant NPRIVATES(arm)>>
+<<constant NOPROF(arm)>>
 arg=0
 sp=13
 sb=12
@@ -1981,30 +2151,109 @@ TEXT    _main(SB), NOPROF, $(16 + NPRIVATES*4)
         MOVW    $setR12(SB), R(sb)
         MOVW    R(arg), _tos(SB)
 
-        MOVW    $p-64(SP), R1
-        MOVW    R1, _privates(SB)
-        MOVW    $NPRIVATES, R1
-        MOVW    R1, _nprivates(SB)
+        <<[[_main()]](arm) setup private storage>>
 
         MOVW    $inargv+0(FP), R(arg)
         MOVW    R(arg), 8(R(sp))
         MOVW    inargc-4(FP), R(arg)
         MOVW    R(arg), 4(R(sp))
 
-    // user main()
+        // user main()
         BL      main(SB)
 
 loop:
-        MOVW    $_exitstr<>(SB), R(arg)
-        MOVW    R(arg), 4(R(sp))
-        BL      exits(SB)
-    // unreachable
-    // force loading of div?
-        BL      _div(SB) 
-        B       loop
+        <<[[_main()]](arm) exit (if not done by main)>>
 
+<<[[_main()]](arm) [[_exitstr]] defintion>>
+@
+
+%claude:
+The first instruction initializes [[R12]] via the
+[[setR12]] bootstrap described in
+Section~\ref{sec:asm-crash-course}. Until this executes,
+no global variable can be accessed.
+%
+The second instruction saves the [[Tos]] pointer (passed
+by the kernel in [[R0]]) to the global [[_tos]] (declared
+in [[libc.h]] as \verb+extern Tos *_tos+). This works
+because [[R12]] was just initialized.
+
+%yoann: say where is this _tos global? declared where?
+
+%claude:
+The private storage area is carved from the stack frame
+(the \verb!$(16 + NPRIVATES*4)! in the [[TEXT]] directive
+reserves space). [[_privates]] and [[_nprivates]] are globals
+used by [[privalloc()]] to implement per-process private data
+(see Chapter~\ref{chap:threads}).
+
+<<[[_main()]](arm) setup private storage>>=
+MOVW    $p-64(SP), R1
+MOVW    R1, _privates(SB)
+MOVW    $NPRIVATES, R1
+MOVW    R1, _nprivates(SB)
+@
+
+<<constant NPRIVATES(arm)>>=
+#define NPRIVATES       16
+@
+
+%claude:
+Next (using the register aliases and pseudo-registers
+described in Section~\ref{sec:asm-crash-course}),
+[[_main]] copies [[argc]] and [[argv]] from the
+kernel's stack layout (accessed via [[FP]]) into the
+positions expected by the C calling convention for calling
+[[main(int argc, char **argv)]]:
+\begin{verbatim}
+  Kernel's layout:                _main's frame (for calling main):
+  +------------------+            +------------------+
+  | argv pointers    |            |                  |
+  +------------------+            +------------------+
+  | argc  (at FP-4)  |  -------> | argc   at 4(SP)  |
+  +------------------+            +------------------+
+  | argv  (at FP+0)  |  -------> | &argv  at 8(SP)  |
+  +------------------+            +------------------+
+                                  | (privates)       |
+                                  +------------------+ <-- SP
+\end{verbatim}
+%
+The adjustment is needed because [[_main]]'s [[TEXT]]
+directive allocated a new stack frame (for the private
+storage area), so [[SP]] has moved. The kernel placed
+[[argc]] and [[argv]] relative to its own stack setup;
+[[_main]] must copy them to where [[main()]] expects them.
+
+If [[main]] returns (instead of calling [[exits]]),
+[[_main]] calls \verb+exits("main")+ in a loop. The
+string \verb+"main"+ signals that the program ended by
+falling off the end of [[main]] rather than exiting
+explicitly.
+
+<<[[_main()]](arm) exit (if not done by main)>>=
+MOVW    $_exitstr<>(SB), R(arg)
+MOVW    R(arg), 4(R(sp))
+BL      exits(SB)
+// unreachable
+// force loading of div?
+BL      _div(SB)
+B       loop
+@
+
+%claude:
+The [[DATA]]/[[GLOBL]] directives define the exit string
+\verb+"main"+ as a global data symbol. The [[BL _div]]
+at the end is a linker trick: it forces the integer
+division routine to be linked in, since many programs
+need it but the linker might otherwise omit it.
+
+<<[[_main()]](arm) [[_exitstr]] defintion>>=
 DATA    _exitstr<>+0(SB)/4, $"main"
 GLOBL   _exitstr<>+0(SB), $5
+@
+
+<<constant NOPROF(arm)>>=
+#define NOPROF 1 // see 5.out.h
 @
 
 %yoann: maybe reference _main9p.s when enable profiling
