@@ -2194,13 +2194,37 @@ atexit(void (*f)(void))
 % But also many portable (slower) implem in libc/port/
 
 %claude:
-These functions operate on raw memory regions. The portable
-C implementations shown here are straightforward byte-at-a-time
-loops, but in practice the real implementations are hand-written
-in assembly (in [[libc/arm/]]) to move data in 32-bit or
-larger chunks for performance. [[memmove]] handles overlapping
-regions by detecting when the source overlaps the destination
-and copying backwards in that case.
+These functions operate on raw memory regions: filling,
+copying, comparing, and searching byte arrays. They are among
+the most frequently called functions in any C program---every
+[[malloc]], every string copy, every structure initialization
+goes through them.
+%
+Each function exists in two versions: a portable C
+implementation in [[port/]] (shown in this chapter) and an
+optimized ARM assembly version in [[arm/]] (shown in the
+appendix). The build system automatically selects which one
+to link: the [[mkfile]] in [[port/]] uses a [[reduce]]
+script that filters out any C file for which a \verb+.s+
+file exists in the architecture directory. So when building
+for ARM, [[arm/memset.s]] replaces [[port/memset.c]].
+The C versions are correct but slow (byte-at-a-time loops);
+the assembly versions operate on 32-bit words, roughly
+4$\times$ faster for large buffers.
+
+\section{Filling: [[memset()]]}
+
+%claude:
+[[memset]] fills [[n]] bytes starting at [[ap]] with the
+value [[c]]. It is used to zero-initialize structures
+(\verb+memset(&s, 0, sizeof s)+), clear buffers before use,
+and fill memory with a sentinel value for debugging
+(e.g., \verb+0xFE+ to detect uninitialized stack).
+\begin{verbatim}
+  Before:  [  ?  |  ?  |  ?  |  ?  |  ?  ]
+                                            memset(buf, 0, 5)
+  After:   [ 00  | 00  | 00  | 00  | 00  ]
+\end{verbatim}
 
 <<function [[memset]]>>=
 void*
@@ -2232,6 +2256,112 @@ truncates to a byte when storing. This means
 same result: every byte set to \verb+0xFF+. The parameter is
 [[int]] because passing 32-bit values is more efficient on
 most architectures than passing single bytes.
+%
+This byte-at-a-time loop is correct but slow. The ARM assembly
+version in [[libc/arm/memset.s]] fills 4~bytes at a time
+using word-sized stores, which is roughly 4$\times$ faster
+for large buffers.
+
+\section{[[memset()]] (ARM)}
+
+%claude:
+The ARM version of [[memset]] is dramatically faster than the
+C version for large buffers. The key optimizations are:
+\begin{itemize}
+\item The fill byte is replicated into all four bytes of a
+register (\verb+ORR R4<<8+ / \verb+ORR R4<<16+), so a
+single 32-bit store writes 4~bytes at once.
+\item The destination is aligned to a 4-byte boundary first
+(the \verb+_4align+ loop handles the leading 1--3 bytes).
+\item The inner loop (\verb+_f16loop+) uses
+\verb+MOVM.IA.W+ (``move multiple, increment after, write
+back'') to store 16~bytes per iteration---four registers
+at once.
+\item The tail handles the remaining 1--3 bytes individually.
+\end{itemize}
+
+<<libc/arm/memset.s>>=
+TO = 1
+TOE = 2
+N = 3
+TMP = 3					/* N and TMP don't overlap */
+
+TEXT memset(SB), $0
+	MOVW	R0, R(TO)
+	MOVW	data+4(FP), R(4)
+	MOVW	n+8(FP), R(N)
+
+	ADD	R(N), R(TO), R(TOE)	/* to end pointer */
+
+	CMP	$4, R(N)		/* need at least 4 bytes to copy */
+	BLT	_1tail
+
+	AND	$0xFF, R(4)
+	ORR	R(4)<<8, R(4)
+	ORR	R(4)<<16, R(4)		/* replicate to word */
+
+_4align:				/* align on 4 */
+	AND.S	$3, R(TO), R(TMP)
+	BEQ	_4aligned
+
+	MOVBU.P	R(4), 1(R(TO))		/* implicit write back */
+	B	_4align
+
+_4aligned:
+	SUB	$15, R(TOE), R(TMP)	/* do 16-byte chunks if possible */
+	CMP	R(TMP), R(TO)
+	BHS	_4tail
+
+	MOVW	R4, R5			/* replicate */
+	MOVW	R4, R6
+	MOVW	R4, R7
+
+_f16loop:
+	CMP	R(TMP), R(TO)
+	BHS	_4tail
+
+	MOVM.IA.W [R4-R7], (R(TO))
+	B	_f16loop
+
+_4tail:
+	SUB	$3, R(TOE), R(TMP)	/* do remaining words if possible */
+_4loop:
+	CMP	R(TMP), R(TO)
+	BHS	_1tail
+
+	MOVW.P	R(4), 4(R(TO))		/* implicit write back */
+	B	_4loop
+
+_1tail:
+	CMP	R(TO), R(TOE)
+	BEQ	_return
+
+	MOVBU.P	R(4), 1(R(TO))		/* implicit write back */
+	B	_1tail
+
+_return:
+	RET
+@
+
+\section{Copying: [[memcpy()]] and [[memmove()]]}
+
+%claude:
+[[memmove]] copies [[n]] bytes from [[a2]] to [[a1]]. It is
+used whenever raw data must be relocated: copying structures,
+shifting buffer contents, building packets. The key subtlety
+is handling {overlapping} regions:
+\begin{verbatim}
+  Non-overlapping (forward copy is safe):
+    src:  [A B C D E]
+    dst:          [. . . . .]     -->  [A B C D E]
+
+  Overlapping (forward copy would clobber):
+    [A B C D E . . .]
+        ^src    ^dst
+  Forward: dst[0]=src[0]=A, dst[1]=src[1]=B, dst[2]=src[2]= oops,
+           src[2] was already overwritten!
+  Solution: copy backwards from the end.
+\end{verbatim}
 
 <<function [[memcpy]]>>=
 void*
@@ -2274,11 +2404,274 @@ back:
 \t replace every call to memmove to memcpy!
 
 %claude:
+The overlap test \verb+(s2 < s1) && (s2+n > s1)+ checks
+whether the source extends into the destination---if so, it
+copies backwards to avoid clobbering. In all other cases
+(non-overlapping, or source after destination), forward copy
+is safe.
+%
 [[memcpy]] is simply an alias for [[memmove]]---both handle
 overlapping regions. In standard C, [[memcpy]] has undefined
 behavior on overlapping memory, but \plan makes the safe
 choice: there is only one implementation, and it always works
 correctly.
+
+\section{[[memmove()]] (ARM)}
+
+%claude:
+The ARM [[memmove]] is the most complex assembly routine in
+the library. It handles four cases:
+\begin{itemize}
+\item {\em Forward, aligned}: both source and destination are
+word-aligned. The inner loop (\verb+_f32loop+) copies
+32~bytes per iteration using two \verb+MOVM.IA.W+
+instructions (8~registers $\times$ 4~bytes).
+\item {\em Backward, aligned}: same, but using
+\verb+MOVM.DB.W+ (``decrement before'') to copy from the
+end.
+\item {\em Forward, unaligned}: the source is not
+word-aligned. The code aligns the source, then uses shifts
+and ORs to assemble aligned words from two consecutive
+source words (\verb+_fu8loop+).
+\item {\em Backward, unaligned}: same strategy in reverse
+(\verb+_bu8loop+).
+\end{itemize}
+%
+The direction (forward vs.\ backward) is chosen by comparing
+the source and destination pointers, exactly as in the C
+version. The unaligned cases are the most intricate: they
+read aligned words and use barrel-shifter operations
+([[<<R(LSHIFT)]], [[>>R(RSHIFT)]]) to extract the bytes
+that straddle word boundaries.
+%
+Note that [[memcmp]] and [[memchr]] have no ARM assembly
+versions---only the write-heavy functions ([[memset]],
+[[memmove]]) were deemed worth optimizing.
+
+<<libc/arm/memmove.s>>=
+TS = 0
+TE = 1
+FROM = 2
+N = 3
+TMP = 3					/* N and TMP don't overlap */
+TMP1 = 4
+
+TEXT memcpy(SB), $0
+	B	_memmove
+TEXT memmove(SB), $0
+_memmove:
+	MOVW	R(TS), to+0(FP)		/* need to save for return value */
+	MOVW	from+4(FP), R(FROM)
+	MOVW	n+8(FP), R(N)
+
+	ADD	R(N), R(TS), R(TE)	/* to end pointer */
+
+	CMP	R(FROM), R(TS)
+	BLS	_forward
+
+_back:
+	ADD	R(N), R(FROM)		/* from end pointer */
+	CMP	$4, R(N)		/* need at least 4 bytes to copy */
+	BLT	_b1tail
+
+_b4align:				/* align destination on 4 */
+	AND.S	$3, R(TE), R(TMP)
+	BEQ	_b4aligned
+
+	MOVBU.W	-1(R(FROM)), R(TMP)	/* pre-indexed */
+	MOVBU.W	R(TMP), -1(R(TE))	/* pre-indexed */
+	B	_b4align
+
+_b4aligned:				/* is source now aligned? */
+	AND.S	$3, R(FROM), R(TMP)
+	BNE	_bunaligned
+
+	ADD	$31, R(TS), R(TMP)	/* do 32-byte chunks if possible */
+_b32loop:
+	CMP	R(TMP), R(TE)
+	BLS	_b4tail
+
+	MOVM.DB.W (R(FROM)), [R4-R7]
+	MOVM.DB.W [R4-R7], (R(TE))
+	MOVM.DB.W (R(FROM)), [R4-R7]
+	MOVM.DB.W [R4-R7], (R(TE))
+	B	_b32loop
+
+_b4tail:				/* do remaining words if possible */
+	ADD	$3, R(TS), R(TMP)
+_b4loop:
+	CMP	R(TMP), R(TE)
+	BLS	_b1tail
+
+	MOVW.W	-4(R(FROM)), R(TMP1)	/* pre-indexed */
+	MOVW.W	R(TMP1), -4(R(TE))	/* pre-indexed */
+	B	_b4loop
+
+_b1tail:				/* remaining bytes */
+	CMP	R(TE), R(TS)
+	BEQ	_return
+
+	MOVBU.W	-1(R(FROM)), R(TMP)	/* pre-indexed */
+	MOVBU.W	R(TMP), -1(R(TE))	/* pre-indexed */
+	B	_b1tail
+
+_forward:
+	CMP	$4, R(N)		/* need at least 4 bytes to copy */
+	BLT	_f1tail
+
+_f4align:				/* align destination on 4 */
+	AND.S	$3, R(TS), R(TMP)
+	BEQ	_f4aligned
+
+	MOVBU.P	1(R(FROM)), R(TMP)	/* implicit write back */
+	MOVBU.P	R(TMP), 1(R(TS))	/* implicit write back */
+	B	_f4align
+
+_f4aligned:				/* is source now aligned? */
+	AND.S	$3, R(FROM), R(TMP)
+	BNE	_funaligned
+
+	SUB	$31, R(TE), R(TMP)	/* do 32-byte chunks if possible */
+_f32loop:
+	CMP	R(TMP), R(TS)
+	BHS	_f4tail
+
+	MOVM.IA.W (R(FROM)), [R4-R7] 
+	MOVM.IA.W [R4-R7], (R(TS))
+	MOVM.IA.W (R(FROM)), [R4-R7] 
+	MOVM.IA.W [R4-R7], (R(TS))
+	B	_f32loop
+
+_f4tail:
+	SUB	$3, R(TE), R(TMP)	/* do remaining words if possible */
+_f4loop:
+	CMP	R(TMP), R(TS)
+	BHS	_f1tail
+
+	MOVW.P	4(R(FROM)), R(TMP1)	/* implicit write back */
+	MOVW.P	R4, 4(R(TS))		/* implicit write back */
+	B	_f4loop
+
+_f1tail:
+	CMP	R(TS), R(TE)
+	BEQ	_return
+
+	MOVBU.P	1(R(FROM)), R(TMP)	/* implicit write back */
+	MOVBU.P	R(TMP), 1(R(TS))	/* implicit write back */
+	B	_f1tail
+
+_return:
+	MOVW	to+0(FP), R0
+	RET
+
+RSHIFT = 4
+LSHIFT = 5
+OFFSET = 11
+
+BR0 = 6
+BW0 = 7
+BR1 = 7
+BW1 = 8
+
+_bunaligned:
+	CMP	$2, R(TMP)		/* is R(TMP) < 2 ? */
+
+	MOVW.LT	$8, R(RSHIFT)		/* (R(n)<<24)|(R(n-1)>>8) */
+	MOVW.LT	$24, R(LSHIFT)
+	MOVW.LT	$1, R(OFFSET)
+
+	MOVW.EQ	$16, R(RSHIFT)		/* (R(n)<<16)|(R(n-1)>>16) */
+	MOVW.EQ	$16, R(LSHIFT)
+	MOVW.EQ	$2, R(OFFSET)
+
+	MOVW.GT	$24, R(RSHIFT)		/* (R(n)<<8)|(R(n-1)>>24) */
+	MOVW.GT	$8, R(LSHIFT)
+	MOVW.GT	$3, R(OFFSET)
+
+	ADD	$8, R(TS), R(TMP)	/* do 8-byte chunks if possible */
+	CMP	R(TMP), R(TE)
+	BLS	_b1tail
+
+	BIC	$3, R(FROM)		/* align source */
+	MOVW	(R(FROM)), R(BR0)	/* prime first block register */
+
+_bu8loop:
+	CMP	R(TMP), R(TE)
+	BLS	_bu1tail
+
+	MOVW	R(BR0)<<R(LSHIFT), R(BW1)
+	MOVM.DB.W (R(FROM)), [R(BR0)-R(BR1)]
+	ORR	R(BR1)>>R(RSHIFT), R(BW1)
+
+	MOVW	R(BR1)<<R(LSHIFT), R(BW0)
+	ORR	R(BR0)>>R(RSHIFT), R(BW0)
+
+	MOVM.DB.W [R(BW0)-R(BW1)], (R(TE))
+	B	_bu8loop
+
+_bu1tail:
+	ADD	R(OFFSET), R(FROM)
+	B	_b1tail
+
+RSHIFT = 4
+LSHIFT = 5
+OFFSET = 11
+
+FW0 = 6
+FR0 = 7
+FW1 = 7
+FR1 = 8
+
+_funaligned:
+	CMP	$2, R(TMP)
+
+	MOVW.LT	$8, R(RSHIFT)		/* (R(n+1)<<24)|(R(n)>>8) */
+	MOVW.LT	$24, R(LSHIFT)
+	MOVW.LT	$3, R(OFFSET)
+
+	MOVW.EQ	$16, R(RSHIFT)		/* (R(n+1)<<16)|(R(n)>>16) */
+	MOVW.EQ	$16, R(LSHIFT)
+	MOVW.EQ	$2, R(OFFSET)
+
+	MOVW.GT	$24, R(RSHIFT)		/* (R(n+1)<<8)|(R(n)>>24) */
+	MOVW.GT	$8, R(LSHIFT)
+	MOVW.GT	$1, R(OFFSET)
+
+	SUB	$8, R(TE), R(TMP)	/* do 8-byte chunks if possible */
+	CMP	R(TMP), R(TS)
+	BHS	_f1tail
+
+	BIC	$3, R(FROM)		/* align source */
+	MOVW.P	4(R(FROM)), R(FR1)	/* prime last block register, implicit write back */
+
+_fu8loop:
+	CMP	R(TMP), R(TS)
+	BHS	_fu1tail
+
+	MOVW	R(FR1)>>R(RSHIFT), R(FW0)
+	MOVM.IA.W (R(FROM)), [R(FR0)-R(FR1)]
+	ORR	R(FR0)<<R(LSHIFT), R(FW0)
+
+	MOVW	R(FR0)>>R(RSHIFT), R(FW1)
+	ORR	R(FR1)<<R(LSHIFT), R(FW1)
+
+	MOVM.IA.W [R(FW0)-R(FW1)], (R(TS))
+	B	_fu8loop
+
+_fu1tail:
+	SUB	R(OFFSET), R(FROM)
+	B	_f1tail
+@
+
+\section{Comparing: [[memcmp()]]}
+
+%claude:
+[[memcmp]] compares two memory regions byte by byte, returning
+0 if they are equal, 1 if the first differing byte in [[a1]]
+is greater, or $-1$ if it is smaller. It is used to compare
+structures, binary data, and keys in hash tables. Unlike
+[[strcmp]], it does not stop at null bytes---it always
+compares exactly [[n]] bytes.
 
 <<function [[memcmp]]>>=
 int
@@ -2302,6 +2695,17 @@ memcmp(void *a1, void *a2, ulong n)
     return 0;
 }
 @
+
+\section{Searching: [[memchr()]]}
+
+%claude:
+[[memchr]] scans [[n]] bytes starting at [[ap]] for the first
+occurrence of byte [[c]], returning a pointer to it or [[nil]]
+if not found. It is used by [[strchr]] (which searches for a
+character in a string) and by parsers that scan binary data
+for a delimiter. The \verb+c &= 0xFF+ ensures the comparison
+works correctly even if [[c]] was passed as a negative
+[[int]].
 
 <<function [[memchr]]>>=
 void*
