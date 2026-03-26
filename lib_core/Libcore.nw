@@ -1263,6 +1263,13 @@ union FPdbleword
 % also useful is union { double d; uint64 x}
 % to display internal representation in hex of a double.
 
+%claude:
+Note the \verb+/* little endian */+ comment: [[lo]] comes
+before [[hi]] in the struct because ARM stores the least
+significant word at the lower address. On a big-endian
+architecture, the fields would be reversed. This is why
+[[FPdbleword]] lives in [[arm/u.h]] rather than the
+portable headers.
 
 %claude:
 Recall that a double encodes the value $(-1)^S \times 1.M \times 2^{E-1023}$,
@@ -2561,6 +2568,10 @@ destructors are paired in C++. The name [[Onex]] is short
 for ``on exit'' (as in [[atexit]]---``at exit''), and
 [[onex]] is the array of registered callbacks.
 %
+A subtle detail: \verb+onex[i].f = nil+ is set {\em before}
+calling the callback. This prevents infinite recursion
+if the callback itself calls [[exits]].
+%
 The [[pid == onex[i].pid]] check is important: after
 [[rfork(RFMEM)]], parent and child share the same [[onex]]
 array. Without the check, both processes would run all
@@ -2640,17 +2651,15 @@ the most frequently called functions in any C program---every
 [[malloc]], every string copy, every structure initialization
 goes through them.
 %
-Each function exists in two versions: a portable C
-implementation in [[port/]] (shown in this chapter) and an
-optimized ARM assembly version in [[arm/]] (shown in the
-appendix). The build system automatically selects which one
-to link: the [[mkfile]] in [[port/]] uses a [[reduce]]
-script that filters out any C file for which a \verb+.s+
-file exists in the architecture directory. So when building
-for ARM, [[arm/memset.s]] replaces [[port/memset.c]].
-The C versions are correct but slow (byte-at-a-time loops);
-the assembly versions operate on 32-bit words, roughly
-4$\times$ faster for large buffers.
+Some functions ([[memset]], [[memmove]]) have both a portable
+C implementation in [[port/]] and an optimized ARM assembly
+version in [[arm/]]; the others ([[memcmp]], [[memchr]])
+exist only in C. The build system automatically selects
+which version to link: the [[mkfile]] in [[port/]] uses a
+[[reduce]] script that filters out any C file for which a
+\verb+.s+ file exists in the architecture directory. So
+when building for ARM, [[arm/memset.s]] replaces
+[[port/memset.c]], but [[port/memcmp.c]] is used as-is.
 
 \section{Filling: [[memset()]]}
 
