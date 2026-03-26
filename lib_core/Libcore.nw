@@ -40,9 +40,10 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand libc:
-% - TODO errno global
-% - SEMI malloc vs brk internals
+% - float internal representation IEEE 574 standard
+% - malloc vs brk internals
 % - floor and ceil :) I never remembered
+% - errno global
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -898,6 +899,12 @@ typedef unsigned long   ulong;
 typedef unsigned int    uint;
 @
 
+<<type [[byte]]>>=
+typedef uchar byte;
+@
+% and byte*
+
+
 % TODO: like in Rust/Zig use u8/u32/u64, s8/s32/s64
 <<type [[uxxxint]]>>=
 typedef unsigned char u8int;
@@ -908,6 +915,15 @@ typedef unsigned long long u64int;
 % ok this deserves to be in arm/u.h
 
 %yoann: say those types defined in arch/arm/u.h because u32int might be different typedef on amd64 arch (maybe give an example of difference)
+%claude:
+These typedefs live in [[arm/u.h]] (not [[libc.h]]) because
+they are architecture-specific. The \plan C compiler keeps
+[[long]] at 32~bits on all architectures, but when porting
+to gcc/clang (as in plan9port or Goken), [[long]] becomes
+64~bits on 64-bit hosts (the LP64 model). The explicit-width
+types like [[u32int]] guarantee exactly 32~bits regardless
+of compiler, avoiding subtle bugs when the same code is
+compiled for different targets.
 
 % vlong for very long
 % Note that 'long' is misleading because 32bits on 32bits arch
@@ -1029,7 +1045,7 @@ making classification a single array lookup with no branches.
 #define	_P	020 // punctuation
 #define	_C	040 // ctlr
 #define	_B	0100 // ??
-#define	_X	0200 // ??
+#define	_X	0200 // valid hex digit
 @
 
 
@@ -1089,8 +1105,7 @@ the [[_U]] bit is set. [[isdigit('A')]] tests
 The [[toupper]]/[[tolower]] functions take [[int]] rather than
 [[char]]. In C, [[char]] is automatically promoted to [[int]]
 when passed to a function, so these work transparently with
-both [[char]] and [[Rune]] arguments---a form of ad-hoc
-polymorphism through C's implicit integer promotions. For
+both [[char]] and [[Rune]] arguments. For
 ASCII-range characters (below 128), the conversion is a simple
 offset between the uppercase and lowercase ranges.
 
@@ -1128,7 +1143,7 @@ tolower(int c)
 
 %yoann: explain what is the use of this macro?
 %claude:
-[[toascii]] strips the high bit, forcing any byte into the
+[[toascii()]] strips the high bit, forcing any byte into the
 7-bit ASCII range (0--127). This is a blunt tool for
 sanitizing input that might contain 8-bit characters, but
 it destroys UTF-8 multi-byte sequences and is rarely useful
@@ -1246,16 +1261,7 @@ and function calling conventions.
 \subsection{Pointers}
 
 %claude:
-\plan uses [[nil]] instead of C's [[NULL]], defined simply as
-\verb+((void*)0)+. The [[uintptr]] type is an integer wide
-enough to hold a pointer---critical for code that needs to
-do arithmetic on addresses. You cannot do arbitrary arithmetic
-on C pointers directly (e.g., masking the low bits for
-alignment, or XOR-ing two pointers for a hash); you must
-cast to [[uintptr]] first. For example, [[qsort]] checks
-alignment with \verb+((uintptr)va + es) % sizeof(long)+
-to decide whether to use word-sized or byte-sized swaps.
-\plan uses [[nil]] rather than C's [[NULL]] because it is
+\plan uses [[nil]] instead of C's [[NULL]] because it is
 shorter and, unlike [[NULL]], is always defined as
 \verb+((void*)0)+---some C implementations define [[NULL]]
 as plain \verb+0+, which can cause subtle bugs when passed
@@ -1267,15 +1273,20 @@ an integer~0 should be a pointer).
 @
 % why in u.h? could be in libc.h no?
 
+%claude:
+The [[uintptr]] type is an integer wide
+enough to hold a pointer---critical for code that needs to
+do arithmetic on addresses. You cannot do arbitrary arithmetic
+on C pointers directly (e.g., masking the low bits for
+alignment, or XOR-ing two pointers for a hash); you must
+cast to [[uintptr]] first. For example, [[qsort]] checks
+alignment with \verb+((uintptr)va + es) % sizeof(long)+
+to decide whether to use word-sized or byte-sized swaps.
+
 <<type [[uintptr]]>>=
 typedef unsigned long   uintptr;
 @
 % tricky again when porting code! ptr size is different!
-
-<<type [[byte]]>>=
-typedef uchar byte;
-@
-% and byte*
 
 \subsection{Arrays (and [[qsort()]])}
 
@@ -1287,6 +1298,8 @@ hardcoding array sizes.
 <<function [[nelem]]>>=
 #define nelem(x)    (sizeof(x)/sizeof((x)[0]))
 @
+
+%yoann: maybe show example of use of nelem() and show how better than alternative
 
 
 %claude:
@@ -1301,8 +1314,8 @@ After partitioning, it recurses on the smaller partition
 and loops on the larger, which limits stack depth to
 $O(\log n)$ even in the worst case.
 %
-Note also the two swap functions: [[swapi]] swaps in
-[[long]]-sized chunks (fast, for aligned data) and [[swapb]]
+Note also the two swap functions: [<swapi()>] swaps in
+[[long]]-sized chunks (fast, for aligned data) and [<swapb()>]
 swaps byte-by-byte (for unaligned data). [[qsort]] checks
 alignment to choose between them.
 
@@ -1461,16 +1474,23 @@ The Linux kernel uses the same pattern extensively via its
 %yoann: maybe recall need for va_list and va_xxx first; what is the problem they solve?
 %claude:
 C functions like [[print(char *fmt, ...)]] accept a variable
-number of arguments, but the compiler does not know at compile
-time how many arguments were passed or what their types are.
-The [[va_list]]/[[va_start]]/[[va_arg]]/[[va_end]] macros
-solve this by walking the stack frame manually. 
+number of arguments. The problem is: how does the function
+body retrieve those arguments? For a fixed-signature function,
+the compiler generates code to read each parameter at a known
+offset in the stack frame. But for variadic functions, the
+compiler cannot generate this code because it does not know
+how many arguments were passed. The
+[[va_list]]/[[va_start]]/[[va_arg]]/[[va_end]] macros let
+the function walk the stack frame at runtime, extracting
+arguments one at a time.
 
 %claude:
-On ARM with
-the \plan calling convention, all arguments are pushed onto
-the stack in order, so [[va_list]] is simply a [[char*]]
-pointer into the stack:
+The [[va_start]] macro works by taking the address of the
+last named parameter ([[&(start)]]) and pointing just past
+it---this is where the first variadic argument lives on the
+stack. So [[va_list]] is simply a [[char*]] pointer into
+the stack:
+
 \begin{verbatim}
   High addresses
   +----------+
@@ -1691,11 +1711,16 @@ is partly a consequence of C itself: without generics or
 templates, a reusable list library must either use [[void*]]
 (losing type safety and adding indirection) or rely on macros.
 In practice, C systems programmers prefer to embed the
-[[next]] pointer directly inside their structures (as seen
-throughout this book and in the Linux kernel), which gives
+[[next]] pointer directly inside their structures, which gives
 tight control over memory layout and avoids the overhead of
 a generic container. The cost is that each program
-reimplements the same patterns.
+reimplements the same patterns. In this book, you will see
+embedded [[next]] pointers in [[QLp]] (lock wait queues),
+[[Free]] (allocator free list), [[Proc]] and [[Thread]]
+(thread scheduler queues). The same idiom appears
+throughout \principia---in the \book{Assembler},
+\book{Compiler}, and \book{Kernel}---for linked lists,
+hash tables, and queues.
 
 %claude:
 Hanson's {\em C Interfaces and Implementations}~\cite{cii}
