@@ -1,3 +1,4 @@
+/*s: libc/arm/memmove.s */
 TS = 0
 TE = 1
 FROM = 2
@@ -210,3 +211,4 @@ _fu8loop:
 _fu1tail:
 	SUB	R(OFFSET), R(FROM)
 	B	_f1tail
+/*e: libc/arm/memmove.s */

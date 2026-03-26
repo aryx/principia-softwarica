@@ -1,3 +1,4 @@
+/*s: libc/arm/memset.s */
 TO = 1
 TOE = 2
 N = 3
@@ -58,3 +59,4 @@ _1tail:
 
 _return:
 	RET
+/*e: libc/arm/memset.s */
