@@ -12,7 +12,7 @@
 #define	_P	020 // punctuation
 #define	_C	040 // ctlr
 #define	_B	0100 // ??
-#define	_X	0200 // ??
+#define	_X	0200 // valid hex digit
 /*e: type [[Ctype_flag]] */
 
 extern unsigned char	_ctype[];
