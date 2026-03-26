@@ -445,10 +445,11 @@ and the other Bell Labs and \plan contributors.
 %******************************************************************************
 
 %claude:
-Before showing the source code of the \plan core libraries in
-the following chapters, I first give an overview of the general
-principles of a C standard library, describe the [[libc.h]]
-interface, and explain how the code is organized.
+Before diving into the source code, this chapter provides
+the background needed to read the rest of the book:
+design principles, the library's interface and architecture,
+a crash course on \plan ARM assembly, and a roadmap of the
+chapters.
 
 \section{Principles}
 %\section{Core components}
@@ -592,16 +593,20 @@ full details).
 ARM has 16 registers, [[R0]] through [[R15]]. Some have
 conventional roles:
 \begin{verbatim}
+  General purpose (conventions set by Plan 9, not hardware):
   R0          first argument / return value
-  R1-R7       general purpose / scratch
+  R1-R7       scratch (compiler register allocation)
   R8-R10      may be used for extern registers (see below)
   R11         reserved by linker (REGTMP, for instruction expansion)
   R12         SB (static base) — reserved for global data access
+
+  Special (hardware-defined roles):
   R13         SP (hardware stack pointer)
-  R14         LR (link register — return address)
+  R14         LR (link register — return address, set by BL)
   R15         PC (program counter)
 \end{verbatim}
-%
+
+
 Assembly files often define aliases for readability:
 \verb+arg=0+, \verb+sp=13+, \verb+sb=12+, so that
 \verb+R(sp)+ means R13 and \verb+R(arg)+ means R0.
@@ -612,6 +617,8 @@ uses this for the [[up]] pointer (the current process),
 avoiding a memory load on every access. When extern registers
 are in use, those registers are unavailable for the compiler's
 register allocator.
+
+%yoann: maybe say some registers have special constraints like R13, R14, R15 but the rest is mere convention that may be different with other OS, other compiler.
 
 \subsection{Pseudo-registers}
 
@@ -635,10 +642,12 @@ globals are reached. The linker resolves [[SB]] to [[R12]].
 \item [[FP]] (frame pointer): used to reference the {\em
 caller's} arguments. \verb+4(FP)+ means ``the second
 argument passed to this function.'' Offsets go by~4 because
-each 32-bit word occupies 4~bytes: the first argument
-is at \verb+0(FP)+, the second at \verb+4(FP)+, the third
-at \verb+8(FP)+. The assembler resolves [[FP]]
-references to offsets from [[R13]] based on the frame size.
+ARM is a 32-bit architecture: the natural unit (a ``word'')
+is 4~bytes, and each argument occupies one word. So the
+first argument is at \verb+0(FP)+, the second at
+\verb+4(FP)+, the third at \verb+8(FP)+. The assembler
+resolves [[FP]] references to offsets from [[R13]] based
+on the frame size.
 
 \item [[SP]] (pseudo stack pointer): used to reference the
 current function's {\em local} storage. Not to be confused
@@ -693,9 +702,11 @@ When [[foo]] calls \verb+bar(10, 20)+, the stack looks like:
 Note that the names before the offsets ([[a]], [[b]], [[tmp]])
 are for documentation and the debugger's symbol table only---the
 assembler ignores them. What matters is the numeric offset.
-The assembler converts pseudo-register references to concrete
-[[R13]] offsets. For [[bar]], with a frame size of~4 (one
-local), the conversion is:
+The linker converts pseudo-register references to concrete
+[[R13]] offsets when generating the final machine code.
+For [[bar]], with a frame size of~4 (one local), the
+conversion is:
+
 \begin{verbatim}
   Pseudo-register       Concrete (R13-relative)
   ---------------       -----------------------
@@ -708,8 +719,10 @@ local), the conversion is:
 \subsection{Key directives and notations}
 
 %claude:
-An important notational convention: the [[\$]] prefix means
-``the address of'' or ``an immediate constant.'' So
+In \plan assembly, the [[$]] prefix turns a memory
+reference into a literal operand. Without [[$]], the
+value is loaded {\em from} memory; with [[$]], the address
+or constant itself is used. For example:
 \verb+MOVW foo(SB), R1+ loads the {\em contents} of global
 [[foo]] into [[R1]], while \verb+MOVW $foo(SB), R1+ loads
 the {\em address} of [[foo]] into [[R1]]. Similarly,
@@ -791,14 +804,29 @@ a symbol called [[setR12]] at offset~0 in the data section,
 so the {\em address} of [[setR12]] equals [[INITDAT]].
 The instruction \verb+MOVW $setR12(SB), R12+ means ``load
 the address of [[setR12]] into [[R12]]'' (recall that
-[[\$]] means ``address of'')---and that address {\em is}
-[[INITDAT]].
-%
+[[$]] turns a memory reference into a literal)---and that
+address {\em is} [[INITDAT]].
+This is similar to how the linker defines [[etext]],
+[[edata]], and [[end]]---symbols whose addresses mark the
+boundaries between text, data, and BSS. C programs can
+reference these as \verb+extern char end[]+ to find where
+the heap starts (used by [[sbrk]] in
+Chapter~\ref{chap:malloc}).
+
+%claude:
 There is still a bootstrap problem: this instruction uses
 an [[SB]] reference, but [[R12]] is not yet set. The linker
 recognizes this specific instruction and emits an absolute
 load (e.g., \verb+MOV $0x7000, R12+) with [[INITDAT]]
 hard-coded, bypassing the normal [[R12]]-relative encoding.
+Why not use absolute loads for {\em all} globals, eliminating
+the need for [[R12]] entirely? Because an absolute 32-bit
+load on ARM requires multiple instructions (ARM instructions
+are 32~bits wide, so a 32-bit constant cannot fit alongside
+the opcode). The [[R12]]-relative form fits in a single
+instruction as long as the offset is small enough, which is
+the common case.
+%
 After this bootstrap (which we will see in [[_main]] in
 Chapter~\ref{chap:main}), all \verb+xxx(SB)+ references
 work. See \book{Linker} for the full details.
@@ -838,10 +866,11 @@ The callee typically starts with \verb+MOVW R0, 0(FP)+
 to save the first argument into its reserved slot, so
 that all arguments are on the stack in a uniform layout.
 This is why the syscall stubs (Chapter~\ref{chap:user-kernel})
-begin with this instruction. ([[_main]] is a special case:
-[[R0]] holds the [[Tos]] pointer from the kernel, not a
-normal first argument, so it saves [[R0]] to [[_tos(SB)]]
-instead---see Chapter~\ref{chap:main}.)
+begin with this instruction.
+% ([[_main]] is a special case:
+%[[R0]] holds the [[Tos]] pointer from the kernel, not a
+%normal first argument, so it saves [[R0]] to [[_tos(SB)]]
+%instead---see Chapter~\ref{chap:main}.)
 
 %claude:
 System calls use a different convention: the syscall number
