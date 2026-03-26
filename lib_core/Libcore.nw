@@ -721,9 +721,9 @@ to [[/net/]]).
 
 \item {\em Pure computation}: string manipulation, math functions,
 regular expressions, and 9P marshalling.
-These do not use system calls at all (except [[malloc]]
-for memory).
-%yoann1: but malloc is not a syscall; well it might call sbrk though
+These do not use system calls at all---though they may
+call [[malloc]], which itself may call the [[sbrk]] system
+call to grow the heap.
 
 \item {\em [[libthread]]}: a layer on top of everything else,
 providing cooperative threads, channels, and IO procs. When
@@ -907,6 +907,7 @@ typedef unsigned long long u64int;
 @
 % ok this deserves to be in arm/u.h
 
+%yoann: say those types defined in arch/arm/u.h because u32int might be different typedef on amd64 arch (maybe give an example of difference)
 
 % vlong for very long
 % Note that 'long' is misleading because 32bits on 32bits arch
@@ -931,8 +932,8 @@ typedef unsigned long   usize;
 %claude:
 [[FPdbleword]] is a union that overlays a [[double]] with its
 raw bit representation as two 32-bit words. This is essential
-for the math library: functions like [[NaN]], [[isNaN]], and
-[[isInf]] need to inspect or construct the IEEE~754 bit pattern
+for the math library: functions like [<NaN()>], [<isNaN()>], and
+[<isInf()>] need to inspect or construct the IEEE~754 bit pattern
 directly (exponent, mantissa, sign) rather than treating the
 value as a number.
 An IEEE~754 double-precision float is laid out as follows:
@@ -969,20 +970,31 @@ union FPdbleword
 
 %claude:
 Recall that a double encodes the value $(-1)^S \times 1.M \times 2^{E-1023}$,
-where $S$ is the sign bit, $E$ is the 11-bit exponent (biased
-by 1023 so that an exponent of 0 is stored as 1023), and $M$ is
+where $S$ is the sign bit, $E$ is the 11-bit exponent, and $M$ is
 the 52-bit mantissa (the fractional part after an implicit
-leading~1). For example:
+leading~1). The exponent is stored with a {bias} of 1023:
+the actual exponent is $E - 1023$. The bias makes the
+stored exponent always non-negative (an unsigned integer),
+which simplifies hardware comparison---you can compare two
+floats by comparing their bit patterns as integers.
+
+For example:
 \begin{verbatim}
   Value    S  Exponent (E)  Mantissa (M)   Meaning
   -----    -  ------------  ------------   -------
-   1.0     0  01111111111   000...000      +1.0 x 2^(1023-1023) = 1.0
-  -1.0     1  01111111111   000...000      -1.0 x 2^0 = -1.0
-   0.5     0  01111111110   000...000      +1.0 x 2^(1022-1023) = 2^-1
-   3.14    0  10000000000   1001000111...  +1.57 x 2^(1024-1023) = 3.14
+   1.0     0  01111111111   000...000      1.0 x 2^(1023-1023) = 1
+  -1.0     1  01111111111   000...000      -(1.0 x 2^0) = -1
+   0.5     0  01111111110   000...000      1.0 x 2^(1022-1023) = 0.5
+   3.14    0  10000000000   100100011...   1.100100011... x 2^1 = 3.14
    NaN     0  11111111111   000...001      exp all 1s, mantissa != 0
   +Inf     0  11111111111   000...000      exp all 1s, mantissa = 0
 \end{verbatim}
+%
+For 3.14: in binary $3.14 \approx 11.001000111\ldots$, which
+normalizes to $1.1001000111\ldots \times 2^1$. The exponent
+is $1 + 1023 = 1024$ (binary \verb+10000000000+), and the
+mantissa stores \verb+1001000111...+ (the part after the
+implicit leading~1).
 
 
 \subsection{Strings and characters}
