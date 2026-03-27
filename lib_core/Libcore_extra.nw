@@ -853,6 +853,147 @@ extern	void	rerrstr(char*, uint);
 extern	char*	sysname(void);
 @
 
+\subsection{[[include/core/internals/pool.h]]}
+
+<<include/core/internals/pool.h>>=
+typedef struct Pool Pool;
+
+<<type [[Pool]]>>
+
+extern void*	poolalloc(Pool*, ulong);
+extern void	poolfree(Pool*, void*);
+
+extern void*	poolallocalign(Pool*, ulong, ulong, long, ulong);
+extern ulong	poolmsize(Pool*, void*);
+extern void*	poolrealloc(Pool*, void*, ulong);
+extern void	poolcheck(Pool*);
+extern int	poolcompact(Pool*);
+extern void	poolblockcheck(Pool*, void*);
+
+// those globals are initialized in libc but also in the kernel itself
+// so that the kernel can reuse the pool allocation code
+extern Pool*	mainmem;
+extern Pool*	imagmem;
+
+<<type [[Pool_flag]]>>
+@
+
+\subsection{[[include/io/bio.h]]}
+
+<<macro [[BGETC]]>>=
+#define	BGETC(bp)	Bgetc(bp)
+@
+
+<<macro [[BPUTC]]>>=
+#define	BPUTC(bp,c)	Bputc(bp,c)
+@
+
+<<macro [[BOFFSET]]>>=
+#define	BOFFSET(bp)	Boffset(bp)
+@
+
+<<macro [[BLINELEN]]>>=
+#define	BLINELEN(bp)	Blinelen(bp)
+@
+
+<<macro [[BFILDES]]>>=
+#define	BFILDES(bp)	Bfildes(bp)
+@
+
+
+%-------------------------------------------------------------
+
+<<include/io/bio.h>>=
+#pragma	src	"/sys/src/libbio"
+#pragma	lib	"libbio.a"
+
+typedef	struct	Biobuf	Biobuf;
+typedef	struct	Biobufhdr	Biobufhdr;
+
+//typedef	struct	Biobuf	BiobufGen; // for 5c in ocaml
+typedef	struct	Biobufhdr	BiobufGen; // for regular 5c
+
+enum
+{
+    Bsize		= 8*1024,
+    Bungetsize	= UTFmax+1,		/* space for ungetc */
+    Bmagic		= 0x314159,
+    Beof		= -1,
+    Bbad		= -2,
+
+    Binactive	= 0,		/* states */
+    Bractive,
+    Bwactive,
+    Bracteof,
+};
+
+struct	Biobufhdr
+{
+    int	icount;		/* neg num of bytes at eob */
+    int	ocount;		/* num of bytes at bob */
+    int	rdline;		/* num of bytes after rdline */
+    int	runesize;	/* num of bytes of last getrune */
+    int	state;		/* r/w/inactive */
+    int	fid;		/* open file */
+    int	flag;		/* magic if malloc'ed */
+    vlong	offset;		/* offset of buffer in file */
+    int	bsize;		/* size of buffer */
+    uchar*	bbuf;		/* pointer to beginning of buffer */
+    uchar*	ebuf;		/* pointer to end of buffer */
+    uchar*	gbuf;		/* pointer to good data in buf */
+};
+
+struct	Biobuf
+{
+    Biobufhdr;
+    uchar	b[Bungetsize+Bsize];
+};
+
+/* Dregs, redefined as functions for backwards compatibility */
+<<macro [[BGETC]]>>
+<<macro [[BPUTC]]>>
+<<macro [[BOFFSET]]>>
+<<macro [[BLINELEN]]>>
+<<macro [[BFILDES]]>>
+
+Biobuf*	Bopen(char*, int);
+
+int	Binit(Biobuf*, fdt, int);
+int	Binits(Biobufhdr*, fdt, int, uchar*, int);
+
+int	Bflush(BiobufGen*);
+
+long	Bread(Biobufhdr*, void*, long);
+long	Bwrite(BiobufGen*, void*, long);
+vlong	Bseek(Biobufhdr*, vlong, int);
+
+int	Bputc(BiobufGen*, int);
+int	Bgetc(BiobufGen*);
+int	Bungetc(Biobufhdr*);
+
+int	Bputrune(Biobufhdr*, long);
+long	Bgetrune(BiobufGen*);
+int	Bungetrune(BiobufGen*);
+
+int	Bprint(BiobufGen*, char*, ...);
+int	Bvprint(Biobufhdr*, char*, va_list);
+
+
+
+int	Bbuffered(Biobufhdr*);
+int	Bfildes(Biobufhdr*);
+
+int	Bgetd(Biobufhdr*, double*);
+int	Blinelen(Biobufhdr*);
+vlong	Boffset(Biobufhdr*);
+void*	Brdline(Biobufhdr*, int);
+char*	Brdstr(Biobufhdr*, int, int);
+int	Bterm(Biobufhdr*);
+
+#pragma	varargck	argpos	Bprint	2
+@
+
+
 \subsection{[[include/strings/regexp.h]]}
 
 <<include/strings/regexp.h>>=
@@ -927,6 +1068,127 @@ extern void regsub(char*, char*, int, Resub*, int);
 extern int  rregexec(Reprog*, Rune*, Resub*, int);
 extern void rregsub(Rune*, Rune*, int, Resub*, int);
 @
+
+
+\subsection{[[include/strings/str.h]]}
+
+<<macro [[s_clone]]>>=
+#define s_clone(s) s_copy((s)->base)
+@
+
+<<macro [[s_to_c]]>>=
+#define s_to_c(s) ((s)->base)
+@
+
+<<macro [[s_len]]>>=
+#define s_len(s) ((s)->ptr-(s)->base)
+@
+
+
+%-------------------------------------------------------------
+
+<<strings/str.h>>=
+#pragma	src	"/sys/src/libstring"
+#pragma	lib	"libstring.a"
+
+// Extensible Strings.
+
+// This file was originally called string.h but this conflicts with
+// the Posix <string.h> so simpler to rename str.h (which anyway fits
+// well with the 3-letters utf.h, bio.h, fmt.h, etc.).
+
+/* extensible Strings */
+typedef struct String {
+    Lock;
+    char	*base;	/* base of String */
+    char	*end;	/* end of allocated space+1 */
+    char	*ptr;	/* ptr into String */
+    short	ref;
+    uchar	fixed;
+} String;
+
+<<macro [[s_clone]]>>
+<<macro [[s_to_c]]>>
+<<macro [[s_len]]>>
+
+extern String*	s_append(String*, char*);
+extern String*	s_array(char*, int);
+extern String*	s_copy(char*);
+extern void	s_free(String*);
+extern String*	s_incref(String*);	
+extern String*	s_memappend(String*, char*, int);
+extern String*	s_nappend(String*, char*, int);
+extern String*	s_new(void);
+extern String*	s_newalloc(int);
+extern String*	s_parse(String*, String*);
+extern String*	s_reset(String*);
+extern String*	s_restart(String*);
+extern void	s_terminate(String*);
+extern void	s_tolower(String*);
+extern void	s_putc(String*, int);
+extern String*	s_unique(String*);
+extern String*	s_grow(String*, int);
+
+#ifdef BGETC
+extern int	s_read(Biobuf*, String*, int);
+extern char	*s_read_line(Biobuf*, String*);
+extern char	*s_getline(Biobuf*, String*);
+typedef struct Sinstack Sinstack;
+#pragma incomplete Sinstack
+extern char	*s_rdinstack(Sinstack*, String*);
+extern Sinstack	*s_allocinstack(char*);
+extern void	s_freeinstack(Sinstack*);
+#endif /* BGETC */
+@
+
+
+\subsection{[[include/compress/flate.h]]}
+
+
+%-------------------------------------------------------------
+
+<<compress/flate.h>>=
+#pragma	lib	"libflate.a"
+#pragma	src	"/sys/src/libflate"
+
+/*
+ * errors from deflate, deflateinit, deflateblock,
+ * inflate, inflateinit, inflateblock.
+ * convertable to a string by flateerr
+ */
+enum
+{
+    FlateOk			= 0,
+    FlateNoMem		= -1,
+    FlateInputFail		= -2,
+    FlateOutputFail		= -3,
+    FlateCorrupted		= -4,
+    FlateInternal		= -5,
+};
+
+int	deflateinit(void);
+int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
+
+int	inflateinit(void);
+int	inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
+
+int	inflateblock(uchar *dst, int dsize, uchar *src, int ssize);
+int	deflateblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int debug);
+
+int	deflatezlib(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
+int	inflatezlib(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
+
+int	inflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize);
+int	deflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int debug);
+
+char	*flateerr(int err);
+
+ulong	*mkcrctab(ulong);
+ulong	blockcrc(ulong *tab, ulong crc, void *buf, int n);
+
+ulong	adler32(ulong adler, void *buf, int n);
+@
+
 
 
 \subsection{[[include/ipc/thread.h]]}
@@ -1046,31 +1308,6 @@ void    yield(void);
 extern  int mainstacksize;
 @
 
-\subsection{[[include/core/internals/pool.h]]}
-
-<<include/core/internals/pool.h>>=
-typedef struct Pool Pool;
-
-<<type [[Pool]]>>
-
-extern void*	poolalloc(Pool*, ulong);
-extern void	poolfree(Pool*, void*);
-
-extern void*	poolallocalign(Pool*, ulong, ulong, long, ulong);
-extern ulong	poolmsize(Pool*, void*);
-extern void*	poolrealloc(Pool*, void*, ulong);
-extern void	poolcheck(Pool*);
-extern int	poolcompact(Pool*);
-extern void	poolblockcheck(Pool*, void*);
-
-// those globals are initialized in libc but also in the kernel itself
-// so that the kernel can reuse the pool allocation code
-extern Pool*	mainmem;
-extern Pool*	imagmem;
-
-<<type [[Pool_flag]]>>
-@
-
 \subsection{[[include/ipc/fcall.h]]}
 
 <<include/ipc/fcall.h>>=
@@ -1126,7 +1363,7 @@ int read9pmsg(fdt, void*, uint);
 
 \section{[[lib_core/libc/port]]}
 
-\subsection{[[libc/port/_assert.c]]}
+\subsection*{[[libc/port/_assert.c]]}
 
 %-------------------------------------------------------------
 
@@ -1142,7 +1379,7 @@ int read9pmsg(fdt, void*, uint);
 @
 
 
-\subsection{[[libc/port/abs.c]]}
+\subsection*{[[libc/port/abs.c]]}
 
 %dead: labs()
 
@@ -1156,7 +1393,7 @@ int read9pmsg(fdt, void*, uint);
 @
 
 
-\subsection{[[libc/port/asin.c]]}
+\subsection*{[[libc/port/asin.c]]}
 
 %-------------------------------------------------------------
 
@@ -1176,7 +1413,7 @@ int read9pmsg(fdt, void*, uint);
 @
 
 
-\subsection{[[libc/port/atan.c]]}
+\subsection*{[[libc/port/atan.c]]}
 
 <<constant [[sq2p1]]>>=
 #define sq2p1 2.414213562373095048802e0
@@ -1303,7 +1540,7 @@ satan(double arg)
 @
 
 
-\subsection{[[libc/port/atan2.c]]}
+\subsection*{[[libc/port/atan2.c]]}
 
 <<function [[atan2]]>>=
 /*
@@ -1341,7 +1578,7 @@ atan2(double arg1, double arg2)
 @
 
 
-\subsection{[[libc/port/atexit.c]]}
+\subsection*{[[libc/port/atexit.c]]}
 
 %dead: <<function atexitdont>>
 
@@ -1367,7 +1604,7 @@ typedef struct Onex Onex;
 @
 
 
-\subsection{[[libc/port/atnotify.c]]}
+\subsection*{[[libc/port/atnotify.c]]}
 
 %-------------------------------------------------------------
 
@@ -1385,7 +1622,7 @@ typedef struct Onex Onex;
 @
 
 
-\subsection{[[libc/port/atof.c]]}
+\subsection*{[[libc/port/atof.c]]}
 
 %-------------------------------------------------------------
 
@@ -1397,7 +1634,7 @@ typedef struct Onex Onex;
 @
 
 
-\subsection{[[libc/port/atol.c]]}
+\subsection*{[[libc/port/atol.c]]}
 
 %-------------------------------------------------------------
 
@@ -1411,7 +1648,7 @@ typedef struct Onex Onex;
 @
 
 
-\subsection{[[libc/port/atoll.c]]}
+\subsection*{[[libc/port/atoll.c]]}
 
 <<function [[atoll]]>>=
 vlong
@@ -1431,7 +1668,7 @@ atoll(char *s)
 @
 
 
-\subsection{[[libc/port/charstod.c]]}
+\subsection*{[[libc/port/charstod.c]]}
 
 <<constant [[ADVANCE]]>>=
 /*
@@ -1529,7 +1766,7 @@ charstod(int(*f)(void*), void *vp)
 @
 
 
-\subsection{[[libc/port/cistrcmp.c]]}
+\subsection*{[[libc/port/cistrcmp.c]]}
 
 <<function [[cistrcmp]]>>=
 int
@@ -1567,7 +1804,7 @@ cistrcmp(char *s1, char *s2)
 @
 
 
-\subsection{[[libc/port/cistrncmp.c]]}
+\subsection*{[[libc/port/cistrncmp.c]]}
 
 <<function [[cistrncmp]]>>=
 int
@@ -1607,7 +1844,7 @@ cistrncmp(char *s1, char *s2, int n)
 @
 
 
-\subsection{[[libc/port/cistrstr.c]]}
+\subsection*{[[libc/port/cistrstr.c]]}
 
 <<function [[cistrstr]]>>=
 char*
@@ -1641,7 +1878,7 @@ cistrstr(char *s, char *sub)
 <<function [[cistrstr]]>>
 @
 
-\subsection{[[libc/port/cleanname.c]]}
+\subsection*{[[libc/port/cleanname.c]]}
 
 %-------------------------------------------------------------
 
@@ -1653,7 +1890,7 @@ cistrstr(char *s, char *sub)
 <<function [[cleanname]]>>
 @
 
-\subsection{[[libc/port/crypt.c]]}
+\subsection*{[[libc/port/crypt.c]]}
 
 %-------------------------------------------------------------
 
@@ -1678,7 +1915,7 @@ cistrstr(char *s, char *sub)
 @
 
 
-\subsection{[[libc/port/ctype.c]]}
+\subsection*{[[libc/port/ctype.c]]}
 
 %-------------------------------------------------------------
 
@@ -1691,7 +1928,7 @@ cistrstr(char *s, char *sub)
 @
 
 
-\subsection{[[libc/port/encodefmt.c]]}
+\subsection*{[[libc/port/encodefmt.c]]}
 
 <<function [[encodefmt]]>>=
 int
@@ -1779,7 +2016,7 @@ error:
 <<function [[encodefmt]]>>
 @
 
-\subsection{[[libc/port/execl.c]]}
+\subsection*{[[libc/port/execl.c]]}
 
 %-------------------------------------------------------------
 
@@ -1790,7 +2027,7 @@ error:
 <<function [[execl]]>>
 @
 
-\subsection{[[libc/port/exp.c]]}
+\subsection*{[[libc/port/exp.c]]}
 
 %-------------------------------------------------------------
 
@@ -1818,7 +2055,7 @@ error:
 <<function [[exp]]>>
 @
 
-\subsection{[[libc/port/fabs.c]]}
+\subsection*{[[libc/port/fabs.c]]}
 
 %-------------------------------------------------------------
 
@@ -1829,7 +2066,7 @@ error:
 <<function [[fabs]]>>
 @
 
-\subsection{[[libc/port/floor.c]]}
+\subsection*{[[libc/port/floor.c]]}
 
 %-------------------------------------------------------------
 
@@ -1841,7 +2078,7 @@ error:
 <<function [[ceil]]>>
 @
 
-\subsection{[[libc/port/fmod.c]]}
+\subsection*{[[libc/port/fmod.c]]}
 
 
 %-------------------------------------------------------------
@@ -1853,7 +2090,7 @@ error:
 <<function [[fmod]]>>
 @
 
-\subsection{[[libc/port/frand.c]]}
+\subsection*{[[libc/port/frand.c]]}
 
 <<constant [[MASK]]>>=
 #define MASK    0x7fffffffL
@@ -1889,7 +2126,7 @@ frand(void)
 <<function [[frand]]>>
 @
 
-\subsection{[[libc/port/frexp.c]]}
+\subsection*{[[libc/port/frexp.c]]}
 
 %-------------------------------------------------------------
 
@@ -1909,7 +2146,7 @@ frand(void)
 <<function [[modf]]>>
 @
 
-\subsection{[[libc/port/getcallerpc.c]]}
+\subsection*{[[libc/port/getcallerpc.c]]}
 
 % implemented in assembly
 <<function [[getcallerpc]]>>=
@@ -1929,7 +2166,7 @@ getcallerpc(void*)
 <<function [[getcallerpc]]>>
 @
 
-\subsection{[[libc/port/getfields.c]]}
+\subsection*{[[libc/port/getfields.c]]}
 
 %-------------------------------------------------------------
 
@@ -1940,7 +2177,7 @@ getcallerpc(void*)
 <<function [[getfields]]>>
 @
 
-\subsection{[[libc/port/getuser.c]]}
+\subsection*{[[libc/port/getuser.c]]}
 
 %-------------------------------------------------------------
 
@@ -1951,7 +2188,7 @@ getcallerpc(void*)
 <<function [[getuser]]>>
 @
 
-\subsection{[[libc/port/hangup.c]]}
+\subsection*{[[libc/port/hangup.c]]}
 
 <<function [[hangup]]>>=
 /*
@@ -1974,7 +2211,7 @@ hangup(int ctl)
 <<function [[hangup]]>>
 @
 
-\subsection{[[libc/port/hypot.c]]}
+\subsection*{[[libc/port/hypot.c]]}
 
 <<function [[hypot]]>>=
 double
@@ -2027,7 +2264,7 @@ hypot(double p, double q)
 @
 
 
-\subsection{[[libc/port/lnrand.c]]}
+\subsection*{[[libc/port/lnrand.c]]}
 
 <<constant MASK (port/lnrand.c)>>=
 #define MASK    0x7fffffffL
@@ -2060,7 +2297,7 @@ lnrand(long n)
 <<function [[lnrand]]>>
 @
 
-\subsection{[[libc/port/lock.c]]}
+\subsection*{[[libc/port/lock.c]]}
 
 %-------------------------------------------------------------
 
@@ -2075,7 +2312,7 @@ lnrand(long n)
 <<function [[canlock]]>>
 @
 
-\subsection{[[libc/port/log.c]]}
+\subsection*{[[libc/port/log.c]]}
 
 %-------------------------------------------------------------
 
@@ -2108,7 +2345,7 @@ lnrand(long n)
 <<function [[log10]]>>
 @
 
-\subsection{[[libc/port/lrand.c]]}
+\subsection*{[[libc/port/lrand.c]]}
 
 <<constant [[LEN]]>>=
 #define LEN 607
@@ -2215,7 +2452,7 @@ srand(long seed)
 <<function [[lrand]]>>
 @
 
-\subsection{[[libc/port/malloc.c]]}
+\subsection*{[[libc/port/malloc.c]]}
 
 <<function [[sbrkalloc]]>>=
 /*
@@ -2604,7 +2841,7 @@ enum {
 @
 
 
-\subsection{[[libc/port/memccpy.c]]}
+\subsection*{[[libc/port/memccpy.c]]}
 
 %-------------------------------------------------------------
 
@@ -2615,7 +2852,7 @@ enum {
 <<function [[memccpy]]>>
 @
 
-\subsection{[[libc/port/memchr.c]]}
+\subsection*{[[libc/port/memchr.c]]}
 
 %-------------------------------------------------------------
 
@@ -2626,7 +2863,7 @@ enum {
 <<function [[memchr]]>>
 @
 
-\subsection{[[libc/port/memcmp.c]]}
+\subsection*{[[libc/port/memcmp.c]]}
 
 %-------------------------------------------------------------
 
@@ -2637,7 +2874,7 @@ enum {
 <<function [[memcmp]]>>
 @
 
-\subsection{[[libc/port/memmove.c]]}
+\subsection*{[[libc/port/memmove.c]]}
 
 %-------------------------------------------------------------
 
@@ -2650,7 +2887,7 @@ enum {
 <<function [[memcpy]]>>
 @
 
-\subsection{[[libc/port/memset.c]]}
+\subsection*{[[libc/port/memset.c]]}
 
 %-------------------------------------------------------------
 
@@ -2661,7 +2898,7 @@ enum {
 <<function [[memset]]>>
 @
 
-\subsection{[[libc/port/mktemp.c]]}
+\subsection*{[[libc/port/mktemp.c]]}
 
 %-------------------------------------------------------------
 
@@ -2672,7 +2909,7 @@ enum {
 <<function [[mktemp]]>>
 @
 
-\subsection{[[libc/port/muldiv.c]]}
+\subsection*{[[libc/port/muldiv.c]]}
 
 %-------------------------------------------------------------
 
@@ -2685,7 +2922,7 @@ enum {
 <<function [[muldiv]]>>
 @
 
-\subsection{[[libc/port/nan.c]]}
+\subsection*{[[libc/port/nan.c]]}
 
 %-------------------------------------------------------------
 
@@ -2707,7 +2944,7 @@ enum {
 @
 
 
-\subsection{[[libc/port/needsrcquote.c]]}
+\subsection*{[[libc/port/needsrcquote.c]]}
 
 <<function [[needsrcquote]]>>=
 int
@@ -2731,7 +2968,7 @@ needsrcquote(int c)
 <<function [[needsrcquote]]>>
 @
 
-\subsection{[[libc/port/netcrypt.c]]}
+\subsection*{[[libc/port/netcrypt.c]]}
 
 %-------------------------------------------------------------
 
@@ -2743,7 +2980,7 @@ needsrcquote(int c)
 <<function [[netcrypt]]>>
 @
 
-\subsection{[[libc/port/netmkaddr.c]]}
+\subsection*{[[libc/port/netmkaddr.c]]}
 
 %-------------------------------------------------------------
 
@@ -2755,7 +2992,7 @@ needsrcquote(int c)
 <<function [[netmkaddr]]>>
 @
 
-\subsection{[[libc/port/nrand.c]]}
+\subsection*{[[libc/port/nrand.c]]}
 
 <<constant MASK (port/nrand.c)>>=
 #define MASK    0x7fffffffL
@@ -2791,7 +3028,7 @@ nrand(int n)
 <<function [[nrand]]>>
 @
 
-\subsection{[[libc/port/ntruerand.c]]}
+\subsection*{[[libc/port/ntruerand.c]]}
 
 <<function [[ntruerand]]>>=
 ulong
@@ -2825,7 +3062,7 @@ ntruerand(ulong n)
 <<function [[ntruerand]]>>
 @
 
-\subsection{[[libc/port/perror.c]]}
+\subsection*{[[libc/port/perror.c]]}
 
 %-------------------------------------------------------------
 
@@ -2836,7 +3073,7 @@ ntruerand(ulong n)
 <<function [[perror]]>>
 @
 
-\subsection{[[libc/port/pool.c]]}
+\subsection*{[[libc/port/pool.c]]}
 
 <<function [[checklist]]>>=
 /*
@@ -4466,7 +4703,7 @@ poolcompactl(Pool*)
 <<function [[memmark]]>>
 @
 
-\subsection{[[libc/port/pow.c]]}
+\subsection*{[[libc/port/pow.c]]}
 
 %-------------------------------------------------------------
 
@@ -4477,7 +4714,7 @@ poolcompactl(Pool*)
 <<function [[pow]]>>
 @
 
-\subsection{[[libc/port/pow10.c]]}
+\subsection*{[[libc/port/pow10.c]]}
 
 %-------------------------------------------------------------
 
@@ -4490,7 +4727,7 @@ poolcompactl(Pool*)
 <<function [[pow10]]>>
 @
 
-\subsection{[[libc/port/profile.c]]}
+\subsection*{[[libc/port/profile.c]]}
 
 
 %-------------------------------------------------------------
@@ -4527,7 +4764,7 @@ typedef struct  Plink   Plink;
 #pragma profile on
 @
 
-\subsection{[[libc/port/qsort.c]]}
+\subsection*{[[libc/port/qsort.c]]}
 
 %-------------------------------------------------------------
 
@@ -4551,7 +4788,7 @@ typedef struct  Plink   Plink;
 @
 
 
-\subsection{[[libc/port/quote.c]]}
+\subsection*{[[libc/port/quote.c]]}
 
 <<global [[doquote]]>>=
 int (*doquote)(int);
@@ -4714,7 +4951,7 @@ extern int _runeneedsquotes(Rune*, int*);
 <<function [[quoterunestrdup]]>>
 @
 
-\subsection{[[libc/port/rand.c]]}
+\subsection*{[[libc/port/rand.c]]}
 
 %-------------------------------------------------------------
 
@@ -4725,7 +4962,7 @@ extern int _runeneedsquotes(Rune*, int*);
 <<function [[rand]]>>
 @
 
-\subsection{[[libc/port/readn.c]]}
+\subsection*{[[libc/port/readn.c]]}
 
 %-------------------------------------------------------------
 
@@ -4736,7 +4973,7 @@ extern int _runeneedsquotes(Rune*, int*);
 <<function [[readn]]>>
 @
 
-\subsection{[[libc/port/rune.c]]}
+\subsection*{[[libc/port/rune.c]]}
 
 
 <<enum [[_anon_ (port/rune.c)]]>>=
@@ -4837,10 +5074,10 @@ fullrune(char *str, int n)
 <<function [[fullrune]]>>
 @
 
-\subsection{[[libc/port/runebase.c]]}
+\subsection*{[[libc/port/runebase.c]]}
 % in Libcore_big.nw now
 
-\subsection{[[libc/port/runebsearch.c]]}
+\subsection*{[[libc/port/runebsearch.c]]}
 
 %-------------------------------------------------------------
 
@@ -4851,7 +5088,7 @@ fullrune(char *str, int n)
 <<function [[_runebsearch]]>>
 @
 
-\subsection{[[libc/port/runestrcat.c]]}
+\subsection*{[[libc/port/runestrcat.c]]}
 
 %-------------------------------------------------------------
 
@@ -4862,7 +5099,7 @@ fullrune(char *str, int n)
 <<function [[runestrcat]]>>
 @
 
-\subsection{[[libc/port/runestrchr.c]]}
+\subsection*{[[libc/port/runestrchr.c]]}
 
 %-------------------------------------------------------------
 
@@ -4873,7 +5110,7 @@ fullrune(char *str, int n)
 <<function [[runestrchr]]>>
 @
 
-\subsection{[[libc/port/runestrcmp.c]]}
+\subsection*{[[libc/port/runestrcmp.c]]}
 
 %-------------------------------------------------------------
 
@@ -4884,7 +5121,7 @@ fullrune(char *str, int n)
 <<function [[runestrcmp]]>>
 @
 
-\subsection{[[libc/port/runestrcpy.c]]}
+\subsection*{[[libc/port/runestrcpy.c]]}
 
 %-------------------------------------------------------------
 
@@ -4895,7 +5132,7 @@ fullrune(char *str, int n)
 <<function [[runestrcpy]]>>
 @
 
-\subsection{[[libc/port/runestrdup.c]]}
+\subsection*{[[libc/port/runestrdup.c]]}
 
 %-------------------------------------------------------------
 
@@ -4906,7 +5143,7 @@ fullrune(char *str, int n)
 <<function [[runestrdup]]>>
 @
 
-\subsection{[[libc/port/runestrecpy.c]]}
+\subsection*{[[libc/port/runestrecpy.c]]}
 
 <<function [[runestrecpy]]>>=
 Rune*
@@ -4934,7 +5171,7 @@ runestrecpy(Rune *s1, Rune *es1, Rune *s2)
 <<function [[runestrecpy]]>>
 @
 
-\subsection{[[libc/port/runestrlen.c]]}
+\subsection*{[[libc/port/runestrlen.c]]}
 
 %-------------------------------------------------------------
 
@@ -4945,7 +5182,7 @@ runestrecpy(Rune *s1, Rune *es1, Rune *s2)
 <<function [[runestrlen]]>>
 @
 
-\subsection{[[libc/port/runestrncat.c]]}
+\subsection*{[[libc/port/runestrncat.c]]}
 
 <<function [[runestrncat]]>>=
 Rune*
@@ -4973,7 +5210,7 @@ runestrncat(Rune *s1, Rune *s2, long n)
 <<function [[runestrncat]]>>
 @
 
-\subsection{[[libc/port/runestrncmp.c]]}
+\subsection*{[[libc/port/runestrncmp.c]]}
 
 <<function [[runestrncmp]]>>=
 int
@@ -5006,7 +5243,7 @@ runestrncmp(Rune *s1, Rune *s2, long n)
 <<function [[runestrncmp]]>>
 @
 
-\subsection{[[libc/port/runestrncpy.c]]}
+\subsection*{[[libc/port/runestrncpy.c]]}
 
 <<function [[runestrncpy]]>>=
 Rune*
@@ -5035,7 +5272,7 @@ runestrncpy(Rune *s1, Rune *s2, long n)
 <<function [[runestrncpy]]>>
 @
 
-\subsection{[[libc/port/runestrrchr.c]]}
+\subsection*{[[libc/port/runestrrchr.c]]}
 
 %-------------------------------------------------------------
 
@@ -5046,7 +5283,7 @@ runestrncpy(Rune *s1, Rune *s2, long n)
 <<function [[runestrrchr]]>>
 @
 
-\subsection{[[libc/port/runestrstr.c]]}
+\subsection*{[[libc/port/runestrstr.c]]}
 
 %-------------------------------------------------------------
 
@@ -5057,7 +5294,7 @@ runestrncpy(Rune *s1, Rune *s2, long n)
 <<function [[runestrstr]]>>
 @
 
-\subsection{[[libc/port/runetype.c]] and [[runetypebody-6.2.0.h]]}
+\subsection*{[[libc/port/runetype.c]] and [[runetypebody-6.2.0.h]]}
 
 %-------------------------------------------------------------
 
@@ -5070,7 +5307,7 @@ Rune*_runebsearch(Rune c, Rune *t, int n, int ne);
 #include "runetypebody-6.2.0.h"
 @
 
-\subsection{[[libc/port/sin.c]]}
+\subsection*{[[libc/port/sin.c]]}
 
 %-------------------------------------------------------------
 
@@ -5102,7 +5339,7 @@ Rune*_runebsearch(Rune c, Rune *t, int n, int ne);
 <<function [[sin]]>>
 @
 
-\subsection{[[libc/port/sinh.c]]}
+\subsection*{[[libc/port/sinh.c]]}
 
 <<global [[p0]]>>=
 /*
@@ -5207,7 +5444,7 @@ cosh(double arg)
 <<function [[cosh]]>>
 @
 
-\subsection{[[libc/port/sqrt.c]]}
+\subsection*{[[libc/port/sqrt.c]]}
 
 %-------------------------------------------------------------
 
@@ -5225,7 +5462,7 @@ cosh(double arg)
 <<function [[sqrt]]>>
 @
 
-\subsection{[[libc/port/strcat.c]]}
+\subsection*{[[libc/port/strcat.c]]}
 
 %-------------------------------------------------------------
 
@@ -5236,7 +5473,7 @@ cosh(double arg)
 <<function [[strcat]]>>
 @
 
-\subsection{[[libc/port/strchr.c]]}
+\subsection*{[[libc/port/strchr.c]]}
 
 %-------------------------------------------------------------
 
@@ -5247,7 +5484,7 @@ cosh(double arg)
 <<function [[strchr]]>>
 @
 
-\subsection{[[libc/port/strcmp.c]]}
+\subsection*{[[libc/port/strcmp.c]]}
 
 %-------------------------------------------------------------
 
@@ -5258,7 +5495,7 @@ cosh(double arg)
 <<function [[strcmp]]>>
 @
 
-\subsection{[[libc/port/strcpy.c]]}
+\subsection*{[[libc/port/strcpy.c]]}
 
 %-------------------------------------------------------------
 
@@ -5270,7 +5507,7 @@ cosh(double arg)
 <<function [[strcpy]]>>
 @
 
-\subsection{[[libc/port/strcspn.c]]}
+\subsection*{[[libc/port/strcspn.c]]}
 
 <<constant N (port/strcspn.c)>>=
 #define N   256
@@ -5306,7 +5543,7 @@ strcspn(char *s, char *b)
 <<function [[strcspn]]>>
 @
 
-\subsection{[[libc/port/strdup.c]]}
+\subsection*{[[libc/port/strdup.c]]}
 
 %-------------------------------------------------------------
 
@@ -5317,7 +5554,7 @@ strcspn(char *s, char *b)
 <<function [[strdup]]>>
 @
 
-\subsection{[[libc/port/strecpy.c]]}
+\subsection*{[[libc/port/strecpy.c]]}
 
 <<function [[strecpy]]>>=
 char*
@@ -5345,7 +5582,7 @@ strecpy(char *to, char *e, char *from)
 <<function [[strecpy]]>>
 @
 
-\subsection{[[libc/port/strlen.c]]}
+\subsection*{[[libc/port/strlen.c]]}
 
 %-------------------------------------------------------------
 
@@ -5356,7 +5593,7 @@ strecpy(char *to, char *e, char *from)
 <<function [[strlen]]>>
 @
 
-\subsection{[[libc/port/strncat.c]]}
+\subsection*{[[libc/port/strncat.c]]}
 
 <<function [[strncat]]>>=
 char*
@@ -5386,7 +5623,7 @@ strncat(char *s1, char *s2, long n)
 <<function [[strncat]]>>
 @
 
-\subsection{[[libc/port/strncmp.c]]}
+\subsection*{[[libc/port/strncmp.c]]}
 
 <<function [[strncmp]]>>=
 int
@@ -5419,7 +5656,7 @@ strncmp(char *s1, char *s2, long n)
 <<function [[strncmp]]>>
 @
 
-\subsection{[[libc/port/strncpy.c]]}
+\subsection*{[[libc/port/strncpy.c]]}
 
 <<function [[strncpy]]>>=
 char*
@@ -5448,7 +5685,7 @@ strncpy(char *s1, char *s2, long n)
 <<function [[strncpy]]>>
 @
 
-\subsection{[[libc/port/strpbrk.c]]}
+\subsection*{[[libc/port/strpbrk.c]]}
 
 <<constant N (port/strpbrk.c)>>=
 #define N   256
@@ -5485,7 +5722,7 @@ strpbrk(char *cs, char *cb)
 <<function [[strpbrk]]>>
 @
 
-\subsection{[[libc/port/strrchr.c]]}
+\subsection*{[[libc/port/strrchr.c]]}
 
 %-------------------------------------------------------------
 
@@ -5496,7 +5733,7 @@ strpbrk(char *cs, char *cb)
 <<function [[strrchr]]>>
 @
 
-\subsection{[[libc/port/strspn.c]]}
+\subsection*{[[libc/port/strspn.c]]}
 
 <<constant N (port/strspn.c)>>=
 #define N   256
@@ -5529,7 +5766,7 @@ strspn(char *s, char *b)
 <<function [[strspn]]>>
 @
 
-\subsection{[[libc/port/strstr.c]]}
+\subsection*{[[libc/port/strstr.c]]}
 
 %-------------------------------------------------------------
 
@@ -5540,7 +5777,7 @@ strspn(char *s, char *b)
 <<function [[strstr]]>>
 @
 
-\subsection{[[libc/port/strtod.c]]}
+\subsection*{[[libc/port/strtod.c]]}
 
 %-------------------------------------------------------------
 
@@ -5584,7 +5821,7 @@ typedef struct  Tab Tab;
 <<function [[xcmp]]>>
 @
 
-\subsection{[[libc/port/strtok.c]]}
+\subsection*{[[libc/port/strtok.c]]}
 
 <<constant N (port/strtok.c)>>=
 #define N   256
@@ -5629,7 +5866,7 @@ strtok(char *s, char *b)
 <<function [[strtok]]>>
 @
 
-\subsection{[[libc/port/strtol.c]]}
+\subsection*{[[libc/port/strtol.c]]}
 
 %-------------------------------------------------------------
 
@@ -5643,7 +5880,7 @@ strtok(char *s, char *b)
 <<function [[strtol]]>>
 @
 
-\subsection{[[libc/port/strtoll.c]]}
+\subsection*{[[libc/port/strtoll.c]]}
 
 <<constant [[VLONG_MAX]]>>=
 #define VLONG_MAX   ~(1LL<<63)
@@ -5763,7 +6000,7 @@ Return:
 <<function [[strtoll]]>>
 @
 
-\subsection{[[libc/port/strtoul.c]]}
+\subsection*{[[libc/port/strtoul.c]]}
 
 <<constant [[ULONG_MAX]]>>=
 #define ULONG_MAX   4294967295UL
@@ -5875,7 +6112,7 @@ strtoul(char *nptr, char **endptr, int base)
 <<function [[strtoul]]>>
 @
 
-\subsection{[[libc/port/strtoull.c]]}
+\subsection*{[[libc/port/strtoull.c]]}
 
 <<constant [[UVLONG_MAX]]>>=
 #define UVLONG_MAX  (1LL<<63)
@@ -5987,7 +6224,7 @@ Return:
 <<function [[strtoull]]>>
 @
 
-\subsection{[[libc/port/tan.c]]}
+\subsection*{[[libc/port/tan.c]]}
 
 %-------------------------------------------------------------
 
@@ -6014,7 +6251,7 @@ Return:
 <<function [[tan]]>>
 @
 
-\subsection{[[libc/port/tanh.c]]}
+\subsection*{[[libc/port/tanh.c]]}
 
 <<function [[tanh]]>>=
 /*
@@ -6050,7 +6287,7 @@ tanh(double arg)
 <<function [[tanh]]>>
 @
 
-\subsection{[[libc/port/tokenize.c]]}
+\subsection*{[[libc/port/tokenize.c]]}
 
 <<global [[qsep]]>>=
 static char qsep[] = " \t\r\n";
@@ -6185,7 +6422,7 @@ tokenize(char *s, char **args, int maxargs)
 <<function [[tokenize]]>>
 @
 
-\subsection{[[libc/port/toupper.c]]}
+\subsection*{[[libc/port/toupper.c]]}
 
 %-------------------------------------------------------------
 
@@ -6197,7 +6434,7 @@ tokenize(char *s, char **args, int maxargs)
 <<function [[tolower]]>>
 @
 
-\subsection{[[libc/port/u16.c]]}
+\subsection*{[[libc/port/u16.c]]}
 
 <<global [[t16e]]>>=
 static char t16e[] = "0123456789ABCDEF";
@@ -6269,7 +6506,7 @@ exhausted:
 <<function [[enc16]]>>
 @
 
-\subsection{[[libc/port/u32.c]]}
+\subsection*{[[libc/port/u32.c]]}
 
 <<function [[dec32]]>>=
 int
@@ -6396,7 +6633,7 @@ out:
 @
 
 
-\subsection{[[libc/port/u64.c]]}
+\subsection*{[[libc/port/u64.c]]}
 
 <<enum [[_anon_ (port/u64.c)]]>>=
 enum {
@@ -6551,7 +6788,7 @@ exhausted:
 <<function [[enc64]]>>
 @
 
-\subsection{[[libc/port/utfecpy.c]]}
+\subsection*{[[libc/port/utfecpy.c]]}
 
 <<function [[utfecpy]]>>=
 char*
@@ -6583,7 +6820,7 @@ utfecpy(char *to, char *e, char *from)
 <<function [[utfecpy]]>>
 @
 
-\subsection{[[libc/port/utflen.c]]}
+\subsection*{[[libc/port/utflen.c]]}
 
 %-------------------------------------------------------------
 
@@ -6594,7 +6831,7 @@ utfecpy(char *to, char *e, char *from)
 <<function [[utflen]]>>
 @
 
-\subsection{[[libc/port/utfnlen.c]]}
+\subsection*{[[libc/port/utfnlen.c]]}
 
 <<function [[utfnlen]]>>=
 int
@@ -6631,7 +6868,7 @@ utfnlen(char *s, long m)
 <<function [[utfnlen]]>>
 @
 
-\subsection{[[libc/port/utfrrune.c]]}
+\subsection*{[[libc/port/utfrrune.c]]}
 
 %-------------------------------------------------------------
 
@@ -6642,7 +6879,7 @@ utfnlen(char *s, long m)
 <<function [[utfrrune]]>>
 @
 
-\subsection{[[libc/port/utfrune.c]]}
+\subsection*{[[libc/port/utfrune.c]]}
 
 %-------------------------------------------------------------
 
@@ -6653,7 +6890,7 @@ utfnlen(char *s, long m)
 <<function [[utfrune]]>>
 @
 
-\subsection{[[libc/port/utfutf.c]]}
+\subsection*{[[libc/port/utfutf.c]]}
 
 %-------------------------------------------------------------
 
@@ -6667,7 +6904,7 @@ utfnlen(char *s, long m)
 \section{[[lib_core/libc/9sys/]]}
 
 
-\subsection{[[libc/9sys/abort.c]]}
+\subsection*{[[libc/9sys/abort.c]]}
 
 %-------------------------------------------------------------
 
@@ -6678,7 +6915,7 @@ utfnlen(char *s, long m)
 <<function [[abort]]>>
 @
 
-\subsection{[[libc/9sys/access.c]]}
+\subsection*{[[libc/9sys/access.c]]}
 
 %-------------------------------------------------------------
 
@@ -6689,7 +6926,7 @@ utfnlen(char *s, long m)
 <<function [[access]]>>
 @
 
-\subsection{[[libc/9sys/announce.c]]}
+\subsection*{[[libc/9sys/announce.c]]}
 
 <<enum [[_anon_ (9sys/announce.c)]]>>=
 enum
@@ -6827,7 +7064,7 @@ static int  nettrans(char*, char*, int na, char*, int);
 <<function [[nettrans]]>>
 @
 
-\subsection{[[libc/9sys/convD2M.c]]}
+\subsection*{[[libc/9sys/convD2M.c]]}
 
 <<function [[sizeD2M]]>>=
 uint
@@ -6862,7 +7099,7 @@ sizeD2M(Dir *d)
 <<function [[convD2M]]>>
 @
 
-\subsection{[[libc/9sys/convM2D.c]]}
+\subsection*{[[libc/9sys/convM2D.c]]}
 
 <<function [[statcheck]]>>=
 int
@@ -6909,7 +7146,7 @@ static char nullstring[] = "";
 <<function [[convM2D]]>>
 @
 
-\subsection{[[libc/9sys/convM2S.c]]}
+\subsection*{[[libc/9sys/convM2S.c]]}
 
 %-------------------------------------------------------------
 
@@ -6925,7 +7162,7 @@ static char nullstring[] = "";
 <<function [[convM2S]]>>
 @
 
-\subsection{[[libc/9sys/convS2M.c]]}
+\subsection*{[[libc/9sys/convS2M.c]]}
 
 %-------------------------------------------------------------
 
@@ -6945,7 +7182,7 @@ static char nullstring[] = "";
 <<function [[convS2M]]>>
 @
 
-\subsection{[[libc/9sys/cputime.c]]}
+\subsection*{[[libc/9sys/cputime.c]]}
 
 %-------------------------------------------------------------
 
@@ -6958,7 +7195,7 @@ static char nullstring[] = "";
 <<function [[cputime]]>>
 @
 
-\subsection{[[libc/9sys/ctime.c]]}
+\subsection*{[[libc/9sys/ctime.c]]}
 
 <<global [[dmsize]]>>=
 static  char    dmsize[12] =
@@ -7257,7 +7494,7 @@ static  int rd_long(char**, long*);
 @
 
 
-\subsection{[[libc/9sys/dial.c]]}
+\subsection*{[[libc/9sys/dial.c]]}
 
 <<enum [[_anon_ (9sys/dial.c)]]>>=
 enum
@@ -7631,7 +7868,7 @@ static void _dial_string_parse(char*, DS*);
 <<function [[_dial_string_parse]](9sys/dial.c)>>
 @
 
-\subsection{[[libc/9sys/dirfstat.c]]}
+\subsection*{[[libc/9sys/dirfstat.c]]}
 
 %-------------------------------------------------------------
 
@@ -7645,7 +7882,7 @@ static void _dial_string_parse(char*, DS*);
 <<function [[dirfstat]]>>
 @
 
-\subsection{[[libc/9sys/dirfwstat.c]]}
+\subsection*{[[libc/9sys/dirfwstat.c]]}
 
 %-------------------------------------------------------------
 
@@ -7657,7 +7894,7 @@ static void _dial_string_parse(char*, DS*);
 <<function [[dirfwstat]]>>
 @
 
-\subsection{[[libc/9sys/dirmodefmt.c]]}
+\subsection*{[[libc/9sys/dirmodefmt.c]]}
 
 <<global [[modes]]>>=
 static char *modes[] =
@@ -7724,7 +7961,7 @@ dirmodefmt(Fmt *f)
 <<function [[dirmodefmt]]>>
 @
 
-\subsection{[[libc/9sys/dirread.c]]}
+\subsection*{[[libc/9sys/dirread.c]]}
 
 <<function [[dirpackage]]>>=
 static
@@ -7840,7 +8077,7 @@ dirreadall(int fd, Dir **d)
 <<function [[dirreadall]]>>
 @
 
-\subsection{[[libc/9sys/dirstat.c]]}
+\subsection*{[[libc/9sys/dirstat.c]]}
 
 %-------------------------------------------------------------
 
@@ -7854,7 +8091,7 @@ dirreadall(int fd, Dir **d)
 <<function [[dirstat]]>>
 @
 
-\subsection{[[libc/9sys/dirwstat.c]]}
+\subsection*{[[libc/9sys/dirwstat.c]]}
 
 %-------------------------------------------------------------
 
@@ -7866,7 +8103,7 @@ dirreadall(int fd, Dir **d)
 <<function [[dirwstat]]>>
 @
 
-\subsection{[[libc/9sys/fcallfmt.c]]}
+\subsection*{[[libc/9sys/fcallfmt.c]]}
 
 
 <<function [[dirfmt]]>>=
@@ -7972,7 +8209,7 @@ static char *qidtype(char*, uchar);
 <<function [[dumpsome]]>>
 @
 
-\subsection{[[libc/9sys/fork.c]]}
+\subsection*{[[libc/9sys/fork.c]]}
 
 %-------------------------------------------------------------
 
@@ -7983,7 +8220,7 @@ static char *qidtype(char*, uchar);
 <<function [[fork]]>>
 @
 
-\subsection{[[libc/9sys/getenv.c]]}
+\subsection*{[[libc/9sys/getenv.c]]}
 
 %-------------------------------------------------------------
 
@@ -7994,7 +8231,7 @@ static char *qidtype(char*, uchar);
 <<function [[getenv]]>>
 @
 
-\subsection{[[libc/9sys/getnetconninfo.c]]}
+\subsection*{[[libc/9sys/getnetconninfo.c]]}
 
 <<global [[unknown]]>>=
 static char *unknown = "???";
@@ -8154,7 +8391,7 @@ freenetconninfo(NetConnInfo *nci)
 <<function [[freenetconninfo]]>>
 @
 
-\subsection{[[libc/9sys/getpid.c]]}
+\subsection*{[[libc/9sys/getpid.c]]}
 
 %-------------------------------------------------------------
 
@@ -8165,7 +8402,7 @@ freenetconninfo(NetConnInfo *nci)
 <<function [[getpid]]>>
 @
 
-\subsection{[[libc/9sys/getppid.c]]}
+\subsection*{[[libc/9sys/getppid.c]]}
 
 %-------------------------------------------------------------
 
@@ -8176,7 +8413,7 @@ freenetconninfo(NetConnInfo *nci)
 <<function [[getppid]]>>
 @
 
-\subsection{[[libc/9sys/getwd.c]]}
+\subsection*{[[libc/9sys/getwd.c]]}
 
 %-------------------------------------------------------------
 
@@ -8189,7 +8426,7 @@ static char *nsgetwd(char*, int);
 <<function [[getwd]]>>
 @
 
-\subsection{[[libc/9sys/iounit.c]]}
+\subsection*{[[libc/9sys/iounit.c]]}
 
 <<function [[iounit]]>>=
 /*
@@ -8227,7 +8464,7 @@ iounit(int fd)
 <<function [[iounit]]>>
 @
 
-\subsection{[[libc/9sys/nsec.c]]}
+\subsection*{[[libc/9sys/nsec.c]]}
 
 <<global [[order]]>>=
 static uvlong order = 0x0001020304050607ULL;
@@ -8330,7 +8567,7 @@ nsec(void)
 <<function [[nsec]]>>
 @
 
-\subsection{[[libc/9sys/nulldir.c]]}
+\subsection*{[[libc/9sys/nulldir.c]]}
 
 %-------------------------------------------------------------
 
@@ -8341,7 +8578,7 @@ nsec(void)
 <<function [[nulldir]]>>
 @
 
-\subsection{[[libc/9sys/postnote.c]]}
+\subsection*{[[libc/9sys/postnote.c]]}
 
 %-------------------------------------------------------------
 
@@ -8352,7 +8589,7 @@ nsec(void)
 <<function [[postnote]]>>
 @
 
-\subsection{[[libc/9sys/privalloc.c]]}
+\subsection*{[[libc/9sys/privalloc.c]]}
 
 % used by??
 
@@ -8427,7 +8664,7 @@ extern int  _nprivates;
 <<function [[privfree]]>>
 @
 
-\subsection{[[libc/9sys/pushssl.c]]}
+\subsection*{[[libc/9sys/pushssl.c]]}
 
 %-------------------------------------------------------------
 
@@ -8438,7 +8675,7 @@ extern int  _nprivates;
 <<function [[pushssl]]>>
 @
 
-\subsection{[[libc/9sys/pushtls.c]]}
+\subsection*{[[libc/9sys/pushtls.c]]}
 
 <<enum [[_anon_ (9sys/pushtls.c)]]>>=
 enum {
@@ -8493,7 +8730,7 @@ finished(int hand, int isclient)
 <<function [[pushtls]]>>
 @
 
-\subsection{[[libc/9sys/putenv.c]]}
+\subsection*{[[libc/9sys/putenv.c]]}
 
 %-------------------------------------------------------------
 
@@ -8504,7 +8741,7 @@ finished(int hand, int isclient)
 <<function [[putenv]]>>
 @
 
-\subsection{[[libc/9sys/qlock.c]]}
+\subsection*{[[libc/9sys/qlock.c]]}
 
 <<global [[ql]]>>=
 static struct {
@@ -8602,7 +8839,7 @@ getqlp(void)
 <<function [[rwakeupall]]>>
 @
 
-\subsection{[[libc/9sys/read.c]]}
+\subsection*{[[libc/9sys/read.c]]}
 
 %-------------------------------------------------------------
 
@@ -8613,7 +8850,7 @@ getqlp(void)
 <<function [[read]]>>
 @
 
-\subsection{[[libc/9sys/read9pmsg.c]]}
+\subsection*{[[libc/9sys/read9pmsg.c]]}
 
 %-------------------------------------------------------------
 
@@ -8625,7 +8862,7 @@ getqlp(void)
 <<function [[read9pmsg]]>>
 @
 
-\subsection{[[libc/9sys/readv.c]]}
+\subsection*{[[libc/9sys/readv.c]]}
 
 <<function [[ioreadv]]>>=
 static
@@ -8693,7 +8930,7 @@ preadv(int fd, IOchunk *io, int nio, vlong off)
 <<function [[preadv]]>>
 @
 
-\subsection{[[libc/9sys/rerrstr.c]]}
+\subsection*{[[libc/9sys/rerrstr.c]]}
 
 %-------------------------------------------------------------
 
@@ -8704,7 +8941,7 @@ preadv(int fd, IOchunk *io, int nio, vlong off)
 <<function [[rerrstr]]>>
 @
 
-\subsection{[[libc/9sys/sbrk.c]]}
+\subsection*{[[libc/9sys/sbrk.c]]}
 
 %-------------------------------------------------------------
 
@@ -8724,7 +8961,7 @@ extern  int brk(void*);
 <<function [[sbrk]]>>
 @
 
-\subsection{[[libc/9sys/setnetmtpt.c]]}
+\subsection*{[[libc/9sys/setnetmtpt.c]]}
 
 <<function [[setnetmtpt]]>>=
 void
@@ -8751,7 +8988,7 @@ setnetmtpt(char *net, int n, char *x)
 <<function [[setnetmtpt]]>>
 @
 
-\subsection{[[libc/9sys/sysfatal.c]]}
+\subsection*{[[libc/9sys/sysfatal.c]]}
 
 %-------------------------------------------------------------
 
@@ -8766,7 +9003,7 @@ setnetmtpt(char *net, int n, char *x)
 <<function [[sysfatal]]>>
 @
 
-\subsection{[[libc/9sys/syslog.c]]}
+\subsection*{[[libc/9sys/syslog.c]]}
 
 %-------------------------------------------------------------
 
@@ -8783,7 +9020,7 @@ setnetmtpt(char *net, int n, char *x)
 <<function [[syslog]]>>
 @
 
-\subsection{[[libc/9sys/sysname.c]]}
+\subsection*{[[libc/9sys/sysname.c]]}
 
 <<function [[sysname]]>>=
 char*
@@ -8815,7 +9052,7 @@ sysname(void)
 <<function [[sysname]]>>
 @
 
-\subsection{[[libc/9sys/time.c]]}
+\subsection*{[[libc/9sys/time.c]]}
 
 %-------------------------------------------------------------
 
@@ -8828,7 +9065,7 @@ sysname(void)
 <<function [[time]]>>
 @
 
-\subsection{[[libc/9sys/times.c]]}
+\subsection*{[[libc/9sys/times.c]]}
 
 <<function skip (9sys/times.c)>>=
 static
@@ -8903,7 +9140,7 @@ times(long *t)
 <<function [[times]]>>
 @
 
-\subsection{[[libc/9sys/tm2sec.c]]}
+\subsection*{[[libc/9sys/tm2sec.c]]}
 
 <<constant [[TZSIZE]](9sys/tm2sec.c)>>=
 #define TZSIZE  150
@@ -9094,7 +9331,7 @@ static  int rd_long(char**, long*);
 <<function [[rd_long]](9sys/tm2sec.c)>>
 @
 
-\subsection{[[libc/9sys/truerand.c]]}
+\subsection*{[[libc/9sys/truerand.c]]}
 
 %-------------------------------------------------------------
 
@@ -9105,7 +9342,7 @@ static  int rd_long(char**, long*);
 <<function [[truerand]]>>
 @
 
-\subsection{[[libc/9sys/wait.c]]}
+\subsection*{[[libc/9sys/wait.c]]}
 
 %-------------------------------------------------------------
 
@@ -9117,7 +9354,7 @@ static  int rd_long(char**, long*);
 <<function [[wait]]>>
 @
 
-\subsection{[[libc/9sys/waitpid.c]]}
+\subsection*{[[libc/9sys/waitpid.c]]}
 
 %-------------------------------------------------------------
 
@@ -9129,7 +9366,7 @@ static  int rd_long(char**, long*);
 <<function [[waitpid]]>>
 @
 
-\subsection{[[libc/9sys/werrstr.c]]}
+\subsection*{[[libc/9sys/werrstr.c]]}
 
 %-------------------------------------------------------------
 
@@ -9140,7 +9377,7 @@ static  int rd_long(char**, long*);
 <<function [[werrstr]]>>
 @
 
-\subsection{[[libc/9sys/write.c]]}
+\subsection*{[[libc/9sys/write.c]]}
 
 %-------------------------------------------------------------
 
@@ -9151,7 +9388,7 @@ static  int rd_long(char**, long*);
 <<function [[write]]>>
 @
 
-\subsection{[[libc/9sys/writev.c]]}
+\subsection*{[[libc/9sys/writev.c]]}
 
 <<function [[iowritev]]>>=
 static
@@ -9214,7 +9451,7 @@ pwritev(int fd, IOchunk *io, int nio, vlong off)
 
 \section{[[lib_core/libc/fmt/]]}
 
-\subsection{[[libc/fmt/fmtdef.h]]}
+\subsection*{[[libc/fmt/fmtdef.h]]}
 
 <<libc/fmt/fmtdef.h>>=
 /*
@@ -9305,7 +9542,7 @@ void    _fmtunlock(void);
 @
 
 
-\subsection{[[libc/fmt/dofmt.c]]}
+\subsection*{[[libc/fmt/dofmt.c]]}
 
 <<function [[dofmt]]>>=
 /* format the output into f->to and return the number of characters fmted  */
@@ -9914,7 +10151,7 @@ _badfmt(Fmt *f)
 @
 
 
-\subsection{[[libc/fmt/dorfmt.c]]}
+\subsection*{[[libc/fmt/dorfmt.c]]}
 
 <<function [[dorfmt]]>>=
 /* format the output into f->to and return the number of characters fmted  */
@@ -9970,7 +10207,7 @@ dorfmt(Fmt *f, Rune *fmt)
 <<function [[dorfmt]]>>
 @
 
-\subsection{[[libc/fmt/errfmt.c]]}
+\subsection*{[[libc/fmt/errfmt.c]]}
 
 <<function [[errfmt]]>>=
 int
@@ -9993,7 +10230,7 @@ errfmt(Fmt *f)
 <<function [[errfmt]]>>
 @
 
-\subsection{[[libc/fmt/fltfmt.c]]}
+\subsection*{[[libc/fmt/fltfmt.c]]}
 
 <<enum [[_anon_ (fmt/fltfmt.c)]]>>=
 enum
@@ -10343,7 +10580,7 @@ _efgfmt(Fmt *f)
 <<function [[_efgfmt]]>>
 @
 
-\subsection{[[libc/fmt/fmt.c]]}
+\subsection*{[[libc/fmt/fmt.c]]}
 
 <<enum [[_anon_ (fmt/fmt.c)]]>>=
 enum
@@ -10604,7 +10841,7 @@ typedef struct Convfmt Convfmt;
 <<function [[_fmtdispatch]]>>
 @
 
-\subsection{[[libc/fmt/fmtfd.c]]}
+\subsection*{[[libc/fmt/fmtfd.c]]}
 
 <<function [[fmtfdflush]]>>=
 /*
@@ -10650,7 +10887,7 @@ fmtfdinit(Fmt *f, int fd, char *buf, int size)
 <<function [[fmtfdinit]]>>
 @
 
-\subsection{[[libc/fmt/fmtlock.c]]}
+\subsection*{[[libc/fmt/fmtlock.c]]}
 
 <<global [[fmtl]]>>=
 static Lock fmtl;
@@ -10686,7 +10923,7 @@ _fmtunlock(void)
 @
 
 
-\subsection{[[libc/fmt/fmtprint.c]]}
+\subsection*{[[libc/fmt/fmtprint.c]]}
 
 <<function [[fmtprint]]>>=
 /*
@@ -10716,7 +10953,7 @@ fmtprint(Fmt *f, char *fmt, ...)
 <<function [[fmtprint]]>>
 @
 
-\subsection{[[libc/fmt/fmtquote.c]]}
+\subsection*{[[libc/fmt/fmtquote.c]]}
 
 <<function [[_quotesetup]]>>=
 /*
@@ -11004,7 +11241,7 @@ _runeneedsquotes(Rune *r, int *quotelenp)
 <<function [[_runeneedsquotes]]>>
 @
 
-\subsection{[[libc/fmt/fmtrune.c]]}
+\subsection*{[[libc/fmt/fmtrune.c]]}
 
 <<function [[fmtrune]]>>=
 int
@@ -11040,7 +11277,7 @@ fmtrune(Fmt *f, int r)
 <<function [[fmtrune]]>>
 @
 
-\subsection{[[libc/fmt/fmtstr.c]]}
+\subsection*{[[libc/fmt/fmtstr.c]]}
 
 <<function [[fmtstrflush]]>>=
 char*
@@ -11062,7 +11299,7 @@ fmtstrflush(Fmt *f)
 <<function [[fmtstrflush]]>>
 @
 
-\subsection{[[libc/fmt/fmtvprint.c]]}
+\subsection*{[[libc/fmt/fmtvprint.c]]}
 
 <<function [[fmtvprint]]>>=
 /*
@@ -11095,7 +11332,7 @@ fmtvprint(Fmt *f, char *fmt, va_list args)
 <<function [[fmtvprint]]>>
 @
 
-\subsection{[[libc/fmt/fprint.c]]}
+\subsection*{[[libc/fmt/fprint.c]]}
 
 <<function [[fprint]]>>=
 int
@@ -11120,7 +11357,7 @@ fprint(int fd, char *fmt, ...)
 <<function [[fprint]]>>
 @
 
-\subsection{[[libc/fmt/print.c]]}
+\subsection*{[[libc/fmt/print.c]]}
 
 <<function [[libc_print]]>>=
 int
@@ -11151,7 +11388,7 @@ int (*print)(char *fmt, ...) = &libc_print;
 <<global [[print]]>>
 @
 
-\subsection{[[libc/fmt/runefmtstr.c]]}
+\subsection*{[[libc/fmt/runefmtstr.c]]}
 
 <<function [[runefmtstrflush]]>>=
 Rune*
@@ -11173,7 +11410,7 @@ runefmtstrflush(Fmt *f)
 <<function [[runefmtstrflush]]>>
 @
 
-\subsection{[[libc/fmt/runeseprint.c]]}
+\subsection*{[[libc/fmt/runeseprint.c]]}
 
 <<function [[runeseprint]]>>=
 Rune*
@@ -11198,7 +11435,7 @@ runeseprint(Rune *buf, Rune *e, char *fmt, ...)
 <<function [[runeseprint]]>>
 @
 
-\subsection{[[libc/fmt/runesmprint.c]]}
+\subsection*{[[libc/fmt/runesmprint.c]]}
 
 <<function [[runesmprint]]>>=
 Rune*
@@ -11223,7 +11460,7 @@ runesmprint(char *fmt, ...)
 <<function [[runesmprint]]>>
 @
 
-\subsection{[[libc/fmt/runesnprint.c]]}
+\subsection*{[[libc/fmt/runesnprint.c]]}
 
 <<function [[runesnprint]]>>=
 int
@@ -11248,7 +11485,7 @@ runesnprint(Rune *buf, int len, char *fmt, ...)
 <<function [[runesnprint]]>>
 @
 
-\subsection{[[libc/fmt/runesprint.c]]}
+\subsection*{[[libc/fmt/runesprint.c]]}
 
 <<function [[runesprint]]>>=
 int
@@ -11273,7 +11510,7 @@ runesprint(Rune *buf, char *fmt, ...)
 <<function [[runesprint]]>>
 @
 
-\subsection{[[libc/fmt/runevseprint.c]]}
+\subsection*{[[libc/fmt/runevseprint.c]]}
 
 <<function [[runevseprint]]>>=
 Rune*
@@ -11306,7 +11543,7 @@ runevseprint(Rune *buf, Rune *e, char *fmt, va_list args)
 <<function [[runevseprint]]>>
 @
 
-\subsection{[[libc/fmt/runevsmprint.c]]}
+\subsection*{[[libc/fmt/runevsmprint.c]]}
 
 <<function [[runeFmtStrFlush]]>>=
 static int
@@ -11398,7 +11635,7 @@ runevsmprint(char *fmt, va_list args)
 <<function [[runevsmprint]]>>
 @
 
-\subsection{[[libc/fmt/runevsnprint.c]]}
+\subsection*{[[libc/fmt/runevsnprint.c]]}
 
 <<function [[runevsnprint]]>>=
 int
@@ -11431,7 +11668,7 @@ runevsnprint(Rune *buf, int len, char *fmt, va_list args)
 <<function [[runevsnprint]]>>
 @
 
-\subsection{[[libc/fmt/seprint.c]]}
+\subsection*{[[libc/fmt/seprint.c]]}
 
 <<function [[seprint]]>>=
 char*
@@ -11456,7 +11693,7 @@ seprint(char *buf, char *e, char *fmt, ...)
 <<function [[seprint]]>>
 @
 
-\subsection{[[libc/fmt/smprint.c]]}
+\subsection*{[[libc/fmt/smprint.c]]}
 
 <<function [[smprint]]>>=
 char*
@@ -11482,7 +11719,7 @@ smprint(char *fmt, ...)
 <<function [[smprint]]>>
 @
 
-\subsection{[[libc/fmt/snprint.c]]}
+\subsection*{[[libc/fmt/snprint.c]]}
 
 <<function [[snprint]]>>=
 int
@@ -11507,7 +11744,7 @@ snprint(char *buf, int len, char *fmt, ...)
 <<function [[snprint]]>>
 @
 
-\subsection{[[libc/fmt/sprint.c]]}
+\subsection*{[[libc/fmt/sprint.c]]}
 
 <<function [[sprint]]>>=
 int
@@ -11532,7 +11769,7 @@ sprint(char *buf, char *fmt, ...)
 <<function [[sprint]]>>
 @
 
-\subsection{[[libc/fmt/vfprint.c]]}
+\subsection*{[[libc/fmt/vfprint.c]]}
 
 <<function [[_fmtFdFlush]]>>=
 /*
@@ -11581,7 +11818,7 @@ vfprint(int fd, char *fmt, va_list args)
 <<function [[vfprint]]>>
 @
 
-\subsection{[[libc/fmt/vseprint.c]]}
+\subsection*{[[libc/fmt/vseprint.c]]}
 
 <<function [[vseprint]]>>=
 char*
@@ -11614,7 +11851,7 @@ vseprint(char *buf, char *e, char *fmt, va_list args)
 <<function [[vseprint]]>>
 @
 
-\subsection{[[libc/fmt/vsmprint.c]]}
+\subsection*{[[libc/fmt/vsmprint.c]]}
 
 <<function [[fmtStrFlush]]>>=
 static int
@@ -11706,7 +11943,7 @@ vsmprint(char *fmt, va_list args)
 <<function [[vsmprint]]>>
 @
 
-\subsection{[[libc/fmt/vsnprint.c]]}
+\subsection*{[[libc/fmt/vsnprint.c]]}
 
 <<function [[vsnprint]]>>=
 int
@@ -11742,17 +11979,17 @@ vsnprint(char *buf, int len, char *fmt, va_list args)
 
 \section{[[lib_core/libc/arm/]]}
 
-\subsection{[[libc/arm/main.s]]}
+\subsection*{[[libc/arm/main.s]]}
 % defined in Libcore.nw now
 
-\subsection{[[libc/arm/memset.s]]}
+\subsection*{[[libc/arm/memset.s]]}
 % defined in Libcore.nw now
 
-\subsection{[[libc/arm/memmove.s]]}
+\subsection*{[[libc/arm/memmove.s]]}
 % defined in Libcore.nw now
 
 
-\subsection{[[libc/arm/cycles.c]]}
+\subsection*{[[libc/arm/cycles.c]]}
 
 <<function [[cycles]](arm)>>=
 void
@@ -11775,7 +12012,7 @@ cycles(uvlong* u)
 @
 
 
-\subsection{[[libc/arm/notejmp.c]]}
+\subsection*{[[libc/arm/notejmp.c]]}
 
 <<function [[notejmp]](arm)>>=
 void
@@ -11802,7 +12039,7 @@ notejmp(void *vr, jmp_buf j, int ret)
 <<function [[notejmp]](arm)>>
 @
 
-\subsection{[[libc/arm/vlrt.c]]}
+\subsection*{[[libc/arm/vlrt.c]]}
 
 <<macro [[SIGN]](arm)>>=
 #define SIGN(n) (1UL<<(n-1))
@@ -12740,2560 +12977,7 @@ void    abort(void);
 
 
 
-\section{[[libregexp/]]}
-
-
-\subsection{[[libregexp/regcomp.h]]}
-
-<<libregexp/regcomp.h>>=
-/*
- *  substitution list
- */
-#define NSUBEXP 32
-typedef struct Resublist	Resublist;
-struct	Resublist
-{
- Resub	m[NSUBEXP];
-};
-
-/*
- * Actions and Tokens (Reinst types)
- *
- *	02xx are operators, value == precedence
- *	03xx are tokens, i.e. operands for operators
- */
-#define RUNE		0177
-#define	OPERATOR	0200	/* Bitmask of all operators */
-#define	START		0200	/* Start, used for marker on stack */
-#define	RBRA		0201	/* Right bracket, ) */
-#define	LBRA		0202	/* Left bracket, ( */
-#define	OR		0203	/* Alternation, | */
-#define	CAT		0204	/* Concatentation, implicit operator */
-#define	STAR		0205	/* Closure, * */
-#define	PLUS		0206	/* a+ == aa* */
-#define	QUEST		0207	/* a? == a|nothing, i.e. 0 or 1 a's */
-#define	ANY		0300	/* Any character except newline, . */
-#define	ANYNL		0301	/* Any character including newline, . */
-#define	NOP		0302	/* No operation, internal use only */
-#define	BOL		0303	/* Beginning of line, ^ */
-#define	EOL		0304	/* End of line, $ */
-#define	CCLASS		0305	/* Character class, [] */
-#define	NCCLASS		0306	/* Negated character class, [] */
-#define	END		0377	/* Terminate: match found */
-
-/*
- *  regexec execution lists
- */
-#define LISTSIZE	10
-#define BIGLISTSIZE	(25*LISTSIZE)
-typedef struct Relist	Relist;
-struct Relist
-{
- Reinst*		inst;		/* Reinstruction of the thread */
- Resublist	se;		/* matched subexpressions in this thread */
-};
-typedef struct Reljunk	Reljunk;
-struct	Reljunk
-{
- Relist*	relist[2];
- Relist*	reliste[2];
- int	starttype;
- Rune	startchar;
- char*	starts;
- char*	eol;
- Rune*	rstarts;
- Rune*	reol;
-};
-
-extern Relist*	_renewthread(Relist*, Reinst*, int, Resublist*);
-extern void	_renewmatch(Resub*, int, Resublist*);
-extern Relist*	_renewemptythread(Relist*, Reinst*, int, char*);
-extern Relist*	_rrenewemptythread(Relist*, Reinst*, int, Rune*);
-@
-%$
-
-\subsection{[[libregexp/regaux.c]]}
-
-<<function [[_renewmatch]]>>=
-/*
- *  save a new match in mp
- */
-extern void
-_renewmatch(Resub *mp, int ms, Resublist *sp)
-{
-    int i;
-
-    if(mp==0 || ms<=0)
-        return;
-    if(mp[0].s.sp==0 || sp->m[0].s.sp<mp[0].s.sp ||
-       (sp->m[0].s.sp==mp[0].s.sp && sp->m[0].e.ep>mp[0].e.ep)){
-        for(i=0; i<ms && i<NSUBEXP; i++)
-            mp[i] = sp->m[i];
-        for(; i<ms; i++)
-            mp[i].s.sp = mp[i].e.ep = 0;
-    }
-}
-@
-
-<<function [[_renewthread]]>>=
-/*
- * Note optimization in _renewthread:
- * 	*lp must be pending when _renewthread called; if *l has been looked
- *		at already, the optimization is a bug.
- */
-extern Relist*
-_renewthread(Relist *lp,	/* _relist to add to */
-    Reinst *ip,		/* instruction to add */
-    int ms,
-    Resublist *sep)		/* pointers to subexpressions */
-{
-    Relist *p;
-
-    for(p=lp; p->inst; p++){
-        if(p->inst == ip){
-            if(sep->m[0].s.sp < p->se.m[0].s.sp){
-                if(ms > 1)
-                    p->se = *sep;
-                else
-                    p->se.m[0] = sep->m[0];
-            }
-            return 0;
-        }
-    }
-    p->inst = ip;
-    if(ms > 1)
-        p->se = *sep;
-    else
-        p->se.m[0] = sep->m[0];
-    (++p)->inst = 0;
-    return p;
-}
-@
-
-<<function [[_renewemptythread]]>>=
-/*
- * same as renewthread, but called with
- * initial empty start pointer.
- */
-extern Relist*
-_renewemptythread(Relist *lp,	/* _relist to add to */
-    Reinst *ip,		/* instruction to add */
-    int ms,
-    char *sp)		/* pointers to subexpressions */
-{
-    Relist *p;
-
-    for(p=lp; p->inst; p++){
-        if(p->inst == ip){
-            if(sp < p->se.m[0].s.sp) {
-                if(ms > 1)
-                    memset(&p->se, 0, sizeof(p->se));
-                p->se.m[0].s.sp = sp;
-            }
-            return 0;
-        }
-    }
-    p->inst = ip;
-    if(ms > 1)
-        memset(&p->se, 0, sizeof(p->se));
-    p->se.m[0].s.sp = sp;
-    (++p)->inst = 0;
-    return p;
-}
-@
-
-<<function [[_rrenewemptythread]]>>=
-extern Relist*
-_rrenewemptythread(Relist *lp,	/* _relist to add to */
-    Reinst *ip,		/* instruction to add */
-    int ms,
-    Rune *rsp)		/* pointers to subexpressions */
-{
-    Relist *p;
-
-    for(p=lp; p->inst; p++){
-        if(p->inst == ip){
-            if(rsp < p->se.m[0].s.rsp) {
-                if(ms > 1)
-                    memset(&p->se, 0, sizeof(p->se));
-                p->se.m[0].s.rsp = rsp;
-            }
-            return 0;
-        }
-    }
-    p->inst = ip;
-    if(ms > 1)
-        memset(&p->se, 0, sizeof(p->se));
-    p->se.m[0].s.rsp = rsp;
-    (++p)->inst = 0;
-    return p;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<libregexp/regaux.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-#include "regcomp.h"
-
-
-<<function [[_renewmatch]]>>
-
-<<function [[_renewthread]]>>
-
-<<function [[_renewemptythread]]>>
-
-<<function [[_rrenewemptythread]]>>
-@
-
-
-\subsection{[[libregexp/regcomp.c]]}
-
-<<constant [[TRUE]]>>=
-#define	TRUE	1
-@
-
-<<constant [[FALSE]]>>=
-#define	FALSE	0
-@
-
-<<struct [[Node]]>>=
-/*
- * Parser Information
- */
-typedef
-struct Node
-{
-    Reinst*	first;
-    Reinst*	last;
-}Node;
-@
-
-<<global [[reprog]]>>=
-/* max character classes per program is nelem(reprog->class) */
-static Reprog	*reprog;
-@
-
-<<constant [[NCCRUNE]]>>=
-/* max rune ranges per character class is nelem(classp->spans)/2 */
-#define NCCRUNE	nelem(classp->spans)
-@
-
-<<constant [[NSTACK]]>>=
-#define	NSTACK	20
-@
-
-<<global [[andstack]]>>=
-static	Node	andstack[NSTACK];
-@
-
-<<global [[andp]]>>=
-static	Node	*andp;
-@
-
-<<global [[atorstack]]>>=
-static	int	atorstack[NSTACK];
-@
-
-<<global [[atorp]]>>=
-static	int*	atorp;
-@
-
-<<global [[cursubid]]>>=
-static	int	cursubid;		/* id of current subexpression */
-@
-
-<<global [[subidstack]]>>=
-static	int	subidstack[NSTACK];	/* parallel to atorstack */
-@
-
-<<global [[subidp]]>>=
-static	int*	subidp;
-@
-
-<<global [[lastwasand]]>>=
-static	int	lastwasand;	/* Last token was operand */
-@
-
-<<global [[nbra]]>>=
-static	int	nbra;
-@
-
-<<global [[exprp]]>>=
-static	char*	exprp;		/* pointer to next character in source expression */
-@
-
-<<global [[lexdone]]>>=
-static	int	lexdone;
-@
-
-<<global [[nclass]]>>=
-static	int	nclass;
-@
-
-<<global [[classp]]>>=
-static	Reclass*classp;
-@
-
-<<global [[freep]]>>=
-static	Reinst*	freep;
-@
-
-<<global [[errors]]>>=
-static	int	errors;
-@
-
-<<global [[yyrune]]>>=
-static	Rune	yyrune;		/* last lex'd rune */
-@
-
-<<global [[yyclassp]]>>=
-static	Reclass*yyclassp;	/* last lex'd class */
-@
-
-<<global [[regkaboom]]>>=
-static jmp_buf regkaboom;
-@
-
-<<function [[rcerror]]>>=
-static	void
-rcerror(char *s)
-{
-    errors++;
-    regerror(s);
-    longjmp(regkaboom, 1);
-}
-@
-
-<<function [[newinst]]>>=
-static	Reinst*
-newinst(int t)
-{
-    freep->type = t;
-    freep->left = 0;
-    freep->right = 0;
-    return freep++;
-}
-@
-
-<<function [[operand]]>>=
-static	void
-operand(int t)
-{
-    Reinst *i;
-
-    if(lastwasand)
-        operator(CAT);	/* catenate is implicit */
-    i = newinst(t);
-
-    if(t == CCLASS || t == NCCLASS)
-        i->cp = yyclassp;
-    if(t == RUNE)
-        i->r = yyrune;
-
-    pushand(i, i);
-    lastwasand = TRUE;
-}
-@
-
-<<function [[operator]]>>=
-static	void
-operator(int t)
-{
-    if(t==RBRA && --nbra<0)
-        rcerror("unmatched right paren");
-    if(t==LBRA){
-        if(++cursubid >= NSUBEXP)
-            rcerror ("too many subexpressions");
-        nbra++;
-        if(lastwasand)
-            operator(CAT);
-    } else
-        evaluntil(t);
-    if(t != RBRA)
-        pushator(t);
-    lastwasand = FALSE;
-    if(t==STAR || t==QUEST || t==PLUS || t==RBRA)
-        lastwasand = TRUE;	/* these look like operands */
-}
-@
-
-<<function [[regerr2]]>>=
-static	void
-regerr2(char *s, int c)
-{
-    char buf[100];
-    char *cp = buf;
-    while(*s)
-        *cp++ = *s++;
-    *cp++ = c;
-    *cp = '\0'; 
-    rcerror(buf);
-}
-@
-
-<<function [[cant]]>>=
-static	void
-cant(char *s)
-{
-    char buf[100];
-    strcpy(buf, "can't happen: ");
-    strcat(buf, s);
-    rcerror(buf);
-}
-@
-
-<<function [[pushand]]>>=
-static	void
-pushand(Reinst *f, Reinst *l)
-{
-    if(andp >= &andstack[NSTACK])
-        cant("operand stack overflow");
-    andp->first = f;
-    andp->last = l;
-    andp++;
-}
-@
-
-<<function [[pushator]]>>=
-static	void
-pushator(int t)
-{
-    if(atorp >= &atorstack[NSTACK])
-        cant("operator stack overflow");
-    *atorp++ = t;
-    *subidp++ = cursubid;
-}
-@
-
-<<function [[popand]]>>=
-static	Node*
-popand(int op)
-{
-    Reinst *inst;
-
-    if(andp <= &andstack[0]){
-        regerr2("missing operand for ", op);
-        inst = newinst(NOP);
-        pushand(inst,inst);
-    }
-    return --andp;
-}
-@
-
-<<function [[popator]]>>=
-static	int
-popator(void)
-{
-    if(atorp <= &atorstack[0])
-        cant("operator stack underflow");
-    --subidp;
-    return *--atorp;
-}
-@
-
-<<function [[evaluntil]]>>=
-static	void
-evaluntil(int pri)
-{
-    Node *op1, *op2;
-    Reinst *inst1, *inst2;
-
-    while(pri==RBRA || atorp[-1]>=pri){
-        switch(popator()){
-        default:
-            rcerror("unknown operator in evaluntil");
-            break;
-        case LBRA:		/* must have been RBRA */
-            op1 = popand('(');
-            inst2 = newinst(RBRA);
-            inst2->subid = *subidp;
-            op1->last->next = inst2;
-            inst1 = newinst(LBRA);
-            inst1->subid = *subidp;
-            inst1->next = op1->first;
-            pushand(inst1, inst2);
-            return;
-        case OR:
-            op2 = popand('|');
-            op1 = popand('|');
-            inst2 = newinst(NOP);
-            op2->last->next = inst2;
-            op1->last->next = inst2;
-            inst1 = newinst(OR);
-            inst1->right = op1->first;
-            inst1->left = op2->first;
-            pushand(inst1, inst2);
-            break;
-        case CAT:
-            op2 = popand(0);
-            op1 = popand(0);
-            op1->last->next = op2->first;
-            pushand(op1->first, op2->last);
-            break;
-        case STAR:
-            op2 = popand('*');
-            inst1 = newinst(OR);
-            op2->last->next = inst1;
-            inst1->right = op2->first;
-            pushand(inst1, inst1);
-            break;
-        case PLUS:
-            op2 = popand('+');
-            inst1 = newinst(OR);
-            op2->last->next = inst1;
-            inst1->right = op2->first;
-            pushand(op2->first, inst1);
-            break;
-        case QUEST:
-            op2 = popand('?');
-            inst1 = newinst(OR);
-            inst2 = newinst(NOP);
-            inst1->left = inst2;
-            inst1->right = op2->first;
-            op2->last->next = inst2;
-            pushand(inst1, inst2);
-            break;
-        }
-    }
-}
-@
-
-<<function [[optimize]]>>=
-static	Reprog*
-optimize(Reprog *pp)
-{
-    Reinst *inst, *target;
-    int size;
-    Reprog *npp;
-    Reclass *cl;
-    int diff;
-
-    /*
-     *  get rid of NOOP chains
-     */
-    for(inst=pp->firstinst; inst->type!=END; inst++){
-        target = inst->next;
-        while(target->type == NOP)
-            target = target->next;
-        inst->next = target;
-    }
-
-    /*
-     *  The original allocation is for an area larger than
-     *  necessary.  Reallocate to the actual space used
-     *  and then relocate the code.
-     */
-    size = sizeof(Reprog) + (freep - pp->firstinst)*sizeof(Reinst);
-    npp = realloc(pp, size);
-    if(npp==0 || npp==pp)
-        return pp;
-    diff = (char *)npp - (char *)pp;
-    freep = (Reinst *)((char *)freep + diff);
-    for(inst=npp->firstinst; inst<freep; inst++){
-        switch(inst->type){
-        case OR:
-        case STAR:
-        case PLUS:
-        case QUEST:
-            *(char **)&inst->right += diff;
-            break;
-        case CCLASS:
-        case NCCLASS:
-            *(char **)&inst->right += diff;
-            cl = inst->cp;
-            *(char **)&cl->end += diff;
-            break;
-        }
-        *(char **)&inst->left += diff;
-    }
-    *(char **)&npp->startinst += diff;
-    return npp;
-}
-@
-
-<<function [[dumpstack]]>>=
-static	void
-dumpstack(void){
-    Node *stk;
-    int *ip;
-
-    print("operators\n");
-    for(ip=atorstack; ip<atorp; ip++)
-        print("0%o\n", *ip);
-    print("operands\n");
-    for(stk=andstack; stk<andp; stk++)
-        print("0%o\t0%o\n", stk->first->type, stk->last->type);
-}
-@
-
-<<function [[dump]]>>=
-static	void
-dump(Reprog *pp)
-{
-    Reinst *l;
-    Rune *p;
-
-    l = pp->firstinst;
-    do{
-        print("%d:\t0%o\t%d\t%d", l-pp->firstinst, l->type,
-            l->left-pp->firstinst, l->right-pp->firstinst);
-        if(l->type == RUNE)
-            print("\t%C\n", l->r);
-        else if(l->type == CCLASS || l->type == NCCLASS){
-            print("\t[");
-            if(l->type == NCCLASS)
-                print("^");
-            for(p = l->cp->spans; p < l->cp->end; p += 2)
-                if(p[0] == p[1])
-                    print("%C", p[0]);
-                else
-                    print("%C-%C", p[0], p[1]);
-            print("]\n");
-        } else
-            print("\n");
-    }while(l++->type);
-}
-@
-
-<<function [[newclass]]>>=
-static	Reclass*
-newclass(void)
-{
-    if(nclass >= nelem(reprog->class))
-        rcerror("too many character classes; increase Reprog.class size");
-    return &(classp[nclass++]);
-}
-@
-
-<<function [[nextc]]>>=
-static	int
-nextc(Rune *rp)
-{
-    if(lexdone){
-        *rp = 0;
-        return 1;
-    }
-    exprp += chartorune(rp, exprp);
-    if(*rp == L'\\'){
-        exprp += chartorune(rp, exprp);
-        return 1;
-    }
-    if(*rp == 0)
-        lexdone = 1;
-    return 0;
-}
-@
-
-<<function [[lex]]>>=
-static	int
-lex(int literal, int dot_type)
-{
-    int quoted;
-
-    quoted = nextc(&yyrune);
-    if(literal || quoted){
-        if(yyrune == 0)
-            return END;
-        return RUNE;
-    }
-
-    switch(yyrune){
-    case 0:
-        return END;
-    case L'*':
-        return STAR;
-    case L'?':
-        return QUEST;
-    case L'+':
-        return PLUS;
-    case L'|':
-        return OR;
-    case L'.':
-        return dot_type;
-    case L'(':
-        return LBRA;
-    case L')':
-        return RBRA;
-    case L'^':
-        return BOL;
-    case L'$':
-        return EOL;
-    case L'[':
-        return bldcclass();
-    }
-    return RUNE;
-}
-@
-%$
-
-<<function [[bldcclass]]>>=
-static int
-bldcclass(void)
-{
-    int type;
-    Rune r[NCCRUNE];
-    Rune *p, *ep, *np;
-    Rune rune;
-    int quoted;
-
-    /* we have already seen the '[' */
-    type = CCLASS;
-    yyclassp = newclass();
-
-    /* look ahead for negation */
-    /* SPECIAL CASE!!! negated classes don't match \n */
-    ep = r;
-    quoted = nextc(&rune);
-    if(!quoted && rune == L'^'){
-        type = NCCLASS;
-        quoted = nextc(&rune);
-        *ep++ = L'\n';
-        *ep++ = L'\n';
-    }
-
-    /* parse class into a set of spans */
-    while(ep < &r[NCCRUNE-1]){
-        if(rune == 0){
-            rcerror("malformed '[]'");
-            return 0;
-        }
-        if(!quoted && rune == L']')
-            break;
-        if(!quoted && rune == L'-'){
-            if(ep == r){
-                rcerror("malformed '[]'");
-                return 0;
-            }
-            quoted = nextc(&rune);
-            if((!quoted && rune == L']') || rune == 0){
-                rcerror("malformed '[]'");
-                return 0;
-            }
-            *(ep-1) = rune;
-        } else {
-            *ep++ = rune;
-            *ep++ = rune;
-        }
-        quoted = nextc(&rune);
-    }
-    if(ep >= &r[NCCRUNE-1]) {
-        rcerror("char class too large; increase Reclass.spans size");
-        return 0;
-    }
-
-    /* sort on span start */
-    for(p = r; p < ep; p += 2){
-        for(np = p; np < ep; np += 2)
-            if(*np < *p){
-                rune = np[0];
-                np[0] = p[0];
-                p[0] = rune;
-                rune = np[1];
-                np[1] = p[1];
-                p[1] = rune;
-            }
-    }
-
-    /* merge spans */
-    np = yyclassp->spans;
-    p = r;
-    if(r == ep)
-        yyclassp->end = np;
-    else {
-        np[0] = *p++;
-        np[1] = *p++;
-        for(; p < ep; p += 2)
-            /* overlapping or adjacent ranges? */
-            if(p[0] <= np[1] + 1){
-                if(p[1] >= np[1])
-                    np[1] = p[1];	/* coalesce */
-            } else {
-                np += 2;
-                np[0] = p[0];
-                np[1] = p[1];
-            }
-        yyclassp->end = np+2;
-    }
-
-    return type;
-}
-@
-
-<<function [[regcomp1]]>>=
-static	Reprog*
-regcomp1(char *s, int literal, int dot_type)
-{
-    int token;
-    Reprog *pp;
-
-    /* get memory for the program */
-    pp = malloc(sizeof(Reprog) + 6*sizeof(Reinst)*strlen(s));
-    if(pp == 0){
-        regerror("out of memory");
-        return 0;
-    }
-    freep = pp->firstinst;
-    classp = pp->class;
-    errors = 0;
-
-    if(setjmp(regkaboom))
-        goto out;
-
-    /* go compile the sucker */
-    lexdone = 0;
-    exprp = s;
-    nclass = 0;
-    nbra = 0;
-    atorp = atorstack;
-    andp = andstack;
-    subidp = subidstack;
-    lastwasand = FALSE;
-    cursubid = 0;
-
-    /* Start with a low priority operator to prime parser */
-    pushator(START-1);
-    while((token = lex(literal, dot_type)) != END){
-        if((token&0300) == OPERATOR)
-            operator(token);
-        else
-            operand(token);
-    }
-
-    /* Close with a low priority operator */
-    evaluntil(START);
-
-    /* Force END */
-    operand(END);
-    evaluntil(START);
-#ifdef DEBUG
-    dumpstack();
-#endif
-    if(nbra)
-        rcerror("unmatched left paren");
-    --andp;	/* points to first and only operand */
-    pp->startinst = andp->first;
-#ifdef DEBUG
-    dump(pp);
-#endif
-    pp = optimize(pp);
-#ifdef DEBUG
-    print("start: %d\n", andp->first-pp->firstinst);
-    dump(pp);
-#endif
-out:
-    if(errors){
-        free(pp);
-        pp = 0;
-    }
-    return pp;
-}
-@
-
-<<function [[regcomp]]>>=
-extern	Reprog*
-regcomp(char *s)
-{
-    return regcomp1(s, 0, ANY);
-}
-@
-
-<<function [[regcomplit]]>>=
-extern	Reprog*
-regcomplit(char *s)
-{
-    return regcomp1(s, 1, ANY);
-}
-@
-
-<<function [[regcompnl]]>>=
-extern	Reprog*
-regcompnl(char *s)
-{
-    return regcomp1(s, 0, ANYNL);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<libregexp/regcomp.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-#include "regcomp.h"
-
-<<constant [[TRUE]]>>
-<<constant [[FALSE]]>>
-
-<<struct [[Node]]>>
-
-<<global [[reprog]]>>
-
-<<constant [[NCCRUNE]]>>
-
-<<constant [[NSTACK]]>>
-<<global [[andstack]]>>
-<<global [[andp]]>>
-<<global [[atorstack]]>>
-<<global [[atorp]]>>
-<<global [[cursubid]]>>
-<<global [[subidstack]]>>
-<<global [[subidp]]>>
-<<global [[lastwasand]]>>
-<<global [[nbra]]>>
-<<global [[exprp]]>>
-<<global [[lexdone]]>>
-<<global [[nclass]]>>
-<<global [[classp]]>>
-<<global [[freep]]>>
-<<global [[errors]]>>
-<<global [[yyrune]]>>
-<<global [[yyclassp]]>>
-
-/* predeclared crap */
-static	void	operator(int);
-static	void	pushand(Reinst*, Reinst*);
-static	void	pushator(int);
-static	void	evaluntil(int);
-static	int	bldcclass(void);
-
-<<global [[regkaboom]]>>
-
-<<function [[rcerror]]>>
-
-<<function [[newinst]]>>
-
-<<function [[operand]]>>
-
-<<function [[operator]]>>
-
-<<function [[regerr2]]>>
-
-<<function [[cant]]>>
-
-<<function [[pushand]]>>
-
-<<function [[pushator]]>>
-
-<<function [[popand]]>>
-
-<<function [[popator]]>>
-
-<<function [[evaluntil]]>>
-
-<<function [[optimize]]>>
-
-#ifdef	DEBUG
-<<function [[dumpstack]]>>
-
-<<function [[dump]]>>
-#endif
-
-<<function [[newclass]]>>
-
-<<function [[nextc]]>>
-
-<<function [[lex]]>>
-
-<<function [[bldcclass]]>>
-
-<<function [[regcomp1]]>>
-
-<<function [[regcomp]]>>
-
-<<function [[regcomplit]]>>
-
-<<function [[regcompnl]]>>
-@
-
-
-\subsection{[[libregexp/regerror.c]]}
-
-<<function [[regerror]]>>=
-void
-regerror(char *s)
-{
-    char buf[132];
-
-    strcpy(buf, "regerror: ");
-    strcat(buf, s);
-    strcat(buf, "\n");
-    write(2, buf, strlen(buf));
-    exits("regerr");
-}
-@
-
-%-------------------------------------------------------------
-
-<<libregexp/regerror.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-
-<<function [[regerror]]>>
-@
-
-\subsection{[[libregexp/regexec.c]]}
-
-<<function [[regexec1]]>>=
-/*
- *  return	0 if no match
- *		>0 if a match
- *		<0 if we ran out of _relist space
- */
-static int
-regexec1(Reprog *progp,	/* program to run */
-    char *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms,		/* number of elements at mp */
-    Reljunk *j
-)
-{
-    int flag=0;
-    Reinst *inst;
-    Relist *tlp;
-    char *s;
-    int i, checkstart;
-    Rune r, *rp, *ep;
-    int n;
-    Relist* tl;		/* This list, next list */
-    Relist* nl;
-    Relist* tle;		/* ends of this and next list */
-    Relist* nle;
-    int match;
-    char *p;
-
-    match = 0;
-    checkstart = j->starttype;
-    if(mp)
-        for(i=0; i<ms; i++) {
-            mp[i].s.sp = 0;
-            mp[i].e.ep = 0;
-        }
-    j->relist[0][0].inst = 0;
-    j->relist[1][0].inst = 0;
-
-    /* Execute machine once for each character, including terminal NUL */
-    s = j->starts;
-    do{
-        /* fast check for first char */
-        if(checkstart) {
-            switch(j->starttype) {
-            case RUNE:
-                p = utfrune(s, j->startchar);
-                if(p == 0 || s == j->eol)
-                    return match;
-                s = p;
-                break;
-            case BOL:
-                if(s == bol)
-                    break;
-                p = utfrune(s, '\n');
-                if(p == 0 || s == j->eol)
-                    return match;
-                s = p+1;
-                break;
-            }
-        }
-        r = *(uchar*)s;
-        if(r < Runeself)
-            n = 1;
-        else
-            n = chartorune(&r, s);
-
-        /* switch run lists */
-        tl = j->relist[flag];
-        tle = j->reliste[flag];
-        nl = j->relist[flag^=1];
-        nle = j->reliste[flag];
-        nl->inst = 0;
-
-        /* Add first instruction to current list */
-        if(match == 0)
-            _renewemptythread(tl, progp->startinst, ms, s);
-
-        /* Execute machine until current list is empty */
-        for(tlp=tl; tlp->inst; tlp++){	/* assignment = */
-            for(inst = tlp->inst; ; inst = inst->next){
-                switch(inst->type){
-                case RUNE:	/* regular character */
-                    if(inst->r == r){
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    }
-                    break;
-                case LBRA:
-                    tlp->se.m[inst->subid].s.sp = s;
-                    continue;
-                case RBRA:
-                    tlp->se.m[inst->subid].e.ep = s;
-                    continue;
-                case ANY:
-                    if(r != '\n')
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case ANYNL:
-                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case BOL:
-                    if(s == bol || *(s-1) == '\n')
-                        continue;
-                    break;
-                case EOL:
-                    if(s == j->eol || r == 0 || r == '\n')
-                        continue;
-                    break;
-                case CCLASS:
-                    ep = inst->cp->end;
-                    for(rp = inst->cp->spans; rp < ep; rp += 2)
-                        if(r >= rp[0] && r <= rp[1]){
-                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                                return -1;
-                            break;
-                        }
-                    break;
-                case NCCLASS:
-                    ep = inst->cp->end;
-                    for(rp = inst->cp->spans; rp < ep; rp += 2)
-                        if(r >= rp[0] && r <= rp[1])
-                            break;
-                    if(rp == ep)
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case OR:
-                    /* evaluate right choice later */
-                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
-                        return -1;
-                    /* efficiency: advance and re-evaluate */
-                    continue;
-                case END:	/* Match! */
-                    match = 1;
-                    tlp->se.m[0].e.ep = s;
-                    if(mp != 0)
-                        _renewmatch(mp, ms, &tlp->se);
-                    break;
-                }
-                break;
-            }
-        }
-        if(s == j->eol)
-            break;
-        checkstart = j->starttype && nl->inst==0;
-        s += n;
-    }while(r);
-    return match;
-}
-@
-
-<<function [[regexec2]]>>=
-static int
-regexec2(Reprog *progp,	/* program to run */
-    char *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms,		/* number of elements at mp */
-    Reljunk *j
-)
-{
-    int rv;
-    Relist *relist0, *relist1;
-
-    /* mark space */
-    relist0 = malloc(BIGLISTSIZE*sizeof(Relist));
-    if(relist0 == nil)
-        return -1;
-    relist1 = malloc(BIGLISTSIZE*sizeof(Relist));
-    if(relist1 == nil){
-        free(relist1);
-        return -1;
-    }
-    j->relist[0] = relist0;
-    j->relist[1] = relist1;
-    j->reliste[0] = relist0 + BIGLISTSIZE - 2;
-    j->reliste[1] = relist1 + BIGLISTSIZE - 2;
-
-    rv = regexec1(progp, bol, mp, ms, j);
-    free(relist0);
-    free(relist1);
-    return rv;
-}
-@
-
-<<function [[regexec]]>>=
-extern int
-regexec(Reprog *progp,	/* program to run */
-    char *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms)		/* number of elements at mp */
-{
-    Reljunk j;
-    Relist relist0[LISTSIZE], relist1[LISTSIZE];
-    int rv;
-
-    /*
-   *  use user-specified starting/ending location if specified
-     */
-    j.starts = bol;
-    j.eol = 0;
-    if(mp && ms>0){
-        if(mp->s.sp)
-            j.starts = mp->s.sp;
-        if(mp->e.ep)
-            j.eol = mp->e.ep;
-    }
-    j.starttype = 0;
-    j.startchar = 0;
-    if(progp->startinst->type == RUNE && progp->startinst->r < Runeself) {
-        j.starttype = RUNE;
-        j.startchar = progp->startinst->r;
-    }
-    if(progp->startinst->type == BOL)
-        j.starttype = BOL;
-
-    /* mark space */
-    j.relist[0] = relist0;
-    j.relist[1] = relist1;
-    j.reliste[0] = relist0 + nelem(relist0) - 2;
-    j.reliste[1] = relist1 + nelem(relist1) - 2;
-
-    rv = regexec1(progp, bol, mp, ms, &j);
-    if(rv >= 0)
-        return rv;
-    rv = regexec2(progp, bol, mp, ms, &j);
-    if(rv >= 0)
-        return rv;
-    return -1;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<libregexp/regexec.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-#include "regcomp.h"
-
-
-<<function [[regexec1]]>>
-
-<<function [[regexec2]]>>
-
-<<function [[regexec]]>>
-@
-
-
-\subsection{[[libregexp/regsub.c]]}
-
-<<function [[regsub]]>>=
-/* substitute into one string using the matches from the last regexec() */
-extern	void
-regsub(char *sp,	/* source string */
-    char *dp,	/* destination string */
-    int dlen,
-    Resub *mp,	/* subexpression elements */
-    int ms)		/* number of elements pointed to by mp */
-{
-    char *ssp, *ep;
-    int i;
-
-    ep = dp+dlen-1;
-    while(*sp != '\0'){
-        if(*sp == '\\'){
-            switch(*++sp){
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                i = *sp-'0';
-                if(mp!=0 && mp[i].s.sp != 0 && ms>i)
-                    for(ssp = mp[i].s.sp;
-                         ssp < mp[i].e.ep;
-                         ssp++)
-                        if(dp < ep)
-                            *dp++ = *ssp;
-                break;
-            case '\\':
-                if(dp < ep)
-                    *dp++ = '\\';
-                break;
-            case '\0':
-                sp--;
-                break;
-            default:
-                if(dp < ep)
-                    *dp++ = *sp;
-                break;
-            }
-        }else if(*sp == '&'){
-            if(mp!=0 && mp[0].s.sp != 0 && ms>0)
-                for(ssp = mp[0].s.sp;
-                     ssp < mp[0].e.ep; ssp++)
-                    if(dp < ep)
-                        *dp++ = *ssp;
-        }else{
-            if(dp < ep)
-                *dp++ = *sp;
-        }
-        sp++;
-    }
-    *dp = '\0';
-}
-@
-
-%-------------------------------------------------------------
-
-<<libregexp/regsub.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-
-<<function [[regsub]]>>
-@
-
-\subsection{[[libregexp/rregexec.c]]}
-
-<<function [[rregexec1]]>>=
-/*
- *  return	0 if no match
- *		>0 if a match
- *		<0 if we ran out of _relist space
- */
-static int
-rregexec1(Reprog *progp,	/* program to run */
-    Rune *bol,		/* string to run machine on */
-    Resub *mp,		/* subexpression elements */
-    int ms,			/* number of elements at mp */
-    Reljunk *j)
-{
-    int flag=0;
-    Reinst *inst;
-    Relist *tlp;
-    Rune *s;
-    int i, checkstart;
-    Rune r, *rp, *ep;
-    Relist* tl;		/* This list, next list */
-    Relist* nl;
-    Relist* tle;		/* ends of this and next list */
-    Relist* nle;
-    int match;
-    Rune *p;
-
-    match = 0;
-    checkstart = j->startchar;
-    if(mp)
-        for(i=0; i<ms; i++) {
-            mp[i].s.rsp = 0;
-            mp[i].e.rep = 0;
-        }
-    j->relist[0][0].inst = 0;
-    j->relist[1][0].inst = 0;
-
-    /* Execute machine once for each character, including terminal NUL */
-    s = j->rstarts;
-    do{
-        /* fast check for first char */
-        if(checkstart) {
-            switch(j->starttype) {
-            case RUNE:
-                p = runestrchr(s, j->startchar);
-                if(p == 0 || s == j->reol)
-                    return match;
-                s = p;
-                break;
-            case BOL:
-                if(s == bol)
-                    break;
-                p = runestrchr(s, '\n');
-                if(p == 0 || s == j->reol)
-                    return match;
-                s = p+1;
-                break;
-            }
-        }
-
-        r = *s;
-
-        /* switch run lists */
-        tl = j->relist[flag];
-        tle = j->reliste[flag];
-        nl = j->relist[flag^=1];
-        nle = j->reliste[flag];
-        nl->inst = 0;
-
-        /* Add first instruction to current list */
-        _rrenewemptythread(tl, progp->startinst, ms, s);
-
-        /* Execute machine until current list is empty */
-        for(tlp=tl; tlp->inst; tlp++){
-            for(inst=tlp->inst; ; inst = inst->next){
-                switch(inst->type){
-                case RUNE:	/* regular character */
-                    if(inst->r == r)
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case LBRA:
-                    tlp->se.m[inst->subid].s.rsp = s;
-                    continue;
-                case RBRA:
-                    tlp->se.m[inst->subid].e.rep = s;
-                    continue;
-                case ANY:
-                    if(r != '\n')
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case ANYNL:
-                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case BOL:
-                    if(s == bol || *(s-1) == '\n')
-                        continue;
-                    break;
-                case EOL:
-                    if(s == j->reol || r == 0 || r == '\n')
-                        continue;
-                    break;
-                case CCLASS:
-                    ep = inst->cp->end;
-                    for(rp = inst->cp->spans; rp < ep; rp += 2)
-                        if(r >= rp[0] && r <= rp[1]){
-                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                                return -1;
-                            break;
-                        }
-                    break;
-                case NCCLASS:
-                    ep = inst->cp->end;
-                    for(rp = inst->cp->spans; rp < ep; rp += 2)
-                        if(r >= rp[0] && r <= rp[1])
-                            break;
-                    if(rp == ep)
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case OR:
-                    /* evaluate right choice later */
-                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
-                        return -1;
-                    /* efficiency: advance and re-evaluate */
-                    continue;
-                case END:	/* Match! */
-                    match = 1;
-                    tlp->se.m[0].e.rep = s;
-                    if(mp != 0)
-                        _renewmatch(mp, ms, &tlp->se);
-                    break;
-                }
-                break;
-            }
-        }
-        if(s == j->reol)
-            break;
-        checkstart = j->startchar && nl->inst==0;
-        s++;
-    }while(r);
-    return match;
-}
-@
-
-<<function [[rregexec2]]>>=
-static int
-rregexec2(Reprog *progp,	/* program to run */
-    Rune *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms,		/* number of elements at mp */
-    Reljunk *j
-)
-{
-    Relist relist0[5*LISTSIZE], relist1[5*LISTSIZE];
-
-    /* mark space */
-    j->relist[0] = relist0;
-    j->relist[1] = relist1;
-    j->reliste[0] = relist0 + nelem(relist0) - 2;
-    j->reliste[1] = relist1 + nelem(relist1) - 2;
-
-    return rregexec1(progp, bol, mp, ms, j);
-}
-@
-
-<<function [[rregexec]]>>=
-extern int
-rregexec(Reprog *progp,	/* program to run */
-    Rune *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms)		/* number of elements at mp */
-{
-    Reljunk j;
-    Relist relist0[LISTSIZE], relist1[LISTSIZE];
-    int rv;
-
-    /*
-   *  use user-specified starting/ending location if specified
-     */
-    j.rstarts = bol;
-    j.reol = 0;
-    if(mp && ms>0){
-        if(mp->s.sp)
-            j.rstarts = mp->s.rsp;
-        if(mp->e.ep)
-            j.reol = mp->e.rep;
-    }
-    j.starttype = 0;
-    j.startchar = 0;
-    if(progp->startinst->type == RUNE && progp->startinst->r < Runeself) {
-        j.starttype = RUNE;
-        j.startchar = progp->startinst->r;
-    }
-    if(progp->startinst->type == BOL)
-        j.starttype = BOL;
-
-    /* mark space */
-    j.relist[0] = relist0;
-    j.relist[1] = relist1;
-    j.reliste[0] = relist0 + nelem(relist0) - 2;
-    j.reliste[1] = relist1 + nelem(relist1) - 2;
-
-    rv = rregexec1(progp, bol, mp, ms, &j);
-    if(rv >= 0)
-        return rv;
-    rv = rregexec2(progp, bol, mp, ms, &j);
-    if(rv >= 0)
-        return rv;
-    return -1;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<libregexp/rregexec.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-#include "regcomp.h"
-
-<<function [[rregexec1]]>>
-
-<<function [[rregexec2]]>>
-
-<<function [[rregexec]]>>
-@
-
-
-\subsection{[[libregexp/rregsub.c]]}
-
-<<function [[rregsub]]>>=
-/* substitute into one string using the matches from the last regexec() */
-extern	void
-rregsub(Rune *sp,	/* source string */
-    Rune *dp,	/* destination string */
-    int dlen,
-    Resub *mp,	/* subexpression elements */
-    int ms)		/* number of elements pointed to by mp */
-{
-    Rune *ssp, *ep;
-    int i;
-
-    ep = dp+(dlen/sizeof(Rune))-1;
-    while(*sp != '\0'){
-        if(*sp == '\\'){
-            switch(*++sp){
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                i = *sp-'0';
-                if(mp[i].s.rsp != 0 && mp!=0 && ms>i)
-                    for(ssp = mp[i].s.rsp;
-                         ssp < mp[i].e.rep;
-                         ssp++)
-                        if(dp < ep)
-                            *dp++ = *ssp;
-                break;
-            case '\\':
-                if(dp < ep)
-                    *dp++ = '\\';
-                break;
-            case '\0':
-                sp--;
-                break;
-            default:
-                if(dp < ep)
-                    *dp++ = *sp;
-                break;
-            }
-        }else if(*sp == '&'){				
-            if(mp[0].s.rsp != 0 && mp!=0 && ms>0)
-            if(mp[0].s.rsp != 0)
-                for(ssp = mp[0].s.rsp;
-                     ssp < mp[0].e.rep; ssp++)
-                    if(dp < ep)
-                        *dp++ = *ssp;
-        }else{
-            if(dp < ep)
-                *dp++ = *sp;
-        }
-        sp++;
-    }
-    *dp = '\0';
-}
-@
-
-%-------------------------------------------------------------
-
-<<libregexp/rregsub.c>>=
-#include <u.h>
-#include <libc.h>
-#include "regexp.h"
-
-<<function [[rregsub]]>>
-@
-
-\section{[[lib_core/libthread/arm]]}
-
-<<libthread/arm.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-/* first argument goes in a register; simplest just to ignore it */
-static void
-launcherarm(int, void (*f)(void *arg), void *arg)
-{
- (*f)(arg);
- threadexits(nil);
-}
-
-void
-_threadinitstack(Thread *t, void (*f)(void*), void *arg)
-{
- ulong *tos;
-
- tos = (ulong*)&t->stk[t->stksize&~7];
- *--tos = (ulong)arg;
- *--tos = (ulong)f;
- *--tos = 0;	/* first arg to launchermips */
- *--tos = 0;	/* place to store return PC */
-
- t->sched[JMPBUFPC] = (ulong)launcherarm+JMPBUFDPC;
- t->sched[JMPBUFSP] = (ulong)tos;
-}
-@
-
-\section{[[lib_core/libthread/x86]]}
-
-\subsection{[[libthread/386.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/386.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-
-#include "threadimpl.h"
-
-<<function [[launcher386]]>>
-
-<<function [[_threadinitstack]]>>
-@
-
-
-
-\section{[[lib_core/libthread/]]}
-
-\subsection{[[libthread/ref.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/ref.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[incref]]>>
-
-<<function [[decref]]>>
-@
-
-
-\subsection{[[libthread/threadimpl.h]]}
-
-<<enum [[_anon_ (libthread/threadimpl.h)]]>>=
-enum
-{
-<<constant [[RENDHASH]]>>
-<<constant [[Printsize]]>>
-<<constant [[NPRIV]]>>
-};
-@
-
-%-------------------------------------------------------------
-
-
-<<libthread/threadimpl.h>>=
-/* 
- * Some notes on locking:
- *
- *  All the locking woes come from implementing
- *  threadinterrupt (and threadkill).
- *
- *  _threadgetproc()->thread is always a live pointer.
- *  p->threads, p->ready, and _threadrgrp also contain
- *  live thread pointers.  These may only be consulted
- *  while holding p->lock or _threadrgrp.lock; in procs
- *  other than p, the pointers are only guaranteed to be live
- *  while the lock is still being held.
- *
- *  Thread structures can only be freed by the proc
- *  they belong to.  Threads marked with t->inrendez
- *  need to be extracted from the _threadrgrp before
- *  being freed.
- *
- *  _threadrgrp.lock cannot be acquired while holding p->lock.
- */
-
-typedef struct Pqueue   Pqueue;
-typedef struct Rgrp Rgrp;
-typedef struct Tqueue   Tqueue;
-typedef struct Thread   Thread;
-typedef struct Execargs Execargs;
-typedef struct Proc Proc;
-
-
-/* must match list in sched.c */
-<<enum [[state]]>>
-typedef enum state State;
-    
-<<enum [[chanstate]]>>
-typedef enum chanstate Chanstate;
-
-<<enum [[_anon_ (libthread/threadimpl.h)]]>>
-
-<<struct [[Rgrp]]>>
-
-<<struct [[Tqueue]]>>
-
-<<struct [[Thread]]>>
-
-<<struct [[Execargs]]>>
-
-<<struct [[Proc]]>>
-
-<<struct [[Pqueue]]>>
-
-<<struct [[Ioproc]]>>
-
-void    _freeproc(Proc*);
-void    _freethread(Thread*);
-Proc*   _newproc(void(*)(void*), void*, uint, char*, int, int);
-int _procsplhi(void);
-void    _procsplx(int);
-void    _sched(void);
-int _schedexec(Execargs*);
-void    _schedexecwait(void);
-void    _schedexit(Proc*);
-int _schedfork(Proc*);
-void    _schedinit(void*);
-void    _systhreadinit(void);
-void    _threadassert(char*);
-void    _threadbreakrendez(void);
-void    _threaddebug(ulong, char*, ...);
-void    _threadexitsall(char*);
-void    _threadflagrendez(Thread*);
-Proc*   _threadgetproc(void);
-void    _threadsetproc(Proc*);
-void    _threadinitstack(Thread*, void(*)(void*), void*);
-void*   _threadmalloc(long, int);
-void    _threadnote(void*, char*);
-void    _threadready(Thread*);
-void*   _threadrendezvous(void*, void*);
-void    _threadsignal(void);
-void    _threadsysfatal(char*, va_list);
-void**  _workerdata(void);
-void    _xinc(long*);
-long    _xdec(long*);
-
-extern int      _threaddebuglevel;
-extern char*        _threadexitsallstatus;
-extern Pqueue       _threadpq;
-extern Channel*     _threadwaitchan;
-extern Rgrp     _threadrgrp;
-
-<<constant [[DBGAPPL]]>>
-<<constant [[DBGSCHED]]>>
-<<constant [[DBGCHAN]]>>
-<<constant [[DBGREND]]>>
-<<constant [[DBGNOTE]]>>
-<<constant [[DBGEXEC]]>>
-
-<<function [[ioproc_arg]]>>
-@
-
-
-\subsection{[[libthread/xincarm.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/xincarm.c>>=
-#include "xincport.h"
-@
-
-\subsection{[[libthread/xincport.h]]}
-
-%-------------------------------------------------------------
-
-<<libthread/xincport.h>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-
-<<global [[xincport_lock]]>>
-
-<<function [[_xinc]]>>
-
-<<function [[_xdec]]>>
-@
-
-
-\subsection{[[libthread/globals.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/globals.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<global [[_threadpq]]>>
-
-<<global [[procp]]>>
-
-<<function [[_systhreadinit]]>>
-
-<<function [[_threadgetproc]]>>
-
-<<function [[_threadsetproc]]>>
-@
-
-
-\subsection{[[libthread/debug.c]]}
-
-
-%-------------------------------------------------------------
-
-<<libthread/debug.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<global [[_threaddebuglevel]]>>
-
-<<function [[_threaddebug]]>>
-
-<<function [[_threadassert]]>>
-@
-
-\subsection{[[libthread/id.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/id.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-#include <tos.h>
-
-<<function [[threadid]]>>
-
-<<function [[threadpid]]>>
-
-<<function [[threadsetgrp]]>>
-
-<<function [[threadgetgrp]]>>
-
-<<function [[threadsetname]]>>
-
-<<function [[threadgetname]]>>
-
-<<function [[threaddata]]>>
-
-<<function [[_workerdata]]>>
-
-<<function [[procdata]]>>
-
-<<global privlock (libthread/id.c)>>
-<<global [[privmask]]>>
-
-<<function [[tprivalloc]]>>
-
-<<function [[tprivfree]]>>
-
-<<function [[tprivaddr]]>>
-@
-
-
-\subsection{[[libthread/exit.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/exit.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-#include <tos.h>
-
-<<global [[_threadexitsallstatus]]>>
-<<global [[_threadwaitchan]]>>
-
-<<function [[threadexits]]>>
-
-<<function [[threadexitsall]]>>
-
-<<function [[threadwaitchan]]>>
-@
-
-
-\subsection{[[libthread/lib.c]]}
-
-
-%-------------------------------------------------------------
-
-<<libthread/lib.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<global [[totalmalloc]]>>
-
-<<function [[_threadmalloc]]>>
-
-<<function [[_threadsysfatal]]>>
-@
-
-\subsection{[[libthread/note.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/note.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-typedef struct Note Note;
-
-<<global [[_threadnopasser]]>>
-
-<<constant NFN (libthread/note.c)>>
-<<constant [[ERRLEN]]>>
-<<struct [[Note]]>>
-
-<<global [[notes]]>>
-<<global [[enotes]]>>
-<<global [[onnote]]>>
-<<global [[onnotepid]]>>
-<<global [[onnotelock]]>>
-
-<<function [[threadnotify]]>>
-
-<<function [[delayednotes]]>>
-
-<<function [[_threadnote]]>>
-
-<<function [[_procsplhi]]>>
-
-<<function [[_procsplx]]>>
-@
-
-\subsection{[[libthread/rendez.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/rendez.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<global [[_threadrgrp]]>>
-<<global [[isdirty]]>>
-
-<<function [[finish]]>>
-
-<<function [[_threadrendezvous]]>>
-
-<<function [[_threadflagrendez]]>>
-
-<<function [[_threadbreakrendez]]>>
-@
-
-\subsection{[[libthread/sched.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/sched.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-#include <tos.h>
-
-static Thread   *runthread(Proc*);
-
-<<global [[_psstate]]>>
-
-<<function [[psstate]]>>
-
-<<function [[_schedinit]]>>
-
-<<function [[needstack]]>>
-
-<<function [[_sched]]>>
-
-<<function [[runthread]]>>
-
-<<function [[_threadready]]>>
-
-<<function [[yield]]>>
-@
-
-\subsection{[[libthread/create.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/create.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[nextID]]>>
-    
-<<function [[newthread]]>>
-
-<<function [[threadcreate]]>>
-
-<<function [[_newproc]]>>
-
-<<function [[procrfork]]>>
-
-<<function [[proccreate]]>>
-
-<<function [[_freeproc]]>>
-
-<<function [[_freethread]]>>
-@
-
-\subsection{[[libthread/channel.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/channel.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<enum [[_anon_ (libthread/channel.c)]]>>
-
-<<global [[errcl]]>>
-<<global [[chanlock]]>>
-
-static void enqueue(Alt*, Channel**);
-static void dequeue(Alt*);
-static int canexec(Alt*);
-static int altexec(Alt*, int);
-
-<<constant [[Closed]]>>
-<<constant [[Intred]]>>
-
-<<function [[_chanfree]]>>
-
-<<function [[chanfree]]>>
-
-<<function [[chaninit]]>>
-
-<<function [[chancreate]]>>
-
-<<function [[isopenfor]]>>
-
-<<function [[alt]]>>
-
-<<function [[chanclose]]>>
-
-<<function [[chanclosing]]>>
-
-<<function [[runop]]>>
-
-<<function [[recv]]>>
-
-<<function [[nbrecv]]>>
-
-<<function [[send]]>>
-
-<<function [[nbsend]]>>
-
-<<function [[channelsize]]>>
-
-<<function [[sendul]]>>
-
-<<function [[recvul]]>>
-
-<<function [[sendp]]>>
-
-<<function [[recvp]]>>
-
-<<function [[nbsendul]]>>
-
-<<function [[nbrecvul]]>>
-
-<<function [[nbsendp]]>>
-
-<<function [[nbrecvp]]>>
-
-<<function [[emptyentry]]>>
-
-<<function [[enqueue]]>>
-
-<<function [[dequeue]]>>
-
-<<function [[canexec]]>>
-
-<<function [[altexecbuffered]]>>
-
-<<function [[altcopy]]>>
-
-<<function [[altexec]]>>
-@
-
-\subsection{[[libthread/main.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/main.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-typedef struct Mainarg Mainarg;
-
-<<struct [[Mainarg]]>>
-
-<<global [[mainstacksize]]>>
-<<global [[_threadnotefd]]>>
-<<global [[_threadpasserpid]]>>
-
-<<global [[_mainjmp]]>>
-
-static void mainlauncher(void*);
-extern void (*_sysfatal)(char*, va_list);
-extern void (*__assert)(char*);
-extern int (*_dial)(char*, char*, char*, int*);
-
-extern int _threaddial(char*, char*, char*, int*);
-
-<<global [[mainp]]>>
-
-<<function [[main]]>>
-
-<<function [[mainlauncher]]>>
-
-<<function skip (libthread/main.c)>>
-
-<<function [[_times]]>>
-
-<<function [[efork]]>>
-
-<<function [[_schedexec]]>>
-
-<<function [[_schedfork]]>>
-
-<<function [[_schedexit]]>>
-
-<<function [[_schedexecwait]]>>
-@
-
-\subsection{[[libthread/kill.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/kill.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-static void tinterrupt(Proc*, Thread*);
-
-<<function [[threadxxxgrp]]>>
-
-<<function [[threadxxx]]>>
-
-<<function [[threadkillgrp]]>>
-
-<<function [[threadkill]]>>
-
-<<function [[threadintgrp]]>>
-
-<<function [[threadint]]>>
-
-<<function [[tinterrupt]]>>
-@
-
-\subsection{[[libthread/ioproc.c]]}
-
-<<enum [[_anon_ (libthread/ioproc.c)]]>>=
-enum
-{
-    <<constant [[STACK]]>>
-};
-@
-
-%-------------------------------------------------------------
-
-<<libthread/ioproc.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<enum [[_anon_ (libthread/ioproc.c)]]>>
-
-<<function [[iointerrupt]]>>
-
-<<function [[xioproc]]>>
-
-<<function [[ioproc]]>>
-
-<<function [[closeioproc]]>>
-@
-
-\subsection{[[libthread/iocall.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/iocall.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[iocall]]>>
-@
-
-\subsection{[[libthread/chanprint.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/chanprint.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-
-<<function [[chanprint]]>>
-@
-
-\subsection{[[libthread/ioclose.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/ioclose.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_ioclose]]>>
-
-<<function [[ioclose]]>>
-@
-
-\subsection{[[libthread/iodial.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/iodial.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_iodial]]>>
-
-<<function [[iodial]]>>
-@
-
-\subsection{[[libthread/ioopen.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/ioopen.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_ioopen]]>>
-
-<<function [[ioopen]]>>
-@
-
-\subsection{[[libthread/ioread.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/ioread.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_ioread]]>>
-
-<<function [[ioread]]>>
-@
-
-\subsection{[[libthread/ioreadn.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/ioreadn.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_ioreadn]]>>
-
-<<function [[ioreadn]]>>
-@
-
-\subsection{[[libthread/iosleep.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/iosleep.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_iosleep]]>>
-
-<<function [[iosleep]]>>
-@
-
-\subsection{[[libthread/iowrite.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/iowrite.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<function [[_iowrite]]>>
-
-<<function [[iowrite]]>>
-@
-
-\subsection{[[libthread/dial.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/dial.c>>=
-/*
- * old single-process version of dial that libthread can cope with
- */
-#include <u.h>
-#include <libc.h>
-
-typedef struct DS DS;
-
-static int  call(char*, char*, DS*);
-static int  csdial(DS*);
-static void _dial_string_parse(char*, DS*);
-
-<<enum [[_anon_ (libthread/dial.c)]]>>
-
-<<struct [[DS]](libthread/dial.c)>>
-
-
-<<function [[_threaddial]]>>
-
-<<function [[csdial]](libthread/dial.c)>>
-
-<<function [[call]](libthread/dial.c)>>
-
-<<function [[_dial_string_parse]](libthread/dial.c)>>
-@
-
-\subsection{[[libthread/exec.c]]}
-
-%-------------------------------------------------------------
-
-<<libthread/exec.c>>=
-#include <u.h>
-#include <libc.h>
-#include <thread.h>
-#include "threadimpl.h"
-
-<<constant [[PIPEMNT]]>>
-
-<<function [[procexec]]>>
-
-<<function [[procexecl]]>>
-@
-
 \section{[[libbio/]]}
-
-\subsection*{[[include/io/bio.h]]}
-
-<<macro [[BGETC]]>>=
-#define	BGETC(bp)	Bgetc(bp)
-@
-
-<<macro [[BPUTC]]>>=
-#define	BPUTC(bp,c)	Bputc(bp,c)
-@
-
-<<macro [[BOFFSET]]>>=
-#define	BOFFSET(bp)	Boffset(bp)
-@
-
-<<macro [[BLINELEN]]>>=
-#define	BLINELEN(bp)	Blinelen(bp)
-@
-
-<<macro [[BFILDES]]>>=
-#define	BFILDES(bp)	Bfildes(bp)
-@
-
-
-%-------------------------------------------------------------
-
-<<include/io/bio.h>>=
-#pragma	src	"/sys/src/libbio"
-#pragma	lib	"libbio.a"
-
-typedef	struct	Biobuf	Biobuf;
-typedef	struct	Biobufhdr	Biobufhdr;
-
-//typedef	struct	Biobuf	BiobufGen; // for 5c in ocaml
-typedef	struct	Biobufhdr	BiobufGen; // for regular 5c
-
-enum
-{
-    Bsize		= 8*1024,
-    Bungetsize	= UTFmax+1,		/* space for ungetc */
-    Bmagic		= 0x314159,
-    Beof		= -1,
-    Bbad		= -2,
-
-    Binactive	= 0,		/* states */
-    Bractive,
-    Bwactive,
-    Bracteof,
-};
-
-struct	Biobufhdr
-{
-    int	icount;		/* neg num of bytes at eob */
-    int	ocount;		/* num of bytes at bob */
-    int	rdline;		/* num of bytes after rdline */
-    int	runesize;	/* num of bytes of last getrune */
-    int	state;		/* r/w/inactive */
-    int	fid;		/* open file */
-    int	flag;		/* magic if malloc'ed */
-    vlong	offset;		/* offset of buffer in file */
-    int	bsize;		/* size of buffer */
-    uchar*	bbuf;		/* pointer to beginning of buffer */
-    uchar*	ebuf;		/* pointer to end of buffer */
-    uchar*	gbuf;		/* pointer to good data in buf */
-};
-
-struct	Biobuf
-{
-    Biobufhdr;
-    uchar	b[Bungetsize+Bsize];
-};
-
-/* Dregs, redefined as functions for backwards compatibility */
-<<macro [[BGETC]]>>
-<<macro [[BPUTC]]>>
-<<macro [[BOFFSET]]>>
-<<macro [[BLINELEN]]>>
-<<macro [[BFILDES]]>>
-
-Biobuf*	Bopen(char*, int);
-
-int	Binit(Biobuf*, fdt, int);
-int	Binits(Biobufhdr*, fdt, int, uchar*, int);
-
-int	Bflush(BiobufGen*);
-
-long	Bread(Biobufhdr*, void*, long);
-long	Bwrite(BiobufGen*, void*, long);
-vlong	Bseek(Biobufhdr*, vlong, int);
-
-int	Bputc(BiobufGen*, int);
-int	Bgetc(BiobufGen*);
-int	Bungetc(Biobufhdr*);
-
-int	Bputrune(Biobufhdr*, long);
-long	Bgetrune(BiobufGen*);
-int	Bungetrune(BiobufGen*);
-
-int	Bprint(BiobufGen*, char*, ...);
-int	Bvprint(Biobufhdr*, char*, va_list);
-
-
-
-int	Bbuffered(Biobufhdr*);
-int	Bfildes(Biobufhdr*);
-
-int	Bgetd(Biobufhdr*, double*);
-int	Blinelen(Biobufhdr*);
-vlong	Boffset(Biobufhdr*);
-void*	Brdline(Biobufhdr*, int);
-char*	Brdstr(Biobufhdr*, int, int);
-int	Bterm(Biobufhdr*);
-
-#pragma	varargck	argpos	Bprint	2
-@
 
 
 \subsection*{[[libbio/bbuffered.c]]}
@@ -16421,78 +14105,2445 @@ Bwrite(Biobufhdr *bp, void *ap, long count)
 @
 
 
-\section{[[libstring/]]}
+\section{[[lib_core/libthread/arm]]}
 
-\subsection*{[[include/strings/str.h]]}
+<<libthread/arm.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
 
-<<macro [[s_clone]]>>=
-#define s_clone(s) s_copy((s)->base)
+/* first argument goes in a register; simplest just to ignore it */
+static void
+launcherarm(int, void (*f)(void *arg), void *arg)
+{
+ (*f)(arg);
+ threadexits(nil);
+}
+
+void
+_threadinitstack(Thread *t, void (*f)(void*), void *arg)
+{
+ ulong *tos;
+
+ tos = (ulong*)&t->stk[t->stksize&~7];
+ *--tos = (ulong)arg;
+ *--tos = (ulong)f;
+ *--tos = 0;	/* first arg to launchermips */
+ *--tos = 0;	/* place to store return PC */
+
+ t->sched[JMPBUFPC] = (ulong)launcherarm+JMPBUFDPC;
+ t->sched[JMPBUFSP] = (ulong)tos;
+}
 @
 
-<<macro [[s_to_c]]>>=
-#define s_to_c(s) ((s)->base)
+\section{[[lib_core/libthread/x86]]}
+
+\subsection*{[[libthread/386.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/386.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+
+#include "threadimpl.h"
+
+<<function [[launcher386]]>>
+
+<<function [[_threadinitstack]]>>
 @
 
-<<macro [[s_len]]>>=
-#define s_len(s) ((s)->ptr-(s)->base)
+
+
+\section{[[lib_core/libthread/]]}
+
+\subsection*{[[libthread/ref.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/ref.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[incref]]>>
+
+<<function [[decref]]>>
+@
+
+
+\subsection*{[[libthread/threadimpl.h]]}
+
+<<enum [[_anon_ (libthread/threadimpl.h)]]>>=
+enum
+{
+<<constant [[RENDHASH]]>>
+<<constant [[Printsize]]>>
+<<constant [[NPRIV]]>>
+};
+@
+
+%-------------------------------------------------------------
+
+
+<<libthread/threadimpl.h>>=
+/* 
+ * Some notes on locking:
+ *
+ *  All the locking woes come from implementing
+ *  threadinterrupt (and threadkill).
+ *
+ *  _threadgetproc()->thread is always a live pointer.
+ *  p->threads, p->ready, and _threadrgrp also contain
+ *  live thread pointers.  These may only be consulted
+ *  while holding p->lock or _threadrgrp.lock; in procs
+ *  other than p, the pointers are only guaranteed to be live
+ *  while the lock is still being held.
+ *
+ *  Thread structures can only be freed by the proc
+ *  they belong to.  Threads marked with t->inrendez
+ *  need to be extracted from the _threadrgrp before
+ *  being freed.
+ *
+ *  _threadrgrp.lock cannot be acquired while holding p->lock.
+ */
+
+typedef struct Pqueue   Pqueue;
+typedef struct Rgrp Rgrp;
+typedef struct Tqueue   Tqueue;
+typedef struct Thread   Thread;
+typedef struct Execargs Execargs;
+typedef struct Proc Proc;
+
+
+/* must match list in sched.c */
+<<enum [[state]]>>
+typedef enum state State;
+    
+<<enum [[chanstate]]>>
+typedef enum chanstate Chanstate;
+
+<<enum [[_anon_ (libthread/threadimpl.h)]]>>
+
+<<struct [[Rgrp]]>>
+
+<<struct [[Tqueue]]>>
+
+<<struct [[Thread]]>>
+
+<<struct [[Execargs]]>>
+
+<<struct [[Proc]]>>
+
+<<struct [[Pqueue]]>>
+
+<<struct [[Ioproc]]>>
+
+void    _freeproc(Proc*);
+void    _freethread(Thread*);
+Proc*   _newproc(void(*)(void*), void*, uint, char*, int, int);
+int _procsplhi(void);
+void    _procsplx(int);
+void    _sched(void);
+int _schedexec(Execargs*);
+void    _schedexecwait(void);
+void    _schedexit(Proc*);
+int _schedfork(Proc*);
+void    _schedinit(void*);
+void    _systhreadinit(void);
+void    _threadassert(char*);
+void    _threadbreakrendez(void);
+void    _threaddebug(ulong, char*, ...);
+void    _threadexitsall(char*);
+void    _threadflagrendez(Thread*);
+Proc*   _threadgetproc(void);
+void    _threadsetproc(Proc*);
+void    _threadinitstack(Thread*, void(*)(void*), void*);
+void*   _threadmalloc(long, int);
+void    _threadnote(void*, char*);
+void    _threadready(Thread*);
+void*   _threadrendezvous(void*, void*);
+void    _threadsignal(void);
+void    _threadsysfatal(char*, va_list);
+void**  _workerdata(void);
+void    _xinc(long*);
+long    _xdec(long*);
+
+extern int      _threaddebuglevel;
+extern char*        _threadexitsallstatus;
+extern Pqueue       _threadpq;
+extern Channel*     _threadwaitchan;
+extern Rgrp     _threadrgrp;
+
+<<constant [[DBGAPPL]]>>
+<<constant [[DBGSCHED]]>>
+<<constant [[DBGCHAN]]>>
+<<constant [[DBGREND]]>>
+<<constant [[DBGNOTE]]>>
+<<constant [[DBGEXEC]]>>
+
+<<function [[ioproc_arg]]>>
+@
+
+
+\subsection*{[[libthread/xincarm.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/xincarm.c>>=
+#include "xincport.h"
+@
+
+\subsection*{[[libthread/xincport.h]]}
+
+%-------------------------------------------------------------
+
+<<libthread/xincport.h>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+
+<<global [[xincport_lock]]>>
+
+<<function [[_xinc]]>>
+
+<<function [[_xdec]]>>
+@
+
+
+\subsection*{[[libthread/globals.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/globals.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<global [[_threadpq]]>>
+
+<<global [[procp]]>>
+
+<<function [[_systhreadinit]]>>
+
+<<function [[_threadgetproc]]>>
+
+<<function [[_threadsetproc]]>>
+@
+
+
+\subsection*{[[libthread/debug.c]]}
+
+
+%-------------------------------------------------------------
+
+<<libthread/debug.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<global [[_threaddebuglevel]]>>
+
+<<function [[_threaddebug]]>>
+
+<<function [[_threadassert]]>>
+@
+
+\subsection*{[[libthread/id.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/id.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+#include <tos.h>
+
+<<function [[threadid]]>>
+
+<<function [[threadpid]]>>
+
+<<function [[threadsetgrp]]>>
+
+<<function [[threadgetgrp]]>>
+
+<<function [[threadsetname]]>>
+
+<<function [[threadgetname]]>>
+
+<<function [[threaddata]]>>
+
+<<function [[_workerdata]]>>
+
+<<function [[procdata]]>>
+
+<<global privlock (libthread/id.c)>>
+<<global [[privmask]]>>
+
+<<function [[tprivalloc]]>>
+
+<<function [[tprivfree]]>>
+
+<<function [[tprivaddr]]>>
+@
+
+
+\subsection*{[[libthread/exit.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/exit.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+#include <tos.h>
+
+<<global [[_threadexitsallstatus]]>>
+<<global [[_threadwaitchan]]>>
+
+<<function [[threadexits]]>>
+
+<<function [[threadexitsall]]>>
+
+<<function [[threadwaitchan]]>>
+@
+
+
+\subsection*{[[libthread/lib.c]]}
+
+
+%-------------------------------------------------------------
+
+<<libthread/lib.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<global [[totalmalloc]]>>
+
+<<function [[_threadmalloc]]>>
+
+<<function [[_threadsysfatal]]>>
+@
+
+\subsection*{[[libthread/note.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/note.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+typedef struct Note Note;
+
+<<global [[_threadnopasser]]>>
+
+<<constant NFN (libthread/note.c)>>
+<<constant [[ERRLEN]]>>
+<<struct [[Note]]>>
+
+<<global [[notes]]>>
+<<global [[enotes]]>>
+<<global [[onnote]]>>
+<<global [[onnotepid]]>>
+<<global [[onnotelock]]>>
+
+<<function [[threadnotify]]>>
+
+<<function [[delayednotes]]>>
+
+<<function [[_threadnote]]>>
+
+<<function [[_procsplhi]]>>
+
+<<function [[_procsplx]]>>
+@
+
+\subsection*{[[libthread/rendez.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/rendez.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<global [[_threadrgrp]]>>
+<<global [[isdirty]]>>
+
+<<function [[finish]]>>
+
+<<function [[_threadrendezvous]]>>
+
+<<function [[_threadflagrendez]]>>
+
+<<function [[_threadbreakrendez]]>>
+@
+
+\subsection*{[[libthread/sched.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/sched.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+#include <tos.h>
+
+static Thread   *runthread(Proc*);
+
+<<global [[_psstate]]>>
+
+<<function [[psstate]]>>
+
+<<function [[_schedinit]]>>
+
+<<function [[needstack]]>>
+
+<<function [[_sched]]>>
+
+<<function [[runthread]]>>
+
+<<function [[_threadready]]>>
+
+<<function [[yield]]>>
+@
+
+\subsection*{[[libthread/create.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/create.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[nextID]]>>
+    
+<<function [[newthread]]>>
+
+<<function [[threadcreate]]>>
+
+<<function [[_newproc]]>>
+
+<<function [[procrfork]]>>
+
+<<function [[proccreate]]>>
+
+<<function [[_freeproc]]>>
+
+<<function [[_freethread]]>>
+@
+
+\subsection*{[[libthread/channel.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/channel.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<enum [[_anon_ (libthread/channel.c)]]>>
+
+<<global [[errcl]]>>
+<<global [[chanlock]]>>
+
+static void enqueue(Alt*, Channel**);
+static void dequeue(Alt*);
+static int canexec(Alt*);
+static int altexec(Alt*, int);
+
+<<constant [[Closed]]>>
+<<constant [[Intred]]>>
+
+<<function [[_chanfree]]>>
+
+<<function [[chanfree]]>>
+
+<<function [[chaninit]]>>
+
+<<function [[chancreate]]>>
+
+<<function [[isopenfor]]>>
+
+<<function [[alt]]>>
+
+<<function [[chanclose]]>>
+
+<<function [[chanclosing]]>>
+
+<<function [[runop]]>>
+
+<<function [[recv]]>>
+
+<<function [[nbrecv]]>>
+
+<<function [[send]]>>
+
+<<function [[nbsend]]>>
+
+<<function [[channelsize]]>>
+
+<<function [[sendul]]>>
+
+<<function [[recvul]]>>
+
+<<function [[sendp]]>>
+
+<<function [[recvp]]>>
+
+<<function [[nbsendul]]>>
+
+<<function [[nbrecvul]]>>
+
+<<function [[nbsendp]]>>
+
+<<function [[nbrecvp]]>>
+
+<<function [[emptyentry]]>>
+
+<<function [[enqueue]]>>
+
+<<function [[dequeue]]>>
+
+<<function [[canexec]]>>
+
+<<function [[altexecbuffered]]>>
+
+<<function [[altcopy]]>>
+
+<<function [[altexec]]>>
+@
+
+\subsection*{[[libthread/main.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/main.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+typedef struct Mainarg Mainarg;
+
+<<struct [[Mainarg]]>>
+
+<<global [[mainstacksize]]>>
+<<global [[_threadnotefd]]>>
+<<global [[_threadpasserpid]]>>
+
+<<global [[_mainjmp]]>>
+
+static void mainlauncher(void*);
+extern void (*_sysfatal)(char*, va_list);
+extern void (*__assert)(char*);
+extern int (*_dial)(char*, char*, char*, int*);
+
+extern int _threaddial(char*, char*, char*, int*);
+
+<<global [[mainp]]>>
+
+<<function [[main]]>>
+
+<<function [[mainlauncher]]>>
+
+<<function skip (libthread/main.c)>>
+
+<<function [[_times]]>>
+
+<<function [[efork]]>>
+
+<<function [[_schedexec]]>>
+
+<<function [[_schedfork]]>>
+
+<<function [[_schedexit]]>>
+
+<<function [[_schedexecwait]]>>
+@
+
+\subsection*{[[libthread/kill.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/kill.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+static void tinterrupt(Proc*, Thread*);
+
+<<function [[threadxxxgrp]]>>
+
+<<function [[threadxxx]]>>
+
+<<function [[threadkillgrp]]>>
+
+<<function [[threadkill]]>>
+
+<<function [[threadintgrp]]>>
+
+<<function [[threadint]]>>
+
+<<function [[tinterrupt]]>>
+@
+
+\subsection*{[[libthread/ioproc.c]]}
+
+<<enum [[_anon_ (libthread/ioproc.c)]]>>=
+enum
+{
+    <<constant [[STACK]]>>
+};
+@
+
+%-------------------------------------------------------------
+
+<<libthread/ioproc.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<enum [[_anon_ (libthread/ioproc.c)]]>>
+
+<<function [[iointerrupt]]>>
+
+<<function [[xioproc]]>>
+
+<<function [[ioproc]]>>
+
+<<function [[closeioproc]]>>
+@
+
+\subsection*{[[libthread/iocall.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/iocall.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[iocall]]>>
+@
+
+\subsection*{[[libthread/chanprint.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/chanprint.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+
+<<function [[chanprint]]>>
+@
+
+\subsection*{[[libthread/ioclose.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/ioclose.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_ioclose]]>>
+
+<<function [[ioclose]]>>
+@
+
+\subsection*{[[libthread/iodial.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/iodial.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_iodial]]>>
+
+<<function [[iodial]]>>
+@
+
+\subsection*{[[libthread/ioopen.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/ioopen.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_ioopen]]>>
+
+<<function [[ioopen]]>>
+@
+
+\subsection*{[[libthread/ioread.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/ioread.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_ioread]]>>
+
+<<function [[ioread]]>>
+@
+
+\subsection*{[[libthread/ioreadn.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/ioreadn.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_ioreadn]]>>
+
+<<function [[ioreadn]]>>
+@
+
+\subsection*{[[libthread/iosleep.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/iosleep.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_iosleep]]>>
+
+<<function [[iosleep]]>>
+@
+
+\subsection*{[[libthread/iowrite.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/iowrite.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<function [[_iowrite]]>>
+
+<<function [[iowrite]]>>
+@
+
+\subsection*{[[libthread/dial.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/dial.c>>=
+/*
+ * old single-process version of dial that libthread can cope with
+ */
+#include <u.h>
+#include <libc.h>
+
+typedef struct DS DS;
+
+static int  call(char*, char*, DS*);
+static int  csdial(DS*);
+static void _dial_string_parse(char*, DS*);
+
+<<enum [[_anon_ (libthread/dial.c)]]>>
+
+<<struct [[DS]](libthread/dial.c)>>
+
+
+<<function [[_threaddial]]>>
+
+<<function [[csdial]](libthread/dial.c)>>
+
+<<function [[call]](libthread/dial.c)>>
+
+<<function [[_dial_string_parse]](libthread/dial.c)>>
+@
+
+\subsection*{[[libthread/exec.c]]}
+
+%-------------------------------------------------------------
+
+<<libthread/exec.c>>=
+#include <u.h>
+#include <libc.h>
+#include <thread.h>
+#include "threadimpl.h"
+
+<<constant [[PIPEMNT]]>>
+
+<<function [[procexec]]>>
+
+<<function [[procexecl]]>>
+@
+
+\section{[[libregexp/]]}
+
+
+\subsection*{[[libregexp/regcomp.h]]}
+
+<<libregexp/regcomp.h>>=
+/*
+ *  substitution list
+ */
+#define NSUBEXP 32
+typedef struct Resublist	Resublist;
+struct	Resublist
+{
+ Resub	m[NSUBEXP];
+};
+
+/*
+ * Actions and Tokens (Reinst types)
+ *
+ *	02xx are operators, value == precedence
+ *	03xx are tokens, i.e. operands for operators
+ */
+#define RUNE		0177
+#define	OPERATOR	0200	/* Bitmask of all operators */
+#define	START		0200	/* Start, used for marker on stack */
+#define	RBRA		0201	/* Right bracket, ) */
+#define	LBRA		0202	/* Left bracket, ( */
+#define	OR		0203	/* Alternation, | */
+#define	CAT		0204	/* Concatentation, implicit operator */
+#define	STAR		0205	/* Closure, * */
+#define	PLUS		0206	/* a+ == aa* */
+#define	QUEST		0207	/* a? == a|nothing, i.e. 0 or 1 a's */
+#define	ANY		0300	/* Any character except newline, . */
+#define	ANYNL		0301	/* Any character including newline, . */
+#define	NOP		0302	/* No operation, internal use only */
+#define	BOL		0303	/* Beginning of line, ^ */
+#define	EOL		0304	/* End of line, $ */
+#define	CCLASS		0305	/* Character class, [] */
+#define	NCCLASS		0306	/* Negated character class, [] */
+#define	END		0377	/* Terminate: match found */
+
+/*
+ *  regexec execution lists
+ */
+#define LISTSIZE	10
+#define BIGLISTSIZE	(25*LISTSIZE)
+typedef struct Relist	Relist;
+struct Relist
+{
+ Reinst*		inst;		/* Reinstruction of the thread */
+ Resublist	se;		/* matched subexpressions in this thread */
+};
+typedef struct Reljunk	Reljunk;
+struct	Reljunk
+{
+ Relist*	relist[2];
+ Relist*	reliste[2];
+ int	starttype;
+ Rune	startchar;
+ char*	starts;
+ char*	eol;
+ Rune*	rstarts;
+ Rune*	reol;
+};
+
+extern Relist*	_renewthread(Relist*, Reinst*, int, Resublist*);
+extern void	_renewmatch(Resub*, int, Resublist*);
+extern Relist*	_renewemptythread(Relist*, Reinst*, int, char*);
+extern Relist*	_rrenewemptythread(Relist*, Reinst*, int, Rune*);
+@
+%$
+
+\subsection*{[[libregexp/regaux.c]]}
+
+<<function [[_renewmatch]]>>=
+/*
+ *  save a new match in mp
+ */
+extern void
+_renewmatch(Resub *mp, int ms, Resublist *sp)
+{
+    int i;
+
+    if(mp==0 || ms<=0)
+        return;
+    if(mp[0].s.sp==0 || sp->m[0].s.sp<mp[0].s.sp ||
+       (sp->m[0].s.sp==mp[0].s.sp && sp->m[0].e.ep>mp[0].e.ep)){
+        for(i=0; i<ms && i<NSUBEXP; i++)
+            mp[i] = sp->m[i];
+        for(; i<ms; i++)
+            mp[i].s.sp = mp[i].e.ep = 0;
+    }
+}
+@
+
+<<function [[_renewthread]]>>=
+/*
+ * Note optimization in _renewthread:
+ * 	*lp must be pending when _renewthread called; if *l has been looked
+ *		at already, the optimization is a bug.
+ */
+extern Relist*
+_renewthread(Relist *lp,	/* _relist to add to */
+    Reinst *ip,		/* instruction to add */
+    int ms,
+    Resublist *sep)		/* pointers to subexpressions */
+{
+    Relist *p;
+
+    for(p=lp; p->inst; p++){
+        if(p->inst == ip){
+            if(sep->m[0].s.sp < p->se.m[0].s.sp){
+                if(ms > 1)
+                    p->se = *sep;
+                else
+                    p->se.m[0] = sep->m[0];
+            }
+            return 0;
+        }
+    }
+    p->inst = ip;
+    if(ms > 1)
+        p->se = *sep;
+    else
+        p->se.m[0] = sep->m[0];
+    (++p)->inst = 0;
+    return p;
+}
+@
+
+<<function [[_renewemptythread]]>>=
+/*
+ * same as renewthread, but called with
+ * initial empty start pointer.
+ */
+extern Relist*
+_renewemptythread(Relist *lp,	/* _relist to add to */
+    Reinst *ip,		/* instruction to add */
+    int ms,
+    char *sp)		/* pointers to subexpressions */
+{
+    Relist *p;
+
+    for(p=lp; p->inst; p++){
+        if(p->inst == ip){
+            if(sp < p->se.m[0].s.sp) {
+                if(ms > 1)
+                    memset(&p->se, 0, sizeof(p->se));
+                p->se.m[0].s.sp = sp;
+            }
+            return 0;
+        }
+    }
+    p->inst = ip;
+    if(ms > 1)
+        memset(&p->se, 0, sizeof(p->se));
+    p->se.m[0].s.sp = sp;
+    (++p)->inst = 0;
+    return p;
+}
+@
+
+<<function [[_rrenewemptythread]]>>=
+extern Relist*
+_rrenewemptythread(Relist *lp,	/* _relist to add to */
+    Reinst *ip,		/* instruction to add */
+    int ms,
+    Rune *rsp)		/* pointers to subexpressions */
+{
+    Relist *p;
+
+    for(p=lp; p->inst; p++){
+        if(p->inst == ip){
+            if(rsp < p->se.m[0].s.rsp) {
+                if(ms > 1)
+                    memset(&p->se, 0, sizeof(p->se));
+                p->se.m[0].s.rsp = rsp;
+            }
+            return 0;
+        }
+    }
+    p->inst = ip;
+    if(ms > 1)
+        memset(&p->se, 0, sizeof(p->se));
+    p->se.m[0].s.rsp = rsp;
+    (++p)->inst = 0;
+    return p;
+}
 @
 
 
 %-------------------------------------------------------------
 
-<<strings/str.h>>=
-#pragma	src	"/sys/src/libstring"
-#pragma	lib	"libstring.a"
+<<libregexp/regaux.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+#include "regcomp.h"
 
-// Extensible Strings.
 
-// This file was originally called string.h but this conflicts with
-// the Posix <string.h> so simpler to rename str.h (which anyway fits
-// well with the 3-letters utf.h, bio.h, fmt.h, etc.).
+<<function [[_renewmatch]]>>
 
-/* extensible Strings */
-typedef struct String {
-    Lock;
-    char	*base;	/* base of String */
-    char	*end;	/* end of allocated space+1 */
-    char	*ptr;	/* ptr into String */
-    short	ref;
-    uchar	fixed;
-} String;
+<<function [[_renewthread]]>>
 
-<<macro [[s_clone]]>>
-<<macro [[s_to_c]]>>
-<<macro [[s_len]]>>
+<<function [[_renewemptythread]]>>
 
-extern String*	s_append(String*, char*);
-extern String*	s_array(char*, int);
-extern String*	s_copy(char*);
-extern void	s_free(String*);
-extern String*	s_incref(String*);	
-extern String*	s_memappend(String*, char*, int);
-extern String*	s_nappend(String*, char*, int);
-extern String*	s_new(void);
-extern String*	s_newalloc(int);
-extern String*	s_parse(String*, String*);
-extern String*	s_reset(String*);
-extern String*	s_restart(String*);
-extern void	s_terminate(String*);
-extern void	s_tolower(String*);
-extern void	s_putc(String*, int);
-extern String*	s_unique(String*);
-extern String*	s_grow(String*, int);
-
-#ifdef BGETC
-extern int	s_read(Biobuf*, String*, int);
-extern char	*s_read_line(Biobuf*, String*);
-extern char	*s_getline(Biobuf*, String*);
-typedef struct Sinstack Sinstack;
-#pragma incomplete Sinstack
-extern char	*s_rdinstack(Sinstack*, String*);
-extern Sinstack	*s_allocinstack(char*);
-extern void	s_freeinstack(Sinstack*);
-#endif /* BGETC */
+<<function [[_rrenewemptythread]]>>
 @
+
+
+\subsection*{[[libregexp/regcomp.c]]}
+
+<<constant [[TRUE]]>>=
+#define	TRUE	1
+@
+
+<<constant [[FALSE]]>>=
+#define	FALSE	0
+@
+
+<<struct [[Node]]>>=
+/*
+ * Parser Information
+ */
+typedef
+struct Node
+{
+    Reinst*	first;
+    Reinst*	last;
+}Node;
+@
+
+<<global [[reprog]]>>=
+/* max character classes per program is nelem(reprog->class) */
+static Reprog	*reprog;
+@
+
+<<constant [[NCCRUNE]]>>=
+/* max rune ranges per character class is nelem(classp->spans)/2 */
+#define NCCRUNE	nelem(classp->spans)
+@
+
+<<constant [[NSTACK]]>>=
+#define	NSTACK	20
+@
+
+<<global [[andstack]]>>=
+static	Node	andstack[NSTACK];
+@
+
+<<global [[andp]]>>=
+static	Node	*andp;
+@
+
+<<global [[atorstack]]>>=
+static	int	atorstack[NSTACK];
+@
+
+<<global [[atorp]]>>=
+static	int*	atorp;
+@
+
+<<global [[cursubid]]>>=
+static	int	cursubid;		/* id of current subexpression */
+@
+
+<<global [[subidstack]]>>=
+static	int	subidstack[NSTACK];	/* parallel to atorstack */
+@
+
+<<global [[subidp]]>>=
+static	int*	subidp;
+@
+
+<<global [[lastwasand]]>>=
+static	int	lastwasand;	/* Last token was operand */
+@
+
+<<global [[nbra]]>>=
+static	int	nbra;
+@
+
+<<global [[exprp]]>>=
+static	char*	exprp;		/* pointer to next character in source expression */
+@
+
+<<global [[lexdone]]>>=
+static	int	lexdone;
+@
+
+<<global [[nclass]]>>=
+static	int	nclass;
+@
+
+<<global [[classp]]>>=
+static	Reclass*classp;
+@
+
+<<global [[freep]]>>=
+static	Reinst*	freep;
+@
+
+<<global [[errors]]>>=
+static	int	errors;
+@
+
+<<global [[yyrune]]>>=
+static	Rune	yyrune;		/* last lex'd rune */
+@
+
+<<global [[yyclassp]]>>=
+static	Reclass*yyclassp;	/* last lex'd class */
+@
+
+<<global [[regkaboom]]>>=
+static jmp_buf regkaboom;
+@
+
+<<function [[rcerror]]>>=
+static	void
+rcerror(char *s)
+{
+    errors++;
+    regerror(s);
+    longjmp(regkaboom, 1);
+}
+@
+
+<<function [[newinst]]>>=
+static	Reinst*
+newinst(int t)
+{
+    freep->type = t;
+    freep->left = 0;
+    freep->right = 0;
+    return freep++;
+}
+@
+
+<<function [[operand]]>>=
+static	void
+operand(int t)
+{
+    Reinst *i;
+
+    if(lastwasand)
+        operator(CAT);	/* catenate is implicit */
+    i = newinst(t);
+
+    if(t == CCLASS || t == NCCLASS)
+        i->cp = yyclassp;
+    if(t == RUNE)
+        i->r = yyrune;
+
+    pushand(i, i);
+    lastwasand = TRUE;
+}
+@
+
+<<function [[operator]]>>=
+static	void
+operator(int t)
+{
+    if(t==RBRA && --nbra<0)
+        rcerror("unmatched right paren");
+    if(t==LBRA){
+        if(++cursubid >= NSUBEXP)
+            rcerror ("too many subexpressions");
+        nbra++;
+        if(lastwasand)
+            operator(CAT);
+    } else
+        evaluntil(t);
+    if(t != RBRA)
+        pushator(t);
+    lastwasand = FALSE;
+    if(t==STAR || t==QUEST || t==PLUS || t==RBRA)
+        lastwasand = TRUE;	/* these look like operands */
+}
+@
+
+<<function [[regerr2]]>>=
+static	void
+regerr2(char *s, int c)
+{
+    char buf[100];
+    char *cp = buf;
+    while(*s)
+        *cp++ = *s++;
+    *cp++ = c;
+    *cp = '\0'; 
+    rcerror(buf);
+}
+@
+
+<<function [[cant]]>>=
+static	void
+cant(char *s)
+{
+    char buf[100];
+    strcpy(buf, "can't happen: ");
+    strcat(buf, s);
+    rcerror(buf);
+}
+@
+
+<<function [[pushand]]>>=
+static	void
+pushand(Reinst *f, Reinst *l)
+{
+    if(andp >= &andstack[NSTACK])
+        cant("operand stack overflow");
+    andp->first = f;
+    andp->last = l;
+    andp++;
+}
+@
+
+<<function [[pushator]]>>=
+static	void
+pushator(int t)
+{
+    if(atorp >= &atorstack[NSTACK])
+        cant("operator stack overflow");
+    *atorp++ = t;
+    *subidp++ = cursubid;
+}
+@
+
+<<function [[popand]]>>=
+static	Node*
+popand(int op)
+{
+    Reinst *inst;
+
+    if(andp <= &andstack[0]){
+        regerr2("missing operand for ", op);
+        inst = newinst(NOP);
+        pushand(inst,inst);
+    }
+    return --andp;
+}
+@
+
+<<function [[popator]]>>=
+static	int
+popator(void)
+{
+    if(atorp <= &atorstack[0])
+        cant("operator stack underflow");
+    --subidp;
+    return *--atorp;
+}
+@
+
+<<function [[evaluntil]]>>=
+static	void
+evaluntil(int pri)
+{
+    Node *op1, *op2;
+    Reinst *inst1, *inst2;
+
+    while(pri==RBRA || atorp[-1]>=pri){
+        switch(popator()){
+        default:
+            rcerror("unknown operator in evaluntil");
+            break;
+        case LBRA:		/* must have been RBRA */
+            op1 = popand('(');
+            inst2 = newinst(RBRA);
+            inst2->subid = *subidp;
+            op1->last->next = inst2;
+            inst1 = newinst(LBRA);
+            inst1->subid = *subidp;
+            inst1->next = op1->first;
+            pushand(inst1, inst2);
+            return;
+        case OR:
+            op2 = popand('|');
+            op1 = popand('|');
+            inst2 = newinst(NOP);
+            op2->last->next = inst2;
+            op1->last->next = inst2;
+            inst1 = newinst(OR);
+            inst1->right = op1->first;
+            inst1->left = op2->first;
+            pushand(inst1, inst2);
+            break;
+        case CAT:
+            op2 = popand(0);
+            op1 = popand(0);
+            op1->last->next = op2->first;
+            pushand(op1->first, op2->last);
+            break;
+        case STAR:
+            op2 = popand('*');
+            inst1 = newinst(OR);
+            op2->last->next = inst1;
+            inst1->right = op2->first;
+            pushand(inst1, inst1);
+            break;
+        case PLUS:
+            op2 = popand('+');
+            inst1 = newinst(OR);
+            op2->last->next = inst1;
+            inst1->right = op2->first;
+            pushand(op2->first, inst1);
+            break;
+        case QUEST:
+            op2 = popand('?');
+            inst1 = newinst(OR);
+            inst2 = newinst(NOP);
+            inst1->left = inst2;
+            inst1->right = op2->first;
+            op2->last->next = inst2;
+            pushand(inst1, inst2);
+            break;
+        }
+    }
+}
+@
+
+<<function [[optimize]]>>=
+static	Reprog*
+optimize(Reprog *pp)
+{
+    Reinst *inst, *target;
+    int size;
+    Reprog *npp;
+    Reclass *cl;
+    int diff;
+
+    /*
+     *  get rid of NOOP chains
+     */
+    for(inst=pp->firstinst; inst->type!=END; inst++){
+        target = inst->next;
+        while(target->type == NOP)
+            target = target->next;
+        inst->next = target;
+    }
+
+    /*
+     *  The original allocation is for an area larger than
+     *  necessary.  Reallocate to the actual space used
+     *  and then relocate the code.
+     */
+    size = sizeof(Reprog) + (freep - pp->firstinst)*sizeof(Reinst);
+    npp = realloc(pp, size);
+    if(npp==0 || npp==pp)
+        return pp;
+    diff = (char *)npp - (char *)pp;
+    freep = (Reinst *)((char *)freep + diff);
+    for(inst=npp->firstinst; inst<freep; inst++){
+        switch(inst->type){
+        case OR:
+        case STAR:
+        case PLUS:
+        case QUEST:
+            *(char **)&inst->right += diff;
+            break;
+        case CCLASS:
+        case NCCLASS:
+            *(char **)&inst->right += diff;
+            cl = inst->cp;
+            *(char **)&cl->end += diff;
+            break;
+        }
+        *(char **)&inst->left += diff;
+    }
+    *(char **)&npp->startinst += diff;
+    return npp;
+}
+@
+
+<<function [[dumpstack]]>>=
+static	void
+dumpstack(void){
+    Node *stk;
+    int *ip;
+
+    print("operators\n");
+    for(ip=atorstack; ip<atorp; ip++)
+        print("0%o\n", *ip);
+    print("operands\n");
+    for(stk=andstack; stk<andp; stk++)
+        print("0%o\t0%o\n", stk->first->type, stk->last->type);
+}
+@
+
+<<function [[dump]]>>=
+static	void
+dump(Reprog *pp)
+{
+    Reinst *l;
+    Rune *p;
+
+    l = pp->firstinst;
+    do{
+        print("%d:\t0%o\t%d\t%d", l-pp->firstinst, l->type,
+            l->left-pp->firstinst, l->right-pp->firstinst);
+        if(l->type == RUNE)
+            print("\t%C\n", l->r);
+        else if(l->type == CCLASS || l->type == NCCLASS){
+            print("\t[");
+            if(l->type == NCCLASS)
+                print("^");
+            for(p = l->cp->spans; p < l->cp->end; p += 2)
+                if(p[0] == p[1])
+                    print("%C", p[0]);
+                else
+                    print("%C-%C", p[0], p[1]);
+            print("]\n");
+        } else
+            print("\n");
+    }while(l++->type);
+}
+@
+
+<<function [[newclass]]>>=
+static	Reclass*
+newclass(void)
+{
+    if(nclass >= nelem(reprog->class))
+        rcerror("too many character classes; increase Reprog.class size");
+    return &(classp[nclass++]);
+}
+@
+
+<<function [[nextc]]>>=
+static	int
+nextc(Rune *rp)
+{
+    if(lexdone){
+        *rp = 0;
+        return 1;
+    }
+    exprp += chartorune(rp, exprp);
+    if(*rp == L'\\'){
+        exprp += chartorune(rp, exprp);
+        return 1;
+    }
+    if(*rp == 0)
+        lexdone = 1;
+    return 0;
+}
+@
+
+<<function [[lex]]>>=
+static	int
+lex(int literal, int dot_type)
+{
+    int quoted;
+
+    quoted = nextc(&yyrune);
+    if(literal || quoted){
+        if(yyrune == 0)
+            return END;
+        return RUNE;
+    }
+
+    switch(yyrune){
+    case 0:
+        return END;
+    case L'*':
+        return STAR;
+    case L'?':
+        return QUEST;
+    case L'+':
+        return PLUS;
+    case L'|':
+        return OR;
+    case L'.':
+        return dot_type;
+    case L'(':
+        return LBRA;
+    case L')':
+        return RBRA;
+    case L'^':
+        return BOL;
+    case L'$':
+        return EOL;
+    case L'[':
+        return bldcclass();
+    }
+    return RUNE;
+}
+@
+%$
+
+<<function [[bldcclass]]>>=
+static int
+bldcclass(void)
+{
+    int type;
+    Rune r[NCCRUNE];
+    Rune *p, *ep, *np;
+    Rune rune;
+    int quoted;
+
+    /* we have already seen the '[' */
+    type = CCLASS;
+    yyclassp = newclass();
+
+    /* look ahead for negation */
+    /* SPECIAL CASE!!! negated classes don't match \n */
+    ep = r;
+    quoted = nextc(&rune);
+    if(!quoted && rune == L'^'){
+        type = NCCLASS;
+        quoted = nextc(&rune);
+        *ep++ = L'\n';
+        *ep++ = L'\n';
+    }
+
+    /* parse class into a set of spans */
+    while(ep < &r[NCCRUNE-1]){
+        if(rune == 0){
+            rcerror("malformed '[]'");
+            return 0;
+        }
+        if(!quoted && rune == L']')
+            break;
+        if(!quoted && rune == L'-'){
+            if(ep == r){
+                rcerror("malformed '[]'");
+                return 0;
+            }
+            quoted = nextc(&rune);
+            if((!quoted && rune == L']') || rune == 0){
+                rcerror("malformed '[]'");
+                return 0;
+            }
+            *(ep-1) = rune;
+        } else {
+            *ep++ = rune;
+            *ep++ = rune;
+        }
+        quoted = nextc(&rune);
+    }
+    if(ep >= &r[NCCRUNE-1]) {
+        rcerror("char class too large; increase Reclass.spans size");
+        return 0;
+    }
+
+    /* sort on span start */
+    for(p = r; p < ep; p += 2){
+        for(np = p; np < ep; np += 2)
+            if(*np < *p){
+                rune = np[0];
+                np[0] = p[0];
+                p[0] = rune;
+                rune = np[1];
+                np[1] = p[1];
+                p[1] = rune;
+            }
+    }
+
+    /* merge spans */
+    np = yyclassp->spans;
+    p = r;
+    if(r == ep)
+        yyclassp->end = np;
+    else {
+        np[0] = *p++;
+        np[1] = *p++;
+        for(; p < ep; p += 2)
+            /* overlapping or adjacent ranges? */
+            if(p[0] <= np[1] + 1){
+                if(p[1] >= np[1])
+                    np[1] = p[1];	/* coalesce */
+            } else {
+                np += 2;
+                np[0] = p[0];
+                np[1] = p[1];
+            }
+        yyclassp->end = np+2;
+    }
+
+    return type;
+}
+@
+
+<<function [[regcomp1]]>>=
+static	Reprog*
+regcomp1(char *s, int literal, int dot_type)
+{
+    int token;
+    Reprog *pp;
+
+    /* get memory for the program */
+    pp = malloc(sizeof(Reprog) + 6*sizeof(Reinst)*strlen(s));
+    if(pp == 0){
+        regerror("out of memory");
+        return 0;
+    }
+    freep = pp->firstinst;
+    classp = pp->class;
+    errors = 0;
+
+    if(setjmp(regkaboom))
+        goto out;
+
+    /* go compile the sucker */
+    lexdone = 0;
+    exprp = s;
+    nclass = 0;
+    nbra = 0;
+    atorp = atorstack;
+    andp = andstack;
+    subidp = subidstack;
+    lastwasand = FALSE;
+    cursubid = 0;
+
+    /* Start with a low priority operator to prime parser */
+    pushator(START-1);
+    while((token = lex(literal, dot_type)) != END){
+        if((token&0300) == OPERATOR)
+            operator(token);
+        else
+            operand(token);
+    }
+
+    /* Close with a low priority operator */
+    evaluntil(START);
+
+    /* Force END */
+    operand(END);
+    evaluntil(START);
+#ifdef DEBUG
+    dumpstack();
+#endif
+    if(nbra)
+        rcerror("unmatched left paren");
+    --andp;	/* points to first and only operand */
+    pp->startinst = andp->first;
+#ifdef DEBUG
+    dump(pp);
+#endif
+    pp = optimize(pp);
+#ifdef DEBUG
+    print("start: %d\n", andp->first-pp->firstinst);
+    dump(pp);
+#endif
+out:
+    if(errors){
+        free(pp);
+        pp = 0;
+    }
+    return pp;
+}
+@
+
+<<function [[regcomp]]>>=
+extern	Reprog*
+regcomp(char *s)
+{
+    return regcomp1(s, 0, ANY);
+}
+@
+
+<<function [[regcomplit]]>>=
+extern	Reprog*
+regcomplit(char *s)
+{
+    return regcomp1(s, 1, ANY);
+}
+@
+
+<<function [[regcompnl]]>>=
+extern	Reprog*
+regcompnl(char *s)
+{
+    return regcomp1(s, 0, ANYNL);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<libregexp/regcomp.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+#include "regcomp.h"
+
+<<constant [[TRUE]]>>
+<<constant [[FALSE]]>>
+
+<<struct [[Node]]>>
+
+<<global [[reprog]]>>
+
+<<constant [[NCCRUNE]]>>
+
+<<constant [[NSTACK]]>>
+<<global [[andstack]]>>
+<<global [[andp]]>>
+<<global [[atorstack]]>>
+<<global [[atorp]]>>
+<<global [[cursubid]]>>
+<<global [[subidstack]]>>
+<<global [[subidp]]>>
+<<global [[lastwasand]]>>
+<<global [[nbra]]>>
+<<global [[exprp]]>>
+<<global [[lexdone]]>>
+<<global [[nclass]]>>
+<<global [[classp]]>>
+<<global [[freep]]>>
+<<global [[errors]]>>
+<<global [[yyrune]]>>
+<<global [[yyclassp]]>>
+
+/* predeclared crap */
+static	void	operator(int);
+static	void	pushand(Reinst*, Reinst*);
+static	void	pushator(int);
+static	void	evaluntil(int);
+static	int	bldcclass(void);
+
+<<global [[regkaboom]]>>
+
+<<function [[rcerror]]>>
+
+<<function [[newinst]]>>
+
+<<function [[operand]]>>
+
+<<function [[operator]]>>
+
+<<function [[regerr2]]>>
+
+<<function [[cant]]>>
+
+<<function [[pushand]]>>
+
+<<function [[pushator]]>>
+
+<<function [[popand]]>>
+
+<<function [[popator]]>>
+
+<<function [[evaluntil]]>>
+
+<<function [[optimize]]>>
+
+#ifdef	DEBUG
+<<function [[dumpstack]]>>
+
+<<function [[dump]]>>
+#endif
+
+<<function [[newclass]]>>
+
+<<function [[nextc]]>>
+
+<<function [[lex]]>>
+
+<<function [[bldcclass]]>>
+
+<<function [[regcomp1]]>>
+
+<<function [[regcomp]]>>
+
+<<function [[regcomplit]]>>
+
+<<function [[regcompnl]]>>
+@
+
+
+\subsection*{[[libregexp/regerror.c]]}
+
+<<function [[regerror]]>>=
+void
+regerror(char *s)
+{
+    char buf[132];
+
+    strcpy(buf, "regerror: ");
+    strcat(buf, s);
+    strcat(buf, "\n");
+    write(2, buf, strlen(buf));
+    exits("regerr");
+}
+@
+
+%-------------------------------------------------------------
+
+<<libregexp/regerror.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+
+<<function [[regerror]]>>
+@
+
+\subsection*{[[libregexp/regexec.c]]}
+
+<<function [[regexec1]]>>=
+/*
+ *  return	0 if no match
+ *		>0 if a match
+ *		<0 if we ran out of _relist space
+ */
+static int
+regexec1(Reprog *progp,	/* program to run */
+    char *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms,		/* number of elements at mp */
+    Reljunk *j
+)
+{
+    int flag=0;
+    Reinst *inst;
+    Relist *tlp;
+    char *s;
+    int i, checkstart;
+    Rune r, *rp, *ep;
+    int n;
+    Relist* tl;		/* This list, next list */
+    Relist* nl;
+    Relist* tle;		/* ends of this and next list */
+    Relist* nle;
+    int match;
+    char *p;
+
+    match = 0;
+    checkstart = j->starttype;
+    if(mp)
+        for(i=0; i<ms; i++) {
+            mp[i].s.sp = 0;
+            mp[i].e.ep = 0;
+        }
+    j->relist[0][0].inst = 0;
+    j->relist[1][0].inst = 0;
+
+    /* Execute machine once for each character, including terminal NUL */
+    s = j->starts;
+    do{
+        /* fast check for first char */
+        if(checkstart) {
+            switch(j->starttype) {
+            case RUNE:
+                p = utfrune(s, j->startchar);
+                if(p == 0 || s == j->eol)
+                    return match;
+                s = p;
+                break;
+            case BOL:
+                if(s == bol)
+                    break;
+                p = utfrune(s, '\n');
+                if(p == 0 || s == j->eol)
+                    return match;
+                s = p+1;
+                break;
+            }
+        }
+        r = *(uchar*)s;
+        if(r < Runeself)
+            n = 1;
+        else
+            n = chartorune(&r, s);
+
+        /* switch run lists */
+        tl = j->relist[flag];
+        tle = j->reliste[flag];
+        nl = j->relist[flag^=1];
+        nle = j->reliste[flag];
+        nl->inst = 0;
+
+        /* Add first instruction to current list */
+        if(match == 0)
+            _renewemptythread(tl, progp->startinst, ms, s);
+
+        /* Execute machine until current list is empty */
+        for(tlp=tl; tlp->inst; tlp++){	/* assignment = */
+            for(inst = tlp->inst; ; inst = inst->next){
+                switch(inst->type){
+                case RUNE:	/* regular character */
+                    if(inst->r == r){
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    }
+                    break;
+                case LBRA:
+                    tlp->se.m[inst->subid].s.sp = s;
+                    continue;
+                case RBRA:
+                    tlp->se.m[inst->subid].e.ep = s;
+                    continue;
+                case ANY:
+                    if(r != '\n')
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case ANYNL:
+                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case BOL:
+                    if(s == bol || *(s-1) == '\n')
+                        continue;
+                    break;
+                case EOL:
+                    if(s == j->eol || r == 0 || r == '\n')
+                        continue;
+                    break;
+                case CCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1]){
+                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                                return -1;
+                            break;
+                        }
+                    break;
+                case NCCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1])
+                            break;
+                    if(rp == ep)
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case OR:
+                    /* evaluate right choice later */
+                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
+                        return -1;
+                    /* efficiency: advance and re-evaluate */
+                    continue;
+                case END:	/* Match! */
+                    match = 1;
+                    tlp->se.m[0].e.ep = s;
+                    if(mp != 0)
+                        _renewmatch(mp, ms, &tlp->se);
+                    break;
+                }
+                break;
+            }
+        }
+        if(s == j->eol)
+            break;
+        checkstart = j->starttype && nl->inst==0;
+        s += n;
+    }while(r);
+    return match;
+}
+@
+
+<<function [[regexec2]]>>=
+static int
+regexec2(Reprog *progp,	/* program to run */
+    char *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms,		/* number of elements at mp */
+    Reljunk *j
+)
+{
+    int rv;
+    Relist *relist0, *relist1;
+
+    /* mark space */
+    relist0 = malloc(BIGLISTSIZE*sizeof(Relist));
+    if(relist0 == nil)
+        return -1;
+    relist1 = malloc(BIGLISTSIZE*sizeof(Relist));
+    if(relist1 == nil){
+        free(relist1);
+        return -1;
+    }
+    j->relist[0] = relist0;
+    j->relist[1] = relist1;
+    j->reliste[0] = relist0 + BIGLISTSIZE - 2;
+    j->reliste[1] = relist1 + BIGLISTSIZE - 2;
+
+    rv = regexec1(progp, bol, mp, ms, j);
+    free(relist0);
+    free(relist1);
+    return rv;
+}
+@
+
+<<function [[regexec]]>>=
+extern int
+regexec(Reprog *progp,	/* program to run */
+    char *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements at mp */
+{
+    Reljunk j;
+    Relist relist0[LISTSIZE], relist1[LISTSIZE];
+    int rv;
+
+    /*
+   *  use user-specified starting/ending location if specified
+     */
+    j.starts = bol;
+    j.eol = 0;
+    if(mp && ms>0){
+        if(mp->s.sp)
+            j.starts = mp->s.sp;
+        if(mp->e.ep)
+            j.eol = mp->e.ep;
+    }
+    j.starttype = 0;
+    j.startchar = 0;
+    if(progp->startinst->type == RUNE && progp->startinst->r < Runeself) {
+        j.starttype = RUNE;
+        j.startchar = progp->startinst->r;
+    }
+    if(progp->startinst->type == BOL)
+        j.starttype = BOL;
+
+    /* mark space */
+    j.relist[0] = relist0;
+    j.relist[1] = relist1;
+    j.reliste[0] = relist0 + nelem(relist0) - 2;
+    j.reliste[1] = relist1 + nelem(relist1) - 2;
+
+    rv = regexec1(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    rv = regexec2(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    return -1;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<libregexp/regexec.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+#include "regcomp.h"
+
+
+<<function [[regexec1]]>>
+
+<<function [[regexec2]]>>
+
+<<function [[regexec]]>>
+@
+
+
+\subsection*{[[libregexp/regsub.c]]}
+
+<<function [[regsub]]>>=
+/* substitute into one string using the matches from the last regexec() */
+extern	void
+regsub(char *sp,	/* source string */
+    char *dp,	/* destination string */
+    int dlen,
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements pointed to by mp */
+{
+    char *ssp, *ep;
+    int i;
+
+    ep = dp+dlen-1;
+    while(*sp != '\0'){
+        if(*sp == '\\'){
+            switch(*++sp){
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                i = *sp-'0';
+                if(mp!=0 && mp[i].s.sp != 0 && ms>i)
+                    for(ssp = mp[i].s.sp;
+                         ssp < mp[i].e.ep;
+                         ssp++)
+                        if(dp < ep)
+                            *dp++ = *ssp;
+                break;
+            case '\\':
+                if(dp < ep)
+                    *dp++ = '\\';
+                break;
+            case '\0':
+                sp--;
+                break;
+            default:
+                if(dp < ep)
+                    *dp++ = *sp;
+                break;
+            }
+        }else if(*sp == '&'){
+            if(mp!=0 && mp[0].s.sp != 0 && ms>0)
+                for(ssp = mp[0].s.sp;
+                     ssp < mp[0].e.ep; ssp++)
+                    if(dp < ep)
+                        *dp++ = *ssp;
+        }else{
+            if(dp < ep)
+                *dp++ = *sp;
+        }
+        sp++;
+    }
+    *dp = '\0';
+}
+@
+
+%-------------------------------------------------------------
+
+<<libregexp/regsub.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+
+<<function [[regsub]]>>
+@
+
+\subsection*{[[libregexp/rregexec.c]]}
+
+<<function [[rregexec1]]>>=
+/*
+ *  return	0 if no match
+ *		>0 if a match
+ *		<0 if we ran out of _relist space
+ */
+static int
+rregexec1(Reprog *progp,	/* program to run */
+    Rune *bol,		/* string to run machine on */
+    Resub *mp,		/* subexpression elements */
+    int ms,			/* number of elements at mp */
+    Reljunk *j)
+{
+    int flag=0;
+    Reinst *inst;
+    Relist *tlp;
+    Rune *s;
+    int i, checkstart;
+    Rune r, *rp, *ep;
+    Relist* tl;		/* This list, next list */
+    Relist* nl;
+    Relist* tle;		/* ends of this and next list */
+    Relist* nle;
+    int match;
+    Rune *p;
+
+    match = 0;
+    checkstart = j->startchar;
+    if(mp)
+        for(i=0; i<ms; i++) {
+            mp[i].s.rsp = 0;
+            mp[i].e.rep = 0;
+        }
+    j->relist[0][0].inst = 0;
+    j->relist[1][0].inst = 0;
+
+    /* Execute machine once for each character, including terminal NUL */
+    s = j->rstarts;
+    do{
+        /* fast check for first char */
+        if(checkstart) {
+            switch(j->starttype) {
+            case RUNE:
+                p = runestrchr(s, j->startchar);
+                if(p == 0 || s == j->reol)
+                    return match;
+                s = p;
+                break;
+            case BOL:
+                if(s == bol)
+                    break;
+                p = runestrchr(s, '\n');
+                if(p == 0 || s == j->reol)
+                    return match;
+                s = p+1;
+                break;
+            }
+        }
+
+        r = *s;
+
+        /* switch run lists */
+        tl = j->relist[flag];
+        tle = j->reliste[flag];
+        nl = j->relist[flag^=1];
+        nle = j->reliste[flag];
+        nl->inst = 0;
+
+        /* Add first instruction to current list */
+        _rrenewemptythread(tl, progp->startinst, ms, s);
+
+        /* Execute machine until current list is empty */
+        for(tlp=tl; tlp->inst; tlp++){
+            for(inst=tlp->inst; ; inst = inst->next){
+                switch(inst->type){
+                case RUNE:	/* regular character */
+                    if(inst->r == r)
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case LBRA:
+                    tlp->se.m[inst->subid].s.rsp = s;
+                    continue;
+                case RBRA:
+                    tlp->se.m[inst->subid].e.rep = s;
+                    continue;
+                case ANY:
+                    if(r != '\n')
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case ANYNL:
+                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case BOL:
+                    if(s == bol || *(s-1) == '\n')
+                        continue;
+                    break;
+                case EOL:
+                    if(s == j->reol || r == 0 || r == '\n')
+                        continue;
+                    break;
+                case CCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1]){
+                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                                return -1;
+                            break;
+                        }
+                    break;
+                case NCCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1])
+                            break;
+                    if(rp == ep)
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case OR:
+                    /* evaluate right choice later */
+                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
+                        return -1;
+                    /* efficiency: advance and re-evaluate */
+                    continue;
+                case END:	/* Match! */
+                    match = 1;
+                    tlp->se.m[0].e.rep = s;
+                    if(mp != 0)
+                        _renewmatch(mp, ms, &tlp->se);
+                    break;
+                }
+                break;
+            }
+        }
+        if(s == j->reol)
+            break;
+        checkstart = j->startchar && nl->inst==0;
+        s++;
+    }while(r);
+    return match;
+}
+@
+
+<<function [[rregexec2]]>>=
+static int
+rregexec2(Reprog *progp,	/* program to run */
+    Rune *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms,		/* number of elements at mp */
+    Reljunk *j
+)
+{
+    Relist relist0[5*LISTSIZE], relist1[5*LISTSIZE];
+
+    /* mark space */
+    j->relist[0] = relist0;
+    j->relist[1] = relist1;
+    j->reliste[0] = relist0 + nelem(relist0) - 2;
+    j->reliste[1] = relist1 + nelem(relist1) - 2;
+
+    return rregexec1(progp, bol, mp, ms, j);
+}
+@
+
+<<function [[rregexec]]>>=
+extern int
+rregexec(Reprog *progp,	/* program to run */
+    Rune *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements at mp */
+{
+    Reljunk j;
+    Relist relist0[LISTSIZE], relist1[LISTSIZE];
+    int rv;
+
+    /*
+   *  use user-specified starting/ending location if specified
+     */
+    j.rstarts = bol;
+    j.reol = 0;
+    if(mp && ms>0){
+        if(mp->s.sp)
+            j.rstarts = mp->s.rsp;
+        if(mp->e.ep)
+            j.reol = mp->e.rep;
+    }
+    j.starttype = 0;
+    j.startchar = 0;
+    if(progp->startinst->type == RUNE && progp->startinst->r < Runeself) {
+        j.starttype = RUNE;
+        j.startchar = progp->startinst->r;
+    }
+    if(progp->startinst->type == BOL)
+        j.starttype = BOL;
+
+    /* mark space */
+    j.relist[0] = relist0;
+    j.relist[1] = relist1;
+    j.reliste[0] = relist0 + nelem(relist0) - 2;
+    j.reliste[1] = relist1 + nelem(relist1) - 2;
+
+    rv = rregexec1(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    rv = rregexec2(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    return -1;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<libregexp/rregexec.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+#include "regcomp.h"
+
+<<function [[rregexec1]]>>
+
+<<function [[rregexec2]]>>
+
+<<function [[rregexec]]>>
+@
+
+
+\subsection*{[[libregexp/rregsub.c]]}
+
+<<function [[rregsub]]>>=
+/* substitute into one string using the matches from the last regexec() */
+extern	void
+rregsub(Rune *sp,	/* source string */
+    Rune *dp,	/* destination string */
+    int dlen,
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements pointed to by mp */
+{
+    Rune *ssp, *ep;
+    int i;
+
+    ep = dp+(dlen/sizeof(Rune))-1;
+    while(*sp != '\0'){
+        if(*sp == '\\'){
+            switch(*++sp){
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                i = *sp-'0';
+                if(mp[i].s.rsp != 0 && mp!=0 && ms>i)
+                    for(ssp = mp[i].s.rsp;
+                         ssp < mp[i].e.rep;
+                         ssp++)
+                        if(dp < ep)
+                            *dp++ = *ssp;
+                break;
+            case '\\':
+                if(dp < ep)
+                    *dp++ = '\\';
+                break;
+            case '\0':
+                sp--;
+                break;
+            default:
+                if(dp < ep)
+                    *dp++ = *sp;
+                break;
+            }
+        }else if(*sp == '&'){				
+            if(mp[0].s.rsp != 0 && mp!=0 && ms>0)
+            if(mp[0].s.rsp != 0)
+                for(ssp = mp[0].s.rsp;
+                     ssp < mp[0].e.rep; ssp++)
+                    if(dp < ep)
+                        *dp++ = *ssp;
+        }else{
+            if(dp < ep)
+                *dp++ = *sp;
+        }
+        sp++;
+    }
+    *dp = '\0';
+}
+@
+
+%-------------------------------------------------------------
+
+<<libregexp/rregsub.c>>=
+#include <u.h>
+#include <libc.h>
+#include "regexp.h"
+
+<<function [[rregsub]]>>
+@
+
+\section{[[libstring/]]}
 
 
 \subsection*{[[libstring/s_alloc.c]]}
@@ -17343,53 +17394,6 @@ s_unique(String *s)
 
 
 \section{[[libflate/]]}
-
-\subsection*{[[compress/flate.h]]}
-
-
-%-------------------------------------------------------------
-
-<<compress/flate.h>>=
-#pragma	lib	"libflate.a"
-#pragma	src	"/sys/src/libflate"
-
-/*
- * errors from deflate, deflateinit, deflateblock,
- * inflate, inflateinit, inflateblock.
- * convertable to a string by flateerr
- */
-enum
-{
-    FlateOk			= 0,
-    FlateNoMem		= -1,
-    FlateInputFail		= -2,
-    FlateOutputFail		= -3,
-    FlateCorrupted		= -4,
-    FlateInternal		= -5,
-};
-
-int	deflateinit(void);
-int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
-
-int	inflateinit(void);
-int	inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
-
-int	inflateblock(uchar *dst, int dsize, uchar *src, int ssize);
-int	deflateblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int debug);
-
-int	deflatezlib(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
-int	inflatezlib(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
-
-int	inflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize);
-int	deflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int debug);
-
-char	*flateerr(int err);
-
-ulong	*mkcrctab(ulong);
-ulong	blockcrc(ulong *tab, ulong crc, void *buf, int n);
-
-ulong	adler32(ulong adler, void *buf, int n);
-@
 
 
 \subsection*{[[libflate/adler.c]]}
