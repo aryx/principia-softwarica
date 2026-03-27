@@ -5507,6 +5507,16 @@ A typical use looks like this:
 
 \section{Data structures: [[Reprog]], [[Reinst]], [[Reclass]], [[Resub]]}
 
+%claude:
+The compiled form of a regular expression is a [<Reprog>]---a
+small virtual machine. The naming follows the metaphor:
+[[startinst]] is the program counter, [[firstinst]] is the
+``.text'' segment (the instruction array), and [[class]] is
+the ``.data'' segment (character class tables). The [[firstinst]]
+array is declared with only 5 entries, but [<regcomp()>]
+[[malloc]]s a [<Reprog>] large enough for the actual program---the
+array extends past the end of the struct.
+
 <<struct [[Reprog]]>>=
 /*
  *  Reprogram definition
@@ -5517,6 +5527,31 @@ struct Reprog{
     Reinst  firstinst[5];   /* .text */
 };
 @
+
+%claude:
+Each instruction ([<Reinst>]) has a [[type]] and two union
+fields whose meaning depends on the type:
+\begin{verbatim}
+  Type     Field 1             Field 2
+  ------   -----------------   ------------------
+  RUNE     r (char to match)   next (next inst)
+  ANY      (unused)            next
+  CCLASS   cp (class pointer)  next
+  NCCLASS  cp (negated class)  next
+  BOL      (unused)            next
+  EOL      (unused)            next
+  OR       right (alt branch)  left (main branch)
+  LBRA     subid (group num)   next
+  RBRA     subid (group num)   next
+  END      (unused)            (unused)
+\end{verbatim}
+
+%claude:
+The second union overlays [[left]] and [[next]]---for [[OR]]
+instructions, [[left]] is the main branch and [[right]] is
+the alternative; for all other instructions, [[next]] points
+to the following instruction. This dual use saves space and
+is safe because [[OR]] never uses [[next]].
 
 <<struct [[Reinst]]>>=
 /*
@@ -5537,6 +5572,15 @@ struct Reinst{
 };
 @
 
+%claude:
+A character class like [[{[}a-zA-Z0-9{]}]] is stored as an
+array of rune pairs in [<Reclass>]. Each pair defines an
+inclusive range: [[spans[0]]]--[[spans[1]]] is the first
+range, [[spans[2]]]--[[spans[3]]] the second, and so on.
+The [[end]] pointer marks the end of the valid pairs.
+Matching is a linear scan: if the input rune falls within
+any range, the class matches.
+
 <<struct [[Reclass]]>>=
 /*
  *  character class, each pair of rune's defines a range
@@ -5546,6 +5590,14 @@ struct Reclass{
     Rune    spans[64];
 };
 @
+
+%claude:
+[<Resub>] records where a subexpression matched.
+Each element has a start pointer ([[s.sp]] or [[s.rsp]])
+and an end pointer ([[e.ep]] or [[e.rep]]), using unions
+so the same structure works for both [[char*]] and
+[[Rune*]] strings. Element 0 is always the overall match;
+elements 1 through $n$ correspond to parenthesized groups.
 
 <<struct [[Resub]]>>=
 /*
@@ -5572,6 +5624,39 @@ struct Resub{
 
 \section{Compilation: [[regcomp()]]}
 
+%claude:
+[<regcomp()>] parses a regular expression string and compiles
+it into a [<Reprog>]. The compiler is a classic
+operator-precedence parser with two stacks: an operand
+stack ([[andstack]]) holding NFA fragments, and an operator
+stack ([[atorstack]]) holding pending operators. Implicit
+concatenation is inserted between adjacent operands.
+The output is a linear array of [<Reinst>] instructions
+that encode the NFA.
+
+%claude:
+Three entry points are provided: [<regcomp()>] treats [[.]]
+as ``any character except newline'' (the usual behavior),
+[[regcomplit]] treats [[.]] as ``any character except newline''
+but also makes character classes case-insensitive, and
+[[regcompnl]] treats [[.]] as ``any character including
+newline''---useful for multi-line matching.
+
+%claude:
+For example, the pattern [[a(b|c)*d]] compiles to:
+\begin{verbatim}
+  0: RUNE 'a'  -> 1
+  1: LBRA 1    -> 2      (start of group 1)
+  2: OR        -> 3 / 5  (left=3, right=5)
+  3: RUNE 'b'  -> 4
+  4: NOP       -> 6
+  5: RUNE 'c'  -> 6
+  6: RBRA 1    -> 7      (end of group 1)
+  7: OR        -> 2 / 8  (* = loop back or continue)
+  8: RUNE 'd'  -> 9
+  9: END
+\end{verbatim}
+
 <<function [[regcomp]]>>=
 extern	Reprog*
 regcomp(char *s)
@@ -5582,6 +5667,34 @@ regcomp(char *s)
 
 
 \section{Execution: [[regexec()]]}
+
+%claude:
+[<regexec()>] runs the compiled NFA against a string using
+Thompson's simulation. The key idea is to maintain two lists
+of active threads (NFA states): the ``current list'' for the
+character being processed and the ``next list'' for the
+character that follows. At each input character, every thread
+in the current list is advanced: if a thread's instruction
+matches the character, a new thread is added to the next list;
+if it doesn't match, the thread dies. After processing one
+character, the lists are swapped and the cycle repeats.
+
+%claude:
+The algorithm guarantees $O(nm)$ time where $n$ is the pattern
+size and $m$ is the string length, because each character is
+processed once and the list can never exceed $n$ entries (one
+per NFA state, with duplicates suppressed by
+[<_renewthread()>]).
+
+%claude:
+Two optimizations are notable. First, if the pattern starts
+with a literal character or [[^]], [<regexec()>] uses
+[[utfrune]] or [[strchr]] to skip ahead to the first possible
+match position---avoiding the NFA overhead for positions that
+can't possibly match. Second, execution starts with small
+stack-allocated lists ([[LISTSIZE]] = 10 entries); if these
+overflow, [<regexec2()>] retries with heap-allocated lists
+25 times larger ([[BIGLISTSIZE]]).
 
 <<function [[regexec]]>>=
 extern int
@@ -5632,6 +5745,15 @@ regexec(Reprog *progp,	/* program to run */
 
 
 \section{Substitution: [[regsub()]]}
+
+%claude:
+[<regsub()>] performs substitution using the match results
+from [<regexec()>]. It scans a template string ([[sp]]) and
+copies it to a destination buffer ([[dp]]), replacing
+backreferences as it goes: [[\0]] through [[\9]] expand to
+the corresponding subexpression match, and [[&]] expands to
+the entire match ([[mp[0]]]). The output is bounded by
+[[dlen]] to prevent buffer overflows.
 
 <<function [[regsub]]>>=
 /* substitute into one string using the matches from the last regexec() */
@@ -5697,6 +5819,15 @@ regsub(char *sp,	/* source string */
 
 
 \section{Rune variants: [[rregexec()]], [[rregsub()]]}
+
+%claude:
+[<rregexec()>] and [<rregsub()>] are the [[Rune*]] counterparts
+of [<regexec()>] and [<regsub()>]. They operate on arrays of
+decoded runes rather than UTF-8 byte strings, which simplifies
+the inner loop---each element is one character, so there is no
+need for [<chartorune()>] decoding. The compiled [<Reprog>] is
+shared: the same program works for both byte and rune execution
+because the instruction set operates on rune values.
 
 <<function [[rregexec1]]>>=
 /*
@@ -5977,6 +6108,14 @@ rregsub(Rune *sp,	/* source string */
 
 \section{Error handling: [[regerror()]]}
 
+%claude:
+[<regerror()>] is called when compilation encounters a syntax
+error in the pattern. The default implementation writes the
+error message to stderr and exits. Programs that want to
+recover from bad patterns can replace this function with their
+own version---it is declared [[extern]], not static, precisely
+for this purpose.
+
 <<function [[regerror]]>>=
 void
 regerror(char *s)
@@ -5986,7 +6125,7 @@ regerror(char *s)
     strcpy(buf, "regerror: ");
     strcat(buf, s);
     strcat(buf, "\n");
-    write(2, buf, strlen(buf));
+    write(STDERR, buf, strlen(buf));
     exits("regerr");
 }
 @
@@ -16542,7 +16681,7 @@ _threadassert(char *s)
     else
         n = 0;
     snprint(buf+n, sizeof(buf)-n, "%s: assertion failed\n", s);
-    write(2, buf, strlen(buf));
+    write(STDERR, buf, strlen(buf));
     abort();
 }
 @
