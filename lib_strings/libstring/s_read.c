@@ -1,3 +1,4 @@
+/*s: libstring/s_read.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -5,9 +6,10 @@
 
 enum
 {
-	Minread=	256,
+    Minread=	256,
 };
 
+/*s: function [[s_read]] */
 /* Append up to 'len' input bytes to the string 'to'.
  *
  * Returns the number of characters read.
@@ -15,24 +17,26 @@ enum
 extern int
 s_read(Biobuf *fp, String *to, int len)
 {
-	int rv;
-	int n;
+    int rv;
+    int n;
 
-	if(to->ref > 1)
-		sysfatal("can't s_read a shared string");
-	for(rv = 0; rv < len; rv += n){
-		n = to->end - to->ptr;
-		if(n < Minread){
-			s_grow(to, Minread);
-			n = to->end - to->ptr;
-		}
-		if(n > len - rv)
-			n = len - rv;
-		n = Bread(fp, to->ptr, n);
-		if(n <= 0)
-			break;
-		to->ptr += n;
-	}
-	s_terminate(to);
-	return rv;
+    if(to->ref > 1)
+        sysfatal("can't s_read a shared string");
+    for(rv = 0; rv < len; rv += n){
+        n = to->end - to->ptr;
+        if(n < Minread){
+            s_grow(to, Minread);
+            n = to->end - to->ptr;
+        }
+        if(n > len - rv)
+            n = len - rv;
+        n = Bread(fp, to->ptr, n);
+        if(n <= 0)
+            break;
+        to->ptr += n;
+    }
+    s_terminate(to);
+    return rv;
 }
+/*e: function [[s_read]] */
+/*e: libstring/s_read.c */
