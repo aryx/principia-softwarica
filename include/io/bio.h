@@ -1,3 +1,4 @@
+/*s: include/io/bio.h */
 #pragma	src	"/sys/src/libbio"
 #pragma	lib	"libbio.a"
 
@@ -9,46 +10,56 @@ typedef	struct	Biobufhdr	BiobufGen; // for regular 5c
 
 enum
 {
-	Bsize		= 8*1024,
-	Bungetsize	= UTFmax+1,		/* space for ungetc */
-	Bmagic		= 0x314159,
-	Beof		= -1,
-	Bbad		= -2,
+    Bsize		= 8*1024,
+    Bungetsize	= UTFmax+1,		/* space for ungetc */
+    Bmagic		= 0x314159,
+    Beof		= -1,
+    Bbad		= -2,
 
-	Binactive	= 0,		/* states */
-	Bractive,
-	Bwactive,
-	Bracteof,
+    Binactive	= 0,		/* states */
+    Bractive,
+    Bwactive,
+    Bracteof,
 };
 
 struct	Biobufhdr
 {
-	int	icount;		/* neg num of bytes at eob */
-	int	ocount;		/* num of bytes at bob */
-	int	rdline;		/* num of bytes after rdline */
-	int	runesize;	/* num of bytes of last getrune */
-	int	state;		/* r/w/inactive */
-	int	fid;		/* open file */
-	int	flag;		/* magic if malloc'ed */
-	vlong	offset;		/* offset of buffer in file */
-	int	bsize;		/* size of buffer */
-	uchar*	bbuf;		/* pointer to beginning of buffer */
-	uchar*	ebuf;		/* pointer to end of buffer */
-	uchar*	gbuf;		/* pointer to good data in buf */
+    int	icount;		/* neg num of bytes at eob */
+    int	ocount;		/* num of bytes at bob */
+    int	rdline;		/* num of bytes after rdline */
+    int	runesize;	/* num of bytes of last getrune */
+    int	state;		/* r/w/inactive */
+    int	fid;		/* open file */
+    int	flag;		/* magic if malloc'ed */
+    vlong	offset;		/* offset of buffer in file */
+    int	bsize;		/* size of buffer */
+    uchar*	bbuf;		/* pointer to beginning of buffer */
+    uchar*	ebuf;		/* pointer to end of buffer */
+    uchar*	gbuf;		/* pointer to good data in buf */
 };
 
 struct	Biobuf
 {
-	Biobufhdr;
-	uchar	b[Bungetsize+Bsize];
+    Biobufhdr;
+    uchar	b[Bungetsize+Bsize];
 };
 
 /* Dregs, redefined as functions for backwards compatibility */
+/*s: macro [[BGETC]] */
 #define	BGETC(bp)	Bgetc(bp)
+/*e: macro [[BGETC]] */
+/*s: macro [[BPUTC]] */
 #define	BPUTC(bp,c)	Bputc(bp,c)
+/*e: macro [[BPUTC]] */
+/*s: macro [[BOFFSET]] */
 #define	BOFFSET(bp)	Boffset(bp)
+/*e: macro [[BOFFSET]] */
+/*s: macro [[BLINELEN]] */
 #define	BLINELEN(bp)	Blinelen(bp)
+/*e: macro [[BLINELEN]] */
+/*s: macro [[BFILDES]] */
 #define	BFILDES(bp)	Bfildes(bp)
+/*e: macro [[BFILDES]] */
 
 Biobuf*	Bopen(char*, int);
 
@@ -85,3 +96,4 @@ char*	Brdstr(Biobufhdr*, int, int);
 int	Bterm(Biobufhdr*);
 
 #pragma	varargck	argpos	Bprint	2
+/*e: include/io/bio.h */
