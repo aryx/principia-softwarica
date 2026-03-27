@@ -1050,19 +1050,6 @@ extern void rregsub(Rune*, Rune*, int, Resub*, int);
 
 \subsection{[[include/strings/str.h]]}
 
-<<macro [[s_clone]]>>=
-#define s_clone(s) s_copy((s)->base)
-@
-
-<<macro [[s_to_c]]>>=
-#define s_to_c(s) ((s)->base)
-@
-
-<<macro [[s_len]]>>=
-#define s_len(s) ((s)->ptr-(s)->base)
-@
-
-
 %-------------------------------------------------------------
 
 <<strings/str.h>>=
@@ -1072,18 +1059,11 @@ extern void rregsub(Rune*, Rune*, int, Resub*, int);
 // Extensible Strings.
 
 // This file was originally called string.h but this conflicts with
-// the Posix <string.h> so simpler to rename str.h (which anyway fits
+// the Posix <string.h> so simpler to rename <str.h> (which anyway fits
 // well with the 3-letters utf.h, bio.h, fmt.h, etc.).
 
-/* extensible Strings */
-typedef struct String {
-    Lock;
-    char	*base;	/* base of String */
-    char	*end;	/* end of allocated space+1 */
-    char	*ptr;	/* ptr into String */
-    short	ref;
-    uchar	fixed;
-} String;
+<<struct [[String]]>>
+typedef struct String String;
 
 <<macro [[s_clone]]>>
 <<macro [[s_to_c]]>>
@@ -1107,6 +1087,7 @@ extern void	s_putc(String*, int);
 extern String*	s_unique(String*);
 extern String*	s_grow(String*, int);
 
+// Biobuf functions visible when including bio.h before str.h
 #ifdef BGETC
 extern int	s_read(Biobuf*, String*, int);
 extern char	*s_read_line(Biobuf*, String*);
@@ -1119,9 +1100,7 @@ extern void	s_freeinstack(Sinstack*);
 #endif /* BGETC */
 @
 
-
 \subsection{[[include/compress/flate.h]]}
-
 
 %-------------------------------------------------------------
 
@@ -15649,107 +15628,6 @@ rregsub(Rune *sp,	/* source string */
 
 \section{[[libstring/]]}
 
-
-\subsection*{[[libstring/s_alloc.c]]}
-
-<<constant [[STRLEN]]>>=
-#define STRLEN 128
-@
-
-<<function [[s_free]]>>=
-extern void
-s_free(String *sp)
-{
-    if (sp == nil)
-        return;
-    lock(sp);
-    if(--(sp->ref) != 0){
-        unlock(sp);
-        return;
-    }
-    unlock(sp);
-
-    if(sp->fixed == 0 && sp->base != nil)
-        free(sp->base);
-    free(sp);
-}
-@
-
-<<function [[s_incref]]>>=
-/* get another reference to a string */
-extern String *
-s_incref(String *sp)
-{
-    lock(sp);
-    sp->ref++;
-    unlock(sp);
-
-    return sp;
-}
-@
-
-<<function [[_s_alloc]]>>=
-/* allocate a String head */
-extern String *
-_s_alloc(void)
-{
-    String *s;
-
-    s = mallocz(sizeof *s, 1);
-    if(s == nil)
-        return s;
-    s->ref = 1;
-    s->fixed = 0;
-    return s;
-}
-@
-
-<<function [[s_newalloc]]>>=
-/* create a new `short' String */
-extern String *
-s_newalloc(int len)
-{
-    String *sp;
-
-    sp = _s_alloc();
-    if(sp == nil)
-        sysfatal("s_newalloc: %r");
-    setmalloctag(sp, getcallerpc(&len));
-    if(len < STRLEN)
-        len = STRLEN;
-    sp->base = sp->ptr = malloc(len);
-    if (sp->base == nil)
-        sysfatal("s_newalloc: %r");
-    setmalloctag(sp->base, getcallerpc(&len));
-
-    sp->end = sp->base + len;
-    s_terminate(sp);
-    return sp;
-}
-@
-
-<<function [[s_new]]>>=
-/* create a new `short' String */
-extern String *
-s_new(void)
-{
-    String *sp;
-
-    sp = _s_alloc();
-    if(sp == nil)
-        sysfatal("s_new: %r");
-    sp->base = sp->ptr = malloc(STRLEN);
-    if (sp->base == nil)
-        sysfatal("s_new: %r");
-    sp->end = sp->base + STRLEN;
-    s_terminate(sp);
-    return sp;
-}
-@
-
-
-%-------------------------------------------------------------
-
 <<libstring includes>>=
 #include <u.h>
 #include <libc.h>
@@ -15763,6 +15641,10 @@ s_new(void)
 #include <str.h> // was string.h
 @
 
+
+\subsection*{[[libstring/s_alloc.c]]}
+
+%-------------------------------------------------------------
 
 <<libstring/s_alloc.c>>=
 <<libstring includes>>
@@ -15780,25 +15662,7 @@ s_new(void)
 <<function [[s_new]]>>
 @
 
-
 \subsection*{[[libstring/s_append.c]]}
-
-<<function [[s_append]]>>=
-/* append a char array to a String */
-String *
-s_append(String *to, char *from)
-{
-    if (to == 0)
-        to = s_new();
-    if (from == 0)
-        return to;
-    for(; *from; from++)
-        s_putc(to, *from);
-    s_terminate(to);
-    return to;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -15808,23 +15672,7 @@ s_append(String *to, char *from)
 <<function [[s_append]]>>
 @
 
-
 \subsection*{[[libstring/s_array.c]]}
-
-<<function [[s_array]]>>=
-/* return a String containing a character array (this had better not grow) */
-extern String *
-s_array(char *cp, int len)
-{
-    String *sp = _s_alloc();
-
-    sp->base = sp->ptr = cp;
-    sp->end = sp->base + len;
-    sp->fixed = 1;
-    return sp;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -15836,108 +15684,17 @@ extern String*	_s_alloc(void);
 <<function [[s_array]]>>
 @
 
-
 \subsection*{[[libstring/s_copy.c]]}
-
-<<function [[s_copy]]>>=
-/* return a String containing a copy of the passed char array */
-extern String*
-s_copy(char *cp)
-{
-    String *sp;
-    int len;
-
-    len = strlen(cp)+1;
-    sp = s_newalloc(len);
-    setmalloctag(sp, getcallerpc(&cp));
-    strcpy(sp->base, cp);
-    sp->ptr = sp->base + len - 1;		/* point to 0 terminator */
-    return sp;
-}
-@
-
 
 %-------------------------------------------------------------
 
 <<libstring/s_copy.c>>=
 <<libstring includes>>
 
-
 <<function [[s_copy]]>>
 @
 
-
 \subsection*{[[libstring/s_getline.c]]}
-
-<<function [[s_getline]]>>=
-/* Append an input line to a String.
- *
- * Returns a pointer to the character string (or 0).
- * Leading whitespace and newlines are removed.
- *
- * Empty lines and lines starting with '#' are ignored.
- */ 
-extern char *
-s_getline(Biobuf *fp, String *to)
-{
-    int c;
-    int len=0;
-
-    s_terminate(to);
-
-    /* end of input */
-    if ((c = Bgetc(fp)) < 0)
-        return 0;
-
-    /* take care of inconsequentials */
-    for(;;) {
-        /* eat leading white */
-        while(c==' ' || c=='\t' || c=='\n' || c=='\r')
-            c = Bgetc(fp);
-
-        if(c < 0)
-            return 0;
-
-        /* take care of comments */
-        if(c == '#'){
-            do {
-                c = Bgetc(fp);
-                if(c < 0)
-                    return 0;
-            } while(c != '\n');
-            continue;
-        }
-
-        /* if we got here, we've gotten something useful */
-        break;
-    }
-
-    /* gather up a line */
-    for(;;) {
-        len++;
-        switch(c) {
-        case -1:
-            s_terminate(to);
-            return len ? to->ptr-len : 0;
-        case '\\':
-            c = Bgetc(fp);
-            if (c != '\n') {
-                s_putc(to, '\\');
-                s_putc(to, c);
-            }
-            break;
-        case '\n':
-            s_terminate(to);
-            return len ? to->ptr-len : 0;
-        default:
-            s_putc(to, c);
-            break;
-        }
-        c = Bgetc(fp);
-    }
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -15947,41 +15704,7 @@ s_getline(Biobuf *fp, String *to)
 <<function [[s_getline]]>>
 @
 
-
 \subsection*{[[libstring/s_grow.c]]}
-
-<<function [[s_grow]]>>=
-/* grow a String's allocation by at least `incr' bytes */
-extern String*
-s_grow(String *s, int incr)	
-{
-    char *cp;
-    int size;
-
-    if(s->fixed)
-        sysfatal("s_grow of constant string");
-    s = s_unique(s);
-
-    /*
-     *  take a larger increment to avoid mallocing too often
-     */
-    size = s->end-s->base;
-    if(size/2 < incr)
-        size += incr;
-    else
-        size += size/2;
-
-    cp = realloc(s->base, size);
-    if (cp == 0)
-        sysfatal("s_grow: %r");
-    s->ptr = (s->ptr - s->base) + cp;
-    s->end = cp + size;
-    s->base = cp;
-
-    return s;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -15989,30 +15712,9 @@ s_grow(String *s, int incr)
 <<libstring includes>>
 
 <<function [[s_grow]]>>
-
 @
-
 
 \subsection*{[[libstring/s_memappend.c]]}
-
-<<function [[s_memappend]]>>=
-/* append a char array ( of up to n characters) to a String */
-String *
-s_memappend(String *to, char *from, int n)
-{
-    char *e;
-
-    if (to == 0)
-        to = s_new();
-    if (from == 0)
-        return to;
-    for(e = from + n; from < e; from++)
-        s_putc(to, *from);
-    s_terminate(to);
-    return to;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16020,28 +15722,9 @@ s_memappend(String *to, char *from, int n)
 <<libstring includes>>
 
 <<function [[s_memappend]]>>
-
 @
-
 
 \subsection*{[[libstring/s_nappend.c]]}
-
-<<function [[s_nappend]]>>=
-/* append a char array ( of up to n characters) to a String */
-String *
-s_nappend(String *to, char *from, int n)
-{
-    if (to == 0)
-        to = s_new();
-    if (from == 0)
-        return to;
-    for(; n && *from; from++, n--)
-        s_putc(to, *from);
-    s_terminate(to);
-    return to;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16049,53 +15732,9 @@ s_nappend(String *to, char *from, int n)
 <<libstring includes>>
 
 <<function [[s_nappend]]>>
-
 @
-
 
 \subsection*{[[libstring/s_parse.c]]}
-
-<<macro [[isspace]]>>=
-#define isspace(c) ((c)==' ' || (c)=='\t' || (c)=='\n')
-@
-
-<<function [[s_parse]]>>=
-/* Get the next field from a String.  The field is delimited by white space,
- * single or double quotes.
- */
-String *
-s_parse(String *from, String *to)
-{
-    if (*from->ptr == '\0')
-        return 0;
-    if (to == 0)
-        to = s_new();
-    if (*from->ptr == '\'') {
-        from->ptr++;
-        for (;*from->ptr != '\'' && *from->ptr != '\0'; from->ptr++)
-            s_putc(to, *from->ptr);
-        if (*from->ptr == '\'')	
-            from->ptr++;
-    } else if (*from->ptr == '"') {
-        from->ptr++;
-        for (;*from->ptr != '"' && *from->ptr != '\0'; from->ptr++)
-            s_putc(to, *from->ptr);
-        if (*from->ptr == '"')	
-            from->ptr++;
-    } else {
-        for (;!isspace(*from->ptr) && *from->ptr != '\0'; from->ptr++)
-            s_putc(to, *from->ptr);
-    }
-    s_terminate(to);
-
-    /* crunch trailing white */
-    while(isspace(*from->ptr))
-        from->ptr++;
-
-    return to;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16107,21 +15746,7 @@ s_parse(String *from, String *to)
 <<function [[s_parse]]>>
 @
 
-
 \subsection*{[[libstring/s_putc.c]]}
-
-<<function [[s_putc]]>>=
-void
-s_putc(String *s, int c)
-{
-    if(s->ref > 1)
-        sysfatal("can't s_putc a shared string");
-    if (s->ptr >= s->end)
-        s_grow(s, 2);
-    *(s->ptr)++ = c;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16131,148 +15756,7 @@ s_putc(String *s, int c)
 <<function [[s_putc]]>>
 @
 
-
 \subsection*{[[libstring/s_rdinstack.c]]}
-
-<<function [[s_allocinstack]]>>=
-/* initialize */
-extern Sinstack *
-s_allocinstack(char *file)
-{
-    Sinstack *sp;
-    Biobuf *fp;
-
-    fp = Bopen(file, OREAD);
-    if(fp == nil)
-        return nil;
-
-    sp = malloc(sizeof *sp);
-    sp->depth = 0;
-    sp->fp[0] = fp;
-    return sp;
-}
-@
-
-<<function [[s_freeinstack]]>>=
-extern void
-s_freeinstack(Sinstack *sp)
-{
-    while(sp->depth >= 0)
-        Bterm(sp->fp[sp->depth--]);
-    free(sp);
-}
-@
-
-<<function [[rdline]]>>=
-/*  Append an input line to a String.
- *
- *  Empty lines and leading whitespace are removed.
- */
-static char *
-rdline(Biobuf *fp, String *to)
-{
-    int c;
-    int len = 0;
-
-    c = Bgetc(fp);
-
-    /* eat leading white */
-    while(c==' ' || c=='\t' || c=='\n' || c=='\r')
-        c = Bgetc(fp);
-
-    if(c < 0)
-        return 0;
-
-    for(;;){
-        switch(c) {
-        case -1:
-            goto out;
-        case '\\':
-            c = Bgetc(fp);
-            if (c != '\n') {
-                s_putc(to, '\\');
-                s_putc(to, c);
-                len += 2;
-            }
-            break;
-        case '\r':
-            break;
-        case '\n':
-            if(len != 0)
-                goto out;
-            break;
-        default:
-            s_putc(to, c);
-            len++;
-            break;
-        }
-        c = Bgetc(fp);
-    }
-out:
-    s_terminate(to);
-    return to->ptr - len;
-}
-@
-
-<<function [[s_rdinstack]]>>=
-/* Append an input line to a String.
- *
- * Returns a pointer to the character string (or 0).
- * Leading whitespace and newlines are removed.
- * Lines starting with #include cause us to descend into the new file.
- * Empty lines and other lines starting with '#' are ignored.
- */ 
-extern char *
-s_rdinstack(Sinstack *sp, String *to)
-{
-    char *p;
-    Biobuf *fp, *nfp;
-
-    s_terminate(to);
-    fp = sp->fp[sp->depth];
-
-    for(;;){
-        p = rdline(fp, to);
-        if(p == nil){
-            if(sp->depth == 0)
-                break;
-            Bterm(fp);
-            sp->depth--;
-            return s_rdinstack(sp, to);
-        }
-
-        if(strncmp(p, "#include", 8) == 0 && (p[8] == ' ' || p[8] == '\t')){
-            to->ptr = p;
-            p += 8;
-
-            /* sanity (and looping) */
-            if(sp->depth >= nelem(sp->fp))
-                sysfatal("s_recgetline: includes too deep");
-
-            /* skip white */
-            while(*p == ' ' || *p == '\t')
-                p++;
-
-            nfp = Bopen(p, OREAD);
-            if(nfp == nil)
-                continue;
-            sp->depth++;
-            sp->fp[sp->depth] = nfp;
-            return s_rdinstack(sp, to);
-        }
-
-        /* got milk? */
-        if(*p != '#')
-            break;
-
-        /* take care of comments */
-        to->ptr = p;
-        s_terminate(to);
-    }
-    return p;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16293,40 +15777,7 @@ struct Sinstack{
 <<function [[s_rdinstack]]>>
 @
 
-
 \subsection*{[[libstring/s_read.c]]}
-
-<<function [[s_read]]>>=
-/* Append up to 'len' input bytes to the string 'to'.
- *
- * Returns the number of characters read.
- */ 
-extern int
-s_read(Biobuf *fp, String *to, int len)
-{
-    int rv;
-    int n;
-
-    if(to->ref > 1)
-        sysfatal("can't s_read a shared string");
-    for(rv = 0; rv < len; rv += n){
-        n = to->end - to->ptr;
-        if(n < Minread){
-            s_grow(to, Minread);
-            n = to->end - to->ptr;
-        }
-        if(n > len - rv)
-            n = len - rv;
-        n = Bread(fp, to->ptr, n);
-        if(n <= 0)
-            break;
-        to->ptr += n;
-    }
-    s_terminate(to);
-    return rv;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16341,38 +15792,7 @@ enum
 <<function [[s_read]]>>
 @
 
-
 \subsection*{[[libstring/s_read_line.c]]}
-
-<<function [[s_read_line]]>>=
-/* Append an input line to a String.
- *
- * Returns a pointer to the character string (or 0).
- * Trailing newline is left on.
- */ 
-extern char *
-s_read_line(Biobuf *fp, String *to)
-{
-    char *cp;
-    int llen;
-
-    if(to->ref > 1)
-        sysfatal("can't s_read_line a shared string");
-    s_terminate(to);
-    cp = Brdline(fp, '\n');
-    if(cp == 0)
-        return 0;
-    llen = Blinelen(fp);
-    if(to->end - to->ptr < llen)
-        s_grow(to, llen);
-    memmove(to->ptr, cp, llen);
-    cp = to->ptr;
-    to->ptr += llen;
-    s_terminate(to);
-    return cp;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16382,33 +15802,7 @@ s_read_line(Biobuf *fp, String *to)
 <<function [[s_read_line]]>>
 @
 
-
 \subsection*{[[libstring/s_reset.c]]}
-
-<<function [[s_reset]]>>=
-String*
-s_reset(String *s)
-{
-    if(s != nil){
-        s = s_unique(s);
-        s->ptr = s->base;
-        *s->ptr = '\0';
-    } else
-        s = s_new();
-    return s;
-}
-@
-
-<<function [[s_restart]]>>=
-String*
-s_restart(String *s)
-{
-    s = s_unique(s);
-    s->ptr = s->base;
-    return s;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16420,21 +15814,7 @@ s_restart(String *s)
 <<function [[s_restart]]>>
 @
 
-
 \subsection*{[[libstring/s_terminate.c]]}
-
-<<function [[s_terminate]]>>=
-void
-s_terminate(String *s)
-{
-    if(s->ref > 1)
-        sysfatal("can't s_terminate a shared string");
-    if (s->ptr >= s->end)
-        s_grow(s, 1);
-    *s->ptr = 0;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16444,49 +15824,17 @@ s_terminate(String *s)
 <<function [[s_terminate]]>>
 @
 
-
 \subsection*{[[libstring/s_tolower.c]]}
-
-<<function [[s_tolower]]>>=
-/* convert String to lower case */
-void
-s_tolower(String *sp)
-{
-    char *cp;
-
-    for(cp=sp->ptr; *cp; cp++)
-        *cp = tolower(*cp);
-}
-@
-
 
 %-------------------------------------------------------------
 
 <<libstring/s_tolower.c>>=
 <<libstring includes>>
 
-
 <<function [[s_tolower]]>>
 @
 
-
 \subsection*{[[libstring/s_unique.c]]}
-
-<<function [[s_unique]]>>=
-String*
-s_unique(String *s)
-{
-    String *p;
-
-    if(s->ref > 1){
-        p = s;
-        s = s_clone(p);
-        s_free(p);
-    }
-    return s;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -16495,7 +15843,6 @@ s_unique(String *s)
 
 <<function [[s_unique]]>>
 @
-
 
 \section{[[libflate/]]}
 
