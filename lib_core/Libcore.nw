@@ -3869,11 +3869,20 @@ the UTF-8 encoding/decoding functions that convert between the two.
 % copy, search, len, etc.
 
 %claude:
-Note how [[strlen()]] is implemented in terms of [<strchr()>]:
+In C, a string is just a pointer to a sequence of bytes terminated
+by a null character ([[\0]]). There is no length field---[[strlen]]
+must scan to find the end. This simplicity has trade-offs: strings
+are cheap to create (just a pointer), but computing the length is
+$O(n)$, and the caller must ensure the destination buffer is large
+enough for any copy or concatenation.
+
+%claude:
+The \plan implementations are notable for how they layer on each
+other. [<strlen()>] is implemented in terms of [<strchr()>]:
 it searches for the null terminator and returns the distance.
-Similarly, [<strcat()>] uses [[strchr()]] to find the end of the
+[<strcat()>] uses [[strchr()]] to find the end of the
 destination string, then calls [<strcpy()>]. This layering
-keeps each function minimal.
+keeps each function minimal and avoids duplicating loop logic.
 
 <<function [[strlen]]>>=
 long
@@ -4079,8 +4088,17 @@ Boyer-Moore or KMP.
 \section{Runes}
 
 %claude:
-The rune functions mirror the C string functions but operate
-on [[Rune]] arrays: [[runestrlen]], [[runestrcmp]], etc.
+While C strings are byte-oriented, rune strings operate on
+decoded Unicode code points---arrays of [[Rune]] (32-bit
+integers) terminated by a zero rune. Every plain C string
+function has a rune counterpart: [[runestrlen]], [[runestrcmp]],
+[[runestrcpy]], etc. The implementations are nearly identical
+to the byte versions, just with [[Rune]] instead of [[char]].
+Programs that need to manipulate characters by code point
+(editors, for instance) work with rune strings internally
+and convert to/from UTF-8 only at I/O boundaries.
+
+%claude:
 The [[_runebsearch]] function performs binary search on the
 Unicode character property tables (stored as sorted arrays
 of rune ranges), used by [[isalpharune]], [[istitlerune]],
@@ -4278,6 +4296,14 @@ runetochar(char *str, Rune *rune)
 
 \subsection{Basics}
 
+%claude:
+These are the rune-string equivalents of the plain C string
+functions. They follow the same layering pattern: [[runestrlen]]
+calls [[runestrchr]], [[runestrcat]] calls [[runestrcpy]], and
+so on. Since runes are fixed-width (unlike UTF-8 bytes), these
+functions are simpler---[[runestrcpy]] is just a straightforward
+copy loop with no need for [[memccpy]] tricks.
+
 <<function [[runestrlen]]>>=
 long
 runestrlen(Rune *s)
@@ -4421,12 +4447,20 @@ runestrstr(Rune *s1, Rune *s2)
 \section{UTF8}
 
 %claude:
-The UTF-8 functions work on byte strings that may contain
-multi-byte rune encodings. The key optimization is the
-[[Runeself]] test: any byte below 0x80 is ASCII and can be
-handled without calling [[chartorune]]. Since most text in
-practice is ASCII, this fast path avoids the overhead of
-the full decoder for the common case.
+The UTF-8 functions bridge the gap between byte strings and
+rune strings: they search and measure byte strings while
+respecting multi-byte character boundaries. [[utflen]] counts
+the number of runes (not bytes) in a UTF-8 string. [[utfrune]]
+and [[utfrrune]] find a rune in a UTF-8 string (forward and
+backward). [[utfutf]] finds a UTF-8 substring within another.
+
+%claude:
+The key optimization throughout is the [[Runeself]] test: any
+byte below 0x80 is ASCII and can be handled without calling
+[[chartorune]]. Since most text in practice is ASCII, this
+fast path avoids the overhead of the full decoder for the
+common case. For ASCII-only runes, [[utfrune]] even
+delegates directly to [[strchr]].
 
 % use typedef utf here? utf* s?
 <<function [[utflen]]>>=
