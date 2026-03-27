@@ -6704,6 +6704,9 @@ enum Seek_cursor {
 % sysopen(), sysclose(), sysread(), syswrite(), sysseek(), etc
 % file, directory, namespace
 
+%claude:
+These are the core file I/O syscalls.
+
 <<signatures file syscall>>=
 extern	fdt	open(char*, int);
 extern	int	close(fdt);
@@ -6716,12 +6719,27 @@ extern	int	dup(int, int);
 % which is useful for servers.
 
 %claude:
-The fundamental I/O system calls in \plan are [[pread]] and
-[[pwrite]], which take an explicit file offset. Making the
-offset a parameter rather than hidden state in the kernel
-means concurrent readers/writers on the same file descriptor
-don't race on the offset---a critical property for file
-servers that handle multiple clients.
+Note that the fundamental I/O syscalls are [[pread]] and
+[[pwrite]] (``positional read/write''), not [[read]] and
+[[write]]. They take an explicit file offset as a parameter,
+so the kernel does not need to maintain a per-fd offset.
+This avoids a race condition that plagues \unix: if two
+processes share a file descriptor (after [[fork]]), a
+\unix [[lseek]]+[[read]] sequence is not atomic---another
+process can seek in between. With [[pread]], the offset
+is part of the call itself, so no race is possible.
+
+%claude:
+In the kernel, [[sysopen()]] resolves the file path through
+the namespace via [[namec()]], which walks the mount table
+and device trees to produce a [[Chan]] (channel)---the
+kernel's representation of an open file.
+[[sysclose()]] decrements the channel's reference count and
+frees it when it reaches zero.
+[[syspread()]]/[[syspwrite()]] call the device driver's
+[[read]]/[[write]] methods with the given offset.
+[[sysdup()]] duplicates a file descriptor, optionally
+replacing an existing one.
 
 \section{[[read()]], [[write()]]}
 
@@ -6895,6 +6913,9 @@ current name, owner, or modification time.
 
 \section{Syscalls: [[create()]], [[chdir()]], etc}
 
+%claude:
+These syscalls manage directory entries and file metadata.
+
 <<signatures directory syscall>>=
 extern	int	create(char*, int, ulong);
 extern	int	remove(char*);
@@ -6909,6 +6930,22 @@ extern	int	fwstat(int, uchar*, int);
 extern	int	wstat(char*, uchar*, int);
 @
 
+%claude:
+The [[stat]]/[[fstat]] syscalls return file metadata in the
+9P wire format (a packed binary encoding), and
+[[wstat]]/[[fwstat]] modify it. The library wrappers
+[[dirstat]]/[[dirfstat]] shown below convert between this
+wire format and the [[Dir]] C structure using
+[[convM2D]]/[[convD2M]].
+
+%claude:
+In the kernel, [[syscreate()]] resolves the path via
+[[namec()]] with the [[Acreate]] action, which walks to the
+parent directory and asks the device driver to create the
+file. [[sysremove()]] walks to the file and calls the
+device's [[remove]] method. [[chdir()]] changes the
+process's current directory. [[fd2path()]] returns the full
+path name associated with an open file descriptor.
 
 \section{[[xxxfstat()]]}
 
@@ -7313,6 +7350,9 @@ and much of the role of environment variables.
 
 \section{Syscalls: [[bind()]], [[mount()]], etc}
 
+%claude:
+These syscalls manipulate the per-process namespace.
+
 <<signatures namespace syscall>>=
 extern	int	bind(char*, char*, int/*Mxxx*/);
 extern	int	mount(fdt, int, char*, int/*Mxxx*/, char*);
@@ -7320,6 +7360,18 @@ extern	int	unmount(char*, char*);
 @
 
 % related then for mount is read9pmsg later and Fcall
+
+%claude:
+[[bind]] makes one local path appear at another by inserting
+a mount entry in the process's namespace. [[mount]] does the
+same but for a remote file server: it takes a file descriptor
+(typically a pipe to a 9P server) and attaches it at a path,
+so that file operations on that path are forwarded over the
+pipe as 9P messages.
+Both take flags ([[MBEFORE]], [[MAFTER]], [[MREPL]]) that
+control how the new entry combines with existing entries
+in union directories. [[unmount]] reverses a previous
+[[bind]] or [[mount]].
 
 %******************************************************************************
 \chapter{Time}
@@ -7336,10 +7388,22 @@ structure.
 
 \section{Syscalls: [[sleep()]], [[alarm()]]}
 
+%claude:
+These syscalls deal with time delays and timeouts.
+
 <<signatures time syscall>>=
 extern	long	alarm(ulong);
 extern	int	sleep(long); //less: could be void (ulong). 0 means yield.
 @
+
+%claude:
+[[sleep]] suspends the process for [[n]] milliseconds.
+If [[n]] is zero or negative, it simply yields the
+processor to other processes.
+[[alarm]] sets a timer: after [[n]] milliseconds, the kernel
+sends an \verb+"alarm"+ note to the process. Calling
+[[alarm(0)]] cancels a pending alarm. [[alarm]] returns the
+time remaining from any previous alarm.
 
 \section{Time and day}
 % called Time-of-day, not sure  why
@@ -7613,16 +7677,30 @@ enum Rfork_flags
 
 \section{Syscalls: [[rfork()]], [[exec()]], [[await()]], etc}
 
+%claude:
+These syscalls manage processes. The [[_exits]] syscall was
+presented in Chapter~\ref{chap:main}.
+
 <<signatures process syscall>>=
 extern	int	rfork(int);
 extern	int	exec(char*, char*[]);
 extern	int	await(char*, int);
 @
 
-%yoann: say saw _exits() process syscall earlier
-
 % sysfork(), sysexit(), sysawait(), sysexec()
 % want to run external command? need fork+exec! classic pattern.
+
+%claude:
+In the kernel, [[sysrfork()]] creates a new process,
+selectively sharing or copying resources (memory, file
+descriptors, namespace, environment) based on the flag bits.
+[[sysexec()]] replaces the current process's memory image
+with a new program: it reads the executable, creates fresh
+text/data/bss segments, sets up the stack with [[argc]] and
+[[argv]], and jumps to [[_main]].
+[[sysawait()]] blocks until a child process exits, then
+returns a text string containing the child's pid, CPU times,
+and exit message.
 
 %claude:
 The fork/exec pattern is the cornerstone of \unix process
@@ -7761,6 +7839,9 @@ return descriptive error messages.
 
 \section{Syscall: [[errstr()]]}
 
+%claude:
+This syscall handles error reporting.
+
 <<signatures error syscall>>=
 extern	int	errstr(char*, uint);
 @
@@ -7773,6 +7854,15 @@ extern	int	errstr(char*, uint);
 % kernel swaps value with string passed in, so you want to pass a string buffer
 % with '\0' as first char so after the call to errstr, the errstr in
 % the kernel is reset.
+
+%claude:
+[[errstr]] {\em swaps} the caller's buffer with the
+kernel's per-process error string. If you pass an empty
+buffer (\verb+buf[0] = '\0'+), the kernel's error string
+is returned and cleared. If you pass a non-empty buffer,
+you set the error string (used by [[werrstr]]).
+This swap design is unusual but efficient: a single syscall
+both reads and resets the error.
 
 
 \section{[[rerrstr()]], [[werrstr()]]}
@@ -8252,6 +8342,10 @@ later chapter.
 
 \section{Syscalls: [[rendezvous()]], etc}
 
+%claude:
+These syscalls provide kernel-level synchronization for
+shared-memory processes.
+
 <<signatures concurrency syscall>>=
 extern	void*	rendezvous(void*, void*);
 @
@@ -8269,6 +8363,21 @@ extern	int	tsemacquire(long*, ulong);
 % see also thread chapter, that build on top of this to
 % provide more convenient abstractions (channels, alt(), cooperative
 % threads with less needs for locking, etc)
+
+%claude:
+[[rendezvous]] is \plan's core synchronization primitive.
+Two processes call [[rendezvous]] with the same tag; the
+first to arrive sleeps, and when the second arrives, they
+exchange pointer values and both wake up. In the kernel,
+this is implemented as a hash table of waiting processes.
+%
+[[semacquire]] and [[semrelease]] implement counting
+semaphores in shared memory. [[semacquire]] atomically
+decrements the semaphore; if it would go negative, the
+process sleeps until another process calls [[semrelease]].
+[[tsemacquire]] is a variant with a timeout.
+These are the primitives on which [[Lock]] and [[QLock]]
+(shown later) are built.
 
 % see lock(2), rendezvous(2)
 % sleep/wakeup
@@ -8825,6 +8934,9 @@ communicate with file servers.
 
 \section{Syscalls: [[pipe()]], [[notify()]], [[await()]], [[segattach()]]}
 
+%claude:
+These syscalls provide the remaining IPC mechanisms.
+
 <<signatures ipc syscall>>=
 extern	int	pipe(int*);
 @
@@ -8839,6 +8951,22 @@ extern	int	segdetach(void*);
 extern	int	segflush(void*, ulong);
 extern	int	segfree(void*, ulong);
 @
+
+%claude:
+[[pipe]] creates a bidirectional pipe (unlike \unix's
+unidirectional pipes) by attaching to the pipe device
+(\verb+#|+) and returning two file descriptors.
+%
+[[notify]] registers a function to be called when the
+process receives a note (signal). [[noted]] tells the kernel
+what to do after the note handler returns ([[NCONT]] to
+continue, [[NDFLT]] to terminate).
+%
+[[segattach]] maps a shared memory segment into the
+process's address space. [[segdetach]] unmaps it.
+[[segbrk]] extends a segment, [[segflush]] invalidates
+cached pages, and [[segfree]] releases pages without
+detaching the segment.
 
 \section{Helpers}
 
