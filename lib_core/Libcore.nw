@@ -3905,6 +3905,13 @@ strcat(char *s1, char *s2)
 }
 @
 
+%claude:
+[<strchr()>] is the fundamental building block: both [<strlen()>]
+and [<strcat()>] are built on it. It handles two cases separately:
+searching for [[\0]] (scan to the end) and searching for any
+other byte. [<strrchr()>] (reverse search) simply calls [<strchr()>]
+repeatedly, remembering the last match.
+
 <<function [[strchr]]>>=
 char*
 strchr(char *s, int c)
@@ -4047,6 +4054,14 @@ strdup(char *s)
 
 
 
+%claude:
+[<strstr()>] is the classic substring search: for each
+occurrence of the first character of [[s2]] in [[s1]], it
+checks whether the rest of [[s2]] follows. This is the
+naive $O(nm)$ algorithm---good enough for the short strings
+typical in system programming, without the complexity of
+Boyer-Moore or KMP.
+
 <<function [[strstr]]>>=
 /*
  * Return pointer to first occurrence of s2 in s1,
@@ -4075,13 +4090,6 @@ strstr(char *s1, char *s2)
     return 0;
 }
 @
-%claude:
-[[strstr]] is the classic substring search: for each
-occurrence of the first character of [[s2]] in [[s1]], it
-checks whether the rest of [[s2]] follows. This is the
-naive $O(nm)$ algorithm---good enough for the short strings
-typical in system programming, without the complexity of
-Boyer-Moore or KMP.
 
 % a classic interview question :)
 
@@ -4167,7 +4175,8 @@ _runebsearch(Rune c, Rune *t, int n, int ne)
 \subsection{Conversion}
 
 %claude:
-[[chartorune]] and [[runetochar]] convert between UTF-8 byte
+[<chartorune()>] and [<runetochar()>] are the core of \plan's
+UTF-8 support---they convert between UTF-8 byte
 sequences and runes. The encoding uses prefix bits to indicate
 the sequence length: a leading byte starting with 0 is ASCII
 (1~byte), 110 means 2~bytes, 1110 means 3~bytes, and 11110
@@ -4175,6 +4184,16 @@ means 4~bytes. Continuation bytes always start with 10.
 The decoder validates that sequences are not overlong
 (e.g., encoding ASCII as a 2-byte sequence) and rejects
 surrogate code points, returning [[Runeerror]] for invalid input.
+
+%claude:
+The implementation uses helper macros to build and test
+the prefix bits. [[Bit(i)]] converts a bit position,
+[[T(i)]] builds a prefix mask (e.g., [[T(2)]] = [[0xC0]]
+for 2-byte sequences), and [[RuneX(i)]] computes the
+maximum code point that fits in an [[i]]-byte encoding.
+The decoder loop in [<chartorune()>] XORs each
+continuation byte with [[Tx]] ([[0x80]]) to strip the
+prefix, then shifts and accumulates the payload bits.
 
 <<macro [[Bit]]>>=
 #define Bit(i) (7-(i))
@@ -6940,8 +6959,8 @@ struct	Biobuf
 The buffer is [[Bsize]] (8\,KB) plus [[Bungetsize]] extra
 bytes. The extra bytes---[[UTFmax+1]], i.e.\ 4 bytes---sit
 at the front and serve as a small ``unget zone'': when
-[<Bgetc>] refills the buffer, it copies the last few bytes
-of the old buffer into this zone so that [<Bungetc>] can
+[<Bgetc()>] refills the buffer, it copies the last few bytes
+of the old buffer into this zone so that [<Bungetc()>] can
 back up past a buffer boundary. Without this, ungetting
 a multi-byte UTF-8 rune that straddled two buffer fills
 would fail.
@@ -6999,10 +7018,10 @@ Bracteof,
 [[Bracteof]] is a transitional state that enables rereading
 after end-of-file. Consider [[tail -f]]: it reads to the end
 of a file, sees EOF, then sleeps and tries again. Without
-[[Bracteof]], the buffer would be stuck---[<Bgetc>] would keep
-returning [[Beof]] forever. Instead, the first [<Bgetc>] after
+[[Bracteof]], the buffer would be stuck---[<Bgetc()>] would keep
+returning [[Beof]] forever. Instead, the first [<Bgetc()>] after
 EOF returns [[Beof]] \emph{and} transitions the state back to
-[[Bractive]], so the next [<Bgetc>] will try a fresh [[read]]
+[[Bractive]], so the next [<Bgetc()>] will try a fresh [[read]]
 system call. If the file has grown in the meantime, the new
 data is picked up.
 
