@@ -628,6 +628,18 @@ are in use, those registers are unavailable for the compiler's
 register allocator.
 
 %yoann: say some registers have special constraints like R13, R14, R15 but the rest is mere convention that may be different with other OS, other compiler.
+%claude:
+A few registers are fixed by the ARM hardware: [[R13]] is the
+stack pointer (the [[PUSH]]/[[POP]] and addressing modes
+that reference ``SP'' are hardwired to R13 by the CPU),
+[[R14]] is the link register (loaded by every [[BL]]
+instruction), and [[R15]] is the program counter (every
+branch rewrites R15). The other assignments---[[R0]] for
+the first argument and return value, [[R12]] as the
+static-data base ([[SB]])---are calling conventions
+chosen by the \plan compiler team. They are not universal:
+Linux/ARM uses a different static base strategy, and other
+compilers may allocate registers differently.
 
 \subsection{Pseudo-registers}
 
@@ -742,8 +754,8 @@ Key assembler directives:
 \begin{itemize}
 \item \verb+TEXT name(SB), flags, $framesize+ --- declares a
 function. The [[framesize]] is how much stack space to
-reserve for locals (the assembler adjusts R13 on entry).
-%yoann1: maybe say for locals or also for arguments to functions called (callees)
+reserve for locals {\em and} for any arguments passed to
+functions this function calls (the assembler adjusts R13 on entry).
 
 \item \verb!DATA sym+offset(SB)/size, $value! --- defines
 initialized global data.
@@ -773,10 +785,9 @@ For example:
 [[LDR]] (load from memory), [[STR]] (store to memory),
 [[MOV]] (register-to-register), or [[ADD]] depending on the
 operand types.
-\item [[RET]] is not a real ARM instruction---it is translated
-to \verb+MOV R14, R15+ (copy the link register to the
-program counter).
-%yoann1: unless it's a leaf procedure? Maybe don't give too much details but say to read Assembler and Linker books for more info
+\item [[RET]] is not a real ARM instruction---it translates to
+\verb+MOV R14, R15+ (copy the link register to the program
+counter). See \book{Assembler} and \book{Linker} for the full details.
 
 \item [[CMP]] with a large constant may be expanded into
 a load from a {literal pool} plus a compare.
@@ -1046,7 +1057,17 @@ Total                                     &                               &     
 
 %yoann: say also not listed above but lib_core/libc/9sys/sys.h (part of Kernel.nw)
 % and syscall.h included from libc.h
-
+%claude:
+One header not shown above is [[lib_core/libc/9syscall/sys.h]],
+which defines the numeric syscall codes ([[EXITS=3]],
+[[OPEN=6]], [[PREAD=8]], etc.) used by the assembly stubs in
+[[9syscall/]]. It is presented in \book{Kernel} (since the
+kernel and the stubs must agree on these numbers). The C-level
+declarations of all syscalls ([[open]], [[exits]], [[rfork]],
+etc.) live in [[syscall.h]], which is included by [[libc.h]]:
+this allows the C compiler to type-check every call site
+against the correct prototype, even though the actual
+implementations are assembly stubs.
 
 \section{Software architecture}
 
@@ -2345,8 +2366,25 @@ The kernel passes its address in [[R0]].
 See \book{Kernel} for the full definition.
 
 %yoann: maybe say that no space for ret addr, which is part of C calling convention! hence the need to adjust what the kernel did (why kernel didn't do the right thing directly?)
+%claude:
+Notice that the kernel's layout has no slot for a return
+address---that is not a mistake. In ARM, the return address
+is held in R14 (the link register), never pushed to the
+stack. However, the C calling convention still reserves
+a specific layout for how a callee sees its arguments via FP.
+The kernel cannot simply match that layout because it is not
+a C caller: it just pushes [[argc]] and [[argv]] at the
+initial SP without any calling-convention framing. It is
+[[_main]]'s job to bridge this gap.
 
 %yoann: transition paragraph say now mostly ready to show ARM code of _main
+%claude:
+With the kernel's entry layout understood, we are ready to
+read [[_main]] itself. The assembly sets up the SB register,
+saves [[Tos]], carves the private storage area from the
+frame, and copies [[argc]]/[[argv]] into the positions that
+the C calling convention requires before branching to
+[[main()]].
 
 <<libc/arm/main9.s>>=
 <<constant NPRIVATES(arm)>>
@@ -2389,7 +2427,12 @@ The private storage area is carved from the stack frame
 reserves space). [[_privates]] and [[_nprivates]] are globals
 used by [[privalloc()]] to implement per-process private data
 (see Chapter~\ref{chap:threads}).
-%yoann1: but why the 16 + ... ? 4 extra locals?
+The [[16]] bytes (4~words) are the argument-passing slots
+that [[_main]] needs for the functions it calls: the Plan 9
+ARM convention requires the caller to reserve stack space
+for arguments, so [[_main]]'s frame has room for the
+[[argc]]/[[argv]] it will place at \verb+4(R(sp))+/\verb+8(R(sp))+ when calling [[main()]]
+(and similarly for the call to [[exits()]]).
 
 <<constant NPRIVATES(arm)>>=
 #define NPRIVATES       16
@@ -2555,6 +2598,21 @@ After [[ARGEND]], [[argv]] points to the remaining arguments
 
 \section{Syscall: [[_exits()]]}
 
+%yoann: explain syscall really in sys.h with syscall code, but also declared in syscall.h included from libc.h for C typechecking. The actual func is defined in assembly (via stub as explained before)
+%claude:
+Each syscall has two definitions. The numeric code
+([[EXITS=3]], [[OPEN=6]], etc.) lives in [[9syscall/sys.h]]
+and is used only by the assembly stubs. The C-level
+signature ([[void _exits(char*)]]) is declared in
+[[syscall.h]] which is included from [[libc.h]]---so any
+[[.c]] file that includes [[libc.h]] gets type-checked
+against the correct prototype. The implementation itself
+is the assembly stub generated by [[9syscall/mkfile]].
+
+<<signatures process syscall>>=
+extern	void	_exits(char*);
+@
+
 % ugly but special code in 9syscall/mkfile to rename call to
 % EXITS syscall to _exits instead of exits because probably wanted to
 % add special code around _exits after and wanted to be backward
@@ -2570,20 +2628,19 @@ in the [<exits()>] function below.
 %claude:
 This is actually the only \plan system call that uses this
 underscore convention---most other system calls ([[open]],
-[[read]], [[rfork]], etc.) are used directly without a
+[[pread]], [[rfork]], etc.) are used directly without a
 wrapper. [[exits]] is special because it needs to run
 cleanup callbacks before terminating.
-%yoann1: actually it's pread not read no?
 
 %yoann: now that User/Kernel bridge is before, maybe show concrete code of _exits to make things more concrete?
 %claude:
 The assembly stub for [[_exits]] follows the pattern described
-in Chapter~\ref{chap:user-kernel}: it loads the syscall number
-for [[EXITS]] into [[R0]], places the argument (the exit
-status string pointer) in [[R1]], and executes [[SWI 0]].
+in Chapter~\ref{chap:user-kernel}: it saves the argument
+(the exit string pointer, which arrived in [[R0]]) to the
+frame at \verb+0(FP)+, loads the syscall number [[EXITS=3]]
+into [[R0]], and executes [[SWI $0]].
 This is all the user-space code there is---the kernel's
 [[sysexits()]] does the actual process teardown.
-%yoann1: why are you talking about R1?
 
 %yoann: show actual assembly ARM for _exits.s, we already saw one in previous chapter, it is ok to repeat things once
 %claude:
@@ -2602,6 +2659,18 @@ the process. It is there because the assembler requires
 every [[TEXT]] block to end with a [[RET]].
 
 %yoann: maybe quickly give semantic of _exits()? give an idea of what it does
+%claude:
+[[_exits(s)]] terminates the calling process immediately,
+passing the string [[s]] as its exit status (readable by
+the parent via [[await()]]). The empty string \verb+""+ (or
+[[nil]]) conventionally means success; any other string
+signals failure. Internally, the kernel's [[sysexits()]]
+copies the string from user space and calls [[pexit()]],
+which frees file descriptors, namespace, and segments,
+posts a wait message to the parent, and then---after
+switching to the CPU's main stack---releases the MMU state
+and returns the [[Proc]] slot to the free pool.
+See \book{Kernel} for the full details.
 
 \section{[[exits()]] and [[atexit()]]}
 
@@ -2826,6 +2895,14 @@ at once.
 \end{itemize}
 
 %yoann: maybe give intuition about code? what means TO?TOE?
+%claude:
+The register aliases make the code self-documenting:
+[[TO]] (``to'', register 1) is the write pointer that
+advances through the destination; [[TOE]] (``to end'',
+register 2) is the end address ([[dest + n]]), used as
+a loop terminator. [[N]] (register 3) holds the byte
+count, and [[TMP]] aliases the same register since [[N]]
+and [[TMP]] are never live at the same time.
 
 <<libc/arm/memset.s>>=
 TO = 1
@@ -2900,7 +2977,7 @@ is handling {overlapping} regions:
 \begin{verbatim}
   Non-overlapping (forward copy is safe):
     src:  [A B C D E]
-    dst:          [. . . . .]     -->  [A B C D E]
+    dst:                [. . . . .]   -->  [A B C D E]
 
   Overlapping (forward copy would clobber):
     [A B C D E . . .]
@@ -2909,7 +2986,6 @@ is handling {overlapping} regions:
            src[2] was already overwritten!
   Solution: copy backwards from the end.
 \end{verbatim}
-%yoann1: actually on the ASCII diagram the Non-overlapping case seems overlapping
 
 <<function [[memmove]]>>=
 void*
@@ -3328,9 +3404,47 @@ in a binary tree for efficient best-fit allocation.
 \section{Syscall: [[brk()]]}
 % sysbrk()
 
+% brk not defined in syscall.h ??
+<<signatures memory syscall>>=
+// brk() ??
+@
+
 %yoann: say will not put assembly stub, very similar, but maybe explain semantic of the call. Maybe ASCII diagram of memory layout with text, data, bss, and heap, and stack and relation for sbrk, and maybe also edata, etext, eend
+%claude:
+The [[brk()]] assembly stub is not reproduced here---it
+is generated by [[9syscall/mkfile]] using the same template
+as [[_exits]] above. Semantically, [[brk(addr)]] asks the
+kernel to set the top of the process's data segment to
+[[addr]]; the kernel maps or unmaps pages as needed.
+\begin{verbatim}
+  High addresses
+  +------------------+  <-- top of stack (grows down)
+  |      stack       |
+  |        |         |
+  |        v         |
+  |                  |
+  |        ^         |
+  |        |         |
+  |       heap       |  <-- grows up via brk()
+  +------------------+  <-- bloc (current heap end)
+  |       bss        |  zero-initialized globals
+  +------------------+  <-- end (eend / linker symbol)
+  |      data        |  initialized globals
+  +------------------+  <-- edata (linker symbol)
+  |      text        |  executable code
+  +------------------+  <-- etext (linker symbol)
+  Low addresses
+\end{verbatim}
+The linker exports [[etext]], [[edata]], and [[end]] as
+symbols marking the boundaries between segments.
+[[sbrk()]] starts its heap at [[end]] (the first address
+after BSS) and advances it with each allocation.
 
 \section{[[sbrk()]]}
+
+<<signatures memory syscall wrapper>>=
+extern	void*	sbrk(ulong);
+@
 
 % in 9sys/
 
@@ -3339,9 +3453,10 @@ in a binary tree for efficient best-fit allocation.
 The [[bloc]] pointer tracks the current end of the heap
 (initialized to [[end]], the linker-defined symbol marking
 the end of BSS). The rounding expression
-the rounding expression (add [[Round]], then mask off the low bits)
-aligns the allocation to an 8-byte boundary.
-%yoann1: why say 2 times the rounding expression? also why 8byte boundary matters?
+\verb+(bloc + Round) & ~Round+ aligns the returned pointer
+to an 8-byte boundary---necessary because [[malloc]] must
+return memory usable for any type, including 64-bit values
+([[double]], [[vlong]]) which fault on ARM if misaligned.
 
 <<global [[bloc]]>>=
 // starting point for the heap, after the text, data, and bss.
@@ -3376,6 +3491,14 @@ enum
 \section{Data structures}
 
 %yoann: transition paragraph explaining now switch to allocator on top of sbrk and will need complex data structures
+%claude:
+[[sbrk()]] can only grow the heap---it has no way to
+reclaim freed memory. Building a real allocator on top of
+it requires tracking which regions have been freed and
+reusing them. The \plan allocator does this with a set of
+non-trivial data structures: a binary tree of free blocks
+([[Pool.freeroot]]), a linked list of arenas, and per-block
+headers with boundary tags. We look at those structures next.
 
 \subsection{[[Pool]]}
 
@@ -6566,6 +6689,14 @@ enum Seek_cursor {
 % sysopen(), sysclose(), sysread(), syswrite(), sysseek(), etc
 % file, directory, namespace
 
+<<signatures file syscall>>=
+extern	fdt	open(char*, int);
+extern	int	close(fdt);
+extern	long	pread(fdt, void*, long, vlong);
+extern	long	pwrite(fdt, void*, long, vlong);
+extern	int	dup(int, int);
+@
+
 % why pread? does seek and read at the same time, so atomic,
 % which is useful for servers.
 
@@ -6748,6 +6879,21 @@ change just the mode of a file without having to know its
 current name, owner, or modification time.
 
 \section{Syscalls: [[create()]], [[chdir()]], etc}
+
+<<signatures directory syscall>>=
+extern	int	create(char*, int, ulong);
+extern	int	remove(char*);
+extern	int	chdir(char*);
+extern	int	fd2path(fdt, char*, int);
+@
+
+<<signatures directory syscall>>=
+extern	int	fstat(int, uchar*, int);
+extern	int	stat(char*, uchar*, int);
+extern	int	fwstat(int, uchar*, int);
+extern	int	wstat(char*, uchar*, int);
+@
+
 
 \section{[[xxxfstat()]]}
 
@@ -7152,6 +7298,12 @@ and much of the role of environment variables.
 
 \section{Syscalls: [[bind()]], [[mount()]], etc}
 
+<<signatures namespace syscall>>=
+extern	int	bind(char*, char*, int/*Mxxx*/);
+extern	int	mount(fdt, int, char*, int/*Mxxx*/, char*);
+extern	int	unmount(char*, char*);
+@
+
 % related then for mount is read9pmsg later and Fcall
 
 %******************************************************************************
@@ -7167,7 +7319,12 @@ for sleeping and setting alarms, time-of-day functions, timezone
 handling, and conversions between epoch seconds and the [[Tm]]
 structure.
 
-\section{Syscalls: [[sleep()]], [[alarm()]], etc}
+\section{Syscalls: [[sleep()]], [[alarm()]]}
+
+<<signatures time syscall>>=
+extern	long	alarm(ulong);
+extern	int	sleep(long); //less: could be void (ulong). 0 means yield.
+@
 
 \section{Time and day}
 % called Time-of-day, not sure  why
@@ -7441,6 +7598,14 @@ enum Rfork_flags
 
 \section{Syscalls: [[rfork()]], [[exec()]], [[await()]], etc}
 
+<<signatures process syscall>>=
+extern	int	rfork(int);
+extern	int	exec(char*, char*[]);
+extern	int	await(char*, int);
+@
+
+%yoann: say saw _exits() process syscall earlier
+
 % sysfork(), sysexit(), sysawait(), sysexec()
 % want to run external command? need fork+exec! classic pattern.
 
@@ -7580,6 +7745,10 @@ return descriptive error messages.
 @
 
 \section{Syscall: [[errstr()]]}
+
+<<signatures error syscall>>=
+extern	int	errstr(char*, uint);
+@
 
 % error of last system call.
 % but why not return error information from system call directly?
@@ -8067,6 +8236,16 @@ are built on top of these in [[libthread]], covered in a
 later chapter.
 
 \section{Syscalls: [[rendezvous()]], etc}
+
+<<signatures concurrency syscall>>=
+extern	void*	rendezvous(void*, void*);
+@
+
+<<signatures concurrency syscall>>=
+extern	int	semacquire(long*, int);
+extern	long	semrelease(long*, long);
+extern	int	tsemacquire(long*, ulong);
+@
 
 % plan9 has shared memory processes. rfork(RFMEM)
 % has then locking function to coordinate. qlock, lock, etc.
@@ -8630,6 +8809,21 @@ covers the 9P protocol marshalling functions used to
 communicate with file servers.
 
 \section{Syscalls: [[pipe()]], [[notify()]], [[await()]], [[segattach()]]}
+
+<<signatures ipc syscall>>=
+extern	int	pipe(int*);
+@
+<<signatures ipc syscall>>=
+extern	int	noted(int);
+extern	int	notify(void(*)(void*, char*));
+@
+<<signatures ipc syscall>>=
+extern	void*	segattach(int, char*, void*, ulong);
+extern	void*	segbrk(void*, void*);
+extern	int	segdetach(void*);
+extern	int	segflush(void*, ulong);
+extern	int	segfree(void*, ulong);
+@
 
 \section{Helpers}
 
