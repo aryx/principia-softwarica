@@ -3,6 +3,7 @@
 %last:
 % - https://www.markhansen.co.nz/profilerpedia/
 % - jeff dean advice on perf: https://abseil.io/fast/hints.html
+% - https://jvns.ca/blog/2017/12/17/how-do-ruby---python-profilers-work-/
 
 \input{../docs/latex/Packages}
 \input{../docs/latex/Noweb}
@@ -116,7 +117,7 @@ What is the difference between {user time}, {system time},
 and {real time} (wall-clock time)?
 
 \item How does a {sampling profiler} work?
-How does the kernel periodically record where a program
+How does the kernel periodically record what a program
 is executing?
 
 \item How does an {instrumenting profiler} work?
@@ -169,6 +170,19 @@ which I ultimately discarded:
 %history:
 % ?? prof?
 
+%yoann: is there an historical prof that could have been considered? whose source is available?
+%claude:
+\item The original \unix {prof} from V6 and V7 is the historical
+ancestor of all the tools in this list. It was a simple
+sampling profiler: the program called [[monitor()]] to enable
+PC sampling, ran normally, and on exit wrote a [[mon.out]]
+file that [[prof]] read to produce a flat time histogram.
+Its source is publicly available in the Unix V6 and V7 archives
+(released under the Caldera license in 2002).
+However, it is entirely superseded by its successors,
+and \plan's own [[prof]] covers the same sampling idea
+in a cleaner design without the [[monitor()]] indirection.
+
 \item [[gprof]]~\cite{gprof} is the classic \unix profiler.
 %claude:
 It combines instrumentation (the compiler inserts code at each
@@ -178,10 +192,13 @@ program counter). The combination gives both call counts and
 time estimates per function.
 [[gprof]] was introduced with 4.2BSD and became the standard
 profiling tool on \unix systems for decades.
+The ``g'' stands for {graph} (call graph), not GNU---the name
+predates the GNU project.
 The \plan\ [[prof]] tool works on a similar principle but is
 simpler, relying on the linker rather than the compiler for
 instrumentation.
-GNU [[gprof]], part of the [[binutils]] package, is a
+
+\item GNU [[gprof]], part of the [[binutils]] package, is a
 reimplementation of the original BSD tool that follows the
 same design (compiler-inserted call arcs plus PC sampling)
 and reads the same [[gmon.out]] file format.
@@ -189,13 +206,18 @@ The original BSD [[gprof]] was about 3000 LOC;
 GNU [[gprof]] (part of [[binutils]]) is roughly
 15\,000 LOC.
 
+
 \item OProfile is a system-wide statistical profiler for Linux
 that uses hardware {performance counters} when available.
-% dean?
 %claude:
 Unlike [[gprof]], which requires recompiling the target program,
 OProfile can profile any running program, including the kernel
 itself, with low overhead.
+It uses hardware performance counters via the Linux kernel's
+[[perf_events]] interface to trigger sampling.
+OProfile is now essentially unmaintained---its last significant
+development activity was around 2015---and has been largely
+displaced by newer tools built on the same kernel interface.
 
 \item [[perf]] is the modern Linux profiling framework.
 % huge on Linux
@@ -205,17 +227,31 @@ itself, with low overhead.
 %claude:
 It subsumes most of what OProfile and [[gprof]] do, and
 adds tracing, hardware counter access, and visualization.
-However, the [[perf]] codebase is enormous---tens of thousands
-of lines of C---making it unsuitable for a teaching book.
+However, the [[perf]] codebase is enormous---orders of magnitude
+larger than the \plan tools in this book---making it unsuitable
+for a teaching book.
+
+
+%yoann: add also discussion of ebpf and relate to the perf tool (a wrapper? an extension? rely on completely different mechanisms?) but there is linux/kernel/bpf and libbepf and bpftrace and bcc and more? and BPF vs eBPF?
+%claude:
+\item {eBPF} (extended Berkeley Packet Filter) represents a
+fundamentally different approach from the tools above.
+The original {BPF} (1992) was a tiny in-kernel filter for
+network packets; eBPF (Linux 3.18, 2014) generalized it into
+a safe, general-purpose virtual machine that can run
+user-supplied programs inside the kernel.
+Instead of passively sampling or instrumenting a target program,
+eBPF programs attach to kernel hooks---tracepoints, function
+entry/exit, syscalls, network events---and can aggregate data
+entirely in-kernel before reporting to userspace.
+[[perf]] can load eBPF programs as event handlers;
+[[bpftrace]] (a high-level tracing language) and
+[[bcc]] (a Python/C++ toolkit) compile to eBPF and load it.
+The eBPF ecosystem ([[linux/kernel/bpf]], [[libbpf]], [[bpftrace]], [[bcc]])
+is now the dominant Linux tracing substrate, but its complexity
+far exceeds the scope of this book.
 
 \end{itemize}
-
-% critique of perf and lots of visual tracing output
-%http://danluu.com/perf-tracing/
-
-%https://jvns.ca/blog/2017/12/17/how-do-ruby---python-profilers-work-/
-
-%https://hackernoon.com/usr-bin-time-not-the-command-you-think-you-know-34ac03e55cc3#.v96gngqz2
 
 \begin{figure}[]\centering
 \includegraphics[width=\textwidth]{lineage}
@@ -231,6 +267,11 @@ profiling approaches---timing ([[time]]), instrumentation
 ([[prof]]), and sampling ([[tprof]])---plus system-wide
 monitoring ([[stats]], [[trace]]) and I/O tracing ([[iostats]]),
 all in a fraction of the code found in modern tools like [[perf]].
+
+%links:
+% - critique of perf and lots of visual tracing output
+%   http://danluu.com/perf-tracing/
+
 
 \section{Getting started}
 
@@ -1414,6 +1455,9 @@ binary search to find the enclosing function.
 %******************************************************************************
 \label{chap:time}
 
+%TODO:
+% - https://hackernoon.com/usr-bin-time-not-the-command-you-think-you-know-34ac03e55cc3#.v96gngqz2
+
 % time: most basic perf tool! and super useful!
 
 %claude:
@@ -2315,7 +2359,7 @@ indent(int ind)
 @
 
 
-\subsection{[[prof -d -r]]}
+%\subsection{[[prof -d -r]]}
 
 <<global [[rflag]]>>=
 int	rflag;
@@ -2880,7 +2924,7 @@ compar(void *va, void *vb)
 
 
 %******************************************************************************
-\chapter{Show real-time Behavior: [[/bin/trace]]}
+\chapter{Show Real-time Behavior: [[/bin/trace]]}
 %******************************************************************************
 \label{chap:trace}
 
