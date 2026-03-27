@@ -2677,6 +2677,16 @@ switching to the CPU's main stack---releases the MMU state
 and returns the [[Proc]] slot to the free pool.
 See \book{Kernel} for the full details.
 
+%claude: %unix:
+In \unix, [[exit()]] takes an integer status code (0 for
+success, non-zero for failure), and the parent decodes it
+via macros like [[WIFEXITED]] and [[WEXITSTATUS]]. The
+mapping from number to meaning is program-specific and
+often undocumented---you need to read the man page to know
+that exit code~2 means [[ENOENT]] (``no such file'').
+\plan's string-based exit is self-documenting: the parent
+sees \verb+"file not found"+ directly.
+
 \section{[[exits()]] and [[atexit()]]}
 
 %claude:
@@ -3444,6 +3454,20 @@ The linker exports [[etext]], [[edata]], and [[end]] as
 symbols marking the boundaries between segments.
 [[sbrk()]] starts its heap at [[end]] (the first address
 after BSS) and advances it with each allocation.
+
+%claude: %unix:
+In \unix, both [[brk]] and [[sbrk]] are syscalls; \plan
+has only [[brk]] as a syscall and implements [[sbrk]] in
+the library (shown below). On Linux, [[glibc]]'s [[malloc]]
+also uses [[mmap]] for large allocations: unlike [[brk]],
+which can only grow or shrink the heap from the top,
+[[mmap]]/[[munmap]] can allocate and release memory anywhere
+in the address space, so large blocks can be returned to the
+kernel immediately when freed. \plan's simpler [[brk]]-only
+model works well for its typical workload of short-lived
+programs. For mapping shared memory, \plan provides
+[[segattach]] instead of [[mmap]] (see
+Section~\ref{sec:shared-segments}).
 
 \section{[[sbrk()]]}
 
@@ -6718,7 +6742,7 @@ extern	int	dup(int, int);
 % why pread? does seek and read at the same time, so atomic,
 % which is useful for servers.
 
-%claude:
+%claude: %unix:
 Note that the fundamental I/O syscalls are [[pread]] and
 [[pwrite]] (``positional read/write''), not [[read]] and
 [[write]]. They take an explicit file offset as a parameter,
@@ -6728,6 +6752,9 @@ processes share a file descriptor (after [[fork]]), a
 \unix [[lseek]]+[[read]] sequence is not atomic---another
 process can seek in between. With [[pread]], the offset
 is part of the call itself, so no race is possible.
+(\unix later adopted [[pread]]/[[pwrite]] too, in
+POSIX.1-2001, but the traditional [[read]]/[[write]]
+remain the primary interface.)
 
 %claude:
 In the kernel, [[sysopen()]] resolves the file path through
@@ -6946,6 +6973,23 @@ file. [[sysremove()]] walks to the file and calls the
 device's [[remove]] method. [[chdir()]] changes the
 process's current directory. [[fd2path()]] returns the full
 path name associated with an open file descriptor.
+
+%claude: %unix:
+\plan spells [[create]] in full---in \unix, the syscall was
+famously [[creat]] without the final `e'. When asked what he
+would change about \unix, Ken Thompson answered: ``I'd spell
+creat with an e.''
+%
+[[fd2path]] has no direct \unix equivalent. In \plan,
+with per-process namespaces, the same file can be reached
+via different paths in different processes, and \verb+..+
+is resolved lexically (by [[cleanname]], shown later) rather
+than by following the filesystem's parent pointers. So
+the kernel remembers the path used to open each file
+descriptor and [[fd2path]] returns it. In \unix,
+[[realpath()]] tries to resolve a path to a canonical form,
+but it does not work correctly with bind mounts and has no
+connection to file descriptors.
 
 \section{[[xxxfstat()]]}
 
@@ -7373,6 +7417,17 @@ control how the new entry combines with existing entries
 in union directories. [[unmount]] reverses a previous
 [[bind]] or [[mount]].
 
+%claude: %unix:
+\unix's [[mount]] is a privileged operation (root only)
+that attaches a disk partition to a directory. \plan's
+[[mount]] is unprivileged and far more general: any process
+can mount any 9P file server (including user-level programs)
+at any point in its own namespace. [[bind]] has no \unix
+equivalent at all---the closest is Linux's [[mount --bind]],
+added decades later, which lacks union directory support.
+The combination of per-process namespaces, [[bind]], and
+[[mount]] is one of \plan's most distinctive features.
+
 %******************************************************************************
 \chapter{Time}
 %******************************************************************************
@@ -7404,6 +7459,14 @@ processor to other processes.
 sends an \verb+"alarm"+ note to the process. Calling
 [[alarm(0)]] cancels a pending alarm. [[alarm]] returns the
 time remaining from any previous alarm.
+
+%claude: %unix:
+\unix has similar calls but with coarser granularity:
+\unix [[sleep()]] takes seconds (not milliseconds), and
+\unix [[alarm()]] also takes seconds. For sub-second
+timing, \unix programs must use [[nanosleep]] or
+[[setitimer]]---separate, more complex interfaces. \plan
+simply uses milliseconds everywhere.
 
 \section{Time and day}
 % called Time-of-day, not sure  why
@@ -7702,6 +7765,16 @@ text/data/bss segments, sets up the stack with [[argc]] and
 returns a text string containing the child's pid, CPU times,
 and exit message.
 
+%claude: %unix:
+\unix has separate [[fork()]], [[clone()]] (Linux), and
+[[vfork()]] syscalls for different sharing patterns. \plan
+unifies them all into [[rfork]] with flags. Linux's
+[[clone()]] was in fact inspired by \plan's [[rfork]].
+%
+[[await]] returns a text string rather than \unix's integer
+status code (see the [[_exits]] comparison in
+Chapter~\ref{chap:main}).
+
 %claude:
 The fork/exec pattern is the cornerstone of \unix process
 creation: [[fork]] duplicates the process, then the child
@@ -7864,6 +7937,16 @@ you set the error string (used by [[werrstr]]).
 This swap design is unusual but efficient: a single syscall
 both reads and resets the error.
 
+%claude: %unix:
+\unix uses [[errno]], a global integer that each syscall sets
+on failure. Programs must call [[strerror(errno)]] or
+[[perror()]] to get a human-readable message, and the set of
+error codes is fixed at compile time ([[ENOENT]],
+[[EPERM]], etc.). \plan's per-process string avoids all three
+problems: it is per-process (no thread-safety issue), it is
+human-readable directly, and file servers can return
+application-specific messages that do not need to fit into a
+predefined enum.
 
 \section{[[rerrstr()]], [[werrstr()]]}
 
@@ -8378,6 +8461,15 @@ process sleeps until another process calls [[semrelease]].
 [[tsemacquire]] is a variant with a timeout.
 These are the primitives on which [[Lock]] and [[QLock]]
 (shown later) are built.
+
+%claude: %unix:
+\unix has no equivalent of [[rendezvous]]. The closest
+primitives are [[futex]] (Linux), which also allows
+user-space fast paths with kernel fallback, but [[futex]]
+is more complex (it operates on memory addresses rather
+than abstract tags). \plan's [[semacquire]]/[[semrelease]]
+are similar in spirit to Linux's [[futex]] \verb+WAIT+ and
+\verb+WAKE+ operations.
 
 % see lock(2), rendezvous(2)
 % sleep/wakeup
@@ -8968,6 +9060,24 @@ process's address space. [[segdetach]] unmaps it.
 cached pages, and [[segfree]] releases pages without
 detaching the segment.
 
+%claude: %unix:
+\plan's pipes are bidirectional---both ends can read and
+write---unlike \unix pipes which are unidirectional (you
+need two pipes for two-way communication).
+%
+Notes are \plan's replacement for \unix signals. The key
+improvement is that notes carry a string message (e.g.,
+\verb+"alarm"+ or \verb+"sys: write on closed pipe"+)
+rather than just a number ([[SIGALRM]], [[SIGPIPE]]).
+The handler also receives a string, not just a signal
+number, so it can make decisions based on the message
+content.
+%
+[[segattach]] is \plan's equivalent of \unix's [[mmap]]
+for shared memory (though not for file mapping). Unlike
+[[mmap]], it uses named segment classes rather than
+anonymous mappings.
+
 \section{Helpers}
 
 %claude:
@@ -9340,6 +9450,7 @@ descriptors that are endpoints of a two-way communication
 channel.
 
 \section{Shared segments}
+\label{sec:shared-segments}
 
 %claude:
 [[segattach]] maps a shared memory segment into the process's
