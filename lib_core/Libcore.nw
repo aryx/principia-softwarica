@@ -6870,6 +6870,15 @@ strings from the ground up.
 
 \section{Data structures}
 
+%claude:
+The central idea in [[libbio]] is that reading and writing
+use the same buffer but with mirror-image pointer arithmetic.
+The buffer lives at the end of a [[Biobuf]] structure, which
+embeds a [[Biobufhdr]] (the ``header'') containing all the
+bookkeeping fields plus a fixed-size byte array [[b]].
+A [[Biobuf]] is designed to be stack-allocated; for heap
+allocation, use [<Bopen>] instead.
+
 <<struct [[Biobuf]]>>=
 struct	Biobuf
 {
@@ -6882,6 +6891,24 @@ struct	Biobuf
 Bsize		= 8*1024,
 Bungetsize	= UTFmax+1,		/* space for ungetc */
 @
+
+%claude:
+The header contains the real machinery. The key insight is
+that [[icount]] and [[ocount]] are \emph{negative} counters:
+[[icount]] counts up from [[-n]] toward zero as bytes are
+consumed from the read buffer, while [[ocount]] counts up
+from [[-bsize]] toward zero as bytes are added to the write
+buffer. When either reaches zero, it's time to refill or flush.
+This lets the fast path---[<Bgetc>] and [<Bputc>]---be a
+single increment-and-index with no comparisons.
+
+%claude:
+The three pointers [[bbuf]], [[ebuf]], and [[gbuf]] partition
+the byte array. [[bbuf]] and [[ebuf]] mark the full extent of
+the buffer. [[gbuf]] (``good buffer'') marks where valid data
+starts---when a short read returns fewer than [[bsize]] bytes,
+the data is right-aligned against [[ebuf]] so that [[ebuf[icount]]]
+always points to the next byte to return.
 
 <<struct [[Biobufhdr]]>>=
 struct	Biobufhdr
@@ -6908,6 +6935,17 @@ struct	Biobufhdr
 };
 @
 
+%claude:
+A [[Biobuf]] is always in one of four states.
+[[Binactive]] means the buffer has hit an error and is dead.
+[[Bractive]] and [[Bwactive]] are the normal reading and writing
+states. [[Bracteof]] is a transitional state: [[read]] returned
+zero (end of file), but the caller hasn't consumed this fact yet.
+The next [<Bgetc>] in [[Bracteof]] returns [[Beof]] and
+transitions to [[Bractive]], so a subsequent read after the
+file grows will pick up new data---useful for programs like
+[[tail]] that follow a file.
+
 <<constants Bxxx>>=
 Binactive	= 0,		/* states */
 Bractive,
@@ -6917,6 +6955,17 @@ Bracteof,
 
 \section{Initialization: [[Binit()]], [[Bopen()]], [[Bterm()]]}
 
+%claude:
+There are two ways to create a [[Biobuf]]: [<Binit>] wraps an
+already-open file descriptor (the [[Biobuf]] is usually on the
+stack), while [<Bopen>] opens the file and heap-allocates the
+buffer. In both cases the real work is done by [<Binits>], which
+takes an explicit buffer pointer and size.
+
+%claude:
+[<Binit>] is a thin wrapper that passes the embedded [[b]] array
+to [<Binits>]:
+
 <<function [[Binit]]>>=
 int
 Binit(Biobuf *bp, fdt f, int mode)
@@ -6924,6 +6973,16 @@ Binit(Biobuf *bp, fdt f, int mode)
     return Binits(bp, f, mode, bp->b, sizeof(bp->b));
 }
 @
+
+%claude:
+[<Binits>] first reserves [[Bungetsize]] bytes at the front
+of the buffer for [<Bungetc>] support, then sets the state
+based on the mode. For write buffers, [[ocount]] starts at
+[[-size]] (the entire buffer is free); for read buffers,
+[[icount]] starts at zero (no data available yet, so the
+first [<Bgetc>] will trigger a [[read]] system call).
+Write buffers are registered via [<install>] for automatic
+flushing at exit.
 
 <<function [[Binits]]>>=
 int
@@ -6962,6 +7021,14 @@ Binits(Biobufhdr *bp, fdt f, int mode, uchar *p, int size)
 }
 @
 
+
+%claude:
+The atexit machinery ensures that write buffers are flushed
+when a program exits, even if the programmer forgets to call
+[<Bterm>]. A global table [[wbufs]] holds up to 20 active
+write buffers. When the first write buffer is installed, an
+[[atexit]] handler is registered that walks the table and
+flushes each one.
 
 <<global [[wbufs]]>>=
 static	Biobufhdr*	wbufs[20];
@@ -7023,6 +7090,13 @@ batexit(void)
 }
 @
 
+%claude:
+[<Bopen>] is the high-level constructor: it opens (or creates)
+the file, [[malloc]]s a [[Biobuf]], and marks it with [[Bmagic]]
+so that [<Bterm>] knows to [[close]] the descriptor and [[free]]
+the memory. If the caller used [<Binit>] instead, [<Bterm>]
+just flushes without freeing---the caller owns the storage.
+
 <<function [[Bopen]]>>=
 Biobuf*
 Bopen(char *name, int mode)
@@ -7060,6 +7134,15 @@ int	flag;		/* magic if malloc'ed */
 @
 
 
+%claude:
+[<Bterm>] tears down a [[Biobuf]]: it deinstalls it from the
+atexit table, flushes any pending writes, and---only if the
+buffer was heap-allocated by [<Bopen>]---closes the file
+descriptor and frees the memory. Setting [[fid]] to $-1$
+after close is a defensive touch that makes use-after-free
+produce an obvious [[write]] error rather than silently
+corrupting another file.
+
 <<function [[Bterm]]>>=
 int
 Bterm(Biobufhdr *bp)
@@ -7081,7 +7164,33 @@ Bterm(Biobufhdr *bp)
 
 \section{Reading}
 
+%claude:
+[[libbio]] offers reading at three granularities: byte
+([<Bgetc>]), rune ([<Bgetrune>]), and line ([<Brdline>],
+[<Brdstr>]). All share the same underlying buffer; the
+differences are in how much they consume per call and
+whether they return a pointer into the buffer (zero-copy)
+or allocate.
+
 \subsection{Byte reading: [[Bgetc()]], [[Bungetc()]]}
+
+%claude:
+[<Bgetc>] is the workhorse. The fast path is two instructions:
+if [[icount]] is non-zero, increment it and index [[ebuf]].
+Since [[icount]] is negative and counts toward zero, the
+expression [[ebuf[icount]]] walks backward from the end of
+the buffer---this is why short reads are right-aligned against
+[[ebuf]].
+
+%claude:
+When [[icount]] reaches zero the buffer is exhausted.
+Before calling [[read]], the last [[Bungetsize]] bytes from
+the old buffer are copied to just before [[bbuf]], so that
+a subsequent [<Bungetc>] can back up past the buffer boundary.
+If the [[read]] returns fewer than [[bsize]] bytes, the data
+is shifted to the end of the buffer (right-aligned) and
+[[gbuf]] is adjusted, maintaining the invariant that
+[[ebuf[icount]]] always points to the next byte.
 
 <<function [[Bgetc]]>>=
 int
@@ -7124,6 +7233,12 @@ loop:
 }
 @
 
+%claude:
+[<Bungetc>] simply decrements [[icount]], moving the read
+cursor back by one byte. This works even across buffer
+boundaries thanks to the [[Bungetsize]] bytes preserved
+during refill.
+
 <<function [[Bungetc]]>>=
 int
 Bungetc(Biobufhdr *bp)
@@ -7139,6 +7254,16 @@ Bungetc(Biobufhdr *bp)
 @
 
 \subsection{Rune reading: [[Bgetrune()]], [[Bungetrune()]]}
+
+%claude:
+[<Bgetrune>] reads a full UTF-8 sequence by calling [<Bgetc>]
+one byte at a time. If the first byte is below [[Runeself]]
+(128), it's ASCII and we're done. Otherwise, bytes are
+accumulated until [[fullrune]] says we have a complete
+sequence, then [[chartorune]] decodes it. Any excess bytes
+consumed are pushed back with [<Bungetc>]. The [[runesize]]
+field records how many bytes the rune occupied, which
+[<Bungetrune>] needs to know how far to back up.
 
 <<function [[Bgetrune]]>>=
 long
@@ -7179,6 +7304,12 @@ Bgetrune(Biobufhdr *bp)
 }
 @
 
+%claude:
+[<Bungetrune>] backs up by [[runesize]] bytes rather than
+one, undoing exactly the multi-byte sequence that
+[<Bgetrune>] consumed. It then clears [[runesize]] to
+prevent double-ungets.
+
 <<function [[Bungetrune]]>>=
 int
 Bungetrune(Biobufhdr *bp)
@@ -7195,6 +7326,31 @@ Bungetrune(Biobufhdr *bp)
 @
 
 \subsection{Line reading: [[Brdline()]]}
+
+%claude:
+[<Brdline>] is the most complex function in [[libbio]].
+It searches for a delimiter (usually [[\n]]) and returns
+a pointer directly into the buffer---no allocation, no copy.
+The caller must process the data before the next [[libbio]]
+call, since the pointer is invalidated by any operation
+that refills the buffer. The length of the returned line
+(including the delimiter) is available via [<Blinelen>].
+
+%claude:
+The algorithm has three phases. First, it scans the
+unread portion of the current buffer with [[memchr]].
+If the delimiter is found, it returns immediately---this
+is the fast path that handles most lines.
+If not, the unconsumed data is moved to the front of the
+buffer ([[bbuf]]), and more data is read in behind it.
+Each time new data arrives, only the new portion is scanned.
+If the delimiter is found, the accumulated data is moved
+back to the end of the buffer (to maintain the right-alignment
+invariant) and a pointer is returned.
+If the buffer fills completely without finding the delimiter,
+[<Brdline>] returns [[nil]]---the line is simply too long.
+The caller can detect this by checking [<Blinelen>], which
+will equal [[bsize]].
 
 <<function [[Brdline]]>>=
 void*
@@ -7285,6 +7441,25 @@ Brdline(Biobufhdr *bp, int delim)
 
 
 \subsection{Line reading (allocating): [[Brdstr()]]}
+
+%claude:
+[<Brdstr>] solves the limitation of [<Brdline>]: it handles
+lines of arbitrary length by [[malloc]]ing a string that the
+caller must eventually [[free]]. The [[nulldelim]] parameter
+controls whether the delimiter is included in the returned
+string---if true, the trailing delimiter is replaced with
+[[\0]].
+
+%claude:
+The helper [[badd]] appends data to a growable string via
+[[realloc]]. When the line fits within one buffer, [<Brdstr>]
+calls [[badd]] once and returns. For lines longer than the
+buffer, it loops: each time the buffer fills without finding
+the delimiter, the buffer contents are appended to the
+accumulator string and a new buffer is read. This means
+[<Brdstr>] can handle arbitrarily long lines at the cost
+of allocation, while [<Brdline>] is zero-copy but bounded
+by buffer size.
 
 <<function [[badd]]>>=
 static char*
@@ -7401,6 +7576,15 @@ Brdstr(Biobufhdr *bp, int delim, int nulldelim)
 
 \subsection{Bulk reading: [[Bread()]]}
 
+%claude:
+[<Bread>] reads an exact number of bytes into a caller-supplied
+buffer, similar to \unix's [[fread]]. It first drains whatever
+is left in the [[Biobuf]]'s internal buffer, then issues
+[[read]] calls for any remaining data. Like [<Bgetc>], it
+handles short reads and right-aligns partial buffers. The
+return value is the number of bytes actually read, or $-1$
+on hard error with no data delivered.
+
 <<function [[Bread]]>>=
 long
 Bread(Biobufhdr *bp, void *ap, long count)
@@ -7450,7 +7634,21 @@ Bread(Biobufhdr *bp, void *ap, long count)
 
 \section{Writing}
 
+%claude:
+The write side mirrors the read side: [[ocount]] is a negative
+counter that starts at [[-bsize]] and increments toward zero.
+The expression [[ebuf[ocount]]] walks backward from [[ebuf]],
+filling the buffer from [[bbuf]] toward [[ebuf]]. When
+[[ocount]] reaches zero the buffer is full and [<Bflush>]
+writes it out.
+
 \subsection{Byte writing: [[Bputc()]]}
+
+%claude:
+[<Bputc>] is the write-side counterpart to [<Bgetc>]: store
+the byte at [[ebuf[ocount]]] and increment. If [[ocount]] is
+zero (buffer full), flush first. The [[for(;;)]] loop retries
+after a successful flush; if flush fails, it returns [[Beof]].
 
 <<function [[Bputc]]>>=
 int
@@ -7472,7 +7670,13 @@ Bputc(Biobufhdr *bp, int c)
 }
 @
 
-\subsection{Rune writing:[[Bputrune()]]}
+\subsection{Rune writing: [[Bputrune()]]}
+
+%claude:
+[<Bputrune>] encodes a rune into UTF-8 and writes the bytes.
+ASCII runes (below [[Runeself]]) take the fast path through
+[<Bputc>]. Multi-byte runes are encoded into a temporary
+buffer with [[runetochar]] and written with [<Bwrite>].
 
 <<function [[Bputrune]]>>=
 int
@@ -7498,6 +7702,16 @@ Bputrune(Biobufhdr *bp, long c)
 
 
 \subsection{Bulk writing: [[Bwrite()]]}
+
+%claude:
+[<Bwrite>] is the write-side counterpart to [<Bread>]: it
+copies data into the internal buffer, flushing whenever
+the buffer fills. One detail worth noting is the interrupt
+handling: if a [[write]] system call fails, [<Bwrite>]
+checks whether the error string contains ``interrupt.''
+If so, the buffer stays active---the write was interrupted
+by a note (signal) but the file descriptor is still good.
+Any other error kills the buffer by setting [[Binactive]].
 
 <<function [[Bwrite]]>>=
 long
@@ -7542,6 +7756,18 @@ Bwrite(Biobufhdr *bp, void *ap, long count)
 @
 
 \subsection{Formatted writing: [[Bprint()]], [[Bvprint()]]}
+
+%claude:
+[<Bprint>] is the [[libbio]] equivalent of [[fprintf]]:
+formatted output directly to a buffered file. It delegates
+to [<Bvprint>], which plugs the [[Biobuf]]'s write buffer
+into the [[fmt]] library's [[Fmt]] structure. The key is
+the [[fmtBflush]] callback: when [[dofmt]] fills the
+available space, [[fmtBflush]] calls [<Bflush>] to write
+the buffer to disk and resets the format output pointers.
+This means [<Bprint>] can format strings larger than the
+buffer without any temporary allocation---the [[fmt]]
+library and [[libbio]] cooperate to stream the output.
 
 <<function [[Bprint]]>>=
 int
@@ -7597,6 +7823,16 @@ Bvprint(Biobufhdr *bp, char *fmt, va_list arg)
 
 \subsection{Flushing: [[Bflush()]]}
 
+%claude:
+[<Bflush>] has different behavior depending on the buffer's
+state. For write buffers ([[Bwactive]]), it computes how many
+bytes are pending ([[bsize + ocount]], since [[ocount]] is
+negative), writes them, and resets [[ocount]] to [[-bsize]].
+A short write kills the buffer. For read buffers, flushing
+discards any buffered data by resetting [[icount]] and
+[[gbuf]]---this is used by [<Bseek>] to invalidate the
+buffer before seeking.
+
 <<function [[Bflush]]>>=
 int
 Bflush(Biobufhdr *bp)
@@ -7631,6 +7867,15 @@ Bflush(Biobufhdr *bp)
 @
 
 \section{Seeking and position: [[Bseek()]], [[Boffset()]]}
+
+%claude:
+[<Bseek>] attempts to satisfy seeks without a system call
+when possible. For absolute seeks ([[base == 0]]) within a
+read buffer, it adjusts [[icount]] and checks whether the
+new position falls within the currently buffered data---if
+so, no [[seek]] system call is needed. Relative seeks
+([[base == 1]]) are converted to absolute by adding [<Boffset>].
+For write buffers, [<Bseek>] flushes before seeking.
 
 <<function [[Bseek]]>>=
 vlong
@@ -7689,6 +7934,14 @@ Bseek(Biobufhdr *bp, vlong offset, int base)
 }
 @
 
+%claude:
+[<Boffset>] returns the current logical file position---the
+position the caller thinks they're at, accounting for buffered
+but unconsumed data. For read buffers this is [[offset + icount]]
+(the file offset minus unread bytes); for write buffers it's
+[[offset + bsize + ocount]] (the file offset plus buffered writes
+not yet flushed).
+
 <<function [[Boffset]]>>=
 vlong
 Boffset(Biobufhdr *bp)
@@ -7715,6 +7968,14 @@ Boffset(Biobufhdr *bp)
 @
 
 \section{Helpers: [[Bbuffered()]], [[Bfildes()]], [[Blinelen()]]}
+
+%claude:
+These are simple accessors. [<Bbuffered>] returns how many
+bytes are sitting in the buffer (unread for read buffers,
+unwritten for write buffers). [<Bfildes>] returns the
+underlying file descriptor. [<Blinelen>] returns the length
+of the last line returned by [<Brdline>] or [<Brdstr>],
+including the delimiter.
 
 <<function [[Bbuffered]]>>=
 int
