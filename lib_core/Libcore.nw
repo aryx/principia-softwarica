@@ -8100,14 +8100,274 @@ typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
 % libflate
 
 %claude:
-[[libflate]] implements the deflate/inflate algorithms
-(RFC~1951) used by [[gzip]] and [[gunzip]]. The library
-provides a callback-based streaming interface: the caller
-supplies read and write functions, and [[deflate]]/[[inflate]]
-process data in chunks without loading the entire file into
-memory.
+[[libflate]] (declared in [[flate.h]]) implements the DEFLATE
+compression algorithm (RFC~1951) used by [[gzip]], [[gunzip]],
+and the zlib format. The API is callback-based: the caller
+supplies read and write functions, and [<deflate()>]/[<inflate()>]
+process data in streaming chunks without loading the entire
+file into memory. Block-level variants ([<deflateblock()>],
+[<inflateblock()>]) provide a simpler in-memory interface for
+small data, and zlib wrappers add the framing and checksums
+expected by [[zip]] and HTTP's [[Content-Encoding: deflate]].
 
-% BIG!
+%claude:
+A typical compression looks like this:
+\begin{verbatim}
+  deflateinit();
+  err = deflate(&out, mywrite, &in, myread, 6, 0);
+  if(err != FlateOk)
+      sysfatal("deflate: %s", flateerr(err));
+\end{verbatim}
+%claude:
+And decompression:
+\begin{verbatim}
+  inflateinit();
+  err = inflate(&out, mywrite, &in, mygetc);
+  if(err != FlateOk)
+      sysfatal("inflate: %s", flateerr(err));
+\end{verbatim}
+
+\section{Data structures and interface}
+
+%claude:
+The [[flate.h]] header defines error codes and the function
+signatures. The streaming API uses C function pointers as
+callbacks: [<deflate()>] takes a write callback and a read
+callback, while [<inflate()>] takes a write callback and a
+single-byte get callback. This lets the caller wire
+compression to any data source---files, network connections,
+or in-memory buffers---without the library knowing the details.
+
+\section{Overview of the DEFLATE format}
+
+%claude:
+Before diving into the code, it helps to understand what
+DEFLATE actually is. The format (RFC~1951) compresses data
+as a sequence of \emph{blocks}, each independently decodable.
+There are three block types:
+
+%claude:
+\emph{Uncompressed blocks} store data verbatim with just a
+length header---used when the data is already incompressible.
+
+%claude:
+\emph{Fixed Huffman blocks} use a predefined Huffman code
+built into both compressor and decompressor. This avoids
+transmitting the code table, saving space for small blocks.
+
+%claude:
+\emph{Dynamic Huffman blocks} transmit a custom Huffman code
+at the start of each block, optimized for the block's
+contents. This is where most of the compression happens for
+real data.
+
+%claude:
+Within each block, DEFLATE uses two complementary techniques.
+{LZ77} finds repeated substrings and replaces them with
+(length, distance) back-references into the sliding window
+(up to 32\,KB back). {Huffman coding} then encodes the
+resulting stream of literals, lengths, and distances using
+variable-length bit codes, assigning shorter codes to more
+frequent symbols. The combination is powerful: LZ77 removes
+redundancy at the string level, and Huffman coding removes
+redundancy at the symbol level.
+
+%claude:
+The following diagram shows the data flow:
+\begin{verbatim}
+  Compression:
+    input bytes -> LZ77 (find matches) -> Huffman encode -> bit stream
+
+  Decompression:
+    bit stream -> Huffman decode -> expand LZ77 refs -> output bytes
+\end{verbatim}
+
+%claude:
+Note how decompression is simpler: it only needs to decode
+Huffman symbols and copy back-references from the output
+window. Compression must search for matches (expensive) and
+build optimal Huffman trees (complex). This asymmetry is
+reflected in the code: [[deflate.c]] is roughly twice the
+size of [[inflate.c]].
+
+\section{Inflation (decompression)}
+
+%claude:
+The decompressor reads a DEFLATE bit stream and produces
+the original uncompressed data. It processes one block at
+a time, dispatching on the block type (uncompressed, fixed
+Huffman, or dynamic Huffman), then decoding symbols until
+the end-of-block marker.
+
+\subsection{Initialization: [[inflateinit()]]}
+
+%claude:
+[<inflateinit()>] builds the fixed Huffman decoding tables
+used by fixed-code blocks. These tables are defined by the
+RFC and never change, so they only need to be built once.
+The function returns [[FlateOk]] on success.
+
+\subsection{The decompression loop: [[inflate()]], [[decode()]]}
+
+%claude:
+[<inflate()>] is the main entry point. It reads block
+headers from the bit stream and dispatches to [<uncblock()>]
+(uncompressed), [<fixedblock()>] (fixed Huffman), or
+[<dynamicblock()>] (dynamic Huffman). Each of these
+sets up the appropriate Huffman tables and then calls
+[<decode()>], which runs the actual decoding loop.
+
+%claude:
+[<decode()>] is the inner loop of the decompressor. It reads
+Huffman-coded symbols one at a time: a literal (0--255) is
+copied directly to the output; a length code (257--285)
+is followed by a distance code, and the pair defines a
+back-reference---copy [[length]] bytes from [[distance]]
+bytes back in the output window. Symbol 256 marks end-of-block.
+
+\subsection{Huffman tree decoding: [[hufftab()]], [[hdecsym()]]}
+
+%claude:
+For dynamic blocks, the Huffman trees themselves must be
+read from the stream. [<hufftab()>] builds a decoding lookup
+table from an array of code lengths (transmitted in the
+block header). [<hdecsym()>] reads the code-length encoding---a
+meta-Huffman code that compresses the code lengths using
+run-length encoding and its own small Huffman table. This
+two-level encoding is one of DEFLATE's space-saving tricks.
+
+\subsection{Bit stream: [[sregfill()]], [[sregunget()]]}
+
+%claude:
+The bit-level input machinery. DEFLATE is a bit stream, not
+a byte stream, so the decompressor needs to read individual
+bits. [<sregfill()>] refills a shift register from the byte
+input, and [<sregunget()>] pushes unused bytes back. The
+shift register accumulates bits so that multi-bit reads are
+a single mask-and-shift rather than repeated single-bit
+operations.
+
+\section{Deflation (compression)}
+
+%claude:
+The compressor is the complex half. It must find repeated
+substrings (LZ77 matching), decide how to encode them
+(literal vs.\ back-reference), build optimal Huffman trees
+from the frequency counts, and pack everything into a bit
+stream. The [[level]] parameter (0--9) controls the trade-off
+between compression ratio and speed, primarily by adjusting
+how aggressively [<lzmatch()>] searches for matches.
+
+\subsection{Initialization: [[deflateinit()]]}
+
+%claude:
+[<deflateinit()>] builds the fixed Huffman encoding tables,
+byte-reversal tables, and length/distance code mappings.
+Like [<inflateinit()>], this only needs to be called once.
+[<deflatereset()>] resets the compressor state between
+independent compression runs without rebuilding the tables.
+
+\subsection{LZ77 matching: [[lzmatch()]], [[lzcomp()]]}
+
+%claude:
+[<lzcomp()>] is the LZ77 compressor. It slides a window
+over the input, and at each position calls [<lzmatch()>] to
+find the longest match in the window. Matches are found
+using hash chains: [<hashit()>] hashes three-byte sequences
+to index into a chain of previous positions with the same
+hash. Longer chains mean more thorough (but slower) searching
+---the compression level controls the chain length.
+
+%claude:
+When a match is found (length $\ge 3$), it is encoded as a
+(length, distance) pair. Otherwise, the byte is emitted as
+a literal. The output goes to an intermediate buffer that
+will later be Huffman-coded.
+
+\subsection{Huffman tree construction: [[mkprecode()]], [[huffcodes()]], [[leafsort()]]}
+
+%claude:
+After LZ77 compression, the frequency of each symbol
+(literals 0--255, length codes 257--285, distance codes
+0--29) is known. [<mkprecode()>] builds an optimal Huffman
+code from these frequencies using a boundary package-merge
+variant: [<nextchain()>] and [<leafsort()>] implement the
+algorithm that finds minimum-redundancy codes respecting
+the maximum bit-length constraint (15 bits for DEFLATE).
+[<huffcodes()>] then converts the bit lengths into canonical
+Huffman codes.
+
+\subsection{Bit output: [[lzput()]], [[lzflushbits()]], [[wrblock()]]}
+
+%claude:
+[<lzput()>] appends bits to the output shift register,
+and [<lzflushbits()>] writes completed bytes to the output.
+[<wrblock()>] assembles a complete DEFLATE block: it writes
+the block header, the Huffman code tables (for dynamic
+blocks, via [<wrdyncode()>]), and then the Huffman-encoded
+symbols. [<bitcost()>] estimates the output size to decide
+whether a dynamic or fixed Huffman block is cheaper.
+
+\subsection{The compression loop: [[deflate()]], [[deflateb()]]}
+
+%claude:
+[<deflate()>] is the top-level entry point. It calls
+[<deflateb()>], which reads input in chunks, runs
+[<lzcomp()>] to find matches, then calls [<wrblock()>] to
+emit each DEFLATE block. The compressor decides block
+boundaries based on when the Huffman statistics shift enough
+to warrant starting a fresh block with new code tables.
+
+\section{Block interface: [[deflateblock()]], [[inflateblock()]]}
+
+%claude:
+[<deflateblock()>] and [<inflateblock()>] are convenience
+wrappers that compress or decompress a single in-memory
+buffer. They construct trivial read/write callbacks
+(using an internal [[Block]] struct with a position pointer)
+and delegate to the streaming [<deflate()>] and [<inflate()>]
+functions. The return value is the output size on success
+or a negative error code.
+
+\section{Checksums: [[adler32()]], [[blockcrc()]]}
+
+%claude:
+Two checksum algorithms are provided. [<adler32()>] computes
+the Adler-32 checksum used by the zlib framing format---a
+pair of 16-bit sums (one cumulative, one of the cumulative
+sums) reduced modulo the largest prime below $2^{16}$ (65521).
+The inner loop is unrolled 16$\times$ for speed, processing
+batches of up to 5552 bytes before reducing (the maximum
+before the 32-bit accumulators can overflow).
+
+%claude:
+[<blockcrc()>] computes CRC-32 using a 256-entry lookup table
+built by [<mkcrctab()>]. The table is polynomial-specific:
+[[gzip]] uses the standard CRC-32 polynomial 0xEDB88320.
+Each byte is processed by XORing with the low byte of the
+running CRC, indexing into the table, and shifting.
+
+\section{Zlib wrappers: [[deflatezlib()]], [[inflatezlib()]]}
+
+%claude:
+The zlib format (RFC~1950) wraps a raw DEFLATE stream with
+a 2-byte header and a trailing Adler-32 checksum of the
+uncompressed data. [<deflatezlib()>] writes the header, runs
+[<deflate()>] with a wrapper that checksums data as it's read,
+and appends the checksum. [<inflatezlib()>] validates the
+header, runs [<inflate()>] with a wrapper that checksums data
+as it's written, and verifies the trailing checksum.
+Block variants ([<deflatezlibblock()>], [<inflatezlibblock()>])
+do the same for in-memory buffers.
+
+\section{Error handling: [[flateerr()]]}
+
+%claude:
+[<flateerr()>] converts a [[Flate]] error code to a human-readable
+string. The error codes cover the expected failure modes:
+out of memory, I/O failure (read or write callback returned
+an error), corrupted data (invalid Huffman codes, bad checksums),
+and internal errors (bugs in the library).
 
 %******************************************************************************
 %\chapter{Encryption}
