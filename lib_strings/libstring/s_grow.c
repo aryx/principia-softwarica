@@ -1,7 +1,9 @@
 /*s: libstring/s_grow.c */
+/*s: libstring includes */
 #include <u.h>
 #include <libc.h>
-#include <string.h>
+#include <str.h> // was string.h
+/*e: libstring includes */
 
 /*s: function [[s_grow]] */
 /* grow a String's allocation by at least `incr' bytes */

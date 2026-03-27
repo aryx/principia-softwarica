@@ -1,7 +1,9 @@
 /*s: libstring/s_array.c */
+/*s: libstring includes */
 #include <u.h>
 #include <libc.h>
-#include <string.h>
+#include <str.h> // was string.h
+/*e: libstring includes */
 
 extern String*	_s_alloc(void);
 

@@ -1,7 +1,9 @@
 /*s: libstring/s_nappend.c */
+/*s: libstring includes */
 #include <u.h>
 #include <libc.h>
-#include <string.h>
+#include <str.h> // was string.h
+/*e: libstring includes */
 
 /*s: function [[s_nappend]] */
 /* append a char array ( of up to n characters) to a String */

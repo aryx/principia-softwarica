@@ -76,7 +76,6 @@ struct  Fcall
 #define GBIT64(p)   ((u32int)((p)[0]|((p)[1]<<8)|((p)[2]<<16)|((p)[3]<<24)) |\
                 ((vlong)((p)[4]|((p)[5]<<8)|((p)[6]<<16)|((p)[7]<<24)) << 32))
 /*e: macros GBITxxx */
-
 /*s: macros PBITxxx */
 #define PBIT8(p,v)  (p)[0]=(v)
 #define PBIT16(p,v) do{(p)[0]=(v);(p)[1]=(v)>>8;}while(0)
@@ -84,7 +83,6 @@ struct  Fcall
 #define PBIT64(p,v) do{(p)[0]=(v);(p)[1]=(v)>>8;(p)[2]=(v)>>16;(p)[3]=(v)>>24;\
             (p)[4]=(v)>>32;(p)[5]=(v)>>40;(p)[6]=(v)>>48;(p)[7]=(v)>>56;}while(0)
 /*e: macros PBITxxx */
-
 /*s: macros BITxxx */
 #define BIT8SZ      1
 #define BIT16SZ     2

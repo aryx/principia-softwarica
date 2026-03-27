@@ -1,7 +1,9 @@
 /*s: libstring/s_putc.c */
+/*s: libstring includes */
 #include <u.h>
 #include <libc.h>
-#include <string.h>
+#include <str.h> // was string.h
+/*e: libstring includes */
 
 /*s: function [[s_putc]] */
 void

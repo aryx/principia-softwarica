@@ -1,8 +1,10 @@
 /*s: libstring/s_getline.c */
+/*s: libstring includes bis */
 #include <u.h>
 #include <libc.h>
-#include <bio.h>
-#include <string.h>
+#include <bio.h> // must be before, set BGETC used in str.h
+#include <str.h> // was string.h
+/*e: libstring includes bis */
 
 /*s: function [[s_getline]] */
 /* Append an input line to a String.

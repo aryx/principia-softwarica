@@ -6,7 +6,6 @@
 void (*__assert)(char*);
 /*e: global [[__assert]] */
 
-
 /*s: function [[default_assert]] */
 void
 default_assert(char *s)

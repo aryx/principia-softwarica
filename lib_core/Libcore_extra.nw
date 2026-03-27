@@ -23,6 +23,8 @@
 % Most of the definitions below could be in libc.h because there is 
 % no diff between arm/u.h and 386/u.h and there is no really 
 % 16 vs 32 vs 64 bits material (except the uxxxint)
+%update: actually there are also some little vs big endian issues so those defs
+% have to be under arch/xxx/u.h
 
 <<include/arch/arm/u.h>>=
 
@@ -723,9 +725,6 @@ extern	int	access(char*, int); // ???
 @
 
 
-
-
-
 <<signatures security syscall>>=
 extern	int	fauth(int, char*);
 extern	int	fversion(int, int, char*, int);
@@ -1087,9 +1086,7 @@ typedef struct  Fcall Fcall;
 <<type [[Fcall]]>>
 
 <<macros GBITxxx>>
-
 <<macros PBITxxx>>
-
 <<macros BITxxx>>
 
 <<constant [[QIDSZ]]>>
@@ -1131,7 +1128,6 @@ int read9pmsg(fdt, void*, uint);
 
 \subsection{[[libc/port/_assert.c]]}
 
-
 %-------------------------------------------------------------
 
 <<libc/port/_assert.c>>=
@@ -1139,7 +1135,6 @@ int read9pmsg(fdt, void*, uint);
 #include <libc.h>
 
 <<global [[__assert]]>>
-
 
 <<function [[default_assert]]>>
 
@@ -15183,9 +15178,6 @@ static void _dial_string_parse(char*, DS*);
 <<function [[procexecl]]>>
 @
 
-\section{[[libflate/]]}
-%TODO
-
 \section{[[libbio/]]}
 
 \subsection*{[[include/io/bio.h]]}
@@ -16431,6 +16423,78 @@ Bwrite(Biobufhdr *bp, void *ap, long count)
 
 \section{[[libstring/]]}
 
+\subsection*{[[include/strings/str.h]]}
+
+<<macro [[s_clone]]>>=
+#define s_clone(s) s_copy((s)->base)
+@
+
+<<macro [[s_to_c]]>>=
+#define s_to_c(s) ((s)->base)
+@
+
+<<macro [[s_len]]>>=
+#define s_len(s) ((s)->ptr-(s)->base)
+@
+
+
+%-------------------------------------------------------------
+
+<<strings/str.h>>=
+#pragma	src	"/sys/src/libstring"
+#pragma	lib	"libstring.a"
+
+// Extensible Strings.
+
+// This file was originally called string.h but this conflicts with
+// the Posix <string.h> so simpler to rename str.h (which anyway fits
+// well with the 3-letters utf.h, bio.h, fmt.h, etc.).
+
+/* extensible Strings */
+typedef struct String {
+    Lock;
+    char	*base;	/* base of String */
+    char	*end;	/* end of allocated space+1 */
+    char	*ptr;	/* ptr into String */
+    short	ref;
+    uchar	fixed;
+} String;
+
+<<macro [[s_clone]]>>
+<<macro [[s_to_c]]>>
+<<macro [[s_len]]>>
+
+extern String*	s_append(String*, char*);
+extern String*	s_array(char*, int);
+extern String*	s_copy(char*);
+extern void	s_free(String*);
+extern String*	s_incref(String*);	
+extern String*	s_memappend(String*, char*, int);
+extern String*	s_nappend(String*, char*, int);
+extern String*	s_new(void);
+extern String*	s_newalloc(int);
+extern String*	s_parse(String*, String*);
+extern String*	s_reset(String*);
+extern String*	s_restart(String*);
+extern void	s_terminate(String*);
+extern void	s_tolower(String*);
+extern void	s_putc(String*, int);
+extern String*	s_unique(String*);
+extern String*	s_grow(String*, int);
+
+#ifdef BGETC
+extern int	s_read(Biobuf*, String*, int);
+extern char	*s_read_line(Biobuf*, String*);
+extern char	*s_getline(Biobuf*, String*);
+typedef struct Sinstack Sinstack;
+#pragma incomplete Sinstack
+extern char	*s_rdinstack(Sinstack*, String*);
+extern Sinstack	*s_allocinstack(char*);
+extern void	s_freeinstack(Sinstack*);
+#endif /* BGETC */
+@
+
+
 \subsection*{[[libstring/s_alloc.c]]}
 
 <<constant [[STRLEN]]>>=
@@ -16531,10 +16595,22 @@ s_new(void)
 
 %-------------------------------------------------------------
 
-<<libstring/s_alloc.c>>=
+<<libstring includes>>=
 #include <u.h>
 #include <libc.h>
-#include <string.h>
+#include <str.h> // was string.h
+@
+
+<<libstring includes bis>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h> // must be before, set BGETC used in str.h
+#include <str.h> // was string.h
+@
+
+
+<<libstring/s_alloc.c>>=
+<<libstring includes>>
 
 <<constant [[STRLEN]]>>
 
@@ -16572,9 +16648,7 @@ s_append(String *to, char *from)
 %-------------------------------------------------------------
 
 <<libstring/s_append.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_append]]>>
 @
@@ -16600,9 +16674,7 @@ s_array(char *cp, int len)
 %-------------------------------------------------------------
 
 <<libstring/s_array.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 extern String*	_s_alloc(void);
 
@@ -16633,9 +16705,7 @@ s_copy(char *cp)
 %-------------------------------------------------------------
 
 <<libstring/s_copy.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 
 <<function [[s_copy]]>>
@@ -16717,10 +16787,7 @@ s_getline(Biobuf *fp, String *to)
 %-------------------------------------------------------------
 
 <<libstring/s_getline.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <string.h>
+<<libstring includes bis>>
 
 <<function [[s_getline]]>>
 @
@@ -16764,9 +16831,7 @@ s_grow(String *s, int incr)
 %-------------------------------------------------------------
 
 <<libstring/s_grow.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_grow]]>>
 
@@ -16797,9 +16862,7 @@ s_memappend(String *to, char *from, int n)
 %-------------------------------------------------------------
 
 <<libstring/s_memappend.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_memappend]]>>
 
@@ -16828,9 +16891,7 @@ s_nappend(String *to, char *from, int n)
 %-------------------------------------------------------------
 
 <<libstring/s_nappend.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_nappend]]>>
 
@@ -16884,9 +16945,7 @@ s_parse(String *from, String *to)
 %-------------------------------------------------------------
 
 <<libstring/s_parse.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<macro [[isspace]]>>
 
@@ -16912,9 +16971,7 @@ s_putc(String *s, int c)
 %-------------------------------------------------------------
 
 <<libstring/s_putc.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_putc]]>>
 @
@@ -17065,11 +17122,7 @@ s_rdinstack(Sinstack *sp, String *to)
 %-------------------------------------------------------------
 
 <<libstring/s_rdinstack.c>>=
-
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <string.h>
+<<libstring includes bis>>
 
 struct Sinstack{
     int	depth;
@@ -17123,10 +17176,7 @@ s_read(Biobuf *fp, String *to, int len)
 %-------------------------------------------------------------
 
 <<libstring/s_read.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <string.h>
+<<libstring includes bis>>
 
 enum
 {
@@ -17172,10 +17222,7 @@ s_read_line(Biobuf *fp, String *to)
 %-------------------------------------------------------------
 
 <<libstring/s_read_line.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <string.h>
+<<libstring includes bis>>
 
 <<function [[s_read_line]]>>
 @
@@ -17211,9 +17258,7 @@ s_restart(String *s)
 %-------------------------------------------------------------
 
 <<libstring/s_reset.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_reset]]>>
 
@@ -17239,9 +17284,7 @@ s_terminate(String *s)
 %-------------------------------------------------------------
 
 <<libstring/s_terminate.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_terminate]]>>
 @
@@ -17265,9 +17308,7 @@ s_tolower(String *sp)
 %-------------------------------------------------------------
 
 <<libstring/s_tolower.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 
 <<function [[s_tolower]]>>
@@ -17295,85 +17336,9 @@ s_unique(String *s)
 %-------------------------------------------------------------
 
 <<libstring/s_unique.c>>=
-#include <u.h>
-#include <libc.h>
-#include <string.h>
+<<libstring includes>>
 
 <<function [[s_unique]]>>
-@
-
-
-\section{[[strings/]]}
-
-\subsection*{[[strings/str.h]]}
-
-<<macro [[s_clone]]>>=
-#define s_clone(s) s_copy((s)->base)
-@
-
-<<macro [[s_to_c]]>>=
-#define s_to_c(s) ((s)->base)
-@
-
-<<macro [[s_len]]>>=
-#define s_len(s) ((s)->ptr-(s)->base)
-@
-
-
-%-------------------------------------------------------------
-
-<<strings/str.h>>=
-#pragma	src	"/sys/src/libstring"
-#pragma	lib	"libstring.a"
-
-// Extensible Strings.
-
-// This file was originally called string.h but this conflicts with
-// the Posix <string.h> so simpler to rename str.h (which anyway fits
-// well with the 3-letters utf.h, bio.h, fmt.h, etc.).
-
-/* extensible Strings */
-typedef struct String {
-    Lock;
-    char	*base;	/* base of String */
-    char	*end;	/* end of allocated space+1 */
-    char	*ptr;	/* ptr into String */
-    short	ref;
-    uchar	fixed;
-} String;
-
-<<macro [[s_clone]]>>
-<<macro [[s_to_c]]>>
-<<macro [[s_len]]>>
-
-extern String*	s_append(String*, char*);
-extern String*	s_array(char*, int);
-extern String*	s_copy(char*);
-extern void	s_free(String*);
-extern String*	s_incref(String*);	
-extern String*	s_memappend(String*, char*, int);
-extern String*	s_nappend(String*, char*, int);
-extern String*	s_new(void);
-extern String*	s_newalloc(int);
-extern String*	s_parse(String*, String*);
-extern String*	s_reset(String*);
-extern String*	s_restart(String*);
-extern void	s_terminate(String*);
-extern void	s_tolower(String*);
-extern void	s_putc(String*, int);
-extern String*	s_unique(String*);
-extern String*	s_grow(String*, int);
-
-#ifdef BGETC
-extern int	s_read(Biobuf*, String*, int);
-extern char	*s_read_line(Biobuf*, String*);
-extern char	*s_getline(Biobuf*, String*);
-typedef struct Sinstack Sinstack;
-#pragma incomplete Sinstack
-extern char	*s_rdinstack(Sinstack*, String*);
-extern Sinstack	*s_allocinstack(char*);
-extern void	s_freeinstack(Sinstack*);
-#endif /* BGETC */
 @
 
 
