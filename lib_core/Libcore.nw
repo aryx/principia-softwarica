@@ -4764,6 +4764,14 @@ and [[s_clone(s)]] makes an independent copy via [<s_copy()>].
 
 \subsection{Allocation: [[s_new()]], [[s_copy()]], [[s_free()]]}
 
+%claude:
+[<s_new()>] creates an empty string with a default 128-byte
+buffer ([[STRLEN]]). [<s_copy()>] creates a string initialized
+from a C string, allocating at least enough to hold it.
+Both delegate to [<_s_alloc()>] (which allocates the [[String]]
+header with [[ref=1]]) and [<s_newalloc()>] (which allocates
+the character buffer).
+
 <<function [[s_new]]>>=
 /* create a new `short' String */
 extern String *
@@ -4846,6 +4854,14 @@ s_newalloc(int len)
 @
 
 
+%claude:
+[<s_free()>] decrements the reference count under a lock.
+If other references remain, it returns without freeing.
+Only when the count drops to zero does it free the buffer
+(unless [[fixed]]) and the header. This is the reference-counting
+half of the copy-on-write scheme---sharing is cheap, copying
+only happens when a shared string is mutated.
+
 <<function [[s_free]]>>=
 extern void
 s_free(String *sp)
@@ -4866,6 +4882,19 @@ s_free(String *sp)
 @
 
 \subsection{Growing: [[s_putc()]], [[s_grow()]], [[s_terminate()]]}
+
+%claude:
+These three functions form the low-level append machinery.
+[<s_putc()>] appends a single byte, growing the buffer if
+[[ptr]] has reached [[end]]. It refuses to modify shared
+strings ([[ref > 1]])---the caller must call [<s_unique()>]
+first. [<s_grow()>] reallocates using amortized doubling:
+it grows by at least the requested increment, but if that
+increment is less than half the current size, it grows by
+50\% instead---this keeps the total cost of $n$ appends at
+$O(n)$ rather than $O(n^2)$. [<s_terminate()>] writes the
+null terminator at [[ptr]] without advancing it, growing
+if necessary.
 
 <<function [[s_putc]]>>=
 void
@@ -4925,6 +4954,15 @@ s_terminate(String *s)
 
 \subsection{Appending: [[s_append()]], [[s_nappend()]], [[s_memappend()]]}
 
+%claude:
+Three variants for appending data to a [[String]].
+[<s_append()>] appends a null-terminated C string.
+[<s_nappend()>] appends up to [[n]] characters, stopping
+early at a null terminator. [<s_memappend()>] appends
+exactly [[n]] bytes regardless of null bytes---useful for
+binary data. All three create a new string if passed [[nil]],
+call [<s_putc()>] in a loop, and null-terminate at the end.
+
 <<function [[s_append]]>>=
 /* append a char array to a String */
 String *
@@ -4977,6 +5015,14 @@ s_memappend(String *to, char *from, int n)
 
 \subsection{Resetting: [[s_reset()]], [[s_restart()]]}
 
+%claude:
+Both functions rewind the write pointer to [[base]],
+effectively clearing the string without freeing the buffer.
+[<s_reset()>] also null-terminates and handles [[nil]] by
+creating a new string. [<s_restart()>] just moves [[ptr]]
+back without terminating---useful when the caller will
+immediately start appending new content.
+
 <<function [[s_reset]]>>=
 String*
 s_reset(String *s)
@@ -5004,7 +5050,23 @@ s_restart(String *s)
 
 \subsection{I/O: [[s_read_line()]], [[s_read()]], [[s_getline()]]}
 
-%yoann: say Biobuf explained actually later, but essentially Buffered IO buffer
+%claude:
+These functions read from a [<Biobuf>] (see
+Chapter~\ref{chap:bufio}) into a [[String]], combining
+[[libbio]]'s buffered reading with [[libstring]]'s growable
+storage. They are only available when [[bio.h]] has been
+included (guarded by [[#ifdef BGETC]] in [[str.h]]).
+
+%claude:
+[<s_read_line()>] appends one line using [<Brdline()>]
+(the zero-copy line reader), copying the result into the
+[[String]]. The trailing newline is preserved.
+[<s_read()>] appends up to [[len]] raw bytes using [<Bread()>],
+growing the string as needed.
+[<s_getline()>] is the most sophisticated: it strips leading
+whitespace, skips comment lines starting with [[#]], and
+handles backslash-newline continuation. This is the format
+used by \plan configuration files like [[/lib/ndb/local]].
 
 <<function [[s_read_line]]>>=
 /* Append an input line to a String.
@@ -5137,6 +5199,15 @@ s_getline(Biobuf *fp, String *to)
 
 \subsection{Parsing: [[s_parse()]]}
 
+%claude:
+[<s_parse()>] extracts the next whitespace-delimited field from
+a [[String]], advancing [[ptr]] past it. Fields can be
+single-quoted or double-quoted to include whitespace. The
+extracted field is appended to a destination [[String]] (or a
+freshly allocated one if [[nil]]). This is used for parsing
+configuration lines where fields may contain spaces---for
+example, mail addresses or file paths in \plan system files.
+
 <<macro [[isspace]]>>=
 #define isspace(c) ((c)==' ' || (c)=='\t' || (c)=='\n')
 @
@@ -5179,6 +5250,23 @@ s_parse(String *from, String *to)
 @
 
 \subsection{Miscellaneous: [[s_tolower()]], [[s_rdinstack()]]}
+
+%claude:
+[<s_tolower()>] converts the string content to lower case
+in place. [<s_incref()>] and [<s_unique()>] implement the
+copy-on-write mechanism: [<s_incref()>] bumps the reference
+count (under a lock, for thread safety), while [<s_unique()>]
+ensures the caller has an exclusive copy---if [[ref > 1]], it
+clones the string and decrements the original's reference.
+[<s_array()>] wraps a caller-owned buffer as a [[String]]
+with [[fixed=1]], meaning it must not be reallocated or freed.
+
+%claude:
+[<s_rdinstack()>] reads lines from a stack of files, following
+[[#include]] directives to descend into nested files (up to 32
+deep). When an included file reaches EOF, it pops back to the
+parent. This is used by \plan's mail system for reading
+configuration files with includes.
 
 <<function [[s_tolower]]>>=
 /* convert String to lower case */
