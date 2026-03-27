@@ -655,12 +655,17 @@ testing purposes.
 %
 The [[ERRSTR]] syscall at position~39
 is \plan's error-reporting mechanism.
+
+%yoann: maybe put C prototype form syscall.h and explain that C proto but actually defined in assembly, but allow typecheck, and interface here is what sysxxx expect in the stack
+
 %claude: %unix:
 Unlike \unix, which uses the opaque numeric error code [[errno]]
 (where you need a man page to find out what [[ENOENT]]
 means), \plan uses human-readable error strings that
 programs retrieve via [[errstr()]]---one of the many
 small cleanups \plan made over \unix.
+
+
 
 % will see in helloraw.c how to use those codes to perform syscall to kernel.
 % will see sys_nop() soon.
@@ -6069,6 +6074,12 @@ solving a different problem.
 [BRK]      sysbrk,
 @
 
+%claude:
+The C prototype is:
+\begin{verbatim}
+  int   brk(void *addr);     // set heap end to addr
+\end{verbatim}
+
 %http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/
 
 \section{Overview}
@@ -8866,6 +8877,15 @@ model.
 [AWAIT]     sysawait,
 [EXITS]     sysexits,
 @
+
+%claude:
+The C prototypes (from [[syscall.h]]) are:
+\begin{verbatim}
+  int   rfork(int flags);     // RFPROC|RFMEM|... see Rfork_flag
+  int   exec(char *name, char *argv[]);
+  void  _exits(char *status); // nil or "" for success
+  int   await(char *buf, int n);  // "pid t1 t2 t3 exitstr"
+\end{verbatim}
 
 \section{Overview}
 
@@ -17659,6 +17679,13 @@ TEXT arch_idlehands(SB), $-4
 [ALARM]     sysalarm,
 @
 
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   sleep(long millisecs);   // 0 = yield
+  long  alarm(ulong millisecs);  // 0 = cancel; returns previous
+\end{verbatim}
+
 \section{Overview (arm)}
 
 %claude:
@@ -21292,7 +21319,17 @@ and the on-disk file system.
 [PREAD]     syspread,
 [PWRITE]    syspwrite,
 [SEEK]      sysseek,
-@ 
+@
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   open(char *file, int omode);
+  int   close(int fd);
+  long  pread(int fd, void *buf, long n, vlong offset);  // -1 = current
+  long  pwrite(int fd, void *buf, long n, vlong offset);
+  vlong seek(int fd, vlong n, int type);
+\end{verbatim}
 
 \section{Overview}
 
@@ -23172,6 +23209,19 @@ if(omode & ORCLOSE)
 [FWSTAT]    sysfwstat,
 @
 
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   create(char *file, int omode, ulong perm);
+  int   remove(char *file);
+  int   chdir(char *dir);
+  int   fd2path(int fd, char *buf, int nbuf);
+  int   stat(char *file, uchar *buf, int nbuf);   // 9P wire format
+  int   fstat(int fd, uchar *buf, int nbuf);
+  int   wstat(char *file, uchar *buf, int nbuf);   // w = write metadata
+  int   fwstat(int fd, uchar *buf, int nbuf);
+\end{verbatim}
+
 \section{Overview}
 
 %claude:
@@ -24400,6 +24450,19 @@ wstat(Chan *c, byte *d, int nd)
 [MOUNT]     sysmount,
 [UNMOUNT]   sysunmount,
 @
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   bind(char *new, char *old, int flags);
+  int   mount(int fd, int afd, char *old, int flags, char *aname);
+  int   unmount(char *new, char *old);
+\end{verbatim}
+%
+In [[mount]]: [[fd]] is the pipe to a 9P server, [[afd]]
+is an authentication fd ($-1$ if none), [[old]] is the
+mount point, [[flags]] is [[MBEFORE]]/[[MAFTER]]/[[MREPL]],
+and [[aname]] names which tree to attach to.
 
 \section{Overview}
 
@@ -31118,7 +31181,17 @@ synchronization primitive for exchanging values between processes).
 [SEGFREE]   syssegfree,
 [SEGFLUSH]  syssegflush,
 [SEGBRK]    syssegbrk,
-@ 
+@
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   notify(void (*f)(void *ureg, char *note));
+  int   noted(int v);           // NCONT, NDFLT, NSAVE, NRSTR
+  int   pipe(int fd[2]);        // bidirectional
+  void* segattach(int attr, char *class, void *va, ulong len);
+  int   segdetach(void *addr);
+\end{verbatim}
 
 <<[[systab]] concurrency syscalls>>=
 [RENDEZVOUS]    sysrendezvous,
@@ -31126,7 +31199,16 @@ synchronization primitive for exchanging values between processes).
 [SEMACQUIRE]    syssemacquire,
 [SEMRELEASE]    syssemrelease,
 [TSEMACQUIRE]   systsemacquire,
-@ 
+@
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  void* rendezvous(void *tag, void *value);  // exchange values
+  int   semacquire(long *addr, int block);   // decrement or sleep
+  long  semrelease(long *addr, long delta);  // increment and wake
+  int   tsemacquire(long *addr, ulong ms);   // with timeout
+\end{verbatim}
 
 \section{Notes (signals)}
 
@@ -40570,8 +40652,14 @@ bool iseve(void) {
 <<[[systab]] security syscalls>>=
 [FAUTH]     sysfauth,
 [FVERSION]  sysfversion,
-@ 
+@
 
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   fversion(int fd, int bufsize, char *vers, int nvers);
+  int   fauth(int fd, char *aname);
+\end{verbatim}
 
 <<global [[hostdomain]]>>=
 char    hostdomain[DOMLEN];
@@ -42499,11 +42587,17 @@ programmatic access to the same functionality.
 
 <<[[systab]] special file syscalls>>=
 [DUP]       sysdup,
-@ 
+@
+
+%claude:
+The C prototype is:
+\begin{verbatim}
+  int   dup(int oldfd, int newfd);  // -1 = allocate new
+\end{verbatim}
 
 %claude:
 The [[dup()]] system call duplicates a file descriptor. If [[newfd]]
-is -1, a new descriptor is allocated. Otherwise, the specified
+is $-1$, a new descriptor is allocated. Otherwise, the specified
 slot is used, and any existing channel there is closed \emph{after}
 the dup---this ordering matters for idioms like
 [[date > #d/1]] where stdout is being replaced.
