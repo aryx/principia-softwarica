@@ -6755,6 +6755,17 @@ is part of the call itself, so no race is possible.
 (\unix later adopted [[pread]]/[[pwrite]] too, in
 POSIX.1-2001, but the traditional [[read]]/[[write]]
 remain the primary interface.)
+%
+In \verb+pread(fd, buf, n, offset)+: [[fd]] is the file
+descriptor, [[buf]] the destination buffer, [[n]] the
+number of bytes to read, and [[offset]] the position in
+the file. Passing offset~$-1$ means ``use the current
+file position'' (this is how the library wrappers
+[[read]]/[[write]] are implemented---see below).
+%
+[[dup(oldfd, newfd)]] duplicates [[oldfd]] onto [[newfd]].
+If [[newfd]] is $-1$, the kernel allocates the lowest
+available descriptor.
 
 %claude:
 In the kernel, [[sysopen()]] resolves the file path through
@@ -7416,6 +7427,16 @@ Both take flags ([[MBEFORE]], [[MAFTER]], [[MREPL]]) that
 control how the new entry combines with existing entries
 in union directories. [[unmount]] reverses a previous
 [[bind]] or [[mount]].
+%
+In [[mount(fd, afd, old, flags, aname)]]: [[fd]] is the
+file descriptor to the 9P server, [[afd]] is an optional
+authentication fd ($-1$ if none), [[old]] is the mount point
+path, and [[aname]] names which tree to attach to on the
+server (often [[nil]]). For example:
+\begin{verbatim}
+  bind("/arm/bin", "/bin", MBEFORE);
+  mount(fd, -1, "/mnt/ws", MREPL, "");
+\end{verbatim}
 
 %claude: %unix:
 \unix's [[mount]] is a privileged operation (root only)
@@ -7761,6 +7782,19 @@ extern	int	await(char*, int);
 
 % sysfork(), sysexit(), sysawait(), sysexec()
 % want to run external command? need fork+exec! classic pattern.
+
+%claude:
+Common [[rfork]] flag combinations:
+\begin{verbatim}
+  rfork(RFPROC|RFFDG|RFREND)       traditional fork
+  rfork(RFPROC|RFMEM|RFNOWAIT)     shared-memory "thread"
+  rfork(RFNAMEG|RFENVG)             isolate namespace+env (no new proc)
+\end{verbatim}
+%
+[[await(buf, n)]] fills [[buf]] with a space-separated
+string: \verb+pid time1 time2 time3 exitstring+.
+The library wrapper [[wait()]] parses this into a
+[[Waitmsg]] structure (shown in Chapter~\ref{chap:ipc}).
 
 %claude:
 In the kernel, [[sysrfork()]] creates a new process,
@@ -8457,11 +8491,13 @@ extern	int	tsemacquire(long*, ulong);
 % threads with less needs for locking, etc)
 
 %claude:
-[[rendezvous]] is \plan's core synchronization primitive.
-Two processes call [[rendezvous]] with the same tag; the
-first to arrive sleeps, and when the second arrives, they
-exchange pointer values and both wake up. In the kernel,
-this is implemented as a hash table of waiting processes.
+In \verb+rendezvous(tag, value)+, [[tag]] is an arbitrary
+pointer used as a meeting-point key, and [[value]] is the
+data to exchange. Two processes call [[rendezvous]] with
+the same tag; the first to arrive sleeps, and when the
+second arrives, they swap their [[value]] pointers and
+both wake up. For example, the [[Lock]] implementation
+uses the lock's address as the tag.
 %
 [[semacquire]] and [[semrelease]] implement counting
 semaphores in shared memory. [[semacquire]] atomically
@@ -9054,20 +9090,23 @@ extern	int	segfree(void*, ulong);
 @
 
 %claude:
-[[pipe]] creates a bidirectional pipe (unlike \unix's
-unidirectional pipes) by attaching to the pipe device
-(\verb+#|+) and returning two file descriptors.
+[[pipe(fd)]] fills [[fd[0]]] and [[fd[1]]] with two
+file descriptors for a bidirectional pipe.
 %
-[[notify]] registers a function to be called when the
-process receives a note (signal). [[noted]] tells the kernel
-what to do after the note handler returns ([[NCONT]] to
-continue, [[NDFLT]] to terminate).
+[[notify(handler)]] registers a function to be called when
+the process receives a note. The handler receives a
+pointer to the saved registers and the note string:
+\verb+int handler(void *ureg, char *note)+. [[noted(v)]]
+tells the kernel what to do after the handler returns
+([[NCONT]] to continue, [[NDFLT]] to terminate).
 %
-[[segattach]] maps a shared memory segment into the
-process's address space. [[segdetach]] unmaps it.
-[[segbrk]] extends a segment, [[segflush]] invalidates
-cached pages, and [[segfree]] releases pages without
-detaching the segment.
+In \verb+segattach(attr, class, va, len)+: [[class]] is a
+name like \verb+"shared"+ that identifies the segment type,
+[[va]] is the desired virtual address (0 to let the kernel
+choose), and [[len]] is the size in bytes.
+[[segdetach]] unmaps it, [[segbrk]] extends it,
+[[segflush]] invalidates cached pages, and [[segfree]]
+releases pages without detaching.
 
 %claude: %unix:
 \plan's pipes are bidirectional---both ends can read and
