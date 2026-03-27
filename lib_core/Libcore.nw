@@ -5471,27 +5471,525 @@ s_rdinstack(Sinstack *sp, String *to)
 %https://swtch.com/~rsc/regexp/
 
 %claude:
-[[libregexp]] provides the shared regular expression library
-used by programs that don't have their own engine (unlike
-[[grep]], which has a built-in DFA matcher for speed). The
-library uses an NFA (nondeterministic finite automaton)
-approach, which guarantees linear-time matching regardless
-of the pattern---unlike backtracking engines (as in Perl or
-Python) that can take exponential time on certain inputs.
-See Russ Cox's well-known articles on regular expression
-matching for a thorough comparison.
+[[libregexp]] (declared in [[regexp.h]]) provides regular
+expression compilation and matching. The API has three
+steps: compile a pattern into a [<Reprog>] with
+[<regcomp()>], match it against a string with [<regexec()>],
+and optionally perform substitution with [<regsub()>].
+The library handles UTF-8 natively---patterns and strings
+are byte strings, but character classes and [[.]] operate
+on runes, not bytes. Rune-string variants ([<rregexec()>],
+[<rregsub()>]) are also provided.
+
+%claude:
+The implementation uses Thompson's NFA simulation algorithm,
+which guarantees linear-time matching regardless of the
+pattern. This is in contrast to backtracking engines (as
+in Perl or Python) that can take exponential time on
+pathological inputs like [[a?^na^n]] matched against
+[[a^n]]. See Russ Cox's well-known articles on regular
+expression matching for a thorough comparison.
+
+%claude:
+A typical use looks like this:
+\begin{verbatim}
+  Reprog *prog;
+  Resub match[10];
+
+  prog = regcomp("([0-9]+)-([0-9]+)");
+  if(regexec(prog, "port 80-443", match, 10)) {
+      /* match[0] is the whole match: "80-443" */
+      /* match[1] is first group: "80" */
+      /* match[2] is second group: "443" */
+  }
+  free(prog);
+\end{verbatim}
 
 \section{Data structures: [[Reprog]], [[Reinst]], [[Reclass]], [[Resub]]}
 
+<<struct [[Reprog]]>>=
+/*
+ *  Reprogram definition
+ */
+struct Reprog{
+    Reinst  *startinst; /* start pc */
+    Reclass class[16];  /* .data */
+    Reinst  firstinst[5];   /* .text */
+};
+@
+
+<<struct [[Reinst]]>>=
+/*
+ *  Machine instructions
+ */
+struct Reinst{
+    int type;
+    union   {
+        Reclass *cp;        /* class pointer */
+        Rune    r;      /* character */
+        int subid;      /* sub-expression id for RBRA and LBRA */
+        Reinst  *right;     /* right child of OR */
+    };
+    union { /* regexp relies on these two being in the same union */
+        Reinst *left;       /* left child of OR */
+        Reinst *next;       /* next instruction for CAT & LBRA */
+    };
+};
+@
+
+<<struct [[Reclass]]>>=
+/*
+ *  character class, each pair of rune's defines a range
+ */
+struct Reclass{
+    Rune    *end;
+    Rune    spans[64];
+};
+@
+
+<<struct [[Resub]]>>=
+/*
+ *  Sub expression matches
+ */
+struct Resub{
+    // Start/End matches
+    // old: kencc-ext: this used to be anon unions but gcc/clang don't accept it
+    // and for goken we need mk to be compatible with a libregexp gcc/clang can
+    // compile hence the }s; and }e; below
+    union
+    {
+        char *sp;
+        Rune *rsp;
+    }s;
+    union
+    {
+        char *ep;
+        Rune *rep;
+    }e;
+};
+@
+%old: I've named the union s,e like in plan9port and kencc so can compile with gcc/clang
+
 \section{Compilation: [[regcomp()]]}
+
+<<function [[regcomp]]>>=
+extern	Reprog*
+regcomp(char *s)
+{
+    return regcomp1(s, 0, ANY);
+}
+@
+
 
 \section{Execution: [[regexec()]]}
 
+<<function [[regexec]]>>=
+extern int
+regexec(Reprog *progp,	/* program to run */
+    char *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements at mp */
+{
+    Reljunk j;
+    Relist relist0[LISTSIZE], relist1[LISTSIZE];
+    int rv;
+
+    /*
+   *  use user-specified starting/ending location if specified
+     */
+    j.starts = bol;
+    j.eol = 0;
+    if(mp && ms>0){
+        if(mp->s.sp)
+            j.starts = mp->s.sp;
+        if(mp->e.ep)
+            j.eol = mp->e.ep;
+    }
+    j.starttype = 0;
+    j.startchar = 0;
+    if(progp->startinst->type == RUNE && progp->startinst->r < Runeself) {
+        j.starttype = RUNE;
+        j.startchar = progp->startinst->r;
+    }
+    if(progp->startinst->type == BOL)
+        j.starttype = BOL;
+
+    /* mark space */
+    j.relist[0] = relist0;
+    j.relist[1] = relist1;
+    j.reliste[0] = relist0 + nelem(relist0) - 2;
+    j.reliste[1] = relist1 + nelem(relist1) - 2;
+
+    rv = regexec1(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    rv = regexec2(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    return -1;
+}
+@
+
+
 \section{Substitution: [[regsub()]]}
+
+<<function [[regsub]]>>=
+/* substitute into one string using the matches from the last regexec() */
+extern	void
+regsub(char *sp,	/* source string */
+    char *dp,	/* destination string */
+    int dlen,
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements pointed to by mp */
+{
+    char *ssp, *ep;
+    int i;
+
+    ep = dp+dlen-1;
+    while(*sp != '\0'){
+        if(*sp == '\\'){
+            switch(*++sp){
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                i = *sp-'0';
+                if(mp!=0 && mp[i].s.sp != 0 && ms>i)
+                    for(ssp = mp[i].s.sp;
+                         ssp < mp[i].e.ep;
+                         ssp++)
+                        if(dp < ep)
+                            *dp++ = *ssp;
+                break;
+            case '\\':
+                if(dp < ep)
+                    *dp++ = '\\';
+                break;
+            case '\0':
+                sp--;
+                break;
+            default:
+                if(dp < ep)
+                    *dp++ = *sp;
+                break;
+            }
+        }else if(*sp == '&'){
+            if(mp!=0 && mp[0].s.sp != 0 && ms>0)
+                for(ssp = mp[0].s.sp;
+                     ssp < mp[0].e.ep; ssp++)
+                    if(dp < ep)
+                        *dp++ = *ssp;
+        }else{
+            if(dp < ep)
+                *dp++ = *sp;
+        }
+        sp++;
+    }
+    *dp = '\0';
+}
+@
+
 
 \section{Rune variants: [[rregexec()]], [[rregsub()]]}
 
+<<function [[rregexec1]]>>=
+/*
+ *  return	0 if no match
+ *		>0 if a match
+ *		<0 if we ran out of _relist space
+ */
+static int
+rregexec1(Reprog *progp,	/* program to run */
+    Rune *bol,		/* string to run machine on */
+    Resub *mp,		/* subexpression elements */
+    int ms,			/* number of elements at mp */
+    Reljunk *j)
+{
+    int flag=0;
+    Reinst *inst;
+    Relist *tlp;
+    Rune *s;
+    int i, checkstart;
+    Rune r, *rp, *ep;
+    Relist* tl;		/* This list, next list */
+    Relist* nl;
+    Relist* tle;		/* ends of this and next list */
+    Relist* nle;
+    int match;
+    Rune *p;
+
+    match = 0;
+    checkstart = j->startchar;
+    if(mp)
+        for(i=0; i<ms; i++) {
+            mp[i].s.rsp = 0;
+            mp[i].e.rep = 0;
+        }
+    j->relist[0][0].inst = 0;
+    j->relist[1][0].inst = 0;
+
+    /* Execute machine once for each character, including terminal NUL */
+    s = j->rstarts;
+    do{
+        /* fast check for first char */
+        if(checkstart) {
+            switch(j->starttype) {
+            case RUNE:
+                p = runestrchr(s, j->startchar);
+                if(p == 0 || s == j->reol)
+                    return match;
+                s = p;
+                break;
+            case BOL:
+                if(s == bol)
+                    break;
+                p = runestrchr(s, '\n');
+                if(p == 0 || s == j->reol)
+                    return match;
+                s = p+1;
+                break;
+            }
+        }
+
+        r = *s;
+
+        /* switch run lists */
+        tl = j->relist[flag];
+        tle = j->reliste[flag];
+        nl = j->relist[flag^=1];
+        nle = j->reliste[flag];
+        nl->inst = 0;
+
+        /* Add first instruction to current list */
+        _rrenewemptythread(tl, progp->startinst, ms, s);
+
+        /* Execute machine until current list is empty */
+        for(tlp=tl; tlp->inst; tlp++){
+            for(inst=tlp->inst; ; inst = inst->next){
+                switch(inst->type){
+                case RUNE:	/* regular character */
+                    if(inst->r == r)
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case LBRA:
+                    tlp->se.m[inst->subid].s.rsp = s;
+                    continue;
+                case RBRA:
+                    tlp->se.m[inst->subid].e.rep = s;
+                    continue;
+                case ANY:
+                    if(r != '\n')
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case ANYNL:
+                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case BOL:
+                    if(s == bol || *(s-1) == '\n')
+                        continue;
+                    break;
+                case EOL:
+                    if(s == j->reol || r == 0 || r == '\n')
+                        continue;
+                    break;
+                case CCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1]){
+                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                                return -1;
+                            break;
+                        }
+                    break;
+                case NCCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1])
+                            break;
+                    if(rp == ep)
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case OR:
+                    /* evaluate right choice later */
+                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
+                        return -1;
+                    /* efficiency: advance and re-evaluate */
+                    continue;
+                case END:	/* Match! */
+                    match = 1;
+                    tlp->se.m[0].e.rep = s;
+                    if(mp != 0)
+                        _renewmatch(mp, ms, &tlp->se);
+                    break;
+                }
+                break;
+            }
+        }
+        if(s == j->reol)
+            break;
+        checkstart = j->startchar && nl->inst==0;
+        s++;
+    }while(r);
+    return match;
+}
+@
+
+<<function [[rregexec2]]>>=
+static int
+rregexec2(Reprog *progp,	/* program to run */
+    Rune *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms,		/* number of elements at mp */
+    Reljunk *j
+)
+{
+    Relist relist0[5*LISTSIZE], relist1[5*LISTSIZE];
+
+    /* mark space */
+    j->relist[0] = relist0;
+    j->relist[1] = relist1;
+    j->reliste[0] = relist0 + nelem(relist0) - 2;
+    j->reliste[1] = relist1 + nelem(relist1) - 2;
+
+    return rregexec1(progp, bol, mp, ms, j);
+}
+@
+
+<<function [[rregexec]]>>=
+extern int
+rregexec(Reprog *progp,	/* program to run */
+    Rune *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements at mp */
+{
+    Reljunk j;
+    Relist relist0[LISTSIZE], relist1[LISTSIZE];
+    int rv;
+
+    /*
+   *  use user-specified starting/ending location if specified
+     */
+    j.rstarts = bol;
+    j.reol = 0;
+    if(mp && ms>0){
+        if(mp->s.sp)
+            j.rstarts = mp->s.rsp;
+        if(mp->e.ep)
+            j.reol = mp->e.rep;
+    }
+    j.starttype = 0;
+    j.startchar = 0;
+    if(progp->startinst->type == RUNE && progp->startinst->r < Runeself) {
+        j.starttype = RUNE;
+        j.startchar = progp->startinst->r;
+    }
+    if(progp->startinst->type == BOL)
+        j.starttype = BOL;
+
+    /* mark space */
+    j.relist[0] = relist0;
+    j.relist[1] = relist1;
+    j.reliste[0] = relist0 + nelem(relist0) - 2;
+    j.reliste[1] = relist1 + nelem(relist1) - 2;
+
+    rv = rregexec1(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    rv = rregexec2(progp, bol, mp, ms, &j);
+    if(rv >= 0)
+        return rv;
+    return -1;
+}
+@
+
+<<function [[rregsub]]>>=
+/* substitute into one string using the matches from the last regexec() */
+extern	void
+rregsub(Rune *sp,	/* source string */
+    Rune *dp,	/* destination string */
+    int dlen,
+    Resub *mp,	/* subexpression elements */
+    int ms)		/* number of elements pointed to by mp */
+{
+    Rune *ssp, *ep;
+    int i;
+
+    ep = dp+(dlen/sizeof(Rune))-1;
+    while(*sp != '\0'){
+        if(*sp == '\\'){
+            switch(*++sp){
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                i = *sp-'0';
+                if(mp[i].s.rsp != 0 && mp!=0 && ms>i)
+                    for(ssp = mp[i].s.rsp;
+                         ssp < mp[i].e.rep;
+                         ssp++)
+                        if(dp < ep)
+                            *dp++ = *ssp;
+                break;
+            case '\\':
+                if(dp < ep)
+                    *dp++ = '\\';
+                break;
+            case '\0':
+                sp--;
+                break;
+            default:
+                if(dp < ep)
+                    *dp++ = *sp;
+                break;
+            }
+        }else if(*sp == '&'){				
+            if(mp[0].s.rsp != 0 && mp!=0 && ms>0)
+            if(mp[0].s.rsp != 0)
+                for(ssp = mp[0].s.rsp;
+                     ssp < mp[0].e.rep; ssp++)
+                    if(dp < ep)
+                        *dp++ = *ssp;
+        }else{
+            if(dp < ep)
+                *dp++ = *sp;
+        }
+        sp++;
+    }
+    *dp = '\0';
+}
+@
+
 \section{Error handling: [[regerror()]]}
+
+<<function [[regerror]]>>=
+void
+regerror(char *s)
+{
+    char buf[132];
+
+    strcpy(buf, "regerror: ");
+    strcat(buf, s);
+    strcat(buf, "\n");
+    write(2, buf, strlen(buf));
+    exits("regerr");
+}
+@
 
 %******************************************************************************
 \chapter{Mathematics}
