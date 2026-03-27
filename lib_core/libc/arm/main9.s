@@ -19,11 +19,12 @@ TEXT    _main(SB), NOPROF, $(16 + NPRIVATES*4)
         MOVW    $NPRIVATES, R1
         MOVW    R1, _nprivates(SB)
         /*e: [[_main()]](arm) setup private storage */
-
+        /*s: [[_main()]](arm) adjust argc argv */
         MOVW    $inargv+0(FP), R(arg)
         MOVW    R(arg), 8(R(sp))
         MOVW    inargc-4(FP), R(arg)
         MOVW    R(arg), 4(R(sp))
+        /*e: [[_main()]](arm) adjust argc argv */
 
         // user main()
         BL      main(SB)

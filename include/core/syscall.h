@@ -1,9 +1,9 @@
 /*s: include/core/syscall.h */
-// you must include libc.h instead of this file
+// !You must include libc.h instead of this file!
 
-//----------------------------------------------------------------------------
-// Data structures and constants
-//----------------------------------------------------------------------------
+//******************************************************************************
+// Types and constants
+//******************************************************************************
 
 /*s: type [[Namespace_flag]] */
 // enum Namespace_flag, mount/bind parameter
@@ -168,13 +168,15 @@ struct IOchunk {
 };
 /*e: type [[IOchunk]] */
 
-//----------------------------------------------------------------------------
-// Functions
-//----------------------------------------------------------------------------
+//******************************************************************************
+// Function prototypes
+//******************************************************************************
 
 // syscalls (and small wrappers around syscalls after in each category)
 
+//----------------------------------------------------------------------------
 // process
+//----------------------------------------------------------------------------
 extern	int	rfork(int);
 extern	void	_exits(char*);
 extern	int	exec(char*, char*[]);
@@ -192,14 +194,19 @@ extern	int	getppid(void);
 extern  char*   getenv(char*);
 extern  int     putenv(char*, char*);
 
+//----------------------------------------------------------------------------
 // memory
+//----------------------------------------------------------------------------
 extern	void*	sbrk(ulong);
 
+//----------------------------------------------------------------------------
 // file
+//----------------------------------------------------------------------------
 extern	fdt	open(char*, int);
 extern	int	close(fdt);
 extern	long	pread(fdt, void*, long, vlong);
 extern	long	pwrite(fdt, void*, long, vlong);
+extern	int	dup(int, int);
 
 extern	long	read(fdt, void*, long);
 extern	long	write(fdt, void*, long);
@@ -212,7 +219,9 @@ extern	vlong	seek(fdt, vlong, int);
 
 extern	long	readn(fdt, void*, long);
 
+//----------------------------------------------------------------------------
 // directory
+//----------------------------------------------------------------------------
 extern	int	create(char*, int, ulong);
 extern	int	remove(char*);
 extern	int	chdir(char*);
@@ -235,16 +244,22 @@ extern	void	nulldir(Dir*);
 extern	long	dirreadall(int, Dir**);
 extern	int	access(char*, int); // ???
 
+//----------------------------------------------------------------------------
 // namespace
+//----------------------------------------------------------------------------
 extern	int	bind(char*, char*, int/*Mxxx*/);
 extern	int	mount(fdt, int, char*, int/*Mxxx*/, char*);
 extern	int	unmount(char*, char*);
 
+//----------------------------------------------------------------------------
 // time
+//----------------------------------------------------------------------------
 extern	long	alarm(ulong);
 extern	int	sleep(long); //less: could be void (ulong). 0 means yield.
 
+//----------------------------------------------------------------------------
 // IPC
+//----------------------------------------------------------------------------
 extern	int	pipe(int*);
 extern	int	noted(int);
 extern	int	notify(void(*)(void*, char*));
@@ -254,28 +269,35 @@ extern	int	segdetach(void*);
 extern	int	segflush(void*, ulong);
 extern	int	segfree(void*, ulong);
 
+//----------------------------------------------------------------------------
 // concurrency
+//----------------------------------------------------------------------------
 extern	void*	rendezvous(void*, void*);
 extern	int	semacquire(long*, int);
 extern	long	semrelease(long*, long);
 extern	int	tsemacquire(long*, ulong);
 
-// special files
-extern	int	dup(int, int);
-
+//----------------------------------------------------------------------------
 // security
+//----------------------------------------------------------------------------
 extern	int	fauth(int, char*);
 extern	int	fversion(int, int, char*, int);
 
 extern  char*   getuser(void);
 
+//----------------------------------------------------------------------------
 // error management
+//----------------------------------------------------------------------------
 extern	int	errstr(char*, uint);
 
 extern	void	werrstr(char*, ...);
 extern	void	rerrstr(char*, uint);
 
 #pragma	varargck	argpos	werrstr	1
+
+//----------------------------------------------------------------------------
+// Misc
+//----------------------------------------------------------------------------
 
 //???
 extern	char*	sysname(void);
