@@ -5,6 +5,18 @@
 // Types and constants
 //******************************************************************************
 
+/*s: type [[Open_flag]] */
+// enum Open_flag, open parameter
+#define	OREAD	0	/* open for read */
+#define	OWRITE	1	/* write */
+#define	ORDWR	2	/* read and write */
+#define	OEXEC	3	/* execute, == read but check execute permission */
+// advanced stuff (no O_APPEND, O_CREATE, O_NONBLOCK as in Unix though)
+#define	OTRUNC	16	/* or'ed in (except for exec), truncate file first */
+#define	OCEXEC	32	/* or'ed in, close on exec */
+#define	ORCLOSE	64	/* or'ed in, remove on close */
+#define	OEXCL	0x1000	/* or'ed in, exclusive use (create only) */
+/*e: type [[Open_flag]] */
 /*s: type [[Namespace_flag]] */
 // enum Namespace_flag, mount/bind parameter
 #define	MREPL	0x0000	/* mount replaces object */
@@ -18,20 +30,6 @@
 
 #define	MMASK	0x0017	/* all bits on */
 /*e: type [[Namespace_flag]] */
-
-/*s: type [[Open_flag]] */
-// enum Open_flag, open parameter
-#define	OREAD	0	/* open for read */
-#define	OWRITE	1	/* write */
-#define	ORDWR	2	/* read and write */
-#define	OEXEC	3	/* execute, == read but check execute permission */
-// advanced stuff (no O_APPEND, O_CREATE, O_NONBLOCK as in Unix though)
-#define	OTRUNC	16	/* or'ed in (except for exec), truncate file first */
-#define	OCEXEC	32	/* or'ed in, close on exec */
-#define	ORCLOSE	64	/* or'ed in, remove on close */
-#define	OEXCL	0x1000	/* or'ed in, exclusive use (create only) */
-/*e: type [[Open_flag]] */
-
 /*s: type [[Access_flag]] */
 // enum Access_flag
 #define	AEXIST	0	/* accessible: exists */
@@ -39,13 +37,11 @@
 #define	AWRITE	2	/* write access */
 #define	AREAD	4	/* read access */
 /*e: type [[Access_flag]] */
-
 /*s: type [[Segattach_flag]] */
 /* Segattch */
 #define	SG_RONLY	0040	/* read only */
 #define	SG_CEXEC	0100	/* detach on exec */
 /*e: type [[Segattach_flag]] */
-
 /*s: type [[Note_flag]] */
 #define	NCONT	0	/* continue after note */
 #define	NDFLT	1	/* terminate after note */
@@ -64,7 +60,6 @@
 #define QTAUTH		0x08		/* type bit for authentication file */
 #define QTTMP		0x04		/* type bit for not-backed-up file */
 /*e: type [[Qid_type]] */
-
 /*s: type [[Dir_mode]] */
 /* bits in Dir.mode */
 #define DMDIR		0x80000000	/* mode bit for directories */
@@ -101,11 +96,9 @@ enum Rfork_flags
 /*s: constant [[STATMAX]] */
 #define	STATMAX	65535U	/* max length of machine-independent stat structure */
 /*e: constant [[STATMAX]] */
-
 /*s: constant [[DIRMAX]] */
 #define	DIRMAX	(sizeof(Dir)+STATMAX)	/* max length of Dir structure */
 /*e: constant [[DIRMAX]] */
-
 /*s: constant [[ERRMAX]] */
 #define	ERRMAX	128	/* max length of error string */
 /*e: constant [[ERRMAX]] */
@@ -177,37 +170,47 @@ struct IOchunk {
 //----------------------------------------------------------------------------
 // process
 //----------------------------------------------------------------------------
+/*s: signatures process syscall */
 extern	int	rfork(int);
 extern	void	_exits(char*);
 extern	int	exec(char*, char*[]);
 extern	int	await(char*, int);
+/*e: signatures process syscall */
 
+/*s: signatures process syscall wrapper */
 extern	int	fork(void);
 extern  void    exits(char*);
 extern	int	execl(char*, ...);
 extern	void	abort(void);
 extern	Waitmsg*wait(void);
 extern	int	waitpid(void);
-
+/*e: signatures process syscall wrapper */
+/*s: signatures other process syscall wrapper */
 extern	int	getpid(void);
 extern	int	getppid(void);
 extern  char*   getenv(char*);
 extern  int     putenv(char*, char*);
+/*e: signatures other process syscall wrapper */
 
 //----------------------------------------------------------------------------
 // memory
 //----------------------------------------------------------------------------
+/*s: signatures memory syscall */
 extern	void*	sbrk(ulong);
+/*e: signatures memory syscall */
 
 //----------------------------------------------------------------------------
 // file
 //----------------------------------------------------------------------------
+/*s: signatures file syscall */
 extern	fdt	open(char*, int);
 extern	int	close(fdt);
 extern	long	pread(fdt, void*, long, vlong);
 extern	long	pwrite(fdt, void*, long, vlong);
 extern	int	dup(int, int);
+/*e: signatures file syscall */
 
+/*s: signatures file syscall wrapper */
 extern	long	read(fdt, void*, long);
 extern	long	write(fdt, void*, long);
 extern	long	preadv(fdt, IOchunk*, int, vlong);
@@ -218,10 +221,12 @@ extern	vlong	seek(fdt, vlong, int);
 // extern	int	fdflush(int);
 
 extern	long	readn(fdt, void*, long);
+/*e: signatures file syscall wrapper */
 
 //----------------------------------------------------------------------------
 // directory
 //----------------------------------------------------------------------------
+/*s: signatures directory syscall */
 extern	int	create(char*, int, ulong);
 extern	int	remove(char*);
 extern	int	chdir(char*);
@@ -230,7 +235,9 @@ extern	int	fstat(int, uchar*, int);
 extern	int	stat(char*, uchar*, int);
 extern	int	fwstat(int, uchar*, int);
 extern	int	wstat(char*, uchar*, int);
+/*e: signatures directory syscall */
 
+/*s: signatures directory syscall wrapper */
 extern  char*   getwd(char*, int);
 extern  char*   mktemp(char*);
 
@@ -243,23 +250,29 @@ extern	long	dirread(int, Dir**);
 extern	void	nulldir(Dir*);
 extern	long	dirreadall(int, Dir**);
 extern	int	access(char*, int); // ???
+/*e: signatures directory syscall wrapper */
 
 //----------------------------------------------------------------------------
 // namespace
 //----------------------------------------------------------------------------
+/*s: signatures namespace syscall */
 extern	int	bind(char*, char*, int/*Mxxx*/);
 extern	int	mount(fdt, int, char*, int/*Mxxx*/, char*);
 extern	int	unmount(char*, char*);
+/*e: signatures namespace syscall */
 
 //----------------------------------------------------------------------------
 // time
 //----------------------------------------------------------------------------
+/*s: signatures time syscall */
 extern	long	alarm(ulong);
 extern	int	sleep(long); //less: could be void (ulong). 0 means yield.
+/*e: signatures time syscall */
 
 //----------------------------------------------------------------------------
 // IPC
 //----------------------------------------------------------------------------
+/*s: signatures ipc syscall */
 extern	int	pipe(int*);
 extern	int	noted(int);
 extern	int	notify(void(*)(void*, char*));
@@ -268,32 +281,43 @@ extern	void*	segbrk(void*, void*);
 extern	int	segdetach(void*);
 extern	int	segflush(void*, ulong);
 extern	int	segfree(void*, ulong);
+/*e: signatures ipc syscall */
 
 //----------------------------------------------------------------------------
 // concurrency
 //----------------------------------------------------------------------------
+/*s: signatures concurrency syscall */
 extern	void*	rendezvous(void*, void*);
 extern	int	semacquire(long*, int);
 extern	long	semrelease(long*, long);
 extern	int	tsemacquire(long*, ulong);
+/*e: signatures concurrency syscall */
 
 //----------------------------------------------------------------------------
 // security
 //----------------------------------------------------------------------------
+/*s: signatures security syscall */
 extern	int	fauth(int, char*);
 extern	int	fversion(int, int, char*, int);
+/*e: signatures security syscall */
 
+/*s: signatures security syscall wrapper */
 extern  char*   getuser(void);
+/*e: signatures security syscall wrapper */
 
 //----------------------------------------------------------------------------
 // error management
 //----------------------------------------------------------------------------
+/*s: signatures error syscall */
 extern	int	errstr(char*, uint);
+/*e: signatures error syscall */
 
+/*s: signatures error syscall wrapper */
 extern	void	werrstr(char*, ...);
 extern	void	rerrstr(char*, uint);
 
 #pragma	varargck	argpos	werrstr	1
+/*e: signatures error syscall wrapper */
 
 //----------------------------------------------------------------------------
 // Misc
@@ -301,5 +325,4 @@ extern	void	rerrstr(char*, uint);
 
 //???
 extern	char*	sysname(void);
-
 /*e: include/core/syscall.h */
