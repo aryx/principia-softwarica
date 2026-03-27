@@ -173,8 +173,8 @@ How can you add your own format verbs?
 computed when the hardware has no floating-point unit?
 
 \item How does a regular expression engine work?
-Why can an NFA-based matcher handle patterns that make
-backtracking engines take exponential time?
+%Why can an NFA-based matcher handle patterns that make
+%backtracking engines take exponential time?
 
 \item Why do we need buffered I/O on top of [[read()]]
 and [[write()]]? How does reading one character at a time
@@ -734,16 +734,24 @@ Key assembler directives:
 \item \verb+TEXT name(SB), flags, $framesize+ --- declares a
 function. The [[framesize]] is how much stack space to
 reserve for locals (the assembler adjusts R13 on entry).
+%yoann1: maybe say for locals or also for arguments to functions called (callees)
+
 \item \verb!DATA sym+offset(SB)/size, $value! --- defines
 initialized global data.
+
 \item \verb!GLOBL sym+0(SB), $size! --- declares the total
 size of a global symbol.
+
 \item [[BL]] --- branch and link (function call; saves return
 address in R14).
+
 \item [[RET]] --- return (branches to R14).
+
 \item [[SWI $0]] --- software interrupt (system call trap).
+
 \item [[MOVM.IA.W]] --- move multiple registers
 (increment after, write back); used for fast block copies.
+
 \end{itemize}
 
 %claude:
@@ -759,6 +767,8 @@ operand types.
 \item [[RET]] is not a real ARM instruction---it is translated
 to \verb+MOV R14, R15+ (copy the link register to the
 program counter).
+%yoann1: unless it's a leaf procedure? Maybe don't give too much details but say to read Assembler and Linker books for more info
+
 \item [[CMP]] with a large constant may be expanded into
 a load from a {literal pool} plus a compare.
 \end{itemize}
@@ -837,8 +847,8 @@ the heap starts (used by [<sbrk()>] in
 Chapter~\ref{chap:malloc}).
 
 %claude:
-There is still a bootstrap problem: this instruction uses
-an [[SB]] reference, but [[R12]] is not yet set. The linker
+There is still a bootstrap problem: the \verb+MOVW $setR12(SB), R12+ instruction
+uses an [[SB]] reference, but [[R12]] is not yet set. The linker
 recognizes this specific instruction and emits an absolute
 load (e.g., \verb+MOV $0x7000, R12+) with [[INITDAT]]
 hard-coded, bypassing the normal [[R12]]-relative encoding.
@@ -2261,14 +2271,14 @@ syscall with flags for fine-grained resource sharing.
 %real-world: crt0 for "C runtime 0"?
 
 %claude:
-Every \plan program starts in [[_main]], the C runtime entry
-point. On \unix systems, this role is played by [[crt0]]
+Every \plan program actually starts in [[_main()]] (not [[main()]]),
+the C runtime entry point. On \unix systems, this role is played by [[crt0]]
 (``C runtime, file 0''---the first object file linked into
 every program). Some \unix systems also have [[crt1]] and
 [[crti]]/[[crtn]] for additional initialization (e.g.,
 constructors, profiling setup), but \plan keeps it simple
 with a single [[_main]] that sets up [[argc]]/[[argv]] and
-calls [[main()]]. The name may be confusing: [[_main]] is
+then calls [[main()]]. The name may be confusing: [[_main]] is
 the true entry point of the program (the linker sets it as
 the default entry point---see \book{Linker}), while
 [[main()]] is the user's entry point, called by [[_main]]
@@ -2324,6 +2334,8 @@ counts), and the [[Prof]] structure for profiling data.
 The kernel passes its address in [[R0]].
 See \book{Kernel} for the full definition.
 
+%yoann: maybe say that no space for ret addr, which is part of C calling convention! hence the need to adjust what the kernel did (why kernel didn't do the right thing directly?)
+
 %yoann: transition paragraph say now mostly ready to show ARM code of _main
 
 <<libc/arm/main9.s>>=
@@ -2338,11 +2350,7 @@ TEXT    _main(SB), NOPROF, $(16 + NPRIVATES*4)
         MOVW    R(arg), _tos(SB)
 
         <<[[_main()]](arm) setup private storage>>
-
-        MOVW    $inargv+0(FP), R(arg)
-        MOVW    R(arg), 8(R(sp))
-        MOVW    inargc-4(FP), R(arg)
-        MOVW    R(arg), 4(R(sp))
+        <<[[_main()]](arm) adjust argc argv>>
 
         // user main()
         BL      main(SB)
@@ -2360,11 +2368,10 @@ Section~\ref{sec:asm-crash-course}. Until this executes,
 no global variable can be accessed.
 %
 The second instruction saves the [[Tos]] pointer (passed
-by the kernel in [[R0]]) to the global [[_tos]] (declared
+by the kernel in [[R0]], which is the same than [[R(arg)]] given the definition
+of [[arg]]) to the global [[_tos]] (declared
 in [[libc.h]] as \verb+extern Tos *_tos+). This works
 because [[R12]] was just initialized.
-
-%yoann: say where is this _tos global? declared where?
 
 %claude:
 The private storage area is carved from the stack frame
@@ -2372,6 +2379,11 @@ The private storage area is carved from the stack frame
 reserves space). [[_privates]] and [[_nprivates]] are globals
 used by [[privalloc()]] to implement per-process private data
 (see Chapter~\ref{chap:threads}).
+%yoann1: but why the 16 + ... ? 4 extra locals?
+
+<<constant NPRIVATES(arm)>>=
+#define NPRIVATES       16
+@
 
 <<[[_main()]](arm) setup private storage>>=
 MOVW    $p-64(SP), R1
@@ -2380,9 +2392,7 @@ MOVW    $NPRIVATES, R1
 MOVW    R1, _nprivates(SB)
 @
 
-<<constant NPRIVATES(arm)>>=
-#define NPRIVATES       16
-@
+%yoann: maybe show adjusted ASCII stack diagram, where see also why -64(SP)? why not use R13 directly there? (or R(sp))?
 
 %claude:
 Next (using the register aliases and pseudo-registers
@@ -2391,6 +2401,15 @@ described in Section~\ref{sec:asm-crash-course}),
 kernel's stack layout (accessed via [[FP]]) into the
 positions expected by the C calling convention for calling
 [[main(int argc, char **argv)]]:
+
+<<[[_main()]](arm) adjust argc argv>>=
+MOVW    $inargv+0(FP), R(arg)
+MOVW    R(arg), 8(R(sp))
+MOVW    inargc-4(FP), R(arg)
+MOVW    R(arg), 4(R(sp))
+@
+
+
 \begin{verbatim}
   High addresses
   Kernel's layout:                _main's frame (for calling main):
@@ -2405,6 +2424,7 @@ positions expected by the C calling convention for calling
                                   +------------------+ <-- R13
   Low addresses
 \end{verbatim}
+%yoann1: why argc in FP-4 here when in the previous ASCII diagram it was just after SP? also why mention privates here? same than _privates mentioned before?
 
 %
 The adjustment is needed because [[_main]]'s [[TEXT]]
@@ -2543,6 +2563,7 @@ underscore convention---most other system calls ([[open]],
 [[read]], [[rfork]], etc.) are used directly without a
 wrapper. [[exits]] is special because it needs to run
 cleanup callbacks before terminating.
+%yoann1: actually it's pread not read no?
 
 %yoann: now that User/Kernel bridge is before, maybe show concrete code of _exits to make things more concrete?
 %claude:
@@ -2552,6 +2573,7 @@ for [[EXITS]] into [[R0]], places the argument (the exit
 status string pointer) in [[R1]], and executes [[SWI 0]].
 This is all the user-space code there is---the kernel's
 [[sysexits()]] does the actual process teardown.
+%yoann1: why are you talking about R1?
 
 %yoann: show actual assembly ARM for _exits.s, we already saw one in previous chapter, it is ok to repeat things once
 %claude:
@@ -2569,12 +2591,15 @@ The [[RET]] is never reached because the kernel destroys
 the process. It is there because the assembler requires
 every [[TEXT]] block to end with a [[RET]].
 
+%yoann: maybe quickly give semantic of _exits()? give an idea of what it does
+
 \section{[[exits()]] and [[atexit()]]}
 
 %claude:
 [<exits()>] runs registered cleanup callbacks before calling
 the [[_exits]] system call. The [<onex>] table stores up to
-33 callback/pid pairs. The pid field exists because after
+33 callback/pid pairs (see the [<Onex>] struct definition).
+The pid field exists because after
 [[rfork(RFMEM)]], parent and child share memory (including
 [[onex]]) but should only run their own callbacks---each
 process checks [[getpid()]] before invoking a handler.
@@ -2651,7 +2676,8 @@ static Lock onexlock;
 The [[onexlock]] protects the [[onex]] array from concurrent
 access by shared-memory processes (see
 Chapter~\ref{chap:concurrency} for how [[Lock]] works).
-%
+
+%claude:
 [[atexit()]] registers a callback to be called when the
 program exits. It scans the [[onex]] array for an empty
 slot, records the current pid (so that after
@@ -2762,7 +2788,10 @@ truncates to a byte when storing. This means
 same result: every byte set to \verb+0xFF+. The parameter is
 [[int]] because passing 32-bit values is more efficient on
 most architectures than passing single bytes.
-%
+
+%yoann: explain also why take void*ap and not directly char* ap?
+
+%claude:
 This byte-at-a-time loop is correct but slow. The ARM assembly
 version in [[libc/arm/memset.s]] fills 4~bytes at a time
 using word-sized stores, which is roughly 4$\times$ faster
@@ -2785,6 +2814,8 @@ back'') to store 16~bytes per iteration---four registers
 at once.
 \item The tail handles the remaining 1--3 bytes individually.
 \end{itemize}
+
+%yoann: maybe give intuition about code? what means TO?TOE?
 
 <<libc/arm/memset.s>>=
 TO = 1
@@ -2868,15 +2899,7 @@ is handling {overlapping} regions:
            src[2] was already overwritten!
   Solution: copy backwards from the end.
 \end{verbatim}
-
-<<function [[memcpy]]>>=
-void*
-memcpy(void *a1, void *a2, ulong n)
-{
-    return memmove(a1, a2, n);
-}
-@
-
+%yoann1: actually on the ASCII diagram the Non-overlapping case seems overlapping
 
 <<function [[memmove]]>>=
 void*
@@ -2915,12 +2938,21 @@ whether the source extends into the destination---if so, it
 copies backwards to avoid clobbering. In all other cases
 (non-overlapping, or source after destination), forward copy
 is safe.
-%
+
+%claude:
 [[memcpy]] is simply an alias for [[memmove]]---both handle
 overlapping regions. In standard C, [[memcpy]] has undefined
 behavior on overlapping memory, but \plan makes the safe
 choice: there is only one implementation, and it always works
 correctly.
+
+<<function [[memcpy]]>>=
+void*
+memcpy(void *a1, void *a2, ulong n)
+{
+    return memmove(a1, a2, n);
+}
+@
 
 \section{[[memmove()]] (ARM)}
 
@@ -3172,11 +3204,11 @@ _fu1tail:
 \section{Comparing: [[memcmp()]]}
 
 %claude:
-[[memcmp]] compares two memory regions byte by byte, returning
+[[memcmp()]] compares two memory regions byte by byte, returning
 0 if they are equal, 1 if the first differing byte in [[a1]]
 is greater, or $-1$ if it is smaller. It is used to compare
 structures, binary data, and keys in hash tables. Unlike
-[[strcmp]], it does not stop at null bytes---it always
+[<strcmp()>], it does not stop at null bytes---it always
 compares exactly [[n]] bytes.
 
 <<function [[memcmp]]>>=
@@ -3205,9 +3237,9 @@ memcmp(void *a1, void *a2, ulong n)
 \section{Searching: [[memchr()]]}
 
 %claude:
-[[memchr]] scans [[n]] bytes starting at [[ap]] for the first
+[[memchr()]] scans [[n]] bytes starting at [[ap]] for the first
 occurrence of byte [[c]], returning a pointer to it or [[nil]]
-if not found. It is used by [[strchr]] (which searches for a
+if not found. It is used by [<strchr()>] (which searches for a
 character in a string) and by parsers that scan binary data
 for a delimiter. The \verb+c &= 0xFF+ ensures the comparison
 works correctly even if [[c]] was passed as a negative
@@ -3286,17 +3318,20 @@ in a binary tree for efficient best-fit allocation.
 \section{Syscall: [[brk()]]}
 % sysbrk()
 
+%yoann: say will not put assembly stub, very similar, but maybe explain semantic of the call. Maybe ASCII diagram of memory layout with text, data, bss, and heap, and stack and relation for sbrk, and maybe also edata, etext, eend
+
 \section{[[sbrk()]]}
 
 % in 9sys/
 
 %claude:
-[[sbrk]] extends the process's data segment by [[n]] bytes.
+[[sbrk()]] extends the process's data segment by [[n]] bytes.
 The [[bloc]] pointer tracks the current end of the heap
 (initialized to [[end]], the linker-defined symbol marking
 the end of BSS). The rounding expression
 the rounding expression (add [[Round]], then mask off the low bits)
 aligns the allocation to an 8-byte boundary.
+%yoann1: why say 2 times the rounding expression? also why 8byte boundary matters?
 
 <<global [[bloc]]>>=
 // starting point for the heap, after the text, data, and bss.
@@ -3329,6 +3364,8 @@ enum
 
 
 \section{Data structures}
+
+%yoann: transition paragraph explaining now switch to allocator on top of sbrk and will need complex data structures
 
 \subsection{[[Pool]]}
 
@@ -3591,7 +3628,7 @@ static uchar datamagic[] = { 0xFE, 0xF1, 0xF0, 0xFA };
 \section{[[malloc()]]}
 
 %claude:
-[[malloc]] is a thin wrapper around [[poolalloc]]. When
+[[malloc()]] is a thin wrapper around [<poolalloc()>]. When
 [[Npadlong]] is non-zero (debugging mode), extra space is
 allocated before the returned pointer to store the caller's
 PC---[[getcallerpc]] records who called [[malloc]], which
@@ -3671,10 +3708,10 @@ the UTF-8 encoding/decoding functions that convert between the two.
 % copy, search, len, etc.
 
 %claude:
-Note how [[strlen]] is implemented in terms of [[strchr]]:
+Note how [[strlen()]] is implemented in terms of [<strchr()>]:
 it searches for the null terminator and returns the distance.
-Similarly, [[strcat]] uses [[strchr]] to find the end of the
-destination string, then calls [[strcpy]]. This layering
+Similarly, [<strcat()>] uses [[strchr()]] to find the end of the
+destination string, then calls [<strcpy()>]. This layering
 keeps each function minimal.
 
 <<function [[strlen]]>>=
@@ -4435,6 +4472,7 @@ used by programs that don't have their own engine (unlike
 [[grep]], which has a built-in DFA matcher for speed). The
 library uses an NFA-based approach, as described in Russ
 Cox's well-known articles on regular expression matching.
+%yoann1: what NFA means?
 
 \section{Data structures}
 
@@ -4470,17 +4508,16 @@ root finding, interpolation, integration, and random number
 generation---see Press et al.'s {\em Numerical
 Recipes}~\cite{numerical-recipes}, which covers much of the
 same ground as this chapter but in far greater depth.
+%yoann1: what are minimax?
 
 \section{Basics}
 
 %claude:
 The basic math functions are straightforward but note
-that [[abs]] and [[fabs]] have the same C source code
-yet produce very different assembly: [[abs]] uses integer
-comparison and negation, while [[fabs]] uses floating-point
-instructions. [[floor]] and [[ceil]] use [[modf]] to split
-a number into integer and fractional parts, then adjust
-for negative numbers.
+that [[abs()]] and [[fabs()]] have the same C source code
+yet produce very different assembly: [[abs()]] uses integer
+comparison and negation, while [[fabs()]] uses floating-point
+instructions. 
 
 <<function [[abs]]>>=
 int
@@ -4515,6 +4552,10 @@ fabs(double arg)
 %    return a;
 %}
 %@
+
+[[floor()]] and [[ceil()]] use [<modf()>] to split
+a number into integer and fractional parts, then adjust
+for negative numbers.
 
 % floor and ceiling in an appartment :)
 
@@ -4747,7 +4788,7 @@ Return:
 IEEE~754 floating-point has special values: NaN (not a
 number), positive/negative infinity, and negative zero.
 These functions construct and detect them by manipulating
-the raw bit representation via [[FPdbleword]]. A NaN has
+the raw bit representation via [<FPdbleword>]. A NaN has
 all exponent bits set ([[NANEXP]] = \verb+2047<<20+) and a
 non-zero mantissa. Infinity has all exponent bits set and
 a zero mantissa. [[isNaN]] exploits the property that NaN
@@ -15216,7 +15257,7 @@ considerably larger. Here are some of the areas
 where they differ:
 \begin{itemize}
 
-\item \emph{Memory allocators}: the \plan [[Pool]]
+\item \emph{Memory allocators}: the \plan\ [[Pool]]
 allocator is a straightforward first-fit allocator
 with red-zone poisoning for debugging. Production
 allocators like jemalloc (FreeBSD, Firefox),
