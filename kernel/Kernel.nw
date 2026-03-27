@@ -670,10 +670,16 @@ small cleanups \plan made over \unix.
 % are accessed from assembly so need to use #define
 
 %claude:
+I now describe each category in turn, with the C prototypes
+from [[syscall.h]] (see \book{Libcore} for the library
+wrappers built on top of these).
+
+\subsection{Process syscalls}
+
+%claude:
 The process syscalls mirror the \unix model: [[RFORK]] creates
-a new process (a generalization of \unix\ [[fork]]),
-[[EXEC]] replaces the current program, [[EXITS]] terminates,
-and [[AWAIT]] waits for a child (like \unix\ [[wait]]).
+a new process, [[EXEC]] replaces the current program,
+[[EXITS]] terminates, and [[AWAIT]] waits for a child.
 
 <<[[sys.h]] process syscalls>>=
 #define RFORK       1
@@ -681,25 +687,6 @@ and [[AWAIT]] waits for a child (like \unix\ [[wait]]).
 #define EXITS       3
 #define AWAIT       4
 @
-
-%yoann: maybe say again cleaning up Unix/Linux where no need fork() and clone() but instead more general mechanism RFORK (resource fork) where can fork or share many resources (memory, fds, env, etc.) so clone is just RFORK with memory not forked but shared
-%claude: %unix:
-\plan cleans up \unix here too. Instead of having
-separate [[fork()]] and [[clone()]] syscalls (as Linux
-does), \plan has a single [[RFORK]] (``resource fork'')
-that takes flags specifying which resources to copy and
-which to share: memory, file descriptors, environment,
-namespace, etc. A traditional [[fork]] is [[RFORK]] with
-everything copied; a thread (shared memory) is [[RFORK]]
-with memory shared.
-
-%yoann: EXITS is another cleaning, does not take error code but clearer string so no need man page to describe each time mapping from error code to actual meaning
-%claude: %unix:
-Similarly, [[EXITS]] takes an error {string} (or [[nil]]
-for success), not a numeric exit code. The parent reads
-this string via [[AWAIT]]. No need to memorize that
-exit code~2 means ``file not found''---the string says
-it directly.
 
 % for EXITS it generates _exits assembly function, not exits
 %  because exits is a C function in libc/port/atexit.c
@@ -710,6 +697,37 @@ it directly.
 % unix philosphy!
 % cells are using fork so it must be a good API :)
 
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   rfork(int flags);
+  int   exec(char *name, char *argv[]);
+  void  _exits(char *status);
+  int   await(char *s, int n);
+\end{verbatim}
+
+%yoann: maybe say again cleaning up Unix/Linux where no need fork() and clone() but instead more general mechanism RFORK (resource fork) where can fork or share many resources (memory, fds, env, etc.) so clone is just RFORK with memory not forked but shared
+%claude: %unix:
+\plan cleans up \unix in several ways here. Instead of having
+separate [[fork()]] and [[clone()]] syscalls (as Linux
+does), \plan has a single [[RFORK]] (``resource fork'')
+that takes flags specifying which resources to copy and
+which to share: memory, file descriptors, environment,
+namespace, etc. A traditional [[fork]] is [[RFORK]] with
+everything copied; a thread (shared memory) is [[RFORK]]
+with memory shared. Linux's [[clone()]] was in fact
+inspired by \plan's [[rfork]].
+
+%yoann: EXITS is another cleaning, does not take error code but clearer string so no need man page to describe each time mapping from error code to actual meaning
+%claude: %unix:
+Similarly, [[EXITS]] takes an error {string} (or [[nil]]
+for success), not a numeric exit code. The parent reads
+this string via [[AWAIT]]. No need to memorize that
+exit code~2 means [[ENOENT]]---the string says
+\verb+"file not found"+ directly.
+
+\subsection{Memory syscalls}
+
 %yoann: what BRK mean? no malloc/free here? one syscall is enough?
 %claude:
 There is only one memory syscall: [[BRK]] (for ``break''),
@@ -717,13 +735,12 @@ which moves the boundary between the data segment and free
 memory. The name comes from the traditional \unix term for
 the end of the process's data area.
 There is no [[malloc]] or [[free]] syscall---those are
-implemented entirely in user space (in the C library, see \book{Libcore}) on
-top of [[brk]]. The library requests large chunks of memory
-from the kernel via [[brk]] and then subdivides them.
+implemented entirely in user space (in the C library, see
+\book{Libcore}) on top of [[brk]].
 
 <<[[sys.h]] memory syscalls>>=
 #define BRK     5
-@ 
+@
 %old: this used to be BRK_, because I think of APE. Some applications
 % call brk() but POSIX brk() has a different semantic than Plan9
 % brk, and making brk() a syscall makes things difficult to change.
@@ -736,18 +753,17 @@ from the kernel via [[brk]] and then subdivides them.
 %todo: bad name btw, not sure what it means
 
 %claude:
+The C prototype is:
+\begin{verbatim}
+  int   brk(void *addr);
+\end{verbatim}
+
+\subsection{File syscalls}
+
+%claude:
 The file syscalls are the workhorses of the interface.
 Because so many things in \plan are files, most of
 the kernel's services are accessed through these five calls.
-Note [[PREAD]] and [[PWRITE]] instead of the traditional
-\unix\ [[read]]/[[write]]: the [['p']] stands for
-``positional''---they take an explicit file offset, making
-seek-then-read atomic.
-%claude: %unix:
-This is another cleanup: in \unix, [[read]] and [[seek]]
-are separate syscalls, so a concurrent [[seek]]+[[read]]
-from two threads can race. \plan avoids this by combining
-them into a single [[pread]] call.
 
 <<[[sys.h]] file syscalls>>=
 #define OPEN        6
@@ -757,12 +773,35 @@ them into a single [[pread]] call.
 #define SEEK        10
 @
 % pread/pwrite? what is the p for? page read? page write?
-% it does have an extra arg for seek, so have atomic seek;read? 
+% it does have an extra arg for seek, so have atomic seek;read?
 
 % Note that read() might mention a big count but this might not be honored.
 % The kernel might return less bytes. For example the shell will read
 % /dev/cons and ask for 8192 bytes (a buffer), but the kernel will return
 % only the bytes until the newline.
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   open(char *file, int omode);
+  int   close(int fd);
+  long  pread(int fd, void *buf, long n, vlong offset);
+  long  pwrite(int fd, void *buf, long n, vlong offset);
+  vlong seek(int fd, vlong n, int type);
+\end{verbatim}
+
+%claude: %unix:
+Note [[PREAD]] and [[PWRITE]] instead of the traditional
+\unix\ [[read]]/[[write]]: the `p' stands for
+``positional''---they take an explicit file offset, making
+seek-then-read atomic. In \unix, [[read]] and [[seek]]
+are separate syscalls, so a concurrent [[seek]]+[[read]]
+from two threads can race. \plan avoids this by combining
+them into a single [[pread]] call. (\unix later adopted
+[[pread]]/[[pwrite]] in POSIX.1-2001, but the traditional
+[[read]]/[[write]] remain the primary interface.)
+
+\subsection{Directory syscalls}
 
 %yoann: small paragraph explaining those syscalls, why all the xSTAT variation? fd2path seems original too
 %claude:
@@ -772,16 +811,8 @@ proliferation of [[STAT]]/[[FSTAT]]/[[WSTAT]]/[[FWSTAT]]
 comes from two axes: [[STAT]] vs.\ [[FSTAT]] (take a
 path name vs.\ a file descriptor), and read vs.\ write
 (``w'' for write, i.e., change metadata). [[FD2PATH]]
-is a \plan addition that returns the file name associated
-with an open file descriptor---useful because in \plan,
-with per-process namespaces, a file descriptor is often
-more reliable than a path.
-%claude: %unix:
-Note [[CREATE]] with the full spelling---in \unix, the
-syscall was famously called [[creat]] without the final
-`e'. When asked what he would change about \unix, Ken
-Thompson once answered: ``I'd spell creat with an e.''
-\plan finally fixed this.
+returns the file name associated with an open file
+descriptor.
 
 <<[[sys.h]] directory syscalls>>=
 #define CREATE      11
@@ -796,10 +827,37 @@ Thompson once answered: ``I'd spell creat with an e.''
 % why so many stat, ugly a bit. each time variant where take name
 % or file descriptor (the f stands for fd). Could remove maybe.
 
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   create(char *file, int omode, ulong perm);
+  int   remove(char *file);
+  int   chdir(char *dir);
+  int   fd2path(int fd, char *buf, int nbuf);
+  int   stat(char *file, uchar *buf, int nbuf);
+  int   fstat(int fd, uchar *buf, int nbuf);
+  int   wstat(char *file, uchar *buf, int nbuf);
+  int   fwstat(int fd, uchar *buf, int nbuf);
+\end{verbatim}
+
+%claude: %unix:
+Note [[CREATE]] with the full spelling---in \unix, the
+syscall was famously called [[creat]] without the final
+`e'. Ken Thompson once said the one thing he would change
+about \unix is ``I'd spell creat with an e.''
+%
+[[FD2PATH]] has no \unix equivalent. In \plan, with
+per-process namespaces, the same file can be reached via
+different paths in different processes, and \verb+..+ is
+resolved lexically. The kernel remembers the path used to
+open each file descriptor; [[fd2path]] returns it.
+
+\subsection{Namespace syscalls}
+
 %plan9 specific! vs general os principles, e.g. namespace so have
 % nice /dev/cons, /dev/draw, which enable easier network and graphics
 %claude:
-The namespace syscalls below are specific to \plan. [[BIND]] and
+The namespace syscalls are specific to \plan. [[BIND]] and
 [[MOUNT]] let each process customize its own view of the
 file system by overlaying directories or attaching file
 servers at arbitrary mount points. This is what makes
@@ -813,13 +871,34 @@ servers.
 #define UNMOUNT     21
 @
 
-
 % alternative to namespace and fileservers and uniondir?
 % once go to a "device is a file", and want a clean /dev/cons and
 % clean xterm, that means you need to have programs that provides
 % a fake /dev/cons so need easy fileservers and namespace. Union dir
 % then is natural too, goes with having flexible namespace.
 % ??alternative would be if /dev/cons??
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   bind(char *new, char *old, int flags);
+  int   mount(int fd, int afd, char *old, int flags, char *aname);
+  int   unmount(char *new, char *old);
+\end{verbatim}
+
+%claude: %unix:
+\unix's [[mount]] is a privileged operation (root only) that
+attaches a disk partition. \plan's [[mount]] is unprivileged
+and far more general: any process can mount any 9P file
+server at any point in its own namespace. [[bind]] has no
+\unix equivalent---the closest is Linux's \verb+mount --bind+,
+added decades later. \unix's [[chroot]] provides a crude
+approximation of per-process namespaces, but it is
+all-or-nothing. Linux eventually added mount namespaces
+(2002), which form the basis of containers (Docker), but
+they arrived 20~years after \plan had the same capability.
+
+\subsection{Time syscalls}
 
 <<[[sys.h]] time syscalls>>=
 #define SLEEP       22
@@ -830,12 +909,29 @@ servers.
 \t nsec? =~ gettimeofday? but also at top of user stack?
 
 %claude:
-The IPC syscalls cover several mechanisms.
-[[PIPE]] creates a pipe---one of \unix's greatest inventions.
-[[NOTIFY]]/[[NOTED]] handle {notes}, \plan's equivalent of
-\unix signals. The [[SEG]] family ([[SEGATTACH]],
-[[SEGDETACH]], etc.)\ lets processes attach shared memory
-segments, similar to \unix\ [[mmap]].
+The C prototypes are:
+\begin{verbatim}
+  int   sleep(long millisecs);
+  long  alarm(ulong millisecs);
+\end{verbatim}
+
+%claude:
+[[sleep]] suspends the process for [[n]] milliseconds
+(if zero or negative, it yields). [[alarm]] sets a timer:
+after [[n]] milliseconds, the kernel sends an
+\verb+"alarm"+ note to the process.
+
+%claude: %unix:
+\unix's [[sleep()]] and [[alarm()]] take seconds, not
+milliseconds. For sub-second timing, \unix needs
+[[nanosleep]] or [[setitimer]]. \plan uses milliseconds
+everywhere; there is no sub-millisecond sleep.
+
+\subsection{IPC syscalls}
+
+%claude:
+The IPC syscalls cover pipes, notes (signals), and shared
+memory segments.
 
 <<[[sys.h]] ipc syscalls>>=
 #define PIPE        26
@@ -852,6 +948,30 @@ segments, similar to \unix\ [[mmap]].
 % pipe! one of unix greatest invention!
 % segxxx =~ mmap (important for speed for some programs)
 
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   pipe(int fd[2]);
+  int   notify(void (*f)(void*, char*));
+  int   noted(int v);
+  void* segattach(int attr, char *class, void *va, ulong len);
+  int   segdetach(void *addr);
+  int   segfree(void *va, ulong len);
+  int   segflush(void *va, ulong len);
+  void* segbrk(void *saddr, void *addr);
+\end{verbatim}
+
+%claude: %unix:
+\plan's pipes are bidirectional (both ends can read and
+write), unlike \unix's unidirectional pipes. Notes carry a
+string message (\verb+"alarm"+, \verb+"sys: write on closed pipe"+)
+rather than just a number ([[SIGALRM]], [[SIGPIPE]]).
+[[segattach]] is \plan's equivalent of \unix [[mmap]] for
+shared memory, but uses named segment classes rather than
+anonymous mappings.
+
+\subsection{Concurrency syscalls}
+
 % user level concurrency of course, the kernel itself uses
 % lots of concurrency mechanisms (often mimiced also in userland)
 %claude:
@@ -860,7 +980,7 @@ user-level synchronization. [[RENDEZVOUS]] is a
 meeting-point mechanism, and [[SEMACQUIRE]]/[[SEMRELEASE]]
 provide kernel-backed semaphores. These are the building
 blocks on top of which the user-level thread library
-([[libthread]]) is implemented.
+([[libthread]], see \book{Libcore}) is implemented.
 
 <<[[sys.h]] concurrency syscalls>>=
 #define RENDEZVOUS  32
@@ -869,6 +989,22 @@ blocks on top of which the user-level thread library
 #define TSEMACQUIRE 35
 @
 %TSEMACQUIRE ? timed semacquire?
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  void* rendezvous(void *tag, void *value);
+  int   semacquire(long *addr, int block);
+  long  semrelease(long *addr, long delta);
+  int   tsemacquire(long *addr, ulong ms);
+\end{verbatim}
+
+%claude: %unix:
+\unix has no equivalent of [[rendezvous]]. The closest
+is Linux's [[futex]], which also provides user-space fast
+paths with kernel fallback, but is more complex.
+
+\subsection{Special file and security syscalls}
 
 <<[[sys.h]] special file syscalls>>=
 #define DUP         36
@@ -890,6 +1026,14 @@ authentication rather than on a global user database.
 #define FAUTH       38
 @
 %??
+
+%claude:
+The C prototypes are:
+\begin{verbatim}
+  int   dup(int oldfd, int newfd);
+  int   fversion(int fd, int bufsize, char *version, int nversion);
+  int   fauth(int fd, char *aname);
+\end{verbatim}
 
 % and that's it! that's the only API with userspace!
 % amazing that can do everything with only those 38 syscalls!
