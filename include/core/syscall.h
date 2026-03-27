@@ -171,8 +171,9 @@ struct IOchunk {
 // process
 //----------------------------------------------------------------------------
 /*s: signatures process syscall */
-extern	int	rfork(int);
 extern	void	_exits(char*);
+/*x: signatures process syscall */
+extern	int	rfork(int);
 extern	int	exec(char*, char*[]);
 extern	int	await(char*, int);
 /*e: signatures process syscall */
@@ -196,8 +197,12 @@ extern  int     putenv(char*, char*);
 // memory
 //----------------------------------------------------------------------------
 /*s: signatures memory syscall */
-extern	void*	sbrk(ulong);
+// brk() ??
 /*e: signatures memory syscall */
+
+/*s: signatures memory syscall wrapper */
+extern	void*	sbrk(ulong);
+/*e: signatures memory syscall wrapper */
 
 //----------------------------------------------------------------------------
 // file
@@ -231,6 +236,7 @@ extern	int	create(char*, int, ulong);
 extern	int	remove(char*);
 extern	int	chdir(char*);
 extern	int	fd2path(fdt, char*, int);
+/*x: signatures directory syscall */
 extern	int	fstat(int, uchar*, int);
 extern	int	stat(char*, uchar*, int);
 extern	int	fwstat(int, uchar*, int);
@@ -274,8 +280,10 @@ extern	int	sleep(long); //less: could be void (ulong). 0 means yield.
 //----------------------------------------------------------------------------
 /*s: signatures ipc syscall */
 extern	int	pipe(int*);
+/*x: signatures ipc syscall */
 extern	int	noted(int);
 extern	int	notify(void(*)(void*, char*));
+/*x: signatures ipc syscall */
 extern	void*	segattach(int, char*, void*, ulong);
 extern	void*	segbrk(void*, void*);
 extern	int	segdetach(void*);
@@ -288,6 +296,7 @@ extern	int	segfree(void*, ulong);
 //----------------------------------------------------------------------------
 /*s: signatures concurrency syscall */
 extern	void*	rendezvous(void*, void*);
+/*x: signatures concurrency syscall */
 extern	int	semacquire(long*, int);
 extern	long	semrelease(long*, long);
 extern	int	tsemacquire(long*, ulong);
