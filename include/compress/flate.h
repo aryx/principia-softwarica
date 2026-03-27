@@ -1,3 +1,4 @@
+/*s: compress/flate.h */
 #pragma	lib	"libflate.a"
 #pragma	src	"/sys/src/libflate"
 
@@ -8,12 +9,12 @@
  */
 enum
 {
-	FlateOk			= 0,
-	FlateNoMem		= -1,
-	FlateInputFail		= -2,
-	FlateOutputFail		= -3,
-	FlateCorrupted		= -4,
-	FlateInternal		= -5,
+    FlateOk			= 0,
+    FlateNoMem		= -1,
+    FlateInputFail		= -2,
+    FlateOutputFail		= -3,
+    FlateCorrupted		= -4,
+    FlateInternal		= -5,
 };
 
 int	deflateinit(void);
@@ -37,3 +38,4 @@ ulong	*mkcrctab(ulong);
 ulong	blockcrc(ulong *tab, ulong crc, void *buf, int n);
 
 ulong	adler32(ulong adler, void *buf, int n);
+/*e: compress/flate.h */
