@@ -1064,26 +1064,15 @@ extern void	s_freeinstack(Sinstack*);
 #pragma	lib	"libflate.a"
 #pragma	src	"/sys/src/libflate"
 
-/*
- * errors from deflate, deflateinit, deflateblock,
- * inflate, inflateinit, inflateblock.
- * convertable to a string by flateerr
- */
-enum
-{
-    FlateOk			= 0,
-    FlateNoMem		= -1,
-    FlateInputFail		= -2,
-    FlateOutputFail		= -3,
-    FlateCorrupted		= -4,
-    FlateInternal		= -5,
-};
+<<enum [[flate_error]]>>
 
+// compression (make smaller)
+<<signature [[deflate]]>>
 int	deflateinit(void);
-int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
 
+// decompression (make bigger)
 int	inflateinit(void);
-int	inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
+<<signature [[inflate]]>>
 
 int	inflateblock(uchar *dst, int dsize, uchar *src, int ssize);
 int	deflateblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int debug);
@@ -15380,82 +15369,20 @@ enum
 
 \section{[[libflate/]]}
 
+<<libflate includes>>=
+#include <u.h>
+#include <libc.h>
+#include <flate.h>
+@
+
 
 \subsection*{[[libflate/adler.c]]}
-
-<<function [[adler32]]>>=
-ulong
-adler32(ulong adler, void *vbuf, int n)
-{
-    ulong s1, s2;
-    uchar *buf, *ebuf;
-    int m;
-
-    buf = vbuf;
-    s1 = adler & 0xffff;
-    s2 = (adler >> 16) & 0xffff;
-    for(; n >= 16; n -= m){
-        m = n;
-        if(m > ADLERITERS)
-            m = ADLERITERS;
-        m &= ~15;
-        for(ebuf = buf + m; buf < ebuf; buf += 16){
-            s1 += buf[0];
-            s2 += s1;
-            s1 += buf[1];
-            s2 += s1;
-            s1 += buf[2];
-            s2 += s1;
-            s1 += buf[3];
-            s2 += s1;
-            s1 += buf[4];
-            s2 += s1;
-            s1 += buf[5];
-            s2 += s1;
-            s1 += buf[6];
-            s2 += s1;
-            s1 += buf[7];
-            s2 += s1;
-            s1 += buf[8];
-            s2 += s1;
-            s1 += buf[9];
-            s2 += s1;
-            s1 += buf[10];
-            s2 += s1;
-            s1 += buf[11];
-            s2 += s1;
-            s1 += buf[12];
-            s2 += s1;
-            s1 += buf[13];
-            s2 += s1;
-            s1 += buf[14];
-            s2 += s1;
-            s1 += buf[15];
-            s2 += s1;
-        }
-        s1 %= ADLERBASE;
-        s2 %= ADLERBASE;
-    }
-    if(n){
-        for(ebuf = buf + n; buf < ebuf; buf++){
-            s1 += buf[0];
-            s2 += s1;
-        }
-        s1 %= ADLERBASE;
-        s2 %= ADLERBASE;
-    }
-    return (s2 << 16) + s1;
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/adler.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 enum
 {
     ADLERITERS	= 5552,	/* max iters before can overflow 32 bits */
@@ -15494,29 +15421,11 @@ mkcrctab(ulong poly)
 }
 @
 
-<<function [[blockcrc]]>>=
-ulong
-blockcrc(ulong *crctab, ulong crc, void *vbuf, int n)
-{
-    uchar *buf, *ebuf;
-
-    crc ^= 0xffffffff;
-    buf = vbuf;
-    ebuf = buf + n;
-    while(buf < ebuf)
-        crc = crctab[(crc & 0xff) ^ *buf++] ^ (crc >> 8);
-    return crc ^ 0xffffffff;
-}
-@
-
 
 %-------------------------------------------------------------
 
 <<libflate/crc.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 <<function [[mkcrctab]]>>
 
 <<function [[blockcrc]]>>
@@ -15529,83 +15438,6 @@ blockcrc(ulong *crctab, ulong crc, void *vbuf, int n)
 #define hashit(c)	((((ulong)(c) & 0xffffff) * 0x6b43a9b5) >> (32 - HashLog))
 @
 
-<<function [[deflateinit]]>>=
-int
-deflateinit(void)
-{
-    ulong bitcount[MaxHuffBits];
-    int i, j, ci, n;
-
-    /* byte reverse table */
-    for(i=0; i<256; i++)
-        for(j=0; j<8; j++)
-            if(i & (1<<j))
-                revtab[i] |= 0x80 >> j;
-
-    /* static Litlen bit lengths */
-    for(i=0; i<144; i++)
-        litlentab[i].bits = 8;
-    for(i=144; i<256; i++)
-        litlentab[i].bits = 9;
-    for(i=256; i<280; i++)
-        litlentab[i].bits = 7;
-    for(i=280; i<Nlitlen; i++)
-        litlentab[i].bits = 8;
-
-    memset(bitcount, 0, sizeof(bitcount));
-    bitcount[8] += 144 - 0;
-    bitcount[9] += 256 - 144;
-    bitcount[7] += 280 - 256;
-    bitcount[8] += Nlitlen - 280;
-
-    if(!hufftabinit(litlentab, Nlitlen, bitcount, 9))
-        return FlateInternal;
-
-    /* static offset bit lengths */
-    for(i = 0; i < Noff; i++)
-        offtab[i].bits = 5;
-
-    memset(bitcount, 0, sizeof(bitcount));
-    bitcount[5] = Noff;
-
-    if(!hufftabinit(offtab, Noff, bitcount, 5))
-        return FlateInternal;
-
-    bitcount[0] = 0;
-    bitcount[1] = 0;
-    if(!mkgzprecode(hofftab, bitcount, 2, MaxHuffBits))
-        return FlateInternal;
-
-    /* conversion tables for lens & offs to codes */
-    ci = 0;
-    for(i = LenStart; i < 286; i++){
-        n = ci + (1 << litlenextra[i - LenStart]);
-        litlenbase[i - LenStart] = ci;
-        for(; ci < n; ci++)
-            lencode[ci] = i;
-    }
-    /* patch up special case for len MaxMatch */
-    lencode[MaxMatch-MinMatch] = 285;
-    litlenbase[285-LenStart] = MaxMatch-MinMatch;
-
-    ci = 0;
-    for(i = 0; i < 16; i++){
-        n = ci + (1 << offextra[i]);
-        offbase[i] = ci;
-        for(; ci < n; ci++)
-            offcode[ci] = i;
-    }
-
-    ci = ci >> 7;
-    for(; i < 30; i++){
-        n = ci + (1 << (offextra[i] - 7));
-        offbase[i] = ci << 7;
-        for(; ci < n; ci++)
-            bigoffcode[ci] = i;
-    }
-    return FlateOk;
-}
-@
 
 <<function [[deflatereset]]>>=
 static void
@@ -15636,219 +15468,7 @@ deflatereset(LZstate *lz, int level, int debug)
 }
 @
 
-<<function [[deflate]]>>=
-int
-deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug)
-{
-    LZstate *lz;
-    LZblock *lzb;
-    int ok;
 
-    lz = malloc(sizeof *lz + sizeof *lzb);
-    if(lz == nil)
-        return FlateNoMem;
-    lzb = (LZblock*)&lz[1];
-
-    deflatereset(lz, level, debug);
-    lz->w = w;
-    lz->wr = wr;
-    lz->wbad = 0;
-    lz->rbad = 0;
-    lz->eof = 0;
-    ok = FlateOk;
-    while(!lz->eof || lz->avail){
-        ok = deflateb(lz, lzb, rr, r);
-        if(ok != FlateOk)
-            break;
-    }
-    if(ok == FlateOk && lz->rbad)
-        ok = FlateInputFail;
-    if(ok == FlateOk && lz->wbad)
-        ok = FlateOutputFail;
-    free(lz);
-    return ok;
-}
-@
-
-<<function [[deflateb]]>>=
-static int
-deflateb(LZstate *lz, LZblock *lzb, void *rr, int (*r)(void*, void*, int))
-{
-    Dyncode dyncode, hdyncode;
-    Huff dlitlentab[Nlitlen], dofftab[Noff], hlitlentab[Nlitlen];
-    ulong litcount[Nlitlen];
-    long nunc, ndyn, nfix, nhuff;
-    uchar *slop, *hslop;
-    ulong ep;
-    int i, n, m, mm, nslop;
-
-    memset(lzb->litlencount, 0, sizeof lzb->litlencount);
-    memset(lzb->offcount, 0, sizeof lzb->offcount);
-    lzb->litlencount[DeflateEob]++;
-
-    lzb->bytes = 0;
-    lzb->eparse = lzb->parse;
-    lzb->lastv = 0;
-    lzb->excost = 0;
-
-    slop = &lz->hist[lz->pos];
-    n = lz->avail;
-    while(n < DeflateBlock && (!lz->eof || lz->avail)){
-        /*
-         * fill the buffer as much as possible,
-         * while leaving room for MaxOff history behind lz->pos,
-         * and not reading more than we can handle.
-         *
-         * make sure we read at least HistSlop bytes.
-         */
-        if(!lz->eof){
-            ep = lz->pos + lz->avail;
-            if(ep >= HistBlock)
-                ep -= HistBlock;
-            m = HistBlock - MaxOff - lz->avail;
-            if(m > HistBlock - n)
-                m = HistBlock - n;
-            if(m > (HistBlock + HistSlop) - ep)
-                m = (HistBlock + HistSlop) - ep;
-            if(m & ~(BlockSize - 1))
-                m &= ~(BlockSize - 1);
-
-            /*
-             * be nice to the caller: stop reads that are too small.
-             * can only get here when we've already filled the buffer some
-             */
-            if(m < HistSlop){
-                if(!m || !lzb->bytes)
-                    return FlateInternal;
-                break;
-            }
-
-            mm = (*r)(rr, &lz->hist[ep], m);
-            if(mm > 0){
-                /*
-                 * wrap data to end if we're read it from the beginning
-                 * this way, we don't have to wrap searches.
-                 *
-                 * wrap reads past the end to the beginning.
-                 * this way, we can guarantee minimum size reads.
-                 */
-                if(ep < HistSlop)
-                    memmove(&lz->hist[ep + HistBlock], &lz->hist[ep], HistSlop - ep);
-                else if(ep + mm > HistBlock)
-                    memmove(&lz->hist[0], &lz->hist[HistBlock], ep + mm - HistBlock);
-
-                lz->totr += mm;
-                n += mm;
-                lz->avail += mm;
-            }else{
-                if(mm < 0)
-                    lz->rbad = 1;
-                lz->eof = 1;
-            }
-        }
-        ep = lz->pos + lz->avail;
-        if(ep > HistSize)
-            ep = HistSize;
-        if(lzb->bytes + ep - lz->pos > DeflateMaxBlock)
-            ep = lz->pos + DeflateMaxBlock - lzb->bytes;
-        m = lzcomp(lz, lzb, &lz->hist[ep], lzb->eparse, lz->eof);
-        lzb->bytes += m;
-        lz->pos = (lz->pos + m) & (HistBlock - 1);
-        lz->avail -= m;
-    }
-    if(lzb->lastv)
-        *lzb->eparse++ = lzb->lastv;
-    if(lzb->eparse > lzb->parse + nelem(lzb->parse))
-        return FlateInternal;
-    nunc = lzb->bytes;
-
-    if(!mkgzprecode(dlitlentab, lzb->litlencount, Nlitlen, MaxHuffBits)
-    || !mkgzprecode(dofftab, lzb->offcount, Noff, MaxHuffBits))
-        return FlateInternal;
-
-    ndyn = huffcodes(&dyncode, dlitlentab, dofftab);
-    if(ndyn < 0)
-        return FlateInternal;
-    ndyn += bitcost(dlitlentab, lzb->litlencount, Nlitlen)
-        + bitcost(dofftab, lzb->offcount, Noff)
-        + lzb->excost;
-
-    memset(litcount, 0, sizeof litcount);
-
-    nslop = nunc;
-    if(nslop > &lz->hist[HistSize] - slop)
-        nslop = &lz->hist[HistSize] - slop;
-
-    for(i = 0; i < nslop; i++)
-        litcount[slop[i]]++;
-    hslop = &lz->hist[HistSlop - nslop];
-    for(; i < nunc; i++)
-        litcount[hslop[i]]++;
-    litcount[DeflateEob]++;
-
-    if(!mkgzprecode(hlitlentab, litcount, Nlitlen, MaxHuffBits))
-        return FlateInternal;
-    nhuff = huffcodes(&hdyncode, hlitlentab, hofftab);
-    if(nhuff < 0)
-        return FlateInternal;
-    nhuff += bitcost(hlitlentab, litcount, Nlitlen);
-
-    nfix = bitcost(litlentab, lzb->litlencount, Nlitlen)
-        + bitcost(offtab, lzb->offcount, Noff)
-        + lzb->excost;
-
-    lzput(lz, lz->eof && !lz->avail, 1);
-
-    if(lz->debug){
-        fprint(2, "block: bytes=%lud entries=%ld extra bits=%d\n\tuncompressed=%lud fixed=%lud dynamic=%lud huffman=%lud\n",
-            nunc, lzb->eparse - lzb->parse, lzb->excost, (nunc + 4) * 8, nfix, ndyn, nhuff);
-        fprint(2, "\tnlit=%lud matches=%lud eof=%d\n", nlits, nmatches, lz->eof && !lz->avail);
-    }
-
-    if((nunc + 4) * 8 < ndyn && (nunc + 4) * 8 < nfix && (nunc + 4) * 8 < nhuff){
-        lzput(lz, DeflateUnc, 2);
-        lzflushbits(lz);
-
-        lzput(lz, nunc & 0xff, 8);
-        lzput(lz, (nunc >> 8) & 0xff, 8);
-        lzput(lz, ~nunc & 0xff, 8);
-        lzput(lz, (~nunc >> 8) & 0xff, 8);
-        lzflush(lz);
-
-        lzwrite(lz, slop, nslop);
-        lzwrite(lz, &lz->hist[HistSlop], nunc - nslop);
-    }else if(ndyn < nfix && ndyn < nhuff){
-        lzput(lz, DeflateDyn, 2);
-
-        wrdyncode(lz, &dyncode);
-        wrblock(lz, slop - lz->hist, lzb->parse, lzb->eparse, dlitlentab, dofftab);
-        lzput(lz, dlitlentab[DeflateEob].encode, dlitlentab[DeflateEob].bits);
-    }else if(nhuff < nfix){
-        lzput(lz, DeflateDyn, 2);
-
-        wrdyncode(lz, &hdyncode);
-
-        m = 0;
-        for(i = nunc; i > MaxLitRun; i -= MaxLitRun)
-            lzb->parse[m++] = MaxLitRun;
-        lzb->parse[m++] = i;
-
-        wrblock(lz, slop - lz->hist, lzb->parse, lzb->parse + m, hlitlentab, hofftab);
-        lzput(lz, hlitlentab[DeflateEob].encode, hlitlentab[DeflateEob].bits);
-    }else{
-        lzput(lz, DeflateFix, 2);
-
-        wrblock(lz, slop - lz->hist, lzb->parse, lzb->eparse, litlentab, offtab);
-        lzput(lz, litlentab[DeflateEob].encode, litlentab[DeflateEob].bits);
-    }
-
-    if(lz->eof && !lz->avail){
-        lzflushbits(lz);
-        lzflush(lz);
-    }
-    return FlateOk;
-}
-@
 
 <<function [[lzwrite]]>>=
 static void
@@ -15876,462 +15496,11 @@ lzflush(LZstate *lz)
 }
 @
 
-<<function [[lzput]]>>=
-static void
-lzput(LZstate *lz, ulong bits, int nbits)
-{
-    bits = (bits << lz->nbits) | lz->bits;
-    for(nbits += lz->nbits; nbits >= 8; nbits -= 8){
-        *lz->out++ = bits;
-        if(lz->out == lz->eout)
-            lzflush(lz);
-        bits >>= 8;
-    }
-    lz->bits = bits;
-    lz->nbits = nbits;
-}
-@
 
-<<function [[lzflushbits]]>>=
-static void
-lzflushbits(LZstate *lz)
-{
-    if(lz->nbits)
-        lzput(lz, 0, 8 - (lz->nbits & 7));
-}
-@
 
-<<function [[wrblock]]>>=
-/*
- * write out a block of n samples,
- * given lz encoding and counts for huffman tables
- */
-static void
-wrblock(LZstate *out, int litoff, ushort *soff, ushort *eoff, Huff *litlentab, Huff *offtab)
-{
-    ushort *off;
-    int i, run, offset, lit, len, c;
 
-    if(out->debug > 2){
-        for(off = soff; off < eoff; ){
-            offset = *off++;
-            run = offset & MaxLitRun;
-            if(run){
-                for(i = 0; i < run; i++){
-                    lit = out->hist[litoff & (HistBlock - 1)];
-                    litoff++;
-                    fprint(2, "\tlit %.2ux %c\n", lit, lit);
-                }
-                if(!(offset & LenFlag))
-                    continue;
-                len = offset >> LenShift;
-                offset = *off++;
-            }else if(offset & LenFlag){
-                len = offset >> LenShift;
-                offset = *off++;
-            }else{
-                len = 0;
-                offset >>= LenShift;
-            }
-            litoff += len + MinMatch;
-            fprint(2, "\t<%d, %d>\n", offset + 1, len + MinMatch);
-        }
-    }
 
-    for(off = soff; off < eoff; ){
-        offset = *off++;
-        run = offset & MaxLitRun;
-        if(run){
-            for(i = 0; i < run; i++){
-                lit = out->hist[litoff & (HistBlock - 1)];
-                litoff++;
-                lzput(out, litlentab[lit].encode, litlentab[lit].bits);
-            }
-            if(!(offset & LenFlag))
-                continue;
-            len = offset >> LenShift;
-            offset = *off++;
-        }else if(offset & LenFlag){
-            len = offset >> LenShift;
-            offset = *off++;
-        }else{
-            len = 0;
-            offset >>= LenShift;
-        }
-        litoff += len + MinMatch;
-        c = lencode[len];
-        lzput(out, litlentab[c].encode, litlentab[c].bits);
-        c -= LenStart;
-        if(litlenextra[c])
-            lzput(out, len - litlenbase[c], litlenextra[c]);
 
-        if(offset < MaxOffCode)
-            c = offcode[offset];
-        else
-            c = bigoffcode[offset >> 7];
-        lzput(out, offtab[c].encode, offtab[c].bits);
-        if(offextra[c])
-            lzput(out, offset - offbase[c], offextra[c]);
-    }
-}
-@
-
-<<function [[lzmatch]]>>=
-/*
- * look for the longest, closest string which matches
- * the next prefix.  the clever part here is looking for
- * a string 1 longer than the previous best match.
- *
- * follows the recommendation of limiting number of chains
- * which are checked.  this appears to be the best heuristic.
- */
-static int
-lzmatch(int now, int then, uchar *p, uchar *es, ushort *nexts, uchar *hist, int runlen, int check, int *m)
-{
-    uchar *s, *t;
-    int ml, off, last;
-
-    ml = check;
-    if(runlen >= 8)
-        check >>= 2;
-    *m = 0;
-    if(p + runlen >= es)
-        return runlen;
-    last = 0;
-    for(; check-- > 0; then = nexts[then & (MaxOff-1)]){
-        off = (ushort)(now - then);
-        if(off <= last || off > MaxOff)
-            break;
-        s = p + runlen;
-        t = hist + (((p - hist) - off) & (HistBlock-1));
-        t += runlen;
-        for(; s >= p; s--){
-            if(*s != *t)
-                goto matchloop;
-            t--;
-        }
-
-        /*
-         * we have a new best match.
-         * extend it to it's maximum length
-         */
-        t += runlen + 2;
-        s += runlen + 2;
-        for(; s < es; s++){
-            if(*s != *t)
-                break;
-            t++;
-        }
-        runlen = s - p;
-        *m = off - 1;
-        if(s == es || runlen > ml)
-            break;
-matchloop:;
-        last = off;
-    }
-    return runlen;
-}
-@
-
-<<function [[lzcomp]]>>=
-static int
-lzcomp(LZstate *lz, LZblock *lzb, uchar *ep, ushort *parse, int finish)
-{
-    ulong cont, excost, *litlencount, *offcount;
-    uchar *p, *q, *s, *es;
-    ushort *nexts, *hash;
-    int v, i, h, runlen, n, now, then, m, prevlen, prevoff, maxdefer;
-
-    litlencount = lzb->litlencount;
-    offcount = lzb->offcount;
-    nexts = lz->nexts;
-    hash = lz->hash;
-    now = lz->now;
-
-    p = &lz->hist[lz->pos];
-    if(lz->prevlen != MinMatch - 1)
-        p++;
-
-    /*
-     * hash in the links for any hanging link positions,
-     * and calculate the hash for the current position.
-     */
-    n = MinMatch;
-    if(n > ep - p)
-        n = ep - p;
-    cont = 0;
-    for(i = 0; i < n - 1; i++){
-        m = now - ((MinMatch-1) - i);
-        if(m < lz->dot)
-            continue;
-        s = lz->hist + (((p - lz->hist) - (now - m)) & (HistBlock-1));
-
-        cont = (s[0] << 16) | (s[1] << 8) | s[2];
-        h = hashit(cont);
-        prevoff = 0;
-        for(then = hash[h]; ; then = nexts[then & (MaxOff-1)]){
-            v = (ushort)(now - then);
-            if(v <= prevoff || v >= (MinMatch-1) - i)
-                break;
-            prevoff = v;
-        }
-        if(then == (ushort)m)
-            continue;
-        nexts[m & (MaxOff-1)] = hash[h];
-        hash[h] = m;
-    }
-    for(i = 0; i < n; i++)
-        cont = (cont << 8) | p[i];
-
-    /*
-     * now must point to the index in the nexts array
-     * corresponding to p's position in the history
-     */
-    prevlen = lz->prevlen;
-    prevoff = lz->prevoff;
-    maxdefer = lz->maxcheck >> 2;
-    excost = 0;
-    v = lzb->lastv;
-    for(;;){
-        es = p + MaxMatch;
-        if(es > ep){
-            if(!finish || p >= ep)
-                break;
-            es = ep;
-        }
-
-        h = hashit(cont);
-        runlen = lzmatch(now, hash[h], p, es, nexts, lz->hist, prevlen, lz->maxcheck, &m);
-
-        /*
-         * back out of small matches too far in the past
-         */
-        if(runlen == MinMatch && m >= MinMatchMaxOff){
-            runlen = MinMatch - 1;
-            m = 0;
-        }
-
-        /*
-         * record the encoding and increment counts for huffman trees
-         * if we get a match, defer selecting it until we check for
-         * a longer match at the next position.
-         */
-        if(prevlen >= runlen && prevlen != MinMatch - 1){
-            /*
-             * old match at least as good; use that one
-             */
-            n = prevlen - MinMatch;
-            if(v || n){
-                *parse++ = v | LenFlag | (n << LenShift);
-                *parse++ = prevoff;
-            }else
-                *parse++ = prevoff << LenShift;
-            v = 0;
-
-            n = lencode[n];
-            litlencount[n]++;
-            excost += litlenextra[n - LenStart];
-
-            if(prevoff < MaxOffCode)
-                n = offcode[prevoff];
-            else
-                n = bigoffcode[prevoff >> 7];
-            offcount[n]++;
-            excost += offextra[n];
-
-            runlen = prevlen - 1;
-            prevlen = MinMatch - 1;
-            nmatches++;
-        }else if(runlen == MinMatch - 1){
-            /*
-             * no match; just put out the literal
-             */
-            if(++v == MaxLitRun){
-                *parse++ = v;
-                v = 0;
-            }
-            litlencount[*p]++;
-            nlits++;
-            runlen = 1;
-        }else{
-            if(prevlen != MinMatch - 1){
-                /*
-                 * longer match now. output previous literal,
-                 * update current match, and try again
-                 */
-                if(++v == MaxLitRun){
-                    *parse++ = v;
-                    v = 0;
-                }
-                litlencount[p[-1]]++;
-                nlits++;
-            }
-
-            prevoff = m;
-
-            if(runlen < maxdefer){
-                prevlen = runlen;
-                runlen = 1;
-            }else{
-                n = runlen - MinMatch;
-                if(v || n){
-                    *parse++ = v | LenFlag | (n << LenShift);
-                    *parse++ = prevoff;
-                }else
-                    *parse++ = prevoff << LenShift;
-                v = 0;
-
-                n = lencode[n];
-                litlencount[n]++;
-                excost += litlenextra[n - LenStart];
-
-                if(prevoff < MaxOffCode)
-                    n = offcode[prevoff];
-                else
-                    n = bigoffcode[prevoff >> 7];
-                offcount[n]++;
-                excost += offextra[n];
-
-                prevlen = MinMatch - 1;
-                nmatches++;
-            }
-        }
-
-        /*
-         * update the hash for the newly matched data
-         * this is constructed so the link for the old
-         * match in this position must be at the end of a chain,
-         * and will expire when this match is added, ie it will
-         * never be examined by the match loop.
-         * add to the hash chain only if we have the real hash data.
-         */
-        for(q = p + runlen; p != q; p++){
-            if(p + MinMatch <= ep){
-                h = hashit(cont);
-                nexts[now & (MaxOff-1)] = hash[h];
-                hash[h] = now;
-                if(p + MinMatch < ep)
-                    cont = (cont << 8) | p[MinMatch];
-            }
-            now++;
-        }
-    }
-
-    /*
-     * we can just store away the lazy state and
-     * pick it up next time.  the last block will have finish set
-     * so we won't have any pending matches
-     * however, we need to correct for how much we've encoded
-     */
-    if(prevlen != MinMatch - 1)
-        p--;
-
-    lzb->excost += excost;
-    lzb->eparse = parse;
-    lzb->lastv = v;
-
-    lz->now = now;
-    lz->prevlen = prevlen;
-    lz->prevoff = prevoff;
-
-    return p - &lz->hist[lz->pos];
-}
-@
-
-<<function [[huffcodes]]>>=
-/*
- * make up the dynamic code tables, and return the number of bits
- * needed to transmit them.
- */
-static int
-huffcodes(Dyncode *dc, Huff *littab, Huff *offtab)
-{
-    Huff *codetab;
-    uchar *codes, *codeaux;
-    ulong codecount[Nclen], excost;
-    int i, n, m, v, c, nlit, noff, ncode, nclen;
-
-    codetab = dc->codetab;
-    codes = dc->codes;
-    codeaux = dc->codeaux;
-
-    /*
-     * trim the sizes of the tables
-     */
-    for(nlit = Nlitlen; nlit > 257 && littab[nlit-1].bits == 0; nlit--)
-        ;
-    for(noff = Noff; noff > 1 && offtab[noff-1].bits == 0; noff--)
-        ;
-
-    /*
-     * make the code-length code
-     */
-    for(i = 0; i < nlit; i++)
-        codes[i] = littab[i].bits;
-    for(i = 0; i < noff; i++)
-        codes[i + nlit] = offtab[i].bits;
-
-    /*
-     * run-length compress the code-length code
-     */
-    excost = 0;
-    c = 0;
-    ncode = nlit+noff;
-    for(i = 0; i < ncode; ){
-        n = i + 1;
-        v = codes[i];
-        while(n < ncode && v == codes[n])
-            n++;
-        n -= i;
-        i += n;
-        if(v == 0){
-            while(n >= 11){
-                m = n;
-                if(m > 138)
-                    m = 138;
-                codes[c] = 18;
-                codeaux[c++] = m - 11;
-                n -= m;
-                excost += 7;
-            }
-            if(n >= 3){
-                codes[c] = 17;
-                codeaux[c++] = n - 3;
-                n = 0;
-                excost += 3;
-            }
-        }
-        while(n--){
-            codes[c++] = v;
-            while(n >= 3){
-                m = n;
-                if(m > 6)
-                    m = 6;
-                codes[c] = 16;
-                codeaux[c++] = m - 3;
-                n -= m;
-                excost += 3;
-            }
-        }
-    }
-
-    memset(codecount, 0, sizeof codecount);
-    for(i = 0; i < c; i++)
-        codecount[codes[i]]++;
-    if(!mkgzprecode(codetab, codecount, Nclen, 8))
-        return -1;
-
-    for(nclen = Nclen; nclen > 4 && codetab[clenorder[nclen-1]].bits == 0; nclen--)
-        ;
-
-    dc->nlit = nlit;
-    dc->noff = noff;
-    dc->nclen = nclen;
-    dc->ncode = c;
-
-    return 5 + 5 + 4 + nclen * 3 + bitcost(codetab, codecount, Nclen) + excost;
-}
-@
 
 <<function [[wrdyncode]]>>=
 static void
@@ -16437,94 +15606,6 @@ hufftabinit(Huff *tab, int n, ulong *bitcount, int nbits)
 }
 @
 
-<<function [[mkprecode]]>>=
-/*
- * fast, low space overhead algorithm for max depth huffman type codes
- *
- * J. Katajainen, A. Moffat and A. Turpin, "A fast and space-economical
- * algorithm for length-limited coding," Proc. Intl. Symp. on Algorithms
- * and Computation, Cairns, Australia, Dec. 1995, Lecture Notes in Computer
- * Science, Vol 1004, J. Staples, P. Eades, N. Katoh, and A. Moffat, eds.,
- * pp 12-21, Springer Verlag, New York, 1995.
- */
-static int
-mkprecode(Huff *tab, ulong *count, int n, int maxbits, ulong *bitcount)
-{
-    Chains cs;
-    Chain *c;
-    int i, m, em, bits;
-
-    /*
-     * set up the sorted list of leaves
-     */
-    m = 0;
-    for(i = 0; i < n; i++){
-        tab[i].bits = -1;
-        tab[i].encode = 0;
-        if(count[i] != 0){
-            cs.leafcount[m] = count[i];
-            cs.leafmap[m] = i;
-            m++;
-        }
-    }
-    if(m < 2){
-        if(m != 0){
-            tab[cs.leafmap[0]].bits = 0;
-            bitcount[0] = 1;
-        }else
-            bitcount[0] = 0;
-        return 0;
-    }
-    cs.nleaf = m;
-    leafsort(cs.leafcount, cs.leafmap, 0, m);
-
-    for(i = 0; i < m; i++)
-        cs.leafcount[i] = count[cs.leafmap[i]];
-
-    /*
-     * set up free list
-     */
-    cs.free = &cs.chains[2];
-    cs.echains = &cs.chains[ChainMem];
-    cs.col = 1;
-
-    /*
-     * initialize chains for each list
-     */
-    c = &cs.chains[0];
-    c->count = cs.leafcount[0];
-    c->leaf = 1;
-    c->col = cs.col;
-    c->up = nil;
-    c->gen = 0;
-    cs.chains[1] = cs.chains[0];
-    cs.chains[1].leaf = 2;
-    cs.chains[1].count = cs.leafcount[1];
-    for(i = 0; i < maxbits-1; i++){
-        cs.lists[i * 2] = &cs.chains[0];
-        cs.lists[i * 2 + 1] = &cs.chains[1];
-    }
-
-    cs.nlists = 2 * (maxbits - 1);
-    m = 2 * m - 2;
-    for(i = 2; i < m; i++)
-        nextchain(&cs, cs.nlists - 2);
-
-    bits = 0;
-    bitcount[0] = cs.nleaf;
-    for(c = cs.lists[cs.nlists - 1]; c != nil; c = c->up){
-        m = c->leaf;
-        bitcount[bits++] -= m;
-        bitcount[bits] = m;
-    }
-    m = 0;
-    for(i = bits; i >= 0; i--)
-        for(em = m + bitcount[i]; m < em; m++)
-            tab[cs.leafmap[m]].bits = i;
-
-    return bits;
-}
-@
 
 <<function [[nextchain]]>>=
 /*
@@ -16629,72 +15710,12 @@ pivot(ulong *c, int a, int n)
 }
 @
 
-<<function [[leafsort]]>>=
-static	void
-leafsort(ulong *leafcount, ushort *leafmap, int a, int n)
-{
-    ulong t;
-    int j, pi, pj, pn;
-
-    while(n > 1){
-        if(n > 10){
-            pi = pivot(leafcount, a, n);
-        }else
-            pi = a + (n>>1);
-
-        t = leafcount[pi];
-        leafcount[pi] = leafcount[a];
-        leafcount[a] = t;
-        t = leafmap[pi];
-        leafmap[pi] = leafmap[a];
-        leafmap[a] = t;
-        pi = a;
-        pn = a + n;
-        pj = pn;
-        for(;;){
-            do
-                pi++;
-            while(pi < pn && (leafcount[pi] < leafcount[a] || leafcount[pi] == leafcount[a] && leafmap[pi] > leafmap[a]));
-            do
-                pj--;
-            while(pj > a && (leafcount[pj] > leafcount[a] || leafcount[pj] == leafcount[a] && leafmap[pj] < leafmap[a]));
-            if(pj < pi)
-                break;
-            t = leafcount[pi];
-            leafcount[pi] = leafcount[pj];
-            leafcount[pj] = t;
-            t = leafmap[pi];
-            leafmap[pi] = leafmap[pj];
-            leafmap[pj] = t;
-        }
-        t = leafcount[a];
-        leafcount[a] = leafcount[pj];
-        leafcount[pj] = t;
-        t = leafmap[a];
-        leafmap[a] = leafmap[pj];
-        leafmap[pj] = t;
-        j = pj - a;
-
-        n = n-j-1;
-        if(j >= n){
-            leafsort(leafcount, leafmap, a, j);
-            a += j+1;
-        }else{
-            leafsort(leafcount, leafmap, a + (j+1), n);
-            n = j;
-        }
-    }
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/deflate.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 typedef struct Chain	Chain;
 typedef struct Chains	Chains;
 typedef struct Dyncode	Dyncode;
@@ -17008,34 +16029,12 @@ blwrite(void *vb, void *buf, int n)
 }
 @
 
-<<function [[deflateblock]]>>=
-int
-deflateblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int debug)
-{
-    Block bd, bs;
-    int ok;
-
-    bs.pos = src;
-    bs.limit = src + ssize;
-
-    bd.pos = dst;
-    bd.limit = dst + dsize;
-
-    ok = deflate(&bd, blwrite, &bs, blread, level, debug);
-    if(ok != FlateOk)
-        return ok;
-    return bd.pos - dst;
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/deflateblock.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 typedef struct Block	Block;
 
 struct Block
@@ -17069,49 +16068,12 @@ zlread(void *vzr, void *buf, int n)
 }
 @
 
-<<function [[deflatezlib]]>>=
-int
-deflatezlib(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug)
-{
-    ZRead zr;
-    uchar buf[4];
-    int ok;
-
-    buf[0] = ZlibDeflate | ZlibWin32k;
-
-    /* bogus zlib encoding of compression level */
-    buf[1] = ((level > 2) + (level > 5) + (level > 8)) << 6;
-
-    /* header check field */
-    buf[1] |= 31 - ((buf[0] << 8) | buf[1]) % 31;
-    if((*w)(wr, buf, 2) != 2)
-        return FlateOutputFail;
-
-    zr.rr = rr;
-    zr.r = r;
-    zr.adler = 1;
-    ok = deflate(wr, w, &zr, zlread, level, debug);
-    if(ok != FlateOk)
-        return ok;
-
-    buf[0] = zr.adler >> 24;
-    buf[1] = zr.adler >> 16;
-    buf[2] = zr.adler >> 8;
-    buf[3] = zr.adler;
-    if((*w)(wr, buf, 4) != 4)
-        return FlateOutputFail;
-
-    return FlateOk;
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/deflatezlib.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
+<<libflate includes>>
 #include "zlib.h"
 
 typedef struct ZRead	ZRead;
@@ -17167,9 +16129,7 @@ deflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int de
 %-------------------------------------------------------------
 
 <<libflate/deflatezlibblock.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
+<<libflate includes>>
 #include "zlib.h"
 
 <<function [[deflatezlibblock]]>>
@@ -17178,166 +16138,17 @@ deflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int de
 
 \subsection*{[[libflate/flateerr.c]]}
 
-<<function [[flateerr]]>>=
-char *
-flateerr(int err)
-{
-    switch(err){
-    case FlateOk:
-        return "no error";
-    case FlateNoMem:
-        return "out of memory";
-    case FlateInputFail:
-        return "input error";
-    case FlateOutputFail:
-        return "output error";
-    case FlateCorrupted:
-        return "corrupted data";
-    case FlateInternal:
-        return "internal error";
-    }
-    return "unknown error";
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<libflate/flateerr.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 <<function [[flateerr]]>>
 @
 
 
 \subsection*{[[libflate/inflate.c]]}
 
-<<function [[inflateinit]]>>=
-int
-inflateinit(void)
-{
-    char *len;
-    int i, j, base;
 
-    /* byte reverse table */
-    for(i=0; i<256; i++)
-        for(j=0; j<8; j++)
-            if(i & (1<<j))
-                revtab[i] |= 0x80 >> j;
-
-    for(i=257,base=3; i<Nlitlen; i++) {
-        litlenbase[i-257] = base;
-        base += 1<<litlenextra[i-257];
-    }
-    /* strange table entry in spec... */
-    litlenbase[285-257]--;
-
-    for(i=0,base=1; i<Noff; i++) {
-        offbase[i] = base;
-        base += 1<<offextra[i];
-    }
-
-    len = malloc(MaxLeaf);
-    if(len == nil)
-        return FlateNoMem;
-
-    /* static Litlen bit lengths */
-    for(i=0; i<144; i++)
-        len[i] = 8;
-    for(i=144; i<256; i++)
-        len[i] = 9;
-    for(i=256; i<280; i++)
-        len[i] = 7;
-    for(i=280; i<Nlitlen; i++)
-        len[i] = 8;
-
-    if(!hufftab(&litlentab, len, Nlitlen, MaxFlatBits))
-        return FlateInternal;
-
-    /* static Offset bit lengths */
-    for(i=0; i<Noff; i++)
-        len[i] = 5;
-
-    if(!hufftab(&offtab, len, Noff, MaxFlatBits))
-        return FlateInternal;
-    free(len);
-
-    return FlateOk;
-}
-@
-
-<<function [[inflate]]>>=
-int
-inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*))
-{
-    History *his;
-    Input in;
-    int final, type;
-
-    his = malloc(sizeof(History));
-    if(his == nil)
-        return FlateNoMem;
-    his->cp = his->his;
-    his->full = 0;
-    in.getr = getr;
-    in.get = get;
-    in.wr = wr;
-    in.w = w;
-    in.nbits = 0;
-    in.sreg = 0;
-    in.error = FlateOk;
-
-    do {
-        if(!sregfill(&in, 3))
-            goto bad;
-        final = in.sreg & 0x1;
-        type = (in.sreg>>1) & 0x3;
-        in.sreg >>= 3;
-        in.nbits -= 3;
-        switch(type) {
-        default:
-            in.error = FlateCorrupted;
-            goto bad;
-        case 0:
-            /* uncompressed */
-            if(!uncblock(&in, his))
-                goto bad;
-            break;
-        case 1:
-            /* fixed huffman */
-            if(!fixedblock(&in, his))
-                goto bad;
-            break;
-        case 2:
-            /* dynamic huffman */
-            if(!dynamicblock(&in, his))
-                goto bad;
-            break;
-        }
-    } while(!final);
-
-    if(his->cp != his->his && (*w)(wr, his->his, his->cp - his->his) != his->cp - his->his) {
-        in.error = FlateOutputFail;
-        goto bad;
-    }
-
-    if(!sregunget(&in))
-        goto bad;
-
-    free(his);
-    if(in.error != FlateOk)
-        return FlateInternal;
-    return FlateOk;
-
-bad:
-    free(his);
-    if(in.error == FlateOk)
-        return FlateInternal;
-    return in.error;
-}
-@
 
 <<function [[uncblock]]>>=
 static int
@@ -17523,138 +16334,6 @@ bad:
 }
 @
 
-<<function [[decode]]>>=
-static int
-decode(Input *in, History *his, Huff *litlentab, Huff *offtab)
-{
-    int len, off;
-    uchar *hs, *hp, *hq, *he;
-    int c;
-    int nb;
-
-    hs = his->his;
-    he = hs + HistorySize;
-    hp = his->cp;
-
-    for(;;) {
-        nb = litlentab->minbits;
-        for(;;){
-            if(in->nbits<nb && !sregfill(in, nb))
-                return 0;
-            c = litlentab->flat[in->sreg & litlentab->flatmask];
-            nb = c & 0xff;
-            if(nb > in->nbits){
-                if(nb != 0xff)
-                    continue;
-                c = hdecsym(in, litlentab, c);
-                if(c < 0)
-                    return 0;
-            }else{
-                c >>= 8;
-                in->sreg >>= nb;
-                in->nbits -= nb;
-            }
-            break;
-        }
-
-        if(c < 256) {
-            /* literal */
-            *hp++ = c;
-            if(hp == he) {
-                his->full = 1;
-                if((*in->w)(in->wr, hs, HistorySize) != HistorySize) {
-                    in->error = FlateOutputFail;
-                    return 0;
-                }
-                hp = hs;
-            }
-            continue;
-        }
-
-        if(c == 256)
-            break;
-
-        if(c > 285) {
-            in->error = FlateCorrupted;
-            return 0;
-        }
-
-        c -= 257;
-        nb = litlenextra[c];
-        if(in->nbits < nb && !sregfill(in, nb))
-            return 0;
-        len = litlenbase[c] + (in->sreg & ((1<<nb)-1));
-        in->sreg >>= nb;
-        in->nbits -= nb;
-
-        /* get offset */
-        nb = offtab->minbits;
-        for(;;){
-            if(in->nbits<nb && !sregfill(in, nb))
-                return 0;
-            c = offtab->flat[in->sreg & offtab->flatmask];
-            nb = c & 0xff;
-            if(nb > in->nbits){
-                if(nb != 0xff)
-                    continue;
-                c = hdecsym(in, offtab, c);
-                if(c < 0)
-                    return 0;
-            }else{
-                c >>= 8;
-                in->sreg >>= nb;
-                in->nbits -= nb;
-            }
-            break;
-        }
-
-        if(c > 29) {
-            in->error = FlateCorrupted;
-            return 0;
-        }
-
-        nb = offextra[c];
-        if(in->nbits < nb && !sregfill(in, nb))
-            return 0;
-
-        off = offbase[c] + (in->sreg & ((1<<nb)-1));
-        in->sreg >>= nb;
-        in->nbits -= nb;
-
-        hq = hp - off;
-        if(hq < hs) {
-            if(!his->full) {
-                in->error = FlateCorrupted;
-                return 0;
-            }
-            hq += HistorySize;
-        }
-
-        /* slow but correct */
-        while(len) {
-            *hp = *hq;
-            hq++;
-            hp++;
-            if(hq >= he)
-                hq = hs;
-            if(hp == he) {
-                his->full = 1;
-                if((*in->w)(in->wr, hs, HistorySize) != HistorySize) {
-                    in->error = FlateOutputFail;
-                    return 0;
-                }
-                hp = hs;
-            }
-            len--;
-        }
-
-    }
-
-    his->cp = hp;
-
-    return 1;
-}
-@
 
 <<function [[revcode]]>>=
 static int
@@ -17667,184 +16346,14 @@ revcode(int c, int b)
 }
 @
 
-<<function [[hufftab]]>>=
-/*
- * construct the huffman decoding arrays and a fast lookup table.
- * the fast lookup is a table indexed by the next flatbits bits,
- * which returns the symbol matched and the number of bits consumed,
- * or the minimum number of bits needed and 0xff if more than flatbits
- * bits are needed.
- *
- * flatbits can be longer than the smallest huffman code,
- * because shorter codes are assigned smaller lexical prefixes.
- * this means assuming zeros for the next few bits will give a
- * conservative answer, in the sense that it will either give the
- * correct answer, or return the minimum number of bits which
- * are needed for an answer.
- */
-static int
-hufftab(Huff *h, char *hb, int maxleaf, int flatbits)
-{
-    ulong bitcount[MaxHuffBits];
-    ulong c, fc, ec, mincode, code, nc[MaxHuffBits];
-    int i, b, minbits, maxbits;
 
-    for(i = 0; i < MaxHuffBits; i++)
-        bitcount[i] = 0;
-    maxbits = -1;
-    minbits = MaxHuffBits + 1;
-    for(i=0; i < maxleaf; i++){
-        b = hb[i];
-        if(b){
-            bitcount[b]++;
-            if(b < minbits)
-                minbits = b;
-            if(b > maxbits)
-                maxbits = b;
-        }
-    }
 
-    h->maxbits = maxbits;
-    if(maxbits <= 0){
-        h->maxbits = 0;
-        h->minbits = 0;
-        h->flatmask = 0;
-        return 1;
-    }
-    code = 0;
-    c = 0;
-    for(b = 0; b <= maxbits; b++){
-        h->last[b] = c;
-        c += bitcount[b];
-        mincode = code << 1;
-        nc[b] = mincode;
-        code = mincode + bitcount[b];
-        if(code > (1 << b))
-            return 0;
-        h->maxcode[b] = code - 1;
-        h->last[b] += code - 1;
-    }
-
-    if(flatbits > maxbits)
-        flatbits = maxbits;
-    h->flatmask = (1 << flatbits) - 1;
-    if(minbits > flatbits)
-        minbits = flatbits;
-    h->minbits = minbits;
-
-    b = 1 << flatbits;
-    for(i = 0; i < b; i++)
-        h->flat[i] = ~0;
-
-    /*
-     * initialize the flat table to include the minimum possible
-     * bit length for each code prefix
-     */
-    for(b = maxbits; b > flatbits; b--){
-        code = h->maxcode[b];
-        if(code == -1)
-            break;
-        mincode = code + 1 - bitcount[b];
-        mincode >>= b - flatbits;
-        code >>= b - flatbits;
-        for(; mincode <= code; mincode++)
-            h->flat[revcode(mincode, flatbits)] = (b << 8) | 0xff;
-    }
-
-    for(i = 0; i < maxleaf; i++){
-        b = hb[i];
-        if(b <= 0)
-            continue;
-        c = nc[b]++;
-        if(b <= flatbits){
-            code = (i << 8) | b;
-            ec = (c + 1) << (flatbits - b);
-            if(ec > (1<<flatbits))
-                return 0;	/* this is actually an internal error */
-            for(fc = c << (flatbits - b); fc < ec; fc++)
-                h->flat[revcode(fc, flatbits)] = code;
-        }
-        if(b > minbits){
-            c = h->last[b] - c;
-            if(c >= maxleaf)
-                return 0;
-            h->decode[c] = i;
-        }
-    }
-    return 1;
-}
-@
-
-<<function [[hdecsym]]>>=
-static int
-hdecsym(Input *in, Huff *h, int nb)
-{
-    long c;
-
-    if((nb & 0xff) == 0xff)
-        nb = nb >> 8;
-    else
-        nb = nb & 0xff;
-    for(; nb <= h->maxbits; nb++){
-        if(in->nbits<nb && !sregfill(in, nb))
-            return -1;
-        c = revtab[in->sreg&0xff]<<8;
-        c |= revtab[(in->sreg>>8)&0xff];
-        c >>= (16-nb);
-        if(c <= h->maxcode[nb]){
-            in->sreg >>= nb;
-            in->nbits -= nb;
-            return h->decode[h->last[nb] - c];
-        }
-    }
-    in->error = FlateCorrupted;
-    return -1;
-}
-@
-
-<<function [[sregfill]]>>=
-static int
-sregfill(Input *in, int n)
-{
-    int c;
-
-    while(n > in->nbits) {
-        c = (*in->get)(in->getr);
-        if(c < 0){
-            in->error = FlateInputFail;
-            return 0;
-        }
-        in->sreg |= c<<in->nbits;
-        in->nbits += 8;
-    }
-    return 1;
-}
-@
-
-<<function [[sregunget]]>>=
-static int
-sregunget(Input *in)
-{
-    if(in->nbits >= 8) {
-        in->error = FlateInternal;
-        return 0;
-    }
-
-    /* throw other bits on the floor */
-    in->nbits = 0;
-    in->sreg = 0;
-    return 1;
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/inflate.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 enum {
     HistorySize=	32*1024,
     BufSize=	4*1024,
@@ -17989,34 +16498,12 @@ blwrite(void *vb, void *buf, int n)
 }
 @
 
-<<function [[inflateblock]]>>=
-int
-inflateblock(uchar *dst, int dsize, uchar *src, int ssize)
-{
-    Block bd, bs;
-    int ok;
-
-    bs.pos = src;
-    bs.limit = src + ssize;
-
-    bd.pos = dst;
-    bd.limit = dst + dsize;
-
-    ok = inflate(&bd, blwrite, &bs, blgetc);
-    if(ok != FlateOk)
-        return ok;
-    return bd.pos - dst;
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/inflateblock.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
-
+<<libflate includes>>
 typedef struct Block	Block;
 
 struct Block
@@ -18050,55 +16537,12 @@ zlwrite(void *vzw, void *buf, int n)
 }
 @
 
-<<function [[inflatezlib]]>>=
-int
-inflatezlib(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*))
-{
-    ZWrite zw;
-    ulong v;
-    int c, i;
-
-    c = (*get)(getr);
-    if(c < 0)
-        return FlateInputFail;
-    i = (*get)(getr);
-    if(i < 0)
-        return FlateInputFail;
-
-    if(((c << 8) | i) % 31)
-        return FlateCorrupted;
-    if((c & ZlibMeth) != ZlibDeflate
-    || (c & ZlibCInfo) > ZlibWin32k)
-        return FlateCorrupted;
-
-    zw.wr = wr;
-    zw.w = w;
-    zw.adler = 1;
-    i = inflate(&zw, zlwrite, getr, get);
-    if(i != FlateOk)
-        return i;
-
-    v = 0;
-    for(i = 0; i < 4; i++){
-        c = (*get)(getr);
-        if(c < 0)
-            return FlateInputFail;
-        v = (v << 8) | c;
-    }
-    if(zw.adler != v)
-        return FlateCorrupted;
-
-    return FlateOk;
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<libflate/inflatezlib.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
+<<libflate includes>>
 #include "zlib.h"
 
 typedef struct ZWrite	ZWrite;
@@ -18184,9 +16628,7 @@ inflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize)
 %-------------------------------------------------------------
 
 <<libflate/inflatezlibblock.c>>=
-#include <u.h>
-#include <libc.h>
-#include <flate.h>
+<<libflate includes>>
 #include "zlib.h"
 
 typedef struct Block	Block;
