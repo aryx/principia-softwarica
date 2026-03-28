@@ -53,7 +53,7 @@ _threadassert(char *s)
     else
         n = 0;
     snprint(buf+n, sizeof(buf)-n, "%s: assertion failed\n", s);
-    write(2, buf, strlen(buf));
+    write(STDERR, buf, strlen(buf));
     abort();
 }
 /*e: function [[_threadassert]] */
