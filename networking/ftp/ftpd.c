@@ -5,7 +5,7 @@
 #include <auth.h>
 #include <ip.h>
 #include <libsec.h>
-#include <string.h>
+#include <str.h>
 
 #include "glob.h"
 

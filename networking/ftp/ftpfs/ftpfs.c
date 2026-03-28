@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <auth.h>
 #include <fcall.h>
-#include <string.h>
+#include <str.h>
 #include "ftpfs.h"
 
 /* an active fid */

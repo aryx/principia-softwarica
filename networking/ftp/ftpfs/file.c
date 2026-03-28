@@ -1,7 +1,7 @@
 /*s: networking/ip/ftpfs/file.c */
 #include <u.h>
 #include <libc.h>
-#include <string.h>
+#include <str.h>
 #include "ftpfs.h"
 
 /*s: enum [[_anon_ (networking/ip/ftpfs/file.c)]] */

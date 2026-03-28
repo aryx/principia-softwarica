@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <regexp.h>
-#include <string.h>
+#include <str.h>
 #include "glob.h"
 
 /*

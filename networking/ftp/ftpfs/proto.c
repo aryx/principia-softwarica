@@ -8,7 +8,7 @@
 #include <auth.h>
 #include <fcall.h>
 #include <ctype.h>
-#include <string.h>
+#include <str.h>
 #include "ftpfs.h"
 
 /*s: enum [[_anon_ (networking/ip/ftpfs/proto.c)]] */

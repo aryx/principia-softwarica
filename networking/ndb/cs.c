@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include <ndb.h>
 #include <ip.h>
-#include <string.h>
+#include <str.h>
 
 /*s: enum [[_anon_ (networking/ndb/cs.c)]] */
 enum
