@@ -1,8 +1,9 @@
 /*s: libbio/bvprint.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[fmtBflush]] */
 static int
 fmtBflush(Fmt *f)

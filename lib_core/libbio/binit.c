@@ -1,10 +1,15 @@
 /*s: libbio/binit.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
+/*s: global [[wbufs]] */
 static	Biobufhdr*	wbufs[20];
-static	int		atexitflag;
+/*e: global [[wbufs]] */
+/*s: global [[atexitflag]] */
+static	bool		atexitflag;
+/*e: global [[atexitflag]] */
 
 /*s: function [[batexit]] */
 static
@@ -36,7 +41,6 @@ deinstall(Biobufhdr *bp)
             wbufs[i] = nil;
 }
 /*e: function [[deinstall]] */
-
 /*s: function [[install]] */
 static
 void
@@ -46,12 +50,12 @@ install(Biobufhdr *bp)
 
     deinstall(bp);
     for(i=0; i<nelem(wbufs); i++)
-        if(wbufs[i] == 0) {
+        if(wbufs[i] == nil) {
             wbufs[i] = bp;
             break;
         }
-    if(atexitflag == 0) {
-        atexitflag = 1;
+    if(atexitflag == false) {
+        atexitflag = true;
         atexit(batexit);
     }
 }
@@ -66,20 +70,19 @@ Binits(Biobufhdr *bp, fdt f, int mode, uchar *p, int size)
     size -= Bungetsize;
 
     switch(mode&~(OCEXEC|ORCLOSE|OTRUNC)) {
-    default:
-        fprint(2, "Binits: unknown mode %d\n", mode);
-        return Beof;
-
     case OREAD:
         bp->state = Bractive;
         bp->ocount = 0;
         break;
-
     case OWRITE:
         install(bp);
         bp->state = Bwactive;
         bp->ocount = -size;
         break;
+    default:
+        fprint(2, "Binits: unknown mode %d\n", mode);
+        return Beof;
+
     }
     bp->bbuf = p;
     bp->ebuf = p+size;
@@ -94,8 +97,6 @@ Binits(Biobufhdr *bp, fdt f, int mode, uchar *p, int size)
     return 0;
 }
 /*e: function [[Binits]] */
-
-
 /*s: function [[Binit]] */
 int
 Binit(Biobuf *bp, fdt f, int mode)
@@ -103,27 +104,27 @@ Binit(Biobuf *bp, fdt f, int mode)
     return Binits(bp, f, mode, bp->b, sizeof(bp->b));
 }
 /*e: function [[Binit]] */
-
 /*s: function [[Bopen]] */
 Biobuf*
 Bopen(char *name, int mode)
 {
     Biobuf *bp;
-    int f;
+    fdt f;
 
     switch(mode&~(OCEXEC|ORCLOSE|OTRUNC)) {
-    default:
-        fprint(2, "Bopen: unknown mode %#x\n", mode);
-        return 0;
     case OREAD:
         f = open(name, mode);
         break;
     case OWRITE:
         f = create(name, mode, 0666);
         break;
+    default:
+        fprint(2, "Bopen: unknown mode %#x\n", mode);
+        return 0;
     }
     if(f < 0)
-        return 0;
+        return nil;
+
     bp = malloc(sizeof(Biobuf));
     Binits(bp, f, mode, bp->b, sizeof(bp->b));
     bp->flag = Bmagic;			/* mark bp open & malloced */

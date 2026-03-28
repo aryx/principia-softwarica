@@ -1,8 +1,9 @@
 /*s: libbio/boffset.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Boffset]] */
 vlong
 Boffset(Biobufhdr *bp)

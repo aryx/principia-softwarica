@@ -1,8 +1,9 @@
 /*s: libbio/btestprint.c */
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-
+/*s: libbio includes */
+#include	<u.h>
+#include	<libc.h>
+#include	<bio.h>
+/*e: libbio includes */
 /*s: function [[main]](btestprint.c) */
 void
 main(int argc, char **argv)

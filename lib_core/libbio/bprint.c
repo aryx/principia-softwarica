@@ -1,8 +1,9 @@
 /*s: libbio/bprint.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Bprint]] */
 int
 Bprint(Biobufhdr *bp, char *fmt, ...)

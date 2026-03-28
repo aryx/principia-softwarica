@@ -1,7 +1,9 @@
 /*s: libbio/bgetd.c */
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
+/*s: libbio includes */
+#include	<u.h>
+#include	<libc.h>
+#include	<bio.h>
+/*e: libbio includes */
 
 struct	bgetd
 {
@@ -22,7 +24,6 @@ Bgetdf(void *vp)
     return c;
 }
 /*e: function [[Bgetdf]] */
-
 /*s: function [[Bgetd]] */
 int
 Bgetd(Biobufhdr *bp, double *dp)

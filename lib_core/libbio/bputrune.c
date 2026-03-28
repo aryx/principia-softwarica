@@ -1,8 +1,9 @@
 /*s: libbio/bputrune.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Bputrune]] */
 int
 Bputrune(Biobufhdr *bp, long c)

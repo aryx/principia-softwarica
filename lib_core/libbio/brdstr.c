@@ -1,8 +1,9 @@
 /*s: libbio/brdstr.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[badd]] */
 static char*
 badd(char *p, int *np, char *data, int ndata, int delim, int nulldelim)

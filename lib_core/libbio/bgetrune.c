@@ -1,8 +1,9 @@
 /*s: libbio/bgetrune.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Bgetrune]] */
 long
 Bgetrune(Biobufhdr *bp)
@@ -41,7 +42,6 @@ Bgetrune(Biobufhdr *bp)
     }
 }
 /*e: function [[Bgetrune]] */
-
 /*s: function [[Bungetrune]] */
 int
 Bungetrune(Biobufhdr *bp)

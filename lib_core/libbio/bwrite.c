@@ -1,8 +1,9 @@
 /*s: libbio/bwrite.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Bwrite]] */
 long
 Bwrite(Biobufhdr *bp, void *ap, long count)

@@ -1,8 +1,9 @@
 /*s: libbio/bgetc.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Bgetc]] */
 int
 Bgetc(Biobufhdr *bp)
@@ -43,7 +44,6 @@ loop:
     goto loop;
 }
 /*e: function [[Bgetc]] */
-
 /*s: function [[Bungetc]] */
 int
 Bungetc(Biobufhdr *bp)

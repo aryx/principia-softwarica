@@ -1,8 +1,9 @@
 /*s: libbio/bbuffered.c */
+/*s: libbio includes */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-
+/*e: libbio includes */
 /*s: function [[Bbuffered]] */
 int
 Bbuffered(Biobufhdr *bp)
