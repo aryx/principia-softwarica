@@ -1,8 +1,9 @@
 /*s: libflate/flateerr.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
-
+/*e: libflate includes */
 /*s: function [[flateerr]] */
 char *
 flateerr(int err)

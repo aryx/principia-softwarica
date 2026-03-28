@@ -1,7 +1,9 @@
 /*s: libflate/inflatezlibblock.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
+/*e: libflate includes */
 #include "zlib.h"
 
 typedef struct Block	Block;

@@ -1,8 +1,9 @@
 /*s: libflate/deflateblock.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
-
+/*e: libflate includes */
 typedef struct Block	Block;
 
 struct Block

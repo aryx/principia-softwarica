@@ -1,8 +1,9 @@
 /*s: libflate/crc.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
-
+/*e: libflate includes */
 /*s: function [[mkcrctab]] */
 ulong*
 mkcrctab(ulong poly)

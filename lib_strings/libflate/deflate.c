@@ -1,8 +1,9 @@
 /*s: libflate/deflate.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
-
+/*e: libflate includes */
 typedef struct Chain	Chain;
 typedef struct Chains	Chains;
 typedef struct Dyncode	Dyncode;

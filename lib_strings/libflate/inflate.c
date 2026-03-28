@@ -1,8 +1,9 @@
 /*s: libflate/inflate.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
-
+/*e: libflate includes */
 enum {
     HistorySize=	32*1024,
     BufSize=	4*1024,

@@ -1,8 +1,9 @@
 /*s: libflate/adler.c */
+/*s: libflate includes */
 #include <u.h>
 #include <libc.h>
 #include <flate.h>
-
+/*e: libflate includes */
 enum
 {
     ADLERITERS	= 5552,	/* max iters before can overflow 32 bits */
