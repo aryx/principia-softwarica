@@ -4,6 +4,8 @@ export PATH=$GOKEN/bin:$PATH
 #coupling: goken/env.sh
 export MKSHELL=$GOKEN/bin/rc
 export RCMAIN=$GOKEN/etc/rcmain.unix
+# disable leak detection when goken is built with --asan
+export ASAN_OPTIONS=detect_leaks=0
 export YACCPAR=$GOKEN/etc/yaccpar
 #export NPROC=`nproc`
 
