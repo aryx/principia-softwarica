@@ -5,7 +5,6 @@
 #include <str.h> // was string.h
 /*e: libstring includes */
 
-
 /*s: function [[s_tolower]] */
 /* convert String to lower case */
 void

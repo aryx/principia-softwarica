@@ -1,9 +1,10 @@
 /*s: libregexp/regaux.c */
+/*s: libregexp includes */
 #include <u.h>
 #include <libc.h>
 #include "regexp.h"
+/*e: libregexp includes */
 #include "regcomp.h"
-
 
 /*s: function [[_renewmatch]] */
 /*
@@ -25,7 +26,6 @@ _renewmatch(Resub *mp, int ms, Resublist *sp)
     }
 }
 /*e: function [[_renewmatch]] */
-
 /*s: function [[_renewthread]] */
 /*
  * Note optimization in _renewthread:
@@ -60,7 +60,6 @@ _renewthread(Relist *lp,	/* _relist to add to */
     return p;
 }
 /*e: function [[_renewthread]] */
-
 /*s: function [[_renewemptythread]] */
 /*
  * same as renewthread, but called with
@@ -92,7 +91,6 @@ _renewemptythread(Relist *lp,	/* _relist to add to */
     return p;
 }
 /*e: function [[_renewemptythread]] */
-
 /*s: function [[_rrenewemptythread]] */
 extern Relist*
 _rrenewemptythread(Relist *lp,	/* _relist to add to */

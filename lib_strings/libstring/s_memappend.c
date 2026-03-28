@@ -22,5 +22,4 @@ s_memappend(String *to, char *from, int n)
     return to;
 }
 /*e: function [[s_memappend]] */
-
 /*e: libstring/s_memappend.c */

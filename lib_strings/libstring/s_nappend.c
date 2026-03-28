@@ -20,5 +20,4 @@ s_nappend(String *to, char *from, int n)
     return to;
 }
 /*e: function [[s_nappend]] */
-
 /*e: libstring/s_nappend.c */

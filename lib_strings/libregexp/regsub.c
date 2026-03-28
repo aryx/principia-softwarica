@@ -1,8 +1,9 @@
 /*s: libregexp/regsub.c */
+/*s: libregexp includes */
 #include <u.h>
 #include <libc.h>
 #include "regexp.h"
-
+/*e: libregexp includes */
 /*s: function [[regsub]] */
 /* substitute into one string using the matches from the last regexec() */
 extern	void

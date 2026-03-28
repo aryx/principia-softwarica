@@ -1,7 +1,9 @@
 /*s: libregexp/regcomp.c */
+/*s: libregexp includes */
 #include <u.h>
 #include <libc.h>
 #include "regexp.h"
+/*e: libregexp includes */
 #include "regcomp.h"
 
 /*s: constant [[TRUE]] */
@@ -371,7 +373,6 @@ dumpstack(void){
         print("0%o\t0%o\n", stk->first->type, stk->last->type);
 }
 /*e: function [[dumpstack]] */
-
 /*s: function [[dump]] */
 static	void
 dump(Reprog *pp)
@@ -634,7 +635,6 @@ out:
     return pp;
 }
 /*e: function [[regcomp1]] */
-
 /*s: function [[regcomp]] */
 extern	Reprog*
 regcomp(char *s)

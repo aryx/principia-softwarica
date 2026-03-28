@@ -1,7 +1,9 @@
 /*s: libregexp/rregexec.c */
+/*s: libregexp includes */
 #include <u.h>
 #include <libc.h>
 #include "regexp.h"
+/*e: libregexp includes */
 #include "regcomp.h"
 
 /*s: function [[rregexec1]] */
@@ -149,7 +151,6 @@ rregexec1(Reprog *progp,	/* program to run */
     return match;
 }
 /*e: function [[rregexec1]] */
-
 /*s: function [[rregexec2]] */
 static int
 rregexec2(Reprog *progp,	/* program to run */

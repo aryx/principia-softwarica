@@ -36,5 +36,4 @@ s_grow(String *s, int incr)
     return s;
 }
 /*e: function [[s_grow]] */
-
 /*e: libstring/s_grow.c */
