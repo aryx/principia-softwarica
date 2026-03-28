@@ -7,6 +7,7 @@ typedef struct Reclass      Reclass;
 typedef struct Reinst       Reinst;
 typedef struct Reprog       Reprog;
 
+/*s: struct [[Resub]] */
 /*
  *  Sub expression matches
  */
@@ -26,7 +27,9 @@ struct Resub{
         Rune *rep;
     }e;
 };
+/*e: struct [[Resub]] */
 
+/*s: struct [[Reclass]] */
 /*
  *  character class, each pair of rune's defines a range
  */
@@ -34,7 +37,9 @@ struct Reclass{
     Rune    *end;
     Rune    spans[64];
 };
+/*e: struct [[Reclass]] */
 
+/*s: struct [[Reinst]] */
 /*
  *  Machine instructions
  */
@@ -51,7 +56,9 @@ struct Reinst{
         Reinst *next;       /* next instruction for CAT & LBRA */
     };
 };
+/*e: struct [[Reinst]] */
 
+/*s: struct [[Reprog]] */
 /*
  *  Reprogram definition
  */
@@ -60,6 +67,7 @@ struct Reprog{
     Reclass class[16];  /* .data */
     Reinst  firstinst[5];   /* .text */
 };
+/*e: struct [[Reprog]] */
 
 extern Reprog   *regcomp(char*);
 extern Reprog   *regcomplit(char*);

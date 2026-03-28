@@ -5,18 +5,24 @@
 // Extensible Strings.
 
 // This file was originally called string.h but this conflicts with
-// the Posix <string.h> so simpler to rename str.h (which anyway fits
+// the Posix <string.h> so simpler to rename <str.h> (which anyway fits
 // well with the 3-letters utf.h, bio.h, fmt.h, etc.).
 
+/*s: struct [[String]] */
 /* extensible Strings */
-typedef struct String {
+struct String {
     Lock;
+
     char	*base;	/* base of String */
     char	*end;	/* end of allocated space+1 */
+
     char	*ptr;	/* ptr into String */
+
     short	ref;
     uchar	fixed;
-} String;
+};
+/*e: struct [[String]] */
+typedef struct String String;
 
 /*s: macro [[s_clone]] */
 #define s_clone(s) s_copy((s)->base)
@@ -46,6 +52,7 @@ extern void	s_putc(String*, int);
 extern String*	s_unique(String*);
 extern String*	s_grow(String*, int);
 
+// Biobuf functions visible when including bio.h before str.h
 #ifdef BGETC
 extern int	s_read(Biobuf*, String*, int);
 extern char	*s_read_line(Biobuf*, String*);
