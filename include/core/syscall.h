@@ -179,10 +179,12 @@ extern	int	await(char*, int);
 /*e: signatures process syscall */
 
 /*s: signatures process syscall wrapper */
-extern	int	fork(void);
 extern  void    exits(char*);
-extern	int	execl(char*, ...);
+extern  int     atexit(void(*)(void));
+extern  void    atexitdont(void(*)(void));
 extern	void	abort(void);
+extern	int	fork(void);
+extern	int	execl(char*, ...);
 extern	Waitmsg*wait(void);
 extern	int	waitpid(void);
 /*e: signatures process syscall wrapper */
@@ -199,6 +201,9 @@ extern  int     putenv(char*, char*);
 /*s: signatures memory syscall */
 // brk() ??
 /*e: signatures memory syscall */
+
+/* this is used by sbrk and brk,  it's a really bad idea to redefine it */
+extern  char    end[];
 
 /*s: signatures memory syscall wrapper */
 extern	void*	sbrk(ulong);
@@ -290,6 +295,10 @@ extern	int	segdetach(void*);
 extern	int	segflush(void*, ulong);
 extern	int	segfree(void*, ulong);
 /*e: signatures ipc syscall */
+
+// ??
+extern  int     postnote(int, int, char *);
+extern  int     atnotify(int(*)(void*, char*), int);
 
 //----------------------------------------------------------------------------
 // concurrency

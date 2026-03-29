@@ -2,9 +2,27 @@
 #pragma lib "libc.a"
 #pragma src "/sys/src/libc"
 
-// --------------------------------------------
-// pad's stuff
-// --------------------------------------------
+typedef struct Fmt Fmt;
+typedef struct Tm Tm;
+typedef struct Lock Lock;
+typedef struct QLp QLp;
+typedef struct QLock QLock;
+typedef struct RWLock RWLock;
+typedef struct Rendez Rendez;
+typedef struct NetConnInfo NetConnInfo;
+typedef struct Qid Qid;
+typedef struct Dir Dir;
+typedef struct Waitmsg Waitmsg;
+typedef struct IOchunk IOchunk;
+
+//******************************************************************************
+// Foundations
+//******************************************************************************
+
+//----------------------------------------------------------------------------
+// Pad's core types
+//----------------------------------------------------------------------------
+
 // More types! Types are good!
 /*s: type [[bool]] */
 typedef int bool;
@@ -13,11 +31,9 @@ enum _bool {
   true = 1
 };
 /*e: type [[bool]] */
-
 /*s: type [[byte]] */
 typedef uchar byte;
 /*e: type [[byte]] */
-
 typedef uchar bool_byte;
 
 //typedef char* string; // conflict
@@ -56,9 +72,9 @@ typedef int errorneg1; // -1 is the error value
 typedef int errorn; // 1 or more means error
 /*e: type [[errorxxx]] */
 
-// --------------------------------------------
-// end pad's stuff
-// --------------------------------------------
+//----------------------------------------------------------------------------
+// Macros (Array/Struct)
+//----------------------------------------------------------------------------
 
 /*s: function [[nelem]] */
 #define nelem(x)    (sizeof(x)/sizeof((x)[0]))
@@ -67,18 +83,48 @@ typedef int errorn; // 1 or more means error
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
 /*e: function [[offsetof]] */
 
-typedef struct Fmt Fmt;
-typedef struct Tm Tm;
-typedef struct Lock Lock;
-typedef struct QLp QLp;
-typedef struct QLock QLock;
-typedef struct RWLock RWLock;
-typedef struct Rendez Rendez;
-typedef struct NetConnInfo NetConnInfo;
-typedef struct Qid Qid;
-typedef struct Dir Dir;
-typedef struct Waitmsg Waitmsg;
-typedef struct IOchunk IOchunk;
+//----------------------------------------------------------------------------
+// Exception
+//----------------------------------------------------------------------------
+
+extern  int     setjmp(jmp_buf);
+extern  void    longjmp(jmp_buf, int);
+
+// ??
+extern  void    notejmp(void*, jmp_buf, int);
+
+
+//----------------------------------------------------------------------------
+// Malloc/free
+//----------------------------------------------------------------------------
+
+/*
+ * malloc
+ */
+extern  void*   malloc(ulong);
+extern  void    free(void*);
+
+// less useful
+extern  void*   mallocz(ulong, bool);
+extern  void*   calloc(ulong, ulong);
+extern  void*   realloc(void*, ulong);
+extern  ulong   msize(void*);
+extern  void*   mallocalign(ulong, ulong, long, ulong);
+
+// internals
+extern  void    setmalloctag(void*, ulong);
+extern  void    setrealloctag(void*, ulong);
+extern  ulong   getmalloctag(void*);
+extern  ulong   getrealloctag(void*);
+extern  void*   malloctopoolblock(void*);
+
+//******************************************************************************
+// Data processing
+//******************************************************************************
+
+//----------------------------------------------------------------------------
+// Mem ops
+//----------------------------------------------------------------------------
 
 /*
  * mem routines
@@ -93,6 +139,9 @@ extern  void*   memmove(void*, void*, ulong);
 extern  void*   memccpy(void*, void*, int, ulong);
 
 
+//----------------------------------------------------------------------------
+// Str ops
+//----------------------------------------------------------------------------
 
 /*
  * string routines
@@ -129,6 +178,10 @@ extern  char*   cistrstr(char*, char*);
 extern  char*   strtok(char*, char*);
 extern  int     tokenize(char*, char**, int);
 
+//----------------------------------------------------------------------------
+// Runes
+//----------------------------------------------------------------------------
+
 enum
 {
     /*s: constant [[UTFmax]] */
@@ -154,10 +207,6 @@ enum
 /*
  * rune routines
  */
-
-// char <-> rune conversion
-extern  int chartorune(Rune*, char*);
-extern  int runetochar(char*, Rune*);
 
 // strxxx equivalent for rune
 extern  Rune*   runestrcpy(Rune*, Rune*);
@@ -196,6 +245,14 @@ extern  int runelen(long);
 extern  int runenlen(Rune*, int);
 extern  int fullrune(char*, int);
 
+//----------------------------------------------------------------------------
+// UTF8
+//----------------------------------------------------------------------------
+
+// char <-> rune conversion
+extern  int chartorune(Rune*, char*);
+extern  int runetochar(char*, Rune*);
+
 // strxxx equivalent for utf
 extern  int utflen(char*);
 extern  char*   utfrune(char*, long);
@@ -206,25 +263,10 @@ extern  char*   utfrrune(char*, long);
 extern  char*   utfutf(char*, char*);
 extern  char*   utfecpy(char*, char*, char*);
 
-/*
- * malloc
- */
-extern  void*   malloc(ulong);
-extern  void    free(void*);
 
-// less useful
-extern  void*   mallocz(ulong, bool);
-extern  void*   calloc(ulong, ulong);
-extern  void*   realloc(void*, ulong);
-extern  ulong   msize(void*);
-extern  void*   mallocalign(ulong, ulong, long, ulong);
-
-// internals
-extern  void    setmalloctag(void*, ulong);
-extern  void    setrealloctag(void*, ulong);
-extern  ulong   getmalloctag(void*);
-extern  ulong   getrealloctag(void*);
-extern  void*   malloctopoolblock(void*);
+//----------------------------------------------------------------------------
+// Print
+//----------------------------------------------------------------------------
 
 /*
  * print routines
@@ -388,6 +430,10 @@ extern  int fmtrunestrcpy(Fmt*, Rune*);
  */
 extern  int errfmt(Fmt *f);
 
+//----------------------------------------------------------------------------
+// Quoted strings
+//----------------------------------------------------------------------------
+
 /*
  * quoted strings
  */
@@ -400,6 +446,14 @@ extern  int     quoterunestrfmt(Fmt*);
 extern  void    quotefmtinstall(void);
 extern  int     (*doquote)(int);
 extern  int     needsrcquote(int);
+
+//******************************************************************************
+// Mathematics
+//******************************************************************************
+
+//----------------------------------------------------------------------------
+// Random
+//----------------------------------------------------------------------------
 
 /*
  * random number
@@ -415,6 +469,10 @@ extern  ulong   truerand(void);         /* uses /dev/random */
 extern  long    lrand(void);
 extern  long    lnrand(long);
 extern  ulong   ntruerand(ulong);       /* uses /dev/random */
+
+//----------------------------------------------------------------------------
+// Basic math
+//----------------------------------------------------------------------------
 
 /*
  * math
@@ -445,6 +503,10 @@ extern  double  sqrt(double);
 extern  double  hypot(double, double);
 extern  double  fmod(double, double);
 
+//----------------------------------------------------------------------------
+// Trigonometry
+//----------------------------------------------------------------------------
+
 #define PIO2    1.570796326794896619231e0
 #define PI  (PIO2+PIO2)
 
@@ -459,8 +521,10 @@ extern  double  sinh(double);
 extern  double  cosh(double);
 extern  double  tanh(double);
 
+//----------------------------------------------------------------------------
+// Conversion
+//----------------------------------------------------------------------------
 
-// conversion
 extern  double  atof(char*);
 extern  int     atoi(char*);
 extern  long    atol(char*);
@@ -472,6 +536,10 @@ extern  ulong   strtoul(char*, char**, int);
 extern  vlong   strtoll(char*, char**, int);
 extern  uvlong  strtoull(char*, char**, int);
 
+//----------------------------------------------------------------------------
+// Misc
+//----------------------------------------------------------------------------
+
 // internals?
 extern  ulong   getfcr(void);
 extern  void    setfsr(ulong);
@@ -482,6 +550,13 @@ extern  ulong   umuldiv(ulong, ulong, ulong);
 extern  long    muldiv(long, long, long);
 
 
+//******************************************************************************
+// Misc
+//******************************************************************************
+
+//----------------------------------------------------------------------------
+// Time
+//----------------------------------------------------------------------------
 
 /*
  * Time-of-day
@@ -521,6 +596,9 @@ extern  long    times(long*);
 extern  void    cycles(uvlong*);    /* 64-bit value of the cycle counter if there is one, 0 if there isn't */
 
 
+//----------------------------------------------------------------------------
+// Misc
+//----------------------------------------------------------------------------
 
 /*
  * one-of-a-kind
@@ -541,6 +619,13 @@ extern  int     iounit(fdt);
 // ugly redefined by user code? see statusbar.c
 extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
+//******************************************************************************
+// Debugging and profiling
+//******************************************************************************
+
+//----------------------------------------------------------------------------
+// Debugging
+//----------------------------------------------------------------------------
 
 /*
  | debugging tools 
@@ -549,7 +634,9 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
 /*s: macro [[assert]] */
 #define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
 /*e: macro [[assert]] */
+
 extern  void    (*_assert)(char*);
+
 extern  void    perror(char*);
 extern  void    sysfatal(char*, ...);
 extern  void    syslog(int, char*, char*, ...);
@@ -557,7 +644,12 @@ extern  void    syslog(int, char*, char*, ...);
 #pragma varargck    argpos  sysfatal    1
 #pragma varargck    argpos  syslog  3
 
+// useful for stack trace?
 extern  uintptr getcallerpc(void*);
+
+//----------------------------------------------------------------------------
+// Profiling
+//----------------------------------------------------------------------------
 
 /*
  *  profiling
@@ -575,16 +667,10 @@ enum Profiling {
 
 extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
 
+//******************************************************************************
+// Concurrency and communication
+//******************************************************************************
 
-/*
- | concurrency
- */
-
-extern  int     setjmp(jmp_buf);
-extern  void    longjmp(jmp_buf, int);
-extern  void    notejmp(void*, jmp_buf, int);
-
-// IPC
 /*s: type [[PostnoteKind]] */
 enum
 {
@@ -592,11 +678,10 @@ enum
     PNGROUP     = 2,
 };
 /*e: type [[PostnoteKind]] */
-extern  int     postnote(int, int, char *);
-extern  int     atnotify(int(*)(void*, char*), int);
 
-extern  int     atexit(void(*)(void));
-extern  void    atexitdont(void(*)(void));
+//----------------------------------------------------------------------------
+// Concurrency
+//----------------------------------------------------------------------------
 
 /*
  * atomic
@@ -681,8 +766,14 @@ extern  void    rsleep(Rendez*);    /* unlocks r->l, sleeps, locks r->l again */
 extern  int     rwakeup(Rendez*);
 
 extern  int     rwakeupall(Rendez*);
+
+// per-process private vars
 extern  void**  privalloc(void);
 extern  void    privfree(void**);
+
+//----------------------------------------------------------------------------
+// Network (/net wrappers)
+//----------------------------------------------------------------------------
 
 /*
  *  network dialing
@@ -717,6 +808,10 @@ extern  NetConnInfo*    getnetconninfo(char*, int);
 extern  void            freenetconninfo(NetConnInfo*);
 
 
+//----------------------------------------------------------------------------
+// Crypto
+//----------------------------------------------------------------------------
+
 /*
  *  encryption
  */
@@ -735,6 +830,9 @@ extern  int enc32(char*, int, uchar*, int);
 extern  int dec16(uchar*, int, char*, int);
 extern  int enc16(char*, int, uchar*, int);
 
+//******************************************************************************
+// Syscalls
+//******************************************************************************
 
 /*
  * system calls
@@ -742,6 +840,10 @@ extern  int enc16(char*, int, uchar*, int);
  */
 #include <syscall.h>
 
+
+//******************************************************************************
+// ARGXXX
+//******************************************************************************
 
 // getopt like macros
 /*s: signature global argv0 */
@@ -775,9 +877,5 @@ extern char *argv0;
 /*s: macro [[ARGC]] */
 #define ARGC()      _argc
 /*e: macro [[ARGC]] */
-
-
-/* this is used by sbrk and brk,  it's a really bad idea to redefine it */
-extern  char    end[];
 
 /*e: include/core/libc.h */
