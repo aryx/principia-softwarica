@@ -172,6 +172,9 @@ tcomo(Node *n, int f)
             /*s: [[tcomo()]] in ONAME case, if extern register, if x86 */
             if(thechar == '8')
                 n->op = OEXREG;
+            /*x: [[tcomo()]] in ONAME case, if extern register, if x86 */
+            if(thechar == '8')
+                n->op = OEXREG;
             /*e: [[tcomo()]] in ONAME case, if extern register, if x86 */
             n->reg = n->sym->offset;
             n->xoffset = 0;
