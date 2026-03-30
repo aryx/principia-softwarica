@@ -3390,6 +3390,13 @@ extern  void*   mallocz(ulong, bool);
 extern  ulong   msize(void*);
 @
 
+%claude:
+Beyond the standard [[malloc]]/[[free]]/[[realloc]], \plan
+adds [[mallocz]] (allocate and optionally zero---the [[bool]]
+parameter controls zeroing) and [[msize]] (return the usable
+size of an allocated block, useful when the allocator rounds
+up).
+
 %last:
 % - https://silent-tower.net/projects/visual-overview-malloc
 % - https://blog.learngoprogramming.com/a-visual-guide-to-golang-memory-allocator-from-ground-up-e132258453ed
@@ -3846,6 +3853,31 @@ free(void *v)
 
 %yoann: printf style output, funndation because used everywhere, even in kernel!
 
+%claude:
+Formatted output is a foundation: it is used everywhere
+in \plan, including inside the kernel itself. \plan's
+[[print]] family is more powerful than \unix's [[printf]]:
+it supports user-defined format verbs via a callback
+mechanism ([[fmtinstall]]), outputs to any destination
+(not just file descriptors or strings) through a [[Fmt]]
+closure, and handles Unicode natively. This chapter covers
+the [[Fmt]] data structure, the format string parser
+([[dofmt]]), the built-in format verbs, and the mechanism
+for registering custom ones.
+
+%claude:
+Here is a preview of the public API. Note that [[print]]
+is a function pointer (not a plain function), so the kernel
+can redirect it to the console or serial port.
+[[seprint(buf, ebuf, fmt, ...)]] is the preferred safe
+variant: it takes both the start and end of the buffer,
+returning a pointer to the next position, so calls can be
+chained. The [[#pragma varargck]] lines are a compiler
+extension that enables type-checking of format arguments.
+[[fmtinstall]] registers a custom format verb: pass a rune
+(e.g., [['H']]) and a callback, and \verb+%H+ becomes
+available in all print functions.
+
 <<signatures [[xxxprint]] functions>>=
 extern  int     (*print)(char*, ...);
 extern  int     fprint(fdt, char*, ...);
@@ -3983,6 +4015,16 @@ extern  char*   utfrune(char*, long);
 extern  char*   utfrrune(char*, long);
 extern  char*   utfutf(char*, char*);
 @
+
+%claude:
+The conversion functions bridge the byte and rune worlds.
+[[chartorune]] decodes one UTF-8 sequence into a [[Rune]],
+returning the number of bytes consumed; [[runetochar]]
+encodes one [[Rune]] into UTF-8, returning the number of
+bytes produced. The [[utfxxx]] functions operate on UTF-8
+strings directly: [[utflen]] returns the number of runes
+(not bytes), [[utfrune]]/[[utfrrune]] search forward/backward
+for a rune, and [[utfutf]] finds a UTF-8 substring.
 
 %\section{Conversions}
 % see Mathematics section and Parsing subsections
@@ -6304,6 +6346,14 @@ extern  int     nrand(int);
 
 extern  void    srand(long);
 @
+
+%claude:
+Most of these are standard C, but a few are \plan additions:
+[[NaN()]]/[[Inf(sign)]] construct special IEEE~754 values
+(standard C uses macros instead), [[pow10]] is a fast
+integer-exponent variant, and [[nrand(n)]] returns a
+uniform random integer in $[0,n)$---more convenient than
+the \verb+rand() % n+ idiom which has modulo bias.
 
 \section{Basics}
 
@@ -12207,6 +12257,14 @@ extern  Tm*     gmtime(long);
 extern  Tm*     localtime(long);
 @
 
+%claude:
+[[time]] returns seconds since the epoch;
+[[nsec]] returns nanoseconds (by reading
+\verb+/dev/bintime+), useful for benchmarking.
+[[gmtime]] and [[localtime]] convert epoch seconds to
+a [[Tm]] structure (presented in the Core Data Structures
+chapter) and return a pointer to a static buffer.
+
 % seen before Tm in core DS
 
 \section{Syscalls: [[sleep()]], [[alarm()]]}
@@ -12523,6 +12581,16 @@ extern	int	getppid(void);
 extern  char*   getenv(char*);
 extern  int     putenv(char*, char*);
 @
+
+%claude:
+The wrappers above are convenience functions built on
+the raw syscalls below. [[fork]] calls
+\verb+rfork(RFFDG|RFREND|RFPROC)+ (the traditional
+fork semantics), [[execl]] is a variadic wrapper around
+[[exec]], and [[wait]] parses the raw [[await]] string
+into a [[Waitmsg]] structure. Note that \plan's [[putenv]]
+takes two arguments (name, value) rather than the single
+\verb+"name=value"+ string of \unix.
 
 \section{Syscalls: [[rfork()]], [[exec()]], [[await()]], etc}
 
@@ -12970,6 +13038,15 @@ extern	int	fversion(int, int, char*, int);
 extern  char*   getuser(void);
 @
 
+%claude:
+[[fauth]] opens an authentication channel on a file server
+connection (the [[int]] is the fd to the server, the
+[[char*]] is the aname). [[fversion]] negotiates the 9P
+protocol version and maximum message size with a server.
+Both are low-level plumbing used by [[mount]]---most
+programs never call them directly. [[getuser]] simply
+reads [[/dev/user]].
+
 \section{[[getuser()]]}
 
 % very different in plan9, no uid/gid (why? because distributed context?)
@@ -13230,10 +13307,8 @@ operations at the bottom, channels and threads at the top.
 When processes share memory via [[rfork(RFMEM)]], they need
 synchronization primitives to ensure thread safety (as
 discussed in the Principles section of the Overview).
-This chapter covers the building blocks: spin locks, queuing
-locks, and read-write locks. These are the primitives that
-make [[malloc]], [[atexit]], and other [[libc]] functions
-safe for concurrent use.
+These are the primitives that make [[malloc]], [[atexit]],
+and other [[libc]] functions safe for concurrent use.
 The higher-level abstractions (channels and cooperative threads)
 are built on top of these in [[libthread]], covered in a
 later chapter.
@@ -13274,6 +13349,22 @@ extern  void**  privalloc(void);
 extern  void    privfree(void**);
 @
 
+%claude:
+The primitives above form a hierarchy.
+[[ainc]]/[[adec]] are atomic increment/decrement (lock-free).
+[[Lock]] is a spin lock (busy-waits). [[QLock]] (``queuing
+lock'') blocks the caller instead of spinning---preferred
+for anything held longer than a few instructions. [[RWLock]]
+allows multiple concurrent readers or one exclusive writer.
+[[Rendez]] is a condition variable tied to a [[QLock]]:
+[[rsleep]] atomically releases the lock and sleeps,
+[[rwakeup]] wakes one sleeper. The [[can*]] variants are
+non-blocking: they return 1 if the lock was acquired, 0
+otherwise.
+[[privalloc]]/[[privfree]] provide per-process private
+storage for shared-memory processes (like thread-local
+storage), useful for things like per-process error strings.
+
 \section{Syscalls: [[rendezvous()]], etc}
 
 %claude:
@@ -13289,6 +13380,14 @@ extern	int	semacquire(long*, int);
 extern	long	semrelease(long*, long);
 extern	int	tsemacquire(long*, ulong);
 @
+
+%claude:
+The semaphore syscalls operate on a [[long]] in shared
+memory. In [[semacquire(addr, block)]], the [[int]] parameter
+controls blocking: 1 to wait, 0 to try and fail immediately.
+[[tsemacquire]] adds a timeout in milliseconds.
+[[semrelease(addr, delta)]] increments the semaphore by
+[[delta]] (usually~1) and wakes waiting processes.
 
 % plan9 has shared memory processes. rfork(RFMEM)
 % has then locking function to coordinate. qlock, lock, etc.
