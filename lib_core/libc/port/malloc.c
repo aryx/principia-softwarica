@@ -224,7 +224,9 @@ enum {
 /*s: enum [[_anon_]] */
 /* tracing */
 enum {
+    /*s: constant [[Npadlong]] */
     Npadlong    = 2,
+    /*e: constant [[Npadlong]] */
     MallocOffset = 0,
     ReallocOffset = 1
 };

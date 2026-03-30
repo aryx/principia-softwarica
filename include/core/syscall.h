@@ -200,7 +200,7 @@ extern  int     putenv(char*, char*);
 // memory
 //----------------------------------------------------------------------------
 /*s: signatures memory syscall */
-// brk() ??
+extern  int brk(void*);
 /*e: signatures memory syscall */
 
 /* this is used by sbrk and brk,  it's a really bad idea to redefine it */

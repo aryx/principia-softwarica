@@ -11,7 +11,6 @@ toupper(int c)
     return _toupper(c);
 }
 /*e: function [[toupper]] */
-
 /*s: function [[tolower]] */
 int
 tolower(int c)

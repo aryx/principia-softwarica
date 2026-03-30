@@ -19,7 +19,6 @@ _xinc(long *p)
     unlock(&xincport_lock);
 }
 /*e: function [[_xinc]] */
-
 /*s: function [[_xdec]] */
 long
 _xdec(long *p)

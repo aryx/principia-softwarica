@@ -91,7 +91,6 @@ out:
     return arg;     /* disgusting linkage */
 }
 /*e: function [[_profin]] */
-
 /*s: function [[_profout]] */
 // Called at every procedure return when use 5l -p, see Linker.nw
 ulong

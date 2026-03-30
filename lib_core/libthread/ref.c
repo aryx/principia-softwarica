@@ -13,7 +13,6 @@ incref(Ref *r)
     ainc(&r->ref);
 }
 /*e: function [[incref]] */
-
 /*s: function [[decref]] */
 long
 decref(Ref *r)

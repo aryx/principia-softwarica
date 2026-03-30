@@ -20,7 +20,6 @@ s_reset(String *s)
     return s;
 }
 /*e: function [[s_reset]] */
-
 /*s: function [[s_restart]] */
 String*
 s_restart(String *s)

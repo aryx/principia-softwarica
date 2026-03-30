@@ -6,7 +6,6 @@
 /*e: libc includes */
 #include <str.h> // was string.h
 /*e: libstring includes */
-
 /*s: function [[s_memappend]] */
 /* append a char array ( of up to n characters) to a String */
 String *

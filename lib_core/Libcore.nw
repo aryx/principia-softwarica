@@ -3384,8 +3384,8 @@ in a binary tree for efficient best-fit allocation.
 <<signatures memory management functions>>=
 extern  void*   malloc(ulong);
 extern  void    free(void*);
-
 extern  void*   realloc(void*, ulong);
+
 extern  void*   mallocz(ulong, bool);
 extern  ulong   msize(void*);
 @
@@ -3431,10 +3431,10 @@ up).
 \section{Syscall: [[brk()]]}
 % sysbrk()
 
-% brk not defined in syscall.h ?? not exported probably because not convenient
-% sbrk with 'end' better
+%pad: brk was actually not defined in syscall.h but in sbrk.c.
+% Not exported probably because not convenient. sbrk with 'end' better
 <<signatures memory syscall>>=
-// brk() ??
+extern  int brk(void*);
 @
 
 
@@ -3501,11 +3501,15 @@ to an 8-byte boundary---necessary because [[malloc]] must
 return memory usable for any type, including 64-bit values
 ([[double]], [[vlong]]) which fault on ARM if misaligned.
 
+<<global extern declaration [[end]]>>=
+extern  char    end[];
+@
+% [[end]], see \book{Linker}
+
 <<global [[bloc]]>>=
 // starting point for the heap, after the text, data, and bss.
 static  char    *bloc = { end };
 @
-% [[end]], see \book{Linker}
 
 <<function [[sbrk]]>>=
 void*
@@ -3614,7 +3618,7 @@ struct Private {
 Private sbrkmempriv;
 @
 
-\subsection{[[sbrkmem]]}
+\subsection{[[sbrkmem]] and [[mainmem]]}
 
 % in malloc.c
 <<global [[sbrkmem]]>>=
@@ -3801,14 +3805,16 @@ static uchar datamagic[] = { 0xFE, 0xF1, 0xF0, 0xFA };
 @
 
 
-\section{[[malloc()]]}
+\section{[[malloc()]] and [[free()]]}
 
 %claude:
-[[malloc()]] is a thin wrapper around [<poolalloc()>]. When
-[[Npadlong]] is non-zero (debugging mode), extra space is
+[[malloc()]] is a thin wrapper around [<poolalloc()>]. 
+%
+When [[Npadlong]] is non-zero (debugging mode), extra space is
 allocated before the returned pointer to store the caller's
 PC---[[getcallerpc]] records who called [[malloc]], which
 is invaluable for tracking down memory leaks.
+
 
 <<function [[malloc]]>>=
 void*
@@ -3826,7 +3832,11 @@ malloc(ulong size)
 }
 @
 
-\section{[[free()]]}
+<<constant [[Npadlong]]>>=
+Npadlong    = 2,
+@
+
+%alt: \section{[[free()]]}
 
 <<function [[free]]>>=
 void
@@ -3839,7 +3849,137 @@ free(void *v)
 
 \section{[[poolalloc()]]}
 
+<<function [[poolalloc]]>>=
+void*
+poolalloc(Pool *p, ulong n)
+{
+    void *v;
+
+    p->lock(p);
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+
+    v = poolallocl(p, n);
+
+
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
+    LOG(p, "poolalloc %p %lud = %p\n", p, n, v);
+    p->unlock(p);
+    return v;
+}
+@
+
+
+<<function [[poolallocl]]>>=
+/* poolallocl: attempt to allocate block to hold dsize user bytes; assumes lock held */
+static void*
+poolallocl(Pool *p, ulong dsize)
+{
+    ulong bsize;
+    Free *fb;
+    Alloc *ab;
+
+    if(dsize >= 0x80000000UL){  /* for sanity, overflow */
+        werrstr("invalid allocation size");
+        return nil;
+    }
+
+    bsize = dsize2bsize(p, dsize);
+
+    fb = treelookupgt(p->freeroot, bsize);
+    if(fb == nil) {
+        poolnewarena(p, bsize2asize(p, bsize));
+        if((fb = treelookupgt(p->freeroot, bsize)) == nil) {
+            /* assume poolnewarena failed and set %r */
+            return nil;
+        }
+    }
+
+    ab = trim(p, pooldel(p, fb), dsize);
+    p->curalloc += ab->size;
+    antagonism {
+        memset(B2D(p, ab), 0xDF, dsize);
+    }
+    return B2D(p, ab);
+}
+@
+
 \section{[[poolfree()]]}
+
+<<function [[poolfree]]>>=
+void
+poolfree(Pool *p, void *v)
+{
+    p->lock(p);
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+
+    poolfreel(p, v);
+
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
+    LOG(p, "poolfree %p %p\n", p, v);
+    p->unlock(p);
+}
+@
+
+<<function [[poolfreel]]>>=
+/* poolfree: free block obtained from poolalloc; assumes lock held */
+static void
+poolfreel(Pool *p, void *v)
+{
+    Alloc *ab;
+    Bhdr *back, *fwd;
+
+    if(v == nil)    /* for ANSI */
+        return;
+
+    ab = D2B(p, v);
+    blockcheck(p, ab);
+
+    if(p->flags&POOL_NOREUSE){
+        int n;
+
+        ab->magic = DEAD_MAGIC;
+        n = getdsize(ab)-8;
+        if(n > 0)
+            memset((uchar*)v+8, 0xDA, n);
+        return; 
+    }
+
+    p->nfree++;
+    p->curalloc -= ab->size;
+    back = T2HDR(B2PT(ab));
+    if(back->magic == FREE_MAGIC)
+        ab = blockmerge(p, back, ab);
+
+    fwd = B2NB(ab);
+    if(fwd->magic == FREE_MAGIC)
+        ab = blockmerge(p, ab, fwd);
+
+    pooladd(p, ab);
+}
+@
+
 
 \section{Other functions}
 
@@ -3886,6 +4026,35 @@ realloc(void *v, ulong size)
 }
 @
 
+<<function [[poolrealloc]]>>=
+void*
+poolrealloc(Pool *p, void *v, ulong n)
+{
+    void *nv;
+
+    p->lock(p);
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+    nv = poolreallocl(p, v, n);
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
+    LOG(p, "poolrealloc %p %p %ld = %p\n", p, v, n, nv);
+    p->unlock(p);
+    return nv;
+}
+@
+
+
+
 <<function [[msize]]>>=
 ulong
 msize(void *v)
@@ -3894,6 +4063,43 @@ msize(void *v)
 }
 @
 
+<<function [[poolmsize]]>>=
+/*
+ * Return the real size of a block, and let the user use it. 
+ */
+ulong
+poolmsize(Pool *p, void *v)
+{
+    Alloc *b;
+    ulong dsize;
+
+    p->lock(p);
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+    if(v == nil)    /* consistency with other braindead ANSI-ness */
+        dsize = 0;
+    else {
+        b = D2B(p, v);
+        dsize = (b->size&~(p->quantum-1)) - sizeof(Bhdr) - sizeof(Btail);
+        assert(dsize >= getdsize(b));
+        blocksetdsize(p, b, dsize);
+    }
+    paranoia {
+        poolcheckl(p);
+    }
+    verbosity {
+        pooldumpl(p);
+    }
+    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
+    LOG(p, "poolmsize %p %p = %ld\n", p, v, dsize);
+    p->unlock(p);
+    return dsize;
+}
+@
 
 \section{Debugging support}
 
@@ -4057,7 +4263,60 @@ enum Fmt_flag {
 };
 @
 
-\section{[[print()]]}
+\section{[[print()]] and [[vfprint()]]}
+
+<<global [[print]]>>=
+int (*print)(char *fmt, ...) = &libc_print;
+@
+
+<<function [[libc_print]]>>=
+int
+libc_print(char *fmt, ...)
+{
+    int n;
+    va_list args;
+
+    va_start(args, fmt);
+    n = vfprint(STDOUT, fmt, args);
+    va_end(args);
+    return n;
+}
+@
+
+
+\section{[[fprint()]]}
+
+<<function [[fprint]]>>=
+int
+fprint(int fd, char *fmt, ...)
+{
+    int n;
+    va_list args;
+
+    va_start(args, fmt);
+    n = vfprint(fd, fmt, args);
+    va_end(args);
+    return n;
+}
+@
+
+\section{[[sprint()]] and variants}
+
+<<function [[sprint]]>>=
+int
+sprint(char *buf, char *fmt, ...)
+{
+    int n;
+    va_list args;
+
+    va_start(args, fmt);
+    n = vsnprint(buf, 65536, fmt, args);    /* big number, but sprint is deprecated anyway */
+    va_end(args);
+    return n;
+}
+@
+
+
 
 
 %###############################################################################
@@ -8064,6 +8323,115 @@ atan2(double arg1, double arg2)
 
 \subsection{Hyperbolic functions}
 
+<<global [[p0]]>>=
+/*
+ * sinh(arg) returns the hyperbolic sine of its floating-
+ * point argument.
+ *
+ * The exponential function is called for arguments
+ * greater in magnitude than 0.5.
+ *
+ * A series is used for arguments smaller in magnitude than 0.5.
+ * The coefficients are #2029 from Hart & Cheney. (20.36D)
+ *
+ * cosh(arg) is computed from the exponential function for
+ * all arguments.
+ */
+
+static  double  p0  = -0.6307673640497716991184787251e+6;
+@
+
+<<global [[p1]]>>=
+static  double  p1  = -0.8991272022039509355398013511e+5;
+@
+
+<<global [[p2]]>>=
+static  double  p2  = -0.2894211355989563807284660366e+4;
+@
+
+<<global [[p3]]>>=
+static  double  p3  = -0.2630563213397497062819489e+2;
+@
+
+<<global [[q0]]>>=
+static  double  q0  = -0.6307673640497716991212077277e+6;
+@
+
+<<global [[q1]]>>=
+static  double  q1   = 0.1521517378790019070696485176e+5;
+@
+
+<<global [[q2]]>>=
+static  double  q2  = -0.173678953558233699533450911e+3;
+@
+
+<<function [[sinh]]>>=
+double
+sinh(double arg)
+{
+    double temp, argsq;
+    int sign;
+
+    sign = 0;
+    if(arg < 0) {
+        arg = -arg;
+        sign++;
+    }
+    if(arg > 21) {
+        temp = exp(arg)/2;
+        goto out;
+    }
+    if(arg > 0.5) {
+        temp = (exp(arg) - exp(-arg))/2;
+        goto out;
+    }
+    argsq = arg*arg;
+    temp = (((p3*argsq+p2)*argsq+p1)*argsq+p0)*arg;
+    temp /= (((argsq+q2)*argsq+q1)*argsq+q0);
+out:
+    if(sign)
+        temp = -temp;
+    return temp;
+}
+@
+
+<<function [[cosh]]>>=
+double
+cosh(double arg)
+{
+    if(arg < 0)
+        arg = - arg;
+    if(arg > 21)
+        return exp(arg)/2;
+    return (exp(arg) + exp(-arg))/2;
+}
+@
+
+
+<<function [[tanh]]>>=
+/*
+    tanh(arg) computes the hyperbolic tangent of its floating
+    point argument.
+
+    sinh and cosh are called except for large arguments, which
+    would cause overflow improperly.
+ */
+
+double
+tanh(double arg)
+{
+
+    if(arg < 0) {
+        arg = -arg;
+        if(arg > 21)
+            return -1;
+        return -sinh(arg)/cosh(arg);
+    }
+    if(arg > 21)
+        return 1;
+    return sinh(arg)/cosh(arg);
+}
+@
 
 
 \section{Logarithms and exponentials}
@@ -12746,6 +13114,61 @@ oldtime(long *tp)
 }
 @
 
+<<function [[nsec]]>>=
+vlong
+nsec(void)
+{
+    uchar b[8];
+    vlong t;
+    int pid, i, f, tries;
+
+    /*
+     * Threaded programs may have multiple procs
+     * with different fd tables, so we may need to open
+     * /dev/bintime on a per-pid basis
+     */
+
+    /* First, look if we've opened it for this particular pid */
+    if((pid = _tos->pid) == 0)      /* 9vx bug, perhaps? */
+        _tos->pid = pid = getpid();
+    do{
+        f = -1;
+        for(i = 0; i < nelem(fds); i++)
+            if(fds[i].pid == pid){
+                f = fds[i].fd;
+                break;
+            }
+        tries = 0;
+        if(f < 0){
+            /* If it's not open for this pid, try the global pid */
+            if(fd >= 0)
+                f = fd;
+            else{
+                /* must open */
+                if((f = open("/dev/bintime", OREAD|OCEXEC)) < 0)
+                    return 0;
+                fd = f;
+                for(i = 0; i < nelem(fds); i++)
+                    if(fds[i].pid == pid || fds[i].pid == 0){
+                        fds[i].pid = pid;
+                        fds[i].fd = f;
+                        break;
+                    }
+            }
+        }
+        if(pread(f, b, sizeof b, 0) == sizeof b){
+            be2vlong(&t, b);
+            return t;
+        }
+        close(f);
+        if(i < nelem(fds))
+            fds[i].fd = -1;
+    }while(tries++ == 0);   /* retry once */
+    USED(tries);
+    return 0;
+}
+@
+
 \section{Conversions}
 
 %claude:
@@ -14683,6 +15106,22 @@ notifier(void *v, char *s)
 }
 @
 
+\section{Misc}
+
+<<function [[notejmp]](arm)>>=
+void
+notejmp(void *vr, jmp_buf j, int ret)
+{
+    struct Ureg *r = vr;
+
+    r->r0 = ret;
+    if(ret == 0)
+        r->r0 = 1;
+    r->pc = j[JMPBUFPC];
+    r->r13 = j[JMPBUFSP];
+    noted(NCONT);
+}
+@
 
 
 \section{Pipes}

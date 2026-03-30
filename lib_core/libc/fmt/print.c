@@ -11,7 +11,7 @@ libc_print(char *fmt, ...)
     va_list args;
 
     va_start(args, fmt);
-    n = vfprint(1, fmt, args);
+    n = vfprint(STDOUT, fmt, args);
     va_end(args);
     return n;
 }

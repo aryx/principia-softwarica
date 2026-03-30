@@ -3,6 +3,7 @@
  * qsort -- simple quicksort
  */
 #include <u.h>
+// not even libc.h
 
 /*s: type [[Sort]] */
 typedef
@@ -29,7 +30,6 @@ swapb(char *i, char *j, long es)
 
 }
 /*e: function [[swapb]] */
-
 /*s: function [[swapi]] */
 static  void
 swapi(char *ii, char *ij, long es)

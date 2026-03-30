@@ -2159,7 +2159,7 @@ ppanic(Pool *p, char *fmt, ...)
 <<enum [[_anon_]]>>=
 /* tracing */
 enum {
-    Npadlong    = 2,
+    <<constant [[Npadlong]]>>
     MallocOffset = 0,
     ReallocOffset = 1
 };
@@ -2401,8 +2401,6 @@ needsrcquote(int c)
 
 \subsection*{[[libc/port/netmkaddr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/netmkaddr.c>>=
 <<libc includes>>
 #include <ctype.h>
@@ -2477,8 +2475,6 @@ ntruerand(ulong n)
 @
 
 \subsection*{[[libc/port/perror.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/perror.c>>=
 <<libc includes>>
@@ -3274,39 +3270,6 @@ D2B(Pool *p, void *v)
 }
 @
 
-<<function [[poolallocl]]>>=
-/* poolallocl: attempt to allocate block to hold dsize user bytes; assumes lock held */
-static void*
-poolallocl(Pool *p, ulong dsize)
-{
-    ulong bsize;
-    Free *fb;
-    Alloc *ab;
-
-    if(dsize >= 0x80000000UL){  /* for sanity, overflow */
-        werrstr("invalid allocation size");
-        return nil;
-    }
-
-    bsize = dsize2bsize(p, dsize);
-
-    fb = treelookupgt(p->freeroot, bsize);
-    if(fb == nil) {
-        poolnewarena(p, bsize2asize(p, bsize));
-        if((fb = treelookupgt(p->freeroot, bsize)) == nil) {
-            /* assume poolnewarena failed and set %r */
-            return nil;
-        }
-    }
-
-    ab = trim(p, pooldel(p, fb), dsize);
-    p->curalloc += ab->size;
-    antagonism {
-        memset(B2D(p, ab), 0xDF, dsize);
-    }
-    return B2D(p, ab);
-}
-@
 
 <<function [[poolreallocl]]>>=
 /* poolreallocl: attempt to grow v to ndsize bytes; assumes lock held */
@@ -3492,70 +3455,7 @@ poolallocalignl(Pool *p, ulong dsize, ulong align, long offset, ulong span)
 }
 @
 
-<<function [[poolfreel]]>>=
-/* poolfree: free block obtained from poolalloc; assumes lock held */
-static void
-poolfreel(Pool *p, void *v)
-{
-    Alloc *ab;
-    Bhdr *back, *fwd;
 
-    if(v == nil)    /* for ANSI */
-        return;
-
-    ab = D2B(p, v);
-    blockcheck(p, ab);
-
-    if(p->flags&POOL_NOREUSE){
-        int n;
-
-        ab->magic = DEAD_MAGIC;
-        n = getdsize(ab)-8;
-        if(n > 0)
-            memset((uchar*)v+8, 0xDA, n);
-        return; 
-    }
-
-    p->nfree++;
-    p->curalloc -= ab->size;
-    back = T2HDR(B2PT(ab));
-    if(back->magic == FREE_MAGIC)
-        ab = blockmerge(p, back, ab);
-
-    fwd = B2NB(ab);
-    if(fwd->magic == FREE_MAGIC)
-        ab = blockmerge(p, ab, fwd);
-
-    pooladd(p, ab);
-}
-@
-
-<<function [[poolalloc]]>>=
-void*
-poolalloc(Pool *p, ulong n)
-{
-    void *v;
-
-    p->lock(p);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    v = poolallocl(p, n);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
-    LOG(p, "poolalloc %p %lud = %p\n", p, n, v);
-    p->unlock(p);
-    return v;
-}
-@
 
 <<function [[poolallocalign]]>>=
 void*
@@ -3610,94 +3510,8 @@ poolcompact(Pool *p)
 }
 @
 
-<<function [[poolrealloc]]>>=
-void*
-poolrealloc(Pool *p, void *v, ulong n)
-{
-    void *nv;
 
-    p->lock(p);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    nv = poolreallocl(p, v, n);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
-    LOG(p, "poolrealloc %p %p %ld = %p\n", p, v, n, nv);
-    p->unlock(p);
-    return nv;
-}
-@
 
-<<function [[poolfree]]>>=
-void
-poolfree(Pool *p, void *v)
-{
-    p->lock(p);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    poolfreel(p, v);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
-    LOG(p, "poolfree %p %p\n", p, v);
-    p->unlock(p);
-}
-@
-
-<<function [[poolmsize]]>>=
-/*
- * Return the real size of a block, and let the user use it. 
- */
-ulong
-poolmsize(Pool *p, void *v)
-{
-    Alloc *b;
-    ulong dsize;
-
-    p->lock(p);
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    if(v == nil)    /* consistency with other braindead ANSI-ness */
-        dsize = 0;
-    else {
-        b = D2B(p, v);
-        dsize = (b->size&~(p->quantum-1)) - sizeof(Bhdr) - sizeof(Btail);
-        assert(dsize >= getdsize(b));
-        blocksetdsize(p, b, dsize);
-    }
-    paranoia {
-        poolcheckl(p);
-    }
-    verbosity {
-        pooldumpl(p);
-    }
-    if(p->logstack && (p->flags & POOL_LOGGING)) p->logstack(p);
-    LOG(p, "poolmsize %p %p = %ld\n", p, v, dsize);
-    p->unlock(p);
-    return dsize;
-}
-@
 
 <<function [[poolcheckarena]]>>=
 /*
@@ -3979,7 +3793,6 @@ static Free*    treelookupgt(Free*, ulong);
  */
 
 <<function [[listadd]]>>
-
 <<function [[listdelete]]>>
 
 /*
@@ -3987,14 +3800,12 @@ static Free*    treelookupgt(Free*, ulong);
  */
 
 <<function [[pooladd]]>>
-
 <<function [[pooldel]]>>
 
 /*
  * Block maintenance 
  */
 <<function [[dsize2bsize]]>>
-
 <<function [[bsize2asize]]>>
 
 /* blockmerge: merge a and b, known to be adjacent */
@@ -4072,7 +3883,6 @@ poolcompactl(Pool*)
  */
 
 <<function [[B2D]]>>
-
 <<function [[D2B]]>>
 
 <<function [[poolallocl]]>>
@@ -4116,16 +3926,12 @@ poolcompactl(Pool*)
 
 \subsection*{[[libc/port/pow.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/pow.c>>=
 <<libc includes>>
 <<function [[pow]]>>
 @
 
 \subsection*{[[libc/port/pow10.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/pow10.c>>=
 <<libc includes>>
@@ -4135,9 +3941,6 @@ poolcompactl(Pool*)
 @
 
 \subsection*{[[libc/port/profile.c]]}
-
-
-%-------------------------------------------------------------
 
 <<libc/port/profile.c>>=
 <<libc includes>>
@@ -4156,7 +3959,6 @@ typedef struct  Plink   Plink;
 #pragma profile off
 
 <<function [[_profin]]>>
-
 <<function [[_profout]]>>
 
 <<function [[_profdump]]>>
@@ -4172,18 +3974,16 @@ typedef struct  Plink   Plink;
 
 \subsection*{[[libc/port/qsort.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/qsort.c>>=
 /*
  * qsort -- simple quicksort
  */
 #include <u.h>
+// not even libc.h
 
 <<type [[Sort]]>>
 
 <<function [[swapb]]>>
-
 <<function [[swapi]]>>
 
 <<function [[pivot]]>>
@@ -4357,16 +4157,12 @@ extern int _runeneedsquotes(Rune*, int*);
 
 \subsection*{[[libc/port/rand.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/rand.c>>=
 <<libc includes>>
 <<function [[rand]]>>
 @
 
 \subsection*{[[libc/port/readn.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/readn.c>>=
 <<libc includes>>
@@ -4477,16 +4273,12 @@ fullrune(char *str, int n)
 
 \subsection*{[[libc/port/runebsearch.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/runebsearch.c>>=
 <<libc includes>>
 <<function [[_runebsearch]]>>
 @
 
 \subsection*{[[libc/port/runestrcat.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/runestrcat.c>>=
 <<libc includes>>
@@ -4495,16 +4287,12 @@ fullrune(char *str, int n)
 
 \subsection*{[[libc/port/runestrchr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/runestrchr.c>>=
 <<libc includes>>
 <<function [[runestrchr]]>>
 @
 
 \subsection*{[[libc/port/runestrcmp.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/runestrcmp.c>>=
 <<libc includes>>
@@ -4513,16 +4301,12 @@ fullrune(char *str, int n)
 
 \subsection*{[[libc/port/runestrcpy.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/runestrcpy.c>>=
 <<libc includes>>
 <<function [[runestrcpy]]>>
 @
 
 \subsection*{[[libc/port/runestrdup.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/runestrdup.c>>=
 <<libc includes>>
@@ -4556,8 +4340,6 @@ runestrecpy(Rune *s1, Rune *es1, Rune *s2)
 @
 
 \subsection*{[[libc/port/runestrlen.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/runestrlen.c>>=
 <<libc includes>>
@@ -4650,8 +4432,6 @@ runestrncpy(Rune *s1, Rune *s2, long n)
 
 \subsection*{[[libc/port/runestrrchr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/runestrrchr.c>>=
 <<libc includes>>
 <<function [[runestrrchr]]>>
@@ -4659,16 +4439,12 @@ runestrncpy(Rune *s1, Rune *s2, long n)
 
 \subsection*{[[libc/port/runestrstr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/runestrstr.c>>=
 <<libc includes>>
 <<function [[runestrstr]]>>
 @
 
 \subsection*{[[libc/port/runetype.c]] and [[runetypebody-6.2.0.h]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/runetype.c>>=
 <<libc includes>>
@@ -4678,8 +4454,6 @@ Rune*_runebsearch(Rune c, Rune *t, int n, int ne);
 @
 
 \subsection*{[[libc/port/sin.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/sin.c>>=
 /*
@@ -4709,92 +4483,6 @@ Rune*_runebsearch(Rune c, Rune *t, int n, int ne);
 
 \subsection*{[[libc/port/sinh.c]]}
 
-<<global [[p0]]>>=
-/*
- * sinh(arg) returns the hyperbolic sine of its floating-
- * point argument.
- *
- * The exponential function is called for arguments
- * greater in magnitude than 0.5.
- *
- * A series is used for arguments smaller in magnitude than 0.5.
- * The coefficients are #2029 from Hart & Cheney. (20.36D)
- *
- * cosh(arg) is computed from the exponential function for
- * all arguments.
- */
-
-static  double  p0  = -0.6307673640497716991184787251e+6;
-@
-
-<<global [[p1]]>>=
-static  double  p1  = -0.8991272022039509355398013511e+5;
-@
-
-<<global [[p2]]>>=
-static  double  p2  = -0.2894211355989563807284660366e+4;
-@
-
-<<global [[p3]]>>=
-static  double  p3  = -0.2630563213397497062819489e+2;
-@
-
-<<global [[q0]]>>=
-static  double  q0  = -0.6307673640497716991212077277e+6;
-@
-
-<<global [[q1]]>>=
-static  double  q1   = 0.1521517378790019070696485176e+5;
-@
-
-<<global [[q2]]>>=
-static  double  q2  = -0.173678953558233699533450911e+3;
-@
-
-<<function [[sinh]]>>=
-double
-sinh(double arg)
-{
-    double temp, argsq;
-    int sign;
-
-    sign = 0;
-    if(arg < 0) {
-        arg = -arg;
-        sign++;
-    }
-    if(arg > 21) {
-        temp = exp(arg)/2;
-        goto out;
-    }
-    if(arg > 0.5) {
-        temp = (exp(arg) - exp(-arg))/2;
-        goto out;
-    }
-    argsq = arg*arg;
-    temp = (((p3*argsq+p2)*argsq+p1)*argsq+p0)*arg;
-    temp /= (((argsq+q2)*argsq+q1)*argsq+q0);
-out:
-    if(sign)
-        temp = -temp;
-    return temp;
-}
-@
-
-<<function [[cosh]]>>=
-double
-cosh(double arg)
-{
-    if(arg < 0)
-        arg = - arg;
-    if(arg > 21)
-        return exp(arg)/2;
-    return (exp(arg) + exp(-arg))/2;
-}
-@
-
-%-------------------------------------------------------------
-
 <<libc/port/sinh.c>>=
 <<libc includes>>
 <<global [[p0]]>>
@@ -4812,8 +4500,6 @@ cosh(double arg)
 
 \subsection*{[[libc/port/sqrt.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/sqrt.c>>=
 /*
     sqrt returns the square root of its floating
@@ -4828,16 +4514,12 @@ cosh(double arg)
 
 \subsection*{[[libc/port/strcat.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/strcat.c>>=
 <<libc includes>>
 <<function [[strcat]]>>
 @
 
 \subsection*{[[libc/port/strchr.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/strchr.c>>=
 <<libc includes>>
@@ -4846,16 +4528,12 @@ cosh(double arg)
 
 \subsection*{[[libc/port/strcmp.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/strcmp.c>>=
 <<libc includes>>
 <<function [[strcmp]]>>
 @
 
 \subsection*{[[libc/port/strcpy.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/strcpy.c>>=
 <<libc includes>>
@@ -4900,8 +4578,6 @@ strcspn(char *s, char *b)
 
 \subsection*{[[libc/port/strdup.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/strdup.c>>=
 <<libc includes>>
 <<function [[strdup]]>>
@@ -4934,8 +4610,6 @@ strecpy(char *to, char *e, char *from)
 @
 
 \subsection*{[[libc/port/strlen.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/strlen.c>>=
 <<libc includes>>
@@ -5066,8 +4740,6 @@ strpbrk(char *cs, char *cb)
 
 \subsection*{[[libc/port/strrchr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/strrchr.c>>=
 <<libc includes>>
 <<function [[strrchr]]>>
@@ -5106,16 +4778,12 @@ strspn(char *s, char *b)
 
 \subsection*{[[libc/port/strstr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/strstr.c>>=
 <<libc includes>>
 <<function [[strstr]]>>
 @
 
 \subsection*{[[libc/port/strtod.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/strtod.c>>=
 <<libc includes>>
@@ -5200,8 +4868,6 @@ strtok(char *s, char *b)
 @
 
 \subsection*{[[libc/port/strtol.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/strtol.c>>=
 <<libc includes>>
@@ -5551,8 +5217,6 @@ Return:
 
 \subsection*{[[libc/port/tan.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/tan.c>>=
 /*
     floating point tangent
@@ -5575,33 +5239,6 @@ Return:
 @
 
 \subsection*{[[libc/port/tanh.c]]}
-
-<<function [[tanh]]>>=
-/*
-    tanh(arg) computes the hyperbolic tangent of its floating
-    point argument.
-
-    sinh and cosh are called except for large arguments, which
-    would cause overflow improperly.
- */
-
-double
-tanh(double arg)
-{
-
-    if(arg < 0) {
-        arg = -arg;
-        if(arg > 21)
-            return -1;
-        return -sinh(arg)/cosh(arg);
-    }
-    if(arg > 21)
-        return 1;
-    return sinh(arg)/cosh(arg);
-}
-@
-
-%-------------------------------------------------------------
 
 <<libc/port/tanh.c>>=
 <<libc includes>>
@@ -5743,13 +5380,10 @@ tokenize(char *s, char **args, int maxargs)
 
 \subsection*{[[libc/port/toupper.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/toupper.c>>=
 #include    <ctype.h>
 
 <<function [[toupper]]>>
-
 <<function [[tolower]]>>
 @
 
@@ -6134,8 +5768,6 @@ utfecpy(char *to, char *e, char *from)
 
 \subsection*{[[libc/port/utflen.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/utflen.c>>=
 <<libc includes>>
 <<function [[utflen]]>>
@@ -6178,8 +5810,6 @@ utfnlen(char *s, long m)
 
 \subsection*{[[libc/port/utfrrune.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/utfrrune.c>>=
 <<libc includes>>
 <<function [[utfrrune]]>>
@@ -6187,16 +5817,12 @@ utfnlen(char *s, long m)
 
 \subsection*{[[libc/port/utfrune.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/port/utfrune.c>>=
 <<libc includes>>
 <<function [[utfrune]]>>
 @
 
 \subsection*{[[libc/port/utfutf.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/port/utfutf.c>>=
 <<libc includes>>
@@ -6208,16 +5834,12 @@ utfnlen(char *s, long m)
 
 \subsection*{[[libc/9sys/abort.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/abort.c>>=
 <<libc includes>>
 <<function [[abort]]>>
 @
 
 \subsection*{[[libc/9sys/access.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/access.c>>=
 <<libc includes>>
@@ -6443,8 +6065,6 @@ static char nullstring[] = "";
 
 \subsection*{[[libc/9sys/convM2S.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/convM2S.c>>=
 <<libc includes>>
 #include    <fcall.h>
@@ -6457,8 +6077,6 @@ static char nullstring[] = "";
 @
 
 \subsection*{[[libc/9sys/convS2M.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/convS2M.c>>=
 <<libc includes>>
@@ -6476,8 +6094,6 @@ static char nullstring[] = "";
 @
 
 \subsection*{[[libc/9sys/cputime.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/cputime.c>>=
 <<libc includes>>
@@ -7157,8 +6773,6 @@ static void _dial_string_parse(char*, DS*);
 
 \subsection*{[[libc/9sys/dirfstat.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/dirfstat.c>>=
 <<libc includes>>
 #include <fcall.h>
@@ -7169,8 +6783,6 @@ static void _dial_string_parse(char*, DS*);
 @
 
 \subsection*{[[libc/9sys/dirfwstat.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/dirfwstat.c>>=
 <<libc includes>>
@@ -7362,8 +6974,6 @@ dirreadall(int fd, Dir **d)
 
 \subsection*{[[libc/9sys/dirstat.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/dirstat.c>>=
 <<libc includes>>
 #include <fcall.h>
@@ -7374,8 +6984,6 @@ dirreadall(int fd, Dir **d)
 @
 
 \subsection*{[[libc/9sys/dirwstat.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/dirwstat.c>>=
 <<libc includes>>
@@ -7491,16 +7099,12 @@ static char *qidtype(char*, uchar);
 
 \subsection*{[[libc/9sys/fork.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/fork.c>>=
 <<libc includes>>
 <<function [[fork]]>>
 @
 
 \subsection*{[[libc/9sys/getenv.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/getenv.c>>=
 <<libc includes>>
@@ -7667,8 +7271,6 @@ freenetconninfo(NetConnInfo *nci)
 
 \subsection*{[[libc/9sys/getpid.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/getpid.c>>=
 <<libc includes>>
 <<function [[getpid]]>>
@@ -7676,16 +7278,12 @@ freenetconninfo(NetConnInfo *nci)
 
 \subsection*{[[libc/9sys/getppid.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/getppid.c>>=
 <<libc includes>>
 <<function [[getppid]]>>
 @
 
 \subsection*{[[libc/9sys/getwd.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/getwd.c>>=
 <<libc includes>>
@@ -7761,60 +7359,6 @@ static struct {
 } fds[64];
 @
 
-<<function [[nsec]]>>=
-vlong
-nsec(void)
-{
-    uchar b[8];
-    vlong t;
-    int pid, i, f, tries;
-
-    /*
-     * Threaded programs may have multiple procs
-     * with different fd tables, so we may need to open
-     * /dev/bintime on a per-pid basis
-     */
-
-    /* First, look if we've opened it for this particular pid */
-    if((pid = _tos->pid) == 0)      /* 9vx bug, perhaps? */
-        _tos->pid = pid = getpid();
-    do{
-        f = -1;
-        for(i = 0; i < nelem(fds); i++)
-            if(fds[i].pid == pid){
-                f = fds[i].fd;
-                break;
-            }
-        tries = 0;
-        if(f < 0){
-            /* If it's not open for this pid, try the global pid */
-            if(fd >= 0)
-                f = fd;
-            else{
-                /* must open */
-                if((f = open("/dev/bintime", OREAD|OCEXEC)) < 0)
-                    return 0;
-                fd = f;
-                for(i = 0; i < nelem(fds); i++)
-                    if(fds[i].pid == pid || fds[i].pid == 0){
-                        fds[i].pid = pid;
-                        fds[i].fd = f;
-                        break;
-                    }
-            }
-        }
-        if(pread(f, b, sizeof b, 0) == sizeof b){
-            be2vlong(&t, b);
-            return t;
-        }
-        close(f);
-        if(i < nelem(fds))
-            fds[i].fd = -1;
-    }while(tries++ == 0);   /* retry once */
-    USED(tries);
-    return 0;
-}
-@
 
 %-------------------------------------------------------------
 
@@ -7834,16 +7378,12 @@ nsec(void)
 
 \subsection*{[[libc/9sys/nulldir.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/nulldir.c>>=
 <<libc includes>>
 <<function [[nulldir]]>>
 @
 
 \subsection*{[[libc/9sys/postnote.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/postnote.c>>=
 <<libc includes>>
@@ -7906,7 +7446,6 @@ privfree(void **p)
 }
 @
 
-
 %-------------------------------------------------------------
 
 <<libc/9sys/privalloc.c>>=
@@ -7924,8 +7463,6 @@ extern int  _nprivates;
 @
 
 \subsection*{[[libc/9sys/pushssl.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/pushssl.c>>=
 <<libc includes>>
@@ -7971,7 +7508,6 @@ finished(int hand, int isclient)
 }
 @
 
-
 %-------------------------------------------------------------
 
 <<libc/9sys/pushtls.c>>=
@@ -7987,8 +7523,6 @@ finished(int hand, int isclient)
 @
 
 \subsection*{[[libc/9sys/putenv.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/putenv.c>>=
 <<libc includes>>
@@ -8093,16 +7627,12 @@ getqlp(void)
 
 \subsection*{[[libc/9sys/read.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/read.c>>=
 <<libc includes>>
 <<function [[read]]>>
 @
 
 \subsection*{[[libc/9sys/read9pmsg.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/read9pmsg.c>>=
 <<libc includes>>
@@ -8179,8 +7709,6 @@ preadv(int fd, IOchunk *io, int nio, vlong off)
 
 \subsection*{[[libc/9sys/rerrstr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/rerrstr.c>>=
 <<libc includes>>
 <<function [[rerrstr]]>>
@@ -8188,16 +7716,11 @@ preadv(int fd, IOchunk *io, int nio, vlong off)
 
 \subsection*{[[libc/9sys/sbrk.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/sbrk.c>>=
 <<libc includes>>
-extern  char    end[];
 
+<<global extern declaration [[end]]>>
 <<global [[bloc]]>>
-
-// the syscall
-extern  int brk(void*);
 
 <<enum [[_anon_ (9sys/sbrk.c)]]>>
 
@@ -8231,8 +7754,6 @@ setnetmtpt(char *net, int n, char *x)
 
 \subsection*{[[libc/9sys/sysfatal.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/sysfatal.c>>=
 <<libc includes>>
 <<function [[_sysfatalimpl]]>>
@@ -8243,8 +7764,6 @@ setnetmtpt(char *net, int n, char *x)
 @
 
 \subsection*{[[libc/9sys/syslog.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/syslog.c>>=
 <<libc includes>>
@@ -8288,8 +7807,6 @@ sysname(void)
 @
 
 \subsection*{[[libc/9sys/time.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/time.c>>=
 <<libc includes>>
@@ -8562,16 +8079,12 @@ static  int rd_long(char**, long*);
 
 \subsection*{[[libc/9sys/truerand.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/truerand.c>>=
 <<libc includes>>
 <<function [[truerand]]>>
 @
 
 \subsection*{[[libc/9sys/wait.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/wait.c>>=
 <<libc includes>>
@@ -8582,8 +8095,6 @@ static  int rd_long(char**, long*);
 
 \subsection*{[[libc/9sys/waitpid.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/waitpid.c>>=
 <<libc includes>>
 #include <fcall.h>
@@ -8593,16 +8104,12 @@ static  int rd_long(char**, long*);
 
 \subsection*{[[libc/9sys/werrstr.c]]}
 
-%-------------------------------------------------------------
-
 <<libc/9sys/werrstr.c>>=
 <<libc includes>>
 <<function [[werrstr]]>>
 @
 
 \subsection*{[[libc/9sys/write.c]]}
-
-%-------------------------------------------------------------
 
 <<libc/9sys/write.c>>=
 <<libc includes>>
@@ -8668,7 +8175,10 @@ pwritev(int fd, IOchunk *io, int nio, vlong off)
 <<function [[pwritev]]>>
 @
 
+
+
 \section{[[lib_core/libc/fmt/]]}
+
 
 \subsection*{[[libc/fmt/fmtdef.h]]}
 
@@ -10539,20 +10049,6 @@ fmtvprint(Fmt *f, char *fmt, va_list args)
 
 \subsection*{[[libc/fmt/fprint.c]]}
 
-<<function [[fprint]]>>=
-int
-fprint(int fd, char *fmt, ...)
-{
-    int n;
-    va_list args;
-
-    va_start(args, fmt);
-    n = vfprint(fd, fmt, args);
-    va_end(args);
-    return n;
-}
-@
-
 %-------------------------------------------------------------
 
 <<libc/fmt/fprint.c>>=
@@ -10561,24 +10057,6 @@ fprint(int fd, char *fmt, ...)
 @
 
 \subsection*{[[libc/fmt/print.c]]}
-
-<<function [[libc_print]]>>=
-int
-libc_print(char *fmt, ...)
-{
-    int n;
-    va_list args;
-
-    va_start(args, fmt);
-    n = vfprint(1, fmt, args);
-    va_end(args);
-    return n;
-}
-@
-
-<<global [[print]]>>=
-int (*print)(char *fmt, ...) = &libc_print;
-@
 
 %-------------------------------------------------------------
 
@@ -10926,20 +10404,6 @@ snprint(char *buf, int len, char *fmt, ...)
 
 \subsection*{[[libc/fmt/sprint.c]]}
 
-<<function [[sprint]]>>=
-int
-sprint(char *buf, char *fmt, ...)
-{
-    int n;
-    va_list args;
-
-    va_start(args, fmt);
-    n = vsnprint(buf, 65536, fmt, args);    /* big number, but sprint is deprecated anyway */
-    va_end(args);
-    return n;
-}
-@
-
 %-------------------------------------------------------------
 
 <<libc/fmt/sprint.c>>=
@@ -11149,6 +10613,8 @@ vsnprint(char *buf, int len, char *fmt, va_list args)
 @
 
 
+
+
 \section{[[lib_core/libc/arm/]]}
 
 \subsection*{[[libc/arm/main.s]]}
@@ -11183,21 +10649,6 @@ cycles(uvlong* u)
 
 
 \subsection*{[[libc/arm/notejmp.c]]}
-
-<<function [[notejmp]](arm)>>=
-void
-notejmp(void *vr, jmp_buf j, int ret)
-{
-    struct Ureg *r = vr;
-
-    r->r0 = ret;
-    if(ret == 0)
-        r->r0 = 1;
-    r->pc = j[JMPBUFPC];
-    r->r13 = j[JMPBUFSP];
-    noted(NCONT);
-}
-@
 
 %-------------------------------------------------------------
 
@@ -12156,16 +11607,12 @@ void    abort(void);
 
 \subsection*{[[libbio/bbuffered.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bbuffered.c>>=
 <<libbio includes>>
 <<function [[Bbuffered]]>>
 @
 
 \subsection*{[[libbio/bfildes.c]]}
-
-%-------------------------------------------------------------
 
 <<libbio/bfildes.c>>=
 <<libbio includes>>
@@ -12174,16 +11621,12 @@ void    abort(void);
 
 \subsection*{[[libbio/bflush.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bflush.c>>=
 <<libbio includes>>
 <<function [[Bflush]]>>
 @
 
 \subsection*{[[libbio/bgetc.c]]}
-
-%-------------------------------------------------------------
 
 <<libbio/bgetc.c>>=
 <<libbio includes>>
@@ -12243,8 +11686,6 @@ struct	bgetd
 
 \subsection*{[[libbio/bgetrune.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bgetrune.c>>=
 <<libbio includes>>
 <<function [[Bgetrune]]>>
@@ -12252,8 +11693,6 @@ struct	bgetd
 @
 
 \subsection*{[[libbio/binit.c]]}
-
-%-------------------------------------------------------------
 
 <<libbio/binit.c>>=
 <<libbio includes>>
@@ -12274,16 +11713,12 @@ struct	bgetd
 
 \subsection*{[[libbio/boffset.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/boffset.c>>=
 <<libbio includes>>
 <<function [[Boffset]]>>
 @
 
 \subsection*{[[libbio/bprint.c]]}
-
-%-------------------------------------------------------------
 
 <<libbio/bprint.c>>=
 <<libbio includes>>
@@ -12292,8 +11727,6 @@ struct	bgetd
 
 \subsection*{[[libbio/bputc.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bputc.c>>=
 <<libbio includes>>
 <<function [[Bputc]]>>
@@ -12301,16 +11734,12 @@ struct	bgetd
 
 \subsection*{[[libbio/bputrune.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bputrune.c>>=
 <<libbio includes>>
 <<function [[Bputrune]]>>
 @
 
 \subsection*{[[libbio/brdline.c]]}
-
-%-------------------------------------------------------------
 
 <<libbio/brdline.c>>=
 <<libbio includes>>
@@ -12321,8 +11750,6 @@ struct	bgetd
 
 \subsection*{[[libbio/brdstr.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/brdstr.c>>=
 <<libbio includes>>
 <<function [[badd]]>>
@@ -12332,16 +11759,12 @@ struct	bgetd
 
 \subsection*{[[libbio/bread.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bread.c>>=
 <<libbio includes>>
 <<function [[Bread]]>>
 @
 
 \subsection*{[[libbio/bseek.c]]}
-
-%-------------------------------------------------------------
 
 <<libbio/bseek.c>>=
 <<libbio includes>>
@@ -12378,8 +11801,6 @@ main(int argc, char **argv)
 
 \subsection*{[[libbio/bvprint.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bvprint.c>>=
 <<libbio includes>>
 <<function [[fmtBflush]]>>
@@ -12389,13 +11810,10 @@ main(int argc, char **argv)
 
 \subsection*{[[libbio/bwrite.c]]}
 
-%-------------------------------------------------------------
-
 <<libbio/bwrite.c>>=
 <<libbio includes>>
 <<function [[Bwrite]]>>
 @
-
 
 
 
@@ -12449,12 +11867,9 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 @
 
 
-
 \section{[[lib_core/libthread/]]}
 
 \subsection*{[[libthread/ref.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/ref.c>>=
 <<libc includes>>
@@ -12462,7 +11877,6 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 #include "threadimpl.h"
 
 <<function [[incref]]>>
-
 <<function [[decref]]>>
 @
 
@@ -12583,15 +11997,11 @@ extern Rgrp     _threadrgrp;
 
 \subsection*{[[libthread/xincarm.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/xincarm.c>>=
 #include "xincport.h"
 @
 
 \subsection*{[[libthread/xincport.h]]}
-
-%-------------------------------------------------------------
 
 <<libthread/xincport.h>>=
 <<libc includes>>
@@ -12600,14 +12010,11 @@ extern Rgrp     _threadrgrp;
 <<global [[xincport_lock]]>>
 
 <<function [[_xinc]]>>
-
 <<function [[_xdec]]>>
 @
 
 
 \subsection*{[[libthread/globals.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/globals.c>>=
 <<libc includes>>
@@ -12628,9 +12035,6 @@ extern Rgrp     _threadrgrp;
 
 \subsection*{[[libthread/debug.c]]}
 
-
-%-------------------------------------------------------------
-
 <<libthread/debug.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -12644,8 +12048,6 @@ extern Rgrp     _threadrgrp;
 @
 
 \subsection*{[[libthread/id.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/id.c>>=
 <<libc includes>>
@@ -12684,8 +12086,6 @@ extern Rgrp     _threadrgrp;
 
 \subsection*{[[libthread/exit.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/exit.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -12702,11 +12102,7 @@ extern Rgrp     _threadrgrp;
 <<function [[threadwaitchan]]>>
 @
 
-
 \subsection*{[[libthread/lib.c]]}
-
-
-%-------------------------------------------------------------
 
 <<libthread/lib.c>>=
 <<libc includes>>
@@ -12721,8 +12117,6 @@ extern Rgrp     _threadrgrp;
 @
 
 \subsection*{[[libthread/note.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/note.c>>=
 <<libc includes>>
@@ -12756,8 +12150,6 @@ typedef struct Note Note;
 
 \subsection*{[[libthread/rendez.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/rendez.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -12776,8 +12168,6 @@ typedef struct Note Note;
 @
 
 \subsection*{[[libthread/sched.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/sched.c>>=
 <<libc includes>>
@@ -12806,8 +12196,6 @@ static Thread   *runthread(Proc*);
 
 \subsection*{[[libthread/create.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/create.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -12831,8 +12219,6 @@ static Thread   *runthread(Proc*);
 @
 
 \subsection*{[[libthread/channel.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/channel.c>>=
 <<libc includes>>
@@ -12913,8 +12299,6 @@ static int altexec(Alt*, int);
 
 \subsection*{[[libthread/main.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/main.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -12959,8 +12343,6 @@ extern int _threaddial(char*, char*, char*, int*);
 @
 
 \subsection*{[[libthread/kill.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/kill.c>>=
 <<libc includes>>
@@ -13013,8 +12395,6 @@ enum
 
 \subsection*{[[libthread/iocall.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/iocall.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -13025,8 +12405,6 @@ enum
 
 \subsection*{[[libthread/chanprint.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/chanprint.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -13035,8 +12413,6 @@ enum
 @
 
 \subsection*{[[libthread/ioclose.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/ioclose.c>>=
 <<libc includes>>
@@ -13050,8 +12426,6 @@ enum
 
 \subsection*{[[libthread/iodial.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/iodial.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -13063,8 +12437,6 @@ enum
 @
 
 \subsection*{[[libthread/ioopen.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/ioopen.c>>=
 <<libc includes>>
@@ -13078,8 +12450,6 @@ enum
 
 \subsection*{[[libthread/ioread.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/ioread.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -13091,8 +12461,6 @@ enum
 @
 
 \subsection*{[[libthread/ioreadn.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/ioreadn.c>>=
 <<libc includes>>
@@ -13106,8 +12474,6 @@ enum
 
 \subsection*{[[libthread/iosleep.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/iosleep.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -13120,8 +12486,6 @@ enum
 
 \subsection*{[[libthread/iowrite.c]]}
 
-%-------------------------------------------------------------
-
 <<libthread/iowrite.c>>=
 <<libc includes>>
 #include <thread.h>
@@ -13133,8 +12497,6 @@ enum
 @
 
 \subsection*{[[libthread/dial.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/dial.c>>=
 /*
@@ -13162,8 +12524,6 @@ static void _dial_string_parse(char*, DS*);
 @
 
 \subsection*{[[libthread/exec.c]]}
-
-%-------------------------------------------------------------
 
 <<libthread/exec.c>>=
 <<libc includes>>
@@ -14141,8 +13501,6 @@ static	int	bldcclass(void);
 
 \subsection*{[[libregexp/regerror.c]]}
 
-%-------------------------------------------------------------
-
 <<libregexp/regerror.c>>=
 <<libregexp includes>>
 <<function [[regerror]]>>
@@ -14350,16 +13708,12 @@ regexec2(Reprog *progp,	/* program to run */
 
 \subsection*{[[libregexp/regsub.c]]}
 
-%-------------------------------------------------------------
-
 <<libregexp/regsub.c>>=
 <<libregexp includes>>
 <<function [[regsub]]>>
 @
 
 \subsection*{[[libregexp/rregexec.c]]}
-
-%-------------------------------------------------------------
 
 <<libregexp/rregexec.c>>=
 <<libregexp includes>>
@@ -14373,8 +13727,6 @@ regexec2(Reprog *progp,	/* program to run */
 
 
 \subsection*{[[libregexp/rregsub.c]]}
-
-%-------------------------------------------------------------
 
 <<libregexp/rregsub.c>>=
 <<libregexp includes>>
@@ -14402,8 +13754,6 @@ regexec2(Reprog *progp,	/* program to run */
 
 \subsection*{[[libstring/s_alloc.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_alloc.c>>=
 <<libstring includes>>
 
@@ -14422,17 +13772,12 @@ regexec2(Reprog *progp,	/* program to run */
 
 \subsection*{[[libstring/s_append.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_append.c>>=
 <<libstring includes>>
-
 <<function [[s_append]]>>
 @
 
 \subsection*{[[libstring/s_array.c]]}
-
-%-------------------------------------------------------------
 
 <<libstring/s_array.c>>=
 <<libstring includes>>
@@ -14444,57 +13789,40 @@ extern String*	_s_alloc(void);
 
 \subsection*{[[libstring/s_copy.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_copy.c>>=
 <<libstring includes>>
-
 <<function [[s_copy]]>>
 @
 
 \subsection*{[[libstring/s_getline.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_getline.c>>=
 <<libstring includes bis>>
-
 <<function [[s_getline]]>>
 @
 
 \subsection*{[[libstring/s_grow.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_grow.c>>=
 <<libstring includes>>
-
 <<function [[s_grow]]>>
 @
 
 \subsection*{[[libstring/s_memappend.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_memappend.c>>=
 <<libstring includes>>
-
 <<function [[s_memappend]]>>
 @
 
 \subsection*{[[libstring/s_nappend.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_nappend.c>>=
 <<libstring includes>>
-
 <<function [[s_nappend]]>>
 @
 
 \subsection*{[[libstring/s_parse.c]]}
-
-%-------------------------------------------------------------
 
 <<libstring/s_parse.c>>=
 <<libstring includes>>
@@ -14506,17 +13834,12 @@ extern String*	_s_alloc(void);
 
 \subsection*{[[libstring/s_putc.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_putc.c>>=
 <<libstring includes>>
-
 <<function [[s_putc]]>>
 @
 
 \subsection*{[[libstring/s_rdinstack.c]]}
-
-%-------------------------------------------------------------
 
 <<libstring/s_rdinstack.c>>=
 <<libstring includes bis>>
@@ -14537,8 +13860,6 @@ struct Sinstack{
 
 \subsection*{[[libstring/s_read.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_read.c>>=
 <<libstring includes bis>>
 
@@ -14552,53 +13873,38 @@ enum
 
 \subsection*{[[libstring/s_read_line.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_read_line.c>>=
 <<libstring includes bis>>
-
 <<function [[s_read_line]]>>
 @
 
 \subsection*{[[libstring/s_reset.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_reset.c>>=
 <<libstring includes>>
 
 <<function [[s_reset]]>>
-
 <<function [[s_restart]]>>
 @
 
 \subsection*{[[libstring/s_terminate.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_terminate.c>>=
 <<libstring includes>>
-
 <<function [[s_terminate]]>>
 @
 
 \subsection*{[[libstring/s_tolower.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_tolower.c>>=
 <<libstring includes>>
-
 <<function [[s_tolower]]>>
 @
 
 \subsection*{[[libstring/s_unique.c]]}
 
-%-------------------------------------------------------------
-
 <<libstring/s_unique.c>>=
 <<libstring includes>>
-
 <<function [[s_unique]]>>
 @
 
@@ -14611,9 +13917,6 @@ enum
 
 
 \subsection*{[[libflate/adler.c]]}
-
-
-%-------------------------------------------------------------
 
 <<libflate/adler.c>>=
 <<libflate includes>>
@@ -14655,7 +13958,6 @@ mkcrctab(ulong poly)
 }
 @
 
-
 %-------------------------------------------------------------
 
 <<libflate/crc.c>>=
@@ -14664,7 +13966,6 @@ mkcrctab(ulong poly)
 
 <<function [[blockcrc]]>>
 @
-
 
 \subsection*{[[libflate/deflate.c]]}
 
@@ -14702,8 +14003,6 @@ deflatereset(LZstate *lz, int level, int debug)
 }
 @
 
-
-
 <<function [[lzwrite]]>>=
 static void
 lzwrite(LZstate *lz, void *buf, int n)
@@ -14729,10 +14028,6 @@ lzflush(LZstate *lz)
     lz->out = lz->obuf;
 }
 @
-
-
-
-
 
 
 
@@ -14943,8 +14238,6 @@ pivot(ulong *c, int a, int n)
     return pj;
 }
 @
-
-
 
 %-------------------------------------------------------------
 
@@ -15263,8 +14556,6 @@ blwrite(void *vb, void *buf, int n)
 }
 @
 
-
-
 %-------------------------------------------------------------
 
 <<libflate/deflateblock.c>>=
@@ -15284,7 +14575,6 @@ struct Block
 <<function [[deflateblock]]>>
 @
 
-
 \subsection*{[[libflate/deflatezlib.c]]}
 
 <<function [[zlread]]>>=
@@ -15301,8 +14591,6 @@ zlread(void *vzr, void *buf, int n)
     return n;
 }
 @
-
-
 
 %-------------------------------------------------------------
 
@@ -15372,17 +14660,11 @@ deflatezlibblock(uchar *dst, int dsize, uchar *src, int ssize, int level, int de
 
 \subsection*{[[libflate/flateerr.c]]}
 
-%-------------------------------------------------------------
-
 <<libflate/flateerr.c>>=
 <<libflate includes>>
 <<function [[flateerr]]>>
 @
-
-
 \subsection*{[[libflate/inflate.c]]}
-
-
 
 <<function [[uncblock]]>>=
 static int
@@ -15579,9 +14861,6 @@ revcode(int c, int b)
     return c;
 }
 @
-
-
-
 
 
 %-------------------------------------------------------------
@@ -15882,9 +15161,6 @@ struct Block
 
 
 \subsection*{[[libflate/zlib.h]]}
-
-
-%-------------------------------------------------------------
 
 <<libflate/zlib.h>>=
 /*

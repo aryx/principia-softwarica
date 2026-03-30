@@ -6,7 +6,6 @@
 /*e: libc includes */
 #include <str.h> // was string.h
 /*e: libstring includes */
-
 /*s: function [[s_terminate]] */
 void
 s_terminate(String *s)

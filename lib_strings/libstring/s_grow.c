@@ -6,7 +6,6 @@
 /*e: libc includes */
 #include <str.h> // was string.h
 /*e: libstring includes */
-
 /*s: function [[s_grow]] */
 /* grow a String's allocation by at least `incr' bytes */
 extern String*

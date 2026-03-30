@@ -6,7 +6,6 @@
 /*e: libc includes */
 #include <str.h> // was string.h
 /*e: libstring includes */
-
 /*s: function [[s_unique]] */
 String*
 s_unique(String *s)

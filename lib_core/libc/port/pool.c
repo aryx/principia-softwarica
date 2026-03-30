@@ -413,7 +413,6 @@ listadd(Free *list, Free *node)
     return list;
 }
 /*e: function [[listadd]] */
-
 /*s: function [[listdelete]] */
 /* listdelete: remove node from a doubly linked list */
 static Free*
@@ -466,7 +465,6 @@ pooladd(Pool *p, Alloc *anode)
     return node;
 }
 /*e: function [[pooladd]] */
-
 /*s: function [[pooldel]] */
 /* pooldel: remove node from the free pool */
 static Alloc*
@@ -514,7 +512,6 @@ dsize2bsize(Pool *p, ulong sz)
     return sz;
 }
 /*e: function [[dsize2bsize]] */
-
 /*s: function [[bsize2asize]] */
 static ulong
 bsize2asize(Pool *p, ulong sz)
@@ -1052,7 +1049,6 @@ B2D(Pool *p, Alloc *a)
     return _B2D(a);
 }
 /*e: function [[B2D]] */
-
 /*s: function [[D2B]] */
 /*
 static void*
@@ -1351,7 +1347,10 @@ poolalloc(Pool *p, ulong n)
     verbosity {
         pooldumpl(p);
     }
+
     v = poolallocl(p, n);
+
+
     paranoia {
         poolcheckl(p);
     }
@@ -1456,7 +1455,9 @@ poolfree(Pool *p, void *v)
     verbosity {
         pooldumpl(p);
     }
+
     poolfreel(p, v);
+
     paranoia {
         poolcheckl(p);
     }

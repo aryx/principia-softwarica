@@ -104,8 +104,8 @@ extern  void    notejmp(void*, jmp_buf, int);
 /*s: signatures memory management functions */
 extern  void*   malloc(ulong);
 extern  void    free(void*);
-
 extern  void*   realloc(void*, ulong);
+
 extern  void*   mallocz(ulong, bool);
 extern  ulong   msize(void*);
 /*e: signatures memory management functions */

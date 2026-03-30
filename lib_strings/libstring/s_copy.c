@@ -6,7 +6,6 @@
 /*e: libc includes */
 #include <str.h> // was string.h
 /*e: libstring includes */
-
 /*s: function [[s_copy]] */
 /* return a String containing a copy of the passed char array */
 extern String*
