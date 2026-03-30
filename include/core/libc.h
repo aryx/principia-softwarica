@@ -674,14 +674,11 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
 extern  void    (*_assert)(char*);
 
-/*s: signatures error and logging functions */
-extern  void    perror(char*);
-extern  void    sysfatal(char*, ...);
+/*s: signatures logging functions */
 extern  void    syslog(int, char*, char*, ...);
 
-#pragma varargck    argpos  sysfatal    1
 #pragma varargck    argpos  syslog  3
-/*e: signatures error and logging functions */
+/*e: signatures logging functions */
 
 // useful for stack trace?
 extern  uintptr getcallerpc(void*);

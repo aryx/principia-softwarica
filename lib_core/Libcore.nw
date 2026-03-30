@@ -956,6 +956,10 @@ memory operations                         & \ref{chap:memops}             & [[po
 pool interface                            & \ref{chap:malloc}             & [[pool.h]]               & [<Pool>] [<Pool\_flag>]              & 100 \\
 heap allocator                            & \ref{chap:malloc}             & [[port/pool.c]]          & [<Bhdr>] [<Free>] [<Arena>]          & 800 \\
 malloc wrappers                           & \ref{chap:malloc}             & [[port/malloc.c]] etc.   & [<malloc>] [<free>] [<sbrk>]         & 100 \\
+formatted output                          & \ref{chap:fmt}                & [[fmt/dofmt.c]] etc.     & [<fprint>] [<sprint>] [<Fmt>]        & 1300 \\
+% also: fmt/{fprint,sprint,snprint,seprint,smprint,vfprint,vseprint,vsmprint,vsnprint}.c,
+%   fmt/{fmtstr,fmtprint,fmtvprint,fmtfd,fmtrune,fmtquote,fmtlock,dorfmt,errfmt,fltfmt}.c,
+%   fmt/rune{fmtstr,sprint,snprint,seprint,smprint,vseprint,vsmprint,vsnprint}.c (30 files)
 \midrule
 % Part II: Data Processing
 C strings                                 & \ref{chap:strings}            & [[port/strlen.c]] etc.   & [<strlen>] [<strcmp>] [<strcpy>]      & 210 \\
@@ -964,10 +968,6 @@ rune strings                              & \ref{chap:strings}            & [[po
 % also: port/rune{strcat,strchr,strcmp,strcpy,strdup,strecpy,strlen,strncat,strncmp,strncpy,strrchr,strstr,type,base,bsearch}.c (16 files)
 UTF-8 strings                             & \ref{chap:strings}            & [[port/utflen.c]] etc.   & [<utflen>] [<utfrune>]               & 90 \\
 % also: port/utf{ecpy,nlen,rrune}.c, port/u{16,32,64}.c (6 files)
-formatted output                          & \ref{chap:strings}            & [[fmt/dofmt.c]] etc.     & [<fprint>] [<sprint>] [<Fmt>]        & 1300 \\
-% also: fmt/{fprint,sprint,snprint,seprint,smprint,vfprint,vseprint,vsmprint,vsnprint}.c,
-%   fmt/{fmtstr,fmtprint,fmtvprint,fmtfd,fmtrune,fmtquote,fmtlock,dorfmt,errfmt,fltfmt}.c,
-%   fmt/rune{fmtstr,sprint,snprint,seprint,smprint,vseprint,vsmprint,vsnprint}.c (30 files)
 % also: port/{nrand,frand,ntruerand}.c
 regexp interface                          & \ref{chap:regexp}             & [[regexp.h]]             & [<Reprog>] [<Resub>]                 & 40 \\
 regexp compilation                        & \ref{chap:regexp}             & [[libregexp/regcomp.c]]  & [<regcomp>] [<Reinst>]               & 660 \\
@@ -979,8 +979,8 @@ parsing                                   & \ref{chap:math}               & [[po
 % also: port/{atof,atoll,strtoll,strtoul,strtoull,charstod,muldiv}.c
 random numbers                            & \ref{chap:math}               & [[port/lrand.c]]         & [<lrand>] [<nrand>]                  & 80 \\
 %compression interface                    &                               & [[flate.h]]              & [<LZstate>]                          & 40 \\
-deflate                                   &                               & [[libflate/deflate.c]]   & [<deflate>] [<LZstate>]              & 1360 \\
-inflate                                   &                               & [[libflate/inflate.c]] etc. & [<inflate>] [<crc>]              & 1050 \\
+deflate                                   & \ref{chap:compression}        & [[libflate/deflate.c]]   & [<deflate>] [<LZstate>]              & 1360 \\
+inflate                                   & \ref{chap:compression}        & [[libflate/inflate.c]] etc. & [<inflate>] [<crc>]              & 1050 \\
 % also: libflate/{deflateblock,deflatezlib,inflateblock,inflatezlibblock,inflatezlib,crc,adler}.c (11 files total)
 \midrule
 % Part III: System Services
@@ -1142,8 +1142,10 @@ Part~I ({\em Foundations}) covers the bedrock:
 the core types and data structures in Chapter~\ref{chap:core-ds},
 the system call interface in Chapter~\ref{chap:user-kernel},
 the C runtime entry point [[_main()]] in Chapter~\ref{chap:main},
-and memory management (Chapter~\ref{chap:memops} for low-level
-operations, Chapter~\ref{chap:malloc} for the [[malloc]] allocator).
+memory management (Chapter~\ref{chap:memops} for low-level
+operations, Chapter~\ref{chap:malloc} for the [[malloc]] allocator),
+and formatted output in Chapter~\ref{chap:fmt} (the extensible
+[[print]] family used everywhere, including the kernel).
 %
 Part~II ({\em Data Processing}) covers pure computation:
 strings in Chapter~\ref{chap:strings} (C strings, runes, and UTF-8),
@@ -1185,8 +1187,9 @@ to other books in the \principia series.
 This part covers the bedrock that everything else is built on:
 the type system ([[u.h]] and [[libc.h]]), the C runtime entry
 point ([[_main]]), the system call interface to the kernel,
-and memory management---from the raw [[sbrk]] system call
-through the [[Pool]] allocator to [[malloc]]/[[free]].
+memory management---from the raw [[sbrk]] system call
+through the [[Pool]] allocator to [[malloc]]/[[free]]---and
+formatted output (the extensible [[print]] family).
 
 %******************************************************************************
 \chapter{Core Types and Data Structures}
@@ -4158,6 +4161,7 @@ getrealloctag(void *v)
 %******************************************************************************
 \chapter{Formatted Output}
 %******************************************************************************
+\label{chap:fmt}
 
 %last:
 % - https://github.com/wkoszek/mini_printf
@@ -8921,6 +8925,7 @@ typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
 %******************************************************************************
 \chapter{Compression}
 %******************************************************************************
+\label{chap:compression}
 % libflate
 
 %claude:
@@ -13495,6 +13500,13 @@ extern	void	werrstr(char*, ...);
 
 <<constant [[ERRMAX]]>>=
 #define	ERRMAX	128	/* max length of error string */
+@
+
+<<signatures error other wrapper>>=
+extern  void    perror(char*);
+extern  void    sysfatal(char*, ...);
+
+#pragma varargck    argpos  sysfatal    1
 @
 
 \section{Syscall: [[errstr()]]}
@@ -20739,12 +20751,9 @@ and the memory allocator's built-in corruption detection
 generates a segmentation fault to produce a core dump for
 post-mortem analysis with [[acid]] (see \book{Debugger}).
 
-<<signatures error and logging functions>>=
-extern  void    perror(char*);
-extern  void    sysfatal(char*, ...);
+<<signatures logging functions>>=
 extern  void    syslog(int, char*, char*, ...);
 
-#pragma varargck    argpos  sysfatal    1
 #pragma varargck    argpos  syslog  3
 @
 

@@ -337,6 +337,12 @@ extern	void	werrstr(char*, ...);
 
 #pragma	varargck	argpos	werrstr	1
 /*e: signatures error syscall wrapper */
+/*s: signatures error other wrapper */
+extern  void    perror(char*);
+extern  void    sysfatal(char*, ...);
+
+#pragma varargck    argpos  sysfatal    1
+/*e: signatures error other wrapper */
 
 //----------------------------------------------------------------------------
 // Misc
