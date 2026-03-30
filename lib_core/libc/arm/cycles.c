@@ -1,7 +1,8 @@
 /*s: libc/arm/cycles.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #pragma profile off
 
 /*s: function [[cycles]](arm) */

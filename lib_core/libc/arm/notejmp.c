@@ -1,6 +1,8 @@
 /*s: libc/arm/notejmp.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <ureg.h>
 
 /*s: function [[notejmp]](arm) */

@@ -1,7 +1,8 @@
 /*s: libc/9sys/nulldir.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[nulldir]] */
 void
 nulldir(Dir *d)

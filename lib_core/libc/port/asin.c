@@ -5,9 +5,10 @@
  *
  * Arctan is called after appropriate range reduction.
  */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[asin]] */
 double
 asin(double arg)
@@ -32,7 +33,6 @@ asin(double arg)
     return temp;
 }
 /*e: function [[asin]] */
-
 /*s: function [[acos]] */
 double
 acos(double arg)

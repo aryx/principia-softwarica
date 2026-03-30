@@ -1,7 +1,8 @@
 /*s: libc/port/tokenize.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[qsep]] */
 static char qsep[] = " \t\r\n";
 /*e: global [[qsep]] */

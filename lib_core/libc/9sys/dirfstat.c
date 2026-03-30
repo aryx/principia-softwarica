@@ -1,6 +1,8 @@
 /*s: libc/9sys/dirfstat.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <fcall.h>
 
 /*s: enum [[_anon_ (9sys/dirfstat.c)]] */

@@ -1,7 +1,8 @@
 /*s: libc/9sys/getpid.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[getpid]] */
 int
 getpid(void)

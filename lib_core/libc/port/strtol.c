@@ -1,7 +1,8 @@
 /*s: libc/port/strtol.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[LONG_MAX]] */
 #define LONG_MAX    2147483647L
 /*e: constant [[LONG_MAX]] */

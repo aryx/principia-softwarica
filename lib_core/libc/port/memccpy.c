@@ -1,7 +1,8 @@
 /*s: libc/port/memccpy.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[memccpy]] */
 void*
 memccpy(void *a1, void *a2, int c, ulong n)

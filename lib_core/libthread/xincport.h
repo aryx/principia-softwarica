@@ -1,6 +1,8 @@
 /*s: libthread/xincport.h */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <thread.h>
 
 /*s: global [[xincport_lock]] */

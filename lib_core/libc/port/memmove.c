@@ -1,7 +1,8 @@
 /*s: libc/port/memmove.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[memmove]] */
 void*
 memmove(void *a1, void *a2, ulong n)
@@ -30,7 +31,6 @@ back:
     return a1;
 }
 /*e: function [[memmove]] */
-
 /*s: function [[memcpy]] */
 void*
 memcpy(void *a1, void *a2, ulong n)

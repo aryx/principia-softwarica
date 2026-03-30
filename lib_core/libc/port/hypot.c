@@ -7,9 +7,10 @@
  * Vol. 27, Number 6, pp. 577-581, Nov. 1983
  */
 
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[hypot]] */
 double
 hypot(double p, double q)

@@ -39,8 +39,10 @@
  * to merge it with its two neighbors via p->merge.
  */
 
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <pool.h>
 
 typedef struct Alloc    Alloc;

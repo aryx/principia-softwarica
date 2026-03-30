@@ -1,6 +1,8 @@
 /*s: libc/port/floor.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[floor]] */
 /*
  * floor and ceil-- greatest integer <= arg
@@ -21,7 +23,6 @@ floor(double d)
     return d;
 }
 /*e: function [[floor]] */
-
 /*s: function [[ceil]] */
 double
 ceil(double d)

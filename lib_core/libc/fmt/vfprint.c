@@ -1,6 +1,8 @@
 /*s: libc/fmt/vfprint.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include "fmtdef.h"
 
 /*s: function [[_fmtFdFlush]] */

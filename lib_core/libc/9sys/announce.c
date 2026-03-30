@@ -1,6 +1,8 @@
 /*s: libc/9sys/announce.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <ctype.h>
 
 static int  nettrans(char*, char*, int na, char*, int);

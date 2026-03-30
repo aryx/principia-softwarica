@@ -12,9 +12,10 @@
 
     coefficients are #5077 from Hart & Cheney. (19.56D)
 */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[sq2p1]] */
 #define sq2p1 2.414213562373095048802e0
 /*e: constant [[sq2p1]] */

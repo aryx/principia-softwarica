@@ -1,7 +1,8 @@
 /*s: libc/port/pow10.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: global [[tab]] */
 /*
  * this table might overflow 127-bit exponent representations.

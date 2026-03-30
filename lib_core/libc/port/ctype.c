@@ -1,6 +1,8 @@
 /*s: libc/port/ctype.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <ctype.h>
 
 /*s: global [[_ctype]] */

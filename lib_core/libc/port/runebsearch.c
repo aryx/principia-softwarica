@@ -1,7 +1,8 @@
 /*s: libc/port/runebsearch.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[_runebsearch]] */
 Rune*
 _runebsearch(Rune c, Rune *t, int n, int ne)

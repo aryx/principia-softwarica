@@ -1,6 +1,8 @@
 /*s: libc/fmt/fltfmt.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <ctype.h>
 #include "fmtdef.h"
 

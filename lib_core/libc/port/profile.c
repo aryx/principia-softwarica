@@ -1,6 +1,8 @@
 /*s: libc/port/profile.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
+/*e: libc includes */
 #include    <tos.h>
 
 extern  long    _callpc(void**);

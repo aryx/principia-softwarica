@@ -1,7 +1,8 @@
 /*s: libc/port/frand.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: constant [[MASK]] */
 #define MASK    0x7fffffffL
 /*e: constant [[MASK]] */

@@ -1,6 +1,8 @@
 /*s: libc/port/u16.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[t16e]] */
 static char t16e[] = "0123456789ABCDEF";
 /*e: global [[t16e]] */

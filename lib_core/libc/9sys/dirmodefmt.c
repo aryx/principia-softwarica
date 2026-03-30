@@ -1,6 +1,8 @@
 /*s: libc/9sys/dirmodefmt.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <fcall.h>
 
 /*s: global [[modes]] */

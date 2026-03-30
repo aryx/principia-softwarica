@@ -1,7 +1,8 @@
 /*s: libc/9sys/access.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[access]] */
 int
 access(char *name, int mode)

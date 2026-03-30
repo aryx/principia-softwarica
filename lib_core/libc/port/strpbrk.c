@@ -1,6 +1,8 @@
 /*s: libc/port/strpbrk.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant N (port/strpbrk.c) */
 #define N   256
 /*e: constant N (port/strpbrk.c) */

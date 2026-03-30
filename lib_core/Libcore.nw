@@ -2710,7 +2710,7 @@ struct Onex{
 % exits.
 
 
-% profile is turned off around this function
+% note that profile is turned off around this function with #pragma
 <<function [[exits]]>>=
 void
 exits(char *s)
@@ -3837,7 +3837,114 @@ free(void *v)
 }
 @
 
+\section{[[poolalloc()]]}
+
+\section{[[poolfree()]]}
+
+\section{Other functions}
+
+<<function [[mallocz]]>>=
+void*
+mallocz(ulong size, int clr)
+{
+    void *v;
+
+    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    if(Npadlong && v != nil){
+        v = (ulong*)v+Npadlong;
+        setmalloctag(v, getcallerpc(&size));
+        setrealloctag(v, 0);
+    }
+    if(clr && v != nil)
+        memset(v, 0, size);
+    return v;
+}
+@
+
+<<function [[realloc]]>>=
+void*
+realloc(void *v, ulong size)
+{
+    void *nv;
+
+    if(size == 0){
+        free(v);
+        return nil;
+    }
+
+    if(v)
+        v = (ulong*)v-Npadlong;
+    size += Npadlong*sizeof(ulong);
+
+    if(nv = poolrealloc(mainmem, v, size)){
+        nv = (ulong*)nv+Npadlong;
+        setrealloctag(nv, getcallerpc(&v));
+        if(v == nil)
+            setmalloctag(nv, getcallerpc(&v));
+    }       
+    return nv;
+}
+@
+
+<<function [[msize]]>>=
+ulong
+msize(void *v)
+{
+    return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
+}
+@
+
+
 \section{Debugging support}
+
+<<function [[setmalloctag]]>>=
+void
+setmalloctag(void *v, ulong pc)
+{
+    ulong *u;
+    USED(v, pc);
+    if(Npadlong <= MallocOffset || v == nil)
+        return;
+    u = v;
+    u[-Npadlong+MallocOffset] = pc;
+}
+@
+
+<<function [[setrealloctag]]>>=
+void
+setrealloctag(void *v, ulong pc)
+{
+    ulong *u;
+    USED(v, pc);
+    if(Npadlong <= ReallocOffset || v == nil)
+        return;
+    u = v;
+    u[-Npadlong+ReallocOffset] = pc;
+}
+@
+
+<<function [[getmalloctag]]>>=
+ulong
+getmalloctag(void *v)
+{
+    USED(v);
+    if(Npadlong <= MallocOffset)
+        return ~0;
+    return ((ulong*)v)[-Npadlong+MallocOffset];
+}
+@
+
+<<function [[getrealloctag]]>>=
+ulong
+getrealloctag(void *v)
+{
+    USED(v);
+    if(Npadlong <= ReallocOffset)
+        return ((ulong*)v)[-Npadlong+ReallocOffset];
+    return ~0;
+}
+@
+
 
 \section{Advanced topics}
 
@@ -7601,6 +7708,8 @@ periodicity of sin/cos, then evaluates a rational polynomial
 $p(x)/q(x)$. The coefficients (p0--p4, q0--q3) are chosen
 to give double-precision accuracy over this range.
 
+\subsection{Direct functions}
+
 <<function [[cos]]>>=
 double
 cos(double arg)
@@ -7784,6 +7893,7 @@ tan(double arg)
 @
 
 
+\subsection{Inverse functions}
 
 
 <<function [[asin]]>>=
@@ -7837,6 +7947,122 @@ atan(double arg)
     return -satan(-arg);
 }
 @
+
+
+<<constant [[sq2p1]]>>=
+#define sq2p1 2.414213562373095048802e0
+@
+
+<<constant [[sq2m1]]>>=
+#define sq2m1  .414213562373095048802e0
+@
+
+<<constant [[p4]]>>=
+#define p4  .161536412982230228262e2
+@
+
+<<constant [[p3]]>>=
+#define p3  .26842548195503973794141e3
+@
+
+<<constant [[p2]]>>=
+#define p2  .11530293515404850115428136e4
+@
+
+<<constant [[p1]]>>=
+#define p1  .178040631643319697105464587e4
+@
+
+<<constant [[p0]]>>=
+#define p0  .89678597403663861959987488e3
+@
+
+<<constant [[q4]]>>=
+#define q4  .5895697050844462222791e2
+@
+
+<<constant [[q3]]>>=
+#define q3  .536265374031215315104235e3
+@
+
+<<constant [[q2]]>>=
+#define q2  .16667838148816337184521798e4
+@
+
+<<constant [[q1]]>>=
+#define q1  .207933497444540981287275926e4
+@
+
+<<constant [[q0]]>>=
+#define q0  .89678597403663861962481162e3
+@
+
+<<function [[xatan]]>>=
+/*
+    xatan evaluates a series valid in the
+    range [-0.414...,+0.414...]. (tan(pi/8))
+ */
+
+static
+double
+xatan(double arg)
+{
+    double argsq, value;
+
+    argsq = arg*arg;
+    value = ((((p4*argsq + p3)*argsq + p2)*argsq + p1)*argsq + p0);
+    value = value/(((((argsq + q4)*argsq + q3)*argsq + q2)*argsq + q1)*argsq + q0);
+    return value*arg;
+}
+@
+
+<<function [[satan]]>>=
+/*
+    satan reduces its argument (known to be positive)
+    to the range [0,0.414...] and calls xatan.
+ */
+
+static
+double
+satan(double arg)
+{
+
+    if(arg < sq2m1)
+        return xatan(arg);
+    if(arg > sq2p1)
+        return PIO2 - xatan(1/arg);
+    return PIO2/2 + xatan((arg-1)/(arg+1));
+}
+@
+
+
+<<function [[atan2]]>>=
+/*
+    atan2 discovers what quadrant the angle
+    is in and calls atan.
+*/
+
+double
+atan2(double arg1, double arg2)
+{
+
+    if(arg1+arg2 == arg1) {
+        if(arg1 >= 0)
+            return PIO2;
+        return -PIO2;
+    }
+    arg1 = atan(arg1/arg2);
+    if(arg2 < 0) {
+        if(arg1 <= 0)
+            return arg1 + PI;
+        return arg1 - PI;
+    }
+    return arg1;
+}
+@
+
+
+\subsection{Hyperbolic functions}
 
 
 
@@ -8192,6 +8418,50 @@ static  ulong*  rng_tap = rng_vec;
 <<global [[rng_feed]]>>=
 static  ulong*  rng_feed = 0;
 @
+
+
+<<function [[srand]]>>=
+void
+srand(long seed)
+{
+    lock(&lk);
+    isrand(seed);
+    unlock(&lk);
+}
+@
+
+
+
+<<function [[isrand]]>>=
+static void
+isrand(long seed)
+{
+    long lo, hi, x;
+    int i;
+
+    rng_tap = rng_vec;
+    rng_feed = rng_vec+LEN-TAP;
+    seed = seed%M;
+    if(seed < 0)
+        seed += M;
+    if(seed == 0)
+        seed = 89482311;
+    x = seed;
+    /*
+     *  Initialize by x[n+1] = 48271 * x[n] mod (2**31 - 1)
+     */
+    for(i = -20; i < LEN; i++) {
+        hi = x / Q;
+        lo = x % Q;
+        x = A*lo - R*hi;
+        if(x < 0)
+            x += M;
+        if(i >= 0)
+            rng_vec[i] = x;
+    }
+}
+@
+
 
 
 <<function [[truerand]]>>=
@@ -10415,6 +10685,26 @@ A typical use looks like this:
   }
   Bterm(&bin);
 \end{verbatim}
+
+
+<<signatures [[Bxxx]] functions>>=
+int	Binit(Biobuf*, fdt, int);
+Biobuf*	Bopen(char*, int);
+int	Bterm(Biobufhdr*);
+
+int	Bgetc(BiobufGen*);
+int	Bungetc(Biobufhdr*);
+long	Bread(Biobufhdr*, void*, long);
+
+int	Bputc(BiobufGen*, int);
+long	Bwrite(BiobufGen*, void*, long);
+int	Bprint(BiobufGen*, char*, ...);
+
+#pragma	varargck	argpos	Bprint	2
+
+void*	Brdline(Biobufhdr*, int);
+int	Blinelen(Biobufhdr*);
+@
 
 \section{Data structures}
 

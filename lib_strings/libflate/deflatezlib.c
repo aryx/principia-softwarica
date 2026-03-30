@@ -1,7 +1,9 @@
 /*s: libflate/deflatezlib.c */
 /*s: libflate includes */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <flate.h>
 /*e: libflate includes */
 #include "zlib.h"

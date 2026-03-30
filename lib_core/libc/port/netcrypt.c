@@ -1,6 +1,8 @@
 /*s: libc/port/netcrypt.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <auth.h>
 
 /*s: function [[netcrypt]] */

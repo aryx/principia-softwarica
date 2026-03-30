@@ -1,7 +1,8 @@
 /*s: libc/port/strecpy.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[strecpy]] */
 char*
 strecpy(char *to, char *e, char *from)

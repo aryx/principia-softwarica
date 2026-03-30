@@ -1,7 +1,8 @@
 /*s: libc/port/u32.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[dec32]] */
 int
 dec32(uchar *dest, int ndest, char *src, int nsrc)

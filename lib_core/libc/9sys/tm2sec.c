@@ -1,7 +1,8 @@
 /*s: libc/9sys/tm2sec.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[TZSIZE]](9sys/tm2sec.c) */
 #define TZSIZE  150
 /*e: constant [[TZSIZE]](9sys/tm2sec.c) */

@@ -1,7 +1,8 @@
 /*s: libc/fmt/sprint.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[sprint]] */
 int
 sprint(char *buf, char *fmt, ...)

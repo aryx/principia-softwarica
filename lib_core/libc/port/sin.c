@@ -6,9 +6,10 @@
     Coefficients are #3370 from Hart & Cheney (18.80D).
 */
 
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant p0 (port/sin.c) */
 #define p0      .1357884097877375669092680e8
 /*e: constant p0 (port/sin.c) */

@@ -8,8 +8,10 @@
  *  these routines use the non-standard 7 byte format
  *  for DES keys.
  */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <auth.h>
 #include <libsec.h>
 
@@ -41,7 +43,6 @@ encrypt(void *key, void *vbuf, int n)
     return 1;
 }
 /*e: function [[encrypt]] */
-
 /*s: function [[decrypt]] */
 /*
  * destructively decrypt the buffer, which

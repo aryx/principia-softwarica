@@ -1,7 +1,8 @@
 /*s: libc/port/nan.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[NANEXP]] */
 #define NANEXP  (2047<<20)
 /*e: constant [[NANEXP]] */
@@ -23,7 +24,6 @@ NaN(void)
     return a.x;
 }
 /*e: function [[NaN]] */
-
 /*s: function [[isNaN]] */
 bool
 isNaN(double d)
@@ -50,7 +50,6 @@ Inf(int sign)
     return a.x;
 }
 /*e: function [[Inf]] */
-
 /*s: function [[isInf]] */
 bool
 isInf(double d, int sign)

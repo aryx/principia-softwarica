@@ -1,7 +1,8 @@
 /*s: libc/port/strrchr.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[strrchr]] */
 char*
 strrchr(char *s, int c)

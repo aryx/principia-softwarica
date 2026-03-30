@@ -1,7 +1,8 @@
 /*s: libc/port/utfutf.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[utfutf]] */
 /*
  * Return pointer to first occurrence of s2 in s1,

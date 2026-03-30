@@ -1,7 +1,8 @@
 /*s: libc/9sys/setnetmtpt.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[setnetmtpt]] */
 void
 setnetmtpt(char *net, int n, char *x)

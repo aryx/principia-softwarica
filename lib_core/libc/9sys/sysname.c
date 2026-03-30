@@ -1,7 +1,8 @@
 /*s: libc/9sys/sysname.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[sysname]] */
 char*
 sysname(void)

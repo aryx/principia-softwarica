@@ -1,7 +1,8 @@
 /*s: libc/fmt/runevsnprint.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[runevsnprint]] */
 int
 runevsnprint(Rune *buf, int len, char *fmt, va_list args)

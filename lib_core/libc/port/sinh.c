@@ -1,7 +1,8 @@
 /*s: libc/port/sinh.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[p0]] */
 /*
  * sinh(arg) returns the hyperbolic sine of its floating-

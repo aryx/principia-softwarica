@@ -1,6 +1,8 @@
 /*s: libc/9sys/convD2M.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
+/*e: libc includes */
 #include    <fcall.h>
 
 /*s: function [[sizeD2M]] */

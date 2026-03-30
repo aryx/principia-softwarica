@@ -2,9 +2,10 @@
 /*
  * old single-process version of dial that libthread can cope with
  */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 typedef struct DS DS;
 
 static int  call(char*, char*, DS*);

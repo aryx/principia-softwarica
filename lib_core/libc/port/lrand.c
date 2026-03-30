@@ -1,7 +1,8 @@
 /*s: libc/port/lrand.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*
  *  algorithm by
  *  D. P. Mitchell & J. A. Reeds

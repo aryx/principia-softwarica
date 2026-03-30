@@ -1,7 +1,8 @@
 /*s: libc/port/lock.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[lock]] */
 void
 lock(Lock *l)
@@ -15,7 +16,6 @@ lock(Lock *l)
     }
 }
 /*e: function [[lock]] */
-
 /*s: function [[unlock]] */
 void
 unlock(Lock *l)

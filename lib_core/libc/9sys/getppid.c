@@ -1,7 +1,8 @@
 /*s: libc/9sys/getppid.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[getppid]] */
 int
 getppid(void)

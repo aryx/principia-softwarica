@@ -1,7 +1,8 @@
 /*s: libc/port/fabs.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[fabs]] */
 double
 fabs(double arg)

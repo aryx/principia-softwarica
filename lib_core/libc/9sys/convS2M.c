@@ -1,6 +1,8 @@
 /*s: libc/9sys/convS2M.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
+/*e: libc includes */
 #include    <fcall.h>
 
 /*s: function [[pstring]] */

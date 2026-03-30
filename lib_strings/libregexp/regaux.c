@@ -1,7 +1,9 @@
 /*s: libregexp/regaux.c */
 /*s: libregexp includes */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include "regexp.h"
 /*e: libregexp includes */
 #include "regcomp.h"

@@ -1,7 +1,8 @@
 /*s: libc/port/strtoul.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[ULONG_MAX]] */
 #define ULONG_MAX   4294967295UL
 /*e: constant [[ULONG_MAX]] */

@@ -1,7 +1,8 @@
 /*s: libc/port/strtoll.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[VLONG_MAX]] */
 #define VLONG_MAX   ~(1LL<<63)
 /*e: constant [[VLONG_MAX]] */

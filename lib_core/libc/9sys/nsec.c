@@ -1,6 +1,8 @@
 /*s: libc/9sys/nsec.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <tos.h>
 
 /*s: global [[order]] */

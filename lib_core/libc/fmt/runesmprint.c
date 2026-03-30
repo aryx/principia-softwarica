@@ -1,7 +1,8 @@
 /*s: libc/fmt/runesmprint.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[runesmprint]] */
 Rune*
 runesmprint(char *fmt, ...)

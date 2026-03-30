@@ -1,6 +1,8 @@
 /*s: libc/port/strcpy.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[N]] */
 #define N   10000
 /*e: constant [[N]] */

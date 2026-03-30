@@ -8,9 +8,10 @@
     It calls frexp.
 */
 
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[log2]] */
 #define log2    0.693147180559945309e0
 /*e: constant [[log2]] */

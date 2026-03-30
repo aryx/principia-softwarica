@@ -1,7 +1,8 @@
 /*s: libc/9sys/getwd.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 static char *nsgetwd(char*, int);
 
 /*s: function [[getwd]] */

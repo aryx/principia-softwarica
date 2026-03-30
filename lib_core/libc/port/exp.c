@@ -6,9 +6,10 @@
     The coefficients are #1069 from Hart and Cheney. (22.35D)
 */
 
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant p0 (port/exp.c) */
 #define p0  .2080384346694663001443843411e7
 /*e: constant p0 (port/exp.c) */

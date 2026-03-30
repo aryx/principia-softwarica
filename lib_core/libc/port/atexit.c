@@ -1,7 +1,8 @@
 /*s: libc/port/atexit.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[NEXIT]] */
 #define NEXIT   33
 /*e: constant [[NEXIT]] */

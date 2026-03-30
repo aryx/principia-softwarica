@@ -1,7 +1,8 @@
 /*s: libc/port/cistrstr.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[cistrstr]] */
 char*
 cistrstr(char *s, char *sub)

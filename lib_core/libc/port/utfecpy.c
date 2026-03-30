@@ -1,7 +1,8 @@
 /*s: libc/port/utfecpy.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[utfecpy]] */
 char*
 utfecpy(char *to, char *e, char *from)

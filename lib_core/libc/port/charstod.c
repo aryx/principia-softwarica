@@ -1,7 +1,8 @@
 /*s: libc/port/charstod.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant [[ADVANCE]] */
 /*
  * Reads a floating-point number by interpreting successive characters

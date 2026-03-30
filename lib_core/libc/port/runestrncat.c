@@ -1,7 +1,8 @@
 /*s: libc/port/runestrncat.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[runestrncat]] */
 Rune*
 runestrncat(Rune *s1, Rune *s2, long n)

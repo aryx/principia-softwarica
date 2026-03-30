@@ -1,7 +1,8 @@
 /*s: libc/fmt/runevseprint.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[runevseprint]] */
 Rune*
 runevseprint(Rune *buf, Rune *e, char *fmt, va_list args)

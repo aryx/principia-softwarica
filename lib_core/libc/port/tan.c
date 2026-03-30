@@ -6,9 +6,10 @@
     Coefficients are #4285 from Hart & Cheney. (19.74D)
  */
 
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global p0 (port/tan.c) */
 static double p0     = -0.1306820264754825668269611177e+5;
 /*e: global p0 (port/tan.c) */

@@ -1,7 +1,8 @@
 /*s: libc/port/pow.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[pow]] */
 double
 pow(double x, double y) /* return x ^ y (exponentiation) */

@@ -1,7 +1,8 @@
 /*s: libc/port/memchr.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[memchr]] */
 void*
 memchr(void *ap, int c, ulong n)

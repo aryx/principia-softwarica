@@ -1,7 +1,8 @@
 /*s: libc/port/atnotify.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant NFN (port/atnotify.c) */
 #define NFN 33
 /*e: constant NFN (port/atnotify.c) */

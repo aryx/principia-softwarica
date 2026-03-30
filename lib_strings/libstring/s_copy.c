@@ -1,7 +1,9 @@
 /*s: libstring/s_copy.c */
 /*s: libstring includes */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <str.h> // was string.h
 /*e: libstring includes */
 

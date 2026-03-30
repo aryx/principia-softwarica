@@ -1,7 +1,8 @@
 /*s: libc/9sys/syslog.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[sl]] */
 static struct
 {

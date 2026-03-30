@@ -1,7 +1,8 @@
 /*s: libc/9sys/postnote.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[postnote]] */
 int
 postnote(int group, int pid, char *note)

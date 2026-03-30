@@ -31,9 +31,10 @@
  * ctime(t) just calls localtime, then asctime.
  */
 
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[dmsize]] */
 static  char    dmsize[12] =
 {

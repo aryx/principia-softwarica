@@ -1,7 +1,8 @@
 /*s: libc/port/nrand.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: constant MASK (port/nrand.c) */
 #define MASK    0x7fffffffL
 /*e: constant MASK (port/nrand.c) */

@@ -1,7 +1,8 @@
 /*s: libc/port/strncat.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[strncat]] */
 char*
 strncat(char *s1, char *s2, long n)

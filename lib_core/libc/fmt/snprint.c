@@ -1,7 +1,8 @@
 /*s: libc/fmt/snprint.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[snprint]] */
 int
 snprint(char *buf, int len, char *fmt, ...)

@@ -1,7 +1,8 @@
 /*s: libc/port/runestrchr.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[runestrchr]] */
 Rune*
 runestrchr(Rune *s, Rune c)

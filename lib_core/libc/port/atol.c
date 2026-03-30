@@ -1,7 +1,8 @@
 /*s: libc/port/atol.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[atol]] */
 long
 atol(char *s)
@@ -47,7 +48,6 @@ atol(char *s)
     return n;
 }
 /*e: function [[atol]] */
-
 /*s: function [[atoi]] */
 int
 atoi(char *s)

@@ -1,11 +1,11 @@
 /*s: libc/port/_assert.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[__assert]] */
 void (*__assert)(char*);
 /*e: global [[__assert]] */
-
 /*s: function [[default_assert]] */
 void
 default_assert(char *s)
@@ -16,7 +16,6 @@ default_assert(char *s)
     abort();
 }
 /*e: function [[default_assert]] */
-
 /*s: global [[_assert]] */
 void (*_assert)(char*) = default_assert;
 /*e: global [[_assert]] */

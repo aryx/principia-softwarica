@@ -1,7 +1,8 @@
 /*s: libc/port/strcspn.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: constant N (port/strcspn.c) */
 #define N   256
 /*e: constant N (port/strcspn.c) */

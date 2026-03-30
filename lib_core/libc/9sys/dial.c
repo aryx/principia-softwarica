@@ -2,9 +2,10 @@
 /*
  * dial - connect to a service (parallel version)
  */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 typedef struct Conn Conn;
 typedef struct Dest Dest;
 typedef struct DS DS;

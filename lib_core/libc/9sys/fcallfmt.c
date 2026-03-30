@@ -1,6 +1,8 @@
 /*s: libc/9sys/fcallfmt.c */
-#include <u.h>
-#include <libc.h>
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 #include <fcall.h>
 
 static uint dumpsome(char*, char*, char*, long);

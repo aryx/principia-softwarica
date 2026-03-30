@@ -1,7 +1,8 @@
 /*s: libc/port/quote.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global [[doquote]] */
 int (*doquote)(int);
 /*e: global [[doquote]] */

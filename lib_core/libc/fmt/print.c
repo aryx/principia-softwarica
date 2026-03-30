@@ -1,7 +1,8 @@
 /*s: libc/fmt/print.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[libc_print]] */
 int
 libc_print(char *fmt, ...)

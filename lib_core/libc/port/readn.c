@@ -1,7 +1,8 @@
 /*s: libc/port/readn.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[readn]] */
 long
 readn(fdt f, void *av, long n)

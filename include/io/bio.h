@@ -81,39 +81,43 @@ struct	Biobuf
 #define	BFILDES(bp)	Bfildes(bp)
 /*e: macro [[BFILDES]] */
 
-Biobuf*	Bopen(char*, int);
-
+/*s: signatures [[Bxxx]] functions */
 int	Binit(Biobuf*, fdt, int);
+Biobuf*	Bopen(char*, int);
+int	Bterm(Biobufhdr*);
+
+int	Bgetc(BiobufGen*);
+int	Bungetc(Biobufhdr*);
+long	Bread(Biobufhdr*, void*, long);
+
+int	Bputc(BiobufGen*, int);
+long	Bwrite(BiobufGen*, void*, long);
+int	Bprint(BiobufGen*, char*, ...);
+
+#pragma	varargck	argpos	Bprint	2
+
+void*	Brdline(Biobufhdr*, int);
+int	Blinelen(Biobufhdr*);
+/*e: signatures [[Bxxx]] functions */
+
 int	Binits(Biobufhdr*, fdt, int, uchar*, int);
 
 int	Bflush(BiobufGen*);
 
-long	Bread(Biobufhdr*, void*, long);
-long	Bwrite(BiobufGen*, void*, long);
 vlong	Bseek(Biobufhdr*, vlong, int);
-
-int	Bputc(BiobufGen*, int);
-int	Bgetc(BiobufGen*);
-int	Bungetc(Biobufhdr*);
 
 int	Bputrune(Biobufhdr*, long);
 long	Bgetrune(BiobufGen*);
 int	Bungetrune(BiobufGen*);
 
-int	Bprint(BiobufGen*, char*, ...);
 int	Bvprint(Biobufhdr*, char*, va_list);
-
-#pragma	varargck	argpos	Bprint	2
 
 // Helpers
 int	Bbuffered(Biobufhdr*);
 int	Bfildes(Biobufhdr*);
 
 int	Bgetd(Biobufhdr*, double*);
-int	Blinelen(Biobufhdr*);
 vlong	Boffset(Biobufhdr*);
-void*	Brdline(Biobufhdr*, int);
 char*	Brdstr(Biobufhdr*, int, int);
-int	Bterm(Biobufhdr*);
 
 /*e: include/io/bio.h */

@@ -1,7 +1,8 @@
 /*s: libc/9sys/privalloc.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: global privlock (9sys/privalloc.c) */
 static Lock privlock;
 /*e: global privlock (9sys/privalloc.c) */

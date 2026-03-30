@@ -1,7 +1,8 @@
 /*s: libc/port/memcmp.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: function [[memcmp]] */
 int
 memcmp(void *a1, void *a2, ulong n)

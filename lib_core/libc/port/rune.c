@@ -1,7 +1,8 @@
 /*s: libc/port/rune.c */
+/*s: libc includes */
 #include    <u.h>
 #include    <libc.h>
-
+/*e: libc includes */
 /*s: macro [[Bit]] */
 #define Bit(i) (7-(i))
 /*e: macro [[Bit]] */

@@ -1,7 +1,8 @@
 /*s: libc/port/u64.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: enum [[_anon_ (port/u64.c)]] */
 enum {
     INVAL=  255

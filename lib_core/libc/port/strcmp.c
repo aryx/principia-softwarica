@@ -1,7 +1,8 @@
 /*s: libc/port/strcmp.c */
-#include <u.h>
-#include <libc.h>
-
+/*s: libc includes */
+#include    <u.h>
+#include    <libc.h>
+/*e: libc includes */
 /*s: function [[strcmp]] */
 int
 strcmp(char *s1, char *s2)
