@@ -186,14 +186,10 @@ extern	int	fork(void);
 extern	int	execl(char*, ...);
 extern	Waitmsg*wait(void);
 extern	int	waitpid(void);
-extern	void	abort(void);
 /*e: signatures process syscall wrapper */
 /*s: signatures other process syscall wrapper */
 extern	int	getpid(void);
 extern	int	getppid(void);
-
-extern  char*   getenv(char*);
-extern  int     putenv(char*, char*);
 /*e: signatures other process syscall wrapper */
 
 //----------------------------------------------------------------------------
@@ -224,15 +220,16 @@ extern	int	dup(int, int);
 /*s: signatures file syscall wrapper */
 extern	long	read(fdt, void*, long);
 extern	long	write(fdt, void*, long);
+extern	vlong	seek(fdt, vlong, int);
+/*e: signatures file syscall wrapper */
+/*s: signatures file other wrapper */
 extern	long	preadv(fdt, IOchunk*, int, vlong);
 extern	long	pwritev(fdt, IOchunk*, int, vlong);
 extern	long	readv(fdt, IOchunk*, int);
 extern	long	writev(fdt, IOchunk*, int);
-extern	vlong	seek(fdt, vlong, int);
-// extern	int	fdflush(int);
-
 extern	long	readn(fdt, void*, long);
-/*e: signatures file syscall wrapper */
+/*e: signatures file other wrapper */
+// extern	int	fdflush(int);
 
 //----------------------------------------------------------------------------
 // directory
@@ -250,18 +247,18 @@ extern	int	wstat(char*, uchar*, int);
 /*e: signatures directory syscall */
 
 /*s: signatures directory syscall wrapper */
-extern  char*   getwd(char*, int);
-extern  char*   mktemp(char*);
-
 extern	Dir*	dirfstat(fdt);
 extern	Dir*	dirstat(char*);
 extern	int	dirfwstat(int, Dir*);
 extern	int	dirwstat(char*, Dir*);
-//
+
 extern	long	dirread(int, Dir**);
 extern	void	nulldir(Dir*);
 extern	long	dirreadall(int, Dir**);
+
+extern  char*   getwd(char*, int);
 extern	int	access(char*, int); // ???
+extern  char*   mktemp(char*);
 /*e: signatures directory syscall wrapper */
 
 //----------------------------------------------------------------------------
@@ -296,6 +293,10 @@ extern	int	segdetach(void*);
 extern	int	segflush(void*, ulong);
 extern	int	segfree(void*, ulong);
 /*e: signatures ipc syscall */
+/*s: signatures ipc helpers */
+extern  char*   getenv(char*);
+extern  int     putenv(char*, char*);
+/*e: signatures ipc helpers */
 
 // ??
 extern  int     postnote(int, int, char *);

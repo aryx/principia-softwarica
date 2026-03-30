@@ -2255,7 +2255,7 @@ result is placed in [[R0]] and the kernel restores
 the user registers.
 %
 Errors are signaled by returning $-1$ and setting the
-per-process error string (readable via [[errstr()]]).
+per-process error string (readable via [<errstr()>]).
 This is different from \unix, where [[errno]] is a global
 variable set by the C library---in \plan, the kernel itself
 sets the error string, and the [[%r]] format verb in
@@ -2307,7 +2307,7 @@ the default entry point---see \book{Linker}), while
 after initialization is complete.
 
 This chapter also covers the argument parsing macros and
-the [[exits]] function that handles cleanup callbacks before
+the [<exits()>] function that handles cleanup callbacks before
 termination.
 
 
@@ -2417,6 +2417,18 @@ by the kernel in [[R0]], which is the same than [[R(arg)]] given the definition
 of [[arg]]) to the global [[_tos]] (declared
 in [[libc.h]] as \verb+extern Tos *_tos+). This works
 because [[R12]] was just initialized.
+%yoann1: actually could not find the _tos decl in libc.h
+
+<<libc/arm/argv0.s>>=
+<<globals [[argv0.s]]>>
+@
+%should rename to globals.s maybe
+
+<<globals [[argv0.s]]>>=
+GLOBL	_tos(SB), $4
+@
+
+
 
 %claude:
 The private storage area is carved from the stack frame
@@ -2440,6 +2452,11 @@ MOVW    $p-64(SP), R1
 MOVW    R1, _privates(SB)
 MOVW    $NPRIVATES, R1
 MOVW    R1, _nprivates(SB)
+@
+
+<<globals [[argv0.s]]>>=
+GLOBL	_privates(SB), $4
+GLOBL	_nprivates(SB), $4
 @
 
 %yoann: maybe show adjusted ASCII stack diagram, where see also why -64(SP)? why not use R13 directly there? (or R(sp))?
@@ -2540,6 +2557,10 @@ argument for flags that take a value.
 
 <<signature global argv0>>=
 extern char *argv0;
+@
+
+<<globals [[argv0.s]]>>=
+GLOBL	argv0(SB), $4
 @
 
 <<macro [[ARGBEGIN]]>>=
@@ -2688,7 +2709,7 @@ sees \verb+"file not found"+ directly.
 
 %claude:
 [<exits()>] runs registered cleanup callbacks before calling
-the [[_exits]] system call. The [<onex>] table stores up to
+the [[_exits()]] system call. The [<onex>] table stores up to
 33 callback/pid pairs (see the [<Onex>] struct definition).
 The pid field exists because after
 [[rfork(RFMEM)]], parent and child share memory (including
@@ -2991,7 +3012,7 @@ _return:
 \section{Copying: [[memcpy()]] and [[memmove()]]}
 
 %claude:
-[[memmove]] copies [[n]] bytes from [[a2]] to [[a1]]. It is
+[[memmove()]] copies [[n]] bytes from [[a2]] to [[a1]]. It is
 used whenever raw data must be relocated: copying structures,
 shifting buffer contents, building packets. The key subtlety
 is handling {overlapping} regions:
@@ -3377,7 +3398,7 @@ memchr(void *ap, int c, ulong n)
 \label{chap:malloc}
 
 %claude:
-This chapter covers the memory allocator: from the [[sbrk]]
+This chapter covers the memory allocator: from the [[brk()]]
 system call that extends the heap, through the pool-based
 allocator that manages free blocks, to the [[malloc]]/[[free]]
 interface that programs use. The allocator organizes memory
@@ -4175,11 +4196,11 @@ Formatted output is a foundation: it is used everywhere
 in \plan, including inside the kernel itself. \plan's
 [[print]] family is more powerful than \unix's [[printf]]:
 it supports user-defined format verbs via a callback
-mechanism ([[fmtinstall]]), outputs to any destination
+mechanism ([[fmtinstall()]]), outputs to any destination
 (not just file descriptors or strings) through a [[Fmt]]
 closure, and handles Unicode natively. This chapter covers
 the [[Fmt]] data structure, the format string parser
-([[dofmt]]), the built-in format verbs, and the mechanism
+([[dofmt()]]), the built-in format verbs, and the mechanism
 for registering custom ones.
 
 %claude:
@@ -4191,7 +4212,7 @@ variant: it takes both the start and end of the buffer,
 returning a pointer to the next position, so calls can be
 chained. The [[#pragma varargck]] lines are a compiler
 extension that enables type-checking of format arguments.
-[[fmtinstall]] registers a custom format verb: pass a rune
+[[fmtinstall()]] registers a custom format verb: pass a rune
 (e.g., [['H']]) and a callback, and \verb+%H+ becomes
 available in all print functions.
 
@@ -4288,6 +4309,91 @@ libc_print(char *fmt, ...)
 @
 
 
+<<function [[vfprint]]>>=
+int
+vfprint(int fd, char *fmt, va_list args)
+{
+    Fmt f;
+    char buf[256];
+    int n;
+
+    fmtfdinit(&f, fd, buf, sizeof(buf));
+    f.args = args;
+    n = dofmt(&f, fmt);
+    if(n > 0 && _fmtFdFlush(&f) == 0)
+        return -1;
+    return n;
+}
+@
+
+\section{[[dofmt()]]}
+
+<<function [[dofmt]]>>=
+/* format the output into f->to and return the number of characters fmted  */
+int
+dofmt(Fmt *f, char *fmt)
+{
+    Rune rune, *rt, *rs;
+    int r;
+    char *t, *s;
+    int n, nfmt;
+
+    nfmt = f->nfmt;
+    for(;;){
+        if(f->runes){
+            rt = f->to;
+            rs = f->stop;
+            while((r = *(uchar*)fmt) && r != '%'){
+                if(r < Runeself)
+                    fmt++;
+                else{
+                    fmt += chartorune(&rune, fmt);
+                    r = rune;
+                }
+                FMTRCHAR(f, rt, rs, r);
+            }
+            fmt++;
+            f->nfmt += rt - (Rune *)f->to;
+            f->to = rt;
+            if(!r)
+                return f->nfmt - nfmt;
+            f->stop = rs;
+        }else{
+            t = f->to;
+            s = f->stop;
+            while((r = *(uchar*)fmt) && r != '%'){
+                if(r < Runeself){
+                    FMTCHAR(f, t, s, r);
+                    fmt++;
+                }else{
+                    n = chartorune(&rune, fmt);
+                    if(t + n > s){
+                        t = _fmtflush(f, t, n);
+                        if(t != nil)
+                            s = f->stop;
+                        else
+                            return -1;
+                    }
+                    while(n--)
+                        *t++ = *fmt++;
+                }
+            }
+            fmt++;
+            f->nfmt += t - (char *)f->to;
+            f->to = t;
+            if(!r)
+                return f->nfmt - nfmt;
+            f->stop = s;
+        }
+
+        fmt = _fmtdispatch(f, fmt, 0);
+        if(fmt == nil)
+            return -1;
+    }
+}
+@
+
+
 \section{[[fprint()]]}
 
 <<function [[fprint]]>>=
@@ -4322,6 +4428,29 @@ sprint(char *buf, char *fmt, ...)
 
 
 
+<<function [[vsnprint]]>>=
+int
+vsnprint(char *buf, int len, char *fmt, va_list args)
+{
+    Fmt f;
+
+    if(len <= 0)
+        return -1;
+    f.runes = 0;
+    f.start = buf;
+    f.to = buf;
+    f.stop = buf + len - 1;
+    f.flush = nil;
+    f.farg = nil;
+    f.nfmt = 0;
+    f.args = args;
+    dofmt(&f, fmt);
+    *(char*)f.to = '\0';
+    return (char*)f.to - buf;
+}
+@
+
+
 
 %###############################################################################
 \part{Data Processing}
@@ -4350,8 +4479,8 @@ depend only on the memory allocator from Part~I.
 This chapter covers string manipulation at two levels: plain
 C strings (null-terminated byte arrays for ASCII) and rune
 strings (for Unicode). The plain C functions are the familiar
-[[strlen]], [[strcmp]], [[strcpy]], etc. The rune functions
-provide the same operations on arrays of [[Rune]] values, plus
+[[strlen()]], [[strcmp()]], [[strcpy()]], etc. The rune functions
+provide the same operations on arrays of [<Rune>] values, plus
 the UTF-8 encoding/decoding functions that convert between the two.
 
 <<signatures of [[strxxx]] functions>>=
@@ -4388,8 +4517,8 @@ extern  char*   utfutf(char*, char*);
 
 %claude:
 The conversion functions bridge the byte and rune worlds.
-[[chartorune]] decodes one UTF-8 sequence into a [[Rune]],
-returning the number of bytes consumed; [[runetochar]]
+[<chartorune()>] decodes one UTF-8 sequence into a [<Rune>],
+returning the number of bytes consumed; [<runetochar()>]
 encodes one [[Rune]] into UTF-8, returning the number of
 bytes produced. The [[utfxxx]] functions operate on UTF-8
 strings directly: [[utflen]] returns the number of runes
@@ -4638,17 +4767,21 @@ strstr(char *s1, char *s2)
 
 %claude:
 While C strings are byte-oriented, rune strings operate on
-decoded Unicode code points---arrays of [[Rune]] (32-bit
+decoded Unicode code points---arrays of [<Rune>] (32-bit
 integers) terminated by a zero rune. Every plain C string
-function has a rune counterpart: [[runestrlen]], [[runestrcmp]],
-[[runestrcpy]], etc. The implementations are nearly identical
+function has a rune counterpart: [<runestrlen()>], [<runestrcmp()>],
+[<runestrcpy()>], etc. The implementations are nearly identical
 to the byte versions, just with [[Rune]] instead of [[char]].
 Programs that need to manipulate characters by code point
 (editors, for instance) work with rune strings internally
 and convert to/from UTF-8 only at I/O boundaries.
 
+
+
+
+
 %claude:
-The [[_runebsearch]] function performs binary search on the
+The [<_runebsearch()>] function performs binary search on the
 Unicode character property tables (stored as sorted arrays
 of rune ranges), used by [[isalpharune]], [[istitlerune]],
 and similar classification functions.
@@ -4858,11 +4991,11 @@ runetochar(char *str, Rune *rune)
 
 %claude:
 These are the rune-string equivalents of the plain C string
-functions. They follow the same layering pattern: [[runestrlen]]
-calls [[runestrchr]], [[runestrcat]] calls [[runestrcpy]], and
+functions. They follow the same layering pattern: [<runestrlen()>]
+calls [<runestrchr()>], [<runestrcat()>] calls [<runestrcpy()>], and
 so on. Since runes are fixed-width (unlike UTF-8 bytes), these
-functions are simpler---[[runestrcpy]] is just a straightforward
-copy loop with no need for [[memccpy]] tricks.
+functions are simpler---[<runestrcpy()>] is just a straightforward
+copy loop with no need for [<memccpy()>] tricks.
 
 <<function [[runestrlen]]>>=
 long
@@ -5009,18 +5142,18 @@ runestrstr(Rune *s1, Rune *s2)
 %claude:
 The UTF-8 functions bridge the gap between byte strings and
 rune strings: they search and measure byte strings while
-respecting multi-byte character boundaries. [[utflen]] counts
-the number of runes (not bytes) in a UTF-8 string. [[utfrune]]
-and [[utfrrune]] find a rune in a UTF-8 string (forward and
-backward). [[utfutf]] finds a UTF-8 substring within another.
+respecting multi-byte character boundaries. [<utflen()>] counts
+the number of runes (not bytes) in a UTF-8 string. [<utfrune()>]
+and [<utfrrune()>] find a rune in a UTF-8 string (forward and
+backward). [<utfutf()>] finds a UTF-8 substring within another.
 
 %claude:
 The key optimization throughout is the [[Runeself]] test: any
 byte below 0x80 is ASCII and can be handled without calling
-[[chartorune]]. Since most text in practice is ASCII, this
+[<chartorune()>]. Since most text in practice is ASCII, this
 fast path avoids the overhead of the full decoder for the
-common case. For ASCII-only runes, [[utfrune]] even
-delegates directly to [[strchr]].
+common case. For ASCII-only runes, [<utfrune()>] even
+delegates directly to [<strchr()>].
 
 % use typedef utf here? utf* s?
 <<function [[utflen]]>>=
@@ -6153,6 +6286,76 @@ regcomp(char *s)
 @
 
 
+<<function [[regcomp1]]>>=
+static	Reprog*
+regcomp1(char *s, int literal, int dot_type)
+{
+    int token;
+    Reprog *pp;
+
+    /* get memory for the program */
+    pp = malloc(sizeof(Reprog) + 6*sizeof(Reinst)*strlen(s));
+    if(pp == 0){
+        regerror("out of memory");
+        return 0;
+    }
+    freep = pp->firstinst;
+    classp = pp->class;
+    errors = 0;
+
+    if(setjmp(regkaboom))
+        goto out;
+
+    /* go compile the sucker */
+    lexdone = 0;
+    exprp = s;
+    nclass = 0;
+    nbra = 0;
+    atorp = atorstack;
+    andp = andstack;
+    subidp = subidstack;
+    lastwasand = FALSE;
+    cursubid = 0;
+
+    /* Start with a low priority operator to prime parser */
+    pushator(START-1);
+    while((token = lex(literal, dot_type)) != END){
+        if((token&0300) == OPERATOR)
+            operator(token);
+        else
+            operand(token);
+    }
+
+    /* Close with a low priority operator */
+    evaluntil(START);
+
+    /* Force END */
+    operand(END);
+    evaluntil(START);
+#ifdef DEBUG
+    dumpstack();
+#endif
+    if(nbra)
+        rcerror("unmatched left paren");
+    --andp;	/* points to first and only operand */
+    pp->startinst = andp->first;
+#ifdef DEBUG
+    dump(pp);
+#endif
+    pp = optimize(pp);
+#ifdef DEBUG
+    print("start: %d\n", andp->first-pp->firstinst);
+    dump(pp);
+#endif
+out:
+    if(errors){
+        free(pp);
+        pp = 0;
+    }
+    return pp;
+}
+@
+
 \section{Execution: [[regexec()]]}
 
 %claude:
@@ -6230,6 +6433,193 @@ regexec(Reprog *progp,	/* program to run */
 }
 @
 
+
+
+<<function [[regexec1]]>>=
+/*
+ *  return	0 if no match
+ *		>0 if a match
+ *		<0 if we ran out of _relist space
+ */
+static int
+regexec1(Reprog *progp,	/* program to run */
+    char *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms,		/* number of elements at mp */
+    Reljunk *j
+)
+{
+    int flag=0;
+    Reinst *inst;
+    Relist *tlp;
+    char *s;
+    int i, checkstart;
+    Rune r, *rp, *ep;
+    int n;
+    Relist* tl;		/* This list, next list */
+    Relist* nl;
+    Relist* tle;		/* ends of this and next list */
+    Relist* nle;
+    int match;
+    char *p;
+
+    match = 0;
+    checkstart = j->starttype;
+    if(mp)
+        for(i=0; i<ms; i++) {
+            mp[i].s.sp = 0;
+            mp[i].e.ep = 0;
+        }
+    j->relist[0][0].inst = 0;
+    j->relist[1][0].inst = 0;
+
+    /* Execute machine once for each character, including terminal NUL */
+    s = j->starts;
+    do{
+        /* fast check for first char */
+        if(checkstart) {
+            switch(j->starttype) {
+            case RUNE:
+                p = utfrune(s, j->startchar);
+                if(p == 0 || s == j->eol)
+                    return match;
+                s = p;
+                break;
+            case BOL:
+                if(s == bol)
+                    break;
+                p = utfrune(s, '\n');
+                if(p == 0 || s == j->eol)
+                    return match;
+                s = p+1;
+                break;
+            }
+        }
+        r = *(uchar*)s;
+        if(r < Runeself)
+            n = 1;
+        else
+            n = chartorune(&r, s);
+
+        /* switch run lists */
+        tl = j->relist[flag];
+        tle = j->reliste[flag];
+        nl = j->relist[flag^=1];
+        nle = j->reliste[flag];
+        nl->inst = 0;
+
+        /* Add first instruction to current list */
+        if(match == 0)
+            _renewemptythread(tl, progp->startinst, ms, s);
+
+        /* Execute machine until current list is empty */
+        for(tlp=tl; tlp->inst; tlp++){	/* assignment = */
+            for(inst = tlp->inst; ; inst = inst->next){
+                switch(inst->type){
+                case RUNE:	/* regular character */
+                    if(inst->r == r){
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    }
+                    break;
+                case LBRA:
+                    tlp->se.m[inst->subid].s.sp = s;
+                    continue;
+                case RBRA:
+                    tlp->se.m[inst->subid].e.ep = s;
+                    continue;
+                case ANY:
+                    if(r != '\n')
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case ANYNL:
+                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case BOL:
+                    if(s == bol || *(s-1) == '\n')
+                        continue;
+                    break;
+                case EOL:
+                    if(s == j->eol || r == 0 || r == '\n')
+                        continue;
+                    break;
+                case CCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1]){
+                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                                return -1;
+                            break;
+                        }
+                    break;
+                case NCCLASS:
+                    ep = inst->cp->end;
+                    for(rp = inst->cp->spans; rp < ep; rp += 2)
+                        if(r >= rp[0] && r <= rp[1])
+                            break;
+                    if(rp == ep)
+                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
+                            return -1;
+                    break;
+                case OR:
+                    /* evaluate right choice later */
+                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
+                        return -1;
+                    /* efficiency: advance and re-evaluate */
+                    continue;
+                case END:	/* Match! */
+                    match = 1;
+                    tlp->se.m[0].e.ep = s;
+                    if(mp != 0)
+                        _renewmatch(mp, ms, &tlp->se);
+                    break;
+                }
+                break;
+            }
+        }
+        if(s == j->eol)
+            break;
+        checkstart = j->starttype && nl->inst==0;
+        s += n;
+    }while(r);
+    return match;
+}
+@
+
+<<function [[regexec2]]>>=
+static int
+regexec2(Reprog *progp,	/* program to run */
+    char *bol,	/* string to run machine on */
+    Resub *mp,	/* subexpression elements */
+    int ms,		/* number of elements at mp */
+    Reljunk *j
+)
+{
+    int rv;
+    Relist *relist0, *relist1;
+
+    /* mark space */
+    relist0 = malloc(BIGLISTSIZE*sizeof(Relist));
+    if(relist0 == nil)
+        return -1;
+    relist1 = malloc(BIGLISTSIZE*sizeof(Relist));
+    if(relist1 == nil){
+        free(relist1);
+        return -1;
+    }
+    j->relist[0] = relist0;
+    j->relist[1] = relist1;
+    j->reliste[0] = relist0 + BIGLISTSIZE - 2;
+    j->reliste[1] = relist1 + BIGLISTSIZE - 2;
+
+    rv = regexec1(progp, bol, mp, ms, j);
+    free(relist0);
+    free(relist1);
+    return rv;
+}
+@
 
 \section{Substitution: [[regsub()]]}
 
@@ -6720,7 +7110,7 @@ extern  void    srand(long);
 %claude:
 Most of these are standard C, but a few are \plan additions:
 [[NaN()]]/[[Inf(sign)]] construct special IEEE~754 values
-(standard C uses macros instead), [[pow10]] is a fast
+(standard C uses macros instead), [[pow10()]] is a fast
 integer-exponent variant, and [[nrand(n)]] returns a
 uniform random integer in $[0,n)$---more convenient than
 the \verb+rand() % n+ idiom which has modulo bias.
@@ -8441,13 +8831,13 @@ tanh(double arg)
 \section{Logarithms and exponentials}
 
 %claude:
-The [[exp]] and [[log]] functions also use polynomial
-approximations. [[exp]] reduces its argument to the range
+The [<exp()>] and [<log()>] functions also use polynomial
+approximations. [[exp()]] reduces its argument to the range
 $[0, \ln 2]$ by extracting the integer part as a power of~2
-(applied via [[ldexp]]), then evaluates a rational polynomial
-for the remainder. [[log]] does the reverse: it uses [[frexp]]
+(applied via [<ldexp()>]), then evaluates a rational polynomial
+for the remainder. [[log()]] does the reverse: it uses [<frexp()>]
 to extract the exponent, then approximates $\ln(x)$ for
-$x \in [0.5, 1.0)$. [[ldexp]] and [[frexp]] manipulate the
+$x \in [0.5, 1.0)$. [[ldexp()]] and [[frexp()]] manipulate the
 IEEE~754 exponent field directly for exact, fast
 multiplication/division by powers of~2.
 
@@ -8518,11 +8908,11 @@ exp(double arg)
 \subsection{[[ldexp()]]}
 
 %claude:
-[[ldexp]] multiplies a double by $2^n$ by directly adjusting
+[[ldexp()]] multiplies a double by $2^n$ by directly adjusting
 the IEEE~754 exponent field. It handles edge cases (zero,
 NaN, infinity, denormals, overflow, underflow) and works in
 a loop when [[n]] is too large for a single exponent
-adjustment. [[frexp]] does the reverse: it extracts the
+adjustment. [<frexp()>] does the reverse: it extracts the
 exponent and returns the mantissa in $[0.5, 1.0)$. Both
 access the bit representation through [[FPdbleword]].
 
@@ -8724,16 +9114,18 @@ log10(double arg)
 %claude:
 The PRNG uses a lagged Fibonacci generator with taps at
 positions separated by [[TAP]] within a [[LEN]]-element
-ring buffer. [[srand]] seeds the generator with a linear
-congruential step. [[rand]] returns 15-bit values (for ANSI
-C compatibility), [[lrand]] returns 31-bit values, and
-[[nrand]] returns values in $[0, n)$ with uniform
+ring buffer. [<srand()>] seeds the generator with a linear
+congruential step. [<rand()>] returns 15-bit values (for ANSI
+C compatibility), [<lrand()>] returns 31-bit values, and
+[<nrand()>] returns values in $[0, n)$ with uniform
 distribution (it retries when the raw value would cause
 modulo bias).
-%
-[[lrand]] uses an additive feedback shift register (a
+%yoann1: what is PRNG?
+
+%claude:
+[<lrand()>] uses an additive feedback shift register (a
 lagged Fibonacci generator) for fast pseudo-random numbers.
-For cryptographic randomness, [[truerand]] reads from
+For cryptographic randomness, [<truerand()>] reads from
 [[/dev/random]], which in the kernel collects entropy from
 hardware sources.
 
@@ -8957,6 +9349,14 @@ And decompression:
 \end{verbatim}
 %yoann1: use more concrete example with actuall string to compress; myread/mywrite are too abstract
 
+<<signature [[deflate]]>>=
+int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
+@
+
+<<signature [[inflate]]>>=
+int	inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
+@
+
 \section{Data structures and interface}
 
 %claude:
@@ -8985,13 +9385,6 @@ enum
 };
 @
 
-<<signature [[deflate]]>>=
-int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
-@
-
-<<signature [[inflate]]>>=
-int	inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
-@
 
 \section{Overview of the DEFLATE format}
 
@@ -10808,7 +11201,7 @@ built on top.
 % See file descriptor type in core DS.
 
 %claude:
-File I/O in \plan is built on five system calls: [[open]],
+File I/O in \plan is built on five functions: [[open]],
 [[create]], [[read]], [[write]], and [[close]]. The \plan
 interface differs from \unix in a few ways: there is no
 separate [[creat]] call (use [[create]]), [[read]] and [[write]]
@@ -10816,18 +11209,21 @@ are implemented as wrappers around [[pread]]/[[pwrite]] (which
 take an explicit offset, making them atomic for concurrent
 access), and file modes include \plan-specific bits like
 [[OEXCL]] (exclusive create) and [[ORCLOSE]] (remove on close).
+%yoann1: confusing the separate creat; obvious it is the same than create
 
+%yoann: actually create() seen in directory chapter later
 
 <<signatures file syscall wrapper>>=
 extern	long	read(fdt, void*, long);
 extern	long	write(fdt, void*, long);
+extern	vlong	seek(fdt, vlong, int);
+@
+
+<<signatures file other wrapper>>=
 extern	long	preadv(fdt, IOchunk*, int, vlong);
 extern	long	pwritev(fdt, IOchunk*, int, vlong);
 extern	long	readv(fdt, IOchunk*, int);
 extern	long	writev(fdt, IOchunk*, int);
-extern	vlong	seek(fdt, vlong, int);
-// extern	int	fdflush(int);
-
 extern	long	readn(fdt, void*, long);
 @
 
@@ -10916,13 +11312,13 @@ extern	int	dup(int, int);
 % which is useful for servers.
 
 %claude: %unix:
-Note that the fundamental I/O syscalls are [[pread]] and
-[[pwrite]] (``positional read/write''), not [[read]] and
-[[write]]. They take an explicit file offset as a parameter,
+Note that the fundamental I/O syscalls are [[pread()]] and
+[[pwrite()]] (``positional read/write''), not [<read()>] and
+[<write()>]. They take an explicit file offset as a parameter,
 so the kernel does not need to maintain a per-fd offset.
-This avoids a race condition that plagues \unix: if two
+This avoids a race condition that plagues \unix\: if two
 processes share a file descriptor (after [[fork]]), a
-\unix [[lseek]]+[[read]] sequence is not atomic---another
+\unix\ [[lseek]]+[[read]] sequence is not atomic---another
 process can seek in between. With [[pread]], the offset
 is part of the call itself, so no race is possible.
 (\unix later adopted [[pread]]/[[pwrite]] too, in
@@ -10955,8 +11351,8 @@ replacing an existing one.
 \section{[[read()]], [[write()]]}
 
 %claude:
-[[read]] and [[write]] are thin wrappers around [[pread]] and
-[[pwrite]] with an offset of $-1$, meaning ``use the current
+[[read()]] and [[write()]] are thin wrappers around [[pread()]] and
+[[pwrite()]] with an offset of $-1$, meaning ``use the current
 file offset.'' The positional variants are the real system
 calls in \plan; the traditional [[read]]/[[write]] are
 convenience functions.
@@ -10977,10 +11373,11 @@ write(fdt fd, void *buf, long n)
 }
 @
 
-\section{[[readn()]], [[writen()]]}
+\section{[[readn()]]}
+% no [[writen()]]?
 
 %claude:
-[[readn]] loops until exactly [[n]] bytes have been read or
+[[readn()]] loops until exactly [[n]] bytes have been read or
 EOF is reached. This is necessary because [[read]] may return
 fewer bytes than requested (a ``short read''), especially when
 reading from pipes or network connections. [[readn]] guarantees
@@ -12313,18 +12710,18 @@ kernel's wire format and this C structure using [[convM2D]]
 and [[convD2M]].
 
 <<signatures directory syscall wrapper>>=
-extern  char*   getwd(char*, int);
-extern  char*   mktemp(char*);
-
 extern	Dir*	dirfstat(fdt);
 extern	Dir*	dirstat(char*);
 extern	int	dirfwstat(int, Dir*);
 extern	int	dirwstat(char*, Dir*);
-//
+
 extern	long	dirread(int, Dir**);
 extern	void	nulldir(Dir*);
 extern	long	dirreadall(int, Dir**);
+
+extern  char*   getwd(char*, int);
 extern	int	access(char*, int); // ???
+extern  char*   mktemp(char*);
 @
 
 \section{Data structures: [[Dir]]}
@@ -12603,11 +13000,11 @@ getwd(char *buf, int nbuf)
 %time-of-check vs time-of-use (TOCTOU) race condition use mkstemp() instead!
 
 %claude:
-[[mktemp]] has a classic TOCTOU (time-of-check, time-of-use)
+[[mktemp()]] has a classic TOCTOU (time-of-check, time-of-use)
 vulnerability: it checks whether a filename exists with
-[[access]], then expects the caller to [[create]] it---but
+[[access()]], then expects the caller to [[create]] it---but
 another process could create that file in between. The safe
-alternative is [[mkstemp]] (next section), which atomically
+alternative is [[mkstemp()]] (next section), which atomically
 creates and opens the file.
 
 <<function [[mktemp]]>>=
@@ -12768,10 +13165,10 @@ cleanname(char *name)
 \section{[[access()]]}
 
 %claude:
-[[access]] checks file accessibility by actually trying to
+[[access()]] checks file accessibility by actually trying to
 open the file with the requested mode. For existence checks
-([[AEXIST]]), it uses [[dirstat]] instead. This is different
-from \unix, where [[access]] is a dedicated system call. The
+([[AEXIST]]), it uses [<dirstat()>] instead. This is different
+from \unix, where [[access()]] is a dedicated system call. The
 \plan approach is more honest---it tests exactly what will
 happen when you try to use the file---but it's also more
 expensive, since it opens and immediately closes the file.
@@ -12824,7 +13221,7 @@ access(char *name, int mode)
 
 %claude:
 \plan's namespace is a per-process view of the file system
-that can be customized with [[bind]] and [[mount]]. [[bind]]
+that can be customized with [[bind()]] and [[mount()]]. [[bind]]
 makes one directory appear at another location; [[mount]]
 attaches a 9P file server to a mount point. The [[MBEFORE]]
 and [[MAFTER]] flags create union directories where multiple
@@ -13289,15 +13686,11 @@ extern	int	fork(void);
 extern	int	execl(char*, ...);
 extern	Waitmsg*wait(void);
 extern	int	waitpid(void);
-extern	void	abort(void);
 @
 
 <<signatures other process syscall wrapper>>=
 extern	int	getpid(void);
 extern	int	getppid(void);
-
-extern  char*   getenv(char*);
-extern  int     putenv(char*, char*);
 @
 
 %claude:
@@ -13306,9 +13699,8 @@ the raw syscalls below. [[fork]] calls
 \verb+rfork(RFFDG|RFREND|RFPROC)+ (the traditional
 fork semantics), [[execl]] is a variadic wrapper around
 [[exec]], and [[wait]] parses the raw [[await]] string
-into a [[Waitmsg]] structure. Note that \plan's [[putenv]]
-takes two arguments (name, value) rather than the single
-\verb+"name=value"+ string of \unix.
+into a [[Waitmsg]] structure. 
+
 
 \section{Syscalls: [[rfork()]], [[exec()]], [[await()]], etc}
 
@@ -13681,17 +14073,6 @@ void (*__assert)(char*);
 @
 % used by libthread to point to _theadassert that does ???
 
-
-
-<<function [[abort]]>>=
-void
-abort(void)
-{
-    while(*(int*)0)
-        ;
-}
-@
-% generate segfault
 
 
 \section{[[sysfatal()]]}
@@ -14696,10 +15077,23 @@ typedef long    jmp_buf[2];
 %claude:
 \plan provides several IPC mechanisms: pipes for byte
 streams, notes (signals) for asynchronous notification,
-the [[await]] system call for parent-child communication via
+the [[await()]] system call for parent-child communication via
 exit strings, and shared memory segments. This chapter also
 covers the 9P protocol marshalling functions used to
 communicate with file servers.
+
+
+%yoann: env is also a parent-child way of communication in plan9
+
+<<signatures ipc helpers>>=
+extern  char*   getenv(char*);
+extern  int     putenv(char*, char*);
+@
+
+Note that \plan's [[putenv]]
+takes two arguments (name, value) rather than the single
+\verb+"name=value"+ string of \unix.
+
 
 \section{Syscalls: [[pipe()]], [[notify()]], [[await()]], [[segattach()]]}
 
@@ -20757,6 +21151,10 @@ extern  void    syslog(int, char*, char*, ...);
 #pragma varargck    argpos  syslog  3
 @
 
+<<signatures debugging functions>>=
+extern	void	abort(void);
+@
+
 \section{Logging}
 
 %claude:
@@ -20893,6 +21291,19 @@ eqdirdev(Dir *a, Dir *b)
 }
 @
 
+\section{[[abort()]]}
+
+<<function [[abort]]>>=
+void
+abort(void)
+{
+    while(*(int*)0)
+        ;
+}
+@
+% generate segfault
+
+
 %******************************************************************************
 \chapter{Profiling Support}
 %******************************************************************************
@@ -20916,6 +21327,8 @@ human-readable profiles.
 <<signatures profiling functions>>=
 extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
 @
+
+\section{Data structures}
 
 <<type [[Prof]]>>=
 enum Profiling {
@@ -20942,20 +21355,6 @@ struct  Plink
 @
 
 
-<<function [[prof]]>>=
-void
-prof(void (*fn)(void*), void *arg, int entries, int what)
-{
-    _profinit(entries, what);
-    _tos->prof.pp = _tos->prof.next;
-    fn(arg);
-    _profdump();
-}
-@
-
-
-
-
 <<global [[khz]]>>=
 static  ulong   khz;
 @
@@ -20966,6 +21365,19 @@ static  ulong   perr;
 
 <<global [[havecycles]]>>=
 static  int havecycles;
+@
+
+\section{[[prof()]]}
+
+<<function [[prof]]>>=
+void
+prof(void (*fn)(void*), void *arg, int entries, int what)
+{
+    _profinit(entries, what);
+    _tos->prof.pp = _tos->prof.next;
+    fn(arg);
+    _profdump();
+}
 @
 
 \section{[[_profin()]]}

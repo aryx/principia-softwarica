@@ -543,6 +543,8 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
 extern  void    (*_assert)(char*);
 
+<<signatures debugging functions>>
+
 <<signatures logging functions>>
 
 // useful for stack trace?
@@ -762,6 +764,8 @@ extern  char    end[];
 <<signatures file syscall>>
 
 <<signatures file syscall wrapper>>
+<<signatures file other wrapper>>
+// extern	int	fdflush(int);
 
 //----------------------------------------------------------------------------
 // directory
@@ -784,6 +788,7 @@ extern  char    end[];
 // IPC
 //----------------------------------------------------------------------------
 <<signatures ipc syscall>>
+<<signatures ipc helpers>>
 
 // ??
 extern  int     postnote(int, int, char *);
@@ -8283,70 +8288,6 @@ void    _fmtunlock(void);
 
 \subsection*{[[libc/fmt/dofmt.c]]}
 
-<<function [[dofmt]]>>=
-/* format the output into f->to and return the number of characters fmted  */
-int
-dofmt(Fmt *f, char *fmt)
-{
-    Rune rune, *rt, *rs;
-    int r;
-    char *t, *s;
-    int n, nfmt;
-
-    nfmt = f->nfmt;
-    for(;;){
-        if(f->runes){
-            rt = f->to;
-            rs = f->stop;
-            while((r = *(uchar*)fmt) && r != '%'){
-                if(r < Runeself)
-                    fmt++;
-                else{
-                    fmt += chartorune(&rune, fmt);
-                    r = rune;
-                }
-                FMTRCHAR(f, rt, rs, r);
-            }
-            fmt++;
-            f->nfmt += rt - (Rune *)f->to;
-            f->to = rt;
-            if(!r)
-                return f->nfmt - nfmt;
-            f->stop = rs;
-        }else{
-            t = f->to;
-            s = f->stop;
-            while((r = *(uchar*)fmt) && r != '%'){
-                if(r < Runeself){
-                    FMTCHAR(f, t, s, r);
-                    fmt++;
-                }else{
-                    n = chartorune(&rune, fmt);
-                    if(t + n > s){
-                        t = _fmtflush(f, t, n);
-                        if(t != nil)
-                            s = f->stop;
-                        else
-                            return -1;
-                    }
-                    while(n--)
-                        *t++ = *fmt++;
-                }
-            }
-            fmt++;
-            f->nfmt += t - (char *)f->to;
-            f->to = t;
-            if(!r)
-                return f->nfmt - nfmt;
-            f->stop = s;
-        }
-
-        fmt = _fmtdispatch(f, fmt, 0);
-        if(fmt == nil)
-            return -1;
-    }
-}
-@
 
 <<function [[_fmtflush]]>>=
 void *
@@ -10441,22 +10382,6 @@ _fmtFdFlush(Fmt *f)
 }
 @
 
-<<function [[vfprint]]>>=
-int
-vfprint(int fd, char *fmt, va_list args)
-{
-    Fmt f;
-    char buf[256];
-    int n;
-
-    fmtfdinit(&f, fd, buf, sizeof(buf));
-    f.args = args;
-    n = dofmt(&f, fmt);
-    if(n > 0 && _fmtFdFlush(&f) == 0)
-        return -1;
-    return n;
-}
-@
 
 %-------------------------------------------------------------
 
@@ -10593,30 +10518,6 @@ vsmprint(char *fmt, va_list args)
 
 \subsection*{[[libc/fmt/vsnprint.c]]}
 
-<<function [[vsnprint]]>>=
-int
-vsnprint(char *buf, int len, char *fmt, va_list args)
-{
-    Fmt f;
-
-    if(len <= 0)
-        return -1;
-    f.runes = 0;
-    f.start = buf;
-    f.to = buf;
-    f.stop = buf + len - 1;
-    f.flush = nil;
-    f.farg = nil;
-    f.nfmt = 0;
-    f.args = args;
-    dofmt(&f, fmt);
-    *(char*)f.to = '\0';
-    return (char*)f.to - buf;
-}
-@
-
-%-------------------------------------------------------------
-
 <<libc/fmt/vsnprint.c>>=
 <<libc includes>>
 <<function [[vsnprint]]>>
@@ -10629,6 +10530,10 @@ vsnprint(char *buf, int len, char *fmt, va_list args)
 
 \subsection*{[[libc/arm/main.s]]}
 % defined in Libcore.nw now
+
+\subsection*{[[libc/arm/argv0.s]]}
+% defined in Libcore.nw now
+
 
 \subsection*{[[libc/arm/memset.s]]}
 % defined in Libcore.nw now
@@ -13332,75 +13237,6 @@ bldcclass(void)
 }
 @
 
-<<function [[regcomp1]]>>=
-static	Reprog*
-regcomp1(char *s, int literal, int dot_type)
-{
-    int token;
-    Reprog *pp;
-
-    /* get memory for the program */
-    pp = malloc(sizeof(Reprog) + 6*sizeof(Reinst)*strlen(s));
-    if(pp == 0){
-        regerror("out of memory");
-        return 0;
-    }
-    freep = pp->firstinst;
-    classp = pp->class;
-    errors = 0;
-
-    if(setjmp(regkaboom))
-        goto out;
-
-    /* go compile the sucker */
-    lexdone = 0;
-    exprp = s;
-    nclass = 0;
-    nbra = 0;
-    atorp = atorstack;
-    andp = andstack;
-    subidp = subidstack;
-    lastwasand = FALSE;
-    cursubid = 0;
-
-    /* Start with a low priority operator to prime parser */
-    pushator(START-1);
-    while((token = lex(literal, dot_type)) != END){
-        if((token&0300) == OPERATOR)
-            operator(token);
-        else
-            operand(token);
-    }
-
-    /* Close with a low priority operator */
-    evaluntil(START);
-
-    /* Force END */
-    operand(END);
-    evaluntil(START);
-#ifdef DEBUG
-    dumpstack();
-#endif
-    if(nbra)
-        rcerror("unmatched left paren");
-    --andp;	/* points to first and only operand */
-    pp->startinst = andp->first;
-#ifdef DEBUG
-    dump(pp);
-#endif
-    pp = optimize(pp);
-#ifdef DEBUG
-    print("start: %d\n", andp->first-pp->firstinst);
-    dump(pp);
-#endif
-out:
-    if(errors){
-        free(pp);
-        pp = 0;
-    }
-    return pp;
-}
-@
 
 
 <<function [[regcomplit]]>>=
@@ -13517,194 +13353,6 @@ static	int	bldcclass(void);
 @
 
 \subsection*{[[libregexp/regexec.c]]}
-
-<<function [[regexec1]]>>=
-/*
- *  return	0 if no match
- *		>0 if a match
- *		<0 if we ran out of _relist space
- */
-static int
-regexec1(Reprog *progp,	/* program to run */
-    char *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms,		/* number of elements at mp */
-    Reljunk *j
-)
-{
-    int flag=0;
-    Reinst *inst;
-    Relist *tlp;
-    char *s;
-    int i, checkstart;
-    Rune r, *rp, *ep;
-    int n;
-    Relist* tl;		/* This list, next list */
-    Relist* nl;
-    Relist* tle;		/* ends of this and next list */
-    Relist* nle;
-    int match;
-    char *p;
-
-    match = 0;
-    checkstart = j->starttype;
-    if(mp)
-        for(i=0; i<ms; i++) {
-            mp[i].s.sp = 0;
-            mp[i].e.ep = 0;
-        }
-    j->relist[0][0].inst = 0;
-    j->relist[1][0].inst = 0;
-
-    /* Execute machine once for each character, including terminal NUL */
-    s = j->starts;
-    do{
-        /* fast check for first char */
-        if(checkstart) {
-            switch(j->starttype) {
-            case RUNE:
-                p = utfrune(s, j->startchar);
-                if(p == 0 || s == j->eol)
-                    return match;
-                s = p;
-                break;
-            case BOL:
-                if(s == bol)
-                    break;
-                p = utfrune(s, '\n');
-                if(p == 0 || s == j->eol)
-                    return match;
-                s = p+1;
-                break;
-            }
-        }
-        r = *(uchar*)s;
-        if(r < Runeself)
-            n = 1;
-        else
-            n = chartorune(&r, s);
-
-        /* switch run lists */
-        tl = j->relist[flag];
-        tle = j->reliste[flag];
-        nl = j->relist[flag^=1];
-        nle = j->reliste[flag];
-        nl->inst = 0;
-
-        /* Add first instruction to current list */
-        if(match == 0)
-            _renewemptythread(tl, progp->startinst, ms, s);
-
-        /* Execute machine until current list is empty */
-        for(tlp=tl; tlp->inst; tlp++){	/* assignment = */
-            for(inst = tlp->inst; ; inst = inst->next){
-                switch(inst->type){
-                case RUNE:	/* regular character */
-                    if(inst->r == r){
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    }
-                    break;
-                case LBRA:
-                    tlp->se.m[inst->subid].s.sp = s;
-                    continue;
-                case RBRA:
-                    tlp->se.m[inst->subid].e.ep = s;
-                    continue;
-                case ANY:
-                    if(r != '\n')
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case ANYNL:
-                    if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case BOL:
-                    if(s == bol || *(s-1) == '\n')
-                        continue;
-                    break;
-                case EOL:
-                    if(s == j->eol || r == 0 || r == '\n')
-                        continue;
-                    break;
-                case CCLASS:
-                    ep = inst->cp->end;
-                    for(rp = inst->cp->spans; rp < ep; rp += 2)
-                        if(r >= rp[0] && r <= rp[1]){
-                            if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                                return -1;
-                            break;
-                        }
-                    break;
-                case NCCLASS:
-                    ep = inst->cp->end;
-                    for(rp = inst->cp->spans; rp < ep; rp += 2)
-                        if(r >= rp[0] && r <= rp[1])
-                            break;
-                    if(rp == ep)
-                        if(_renewthread(nl, inst->next, ms, &tlp->se)==nle)
-                            return -1;
-                    break;
-                case OR:
-                    /* evaluate right choice later */
-                    if(_renewthread(tlp, inst->right, ms, &tlp->se) == tle)
-                        return -1;
-                    /* efficiency: advance and re-evaluate */
-                    continue;
-                case END:	/* Match! */
-                    match = 1;
-                    tlp->se.m[0].e.ep = s;
-                    if(mp != 0)
-                        _renewmatch(mp, ms, &tlp->se);
-                    break;
-                }
-                break;
-            }
-        }
-        if(s == j->eol)
-            break;
-        checkstart = j->starttype && nl->inst==0;
-        s += n;
-    }while(r);
-    return match;
-}
-@
-
-<<function [[regexec2]]>>=
-static int
-regexec2(Reprog *progp,	/* program to run */
-    char *bol,	/* string to run machine on */
-    Resub *mp,	/* subexpression elements */
-    int ms,		/* number of elements at mp */
-    Reljunk *j
-)
-{
-    int rv;
-    Relist *relist0, *relist1;
-
-    /* mark space */
-    relist0 = malloc(BIGLISTSIZE*sizeof(Relist));
-    if(relist0 == nil)
-        return -1;
-    relist1 = malloc(BIGLISTSIZE*sizeof(Relist));
-    if(relist1 == nil){
-        free(relist1);
-        return -1;
-    }
-    j->relist[0] = relist0;
-    j->relist[1] = relist1;
-    j->reliste[0] = relist0 + BIGLISTSIZE - 2;
-    j->reliste[1] = relist1 + BIGLISTSIZE - 2;
-
-    rv = regexec1(progp, bol, mp, ms, j);
-    free(relist0);
-    free(relist1);
-    return rv;
-}
-@
-
-%-------------------------------------------------------------
 
 <<libregexp/regexec.c>>=
 <<libregexp includes>>

@@ -674,6 +674,10 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
 extern  void    (*_assert)(char*);
 
+/*s: signatures debugging functions */
+extern	void	abort(void);
+/*e: signatures debugging functions */
+
 /*s: signatures logging functions */
 extern  void    syslog(int, char*, char*, ...);
 
