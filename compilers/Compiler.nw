@@ -1009,12 +1009,22 @@ char	class;
 \section{Node and type attributes}
 
 %trans:
-% Saw Node.type (and Node.etype), 
+% Saw Node.type (and Node.etype),
 % Node.class
 % (Saw Node.sym).
 % 5c use node attributes for many things! For everything actually.
 %ocaml: I prefer use separate phases and separate external hashtbl or
 % temporary environment.
+
+%claude:
+Beyond the tree structure, each [[Node]] carries attributes that
+later phases use for code generation. The [[addable]] field marks
+whether an expression is an {\em lvalue} (can appear on the left of
+an assignment, and therefore has a memory address). The [[complex]]
+field estimates how many registers the expression needs, which
+the code generator uses to decide which subtree to evaluate first.
+Both fields are set by the type checker's [[xcom]] pass and
+consumed by the code generator.
 
 %\subsection{Misc attributes}
 
@@ -1070,6 +1080,14 @@ All symbols live in a flat hash table ([[hash]]), and scope
 nesting is managed by the separate [[Decl]] stack.
 
 \subsection{[[Sym]]}
+
+%claude:
+The [[Sym]] structure groups all namespace value fields together
+(not in a union) because the same spelling can simultaneously denote
+a variable ([[type]], [[class]], [[offset]]) and a struct tag
+([[suetag]], [[sueblock]]). The lexer also stores keyword token
+codes in [[lexical]] and macro bodies in [[macro]], overloading
+this single structure for every kind of named entity in C.
 
 <<struct [[Sym]]>>=
 struct	Sym
@@ -1179,6 +1197,14 @@ struct	Sym
 
 \subsection{[[hash]]}
 
+%claude:
+The hash table is a simple open-chaining table of 1024 buckets.
+Each bucket is a linked list of [[Sym]] nodes chained through
+[[Sym.link]]. The hash function multiplies-and-accumulates
+over the bytes of the name. This table holds \emph{every}
+symbol ever seen---scope is not managed here but through the
+separate [[Decl]] stack.
+
 <<global [[hash]]>>=
 // hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
@@ -1203,6 +1229,16 @@ for(i=0; i<NHASH; i++)
 
 
 \subsection{[[slookup()]] and [[lookup()]]}
+
+%claude:
+[[lookup]] is the core function: it hashes the global [[symb]]
+buffer, walks the bucket chain looking for a match, and if
+none is found, allocates a fresh [[Sym]] and inserts it at the
+head of the bucket. This means [[lookup]] never returns [[nil]]---it
+always returns a valid symbol, possibly newly created with
+default values ([[LNAME]] lexical class, no type, no storage).
+[[slookup]] is a convenience wrapper that copies a string
+into [[symb]] and calls [[lookup]].
 
 <<function [[slookup]]>>=
 Sym*
@@ -1273,6 +1309,19 @@ lookup(void)
 
 \subsection{Identifier symbols}
 
+%claude:
+When a [[Sym]] represents an identifier (variable, function,
+typedef, or enum constant), it carries several value fields:
+[[type]] and [[class]] give the type and storage class,
+[[block]] records which scope it belongs to (for detecting
+redeclarations), [[offset]] gives its position in the stack
+frame (for locals and parameters), and [[varlineno]] records
+the source location of the declaration (for error messages).
+When the parser encounters a use of an identifier, it copies
+these fields from the [[Sym]] into the [[Node]], so the AST
+is self-contained for code generation even after the scope
+is reverted.
+
 % complex sub structure :)
 <<[[Sym]] identifier value fields>>=
 <<[[Sym]] identifier value, type and storage fields>>
@@ -1333,6 +1382,16 @@ long	varlineno;
 
 \subsection{Tag symbols}
 
+%claude:
+Tags (struct, union, enum names) live in a separate C namespace,
+so [[struct x]] and [[int x]] can coexist. The [[suetag]] field
+points to the [[Type]] that represents the struct's definition
+(its list of fields linked through [[Type.link]]). For forward
+declarations, [[suetag]] initially points to an incomplete type
+whose [[link]] is [[T]]; it gets filled in later when the full
+definition is parsed. The [[sueblock]] field tracks the scope
+depth, analogous to [[block]] for identifiers.
+
 % if a name refers also to a tag, then here is a ref to its type def
 % (which at first can have Type.link set to T, but will be defined later).
 % sue = structure union enum
@@ -1363,6 +1422,16 @@ ushort	sueblock;
 % To know also if redefine in same scope the same structure.
 
 \subsection{Other symbols}
+
+%claude:
+The remaining [[Sym]] fields serve two internal purposes.
+[[macro]] stores the replacement text for \verb+#define+d macros
+(with a leading byte encoding the parameter count).
+[[lexical]] stores the token code for keywords: at startup,
+[[cinit]] inserts all C keywords into the hash table with
+their token codes, so [[lookup]] of ``[[if]]'' returns a [[Sym]]
+with [[lexical == LIF]]. Ordinary identifiers get [[LNAME]]
+by default from [[syminit]].
 
 % for labels?
 %  see later labels
@@ -1733,6 +1802,14 @@ d->varlineno = s->varlineno;
 
 \section{[[Token]]}
 
+%claude:
+The yacc [[%union]] defines what values a token can carry.
+Numeric constants carry their value as [[vval]] (integer) or
+[[dval]] (floating-point). String literals carry a pointer and
+length in [[sval]]. Identifiers and keywords carry a [[Sym]]
+pointer, which the lexer looks up in the hash table. This is
+the interface between the lexer and the parser.
+
 <<union yacc>>=
 %union  {
     vlong   vval;
@@ -2000,6 +2077,17 @@ thestring = "arm";
 % gxx = arch specific? =~ hooks, gins, gout, etc.
 
 \section{Arguments processing}
+
+%claude:
+Command-line processing uses the [[ARGBEGIN]]/[[ARGEND]] macros
+from \plan's [[libc.h]]. The [[-o]] flag overrides the output file
+name, [[-D]] defines preprocessor macros (accumulated in a growable
+array for replay when compiling multiple files), and [[-I]] adds
+include search paths. All other single-character flags toggle
+entries in the [[debug]] array---a simple but effective scheme
+where [[debug['S']]] enables assembly output, [[debug['w']]]
+enables warnings, and so on. There is no [[-c]] flag as in
+[[gcc]]: [[5c]] always produces an object file, never an executable.
 
 <<[[main()]] command line processing>>=
 case 'o':
@@ -2294,6 +2382,16 @@ gclean(void)
 
 \section{Initializations}
 
+%claude:
+The compiler has four initialization functions, called in order:
+[[tinit]] fills the type-related lookup tables (type compatibility
+matrices, type set bitmasks, debugging name arrays), [[cinit]]
+initializes the C language layer (hash table, symbol table,
+declaration stack, basic types), [[ginit]] initializes the
+architecture-specific backend (zero-valued template [[zprog]],
+special AST nodes, register state), and [[arginit]] sets up
+the [[printf]]-format argument checker.
+
 \subsection{[[tinit()]]}
 % type initialisation?
 
@@ -2447,6 +2545,15 @@ lineno = 1;
 
 \section{Files management: [[iostack]]}
 
+%claude:
+Each open file (or macro expansion) gets an [[Io]] structure with
+its own 8\,KB read buffer. The [[Io]] nodes form a stack through
+their [[link]] pointers: the current file is always at the top
+of [[iostack]]. When a file is exhausted, its [[Io]] is moved
+to the [[iofree]] list for reuse rather than freed---a simple
+allocator that avoids repeated [[alloc]] calls during deep
+\verb+#include+ nesting.
+
 <<struct [[Io]]>>=
 struct	Io
 {
@@ -2576,6 +2683,15 @@ newfile(char *s, int f)
 
 \section{Buffer management: [[fi]]}
 
+%claude:
+The global [[fi]] structure is a ``cursor'' into the current
+[[Io]]'s buffer: [[fi.p]] points to the next character and
+[[fi.c]] counts the remaining characters. When [[fi.c]] reaches
+zero, [[filbuf]] refills the buffer from the underlying file
+descriptor. This two-level scheme (global cursor over per-file
+buffers) means the hot path---reading the next character---is
+a single decrement-and-dereference, inlined as the [[GETC]] macro.
+
 %ocaml: IO are already buffered
 
 <<constant [[BUFSIZ]]>>=
@@ -2603,6 +2719,15 @@ struct Fi fi;
 @
 
 \section{[[GETC()]]}
+
+%claude:
+[[GETC]] is the compiler's inner loop: every character passes
+through it. The macro fast-paths the common case (buffer not
+empty) as a pointer dereference, falling back to [[filbuf]]
+only when the buffer is exhausted. [[filbuf]] refills from the
+current file, and on EOF pops the [[iostack]] to resume reading
+the parent file---this is how \verb+#include+ returns seamlessly
+to the including file.
 
 <<function [[GETC]]>>=
 #define	GETC()	((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff))
@@ -2697,6 +2822,15 @@ classifies them, and returns token codes for the yacc parser.
 
 \section{[[yylex()]]}
 
+%claude:
+[[yylex]] is a large function structured around a [[switch]] on the
+first character of each token. Whitespace is skipped in a loop
+at [[l0]], the [[peekc]] lookahead is consumed before calling
+[[GETC]], and multi-character tokens (operators, numbers, strings)
+branch to labeled code sections ([[tnum]], [[talph]], [[casedot]]).
+The function returns either a single ASCII character (for
+one-character operators like [[*]] and [[;]]) or an [[Lxxx]]
+token code for keywords, identifiers, and multi-character operators.
 
 <<function [[yylex]]>>=
 //@Scheck: not dead, called by yyparse
@@ -2737,6 +2871,15 @@ if(c == '\n')
 % this unfortunately needs to be handled at many places
 
 \section{Peek, seek, and look ahead}
+
+%claude:
+Many C operators require two characters to distinguish (e.g.,
+[[<]] vs.\ [[<<]] vs.\ [[<=]]). The lexer handles this with
+[[peekc]]: after reading a second character and deciding it
+does not belong to the current token, it stores it in [[peekc]]
+so the next call to [[yylex]] picks it up without calling
+[[GETC]] again. The sentinel value [[IGN]] means ``no character
+pending.''
 
 <<global [[peekc]]>>=
 int	peekc;
@@ -2785,6 +2928,16 @@ case EOF:
 
 
 \section{Comments}
+
+%claude:
+Comment handling is embedded in the [[/]] case of the lexer's
+switch. After reading [[/]], the lexer peeks at the next character:
+[[*]] starts a block comment (scan until [[*/]]),
+[[/]] starts a line comment (scan until newline),
+[[=]] returns the [[/=]] token ([[LDVE]]),
+and anything else produces the bare [[/]] division operator.
+The [[getr]] function is used instead of [[GETC]] so that
+Unicode characters inside comments are handled correctly.
 
 % comment part 1
 <<[[yylex()]] switch c cases>>=
@@ -2969,6 +3122,13 @@ talph:
 
 \subsection{Unicode identifiers}
 
+%claude:
+\plan treats all multi-byte UTF-8 runes as alphabetic, so
+identifiers can contain Unicode characters. The [[Runeself]]
+constant (128) marks the boundary: any byte below it is ASCII
+and handled normally; any byte at or above it starts a UTF-8
+sequence that [[fullrune]] reassembles into a complete rune.
+
 <<[[yylex()]] if unicode character>>=
 if(c >= Runeself) {
     /*
@@ -2996,7 +3156,7 @@ if(c >= Runeself) {
 
 \subsection{Typedef trick}
 
-% ambiguity in C grammar. 
+% ambiguity in C grammar.
 % ex:
 % not context-free.
 % need to know if identifier is a typedef.
@@ -3007,6 +3167,15 @@ if(c >= Runeself) {
 % xdecor actually uses ltag with LNAME | LTYPE.
 % (but no conflict????)
 
+%claude:
+C's grammar is not context-free: the statement [[T * x;]] is
+a pointer declaration if [[T]] is a typedef, but a multiplication
+expression if [[T]] is a variable. The standard solution is
+to have the lexer consult the symbol table: if [[lookup]]
+returns a symbol whose class is [[CTYPEDEF]], the lexer returns
+[[LTYPE]] instead of [[LNAME]], and the parser uses different
+grammar rules for each. This lexer--parser--symbol-table
+cooperation is a classic source of complexity in C compilers.
 
 <<[[yylex()]] alpha case, return LTYPE if typedef symbol s>>=
 if(s->class == CTYPEDEF || s->class == CTYPESTR)
@@ -3203,6 +3372,16 @@ tnum:
 
 \subsection{Decimals}
 
+%claude:
+After collecting the digit characters of a decimal number into
+[[symb]], [[mpatov]] converts the string to a [[vlong]] value.
+The code then determines the C type by checking suffix flags
+and magnitude: an [[LL]] suffix forces [[TVLONG]], an [[L]] forces
+[[TLONG]], a [[U]] forces the unsigned variant, and if no suffix
+is present the smallest type that fits is chosen. The result
+is truncated to the chosen width via [[convvtox]], which warns
+if the value overflows.
+
 <<[[yylex()]] locals>>=
 vlong vv;
 // enum<Type_kind>
@@ -3244,6 +3423,16 @@ nret:
 @
 
 \subsection{[[convvtox()]]}
+
+%claude:
+[[convvtox]] (``convert vlong to type X'') truncates a 64-bit
+value to the width of a given type, applying sign extension for
+signed types. This is used everywhere a constant must be narrowed
+to its declared type --- in the lexer (to detect overflow in
+numeric literals), in the type checker (for casts), and in
+constant evaluation. [[mpatov]] handles the string-to-integer
+conversion for the different bases (decimal, octal, hex).
+
 
 <<function [[convvtox]]>>=
 vlong
@@ -3339,6 +3528,14 @@ bad:
 
 \subsection{Hexadecimals and octals}
 
+%claude:
+Numbers starting with [[0]] are either octal ([[0377]]) or
+hexadecimal ([[0xFF]]). The lexer peeks at the next character
+to decide: [[x]]/[[X]] means hex, otherwise octal. Both
+accumulate into [[symb]] and then jump to the suffix handling
+at [[ncu]] (unsigned/long suffixes) rather than [[dc]] (the
+decimal path, which also handles floats).
+
 <<[[yylex()]] in number case, 0xxx handling>>=
 // else, octal or hexadecimal number
 *cp++ = c;
@@ -3373,6 +3570,13 @@ for(;;) {
 
 \subsection{Unsigned numbers}
 
+%claude:
+The [[U]] suffix forces the constant to an unsigned type, even
+if the value would fit in a signed type. The [[Numuns]] flag
+is accumulated via [[ncu:]] and checked later: if set, or if
+the value does not fit in a signed [[int]], the constant gets
+[[TUINT]] (or the appropriate wider unsigned type).
+
 % why matters? why need this suffix?
 
 <<[[Numxxx]] cases>>=
@@ -3398,6 +3602,14 @@ if((c1 & Numuns) || convvtox(vv, TINT) < 0) {
 @
 
 \subsection{Long numbers}
+
+%claude:
+The [[L]] suffix promotes a constant to [[TLONG]], and [[LL]]
+promotes it to [[TVLONG]] (64 bits). The second [[L]] sets
+[[Numvlong]], and the first sets [[Numlong]]. The type
+determination cascade checks vlong first, then long, then
+unsigned, then plain int --- picking the smallest type that
+both fits the value and satisfies the suffix constraints.
 
 % why need this suffix?
 
@@ -3443,6 +3655,16 @@ if(c1 & Numlong) {
 @
 
 \subsection{Floats}
+
+%claude:
+A decimal number becomes a float if a [[.]] or [[e]]/[[E]]
+follows the digit sequence. The lexer collects the entire
+float text (including exponent and sign) into [[symb]], then
+calls [[strtod]] to convert it. An [[F]] suffix produces
+[[LFCONST]] (single precision), otherwise [[LDCONST]] (double).
+The [[casedot]] label is shared with the [[.]] operator case
+in the main switch --- if a [[.]] is followed by a digit, it
+is a float, otherwise it is a field-access or struct operator.
 
 <<[[yylex()]] in number case, in decimal case, float handling>>=
 if(c == '.')
@@ -3516,6 +3738,15 @@ caseout:
 %ocaml: lex definitely better I think
 
 \section{Characters}
+
+%claude:
+Character constants are lexed by calling [[escchar]] to read
+one character (handling escape sequences like [[\n]], [[\t]],
+and hexadecimal/octal escapes). The result is converted to
+[[TCHAR]] via [[convvtox]] and returned as [[LCONST]].
+A second call to [[escchar]] verifies that the closing quote
+follows immediately.
+
 % part1
 
 <<[[yylex()]] switch c cases>>=
@@ -3554,6 +3785,16 @@ case '\'':
 % chars are converted to integer constants.
 
 \subsection{Escaping characters}
+
+%claude:
+[[escchar]] reads the next character, handling escape sequences.
+It takes three parameters: [[e]] is the closing delimiter
+([[\']] or [[\"]]), [[longflg]] extends octal escapes to 8
+digits (for Unicode strings), and [[escflg]] ORs [[ESC]] into
+numeric escapes (so the string lexer can distinguish literal
+from escaped characters). The function returns [[EOF]] when
+it sees the closing delimiter, and the caller uses this
+to detect the end of the character or string literal.
 
 %dup: Assembler.nw except have also the longflg and escflg
 <<function [[escchar]]>>=
@@ -3691,6 +3932,15 @@ if(c == 'x') {
 
 \subsection{Unicode characters}
 
+%claude:
+The [[L]] prefix introduces wide character ([[L'x']]) and
+wide string ([[L"..."]]) literals. The lexer detects this
+by checking the character after [[L]]: a single quote goes
+to the wide character path (using [[escchar]] with [[longflg]]
+true, allowing 8-digit octal escapes for full Unicode), and
+a double quote goes to the wide string path at [[caselq]].
+If neither follows, [[L]] is just the start of an identifier.
+
 <<[[yylex()]] if L followed by unicode strings or character>>=
 if(c != 'L')
     goto talph;
@@ -3717,6 +3967,15 @@ if(c == '"') {
 % pass longflag true here! to escchar
 
 \section{Strings}
+
+%claude:
+String literals are collected character by character using
+[[escchar]], which marks escaped bytes with the [[ESC]] flag.
+Characters without [[ESC]] are UTF-8 encoded via [[runetochar]],
+while escaped characters ([[\\x41]]) are stored as raw bytes.
+The result is a dynamically grown buffer (via [[allocn]]) that
+holds the string's bytes plus a null terminator. The parser
+receives a pointer and length in [[yylval.sval]].
 
 <<constant [[ESC]]>>=
 #define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
@@ -3759,6 +4018,16 @@ case '"':
 @
 
 \subsection{Unicode strings}
+
+%claude:
+Wide strings ([[L"..."]]) store each character as a [[TRune]]
+(typically 4 bytes) instead of UTF-8. [[escchar]] is called
+with [[longflg]] true so octal escapes can encode full Unicode
+code points. The result buffer is [[TRune]]-aligned and
+null-terminated with a [[TRune]]-sized zero. The grammar rule
+for [[lstring]] handles adjacent wide string concatenation,
+just like the ASCII string rule does for regular strings.
+
 % long strings
 
 <<[[yylex()]] switch c cases>>=
@@ -4051,6 +4320,15 @@ if(peekc != IGN) {
 
 \subsection{Include paths, [[-I]]}
 
+%claude:
+The include paths are stored in a growable array. Entry~0 is
+special: it is initially set to [["."]],
+then overwritten with the directory of the current source file
+(unless [[-.]]) is given). For \verb+#include "file"+,
+the compiler searches entry~0 first (the source directory),
+then the remaining paths. For \verb+#include <file>+,
+it skips entry~0 and searches only the system directories.
+
 %assembler: was using fixed array in assembler
 <<global [[include]]>>=
 // growing_array<string>
@@ -4206,6 +4484,14 @@ linehist(char *f, int offset)
 
 
 \subsection{[[#include]]}
+
+%claude:
+[[macinc]] lexes the filename (either [[<file>]] or [["file"]]),
+searches the include path array, opens the file, and pushes it
+onto the I/O stack via [[newfile]]. For quoted includes, it
+searches from [[include[0]]] (the source file's directory);
+for angle-bracket includes, it skips [[include[0]]] and starts
+from the system paths.
 
 <<constant [[STRINGSZ]]>>=
 #define	STRINGSZ	200
@@ -4402,6 +4688,14 @@ this is why [[5c]] does not need a separate stringify operator.
 
 \subsection{[[-D]]}
 
+%claude:
+Command-line [[-D]] definitions are handled by [[dodefine]],
+which splits the argument at [[=]] (if present) to separate
+the name from the value, looks up the symbol, and stores the
+replacement text in [[Sym.macro]]. A bare [[-Dfoo]] is equivalent
+to [[-Dfoo=1]]. The first byte of the macro string is the
+parameter count (0 for object-like macros).
+
 % no Dlist here, instead pass the defs to compile()
 
 % cp can be just XX or also XX=YY
@@ -4449,6 +4743,15 @@ dodefine(char *cp)
 % factorize hunk/
 
 \subsection{[[#define]]}
+
+%claude:
+[[macdef]] parses a macro definition in three steps: it lexes
+the macro name, lexes the parameter list (if any), then lexes
+the body. Parameters are limited to 25 ([[NARG]]) because they
+are encoded in the body string as [[#a]], [[#b]], ..., [[#y]] ---
+one character per parameter, fitting within the alphabet.
+Variadic macros ([[...]]) are supported via the [[VARMAC]] flag
+and expand [[__VA_ARGS__]] in the body.
 
 <<constant [[NARG]]>>=
 #define	NARG	25
@@ -4816,6 +5119,15 @@ if(peekc != IGN) {
 
 \subsubsection{[[macexpand()]]}
 
+%claude:
+[[macexpand]] performs textual macro expansion into a buffer [[b]].
+For object-like macros (no parameters), it simply copies the body.
+For function-like macros, it first extracts the actual arguments
+by reading characters and tracking parenthesis depth, then walks
+the body and replaces each [[#x]] marker with the corresponding
+argument text. The result is written into an [[Io]] buffer and
+pushed onto the I/O stack, so the lexer reads the expansion next.
+
 % wow, complicated too
 <<function [[macexpand]]>>=
 void
@@ -4862,6 +5174,15 @@ toobig:
 
 
 \subsubsection{Extracting the arguments}
+
+%claude:
+Arguments are extracted by reading characters between the
+opening [[`(`]] and closing [[`)`]], splitting at commas while
+respecting nested parenthesis depth ([[l]]). Each argument is
+stored as a null-terminated string in [[buf]], with [[arg[n]]]
+pointing to the start. For variadic macros, all remaining
+arguments after the last named parameter are concatenated
+into [[__VA_ARGS__]].
 
 %XXX
 <<[[macexpand()]] other locals>>=
@@ -5004,6 +5325,15 @@ if(c == '/') {
 
 \subsubsection{Substituting the arguments}
 
+%claude:
+The substitution loop walks the macro body string character
+by character. Plain characters are copied directly. When [[#]]
+is encountered, the next character is either another [[#]]
+(an escaped literal hash) or a letter [[a]]--[[y]] indicating
+which argument to substitute. The argument text is copied
+inline via [[strcpy]], building the complete expanded string
+in the output buffer [[b]].
+
 <<[[macexpand()]] substituting the arguments>>=
 cp = s->macro+1;
 for(;;) {
@@ -5044,6 +5374,11 @@ for(;;) {
 % so when expand, it does not change the line number!
 
 \section{[[#undef]]}
+
+%claude:
+[[#undef]] simply sets [[Sym.macro]] to [[nil]], making the
+symbol invisible to macro expansion. [[macend]] consumes the
+rest of the line (comments, trailing whitespace).
 
 <<function [[macund]]>>=
 void
@@ -5165,6 +5500,14 @@ skip:
 
 \section{[[#pragma]]}
 
+%claude:
+[[#pragma]] is \plan's extension point. The compiler recognizes
+several pragmas: [[lib]] for automatic library linking, [[pack]]
+for structure packing, [[profile]] to disable profiling for a
+function, [[varargck]] for format-string checking, and
+[[incomplete]] to suppress warnings about incomplete struct
+definitions. Unknown pragmas are silently ignored.
+
 <<function [[macprag]]>>=
 void
 macprag(void)
@@ -5195,6 +5538,12 @@ macprag(void)
 
 % useful for code generator, to report error to original file, not generated
 % code, e.g. for lex&yacc
+
+%claude:
+[[#line]] directives let tools like [[yacc]] map errors back
+to the original source file. [[maclin]] parses the line number
+and optional filename, then calls [[linehist]] with the offset
+so the error reporter can reconstruct the correct file and line.
 
 <<function [[maclin]]>>=
 void
@@ -5319,8 +5668,23 @@ grammar rules), and this chapter reflects that complexity.
 
 % In this chapter 5c will make heavy uses of symbol table! lots of
 % things going on in addition to parsing.
-% Moreover the parser returns an AST with lots of annotations, where lots of 
+% Moreover the parser returns an AST with lots of annotations, where lots of
 %  things are "resolved".
+
+%claude:
+The grammar is a standard yacc [[.y]] file with rules organized
+into five groups: declarators, statements, expressions,
+initializers, and types/storage classes. The top-level rule
+[[prog]] is just a list of [[xdecl]] (external declarations)---and
+since [[5c]] triggers code generation after each function body
+is parsed, [[prog]] never returns an AST for the whole file.
+
+%claude:
+The priority and associativity declarations encode C's 15-level
+operator precedence: [[*]] binds tighter than [[+]], which
+binds tighter than [[<<]], and so on. The yacc union carries
+either a numeric value (for constants), a [[Sym]] pointer (for
+identifiers), or a [[Node]] pointer (for AST subtrees).
 
 %pad: to please syncweb -to_tex
 \ifallcode
@@ -5469,7 +5833,17 @@ parameter, and abstract (used in casts and [[sizeof]]).
 
 \subsection{No-declarator declarations}
 
-% I originally titled "nameless" declarations, but it actually 
+%claude:
+The simplest form of [[xdecl]] has no declarator at all---just
+a type specifier and a semicolon. This covers forward struct
+declarations ([[struct Foo;]]), enum definitions, and the
+degenerate case [[int;]] (which compiles but is useless).
+The global [[lastclass]] and [[lasttype]] capture the type
+specifiers parsed by [[ctlist]], and [[dodecl]] is called
+with [[Z]] (no name) to finalize any side effects like
+struct tag registration.
+
+% I originally titled "nameless" declarations, but it actually
 % can define struct, in which case they have a name ... so better title I think
 % even if it's very technical, but I have to.
 
@@ -5547,6 +5921,19 @@ ctlist:
 % globals or data access than arrays indexes.
 
 \subsection{Declarator-based declarations}
+
+%claude:
+Most useful declarations have a declarator: [[int x;]],
+[[int *p;]], [[int f(int);]], [[typedef int size_t;]].
+The [[xdlist]] rule calls [[dodecl]] for each declarator
+in a comma-separated list. [[dodecl]] is the key function:
+it walks the nested [[OIND]] (pointer), [[OFUNC]], and
+[[OARRAY]] nodes in the declarator tree, composing them with
+the base type from part one to build the final [[Type]].
+For example, [[int *f(int)]] starts with base type [[TINT]],
+then [[dodecl]] wraps it in [[TFUNC]] (for the parameter list)
+and [[TIND]] (for the pointer), yielding ``pointer to function
+returning int.''
 
 %http://blog.robertelder.org/building-a-c-compiler-type-system-the-formidable-declarator/
 
@@ -5636,6 +6023,17 @@ Type*	lastdcltype;
 
 
 \subsection{Entity declarations, the declarator}
+
+%claude:
+The declarator grammar mirrors C's inside-out type syntax.
+An [[xdecor]] is an optional pointer prefix ([[*]]) wrapping
+an [[xdecor2]], which is either a bare identifier ([[tag]])
+or a parenthesized subdeclarator. Array brackets ([[[]]])
+and function parameter lists ([[()]]) are postfix on [[xdecor2]].
+The parser builds a small tree of [[OIND]], [[OARRAY]], and
+[[OFUNC]] nodes around the [[ONAME]] leaf; [[dodecl]] then
+walks this tree to compose the final type.
+
 % also use for definitions
 
 <<xdecor rule>>=
@@ -5777,6 +6175,17 @@ xdecl(int class, Type *t, Sym *s)
 %alt: extern "C" in C++, 'external' in ocaml
 
 \subsection{Function definitions}
+
+%claude:
+When the parser sees a declarator followed by a [[{]] instead
+of a [[;]], it is a function definition. The yacc action calls
+[[dodecl]] to extract the function name and type, pushes the
+parameters into the scope (via [[markdcl]] and [[pdecl]]),
+parses the body, and then immediately calls [[codgen]] to
+generate assembly for that function. After code generation,
+[[revertdcl]] restores the scope. This is why [[5c]] is a
+one-pass compiler: each function is fully compiled before
+the next one is even parsed.
 
 <<global [[firstdcl]]>>=
 Decl*	firstdcl;
@@ -5954,6 +6363,13 @@ labels:
 % have seen block rule above used for example for function definitions.
 % a single stmt can also be a block! nested language.
 
+%claude:
+A block opens a new declaration scope via [[markdcl()]] and closes it
+with [[revertdcl()]], which pops all symbols declared inside the block
+from the symbol table. This scope management happens at parse time,
+so by the time code generation runs, all names have already been
+resolved to their correct bindings.
+
 <<ulstmnt rule>>=
 |   {
         markdcl();
@@ -5979,6 +6395,13 @@ labels:
 % (even use of external entities are found out only at link time).
 
 \subsection{Conditionals}
+
+%claude:
+An [[if]] statement becomes an [[OIF]] node whose left child is
+the condition expression and whose right child is an [[OLIST]] pair
+of (then-branch, else-branch), with [[Z]] for a missing [[else]].
+The compiler warns on empty bodies, a useful diagnostic since a
+stray semicolon after [[if(x);]] is almost always a bug.
 
 <<statement nodes>>=
 OIF,
@@ -6006,6 +6429,14 @@ OIF,
 % OLIST here could be an OPAIR
 
 \subsection{Loops}
+
+%claude:
+Loops use three node kinds: [[OWHILE]] (condition on the left, body on the right),
+[[ODWHILE]] for [[do-while]] (same layout but with reversed evaluation order),
+and [[OFOR]] whose left child packs the three [[for]] clauses via nested [[OLIST]]
+nodes. The [[for]] rule calls [[markdcl()]]/[[revertdcl()]] because [[5c]]
+supports the C++ extension [[for(int i = 0; ...)]], which requires a
+fresh scope for the loop variable.
 
 <<statement nodes>>=
 OWHILE,
@@ -6043,6 +6474,13 @@ forexpr:
 
 \subsection{Control flow jumps}
 
+%claude:
+[[ORETURN]] records [[thisfntype->link]] (the function's return type) directly
+in the node at parse time, so the type checker can later verify the
+returned expression matches. [[OBREAK]] and [[OCONTINUE]] are leaf nodes
+with no children---the compiler resolves which loop they refer to during
+code generation, not during parsing.
+
 <<statement nodes>>=
 ORETURN,
 
@@ -6073,6 +6511,14 @@ OCONTINUE,
 % kinda control flow jump too
 
 % seen labels rule before in Statements section header.
+
+%claude:
+Labels live in their own namespace (the [[label]] field of [[Sym]])
+and have function scope---a [[goto]] can jump forward to a label not yet
+seen. The [<dcllabel>] function achieves this by removing the label from
+the normal [[dclstack]] and inserting it at [[firstdcl]], which is the
+function-level scope. This way, [[revertdcl()]] for inner blocks will
+not accidentally pop the label.
 
 <<statement nodes>>=
 OLABEL,
@@ -6155,6 +6601,14 @@ Node* dcllabel(Sym *s, bool defcontext)
 
 \subsection{Switch}
 % kinda conditional too
+
+%claude:
+A [[switch]] becomes an [[OSWITCH]] node with the scrutinee expression
+on the left and the body statement on the right. [[case]] and [[default]]
+labels are [[OCASE]] nodes (with [[left]] being the constant expression,
+or [[Z]] for [[default]]). They appear in the grammar as label
+alternatives alongside [[OLABEL]], so you can freely intermix
+[[case 1: label_x: ...]] in the source.
 
 <<statement nodes>>=
 OSWITCH,
@@ -6286,6 +6740,14 @@ zcexpr:
 
 \subsection{Numeric constants}
 
+%claude:
+Each numeric token variant ([[LCONST]], [[LLCONST]], [[LFCONST]], etc.)
+gets its own grammar action that creates an [[OCONST]] node with
+the appropriate type pre-set. The parser also saves the original
+text ([[symb]]) in [[cstring]] for debugging output and constant
+folding. Note that character constants like [['x']] are already
+converted to integers by the lexer.
+
 <<expression nodes>>=
 OCONST,
 @
@@ -6295,6 +6757,13 @@ OCONST,
 %codegen: same in assembly, $intvalue.
 
 \subsubsection{Integers}
+
+%claude:
+Each integer constant variant (plain, unsigned, long, vlong) gets
+its own grammar action that creates an [[OCONST]] node with the
+right type and value pre-set. The [[vconst]] field uses [[vlong]]
+(64-bit) to hold any integer value; [[cstring]] saves the original
+text for debugging.
 
 % the grammar section builds the AST node and assign the types.
 
@@ -6396,6 +6865,14 @@ double	fconst;		/* fp constant */ // for OCONST
 % and also handle unicode here.
 
 \subsubsection{ASCII strings}
+
+%claude:
+String literals produce [[OSTRING]] nodes with a [[TARRAY]]
+of [[TCHAR]] type. Adjacent strings are concatenated at parse
+time by appending the second to the first. Each string is
+assigned a unique static symbol (via [[symstring]]) so the
+code generator can emit it as a [[DATA]] item.
+
 % classic '\0' terminated "C strings"
 
 <<expression nodes>>=
@@ -6501,6 +6978,17 @@ lstring:
 
 
 \subsection{Entity uses}
+
+%claude:
+When an identifier appears in an expression, the parser resolves
+it immediately: it copies [[Sym.type]], [[Sym.class]], and
+[[Sym.offset]] from the symbol table entry into the AST node.
+This is the bridge from name resolution to code generation---after
+this point, the node is self-contained and does not need the
+symbol table anymore. If the identifier has not been declared,
+[[5c]] issues a warning but continues (with an implicit [[int]]
+type), matching traditional C behavior.
+
 % important!
 
 <<pexpr rule>>=
@@ -6555,6 +7043,13 @@ name:
 
 % also + is now overloaded! works for many integers (char/short/int/long/vlong)
 % and many floats (double/float), so no need to use AADD, AADDF, AADDD
+
+%claude:
+The expression rules use yacc's [[%left]] and [[%right]] precedence
+declarations to handle operator priority and associativity, avoiding
+the need for separate grammar nonterminals per precedence level.
+All binary operators share the same [[expr op expr]] pattern and yacc
+resolves conflicts using the declared precedences.
 
 <<expression nodes>>=
 OADD,
@@ -6619,6 +7114,14 @@ OASHR,
 
 \subsection{Boolean expressions}
 
+%claude:
+[[OANDAND]] and [[OOROR]] are short-circuit operators: unlike
+arithmetic operators that map directly to a single instruction,
+these require conditional branches during code generation, making
+them closer to control flow statements than pure expressions.
+[[ONOT]] ([[!]]) is the logical complement, while [[OCOM]] ([[~]])
+is bitwise complement---grouped here but not truly boolean.
+
 <<expression nodes>>=
 OANDAND,
 OOROR,
@@ -6674,6 +7177,14 @@ OGE,
 
 
 \subsection{Assignments}
+
+%claude:
+Plain assignment ([[=]]) and compound assignments ([[+=]], [[-=]], etc.)
+each have their own AST node kinds ([[OAS]], [[OASADD]], etc.).
+[[5c]] does not desugar [[x += y]] into [[x = x + y]], because
+the compound form evaluates the left-hand side only once---important
+when it has side effects (e.g., [[*p++ += 1]]).
+
 % which really should be instructions, not expressions, grrr
 
 
@@ -6726,6 +7237,13 @@ OASASHR,
 \subsection{Pointers}
 % C power!
 
+%claude:
+[[OIND]] (indirection, i.e., dereference [[*p]]) and [[OADDR]]
+(address-of [[&x]]) are the two pointer operators. Note that [[OIND]]
+is reused in the declaration grammar to represent pointer types
+(e.g., [[int *x]]), so the same node kind serves double duty---the
+context (expression vs. declarator) determines which meaning applies.
+
 <<expression nodes>>=
 OIND, // for uses (dereference) and also declarations
 OADDR,
@@ -6742,6 +7260,14 @@ OADDR,
 \subsection{Array accesses}
 
 % unsugar x[y] as *(x+y) :)
+
+%claude:
+Array indexing is immediately desugared at parse time: [[x[i]]] becomes
+[[*(x+i)]]. This means the AST has no dedicated array-access node.
+The type checker later adjusts the addition for pointer arithmetic
+(scaling by element size), and if [[x]] is an array type, it gets
+an implicit [[OADDR]] to decay into a pointer.
+
 <<pexpr rule>>=
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 @
@@ -6756,6 +7282,13 @@ OADDR,
 % to get the pointer.
 
 \subsection{Field accesses}
+
+%claude:
+Only [[ODOT]] exists in the AST---the arrow operator [[->]] is desugared
+at parse time into [[(*x).f]], i.e., an [[ODOT]] wrapping an [[OIND]].
+The field name is stored in [[node->sym]] rather than as a child node.
+Code generation will ultimately turn field access into a pointer-plus-offset
+computation, just like array access.
 
 <<expression nodes>>=
 ODOT,
@@ -6781,6 +7314,15 @@ ODOT,
 
 
 \subsection{Function calls}
+
+%claude:
+[[OFUNC]] is overloaded: it represents both function calls (in
+expressions) and function types (in declarations). When the compiler
+sees a call to an undeclared function like [[foo(x)]], it implicitly
+declares [[foo]] as returning [[int]] via [[dodecl]]---a legacy C
+behavior that the Plan 9 OCaml port sensibly forbids.
+The argument list is reversed with [[invert()]] to restore
+left-to-right order from the right-recursive grammar.
 
 <<expression nodes>>=
 OFUNC, // used for uses (calls) but also defs (and decls)
@@ -6830,6 +7372,15 @@ if(($1->op == ONAME) && ($1->type == T))
 
 
 \subsection{Cast}
+
+%claude:
+A cast expression like [[(int*)p]] is parsed as an extended unary
+expression. The trick is that the type in parentheses is an abstract
+declarator (no variable name), so the parser calls [[dodecl(NODECL, ...)]]
+to run the type-assembly machinery and recover the full type in
+[[lastdcltype]], without actually declaring any symbol.
+The [[xcast]] flag marks this as an explicit cast, distinguishing it
+from the implicit casts the compiler inserts during type checking.
 
 <<expression nodes>>=
 OCAST,
@@ -7316,6 +7867,15 @@ long typebitor(long a, long b)
 \subsection{Basic types}
 % types part1
 
+%claude:
+C's type specifiers can appear in any order and in combinations
+([[unsigned long int]], [[long unsigned]], etc.), so the parser
+accumulates them as a bitmask of [[Bxxx]] flags. The [<simplet>]
+function then maps this bitmask to a canonical [[Type*]] from the
+[[types[]]] hash table. This is why [[simplet]] has so many
+cases---each valid combination of keywords maps to a single type.
+Invalid combinations (e.g., [[float short]]) produce an error.
+
 <<types, storage classes, qualifiers rules>>=
 <<types rule>>
 @
@@ -7489,6 +8049,15 @@ zgnlist:
 
 \subsection{Storage classes}
 
+%claude:
+Storage classes ([[static]], [[extern]], [[auto]], [[register]]) are parsed
+alongside type specifiers using the same bitmask technique. The
+[[TAUTO]], [[TEXTERN]], etc. values in [[Type_kind_bis]] are temporary
+tokens---they exist only to give each keyword a distinct bit position.
+The [<simplec>] function then converts the bitmask into the real
+storage class enum ([[CAUTO]], [[CEXTERN]], [[CSTATIC]]).
+Note that [[typedef]] is also treated as a storage class, which is
+semantically odd but simplifies the grammar.
 
 <<[[Type_kind_bis]] storage cases>>=
 TAUTO	= NTYPE,
@@ -7554,6 +8123,13 @@ case BAUTO|BREGISTER:
 %ocaml: forbid them
 
 \subsection{Qualifiers}
+
+%claude:
+Type qualifiers ([[const]], [[volatile]]) follow the same bitmask
+pattern. The [<garbt>] function extracts the qualifier bits and, if
+any are set, copies the type before attaching them---because basic
+types like [[types[TINT]]] are shared singletons, so modifying one
+in place would corrupt all [[int]] declarations.
 
 <<[[Type_kind_bis]] qualifier cases>>=
 TCONSTNT,
@@ -7647,6 +8223,14 @@ may hold copies that did not share the same [[Type]] pointer.
 % And Sym.sueblock. And Type.link.
 
 \subsubsection{Complex types}
+
+%claude:
+The [[complex]] rule handles struct, union, and enum types ---
+the ``complex'' types that can contain definitions. Each returns
+a [[Type]] directly (not a bitset like simple types), which is
+then wrapped in the [[types]] rule for integration with the
+declaration machinery.
+
 % also for enum
 
 <<types rule>>=
@@ -7684,6 +8268,14 @@ may hold copies that did not share the same [[Type]] pointer.
 
 
 \subsubsection{Structure/union uses}
+
+%claude:
+When the parser sees [[struct Foo]] (without a body), it calls
+[[dotag]] to look up or create the tag. If [[Foo]] was already
+defined, [[dotag]] returns its type with all fields; if not,
+it returns an incomplete type (forward declaration) that will
+be completed later when the definition is parsed.
+
 % or forward decl?
 
 %use
@@ -7766,6 +8358,15 @@ if(s->suetag->etype != et)
 
 
 \subsubsection{Structure/union definitions}
+
+%claude:
+When the parser sees [[struct Foo \{ ... \}]], it first calls
+[[dotag]] to create (or look up) the tag, then parses the body
+([[sbody]]) to get the list of field types, and fills in
+[[suetag->link]] with that list. [[sualign]] then walks the
+fields to compute each field's offset and the struct's total
+width, respecting alignment constraints. For unions, all fields
+start at offset zero and the width is the maximum field width.
 
 % defs
 <<complex rule>>=
@@ -7857,6 +8458,16 @@ int	taggen;
 
 
 \subsubsection{Fields}
+
+%claude:
+Field parsing uses the [[tlist]] and [[edecor]] rules to get
+each field's type and name, then chains them into a linked list
+via [[Type.down]]. Each field [[Type]] carries the field name
+in [[Type.sym]], the field type in [[Type.link]], and (after
+alignment) the byte offset in [[Type.offset]]. Anonymous struct
+members (a \plan extension) get no name, and their fields are
+promoted to the enclosing struct's namespace.
+
 % Complex too.
 
 <<type [[declarations]]>>=
@@ -8031,6 +8642,14 @@ generation runs, enums have been completely eliminated.
 
 \subsubsection{Enumeration type uses and definitions}
 
+%claude:
+Enum types share the [[dotag]] mechanism with structs and unions
+(they are in the same ``tag'' namespace). The parser creates a
+[[TENUM]] type whose [[link]] points to the underlying integer
+type (typically [[TINT]], but widened to [[TLONG]] if a constant
+exceeds [[TINT]] range). Forward-declaring an enum is allowed
+but the constants must be defined before use.
+
 % the type of the enum is a TENUM with a Type.link pointing to the right
 % type.
 
@@ -8120,6 +8739,16 @@ if(en.tenum == T) {
 
 \subsubsection{Enumeration constant definitions}
 
+%claude:
+Each enum constant is installed in the symbol table by [[doenum]]:
+[[Sym.type]] is set to [[TENUM]] (so the typedef trick does not
+trigger), [[Sym.tenum]] records the underlying integer type, and
+[[Sym.vconst]] stores the constant's value. If an explicit
+initializer is given ([[FOO = 42]]), [[evconst]] evaluates it
+at compile time; otherwise, the value auto-increments from the
+previous constant. The global [[en.ceession]] tracks the
+auto-increment state.
+
 % for the enumeration constants, the field below contains
 % the reference to the type of the enum.
 <<[[Sym]] enum value fields>>=
@@ -8198,6 +8827,15 @@ void doenum(Sym *s, Node *n)
 \subsection{Pointer and array types}
 
 % types part 2a
+
+%claude:
+C's declaration syntax splits a type across two places: the base type
+(``type specifiers'') and the declarator (pointers, arrays, function
+signatures). The [[xdecor]] rules build a temporary AST of [[OIND]],
+[[OARRAY]], and [[OFUNC]] nodes that [[dodecl()]] then walks in a loop,
+wrapping the base type with [[TIND]], [[TARRAY]], or [[TFUNC]] at each
+step and descending via [[n = n->left]] to reach the name.
+
 <<xdecor rule>>=
 |   '*' zgnlist xdecor
     {
@@ -8260,6 +8898,14 @@ case OARRAY:
 % OFUNC used also for function calls and introduced before.
 % But used temporarily here because dodecl will parse it and
 % transform in a TFUNC
+
+%claude:
+Function parameter lists are parsed into [[OPROTO]] and [[OLIST]] nodes
+by the argument grammar, then [<fnproto>] converts them into a linked
+list of [[Type]] nodes (via [[Type.down]]) representing the parameter
+types. The [[OFUNC]] node in the declarator is temporary---[[dodecl()]]
+transforms it into a [[TFUNC]] type, just as it transforms [[OIND]]
+into [[TIND]].
 
 <<xdecor2 rule>>=
 |   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
@@ -8411,6 +9057,15 @@ TDOT, // ... in function types
 
 % defs
 
+%claude:
+[[typedef]] is treated as a storage class ([[CTYPEDEF]]) in the
+grammar, so [[typedef int Foo;]] goes through the same [[dodecl]]
+machinery as [[static int x;]]. The symbol [[Foo]] ends up in the
+symbol table with [[class == CTYPEDEF]] and a [[type]] pointing to
+[[int]]. The lexer then recognizes [[Foo]] as a [[LTYPE]] token in
+subsequent code, which is what makes typedef names work as type
+specifiers in the grammar.
+
 <<cname rule>>=
 |   LTYPEDEF  { $$ = BTYPEDEF; }
 @
@@ -8461,6 +9116,15 @@ CTYPEDEF,
 % call argmark before process body of function. See Section X.
 % call argmark with node for xdecor in 'zctlist xdecor'
 % but after have called dodecl on this node.
+
+%claude:
+When a function definition (not just a prototype) is parsed,
+[<argmark>] walks the parameter list and pushes each parameter name
+into the symbol table scope via [[push1()]], with [[offset == -1]] as
+a sentinel. Later, [<pdecl>] (called through [[dodecl]]) checks this
+sentinel to confirm the symbol is indeed a parameter, then delegates
+to [[adecl]] because parameters are essentially local variables
+with [[CPARAM]] storage class.
 % so node should be a OFUNC(ONAME, args)
 
 % pass is 0 for ANSI proto, 1 for old style proto
@@ -8589,6 +9253,17 @@ if(s && s->offset != -1) {
 \subsection{Locals, automatic declarator}
 
 % slist -> <>
+
+%claude:
+The [[adecl]] rules handle local variable declarations inside function
+bodies. Unlike global declarations ([[xdecl]]), local declarations return
+AST nodes for any initializers (e.g., [[int x = 5;]] yields an assignment
+node), because these must execute at runtime.
+The [<adecl>] callback function pushes the variable into the current
+scope with [[push1()]] and assigns its storage class---typically
+[[CAUTO]] for stack locals or [[CLOCAL]] for [[static]] locals
+(which get file-scope storage but block-scope visibility).
+
 <<automatic declarator rules>>=
 /*
  * automatic declarator
@@ -8758,12 +9433,26 @@ duplicate declarations, and format string validation
 % - typechecking rules
 % - lint rules (e.g. unused vars/labels, unused param, dead code, etc)
 
-% a few warn() seen before, 
+%claude:
+Checking in [[5c]] falls into four categories:
+(1) {\em symbol resolution} --- matching uses to definitions via
+the scope stack, catching undefined and unused identifiers;
+(2) {\em storage merging} --- reconciling multiple declarations of
+the same global (e.g., [[extern]] then definition);
+(3) {\em type checking} --- verifying that operand types are
+compatible, inserting implicit conversions, and annotating the AST
+with result types;
+(4) {\em lint-like warnings} --- empty [[if]] bodies, division
+by zero, dead code, format string mismatches.
+These checks are scattered across the parser, [[dodecl]],
+[[revertdcl]], and the type checker [[tcomo]]/[[tcom]].
+
+% a few warn() seen before,
 %  - in lexer: sign-extended char? truncated constant?
-%  - in grammar: 
+%  - in grammar:
 %     * empty body of if (empty then, empty else)
-%  - in ast builder helper: 
-%     * CAST in initialization ignored?? 
+%  - in ast builder helper:
+%     * CAST in initialization ignored??
 %     * initialize pointer to an integer?
 %     * duplicated keywords for storage or qualifier or type
 %       overspecified class? just say static?
@@ -8779,6 +9468,16 @@ duplicate declarations, and format string validation
 % (e.g. constant evaluation done)
 
 \section{Printing warnings: [[5c -w]] and [[5c -W]]}
+
+%claude:
+Warnings are only printed when [[-w]] (or [[-W]] for verbose
+mode) is given on the command line. This means [[5c]] is
+silent by default---a design choice that keeps build output
+clean but requires the programmer to opt in to diagnostics.
+With [[-w -v]], the warning also dumps the AST subtree that
+triggered it, which is invaluable for debugging the compiler
+itself.
+
 % also -X
 
 % 5c -w
@@ -8838,6 +9537,14 @@ if(n != Z)
 
 % See Decl section and markdcl() and revertdecl().
 % see also the Sym.block and Sym.sublock fields
+
+%claude:
+Scoping in [[5c]] is handled entirely during parsing, using the
+[[Decl]] stack and the [[markdcl()]]/[[revertdcl()]] mechanism
+described earlier. Since C requires forward declarations for
+everything, all type information is already in the symbol table
+by the time the typechecker runs---cross-file consistency is
+left to the linker.
 
 \section{Storage resolution}
 
@@ -9028,6 +9735,14 @@ if(s->type != T)
 
 \subsection{Type equality: [[sametype()]]}
 
+%claude:
+[[sametype]] checks structural type equality: two types are the
+same if they have the same shape (same [[etype]], same
+pointed-to type, same number and types of parameters, same fields
+in the same order). The recursion is depth-limited to 5 to
+handle mutually recursive structures that would cause an infinite
+loop via pointer cycles in the type graph.
+
 % sametype() called in xdecl() to make sure types are equals.
 <<function [[sametype]]>>=
 /// xdecl -> <>
@@ -9183,6 +9898,14 @@ snap(Type *t)
 % often use 5c -FTV, -V means 'enable void* conversion warnings'
 % so in fact it disables void* conversions.
 
+%claude:
+By default, [[5c]] silently allows [[void*]] to match any pointer
+type, which is essential for functions like [[pwrite]] that take a
+[[void*]] buffer. The [[-V]] flag disables this leniency,
+requiring explicit casts. The [[f]] parameter restricts the
+match to the top-level pointer only---a [[void**]] will not
+silently match an [[int**]].
+
 <<[[rsametype()]] if f and not -V, allow void star>>=
 if((f || !debug['V']) && et == TIND) {
     if(t1 != T && t1->etype == TVOID)
@@ -9203,6 +9926,15 @@ if((f || !debug['V']) && et == TIND) {
 
 \subsection{Type merge: [[tmerge()]]}
 %Declaration and definition types merge
+
+%claude:
+When a global is declared multiple times (e.g., a forward
+declaration in a header followed by a definition), [[tmerge]]
+walks both type chains in parallel and patches the older one.
+The key case is functions declared with old-style (unprototyped)
+parameter lists that are later given a full prototype, and
+arrays declared with incomplete size ([[extern int a[]]]) that are
+later given a concrete width.
 
 <<[[xdecl()]] merge type declarations>>=
 tmerge(t, s);
@@ -9249,6 +9981,15 @@ tmerge(Type *t1, Sym *s)
 \t why allow different size for array
 
 \subsection{Set of types constants: [[typexxx[]]]}
+
+%claude:
+The type checker needs to quickly test whether a type belongs to
+a category (``is this an integer?'', ``is this a struct/union?'').
+Rather than writing switch statements everywhere, [[5c]] uses
+boolean arrays indexed by [[Type_kind]]: [[typei]] is true for
+all integer types, [[typeu]] for unsigned types, [[typesu]] for
+struct/union, [[typefd]] for float/double, and so on. These
+arrays are filled at startup from initializer lists in [[tinit]].
 
 <<global [[typei]]>>=
 // set<Type_kind>
@@ -9382,6 +10123,16 @@ for(ip=typesuinit; *ip >= 0; ip++) {
 
 
 \subsection{Type compatibility: [[tcompat()]]}
+
+%claude:
+[[tcompat]] checks whether two types are compatible for a given
+operation. Rather than hard-coding rules for each operator,
+it uses a table-driven approach: each operator has a ``compatibility
+policy'' ([[ttab]]) that encodes which type-category combinations
+are legal as a bitmask. [[stcompat]] encodes both types as bits
+and looks them up in the policy table. If the combination is
+not in the table, the types are incompatible and [[tcompat]]
+reports an error.
 
 % returning true means actually they are not compatible and
 % there is a type error.
@@ -9565,6 +10316,15 @@ for(p=trelinit; p->code >= 0; p++) {
 % Again, returning true means type error!
 %ocaml: use exn
 
+%claude:
+[[tcom]] is the entry point but just calls [[tcomo]] with the
+[[ADDROF]] context flag. The real work is in [[tcomo]], which takes
+an extra [[f]] parameter encoding the syntactic context: [[ADDROF]]
+means the node might need an implicit address-of (for arrays
+and functions), [[CASTOF]] signals a cast context, and [[ADDROP]]
+signals an explicit [[&]]. This context drives the special
+adjustments for array-to-pointer decay and function pointers.
+
 <<function [[tcom]]>>=
 /// complex -> <> -> tcomo|tcoma|tcomx -> <>
 /*
@@ -9690,6 +10450,13 @@ if(t->width < 0) {
 
 \subsection{Array to pointer conversions}
 
+%claude:
+In C, arrays are a lie at the expression level: an array name
+almost always decays into a pointer to its first element.
+The typechecker implements this by detecting [[TARRAY]] nodes
+after type evaluation and wrapping them in an [[OADDR]] node
+whose type is [[TIND]] (pointer). This way, the rest of the
+compiler---code generation especially---only ever sees pointers.
 
 % set addable to false by default.
 % lvalues are x, *x, and x[i] (which is converted in parsing in *(x+i))
@@ -9780,6 +10547,10 @@ case OCOMMA:
 
 \subsection{Numeric constants}
 
+%claude:
+Constants need no type checking---their type was already set
+by the parser. The [[OCONST]] case is a no-op.
+
 % type annotations done already in grammar action.
 % See Section X. Node.type already good.
 
@@ -9806,6 +10577,13 @@ case OSTRING:
 
 
 \subsection{Entity uses}
+
+%claude:
+For identifiers, the type checker verifies the name was declared
+(its type is not [[T]]), marks it as an lvalue ([[addable = true]]),
+and handles enum constants specially: an [[ONAME]] referencing
+an enum value is rewritten into an [[OCONST]] with the enum's
+integer value and its underlying type.
 
 <<[[tcomo()]] switch node kind cases>>=
 case ONAME:
@@ -9852,6 +10630,16 @@ if(n->type->etype == TENUM) {
 \l mv in code generation?
 
 \subsection{Arithmetic expressions}
+
+%claude:
+The arithmetic cases all follow the same pattern:
+type-check both children via [[tcom]], check compatibility
+via [[tcompat]] with the operator's policy table (e.g.,
+[[tadd]], [[tsub]], [[tmul]]), then call [[arith]] to perform
+the ``usual arithmetic conversions''---widening both operands
+to a common type and setting [[n->type]] to the result.
+The policy tables differ: [[tadd]] allows pointer+integer
+(for pointer arithmetic), while [[tmul]] does not.
 
 % the different cases of tcomo for the different kinds of expressions
 % are very similar. Mosly like the code below, but with a different
@@ -10315,6 +11103,16 @@ if(!sametype(n->type, n->right->type)) {
 
 \subsection{Pointer arithmetic}
 
+%claude:
+When an addition or subtraction involves a pointer and an integer,
+the integer must be scaled by the size of the pointed-to type.
+For [[int *p]], the expression [[p + 3]] means ``advance by
+3 $\times$ [[sizeof(int)]] bytes.'' The type checker inserts
+an [[OMUL]] node to multiply the integer operand by the element
+width. For pointer subtraction ([[p - q]]), the result is
+divided by the element width to produce an element count.
+
+
 %ocaml: do that in later phase?
 
 % if final result is pointer, but left child was not same type,
@@ -10398,6 +11196,13 @@ if(i == TIND && j == TIND) {
 % special return type! it's a long!
 
 \subsection{Boolean expressions}
+
+%claude:
+Comparison ([[==]], [[!=]], [[<]], etc.) and logical operators
+([[&&]], [[||]], [[!]]) accept any numeric type or pointer, and
+always produce [[TINT]]. The bitwise complement [[~x]] is
+rewritten as [[(-1) ^ x]] if the target architecture does not
+have a native complement instruction.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OEQ:
@@ -10538,6 +11343,14 @@ case OOROR:
 
 
 \subsection{Assignments}
+
+%claude:
+Assignment type-checking first verifies that the left-hand side
+is an lvalue (via [[tlvalue]]), then checks type compatibility
+between the left and right sides. If the types differ but are
+compatible (e.g., assigning an [[int]] to a [[long]]), an implicit
+[[OCAST]] node is inserted. Compound assignments ([[+=]], etc.)
+follow the same pattern but use their own policy table.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OAS:
@@ -10809,6 +11622,15 @@ case OASXOR:
 
 % call tcomo with special context, not tcom!
 
+%claude:
+For [[OADDR]] ([[&x]]), the operand must be an lvalue, and
+cannot be a bitfield or register variable. Note the use of
+[[ADDROP]] context rather than [[ADDROF]]---this avoids the
+automatic array-to-pointer decay that [[ADDROF]] would trigger.
+For [[OIND]] ([[*p]]), the operand must be a pointer ([[TIND]]),
+and the result is an lvalue (its [[addable]] is set to true, since
+you can write [[*p = value]]).
+
 <<[[tcomo()]] switch node kind cases>>=
 case OADDR:
     if(tcomo(l, ADDROP))
@@ -10964,8 +11786,19 @@ if(s->class == CTYPEDEF || s->class == CTYPESTR)
 
 \subsection{Function calls}
 
-% again here call recursively tcomo on left part without ADDROF, 
-% so will not get the OADDR added automatically 
+%claude:
+For a call like [[f(a, b)]], the left child is the function
+expression and the right child is the [[OLIST]] of arguments.
+The type checker verifies that the left side has function type,
+then calls [[tcoma]] to walk the parameter list and the argument
+list in parallel, checking type compatibility for each pair and
+inserting [[OCAST]] nodes as needed. If the function was declared
+without a prototype (old-style), a warning is issued that argument
+types are not checked. The result type is the function's return
+type ([[Type.link]]).
+
+% again here call recursively tcomo on left part without ADDROF,
+% so will not get the OADDR added automatically
 % around function (or array, but anyway obvious will not call an array)
 
 <<[[tcomo()]] switch node kind cases>>=
@@ -11156,6 +11989,14 @@ nodproto = new(OPROTO, Z, Z);
 
 % again call tcomo with special context.
 
+%claude:
+Explicit casts ([[OCAST]]) are checked via the [[tcast]] compatibility
+table, which is more permissive than assignment: you can cast between
+integers and pointers, or between structs of the same kind. The
+compiler also inserts implicit [[OCAST]] nodes during type checking
+(e.g., when assigning an [[int]] to a [[char]] variable), making all
+narrowing conversions explicit in the AST before code generation.
+
 <<[[tcomo()]] switch node kind cases>>=
 case OCAST:
     if(n->type == T)
@@ -11216,6 +12057,14 @@ Init	tcastinit[] =
 \subsection{Ternary expressions}
 
 % x ? (l : r) so l = r->left, r = r->right
+
+%claude:
+For [[x ? a : b]], the two branches must have compatible types.
+If they are identical, the result type is used directly; otherwise
+the usual arithmetic conversions are applied via [[tcompat]] and
+[[arith]]. A special case handles the literal [[0]] as a null
+pointer: if one branch is a pointer and the other is the constant
+zero, the zero is silently promoted to the pointer type.
 
 <<[[tcomo()]] switch node kind cases>>=
 case OCOND:
@@ -11382,10 +12231,23 @@ if(n->type->etype == TFUNC) {
 
 \section{Typechecking statements}
 
+%claude:
+Statements like [[return]], [[switch]], and [[if]] also go through
+[[tcomo]]---they are just more cases in the big switch. The
+typechecker validates that [[return]] values match the function's
+declared return type, that [[switch]] expressions are integers,
+and that [[if]] conditions are valid boolean-like values.
 
 \subsection{[[return]]}
 
 % remember that node typed with return type during parsing.
+
+%claude:
+The [[ORETURN]] node was stamped with the function's return type
+during parsing (from [[thisfntype]]). The typechecker verifies the
+returned expression is assignment-compatible with that type, and
+inserts an [[OCAST]] if the types differ but are compatible (e.g.,
+returning an [[int]] from a [[long]] function).
 
 <<[[tcomo()]] switch node kind cases>>=
 case ORETURN:
@@ -11413,6 +12275,14 @@ case ORETURN:
 % for if, we accept anything, but for switch
 % we want to typecheck that does not pass a pointer!
 % so we can abuse expression typechecker for that!
+
+%claude:
+The [[switch]] expression must be an integer type (no pointers,
+no [[vlong]]). Rather than adding a dedicated check, the parser
+wraps the expression in [[0 - (0 - x)]], which forces the usual
+arithmetic conversions and will produce a type error if [[x]] is
+a pointer. A separate check in [[gen]] also validates against the
+[[typeswitch]] set.
 
 <<ulstmt rule, SWITCH case, adjust cexpr node>>=
 // generate (0:int - (0:int - x))
@@ -11492,12 +12362,26 @@ if(n->type != T)
 
 \section{Typechecking declarations and constant evaluation}
 
+%claude:
+Some type checking happens not in [[tcomo]] but during parsing
+itself, as part of [[dodecl]] and its helpers. Enumeration
+constants, array sizes, and function parameter types all require
+validation and constant evaluation at declaration time.
+
 \subsection{Enumerations}
 
 % Seen already a bit of typechecking code with En structure,
 % and En.tenum and En.cenum and the call to maxtype!
 
 % 5c also computes values of enumeration constants during parsing!
+
+%claude:
+Enum constants are evaluated eagerly during parsing via
+[[complex]]/[[evconst]]. Each value is stored in [[En.lastenum]]
+(or [[En.floatenum]] for the exotic float-enum extension) and
+recorded in the symbol's [[vconst]] field. The type of the
+enum is widened via [[maxtype]] to accommodate the largest
+constant.
 
 <<[[En]] value fields>>=
 vlong	lastenum;	/* value of current enum */
@@ -11594,6 +12478,14 @@ if(n1 != Z) {
 
 
 \subsection{Functions}
+
+%claude:
+Function parameters undergo implicit type adjustments via
+[[paramconv]]: arrays become pointers, functions become function
+pointers, and in old-style (K\&R) declarations, [[char]]/[[short]]
+are promoted to [[int]] and [[float]] to [[double]]. The [[f]]
+parameter distinguishes prototype context (where narrow types are
+preserved) from old-style context (where they are widened).
 
 <<[[fnproto1()]] when OPROTO case, adjust parameter type>>=
 if(lastdcltype != T)
@@ -11729,6 +12621,15 @@ the parser, type-checker, and code generator.
 
 % the data structure
 
+%claude:
+The [[Sym.aused]] flag tracks whether a local variable or parameter
+has been referenced. It is set to [[true]] during parsing whenever
+the variable's name appears in an expression, and checked at scope
+exit in [[revertdcl]]: if [[aused]] is still false for an [[CAUTO]]
+or [[CPARAM]] symbol, a warning is emitted. This is a simple
+dataflow approximation---any mention counts as a ``use,'' even in
+dead code.
+
 <<[[Sym]] identifier value, checking fields>>=
 bool	aused;
 @
@@ -11767,6 +12668,16 @@ if(!s->aused) {
 
 
 \subsection{False positives silencing: [[SET()/USED()]]}
+
+%claude:
+The [[USED(x)]] and [[SET(x)]] macros are pseudo-statements
+that silence specific lint warnings: [[USED(x)]] marks [[x]]
+as used (preventing ``declared but not used'' warnings), and
+[[SET(x)]] marks it as set (preventing ``used before set''
+warnings). These are parsed as [[OUSED]]/[[OSET]] statement
+nodes and handled at type-checking time by setting the
+appropriate flags on the symbol. They generate no code.
+
 % like fallthrough, to remove false positives or true positives which are ok.
 
 % Why have false positives? limitations? bugs? or normal?
@@ -11849,6 +12760,14 @@ usedset(Node *n, int o)
 % Node.complex = definition
 % Node.addable = use.
 
+%claude:
+Labels are tracked by repurposing two Node fields: [[complex]]
+records whether the label has been defined ([[label:]]), and
+[[addable]] records whether it has been used ([[goto label]]).
+At scope exit, [[revertdcl]] warns if a label was defined but
+never used. Redefinition of the same label is caught immediately
+in [[dcllabel]].
+
 <<[[dcllabel()]] when new label, set def and use fields>>=
 n->complex = defcontext;
 n->addable = !defcontext;
@@ -11893,6 +12812,14 @@ if(s->label && !s->label->addable)
 %ocaml: in check.ml
 
 \subsection{Unreachable code}
+
+%claude:
+The global [[canreach]] flag is set to false after processing a
+[[return]] or [[goto]] in a statement list. If subsequent
+statements are encountered while [[canreach]] is false, a warning
+is emitted (once, controlled by [[warnreach]]). Labels and
+[[case]] statements reset reachability since they can be jumped
+to from elsewhere.
 
 <<global [[canreach]]>>=
 bool	canreach;
@@ -12131,6 +13058,13 @@ supgen(Node *n)
 
 % -B?
 
+%claude:
+After processing the entire function body, if [[canreach]] is
+still true and the return type is not [[void]], the function
+falls off the end without a [[return]]. By default this is an
+error (ANSI C requires it); with [[-B]] it is downgraded to a
+warning.
+
 <<[[codgen()]] warn for possible missing return after call to gen>>=
 if(canreach && thisfntype->link->etype != TVOID){
     if(debug['B'])
@@ -12250,6 +13184,14 @@ case OASXOR:
 
 \section{Const checking}
 
+%claude:
+The [[constas]] function warns when assigning to a [[const]]-qualified
+variable, or when assigning a [[const]] pointer to a non-[[const]]
+pointer (e.g., passing a [[const char*]] where a [[char*]] is expected).
+It walks the pointer chain level by level, checking the [[GCONSTNT]]
+bit in each type's [[garb]] (``garbage'') field---Ken Thompson's
+characteristically dismissive name for type qualifiers.
+
 <<[[tcomo()]] when OAS, const checking>>=
 constas(n, l->type, r->type);
 @
@@ -12329,6 +13271,19 @@ list of [[Prog]] instructions written to the object file
 by [[outcode]].
 
 \section{Overview}
+
+%claude:
+The code generator works by recursive descent over the AST,
+directly producing ARM assembly instructions---there is no
+intermediate representation. The pipeline is [[codgen]] (per
+function) $\to$ [[gen]] (statements) $\to$ [[cgen]] (expressions),
+with a few helpers: [[gpseudo]] emits pseudo-instructions like
+[[TEXT]] and [[DATA]], [[gbranch]] emits conditional/unconditional
+jumps, [[gmove]] emits typed moves between registers and memory,
+and [[gins]] emits general arithmetic instructions. The assembly
+output is a linked list of [[Prog]] nodes that [[outcode]] later
+serializes. Use [[5c -N -S]] to see the unoptimized assembly
+for any C file.
 
 % 5c/8c/... do not use an intermediate language :( not even an RTL :(
 % They generate directly (arch-specific) assembly 
@@ -12621,6 +13576,14 @@ nodconst(long v)
 
 \subsection{[[gpseudo()]]}
 
+%claude:
+[[gpseudo]] emits pseudo-instructions like [[TEXT]] (function
+entry), [[DATA]] (initialized data), and [[GLOBL]] (global
+variable size). These are not real ARM instructions but
+directives that the linker interprets. The ``from'' operand is
+always a symbol name, and the ``to'' operand carries the payload
+(frame size for [[TEXT]], initial value for [[DATA]]).
+
 <<function [[gpseudo]](arm)>>=
 /// codgen(function generation) | gextern -> <>
 void
@@ -12651,6 +13614,15 @@ gpseudo(int a, Sym *s, Node *n)
 
 \subsection{[[gbranch()]]}
 
+%claude:
+[[gbranch]] emits a branch instruction to a given destination
+[[Prog]]. For unconditional branches it emits [[AB]] (always
+branch); for conditional branches, the condition code is set
+via [[scond]]. [[ORETURN]] branches to the function's epilogue.
+The destination is stored as a [[Prog]] pointer in [[to.offset]],
+which the linker later resolves to a PC-relative offset.
+
+
 <<function [[gbranch]](arm)>>=
 /// codgen | ... -> <>
 void
@@ -12680,6 +13652,15 @@ gbranch(int o)
 
 \subsection{[[patch()]]}
 % quite important for control flow generation.
+
+%claude:
+The compiler generates branch instructions before it knows
+where they will land --- for instance, the false-branch of an
+[[if]] is emitted before the ``else'' body exists. [[patch]]
+fills in the target after the fact: it sets the branch's
+destination to [[pc]], the address of the next instruction
+that will be emitted. The typical idiom is
+[[gbranch]]; [[sp = p]]; \ldots; [[patch(sp, pc)]].
 
 <<function [[patch]]>>=
 /// gmove | gen | ... -> <>
@@ -12814,6 +13795,13 @@ loop:
 % 'if not canreach' explained in Checking chapter.
 
 \subsection{Blocks, sequences}
+
+%claude:
+Statement lists are simply generated left-to-right: [[gen]]
+recurses on the left child then the right child. The [[canreach]]
+flag tracks whether control flow can reach each statement---if
+not, the code generator skips it and optionally warns about
+dead code.
 
 <<[[gen()]] switch node kind cases>>=
 case OLIST:
@@ -13022,6 +14010,16 @@ void*	label;
 
 \subsubsection{Labels}
 
+%claude:
+When a label is encountered, its [[pc]] is recorded so that
+future [[goto]]s can branch directly to it. If a [[goto]]
+was already emitted before the label was defined, the saved
+branch instruction is patched to point here. The seemingly
+redundant [[gbranch(OGOTO)]] at the end prevents the label's
+[[pc]] from coinciding with the address of a register-allocating
+instruction that follows, which would create a self-referencing
+branch target.
+
 <<[[gen()]] switch node kind cases>>=
 case OLABEL:
     <<[[gen()]] when LABEL, set canreach>>
@@ -13053,6 +14051,14 @@ canreach = true;
 
 \subsubsection{Gotos}
 
+%claude:
+If the target label has already been seen, [[goto]] patches its
+branch directly to [[n->pc]]. Otherwise, the compiler chains
+forward references: it patches the \emph{previous} unresolved
+[[goto]] to jump to \emph{this} one, forming a linked list
+through [[n->label]]. When the label finally appears, patching
+the head of the chain fixes only the last [[goto]]; the
+linker's branch-chain optimizer collapses the rest.
 
 <<[[gen()]] switch node kind cases>>=
 case OGOTO:
@@ -13130,6 +14136,16 @@ continpc = -1;
 
 \subsubsection{while/dowhile}
 
+%claude:
+The generated code layout first emits placeholder branches
+for entry, continue, and break, then patches them as each
+target becomes known. For [[while]], entry jumps straight to
+the condition test; for [[do-while]], entry falls through to
+the body. The only difference between the two is which
+[[patch(sp, pc)]] comes before the test vs.\ before the body.
+The author's ASCII art below shows the resulting instruction
+layout.
+
 % while(e) { stmt }
 % =>
 % AB entry
@@ -13193,6 +14209,14 @@ case ODWHILE:
 
 
 \subsubsection{for}
+
+%claude:
+The [[for]] loop is more complex than [[while]] because it has
+three parts: init, test, and increment. The layout is:
+emit init, branch to test, emit continue-target (which is the
+increment code, not the test), emit test, emit body, branch
+back to continue. This means [[continue]] in a [[for]] loop
+jumps to the increment, matching C semantics.
 
 <<[[gen()]] switch node kind cases>>=
 case OFOR:
@@ -13287,8 +14311,15 @@ if(!canreach)
 \subsubsection{Continue/break}
 
 % I mentioned continpc and breakpc before, set during
-% while/for. 
+% while/for.
 % then can be used!
+
+%claude:
+[[continue]] and [[break]] simply emit an unconditional branch
+to [[continpc]] or [[breakpc]], which were set when the
+enclosing loop began. The save/restore of these globals around
+each loop body (via the local [[spc]]/[[spb]] variables) means
+nested loops automatically get the right targets.
 
 <<[[gen()]] switch node kind cases>>=
 case OCONTINUE:
@@ -13460,6 +14491,15 @@ if(!canreach)
 
 \subsection{Control flow jumps}
 
+%claude:
+[[return]], [[break]], and [[continue]] all compile to
+unconditional branches: [[return]] jumps to the function's
+epilogue (which restores registers and returns), [[break]]
+jumps to the loop or switch exit label, and [[continue]]
+jumps to the loop's re-test label. [[goto]] is resolved
+to the target label's [[Prog]]. All four set [[canreach = false]]
+for the code that follows.
+
 %\subsubsection{Return}
 
 % seen gbranch(ORETURN) already in codgen.
@@ -13576,6 +14616,16 @@ promotion pass ([[regopt]]) runs later as a separate optimization.
 
 \subsection{[[reg]]}
 
+%claude:
+The [[reg]] array is a reference count for each ARM register.
+A value of 0 means the register is free; a positive value
+means it is in use by that many expressions. Registers
+[[REGTMP]], [[REGSB]], [[REGSP]], and [[REGLINK]] are reserved
+and pre-incremented to 1 so they are never allocated for
+temporaries. [[regalloc]] finds the first free register,
+and [[regfree]] decrements the count.
+
+
 <<global [[reg]](arm)>>=
 // map<enum<registr>, int>
 char	reg[NREG+NFREG];
@@ -13623,6 +14673,13 @@ for(i=0; i<NREG; i++)
 
 \subsection{[[OREGISTER]]}
 
+%claude:
+[[OREGISTER]] is a synthetic node kind injected during code
+generation to represent a value that already lives in a
+physical register. The parser never produces these nodes;
+they are created by [[regalloc]] and [[nodreg]] so that
+[[naddr]] can translate them into [[Adr]] operands.
+
 <<after parsing nodes>>=
 OREGISTER,
 @
@@ -13639,6 +14696,15 @@ int		reg; // for OREGISTER
 %less: rename, to avoid ambiguity with Prog.reg and Adr.reg
 
 \subsection{[[nodreg()]]}
+
+%claude:
+[[nodreg]] stamps a node as an [[OREGISTER]] for a specific
+physical register. It copies from a global [[regnode]]
+template (pre-initialized with [[OREGISTER]], addable 11) and
+fills in the register number, type, and source location from
+[[nn]]. The [[nn]] parameter exists only to donate its type
+and line number --- the resulting node refers to [[reg]], not
+to [[nn]]'s value.
 
 <<function [[nodreg]](arm)>>=
 /// regret | ... -> <>
@@ -13680,6 +14746,14 @@ regnode.type = types[TLONG];
 % other thing naddr can handle.
 
 \subsection{[[regfree()]]}
+
+%claude:
+[[regfree]] decrements the reference count in the global
+[[reg]] array for the register held by node [[n]]. Every
+[[regalloc]] must be balanced by a [[regfree]]; the
+[[gclean]] function at the end of each function body asserts
+that all non-reserved registers have count zero, catching
+leaks early.
 
 <<function [[regfree]](arm)>>=
 void
@@ -13860,6 +14934,15 @@ xcom(Node *n)
 
 \subsection{Addressable: [[INDEXED]]}
 
+%claude:
+The [[INDEXED]] threshold (9) divides nodes into two worlds:
+nodes with [[addable >= 10]] can be used directly as
+instruction operands (constants, globals, registers), while
+nodes below that threshold need temporary registers and
+extra instructions. This single integer drives the key
+code-generation decision: emit a simple operand or spill
+through a register.
+
 <<constant [[INDEXED]](arm)>>=
 #define	INDEXED	9
 @
@@ -13873,6 +14956,18 @@ xcom(Node *n)
 
 % abuse addable that was used to mark lvalue during typechecking
 % to now be used for "addressability" ?
+
+%claude:
+[[xcom]] assigns numeric ``addressability'' scores that encode
+how each node maps to ARM addressing modes:
+20 = constant (immediate operand),
+10 = named variable (can use [[SB]]/[[FP]]/[[SP]] relative),
+11 = register, 12 = indirect register.
+Values 2 and 3 are intermediate: address-of-name and
+address-of-indirect, which become 10 or 12 when dereferenced.
+The key insight is that [[OIND(OADD(OADDR(x), const))]]
+collapses back to addable 10 --- the ARM can encode
+[[x+offset(SB)]] in a single instruction.
 
 <<[[xcom()]] switch op cases to set addable>>=
 case OCONST:
@@ -14007,6 +15102,15 @@ case OADD:
 % which is rough estimate of number of registers needed to compile
 % an expression. This guides the code generation.
 
+%claude:
+The complexity number estimates how many registers are needed
+to evaluate a subtree, following Sethi and Ullman's algorithm:
+if both children need the same number of registers, the parent
+needs one more (to hold the left result while computing the
+right); otherwise, it takes the maximum. Nodes that are
+already addressable ([[addable >= 10]]) have complexity 0
+because they need no registers at all.
+
 <<[[xcom()]] set complex if addable less than 10>>=
 if(l != Z)
     n->complex = l->complex;
@@ -14032,6 +15136,15 @@ switch(n->op) {
 
 
 \subsection{[[FNX]]}
+
+%claude:
+Function calls get a special complexity of 100 ([[FNX]]),
+far above any real register count. This forces [[cgen]] to
+spill all sub-expressions containing function calls into
+temporaries before evaluating them, since a call clobbers
+every caller-save register. The code generator checks
+[[complex >= FNX]] to detect this case and uses [[regsalloc]]
+to save the intermediate values on the stack.
 
 <<[[xcom()]] switch node opkind cases to set complexity>>=
 case OFUNC:
@@ -14086,6 +15199,17 @@ the actual [[Prog]] instructions.
 % ==> ??
 
 \subsection{[[gmove()]]}
+
+%claude:
+[[gmove]] is a two-dimensional dispatch on source and destination
+types: it selects the right [[MOV]] variant ([[AMOVW]], [[AMOVB]],
+[[AMOVBU]], [[AMOVF]], [[AMOVD]], etc.) and inserts sign-extension
+or truncation as needed. For example, moving a [[TCHAR]] to a
+[[TINT]] emits [[AMOVB]] (move byte with sign extension), while
+moving a [[TUCHAR]] emits [[AMOVBU]] (move byte unsigned).
+Float-to-integer and integer-to-float conversions route through
+[[AMOVFW]]/[[AMOVWF]] instructions.
+
 
 % if return 1;  then transformed in MOVW $1, R0
 % will call gmove with OCONST1 and OREGISTER of REGRET
@@ -14301,6 +15425,14 @@ case TIND:
 
 \subsection{Conversions}
 
+%claude:
+When [[gmove]] loads from or stores to memory, it must pick
+the right MOV variant ([[MOVB]], [[MOVBU]], [[MOVH]], [[MOVHU]],
+[[MOVF]], [[MOVD]]) based on the source or destination type.
+The signed variants ([[MOVB]], [[MOVH]]) sign-extend on load;
+the unsigned variants ([[MOVBU]], [[MOVHU]]) zero-extend.
+This is where C's implicit integer promotions become real
+machine instructions.
 
 <<[[gmove()]] when indirect from, set MOVxx for [[a]] depending on type>>=
 case TCHAR:
@@ -14441,6 +15573,16 @@ case TUCHAR:
 
 \subsection{[[gins()]]}
 
+%claude:
+[[gins]] (``generate instruction'') is the most general
+instruction emitter: it takes an opcode and two node operands,
+calls [[naddr]] on each to fill the ``from'' and ``to'' [[Adr]]
+fields, and appends the resulting [[Prog]] to the instruction
+list. It handles the conversion from the AST world (nodes with
+types and addressability) to the assembly world (operands with
+register numbers and addressing modes).
+
+
 % the from (f) and to (t) nodes should be very basic,
 % constants, or names, or simple indirection of names or constants,
 % but only one of them can be a memory reference (so store or load, but not
@@ -14471,6 +15613,15 @@ gins(int a, Node *f, Node *t)
 
 
 \subsection{[[naddr()]]}
+
+%claude:
+[[naddr]] translates a [[Node]]'s addressability annotation into
+a concrete [[Adr]] operand. An [[ONAME]] with class [[CGLOBL]]
+becomes [[name(SB)]]; a [[CPARAM]] becomes [[name+offset(FP)]];
+a [[CAUTO]] becomes [[name-offset(SP)]]; an [[OREGISTER]]
+becomes a bare register; an [[OCONST]] becomes an immediate
+[[$value]]. This is where the abstract AST meets the concrete
+ARM addressing modes from the \book{Assembler}.
 
 % node addressable? node to Adr ?
 
@@ -14634,6 +15785,15 @@ char	etype;
 % it is a convention to use R0 for return value of a function.
 % Sometimes, we just want a register, any register.
 
+%claude:
+[[regalloc]] finds a free general-purpose register for a
+temporary value. If the optional destination [[o]] is already
+a register, it reuses that register to avoid an extra [[MOV]]
+(ARM's three-operand instructions can write the result into
+a source register). The search starts from a rotating
+[[lasti]] index to spread pressure across registers, skipping
+reserved ones ([[resvreg]]). The [[reg]] array is a simple
+reference-counting allocator.
 
 % o is the optional node target in which the allocated register
 % will go into (via a mov), so if the target is a register, then
@@ -14837,6 +15997,12 @@ long v;
 
 \subsection{Numeric constants}
 
+%claude:
+Constants and other fully addressable expressions (addable $\ge$
+[[INDEXED]]) are handled by a single [[gmove]]: the value is
+loaded directly into the target register. This covers constants,
+global names, and register variables.
+
 % because 'if addable more than INDEXED' so then get a gmove
 % and OCONST is addable 20.
 % Because expr is address-able Adr-able.
@@ -14865,6 +16031,13 @@ if(n->addable >= INDEXED) {
 % previous code covers also entity uses. gmove -> gins -> naddr.
 
 \subsubsection{Parameters}
+
+%claude:
+Parameters are laid out in the stack frame at positive offsets
+from [[FP]]. [[autoffset]] is advanced by each parameter's
+aligned size via the two-phase [[align]] calls ([[Aarg1]] for
+the start, [[Aarg2]] for the end). The first parameter is
+tracked specially for the [[REGARG]] optimization.
 
 <<[[adecl()]] switch class cases>>=
 case CPARAM:
@@ -14933,6 +16106,14 @@ case CSTATIC:
 % String constants are transformed in ONAME in tcomo().
 
 \subsubsection{ASCII strings}
+
+%claude:
+String constants are compiled in two steps. First, the type
+checker transforms [[OSTRING]] into [[ONAME]] referencing a
+unique static symbol (e.g., [[.string<>]]). Then, the code
+generator emits [[ADATA]] pseudo-instructions to define that
+symbol's content in the data segment. Duplicate strings are
+not shared---each literal gets its own static.
 
 % "foo\n" -> .string<>+0
 
@@ -15121,6 +16302,14 @@ outlstring(TRune *s, long n)
 
 % see also pointer arithmetic adjustments during typechecking
 
+%claude:
+Arithmetic code generation follows a uniform pattern: allocate
+registers for both operands, generate their values, emit
+[[gopcode]] (which maps AST operators like [[OADD]] to ARM
+opcodes like [[ADD]]), then move the result to the destination
+[[nn]]. The subtlety lies in the evaluation order: the more
+complex child is evaluated first so that fewer registers are
+live simultaneously (Sethi-Ullman ordering).
 
 <<[[cgenrel()]] switch node kind cases>>=
 case OSUB:
@@ -15171,6 +16360,16 @@ case OMOD:
 \subsubsection{Complexity and register allocation}
 
 % subtle! see plus_chain.c, or registers.c
+
+%claude:
+When the left child is more complex (needs more registers),
+it is evaluated first into [[nod]] --- which is allocated
+targeting [[nn]] so the final [[gopcode(OAS, \&nod, Z, nn)]]
+can often become a no-op. The result is stored in [[nod]]
+regardless of which branch runs, but the operand order to
+[[gopcode]] flips so that the ARM instruction writes into
+whichever register holds the first-evaluated child, saving
+a [[MOV]].
 
 <<[[cgenrel()]] when OADD/OAND/..., if l more complex than r>>=
 if(l->complex >= r->complex) {
@@ -15358,7 +16557,7 @@ case OASMOD:
 
 \subsubsection{Unsigned operations}
 
-\l Why generate special opcode? 
+\l Why generate special opcode?
 % Why not for OADD but for OMUL?
 % Because ARM handles unsigned and signed with same opcode for addition
 % but not for multiplication!!! and especially not for bit shifting!
@@ -15366,6 +16565,15 @@ case OASMOD:
 
 % useful for evconst too! otherwise vconst interpreted wrongly!
 % and can not do certain operations on very high unsigned integers.
+
+%claude:
+ARM uses the same [[ADD]]/[[SUB]] for signed and unsigned
+integers (two's complement makes them identical), but
+multiplication and shifts differ: [[UMULL]] vs.\ [[SMULL]],
+[[LSR]] (logical) vs.\ [[ASR]] (arithmetic). The [[typeu]]
+array marks which type kinds are unsigned, so [[gopcode]]
+can select the correct variant. Pointers ([[TIND]]) count
+as unsigned since addresses are never negative.
 
 <<global [[typeu]]>>=
 char	typeu[NTYPE];
@@ -15612,6 +16820,16 @@ of assignments when the destination is not directly addressable.
 
 \subsubsection{Getting the address, [[lcgen()]]}
 
+%claude:
+[[lcgen]] (``lvalue code generator'') computes the
+\emph{address} of a node rather than its value. This is
+needed for [[&x]], for the left side of assignments to
+non-addressable locations (e.g., [[*p = v]]), and for
+passing struct arguments by reference. It recurses
+through [[OIND]] nodes and falls back to [[naddr]] for
+simple names, which can express their address directly
+via the [[SB]]/[[FP]]-relative addressing modes.
+
 % return &x;
 
 <<[[cgenrel()]] switch node kind cases>>=
@@ -15825,6 +17043,14 @@ if(sconst(r) && (v = r->vconst + nod.xoffset) > -4096 && v < 4096) {
 
 % *x = 1;  for example.
 
+%claude:
+When the left side of an assignment is not directly addressable
+(e.g., [[*p]] where [[p]] is itself computed), the compiler
+must first load the destination address into a register via
+[[reglcgen]], then store the right-hand value through that
+register. The Sethi-Ullman ordering applies here too:
+whichever side is more complex is evaluated first.
+
 <<[[cgenrel()]] when OAS, when left node not addressable or too complex>>=
 <<[[cgenrel()]] when OAS, when l not addressable, if l more complex than r>>
 else {
@@ -15936,6 +17162,14 @@ else if(n->op == OINDREG) {
 @
 
 \subsection{Assignments and arithmetic}
+
+%claude:
+Compound assignment operators like [[+=]] and [[<<=]] combine
+a load, an arithmetic operation, and a store. The generated
+code loads the left-hand side into a temporary, applies
+[[gopcode]] with the right-hand operand, then stores back.
+If [[nn]] is non-null (the expression's value is used, as in
+[[y = (x += 1)]]), the result is also copied to [[nn]].
 
 <<[[cgenrel()]] switch node kind cases>>=
 case OASADD:
@@ -17072,6 +18306,15 @@ case OHI:
 
 % skeleton to handle function calls
 
+%claude:
+A function call generates three phases: push arguments onto
+the stack via [[gargs]] (which walks the argument list
+right-to-left using [[regaalloc]] to assign stack slots),
+emit [[BL]] to the callee, then copy the return value
+from [[REGRET]] (R0) to the destination. If the callee is
+not directly addressable (e.g., a function pointer), its
+address is loaded into a register first.
+
 <<[[cgenrel()]] switch node kind cases>>=
 case OFUNC:
     <<[[cgenrel()]] when OFUNC, if complex indirect function call>>
@@ -17100,6 +18343,18 @@ case OFUNC:
 
 
 \subsection{[[gargs()]]}
+
+%claude:
+[[gargs]] pushes function arguments onto the stack in two passes.
+The first pass ([[garg1]]) handles simple arguments: each is
+evaluated and stored at the appropriate stack offset. The first
+word-sized argument goes to [[REGARG]] (R0) instead of the stack.
+The second pass evaluates complex arguments (those containing
+function calls, marked with [[FNX]]) that were deferred in pass
+one because they might clobber registers. [[cursafe]] and
+[[maxargsafe]] track the maximum stack depth needed for nested
+calls.
+
 % arguments, g = ?
 
 <<global [[curarg]]>>=
@@ -17230,6 +18485,15 @@ regaalloc(Node *n, Node *nn)
 \subsection{Caller-save vs Callee-save}
 % ?? need this section? related to .safe below?
 
+%claude:
+Plan 9's C compilers use a caller-save convention: the caller
+must save any live temporaries before a function call, because
+the callee is free to clobber all registers. [[regsalloc]]
+allocates stack space in the caller's frame for these spills,
+using the synthetic [[.safe]] variable to track the high-water
+mark. This is simpler than callee-save (no need for the callee
+to save/restore), at the cost of slightly more stack traffic.
+
 <<global [[nodsafe]]>>=
 Node*	nodsafe;
 @
@@ -17354,6 +18618,16 @@ if(n->complex >= FNX) {
 \section{Initializers}
 \t could mv complex initializers like designators in advanced features
 \t and at least explain here (of even before closer to Assign) int x = 1;
+
+%claude:
+Initializers for global and static variables are emitted at
+compile time as [[ADATA]] pseudo-instructions (data constants
+in the object file), while local initializers become runtime
+assignments. [[init1]] walks the initializer list recursively,
+matching each value against the target type: scalars emit a
+single datum, arrays and structs recurse into their elements,
+and [[doinit]] handles the outer bookkeeping including
+designated initializers.
 
 % could be made a static local of init1?
 <<global [[nodcast]]>>=
@@ -17865,6 +19139,16 @@ symadjust(Sym *s, Node *n, long del)
 
 \section{Toplevel globals}
 
+%claude:
+At the end of compilation, [[gclean]] walks the symbol table
+and emits an [[AGLOBL]] pseudo-instruction for every global
+or static variable, declaring its name and size to the linker.
+The corresponding [[ADATA]] instructions (emitted earlier
+during initializer processing) fill in the actual values.
+This two-part scheme lets the compiler emit data incrementally
+as it encounters initializers, then declare all symbols in
+one pass at the end.
+
 <<[[gclean()]] locals>>=
 Sym *s;
 @
@@ -18123,6 +19407,15 @@ nod32const(vlong v)
 % useful for pointer arithmetic, and sizeof.
 % see code that maintains Node.width everywhere.
 
+%claude:
+The [[ewidth]] array maps each type kind to its size in bytes.
+This is the machine-dependent table that makes [[sizeof]]
+work: the front end looks up [[ewidth[t->etype]]] and also
+uses it to scale pointer arithmetic (e.g., [[p + 1]] becomes
+[[p + ewidth[*p]]]). Composite types (struct, union, array)
+have $-1$ here because their sizes depend on layout and are
+computed by [[sualign]] instead.
+
 <<global [[ewidth]]>>=
 schar	ewidth[NTYPE] =
 {
@@ -18219,6 +19512,15 @@ Type*	firstargtype;
 
 
 \subsection{Alignment}
+
+%claude:
+[[align]] is a multi-purpose function dispatched by an [[op]]
+code: it handles struct element alignment ([[Ael1]]/[[Ael2]]),
+end-of-struct padding ([[Asu2]]), function parameter layout
+([[Aarg1]]/[[Aarg2]]), and auto variable allocation ([[Aaut3]]).
+On ARM, the natural alignment is [[SZ_LONG]] (4 bytes); smaller
+types align to their own width. The [[packflg]] pragma can
+override this for packed structs.
 
 <<function [[align]](arm)>>=
 /// ??? -> <>
@@ -18442,6 +19744,14 @@ void sualign(Type *t)
 
 
 \section{Advanced assembly generation}
+
+%claude:
+This section covers code generation for constructs that go
+beyond simple expressions and control flow: switch statements,
+64-bit arithmetic on a 32-bit machine, floating point, and
+bitfield access. Each requires specialized instruction
+sequences that do not fit the uniform [[cgen]]/[[gopcode]]
+pattern.
 
 %alt: \subsection{Function calls}
 
@@ -18852,7 +20162,24 @@ object code back to C source lines.
 
 \section{Object format}
 
+%claude:
+The object file is a sequence of variable-length records:
+symbol name definitions (emitted by [[zname]]) and instruction
+records (emitted by [[zwrite]]). The format is compact and
+designed for fast one-pass reading by the linker---the same
+format described in the \book{Assembler}.
+
 \section{Instruction output: [[outcode()]]}
+
+%claude:
+[[outcode]] walks the [[Prog]] list from [[firstp]] to the end.
+For each instruction, it checks whether the ``from'' and ``to''
+symbols have already been emitted; if not, it calls [[zname]]
+to define them. A small hash table ([[h]]) of size [[NSYM]] maps
+recently emitted symbols to their indices, so the common case
+(reusing a symbol from the previous instruction) requires no
+re-emission. The [[jackpot]] label handles the rare collision
+case where both operands' symbols compete for the same index.
 
 <<struct [[Htab]]>>=
 struct Htab { 
@@ -18959,6 +20286,13 @@ zwrite(Biobuf *b, Prog *p, int sf, int st)
 
 \section{Operand output: [[zaddr()]]}
 
+%claude:
+[[zaddr]] serializes an [[Adr]] operand into the binary object
+file format. It writes the addressing mode, register, symbol
+index, and offset/value as a variable-length byte sequence.
+Float constants are encoded in IEEE format via the [[Ieee]]
+conversion. The format is compact: each operand takes 2--10
+bytes depending on the addressing mode.
 
 <<function [[zaddr]](arm)>>=
 char*
@@ -19033,6 +20367,15 @@ zaddr(char *bp, Adr *a, int s)
 
 
 \section{Symbol table, [[zname()]], [[h]] and [[ANAME]]}
+
+%claude:
+[[zname]] emits an [[ANAME]] record to the object file, defining
+a symbol's name, type (extern/intern/auto/param), and index.
+The index is used by subsequent instructions to refer to the
+symbol compactly. If safe linking ([[5c -T]]) is enabled,
+[[zname]] also emits an [[ASIGNAME]] record with the type
+signature hash, allowing the linker to catch declaration mismatches.
+
 % spreaded
 % and SIGNAME!
 
@@ -19061,6 +20404,15 @@ zname(Biobuf *b, Sym *s, int t)
 
 
 \section{File and line information: [[outhist()]]}
+
+%claude:
+[[outhist]] writes the file inclusion history into the object
+file as [[AHISTORY]] pseudo-instructions. Each entry records
+either a ``push'' (entering a new file via \verb+#include+) with
+the filename, or a ``pop'' (returning to the parent file) with
+a nil name. The debugger uses this history to map global line
+numbers back to (filename, local-line) pairs. Directory path
+components are split into separate records for compact encoding.
 
 <<function [[outhist]](arm)>>=
 void
@@ -19238,6 +20590,12 @@ case OINDREG:
 
 \subsubsection{No op casts}
 
+%claude:
+A cast between types of the same size and signedness is a no-op:
+[[ccom]] removes it by replacing the [[OCAST]] node with its
+child. If the child is a constant, [[evconst]] folds the cast
+into the constant (e.g., [[(long)42]] becomes a [[TLONG]] constant).
+
 <<[[ccom()]] switch node kind cases>>=
 case OCAST:
     ccom(l);
@@ -19256,6 +20614,14 @@ case OCAST:
 @
 
 \subsubsection{Pointers and addresses}
+
+%claude:
+Taking the address of a dereference ([[&(*p)]]) cancels out
+to just [[p]], and dereferencing an address ([[*(&x)]]) cancels
+to just [[x]]. These inverse-operation eliminations are among
+the most effective simplifications, since the type checker
+introduces many implicit [[OADDR]] nodes (for array-to-pointer
+decay) that can often be immediately canceled.
 
 <<[[ccom()]] switch node kind cases>>=
 case OADDR:
@@ -19282,6 +20648,17 @@ case OIND:
 
 
 \subsubsection{Zero operands}
+
+%claude:
+Zero is the identity element for addition, OR, and XOR:
+[[x + 0]], [[x | 0]], and [[x ^ 0]] all simplify to [[x]].
+Zero is also an annihilator for multiplication: [[x * 0]]
+becomes [[0]]. The [[commute:]] label additionally normalizes
+commutative operations to push constants toward the right side,
+which enables better code generation (ARM immediate operands).
+If both children of a commutative operator are themselves the
+same operator with a constant child, the constants are
+reassociated to enable further folding.
 
 <<[[ccom()]] switch node kind cases>>=
 case OADD:
@@ -19494,6 +20871,13 @@ case OLDIV:
 
 \subsubsection{Sub to Add}
 
+%claude:
+Subtraction of a constant is rewritten as addition of the
+negated constant: [[x - 3]] becomes [[x + (-3)]]. This
+canonicalization helps later optimizations that look for
+addition patterns (commutative reassociation, immediate
+operand fitting).
+
 % OADD more performant than OSUB? meh
 % or because use more patterns with OADD than OSUB for optim opportunities?
 
@@ -19517,6 +20901,15 @@ case OSUB:
 
 
 \subsubsection{Comparisons}
+
+%claude:
+The comparison simplifier [[compar]] handles several patterns:
+comparing a variable to itself ([[x == x]] is always true),
+comparing against zero (which ARM can do without loading the
+constant), and normalizing the constant to the right side.
+When both operands are constants, [[evconst]] folds the entire
+comparison. The unsigned comparison operators ([[OLS]], [[OHS]],
+[[OLO]], [[OHI]]) are treated alongside their signed counterparts.
 
 <<[[ccom()]] switch node kind cases>>=
 case OEQ:
@@ -19825,6 +21218,13 @@ useless:
 
 
 \subsubsection{Boolean expressions}
+
+%claude:
+If one operand of [[&&]] or [[||]] is a constant, the result
+can be determined statically: [[0 && x]] is always [[0]],
+[[1 || x]] is always [[1]], and the other operand is checked
+for side effects before being eliminated. This is also where
+[[!0]] folds to [[1]] and [[!1]] to [[0]].
 
 <<[[ccom()]] switch node kind cases>>=
 case OANDAND:
@@ -20162,6 +21562,15 @@ case ONOT:
 
 \section{Comma hoisting: [[comma()]]}
 
+%claude:
+[[comma]] restructures expressions that contain comma operators
+buried inside other operators. It ``hoists'' the side effects
+to the top level, so the code generator sees a clean sequence
+of side effects followed by the value expression. For example,
+[[(a++, b) + c]] becomes [[a++; b + c]]. This simplifies
+the code generator, which would otherwise need to handle
+comma operators in arbitrary positions.
+
 % not really an optimization? needed otherwise code generator
 % will fail? no, cgen() and uncomma() handles it, but
 % maybe can lead to better code.
@@ -20292,6 +21701,14 @@ comargs(Com *com, Node *n)
 
 \section{Bitshifting opportunities}
 
+%claude:
+When the compiler sees a multiplication or division by a power
+of two, it replaces the operation with a left or right shift:
+[[x * 8]] becomes [[x << 3]], and [[x / 4]] becomes [[x >> 2]].
+[[vlog]] checks whether a constant is a power of two by calling
+[[log2]]. This applies both in [[xcom]] (for general expressions)
+and in [[arith]] (for pointer-difference scaling).
+
 <<function [[vlog]]>>=
 /// arith -> <>
 int
@@ -20412,6 +21829,11 @@ if(nn != Z)
 
 \section{And opportunities}
 
+%claude:
+Unsigned modulo by a power of two is replaced by a bitwise AND:
+[[x % 8]] becomes [[x & 7]]. This is valid only for unsigned
+types ([[OLMOD]] is the unsigned modulo operation).
+
 <<[[xcom()]] switch op cases to set addable>>=
 case OLMOD:
     xcom(l);
@@ -20438,6 +21860,16 @@ case OASLMOD:
 @
 
 \section{Immediate operands}
+
+%claude:
+ARM instructions can encode small constants directly in the
+instruction (as an 8-bit value with an even rotation). When
+one operand is such a constant, the code generator avoids loading
+it into a register first---it just embeds the value in the
+instruction's immediate field. This section handles subtraction
+(constant on the left), and addition/bitwise ops (constant on
+the right, after [[xcom]]'s normalization).
+
 % kinda Assembly-level opti?
 
 \subsection{Substraction}
@@ -21328,6 +22760,14 @@ where the compiler can factor out the element size.
 
 \subsection{[[Term]]}
 
+%claude:
+A [[Term]] pairs a node with an integer multiplier. [[acom]]
+flattens an expression tree like [[a + 2*b - a]] into an array
+of terms [[(1,a), (2,b), (-1,a)]], then combines like terms
+([[a]] cancels out) and rebuilds the tree. The [[NTERM]] limit
+of 10 means expressions with more than 10 leaves are not
+fully optimized.
+
 <<constant [[NTERM]]>>=
 #define	NTERM		10
 @
@@ -21350,6 +22790,17 @@ int	nterm;
 
 
 \subsection{[[acom()]]}
+
+%claude:
+[[acom]] first calls [[apts]] to flatten the expression tree
+into the [[term]] array, collecting multiplied terms. Then it
+sorts the terms so identical nodes are adjacent, merges
+duplicate terms by adding their multipliers, and rebuilds
+the expression tree from the simplified term list. Terms
+with a zero multiplier are eliminated entirely. This
+optimization is especially effective for address arithmetic
+where the compiler generates redundant add/subtract chains.
+
 % cc/scon.c ??
 
 <<function [[acom]]>>=
@@ -21768,6 +23219,13 @@ and see the raw output.
 
 \section{Nop detection}
 
+%claude:
+The simplest optimization: when [[gmove]] would emit a move
+from a register to itself ([[MOVW R0, R0]]), it returns without
+emitting anything. This happens frequently, for example when
+a function's first parameter is already in [[R0]] (the return
+register) and the body is [[return x]].
+
 <<[[gmove()]] if samaddr return>>=
 if(a == AMOVW || a == AMOVF || a == AMOVD)
  if(samaddr(f, t))
@@ -21796,6 +23254,13 @@ samaddr(Node *f, Node *t)
 
 \section{ARM special instructions}
 
+%claude:
+ARM has a reverse-subtract instruction ([[RSB]]) that computes
+[[b - a]] instead of [[a - b]], which avoids needing to swap
+operands into registers. When a subtraction has a constant on
+the left ([[5 - x]]), [[gopcode]] uses [[RSB]] instead of [[SUB]]
+to avoid loading the constant first.
+
 <<[[gopcode()]] when OSUB, ARSB opportunity>>=
 if(f2 && f2->op == OCONST) {
     Node *t = f1;
@@ -21806,6 +23271,14 @@ if(f2 && f2->op == OCONST) {
 @
 
 \section{Register passing argument: [[REGARG]]}
+
+%claude:
+On ARM, the first word-sized argument is passed in [[R0]] (= [[REGARG]]).
+At function entry, [[codgen]] immediately saves [[R0]] to
+the parameter's stack slot so the rest of the function can treat
+it like any other variable. This spill is removed by the register
+allocator if the parameter can stay in a register throughout.
+
 % kind of assembly-level opti. seems generic and involves modifying the AST.
 
 <<[[codgen()]] locals>>=
@@ -22030,6 +23503,15 @@ for(z=0; z<BITS; z++) {
 
 
 \subsection{[[noretval()]]}
+
+%claude:
+[[noretval]] emits fake [[NOP]] instructions that reference
+[[REGRET]] (integer return register) and [[FREGRET]] (float
+return register). These are not real instructions---they serve
+as sentinels for the register allocator, marking the point where
+the return value must be in the return register. Without them,
+the optimizer might move a value out of [[REGRET]] before the
+[[RET]] instruction reads it.
 
 <<[[codgen()]] before RET>>=
 noretval(1 | 2);
@@ -22474,6 +23956,11 @@ for(i=0; i<nregion; i++) {
 
 \subsection{pass 7, peep hole optimizations}
 
+%claude:
+Pass 7 runs the peephole optimizer ([[peep]]) on the modified
+instruction list. Peephole optimization is disabled when [[-R]]
+is used alone (to isolate register allocation effects).
+
 <<[[regopt()]] pass 7>>=
 /*
  * pass 7
@@ -22486,6 +23973,12 @@ if(!debug['R'] || debug['P'])
 % if R then regopti but not peephole
 
 \subsection{pass 8}
+
+%claude:
+Pass 8 recalculates PC values for each instruction (since
+register promotion and peephole may have added or removed
+instructions), then fixes up branch targets so they point
+to the correct PCs.
 
 <<[[regopt()]] pass 8>>=
 /*
@@ -22534,6 +24027,11 @@ for(r = firstr; r != R; r = r->link) {
 @
 
 \subsection{pass 9}
+
+%claude:
+The final pass strips [[NOP]] instructions from the linked list
+(they were used as placeholders) and frees the [[Reg]] auxiliary
+structures.
 
 <<[[regopt()]] pass 9>>=
 /*
@@ -22693,6 +24191,13 @@ int bset(Bits a, uint n)
 
 \subsection{[[Var]]}
 
+%claude:
+A [[Var]] identifies a candidate for register promotion: it
+records the symbol, its type, and its stack offset. The global
+[[var]] array holds up to [[NVAR]] (160) variables, each
+represented by a single bit in the [[Bits]] bitset that the
+dataflow analysis manipulates.
+
 <<constant [[NVAR]]>>=
 #define	NVAR	(BITS*sizeof(ulong)*8)
 @
@@ -22721,6 +24226,14 @@ struct	Var
 % yet another etype
 
 \subsection{[[Reg]]}
+
+%claude:
+A [[Reg]] node represents one instruction in the control-flow
+graph. It carries the dataflow sets ([[use1]], [[use2]], [[set]]),
+liveness information ([[refahead]], [[refbehind]], [[calahead]],
+[[calbehind]]), loop nesting depth, and CFG edges ([[p1]]/[[s1]]
+for fallthrough, [[p2]]/[[s2]] for branches). The [[log5]] field
+is a skip-list pointer for faster branch target resolution.
 
 % for region?
 
@@ -22766,6 +24279,17 @@ struct	Reg
 
 
 \subsection{[[XXX]]}
+
+%claude:
+This subsection collects the helper functions for the register
+allocator: [[rega]]/[[freea]] manage a free list of [[Reg]] nodes,
+[[mkvar]] maps an [[Adr]] operand to a [[Var]] slot (creating one
+if needed), [[prop]]/[[synch]] implement the backward and forward
+dataflow propagation, [[paint1]]/[[paint2]]/[[paint3]] assign
+registers to variables by painting regions, [[loopit]] computes
+loop nesting depth, and [[addsplits]] inserts MOV instructions
+at points where a register's value must be synchronized with
+its stack slot.
 
 <<function [[rega]]>>=
 Reg*
@@ -25213,6 +26737,13 @@ mismatched declarations across compilation units.
 
 \section{[[#pragma lib]] and automagic linking}
 
+%claude:
+When a header file says \verb+#pragma lib "libfoo.a"+,
+the compiler stores the library path in the object file via
+a special [[Hist]] entry with offset $-1$. The linker reads
+these entries and automatically links the specified libraries,
+eliminating the need for [[Makefile]] library lists.
+
 % nice feature. Simple and useful (if have a standard directory
 % where to put the library)
 
@@ -25611,6 +27142,15 @@ parameter values and local variables by name.
 %http://yosefk.com/blog/getting-the-call-stack-without-a-frame-pointer.html
 
 \section{General debugging metadata}
+
+%claude:
+Every [[Prog]] instruction carries a [[lineno]] field that
+records which C source line generated it. This is set by
+[[nextpc]] from the global [[nearln]], which [[codgen]] sets
+to the current function's starting line. The linker preserves
+this mapping in the executable, so the debugger [[acid]] can
+show source lines alongside disassembly.
+
 % Instruction origin location?
 
 % have lineno field in generated object that tracked
@@ -25664,6 +27204,15 @@ if(debug['a'] && debug['n'])
 @
 
 \subsection{Entities}
+
+%claude:
+For each declared entity (global, local, parameter), the
+compiler emits an [[acid]] function definition that prints
+the entity's value with the correct type. For example,
+[[int x]] generates [[acid]] code equivalent to
+``\verb+x() { return *fmt(x, 'd');}+''. This allows the
+debugger to inspect any variable by calling its name as
+an acid function.
 
 <<[[dodecl()]] case ONAME, debugging support>>=
 acidvar(s);
@@ -25817,6 +27366,13 @@ amap(char *s)
 
 
 \subsection{Structure/union definitions}
+
+%claude:
+[[acidtype]] emits an acid ``\verb+complex+'' definition for each
+struct or union, listing its fields with their types and offsets.
+This lets the acid debugger display struct members by name
+rather than as raw memory, and supports nested structs and
+arrays through recursive type description.
 
 % called from sualign, so for struct and union
 % exported in cc.h
@@ -26448,6 +28004,13 @@ and miscellaneous optimizations like \verb+#pragma pack+.
 
 \section{Advanced C features}
 
+%claude:
+This section covers C features that require non-trivial compiler
+support: automatic conversions between functions and function
+pointers, between arrays and pointers, local [[static]] and
+[[volatile]] variables, bitfields, old-style function prototypes,
+and [[_Noreturn]].
+
 \subsection{Function and function pointer automatic conversions}
 
 % fp(...) -> (*fp)(...)
@@ -26495,6 +28058,16 @@ case TARRAY:
 % to pass it as an argument, etc.)
 
 \subsection{Local [[static]]}
+
+%claude:
+A [[static]] local variable has the lifetime of a global but the
+visibility of a local. The compiler handles it with a special
+storage class [[CLOCAL]]: the variable is allocated in the global
+data segment (like [[CGLOBL]]) and emitted as a static symbol
+(with a [[<>]] suffix for uniqueness), but its declaration is
+scoped to the block it appears in. Initialization is done
+via [[ADATA]] at file scope, not at function entry.
+
 % sugar for what could be just a scoped global.
 
 
@@ -26556,6 +28129,15 @@ if(s->class != CLOCAL) // should never happen, use errorexit()?
 @
 
 \subsection{Local [[volatile]]}
+
+%claude:
+A [[volatile]] local must not be promoted to a register by the
+optimizer, since its value can change outside the compiler's
+knowledge (e.g., signal handlers, memory-mapped I/O). The
+compiler ensures this by inserting a hidden [[USED(&var)]]
+call at scope exit via [[revertdcl]], which forces the variable
+to have an address (and thus live on the stack). The register
+allocator sees this reference and avoids promoting the variable.
 
 %todo: volatile means data can change outside.
 % so if put a local in a register, and then read
@@ -26984,6 +28566,17 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 
 
 \subsection{Old style prototypes}
+
+%claude:
+K\&R-style (``old style'') function declarations list parameter
+names without types: [[int f(x, y) int x; int y; \{...\}]].
+The parser handles this with a separate [[pdecl]] rule that
+associates types with previously-unnamed parameters. This
+requires a second pass ([[tmerge]]) to reconcile the old-style
+parameter list with any prior forward declaration that used
+a prototype. [[5c]] warns when it encounters old-style
+functions but still supports them for backwards compatibility.
+
 % not really an advanced features though
 
 
@@ -27224,6 +28817,17 @@ in the \plan kernel and libraries.
 % see cc/c99.txt for list of things implemented by kencc
 
 \subsection{Typing extensions: [[typeext()]]}
+
+%claude:
+[[typeext]] is a hook called at every type-compatibility
+checkpoint (assignments, comparisons, function arguments,
+returns). It adjusts the right-hand node's type to match the
+left-hand type in three cases: (1) nil pointer constants are
+promoted to the target pointer type, (2) integer-to-float and
+float-to-integer implicit conversions are inserted, and
+(3) unnamed substructure members are resolved by walking the
+struct hierarchy to find a matching type.
+
 
 % Mostly for float and unnamed substructure.
 
@@ -27495,6 +29099,16 @@ ambig:
 
 
 \subsection{Struct constructors}
+
+%claude:
+Struct constructors (e.g., [[(Point)\{1, 2\}]]) are a \plan
+extension that creates a struct value inline as an expression.
+The compiler allocates a hidden static variable for the
+constructor's data, initializes it via [[ADATA]], and replaces
+the constructor expression with a reference to that static.
+This is essentially syntactic sugar for what would otherwise
+require a named temporary variable.
+
 
 %\subsubsection{Parsing}
 
@@ -27779,6 +29393,17 @@ if(l->op == OREGISTER) {
 
 
 \subsection{Type reflection: [[typestr()]]}
+
+%claude:
+[[typestr]] is a \plan extension that embeds a string representation
+of a variable's type in the object file. When storage class
+[[CTYPESTR]] is used, the compiler calls [[typestrn]] to produce
+a string encoding of the type graph (e.g., ``[[*int]]'' for a
+pointer to int) which is stored as a static string. This is
+used by acid for type-aware formatting: the debugger can
+retrieve the type string at runtime to decide how to print
+a value.
+
 % a form of reflection too?
 % seems dead. Never used, not documented.
 
@@ -28265,6 +29890,14 @@ bad:
 
 
 \subsection{Signature reflection: [[signof()]]}
+
+%claude:
+[[signof]] is a compile-time operator (like [[sizeof]]) that
+returns the type signature hash of its argument. This is the
+same hash used by \verb+5c -T+ for safe linking. The kernel
+uses it to verify at runtime that the types expected by a
+device driver match the types defined in the kernel headers.
+
 % sign for signature, not sign of an operation
 
 <<expression nodes>>=
@@ -29209,6 +30842,15 @@ lowering pass handles types wider than the native word size.
 
 \subsection{[[com64init()]]}
 
+%claude:
+[[com64init]] creates [[Node]] references to the runtime helper
+functions for 64-bit arithmetic: [[_addv]], [[_subv]], [[_mulv]],
+[[_divv]], [[_lshv]], etc. These functions are implemented in
+[[libc]] (in assembly, for performance) and called by the
+compiler whenever a [[vlong]] operation cannot be expressed
+with a single pair of ARM instructions. The [[fvn]] helper
+creates a function-call node for each named builtin.
+
 <<[[ginit()]] com64init initialisation>>=
 com64init();
 @
@@ -30019,6 +31661,11 @@ bool64(Node *n)
 
 \section{Endianness}
 
+%claude:
+The [[-l]] flag is MIPS-only: it switches the compiler from
+big-endian [[vc]] to little-endian [[0c]] (SPIM). ARM is
+always little-endian in this compiler.
+
 % 5c -l, just for mips => switch from vc to 0c
 
 
@@ -30033,6 +31680,14 @@ bool64(Node *n)
 
 
 \section{Using an external preprocessor: [[/bin/cpp]]}
+
+%claude:
+When [[-p]] is given, [[5c]] forks [[/bin/cpp]] as a child
+process connected by a pipe, rather than using its built-in
+preprocessor. This is needed for APE (the ANSI/POSIX
+environment) compatibility, where the external [[cpp]] handles
+features that [[5c]]'s embedded preprocessor does not support
+(like [[#if]] constant expressions).
 
 %5c -p
 %useful for pcc and APE.
@@ -30104,6 +31759,12 @@ if(debug['p']) {
 
 
 \section{Processing multiple files}
+
+%claude:
+[[5c]] can compile multiple files in a single invocation, but
+this feature is rarely used since [[mk]] handles parallelism.
+Each file is compiled sequentially by calling [[compile]] in
+a loop.
 
 <<[[main()]] locals>>=
 int nproc, nout, status, i;
@@ -30439,12 +32100,31 @@ enough to read in its entirety.
 \chapter{Debugging}
 %******************************************************************************
 
+%claude:
+The compiler has extensive self-debugging support via single-letter
+flags stored in the [[debug]] array. Each flag enables output
+for a particular phase: [[-L]] prints symbol lookups, [[-d]]
+prints declarations, [[-t]] prints type trees, [[-g]]/[[-G]]
+trace code generation, [[-S]] prints assembly output, [[-r]]
+prints register allocation, and [[-m]] prints arithmetic trees
+and macro expansion. The [[prtree]] function dumps any AST
+subtree in a readable format.
+
 <<global [[debug]]>>=
 char	debug[256];
 @
 % bool? ushort?
 
 \section{Dumpers}
+
+%claude:
+The compiler registers custom format verbs ([[%O]] for node
+kinds, [[%T]] for types, [[%N]] for symbol kinds, [[%B]] for
+bitsets, [[%A]] for opcodes, etc.) so that [[diag]] and
+[[print]] can display compiler data structures in a readable
+form. The portable verbs are in [[cc/]] and the ARM-specific
+ones in [[5c/]].
+
 
 
 \subsection{[[cc/]] [[Fmt]] data structures}
@@ -31100,6 +32780,14 @@ out:
 
 \subsection{[[xxxnames[]]]}
 
+%claude:
+Name arrays provide string representations for debugging:
+[[onames]] for node kinds, [[tnames]] for type kinds,
+[[cnames]] for storage classes, [[gnames]] for qualifiers,
+[[bnames]] for alignment phases, and [[qnames]] for the
+extended type kinds. Each is filled at startup from an
+[[Init]] array via [[tinit]].
+
 % already seen onames and anames before
 
 
@@ -31219,6 +32907,14 @@ for(p=onamesinit; p->code >= 0; p++) {
 
 
 \subsection{AST dumper: [[prtree()]] and [[5c -x]]}
+
+%claude:
+[[prtree]] recursively prints an AST subtree in a readable
+format, showing node kinds, types, values, and tree structure
+via indentation. The [[-x]] flag dumps the AST for each function
+after parsing, which is invaluable for understanding what the
+parser produces and what the type checker transforms.
+
 % this is useful! gcc still have not it, and RMS is actually
 % opposing adding them to gcc (but for licensing issues).
 % clang has it! (and pfff has it from the beginning of course ...)
@@ -31692,6 +33388,14 @@ if(debug['i']) {
 %******************************************************************************
 %assembler: very similar
 
+%claude:
+Error management uses a graduated severity system: [[warn]]
+prints warnings (only with [[-w]]), [[yyerror]] reports
+syntax/semantic errors with accurate file:line locations,
+[[diag]] reports general diagnostics, and [[fatal]] aborts
+immediately on internal errors. The [[errorexit]] function
+cleans up the output file before exiting, so a failed
+compilation does not leave a corrupt [[.5]] file behind.
 
 <<global [[nerrors]]>>=
 int	nerrors;
@@ -31826,6 +33530,16 @@ if(n != Z)
 
 \subsection{Error location}
 
+%claude:
+The [[%L]] format verb converts a global line number into a
+human-readable ``file:line'' string by walking the [[Hist]]
+linked list. It maintains a stack of active include files
+([[Atab]]) and applies the line offset deltas to reconstruct
+the local line number within each file. This is used by
+[[diag]], [[yyerror]], and [[warn]] to produce accurate
+error messages even through deep \verb+#include+ nesting
+and \verb+#line+ directives.
+
 <<[[cinit()]] fmtinstall>>=
 fmtinstall('L', Lconv);
 @
@@ -31924,7 +33638,26 @@ Lconv(Fmt *fp)
 \chapter{Libc}
 %******************************************************************************
 
+%claude:
+The compiler uses a few custom library routines rather than
+standard libc functions. The most notable is the arena allocator
+([[alloc]]/[[allocn]]) built on a ``hunk'' of 50\,KB blocks:
+since the compiler never frees AST nodes or type structures
+(they live until the function is compiled and emitted), this
+is faster than [[malloc]] and simpler than a garbage collector.
+
 \section{Memory management}
+
+%claude:
+The allocator maintains a global ``hunk'' pointer into a
+50\,KB block. [[alloc]] bumps [[hunk]] by the requested size,
+4-byte aligned; when the block is exhausted, [[gethunk]]
+allocates a new one from the OS. [[allocn]] extends an existing
+allocation (like a simple [[realloc]]). Since the compiler
+processes one function at a time and never frees anything,
+this bump allocator is both fast and leak-free.
+The same pattern appears in the assembler and linker.
+
 % same in Linker/assembler, not sure why they just don't use malloc?
 % to avoid dependencies to libc? for bootstrapping reasons? because
 % compiler anyway never frees so can optimize things?
@@ -32054,6 +33787,13 @@ void setmalloctag(void*, ulong)
 
 \section{Bit operations}
 
+%claude:
+These utility functions manipulate individual bits:
+[[topbit]] returns the index of the highest set bit,
+[[bitno]] returns the index of the single set bit (or $-1$),
+and [[log2]] returns [[n]] if the value is $2^n$ (used by
+the power-of-two optimization in [[vlog]]).
+
 % see also Bits structure
 
 <<function [[topbit]]>>=
@@ -32154,6 +33894,13 @@ struct	Init			/* general purpose initialization */
 @
 
 \section{Portability}
+
+%claude:
+The compiler supports cross-compilation from multiple host
+OSes (Plan~9, Unix/Linux, formerly Windows). The [[systemtype]]
+function checks the current OS, and OS-specific differences
+(file path separators, file creation modes, byte order) are
+abstracted through these portability wrappers.
 
 <<enum [[os]]>>=
 enum os				/* also in ../{8a,5a,0a}.h */
