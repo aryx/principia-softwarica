@@ -1322,8 +1322,26 @@ so font files can be large.
 % reactive.
 % also for keyboard, raw mode. not buffered.
 % More on this in Chapter X. First will focus on output. graphics.
-% /dev/draw/. Will see later /dev/mouse (and cursor) and /dev/cons 
+% /dev/draw/. Will see later /dev/mouse (and cursor) and /dev/cons
 % and input APIs.
+
+%claude:
+A textual application reads a line of input, processes it, and
+prints a line of output---a sequential conversation. A graphical
+application is fundamentally different: it must react to events
+(mouse clicks, key presses, window resizes) that can arrive at
+any time, on any input device simultaneously.
+%
+This leads to a {reactive} programming model. Instead of the
+program driving the interaction, the user drives it: the program
+sits in an {event loop}, waiting for something to happen, and
+dispatches each event to the appropriate handler.
+%
+I will cover input devices (mouse and keyboard) in
+Chapter~\ref{chap:input}, and the event-based programming model
+in Chapter~\ref{chap:advanced}. For now, the rest of this
+overview focuses on the output side: how to draw things on
+the screen.
 
 \section{[[/dev/draw/]] filesystem interface}
 
@@ -4111,6 +4129,10 @@ enum Drawop
 \section{Fonts}
 % present later, already lots of DS to understand ...
 
+%claude:
+The font data structures ([<Font>], [<Subfont>], [<Fontchar>])
+are presented in Chapter~\ref{chap:fonts}.
+
 \section{Overlapping layers}
 \n better to use layer than window for Windows.nw; less risk of confusion
 
@@ -4120,6 +4142,10 @@ enum Drawop
 % moved all of that later and aspectized everything related
 % to windowing system (basic stuff already quite complicated
 % so let's not complicate it even more)
+
+%claude:
+The layer data structures ([<Screen>], [<Memscreen>], [<Memlayer>])
+are presented in Chapter~\ref{chap:overlapping-windows}.
 
 
 
@@ -20805,25 +20831,20 @@ XBGR32  = CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
 %claude:
 [[GREY1]] images store one bit per pixel---they are used
-everywhere as masks (font glyphs, cursor shapes). Reading
-and writing individual pixels in sub-byte images requires
-bit-shifting: [[pixelbits]] extracts a pixel's bits from a
-packed word, and [[memoptdraw]] has a fast path for all-1-bit
-operations that uses bitwise byte operations instead of the
-per-pixel compositing loop.
+everywhere as masks (font glyphs, cursor shapes), packing
+8 pixels per byte. Reading and writing individual pixels
+requires bit-shifting: [[pixelbits]] extracts a pixel's
+bits from a packed word.
+When source, mask, and destination are all [[GREY1]] and
+bit-aligned, [[memoptdraw]] can reduce compositing to
+bitwise operations on whole bytes---much faster than the
+general per-pixel path. The code handles left and right
+edge masks ([[lm]], [[rm]]) for partial bytes, and a
+direction flag for overlapping source and destination.
 
 % or bitmasks
 
 % GREY1, used for masks
-
-%claude:
-[[GREY1]] images pack 8 pixels per byte. When source, mask,
-and destination are all [[GREY1]] and bit-aligned, the
-compositing reduces to bitwise operations on whole bytes---much
-faster than the general per-pixel path. The code handles
-left and right edge masks ([[lm]], [[rm]]) for partial bytes,
-and a direction flag to handle overlapping source and
-destination correctly.
 
 % some kind of optimisations
 <<[[memoptdraw()]] if 1 bit mask, src, and dest>>=
@@ -22154,13 +22175,16 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 \label{chap:advanced}
 
 %claude:
-This chapter collects the more complex or specialized parts
-of the graphics system: arrow-tipped lines, Bezier curves,
-the optimized drawing paths in [[memoptdraw]], the full
-alpha compositing code in [[alphadraw]], the scan-line
-polygon fill algorithm, the color map for 8-bit displays,
-hardware acceleration hooks, events, menus, and window
-resize handling.
+The previous chapters presented the core drawing operations
+in simplified form, focusing on 32-bit images and the
+common case. This chapter covers what was deferred: the
+full generality of the compositing code (additional
+Porter-Duff operators, optimized fast paths), additional
+drawing primitives (arrow-tipped lines, Bezier curves),
+and higher-level facilities built on top of the graphics
+system (menus, rubber-band selection, event-based I/O).
+A reader interested only in the fundamentals of 2D
+graphics can skip this chapter.
 
 %\section{Image naming?} Better before.
 %\section{JPG}
@@ -28818,14 +28842,11 @@ serializes drawing commands from multiple clients.
 The graphics driver (VGA or VideoCore) provides
 the low-level framebuffer access.
 
-%\item \book{Editor}: the \plan text editor [[sam]]
-%is a graphical application that uses [[libdraw]]
-%and [[libframe]] for text display.
-
-%\item \book{Libcore}: the [[libdraw]] library uses
-%many of the same patterns as other \plan
-%libraries---[[Biobuf]] for I/O, the allocator,
-%and the error handling conventions.
+\item \book{Libcore}: the [[libdraw]] library uses
+the same patterns as other \plan
+libraries---pool allocators for image memory,
+[[Biobuf]] for I/O, and the [[waserror]]/[[nexterror]]
+error handling conventions.
 
 \end{itemize}
 
@@ -28909,18 +28930,17 @@ have studied in this book.
 
 \appendix
 
+%******************************************************************************
+\chapter{Debugging}
+%******************************************************************************
+\label{chap:debugging-appendix}
+
 %claude:
 The debugging support includes formatted printing of
 graphics types ([[%P]] for points, [[%R]] for rectangles),
 image statistics via [[/dev/draw/x/ctl]], and the ability
 to read back pixel data with [[unloadimage]] for
 inspection.
-
-%******************************************************************************
-\chapter{Debugging}
-%******************************************************************************
-\label{chap:debugging-appendix}
-
 
 %dead:? used just for this? maybe better to remove no?
 % libdraw
