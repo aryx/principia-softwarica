@@ -181,16 +181,17 @@ extern	int	await(char*, int);
 /*s: signatures process syscall wrapper */
 extern  void    exits(char*);
 extern  int     atexit(void(*)(void));
-extern  void    atexitdont(void(*)(void));
-extern	void	abort(void);
+/*x: signatures process syscall wrapper */
 extern	int	fork(void);
 extern	int	execl(char*, ...);
 extern	Waitmsg*wait(void);
 extern	int	waitpid(void);
+extern	void	abort(void);
 /*e: signatures process syscall wrapper */
 /*s: signatures other process syscall wrapper */
 extern	int	getpid(void);
 extern	int	getppid(void);
+
 extern  char*   getenv(char*);
 extern  int     putenv(char*, char*);
 /*e: signatures other process syscall wrapper */
@@ -331,8 +332,8 @@ extern	int	errstr(char*, uint);
 /*e: signatures error syscall */
 
 /*s: signatures error syscall wrapper */
-extern	void	werrstr(char*, ...);
 extern	void	rerrstr(char*, uint);
+extern	void	werrstr(char*, ...);
 
 #pragma	varargck	argpos	werrstr	1
 /*e: signatures error syscall wrapper */

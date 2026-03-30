@@ -1,26 +1,14 @@
 \documentclass[12pt]{report}
-
-%last:
-% - implementing cosine from scratch:
-%   https://austinhenley.com/blog/cosine.html
-% - https://silent-tower.net/projects/visual-overview-malloc
-
 \input{../docs/latex/Packages}
 \input{../docs/latex/Noweb}
 \input{../docs/latex/Config}
 \input{../docs/latex/Macros}
 
-\usepackage[utf8]{inputenc}
-
-% Keep description text on the same page as the \part title
-\usepackage{etoolbox}
-\makeatletter
-\patchcmd{\@endpart}{\vfil\newpage}{\vfil}{}{}
-\makeatother
-
 %******************************************************************************
 % Prelude
 %******************************************************************************
+
+%last:
 
 %------------------------------------------------------------------------------
 %history: 
@@ -43,7 +31,7 @@
 % - float internal representation IEEE 574 standard
 % - malloc vs brk internals
 % - floor and ceil :) I never remembered
-% - errno global
+% - errno global (and better errstr())
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -403,7 +391,8 @@ that depend on \plan kernel features (e.g., [[rfork()]],
 
 \section{Requirements}
 
-% see intro(2), overview of many libs
+% see 0intro(2), overview of many libs
+% (just like intro(1) is overview of utilities)
 
 %claude:
 Because this book is made of C source code, you will need
@@ -431,7 +420,6 @@ kernel implements the system calls that the libraries wrap,
 and understanding both sides gives a fuller picture. The
 \book{Assembler} is useful for the few routines written in
 ARM assembly (e.g., [[memset]], [[getcallerpc]]).
-% (just like intro(1) is overview of utilities)
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -630,8 +618,7 @@ register allocator.
 %yoann: say some registers have special constraints like R13, R14, R15 but the rest is mere convention that may be different with other OS, other compiler.
 %claude:
 A few registers are fixed by the ARM hardware: [[R13]] is the
-stack pointer (the [[PUSH]]/[[POP]] and addressing modes
-that reference ``SP'' are hardwired to R13 by the CPU),
+stack pointer, (the [[PUSH]]/[[POP]] and addressing modes that reference ``SP'' are hardwired to R13 by the CPU),
 [[R14]] is the link register (loaded by every [[BL]]
 instruction), and [[R15]] is the program counter (every
 branch rewrites R15). The other assignments---[[R0]] for
@@ -640,6 +627,7 @@ static-data base ([[SB]])---are calling conventions
 chosen by the \plan compiler team. They are not universal:
 Linux/ARM uses a different static base strategy, and other
 compilers may allocate registers differently.
+%yoann1: I don't think there are PUSH/POP instructions in Asm5 (see Assembler.nw)
 
 \subsection{Pseudo-registers}
 
@@ -2319,6 +2307,12 @@ This chapter also covers the argument parsing macros and
 the [[exits]] function that handles cleanup callbacks before
 termination.
 
+
+<<signatures process syscall wrapper>>=
+extern  void    exits(char*);
+extern  int     atexit(void(*)(void));
+@
+
 \section{[[_main()]] (ARM)}
 
 %yoann: explain assembly, and especially weird SB thing (reference Linker book?)
@@ -2798,7 +2792,8 @@ atexit(void (*f)(void))
 }
 @
 
-%dead:
+%dead: used only in ssh1.c
+%extern  void    atexitdont(void(*)(void));
 %<<function atexitdont>>=
 %void
 %atexitdont(void (*f)(void))
@@ -2837,6 +2832,14 @@ which version to link: the [[mkfile]] in [[port/]] uses a
 \verb+.s+ file exists in the architecture directory. So
 when building for ARM, [[arm/memset.s]] replaces
 [[port/memset.c]], but [[port/memcmp.c]] is used as-is.
+
+<<signatures of [[memxxx]] functions>>=
+extern  void*   memset(void*, int, ulong);
+extern  void*   memcpy(void*, void*, ulong);
+extern  void*   memmove(void*, void*, ulong);
+extern  int     memcmp(void*, void*, ulong);
+extern  void*   memchr(void*, int, ulong);
+@
 
 \section{Filling: [[memset()]]}
 
@@ -3378,38 +3381,40 @@ interface that programs use. The allocator organizes memory
 into arenas obtained from [[sbrk]], with free blocks managed
 in a binary tree for efficient best-fit allocation.
 
-%https://blog.learngoprogramming.com/a-visual-guide-to-golang-memory-allocator-from-ground-up-e132258453ed
+<<signatures memory management functions>>=
+extern  void*   malloc(ulong);
+extern  void    free(void*);
 
-%http://marek.vavrusa.com/c/memory/2015/02/20/memory/
+extern  void*   realloc(void*, ulong);
+extern  void*   mallocz(ulong, bool);
+extern  ulong   msize(void*);
+@
 
-%https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/
-
-% http://jamesgolick.com/2013/5/15/memory-allocators-101.html
-% http://jamesgolick.com/2013/5/19/how-tcmalloc-works.html
-
-% http://danluu.com/malloc-tutorial/
-
-%http://blog.httrack.com/blog/2014/04/05/a-story-of-realloc-and-laziness/
-
-%http://bitsquid.blogspot.com/2015/08/allocation-adventures-3-buddy-allocator.html
-
-%tiny: but uses calloc apparently, so it's cheating
-%https://github.com/NanXiao/umalloc
-
-%200 LOC:
-%http://www.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/libc/gen/malloc.c
-%250 LOC:
-%https://github.com/CCareaga/heap_allocator#shmall---simple-heap-memory-allocator
-
-% 4 basic allocators:
-%http://vicsydev.blogspot.com/2016/11/the-malloc-challenge.html
-
-%survey of allocators literature 78 pages:
-%http://www.cs.northwestern.edu/~pdinda/ics-s05/doc/dsa.pdf
+%last:
+% - https://silent-tower.net/projects/visual-overview-malloc
+% - https://blog.learngoprogramming.com/a-visual-guide-to-golang-memory-allocator-from-ground-up-e132258453ed
+% - http://marek.vavrusa.com/c/memory/2015/02/20/memory/
+% - https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/
+% - http://jamesgolick.com/2013/5/15/memory-allocators-101.html
+% - http://jamesgolick.com/2013/5/19/how-tcmalloc-works.html
+% - http://danluu.com/malloc-tutorial/
+% - http://blog.httrack.com/blog/2014/04/05/a-story-of-realloc-and-laziness/
+% - http://bitsquid.blogspot.com/2015/08/allocation-adventures-3-buddy-allocator.html
+% - tiny: but uses calloc apparently, so it's cheating
+%   https://github.com/NanXiao/umalloc
+% - 200 LOC:
+%   http://www.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/libc/gen/malloc.c
+% - 250 LOC:
+%   https://github.com/CCareaga/heap_allocator#shmall---simple-heap-memory-allocator
+% - 4 basic allocators:
+%   http://vicsydev.blogspot.com/2016/11/the-malloc-challenge.html
+% - survey of allocators literature 78 pages:
+%   http://www.cs.northwestern.edu/~pdinda/ics-s05/doc/dsa.pdf
 
 % many more allocators:
-% - jmalloc
-% - the one from google
+% - jemalloc
+% - the one from google tcmalloc?
+% - the one from microsoft minmalloc? mcmalloc?
 % - http://swapped.cc/#!/halloc
 % - talloc (in petitboot) from Samba
 % - rpmalloc a lock free allocator
@@ -3419,10 +3424,12 @@ in a binary tree for efficient best-fit allocation.
 \section{Syscall: [[brk()]]}
 % sysbrk()
 
-% brk not defined in syscall.h ??
+% brk not defined in syscall.h ?? not exported probably because not convenient
+% sbrk with 'end' better
 <<signatures memory syscall>>=
 // brk() ??
 @
+
 
 %yoann: say will not put assembly stub, very similar, but maybe explain semantic of the call. Maybe ASCII diagram of memory layout with text, data, bss, and heap, and stack and relation for sbrk, and maybe also edata, etext, eend
 %claude:
@@ -3828,6 +3835,92 @@ free(void *v)
 \section{Advanced topics}
 
 
+%******************************************************************************
+\chapter{Formatted Output}
+%******************************************************************************
+
+%last:
+% - https://github.com/wkoszek/mini_printf
+
+%alt: overloading and show as in haskell
+
+%yoann: printf style output, funndation because used everywhere, even in kernel!
+
+<<signatures [[xxxprint]] functions>>=
+extern  int     (*print)(char*, ...);
+extern  int     fprint(fdt, char*, ...);
+
+#pragma varargck    argpos  print       1
+#pragma varargck    argpos  fprint      2
+
+extern  int     sprint(char*, char*, ...);
+extern  char*   seprint(char*, char*, char*, ...);
+extern  int     snprint(char*, int, char*, ...);
+
+#pragma varargck    argpos  sprint      2
+#pragma varargck    argpos  seprint     3
+#pragma varargck    argpos  snprint     3
+
+extern  int fmtinstall(int, int (*)(Fmt*));
+@
+
+\section{Data structures: [[Fmt]]}
+
+%claude:
+\plan's [[Fmt]] structure is more powerful than \unix's
+[[printf]]: it supports user-defined format verbs via a
+callback mechanism, buffered output to any destination (not
+just file descriptors), and rune-aware formatting. The
+[[flush]] function pointer makes [[Fmt]] work like a closure:
+[[fprint]] flushes to a file descriptor, [[sprint]] flushes
+to a string, and [[Bprint]] flushes through a [[Biobuf]].
+The [[%r]] verb (print the current error string) is a \plan
+extension that replaces the separate [[perror]] pattern.
+
+<<type [[Fmt]]>>=
+struct Fmt {
+    uchar   runes;          /* output buffer is runes or chars? */
+
+    void    *start;         /* of buffer */
+    void    *to;            /* current place in the buffer */
+    void    *stop;          /* end of the buffer; overwritten if flush fails */
+
+    int     (*flush)(Fmt *);    /* called when to == stop */
+    void    *farg;          /* to make flush a closure */
+    int     nfmt;           /* num chars formatted so far */
+
+    va_list args;           /* args passed to dofmt */
+
+    int     r;          /* % format Rune */
+    int     width;
+    int     prec;
+    ulong   flags;
+};
+@
+
+<<type [[Fmt_flag]]>>=
+enum Fmt_flag {
+    FmtWidth    = 1,
+    FmtLeft     = FmtWidth << 1,
+    FmtPrec     = FmtLeft << 1,
+    FmtSharp    = FmtPrec << 1,
+    FmtSpace    = FmtSharp << 1,
+    FmtSign     = FmtSpace << 1,
+    FmtZero     = FmtSign << 1,
+    FmtUnsigned = FmtZero << 1,
+    FmtShort    = FmtUnsigned << 1,
+    FmtLong     = FmtShort << 1,
+    FmtVLong    = FmtLong << 1,
+    FmtComma    = FmtVLong << 1,
+    FmtByte     = FmtComma << 1,
+
+    FmtFlag     = FmtByte << 1
+};
+@
+
+\section{[[print()]]}
+
+
 %###############################################################################
 \part{Data Processing}
 %###############################################################################
@@ -3859,6 +3952,38 @@ strings (for Unicode). The plain C functions are the familiar
 provide the same operations on arrays of [[Rune]] values, plus
 the UTF-8 encoding/decoding functions that convert between the two.
 
+<<signatures of [[strxxx]] functions>>=
+extern  long    strlen(char*);
+extern  int     strcmp(char*, char*);
+extern  char*   strcpy(char*, char*);
+extern  char*   strchr(char*, int);
+extern  char*   strdup(char*);
+extern  char*   strstr(char*, char*);
+extern  char*   strcat(char*, char*);
+@
+
+<<signatures of [[runexxx]] functions>>=
+extern  long    runestrlen(Rune*);
+extern  int     runestrcmp(Rune*, Rune*);
+extern  Rune*   runestrcpy(Rune*, Rune*);
+extern  Rune*   runestrchr(Rune*, Rune);
+extern  Rune*   runestrdup(Rune*);
+extern  Rune*   runestrstr(Rune*, Rune*);
+extern  Rune*   runestrcat(Rune*, Rune*);
+@
+
+<<signatures rune conversion functions>>=
+extern  int chartorune(Rune*, char*);
+extern  int runetochar(char*, Rune*);
+@
+
+<<signatures [[utfxxx]] functions>>=
+extern  int     utflen(char*);
+extern  char*   utfrune(char*, long);
+extern  char*   utfrrune(char*, long);
+extern  char*   utfutf(char*, char*);
+@
+
 %\section{Conversions}
 % see Mathematics section and Parsing subsections
 
@@ -3883,6 +4008,10 @@ it searches for the null terminator and returns the distance.
 [<strcat()>] uses [[strchr()]] to find the end of the
 destination string, then calls [<strcpy()>]. This layering
 keeps each function minimal and avoids duplicating loop logic.
+
+
+
+
 
 <<function [[strlen]]>>=
 long
@@ -4595,66 +4724,6 @@ utfutf(char *s1, char *s2)
             return p;
     return 0;
 }
-@
-
-\section{Formatted Output}
-% printf style output
-
-%printf
-% https://github.com/wkoszek/mini_printf
-
-%alt: overloading and show as in haskell
-
-%claude:
-\plan's [[Fmt]] structure is more powerful than \unix's
-[[printf]]: it supports user-defined format verbs via a
-callback mechanism, buffered output to any destination (not
-just file descriptors), and rune-aware formatting. The
-[[flush]] function pointer makes [[Fmt]] work like a closure:
-[[fprint]] flushes to a file descriptor, [[sprint]] flushes
-to a string, and [[Bprint]] flushes through a [[Biobuf]].
-The [[%r]] verb (print the current error string) is a \plan
-extension that replaces the separate [[perror]] pattern.
-
-<<type [[Fmt]]>>=
-struct Fmt {
-    uchar   runes;          /* output buffer is runes or chars? */
-
-    void    *start;         /* of buffer */
-    void    *to;            /* current place in the buffer */
-    void    *stop;          /* end of the buffer; overwritten if flush fails */
-
-    int     (*flush)(Fmt *);    /* called when to == stop */
-    void    *farg;          /* to make flush a closure */
-    int     nfmt;           /* num chars formatted so far */
-
-    va_list args;           /* args passed to dofmt */
-
-    int     r;          /* % format Rune */
-    int     width;
-    int     prec;
-    ulong   flags;
-};
-@
-
-<<type [[Fmt_flag]]>>=
-enum Fmt_flag {
-    FmtWidth    = 1,
-    FmtLeft     = FmtWidth << 1,
-    FmtPrec     = FmtLeft << 1,
-    FmtSharp    = FmtPrec << 1,
-    FmtSpace    = FmtSharp << 1,
-    FmtSign     = FmtSpace << 1,
-    FmtZero     = FmtSign << 1,
-    FmtUnsigned = FmtZero << 1,
-    FmtShort    = FmtUnsigned << 1,
-    FmtLong     = FmtShort << 1,
-    FmtVLong    = FmtLong << 1,
-    FmtComma    = FmtVLong << 1,
-    FmtByte     = FmtComma << 1,
-
-    FmtFlag     = FmtByte << 1
-};
 @
 
 
@@ -5505,6 +5574,12 @@ A typical use looks like this:
   free(prog);
 \end{verbatim}
 
+<<signatures [[regxxxx]] functions>>=
+extern Reprog   *regcomp(char*);
+extern int  regexec(Reprog*, char*, Resub*, int);
+extern void regsub(char*, char*, int, Resub*, int);
+@
+
 \section{Data structures: [[Reprog]], [[Reinst]], [[Reclass]], [[Resub]]}
 
 %claude:
@@ -6135,7 +6210,11 @@ regerror(char *s)
 %******************************************************************************
 \label{chap:math}
 
-%http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
+%last:
+% - http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
+% - implementing cosine from scratch:
+%   https://austinhenley.com/blog/cosine.html
+
 
 % _div and _mod are in Assembler.nw appendix
 
@@ -6168,6 +6247,63 @@ root finding, interpolation, integration, and random number
 generation---see Press et al.'s {\em Numerical
 Recipes}~\cite{numerical-recipes}, which covers much of the
 same ground as this chapter but in far greater depth.
+
+<<signatures basic and rounding functions>>=
+extern  int     abs(int);
+extern  double  fabs(double);
+
+extern  double  floor(double);
+extern  double  ceil(double);
+extern  double  fmod(double, double);
+@
+
+<<signatures special float functions>>=
+extern  double  NaN(void);
+extern  double  Inf(int);
+
+extern  int     isNaN(double);
+extern  int     isInf(double, int);
+@
+
+<<signatures exponential and powers functions>>=
+extern  double  exp(double);
+extern  double  log(double);
+extern  double  log10(double);
+extern  double  pow(double, double);
+extern  double  pow10(int);
+extern  double  sqrt(double);
+@
+
+<<signatures trigonometric functions>>=
+extern  double  sin(double);
+extern  double  cos(double);
+extern  double  tan(double);
+
+extern  double  asin(double);
+extern  double  acos(double);
+extern  double  atan(double);
+extern  double  atan2(double, double);
+
+extern  double  sinh(double);
+extern  double  cosh(double);
+extern  double  tanh(double);
+@
+
+<<signatures number parsing functions>>=
+extern  int     atoi(char*);
+extern  double  atof(char*);
+extern  long    atol(char*);
+
+extern  double  strtod(char*, char**);
+extern  long    strtol(char*, char**, int);
+@
+
+<<signatures [[xxxrand]] functions>>=
+extern  int     rand(void);
+extern  int     nrand(int);
+
+extern  void    srand(long);
+@
 
 \section{Basics}
 
@@ -9988,6 +10124,20 @@ take an explicit offset, making them atomic for concurrent
 access), and file modes include \plan-specific bits like
 [[OEXCL]] (exclusive create) and [[ORCLOSE]] (remove on close).
 
+
+<<signatures file syscall wrapper>>=
+extern	long	read(fdt, void*, long);
+extern	long	write(fdt, void*, long);
+extern	long	preadv(fdt, IOchunk*, int, vlong);
+extern	long	pwritev(fdt, IOchunk*, int, vlong);
+extern	long	readv(fdt, IOchunk*, int);
+extern	long	writev(fdt, IOchunk*, int);
+extern	vlong	seek(fdt, vlong, int);
+// extern	int	fdflush(int);
+
+extern	long	readn(fdt, void*, long);
+@
+
 \section{Data structures}
 
 %claude:
@@ -11449,6 +11599,21 @@ The [[dirstat]]/[[dirwstat]] functions convert between the
 kernel's wire format and this C structure using [[convM2D]]
 and [[convD2M]].
 
+<<signatures directory syscall wrapper>>=
+extern  char*   getwd(char*, int);
+extern  char*   mktemp(char*);
+
+extern	Dir*	dirfstat(fdt);
+extern	Dir*	dirstat(char*);
+extern	int	dirfwstat(int, Dir*);
+extern	int	dirwstat(char*, Dir*);
+//
+extern	long	dirread(int, Dir**);
+extern	void	nulldir(Dir*);
+extern	long	dirreadall(int, Dir**);
+extern	int	access(char*, int); // ???
+@
+
 \section{Data structures: [[Dir]]}
 
 <<type [[DirEntry]]>>=
@@ -12034,6 +12199,16 @@ for sleeping and setting alarms, time-of-day functions, timezone
 handling, and conversions between epoch seconds and the [[Tm]]
 structure.
 
+<<signatures time functions>>=
+extern  long    time(long*);
+extern  vlong   nsec(void);
+
+extern  Tm*     gmtime(long);
+extern  Tm*     localtime(long);
+@
+
+% seen before Tm in core DS
+
 \section{Syscalls: [[sleep()]], [[alarm()]]}
 
 %claude:
@@ -12333,6 +12508,22 @@ enum Rfork_flags
 };
 @
 
+<<signatures process syscall wrapper>>=
+extern	int	fork(void);
+extern	int	execl(char*, ...);
+extern	Waitmsg*wait(void);
+extern	int	waitpid(void);
+extern	void	abort(void);
+@
+
+<<signatures other process syscall wrapper>>=
+extern	int	getpid(void);
+extern	int	getppid(void);
+
+extern  char*   getenv(char*);
+extern  int     putenv(char*, char*);
+@
+
 \section{Syscalls: [[rfork()]], [[exec()]], [[await()]], etc}
 
 %claude:
@@ -12513,6 +12704,13 @@ return descriptive error messages.
 % what is %r? last error code from libc function? a bit ugly
 % those == 0 are also ugly.
 
+
+<<signatures error syscall wrapper>>=
+extern	void	rerrstr(char*, uint);
+extern	void	werrstr(char*, ...);
+
+#pragma	varargck	argpos	werrstr	1
+@
 
 <<constant [[ERRMAX]]>>=
 #define	ERRMAX	128	/* max length of error string */
@@ -12762,6 +12960,15 @@ uid/gid pairs. [[getuser]] reads the current user name from
 In a distributed environment where different file servers may
 have different user databases, string-based identities are
 more flexible than numeric IDs.
+
+<<signatures security syscall>>=
+extern	int	fauth(int, char*);
+extern	int	fversion(int, int, char*, int);
+@
+
+<<signatures security syscall wrapper>>=
+extern  char*   getuser(void);
+@
 
 \section{[[getuser()]]}
 
@@ -13030,6 +13237,42 @@ safe for concurrent use.
 The higher-level abstractions (channels and cooperative threads)
 are built on top of these in [[libthread]], covered in a
 later chapter.
+
+<<signatures atomic functions>>=
+extern long    ainc(long*);
+extern long    adec(long*);
+@
+
+<<signatures [[Lock]] functions>>=
+extern  void    lock(Lock*);
+extern  void    unlock(Lock*);
+extern  int     canlock(Lock*);
+@
+
+<<signatures [[QLock]] functions>>=
+extern  void    qlock(QLock*);
+extern  void    qunlock(QLock*);
+extern  int     canqlock(QLock*);
+@
+
+<<signatures [[RWLock]] functions>>=
+extern  void    rlock(RWLock*);
+extern  void    runlock(RWLock*);
+extern  int     canrlock(RWLock*);
+extern  void    wlock(RWLock*);
+extern  void    wunlock(RWLock*);
+extern  int     canwlock(RWLock*);
+@
+
+<<signatures [[Rendez]] functions>>=
+extern  void    rsleep(Rendez*);    /* unlocks r->l, sleeps, locks r->l again */
+extern  int     rwakeup(Rendez*);
+@
+
+<<signatures private vars functions>>=
+extern  void**  privalloc(void);
+extern  void    privfree(void**);
+@
 
 \section{Syscalls: [[rendezvous()]], etc}
 
@@ -19067,6 +19310,13 @@ The [[NetConnInfo]] structure holds the parsed connection
 metadata (local/remote addresses, service names), all obtained
 by reading files under the connection directory.
 
+<<signatures networking functions>>=
+extern  int     dial(char*, char*, char*, int*);
+extern  int     accept(int, char*);
+extern  int     announce(char*, char*);
+extern  int     listen(char*, char*);
+@
+
 <<type [[NetConnInfo]]>>=
 struct NetConnInfo {
     char    *dir;       /* connection directory */
@@ -19661,6 +19911,15 @@ and the memory allocator's built-in corruption detection
 generates a segmentation fault to produce a core dump for
 post-mortem analysis with [[acid]] (see \book{Debugger}).
 
+<<signatures error and logging functions>>=
+extern  void    perror(char*);
+extern  void    sysfatal(char*, ...);
+extern  void    syslog(int, char*, char*, ...);
+
+#pragma varargck    argpos  sysfatal    1
+#pragma varargck    argpos  syslog  3
+@
+
 \section{Logging}
 
 %claude:
@@ -19816,6 +20075,10 @@ functions maintain a call tree of [[Plink]] nodes, recording
 the caller PC and invocation count. [[_profdump]] writes this
 data to a file that the [[prof]] command reads to produce
 human-readable profiles.
+
+<<signatures profiling functions>>=
+extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
+@
 
 <<type [[Prof]]>>=
 enum Profiling {

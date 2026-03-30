@@ -101,14 +101,16 @@ extern  void    notejmp(void*, jmp_buf, int);
 /*
  * malloc
  */
+/*s: signatures memory management functions */
 extern  void*   malloc(ulong);
 extern  void    free(void*);
 
-// less useful
-extern  void*   mallocz(ulong, bool);
-extern  void*   calloc(ulong, ulong);
 extern  void*   realloc(void*, ulong);
+extern  void*   mallocz(ulong, bool);
 extern  ulong   msize(void*);
+/*e: signatures memory management functions */
+// less useful
+extern  void*   calloc(ulong, ulong);
 extern  void*   mallocalign(ulong, ulong, long, ulong);
 
 // internals
@@ -116,6 +118,7 @@ extern  void    setmalloctag(void*, ulong);
 extern  void    setrealloctag(void*, ulong);
 extern  ulong   getmalloctag(void*);
 extern  ulong   getrealloctag(void*);
+
 extern  void*   malloctopoolblock(void*);
 
 //******************************************************************************
@@ -129,15 +132,15 @@ extern  void*   malloctopoolblock(void*);
 /*
  * mem routines
  */
+/*s: signatures of [[memxxx]] functions */
 extern  void*   memset(void*, int, ulong);
 extern  void*   memcpy(void*, void*, ulong);
+extern  void*   memmove(void*, void*, ulong);
 extern  int     memcmp(void*, void*, ulong);
 extern  void*   memchr(void*, int, ulong);
-
+/*e: signatures of [[memxxx]] functions */
 // less useful?
-extern  void*   memmove(void*, void*, ulong);
 extern  void*   memccpy(void*, void*, int, ulong);
-
 
 //----------------------------------------------------------------------------
 // Str ops
@@ -147,15 +150,15 @@ extern  void*   memccpy(void*, void*, int, ulong);
  * string routines
  */
 // memxxx equivalent, but with special handling for '\0' (no need pass ulong)
-extern  char*   strcpy(char*, char*);
-extern  int     strcmp(char*, char*);
-extern  char*   strchr(char*, int);
-extern  char*   strrchr(char*, int);
-
+/*s: signatures of [[strxxx]] functions */
 extern  long    strlen(char*);
+extern  int     strcmp(char*, char*);
+extern  char*   strcpy(char*, char*);
+extern  char*   strchr(char*, int);
 extern  char*   strdup(char*);
-extern  char*   strcat(char*, char*);
 extern  char*   strstr(char*, char*);
+extern  char*   strcat(char*, char*);
+/*e: signatures of [[strxxx]] functions */
 
 extern  int tolower(int);
 extern  int toupper(int);
@@ -165,6 +168,7 @@ extern  char*   strecpy(char*, char*, char*);
 extern  char*   strncat(char*, char*, long);
 extern  char*   strncpy(char*, char*, long);
 extern  int     strncmp(char*, char*, long);
+extern  char*   strrchr(char*, int);
 
 extern  char*   strpbrk(char*, char*);
 
@@ -209,17 +213,18 @@ enum
  */
 
 // strxxx equivalent for rune
-extern  Rune*   runestrcpy(Rune*, Rune*);
-extern  int     runestrcmp(Rune*, Rune*);
-extern  Rune*   runestrchr(Rune*, Rune);
-extern  Rune*   runestrrchr(Rune*, Rune);
-
+/*s: signatures of [[runexxx]] functions */
 extern  long    runestrlen(Rune*);
+extern  int     runestrcmp(Rune*, Rune*);
+extern  Rune*   runestrcpy(Rune*, Rune*);
+extern  Rune*   runestrchr(Rune*, Rune);
 extern  Rune*   runestrdup(Rune*);
-extern  Rune*   runestrcat(Rune*, Rune*);
 extern  Rune*   runestrstr(Rune*, Rune*);
+extern  Rune*   runestrcat(Rune*, Rune*);
+/*e: signatures of [[runexxx]] functions */
 
 // less useful
+extern  Rune*   runestrrchr(Rune*, Rune);
 extern  Rune*   runestrecpy(Rune*, Rune*, Rune*);
 extern  Rune*   runestrncpy(Rune*, Rune*, long);
 extern  Rune*   runestrncat(Rune*, Rune*, long);
@@ -250,17 +255,21 @@ extern  int fullrune(char*, int);
 //----------------------------------------------------------------------------
 
 // char <-> rune conversion
+/*s: signatures rune conversion functions */
 extern  int chartorune(Rune*, char*);
 extern  int runetochar(char*, Rune*);
+/*e: signatures rune conversion functions */
 
 // strxxx equivalent for utf
-extern  int utflen(char*);
+/*s: signatures [[utfxxx]] functions */
+extern  int     utflen(char*);
 extern  char*   utfrune(char*, long);
+extern  char*   utfrrune(char*, long);
+extern  char*   utfutf(char*, char*);
+/*e: signatures [[utfxxx]] functions */
 
 // less useful?
 extern  int utfnlen(char*, long);
-extern  char*   utfrrune(char*, long);
-extern  char*   utfutf(char*, char*);
 extern  char*   utfecpy(char*, char*, char*);
 
 
@@ -312,10 +321,24 @@ enum Fmt_flag {
 };
 /*e: type [[Fmt_flag]] */
 
-// pad: used to be just print()? but for cg transformed in a pointer func
+// pad: used to be just print() but for cg transformed in a pointer func
+/*s: signatures [[xxxprint]] functions */
 extern  int     (*print)(char*, ...);
-extern  int     sprint(char*, char*, ...);
 extern  int     fprint(fdt, char*, ...);
+
+#pragma varargck    argpos  print       1
+#pragma varargck    argpos  fprint      2
+
+extern  int     sprint(char*, char*, ...);
+extern  char*   seprint(char*, char*, char*, ...);
+extern  int     snprint(char*, int, char*, ...);
+
+#pragma varargck    argpos  sprint      2
+#pragma varargck    argpos  seprint     3
+#pragma varargck    argpos  snprint     3
+
+extern  int fmtinstall(int, int (*)(Fmt*));
+/*e: signatures [[xxxprint]] functions */
 
 extern  int     vfprint(fdt, char*, va_list);
 extern  char*   vseprint(char*, char*, char*, va_list);
@@ -323,8 +346,6 @@ extern  char*   vseprint(char*, char*, char*, va_list);
 extern  int     runesprint(Rune*, char*, ...);
 
 // less useful
-extern  char*   seprint(char*, char*, char*, ...);
-extern  int     snprint(char*, int, char*, ...);
 extern  char*   smprint(char*, ...);
 
 extern  int     vsnprint(char*, int, char*, va_list);
@@ -347,16 +368,11 @@ extern  int     runefmtstrinit(Fmt*);
 extern  Rune*   runefmtstrflush(Fmt*);
 
 #pragma varargck    argpos  fmtprint    2
-#pragma varargck    argpos  fprint      2
-#pragma varargck    argpos  print       1
 #pragma varargck    argpos  runeseprint 3
 #pragma varargck    argpos  runesmprint 1
 #pragma varargck    argpos  runesnprint 3
 #pragma varargck    argpos  runesprint  2
-#pragma varargck    argpos  seprint     3
 #pragma varargck    argpos  smprint     1
-#pragma varargck    argpos  snprint     3
-#pragma varargck    argpos  sprint      2
 
 // %d = decimal, o = octal, x = hexa, b = binary?
 #pragma varargck    type    "d" int
@@ -415,7 +431,6 @@ extern  Rune*   runefmtstrflush(Fmt*);
 #pragma varargck    flag    'h'
 
 
-extern  int fmtinstall(int, int (*)(Fmt*));
 
 extern  int dofmt(Fmt*, char*);
 extern  int dorfmt(Fmt*, Rune*);
@@ -424,6 +439,7 @@ extern  int fmtvprint(Fmt*, char*, va_list);
 extern  int fmtrune(Fmt*, int);
 extern  int fmtstrcpy(Fmt*, char*);
 extern  int fmtrunestrcpy(Fmt*, Rune*);
+
 /*
  * error string for %r
  * supplied on per os basis, not part of fmt library
@@ -443,7 +459,9 @@ extern  char*   quotestrdup(char*);
 extern  Rune*   quoterunestrdup(Rune*);
 extern  int     quotestrfmt(Fmt*);
 extern  int     quoterunestrfmt(Fmt*);
+
 extern  void    quotefmtinstall(void);
+
 extern  int     (*doquote)(int);
 extern  int     needsrcquote(int);
 
@@ -458,14 +476,16 @@ extern  int     needsrcquote(int);
 /*
  * random number
  */
-extern  void    srand(long);
-
+/*s: signatures [[xxxrand]] functions */
 extern  int     rand(void);
-extern  double  frand(void);
 extern  int     nrand(int);
-extern  ulong   truerand(void);         /* uses /dev/random */
+
+extern  void    srand(long);
+/*e: signatures [[xxxrand]] functions */
 
 // less useful
+extern  double  frand(void);
+extern  ulong   truerand(void);         /* uses /dev/random */
 extern  long    lrand(void);
 extern  long    lnrand(long);
 extern  ulong   ntruerand(ulong);       /* uses /dev/random */
@@ -477,31 +497,39 @@ extern  ulong   ntruerand(ulong);       /* uses /dev/random */
 /*
  * math
  */
+/*s: signatures basic and rounding functions */
 extern  int     abs(int);
+extern  double  fabs(double);
+
+extern  double  floor(double);
+extern  double  ceil(double);
+extern  double  fmod(double, double);
+/*e: signatures basic and rounding functions */
 //extern  long    labs(long);
+
 extern  double  frexp(double, int*);
 extern  double  ldexp(double, int);
 extern  double  modf(double, double*);
-extern  double  pow10(int);
 
 #define HUGE    3.4028234e38
-
+/*s: signatures special float functions */
 extern  double  NaN(void);
 extern  double  Inf(int);
+
 extern  int     isNaN(double);
 extern  int     isInf(double, int);
+/*e: signatures special float functions */
 
-extern  double  fabs(double);
-extern  double  floor(double);
-extern  double  ceil(double);
-
-extern  double  pow(double, double);
+/*s: signatures exponential and powers functions */
+extern  double  exp(double);
 extern  double  log(double);
 extern  double  log10(double);
-extern  double  exp(double);
+extern  double  pow(double, double);
+extern  double  pow10(int);
 extern  double  sqrt(double);
+/*e: signatures exponential and powers functions */
+
 extern  double  hypot(double, double);
-extern  double  fmod(double, double);
 
 //----------------------------------------------------------------------------
 // Trigonometry
@@ -510,28 +538,36 @@ extern  double  fmod(double, double);
 #define PIO2    1.570796326794896619231e0
 #define PI  (PIO2+PIO2)
 
+/*s: signatures trigonometric functions */
 extern  double  sin(double);
 extern  double  cos(double);
 extern  double  tan(double);
+
 extern  double  asin(double);
 extern  double  acos(double);
 extern  double  atan(double);
 extern  double  atan2(double, double);
+
 extern  double  sinh(double);
 extern  double  cosh(double);
 extern  double  tanh(double);
+/*e: signatures trigonometric functions */
 
 //----------------------------------------------------------------------------
 // Conversion
 //----------------------------------------------------------------------------
 
-extern  double  atof(char*);
+/*s: signatures number parsing functions */
 extern  int     atoi(char*);
+extern  double  atof(char*);
 extern  long    atol(char*);
-extern  vlong   atoll(char*);
 
 extern  double  strtod(char*, char**);
 extern  long    strtol(char*, char**, int);
+/*e: signatures number parsing functions */
+
+extern  vlong   atoll(char*);
+
 extern  ulong   strtoul(char*, char**, int);
 extern  vlong   strtoll(char*, char**, int);
 extern  uvlong  strtoull(char*, char**, int);
@@ -548,7 +584,6 @@ extern  void    setfcr(ulong);
 
 extern  ulong   umuldiv(ulong, ulong, ulong);
 extern  long    muldiv(long, long, long);
-
 
 //******************************************************************************
 // Misc
@@ -578,13 +613,15 @@ struct Tm {
 };
 /*e: type [[Tm]] */
 
+/*s: signatures time functions */
 extern  long    time(long*);
-
-extern  double  cputime(void);
 extern  vlong   nsec(void);
 
 extern  Tm*     gmtime(long);
 extern  Tm*     localtime(long);
+/*e: signatures time functions */
+
+extern  double  cputime(void);
 
 extern  long    tm2sec(Tm*);
 
@@ -637,12 +674,14 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
 extern  void    (*_assert)(char*);
 
+/*s: signatures error and logging functions */
 extern  void    perror(char*);
 extern  void    sysfatal(char*, ...);
 extern  void    syslog(int, char*, char*, ...);
 
 #pragma varargck    argpos  sysfatal    1
 #pragma varargck    argpos  syslog  3
+/*e: signatures error and logging functions */
 
 // useful for stack trace?
 extern  uintptr getcallerpc(void*);
@@ -654,6 +693,7 @@ extern  uintptr getcallerpc(void*);
 /*
  *  profiling
  */
+
 /*s: type [[Prof]] */
 enum Profiling {
     Profoff,        /* No profiling */
@@ -665,7 +705,9 @@ enum Profiling {
 }; /* what */
 /*e: type [[Prof]] */
 
+/*s: signatures profiling functions */
 extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
+/*e: signatures profiling functions */
 
 //******************************************************************************
 // Concurrency and communication
@@ -686,8 +728,10 @@ enum
 /*
  * atomic
  */
+/*s: signatures atomic functions */
 extern long    ainc(long*);
 extern long    adec(long*);
+/*e: signatures atomic functions */
 
 extern int     cas32(u32int*, u32int, u32int);
 extern int     casp(void**, void*, void*);
@@ -705,9 +749,11 @@ struct Lock {
 
 extern int  _tas(int*);
 
+/*s: signatures [[Lock]] functions */
 extern  void    lock(Lock*);
 extern  void    unlock(Lock*);
 extern  int     canlock(Lock*);
+/*e: signatures [[Lock]] functions */
 
 /*s: type [[QLp]] */
 struct QLp {
@@ -728,9 +774,11 @@ struct QLock {
 };
 /*e: type [[QLock]] */
 
+/*s: signatures [[QLock]] functions */
 extern  void    qlock(QLock*);
 extern  void    qunlock(QLock*);
 extern  int     canqlock(QLock*);
+/*e: signatures [[QLock]] functions */
 
 extern  void    _qlockinit(void* (*)(void*, void*));    /* called only by the thread library */
 
@@ -745,13 +793,14 @@ struct RWLock {
 };
 /*e: type [[RWLock]] */
 
-
+/*s: signatures [[RWLock]] functions */
 extern  void    rlock(RWLock*);
 extern  void    runlock(RWLock*);
 extern  int     canrlock(RWLock*);
 extern  void    wlock(RWLock*);
 extern  void    wunlock(RWLock*);
 extern  int     canwlock(RWLock*);
+/*e: signatures [[RWLock]] functions */
 
 /*s: type [[Rendez]] */
 struct Rendez {
@@ -762,14 +811,18 @@ struct Rendez {
 };
 /*e: type [[Rendez]] */
 
+/*s: signatures [[Rendez]] functions */
 extern  void    rsleep(Rendez*);    /* unlocks r->l, sleeps, locks r->l again */
 extern  int     rwakeup(Rendez*);
+/*e: signatures [[Rendez]] functions */
 
 extern  int     rwakeupall(Rendez*);
 
 // per-process private vars
+/*s: signatures private vars functions */
 extern  void**  privalloc(void);
 extern  void    privfree(void**);
+/*e: signatures private vars functions */
 
 //----------------------------------------------------------------------------
 // Network (/net wrappers)
@@ -779,12 +832,15 @@ extern  void    privfree(void**);
  *  network dialing
  */
 #define NETPATHLEN 40
+/*s: signatures networking functions */
+extern  int     dial(char*, char*, char*, int*);
 extern  int     accept(int, char*);
 extern  int     announce(char*, char*);
-extern  int     dial(char*, char*, char*, int*);
+extern  int     listen(char*, char*);
+/*e: signatures networking functions */
+
 extern  void    setnetmtpt(char*, int, char*);
 extern  int     hangup(int);
-extern  int     listen(char*, char*);
 extern  char*   netmkaddr(char*, char*, char*);
 extern  int     reject(int, char*, char*);
 

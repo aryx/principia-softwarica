@@ -69,12 +69,15 @@ struct Reprog{
 };
 /*e: struct [[Reprog]] */
 
+/*s: signatures [[regxxxx]] functions */
 extern Reprog   *regcomp(char*);
+extern int  regexec(Reprog*, char*, Resub*, int);
+extern void regsub(char*, char*, int, Resub*, int);
+/*e: signatures [[regxxxx]] functions */
+// other less important
 extern Reprog   *regcomplit(char*);
 extern Reprog   *regcompnl(char*);
 extern void regerror(char*);
-extern int  regexec(Reprog*, char*, Resub*, int);
-extern void regsub(char*, char*, int, Resub*, int);
 extern int  rregexec(Reprog*, Rune*, Resub*, int);
 extern void rregsub(Rune*, Rune*, int, Resub*, int);
 /*e: include/strings/regexp.h */
