@@ -7284,6 +7284,15 @@ case 'v':
 
 \subsection{Algorithm}
 
+%claude:
+[[drawflush]] copies the accumulated dirty rectangle
+([[flushrect]]) to the hardware via [[arch_flushmemscreen]],
+then resets [[flushrect]] to an empty (inverted) rectangle.
+[[dstflush]] is called after every drawing operation: if the
+destination is the screen (ID 0), it expands [[flushrect]]
+via [[combinerect]] to include the drawn area. [[combinerect]]
+computes the bounding box of two rectangles---a simple
+union that avoids tracking individual dirty regions.
 
 <<global [[flushrect]]>>=
 static  Rectangle   flushrect;
@@ -7665,6 +7674,16 @@ if(di == nil)
 @
 
 \subsection{Algorithm}
+
+%claude:
+The kernel maintains a global [[DName]] table in [[KDraw]]
+that maps string names to [[DImage]] pointers. [[drawlookupname]]
+does a linear scan comparing names; [[drawaddname]] appends a
+new entry (growing the array by one each time); [[drawdelname]]
+removes an entry by shifting the tail. A version counter
+([[vers]]) tracks changes so clients can detect when a named
+image has been replaced (e.g., after a window resize).
+
 % and [[DName]]
 
 % drawlookup seen before, return DImage given a client and id.
@@ -9254,6 +9273,17 @@ clipy(Memimage *img, int *y)
 
 \subsection{Additional data structures}
 
+%claude:
+The compositing engine uses three helper types. [[Dbuf]] is a
+scratch buffer holding one full scan line of pixel data for the
+source, mask, and destination. [[ParamDraw]] (alias [[Param]])
+packages the per-image state for a single scan line read or
+write: the byte pointer into the image data, the stride between
+lines, the pixel format, and the function pointer to call.
+[[Buffer]] is what [[readfn]] produces---a scan line's worth
+of color and alpha bytes, stored separately so the compositing
+formula can access them independently.
+
 \subsubsection{[[Dbuf]]}
 
 <<struct [[Dbuf]]>>=
@@ -9812,6 +9842,17 @@ greymaskread(Param *p, uchar *buf, int y)
 
 \subsection{Compositing pixels: [[alphacalcxx()]]}
 
+%claude:
+The [[alphacalc]] table dispatches to the right compositing
+function for each Porter-Duff operator. [[alphacalc11]]
+implements [[SoverD]] (``source over destination''), the
+most common case: for each pixel,
+$\text{dst} = \text{src} \times \text{mask\_alpha} + \text{dst} \times (1 - \text{src\_alpha} \times \text{mask\_alpha})$.
+The [[MUL]] macro does fixed-point multiplication in 0--255
+range with rounding: $\lfloor(x \times y + 128 + \lfloor(x \times y + 128)/256\rfloor) / 256\rfloor$.
+The suffix numbers (e.g., ``3679'') indicate which
+Porter-Duff operator indices share the same code.
+
 % I put in appendix or adv topics everything except SoverD alphacalc11?
 
 <<global [[alphacalc]]>>=
@@ -9999,6 +10040,13 @@ enum EndLine
 % But actually can by playing with the mask! or src!
 
 \subsection{Marshalling}
+
+%claude:
+The \verb+'L'+ command encodes two endpoints, two end-cap
+styles, a radius (half-thickness), the source image ID, and
+a source point. The end-cap style determines how line
+endpoints are drawn: [[Endsquare]] (flat), [[Enddisc]]
+(rounded), or [[Endarrow]] (with an arrowhead).
 
 <<function [[lineop]]>>=
 void
@@ -10213,6 +10261,13 @@ if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
 
 \subsubsection{Simple case: vertical or horizontal lines}
 
+%claude:
+Axis-aligned lines are cheap: they map directly to a filled
+rectangle. A vertical line from $(x,y_0)$ to $(x,y_1)$ with
+[[radius]] $r$ becomes the rectangle $[x-r,\, y_0] \times
+[x+r+1,\, y_1]$---no trigonometry, just a single
+[[memimagedraw]] call.
+
 %dead: was in comment, but they actually do that so was old comment probably
 %    /*
 %     * BUG: We should really really pick off purely horizontal and purely
@@ -10266,6 +10321,15 @@ dst->clipr = oclipr;
 
 
 \subsubsection{General case}
+
+%claude:
+For arbitrary (non-axis-aligned) thick lines, the algorithm
+builds a polygon from the line's outline: two parallel edges
+offset by the line's radius perpendicular to its direction,
+plus optional end caps. The perpendicular offset is computed
+using integer-scaled trigonometry ([[icossin2]] returns cosine
+and sine multiplied by [[ICOSSCALE]]=1024). The resulting
+polygon is then filled with [[_memfillpolysc]].
 
 <<[[_memimageline()]] other locals>>=
 int sin, cos, dx, dy, t;
@@ -10366,6 +10430,15 @@ the outline as a series of connected line segments.
 \subsection{API}
 
 % array of points!
+%claude:
+[[poly]] draws an outlined polygon by connecting the points
+with thick lines (each segment drawn with [[memline]]).
+[[fillpoly]] fills the interior using the scan-line fill
+algorithm. Both use [[dopoly]] for marshalling, which
+delta-encodes the vertex coordinates to save bandwidth
+(each coordinate is stored as a difference from the previous
+one via [[addcoord]]).
+
 <<function [[poly]]>>=
 void
 poly(Image *dst, Point *p, int np, int end0, int end1, int radius, Image *src, Point sp)
@@ -10648,6 +10721,15 @@ memfillpoly(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point s
 
 \subsubsection{[[Seg]]}
 
+%claude:
+A [[Seg]] represents one edge of the polygon during the
+scan-line fill. The fields [[num]], [[den]], [[dz]], and
+[[dzrem]] encode the edge's inverse slope as a fixed-point
+fraction---the X increment per scan line. The [[z]] and
+[[zerr]] fields track the current X intercept as the scan
+line sweeps downward, using Bresenham-style error
+accumulation to avoid floating point.
+
 <<struct [[Seg]]>>=
 struct Seg
 {
@@ -10758,6 +10840,18 @@ if(!fixshift)
 
 
 \subsubsection{[[xscan()]]}
+
+%claude:
+[[xscan]] is the heart of the scan-line polygon fill algorithm.
+It first normalizes all edges so that [[p0.y]] $\leq$ [[p1.y]]
+(removing horizontal edges), then sorts them by starting Y.
+For each scan line from top to bottom, it maintains an
+active-edge list sorted by current X intercept. Between
+each consecutive pair of active edges, [[fillline]] draws a
+horizontal span. After processing each scan line, active
+edges advance their X intercept by [[dz]] (with fractional
+error [[dzrem]]/[[den]]), and edges that have been fully
+traversed are removed.
 
 <<[[Seg]] other fields>>=
 long	num;
@@ -10981,6 +11075,15 @@ fillline(Memimage *dst, int xleft, int xright, int y, Memimage *src, Point p, in
 
 \subsubsection{Arithmetics}
 
+%claude:
+These helper functions implement floor-division and
+floor-modulo for signed integers, which C's \verb+/+ and
+\verb+%+ do not provide (C truncates toward zero). The
+scan-line algorithm needs floor semantics so that negative
+coordinates round correctly. [[smuldivmod]] computes
+$x \times y / z$ and the remainder using 64-bit intermediate
+arithmetic to avoid overflow.
+
 <<function [[mod]]>>=
 static long
 mod(long x, long y)
@@ -11028,6 +11131,14 @@ smuldivmod(long x, long y, long z, long *mod)
 
 \subsubsection{Sorting}
 
+%claude:
+The active-edge list must be sorted by X intercept ([[z]])
+at each scan line. [[zsort]] uses bubble sort for small
+lists (under 20 edges)---since edges move slowly between
+scan lines, the list is almost sorted already, making
+bubble sort nearly O(n). For larger lists, it falls back
+to [[qsort]]. [[ycompare]] sorts edges by starting Y
+coordinate for the initial edge table construction.
 
 <<function [[zsort]]>>=
 static void
@@ -11597,6 +11708,17 @@ if(ox & (1<<31)){
 
 \subsection{Algorithm}
 
+%claude:
+[[memarc]] draws partial ellipses using a wedge-mask technique:
+it draws a full ellipse into a temporary image, constructs a
+polygon ``wedge'' covering the desired angular range (from
+[[alpha]] to [[alpha+phi]]), and composites them together. The
+wedge polygon is built from the center point, the ray endpoints
+(computed with [[icossin]]), and any quadrant corners that fall
+within the arc's range. Angles are in degrees, measured
+counterclockwise from the positive X axis; the Y axis is flipped
+because screen coordinates grow downward.
+
 <<enum [[_anon_]]([[(lib_graphics/libmemdraw/arc.c)]])>>=
 /*
  * elarc(dst,c,a,b,t,src,sp,alpha,phi)
@@ -11804,6 +11926,16 @@ a typical program touching only ASCII never loads the
 CJK subfonts.
 
 \section{Font files formats}
+
+%claude:
+A font file (e.g., [[/lib/font/bit/lucm/unicode.font]])
+is a plain text file: the first line gives height and ascent,
+then each subsequent line maps a Unicode range ([[min max]])
+to a subfont filename. A subfont file stores a compressed
+glyph image followed by a header (character count, height,
+ascent) and a table of per-character metrics ([[Fontchar]]).
+Splitting into subfonts saves memory: a program that only
+uses Latin characters never loads CJK glyph images.
 
 % show content of unicode.font where see list of subfonts ranges.
 %  A subfont is a picture containing many chars! where spec of chars
@@ -12159,6 +12291,16 @@ if(font == nil){
 
 \subsection{Default subfont: [[getdefont()]]}
 
+%claude:
+[[getdefont]] creates the built-in default subfont from
+[[defontdata]]---a compiled-in byte array containing the
+Latin-1 character set (the Lucida Mono bitmap). It parses
+the image header, creates an [[Image]] via [[allocimage]]
+and [[loadimage]], then unpacks the [[Fontchar]] metrics
+with [[_unpackinfo]] and wraps everything in a [[Subfont]]
+via [[allocsubfont]]. This guarantees that even without
+any font files on disk, the system can display text.
+
 % defontdata in libdraw/defont.c, big, "lucm/latin1.9, in uncompressed form"
 
 <<global [[sizeofdefont]]>>=
@@ -12506,6 +12648,15 @@ encounters a rune for the first time.
 % Loading of subfonts (and of characters in the character cache)
 %   is done on demand when drawing text.
 
+%claude:
+[[buildfont]] parses the font description string: first line
+is ``height ascent'', then each subsequent line is
+``min max [offset] subfontname''. It allocates one [[Cachefont]]
+per line and stores the range/filename mapping. The cache
+image and character cache arrays are also allocated here,
+initially empty. [[freefont]] frees everything including
+all loaded subfonts and the cache image.
+
 % buf specify information about font, format with spacing and newline
 %  so code below does some limited parsing.
 % ctor of Font
@@ -12759,6 +12910,15 @@ naturally.
 
 \subsection{API}
 
+%claude:
+The public API consists of 16 thin wrappers around [[_string]],
+covering all combinations of: UTF-8 string vs [[Rune]] array,
+limited length vs unlimited, default compositing vs explicit
+[[Drawop]], and with or without a background fill color. All
+return the [[Point]] where the next character would begin, so
+consecutive calls can be chained:
+\verb+pt = string(dst, pt, src, sp, f, "hello")+.
+
 % variants = string vs rune, maxlen vs smaller n, SoverD vs op, nobg vs bg
 
 <<function [[string]]>>=
@@ -12905,6 +13065,17 @@ runestringnbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, in
 
 
 \subsection{Marshalling}
+
+%claude:
+[[_string]] processes the input in batches of up to [[Max]]=100
+characters at a time. For each batch, it calls [[cachechars]]
+to ensure the glyphs are loaded in the kernel's font cache
+and to get back an array of cache indices ([[cbuf]]). It then
+sends an \verb+'s'+ (or \verb+'x'+ for background-fill variant)
+command containing the destination, source, font cache image ID,
+starting point (with [[ascent]] added), clip rectangle, and the
+list of cache indices. The kernel will use these indices to look
+up glyph positions in the cache and draw them consecutively.
 
 <<constant [[Max]]>>=
 Max = 100
@@ -13063,6 +13234,13 @@ if(b == nil){
 
 \subsection{Unmarshalling}
 
+%claude:
+The kernel's \verb+'s'+ handler iterates over the cache
+index array and calls [[drawchar]] for each glyph. For the
+\verb+'x'+ (background) variant, it first computes the total
+width by summing all [[fchar[ci].width]] values and fills
+a background rectangle, then draws the glyphs on top.
+
 <<[[drawmesg()]] locals>>=
 DImage *font;
 Memimage  *bg;
@@ -13171,6 +13349,18 @@ if(ci<0 || ci>=font->nfchar){
 
 
 \subsection{Algorithm}
+
+%claude:
+[[drawchar]] renders a single glyph from the font cache image.
+It computes the destination rectangle from the character's
+position [[p]], its left bearing ([[fc->left]]), and the glyph
+bitmap's height. The font cache image serves as a mask: the
+glyph pixels are white (opaque) where ink should appear, so
+[[memdraw(dst, r, src, sp, font->image, glyph_origin, op)]]
+composites the source color through the glyph shape. The
+function advances [[p.x]] by [[fc->width]] (the character's
+advance width, which may differ from the glyph's pixel width
+due to side bearings).
 
 % note that font below is actually a DImage!
 % it has a fchar field that is populated by cachechars and loadchar
@@ -13410,6 +13600,17 @@ freeimage(f->cacheimage);
 
 \subsection{[[Cacheinfo]]}
 
+%claude:
+Each [[Cacheinfo]] entry records a rune's position in the
+font cache image: [[x]] is the left pixel column, [[width]]
+is the character advance, and [[left]] is the left bearing
+offset. The [[age]] field implements LRU eviction---it is
+set to [[Font.age]] on each access. The initial cache has
+[[NFCACHE]]=64 entries plus [[NFLOOK]]=5 extra slots for
+linear probing, enough for ASCII text. It grows
+dynamically up to [[MAXFCACHE]]=1024 when more code points
+are needed (e.g., CJK text).
+
 <<[[Font]] character cache fields>>=
 // growing_hash<Rune, Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
 Cacheinfo   *cache;
@@ -13475,6 +13676,17 @@ free(f->cache);
 
 
 \subsection{Loading characters: [[cachechars()]]}
+
+%claude:
+[[cachechars]] processes a string and fills [[cp]] with cache
+indices. For each rune, it hashes into [[Font.cache]] with
+hash function $17 \times r \bmod (\text{ncache}-\text{NFLOOK})$
+and probes up to [[NFLOOK]]=5 consecutive slots. On a hit, it
+records the age and index. On a miss, it calls [[loadchar]]
+to load the glyph from the subfont into the cache image and
+kernel-side [[DImage.fchar]] array. If the subfont isn't loaded
+yet, [[cachechars]] returns 0 and sets [[*subfontname]]---the
+caller ([[_string]]) then loads the subfont and retries.
 
 % fill cp with index to char in subfont.
 % return number of characters processed (or 0)
@@ -13581,6 +13793,19 @@ if(ss)
 
 
 \subsection{Loading one new character: [[loadchar()]]}
+
+%claude:
+[[loadchar]] handles a cache miss: given a rune [[r]], it
+searches the [[Cachefont]] array for the range containing
+that rune, finds (or loads) the corresponding [[Subfont]],
+extracts the glyph metrics from [[Fontchar]], and sends a
+\verb+'l'+ command to the kernel to copy the glyph bitmap
+into the font cache image at position [[h * f->width]].
+If the rune falls outside all ranges, it falls back to the
+replacement character ([[PJW]]=NUL). If the subfont hasn't
+been loaded yet, [[loadchar]] returns $-1$ and stores the
+subfont filename in [[*subfontname]]---the caller will
+load it and retry.
 
 <<[[cachechars()]] other locals>>=
 int ld;
@@ -13864,6 +14089,20 @@ if(ci >= font->nfchar)
 
 
 \subsection{Resizing the character cache: [[fontresize()]]}
+
+%claude:
+[[fontresize]] is triggered in two situations: when a newly
+loaded glyph is wider or deeper than the current cache image
+can accommodate, or when the LRU eviction is kicking out
+too-recent entries (meaning the cache is too small). It
+allocates a new cache image with the updated dimensions,
+sends an \verb+'i'+ (font init) command to the kernel to set
+up the corresponding [[DImage.fchar]] array, frees the old
+image, and zeroes the entire cache---all previously cached
+glyphs must be reloaded. This is expensive but rare: it
+typically happens only once, when the first non-ASCII
+subfont (with wider or deeper glyphs) is loaded.
+
 % misleading function name
 
 % 2 reasons: 
@@ -14091,6 +14330,15 @@ if(font->fchar == nil)
 
 \subsection{[[agefont()]]}
 
+%claude:
+[[agefont]] increments the font's global age counter after
+each batch of text operations. When the counter reaches
+65536, it renormalizes: all ages are divided by 4 (via shift),
+and subfonts that haven't been used recently (age $<$
+[[SUBFAGE]]) are freed to reclaim memory. This prevents
+counter overflow while preserving the relative ordering
+of recently used entries.
+
 % _string -> <>
 <<function [[agefont]]>>=
 void
@@ -14211,6 +14459,17 @@ free(f->subf);
 
 
 \subsection{Subfont loading}
+
+%claude:
+When [[loadchar]] can't find a subfont in the cache, it
+either evicts the oldest entry (if it's old enough) or grows
+the [[subf]] array by [[DSUBF]]=4 slots. It then calls
+[[cf2subfont]] to resolve the [[Cachefont]]'s filename to
+an actual [[Subfont]] via [[lookupsubfont]]. If the subfont
+file hasn't been read yet, [[lookupsubfont]] returns nil, and
+control returns to [[_string]] which calls [[_getsubfont]]
+(opening and reading the subfont file from disk) to populate
+the global subfont table.
 
 \subsubsection{Subfont loading part 1}
 
@@ -14601,6 +14860,15 @@ uninstallsubfont(Subfont *subfont)
 
 \subsection{Subfont IO}
 
+%claude:
+A subfont file contains a compressed glyph image followed by
+a header (3 integers: number of chars, height, ascent) and
+an array of per-character metrics. [[readsubfont]] reads
+the image with [[readimage]], parses the header, unpacks
+the [[Fontchar]] array, and wraps everything in a [[Subfont]].
+[[writesubfont]] does the reverse for tools that generate
+font files.
+
 \subsubsection{Reading a subfont}
 
 % subfont format? image, then fontchar header
@@ -14798,17 +15066,14 @@ decompressing them.
 
 \subsection{API}
 
-% assumes already done allocimage. Image format then is really just
-% a series of words for its pixels (format specified in chan of Image).
-
-% send multiple lines at a time. 
-% note that data contain all lines one after another of rectangle
-% specified in r.
-% send in chunks because of buffer when write in /dev/draw/x/data
-% (bufsize)
-
-% can be used to load parts of an image (see readimage
-% which calls loadimage multiple time)
+%claude:
+[[loadimage]] copies raw pixel data from a user buffer into an
+already-allocated server image. It splits the data into
+horizontal strips that fit within the display's command buffer
+([[bufsize]] minus header overhead), sending one \verb+'y'+
+command per strip. The caller provides a rectangle and a byte
+array containing [[bytesperline(r) * Dy(r)]] bytes of pixel
+data in the image's native format.
 
 % getdefont | readimage | ...  -> <>
 <<function [[loadimage]]>>=
@@ -14945,6 +15210,15 @@ if(y < 0)
 
 \subsection{Algorithm}
 
+%claude:
+[[memload]] handles two cases: for plain images, it delegates
+to [[loadmemimage]] which copies pixel data line by line into
+the [[Memimage]]'s buffer using [[memmove]]. For layered
+images (windows), it must save the cursor, load into the
+backing store, and then update the visible screen. If the
+data is compressed ([[iscompressed]]), it uses
+[[cloadmemimage]] instead, which decompresses on the fly.
+
 <<function [[memload]]>>=
 errorneg1
 memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
@@ -15031,6 +15305,14 @@ to stay within the buffer size.
 % and then read data from /dev/draw/x/data
 
 \subsection{API}
+
+%claude:
+[[unloadimage]] reads pixel data from a server-held image
+into a user buffer. It works in horizontal strips: for each
+strip, it writes an \verb+'r'+ (read) command with the image
+ID and sub-rectangle, flushes, then reads the pixel data back
+from [[/dev/draw/x/data]]. The data arrives in the image's
+native pixel format.
 
 % this time data is an OUT parameter
 
@@ -15202,6 +15484,14 @@ if(n < cl->nreaddata)
 
 
 \subsection{Algorithm}
+
+%claude:
+[[memunload]] copies pixel data from a [[Memimage]] into a
+user buffer, line by line. For layered images,
+[[unloadmemimage]] first hides the software cursor, then
+reads through the layer stack to get the visible pixels
+(which may come partly from the backing store and partly
+from layers in front).
 
 <<function [[memunload]]>>=
 errorneg1
@@ -15628,6 +15918,17 @@ event sources without blocking.
 % But then synchrone ... annoying. Need another model!
 
 \subsection{Additional data structures}
+
+%claude:
+[[Mouse]] holds one snapshot: coordinates ([[xy]]), a button
+bitmask (1=left, 2=middle, 4=right), and a millisecond
+timestamp. [[Mousectl]] wraps it with the file descriptor
+to [[/dev/mouse]], a pointer to the display [[Image]]
+(so [[readmouse]] can flush drawing before blocking), and
+a [[Channel]] for asynchronous delivery. The [[pid]] field
+tracks the I/O slave process that continuously reads
+[[/dev/mouse]] and sends events on the channel.
+
 % [[mouse.h]] interface
 % user side
 
@@ -15722,6 +16023,14 @@ Channel	*c;			/* chan(Mouse) */
 
 \subsection{Additional (user) initializations: [[initmouse()]]}
 
+%claude:
+[[initmouse]] opens [[/dev/mouse]] (or the specified file),
+creates a [[Channel]] for mouse events, and spawns a
+dedicated I/O thread ([[_ioproc]]) that loops reading mouse
+events from the device file and sending them on the channel.
+The caller then uses \verb+recv(mc->c, &m)+ or [[alt]] to
+receive mouse events without blocking.
+
 % in rio.c or trace.c: initmouse(nil, view)
 
 % user program -> <>
@@ -15770,6 +16079,16 @@ if(mc->mfd < 0){
 
 
 \subsection{IO process and communication channels}
+
+%claude:
+The I/O process ([[_ioproc]]) runs in a separate process
+(not a thread, because Plan~9 threads block on I/O). It
+loops reading [[/dev/mouse]], parsing the ASCII-formatted
+event (character code, x, y, buttons, timestamp), and
+sending the result on [[mc->c]]. Using a channel with
+zero buffering means the sender blocks until the application
+calls [[recv]]---this provides flow control and ensures the
+application always sees the latest mouse position.
 
 % not to confuse with Color channels ...
 <<[[initmouse()]] set channels>>=
@@ -15892,6 +16211,14 @@ if(mc == nil)
 
 
 \subsection{API}
+
+%claude:
+[[readmouse]] is the synchronous wrapper: it flushes pending
+drawing commands (so the display is up to date before
+blocking), then calls [[recv]] to wait for the next mouse
+event. [[moveto]] writes new coordinates to [[/dev/mouse]]
+to warp the cursor. For non-blocking use, applications call
+[[alt]] with [[mc->c]] alongside keyboard and other channels.
 
 % synchrone
 % for choice, use alt() with mc->c in the list of Alt.
@@ -16161,7 +16488,18 @@ VGAcur swcursor =
 
 
 \subsection{Additionnal (kernel) initializations}
-\t look Raspberry, can factorize stuff in a swcursor.c? 
+
+%claude:
+The software cursor is initialized after the screen size is
+set. [[swcursorinit]] allocates four [[Memimage]]s: [[swback]]
+(to save the pixels under the cursor), [[swimg]] and
+[[swmask]] (the cursor's shape and transparency),
+and working copies [[swimg1]]/[[swmask1]]. [[swload]]
+converts the 16x16 two-plane [[Cursor]] bitmap into these
+images. The initialization is re-done whenever [[screensize]]
+changes (e.g., a resolution switch).
+
+\t look Raspberry, can factorize stuff in a swcursor.c?
 
 % who set vgascreen.cur to swcursor?
 
@@ -16664,6 +17002,18 @@ struct	Keyboardctl
 % 20 so buffer of 20 Rune?
 
 \subsection{Additional (user) initializations: [[initkeyboard()]]}
+
+%claude:
+[[initkeyboard]] opens [[/dev/cons]] and [[/dev/consctl]],
+puts the console into raw mode (so each keystroke is
+delivered immediately rather than waiting for a newline),
+creates a buffered channel of 20 runes, and spawns a
+dedicated I/O thread ([[_ioproc]]) that reads raw bytes
+from [[/dev/cons]], converts them to runes via
+[[chartorune]], and sends them on the channel. The
+application reads keystrokes asynchronously with
+\verb+recv(kc->c, &r)+ or uses [[alt]] to multiplex
+keyboard and mouse input.
 
 <<function [[initkeyboard]]>>=
 Keyboardctl*
@@ -17408,6 +17758,12 @@ if(s == nil)
 
 \subsection{Marshalling}
 
+%claude:
+The \verb+'A'+ command creates a [[Screen]] on the server,
+passing the base image ID, fill image ID, and a public
+flag. [[freescreen]] sends an \verb+'F'+ command. Screen
+IDs are allocated client-side with a simple counter.
+
 <<global [[screenid]]>>=
 static int	screenid;
 @
@@ -17483,6 +17839,13 @@ Error:
 
 
 \subsection{Unmarshalling}
+
+%claude:
+The kernel's \verb+'A'+ handler resolves the base image and
+fill image [[DImage]]s, then calls [[drawinstallscreen]] to
+create a [[DScreen]] (wrapping a [[Memscreen]]) and link it
+into the global [[dscreen]] list. Public screens are stored
+in [[sdraw]] so other clients can find them.
 
 <<[[drawmesg()]] locals>>=
 DImage *dsrc;
@@ -17586,6 +17949,16 @@ if(dscrn->screen->image->chan != BGLONG(a+5))
 % no really algorithm, it's just about malloc.
 
 \subsection{[[Client]] and [[Memscreen]] connection: [[CScreen]]}
+
+%claude:
+[[drawinstallscreen]] creates the link between a [[Client]]
+and a [[Memscreen]]: it allocates a [[CScreen]] (per-client
+reference to a screen), a [[DScreen]] (kernel wrapper with
+the base and fill [[DImage]] pointers), and the [[Memscreen]]
+itself. For public screens, the [[DScreen]] is shared across
+clients; for private ones, each client gets its own.
+[[drawuninstallscreen]] decrements reference counts and frees
+everything when the last reference is released.
 
 % a bit like drawinstall which installs an image, except here it's a screen.
 % replaced CScreen list with Dimage hash in client.
@@ -17784,6 +18157,15 @@ backing-store image ([[save]]) for the hidden portions.
 
 \subsection{API}
 
+%claude:
+[[allocwindow]] creates a new window (layer) on a [[Screen]].
+It marshalls an \verb+'A'+ command with the screen ID, refresh
+method, and the window's rectangle and fill color. On the
+kernel side, [[memlalloc]] allocates the [[Memlayer]] and
+inserts the window at the top of the layer stack, then
+[[memlsetclear]] fills the backing store with the background
+color.
+
 <<function [[allocwindow]]>>=
 Image*
 allocwindow(Screen *s, Rectangle r, int ref, rgba val)
@@ -17860,6 +18242,14 @@ if(i->screen){
 
 \subsection{Unmarshalling}
 
+%claude:
+The \verb+'A'+ (allocate window) command creates a
+[[Memimage]] with an attached [[Memlayer]] on the specified
+screen. It also installs a [[DImage]] for the window in
+the client's hash table with a backlink to the [[DScreen]].
+When the window is freed, both the [[DImage]] and its
+layer are cleaned up.
+
 <<[[drawmesg()]] locals>>=
 Memscreen *scrn;
 Memimage *l;
@@ -17908,6 +18298,17 @@ if(l == nil)
 % drawuninstall (which will call drawfreedimage which calls memldelete)
 
 \subsection{Algorithm}
+
+%claude:
+[[memlalloc]] is the core layer allocator. It creates a
+[[Memimage]] with the screen's pixel format, allocates a
+[[Memlayer]] linking it to the [[Memscreen]], and optionally
+allocates a [[save]] image (for [[Refbackup]] refresh mode)
+to preserve pixels hidden by other layers. The new layer
+is inserted at the front of the screen's doubly-linked list
+(in front of all existing layers). After allocation,
+[[memlsetclear]] fills the backing store with the
+background color.
 
 % ctor Memlayer
 % return a Memimage! (with attached layer)
@@ -18355,6 +18756,17 @@ for(j=1; j<nw; j++)
 
 \subsubsection{To front}
 
+%claude:
+Moving a layer to the front means relinking it in the
+doubly-linked list so it becomes [[screen->frontmost]].
+But the real work is the pixel shuffling: [[memlhide]]
+saves the pixels under the layer's old position (where other
+layers may now be exposed), and [[memlexpose]] paints the
+layer's saved pixels onto the screen at the front. For
+efficiency, [[memltofrontn]] can move multiple layers at
+once (used by [[rio]] to raise a window and all its
+children).
+
 % so first entry in array will be at the end the first one
 <<function [[memltofrontn]]>>=
 void
@@ -18496,6 +18908,12 @@ _memltofrontfill(Memimage *i, bool fill)
 
 \subsubsection{To rear}
 
+%claude:
+Moving a layer to the rear is the inverse: [[memlhide]]
+saves its visible pixels into the backing store, then the
+layer is relinked at [[screen->rearmost]]. The layers that
+were behind it are now exposed and their saved pixels are
+painted onto the screen via [[memlexpose]].
 
 <<function [[memltorearn]]>>=
 void
@@ -18599,6 +19017,15 @@ pixels match what was last drawn.
 
 \subsection{[[memlhide()]]}
 
+%claude:
+[[memlhide]] saves the visible pixels of a layer's rectangle
+into its backing store ([[save]] image) before the layer is
+moved or obscured. It walks the layer stack from front to
+back, clipping against each layer in front to find the
+actually-visible portions, and copies those pixels from the
+screen to [[save]]. This is the ``save'' half of the
+backing-store mechanism.
+
 % rectangle in screen coordinate!
 <<function [[memlhide]]>>=
 void
@@ -18659,6 +19086,14 @@ lhideop(Memimage *src, Rectangle screenr, Rectangle clipr, void *etc, bool insav
 %ocaml: Logical of Pt | Screen of Pt
 
 \subsection{[[memlexpose()]]}
+
+%claude:
+[[memlexpose]] is the inverse of [[memlhide]]: it paints
+the layer's saved pixels from the backing store onto the
+screen, restoring the image that was previously hidden.
+It uses [[lexposeop]] which walks the layer stack to
+determine which portions are actually visible (not covered
+by layers in front) and draws only those.
 
 <<function [[memlexpose]]>>=
 void
@@ -19129,6 +19564,14 @@ if(sl){
 
 \subsubsection{Shortcuts}
 
+%claude:
+Several fast paths avoid the full layer-walking machinery.
+If the destination layer is fully visible (nothing in front
+of it), drawing goes directly to the screen with a simple
+coordinate translation ([[delta]]). If both source and
+destination are on the same screen and neither has
+overlapping layers, a direct [[memimagedraw]] suffices.
+
 <<[[memdraw()]] if dst is fully visible can optimize>>=
 Clearlayer:
 if(dl!=nil && dl->clear){
@@ -19228,6 +19671,17 @@ if(dl->clear)
 
 
 \subsubsection{[[_ldrawop()]]}
+
+%claude:
+[[_ldrawop]] handles the case where the destination is
+a partially obscured layer. It draws into the layer's
+backing store first, then selectively copies to the screen
+only the portions that are actually visible (not covered
+by layers in front). [[_memlayerop]] does the heavy
+lifting: it walks the layer stack from front to back,
+clipping the destination rectangle against each overlapping
+layer, and uses recursive calls ([[RECUR]]) to handle
+the remaining visible sub-rectangles.
 
 %trans: back to general case when dst is obscured window.
 % src is a simple image, coords have been converted (r is a screenr)
@@ -19493,6 +19947,15 @@ _layerop(
 
 
 \subsection{Drawing lines on overlapping layers}
+
+%claude:
+Drawing lines on layered images requires the same
+clip-and-recurse logic as rectangles: [[llineop]] clips
+the line to the visible portion of the destination layer,
+draws it on the screen, and updates the backing store.
+Since lines can't be split into sub-rectangles as easily
+as rectangles, the line is drawn in full and then the
+affected screen area is handled via [[_memlayerop]].
 
 <<[[_memline()]] sanity check no src layer>>=
 if(src->layer)	/* can't draw line with layered source */
@@ -19902,6 +20365,16 @@ getwindow(Display *d, int ref)
 % call getwindow() to get your new 'view'.
 
 \subsection{[[gengetwindow()]]}
+
+%claude:
+[[gengetwindow]] reads [[/dev/winname]] to learn the name of
+the application's window image (e.g., ``noborder.screen.1''),
+then retrieves it via [[namedimage]]. It allocates a
+[[Screen]] on top of this image and creates a window within
+it (with the border inset). If no windowing system is running,
+it falls back to using [[display->image]] directly. After a
+resize event, [[getwindow]] is called again to reattach to
+the resized window image.
 
 % use /dev/winname and named image! way to know from rio
 % which window I'm associated with (but could cheat?)
@@ -20823,6 +21296,12 @@ return ndata;
 
 \section{8-bits images}
 
+%claude:
+8-bit images (e.g., [[CMAP8]]) store one pixel per byte.
+The [[memset]] fast path can fill entire rows with a single
+call, and the [[chardraw]] glyph renderer can copy bytes
+directly without bit manipulation.
+
 <<[[memoptdraw()]] when condition for memset, switch depth of dst cases>>=
 case 8:
     for(y=0; y < dy; y++, dp += dwid)
@@ -20859,6 +21338,13 @@ case 8:
 
 
 \section{16-bits images}
+
+%claude:
+16-bit images (e.g., [[RGB16]] with 5/6/5 bits for R/G/B)
+are the default on the Raspberry Pi. They pack two bytes
+per pixel in little-endian order. The [[memset]] fast path
+writes one 16-bit value per pixel, and [[pixelbits]] reads
+two bytes.
 
 % called high color
 
@@ -20913,6 +21399,12 @@ case 16:
 
 
 \section{24-bits images}
+
+%claude:
+24-bit images store 3 bytes per pixel (RGB without alpha).
+They are awkward because 3 is not a power of two---the
+memset fast path must write 3 bytes at a time, and
+pointer arithmetic can't use simple shifts.
 
 % called true color
 
@@ -21104,6 +21596,16 @@ void _memmkcmap(void){}
 @
 
 \subsection{Conversions}
+
+%claude:
+Color-mapped images require lookup tables to convert between
+palette indices and RGB. [[cmap2rgb]] maps a palette index to
+an (R,G,B) triple; [[rgb2cmap]] finds the closest palette
+index for a given RGB value using a precomputed reverse lookup
+table. The [[imgtorgba]] and [[rgbatoimg]] functions use these
+tables when the channel type is [[CMap]]. Sub-byte channels
+(less than 8 bits) are replicated to fill 8 bits using the
+[[replbit]] table.
 
 <<[[imgtorgba()]] other locals>>=
 byte *p;
@@ -21707,6 +22209,14 @@ membrush(int radius)
 
 \subsubsection{Arrows}
 
+%claude:
+Arrow line ends are drawn as filled triangles at the
+endpoint. The [[ARROW]] macro packs three parameters
+(arrow length, base width, opening angle) into the end-cap
+integer. [[arrowend]] computes the three vertices of the
+arrowhead triangle from the line direction and the arrow
+parameters, then fills it with [[_memfillpolysc]].
+
 \paragraph{[[ARROW()]]}
 
 <<function [[ARROW]]>>=
@@ -22030,6 +22540,14 @@ appendpt(Plist *l, Point p)
 @
 
 \subsubsection{API}
+
+%claude:
+The Bezier API mirrors the polygon API: [[bezier]] draws
+a cubic Bezier outline through four control points,
+[[fillbezier]] fills the region. B-splines ([[bezspline]])
+are converted to a sequence of Bezier segments. All variants
+work by computing a point list via recursive subdivision,
+then drawing it as a polygon.
 
 <<function [[bezier]]>>=
 error0
@@ -22385,6 +22903,14 @@ return b;
 
 
 \subsubsection{[[mktables]]}
+
+%claude:
+[[mktables]] precomputes the [[replbit]] lookup tables used
+to expand sub-byte pixel values to 8 bits. For example,
+a 1-bit pixel value 1 is replicated to 0xFF (all bits set),
+and a 2-bit value 3 becomes 0xFF. This avoids repeated
+shift-and-OR operations in the inner loops of the
+pixel I/O functions.
 
 <<[[memimageinit()]] initializations>>=
 mktables();
@@ -22888,6 +23414,15 @@ enum
 
 \subsection{Colors}
 
+%claude:
+The menu uses four lazily-allocated color images:
+[[back]] (pale yellow background), [[high]] (dark yellow
+highlight), [[bord]] (yellow-green border), and [[text]]
+(black foreground). [[allocimagemix]] creates dithered
+colors by alternating pixels of two colors---a simple
+way to get in-between shades on displays that lack full
+color depth.
+
 <<global [[back]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
 static	Image	*back;
 @
@@ -23000,6 +23535,17 @@ if(b == nil){
 %ocaml: finalize and exn
 
 \subsection{[[menuhits()]]}
+
+%claude:
+[[menuhit]] implements the complete popup menu interaction
+in a single synchronous function. It saves the screen area
+under the menu, draws the menu items, enters a tracking loop
+that reads mouse events via [[readmouse]], highlights items
+as the cursor moves over them, and returns the selected item
+index when the button is released ($-1$ if none). The saved
+screen area is restored before returning. If the menu doesn't
+fit on screen, the rectangle is adjusted to stay within view
+bounds.
 
 % entry point
 <<function [[menuhit]]>>=
@@ -23374,6 +23920,14 @@ menu->lasthit = lasti+off;
 
 \subsection{Scrolling menus}
 
+%claude:
+When a menu has more items than can fit on screen, scroll
+arrows appear at the top and bottom. The [[scrollr]]
+rectangle contains a scrollbar that shows the visible
+portion. Clicking in the scrollbar area jumps to that
+position in the item list; the menu is repainted with the
+new offset.
+
 <<[[menuhit.c]] constants>>=
 Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
 Nscroll = 20,		/* number entries in scrolling part */
@@ -23667,6 +24221,15 @@ with [[alt]] is preferred for new code.
 
 \subsection{Data structures}
 
+%claude:
+The event system uses a pipe-based architecture. Each event
+source (mouse, keyboard, or custom file descriptor) gets a
+``slave'' process that reads from the device and writes an
+[[Event]] packet into a shared pipe. The ``master''
+([[extract]]) reads from the pipe and dispatches events
+to caller-visible queues. [[Slave.head]]/[[Slave.tail]]
+form a circular buffer of events per source.
+
 <<enum [[Key]]>>=
 enum
 {
@@ -23806,6 +24369,14 @@ static	fdt	cursorfd;
 
 \subsection{Initialization: [[einit()]]}
 
+%claude:
+[[einit]] creates the central event pipe, opens the mouse
+and keyboard devices (putting the console in raw mode),
+spawns one slave process per event source, and forks the
+master process ([[extract]]). The [[keys]] bitmask selects
+which sources to enable ([[Emouse]], [[Ekeyboard]], or
+both).
+
 <<function [[einit]]>>=
 void
 einit(keys keys)
@@ -23897,6 +24468,16 @@ enote(void *v, char *s)
 @
 
 \subsection{The slaves}
+
+%claude:
+Each slave is a child process that reads from a single file
+descriptor (e.g., [[/dev/mouse]] or [[/dev/cons]]) in a
+tight loop and writes event packets to [[epipe]]. The first
+byte of each packet identifies the slave; the rest is the
+event data. [[ekeyslave]] reads raw bytes, assembles them
+into runes, and writes 3-byte rune packets. For the mouse,
+[[estart]] spawns a generic slave that writes 49-byte mouse
+event packets.
 
 <<function [[ekeyslave]]>>=
 static void
@@ -24018,6 +24599,15 @@ estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
 
 
 \subsection{Event loop: [[event()]]}
+
+%claude:
+[[eread]] is the core event reading function: it scans all
+slaves for a pending event matching the [[keys]] bitmask.
+If nothing is queued, it calls [[extract]] to read from the
+pipe and dispatch. [[event]] is a convenience wrapper that
+reads any event; [[emouse]] and [[ekbd]] dequeue from
+specific slaves. [[ebread]] drains the pipe (via [[extract]])
+until the requested slave has data in its queue.
 
 % to get next event, usually called in event loop
 <<function [[event]]>>=
@@ -24147,6 +24737,17 @@ ebread(Slave *s)
 @
 
 \subsection{The master: [[extract()]]}
+
+%claude:
+[[extract]] reads one packet from [[epipe]], identifies
+the slave by the first byte, and enqueues the rest in
+that slave's linked-list buffer. For mouse events, it
+squashes duplicate events where only the position changed
+(same buttons and timestamp)---this prevents the queue from
+growing unboundedly when the application is slow. A resize
+event (mouse message starting with \verb+'r'+) triggers
+[[eresized]]. Before reading, [[extract]] flushes pending
+drawing commands so the display is up to date.
 
 <<function [[extract]]>>=
 static void
@@ -24374,6 +24975,15 @@ eatomouse(Mouse *m, char *buf, int n)
 
 
 \subsection{[[egetrects.c]]}
+
+%claude:
+[[egetrect]] and [[edrawgetrect]] are event-library versions
+of [[getrect]] and [[drawgetrect]]: they use [[emouse]] and
+[[ereadmouse]] instead of [[readmouse]]. The logic is
+identical---rubber-band a rectangle by tracking the mouse
+while a button is held, saving and restoring the pixels
+under the border.
+
 % event version of getrects.c ?
 
 
@@ -24827,6 +25437,16 @@ when the output reaches the bottom of the screen.
 % when do aux/vga it switches to graphic mode, but we still want a console!
 % the kernel still needs a working (*screenputs)(...).
 
+%claude:
+The software console uses the frame buffer directly (via
+[[gscreen]]) and a built-in memory font ([[Memsubfont]])
+to render characters. [[swconsole_screenputc]] handles
+newlines, tabs, backspace, and bell; regular characters
+are drawn with [[memdraw]] through the font's glyph image.
+When the cursor reaches the bottom, [[swconsole_scroll]]
+copies the screen up by one line using [[memimagedraw]]
+and blanks the last line.
+
 % this used to be a subsection of VGA driver,
 % but the code seems quite generic and almost independent of VGA
 % so I moved it here.
@@ -25020,6 +25640,15 @@ swconsole_screenputs(char *s, int n)
 
 
 \section{Blank screen}
+
+%claude:
+The blank screen feature turns off the display after a period
+of inactivity to save energy (DPMS). [[drawblankscreen]]
+fills the screen with black (or restores it); [[drawactive]]
+resets the idle timer on each drawing operation. The VGA
+driver's [[blank]] method sends the hardware-specific DPMS
+commands to power down the monitor.
+
 % used by screenlock.c, used to save energy?
 
 %echo blang > /dev/vgactl ??
@@ -25325,6 +25954,17 @@ case Qrefresh:
 
 \subsection{Window refresh}
 
+%claude:
+When a layer uses [[Refnone]] (no backing store), it has no
+[[save]] image---the application must redraw on demand. The
+[[drawrefreshscreen]] function queues [[Refresh]] entries on
+the client, and reading [[/dev/draw/x/refresh]] returns the
+dirty rectangles (image ID + rectangle). The application
+redraws those areas and re-reads to get more. Drawing
+operations that target a layer without backing store
+([[save == nil]]) are silently skipped for the hidden
+portions, since there is nowhere to save them.
+
 <<[[ldrawop()]] return if no save in dst>>=
 if(insave && d->dstlayer->save == nil)
     return;
@@ -25553,6 +26193,14 @@ shared state in [[sdraw]] and the [[Client]] structures.
 
 \subsection{[[lockdisplay()]]}
 
+%claude:
+[[lockdisplay]]/[[unlockdisplay]] serialize access to the
+[[Display]] from multiple threads. The [[locking]] flag tells
+the library itself to acquire the lock around its own internal
+I/O (e.g., subfont loading). When locking is enabled, the
+event library ([[extract]]) must be careful to flush and
+release the lock before blocking on I/O.
+
 <<[[Display]] concurrency fields>>=
 QLock   qlock;
 @
@@ -25712,6 +26360,16 @@ return false;
 
 
 \subsubsection{[[chardraw()]]}
+
+%claude:
+[[chardraw]] optimizes the common case of text rendering:
+a 1-bit mask (the glyph shape), a simple replicated source
+(a solid color), and a destination with depth $\geq 8$.
+Instead of going through the full [[alphadraw]] pipeline,
+it iterates over the mask bits directly: for each set bit,
+it writes the source color to the destination. This avoids
+all the per-pixel alpha arithmetic and buffer management
+of the general path.
 % also see drawchar() optimisation
 
 % not sure why it's called chardraw. Seems unrelated to fonts.
@@ -25850,6 +26508,14 @@ arithmetic.
 
 \subsubsection{Small replicated rectangle}
 
+%claude:
+When the source or mask is a small replicated image (a few
+pixels wide, not just 1x1), [[alphadraw]] pre-reads the
+entire source tile into a buffer and replicates it in
+memory. The [[replcnt]] and [[soff]]/[[moff]] fields track
+the replication count and offset so the main loop can wrap
+around the tile without per-pixel modulo operations.
+
 <<[[ParamDraw]] replication fields>>=
 bool	replcache;	/* if set, cache buffers */
 @
@@ -25967,6 +26633,15 @@ else if(op == SoverD && !(src->flags&Falpha))
 
 
 \subsubsection{Simple bit mask and big dest, [[boolcopyxxx()]]}
+
+%claude:
+When the mask is a 1-bit image and the destination has 8+
+bits per pixel, the compositing can be done with boolean
+operations instead of per-pixel alpha arithmetic.
+[[boolcopyNNN]] functions (where NNN encodes the pixel
+width) iterate over mask bits, copying source pixels to
+destination only where the mask bit is set. This is the
+inner loop for drawing text glyphs with a solid color.
 
 <<[[ParamDraw]] conversion fields>>=
 Readfn	*convreadcall;
@@ -26659,6 +27334,14 @@ dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
 
 \subsubsection{Flushing and windows}
 
+%claude:
+For layered images, [[dstflush]] must walk the layer chain
+to translate the dirty rectangle from layer coordinates to
+screen coordinates (adding [[delta]] at each level). When
+a window is freed, its screen rectangle is added to the
+flush area so the exposed region gets repainted. Allocating,
+moving, and reordering windows all trigger [[addflush]]
+calls for the affected screen areas.
 
 <<[[drawfreedimage()]] addflush>>=
 if(l->data == screenimage->data)
@@ -27092,6 +27775,15 @@ _twiddlecompressed(uchar *buf, int n)
 
 \subsubsection{Writing compressed images}
 
+%claude:
+[[writememimage]] compresses scan lines using a hash-based
+match finder: for each position, it hashes the next
+[[NMATCH]] bytes, looks for a match in the hash table, and
+emits either a literal run or a back-reference. The hash
+table ([[hashtab]]) maps 3-byte sequences to positions in
+the output buffer. Each match can encode 3--34 bytes in a
+single back-reference byte.
+
 <<constant [[HSHIFT]]>>=
 #define	HSHIFT	3	/* HSHIFT==5 runs slightly faster, but hash table is 64x bigger */
 @
@@ -27470,6 +28162,17 @@ if(!new)	/* an old image: must flip all the bits */
 @
 
 \section{[[Memimage]] duplicated API}
+
+%claude:
+Some programs (e.g., the graphical text console, [[togif]])
+operate directly on [[Memimage]]s without going through the
+[[Display]] and user/kernel bridge. These functions duplicate
+the user-side API ([[allocimage]], [[string]], [[draw]], etc.)
+but work on [[Memimage]] pointers directly, calling
+[[memimagedraw]] instead of marshalling commands. This is
+also useful for testing graphics code without a running
+kernel.
+
 % for testing code, for togif, for graphics text mode below
 % maybe could be put in appendix? or extra?
 
@@ -28228,6 +28931,12 @@ if(debuglockdisplay){
 
 \section{[[drawsetdebug()]]}
 
+%claude:
+[[drawsetdebug]] sends a \verb+'D'+ command to toggle verbose
+debugging output in the kernel draw device. When enabled,
+[[drawmesg]] prints each command it receives, which is useful
+for tracing protocol issues between the library and the kernel.
+
 % API and marshalling
 <<function [[drawsetdebug]]>>=
 void
@@ -28284,6 +28993,14 @@ case 'D':
 
 \section{Dumpers}
 
+%claude:
+The graphics library installs custom [[print]] format verbs:
+[[%P]] for [[Point]] (e.g., \verb+[10 20]+), [[%R]] for
+[[Rectangle]] (e.g., \verb+[10 20 30 40]+). The kernel side
+installs the same verbs so error messages and debug output
+can print geometry values directly. [[chantostr]] converts
+a channel descriptor integer back to a human-readable string
+like ``r8g8b8a8''.
 
 \subsection{Points and rectangles}
 
@@ -28428,6 +29145,13 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
 % calls to trace when debugging an issue.
 
 \section{Memory tags}
+
+%claude:
+Memory tags record which caller allocated each block, using
+[[setmalloctag]] with [[getcallerpc]]. When a memory leak is
+detected, the tag reveals where the leaked allocation
+originated. Only a few key allocations are tagged: images,
+subfonts, and compressed images.
 
 % not sure why do only those 3
 

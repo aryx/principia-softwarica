@@ -983,6 +983,16 @@ typedef uchar ipv4[IPv4addrlen];
 
 \subsection{IPv4 vs IPv6}
 
+%claude:
+IPv4 uses 4-byte addresses ($2^{32} \approx 4$ billion hosts),
+which have been exhausted. IPv6 uses 16-byte addresses
+($2^{128}$). Internally, \plan stores all addresses in the
+16-byte IPv6 format: IPv4 addresses are embedded with the
+\verb+::ffff:+ prefix (10 zero bytes, two \verb+0xff+ bytes,
+then 4 IPv4 bytes). [[v4tov6]] and [[v6tov4]] convert between
+the two representations; [[isv4]] checks whether an address
+is really IPv4 in disguise.
+
 <<constant [[IPaddrlen]]>>=
 IPaddrlen=	16,
 @
@@ -1115,6 +1125,15 @@ still supports it as a default.
 
 \subsection{Network mask}
 
+%claude:
+A network mask separates the network part of an IP address
+from the host part. [[defmask]] returns the default mask for
+the address class: 255.0.0.0 for class~A (first byte 0--127),
+255.255.0.0 for class~B (128--191), and 255.255.255.0 for
+class~C (192--223). [[maskip]] applies the mask with a
+byte-by-byte AND: $\text{netid} = \text{ip} \mathbin{\&} \text{mask}$.
+Two machines are on the same local network if their netids match.
+
 %todo: return ipaddr, but have trouble to use ipaddr here as a return type.
 % 8c then complains
 <<function [[defmask]]>>=
@@ -1163,6 +1182,15 @@ maskip(ipaddr from, ipaddr mask, ipaddr to)
 % netid = ip & mask.
 
 \subsection{Network byte order}
+
+%claude:
+Network protocols use big-endian byte order, while the host
+CPU may use either. The [[nhgets]]/[[hnputs]] family of
+functions (defined in the \book{Libcore}) convert between
+the two. [[iplong]] is a host-order 32-bit integer used when
+arithmetic on IP addresses is needed---for instance, checking
+whether an address falls within a route's address range.
+
 % This is not only related to IP address, but I don't know where
 % to put this section and can be opportunity to define 'ip_long'
 % that will be used later for the Route DS.
@@ -1176,6 +1204,16 @@ typedef ulong iplong;
 % such as to check if they are in a certain range. See Route.
 
 \subsection{Other address operations}
+
+%claude:
+Since IP addresses are fixed-size byte arrays (not structs),
+they cannot be assigned with \verb+=+ or compared with
+\verb+==+. The [[ipmove]] and [[ipcmp]] macros wrap
+[[memmove]] and [[memcmp]]. [[ipcmp]] includes a fast-path
+optimization: it first compares the last byte (which varies
+most between addresses) before falling through to the full
+16-byte comparison.
+
 %reset, move, comparison
 
 % used a lot to reset an address
@@ -1255,6 +1293,15 @@ different networks.
 
 \subsection{User side}
 
+%claude:
+The user-side [[Ipifc]] is a read-only view of a network
+interface, filled by [[readipifc]] which parses
+[[/net/ipifc]]. Each interface has a device name
+(e.g., ``/net/ether0''), an MTU, packet statistics, and
+a linked list of [[Iplifc]] entries---the actual IP addresses
+bound to this interface. Applications use [[readipifc]]
+to discover what IP addresses the machine has.
+
 % how used by programmer? readipifc()?
 % hmm but not that useful in practice no? or because dial uses that?
 % Need that to know who you are ... like hostname?
@@ -1329,6 +1376,15 @@ Iplifc	*next;
 
 
 \subsection{Kernel side}
+
+%claude:
+The kernel-side [[Ipifc]] is richer: it holds the [[Medium]]
+pointer, the MAC address, transfer unit bounds, and routing
+parameters. The [[arg]] field points to medium-specific
+private data (for Ethernet, it holds the channel file
+descriptors for the three packet types: IPv4, ARP, IPv6).
+The [[conv]] field links back to the [[Conv]] in the
+[[ipifc]] protocol that owns this interface.
 
 % typedef maddr?
 
@@ -1615,6 +1671,15 @@ void  *arg;   /* medium specific */
 % and unsafe cast.
 
 \subsection{[[Ether]]net controllers and [[etherxx]]}
+
+%claude:
+[[etherxx]] is a global array of Ethernet controllers, one
+per physical network card. Each [[Ether]] structure embeds
+a [[Netif]] (for multiplexing) and an [[ISAConf]] (for
+hardware I/O port and IRQ information). The [[ctlr]] field
+points to the driver-specific control block (e.g., [[Dp8390]]
+for NE2000). The [[transmit]] method is called to send a
+packet; [[interrupt]] is the hardware interrupt handler.
 
 <<global etherxx (kernel)>>=
 static Ether *etherxx[MaxEther];
@@ -2222,6 +2287,16 @@ int inuse;      /* opens of listen/data/ctl */
 
 \subsection{Chan Qid, [[PROTO()]], [[CONV()]], [[QID()]]}
 
+%claude:
+The [[/net]] filesystem encodes three coordinates into a
+single Qid path: 8~bits for the protocol index, 12~bits
+for the conversation number, and 5~bits for the file type
+(ctl, data, etc.). The [[QID]] macro packs these three
+values; [[PROTO]], [[CONV]], and [[TYPE]] extract them.
+This scheme allows the device's [[walk]]/[[open]]/[[read]]/[[write]]
+functions to identify exactly which protocol, conversation,
+and file a channel refers to with a single integer comparison.
+
 % In the end everything is a file in plan9, so connexion/sockets
 % will be channel with a qid in /net/.
 % Have a qid scheme to encode the type of channel.
@@ -2327,7 +2402,16 @@ enum
 
 \subsection{[[Netif]]}
 
-%XXX
+%claude:
+[[Netif]] is the generic network interface structure,
+embedded (via C structure embedding) in every [[Ether]]
+controller. It provides protocol-independent multiplexing:
+multiple processes can open the same Ethernet device and
+filter packets by type. Each open gets a [[Netfile]] with
+its own input queue. [[Netif]] also tracks link statistics
+(packets in/out, CRC errors, overflows) and supports
+promiscuous mode for packet sniffing.
+
 <<struct Netif (kernel)>>=
 /*
  *  a network interface
@@ -2397,7 +2481,15 @@ int soverflows; /* software overflow */
 
 \subsection{[[Netfile]]}
 
-%XXX
+%claude:
+Each open of [[/net/etherX/N]] creates a [[Netfile]] that
+acts as a filter: the [[type]] field selects which Ethernet
+frame types this file receives (e.g., only IP packets, only
+ARP packets). The [[prom]] flag enables promiscuous mode for
+this file, allowing packet capture. Incoming frames are
+demultiplexed by [[etheriq]] and copied into the [[in]]
+queue of each matching [[Netfile]].
+
 <<struct [[Netfile]]>>=
 /*
  *  one per multiplexed connection
@@ -2425,6 +2517,16 @@ struct Netfile
 @
 
 \section{Routes}
+
+%claude:
+Routes connect the IP layer to the physical layer: given a
+destination IP address, [[v4lookup]] finds the [[Route]]
+that tells which gateway to forward through and which
+[[Ipifc]] to send on. Each [[Conv]] caches its last route
+in [[Conv.r]] with a generation counter ([[rgen]]) to detect
+when the routing table has changed. The routing table is
+a binary search forest keyed by IP address ranges, with
+1024 root buckets for fast lookup.
 
 \subsection{Single [[Route]]}
 
@@ -2563,6 +2665,14 @@ Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
 
 \subsection{Routing forest}
 
+%claude:
+The routing table is a forest of $2^{10} = 1024$ ternary
+search trees. The destination IP address is hashed (via
+[[V4H]]) to select a root, then the tree is walked using
+address-range comparisons: left for ranges entirely below,
+right for ranges entirely above, and mid for overlapping
+ranges (more specific routes). This structure supports
+longest-prefix matching efficiently.
 
 <<[[Fs(kernel)]] routing fields>>=
 // hash<ip, ref<Route>> where hash function is V4H
@@ -2577,6 +2687,13 @@ Lroot=    10,
 
 
 \section{Blocks}
+
+%claude:
+Network data travels through the kernel as [[Block]]s
+(see the \book{Kernel}). The [[BLKIP]] macro casts a
+block's read pointer to an [[Ip4hdr]] for direct access
+to IP header fields, and [[BLKIPVER]] extracts the IP
+version nibble to distinguish IPv4 from IPv6 packets.
 
 % DS of the kernel
 
@@ -2610,6 +2727,17 @@ IP address and routes, typically via DHCP.
 \section{Kernel side}
 
 \subsection{Mounting the ip device}
+
+%claude:
+Mounting the IP device (\verb+bind #I /net+) triggers
+[[ipattach]], which calls [[ipgetfs]] to create or reuse an
+[[Fs]] structure. [[ipgetfs]] is the real initialization:
+it allocates the [[Fs]], creates the [[IP]] fragment tracking
+structure, initializes the ARP cache, and calls each protocol's
+init function (UDP, TCP, IL, ICMP, [[ipifc]], etc.) to register
+them. After this, [[/net]] is populated with protocol
+directories ([[/net/tcp/]], [[/net/udp/]], [[/net/ipifc/]], etc.)
+and special files ([[/net/arp]], [[/net/iproute]]).
 
 % see kernel init.c, but can do that manually too after the boot.
 % bind #I /net
@@ -2785,6 +2913,15 @@ initfrag(IP *ip, int size)
 
 \subsection{Mounting the ethernet device}
 
+%claude:
+Mounting the Ethernet device (\verb+bind #l0 /net+) triggers
+[[etherattach]], which looks up controller 0 in the [[etherxx]]
+array and calls its [[attach]] method. This populates
+[[/net/ether0/]] with files for reading/writing Ethernet
+frames, the MAC address ([[/net/ether0/addr]]), and
+statistics. The MAC address can be read with
+\verb+cat /net/ether0/addr+.
+
 % see kernel init.c
 % bind #l -a /net
 %  bind_safe("#l0", "/net", MAFTER); // ether (and dev 0)
@@ -2839,7 +2976,14 @@ etherattach(char* spec)
 
 \subsection{Connect manually}
 
-% open /net/<protocol>/clone
+%claude:
+A user program connects manually by opening
+[[/net/tcp/clone]] (which returns a conversation number),
+then writing \verb+connect 10.0.0.1!80+ to
+[[/net/tcp/N/ctl]], and reading/writing [[/net/tcp/N/data]].
+The [[dial]] library function wraps this sequence,
+optionally consulting the connection server for name
+resolution.
 
 \subsection{[[dial()]]}
 
@@ -3160,6 +3304,15 @@ case Qdata:
 
 \subsection{Dispatch functions, [[ipxxx()]]}
 
+%claude:
+The [[ipopen]], [[ipclose]], [[ipread]], and [[ipwrite]]
+functions are the kernel device methods that dispatch file
+operations to the appropriate protocol or conversation.
+They all follow the same pattern: extract the protocol
+index and conversation number from the channel's Qid,
+look up the [[Proto]] and [[Conv]], and switch on the
+file type to decide what to do.
+
 \subsubsection{[[ipopen()]]}
 
 <<global [[m2p]]>>=
@@ -3377,6 +3530,16 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
 
 \subsection{[[/net/x/clone]]}
 
+%claude:
+Opening [[/net/tcp/clone]] allocates a new conversation for
+the protocol. [[Fsprotoclone]] scans the protocol's [[conv]]
+array for a free or reusable slot, initializes it with blank
+addresses and idle state, and calls the protocol's [[create]]
+method to set up the read/write queues. The returned channel's
+Qid is rewritten to point to the new conversation's [[ctl]]
+file---so the caller can immediately write ``connect'' or
+``announce'' commands to it.
+
 <<[[ipopen()]] switch TYPE qid cases>>=
 case Qclone:
     p = f->p[PROTO(c->qid)];
@@ -3529,6 +3692,17 @@ int   (*gc)(Proto*);  /* returns true if any conversations are freed */
 @
 
 \subsection{[[/net/x/y/ctl]]}
+
+%claude:
+Reading [[ctl]] returns the conversation number as a string.
+Writing to [[ctl]] dispatches commands: ``connect 10.0.0.1!80''
+calls [[connectctlmsg]] which sets the remote address/port
+and sleeps until the connection is established; ``announce *!80''
+calls [[announcectlmsg]] which prepares the conversation to
+accept incoming connections. [[Fsstdconnect]] parses the
+``ip!port'' address string into the conversation's
+[[raddr]]/[[rport]] fields and looks up a route to find
+the local address.
 
 <<[[ipread()]] switch TYPE qid cases>>=
 case Qctl:
@@ -3965,6 +4139,15 @@ Fsstdbind(Conv* cv, char* argv[], int argc)
 
 \subsection{[[/net/x/y/data]]}
 
+%claude:
+The [[data]] file is the actual data channel. Reading
+dequeues bytes from the conversation's receive queue
+([[qread(cv->rq, ...)]]), and writing enqueues bytes into
+the write queue ([[qwrite(cv->wq, ...)]]). The protocol's
+``kick'' function (installed by [[create]]) is called
+automatically when data is written, triggering the protocol
+to add headers and transmit the packet.
+
 <<[[ipread()]] switch TYPE qid cases>>=
 case Qdata:
     cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
@@ -4008,7 +4191,16 @@ case Qerr:
 % read only
 
 \subsection{[[/net/x/y/listen]]}
-% ?????
+
+%claude:
+Opening the [[listen]] file blocks until a remote machine
+connects. The caller must have already announced on this
+conversation. [[sleep]] waits on [[cv->listenr]] until
+[[incoming]] returns true (meaning [[cv->incall]] is
+non-nil). When a connection arrives, the protocol's
+[[rcv]] handler creates a new [[Conv]] and chains it on
+[[cv->incall]]; the [[listen]] opener dequeues it and
+rewrites its Qid to the new conversation's [[ctl]].
 
 
 <<[[Qid]] conversation extra cases>>=
@@ -4153,6 +4345,12 @@ case Qstatus:
 
 \subsubsection{[[/net/x/y/local]], [[/net/x/y/remote]]}
 
+%claude:
+Reading [[local]] returns the local IP address and port of the
+conversation as a string (e.g., \verb+10.0.2.15!1234+);
+[[remote]] returns the remote side. These are used by servers
+to identify who connected to them.
+
 <<[[Qid]] conversation extra cases>>=
 Qlocal,
 Qremote,
@@ -4274,6 +4472,13 @@ separate configuration mechanism.
 %alt: some special file in /net/ like /net/medium, /net/ip
 
 \subsection{Protocol initialisation}
+
+%claude:
+[[ipifcinit]] registers [[ipifc]] as a protocol in the [[Fs]]
+stack. Unlike transport protocols (UDP, TCP), [[ipifc]] has no
+IP protocol number---it is used purely for configuration. Its
+[[ctl]] method dispatches ``bind'', ``add'', ``remove'',
+and ``unbind'' commands to configure the network stack.
 
 % ipattach -> ipgetfs -> <> (as ipprotoinit[i] <- ipprotoinit[x] = <> <- qemu.c)
 <<function [[ipifcinit]]>>=
@@ -4406,6 +4611,15 @@ ipifccreate(Conv *cv)
 
 \subsection{Binding medium: [[/net/ipifc/x/ctl bind]]}
 
+%claude:
+Writing \verb+bind ether /net/ether0+ to [[/net/ipifc/x/ctl]]
+calls [[ipifcbind]], which looks up ``ether'' in the [[media]]
+table, opens the Ethernet device via [[chandial]], and calls
+the medium's [[bind]] method ([[etherbind]]). This connects
+the IP interface to the physical network: packets written
+to [[/net/ipifc/x/data]] will now go through the Ethernet
+medium.
+
 % ipwrite (Qctl case) -> bindctlmsg -> <> (as x->bind <- ipprotoinit[i] <- qmemu.c)
 % bind ether /net/ether0
 <<function [[ipifcbind]]>>=
@@ -4517,6 +4731,14 @@ ipfindmedium(char *name)
 
 \subsection{[[/net/ipifc/x/ctl]]}
 
+%claude:
+[[ipifcctl]] is the protocol-specific control handler for
+[[ipifc]]. Unlike transport protocols which handle ``connect''
+and ``announce'', [[ipifc]]'s control commands are
+configuration-oriented: ``add'' assigns an IP address,
+``remove'' deletes one, ``unbind'' detaches the medium,
+and various others set routing, MTU, TTL, or TOS parameters.
+
 % ... -> ipwrite (Qctl case) -> <>
 %  (as x->bind <- ...) because not a generic msg
 <<function [[ipifcctl]]>>=
@@ -4544,6 +4766,15 @@ ipifcctl(Conv* cv, char** argv, int argc)
 
 
 \subsection{Adding an IP: [[/net/ipifc/x/ctl add]]}
+
+%claude:
+Writing \verb+add 10.0.2.15 255.255.255.0+ to
+[[/net/ipifc/x/ctl]] calls [[ipifcadd]], which creates an
+[[Iplifc]] node, links it into the interface's list, and
+adds the corresponding routes. This is the step that gives
+the machine its identity on the network---after this, the IP
+stack knows which addresses belong to it and can accept
+incoming packets for them.
 
 <<[[ipifcctl()]] if add string>>=
 if(strcmp(argv[0], "add") == 0)
@@ -4679,6 +4910,14 @@ for(lifc = ifc->lifc; lifc; lifc = lifc->next) {
 
 
 \section{IP Interface, user side}
+
+%claude:
+The user-side IP interface code reads and parses the files
+under [[/net/ipifc/]] to build the [[Ipifc]] and [[Iplifc]]
+linked lists. [[readipifc]] opens each interface directory
+in turn, reads the status and address files, and returns
+a linked list of all configured interfaces with their IP
+addresses, masks, and statistics.
 
 \subsection{Parsing}
 
@@ -4979,6 +5218,16 @@ ipstats(Fs *f, char *buf, int len)
 
 \subsection{[[etherbind()]]}
 
+%claude:
+[[etherbind]] is called when the medium's [[bind]] method is
+invoked. It opens three conversations on the Ethernet device:
+one for IPv4 frames (type 0x0800), one for ARP (type 0x0806),
+and optionally one for IPv6. For each, it opens
+[[/net/etherX/clone]], writes the packet type filter, and
+spawns a reader process that loops reading frames and
+dispatching them to [[ipiput4]] (for IP) or [[arpinput]]
+(for ARP).
+
 % ??? -> <>
 %   (as x->bind <- ...)
 <<function [[etherbind]]>>=
@@ -5137,6 +5386,12 @@ iprouting(Fs *f, bool on)
 
 \subsection{MTU}
 
+%claude:
+The MTU (Maximum Transmission Unit) can be set per-interface
+as a fifth argument to ``add''. It must fall within the medium's
+min/max bounds. The MTU determines the maximum IP packet
+size before fragmentation is required.
+
 <<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>=
 // add <ip> <mask> <rem> <mtu>
 case 5:
@@ -5174,6 +5429,11 @@ ipifcsetmtu(Ipifc *ifc, char **argv, int argc)
 
 \subsection{TOS}
 
+%claude:
+TOS (Type of Service) is a byte in the IP header that hints
+at packet priority. Writing \verb+tos N+ to a conversation's
+[[ctl]] file sets the value used in outgoing packets.
+
 <<[[Conv(kernel)]] other fields>>=
 uint  tos;      /* type of service */
 @
@@ -5195,6 +5455,13 @@ tosctlmsg(Conv *c, Cmdbuf *cb)
 @
 
 \subsection{TTL}
+
+%claude:
+TTL (Time To Live) limits how many gateways a packet can
+traverse---each gateway decrements it by one, and the packet
+is discarded when TTL reaches zero. This prevents routing
+loops from circulating packets forever. The default is
+[[MAXTTL]]=255.
 
 <<[[Conv(kernel)]] other fields>>=
 uint  ttl;      /* max time to live */
@@ -5221,6 +5488,15 @@ MAXTTL=   255,
 @
 
 \subsection{Dynamic interface, removing, unbinding, etc.}
+
+%claude:
+The [[ipifc]] control file also accepts ``remove'' (to delete
+an IP address from an interface), ``unbind'' (to detach the
+medium entirely), ``reassemble'' (to enable fragment
+reassembly on forwarded packets), and several parameters
+for IPv6 router advertisement. The ``remove'' command is the
+inverse of ``add''---it deletes the [[Iplifc]] node and
+removes the associated routes.
 
 <<[[ipifcctl()]] else if other string>>=
 else if(strcmp(argv[0], "remove") == 0)
@@ -5421,6 +5697,13 @@ payload (0x0800 for IPv4, 0x0806 for ARP).
 
 \section{Ethernet addresses}
 
+%claude:
+Ethernet addresses are 6-byte (48-bit) values, usually
+written as colon-separated hexadecimal (e.g.,
+\verb+f8:ed:a5:74:92:a1+). [[parseether]] converts a
+string to 6 bytes; [[myetheraddr]] reads the machine's
+MAC address from [[/net/etherX/addr]].
+
 \subsection{Parsing}
 
 %ex: mac address f8:ed:a5:74:92:a1
@@ -5482,6 +5765,11 @@ myetheraddr(uchar *to, char *dev)
 
 \section{Ethernet header}
 
+%claude:
+An Ethernet frame header is 14 bytes: destination MAC ([[d]]),
+source MAC ([[s]]), and a 2-byte type field ([[t]]) identifying
+the payload protocol (0x0800 for IPv4, 0x0806 for ARP).
+
 <<struct [[Etherhdr]]>>=
 struct Etherhdr
 {
@@ -5495,6 +5783,13 @@ struct Etherhdr
 % ethermedium.c
 
 \section{Ethernet packet}
+
+%claude:
+[[Etherpkt]] is the full Ethernet frame layout: 6-byte
+destination, 6-byte source, 2-byte type, then up to 1500
+bytes of payload data. The maximum frame size is 1514 bytes
+(14 header + 1500 payload), which is the standard Ethernet
+MTU.
 
 <<struct [[Etherpkt]]>>=
 struct Etherpkt
@@ -5533,6 +5828,15 @@ gateways. This chapter covers address parsing, packet output
 reassembly.
 
 \section{IP addresses}
+
+%claude:
+IP addresses are stored as binary byte arrays but configured
+and displayed as dotted-decimal strings (e.g., ``10.0.2.15'')
+for IPv4 or colon-separated hex for IPv6.
+[[v4parseip]] converts a dotted-decimal string to 4 bytes;
+[[parseip]] handles both IPv4 and IPv6 with ``::'' elision.
+These parsing functions are used throughout the stack whenever
+addresses are read from configuration files or user commands.
 
 \subsection{Parsing}
 
@@ -5640,6 +5944,14 @@ parseip(ipaddr to, char *from)
 @
 
 \subsection{Comparisons}
+
+%claude:
+IP address comparison and equality use byte-wise operations
+since addresses are 16-byte arrays. [[equivip4]] compares
+only the 4 IPv4 bytes (ignoring the v6 prefix) and treats
+the all-zeros address as a wildcard that matches anything---this
+is used when looking up conversations by address, where an
+unset address means ``any''.
 
 <<macro [[ipcmp]]>>=
 #define	ipcmp(x, y) memcmp(x, y, IPaddrlen)
@@ -5777,6 +6089,16 @@ ipcsum(uchar *addr)
 @
 
 \section{IP Fragments}
+
+%claude:
+IP fragmentation handles packets larger than the MTU of a
+network link. The sender splits the packet into fragments
+using the [[id]] field to identify fragments of the same
+original packet and the [[frag]] field for offset and
+``more fragments'' flag. The receiver collects fragments
+in [[Fragment4]] structures until all pieces arrive, then
+reassembles them. Fragments are freed after a timeout to
+prevent memory leaks from lost fragments.
 
 <<function [[ipfragfree4]]>>=
 /*
@@ -5925,6 +6247,13 @@ IP_HLEN4= 5,    /* v4: Header length in words */
 
 \subsubsection{Finding the gateway}
 
+%claude:
+If the route is a directly-connected interface ([[Rifc]]) or a
+unicast self-address ([[Runi]]), the destination MAC is resolved
+from the packet's destination IP (via ARP). Otherwise, the
+packet is forwarded to the route's gateway address, whose MAC
+will be resolved by ARP at the medium level.
+
 <<[[ipoput4()]] set gate according to type of route>>=
 if(r->type & (Rifc|Runi))
     gate = eh->dst;
@@ -5935,6 +6264,14 @@ else
 @
 
 \subsubsection{Small send}
+
+%claude:
+When the packet fits within the medium's MTU (the common
+case), [[ipoput4]] fills in the remaining header fields
+(packet ID, length, fragment flags, checksum) and calls
+[[ifc->m->bwrite]] to hand it to the medium for
+transmission. The IP checksum covers only the header,
+not the data---transport protocols add their own checksums.
 
 % setting id field, increment id4
 
@@ -5963,6 +6300,16 @@ if(len <= medialen) {
 @
 
 \subsubsection{Fragmentation}
+
+%claude:
+When the packet exceeds the MTU, IP splits it into fragments.
+Each fragment gets its own IP header with the same packet ID
+but different fragment offsets. The ``more fragments'' flag
+([[IP_MF]]) is set on all but the last piece. Fragment offsets
+are in units of 8 bytes, so the payload of each fragment
+(except the last) must be a multiple of 8. The ``don't
+fragment'' flag ([[IP_DF]]) causes an error instead of
+fragmentation---useful for path MTU discovery.
 
 % Note that different from TCP packeting and reliable
 % reordering. Here it's a packet to send through an hardware medium,
@@ -6182,6 +6529,14 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
 
 \subsubsection{Checks}
 
+%claude:
+Incoming packets are validated in several steps: the IP
+header checksum is verified (unless the hardware already
+checked it via the [[Bipck]] flag), the header length and
+version nibbles are checked, and IP options (if present)
+are stripped from non-forwarded packets. Packets that fail
+any check are silently dropped and counted as [[InHdrErrors]].
+
 <<[[ipiput4()]] check header checksum>>=
 /* dump anything that whose header doesn't checksum */
 if((bp->flag & Bipck) == 0 && ipcsum(&h->vihl)) {
@@ -6222,6 +6577,14 @@ if((h->vihl&0x0F) != IP_HLEN4) {
 @
 
 \subsubsection{Protocol dispatching}
+
+%claude:
+The [[proto]] byte in the IP header identifies which transport
+protocol should receive the packet (17 for UDP, 40 for IL,
+6 for TCP). [[Fsrcvpcol]] looks up the protocol in the
+[[t2p]] table and calls its [[rcv]] method, which demultiplexes
+the packet to the right conversation based on port numbers.
+
 % protocol demultiplexing
 
 <<function [[Fsrcvpcol]]>>=
@@ -6238,6 +6601,19 @@ Fsrcvpcol(Fs* f, uchar proto)
 \subsubsection{Small receive}
 
 \subsubsection{Reassembling}
+
+%claude:
+If the fragment flags are non-zero, the packet is a fragment
+that must be reassembled before delivery to the transport
+protocol. [[ip4reassemble]] collects fragments in a
+[[Fragment4]] structure, matching them by source IP,
+destination IP, and packet ID. When all fragments have
+arrived (no more ``more fragments'' flag and the total
+length is covered), it concatenates the blocks and returns
+the complete packet. If fragments are still missing, it
+returns nil and the caller just returns---the packet will
+be delivered when the last fragment arrives.
+
 % defragmentation
 
 <<[[ipiput4()]] locals>>=
@@ -6448,6 +6824,14 @@ if(BLEN(bp) < 64) {
 
 \section{Advanced features}
 
+%claude:
+When a machine acts as a gateway, packets arrive on one
+interface and leave on another. The ``gating'' flag tells
+[[ipoput4]] that the IP header is already filled in by the
+original sender---do not overwrite the version, TOS, or ID
+fields. The gateway only decrements TTL and recomputes the
+checksum.
+
 \subsection{Gating}
 
 <<[[ipoput4()]] if gating>>=
@@ -6488,6 +6872,16 @@ else if(strcmp(cb->f[0], "maxfragsize") == 0){
 % no framentation IP_DF here
 
 \subsection{Routing}
+
+%claude:
+When a packet arrives that is not addressed to this machine
+([[notforme]]) and IP routing is enabled, the stack forwards
+it like a gateway. It decrements TTL, looks up the route for
+the destination, verifies it doesn't loop back to the source
+network, optionally reassembles fragments, and sends the
+packet out the appropriate interface. This is the core of
+gateway functionality.
+
 % Router?
 
 <<[[ipiput4()]] locals>>=
@@ -6662,6 +7056,14 @@ void  (*areg)(Ipifc*, uchar*);      /* register */
 
 \section{Initialisation}
 
+%claude:
+[[arpinit]] allocates the ARP cache and spawns the
+retransmission process ([[rxmitproc]]), which periodically
+resends unanswered ARP requests. The ARP cache uses a
+hash table of [[Arpent]] entries, each containing a MAC
+address, an IP address, and a list of packets waiting for
+resolution.
+
 % ipattach -> ipgetfs -> <>
 <<function [[arpinit]]>>=
 void
@@ -6719,6 +7121,13 @@ case Qiproute:
 
 \subsection{Reading}
 
+%claude:
+Reading [[/net/arp]] returns one line per cache entry, with
+the medium name, state (``ok'' or ``wait''), IP address, and
+MAC address. Each line is exactly [[Alinelen]] bytes, which
+allows random-access reads by offset---the read offset is
+divided by [[Alinelen]] to skip entries.
+
 <<[[ipread()]] switch TYPE qid cases>>=
 case Qarp:
     return arpread(f->arp, a, offset, n);
@@ -6760,6 +7169,14 @@ arpread(Arp *arp, char *p, ulong offset, int len)
 @
 
 \subsection{Writing}
+
+%claude:
+Writing to [[/net/arp]] allows manual manipulation of the
+cache. The ``add'' command creates a static entry mapping
+an IP to a MAC address; ``flush'' clears all entries;
+``delete'' removes a specific entry. When a new entry is
+added and there are packets queued in [[hold]] waiting for
+this resolution, they are immediately transmitted.
 
 <<[[ipwrite()]] switch TYPE qid cases>>=
 case Qarp:
@@ -6911,6 +7328,15 @@ Results are cached per-conversation to avoid repeated lookups.
 
 \section{[[v4lookup()]]}
 
+%claude:
+[[v4lookup]] first checks the conversation's cached route:
+if the routing table generation hasn't changed, the cached
+result is still valid. Otherwise, it hashes the destination
+address into one of 1024 root buckets and walks the ternary
+tree, comparing the destination against each node's address
+range. The walk terminates at the most specific matching
+route (longest prefix match).
+
 % ipoput4 | ... -> <>
 % a is a ipv4!
 <<function [[v4lookup]]>>=
@@ -7035,6 +7461,15 @@ findipifc(Fs *f, ipaddr remote, int type)
 
 \section{Adding routes: [[v4addroute()]]}
 
+%claude:
+[[v4addroute]] inserts a new route into the ternary search
+tree. Each route covers an address range ([[address]] to
+[[endaddress]]) and points to a gateway. The route is
+inserted using [[routeadd]], which walks the tree to find
+the correct position and may trigger rebalancing. Adding
+a route also increments the generation counter, invalidating
+all cached routes in conversations.
+
 % in ipifcadd()
 %        v4addroute(f, tifc, rem+IPv4off, mask+IPv4off, rem+IPv4off, type);
 
@@ -7084,6 +7519,16 @@ static RWlock   routelock;
 
 \section{Route managment}
 
+%claude:
+Route nodes are managed with a free list: [[allocroute]]
+reuses freed nodes from the [[v4freelist]] chain before
+falling back to [[malloc]]. [[addnode]] inserts a route
+into the ternary tree, splitting existing nodes when address
+ranges overlap, and calls [[balancetree]] to keep the tree
+balanced. The insertion logic handles four cases: the new
+range is entirely left, entirely right, a subset (goes to
+[[mid]]), or overlapping (requiring a split).
+
 <<global [[v4freelist]]>>=
 /* these are used for all instances of IP */
 static Route*   v4freelist;
@@ -7128,6 +7573,12 @@ allocroute(int type)
 
 \subsection{Free}
 
+%claude:
+Freed routes are returned to a free list ([[v4freelist]])
+linked through the [[mid]] pointer. [[allocroute]] checks
+this list before calling [[malloc]], avoiding memory
+allocation overhead in the common case of route churn.
+
 <<function [[freeroute]]>>=
 static void
 freeroute(Route *r)
@@ -7145,6 +7596,17 @@ freeroute(Route *r)
 @
 
 \subsection{Insertion}
+
+%claude:
+[[addnode]] inserts a route into the ternary tree by comparing
+address ranges. [[rangecompare]] classifies the relationship
+between two routes: [[Rpreceeds]] (goes left), [[Rfollows]]
+(goes right), [[Requals]] (replace the existing route),
+[[Rcontains]] (the new route is broader, so the old one goes
+to [[mid]]), or [[Rcontained]] (the new route is narrower and
+goes to [[mid]] of the existing one). When a route is
+contained within another, it provides a more specific match
+for a subset of addresses.
 
 <<enum [[_anon_ (kernel/network/ip/iproute.c)]]>>=
 /*
@@ -7308,6 +7770,14 @@ addqueue(Route **q, Route *r)
 
 \subsection{Balancing}
 
+%claude:
+The routing tree is balanced with AVL-style rotations.
+Each node tracks its [[depth]] (height of the subtree), and
+after every insertion [[balancetree]] checks whether the
+left and right subtrees differ by more than one level. If
+so, it performs a rotation to restore balance, ensuring
+that [[v4lookup]] remains $O(\log n)$.
+
 <<[[Routetree]] other fields>>=
 uchar depth;
 @
@@ -7380,6 +7850,14 @@ calcd(Route *p)
 
 \section{[[/net/iproutes]]}
 
+%claude:
+[[/net/iproute]] exposes the routing table as a text file.
+Reading it returns one line per route with address, mask,
+gateway, tag, and interface number. Writing it accepts
+``add'' and ``remove'' commands to manually configure
+routes---this is how [[ipconfig]] sets up the default
+gateway after DHCP.
+
 % See Qiproute def in enum qid.
 
 <<[[ip1gen()]] switch TYPE qid cases>>=
@@ -7399,6 +7877,15 @@ case Qiproute:
 @
 
 \subsection{Reading}
+
+%claude:
+[[routeread]] walks the routing forest in-order using
+[[ipwalkroutes]], which visits every node in the ternary
+tree (left, current, mid, right). The [[sprintroute]]
+callback formats each route as a fixed-width text line
+with address, mask, gateway, type tag, and interface number.
+The walk supports random-access reads via offset for
+compatibility with [[read]] semantics.
 
 <<function [[routeread]]>>=
 long
@@ -7561,6 +8048,14 @@ rr(Route *r, Routewalk *rw)
 
 \subsection{Writing}
 
+%claude:
+Writing to [[/net/iproute]] accepts ``add'' and ``remove''
+commands with address, mask, and gateway arguments.
+``\verb+add 0.0.0.0 0.0.0.0 10.0.2.2+'' sets the default
+gateway. The ``tag'' field associates routes with the
+process that created them, allowing cleanup when the
+process exits.
+
 <<function [[routewrite]]>>=
 long
 routewrite(Fs *f, Chan *c, char *p, int n)
@@ -7678,6 +8173,15 @@ printroute(Route *r)
 
 
 \section{Self cache}
+
+%claude:
+The ``self cache'' ([[Ipselftab]]) tracks which IP addresses
+belong to this machine. [[ipforme]] checks whether a
+destination address in an incoming packet matches one of
+the machine's own addresses (unicast, broadcast, or
+multicast). This is how the IP layer decides whether to
+deliver a packet locally or forward it as a gateway.
+
 % needed? opti? put in advanced features?
 
 % who uses that???
@@ -7721,6 +8225,14 @@ ipforme(Fs *f, ipaddr addr)
 
 
 \subsection{Data structures}
+
+%claude:
+[[Ipselftab]] is a hash table of [[Ipself]] entries, keyed by
+IP address. Each entry records the address type (unicast,
+broadcast, multicast) and is linked to one or more interfaces
+via [[Iplink]] nodes. The [[acceptall]] flag is set when any
+interface has the zero address (wildcard), in which case
+[[ipforme]] returns true for all packets.
 
 <<struct [[Ipselftab]]>>=
 struct Ipselftab
@@ -7779,6 +8291,16 @@ struct Iplink
 
 
 \subsection{Adding IPs}
+
+%claude:
+[[addselfcache]] is called by [[ipifcadd]] whenever a new
+address is bound to an interface. If the address already
+exists (shared between interfaces), it increments the
+reference count and adds a new [[Iplink]] to connect it
+to the new interface. Otherwise, it allocates a new
+[[Ipself]] entry and inserts it into the hash table. A
+corresponding route is also added so the routing table
+knows this address is local.
 
 <<function [[addselfcache]]>>=
 /*
@@ -7851,6 +8373,15 @@ addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a, int type)
 @
 
 \subsection{Removing IPs}
+
+%claude:
+[[remselfcache]] removes an address from the self cache
+when an interface is deconfigured. It finds the [[Ipself]]
+entry, removes the [[Iplink]] for this specific interface,
+and decrements the reference count. When the reference
+count reaches zero (no interfaces claim this address
+anymore), the [[Ipself]] entry is freed and the
+corresponding route is removed.
 
 <<function [[remselfcache]]>>=
 /*
@@ -7939,6 +8470,13 @@ out:
 @
 
 \subsection{[[/net/ipselftab]]}
+
+%claude:
+[[/net/ipselftab]] is a read-only file that lists all IP
+addresses the machine considers its own, along with the
+interface number and type (unicast, broadcast, multicast).
+This is useful for debugging address configuration and
+multicast group membership.
 
 <<[[Qid]] toplevel extra cases>>=
 Qipselftab,
@@ -8196,6 +8734,15 @@ and other applications where speed matters more than reliability.
 
 \section{Protocol initialisation}
 
+%claude:
+[[udpinit]] registers UDP as protocol 17 with the IP stack.
+It fills in the [[Proto]] method table with UDP-specific
+functions: [[udpcreate]] and [[udpclose]] manage conversations,
+[[udpconnect]] and [[udpannounce]] handle ``connect'' and
+``announce'' commands, [[udpiput]] dispatches incoming
+packets to the right conversation, and [[udpkick]] (set by
+[[udpcreate]]) adds the UDP header and sends packets out.
+
 % ipattach -> ipgetfs -> <> (as ipprotoinit[i] <- ...)
 <<function [[udpinit]]>>=
 void
@@ -8244,6 +8791,14 @@ Nchans=   1024,
 
 \section{Protocol data structures}
 
+%claude:
+[[Udppriv]] holds the protocol-wide hash table ([[Ipht]])
+used to dispatch incoming packets to the right conversation
+by looking up the destination port. [[Udpcb]] (the per-conversation
+control block stored in [[Conv.ptcl]]) holds per-connection
+state such as the ``headers'' flag for user-level UDP header
+mode.
+
 \subsection{[[Udppriv]]}
 
 % protocol priv
@@ -8259,6 +8814,16 @@ struct Udppriv
 %todo: Ipht? Ip hash table? for the Conv dispatch?
 
 \subsection{Addresses hashtable: [[Ipht]]}
+
+%claude:
+[[Ipht]] is a hash table that maps the 4-tuple (remote IP,
+remote port, local IP, local port) to a [[Conv]]. This is
+how [[udpiput]] quickly finds the conversation for an incoming
+packet: it hashes the packet's addresses and ports, then walks
+the chain. The hash function uses all four values and reduces
+modulo 521 (a prime). Wildcard matching (port 0 or address 0)
+is handled by trying progressively less specific lookups.
+
 % mv later? need to be in core DS? maybe put with UDP dispatch?
 
 % it's actually (IP|star * port|star)
@@ -8422,6 +8987,15 @@ struct Udpstats
 
 \section{Protocol header}
 
+%claude:
+[[Udp4hdr]] maps directly to the on-the-wire format:
+the first 20 bytes are the IP header (reusing [[Ip4hdr]]
+field names), followed by an 8-byte UDP header with source
+port, destination port, length, and checksum. The structure
+is laid out so that casting a [[Block]]'s read pointer to
+[[Udp4hdr*]] gives direct access to all fields without
+parsing.
+
 <<struct [[Udp4hdr]]>>=
 struct Udp4hdr
 {
@@ -8490,6 +9064,15 @@ struct Udphdr
 
 \section{[[/net/tcp/clone]]}
 
+%claude:
+[[udpcreate]] sets up a UDP conversation with a message-oriented
+read queue ([[Qmsg]], so each [[read]] returns exactly one
+datagram) and a bypass write queue that calls [[udpkick]]
+directly---there is no buffering on the write side because
+each [[write]] produces exactly one UDP packet. [[udpclose]]
+removes the conversation from the hash table and resets
+all addresses.
+
 <<function [[udpcreate]]>>=
 static void
 udpcreate(Conv *cv)
@@ -8526,6 +9109,14 @@ udpclose(Conv *c)
 @
 
 \section{[[/net/tcp/x/ctl]]}
+
+%claude:
+UDP's ``connect'' simply sets the remote address/port (via
+[[Fsstdconnect]]), marks the conversation as connected (via
+[[Fsconnected]]), and adds it to the hash table. There is no
+handshake---UDP is connectionless. ``Announce'' sets the local
+port and adds the conversation to the hash table so incoming
+packets to that port will be delivered to it.
 
 \subsection{Connect}
 
@@ -9179,6 +9770,15 @@ reliable protocol.
 
 \section{Protocol initialisation}
 
+%claude:
+[[ilinit]] registers IL as protocol 40. Like UDP, it fills
+in a [[Proto]] method table, but IL also needs [[inuse]]
+(because connections have state that prevents reuse) and
+timing infrastructure ([[inittimescale]]) for its adaptive
+retransmission. IL creates per-conversation control blocks
+([[Ilcb]]) that track the state machine, sequence numbers,
+and round-trip time estimates.
+
 <<function [[ilinit]]>>=
 void
 ilinit(Fs *f)
@@ -9257,6 +9857,16 @@ scalednconv(void)
 
 \section{Protocol data structures}
 
+%claude:
+IL's state machine has 6 states: [[Ilclosed]], [[Ilsyncer]]
+(initiating a connection), [[Ilsyncee]] (responding to a
+connection), [[Ilestablished]] (data transfer), [[Illistening]]
+(waiting for connections), and [[Ilclosing]]. The protocol
+uses 7 packet types including [[Ilsync]] (connection request),
+[[Ildata]], [[Ilack]], and [[Ilclose]]. The [[Ilcb]] (control
+block) tracks sequence numbers, acknowledgment state, and
+adaptive retransmission timers.
+
 \subsection{IL state}
 
 % look nice, simple
@@ -9334,6 +9944,18 @@ char	*iltype[] =
 @
 
 \subsection{[[Ilcb]]}
+
+%claude:
+The [[Ilcb]] (IL control block) is the per-conversation state
+for IL. It tracks the state machine, sequence numbers ([[next]]
+for sending, [[recvd]] for receiving), unacknowledged packets
+(a linked list of [[Block]]s awaiting ACKs), and out-of-order
+packets. The adaptive retransmission section tracks round-trip
+time statistics: [[delay]] (average RTT), [[mdev]] (mean
+deviation), and [[maxrtt]] (peak), which are used to set the
+retransmission timeout dynamically---packets to a slow host get
+longer timeouts while fast local hosts get tight ones.
+
 % private to conv
 
 % TODO: LP split!
@@ -9458,6 +10080,15 @@ static char *statnames[] =
 
 \section{Protocol header}
 
+%claude:
+The IL header sits on top of the IP header and adds 18 bytes:
+source and destination ports (like UDP), a packet length, a
+packet type (sync, data, ack, etc.), a 32-bit sequence number
+([[ilid]]), and a 32-bit acknowledgment number ([[ilack]]).
+The sequence and ack numbers are the core of IL's reliable
+delivery---each side tracks what it has sent and what the
+other side has received.
+
 <<struct [[Ilhdr]]>>=
 struct Ilhdr
 {
@@ -9494,6 +10125,12 @@ IL_HDRSIZE	= 18,
 
 \section{[[/net/il/clone]]}
 
+%claude:
+[[ilcreate]] sets up an IL conversation with message-oriented
+queues (like UDP) plus an acknowledgment processing goroutine.
+Unlike UDP, IL needs a ``kick'' function ([[ilkick]]) that
+adds sequence numbers and saves sent packets for retransmission.
+
 <<function [[ilcreate]]>>=
 static void
 ilcreate(Conv *c)
@@ -9510,6 +10147,15 @@ Maxrq		= 64*1024,
 % see also inuse() above, related to clone
 
 \section{[[/net/il/x/ctl]]}
+
+%claude:
+IL's ``connect'' is fundamentally different from UDP's: it
+calls [[ilstart]] with [[IL_CONNECT]], which sends an [[Ilsync]]
+packet and transitions to [[Ilsyncer]] state. The connection
+is not established until the remote side replies with its own
+[[Ilsync]]. ``Announce'' calls [[ilstart]] with [[IL_LISTEN]],
+which transitions to [[Illistening]] and waits for incoming
+sync packets.
 
 <<enum [[mode]]([[(kernel/network/ip/il.c)]])>>=
 enum mode {
@@ -9562,6 +10208,16 @@ ilannounce(Conv *c, char **argv, int argc)
 
 
 \section{IO}
+
+%claude:
+[[ilkick]] is the write-side callback: it prepends the IL
+header (including sequence number, ack number, and packet
+type), computes the checksum, and calls [[ipoput4]] to send
+the packet. Sent packets are saved in [[ic->unacked]] for
+possible retransmission. [[iliput]] is the read-side handler:
+it validates incoming packets, dispatches based on state and
+packet type to [[ilprocess]], delivers data packets to the
+conversation's read queue, and sends acknowledgments.
 
 \subsection{Writing: [[ilkick()]]}
 
@@ -9759,6 +10415,18 @@ raise:
 
 
 \section{State machine}
+
+%claude:
+IL uses a simple two-way handshake: the syncer sends an
+[[Ilsync]] packet and the syncee replies with its own
+[[Ilsync]]. Once both sides have exchanged sync packets
+with sequence numbers, the connection moves to
+[[Ilestablished]]. [[ilprocess]] is the main state machine
+dispatcher---a large switch on [[ic->state]] and packet
+type that handles acks, data delivery, retransmission
+requests ([[Ilquery]]/[[Ildataquery]]), and close
+sequencing. [[ilsendctl]] sends control packets (sync,
+ack, close) without user data.
 
 % two-way handshake
 
@@ -10422,6 +11090,18 @@ for any of these addresses.
 % See Network_v6.nw
 
 \section{Broadcast}
+
+%claude:
+Broadcast addresses have all host bits set to 1 (e.g.,
+10.0.2.255 for a /24 network). When adding an IP to an
+interface, [[ipifcadd]] registers four broadcast addresses
+in the self cache: the subnet-directed broadcast, the
+subnet-directed network address, the classful network
+broadcast, and the classful network address. For outgoing
+broadcasts, the gateway is the destination itself (not a
+router), and the source interface is looked up from the
+sender's own address.
+
 % convention is that address has all 1s
 
 
@@ -10495,6 +11175,17 @@ ipaddr IPv4bcast = {
 
 
 \section{Multicast}
+
+%claude:
+Multicast allows one packet to reach multiple machines
+simultaneously. Each [[Conv]] can join multicast groups
+by writing to its [[ctl]] file. The stack maintains two
+parallel data structures: [[Ipmulti]] (per-conversation
+list of joined groups) and [[Ipmcast]] (per-interface
+list of active multicast addresses). When a conversation
+joins a group, the medium's [[addmulti]] method configures
+the hardware (e.g., the Ethernet card's hash filter) to
+accept frames for that multicast MAC address.
 
 <<struct [[Ipmulti]]>>=
 /*
@@ -10601,6 +11292,16 @@ void  (*multicast)(void*, uchar*, int);
 
 
 \section{Network database: [[ndb]]}
+
+%claude:
+[[/net/ndb]] exposes the network database---a simple text
+format that maps hostnames to IP addresses, DNS servers,
+gateways, and other configuration. Programs like
+[[ipconfig]] write entries (e.g., \verb+sys=myhost ip=10.0.2.15+)
+after DHCP, and the connection server reads them for name
+resolution. The 1024-byte buffer in [[Fs]] is small because
+it only holds the local machine's configuration.
+
 %less: or mv in advanced features of Name resolution chapter?
 
 <<[[Fs(kernel)]] ndb fields>>=
@@ -11028,6 +11729,17 @@ main(void)
 
 \section{[[/net/log]]}
 
+%claude:
+[[/net/log]] provides a kernel-level network event log.
+The [[Netlog]] structure holds a circular buffer where
+[[netlog()]] calls write formatted messages. The [[logmask]]
+controls which protocol layers produce output (each protocol
+has a bit: [[Logip]], [[Logudp]], [[Logil]], etc.), and
+[[iponly]] can filter messages for a single IP address. This
+is the primary debugging tool for kernel network code---it
+avoids the overhead of [[print]] and works even when the
+network itself is broken.
+
 \subsection{[[Netlog]]}
 
 <<struct [[Netlog]]>>=
@@ -11381,6 +12093,15 @@ to transfer data between the card and system memory.
 
 \section{Data structures}
 
+%claude:
+The [[Dp8390]] control block maps the card's hardware state:
+the I/O port address, the ring buffer boundaries ([[pstart]]
+to [[pstop]]), the next expected receive packet ([[nxtpkt]]),
+and the transmit busy flag. The ring buffer is a circular
+region of on-card memory divided into 256-byte pages; the
+DP8390 chip writes received packets into consecutive pages
+and wraps around at [[pstop]].
+
 \subsection{Ethernet [[Dp8390]] controller}
 
 % priv field Ether.ctrl
@@ -11414,6 +12135,15 @@ struct Dp8390 {
 
 
 \section{Initialisation}
+
+%claude:
+NE2000 initialization proceeds in three phases:
+[[ether2000link]] registers the driver with the Ethernet
+subsystem, [[ne2000reset]] probes the hardware (reading the
+MAC address from the card's PROM, configuring the ring buffer
+layout), and [[dp8390attach]] starts the interrupt handler.
+The ring buffer is partitioned: the first page is reserved
+for transmit, the rest is the receive ring.
 
 % qemu.c -> <>
 <<function [[ether2000link]]>>=
@@ -11691,6 +12421,13 @@ shutdown(Ether *ether)
 
 \section{Mounting}
 
+%claude:
+[[attach]] takes the card out of monitor mode and enables
+transmit/receive. It clears the missed-packet counter,
+acknowledges any pending interrupts, and sets the interrupt
+mask to listen for packet-received, transmit-complete, and
+error conditions. After this, the card is live on the network.
+
 <<function [[attach]]>>=
 static void
 attach(Ether* ether)
@@ -11729,6 +12466,17 @@ attach(Ether* ether)
 
 \section{IO}
 
+%claude:
+The NE2000 uses programmed I/O: all communication with the
+card happens through x86 [[inb]]/[[outb]] port instructions.
+[[regr]] and [[regw]] read and write DP8390 registers;
+data transfer uses DMA-like ``remote read'' and ``remote
+write'' commands that move data between host memory and the
+card's ring buffer one word at a time. Writing transmits a
+packet by copying it to the transmit page and issuing a
+transmit command; reading walks the receive ring, extracting
+packets from consecutive pages.
+
 <<macro [[regw]]>>=
 #define regw(c, r, v)	outb((c)->port+(r), (v))
 @
@@ -11741,6 +12489,14 @@ attach(Ether* ether)
 @
 
 \subsection{Writing}
+
+%claude:
+Transmitting a packet on the NE2000 involves three steps:
+dequeue a block from the output queue, copy it to the card's
+transmit buffer using the DP8390's remote-DMA write command
+(transferring 2 bytes at a time via [[outss]]), and issue a
+transmit command. The card handles the rest: preamble, CRC,
+and carrier sense.
 
 <<function [[transmit]]([[(kernel/network/386/ether8390.c)]])>>=
 static void
@@ -11916,6 +12672,16 @@ rdwrite(Dp8390* ctlr, void* from, int len)
 
 
 \subsection{Reading}
+
+%claude:
+Packet reception is interrupt-driven. The DP8390 fires an
+interrupt when a packet arrives; the [[interrupt]] handler
+reads the ring buffer header (4 bytes: status, next page,
+length), copies the packet data from card memory to a kernel
+[[Block]] via remote-DMA read, and calls [[etheriq]] to
+deliver it to the appropriate [[Netfile]]. The receive ring
+wraps at [[pstop]]: when [[nxtpkt]] reaches the end, it
+wraps back to [[pstart]].
 
 <<function [[interrupt]]([[(kernel/network/386/ether8390.c)]])>>=
 static void
@@ -12183,6 +12949,13 @@ overflow(Ether *ether)
 
 \subsection{Multicast}
 
+%claude:
+Multicast support configures the DP8390's hash filter:
+the 64-bit multicast address register ([[mf]]) is a hash
+table where each bit corresponds to a bucket of multicast
+MAC addresses. Setting a bit causes the card to accept
+frames whose destination MAC hashes to that bucket.
+
 <<[[Dp8390]] multicast fields>>=
 uchar	mar[8];			/* shadow multicast address registers */
 int	mref[64];		/* reference counts for multicast groups */
@@ -12294,6 +13067,13 @@ promiscuous(void *arg, int )
 \subsection{Power managment}
 
 \subsection{Plug and play}
+
+%claude:
+PCI/ISA plug-and-play detection scans the PCI bus for known
+NE2000-compatible device/vendor IDs. [[ne2000pnp]] iterates
+over PCI devices matching the NE2000 class code and
+configures the I/O port and IRQ from the PCI configuration
+space, avoiding the need for manual hardware configuration.
 
 <<struct [[Ctlr]]([[(kernel/network/386/ether2000.c)]])>>=
 struct Ctlr {
@@ -12430,6 +13210,12 @@ ne2000match(Ether* edev, int id)
 
 \section{Null medium}
 
+%claude:
+The null medium discards all packets---its [[bwrite]] frees the
+block immediately. It is used for interfaces that need to exist
+in the routing table but don't actually transmit. [[nullbind]]
+simply records the device name without opening any hardware.
+
 <<global [[nullmedium]]>>=
 Medium nullmedium =
 {
@@ -12476,6 +13262,15 @@ nullmediumlink(void)
 @
 
 \section{Loopback medium}
+
+%claude:
+The loopback medium implements local-to-local communication:
+packets written via [[loopbackbwrite]] are immediately fed
+back to [[ipiput4]] on the same interface, without ever
+touching hardware. This is how a machine communicates with
+itself (address 127.0.0.1). The loopback medium has no MAC
+address and no header overhead.
+
 % mv in advanced topics? more important than the other?
 
 % echo 'bind loopback' > /net/ipifc/x/ctl
