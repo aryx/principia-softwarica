@@ -269,7 +269,7 @@ simplet(long b)
     case BUNSIGNED|BSHORT|BINT:
         return types[TUSHORT];
 
-    case 0:
+    case 0: // default to 'int' when no type indicated at all
     case BINT:
     case BINT|BSIGNED:
     case BSIGNED:
@@ -317,6 +317,7 @@ simplet(long b)
 /*e: function [[simplet]] */
 
 /*s: function [[stcompat]] */
+/// tcompat -> <>
 bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
@@ -352,6 +353,7 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 /*e: function [[stcompat]] */
 
 /*s: function [[tcompat]] */
+/// (complex -> tcom -> tcomo) | bcomplex -> <>
 bool
 tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
@@ -372,6 +374,7 @@ tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 /*e: function [[tcompat]] */
 
 /*s: function [[makedot]] */
+/// tcomd -> <>
 void
 makedot(Node *n, Type *t, long o)
 {
@@ -424,6 +427,7 @@ makedot(Node *n, Type *t, long o)
 /*e: function [[makedot]] */
 
 /*s: function [[dotsearch]] */
+/// tcomd -> <>
 Type*
 dotsearch(Sym *s, Type *t, Node *n, long *off)
 {
@@ -486,6 +490,7 @@ ambig:
 /*e: function [[dotsearch]] */
 
 /*s: function [[dotoffset]] */
+/// typeext -> <>
 long
 dotoffset(Type *st, Type *lt, Node *n)
 {
@@ -693,6 +698,7 @@ typeext(Type *st, Node *l)
 /*e: function [[typeext]] */
 
 /*s: function [[nocast]] */
+/// cgen -> cgenrel -> <>
 /*
  * a cast that generates no code
  * (same size move)
@@ -752,6 +758,7 @@ nilcast(Type *t1, Type *t2)
 /*e: function [[nilcast]] */
 
 /*s: function [[arith]] */
+/// tcomo -> <>
 /*
  * "the usual arithmetic conversions are performed"
  */
@@ -1045,6 +1052,7 @@ if(debug['<'])prtree(n, "rewrite2");
 /*e: function [[simplifyshift]] */
 
 /*s: function [[side]] */
+/// ccom -> <>
 bool
 side(Node *n)
 {
@@ -1183,6 +1191,7 @@ log2(uvlong v)
 /*e: function [[log2]] */
 
 /*s: function [[vlog]] */
+/// arith -> <>
 int
 vlog(Node *n)
 {
@@ -1380,6 +1389,7 @@ warn(Node *n, char *fmt, ...)
 /*e: function [[warn]] */
 
 /*s: function [[fatal]] */
+/// code generation stuff -> <>
 void
 fatal(Node *n, char *fmt, ...)
 {
@@ -2125,6 +2135,7 @@ urk(char *name, int max, int i)
 /*e: function [[urk]] */
 
 /*s: function [[tinit]] */
+/// main -> <>
 void
 tinit(void)
 {
@@ -2256,15 +2267,16 @@ tinit(void)
     /*s: [[tinit()]] initialise 32 bits defaults type sets */
     typeswitch = typechl;
     /*x: [[tinit()]] initialise 32 bits defaults type sets */
+    typecmplx = typesuv;
+    /*x: [[tinit()]] initialise 32 bits defaults type sets */
     /* 32-bit defaults */
     typeword = typechlp;
-    /*x: [[tinit()]] initialise 32 bits defaults type sets */
-    typecmplx = typesuv;
     /*e: [[tinit()]] initialise 32 bits defaults type sets */
 }
 /*e: function [[tinit]] */
 
 /*s: function [[deadhead]] */
+/// deadheads -> <>
 /*
  * return true if it is impossible to jump into the middle of n.
  */
@@ -2323,6 +2335,7 @@ loop:
 /*e: function [[deadhead]] */
 
 /*s: function [[deadheads]] */
+/// gen | bcomplex -> <>
 bool
 deadheads(Node *c)
 {

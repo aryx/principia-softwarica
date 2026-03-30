@@ -6,6 +6,7 @@ void	usedset(Node*, int);
 int		bcomplex(Node*, Node*);
 
 /*s: function [[codgen]] */
+// main -> compile -> yyparse -> xdecl -> <>
 //@Scheck: used by cc.y
 void codgen(Node *n, Node *nn)
 {
@@ -17,9 +18,10 @@ void codgen(Node *n, Node *nn)
     /*e: [[codgen()]] locals */
 
     /*s: [[codgen()]] initialisation */
-    cursafe = 0;
     curarg = 0;
     maxargsafe = 0;
+    /*x: [[codgen()]] initialisation */
+    cursafe = 0;
     /*e: [[codgen()]] initialisation */
     /*s: [[codgen()]] set n1 node to node in nn where have ONAME */
     /*
@@ -136,6 +138,7 @@ supgen(Node *n)
 /*e: function [[supgen]] */
 
 /*s: function [[uncomma]] */
+/// gen(case RETURN) -> <>
 Node*
 uncomma(Node *n)
 {
@@ -148,6 +151,7 @@ uncomma(Node *n)
 /*e: function [[uncomma]] */
 
 /*s: function [[gen]] */
+/// codgen -> <>
 void
 gen(Node *n)
 {
@@ -663,6 +667,7 @@ loop:
 /*e: function [[gen]] */
 
 /*s: function [[usedset]] */
+/// gen -> <>
 void
 usedset(Node *n, int o)
 {
@@ -691,7 +696,7 @@ usedset(Node *n, int o)
 /*e: function [[usedset]] */
 
 /*s: function [[bcomplex]] */
-bool
+bool//TODO error_1
 bcomplex(Node *n, Node *c)
 {
 
@@ -717,7 +722,7 @@ bcomplex(Node *n, Node *c)
     /*e: [[bcomplex()]] possibly convert node to funcall if unsupported 64 bit op */
     boolgen(n, true, Z);
 
-    return false; // no error
+    return false; // no error //TODO: OK_0
 }
 /*e: function [[bcomplex]] */
 /*e: cc2/pgen.c */

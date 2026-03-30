@@ -35,6 +35,7 @@ amap(char *s)
 /*e: function [[amap]] */
 
 /*s: function [[acidsue]] */
+/// acidvar -> <>
 Sym*
 acidsue(Type *t)
 {
@@ -51,6 +52,7 @@ acidsue(Type *t)
 /*e: function [[acidsue]] */
 
 /*s: function [[acidfun]] */
+/// acidvar -> <>
 Sym*
 acidfun(Type *t)
 {
@@ -275,6 +277,7 @@ acidtype(Type *t)
 /*e: function [[acidtype]] */
 
 /*s: function [[acidvar]] */
+/// doenum? | dodecl? -> <>
 void
 acidvar(Sym *s)
 {

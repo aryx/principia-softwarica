@@ -2,6 +2,7 @@
 #include "cc.h"
 
 /*s: function [[errorexit]] */
+/// main | compile | newio | newfile | yylex | ... -> <>
 void
 errorexit(void)
 {

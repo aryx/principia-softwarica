@@ -6,6 +6,7 @@ static	char	resvreg[nelem(reg)];
 /*e: global [[resvreg]](arm) */
 
 /*s: function [[ginit]](arm) */
+/// main -> <>
 void
 ginit(void)
 {
@@ -65,13 +66,6 @@ ginit(void)
     regnode.addable = 11;
     regnode.type = types[TLONG];
     /*x: [[ginit()]] special nodes initialisation */
-    nodsafe = new(ONAME, Z, Z);
-    nodsafe->sym = slookup(".safe");
-    nodsafe->type = types[TINT];
-    nodsafe->etype = types[TINT]->etype; // TINT
-    nodsafe->class = CAUTO;
-    complex(nodsafe);
-    /*x: [[ginit()]] special nodes initialisation */
     t = typ(TARRAY, types[TCHAR]);
     symrathole = slookup(".rathole");
     symrathole->class = CGLOBL;
@@ -85,11 +79,12 @@ ginit(void)
     complex(nodrat);
     nodrat->type = t;
     /*x: [[ginit()]] special nodes initialisation */
-    fconstnode.op = OCONST;
-    fconstnode.class = CXXX;
-    fconstnode.complex = 0;
-    fconstnode.addable = 20;
-    fconstnode.type = types[TDOUBLE];
+    nodsafe = new(ONAME, Z, Z);
+    nodsafe->sym = slookup(".safe");
+    nodsafe->type = types[TINT];
+    nodsafe->etype = types[TINT]->etype; // TINT
+    nodsafe->class = CAUTO;
+    complex(nodsafe);
     /*x: [[ginit()]] special nodes initialisation */
     nodret = new(ONAME, Z, Z);
     nodret->sym = slookup(".ret");
@@ -98,6 +93,12 @@ ginit(void)
     nodret->class = CPARAM;
     nodret = new(OIND, nodret, Z);
     complex(nodret);
+    /*x: [[ginit()]] special nodes initialisation */
+    fconstnode.op = OCONST;
+    fconstnode.class = CXXX;
+    fconstnode.complex = 0;
+    fconstnode.addable = 20;
+    fconstnode.type = types[TDOUBLE];
     /*e: [[ginit()]] special nodes initialisation */
     /*s: [[ginit()]] com64init initialisation */
     com64init();
@@ -122,6 +123,7 @@ ginit(void)
 /*e: function [[ginit]](arm) */
 
 /*s: function [[gclean]](arm) */
+/// main -> compile -> yyparse; <>
 void
 gclean(void)
 {
@@ -178,6 +180,7 @@ gclean(void)
 /*e: function [[gclean]](arm) */
 
 /*s: function [[nextpc]] */
+/// gins | gclean | ... -> <>
 void
 nextpc(void)
 {
@@ -199,26 +202,30 @@ nextpc(void)
 /*e: function [[nextpc]] */
 
 /*s: function [[gargs]] */
+/// cgenrel -> <>
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
-    long regs;
     Node fnxargs[20], *fnxp;
+    long regs; // to save cursafe
 
-    regs = cursafe;
+    regs = cursafe; // save
 
     fnxp = fnxargs;
+    // step1
     garg1(n, tn1, tn2, 0, &fnxp);	/* compile fns to temps */
 
     curarg = 0;
     fnxp = fnxargs;
+    // step2
     garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
 
-    cursafe = regs;
+    cursafe = regs; // restore
 }
 /*e: function [[gargs]] */
 
 /*s: function [[garg1]](arm) */
+/// cgenrel -> gargs -> <>
 void
 garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 {
@@ -231,8 +238,10 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
         garg1(n->right, tn1, tn2, f, fnxp);
         return;
     } 
+    // else, an argument
 
     if(f == 0) {
+        /*s: [[garg()]] when [[f == 0]], if [[n]] is complex part1 */
         if(n->complex >= FNX) {
             regsalloc(*fnxp, n);
             nod = znode;
@@ -243,8 +252,10 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
             cgen(&nod, Z);
             (*fnxp)++;
         }
+        /*e: [[garg()]] when [[f == 0]], if [[n]] is complex part1 */
     } 
     else
+
     /*s: [[garg1()]] if complex argument type */
     if(typesuv[n->type->etype]) {
         regaalloc(tn2, n);
@@ -268,10 +279,13 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
     /*e: [[garg1()]] if use REGARG and curarg is zero and simple type */
     else {
         regalloc(tn1, n, Z);
+        /*s: [[garg()]] when [[f != 0]], if [[n]] is complex part2 */
         if(n->complex >= FNX) {
             cgen(*fnxp, tn1);
             (*fnxp)++;
-        } else
+        } 
+        /*e: [[garg()]] when [[f != 0]], if [[n]] is complex part2 */
+        else
             cgen(n, tn1);
         regaalloc(tn2, n);
         gopcode(OAS, tn1, Z, tn2);
@@ -308,8 +322,9 @@ nodfconst(double d)
 /*e: function [[nodfconst]] */
 
 /*s: function [[nodreg]](arm) */
+/// regret | ... -> <>
 void
-nodreg(Node *n, Node *nn, int reg)
+nodreg(Node *n/*OUT*/, Node *nn/*IN*/, int reg)
 {
     *n = regnode;
     n->reg = reg;
@@ -349,10 +364,12 @@ tmpreg(void)
 /*e: function [[tmpreg]](arm) */
 
 /*s: function [[regalloc]](arm) */
+/// gmove |  -> <>
 void
-regalloc(Node *n, Node *tn, Node *o)
+regalloc(Node *n/*OUT*/, Node *tn/*IN*/, Node *o/*option<IN>*/)
 {
     int i, j;
+    // opti to remember last one allocated
     static int lasti;
 
     switch(tn->type->etype) {
@@ -366,13 +383,13 @@ regalloc(Node *n, Node *tn, Node *o)
     case TULONG:
 
     case TIND:
-        /*s: [[regalloc()]] if integer type tn and OREGISTER o */
+        /*s: [[regalloc()]] when integer type tn and if OREGISTER o */
         if(o != Z && o->op == OREGISTER) {
             i = o->reg;
             if(i >= 0 && i < NREG)
                 goto out;
         }
-        /*e: [[regalloc()]] if integer type tn and OREGISTER o */
+        /*e: [[regalloc()]] when integer type tn and if OREGISTER o */
 
         j = lasti + REGRET+1;
         for(i=REGRET+1; i<NREG; i++) {
@@ -414,7 +431,6 @@ regalloc(Node *n, Node *tn, Node *o)
     /*e: [[regalloc()]] switch tn type, float or vlong case */
     }
     /*s: [[regalloc()]] if reach here, unknown type */
-
     diag(tn, "unknown type in regalloc: %T", tn->type);
     // fallthrough
     /*e: [[regalloc()]] if reach here, unknown type */
@@ -473,6 +489,7 @@ err:
 /*e: function [[regfree]](arm) */
 
 /*s: function [[regsalloc]] */
+/// garg1 -> <>
 void
 regsalloc(Node *n, Node *nn)
 {
@@ -529,6 +546,7 @@ regind(Node *n, Node *nn)
 /*e: function [[regind]] */
 
 /*s: function [[raddr]](arm) */
+/// gmove -> <>
 void
 raddr(Node *n, Prog *p)
 {
@@ -548,7 +566,7 @@ raddr(Node *n, Prog *p)
 
 /*s: function [[naddr]](arm) */
 void
-naddr(Node *n, Adr *a)
+naddr(Node *n/*IN*/, Adr *a/*OUT*/)
 {
     /*s: [[naddr()]] locals */
     long v;
@@ -677,6 +695,7 @@ gmovm(Node *f, Node *t, int w)
 /*e: function [[gmovm]](arm) */
 
 /*s: function [[gmove]](arm) */
+/// cgenrel | ... -> <>
 void
 gmove(Node *f, Node *t)
 {
@@ -733,7 +752,7 @@ gmove(Node *f, Node *t)
         else
             regalloc(&nod, f, t);
         gins(a, f, &nod);
-        gmove(&nod, t);
+        gmove(&nod, t); // recurse!
         regfree(&nod);
         return;
     }
@@ -777,7 +796,7 @@ gmove(Node *f, Node *t)
         /*e: [[gmove()]] when indirect to, if ft equal tt */
         else
             regalloc(&nod, t, Z);
-        gmove(f, &nod);
+        gmove(f, &nod); // recurse!
         gins(a, &nod, t);
         regfree(&nod);
         return;
@@ -1077,6 +1096,7 @@ gmover(Node *f, Node *t)
 /*e: function [[gmover]](arm) */
 
 /*s: function [[gins]](arm) */
+/// gmove | ... -> <>
 void
 gins(int a, Node *f, Node *t)
 {
@@ -1097,6 +1117,7 @@ gins(int a, Node *f, Node *t)
 /*e: function [[gins]](arm) */
 
 /*s: function [[gopcode]](arm) */
+/// cgenrel -> <>
 void
 gopcode(int o, Node *f1, Node *f2, Node *t)
 {
@@ -1228,10 +1249,6 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         gmove(f1, t);
         return;
     /*x: [[gopcode()]] switch opcode cases */
-    case OFUNC:
-        a = ABL;
-        break;
-    /*x: [[gopcode()]] switch opcode cases */
     case OCASE:
     case OEQ:
     case ONE:
@@ -1310,6 +1327,10 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         f1 = Z;
         f2 = Z;
         break;
+    /*x: [[gopcode()]] switch opcode cases */
+    case OFUNC:
+        a = ABL;
+        break;
     /*e: [[gopcode()]] switch opcode cases */
     }
     /*s: [[gopcode()]] sanity check a */
@@ -1352,6 +1373,7 @@ samaddr(Node *f, Node *t)
 /*e: function [[samaddr]] */
 
 /*s: function [[gbranch]](arm) */
+/// codgen | ... -> <>
 void
 gbranch(int o)
 {
@@ -1372,6 +1394,7 @@ gbranch(int o)
 /*e: function [[gbranch]](arm) */
 
 /*s: function [[patch]] */
+/// gmove | gen | ... -> <>
 void
 patch(Prog *op, long pc)
 {
@@ -1382,6 +1405,7 @@ patch(Prog *op, long pc)
 /*e: function [[patch]] */
 
 /*s: function [[gpseudo]](arm) */
+/// codgen(function generation) | gextern -> <>
 void
 gpseudo(int a, Sym *s, Node *n)
 {

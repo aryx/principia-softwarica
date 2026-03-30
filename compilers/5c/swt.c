@@ -190,6 +190,7 @@ outstring(char *s, long n)
 /*e: function [[outstring]](arm) */
 
 /*s: function [[mulcon]](arm) */
+/// cgen -> cgenrel -> <>
 bool
 mulcon(Node *n, Node *nn)
 {
@@ -350,6 +351,7 @@ struct Htab {
 /*e: struct [[Htab]] */
 
 /*s: function [[outcode]](arm) */
+/// main -> compile -> yyparse; gclean -> <>
 void
 outcode(void)
 {
@@ -603,6 +605,7 @@ zaddr(char *bp, Adr *a, int s)
 /*e: function [[zaddr]](arm) */
 
 /*s: function [[align]](arm) */
+/// ??? -> <>
 long
 align(long i, Type *t, int op)
 {

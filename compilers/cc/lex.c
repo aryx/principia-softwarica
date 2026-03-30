@@ -191,6 +191,7 @@ void main(int argc, char *argv[])
 /*e: function [[main]] */
 
 /*s: function [[compile]] */
+/// main -> <> (called multiple times if multifile parallel option)
 int
 compile(char *infile, char **defs, int ndef)
 {
@@ -409,6 +410,7 @@ newio(void)
 /*e: function [[newio]] */
 
 /*s: function [[newfile]] */
+/// main | macinc -> <>
 void
 newfile(char *s, int f)
 {
@@ -1089,6 +1091,7 @@ caseout:
 
 
 /*s: function [[mpatov]] */
+/// yylex()#ncu -> <>
 /*
  * convert a string, s, to vlong in *v
  * return conversion overflow.
@@ -1414,6 +1417,7 @@ struct
 /*e: global [[itab]] */
 
 /*s: function [[cinit]] */
+/// main -> <>
 void
 cinit(void)
 {
@@ -1779,6 +1783,7 @@ VBconv(Fmt *fp)
 /*e: function [[VBconv]] */
 
 /*s: function [[setinclude]] */
+/// main -> <>(".") | main -> <>
 void
 setinclude(char *p)
 {

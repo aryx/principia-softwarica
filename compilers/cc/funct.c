@@ -294,6 +294,7 @@ bad:
 }
 /*e: function [[isfunct]] */
 /*s: function [[dclfunct]] */
+/// dodecl(xdecl, ...) ->  <>
 void
 dclfunct(Type *t, Sym *s)
 {

@@ -209,6 +209,7 @@ tcopy(Type *t)
 /*e: function [[tcopy]] */
 
 /*s: function [[doinit]] */
+/// yyparse -> xdlist -> <>
 Node*
 doinit(Sym *s, Type *t, long o, Node *a)
 {
@@ -239,7 +240,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
         a = a->left;
     initlist = a;
 
-    a = init1(s, t, o, 0);
+    a = init1(s, t, o, false);
     /*s: [[doinit()]] sanity check initlist after init1 */
     if(initlist != Z)
         diag(initlist, "more initializers than structure: %s",
@@ -354,8 +355,9 @@ isstruct(Node *a, Type *t)
 /*e: function [[isstruct]] */
 
 /*s: function [[init1]] */
+/// yyparse -> xdlist -> doinit -> <>
 Node*
-init1(Sym *s, Type *t, long o, int exflag)
+init1(Sym *s, Type *t, long o, bool exflag)
 {
     Node *a, *l, *r, nod;
     Type *t1;
@@ -375,6 +377,7 @@ init1(Sym *s, Type *t, long o, int exflag)
     if(exflag && a->op == OINIT)
         return doinit(s, t, o, nextinit());
 
+    // else
     switch(t->etype) {
     case TCHAR:
     case TUCHAR:
@@ -532,7 +535,7 @@ init1(Sym *s, Type *t, long o, int exflag)
             if(t->width != 0)
                 if(mw >= t->width)
                     break;
-            r = init1(s, t->link, o+so, 1);
+            r = init1(s, t->link, o+so, true);
             l = newlist(l, r);
             e++;
         }
@@ -566,7 +569,7 @@ init1(Sym *s, Type *t, long o, int exflag)
                     continue;
                 nextinit();
             }
-            r = init1(s, t1, o+t1->offset, 1);
+            r = init1(s, t1, o+t1->offset, true);
             l = newlist(l, r);
             a = peekinit();
             if(a == Z)
@@ -718,6 +721,7 @@ ofnproto(Node *n)
 /*e: constant [[OLDPROTO]] */
 
 /*s: function [[argmark]] */
+/// yyparse -> xdecl -> <>
 //@Scheck: not dead, used by cc.y
 void argmark(Node *n, int pass)
 {
@@ -1099,6 +1103,7 @@ push1(Sym *s)
 /*e: function [[push1]] */
 
 /*s: function [[sametype]] */
+/// xdecl -> <>
 bool
 sametype(Type *t1, Type *t2)
 {
@@ -1218,6 +1223,7 @@ struct Typetab {
 /*e: struct [[Typetab]] */
 
 /*s: function [[sigind]] */
+/// signat -> <>
 static int
 sigind(Type *t, Typetab *tt)
 {
@@ -1243,6 +1249,7 @@ sigind(Type *t, Typetab *tt)
 /*e: function [[sigind]] */
 
 /*s: function [[signat]] */
+/// sign -> signature -> <>
 static ulong
 signat(Type *t, Typetab *tt)
 {
@@ -1283,6 +1290,7 @@ signat(Type *t, Typetab *tt)
 /*e: function [[signat]] */
 
 /*s: function [[signature]] */
+/// sign -> <>
 ulong
 signature(Type *t)
 {
@@ -1298,6 +1306,7 @@ signature(Type *t)
 /*e: function [[signature]] */
 
 /*s: function [[sign]] */
+/// main -> compile -> gclean -> outcode -> zname -> <>
 ulong
 sign(Sym *s)
 {
@@ -1415,6 +1424,7 @@ Node* dcllabel(Sym *s, bool defcontext)
 /*e: function [[dcllabel]] */
 
 /*s: function [[paramconv]] */
+/// fnproto1 | pdecl -> <>
 Type*
 paramconv(Type *t, bool f)
 {
@@ -1455,6 +1465,7 @@ paramconv(Type *t, bool f)
 /*e: function [[paramconv]] */
 
 /*s: function [[adecl]] */
+/// pdecl | dodecl(<>) -> <>
 void
 adecl(int c, Type *t, Sym *s)
 {
@@ -1528,6 +1539,7 @@ adecl(int c, Type *t, Sym *s)
 /*e: function [[adecl]] */
 
 /*s: function [[pdecl]] */
+/// dodecl(<>,...) -> <> 
 void
 pdecl(int class, Type *t, Sym *s)
 {
@@ -1557,6 +1569,7 @@ pdecl(int class, Type *t, Sym *s)
 /*e: function [[pdecl]] */
 
 /*s: function [[xdecl]] */
+/// dodecl(<>, ..., node n != Z) -> <>
 void
 xdecl(int class, Type *t, Sym *s)
 {
@@ -1625,6 +1638,7 @@ xdecl(int class, Type *t, Sym *s)
 /*e: function [[xdecl]] */
 
 /*s: function [[tmerge]] */
+/// dodectl(xdecl,...) -> xdecl -> <>
 void
 tmerge(Type *t1, Sym *s)
 {
@@ -1700,6 +1714,7 @@ tmerge(Type *t1, Sym *s)
 /*e: function [[tmerge]] */
 
 /*s: function [[edecl]] */
+/// dodecl(<>) -> <>
 //@Scheck: used by cc.y
 void edecl(int c, Type *t, Sym *s)
 {

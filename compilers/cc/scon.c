@@ -22,6 +22,7 @@ acast(Type *t, Node *n)
 /*e: function [[acast]] */
 
 /*s: function [[evconst]] */
+/// gen | ... -> complex -> ccom -> <>
 void
 evconst(Node *n)
 {

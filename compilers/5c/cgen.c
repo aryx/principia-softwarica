@@ -2,6 +2,7 @@
 #include "gc.h"
 
 /*s: function [[cgen]](arm) */
+/// codgen -> gen -> <>
 void
 cgen(Node *n, Node *nn)
 {
@@ -10,6 +11,7 @@ cgen(Node *n, Node *nn)
 /*e: function [[cgen]](arm) */
 
 /*s: function [[cgenrel]](arm) */
+/// codgen -> gen -> cgen -> <>
 void
 cgenrel(Node *n, Node *nn, bool inrel)
 {
@@ -18,7 +20,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
     Node *l, *r;
     // enum<Type_kind>
     int t;
-    long curs;
+    long curs; // to save cursafe
     /*s: [[cgenrel()]] locals */
     Prog *p1;
     Node nod, nod1, nod2, nod3, nod4;
@@ -66,8 +68,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         /*e: [[cgenrel()]] if node addressable */
         // else
 
-        // save
-        curs = cursafe;
+        curs = cursafe; // save
         /*s: [[cgenrel()]] if all complex fields more than FNX */
         if(n->complex >= FNX)
          if(l->complex >= FNX)
@@ -370,55 +371,6 @@ cgenrel(Node *n, Node *nn, bool inrel)
                 regfree(&nod2);
             break;
         /*x: [[cgenrel()]] switch node kind cases */
-        case OFUNC:
-            /*s: [[cgenrel()]] when OFUNC, if indirect function call */
-            if(l->complex >= FNX) {
-                if(l->op != OIND)
-                    diag(n, "bad function call");
-
-                regret(&nod, l->left);
-                cgen(l->left, &nod);
-                regsalloc(&nod1, l->left);
-                gopcode(OAS, &nod, Z, &nod1);
-                regfree(&nod);
-
-                nod = *n;
-                nod.left = &nod2;
-                nod2 = *l;
-                nod2.left = &nod1;
-                nod2.complex = 1;
-                cgen(&nod, nn);
-
-                return;
-            }
-            /*e: [[cgenrel()]] when OFUNC, if indirect function call */
-            // else
-            /*s: [[cgenrel()]] OFUNC case, if use REGARG, part one */
-            if(REGARG >= 0)
-                o = reg[REGARG];
-            /*e: [[cgenrel()]] OFUNC case, if use REGARG, part one */
-            gargs(r, &nod, &nod1);
-            /*s: [[cgenrel()]] OFUNC case, if l not addressable */
-            if(l->addable < INDEXED) {
-                reglcgen(&nod, l, Z);
-                gopcode(OFUNC, Z, Z, &nod);
-                regfree(&nod);
-            }
-            /*e: [[cgenrel()]] OFUNC case, if l not addressable */
-            else
-                gopcode(OFUNC, Z, Z, l);
-            /*s: [[cgenrel()]] OFUNC case, if use REGARG, part two */
-            if(REGARG >= 0)
-                if(o != reg[REGARG])
-                    reg[REGARG]--;
-            /*e: [[cgenrel()]] OFUNC case, if use REGARG, part two */
-            if(nn != Z) {
-                regret(&nod, n);
-                gopcode(OAS, &nod, Z, nn);
-                regfree(&nod);
-            }
-            break;
-        /*x: [[cgenrel()]] switch node kind cases */
         case ODOT:
             sugen(l, nodrat, l->type->width);
             if(nn != Z) {
@@ -595,6 +547,57 @@ cgenrel(Node *n, Node *nn, bool inrel)
             boolgen(n, true, nn);
             break;
         /*x: [[cgenrel()]] switch node kind cases */
+        case OFUNC:
+            /*s: [[cgenrel()]] when OFUNC, if complex indirect function call */
+            if(l->complex >= FNX) {
+                if(l->op != OIND)
+                    diag(n, "bad function call");
+
+                regret(&nod, l->left);
+                cgen(l->left, &nod);
+                regsalloc(&nod1, l->left);
+                gopcode(OAS, &nod, Z, &nod1);
+                regfree(&nod);
+
+                nod = *n;
+                nod.left = &nod2;
+                nod2 = *l;
+                nod2.left = &nod1;
+                nod2.complex = 1;
+                cgen(&nod, nn);
+
+                return;
+            }
+            /*e: [[cgenrel()]] when OFUNC, if complex indirect function call */
+            // else
+
+            /*s: [[cgenrel()]] OFUNC case, if use REGARG, part one */
+            if(REGARG >= 0)
+                o = reg[REGARG];
+            /*e: [[cgenrel()]] OFUNC case, if use REGARG, part one */
+            gargs(r, &nod, &nod1);
+            /*s: [[cgenrel()]] OFUNC case, if l not addressable */
+            if(l->addable < INDEXED) {
+                reglcgen(&nod, l, Z);
+                gopcode(OFUNC, Z, Z, &nod);
+                regfree(&nod);
+            }
+            /*e: [[cgenrel()]] OFUNC case, if l not addressable */
+            else
+                gopcode(OFUNC, Z, Z, l);
+            /*s: [[cgenrel()]] OFUNC case, if use REGARG, part two */
+            if(REGARG >= 0)
+                if(o != reg[REGARG])
+                    reg[REGARG]--;
+            /*e: [[cgenrel()]] OFUNC case, if use REGARG, part two */
+            if(nn != Z) {
+                // store result of function call (in REGRET) to dest nn
+                regret(&nod, n);
+                gopcode(OAS, &nod, Z, nn);
+                regfree(&nod);
+            }
+            break;
+        /*x: [[cgenrel()]] switch node kind cases */
         case OBIT:
             /*s: [[cgenrel()]] nullwarn check if nn is null */
             if(nn == Z) {
@@ -658,8 +661,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
             diag(n, "unknown op in cgen: %O", o);
             break;
         }
-        // restore
-        cursafe = curs;
+        cursafe = curs; // restore
     }
     return;
 }
@@ -805,13 +807,14 @@ bcgen(Node *n, bool btrue)
 /*e: function [[bcgen]] */
 
 /*s: function [[boolgen]](arm) */
+/// cgenrel | bcomplex -> <>
 void
 boolgen(Node *n, int btrue, Node *nn)
 {
     int o;
     Prog *p1, *p2;
     Node *l, *r, nod, nod1;
-    long curs;
+    long curs; // to save cursafe
 
     /*s: [[boolgen()]] debug */
     if(debug['g']) {
@@ -819,7 +822,7 @@ boolgen(Node *n, int btrue, Node *nn)
         prtree(n, "boolgen");
     }
     /*e: [[boolgen()]] debug */
-    curs = cursafe;
+    curs = cursafe; // save
 
     l = n->left;
     r = n->right;
@@ -971,7 +974,7 @@ boolgen(Node *n, int btrue, Node *nn)
         goto com;
 
     }
-    cursafe = curs;
+    cursafe = curs; // restore
 }
 /*e: function [[boolgen]](arm) */
 
@@ -1156,6 +1159,7 @@ sugen(Node *n, Node *nn, long w)
         cgen(n, Z);
         break;
 
+    //TODO: lpsplit and move with other OCOND stuff later
     case OCOND:
         bcgen(n->left, 1);
         p1 = p;

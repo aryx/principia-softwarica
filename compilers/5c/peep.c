@@ -4,6 +4,7 @@
 int xtramodes(Reg*, Adr*);
 
 /*s: function [[peep]](arm) */
+/// codgen -> regopt -> <>
 void
 peep(void)
 {

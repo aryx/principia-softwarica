@@ -994,6 +994,7 @@ macprag(void)
 /*e: function [[macprag]] */
 
 /*s: function [[macend]] */
+/// (domacro | macinc  -> yyerror; <>) | (macund -> <>)
 void
 macend(void)
 {

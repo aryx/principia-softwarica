@@ -21,6 +21,7 @@ static void comma(Node*);
 static Node*	commas(Com*, Node*);
 
 /*s: function [[complex]] */
+/// dodecl (array size) | doenum (evconst) | codgen | bcomplex -> <>
 void
 complex(Node *n)
 {
@@ -81,6 +82,7 @@ enum
 /*e: enum [[_anon_ (cc/com.c)]] */
 
 /*s: function [[tcom]] */
+/// complex -> <> -> tcomo|tcoma|tcomx -> <>
 /*
  * evaluate types
  * evaluate lvalues (addable == 1)
@@ -455,7 +457,7 @@ tcomo(Node *n, int f)
         break;
     /*x: [[tcomo()]] switch node kind cases */
     case OASI:	/* same as as, but no test for const */
-        n->op = OAS;
+        n->op = OAS; // converted in regular assign!
         o = tcom(l);
         if(o | tcom(r))
             goto bad;
@@ -1176,6 +1178,7 @@ commas(Com *com, Node *n)
 /*e: function [[commas]] */
 
 /*s: function [[comma]] */
+/// complex -> <>
 static void
 comma(Node *n)
 {
@@ -1212,6 +1215,7 @@ if(debug['y']) prtree(n, "final");
 /*e: function [[comma]] */
 
 /*s: function [[ccom]] */
+/// complex -> <> 
 /*
  *	general rewrite
  *	(IND(ADDR x)) ==> x
