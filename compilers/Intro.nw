@@ -614,6 +614,18 @@ an [[if(cond) A else B]] becomes a conditional branch past
 loop becomes a backward jump to the condition test.
 
 %yoann: concrete diagram example of C on left and assembly on right
+%claude:
+\begin{verbatim}
+  C code                    ARM assembly
+  ------                    ------------
+  if(x > 0)                    CMP   x, $0
+      y = 1;                   BLE   L1
+  else                         MOVW  $1, y
+      y = 2;                   B     L2
+                            L1:
+                               MOVW  $2, y
+                            L2:
+\end{verbatim}
 
 \subsection{Linearization}
 % registerization
@@ -634,6 +646,17 @@ The same applies to data: a C struct with nested fields is
 decomposed into byte-level accesses at computed offsets.
 
 %yoann: concrete diagram example of C on left and assembly on right
+%claude:
+\begin{verbatim}
+  C code                    ARM assembly
+  ------                    ------------
+  z = x + y * 3;               MOVW  y, R0
+                                MOVW  $3, R1
+                                MUL   R1, R0       // R0 = y * 3
+                                MOVW  x, R1
+                                ADD   R1, R0       // R0 = x + y*3
+                                MOVW  R0, z
+\end{verbatim}
 
 \subsection{Frameization}
 
@@ -652,6 +675,18 @@ where the return value goes, and which registers must be saved
 and restored across calls.
 
 %yoann: concrete diagram example of C on left and assembly on right
+%claude:
+\begin{verbatim}
+  C code                    ARM assembly
+  ------                    ------------
+  int add(int a, int b) {      TEXT add+0(SB), $8   // 8 bytes for locals
+      int sum;                 MOVW a+0(FP), R0     // param a at FP+0
+      sum = a + b;             MOVW b+4(FP), R1     // param b at FP+4
+      return sum;              ADD  R1, R0
+  }                            MOVW R0, sum-4(SP)   // local at SP-4
+                               MOVW R0, .ret+0(FP)  // return value
+                               RET
+\end{verbatim}
 
 \subsection{Optimizations}
 
@@ -796,14 +831,27 @@ and labelization (no branches here, just a straight-line sequence):
     MOVW R0, 0(SP)
     BL   print+0(SB)
     RET
+
+  GLOBL s+0(SB), $20
+  DATA  s+0(SB)/4, $"the "
+  DATA  s+4(SB)/4, $"answ"
+  DATA  s+8(SB)/4, $"er i"
+  DATA  s+12(SB)/4, $"s %d"
+  DATA  s+16(SB)/2, $"\n\z"
 \end{verbatim}
 %
-The string literal [["the answer is %d\n"]] becomes a static
-data item labeled [[s]], and the constant expression [[40 + 2]]
+The constant expression [[40 + 2]]
 is folded at compile time into [[42]].
-%yoann1: add the GLOBL and DATA declaration for s
+The string literal [["the answer is %d\n"]] becomes a static
+data item labeled [[s]], declared with [[GLOBL]] (which reserves
+20 bytes) and initialized in 4-byte chunks by a series of [[DATA]]
+directives.
 
 %yoann: say again that need read assembler book to understand output
+%claude:
+See the \book{Assembler} for a full explanation of the [[TEXT]],
+[[GLOBL]], and [[DATA]] pseudo-instructions and the addressing
+modes used here ([[SB]], [[SP]], [[FP]]).
 
 \section{Input C language}
 
@@ -949,23 +997,53 @@ addressing modes in detail.
 %yoann: caller-saved or callee-saved? what is design choice vs constraint? what is arch-specific?
 
 %claude:
-When compiling function calls, the compiler must decide which
-registers are preserved across calls and which are not.
+A compiler must make many decisions about how to use the
+target machine's registers. Some of these are {\em hardware
+constraints} imposed by the architecture (e.g., which register
+is the program counter), and some are {\em design choices}
+that the compiler or calling convention can decide freely
+(e.g., which registers to use for passing arguments).
+The most important design choice is the {\em calling convention}:
+which registers are preserved across function calls and which
+are not.
+
+%claude:
 In a {\em caller-saved} (``volatile'') convention, the caller
 saves any registers it still needs before the call and restores
 them after; the callee is free to clobber them.
 In a {\em callee-saved} (``non-volatile'') convention, the callee
 saves the registers it wants to use on entry and restores them
 before returning; the caller can assume they are untouched.
+In practice, architectures use a mix of both: some registers
+are caller-saved and some are callee-saved.
 
 %yoann: maybe diagram illustrating both cases, with function foo and bar and use of registers and comment indicating save/restore with maybe original C code and generated assembly to better understand
+%claude:
+\begin{verbatim}
+  Caller-saved (R0-R3):            Callee-saved (R4-R11):
+
+  foo:                             foo:
+    MOVW $1, R0  // use R0           MOVW R4, -4(SP)  // save R4
+    MOVW R0, -4(SP) // save R0      MOVW $1, R4      // use R4
+    BL   bar                         BL   bar
+    MOVW -4(SP), R0 // restore      // R4 still valid, no restore needed
+    ...                              MOVW -4(SP), R4  // restore R4
+                                     RET
+\end{verbatim}
+%claude:
+With caller-saved registers, the caller must save and restore
+around every call. With callee-saved registers, the callee
+saves once on entry and restores once on exit, but only if
+it actually uses the register. Functions that make no calls
+(leaf functions) benefit most from callee-saved registers:
+they can use them freely without saving.
 
 %claude:
-The ARM architecture defines which registers are which: the
-ARM Procedure Call Standard (APCS) designates R0--R3 as caller-saved
-(used for arguments and scratch) and R4--R11 as callee-saved.
-This split is a hardware constraint that [[5c]] must respect.
-But within that framework, the \plan compiler makes its own
+On ARM, the split between the two is fixed by the ARM
+Procedure Call Standard (APCS): R0--R3 are caller-saved
+(used for arguments and scratch) and R4--R11 are callee-saved.
+This is a hardware constraint that [[5c]] must respect.
+But within that framework, \plan makes its own
 design choices: it reserves certain registers for fixed purposes
 (R12 as the static base [[SB]], R13 as [[SP]], R14 as the link
 register, R15 as [[PC]]), and it uses a leaf-function optimization
