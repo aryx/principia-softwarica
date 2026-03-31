@@ -1077,6 +1077,13 @@ void set_pixel(uint x, uint y, byte red, byte green, byte blue) {
 \n notion of soft screen and flush vs direct frame buffer but can see later
 
 %yoann: say in practice kernel protect memory so can't do that, but if graphics in kernel then can
+%claude:
+In practice, a user-space program cannot write directly to the frame
+buffer because the kernel protects that memory region. However, the
+graphics code in [[draw]] runs inside the kernel, so it {\em can}
+access the frame buffer directly---this is one reason why the
+drawing algorithms live in kernel-space libraries ([[libmemdraw]])
+rather than in user-space.
 
 
 \subsection{Vector graphics (shapes)}
@@ -2419,8 +2426,8 @@ as [[Image]]s.
 %In this chapter, I will present the most important data structures of [[draw]].
 Most of those types are defined in [[draw.h]]; the others are defined in the kernel,
 but they relate to structures from [[draw.h]].
-For instance, [[Client]], which is defined in [[devdraw.c]],
-is the kernel equivalent of [[Display]], which is defined in [[draw.h]].
+For instance, [<Client>], which is defined in [[devdraw.c]],
+is the kernel equivalent of [<Display>], which is defined in [[draw.h]].
 \l also memdraw.h
 
 \n many important globals are in libdraw/globals.c
@@ -2445,7 +2452,7 @@ is the kernel equivalent of [[Display]], which is defined in [[draw.h]].
 % http://blog.golang.org/go-image-package
 
 %claude:
-[[Point]] and [[Rectangle]] use integer coordinates (pixels),
+[<Point>] and [<Rectangle>] use integer coordinates (pixels),
 not floating-point---this is the RasterOp imaging model rather
 than the PostScript model. Coordinates grow right and down, with
 (0,0) at the top-left. A key convention: [[Rectangle.max]] is
@@ -2456,6 +2463,48 @@ indexing) simplifies arithmetic: [[Dx(r)]] is simply
 [[r.max.x - r.min.x]].
 
 %yoann: ASCII diagram of coordinate and Dx, Dr, etc.
+%claude:
+\begin{verbatim}
+       x
+  0---->  min.x          max.x
+  |         |              |
+  | y       +--------------+  min.y
+  v         |              |
+            |   Dx(r)      |
+            |<------------>|
+            |              |  Dy(r)
+            |              |  ^
+            |              |  |
+            +--------------+  max.y
+                              (first point outside)
+\end{verbatim}
+
+
+<<signatures point functions>>=
+extern Point    Pt(int, int);
+extern int      eqpt(Point, Point);
+
+extern Point    addpt(Point, Point);
+extern Point    subpt(Point, Point);
+extern Point    divpt(Point, int);
+extern Point    mulpt(Point, int);
+@
+
+<<signatures rectangle functions>>=
+extern Rectangle    Rect(int, int, int, int);
+extern Rectangle    Rpt(Point, Point);
+extern int          eqrect(Rectangle, Rectangle);
+
+extern Rectangle    rectaddpt(Rectangle, Point);
+extern Rectangle    rectsubpt(Rectangle, Point);
+extern Rectangle    insetrect(Rectangle, int);
+extern Rectangle    canonrect(Rectangle);
+extern int      rectXrect(Rectangle, Rectangle);
+extern int      rectinrect(Rectangle, Rectangle);
+extern void     combinerect(Rectangle*, Rectangle);
+
+extern int      ptinrect(Point, Rectangle);
+@
 
 \subsection{[[Point]]}
 
@@ -2505,8 +2554,12 @@ Point	ZP;
 %ocaml: explicit initialize instead of bss default 0 initialization
 
 %yoann: introduce Vector type, and say same than Point, just interpreted differently
+%claude:
+A [[Point]] can also be interpreted as a {\em vector}---a
+displacement rather than a position. The typedef below makes
+this explicit. For instance, [<addpt()>] adds a vector to a
+point, and [<rectaddpt()>] translates a rectangle by a vector.
 
-% can be interpreted as a vector too sometimes.
 <<type [[Vector]]>>=
 typedef Point Vector;
 @
@@ -2717,6 +2770,12 @@ rectsubpt(Rectangle r, Point p)
 
 
 %yoann: mayber say ptinrect quite important? for example used in Windows book for?
+%claude:
+[<ptinrect()>] is one of the most heavily used geometry functions.
+It appears everywhere a mouse click must be tested against a
+region: in [<menuhit()>] to find which menu item was selected,
+in [[rio]] to determine which window was clicked, and in widget
+code to dispatch events to the right handler.
 
 <<function [[ptinrect]]>>=
 bool
@@ -3109,6 +3168,14 @@ if(cp == nil)
 % even windows!
 
 %yoann: transition paragraph
+%claude:
+With the geometry types in place, we can now turn to the central
+abstraction of [[draw]]: the image. In \plan, images are
+remarkably versatile---the same [<Image>] type represents the
+screen, off-screen buffers, colors, masks, font glyphs, and even
+windows. This uniformity is what makes the [[draw]] API so
+compact: a single [<draw()>] function handles all of these because
+they are all just rectangular arrays of pixels.
 
 % unify on-screen and offscreen data
 
@@ -3635,6 +3702,25 @@ struct and makes it easy to iterate over channels with a
 shift loop.
 
 %yoann: ASCII diagram of nibble and pairs and bits and concrete example
+%claude:
+Each channel descriptor is a 32-bit word made of up to four
+8-bit slots, read from low bits to high bits. Each slot packs
+a 4-bit type and a 4-bit bit-count:
+\begin{verbatim}
+  RGBA32 = CHAN4(CRed,8, CGreen,8, CBlue,8, CAlpha,8)
+
+  31      24 23      16 15       8 7        0
+  +---+-----+---+-----+---+------+---+-----+
+  | A |  8  | B |  8  | G |   8  | R |  8  |
+  +---+-----+---+-----+---+------+---+-----+
+  type nbits type nbits type nbits type nbits
+   slot 3     slot 2     slot 1     slot 0
+
+  depth = 8 + 8 + 8 + 8 = 32 bits per pixel
+\end{verbatim}
+%
+For a simpler format like [[GREY1]], only slot~0 is used
+(type=[[CGrey]], nbits=1), and slots 1--3 are zero.
 
 <<type [[channels]]>>=
 typedef ulong channels;
@@ -4097,6 +4183,33 @@ the original Porter-Duff paper, so this compositing algebra
 is a natural fit for \plan.
 
 %yoann: ASCII diagram of those SinD and 4bit mask with concrete example and maybe ASCII diagrams of image operations illustrating those operators
+%claude:
+The four elementary bits correspond to what survives in each
+region of the Venn diagram between source and destination:
+\begin{verbatim}
+          Source (S)        Destination (D)
+        +----------+       +----------+
+        |          |       |          |
+        |  SoutD   +---+---+  DoutS   |
+        |  (bit 1) |SinD|DinS| (bit 0) |
+        |          |bit3|bit2|          |
+        +----------+---+---+----------+
+                   overlap
+\end{verbatim}
+%
+For example, [[SoverD]] = [[SinD]]\verb+|+[[SoutD]]\verb+|+[[DoutS]]
+= 8\verb+|+2\verb+|+1 = 11:
+keep the source everywhere it exists (in and out of D),
+and keep the destination only where the source is absent.
+The result is the classic ``paint on top'' effect:
+\begin{verbatim}
+  Clear  =  0  = 0000    S      = 10 = 1010
+  SoverD = 11  = 1011    D      =  5 = 0101
+  DoverS = 13  = 1101    SxorD  =  3 = 0011
+  SinD   =  8  = 1000    DinS   =  4 = 0100
+  SoutD  =  2  = 0010    DoutS  =  1 = 0001
+  SatopD =  9  = 1001    DatopS =  6 = 0110
+\end{verbatim}
 
 <<[[Client]] drawing state fields>>=
 // enum<Drawop>
@@ -4181,6 +4294,14 @@ library must cooperate: the kernel sets up the frame buffer
 and the [[/dev/draw]] device, while the user calls
 [<initdraw()>] to open a connection, allocate the initial
 screen image, and set up fonts.
+
+
+<<signatures init and close functions>>=
+// This sets the following globals: display, view, font (and screen).
+extern int  initdraw(Errorfn, char*, char*);
+extern Display* initdisplay(char*, char*, Errorfn);
+extern void     closedisplay(Display*);
+@
 
 \section{Kernel side}
 % part1
@@ -5489,7 +5610,7 @@ if(disp == nil)
 %claude:
 All drawing operations are marshalled into byte-encoded
 commands written to [[/dev/draw/x/data]]. The library
-functions ([[line()]], [[draw()]], [[ellipse()]], etc.) don't
+functions ([<line()>], [<draw()>], [<ellipse()>], etc.) don't
 draw directly---they encode their arguments into a command
 buffer and [<flushimage()>] writes the buffer to the kernel.
 The [<drawdevtab>] device then dispatches each command byte
@@ -6207,9 +6328,9 @@ Every drawing operation follows a five-step pipeline:
 (1)~the application calls an API function (e.g., [[line]]),
 (2)~the library marshalls arguments into a byte buffer using
 [[BPLONG]]/[[BPSHORT]] and [[bufimage]],
-(3)~[[drawwrite]] dispatches to [[drawmesg]] which unmarshalls
+(3)~[<drawwrite()>] dispatches to [<drawmesg()>] which unmarshalls
 with [[BGLONG]]/[[BGSHORT]] and calls the kernel algorithm,
-(4)~the algorithm operates on [[Memimage]] pixels, and
+(4)~the algorithm operates on [<Memimage>] pixels, and
 (5)~optionally, a hardware hook flushes changes to the display.
 This protocol uses about 20 single-letter command codes
 (\verb+'d'+ for draw, \verb+'L'+ for line, \verb+'b'+ for
@@ -6217,9 +6338,13 @@ allocate, etc.)---compared to over 120 in X11.
 
 \subsection{Step 1: API function}
 
-% first API.
-
-% ex line() ...
+%yoann: paragraph with ex of API function, ex line() ...
+%claude:
+The API function is what the programmer calls, for example
+[<line()>], [<draw()>], or [<ellipse()>]. These functions
+take high-level parameters (points, rectangles, images) and
+validate them before passing them to the marshalling step.
+They are defined in [[libdraw/]] and declared in [[draw.h]].
 
 %real-world: =~ Xlib layer
 
@@ -6228,7 +6353,6 @@ allocate, etc.)---compared to over 120 in X11.
 % (Java says marshalling is serializing the data and the code itself)
 
 % ex line code to marshall with use of BGSHORT, bufimage, etc.
-
 
 % Lots of boilerplate code, would be better to use thrift in the end?
 % Lots of marshalling/unmarshalling boilerplate with BPLONG and so on.
@@ -6358,11 +6482,11 @@ if(nn != n){
 %real-world: =~ Xserver
 
 %claude:
-[[drawmesg]] is the kernel-side dispatcher: a single
+[<drawmesg()>] is the kernel-side dispatcher: a single
 [[while]] loop that consumes the byte stream written to
 [[/dev/draw/x/data]], dispatching on the first byte of each
 command. Each [[case]] unmarshalls the arguments, resolves
-image IDs to [[DImage]]s via [[drawlookup]], and calls the
+image IDs to [<DImage>]s via [<drawlookup()>], and calls the
 corresponding [[memdraw]] function. The variable [[m]]
 tracks how many bytes each command consumed so the loop
 can advance to the next one.
@@ -6417,11 +6541,29 @@ drawmesg(Client *client, void *av, int n)
 \subsection{Step 4: algorithm}
 % Memory Algorithm?
 
+%yoann: paragraph for this step
+%claude:
+After unmarshalling, [<drawmesg()>] calls the actual drawing
+algorithm in [[libmemdraw]]---for example, [<memimagedraw()>]
+for rectangles or [<memimageline()>] for lines. These functions
+operate directly on [<Memimage>] pixel buffers in kernel memory,
+performing clipping, replication, and Porter-Duff compositing.
+
 %real-world: libpixman?
 
 \subsection{Step 5 (optional): hardware support hook}
 
 %real-world: libdrm and Linux kernel comm?
+
+%yoann: paragraph for this step
+%claude:
+Some operations can be accelerated by the graphics hardware.
+The [[screen.h]] interface defines hooks (e.g., [[hwdraw]],
+[[arch_flushmemscreen]]) that a device driver can implement.
+For instance, the VGA driver can use hardware blitting to
+copy rectangles faster than software. If no hardware support
+is available, the hook is a no-op and the software algorithm
+from step~4 does all the work.
 
 % via screen and then VGAscr and then VGAdev interfaces
 % (and also VGAcur interface)
@@ -6469,12 +6611,30 @@ drawmesg(Client *client, void *av, int n)
 Images are the universal abstraction in [[draw]]: the screen
 is an image, colors are 1x1 replicated images, masks are
 images, font glyphs are images, and even windows are images
-with special properties. [[allocimage]] creates a new image
+with special properties. [<allocimage>] creates a new image
 in the display server (kernel) and returns a handle; all
 subsequent operations on that image go through the
 user/kernel bridge. The [[repl]] flag creates a tiled
 image that repeats infinitely---this is how a single-pixel
 color image can fill any rectangle.
+
+<<signatures image functions>>=
+extern Image*   allocimage(Display*, Rectangle, channels, bool, rgba);
+extern int      freeimage(Image*);
+@
+
+<<signatures clipping functions>>=
+extern void     replclipr(Image*, int, Rectangle);
+@
+
+<<signature flush function>>=
+extern int      flushimage(Display*, bool);
+@
+
+<<signatures image naming functions>>=
+extern Image*   namedimage(Display*, char*);
+extern int      nameimage(Image*, char*, bool);
+@
 
 \section{Allocation}
 
@@ -6484,14 +6644,14 @@ color image can fill any rectangle.
 % allocimage(2)
 
 %claude:
-[[allocimage]] follows the standard drawing protocol:
+[<allocimage()>] follows the standard drawing protocol:
 the library marshalls a \verb+'b'+ command with the new
 image's parameters (rectangle, channel format, replication
 flag, initial fill color) into the display buffer. On the
-kernel side, [[drawmesg]] allocates a [[Memimage]] via
-[[allocmemimage]], installs it in the client's [[DImage]]
+kernel side, [<drawmesg()>] allocates a [<Memimage>] via
+[<allocmemimage()>], installs it in the client's [<DImage>]
 hash, and fills it with the requested color. The client
-gets back an [[Image]] handle with a fresh ID. Freeing
+gets back an [<Image>] handle with a fresh ID. Freeing
 sends an \verb+'f'+ command.
 
 \subsection{API}
@@ -6539,7 +6699,7 @@ freeimage(Image *i)
 \subsection{Marshalling}
 
 %claude:
-[[_allocimage]] encodes 51 bytes: command letter \verb+'b'+,
+[[_allocimage()]] encodes 51 bytes: command letter \verb+'b'+,
 image ID (client-allocated), screen ID, refresh flag,
 channel descriptor, replication flag, two rectangles (r and
 clipr), and the fill color. If replication is requested,
@@ -6837,8 +6997,8 @@ case 'f':
 \subsection{Algorithm}
 
 %claude:
-[[allocmemimage]] allocates both the metadata ([[Memdata]],
-[[Memimage]]) and the pixel buffer from the kernel's image
+[[allocmemimage()]] allocates both the metadata ([<Memdata>],
+[<Memimage>]) and the pixel buffer from the kernel's image
 pool. The layout at [[md->base]] is: a back-pointer to the
 [[Memdata]] (for pool compaction), a debug word (caller PC),
 then the pixel data. [[drawinstall]] wraps the result in a
@@ -6931,12 +7091,12 @@ if(i == nil){
 \subsection{[[Client]] and [[Memimage]] connection, [[DImage]]}
 
 %claude:
-[[drawinstall]] and [[drawuninstall]] manage the client's
-hash table of images. [[drawinstall]] wraps a [[Memimage]] in
+[<drawinstall()>] and [<drawuninstall()>] manage the client's
+hash table of images. [[drawinstall()]] wraps a [[Memimage]] in
 a [[DImage]], assigns the requested ID, and inserts it into
 the [[Client.dimage]] hash by chaining on [[DImage.next]].
-[[drawuninstall]] walks the chain to find and remove the entry,
-then calls [[drawfreedimage]] which decrements the reference
+[[drawuninstall()]] walks the chain to find and remove the entry,
+then calls [<drawfreedimage()>] which decrements the reference
 count and frees the underlying [[Memimage]] when it drops to
 zero.
 
@@ -7208,10 +7368,10 @@ if(ddst == nil)
 
 %claude:
 Drawing commands are buffered in user space and only sent
-to the kernel when [[flushimage]] is called. This batching
+to the kernel when [[flushimage()]] is called. This batching
 is critical for performance---without it, every [[draw]] call
 would require a system call. Programs typically call
-[[flushimage(display, 1)]] once per event loop iteration,
+[[flushimage(display, true)]] once per event loop iteration,
 after all drawing is done.
 
 \subsection{API}
@@ -7323,12 +7483,12 @@ case 'v':
 \subsection{Algorithm}
 
 %claude:
-[[drawflush]] copies the accumulated dirty rectangle
-([[flushrect]]) to the hardware via [[arch_flushmemscreen]],
-then resets [[flushrect]] to an empty (inverted) rectangle.
-[[dstflush]] is called after every drawing operation: if the
-destination is the screen (ID 0), it expands [[flushrect]]
-via [[combinerect]] to include the drawn area. [[combinerect]]
+[[drawflush()]] copies the accumulated dirty rectangle
+([<flushrect()>]) to the hardware via [<arch_flushmemscreen()>],
+then resets [[flushrect()]] to an empty (inverted) rectangle.
+[<dstflush()>] is called after every drawing operation: if the
+destination is the screen (ID 0), it expands [<flushrect()>]
+via [<combinerect()>] to include the drawn area. [<combinerect()>]
 computes the bounding box of two rectangles---a simple
 union that avoids tracking individual dirty regions.
 
@@ -7936,6 +8096,9 @@ if(checkname && !drawgoodname(d))
 %******************************************************************************
 \label{chap:draw}
 
+%yoann: chapter introduction
+
+
 %\section{[[Point]] and [[Rectangle]]} types in core DS.
 
 % Drawing a "rectangle" is actually a fundamental op. 
@@ -7954,6 +8117,19 @@ if(checkname && !drawgoodname(d))
 %  explain API and rational (but has just draw(), no line()/ellipsis()/...)
 
 % aka bitblt aka RasterOp
+
+<<signatures draw functions>>=
+extern void draw(Image*, Rectangle, Image*, Image*, Point);
+
+extern void drawop(Image*, Rectangle, Image*, Image*, Point, Drawop);
+extern void gendraw(Image*, Rectangle, Image*, Point, Image*, Point);
+extern void gendrawop(Image*, Rectangle, Image*, Point, Image*, Point, Drawop);
+@
+
+<<signatures border functions>>=
+extern void border(Image*, Rectangle, int, Image*, Point);
+extern void borderop(Image*, Rectangle, int, Image*, Point, Drawop);
+@
 
 \section{[[draw()]]}
 
@@ -10033,6 +10209,19 @@ the [[draw]] primitive.
 % instead we have each time a xxx or xxxfill with path as parameter.
 % stateless!
 
+<<signatures shape functions>>=
+extern void line(Image*, Point, Point, int, int, int, Image*, Point);
+
+extern void poly(Image*, Point*, int, int, int, int, Image*, Point);
+extern void fillpoly(Image*, Point*, int, int, Image*, Point);
+
+extern void ellipse(Image*, Point, int, int, int, Image*, Point);
+extern void fillellipse(Image*, Point, int, int, Image*, Point);
+
+extern void arc(Image*, Point, int, int, int, Image*, Point, int, int);
+extern void fillarc(Image*, Point, int, int, Image*, Point, int, int);
+@
+
 \section{Lines}
 
 %claude:
@@ -11905,11 +12094,24 @@ as images containing pre-rendered glyphs at a fixed size.
 A font file lists ranges of Unicode code points, each mapped
 to a {\em subfont}---a single image containing all the glyphs
 for that range. Subfonts are loaded on demand and cached, so
-only the character ranges actually used consume memory. The
-[[string]] function draws text by looking up each rune in the
+only the character ranges actually used consume memory. 
+%
+The [<string()>] function draws text by looking up each rune in the
 font cache, finding the glyph's rectangle within the subfont
 image, and copying it to the destination.
 
+<<signature string functions>>=
+extern Point    string(Image*, Point, Image*, Point, Font*, char*);
+extern Point    runestring(Image*, Point, Image*, Point, Font*, Rune*);
+extern Point    stringbg(Image*, Point, Image*, Point, Font*, char*, Image*, Point);
+extern Point    runestringbg(Image*, Point, Image*, Point, Font*, Rune*, Image*, Point);
+
+extern Point    stringsize(Font*, char*);
+extern int      stringwidth(Font*, char*);
+
+extern Point    runestringsize(Font*, Rune*);
+extern int      runestringwidth(Font*, Rune*);
+@
 \l how to draw text in diagonal? can? cairo can.
 
 % fonts are a special kind of pictures
@@ -11959,16 +12161,6 @@ image, and copying it to the destination.
 % Hinting information = hacks to adjust glyphs at small pixel sizes
 % Advanced topic.
 
-%claude:
-The data structures form a two-level hierarchy: [[Font]]
-holds the top-level description (height, ascent, list of
-[[Cachefont]] ranges), while [[Subfont]] holds the actual
-glyph image and per-character metrics ([[Fontchar]]).
-Subfonts are loaded on demand and cached: [[Font.cache]]
-is a circular buffer of recently used glyph entries, so
-a typical program touching only ASCII never loads the
-CJK subfonts.
-
 \section{Font files formats}
 
 %claude:
@@ -12009,6 +12201,16 @@ uses Latin characters never loads CJK glyph images.
 % fixed size, fixed orientation :( no codemap.
 
 \section{Additional data structures}
+
+%claude:
+The data structures form a two-level hierarchy: [<Font>]
+holds the top-level description (height, ascent, list of
+[[Cachefont]] ranges), while [<Subfont>] holds the actual
+glyph image and per-character metrics ([<Fontchar>]).
+Subfonts are loaded on demand and cached: [[Font.cache]]
+is a circular buffer of recently used glyph entries, so
+a typical program touching only ASCII never loads the
+CJK subfonts.
 
 \subsection{[[Font]] and [[font]]}
 
@@ -12944,7 +13146,7 @@ if(f == nil)
 %https://engineering.eventbrite.com/its-2015-and-drawing-text-is-still-hard-webgl-threejs/
 
 %claude:
-The [[string]] function draws text by iterating over each
+The [<string()>] function draws text by iterating over each
 rune, loading the corresponding subfont glyph into the
 kernel cache if needed ([[cachechars]]), and then issuing
 a batch draw command that copies all the cached glyphs at
@@ -15075,12 +15277,24 @@ packinfo(Fontchar *fc, uchar *p, int n)
 %claude:
 Images live in the display server (kernel), so loading an
 image from disk requires transferring pixel data across the
-user/kernel boundary. [[loadimage]] sends raw pixel data in
+user/kernel boundary. [<loadimage()>] sends raw pixel data in
 chunks (limited by the command buffer size), while
-[[readimage]] reads \plan's native image file format (which
+[<readimage()>] reads \plan's native image file format (which
 includes a text header with dimensions and channel format,
 followed by optionally compressed pixel data). The
 compression uses a simple run-length scheme.
+
+<<signatures image IO functions>>=
+extern int      loadimage(Image*, Rectangle, byte*, int);
+extern Image*   readimage(Display*, fdt, bool);
+
+extern int      unloadimage(Image*, Rectangle, byte*, int);
+extern int      writeimage(fdt, Image*, bool);
+
+// compressed variants
+extern int      cloadimage(Image*, Rectangle, byte*, int);
+extern Image*   creadimage(Display*, int, int);
+@
 
 %trans:
 % seen before API calls to image IO functions:
@@ -17227,6 +17441,24 @@ This is the building block that [[rio]] uses to implement
 its window management, but any program can create layers
 (e.g., [[acme]] uses them for its panels).
 
+<<signatures screen allocation functions>>=
+extern Screen*  allocscreen(Image*, Image*, int);
+extern int      freescreen(Screen*);
+@
+
+<<signatures window allocation functions>>=
+extern Image*   allocwindow(Screen*, Rectangle, int, ulong);
+@
+
+<<signatures window stack manipulation functions>>=
+extern void topwindow(Image*);
+extern void bottomwindow(Image*);
+@
+
+<<signatures window other functions>>=
+extern int  originwindow(Image*, Point, Point);
+@
+
 % kind of window.
 % but not process associated, so better use term layer, but in the end
 % used for windows! by rio!
@@ -17318,9 +17550,9 @@ its window management, but any program can create layers
 
 %claude:
 The layer system introduces several new types.
-[[Screen]] (user-side) and [[Memscreen]] (kernel-side) represent
+[<Screen>] (user-side) and [<Memscreen>] (kernel-side) represent
 a ``desktop''---the base image on which layers are stacked.
-[[Memlayer]] is attached to each [[Memimage]] that participates
+[<Memlayer>] is attached to each [<Memimage>] that participates
 in the layer stack, linking it into a doubly-linked list
 ordered front-to-back. Each layer optionally has a [[save]]
 image (the backing store) that preserves pixels hidden by
@@ -20288,12 +20520,12 @@ return n;
 \label{chap:windowing-support}
 
 %claude:
-This chapter covers the [[initdraw]] machinery that
+This chapter covers the [<initdraw()>] machinery that
 connects an application to the windowing system ([[rio]]).
-When a program calls [[initdraw]], it negotiates with
-[[rio]] to get a [[view]] image (its window) and a
-[[screen]] (a [[Screen]] structure for creating sub-layers).
-The [[gengetwindow]] function handles window resize events
+When a program calls [[initdraw()]], it negotiates with
+[[rio]] to get a [<view>] image (its window) and a
+[<screen>] (a [<Screen>] structure for creating sub-layers).
+The [<gengetwindow()>] function handles window resize events
 by re-reading the window image from [[/dev/winname]].
 
 %trans:
@@ -20323,6 +20555,10 @@ by re-reading the window image from [[/dev/winname]].
 % rio creates a public screen, with public windows (images).
 % then builds a screen for each window, then a border (a window?)
 % and then a subwindow for the client.
+
+<< signature [[gengetwindow]]>>=
+extern int  gengetwindow(Display*, char*, Image**, Screen**, int);
+@
 
 \section{Additional data structures}
 

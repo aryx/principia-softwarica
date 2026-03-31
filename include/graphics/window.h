@@ -17,27 +17,36 @@ struct Screen
 // set by initdraw() automatically.
 extern  Screen  *screen; // was called _screen before
 
-// called by initdraw()
+// initdraw -> <>
+/*s:  signature [[gengetwindow]] */
 extern int  gengetwindow(Display*, char*, Image**, Screen**, int);
+/*e:  signature [[gengetwindow]] */
 
 //
 // Base layer
 //
+/*s: signatures screen allocation functions */
 extern Screen*  allocscreen(Image*, Image*, int);
 extern int      freescreen(Screen*);
+/*e: signatures screen allocation functions */
 extern Screen*  publicscreen(Display*, int, ulong);
 
 /*
  * Windows
  */
+/*s: signatures window allocation functions */
 extern Image*   allocwindow(Screen*, Rectangle, int, ulong);
-
-extern int  originwindow(Image*, Point, Point);
-extern void bottomnwindows(Image**, int);
-extern void bottomwindow(Image*);
-extern void topnwindows(Image**, int);
-extern void topwindow(Image*);
-
+/*e: signatures window allocation functions */
 extern int  newwindow(char*);
 
+/*s: signatures window stack manipulation functions */
+extern void topwindow(Image*);
+extern void bottomwindow(Image*);
+/*e: signatures window stack manipulation functions */
+extern void bottomnwindows(Image**, int);
+extern void topnwindows(Image**, int);
+
+/*s: signatures window other functions */
+extern int  originwindow(Image*, Point, Point);
+/*e: signatures window other functions */
 /*e: include/graphics/window.h */

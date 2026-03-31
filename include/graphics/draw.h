@@ -37,7 +37,6 @@ typedef struct  Mouse Mouse;
 //----------------------------------------------------------------------------
 // Geometry
 //----------------------------------------------------------------------------
-
 /*s: struct [[Point]] */
 struct  Point
 {
@@ -45,7 +44,6 @@ struct  Point
     int y;
 };
 /*e: struct [[Point]] */
-
 /*s: type [[Vector]] */
 typedef Point Vector;
 /*e: type [[Vector]] */
@@ -61,7 +59,6 @@ struct Rectangle
 //----------------------------------------------------------------------------
 // Colors
 //----------------------------------------------------------------------------
-
 /*s: enum [[Colors]] */
 enum
 {
@@ -117,7 +114,6 @@ struct RGB
 //----------------------------------------------------------------------------
 // Channels
 //----------------------------------------------------------------------------
-
 /*s: enum [[ImageChan]] */
 /*
  * image channel descriptors 
@@ -187,14 +183,13 @@ enum ImageType {
 typedef ulong channels;
 /*e: type [[channels]] */
 
-
-/*s: type [[Errorfn]] */
-typedef void (*Errorfn)(Display*, char*);
-/*e: type [[Errorfn]] */
-
 //----------------------------------------------------------------------------
 // Display
 //----------------------------------------------------------------------------
+// used in Display, must be before
+/*s: type [[Errorfn]] */
+typedef void (*Errorfn)(Display*, char*);
+/*e: type [[Errorfn]] */
 
 /*s: struct [[Display]] */
 struct Display
@@ -263,7 +258,6 @@ struct Display
 //----------------------------------------------------------------------------
 // Image
 //----------------------------------------------------------------------------
-
 /*s: struct [[Image]] */
 struct Image
 {
@@ -294,7 +288,6 @@ struct Image
 //----------------------------------------------------------------------------
 // Font
 //----------------------------------------------------------------------------
-
 /*s: struct [[Font]] */
 struct Font
 {
@@ -333,8 +326,6 @@ struct Font
 };
 /*e: struct [[Font]] */
 
-
-
 /*s: enum [[constants1]] */
 enum
 {
@@ -351,7 +342,6 @@ enum
 //----------------------------------------------------------------------------
 // Drawop
 //----------------------------------------------------------------------------
-
 /*s: enum [[drawop]] */
 enum Drawop
 {
@@ -381,7 +371,6 @@ typedef enum drawop Drawop;
 //----------------------------------------------------------------------------
 // Misc
 //----------------------------------------------------------------------------
-
 /*s: enum [[Refresh]] */
 enum RefreshMethod
 {
@@ -430,45 +419,54 @@ extern  Rectangle   ZR;
 // Functions
 //******************************************************************************
 
-
 //----------------------------------------------------------------------------
 // Display
 //----------------------------------------------------------------------------
-
+/*s: signatures init and close functions */
 // This sets the following globals: display, view, font (and screen).
 extern int  initdraw(Errorfn, char*, char*);
+extern Display* initdisplay(char*, char*, Errorfn);
+extern void     closedisplay(Display*);
+/*e: signatures init and close functions */
+
 extern int  geninitdraw(char*, Errorfn, char*, char*, char*, int);
 // to call after a resize event
 extern int  getwindow(Display*, int);
 
-extern Display* initdisplay(char*, char*, Errorfn);
-extern void     closedisplay(Display*);
-
+/*s: signature flush function */
 extern int      flushimage(Display*, bool);
+/*e: signature flush function */
 
 extern void drawerror(Display*, char*);
 
 //----------------------------------------------------------------------------
 // Image
 //----------------------------------------------------------------------------
-
 /*
  * Image management
  */
+/*s: signatures image functions */
 extern Image*   allocimage(Display*, Rectangle, channels, bool, rgba);
-extern Image*   allocimagemix(Display*, rgba, rgba);
 extern int      freeimage(Image*);
+/*e: signatures image functions */
+extern Image*   allocimagemix(Display*, rgba, rgba);
 
+/*s: signatures image IO functions */
 extern int      loadimage(Image*, Rectangle, byte*, int);
-extern int      unloadimage(Image*, Rectangle, byte*, int);
 extern Image*   readimage(Display*, fdt, bool);
+
+extern int      unloadimage(Image*, Rectangle, byte*, int);
 extern int      writeimage(fdt, Image*, bool);
+
 // compressed variants
 extern int      cloadimage(Image*, Rectangle, byte*, int);
 extern Image*   creadimage(Display*, int, int);
+/*e: signatures image IO functions */
 
+/*s: signatures image naming functions */
 extern Image*   namedimage(Display*, char*);
 extern int      nameimage(Image*, char*, bool);
+/*e: signatures image naming functions */
 
 //----------------------------------------------------------------------------
 // Channels
@@ -480,7 +478,6 @@ extern  channels    strtochan(char*);
 //----------------------------------------------------------------------------
 // Colors
 //----------------------------------------------------------------------------
-
 /*
  * Colors
  */
@@ -494,10 +491,10 @@ extern int      cmap2rgba(int);
 //----------------------------------------------------------------------------
 // Geometry
 //----------------------------------------------------------------------------
-
 /*
  * Geometry
  */
+/*s: signatures point functions */
 extern Point    Pt(int, int);
 extern int      eqpt(Point, Point);
 
@@ -505,17 +502,11 @@ extern Point    addpt(Point, Point);
 extern Point    subpt(Point, Point);
 extern Point    divpt(Point, int);
 extern Point    mulpt(Point, int);
-
+/*e: signatures point functions */
+/*s: signatures rectangle functions */
 extern Rectangle    Rect(int, int, int, int);
 extern Rectangle    Rpt(Point, Point);
 extern int          eqrect(Rectangle, Rectangle);
-
-/*s: function [[Dx]] */
-#define Dx(r)   ((r).max.x - (r).min.x)
-/*e: function [[Dx]] */
-/*s: function [[Dy]] */
-#define Dy(r)   ((r).max.y - (r).min.y)
-/*e: function [[Dy]] */
 
 extern Rectangle    rectaddpt(Rectangle, Point);
 extern Rectangle    rectsubpt(Rectangle, Point);
@@ -524,86 +515,114 @@ extern Rectangle    canonrect(Rectangle);
 extern int      rectXrect(Rectangle, Rectangle);
 extern int      rectinrect(Rectangle, Rectangle);
 extern void     combinerect(Rectangle*, Rectangle);
+
 extern int      ptinrect(Point, Rectangle);
+/*e: signatures rectangle functions */
+/*s: function [[Dx]] */
+#define Dx(r)   ((r).max.x - (r).min.x)
+/*e: function [[Dx]] */
+/*s: function [[Dy]] */
+#define Dy(r)   ((r).max.y - (r).min.y)
+/*e: function [[Dy]] */
 
 extern void     icossin(int, int*, int*);
 extern void     icossin2(int, int, int*, int*);
 
 // Clipping and replication
+/*s: signatures clipping functions */
 extern void     replclipr(Image*, int, Rectangle);
+/*e: signatures clipping functions */
 extern int      rectclip(Rectangle*, Rectangle);
+
 extern int      drawreplxy(int, int, int);  /* used to be drawsetxy */
 extern Point    drawrepl(Rectangle, Point);
 
 //----------------------------------------------------------------------------
 // Drawing
 //----------------------------------------------------------------------------
-
 /*
  * Graphics
  */
+/*s: signatures draw functions */
 extern void draw(Image*, Rectangle, Image*, Image*, Point);
+
 extern void drawop(Image*, Rectangle, Image*, Image*, Point, Drawop);
 extern void gendraw(Image*, Rectangle, Image*, Point, Image*, Point);
 extern void gendrawop(Image*, Rectangle, Image*, Point, Image*, Point, Drawop);
-
+/*e: signatures draw functions */
+/*s: signatures border functions */
 extern void border(Image*, Rectangle, int, Image*, Point);
 extern void borderop(Image*, Rectangle, int, Image*, Point, Drawop);
+/*e: signatures border functions */
 
+/*s: signatures shape functions */
 extern void line(Image*, Point, Point, int, int, int, Image*, Point);
-extern void lineop(Image*, Point, Point, int, int, int, Image*, Point, Drawop);
 
 extern void poly(Image*, Point*, int, int, int, int, Image*, Point);
-extern void polyop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
 extern void fillpoly(Image*, Point*, int, int, Image*, Point);
-extern void fillpolyop(Image*, Point*, int, int, Image*, Point, Drawop);
 
 extern void ellipse(Image*, Point, int, int, int, Image*, Point);
-extern void ellipseop(Image*, Point, int, int, int, Image*, Point, Drawop);
 extern void fillellipse(Image*, Point, int, int, Image*, Point);
-extern void fillellipseop(Image*, Point, int, int, Image*, Point, Drawop);
 
 extern void arc(Image*, Point, int, int, int, Image*, Point, int, int);
-extern void arcop(Image*, Point, int, int, int, Image*, Point, int, int, Drawop);
 extern void fillarc(Image*, Point, int, int, Image*, Point, int, int);
+/*e: signatures shape functions */
+
+extern void lineop(Image*, Point, Point, int, int, int, Image*, Point, Drawop);
+
+extern void polyop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
+extern void fillpolyop(Image*, Point*, int, int, Image*, Point, Drawop);
+
+extern void ellipseop(Image*, Point, int, int, int, Image*, Point, Drawop);
+extern void fillellipseop(Image*, Point, int, int, Image*, Point, Drawop);
+
+extern void arcop(Image*, Point, int, int, int, Image*, Point, int, int, Drawop);
 extern void fillarcop(Image*, Point, int, int, Image*, Point, int, int, Drawop);
 
-extern int  bezier(Image*, Point, Point, Point, Point, int, int, int, Image*, Point);
 extern int  bezierop(Image*, Point, Point, Point, Point, int, int, int, Image*, Point, Drawop);
+
 extern int  bezspline(Image*, Point*, int, int, int, int, Image*, Point);
 extern int  bezsplineop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
+
 extern int  fillbezier(Image*, Point, Point, Point, Point, int, Image*, Point);
 extern int  fillbezierop(Image*, Point, Point, Point, Point, int, Image*, Point, Drawop);
+
 extern int  fillbezspline(Image*, Point*, int, int, Image*, Point);
 extern int  fillbezsplineop(Image*, Point*, int, int, Image*, Point, Drawop);
 
 extern int  bezsplinepts(Point*, int, Point**);
 
-
+/*s: signature string functions */
 extern Point    string(Image*, Point, Image*, Point, Font*, char*);
+extern Point    runestring(Image*, Point, Image*, Point, Font*, Rune*);
+extern Point    stringbg(Image*, Point, Image*, Point, Font*, char*, Image*, Point);
+extern Point    runestringbg(Image*, Point, Image*, Point, Font*, Rune*, Image*, Point);
+
+extern Point    stringsize(Font*, char*);
+extern int      stringwidth(Font*, char*);
+
+extern Point    runestringsize(Font*, Rune*);
+extern int      runestringwidth(Font*, Rune*);
+/*e: signature string functions */
 extern Point    stringop(Image*, Point, Image*, Point, Font*, char*, Drawop);
 extern Point    stringn(Image*, Point, Image*, Point, Font*, char*, int);
 extern Point    stringnop(Image*, Point, Image*, Point, Font*, char*, int, Drawop);
-extern Point    runestring(Image*, Point, Image*, Point, Font*, Rune*);
+
 extern Point    runestringop(Image*, Point, Image*, Point, Font*, Rune*, Drawop);
 extern Point    runestringn(Image*, Point, Image*, Point, Font*, Rune*, int);
 extern Point    runestringnop(Image*, Point, Image*, Point, Font*, Rune*, int, Drawop);
-extern Point    stringbg(Image*, Point, Image*, Point, Font*, char*, Image*, Point);
+
 extern Point    stringbgop(Image*, Point, Image*, Point, Font*, char*, Image*, Point, Drawop);
 extern Point    stringnbg(Image*, Point, Image*, Point, Font*, char*, int, Image*, Point);
 extern Point    stringnbgop(Image*, Point, Image*, Point, Font*, char*, int, Image*, Point, Drawop);
-extern Point    runestringbg(Image*, Point, Image*, Point, Font*, Rune*, Image*, Point);
+
 extern Point    runestringbgop(Image*, Point, Image*, Point, Font*, Rune*, Image*, Point, Drawop);
 extern Point    runestringnbg(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point);
 extern Point    runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point, Drawop);
 
 
-extern Point    stringsize(Font*, char*);
-extern int      stringwidth(Font*, char*);
 extern int      stringnwidth(Font*, char*, int);
 
-extern Point    runestringsize(Font*, Rune*);
-extern int      runestringwidth(Font*, Rune*);
 extern int      runestringnwidth(Font*, Rune*, int);
 
 //----------------------------------------------------------------------------
