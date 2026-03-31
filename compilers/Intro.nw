@@ -23,6 +23,34 @@ assembly, and ultimately machine code, is essential.
 % http://damienkatz.net/2013/01/the_unreasonable_effectiveness_of_c.html ?
 % even ocaml needs C :) for ocamlrun and its runtime library
 
+%claude:
+A compiler is a critical piece of the development toolchain:
+every C program in this book series---the \book{Shell}, the
+\book{Builder}, the \book{Kernel}---was compiled by a C compiler
+before it could run. Understanding how that translation works
+removes a layer of mystery and makes you a more effective
+programmer, whether you are debugging a miscompilation,
+writing performance-sensitive code, or simply trying to
+understand what the machine actually executes.
+
+%claude:
+Compilers are also where many important ideas in computer science
+come together: formal grammars and parsing, type systems, graph
+algorithms for register allocation, and low-level code generation.
+These techniques are not confined to compilers---they appear in
+linters, code formatters, IDEs, query engines, and static analysis
+tools. Understanding a real compiler gives you a foundation
+for all of these.
+
+%claude:
+The industry certainly takes compilers seriously: Google, Apple,
+and others invest heavily in LLVM and GCC, and compiler
+improvements directly translate into faster software for
+millions of users. Even in the age of AI coding assistants,
+understanding compilation matters---an LLM can generate C code,
+but only a compiler can tell you whether it is well-typed,
+and only a compiler can turn it into instructions the processor
+can execute.
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -93,6 +121,8 @@ I will explain in this book the code of the \plan ARM C compiler
 [[5c]], written by Ken Thompson, which contains about 15\,000 lines
 of C (plus a Yacc grammar for parsing).
 %
+[[5c]] is written in C, with its parser using Yacc~\cite{yacc}.
+%
 Like for most books in \principia, I chose a \plan program because
 those programs are simple, small, elegant, open source, and
 they form together a coherent set.
@@ -109,6 +139,13 @@ A nice bonus is that [[5c]] includes lint-like checks
 (e.g., ``variable set but not used'') that catch common mistakes
 at compile time.
 
+%claude:
+[[5c]] is also historically significant: its design was carried
+forward into the Go compiler, which was originally written in C
+and derived directly from the \plan compiler sources before
+being rewritten in Go in 2015. So studying [[5c]] is also,
+in a sense, studying the ancestor of the Go toolchain.
+
 \section{Other compilers}
 
 Here are a few compilers that I considered for this book, but
@@ -116,11 +153,31 @@ which I ultimately discarded:
 
 \begin{itemize}
 
-\item gcc --- too large, with multiple input languages and output targets.
+%history:
+%claude:
+\item Dennis Ritchie's original C compiler [[cc]] (1973) was the
+first C compiler, written for the PDP-11. It was a two-pass compiler
+with a recursive descent parser. The code is historically
+fascinating but tied to a now-obsolete architecture and
+hard to follow without PDP-11 knowledge.
+
+%history:
+%claude:
+\item The Portable C Compiler [[pcc]]~\cite{pcc} (1979), written by
+Steve Johnson, made C portable across architectures and was used
+in \unix V7 and BSD. At about 7\,000 LOC, it is a reasonable
+size, but its code-generation tables are dense and hard to read.
+[[pcc]] was the standard \unix compiler until GCC replaced it.
+
+\item gcc --- about 15\,000\,000 LOC across all frontends
+and backends. Even the C frontend alone is enormous. GCC
+is an engineering marvel but far too large to read cover to cover.
 %big. Lots of input languages. Lots of output targets.
 
 \item clang/LLVM --- cleaner than GCC and with excellent error messages,
-but still very large.
+but the LLVM infrastructure alone is several million LOC.
+The modular architecture is admirable, but the sheer size
+puts it out of reach for a book like this.
 %cleaner but still very big
 % nice to have single binary that can cross compile for multiple targets, nice
 % interface (cleaner than 5c/vc/...; interfaces are better!)
@@ -128,23 +185,43 @@ but still very large.
 % "A tourist guide to LLVM":
 %http://blog.regehr.org/archives/1453
 
-\item lcc --- about 20\,000 lines and arguably better structured, but
+\item lcc --- about 20\,000 LOC and arguably better structured
+than [[5c]], with a clean retargetable backend. But
 there is already a book on it~\cite{lcc-book}, its copyright is
-restrictive, and it does not use yacc.
+restrictive, and it does not use yacc (or lex), so
+the frontend is harder to follow.
 %maybe better actually, but already a book on it,
 % 20 000 LOC according to wikipedia
 % but seems to not use yacc (or lex), and copyright seems restrictive
 
+%claude:
+\item tcc --- Fabrice Bellard's Tiny C Compiler, about 30\,000 LOC.
+Compiles C almost instantly and is self-hosting, but
+it targets x86 (more complex than ARM) and its code
+is optimized for compilation speed rather than readability.
+% cool maybe
+
+%claude:
+\item 8cc and chibicc --- two small, self-hosting C compilers by
+Rui Ueyama (about 6\,000 and 10\,000 LOC respectively).
+[[chibicc]] in particular has excellent, readable code
+and would make a fine subject for a book. But neither uses
+yacc, and neither is a production compiler---they are
+educational projects that were never used to build
+a real operating system.
+% https://github.com/rui314/8cc
+%   http://www.sigbus.info/how-i-wrote-a-self-hosting-c-compiler-in-40-days.html
+%   but no yacc
+
 \item compcert --- a formally verified compiler written in Coq, with
-a proper IL and CFG, but much harder to read.
+a proper IL and CFG, but much harder to read for anyone
+not fluent in Coq.
 % harder to understand coq :), but definitly better IL and CFG I think.
 
-\item bcc --- Bruce Evans's compiler, historically notable as the
-compiler Linus Torvalds used for early Linux development.
+\item bcc --- Bruce Evans's compiler (about 8\,500 LOC),
+historically notable as the compiler Linus Torvalds used for early Linux
+development. It targets the 8086/80386 and is showing its age.
 % bruce evans, code used by linus at the beginning?
-
-\item fbcc and tcc --- small and interesting, but less mature.
-% cool maybe
 
 \end{itemize}
 
@@ -217,6 +294,32 @@ compiler Linus Torvalds used for early Linux development.
 % some hand-made diagrams and illustation of front/back with llvm intermediates
 % https://nicoleorchard.com/blog/compilers
 
+%claude:
+\begin{figure}[]\centering
+\includegraphics[width=\textwidth]{lineage}
+\caption{C compilers timeline}
+\label{fig:lineage}
+\end{figure}
+
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major C compilers.
+Dennis Ritchie's [[cc]] (1973) is the ancestor of all C compilers.
+The Portable C Compiler [[pcc]] (1979) made C available on many
+architectures and was the standard \unix compiler for years.
+GCC (1987) and later Clang/LLVM (2007) dominate today.
+The \plan compilers (in red) descend directly from Ritchie's
+original [[cc]] and occupy a unique niche: production-quality
+compilers small enough to read in full.
+
+%claude:
+I think [[5c]] represents the best compromise for this book:
+it is a real, production compiler---used to build an entire
+operating system---yet its 15\,000 LOC are within reach
+of a single reader. It uses standard tools (Yacc for parsing),
+targets a clean RISC architecture (ARM), and its one-pass
+design, while limiting optimization, makes the code flow
+easy to follow from input to output.
+
 \section{Getting started}
 
 % need to use 5l? not like gcc where can create executable directly
@@ -224,11 +327,6 @@ compiler Linus Torvalds used for early Linux development.
 
 To play with [[5c]], you will first need to install
 the \plan fork used in \principia (see \urlinstall).
-%claude:
-The \plan toolchain ([[5a]], [[5l]], [[5c]]) can also be compiled
-natively on Linux, macOS, or Windows through
-Goken9cc\furl{https://github.com/aryx/goken9cc}, so you
-can cross-compile ARM programs from your regular machine.
 
 %claude:
 Unlike [[gcc]], which invokes the assembler and linker
@@ -244,6 +342,12 @@ Hello World
 You can also use [[5c -S]] to see the assembly output
 without generating an object file, which is useful for
 understanding what the compiler does.
+
+%claude:
+The \plan toolchain ([[5a]], [[5l]], [[5c]]) can also be compiled
+natively on Linux, macOS, or Windows through
+Goken9cc\furl{https://github.com/aryx/goken9cc}, so you
+can cross-compile ARM programs from your regular machine.
 
 \section{Requirements}
 
@@ -280,8 +384,8 @@ understanding what the compiler does.
 This book assumes you know C well enough to read the compiler's
 source code (which is itself written in C). Some familiarity
 with compiler concepts---ASTs, lexers, parsers, type systems---is
-helpful but not strictly required, as the Principles section above
-provides the essential background.
+helpful but not strictly required, as the Principles section
+in the next chapter provides the essential background.
 %
 Reading the \book{Assembler} or \book{Emulator} first is recommended,
 as [[5c]] generates ARM assembly directly (there is no intermediate
@@ -509,6 +613,8 @@ an [[if(cond) A else B]] becomes a conditional branch past
 [[A]] to [[B]], with a label at the join point. A [[while]]
 loop becomes a backward jump to the condition test.
 
+%yoann: concrete diagram example of C on left and assembly on right
+
 \subsection{Linearization}
 % registerization
 
@@ -527,6 +633,8 @@ becomes: load [[y]] into a register, multiply by [[z]], add [[x]].
 The same applies to data: a C struct with nested fields is
 decomposed into byte-level accesses at computed offsets.
 
+%yoann: concrete diagram example of C on left and assembly on right
+
 \subsection{Frameization}
 
 % - parameters, arguments, locals, more structured forms than just plain stack
@@ -542,6 +650,8 @@ the stack pointer), and tears it down on exit. The
 {\em calling convention} defines which registers hold arguments,
 where the return value goes, and which registers must be saved
 and restored across calls.
+
+%yoann: concrete diagram example of C on left and assembly on right
 
 \subsection{Optimizations}
 
@@ -691,6 +801,9 @@ and labelization (no branches here, just a straight-line sequence):
 The string literal [["the answer is %d\n"]] becomes a static
 data item labeled [[s]], and the constant expression [[40 + 2]]
 is folded at compile time into [[42]].
+%yoann1: add the GLOBL and DATA declaration for s
+
+%yoann: say again that need read assembler book to understand output
 
 \section{Input C language}
 
@@ -732,7 +845,7 @@ bit manipulation are central---and [[5c]] must handle
 all of these, including the many dark corners of C's
 syntax and semantics.
 
-\subsection{C innovations}
+%\subsection{C innovations}
 
 % innovation of C vs fortran/pascal/algol?
 %  - pointer arithmetic? (but also a bad thing to have such wild pointers)
@@ -758,10 +871,13 @@ and wild pointers are easy to create.
 %claude:
 C also introduced a rich set of bit-manipulation operators
 ([[&]], [[|]], [[^]], [[<<]], [[>>]], and their assignment forms),
-making it a natural DSL for the kind of hardware-level code
+making it a natural Domain Specific Language (DSL) for the kind of
+hardware-level code
 that fills the \book{Linker}, \book{Emulator}, and \book{Assembler}.
 Bitfields let structures map directly onto hardware register
-layouts. And C's overloaded arithmetic (the same [[+]] works
+layouts. 
+%
+Finally, C's overloaded arithmetic (the same [[+]] works
 for [[int]], [[long]], [[float]], and [[double]]) simplifies
 the surface language at the cost of a complex type-checker
 that must insert the right coercions.
@@ -780,7 +896,7 @@ that must insert the right coercions.
 %claude:
 Like [[5a]], [[5c]] generates object files in \plan's AST-based
 format (not machine code). The output is essentially a serialized
-list of assembly instructions---the same [[Prog]] structures
+list of assembly instructions---the same [<Prog>] structures
 that the \book{Assembler} describes. The linker [[5l]] then
 performs the actual machine code generation. You can use
 [[5c -S]] to see the assembly in textual form.
@@ -841,6 +957,8 @@ them after; the callee is free to clobber them.
 In a {\em callee-saved} (``non-volatile'') convention, the callee
 saves the registers it wants to use on entry and restores them
 before returning; the caller can assume they are untouched.
+
+%yoann: maybe diagram illustrating both cases, with function foo and bar and use of registers and comment indicating save/restore with maybe original C code and generated assembly to better understand
 
 %claude:
 The ARM architecture defines which registers are which: the
