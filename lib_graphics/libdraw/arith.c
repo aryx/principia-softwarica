@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/arith.c */
+/*s: libdraw/arith.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -202,4 +202,4 @@ Point	ZP;
 /*s: global [[ZR]] */
 Rectangle ZR;
 /*e: global [[ZR]] */
-/*e: lib_graphics/libdraw/arith.c */
+/*e: libdraw/arith.c */

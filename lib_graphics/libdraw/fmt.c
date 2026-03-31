@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/fmt.c */
+/*s: libdraw/fmt.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -25,4 +25,4 @@ Pfmt(Fmt *f)
 }
 /*e: function [[Pfmt]] */
 
-/*e: lib_graphics/libdraw/fmt.c */
+/*e: libdraw/fmt.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/ldelete.c */
+/*s: libmemlayer/ldelete.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -78,4 +78,4 @@ _memlsetclear(Memscreen *s)
     }
 }
 /*e: function [[_memlsetclear]] */
-/*e: lib_graphics/libmemlayer/ldelete.c */
+/*e: libmemlayer/ldelete.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/scripts/mkcmap.c */
+/*s: libmemdraw/scripts/mkcmap.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -77,4 +77,4 @@ main(int argc, char **argv)
     exits(0);
 }
 /*e: function [[main]]([[(lib_graphics/libmemdraw/scripts/mkcmap.c)]]) */
-/*e: lib_graphics/libmemdraw/scripts/mkcmap.c */
+/*e: libmemdraw/scripts/mkcmap.c */

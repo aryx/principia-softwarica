@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/draw.c */
+/*s: libdraw/draw.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -112,4 +112,4 @@ border(Image *im, Rectangle r, int i, Image *color, Point sp)
         color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
 }
 /*e: function [[border]] */
-/*e: lib_graphics/libdraw/draw.c */
+/*e: libdraw/draw.c */

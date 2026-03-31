@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/font.c */
+/*s: libdraw/font.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -246,4 +246,4 @@ freefont(Font *f)
     free(f);
 }
 /*e: function [[freefont]] */
-/*e: lib_graphics/libdraw/font.c */
+/*e: libdraw/font.c */

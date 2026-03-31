@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/io.c */
+/*s: libmemdraw/io.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -404,4 +404,4 @@ writememimage(int fd, Memimage *i)
 }
 /*e: function [[writememimage]] */
 
-/*e: lib_graphics/libmemdraw/io.c */
+/*e: libmemdraw/io.c */

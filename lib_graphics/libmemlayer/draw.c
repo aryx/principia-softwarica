@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/draw.c */
+/*s: libmemlayer/draw.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -265,4 +265,4 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     /*e: [[memdraw()]] when have layers */
 }
 /*e: function [[memdraw]] */
-/*e: lib_graphics/libmemlayer/draw.c */
+/*e: libmemlayer/draw.c */

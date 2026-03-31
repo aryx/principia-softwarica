@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/defont.c */
+/*s: libdraw/defont.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -415,4 +415,4 @@ _unpackinfo(Fontchar *fc, byte *p, int n)
 }
 /*e: function [[_unpackinfo]] */
 
-/*e: lib_graphics/libdraw/defont.c */
+/*e: libdraw/defont.c */

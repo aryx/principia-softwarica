@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/tests/arctest.c */
+/*s: libmemdraw/tests/arctest.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -42,4 +42,4 @@ main(int argc, char **argv)
     print("%lld %lld\n", t1-t0-del, del);
 }
 /*e: function [[main]]([[(lib_graphics/libmemdraw/tests/arctest.c)]]) */
-/*e: lib_graphics/libmemdraw/tests/arctest.c */
+/*e: libmemdraw/tests/arctest.c */

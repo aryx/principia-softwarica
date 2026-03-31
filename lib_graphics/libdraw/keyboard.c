@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/keyboard.c */
+/*s: libdraw/keyboard.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -121,4 +121,4 @@ closekeyboard(Keyboardctl *kc)
 /*e: function [[closekeyboard]] */
 
 
-/*e: lib_graphics/libdraw/keyboard.c */
+/*e: libdraw/keyboard.c */

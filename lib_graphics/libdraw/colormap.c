@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/colormap.c */
+/*s: libdraw/colormap.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -148,4 +148,4 @@ cmap2rgba(int c)
 }
 /*e: function [[cmap2rgba]] */
 
-/*e: lib_graphics/libdraw/colormap.c */
+/*e: libdraw/colormap.c */

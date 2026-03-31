@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/chan.c */
+/*s: libdraw/chan.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -100,4 +100,4 @@ chantodepth(ulong c)
     return n;
 }
 /*e: function [[chantodepth]] */
-/*e: lib_graphics/libdraw/chan.c */
+/*e: libdraw/chan.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/compressed.c */
+/*s: libmemdraw/compressed.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -75,4 +75,4 @@ cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
 }
 /*e: function [[cloadmemimage]] */
 
-/*e: lib_graphics/libmemdraw/compressed.c */
+/*e: libmemdraw/compressed.c */

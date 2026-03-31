@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/unload.c */
+/*s: libmemlayer/unload.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -60,4 +60,4 @@ memunload(Memimage *src, Rectangle r, byte *data, int n)
     /*e: [[memunload()]] if src has layer */
 }
 /*e: function [[memunload]] */
-/*e: lib_graphics/libmemlayer/unload.c */
+/*e: libmemlayer/unload.c */

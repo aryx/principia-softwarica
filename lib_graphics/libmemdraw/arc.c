@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/arc.c */
+/*s: libmemdraw/arc.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -123,4 +123,4 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
     freememimage(mask);
 }
 /*e: function [[memarc]] */
-/*e: lib_graphics/libmemdraw/arc.c */
+/*e: libmemdraw/arc.c */

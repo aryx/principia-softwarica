@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/init.c */
+/*s: libdraw/init.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -388,4 +388,4 @@ _closedisplay(Display *disp, bool isshutdown)
 }
 /*e: function [[_closedisplay]] */
 
-/*e: lib_graphics/libdraw/init.c */
+/*e: libdraw/init.c */

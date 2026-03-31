@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/line.c */
+/*s: libdraw/line.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -42,4 +42,4 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
     BPLONG(a+41, sp.y);
 }
 /*e: function [[lineop]] */
-/*e: lib_graphics/libdraw/line.c */
+/*e: libdraw/line.c */

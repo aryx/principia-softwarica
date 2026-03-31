@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/transfer.c */
+/*s: libmemdraw/transfer.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -118,4 +118,4 @@ unloadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
     return ndata;
 }
 /*e: function [[unloadmemimage]] */
-/*e: lib_graphics/libmemdraw/transfer.c */
+/*e: libmemdraw/transfer.c */

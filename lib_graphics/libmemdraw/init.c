@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/init.c */
+/*s: libmemdraw/init.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -107,4 +107,4 @@ memimageinit(void)
 }
 /*e: function [[memimageinit]] */
 
-/*e: lib_graphics/libmemdraw/init.c */
+/*e: libmemdraw/init.c */

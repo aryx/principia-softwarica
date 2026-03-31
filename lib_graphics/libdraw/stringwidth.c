@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/stringwidth.c */
+/*s: libdraw/stringwidth.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -132,4 +132,4 @@ runestringsize(Font *f, Rune *r)
     return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
 }
 /*e: function [[runestringsize]] */
-/*e: lib_graphics/libdraw/stringwidth.c */
+/*e: libdraw/stringwidth.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/hooks.c */
+/*s: libmemdraw/hooks.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -24,4 +24,4 @@ memdraw_iprint(char*,...)
 int		(*iprint)(char*, ...) = &memdraw_iprint;
 /*e: global [[iprint]] */
 
-/*e: lib_graphics/libmemdraw/hooks.c */
+/*e: libmemdraw/hooks.c */

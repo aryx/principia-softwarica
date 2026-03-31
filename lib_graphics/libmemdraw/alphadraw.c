@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/alphadraw.c */
+/*s: libmemdraw/alphadraw.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -1691,4 +1691,4 @@ boolcopyfn(Memimage *img, Memimage *mask)
 /*e: function [[boolcopyfn]] */
 
 
-/*e: lib_graphics/libmemdraw/alphadraw.c */
+/*e: libmemdraw/alphadraw.c */

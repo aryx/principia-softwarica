@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/load.c */
+/*s: libmemlayer/load.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -72,4 +72,4 @@ memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
     /*e: [[memload()]] if dst has a layer */
 }
 /*e: function [[memload]] */
-/*e: lib_graphics/libmemlayer/load.c */
+/*e: libmemlayer/load.c */

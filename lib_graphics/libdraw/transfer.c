@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/transfer.c */
+/*s: libdraw/transfer.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -144,4 +144,4 @@ unloadimage(Image *i, Rectangle r, byte *data, int ndata)
     return ntot;
 }
 /*e: function [[unloadimage]] */
-/*e: lib_graphics/libdraw/transfer.c */
+/*e: libdraw/transfer.c */

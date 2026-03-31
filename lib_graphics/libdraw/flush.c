@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/flush.c */
+/*s: libdraw/flush.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -72,4 +72,4 @@ bufimage(Display *d, int n)
 }
 /*e: function [[bufimage]] */
 
-/*e: lib_graphics/libdraw/flush.c */
+/*e: libdraw/flush.c */

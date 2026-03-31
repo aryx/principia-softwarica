@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/fillpoly.c */
+/*s: libmemdraw/fillpoly.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -556,4 +556,4 @@ zcompare(void *a, void *b)
     return 1;
 }
 /*e: function [[zcompare]] */
-/*e: lib_graphics/libmemdraw/fillpoly.c */
+/*e: libmemdraw/fillpoly.c */

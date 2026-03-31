@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/menuhit.c */
+/*s: libdraw/menuhit.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -388,4 +388,4 @@ menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
     return -1;
 }
 /*e: function [[menuhit]] */
-/*e: lib_graphics/libdraw/menuhit.c */
+/*e: libdraw/menuhit.c */

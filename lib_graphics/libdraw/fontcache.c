@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/fontcache.c */
+/*s: libdraw/fontcache.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -498,4 +498,4 @@ fontresize(Font *f, int wid, int ncache, int depth)
     return ret;
 }
 /*e: function [[fontresize]] */
-/*e: lib_graphics/libdraw/fontcache.c */
+/*e: libdraw/fontcache.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/lorigin.c */
+/*s: libmemlayer/lorigin.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -140,4 +140,4 @@ memlnorefresh(Memimage *l, Rectangle r, void *v)
     USED(v);
 }
 /*e: function [[memlnorefresh]] */
-/*e: lib_graphics/libmemlayer/lorigin.c */
+/*e: libmemlayer/lorigin.c */

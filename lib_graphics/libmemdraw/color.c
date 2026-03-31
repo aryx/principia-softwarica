@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/color.c */
+/*s: libmemdraw/color.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -160,4 +160,4 @@ memfillcolor(Memimage *i, rgba val)
     }
 }
 /*e: function [[memfillcolor]] */
-/*e: lib_graphics/libmemdraw/color.c */
+/*e: libmemdraw/color.c */

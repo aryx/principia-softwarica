@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/subfont.c */
+/*s: libdraw/subfont.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -394,4 +394,4 @@ uninstallsubfont(Subfont *subfont)
 }
 /*e: function [[uninstallsubfont]] */
 
-/*e: lib_graphics/libdraw/subfont.c */
+/*e: libdraw/subfont.c */

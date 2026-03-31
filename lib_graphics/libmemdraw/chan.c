@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/chan.c */
+/*s: libmemdraw/chan.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -56,4 +56,4 @@ memsetchan(Memimage *i, ulong chan)
 }
 /*e: function [[memsetchan]] */
 
-/*e: lib_graphics/libmemdraw/chan.c */
+/*e: libmemdraw/chan.c */

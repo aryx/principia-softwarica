@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/icossin2.c */
+/*s: libdraw/icossin2.c */
 #include	<u.h>
 #include	<libc.h>
 #include	<draw.h>
@@ -266,4 +266,4 @@ icossin2(int x, int y, int *cosp, int *sinp)
     *cosp = cossign*(ctp[0]+(ctp[1]-ctp[0])*rem/10);
 }
 /*e: function [[icossin2]] */
-/*e: lib_graphics/libdraw/icossin2.c */
+/*e: libdraw/icossin2.c */

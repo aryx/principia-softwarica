@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/line.c */
+/*s: libmemlayer/line.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -154,4 +154,4 @@ memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memim
     _memline(dst, p0, p1, end0, end1, radius, src, sp, dst->clipr, op);
 }
 /*e: function [[memline]] */
-/*e: lib_graphics/libmemlayer/line.c */
+/*e: libmemlayer/line.c */

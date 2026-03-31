@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/layerop.c */
+/*s: libmemlayer/layerop.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -129,4 +129,4 @@ _memlayerop(
     }
 }
 /*e: function [[_memlayerop]] */
-/*e: lib_graphics/libmemlayer/layerop.c */
+/*e: libmemlayer/layerop.c */

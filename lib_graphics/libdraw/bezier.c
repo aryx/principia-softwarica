@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/bezier.c */
+/*s: libdraw/bezier.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -281,4 +281,4 @@ fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Dra
     return OK_1;
 }
 /*e: function [[fillbezsplineop]] */
-/*e: lib_graphics/libdraw/bezier.c */
+/*e: libdraw/bezier.c */

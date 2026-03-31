@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/event.c */
+/*s: libdraw/event.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -595,4 +595,4 @@ eatomouse(Mouse *m, char *buf, int n)
     return n;
 }
 /*e: function [[eatomouse]] */
-/*e: lib_graphics/libdraw/event.c */
+/*e: libdraw/event.c */

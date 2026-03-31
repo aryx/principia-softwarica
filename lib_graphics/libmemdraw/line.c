@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/line.c */
+/*s: libmemdraw/line.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -329,4 +329,4 @@ memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
     return r;
 }
 /*e: function [[memlinebbox]] */
-/*e: lib_graphics/libmemdraw/line.c */
+/*e: libmemdraw/line.c */

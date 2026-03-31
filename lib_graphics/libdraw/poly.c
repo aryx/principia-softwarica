@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/poly.c */
+/*s: libdraw/poly.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -106,4 +106,4 @@ fillpolyop(Image *dst, Point *p, int np, int wind, Image *src, Point sp, Drawop 
     dopoly('P', dst, p, np, wind, 0, 0, src, &sp, op);
 }
 /*e: function [[fillpolyop]] */
-/*e: lib_graphics/libdraw/poly.c */
+/*e: libdraw/poly.c */

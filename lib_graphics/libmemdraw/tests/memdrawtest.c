@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/tests/memdrawtest.c */
+/*s: libmemdraw/tests/memdrawtest.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -1075,4 +1075,4 @@ drawonepixel(Memimage *dst, Point dp, Memimage *src, Point sp, Memimage *mask, P
     putpixel(dst, dp, rgbatopix(dr, dg, db, da));
 }
 /*e: function [[drawonepixel]] */
-/*e: lib_graphics/libmemdraw/tests/memdrawtest.c */
+/*e: libmemdraw/tests/memdrawtest.c */

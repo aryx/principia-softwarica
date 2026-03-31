@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/window.c */
+/*s: libdraw/window.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -301,4 +301,4 @@ newwindow(char *str)
     return mount(fd, -1, "/dev", MBEFORE, buf);
 }
 /*e: function [[newwindow]] */
-/*e: lib_graphics/libdraw/window.c */
+/*e: libdraw/window.c */

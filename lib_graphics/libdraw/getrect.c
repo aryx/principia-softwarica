@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/getrect.c */
+/*s: libdraw/getrect.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -150,4 +150,4 @@ drawgetrect(Rectangle rc, int up)
     }
 }
 /*e: function [[drawgetrect]] */
-/*e: lib_graphics/libdraw/getrect.c */
+/*e: libdraw/getrect.c */

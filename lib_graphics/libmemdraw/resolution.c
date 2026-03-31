@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/resolution.c */
+/*s: libmemdraw/resolution.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -92,4 +92,4 @@ pixelbits(Memimage *i, Point pt)
 }
 /*e: function [[pixelbits]] */
 
-/*e: lib_graphics/libmemdraw/resolution.c */
+/*e: libmemdraw/resolution.c */

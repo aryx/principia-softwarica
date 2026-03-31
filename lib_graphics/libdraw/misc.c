@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/misc.c */
+/*s: libdraw/misc.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -13,4 +13,4 @@ ulong drawld2chan[] = {
 };
 /*e: global [[drawld2chan]] */
 
-/*e: lib_graphics/libdraw/misc.c */
+/*e: libdraw/misc.c */

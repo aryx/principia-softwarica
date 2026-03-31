@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/error.c */
+/*s: libdraw/error.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -19,4 +19,4 @@ drawerror(Display *d, char *s)
 }
 /*e: function [[drawerror]] */
 
-/*e: lib_graphics/libdraw/error.c */
+/*e: libdraw/error.c */

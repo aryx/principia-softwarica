@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/compressed.c */
+/*s: libdraw/compressed.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -416,4 +416,4 @@ writeimage(fdt fd, Image *i, bool dolock)
 }
 /*e: function [[writeimage]] */
 
-/*e: lib_graphics/libdraw/compressed.c */
+/*e: libdraw/compressed.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/lhide.c */
+/*s: libmemlayer/lhide.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -76,4 +76,4 @@ memlexpose(Memimage *i, Rectangle screenr)
     _memlayerop(lexposeop, i, screenr, screenr, i->layer);
 }
 /*e: function [[memlexpose]] */
-/*e: lib_graphics/libmemlayer/lhide.c */
+/*e: libmemlayer/lhide.c */

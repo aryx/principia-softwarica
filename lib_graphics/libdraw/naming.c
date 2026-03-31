@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/naming.c */
+/*s: libdraw/naming.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -126,4 +126,4 @@ nameimage(Image *i, char *name, bool in)
 }
 /*e: function [[nameimage]] */
 
-/*e: lib_graphics/libdraw/naming.c */
+/*e: libdraw/naming.c */

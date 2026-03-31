@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/alloc.c */
+/*s: libdraw/alloc.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -234,4 +234,4 @@ allocimagemix(Display *d, ulong color1, ulong color3)
     }
 }
 /*e: function [[allocimagemix]] */
-/*e: lib_graphics/libdraw/alloc.c */
+/*e: libdraw/alloc.c */

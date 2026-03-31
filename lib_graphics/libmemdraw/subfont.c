@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/subfont.c */
+/*s: libmemdraw/subfont.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -26,4 +26,4 @@ allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memim
 }
 /*e: function [[allocmemsubfont]] */
 
-/*e: lib_graphics/libmemdraw/subfont.c */
+/*e: libmemdraw/subfont.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/replclipr.c */
+/*s: libdraw/replclipr.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -76,4 +76,4 @@ drawrepl(Rectangle r, Point p)
 }
 /*e: function [[drawrepl]] */
 
-/*e: lib_graphics/libdraw/replclipr.c */
+/*e: libdraw/replclipr.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/ltorear.c */
+/*s: libmemlayer/ltorear.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -82,4 +82,4 @@ memltorearn(Memimage **ip, int n)
     _memlsetclear(rear->layer->screen);
 }
 /*e: function [[memltorearn]] */
-/*e: lib_graphics/libmemlayer/ltorear.c */
+/*e: libmemlayer/ltorear.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/mouse.c */
+/*s: libdraw/mouse.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -224,4 +224,4 @@ mousescrollsize(int maxlines)
 }
 /*e: function [[mousescrollsize]] */
 
-/*e: lib_graphics/libdraw/mouse.c */
+/*e: libdraw/mouse.c */

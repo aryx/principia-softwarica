@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/ellipse.c */
+/*s: libdraw/ellipse.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -103,4 +103,4 @@ fillarcop(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, in
     doellipse('E', dst, &c, a, b, 0, src, &sp, alpha, phi, op);
 }
 /*e: function [[fillarcop]] */
-/*e: lib_graphics/libdraw/ellipse.c */
+/*e: libdraw/ellipse.c */

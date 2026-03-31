@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/ellipse.c */
+/*s: libmemdraw/ellipse.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -266,4 +266,4 @@ eline(int x0, int y0, int x1, int y1, Param *p)
         epoint(x1, y1, p);
 }
 /*e: function [[eline]] */
-/*e: lib_graphics/libmemdraw/ellipse.c */
+/*e: libmemdraw/ellipse.c */

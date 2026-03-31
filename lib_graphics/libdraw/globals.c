@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/globals.c */
+/*s: libdraw/globals.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -15,4 +15,4 @@ Image	*view;
 Font	*font;
 /*e: global [[font]] */
 
-/*e: lib_graphics/libdraw/globals.c */
+/*e: libdraw/globals.c */

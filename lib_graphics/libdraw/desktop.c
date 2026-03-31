@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/desktop.c */
+/*s: libdraw/desktop.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -137,4 +137,4 @@ freescreen(Screen *s)
 }
 /*e: function [[freescreen]] */
 
-/*e: lib_graphics/libdraw/desktop.c */
+/*e: libdraw/desktop.c */

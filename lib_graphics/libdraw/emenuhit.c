@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/emenuhit.c */
+/*s: libdraw/emenuhit.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -300,4 +300,4 @@ emenuhit(int but, Mouse *m, Menu *menu)
     return -1;
 }
 /*e: function [[emenuhit]] */
-/*e: lib_graphics/libdraw/emenuhit.c */
+/*e: libdraw/emenuhit.c */

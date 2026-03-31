@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/string.c */
+/*s: libdraw/string.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -270,4 +270,4 @@ runestringnbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, in
     return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, bg, bgp, op);
 }
 /*e: function [[runestringnbgop]] */
-/*e: lib_graphics/libdraw/string.c */
+/*e: libdraw/string.c */

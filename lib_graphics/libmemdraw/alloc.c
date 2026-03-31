@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/alloc.c */
+/*s: libmemdraw/alloc.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -157,4 +157,4 @@ freememimage(Memimage *i)
 }
 /*e: function [[freememimage]] */
 
-/*e: lib_graphics/libmemdraw/alloc.c */
+/*e: libmemdraw/alloc.c */

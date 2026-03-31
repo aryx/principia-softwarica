@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/debug.c */
+/*s: libdraw/debug.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -24,4 +24,4 @@ drawsetdebug(bool v)
     a[1] = v;
 }
 /*e: function [[drawsetdebug]] */
-/*e: lib_graphics/libdraw/debug.c */
+/*e: libdraw/debug.c */

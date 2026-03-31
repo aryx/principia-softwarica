@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/io.c */
+/*s: libdraw/io.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -187,4 +187,4 @@ readimage(Display *d, fdt fd, bool dolock)
 
 // writeimage() is in compressed.c. It does not support the 
 // regular (uncompressed) format.
-/*e: lib_graphics/libdraw/io.c */
+/*e: libdraw/io.c */

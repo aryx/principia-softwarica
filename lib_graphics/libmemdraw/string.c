@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/string.c */
+/*s: libmemdraw/string.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -71,4 +71,4 @@ memsubfontwidth(Memsubfont *f, char *cs)
     return p;
 }
 /*e: function [[memsubfontwidth]] */
-/*e: lib_graphics/libmemdraw/string.c */
+/*e: libmemdraw/string.c */

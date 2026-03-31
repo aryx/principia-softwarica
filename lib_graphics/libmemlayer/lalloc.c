@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/lalloc.c */
+/*s: libmemlayer/lalloc.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -112,4 +112,4 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
     return n;
 }
 /*e: function [[memlalloc]] */
-/*e: lib_graphics/libmemlayer/lalloc.c */
+/*e: libmemlayer/lalloc.c */

@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/draw.c */
+/*s: libmemdraw/draw.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -767,4 +767,4 @@ chardraw(Memdrawparam *par)
 }
 /*e: function [[chardraw]] */
 
-/*e: lib_graphics/libmemdraw/draw.c */
+/*e: libmemdraw/draw.c */

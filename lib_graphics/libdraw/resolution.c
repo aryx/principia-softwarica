@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/resolution.c */
+/*s: libdraw/resolution.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -41,4 +41,4 @@ bytesperline(Rectangle r, int d)
     return unitsperline(r, d, 8);
 }
 /*e: function [[bytesperline]] */
-/*e: lib_graphics/libdraw/resolution.c */
+/*e: libdraw/resolution.c */

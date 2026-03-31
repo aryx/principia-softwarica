@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemdraw/poly.c */
+/*s: libmemdraw/poly.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -31,4 +31,4 @@ mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, M
     }
 }
 /*e: function [[mempoly]] */
-/*e: lib_graphics/libmemdraw/poly.c */
+/*e: libmemdraw/poly.c */

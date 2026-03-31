@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/concurrency.c */
+/*s: libdraw/concurrency.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -33,4 +33,4 @@ unlockdisplay(Display *disp)
 }
 /*e: function [[unlockdisplay]] */
 
-/*e: lib_graphics/libdraw/concurrency.c */
+/*e: libdraw/concurrency.c */

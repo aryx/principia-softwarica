@@ -1,4 +1,4 @@
-/*s: lib_graphics/libmemlayer/ltofront.c */
+/*s: libmemlayer/ltofront.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -99,4 +99,4 @@ memltofrontn(Memimage **ip, int n)
     _memlsetclear(front->layer->screen);
 }
 /*e: function [[memltofrontn]] */
-/*e: lib_graphics/libmemlayer/ltofront.c */
+/*e: libmemlayer/ltofront.c */
