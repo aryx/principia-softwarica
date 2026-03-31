@@ -9694,6 +9694,11 @@ if(s->class == CSTATIC)
 
 \subsection{doinit}
 
+%claude:
+If a global was previously declared [[extern]] and is now being
+initialized, [[doinit]] silently promotes it to [[CGLOBL]].
+This handles the common pattern of [[extern int x;]] in a header
+followed by [[int x = 1;]] in the source file.
 
 <<[[doinit()]] possibly adjust class>>=
 if(s->class == CEXTERN) {
@@ -9705,6 +9710,11 @@ if(s->class == CEXTERN) {
 %ocaml: should report! why would you do extern int x = 1; ?
 
 \subsection{pdecl}
+
+%claude:
+Function parameters must have storage class [[CPARAM]].
+If no class was specified ([[CXXX]]), it defaults to [[CPARAM]];
+any other class is an error.
 
 <<[[pdecl()]] adjust class>>=
 if(class == CXXX)
@@ -9719,6 +9729,12 @@ if(class != CPARAM) {
 % remember than pdecl calls adecl
 
 \subsection{adecl}
+
+%claude:
+Local declarations default to [[CAUTO]] when no storage class
+is given. Functions cannot be [[auto]] or [[extern register]],
+and a local redeclaration of a [[static]] as [[extern]] or
+[[global]] is corrected back to [[static]] with a warning.
 
 %corner:
 
@@ -11742,6 +11758,13 @@ long	tindir[1] =
 
 \subsection{Array accesses}
 
+%claude:
+Array accesses ([[a[i]]]) are desugared into pointer arithmetic
+([[*(a+i)]]) during parsing, so the type-checker never sees
+[[OINDEX]]---it handles the resulting [[OADD]] and [[OIND]]
+nodes instead. References to array-typed variables are
+converted to [[OADDR]] first (array-to-pointer decay).
+
 % array access are converted in pointers during parsing
 % and reference to variable with a TARRAY type are converted
 % in OADDR first.
@@ -12732,6 +12755,14 @@ if(!s->aused) {
 
 \subsection{Used before set}
 
+%claude:
+This warning is detected by the register allocator rather
+than the type-checker: during dataflow analysis, if a variable
+is live at a point where it has not yet been assigned, it was
+potentially used before set. This detection happens late because
+it requires dataflow information that is only available after
+code generation.
+
 \t which code does that?
 
 
@@ -13147,6 +13178,13 @@ if(canreach && thisfntype->link->etype != TVOID){
 
 \subsection{Unused expression}
 
+%claude:
+If an expression like [[a + b]] appears as a statement (no
+assignment, no side effects), [[nullwarn]] warns that the
+result is discarded. The children are still evaluated for
+their side effects (function calls, increments) but the
+computed value is thrown away.
+
 % later in cgenrel()
 
 <<[[cgenrel()]] nullwarn check if nn is null>>=
@@ -13193,11 +13231,24 @@ if(nn == Z) {
 
 \subsection{Constant if: [[5c -c]]}
 
+%claude:
+The [[-c]] flag enables a warning when an [[if]] condition is
+a compile-time constant (like [[if(1)]] or [[if(0)]]). This
+is not on by default because many C programs use constant
+conditions for conditional compilation ([[if(DEBUG)]] or
+[[if(sizeof(int)==4)]]).
+
 % print if constant value in if statement
 % not printed by default because lots of people write
 % if(1) { } so you have to add -c to get the warnings
 
 \subsection{Out of range shifting}
+
+%claude:
+After [[ccom]] folds constants, the shift amount may be
+a known constant. If it exceeds the type width (e.g.,
+shifting a 32-bit int by 35), the compiler warns about
+a ``stupid shift.''
 
 % will see ccom later. it simplifies the AST and
 % do some constant evaluation, so code below can trigger more often.
@@ -13245,6 +13296,13 @@ case OASXOR:
 
 
 \subsection{Useless comparisons}
+
+%claude:
+The [[compar]] function detects comparisons whose result is
+always true or always false due to type ranges---for example,
+comparing an [[unsigned char]] with a negative constant, or
+testing whether an [[unsigned int]] is less than zero. These
+are almost always bugs.
 
 % see compar()
 
@@ -16810,6 +16868,13 @@ case OASLDIV:
 \subsection{Boolean expressions}
 % special because also generate ABxxx so explained later
 
+%claude:
+Boolean expressions ([[&&]], [[||]], comparisons) are not compiled
+by [[cgen]] at all---they are handled by [[boolgen]], which
+generates conditional branches directly. This avoids materializing
+a 0 or 1 into a register; instead, the truth value controls the
+branch direction. See Section~\ref{sec:boolgen} for details.
+
 \subsection{Assignments part 1}
 
 %claude:
@@ -17916,6 +17981,15 @@ case OCOND:
 
 \subsection{Prefix/postfix}
 
+%claude:
+Post-increment ([[x++]]) returns the old value and then
+increments: the value is saved in a register ([[nod]]),
+the incremented value is computed in another register ([[nod1]]),
+and the incremented value is stored back. Pre-increment
+([[++x]]) is simpler: just increment and return the new value.
+For pointers, the increment is scaled by the pointed-to type's
+width (e.g., [[int*]] increments by 4).
+
 <<[[cgenrel()]] switch node kind cases>>=
 case OPOSTINC:
 case OPOSTDEC:
@@ -18004,6 +18078,7 @@ pre:
 
 
 \section{Boolean expressions}
+\label{sec:boolgen}
 
 %claude:
 Boolean expressions ([[&&]], [[||]], comparisons) are compiled
@@ -18597,6 +18672,13 @@ regsalloc(Node *n, Node *nn)
 
 
 \subsection{Indirect function calls}
+
+%claude:
+When calling through a function pointer (e.g., [[fp(args)]]),
+the pointer must first be loaded into a register, then [[BL]]
+branches to the register's value. If the function pointer
+expression itself contains a function call ([[FNX]] complexity),
+the pointer is evaluated first and saved before pushing arguments.
 
 <<[[cgenrel()]] OFUNC case, if l not addressable>>=
 if(l->addable < INDEXED) {
@@ -19275,11 +19357,25 @@ gextern(Sym *s, Node *a, long o, long w)
 \n it is a compiler concept meaning a big value.
 %alt: Big values
 
+%claude:
+Values that do not fit in a single register---structs, unions,
+and 64-bit [[vlong]]s---require special handling throughout
+code generation. The [[sugen]] function (``structure generator'')
+handles these by copying them word-by-word via [[MOVM]] (block
+move) instructions. For function calls, complex arguments are
+pushed onto the stack, and complex return values are returned
+through a hidden pointer argument ([[.ret]]).
 
 % 5c allows vlong, big structure. Can return such thing, but does not
 % fit in R0! more than 32 bits. So How?
 
 \subsection{Complex types}
+
+%claude:
+``Complex types'' in this context means types too large for a
+register: structs, unions, and 64-bit [[vlong]]. The [[typecmplx]]
+set (aliased to [[typesuv]]) identifies them, triggering the
+[[sugen]] code path instead of the normal register-based [[cgen]].
 
 % set of complex types
 <<global [[typecmplx]]>>=
@@ -19314,6 +19410,11 @@ int	typesuvinit[] =
 
 \subsection{Complex expression}
 
+%claude:
+When [[cgen]] encounters an expression whose type is a struct,
+union, or [[vlong]], it delegates to [[sugen]] which copies
+the value word-by-word rather than through a single register.
+
 % why not use typecmplx here?
 
 <<[[cgenrel()]] if complex type node>>=
@@ -19323,6 +19424,11 @@ if(typesuv[n->type->etype]) {
 @
 
 \subsection{Complex argument}
+
+%claude:
+Complex arguments (struct/union/vlong) are pushed onto the stack
+via [[sugen]] rather than passed in a register. The [[regaalloc]]
+call reserves the argument's stack slot.
 
 % why not use typecmplx here?
 
@@ -19340,6 +19446,13 @@ if(typesuv[n->type->etype]) {
 
 
 \subsection{Complex return value}
+
+%claude:
+When a function returns a complex type (struct/union/vlong),
+the caller passes a hidden pointer argument in [[REGARG]]
+pointing to scratch space for the return value. The callee
+writes through this pointer (the [[.ret]] synthetic variable)
+instead of using [[REGRET]].
 
 % set in codegen
 <<global [[nodret]]>>=
@@ -19415,6 +19528,11 @@ if(typecmplx[thisfntype->link->etype]) {
 @
 
 \subsection{[[vlong]] constant}
+
+%claude:
+A 64-bit constant must be split into two 32-bit halves for
+the [[ADATA]] pseudo-instruction, with the order depending on
+endianness. On little-endian ARM, the low 32 bits come first.
 
 %\subsection{[[vlong]] management}
 
@@ -28089,6 +28207,15 @@ and [[_Noreturn]].
 
 \subsection{Function and function pointer automatic conversions}
 
+%claude:
+C implicitly converts between function types and function pointers:
+calling through a function pointer ([[fp(args)]]) automatically
+inserts a dereference ([[(*fp)(args)]]), and passing a function
+name where a function pointer is expected automatically takes
+its address. The compiler also converts function-typed parameters
+to function pointer parameters, since functions cannot be passed
+by value.
+
 % fp(...) -> (*fp)(...)
 
 <<[[tcomo()]] when OFUNC case, add OIND if pointer function call>>=
@@ -28116,6 +28243,13 @@ case TFUNC:
 % a function (in an argument, etc.)
 
 \subsection{Array and pointer automatic conversions}
+
+%claude:
+When an array is passed as a function parameter, C converts it
+to a pointer to its first element---the array size information is
+lost. Similarly, [[int foo(int x[45])]] is treated as
+[[int foo(int *x)]]: the [[45]] is silently discarded by the
+compiler, which can be a source of bugs.
 
 % An array is really a pointer when passed as a parameter
 % as the size of the array information is lost.
@@ -28872,6 +29006,12 @@ if(!debug['B'])
 @
 
 \subsection{[[_Noreturn()]]}
+
+%claude:
+The [[_Noreturn]] attribute marks functions that never return
+(like [[exits]] or [[abort]]). This suppresses false ``missing
+return'' warnings at call sites and enables better dead-code
+analysis after calls to such functions.
 
 % in kencc-latest; convenient. otherwise some False positives
 % in other checks and forced to write some stupid return.
@@ -31900,6 +32040,14 @@ if(argc > 1) {
 
 \subsection{Packing: [[#pragma pack]]}
 
+%claude:
+\verb+#pragma pack+ overrides the default struct field alignment,
+telling the compiler to pack fields tightly without padding.
+This is useful for data structures that must match a hardware
+register layout or an on-disk/on-wire format. The [[packflg]]
+global is checked during struct layout to suppress alignment
+padding when non-zero.
+
 <<[[macprag()]] if pragma xxx>>=
 if(s && strcmp(s->name, "pack") == 0) {
     pragpack();
@@ -31948,6 +32096,13 @@ if(packflg)
 @
 
 \subsection{Minimizing [[#line]] history}
+
+%claude:
+The file/line history embedded in the object file can grow
+large. This optimization deduplicates consecutive [[#line]]
+directives from the same file by overwriting the previous
+entry when no AST nodes have been allocated since (tracked
+by [[newflag]], set in [[new]]).
 
 % delete?
 <<[[linehist()]] possibly overwrite last line directive>>=
