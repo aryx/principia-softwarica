@@ -4073,7 +4073,7 @@ diag("incompatible type signatures %lux(%s) and %lux(%s) for %s",
 
 
 %******************************************************************************
-\chapter{Loading Libraries TODO}
+\chapter{Loading Libraries}
 %******************************************************************************
 \label{chap:loading-libraries}
 
@@ -4106,6 +4106,14 @@ world program pulls in only the few library objects it actually needs.
 \section{Archive library format: [[.a]]}
 
 % see ar(5) man page
+
+%claude:
+A [[.a]] archive is a flat file that concatenates multiple object files
+together with a header and a symbol table at the front.
+The format is shared across all Unix systems and dates back to the
+original PDP-11 tools. Each entry has an [[ar_hdr]] that stores
+metadata (name, date, size) as ASCII text---not binary---which makes
+archives portable and inspectable with simple tools.
 
 % from ar.h
 <<constant [[ARMAG]]>>=
@@ -4157,6 +4165,31 @@ struct	ar_hdr
 % object file content
 % ...
 
+%claude:
+The layout of a [[.a]] file is:
+\begin{verbatim}
+  +---------------------------+
+  | ARMAG  "!<arch>\n"        |   8 bytes
+  +---------------------------+
+  | ar_hdr (__.SYMDEF)        |   60 bytes (symbol table entry)
+  | symbol table data         |   variable
+  +---------------------------+
+  | ar_hdr (foo.5)            |   60 bytes
+  | object file content       |   variable
+  +---------------------------+
+  | ar_hdr (bar.5)            |   60 bytes
+  | object file content       |   variable
+  +---------------------------+
+  | ...                       |
+  +---------------------------+
+\end{verbatim}
+%claude:
+The first entry after the magic is always the symbol table
+([[__.SYMDEF]]), which maps symbol names to file offsets
+within the archive. This allows the linker to seek directly
+to the object file that defines a needed symbol, without
+scanning every entry.
+
 <<constant [[SAR_HDR]]>>=
 #define	SAR_HDR	(SARNAME+44)
 @
@@ -4183,6 +4216,25 @@ char	symname[]	= SYMDEF;
 % AEND boundary mark
 
 \section{Loading libraries manually: [[5l libxxx.a]]}
+
+%claude:
+When [[5l]] encounters a library on the command line, it performs
+{selective loading}: it reads the archive's symbol table into memory,
+then iterates over it looking for symbols that match unresolved
+references ([[SXREF]]). For each match, it seeks to the corresponding
+object file within the archive and loads it with [<ldobj()>].
+%
+%claude:
+The key subtlety is the outer [[while(work)]] loop: loading one
+object file may introduce new undefined references (the loaded code
+calls other functions), so the linker must make multiple passes
+over the symbol table until a fixpoint is reached---a pass where
+no new symbols are pulled in.
+This is the same transitive-closure algorithm that all Unix
+linkers use, and it is why library order on the command line
+matters: a library is scanned only when the linker reaches
+it in the argument list, so dependencies must appear after
+the objects that reference them.
 
 <<[[objfile()]] other locals>>=
 struct ar_hdr arhdr;
@@ -4313,6 +4365,13 @@ if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
 
 \section{Loading libraries semi automatically: [[5l -lxxx]]}
 \label{sec:loading-libraries-semi-auto}
+
+%claude:
+Like Unix linkers, [[5l]] supports a [[-l]] shorthand:
+[[5l -lfoo]] is equivalent to [[5l libfoo.a]], with the linker
+searching a list of directories for the library.
+The search path defaults to [[/arm/lib/]] and can be extended
+with [[-L]].
 
 \subsection{Library search path}
 
@@ -4465,6 +4524,22 @@ findlib(char *file)
 % (hmm but still need in theory to put them in mkfile for dependency
 % tracking? maybe not)
 
+%claude:
+This is one of the most original features of the \plan toolchain,
+alongside safe linking (Section~\ref{sec:safe-linking}).
+In \plan, header files contain a [[#pragma lib "libxxx.a"]] directive.
+When [[5c]] compiles a source file that includes such a header, it
+embeds an [[AHISTORY]] instruction with a special marker ([[offset == -1]])
+in the object file. When [[5l]] loads that object file, it records
+the library name. After all command-line objects are loaded, [[5l]]
+automatically loads those recorded libraries via [<loadlib()>].
+%
+%claude:
+The result is that you never need to specify libraries on the
+link command line---just include the right header and the linker
+does the rest. This is the \plan equivalent of what
+[[pkg-config --libs]] and build systems like CMake do on Unix,
+but built directly into the compiler and linker.
 
 % pn? filename of object file, but addlib() really abuse histfrog global
 <<[[ldobj()]] in AHISTORY case, if pragma lib>>=
@@ -4568,6 +4643,13 @@ loadlib(void)
 %\section{Mutually dependent libraries}
 % in advanced topic?
 
+%claude:
+The full version of [<loadlib()>] handles mutually dependent libraries.
+After loading all recorded libraries, it checks whether any [[SXREF]]
+symbols remain in the hash table. If so, it loops and loads the
+libraries again---each pass may resolve symbols that allow the next
+pass to pull in more objects. This is a fixpoint computation:
+the loop terminates when a full pass adds nothing new.
 
 <<function [[loadlib]]>>=
 void
@@ -4636,6 +4718,16 @@ xrefresolv = true;
 
 
 % when done automatically
+
+%claude:
+[<addlib()>] reconstructs a library path from the [[AHISTORY]]
+data that [[5c]] embedded in the object file.
+The path components are stored in [[histfrog[]]], a global array
+that [[ldobj()]] populates as it processes [[AHISTORY]] instructions.
+[<addlib()>] concatenates them, substituting [[$O]] with the
+architecture character (e.g., [['5']]) and [[$M]] with the
+architecture string (e.g., [["arm"]]), then deduplicates against
+libraries already recorded.
 
 <<function [[addlib]]>>=
 /// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
@@ -12872,7 +12964,7 @@ p->reg = NOPROF;
 
 
 %******************************************************************************
-\chapter{Advanced Topics TODO}
+\chapter{Advanced Topics}
 %******************************************************************************
 \label{chap:advanced}
 
@@ -16581,6 +16673,17 @@ listinit(); // fmtinstall()
 
 % dupe with Compiler.nw
 
+%claude:
+The linker uses \plan's [[fmtinstall()]] mechanism (see the
+\book{Libcore}) to register custom format verbs for
+[[print()]]. Each verb converts one of the linker's data structures
+to a string: [[\%P]] prints an instruction ([[Prog]]),
+[[\%A]] prints an opcode, [[\%D]] prints an operand ([[Adr]]),
+[[\%N]] prints a symbol kind, [[\%C]] a condition code, and
+[[\%S]] a string with escapes. This convention is shared with
+[[5a]] and [[5c]], so debug output looks consistent across the
+entire toolchain.
+
 \l why called listinit??
 
 <<function [[listinit]](arm)>>=
@@ -17022,6 +17125,14 @@ Sconv(Fmt *fp)
 \section{Verbose mode: [[5l -v]]}
 \l and [[DBG()]]
 
+%claude:
+The [[-v]] flag is the most useful debug option: it prints timing
+information at each phase of linking (loading, resolving, code
+generation), making it easy to identify bottlenecks.
+Rather than scattering [[if(debug['v'])]] throughout the code,
+the author introduced a [[DBG()]] macro that expands to a
+conditional [[mylog()]] call.
+
 %old: used to have lots of code like:
 % if(debug['v']) {
 %    Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
@@ -17093,6 +17204,14 @@ if(debug['O']) {
 
 % print final concrete code in assembly language with addresses
 % very nice!
+
+%claude:
+The [[-a]] flag produces a disassembly-like listing of the generated
+executable: each line shows the address, the raw machine word(s) in
+hex, and the instruction mnemonic. Using [[-a -a]] (twice) additionally
+prints the opcode table entry type ([[o->type]]) that was used to
+encode each instruction---invaluable when debugging why an instruction
+was encoded incorrectly.
 
 %ex of output:
 % 00001020: e52de024 (12) MOVW.W R14, -36(R13)
@@ -17360,6 +17479,18 @@ during symbol name manipulation.
 % same in Assembler.nw
 \l could get rid of it? remove all those globals and use plain libc malloc?
 
+%claude:
+The linker replaces the standard [[malloc()]] and [[free()]] with a
+simple arena allocator that never frees memory. This makes sense
+because a linker allocates many small objects (instructions, symbols,
+operands) that all live until the program exits---there is no point
+in tracking individual lifetimes. The allocator requests large chunks
+from [[sbrk()]] and hands out pieces sequentially. An important
+side effect is that [[sbrk()]] returns zero-filled memory (the kernel
+zeroes pages before mapping them), so newly allocated structures
+start with all fields set to zero. Some code in [[5l]] relies on
+this property.
+
 <<global [[hunk]]>>=
 char*	hunk;
 @
@@ -17464,6 +17595,14 @@ void setmalloctag(void *v, ulong pc)
 
 \section{Buffer management}
 \label{sec:buffer-management}
+
+%claude:
+The linker uses its own I/O buffers rather than [[libbio]] for the
+performance-critical paths: writing the executable and reading object
+files. The output buffer ([[obuf]]) accumulates machine code and data
+before flushing to the executable file; the input buffer ([[ibuf]])
+holds the current chunk of an object file being deserialized.
+The [[dbuf]] alias allows treating the union as a variable-size buffer.
 
 <<struct [[Buf]]>>=
 union Buf
@@ -17621,6 +17760,14 @@ fileexists(char *s)
 
 % could be put in libc, with the other atoxxx
 % atoxx? why a?  a to long with hexadecimal?
+
+%claude:
+[<atolwhex()>] (``ASCII to long, with hex'') is a number parser
+that handles decimal, octal (leading [[0]]), and hexadecimal
+(leading [[0x]]) formats. It is used throughout [[5l]] to parse
+command-line arguments like [[-T0x10000]] (text segment start address)
+and to decode the ASCII size fields in archive headers.
+
 <<function [[atolwhex]]>>=
 long
 atolwhex(char *s)
@@ -17668,6 +17815,14 @@ atolwhex(char *s)
 
 % rnd, exemple:  rnd(16, 8) = 16. rnd(17, 8) = 24
 
+%claude:
+[<rnd()>] rounds a value [[v]] up to the next multiple of [[r]].
+For example, [[rnd(16, 8) == 16]] and [[rnd(17, 8) == 24]].
+The linker uses this constantly to align sections and data
+to the boundaries required by the executable format and the
+hardware (e.g., 4-byte alignment for ARM instructions,
+page alignment for text and data segments).
+
 \t maybe show code of alternatives?
 %alt: code like that too
 %   while(orig & 7) // align
@@ -17703,7 +17858,7 @@ if(c < 0)
 
 
 %******************************************************************************
-\chapter{Linker-related Programs TODO}
+\chapter{Linker-related Programs}
 %******************************************************************************
 \label{chap:linker-related-programs}
 
