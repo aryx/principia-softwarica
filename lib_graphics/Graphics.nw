@@ -17424,6 +17424,2179 @@ closekeyboard(Keyboardctl *kc)
 %\chapter{Widgets}
 % now in Widgets.nw
 
+%******************************************************************************
+\chapter{Graphical Application Support}
+%******************************************************************************
+
+\section{Event-based IO}
+
+%claude:
+The event library provides an alternative to the
+[[Mousectl]]/[[Keyboardctl]] channel-based model. It uses a
+single master process ([[extract]]) that multiplexes mouse,
+keyboard, and timer events, dispatching them to slave
+processes. Applications call [[event]] to block until the
+next event, or [[ecankbd]]/[[ecanmouse]] to poll.
+This is the older API; the channel-based model
+with [[alt]] is preferred for new code.
+
+% seen before /dev/mouse synchrony issue, and the introduction
+% of ioproc and channel and alt().
+
+% Events are an alternative API. 
+% See event(2)
+%  "These routines provide an interface to multiple sources of input 
+%   for unthreaded programs. Threaded programs (see thread (2))
+%   should instead use the threaded mouse and keyboard interface ..."
+
+% event vs thread
+% classic thread vs event slide.
+
+% In the end most of the simple graphical apps (lens/color/clock) use events.
+% The complex one use threads (rio/acme/sam/abaco).
+
+% The event pipe!
+
+% have lots of dupes, menuhit.c vs emenuhit.c?
+
+%alt: X11 has XEvent structure
+%related: big-bang function in racket/htdp
+
+\subsection{Data structures}
+
+%claude:
+The event system uses a pipe-based architecture. Each event
+source (mouse, keyboard, or custom file descriptor) gets a
+``slave'' process that reads from the device and writes an
+[[Event]] packet into a shared pipe. The ``master''
+([[extract]]) reads from the pipe and dispatches events
+to caller-visible queues. [[Slave.head]]/[[Slave.tail]]
+form a circular buffer of events per source.
+
+<<enum [[Key]]>>=
+enum
+{
+    Emouse	= 1,
+    Ekeyboard	= 2,
+};
+@
+% keys, arguments to einit. bitset actually.
+% bitset because can have multiple events at the same time
+
+<<type [[keys]]>>=
+// bitset<Key>
+typedef ulong keys;
+@
+%pad: I introduced that
+
+
+<<struct [[Event]]>>=
+struct	Event
+{
+    int		kbdc;
+    Mouse	mouse;
+
+    int		n;		/* number of characters in message */
+    void	*v;		/* data unpacked by general event-handling function */
+    byte	data[EMAXMSG];	/* message from an arbitrary file descriptor */
+};
+@
+% int or Rune for kbdc?
+
+% dupe of include/mouse.h
+<<struct Mouse (include/event.h)>>=
+struct	Mouse
+{
+    int		buttons;	/* bit array: LMR=124 */
+    Point	xy;
+    ulong	msec;
+};
+@
+
+% dupe of include/mouse.h
+<<struct Menu (include/event.h)>>=
+struct Menu
+{
+    char	**item;
+    char	*(*gen)(int);
+    int	lasthit;
+};
+@
+
+<<enum [[_anon_ (include/event.h)2]]>>=
+enum
+{
+    MAXSLAVE = 32,
+    EMAXMSG = 128+8192,	/* size of 9p header+data */
+};
+@
+% 32 cos use bitset. A bit like select set?
+
+<<struct [[Slave]]>>=
+struct Slave
+{
+    int	pid;
+
+    Ebuf	*head;		/* queue of messages for this descriptor */
+    Ebuf	*tail;
+
+    int	(*fn)(int, Event*, uchar*, int);
+};
+@
+% generalize the special ioproc for the mouse and the keyboard
+% but in the end the same.
+
+<<struct [[Ebuf]]>>=
+struct Ebuf
+{
+    // Extra
+    Ebuf	*next;
+
+    int	n;		/* number of bytes in buf */
+    // this must be the last field
+    byte	buf[EMAXMSG];
+
+};
+@
+%bugpad: the order matters, you cant put next at the end because
+% some malloc in extract() in event.c do some optimizations regarding
+% buf by allocating only what is needed
+% (I had some segfault in colors.c because of this reordering)
+
+<<global [[eslave]]>>=
+static	Slave	eslave[MAXSLAVE];
+@
+<<global [[nslave]]>>=
+static	int	nslave;
+@
+
+
+
+<<global [[Skeyboard]]>>=
+static	int	Skeyboard = -1;
+@
+% index in eslave? the ioproc for the keyboard?
+
+<<global [[Smouse]]>>=
+static	int	Smouse = -1;
+@
+
+<<global [[Stimer]]>>=
+static	int	Stimer = -1;
+@
+
+
+<<global [[parentpid]]>>=
+static	int	parentpid;
+@
+
+<<global [[logfid]]>>=
+static	fdt	logfid;
+@
+
+
+% The event pipe!
+<<global [[epipe]]>>=
+static	fdt	epipe[2];
+@
+% One pipe shared by all slaves. atomic write? I think so.
+% first byte is slave identifier, followed by variable number of
+% bytes depending if mouse or keyboard or something else.
+
+<<global [[mousefd]]>>=
+static	fdt	mousefd;
+@
+<<global [[cursorfd]]>>=
+static	fdt	cursorfd;
+@
+
+\subsection{Initialization: [[einit()]]}
+
+%claude:
+[[einit]] creates the central event pipe, opens the mouse
+and keyboard devices (putting the console in raw mode),
+spawns one slave process per event source, and forks the
+master process ([[extract]]). The [[keys]] bitmask selects
+which sources to enable ([[Emouse]], [[Ekeyboard]], or
+both).
+
+<<function [[einit]]>>=
+void
+einit(keys keys)
+{
+    fdt ctl, fd;
+    char buf[256];
+
+    parentpid = getpid();
+    if(pipe(epipe) < 0)
+        drawerror(display, "events: einit pipe");
+
+    atexit(ekill);
+    atnotify(enote, 1);
+
+    snprint(buf, sizeof buf, "%s/mouse", display->devdir);
+    mousefd = open(buf, ORDWR|OCEXEC);
+    if(mousefd < 0)
+        drawerror(display, "einit: can't open mouse\n");
+
+    snprint(buf, sizeof buf, "%s/cursor", display->devdir);
+    cursorfd = open(buf, ORDWR|OCEXEC);
+    if(cursorfd < 0)
+        drawerror(display, "einit: can't open cursor\n");
+
+    if(keys&Ekeyboard){
+        snprint(buf, sizeof buf, "%s/cons", display->devdir);
+        fd = open(buf, OREAD);
+        if(fd < 0)
+            drawerror(display, "events: can't open console");
+
+        snprint(buf, sizeof buf, "%s/consctl", display->devdir);
+        ctl = open("/dev/consctl", OWRITE|OCEXEC);
+        if(ctl < 0)
+            drawerror(display, "events: can't open consctl");
+        write(ctl, "rawon", 5);
+
+        for(Skeyboard=0; Ekeyboard & ~(1<<Skeyboard); Skeyboard++)
+            ;
+        ekeyslave(fd);
+    }
+    if(keys&Emouse){
+        estart(Emouse, mousefd, 1+4*12);
+        for(Smouse=0; Emouse & ~(1<<Smouse); Smouse++)
+            ;
+    }
+}
+@
+% >> >> >>
+
+
+<<function [[ekill]]>>=
+static void
+ekill(void)
+{
+    enote(0, 0);
+}
+@
+
+<<function [[enote]]>>=
+static int
+enote(void *v, char *s)
+{
+    char t[1];
+    int i, pid;
+
+    USED(v, s);
+    pid = getpid();
+    if(pid != parentpid){
+        for(i=0; i<nslave; i++){
+            if(pid == eslave[i].pid){
+                t[0] = MAXSLAVE;
+                write(epipe[1], t, 1);
+                break;
+            }
+        }
+        return 0;
+    }
+    close(epipe[0]);
+    epipe[0] = -1;
+    close(epipe[1]);
+    epipe[1] = -1;
+    for(i=0; i<nslave; i++){
+        if(pid == eslave[i].pid)
+            continue;	/* don't kill myself */
+        postnote(PNPROC, eslave[i].pid, "die");
+    }
+    return 0;
+}
+@
+
+\subsection{The slaves}
+
+%claude:
+Each slave is a child process that reads from a single file
+descriptor (e.g., [[/dev/mouse]] or [[/dev/cons]]) in a
+tight loop and writes event packets to [[epipe]]. The first
+byte of each packet identifies the slave; the rest is the
+event data. [[ekeyslave]] reads raw bytes, assembles them
+into runes, and writes 3-byte rune packets. For the mouse,
+[[estart]] spawns a generic slave that writes 49-byte mouse
+event packets.
+
+<<function [[ekeyslave]]>>=
+static void
+ekeyslave(fdt fd)
+{
+    Rune r;
+    char t[3], k[10];
+    int kr, kn, w;
+
+    if(eforkslave(Ekeyboard) < MAXSLAVE)
+        // parent (master)
+        return;
+
+    // child (slave) code
+    kn = 0;
+    t[0] = Skeyboard;
+    for(;;){
+        while(!fullrune(k, kn)){
+            // blocking call
+            kr = read(fd, k+kn, sizeof k - kn);
+            if(kr <= 0)
+                goto breakout;
+            kn += kr;
+        }
+        w = chartorune(&r, k);
+        kn -= w;
+        memmove(k, &k[w], kn);
+        t[1] = r;
+        t[2] = r>>8; // TODO what about other parts of the Rune????
+        // send to master
+        if(write(epipe[1], t, 3) != 3)
+            break;
+    }
+breakout:;
+    t[0] = MAXSLAVE;
+    write(epipe[1], t, 1);
+    _exits(0);
+}
+@
+
+
+<<function [[eforkslave]]>>=
+static int
+eforkslave(ulong key)
+{
+    int i, pid;
+
+    for(i=0; i<MAXSLAVE; i++)
+        if((key & ~(1<<i)) == 0 && eslave[i].pid == 0){
+            if(nslave <= i)
+                nslave = i + 1;
+            /*
+             * share the file descriptors so the last child
+             * out closes all connections to the window server.
+             */
+            switch(pid = rfork(RFPROC)){
+            // child
+            case 0:
+                return MAXSLAVE+i;
+            case -1:
+                fprint(2, "events: fork error\n");
+                exits("fork");
+            }
+            // parent
+            eslave[i].pid = pid;
+            eslave[i].head = eslave[i].tail = nil;
+            return i;
+        }
+    drawerror(display, "events: bad slave assignment");
+    return 0;
+}
+@
+% >> >>
+
+
+
+% for the mouse
+<<function [[estart]]>>=
+ulong
+estart(ulong key, fdt fd, int n)
+{
+    return estartfn(key, fd, n, nil);
+}
+@
+
+<<function [[estartfn]]>>=
+ulong
+estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
+{
+    char buf[EMAXMSG+1];
+    int i, r;
+
+    if(fd < 0)
+        drawerror(display, "events: bad file descriptor");
+    if(n <= 0 || n > EMAXMSG)
+        n = EMAXMSG;
+
+    i = eforkslave(key);
+    // master
+    if(i < MAXSLAVE){
+        eslave[i].fn = fn;
+        return 1<<i;
+    }
+    // slave
+    buf[0] = i - MAXSLAVE; // slave identifier
+    while((r = read(fd, buf+1, n))>0)
+        if(write(epipe[1], buf, r+1)!=r+1)
+            break;
+
+    buf[0] = MAXSLAVE;
+    write(epipe[1], buf, 1);
+    _exits(nil);
+    return 0;
+}
+@
+% >>
+
+
+
+
+\subsection{Event loop: [[event()]]}
+
+%claude:
+[[eread]] is the core event reading function: it scans all
+slaves for a pending event matching the [[keys]] bitmask.
+If nothing is queued, it calls [[extract]] to read from the
+pipe and dispatch. [[event]] is a convenience wrapper that
+reads any event; [[emouse]] and [[ekbd]] dequeue from
+specific slaves. [[ebread]] drains the pipe (via [[extract]])
+until the requested slave has data in its queue.
+
+% to get next event, usually called in event loop
+<<function [[event]]>>=
+keys
+event(Event *e)
+{
+    return eread(~0UL, e);
+}
+@
+
+<<function [[eread]]>>=
+keys
+eread(keys keys, Event *e)
+{
+    Ebuf *eb;
+    int i, id;
+
+    if(keys == 0)
+        return 0;
+    for(;;){
+        // check if pending message
+        for(i=0; i<nslave; i++) {
+            if((keys & (1<<i)) && eslave[i].head){
+                id = 1<<i;
+                if(i == Smouse)
+                    e->mouse = emouse();
+                else if(i == Skeyboard)
+                    e->kbdc = ekbd();
+                else if(i == Stimer)
+                    eslave[i].head = nil;
+                else{
+                    eb = ebread(&eslave[i]);
+                    e->n = eb->n;
+                    if(eslave[i].fn)
+                        id = (*eslave[i].fn)(id, e, eb->buf, eb->n);
+                    else
+                        memmove(e->data, eb->buf, eb->n);
+                    free(eb);
+                }
+                return id;
+            }
+        }
+        // read from pipe new messages from the slaves
+        extract();
+    }
+    return 0; // unreachable
+}
+@
+% >> >>
+%note: would like to use switch, but the Smouse are not constants, they
+% are static globals
+
+
+
+<<function [[emouse]]>>=
+Mouse
+emouse(void)
+{
+    Mouse m;
+    Ebuf *eb;
+    static int but[2];
+    int b;
+
+    if(Smouse < 0)
+        drawerror(display, "events: mouse not initialized");
+    eb = ebread(&eslave[Smouse]);
+    m.xy.x = atoi((char*)eb->buf+1+0*12);
+    m.xy.y = atoi((char*)eb->buf+1+1*12);
+    b = atoi((char*)eb->buf+1+2*12);
+    m.buttons = b;
+    m.msec = atoi((char*)eb->buf+1+3*12);
+    if (logfid)
+        fprint(logfid, "b: %d xy: %P\n", m.buttons, m.xy);
+    free(eb);
+    return m;
+}
+@
+
+<<function [[ekbd]]>>=
+int
+ekbd(void)
+{
+    Ebuf *eb;
+    int c;
+
+    if(Skeyboard < 0)
+        drawerror(display, "events: keyboard not initialzed");
+    eb = ebread(&eslave[Skeyboard]);
+    c = eb->buf[0] + (eb->buf[1]<<8);
+    free(eb);
+    return c;
+}
+@
+% >>
+
+
+
+% emouse | ekbd | eread  -> <>
+<<function [[ebread]]>>=
+static
+Ebuf*
+ebread(Slave *s)
+{
+    Ebuf *eb;
+    Dir *d;
+    ulong l;
+
+    for(;;){
+        d = dirfstat(epipe[0]);
+        if(d == nil)
+            drawerror(display, "events: eread stat error");
+        l = d->length;
+        free(d);
+        if(s->head && l==0)
+            break;
+        // else
+        extract();
+    }
+    // eb = pop_queue(s->head, s->tail);
+    eb = s->head;
+    s->head = s->head->next;
+    if(s->head == nil)
+        s->tail = nil;
+
+    return eb;
+}
+@
+
+\subsection{The master: [[extract()]]}
+
+%claude:
+[[extract]] reads one packet from [[epipe]], identifies
+the slave by the first byte, and enqueues the rest in
+that slave's linked-list buffer. For mouse events, it
+squashes duplicate events where only the position changed
+(same buttons and timestamp)---this prevents the queue from
+growing unboundedly when the application is slow. A resize
+event (mouse message starting with \verb+'r'+) triggers
+[[eresized]]. Before reading, [[extract]] flushes pending
+drawing commands so the display is up to date.
+
+<<function [[extract]]>>=
+static void
+extract(void)
+{
+    Slave *s;
+    Ebuf *eb;
+    int i, n;
+    byte ebuf[EMAXMSG+1];
+
+    /* avoid generating a message if there's nothing to show. */
+    /* this test isn't perfect, though; could do flushimage(display, 0) then call extract */
+    /* also: make sure we don't interfere if we're multiprocessing the display */
+    if(display->locking){
+        /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
+        if(canqlock(&display->qlock)){
+            if(display->bufp > display->buf)
+                flushimage(display, true);
+            unlockdisplay(display);
+        }
+    }else
+        if(display->bufp > display->buf)
+            flushimage(display, true);
+
+loop:
+    if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
+    || ebuf[0] >= MAXSLAVE)
+        drawerror(display, "eof on event pipe");
+    if(n == 0)
+        goto loop;
+
+    i = ebuf[0];
+    if(i >= nslave || n <= 1)
+        drawerror(display, "events: protocol error: short read");
+    s = &eslave[i];
+
+    if(i == Stimer){
+        s->head = (Ebuf *)1;
+        return;
+    }
+    if(i == Skeyboard && n != 3)
+        drawerror(display, "events: protocol error: keyboard");
+    if(i == Smouse){
+        if(n < 1+1+2*12)
+            drawerror(display, "events: protocol error: mouse");
+        if(ebuf[1] == 'r')
+            eresized(1);
+
+        /* squash extraneous mouse events */
+        if((eb=s->tail) && memcmp(eb->buf+1+2*12, ebuf+1+1+2*12, 12)==0){
+            memmove(eb->buf, &ebuf[1], n - 1);
+            return;
+        }
+    }
+
+    /* try to save space by only allocating as much buffer as we need */
+    eb = malloc(sizeof(*eb) - sizeof(eb->buf) + n - 1);
+    if(eb == nil)
+        drawerror(display, "events: protocol error 4");
+    eb->n = n - 1;
+    memmove(eb->buf, &ebuf[1], n - 1);
+
+    // add_queue(eb, s->head, s->tail)
+    eb->next = nil;
+    if(s->head)
+        s->tail = s->tail->next = eb;
+    else
+        s->head = s->tail = eb;
+}
+@
+% what if multiple events in the pipe? first out win all?
+% timer too??
+
+\subsection{[[ecanxxx()]]}
+
+<<function [[ecanmouse]]>>=
+int
+ecanmouse(void)
+{
+    if(Smouse < 0)
+        drawerror(display, "events: mouse not initialized");
+    return ecanread(Emouse);
+}
+@
+
+<<function [[ecankbd]]>>=
+int
+ecankbd(void)
+{
+    if(Skeyboard < 0)
+        drawerror(display, "events: keyboard not initialzed");
+    return ecanread(Ekeyboard);
+}
+@
+
+<<function [[ecanread]]>>=
+int
+ecanread(ulong keys)
+{
+    Dir *d;
+    int i;
+    ulong l;
+
+    for(;;){
+        for(i=0; i<nslave; i++)
+            if((keys & (1<<i)) && eslave[i].head)
+                return 1;
+        d = dirfstat(epipe[0]);
+        if(d == nil)
+            drawerror(display, "events: ecanread stat error");
+        l = d->length;
+        free(d);
+        if(l == 0)
+            return 0;
+        extract();
+    }
+    return 0; // unreachable
+}
+@
+% >>
+
+\subsection{Timer}
+
+<<function [[etimer]]>>=
+ulong
+etimer(ulong key, int n)
+{
+    char t[2];
+    int cnt;
+
+    if(Stimer != -1)
+        drawerror(display, "events: timer started twice");
+    Stimer = eforkslave(key);
+    // master
+    if(Stimer < MAXSLAVE)
+        return 1<<Stimer;
+    // slave
+    if(n <= 0)
+        n = 1000;
+    t[0] = t[1] = Stimer - MAXSLAVE;
+    do {
+        sleep(n);
+        cnt = write(epipe[1], t, 2);
+    } while(cnt == 2);
+
+    t[0] = MAXSLAVE;
+    write(epipe[1], t, 1);
+    _exits(nil);
+    return 0;
+}
+@
+% >> >> >> >> >>
+%old: I moved the write outside the while and use a cnt local
+
+
+
+
+
+\subsection{Misc}
+
+<<function [[emoveto]]>>=
+void
+emoveto(Point pt)
+{
+    char buf[2*12+2];
+    int n;
+
+    n = sprint(buf, "m%d %d", pt.x, pt.y);
+    write(mousefd, buf, n);
+}
+@
+
+<<function [[esetcursor]]>>=
+void
+esetcursor(Cursor *c)
+{
+    uchar curs[2*4+2*2*16];
+
+    if(c == 0)
+        write(cursorfd, curs, 0);
+    else{
+        BPLONG(curs+0*4, c->offset.x);
+        BPLONG(curs+1*4, c->offset.y);
+        memmove(curs+2*4, c->clr, 2*2*16);
+        write(cursorfd, curs, sizeof curs);
+    }
+}
+@
+
+<<function [[ereadmouse]]>>=
+int
+ereadmouse(Mouse *m)
+{
+    int n;
+    char buf[128];
+
+    do{
+        n = read(mousefd, buf, sizeof(buf));
+        if(n < 0)	/* probably interrupted */
+            return -1;
+        n = eatomouse(m, buf, n);
+    }while(n == 0);
+    return n;
+}
+@
+
+<<function [[eatomouse]]>>=
+int
+eatomouse(Mouse *m, char *buf, int n)
+{
+    if(n != 1+4*12){
+        werrstr("atomouse: bad count");
+        return -1;
+    }
+
+    if(buf[0] == 'r')
+        eresized(1);
+    m->xy.x = atoi(buf+1+0*12);
+    m->xy.y = atoi(buf+1+1*12);
+    m->buttons = atoi(buf+1+2*12);
+    m->msec = atoi(buf+1+3*12);
+    return n;
+}
+@
+
+
+\subsection{[[egetrects.c]]}
+
+%claude:
+[[egetrect]] and [[edrawgetrect]] are event-library versions
+of [[getrect]] and [[drawgetrect]]: they use [[emouse]] and
+[[ereadmouse]] instead of [[readmouse]]. The logic is
+identical---rubber-band a rectangle by tracking the mouse
+while a button is held, saving and restoring the pixels
+under the border.
+
+% event version of getrects.c ?
+
+
+<<constant [[W]]>>=
+#define	W	Borderwidth
+@
+
+<<global [[tmp]]>>=
+static Image *tmp[4];
+@
+
+<<global [[red]]>>=
+static Image *red;
+@
+
+<<global [[sweep]]>>=
+static Cursor sweep={
+    {-7, -7},
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
+     0xE0, 0x07, 0xE0, 0x07, 0xE3, 0xF7, 0xE3, 0xF7,
+     0xE3, 0xE7, 0xE3, 0xF7, 0xE3, 0xFF, 0xE3, 0x7F,
+     0xE0, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,},
+    {0x00, 0x00, 0x7F, 0xFE, 0x40, 0x02, 0x40, 0x02,
+     0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x41, 0xE2,
+     0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
+     0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
+};
+@
+
+% edrawgetrects -> <>
+<<function [[brects]]>>=
+static
+void
+brects(Rectangle r, Rectangle rp[4])
+{
+    if(Dx(r) < 2*W)
+        r.max.x = r.min.x+2*W;
+    if(Dy(r) < 2*W)
+        r.max.y = r.min.y+2*W;
+    rp[0] = Rect(r.min.x, r.min.y, r.max.x, r.min.y+W);
+    rp[1] = Rect(r.min.x, r.max.y-W, r.max.x, r.max.y);
+    rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
+    rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
+}
+@
+
+<<function [[egetrect]]>>=
+Rectangle
+egetrect(int but, Mouse *m)
+{
+    Rectangle r, rc;
+
+    but = 1<<(but-1);
+    esetcursor(&sweep);
+    while(m->buttons)
+        *m = emouse();
+    while(!(m->buttons & but)){
+        *m = emouse();
+        if(m->buttons & (7^but))
+            goto Return;
+    }
+    r.min = m->xy;
+    r.max = m->xy;
+    do{
+        rc = canonrect(r);
+        edrawgetrect(rc, 1);
+        *m = emouse();
+        edrawgetrect(rc, 0);
+        r.max = m->xy;
+    }while(m->buttons == but);
+
+    Return:
+    esetcursor(0);
+    if(m->buttons & (7^but)){
+        rc.min.x = rc.max.x = 0;
+        rc.min.y = rc.max.y = 0;
+        while(m->buttons)
+            *m = emouse();
+    }
+    return rc;
+}
+@
+
+<<function [[freetmp]]>>=
+static
+void
+freetmp(void)
+{
+    freeimage(tmp[0]);
+    freeimage(tmp[1]);
+    freeimage(tmp[2]);
+    freeimage(tmp[3]);
+    freeimage(red);
+    tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
+}
+@
+
+<<function [[edrawgetrect]]>>=
+void
+edrawgetrect(Rectangle rc, int up)
+{
+    int i;
+    Rectangle r, rects[4];
+
+    if(up && tmp[0]!=nil)
+        if(Dx(tmp[0]->r)<Dx(rc) || Dy(tmp[2]->r)<Dy(rc))
+            freetmp();
+
+    if(tmp[0] == 0){
+        r = Rect(0, 0, Dx(view->r), W);
+        tmp[0] = allocimage(display, r, view->chan, 0, -1);
+        tmp[1] = allocimage(display, r, view->chan, 0, -1);
+        r = Rect(0, 0, W, Dy(view->r));
+        tmp[2] = allocimage(display, r, view->chan, 0, -1);
+        tmp[3] = allocimage(display, r, view->chan, 0, -1);
+        red = allocimage(display, Rect(0,0,1,1), view->chan, 1, DRed);
+        if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0)
+            drawerror(display, "getrect: allocimage failed");
+    }
+    brects(rc, rects);
+    if(!up){
+        for(i=0; i<4; i++)
+            draw(view, rects[i], tmp[i], nil, ZP);
+        return;
+    }
+    for(i=0; i<4; i++){
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
+        draw(view, rects[i], red, nil, ZP);
+    }
+}
+@
+
+\subsection{[[emenuhits.c]]}
+% event version of menuhits.c
+
+<<enum [[_anon_]]([[(lib_graphics/libdraw/emenuhit.c)]])>>=
+enum
+{
+    Margin = 4,		/* outside to text */
+    Border = 2,		/* outside to selection boxes */
+    Blackborder = 2,	/* width of outlining border */
+    Vspacing = 2,		/* extra spacing between lines of text */
+    Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
+    Nscroll = 20,		/* number entries in scrolling part */
+    Scrollwid = 14,		/* width of scroll bar */
+    Gap = 4,			/* between text and scroll bar */
+};
+@
+
+<<global [[menutxt]]>>=
+static	Image	*menutxt;
+@
+
+<<global [[back]]>>=
+static	Image	*back;
+@
+
+<<global [[high]]>>=
+static	Image	*high;
+@
+
+<<global [[bord]]>>=
+static	Image	*bord;
+@
+
+<<global [[text]]>>=
+static	Image	*text;
+@
+
+<<global [[htext]]>>=
+static	Image	*htext;
+@
+
+<<function [[menucolors]]>>=
+static
+void
+menucolors(void)
+{
+    /* Main tone is greenish, with negative selection */
+    back = allocimagemix(display, DPalegreen, DWhite);
+    high = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedgreen);	/* not as dark green */
+    if(back == nil || high == nil || bord == nil)
+        goto Error;
+    text = display->black;
+    htext = back;
+    return;
+
+    Error:
+    freeimage(back);
+    freeimage(high);
+    freeimage(bord);
+    back = display->white;
+    high = display->black;
+    bord = display->black;
+    text = display->black;
+    htext = display->white;
+}
+@
+
+<<function [[menurect]]>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the rectangle, including its black edge, holding element i.
+ */
+static Rectangle
+menurect(Rectangle r, int i)
+{
+    if(i < 0)
+        return Rect(0, 0, 0, 0);
+    r.min.y += (font->height+Vspacing)*i;
+    r.max.y = r.min.y+font->height+Vspacing;
+    return insetrect(r, Border-Margin);
+}
+@
+
+<<function [[menusel]]>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the element number containing p.
+ */
+static int
+menusel(Rectangle r, Point p)
+{
+    r = insetrect(r, Margin);
+    if(!ptinrect(p, r))
+        return -1;
+    return (p.y-r.min.y)/(font->height+Vspacing);
+}
+@
+
+<<function [[paintitem]]>>=
+static
+void
+paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *save, Image *restore)
+{
+    char *item;
+    Rectangle r;
+    Point pt;
+
+    if(i < 0)
+        return;
+    r = menurect(textr, i);
+    if(restore){
+        draw(view, r, restore, nil, restore->r.min);
+        return;
+    }
+    if(save)
+        draw(save, save->r, view, nil, r.min);
+    item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
+    pt.x = (textr.min.x+textr.max.x-stringwidth(font, item))/2;
+    pt.y = textr.min.y+i*(font->height+Vspacing);
+    draw(view, r, highlight? high : back, nil, pt);
+    string(view, pt, highlight? htext : text, pt, font, item);
+}
+@
+
+<<function [[menuscan]]>>=
+/*
+ * menur is a rectangle holding all the highlightable text elements.
+ * track mouse while inside the box, return what's selected when button
+ * is raised, -1 as soon as it leaves box.
+ * invariant: nothing is highlighted on entry or exit.
+ */
+static int
+menuscan(Menu *menu, int but, Mouse *m, Rectangle textr, int off, int lasti, Image *save)
+{
+    int i;
+
+    paintitem(menu, textr, off, lasti, 1, save, nil);
+    flushimage(display, true);	/* in case display->locking is set */
+    *m = emouse();
+    while(m->buttons & (1<<(but-1))){
+        flushimage(display, true);	/* in case display->locking is set */
+        *m = emouse();
+        i = menusel(textr, m->xy);
+        if(i != -1 && i == lasti)
+            continue;
+        paintitem(menu, textr, off, lasti, 0, nil, save);
+        if(i == -1)
+            return i;
+        lasti = i;
+        paintitem(menu, textr, off, lasti, 1, save, nil);
+    }
+    return lasti;
+}
+@
+
+<<function [[menupaint]]>>=
+static void
+menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
+{
+    int i;
+
+    draw(view, insetrect(textr, Border-Margin), back, nil, ZP);
+    for(i = 0; i<nitemdrawn; i++)
+        paintitem(menu, textr, off, i, 0, nil, nil);
+}
+@
+
+<<function [[menuscrollpaint]]>>=
+static void
+menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
+{
+    Rectangle r;
+
+    draw(view, scrollr, back, nil, ZP);
+    r.min.x = scrollr.min.x;
+    r.max.x = scrollr.max.x;
+    r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
+    r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
+    if(r.max.y < r.min.y+2)
+        r.max.y = r.min.y+2;
+    border(view, r, 1, bord, ZP);
+    if(menutxt == 0)
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DDarkgreen);
+    if(menutxt)
+        draw(view, insetrect(r, 1), menutxt, nil, ZP);
+}
+@
+
+<<function [[emenuhit]]>>=
+int
+emenuhit(int but, Mouse *m, Menu *menu)
+{
+    int i, nitem, nitemdrawn, maxwid, lasti, off, noff, wid, screenitem;
+    int scrolling;
+    Rectangle r, menur, sc, textr, scrollr;
+    Image *b, *save;
+    Point pt;
+    char *item;
+
+    if(back == nil)
+        menucolors();
+    sc = view->clipr;
+    replclipr(view, 0, view->r);
+    maxwid = 0;
+    for(nitem = 0;
+        item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
+        nitem++){
+        i = stringwidth(font, item);
+        if(i > maxwid)
+            maxwid = i;
+    }
+    if(menu->lasthit<0 || menu->lasthit>=nitem)
+        menu->lasthit = 0;
+    screenitem = (Dy(view->r)-10)/(font->height+Vspacing);
+    if(nitem>Maxunscroll || nitem>screenitem){
+        scrolling = 1;
+        nitemdrawn = Nscroll;
+        if(nitemdrawn > screenitem)
+            nitemdrawn = screenitem;
+        wid = maxwid + Gap + Scrollwid;
+        off = menu->lasthit - nitemdrawn/2;
+        if(off < 0)
+            off = 0;
+        if(off > nitem-nitemdrawn)
+            off = nitem-nitemdrawn;
+        lasti = menu->lasthit-off;
+    }else{
+        scrolling = 0;
+        nitemdrawn = nitem;
+        wid = maxwid;
+        off = 0;
+        lasti = menu->lasthit;
+    }
+    r = insetrect(Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing)), -Margin);
+    r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
+    r = rectaddpt(r, m->xy);
+    pt = ZP;
+    if(r.max.x>view->r.max.x)
+        pt.x = view->r.max.x-r.max.x;
+    if(r.max.y>view->r.max.y)
+        pt.y = view->r.max.y-r.max.y;
+    if(r.min.x<view->r.min.x)
+        pt.x = view->r.min.x-r.min.x;
+    if(r.min.y<view->r.min.y)
+        pt.y = view->r.min.y-r.min.y;
+    menur = rectaddpt(r, pt);
+    textr.max.x = menur.max.x-Margin;
+    textr.min.x = textr.max.x-maxwid;
+    textr.min.y = menur.min.y+Margin;
+    textr.max.y = textr.min.y + nitemdrawn*(font->height+Vspacing);
+    if(scrolling){
+        scrollr = insetrect(menur, Border);
+        scrollr.max.x = scrollr.min.x+Scrollwid;
+    }else
+        scrollr = Rect(0, 0, 0, 0);
+
+    b = allocimage(display, menur, view->chan, 0, 0);
+    if(b == 0)
+        b = view;
+    draw(b, menur, view, nil, menur.min);
+    draw(view, menur, back, nil, ZP);
+    border(view, menur, Blackborder, bord, ZP);
+    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
+    r = menurect(textr, lasti);
+    emoveto(divpt(addpt(r.min, r.max), 2));
+    menupaint(menu, textr, off, nitemdrawn);
+    if(scrolling)
+        menuscrollpaint(scrollr, off, nitem, nitemdrawn);
+    while(m->buttons & (1<<(but-1))){
+        lasti = menuscan(menu, but, m, textr, off, lasti, save);
+        if(lasti >= 0)
+            break;
+        while(!ptinrect(m->xy, textr) && (m->buttons & (1<<(but-1)))){
+            if(scrolling && ptinrect(m->xy, scrollr)){
+                noff = ((m->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
+                noff -= nitemdrawn/2;
+                if(noff < 0)
+                    noff = 0;
+                if(noff > nitem-nitemdrawn)
+                    noff = nitem-nitemdrawn;
+                if(noff != off){
+                    off = noff;
+                    menupaint(menu, textr, off, nitemdrawn);
+                    menuscrollpaint(scrollr, off, nitem, nitemdrawn);
+                }
+            }
+            flushimage(display, true);	/* in case display->locking is set */
+            *m = emouse();
+        }
+    }
+    draw(view, menur, b, nil, menur.min);
+    if(b != view)
+        freeimage(b);
+    freeimage(save);
+    replclipr(view, 0, sc);
+    if(lasti >= 0){
+        menu->lasthit = lasti+off;
+        return menu->lasthit;
+    }
+    return -1;
+}
+@
+% >> >>
+
+
+
+\section{Menus}
+\l mv in advanced shapes? windowing system support?
+\l mv in appendix (nice example of use of drawing API)?
+\l mv in Widgets.nw? or have Widgets chapter here and say that just subset?
+
+% related to mouse too.
+% used in Windows.nw for the wm menus.
+
+%claude:
+The menu system is a self-contained popup widget built entirely
+on top of the drawing primitives. [[menuhit]] creates a temporary
+image, draws the menu items, tracks the mouse to highlight the
+current selection, and returns the chosen item index. The menu
+appears at the mouse position and vanishes when the button is
+released. Scrolling menus handle lists too long to fit on screen
+by adding scroll arrows at the top and bottom.
+
+\subsection{[[Menu]]}
+
+<<struct [[Menu]]>>=
+struct Menu
+{
+    char	**item;
+    <<[[Menu]] other fields>>
+};
+@
+%ocaml: list of pair with string * closure, so no need
+% to have intermediate and redundant enum or hardcoded integers
+% to know which entry was clicked (as done in rio)
+
+
+
+\subsection{Constants}
+
+<<enum [[_anon_]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+enum
+{
+    Margin = 4,		/* outside to text */
+    Border = 2,		/* outside to selection boxes */
+    Blackborder = 2,	/* width of outlining border */
+    Vspacing = 2,		/* extra spacing between lines of text */
+    <<[[menuhit.c]] constants>>
+};
+@
+\l Blackborder -> border_size
+
+% FIGURE! where see the dimensions used!
+
+\subsection{Colors}
+
+%claude:
+The menu uses four lazily-allocated color images:
+[[back]] (pale yellow background), [[high]] (dark yellow
+highlight), [[bord]] (yellow-green border), and [[text]]
+(black foreground). [[allocimagemix]] creates dithered
+colors by alternating pixels of two colors---a simple
+way to get in-between shades on displays that lack full
+color depth.
+
+<<global [[back]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static	Image	*back;
+@
+\l background
+
+<<global [[high]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static	Image	*high;
+@
+\l background_highlighted
+
+<<global [[bord]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static	Image	*bord;
+@
+\l longer name, border
+
+<<global [[text]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static	Image	*text;
+@
+\l text_color
+
+<<global [[htext]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static	Image	*htext;
+@
+\l longer name, text_highlighted
+
+
+<<global [[menutxt]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static	Image	*menutxt;
+@
+% diff with text?
+
+<<[[menuhit()]] initialize colors>>=
+if(back == nil)
+    menucolors();
+@
+
+<<function [[menucolors]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static
+void
+menucolors(void)
+{
+    /* Main tone is greenish, with negative selection */
+    back = allocimagemix(display, DPalegreen, DWhite);
+    high = allocimage(display, Rect(0,0,1,1), view->chan, true, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), view->chan, true, DMedgreen);	/* not as dark green */
+    <<[[menucolors()]] sanity check images>>
+    text = display->black;
+    htext = back;
+    return;
+
+<<[[menucolors()]] Error label>>
+}
+@
+
+<<[[menucolors()]] sanity check images>>=
+if(back == nil || high == nil || bord == nil)
+    goto Error;
+@
+
+<<[[menucolors()]] Error label>>=
+Error:
+freeimage(back);
+freeimage(high);
+freeimage(bord);
+back = display->white;
+high = display->black;
+bord = display->black;
+text = display->black;
+htext = display->white;
+@
+%ocaml: use exn for error. When can not allocate image?
+
+% color3? why note color2?
+% menucolors -> <>
+<<function [[allocimagemix]]>>=
+Image*
+allocimagemix(Display *d, ulong color1, ulong color3)
+{
+    Image *t, *b;
+    static Image *qmask;
+
+    if(qmask == nil)
+        qmask = allocimage(d, Rect(0,0,1,1), GREY8, true, 0x3F3F3FFF);
+
+    <<[[allocimagemix()]] if depth less than 8>>
+    else{	/* use a solid color, blended using alpha */
+        t = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, true, color1);
+        <<[[allocimagemix()]] sanity check t>>
+        b = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, true, color3);
+        <<[[allocimagemix()]] sanity check b>>
+        draw(b, b->r, t, qmask, ZP);
+        freeimage(t);
+        return b;
+    }
+}
+@
+% this allocate a color with a pattern, like mostly white
+% with some green dots.
+
+<<[[allocimagemix()]] sanity check t>>=
+if(t == nil)
+    return nil;
+@
+<<[[allocimagemix()]] sanity check b>>=
+if(b == nil){
+    freeimage(t);
+    return nil;
+}
+@
+%ocaml: finalize and exn
+
+\subsection{[[menuhits()]]}
+
+%claude:
+[[menuhit]] implements the complete popup menu interaction
+in a single synchronous function. It saves the screen area
+under the menu, draws the menu items, enters a tracking loop
+that reads mouse events via [[readmouse]], highlights items
+as the cursor moves over them, and returns the selected item
+index when the button is released ($-1$ if none). The saved
+screen area is restored before returning. If the menu doesn't
+fit on screen, the rectangle is adjusted to stay within view
+bounds.
+
+% entry point
+<<function [[menuhit]]>>=
+int
+menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
+{
+    int i;
+    int lasti;
+    char *item;
+    int nitem, nitemdrawn;
+    int maxwid, wid;
+    Rectangle r, menur, textr;
+    Image *b, *backup, *save;
+    Point pt;
+    bool scrolling;
+    int off;
+    <<[[menuhit()]] other locals>>
+
+    <<[[menuhit()]] initialize colors>>
+    <<[[menuhit()]] set repl and clip on view>>
+
+    <<[[menuhit()]] compute [[maxwid]] and [[nitem]]>>
+    <<[[menuhit()]] set lasthit>>
+    <<[[menuhit()]] if need a scroller for items>>
+    else{
+        scrolling = false;
+        nitemdrawn = nitem;
+        wid = maxwid;
+        off = 0;
+        lasti = menu->lasthit;
+    }
+    <<[[menuhit()]] set [[r]], the temporary rectangle to draw the menu>>
+    <<[[menuhit()]] set [[menur]], the adjusted rectangle to draw the menu>>
+    <<[[menuhit()]] set [[textr]], the rectangle to draw the text>>
+    <<[[menuhit()]] set [[scrollr]], the rectangle to draw maybe a scrollbar>>
+
+    <<[[menuhit()]] set [[b]] the image to draw on and right [[backup]]>>
+    <<[[menuhit()]] paint on [[b]]>>
+
+    <<[[menuhit()]] allocate [[save]] image>>
+    <<[[menuhit()]] loop while button still pressed and return [[lasti]]>>
+
+    <<[[menuhit()]] restore what was under the menu in [[backup]]>>
+    <<[[menuhit()]] free [[save]] image>>
+    <<[[menuhit()]] restore clip on view>>
+    flushimage(display, true);
+    if(lasti >= 0){
+        <<[[menuhit()]] save lasthit before returning>>
+        return menu->lasthit;
+    }
+    return -1;
+}
+@
+% >> >> >> >> >>
+%pad: but -> button
+%ocaml: clearer to use button variant than use bitset
+% and then bitset tricks above
+
+\subsubsection{The items size}
+
+<<[[menuhit()]] compute [[maxwid]] and [[nitem]]>>=
+maxwid = 0;
+for(nitem = 0;
+    item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
+    nitem++){
+    i = stringwidth(font, item);
+    if(i > maxwid)
+        maxwid = i;
+}
+@
+%ocaml: map and foldl(max), and no need nitem compute (just use List.length)
+
+<<[[Menu]] other fields>>=
+char	*(*gen)(int);
+@
+% some app uses that?
+
+\subsubsection{The rectangles}
+
+<<[[menuhit()]] set [[r]], the temporary rectangle to draw the menu>>=
+r = Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing));
+r = insetrect(r, -Margin); // enlarge
+r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
+r = rectaddpt(r, mc->xy);
+@
+%old: I added the first line where create first simple rectangle without margin
+%ocaml: use pipe operator and currying, so shorter
+
+% centered on last entry
+
+<<[[menuhit()]] set [[menur]], the adjusted rectangle to draw the menu>>=
+pt = ZP;
+<<[[menuhit()]] adjust [[pt]] if [[r]] outside view>>
+menur = rectaddpt(r, pt);
+@
+
+<<[[menuhit()]] adjust [[pt]] if [[r]] outside view>>=
+if(r.max.x > view->r.max.x)
+    pt.x = view->r.max.x - r.max.x;
+if(r.max.y > view->r.max.y)
+    pt.y = view->r.max.y - r.max.y;
+if(r.min.x < view->r.min.x)
+    pt.x = view->r.min.x-r.min.x;
+if(r.min.y < view->r.min.y)
+    pt.y = view->r.min.y-r.min.y;
+@
+
+
+
+<<[[menuhit()]] set [[textr]], the rectangle to draw the text>>=
+textr.max.x = menur.max.x - Margin;
+textr.min.x = textr.max.x - maxwid;
+textr.min.y = menur.min.y + Margin;
+textr.max.y = textr.min.y + nitemdrawn*(font->height+Vspacing);
+@
+\l why not simply insetrect(menur, Margin)? because before
+\l  was using wid but here maxwid?
+
+
+<<function [[menurect]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the rectangle, including its black edge, holding element i.
+ */
+static Rectangle
+menurect(Rectangle r, int i)
+{
+    <<[[menurect()]] sanity check i>>
+    r.min.y += (font->height+Vspacing)*i;
+    r.max.y = r.min.y + font->height+Vspacing;
+    return insetrect(r, Border-Margin);
+}
+@
+% Border-margin = -2 is negative, so enlarge textr
+
+<<[[menurect()]] sanity check i>>=
+if(i < 0)
+    return Rect(0, 0, 0, 0);
+@
+%ocaml: exn!
+
+
+\subsubsection{The image}
+
+<<[[menuhit()]] set [[b]] the image to draw on and right [[backup]]>>=
+if(scr){
+    b = allocwindow(scr, menur, Refbackup, DWhite);
+    <<[[menuhit()]] sanitize b>>
+    backup = nil;
+}else{
+    b = view;
+    backup = allocimage(display, menur, view->chan, false, -1);
+    if(backup)
+        draw(backup, menur, view, nil, menur.min);
+}
+@
+
+
+
+<<[[menuhit()]] sanitize b>>=
+if(b == nil)
+    b = view;
+@
+
+<<[[menuhit()]] restore what was under the menu in [[backup]]>>=
+if(b != view)
+    freeimage(b);
+if(backup){
+    draw(view, menur, backup, nil, menur.min);
+    freeimage(backup);
+}
+@
+
+% note that freeimage free the resource and restore what was under
+% the layer on the desktop!
+
+\subsubsection{The paint}
+
+<<[[menuhit()]] paint on [[b]]>>=
+draw(b, menur, back, nil, ZP);
+border(b, menur, Blackborder, bord, ZP);
+<<[[menuhit()]] move cursor to lasti entry>>
+menupaint(b, menu, textr, off, nitemdrawn);
+<<[[menuhit()]] if scrolling, paint the scroll>>
+@
+
+% menuhit -> <>
+<<function [[menupaint]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static void
+menupaint(Image *m, Menu *menu, Rectangle textr, int off, int nitemdrawn)
+{
+    int i;
+
+    draw(m, insetrect(textr, Border-Margin), back, nil, ZP);
+    for(i = 0; i<nitemdrawn; i++)
+        paintitem(m, menu, textr, off, i, false, nil, nil);
+}
+@
+\l why redraw again background? because if was scrolling?
+
+% menupain | menuscan -> <>
+<<function [[paintitem]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static
+void
+paintitem(Image *m, Menu *menu, Rectangle textr, int off, int i, bool highlight, Image *save, Image *restore)
+{
+    char *item;
+    Rectangle r;
+    Point pt;
+
+    <<[[paintitem()]] sanity check i>>
+    r = menurect(textr, i);
+    <<[[paintitem()]] if restore>>
+    <<[[paintitem()]] if save>>
+    item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
+    pt.x = (textr.min.x + textr.max.x - stringwidth(font, item))/2;
+    pt.y = textr.min.y + i*(font->height+Vspacing);
+    draw(m, r, highlight? high : back, nil, pt);
+    string(m, pt, highlight? htext : text, pt, font, item);
+}
+@
+% the pt.x instruction is to center text :) nice, simple.
+
+\l why pass pt to draw and to fourth arg of string?
+
+% call draw again cause will call paintitem to redraw on past stuff
+% and especially to highlight
+
+
+<<[[paintitem()]] sanity check i>>=
+if(i < 0)
+    return;
+@
+% yes, can be called with i = -1, when went out of menu
+% and return back towards menu, lasti will still be -1
+
+<<[[menuhit()]] move cursor to lasti entry>>=
+r = menurect(textr, lasti);
+moveto(mc, divpt(addpt(r.min, r.max), 2));
+@
+\l why before menupaint?
+
+\subsubsection{The loop}
+
+<<[[menuhit()]] loop while button still pressed and return [[lasti]]>>=
+while(mc->buttons & (1<<(button-1))){
+    lasti = menuscan(b, menu, button, mc, textr, off, lasti, save);
+    if(lasti >= 0)
+        break;
+    while(!ptinrect(mc->xy, textr) && (mc->buttons & (1<<(button-1)))){
+        <<[[menuhit()]] if scrolling and mouse in [[scrollr]]>>
+        readmouse(mc);
+    }
+}
+@
+% when goes out of textr, menuscan will return -1 in which case
+% we loop until we go back in and we go back in lasti is still
+% -1 so may call paintitem with -1.
+
+<<[[menuhit()]] allocate [[save]] image>>=
+save = allocimage(display, menurect(textr, 0), view->chan, false, -1);
+@
+%old: save was in the next chunk, but more logical here
+\l why need save and backup? backup is if not use allocwindow,
+\l  save is needed anyway to draw highlighted text (but could
+\l  alloc and free a layer each time too)
+
+<<[[paintitem()]] if save>>=
+if(save)
+    draw(save, save->r, m, nil, r.min);
+@
+
+<<[[paintitem()]] if restore>>=
+if(restore){
+    draw(m, r, restore, nil, restore->r.min);
+    return;
+}
+@
+
+<<[[menuhit()]] free [[save]] image>>=
+freeimage(save);
+@
+
+\subsubsection{The scan}
+
+% lasti can be -1 below
+
+<<function [[menuscan]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+/*
+ * menur is a rectangle holding all the highlightable text elements.
+ * track mouse while inside the box, return what's selected when button
+ * is raised, -1 as soon as it leaves box.
+ * invariant: nothing is highlighted on entry or exit.
+ */
+static int
+menuscan(Image *m, Menu *menu, int button, Mousectl *mc, Rectangle textr, int off, int lasti, Image *save)
+{
+    int i;
+
+    paintitem(m, menu, textr, off, lasti, true, save, nil);
+    for(readmouse(mc); mc->buttons & (1<<(button-1)); readmouse(mc)){
+        i = menusel(textr, mc->xy);
+        if(i != -1 && i == lasti)
+            continue;
+        // else (i == -1 || i != lasti)
+        paintitem(m, menu, textr, off, lasti, false, nil, save); // restore
+        if(i == -1)
+            return i;
+        lasti = i;
+        paintitem(m, menu, textr, off, lasti, true, save, nil);
+    }
+    return lasti;
+}
+@
+% >>
+% complex flow with continue and return ...
+
+% remember that readmouse internally flush the display! so no need
+% to do it but important! otherwise get no refresh. and just see the
+% old menu list.
+
+% first paintitem is to highlight lasti
+
+<<function [[menusel]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the element number containing p.
+ */
+static int
+menusel(Rectangle r, Point p)
+{
+    r = insetrect(r, Margin);
+    if(!ptinrect(p, r))
+        return -1;
+    return (p.y - r.min.y)/(font->height+Vspacing);
+}
+@
+\l why reduce by Margin? textr is already a reduced menur
+
+\subsubsection{Misc}
+
+<<[[menuhit()]] other locals>>=
+Rectangle sc; // save clipr
+@
+<<[[menuhit()]] set repl and clip on view>>=
+sc = view->clipr;
+replclipr(view, false, view->r);
+@
+<<[[menuhit()]] restore clip on view>>=
+replclipr(view, false, sc);
+@
+
+% why need that?
+
+\subsection{Last hit}
+
+% Allows to display menu centered on your last choice.
+% So fast to repeat the same operation.
+
+<<[[menuhit()]] set lasthit>>=
+if(menu->lasthit<0 || menu->lasthit>=nitem)
+    menu->lasthit = 0;
+@
+
+<<[[Menu]] other fields>>=
+int	lasthit;
+@
+
+<<[[menuhit()]] save lasthit before returning>>=
+menu->lasthit = lasti+off;
+@
+
+\subsection{Scrolling menus}
+
+%claude:
+When a menu has more items than can fit on screen, scroll
+arrows appear at the top and bottom. The [[scrollr]]
+rectangle contains a scrollbar that shows the visible
+portion. Clicking in the scrollbar area jumps to that
+position in the item list; the menu is repainted with the
+new offset.
+
+<<[[menuhit.c]] constants>>=
+Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
+Nscroll = 20,		/* number entries in scrolling part */
+Scrollwid = 14,		/* width of scroll bar */
+Gap = 4,			/* between text and scroll bar */
+@
+
+<<[[menuhit()]] other locals>>=
+int screenitem;
+@
+
+<<[[menuhit()]] if need a scroller for items>>=
+screenitem = (Dy(view->r) - 10) / (font->height + Vspacing);
+if(nitem>Maxunscroll || nitem>screenitem){
+    scrolling = 1;
+    nitemdrawn = Nscroll;
+    if(nitemdrawn > screenitem)
+        nitemdrawn = screenitem;
+    wid = maxwid + Gap + Scrollwid;
+    off = menu->lasthit - nitemdrawn/2;
+    if(off < 0)
+        off = 0;
+    if(off > nitem-nitemdrawn)
+        off = nitem-nitemdrawn;
+    lasti = menu->lasthit-off;
+}
+@
+
+<<[[menuhit()]] other locals>>=
+Rectangle scrollr;
+@
+<<[[menuhit()]] set [[scrollr]], the rectangle to draw maybe a scrollbar>>=
+<<[[menuhit()]] if scrolling set scrollr>>
+else
+    scrollr = Rect(0, 0, 0, 0);
+@
+% I dont think it needs a default value, if not scrolling then never used
+
+<<[[menuhit()]] if scrolling set scrollr>>=
+if(scrolling){
+    scrollr = insetrect(menur, Border);
+    scrollr.max.x = scrollr.min.x+Scrollwid;
+}
+@
+
+<<[[menuhit()]] if scrolling, paint the scroll>>=
+if(scrolling)
+    menuscrollpaint(b, scrollr, off, nitem, nitemdrawn);
+@
+
+<<function [[menuscrollpaint]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
+static void
+menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
+{
+    Rectangle r;
+
+    draw(m, scrollr, back, nil, ZP);
+    r.min.x = scrollr.min.x;
+    r.max.x = scrollr.max.x;
+    r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
+    r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
+    if(r.max.y < r.min.y+2)
+        r.max.y = r.min.y+2;
+    border(m, r, 1, bord, ZP);
+    if(menutxt == nil)
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), view->chan, true, DDarkgreen);	/* border color; BUG? */
+    if(menutxt)
+        draw(m, insetrect(r, 1), menutxt, nil, ZP);
+}
+@
+
+<<[[menuhit()]] other locals>>=
+int noff;
+@
+<<[[menuhit()]] if scrolling and mouse in [[scrollr]]>>=
+if(scrolling && ptinrect(mc->xy, scrollr)){
+    noff = ((mc->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
+    noff -= nitemdrawn/2;
+    if(noff < 0)
+        noff = 0;
+    if(noff > nitem-nitemdrawn)
+        noff = nitem-nitemdrawn;
+    if(noff != off){
+        off = noff;
+        menupaint(b, menu, textr, off, nitemdrawn);
+        menuscrollpaint(b, scrollr, off, nitem, nitemdrawn);
+    }
+}
+@
+
+
+\section{Selection}
+
+%claude:
+[[getrect]] lets the user rubber-band a rectangle on screen
+by tracking the mouse while a button is held. It draws four
+thin rectangles as a border, saving the pixels underneath
+into temporary images so they can be restored when the
+selection moves. This is used by [[rio]] when the user
+sweeps a new window.
+
+\subsection{[[getrect.c]]}
+
+% =~ sweep() action done by rio, but available for other programs
+% like menuhit.c
+
+
+<<constant [[W]]([[(lib_graphics/libdraw/getrect.c)]])>>=
+#define	W	Borderwidth
+@
+
+<<global [[tmp]]([[(lib_graphics/libdraw/getrect.c)]])>>=
+static Image *tmp[4];
+@
+
+<<global [[red]]([[(lib_graphics/libdraw/getrect.c)]])>>=
+static Image *red;
+@
+
+<<global [[sweep]]([[(lib_graphics/libdraw/getrect.c)]])>>=
+static Cursor sweep={
+    {-7, -7},
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
+     0xE0, 0x07, 0xE0, 0x07, 0xE3, 0xF7, 0xE3, 0xF7,
+     0xE3, 0xE7, 0xE3, 0xF7, 0xE3, 0xFF, 0xE3, 0x7F,
+     0xE0, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,},
+    {0x00, 0x00, 0x7F, 0xFE, 0x40, 0x02, 0x40, 0x02,
+     0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x41, 0xE2,
+     0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
+     0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
+};
+@
+
+<<function [[brects]]([[(lib_graphics/libdraw/getrect.c)]])>>=
+static
+void
+brects(Rectangle r, Rectangle rp[4])
+{
+    if(Dx(r) < 2*W)
+        r.max.x = r.min.x+2*W;
+    if(Dy(r) < 2*W)
+        r.max.y = r.min.y+2*W;
+    rp[0] = Rect(r.min.x, r.min.y, r.max.x, r.min.y+W);
+    rp[1] = Rect(r.min.x, r.max.y-W, r.max.x, r.max.y);
+    rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
+    rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
+}
+@
+
+<<function [[getrect]]>>=
+Rectangle
+getrect(int but, Mousectl *mc)
+{
+    Rectangle r, rc;
+
+    but = 1<<(but-1);
+    setcursor(mc, &sweep);
+    while(mc->buttons)
+        readmouse(mc);
+    while(!(mc->buttons & but)){
+        readmouse(mc);
+        if(mc->buttons & (7^but))
+            goto Return;
+    }
+    r.min = mc->xy;
+    r.max = mc->xy;
+    do{
+        rc = canonrect(r);
+        drawgetrect(rc, 1);
+        readmouse(mc);
+        drawgetrect(rc, 0);
+        r.max = mc->xy;
+    }while(mc->buttons == but);
+
+    Return:
+    setcursor(mc, nil);
+    if(mc->buttons & (7^but)){
+        rc.min.x = rc.max.x = 0;
+        rc.min.y = rc.max.y = 0;
+        while(mc->buttons)
+            readmouse(mc);
+    }
+    return rc;
+}
+@
+
+<<function [[drawgetrect]]>>=
+void
+drawgetrect(Rectangle rc, int up)
+{
+    int i;
+    Rectangle r, rects[4];
+
+    /*
+     * BUG: if for some reason we have two of these going on at once
+     * when we must grow the tmp buffers, we lose data.  Also if tmp
+     * is unallocated and we ask to restore the screen, it would be nice
+     * to complain, but we silently make a mess.
+     */
+    if(up && tmp[0]!=nil)
+        if(Dx(tmp[0]->r)<Dx(rc) || Dy(tmp[2]->r)<Dy(rc))
+            freetmp();
+    if(tmp[0] == 0){
+        r = Rect(0, 0, max(Dx(display->screenimage->r), Dx(rc)), W);
+        tmp[0] = allocimage(display, r, view->chan, false, -1);
+        tmp[1] = allocimage(display, r, view->chan, false, -1);
+        r = Rect(0, 0, W, max(Dy(display->screenimage->r), Dy(rc)));
+        tmp[2] = allocimage(display, r, view->chan, false, -1);
+        tmp[3] = allocimage(display, r, view->chan, false, -1);
+        red = allocimage(display, Rect(0,0,1,1), view->chan, true, DRed);
+        if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0){
+            freetmp();
+            drawerror(display, "getrect: allocimage failed");
+        }
+    }
+    brects(rc, rects);
+    if(!up){
+        for(i=0; i<4; i++)
+            draw(view, rects[i], tmp[i], nil, ZP);
+        return;
+    }
+    for(i=0; i<4; i++){
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
+        draw(view, rects[i], red, nil, ZP);
+    }
+}
+@
+
+% drawgetrect -> <>
+<<function [[freetmp]]([[(lib_graphics/libdraw/getrect.c)]])>>=
+static
+void
+freetmp(void)
+{
+    freeimage(tmp[0]);
+    freeimage(tmp[1]);
+    freeimage(tmp[2]);
+    freeimage(tmp[3]);
+    freeimage(red);
+    tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
+}
+@
+
+<<function [[max]]>>=
+static
+int
+max(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+@
+
+
+
+\section{Advanced mouse settings}
+
+
+\subsection{[[/dev/cursor]]}
+\n not that important in the end
+
+% code in devmouse.c? mostly to set new cursor picture?
+
+
+<<[[Mousectl]] cursor field>>=
+// /dev/cursor
+fdt		cfd;		/* to cursor file */
+@
+
+<<[[initmouse()]] other locals>>=
+char *t;
+char *sl;
+@
+
+<<[[initmouse()]] set cursor field>>=
+<<[[initmouse()]] set t to /dev/cursor>>
+mc->cfd = open(t, ORDWR|OCEXEC);
+free(t);
+@
+
+<<[[initmouse()]] set t to /dev/cursor>>=
+// t = "{basename(file)}/cursor"
+t = malloc(strlen(file)+16);
+<<[[initmouse()]] sanity check t>>
+strcpy(t, file);
+sl = utfrrune(t, '/');
+if(sl)
+    strcpy(sl, "/cursor");
+else
+    strcpy(t, "/dev/cursor");
+@
+%ocaml: just hardcode /dev/cursor, no need to be so general, who
+% does not open /dev/mouse?
+
+<<[[initmouse()]] sanity check t>>=
+if (t == nil) {
+    close(mc->mfd);
+    free(mc);
+    return nil;
+}
+@
+
+
+
+
+
+
+<<function [[setcursor]]>>=
+void
+setcursor(Mousectl *mc, Cursor *c)
+{
+    char curs[2*4 + 2*2*16]; // sizeof Cursor
+
+    if(c == nil)
+        write(mc->cfd, curs, 0);
+    else{
+        BPLONG(curs+0*4, c->offset.x);
+        BPLONG(curs+1*4, c->offset.y);
+        memmove(curs+2*4, c->clr, 2*2*16);
+        write(mc->cfd, curs, sizeof curs);
+    }
+}
+@
+% case when == nil is to reset the cursor to original big arrow cursor.
+%ocaml: have set_cursor and reset_cursor
+
+% note that also use c->set indirectly because bytes are after clr
+% in the struct and 2*2*16 overflow Cursor.clr
+
+%? devmouse.c code? for /dev/cursor?
+
+
+
+\subsection{[[mousescrollsize()]]}
+% advanced topic? who calls that?
+
+<<function [[mousescrollsize]]>>=
+int
+mousescrollsize(int maxlines)
+{
+    static int lines, pcnt;
+    char *mss;
+
+    if(lines == 0 && pcnt == 0){
+        mss = getenv("mousescrollsize");
+        if(mss){
+            if(strchr(mss, '%') != nil)
+                pcnt = atof(mss);
+            else
+                lines = atoi(mss);
+            free(mss);
+        }
+        if(lines == 0 && pcnt == 0)
+            lines = 1;
+        if(pcnt>=100)
+            pcnt = 100;
+    }
+
+    if(lines)
+        return lines;
+    return pcnt * maxlines/100.0;	
+}
+@
+
+
+
 
 %******************************************************************************
 \chapter{Overlapping Layers}
@@ -23544,2172 +25717,6 @@ alphacalc5(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
 
 
 
-
-\section{Advanced mouse settings}
-
-
-\subsection{[[/dev/cursor]]}
-\n not that important in the end
-
-% code in devmouse.c? mostly to set new cursor picture?
-
-
-<<[[Mousectl]] cursor field>>=
-// /dev/cursor
-fdt		cfd;		/* to cursor file */
-@
-
-<<[[initmouse()]] other locals>>=
-char *t;
-char *sl;
-@
-
-<<[[initmouse()]] set cursor field>>=
-<<[[initmouse()]] set t to /dev/cursor>>
-mc->cfd = open(t, ORDWR|OCEXEC);
-free(t);
-@
-
-<<[[initmouse()]] set t to /dev/cursor>>=
-// t = "{basename(file)}/cursor"
-t = malloc(strlen(file)+16);
-<<[[initmouse()]] sanity check t>>
-strcpy(t, file);
-sl = utfrrune(t, '/');
-if(sl)
-    strcpy(sl, "/cursor");
-else
-    strcpy(t, "/dev/cursor");
-@
-%ocaml: just hardcode /dev/cursor, no need to be so general, who
-% does not open /dev/mouse?
-
-<<[[initmouse()]] sanity check t>>=
-if (t == nil) {
-    close(mc->mfd);
-    free(mc);
-    return nil;
-}
-@
-
-
-
-
-
-
-<<function [[setcursor]]>>=
-void
-setcursor(Mousectl *mc, Cursor *c)
-{
-    char curs[2*4 + 2*2*16]; // sizeof Cursor
-
-    if(c == nil)
-        write(mc->cfd, curs, 0);
-    else{
-        BPLONG(curs+0*4, c->offset.x);
-        BPLONG(curs+1*4, c->offset.y);
-        memmove(curs+2*4, c->clr, 2*2*16);
-        write(mc->cfd, curs, sizeof curs);
-    }
-}
-@
-% case when == nil is to reset the cursor to original big arrow cursor.
-%ocaml: have set_cursor and reset_cursor
-
-% note that also use c->set indirectly because bytes are after clr
-% in the struct and 2*2*16 overflow Cursor.clr
-
-%? devmouse.c code? for /dev/cursor?
-
-
-
-\subsection{[[mousescrollsize()]]}
-% advanced topic? who calls that?
-
-<<function [[mousescrollsize]]>>=
-int
-mousescrollsize(int maxlines)
-{
-    static int lines, pcnt;
-    char *mss;
-
-    if(lines == 0 && pcnt == 0){
-        mss = getenv("mousescrollsize");
-        if(mss){
-            if(strchr(mss, '%') != nil)
-                pcnt = atof(mss);
-            else
-                lines = atoi(mss);
-            free(mss);
-        }
-        if(lines == 0 && pcnt == 0)
-            lines = 1;
-        if(pcnt>=100)
-            pcnt = 100;
-    }
-
-    if(lines)
-        return lines;
-    return pcnt * maxlines/100.0;	
-}
-@
-
-\section{Menus}
-\l mv in advanced shapes? windowing system support?
-\l mv in appendix (nice example of use of drawing API)?
-\l mv in Widgets.nw? or have Widgets chapter here and say that just subset?
-
-% related to mouse too.
-% used in Windows.nw for the wm menus.
-
-%claude:
-The menu system is a self-contained popup widget built entirely
-on top of the drawing primitives. [[menuhit]] creates a temporary
-image, draws the menu items, tracks the mouse to highlight the
-current selection, and returns the chosen item index. The menu
-appears at the mouse position and vanishes when the button is
-released. Scrolling menus handle lists too long to fit on screen
-by adding scroll arrows at the top and bottom.
-
-\subsection{[[Menu]]}
-
-<<struct [[Menu]]>>=
-struct Menu
-{
-    char	**item;
-    <<[[Menu]] other fields>>
-};
-@
-%ocaml: list of pair with string * closure, so no need
-% to have intermediate and redundant enum or hardcoded integers
-% to know which entry was clicked (as done in rio)
-
-
-
-\subsection{Constants}
-
-<<enum [[_anon_]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-enum
-{
-    Margin = 4,		/* outside to text */
-    Border = 2,		/* outside to selection boxes */
-    Blackborder = 2,	/* width of outlining border */
-    Vspacing = 2,		/* extra spacing between lines of text */
-    <<[[menuhit.c]] constants>>
-};
-@
-\l Blackborder -> border_size
-
-% FIGURE! where see the dimensions used!
-
-\subsection{Colors}
-
-%claude:
-The menu uses four lazily-allocated color images:
-[[back]] (pale yellow background), [[high]] (dark yellow
-highlight), [[bord]] (yellow-green border), and [[text]]
-(black foreground). [[allocimagemix]] creates dithered
-colors by alternating pixels of two colors---a simple
-way to get in-between shades on displays that lack full
-color depth.
-
-<<global [[back]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static	Image	*back;
-@
-\l background
-
-<<global [[high]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static	Image	*high;
-@
-\l background_highlighted
-
-<<global [[bord]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static	Image	*bord;
-@
-\l longer name, border
-
-<<global [[text]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static	Image	*text;
-@
-\l text_color
-
-<<global [[htext]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static	Image	*htext;
-@
-\l longer name, text_highlighted
-
-
-<<global [[menutxt]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static	Image	*menutxt;
-@
-% diff with text?
-
-<<[[menuhit()]] initialize colors>>=
-if(back == nil)
-    menucolors();
-@
-
-<<function [[menucolors]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static
-void
-menucolors(void)
-{
-    /* Main tone is greenish, with negative selection */
-    back = allocimagemix(display, DPalegreen, DWhite);
-    high = allocimage(display, Rect(0,0,1,1), view->chan, true, DDarkgreen);	/* dark green */
-    bord = allocimage(display, Rect(0,0,1,1), view->chan, true, DMedgreen);	/* not as dark green */
-    <<[[menucolors()]] sanity check images>>
-    text = display->black;
-    htext = back;
-    return;
-
-<<[[menucolors()]] Error label>>
-}
-@
-
-<<[[menucolors()]] sanity check images>>=
-if(back == nil || high == nil || bord == nil)
-    goto Error;
-@
-
-<<[[menucolors()]] Error label>>=
-Error:
-freeimage(back);
-freeimage(high);
-freeimage(bord);
-back = display->white;
-high = display->black;
-bord = display->black;
-text = display->black;
-htext = display->white;
-@
-%ocaml: use exn for error. When can not allocate image?
-
-% color3? why note color2?
-% menucolors -> <>
-<<function [[allocimagemix]]>>=
-Image*
-allocimagemix(Display *d, ulong color1, ulong color3)
-{
-    Image *t, *b;
-    static Image *qmask;
-
-    if(qmask == nil)
-        qmask = allocimage(d, Rect(0,0,1,1), GREY8, true, 0x3F3F3FFF);
-
-    <<[[allocimagemix()]] if depth less than 8>>
-    else{	/* use a solid color, blended using alpha */
-        t = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, true, color1);
-        <<[[allocimagemix()]] sanity check t>>
-        b = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, true, color3);
-        <<[[allocimagemix()]] sanity check b>>
-        draw(b, b->r, t, qmask, ZP);
-        freeimage(t);
-        return b;
-    }
-}
-@
-% this allocate a color with a pattern, like mostly white
-% with some green dots.
-
-<<[[allocimagemix()]] sanity check t>>=
-if(t == nil)
-    return nil;
-@
-<<[[allocimagemix()]] sanity check b>>=
-if(b == nil){
-    freeimage(t);
-    return nil;
-}
-@
-%ocaml: finalize and exn
-
-\subsection{[[menuhits()]]}
-
-%claude:
-[[menuhit]] implements the complete popup menu interaction
-in a single synchronous function. It saves the screen area
-under the menu, draws the menu items, enters a tracking loop
-that reads mouse events via [[readmouse]], highlights items
-as the cursor moves over them, and returns the selected item
-index when the button is released ($-1$ if none). The saved
-screen area is restored before returning. If the menu doesn't
-fit on screen, the rectangle is adjusted to stay within view
-bounds.
-
-% entry point
-<<function [[menuhit]]>>=
-int
-menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
-{
-    int i;
-    int lasti;
-    char *item;
-    int nitem, nitemdrawn;
-    int maxwid, wid;
-    Rectangle r, menur, textr;
-    Image *b, *backup, *save;
-    Point pt;
-    bool scrolling;
-    int off;
-    <<[[menuhit()]] other locals>>
-
-    <<[[menuhit()]] initialize colors>>
-    <<[[menuhit()]] set repl and clip on view>>
-
-    <<[[menuhit()]] compute [[maxwid]] and [[nitem]]>>
-    <<[[menuhit()]] set lasthit>>
-    <<[[menuhit()]] if need a scroller for items>>
-    else{
-        scrolling = false;
-        nitemdrawn = nitem;
-        wid = maxwid;
-        off = 0;
-        lasti = menu->lasthit;
-    }
-    <<[[menuhit()]] set [[r]], the temporary rectangle to draw the menu>>
-    <<[[menuhit()]] set [[menur]], the adjusted rectangle to draw the menu>>
-    <<[[menuhit()]] set [[textr]], the rectangle to draw the text>>
-    <<[[menuhit()]] set [[scrollr]], the rectangle to draw maybe a scrollbar>>
-
-    <<[[menuhit()]] set [[b]] the image to draw on and right [[backup]]>>
-    <<[[menuhit()]] paint on [[b]]>>
-
-    <<[[menuhit()]] allocate [[save]] image>>
-    <<[[menuhit()]] loop while button still pressed and return [[lasti]]>>
-
-    <<[[menuhit()]] restore what was under the menu in [[backup]]>>
-    <<[[menuhit()]] free [[save]] image>>
-    <<[[menuhit()]] restore clip on view>>
-    flushimage(display, true);
-    if(lasti >= 0){
-        <<[[menuhit()]] save lasthit before returning>>
-        return menu->lasthit;
-    }
-    return -1;
-}
-@
-% >> >> >> >> >>
-%pad: but -> button
-%ocaml: clearer to use button variant than use bitset
-% and then bitset tricks above
-
-\subsubsection{The items size}
-
-<<[[menuhit()]] compute [[maxwid]] and [[nitem]]>>=
-maxwid = 0;
-for(nitem = 0;
-    item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
-    nitem++){
-    i = stringwidth(font, item);
-    if(i > maxwid)
-        maxwid = i;
-}
-@
-%ocaml: map and foldl(max), and no need nitem compute (just use List.length)
-
-<<[[Menu]] other fields>>=
-char	*(*gen)(int);
-@
-% some app uses that?
-
-\subsubsection{The rectangles}
-
-<<[[menuhit()]] set [[r]], the temporary rectangle to draw the menu>>=
-r = Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing));
-r = insetrect(r, -Margin); // enlarge
-r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
-r = rectaddpt(r, mc->xy);
-@
-%old: I added the first line where create first simple rectangle without margin
-%ocaml: use pipe operator and currying, so shorter
-
-% centered on last entry
-
-<<[[menuhit()]] set [[menur]], the adjusted rectangle to draw the menu>>=
-pt = ZP;
-<<[[menuhit()]] adjust [[pt]] if [[r]] outside view>>
-menur = rectaddpt(r, pt);
-@
-
-<<[[menuhit()]] adjust [[pt]] if [[r]] outside view>>=
-if(r.max.x > view->r.max.x)
-    pt.x = view->r.max.x - r.max.x;
-if(r.max.y > view->r.max.y)
-    pt.y = view->r.max.y - r.max.y;
-if(r.min.x < view->r.min.x)
-    pt.x = view->r.min.x-r.min.x;
-if(r.min.y < view->r.min.y)
-    pt.y = view->r.min.y-r.min.y;
-@
-
-
-
-<<[[menuhit()]] set [[textr]], the rectangle to draw the text>>=
-textr.max.x = menur.max.x - Margin;
-textr.min.x = textr.max.x - maxwid;
-textr.min.y = menur.min.y + Margin;
-textr.max.y = textr.min.y + nitemdrawn*(font->height+Vspacing);
-@
-\l why not simply insetrect(menur, Margin)? because before
-\l  was using wid but here maxwid?
-
-
-<<function [[menurect]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-/*
- * r is a rectangle holding the text elements.
- * return the rectangle, including its black edge, holding element i.
- */
-static Rectangle
-menurect(Rectangle r, int i)
-{
-    <<[[menurect()]] sanity check i>>
-    r.min.y += (font->height+Vspacing)*i;
-    r.max.y = r.min.y + font->height+Vspacing;
-    return insetrect(r, Border-Margin);
-}
-@
-% Border-margin = -2 is negative, so enlarge textr
-
-<<[[menurect()]] sanity check i>>=
-if(i < 0)
-    return Rect(0, 0, 0, 0);
-@
-%ocaml: exn!
-
-
-\subsubsection{The image}
-
-<<[[menuhit()]] set [[b]] the image to draw on and right [[backup]]>>=
-if(scr){
-    b = allocwindow(scr, menur, Refbackup, DWhite);
-    <<[[menuhit()]] sanitize b>>
-    backup = nil;
-}else{
-    b = view;
-    backup = allocimage(display, menur, view->chan, false, -1);
-    if(backup)
-        draw(backup, menur, view, nil, menur.min);
-}
-@
-
-
-
-<<[[menuhit()]] sanitize b>>=
-if(b == nil)
-    b = view;
-@
-
-<<[[menuhit()]] restore what was under the menu in [[backup]]>>=
-if(b != view)
-    freeimage(b);
-if(backup){
-    draw(view, menur, backup, nil, menur.min);
-    freeimage(backup);
-}
-@
-
-% note that freeimage free the resource and restore what was under
-% the layer on the desktop!
-
-\subsubsection{The paint}
-
-<<[[menuhit()]] paint on [[b]]>>=
-draw(b, menur, back, nil, ZP);
-border(b, menur, Blackborder, bord, ZP);
-<<[[menuhit()]] move cursor to lasti entry>>
-menupaint(b, menu, textr, off, nitemdrawn);
-<<[[menuhit()]] if scrolling, paint the scroll>>
-@
-
-% menuhit -> <>
-<<function [[menupaint]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static void
-menupaint(Image *m, Menu *menu, Rectangle textr, int off, int nitemdrawn)
-{
-    int i;
-
-    draw(m, insetrect(textr, Border-Margin), back, nil, ZP);
-    for(i = 0; i<nitemdrawn; i++)
-        paintitem(m, menu, textr, off, i, false, nil, nil);
-}
-@
-\l why redraw again background? because if was scrolling?
-
-% menupain | menuscan -> <>
-<<function [[paintitem]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static
-void
-paintitem(Image *m, Menu *menu, Rectangle textr, int off, int i, bool highlight, Image *save, Image *restore)
-{
-    char *item;
-    Rectangle r;
-    Point pt;
-
-    <<[[paintitem()]] sanity check i>>
-    r = menurect(textr, i);
-    <<[[paintitem()]] if restore>>
-    <<[[paintitem()]] if save>>
-    item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
-    pt.x = (textr.min.x + textr.max.x - stringwidth(font, item))/2;
-    pt.y = textr.min.y + i*(font->height+Vspacing);
-    draw(m, r, highlight? high : back, nil, pt);
-    string(m, pt, highlight? htext : text, pt, font, item);
-}
-@
-% the pt.x instruction is to center text :) nice, simple.
-
-\l why pass pt to draw and to fourth arg of string?
-
-% call draw again cause will call paintitem to redraw on past stuff
-% and especially to highlight
-
-
-<<[[paintitem()]] sanity check i>>=
-if(i < 0)
-    return;
-@
-% yes, can be called with i = -1, when went out of menu
-% and return back towards menu, lasti will still be -1
-
-<<[[menuhit()]] move cursor to lasti entry>>=
-r = menurect(textr, lasti);
-moveto(mc, divpt(addpt(r.min, r.max), 2));
-@
-\l why before menupaint?
-
-\subsubsection{The loop}
-
-<<[[menuhit()]] loop while button still pressed and return [[lasti]]>>=
-while(mc->buttons & (1<<(button-1))){
-    lasti = menuscan(b, menu, button, mc, textr, off, lasti, save);
-    if(lasti >= 0)
-        break;
-    while(!ptinrect(mc->xy, textr) && (mc->buttons & (1<<(button-1)))){
-        <<[[menuhit()]] if scrolling and mouse in [[scrollr]]>>
-        readmouse(mc);
-    }
-}
-@
-% when goes out of textr, menuscan will return -1 in which case
-% we loop until we go back in and we go back in lasti is still
-% -1 so may call paintitem with -1.
-
-<<[[menuhit()]] allocate [[save]] image>>=
-save = allocimage(display, menurect(textr, 0), view->chan, false, -1);
-@
-%old: save was in the next chunk, but more logical here
-\l why need save and backup? backup is if not use allocwindow,
-\l  save is needed anyway to draw highlighted text (but could
-\l  alloc and free a layer each time too)
-
-<<[[paintitem()]] if save>>=
-if(save)
-    draw(save, save->r, m, nil, r.min);
-@
-
-<<[[paintitem()]] if restore>>=
-if(restore){
-    draw(m, r, restore, nil, restore->r.min);
-    return;
-}
-@
-
-<<[[menuhit()]] free [[save]] image>>=
-freeimage(save);
-@
-
-\subsubsection{The scan}
-
-% lasti can be -1 below
-
-<<function [[menuscan]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-/*
- * menur is a rectangle holding all the highlightable text elements.
- * track mouse while inside the box, return what's selected when button
- * is raised, -1 as soon as it leaves box.
- * invariant: nothing is highlighted on entry or exit.
- */
-static int
-menuscan(Image *m, Menu *menu, int button, Mousectl *mc, Rectangle textr, int off, int lasti, Image *save)
-{
-    int i;
-
-    paintitem(m, menu, textr, off, lasti, true, save, nil);
-    for(readmouse(mc); mc->buttons & (1<<(button-1)); readmouse(mc)){
-        i = menusel(textr, mc->xy);
-        if(i != -1 && i == lasti)
-            continue;
-        // else (i == -1 || i != lasti)
-        paintitem(m, menu, textr, off, lasti, false, nil, save); // restore
-        if(i == -1)
-            return i;
-        lasti = i;
-        paintitem(m, menu, textr, off, lasti, true, save, nil);
-    }
-    return lasti;
-}
-@
-% >>
-% complex flow with continue and return ...
-
-% remember that readmouse internally flush the display! so no need
-% to do it but important! otherwise get no refresh. and just see the
-% old menu list.
-
-% first paintitem is to highlight lasti
-
-<<function [[menusel]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-/*
- * r is a rectangle holding the text elements.
- * return the element number containing p.
- */
-static int
-menusel(Rectangle r, Point p)
-{
-    r = insetrect(r, Margin);
-    if(!ptinrect(p, r))
-        return -1;
-    return (p.y - r.min.y)/(font->height+Vspacing);
-}
-@
-\l why reduce by Margin? textr is already a reduced menur
-
-\subsubsection{Misc}
-
-<<[[menuhit()]] other locals>>=
-Rectangle sc; // save clipr
-@
-<<[[menuhit()]] set repl and clip on view>>=
-sc = view->clipr;
-replclipr(view, false, view->r);
-@
-<<[[menuhit()]] restore clip on view>>=
-replclipr(view, false, sc);
-@
-
-% why need that?
-
-\subsection{Last hit}
-
-% Allows to display menu centered on your last choice.
-% So fast to repeat the same operation.
-
-<<[[menuhit()]] set lasthit>>=
-if(menu->lasthit<0 || menu->lasthit>=nitem)
-    menu->lasthit = 0;
-@
-
-<<[[Menu]] other fields>>=
-int	lasthit;
-@
-
-<<[[menuhit()]] save lasthit before returning>>=
-menu->lasthit = lasti+off;
-@
-
-\subsection{Scrolling menus}
-
-%claude:
-When a menu has more items than can fit on screen, scroll
-arrows appear at the top and bottom. The [[scrollr]]
-rectangle contains a scrollbar that shows the visible
-portion. Clicking in the scrollbar area jumps to that
-position in the item list; the menu is repainted with the
-new offset.
-
-<<[[menuhit.c]] constants>>=
-Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
-Nscroll = 20,		/* number entries in scrolling part */
-Scrollwid = 14,		/* width of scroll bar */
-Gap = 4,			/* between text and scroll bar */
-@
-
-<<[[menuhit()]] other locals>>=
-int screenitem;
-@
-
-<<[[menuhit()]] if need a scroller for items>>=
-screenitem = (Dy(view->r) - 10) / (font->height + Vspacing);
-if(nitem>Maxunscroll || nitem>screenitem){
-    scrolling = 1;
-    nitemdrawn = Nscroll;
-    if(nitemdrawn > screenitem)
-        nitemdrawn = screenitem;
-    wid = maxwid + Gap + Scrollwid;
-    off = menu->lasthit - nitemdrawn/2;
-    if(off < 0)
-        off = 0;
-    if(off > nitem-nitemdrawn)
-        off = nitem-nitemdrawn;
-    lasti = menu->lasthit-off;
-}
-@
-
-<<[[menuhit()]] other locals>>=
-Rectangle scrollr;
-@
-<<[[menuhit()]] set [[scrollr]], the rectangle to draw maybe a scrollbar>>=
-<<[[menuhit()]] if scrolling set scrollr>>
-else
-    scrollr = Rect(0, 0, 0, 0);
-@
-% I dont think it needs a default value, if not scrolling then never used
-
-<<[[menuhit()]] if scrolling set scrollr>>=
-if(scrolling){
-    scrollr = insetrect(menur, Border);
-    scrollr.max.x = scrollr.min.x+Scrollwid;
-}
-@
-
-<<[[menuhit()]] if scrolling, paint the scroll>>=
-if(scrolling)
-    menuscrollpaint(b, scrollr, off, nitem, nitemdrawn);
-@
-
-<<function [[menuscrollpaint]]([[(lib_graphics/libdraw/menuhit.c)]])>>=
-static void
-menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
-{
-    Rectangle r;
-
-    draw(m, scrollr, back, nil, ZP);
-    r.min.x = scrollr.min.x;
-    r.max.x = scrollr.max.x;
-    r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
-    r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
-    if(r.max.y < r.min.y+2)
-        r.max.y = r.min.y+2;
-    border(m, r, 1, bord, ZP);
-    if(menutxt == nil)
-        menutxt = allocimage(display, Rect(0, 0, 1, 1), view->chan, true, DDarkgreen);	/* border color; BUG? */
-    if(menutxt)
-        draw(m, insetrect(r, 1), menutxt, nil, ZP);
-}
-@
-
-<<[[menuhit()]] other locals>>=
-int noff;
-@
-<<[[menuhit()]] if scrolling and mouse in [[scrollr]]>>=
-if(scrolling && ptinrect(mc->xy, scrollr)){
-    noff = ((mc->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
-    noff -= nitemdrawn/2;
-    if(noff < 0)
-        noff = 0;
-    if(noff > nitem-nitemdrawn)
-        noff = nitem-nitemdrawn;
-    if(noff != off){
-        off = noff;
-        menupaint(b, menu, textr, off, nitemdrawn);
-        menuscrollpaint(b, scrollr, off, nitem, nitemdrawn);
-    }
-}
-@
-
-
-\section{Selection}
-
-%claude:
-[[getrect]] lets the user rubber-band a rectangle on screen
-by tracking the mouse while a button is held. It draws four
-thin rectangles as a border, saving the pixels underneath
-into temporary images so they can be restored when the
-selection moves. This is used by [[rio]] when the user
-sweeps a new window.
-
-\subsection{[[getrect.c]]}
-
-% =~ sweep() action done by rio, but available for other programs
-% like menuhit.c
-
-
-<<constant [[W]]([[(lib_graphics/libdraw/getrect.c)]])>>=
-#define	W	Borderwidth
-@
-
-<<global [[tmp]]([[(lib_graphics/libdraw/getrect.c)]])>>=
-static Image *tmp[4];
-@
-
-<<global [[red]]([[(lib_graphics/libdraw/getrect.c)]])>>=
-static Image *red;
-@
-
-<<global [[sweep]]([[(lib_graphics/libdraw/getrect.c)]])>>=
-static Cursor sweep={
-    {-7, -7},
-    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
-     0xE0, 0x07, 0xE0, 0x07, 0xE3, 0xF7, 0xE3, 0xF7,
-     0xE3, 0xE7, 0xE3, 0xF7, 0xE3, 0xFF, 0xE3, 0x7F,
-     0xE0, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,},
-    {0x00, 0x00, 0x7F, 0xFE, 0x40, 0x02, 0x40, 0x02,
-     0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x41, 0xE2,
-     0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
-     0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
-};
-@
-
-<<function [[brects]]([[(lib_graphics/libdraw/getrect.c)]])>>=
-static
-void
-brects(Rectangle r, Rectangle rp[4])
-{
-    if(Dx(r) < 2*W)
-        r.max.x = r.min.x+2*W;
-    if(Dy(r) < 2*W)
-        r.max.y = r.min.y+2*W;
-    rp[0] = Rect(r.min.x, r.min.y, r.max.x, r.min.y+W);
-    rp[1] = Rect(r.min.x, r.max.y-W, r.max.x, r.max.y);
-    rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
-    rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
-}
-@
-
-<<function [[getrect]]>>=
-Rectangle
-getrect(int but, Mousectl *mc)
-{
-    Rectangle r, rc;
-
-    but = 1<<(but-1);
-    setcursor(mc, &sweep);
-    while(mc->buttons)
-        readmouse(mc);
-    while(!(mc->buttons & but)){
-        readmouse(mc);
-        if(mc->buttons & (7^but))
-            goto Return;
-    }
-    r.min = mc->xy;
-    r.max = mc->xy;
-    do{
-        rc = canonrect(r);
-        drawgetrect(rc, 1);
-        readmouse(mc);
-        drawgetrect(rc, 0);
-        r.max = mc->xy;
-    }while(mc->buttons == but);
-
-    Return:
-    setcursor(mc, nil);
-    if(mc->buttons & (7^but)){
-        rc.min.x = rc.max.x = 0;
-        rc.min.y = rc.max.y = 0;
-        while(mc->buttons)
-            readmouse(mc);
-    }
-    return rc;
-}
-@
-
-<<function [[drawgetrect]]>>=
-void
-drawgetrect(Rectangle rc, int up)
-{
-    int i;
-    Rectangle r, rects[4];
-
-    /*
-     * BUG: if for some reason we have two of these going on at once
-     * when we must grow the tmp buffers, we lose data.  Also if tmp
-     * is unallocated and we ask to restore the screen, it would be nice
-     * to complain, but we silently make a mess.
-     */
-    if(up && tmp[0]!=nil)
-        if(Dx(tmp[0]->r)<Dx(rc) || Dy(tmp[2]->r)<Dy(rc))
-            freetmp();
-    if(tmp[0] == 0){
-        r = Rect(0, 0, max(Dx(display->screenimage->r), Dx(rc)), W);
-        tmp[0] = allocimage(display, r, view->chan, false, -1);
-        tmp[1] = allocimage(display, r, view->chan, false, -1);
-        r = Rect(0, 0, W, max(Dy(display->screenimage->r), Dy(rc)));
-        tmp[2] = allocimage(display, r, view->chan, false, -1);
-        tmp[3] = allocimage(display, r, view->chan, false, -1);
-        red = allocimage(display, Rect(0,0,1,1), view->chan, true, DRed);
-        if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0){
-            freetmp();
-            drawerror(display, "getrect: allocimage failed");
-        }
-    }
-    brects(rc, rects);
-    if(!up){
-        for(i=0; i<4; i++)
-            draw(view, rects[i], tmp[i], nil, ZP);
-        return;
-    }
-    for(i=0; i<4; i++){
-        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
-        draw(view, rects[i], red, nil, ZP);
-    }
-}
-@
-
-% drawgetrect -> <>
-<<function [[freetmp]]([[(lib_graphics/libdraw/getrect.c)]])>>=
-static
-void
-freetmp(void)
-{
-    freeimage(tmp[0]);
-    freeimage(tmp[1]);
-    freeimage(tmp[2]);
-    freeimage(tmp[3]);
-    freeimage(red);
-    tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
-}
-@
-
-<<function [[max]]>>=
-static
-int
-max(int a, int b)
-{
-    if(a > b)
-        return a;
-    return b;
-}
-@
-
-
-
-
-\section{Event-based IO}
-
-%claude:
-The event library provides an alternative to the
-[[Mousectl]]/[[Keyboardctl]] channel-based model. It uses a
-single master process ([[extract]]) that multiplexes mouse,
-keyboard, and timer events, dispatching them to slave
-processes. Applications call [[event]] to block until the
-next event, or [[ecankbd]]/[[ecanmouse]] to poll.
-This is the older API; the channel-based model
-with [[alt]] is preferred for new code.
-
-% seen before /dev/mouse synchrony issue, and the introduction
-% of ioproc and channel and alt().
-
-% Events are an alternative API. 
-% See event(2)
-%  "These routines provide an interface to multiple sources of input 
-%   for unthreaded programs. Threaded programs (see thread (2))
-%   should instead use the threaded mouse and keyboard interface ..."
-
-% event vs thread
-% classic thread vs event slide.
-
-% In the end most of the simple graphical apps (lens/color/clock) use events.
-% The complex one use threads (rio/acme/sam/abaco).
-
-% The event pipe!
-
-% have lots of dupes, menuhit.c vs emenuhit.c?
-
-%alt: X11 has XEvent structure
-%related: big-bang function in racket/htdp
-
-\subsection{Data structures}
-
-%claude:
-The event system uses a pipe-based architecture. Each event
-source (mouse, keyboard, or custom file descriptor) gets a
-``slave'' process that reads from the device and writes an
-[[Event]] packet into a shared pipe. The ``master''
-([[extract]]) reads from the pipe and dispatches events
-to caller-visible queues. [[Slave.head]]/[[Slave.tail]]
-form a circular buffer of events per source.
-
-<<enum [[Key]]>>=
-enum
-{
-    Emouse	= 1,
-    Ekeyboard	= 2,
-};
-@
-% keys, arguments to einit. bitset actually.
-% bitset because can have multiple events at the same time
-
-<<type [[keys]]>>=
-// bitset<Key>
-typedef ulong keys;
-@
-%pad: I introduced that
-
-
-<<struct [[Event]]>>=
-struct	Event
-{
-    int		kbdc;
-    Mouse	mouse;
-
-    int		n;		/* number of characters in message */
-    void	*v;		/* data unpacked by general event-handling function */
-    byte	data[EMAXMSG];	/* message from an arbitrary file descriptor */
-};
-@
-% int or Rune for kbdc?
-
-% dupe of include/mouse.h
-<<struct Mouse (include/event.h)>>=
-struct	Mouse
-{
-    int		buttons;	/* bit array: LMR=124 */
-    Point	xy;
-    ulong	msec;
-};
-@
-
-% dupe of include/mouse.h
-<<struct Menu (include/event.h)>>=
-struct Menu
-{
-    char	**item;
-    char	*(*gen)(int);
-    int	lasthit;
-};
-@
-
-<<enum [[_anon_ (include/event.h)2]]>>=
-enum
-{
-    MAXSLAVE = 32,
-    EMAXMSG = 128+8192,	/* size of 9p header+data */
-};
-@
-% 32 cos use bitset. A bit like select set?
-
-<<struct [[Slave]]>>=
-struct Slave
-{
-    int	pid;
-
-    Ebuf	*head;		/* queue of messages for this descriptor */
-    Ebuf	*tail;
-
-    int	(*fn)(int, Event*, uchar*, int);
-};
-@
-% generalize the special ioproc for the mouse and the keyboard
-% but in the end the same.
-
-<<struct [[Ebuf]]>>=
-struct Ebuf
-{
-    // Extra
-    Ebuf	*next;
-
-    int	n;		/* number of bytes in buf */
-    // this must be the last field
-    byte	buf[EMAXMSG];
-
-};
-@
-%bugpad: the order matters, you cant put next at the end because
-% some malloc in extract() in event.c do some optimizations regarding
-% buf by allocating only what is needed
-% (I had some segfault in colors.c because of this reordering)
-
-<<global [[eslave]]>>=
-static	Slave	eslave[MAXSLAVE];
-@
-<<global [[nslave]]>>=
-static	int	nslave;
-@
-
-
-
-<<global [[Skeyboard]]>>=
-static	int	Skeyboard = -1;
-@
-% index in eslave? the ioproc for the keyboard?
-
-<<global [[Smouse]]>>=
-static	int	Smouse = -1;
-@
-
-<<global [[Stimer]]>>=
-static	int	Stimer = -1;
-@
-
-
-<<global [[parentpid]]>>=
-static	int	parentpid;
-@
-
-<<global [[logfid]]>>=
-static	fdt	logfid;
-@
-
-
-% The event pipe!
-<<global [[epipe]]>>=
-static	fdt	epipe[2];
-@
-% One pipe shared by all slaves. atomic write? I think so.
-% first byte is slave identifier, followed by variable number of
-% bytes depending if mouse or keyboard or something else.
-
-<<global [[mousefd]]>>=
-static	fdt	mousefd;
-@
-<<global [[cursorfd]]>>=
-static	fdt	cursorfd;
-@
-
-\subsection{Initialization: [[einit()]]}
-
-%claude:
-[[einit]] creates the central event pipe, opens the mouse
-and keyboard devices (putting the console in raw mode),
-spawns one slave process per event source, and forks the
-master process ([[extract]]). The [[keys]] bitmask selects
-which sources to enable ([[Emouse]], [[Ekeyboard]], or
-both).
-
-<<function [[einit]]>>=
-void
-einit(keys keys)
-{
-    fdt ctl, fd;
-    char buf[256];
-
-    parentpid = getpid();
-    if(pipe(epipe) < 0)
-        drawerror(display, "events: einit pipe");
-
-    atexit(ekill);
-    atnotify(enote, 1);
-
-    snprint(buf, sizeof buf, "%s/mouse", display->devdir);
-    mousefd = open(buf, ORDWR|OCEXEC);
-    if(mousefd < 0)
-        drawerror(display, "einit: can't open mouse\n");
-
-    snprint(buf, sizeof buf, "%s/cursor", display->devdir);
-    cursorfd = open(buf, ORDWR|OCEXEC);
-    if(cursorfd < 0)
-        drawerror(display, "einit: can't open cursor\n");
-
-    if(keys&Ekeyboard){
-        snprint(buf, sizeof buf, "%s/cons", display->devdir);
-        fd = open(buf, OREAD);
-        if(fd < 0)
-            drawerror(display, "events: can't open console");
-
-        snprint(buf, sizeof buf, "%s/consctl", display->devdir);
-        ctl = open("/dev/consctl", OWRITE|OCEXEC);
-        if(ctl < 0)
-            drawerror(display, "events: can't open consctl");
-        write(ctl, "rawon", 5);
-
-        for(Skeyboard=0; Ekeyboard & ~(1<<Skeyboard); Skeyboard++)
-            ;
-        ekeyslave(fd);
-    }
-    if(keys&Emouse){
-        estart(Emouse, mousefd, 1+4*12);
-        for(Smouse=0; Emouse & ~(1<<Smouse); Smouse++)
-            ;
-    }
-}
-@
-% >> >> >>
-
-
-<<function [[ekill]]>>=
-static void
-ekill(void)
-{
-    enote(0, 0);
-}
-@
-
-<<function [[enote]]>>=
-static int
-enote(void *v, char *s)
-{
-    char t[1];
-    int i, pid;
-
-    USED(v, s);
-    pid = getpid();
-    if(pid != parentpid){
-        for(i=0; i<nslave; i++){
-            if(pid == eslave[i].pid){
-                t[0] = MAXSLAVE;
-                write(epipe[1], t, 1);
-                break;
-            }
-        }
-        return 0;
-    }
-    close(epipe[0]);
-    epipe[0] = -1;
-    close(epipe[1]);
-    epipe[1] = -1;
-    for(i=0; i<nslave; i++){
-        if(pid == eslave[i].pid)
-            continue;	/* don't kill myself */
-        postnote(PNPROC, eslave[i].pid, "die");
-    }
-    return 0;
-}
-@
-
-\subsection{The slaves}
-
-%claude:
-Each slave is a child process that reads from a single file
-descriptor (e.g., [[/dev/mouse]] or [[/dev/cons]]) in a
-tight loop and writes event packets to [[epipe]]. The first
-byte of each packet identifies the slave; the rest is the
-event data. [[ekeyslave]] reads raw bytes, assembles them
-into runes, and writes 3-byte rune packets. For the mouse,
-[[estart]] spawns a generic slave that writes 49-byte mouse
-event packets.
-
-<<function [[ekeyslave]]>>=
-static void
-ekeyslave(fdt fd)
-{
-    Rune r;
-    char t[3], k[10];
-    int kr, kn, w;
-
-    if(eforkslave(Ekeyboard) < MAXSLAVE)
-        // parent (master)
-        return;
-
-    // child (slave) code
-    kn = 0;
-    t[0] = Skeyboard;
-    for(;;){
-        while(!fullrune(k, kn)){
-            // blocking call
-            kr = read(fd, k+kn, sizeof k - kn);
-            if(kr <= 0)
-                goto breakout;
-            kn += kr;
-        }
-        w = chartorune(&r, k);
-        kn -= w;
-        memmove(k, &k[w], kn);
-        t[1] = r;
-        t[2] = r>>8; // TODO what about other parts of the Rune????
-        // send to master
-        if(write(epipe[1], t, 3) != 3)
-            break;
-    }
-breakout:;
-    t[0] = MAXSLAVE;
-    write(epipe[1], t, 1);
-    _exits(0);
-}
-@
-
-
-<<function [[eforkslave]]>>=
-static int
-eforkslave(ulong key)
-{
-    int i, pid;
-
-    for(i=0; i<MAXSLAVE; i++)
-        if((key & ~(1<<i)) == 0 && eslave[i].pid == 0){
-            if(nslave <= i)
-                nslave = i + 1;
-            /*
-             * share the file descriptors so the last child
-             * out closes all connections to the window server.
-             */
-            switch(pid = rfork(RFPROC)){
-            // child
-            case 0:
-                return MAXSLAVE+i;
-            case -1:
-                fprint(2, "events: fork error\n");
-                exits("fork");
-            }
-            // parent
-            eslave[i].pid = pid;
-            eslave[i].head = eslave[i].tail = nil;
-            return i;
-        }
-    drawerror(display, "events: bad slave assignment");
-    return 0;
-}
-@
-% >> >>
-
-
-
-% for the mouse
-<<function [[estart]]>>=
-ulong
-estart(ulong key, fdt fd, int n)
-{
-    return estartfn(key, fd, n, nil);
-}
-@
-
-<<function [[estartfn]]>>=
-ulong
-estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
-{
-    char buf[EMAXMSG+1];
-    int i, r;
-
-    if(fd < 0)
-        drawerror(display, "events: bad file descriptor");
-    if(n <= 0 || n > EMAXMSG)
-        n = EMAXMSG;
-
-    i = eforkslave(key);
-    // master
-    if(i < MAXSLAVE){
-        eslave[i].fn = fn;
-        return 1<<i;
-    }
-    // slave
-    buf[0] = i - MAXSLAVE; // slave identifier
-    while((r = read(fd, buf+1, n))>0)
-        if(write(epipe[1], buf, r+1)!=r+1)
-            break;
-
-    buf[0] = MAXSLAVE;
-    write(epipe[1], buf, 1);
-    _exits(nil);
-    return 0;
-}
-@
-% >>
-
-
-
-
-\subsection{Event loop: [[event()]]}
-
-%claude:
-[[eread]] is the core event reading function: it scans all
-slaves for a pending event matching the [[keys]] bitmask.
-If nothing is queued, it calls [[extract]] to read from the
-pipe and dispatch. [[event]] is a convenience wrapper that
-reads any event; [[emouse]] and [[ekbd]] dequeue from
-specific slaves. [[ebread]] drains the pipe (via [[extract]])
-until the requested slave has data in its queue.
-
-% to get next event, usually called in event loop
-<<function [[event]]>>=
-keys
-event(Event *e)
-{
-    return eread(~0UL, e);
-}
-@
-
-<<function [[eread]]>>=
-keys
-eread(keys keys, Event *e)
-{
-    Ebuf *eb;
-    int i, id;
-
-    if(keys == 0)
-        return 0;
-    for(;;){
-        // check if pending message
-        for(i=0; i<nslave; i++) {
-            if((keys & (1<<i)) && eslave[i].head){
-                id = 1<<i;
-                if(i == Smouse)
-                    e->mouse = emouse();
-                else if(i == Skeyboard)
-                    e->kbdc = ekbd();
-                else if(i == Stimer)
-                    eslave[i].head = nil;
-                else{
-                    eb = ebread(&eslave[i]);
-                    e->n = eb->n;
-                    if(eslave[i].fn)
-                        id = (*eslave[i].fn)(id, e, eb->buf, eb->n);
-                    else
-                        memmove(e->data, eb->buf, eb->n);
-                    free(eb);
-                }
-                return id;
-            }
-        }
-        // read from pipe new messages from the slaves
-        extract();
-    }
-    return 0; // unreachable
-}
-@
-% >> >>
-%note: would like to use switch, but the Smouse are not constants, they
-% are static globals
-
-
-
-<<function [[emouse]]>>=
-Mouse
-emouse(void)
-{
-    Mouse m;
-    Ebuf *eb;
-    static int but[2];
-    int b;
-
-    if(Smouse < 0)
-        drawerror(display, "events: mouse not initialized");
-    eb = ebread(&eslave[Smouse]);
-    m.xy.x = atoi((char*)eb->buf+1+0*12);
-    m.xy.y = atoi((char*)eb->buf+1+1*12);
-    b = atoi((char*)eb->buf+1+2*12);
-    m.buttons = b;
-    m.msec = atoi((char*)eb->buf+1+3*12);
-    if (logfid)
-        fprint(logfid, "b: %d xy: %P\n", m.buttons, m.xy);
-    free(eb);
-    return m;
-}
-@
-
-<<function [[ekbd]]>>=
-int
-ekbd(void)
-{
-    Ebuf *eb;
-    int c;
-
-    if(Skeyboard < 0)
-        drawerror(display, "events: keyboard not initialzed");
-    eb = ebread(&eslave[Skeyboard]);
-    c = eb->buf[0] + (eb->buf[1]<<8);
-    free(eb);
-    return c;
-}
-@
-% >>
-
-
-
-% emouse | ekbd | eread  -> <>
-<<function [[ebread]]>>=
-static
-Ebuf*
-ebread(Slave *s)
-{
-    Ebuf *eb;
-    Dir *d;
-    ulong l;
-
-    for(;;){
-        d = dirfstat(epipe[0]);
-        if(d == nil)
-            drawerror(display, "events: eread stat error");
-        l = d->length;
-        free(d);
-        if(s->head && l==0)
-            break;
-        // else
-        extract();
-    }
-    // eb = pop_queue(s->head, s->tail);
-    eb = s->head;
-    s->head = s->head->next;
-    if(s->head == nil)
-        s->tail = nil;
-
-    return eb;
-}
-@
-
-\subsection{The master: [[extract()]]}
-
-%claude:
-[[extract]] reads one packet from [[epipe]], identifies
-the slave by the first byte, and enqueues the rest in
-that slave's linked-list buffer. For mouse events, it
-squashes duplicate events where only the position changed
-(same buttons and timestamp)---this prevents the queue from
-growing unboundedly when the application is slow. A resize
-event (mouse message starting with \verb+'r'+) triggers
-[[eresized]]. Before reading, [[extract]] flushes pending
-drawing commands so the display is up to date.
-
-<<function [[extract]]>>=
-static void
-extract(void)
-{
-    Slave *s;
-    Ebuf *eb;
-    int i, n;
-    byte ebuf[EMAXMSG+1];
-
-    /* avoid generating a message if there's nothing to show. */
-    /* this test isn't perfect, though; could do flushimage(display, 0) then call extract */
-    /* also: make sure we don't interfere if we're multiprocessing the display */
-    if(display->locking){
-        /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
-        if(canqlock(&display->qlock)){
-            if(display->bufp > display->buf)
-                flushimage(display, true);
-            unlockdisplay(display);
-        }
-    }else
-        if(display->bufp > display->buf)
-            flushimage(display, true);
-
-loop:
-    if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
-    || ebuf[0] >= MAXSLAVE)
-        drawerror(display, "eof on event pipe");
-    if(n == 0)
-        goto loop;
-
-    i = ebuf[0];
-    if(i >= nslave || n <= 1)
-        drawerror(display, "events: protocol error: short read");
-    s = &eslave[i];
-
-    if(i == Stimer){
-        s->head = (Ebuf *)1;
-        return;
-    }
-    if(i == Skeyboard && n != 3)
-        drawerror(display, "events: protocol error: keyboard");
-    if(i == Smouse){
-        if(n < 1+1+2*12)
-            drawerror(display, "events: protocol error: mouse");
-        if(ebuf[1] == 'r')
-            eresized(1);
-
-        /* squash extraneous mouse events */
-        if((eb=s->tail) && memcmp(eb->buf+1+2*12, ebuf+1+1+2*12, 12)==0){
-            memmove(eb->buf, &ebuf[1], n - 1);
-            return;
-        }
-    }
-
-    /* try to save space by only allocating as much buffer as we need */
-    eb = malloc(sizeof(*eb) - sizeof(eb->buf) + n - 1);
-    if(eb == nil)
-        drawerror(display, "events: protocol error 4");
-    eb->n = n - 1;
-    memmove(eb->buf, &ebuf[1], n - 1);
-
-    // add_queue(eb, s->head, s->tail)
-    eb->next = nil;
-    if(s->head)
-        s->tail = s->tail->next = eb;
-    else
-        s->head = s->tail = eb;
-}
-@
-% what if multiple events in the pipe? first out win all?
-% timer too??
-
-\subsection{[[ecanxxx()]]}
-
-<<function [[ecanmouse]]>>=
-int
-ecanmouse(void)
-{
-    if(Smouse < 0)
-        drawerror(display, "events: mouse not initialized");
-    return ecanread(Emouse);
-}
-@
-
-<<function [[ecankbd]]>>=
-int
-ecankbd(void)
-{
-    if(Skeyboard < 0)
-        drawerror(display, "events: keyboard not initialzed");
-    return ecanread(Ekeyboard);
-}
-@
-
-<<function [[ecanread]]>>=
-int
-ecanread(ulong keys)
-{
-    Dir *d;
-    int i;
-    ulong l;
-
-    for(;;){
-        for(i=0; i<nslave; i++)
-            if((keys & (1<<i)) && eslave[i].head)
-                return 1;
-        d = dirfstat(epipe[0]);
-        if(d == nil)
-            drawerror(display, "events: ecanread stat error");
-        l = d->length;
-        free(d);
-        if(l == 0)
-            return 0;
-        extract();
-    }
-    return 0; // unreachable
-}
-@
-% >>
-
-\subsection{Timer}
-
-<<function [[etimer]]>>=
-ulong
-etimer(ulong key, int n)
-{
-    char t[2];
-    int cnt;
-
-    if(Stimer != -1)
-        drawerror(display, "events: timer started twice");
-    Stimer = eforkslave(key);
-    // master
-    if(Stimer < MAXSLAVE)
-        return 1<<Stimer;
-    // slave
-    if(n <= 0)
-        n = 1000;
-    t[0] = t[1] = Stimer - MAXSLAVE;
-    do {
-        sleep(n);
-        cnt = write(epipe[1], t, 2);
-    } while(cnt == 2);
-
-    t[0] = MAXSLAVE;
-    write(epipe[1], t, 1);
-    _exits(nil);
-    return 0;
-}
-@
-% >> >> >> >> >>
-%old: I moved the write outside the while and use a cnt local
-
-
-
-
-
-\subsection{Misc}
-
-<<function [[emoveto]]>>=
-void
-emoveto(Point pt)
-{
-    char buf[2*12+2];
-    int n;
-
-    n = sprint(buf, "m%d %d", pt.x, pt.y);
-    write(mousefd, buf, n);
-}
-@
-
-<<function [[esetcursor]]>>=
-void
-esetcursor(Cursor *c)
-{
-    uchar curs[2*4+2*2*16];
-
-    if(c == 0)
-        write(cursorfd, curs, 0);
-    else{
-        BPLONG(curs+0*4, c->offset.x);
-        BPLONG(curs+1*4, c->offset.y);
-        memmove(curs+2*4, c->clr, 2*2*16);
-        write(cursorfd, curs, sizeof curs);
-    }
-}
-@
-
-<<function [[ereadmouse]]>>=
-int
-ereadmouse(Mouse *m)
-{
-    int n;
-    char buf[128];
-
-    do{
-        n = read(mousefd, buf, sizeof(buf));
-        if(n < 0)	/* probably interrupted */
-            return -1;
-        n = eatomouse(m, buf, n);
-    }while(n == 0);
-    return n;
-}
-@
-
-<<function [[eatomouse]]>>=
-int
-eatomouse(Mouse *m, char *buf, int n)
-{
-    if(n != 1+4*12){
-        werrstr("atomouse: bad count");
-        return -1;
-    }
-
-    if(buf[0] == 'r')
-        eresized(1);
-    m->xy.x = atoi(buf+1+0*12);
-    m->xy.y = atoi(buf+1+1*12);
-    m->buttons = atoi(buf+1+2*12);
-    m->msec = atoi(buf+1+3*12);
-    return n;
-}
-@
-
-
-\subsection{[[egetrects.c]]}
-
-%claude:
-[[egetrect]] and [[edrawgetrect]] are event-library versions
-of [[getrect]] and [[drawgetrect]]: they use [[emouse]] and
-[[ereadmouse]] instead of [[readmouse]]. The logic is
-identical---rubber-band a rectangle by tracking the mouse
-while a button is held, saving and restoring the pixels
-under the border.
-
-% event version of getrects.c ?
-
-
-<<constant [[W]]>>=
-#define	W	Borderwidth
-@
-
-<<global [[tmp]]>>=
-static Image *tmp[4];
-@
-
-<<global [[red]]>>=
-static Image *red;
-@
-
-<<global [[sweep]]>>=
-static Cursor sweep={
-    {-7, -7},
-    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
-     0xE0, 0x07, 0xE0, 0x07, 0xE3, 0xF7, 0xE3, 0xF7,
-     0xE3, 0xE7, 0xE3, 0xF7, 0xE3, 0xFF, 0xE3, 0x7F,
-     0xE0, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,},
-    {0x00, 0x00, 0x7F, 0xFE, 0x40, 0x02, 0x40, 0x02,
-     0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x41, 0xE2,
-     0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
-     0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
-};
-@
-
-% edrawgetrects -> <>
-<<function [[brects]]>>=
-static
-void
-brects(Rectangle r, Rectangle rp[4])
-{
-    if(Dx(r) < 2*W)
-        r.max.x = r.min.x+2*W;
-    if(Dy(r) < 2*W)
-        r.max.y = r.min.y+2*W;
-    rp[0] = Rect(r.min.x, r.min.y, r.max.x, r.min.y+W);
-    rp[1] = Rect(r.min.x, r.max.y-W, r.max.x, r.max.y);
-    rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
-    rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
-}
-@
-
-<<function [[egetrect]]>>=
-Rectangle
-egetrect(int but, Mouse *m)
-{
-    Rectangle r, rc;
-
-    but = 1<<(but-1);
-    esetcursor(&sweep);
-    while(m->buttons)
-        *m = emouse();
-    while(!(m->buttons & but)){
-        *m = emouse();
-        if(m->buttons & (7^but))
-            goto Return;
-    }
-    r.min = m->xy;
-    r.max = m->xy;
-    do{
-        rc = canonrect(r);
-        edrawgetrect(rc, 1);
-        *m = emouse();
-        edrawgetrect(rc, 0);
-        r.max = m->xy;
-    }while(m->buttons == but);
-
-    Return:
-    esetcursor(0);
-    if(m->buttons & (7^but)){
-        rc.min.x = rc.max.x = 0;
-        rc.min.y = rc.max.y = 0;
-        while(m->buttons)
-            *m = emouse();
-    }
-    return rc;
-}
-@
-
-<<function [[freetmp]]>>=
-static
-void
-freetmp(void)
-{
-    freeimage(tmp[0]);
-    freeimage(tmp[1]);
-    freeimage(tmp[2]);
-    freeimage(tmp[3]);
-    freeimage(red);
-    tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
-}
-@
-
-<<function [[edrawgetrect]]>>=
-void
-edrawgetrect(Rectangle rc, int up)
-{
-    int i;
-    Rectangle r, rects[4];
-
-    if(up && tmp[0]!=nil)
-        if(Dx(tmp[0]->r)<Dx(rc) || Dy(tmp[2]->r)<Dy(rc))
-            freetmp();
-
-    if(tmp[0] == 0){
-        r = Rect(0, 0, Dx(view->r), W);
-        tmp[0] = allocimage(display, r, view->chan, 0, -1);
-        tmp[1] = allocimage(display, r, view->chan, 0, -1);
-        r = Rect(0, 0, W, Dy(view->r));
-        tmp[2] = allocimage(display, r, view->chan, 0, -1);
-        tmp[3] = allocimage(display, r, view->chan, 0, -1);
-        red = allocimage(display, Rect(0,0,1,1), view->chan, 1, DRed);
-        if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0)
-            drawerror(display, "getrect: allocimage failed");
-    }
-    brects(rc, rects);
-    if(!up){
-        for(i=0; i<4; i++)
-            draw(view, rects[i], tmp[i], nil, ZP);
-        return;
-    }
-    for(i=0; i<4; i++){
-        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
-        draw(view, rects[i], red, nil, ZP);
-    }
-}
-@
-
-\subsection{[[emenuhits.c]]}
-% event version of menuhits.c
-
-<<enum [[_anon_]]([[(lib_graphics/libdraw/emenuhit.c)]])>>=
-enum
-{
-    Margin = 4,		/* outside to text */
-    Border = 2,		/* outside to selection boxes */
-    Blackborder = 2,	/* width of outlining border */
-    Vspacing = 2,		/* extra spacing between lines of text */
-    Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
-    Nscroll = 20,		/* number entries in scrolling part */
-    Scrollwid = 14,		/* width of scroll bar */
-    Gap = 4,			/* between text and scroll bar */
-};
-@
-
-<<global [[menutxt]]>>=
-static	Image	*menutxt;
-@
-
-<<global [[back]]>>=
-static	Image	*back;
-@
-
-<<global [[high]]>>=
-static	Image	*high;
-@
-
-<<global [[bord]]>>=
-static	Image	*bord;
-@
-
-<<global [[text]]>>=
-static	Image	*text;
-@
-
-<<global [[htext]]>>=
-static	Image	*htext;
-@
-
-<<function [[menucolors]]>>=
-static
-void
-menucolors(void)
-{
-    /* Main tone is greenish, with negative selection */
-    back = allocimagemix(display, DPalegreen, DWhite);
-    high = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);	/* dark green */
-    bord = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedgreen);	/* not as dark green */
-    if(back == nil || high == nil || bord == nil)
-        goto Error;
-    text = display->black;
-    htext = back;
-    return;
-
-    Error:
-    freeimage(back);
-    freeimage(high);
-    freeimage(bord);
-    back = display->white;
-    high = display->black;
-    bord = display->black;
-    text = display->black;
-    htext = display->white;
-}
-@
-
-<<function [[menurect]]>>=
-/*
- * r is a rectangle holding the text elements.
- * return the rectangle, including its black edge, holding element i.
- */
-static Rectangle
-menurect(Rectangle r, int i)
-{
-    if(i < 0)
-        return Rect(0, 0, 0, 0);
-    r.min.y += (font->height+Vspacing)*i;
-    r.max.y = r.min.y+font->height+Vspacing;
-    return insetrect(r, Border-Margin);
-}
-@
-
-<<function [[menusel]]>>=
-/*
- * r is a rectangle holding the text elements.
- * return the element number containing p.
- */
-static int
-menusel(Rectangle r, Point p)
-{
-    r = insetrect(r, Margin);
-    if(!ptinrect(p, r))
-        return -1;
-    return (p.y-r.min.y)/(font->height+Vspacing);
-}
-@
-
-<<function [[paintitem]]>>=
-static
-void
-paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *save, Image *restore)
-{
-    char *item;
-    Rectangle r;
-    Point pt;
-
-    if(i < 0)
-        return;
-    r = menurect(textr, i);
-    if(restore){
-        draw(view, r, restore, nil, restore->r.min);
-        return;
-    }
-    if(save)
-        draw(save, save->r, view, nil, r.min);
-    item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
-    pt.x = (textr.min.x+textr.max.x-stringwidth(font, item))/2;
-    pt.y = textr.min.y+i*(font->height+Vspacing);
-    draw(view, r, highlight? high : back, nil, pt);
-    string(view, pt, highlight? htext : text, pt, font, item);
-}
-@
-
-<<function [[menuscan]]>>=
-/*
- * menur is a rectangle holding all the highlightable text elements.
- * track mouse while inside the box, return what's selected when button
- * is raised, -1 as soon as it leaves box.
- * invariant: nothing is highlighted on entry or exit.
- */
-static int
-menuscan(Menu *menu, int but, Mouse *m, Rectangle textr, int off, int lasti, Image *save)
-{
-    int i;
-
-    paintitem(menu, textr, off, lasti, 1, save, nil);
-    flushimage(display, true);	/* in case display->locking is set */
-    *m = emouse();
-    while(m->buttons & (1<<(but-1))){
-        flushimage(display, true);	/* in case display->locking is set */
-        *m = emouse();
-        i = menusel(textr, m->xy);
-        if(i != -1 && i == lasti)
-            continue;
-        paintitem(menu, textr, off, lasti, 0, nil, save);
-        if(i == -1)
-            return i;
-        lasti = i;
-        paintitem(menu, textr, off, lasti, 1, save, nil);
-    }
-    return lasti;
-}
-@
-
-<<function [[menupaint]]>>=
-static void
-menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
-{
-    int i;
-
-    draw(view, insetrect(textr, Border-Margin), back, nil, ZP);
-    for(i = 0; i<nitemdrawn; i++)
-        paintitem(menu, textr, off, i, 0, nil, nil);
-}
-@
-
-<<function [[menuscrollpaint]]>>=
-static void
-menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
-{
-    Rectangle r;
-
-    draw(view, scrollr, back, nil, ZP);
-    r.min.x = scrollr.min.x;
-    r.max.x = scrollr.max.x;
-    r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
-    r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
-    if(r.max.y < r.min.y+2)
-        r.max.y = r.min.y+2;
-    border(view, r, 1, bord, ZP);
-    if(menutxt == 0)
-        menutxt = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DDarkgreen);
-    if(menutxt)
-        draw(view, insetrect(r, 1), menutxt, nil, ZP);
-}
-@
-
-<<function [[emenuhit]]>>=
-int
-emenuhit(int but, Mouse *m, Menu *menu)
-{
-    int i, nitem, nitemdrawn, maxwid, lasti, off, noff, wid, screenitem;
-    int scrolling;
-    Rectangle r, menur, sc, textr, scrollr;
-    Image *b, *save;
-    Point pt;
-    char *item;
-
-    if(back == nil)
-        menucolors();
-    sc = view->clipr;
-    replclipr(view, 0, view->r);
-    maxwid = 0;
-    for(nitem = 0;
-        item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
-        nitem++){
-        i = stringwidth(font, item);
-        if(i > maxwid)
-            maxwid = i;
-    }
-    if(menu->lasthit<0 || menu->lasthit>=nitem)
-        menu->lasthit = 0;
-    screenitem = (Dy(view->r)-10)/(font->height+Vspacing);
-    if(nitem>Maxunscroll || nitem>screenitem){
-        scrolling = 1;
-        nitemdrawn = Nscroll;
-        if(nitemdrawn > screenitem)
-            nitemdrawn = screenitem;
-        wid = maxwid + Gap + Scrollwid;
-        off = menu->lasthit - nitemdrawn/2;
-        if(off < 0)
-            off = 0;
-        if(off > nitem-nitemdrawn)
-            off = nitem-nitemdrawn;
-        lasti = menu->lasthit-off;
-    }else{
-        scrolling = 0;
-        nitemdrawn = nitem;
-        wid = maxwid;
-        off = 0;
-        lasti = menu->lasthit;
-    }
-    r = insetrect(Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing)), -Margin);
-    r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
-    r = rectaddpt(r, m->xy);
-    pt = ZP;
-    if(r.max.x>view->r.max.x)
-        pt.x = view->r.max.x-r.max.x;
-    if(r.max.y>view->r.max.y)
-        pt.y = view->r.max.y-r.max.y;
-    if(r.min.x<view->r.min.x)
-        pt.x = view->r.min.x-r.min.x;
-    if(r.min.y<view->r.min.y)
-        pt.y = view->r.min.y-r.min.y;
-    menur = rectaddpt(r, pt);
-    textr.max.x = menur.max.x-Margin;
-    textr.min.x = textr.max.x-maxwid;
-    textr.min.y = menur.min.y+Margin;
-    textr.max.y = textr.min.y + nitemdrawn*(font->height+Vspacing);
-    if(scrolling){
-        scrollr = insetrect(menur, Border);
-        scrollr.max.x = scrollr.min.x+Scrollwid;
-    }else
-        scrollr = Rect(0, 0, 0, 0);
-
-    b = allocimage(display, menur, view->chan, 0, 0);
-    if(b == 0)
-        b = view;
-    draw(b, menur, view, nil, menur.min);
-    draw(view, menur, back, nil, ZP);
-    border(view, menur, Blackborder, bord, ZP);
-    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
-    r = menurect(textr, lasti);
-    emoveto(divpt(addpt(r.min, r.max), 2));
-    menupaint(menu, textr, off, nitemdrawn);
-    if(scrolling)
-        menuscrollpaint(scrollr, off, nitem, nitemdrawn);
-    while(m->buttons & (1<<(but-1))){
-        lasti = menuscan(menu, but, m, textr, off, lasti, save);
-        if(lasti >= 0)
-            break;
-        while(!ptinrect(m->xy, textr) && (m->buttons & (1<<(but-1)))){
-            if(scrolling && ptinrect(m->xy, scrollr)){
-                noff = ((m->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
-                noff -= nitemdrawn/2;
-                if(noff < 0)
-                    noff = 0;
-                if(noff > nitem-nitemdrawn)
-                    noff = nitem-nitemdrawn;
-                if(noff != off){
-                    off = noff;
-                    menupaint(menu, textr, off, nitemdrawn);
-                    menuscrollpaint(scrollr, off, nitem, nitemdrawn);
-                }
-            }
-            flushimage(display, true);	/* in case display->locking is set */
-            *m = emouse();
-        }
-    }
-    draw(view, menur, b, nil, menur.min);
-    if(b != view)
-        freeimage(b);
-    freeimage(save);
-    replclipr(view, 0, sc);
-    if(lasti >= 0){
-        menu->lasthit = lasti+off;
-        return menu->lasthit;
-    }
-    return -1;
-}
-@
-% >> >>
 
 
 
