@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/myipaddr.c */
+/*s: libip/myipaddr.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -48,4 +48,4 @@ myipaddr(ipaddr ip, char *net)
     return ERROR_NEG1;
 }
 /*e: function [[myipaddr]] */
-/*e: lib_networking/libip/myipaddr.c */
+/*e: libip/myipaddr.c */

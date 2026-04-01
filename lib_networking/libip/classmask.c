@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/classmask.c */
+/*s: libip/classmask.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -121,4 +121,4 @@ maskip(ipaddr from, ipaddr mask, ipaddr to)
         to[i] = from[i] & mask[i];
 }
 /*e: function [[maskip]] */
-/*e: lib_networking/libip/classmask.c */
+/*e: libip/classmask.c */

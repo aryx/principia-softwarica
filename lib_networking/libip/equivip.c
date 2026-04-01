@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/equivip.c */
+/*s: libip/equivip.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -28,4 +28,4 @@ equivip6(uchar *a, uchar *b)
     return true;
 }
 /*e: function [[equivip6]] */
-/*e: lib_networking/libip/equivip.c */
+/*e: libip/equivip.c */

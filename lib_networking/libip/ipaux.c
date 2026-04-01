@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/ipaux.c */
+/*s: libip/ipaux.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -111,4 +111,4 @@ v6tov4(ipv4 v4, ipaddr v6)
     /*e: [[v6tov4()]] else if ipv6 address */
 }
 /*e: function [[v6tov4]] */
-/*e: lib_networking/libip/ipaux.c */
+/*e: libip/ipaux.c */

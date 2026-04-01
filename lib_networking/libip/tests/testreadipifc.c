@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/tests/testreadipifc.c */
+/*s: libip/tests/testreadipifc.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -22,4 +22,4 @@ main(void)
     }
 }
 /*e: function [[main]] */
-/*e: lib_networking/libip/tests/testreadipifc.c */
+/*e: libip/tests/testreadipifc.c */

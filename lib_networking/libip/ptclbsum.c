@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/ptclbsum.c */
+/*s: libip/ptclbsum.c */
 #include	<u.h>
 #include	<libc.h>
 #include	<ip.h>
@@ -75,4 +75,4 @@ ptclbsum(uchar *addr, int len)
     return losum & 0xffff;
 }
 /*e: function [[ptclbsum]] */
-/*e: lib_networking/libip/ptclbsum.c */
+/*e: libip/ptclbsum.c */

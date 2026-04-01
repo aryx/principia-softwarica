@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/parseip.c */
+/*s: libip/parseip.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -171,4 +171,4 @@ parseipmask(uchar *to, char *from)
 }
 /*e: function [[parseipmask]] */
 
-/*e: lib_networking/libip/parseip.c */
+/*e: libip/parseip.c */

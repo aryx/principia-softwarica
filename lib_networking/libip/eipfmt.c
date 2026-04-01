@@ -1,14 +1,14 @@
-/*s: lib_networking/libip/eipfmt.c */
+/*s: libip/eipfmt.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
 
-/*s: enum [[_anon_ (lib_networking/libip/eipfmt.c)]] */
+/*s: enum [[_anon_ (libip/eipfmt.c)]] */
 enum
 {
     Isprefix= 16,
 };
-/*e: enum [[_anon_ (lib_networking/libip/eipfmt.c)]] */
+/*e: enum [[_anon_ (libip/eipfmt.c)]] */
 
 /*s: global [[prefixvals]] */
 uchar prefixvals[256] =
@@ -115,4 +115,4 @@ common:
     return fmtstrcpy(f, "(eipfmt)");
 }
 /*e: function [[eipfmt]] */
-/*e: lib_networking/libip/eipfmt.c */
+/*e: libip/eipfmt.c */

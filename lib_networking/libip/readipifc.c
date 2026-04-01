@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/readipifc.c */
+/*s: libip/readipifc.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -169,4 +169,4 @@ readipifc(char *net, Ipifc *ifc, int index)
     return ifc;
 }
 /*e: function [[readipifc]] */
-/*e: lib_networking/libip/readipifc.c */
+/*e: libip/readipifc.c */

@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/myetheraddr.c */
+/*s: libip/myetheraddr.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -29,4 +29,4 @@ myetheraddr(uchar *to, char *dev)
     return OK_0;
 }
 /*e: function [[myetheraddr]] */
-/*e: lib_networking/libip/myetheraddr.c */
+/*e: libip/myetheraddr.c */

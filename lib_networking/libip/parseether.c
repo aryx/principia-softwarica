@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/parseether.c */
+/*s: libip/parseether.c */
 #include <u.h>
 #include <libc.h>
 
@@ -26,4 +26,4 @@ parseether(uchar* to, char *from)
     return OK_0;
 }
 /*e: function [[parseether]] */
-/*e: lib_networking/libip/parseether.c */
+/*e: libip/parseether.c */

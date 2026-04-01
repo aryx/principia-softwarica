@@ -1,4 +1,4 @@
-/*s: lib_networking/libip/bo.c */
+/*s: libip/bo.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -88,4 +88,4 @@ nhgets(void *p)
     return (a[0]<<8)|(a[1]<<0);
 }
 /*e: function [[nhgets]] */
-/*e: lib_networking/libip/bo.c */
+/*e: libip/bo.c */
