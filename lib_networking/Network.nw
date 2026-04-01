@@ -880,6 +880,81 @@ in another:
 % kernel/network/, devip, devether, udp.c, tpc.c, and ether2000.c, etherigbe.c
 % networking/...
 
+%claude:
+The networking code spans three directories. The user-space
+library [[lib_networking/libip/]] provides IP address parsing
+and formatting used by applications. The kernel network
+stack lives in [[kernel/network/ip/]], which contains the
+protocol implementations (UDP, TCP, IL), the IP layer, ARP,
+routing, and the [[/net]] file interface. The Ethernet
+driver layer is in [[kernel/network/386/]] (or [[arm/]]
+for the Raspberry Pi).
+
+%claude:
+%dup: (and adapted) from Windows.nw
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files, as well as
+the main entities (e.g., structures, functions) the file defines,
+and the corresponding chapter in this document in which the code
+contained in the file is primarily discussed.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Function}  & {\bf Ch.} & {\bf File} & {\bf Entities} & {\bf LOC} \\
+\otoprule
+user-space header             & \ref{chap:core-ds}          & [[include/net/ip.h]]              & [[Ipifc]] [[Iplifc]]                              & 271 \\
+kernel header                 & \ref{chap:core-ds}          & [[kernel/.../ip.h]]               & [<Fs>] [<Proto>] [<Conv>] [<Medium>]               & 1058 \\
+netif header                  & \ref{chap:core-ds}          & [[kernel/.../netif.h]]            & [<Netif>] [<Netfile>]                              & 197 \\
+etherif header                & \ref{chap:core-ds}          & [[kernel/.../etherif.h]]          & [<Ether>]                                          & 73 \\
+
+\midrule
+initialization                & \ref{chap:init}             & [[ip.c]]                          & [<iprouter()>] [<Fsproto()>]                       & 812 \\
+\verb+/net+ file server       & \ref{chap:devip}            & [[devip.c]]                       & [<ipopen()>] [<ipread()>] [<ipwrite()>]            & 1714 \\
+IP interfaces                 & \ref{chap:devip}            & [[ipifc.c]]                       & [<ipifcbind()>] [<ipifcadd()>]                     & 1876 \\
+netif                         & \ref{chap:ethernet}         & [[netif.c]]                       & [<netifread()>] [<netifwrite()>]                   & 758 \\
+
+\midrule
+Ethernet driver               & \ref{chap:ethernet}         & [[devether.c]]                    & [<etherreset()>] [<etherwrite()>]                  & 623 \\
+Intel GbE driver              & \ref{chap:ethernet}         & [[etherigbe.c]]                   &                                                    & 2193 \\
+NE2000 driver                 & \ref{chap:ne2000}           & [[ether2000.c]] [[ether8390.c]]   &                                                    & 1129 \\
+MII PHY                       & \ref{chap:ethernet}         & [[ethermii.c]]                    &                                                    & 249 \\
+
+\midrule
+Ethernet medium               & \ref{chap:ethernet}         & [[ethermedium.c]]                 & [<ethermediumlink>]                                & 825 \\
+other mediums                 &                             & [[nullmedium.c]] etc.             &                                                    & 287 \\
+
+\midrule
+IP utilities                  & \ref{chap:ip}               & [[ipaux.c]]                       & [<iptentative()>]                                  & 407 \\
+ARP                           & \ref{chap:arp}              & [[arp.c]]                         & [<arpenter()>] [<arpwrite()>]                      & 739 \\
+ICMP                          &                             & [[icmp.c]]                        &                                                    & 550 \\
+routing                       & \ref{chap:routes}           & [[iproute.c]]                     & [<v4lookup()>] [<routeadd()>]                      & 986 \\
+
+\midrule
+UDP                           & \ref{chap:udp}              & [[udp.c]]                         & [<udpiput()>] [<udpkick()>]                        & 742 \\
+IL                            & \ref{chap:il}               & [[il.c]]                          & [<iliput()>] [<ilkick()>]                          & 1551 \\
+TCP                           & \ref{chap:tcp}              & [[tcp.c]]                         & [<tcpiput()>] [<tcpoutput()>]                      & 3603 \\
+
+\midrule
+kernel dial                   &                             & [[chandial.c]]                    &                                                    & 136 \\
+logging                       &                             & [[netlog.c]]                      &                                                    & 299 \\
+
+\midrule
+parsing (user-space)          & \ref{chap:core-ds}          & [[parseip.c]] [[parseether.c]]    & [<parseip()>] [<parseether()>]                     & 203 \\
+formatting                    & \ref{chap:debugging}        & [[eipfmt.c]]                      &                                                    & 118 \\
+other libip                   &                             & [[bo.c]] [[classmask.c]] etc.     &                                                    & 964 \\
+
+\otoprule
+Total                         &                             &                                   &                                                    & $\sim$22\,000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and source files of the \plan networking code.}
+\label{tab:code-orga}
+\end{table*}
+
+
 \section{Software architecture}
 
 % physical (e.g. ethernet), kernel (devip+ether), lib(dial), apps (e.g. telnetd)
@@ -899,16 +974,56 @@ in another:
 
 % encapsulation each time, more headers each time.
 
-% packet (network) vs frame (ethernet) vs datagram and fragments (ip) 
+% packet (network) vs frame (ethernet) vs datagram and fragments (ip)
 % vs continuous stream (user)
 
 % use network transport, gateways, and at some point when on same
 % physical local network, use physical transport and ethernet.
 
+%claude:
+The networking stack is organized in layers, following the
+standard Internet model. From bottom to top:
+\begin{enumerate}
+\item {\bf Link layer} (Ethernet): hardware drivers
+  ([[devether.c]], [[etherigbe.c]]) handle frames on
+  the physical wire, with [[netif.c]] providing a generic
+  interface.
+\item {\bf Network layer} (IP): routing ([[iproute.c]]),
+  ARP ([[arp.c]]), ICMP ([[icmp.c]]), and the IP interface
+  management ([[ipifc.c]]) handle addressing and
+  forwarding of datagrams across networks.
+\item {\bf Transport layer} (UDP, TCP, IL): protocol
+  implementations provide either unreliable datagrams
+  ([[udp.c]]), reliable streams ([[tcp.c]]), or \plan's
+  own reliable datagram protocol ([[il.c]]).
+\item {\bf Application layer}: user programs like
+  [[telnet]], [[ping]], and [[dns]] use [[dial()]]/[[announce()]]
+  from [[libc]] to access the stack through [[/net]] files.
+\end{enumerate}
+
+%claude:
+Each layer adds its own header when sending (encapsulation)
+and strips it when receiving (decapsulation). User programs
+see a continuous byte stream (TCP) or discrete messages
+(UDP), but underneath the data travels as Ethernet frames
+containing IP datagrams, which may be fragmented into
+multiple packets.
+
 % Proto vs Fs vs Ipifc vs Netif
 
 % OO like interface, with class and methods, and some private
 % fields.
+
+%claude:
+The kernel code uses an object-oriented style despite being
+written in C. The key abstractions---[<Proto>], [<Medium>],
+[<Netif>]---are structures with function pointer fields
+that act as virtual method tables. For instance, each
+transport protocol registers its own [[iput]] (input),
+[[kick]] (output), [[connect]], [[announce]], and [[close]]
+methods in a [<Proto>] structure, and the generic [[devip]]
+layer dispatches to them without knowing which protocol it
+is serving.
 
 % name conventions:
 % f = /net fs
@@ -917,6 +1032,12 @@ in another:
 % p = protocol (TODO or err sometimes, but we should rename them)
 % err = error string
 
+%claude:
+A few naming conventions appear throughout the code:
+[[f]] for the [<Fs>] (IP stack instance),
+[[cv]] for a [<Conv>]ersation (a single connection),
+[[p]] for a [<Proto>]col,
+and [[err]] for error strings.
 
 \subsection{Trace of a network write}
 
@@ -928,11 +1049,54 @@ in another:
 
 \section{Book structure}
 
+%claude:
+The rest of the book is organized as follows.
+Chapter~\ref{chap:core-ds} presents the core data structures:
+IP addresses, the [<Fs>]/[<Proto>]/[<Conv>] hierarchy, media
+and interfaces, and the kernel-side IP header types.
+%claude:
+Chapter~\ref{chap:init} covers the initialization of the
+IP stack. Chapter~\ref{chap:devip} describes the [[/net]]
+file-server interface---how user programs interact with the
+stack by reading and writing files under [[/net/tcp/]],
+[[/net/udp/]], etc.
+%claude:
+Chapter~\ref{chap:config} covers the configuration of
+interfaces and addresses.
+Chapter~\ref{chap:ethernet} presents the Ethernet layer:
+drivers, the [[Netif]] abstraction, and the Ethernet medium
+binding. Chapter~\ref{chap:ip} covers the IP layer
+proper.
+%claude:
+Chapter~\ref{chap:arp} explains ARP---how IP addresses are
+resolved to Ethernet MAC addresses on a local network.
+Chapter~\ref{chap:routes} covers the routing table and
+how the stack decides where to send packets.
+%claude:
+The transport protocols are presented next:
+UDP (Chapter~\ref{chap:udp}) for unreliable datagrams,
+IL (Chapter~\ref{chap:il}) for \plan's own reliable
+protocol, and TCP (Chapter~\ref{chap:tcp}) for the
+standard reliable stream.
+%claude:
+The book then covers higher-level topics: applications
+(Chapter~\ref{chap:applications}), the 9P protocol
+(Chapter~\ref{chap:rpc}), [[exportfs]] (Chapter~\ref{chap:nfs}),
+DNS (Chapter~\ref{chap:dns}), security
+(Chapter~\ref{chap:security}), and advanced topics
+(Chapter~\ref{chap:advanced}).
+Finally, Chapter~\ref{chap:conclusion} concludes.
+%claude:
+Some appendices present non-functional code: debugging
+helpers, error management, the NE2000 Ethernet driver,
+and extra mediums and protocols.
+
 %###############################################################################
 
 %******************************************************************************
 \chapter{Core Data Structures}
 %******************************************************************************
+\label{chap:core-ds}
 
 % Lots of DS, really a lot.
 
@@ -2711,6 +2875,7 @@ version nibble to distinguish IPv4 from IPv6 packets.
 %******************************************************************************
 \chapter{Initialization}
 %******************************************************************************
+\label{chap:init}
 
 %claude:
 Initializing the network stack is a two-stage process.
@@ -2995,6 +3160,7 @@ resolution.
 %******************************************************************************
 \chapter{User/Kernel Bridge}
 %******************************************************************************
+\label{chap:devip}
 
 % Will see how dispatch commands from user to kernel, via /net,
 % and how the kernel then dispatch internally the command to the right
@@ -4449,6 +4615,7 @@ Dev etherdevtab = {
 %******************************************************************************
 \chapter{Configuration}
 %******************************************************************************
+\label{chap:config}
 
 % code of ipconfig also here?
 
@@ -5676,6 +5843,7 @@ ipifcclose(Conv *c)
 %******************************************************************************
 \chapter{Physical Transport: Ethernet}
 %******************************************************************************
+\label{chap:ethernet}
 % Local Area Network Transport
 
 % ethernet = CSMA-CD (carrier sense multiple access - collision detection)
@@ -5812,6 +5980,7 @@ struct Etherpkt
 %******************************************************************************
 \chapter{Inter Network Transport: IP}
 %******************************************************************************
+\label{chap:ip}
 
 % RFC 79, Internet Protocol
 
@@ -6974,6 +7143,7 @@ else if(strcmp(argv[0], "reassemble") == 0){
 %******************************************************************************
 \chapter{Finding Machines Locally: ARP}
 %******************************************************************************
+\label{chap:arp}
 
 %claude:
 ARP (Address Resolution Protocol) answers the question:
@@ -7305,6 +7475,7 @@ arpwrite(Fs *fs, char *s, int len)
 %******************************************************************************
 \chapter{Finding Machines Globally: Routes}
 %******************************************************************************
+\label{chap:routes}
 
 
 % ARP allows local routing
@@ -8709,6 +8880,7 @@ ipifcremroute(Fs *f, int vers, uchar *addr, uchar *mask)
 %******************************************************************************
 \chapter{Basic Communication: UDP}
 %******************************************************************************
+\label{chap:udp}
 % U for Unreliable, Unordered :)
 % Transmission?
 
@@ -9747,6 +9919,7 @@ case 7:
 %******************************************************************************
 \chapter{Reliable Communication: IL}
 %******************************************************************************
+\label{chap:il}
 
 % For Internet Link
 
@@ -10920,6 +11093,7 @@ if(argc > 1){
 %******************************************************************************
 \chapter{Standard Reliable Communication: TCP}
 %******************************************************************************
+\label{chap:tcp}
 
 % TCP in 30 instructions? from van jacobson himself!
 %http://www.pdl.cmu.edu/mailinglists/ips/mail/msg00133.html?
@@ -10970,6 +11144,7 @@ tcpinit(Fs *fs)
 %******************************************************************************
 \chapter{Applications}
 %******************************************************************************
+\label{chap:applications}
 
 %claude:
 With the protocol stack in place, this chapter surveys the
@@ -11000,6 +11175,7 @@ opposite of traditional remote login.
 %******************************************************************************
 \chapter{Remote Procedure Call: 9P}
 %******************************************************************************
+\label{chap:rpc}
 
 %critique of RPC:
 %https://www.cs.vu.nl/~ast/publications/euteco-1988.pdf
@@ -11016,6 +11192,7 @@ messages ([[convS2M]], [[convM2S]]) is in \book{Libcore}.
 %******************************************************************************
 \chapter{Network File System: [[exportfs]]}
 %******************************************************************************
+\label{chap:nfs}
 % the logical conclusion for all of that.
 
 %claude:
@@ -11033,6 +11210,7 @@ context follows you to any machine on the network.
 %******************************************************************************
 \chapter{Name Resolution: DNS}
 %******************************************************************************
+\label{chap:dns}
 % code of ndb/ here and of dns and cs?
 %TODO? move earlier? pretty fundamental
 
@@ -11048,6 +11226,7 @@ DNS directly.
 %******************************************************************************
 \chapter{Security}
 %******************************************************************************
+\label{chap:security}
 
 \section{Denial of service}
 % hogport? in tcp? tcpporthogdefense
@@ -11069,6 +11248,7 @@ DNS directly.
 %******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
+\label{chap:advanced}
 
 %claude:
 This chapter covers advanced networking features that cut
@@ -11597,6 +11777,7 @@ that did not exist when \plan was designed.
 %******************************************************************************
 \chapter{Debugging}
 %******************************************************************************
+\label{chap:debugging}
 
 %claude:
 Network debugging relies heavily on formatted output of
@@ -12075,6 +12256,7 @@ case Qsnoop:
 %******************************************************************************
 \chapter{Ethernet NE2000 Driver}
 %******************************************************************************
+\label{chap:ne2000}
 % like I did in Graphics.nw and the VGA driver
 % with again a classic device, the NE2000! (I even got it, like for the cirrus)
 % alt: Intel Pro/1000  but far bigger
