@@ -1,19 +1,5 @@
 
-%pad: to please syncweb -to_tex checker
-\ifallcode
-
-<<acid/y.tab.h>>=
-@
-
-\fi
-
-
-<<global [[mach]]>>=
-Mach	*mach = &mi386;			/* Global current machine table */
-@
-
 \section{[[db/]]}
-
 
 \subsection{[[db/defs.h]]}
 
@@ -1701,6 +1687,17 @@ typedef struct  Fhdr Fhdr;
 <<struct [[Reglist]]>>
 
 <<enum [[register_flag]]>>
+
+/*
+ *	Machine-dependent data is stored in two structures:
+ *		Mach  - miscellaneous general parameters
+ *		Machdata - jump vector of service functions used by debuggers
+ *
+ *	Mach is defined in ?.c and set in executable.c
+ *
+ *	Machdata is defined in ?db.c
+ *		and set in the debugger startup.
+ */
 
 <<struct [[Mach]]>>
 
@@ -7433,18 +7430,21 @@ extern	Machdata	i386mach, armmach, mipsmach;
 
 \subsection{[[acid/acid.h]]}
 
+
+<<acid constants>>=
+Maxarg		= 512,
+NFD		= 100,
+Maxproc		= 50,
+Maxval		= 10,
+Mempergc	= 1024*1024,
+@
+
+
 <<enum [[_anon_ (acid/acid.h)]]>>=
 /* acid.h */
 enum
 {
-    Eof		= -1,
-    Strsize		= 4096,
-    Hashsize	= 128,
-    Maxarg		= 512,
-    NFD		= 100,
-    Maxproc		= 50,
-    Maxval		= 10,
-    Mempergc	= 1024*1024,
+    <<acid constants>>
 };
 @
 
@@ -7655,9 +7655,6 @@ Rplace*	ret;
 @
 
 
-<<global [[prnt]]>>=
-Node*	prnt;
-@
 
 <<global [[tracelist]]>>=
 List*	tracelist;
@@ -8650,65 +8647,7 @@ nproc(char **argv)
 }
 @
 
-<<function notes (acid/proc.c)>>=
-void
-notes(int pid)
-{
-    Lsym *s;
-    Value *v;
-    int i, fd;
-    char buf[128];
-    List *l, **tail;
 
-    s = look("notes");
-    if(s == 0)
-        return;
-    v = s->v;
-
-    snprint(buf, sizeof(buf), "/proc/%d/note", pid);
-    fd = open(buf, OREAD);
-    if(fd < 0)
-        error("pid=%d: open note: %r", pid);
-
-    v->set = 1;
-    v->type = TLIST;
-    v->l = 0;
-    tail = &v->l;
-    for(;;) {
-        i = read(fd, buf, sizeof(buf));
-        if(i <= 0)
-            break;
-        buf[i] = '\0';
-        l = al(TSTRING);
-        l->string = strnode(buf);
-        l->fmt = 's';
-        *tail = l;
-        tail = &l->next;
-    }
-    close(fd);
-}
-@
-
-<<function [[dostop]]>>=
-void
-dostop(int pid)
-{
-    Lsym *s;
-    Node *np, *p;
-
-    s = look("stopped");
-    if(s && s->proc) {
-        np = an(ONAME, ZN, ZN);
-        np->sym = s;
-        np->fmt = 'D';
-        np->type = TINT;
-        p = con(pid);
-        p->fmt = 'D';
-        np = an(OCALL, np, p);
-        execute(np);
-    }
-}
-@
 
 
 <<function [[deinstall]]>>=
@@ -8740,29 +8679,6 @@ deinstall(int pid)
 }
 @
 
-<<function [[msg]]>>=
-void
-msg(int pid, char *msg)
-{
-    int i;
-    int l;
-    char err[ERRMAX];
-
-    for(i = 0; i < Maxproc; i++) {
-        if(ptab[i].pid == pid) {
-            l = strlen(msg);
-            if(write(ptab[i].ctl, msg, l) != l) {
-                errstr(err, sizeof err);
-                if(strcmp(err, "process exited") == 0)
-                    deinstall(pid);
-                error("msg: pid=%d %s: %s", pid, msg, err);
-            }
-            return;
-        }
-    }
-    error("msg: pid=%d: not found for %s", pid, msg);
-}
-@
 
 <<function [[getstatus]]>>=
 char *
@@ -11158,81 +11074,9 @@ newproc(Node *r, Node *args)
 }
 @
 
-<<function [[startstop]]>>=
-void
-startstop(Node *r, Node *args)
-{
-    Node res;
 
-    USED(r);
-    if(args == 0)
-        error("startstop(pid): no pid");
-    expr(args, &res);
-    if(res.type != TINT)
-        error("startstop(pid): arg type");
 
-    msg(res.ival, "startstop");
-    notes(res.ival);
-    dostop(res.ival);
-}
-@
 
-<<function [[waitstop]]>>=
-void
-waitstop(Node *r, Node *args)
-{
-    Node res;
-
-    USED(r);
-    if(args == 0)
-        error("waitstop(pid): no pid");
-    expr(args, &res);
-    if(res.type != TINT)
-        error("waitstop(pid): arg type");
-
-    Bflush(bout);
-    msg(res.ival, "waitstop");
-    notes(res.ival);
-    dostop(res.ival);
-}
-@
-
-<<function [[start]]>>=
-void
-start(Node *r, Node *args)
-{
-    Node res;
-
-    USED(r);
-    if(args == 0)
-        error("start(pid): no pid");
-    expr(args, &res);
-    if(res.type != TINT)
-        error("start(pid): arg type");
-
-    msg(res.ival, "start");
-}
-@
-
-<<function [[stop]]>>=
-void
-stop(Node *r, Node *args)
-{
-    Node res;
-
-    USED(r);
-    if(args == 0)
-        error("stop(pid): no pid");
-    expr(args, &res);
-    if(res.type != TINT)
-        error("stop(pid): arg type");
-
-    Bflush(bout);
-    msg(res.ival, "stop");
-    notes(res.ival);
-    dostop(res.ival);
-}
-@
 
 <<function [[kill]]>>=
 void
@@ -11252,27 +11096,6 @@ kill(Node *r, Node *args)
 }
 @
 
-<<function [[status]]>>=
-void
-status(Node *r, Node *args)
-{
-    Node res;
-    char *p;
-
-    USED(r);
-    if(args == 0)
-        error("status(pid): no pid");
-    expr(args, &res);
-    if(res.type != TINT)
-        error("status(pid): arg type");
-
-    p = getstatus(res.ival);
-    r->string = strnode(p);
-    r->op = OCONST;
-    r->fmt = 's';
-    r->type = TSTRING;
-}
-@
 
 <<function [[reason]]>>=
 void
@@ -11398,31 +11221,6 @@ filepc(Node *r, Node *args)
 }
 @
 
-<<function [[interpret]]>>=
-void
-interpret(Node *r, Node *args)
-{
-    Node res;
-    int isave;
-
-    if(args == 0)
-        error("interpret(string): arg count");
-    expr(args, &res);
-    if(res.type != TSTRING)
-        error("interpret(string): arg type");
-
-    pushstr(&res);
-
-    isave = interactive;
-    interactive = 0;
-    r->ival = yyparse();
-    interactive = isave;
-    popio();
-    r->op = OCONST;
-    r->type = TINT;
-    r->fmt = 'D';
-}
-@
 
 <<function [[include]]>>=
 void

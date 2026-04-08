@@ -1301,16 +1301,6 @@ enum executable_type
 
 
 <<struct [[Mach]]>>=
-/*
- *	Machine-dependent data is stored in two structures:
- *		Mach  - miscellaneous general parameters
- *		Machdata - jump vector of service functions used by debuggers
- *
- *	Mach is defined in ?.c and set in executable.c
- *
- *	Machdata is defined in ?db.c
- *		and set in the debugger startup.
- */
 struct Mach{
     char	*name;
     // enum<machine_type>
@@ -1339,6 +1329,11 @@ struct Mach{
     int	szdouble;		/* sizeof(double) */
 };
 @
+
+<<global [[mach]]>>=
+Mach	*mach = &mi386;			/* Global current machine table */
+@
+
 
 <<enum [[machine_type]]>>=
 /* machine types */
@@ -1435,7 +1430,7 @@ struct Map {
 
     struct segment {		/* per-segment map */
         char	*name;		/* the segment name */
-        int	fd;		/* file descriptor */
+        fdt	fd;		/* file descriptor */
 
         bool	inuse;		/* in use - not in use */
         bool	cache;		/* should cache reads? */
@@ -1507,6 +1502,36 @@ Map*	cormap;
 %\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
 
 
+\section{Tokens}
+
+% Token_kind
+
+<<token declarations>>=
+%token <sym>	Tid
+%token <ival>	Tconst
+%token <fval>	Tfconst
+%token <string>	Tstring
+
+%token <ival> Tfmt
+
+%token Tif Tdo Tthen Telse Twhile Tloop
+%token Thead Ttail Tappend
+%token Tfn Tret Tlocal
+%token Tcomplex Twhat Tdelete Teval Tbuiltin
+@
+
+<<union yacc>>=
+%union
+{
+	uvlong	ival;
+	float	fval;
+	String	*string;
+
+	Lsym	*sym;
+        <<[[union yacc]] other fields>>
+}
+@
+
 
 \section{Abstract syntax tree}
 
@@ -1529,6 +1554,7 @@ struct Node
     // option<Lsym>, Some when op = ONAME
     Lsym*	sym;
 
+    // ??
     int	builtin;
 
     // must be last?
@@ -1555,6 +1581,7 @@ an(int op, Node *l, Node *r)
     n->op = op;
     n->left = l;
     n->right = r;
+
     return n;
 }
 @
@@ -1659,6 +1686,8 @@ struct StringAcid
     int	len;
 };
 @
+% and then typedef struct StringAcid String;
+% why? conflict on struct String with libstring?
 
 \subsection{[[Gc]]}
 
@@ -1682,6 +1711,17 @@ gcl = n;
 
 \section{[[Type]] system}
 
+<<enum [[_anon_ (acid/acid.h)]]2>>=
+enum Type_kind
+{
+    TINT,
+    TFLOAT,
+    TSTRING,
+    TLIST,
+    TCODE,
+};
+@
+
 <<struct [[Type]]>>=
 struct Type
 {
@@ -1697,16 +1737,6 @@ struct Type
 };
 @
 
-<<enum [[_anon_ (acid/acid.h)]]2>>=
-enum Type_kind
-{
-    TINT,
-    TFLOAT,
-    TSTRING,
-    TLIST,
-    TCODE,
-};
-@
 
 
 %???
@@ -1719,9 +1749,10 @@ struct Frtype
 };
 @
 
+
 \section{Symbol table}
 
-% L stands for?
+% L stands for? Lexical?
 
 \subsection{[[Lsym]]}
 
@@ -1730,12 +1761,13 @@ struct Lsym
 {
     // ref_own<string>
     char*	name;
-    // enum<??>
+    // enum<Token_kind>
     int	lexval;
 
     // ref_own<Value>
     Value*	v;
 
+    // ???
     Type*	lt;
     Node*	proc;
     Frtype*	local;
@@ -1754,6 +1786,10 @@ struct Lsym
 // hash <string, ref_own<Lsym>, (next in bucket = Lsym.hash)
 Lsym*	hash[Hashsize];
 @
+<<acid constants>>=
+Hashsize	= 128,
+@
+
 
 <<function [[look]]>>=
 Lsym*
@@ -1776,6 +1812,7 @@ look(char *name)
 }
 @
 
+\subsection{[[mkvar()]]}
 
 <<function [[mkvar]]>>=
 Lsym*
@@ -1790,6 +1827,8 @@ mkvar(char *s)
 }
 @
 
+
+\subsection{[[enter()]]}
 
 <<function [[enter]]>>=
 Lsym*
@@ -1836,6 +1875,7 @@ struct Value
     Rplace*	ret;
 };
 @
+%todo? bool for set?
 
 
 <<[[enter()]] other locals>>=
@@ -1863,10 +1903,40 @@ struct Ptab
 };
 @
 
+
+\subsection{[[ptab]]}
+
 <<global [[ptab]]>>=
 Ptab	ptab[Maxproc];
 @
 
+\subsection{[[msg()]]}
+
+
+<<function [[msg]]>>=
+void
+msg(int pid, char *msg)
+{
+    int i;
+    int l;
+    char err[ERRMAX];
+
+    for(i = 0; i < Maxproc; i++) {
+
+        if(ptab[i].pid == pid) {
+            l = strlen(msg);
+            if(write(ptab[i].ctl, msg, l) != l) {
+                errstr(err, sizeof err);
+                if(strcmp(err, "process exited") == 0)
+                    deinstall(pid);
+                error("msg: pid=%d %s: %s", pid, msg, err);
+            }
+            return;
+        }
+    }
+    error("msg: pid=%d: not found for %s", pid, msg);
+}
+@
 
 
 %******************************************************************************
@@ -1937,7 +2007,7 @@ main(int argc, char *argv[])
 int	interactive;
 @
 %todo: bool
-% for prompt?
+% for prompt essentially, like in rc
 
 <<global line (acid/globals.c)>>=
 int	line;
@@ -1971,6 +2041,7 @@ for(;;) {
 int	stacked;
 @
 %todo: bool
+% for counting {}
 
 
 <<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
@@ -2169,6 +2240,7 @@ if(text < 0)
 Fhdr	fhdr;
 @
 
+% rely on global text set before in attachfiles
 <<function [[readtext]]>>=
 /// main -> attachfiles -> <>
 void
@@ -2184,7 +2256,7 @@ readtext(char *s)
         return;
     }
 
-    symmap = loadmap(0, text, &fhdr);
+    symmap = loadmap(nil, text, &fhdr);
     <<[[readtext()]] sanity check [[symmap]]>>
 
     if(syminit(text, &fhdr) < 0) {
@@ -2563,18 +2635,16 @@ if(pid)					/* pid given */
 void
 sproc(int pid)
 {
-    Lsym *s;
     char buf[64];
-    int i;
     fdt fcor;
+    Lsym *s;
+    int i;
 
-    if(symmap == nil)
-        error("no map");
+    <<[[sproc()]] sanity check [[symmap]]>>
 
     snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
     fcor = open(buf, ORDWR);
-    if(fcor < 0)
-        error("setproc: open %s: %r", buf);
+    <<[[sproc()]] sanity check [[fcor]]>>
 
     checkqid(symmap->seg[0].fd, pid);
 
@@ -2584,8 +2654,7 @@ sproc(int pid)
     nocore();
 
     cormap = attachproc(pid, kernel, fcor, &fhdr);
-    if (cormap == nil)
-        error("setproc: can't make coremap: %r");
+    <<[[sproc()]] sanity check [[cormap]]>>
 
     i = findseg(cormap, "text");
     if (i > 0)
@@ -2599,6 +2668,21 @@ sproc(int pid)
 }
 @
 
+<<[[sproc()]] sanity check [[symmap]]>>=
+if(symmap == nil)
+    error("no map");
+@
+
+<<[[sproc()]] sanity check [[fcor]]>>=
+if(fcor < 0)
+    error("setproc: open %s: %r", buf);
+@
+
+<<[[sproc()]] sanity check [[cormap]]>>=
+if (cormap == nil)
+    error("setproc: can't make coremap: %r");
+@
+
 \subsection{[[checkqid()]]}
 
 
@@ -2606,7 +2690,7 @@ sproc(int pid)
 void
 checkqid(int f1, int pid)
 {
-    int fd;
+    fdt fd;
     Dir *d1, *d2;
     char buf[128];
 
@@ -2810,7 +2894,9 @@ machbytype(int type)
     for (mp = machines; mp->name; mp++){
         if (mp->type == type || mp->boottype == type) {
             asstype = mp->asstype;
+
             machdata = mp->machdata;
+
             break;
         }
     }
@@ -2899,8 +2985,8 @@ Map*
 loadmap(Map *map, int fd, Fhdr *fp)
 {
     map = newmap(map, 2);
-    if (map == 0)
-        return 0;
+    if (map == nil)
+        return nil;
 
     map->seg[0].b = fp->txtaddr;
     map->seg[0].e = fp->txtaddr+fp->txtsz;
@@ -2908,12 +2994,14 @@ loadmap(Map *map, int fd, Fhdr *fp)
     map->seg[0].fd = fd;
     map->seg[0].inuse = 1;
     map->seg[0].name = "text";
+
     map->seg[1].b = fp->dataddr;
     map->seg[1].e = fp->dataddr+fp->datsz;
     map->seg[1].f = fp->datoff;
     map->seg[1].fd = fd;
     map->seg[1].inuse = 1;
     map->seg[1].name = "data";
+
     return map;
 }
 @
@@ -3043,11 +3131,9 @@ syminit(int fd, Fhdr *fp)
 }
 @
 
-\section{[[machdata]]}
+%\section{[[machdata]]}
 
-\section{Symbol table}
-
-
+%\section{Symbol table}
 
 
 %******************************************************************************
@@ -3055,25 +3141,30 @@ syminit(int fd, Fhdr *fp)
 %******************************************************************************
 
 % Lexing and parsing in same chapter this time; we also explain less this time
-% as similar to parsing in Compiler, Assembler, Make, Shell
+% as similar to parsing in Compiler, Assembler, Make, Shell, Utilities (awk, ...)
 
-%TODO: acid/dbg.y!
 
-\section{Files management: [[IOstack]]}
+\section{Files management}
 % similar to what was done by cpp with #include, but here acid include
+% and no macro, just include
+
+
+\subsection{[[IOstack]]}
 
 <<struct [[IOstack]]>>=
 struct IOstack
 {
+    // ref_own<string>    included filename or "<stdin>" 
     char	*name;
+    // ref_own<Biobuf>
     Biobuf	*fin;
 
+    // saved global line to be restored in popio()
     int	line;
-    char	*text;
-    char	*ip;
 
+    <<[[IOstack]] other fields>>
     // Extra
-    IOstack	*prev;
+    <<[[IOstack]] extra fields>>
 };
 @
 
@@ -3081,6 +3172,13 @@ struct IOstack
 // list<ref_own<IOstack> next = lexio.prev
 IOstack *lexio;
 @
+<<[[IOstack]] extra fields>>=
+IOstack	*prev;
+@
+
+\subsection{[[pushfile()]]}
+
+% file can be nil when called from main first time to read stdin
 
 <<function [[pushfile]]>>=
 /// main | loadmodule -> <>
@@ -3106,9 +3204,10 @@ pushfile(char *file)
 
     io->line = line;
     line = 1;
-    io->text = 0;
     io->fin = b;
+    io->text = nil;
 
+    // add_list(io, lexio)
     io->prev = lexio;
     lexio = io;
 }
@@ -3124,41 +3223,16 @@ if(io == nil)
     fatal("no memory");
 @
 <<[[pushfile()]] sanity check [[io->name]]>>=
-if(io->name == 0)
+if(io->name == nil)
     fatal("no memory");
 @
 
 
-<<function [[pushstr]]>>=
-/// ??? -> <>
-void
-pushstr(Node *s)
-{
-    IOstack *io;
 
-    io = malloc(sizeof(IOstack));
-    if(io == 0)
-        fatal("no memory");
-    io->line = line;
-    line = 1;
-    io->name = strdup("<string>");
-    if(io->name == 0)
-        fatal("no memory");
-    io->line = line;
-    line = 1;
-    io->text = strdup(s->string->string);
-    if(io->text == 0)
-        fatal("no memory");
-    io->ip = io->text;
-    io->fin = 0;
-    io->prev = lexio;
-    lexio = io;
-}
-@
-
+\subsection{[[restartio()]], [[popio()]]}
 
 <<function [[restartio]]>>=
-/// main -> <>
+/// main -> yyparse; <>
 void
 restartio(void)
 {
@@ -3166,22 +3240,27 @@ restartio(void)
     Binit(lexio->fin, STDIN, OREAD);
 }
 @
+% why need that?
+
+
+% return false when done, so can be used as while(popio())
 
 <<function [[popio]]>>=
 /// loadmodule | error -> <>
-int
+bool
 popio(void)
 {
     IOstack *s;
 
     if(lexio == nil)
-        return 0;
+        return false;
 
     if(lexio->prev == nil){
         if(lexio->fin)
             restartio();
-        return 0;
+        return false;
     }
+    // else
 
     if(lexio->fin)
         Bterm(lexio->fin);
@@ -3189,12 +3268,15 @@ popio(void)
         free(lexio->text);
     free(lexio->name);
 
+    // restore global line
     line = lexio->line;
+
+    // s = pop_list(lexio)
     s = lexio;
     lexio = s->prev;
     free(s);
 
-    return 1;
+    return true;
 }
 @
 
@@ -3202,6 +3284,9 @@ popio(void)
 
 \section{Lexer}
 
+<<acid constants>>=
+Eof		= -1,
+@
 
 \subsection{[[lexc()]] and [[unlexc()]]}
 
@@ -3217,6 +3302,7 @@ lexc(void)
             error("interrupt");
         return c;
     }
+    // else
 
     c = *lexio->ip++;
     if(c == 0)
@@ -3224,6 +3310,7 @@ lexc(void)
     return c;
 }
 @
+% why -1? why not Eof?
 
 <<function [[unlexc]]>>=
 void
@@ -3412,7 +3499,7 @@ loop:
 }
 @
 
-\subsection{Comments}
+\subsection{Spaces and Comments}
 
 <<function [[eatnl]]>>=
 void
@@ -3431,6 +3518,7 @@ eatnl(void)
 }
 @
 
+\subsection{Newlines}
 
 \subsection{Numbers}
 
@@ -3517,6 +3605,7 @@ numsym(char first)
 @
 %$
 
+\subsection{Characters}
 
 \subsection{Strings}
 
@@ -3567,6 +3656,11 @@ done:
 }
 @
 
+<<acid constants>>=
+Strsize		= 4096,
+@
+
+
 \subsection{Operators}
 
 \subsection{Keywords}
@@ -3579,27 +3673,27 @@ struct keywd
 }
 keywds[] =
 {
-    "do",		Tdo,
-    "if",		Tif,
-    "then",		Tthen,
-    "else",		Telse,
+    "do",	Tdo,
+    "if",	Tif,
+    "then",	Tthen,
+    "else",	Telse,
     "while",	Twhile,
-    "loop",		Tloop,
+    "loop",	Tloop,
 
-    "head",		Thead,
-    "tail",		Ttail,
+    "head",	Thead,
+    "tail",	Ttail,
     "append",	Tappend,
 
-    "defn",		Tfn,
+    "defn",	Tfn,
     "return",	Tret,
     "local",	Tlocal,
-    "aggr",		Tcomplex,
+    "aggr",	Tcomplex,
     "union",	Tcomplex,
-    "adt",		Tcomplex,
+    "adt",	Tcomplex,
     "complex",	Tcomplex,
     "delete",	Tdelete,
     "whatis",	Twhat,
-    "eval",		Teval,
+    "eval",	Teval,
     "builtin",	Tbuiltin,
 
     0,		0
@@ -3620,6 +3714,375 @@ kinit(void)
 
 \section{Grammar}
 
+\subsection{Overview}
+
+<<acid/dbg.t>>=
+%{
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <mach.h>
+
+#include "acid.h"
+%}
+<<union yacc>>
+<<type declarations>>
+<<priority and associativity declarations>>
+<<token declarations>>
+%%
+<<grammar>>
+%%
+@
+
+<<[[union yacc]] other fields>>=
+Node	*node;
+@
+
+<<type declarations>>=
+%type <node> expr monexpr term stmnt name args zexpr slist
+%type <node> member members mname castexpr idlist
+%type <sym> zname
+@
+
+<<priority and associativity declarations>>=
+%left	';'
+%right	'='
+%left	Tfmt
+%left	Toror
+%left	Tandand
+%left	'|'
+%left	'^'
+%left	'&'
+%left	Teq Tneq
+%left	'<' '>' Tleq Tgeq
+%left	Tlsh Trsh
+%left	'+' '-'
+%left	'*' '/' '%'
+%right	Tdec Tinc Tindir '.' '[' '('
+@
+
+<<grammar>>=
+prog		: 
+		| prog bigstmnt
+		;
+
+<<statements rules>>
+<<members rules>>
+<<expressions rules>>
+<<name rules>>
+<<other rules>>
+@
+
+
+<<name rules>>=
+name		: Tid
+		{
+			$$ = an(ONAME, ZN, ZN);
+			$$->sym = $1;
+		}
+		| Tid ':' name
+		{
+			$$ = an(OFRAME, $3, ZN);
+			$$->sym = $1;
+		}
+		;
+@
+
+<<name rules>>=
+zname		: 
+		{ $$ = 0; }
+		| Tid
+		;
+@
+% frame? complex?
+
+\subsection{Statements}
+
+<<statements rules>>=
+bigstmnt	: stmnt
+		{
+			/* make stmnt a root so it isn't collected! */
+			mkvar("_thiscmd")->proc = $1;
+			execute($1);
+			mkvar("_thiscmd")->proc = nil;
+			gc();
+			if(interactive)
+				Bprint(bout, "acid: ");
+		}
+		| Tfn Tid '(' args ')' zsemi '{' slist '}'
+		{
+			$2->proc = an(OLIST, $4, $8);
+		}
+		| Tfn Tid
+		{
+			$2->proc = nil;
+		}
+		| Tcomplex name '{' members '}' ';'
+		{
+			defcomplex($2, $4);
+		}
+		;
+@
+
+<<other rules>>=
+zsemi		:
+		| ';' zsemi
+@
+
+
+
+<<statements rules>>=
+stmnt		: zexpr ';'
+		| '{' slist '}'
+		{
+			$$ = $2;
+		}
+		| Tif expr Tthen stmnt
+		{
+			$$ = an(OIF, $2, $4);
+		}
+		| Tif expr Tthen stmnt Telse stmnt
+		{
+			$$ = an(OIF, $2, an(OELSE, $4, $6));
+		}
+		| Tloop expr ',' expr Tdo stmnt
+		{
+			$$ = an(ODO, an(OLIST, $2, $4), $6);
+		}
+		| Twhile expr Tdo stmnt
+		{
+			$$ = an(OWHILE, $2, $4);
+		}
+		| Tret expr ';'
+		{
+			$$ = an(ORET, $2, ZN);
+		}
+		| Tlocal idlist
+		{
+			$$ = an(OLOCAL, $2, ZN);
+		}
+		| Tcomplex Tid name ';'
+		{
+			$$ = an(OCOMPLEX, $3, ZN);
+			$$->sym = $2;
+		}
+		;
+
+@
+
+
+<<other rules>>=
+idlist		: Tid
+		{
+			$$ = an(ONAME, ZN, ZN);
+			$$->sym = $1;
+		}
+		| idlist ',' Tid
+		{
+			$$ = an(ONAME, $1, ZN);
+			$$->sym = $3;
+		}
+		;
+
+@
+
+
+<<statements rules>>=
+slist		: stmnt
+		| slist stmnt
+		{
+			$$ = an(OLIST, $1, $2);
+		}
+		;
+@
+
+\subsection{Complex}
+
+<<members rules>>=
+members		: member
+		| members member
+		{
+			$$ = an(OLIST, $1, $2);
+		}
+		;
+
+mname		: Tid
+		{
+			$$ = an(ONAME, ZN, ZN);
+			$$->sym = $1;
+		}
+		;
+
+member		: Tconst Tconst mname ';'
+		{
+			$3->ival = $2;
+			$3->fmt = $1;
+			$$ = $3;
+		}
+		| Tconst mname Tconst mname ';'
+		{
+			$4->ival = $3;
+			$4->fmt = $1;
+			$4->right = $2;
+			$$ = $4;
+		}
+		| mname Tconst mname ';'
+		{
+			$3->ival = $2;
+			$3->left = $1;
+			$$ = $3;
+		}
+		| '{' members '}' ';'
+		{
+			$$ = an(OCTRUCT, $2, ZN);
+		}
+		;
+@
+
+\subsection{Expressions}
+
+<<expressions rules>>=
+expr		: castexpr
+		| expr '*' expr { $$ = an(OMUL, $1, $3); }
+		| expr '/' expr	{ $$ = an(ODIV, $1, $3); }
+		| expr '%' expr	{ $$ = an(OMOD, $1, $3); }
+		| expr '+' expr	{ $$ = an(OADD, $1, $3); }
+		| expr '-' expr	{ $$ = an(OSUB, $1, $3); }
+
+		| expr Trsh expr { $$ = an(ORSH, $1, $3); }
+		| expr Tlsh expr { $$ = an(OLSH, $1, $3); }
+
+		| expr '<' expr	 { $$ = an(OLT, $1, $3); }
+		| expr '>' expr	 { $$ = an(OGT, $1, $3); }
+		| expr Tleq expr { $$ = an(OLEQ, $1, $3); }
+		| expr Tgeq expr { $$ = an(OGEQ, $1, $3); }
+		| expr Teq expr  { $$ = an(OEQ, $1, $3); }
+		| expr Tneq expr { $$ = an(ONEQ, $1, $3); }
+
+		| expr '&' expr { $$ = an(OLAND, $1, $3); }
+		| expr '^' expr	{ $$ = an(OXOR, $1, $3); }
+		| expr '|' expr { $$ = an(OLOR, $1, $3); }
+
+		| expr Tandand expr { $$ = an(OCAND, $1, $3); }
+		| expr Toror expr   { $$ = an(OCOR, $1, $3); }
+
+		| expr '=' expr { $$ = an(OASGN, $1, $3); }
+		| expr Tfmt { $$ = an(OFMT, $1, con($2)); }
+		;
+@
+<<expressions rules>>=
+castexpr	: monexpr
+		| '(' Tid ')' monexpr
+		{
+			$$ = an(OCAST, $4, ZN);
+			$$->sym = $2;
+		}
+		;
+@
+<<expressions rules>>=
+monexpr		: term
+		| '*' monexpr {	$$ = an(OINDM, $2, ZN);	}
+		| '@' monexpr {	$$ = an(OINDC, $2, ZN);	}
+		| '+' monexpr {	$$ = an(OADD, $2, ZN); }
+		| '-' monexpr {	$$ = con(0); $$ = an(OSUB, $$, $2); }
+
+		| Tdec monexpr { $$ = an(OEDEC, $2, ZN); }
+		| Tinc monexpr { $$ = an(OEINC, $2, ZN); }
+
+		| Thead monexpr	{ $$ = an(OHEAD, $2, ZN); }
+		| Ttail monexpr	{ $$ = an(OTAIL, $2, ZN); }
+		| Tappend monexpr ',' monexpr { $$ = an(OAPPEND, $2, $4); }
+		| Tdelete monexpr ',' monexpr {	$$ = an(ODELETE, $2, $4); }
+
+		| '!' monexpr {	$$ = an(ONOT, $2, ZN); }
+		| '~' monexpr {	$$ = an(OXOR, $2, con(-1)); }
+		| Teval monexpr { $$ = an(OEVAL, $2, ZN);}
+		;
+@
+<<expressions rules>>=
+term		: '(' expr ')'
+		{
+			$$ = $2;
+		}
+		| '{' args '}'
+		{
+			$$ = an(OCTRUCT, $2, ZN);
+		}
+		| term '[' expr ']'
+		{
+			$$ = an(OINDEX, $1, $3);
+		}
+		| term Tdec
+		{
+			$$ = an(OPDEC, $1, ZN);
+		}
+		| term '.' Tid
+		{
+			$$ = an(ODOT, $1, ZN);
+			$$->sym = $3;
+		}
+		| term Tindir Tid
+		{
+			$$ = an(ODOT, an(OINDM, $1, ZN), ZN);
+			$$->sym = $3;
+		}
+		| term Tinc
+		{
+			$$ = an(OPINC, $1, ZN);
+		}
+		| name '(' args ')'
+		{
+			$$ = an(OCALL, $1, $3);
+		}
+		| Tbuiltin name '(' args ')'
+		{
+			$$ = an(OCALL, $2, $4);
+			$$->builtin = 1;
+		}
+		| name
+		| Tconst
+		{
+			$$ = con($1);
+		}
+		| Tfconst
+		{
+			$$ = an(OCONST, ZN, ZN);
+			$$->type = TFLOAT;
+			$$->fmt = 'f';
+			$$->fval = $1;
+		}
+		| Tstring
+		{
+			$$ = an(OCONST, ZN, ZN);
+			$$->type = TSTRING;
+			$$->string = $1;
+			$$->fmt = 's';
+		}
+		| Twhat zname
+		{
+			$$ = an(OWHAT, ZN, ZN);
+			$$->sym = $2;
+		}
+		;
+@
+
+
+<<expressions rules>>=
+args		: zexpr
+		| args ','  zexpr
+		{
+			$$ = an(OLIST, $1, $3);
+		}
+		;
+@
+
+<<expressions rules>>=
+zexpr		:
+		{ $$ = 0; }
+		| expr
+		;
+@
+
 
 %******************************************************************************
 \chapter{Interpreting}
@@ -3632,9 +4095,9 @@ kinit(void)
 void
 execute(Node *n)
 {
+    Node *l, *r;
     Value *v;
     Lsym *sl;
-    Node *l, *r;
     vlong i, s, e;
     Node res, xx;
     static int stmnt;
@@ -3658,10 +4121,12 @@ execute(Node *n)
     switch(n->op) {
     default:
         expr(n, &res);
+
         if(ret || (res.type == TLIST && res.l == 0 && n->op != OADD))
             break;
         prnt->right = &res;
         expr(prnt, &xx);
+
         break;
     case OASGN:
     case OCALL:
@@ -3805,43 +4270,154 @@ struct Btab
     void	(*fn)(Node*, Node*);
 } tab[] =
 {
-    "atof",	cvtatof,
-    "atoi",	cvtatoi,
-    "error",	doerror,
-    "file",	getfile,
-    "readfile",	readfile,
-    "access",	doaccess,
-    "filepc",	filepc,
-    "fnbound",	funcbound,
-    "fmt",	fmt,
-    "follow",	follow,
-    "itoa",	cvtitoa,
-    "kill",	kill,
-    "match",	match,
-    "newproc",	newproc,
-    "pcfile",	pcfile,
-    "pcline",	pcline,
-    "print",	bprint,
-    "printto",	printto,
-    "rc",	rc,
-    "reason",	reason,
-    "setproc",	setproc,
-    "start",	start,
-    "startstop",startstop,
-    "status",	status,
-    "stop",	stop,
-    "strace",	strace,
-    "sysr1",	dosysr1,
-    "waitstop",	waitstop,
-    "map",	map,
-    "interpret",interpret,
-    "include",	include,
-    "regexp",	regexp,
-    "fmtof",	fmtof,
-    "fmtsize",	dofmtsize,
+    <<[[tab]] entries>>
     0
 };
 @
+
+<<[[tab]] entries>>=
+"atof",	cvtatof,
+"atoi",	cvtatoi,
+"itoa",	cvtitoa,
+@
+
+<<[[tab]] entries>>=
+"error",	doerror,
+"file",	        getfile,
+"readfile",	readfile,
+"access",	doaccess,
+@
+<<[[tab]] entries>>=
+"filepc",	filepc,
+"fnbound",	funcbound,
+@
+<<[[tab]] entries>>=
+"fmt",	fmt,
+"follow",	follow,
+@
+<<[[tab]] entries>>=
+"kill",	kill,
+"match",	match,
+"newproc",	newproc,
+@
+<<[[tab]] entries>>=
+"pcfile",	pcfile,
+"pcline",	pcline,
+@
+<<[[tab]] entries>>=
+"print",	bprint,
+"printto",	printto,
+@
+<<[[tab]] entries>>=
+"rc",	rc,
+@
+<<[[tab]] entries>>=
+"reason",	reason,
+@
+<<[[tab]] entries>>=
+"setproc",	setproc,
+@
+<<[[tab]] entries>>=
+"strace",	strace,
+"sysr1",	dosysr1,
+@
+<<[[tab]] entries>>=
+"map",	map,
+@
+<<[[tab]] entries>>=
+"include",	include,
+@
+<<[[tab]] entries>>=
+"regexp",	regexp,
+"fmtof",	fmtof,
+"fmtsize",	dofmtsize,
+@
+
+
+
+\section{Eval: [[acid: interpret]]}
+
+<<[[tab]] entries>>=
+"interpret",interpret,
+@
+
+<<function [[interpret]]>>=
+/// ??? -> <>
+void
+interpret(Node *r, Node *args)
+{
+    Node res;
+    int isave;
+
+    if(args == nil)
+        error("interpret(string): arg count");
+    expr(args, &res);
+    if(res.type != TSTRING)
+        error("interpret(string): arg type");
+
+    pushstr(&res);
+
+    isave = interactive;
+    interactive = 0;
+    r->ival = yyparse();
+    interactive = isave;
+    popio();
+    r->op = OCONST;
+    r->type = TINT;
+    r->fmt = 'D';
+}
+@
+
+
+<<[[IOstack]] other fields>>=
+char	*text;
+char	*ip;
+@
+
+
+<<function [[pushstr]]>>=
+/// ?? -> interpret -> <>
+void
+pushstr(Node *s)
+{
+    IOstack *io;
+
+    io = malloc(sizeof(IOstack));
+    <<[[pushstr()]] sanity check [[io]]>>
+    io->line = line;
+    line = 1;
+    io->name = strdup("<string>");
+    <<[[pushstr()]] sanity check [[io->name]]>>
+    io->line = line;
+    line = 1;
+
+    // this time we do not use io->fin but io->text
+    io->fin = nil;
+    io->text = strdup(s->string->string);
+    <<[[pushstr()]] sanity check [[io->text]]>>
+
+    io->ip = io->text;
+
+    io->prev = lexio;
+    lexio = io;
+}
+@
+
+<<[[pushstr()]] sanity check [[io]]>>=
+if(io == nil)
+    fatal("no memory");
+@
+
+<<[[pushstr()]] sanity check [[io->name]]>>=
+if(io->name == nil)
+    fatal("no memory");
+@
+
+<<[[pushstr()]] sanity check [[io->text]]>>=
+if(io->text == 0)
+    fatal("no memory");
+@
+
 
 \section{Garbage collection}
 
@@ -3950,14 +4526,219 @@ gc(void)
 @
 
 %******************************************************************************
+\chapter{The [[acid]] Library}
+%******************************************************************************
+
+\section{[[/lib/acid/port]]}
+
+\subsection{[[acid: new()]]}
+
+\section{[[/lib/acid/arm]]}
+%\section{[[386]]}
+
+%\section{...} lots of files
+
+\section{[[/lib/acid/truss]]}
+% ratrace using acid program
+
+
+%******************************************************************************
 \chapter{Process control}
 %******************************************************************************
 
+<<[[tab]] entries>>=
+"start",	start,
+"startstop",startstop,
+"stop",	stop,
+"waitstop",	waitstop,
+@
+
+<<[[tab]] entries>>=
+"status",	status,
+@
+
+\section{[[acid: start()]]}
+
+<<function [[start]]>>=
+void
+start(Node *r, Node *args)
+{
+    Node res;
+
+    USED(r);
+    if(args == nil)
+        error("start(pid): no pid");
+    expr(args, &res);
+    if(res.type != TINT)
+        error("start(pid): arg type");
+
+    msg(res.ival, "start");
+}
+@
+
+\section{[[acid: stop()]]}
+
+<<function [[stop]]>>=
+void
+stop(Node *r, Node *args)
+{
+    Node res;
+
+    USED(r);
+    if(args == 0)
+        error("stop(pid): no pid");
+    expr(args, &res);
+    if(res.type != TINT)
+        error("stop(pid): arg type");
+
+    Bflush(bout);
+
+    msg(res.ival, "stop");
+
+    notes(res.ival);
+    dostop(res.ival);
+}
+@
+
 \section{[[acid: startstop()]]}
+
+<<function [[startstop]]>>=
+void
+startstop(Node *r, Node *args)
+{
+    Node res;
+
+    USED(r);
+    if(args == nil)
+        error("startstop(pid): no pid");
+    expr(args, &res);
+    if(res.type != TINT)
+        error("startstop(pid): arg type");
+
+    msg(res.ival, "startstop");
+
+    notes(res.ival);
+    dostop(res.ival);
+}
+@
+
+
+<<function notes (acid/proc.c)>>=
+void
+notes(int pid)
+{
+    Lsym *s;
+    Value *v;
+    int i, fd;
+    char buf[128];
+    List *l, **tail;
+
+    s = look("notes");
+    if(s == 0)
+        return;
+    v = s->v;
+
+    snprint(buf, sizeof(buf), "/proc/%d/note", pid);
+    fd = open(buf, OREAD);
+    if(fd < 0)
+        error("pid=%d: open note: %r", pid);
+
+    v->set = 1;
+    v->type = TLIST;
+    v->l = 0;
+    tail = &v->l;
+    for(;;) {
+        i = read(fd, buf, sizeof(buf));
+        if(i <= 0)
+            break;
+        buf[i] = '\0';
+        l = al(TSTRING);
+        l->string = strnode(buf);
+        l->fmt = 's';
+        *tail = l;
+        tail = &l->next;
+    }
+    close(fd);
+}
+@
+
+<<function [[dostop]]>>=
+void
+dostop(int pid)
+{
+    Lsym *s;
+    Node *np, *p;
+
+    s = look("stopped");
+    if(s && s->proc) {
+        np = an(ONAME, ZN, ZN);
+        np->sym = s;
+        np->fmt = 'D';
+        np->type = TINT;
+        p = con(pid);
+        p->fmt = 'D';
+        np = an(OCALL, np, p);
+        execute(np);
+    }
+}
+@
+
+
+\section{[[acid: waitstop()]]}
+
+<<function [[waitstop]]>>=
+void
+waitstop(Node *r, Node *args)
+{
+    Node res;
+
+    USED(r);
+    if(args == 0)
+        error("waitstop(pid): no pid");
+    expr(args, &res);
+    if(res.type != TINT)
+        error("waitstop(pid): arg type");
+
+    Bflush(bout);
+    msg(res.ival, "waitstop");
+    notes(res.ival);
+    dostop(res.ival);
+}
+@
+
+
+\section{[[acid: status()]]}
+
+
+<<function [[status]]>>=
+void
+status(Node *r, Node *args)
+{
+    Node res;
+    char *p;
+
+    USED(r);
+    if(args == 0)
+        error("status(pid): no pid");
+    expr(args, &res);
+    if(res.type != TINT)
+        error("status(pid): arg type");
+
+    p = getstatus(res.ival);
+    r->string = strnode(p);
+    r->op = OCONST;
+    r->fmt = 's';
+    r->type = TSTRING;
+}
+@
 
 %******************************************************************************
 \chapter{Printing and Introspection}
 %******************************************************************************
+
+<<global [[prnt]]>>=
+Node*	prnt;
+@
 
 %******************************************************************************
 \chapter{Source level C Debugging}
@@ -3972,19 +4753,6 @@ gc(void)
 %\chapter{Command Parsing}
 %\chapter{Commands}
 %\chapter{[[acid]]}
-
-%******************************************************************************
-\chapter{The [[acid]] Library}
-%******************************************************************************
-
-%\section{[[port]]}
-%\section{[[arm]]}
-%\section{[[386]]}
-
-%\section{...} lots of files
-
-\section{[[Truss]]}
-% ratrace using acid program
 
 %******************************************************************************
 \chapter{Advanced Features}
@@ -4522,6 +5290,13 @@ gmalloc(long l)
 %******************************************************************************
 \chapter{Extra Code}
 %******************************************************************************
+
+%pad: to please syncweb -to_tex checker
+\ifallcode
+<<acid/y.tab.h>>=
+@
+\fi
+
 
 #include "Debugger_extra.nw"
 
