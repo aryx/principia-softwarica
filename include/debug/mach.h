@@ -95,7 +95,7 @@ struct Map {
 
     struct segment {		/* per-segment map */
         char	*name;		/* the segment name */
-        int	fd;		/* file descriptor */
+        fdt	fd;		/* file descriptor */
 
         bool	inuse;		/* in use - not in use */
         bool	cache;		/* should cache reads? */
@@ -149,7 +149,6 @@ enum {					/* bits in rflags field */
 };
 /*e: enum [[register_flag]] */
 
-/*s: struct [[Mach]] */
 /*
  *	Machine-dependent data is stored in two structures:
  *		Mach  - miscellaneous general parameters
@@ -160,6 +159,8 @@ enum {					/* bits in rflags field */
  *	Machdata is defined in ?db.c
  *		and set in the debugger startup.
  */
+
+/*s: struct [[Mach]] */
 struct Mach{
     char	*name;
     // enum<machine_type>

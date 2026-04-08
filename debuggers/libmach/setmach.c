@@ -64,7 +64,9 @@ machbytype(int type)
     for (mp = machines; mp->name; mp++){
         if (mp->type == type || mp->boottype == type) {
             asstype = mp->asstype;
+
             machdata = mp->machdata;
+
             break;
         }
     }

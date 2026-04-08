@@ -30,18 +30,22 @@ nocore(void)
 void
 sproc(int pid)
 {
-    Lsym *s;
     char buf[64];
-    int i;
     fdt fcor;
+    Lsym *s;
+    int i;
 
+    /*s: [[sproc()]] sanity check [[symmap]] */
     if(symmap == nil)
         error("no map");
+    /*e: [[sproc()]] sanity check [[symmap]] */
 
     snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
     fcor = open(buf, ORDWR);
+    /*s: [[sproc()]] sanity check [[fcor]] */
     if(fcor < 0)
         error("setproc: open %s: %r", buf);
+    /*e: [[sproc()]] sanity check [[fcor]] */
 
     checkqid(symmap->seg[0].fd, pid);
 
@@ -51,8 +55,10 @@ sproc(int pid)
     nocore();
 
     cormap = attachproc(pid, kernel, fcor, &fhdr);
+    /*s: [[sproc()]] sanity check [[cormap]] */
     if (cormap == nil)
         error("setproc: can't make coremap: %r");
+    /*e: [[sproc()]] sanity check [[cormap]] */
 
     i = findseg(cormap, "text");
     if (i > 0)
@@ -247,6 +253,7 @@ msg(int pid, char *msg)
     char err[ERRMAX];
 
     for(i = 0; i < Maxproc; i++) {
+
         if(ptab[i].pid == pid) {
             l = strlen(msg);
             if(write(ptab[i].ctl, msg, l) != l) {

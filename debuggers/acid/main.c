@@ -371,7 +371,7 @@ readtext(char *s)
         return;
     }
 
-    symmap = loadmap(0, text, &fhdr);
+    symmap = loadmap(nil, text, &fhdr);
     /*s: [[readtext()]] sanity check [[symmap]] */
     if(symmap == nil)
         print("%s: (error) loadmap: cannot make symbol map\n", argv0);
@@ -432,6 +432,7 @@ an(int op, Node *l, Node *r)
     n->op = op;
     n->left = l;
     n->right = r;
+
     return n;
 }
 /*e: function [[an]] */
@@ -621,7 +622,7 @@ gmalloc(long l)
 void
 checkqid(int f1, int pid)
 {
-    int fd;
+    fdt fd;
     Dir *d1, *d2;
     char buf[128];
 

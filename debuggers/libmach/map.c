@@ -167,8 +167,8 @@ Map*
 loadmap(Map *map, int fd, Fhdr *fp)
 {
     map = newmap(map, 2);
-    if (map == 0)
-        return 0;
+    if (map == nil)
+        return nil;
 
     map->seg[0].b = fp->txtaddr;
     map->seg[0].e = fp->txtaddr+fp->txtsz;
@@ -176,12 +176,14 @@ loadmap(Map *map, int fd, Fhdr *fp)
     map->seg[0].fd = fd;
     map->seg[0].inuse = 1;
     map->seg[0].name = "text";
+
     map->seg[1].b = fp->dataddr;
     map->seg[1].e = fp->dataddr+fp->datsz;
     map->seg[1].f = fp->datoff;
     map->seg[1].fd = fd;
     map->seg[1].inuse = 1;
     map->seg[1].name = "data";
+
     return map;
 }
 /*e: function [[loadmap]] */

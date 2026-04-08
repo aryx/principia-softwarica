@@ -17,27 +17,27 @@ struct keywd
 }
 keywds[] =
 {
-    "do",		Tdo,
-    "if",		Tif,
-    "then",		Tthen,
-    "else",		Telse,
+    "do",	Tdo,
+    "if",	Tif,
+    "then",	Tthen,
+    "else",	Telse,
     "while",	Twhile,
-    "loop",		Tloop,
+    "loop",	Tloop,
 
-    "head",		Thead,
-    "tail",		Ttail,
+    "head",	Thead,
+    "tail",	Ttail,
     "append",	Tappend,
 
-    "defn",		Tfn,
+    "defn",	Tfn,
     "return",	Tret,
     "local",	Tlocal,
-    "aggr",		Tcomplex,
+    "aggr",	Tcomplex,
     "union",	Tcomplex,
-    "adt",		Tcomplex,
+    "adt",	Tcomplex,
     "complex",	Tcomplex,
     "delete",	Tdelete,
     "whatis",	Twhat,
-    "eval",		Teval,
+    "eval",	Teval,
     "builtin",	Tbuiltin,
 
     0,		0
@@ -75,15 +75,22 @@ typedef struct IOstack IOstack;
 /*s: struct [[IOstack]] */
 struct IOstack
 {
+    // ref_own<string>    included filename or "<stdin>" 
     char	*name;
+    // ref_own<Biobuf>
     Biobuf	*fin;
 
+    // saved global line to be restored in popio()
     int	line;
+
+    /*s: [[IOstack]] other fields */
     char	*text;
     char	*ip;
-
+    /*e: [[IOstack]] other fields */
     // Extra
+    /*s: [[IOstack]] extra fields */
     IOstack	*prev;
+    /*e: [[IOstack]] extra fields */
 };
 /*e: struct [[IOstack]] */
 /*s: global [[lexio]] */
@@ -118,48 +125,59 @@ pushfile(char *file)
     /*e: [[pushfile()]] sanity check [[io]] */
     io->name = strdup(file);
     /*s: [[pushfile()]] sanity check [[io->name]] */
-    if(io->name == 0)
+    if(io->name == nil)
         fatal("no memory");
     /*e: [[pushfile()]] sanity check [[io->name]] */
 
     io->line = line;
     line = 1;
-    io->text = 0;
     io->fin = b;
+    io->text = nil;
 
+    // add_list(io, lexio)
     io->prev = lexio;
     lexio = io;
 }
 /*e: function [[pushfile]] */
 /*s: function [[pushstr]] */
-/// ??? -> <>
+/// ?? -> interpret -> <>
 void
 pushstr(Node *s)
 {
     IOstack *io;
 
     io = malloc(sizeof(IOstack));
-    if(io == 0)
+    /*s: [[pushstr()]] sanity check [[io]] */
+    if(io == nil)
         fatal("no memory");
+    /*e: [[pushstr()]] sanity check [[io]] */
     io->line = line;
     line = 1;
     io->name = strdup("<string>");
-    if(io->name == 0)
+    /*s: [[pushstr()]] sanity check [[io->name]] */
+    if(io->name == nil)
         fatal("no memory");
+    /*e: [[pushstr()]] sanity check [[io->name]] */
     io->line = line;
     line = 1;
+
+    // this time we do not use io->fin but io->text
+    io->fin = nil;
     io->text = strdup(s->string->string);
+    /*s: [[pushstr()]] sanity check [[io->text]] */
     if(io->text == 0)
         fatal("no memory");
+    /*e: [[pushstr()]] sanity check [[io->text]] */
+
     io->ip = io->text;
-    io->fin = 0;
+
     io->prev = lexio;
     lexio = io;
 }
 /*e: function [[pushstr]] */
 
 /*s: function [[restartio]] */
-/// main -> <>
+/// main -> yyparse; <>
 void
 restartio(void)
 {
@@ -169,19 +187,20 @@ restartio(void)
 /*e: function [[restartio]] */
 /*s: function [[popio]] */
 /// loadmodule | error -> <>
-int
+bool
 popio(void)
 {
     IOstack *s;
 
     if(lexio == nil)
-        return 0;
+        return false;
 
     if(lexio->prev == nil){
         if(lexio->fin)
             restartio();
-        return 0;
+        return false;
     }
+    // else
 
     if(lexio->fin)
         Bterm(lexio->fin);
@@ -189,12 +208,15 @@ popio(void)
         free(lexio->text);
     free(lexio->name);
 
+    // restore global line
     line = lexio->line;
+
+    // s = pop_list(lexio)
     s = lexio;
     lexio = s->prev;
     free(s);
 
-    return 1;
+    return true;
 }
 /*e: function [[popio]] */
 
@@ -247,6 +269,7 @@ lexc(void)
             error("interrupt");
         return c;
     }
+    // else
 
     c = *lexio->ip++;
     if(c == 0)

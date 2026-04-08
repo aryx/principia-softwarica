@@ -51,40 +51,58 @@ struct Btab
     void	(*fn)(Node*, Node*);
 } tab[] =
 {
+    /*s: [[tab]] entries */
     "atof",	cvtatof,
     "atoi",	cvtatoi,
+    "itoa",	cvtitoa,
+    /*x: [[tab]] entries */
     "error",	doerror,
-    "file",	getfile,
+    "file",	        getfile,
     "readfile",	readfile,
     "access",	doaccess,
+    /*x: [[tab]] entries */
     "filepc",	filepc,
     "fnbound",	funcbound,
+    /*x: [[tab]] entries */
     "fmt",	fmt,
     "follow",	follow,
-    "itoa",	cvtitoa,
+    /*x: [[tab]] entries */
     "kill",	kill,
     "match",	match,
     "newproc",	newproc,
+    /*x: [[tab]] entries */
     "pcfile",	pcfile,
     "pcline",	pcline,
+    /*x: [[tab]] entries */
     "print",	bprint,
     "printto",	printto,
+    /*x: [[tab]] entries */
     "rc",	rc,
+    /*x: [[tab]] entries */
     "reason",	reason,
+    /*x: [[tab]] entries */
     "setproc",	setproc,
-    "start",	start,
-    "startstop",startstop,
-    "status",	status,
-    "stop",	stop,
+    /*x: [[tab]] entries */
     "strace",	strace,
     "sysr1",	dosysr1,
-    "waitstop",	waitstop,
+    /*x: [[tab]] entries */
     "map",	map,
-    "interpret",interpret,
+    /*x: [[tab]] entries */
     "include",	include,
+    /*x: [[tab]] entries */
     "regexp",	regexp,
     "fmtof",	fmtof,
     "fmtsize",	dofmtsize,
+    /*x: [[tab]] entries */
+    "interpret",interpret,
+    /*x: [[tab]] entries */
+    "start",	start,
+    "startstop",startstop,
+    "stop",	stop,
+    "waitstop",	waitstop,
+    /*x: [[tab]] entries */
+    "status",	status,
+    /*e: [[tab]] entries */
     0
 };
 /*e: global [[tab]] */
@@ -246,13 +264,14 @@ startstop(Node *r, Node *args)
     Node res;
 
     USED(r);
-    if(args == 0)
+    if(args == nil)
         error("startstop(pid): no pid");
     expr(args, &res);
     if(res.type != TINT)
         error("startstop(pid): arg type");
 
     msg(res.ival, "startstop");
+
     notes(res.ival);
     dostop(res.ival);
 }
@@ -285,7 +304,7 @@ start(Node *r, Node *args)
     Node res;
 
     USED(r);
-    if(args == 0)
+    if(args == nil)
         error("start(pid): no pid");
     expr(args, &res);
     if(res.type != TINT)
@@ -309,7 +328,9 @@ stop(Node *r, Node *args)
         error("stop(pid): arg type");
 
     Bflush(bout);
+
     msg(res.ival, "stop");
+
     notes(res.ival);
     dostop(res.ival);
 }
@@ -480,13 +501,14 @@ filepc(Node *r, Node *args)
 /*e: function [[filepc]] */
 
 /*s: function [[interpret]] */
+/// ??? -> <>
 void
 interpret(Node *r, Node *args)
 {
     Node res;
     int isave;
 
-    if(args == 0)
+    if(args == nil)
         error("interpret(string): arg count");
     expr(args, &res);
     if(res.type != TSTRING)

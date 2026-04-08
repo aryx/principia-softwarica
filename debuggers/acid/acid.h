@@ -3,14 +3,19 @@
 /* acid.h */
 enum
 {
-    Eof		= -1,
-    Strsize		= 4096,
+    /*s: acid constants */
     Hashsize	= 128,
+    /*x: acid constants */
+    Eof		= -1,
+    /*x: acid constants */
+    Strsize		= 4096,
+    /*x: acid constants */
     Maxarg		= 512,
     NFD		= 100,
     Maxproc		= 50,
     Maxval		= 10,
     Mempergc	= 1024*1024,
+    /*e: acid constants */
 };
 /*e: enum [[_anon_ (acid/acid.h)]] */
 
@@ -173,12 +178,13 @@ struct Lsym
 {
     // ref_own<string>
     char*	name;
-    // enum<??>
+    // enum<Token_kind>
     int	lexval;
 
     // ref_own<Value>
     Value*	v;
 
+    // ???
     Type*	lt;
     Node*	proc;
     Frtype*	local;
@@ -208,6 +214,7 @@ struct Node
     // option<Lsym>, Some when op = ONAME
     Lsym*	sym;
 
+    // ??
     int	builtin;
 
     // must be last?

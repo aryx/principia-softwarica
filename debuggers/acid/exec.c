@@ -71,9 +71,9 @@ unwind(void)
 void
 execute(Node *n)
 {
+    Node *l, *r;
     Value *v;
     Lsym *sl;
-    Node *l, *r;
     vlong i, s, e;
     Node res, xx;
     static int stmnt;
@@ -97,10 +97,12 @@ execute(Node *n)
     switch(n->op) {
     default:
         expr(n, &res);
+
         if(ret || (res.type == TLIST && res.l == 0 && n->op != OADD))
             break;
         prnt->right = &res;
         expr(prnt, &xx);
+
         break;
     case OASGN:
     case OCALL:
