@@ -109,7 +109,7 @@ Mach	*mach = &mi386;			/* Global current machine table */
 
 /*s: function [[crackhdr]] */
 int
-crackhdr(int fd, Fhdr *fp)
+crackhdr(fdt fd, Fhdr *fp)
 {
     ExecTable *mp;
     ExecHdr d;

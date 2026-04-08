@@ -59,7 +59,7 @@ extern int	quiet;
 
 extern void	(*expop[])(Node*, Node*);
 /*s: macro [[expr]] */
-#define expr(n, r) do{(r)->comt=0; (*expop[(n)->op])(n, r);}while(0)
+#define expr(n, r) do{(r)->comt=nil; (*expop[(n)->op])(n, r);}while(0)
 /*e: macro [[expr]] */
 extern int	fmtsize(Value *v) ;
 
@@ -157,6 +157,7 @@ struct List
 struct Value
 {
     char	set;
+    // enum<Type_kind> ?
     char	type;
 
     Store;
@@ -204,7 +205,9 @@ struct Node
     // enum<Type_kind> ?
     char	type;
 
+    // option<Lsym>, Some when op = ONAME
     Lsym*	sym;
+
     int	builtin;
 
     // must be last?

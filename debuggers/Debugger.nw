@@ -1488,7 +1488,7 @@ enum symbol_type
 \section{[[acid]], [[libmach]], and [[/proc]]}
 
 
-\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
+%\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
 
 \subsection{[[/proc/x/text]] and [[symmap]]}
 
@@ -1502,11 +1502,15 @@ Map*	symmap;
 Map*	cormap;
 @
 
+% but used only when do  acid <pid> ?
+
 %\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
 
 
 
-\section{Abstract syntax tree: [[Node]]}
+\section{Abstract syntax tree}
+
+\subsection{[[Node]]}
 
 <<struct [[Node]]>>=
 struct Node
@@ -1522,7 +1526,9 @@ struct Node
     // enum<Type_kind> ?
     char	type;
 
+    // option<Lsym>, Some when op = ONAME
     Lsym*	sym;
+
     int	builtin;
 
     // must be last?
@@ -1534,6 +1540,27 @@ struct Node
 #define ZN	(Node*)0
 @
 
+
+<<function [[an]]>>=
+Node*
+an(int op, Node *l, Node *r)
+{
+    Node *n;
+
+    n = gmalloc(sizeof(Node));
+    memset(n, 0, sizeof(Node));
+
+    <<[[an()]] add node [[n]] to [[gcl]]>>
+
+    n->op = op;
+    n->left = l;
+    n->right = r;
+    return n;
+}
+@
+
+
+\subsection{[[Opcode]]}
 
 <<enum [[_anon_ (acid/acid.h)]]3>>=
 enum Opcode
@@ -1604,7 +1631,7 @@ enum Opcode
 @
 
 
-\section{[[Store]]}
+\subsection{[[Store]]}
 
 <<struct [[Store]]>>=
 struct Store
@@ -1622,7 +1649,18 @@ struct Store
 };
 @
 
-\section{[[Gc]]}
+\subsection{[[String]]}
+
+<<struct [[StringAcid]]>>=
+struct StringAcid
+{
+    Gc;
+    char	*string;
+    int	len;
+};
+@
+
+\subsection{[[Gc]]}
 
 <<struct [[Gc]]>>=
 struct Gc
@@ -1630,6 +1668,16 @@ struct Gc
     char	gcmark;
     Gc*	gclink;
 };
+@
+
+<<global [[gcl]]>>=
+Gc*	gcl;
+@
+
+
+<<[[an()]] add node [[n]] to [[gcl]]>>=
+n->gclink = gcl;
+gcl = n;
 @
 
 \section{[[Type]] system}
@@ -1675,6 +1723,8 @@ struct Frtype
 
 % L stands for?
 
+\subsection{[[Lsym]]}
+
 <<struct [[Lsym]]>>=
 struct Lsym
 {
@@ -1697,6 +1747,8 @@ struct Lsym
 
 };
 @
+
+\subsection{[[hash]]}
 
 <<global [[hash]]>>=
 // hash <string, ref_own<Lsym>, (next in bucket = Lsym.hash)
@@ -1768,13 +1820,13 @@ enter(char *name, int t)
 }
 @
 
-
-\section{[[Value]]}
+\subsection{[[Value]]}
 
 <<struct [[Value]]>>=
 struct Value
 {
     char	set;
+    // enum<Type_kind> ?
     char	type;
 
     Store;
@@ -1801,6 +1853,7 @@ memset(v, 0, sizeof(Value));
 
 
 \section{Process table}
+% still? used only for 'acid <pid>' ?
 
 <<struct [[Ptab]]>>=
 struct Ptab
@@ -1808,6 +1861,10 @@ struct Ptab
     int	pid;
     fdt	ctl;
 };
+@
+
+<<global [[ptab]]>>=
+Ptab	ptab[Maxproc];
 @
 
 
@@ -1820,7 +1877,7 @@ struct Ptab
 \section{[[main()]]}
 
 <<global [[aout]]>>=
-// /proc/<pid>/text or given textfile to debug
+// given program to debug (or /proc/<pid>/text when running acid <pid>)
 char*	aout;
 @
 
@@ -1873,32 +1930,29 @@ main(int argc, char *argv[])
 }
 @
 
-\section{[[acid pid]]}
-
-<<global [[prog]]>>=
-static char	prog[128];
-@
-
-<<[[main()]](acid) if [[acid pid]]>>=
-if(isnumeric(argv[0])) {
-    pid = strtol(argv[0], 0, 0);
-    snprint(prog, sizeof(prog), "/proc/%d/text", pid);
-    aout = prog;
-    if(argc > 1)
-        aout = argv[1];
-    else if(kernel)
-        aout = system();
-}
-@
-
-
 \section{REPL}
 
 
+<<global interactive (acid/globals.c)>>=
+int	interactive;
+@
+%todo: bool
+% for prompt?
+
+<<global line (acid/globals.c)>>=
+int	line;
+@
+% for error report
+
+
+
 <<[[main()]](acid) infinite loop>>=
+interactive = 1;
+line = 1;
+
 for(;;) {
     
-    <<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
+    <<[[main()]](acid) in infinite loop, reinit and unwind if error>>
     stacked = 0;
 
     Bprint(bout, "acid: ");
@@ -1944,11 +1998,9 @@ case 'q':
 
 \subsection{[[acid -l <lib>]]}
 
-
 <<global [[nlm]]>>=
 static int	nlm;
 @
-
 <<global [[lm]]>>=
 // array<ref<string>> length = nlm
 static char*	lm[16];
@@ -1958,7 +2010,6 @@ static char*	lm[16];
 <<[[main()]](acid) other locals>>=
 char *s;
 @
-
 <<[[main()]](acid) command line processing>>=
 case 'l':
     s = ARGF();
@@ -1978,26 +2029,16 @@ int	initialising;
 @
 %todo: bool
 
-<<global interactive (acid/globals.c)>>=
-int	interactive;
-@
-%todo: bool
-
-<<global line (acid/globals.c)>>=
-int	line;
-@
-
 
 <<[[main()]](acid) initializations>>=
-<<[[main()]](acid) format initializations>>
+initialising = 1;
 
+<<[[main()]](acid) format initializations>>
 Binit(&bioout, STDOUT, OWRITE);
 bout = &bioout;
 
 kinit();
-
-initialising = 1;
-
+// to read commands on stdin once all modules have been loaded
 pushfile(nil);
 
 loadvars();
@@ -2011,19 +2052,20 @@ userinit();
 varsym();
 <<[[main()]](acid) check acidmap>>
 
-initialising = 0;
-
-interactive = 1;
-line = 1;
-
 <<[[main()]](acid) notify setup>>
+
+initialising = 0;
 @
 
 
-%alt: \subsection{Formatters}
-%alt: \subsection{...}
 
-\section{[[loadvars()]]}
+%\section{[[notify()]]}
+<<[[main()]](acid) notify setup>>=
+notify(catcher);
+@
+
+
+\subsection{[[loadvars()]]}
 
 <<function [[loadvars]]>>=
 /// main -> <>
@@ -2054,7 +2096,7 @@ loadvars(void)
 }
 @
 
-\section{[[installbuiltin()]]}
+\subsection{[[installbuiltin()]]}
 
 <<function [[installbuiltin]]>>=
 void
@@ -2105,8 +2147,7 @@ attachfiles(char *aout, int pid)
         <<[[attachfiles()]] sanity check [[text]]>>
         readtext(aout);
     }
-    if(pid)					/* pid given */
-        sproc(pid);
+    <<[[attachfiles()]] if [[pid]] given>>
     return OK_0;
 }
 @
@@ -2160,12 +2201,21 @@ readtext(char *s)
     varreg();
 }
 @
-%$
-%dead: because machbytype will set this
+%dead: (because machbytype(...) is setting the machdata global
 %    extern Machdata armmach;
 %    machdata = &armmach;
 
-%yoann: print here that we saw earlier about binary path and arch
+%yoann: print above print what we saw earlier about binary path and arch
+
+% syminit(), very important
+
+
+<<[[readtext()]] sanity check [[symmap]]>>=
+if(symmap == nil)
+    print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+@
+
+
 
 %XXX
 <<[[readtext()]] locals>>=
@@ -2175,10 +2225,8 @@ Symbol sym;
 @
 
 
-<<[[readtext()]] sanity check [[symmap]]>>=
-if(symmap == nil)
-    print("%s: (error) loadmap: cannot make symbol map\n", argv0);
-@
+
+\subsection{Setting [[objtype]] and [[textfile]]}
 
 <<[[readtext()]] locals>>=
 Lsym *l;
@@ -2203,6 +2251,7 @@ v->string = strnode(s);
 v->type = TSTRING;
 @
 
+\subsection{[[sbreg]]}
 
 %???
 <<[[readtext()]] if [[mach->sbreg]]>>=
@@ -2215,6 +2264,58 @@ if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
     l->v->set = 1;
 }
 @
+
+\subsection{Setting [[registers]] and [[bpinst]]}
+
+<<function [[varreg]]>>=
+/// main -> attachfiles -> readtext -> <>
+void
+varreg(void)
+{
+    Lsym *l;
+    Value *v;
+    Reglist *r;
+    List **tail, *li;
+
+    l = mkvar("registers");
+    v = l->v;
+    v->set = 1;
+    v->type = TLIST;
+
+    v->l = 0;
+    tail = &v->l;
+
+    for(r = mach->reglist; r->rname; r++) {
+        l = mkvar(r->rname);
+        v = l->v;
+        v->set = 1;
+        v->ival = r->roffs;
+        v->fmt = r->rformat;
+        v->type = TINT;
+
+        li = al(TSTRING);
+        li->string = strnode(r->rname);
+        li->fmt = 's';
+
+        *tail = li;
+        tail = &li->next;
+    }
+
+    if(machdata == nil)
+        return;
+
+    l = mkvar("bpinst");	/* Breakpoint text */
+    v = l->v;
+    v->type = TSTRING;
+    v->fmt = 's';
+    v->set = 1;
+    v->string = gmalloc(sizeof(String));
+    v->string->len = machdata->bpsize;
+    v->string->string = gmalloc(machdata->bpsize);
+    memmove(v->string->string, machdata->bpinst, machdata->bpsize);
+}
+@
+
 
 
 \section{[[loadmodule()]]} % and [[loadmoduleobjtype()]]}
@@ -2315,6 +2416,8 @@ userinit(void)
 }
 @
 
+% execute!
+
 
 <<[[userinit()]] unwind if error>>=
 if(setjmp(err)) {
@@ -2334,7 +2437,7 @@ if(p != nil) {
 @
 
 
-\section{[[varsym()]]}
+\section{Setting [[symbols]]}
 
 
 <<function [[varsym]]>>=
@@ -2426,11 +2529,180 @@ if(l && l->proc) {
 }
 @
 
-\section{[[notify()]]}
+%execute!
 
-<<[[main()]](acid) notify setup>>=
-notify(catcher);
+
+\section{[[acid pid]]}
+
+<<global [[prog]]>>=
+static char	prog[128];
 @
+
+<<[[main()]](acid) if [[acid pid]]>>=
+if(isnumeric(argv[0])) {
+    pid = strtol(argv[0], 0, 0);
+    snprint(prog, sizeof(prog), "/proc/%d/text", pid);
+    aout = prog;
+    if(argc > 1)
+        aout = argv[1];
+    else if(kernel)
+        aout = system();
+}
+@
+
+
+
+<<[[attachfiles()]] if [[pid]] given>>=
+if(pid)					/* pid given */
+    sproc(pid);
+@
+
+\subsection{[[sproc()]]}
+
+<<function [[sproc]]>>=
+void
+sproc(int pid)
+{
+    Lsym *s;
+    char buf[64];
+    int i;
+    fdt fcor;
+
+    if(symmap == nil)
+        error("no map");
+
+    snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
+    fcor = open(buf, ORDWR);
+    if(fcor < 0)
+        error("setproc: open %s: %r", buf);
+
+    checkqid(symmap->seg[0].fd, pid);
+
+    s = look("pid");
+    s->v->ival = pid;
+
+    nocore();
+
+    cormap = attachproc(pid, kernel, fcor, &fhdr);
+    if (cormap == nil)
+        error("setproc: can't make coremap: %r");
+
+    i = findseg(cormap, "text");
+    if (i > 0)
+        cormap->seg[i].name = "*text";
+
+    i = findseg(cormap, "data");
+    if (i > 0)
+        cormap->seg[i].name = "*data";
+
+    install(pid);
+}
+@
+
+\subsection{[[checkqid()]]}
+
+
+<<function [[checkqid]]>>=
+void
+checkqid(int f1, int pid)
+{
+    int fd;
+    Dir *d1, *d2;
+    char buf[128];
+
+    if(kernel)
+        return;
+
+    d1 = dirfstat(f1);
+    if(d1 == nil){
+        print("checkqid: (qid not checked) dirfstat: %r\n");
+        return;
+    }
+
+    snprint(buf, sizeof(buf), "/proc/%d/text", pid);
+    fd = open(buf, OREAD);
+    if(fd < 0 || (d2 = dirfstat(fd)) == nil){
+        print("checkqid: (qid not checked) dirstat %s: %r\n", buf);
+        free(d1);
+        if(fd >= 0)
+            close(fd);
+        return;
+    }
+
+    close(fd);
+
+    if(d1->qid.path != d2->qid.path || d1->qid.vers != d2->qid.vers || d1->qid.type != d2->qid.type){
+        print("path %llux %llux vers %lud %lud type %d %d\n",
+            d1->qid.path, d2->qid.path, d1->qid.vers, d2->qid.vers, d1->qid.type, d2->qid.type);
+        print("warning: image does not match text for pid %d\n", pid);
+    }
+    free(d1);
+    free(d2);
+}
+@
+
+\subsection{[[install()]]}
+
+<<function [[install]]>>=
+static void
+install(int pid)
+{
+    Lsym *s;
+    List *l;
+    char buf[128];
+    int i, fd, new, p;
+
+    new = -1;
+    for(i = 0; i < Maxproc; i++) {
+        p = ptab[i].pid;
+        if(p == pid)
+            return;
+        if(p == 0 && new == -1)
+            new = i;
+    }
+    if(new == -1)
+        error("no free process slots");
+
+    snprint(buf, sizeof(buf), "/proc/%d/ctl", pid);
+    fd = open(buf, OWRITE);
+    if(fd < 0)
+        error("pid=%d: open ctl: %r", pid);
+
+    ptab[new].pid = pid;
+    ptab[new].ctl = fd;
+
+    s = look("proclist");
+    l = al(TINT);
+    l->fmt = 'D';
+    l->ival = pid;
+    l->next = s->v->l;
+    s->v->l = l;
+    s->v->set = 1;
+}
+@
+
+
+
+\subsection{[[nocore()]]}
+
+<<function [[nocore]]>>=
+void
+nocore(void)
+{
+    int i;
+
+    if(cormap == nil)
+        return;
+
+    for (i = 0; i < cormap->nsegs; i++)
+        if (cormap->seg[i].inuse && cormap->seg[i].fd >= 0)
+            close(cormap->seg[i].fd);
+    free(cormap);
+    cormap = nil;
+}
+@
+
+
 
 %alt: when was db
 %\section{Process attachment: [[pid]]}
@@ -2445,6 +2717,7 @@ notify(catcher);
 
 
 
+
 %******************************************************************************
 \chapter{[[libmach/]]}
 %******************************************************************************
@@ -2452,33 +2725,14 @@ notify(catcher);
 % a bit reverse of linker. linker actually does not use libmach/,
 % but the debugger/profiler/emulator do.
 
-% read .o (objects), read .out (binaries)
+% read .o (objects) and read .out (binaries)
 
-
-<<function [[machbytype]]>>=
-/*
- *	select a machine by executable file type
- */
-void
-machbytype(int type)
-{
-    Machtab *mp;
-
-    for (mp = machines; mp->name; mp++){
-        if (mp->type == type || mp->boottype == type) {
-            asstype = mp->asstype;
-            machdata = mp->machdata;
-            break;
-        }
-    }
-}
-@
 
 \section{[[Fhdr]] and [[crackhdr()]]}
 
 <<function [[crackhdr]]>>=
 int
-crackhdr(int fd, Fhdr *fp)
+crackhdr(fdt fd, Fhdr *fp)
 {
     ExecTable *mp;
     ExecHdr d;
@@ -2542,9 +2796,252 @@ crackhdr(int fd, Fhdr *fp)
 @
 
 
-\section{ARM}
+\section{[[machbytype()]]}
 
-\section{[[Map]], [[syminit()]], and [[loadmap()]]}
+<<function [[machbytype]]>>=
+/*
+ *	select a machine by executable file type
+ */
+void
+machbytype(int type)
+{
+    Machtab *mp;
+
+    for (mp = machines; mp->name; mp++){
+        if (mp->type == type || mp->boottype == type) {
+            asstype = mp->asstype;
+            machdata = mp->machdata;
+            break;
+        }
+    }
+}
+@
+
+\section{[[attachproc()]]}
+
+<<function [[attachproc]]>>=
+Map*
+attachproc(int pid, int kflag, int corefd, Fhdr *fp)
+{
+    char buf[64], *regs;
+    int fd;
+    Map *map;
+    uvlong n;
+
+    map = newmap(0, 4);
+    if (!map)
+        return 0;
+    if(kflag)
+        regs = "kregs";
+    else
+        regs = "regs";
+    if (mach->regsize) {
+        sprint(buf, "/proc/%d/%s", pid, regs);
+        fd = open(buf, ORDWR);
+        if(fd < 0)
+            fd = open(buf, OREAD);
+        if(fd < 0) {
+            free(map);
+            return 0;
+        }
+        setmap(map, fd, 0, mach->regsize, 0, "regs");
+    }
+    if (mach->fpregsize) {
+        sprint(buf, "/proc/%d/fpregs", pid);
+        fd = open(buf, ORDWR);
+        if(fd < 0)
+            fd = open(buf, OREAD);
+        if(fd < 0) {
+            close(map->seg[0].fd);
+            free(map);
+            return 0;
+        }
+        setmap(map, fd, mach->regsize, mach->regsize+mach->fpregsize, 0, "fpregs");
+    }
+    setmap(map, corefd, fp->txtaddr, fp->txtaddr+fp->txtsz, fp->txtaddr, "text");
+    if(kflag || fp->dataddr >= mach->utop) {
+        setmap(map, corefd, fp->dataddr, ~0, fp->dataddr, "data");
+        return map;
+    }
+    n = stacktop(pid);
+    if (n == 0) {
+        setmap(map, corefd, fp->dataddr, mach->utop, fp->dataddr, "data");
+        return map;
+    }
+    setmap(map, corefd, fp->dataddr, n, fp->dataddr, "data");
+    return map;
+}
+@
+
+<<function [[findseg]]>>=
+int
+findseg(Map *map, char *name)
+{
+    int i;
+
+    if (!map)
+        return -1;
+    for (i = 0; i < map->nsegs; i++)
+        if (map->seg[i].inuse && !strcmp(map->seg[i].name, name))
+            return i;
+    return -1;
+}
+@
+
+
+%\section{ARM}
+%\section{[[Map]], [[syminit()]], and [[loadmap()]]}
+
+\section{[[loadmap()]]}
+
+<<function [[loadmap]]>>=
+Map*
+loadmap(Map *map, int fd, Fhdr *fp)
+{
+    map = newmap(map, 2);
+    if (map == 0)
+        return 0;
+
+    map->seg[0].b = fp->txtaddr;
+    map->seg[0].e = fp->txtaddr+fp->txtsz;
+    map->seg[0].f = fp->txtoff;
+    map->seg[0].fd = fd;
+    map->seg[0].inuse = 1;
+    map->seg[0].name = "text";
+    map->seg[1].b = fp->dataddr;
+    map->seg[1].e = fp->dataddr+fp->datsz;
+    map->seg[1].f = fp->datoff;
+    map->seg[1].fd = fd;
+    map->seg[1].inuse = 1;
+    map->seg[1].name = "data";
+    return map;
+}
+@
+
+\section{[[syminit()]]}
+
+<<function [[syminit]]>>=
+/*
+ *	initialize the symbol tables
+ */
+int
+syminit(int fd, Fhdr *fp)
+{
+    Sym *p;
+    long i, l, size;
+    vlong vl;
+    Biobuf b;
+    int svalsz;
+
+    if(fp->symsz == 0)
+        return 0;
+    if(fp->type == FNONE)
+        return 0;
+
+    cleansyms();
+    textseg(fp->txtaddr, fp);
+        /* minimum symbol record size = 4+1+2 bytes */
+    symbols = malloc((fp->symsz/(4+1+2)+1)*sizeof(Sym));
+    if(symbols == 0) {
+        werrstr("can't malloc %ld bytes", fp->symsz);
+        return -1;
+    }
+    Binit(&b, fd, OREAD);
+    Bseek(&b, fp->symoff, 0);
+    nsym = 0;
+    size = 0;
+    if((fp->_magic && (fp->magic & HDR_MAGIC)) || mach->szaddr == 8)
+        svalsz = 8;
+    else
+        svalsz = 4;
+    for(p = symbols; size < fp->symsz; p++, nsym++) {
+        if(svalsz == 8){
+            if(Bread(&b, &vl, 8) != 8)
+                return symerrmsg(8, "symbol");
+            p->value = beswav(vl);
+        }
+        else{
+            if(Bread(&b, &l, 4) != 4)
+                return symerrmsg(4, "symbol");
+            p->value = (u32int)beswal(l);
+        }
+        if(Bread(&b, &p->type, sizeof(p->type)) != sizeof(p->type))
+            return symerrmsg(sizeof(p->value), "symbol");
+
+        i = decodename(&b, p);
+        if(i < 0)
+            return -1;
+        size += i+svalsz+sizeof(p->type);
+
+        /* count global & auto vars, text symbols, and file names */
+        switch (p->type) {
+        case 'l':
+        case 'L':
+        case 't':
+        case 'T':
+            ntxt++;
+            break;
+        case 'd':
+        case 'D':
+        case 'b':
+        case 'B':
+            nglob++;
+            break;
+        case 'f':
+            if(strcmp(p->name, ".frame") == 0) {
+                p->type = 'm';
+                nauto++;
+            }
+            else if(p->value > fmax)
+                fmax = p->value;	/* highest path index */
+            break;
+        case 'a':
+        case 'p':
+        case 'm':
+            nauto++;
+            break;
+        case 'z':
+            if(p->value == 1) {		/* one extra per file */
+                nhist++;
+                nfiles++;
+            }
+            nhist++;
+            break;
+        default:
+            break;
+        }
+    }
+    if (debug)
+        print("NG: %ld NT: %d NF: %d\n", nglob, ntxt, fmax);
+    if (fp->sppcsz) {			/* pc-sp offset table */
+        spoff = (uchar *)malloc(fp->sppcsz);
+        if(spoff == 0) {
+            werrstr("can't malloc %ld bytes", fp->sppcsz);
+            return -1;
+        }
+        Bseek(&b, fp->sppcoff, 0);
+        if(Bread(&b, spoff, fp->sppcsz) != fp->sppcsz){
+            spoff = 0;
+            return symerrmsg(fp->sppcsz, "sp-pc");
+        }
+        spoffend = spoff+fp->sppcsz;
+    }
+    if (fp->lnpcsz) {			/* pc-line number table */
+        pcline = (uchar *)malloc(fp->lnpcsz);
+        if(pcline == 0) {
+            werrstr("can't malloc %ld bytes", fp->lnpcsz);
+            return -1;
+        }
+        Bseek(&b, fp->lnpcoff, 0);
+        if(Bread(&b, pcline, fp->lnpcsz) != fp->lnpcsz){
+            pcline = 0;
+            return symerrmsg(fp->lnpcsz, "pc-line");
+        }
+        pclineend = pcline+fp->lnpcsz;
+    }
+    return nsym;
+}
+@
 
 \section{[[machdata]]}
 
@@ -2915,9 +3412,160 @@ loop:
 }
 @
 
+\subsection{Comments}
+
+<<function [[eatnl]]>>=
+void
+eatnl(void)
+{
+    int c;
+
+    line++;
+    for(;;) {
+        c = lexc();
+        if(c == Eof)
+            error("eof in comment");
+        if(c == '\n')
+            return;
+    }
+}
+@
+
+
 \subsection{Numbers}
 
+<<function [[numsym]]>>=
+int
+numsym(char first)
+{
+    int c, isbin, isfloat, ishex;
+    char *sel, *p;
+    Lsym *s;
+
+    symbol[0] = first;
+    p = symbol;
+
+    ishex = 0;
+    isbin = 0;
+    isfloat = 0;
+    if(first == '.')
+        isfloat = 1;
+
+    if(isdigit(*p++) || isfloat) {
+        for(;;) {
+            c = lexc();
+            if(c < 0)
+                error("%d: <eof> eating symbols", line);
+
+            if(c == '\n')
+                line++;
+            sel = "01234567890.xb";
+            if(ishex)
+                sel = "01234567890abcdefABCDEF";
+            else if(isbin)
+                sel = "01";
+            else if(isfloat)
+                sel = "01234567890eE-+";
+
+            if(strchr(sel, c) == 0) {
+                unlexc(c);
+                break;
+            }
+            if(c == '.')
+                isfloat = 1;
+            if(!isbin && c == 'x')
+                ishex = 1;
+            if(!ishex && c == 'b')
+                isbin = 1;
+            *p++ = c;
+        }
+        *p = '\0';
+        if(isfloat) {
+            yylval.fval = atof(symbol);
+            return Tfconst;
+        }
+
+        if(isbin)
+            yylval.ival = strtoull(symbol+2, 0, 2);
+        else
+            yylval.ival = strtoull(symbol, 0, 0);
+        return Tconst;
+    }
+
+    for(;;) {
+        c = lexc();
+        if(c < 0)
+            error("%d <eof> eating symbols", line);
+        if(c == '\n')
+            line++;
+        if(c != '_' && c != '$' && c <= '~' && !isalnum(c)) {	/* checking against ~ lets UTF names through */
+            unlexc(c);
+            break;
+        }
+        *p++ = c;
+    }
+
+    *p = '\0';
+
+    s = look(symbol);
+    if(s == 0)
+        s = enter(symbol, Tid);
+
+    yylval.sym = s;
+    return s->lexval;
+}
+@
+%$
+
+
 \subsection{Strings}
+
+<<function [[eatstring]]>>=
+void
+eatstring(void)
+{
+    int esc, c, cnt;
+    char buf[Strsize];
+
+    esc = 0;
+    for(cnt = 0;;) {
+        c = lexc();
+        switch(c) {
+        case Eof:
+            error("%d: <eof> in string constant", line);
+
+        case '\n':
+            error("newline in string constant");
+            goto done;
+
+        case '\\':
+            if(esc)
+                goto Default;
+            esc = 1;
+            break;
+
+        case '"':
+            if(esc == 0)
+                goto done;
+
+            /* Fall through */
+        default:
+        Default:
+            if(esc) {
+                c = escchar(c);
+                esc = 0;
+            }
+            buf[cnt++] = c;
+            break;
+        }
+        if(cnt >= Strsize)
+            error("string token too long");
+    }
+done:
+    buf[cnt] = '\0';
+    yylval.string = strnode(buf);
+}
+@
 
 \subsection{Operators}
 
@@ -2976,7 +3624,6 @@ kinit(void)
 %******************************************************************************
 \chapter{Interpreting}
 %******************************************************************************
-
 
 \section{[[execute()]]}
 
@@ -3086,6 +3733,67 @@ execute(Node *n)
 
 \section{Expressions}
 
+<<macro [[expr]]>>=
+#define expr(n, r) do{(r)->comt=nil; (*expop[(n)->op])(n, r);}while(0)
+@
+
+
+<<global [[expop]]>>=
+void (*expop[])(Node*, Node*) =
+{
+    [ONAME]	oname,
+    [OCONST]	oconst,
+    [OMUL]	omul,
+    [ODIV]	odiv,
+    [OMOD]	omod,
+    [OADD]	oadd,
+    [OSUB]	osub,
+    [ORSH]	orsh,
+    [OLSH]	olsh,
+    [OLT]	olt,
+    [OGT]	ogt,
+    [OLEQ]	oleq,
+    [OGEQ]	ogeq,
+    [OEQ]	oeq,
+    [ONEQ]	oeq,
+    [OLAND]	oland,
+    [OXOR]	oxor,
+    [OLOR]	olor,
+    [OCAND]	ocand,
+    [OCOR]	ocor,
+    [OASGN]	oasgn,
+    [OINDM]	oindm,
+    [OEDEC]	oeinc,
+    [OEINC]	oeinc,
+    [OPINC]	opinc,
+    [OPDEC]	opinc,
+    [ONOT]	onot,
+    [OIF]	0,
+    [ODO]	0,
+    [OLIST]	olist,
+    [OCALL]	ocall,
+    [OCTRUCT]	octruct,
+    [OWHILE]	0,
+    [OELSE]	0,
+    [OHEAD]	ohead,
+    [OTAIL]	otail,
+    [OAPPEND]	oappend,
+    [ORET]	0,
+    [OINDEX]	oindex,
+    [OINDC]	oindc,
+    [ODOT]	odot,
+    [OLOCAL]	0,
+    [OFRAME]	oframe,
+    [OCOMPLEX]	0,
+    [ODELETE]	odelete,
+    [OCAST]	ocast,
+    [OFMT]	ofmt,
+    [OEVAL]	oeval,
+    [OWHAT]	owhat,
+};
+@
+
+
 \section{Statements}
 
 \section{Builtins}
@@ -3097,42 +3805,148 @@ struct Btab
     void	(*fn)(Node*, Node*);
 } tab[] =
 {
-    "atof",		cvtatof,
-    "atoi",		cvtatoi,
+    "atof",	cvtatof,
+    "atoi",	cvtatoi,
     "error",	doerror,
-    "file",		getfile,
+    "file",	getfile,
     "readfile",	readfile,
     "access",	doaccess,
     "filepc",	filepc,
     "fnbound",	funcbound,
-    "fmt",		fmt,
+    "fmt",	fmt,
     "follow",	follow,
-    "itoa",		cvtitoa,
-    "kill",		kill,
+    "itoa",	cvtitoa,
+    "kill",	kill,
     "match",	match,
     "newproc",	newproc,
     "pcfile",	pcfile,
     "pcline",	pcline,
     "print",	bprint,
     "printto",	printto,
-    "rc",		rc,
+    "rc",	rc,
     "reason",	reason,
     "setproc",	setproc,
     "start",	start,
-    "startstop",	startstop,
+    "startstop",startstop,
     "status",	status,
-    "stop",		stop,
+    "stop",	stop,
     "strace",	strace,
     "sysr1",	dosysr1,
     "waitstop",	waitstop,
-    "map",		map,
-    "interpret",	interpret,
+    "map",	map,
+    "interpret",interpret,
     "include",	include,
     "regexp",	regexp,
     "fmtof",	fmtof,
     "fmtsize",	dofmtsize,
     0
 };
+@
+
+\section{Garbage collection}
+
+<<function [[marktree]]>>=
+void
+marktree(Node *n)
+{
+
+    if(n == 0)
+        return;
+
+    marktree(n->left);
+    marktree(n->right);
+
+    n->gcmark = 1;
+    if(n->op != OCONST)
+        return;
+
+    switch(n->type) {
+    case TSTRING:
+        n->string->gcmark = 1;
+        break;
+    case TLIST:
+        marklist(n->l);
+        break;
+    case TCODE:
+        marktree(n->cc);
+        break;
+    }
+}
+@
+
+<<function [[marklist]]>>=
+void
+marklist(List *l)
+{
+    while(l) {
+        l->gcmark = 1;
+        switch(l->type) {
+        case TSTRING:
+            l->string->gcmark = 1;
+            break;
+        case TLIST:
+            marklist(l->l);
+            break;
+        case TCODE:
+            marktree(l->cc);
+            break;
+        }
+        l = l->next;
+    }
+}
+@
+
+<<function [[gc]]>>=
+void
+gc(void)
+{
+    int i;
+    Lsym *f;
+    Value *v;
+    Gc *m, **p, *next;
+
+    if(dogc < Mempergc)
+        return;
+    dogc = 0;
+
+    /* Mark */
+    for(m = gcl; m; m = m->gclink)
+        m->gcmark = 0;
+
+    /* Scan */
+    for(i = 0; i < Hashsize; i++) {
+        for(f = hash[i]; f; f = f->hash) {
+            marktree(f->proc);
+            if(f->lexval != Tid)
+                continue;
+            for(v = f->v; v; v = v->pop) {
+                switch(v->type) {
+                case TSTRING:
+                    v->string->gcmark = 1;
+                    break;
+                case TLIST:
+                    marklist(v->l);
+                    break;
+                case TCODE:
+                    marktree(v->cc);
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Free */
+    p = &gcl;
+    for(m = gcl; m; m = next) {
+        next = m->gclink;
+        if(m->gcmark == 0) {
+            *p = next;
+            free(m);	/* Sleazy reliance on my malloc */
+        }
+        else
+            p = &m->gclink;
+    }
+}
 @
 
 %******************************************************************************

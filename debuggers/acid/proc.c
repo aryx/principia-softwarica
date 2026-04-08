@@ -15,14 +15,14 @@ nocore(void)
 {
     int i;
 
-    if(cormap == 0)
+    if(cormap == nil)
         return;
 
     for (i = 0; i < cormap->nsegs; i++)
         if (cormap->seg[i].inuse && cormap->seg[i].fd >= 0)
             close(cormap->seg[i].fd);
     free(cormap);
-    cormap = 0;
+    cormap = nil;
 }
 /*e: function [[nocore]] */
 
@@ -32,9 +32,10 @@ sproc(int pid)
 {
     Lsym *s;
     char buf[64];
-    int i, fcor;
+    int i;
+    fdt fcor;
 
-    if(symmap == 0)
+    if(symmap == nil)
         error("no map");
 
     snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
@@ -48,15 +49,19 @@ sproc(int pid)
     s->v->ival = pid;
 
     nocore();
+
     cormap = attachproc(pid, kernel, fcor, &fhdr);
-    if (cormap == 0)
+    if (cormap == nil)
         error("setproc: can't make coremap: %r");
+
     i = findseg(cormap, "text");
     if (i > 0)
         cormap->seg[i].name = "*text";
+
     i = findseg(cormap, "data");
     if (i > 0)
         cormap->seg[i].name = "*data";
+
     install(pid);
 }
 /*e: function [[sproc]] */
@@ -190,6 +195,7 @@ install(int pid)
     fd = open(buf, OWRITE);
     if(fd < 0)
         error("pid=%d: open ctl: %r", pid);
+
     ptab[new].pid = pid;
     ptab[new].ctl = fd;
 

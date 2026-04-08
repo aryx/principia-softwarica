@@ -4482,74 +4482,7 @@ stacktop(int pid)
 }
 @
 
-<<function [[attachproc]]>>=
-Map*
-attachproc(int pid, int kflag, int corefd, Fhdr *fp)
-{
-    char buf[64], *regs;
-    int fd;
-    Map *map;
-    uvlong n;
 
-    map = newmap(0, 4);
-    if (!map)
-        return 0;
-    if(kflag)
-        regs = "kregs";
-    else
-        regs = "regs";
-    if (mach->regsize) {
-        sprint(buf, "/proc/%d/%s", pid, regs);
-        fd = open(buf, ORDWR);
-        if(fd < 0)
-            fd = open(buf, OREAD);
-        if(fd < 0) {
-            free(map);
-            return 0;
-        }
-        setmap(map, fd, 0, mach->regsize, 0, "regs");
-    }
-    if (mach->fpregsize) {
-        sprint(buf, "/proc/%d/fpregs", pid);
-        fd = open(buf, ORDWR);
-        if(fd < 0)
-            fd = open(buf, OREAD);
-        if(fd < 0) {
-            close(map->seg[0].fd);
-            free(map);
-            return 0;
-        }
-        setmap(map, fd, mach->regsize, mach->regsize+mach->fpregsize, 0, "fpregs");
-    }
-    setmap(map, corefd, fp->txtaddr, fp->txtaddr+fp->txtsz, fp->txtaddr, "text");
-    if(kflag || fp->dataddr >= mach->utop) {
-        setmap(map, corefd, fp->dataddr, ~0, fp->dataddr, "data");
-        return map;
-    }
-    n = stacktop(pid);
-    if (n == 0) {
-        setmap(map, corefd, fp->dataddr, mach->utop, fp->dataddr, "data");
-        return map;
-    }
-    setmap(map, corefd, fp->dataddr, n, fp->dataddr, "data");
-    return map;
-}
-@
-
-<<function [[findseg]]>>=
-int
-findseg(Map *map, char *name)
-{
-    int i;
-
-    if (!map)
-        return -1;
-    for (i = 0; i < map->nsegs; i++)
-        if (map->seg[i].inuse && !strcmp(map->seg[i].name, name))
-            return i;
-    return -1;
-}
-@
 
 <<function [[unusemap]]>>=
 void
@@ -4560,29 +4493,6 @@ unusemap(Map *map, int i)
 }
 @
 
-<<function [[loadmap]]>>=
-Map*
-loadmap(Map *map, int fd, Fhdr *fp)
-{
-    map = newmap(map, 2);
-    if (map == 0)
-        return 0;
-
-    map->seg[0].b = fp->txtaddr;
-    map->seg[0].e = fp->txtaddr+fp->txtsz;
-    map->seg[0].f = fp->txtoff;
-    map->seg[0].fd = fd;
-    map->seg[0].inuse = 1;
-    map->seg[0].name = "text";
-    map->seg[1].b = fp->dataddr;
-    map->seg[1].e = fp->dataddr+fp->datsz;
-    map->seg[1].f = fp->datoff;
-    map->seg[1].fd = fd;
-    map->seg[1].inuse = 1;
-    map->seg[1].name = "data";
-    return map;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -4738,128 +4648,6 @@ static	uvlong	txtstart;		/* start of text segment */
 static	uvlong	txtend;			/* end of text segment */
 @
 
-<<function [[syminit]]>>=
-/*
- *	initialize the symbol tables
- */
-int
-syminit(int fd, Fhdr *fp)
-{
-    Sym *p;
-    long i, l, size;
-    vlong vl;
-    Biobuf b;
-    int svalsz;
-
-    if(fp->symsz == 0)
-        return 0;
-    if(fp->type == FNONE)
-        return 0;
-
-    cleansyms();
-    textseg(fp->txtaddr, fp);
-        /* minimum symbol record size = 4+1+2 bytes */
-    symbols = malloc((fp->symsz/(4+1+2)+1)*sizeof(Sym));
-    if(symbols == 0) {
-        werrstr("can't malloc %ld bytes", fp->symsz);
-        return -1;
-    }
-    Binit(&b, fd, OREAD);
-    Bseek(&b, fp->symoff, 0);
-    nsym = 0;
-    size = 0;
-    if((fp->_magic && (fp->magic & HDR_MAGIC)) || mach->szaddr == 8)
-        svalsz = 8;
-    else
-        svalsz = 4;
-    for(p = symbols; size < fp->symsz; p++, nsym++) {
-        if(svalsz == 8){
-            if(Bread(&b, &vl, 8) != 8)
-                return symerrmsg(8, "symbol");
-            p->value = beswav(vl);
-        }
-        else{
-            if(Bread(&b, &l, 4) != 4)
-                return symerrmsg(4, "symbol");
-            p->value = (u32int)beswal(l);
-        }
-        if(Bread(&b, &p->type, sizeof(p->type)) != sizeof(p->type))
-            return symerrmsg(sizeof(p->value), "symbol");
-
-        i = decodename(&b, p);
-        if(i < 0)
-            return -1;
-        size += i+svalsz+sizeof(p->type);
-
-        /* count global & auto vars, text symbols, and file names */
-        switch (p->type) {
-        case 'l':
-        case 'L':
-        case 't':
-        case 'T':
-            ntxt++;
-            break;
-        case 'd':
-        case 'D':
-        case 'b':
-        case 'B':
-            nglob++;
-            break;
-        case 'f':
-            if(strcmp(p->name, ".frame") == 0) {
-                p->type = 'm';
-                nauto++;
-            }
-            else if(p->value > fmax)
-                fmax = p->value;	/* highest path index */
-            break;
-        case 'a':
-        case 'p':
-        case 'm':
-            nauto++;
-            break;
-        case 'z':
-            if(p->value == 1) {		/* one extra per file */
-                nhist++;
-                nfiles++;
-            }
-            nhist++;
-            break;
-        default:
-            break;
-        }
-    }
-    if (debug)
-        print("NG: %ld NT: %d NF: %d\n", nglob, ntxt, fmax);
-    if (fp->sppcsz) {			/* pc-sp offset table */
-        spoff = (uchar *)malloc(fp->sppcsz);
-        if(spoff == 0) {
-            werrstr("can't malloc %ld bytes", fp->sppcsz);
-            return -1;
-        }
-        Bseek(&b, fp->sppcoff, 0);
-        if(Bread(&b, spoff, fp->sppcsz) != fp->sppcsz){
-            spoff = 0;
-            return symerrmsg(fp->sppcsz, "sp-pc");
-        }
-        spoffend = spoff+fp->sppcsz;
-    }
-    if (fp->lnpcsz) {			/* pc-line number table */
-        pcline = (uchar *)malloc(fp->lnpcsz);
-        if(pcline == 0) {
-            werrstr("can't malloc %ld bytes", fp->lnpcsz);
-            return -1;
-        }
-        Bseek(&b, fp->lnpcoff, 0);
-        if(Bread(&b, pcline, fp->lnpcsz) != fp->lnpcsz){
-            pcline = 0;
-            return symerrmsg(fp->lnpcsz, "pc-line");
-        }
-        pclineend = pcline+fp->lnpcsz;
-    }
-    return nsym;
-}
-@
 
 <<function [[symerrmsg]]>>=
 static int
@@ -7660,9 +7448,6 @@ enum
 };
 @
 
-<<macro [[expr]]>>=
-#define expr(n, r) do{(r)->comt=0; (*expop[(n)->op])(n, r);}while(0)
-@
 
 
 
@@ -7696,14 +7481,6 @@ struct List
 
 
 
-<<struct [[StringAcid]]>>=
-struct StringAcid
-{
-    Gc;
-    char	*string;
-    int	len;
-};
-@
 
 %-------------------------------------------------------------
 
@@ -7864,37 +7641,18 @@ int	yyparse(void);
 
 \subsection{[[acid/globals.c]]}
 
-
-
-
-
-
-
-
 <<global [[symbol]]>>=
 char	symbol[Strsize];
 @
-
 
 <<global [[na]]>>=
 int	na;
 @
 
 
-
-
-
-
 <<global [[ret]]>>=
 Rplace*	ret;
 @
-
-
-
-<<global [[gcl]]>>=
-Gc*	gcl;
-@
-
 
 
 <<global [[prnt]]>>=
@@ -7903,12 +7661,6 @@ Node*	prnt;
 
 <<global [[tracelist]]>>=
 List*	tracelist;
-@
-
-
-
-<<global [[ptab]]>>=
-Ptab	ptab[Maxproc];
 @
 
 
@@ -7954,7 +7706,6 @@ Ptab	ptab[Maxproc];
 
 
 \subsection{[[acid/lex.c]]}
-
 
 <<global [[cmap]]>>=
 char cmap[256] =
@@ -8012,154 +7763,6 @@ escchar(char c)
 }
 @
 
-<<function [[eatstring]]>>=
-void
-eatstring(void)
-{
-    int esc, c, cnt;
-    char buf[Strsize];
-
-    esc = 0;
-    for(cnt = 0;;) {
-        c = lexc();
-        switch(c) {
-        case Eof:
-            error("%d: <eof> in string constant", line);
-
-        case '\n':
-            error("newline in string constant");
-            goto done;
-
-        case '\\':
-            if(esc)
-                goto Default;
-            esc = 1;
-            break;
-
-        case '"':
-            if(esc == 0)
-                goto done;
-
-            /* Fall through */
-        default:
-        Default:
-            if(esc) {
-                c = escchar(c);
-                esc = 0;
-            }
-            buf[cnt++] = c;
-            break;
-        }
-        if(cnt >= Strsize)
-            error("string token too long");
-    }
-done:
-    buf[cnt] = '\0';
-    yylval.string = strnode(buf);
-}
-@
-
-<<function [[eatnl]]>>=
-void
-eatnl(void)
-{
-    int c;
-
-    line++;
-    for(;;) {
-        c = lexc();
-        if(c == Eof)
-            error("eof in comment");
-        if(c == '\n')
-            return;
-    }
-}
-@
-
-
-<<function [[numsym]]>>=
-int
-numsym(char first)
-{
-    int c, isbin, isfloat, ishex;
-    char *sel, *p;
-    Lsym *s;
-
-    symbol[0] = first;
-    p = symbol;
-
-    ishex = 0;
-    isbin = 0;
-    isfloat = 0;
-    if(first == '.')
-        isfloat = 1;
-
-    if(isdigit(*p++) || isfloat) {
-        for(;;) {
-            c = lexc();
-            if(c < 0)
-                error("%d: <eof> eating symbols", line);
-
-            if(c == '\n')
-                line++;
-            sel = "01234567890.xb";
-            if(ishex)
-                sel = "01234567890abcdefABCDEF";
-            else if(isbin)
-                sel = "01";
-            else if(isfloat)
-                sel = "01234567890eE-+";
-
-            if(strchr(sel, c) == 0) {
-                unlexc(c);
-                break;
-            }
-            if(c == '.')
-                isfloat = 1;
-            if(!isbin && c == 'x')
-                ishex = 1;
-            if(!ishex && c == 'b')
-                isbin = 1;
-            *p++ = c;
-        }
-        *p = '\0';
-        if(isfloat) {
-            yylval.fval = atof(symbol);
-            return Tfconst;
-        }
-
-        if(isbin)
-            yylval.ival = strtoull(symbol+2, 0, 2);
-        else
-            yylval.ival = strtoull(symbol, 0, 0);
-        return Tconst;
-    }
-
-    for(;;) {
-        c = lexc();
-        if(c < 0)
-            error("%d <eof> eating symbols", line);
-        if(c == '\n')
-            line++;
-        if(c != '_' && c != '$' && c <= '~' && !isalnum(c)) {	/* checking against ~ lets UTF names through */
-            unlexc(c);
-            break;
-        }
-        *p++ = c;
-    }
-
-    *p = '\0';
-
-    s = look(symbol);
-    if(s == 0)
-        s = enter(symbol, Tid);
-
-    yylval.sym = s;
-    return s->lexval;
-}
-@
-%$
-
 
 %-------------------------------------------------------------
 
@@ -8214,22 +7817,6 @@ typedef struct IOstack IOstack;
 \subsection{[[acid/main.c]]}
 
 
-<<function [[an]]>>=
-Node*
-an(int op, Node *l, Node *r)
-{
-    Node *n;
-
-    n = gmalloc(sizeof(Node));
-    memset(n, 0, sizeof(Node));
-    n->gclink = gcl;
-    gcl = n;
-    n->op = op;
-    n->left = l;
-    n->right = r;
-    return n;
-}
-@
 
 <<function [[al]]>>=
 List*
@@ -8262,149 +7849,8 @@ con(vlong v)
 
 
 
-<<function [[marktree]]>>=
-void
-marktree(Node *n)
-{
-
-    if(n == 0)
-        return;
-
-    marktree(n->left);
-    marktree(n->right);
-
-    n->gcmark = 1;
-    if(n->op != OCONST)
-        return;
-
-    switch(n->type) {
-    case TSTRING:
-        n->string->gcmark = 1;
-        break;
-    case TLIST:
-        marklist(n->l);
-        break;
-    case TCODE:
-        marktree(n->cc);
-        break;
-    }
-}
-@
-
-<<function [[marklist]]>>=
-void
-marklist(List *l)
-{
-    while(l) {
-        l->gcmark = 1;
-        switch(l->type) {
-        case TSTRING:
-            l->string->gcmark = 1;
-            break;
-        case TLIST:
-            marklist(l->l);
-            break;
-        case TCODE:
-            marktree(l->cc);
-            break;
-        }
-        l = l->next;
-    }
-}
-@
-
-<<function [[gc]]>>=
-void
-gc(void)
-{
-    int i;
-    Lsym *f;
-    Value *v;
-    Gc *m, **p, *next;
-
-    if(dogc < Mempergc)
-        return;
-    dogc = 0;
-
-    /* Mark */
-    for(m = gcl; m; m = m->gclink)
-        m->gcmark = 0;
-
-    /* Scan */
-    for(i = 0; i < Hashsize; i++) {
-        for(f = hash[i]; f; f = f->hash) {
-            marktree(f->proc);
-            if(f->lexval != Tid)
-                continue;
-            for(v = f->v; v; v = v->pop) {
-                switch(v->type) {
-                case TSTRING:
-                    v->string->gcmark = 1;
-                    break;
-                case TLIST:
-                    marklist(v->l);
-                    break;
-                case TCODE:
-                    marktree(v->cc);
-                    break;
-                }
-            }
-        }
-    }
-
-    /* Free */
-    p = &gcl;
-    for(m = gcl; m; m = next) {
-        next = m->gclink;
-        if(m->gcmark == 0) {
-            *p = next;
-            free(m);	/* Sleazy reliance on my malloc */
-        }
-        else
-            p = &m->gclink;
-    }
-}
-@
 
 
-<<function [[checkqid]]>>=
-void
-checkqid(int f1, int pid)
-{
-    int fd;
-    Dir *d1, *d2;
-    char buf[128];
-
-    if(kernel)
-        return;
-
-    d1 = dirfstat(f1);
-    if(d1 == nil){
-        print("checkqid: (qid not checked) dirfstat: %r\n");
-        return;
-    }
-
-    snprint(buf, sizeof(buf), "/proc/%d/text", pid);
-    fd = open(buf, OREAD);
-    if(fd < 0 || (d2 = dirfstat(fd)) == nil){
-        print("checkqid: (qid not checked) dirstat %s: %r\n", buf);
-        free(d1);
-        if(fd >= 0)
-            close(fd);
-        return;
-    }
-
-    close(fd);
-
-    if(d1->qid.path != d2->qid.path || d1->qid.vers != d2->qid.vers || d1->qid.type != d2->qid.type){
-        print("path %llux %llux vers %lud %lud type %d %d\n",
-            d1->qid.path, d2->qid.path, d1->qid.vers, d2->qid.vers, d1->qid.type, d2->qid.type);
-        print("warning: image does not match text for pid %d\n", pid);
-    }
-    free(d1);
-    free(d2);
-}
-@
 
 <<function [[catcher]]>>=
 void
@@ -8591,51 +8037,6 @@ unique(char *buf, Sym *s)
 @
 
 
-<<function [[varreg]]>>=
-void
-varreg(void)
-{
-    Lsym *l;
-    Value *v;
-    Reglist *r;
-    List **tail, *li;
-
-    l = mkvar("registers");
-    v = l->v;
-    v->set = 1;
-    v->type = TLIST;
-    v->l = 0;
-    tail = &v->l;
-
-    for(r = mach->reglist; r->rname; r++) {
-        l = mkvar(r->rname);
-        v = l->v;
-        v->set = 1;
-        v->ival = r->roffs;
-        v->fmt = r->rformat;
-        v->type = TINT;
-
-        li = al(TSTRING);
-        li->string = strnode(r->rname);
-        li->fmt = 's';
-        *tail = li;
-        tail = &li->next;
-    }
-
-    if(machdata == 0)
-        return;
-
-    l = mkvar("bpinst");	/* Breakpoint text */
-    v = l->v;
-    v->type = TSTRING;
-    v->fmt = 's';
-    v->set = 1;
-    v->string = gmalloc(sizeof(String));
-    v->string->len = machdata->bpsize;
-    v->string->string = gmalloc(machdata->bpsize);
-    memmove(v->string->string, machdata->bpinst, machdata->bpsize);
-}
-@
 
 
 <<function rget (acid/util.c)>>=
@@ -9202,57 +8603,7 @@ call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
 
 \subsection{[[acid/proc.c]]}
 
-<<function [[nocore]]>>=
-void
-nocore(void)
-{
-    int i;
 
-    if(cormap == 0)
-        return;
-
-    for (i = 0; i < cormap->nsegs; i++)
-        if (cormap->seg[i].inuse && cormap->seg[i].fd >= 0)
-            close(cormap->seg[i].fd);
-    free(cormap);
-    cormap = 0;
-}
-@
-
-<<function [[sproc]]>>=
-void
-sproc(int pid)
-{
-    Lsym *s;
-    char buf[64];
-    int i, fcor;
-
-    if(symmap == 0)
-        error("no map");
-
-    snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
-    fcor = open(buf, ORDWR);
-    if(fcor < 0)
-        error("setproc: open %s: %r", buf);
-
-    checkqid(symmap->seg[0].fd, pid);
-
-    s = look("pid");
-    s->v->ival = pid;
-
-    nocore();
-    cormap = attachproc(pid, kernel, fcor, &fhdr);
-    if (cormap == 0)
-        error("setproc: can't make coremap: %r");
-    i = findseg(cormap, "text");
-    if (i > 0)
-        cormap->seg[i].name = "*text";
-    i = findseg(cormap, "data");
-    if (i > 0)
-        cormap->seg[i].name = "*data";
-    install(pid);
-}
-@
 
 <<function [[nproc]]>>=
 int
@@ -9359,42 +8710,6 @@ dostop(int pid)
 }
 @
 
-<<function [[install]]>>=
-static void
-install(int pid)
-{
-    Lsym *s;
-    List *l;
-    char buf[128];
-    int i, fd, new, p;
-
-    new = -1;
-    for(i = 0; i < Maxproc; i++) {
-        p = ptab[i].pid;
-        if(p == pid)
-            return;
-        if(p == 0 && new == -1)
-            new = i;
-    }
-    if(new == -1)
-        error("no free process slots");
-
-    snprint(buf, sizeof(buf), "/proc/%d/ctl", pid);
-    fd = open(buf, OWRITE);
-    if(fd < 0)
-        error("pid=%d: open ctl: %r", pid);
-    ptab[new].pid = pid;
-    ptab[new].ctl = fd;
-
-    s = look("proclist");
-    l = al(TINT);
-    l->fmt = 'D';
-    l->ival = pid;
-    l->next = s->v->l;
-    s->v->l = l;
-    s->v->set = 1;
-}
-@
 
 <<function [[deinstall]]>>=
 void
@@ -11611,60 +10926,6 @@ owhat(Node *n, Node *res)
 }
 @
 
-<<global [[expop]]>>=
-void (*expop[])(Node*, Node*) =
-{
-    [ONAME]		oname,
-    [OCONST]	oconst,
-    [OMUL]		omul,
-    [ODIV]		odiv,
-    [OMOD]		omod,
-    [OADD]		oadd,
-    [OSUB]		osub,
-    [ORSH]		orsh,
-    [OLSH]		olsh,
-    [OLT]		olt,
-    [OGT]		ogt,
-    [OLEQ]		oleq,
-    [OGEQ]		ogeq,
-    [OEQ]		oeq,
-    [ONEQ]		oeq,
-    [OLAND]		oland,
-    [OXOR]		oxor,
-    [OLOR]		olor,
-    [OCAND]		ocand,
-    [OCOR]		ocor,
-    [OASGN]		oasgn,
-    [OINDM]		oindm,
-    [OEDEC]		oeinc,
-    [OEINC]		oeinc,
-    [OPINC]		opinc,
-    [OPDEC]		opinc,
-    [ONOT]		onot,
-    [OIF]		0,
-    [ODO]		0,
-    [OLIST]		olist,
-    [OCALL]		ocall,
-    [OCTRUCT]	octruct,
-    [OWHILE]	0,
-    [OELSE]		0,
-    [OHEAD]		ohead,
-    [OTAIL]		otail,
-    [OAPPEND]	oappend,
-    [ORET]		0,
-    [OINDEX]	oindex,
-    [OINDC]		oindc,
-    [ODOT]		odot,
-    [OLOCAL]	0,
-    [OFRAME]	oframe,
-    [OCOMPLEX]	0,
-    [ODELETE]	odelete,
-    [OCAST]		ocast,
-    [OFMT]		ofmt,
-    [OEVAL]		oeval,
-    [OWHAT]		owhat,
-};
-@
 
 
 %-------------------------------------------------------------

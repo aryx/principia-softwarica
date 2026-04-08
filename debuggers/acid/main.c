@@ -127,19 +127,18 @@ main(int argc, char *argv[])
        /*e: [[main()]](acid) if not argc and remote adjust [[aout]] */
 
     /*s: [[main()]](acid) initializations */
+    initialising = 1;
+
     /*s: [[main()]](acid) format initializations */
     fmtinstall('L', Lfmt);
     /*x: [[main()]](acid) format initializations */
     fmtinstall('x', xfmt);
     /*e: [[main()]](acid) format initializations */
-
     Binit(&bioout, STDOUT, OWRITE);
     bout = &bioout;
 
     kinit();
-
-    initialising = 1;
-
+    // to read commands on stdin once all modules have been loaded
     pushfile(nil);
 
     loadvars();
@@ -181,20 +180,25 @@ main(int argc, char *argv[])
     }
     /*e: [[main()]](acid) check acidmap */
 
-    initialising = 0;
-
-    interactive = 1;
-    line = 1;
-
     /*s: [[main()]](acid) notify setup */
     notify(catcher);
     /*e: [[main()]](acid) notify setup */
+
+    initialising = 0;
     /*e: [[main()]](acid) initializations */
 
     /*s: [[main()]](acid) infinite loop */
+    interactive = 1;
+    line = 1;
+
     for(;;) {
     
-        <<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
+        /*s: [[main()]](acid) in infinite loop, reinit and unwind if error */
+        if(setjmp(err)) {
+            Binit(&bioout, STDOUT, OWRITE);
+            unwind();
+        }
+        /*e: [[main()]](acid) in infinite loop, reinit and unwind if error */
         stacked = 0;
 
         Bprint(bout, "acid: ");
@@ -236,8 +240,10 @@ attachfiles(char *aout, int pid)
         /*e: [[attachfiles()]] sanity check [[text]] */
         readtext(aout);
     }
+    /*s: [[attachfiles()]] if [[pid]] given */
     if(pid)					/* pid given */
         sproc(pid);
+    /*e: [[attachfiles()]] if [[pid]] given */
     return OK_0;
 }
 /*e: function [[attachfiles]] */
@@ -417,8 +423,12 @@ an(int op, Node *l, Node *r)
 
     n = gmalloc(sizeof(Node));
     memset(n, 0, sizeof(Node));
+
+    /*s: [[an()]] add node [[n]] to [[gcl]] */
     n->gclink = gcl;
     gcl = n;
+    /*e: [[an()]] add node [[n]] to [[gcl]] */
+
     n->op = op;
     n->left = l;
     n->right = r;

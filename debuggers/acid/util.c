@@ -116,6 +116,7 @@ varsym(void)
 /*e: function [[varsym]] */
 
 /*s: function [[varreg]] */
+/// main -> attachfiles -> readtext -> <>
 void
 varreg(void)
 {
@@ -128,6 +129,7 @@ varreg(void)
     v = l->v;
     v->set = 1;
     v->type = TLIST;
+
     v->l = 0;
     tail = &v->l;
 
@@ -142,11 +144,12 @@ varreg(void)
         li = al(TSTRING);
         li->string = strnode(r->rname);
         li->fmt = 's';
+
         *tail = li;
         tail = &li->next;
     }
 
-    if(machdata == 0)
+    if(machdata == nil)
         return;
 
     l = mkvar("bpinst");	/* Breakpoint text */

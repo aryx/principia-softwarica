@@ -62,7 +62,7 @@ long	dogc;
 Rplace*	ret;
 /*e: global [[ret]] */
 /*s: global [[aout]] */
-// /proc/<pid>/text or given textfile to debug
+// given program to debug (or /proc/<pid>/text when running acid <pid>)
 char*	aout;
 /*e: global [[aout]] */
 /*s: global [[gotint]] */
