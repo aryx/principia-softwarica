@@ -69,7 +69,6 @@ struct Btab
     /*x: [[tab]] entries */
     "kill",	kill,
     "match",	match,
-    "newproc",	newproc,
     /*x: [[tab]] entries */
     "pcfile",	pcfile,
     "pcline",	pcline,
@@ -102,6 +101,8 @@ struct Btab
     "waitstop",	waitstop,
     /*x: [[tab]] entries */
     "status",	status,
+    /*x: [[tab]] entries */
+    "newproc",	newproc,
     /*e: [[tab]] entries */
     0
 };

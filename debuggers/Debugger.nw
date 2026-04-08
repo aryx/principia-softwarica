@@ -4298,7 +4298,6 @@ struct Btab
 <<[[tab]] entries>>=
 "kill",	kill,
 "match",	match,
-"newproc",	newproc,
 @
 <<[[tab]] entries>>=
 "pcfile",	pcfile,
@@ -4556,6 +4555,110 @@ gc(void)
 <<[[tab]] entries>>=
 "status",	status,
 @
+
+\section{[[acid: newproc()]]}
+
+<<[[tab]] entries>>=
+"newproc",	newproc,
+@
+
+<<function [[newproc]]>>=
+void
+newproc(Node *r, Node *args)
+{
+    int i;
+    Node res;
+    char *p, *e;
+    char *argv[Maxarg], buf[Strsize];
+
+    i = 1;
+    argv[0] = aout;
+
+    if(args) {
+        expr(args, &res);
+        if(res.type != TSTRING)
+            error("newproc(): arg not string");
+        if(res.string->len >= sizeof(buf))
+            error("newproc(): too many arguments");
+        memmove(buf, res.string->string, res.string->len);
+        buf[res.string->len] = '\0';
+        p = buf;
+        e = buf+res.string->len;
+        for(;;) {
+            while(p < e && (*p == '\t' || *p == ' '))
+                *p++ = '\0';
+            if(p >= e)
+                break;
+            argv[i++] = p;
+            if(i >= Maxarg)
+                error("newproc: too many arguments");
+            while(p < e && *p != '\t' && *p != ' ')
+                p++;
+        }
+    }
+    argv[i] = 0;
+    r->op = OCONST;
+    r->type = TINT;
+    r->fmt = 'D';
+    r->ival = nproc(argv);
+}
+@
+
+<<function [[nproc]]>>=
+int
+nproc(char **argv)
+{
+    char buf[128];
+    int pid, i;
+    fdt fd;
+
+    pid = fork();
+    switch(pid) {
+    case -1:
+        error("new: fork %r");
+    case 0:
+        // child
+        rfork(RFNAMEG|RFNOTEG);
+
+        snprint(buf, sizeof(buf), "/proc/%d/ctl", getpid());
+        fd = open(buf, ORDWR);
+        if(fd < 0)
+            fatal("new: open %s: %r", buf);
+        write(fd, "hang", 4);
+        close(fd);
+
+        close(STDIN);
+        close(STDOUT);
+        close(STDERR);
+        for(i = 3; i < NFD; i++)
+            close(i);
+
+        open("/dev/cons", OREAD);
+        open("/dev/cons", OWRITE);
+        open("/dev/cons", OWRITE);
+        exec(argv[0], argv);
+        fatal("new: exec %s: %r");
+
+    //parent
+    default:
+        install(pid);
+        msg(pid, "waitstop");
+
+        notes(pid);
+        sproc(pid);
+        dostop(pid);
+
+        break;
+    }
+
+    return pid;
+}
+@
+
+<<acid constants>>=
+NFD		= 100,
+@
+
 
 \section{[[acid: start()]]}
 

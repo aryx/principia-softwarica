@@ -10,8 +10,9 @@ enum
     /*x: acid constants */
     Strsize		= 4096,
     /*x: acid constants */
-    Maxarg		= 512,
     NFD		= 100,
+    /*x: acid constants */
+    Maxarg		= 512,
     Maxproc		= 50,
     Maxval		= 10,
     Mempergc	= 1024*1024,

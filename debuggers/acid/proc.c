@@ -77,13 +77,15 @@ int
 nproc(char **argv)
 {
     char buf[128];
-    int pid, i, fd;
+    int pid, i;
+    fdt fd;
 
     pid = fork();
     switch(pid) {
     case -1:
         error("new: fork %r");
     case 0:
+        // child
         rfork(RFNAMEG|RFNOTEG);
 
         snprint(buf, sizeof(buf), "/proc/%d/ctl", getpid());
@@ -93,9 +95,9 @@ nproc(char **argv)
         write(fd, "hang", 4);
         close(fd);
 
-        close(0);
-        close(1);
-        close(2);
+        close(STDIN);
+        close(STDOUT);
+        close(STDERR);
         for(i = 3; i < NFD; i++)
             close(i);
 
@@ -104,12 +106,16 @@ nproc(char **argv)
         open("/dev/cons", OWRITE);
         exec(argv[0], argv);
         fatal("new: exec %s: %r");
+
+    //parent
     default:
         install(pid);
         msg(pid, "waitstop");
+
         notes(pid);
         sproc(pid);
         dostop(pid);
+
         break;
     }
 
