@@ -116,7 +116,7 @@ installbuiltin(void)
     b = tab;
     while(b->name) {
         s = look(b->name);
-        if(s == 0)
+        if(s == nil)
             s = enter(b->name, Tid);
 
         s->builtin = b->fn;

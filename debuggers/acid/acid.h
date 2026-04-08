@@ -64,7 +64,7 @@ extern void	(*expop[])(Node*, Node*);
 extern int	fmtsize(Value *v) ;
 
 /*s: enum [[_anon_ (acid/acid.h)]]2 */
-enum
+enum Type_kind
 {
     TINT,
     TFLOAT,
@@ -158,7 +158,9 @@ struct Value
 {
     char	set;
     char	type;
+
     Store;
+
     Value*	pop;
     Lsym*	scope;
     Rplace*	ret;
@@ -168,32 +170,44 @@ struct Value
 /*s: struct [[Lsym]] */
 struct Lsym
 {
+    // ref_own<string>
     char*	name;
+    // enum<??>
     int	lexval;
-    Lsym*	hash;
+
+    // ref_own<Value>
     Value*	v;
+
     Type*	lt;
     Node*	proc;
     Frtype*	local;
     void	(*builtin)(Node*, Node*);
+
+    // Extra fields
+    // list<ref<Lsym>> (next = Sym.hash) bucket of hashtbl 'hash'
+    Lsym*	hash;
+
 };
 /*e: struct [[Lsym]] */
 
 /*s: struct [[Node]] */
 struct Node
 {
+    // must be first?
     Gc;
 
     // enum<opcode>
     char	op;
-    char	type;
-
     Node*	left;
     Node*	right;
+
+    // enum<Type_kind> ?
+    char	type;
 
     Lsym*	sym;
     int	builtin;
 
+    // must be last?
     Store;
 };
 /*e: struct [[Node]] */

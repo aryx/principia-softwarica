@@ -7,6 +7,7 @@
 #include "acid.h"
 
 /*s: function error (acid/exec.c) */
+/// ??? -> <>
 void
 error(char *fmt, ...)
 {

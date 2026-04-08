@@ -1,9 +1,11 @@
 /*s: acid/lex.c */
 #include <u.h>
 #include <libc.h>
+
 #include <bio.h>
 #include <ctype.h>
 #include <mach.h>
+
 #include "acid.h"
 #include "y.tab.h"
 
@@ -74,12 +76,13 @@ typedef struct IOstack IOstack;
 struct IOstack
 {
     char	*name;
+    Biobuf	*fin;
 
     int	line;
     char	*text;
     char	*ip;
-    Biobuf	*fin;
 
+    // Extra
     IOstack	*prev;
 };
 /*e: struct [[IOstack]] */
@@ -123,11 +126,11 @@ pushfile(char *file)
     line = 1;
     io->text = 0;
     io->fin = b;
+
     io->prev = lexio;
     lexio = io;
 }
 /*e: function [[pushfile]] */
-
 /*s: function [[pushstr]] */
 /// ??? -> <>
 void
@@ -156,6 +159,7 @@ pushstr(Node *s)
 /*e: function [[pushstr]] */
 
 /*s: function [[restartio]] */
+/// main -> <>
 void
 restartio(void)
 {
@@ -163,7 +167,6 @@ restartio(void)
     Binit(lexio->fin, STDIN, OREAD);
 }
 /*e: function [[restartio]] */
-
 /*s: function [[popio]] */
 /// loadmodule | error -> <>
 int
@@ -232,7 +235,6 @@ unlexc(int s)
         lexio->ip--;
 }
 /*e: function [[unlexc]] */
-
 /*s: function [[lexc]] */
 int
 lexc(void)
@@ -359,7 +361,9 @@ yylex(void)
 
 loop:
     Bflush(bout);
+
     c = lexc();
+
     switch(c) {
     case Eof:
         if(gotint) {
@@ -607,8 +611,11 @@ enter(char *name, int t)
     Lsym *s;
     uint h;
     char *p;
+    /*s: [[enter()]] other locals */
     Value *v;
+    /*e: [[enter()]] other locals */
 
+    // dupe of look()?
     h = 0;
     for(p = name; *p; p++)
         h = h*3 + *p;
@@ -617,17 +624,19 @@ enter(char *name, int t)
     s = gmalloc(sizeof(Lsym));
     memset(s, 0, sizeof(Lsym));
     s->name = strdup(name);
+    s->lexval = t;
 
     s->hash = hash[h];
     hash[h] = s;
-    s->lexval = t;
 
+    /*s: [[enter()]] allocate value of symbol */
     v = gmalloc(sizeof(Value));
     s->v = v;
 
     v->fmt = 'X';
     v->type = TINT;
     memset(v, 0, sizeof(Value));
+    /*e: [[enter()]] allocate value of symbol */
 
     return s;
 }
@@ -649,10 +658,10 @@ look(char *name)
     for(s = hash[h]; s; s = s->hash)
         if(strcmp(name, s->name) == 0)
             return s;
-    return 0;
+    // else
+    return nil;
 }
 /*e: function [[look]] */
-
 /*s: function [[mkvar]] */
 Lsym*
 mkvar(char *s)
@@ -660,7 +669,7 @@ mkvar(char *s)
     Lsym *l;
 
     l = look(s);
-    if(l == 0)
+    if(l == nil)
         l = enter(s, Tid);
     return l;
 }

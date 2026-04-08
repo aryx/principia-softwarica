@@ -52,6 +52,7 @@ Map*	cormap;
 Map*	symmap;
 /*e: global symmap (acid/globals.c) */
 /*s: global [[hash]] */
+// hash <string, ref_own<Lsym>, (next in bucket = Lsym.hash)
 Lsym*	hash[Hashsize];
 /*e: global [[hash]] */
 /*s: global [[dogc]] */

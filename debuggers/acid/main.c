@@ -181,8 +181,9 @@ main(int argc, char *argv[])
     }
     /*e: [[main()]](acid) check acidmap */
 
-    interactive = 1;
     initialising = 0;
+
+    interactive = 1;
     line = 1;
 
     /*s: [[main()]](acid) notify setup */
@@ -192,14 +193,13 @@ main(int argc, char *argv[])
 
     /*s: [[main()]](acid) infinite loop */
     for(;;) {
-        if(setjmp(err)) {
-            Binit(&bioout, STDOUT, OWRITE);
-            unwind();
-        }
+    
+        <<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
         stacked = 0;
 
         Bprint(bout, "acid: ");
 
+        // yyparse() will internally call execute() !
         if(yyparse() != 1)
             die();
         restartio();
@@ -217,8 +217,10 @@ static errorneg1
 attachfiles(char *aout, int pid)
 {
     interactive = 0;
+    /*s: [[attachfiles()]] if error */
     if(setjmp(err))
         return ERROR_NEG1;
+    /*e: [[attachfiles()]] if error */
 
     if(aout) {				/* executable given */
         /*s: [[attachfiles()]] if [[wtflag]] */
@@ -241,6 +243,7 @@ attachfiles(char *aout, int pid)
 /*e: function [[attachfiles]] */
 
 /*s: function die (acid/main.c) */
+/// main -> <>
 void
 die(void)
 {
@@ -254,7 +257,7 @@ die(void)
         for(f = s->v->l; f; f = f->next)
             Bprint(bout, "echo kill > /proc/%d/ctl\n", (int)f->ival);
     }
-    exits(0);
+    exits(nil);
 }
 /*e: function die (acid/main.c) */
 
@@ -271,6 +274,7 @@ loadmoduleobjtype(void)
 /*e: function [[loadmoduleobjtype]] */
 
 /*s: function [[userinit]] */
+/// main -> <>
 void
 userinit(void)
 {
@@ -278,19 +282,24 @@ userinit(void)
     Node *n;
     char *buf, *p;
 
+    /*s: [[userinit()]] if user acid file */
     p = getenv("home");
-    if(p != 0) {
+    if(p != nil) {
         buf = smprint("%s/lib/acid", p);
         silent = 1;
         loadmodule(buf);
         free(buf);
     }
+    /*e: [[userinit()]] if user acid file */
 
     interactive = 0;
+    /*s: [[userinit()]] unwind if error */
     if(setjmp(err)) {
         unwind();
         return;
     }
+    /*e: [[userinit()]] unwind if error */
+
     l = look("acidinit");
     if(l && l->proc) {
         n = an(ONAME, ZN, ZN);
@@ -306,10 +315,12 @@ void
 loadmodule(char *s)
 {
     interactive = 0;
+    /*s: [[loadmodule()]] unwind if error */
     if(setjmp(err)) {
         unwind();
         return;
     }
+    /*e: [[loadmodule()]] unwind if error */
     pushfile(s);
     silent = 0;
     yyparse();
@@ -445,6 +456,7 @@ con(vlong v)
 /*e: function [[con]] */
 
 /*s: function fatal (acid/main.c) */
+/// -> <>
 void
 fatal(char *fmt, ...)
 {
@@ -454,7 +466,7 @@ fatal(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    fprint(2, "%s: %L (fatal problem) %s\n", argv0, buf);
+    fprint(STDERR, "%s: %L (fatal problem) %s\n", argv0, buf);
     exits(buf);
 }
 /*e: function fatal (acid/main.c) */
@@ -589,7 +601,7 @@ gmalloc(long l)
 
     dogc += l;
     p = malloc(l);
-    if(p == 0)
+    if(p == nil)
         fatal("out of memory");
     return p;
 }

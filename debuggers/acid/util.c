@@ -47,6 +47,7 @@ unique(char *buf, Sym *s)
 /*e: function [[unique]] */
 
 /*s: function [[varsym]] */
+/// main -> <>
 void
 varsym(void)
 {
@@ -161,6 +162,7 @@ varreg(void)
 /*e: function [[varreg]] */
 
 /*s: function [[loadvars]] */
+/// main -> <>
 void
 loadvars(void)
 {

@@ -1511,18 +1511,21 @@ Map*	cormap;
 <<struct [[Node]]>>=
 struct Node
 {
+    // must be first?
     Gc;
 
     // enum<opcode>
     char	op;
-    char	type;
-
     Node*	left;
     Node*	right;
+
+    // enum<Type_kind> ?
+    char	type;
 
     Lsym*	sym;
     int	builtin;
 
+    // must be last?
     Store;
 };
 @
@@ -1601,6 +1604,7 @@ enum Opcode
 @
 
 
+\section{[[Store]]}
 
 <<struct [[Store]]>>=
 struct Store
@@ -1646,7 +1650,7 @@ struct Type
 @
 
 <<enum [[_anon_ (acid/acid.h)]]2>>=
-enum
+enum Type_kind
 {
     TINT,
     TFLOAT,
@@ -1669,19 +1673,101 @@ struct Frtype
 
 \section{Symbol table}
 
+% L stands for?
+
 <<struct [[Lsym]]>>=
 struct Lsym
 {
+    // ref_own<string>
     char*	name;
+    // enum<??>
     int	lexval;
-    Lsym*	hash;
+
+    // ref_own<Value>
     Value*	v;
+
     Type*	lt;
     Node*	proc;
     Frtype*	local;
     void	(*builtin)(Node*, Node*);
+
+    // Extra fields
+    // list<ref<Lsym>> (next = Sym.hash) bucket of hashtbl 'hash'
+    Lsym*	hash;
+
 };
 @
+
+<<global [[hash]]>>=
+// hash <string, ref_own<Lsym>, (next in bucket = Lsym.hash)
+Lsym*	hash[Hashsize];
+@
+
+<<function [[look]]>>=
+Lsym*
+look(char *name)
+{
+    Lsym *s;
+    uint h;
+    char *p;
+
+    h = 0;
+    for(p = name; *p; p++)
+        h = h*3 + *p;
+    h %= Hashsize;
+
+    for(s = hash[h]; s; s = s->hash)
+        if(strcmp(name, s->name) == 0)
+            return s;
+    // else
+    return nil;
+}
+@
+
+
+<<function [[mkvar]]>>=
+Lsym*
+mkvar(char *s)
+{
+    Lsym *l;
+
+    l = look(s);
+    if(l == nil)
+        l = enter(s, Tid);
+    return l;
+}
+@
+
+
+<<function [[enter]]>>=
+Lsym*
+enter(char *name, int t)
+{
+    Lsym *s;
+    uint h;
+    char *p;
+    <<[[enter()]] other locals>>
+
+    // dupe of look()?
+    h = 0;
+    for(p = name; *p; p++)
+        h = h*3 + *p;
+    h %= Hashsize;
+
+    s = gmalloc(sizeof(Lsym));
+    memset(s, 0, sizeof(Lsym));
+    s->name = strdup(name);
+    s->lexval = t;
+
+    s->hash = hash[h];
+    hash[h] = s;
+
+    <<[[enter()]] allocate value of symbol>>
+
+    return s;
+}
+@
+
 
 \section{[[Value]]}
 
@@ -1690,11 +1776,27 @@ struct Value
 {
     char	set;
     char	type;
+
     Store;
+
     Value*	pop;
     Lsym*	scope;
     Rplace*	ret;
 };
+@
+
+
+<<[[enter()]] other locals>>=
+Value *v;
+@
+
+<<[[enter()]] allocate value of symbol>>=
+v = gmalloc(sizeof(Value));
+s->v = v;
+
+v->fmt = 'X';
+v->type = TINT;
+memset(v, 0, sizeof(Value));
 @
 
 
@@ -1714,6 +1816,8 @@ struct Ptab
 \chapter{[[/bin/acid]]}
 %******************************************************************************
 
+
+\section{[[main()]]}
 
 <<global [[aout]]>>=
 // /proc/<pid>/text or given textfile to debug
@@ -1793,14 +1897,13 @@ if(isnumeric(argv[0])) {
 
 <<[[main()]](acid) infinite loop>>=
 for(;;) {
-    if(setjmp(err)) {
-        Binit(&bioout, STDOUT, OWRITE);
-        unwind();
-    }
+    
+    <<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
     stacked = 0;
 
     Bprint(bout, "acid: ");
 
+    // yyparse() will internally call execute() !
     if(yyparse() != 1)
         die();
     restartio();
@@ -1809,104 +1912,20 @@ for(;;) {
 }
 @
 
+% ??
 <<global [[stacked]]>>=
 int	stacked;
 @
 %todo: bool
 
 
-
-
-\section{Error management}
-
-<<global [[err]]>>=
-jmp_buf	err;
-@
-
-% got interrupted
-<<global [[gotint]]>>=
-int	gotint;
-@
-%todo: bool
-
-<<function error (acid/exec.c)>>=
-void
-error(char *fmt, ...)
-{
-    int i;
-    char buf[2048];
-    va_list arg;
-
-    <<[[error()]](acid) unstack io channels>>
-
-    ret = 0;
-    gotint = 0;
-
-    Bflush(bout);
-    <<[[error()]](acid) if [[silent]]>>
-    else {
-        va_start(arg, fmt);
-        vseprint(buf, buf+sizeof(buf), fmt, arg);
-        va_end(arg);
-        fprint(STDERR, "%L: (error) %s\n", buf);
-    }
-    while(popio())
-        ;
-    interactive = 1;
-    longjmp(err, 1);
+<<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
+if(setjmp(err)) {
+    Binit(&bioout, STDOUT, OWRITE);
+    unwind();
 }
 @
-
-<<function [[unwind]]>>=
-void
-unwind(void)
-{
-    int i;
-    Lsym *s;
-    Value *v;
-
-    for(i = 0; i < Hashsize; i++) {
-        for(s = hash[i]; s; s = s->hash) {
-            while(s->v->pop) {
-                v = s->v->pop;
-                free(s->v);
-                s->v = v;
-            }
-        }
-    }
-}
-@
-
-
-<<global [[silent]]>>=
-int	silent;
-@
-
-<<[[error()]](acid) if [[silent]]>>=
-if(silent)
-    silent = 0;
-@
-
-
-%XXX
-<<global [[io]]>>=
-Biobuf*	io[32];
-@
-
-<<global [[iop]]>>=
-int	iop;
-@
-
-%XXX
-<<[[error()]](acid) unstack io channels>>=
-/* Unstack io channels */
-if(iop != 0) {
-    for(i = 1; i < iop; i++)
-        Bterm(io[i]);
-    bout = io[0];
-    iop = 0;
-}
-@
+% see error management chapter
 
 
 \section{Arguments processing}
@@ -1992,8 +2011,9 @@ userinit();
 varsym();
 <<[[main()]](acid) check acidmap>>
 
-interactive = 1;
 initialising = 0;
+
+interactive = 1;
 line = 1;
 
 <<[[main()]](acid) notify setup>>
@@ -2003,7 +2023,60 @@ line = 1;
 %alt: \subsection{Formatters}
 %alt: \subsection{...}
 
-\section{[[loadvars()]] and [[installbuiltin()]]}
+\section{[[loadvars()]]}
+
+<<function [[loadvars]]>>=
+/// main -> <>
+void
+loadvars(void)
+{
+    Lsym *l;
+    Value *v;
+
+    l =  mkvar("proc");
+    v = l->v;
+    v->type = TINT;
+    v->fmt = 'X';
+    v->set = 1;
+    v->ival = 0;
+
+    l = mkvar("pid");		/* Current process */
+    v = l->v;
+    v->type = TINT;
+    v->fmt = 'D';
+    v->set = 1;
+    v->ival = 0;
+
+    mkvar("notes");			/* Pending notes */
+
+    l = mkvar("proclist");		/* Attached processes */
+    l->v->type = TLIST;
+}
+@
+
+\section{[[installbuiltin()]]}
+
+<<function [[installbuiltin]]>>=
+void
+installbuiltin(void)
+{
+    Btab *b;
+    Lsym *s;
+
+    b = tab;
+    while(b->name) {
+        s = look(b->name);
+        if(s == nil)
+            s = enter(b->name, Tid);
+
+        s->builtin = b->fn;
+        if(b->fn == bprint)
+            mkprint(s);
+        b++;
+    }
+}
+@
+
 
 \section{[[attachfiles()]] and [[readtext()]]}
 
@@ -2022,8 +2095,7 @@ static errorneg1
 attachfiles(char *aout, int pid)
 {
     interactive = 0;
-    if(setjmp(err))
-        return ERROR_NEG1;
+    <<[[attachfiles()]] if error>>
 
     if(aout) {				/* executable given */
         <<[[attachfiles()]] if [[wtflag]]>>
@@ -2039,6 +2111,11 @@ attachfiles(char *aout, int pid)
 }
 @
 
+
+<<[[attachfiles()]] if error>>=
+if(setjmp(err))
+    return ERROR_NEG1;
+@
 
 <<[[attachfiles()]] sanity check [[text]]>>=
 if(text < 0)
@@ -2140,7 +2217,7 @@ if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
 @
 
 
-\section{[[loadmodule()]] and [[loadmoduleobjtype()]]}
+\section{[[loadmodule()]]} % and [[loadmoduleobjtype()]]}
 
 <<[[main()]](acid) other locals>>=
 int i;
@@ -2185,10 +2262,7 @@ void
 loadmodule(char *s)
 {
     interactive = 0;
-    if(setjmp(err)) {
-        unwind();
-        return;
-    }
+    <<[[loadmodule()]] unwind if error>>
     pushfile(s);
     silent = 0;
     yyparse();
@@ -2198,9 +2272,144 @@ loadmodule(char *s)
 @
 
 
+<<global [[silent]]>>=
+int	silent;
+@
+
+<<[[error()]](acid) if [[silent]]>>=
+if(silent)
+    silent = 0;
+@
+
+
+<<[[loadmodule()]] unwind if error>>=
+if(setjmp(err)) {
+    unwind();
+    return;
+}
+@
+
+\section{[[userinit()]]}
+
+<<function [[userinit]]>>=
+/// main -> <>
+void
+userinit(void)
+{
+    Lsym *l;
+    Node *n;
+    char *buf, *p;
+
+    <<[[userinit()]] if user acid file>>
+
+    interactive = 0;
+    <<[[userinit()]] unwind if error>>
+
+    l = look("acidinit");
+    if(l && l->proc) {
+        n = an(ONAME, ZN, ZN);
+        n->sym = l;
+        n = an(OCALL, n, ZN);
+        execute(n);
+    }
+}
+@
+
+
+<<[[userinit()]] unwind if error>>=
+if(setjmp(err)) {
+    unwind();
+    return;
+}
+@
+
+<<[[userinit()]] if user acid file>>=
+p = getenv("home");
+if(p != nil) {
+    buf = smprint("%s/lib/acid", p);
+    silent = 1;
+    loadmodule(buf);
+    free(buf);
+}
+@
+
+
+\section{[[varsym()]]}
+
+
+<<function [[varsym]]>>=
+/// main -> <>
+void
+varsym(void)
+{
+    int i;
+    Sym *s;
+    long n;
+    Lsym *l;
+    uvlong v;
+    char buf[1024];
+    List *list, **tail, *l2, *tl;
+
+    tail = &l2;
+    l2 = 0;
+
+    symbase(&n);
+    for(i = 0; i < n; i++) {
+        s = getsym(i);
+        switch(s->type) {
+        case 'T':
+        case 'L':
+        case 'D':
+        case 'B':
+        case 'b':
+        case 'd':
+        case 'l':
+        case 't':
+            if(s->name[0] == '.')
+                continue;
+
+            v = s->value;
+            tl = al(TLIST);
+            *tail = tl;
+            tail = &tl->next;
+
+            l = unique(buf, s);
+
+            l->v->set = 1;
+            l->v->type = TINT;
+            l->v->ival = v;
+            if(l->v->comt == 0)
+                l->v->fmt = 'X';
+
+            /* Enter as list of { name, type, value } */
+            list = al(TSTRING);
+            tl->l = list;
+            list->string = strnode(buf);
+            list->fmt = 's';
+            list->next = al(TINT);
+            list = list->next;
+            list->fmt = 'c';
+            list->ival = s->type;
+            list->next = al(TINT);
+            list = list->next;
+            list->fmt = 'X';
+            list->ival = v;
+
+        }
+    }
+    l = mkvar("symbols");
+    l->v->set = 1;
+    l->v->type = TLIST;
+    l->v->l = l2;
+    if(l2 == 0)
+        print("no symbol information\n");
+}
+@
+%$
+
 \section{[[acidmap]]}
 
-% ???
+% move to advanced feature? group with acidinit?
 
 <<[[main()]](acid) other locals>>=
 Lsym *l;
@@ -2354,17 +2563,19 @@ crackhdr(int fd, Fhdr *fp)
 %TODO: acid/dbg.y!
 
 \section{Files management: [[IOstack]]}
+% similar to what was done by cpp with #include, but here acid include
 
 <<struct [[IOstack]]>>=
 struct IOstack
 {
     char	*name;
+    Biobuf	*fin;
 
     int	line;
     char	*text;
     char	*ip;
-    Biobuf	*fin;
 
+    // Extra
     IOstack	*prev;
 };
 @
@@ -2400,6 +2611,7 @@ pushfile(char *file)
     line = 1;
     io->text = 0;
     io->fin = b;
+
     io->prev = lexio;
     lexio = io;
 }
@@ -2449,6 +2661,7 @@ pushstr(Node *s)
 
 
 <<function [[restartio]]>>=
+/// main -> <>
 void
 restartio(void)
 {
@@ -2489,36 +2702,226 @@ popio(void)
 @
 
 
-<<[[main()]](acid) format initializations>>=
-fmtinstall('L', Lfmt);
+
+\section{Lexer}
+
+
+\subsection{[[lexc()]] and [[unlexc()]]}
+
+<<function [[lexc]]>>=
+int
+lexc(void)
+{
+    int c;
+
+    if(lexio->fin) {
+        c = Bgetc(lexio->fin);
+        if(gotint)
+            error("interrupt");
+        return c;
+    }
+
+    c = *lexio->ip++;
+    if(c == 0)
+        return -1;
+    return c;
+}
 @
 
-<<function [[Lfmt]]>>=
-int
-Lfmt(Fmt *f)
+<<function [[unlexc]]>>=
+void
+unlexc(int s)
 {
-    int i;
-    char buf[1024];
-    IOstack *e;
+    if(s == '\n')
+        line--;
 
-    e = lexio;
-    if(e) {
-        i = snprint(buf, sizeof(buf), "%s:%d", e->name, line);
-        while(e->prev) {
-            e = e->prev;
-            if(initialising && e->prev == 0)
-                break;
-            i += snprint(buf+i, sizeof(buf)-i, " [%s:%d]", e->name, e->line);
-        }
-    } else
-        snprint(buf, sizeof(buf),  "no file:0");
-    fmtstrcpy(f, buf);
-    return 0;
+    if(lexio->fin)
+        Bungetc(lexio->fin);
+    else
+        lexio->ip--;
 }
 @
 
 
-\section{Lexer}
+\subsection{[[yylex()]]}
+
+<<function [[yylex]]>>=
+int
+yylex(void)
+{
+    int c;
+    extern char vfmt[];
+
+loop:
+    Bflush(bout);
+
+    c = lexc();
+
+    switch(c) {
+    case Eof:
+        if(gotint) {
+            gotint = 0;
+            stacked = 0;
+            Bprint(bout, "\nacid: ");
+            goto loop;
+        }
+        return Eof;
+
+    case '"':
+        eatstring();
+        return Tstring;
+
+    case ' ':
+    case '\t':
+        goto loop;
+
+    case '\n':
+        line++;
+        if(interactive == 0)
+            goto loop;
+        if(stacked) {
+            print("\t");
+            goto loop;
+        }
+        return ';';
+
+    case '.':
+        c = lexc();
+        unlexc(c);
+        if(isdigit(c))
+            return numsym('.');
+
+        return '.';
+ 
+    case '(':
+    case ')':
+    case '[':
+    case ']':
+    case ';':
+    case ':':
+    case ',':
+    case '~':
+    case '?':
+    case '*':
+    case '@':
+    case '^':
+    case '%':
+        return c;
+    case '{':
+        stacked++;
+        return c;
+    case '}':
+        stacked--;
+        return c;
+
+    case '\\':
+        c = lexc();
+        if(strchr(vfmt, c) == 0) {
+            unlexc(c);
+            return '\\';
+        }
+        yylval.ival = c;
+        return Tfmt;
+
+    case '!':
+        c = lexc();
+        if(c == '=')
+            return Tneq;
+        unlexc(c);
+        return '!';
+
+    case '+':
+        c = lexc();
+        if(c == '+')
+            return Tinc;
+        unlexc(c);
+        return '+';
+
+    case '/':
+        c = lexc();
+        if(c == '/') {
+            eatnl();
+            goto loop;
+        }
+        unlexc(c);
+        return '/';
+
+    case '\'':
+        c = lexc();
+        if(c == '\\')
+            yylval.ival = escchar(lexc());
+        else
+            yylval.ival = c;
+        c = lexc();
+        if(c != '\'') {
+            error("missing '");
+            unlexc(c);
+        }
+        return Tconst;
+
+    case '&':
+        c = lexc();
+        if(c == '&')
+            return Tandand;
+        unlexc(c);
+        return '&';
+
+    case '=':
+        c = lexc();
+        if(c == '=')
+            return Teq;
+        unlexc(c);
+        return '=';
+
+    case '|':
+        c = lexc();
+        if(c == '|')
+            return Toror;
+        unlexc(c);
+        return '|';
+
+    case '<':
+        c = lexc();
+        if(c == '=')
+            return Tleq;
+        if(c == '<')
+            return Tlsh;
+        unlexc(c);
+        return '<';
+
+    case '>':
+        c = lexc();
+        if(c == '=')
+            return Tgeq;
+        if(c == '>')
+            return Trsh;
+        unlexc(c);
+        return '>';
+
+    case '-':
+        c = lexc();
+
+        if(c == '>')
+            return Tindir;
+
+        if(c == '-')
+            return Tdec;
+        unlexc(c);
+        return '-';
+
+    default:
+        return numsym(c);
+    }
+}
+@
+
+\subsection{Numbers}
+
+\subsection{Strings}
+
+\subsection{Operators}
+
+\subsection{Keywords}
 
 <<global [[keywds]]>>=
 struct keywd
@@ -2565,43 +2968,6 @@ kinit(void)
         enter(keywds[i].name, keywds[i].terminal);
 }
 @
-
-
-
-<<function [[enter]]>>=
-Lsym*
-enter(char *name, int t)
-{
-    Lsym *s;
-    uint h;
-    char *p;
-    Value *v;
-
-    h = 0;
-    for(p = name; *p; p++)
-        h = h*3 + *p;
-    h %= Hashsize;
-
-    s = gmalloc(sizeof(Lsym));
-    memset(s, 0, sizeof(Lsym));
-    s->name = strdup(name);
-
-    s->hash = hash[h];
-    hash[h] = s;
-    s->lexval = t;
-
-    v = gmalloc(sizeof(Value));
-    s->v = v;
-
-    v->fmt = 'X';
-    v->type = TINT;
-    memset(v, 0, sizeof(Value));
-
-    return s;
-}
-@
-
-\subsection{[[yylex()]]}
 
 
 \section{Grammar}
@@ -2773,6 +3139,8 @@ struct Btab
 \chapter{Process control}
 %******************************************************************************
 
+\section{[[acid: startstop()]]}
+
 %******************************************************************************
 \chapter{Printing and Introspection}
 %******************************************************************************
@@ -2782,6 +3150,7 @@ struct Btab
 %******************************************************************************
 % C support
 
+\section{[[acid: src()]]}
 
 
 %alt: when using db
@@ -3112,15 +3481,218 @@ making the mechanism especially transparent.
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
 
+\section{Dumpers}
+
+<<[[main()]](acid) format initializations>>=
+fmtinstall('L', Lfmt);
+@
+
+<<function [[Lfmt]]>>=
+int
+Lfmt(Fmt *f)
+{
+    int i;
+    char buf[1024];
+    IOstack *e;
+
+    e = lexio;
+    if(e) {
+        i = snprint(buf, sizeof(buf), "%s:%d", e->name, line);
+        while(e->prev) {
+            e = e->prev;
+            if(initialising && e->prev == 0)
+                break;
+            i += snprint(buf+i, sizeof(buf)-i, " [%s:%d]", e->name, e->line);
+        }
+    } else
+        snprint(buf, sizeof(buf),  "no file:0");
+    fmtstrcpy(f, buf);
+    return 0;
+}
+@
+
+
+
 
 %******************************************************************************
 \chapter{Error Management}
 %******************************************************************************
-% talked already before in main() chapter with unwind etc? or move here?
+
+
+\section{[[die()]]}
+
+<<function die (acid/main.c)>>=
+/// main -> <>
+void
+die(void)
+{
+    Lsym *s;
+    List *f;
+
+    Bprint(bout, "\n");
+
+    s = look("proclist");
+    if(s && s->v->type == TLIST) {
+        for(f = s->v->l; f; f = f->next)
+            Bprint(bout, "echo kill > /proc/%d/ctl\n", (int)f->ival);
+    }
+    exits(nil);
+}
+@
+
+\section{[[fatal()]]}
+
+<<function fatal (acid/main.c)>>=
+/// -> <>
+void
+fatal(char *fmt, ...)
+{
+    char buf[128];
+    va_list arg;
+
+    va_start(arg, fmt);
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    va_end(arg);
+    fprint(STDERR, "%s: %L (fatal problem) %s\n", argv0, buf);
+    exits(buf);
+}
+@
+
+\section{[[yyerror()]]}
+
+% called by yacc generated code in y.tab.c
+
+<<function [[yyerror]]>>=
+void
+yyerror(char *fmt, ...)
+{
+    char buf[128];
+    va_list arg;
+
+    if(strcmp(fmt, "syntax error") == 0) {
+        yyerror("syntax error, near symbol '%s'", symbol);
+        return;
+    }
+    va_start(arg, fmt);
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    va_end(arg);
+    print("%L: %s\n", buf);
+}
+@
+
+
+\section{[[error()]] and exception management}
+
+% setjmp/longjmp poor's man exception in C, see Libcore
+
+<<global [[err]]>>=
+jmp_buf	err;
+@
+
+% got interrupted
+<<global [[gotint]]>>=
+int	gotint;
+@
+%todo: bool
+
+<<function error (acid/exec.c)>>=
+/// ??? -> <>
+void
+error(char *fmt, ...)
+{
+    int i;
+    char buf[2048];
+    va_list arg;
+
+    <<[[error()]](acid) unstack io channels>>
+
+    ret = 0;
+    gotint = 0;
+
+    Bflush(bout);
+    <<[[error()]](acid) if [[silent]]>>
+    else {
+        va_start(arg, fmt);
+        vseprint(buf, buf+sizeof(buf), fmt, arg);
+        va_end(arg);
+        fprint(STDERR, "%L: (error) %s\n", buf);
+    }
+    while(popio())
+        ;
+    interactive = 1;
+    longjmp(err, 1);
+}
+@
+
+
+
+<<function [[unwind]]>>=
+void
+unwind(void)
+{
+    int i;
+    Lsym *s;
+    Value *v;
+
+    for(i = 0; i < Hashsize; i++) {
+        for(s = hash[i]; s; s = s->hash) {
+            while(s->v->pop) {
+                v = s->v->pop;
+                free(s->v);
+                s->v = v;
+            }
+        }
+    }
+}
+@
+
+
+
+
+%XXX
+<<global [[io]]>>=
+Biobuf*	io[32];
+@
+
+<<global [[iop]]>>=
+int	iop;
+@
+
+%XXX
+<<[[error()]](acid) unstack io channels>>=
+/* Unstack io channels */
+if(iop != 0) {
+    for(i = 1; i < iop; i++)
+        Bterm(io[i]);
+    bout = io[0];
+    iop = 0;
+}
+@
+
+
 
 %******************************************************************************
-%\chapter{Utilities}
+\chapter{Utilities}
 %******************************************************************************
+
+% move to Gc chapter/section?
+<<global [[dogc]]>>=
+long	dogc;
+@
+
+<<function [[gmalloc]]>>=
+void*
+gmalloc(long l)
+{
+    void *p;
+
+    dogc += l;
+    p = malloc(l);
+    if(p == nil)
+        fatal("out of memory");
+    return p;
+}
+@
 
 %******************************************************************************
 \chapter{ARM Disassembler}
