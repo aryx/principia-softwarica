@@ -12,7 +12,7 @@ int	kernel;
 int	remote;
 /*e: global [[remote]] */
 /*s: global [[text]] */
-int	text;
+fdt	text;
 /*e: global [[text]] */
 /*s: global [[silent]] */
 int	silent;
@@ -24,6 +24,7 @@ Fhdr	fhdr;
 int	line;
 /*e: global line (acid/globals.c) */
 /*s: global [[bout]] */
+// pointer to bioout
 Biobuf*	bout;
 /*e: global [[bout]] */
 /*s: global [[io]] */
@@ -60,6 +61,7 @@ long	dogc;
 Rplace*	ret;
 /*e: global [[ret]] */
 /*s: global [[aout]] */
+// /proc/<pid>/text or given textfile to debug
 char*	aout;
 /*e: global [[aout]] */
 /*s: global [[gotint]] */
@@ -84,7 +86,7 @@ List*	tracelist;
 int	initialising;
 /*e: global [[initialising]] */
 /*s: global [[quiet]] */
-int	quiet;
+bool	quiet;
 /*e: global [[quiet]] */
 
 /*s: global [[ptab]] */

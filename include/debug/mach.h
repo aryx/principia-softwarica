@@ -92,6 +92,7 @@ typedef struct  Fhdr Fhdr;
  */
 struct Map {
     int	nsegs;			/* number of segments */
+
     struct segment {		/* per-segment map */
         char	*name;		/* the segment name */
         int	fd;		/* file descriptor */
@@ -113,6 +114,7 @@ struct Map {
  */
 struct Symbol {
     void 	*handle;		/* used internally - owning func */
+
     struct {
         char	*name;
         vlong	value;		/* address or stack offset */
@@ -236,8 +238,10 @@ struct Fhdr
 
     uvlong	txtaddr;	/* text address */
     vlong	txtoff;		/* start of text in file */
+
     uvlong	dataddr;	/* start of data segment */
     vlong	datoff;		/* offset to data seg in file */
+
     vlong	symoff;		/* offset of symbol table in file */
 
     uvlong	entry;		/* entry point */

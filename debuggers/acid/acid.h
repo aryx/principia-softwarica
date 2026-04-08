@@ -78,9 +78,11 @@ enum
 struct Type
 {
     Type*	next;
+
     int	offset;
     char	fmt;
     char	depth;
+
     Lsym*	type;
     Lsym*	tag;
     Lsym*	base;
@@ -100,7 +102,7 @@ struct Frtype
 struct Ptab
 {
     int	pid;
-    int	ctl;
+    fdt	ctl;
 };
 /*e: struct [[Ptab]] */
 
@@ -130,6 +132,7 @@ struct Store
 {
     char	fmt;
     Type*	comt;
+
     union {
         vlong	ival;
         double	fval;
@@ -180,12 +183,16 @@ struct Lsym
 struct Node
 {
     Gc;
+
     char	op;
     char	type;
+
     Node*	left;
     Node*	right;
+
     Lsym*	sym;
     int	builtin;
+
     Store;
 };
 /*e: struct [[Node]] */

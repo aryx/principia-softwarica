@@ -218,7 +218,6 @@ done(void)
 }
 /*e: function [[done]] */
 
-
 /*s: function [[fault]] */
 /*
  * An interrupt occurred;

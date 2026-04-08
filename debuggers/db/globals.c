@@ -87,9 +87,7 @@ uvlong	expv;
 bool pcsactive = false;
 /*e: global [[pcsactive]] */
 
-
 /*s: global [[xargc]] */
 int xargc;		/* bullshit */
 /*e: global [[xargc]] */
-
 /*e: db/globals.c */

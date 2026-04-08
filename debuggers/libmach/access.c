@@ -56,7 +56,6 @@ get8(Map *map, uvlong addr, uvlong *x)
     return 1;
 }
 /*e: function [[get8]] */
-
 /*s: function [[get4]] */
 int
 get4(Map *map, uvlong addr, ulong *x)
@@ -76,7 +75,6 @@ get4(Map *map, uvlong addr, ulong *x)
     return 1;
 }
 /*e: function [[get4]] */
-
 /*s: function [[get2]] */
 int
 get2(Map *map, uvlong addr, ushort *x)
@@ -96,7 +94,6 @@ get2(Map *map, uvlong addr, ushort *x)
     return 1;
 }
 /*e: function [[get2]] */
-
 /*s: function [[get1]] */
 int
 get1(Map *map, uvlong addr, uchar *x, int size)
@@ -143,7 +140,6 @@ put8(Map *map, uvlong addr, uvlong v)
     return mput(map, addr, &v, 8);
 }
 /*e: function [[put8]] */
-
 /*s: function put4 (libmach/access.c) */
 int
 put4(Map *map, uvlong addr, ulong v)
@@ -156,7 +152,6 @@ put4(Map *map, uvlong addr, ulong v)
     return mput(map, addr, &v, 4);
 }
 /*e: function put4 (libmach/access.c) */
-
 /*s: function [[put2]] */
 int
 put2(Map *map, uvlong addr, ushort v)
@@ -169,7 +164,6 @@ put2(Map *map, uvlong addr, ushort v)
     return mput(map, addr, &v, 2);
 }
 /*e: function [[put2]] */
-
 /*s: function [[put1]] */
 int
 put1(Map *map, uvlong addr, uchar *v, int size)
@@ -246,7 +240,6 @@ mget(Map *map, uvlong addr, void *buf, int size)
     return -1;
 }
 /*e: function [[mget]] */
-
 /*s: function [[mput]] */
 static int
 mput(Map *map, uvlong addr, void *buf, int size)

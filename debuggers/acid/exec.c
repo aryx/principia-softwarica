@@ -14,6 +14,7 @@ error(char *fmt, ...)
     char buf[2048];
     va_list arg;
 
+    /*s: [[error()]](acid) unstack io channels */
     /* Unstack io channels */
     if(iop != 0) {
         for(i = 1; i < iop; i++)
@@ -21,12 +22,16 @@ error(char *fmt, ...)
         bout = io[0];
         iop = 0;
     }
+    /*e: [[error()]](acid) unstack io channels */
 
     ret = 0;
     gotint = 0;
+
     Bflush(bout);
+    /*s: [[error()]](acid) if [[silent]] */
     if(silent)
         silent = 0;
+    /*e: [[error()]](acid) if [[silent]] */
     else {
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
@@ -61,6 +66,7 @@ unwind(void)
 /*e: function [[unwind]] */
 
 /*s: function [[execute]] */
+/// ?? -> <>
 void
 execute(Node *n)
 {
@@ -72,10 +78,11 @@ execute(Node *n)
     static int stmnt;
 
     gc();
+
     if(gotint)
         error("interrupted");
 
-    if(n == 0)
+    if(n == nil)
         return;
 
     if(stmnt++ > 5000) {

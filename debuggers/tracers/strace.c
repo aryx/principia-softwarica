@@ -3,6 +3,7 @@
 
 #include <u.h>
 #include <libc.h>
+
 #include <bio.h>
 #include <thread.h>
 
@@ -11,18 +12,21 @@
 
 /*s: enum [[_anon_ (strace)]] */
 enum {
-    Stacksize	= 8*1024,
-    Bufsize		= 8*1024,
+    Stacksize   = 8*1024,
+    Bufsize     = 8*1024,
 };
 /*e: enum [[_anon_ (strace)]] */
 
 /*s: global [[out]] */
+// chan<ref<string>> listener = writer sender = reader
 Channel *out;
 /*e: global [[out]] */
 /*s: global [[quit]] */
+// chan<nil> listener = writer, sender = reader
 Channel *quit;
 /*e: global [[quit]] */
 /*s: global [[forkc]] */
+// chan<pid> listener = writer, sender = reader
 Channel *forkc;
 /*e: global [[forkc]] */
 /*s: global [[nread]] */
@@ -32,7 +36,8 @@ int nread = 0;
 typedef struct Str Str;
 /*s: struct [[Str]] */
 struct Str {
-    char	*buf;
+    //ref_own<string> length = len, point to space after malloc'ed Str
+    char *buf;
     int	len;
 };
 /*e: struct [[Str]] */
@@ -41,18 +46,18 @@ struct Str {
 void
 die(char *s)
 {
-    fprint(2, "%s\n", s);
+    fprint(STDERR, "%s\n", s);
     exits(s);
 }
 /*e: function [[die]] */
 
 /*s: function [[cwrite]] */
 void
-cwrite(int fd, char *path, char *cmd, int len)
+cwrite(fdt fd, char *path, char *cmd, int len)
 {
     werrstr("");
     if (write(fd, cmd, len) < len) {
-        fprint(2, "cwrite: %s: failed writing %d bytes: %r\n",
+        fprint(STDERR, "cwrite: %s: failed writing %d bytes: %r\n",
             path, len);
         sendp(quit, nil);
         threadexits(nil);
@@ -66,7 +71,7 @@ newstr(void)
 {
     Str *s;
 
-    s = mallocz(sizeof(Str) + Bufsize, 1);
+    s = mallocz(sizeof(Str) + Bufsize, true);
     if (s == nil)
         sysfatal("malloc");
     s->buf = (char *)&s[1];
@@ -78,11 +83,16 @@ newstr(void)
 void
 reader(void *v)
 {
-    int cfd, tfd, forking = 0, exiting, pid, newpid;
     char *ctl, *truss;
+    fdt cfd, tfd;
+    bool forking = false;
+    bool exiting = false;
+    int pid, newpid;
     Str *s;
-    static char start[] = "start";
+
+    // /proc/<pid>/ctl messages
     static char waitstop[] = "waitstop";
+    static char start[] = "start";
 
     pid = (int)(uintptr)v;
 
@@ -98,14 +108,17 @@ reader(void *v)
     cwrite(cfd, ctl, waitstop, sizeof waitstop - 1);
     // useful? if it was stopped, then why need waitstop?
     // because the fork() has been done but maybe the child
-    // has not yet reached the exec() and got actually stopped!
+    // has not yet reached the exec() and got actually stopped ?
+    // and also for 'ratrace pid' case ?
 
     cwrite(cfd, ctl, "startsyscall", 12);
+
     s = newstr();
-    exiting = 0;
+
     while((s->len = pread(tfd, s->buf, Bufsize - 1, 0)) >= 0){
+        // ??
         if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
-            forking = 0;
+            forking = false;
             newpid = strtol(&s->buf[3], 0, 0);
             sendp(forkc, (void*)newpid);
             procrfork(reader, (void*)newpid, Stacksize, 0);
@@ -120,12 +133,12 @@ reader(void *v)
             char *rf;
 
             rf = strdup(s->buf);
-           if (tokenize(rf, a, 8) == 5 &&
+            if (tokenize(rf, a, 8) == 5 &&
                 strtoul(a[4], 0, 16) & RFPROC)
-                forking = 1;
+                forking = true;
             free(rf);
         } else if (strstr(s->buf, " Exits") != nil)
-            exiting = 1;
+            exiting = true;
 
         sendp(out, s);	/* print line from /proc/$child/syscall */
         if (exiting) {
@@ -144,7 +157,6 @@ reader(void *v)
     threadexitsall(nil);
 }
 /*e: function [[reader]] */
-
 /*s: function [[writer]] */
 void
 writer(void *)
@@ -152,7 +164,7 @@ writer(void *)
     int newpid;
     Str *s;
 
-    // TODO use better initializer?
+    // TODO use literal array initializer?
     Alt a[4];
 
     a[0].op = CHANRCV;
@@ -178,7 +190,7 @@ writer(void *)
             break;
         case 1:			/* out */
             /* it's a nice null terminated thing */
-            fprint(2, "%s", s->buf);
+            fprint(STDERR, "%s", s->buf);
             free(s);
             break;
         case 2:			/* forkc */
@@ -195,7 +207,7 @@ done:
 void
 usage(void)
 {
-    fprint(2, "Usage: strace [-c cmd [arg...]] | [pid]\n");
+    fprint(STDERR, "Usage: ratrace [-c cmd [arg...]] | [pid]\n");
     exits("usage");
 }
 /*e: function usage (tracers/strace.c) */
@@ -204,7 +216,7 @@ usage(void)
 void
 hang(void)
 {
-    int me;
+    fdt me;
     char *myctl;
     static char hang[] = "hang";
 
@@ -223,9 +235,12 @@ void
 threadmain(int argc, char **argv)
 {
     int pid;
+    /*s: [[threadmain()]] other locals */
     char *cmd = nil;
     char **args = nil;
+    /*e: [[threadmain()]] other locals */
 
+    /*s: [[threadmain()]] argv processing */
     /*
      * don't bother with fancy arg processing, because it picks up options
      * for the command you are starting.  Just check for -c as argv[1]
@@ -247,7 +262,8 @@ threadmain(int argc, char **argv)
         ++argv;
         --argc;
     }
-
+    /*e: [[threadmain()]] argv processing */
+    /*s: [[threadmain()]] if command given via [[-c]] */
     /* run a command? */
     if(cmd) {
         pid = fork();
@@ -260,7 +276,9 @@ threadmain(int argc, char **argv)
                 exec(smprint("/bin/%s", cmd), args);
             sysfatal("exec %s failed: %r", cmd);
         }
-    } else {
+    }
+    /*e: [[threadmain()]] if command given via [[-c]] */
+    else {
         if(argc != 2)
             usage();
         pid = atoi(argv[1]);
@@ -270,6 +288,7 @@ threadmain(int argc, char **argv)
     out   = chancreate(sizeof(char*), 0);
     quit  = chancreate(sizeof(char*), 0);
     forkc = chancreate(sizeof(ulong *), 0);
+
     nread++;
     procrfork(writer, nil, Stacksize, 0);
     reader((void*)pid);

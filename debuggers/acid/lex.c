@@ -21,9 +21,11 @@ keywds[] =
     "else",		Telse,
     "while",	Twhile,
     "loop",		Tloop,
+
     "head",		Thead,
     "tail",		Ttail,
     "append",	Tappend,
+
     "defn",		Tfn,
     "return",	Tret,
     "local",	Tlocal,
@@ -35,6 +37,7 @@ keywds[] =
     "whatis",	Twhat,
     "eval",		Teval,
     "builtin",	Tbuiltin,
+
     0,		0
 };
 /*e: global [[keywds]] */
@@ -71,10 +74,12 @@ typedef struct IOstack IOstack;
 struct IOstack
 {
     char	*name;
+
     int	line;
     char	*text;
     char	*ip;
     Biobuf	*fin;
+
     IOstack	*prev;
 };
 /*e: struct [[IOstack]] */

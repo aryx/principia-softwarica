@@ -15,6 +15,7 @@ static Biobuf	bioout;
 static char	prog[128];
 /*e: global [[prog]] */
 /*s: global [[lm]] */
+// array<ref<string>> length = nlm
 static char*	lm[16];
 /*e: global [[lm]] */
 /*s: global [[nlm]] */
@@ -34,7 +35,7 @@ void	loadmoduleobjtype(void);
 void
 usage(void)
 {
-    fprint(2, "usage: acid [-kqw] [-l library] [-m machine] [pid] [file]\n");
+    fprint(STDERR, "usage: acid [-kqw] [-l library] [-m machine] [pid] [file]\n");
     exits("usage");
 }
 /*e: function usage (acid/main.c) */
@@ -43,49 +44,63 @@ usage(void)
 void
 main(int argc, char *argv[])
 {
+    int pid = 0;
+    /*s: [[main()]](acid) other locals */
+    char *s;
+    /*x: [[main()]](acid) other locals */
+    int i;
+    /*x: [[main()]](acid) other locals */
     Lsym *l;
     Node *n;
-    char *s;
-    int pid, i;
+    /*e: [[main()]](acid) other locals */
 
     argv0 = argv[0];
-    pid = 0;
     aout = "8.out";
-    quiet = 1;
+    quiet = true;
+    mtype = nil;
 
-    mtype = 0;
     ARGBEGIN{
-    case 'm':
-        mtype = ARGF();
+    /*s: [[main()]](acid) command line processing */
+    case 'q':
+        quiet = false;
         break;
-    case 'w':
-        wtflag = 1;
-        break;
+    /*x: [[main()]](acid) command line processing */
     case 'l':
         s = ARGF();
-        if(s == 0)
+        if(s == nil)
             usage();
         lm[nlm++] = s;
         break;
+    /*x: [[main()]](acid) command line processing */
+    case 'w':
+        wtflag = 1;
+        break;
+    /*x: [[main()]](acid) command line processing */
     case 'k':
         kernel++;
         break;
-    case 'q':
-        quiet = 0;
-        break;
+    /*x: [[main()]](acid) command line processing */
     case 'r':
         pid = 1;
         remote++;
         kernel++;
         break;
+    /*x: [[main()]](acid) command line processing */
+    case 'm':
+        mtype = ARGF();
+        break;
+    /*e: [[main()]](acid) command line processing */
     default:
         usage();
     }ARGEND
 
     if(argc > 0) {
+        /*s: [[main()]](acid) if argc and remote adjust [[aout]] */
         if(remote)
             aout = argv[0];
+        /*e: [[main()]](acid) if argc and remote adjust [[aout]] */
         else
+        /*s: [[main()]](acid) if [[acid pid]] */
         if(isnumeric(argv[0])) {
             pid = strtol(argv[0], 0, 0);
             snprint(prog, sizeof(prog), "/proc/%d/text", pid);
@@ -95,50 +110,70 @@ main(int argc, char *argv[])
             else if(kernel)
                 aout = system();
         }
+        /*e: [[main()]](acid) if [[acid pid]] */
         else {
+            /*s: [[main()]](acid) if kernel and no pid */
             if(kernel) {
-                fprint(2, "acid: -k requires a pid\n");
+                fprint(STDERR, "acid: -k requires a pid\n");
                 usage();
             }
+            /*e: [[main()]](acid) if kernel and no pid */
             aout = argv[0];
         }
     } else
-    if(remote)
-        aout = "/mips/9ch";
+       /*s: [[main()]](acid) if not argc and remote adjust [[aout]] */
+       if(remote)
+           aout = "/mips/9ch";
+       /*e: [[main()]](acid) if not argc and remote adjust [[aout]] */
 
-    fmtinstall('x', xfmt);
+    /*s: [[main()]](acid) initializations */
+    /*s: [[main()]](acid) format initializations */
     fmtinstall('L', Lfmt);
+    /*x: [[main()]](acid) format initializations */
+    fmtinstall('x', xfmt);
+    /*e: [[main()]](acid) format initializations */
+
     Binit(&bioout, 1, OWRITE);
     bout = &bioout;
 
     kinit();
+
     initialising = 1;
-    pushfile(0);
+
+    pushfile(nil);
+
     loadvars();
     installbuiltin();
 
+    /*s: [[main()]](acid) sanity check [[mtype]] */
     if(mtype && machbyname(mtype) == 0)
         print("unknown machine %s", mtype);
+    /*e: [[main()]](acid) sanity check [[mtype]] */
 
+    /*s: [[main()]](acid) [[attachfiles(aout, pid)]] */
     if (attachfiles(aout, pid) < 0)
         varreg();		/* use default register set on error */
+    /*e: [[main()]](acid) [[attachfiles(aout, pid)]] */
 
-    loadmodule("/sys/lib/acid/port");
+    /*s: [[main()]](acid) load modules */
+    loadmodule("/lib/acid/port");
     loadmoduleobjtype();
 
     for(i = 0; i < nlm; i++) {
         if(access(lm[i], AREAD) >= 0)
             loadmodule(lm[i]);
         else {
-            s = smprint("/sys/lib/acid/%s", lm[i]);
+            s = smprint("/lib/acid/%s", lm[i]);
             loadmodule(s);
             free(s);
         }
     }
+    /*e: [[main()]](acid) load modules */
 
     userinit();
     varsym();
 
+    /*s: [[main()]](acid) check acidmap */
     l = look("acidmap");
     if(l && l->proc) {
         n = an(ONAME, ZN, ZN);
@@ -146,16 +181,22 @@ main(int argc, char *argv[])
         n = an(OCALL, n, ZN);
         execute(n);
     }
+    /*e: [[main()]](acid) check acidmap */
 
     interactive = 1;
+
     initialising = 0;
     line = 1;
 
+    /*s: [[main()]](acid) notify setup */
     notify(catcher);
+    /*e: [[main()]](acid) notify setup */
+    /*e: [[main()]](acid) initializations */
 
+    /*s: [[main()]](acid) infinite loop */
     for(;;) {
         if(setjmp(err)) {
-            Binit(&bioout, 1, OWRITE);
+            Binit(&bioout, STDOUT, OWRITE);
             unwind();
         }
         stacked = 0;
@@ -168,31 +209,37 @@ main(int argc, char *argv[])
 
         unwind();
     }
+    /*e: [[main()]](acid) infinite loop */
     /* not reached */
 }
 /*e: function main (acid/main.c) */
 
 /*s: function [[attachfiles]] */
-static int
+/// main -> <>
+static errorneg1
 attachfiles(char *aout, int pid)
 {
     interactive = 0;
     if(setjmp(err))
-        return -1;
+        return ERROR_NEG1;
 
     if(aout) {				/* executable given */
+        /*s: [[attachfiles()]] if [[wtflag]] */
         if(wtflag)
             text = open(aout, ORDWR);
+        /*e: [[attachfiles()]] if [[wtflag]] */
         else
             text = open(aout, OREAD);
 
+        /*s: [[attachfiles()]] sanity check [[text]] */
         if(text < 0)
             error("%s: can't open %s: %r\n", argv0, aout);
+        /*e: [[attachfiles()]] sanity check [[text]] */
         readtext(aout);
     }
     if(pid)					/* pid given */
         sproc(pid);
-    return 0;
+    return OK_0;
 }
 /*e: function [[attachfiles]] */
 
@@ -220,7 +267,7 @@ loadmoduleobjtype(void)
 {
     char *buf;
 
-    buf = smprint("/sys/lib/acid/%s", mach->name);
+    buf = smprint("/lib/acid/%s", mach->name);
     loadmodule(buf);
     free(buf);
 }
@@ -275,6 +322,7 @@ loadmodule(char *s)
 /*e: function [[loadmodule]] */
 
 /*s: function [[readtext]] */
+/// main -> attachfiles -> <>
 void
 readtext(char *s)
 {
@@ -285,7 +333,7 @@ readtext(char *s)
     Symbol sym;
     extern Machdata armmach;
 
-    if(mtype != 0){
+    if(mtype != nil){
         symmap = newmap(0, 1);
         if(symmap == 0)
             print("%s: (error) loadmap: cannot make symbol map\n", argv0);
