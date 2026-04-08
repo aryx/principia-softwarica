@@ -1,1587 +1,4 @@
 
-\section{[[db/]]}
-
-\subsection{[[db/defs.h]]}
-
-%alt: now defined in libc.h instead, not just for db
-%<<constant STDIN>>=
-%//#define	STDIN	0
-%@
-%
-%<<constant STDOUT>>=
-%//#define	STDOUT	1
-%@
-
-<<constant [[TRUE]]>>=
-#define	TRUE	(-1)
-@
-%todo: replace by true, false
-<<constant [[FALSE]]>>=
-#define	FALSE	0
-@
-
-%<<constant BADREG>>=
-%#define	BADREG	(-1)
-%@
-
-
-%-------------------------------------------------------------
-
-<<db/defs.h>>=
-/*
- * adb - common definitions
- * something of a grab-bag
- */
-
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <ctype.h>
-
-#include <mach.h>
-
-<<type [[ADDR]]>>
-<<type [[WORD]]>>
-
-typedef struct bkpt	BKPT;
-
-<<constant HUGEINT (db)>>
-
-<<constant [[MAXOFF]]>>
-<<constant [[INCDIR]]>>
-<<constant [[DBNAME]]>>
-<<constant [[CMD_VERBS]]>>
-
-<<constant [[MAXPOS]]>>
-<<constant [[MAXLIN]]>>
-<<constant [[ARB]]>>
-<<constant [[MAXCOM]]>>
-<<constant [[MAXARG]]>>
-<<constant [[LINSIZ]]>>
-<<constant [[MAXSYM]]>>
-
-<<constant [[EOR]]>>
-<<constant [[SPC]]>>
-<<constant [[TB]]>>
-
-<<constant [[TRUE]]>>
-<<constant [[FALSE]]>>
-
-/*
- * run modes
- */
-<<constant [[SINGLE]]>>
-<<constant [[CONTIN]]>>
-
-/*
- * breakpoints
- */
-<<constant [[BKPTCLR]]>>
-<<constant [[BKPTSET]]>>
-<<constant [[BKPTSKIP]]>>
-<<constant [[BKPTTMP]]>>
-
-<<struct [[bkpt]]>>
-
-/*
- * common globals
- */
-
-extern	ADDR	dot;
-extern	int	dotinc;
-extern ADDR	ditto;
-
-extern	int	adrflg;
-extern	WORD	adrval;
-
-extern	int	cntflg;
-extern	WORD	cntval;
-extern	WORD	loopcnt;
-
-extern	uvlong	expv;
-
-extern	ADDR	maxoff;
-
-extern	int	pid;
-extern	char	*corfil, *symfil;
-extern	int	fcor, fsym;
-extern	Map	*cormap, *symmap, *dotmap;
-extern	int	pcsactive;
-extern	int	ending;
-extern	bool	mkfault;
-
-extern	BKPT	*bkpthead;
-
-extern	int	lastc, peekc;
-
-<<constant [[NNOTE]]>>
-extern	int	nnote;
-extern	char	note[NNOTE][ERRMAX];
-
-extern	int	xargc;
-
-extern	bool	wtflag;
-extern	bool	kflag;
-
-// new decl, was in main.c before
-extern char *errmsg;
-extern jmp_buf env;
-
-@
-
-%dead:
-%extern	ADDR	localval;
-%extern	ADDR	maxfile;
-%extern	ADDR	maxstor;
-%extern	bool	regdirty;
-
-
-\subsection{[[db/fns.h]]}
-
-%-------------------------------------------------------------
-
-<<db/fns.h>>=
-void		acommand(int);
-void		attachprocess(void);
-void		bkput(BKPT*, bool);
-void		bpwait(void);
-int		charpos(void);
-void		chkerr(void);
-void		clrinp(void);
-void		cmdmap(Map*);
-void		cmdsrc(int, Map*);
-void		cmdwrite(int, Map*);
-int		command(char*, int);
-int		convdig(int);
-void		ctrace(int);
-WORD		defval(WORD);
-void		delbp(void);
-void		done(void);
-int		dprint(char*, ...);
-Map*		dumbmap(int);
-void		endline(void);
-void		endpcs(void);
-int		eol(int);
-void		error(char*);
-void		errors(char*, char*);
-void		execbkpt(BKPT*, int);
-char*		exform(int, int, char*, Map*, int, int);
-int		expr(int);
-void		flush(void);
-void		flushbuf(void);
-char*		getfname(void);
-void		getformat(char*);
-int		getnum(int (*)(void));
-void		grab(void);
-void		iclose(int, int);
-ADDR		inkdot(int);
-int		isfileref(void);
-int		item(int);
-void		killpcs(void);
-void		kmsys(void);
-void		main(int, char**);
-int		mapimage(void);
-void		newline(void);
-int		nextchar(void);
-void		notes(void);
-void		oclose(void);
-void		outputinit(void);
-void		printc(int);
-void		printesc(int);
-void		printlocals(Symbol *, ADDR);
-void		printmap(char*, Map*);
-void		printparams(Symbol *, ADDR);
-void		printpc(void);
-void		printregs(int);
-void		prints(char*);
-void		printsource(ADDR);
-void		printsym(void);
-void		printsyscall(void);
-void		printtrace(int);
-int		quotchar(void);
-int		rdc(void);
-int		readchar(void);
-void		readsym(char*);
-void		redirin(int, char*);
-void		redirout(char*);
-void		readfname(char *);
-void		reread(void);
-char*		regname(int);
-uvlong		rget(Map*, char*);
-Reglist*	rname(char*);
-void		rput(Map*, char*, vlong);
-int		runpcs(int, int);
-void		runrun(int);
-void		runstep(uvlong, int);
-BKPT*		scanbkpt(ADDR adr);
-void		scanform(long, int, char*, Map*, int);
-void		setbp(void);
-void		setcor(void);
-void		setsym(void);
-void		setup(void);
-void		setvec(void);
-void		shell(void);
-void		startpcs(void);
-void		subpcs(int);
-int		symchar(int);
-int		term(int);
-void		ungrab(void);
-int		valpr(long, int);
-
-#pragma	varargck	argpos	dprint	1
-#pragma	varargck	type	"t"	void
-@
-
-\subsection{[[db/utils.c]]}
-
-%-------------------------------------------------------------
-
-<<db/utils.c>>=
-#include "defs.h"
-#include "fns.h"
-
-<<function [[error]]>>
-
-<<function [[errors]]>>
-@
-
-\subsection{[[db/globals.c]]}
-
-%-------------------------------------------------------------
-
-<<db/globals.c>>=
-#include "defs.h"
-
-<<global [[wtflag]]>>
-<<global [[kflag]]>>
-
-<<global [[mkfault]]>>
-<<global [[maxoff]]>>
-
-<<global [[errmsg]]>>
-<<global [[env]]>>
-
-<<global [[symmap]]>>
-<<global [[cormap]]>>
-
-<<global [[ending]]>>
-<<global [[pid]]>>
-<<global [[nnote]]>>
-<<global [[note]]>>
-<<global [[bkpthead]]>>
-
-<<global [[dot]]>>
-<<global [[dotinc]]>>
-<<global [[ditto]]>>
-
-<<global [[adrval]]>>
-<<global [[adrflg]]>>
-
-<<global [[cntval]]>>
-<<global [[cntflg]]>>
-
-<<global [[expv]]>>
-
-<<global [[pcsactive]]>>
-
-<<global [[xargc]]>>
-@
-
-\subsection{[[db/output.c]]}
-
-%-------------------------------------------------------------
-
-<<db/output.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-<<global [[printcol]]>>
-<<global [[infile]]>>
-<<global [[maxpos]]>>
-
-<<global [[stdout]]>>
-
-<<function [[printc]]>>
-
-<<function [[tconv]]>>
-
-<<function [[flushbuf]]>>
-
-<<function [[prints]]>>
-
-<<function [[newline]]>>
-
-<<constant [[MAXIFD]]>>
-<<global [[istack]]>>
-<<global [[ifiledepth]]>>
-
-<<function [[iclose]]>>
-
-<<function [[oclose]]>>
-
-<<function [[redirout]]>>
-
-<<function [[endline]]>>
-
-<<function [[flush]]>>
-
-<<function [[dprint]]>>
-
-<<function [[outputinit]]>>
-@
-
-\subsection{[[db/input.c]]}
-
-<<function [[isfileref]]>>=
-/*
- *	check if the input line if of the form:
- *		<filename>:<digits><verb> ...
- *
- *	we handle this case specially because we have to look ahead
- *	at the token after the colon to decide if it is a file reference
- *	or a colon-command with a symbol name prefix. 
- */
-
-int
-isfileref(void)
-{
-    Rune *cp;
-
-    for (cp = lp-1; *cp && !strchr(CMD_VERBS, *cp); cp++)
-        if (*cp == '\\' && cp[1])	/* escape next char */
-            cp++;
-    if (*cp && cp > lp-1) {
-        while (*cp == ' ' || *cp == '\t')
-            cp++;
-        if (*cp++ == ':') {
-            while (*cp == ' ' || *cp == '\t')
-                cp++;
-            if (isdigit(*cp))
-                return 1;
-        }
-    }
-    return 0;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<db/input.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-extern	int	infile;
-
-<<global [[line]]>>
-<<global [[lp]]>>
-<<global [[peekc]]>>
-<<global [[lastc]]>>
-<<global [[eof]]>>
-
-/* input routines */
-
-<<function [[eol]]>>
-
-<<function [[rdc]]>>
-
-<<function [[reread]]>>
-
-<<function [[clrinp]]>>
-
-<<function [[readrune]]>>
-
-<<function [[readchar]]>>
-
-<<function [[nextchar]]>>
-
-<<function [[quotchar]]>>
-
-<<function [[getformat]]>>
-
-<<function [[isfileref]]>>
-@
-
-\subsection{[[db/setup.c]]}
-
-%-------------------------------------------------------------
-
-<<db/setup.c>>=
-
-/*
- * init routines
- */
-#include "defs.h"
-#include "fns.h"
-
-<<global [[symfil]]>>
-<<global [[corfil]]>>
-
-<<global [[dotmap]]>>
-
-<<global [[fsym]]>>
-<<global [[fcor]]>>
-<<global fhdr (db/setup.c)>>
-
-static int getfile(char*, int, int);
-
-<<function setsym (db)>>
-
-<<function [[setcor]]>>
-
-extern Mach mi386;
-extern Machdata i386mach;
-
-<<function [[dumbmap]]>>
-
-<<function [[cmdmap]]>>
-
-<<function [[getfile]]>>
-
-<<function [[kmsys]]>>
-
-<<function [[attachprocess]]>>
-@
-
-\subsection{[[db/format.c]]}
-
-%-------------------------------------------------------------
-
-<<db/format.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-<<function [[scanform]]>>
-
-<<function [[exform]]>>
-
-<<function [[printesc]]>>
-
-<<function [[inkdot]]>>
-@
-
-\subsection{[[db/regs.c]]}
-
-<<function [[rname]]>>=
-/*
- * translate a name to a magic register offset
- */
-Reglist*
-rname(char *name)
-{
-    Reglist *rp;
-
-    for (rp = mach->reglist; rp->rname; rp++)
-        if (strcmp(name, rp->rname) == 0)
-            return rp;
-    return 0;
-}
-@
-
-<<function [[getreg]]>>=
-static uvlong
-getreg(Map *map, Reglist *rp)
-{
-    uvlong v;
-    ulong w;
-    ushort s;
-    int ret;
-
-    v = 0;
-    ret = 0;
-    switch (rp->rformat)
-    {
-    case 'x':
-        ret = get2(map, rp->roffs, &s);
-        v = s;
-        break;
-    case 'f':
-    case 'X':
-        ret = get4(map, rp->roffs, &w);
-        v = w;
-        break;
-    case 'F':
-    case 'W':
-    case 'Y':
-        ret = get8(map, rp->roffs, &v);
-        break;
-    default:
-        werrstr("can't retrieve register %s", rp->rname);
-        error("%r");
-    }
-    if (ret < 0) {
-        werrstr("Register %s: %r", rp->rname);
-        error("%r");
-    }
-    return v;
-}
-@
-
-<<function [[rget]]>>=
-uvlong
-rget(Map *map, char *name)
-{
-    Reglist *rp;
-
-    rp = rname(name);
-    if (!rp)
-        error("invalid register name");
-    return getreg(map, rp);
-}
-@
-
-<<function [[rput]]>>=
-void
-rput(Map *map, char *name, vlong v)
-{
-    Reglist *rp;
-    int ret;
-
-    rp = rname(name);
-    if (!rp)
-        error("invalid register name");
-    if (rp->rflags & RRDONLY)
-        error("register is read-only");
-    switch (rp->rformat)
-    {
-    case 'x':
-        ret = put2(map, rp->roffs, (ushort) v);
-        break;
-    case 'X':
-    case 'f':
-    case 'F':
-        ret = put4(map, rp->roffs, (long) v);
-        break;
-    case 'Y':
-        ret = put8(map, rp->roffs, v);
-        break;
-    default:
-        ret = -1;
-    }
-    if (ret < 0)
-        error("can't write register");
-}
-@
-
-%-------------------------------------------------------------
-
-<<db/regs.c>>=
-/*
- * code to keep track of registers
- */
-
-#include "defs.h"
-#include "fns.h"
-
-<<function [[rname]]>>
-
-<<function [[getreg]]>>
-
-<<function [[rget]]>>
-
-<<function [[rput]]>>
-<<function [[printregs]]>>
-@
-
-\subsection{[[db/expr.c]]}
-
-<<function [[ascval]]>>=
-static WORD
-ascval(void)
-{
-    Rune r;
-
-    if (readchar() == 0)
-        return (0);
-    r = lastc;
-    while(quotchar())	/*discard chars to ending quote */
-        ;
-    return((WORD) r);
-}
-@
-
-<<function [[quotchar]]>>=
-int
-quotchar(void)
-{
-    if (readchar()=='\\')
-        return(readchar());
-    else if (lastc=='\'')
-        return 0;
-    else
-        return lastc;
-}
-@
-
-<<struct [[fpin_union]]>>=
-union fpin_union {
-        WORD w;
-        float f;
-};
-@
-
-<<function [[fpin]]>>=
-/*
- * read a floating point number
- * the result must fit in a WORD
- */
-
-static WORD
-fpin(char *buf)
-{
-  union fpin_union x;
-
-    x.f = atof(buf);
-    return (x.w);
-}
-@
-
-
-
-<<constant [[MAXBASE]]>>=
-#define	MAXBASE	16
-@
-
-<<constant [[MAXLIN]]>>=
-#define MAXLIN	128
-@
-
-<<function [[getnum]]>>=
-/* service routines for expression reading */
-int
-getnum(int (*rdf)(void))
-{
-    char *cp;
-    int base, d;
-    bool fpnum;
-    char num[MAXLIN];
-
-    base = 0;
-    fpnum = FALSE;
-    if (lastc == '#') {
-        base = 16;
-        (*rdf)();
-    }
-    if (convdig(lastc) >= MAXBASE)
-        return (0);
-    if (lastc == '0')
-        switch ((*rdf)()) {
-        case 'x':
-        case 'X':
-            base = 16;
-            (*rdf)();
-            break;
-
-        case 't':
-        case 'T':
-            base = 10;
-            (*rdf)();
-            break;
-
-        case 'o':
-        case 'O':
-            base = 8;
-            (*rdf)();
-            break;
-        default:
-            if (base == 0)
-                base = 8;
-            break;
-        }
-    if (base == 0)
-        base = 10;
-    expv = 0;
-    for (cp = num, *cp = lastc; ;(*rdf)()) {
-        if ((d = convdig(lastc)) < base) {
-            expv *= base;
-            expv += d;
-            *cp++ = lastc;
-        }
-        else if (lastc == '.') {
-            fpnum = TRUE;
-            *cp++ = lastc;
-        } else {
-            reread();
-            break;
-        }
-    }
-    if (fpnum)
-        expv = fpin(num);
-    return (1);
-}
-@
-
-<<constant [[MAXSYM]]>>=
-#define	MAXSYM	255
-@
-
-<<function [[readsym]]>>=
-void
-readsym(char *isymbol)
-{
-    char	*p;
-    Rune r;
-
-    p = isymbol;
-    do {
-        if (p < &isymbol[MAXSYM-UTFmax-1]){
-            r = lastc;
-            p += runetochar(p, &r);
-        }
-        readchar();
-    } while (symchar(1));
-    *p = 0;
-}
-@
-
-<<function [[readfname]]>>=
-void
-readfname(char *filename)
-{
-    char	*p;
-    Rune	c;
-
-    /* snarf chars until un-escaped char in terminal char set */
-    p = filename;
-    do {
-        if ((c = lastc) != '\\' && p < &filename[MAXSYM-UTFmax-1])
-            p += runetochar(p, &c);
-        readchar();
-    } while (c == '\\' || strchr(CMD_VERBS, lastc) == 0);
-    *p = 0;
-    reread();
-}
-@
-
-<<function [[convdig]]>>=
-int
-convdig(int c)
-{
-    if (isdigit(c))
-        return(c-'0');
-    else if (!isxdigit(c))
-        return(MAXBASE);
-    else if (isupper(c))
-        return(c-'A'+10);
-    else
-        return(c-'a'+10);
-}
-@
-
-<<function [[symchar]]>>=
-int
-symchar(int dig)
-{
-    if (lastc=='\\') {
-        readchar();
-        return(TRUE);
-    }
-    return(isalpha(lastc) || lastc>0x80 || lastc=='_' || dig && isdigit(lastc));
-}
-@
-
-<<function [[round]]>>=
-static long
-round(long a, long b)
-{
-    long w;
-
-    w = (a/b)*b;
-    if (a!=w)
-        w += b;
-    return(w);
-}
-@
-
-%-------------------------------------------------------------
-
-<<db/expr.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-static long	round(long, long);
-
-extern	ADDR	ditto;
-
-<<function [[ascval]]>>
-
-<<struct [[fpin_union]]>>
-
-<<function [[fpin]]>>
-
-<<function [[defval]]>>
-
-<<function [[expr]]>>
-
-<<function [[term]]>>
-
-<<function [[item]]>>
-
-<<constant [[MAXBASE]]>>
-
-<<function [[getnum]]>>
-
-<<function [[readsym]]>>
-
-<<function [[readfname]]>>
-
-<<function [[convdig]]>>
-
-<<function [[symchar]]>>
-
-<<function [[round]]>>
-@
-
-\subsection{[[db/trcrun.c]]}
-
-%-------------------------------------------------------------
-
-<<db/trcrun.c>>=
-/*
- * functions for running the debugged process
- */
-
-#include "defs.h"
-#include "fns.h"
-
-
-<<global [[child]]>>
-<<global [[msgfd]]>>
-<<global [[notefd]]>>
-<<global [[pcspid]]>>
-
-
-<<function [[setpcs]]>>
-
-<<function [[msgpcs]]>>
-
-<<function [[unloadnote]]>>
-
-<<function [[loadnote]]>>
-
-<<function [[notes]]>>
-
-<<function [[killpcs]]>>
-
-<<function [[grab]]>>
-
-<<function [[ungrab]]>>
-
-<<function [[doexec]]>>
-
-<<global [[procname]]>>
-
-<<function [[startpcs]]>>
-
-<<function [[runstep]]>>
-
-<<function [[bpwait]]>>
-
-<<function [[runrun]]>>
-
-<<function [[bkput]]>>
-@
-
-\subsection{[[db/print.c]]}
-
-<<constant [[INCDIR]]>>=
-#define	INCDIR	"/usr/lib/adb"
-@
-
-<<global [[Ipath]]>>=
-char	*Ipath = INCDIR;
-@
-%$
-
-
-<<function [[getfname]]>>=
-char *
-getfname(void)
-{
-    static char fname[ARB];
-    char *p;
-
-    if (rdc() == EOR) {
-        reread();
-        return (0);
-    }
-    p = fname;
-    do {
-        *p++ = lastc;
-        if (p >= &fname[ARB-1])
-            error("filename too long");
-    } while (rdc() != EOR);
-    *p = 0;
-    reread();
-    return (fname);
-}
-@
-
-
-<<function [[redirin]]>>=
-void
-redirin(int stack, char *file)
-{
-    char *pfile;
-
-    if (file == 0) {
-        iclose(-1, 0);
-        return;
-    }
-    iclose(stack, 0);
-    if ((infile = open(file, 0)) < 0) {
-        pfile = smprint("%s/%s", Ipath, file);
-        infile = open(pfile, 0);
-        free(pfile);
-        if(infile < 0) {
-            infile = STDIN;
-            error("cannot open");
-        }
-    }
-}
-@
-
-%-------------------------------------------------------------
-
-<<db/print.c>>=
-/*
- *
- *	debugger
- *
- */
-#include "defs.h"
-#include "fns.h"
-
-extern	int	infile;
-extern	int	outfile;
-extern	int	maxpos;
-
-/* general printing routines ($) */
-
-<<global [[Ipath]]>>
-<<global [[tracetype]]>>
-static void	printfp(Map*, int);
-
-<<function [[ptrace]]>>
-
-<<function [[printtrace]]>>
-
-<<function [[getfname]]>>
-
-<<function [[printfp]]>>
-
-<<function [[redirin]]>>
-
-<<function [[printmap]]>>
-
-<<function [[printsym]]>>
-
-<<constant [[STRINGSZ]]>>
-
-<<function [[printsource]]>>
-
-<<function [[printpc]]>>
-
-<<function [[printlocals]]>>
-
-<<function [[printparams]]>>
-@
-%$
-
-\subsection{[[db/command.c]]}
-
-<<global [[BADEQ]]>>=
-char	BADEQ[] = "unexpected `='";
-@
-
-
-
-<<function [[regname]]>>=
-/*
- * collect a register name; return register offset
- * this is not what i'd call a good division of labour
- */
-
-char *
-regname(int regnam)
-{
-    static char buf[64];
-    char *p;
-    int c;
-
-    p = buf;
-    *p++ = regnam;
-    while (isalnum(c = readchar())) {
-        if (p >= buf+sizeof(buf)-1)
-            error("register name too long");
-        *p++ = c;
-    }
-    *p = 0;
-    reread();
-    return (buf);
-}
-@
-
-%-------------------------------------------------------------
-
-<<db/command.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-<<global [[BADEQ]]>>
-
-<<global [[executing]]>>
-extern	Rune	*lp;
-
-<<global [[eqformat]]>>
-<<global [[stformat]]>>
-
-
-<<global [[loopcnt]]>>
-
-<<function [[command]]>>
-
-<<function [[acommand]]>>
-
-<<function [[cmdsrc]]>>
-
-<<global [[badwrite]]>>
-
-<<function [[cmdwrite]]>>
-
-<<function [[regname]]>>
-
-<<function [[shell]]>>
-@
-
-\subsection{[[db/runpcs.c]]}
-
-%-------------------------------------------------------------
-
-<<db/runpcs.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-<<global [[bpin]]>>
-
-<<function [[runpcs]]>>
-
-<<function [[endpcs]]>>
-
-<<function [[setup]]>>
-
-<<function [[execbkpt]]>>
-
-<<function [[scanbkpt]]>>
-
-<<function [[delbp]]>>
-
-<<function [[setbp]]>>
-@
-
-\subsection{[[db/pcs.c]]}
-
-%-------------------------------------------------------------
-
-<<db/pcs.c>>=
-/*
- *
- *	debugger
- *
- */
-
-#include "defs.h"
-#include "fns.h"
-
-<<global [[NOPCS]]>>
-
-<<function [[subpcs]]>>
-@
-
-\subsection{[[db/main.c]]}
-
-%-------------------------------------------------------------
-
-<<db/main.c>>=
-/*
- * db - main command loop and error/interrupt handling
- */
-#include "defs.h"
-#include "fns.h"
-
-
-extern	bool	executing;
-extern	int	infile;
-extern	int	eof;
-
-int	alldigs(char*);
-void	fault(void*, char*);
-
-extern	char	*Ipath;
-extern jmp_buf env;
-extern char *errmsg;
-
-<<function main (db/main.c)>>
-
-<<function [[alldigs]]>>
-
-<<function [[done]]>>
-
-<<function [[fault]]>>
-@
-
-
-
-
-
-
-
-
-\section{[[tracers/]]}
-
-\subsection{[[tracers/ktrace.c]]}
-
-<<global [[fhdr]]>>=
-static	Fhdr	fhdr;
-@
-
-<<global [[interactive]]>>=
-static	int	interactive = 0;
-@
-
-<<constant FRAMENAME (ktrace)>>=
-#define	FRAMENAME	".frame"
-@
-
-<<function [[usage]]>>=
-static void
-usage(void)
-{
-    fprint(2, "usage: ktrace [-i] kernel pc sp [link]\n");
-    exits("usage");
-}
-@
-
-<<function [[printaddr]]>>=
-static void
-printaddr(char *addr, uvlong pc)
-{
-    int i;
-    char *p;
-
-    /*
-     * reformat the following.
-     *
-     * foo+1a1 -> src(foo+0x1a1);
-     * 10101010 -> src(0x10101010);
-     */
-
-    if(strlen(addr) == 8 && strchr(addr, '+') == nil){
-        for(i=0; i<8; i++)
-            if(!isxdigit(addr[i]))
-                break;
-        if(i == 8){
-            print("src(%#.8llux); // 0x%s\n", pc, addr);
-            return;
-        }
-    }
-
-    if(p=strchr(addr, '+')){
-        *p++ = 0;
-        print("src(%#.8llux); // %s+0x%s\n", pc, addr, p);
-    }else
-        print("src(%#.8llux); // %s\n", pc, addr);
-}
-@
-
-<<global [[fmt]]>>=
-static void (*fmt)(char*, uvlong) = printaddr;
-@
-
-<<function [[main]]>>=
-void
-main(int argc, char *argv[])
-{
-    int (*t)(uvlong, uvlong, uvlong);
-    uvlong pc, sp, link;
-    int fd;
-
-    ARGBEGIN{
-    case 'i':
-        interactive = 1;
-        break;
-    default:
-        usage();
-    }ARGEND
-
-    link = 0;
-    t = rtrace;
-    switch(argc){
-    case 4:
-        t = rtrace;
-        link = strtoull(argv[3], 0, 16);
-        break;
-    case 3:
-        break;
-    default:
-        usage();
-    }
-    pc = strtoull(argv[1], 0, 16);
-    sp = strtoull(argv[2], 0, 16);
-    if(!interactive)
-        readstack();
-
-    fd = open(argv[0], OREAD);
-    if(fd < 0)
-        fatal("can't open %s: %r", argv[0]);
-    inithdr(fd);
-    switch(fhdr.magic){
-    case I_MAGIC:	/* intel 386 */
-        t = i386trace;
-        break;
-    case E_MAGIC:	/* arm 7-something */
-        t = rtrace;
-        break;
-    default:
-        fprint(2, "%s: warning: can't tell what type of stack %s uses; assuming it's %s\n",
-            argv0, argv[0], argc == 4 ? "risc" : "cisc");
-        break;
-    }
-    (*t)(pc, sp, link);
-    exits(0);
-}
-@
-
-<<function [[inithdr]]>>=
-static void
-inithdr(int fd)
-{
-    seek(fd, 0, 0);
-    if(!crackhdr(fd, &fhdr))
-        fatal("read text header");
-
-    if(syminit(fd, &fhdr) < 0)
-        fatal("%r\n");
-}
-@
-
-<<function [[rtrace]]>>=
-// for MIPS and ARM
-static int
-rtrace(uvlong pc, uvlong sp, uvlong link)
-{
-    Symbol s, f;
-    char buf[128];
-    uvlong oldpc;
-    int i;
-
-    i = 0;
-    while(findsym(pc, CTEXT, &s)) {
-        if(pc == s.value)	/* at first instruction */
-            f.value = 0;
-        else if(findlocal(&s, FRAMENAME, &f) == 0)
-            break;
-
-        symoff(buf, sizeof buf, pc, CANY);
-        fmt(buf, pc);
-
-        oldpc = pc;
-        if(s.type == 'L' || s.type == 'l' || pc <= s.value+mach->pcquant){
-            if(link == 0)
-                fprint(2, "%s: need to supply a valid link register\n", argv0);
-            pc = link;
-        }else{
-            pc = getval(sp);
-            if(pc == 0)
-                break;
-        }
-
-        if(pc == 0 || (pc == oldpc && f.value == 0))
-            break;
-
-        sp += f.value;
-
-        if(++i > 40)
-            break;
-    }
-    return i;
-}
-@
-
-<<function i386trace (ktrace)>>=
-static int
-i386trace(uvlong pc, uvlong sp, uvlong link)
-{
-    int i;
-    uvlong osp;
-    Symbol s, f;
-    char buf[128];
-
-    USED(link);
-    i = 0;
-    osp = 0;
-    while(findsym(pc, CTEXT, &s)) {
-
-        symoff(buf, sizeof buf, pc, CANY);
-        fmt(buf, pc);
-
-        if(pc != s.value) {	/* not at first instruction */
-            if(findlocal(&s, FRAMENAME, &f) == 0)
-                break;
-            sp += f.value-mach->szaddr;
-        }else if(strcmp(s.name, "forkret") == 0){
-            print("//passing interrupt frame; last pc found at sp=%#llux\n", osp);
-            sp +=  15 * mach->szaddr;		/* pop interrupt frame */
-        }
-
-        pc = getval(sp);
-        if(pc == 0 && strcmp(s.name, "forkret") == 0){
-            sp += 3 * mach->szaddr;			/* pop iret eip, cs, eflags */
-            print("//guessing call through invalid pointer, try again at sp=%#llux\n", sp);
-            s.name = "";
-            pc = getval(sp);
-        }
-        if(pc == 0) {
-            print("//didn't find pc at sp=%#llux, last pc found at sp=%#llux\n", sp, osp);
-            break;
-        }
-        osp = sp;
-
-        sp += mach->szaddr;
-        if(strcmp(s.name, "forkret") == 0)
-            sp += 2 * mach->szaddr;			/* pop iret cs, eflags */
-
-        if(++i > 40)
-            break;
-    }
-    return i;
-}
-@
-
-<<global [[naddr]]>>=
-int naddr;
-@
-
-<<global [[addr]]>>=
-uvlong addr[1024];
-@
-
-<<global [[val]]>>=
-uvlong val[1024];
-@
-
-<<function [[putval]]>>=
-static void
-putval(uvlong a, uvlong v)
-{
-    if(naddr < nelem(addr)){
-        addr[naddr] = a;
-        val[naddr] = v;
-        naddr++;
-    }
-}
-@
-
-<<function [[readstack]]>>=
-static void
-readstack(void)
-{
-    Biobuf b;
-    char *p;
-    char *f[64];
-    int nf, i;
-
-    Binit(&b, 0, OREAD);
-    while(p=Brdline(&b, '\n')){
-        p[Blinelen(&b)-1] = 0;
-        nf = tokenize(p, f, nelem(f));
-        for(i=0; i<nf; i++){
-            if(p=strchr(f[i], '=')){
-                *p++ = 0;
-                putval(strtoull(f[i], 0, 16), strtoull(p, 0, 16));
-            }
-        }
-    }
-}
-@
-
-<<function [[getval]]>>=
-static uvlong
-getval(uvlong a)
-{
-    char buf[256];
-    int i, n;
-    uvlong r;
-
-    if(interactive){
-        print("// data at %#8.8llux? ", a);
-        n = read(0, buf, sizeof(buf)-1);
-        if(n <= 0)
-            return 0;
-        buf[n] = '\0';
-        r = strtoull(buf, 0, 16);
-    }else{
-        r = 0;
-        for(i=0; i<naddr; i++)
-            if(addr[i] == a)
-                r = val[i];
-    }
-
-    return r;
-}
-@
-
-<<function [[fatal]]>>=
-static void
-fatal(char *fmt, ...)
-{
-    char buf[4096];
-    va_list arg;
-
-    va_start(arg, fmt);
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    va_end(arg);
-    fprint(2, "ktrace: %s\n", buf);
-    exits(buf);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<tracers/ktrace.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <ctype.h>
-
-#include <mach.h>
-
-// ktrace - interpret kernel stack dumps
-
-static	int	rtrace(uvlong, uvlong, uvlong);
-static	int	i386trace(uvlong, uvlong, uvlong);
-
-static	uvlong	getval(uvlong);
-static	void	inithdr(int);
-static	void	fatal(char*, ...);
-static	void	readstack(void);
-
-<<global [[fhdr]]>>
-<<global [[interactive]]>>
-
-<<constant FRAMENAME (ktrace)>>
-
-<<function [[usage]]>>
-
-<<function [[printaddr]]>>
-
-<<global [[fmt]]>>
-
-<<function [[main]]>>
-
-<<function [[inithdr]]>>
-
-<<function [[rtrace]]>>
-
-<<function i386trace (ktrace)>>
-
-<<global [[naddr]]>>
-<<global [[addr]]>>
-<<global [[val]]>>
-
-<<function [[putval]]>>
-
-<<function [[readstack]]>>
-
-<<function [[getval]]>>
-
-<<function [[fatal]]>>
-@
-
-
-\subsection{[[tracers/strace.c]]}
-
-%-------------------------------------------------------------
-
-<<tracers/strace.c>>=
-// System calls tracer
-
-#include <u.h>
-#include <libc.h>
-
-#include <bio.h>
-#include <thread.h>
-
-// was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
-// but most people knows better 'strace'
-
-<<enum [[_anon_ (strace)]]>>
-
-<<global [[out]]>>
-<<global [[quit]]>>
-<<global [[forkc]]>>
-<<global [[nread]]>>
-
-typedef struct Str Str;
-<<struct [[Str]]>>
-
-<<function [[die]]>>
-
-<<function [[cwrite]]>>
-
-<<function [[newstr]]>>
-
-<<function [[reader]]>>
-<<function [[writer]]>>
-
-<<function usage (tracers/strace.c)>>
-
-<<function [[hang]]>>
-
-<<function [[threadmain]]>>
-@
-
-
-
-
-
 \section{[[include/]]}
 
 \subsection{[[include/debug/mach.h]]}
@@ -7426,14 +5843,421 @@ extern	Machdata	i386mach, armmach, mipsmach;
 
 
 
+\section{[[tracers/]]}
+
+\subsection{[[tracers/strace.c]]}
+
+%-------------------------------------------------------------
+
+<<tracers/strace.c>>=
+// System calls tracer
+
+#include <u.h>
+#include <libc.h>
+
+#include <bio.h>
+#include <thread.h>
+
+// was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
+// but most people knows better 'strace'
+
+<<enum [[_anon_ (strace)]]>>
+
+<<global [[out]]>>
+<<global [[quit]]>>
+<<global [[forkc]]>>
+<<global [[nread]]>>
+
+typedef struct Str Str;
+<<struct [[Str]]>>
+
+<<function [[die]]>>
+
+<<function [[cwrite]]>>
+
+<<function [[newstr]]>>
+
+<<function [[reader]]>>
+<<function [[writer]]>>
+
+<<function usage (tracers/strace.c)>>
+
+<<function [[hang]]>>
+
+<<function [[threadmain]]>>
+@
+
+
+
+
+
+\subsection{[[tracers/ktrace.c]]}
+
+<<global [[fhdr]]>>=
+static	Fhdr	fhdr;
+@
+
+<<global [[interactive]]>>=
+static	int	interactive = 0;
+@
+
+<<constant FRAMENAME (ktrace)>>=
+#define	FRAMENAME	".frame"
+@
+
+<<function [[usage]]>>=
+static void
+usage(void)
+{
+    fprint(2, "usage: ktrace [-i] kernel pc sp [link]\n");
+    exits("usage");
+}
+@
+
+<<function [[printaddr]]>>=
+static void
+printaddr(char *addr, uvlong pc)
+{
+    int i;
+    char *p;
+
+    /*
+     * reformat the following.
+     *
+     * foo+1a1 -> src(foo+0x1a1);
+     * 10101010 -> src(0x10101010);
+     */
+
+    if(strlen(addr) == 8 && strchr(addr, '+') == nil){
+        for(i=0; i<8; i++)
+            if(!isxdigit(addr[i]))
+                break;
+        if(i == 8){
+            print("src(%#.8llux); // 0x%s\n", pc, addr);
+            return;
+        }
+    }
+
+    if(p=strchr(addr, '+')){
+        *p++ = 0;
+        print("src(%#.8llux); // %s+0x%s\n", pc, addr, p);
+    }else
+        print("src(%#.8llux); // %s\n", pc, addr);
+}
+@
+
+<<global [[fmt]]>>=
+static void (*fmt)(char*, uvlong) = printaddr;
+@
+
+<<function [[main]]>>=
+void
+main(int argc, char *argv[])
+{
+    int (*t)(uvlong, uvlong, uvlong);
+    uvlong pc, sp, link;
+    int fd;
+
+    ARGBEGIN{
+    case 'i':
+        interactive = 1;
+        break;
+    default:
+        usage();
+    }ARGEND
+
+    link = 0;
+    t = rtrace;
+    switch(argc){
+    case 4:
+        t = rtrace;
+        link = strtoull(argv[3], 0, 16);
+        break;
+    case 3:
+        break;
+    default:
+        usage();
+    }
+    pc = strtoull(argv[1], 0, 16);
+    sp = strtoull(argv[2], 0, 16);
+    if(!interactive)
+        readstack();
+
+    fd = open(argv[0], OREAD);
+    if(fd < 0)
+        fatal("can't open %s: %r", argv[0]);
+    inithdr(fd);
+    switch(fhdr.magic){
+    case I_MAGIC:	/* intel 386 */
+        t = i386trace;
+        break;
+    case E_MAGIC:	/* arm 7-something */
+        t = rtrace;
+        break;
+    default:
+        fprint(2, "%s: warning: can't tell what type of stack %s uses; assuming it's %s\n",
+            argv0, argv[0], argc == 4 ? "risc" : "cisc");
+        break;
+    }
+    (*t)(pc, sp, link);
+    exits(0);
+}
+@
+
+<<function [[inithdr]]>>=
+static void
+inithdr(int fd)
+{
+    seek(fd, 0, 0);
+    if(!crackhdr(fd, &fhdr))
+        fatal("read text header");
+
+    if(syminit(fd, &fhdr) < 0)
+        fatal("%r\n");
+}
+@
+
+<<function [[rtrace]]>>=
+// for MIPS and ARM
+static int
+rtrace(uvlong pc, uvlong sp, uvlong link)
+{
+    Symbol s, f;
+    char buf[128];
+    uvlong oldpc;
+    int i;
+
+    i = 0;
+    while(findsym(pc, CTEXT, &s)) {
+        if(pc == s.value)	/* at first instruction */
+            f.value = 0;
+        else if(findlocal(&s, FRAMENAME, &f) == 0)
+            break;
+
+        symoff(buf, sizeof buf, pc, CANY);
+        fmt(buf, pc);
+
+        oldpc = pc;
+        if(s.type == 'L' || s.type == 'l' || pc <= s.value+mach->pcquant){
+            if(link == 0)
+                fprint(2, "%s: need to supply a valid link register\n", argv0);
+            pc = link;
+        }else{
+            pc = getval(sp);
+            if(pc == 0)
+                break;
+        }
+
+        if(pc == 0 || (pc == oldpc && f.value == 0))
+            break;
+
+        sp += f.value;
+
+        if(++i > 40)
+            break;
+    }
+    return i;
+}
+@
+
+<<function i386trace (ktrace)>>=
+static int
+i386trace(uvlong pc, uvlong sp, uvlong link)
+{
+    int i;
+    uvlong osp;
+    Symbol s, f;
+    char buf[128];
+
+    USED(link);
+    i = 0;
+    osp = 0;
+    while(findsym(pc, CTEXT, &s)) {
+
+        symoff(buf, sizeof buf, pc, CANY);
+        fmt(buf, pc);
+
+        if(pc != s.value) {	/* not at first instruction */
+            if(findlocal(&s, FRAMENAME, &f) == 0)
+                break;
+            sp += f.value-mach->szaddr;
+        }else if(strcmp(s.name, "forkret") == 0){
+            print("//passing interrupt frame; last pc found at sp=%#llux\n", osp);
+            sp +=  15 * mach->szaddr;		/* pop interrupt frame */
+        }
+
+        pc = getval(sp);
+        if(pc == 0 && strcmp(s.name, "forkret") == 0){
+            sp += 3 * mach->szaddr;			/* pop iret eip, cs, eflags */
+            print("//guessing call through invalid pointer, try again at sp=%#llux\n", sp);
+            s.name = "";
+            pc = getval(sp);
+        }
+        if(pc == 0) {
+            print("//didn't find pc at sp=%#llux, last pc found at sp=%#llux\n", sp, osp);
+            break;
+        }
+        osp = sp;
+
+        sp += mach->szaddr;
+        if(strcmp(s.name, "forkret") == 0)
+            sp += 2 * mach->szaddr;			/* pop iret cs, eflags */
+
+        if(++i > 40)
+            break;
+    }
+    return i;
+}
+@
+
+<<global [[naddr]]>>=
+int naddr;
+@
+
+<<global [[addr]]>>=
+uvlong addr[1024];
+@
+
+<<global [[val]]>>=
+uvlong val[1024];
+@
+
+<<function [[putval]]>>=
+static void
+putval(uvlong a, uvlong v)
+{
+    if(naddr < nelem(addr)){
+        addr[naddr] = a;
+        val[naddr] = v;
+        naddr++;
+    }
+}
+@
+
+<<function [[readstack]]>>=
+static void
+readstack(void)
+{
+    Biobuf b;
+    char *p;
+    char *f[64];
+    int nf, i;
+
+    Binit(&b, 0, OREAD);
+    while(p=Brdline(&b, '\n')){
+        p[Blinelen(&b)-1] = 0;
+        nf = tokenize(p, f, nelem(f));
+        for(i=0; i<nf; i++){
+            if(p=strchr(f[i], '=')){
+                *p++ = 0;
+                putval(strtoull(f[i], 0, 16), strtoull(p, 0, 16));
+            }
+        }
+    }
+}
+@
+
+<<function [[getval]]>>=
+static uvlong
+getval(uvlong a)
+{
+    char buf[256];
+    int i, n;
+    uvlong r;
+
+    if(interactive){
+        print("// data at %#8.8llux? ", a);
+        n = read(0, buf, sizeof(buf)-1);
+        if(n <= 0)
+            return 0;
+        buf[n] = '\0';
+        r = strtoull(buf, 0, 16);
+    }else{
+        r = 0;
+        for(i=0; i<naddr; i++)
+            if(addr[i] == a)
+                r = val[i];
+    }
+
+    return r;
+}
+@
+
+<<function [[fatal]]>>=
+static void
+fatal(char *fmt, ...)
+{
+    char buf[4096];
+    va_list arg;
+
+    va_start(arg, fmt);
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    va_end(arg);
+    fprint(2, "ktrace: %s\n", buf);
+    exits(buf);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<tracers/ktrace.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <ctype.h>
+
+#include <mach.h>
+
+// ktrace - interpret kernel stack dumps
+
+static	int	rtrace(uvlong, uvlong, uvlong);
+static	int	i386trace(uvlong, uvlong, uvlong);
+
+static	uvlong	getval(uvlong);
+static	void	inithdr(int);
+static	void	fatal(char*, ...);
+static	void	readstack(void);
+
+<<global [[fhdr]]>>
+<<global [[interactive]]>>
+
+<<constant FRAMENAME (ktrace)>>
+
+<<function [[usage]]>>
+
+<<function [[printaddr]]>>
+
+<<global [[fmt]]>>
+
+<<function [[main]]>>
+
+<<function [[inithdr]]>>
+
+<<function [[rtrace]]>>
+
+<<function i386trace (ktrace)>>
+
+<<global [[naddr]]>>
+<<global [[addr]]>>
+<<global [[val]]>>
+
+<<function [[putval]]>>
+
+<<function [[readstack]]>>
+
+<<function [[getval]]>>
+
+<<function [[fatal]]>>
+@
+
+
 \section{[[acid/]]}
 
 \subsection{[[acid/acid.h]]}
 
-
 <<acid constants>>=
 Maxarg		= 512,
-Maxproc		= 50,
 Maxval		= 10,
 Mempergc	= 1024*1024,
 @
@@ -7448,10 +6272,6 @@ enum
 @
 
 
-
-
-
-
 <<struct [[Rplace]]>>=
 struct Rplace
 {
@@ -7462,23 +6282,6 @@ struct Rplace
     Lsym**	tail;
 };
 @
-
-
-
-
-<<struct [[List]]>>=
-struct List
-{
-    Gc;
-    List*	next;
-    char	type;
-    Store;
-};
-@
-
-
-
-
 
 
 %-------------------------------------------------------------
@@ -7703,63 +6506,6 @@ List*	tracelist;
 
 \subsection{[[acid/lex.c]]}
 
-<<global [[cmap]]>>=
-char cmap[256] =
-{
-    ['0']	'\0'+1,
-    ['n']	'\n'+1,
-    ['r']	'\r'+1,
-    ['t']	'\t'+1,
-    ['b']	'\b'+1,
-    ['f']	'\f'+1,
-    ['a']	'\a'+1,
-    ['v']	'\v'+1,
-    ['\\']	'\\'+1,
-    ['"']	'"'+1,
-};
-@
-
-
-
-
-
-
-
-
-<<function [[escchar]]>>=
-int
-escchar(char c)
-{
-    int n;
-    char buf[Strsize];
-
-    if(c >= '0' && c <= '9') {
-        n = 1;
-        buf[0] = c;
-        for(;;) {
-            c = lexc();
-            if(c == Eof)
-                error("%d: <eof> in escape sequence", line);
-            if(strchr("0123456789xX", c) == 0) {
-                unlexc(c);
-                break;
-            }
-            if(n >= Strsize)
-                error("string escape too long");
-            buf[n++] = c;
-        }
-        buf[n] = '\0';
-        return strtol(buf, 0, 0);
-    }
-
-    n = cmap[c];
-    if(n == 0)
-        return c;
-    return n-1;
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<acid/lex.c>>=
@@ -7811,23 +6557,6 @@ typedef struct IOstack IOstack;
 @
 
 \subsection{[[acid/main.c]]}
-
-
-
-<<function [[al]]>>=
-List*
-al(int t)
-{
-    List *l;
-
-    l = gmalloc(sizeof(List));
-    memset(l, 0, sizeof(List));
-    l->type = t;
-    l->gclink = gcl;
-    gcl = l;
-    return l;
-}
-@
 
 <<function [[con]]>>=
 Node*
@@ -7894,18 +6623,6 @@ system(void)
 }
 @
 
-<<function [[isnumeric]]>>=
-int
-isnumeric(char *s)
-{
-    while(*s) {
-        if(*s < '0' || *s > '9')
-            return 0;
-        s++;
-    }
-    return 1;
-}
-@
 
 <<[[main()]](acid) format initializations>>=
 fmtinstall('x', xfmt);
@@ -8217,36 +6934,6 @@ scmp(String *sr, String *sl)
 
 
 
-<<function [[fbool]]>>=
-int
-fbool(Node *n)
-{
-    int true = 0;
-
-    if(n->op != OCONST)
-        fatal("fbool: not const");
-
-    switch(n->type) {
-    case TINT:
-        if(n->ival != 0)
-            true = 1;
-        break;
-    case TFLOAT:
-        if(n->fval != 0.0)
-            true = 1;
-        break;
-    case TSTRING:
-        if(n->string->len)
-            true = 1;
-        break;
-    case TLIST:
-        if(n->l)
-            true = 1;
-        break;
-    }
-    return true;
-}
-@
 
 <<function [[convflt]]>>=
 void
@@ -8599,68 +7286,6 @@ call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
 
 \subsection{[[acid/proc.c]]}
 
-
-
-
-
-
-
-<<function [[deinstall]]>>=
-void
-deinstall(int pid)
-{
-    int i;
-    Lsym *s;
-    List *f, **d;
-
-    for(i = 0; i < Maxproc; i++) {
-        if(ptab[i].pid == pid) {
-            close(ptab[i].ctl);
-            ptab[i].pid = 0;
-            s = look("proclist");
-            d = &s->v->l;
-            for(f = *d; f; f = f->next) {
-                if(f->ival == pid) {
-                    *d = f->next;
-                    break;
-                }
-            }
-            s = look("pid");
-            if(s->v->ival == pid)
-                s->v->ival = 0;
-            return;
-        }
-    }
-}
-@
-
-
-<<function [[getstatus]]>>=
-char *
-getstatus(int pid)
-{
-    int fd, n;
-    char *argv[16], buf[64];
-    static char status[128];
-
-    snprint(buf, sizeof(buf), "/proc/%d/status", pid);
-    fd = open(buf, OREAD);
-    if(fd < 0)
-        error("open %s: %r", buf);
-
-    n = read(fd, status, sizeof(status)-1);
-    close(fd);
-    if(n <= 0)
-        error("read %s: %r", buf);
-    status[n] = '\0';
-
-    if(tokenize(status, argv, nelem(argv)-1) < 3)
-        error("tokenize %s: %r", buf);
-
-    return argv[2];
-}
-@
-
 <<function [[waitfor]]>>=
 Waitmsg*
 waitfor(int pid)
@@ -8694,7 +7319,6 @@ static void install(int);
 <<function [[nocore]]>>
 
 <<function [[sproc]]>>
-
 <<function [[nproc]]>>
 
 <<function notes (acid/proc.c)>>
@@ -8702,7 +7326,6 @@ static void install(int);
 <<function [[dostop]]>>
 
 <<function [[install]]>>
-
 <<function [[deinstall]]>>
 
 <<function [[msg]]>>
@@ -9241,466 +7864,6 @@ decl(Node *n)
 
 \subsection{[[acid/print.c]]}
 
-<<global [[binop]]>>=
-static char *binop[] =
-{
-    [OMUL]	"*",
-    [ODIV]	"/",
-    [OMOD]	"%",
-    [OADD]	"+",
-    [OSUB]	"-",
-    [ORSH]	">>",
-    [OLSH]	"<<",
-    [OLT]	"<",
-    [OGT]	">",
-    [OLEQ]	"<=",
-    [OGEQ]	">=",
-    [OEQ]	"==",
-    [ONEQ]	"!=",
-    [OLAND]	"&",
-    [OXOR]	"^",
-    [OLOR]	"|",
-    [OCAND]	"&&",
-    [OCOR]	"||",
-    [OASGN]	" = ",
-};
-@
-
-<<global [[tabs]]>>=
-static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-@
-
-<<global [[typenames]]>>=
-char *typenames[] =
-{
-    [TINT]		"integer",
-    [TFLOAT]	"float",
-    [TSTRING]	"string",
-    [TLIST]		"list",
-    [TCODE]		"code",
-};
-@
-
-<<function [[cmp]]>>=
-int
-cmp(void *va, void *vb)
-{
-    char **a = va;
-    char **b = vb;
-
-    return strcmp(*a, *b);
-}
-@
-
-<<function [[fundefs]]>>=
-void
-fundefs(void)
-{
-    Lsym *l;
-    char **vec;
-    int i, j, n, max, col, f, g, s;
-
-    max = 0;
-    f = 0;
-    g = 100;
-    vec = malloc(sizeof(char*)*g);
-    if(vec == 0)
-        fatal("out of memory");
-
-    for(i = 0; i < Hashsize; i++) {
-        for(l = hash[i]; l; l = l->hash) {
-            if(l->proc == 0 && l->builtin == 0)
-                continue;
-            n = strlen(l->name);
-            if(n > max)
-                max = n;
-            if(f >= g) {
-                g *= 2;
-                vec = realloc(vec, sizeof(char*)*g);
-                if(vec == 0)
-                    fatal("out of memory");
-            }
-            vec[f++] = l->name;
-        }
-    }
-        qsort(vec, f, sizeof(char*), cmp);
-    max++;
-    col = 60/max;
-    s = (f+col-1)/col;
-
-    for(i = 0; i < s; i++) {
-        for(j = i; j < f; j += s)
-            Bprint(bout, "%-*s", max, vec[j]);
-        Bprint(bout, "\n");
-    }
-}
-@
-
-<<function [[whatis]]>>=
-void
-whatis(Lsym *l)
-{
-    int t;
-    int def;
-    Type *ti;
-
-    if(l == 0) {
-        fundefs();
-        return;
-    }
-
-    def = 0;
-    if(l->v->set) {
-        t = l->v->type;
-        Bprint(bout, "%s variable", typenames[t]);
-        if(t == TINT || t == TFLOAT)
-            Bprint(bout, " format %c", l->v->fmt);
-        if(l->v->comt)
-            Bprint(bout, " complex %s", l->v->comt->base->name);
-        Bputc(bout, '\n');
-        def = 1;
-    }
-    if(l->lt) {
-        Bprint(bout, "complex %s {\n", l->name);
-        for(ti = l->lt; ti; ti = ti->next) {
-            if(ti->type) {
-                if(ti->fmt == 'a') {
-                    Bprint(bout, "\t%s %d %s;\n",
-                    ti->type->name, ti->offset,
-                    ti->tag->name);
-                }
-                else {
-                    Bprint(bout, "\t'%c' %s %d %s;\n",
-                    ti->fmt, ti->type->name, ti->offset,
-                    ti->tag->name);
-                }
-            }
-            else
-                Bprint(bout, "\t'%c' %d %s;\n",
-                ti->fmt, ti->offset, ti->tag->name);
-        }
-        Bprint(bout, "};\n");
-        def = 1;
-    }
-    if(l->proc) {
-        Bprint(bout, "defn %s(", l->name);
-        pexpr(l->proc->left);
-        Bprint(bout, ") {\n");
-        pcode(l->proc->right, 1);
-        Bprint(bout, "}\n");
-        def = 1;
-    }
-    if(l->builtin) {
-        Bprint(bout, "builtin function\n");
-        def = 1;
-    }
-    if(def == 0)
-        Bprint(bout, "%s is undefined\n", l->name);
-}
-@
-
-<<function [[slist]]>>=
-void
-slist(Node *n, int d)
-{
-    if(n == 0)
-        return;
-    if(n->op == OLIST)
-        Bprint(bout, "%.*s{\n", d-1, tabs);
-    pcode(n, d);
-    if(n->op == OLIST)
-        Bprint(bout, "%.*s}\n", d-1, tabs);
-}
-@
-
-<<function [[pcode]]>>=
-void
-pcode(Node *n, int d)
-{
-    Node *r, *l;
-
-    if(n == 0)
-        return;
-
-    r = n->right;
-    l = n->left;
-
-    switch(n->op) {
-    default:
-        Bprint(bout, "%.*s", d, tabs);
-        pexpr(n);
-        Bprint(bout, ";\n");
-        break;
-    case OLIST:
-        pcode(n->left, d);
-        pcode(n->right, d);
-        break;
-    case OLOCAL:
-        Bprint(bout, "%.*slocal", d, tabs);
-        while(l) {
-            Bprint(bout, " %s", l->sym->name);
-            l = l->left;
-            if(l == 0)
-                Bprint(bout, ";\n");
-            else
-                Bprint(bout, ",");
-        }
-        break;
-    case OCOMPLEX:
-        Bprint(bout, "%.*scomplex %s %s;\n", d, tabs, n->sym->name, l->sym->name);
-        break;
-    case OIF:
-        Bprint(bout, "%.*sif ", d, tabs);
-        pexpr(l);
-        d++;
-        Bprint(bout, " then\n");
-        if(r && r->op == OELSE) {
-            slist(r->left, d);
-            Bprint(bout, "%.*selse\n", d-1, tabs);
-            slist(r->right, d);
-        }
-        else
-            slist(r, d);
-        break;
-    case OWHILE:
-        Bprint(bout, "%.*swhile ", d, tabs);
-        pexpr(l);
-        d++;
-        Bprint(bout, " do\n");
-        slist(r, d);
-        break;
-    case ORET:
-        Bprint(bout, "%.*sreturn ", d, tabs);
-        pexpr(l);
-        Bprint(bout, ";\n");
-        break;
-    case ODO:
-        Bprint(bout, "%.*sloop ", d, tabs);
-        pexpr(l->left);
-        Bprint(bout, ", ");
-        pexpr(l->right);
-        Bprint(bout, " do\n");
-        slist(r, d+1);
-    }
-}
-@
-
-<<function [[pexpr]]>>=
-void
-pexpr(Node *n)
-{
-    Node *r, *l;
-
-    if(n == 0)
-        return;
-
-    r = n->right;
-    l = n->left;
-
-    switch(n->op) {
-    case ONAME:
-        Bprint(bout, "%s", n->sym->name);
-        break;
-    case OCONST:
-        switch(n->type) {
-        case TINT:
-            Bprint(bout, "%lld", n->ival);
-            break;
-        case TFLOAT:
-            Bprint(bout, "%g", n->fval);
-            break;
-        case TSTRING:
-            pstr(n->string);
-            break;
-        case TLIST:
-            break;
-        }
-        break;
-    case OMUL:
-    case ODIV:
-    case OMOD:
-    case OADD:
-    case OSUB:
-    case ORSH:
-    case OLSH:
-    case OLT:
-    case OGT:
-    case OLEQ:
-    case OGEQ:
-    case OEQ:
-    case ONEQ:
-    case OLAND:
-    case OXOR:
-    case OLOR:
-    case OCAND:
-    case OCOR:
-        Bputc(bout, '(');
-        pexpr(l);
-        Bprint(bout, binop[n->op]);
-        pexpr(r);
-        Bputc(bout, ')');
-        break;
-    case OASGN:
-        pexpr(l);
-        Bprint(bout, binop[n->op]);
-        pexpr(r);
-        break;
-    case OINDM:
-        Bprint(bout, "*");
-        pexpr(l);
-        break;
-    case OEDEC:
-        Bprint(bout, "--");
-        pexpr(l);
-        break;
-    case OEINC:
-        Bprint(bout, "++");
-        pexpr(l);
-        break;
-    case OPINC:
-        pexpr(l);
-        Bprint(bout, "++");
-        break;
-    case OPDEC:
-        pexpr(l);
-        Bprint(bout, "--");
-        break;
-    case ONOT:
-        Bprint(bout, "!");
-        pexpr(l);
-        break;
-    case OLIST:
-        pexpr(l);
-        if(r) {
-            Bprint(bout, ",");
-            pexpr(r);
-        }
-        break;
-    case OCALL:
-        pexpr(l);
-        Bprint(bout, "(");
-        pexpr(r);
-        Bprint(bout, ")");
-        break;
-    case OCTRUCT:
-        Bprint(bout, "{");
-        pexpr(l);
-        Bprint(bout, "}");
-        break;
-    case OHEAD:
-        Bprint(bout, "head ");
-        pexpr(l);
-        break;
-    case OTAIL:
-        Bprint(bout, "tail ");
-        pexpr(l);
-        break;
-    case OAPPEND:
-        Bprint(bout, "append ");
-        pexpr(l);
-        Bprint(bout, ",");
-        pexpr(r);
-        break;
-    case ODELETE:
-        Bprint(bout, "delete ");
-        pexpr(l);
-        Bprint(bout, ",");
-        pexpr(r);
-        break;
-    case ORET:
-        Bprint(bout, "return ");
-        pexpr(l);
-        break;
-    case OINDEX:
-        pexpr(l);
-        Bprint(bout, "[");
-        pexpr(r);
-        Bprint(bout, "]");
-        break;
-    case OINDC:
-        Bprint(bout, "@");
-        pexpr(l);
-        break;
-    case ODOT:
-        pexpr(l);
-        Bprint(bout, ".%s", n->sym->name);
-        break;
-    case OFRAME:
-        Bprint(bout, "%s:%s", n->sym->name, l->sym->name);
-        break;
-    case OCAST:
-        Bprint(bout, "(%s)", n->sym->name);
-        pexpr(l);
-        break;
-    case OFMT:
-        pexpr(l);
-        Bprint(bout, "\\%c", (int)r->ival);
-        break;
-    case OEVAL:
-        Bprint(bout, "eval ");
-        pexpr(l);
-        break;
-    case OWHAT:
-        Bprint(bout, "whatis");
-        if(n->sym)
-            Bprint(bout, " %s", n->sym->name);
-        break;
-    }
-}
-@
-
-<<function [[pstr]]>>=
-void
-pstr(String *s)
-{
-    int i, c;
-
-    Bputc(bout, '"');
-    for(i = 0; i < s->len; i++) {
-        c = s->string[i];
-        switch(c) {
-        case '\0':
-            c = '0';
-            break;
-        case '\n':
-            c = 'n';
-            break;
-        case '\r':
-            c = 'r';
-            break;
-        case '\t':
-            c = 't';
-            break;
-        case '\b':
-            c = 'b';
-            break;
-        case '\f':
-            c = 'f';
-            break;
-        case '\a':
-            c = 'a';
-            break;
-        case '\v':
-            c = 'v';
-            break;
-        case '\\':
-            c = '\\';
-            break;
-        case '"':
-            c = '"';
-            break;
-        default:
-            Bputc(bout, c);
-            continue;
-        }
-        Bputc(bout, '\\');
-        Bputc(bout, c);
-    }
-    Bputc(bout, '"');
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<acid/print.c>>=
@@ -10093,598 +8256,7 @@ oasgn(Node *n, Node *res)
 }
 @
 
-<<function [[oadd]]>>=
-void
-oadd(Node *n, Node *res)
-{
-    Node l, r;
 
-    if(n->right == nil){		/* unary + */
-        expr(n->left, res);
-        return;
-    }
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TFLOAT;
-    switch(l.type) {
-    default:
-        error("bad lhs type +");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->type = TINT;
-            res->ival = l.ival+r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.ival+r.fval;
-            break;
-        default:
-            error("bad rhs type +");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->fval = l.fval+r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.fval+r.fval;
-            break;
-        default:
-            error("bad rhs type +");
-        }
-        break;
-    case TSTRING:
-        if(r.type == TSTRING) {
-            res->type = TSTRING;
-            res->fmt = 's';
-            res->string = stradd(l.string, r.string); 
-            break;
-        }
-        if(r.type == TINT) {
-            res->type = TSTRING;
-            res->fmt = 's';
-            res->string = straddrune(l.string, r.ival);
-            break;
-        }
-        error("bad rhs for +");
-    case TLIST:
-        res->type = TLIST;
-        switch(r.type) {
-        case TLIST:
-            res->l = addlist(l.l, r.l);
-            break;
-        default:
-            r.left = 0;
-            r.right = 0;
-            res->l = addlist(l.l, construct(&r));
-            break;
-        }
-    }
-}
-@
-
-<<function [[osub]]>>=
-void
-osub(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TFLOAT;
-    switch(l.type) {
-    default:
-        error("bad lhs type -");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->type = TINT;
-            res->ival = l.ival-r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.ival-r.fval;
-            break;
-        default:
-            error("bad rhs type -");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->fval = l.fval-r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.fval-r.fval;
-            break;
-        default:
-            error("bad rhs type -");
-        }
-        break;
-    }
-}
-@
-
-<<function [[omul]]>>=
-void
-omul(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TFLOAT;
-    switch(l.type) {
-    default:
-        error("bad lhs type *");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->type = TINT;
-            res->ival = l.ival*r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.ival*r.fval;
-            break;
-        default:
-            error("bad rhs type *");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->fval = l.fval*r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.fval*r.fval;
-            break;
-        default:
-            error("bad rhs type *");
-        }
-        break;
-    }
-}
-@
-
-<<function [[odiv]]>>=
-void
-odiv(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TFLOAT;
-    switch(l.type) {
-    default:
-        error("bad lhs type /");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->type = TINT;
-            if(r.ival == 0)
-                error("zero divide");
-            res->ival = l.ival/r.ival;
-            break;
-        case TFLOAT:
-            if(r.fval == 0)
-                error("zero divide");
-            res->fval = l.ival/r.fval;
-            break;
-        default:
-            error("bad rhs type /");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->fval = l.fval/r.ival;
-            break;
-        case TFLOAT:
-            res->fval = l.fval/r.fval;
-            break;
-        default:
-            error("bad rhs type /");
-        }
-        break;
-    }
-}
-@
-
-<<function [[omod]]>>=
-void
-omod(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    if(l.type != TINT || r.type != TINT)
-        error("bad expr type %");
-    res->ival = l.ival%r.ival;
-}
-@
-
-<<function [[olsh]]>>=
-void
-olsh(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    if(l.type != TINT || r.type != TINT)
-        error("bad expr type <<");
-    res->ival = l.ival<<r.ival;
-}
-@
-
-<<function [[orsh]]>>=
-void
-orsh(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    if(l.type != TINT || r.type != TINT)
-        error("bad expr type >>");
-    res->ival = (uvlong)l.ival>>r.ival;
-}
-@
-
-<<function [[olt]]>>=
-void
-olt(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    switch(l.type) {
-    default:
-        error("bad lhs type <");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.ival < r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.ival < r.fval;
-            break;
-        default:
-            error("bad rhs type <");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.fval < r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.fval < r.fval;
-            break;
-        default:
-            error("bad rhs type <");
-        }
-        break;
-    }
-}
-@
-
-<<function [[ogt]]>>=
-void
-ogt(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = 'D';
-    res->op = OCONST;
-    res->type = TINT;
-    switch(l.type) {
-    default:
-        error("bad lhs type >");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.ival > r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.ival > r.fval;
-            break;
-        default:
-            error("bad rhs type >");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.fval > r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.fval > r.fval;
-            break;
-        default:
-            error("bad rhs type >");
-        }
-        break;
-    }
-}
-@
-
-<<function [[oleq]]>>=
-void
-oleq(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = 'D';
-    res->op = OCONST;
-    res->type = TINT;
-    switch(l.type) {
-    default:
-        error("bad expr type <=");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.ival <= r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.ival <= r.fval;
-            break;
-        default:
-            error("bad expr type <=");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.fval <= r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.fval <= r.fval;
-            break;
-        default:
-            error("bad expr type <=");
-        }
-        break;
-    }
-}
-@
-
-<<function [[ogeq]]>>=
-void
-ogeq(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = 'D';
-    res->op = OCONST;
-    res->type = TINT;
-    switch(l.type) {
-    default:
-        error("bad lhs type >=");
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.ival >= r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.ival >= r.fval;
-            break;
-        default:
-            error("bad rhs type >=");
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.fval >= r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.fval >= r.fval;
-            break;
-        default:
-            error("bad rhs type >=");
-        }
-        break;
-    }
-}
-@
-
-<<function [[oeq]]>>=
-void
-oeq(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = 'D';
-    res->op = OCONST;
-    res->type = TINT;
-    res->ival = 0;
-    switch(l.type) {
-    default:
-        break;
-    case TINT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.ival == r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.ival == r.fval;
-            break;
-        default:
-            break;
-        }
-        break;
-    case TFLOAT:
-        switch(r.type) {
-        case TINT:
-            res->ival = l.fval == r.ival;
-            break;
-        case TFLOAT:
-            res->ival = l.fval == r.fval;
-            break;
-        default:
-            break;
-        }
-        break;
-    case TSTRING:
-        if(r.type == TSTRING) {
-            res->ival = scmp(r.string, l.string);
-            break;
-        }
-        break;
-    case TLIST:
-        if(r.type == TLIST) {
-            res->ival = listcmp(l.l, r.l);
-            break;
-        }
-        break;
-    }
-    if(n->op == ONEQ)
-        res->ival = !res->ival;
-}
-@
-
-<<function [[oland]]>>=
-void
-oland(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    if(l.type != TINT || r.type != TINT)
-        error("bad expr type &");
-    res->ival = l.ival&r.ival;
-}
-@
-
-<<function [[oxor]]>>=
-void
-oxor(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    if(l.type != TINT || r.type != TINT)
-        error("bad expr type ^");
-    res->ival = l.ival^r.ival;
-}
-@
-
-<<function [[olor]]>>=
-void
-olor(Node *n, Node *res)
-{
-    Node l, r;
-
-    expr(n->left, &l);
-    expr(n->right, &r);
-    res->fmt = l.fmt;
-    res->op = OCONST;
-    res->type = TINT;
-    if(l.type != TINT || r.type != TINT)
-        error("bad expr type |");
-    res->ival = l.ival|r.ival;
-}
-@
-
-<<function [[ocand]]>>=
-void
-ocand(Node *n, Node *res)
-{
-    Node l, r;
-
-    res->op = OCONST;
-    res->type = TINT;
-    res->ival = 0;
-    res->fmt = 'D';
-    expr(n->left, &l);
-    if(fbool(&l) == 0)
-        return;
-    expr(n->right, &r);
-    if(fbool(&r) == 0)
-        return;
-    res->ival = 1;
-}
-@
-
-<<function [[onot]]>>=
-void
-onot(Node *n, Node *res)
-{
-    Node l;
-
-    res->op = OCONST;
-    res->type = TINT;
-    res->ival = 0;
-    expr(n->left, &l);
-    res->fmt = l.fmt;
-    if(fbool(&l) == 0)
-        res->ival = 1;
-}
-@
-
-<<function [[ocor]]>>=
-void
-ocor(Node *n, Node *res)
-{
-    Node l, r;
-
-    res->op = OCONST;
-    res->type = TINT;
-    res->ival = 0;
-    res->fmt = 'D';
-    expr(n->left, &l);
-    if(fbool(&l)) {
-        res->ival = 1;
-        return;
-    }
-    expr(n->right, &r);
-    if(fbool(&r)) {
-        res->ival = 1;
-        return;
-    }
-}
-@
 
 <<function [[oeinc]]>>=
 void
@@ -10746,36 +8318,6 @@ opinc(Node *n, Node *res)
 }
 @
 
-<<function [[ocall]]>>=
-void
-ocall(Node *n, Node *res)
-{
-    Lsym *s;
-    Rplace *rsav;
-
-    res->op = OCONST;		/* Default return value */
-    res->type = TLIST;
-    res->l = 0;
-
-    chklval(n->left);
-    s = n->left->sym;
-
-    if(n->builtin && !s->builtin){
-        error("no builtin %s", s->name);
-        return;
-    }
-    if(s->builtin && (n->builtin || s->proc == 0)) {
-        (*s->builtin)(res, n->right);
-        return;
-    }
-    if(s->proc == 0)
-        error("no function %s", s->name);
-
-    rsav = ret;
-    call(s->name, n->right, s->proc->left, s->proc->right, res);
-    ret = rsav;
-}
-@
 
 <<function [[ofmt]]>>=
 void
@@ -10822,7 +8364,6 @@ owhat(Node *n, Node *res)
 <<function [[ocast]]>>
 
 <<function [[oindm]]>>
-
 <<function [[oindc]]>>
 
 <<function [[oframe]]>>
@@ -10834,7 +8375,6 @@ owhat(Node *n, Node *res)
 <<function [[odelete]]>>
 
 <<function [[ohead]]>>
-
 <<function [[otail]]>>
 
 <<function [[oconst]]>>
@@ -10846,44 +8386,28 @@ owhat(Node *n, Node *res)
 <<function [[oasgn]]>>
 
 <<function [[oadd]]>>
-
 <<function [[osub]]>>
-
 <<function [[omul]]>>
-
 <<function [[odiv]]>>
-
 <<function [[omod]]>>
 
 <<function [[olsh]]>>
-
 <<function [[orsh]]>>
 
 <<function [[olt]]>>
-
 <<function [[ogt]]>>
-
 <<function [[oleq]]>>
-
 <<function [[ogeq]]>>
-
 <<function [[oeq]]>>
 
-
 <<function [[oland]]>>
-
 <<function [[oxor]]>>
-
 <<function [[olor]]>>
-
 <<function [[ocand]]>>
-
 <<function [[onot]]>>
-
 <<function [[ocor]]>>
 
 <<function [[oeinc]]>>
-
 <<function [[opinc]]>>
 
 <<function [[ocall]]>>
@@ -11136,31 +8660,6 @@ filepc(Node *r, Node *args)
 @
 
 
-<<function [[include]]>>=
-void
-include(Node *r, Node *args)
-{
-    Node res;
-    int isave;
-
-    if(args == 0)
-        error("include(string): arg count");
-    expr(args, &res);
-    if(res.type != TSTRING)
-        error("include(string): arg type");
-
-    pushfile(res.string->string);
-
-    isave = interactive;
-    interactive = 0;
-    r->ival = yyparse();
-    interactive = isave;
-    popio();
-    r->op = OCONST;
-    r->type = TINT;
-    r->fmt = 'D';
-}
-@
 
 <<function [[rc]]>>=
 void
@@ -12184,3 +9683,1175 @@ typedef struct Btab Btab;
 
 <<function [[dofmtsize]]>>
 @
+
+
+
+
+
+\section{[[db/]]}
+
+\subsection{[[db/defs.h]]}
+
+%alt: now defined in libc.h instead, not just for db
+%<<constant STDIN>>=
+%//#define	STDIN	0
+%@
+%
+%<<constant STDOUT>>=
+%//#define	STDOUT	1
+%@
+
+<<constant [[TRUE]]>>=
+#define	TRUE	(-1)
+@
+%todo: replace by true, false
+<<constant [[FALSE]]>>=
+#define	FALSE	0
+@
+
+%<<constant BADREG>>=
+%#define	BADREG	(-1)
+%@
+
+
+%-------------------------------------------------------------
+
+<<db/defs.h>>=
+/*
+ * adb - common definitions
+ * something of a grab-bag
+ */
+
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <ctype.h>
+
+#include <mach.h>
+
+<<type [[ADDR]]>>
+<<type [[WORD]]>>
+
+typedef struct bkpt	BKPT;
+
+<<constant HUGEINT (db)>>
+
+<<constant [[MAXOFF]]>>
+<<constant [[INCDIR]]>>
+<<constant [[DBNAME]]>>
+<<constant [[CMD_VERBS]]>>
+
+<<constant [[MAXPOS]]>>
+<<constant [[MAXLIN]]>>
+<<constant [[ARB]]>>
+<<constant [[MAXCOM]]>>
+<<constant [[MAXARG]]>>
+<<constant [[LINSIZ]]>>
+<<constant [[MAXSYM]]>>
+
+<<constant [[EOR]]>>
+<<constant [[SPC]]>>
+<<constant [[TB]]>>
+
+<<constant [[TRUE]]>>
+<<constant [[FALSE]]>>
+
+/*
+ * run modes
+ */
+<<constant [[SINGLE]]>>
+<<constant [[CONTIN]]>>
+
+/*
+ * breakpoints
+ */
+<<constant [[BKPTCLR]]>>
+<<constant [[BKPTSET]]>>
+<<constant [[BKPTSKIP]]>>
+<<constant [[BKPTTMP]]>>
+
+<<struct [[bkpt]]>>
+
+/*
+ * common globals
+ */
+
+extern	ADDR	dot;
+extern	int	dotinc;
+extern ADDR	ditto;
+
+extern	int	adrflg;
+extern	WORD	adrval;
+
+extern	int	cntflg;
+extern	WORD	cntval;
+extern	WORD	loopcnt;
+
+extern	uvlong	expv;
+
+extern	ADDR	maxoff;
+
+extern	int	pid;
+extern	char	*corfil, *symfil;
+extern	int	fcor, fsym;
+extern	Map	*cormap, *symmap, *dotmap;
+extern	int	pcsactive;
+extern	int	ending;
+extern	bool	mkfault;
+
+extern	BKPT	*bkpthead;
+
+extern	int	lastc, peekc;
+
+<<constant [[NNOTE]]>>
+extern	int	nnote;
+extern	char	note[NNOTE][ERRMAX];
+
+extern	int	xargc;
+
+extern	bool	wtflag;
+extern	bool	kflag;
+
+// new decl, was in main.c before
+extern char *errmsg;
+extern jmp_buf env;
+
+@
+
+%dead:
+%extern	ADDR	localval;
+%extern	ADDR	maxfile;
+%extern	ADDR	maxstor;
+%extern	bool	regdirty;
+
+
+\subsection{[[db/fns.h]]}
+
+%-------------------------------------------------------------
+
+<<db/fns.h>>=
+void		acommand(int);
+void		attachprocess(void);
+void		bkput(BKPT*, bool);
+void		bpwait(void);
+int		charpos(void);
+void		chkerr(void);
+void		clrinp(void);
+void		cmdmap(Map*);
+void		cmdsrc(int, Map*);
+void		cmdwrite(int, Map*);
+int		command(char*, int);
+int		convdig(int);
+void		ctrace(int);
+WORD		defval(WORD);
+void		delbp(void);
+void		done(void);
+int		dprint(char*, ...);
+Map*		dumbmap(int);
+void		endline(void);
+void		endpcs(void);
+int		eol(int);
+void		error(char*);
+void		errors(char*, char*);
+void		execbkpt(BKPT*, int);
+char*		exform(int, int, char*, Map*, int, int);
+int		expr(int);
+void		flush(void);
+void		flushbuf(void);
+char*		getfname(void);
+void		getformat(char*);
+int		getnum(int (*)(void));
+void		grab(void);
+void		iclose(int, int);
+ADDR		inkdot(int);
+int		isfileref(void);
+int		item(int);
+void		killpcs(void);
+void		kmsys(void);
+void		main(int, char**);
+int		mapimage(void);
+void		newline(void);
+int		nextchar(void);
+void		notes(void);
+void		oclose(void);
+void		outputinit(void);
+void		printc(int);
+void		printesc(int);
+void		printlocals(Symbol *, ADDR);
+void		printmap(char*, Map*);
+void		printparams(Symbol *, ADDR);
+void		printpc(void);
+void		printregs(int);
+void		prints(char*);
+void		printsource(ADDR);
+void		printsym(void);
+void		printsyscall(void);
+void		printtrace(int);
+int		quotchar(void);
+int		rdc(void);
+int		readchar(void);
+void		readsym(char*);
+void		redirin(int, char*);
+void		redirout(char*);
+void		readfname(char *);
+void		reread(void);
+char*		regname(int);
+uvlong		rget(Map*, char*);
+Reglist*	rname(char*);
+void		rput(Map*, char*, vlong);
+int		runpcs(int, int);
+void		runrun(int);
+void		runstep(uvlong, int);
+BKPT*		scanbkpt(ADDR adr);
+void		scanform(long, int, char*, Map*, int);
+void		setbp(void);
+void		setcor(void);
+void		setsym(void);
+void		setup(void);
+void		setvec(void);
+void		shell(void);
+void		startpcs(void);
+void		subpcs(int);
+int		symchar(int);
+int		term(int);
+void		ungrab(void);
+int		valpr(long, int);
+
+#pragma	varargck	argpos	dprint	1
+#pragma	varargck	type	"t"	void
+@
+
+\subsection{[[db/utils.c]]}
+
+%-------------------------------------------------------------
+
+<<db/utils.c>>=
+#include "defs.h"
+#include "fns.h"
+
+<<function [[error]]>>
+
+<<function [[errors]]>>
+@
+
+\subsection{[[db/globals.c]]}
+
+%-------------------------------------------------------------
+
+<<db/globals.c>>=
+#include "defs.h"
+
+<<global [[wtflag]]>>
+<<global [[kflag]]>>
+
+<<global [[mkfault]]>>
+<<global [[maxoff]]>>
+
+<<global [[errmsg]]>>
+<<global [[env]]>>
+
+<<global [[symmap]]>>
+<<global [[cormap]]>>
+
+<<global [[ending]]>>
+<<global [[pid]]>>
+<<global [[nnote]]>>
+<<global [[note]]>>
+<<global [[bkpthead]]>>
+
+<<global [[dot]]>>
+<<global [[dotinc]]>>
+<<global [[ditto]]>>
+
+<<global [[adrval]]>>
+<<global [[adrflg]]>>
+
+<<global [[cntval]]>>
+<<global [[cntflg]]>>
+
+<<global [[expv]]>>
+
+<<global [[pcsactive]]>>
+
+<<global [[xargc]]>>
+@
+
+\subsection{[[db/output.c]]}
+
+%-------------------------------------------------------------
+
+<<db/output.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+<<global [[printcol]]>>
+<<global [[infile]]>>
+<<global [[maxpos]]>>
+
+<<global [[stdout]]>>
+
+<<function [[printc]]>>
+
+<<function [[tconv]]>>
+
+<<function [[flushbuf]]>>
+
+<<function [[prints]]>>
+
+<<function [[newline]]>>
+
+<<constant [[MAXIFD]]>>
+<<global [[istack]]>>
+<<global [[ifiledepth]]>>
+
+<<function [[iclose]]>>
+
+<<function [[oclose]]>>
+
+<<function [[redirout]]>>
+
+<<function [[endline]]>>
+
+<<function [[flush]]>>
+
+<<function [[dprint]]>>
+
+<<function [[outputinit]]>>
+@
+
+\subsection{[[db/input.c]]}
+
+<<function [[isfileref]]>>=
+/*
+ *	check if the input line if of the form:
+ *		<filename>:<digits><verb> ...
+ *
+ *	we handle this case specially because we have to look ahead
+ *	at the token after the colon to decide if it is a file reference
+ *	or a colon-command with a symbol name prefix. 
+ */
+
+int
+isfileref(void)
+{
+    Rune *cp;
+
+    for (cp = lp-1; *cp && !strchr(CMD_VERBS, *cp); cp++)
+        if (*cp == '\\' && cp[1])	/* escape next char */
+            cp++;
+    if (*cp && cp > lp-1) {
+        while (*cp == ' ' || *cp == '\t')
+            cp++;
+        if (*cp++ == ':') {
+            while (*cp == ' ' || *cp == '\t')
+                cp++;
+            if (isdigit(*cp))
+                return 1;
+        }
+    }
+    return 0;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<db/input.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+extern	int	infile;
+
+<<global [[line]]>>
+<<global [[lp]]>>
+<<global [[peekc]]>>
+<<global [[lastc]]>>
+<<global [[eof]]>>
+
+/* input routines */
+
+<<function [[eol]]>>
+
+<<function [[rdc]]>>
+
+<<function [[reread]]>>
+
+<<function [[clrinp]]>>
+
+<<function [[readrune]]>>
+
+<<function [[readchar]]>>
+
+<<function [[nextchar]]>>
+
+<<function [[quotchar]]>>
+
+<<function [[getformat]]>>
+
+<<function [[isfileref]]>>
+@
+
+\subsection{[[db/setup.c]]}
+
+%-------------------------------------------------------------
+
+<<db/setup.c>>=
+
+/*
+ * init routines
+ */
+#include "defs.h"
+#include "fns.h"
+
+<<global [[symfil]]>>
+<<global [[corfil]]>>
+
+<<global [[dotmap]]>>
+
+<<global [[fsym]]>>
+<<global [[fcor]]>>
+<<global fhdr (db/setup.c)>>
+
+static int getfile(char*, int, int);
+
+<<function setsym (db)>>
+
+<<function [[setcor]]>>
+
+extern Mach mi386;
+extern Machdata i386mach;
+
+<<function [[dumbmap]]>>
+
+<<function [[cmdmap]]>>
+
+<<function [[getfile]]>>
+
+<<function [[kmsys]]>>
+
+<<function [[attachprocess]]>>
+@
+
+\subsection{[[db/format.c]]}
+
+%-------------------------------------------------------------
+
+<<db/format.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+<<function [[scanform]]>>
+
+<<function [[exform]]>>
+
+<<function [[printesc]]>>
+
+<<function [[inkdot]]>>
+@
+
+\subsection{[[db/regs.c]]}
+
+<<function [[rname]]>>=
+/*
+ * translate a name to a magic register offset
+ */
+Reglist*
+rname(char *name)
+{
+    Reglist *rp;
+
+    for (rp = mach->reglist; rp->rname; rp++)
+        if (strcmp(name, rp->rname) == 0)
+            return rp;
+    return 0;
+}
+@
+
+<<function [[getreg]]>>=
+static uvlong
+getreg(Map *map, Reglist *rp)
+{
+    uvlong v;
+    ulong w;
+    ushort s;
+    int ret;
+
+    v = 0;
+    ret = 0;
+    switch (rp->rformat)
+    {
+    case 'x':
+        ret = get2(map, rp->roffs, &s);
+        v = s;
+        break;
+    case 'f':
+    case 'X':
+        ret = get4(map, rp->roffs, &w);
+        v = w;
+        break;
+    case 'F':
+    case 'W':
+    case 'Y':
+        ret = get8(map, rp->roffs, &v);
+        break;
+    default:
+        werrstr("can't retrieve register %s", rp->rname);
+        error("%r");
+    }
+    if (ret < 0) {
+        werrstr("Register %s: %r", rp->rname);
+        error("%r");
+    }
+    return v;
+}
+@
+
+<<function [[rget]]>>=
+uvlong
+rget(Map *map, char *name)
+{
+    Reglist *rp;
+
+    rp = rname(name);
+    if (!rp)
+        error("invalid register name");
+    return getreg(map, rp);
+}
+@
+
+<<function [[rput]]>>=
+void
+rput(Map *map, char *name, vlong v)
+{
+    Reglist *rp;
+    int ret;
+
+    rp = rname(name);
+    if (!rp)
+        error("invalid register name");
+    if (rp->rflags & RRDONLY)
+        error("register is read-only");
+    switch (rp->rformat)
+    {
+    case 'x':
+        ret = put2(map, rp->roffs, (ushort) v);
+        break;
+    case 'X':
+    case 'f':
+    case 'F':
+        ret = put4(map, rp->roffs, (long) v);
+        break;
+    case 'Y':
+        ret = put8(map, rp->roffs, v);
+        break;
+    default:
+        ret = -1;
+    }
+    if (ret < 0)
+        error("can't write register");
+}
+@
+
+%-------------------------------------------------------------
+
+<<db/regs.c>>=
+/*
+ * code to keep track of registers
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+<<function [[rname]]>>
+
+<<function [[getreg]]>>
+
+<<function [[rget]]>>
+
+<<function [[rput]]>>
+<<function [[printregs]]>>
+@
+
+\subsection{[[db/expr.c]]}
+
+<<function [[ascval]]>>=
+static WORD
+ascval(void)
+{
+    Rune r;
+
+    if (readchar() == 0)
+        return (0);
+    r = lastc;
+    while(quotchar())	/*discard chars to ending quote */
+        ;
+    return((WORD) r);
+}
+@
+
+<<function [[quotchar]]>>=
+int
+quotchar(void)
+{
+    if (readchar()=='\\')
+        return(readchar());
+    else if (lastc=='\'')
+        return 0;
+    else
+        return lastc;
+}
+@
+
+<<struct [[fpin_union]]>>=
+union fpin_union {
+        WORD w;
+        float f;
+};
+@
+
+<<function [[fpin]]>>=
+/*
+ * read a floating point number
+ * the result must fit in a WORD
+ */
+
+static WORD
+fpin(char *buf)
+{
+  union fpin_union x;
+
+    x.f = atof(buf);
+    return (x.w);
+}
+@
+
+
+
+<<constant [[MAXBASE]]>>=
+#define	MAXBASE	16
+@
+
+<<constant [[MAXLIN]]>>=
+#define MAXLIN	128
+@
+
+<<function [[getnum]]>>=
+/* service routines for expression reading */
+int
+getnum(int (*rdf)(void))
+{
+    char *cp;
+    int base, d;
+    bool fpnum;
+    char num[MAXLIN];
+
+    base = 0;
+    fpnum = FALSE;
+    if (lastc == '#') {
+        base = 16;
+        (*rdf)();
+    }
+    if (convdig(lastc) >= MAXBASE)
+        return (0);
+    if (lastc == '0')
+        switch ((*rdf)()) {
+        case 'x':
+        case 'X':
+            base = 16;
+            (*rdf)();
+            break;
+
+        case 't':
+        case 'T':
+            base = 10;
+            (*rdf)();
+            break;
+
+        case 'o':
+        case 'O':
+            base = 8;
+            (*rdf)();
+            break;
+        default:
+            if (base == 0)
+                base = 8;
+            break;
+        }
+    if (base == 0)
+        base = 10;
+    expv = 0;
+    for (cp = num, *cp = lastc; ;(*rdf)()) {
+        if ((d = convdig(lastc)) < base) {
+            expv *= base;
+            expv += d;
+            *cp++ = lastc;
+        }
+        else if (lastc == '.') {
+            fpnum = TRUE;
+            *cp++ = lastc;
+        } else {
+            reread();
+            break;
+        }
+    }
+    if (fpnum)
+        expv = fpin(num);
+    return (1);
+}
+@
+
+<<constant [[MAXSYM]]>>=
+#define	MAXSYM	255
+@
+
+<<function [[readsym]]>>=
+void
+readsym(char *isymbol)
+{
+    char	*p;
+    Rune r;
+
+    p = isymbol;
+    do {
+        if (p < &isymbol[MAXSYM-UTFmax-1]){
+            r = lastc;
+            p += runetochar(p, &r);
+        }
+        readchar();
+    } while (symchar(1));
+    *p = 0;
+}
+@
+
+<<function [[readfname]]>>=
+void
+readfname(char *filename)
+{
+    char	*p;
+    Rune	c;
+
+    /* snarf chars until un-escaped char in terminal char set */
+    p = filename;
+    do {
+        if ((c = lastc) != '\\' && p < &filename[MAXSYM-UTFmax-1])
+            p += runetochar(p, &c);
+        readchar();
+    } while (c == '\\' || strchr(CMD_VERBS, lastc) == 0);
+    *p = 0;
+    reread();
+}
+@
+
+<<function [[convdig]]>>=
+int
+convdig(int c)
+{
+    if (isdigit(c))
+        return(c-'0');
+    else if (!isxdigit(c))
+        return(MAXBASE);
+    else if (isupper(c))
+        return(c-'A'+10);
+    else
+        return(c-'a'+10);
+}
+@
+
+<<function [[symchar]]>>=
+int
+symchar(int dig)
+{
+    if (lastc=='\\') {
+        readchar();
+        return(TRUE);
+    }
+    return(isalpha(lastc) || lastc>0x80 || lastc=='_' || dig && isdigit(lastc));
+}
+@
+
+<<function [[round]]>>=
+static long
+round(long a, long b)
+{
+    long w;
+
+    w = (a/b)*b;
+    if (a!=w)
+        w += b;
+    return(w);
+}
+@
+
+%-------------------------------------------------------------
+
+<<db/expr.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+static long	round(long, long);
+
+extern	ADDR	ditto;
+
+<<function [[ascval]]>>
+
+<<struct [[fpin_union]]>>
+
+<<function [[fpin]]>>
+
+<<function [[defval]]>>
+
+<<function [[expr]]>>
+
+<<function [[term]]>>
+
+<<function [[item]]>>
+
+<<constant [[MAXBASE]]>>
+
+<<function [[getnum]]>>
+
+<<function [[readsym]]>>
+
+<<function [[readfname]]>>
+
+<<function [[convdig]]>>
+
+<<function [[symchar]]>>
+
+<<function [[round]]>>
+@
+
+\subsection{[[db/trcrun.c]]}
+
+%-------------------------------------------------------------
+
+<<db/trcrun.c>>=
+/*
+ * functions for running the debugged process
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+
+<<global [[child]]>>
+<<global [[msgfd]]>>
+<<global [[notefd]]>>
+<<global [[pcspid]]>>
+
+
+<<function [[setpcs]]>>
+
+<<function [[msgpcs]]>>
+
+<<function [[unloadnote]]>>
+
+<<function [[loadnote]]>>
+
+<<function [[notes]]>>
+
+<<function [[killpcs]]>>
+
+<<function [[grab]]>>
+
+<<function [[ungrab]]>>
+
+<<function [[doexec]]>>
+
+<<global [[procname]]>>
+
+<<function [[startpcs]]>>
+
+<<function [[runstep]]>>
+
+<<function [[bpwait]]>>
+
+<<function [[runrun]]>>
+
+<<function [[bkput]]>>
+@
+
+\subsection{[[db/print.c]]}
+
+<<constant [[INCDIR]]>>=
+#define	INCDIR	"/usr/lib/adb"
+@
+
+<<global [[Ipath]]>>=
+char	*Ipath = INCDIR;
+@
+%$
+
+
+<<function [[getfname]]>>=
+char *
+getfname(void)
+{
+    static char fname[ARB];
+    char *p;
+
+    if (rdc() == EOR) {
+        reread();
+        return (0);
+    }
+    p = fname;
+    do {
+        *p++ = lastc;
+        if (p >= &fname[ARB-1])
+            error("filename too long");
+    } while (rdc() != EOR);
+    *p = 0;
+    reread();
+    return (fname);
+}
+@
+
+
+<<function [[redirin]]>>=
+void
+redirin(int stack, char *file)
+{
+    char *pfile;
+
+    if (file == 0) {
+        iclose(-1, 0);
+        return;
+    }
+    iclose(stack, 0);
+    if ((infile = open(file, 0)) < 0) {
+        pfile = smprint("%s/%s", Ipath, file);
+        infile = open(pfile, 0);
+        free(pfile);
+        if(infile < 0) {
+            infile = STDIN;
+            error("cannot open");
+        }
+    }
+}
+@
+
+%-------------------------------------------------------------
+
+<<db/print.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+#include "defs.h"
+#include "fns.h"
+
+extern	int	infile;
+extern	int	outfile;
+extern	int	maxpos;
+
+/* general printing routines ($) */
+
+<<global [[Ipath]]>>
+<<global [[tracetype]]>>
+static void	printfp(Map*, int);
+
+<<function [[ptrace]]>>
+
+<<function [[printtrace]]>>
+
+<<function [[getfname]]>>
+
+<<function [[printfp]]>>
+
+<<function [[redirin]]>>
+
+<<function [[printmap]]>>
+
+<<function [[printsym]]>>
+
+<<constant [[STRINGSZ]]>>
+
+<<function [[printsource]]>>
+
+<<function [[printpc]]>>
+
+<<function [[printlocals]]>>
+
+<<function [[printparams]]>>
+@
+%$
+
+\subsection{[[db/command.c]]}
+
+<<global [[BADEQ]]>>=
+char	BADEQ[] = "unexpected `='";
+@
+
+
+
+<<function [[regname]]>>=
+/*
+ * collect a register name; return register offset
+ * this is not what i'd call a good division of labour
+ */
+
+char *
+regname(int regnam)
+{
+    static char buf[64];
+    char *p;
+    int c;
+
+    p = buf;
+    *p++ = regnam;
+    while (isalnum(c = readchar())) {
+        if (p >= buf+sizeof(buf)-1)
+            error("register name too long");
+        *p++ = c;
+    }
+    *p = 0;
+    reread();
+    return (buf);
+}
+@
+
+%-------------------------------------------------------------
+
+<<db/command.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+<<global [[BADEQ]]>>
+
+<<global [[executing]]>>
+extern	Rune	*lp;
+
+<<global [[eqformat]]>>
+<<global [[stformat]]>>
+
+
+<<global [[loopcnt]]>>
+
+<<function [[command]]>>
+
+<<function [[acommand]]>>
+
+<<function [[cmdsrc]]>>
+
+<<global [[badwrite]]>>
+
+<<function [[cmdwrite]]>>
+
+<<function [[regname]]>>
+
+<<function [[shell]]>>
+@
+
+\subsection{[[db/runpcs.c]]}
+
+%-------------------------------------------------------------
+
+<<db/runpcs.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+<<global [[bpin]]>>
+
+<<function [[runpcs]]>>
+
+<<function [[endpcs]]>>
+
+<<function [[setup]]>>
+
+<<function [[execbkpt]]>>
+
+<<function [[scanbkpt]]>>
+
+<<function [[delbp]]>>
+
+<<function [[setbp]]>>
+@
+
+\subsection{[[db/pcs.c]]}
+
+%-------------------------------------------------------------
+
+<<db/pcs.c>>=
+/*
+ *
+ *	debugger
+ *
+ */
+
+#include "defs.h"
+#include "fns.h"
+
+<<global [[NOPCS]]>>
+
+<<function [[subpcs]]>>
+@
+
+\subsection{[[db/main.c]]}
+
+%-------------------------------------------------------------
+
+<<db/main.c>>=
+/*
+ * db - main command loop and error/interrupt handling
+ */
+#include "defs.h"
+#include "fns.h"
+
+
+extern	bool	executing;
+extern	int	infile;
+extern	int	eof;
+
+int	alldigs(char*);
+void	fault(void*, char*);
+
+extern	char	*Ipath;
+extern jmp_buf env;
+extern char *errmsg;
+
+<<function main (db/main.c)>>
+
+<<function [[alldigs]]>>
+
+<<function [[done]]>>
+
+<<function [[fault]]>>
+@
+

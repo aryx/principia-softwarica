@@ -217,6 +217,7 @@ match(Node *r, Node *args)
 /*e: function [[match]] */
 
 /*s: function [[newproc]] */
+/// main -> yyparse -> <> -> nproc -> sproc
 void
 newproc(Node *r, Node *args)
 {
@@ -370,6 +371,7 @@ status(Node *r, Node *args)
         error("status(pid): arg type");
 
     p = getstatus(res.ival);
+
     r->string = strnode(p);
     r->op = OCONST;
     r->fmt = 's';

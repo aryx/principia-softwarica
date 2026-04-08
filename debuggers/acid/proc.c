@@ -10,6 +10,7 @@
 static void install(int);
 
 /*s: function [[nocore]] */
+/// sproc -> <>
 void
 nocore(void)
 {
@@ -27,6 +28,7 @@ nocore(void)
 /*e: function [[nocore]] */
 
 /*s: function [[sproc]] */
+/// (main -> yyparse -> execute -> new -> newproc -> nproc) | main -> <>
 void
 sproc(int pid)
 {
@@ -71,7 +73,6 @@ sproc(int pid)
     install(pid);
 }
 /*e: function [[sproc]] */
-
 /*s: function [[nproc]] */
 int
 nproc(char **argv)
@@ -220,7 +221,6 @@ install(int pid)
     s->v->set = 1;
 }
 /*e: function [[install]] */
-
 /*s: function [[deinstall]] */
 void
 deinstall(int pid)

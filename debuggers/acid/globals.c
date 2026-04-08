@@ -91,6 +91,7 @@ bool	quiet;
 /*e: global [[quiet]] */
 
 /*s: global [[ptab]] */
+// hash<pid, fdt>
 Ptab	ptab[Maxproc];
 /*e: global [[ptab]] */
 /*e: acid/globals.c */

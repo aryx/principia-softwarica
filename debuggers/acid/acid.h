@@ -6,14 +6,15 @@ enum
     /*s: acid constants */
     Hashsize	= 128,
     /*x: acid constants */
+    Maxproc		= 50,
+    /*x: acid constants */
+    NFD		= 100,
+    /*x: acid constants */
     Eof		= -1,
     /*x: acid constants */
     Strsize		= 4096,
     /*x: acid constants */
-    NFD		= 100,
-    /*x: acid constants */
     Maxarg		= 512,
-    Maxproc		= 50,
     Maxval		= 10,
     Mempergc	= 1024*1024,
     /*e: acid constants */
@@ -153,8 +154,10 @@ struct Store
 struct List
 {
     Gc;
+
     List*	next;
     char	type;
+
     Store;
 };
 /*e: struct [[List]] */

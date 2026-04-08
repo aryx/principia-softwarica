@@ -127,7 +127,6 @@ oindm(Node *n, Node *res)
     res->comt = l.comt;
 }
 /*e: function [[oindm]] */
-
 /*s: function [[oindc]] */
 void
 oindc(Node *n, Node *res)
@@ -278,7 +277,6 @@ ohead(Node *n, Node *res)
     }
 }
 /*e: function [[ohead]] */
-
 /*s: function [[otail]] */
 void
 otail(Node *n, Node *res)
@@ -436,7 +434,6 @@ oadd(Node *n, Node *res)
     }
 }
 /*e: function [[oadd]] */
-
 /*s: function [[osub]] */
 void
 osub(Node *n, Node *res)
@@ -479,7 +476,6 @@ osub(Node *n, Node *res)
     }
 }
 /*e: function [[osub]] */
-
 /*s: function [[omul]] */
 void
 omul(Node *n, Node *res)
@@ -522,7 +518,6 @@ omul(Node *n, Node *res)
     }
 }
 /*e: function [[omul]] */
-
 /*s: function [[odiv]] */
 void
 odiv(Node *n, Node *res)
@@ -569,7 +564,6 @@ odiv(Node *n, Node *res)
     }
 }
 /*e: function [[odiv]] */
-
 /*s: function [[omod]] */
 void
 omod(Node *n, Node *res)
@@ -603,7 +597,6 @@ olsh(Node *n, Node *res)
     res->ival = l.ival<<r.ival;
 }
 /*e: function [[olsh]] */
-
 /*s: function [[orsh]] */
 void
 orsh(Node *n, Node *res)
@@ -663,7 +656,6 @@ olt(Node *n, Node *res)
     }
 }
 /*e: function [[olt]] */
-
 /*s: function [[ogt]] */
 void
 ogt(Node *n, Node *res)
@@ -705,7 +697,6 @@ ogt(Node *n, Node *res)
     }
 }
 /*e: function [[ogt]] */
-
 /*s: function [[oleq]] */
 void
 oleq(Node *n, Node *res)
@@ -747,7 +738,6 @@ oleq(Node *n, Node *res)
     }
 }
 /*e: function [[oleq]] */
-
 /*s: function [[ogeq]] */
 void
 ogeq(Node *n, Node *res)
@@ -789,7 +779,6 @@ ogeq(Node *n, Node *res)
     }
 }
 /*e: function [[ogeq]] */
-
 /*s: function [[oeq]] */
 void
 oeq(Node *n, Node *res)
@@ -847,7 +836,6 @@ oeq(Node *n, Node *res)
 }
 /*e: function [[oeq]] */
 
-
 /*s: function [[oland]] */
 void
 oland(Node *n, Node *res)
@@ -864,7 +852,6 @@ oland(Node *n, Node *res)
     res->ival = l.ival&r.ival;
 }
 /*e: function [[oland]] */
-
 /*s: function [[oxor]] */
 void
 oxor(Node *n, Node *res)
@@ -881,7 +868,6 @@ oxor(Node *n, Node *res)
     res->ival = l.ival^r.ival;
 }
 /*e: function [[oxor]] */
-
 /*s: function [[olor]] */
 void
 olor(Node *n, Node *res)
@@ -898,7 +884,6 @@ olor(Node *n, Node *res)
     res->ival = l.ival|r.ival;
 }
 /*e: function [[olor]] */
-
 /*s: function [[ocand]] */
 void
 ocand(Node *n, Node *res)
@@ -918,7 +903,6 @@ ocand(Node *n, Node *res)
     res->ival = 1;
 }
 /*e: function [[ocand]] */
-
 /*s: function [[onot]] */
 void
 onot(Node *n, Node *res)
@@ -934,7 +918,6 @@ onot(Node *n, Node *res)
         res->ival = 1;
 }
 /*e: function [[onot]] */
-
 /*s: function [[ocor]] */
 void
 ocor(Node *n, Node *res)
@@ -987,7 +970,6 @@ oeinc(Node *n, Node *res)
     res->Store = v->Store;
 }
 /*e: function [[oeinc]] */
-
 /*s: function [[opinc]] */
 void
 opinc(Node *n, Node *res)
@@ -1072,6 +1054,7 @@ owhat(Node *n, Node *res)
 /*s: global [[expop]] */
 void (*expop[])(Node*, Node*) =
 {
+    /*s: [[expop]] entries */
     [ONAME]	oname,
     [OCONST]	oconst,
     [OMUL]	omul,
@@ -1121,6 +1104,7 @@ void (*expop[])(Node*, Node*) =
     [OFMT]	ofmt,
     [OEVAL]	oeval,
     [OWHAT]	owhat,
+    /*e: [[expop]] entries */
 };
 /*e: global [[expop]] */
 /*e: acid/expr.c */

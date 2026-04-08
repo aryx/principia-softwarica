@@ -118,6 +118,7 @@ understanding of the kernel (which provides the debugging
 facilities), the toolchain (which generates the metadata
 the debugger reads), and the hardware (which provides
 breakpoint and single-step support).
+%yoann1: actually not really breakpoint support in hardware, more fault mechanism abused
 
 \l history of term "bug", it was an actual bug!
 %  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
@@ -278,9 +279,9 @@ To trace the system calls of a program:
 \begin{verbatim}
 $ ratrace -c /bin/ls /dev
 ...
-75 ls Open 6a65 0xcfffeb3/"/dev" 0x0 = 3 "" 20000135 20000136
-75 ls Brk b834 0x20c98 = 0 "" 20000136 20000136
-75 Pread b824 3 0xfbf8 65595 -1 0xfbf8/"=.M.....
+75 ls Open  6a65 0xcfffeb3/"/dev" 0x0 = 3 "" 20000135 20000136
+75 ls Brk   b834 0x20c98 = 0 "" 20000136 20000136
+75 ls Pread b824 3 0xfbf8 65595 -1 0xfbf8/"=.M.....
 ...
 /dev/bintime
 /dev/cons
@@ -539,7 +540,7 @@ fault, then restores the original instruction. Breakpoints
 can be conditional (stop only when a condition is true)
 or counted (stop only after the $n$-th hit).
 
-\subsection{Watch point}
+\subsection{Watchpoint}
 
 %claude:
 A {watchpoint} (or data breakpoint) stops execution when
@@ -685,10 +686,7 @@ $ acid ./buggy
 acid: new()
 66: system call  _main   SUBL $0x48, SP
 66: breakpoint main+0x3  MOVL $0x2a, AX
-
-XXXacid: bpset(main)
 acid: cont()
-XXX1234: breakpoint  main+0x0  MOVW.W R14, -0xc(R13)
 66: divide error    main+0xb IDIVL AX,CX
 Notes pending:
     sys: trap: divide error
@@ -700,26 +698,25 @@ acid: src(*PC)
      12:   int y = 0;
     >13    int z = x / y;
      14:   print("%d\n", z);
-XXXacid: step()
+acid: regs()
+XXX...
 XXXacid: print(x)
 XXX42
-XXXacid: cont()
-XXX1234: breakpoint  divtrap+0x0
-XXXacid: stk()
-XXXdivtrap()
-XXXmain() buggy.c:7
 acid:
 \end{verbatim}
 
 
 [[new()]] starts the program and stops at the first instruction.
-[[bpset(main)]] sets a breakpoint at the entry of [[main]].
+%[[bpset(main)]] sets a breakpoint at the entry of [[main]].
 [[cont()]] resumes execution until the breakpoint is hit.
 [[stk()]] prints the call stack with local variable values,
 and [[src(*PC)]] shows the source code around the current
-program counter. After [[step()]] and [[print(x)]], we can
-see that [[x]] has been assigned 42. The final [[cont()]]
-runs into the division by zero, which stops execution in
+program counter.
+%
+After [[step()]] and [[print(x)]], we can
+see that [[x]] has been assigned 42. 
+%
+The final [[cont()]] runs into the division by zero, which stops execution in
 [[divtrap]].
 
 %\section{[[acid]] services}
@@ -798,6 +795,9 @@ runs into the division by zero, which stops execution in
 % state. Useful.
 
 % "hang" (after exec)
+
+% beauty of fork/adjust/exec again! adjust to prepare for debugging!
+
 % "waitstop" (until debugged reaches hang and go in Stopped state), atomic
 
 % "start"
@@ -1188,7 +1188,7 @@ if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
 
 
 %******************************************************************************
-\chapter{Toolchain support}
+\chapter{Toolchain Support}
 %******************************************************************************
 
 \section{Assembler}
@@ -1482,7 +1482,6 @@ enum symbol_type
 
 \section{[[acid]], [[libmach]], and [[/proc]]}
 
-
 %\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
 
 \subsection{[[/proc/x/text]] and [[symmap]]}
@@ -1689,6 +1688,37 @@ struct StringAcid
 % and then typedef struct StringAcid String;
 % why? conflict on struct String with libstring?
 
+\subsection{[[List]]}
+
+<<struct [[List]]>>=
+struct List
+{
+    Gc;
+
+    List*	next;
+    char	type;
+
+    Store;
+};
+@
+
+<<function [[al]]>>=
+List*
+al(int t)
+{
+    List *l;
+
+    l = gmalloc(sizeof(List));
+    memset(l, 0, sizeof(List));
+    l->type = t;
+
+    l->gclink = gcl;
+    gcl = l;
+
+    return l;
+}
+@
+
 \subsection{[[Gc]]}
 
 <<struct [[Gc]]>>=
@@ -1893,7 +1923,7 @@ memset(v, 0, sizeof(Value));
 
 
 \section{Process table}
-% still? used only for 'acid <pid>' ?
+% used for 'acid <pid>' and after newproc() (<- new())
 
 <<struct [[Ptab]]>>=
 struct Ptab
@@ -1907,7 +1937,11 @@ struct Ptab
 \subsection{[[ptab]]}
 
 <<global [[ptab]]>>=
+// hash<pid, fdt>
 Ptab	ptab[Maxproc];
+@
+<<acid constants>>=
+Maxproc		= 50,
 @
 
 \subsection{[[msg()]]}
@@ -2001,7 +2035,6 @@ main(int argc, char *argv[])
 @
 
 \section{REPL}
-
 
 <<global interactive (acid/globals.c)>>=
 int	interactive;
@@ -2603,35 +2636,173 @@ if(l && l->proc) {
 
 %execute!
 
+\section{[[acid: newproc()]]}
 
-\section{[[acid pid]]}
+% can't explain full path, but at some point will type
+% acid: new()
+% which is defined in /lib/acid/port with:
 
-<<global [[prog]]>>=
-static char	prog[128];
+%   defn new()
+%   {
+%   	bplist = {};
+%   	newproc(progargs);
+%   	// Dont miss the delay slot calls
+%   	bpset(follow(main)[0]);
+%   	cont();
+%   	bpdel(*PC);
+%   }
+
+% so will call newproc() that will fork and modify ptab
+
+\subsection{[[newproc()]]}
+
+<<function [[newproc]]>>=
+/// main -> yyparse -> <> -> nproc -> sproc
+void
+newproc(Node *r, Node *args)
+{
+    int i;
+    Node res;
+    char *p, *e;
+    char *argv[Maxarg], buf[Strsize];
+
+    i = 1;
+    argv[0] = aout;
+
+    if(args) {
+        expr(args, &res);
+        if(res.type != TSTRING)
+            error("newproc(): arg not string");
+        if(res.string->len >= sizeof(buf))
+            error("newproc(): too many arguments");
+        memmove(buf, res.string->string, res.string->len);
+        buf[res.string->len] = '\0';
+        p = buf;
+        e = buf+res.string->len;
+        for(;;) {
+            while(p < e && (*p == '\t' || *p == ' '))
+                *p++ = '\0';
+            if(p >= e)
+                break;
+            argv[i++] = p;
+            if(i >= Maxarg)
+                error("newproc: too many arguments");
+            while(p < e && *p != '\t' && *p != ' ')
+                p++;
+        }
+    }
+    argv[i] = 0;
+    r->op = OCONST;
+    r->type = TINT;
+    r->fmt = 'D';
+    r->ival = nproc(argv);
+}
 @
 
-<<[[main()]](acid) if [[acid pid]]>>=
-if(isnumeric(argv[0])) {
-    pid = strtol(argv[0], 0, 0);
-    snprint(prog, sizeof(prog), "/proc/%d/text", pid);
-    aout = prog;
-    if(argc > 1)
-        aout = argv[1];
-    else if(kernel)
-        aout = system();
+\subsection{[[nproc()]]}
+
+<<function [[nproc]]>>=
+int
+nproc(char **argv)
+{
+    char buf[128];
+    int pid, i;
+    fdt fd;
+
+    pid = fork();
+    switch(pid) {
+    case -1:
+        error("new: fork %r");
+    case 0:
+        // child
+        rfork(RFNAMEG|RFNOTEG);
+
+        snprint(buf, sizeof(buf), "/proc/%d/ctl", getpid());
+        fd = open(buf, ORDWR);
+        if(fd < 0)
+            fatal("new: open %s: %r", buf);
+        write(fd, "hang", 4);
+        close(fd);
+
+        close(STDIN);
+        close(STDOUT);
+        close(STDERR);
+        for(i = 3; i < NFD; i++)
+            close(i);
+
+        open("/dev/cons", OREAD);
+        open("/dev/cons", OWRITE);
+        open("/dev/cons", OWRITE);
+        exec(argv[0], argv);
+        fatal("new: exec %s: %r");
+
+    //parent
+    default:
+        install(pid);
+        msg(pid, "waitstop");
+
+        notes(pid);
+        sproc(pid);
+        dostop(pid);
+
+        break;
+    }
+
+    return pid;
+}
+@
+
+<<acid constants>>=
+NFD		= 100,
+@
+
+
+\subsection{[[notes()]]}
+
+<<function notes (acid/proc.c)>>=
+void
+notes(int pid)
+{
+    Lsym *s;
+    Value *v;
+    int i, fd;
+    char buf[128];
+    List *l, **tail;
+
+    s = look("notes");
+    if(s == 0)
+        return;
+    v = s->v;
+
+    snprint(buf, sizeof(buf), "/proc/%d/note", pid);
+    fd = open(buf, OREAD);
+    if(fd < 0)
+        error("pid=%d: open note: %r", pid);
+
+    v->set = 1;
+    v->type = TLIST;
+    v->l = 0;
+    tail = &v->l;
+    for(;;) {
+        i = read(fd, buf, sizeof(buf));
+        if(i <= 0)
+            break;
+        buf[i] = '\0';
+        l = al(TSTRING);
+        l->string = strnode(buf);
+        l->fmt = 's';
+        *tail = l;
+        tail = &l->next;
+    }
+    close(fd);
 }
 @
 
 
-
-<<[[attachfiles()]] if [[pid]] given>>=
-if(pid)					/* pid given */
-    sproc(pid);
-@
-
 \subsection{[[sproc()]]}
 
 <<function [[sproc]]>>=
+/// (main -> yyparse -> execute -> new -> newproc -> nproc) | main -> <>
 void
 sproc(int pid)
 {
@@ -2765,11 +2936,41 @@ install(int pid)
 }
 @
 
+<<function [[deinstall]]>>=
+void
+deinstall(int pid)
+{
+    int i;
+    Lsym *s;
+    List *f, **d;
+
+    for(i = 0; i < Maxproc; i++) {
+        if(ptab[i].pid == pid) {
+            close(ptab[i].ctl);
+            ptab[i].pid = 0;
+            s = look("proclist");
+            d = &s->v->l;
+            for(f = *d; f; f = f->next) {
+                if(f->ival == pid) {
+                    *d = f->next;
+                    break;
+                }
+            }
+            s = look("pid");
+            if(s->v->ival == pid)
+                s->v->ival = 0;
+            return;
+        }
+    }
+}
+@
+
 
 
 \subsection{[[nocore()]]}
 
 <<function [[nocore]]>>=
+/// sproc -> <>
 void
 nocore(void)
 {
@@ -2784,6 +2985,60 @@ nocore(void)
     free(cormap);
     cormap = nil;
 }
+@
+
+
+\subsection{[[dostop()]]}
+
+<<function [[dostop]]>>=
+void
+dostop(int pid)
+{
+    Lsym *s;
+    Node *np, *p;
+
+    s = look("stopped");
+    if(s && s->proc) {
+        np = an(ONAME, ZN, ZN);
+        np->sym = s;
+        np->fmt = 'D';
+        np->type = TINT;
+        p = con(pid);
+        p->fmt = 'D';
+        np = an(OCALL, np, p);
+        execute(np);
+    }
+}
+@
+
+
+
+\section{[[acid pid]]}
+
+% alternative path, attach to existing pid
+
+<<global [[prog]]>>=
+static char	prog[128];
+@
+
+<<[[main()]](acid) if [[acid pid]]>>=
+if(isnumeric(argv[0])) {
+    pid = strtol(argv[0], 0, 0);
+    snprint(prog, sizeof(prog), "/proc/%d/text", pid);
+    aout = prog;
+
+    if(argc > 1)
+        aout = argv[1];
+    else if(kernel)
+        aout = system();
+}
+@
+
+
+
+<<[[attachfiles()]] if [[pid]] given>>=
+if(pid)					/* pid given */
+    sproc(pid);
 @
 
 
@@ -3499,7 +3754,7 @@ loop:
 }
 @
 
-\subsection{Spaces and Comments}
+\subsection{Spaces and comments}
 
 <<function [[eatnl]]>>=
 void
@@ -3606,6 +3861,56 @@ numsym(char first)
 %$
 
 \subsection{Characters}
+
+<<function [[escchar]]>>=
+int
+escchar(char c)
+{
+    int n;
+    char buf[Strsize];
+
+    if(c >= '0' && c <= '9') {
+        n = 1;
+        buf[0] = c;
+        for(;;) {
+            c = lexc();
+            if(c == Eof)
+                error("%d: <eof> in escape sequence", line);
+            if(strchr("0123456789xX", c) == 0) {
+                unlexc(c);
+                break;
+            }
+            if(n >= Strsize)
+                error("string escape too long");
+            buf[n++] = c;
+        }
+        buf[n] = '\0';
+        return strtol(buf, 0, 0);
+    }
+
+    n = cmap[c];
+    if(n == 0)
+        return c;
+    return n-1;
+}
+@
+
+<<global [[cmap]]>>=
+char cmap[256] =
+{
+    ['0']	'\0'+1,
+    ['n']	'\n'+1,
+    ['r']	'\r'+1,
+    ['t']	'\t'+1,
+    ['b']	'\b'+1,
+    ['f']	'\f'+1,
+    ['a']	'\a'+1,
+    ['v']	'\v'+1,
+    ['\\']	'\\'+1,
+    ['"']	'"'+1,
+};
+@
+
 
 \subsection{Strings}
 
@@ -3896,49 +4201,6 @@ slist		: stmnt
   ;
 @
 
-\subsection{Complex}
-
-<<members rules>>=
-members		: member
-  | members member
-  {
-   $$ = an(OLIST, $1, $2);
-  }
-  ;
-
-mname		: Tid
-  {
-   $$ = an(ONAME, ZN, ZN);
-   $$->sym = $1;
-  }
-  ;
-
-member		: Tconst Tconst mname ';'
-  {
-   $3->ival = $2;
-   $3->fmt = $1;
-   $$ = $3;
-  }
-  | Tconst mname Tconst mname ';'
-  {
-   $4->ival = $3;
-   $4->fmt = $1;
-   $4->right = $2;
-   $$ = $4;
-  }
-  | mname Tconst mname ';'
-  {
-   $3->ival = $2;
-   $3->left = $1;
-   $$ = $3;
-  }
-  | '{' members '}' ';'
-  {
-   $$ = an(OCTRUCT, $2, ZN);
-  }
-  ;
-@
-
 \subsection{Expressions}
 
 <<expressions rules>>=
@@ -4084,6 +4346,50 @@ zexpr		:
 @
 
 
+\subsection{Complex}
+
+<<members rules>>=
+members		: member
+  | members member
+  {
+   $$ = an(OLIST, $1, $2);
+  }
+  ;
+
+mname		: Tid
+  {
+   $$ = an(ONAME, ZN, ZN);
+   $$->sym = $1;
+  }
+  ;
+
+member		: Tconst Tconst mname ';'
+  {
+   $3->ival = $2;
+   $3->fmt = $1;
+   $$ = $3;
+  }
+  | Tconst mname Tconst mname ';'
+  {
+   $4->ival = $3;
+   $4->fmt = $1;
+   $4->right = $2;
+   $$ = $4;
+  }
+  | mname Tconst mname ';'
+  {
+   $3->ival = $2;
+   $3->left = $1;
+   $$ = $3;
+  }
+  | '{' members '}' ';'
+  {
+   $$ = an(OCTRUCT, $2, ZN);
+  }
+  ;
+@
+
+
 %******************************************************************************
 \chapter{Interpreting}
 %******************************************************************************
@@ -4206,56 +4512,724 @@ execute(Node *n)
 <<global [[expop]]>>=
 void (*expop[])(Node*, Node*) =
 {
-    [ONAME]	oname,
-    [OCONST]	oconst,
-    [OMUL]	omul,
-    [ODIV]	odiv,
-    [OMOD]	omod,
-    [OADD]	oadd,
-    [OSUB]	osub,
-    [ORSH]	orsh,
-    [OLSH]	olsh,
-    [OLT]	olt,
-    [OGT]	ogt,
-    [OLEQ]	oleq,
-    [OGEQ]	ogeq,
-    [OEQ]	oeq,
-    [ONEQ]	oeq,
-    [OLAND]	oland,
-    [OXOR]	oxor,
-    [OLOR]	olor,
-    [OCAND]	ocand,
-    [OCOR]	ocor,
-    [OASGN]	oasgn,
-    [OINDM]	oindm,
-    [OEDEC]	oeinc,
-    [OEINC]	oeinc,
-    [OPINC]	opinc,
-    [OPDEC]	opinc,
-    [ONOT]	onot,
-    [OIF]	0,
-    [ODO]	0,
-    [OLIST]	olist,
-    [OCALL]	ocall,
-    [OCTRUCT]	octruct,
-    [OWHILE]	0,
-    [OELSE]	0,
-    [OHEAD]	ohead,
-    [OTAIL]	otail,
-    [OAPPEND]	oappend,
-    [ORET]	0,
-    [OINDEX]	oindex,
-    [OINDC]	oindc,
-    [ODOT]	odot,
-    [OLOCAL]	0,
-    [OFRAME]	oframe,
-    [OCOMPLEX]	0,
-    [ODELETE]	odelete,
-    [OCAST]	ocast,
-    [OFMT]	ofmt,
-    [OEVAL]	oeval,
-    [OWHAT]	owhat,
+    <<[[expop]] entries>>
 };
+@
+
+
+<<[[expop]] entries>>=
+[ONAME]	oname,
+[OCONST]	oconst,
+[OMUL]	omul,
+[ODIV]	odiv,
+[OMOD]	omod,
+[OADD]	oadd,
+[OSUB]	osub,
+[ORSH]	orsh,
+[OLSH]	olsh,
+[OLT]	olt,
+[OGT]	ogt,
+[OLEQ]	oleq,
+[OGEQ]	ogeq,
+[OEQ]	oeq,
+[ONEQ]	oeq,
+[OLAND]	oland,
+[OXOR]	oxor,
+[OLOR]	olor,
+[OCAND]	ocand,
+[OCOR]	ocor,
+[OASGN]	oasgn,
+[OINDM]	oindm,
+[OEDEC]	oeinc,
+[OEINC]	oeinc,
+[OPINC]	opinc,
+[OPDEC]	opinc,
+[ONOT]	onot,
+[OIF]	0,
+[ODO]	0,
+[OLIST]	olist,
+[OCALL]	ocall,
+[OCTRUCT]	octruct,
+[OWHILE]	0,
+[OELSE]	0,
+[OHEAD]	ohead,
+[OTAIL]	otail,
+[OAPPEND]	oappend,
+[ORET]	0,
+[OINDEX]	oindex,
+[OINDC]	oindc,
+[ODOT]	odot,
+[OLOCAL]	0,
+[OFRAME]	oframe,
+[OCOMPLEX]	0,
+[ODELETE]	odelete,
+[OCAST]	ocast,
+[OFMT]	ofmt,
+[OEVAL]	oeval,
+[OWHAT]	owhat,
+@
+
+
+\subsection{Booleans}
+
+<<function [[fbool]]>>=
+int
+fbool(Node *n)
+{
+    int true = 0;
+
+    if(n->op != OCONST)
+        fatal("fbool: not const");
+
+    switch(n->type) {
+    case TINT:
+        if(n->ival != 0)
+            true = 1;
+        break;
+    case TFLOAT:
+        if(n->fval != 0.0)
+            true = 1;
+        break;
+    case TSTRING:
+        if(n->string->len)
+            true = 1;
+        break;
+    case TLIST:
+        if(n->l)
+            true = 1;
+        break;
+    }
+    return true;
+}
+@
+
+
+<<function [[olt]]>>=
+void
+olt(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    switch(l.type) {
+    default:
+        error("bad lhs type <");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.ival < r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.ival < r.fval;
+            break;
+        default:
+            error("bad rhs type <");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.fval < r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.fval < r.fval;
+            break;
+        default:
+            error("bad rhs type <");
+        }
+        break;
+    }
+}
+@
+
+<<function [[ogt]]>>=
+void
+ogt(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = 'D';
+    res->op = OCONST;
+    res->type = TINT;
+    switch(l.type) {
+    default:
+        error("bad lhs type >");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.ival > r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.ival > r.fval;
+            break;
+        default:
+            error("bad rhs type >");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.fval > r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.fval > r.fval;
+            break;
+        default:
+            error("bad rhs type >");
+        }
+        break;
+    }
+}
+@
+
+<<function [[oleq]]>>=
+void
+oleq(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = 'D';
+    res->op = OCONST;
+    res->type = TINT;
+    switch(l.type) {
+    default:
+        error("bad expr type <=");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.ival <= r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.ival <= r.fval;
+            break;
+        default:
+            error("bad expr type <=");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.fval <= r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.fval <= r.fval;
+            break;
+        default:
+            error("bad expr type <=");
+        }
+        break;
+    }
+}
+@
+
+<<function [[ogeq]]>>=
+void
+ogeq(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = 'D';
+    res->op = OCONST;
+    res->type = TINT;
+    switch(l.type) {
+    default:
+        error("bad lhs type >=");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.ival >= r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.ival >= r.fval;
+            break;
+        default:
+            error("bad rhs type >=");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.fval >= r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.fval >= r.fval;
+            break;
+        default:
+            error("bad rhs type >=");
+        }
+        break;
+    }
+}
+@
+
+<<function [[oeq]]>>=
+void
+oeq(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = 'D';
+    res->op = OCONST;
+    res->type = TINT;
+    res->ival = 0;
+    switch(l.type) {
+    default:
+        break;
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.ival == r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.ival == r.fval;
+            break;
+        default:
+            break;
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->ival = l.fval == r.ival;
+            break;
+        case TFLOAT:
+            res->ival = l.fval == r.fval;
+            break;
+        default:
+            break;
+        }
+        break;
+    case TSTRING:
+        if(r.type == TSTRING) {
+            res->ival = scmp(r.string, l.string);
+            break;
+        }
+        break;
+    case TLIST:
+        if(r.type == TLIST) {
+            res->ival = listcmp(l.l, r.l);
+            break;
+        }
+        break;
+    }
+    if(n->op == ONEQ)
+        res->ival = !res->ival;
+}
+@
+
+<<function [[oland]]>>=
+void
+oland(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    if(l.type != TINT || r.type != TINT)
+        error("bad expr type &");
+    res->ival = l.ival&r.ival;
+}
+@
+
+<<function [[oxor]]>>=
+void
+oxor(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    if(l.type != TINT || r.type != TINT)
+        error("bad expr type ^");
+    res->ival = l.ival^r.ival;
+}
+@
+
+<<function [[olor]]>>=
+void
+olor(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    if(l.type != TINT || r.type != TINT)
+        error("bad expr type |");
+    res->ival = l.ival|r.ival;
+}
+@
+
+<<function [[ocand]]>>=
+void
+ocand(Node *n, Node *res)
+{
+    Node l, r;
+
+    res->op = OCONST;
+    res->type = TINT;
+    res->ival = 0;
+    res->fmt = 'D';
+    expr(n->left, &l);
+    if(fbool(&l) == 0)
+        return;
+    expr(n->right, &r);
+    if(fbool(&r) == 0)
+        return;
+    res->ival = 1;
+}
+@
+
+<<function [[onot]]>>=
+void
+onot(Node *n, Node *res)
+{
+    Node l;
+
+    res->op = OCONST;
+    res->type = TINT;
+    res->ival = 0;
+    expr(n->left, &l);
+    res->fmt = l.fmt;
+    if(fbool(&l) == 0)
+        res->ival = 1;
+}
+@
+
+<<function [[ocor]]>>=
+void
+ocor(Node *n, Node *res)
+{
+    Node l, r;
+
+    res->op = OCONST;
+    res->type = TINT;
+    res->ival = 0;
+    res->fmt = 'D';
+    expr(n->left, &l);
+    if(fbool(&l)) {
+        res->ival = 1;
+        return;
+    }
+    expr(n->right, &r);
+    if(fbool(&r)) {
+        res->ival = 1;
+        return;
+    }
+}
+@
+
+\subsection{Arithmetic}
+
+<<function [[oadd]]>>=
+void
+oadd(Node *n, Node *res)
+{
+    Node l, r;
+
+    if(n->right == nil){		/* unary + */
+        expr(n->left, res);
+        return;
+    }
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TFLOAT;
+    switch(l.type) {
+    default:
+        error("bad lhs type +");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->type = TINT;
+            res->ival = l.ival+r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.ival+r.fval;
+            break;
+        default:
+            error("bad rhs type +");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->fval = l.fval+r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.fval+r.fval;
+            break;
+        default:
+            error("bad rhs type +");
+        }
+        break;
+    case TSTRING:
+        if(r.type == TSTRING) {
+            res->type = TSTRING;
+            res->fmt = 's';
+            res->string = stradd(l.string, r.string); 
+            break;
+        }
+        if(r.type == TINT) {
+            res->type = TSTRING;
+            res->fmt = 's';
+            res->string = straddrune(l.string, r.ival);
+            break;
+        }
+        error("bad rhs for +");
+    case TLIST:
+        res->type = TLIST;
+        switch(r.type) {
+        case TLIST:
+            res->l = addlist(l.l, r.l);
+            break;
+        default:
+            r.left = 0;
+            r.right = 0;
+            res->l = addlist(l.l, construct(&r));
+            break;
+        }
+    }
+}
+@
+
+<<function [[osub]]>>=
+void
+osub(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TFLOAT;
+    switch(l.type) {
+    default:
+        error("bad lhs type -");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->type = TINT;
+            res->ival = l.ival-r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.ival-r.fval;
+            break;
+        default:
+            error("bad rhs type -");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->fval = l.fval-r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.fval-r.fval;
+            break;
+        default:
+            error("bad rhs type -");
+        }
+        break;
+    }
+}
+@
+
+<<function [[omul]]>>=
+void
+omul(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TFLOAT;
+    switch(l.type) {
+    default:
+        error("bad lhs type *");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->type = TINT;
+            res->ival = l.ival*r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.ival*r.fval;
+            break;
+        default:
+            error("bad rhs type *");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->fval = l.fval*r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.fval*r.fval;
+            break;
+        default:
+            error("bad rhs type *");
+        }
+        break;
+    }
+}
+@
+
+<<function [[odiv]]>>=
+void
+odiv(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TFLOAT;
+    switch(l.type) {
+    default:
+        error("bad lhs type /");
+    case TINT:
+        switch(r.type) {
+        case TINT:
+            res->type = TINT;
+            if(r.ival == 0)
+                error("zero divide");
+            res->ival = l.ival/r.ival;
+            break;
+        case TFLOAT:
+            if(r.fval == 0)
+                error("zero divide");
+            res->fval = l.ival/r.fval;
+            break;
+        default:
+            error("bad rhs type /");
+        }
+        break;
+    case TFLOAT:
+        switch(r.type) {
+        case TINT:
+            res->fval = l.fval/r.ival;
+            break;
+        case TFLOAT:
+            res->fval = l.fval/r.fval;
+            break;
+        default:
+            error("bad rhs type /");
+        }
+        break;
+    }
+}
+@
+
+<<function [[omod]]>>=
+void
+omod(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    if(l.type != TINT || r.type != TINT)
+        error("bad expr type %");
+    res->ival = l.ival%r.ival;
+}
+@
+
+<<function [[olsh]]>>=
+void
+olsh(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    if(l.type != TINT || r.type != TINT)
+        error("bad expr type <<");
+    res->ival = l.ival<<r.ival;
+}
+@
+
+<<function [[orsh]]>>=
+void
+orsh(Node *n, Node *res)
+{
+    Node l, r;
+
+    expr(n->left, &l);
+    expr(n->right, &r);
+    res->fmt = l.fmt;
+    res->op = OCONST;
+    res->type = TINT;
+    if(l.type != TINT || r.type != TINT)
+        error("bad expr type >>");
+    res->ival = (uvlong)l.ival>>r.ival;
+}
+@
+
+\subsection{Call}
+
+<<function [[ocall]]>>=
+void
+ocall(Node *n, Node *res)
+{
+    Lsym *s;
+    Rplace *rsav;
+
+    res->op = OCONST;		/* Default return value */
+    res->type = TLIST;
+    res->l = 0;
+
+    chklval(n->left);
+    s = n->left->sym;
+
+    if(n->builtin && !s->builtin){
+        error("no builtin %s", s->name);
+        return;
+    }
+    if(s->builtin && (n->builtin || s->proc == 0)) {
+        (*s->builtin)(res, n->right);
+        return;
+    }
+    if(s->proc == 0)
+        error("no function %s", s->name);
+
+    rsav = ret;
+    call(s->name, n->right, s->proc->left, s->proc->right, res);
+    ret = rsav;
+}
 @
 
 
@@ -4333,8 +5307,37 @@ struct Btab
 @
 
 
+\section{[[acid: include()]]}
 
-\section{Eval: [[acid: interpret]]}
+<<function [[include]]>>=
+void
+include(Node *r, Node *args)
+{
+    Node res;
+    int isave;
+
+    if(args == 0)
+        error("include(string): arg count");
+    expr(args, &res);
+    if(res.type != TSTRING)
+        error("include(string): arg type");
+
+    pushfile(res.string->string);
+
+    isave = interactive;
+    interactive = 0;
+    r->ival = yyparse();
+    interactive = isave;
+    popio();
+    r->op = OCONST;
+    r->type = TINT;
+    r->fmt = 'D';
+}
+@
+
+
+\section{[[acid: interpret()]]}
+%alt: Eval
 
 <<[[tab]] entries>>=
 "interpret",interpret,
@@ -4525,23 +5528,6 @@ gc(void)
 @
 
 %******************************************************************************
-\chapter{The [[acid]] Library}
-%******************************************************************************
-
-\section{[[/lib/acid/port]]}
-
-\subsection{[[acid: new()]]}
-
-\section{[[/lib/acid/arm]]}
-%\section{[[386]]}
-
-%\section{...} lots of files
-
-\section{[[/lib/acid/truss]]}
-% ratrace using acid program
-
-
-%******************************************************************************
 \chapter{Process control}
 %******************************************************************************
 
@@ -4556,108 +5542,11 @@ gc(void)
 "status",	status,
 @
 
-\section{[[acid: newproc()]]}
-
 <<[[tab]] entries>>=
 "newproc",	newproc,
 @
 
-<<function [[newproc]]>>=
-void
-newproc(Node *r, Node *args)
-{
-    int i;
-    Node res;
-    char *p, *e;
-    char *argv[Maxarg], buf[Strsize];
-
-    i = 1;
-    argv[0] = aout;
-
-    if(args) {
-        expr(args, &res);
-        if(res.type != TSTRING)
-            error("newproc(): arg not string");
-        if(res.string->len >= sizeof(buf))
-            error("newproc(): too many arguments");
-        memmove(buf, res.string->string, res.string->len);
-        buf[res.string->len] = '\0';
-        p = buf;
-        e = buf+res.string->len;
-        for(;;) {
-            while(p < e && (*p == '\t' || *p == ' '))
-                *p++ = '\0';
-            if(p >= e)
-                break;
-            argv[i++] = p;
-            if(i >= Maxarg)
-                error("newproc: too many arguments");
-            while(p < e && *p != '\t' && *p != ' ')
-                p++;
-        }
-    }
-    argv[i] = 0;
-    r->op = OCONST;
-    r->type = TINT;
-    r->fmt = 'D';
-    r->ival = nproc(argv);
-}
-@
-
-<<function [[nproc]]>>=
-int
-nproc(char **argv)
-{
-    char buf[128];
-    int pid, i;
-    fdt fd;
-
-    pid = fork();
-    switch(pid) {
-    case -1:
-        error("new: fork %r");
-    case 0:
-        // child
-        rfork(RFNAMEG|RFNOTEG);
-
-        snprint(buf, sizeof(buf), "/proc/%d/ctl", getpid());
-        fd = open(buf, ORDWR);
-        if(fd < 0)
-            fatal("new: open %s: %r", buf);
-        write(fd, "hang", 4);
-        close(fd);
-
-        close(STDIN);
-        close(STDOUT);
-        close(STDERR);
-        for(i = 3; i < NFD; i++)
-            close(i);
-
-        open("/dev/cons", OREAD);
-        open("/dev/cons", OWRITE);
-        open("/dev/cons", OWRITE);
-        exec(argv[0], argv);
-        fatal("new: exec %s: %r");
-
-    //parent
-    default:
-        install(pid);
-        msg(pid, "waitstop");
-
-        notes(pid);
-        sproc(pid);
-        dostop(pid);
-
-        break;
-    }
-
-    return pid;
-}
-@
-
-<<acid constants>>=
-NFD		= 100,
-@
+%alt: \section{[[acid: newproc()]]}
 
 
 \section{[[acid: start()]]}
@@ -4725,68 +5614,6 @@ startstop(Node *r, Node *args)
 }
 @
 
-
-<<function notes (acid/proc.c)>>=
-void
-notes(int pid)
-{
-    Lsym *s;
-    Value *v;
-    int i, fd;
-    char buf[128];
-    List *l, **tail;
-
-    s = look("notes");
-    if(s == 0)
-        return;
-    v = s->v;
-
-    snprint(buf, sizeof(buf), "/proc/%d/note", pid);
-    fd = open(buf, OREAD);
-    if(fd < 0)
-        error("pid=%d: open note: %r", pid);
-
-    v->set = 1;
-    v->type = TLIST;
-    v->l = 0;
-    tail = &v->l;
-    for(;;) {
-        i = read(fd, buf, sizeof(buf));
-        if(i <= 0)
-            break;
-        buf[i] = '\0';
-        l = al(TSTRING);
-        l->string = strnode(buf);
-        l->fmt = 's';
-        *tail = l;
-        tail = &l->next;
-    }
-    close(fd);
-}
-@
-
-<<function [[dostop]]>>=
-void
-dostop(int pid)
-{
-    Lsym *s;
-    Node *np, *p;
-
-    s = look("stopped");
-    if(s && s->proc) {
-        np = an(ONAME, ZN, ZN);
-        np->sym = s;
-        np->fmt = 'D';
-        np->type = TINT;
-        p = con(pid);
-        p->fmt = 'D';
-        np = an(OCALL, np, p);
-        execute(np);
-    }
-}
-@
-
-
 \section{[[acid: waitstop()]]}
 
 <<function [[waitstop]]>>=
@@ -4828,10 +5655,37 @@ status(Node *r, Node *args)
         error("status(pid): arg type");
 
     p = getstatus(res.ival);
+
     r->string = strnode(p);
     r->op = OCONST;
     r->fmt = 's';
     r->type = TSTRING;
+}
+@
+
+<<function [[getstatus]]>>=
+char *
+getstatus(int pid)
+{
+    int fd, n;
+    char *argv[16], buf[64];
+    static char status[128];
+
+    snprint(buf, sizeof(buf), "/proc/%d/status", pid);
+    fd = open(buf, OREAD);
+    if(fd < 0)
+        error("open %s: %r", buf);
+
+    n = read(fd, status, sizeof(status)-1);
+    close(fd);
+    if(n <= 0)
+        error("read %s: %r", buf);
+    status[n] = '\0';
+
+    if(tokenize(status, argv, nelem(argv)-1) < 3)
+        error("tokenize %s: %r", buf);
+
+    return argv[2];
 }
 @
 
@@ -4858,10 +5712,27 @@ Node*	prnt;
 %\chapter{[[acid]]}
 
 %******************************************************************************
+\chapter{The [[acid]] Library}
+%******************************************************************************
+
+\section{[[/lib/acid/port]]}
+
+\subsection{[[acid: new()]]}
+
+\section{[[/lib/acid/arm]]}
+%\section{[[386]]}
+
+%\section{...} lots of files
+
+\section{[[/lib/acid/truss]]}
+% ratrace using acid program
+
+
+%******************************************************************************
 \chapter{Advanced Features}
 %******************************************************************************
 
-\subsection{Modifying code: [[acid -w]]}
+\section{Modifying code: [[acid -w]]}
 
 <<global wtflag (acid/globals.c)>>=
 bool	wtflag;
@@ -5196,6 +6067,466 @@ Lfmt(Fmt *f)
 }
 @
 
+\section{AST dumper}
+
+<<global [[binop]]>>=
+static char *binop[] =
+{
+    [OMUL]	"*",
+    [ODIV]	"/",
+    [OMOD]	"%",
+    [OADD]	"+",
+    [OSUB]	"-",
+    [ORSH]	">>",
+    [OLSH]	"<<",
+    [OLT]	"<",
+    [OGT]	">",
+    [OLEQ]	"<=",
+    [OGEQ]	">=",
+    [OEQ]	"==",
+    [ONEQ]	"!=",
+    [OLAND]	"&",
+    [OXOR]	"^",
+    [OLOR]	"|",
+    [OCAND]	"&&",
+    [OCOR]	"||",
+    [OASGN]	" = ",
+};
+@
+
+<<global [[tabs]]>>=
+static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+@
+
+<<global [[typenames]]>>=
+char *typenames[] =
+{
+    [TINT]		"integer",
+    [TFLOAT]	"float",
+    [TSTRING]	"string",
+    [TLIST]		"list",
+    [TCODE]		"code",
+};
+@
+
+<<function [[cmp]]>>=
+int
+cmp(void *va, void *vb)
+{
+    char **a = va;
+    char **b = vb;
+
+    return strcmp(*a, *b);
+}
+@
+
+<<function [[fundefs]]>>=
+void
+fundefs(void)
+{
+    Lsym *l;
+    char **vec;
+    int i, j, n, max, col, f, g, s;
+
+    max = 0;
+    f = 0;
+    g = 100;
+    vec = malloc(sizeof(char*)*g);
+    if(vec == 0)
+        fatal("out of memory");
+
+    for(i = 0; i < Hashsize; i++) {
+        for(l = hash[i]; l; l = l->hash) {
+            if(l->proc == 0 && l->builtin == 0)
+                continue;
+            n = strlen(l->name);
+            if(n > max)
+                max = n;
+            if(f >= g) {
+                g *= 2;
+                vec = realloc(vec, sizeof(char*)*g);
+                if(vec == 0)
+                    fatal("out of memory");
+            }
+            vec[f++] = l->name;
+        }
+    }
+        qsort(vec, f, sizeof(char*), cmp);
+    max++;
+    col = 60/max;
+    s = (f+col-1)/col;
+
+    for(i = 0; i < s; i++) {
+        for(j = i; j < f; j += s)
+            Bprint(bout, "%-*s", max, vec[j]);
+        Bprint(bout, "\n");
+    }
+}
+@
+
+<<function [[whatis]]>>=
+void
+whatis(Lsym *l)
+{
+    int t;
+    int def;
+    Type *ti;
+
+    if(l == 0) {
+        fundefs();
+        return;
+    }
+
+    def = 0;
+    if(l->v->set) {
+        t = l->v->type;
+        Bprint(bout, "%s variable", typenames[t]);
+        if(t == TINT || t == TFLOAT)
+            Bprint(bout, " format %c", l->v->fmt);
+        if(l->v->comt)
+            Bprint(bout, " complex %s", l->v->comt->base->name);
+        Bputc(bout, '\n');
+        def = 1;
+    }
+    if(l->lt) {
+        Bprint(bout, "complex %s {\n", l->name);
+        for(ti = l->lt; ti; ti = ti->next) {
+            if(ti->type) {
+                if(ti->fmt == 'a') {
+                    Bprint(bout, "\t%s %d %s;\n",
+                    ti->type->name, ti->offset,
+                    ti->tag->name);
+                }
+                else {
+                    Bprint(bout, "\t'%c' %s %d %s;\n",
+                    ti->fmt, ti->type->name, ti->offset,
+                    ti->tag->name);
+                }
+            }
+            else
+                Bprint(bout, "\t'%c' %d %s;\n",
+                ti->fmt, ti->offset, ti->tag->name);
+        }
+        Bprint(bout, "};\n");
+        def = 1;
+    }
+    if(l->proc) {
+        Bprint(bout, "defn %s(", l->name);
+        pexpr(l->proc->left);
+        Bprint(bout, ") {\n");
+        pcode(l->proc->right, 1);
+        Bprint(bout, "}\n");
+        def = 1;
+    }
+    if(l->builtin) {
+        Bprint(bout, "builtin function\n");
+        def = 1;
+    }
+    if(def == 0)
+        Bprint(bout, "%s is undefined\n", l->name);
+}
+@
+
+<<function [[slist]]>>=
+void
+slist(Node *n, int d)
+{
+    if(n == 0)
+        return;
+    if(n->op == OLIST)
+        Bprint(bout, "%.*s{\n", d-1, tabs);
+    pcode(n, d);
+    if(n->op == OLIST)
+        Bprint(bout, "%.*s}\n", d-1, tabs);
+}
+@
+
+<<function [[pcode]]>>=
+void
+pcode(Node *n, int d)
+{
+    Node *r, *l;
+
+    if(n == 0)
+        return;
+
+    r = n->right;
+    l = n->left;
+
+    switch(n->op) {
+    default:
+        Bprint(bout, "%.*s", d, tabs);
+        pexpr(n);
+        Bprint(bout, ";\n");
+        break;
+    case OLIST:
+        pcode(n->left, d);
+        pcode(n->right, d);
+        break;
+    case OLOCAL:
+        Bprint(bout, "%.*slocal", d, tabs);
+        while(l) {
+            Bprint(bout, " %s", l->sym->name);
+            l = l->left;
+            if(l == 0)
+                Bprint(bout, ";\n");
+            else
+                Bprint(bout, ",");
+        }
+        break;
+    case OCOMPLEX:
+        Bprint(bout, "%.*scomplex %s %s;\n", d, tabs, n->sym->name, l->sym->name);
+        break;
+    case OIF:
+        Bprint(bout, "%.*sif ", d, tabs);
+        pexpr(l);
+        d++;
+        Bprint(bout, " then\n");
+        if(r && r->op == OELSE) {
+            slist(r->left, d);
+            Bprint(bout, "%.*selse\n", d-1, tabs);
+            slist(r->right, d);
+        }
+        else
+            slist(r, d);
+        break;
+    case OWHILE:
+        Bprint(bout, "%.*swhile ", d, tabs);
+        pexpr(l);
+        d++;
+        Bprint(bout, " do\n");
+        slist(r, d);
+        break;
+    case ORET:
+        Bprint(bout, "%.*sreturn ", d, tabs);
+        pexpr(l);
+        Bprint(bout, ";\n");
+        break;
+    case ODO:
+        Bprint(bout, "%.*sloop ", d, tabs);
+        pexpr(l->left);
+        Bprint(bout, ", ");
+        pexpr(l->right);
+        Bprint(bout, " do\n");
+        slist(r, d+1);
+    }
+}
+@
+
+<<function [[pexpr]]>>=
+void
+pexpr(Node *n)
+{
+    Node *r, *l;
+
+    if(n == 0)
+        return;
+
+    r = n->right;
+    l = n->left;
+
+    switch(n->op) {
+    case ONAME:
+        Bprint(bout, "%s", n->sym->name);
+        break;
+    case OCONST:
+        switch(n->type) {
+        case TINT:
+            Bprint(bout, "%lld", n->ival);
+            break;
+        case TFLOAT:
+            Bprint(bout, "%g", n->fval);
+            break;
+        case TSTRING:
+            pstr(n->string);
+            break;
+        case TLIST:
+            break;
+        }
+        break;
+    case OMUL:
+    case ODIV:
+    case OMOD:
+    case OADD:
+    case OSUB:
+    case ORSH:
+    case OLSH:
+    case OLT:
+    case OGT:
+    case OLEQ:
+    case OGEQ:
+    case OEQ:
+    case ONEQ:
+    case OLAND:
+    case OXOR:
+    case OLOR:
+    case OCAND:
+    case OCOR:
+        Bputc(bout, '(');
+        pexpr(l);
+        Bprint(bout, binop[n->op]);
+        pexpr(r);
+        Bputc(bout, ')');
+        break;
+    case OASGN:
+        pexpr(l);
+        Bprint(bout, binop[n->op]);
+        pexpr(r);
+        break;
+    case OINDM:
+        Bprint(bout, "*");
+        pexpr(l);
+        break;
+    case OEDEC:
+        Bprint(bout, "--");
+        pexpr(l);
+        break;
+    case OEINC:
+        Bprint(bout, "++");
+        pexpr(l);
+        break;
+    case OPINC:
+        pexpr(l);
+        Bprint(bout, "++");
+        break;
+    case OPDEC:
+        pexpr(l);
+        Bprint(bout, "--");
+        break;
+    case ONOT:
+        Bprint(bout, "!");
+        pexpr(l);
+        break;
+    case OLIST:
+        pexpr(l);
+        if(r) {
+            Bprint(bout, ",");
+            pexpr(r);
+        }
+        break;
+    case OCALL:
+        pexpr(l);
+        Bprint(bout, "(");
+        pexpr(r);
+        Bprint(bout, ")");
+        break;
+    case OCTRUCT:
+        Bprint(bout, "{");
+        pexpr(l);
+        Bprint(bout, "}");
+        break;
+    case OHEAD:
+        Bprint(bout, "head ");
+        pexpr(l);
+        break;
+    case OTAIL:
+        Bprint(bout, "tail ");
+        pexpr(l);
+        break;
+    case OAPPEND:
+        Bprint(bout, "append ");
+        pexpr(l);
+        Bprint(bout, ",");
+        pexpr(r);
+        break;
+    case ODELETE:
+        Bprint(bout, "delete ");
+        pexpr(l);
+        Bprint(bout, ",");
+        pexpr(r);
+        break;
+    case ORET:
+        Bprint(bout, "return ");
+        pexpr(l);
+        break;
+    case OINDEX:
+        pexpr(l);
+        Bprint(bout, "[");
+        pexpr(r);
+        Bprint(bout, "]");
+        break;
+    case OINDC:
+        Bprint(bout, "@");
+        pexpr(l);
+        break;
+    case ODOT:
+        pexpr(l);
+        Bprint(bout, ".%s", n->sym->name);
+        break;
+    case OFRAME:
+        Bprint(bout, "%s:%s", n->sym->name, l->sym->name);
+        break;
+    case OCAST:
+        Bprint(bout, "(%s)", n->sym->name);
+        pexpr(l);
+        break;
+    case OFMT:
+        pexpr(l);
+        Bprint(bout, "\\%c", (int)r->ival);
+        break;
+    case OEVAL:
+        Bprint(bout, "eval ");
+        pexpr(l);
+        break;
+    case OWHAT:
+        Bprint(bout, "whatis");
+        if(n->sym)
+            Bprint(bout, " %s", n->sym->name);
+        break;
+    }
+}
+@
+
+<<function [[pstr]]>>=
+void
+pstr(String *s)
+{
+    int i, c;
+
+    Bputc(bout, '"');
+    for(i = 0; i < s->len; i++) {
+        c = s->string[i];
+        switch(c) {
+        case '\0':
+            c = '0';
+            break;
+        case '\n':
+            c = 'n';
+            break;
+        case '\r':
+            c = 'r';
+            break;
+        case '\t':
+            c = 't';
+            break;
+        case '\b':
+            c = 'b';
+            break;
+        case '\f':
+            c = 'f';
+            break;
+        case '\a':
+            c = 'a';
+            break;
+        case '\v':
+            c = 'v';
+            break;
+        case '\\':
+            c = '\\';
+            break;
+        case '"':
+            c = '"';
+            break;
+        default:
+            Bputc(bout, c);
+            continue;
+        }
+        Bputc(bout, '\\');
+        Bputc(bout, c);
+    }
+    Bputc(bout, '"');
+}
+@
 
 
 
@@ -5359,6 +6690,21 @@ if(iop != 0) {
 %******************************************************************************
 \chapter{Utilities}
 %******************************************************************************
+
+<<function [[isnumeric]]>>=
+int
+isnumeric(char *s)
+{
+    while(*s) {
+        if(*s < '0' || *s > '9')
+            return 0;
+        s++;
+    }
+    return 1;
+}
+@
+
+
 
 % move to Gc chapter/section?
 <<global [[dogc]]>>=

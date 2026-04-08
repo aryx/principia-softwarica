@@ -105,6 +105,7 @@ main(int argc, char *argv[])
             pid = strtol(argv[0], 0, 0);
             snprint(prog, sizeof(prog), "/proc/%d/text", pid);
             aout = prog;
+
             if(argc > 1)
                 aout = argv[1];
             else if(kernel)
@@ -446,8 +447,10 @@ al(int t)
     l = gmalloc(sizeof(List));
     memset(l, 0, sizeof(List));
     l->type = t;
+
     l->gclink = gcl;
     gcl = l;
+
     return l;
 }
 /*e: function [[al]] */
