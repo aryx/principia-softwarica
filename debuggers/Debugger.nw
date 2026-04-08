@@ -10,28 +10,15 @@
 \input{../docs/latex/Macros}
 
 %restructure: focus on acid
-%  1. Introduction                                                                   
-%  2. Overview                                                                  
-%  3. Kernel Support
 %  4. Core Data Structures (acid types, symbols, process state)                     
-%  5. main()       
-%  6. Lexing
-%  7. Parsing (yacc grammar, AST)
 %  8. Evaluator (expression evaluation, built-in functions)
 %  9. Process Control (breakpoints, stepping, through acid primitives)
 %  10. The acid Library (the .acid scripts in conf/)
-%  11. strace
-%  12. Advanced Topics
-%  13. Conclusion
-%  14. Appendix: db code
 %  15. Appendix: libmach code
 
-%  Ch 1 — Introduction (as before, motivations, why acid over db/gdb)     
 %  Ch 2 — Overview (~2 pages)                                                            %  - acid's design philosophy: scriptable debugger with its own language
 %  - Architecture: interpreter + builtins + library scripts
 %  - A simple debugging session
-%  Ch 3 — Kernel Support (reuse existing chapter)
-%  - /proc/x/mem, /proc/x/ctl, /proc/x/note
 %  Ch 4 — Core Data Structures → acid.h, globals.c (430 lines)
 %  - Node (AST node), Store (value union), Value (scoped variable)
 %  - Lsym (symbol table entry with value stack for scoping)
@@ -103,10 +90,6 @@
 %  - leak/pool/trump — memory debugging
 %  - acme — editor integration
 %  - coverage — code coverage via breakpoints
-%
-%  Ch 15 — libmach (or appendix)
-%  Ch 16 — strace
-%  Ch 17 — Conclusion
 %
 %  Appendix A — db code (current code splits)
 %  Appendix B — Utilities, Error Management
@@ -502,6 +485,16 @@ calls rather than system calls.
 % strace -c <cmd>
 % stace <pid> ?
 
+<<function usage (tracers/strace.c)>>=
+void
+usage(void)
+{
+    fprint(STDERR, "Usage: strace [-c cmd [arg...]] | [pid]\n");
+    exits("usage");
+}
+@
+
+
 %claude:
 The command-line interface of [[ratrace]] (called [[strace]]
 in the source) is simple:
@@ -662,6 +655,16 @@ the linker must preserve them, and the debugger must read them.
 
 % see also Machine.nw, which has a similar interface.
 
+<<function usage (acid/main.c)>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: acid [-kqw] [-l library] [-m machine] [pid] [file]\n");
+    exits("usage");
+}
+@
+
+
 %claude:
 The command-line interface of [[acid]] is:
 \begin{verbatim}
@@ -670,13 +673,18 @@ $ acid [-kqw] [-l library] [-m machine] [pid] [textfile]
 %
 The main flags are:
 \begin{itemize}
+
 \item [[-l library]]: load an [[acid]] library file at startup.
 Libraries provide higher-level debugging functions; for instance,
 [[acid -l truss]] loads a system call tracer written entirely
 in [[acid]]'s own language.
+
 \item [[-k]]: debug kernel state rather than user state.
+
 \item [[-w]]: allow modifying the text file (for patching binaries).
+
 \item [[-m machine]]: specify the CPU type for disassembly.
+
 \end{itemize}
 %
 You can specify a running process by [[pid]], or a binary
@@ -693,6 +701,7 @@ The key functions available at the [[acid]] prompt include:
 [[src()]] (show source around an address),
 [[asm()]] (disassemble), [[regs()]] (print registers),
 and [[print()]] (display a value).
+%
 Because these are regular [[acid]] functions defined in
 the standard library---not built-in commands---the user can
 redefine them or write new ones to automate complex
@@ -725,7 +734,8 @@ main(int argc, char **argv)
     exits(nil);
 }
 \end{verbatim}
-%
+
+
 We compile it, start [[acid]], set a breakpoint on [[main]],
 run to it, and inspect the state:
 \begin{verbatim}
@@ -757,7 +767,8 @@ divtrap()
 main() buggy.c:7
 acid:
 \end{verbatim}
-%
+
+
 [[new()]] starts the program and stops at the first instruction.
 [[bpset(main)]] sets a breakpoint at the entry of [[main]].
 [[cont()]] resumes execution until the breakpoint is hit.
@@ -828,9 +839,13 @@ runs into the division by zero, which stops execution in
 
 %###############################################################################
 
+
 %******************************************************************************
 \chapter{Kernel Support}
 %******************************************************************************
+
+% a lot of debugging power comes from stuff actually done by kernel
+
 % Context
 
 \section{Memory access: [[/proc/x/mem]]}
@@ -877,10 +892,351 @@ runs into the division by zero, which stops execution in
 % ps; db <pid> to start inspect! really useful.
 
 %******************************************************************************
+\chapter{[[/bin/strace]]}
+%******************************************************************************
+%alt: move to appendix or later
+
+%yoann: before see acid, good to see first strace because?
+% allow to understand /proc/x/ctl? things needed later?
+
+
+% soft archi? ASCII diagram?
+
+\section{[[threadmain()]]}
+
+%recall:
+%$ strace [-c cmd [arg...]] | [pid]
+
+<<function [[threadmain]]>>=
+void
+threadmain(int argc, char **argv)
+{
+    int pid;
+    <<[[threadmain()]] other locals>>
+
+    <<[[threadmain()]] argv processing>>
+    <<[[threadmain()]] if command given via [[-c]]>>
+    else {
+        if(argc != 2)
+            usage();
+        pid = atoi(argv[1]);
+        //TODO? send a 'stop' to its ctl file?
+    }
+
+    out   = chancreate(sizeof(char*), 0);
+    quit  = chancreate(sizeof(char*), 0);
+    forkc = chancreate(sizeof(ulong *), 0);
+
+    nread++;
+    procrfork(writer, nil, Stacksize, 0);
+    reader((void*)pid);
+}
+@
+
+<<enum [[_anon_ (strace)]]>>=
+enum {
+    Stacksize   = 8*1024,
+    Bufsize     = 8*1024,
+};
+@
+
+<<global [[nread]]>>=
+int nread = 0;
+@
+
+\subsection{Channels}
+
+<<global [[out]]>>=
+// chan<ref<string>> listener = writer sender = reader
+Channel *out;
+@
+
+<<global [[forkc]]>>=
+// chan<pid> listener = writer, sender = reader
+Channel *forkc;
+@
+
+<<global [[quit]]>>=
+// chan<nil> listener = writer, sender = reader
+Channel *quit;
+@
+
+
+
+\subsection{[[strace -c <cmd>]]}
+
+<<[[threadmain()]] other locals>>=
+char *cmd = nil;
+char **args = nil;
+@
+
+<<[[threadmain()]] argv processing>>=
+/*
+ * don't bother with fancy arg processing, because it picks up options
+ * for the command you are starting.  Just check for -c as argv[1]
+ * and then take it from there.
+ */
+if (argc < 2)
+    usage();
+while (argv[1][0] == '-') {
+    switch(argv[1][1]) {
+    case 'c':
+        if (argc < 3)
+            usage();
+        cmd = strdup(argv[2]);
+        args = &argv[2];
+        break;
+    default:
+        usage();
+    }
+    ++argv;
+    --argc;
+}
+@
+
+<<[[threadmain()]] if command given via [[-c]]>>=
+/* run a command? */
+if(cmd) {
+    pid = fork();
+    if (pid < 0)
+        sysfatal("fork failed: %r");
+    if(pid == 0) {
+        hang();
+        exec(cmd, args);
+        if(cmd[0] != '/')
+            exec(smprint("/bin/%s", cmd), args);
+        sysfatal("exec %s failed: %r", cmd);
+    }
+}
+@
+
+
+<<function [[hang]]>>=
+void
+hang(void)
+{
+    fdt me;
+    char *myctl;
+    static char hang[] = "hang";
+
+    myctl = smprint("/proc/%d/ctl", getpid());
+    me = open(myctl, OWRITE);
+    if (me < 0)
+        sysfatal("can't open %s: %r", myctl);
+    cwrite(me, myctl, hang, sizeof hang - 1);
+    close(me);
+    free(myctl);
+}
+@
+% why sizeof hang - 1?
+
+
+\section{[[writer()]]}
+
+%TODO: use NAlt and NQuit, etc. like we do for other concurrent progs, cleaner
+% than hardcoded 0, 1, 2
+
+% just a process ref counter really, and a stderr output relay
+% (why not write directly in reader?)
+
+
+<<struct [[Str]]>>=
+struct Str {
+    ref_own<string> length = len, point to space after malloc'ed Str
+    char *buf;
+    int	len;
+};
+@
+
+
+
+<<function [[writer]]>>=
+void
+writer(void *)
+{
+    int newpid;
+    Str *s;
+
+    // TODO use literal array initializer?
+    Alt a[4];
+
+    a[0].op = CHANRCV;
+    a[0].c = quit;
+    a[0].v = nil;
+
+    a[1].op = CHANRCV;
+    a[1].c = out;
+    a[1].v = &s;
+
+    a[2].op = CHANRCV;
+    a[2].c = forkc;
+    a[2].v = &newpid;
+
+    a[3].op = CHANEND;
+
+    for(;;)
+        switch(alt(a)){
+        case 0:			/* quit */
+            nread--;
+            if(nread <= 0)
+                goto done;
+            break;
+        case 1:			/* out */
+            /* it's a nice null terminated thing */
+            fprint(STDERR, "%s", s->buf);
+            free(s);
+            break;
+        case 2:			/* forkc */
+            // procrfork(reader, (void*)newpid, Stacksize, 0);
+            nread++;
+            break;
+        }
+done:
+    exits(nil);
+}
+@
+
+\section{[[reader()]]}
+
+
+
+<<function [[reader]]>>=
+void
+reader(void *v)
+{
+    char *ctl, *truss;
+    fdt cfd, tfd;
+    bool forking = false;
+    bool exiting = false;
+    int pid, newpid;
+    Str *s;
+
+    // /proc/<pid>/ctl messages
+    static char waitstop[] = "waitstop";
+    static char start[] = "start";
+
+    pid = (int)(uintptr)v;
+
+    ctl = smprint("/proc/%d/ctl", pid);
+    if ((cfd = open(ctl, OWRITE)) < 0)
+        die(smprint("%s: %r", ctl));
+
+    truss = smprint("/proc/%d/syscall", pid);
+    if ((tfd = open(truss, OREAD)) < 0)
+        die(smprint("%s: %r", truss));
+
+    /* child was stopped by hang msg earlier */
+    cwrite(cfd, ctl, waitstop, sizeof waitstop - 1);
+    // useful? if it was stopped, then why need waitstop?
+    // because the fork() has been done but maybe the child
+    // has not yet reached the exec() and got actually stopped ?
+    // and also for 'strace pid' case ?
+
+    cwrite(cfd, ctl, "startsyscall", 12);
+
+    s = newstr();
+
+    while((s->len = pread(tfd, s->buf, Bufsize - 1, 0)) >= 0){
+        // ??
+        if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
+            forking = false;
+            newpid = strtol(&s->buf[3], 0, 0);
+            sendp(forkc, (void*)newpid);
+            procrfork(reader, (void*)newpid, Stacksize, 0);
+        }
+
+        /*
+         * There are three tests here and they (I hope) guarantee
+         * no false positives.
+         */
+        if (strstr(s->buf, " Rfork") != nil) {
+            char *a[8];
+            char *rf;
+
+            rf = strdup(s->buf);
+            if (tokenize(rf, a, 8) == 5 &&
+                strtoul(a[4], 0, 16) & RFPROC)
+                forking = true;
+            free(rf);
+        } else if (strstr(s->buf, " Exits") != nil)
+            exiting = true;
+
+        sendp(out, s);	/* print line from /proc/$child/syscall */
+        if (exiting) {
+            s = newstr();
+            strcpy(s->buf, "\n");
+            sendp(out, s);
+            break;
+        }
+
+        /* flush syscall trace buffer */
+        cwrite(cfd, ctl, "startsyscall", 12);
+        s = newstr();
+    }
+
+    sendp(quit, nil);
+    threadexitsall(nil);
+}
+@
+%$
+
+
+<<function [[die]]>>=
+void
+die(char *s)
+{
+    fprint(STDERR, "%s\n", s);
+    exits(s);
+}
+@
+
+<<function [[cwrite]]>>=
+void
+cwrite(fdt fd, char *path, char *cmd, int len)
+{
+    werrstr("");
+    if (write(fd, cmd, len) < len) {
+        fprint(STDERR, "cwrite: %s: failed writing %d bytes: %r\n",
+            path, len);
+        sendp(quit, nil);
+        threadexits(nil);
+    }
+}
+@
+
+<<function [[newstr]]>>=
+Str *
+newstr(void)
+{
+    Str *s;
+
+    s = mallocz(sizeof(Str) + Bufsize, true);
+    if (s == nil)
+        sysfatal("malloc");
+    s->buf = (char *)&s[1];
+    return s;
+}
+@
+
+
+
+%******************************************************************************
+\chapter{Toolchain support}
+%******************************************************************************
+
+\section{Assembler}
+
+\section{Compiler}
+
+\section{Linker}
+
+%******************************************************************************
 \chapter{Core Data Structures}
 %******************************************************************************
 
-\section{Executable format: [[Fhdr]]}
+\section{[[libmach]] types and globals}
+
+\subsection{Executable format: [[Fhdr]]}
 % generic
 
 <<struct [[Fhdr]]>>=
@@ -902,8 +1258,10 @@ struct Fhdr
 
     uvlong	txtaddr;	/* text address */
     vlong	txtoff;		/* start of text in file */
+
     uvlong	dataddr;	/* start of data segment */
     vlong	datoff;		/* offset to data seg in file */
+
     vlong	symoff;		/* offset of symbol table in file */
 
     uvlong	entry;		/* entry point */
@@ -966,7 +1324,7 @@ enum executable_type
 %    FARM64B,		/* arm64 bootable */
 
 
-\section{[[Mach]] and [[mach]]}
+\subsection{[[Mach]] and [[mach]]}
 
 % put1? get1? 
 % rput? rget? register put/get
@@ -1063,12 +1421,9 @@ enum {					/* bits in rflags field */
 };
 @
 
-<<global [[mach]]>>=
-Mach	*mach = &mi386;			/* Global current machine table */
-@
 
 
-\section{[[Machdata]] and [[machdata]]}
+\subsection{[[Machdata]] and [[machdata]]}
 
 %machdata->bpinst ! the instruction generating a sys: breakpoint
 
@@ -1098,7 +1453,7 @@ struct	Machdata {		/* Machine-dependent debugger support */
 };
 @
 
-\section{[[Map]]}
+\subsection{[[Map]]}
 
 % cormap, symmap, dotmap
 
@@ -1108,6 +1463,7 @@ struct	Machdata {		/* Machine-dependent debugger support */
  */
 struct Map {
     int	nsegs;			/* number of segments */
+
     struct segment {		/* per-segment map */
         char	*name;		/* the segment name */
         int	fd;		/* file descriptor */
@@ -1123,8 +1479,7 @@ struct Map {
 };
 @
 
-
-\section{[[Symbol]]}
+\subsection{[[Symbol]]}
 
 <<struct [[Symbol]]>>=
 /*
@@ -1132,6 +1487,7 @@ struct Map {
  */
 struct Symbol {
     void 	*handle;		/* used internally - owning func */
+
     struct {
         char	*name;
         vlong	value;		/* address or stack offset */
@@ -1159,38 +1515,681 @@ enum symbol_type
 @
 %CSTAB?
 
-\section{[[/proc/x/text]] and [[symmap]]}
 
-\section{[[/proc/x/mem]] and [[cormap]]}
-
-\section{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
+\section{[[acid]], [[libmach]], and [[/proc]]}
 
 
+\subsection{[[/proc/x/text]] and [[symmap]]}
 
-\section{[[/proc/x/note]], [[notefd]], and [[notes]]}
+<<global symmap (acid/globals.c)>>=
+Map*	symmap;
+@
+
+\subsection{[[/proc/x/mem]] and [[cormap]]}
+
+<<global cormap (acid/globals.c)>>=
+Map*	cormap;
+@
+
+\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
+
+\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
 
 
+\section{Abstract syntax tree: [[Node]]}
+
+<<struct [[Node]]>>=
+struct Node
+{
+    Gc;
+
+    char	op;
+    char	type;
+
+    Node*	left;
+    Node*	right;
+
+    Lsym*	sym;
+    int	builtin;
+
+    Store;
+};
+@
+
+<<constant [[ZN]]>>=
+#define ZN	(Node*)0
+@
+
+
+<<enum [[_anon_ (acid/acid.h)]]3>>=
+enum
+{
+    ONAME,
+    OCONST,
+    OMUL,
+    ODIV,
+    OMOD,
+    OADD,
+    OSUB,
+    ORSH,
+    OLSH,
+    OLT,
+    OGT,
+    OLEQ,
+    OGEQ,
+    OEQ,
+    ONEQ,
+    OLAND,
+    OXOR,
+    OLOR,
+    OCAND,
+    OCOR,
+    OASGN,
+    OINDM,
+    OEDEC,
+    OEINC,
+    OPINC,
+    OPDEC,
+    ONOT,
+    OIF,
+    ODO,
+    OLIST,
+    OCALL,
+    OCTRUCT,
+    OWHILE,
+    OELSE,
+    OHEAD,
+    OTAIL,
+    OAPPEND,
+    ORET,
+    OINDEX,
+    OINDC,
+    ODOT,
+    OLOCAL,
+    OFRAME,
+    OCOMPLEX,
+    ODELETE,
+    OCAST,
+    OFMT,
+    OEVAL,
+    OWHAT,
+};
+@
+
+
+
+<<struct [[Store]]>>=
+struct Store
+{
+    char	fmt;
+    Type*	comt;
+
+    union {
+        vlong	ival;
+        double	fval;
+        String*	string;
+        List*	l;
+        Node*	cc;
+    };
+};
+@
+
+\section{[[Gc]]}
+
+<<struct [[Gc]]>>=
+struct Gc
+{
+    char	gcmark;
+    Gc*	gclink;
+};
+@
+
+\section{[[Type]] system}
+
+<<struct [[Type]]>>=
+struct Type
+{
+    Type*	next;
+
+    int	offset;
+    char	fmt;
+    char	depth;
+
+    Lsym*	type;
+    Lsym*	tag;
+    Lsym*	base;
+};
+@
+
+<<enum [[_anon_ (acid/acid.h)]]2>>=
+enum
+{
+    TINT,
+    TFLOAT,
+    TSTRING,
+    TLIST,
+    TCODE,
+};
+@
+
+
+%???
+<<struct [[Frtype]]>>=
+struct Frtype
+{
+    Lsym*	var;
+    Type*	type;
+    Frtype*	next;
+};
+@
+
+\section{Symbol table}
+
+<<struct [[Lsym]]>>=
+struct Lsym
+{
+    char*	name;
+    int	lexval;
+    Lsym*	hash;
+    Value*	v;
+    Type*	lt;
+    Node*	proc;
+    Frtype*	local;
+    void	(*builtin)(Node*, Node*);
+};
+@
+
+\section{[[Value]]}
+
+<<struct [[Value]]>>=
+struct Value
+{
+    char	set;
+    char	type;
+    Store;
+    Value*	pop;
+    Lsym*	scope;
+    Rplace*	ret;
+};
+@
+
+
+\section{Process table}
+
+<<struct [[Ptab]]>>=
+struct Ptab
+{
+    int	pid;
+    fdt	ctl;
+};
+@
 
 
 
 %******************************************************************************
-\chapter{[[main()]]}
+\chapter{[[/bin/acid]]}
 %******************************************************************************
 
-\section{Process attachment: [[pid]]}
 
-\section{Text file: [[setsym()]]}
+<<global [[aout]]>>=
+// /proc/<pid>/text or given textfile to debug
+char*	aout;
+@
 
-\section{Memory file: [[setcor()]]}
-% Core memory file
+<<global [[quiet]]>>=
+bool	quiet;
+@
 
-\section{Output: [[outputinit()]], [[dprint()]] and [[stdout]]}
 
-\section{Input: [[clrinp()]], [[rdc()]], [[reread()]]}
+<<global [[bioout]]>>=
+static Biobuf	bioout;
+@
+<<global [[bout]]>>=
+// pointer to bioout
+Biobuf*	bout;
+@
 
-\section{Interpreter: [[command()]]}
+<<function main (acid/main.c)>>=
+void
+main(int argc, char *argv[])
+{
+    int pid = 0;
+    <<[[main()]](acid) other locals>>
 
-\section{Exit: [[done()]]}
+    argv0 = argv[0];
+    aout = "8.out";
+    quiet = true;
+    mtype = nil;
+
+    ARGBEGIN{
+    <<[[main()]](acid) command line processing>>
+    default:
+        usage();
+    }ARGEND
+
+    if(argc > 0) {
+        <<[[main()]](acid) if argc and remote adjust [[aout]]>>
+        else
+        <<[[main()]](acid) if [[acid pid]]>>
+        else {
+            <<[[main()]](acid) if kernel and no pid>>
+            aout = argv[0];
+        }
+    } else
+       <<[[main()]](acid) if not argc and remote adjust [[aout]]>>
+
+    <<[[main()]](acid) initializations>>
+
+    <<[[main()]](acid) infinite loop>>
+    /* not reached */
+}
+@
+
+\section{[[acid pid]]}
+
+<<global [[prog]]>>=
+static char	prog[128];
+@
+
+<<[[main()]](acid) if [[acid pid]]>>=
+if(isnumeric(argv[0])) {
+    pid = strtol(argv[0], 0, 0);
+    snprint(prog, sizeof(prog), "/proc/%d/text", pid);
+    aout = prog;
+    if(argc > 1)
+        aout = argv[1];
+    else if(kernel)
+        aout = system();
+}
+@
+
+
+\section{REPL}
+
+
+<<[[main()]](acid) infinite loop>>=
+for(;;) {
+    if(setjmp(err)) {
+        Binit(&bioout, STDOUT, OWRITE);
+        unwind();
+    }
+    stacked = 0;
+
+    Bprint(bout, "acid: ");
+
+    if(yyparse() != 1)
+        die();
+    restartio();
+
+    unwind();
+}
+@
+
+<<global [[stacked]]>>=
+int	stacked;
+@
+%todo: bool
+
+
+
+
+\section{Error management}
+
+<<global [[err]]>>=
+jmp_buf	err;
+@
+
+
+<<function error (acid/exec.c)>>=
+void
+error(char *fmt, ...)
+{
+    int i;
+    char buf[2048];
+    va_list arg;
+
+    <<[[error()]](acid) unstack io channels>>
+
+    ret = 0;
+    gotint = 0;
+
+    Bflush(bout);
+    <<[[error()]](acid) if [[silent]]>>
+    else {
+        va_start(arg, fmt);
+        vseprint(buf, buf+sizeof(buf), fmt, arg);
+        va_end(arg);
+        fprint(2, "%L: (error) %s\n", buf);
+    }
+    while(popio())
+        ;
+    interactive = 1;
+    longjmp(err, 1);
+}
+@
+
+<<function [[unwind]]>>=
+void
+unwind(void)
+{
+    int i;
+    Lsym *s;
+    Value *v;
+
+    for(i = 0; i < Hashsize; i++) {
+        for(s = hash[i]; s; s = s->hash) {
+            while(s->v->pop) {
+                v = s->v->pop;
+                free(s->v);
+                s->v = v;
+            }
+        }
+    }
+}
+@
+
+
+<<global [[silent]]>>=
+int	silent;
+@
+
+<<[[error()]](acid) if [[silent]]>>=
+if(silent)
+    silent = 0;
+@
+
+<<global [[io]]>>=
+Biobuf*	io[32];
+@
+
+<<global [[iop]]>>=
+int	iop;
+@
+
+%XXX
+<<[[error()]](acid) unstack io channels>>=
+/* Unstack io channels */
+if(iop != 0) {
+    for(i = 1; i < iop; i++)
+        Bterm(io[i]);
+    bout = io[0];
+    iop = 0;
+}
+@
+
+
+\section{Arguments processing}
+
+\subsection{[[acid -q]]}
+
+<<[[main()]](acid) command line processing>>=
+case 'q':
+    quiet = false;
+    break;
+@
+
+
+%alt: \subsection{[[acid -m <mtype>]]}
+% later
+
+\subsection{[[acid -l <lib>]]}
+
+
+<<global [[nlm]]>>=
+static int	nlm;
+@
+
+<<global [[lm]]>>=
+// array<ref<string>> length = nlm
+static char*	lm[16];
+@
+
+
+<<[[main()]](acid) other locals>>=
+char *s;
+@
+
+<<[[main()]](acid) command line processing>>=
+case 'l':
+    s = ARGF();
+    if(s == nil)
+        usage();
+    lm[nlm++] = s;
+    break;
+@
+
+
+
+
+\section{Initializations}
+
+<<global [[initialising]]>>=
+int	initialising;
+@
+%todo: bool
+
+<<global interactive (acid/globals.c)>>=
+int	interactive;
+@
+%todo: bool
+
+<<global line (acid/globals.c)>>=
+int	line;
+@
+
+
+<<[[main()]](acid) initializations>>=
+<<[[main()]](acid) format initializations>>
+
+Binit(&bioout, 1, OWRITE);
+bout = &bioout;
+
+kinit();
+
+initialising = 1;
+
+pushfile(nil);
+
+loadvars();
+installbuiltin();
+
+<<[[main()]](acid) sanity check [[mtype]]>>
+
+<<[[main()]](acid) [[attachfiles(aout, pid)]]>>
+
+<<[[main()]](acid) load modules>>
+
+userinit();
+varsym();
+
+<<[[main()]](acid) check acidmap>>
+
+interactive = 1;
+
+initialising = 0;
+line = 1;
+
+<<[[main()]](acid) notify setup>>
+@
+
+
+%alt: \subsection{Formatters}
+%alt: \subsection{...}
+
+\section{[[attachfiles()]] and [[readtext()]]}
+
+<<[[main()]](acid) [[attachfiles(aout, pid)]]>>=
+if (attachfiles(aout, pid) < 0)
+    varreg();		/* use default register set on error */
+@
+
+<<global [[text]]>>=
+fdt	text;
+@
+
+<<function [[attachfiles]]>>=
+/// main -> <>
+static errorneg1
+attachfiles(char *aout, int pid)
+{
+    interactive = 0;
+    if(setjmp(err))
+        return ERROR_NEG1;
+
+    if(aout) {				/* executable given */
+        <<[[attachfiles()]] if [[wtflag]]>>
+        else
+            text = open(aout, OREAD);
+
+        <<[[attachfiles()]] sanity check [[text]]>>
+        readtext(aout);
+    }
+    if(pid)					/* pid given */
+        sproc(pid);
+    return OK_0;
+}
+@
+
+
+<<[[attachfiles()]] sanity check [[text]]>>=
+if(text < 0)
+    error("%s: can't open %s: %r\n", argv0, aout);
+@
+
+
+
+<<global fhdr (acid/globals.c)>>=
+Fhdr	fhdr;
+@
+
+
+<<function [[readtext]]>>=
+/// main -> attachfiles -> <>
+void
+readtext(char *s)
+{
+    Dir *d;
+    Lsym *l;
+    Value *v;
+    uvlong length;
+    Symbol sym;
+    extern Machdata armmach;
+
+    if(mtype != nil){
+        symmap = newmap(0, 1);
+        if(symmap == 0)
+            print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+        length = 1<<24;
+        d = dirfstat(text);
+        if(d != nil){
+            length = d->length;
+            free(d);
+        }
+        setmap(symmap, text, 0, length, 0, "binary");
+        return;
+    }
+
+    machdata = &armmach;
+
+    if(!crackhdr(text, &fhdr)) {
+        print("can't decode file header\n");
+        return;
+    }
+
+    symmap = loadmap(0, text, &fhdr);
+    if(symmap == 0)
+        print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+
+    if(syminit(text, &fhdr) < 0) {
+        print("%s: (error) syminit: %r\n", argv0);
+        return;
+    }
+    print("%s:%s\n", s, fhdr.name);
+
+    if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
+        mach->sb = sym.value;
+        l = enter("SB", Tid);
+        l->v->fmt = 'X';
+        l->v->ival = mach->sb;
+        l->v->type = TINT;
+        l->v->set = 1;
+    }
+
+    l = mkvar("objtype");
+    v = l->v;
+    v->fmt = 's';
+    v->set = 1;
+    v->string = strnode(mach->name);
+    v->type = TSTRING;
+
+    l = mkvar("textfile");
+    v = l->v;
+    v->fmt = 's';
+    v->set = 1;
+    v->string = strnode(s);
+    v->type = TSTRING;
+
+    machbytype(fhdr.type);
+    varreg();
+}
+@
+%$
+
+
+
+\section{[[loadmodule()]] and [[loadmoduleobjtype()]]}
+
+<<[[main()]](acid) other locals>>=
+int i;
+@
+
+<<[[main()]](acid) load modules>>=
+loadmodule("/sys/lib/acid/port");
+loadmoduleobjtype();
+
+for(i = 0; i < nlm; i++) {
+    if(access(lm[i], AREAD) >= 0)
+        loadmodule(lm[i]);
+    else {
+        s = smprint("/sys/lib/acid/%s", lm[i]);
+        loadmodule(s);
+        free(s);
+    }
+}
+@
+
+\section{[[acidmap]]}
+
+<<[[main()]](acid) other locals>>=
+Lsym *l;
+Node *n;
+@
+
+<<[[main()]](acid) check acidmap>>=
+l = look("acidmap");
+if(l && l->proc) {
+    n = an(ONAME, ZN, ZN);
+    n->sym = l;
+    n = an(OCALL, n, ZN);
+    execute(n);
+}
+@
+
+\section{[[notify()]]}
+
+<<[[main()]](acid) notify setup>>=
+notify(catcher);
+@
+
+%alt: when was db
+%\section{Process attachment: [[pid]]}
+%\section{Text file: [[setsym()]]}
+%\section{Memory file: [[setcor()]]}
+%% Core memory file
+%\section{Output: [[outputinit()]], [[dprint()]] and [[stdout]]}
+%\section{Input: [[clrinp()]], [[rdc()]], [[reread()]]}
+%\section{Interpreter: [[command()]]}
+%\section{Exit: [[done()]]}
 
 
 %******************************************************************************
@@ -1281,47 +2280,534 @@ crackhdr(int fd, Fhdr *fp)
 
 
 
+%******************************************************************************
+\chapter{Parsing}
+%******************************************************************************
+
+% Lexing and parsing in same chapter this time; we also explain less this time
+% as similar to parsing in Compiler, Assembler, Make, Shell
+
+%TODO: acid/dbg.y!
+
+\section{Files management: [[IOstack]]}
+
+<<struct [[IOstack]]>>=
+struct IOstack
+{
+    char	*name;
+
+    int	line;
+    char	*text;
+    char	*ip;
+    Biobuf	*fin;
+
+    IOstack	*prev;
+};
+@
+
+<<global [[lexio]]>>=
+IOstack *lexio;
+@
+
+<<function [[pushfile]]>>=
+void
+pushfile(char *file)
+{
+    Biobuf *b;
+    IOstack *io;
+
+    if(file)
+        b = Bopen(file, OREAD);
+    else{
+        b = Bopen("/fd/0", OREAD);
+        file = "<stdin>";
+    }
+
+    if(b == 0)
+        error("pushfile: %s: %r", file);
+
+    io = malloc(sizeof(IOstack));
+    if(io == 0)
+        fatal("no memory");
+    io->name = strdup(file);
+    if(io->name == 0)
+        fatal("no memory");
+    io->line = line;
+    line = 1;
+    io->text = 0;
+    io->fin = b;
+    io->prev = lexio;
+    lexio = io;
+}
+@
+%$
+
+<<function [[pushstr]]>>=
+void
+pushstr(Node *s)
+{
+    IOstack *io;
+
+    io = malloc(sizeof(IOstack));
+    if(io == 0)
+        fatal("no memory");
+    io->line = line;
+    line = 1;
+    io->name = strdup("<string>");
+    if(io->name == 0)
+        fatal("no memory");
+    io->line = line;
+    line = 1;
+    io->text = strdup(s->string->string);
+    if(io->text == 0)
+        fatal("no memory");
+    io->ip = io->text;
+    io->fin = 0;
+    io->prev = lexio;
+    lexio = io;
+}
+@
+
+
+<<function [[restartio]]>>=
+void
+restartio(void)
+{
+    Bflush(lexio->fin);
+    Binit(lexio->fin, 0, OREAD);
+}
+@
+
+<<function [[popio]]>>=
+int
+popio(void)
+{
+    IOstack *s;
+
+    if(lexio == 0)
+        return 0;
+
+    if(lexio->prev == 0){
+        if(lexio->fin)
+            restartio();
+        return 0;
+    }
+
+    if(lexio->fin)
+        Bterm(lexio->fin);
+    else
+        free(lexio->text);
+    free(lexio->name);
+    line = lexio->line;
+    s = lexio;
+    lexio = s->prev;
+    free(s);
+    return 1;
+}
+@
+
+
+<<[[main()]](acid) format initializations>>=
+fmtinstall('L', Lfmt);
+@
+
+<<function [[Lfmt]]>>=
+int
+Lfmt(Fmt *f)
+{
+    int i;
+    char buf[1024];
+    IOstack *e;
+
+    e = lexio;
+    if(e) {
+        i = snprint(buf, sizeof(buf), "%s:%d", e->name, line);
+        while(e->prev) {
+            e = e->prev;
+            if(initialising && e->prev == 0)
+                break;
+            i += snprint(buf+i, sizeof(buf)-i, " [%s:%d]", e->name, e->line);
+        }
+    } else
+        snprint(buf, sizeof(buf),  "no file:0");
+    fmtstrcpy(f, buf);
+    return 0;
+}
+@
+
+
+\section{Lexer}
+
+<<global [[keywds]]>>=
+struct keywd
+{
+    char	*name;
+    int	terminal;
+}
+keywds[] =
+{
+    "do",		Tdo,
+    "if",		Tif,
+    "then",		Tthen,
+    "else",		Telse,
+    "while",	Twhile,
+    "loop",		Tloop,
+
+    "head",		Thead,
+    "tail",		Ttail,
+    "append",	Tappend,
+
+    "defn",		Tfn,
+    "return",	Tret,
+    "local",	Tlocal,
+    "aggr",		Tcomplex,
+    "union",	Tcomplex,
+    "adt",		Tcomplex,
+    "complex",	Tcomplex,
+    "delete",	Tdelete,
+    "whatis",	Twhat,
+    "eval",		Teval,
+    "builtin",	Tbuiltin,
+
+    0,		0
+};
+@
+
+<<function [[kinit]]>>=
+void
+kinit(void)
+{
+    int i;
+    
+    for(i = 0; keywds[i].name; i++) 
+        enter(keywds[i].name, keywds[i].terminal);
+}
+@
 
 
 
-%\chapter{Command Input}
+<<function [[enter]]>>=
+Lsym*
+enter(char *name, int t)
+{
+    Lsym *s;
+    uint h;
+    char *p;
+    Value *v;
 
-%\chapter{Command Parsing}
+    h = 0;
+    for(p = name; *p; p++)
+        h = h*3 + *p;
+    h %= Hashsize;
 
-%\chapter{Commands}
+    s = gmalloc(sizeof(Lsym));
+    memset(s, 0, sizeof(Lsym));
+    s->name = strdup(name);
 
-\chapter{Metadata Generation}
+    s->hash = hash[h];
+    hash[h] = s;
+    s->lexval = t;
 
-\section{Assembler}
+    v = gmalloc(sizeof(Value));
+    s->v = v;
 
-\section{Compiler}
+    v->fmt = 'X';
+    v->type = TINT;
+    memset(v, 0, sizeof(Value));
 
-\section{Linker}
+    return s;
+}
+@
 
+
+\section{Grammar}
+
+
+%******************************************************************************
+\chapter{Interpreting}
+%******************************************************************************
+
+
+\section{[[execute()]]}
+
+<<function [[execute]]>>=
+/// ?? -> <>
+void
+execute(Node *n)
+{
+    Value *v;
+    Lsym *sl;
+    Node *l, *r;
+    vlong i, s, e;
+    Node res, xx;
+    static int stmnt;
+
+    gc();
+
+    if(gotint)
+        error("interrupted");
+
+    if(n == nil)
+        return;
+
+    if(stmnt++ > 5000) {
+        Bflush(bout);
+        stmnt = 0;
+    }
+
+    l = n->left;
+    r = n->right;
+
+    switch(n->op) {
+    default:
+        expr(n, &res);
+        if(ret || (res.type == TLIST && res.l == 0 && n->op != OADD))
+            break;
+        prnt->right = &res;
+        expr(prnt, &xx);
+        break;
+    case OASGN:
+    case OCALL:
+        expr(n, &res);
+        break;
+    case OCOMPLEX:
+        decl(n);
+        break;
+    case OLOCAL:
+        for(n = n->left; n; n = n->left) {
+            if(ret == 0)
+                error("local not in function");
+            sl = n->sym;
+            if(sl->v->ret == ret)
+                error("%s declared twice", sl->name);
+            v = gmalloc(sizeof(Value));
+            v->ret = ret;
+            v->pop = sl->v;
+            sl->v = v;
+            v->scope = 0;
+            *(ret->tail) = sl;
+            ret->tail = &v->scope;
+            v->set = 0;
+        }
+        break;
+    case ORET:
+        if(ret == 0)
+            error("return not in function");
+        expr(n->left, ret->val);
+        longjmp(ret->rlab, 1);
+    case OLIST:
+        execute(n->left);
+        execute(n->right);
+        break;
+    case OIF:
+        expr(l, &res);
+        if(r && r->op == OELSE) {
+            if(fbool(&res))
+                execute(r->left);
+            else
+                execute(r->right);
+        }
+        else if(fbool(&res))
+            execute(r);
+        break;
+    case OWHILE:
+        for(;;) {
+            expr(l, &res);
+            if(!fbool(&res))
+                break;
+            execute(r);
+        }
+        break;
+    case ODO:
+        expr(l->left, &res);
+        if(res.type != TINT)
+            error("loop must have integer start");
+        s = res.ival;
+        expr(l->right, &res);
+        if(res.type != TINT)
+            error("loop must have integer end");
+        e = res.ival;
+        for(i = s; i <= e; i++)
+            execute(r);
+        break;
+    }
+}
+@
+
+\section{Expressions}
+
+\section{Statements}
+
+\section{Builtins}
+
+<<global [[tab]]>>=
+struct Btab
+{
+    char	*name;
+    void	(*fn)(Node*, Node*);
+} tab[] =
+{
+    "atof",		cvtatof,
+    "atoi",		cvtatoi,
+    "error",	doerror,
+    "file",		getfile,
+    "readfile",	readfile,
+    "access",	doaccess,
+    "filepc",	filepc,
+    "fnbound",	funcbound,
+    "fmt",		fmt,
+    "follow",	follow,
+    "itoa",		cvtitoa,
+    "kill",		kill,
+    "match",	match,
+    "newproc",	newproc,
+    "pcfile",	pcfile,
+    "pcline",	pcline,
+    "print",	bprint,
+    "printto",	printto,
+    "rc",		rc,
+    "reason",	reason,
+    "setproc",	setproc,
+    "start",	start,
+    "startstop",	startstop,
+    "status",	status,
+    "stop",		stop,
+    "strace",	strace,
+    "sysr1",	dosysr1,
+    "waitstop",	waitstop,
+    "map",		map,
+    "interpret",	interpret,
+    "include",	include,
+    "regexp",	regexp,
+    "fmtof",	fmtof,
+    "fmtsize",	dofmtsize,
+    0
+};
+@
+
+%******************************************************************************
+\chapter{Process control}
+%******************************************************************************
+
+%******************************************************************************
+\chapter{Printing and Introspection}
+%******************************************************************************
+
+%******************************************************************************
 \chapter{Source level C Debugging}
+%******************************************************************************
 % C support
 
 
-\chapter{[[/bin/strace]]}
 
-% good to see first? allow to understand /proc/x/ctl?
-% things that will be needed later.
-% maybe not
+%alt: when using db
+%\chapter{Command Input}
+%\chapter{Command Parsing}
+%\chapter{Commands}
+%\chapter{[[acid]]}
 
-\chapter{[[acid]]}
+%******************************************************************************
+\chapter{The [[acid]] Library}
+%******************************************************************************
 
-%pad: to please syncweb -to_tex checker
-\ifallcode
-<<acid/y.tab.h>>=
-@
-\fi
 
+\section{[[Truss]]}
+% strace using acid program
+
+%******************************************************************************
 \chapter{Advanced Features}
+%******************************************************************************
+
+\subsection{Modifying code: [[acid -w]]}
+
+<<global wtflag (acid/globals.c)>>=
+int	wtflag;
+@
+%todo: bool
+
+<<[[main()]](acid) command line processing>>=
+case 'w':
+    wtflag = 1;
+    break;
+@
+
+
+<<[[attachfiles()]] if [[wtflag]]>>=
+if(wtflag)
+    text = open(aout, ORDWR);
+@
+
+\section{Kernel debugging: [[acid -k]]}
+
+<<global [[kernel]]>>=
+int	kernel;
+@
+%todo: bool
+
+<<[[main()]](acid) command line processing>>=
+case 'k':
+    kernel++;
+    break;
+@
+
+<<[[main()]](acid) if kernel and no pid>>=
+if(kernel) {
+    fprint(STDERR, "acid: -k requires a pid\n");
+    usage();
+}
+@
+
+\section{Remote debugging: [[acid -r]]}
+
+<<global [[remote]]>>=
+int	remote;
+@
+%todo: bool
+
+<<[[main()]](acid) if remote adjust [[aout]]>>=
+if(remote)
+    aout = argv[0];
+@
+
+<<[[main()]](acid) if not argc and remote adjust [[aout]]>>=
+if(remote)
+    aout = "/mips/9ch";
+@
+
+
+<<[[main()]](acid) command line processing>>=
+case 'r':
+    pid = 1;
+    remote++;
+    kernel++;
+    break;
+@
+
+
+\section{Cross architecture debugging: [[acid -m]]}
+% was also db -m
+
+<<global [[mtype]]>>=
+static char*	mtype;
+@
+
+<<[[main()]](acid) command line processing>>=
+case 'm':
+    mtype = ARGF();
+    break;
+@
+
+<<[[main()]](acid) sanity check [[mtype]]>>=
+if(mtype && machbyname(mtype) == 0)
+    print("unknown machine %s", mtype);
+@
 
 
 
 
+%******************************************************************************
 \chapter{Advanced Topics}
+%******************************************************************************
 
 \section{Time travel}
 % checkpoints
@@ -1330,7 +2816,6 @@ crackhdr(int fd, Fhdr *fp)
 
 % import /proc !! beautiful. Power of 9p and libmach.
 
-\section{Cross architecture debugging: [[db -m]]}
 
 
 \section{Kernel debugging}
@@ -1512,29 +2997,42 @@ target's execution. [[db]] presents this idea in its
 simplest form, with the \plan [[/proc]] interface
 making the mechanism especially transparent.
 
+%###############################################################################
+
 \appendix
 
+%******************************************************************************
 \chapter{Debugging}
+%******************************************************************************
 % debugging the debugger :)
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
 
 
-
+%******************************************************************************
 \chapter{Error Management}
+%******************************************************************************
 
 
-
+%******************************************************************************
 \chapter{Utilities}
+%******************************************************************************
 
 
+%******************************************************************************
+\chapter{ARM Disassembler}
+%******************************************************************************
 
 
+%******************************************************************************
 \chapter{[[db]]}
+%******************************************************************************
 
 #include "db.nw"
 
+%******************************************************************************
 \chapter{Extra Code}
+%******************************************************************************
 
 #include "Debugger_extra.nw"
 
