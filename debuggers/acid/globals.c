@@ -43,7 +43,7 @@ int	interactive;
 int	na;
 /*e: global [[na]] */
 /*s: global wtflag (acid/globals.c) */
-int	wtflag;
+bool	wtflag;
 /*e: global wtflag (acid/globals.c) */
 /*s: global cormap (acid/globals.c) */
 Map*	cormap;

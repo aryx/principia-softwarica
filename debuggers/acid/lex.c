@@ -84,10 +84,12 @@ struct IOstack
 };
 /*e: struct [[IOstack]] */
 /*s: global [[lexio]] */
+// list<ref_own<IOstack> next = lexio.prev
 IOstack *lexio;
 /*e: global [[lexio]] */
 
 /*s: function [[pushfile]] */
+/// main | loadmodule -> <>
 void
 pushfile(char *file)
 {
@@ -101,15 +103,22 @@ pushfile(char *file)
         file = "<stdin>";
     }
 
-    if(b == 0)
+    /*s: [[pushfile()]] sanity check [[b]] */
+    if(b == nil)
         error("pushfile: %s: %r", file);
+    /*e: [[pushfile()]] sanity check [[b]] */
 
     io = malloc(sizeof(IOstack));
-    if(io == 0)
+    /*s: [[pushfile()]] sanity check [[io]] */
+    if(io == nil)
         fatal("no memory");
+    /*e: [[pushfile()]] sanity check [[io]] */
     io->name = strdup(file);
+    /*s: [[pushfile()]] sanity check [[io->name]] */
     if(io->name == 0)
         fatal("no memory");
+    /*e: [[pushfile()]] sanity check [[io->name]] */
+
     io->line = line;
     line = 1;
     io->text = 0;
@@ -120,6 +129,7 @@ pushfile(char *file)
 /*e: function [[pushfile]] */
 
 /*s: function [[pushstr]] */
+/// ??? -> <>
 void
 pushstr(Node *s)
 {
@@ -150,20 +160,21 @@ void
 restartio(void)
 {
     Bflush(lexio->fin);
-    Binit(lexio->fin, 0, OREAD);
+    Binit(lexio->fin, STDIN, OREAD);
 }
 /*e: function [[restartio]] */
 
 /*s: function [[popio]] */
+/// loadmodule | error -> <>
 int
 popio(void)
 {
     IOstack *s;
 
-    if(lexio == 0)
+    if(lexio == nil)
         return 0;
 
-    if(lexio->prev == 0){
+    if(lexio->prev == nil){
         if(lexio->fin)
             restartio();
         return 0;
@@ -174,10 +185,12 @@ popio(void)
     else
         free(lexio->text);
     free(lexio->name);
+
     line = lexio->line;
     s = lexio;
     lexio = s->prev;
     free(s);
+
     return 1;
 }
 /*e: function [[popio]] */

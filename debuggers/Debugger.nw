@@ -35,12 +35,12 @@
 %thx to codemap/codegraph:
 
 %thx to this manual, better understand debuggers:
-% - SEMI need a /proc/x/ctl to control/resume an external process
+% - need a /proc/x/ctl to control/resume an external process
 %   with the right set of messages and synchronisation mechanisms
 % - SEMI need a /proc/x/mem, reflection, including ublock to inspect registers
-% - SEMI how breakpoint can be fast? via trap abuse, thx to virtual 
+% - how breakpoint can be fast? via trap abuse, thx to virtual 
 %   memory and page fault again!
-% - TODO all the symbols are in the text file
+% - all the symbols are in the text file
 
 
 %history LP-ization:
@@ -53,7 +53,7 @@
 % - SEMI nullify, boolify, typeify,    scheckify
 % - SEMI aspecify advanced features!
 % - TODO add figures
-% - TODO add explanations
+% - SEMI add explanations
 
 \begin{document}
 %******************************************************************************
@@ -101,16 +101,14 @@ Why a debugger and tracer? Because I think you are a better programmer if
 you fully understand how things work under the hood, and
 debuggers and tracers are some of the best tools to understand how things
 work.
-
-\l history of term "bug", it was an actual bug!
-%  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
-
 %claude:
-Debuggers and tracers are among the most useful tools a
+They are among the most useful tools a
 programmer can have. When a program crashes, the debugger
 lets you {inspect} exactly what went wrong: which instruction
 faulted, what the {registers} contained, what the {call stack}
-looked like. When a program misbehaves silently, a tracer
+looked like.
+%
+When a program misbehaves silently, a tracer
 reveals every system call it makes, often pointing directly
 to the problem.
 %
@@ -121,26 +119,31 @@ facilities), the toolchain (which generates the metadata
 the debugger reads), and the hardware (which provides
 breakpoint and single-step support).
 
+\l history of term "bug", it was an actual bug!
+%  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
+
+
 Here are a few questions I hope this book will answer:
 \begin{itemize}
+
+\item How does a system call tracer intercept the calls
+made by another program?
+
+\item How does a debugger control another process?
+Is a debugger a kind of binary interpreter?
+What kernel facilities does it use?
 
 \item How does a debugger set a breakpoint? What happens
 at the machine level when a breakpoint is hit?
 
-\item How does a debugger control another process?
-What kernel facilities does it use?
-
-\item How does a system call tracer intercept the calls
-made by another program?
+\item How does single-stepping work? How does the debugger
+advance the target by exactly one instruction?
 
 \item How does a debugger map a machine address to a
 function name or a source line?
 
 \item What is a programmable debugger? How can debugging
 operations be expressed as functions in a language?
-
-\item How does single-stepping work? How does the debugger
-advance the target by exactly one instruction?
 
 \end{itemize}
 
@@ -269,9 +272,8 @@ enough to explain in full detail.
 
 \section{Getting started}
 
-%yoann: to test acid, need plan9 fork, getting-started link
+%yoann: to test ratrace and acid need plan9 fork, getting-started link
 
-%claude:
 To trace the system calls of a program:
 \begin{verbatim}
 $ ratrace -c /bin/ls /dev
@@ -296,11 +298,18 @@ $ acid /bin/ls
 /bin/ls:386 plan 9 executable
 /lib/acid/port
 /lib/acid/386
-acid: bpset(main)
-acid: cont()
-myprogram 1234: breakpoint  main+0x0
+acid: new()
+72: system call _main      SUBL $0x48,SP
+72: breakpoint  main+0x3   MOVL $bin(SB),AX
 acid: stk()
-main() /usr/myprogram.c:12
+main(argv=0xcfffefa4,argc=0x1)+0x3 /utilities/files/ls.c:91
+_main+0x31 /libc/386/main9.s:16
+acid: cont()
+...
+bin
+boot
+...
+<stdin>:4 (error) msg: pid=72 startstop: process exited
 acid:
 \end{verbatim}
 
@@ -530,14 +539,28 @@ fault, then restores the original instruction. Breakpoints
 can be conditional (stop only when a condition is true)
 or counted (stop only after the $n$-th hit).
 
+\subsection{Watch point}
+
+%claude:
+A {watchpoint} (or data breakpoint) stops execution when
+a specific memory location is read or written. This is
+useful for finding out what code modifies a variable.
+Hardware watchpoints use the processor's debug registers
+to monitor an address without slowing down execution.
+Software watchpoints can be implemented by marking the
+memory page as inaccessible and catching the resulting
+page fault, though this is slower.
+
 \subsection{Inspector}
 
 %claude:
 The debugger can {inspect} the state of the stopped process:
-registers, memory, the call stack. With symbol table
-information, the debugger can display function names and
-variable values instead of raw addresses and numbers. With
-type information (e.g., from [[acid]]'s type descriptions
+registers, memory, the call stack. 
+%
+With symbol table information, the debugger can display function
+names and variable values instead of raw addresses and numbers.
+%
+With type information (e.g., from [[acid]]'s type descriptions
 or DWARF on other systems), it can display structured data
 types like structs and arrays in a readable format.
 
@@ -550,18 +573,6 @@ processor will execute. This is the reverse of what the
 assembler does. The debugger typically uses a library
 (e.g., [[libmach]] in \plan) to decode the binary
 instructions at a given address.
-
-\subsection{Watch point}
-
-%claude:
-A {watchpoint} (or data breakpoint) stops execution when
-a specific memory location is read or written. This is
-useful for finding out what code modifies a variable.
-Hardware watchpoints use the processor's debug registers
-to monitor an address without slowing down execution.
-Software watchpoints can be implemented by marking the
-memory page as inaccessible and catching the resulting
-page fault, though this is slower.
 
 \subsection{Source-level debugging}
 
@@ -776,23 +787,7 @@ runs into the division by zero, which stops execution in
 \chapter{Kernel Support}
 %******************************************************************************
 
-% a lot of debugging power comes from stuff actually done by kernel
-
-% Context
-
-\section{Memory access: [[/proc/x/mem]]}
-% Interprocess memory access?
-% or reflection?
-
-% segments, text, data, and ublock. Map everything, including kernel
-% per-process space.
-% "data" is actually for everything, static data, bss, stack.
-
-% ublock = register and process state.
-
-% to a lesser extent /proc/x/text is also useful, but the symfile is 
-% good enough and /proc/x/mem is a superset of /proc/x/text I think.
-
+%yoann: a lot of debugging power comes from stuff actually done by kernel
 
 \section{Process control: [[/proc/x/ctl]]}
 
@@ -810,11 +805,26 @@ runs into the division by zero, which stops execution in
 
 % "startstop", atomic
 
+\section{Memory access: [[/proc/x/mem]]}
+% Interprocess memory access?
+% or reflection?
+
+% segments, text, data, and ublock. Map everything, including kernel
+% per-process space.
+% "data" is actually for everything, static data, bss, stack.
+
+% ublock = register and process state.
+
+% to a lesser extent /proc/x/text is also useful, but the symfile is 
+% good enough and /proc/x/mem is a superset of /proc/x/text I think.
+
+
 \section{Breakpoint faulting instruction}
 
 % machdata->bpinst
 
-\section{User level fault handling: [[/proc/x/note]]}
+
+%\section{User level fault handling: [[/proc/x/note]]}
 % Hmm actually need less than, just provide a way to understand
 % why the debugged process entered the Stopped state.
 
@@ -830,7 +840,6 @@ runs into the division by zero, which stops execution in
 
 %yoann: before see acid, good to see first ratrace because?
 % allow to understand /proc/x/ctl? things needed later?
-
 
 % soft archi? ASCII diagram?
 
@@ -864,6 +873,8 @@ threadmain(int argc, char **argv)
     reader((void*)pid);
 }
 @
+%bug? the sizeof(types) above seems wrong; anyway nelem = 0
+% so sizeof part matters?
 
 <<enum [[_anon_ (strace)]]>>=
 enum {
@@ -879,17 +890,17 @@ int nread = 0;
 \subsection{Channels}
 
 <<global [[out]]>>=
-// chan<ref<string>> listener = writer sender = reader
+// chan<ref<string>> listener = writer(), sender = reader()
 Channel *out;
 @
 
 <<global [[forkc]]>>=
-// chan<pid> listener = writer, sender = reader
+// chan<pid> listener = writer(), sender = reader()
 Channel *forkc;
 @
 
 <<global [[quit]]>>=
-// chan<nil> listener = writer, sender = reader
+// chan<nil> listener = writer(), sender = reader()
 Channel *quit;
 @
 
@@ -965,9 +976,6 @@ hang(void)
 
 \section{[[writer()]]}
 
-%TODO: use NAlt and NQuit, etc. like we do for other concurrent progs, cleaner
-% than hardcoded 0, 1, 2
-
 % just a process ref counter really, and a stderr output relay
 % (why not write directly in reader?)
 
@@ -981,6 +989,9 @@ struct Str {
 @
 
 
+
+%alt: use NAlt and NQuit, etc. like we do for other concurrent progs, cleaner
+% than hardcoded 0, 1, 2
 
 <<function [[writer]]>>=
 void
@@ -1031,7 +1042,6 @@ done:
 \section{[[reader()]]}
 
 
-
 <<function [[reader]]>>=
 void
 reader(void *v)
@@ -1069,37 +1079,16 @@ reader(void *v)
     s = newstr();
 
     while((s->len = pread(tfd, s->buf, Bufsize - 1, 0)) >= 0){
-        // ??
-        if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
-            forking = false;
-            newpid = strtol(&s->buf[3], 0, 0);
-            sendp(forkc, (void*)newpid);
-            procrfork(reader, (void*)newpid, Stacksize, 0);
-        }
 
-        /*
-         * There are three tests here and they (I hope) guarantee
-         * no false positives.
-         */
-        if (strstr(s->buf, " Rfork") != nil) {
-            char *a[8];
-            char *rf;
+        <<[[reader()]] if [[forking]] and special condition>>
 
-            rf = strdup(s->buf);
-            if (tokenize(rf, a, 8) == 5 &&
-                strtoul(a[4], 0, 16) & RFPROC)
-                forking = true;
-            free(rf);
-        } else if (strstr(s->buf, " Exits") != nil)
-            exiting = true;
+        <<[[reader()]] if Rfork syscall>>
+         else
+            <<[[reader()]] if Exits syscall>>
 
         sendp(out, s);	/* print line from /proc/$child/syscall */
-        if (exiting) {
-            s = newstr();
-            strcpy(s->buf, "\n");
-            sendp(out, s);
-            break;
-        }
+
+        <<[[reader()]] if [[exiting]]>>
 
         /* flush syscall trace buffer */
         cwrite(cfd, ctl, "startsyscall", 12);
@@ -1113,12 +1102,17 @@ reader(void *v)
 %$
 
 
-<<function [[die]]>>=
-void
-die(char *s)
-{
-    fprint(STDERR, "%s\n", s);
-    exits(s);
+<<[[reader()]] if Exits syscall>>=
+if (strstr(s->buf, " Exits") != nil)
+  exiting = true;
+@
+
+<<[[reader()]] if [[exiting]]>>=
+if (exiting) {
+    s = newstr();
+    strcpy(s->buf, "\n");
+    sendp(out, s);
+    break;
 }
 @
 
@@ -1136,6 +1130,17 @@ cwrite(fdt fd, char *path, char *cmd, int len)
 }
 @
 
+
+<<function [[die]]>>=
+void
+die(char *s)
+{
+    fprint(STDERR, "%s\n", s);
+    exits(s);
+}
+@
+
+
 <<function [[newstr]]>>=
 Str *
 newstr(void)
@@ -1151,6 +1156,36 @@ newstr(void)
 @
 
 
+\section{Tracing forked children}
+
+<<[[reader()]] if Rfork syscall>>=
+/*
+ * There are three tests here and they (I hope) guarantee
+ * no false positives.
+ */
+if (strstr(s->buf, " Rfork") != nil) {
+    char *a[8];
+    char *rf;
+
+    rf = strdup(s->buf);
+    if (tokenize(rf, a, 8) == 5 &&
+        strtoul(a[4], 0, 16) & RFPROC)
+        forking = true;
+    free(rf);
+}
+@
+
+<<[[reader()]] if [[forking]] and special condition>>=
+// ??
+if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
+    forking = false;
+    newpid = strtol(&s->buf[3], 0, 0);
+    sendp(forkc, (void*)newpid);
+    procrfork(reader, (void*)newpid, Stacksize, 0);
+}
+@
+
+
 
 %******************************************************************************
 \chapter{Toolchain support}
@@ -1158,9 +1193,11 @@ newstr(void)
 
 \section{Assembler}
 
+\section{Linker}
+
 \section{Compiler}
 
-\section{Linker}
+% also cc/acid.c
 
 %******************************************************************************
 \chapter{Core Data Structures}
@@ -1352,7 +1389,7 @@ enum {					/* bits in rflags field */
     RRDONLY	= (1<<1),
 };
 @
-
+%$
 
 
 \subsection{[[Machdata]] and [[machdata]]}
@@ -1451,6 +1488,8 @@ enum symbol_type
 \section{[[acid]], [[libmach]], and [[/proc]]}
 
 
+\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
+
 \subsection{[[/proc/x/text]] and [[symmap]]}
 
 <<global symmap (acid/globals.c)>>=
@@ -1463,9 +1502,8 @@ Map*	symmap;
 Map*	cormap;
 @
 
-\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
+%\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
 
-\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
 
 
 \section{Abstract syntax tree: [[Node]]}
@@ -1475,6 +1513,7 @@ struct Node
 {
     Gc;
 
+    // enum<opcode>
     char	op;
     char	type;
 
@@ -1494,34 +1533,43 @@ struct Node
 
 
 <<enum [[_anon_ (acid/acid.h)]]3>>=
-enum
+enum Opcode
 {
     ONAME,
     OCONST,
+
     OMUL,
     ODIV,
     OMOD,
     OADD,
     OSUB,
+
     ORSH,
     OLSH,
+
     OLT,
     OGT,
     OLEQ,
     OGEQ,
     OEQ,
     ONEQ,
+
     OLAND,
     OXOR,
     OLOR,
+
     OCAND,
     OCOR,
+
     OASGN,
+
     OINDM,
+
     OEDEC,
     OEINC,
     OPINC,
     OPDEC,
+
     ONOT,
     OIF,
     ODO,
@@ -1530,13 +1578,17 @@ enum
     OCTRUCT,
     OWHILE,
     OELSE,
+
     OHEAD,
     OTAIL,
     OAPPEND,
+
     ORET,
+
     OINDEX,
     OINDC,
     ODOT,
+
     OLOCAL,
     OFRAME,
     OCOMPLEX,
@@ -1771,6 +1823,11 @@ int	stacked;
 jmp_buf	err;
 @
 
+% got interrupted
+<<global [[gotint]]>>=
+int	gotint;
+@
+%todo: bool
 
 <<function error (acid/exec.c)>>=
 void
@@ -1791,7 +1848,7 @@ error(char *fmt, ...)
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);
-        fprint(2, "%L: (error) %s\n", buf);
+        fprint(STDERR, "%L: (error) %s\n", buf);
     }
     while(popio())
         ;
@@ -1830,6 +1887,8 @@ if(silent)
     silent = 0;
 @
 
+
+%XXX
 <<global [[io]]>>=
 Biobuf*	io[32];
 @
@@ -1913,7 +1972,7 @@ int	line;
 <<[[main()]](acid) initializations>>=
 <<[[main()]](acid) format initializations>>
 
-Binit(&bioout, 1, OWRITE);
+Binit(&bioout, STDOUT, OWRITE);
 bout = &bioout;
 
 kinit();
@@ -1926,18 +1985,14 @@ loadvars();
 installbuiltin();
 
 <<[[main()]](acid) sanity check [[mtype]]>>
-
 <<[[main()]](acid) [[attachfiles(aout, pid)]]>>
 
 <<[[main()]](acid) load modules>>
-
 userinit();
 varsym();
-
 <<[[main()]](acid) check acidmap>>
 
 interactive = 1;
-
 initialising = 0;
 line = 1;
 
@@ -1947,6 +2002,8 @@ line = 1;
 
 %alt: \subsection{Formatters}
 %alt: \subsection{...}
+
+\section{[[loadvars()]] and [[installbuiltin()]]}
 
 \section{[[attachfiles()]] and [[readtext()]]}
 
@@ -1994,34 +2051,15 @@ if(text < 0)
 Fhdr	fhdr;
 @
 
-
 <<function [[readtext]]>>=
 /// main -> attachfiles -> <>
 void
 readtext(char *s)
 {
-    Dir *d;
-    Lsym *l;
-    Value *v;
-    uvlong length;
-    Symbol sym;
-    extern Machdata armmach;
+    <<[[readtext()]] locals>>
 
-    if(mtype != nil){
-        symmap = newmap(0, 1);
-        if(symmap == 0)
-            print("%s: (error) loadmap: cannot make symbol map\n", argv0);
-        length = 1<<24;
-        d = dirfstat(text);
-        if(d != nil){
-            length = d->length;
-            free(d);
-        }
-        setmap(symmap, text, 0, length, 0, "binary");
-        return;
-    }
-
-    machdata = &armmach;
+    <<[[readtext()]] if [[mtype != nil]]>>
+    // else
 
     if(!crackhdr(text, &fhdr)) {
         print("can't decode file header\n");
@@ -2029,8 +2067,7 @@ readtext(char *s)
     }
 
     symmap = loadmap(0, text, &fhdr);
-    if(symmap == 0)
-        print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+    <<[[readtext()]] sanity check [[symmap]]>>
 
     if(syminit(text, &fhdr) < 0) {
         print("%s: (error) syminit: %r\n", argv0);
@@ -2038,35 +2075,69 @@ readtext(char *s)
     }
     print("%s:%s\n", s, fhdr.name);
 
-    if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
-        mach->sb = sym.value;
-        l = enter("SB", Tid);
-        l->v->fmt = 'X';
-        l->v->ival = mach->sb;
-        l->v->type = TINT;
-        l->v->set = 1;
-    }
-
-    l = mkvar("objtype");
-    v = l->v;
-    v->fmt = 's';
-    v->set = 1;
-    v->string = strnode(mach->name);
-    v->type = TSTRING;
-
-    l = mkvar("textfile");
-    v = l->v;
-    v->fmt = 's';
-    v->set = 1;
-    v->string = strnode(s);
-    v->type = TSTRING;
+    <<[[readtext()]] if [[mach->sbreg]]>>
+    <<[[readtext()]] make objtype variable>>
+    <<[[readtext()]] make textfile variable>>
 
     machbytype(fhdr.type);
     varreg();
 }
 @
 %$
+%dead: because machbytype will set this
+%    extern Machdata armmach;
+%    machdata = &armmach;
 
+%yoann: print here that we saw earlier about binary path and arch
+
+%XXX
+<<[[readtext()]] locals>>=
+Dir *d;
+uvlong length;
+Symbol sym;
+@
+
+
+<<[[readtext()]] sanity check [[symmap]]>>=
+if(symmap == nil)
+    print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+@
+
+<<[[readtext()]] locals>>=
+Lsym *l;
+Value *v;
+@
+
+<<[[readtext()]] make objtype variable>>=
+l = mkvar("objtype");
+v = l->v;
+v->fmt = 's';
+v->set = 1;
+v->string = strnode(mach->name);
+v->type = TSTRING;
+@
+
+<<[[readtext()]] make textfile variable>>=
+l = mkvar("textfile");
+v = l->v;
+v->fmt = 's';
+v->set = 1;
+v->string = strnode(s);
+v->type = TSTRING;
+@
+
+
+%???
+<<[[readtext()]] if [[mach->sbreg]]>>=
+if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
+    mach->sb = sym.value;
+    l = enter("SB", Tid);
+    l->v->fmt = 'X';
+    l->v->ival = mach->sb;
+    l->v->type = TINT;
+    l->v->set = 1;
+}
+@
 
 
 \section{[[loadmodule()]] and [[loadmoduleobjtype()]]}
@@ -2078,16 +2149,7 @@ int i;
 <<[[main()]](acid) load modules>>=
 loadmodule("/lib/acid/port");
 loadmoduleobjtype();
-
-for(i = 0; i < nlm; i++) {
-    if(access(lm[i], AREAD) >= 0)
-        loadmodule(lm[i]);
-    else {
-        s = smprint("/lib/acid/%s", lm[i]);
-        loadmodule(s);
-        free(s);
-    }
-}
+<<[[main()]](acid) load [[-l]] modules>>
 @
 %old: was /sys/lib/acid/
 
@@ -2103,6 +2165,19 @@ loadmoduleobjtype(void)
 }
 @
 %old: was /sys/lib/acid/
+
+
+<<[[main()]](acid) load [[-l]] modules>>=
+for(i = 0; i < nlm; i++) {
+    if(access(lm[i], AREAD) >= 0)
+        loadmodule(lm[i]);
+    else {
+        s = smprint("/lib/acid/%s", lm[i]);
+        loadmodule(s);
+        free(s);
+    }
+}
+@
 
 
 <<function [[loadmodule]]>>=
@@ -2122,7 +2197,10 @@ loadmodule(char *s)
 }
 @
 
+
 \section{[[acidmap]]}
+
+% ???
 
 <<[[main()]](acid) other locals>>=
 Lsym *l;
@@ -2156,6 +2234,8 @@ notify(catcher);
 %\section{Exit: [[done()]]}
 
 
+
+
 %******************************************************************************
 \chapter{[[libmach/]]}
 %******************************************************************************
@@ -2164,6 +2244,26 @@ notify(catcher);
 % but the debugger/profiler/emulator do.
 
 % read .o (objects), read .out (binaries)
+
+
+<<function [[machbytype]]>>=
+/*
+ *	select a machine by executable file type
+ */
+void
+machbytype(int type)
+{
+    Machtab *mp;
+
+    for (mp = machines; mp->name; mp++){
+        if (mp->type == type || mp->boottype == type) {
+            asstype = mp->asstype;
+            machdata = mp->machdata;
+            break;
+        }
+    }
+}
+@
 
 \section{[[Fhdr]] and [[crackhdr()]]}
 
@@ -2270,10 +2370,12 @@ struct IOstack
 @
 
 <<global [[lexio]]>>=
+// list<ref_own<IOstack> next = lexio.prev
 IOstack *lexio;
 @
 
 <<function [[pushfile]]>>=
+/// main | loadmodule -> <>
 void
 pushfile(char *file)
 {
@@ -2287,15 +2389,13 @@ pushfile(char *file)
         file = "<stdin>";
     }
 
-    if(b == nil)
-        error("pushfile: %s: %r", file);
+    <<[[pushfile()]] sanity check [[b]]>>
 
     io = malloc(sizeof(IOstack));
-    if(io == 0)
-        fatal("no memory");
+    <<[[pushfile()]] sanity check [[io]]>>
     io->name = strdup(file);
-    if(io->name == 0)
-        fatal("no memory");
+    <<[[pushfile()]] sanity check [[io->name]]>>
+
     io->line = line;
     line = 1;
     io->text = 0;
@@ -2306,7 +2406,22 @@ pushfile(char *file)
 @
 %$
 
+<<[[pushfile()]] sanity check [[b]]>>=
+if(b == nil)
+    error("pushfile: %s: %r", file);
+@
+<<[[pushfile()]] sanity check [[io]]>>=
+if(io == nil)
+    fatal("no memory");
+@
+<<[[pushfile()]] sanity check [[io->name]]>>=
+if(io->name == 0)
+    fatal("no memory");
+@
+
+
 <<function [[pushstr]]>>=
+/// ??? -> <>
 void
 pushstr(Node *s)
 {
@@ -2338,20 +2453,21 @@ void
 restartio(void)
 {
     Bflush(lexio->fin);
-    Binit(lexio->fin, 0, OREAD);
+    Binit(lexio->fin, STDIN, OREAD);
 }
 @
 
 <<function [[popio]]>>=
+/// loadmodule | error -> <>
 int
 popio(void)
 {
     IOstack *s;
 
-    if(lexio == 0)
+    if(lexio == nil)
         return 0;
 
-    if(lexio->prev == 0){
+    if(lexio->prev == nil){
         if(lexio->fin)
             restartio();
         return 0;
@@ -2362,10 +2478,12 @@ popio(void)
     else
         free(lexio->text);
     free(lexio->name);
+
     line = lexio->line;
     s = lexio;
     lexio = s->prev;
     free(s);
+
     return 1;
 }
 @
@@ -2483,6 +2601,8 @@ enter(char *name, int t)
 }
 @
 
+\subsection{[[yylex()]]}
+
 
 \section{Grammar}
 
@@ -2495,7 +2615,7 @@ enter(char *name, int t)
 \section{[[execute()]]}
 
 <<function [[execute]]>>=
-/// ?? -> <>
+/// main (acidmap) | ?? -> <>
 void
 execute(Node *n)
 {
@@ -2674,6 +2794,11 @@ struct Btab
 \chapter{The [[acid]] Library}
 %******************************************************************************
 
+%\section{[[port]]}
+%\section{[[arm]]}
+%\section{[[386]]}
+
+%\section{...} lots of files
 
 \section{[[Truss]]}
 % ratrace using acid program
@@ -2685,13 +2810,12 @@ struct Btab
 \subsection{Modifying code: [[acid -w]]}
 
 <<global wtflag (acid/globals.c)>>=
-int	wtflag;
+bool	wtflag;
 @
-%todo: bool
 
 <<[[main()]](acid) command line processing>>=
 case 'w':
-    wtflag = 1;
+    wtflag = true;
     break;
 @
 
@@ -2702,6 +2826,10 @@ if(wtflag)
 @
 
 \section{Kernel debugging: [[acid -k]]}
+
+% have a special chapter for Kernel debugging, with ktrace too?
+
+%http://ddeville.me/2015/08/kernel-debugging-with-lldb-and-vmware-fusion/
 
 <<global [[kernel]]>>=
 int	kernel;
@@ -2720,6 +2848,9 @@ if(kernel) {
     usage();
 }
 @
+
+% ?? \subsection{[[/bin/ktrace]]}
+
 
 \section{Remote debugging: [[acid -r]]}
 
@@ -2751,6 +2882,8 @@ case 'r':
 \section{Cross architecture debugging: [[acid -m]]}
 % was also db -m
 
+% import /proc !! beautiful. Power of 9p and libmach.
+
 <<global [[mtype]]>>=
 static char*	mtype;
 @
@@ -2768,6 +2901,23 @@ if(mtype && machbyname(mtype) == 0)
 
 
 
+<<[[readtext()]] if [[mtype != nil]]>>=
+if(mtype != nil){
+    symmap = newmap(0, 1);
+    if(symmap == 0)
+        print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+    length = 1<<24;
+    d = dirfstat(text);
+    if(d != nil){
+        length = d->length;
+        free(d);
+    }
+    setmap(symmap, text, 0, length, 0, "binary");
+    return;
+}
+@
+
+
 
 %******************************************************************************
 \chapter{Advanced Topics}
@@ -2776,19 +2926,8 @@ if(mtype && machbyname(mtype) == 0)
 \section{Time travel}
 % checkpoints
 
-\section{Cross machine debugging}
-
-% import /proc !! beautiful. Power of 9p and libmach.
-
-
-
-\section{Kernel debugging}
-% have a special chapter for Kernel debugging, with ktrace too?
-
-%http://ddeville.me/2015/08/kernel-debugging-with-lldb-and-vmware-fusion/
-
-\subsection{[[/bin/ktrace]]}
-
+%alt: \section{Cross machine debugging}
+%alt: \section{Kernel debugging}
 
 \section{Signals and notes}
 
@@ -2875,7 +3014,7 @@ needing a core dump), and the [[note]] mechanism for
 delivering signals to the debugged process.
 
 \item \book{Linker}: [[5l]] generates the symbol
-table and line number information that [[db]] reads
+table and line number information that [[acid]] reads
 through [[libmach]] to map addresses to function
 names and source lines.
 
@@ -2898,12 +3037,12 @@ mapping between source lines and machine addresses.
 \section{Beyond the \plan debugger}
 
 %claude:
-Modern debuggers have evolved far beyond [[db]]'s
+Modern debuggers have evolved far beyond [[acid]] and [[db]]'s
 command-line interface. Here are some of the
 features they provide:
 \begin{itemize}
 
-\item \emph{DWARF debug information}: [[db]] reads
+\item \emph{DWARF debug information}: [[acid]] reads
 \plan's simple symbol table and line number format.
 Modern debuggers (GDB, LLDB) consume DWARF, a rich
 and complex standard that encodes variable locations
@@ -2949,7 +3088,8 @@ tracing for production debugging.
 and AddressSanitizer detect memory errors (use after
 free, buffer overflows, uninitialized reads) by
 instrumenting memory accesses---a category of
-debugging that [[db]] does not address at all.
+debugging that [[acid]] does not address at all.
+%TODO? actually /lib/acid/leak ? also malloc.acid useful?
 
 \end{itemize}
 
@@ -2957,7 +3097,7 @@ debugging that [[db]] does not address at all.
 The core idea, however, has not changed: a debugger
 is a program that controls another program, using
 kernel facilities to stop, inspect, and modify the
-target's execution. [[db]] presents this idea in its
+target's execution. [[acid]] presents this idea in its
 simplest form, with the \plan [[/proc]] interface
 making the mechanism especially transparent.
 
@@ -2976,12 +3116,11 @@ making the mechanism especially transparent.
 %******************************************************************************
 \chapter{Error Management}
 %******************************************************************************
-
+% talked already before in main() chapter with unwind etc? or move here?
 
 %******************************************************************************
-\chapter{Utilities}
+%\chapter{Utilities}
 %******************************************************************************
-
 
 %******************************************************************************
 \chapter{ARM Disassembler}

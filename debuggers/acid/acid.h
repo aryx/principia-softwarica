@@ -184,6 +184,7 @@ struct Node
 {
     Gc;
 
+    // enum<opcode>
     char	op;
     char	type;
 
@@ -284,34 +285,43 @@ int	yylex(void);
 int	yyparse(void);
 
 /*s: enum [[_anon_ (acid/acid.h)]]3 */
-enum
+enum Opcode
 {
     ONAME,
     OCONST,
+
     OMUL,
     ODIV,
     OMOD,
     OADD,
     OSUB,
+
     ORSH,
     OLSH,
+
     OLT,
     OGT,
     OLEQ,
     OGEQ,
     OEQ,
     ONEQ,
+
     OLAND,
     OXOR,
     OLOR,
+
     OCAND,
     OCOR,
+
     OASGN,
+
     OINDM,
+
     OEDEC,
     OEINC,
     OPINC,
     OPDEC,
+
     ONOT,
     OIF,
     ODO,
@@ -320,13 +330,17 @@ enum
     OCTRUCT,
     OWHILE,
     OELSE,
+
     OHEAD,
     OTAIL,
     OAPPEND,
+
     ORET,
+
     OINDEX,
     OINDC,
     ODOT,
+
     OLOCAL,
     OFRAME,
     OCOMPLEX,

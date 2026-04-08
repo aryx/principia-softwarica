@@ -18,15 +18,15 @@ enum {
 /*e: enum [[_anon_ (strace)]] */
 
 /*s: global [[out]] */
-// chan<ref<string>> listener = writer sender = reader
+// chan<ref<string>> listener = writer(), sender = reader()
 Channel *out;
 /*e: global [[out]] */
 /*s: global [[quit]] */
-// chan<nil> listener = writer, sender = reader
+// chan<nil> listener = writer(), sender = reader()
 Channel *quit;
 /*e: global [[quit]] */
 /*s: global [[forkc]] */
-// chan<pid> listener = writer, sender = reader
+// chan<pid> listener = writer(), sender = reader()
 Channel *forkc;
 /*e: global [[forkc]] */
 /*s: global [[nread]] */
@@ -116,6 +116,8 @@ reader(void *v)
     s = newstr();
 
     while((s->len = pread(tfd, s->buf, Bufsize - 1, 0)) >= 0){
+
+        /*s: [[reader()]] if [[forking]] and special condition */
         // ??
         if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
             forking = false;
@@ -123,7 +125,9 @@ reader(void *v)
             sendp(forkc, (void*)newpid);
             procrfork(reader, (void*)newpid, Stacksize, 0);
         }
+        /*e: [[reader()]] if [[forking]] and special condition */
 
+        /*s: [[reader()]] if Rfork syscall */
         /*
          * There are three tests here and they (I hope) guarantee
          * no false positives.
@@ -137,16 +141,24 @@ reader(void *v)
                 strtoul(a[4], 0, 16) & RFPROC)
                 forking = true;
             free(rf);
-        } else if (strstr(s->buf, " Exits") != nil)
-            exiting = true;
+        }
+        /*e: [[reader()]] if Rfork syscall */
+         else
+            /*s: [[reader()]] if Exits syscall */
+            if (strstr(s->buf, " Exits") != nil)
+              exiting = true;
+            /*e: [[reader()]] if Exits syscall */
 
         sendp(out, s);	/* print line from /proc/$child/syscall */
+
+        /*s: [[reader()]] if [[exiting]] */
         if (exiting) {
             s = newstr();
             strcpy(s->buf, "\n");
             sendp(out, s);
             break;
         }
+        /*e: [[reader()]] if [[exiting]] */
 
         /* flush syscall trace buffer */
         cwrite(cfd, ctl, "startsyscall", 12);

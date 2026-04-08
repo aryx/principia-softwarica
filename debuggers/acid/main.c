@@ -73,7 +73,7 @@ main(int argc, char *argv[])
         break;
     /*x: [[main()]](acid) command line processing */
     case 'w':
-        wtflag = 1;
+        wtflag = true;
         break;
     /*x: [[main()]](acid) command line processing */
     case 'k':
@@ -133,7 +133,7 @@ main(int argc, char *argv[])
     fmtinstall('x', xfmt);
     /*e: [[main()]](acid) format initializations */
 
-    Binit(&bioout, 1, OWRITE);
+    Binit(&bioout, STDOUT, OWRITE);
     bout = &bioout;
 
     kinit();
@@ -149,7 +149,6 @@ main(int argc, char *argv[])
     if(mtype && machbyname(mtype) == 0)
         print("unknown machine %s", mtype);
     /*e: [[main()]](acid) sanity check [[mtype]] */
-
     /*s: [[main()]](acid) [[attachfiles(aout, pid)]] */
     if (attachfiles(aout, pid) < 0)
         varreg();		/* use default register set on error */
@@ -158,7 +157,7 @@ main(int argc, char *argv[])
     /*s: [[main()]](acid) load modules */
     loadmodule("/lib/acid/port");
     loadmoduleobjtype();
-
+    /*s: [[main()]](acid) load [[-l]] modules */
     for(i = 0; i < nlm; i++) {
         if(access(lm[i], AREAD) >= 0)
             loadmodule(lm[i]);
@@ -168,11 +167,10 @@ main(int argc, char *argv[])
             free(s);
         }
     }
+    /*e: [[main()]](acid) load [[-l]] modules */
     /*e: [[main()]](acid) load modules */
-
     userinit();
     varsym();
-
     /*s: [[main()]](acid) check acidmap */
     l = look("acidmap");
     if(l && l->proc) {
@@ -184,7 +182,6 @@ main(int argc, char *argv[])
     /*e: [[main()]](acid) check acidmap */
 
     interactive = 1;
-
     initialising = 0;
     line = 1;
 
@@ -326,13 +323,16 @@ loadmodule(char *s)
 void
 readtext(char *s)
 {
+    /*s: [[readtext()]] locals */
     Dir *d;
-    Lsym *l;
-    Value *v;
     uvlong length;
     Symbol sym;
-    extern Machdata armmach;
+    /*x: [[readtext()]] locals */
+    Lsym *l;
+    Value *v;
+    /*e: [[readtext()]] locals */
 
+    /*s: [[readtext()]] if [[mtype != nil]] */
     if(mtype != nil){
         symmap = newmap(0, 1);
         if(symmap == 0)
@@ -346,8 +346,8 @@ readtext(char *s)
         setmap(symmap, text, 0, length, 0, "binary");
         return;
     }
-
-    machdata = &armmach;
+    /*e: [[readtext()]] if [[mtype != nil]] */
+    // else
 
     if(!crackhdr(text, &fhdr)) {
         print("can't decode file header\n");
@@ -355,8 +355,10 @@ readtext(char *s)
     }
 
     symmap = loadmap(0, text, &fhdr);
-    if(symmap == 0)
+    /*s: [[readtext()]] sanity check [[symmap]] */
+    if(symmap == nil)
         print("%s: (error) loadmap: cannot make symbol map\n", argv0);
+    /*e: [[readtext()]] sanity check [[symmap]] */
 
     if(syminit(text, &fhdr) < 0) {
         print("%s: (error) syminit: %r\n", argv0);
@@ -364,6 +366,7 @@ readtext(char *s)
     }
     print("%s:%s\n", s, fhdr.name);
 
+    /*s: [[readtext()]] if [[mach->sbreg]] */
     if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
         mach->sb = sym.value;
         l = enter("SB", Tid);
@@ -372,20 +375,23 @@ readtext(char *s)
         l->v->type = TINT;
         l->v->set = 1;
     }
-
+    /*e: [[readtext()]] if [[mach->sbreg]] */
+    /*s: [[readtext()]] make objtype variable */
     l = mkvar("objtype");
     v = l->v;
     v->fmt = 's';
     v->set = 1;
     v->string = strnode(mach->name);
     v->type = TSTRING;
-
+    /*e: [[readtext()]] make objtype variable */
+    /*s: [[readtext()]] make textfile variable */
     l = mkvar("textfile");
     v = l->v;
     v->fmt = 's';
     v->set = 1;
     v->string = strnode(s);
     v->type = TSTRING;
+    /*e: [[readtext()]] make textfile variable */
 
     machbytype(fhdr.type);
     varreg();

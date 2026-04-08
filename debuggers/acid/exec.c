@@ -36,7 +36,7 @@ error(char *fmt, ...)
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);
-        fprint(2, "%L: (error) %s\n", buf);
+        fprint(STDERR, "%L: (error) %s\n", buf);
     }
     while(popio())
         ;
@@ -66,7 +66,7 @@ unwind(void)
 /*e: function [[unwind]] */
 
 /*s: function [[execute]] */
-/// ?? -> <>
+/// main (acidmap) | ?? -> <>
 void
 execute(Node *n)
 {
