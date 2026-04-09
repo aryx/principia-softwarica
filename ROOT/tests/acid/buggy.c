@@ -2,15 +2,18 @@
 #include <u.h>
 #include <libc.h>
 
+//void foo(int x) { }
+
 void
 main(int argc, char **argv)
 {
-    USED(argc);
-    USED(argv);
+    // use argc otherwise 8c will optimize things and 
+    // not even allocate stack space for the locals
 
-    int x = 42;
-    int y = 0;
-    int z = x / y;
-    print("%d\n", z);
+    int x, y, z;
+    x = 41 + argc;
+    y = argc - 1;
+    z = x / y;
+    print("%d %d %d\n", x, y, z);
     exits(nil);
 }
