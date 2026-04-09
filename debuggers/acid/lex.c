@@ -75,9 +75,9 @@ typedef struct IOstack IOstack;
 /*s: struct [[IOstack]] */
 struct IOstack
 {
-    // ref_own<string>    included filename or "<stdin>" 
+    // ref_own<string>    included filename or "<stdin>"  or "<string>"
     char	*name;
-    // ref_own<Biobuf>
+    // option<ref_own<Biobuf>> (None when <string>)
     Biobuf	*fin;
 
     // saved global line to be restored in popio()
@@ -140,7 +140,7 @@ pushfile(char *file)
 }
 /*e: function [[pushfile]] */
 /*s: function [[pushstr]] */
-/// ?? -> interpret -> <>
+/// acid: interpret() -> interpret -> <>
 void
 pushstr(Node *s)
 {
@@ -168,7 +168,6 @@ pushstr(Node *s)
     if(io->text == 0)
         fatal("no memory");
     /*e: [[pushstr()]] sanity check [[io->text]] */
-
     io->ip = io->text;
 
     io->prev = lexio;
@@ -205,7 +204,9 @@ popio(void)
     if(lexio->fin)
         Bterm(lexio->fin);
     else
-        free(lexio->text);
+       /*s: [[popio()]] when no [[fin]] */
+       free(lexio->text);
+       /*e: [[popio()]] when no [[fin]] */
     free(lexio->name);
 
     // restore global line
@@ -254,7 +255,9 @@ unlexc(int s)
     if(lexio->fin)
         Bungetc(lexio->fin);
     else
+        /*s: [[unlexc()]] when no [[fin]] */
         lexio->ip--;
+        /*e: [[unlexc()]] when no [[fin]] */
 }
 /*e: function [[unlexc]] */
 /*s: function [[lexc]] */
@@ -265,16 +268,19 @@ lexc(void)
 
     if(lexio->fin) {
         c = Bgetc(lexio->fin);
+        /*s: [[lexc()]] if [[gotint]] */
         if(gotint)
             error("interrupt");
+        /*e: [[lexc()]] if [[gotint]] */
         return c;
     }
     // else
-
+    /*s: [[lexc()]] when no [[fin]] */
     c = *lexio->ip++;
     if(c == 0)
         return -1;
     return c;
+    /*e: [[lexc()]] when no [[fin]] */
 }
 /*e: function [[lexc]] */
 
@@ -389,12 +395,14 @@ loop:
 
     switch(c) {
     case Eof:
+        /*s: [[yylex()]] when [[Eof]], if [[gotint]] */
         if(gotint) {
-            gotint = 0;
+            gotint = false;
             stacked = 0;
             Bprint(bout, "\nacid: ");
             goto loop;
         }
+        /*e: [[yylex()]] when [[Eof]], if [[gotint]] */
         return Eof;
 
     case '"':

@@ -66,7 +66,7 @@ Rplace*	ret;
 char*	aout;
 /*e: global [[aout]] */
 /*s: global [[gotint]] */
-int	gotint;
+bool	gotint;
 /*e: global [[gotint]] */
 /*s: global [[gcl]] */
 Gc*	gcl;

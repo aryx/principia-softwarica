@@ -671,7 +671,7 @@ catcher(void *junk, char *s)
     USED(junk);
 
     if(strstr(s, "interrupt")) {
-        gotint = 1;
+        gotint = true;
         noted(NCONT);
     }
     noted(NDFLT);

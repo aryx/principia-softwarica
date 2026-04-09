@@ -26,7 +26,9 @@ error(char *fmt, ...)
     /*e: [[error()]](acid) unstack io channels */
 
     ret = 0;
-    gotint = 0;
+    /*s: [[error()]] reset [[gotint]] */
+    gotint = false;
+    /*e: [[error()]] reset [[gotint]] */
 
     Bflush(bout);
     /*s: [[error()]](acid) if [[silent]] */
@@ -80,8 +82,10 @@ execute(Node *n)
 
     gc();
 
+    /*s: [[execute()]] if [[gotint]] */
     if(gotint)
         error("interrupted");
+    /*e: [[execute()]] if [[gotint]] */
 
     if(n == nil)
         return;

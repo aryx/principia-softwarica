@@ -56,7 +56,7 @@ extern Lsym*	hash[Hashsize];
 extern long	dogc;
 extern Rplace*	ret;
 extern char*	aout;
-extern int	gotint;
+extern bool	gotint;
 extern Gc*	gcl;
 extern int	stacked;
 extern jmp_buf	err;

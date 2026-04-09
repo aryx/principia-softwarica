@@ -506,7 +506,7 @@ filepc(Node *r, Node *args)
 /*e: function [[filepc]] */
 
 /*s: function [[interpret]] */
-/// ??? -> <>
+/// acid: interpret() -> <>
 void
 interpret(Node *r, Node *args)
 {

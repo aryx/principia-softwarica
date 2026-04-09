@@ -179,6 +179,10 @@ for when a program misbehaves.
 % like when program fails silently, and trace and see can't write in /tmp
 % but program failed to handle error and print useful error message
 
+
+%yoann: say also acid work for multi archs! most acid code arch independent
+% thx to libmach (maybe need to talk about libmach too then used by acid, db, 5i, more?)
+
 \section{Other debuggers}
 
 Here are a few debuggers and tracers that I considered for this book, but
@@ -1480,6 +1484,10 @@ enum symbol_type
 @
 %CSTAB?
 
+\subsection{[[Sym]]}
+
+% ?? Diff with Symbol?
+
 
 \section{[[acid]], [[libmach]], and [[/proc]]}
 
@@ -2281,12 +2289,6 @@ varsym();
 initialising = 0;
 @
 
-
-
-%\section{[[notify()]]}
-<<[[main()]](acid) notify setup>>=
-notify(catcher);
-@
 
 
 \subsection{[[loadvars()]]}
@@ -3224,8 +3226,9 @@ if(pid)					/* pid given */
 
 % read .o (objects) and read .out (binaries)
 
+\section{Parsing executables}
 
-\section{[[Fhdr]] and [[crackhdr()]]}
+\subsection{[[Fhdr]] and [[crackhdr()]]}
 
 <<function [[crackhdr]]>>=
 int
@@ -3293,7 +3296,7 @@ crackhdr(fdt fd, Fhdr *fp)
 @
 
 
-\section{[[machbytype()]]}
+\subsection{[[machbytype()]]}
 
 <<function [[machbytype]]>>=
 /*
@@ -3419,7 +3422,17 @@ loadmap(Map *map, int fd, Fhdr *fp)
 }
 @
 
-\section{[[syminit()]]}
+\section{Loading the symbol table}
+
+<<global nsym (libmach/sym.c)>>=
+static	long	nsym;			/* number of symbols */
+@
+
+<<global [[symbols]]>>=
+static	Sym	*symbols;		/* symbol table */
+@
+
+\subsection{[[syminit()]]}
 
 <<function [[syminit]]>>=
 /*
@@ -3544,15 +3557,8 @@ syminit(int fd, Fhdr *fp)
 }
 @
 
-\section{[[symbase()]]}
+\subsection{[[symbase()]]}
 
-<<global nsym (libmach/sym.c)>>=
-static	long	nsym;			/* number of symbols */
-@
-
-<<global [[symbols]]>>=
-static	Sym	*symbols;		/* symbol table */
-@
 
 <<function [[symbase]]>>=
 /*
@@ -3579,6 +3585,7 @@ symbase(long *n)
 
 % Lexing and parsing in same chapter this time; we also explain less this time
 % as similar to parsing in Compiler, Assembler, Make, Shell, Utilities (awk, ...)
+% Main focus of this book is understand debugging, not parsing.
 
 
 \section{Files management}
@@ -3591,9 +3598,9 @@ symbase(long *n)
 <<struct [[IOstack]]>>=
 struct IOstack
 {
-    // ref_own<string>    included filename or "<stdin>" 
+    // ref_own<string>    included filename or "<stdin>"  or "<string>"
     char	*name;
-    // ref_own<Biobuf>
+    // option<ref_own<Biobuf>> (None when <string>)
     Biobuf	*fin;
 
     // saved global line to be restored in popio()
@@ -3702,7 +3709,7 @@ popio(void)
     if(lexio->fin)
         Bterm(lexio->fin);
     else
-        free(lexio->text);
+       <<[[popio()]] when no [[fin]]>>
     free(lexio->name);
 
     // restore global line
@@ -3735,16 +3742,11 @@ lexc(void)
 
     if(lexio->fin) {
         c = Bgetc(lexio->fin);
-        if(gotint)
-            error("interrupt");
+        <<[[lexc()]] if [[gotint]]>>
         return c;
     }
     // else
-
-    c = *lexio->ip++;
-    if(c == 0)
-        return -1;
-    return c;
+    <<[[lexc()]] when no [[fin]]>>
 }
 @
 % why -1? why not Eof?
@@ -3759,7 +3761,7 @@ unlexc(int s)
     if(lexio->fin)
         Bungetc(lexio->fin);
     else
-        lexio->ip--;
+        <<[[unlexc()]] when no [[fin]]>>
 }
 @
 
@@ -3780,12 +3782,7 @@ loop:
 
     switch(c) {
     case Eof:
-        if(gotint) {
-            gotint = 0;
-            stacked = 0;
-            Bprint(bout, "\nacid: ");
-            goto loop;
-        }
+        <<[[yylex()]] when [[Eof]], if [[gotint]]>>
         return Eof;
 
     case '"':
@@ -4593,8 +4590,7 @@ execute(Node *n)
 
     gc();
 
-    if(gotint)
-        error("interrupted");
+    <<[[execute()]] if [[gotint]]>>
 
     if(n == nil)
         return;
@@ -5478,7 +5474,7 @@ ocall(Node *n, Node *res)
 @
 
 
-\section{[[acid: include()]]}
+\subsection{[[acid: include()]]}
 
 <<function [[include]]>>=
 void
@@ -5507,7 +5503,7 @@ include(Node *r, Node *args)
 @
 
 
-\section{[[acid: interpret()]]}
+\subsection{[[acid: interpret()]]}
 %alt: Eval
 
 <<[[tab]] entries>>=
@@ -5515,7 +5511,7 @@ include(Node *r, Node *args)
 @
 
 <<function [[interpret]]>>=
-/// ??? -> <>
+/// acid: interpret() -> <>
 void
 interpret(Node *r, Node *args)
 {
@@ -5540,16 +5536,15 @@ interpret(Node *r, Node *args)
     r->fmt = 'D';
 }
 @
-
+% note that yyparse() will call execute()!
 
 <<[[IOstack]] other fields>>=
 char	*text;
 char	*ip;
 @
 
-
 <<function [[pushstr]]>>=
-/// ?? -> interpret -> <>
+/// acid: interpret() -> interpret -> <>
 void
 pushstr(Node *s)
 {
@@ -5568,7 +5563,6 @@ pushstr(Node *s)
     io->fin = nil;
     io->text = strdup(s->string->string);
     <<[[pushstr()]] sanity check [[io->text]]>>
-
     io->ip = io->text;
 
     io->prev = lexio;
@@ -5591,6 +5585,22 @@ if(io->text == 0)
     fatal("no memory");
 @
 
+
+
+<<[[popio()]] when no [[fin]]>>=
+free(lexio->text);
+@
+
+<<[[lexc()]] when no [[fin]]>>=
+c = *lexio->ip++;
+if(c == 0)
+    return -1;
+return c;
+@
+
+<<[[unlexc()]] when no [[fin]]>>=
+lexio->ip--;
+@
 
 \section{Garbage collection}
 
@@ -6737,6 +6747,8 @@ die(void)
 }
 @
 
+% it just print the echo kill? it does not do it?
+
 \section{[[fatal()]]}
 
 <<function fatal (acid/main.c)>>=
@@ -6786,12 +6798,6 @@ yyerror(char *fmt, ...)
 jmp_buf	err;
 @
 
-% got interrupted
-<<global [[gotint]]>>=
-int	gotint;
-@
-%todo: bool
-
 <<function error (acid/exec.c)>>=
 /// ??? -> <>
 void
@@ -6804,7 +6810,7 @@ error(char *fmt, ...)
     <<[[error()]](acid) unstack io channels>>
 
     ret = 0;
-    gotint = 0;
+    <<[[error()]] reset [[gotint]]>>
 
     Bflush(bout);
     <<[[error()]](acid) if [[silent]]>>
@@ -6866,7 +6872,56 @@ if(iop != 0) {
 }
 @
 
+\section{Interrupt management}
 
+% got interrupted
+<<global [[gotint]]>>=
+bool	gotint;
+@
+
+<<[[main()]](acid) notify setup>>=
+notify(catcher);
+@
+
+<<function [[catcher]]>>=
+void
+catcher(void *junk, char *s)
+{
+    USED(junk);
+
+    if(strstr(s, "interrupt")) {
+        gotint = true;
+        noted(NCONT);
+    }
+    noted(NDFLT);
+}
+@
+
+
+
+<<[[lexc()]] if [[gotint]]>>=
+if(gotint)
+    error("interrupt");
+@
+
+<<[[execute()]] if [[gotint]]>>=
+if(gotint)
+    error("interrupted");
+@
+
+<<[[yylex()]] when [[Eof]], if [[gotint]]>>=
+if(gotint) {
+    gotint = false;
+    stacked = 0;
+    Bprint(bout, "\nacid: ");
+    goto loop;
+}
+@
+
+
+<<[[error()]] reset [[gotint]]>>=
+gotint = false;
+@
 
 %******************************************************************************
 \chapter{Utilities}
