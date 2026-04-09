@@ -10,14 +10,14 @@
 /*s: union yacc */
 %union
 {
- uvlong	ival;
- float	fval;
- String	*string;
+  uvlong  ival;
+  float	  fval;
+  String* string;
 
- Lsym	*sym;
-        /*s: [[union yacc]] other fields */
-        Node	*node;
-        /*e: [[union yacc]] other fields */
+  Lsym	*sym;
+  /*s: [[union yacc]] other fields */
+  Node	*node;
+  /*e: [[union yacc]] other fields */
 }
 /*e: union yacc */
 /*s: type declarations */

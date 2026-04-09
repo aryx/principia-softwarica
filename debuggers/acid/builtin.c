@@ -139,8 +139,10 @@ installbuiltin(void)
             s = enter(b->name, Tid);
 
         s->builtin = b->fn;
+        /*s: [[installbuiltin()]] if [[bprint]] */
         if(b->fn == bprint)
             mkprint(s);
+        /*e: [[installbuiltin()]] if [[bprint]] */
         b++;
     }
 }
@@ -217,7 +219,7 @@ match(Node *r, Node *args)
 /*e: function [[match]] */
 
 /*s: function [[newproc]] */
-/// main -> yyparse -> <> -> nproc -> sproc
+/// main -> yyparse -> new -> <> -> nproc -> sproc
 void
 newproc(Node *r, Node *args)
 {
@@ -251,7 +253,7 @@ newproc(Node *r, Node *args)
                 p++;
         }
     }
-    argv[i] = 0;
+    argv[i] = nil;
     r->op = OCONST;
     r->type = TINT;
     r->fmt = 'D';

@@ -127,17 +127,18 @@ main(int argc, char *argv[])
            aout = "/mips/9ch";
        /*e: [[main()]](acid) if not argc and remote adjust [[aout]] */
 
-    /*s: [[main()]](acid) initializations */
-    initialising = 1;
-
     /*s: [[main()]](acid) format initializations */
     fmtinstall('L', Lfmt);
     /*x: [[main()]](acid) format initializations */
     fmtinstall('x', xfmt);
     /*e: [[main()]](acid) format initializations */
+    /*s: [[main()]](acid) initializations */
+    initialising = 1;
+
     Binit(&bioout, STDOUT, OWRITE);
     bout = &bioout;
 
+    // setup lexer
     kinit();
     // to read commands on stdin once all modules have been loaded
     pushfile(nil);
@@ -205,7 +206,7 @@ main(int argc, char *argv[])
         Bprint(bout, "acid: ");
 
         // yyparse() will internally call execute() !
-        if(yyparse() != 1)
+        if(yyparse() != OK_1)
             die();
         restartio();
 
@@ -344,10 +345,11 @@ readtext(char *s)
     /*s: [[readtext()]] locals */
     Dir *d;
     uvlong length;
-    Symbol sym;
     /*x: [[readtext()]] locals */
     Lsym *l;
     Value *v;
+    /*x: [[readtext()]] locals */
+    Symbol sym;
     /*e: [[readtext()]] locals */
 
     /*s: [[readtext()]] if [[mtype != nil]] */
@@ -448,8 +450,10 @@ al(int t)
     memset(l, 0, sizeof(List));
     l->type = t;
 
+    /*s: [[al()]] add List [[l]] to [[gcl]] */
     l->gclink = gcl;
     gcl = l;
+    /*e: [[al()]] add List [[l]] to [[gcl]] */
 
     return l;
 }

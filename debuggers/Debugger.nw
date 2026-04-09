@@ -818,6 +818,7 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 % to a lesser extent /proc/x/text is also useful, but the symfile is 
 % good enough and /proc/x/mem is a superset of /proc/x/text I think.
 
+\section{Registers access: [[/proc/x/regs]]}
 
 \section{Breakpoint faulting instruction}
 
@@ -1522,12 +1523,12 @@ Map*	cormap;
 <<union yacc>>=
 %union
 {
- uvlong	ival;
- float	fval;
- String	*string;
+  uvlong  ival;
+  float	  fval;
+  String* string;
 
- Lsym	*sym;
-        <<[[union yacc]] other fields>>
+  Lsym	*sym;
+  <<[[union yacc]] other fields>>
 }
 @
 
@@ -1539,25 +1540,14 @@ Map*	cormap;
 <<struct [[Node]]>>=
 struct Node
 {
-    // must be first?
-    Gc;
+    <<[[Node]] first gc field>>
 
     // enum<opcode>
     char	op;
     Node*	left;
     Node*	right;
 
-    // enum<Type_kind> ?
-    char	type;
-
-    // option<Lsym>, Some when op = ONAME
-    Lsym*	sym;
-
-    // ??
-    int	builtin;
-
-    // must be last?
-    Store;
+    <<[[Node]] other fields>>
 };
 @
 
@@ -1586,6 +1576,22 @@ an(int op, Node *l, Node *r)
 @
 
 
+%XXX
+<<[[Node]] other fields>>=
+// enum<Type_kind> ?
+char	type;
+
+// option<Lsym>, Some when op = ONAME
+Lsym*	sym;
+
+// ??
+int	builtin;
+
+// ??
+Store;
+@
+
+
 \subsection{[[Opcode]]}
 
 <<enum [[_anon_ (acid/acid.h)]]3>>=
@@ -1593,12 +1599,13 @@ enum Opcode
 {
     ONAME,
     OCONST,
+    OLIST,
 
+    OADD,
+    OSUB,
     OMUL,
     ODIV,
     OMOD,
-    OADD,
-    OSUB,
 
     ORSH,
     OLSH,
@@ -1613,130 +1620,45 @@ enum Opcode
     OLAND,
     OXOR,
     OLOR,
+    ONOT,
 
     OCAND,
     OCOR,
-
-    OASGN,
-
-    OINDM,
 
     OEDEC,
     OEINC,
     OPINC,
     OPDEC,
 
-    ONOT,
     OIF,
-    ODO,
-    OLIST,
-    OCALL,
-    OCTRUCT,
-    OWHILE,
     OELSE,
+    OWHILE,
+    ODO,
+    ORET,
+
+    OASGN,
+    OINDM,
+    OCALL,
+    OINDEX,
+    OINDC,
+    ODOT,
+    OCAST,
 
     OHEAD,
     OTAIL,
     OAPPEND,
-
-    ORET,
-
-    OINDEX,
-    OINDC,
-    ODOT,
+    ODELETE,
 
     OLOCAL,
     OFRAME,
+
+    OCTRUCT,
     OCOMPLEX,
-    ODELETE,
-    OCAST,
+
     OFMT,
     OEVAL,
     OWHAT,
 };
-@
-
-
-\subsection{[[Store]]}
-
-<<struct [[Store]]>>=
-struct Store
-{
-    char	fmt;
-    Type*	comt;
-
-    union {
-        vlong	ival;
-        double	fval;
-        String*	string;
-        List*	l;
-        Node*	cc;
-    };
-};
-@
-
-\subsection{[[String]]}
-
-<<struct [[StringAcid]]>>=
-struct StringAcid
-{
-    Gc;
-    char	*string;
-    int	len;
-};
-@
-% and then typedef struct StringAcid String;
-% why? conflict on struct String with libstring?
-
-\subsection{[[List]]}
-
-<<struct [[List]]>>=
-struct List
-{
-    Gc;
-
-    List*	next;
-    char	type;
-
-    Store;
-};
-@
-
-<<function [[al]]>>=
-List*
-al(int t)
-{
-    List *l;
-
-    l = gmalloc(sizeof(List));
-    memset(l, 0, sizeof(List));
-    l->type = t;
-
-    l->gclink = gcl;
-    gcl = l;
-
-    return l;
-}
-@
-
-\subsection{[[Gc]]}
-
-<<struct [[Gc]]>>=
-struct Gc
-{
-    char	gcmark;
-    Gc*	gclink;
-};
-@
-
-<<global [[gcl]]>>=
-Gc*	gcl;
-@
-
-
-<<[[an()]] add node [[n]] to [[gcl]]>>=
-n->gclink = gcl;
-gcl = n;
 @
 
 \section{[[Type]] system}
@@ -1746,12 +1668,15 @@ enum Type_kind
 {
     TINT,
     TFLOAT,
+
     TSTRING,
     TLIST,
+
     TCODE,
 };
 @
 
+%XXX?
 <<struct [[Type]]>>=
 struct Type
 {
@@ -1769,7 +1694,7 @@ struct Type
 
 
 
-%???
+%XXX???
 <<struct [[Frtype]]>>=
 struct Frtype
 {
@@ -1777,6 +1702,187 @@ struct Frtype
     Type*	type;
     Frtype*	next;
 };
+@
+
+
+\section{Runtime values}
+
+\subsection{Formats}
+
+% saw type before, format is related
+% 'X' hexa, 'D' decimal, 'i' = assembly, 'a' = ?
+
+\subsection{[[Value]] and [[Store]]}
+
+<<struct [[Value]]>>=
+struct Value
+{
+    Store;
+    // enum<Type_kind>
+    char	type;
+    <<[[Value]] other fields>>
+};
+@
+%todo? bool for set?
+% no Gc here?
+
+%\subsection{[[Store]]}
+
+<<struct [[Store]]>>=
+struct Store
+{
+    union {
+        vlong	ival;
+        double	fval;
+        String*	string;
+        List*	l;
+
+        Node*	cc;
+    };
+
+    // enum<Format_kind> 'X', 'D', ...
+    char	fmt;
+    <<[[Store]] other fields>>
+};
+@
+
+% remember kencc ext, so can use v->ival directly
+% because 'Store;' in Value (and anon union).
+
+
+% ??
+<<[[Value]] other fields>>=
+char	set;
+@
+%todo: bool
+
+%XXX
+<<[[Value]] other fields>>=
+Value*	pop;
+Lsym*	scope;
+Rplace*	ret;
+@
+
+
+%XXX
+<<[[Store]] other fields>>=
+Type*	comt;
+@
+
+\subsection{[[String]] and [[List]]}
+
+<<struct [[String]]>>=
+struct String
+{
+    <<[[String]] first gc field>>
+    char	*string;
+    int	len;
+};
+@
+%old: I renamed it to StringAcid and then typedef struct StringAcid String;
+% but why? conflict on struct String with libstring? for codegraph?
+
+<<function [[strnode]]>>=
+String*
+strnode(char *name)
+{
+    return strnodlen(name, strlen(name));
+}
+@
+
+<<function [[strnodlen]]>>=
+String*
+strnodlen(char *name, int len)
+{
+    String *s;
+
+    s = gmalloc(sizeof(String)+len+1);
+    s->string = (char*)s+sizeof(String);
+    s->len = len;
+    if(name != 0)
+        memmove(s->string, name, len);
+    s->string[len] = '\0';
+
+    <<[[strnodlen()]] add String [[s]] to [[gcl]]>>
+
+    return s;
+}
+@
+
+
+%\subsection{[[List]]}
+
+<<struct [[List]]>>=
+struct List
+{
+    <<[[List]] first gc field>>
+
+    List*	next;
+    // enum<Type_kind> ?
+    char	type;
+
+    Store;
+};
+@
+
+<<function [[al]]>>=
+List*
+al(int t)
+{
+    List *l;
+
+    l = gmalloc(sizeof(List));
+    memset(l, 0, sizeof(List));
+    l->type = t;
+
+    <<[[al()]] add List [[l]] to [[gcl]]>>
+
+    return l;
+}
+@
+
+\subsection{[[Gc]]}
+
+% mark and sweep
+
+<<struct [[Gc]]>>=
+struct Gc
+{
+    char gcmark;
+    Gc*	 gclink;
+};
+@
+
+<<global [[gcl]]>>=
+Gc*	gcl;
+@
+
+
+<<[[strnodlen()]] add String [[s]] to [[gcl]]>>=
+s->gclink = gcl;
+gcl = s;
+@
+<<[[al()]] add List [[l]] to [[gcl]]>>=
+l->gclink = gcl;
+gcl = l;
+@
+<<[[an()]] add node [[n]] to [[gcl]]>>=
+n->gclink = gcl;
+gcl = n;
+@
+
+
+<<[[String]] first gc field>>=
+Gc;
+@
+<<[[List]] first gc field>>=
+Gc;
+@
+
+% why Node Gc field? it's not really runtime value, but
+% we want to gc it when finished processed? or because of Value with Code?
+<<[[Node]] first gc field>>=
+Gc;
 @
 
 
@@ -1797,17 +1903,19 @@ struct Lsym
     // ref_own<Value>
     Value*	v;
 
-    // ???
-    Type*	lt;
-    Node*	proc;
-    Frtype*	local;
-    void	(*builtin)(Node*, Node*);
+    <<[[Lsym]] other fields>>
 
     // Extra fields
-    // list<ref<Lsym>> (next = Sym.hash) bucket of hashtbl 'hash'
-    Lsym*	hash;
+    <<[[Lsym]] extra fields>>
 
 };
+@
+
+%XXX
+<<[[Lsym]] other fields>>=
+Type*	lt;
+Node*	proc;
+Frtype*	local;
 @
 
 \subsection{[[hash]]}
@@ -1818,6 +1926,11 @@ Lsym*	hash[Hashsize];
 @
 <<acid constants>>=
 Hashsize	= 128,
+@
+
+<<[[Lsym]] extra fields>>=
+// list<ref<Lsym>> (next = Sym.hash) bucket of hashtbl 'hash'
+Lsym*	hash;
 @
 
 
@@ -1889,24 +2002,6 @@ enter(char *name, int t)
 }
 @
 
-\subsection{[[Value]]}
-
-<<struct [[Value]]>>=
-struct Value
-{
-    char	set;
-    // enum<Type_kind> ?
-    char	type;
-
-    Store;
-
-    Value*	pop;
-    Lsym*	scope;
-    Rplace*	ret;
-};
-@
-%todo? bool for set?
-
 
 <<[[enter()]] other locals>>=
 Value *v;
@@ -1920,6 +2015,29 @@ v->fmt = 'X';
 v->type = TINT;
 memset(v, 0, sizeof(Value));
 @
+% Hexa fmt by default
+
+
+\subsection{Builtins}
+
+<<global [[tab]]>>=
+struct Btab
+{
+    char	*name;
+    void	(*fn)(Node*, Node*);
+} tab[] =
+{
+    <<[[tab]] entries>>
+    0
+};
+@
+
+
+<<[[Lsym]] other fields>>=
+void	(*builtin)(Node*, Node*);
+@
+% will be set by installbuiltin()
+
 
 
 \section{Process table}
@@ -2027,6 +2145,7 @@ main(int argc, char *argv[])
     } else
        <<[[main()]](acid) if not argc and remote adjust [[aout]]>>
 
+    <<[[main()]](acid) format initializations>>
     <<[[main()]](acid) initializations>>
 
     <<[[main()]](acid) infinite loop>>
@@ -2061,7 +2180,7 @@ for(;;) {
     Bprint(bout, "acid: ");
 
     // yyparse() will internally call execute() !
-    if(yyparse() != 1)
+    if(yyparse() != OK_1)
         die();
     restartio();
 
@@ -2083,7 +2202,7 @@ if(setjmp(err)) {
     unwind();
 }
 @
-% see error management chapter
+% see error management chapter, for setjmp and unwind
 
 
 \section{Arguments processing}
@@ -2133,14 +2252,15 @@ int	initialising;
 @
 %todo: bool
 
+% Why some code needs to know if in initialising part?
 
 <<[[main()]](acid) initializations>>=
 initialising = 1;
 
-<<[[main()]](acid) format initializations>>
 Binit(&bioout, STDOUT, OWRITE);
 bout = &bioout;
 
+// setup lexer
 kinit();
 // to read commands on stdin once all modules have been loaded
 pushfile(nil);
@@ -2171,6 +2291,8 @@ notify(catcher);
 
 \subsection{[[loadvars()]]}
 
+% seen mkvar before, format, types
+
 <<function [[loadvars]]>>=
 /// main -> <>
 void
@@ -2200,6 +2322,11 @@ loadvars(void)
 }
 @
 
+% 'X' and 'D' formats
+
+% those, especially proc and pid will be set by newproc() later
+% called from acid: new() for example.
+
 \subsection{[[installbuiltin()]]}
 
 <<function [[installbuiltin]]>>=
@@ -2216,12 +2343,19 @@ installbuiltin(void)
             s = enter(b->name, Tid);
 
         s->builtin = b->fn;
-        if(b->fn == bprint)
-            mkprint(s);
+        <<[[installbuiltin()]] if [[bprint]]>>
         b++;
     }
 }
 @
+
+
+% ???
+<<[[installbuiltin()]] if [[bprint]]>>=
+if(b->fn == bprint)
+    mkprint(s);
+@
+
 
 
 \section{[[attachfiles()]] and [[readtext()]]}
@@ -2326,7 +2460,6 @@ if(symmap == nil)
 <<[[readtext()]] locals>>=
 Dir *d;
 uvlong length;
-Symbol sym;
 @
 
 
@@ -2347,6 +2480,8 @@ v->string = strnode(mach->name);
 v->type = TSTRING;
 @
 
+% fmt 's' = string
+
 <<[[readtext()]] make textfile variable>>=
 l = mkvar("textfile");
 v = l->v;
@@ -2356,7 +2491,11 @@ v->string = strnode(s);
 v->type = TSTRING;
 @
 
-\subsection{[[sbreg]]}
+\subsection{Setting [[SB]]}
+
+<<[[readtext()]] locals>>=
+Symbol sym;
+@
 
 %???
 <<[[readtext()]] if [[mach->sbreg]]>>=
@@ -2425,10 +2564,6 @@ varreg(void)
 
 \section{[[loadmodule()]]} % and [[loadmoduleobjtype()]]}
 
-<<[[main()]](acid) other locals>>=
-int i;
-@
-
 <<[[main()]](acid) load modules>>=
 loadmodule("/lib/acid/port");
 loadmoduleobjtype();
@@ -2450,6 +2585,9 @@ loadmoduleobjtype(void)
 %old: was /sys/lib/acid/
 
 
+<<[[main()]](acid) other locals>>=
+int i;
+@
 <<[[main()]](acid) load [[-l]] modules>>=
 for(i = 0; i < nlm; i++) {
     if(access(lm[i], AREAD) >= 0)
@@ -2462,6 +2600,7 @@ for(i = 0; i < nlm; i++) {
 }
 @
 
+% finally loadmodule()
 
 <<function [[loadmodule]]>>=
 void
@@ -2562,6 +2701,7 @@ varsym(void)
     l2 = 0;
 
     symbase(&n);
+
     for(i = 0; i < n; i++) {
         s = getsym(i);
         switch(s->type) {
@@ -2586,6 +2726,7 @@ varsym(void)
             l->v->set = 1;
             l->v->type = TINT;
             l->v->ival = v;
+
             if(l->v->comt == 0)
                 l->v->fmt = 'X';
 
@@ -2609,7 +2750,7 @@ varsym(void)
     l->v->set = 1;
     l->v->type = TLIST;
     l->v->l = l2;
-    if(l2 == 0)
+    if(l2 == nil)
         print("no symbol information\n");
 }
 @
@@ -2657,7 +2798,7 @@ if(l && l->proc) {
 \subsection{[[newproc()]]}
 
 <<function [[newproc]]>>=
-/// main -> yyparse -> <> -> nproc -> sproc
+/// main -> yyparse -> new -> <> -> nproc -> sproc
 void
 newproc(Node *r, Node *args)
 {
@@ -2691,7 +2832,7 @@ newproc(Node *r, Node *args)
                 p++;
         }
     }
-    argv[i] = 0;
+    argv[i] = nil;
     r->op = OCONST;
     r->type = TINT;
     r->fmt = 'D';
@@ -2699,9 +2840,14 @@ newproc(Node *r, Node *args)
 }
 @
 
+<<acid constants>>=
+Maxarg		= 512,
+@
+
 \subsection{[[nproc()]]}
 
 <<function [[nproc]]>>=
+/// main -> yyparse -> new -> newproc -> <> -> sproc
 int
 nproc(char **argv)
 {
@@ -2721,6 +2867,7 @@ nproc(char **argv)
         fd = open(buf, ORDWR);
         if(fd < 0)
             fatal("new: open %s: %r", buf);
+
         write(fd, "hang", 4);
         close(fd);
 
@@ -2733,7 +2880,9 @@ nproc(char **argv)
         open("/dev/cons", OREAD);
         open("/dev/cons", OWRITE);
         open("/dev/cons", OWRITE);
+        // Exec!
         exec(argv[0], argv);
+        // should never reach
         fatal("new: exec %s: %r");
 
     //parent
@@ -2756,145 +2905,9 @@ nproc(char **argv)
 NFD		= 100,
 @
 
+% msg() will block until process stop
+% but already in hang() mode so should be stopped already?
 
-\subsection{[[notes()]]}
-
-<<function notes (acid/proc.c)>>=
-void
-notes(int pid)
-{
-    Lsym *s;
-    Value *v;
-    int i, fd;
-    char buf[128];
-    List *l, **tail;
-
-    s = look("notes");
-    if(s == 0)
-        return;
-    v = s->v;
-
-    snprint(buf, sizeof(buf), "/proc/%d/note", pid);
-    fd = open(buf, OREAD);
-    if(fd < 0)
-        error("pid=%d: open note: %r", pid);
-
-    v->set = 1;
-    v->type = TLIST;
-    v->l = 0;
-    tail = &v->l;
-    for(;;) {
-        i = read(fd, buf, sizeof(buf));
-        if(i <= 0)
-            break;
-        buf[i] = '\0';
-        l = al(TSTRING);
-        l->string = strnode(buf);
-        l->fmt = 's';
-        *tail = l;
-        tail = &l->next;
-    }
-    close(fd);
-}
-@
-
-
-\subsection{[[sproc()]]}
-
-<<function [[sproc]]>>=
-/// (main -> yyparse -> execute -> new -> newproc -> nproc) | main -> <>
-void
-sproc(int pid)
-{
-    char buf[64];
-    fdt fcor;
-    Lsym *s;
-    int i;
-
-    <<[[sproc()]] sanity check [[symmap]]>>
-
-    snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
-    fcor = open(buf, ORDWR);
-    <<[[sproc()]] sanity check [[fcor]]>>
-
-    checkqid(symmap->seg[0].fd, pid);
-
-    s = look("pid");
-    s->v->ival = pid;
-
-    nocore();
-
-    cormap = attachproc(pid, kernel, fcor, &fhdr);
-    <<[[sproc()]] sanity check [[cormap]]>>
-
-    i = findseg(cormap, "text");
-    if (i > 0)
-        cormap->seg[i].name = "*text";
-
-    i = findseg(cormap, "data");
-    if (i > 0)
-        cormap->seg[i].name = "*data";
-
-    install(pid);
-}
-@
-
-<<[[sproc()]] sanity check [[symmap]]>>=
-if(symmap == nil)
-    error("no map");
-@
-
-<<[[sproc()]] sanity check [[fcor]]>>=
-if(fcor < 0)
-    error("setproc: open %s: %r", buf);
-@
-
-<<[[sproc()]] sanity check [[cormap]]>>=
-if (cormap == nil)
-    error("setproc: can't make coremap: %r");
-@
-
-\subsection{[[checkqid()]]}
-
-
-<<function [[checkqid]]>>=
-void
-checkqid(int f1, int pid)
-{
-    fdt fd;
-    Dir *d1, *d2;
-    char buf[128];
-
-    if(kernel)
-        return;
-
-    d1 = dirfstat(f1);
-    if(d1 == nil){
-        print("checkqid: (qid not checked) dirfstat: %r\n");
-        return;
-    }
-
-    snprint(buf, sizeof(buf), "/proc/%d/text", pid);
-    fd = open(buf, OREAD);
-    if(fd < 0 || (d2 = dirfstat(fd)) == nil){
-        print("checkqid: (qid not checked) dirstat %s: %r\n", buf);
-        free(d1);
-        if(fd >= 0)
-            close(fd);
-        return;
-    }
-
-    close(fd);
-
-    if(d1->qid.path != d2->qid.path || d1->qid.vers != d2->qid.vers || d1->qid.type != d2->qid.type){
-        print("path %llux %llux vers %lud %lud type %d %d\n",
-            d1->qid.path, d2->qid.path, d1->qid.vers, d2->qid.vers, d1->qid.type, d2->qid.type);
-        print("warning: image does not match text for pid %d\n", pid);
-    }
-    free(d1);
-    free(d2);
-}
-@
 
 \subsection{[[install()]]}
 
@@ -2967,6 +2980,148 @@ deinstall(int pid)
 
 
 
+\subsection{[[notes()]]}
+
+<<function notes (acid/proc.c)>>=
+void
+notes(int pid)
+{
+    Lsym *s;
+    Value *v;
+    int i, fd;
+    char buf[128];
+    List *l, **tail;
+
+    s = look("notes");
+    if(s == nil)
+        return;
+
+    // else
+    v = s->v;
+
+    snprint(buf, sizeof(buf), "/proc/%d/note", pid);
+    fd = open(buf, OREAD);
+    if(fd < 0)
+        error("pid=%d: open note: %r", pid);
+
+    v->set = 1;
+    v->type = TLIST;
+    v->l = 0;
+    tail = &v->l;
+    for(;;) {
+        i = read(fd, buf, sizeof(buf));
+        if(i <= 0)
+            break;
+        buf[i] = '\0';
+        l = al(TSTRING);
+        l->string = strnode(buf);
+        l->fmt = 's';
+        *tail = l;
+        tail = &l->next;
+    }
+    close(fd);
+}
+@
+
+
+\subsection{[[sproc()]]}
+
+<<function [[sproc]]>>=
+/// (main -> yyparse -> execute -> new -> newproc -> nproc) | main -> <>
+void
+sproc(int pid)
+{
+    char buf[64];
+    fdt fcor;
+    Lsym *s;
+    int i;
+
+    <<[[sproc()]] sanity check [[symmap]]>>
+
+    snprint(buf, sizeof(buf), "/proc/%d/mem", pid);
+    fcor = open(buf, ORDWR);
+    <<[[sproc()]] sanity check [[fcor]]>>
+
+    checkqid(symmap->seg[0].fd, pid);
+
+    s = look("pid");
+    s->v->ival = pid;
+
+    nocore();
+
+    cormap = attachproc(pid, kernel, fcor, &fhdr);
+    <<[[sproc()]] sanity check [[cormap]]>>
+
+    i = findseg(cormap, "text");
+    if (i > 0)
+        cormap->seg[i].name = "*text";
+
+    i = findseg(cormap, "data");
+    if (i > 0)
+        cormap->seg[i].name = "*data";
+
+    install(pid);
+}
+@
+% install(pid) redundant when comes from nproc I think
+
+<<[[sproc()]] sanity check [[symmap]]>>=
+if(symmap == nil)
+    error("no map");
+@
+
+<<[[sproc()]] sanity check [[fcor]]>>=
+if(fcor < 0)
+    error("setproc: open %s: %r", buf);
+@
+
+<<[[sproc()]] sanity check [[cormap]]>>=
+if (cormap == nil)
+    error("setproc: can't make coremap: %r");
+@
+
+\subsection{[[checkqid()]]}
+
+
+<<function [[checkqid]]>>=
+void
+checkqid(int f1, int pid)
+{
+    fdt fd;
+    Dir *d1, *d2;
+    char buf[128];
+
+    if(kernel)
+        return;
+
+    d1 = dirfstat(f1);
+    if(d1 == nil){
+        print("checkqid: (qid not checked) dirfstat: %r\n");
+        return;
+    }
+
+    snprint(buf, sizeof(buf), "/proc/%d/text", pid);
+    fd = open(buf, OREAD);
+    if(fd < 0 || (d2 = dirfstat(fd)) == nil){
+        print("checkqid: (qid not checked) dirstat %s: %r\n", buf);
+        free(d1);
+        if(fd >= 0)
+            close(fd);
+        return;
+    }
+
+    close(fd);
+
+    if(d1->qid.path != d2->qid.path || d1->qid.vers != d2->qid.vers || d1->qid.type != d2->qid.type){
+        print("path %llux %llux vers %lud %lud type %d %d\n",
+            d1->qid.path, d2->qid.path, d1->qid.vers, d2->qid.vers, d1->qid.type, d2->qid.type);
+        print("warning: image does not match text for pid %d\n", pid);
+    }
+    free(d1);
+    free(d2);
+}
+@
+
 \subsection{[[nocore()]]}
 
 <<function [[nocore]]>>=
@@ -2990,7 +3145,10 @@ nocore(void)
 
 \subsection{[[dostop()]]}
 
+% ???
+
 <<function [[dostop]]>>=
+/// main -> yyparse -> new -> newproc -> nproc -> sproc; <>
 void
 dostop(int pid)
 {
@@ -3385,6 +3543,30 @@ syminit(int fd, Fhdr *fp)
     return nsym;
 }
 @
+
+\section{[[symbase()]]}
+
+<<global nsym (libmach/sym.c)>>=
+static	long	nsym;			/* number of symbols */
+@
+
+<<global [[symbols]]>>=
+static	Sym	*symbols;		/* symbol table */
+@
+
+<<function [[symbase]]>>=
+/*
+ *	symbase: return base and size of raw symbol table
+ *		(special hack for high access rate operations)
+ */
+Sym *
+symbase(long *n)
+{
+    *n = nsym;
+    return symbols;
+}
+@
+
 
 %\section{[[machdata]]}
 
@@ -4016,6 +4198,7 @@ kinit(void)
 }
 @
 
+% use enter() too
 
 \section{Grammar}
 
@@ -5237,18 +5420,6 @@ ocall(Node *n, Node *res)
 
 \section{Builtins}
 
-<<global [[tab]]>>=
-struct Btab
-{
-    char	*name;
-    void	(*fn)(Node*, Node*);
-} tab[] =
-{
-    <<[[tab]] entries>>
-    0
-};
-@
-
 <<[[tab]] entries>>=
 "atof",	cvtatof,
 "atoi",	cvtatoi,
@@ -5731,6 +5902,16 @@ Node*	prnt;
 %******************************************************************************
 \chapter{Advanced Features}
 %******************************************************************************
+
+\section{Memory leak detection}
+
+%/lib/acid/leak
+
+% also leak.rc, umem.rc, kmem.rc
+
+\section{Code coverage}
+
+%/lib/acid/coverage
 
 \section{Modifying code: [[acid -w]]}
 

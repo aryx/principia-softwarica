@@ -8,13 +8,14 @@ enum
     /*x: acid constants */
     Maxproc		= 50,
     /*x: acid constants */
+    Maxarg		= 512,
+    /*x: acid constants */
     NFD		= 100,
     /*x: acid constants */
     Eof		= -1,
     /*x: acid constants */
     Strsize		= 4096,
     /*x: acid constants */
-    Maxarg		= 512,
     Maxval		= 10,
     Mempergc	= 1024*1024,
     /*e: acid constants */
@@ -24,7 +25,7 @@ enum
 #pragma varargck type "L"	void
 
 typedef struct Node	Node;
-typedef struct StringAcid	String;
+typedef struct String	String;
 typedef struct Lsym	Lsym;
 typedef struct List	List;
 typedef struct Store	Store;
@@ -75,8 +76,10 @@ enum Type_kind
 {
     TINT,
     TFLOAT,
+
     TSTRING,
     TLIST,
+
     TCODE,
 };
 /*e: enum [[_anon_ (acid/acid.h)]]2 */
@@ -129,33 +132,40 @@ struct Rplace
 /*s: struct [[Gc]] */
 struct Gc
 {
-    char	gcmark;
-    Gc*	gclink;
+    char gcmark;
+    Gc*	 gclink;
 };
 /*e: struct [[Gc]] */
 
 /*s: struct [[Store]] */
 struct Store
 {
-    char	fmt;
-    Type*	comt;
-
     union {
         vlong	ival;
         double	fval;
         String*	string;
         List*	l;
+
         Node*	cc;
     };
+
+    // enum<Format_kind> 'X', 'D', ...
+    char	fmt;
+    /*s: [[Store]] other fields */
+    Type*	comt;
+    /*e: [[Store]] other fields */
 };
 /*e: struct [[Store]] */
 
 /*s: struct [[List]] */
 struct List
 {
+    /*s: [[List]] first gc field */
     Gc;
+    /*e: [[List]] first gc field */
 
     List*	next;
+    // enum<Type_kind> ?
     char	type;
 
     Store;
@@ -165,15 +175,16 @@ struct List
 /*s: struct [[Value]] */
 struct Value
 {
-    char	set;
-    // enum<Type_kind> ?
-    char	type;
-
     Store;
-
+    // enum<Type_kind>
+    char	type;
+    /*s: [[Value]] other fields */
+    char	set;
+    /*x: [[Value]] other fields */
     Value*	pop;
     Lsym*	scope;
     Rplace*	ret;
+    /*e: [[Value]] other fields */
 };
 /*e: struct [[Value]] */
 
@@ -188,15 +199,19 @@ struct Lsym
     // ref_own<Value>
     Value*	v;
 
-    // ???
+    /*s: [[Lsym]] other fields */
     Type*	lt;
     Node*	proc;
     Frtype*	local;
+    /*x: [[Lsym]] other fields */
     void	(*builtin)(Node*, Node*);
+    /*e: [[Lsym]] other fields */
 
     // Extra fields
+    /*s: [[Lsym]] extra fields */
     // list<ref<Lsym>> (next = Sym.hash) bucket of hashtbl 'hash'
     Lsym*	hash;
+    /*e: [[Lsym]] extra fields */
 
 };
 /*e: struct [[Lsym]] */
@@ -204,14 +219,16 @@ struct Lsym
 /*s: struct [[Node]] */
 struct Node
 {
-    // must be first?
+    /*s: [[Node]] first gc field */
     Gc;
+    /*e: [[Node]] first gc field */
 
     // enum<opcode>
     char	op;
     Node*	left;
     Node*	right;
 
+    /*s: [[Node]] other fields */
     // enum<Type_kind> ?
     char	type;
 
@@ -221,22 +238,25 @@ struct Node
     // ??
     int	builtin;
 
-    // must be last?
+    // ??
     Store;
+    /*e: [[Node]] other fields */
 };
 /*e: struct [[Node]] */
 /*s: constant [[ZN]] */
 #define ZN	(Node*)0
 /*e: constant [[ZN]] */
 
-/*s: struct [[StringAcid]] */
-struct StringAcid
+/*s: struct [[String]] */
+struct String
 {
+    /*s: [[String]] first gc field */
     Gc;
+    /*e: [[String]] first gc field */
     char	*string;
     int	len;
 };
-/*e: struct [[StringAcid]] */
+/*e: struct [[String]] */
 
 List*	addlist(List*, List*);
 List*	al(int);
@@ -317,12 +337,13 @@ enum Opcode
 {
     ONAME,
     OCONST,
+    OLIST,
 
+    OADD,
+    OSUB,
     OMUL,
     ODIV,
     OMOD,
-    OADD,
-    OSUB,
 
     ORSH,
     OLSH,
@@ -337,43 +358,41 @@ enum Opcode
     OLAND,
     OXOR,
     OLOR,
+    ONOT,
 
     OCAND,
     OCOR,
-
-    OASGN,
-
-    OINDM,
 
     OEDEC,
     OEINC,
     OPINC,
     OPDEC,
 
-    ONOT,
     OIF,
-    ODO,
-    OLIST,
-    OCALL,
-    OCTRUCT,
-    OWHILE,
     OELSE,
+    OWHILE,
+    ODO,
+    ORET,
+
+    OASGN,
+    OINDM,
+    OCALL,
+    OINDEX,
+    OINDC,
+    ODOT,
+    OCAST,
 
     OHEAD,
     OTAIL,
     OAPPEND,
-
-    ORET,
-
-    OINDEX,
-    OINDC,
-    ODOT,
+    ODELETE,
 
     OLOCAL,
     OFRAME,
+
+    OCTRUCT,
     OCOMPLEX,
-    ODELETE,
-    OCAST,
+
     OFMT,
     OEVAL,
     OWHAT,

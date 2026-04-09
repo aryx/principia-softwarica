@@ -63,6 +63,7 @@ varsym(void)
     l2 = 0;
 
     symbase(&n);
+
     for(i = 0; i < n; i++) {
         s = getsym(i);
         switch(s->type) {
@@ -87,6 +88,7 @@ varsym(void)
             l->v->set = 1;
             l->v->type = TINT;
             l->v->ival = v;
+
             if(l->v->comt == 0)
                 l->v->fmt = 'X';
 
@@ -110,7 +112,7 @@ varsym(void)
     l->v->set = 1;
     l->v->type = TLIST;
     l->v->l = l2;
-    if(l2 == 0)
+    if(l2 == nil)
         print("no symbol information\n");
 }
 /*e: function [[varsym]] */
@@ -237,8 +239,10 @@ strnodlen(char *name, int len)
         memmove(s->string, name, len);
     s->string[len] = '\0';
 
+    /*s: [[strnodlen()]] add String [[s]] to [[gcl]] */
     s->gclink = gcl;
     gcl = s;
+    /*e: [[strnodlen()]] add String [[s]] to [[gcl]] */
 
     return s;
 }

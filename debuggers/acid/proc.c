@@ -74,6 +74,7 @@ sproc(int pid)
 }
 /*e: function [[sproc]] */
 /*s: function [[nproc]] */
+/// main -> yyparse -> new -> newproc -> <> -> sproc
 int
 nproc(char **argv)
 {
@@ -93,6 +94,7 @@ nproc(char **argv)
         fd = open(buf, ORDWR);
         if(fd < 0)
             fatal("new: open %s: %r", buf);
+
         write(fd, "hang", 4);
         close(fd);
 
@@ -105,7 +107,9 @@ nproc(char **argv)
         open("/dev/cons", OREAD);
         open("/dev/cons", OWRITE);
         open("/dev/cons", OWRITE);
+        // Exec!
         exec(argv[0], argv);
+        // should never reach
         fatal("new: exec %s: %r");
 
     //parent
@@ -135,8 +139,10 @@ notes(int pid)
     List *l, **tail;
 
     s = look("notes");
-    if(s == 0)
+    if(s == nil)
         return;
+
+    // else
     v = s->v;
 
     snprint(buf, sizeof(buf), "/proc/%d/note", pid);
@@ -164,6 +170,7 @@ notes(int pid)
 /*e: function notes (acid/proc.c) */
 
 /*s: function [[dostop]] */
+/// main -> yyparse -> new -> newproc -> nproc -> sproc; <>
 void
 dostop(int pid)
 {
