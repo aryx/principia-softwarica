@@ -56,12 +56,14 @@
 /*e: token declarations */
 %%
 /*s: grammar */
-prog		: 
+prog
+  : /* empty */
   | prog bigstmnt
   ;
 
 /*s: statements rules */
-bigstmnt	: stmnt
+bigstmnt
+  : stmnt
   {
    /* make stmnt a root so it isn't collected! */
    mkvar("_thiscmd")->proc = $1;
@@ -69,7 +71,7 @@ bigstmnt	: stmnt
    mkvar("_thiscmd")->proc = nil;
    gc();
    if(interactive)
-    Bprint(bout, "acid: ");
+      Bprint(bout, "acid: ");
   }
   | Tfn Tid '(' args ')' zsemi '{' slist '}'
   {
@@ -85,7 +87,8 @@ bigstmnt	: stmnt
   }
   ;
 /*x: statements rules */
-stmnt		: zexpr ';'
+stmnt
+  : zexpr ';'
   | '{' slist '}'
   {
    $$ = $2;
@@ -122,7 +125,8 @@ stmnt		: zexpr ';'
   ;
 
 /*x: statements rules */
-slist		: stmnt
+slist
+  : stmnt
   | slist stmnt
   {
    $$ = an(OLIST, $1, $2);
@@ -130,21 +134,24 @@ slist		: stmnt
   ;
 /*e: statements rules */
 /*s: members rules */
-members		: member
+members
+  : member
   | members member
   {
    $$ = an(OLIST, $1, $2);
   }
   ;
 
-mname		: Tid
+mname
+  : Tid
   {
    $$ = an(ONAME, ZN, ZN);
    $$->sym = $1;
   }
   ;
 
-member		: Tconst Tconst mname ';'
+member
+  : Tconst Tconst mname ';'
   {
    $3->ival = $2;
    $3->fmt = $1;
@@ -170,18 +177,19 @@ member		: Tconst Tconst mname ';'
   ;
 /*e: members rules */
 /*s: expressions rules */
-expr		: castexpr
+expr
+  : castexpr
   | expr '*' expr { $$ = an(OMUL, $1, $3); }
-  | expr '/' expr	{ $$ = an(ODIV, $1, $3); }
-  | expr '%' expr	{ $$ = an(OMOD, $1, $3); }
-  | expr '+' expr	{ $$ = an(OADD, $1, $3); }
-  | expr '-' expr	{ $$ = an(OSUB, $1, $3); }
+  | expr '/' expr { $$ = an(ODIV, $1, $3); }
+  | expr '%' expr { $$ = an(OMOD, $1, $3); }
+  | expr '+' expr { $$ = an(OADD, $1, $3); }
+  | expr '-' expr { $$ = an(OSUB, $1, $3); }
 
   | expr Trsh expr { $$ = an(ORSH, $1, $3); }
   | expr Tlsh expr { $$ = an(OLSH, $1, $3); }
 
-  | expr '<' expr	 { $$ = an(OLT, $1, $3); }
-  | expr '>' expr	 { $$ = an(OGT, $1, $3); }
+  | expr '<' expr  { $$ = an(OLT, $1, $3); }
+  | expr '>' expr  { $$ = an(OGT, $1, $3); }
   | expr Tleq expr { $$ = an(OLEQ, $1, $3); }
   | expr Tgeq expr { $$ = an(OGEQ, $1, $3); }
   | expr Teq expr  { $$ = an(OEQ, $1, $3); }
@@ -198,7 +206,8 @@ expr		: castexpr
   | expr Tfmt { $$ = an(OFMT, $1, con($2)); }
   ;
 /*x: expressions rules */
-castexpr	: monexpr
+castexpr
+  : monexpr
   | '(' Tid ')' monexpr
   {
    $$ = an(OCAST, $4, ZN);
@@ -206,7 +215,8 @@ castexpr	: monexpr
   }
   ;
 /*x: expressions rules */
-monexpr		: term
+monexpr
+  : term
   | '*' monexpr {	$$ = an(OINDM, $2, ZN);	}
   | '@' monexpr {	$$ = an(OINDC, $2, ZN);	}
   | '+' monexpr {	$$ = an(OADD, $2, ZN); }
@@ -225,7 +235,8 @@ monexpr		: term
   | Teval monexpr { $$ = an(OEVAL, $2, ZN);}
   ;
 /*x: expressions rules */
-term		: '(' expr ')'
+term
+  : '(' expr ')'
   {
    $$ = $2;
   }
@@ -290,20 +301,23 @@ term		: '(' expr ')'
   }
   ;
 /*x: expressions rules */
-args		: zexpr
+args
+  : zexpr
   | args ','  zexpr
   {
    $$ = an(OLIST, $1, $3);
   }
   ;
 /*x: expressions rules */
-zexpr		:
+zexpr
+  : /* empty */
   { $$ = 0; }
   | expr
   ;
 /*e: expressions rules */
 /*s: name rules */
-name		: Tid
+name 
+  : Tid
   {
    $$ = an(ONAME, ZN, ZN);
    $$->sym = $1;
@@ -315,16 +329,20 @@ name		: Tid
   }
   ;
 /*x: name rules */
-zname		: 
+zname
+  : 
+  /* empty */
   { $$ = 0; }
   | Tid
   ;
 /*e: name rules */
 /*s: other rules */
-zsemi		:
+zsemi
+  : /* empty */
   | ';' zsemi
 /*x: other rules */
-idlist		: Tid
+idlist
+  : Tid
   {
    $$ = an(ONAME, ZN, ZN);
    $$->sym = $1;

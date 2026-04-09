@@ -201,8 +201,10 @@ struct Lsym
     Value*	v;
 
     /*s: [[Lsym]] other fields */
-    Type*	lt;
+    // option<Node>, Some when symbol is a user-defined acid function
     Node*	proc;
+    /*x: [[Lsym]] other fields */
+    Type*	lt;
     Frtype*	local;
     /*x: [[Lsym]] other fields */
     void	(*builtin)(Node*, Node*);

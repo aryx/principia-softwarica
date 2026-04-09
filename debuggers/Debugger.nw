@@ -1928,12 +1928,15 @@ struct Lsym
 Lsym*	sym;
 @
 
+<<[[Lsym]] other fields>>=
+// option<Node>, Some when symbol is a user-defined acid function
+Node*	proc;
+@
 
 
 %XXX
 <<[[Lsym]] other fields>>=
 Type*	lt;
-Node*	proc;
 Frtype*	local;
 @
 
@@ -4316,12 +4319,12 @@ kinit(void)
 <<[[union yacc]] other fields>>=
 Node	*node;
 @
-
 <<type declarations>>=
 %type <node> expr monexpr term stmnt name args zexpr slist
 %type <node> member members mname castexpr idlist
 %type <sym> zname
 @
+% most rules return a node
 
 <<priority and associativity declarations>>=
 %left	';'
@@ -4341,7 +4344,8 @@ Node	*node;
 @
 
 <<grammar>>=
-prog		: 
+prog
+  : /* empty */
   | prog bigstmnt
   ;
 
@@ -4354,7 +4358,8 @@ prog		:
 
 
 <<name rules>>=
-name		: Tid
+name 
+  : Tid
   {
    $$ = an(ONAME, ZN, ZN);
    $$->sym = $1;
@@ -4368,17 +4373,20 @@ name		: Tid
 @
 
 <<name rules>>=
-zname		: 
+zname
+  : 
+  /* empty */
   { $$ = 0; }
   | Tid
   ;
 @
-% frame? complex?
 
-\subsection{Statements}
+
+\subsection{Definitions}
 
 <<statements rules>>=
-bigstmnt	: stmnt
+bigstmnt
+  : stmnt
   {
    /* make stmnt a root so it isn't collected! */
    mkvar("_thiscmd")->proc = $1;
@@ -4386,7 +4394,7 @@ bigstmnt	: stmnt
    mkvar("_thiscmd")->proc = nil;
    gc();
    if(interactive)
-    Bprint(bout, "acid: ");
+      Bprint(bout, "acid: ");
   }
   | Tfn Tid '(' args ')' zsemi '{' slist '}'
   {
@@ -4403,15 +4411,20 @@ bigstmnt	: stmnt
   ;
 @
 
+% execute! 
+
 <<other rules>>=
-zsemi		:
+zsemi
+  : /* empty */
   | ';' zsemi
 @
 
 
+\subsection{Statements}
 
 <<statements rules>>=
-stmnt		: zexpr ';'
+stmnt
+  : zexpr ';'
   | '{' slist '}'
   {
    $$ = $2;
@@ -4451,7 +4464,8 @@ stmnt		: zexpr ';'
 
 
 <<other rules>>=
-idlist		: Tid
+idlist
+  : Tid
   {
    $$ = an(ONAME, ZN, ZN);
    $$->sym = $1;
@@ -4467,7 +4481,8 @@ idlist		: Tid
 
 
 <<statements rules>>=
-slist		: stmnt
+slist
+  : stmnt
   | slist stmnt
   {
    $$ = an(OLIST, $1, $2);
@@ -4478,18 +4493,19 @@ slist		: stmnt
 \subsection{Expressions}
 
 <<expressions rules>>=
-expr		: castexpr
+expr
+  : castexpr
   | expr '*' expr { $$ = an(OMUL, $1, $3); }
-  | expr '/' expr	{ $$ = an(ODIV, $1, $3); }
-  | expr '%' expr	{ $$ = an(OMOD, $1, $3); }
-  | expr '+' expr	{ $$ = an(OADD, $1, $3); }
-  | expr '-' expr	{ $$ = an(OSUB, $1, $3); }
+  | expr '/' expr { $$ = an(ODIV, $1, $3); }
+  | expr '%' expr { $$ = an(OMOD, $1, $3); }
+  | expr '+' expr { $$ = an(OADD, $1, $3); }
+  | expr '-' expr { $$ = an(OSUB, $1, $3); }
 
   | expr Trsh expr { $$ = an(ORSH, $1, $3); }
   | expr Tlsh expr { $$ = an(OLSH, $1, $3); }
 
-  | expr '<' expr	 { $$ = an(OLT, $1, $3); }
-  | expr '>' expr	 { $$ = an(OGT, $1, $3); }
+  | expr '<' expr  { $$ = an(OLT, $1, $3); }
+  | expr '>' expr  { $$ = an(OGT, $1, $3); }
   | expr Tleq expr { $$ = an(OLEQ, $1, $3); }
   | expr Tgeq expr { $$ = an(OGEQ, $1, $3); }
   | expr Teq expr  { $$ = an(OEQ, $1, $3); }
@@ -4507,7 +4523,8 @@ expr		: castexpr
   ;
 @
 <<expressions rules>>=
-castexpr	: monexpr
+castexpr
+  : monexpr
   | '(' Tid ')' monexpr
   {
    $$ = an(OCAST, $4, ZN);
@@ -4516,7 +4533,8 @@ castexpr	: monexpr
   ;
 @
 <<expressions rules>>=
-monexpr		: term
+monexpr
+  : term
   | '*' monexpr {	$$ = an(OINDM, $2, ZN);	}
   | '@' monexpr {	$$ = an(OINDC, $2, ZN);	}
   | '+' monexpr {	$$ = an(OADD, $2, ZN); }
@@ -4536,7 +4554,8 @@ monexpr		: term
   ;
 @
 <<expressions rules>>=
-term		: '(' expr ')'
+term
+  : '(' expr ')'
   {
    $$ = $2;
   }
@@ -4604,7 +4623,8 @@ term		: '(' expr ')'
 
 
 <<expressions rules>>=
-args		: zexpr
+args
+  : zexpr
   | args ','  zexpr
   {
    $$ = an(OLIST, $1, $3);
@@ -4613,7 +4633,8 @@ args		: zexpr
 @
 
 <<expressions rules>>=
-zexpr		:
+zexpr
+  : /* empty */
   { $$ = 0; }
   | expr
   ;
@@ -4623,21 +4644,24 @@ zexpr		:
 \subsection{Complex}
 
 <<members rules>>=
-members		: member
+members
+  : member
   | members member
   {
    $$ = an(OLIST, $1, $2);
   }
   ;
 
-mname		: Tid
+mname
+  : Tid
   {
    $$ = an(ONAME, ZN, ZN);
    $$->sym = $1;
   }
   ;
 
-member		: Tconst Tconst mname ';'
+member
+  : Tconst Tconst mname ';'
   {
    $3->ival = $2;
    $3->fmt = $1;
