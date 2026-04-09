@@ -145,8 +145,9 @@ struct Store
         double	fval;
         String*	string;
         List*	l;
-
+        /*s: [[Store]] union other cases */
         Node*	cc;
+        /*e: [[Store]] union other cases */
     };
 
     // enum<Format_kind> 'X', 'D', ...
@@ -164,11 +165,11 @@ struct List
     Gc;
     /*e: [[List]] first gc field */
 
+    Store;
+
     List*	next;
     // enum<Type_kind> ?
     char	type;
-
-    Store;
 };
 /*e: struct [[List]] */
 
@@ -232,14 +233,15 @@ struct Node
     // enum<Type_kind> ?
     char	type;
 
-    // option<Lsym>, Some when op = ONAME
-    Lsym*	sym;
 
     // ??
     int	builtin;
 
     // ??
     Store;
+    /*x: [[Node]] other fields */
+    // option<Lsym>, Some when op = ONAME
+    Lsym*	sym;
     /*e: [[Node]] other fields */
 };
 /*e: struct [[Node]] */
@@ -253,8 +255,8 @@ struct String
     /*s: [[String]] first gc field */
     Gc;
     /*e: [[String]] first gc field */
-    char	*string;
-    int	len;
+    char* string;
+    int	  len;
 };
 /*e: struct [[String]] */
 

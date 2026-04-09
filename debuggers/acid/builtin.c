@@ -511,7 +511,7 @@ void
 interpret(Node *r, Node *args)
 {
     Node res;
-    int isave;
+    bool isave;
 
     if(args == nil)
         error("interpret(string): arg count");
@@ -522,7 +522,7 @@ interpret(Node *r, Node *args)
     pushstr(&res);
 
     isave = interactive;
-    interactive = 0;
+    interactive = false;
     r->ival = yyparse();
     interactive = isave;
     popio();
@@ -537,7 +537,7 @@ void
 include(Node *r, Node *args)
 {
     Node res;
-    int isave;
+    bool isave;
 
     if(args == 0)
         error("include(string): arg count");
@@ -548,7 +548,7 @@ include(Node *r, Node *args)
     pushfile(res.string->string);
 
     isave = interactive;
-    interactive = 0;
+    interactive = false;
     r->ival = yyparse();
     interactive = isave;
     popio();

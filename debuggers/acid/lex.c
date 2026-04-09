@@ -382,18 +382,20 @@ eatnl(void)
 /*e: function [[eatnl]] */
 
 /*s: function [[yylex]] */
+/// main -> yyparse -> <>
 int
 yylex(void)
 {
     int c;
+    /*s: [[yylex]] other locals */
     extern char vfmt[];
+    /*e: [[yylex]] other locals */
 
 loop:
     Bflush(bout);
-
     c = lexc();
-
     switch(c) {
+    /*s: [[yylex()]] switch [[c]] cases */
     case Eof:
         /*s: [[yylex()]] when [[Eof]], if [[gotint]] */
         if(gotint) {
@@ -404,25 +406,7 @@ loop:
         }
         /*e: [[yylex()]] when [[Eof]], if [[gotint]] */
         return Eof;
-
-    case '"':
-        eatstring();
-        return Tstring;
-
-    case ' ':
-    case '\t':
-        goto loop;
-
-    case '\n':
-        line++;
-        if(interactive == 0)
-            goto loop;
-        if(stacked) {
-            print("\t");
-            goto loop;
-        }
-        return ';';
-
+    /*x: [[yylex()]] switch [[c]] cases */
     case '.':
         c = lexc();
         unlexc(c);
@@ -430,7 +414,54 @@ loop:
             return numsym('.');
 
         return '.';
- 
+
+    /*x: [[yylex()]] switch [[c]] cases */
+    default:
+        return numsym(c);
+    /*x: [[yylex()]] switch [[c]] cases */
+    case ' ':
+    case '\t':
+        goto loop;
+    /*x: [[yylex()]] switch [[c]] cases */
+    case '/':
+        c = lexc();
+        if(c == '/') {
+            eatnl();
+            goto loop;
+        }
+        unlexc(c);
+        return '/';
+
+    /*x: [[yylex()]] switch [[c]] cases */
+    case '\n':
+        line++;
+        if(!interactive)
+            goto loop;
+        if(stacked) {
+            print("\t");
+            goto loop;
+        }
+        // else when interactive and not stacked
+        return ';';
+    /*x: [[yylex()]] switch [[c]] cases */
+    case '\'':
+        c = lexc();
+        if(c == '\\')
+            yylval.ival = escchar(lexc());
+        else
+            yylval.ival = c;
+        c = lexc();
+        if(c != '\'') {
+            error("missing '");
+            unlexc(c);
+        }
+        return Tconst;
+
+    /*x: [[yylex()]] switch [[c]] cases */
+    case '"':
+        eatstring();
+        return Tstring;
+    /*x: [[yylex()]] switch [[c]] cases */
     case '(':
     case ')':
     case '[':
@@ -445,6 +476,7 @@ loop:
     case '^':
     case '%':
         return c;
+    /*x: [[yylex()]] switch [[c]] cases */
     case '{':
         stacked++;
         return c;
@@ -452,15 +484,7 @@ loop:
         stacked--;
         return c;
 
-    case '\\':
-        c = lexc();
-        if(strchr(vfmt, c) == 0) {
-            unlexc(c);
-            return '\\';
-        }
-        yylval.ival = c;
-        return Tfmt;
-
+    /*x: [[yylex()]] switch [[c]] cases */
     case '!':
         c = lexc();
         if(c == '=')
@@ -468,6 +492,7 @@ loop:
         unlexc(c);
         return '!';
 
+    /*x: [[yylex()]] switch [[c]] cases */
     case '+':
         c = lexc();
         if(c == '+')
@@ -475,28 +500,7 @@ loop:
         unlexc(c);
         return '+';
 
-    case '/':
-        c = lexc();
-        if(c == '/') {
-            eatnl();
-            goto loop;
-        }
-        unlexc(c);
-        return '/';
-
-    case '\'':
-        c = lexc();
-        if(c == '\\')
-            yylval.ival = escchar(lexc());
-        else
-            yylval.ival = c;
-        c = lexc();
-        if(c != '\'') {
-            error("missing '");
-            unlexc(c);
-        }
-        return Tconst;
-
+    /*x: [[yylex()]] switch [[c]] cases */
     case '&':
         c = lexc();
         if(c == '&')
@@ -504,6 +508,7 @@ loop:
         unlexc(c);
         return '&';
 
+    /*x: [[yylex()]] switch [[c]] cases */
     case '=':
         c = lexc();
         if(c == '=')
@@ -511,6 +516,7 @@ loop:
         unlexc(c);
         return '=';
 
+    /*x: [[yylex()]] switch [[c]] cases */
     case '|':
         c = lexc();
         if(c == '|')
@@ -518,6 +524,7 @@ loop:
         unlexc(c);
         return '|';
 
+    /*x: [[yylex()]] switch [[c]] cases */
     case '<':
         c = lexc();
         if(c == '=')
@@ -536,6 +543,7 @@ loop:
         unlexc(c);
         return '>';
 
+    /*x: [[yylex()]] switch [[c]] cases */
     case '-':
         c = lexc();
 
@@ -547,8 +555,17 @@ loop:
         unlexc(c);
         return '-';
 
-    default:
-        return numsym(c);
+    /*x: [[yylex()]] switch [[c]] cases */
+    case '\\':
+        c = lexc();
+        if(strchr(vfmt, c) == 0) {
+            unlexc(c);
+            return '\\';
+        }
+        yylval.ival = c;
+        return Tfmt;
+
+    /*e: [[yylex()]] switch [[c]] cases */
     }
 }
 /*e: function [[yylex]] */
@@ -557,18 +574,24 @@ loop:
 int
 numsym(char first)
 {
-    int c, isbin, isfloat, ishex;
-    char *sel, *p;
+    char *p;
+    int c;
+    /*s: [[numsym()]] locals */
+    bool isbin, isfloat, ishex;
+    char *sel;
+    /*x: [[numsym()]] locals */
     Lsym *s;
+    /*e: [[numsym()]] locals */
 
     symbol[0] = first;
     p = symbol;
 
-    ishex = 0;
-    isbin = 0;
-    isfloat = 0;
+    /*s: [[numsym()]] if number */
+    ishex = false;
+    isbin = false;
+    isfloat = false;
     if(first == '.')
-        isfloat = 1;
+        isfloat = true;
 
     if(isdigit(*p++) || isfloat) {
         for(;;) {
@@ -591,11 +614,11 @@ numsym(char first)
                 break;
             }
             if(c == '.')
-                isfloat = 1;
+                isfloat = true;
             if(!isbin && c == 'x')
-                ishex = 1;
+                ishex = true;
             if(!ishex && c == 'b')
-                isbin = 1;
+                isbin = true;
             *p++ = c;
         }
         *p = '\0';
@@ -610,7 +633,9 @@ numsym(char first)
             yylval.ival = strtoull(symbol, 0, 0);
         return Tconst;
     }
-
+    /*e: [[numsym()]] if number */
+    // else
+    /*s: [[numsym()]] when symbol */
     for(;;) {
         c = lexc();
         if(c < 0)
@@ -632,6 +657,7 @@ numsym(char first)
 
     yylval.sym = s;
     return s->lexval;
+    /*e: [[numsym()]] when symbol */
 }
 /*e: function [[numsym]] */
 

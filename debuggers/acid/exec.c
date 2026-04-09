@@ -43,7 +43,7 @@ error(char *fmt, ...)
     }
     while(popio())
         ;
-    interactive = 1;
+    interactive = true;
     longjmp(err, 1);
 }
 /*e: function error (acid/exec.c) */

@@ -37,7 +37,7 @@ int	iop;
 char	symbol[Strsize];
 /*e: global [[symbol]] */
 /*s: global interactive (acid/globals.c) */
-int	interactive;
+bool	interactive;
 /*e: global interactive (acid/globals.c) */
 /*s: global [[na]] */
 int	na;

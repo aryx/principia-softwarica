@@ -1589,8 +1589,6 @@ an(int op, Node *l, Node *r)
 // enum<Type_kind> ?
 char	type;
 
-// option<Lsym>, Some when op = ONAME
-Lsym*	sym;
 
 // ??
 int	builtin;
@@ -1744,8 +1742,7 @@ struct Store
         double	fval;
         String*	string;
         List*	l;
-
-        Node*	cc;
+        <<[[Store]] union other cases>>
     };
 
     // enum<Format_kind> 'X', 'D', ...
@@ -1758,7 +1755,13 @@ struct Store
 % because 'Store;' in Value (and anon union).
 
 
-% ??
+<<[[Store]] union other cases>>=
+Node*	cc;
+@
+% when need that?? for symbols? why not Lsym then directly?
+
+
+% ?? seems always set to 1
 <<[[Value]] other fields>>=
 char	set;
 @
@@ -1783,8 +1786,8 @@ Type*	comt;
 struct String
 {
     <<[[String]] first gc field>>
-    char	*string;
-    int	len;
+    char* string;
+    int	  len;
 };
 @
 %old: I renamed it to StringAcid and then typedef struct StringAcid String;
@@ -1825,11 +1828,11 @@ struct List
 {
     <<[[List]] first gc field>>
 
+    Store;
+
     List*	next;
     // enum<Type_kind> ?
     char	type;
-
-    Store;
 };
 @
 
@@ -1918,6 +1921,14 @@ struct Lsym
 
 };
 @
+
+
+<<[[Node]] other fields>>=
+// option<Lsym>, Some when op = ONAME
+Lsym*	sym;
+@
+
+
 
 %XXX
 <<[[Lsym]] other fields>>=
@@ -2164,9 +2175,8 @@ main(int argc, char *argv[])
 \section{REPL}
 
 <<global interactive (acid/globals.c)>>=
-int	interactive;
+bool	interactive;
 @
-%todo: bool
 % for prompt essentially, like in rc
 
 <<global line (acid/globals.c)>>=
@@ -2177,7 +2187,7 @@ int	line;
 
 
 <<[[main()]](acid) infinite loop>>=
-interactive = 1;
+interactive = true;
 line = 1;
 
 for(;;) {
@@ -2200,8 +2210,7 @@ for(;;) {
 <<global [[stacked]]>>=
 int	stacked;
 @
-%todo: bool
-% for counting {}
+% for counting {}, also for prompt to show indent so know wait for closing }
 
 
 <<[[main()]](acid) in infinite loop, reinit and unwind if error>>=
@@ -2376,7 +2385,7 @@ fdt	text;
 static errorneg1
 attachfiles(char *aout, int pid)
 {
-    interactive = 0;
+    interactive = false;
     <<[[attachfiles()]] if error>>
 
     if(aout) {				/* executable given */
@@ -2608,7 +2617,7 @@ for(i = 0; i < nlm; i++) {
 void
 loadmodule(char *s)
 {
-    interactive = 0;
+    interactive = false;
     <<[[loadmodule()]] unwind if error>>
     pushfile(s);
     silent = 0;
@@ -2619,6 +2628,7 @@ loadmodule(char *s)
 @
 
 
+%XXX??
 <<global [[silent]]>>=
 int	silent;
 @
@@ -2649,7 +2659,7 @@ userinit(void)
 
     <<[[userinit()]] if user acid file>>
 
-    interactive = 0;
+    interactive = false;
     <<[[userinit()]] unwind if error>>
 
     l = look("acidinit");
@@ -3587,6 +3597,7 @@ symbase(long *n)
 % as similar to parsing in Compiler, Assembler, Make, Shell, Utilities (awk, ...)
 % Main focus of this book is understand debugging, not parsing.
 
+% main -> yyparse -> yylex
 
 \section{Files management}
 % similar to what was done by cpp with #include, but here acid include
@@ -3728,10 +3739,6 @@ popio(void)
 
 \section{Lexer}
 
-<<acid constants>>=
-Eof		= -1,
-@
-
 \subsection{[[lexc()]] and [[unlexc()]]}
 
 <<function [[lexc]]>>=
@@ -3769,171 +3776,93 @@ unlexc(int s)
 \subsection{[[yylex()]]}
 
 <<function [[yylex]]>>=
+/// main -> yyparse -> <>
 int
 yylex(void)
 {
     int c;
-    extern char vfmt[];
+    <<[[yylex]] other locals>>
 
 loop:
     Bflush(bout);
-
     c = lexc();
-
     switch(c) {
-    case Eof:
-        <<[[yylex()]] when [[Eof]], if [[gotint]]>>
-        return Eof;
-
-    case '"':
-        eatstring();
-        return Tstring;
-
-    case ' ':
-    case '\t':
-        goto loop;
-
-    case '\n':
-        line++;
-        if(interactive == 0)
-            goto loop;
-        if(stacked) {
-            print("\t");
-            goto loop;
-        }
-        return ';';
-
-    case '.':
-        c = lexc();
-        unlexc(c);
-        if(isdigit(c))
-            return numsym('.');
-
-        return '.';
- 
-    case '(':
-    case ')':
-    case '[':
-    case ']':
-    case ';':
-    case ':':
-    case ',':
-    case '~':
-    case '?':
-    case '*':
-    case '@':
-    case '^':
-    case '%':
-        return c;
-    case '{':
-        stacked++;
-        return c;
-    case '}':
-        stacked--;
-        return c;
-
-    case '\\':
-        c = lexc();
-        if(strchr(vfmt, c) == 0) {
-            unlexc(c);
-            return '\\';
-        }
-        yylval.ival = c;
-        return Tfmt;
-
-    case '!':
-        c = lexc();
-        if(c == '=')
-            return Tneq;
-        unlexc(c);
-        return '!';
-
-    case '+':
-        c = lexc();
-        if(c == '+')
-            return Tinc;
-        unlexc(c);
-        return '+';
-
-    case '/':
-        c = lexc();
-        if(c == '/') {
-            eatnl();
-            goto loop;
-        }
-        unlexc(c);
-        return '/';
-
-    case '\'':
-        c = lexc();
-        if(c == '\\')
-            yylval.ival = escchar(lexc());
-        else
-            yylval.ival = c;
-        c = lexc();
-        if(c != '\'') {
-            error("missing '");
-            unlexc(c);
-        }
-        return Tconst;
-
-    case '&':
-        c = lexc();
-        if(c == '&')
-            return Tandand;
-        unlexc(c);
-        return '&';
-
-    case '=':
-        c = lexc();
-        if(c == '=')
-            return Teq;
-        unlexc(c);
-        return '=';
-
-    case '|':
-        c = lexc();
-        if(c == '|')
-            return Toror;
-        unlexc(c);
-        return '|';
-
-    case '<':
-        c = lexc();
-        if(c == '=')
-            return Tleq;
-        if(c == '<')
-            return Tlsh;
-        unlexc(c);
-        return '<';
-
-    case '>':
-        c = lexc();
-        if(c == '=')
-            return Tgeq;
-        if(c == '>')
-            return Trsh;
-        unlexc(c);
-        return '>';
-
-    case '-':
-        c = lexc();
-
-        if(c == '>')
-            return Tindir;
-
-        if(c == '-')
-            return Tdec;
-        unlexc(c);
-        return '-';
-
-    default:
-        return numsym(c);
+    <<[[yylex()]] switch [[c]] cases>>
     }
 }
 @
 
+<<acid constants>>=
+Eof		= -1,
+@
+% Code returned by Bgetc? so reuse same for yylex
+
+<<[[yylex()]] switch [[c]] cases>>=
+case Eof:
+    <<[[yylex()]] when [[Eof]], if [[gotint]]>>
+    return Eof;
+@
+
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '.':
+    c = lexc();
+    unlexc(c);
+    if(isdigit(c))
+        return numsym('.');
+
+    return '.';
+
+@
+
+<<[[yylex()]] switch [[c]] cases>>=
+default:
+    return numsym(c);
+@
+
+<<global [[symbol]]>>=
+char	symbol[Strsize];
+@
+
+<<function [[numsym]]>>=
+int
+numsym(char first)
+{
+    char *p;
+    int c;
+    <<[[numsym()]] locals>>
+
+    symbol[0] = first;
+    p = symbol;
+
+    <<[[numsym()]] if number>>
+    // else
+    <<[[numsym()]] when symbol>>
+}
+@
+%$
+
+
 \subsection{Spaces and comments}
+
+<<[[yylex()]] switch [[c]] cases>>=
+case ' ':
+case '\t':
+    goto loop;
+@
+
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '/':
+    c = lexc();
+    if(c == '/') {
+        eatnl();
+        goto loop;
+    }
+    unlexc(c);
+    return '/';
+
+@
 
 <<function [[eatnl]]>>=
 void
@@ -3954,92 +3883,94 @@ eatnl(void)
 
 \subsection{Newlines}
 
+<<[[yylex()]] switch [[c]] cases>>=
+case '\n':
+    line++;
+    if(!interactive)
+        goto loop;
+    if(stacked) {
+        print("\t");
+        goto loop;
+    }
+    // else when interactive and not stacked
+    return ';';
+@
+
+
 \subsection{Numbers}
 
-<<function [[numsym]]>>=
-int
-numsym(char first)
-{
-    int c, isbin, isfloat, ishex;
-    char *sel, *p;
-    Lsym *s;
+<<[[numsym()]] locals>>=
+bool isbin, isfloat, ishex;
+char *sel;
+@
 
-    symbol[0] = first;
-    p = symbol;
+<<[[numsym()]] if number>>=
+ishex = false;
+isbin = false;
+isfloat = false;
+if(first == '.')
+    isfloat = true;
 
-    ishex = 0;
-    isbin = 0;
-    isfloat = 0;
-    if(first == '.')
-        isfloat = 1;
-
-    if(isdigit(*p++) || isfloat) {
-        for(;;) {
-            c = lexc();
-            if(c < 0)
-                error("%d: <eof> eating symbols", line);
-
-            if(c == '\n')
-                line++;
-            sel = "01234567890.xb";
-            if(ishex)
-                sel = "01234567890abcdefABCDEF";
-            else if(isbin)
-                sel = "01";
-            else if(isfloat)
-                sel = "01234567890eE-+";
-
-            if(strchr(sel, c) == 0) {
-                unlexc(c);
-                break;
-            }
-            if(c == '.')
-                isfloat = 1;
-            if(!isbin && c == 'x')
-                ishex = 1;
-            if(!ishex && c == 'b')
-                isbin = 1;
-            *p++ = c;
-        }
-        *p = '\0';
-        if(isfloat) {
-            yylval.fval = atof(symbol);
-            return Tfconst;
-        }
-
-        if(isbin)
-            yylval.ival = strtoull(symbol+2, 0, 2);
-        else
-            yylval.ival = strtoull(symbol, 0, 0);
-        return Tconst;
-    }
-
+if(isdigit(*p++) || isfloat) {
     for(;;) {
         c = lexc();
         if(c < 0)
-            error("%d <eof> eating symbols", line);
+            error("%d: <eof> eating symbols", line);
+
         if(c == '\n')
             line++;
-        if(c != '_' && c != '$' && c <= '~' && !isalnum(c)) {	/* checking against ~ lets UTF names through */
+        sel = "01234567890.xb";
+        if(ishex)
+            sel = "01234567890abcdefABCDEF";
+        else if(isbin)
+            sel = "01";
+        else if(isfloat)
+            sel = "01234567890eE-+";
+
+        if(strchr(sel, c) == 0) {
             unlexc(c);
             break;
         }
+        if(c == '.')
+            isfloat = true;
+        if(!isbin && c == 'x')
+            ishex = true;
+        if(!ishex && c == 'b')
+            isbin = true;
         *p++ = c;
     }
-
     *p = '\0';
+    if(isfloat) {
+        yylval.fval = atof(symbol);
+        return Tfconst;
+    }
 
-    s = look(symbol);
-    if(s == 0)
-        s = enter(symbol, Tid);
-
-    yylval.sym = s;
-    return s->lexval;
+    if(isbin)
+        yylval.ival = strtoull(symbol+2, 0, 2);
+    else
+        yylval.ival = strtoull(symbol, 0, 0);
+    return Tconst;
 }
 @
-%$
+
 
 \subsection{Characters}
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '\'':
+    c = lexc();
+    if(c == '\\')
+        yylval.ival = escchar(lexc());
+    else
+        yylval.ival = c;
+    c = lexc();
+    if(c != '\'') {
+        error("missing '");
+        unlexc(c);
+    }
+    return Tconst;
+
+@
 
 <<function [[escchar]]>>=
 int
@@ -4093,6 +4024,12 @@ char cmap[256] =
 
 \subsection{Strings}
 
+<<[[yylex()]] switch [[c]] cases>>=
+case '"':
+    eatstring();
+    return Tstring;
+@
+
 <<function [[eatstring]]>>=
 void
 eatstring(void)
@@ -4145,7 +4082,162 @@ Strsize		= 4096,
 @
 
 
-\subsection{Operators}
+\subsection{Operators and punctuations}
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '(':
+case ')':
+case '[':
+case ']':
+case ';':
+case ':':
+case ',':
+case '~':
+case '?':
+case '*':
+case '@':
+case '^':
+case '%':
+    return c;
+@
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '{':
+    stacked++;
+    return c;
+case '}':
+    stacked--;
+    return c;
+
+@
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '!':
+    c = lexc();
+    if(c == '=')
+        return Tneq;
+    unlexc(c);
+    return '!';
+
+@
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '+':
+    c = lexc();
+    if(c == '+')
+        return Tinc;
+    unlexc(c);
+    return '+';
+
+@
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '&':
+    c = lexc();
+    if(c == '&')
+        return Tandand;
+    unlexc(c);
+    return '&';
+
+@
+<<[[yylex()]] switch [[c]] cases>>=
+case '=':
+    c = lexc();
+    if(c == '=')
+        return Teq;
+    unlexc(c);
+    return '=';
+
+@
+<<[[yylex()]] switch [[c]] cases>>=
+case '|':
+    c = lexc();
+    if(c == '|')
+        return Toror;
+    unlexc(c);
+    return '|';
+
+@
+<<[[yylex()]] switch [[c]] cases>>=
+case '<':
+    c = lexc();
+    if(c == '=')
+        return Tleq;
+    if(c == '<')
+        return Tlsh;
+    unlexc(c);
+    return '<';
+
+case '>':
+    c = lexc();
+    if(c == '=')
+        return Tgeq;
+    if(c == '>')
+        return Trsh;
+    unlexc(c);
+    return '>';
+
+@
+<<[[yylex()]] switch [[c]] cases>>=
+case '-':
+    c = lexc();
+
+    if(c == '>')
+        return Tindir;
+
+    if(c == '-')
+        return Tdec;
+    unlexc(c);
+    return '-';
+
+@
+
+\subsection{Format [[X\F]]}
+
+<<[[yylex]] other locals>>=
+extern char vfmt[];
+@
+
+<<[[yylex()]] switch [[c]] cases>>=
+case '\\':
+    c = lexc();
+    if(strchr(vfmt, c) == 0) {
+        unlexc(c);
+        return '\\';
+    }
+    yylval.ival = c;
+    return Tfmt;
+
+@
+
+\subsection{Symbols}
+
+<<[[numsym()]] locals>>=
+Lsym *s;
+@
+<<[[numsym()]] when symbol>>=
+for(;;) {
+    c = lexc();
+    if(c < 0)
+        error("%d <eof> eating symbols", line);
+    if(c == '\n')
+        line++;
+    if(c != '_' && c != '$' && c <= '~' && !isalnum(c)) {	/* checking against ~ lets UTF names through */
+        unlexc(c);
+        break;
+    }
+    *p++ = c;
+}
+
+*p = '\0';
+
+s = look(symbol);
+if(s == 0)
+    s = enter(symbol, Tid);
+
+yylval.sym = s;
+return s->lexval;
+@
 
 \subsection{Keywords}
 
@@ -4196,6 +4288,8 @@ kinit(void)
 @
 
 % use enter() too
+
+
 
 \section{Grammar}
 
@@ -5481,7 +5575,7 @@ void
 include(Node *r, Node *args)
 {
     Node res;
-    int isave;
+    bool isave;
 
     if(args == 0)
         error("include(string): arg count");
@@ -5492,7 +5586,7 @@ include(Node *r, Node *args)
     pushfile(res.string->string);
 
     isave = interactive;
-    interactive = 0;
+    interactive = false;
     r->ival = yyparse();
     interactive = isave;
     popio();
@@ -5516,7 +5610,7 @@ void
 interpret(Node *r, Node *args)
 {
     Node res;
-    int isave;
+    bool isave;
 
     if(args == nil)
         error("interpret(string): arg count");
@@ -5527,7 +5621,7 @@ interpret(Node *r, Node *args)
     pushstr(&res);
 
     isave = interactive;
-    interactive = 0;
+    interactive = false;
     r->ival = yyparse();
     interactive = isave;
     popio();
@@ -6822,7 +6916,7 @@ error(char *fmt, ...)
     }
     while(popio())
         ;
-    interactive = 1;
+    interactive = true;
     longjmp(err, 1);
 }
 @

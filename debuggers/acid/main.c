@@ -190,7 +190,7 @@ main(int argc, char *argv[])
     /*e: [[main()]](acid) initializations */
 
     /*s: [[main()]](acid) infinite loop */
-    interactive = 1;
+    interactive = true;
     line = 1;
 
     for(;;) {
@@ -222,7 +222,7 @@ main(int argc, char *argv[])
 static errorneg1
 attachfiles(char *aout, int pid)
 {
-    interactive = 0;
+    interactive = false;
     /*s: [[attachfiles()]] if error */
     if(setjmp(err))
         return ERROR_NEG1;
@@ -300,7 +300,7 @@ userinit(void)
     }
     /*e: [[userinit()]] if user acid file */
 
-    interactive = 0;
+    interactive = false;
     /*s: [[userinit()]] unwind if error */
     if(setjmp(err)) {
         unwind();
@@ -322,7 +322,7 @@ userinit(void)
 void
 loadmodule(char *s)
 {
-    interactive = 0;
+    interactive = false;
     /*s: [[loadmodule()]] unwind if error */
     if(setjmp(err)) {
         unwind();
