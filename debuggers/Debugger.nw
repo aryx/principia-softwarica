@@ -40,7 +40,7 @@
 % - SEMI need a /proc/x/mem, reflection, including ublock to inspect registers
 % - how breakpoint can be fast? via trap abuse, thx to virtual 
 %   memory and page fault again!
-% - all the symbols are in the text file
+% - all the symbols are in the text (binary) file
 
 
 %history LP-ization:
@@ -49,11 +49,11 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 % - read Extra section, identify concepts, first TOC
-% - SEMI distribute parts of the file before
+% - distribute parts of the file before
 % - SEMI nullify, boolify, typeify,    scheckify
-% - SEMI aspecify advanced features!
+% - aspecify advanced features!
 % - TODO add figures
-% - SEMI add explanations
+% - add explanations
 
 \begin{document}
 %******************************************************************************
@@ -65,7 +65,6 @@ Principia Softwarica: The Plan~9 Debuggers and Tracers
 }\\
 {version 0.1}
 }
-
 \author{
 Yoann Padioleau\\
 \texttt{yoann.padioleau@gmail.com}\\
@@ -73,7 +72,6 @@ Yoann Padioleau\\
 with code from\\
 Phil Winterbottom
 }
-
 \maketitle 
 
 \hrule
@@ -113,13 +111,15 @@ reveals every system call it makes, often pointing directly
 to the problem.
 %
 Yet very few programmers know how these tools actually work.
+%
 Understanding the internals of a debugger also deepens your
-understanding of the kernel (which provides the debugging
-facilities), the toolchain (which generates the metadata
-the debugger reads), and the hardware (whose fault mechanism
-is cleverly abused to implement breakpoints efficiently).
+understanding of
+the kernel (which provides the debugging facilities) and
+the toolchain (which generates the metadata the debugger reads), 
+%and the hardware (whose fault mechanism
+%is cleverly abused to implement breakpoints efficiently).
 
-\l history of term "bug", it was an actual bug!
+% history of term "bug", it was an actual bug!
 %  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
 
 
@@ -179,16 +179,17 @@ for when a program misbehaves.
 % but program failed to handle error and print useful error message
 
 
-%yoann: say also acid work for multi archs! most acid code arch independent
-% thx to libmach (maybe need to talk about libmach too then used by acid, db, 5i, more?)
+%yoann: say also acid work for multi archs! thx to libmach
 %claude:
 An important property of [[acid]] is that most of its code is
 {architecture-independent}. The architecture-specific details---register
 names, instruction decoding, breakpoint instructions---are isolated
 in [[libmach]], a library that provides a uniform interface to
-different object file formats and instruction sets. Thanks to
-[[libmach]], the same [[acid]] binary can debug programs compiled
+different object file formats and instruction sets.
+%
+Thanks to [[libmach]], the same [[acid]] binary can debug programs compiled
 for ARM, x86, MIPS, or any other architecture that \plan supports.
+%
 [[libmach]] is also used by [[db]], the \plan emulators, and
 the profiling tools.
 
@@ -198,7 +199,7 @@ Here are a few debuggers and tracers that I considered for this book, but
 which I ultimately discarded:
 \begin{itemize}
 
-%yoann: history: db thompson?, adb by bourne
+%yoann: history: db thompson, adb by bourne
 %claude:
 \item [[db]], the traditional \plan debugger, descends from
 the original \unix debugger [[db]] written by Ken Thompson,
@@ -346,9 +347,6 @@ information from DWARF debug sections.
 
 \section{Requirements}
 
-% docs/man/3/proc
-% docs/man/2/debugger
-
 % Partly Kernel.nw and its "Debugging Support" chapter
 
 %claude:
@@ -362,13 +360,19 @@ and [[ratrace]] control and observe processes.
 The \book{Linker} and \book{Compiler} explain how
 the symbol tables and line number information that
 [[acid]] reads are generated.
-%
+
 For background on debugger internals in general,
 Rosenberg's {\em How Debuggers Work}~\cite{how-debuggers-work}
 is one of the few books on the subject, covering
 breakpoints, single-stepping, and symbol table
 interpretation.
 % Also book on GDB, but really user manual
+% also CS:APP?
+
+% docs/man/3/proc
+% docs/man/2/debugger
+% docs/acidpaper.pdf
+
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -394,26 +398,19 @@ that [[ratrace]] and [[acid]] provide.
 
 \section{Tracer principles}
 
-% First technique to debug, printf! A classic
-%less: add ref with codes are work that mention a lot the only use of printf
-% for debugging.
-%logging is good, see partial trace of execution. Traces are good.
-
-% ratrace does automatic logging without any printf, based on syscalls;
-% a good boundary, a good granularity.
-% There is also now 'ltrace'.
-
-% Good first way to debug issues, to get more insight on what's going on.
-% Simple, and very effective at finding many bugs, like
-% no more space in /tmp. Especially when people don't check
-% return error code, at least see the call to create a file in /tmp
-
+%yoann: first technique to debug, printf! A classic
 %claude:
 The most basic debugging technique is [[printf]]: insert
 print statements into the code and observe the output.
 This works, but it requires modifying the program,
 recompiling, and knowing where to look in advance.
 
+%less: add ref with codes are work that mention a lot the only use of printf
+% for debugging.
+%logging is good, see partial trace of execution. Traces are good.
+
+%yoann: ratrace does automatic logging without any printf, based on syscalls
+% a good boundary, a good granularity. There is also now 'ltrace'.
 %claude:
 A {system call tracer} provides automatic logging without
 any modification to the program. It intercepts every
@@ -431,6 +428,11 @@ when the program does not check its error codes.
 Linux's [[strace]] and \plan's [[ratrace]] work this way.
 There is also [[ltrace]] on Linux, which traces library
 calls rather than system calls.
+
+% Good first way to debug issues, to get more insight on what's going on.
+% Simple, and very effective at finding many bugs, like
+% no more space in /tmp. Especially when people don't check
+% return error code, at least see the call to create a file in /tmp
 
 \section{[[ratrace]] services}
 
@@ -544,18 +546,6 @@ stops execution and gives control back to the debugger.
 The debugger can then inspect registers and memory, and
 resume execution after restoring the original instruction.
 
-%claude:
-Even without any metadata, a debugger can do a lot if the
-kernel provides good introspection on the target process:
-register values, memory contents, and the ability to
-single-step. But for a good user experience, the debugger
-needs {metadata} generated by the toolchain: a {symbol table}
-mapping addresses to function and variable names (from
-the linker), and {line number information} mapping addresses
-to source lines (from the compiler). The ``Debugging Support''
-chapters in the \book{Assembler}, \book{Compiler}, and
-\book{Linker} describe how this metadata is generated.
-
 \subsection{Breakpoint}
 
 %claude:
@@ -572,6 +562,7 @@ or counted (stop only after the $n$-th hit).
 A {watchpoint} (or data breakpoint) stops execution when
 a specific memory location is read or written. This is
 useful for finding out what code modifies a variable.
+%
 Hardware watchpoints use the processor's debug registers
 to monitor an address without slowing down execution.
 Software watchpoints can be implemented by marking the
@@ -581,14 +572,28 @@ page fault, though this is slower.
 \subsection{Inspector}
 
 %claude:
-The debugger can {inspect} the state of the stopped process:
-registers, memory, the call stack. 
+The debugger can {inspect} the state of the stopped process.
+%registers, memory, the call stack. 
 %
+Even without any metadata, a debugger can do a lot if the
+kernel provides good introspection on the target process:
+register values, memory contents, the call stack.
+%and the ability to single-step.
+
+However, for a good user experience, the debugger
+needs {metadata} generated by the toolchain: a {symbol table}
+mapping addresses to function and variable names (from
+the linker), and {line number information} mapping addresses
+to source lines (from the compiler). The ``Debugging Support''
+chapters in the \book{Assembler}, \book{Compiler}, and
+\book{Linker} describe how this metadata is generated.
+
+%claude:
 With symbol table information, the debugger can display function
 names and variable values instead of raw addresses and numbers.
 %
 With type information (e.g., from [[acid]]'s type descriptions
-or DWARF on other systems), it can display structured data
+or DWARF on other systems), it can even display structured data
 types like structs and arrays in a readable format.
 
 \subsection{Disassembler}
@@ -616,8 +621,6 @@ the linker must preserve them, and the debugger must read them.
 
 \section{[[acid]] services}
 
-% see also Machine.nw, which has a similar interface.
-
 <<function usage (acid/main.c)>>=
 void
 usage(void)
@@ -641,13 +644,16 @@ The main flags are:
 \item [[-l library]]: load an [[acid]] library file at startup.
 Libraries provide higher-level debugging functions; for instance,
 [[acid -l truss]] loads a system call tracer written entirely
-in [[acid]]'s own language.
+in [[acid]]'s own language (see Section~\ref{sec:truss}).
 
-\item [[-k]]: debug kernel state rather than user state.
+\item [[-k]]: debug kernel state rather than user state
+(see Section~\ref{sec:acid-k})
 
 \item [[-w]]: allow modifying the text file (for patching binaries).
+(see Section~\ref{sec:acid-w})
 
 \item [[-m machine]]: specify the CPU type for disassembly.
+(see Section~\ref{sec:acid-m})
 
 \end{itemize}
 
@@ -659,93 +665,164 @@ from [[/lib/acid/$objtype]].
 %old: was from /sys/lib/acid/...
 
 %claude:
-The key functions available at the [[acid]] prompt include:
-[[new()]] (start the program), [[bpset()]] (set a breakpoint),
-[[cont()]] (continue execution), [[step()]] (single-step),
-[[stk()]] (print call stack with locals),
+The key functions available at the [[acid: ]] prompt include:
+[[new()]] (start the program),
+[[bpset()]] (set a breakpoint),
+[[cont()]] (continue execution),
+[[step()]] (single-step),
+[[next()]] (statement-step),
+[[stk()]] (print call stack with arguments),
 [[src()]] (show source around an address),
-[[asm()]] (disassemble), [[regs()]] (print registers),
+[[asm()]] (disassemble),
+[[regs()]] (print registers),
 and [[print()]] (display a value).
+% classic gdb-like, just more verbose
 %
 Because these are regular [[acid]] functions defined in
 the standard library---not built-in commands---the user can
 redefine them or write new ones to automate complex
 debugging tasks.
+% power of language! programmable debugger
 
-
-\section{[[hello_bug.c]]}
+\section{Debugging [[hello_bug.c]]}
 %alt: [[hello.core]] ? [[hello.bug]] A simple debugging session
 
-% command language syntax: [addr] [,count] [command]
-% notion of 'dot', current address.
-%ugly: a bit crude language, they could use lex and yacc to provide
-% something better (actually acid does that)
-
 %claude:
-Here is a typical [[acid]] session on a small program
+Here is a typical [[acid]] debugging session on a small program
 that divides by zero:
-\begin{verbatim}
-/* buggy1.c */
+
+%coupling: ROOT/tests/acid/hello_bug.c
+<<hello_bug.c>>=
 #include <u.h>
 #include <libc.h>
+
+int foo(int x, int y) { 
+    return x / y;
+}
+
+int bar(int a, int b) {
+    return foo(a, b) + 3;
+}
 
 void
 main(int argc, char **argv)
 {
-    int x = 42;
-    int y = 0;
-    int z = x / y;
-    print("%d\n", z);
+    int x, y, z;
+    x = 41 + argc;
+    y = argc - 1;
+    z = bar(x, y);
+    print("%d %d %d\n", x, y, z);
     exits(nil);
 }
-\end{verbatim}
+@
 
 
-We compile it, start [[acid]], set a breakpoint on [[main]],
+We compile it, start [[acid]], set a breakpoint on [[bar]],
 run to it, and inspect the state:
 \begin{verbatim}
 $ cd /tests/acid/
-$ 8c buggy.c
-$ 8l -o buggy buggy.5
-$ acid ./buggy
-./buggy:386 plan 9 executable
+$ 8c hello_bug.c
+$ 8l -o hello_bug hello_bug.8
+$ acid ./hello_bug
+./hello_bug:386 plan 9 executable
+/lib/acid/port
+/lib/acid/386
 acid: new()
 66: system call  _main   SUBL $0x48, SP
-66: breakpoint main+0x3  MOVL $0x2a, AX
+66: breakpoint main+0x3  MOVL argc+0x0(FP), AX
+acid: bpset(bar)
 acid: cont()
-66: divide error    main+0xb IDIVL AX,CX
+66: breakpoint bar   SUBL $0x8, SP
+acid: stk()
+bar(a=0x2a,b=0x0)+0x0 /tests/acid/hello_bug.c:8
+main(argc=0x1)+0x21 /tests/acid/hello_bug.c:25
+_main+0x31  /lib_core/libc/386/main9.s:16
+acid: src(*PC)
+/tests/acid/hello_bug.c:8
+ 3
+ 4  int foo(int x, int y) {
+ 5      return x / y;
+ 6  }
+ 7
+>8  int bar(int a, intb) {
+ 9     return foo(a, b) + 3;
+ 10 }
+ 11 
+ 12 void
+ 13 main(int argc, char **argv)
+\end{verbatim}
+
+[[new()]] starts the program and stops at the first instruction.
+[[bpset(bar)]] sets a breakpoint at the entry of [[bar]].
+[[cont()]] resumes execution until the breakpoint is hit.
+[[stk()]] prints the call stack with argument values, and
+[[src(*PC)]] shows the source code around the current program counter.
+%
+Up until this point, no bug.
+
+
+\begin{verbatim}
+acid: cont()
+66: breakpoint bar+0x3   MOVL a+0x0(FP),CX
+66: divide error    foo+0x5 IDIVL AX,y+0x4(FP)
 Notes pending:
     sys: trap: divide error
-acid: stk()
-main() +0xb /tests/acid/buggy.c:13
-_main+0x31  /libc/386/main9.s:16
 acid: src(*PC)
-     11:   int x = 42;
-     12:   int y = 0;
-    >13    int z = x / y;
-     14:   print("%d\n", z);
+ 1  #include <u.h>
+ 2  #include <libc.h>
+ 3
+ 4  int foo(int x, int y) {
+>5      return x / y;
+ 6  }
+ 7
+ 8  int bar(int a, intb) {
+ 9     return foo(a, b) + 3;
+ 10 }
+acid: *foo:y
+0x00000000
+acid: *foo:x
+0x0000002a
+acid: *foo:x\d
+42
+acid: asm(foo)
+foo 0x00001020  MOVL x+0x0(FP),AX
+foo+0x4 0x00001024   CDQ
+foo+0x5 0x00001025   IDIVL AX,y+0x4(FP)
+foo+0x9 0x00001029   RET
+bar 0x0000102a  SUBL  $0x8,SP
 acid: regs()
-XXX...
-XXXacid: print(x)
-XXX42
+PC  0x00001025 foo+0x5 /tests/acid/hello_bug.c:5
+SP  0xcfffef20 ECODE 0xe010068d EFLAG 0x00000286
+CS  0x00000023 DS 0x0000001b SS 0x0000001b
+GS  0x0000001b FS 0x0000001b ES 0x0000001b
+TRAP    0x000000000 divide error
+AX  0x0000002a BX 0x0000002a CX 0x00000000 DX  0x00000000
+DI  0x0002e641 SI 0x00000000 BP 0xcfffba48
 acid:
 \end{verbatim}
 
-
-[[new()]] starts the program and stops at the first instruction.
-%[[bpset(main)]] sets a breakpoint at the entry of [[main]].
-[[cont()]] resumes execution until the breakpoint is hit.
-[[stk()]] prints the call stack with local variable values,
-and [[src(*PC)]] shows the source code around the current
-program counter.
+[[cont()]] resumes execution, but this time the program hits a
+divide-by-zero fault inside [[foo]] before reaching any breakpoint.
+The kernel stops the process and [[acid]] reports the fault:
+``divide error'' at [[foo+0x5]], the [[IDIVL]] instruction.
 %
-After [[step()]] and [[print(x)]], we can
-see that [[x]] has been assigned 42. 
+[[src(*PC)]] confirms we are on line~5, the [[return x / y]]
+statement. Now we can inspect the arguments that caused the
+fault: [[*foo:y]] reads the value of parameter [[y]] from
+[[foo]]'s stack frame and shows [[0x00000000]]---the zero
+divisor. [[*foo:x]] shows [[0x0000002a]] (42).
+The \verb+\d+ format suffix in \verb+*foo:x\d+ displays
+it as decimal.
 %
-The final [[cont()]] runs into the division by zero, which stops execution in
-[[divtrap]].
-
-%\section{[[acid]] services}
+[[asm(foo)]] disassembles [[foo]], showing the three-instruction
+body: load [[x]] into [[AX]], sign-extend with [[CDQ]], then
+[[IDIVL]] which divides [[AX]] by [[y]]---the faulting instruction.
+%
+Finally, [[regs()]] dumps the full register state at the time of
+the fault: [[AX=0x2a]] (42, the dividend), [[CX=0x0]] (the
+divisor), and [[TRAP=divide error]].
+This is the typical acid debugging workflow: inspect source,
+read variables, check assembly, examine registers.
 
 %related: python scripts to extend GDB so better display STL vectors
 % and so on?
@@ -7352,6 +7429,7 @@ instruction(s) and single-step correctly over branches
 and delay slots.
 
 \section{[[/lib/acid/truss]]}
+\label{sec:truss}
 % ratrace using acid program
 
 %claude:
@@ -7402,6 +7480,7 @@ which ones are hit during execution. After a test run, it reports
 which functions were never called.
 
 \section{Modifying code: [[acid -w]]}
+\label{sec:acid-w}
 
 %claude:
 Normally [[acid]] opens the executable file read-only.
@@ -7428,6 +7507,7 @@ if(wtflag)
 @
 
 \section{Kernel debugging: [[acid -k]]}
+\label{sec:acid-k}
 
 % have a special chapter for Kernel debugging, with ktrace too?
 
@@ -7498,6 +7578,8 @@ case 'r':
 
 
 \section{Cross architecture debugging: [[acid -m]]}
+\label{sec:acid-m}
+
 % was also db -m
 
 % import /proc !! beautiful. Power of 9p and libmach.

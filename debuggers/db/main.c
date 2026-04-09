@@ -102,7 +102,7 @@ main(int argc, char **argv)
     /*e: [[main()]] if pid argument, attach to existing process */
     else if (argc > 0) {
         /*s: [[main()]] print usage and exit (db) */
-        fprint(2, "Usage: db [-kw] [-m machine] [-I dir] ([symfile]|[pid])\n");
+        fprint(STDERR, "Usage: db [-kw] [-m machine] [-I dir] ([symfile]|[pid])\n");
         exits("usage");
         /*e: [[main()]] print usage and exit (db) */
     }
