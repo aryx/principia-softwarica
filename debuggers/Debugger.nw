@@ -116,9 +116,8 @@ Yet very few programmers know how these tools actually work.
 Understanding the internals of a debugger also deepens your
 understanding of the kernel (which provides the debugging
 facilities), the toolchain (which generates the metadata
-the debugger reads), and the hardware (which provides
-breakpoint and single-step support).
-%yoann1: actually not really breakpoint support in hardware, more fault mechanism abused
+the debugger reads), and the hardware (whose fault mechanism
+is cleverly abused to implement breakpoints efficiently).
 
 \l history of term "bug", it was an actual bug!
 %  https://commons.m.wikimedia.org/wiki/File:H96566k.jpg
@@ -154,7 +153,7 @@ operations be expressed as functions in a language?
 
 %yoann: We gonna present acid and ratrace. Small programs. Elegant. Simple.
 %claude:
-I will explain in this book the code of the \plan programmable
+In this book, I will explain the code of the \plan programmable
 debugger [[acid]] and the system call tracer [[ratrace]]
 (the \plan equivalent of Linux's [[strace]]).
 %
@@ -182,6 +181,16 @@ for when a program misbehaves.
 
 %yoann: say also acid work for multi archs! most acid code arch independent
 % thx to libmach (maybe need to talk about libmach too then used by acid, db, 5i, more?)
+%claude:
+An important property of [[acid]] is that most of its code is
+{architecture-independent}. The architecture-specific details---register
+names, instruction decoding, breakpoint instructions---are isolated
+in [[libmach]], a library that provides a uniform interface to
+different object file formats and instruction sets. Thanks to
+[[libmach]], the same [[acid]] binary can debug programs compiled
+for ARM, x86, MIPS, or any other architecture that \plan supports.
+[[libmach]] is also used by [[db]], the \plan emulators, and
+the profiling tools.
 
 \section{Other debuggers}
 
@@ -191,8 +200,10 @@ which I ultimately discarded:
 
 %yoann: history: db thompson?, adb by bourne
 %claude:
-\item [[db]], the traditional \plan debugger (a descendant
-of [[adb]] by Steve Bourne), is a command-line debugger with
+\item [[db]], the traditional \plan debugger, descends from
+the original \unix debugger [[db]] written by Ken Thompson,
+which evolved into [[adb]] (``advanced debugger'') by Steve Bourne.
+\plan's [[db]] is a command-line debugger with
 a terse syntax inherited from \unix. It supports breakpoints,
 memory inspection, disassembly, and source-level debugging.
 However, [[db]] offers a fixed set of commands and is not
@@ -278,6 +289,11 @@ enough to explain in full detail.
 \section{Getting started}
 
 %yoann: to test ratrace and acid need plan9 fork, getting-started link
+%claude:
+To try [[acid]] and [[ratrace]] yourself, you need a \plan
+system or a \plan fork running on Linux or macOS (such as
+Goken9cc\furl{https://github.com/aryx/goken9cc} or
+plan9port\furl{https://9fans.github.io/plan9port/}).
 
 To trace the system calls of a program:
 \begin{verbatim}
@@ -367,6 +383,13 @@ interpretation.
 \section{Acknowledgments}
 
 %yoann: thank original author of acid and ratrace
+%claude:
+Thanks to Phil Winterbottom, the original author of [[acid]].
+His paper {\em Acid: A Debugger Built from a
+Language}~\cite{acid-paper} describes the design philosophy
+behind [[acid]]'s programmable approach.
+Thanks also to the author of [[ratrace]] for demonstrating
+how much can be done with a simple [[/proc]] client.
 
 %******************************************************************************
 \chapter{Overview}
@@ -470,6 +493,14 @@ $-1$ or a [[Pread]] on a file descriptor that was never
 opened points directly to the bug.
 
 %yoann: explain on example above = 6 on line after because actually hello output after -1 so mixed program output and ratrace output
+%claude:
+Note that in the output above, the [[= 6]] return value
+appears on the line \emph{after} the [[Pwrite]] call.
+This is because the program's own output ([[hello]])
+is interleaved with [[ratrace]]'s trace output---both
+write to standard error, so they mix on screen. The
+[[-1]] in the [[Pwrite]] line is the file offset argument,
+not the return value.
 
 \section{Debugger principles}
 
@@ -761,13 +792,63 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 %for libmach:
 %-------------
 
+%claude:
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files of [[acid]] and [[ratrace]], together with
+the main entities (e.g., structures, functions, globals) the file defines,
+and the corresponding chapter in this document in which the code
+contained in the file is primarily discussed.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Function}                 & {\bf Ch.}                     & {\bf File}         & {\bf Entities}                                & {\bf LOC} \\
+\otoprule
+data structures                & \ref{chap:core-ds}            & [[acid.h]]         & [<Node>] [<Value>] [<Store>] [<Lsym>]         & 407 \\
+globals                        & \ref{chap:core-ds}            & [[globals.c]]      & [<symmap>] [<cormap>] [<interactive>]          & 96 \\
+\midrule
+entry point                    & \ref{chap:acid}               & [[main.c]]         & [<main()>] [<readtext()>] [<loadmodule()>]     & 736 \\
+process management             & \ref{chap:acid}               & [[proc.c]]         & [<nproc()>] [<sproc()>] [<install()>] [<msg()>]& 326 \\
+\midrule
+lexer                          & \ref{chap:parsing}            & [[lex.c]]          & [<yylex()>] [<numsym()>] [<pushfile()>]        & 734 \\
+parser                         & \ref{chap:parsing}            & [[dbg.y]]          & [<yyparse()>]                                  & 360 \\
+\midrule
+interpreter                    & \ref{chap:interpreting}        & [[exec.c]]         & [<execute()>] [<call()>]                       & 545 \\
+expression evaluator           & \ref{chap:interpreting}        & [[expr.c]]         & [<oadd()>] [<ocall()>] [<oasgn()>]             & 1110 \\
+list operations                & \ref{chap:interpreting}        & [[list.c]]         & [<al()>] [<addlist()>] [<construct()>]          & 304 \\
+builtins                       & \ref{chap:interpreting}        & [[builtin.c]]      & [<tab>] [<bprint()>] [<follow()>]              & 1439 \\
+\midrule
+printing                       & \ref{chap:printing}           & [[print.c]]        & [<bprint()>] [<patom()>]                       & 466 \\
+dot (complex access)           & \ref{chap:interpreting}        & [[dot.c]]          & [<odot()>] [<oframe()>]                        & 168 \\
+utilities                      & \ref{chap:utilities}          & [[util.c]]         & [<isnumeric()>] [<gc()>]                       & 338 \\
+\midrule
+system call tracer             & \ref{chap:ratrace}            & [[ratrace.c]]      & [<threadmain()>] [<reader()>] [<writer()>]     & 308 \\
+\midrule
+executable parsing             & \ref{chap:libmach}            & [[executable.c]]   & [<crackhdr()>]                                 & 477 \\
+machine selection              & \ref{chap:libmach}            & [[setmach.c]]      & [<machbytype()>]                               & 102 \\
+symbol table                   & \ref{chap:libmach}            & [[sym.c]]          & [<syminit()>] [<symbase()>]                    & 1518 \\
+memory map                     & \ref{chap:libmach}            & [[map.c]]          & [<loadmap()>] [<setmap()>]                     & 190 \\
+memory access                  & \ref{chap:libmach}            & [[access.c]]       & [<get1()>] [<put1()>] [<attachproc()>]         & 295 \\
+machine data                   & \ref{chap:libmach}            & [[machdata.c]]     & [<symoff()>]                                   & 493 \\
+ARM support                    & \ref{chap:libmach}            & [[5.c]], [[5db.c]] & [<armreglist>] [<armdas()>]                    & 1514 \\
+x86 support                    & \ref{chap:libmach}            & [[8.c]], [[8db.c]] & [<i386reglist>] [<i386das()>]                  & 2426 \\
+\otoprule
+Total                          &                               &                    &                                                & 13400 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and associated [[acid]] and [[ratrace]] source files.}
+\label{tab:code-orga}
+\end{table*}
+
 \section{Software architecture}
 
 % Debugging process, debugged process.
 
 % Debugging process control debugged process via /proc/x/ctl!
 % access (and modify) its data via /proc/x/mem and /proc/x/text
-% Also support from libmach for generic symbols access, disassembler, 
+% Also support from libmach for generic symbols access, disassembler,
 % register modification, even memory modification through Map.
 % To map addresses back to symbolic names.
 
@@ -779,7 +860,139 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 
 % name conventions:
 
+%claude:
+The overall architecture involves two processes:
+the {debugging process} ([[acid]]) and the
+{debugged process} (the target program).
+[[acid]] controls the debugged process by writing
+messages to its [[/proc/<pid>/ctl]] file ([[start]],
+[[stop]], [[waitstop]], [[startstop]], [[hang]]),
+accesses and modifies its memory through [[/proc/<pid>/mem]],
+and reads its registers through [[/proc/<pid>/regs]].
+
+%claude:
+The [[libmach]] library sits between [[acid]] and the
+raw binary data. It parses executables ([<crackhdr()>]),
+loads symbol tables ([<syminit()>]),
+disassembles instructions, and provides a uniform
+[[Map]] abstraction for memory access. Thanks to
+[[libmach]], the same [[acid]] code works across
+ARM, x86, and MIPS---the architecture-specific details
+are isolated in per-architecture source files
+([[5.c]]/[[5db.c]] for ARM, [[8.c]]/[[8db.c]] for x86).
+
+%claude:
+The toolchain also cooperates: the assembler, compiler,
+and linker all generate metadata that [[acid]] reads.
+The symbol table maps addresses to function and variable
+names, the line number table maps addresses to source
+positions, and the SP-PC table tracks stack pointer
+offsets for unwinding the call stack.
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                           +----------+
+                           |  main()  |
+                           +----+-----+
+                                |
+         +------------------+---+----+-------------------+
+         |                  |        |                   |
+  +------v------+    +------v-----+  |            +------v------+
+  | readtext()  |    | loadmodule | ++-------+    |  yyparse()  |
+  | attachfiles |    | /lib/acid/ ||         |    +--+-------+--+
+  +------+------+    +-----+------+|         |       |       |
+         |                 |       |  +------v----+  |  +----v-----+
+  +------v------+    +-----v----+  |  | execute() |  |  | yylex()  |
+  | crackhdr()  |    | yyparse()|  |  +------+----+  |  +----------+
+  | syminit()   |    +----------+  |         |        |
+  +------+------+                  |    +----v----+   |
+         |                         |    | expr()  |   |
+  +------v------+                  |    +----+----+   |
+  |  libmach    |                  |         |        |
+  | Map, Symbol |                  |    +----v----+   |
+  +-------------+                  |    | ocall() |   |
+                                   |    +----+----+   |
+                                   |         |        |
+                                   |  +------v------+ |
+                                   +->|   msg()     | |
+                                      | /proc/x/ctl | |
+                                      +-------------+ |
+                                                      |
+                                             +--------v--------+
+                                             |  /proc/<pid>/   |
+                                             | ctl mem regs    |
+                                             +-----------------+
+\end{verbatim}
+\caption{Control flow diagram of [[acid]].}\label{fig:controlflow}
+\end{figure}
+
+\begin{figure}[!tbp]\centering
+\begin{verbatim}
+                    acid library               acid
+                  /lib/acid/port           (interpreter)
+                       |                        |
+  acid: new()  ------->+--- newproc() --------->+--- fork/hang/exec
+                       |                        |
+  acid: bpset()------->+--- *addr = bpinst ---->+--- put1(/proc/x/mem)
+                       |                        |
+  acid: cont() ------->+--- startstop() ------->+--- msg(/proc/x/ctl)
+                       |                        |
+  acid: stk()  ------->+--- ctrace() ---------->+--- get1(/proc/x/mem)
+                       |                        |
+  acid: src()  ------->+--- fileline() -------->+--- libmach/sym.c
+                       |                        |
+  acid: asm()  ------->+--- das() ------------->+--- libmach/5db.c
+\end{verbatim}
+\caption{Data flow between [[acid]] library functions and the interpreter.}\label{fig:dataflow}
+\end{figure}
+
 \section{Book structure}
+
+%claude:
+You now have enough background to understand the source code of
+[[acid]] and [[ratrace]].
+%toc:
+The rest of the book is organized as follows.
+
+%claude:
+I will begin with the external support that [[acid]] relies on:
+Chapter~\ref{chap:kernel-support} describes the kernel's [[/proc]]
+interface for process control and memory access,
+and Chapter~\ref{chap:toolchain-support} reviews the metadata
+generated by the assembler, compiler, and linker.
+%
+Then, Chapter~\ref{chap:ratrace} presents [[ratrace]], the system
+call tracer---a small program that demonstrates how [[/proc]] can
+be used to observe a running process.
+%
+Chapter~\ref{chap:core-ds} describes the core data structures
+of [[acid]] and [[libmach]].
+%
+Chapter~\ref{chap:acid} presents [[main()]], the REPL,
+initialization, and process attachment.
+%
+The following chapters describe the [[acid]] language implementation:
+Chapter~\ref{chap:parsing} covers the lexer and parser,
+Chapter~\ref{chap:interpreting} the interpreter and expression evaluator,
+Chapter~\ref{chap:process-control} the process control builtins
+([[start]], [[stop]], [[startstop]]),
+and Chapter~\ref{chap:printing} the printing and introspection facilities.
+%
+Chapter~\ref{chap:libmach} presents [[libmach]], the library for
+parsing executables, loading symbol tables, and disassembling
+instructions.
+%
+Chapter~\ref{chap:advanced-features} covers advanced features
+such as kernel debugging and cross-architecture support.
+
+%claude:
+Some appendices present the code of non-functional properties:
+code to help debug [[acid]] itself in Appendix~\ref{chap:debugging-appendix},
+error management in Appendix~\ref{chap:error-management},
+and utility functions in Appendix~\ref{chap:utilities-appendix}.
+%
+Appendix~\ref{chap:db} presents [[db]], the traditional \plan
+debugger, for reference.
 
 %###############################################################################
 
@@ -787,8 +1000,17 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 %******************************************************************************
 \chapter{Kernel Support}
 %******************************************************************************
+\label{chap:kernel-support}
 
 %yoann: a lot of debugging power comes from stuff actually done by kernel
+%claude:
+Much of the power of a debugger comes not from the debugger
+itself but from the {kernel}. The kernel provides the interface
+through which the debugger controls, inspects, and modifies
+the target process. In \plan, this interface is the [[/proc]]
+file system: each process is represented as a directory
+[[/proc/<pid>/]] containing files that expose process state
+and accept control messages.
 
 \section{Process control: [[/proc/x/ctl]]}
 
@@ -809,6 +1031,35 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 
 % "startstop", atomic
 
+%claude:
+The [[/proc/<pid>/ctl]] file is the main control channel.
+The debugger writes text messages to this file to control
+the target process:
+\begin{itemize}
+\item [[hang]]: tells the kernel to stop the process after
+its next [[exec]] system call. This is how the debugger
+intercepts a newly started child---it uses the classic
+fork/adjust/exec pattern, where the child writes [[hang]]
+to its own [[ctl]] before calling [[exec]].
+\item [[start]]: resumes a stopped process.
+\item [[stop]]: stops a running process.
+\item [[waitstop]]: blocks the writer (the debugger) until
+the target process enters the [[Stopped]] state. This provides
+synchronization between the debugging and debugged processes.
+\item [[startstop]]: atomically starts the process and then
+waits for it to stop again. This is the core of the
+breakpoint cycle: resume the target until it hits a fault
+or breakpoint, then regain control.
+\end{itemize}
+
+%claude:
+The [[ctl]] file also provides synchronization:
+a write to [[waitstop]] will block until the target is
+actually stopped, so the debugger does not need to poll.
+This is crucial for correct operation---without atomic
+synchronization, the debugger might try to read registers
+while the target is still running.
+
 \section{Memory access: [[/proc/x/mem]]}
 % Interprocess memory access?
 % or reflection?
@@ -819,15 +1070,49 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 
 % ublock = register and process state.
 
-% to a lesser extent /proc/x/text is also useful, but the symfile is 
+% to a lesser extent /proc/x/text is also useful, but the symfile is
 % good enough and /proc/x/mem is a superset of /proc/x/text I think.
 
+%claude:
+The [[/proc/<pid>/mem]] file gives the debugger direct access
+to the target process's entire address space: text (code),
+static data, BSS, heap, and stack. Reading and writing this
+file at a given offset accesses the corresponding virtual
+address in the target. This is how the debugger reads
+variable values, inspects the stack, and---crucially---writes
+breakpoint instructions into the target's code.
+%
+There is also [[/proc/<pid>/text]], which gives access to the
+executable file, but [[mem]] is more general since it reflects
+the actual memory state of the running process.
+
 \section{Registers access: [[/proc/x/regs]]}
+
+%claude:
+The [[/proc/<pid>/regs]] file exposes the target process's
+register state as a binary blob. The debugger reads it to
+inspect register values (program counter, stack pointer,
+general-purpose registers) and can write it to modify
+registers---for instance, to change the PC after handling
+a breakpoint. The layout of the register file is
+architecture-dependent; [[libmach]]'s [[Reglist]] structure
+describes the offset of each register within this blob.
 
 \section{Breakpoint faulting instruction}
 
 % machdata->bpinst
 
+%claude:
+Each architecture has a specific instruction that causes
+a trap when executed. On ARM, this is the [[BKPT]] instruction;
+on x86, it is [[INT 3]] (a single byte, [[0xCC]]).
+The [[Machdata]] structure stores the breakpoint instruction
+bytes in [[bpinst]] and its size in [[bpsize]].
+To set a breakpoint, the debugger saves the original
+instruction at the target address, then overwrites it with
+[[bpinst]] via [[/proc/<pid>/mem]]. When the target executes
+this address, the processor faults, the kernel stops the
+process, and the debugger regains control.
 
 %\section{User level fault handling: [[/proc/x/note]]}
 % Hmm actually need less than, just provide a way to understand
@@ -838,9 +1123,21 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 % when process crashes, it's still around, and can just run
 % ps; db <pid> to start inspect! really useful.
 
+%claude:
+When a process crashes on \plan (e.g., from a segmentation
+fault or divide error), the kernel does not kill it immediately.
+Instead, the process is placed in a [[Broken]] state, where
+it remains visible in [[/proc]] and can be inspected with
+[[acid <pid>]] or [[db <pid>]]. This is much more convenient
+than traditional core dumps: the process's full memory state
+is still live, including dynamically allocated data that a
+core dump might not capture. You simply run [[ps]] to find
+the crashed process's PID, then attach the debugger.
+
 %******************************************************************************
 \chapter{[[/bin/ratrace]]}
 %******************************************************************************
+\label{chap:ratrace}
 %alt: move to appendix or later
 
 %yoann: before see acid, good to see first ratrace because?
@@ -848,10 +1145,36 @@ The final [[cont()]] runs into the division by zero, which stops execution in
 
 % soft archi? ASCII diagram?
 
+%claude:
+Before diving into [[acid]], it is worth looking at [[ratrace]] first.
+It is a much simpler program (about 300 lines of C), yet it already
+demonstrates the key kernel interfaces for process control:
+[[/proc/<pid>/ctl]] for stopping and starting the target, and
+[[/proc/<pid>/syscall]] for reading system call traces.
+The patterns we see here---fork/hang/exec, waitstop, startsyscall---will
+reappear in [[acid]]'s more complex process management code.
+
+%claude:
+[[ratrace]] uses the [[libthread]] library for concurrency.
+The main thread forks the target process, then spawns a
+[[reader()]] thread for each traced process and a single
+[[writer()]] thread that collects their output. The threads
+communicate through channels: [[out]] carries trace lines
+to the writer, [[forkc]] notifies of new child processes,
+and [[quit]] signals when a reader is done.
+
 \section{[[threadmain()]]}
 
 %recall:
 %$ ratrace [-c cmd [arg...]] | [pid]
+
+%claude:
+The entry point [<threadmain()>] (used instead of [[main()]] because
+[[ratrace]] is a [[libthread]] program) processes the command-line
+arguments, then either forks a new child process ([[ratrace -c cmd]])
+or attaches to an existing one ([[ratrace pid]]). It creates three
+channels for inter-thread communication, spawns the [[writer()]]
+thread, and then enters the [[reader()]] loop for the target process.
 
 <<function [[threadmain]]>>=
 void
@@ -894,6 +1217,15 @@ int nread = 0;
 
 \subsection{Channels}
 
+%claude:
+The three channels implement a producer-consumer pattern:
+multiple [[reader()]] threads (one per traced process)
+send trace lines through [[out]], signal new child processes
+through [[forkc]], and announce their termination through [[quit]].
+A single [[writer()]] thread listens on all three channels
+using [[alt()]] (a multiplexing receive), serializing
+the output and tracking the reader count.
+
 <<global [[out]]>>=
 // chan<ref<string>> listener = writer(), sender = reader()
 Channel *out;
@@ -912,6 +1244,16 @@ Channel *quit;
 
 
 \subsection{[[ratrace -c <cmd>]]}
+
+%claude:
+When [[ratrace -c cmd]] is used, [[ratrace]] forks a child
+process that will become the traced target. The child calls
+[<hang()>] before [[exec()]]---this writes [[hang]] to
+the child's own [[/proc/<pid>/ctl]], telling the kernel to
+stop the child after its [[exec]] completes.
+This is the same fork/adjust/exec pattern used by [[acid]]:
+the child adjusts its own state before [[exec]], so the
+parent can intercept it at exactly the right moment.
 
 <<[[threadmain()]] other locals>>=
 char *cmd = nil;
@@ -959,6 +1301,13 @@ if(cmd) {
 @
 
 
+%claude:
+The [<hang()>] function writes the [[hang]] message to the
+calling process's own [[/proc/<pid>/ctl]] file. After this,
+the next [[exec]] system call will cause the process to stop,
+giving the parent (the tracer) a chance to attach before any
+code in the new program runs.
+
 <<function [[hang]]>>=
 void
 hang(void)
@@ -984,6 +1333,13 @@ hang(void)
 % just a process ref counter really, and a stderr output relay
 % (why not write directly in reader?)
 
+%claude:
+The [[writer()]] thread serves two purposes: it serializes
+output from multiple reader threads so trace lines do not
+interleave, and it acts as a reference counter for active
+readers. When a reader finishes, it sends on [[quit]];
+when all readers are done ([[nread]] reaches zero),
+the writer exits the program.
 
 <<struct [[Str]]>>=
 struct Str {
@@ -997,6 +1353,15 @@ struct Str {
 
 %alt: use NAlt and NQuit, etc. like we do for other concurrent progs, cleaner
 % than hardcoded 0, 1, 2
+
+%claude:
+The writer sets up an [[Alt]] array with three channels---quit,
+out, and forkc---and calls [[alt()]] in a loop.
+[[alt()]] is [[libthread]]'s multiplexing receive: it blocks until
+one of the channels has data and returns the index of the
+ready channel. Case~0 (quit) decrements the reader count;
+case~1 (out) prints a trace line to stderr; case~2 (forkc)
+increments the count for a newly spawned reader.
 
 <<function [[writer]]>>=
 void
@@ -1046,6 +1411,17 @@ done:
 
 \section{[[reader()]]}
 
+%claude:
+The [[reader()]] is the core of [[ratrace]]. It opens the
+target process's [[/proc/<pid>/ctl]] and [[/proc/<pid>/syscall]]
+files, then enters a loop: write [[startsyscall]] to [[ctl]]
+(which resumes the process and blocks until the next system call),
+then read the system call description from [[syscall]],
+and send the result to the [[writer()]] through the [[out]] channel.
+%
+The [[waitstop]] at the start ensures the child has actually
+stopped (after the [[hang]]/[[exec]] sequence) before we begin
+tracing.
 
 <<function [[reader]]>>=
 void
@@ -1121,6 +1497,11 @@ if (exiting) {
 }
 @
 
+%claude:
+[<cwrite()>] is a wrapper around [[write()]] that checks
+for errors and terminates the reader thread if the
+write fails (e.g., because the traced process has exited).
+
 <<function [[cwrite]]>>=
 void
 cwrite(fdt fd, char *path, char *cmd, int len)
@@ -1146,6 +1527,12 @@ die(char *s)
 @
 
 
+%claude:
+[<newstr()>] allocates a [[Str]] with the buffer placed immediately
+after the struct in a single allocation (the [[s->buf = (char *)&s[1]]]
+trick). This avoids a separate [[malloc]] for the buffer and
+ensures the buffer is freed with the struct.
+
 <<function [[newstr]]>>=
 Str *
 newstr(void)
@@ -1162,6 +1549,15 @@ newstr(void)
 
 
 \section{Tracing forked children}
+
+%claude:
+When the traced process forks a child (via [[Rfork]] with
+the [[RFPROC]] flag), [[ratrace]] needs to start tracing
+the child as well. The reader detects this by looking for
+[[Rfork]] in the syscall trace output, checking that the
+[[RFPROC]] flag is set. On the next read, the return value
+gives the new child's PID, which is sent to the writer
+via [[forkc]], and a new reader thread is spawned for the child.
 
 <<[[reader()]] if Rfork syscall>>=
 /*
@@ -1195,23 +1591,91 @@ if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
 %******************************************************************************
 \chapter{Toolchain Support}
 %******************************************************************************
+\label{chap:toolchain-support}
+
+%claude:
+A debugger needs metadata generated by the toolchain to
+provide a good user experience. Without symbols, the debugger
+can only show raw addresses; without line numbers, it cannot
+display source code. This chapter briefly reviews what each
+stage of the toolchain contributes. For full details, see the
+\book{Assembler}, \book{Linker}, and \book{Compiler}.
 
 \section{Assembler}
 
+%claude:
+The assembler ([[5a]] for ARM, [[8a]] for x86) records a
+{symbol table} in each object file. Each symbol has a name,
+a type (text, data, BSS, auto, param), and a value (address
+or stack offset). Local variables and function parameters
+are recorded with type codes [[a]] (auto) and [[p]] (param),
+along with their offset from the frame pointer. The assembler
+also generates [[z]]-type entries that record source file
+names and line number {history}, which the debugger uses to
+map addresses back to source positions.
+
 \section{Linker}
+
+%claude:
+The linker ([[5l]] for ARM, [[8l]] for x86) combines the
+symbol tables from all object files into a single table in
+the executable. It also generates two important tables for
+the debugger: the {SP-PC table} (mapping program counter
+values to stack pointer offsets, used for stack unwinding)
+and the {line number-PC table} (mapping program counter
+values to source line numbers, used by [[src()]] and
+[[pcline()]]). These tables are stored in the executable
+header, whose offsets are recorded in the [[Fhdr]] structure.
 
 \section{Compiler}
 
 % also cc/acid.c
 
+%claude:
+The compiler ([[5c]] for ARM, [[8c]] for x86) generates
+the symbol entries for local variables, parameters, and
+their stack frame offsets. It also has a special feature
+for [[acid]]: the [[-a]] flag (implemented in [[cc/acid.c]])
+makes the compiler output [[acid]] type definitions
+(using the [[complex]]/[[aggr]] syntax) for every C struct
+and union. This lets [[acid]] understand the layout of
+data structures without needing DWARF: you just run
+[[8c -a foo.c > foo.acid]] and then load [[foo.acid]]
+into your [[acid]] session.
+
 %******************************************************************************
 \chapter{Core Data Structures}
 %******************************************************************************
+\label{chap:core-ds}
+
+%claude:
+This chapter presents the data structures used by [[acid]],
+[[libmach]], and the kernel's [[/proc]] interface. There are
+two broad categories: the [[libmach]] types that describe
+executables, machines, and memory maps (shared with [[db]]
+and the emulators), and the [[acid]]-specific types for the
+interpreter (AST nodes, values, symbol table, garbage collector).
 
 \section{[[libmach]] types and globals}
 
+%claude:
+The [[libmach]] library provides an architecture-independent
+interface for reading executables, accessing process memory,
+looking up symbols, and disassembling instructions. Its types
+are used by [[acid]], [[db]], the profiler, and the emulators.
+
 \subsection{Executable format: [[Fhdr]]}
 % generic
+
+%claude:
+The [[Fhdr]] structure holds the parsed header of an
+executable file. It contains everything the debugger needs
+to locate code, data, and metadata within the binary:
+the text and data segment addresses and offsets, the symbol
+table location and size, and the line number and SP-PC
+table locations. The [[type]] field identifies the
+architecture (ARM, x86, MIPS) and whether this is a regular
+executable or a bootable kernel image.
 
 <<struct [[Fhdr]]>>=
 /*
@@ -1300,10 +1764,17 @@ enum executable_type
 
 \subsection{[[Mach]] and [[mach]]}
 
-% put1? get1? 
+% put1? get1?
 % rput? rget? register put/get
 % geta? get address
 
+%claude:
+The [[Mach]] structure describes a processor architecture:
+its register set, register file size, well-known register
+names (PC, SP, link register, static base), page size,
+memory layout constants, and address/register sizes. The
+global [[mach]] points to the current architecture's [[Mach]]
+instance, set when the executable is parsed by [<crackhdr()>].
 
 <<struct [[Mach]]>>=
 struct Mach{
@@ -1396,6 +1867,15 @@ enum {					/* bits in rflags field */
 
 %machdata->bpinst ! the instruction generating a sys: breakpoint
 
+%claude:
+While [[Mach]] describes static properties of an architecture,
+[[Machdata]] provides the architecture-specific \emph{operations}
+that the debugger needs: the breakpoint instruction bytes
+([[bpinst]]), byte-swapping functions for cross-architecture
+debugging, the C stack tracer ([[ctrace]]), the disassembler
+([[das]]), and the follow-set calculator ([[foll]]---given a
+PC, what are the possible next PCs?). The global [[machdata]]
+points to the current architecture's instance.
 
 <<struct [[Machdata]]>>=
 struct	Machdata {		/* Machine-dependent debugger support */
@@ -1426,6 +1906,18 @@ struct	Machdata {		/* Machine-dependent debugger support */
 
 % cormap, symmap, dotmap
 
+%claude:
+A [[Map]] is the key abstraction for memory access. It maps
+address ranges to file descriptors and offsets, so that
+reading address [[0x1000]] in the map translates to reading
+at the right offset in the right file. There are two main
+maps: [[symmap]] maps the executable file's text and data
+segments (for reading symbols and code from the binary),
+and [[cormap]] maps the live process's memory through
+[[/proc/<pid>/mem]] and register files. This abstraction
+lets the debugger use the same code to read from a file
+or from a running process.
+
 <<struct [[Map]]>>=
 /*
  * 	Structure to map a segment to a position in a file
@@ -1449,6 +1941,14 @@ struct Map {
 @
 
 \subsection{[[Symbol]]}
+
+%claude:
+A [[Symbol]] is the result of a symbol table lookup. It
+contains the symbol's name, its value (an address for code
+and data symbols, a stack offset for locals), and its type
+and class. The type codes come from the assembler/linker
+conventions: [[T]]/[[t]] for text, [[D]]/[[d]] for data,
+[[B]]/[[b]] for BSS, [[a]] for autos, [[p]] for parameters.
 
 <<struct [[Symbol]]>>=
 /*
@@ -1493,6 +1993,12 @@ enum symbol_type
 
 %\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
 
+%claude:
+[[acid]] uses two [[Map]] objects to access the target: [[symmap]]
+for the executable file (symbols and static code) and [[cormap]]
+for the live process (memory, registers). These are set up
+during initialization and process attachment.
+
 \subsection{[[/proc/x/text]] and [[symmap]]}
 
 <<global symmap (acid/globals.c)>>=
@@ -1513,6 +2019,15 @@ Map*	cormap;
 \section{Tokens}
 
 % Token_kind
+
+%claude:
+The [[acid]] language has a C-like syntax with a few additions:
+[[head]]/[[tail]]/[[append]] for list manipulation,
+[[defn]] for function definitions, [[loop]] for counted
+iteration, [[complex]]/[[aggr]] for type descriptions,
+[[whatis]] for introspection, and [[eval]] for dynamic
+evaluation. The token declarations below are used by
+the yacc-generated parser.
 
 <<token declarations>>=
 %token <sym>	Tid
@@ -1543,7 +2058,23 @@ Map*	cormap;
 
 \section{Abstract syntax tree}
 
+%claude:
+Like many interpreters, [[acid]] parses input into an
+abstract syntax tree (AST) and then walks it to evaluate
+expressions and execute statements. Each AST node is a
+[[Node]] with an opcode, left and right children, and
+optional extra fields for the symbol, type, and literal
+value. Nodes are garbage-collected (they embed a [[Gc]] header).
+
 \subsection{[[Node]]}
+
+%claude:
+The [[Node]] structure serves double duty: it represents
+both AST nodes (during parsing and execution) and temporary
+results (during expression evaluation, where [[op]] is set
+to [[OCONST]] and the value fields hold the result).
+The [<an()>] function allocates a new node and adds it to
+the garbage collector's linked list.
 
 <<struct [[Node]]>>=
 struct Node
@@ -1599,6 +2130,17 @@ Store;
 
 
 \subsection{[[Opcode]]}
+
+%claude:
+The opcodes cover the full range of [[acid]] operations:
+arithmetic ([[OADD]], [[OSUB]], \ldots), comparisons,
+logical operators, assignment, control flow ([[OIF]],
+[[OWHILE]], [[ODO]], [[ORET]]), function calls ([[OCALL]]),
+list operations ([[OHEAD]], [[OTAIL]], [[OAPPEND]]),
+memory indirection ([[OINDM]] for [[*]] dereference through
+[[cormap]], [[OINDC]] for [[@]] dereference through the text),
+and [[acid]]-specific features like [[OCOMPLEX]] for type
+declarations and [[OEVAL]] for dynamic evaluation.
 
 <<enum [[_anon_ (acid/acid.h)]]3>>=
 enum Opcode
@@ -1669,6 +2211,13 @@ enum Opcode
 
 \section{[[Type]] system}
 
+%claude:
+[[acid]] has a simple dynamic type system with five types:
+integers, floats, strings, lists, and code (unevaluated
+expressions passed by reference). Every [[acid]] value
+carries a type tag that is checked at runtime during
+expression evaluation.
+
 <<enum [[_anon_ (acid/acid.h)]]2>>=
 enum Type_kind
 {
@@ -1708,7 +2257,25 @@ struct Type
 % saw type before, format is related
 % 'X' hexa, 'D' decimal, 'i' = assembly, 'a' = ?
 
+%claude:
+Each value also carries a {format} character that controls
+how it is printed: [['X']] for hexadecimal, [['D']] for
+decimal, [['o']] for octal, [['s']] for string, [['c']] for
+character, [['i']] for disassembled instruction, [['a']] for
+complex (structured) display, and [['f']] for floating point.
+Formats are orthogonal to types: an integer can be displayed
+in hex, decimal, or as a disassembled instruction.
+
 \subsection{[[Value]] and [[Store]]}
+
+%claude:
+A [[Value]] is a runtime value in [[acid]]: it contains a
+[[Store]] (the actual data), a type tag, and a scope pointer
+for managing local variables. [[Store]] is factored out as
+a separate struct because it is embedded by inclusion in
+both [[Value]] and [[List]] nodes---this is a kencc extension
+where an anonymous struct field makes its members directly
+accessible (like [[v->ival]] instead of [[v->store.ival]]).
 
 <<struct [[Value]]>>=
 struct Value
@@ -1769,6 +2336,18 @@ Type*	comt;
 @
 
 \subsection{[[String]] and [[List]]}
+
+%claude:
+[[String]] and [[List]] are the two compound value types in
+[[acid]]. Both are garbage-collected (they embed a [[Gc]] header).
+[[String]] holds a length-counted byte array. [[List]] is a
+singly-linked list where each node contains a [[Store]]
+(so list elements can be integers, strings, or nested lists).
+%
+Like [[Str]] in [[ratrace]], [[String]] uses the trick of
+placing the character data right after the struct in a single
+allocation---[[strnodlen()]] allocates [[sizeof(String)+len+1]]
+bytes and points [[s->string]] past the struct header.
 
 <<struct [[String]]>>=
 struct String
@@ -1844,6 +2423,16 @@ al(int t)
 
 % mark and sweep
 
+%claude:
+[[acid]] uses a simple {mark-and-sweep} garbage collector
+for its heap-allocated objects (nodes, strings, and lists).
+Every collectible object starts with a [[Gc]] header containing
+a mark bit and a link pointer. All allocated objects are
+chained through [[gcl]] (the GC list). During collection,
+the GC first clears all marks, then scans the symbol table
+to mark reachable objects, and finally sweeps the list to
+free unmarked objects.
+
 <<struct [[Gc]]>>=
 struct Gc
 {
@@ -1889,7 +2478,26 @@ Gc;
 
 % L stands for? Lexical?
 
+%claude:
+The [[acid]] interpreter maintains a hash table mapping
+names to [[Lsym]] (``lexical symbol'') entries. This is
+[[acid]]'s own symbol table, distinct from the target
+program's symbol table in [[libmach]]. It stores everything
+the interpreter knows: variable values, function definitions,
+keyword tokens, builtin function pointers, and complex type
+descriptions. At startup, [[varsym()]] populates it with
+entries from the target's symbol table, so that typing
+[[main]] at the [[acid]] prompt gives the address of [[main]].
+
 \subsection{[[Lsym]]}
+
+%claude:
+An [[Lsym]] has a name, a token kind ([[lexval]]---[[Tid]]
+for identifiers, keyword tokens for reserved words), a
+current value ([[v]]), an optional function body ([[proc]]),
+an optional builtin function pointer, and an optional complex
+type description ([[lt]]). The [[hash]] field chains entries
+in the same hash bucket.
 
 <<struct [[Lsym]]>>=
 struct Lsym
@@ -1928,6 +2536,14 @@ Type*	lt;
 @
 
 \subsection{[[hash]]}
+
+%claude:
+The hash table uses a simple multiplicative hash
+([[h = h*3 + *p]]) with separate chaining. [<look()>]
+searches for an existing entry; [<enter()>] creates a
+new one with a freshly allocated [[Value]] (defaulting
+to integer type with hexadecimal format). [<mkvar()>]
+combines both: look up first, create if not found.
 
 <<global [[hash]]>>=
 // hash <string, ref_own<Lsym>, (next in bucket = Lsym.hash)
@@ -2029,6 +2645,15 @@ memset(v, 0, sizeof(Value));
 
 \subsection{Builtins}
 
+%claude:
+Builtin functions are implemented in C and registered in
+the [[tab]] array. During initialization, [<installbuiltin()>]
+copies each entry's function pointer into the corresponding
+[[Lsym]]'s [[builtin]] field. When [[acid]] encounters a
+function call, it checks [[s->builtin]] first---if set and
+no user-defined [[proc]] overrides it, the C function is
+called directly rather than interpreting an AST.
+
 <<global [[tab]]>>=
 struct Btab
 {
@@ -2051,6 +2676,14 @@ void	(*builtin)(Node*, Node*);
 
 \section{Process table}
 % used for 'acid <pid>' and after newproc() (<- new())
+
+%claude:
+[[acid]] can debug multiple processes simultaneously
+(e.g., parent and child after a fork). The [[ptab]] array
+maps PIDs to open [[/proc/<pid>/ctl]] file descriptors.
+The [<msg()>] function looks up a PID in this table and
+writes a control message to the corresponding [[ctl]] fd.
+[<install()>] adds an entry, [<deinstall()>] removes one.
 
 <<struct [[Ptab]]>>=
 struct Ptab
@@ -2103,7 +2736,14 @@ msg(int pid, char *msg)
 %******************************************************************************
 \chapter{[[/bin/acid]]}
 %******************************************************************************
+\label{chap:acid}
 
+%claude:
+This chapter presents [[acid]]'s entry point, REPL,
+initialization, and process attachment. The overall flow
+is: parse command-line arguments, open the executable,
+load symbol tables, load the [[acid]] library files,
+then enter the interactive REPL loop.
 
 \section{[[main()]]}
 
@@ -2124,6 +2764,13 @@ static Biobuf	bioout;
 // pointer to bioout
 Biobuf*	bout;
 @
+
+%claude:
+[<main()>] processes command-line flags, determines the executable
+and optional PID, then runs a long initialization sequence:
+format handlers, keyword table, lexer setup, builtins, symbol
+loading, module loading, and the user's [[acidinit]] function.
+Finally it enters the infinite REPL loop.
 
 <<function main (acid/main.c)>>=
 void
@@ -2164,6 +2811,16 @@ main(int argc, char *argv[])
 
 \section{REPL}
 
+%claude:
+The REPL (Read-Eval-Print Loop) is [[acid]]'s interactive
+command loop. It prints the [[acid:]] prompt, calls
+[<yyparse()>] to parse and execute one statement, then
+loops back. An important subtlety: [[yyparse()]] does not
+just parse---it also \emph{executes} the parsed statement
+immediately (via the [[bigstmnt]] grammar rule, which calls
+[<execute()>] inline). So parsing and execution are
+interleaved, not separate passes.
+
 <<global interactive (acid/globals.c)>>=
 bool	interactive;
 @
@@ -2175,6 +2832,15 @@ int	line;
 % for error report
 
 
+
+%claude:
+The REPL uses [[setjmp]]/[[longjmp]] for error recovery:
+if any error occurs during parsing or execution, [<error()>]
+does a [[longjmp]] back to here, which reinitializes the
+output buffer and unwinds any local variable scopes.
+The [[stacked]] counter tracks brace nesting depth for
+multi-line input---when inside braces, [[yylex()]] prints
+a tab instead of the prompt.
 
 <<[[main()]](acid) infinite loop>>=
 interactive = true;
@@ -2254,6 +2920,16 @@ case 'l':
 
 \section{Initializations}
 
+%claude:
+Initialization is a multi-step process: set up the lexer
+keyword table ([<kinit()>]), push stdin as the input source,
+create the built-in variables ([<loadvars()>]) and register
+the builtin C functions ([<installbuiltin()>]), parse the
+executable and load its symbols ([<attachfiles()>]),
+load the standard [[acid]] library files, call the user's
+[[acidinit]] function if defined, and import the target's
+symbols as [[acid]] variables ([<varsym()>]).
+
 <<global [[initialising]]>>=
 int	initialising;
 @
@@ -2294,6 +2970,14 @@ initialising = 0;
 
 % seen mkvar before, format, types
 
+%claude:
+[<loadvars()>] creates the predefined [[acid]] variables:
+[[pid]] (current process ID), [[proc]] (current process handle),
+[[notes]] (pending notes/signals), and [[proclist]] (list of
+attached processes). These are initialized to zero/empty and
+will be set to real values later when a process is attached
+or created via [[new()]].
+
 <<function [[loadvars]]>>=
 /// main -> <>
 void
@@ -2330,6 +3014,11 @@ loadvars(void)
 
 \subsection{[[installbuiltin()]]}
 
+%claude:
+[<installbuiltin()>] iterates through the [[tab]] array and
+registers each C function as an [[acid]] builtin by setting
+the [[builtin]] field of the corresponding [[Lsym]].
+
 <<function [[installbuiltin]]>>=
 void
 installbuiltin(void)
@@ -2360,6 +3049,15 @@ if(b->fn == bprint)
 
 
 \section{[[attachfiles()]] and [[readtext()]]}
+
+%claude:
+[<attachfiles()>] opens the executable and, if a PID was
+given, attaches to the running process. [<readtext()>] does the
+heavy lifting: it calls [<crackhdr()>] to parse the executable
+header, [<loadmap()>] to create the symbol map, and
+[<syminit()>] to load the symbol table. It then prints the
+architecture identification line that you see at startup
+(e.g., ``[[./buggy:386 plan 9 executable]]'').
 
 <<[[main()]](acid) [[attachfiles(aout, pid)]]>>=
 if (attachfiles(aout, pid) < 0)
@@ -2446,6 +3144,11 @@ readtext(char *s)
 %    machdata = &armmach;
 
 %yoann: print above print what we saw earlier about binary path and arch
+%claude:
+The [[print]] call above produces the architecture identification
+line we saw in the Getting Started section---e.g.,
+``[[./buggy:386 plan 9 executable]]''. The [[fhdr.name]] field
+is set by [<crackhdr()>] based on the magic number.
 
 % syminit(), very important
 
@@ -2512,6 +3215,16 @@ if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
 
 \subsection{Setting [[registers]] and [[bpinst]]}
 
+%claude:
+[<varreg()>] creates an [[acid]] variable for each machine
+register (e.g., [[R0]], [[R1]], [[PC]], [[SP]]) using the
+register list from [[mach->reglist]]. Each variable's value
+is set to the register's offset in the [[/proc/<pid>/regs]]
+file, so that [[*R0]] reads the actual register value from
+the live process via [[cormap]]. It also creates the
+[[bpinst]] variable containing the breakpoint instruction
+bytes, and a [[registers]] list variable for enumeration.
+
 <<function [[varreg]]>>=
 /// main -> attachfiles -> readtext -> <>
 void
@@ -2564,6 +3277,16 @@ varreg(void)
 
 
 \section{[[loadmodule()]]} % and [[loadmoduleobjtype()]]}
+
+%claude:
+At startup, [[acid]] loads two standard library files:
+[[/lib/acid/port]] (architecture-independent functions like
+[[new()]], [[bpset()]], [[cont()]], [[stk()]], [[src()]]) and
+[[/lib/acid/<arch>]] (architecture-specific functions). Additional
+libraries can be loaded with [[-l]]. Loading a module simply
+means parsing it with [<yyparse()>]---since the parser
+executes [[defn]] statements as it goes, the function
+definitions become available immediately.
 
 <<[[main()]](acid) load modules>>=
 loadmodule("/lib/acid/port");
@@ -2638,6 +3361,14 @@ if(setjmp(err)) {
 
 \section{[[userinit()]]}
 
+%claude:
+[<userinit()>] loads the user's personal [[acid]] library
+from [[~/lib/acid]] (if it exists), then calls the
+[[acidinit]] function if one was defined in any of the
+loaded modules. This lets users customize their debugging
+environment---for instance, defining a custom [[acidinit]]
+that automatically sets breakpoints or loads type definitions.
+
 <<function [[userinit]]>>=
 /// main -> <>
 void
@@ -2685,6 +3416,15 @@ if(p != nil) {
 
 \section{Setting [[symbols]]}
 
+%claude:
+[<varsym()>] is the bridge between [[libmach]]'s symbol table
+and [[acid]]'s interpreter. It iterates through every symbol
+in the executable ([[T]], [[D]], [[B]], [[t]], [[d]], [[b]],
+[[l]], [[L]] types) and creates a corresponding [[acid]]
+variable with the symbol's address as its value. It also
+builds the [[symbols]] list variable, where each entry is
+a triple of \{name, type, address\}. After this, typing a
+function name at the [[acid]] prompt returns its address.
 
 <<function [[varsym]]>>=
 /// main -> <>
@@ -2781,6 +3521,13 @@ if(l && l->proc) {
 
 \section{[[acid: newproc()]]}
 
+%claude:
+When the user types [[new()]] at the [[acid]] prompt, the
+[[acid]] library function [[new()]] (defined in [[/lib/acid/port]])
+calls the builtin [<newproc()>], which forks a child process
+to run the target program. Here is the [[new()]] definition
+from the library:
+
 % can't explain full path, but at some point will type
 % acid: new()
 % which is defined in /lib/acid/port with:
@@ -2798,6 +3545,12 @@ if(l && l->proc) {
 % so will call newproc() that will fork and modify ptab
 
 \subsection{[[newproc()]]}
+
+%claude:
+The [<newproc()>] builtin takes an optional string of arguments,
+splits it on whitespace (like a simple shell), prepends the
+executable name ([[aout]]), and calls [<nproc()>] to do the
+actual fork/exec.
 
 <<function [[newproc]]>>=
 /// main -> yyparse -> new -> <> -> nproc -> sproc
@@ -2847,6 +3600,20 @@ Maxarg		= 512,
 @
 
 \subsection{[[nproc()]]}
+
+%claude:
+[<nproc()>] implements the fork/hang/exec pattern, the same
+one used by [[ratrace]]. The child writes [[hang]] to its
+own [[ctl]], closes all file descriptors, reopens the console
+for stdin/stdout/stderr, then calls [[exec()]]. The [[hang]]
+ensures the child stops after [[exec]], giving the parent
+control.
+%
+The parent calls [<install()>] to register the child's PID
+in the process table, then [[msg(pid, "waitstop")]] to block
+until the child is actually stopped. It then calls [<sproc()>]
+to set up the memory map and [<dostop()>] to invoke the
+[[stopped()]] callback if one is defined.
 
 <<function [[nproc]]>>=
 /// main -> yyparse -> new -> newproc -> <> -> sproc
@@ -2912,6 +3679,13 @@ NFD		= 100,
 
 
 \subsection{[[install()]]}
+
+%claude:
+[<install()>] registers a new process: it finds a free slot
+in [[ptab]], opens [[/proc/<pid>/ctl]], and adds the PID to
+the [[proclist]] variable (so the [[acid]] user can see which
+processes are being debugged). [<deinstall()>] does the reverse
+when a process exits.
 
 <<function [[install]]>>=
 static void
@@ -2984,6 +3758,13 @@ deinstall(int pid)
 
 \subsection{[[notes()]]}
 
+%claude:
+[<notes()>] reads pending notes (signals) from
+[[/proc/<pid>/note]] and stores them as a list of strings
+in the [[acid]] variable [[notes]]. This lets the user see
+why the process stopped---e.g., ``sys: trap: divide error''
+or ``sys: trap: fault read''.
+
 <<function notes (acid/proc.c)>>=
 void
 notes(int pid)
@@ -3027,6 +3808,15 @@ notes(int pid)
 
 
 \subsection{[[sproc()]]}
+
+%claude:
+[<sproc()>] sets up the live process for debugging: it opens
+[[/proc/<pid>/mem]] for reading and writing the target's memory,
+verifies that the executable matches the running process
+(via [<checkqid()>]), creates [[cormap]] with
+[<attachproc()>], and renames the map segments to [[*text]]
+and [[*data]] (the [[*]] prefix distinguishes live memory
+from the file-based segments in [[symmap]]).
 
 <<function [[sproc]]>>=
 /// (main -> yyparse -> execute -> new -> newproc -> nproc) | main -> <>
@@ -3084,6 +3874,13 @@ if (cormap == nil)
 
 \subsection{[[checkqid()]]}
 
+%claude:
+[<checkqid()>] is a safety check: it compares the QID
+(a unique file identifier in \plan, similar to an inode number)
+of the executable file opened by [[acid]] with the QID of
+[[/proc/<pid>/text]]. If they differ, the running process
+was compiled from a different version of the source than the
+file [[acid]] loaded symbols from, and symbol lookups may be wrong.
 
 <<function [[checkqid]]>>=
 void
@@ -3147,7 +3944,13 @@ nocore(void)
 
 \subsection{[[dostop()]]}
 
-% ???
+%claude:
+[<dostop()>] looks for a user-defined [[acid]] function called
+[[stopped]] and, if found, calls it with the PID as argument.
+This is a callback hook: the user can define [[stopped(pid)]]
+in their [[acid]] library to automatically perform actions
+whenever a process stops---for example, printing registers
+or the current source line.
 
 <<function [[dostop]]>>=
 /// main -> yyparse -> new -> newproc -> nproc -> sproc; <>
@@ -3176,6 +3979,12 @@ dostop(int pid)
 \section{[[acid pid]]}
 
 % alternative path, attach to existing pid
+
+%claude:
+When invoked as [[acid <pid>]], [[acid]] attaches to an
+already-running (or [[Broken]]) process instead of starting
+a new one. It reads the executable path from
+[[/proc/<pid>/text]] and calls [<sproc()>] to set up [[cormap]].
 
 <<global [[prog]]>>=
 static char	prog[128];
@@ -3220,15 +4029,33 @@ if(pid)					/* pid given */
 %******************************************************************************
 \chapter{[[libmach/]]}
 %******************************************************************************
+\label{chap:libmach}
 
 % a bit reverse of linker. linker actually does not use libmach/,
 % but the debugger/profiler/emulator do.
 
 % read .o (objects) and read .out (binaries)
 
+%claude:
+[[libmach]] is the shared library that all \plan binary tools
+use to read executables and object files. It does the reverse
+of the linker: where the linker writes magic numbers, symbol
+tables, and section headers, [[libmach]] reads them back.
+It is used by [[acid]], [[db]], the profiler, and the emulators.
+
 \section{Parsing executables}
 
 \subsection{[[Fhdr]] and [[crackhdr()]]}
+
+%claude:
+[<crackhdr()>] is the entry point for parsing an executable.
+It reads the first bytes of the file, extracts the magic number,
+and searches the [[exectab]] table for a matching entry. Each
+entry in [[exectab]] specifies the header size, a byte-swapping
+function (for cross-endian reading), and a header-specific
+parser. When a match is found, the global [[mach]] is set to
+the corresponding architecture, and the [[Fhdr]] structure is
+filled with the segment addresses, sizes, and symbol table offsets.
 
 <<function [[crackhdr]]>>=
 int
@@ -3298,6 +4125,11 @@ crackhdr(fdt fd, Fhdr *fp)
 
 \subsection{[[machbytype()]]}
 
+%claude:
+[<machbytype()>] selects the architecture-specific disassembler
+and debugging support ([[machdata]]) based on the executable
+type determined by [<crackhdr()>].
+
 <<function [[machbytype]]>>=
 /*
  *	select a machine by executable file type
@@ -3320,6 +4152,16 @@ machbytype(int type)
 @
 
 \section{[[attachproc()]]}
+
+%claude:
+[<attachproc()>] creates a [[Map]] for a live process by
+opening [[/proc/<pid>/regs]] (and [[fpregs]] for floating-point
+registers) and combining them with the [[/proc/<pid>/mem]]
+file descriptor. The resulting map has four segments:
+registers, FP registers, text, and data. The text and data
+segments are mapped through [[mem]], so reading an address
+in the map reads the corresponding virtual address in the
+live process.
 
 <<function [[attachproc]]>>=
 Map*
@@ -3396,6 +4238,13 @@ findseg(Map *map, char *name)
 
 \section{[[loadmap()]]}
 
+%claude:
+[<loadmap()>] creates a [[Map]] for an executable file (not
+a live process). It sets up two segments---text and data---mapping
+address ranges to file offsets so that reading an address
+through the map reads the corresponding bytes from the
+executable file.
+
 <<function [[loadmap]]>>=
 Map*
 loadmap(Map *map, int fd, Fhdr *fp)
@@ -3423,6 +4272,15 @@ loadmap(Map *map, int fd, Fhdr *fp)
 @
 
 \section{Loading the symbol table}
+
+%claude:
+The symbol table is stored in the executable as a sequence
+of records, each containing a value (address or offset),
+a type character, and a name. [<syminit()>] reads the entire
+table into memory and classifies symbols by type: text ([[T]]/[[t]]),
+data ([[D]]/[[d]]/[[B]]/[[b]]), autos/params ([[a]]/[[p]]/[[m]]),
+and file history ([[z]]). It also loads the SP-PC and
+line number-PC tables if present.
 
 <<global nsym (libmach/sym.c)>>=
 static	long	nsym;			/* number of symbols */
@@ -3582,6 +4440,7 @@ symbase(long *n)
 %******************************************************************************
 \chapter{Parsing}
 %******************************************************************************
+\label{chap:parsing}
 
 % Lexing and parsing in same chapter this time; we also explain less this time
 % as similar to parsing in Compiler, Assembler, Make, Shell, Utilities (awk, ...)
@@ -3589,10 +4448,25 @@ symbase(long *n)
 
 % main -> yyparse -> yylex
 
+%claude:
+This chapter presents the lexer and parser for the [[acid]]
+language. The lexer and parser follow the same patterns seen
+in the \book{Compiler}, \book{Shell}, and \book{Assembler}:
+a hand-written lexer feeding a yacc-generated parser. I will
+not explain them in as much detail, since the focus of this
+book is on debugging, not parsing.
+
 \section{Files management}
 % similar to what was done by cpp with #include, but here acid include
 % and no macro, just include
 
+%claude:
+Like the C preprocessor's [[#include]], [[acid]] can read
+input from multiple files (the standard library, user libraries,
+and stdin). The [[IOstack]] structure maintains a stack of
+open input sources. When [[acid]] encounters an [[include()]]
+call or loads a module, it pushes a new [[IOstack]] entry;
+when that file is exhausted, it pops back to the previous source.
 
 \subsection{[[IOstack]]}
 
@@ -3731,6 +4605,12 @@ popio(void)
 
 \subsection{[[lexc()]] and [[unlexc()]]}
 
+%claude:
+[<lexc()>] is the low-level character reader. It reads from
+[[lexio->fin]] (a [[Biobuf]] file) or from [[lexio->text]]
+(an in-memory string, used by [[interpret()]]). [<unlexc()>]
+pushes one character back.
+
 <<function [[lexc]]>>=
 int
 lexc(void)
@@ -3764,6 +4644,14 @@ unlexc(int s)
 
 
 \subsection{[[yylex()]]}
+
+%claude:
+[<yylex()>] is the main lexer function, called by the
+yacc-generated parser. It skips whitespace, handles comments
+([[//]] style), and dispatches on the first character of
+each token. An important detail: in interactive mode, a
+bare newline (not inside braces) is returned as [[;]],
+making semicolons optional at the prompt.
 
 <<function [[yylex]]>>=
 /// main -> yyparse -> <>
@@ -4231,6 +5119,14 @@ return s->lexval;
 
 \subsection{Keywords}
 
+%claude:
+Keywords are handled through the symbol table rather than
+special-casing them in the lexer. [<kinit()>] enters all
+keywords into the hash table with their token codes; when
+[<numsym()>] looks up an identifier, keywords are found
+and their [[lexval]] (e.g., [[Tif]], [[Twhile]], [[Tfn]])
+is returned instead of [[Tid]].
+
 <<global [[keywds]]>>=
 struct keywd
 {
@@ -4284,6 +5180,15 @@ kinit(void)
 \section{Grammar}
 
 \subsection{Overview}
+
+%claude:
+The [[acid]] grammar is specified in yacc format and is
+relatively small---about 150 lines of rules. The grammar
+is C-like with a few differences: [[defn]] instead of
+function declarations, [[then]]/[[do]] keywords after conditions,
+list operations ([[head]], [[tail]], [[append]]), and
+[[complex]]/[[aggr]] for type descriptions. Most grammar
+rules build AST nodes using [<an()>].
 
 <<acid/dbg.y>>=
 %{
@@ -4370,6 +5275,15 @@ zname
 
 
 \subsection{Definitions}
+
+%claude:
+The [[bigstmnt]] rule is the top-level entry point. It handles
+three cases: a statement (which is immediately executed via
+[<execute()>] and then garbage-collected), a function definition
+([[defn name(args) \{ body \}]]), and a complex type declaration
+([[aggr name \{ members \}]]). The immediate execution is the
+key design choice---[[acid]] does not separate parsing from
+execution for interactive statements.
 
 <<statements rules>>=
 bigstmnt
@@ -4678,8 +5592,25 @@ member
 %******************************************************************************
 \chapter{Interpreting}
 %******************************************************************************
+\label{chap:interpreting}
+
+%claude:
+This chapter presents the [[acid]] interpreter: the tree-walking
+evaluator that executes AST nodes produced by the parser.
+The interpreter is split into two parts: [<execute()>] handles
+statements (control flow, assignments, function calls), while
+the [[expr()]] macro dispatches expression evaluation through
+a function pointer table [[expop]].
 
 \section{[[execute()]]}
+
+%claude:
+[<execute()>] is the main statement executor. It pattern-matches
+on the node's opcode: [[OLIST]] sequences two statements,
+[[OIF]] and [[OWHILE]] implement control flow, [[OLOCAL]]
+declares local variables, and [[ORET]] returns from a function
+via [[longjmp]]. For expression statements, it falls through
+to [[expr()]] and prints the result using [[prnt]].
 
 <<function [[execute]]>>=
 /// main (acidmap) | ?? -> <>
@@ -4730,6 +5661,15 @@ Node xx;
 
 
 \section{Expressions}
+
+%claude:
+Expression evaluation uses a dispatch table: the [[expop]]
+array maps each opcode to its evaluation function. The
+[[expr()]] macro indexes into this table and calls the
+corresponding function. Most expression evaluators follow the
+same pattern: evaluate left and right children recursively,
+check types, compute the result, and store it in [[res]]
+with [[op]] set to [[OCONST]].
 
 <<[[execute()]] switch [[n->op]] cases>>=
 default:
@@ -4819,6 +5759,11 @@ void (*expop[])(Node*, Node*) =
 
 
 \subsection{Booleans}
+
+%claude:
+[<fbool()>] converts a value to boolean: nonzero integers,
+nonzero floats, nonempty strings, and nonempty lists are true.
+This is used by [[if]], [[while]], [[&&]], and [[||]].
 
 <<function [[fbool]]>>=
 int
@@ -5190,6 +6135,13 @@ ocor(Node *n, Node *res)
 
 \subsection{Arithmetic}
 
+%claude:
+The arithmetic operators handle mixed int/float types with
+the expected promotion rules (int+float gives float). The
+[[+]] operator is also overloaded for string concatenation
+and list concatenation, making it the most complex of the
+arithmetic operators.
+
 <<function [[oadd]]>>=
 void
 oadd(Node *n, Node *res)
@@ -5449,7 +6401,16 @@ orsh(Node *n, Node *res)
 
 \section{Call, locals, and return}
 
-%XXX ??
+%claude:
+Function calls in [[acid]] use a scope-based approach for
+local variables. Each call pushes new [[Value]] nodes onto
+the symbol table entries (shadowing the previous values via
+the [[pop]] chain), and each return pops them off. The
+[[Rplace]] structure captures the return context: a [[setjmp]]
+buffer for [[return]] statements (which use [[longjmp]]),
+the linked list of local variables to restore on return,
+and a pointer to the result node.
+
 <<global [[ret]]>>=
 Rplace*	ret;
 @
@@ -5508,6 +6469,14 @@ case OLOCAL:
 
 
 
+%claude:
+[<ocall()>] dispatches between builtin C functions and
+user-defined [[acid]] functions. If the symbol has a
+[[builtin]] pointer and either the call uses the [[builtin]]
+keyword or no user-defined [[proc]] exists, the C function
+is called directly. Otherwise, [<call()>] is invoked for
+the user-defined function.
+
 <<function [[ocall]]>>=
 void
 ocall(Node *n, Node *res)
@@ -5542,6 +6511,14 @@ ocall(Node *n, Node *res)
 <<global [[na]]>>=
 int	na;
 @
+
+%claude:
+[<call()>] implements the full function call protocol:
+flatten parameter and argument lists, check arity, push
+new [[Value]] nodes for each parameter (shadowing any
+existing bindings), execute the body, then pop all locals
+and restore the previous bindings. The [[setjmp]] captures
+the return point so that [[return]] can [[longjmp]] back.
 
 <<function [[call]]>>=
 void
@@ -5669,6 +6646,14 @@ case ODO:
 
 \section{Complex}
 
+%claude:
+The [[complex]] (or [[aggr]]) system lets [[acid]] understand
+C data structures. A complex type declaration (typically
+generated by [[cc -a]]) describes the offset, format, and
+name of each field in a struct. When a variable is declared
+as a complex type, the [[.]] operator can access its fields
+by reading memory at the appropriate offset from the base address.
+
 <<[[execute()]] switch [[n->op]] cases>>=
 case OCOMPLEX:
     decl(n);
@@ -5735,6 +6720,17 @@ decl(Node *n)
 
 
 \section{Builtins}
+
+%claude:
+The builtin functions provide the bridge between [[acid]]'s
+interpreted language and the underlying system. They include
+type conversion ([[atof]], [[atoi]], [[itoa]]), file operations
+([[file]], [[readfile]], [[access]]), symbol lookup ([[pcfile]],
+[[pcline]], [[filepc]], [[fnbound]]), process control
+([[start]], [[stop]], [[newproc]], [[setproc]], [[kill]]),
+formatting ([[fmt]], [[print]]), and more. Each builtin
+takes a result node and an argument node, evaluates its
+arguments, performs the operation, and stores the result.
 
 <<[[tab]] entries>>=
 "atof",	cvtatof,
@@ -5825,6 +6821,15 @@ include(Node *r, Node *args)
 
 \subsection{[[acid: interpret()]]}
 %alt: Eval
+
+%claude:
+The [[interpret()]] builtin takes a string and evaluates it
+as [[acid]] code. It pushes the string as an input source
+(via [<pushstr()>], which sets [[lexio->text]] instead of
+[[lexio->fin]]), calls [<yyparse()>] to parse and execute it,
+then pops the input source. This enables dynamic code
+generation: an [[acid]] function can build a string containing
+[[acid]] code and execute it at runtime.
 
 <<[[tab]] entries>>=
 "interpret",interpret,
@@ -5925,6 +6930,16 @@ lexio->ip--;
 \section{Garbage collection}
 
 \subsection{[[gc()]]}
+
+%claude:
+The garbage collector runs periodically (when [[dogc]]
+exceeds 1MB of allocated memory). It uses a three-phase
+mark-and-sweep: (1) clear all marks, (2) scan the symbol
+table and mark all reachable objects (strings, lists, nodes,
+and code values), (3) sweep the [[gcl]] list and free
+unmarked objects. The scan phase traverses both the
+procedure bodies ([[marktree]]) and the value chain
+([[v->pop]] for shadowed locals).
 
 <<function [[gc]]>>=
 void
@@ -6035,6 +7050,15 @@ marklist(List *l)
 \subsection{[[gmalloc()]] and [[dogc]]}
 
 % do gc (not dog)
+
+%claude:
+[<gmalloc()>] is a thin wrapper around [[malloc]] that
+tracks the total amount of memory allocated since the last
+GC in [[dogc]]. When [[dogc]] exceeds [[Mempergc]] (1MB),
+the next call to [<gc()>] will actually run a collection;
+otherwise [<gc()>] returns immediately. This amortizes the
+cost of garbage collection over many allocations.
+
 <<global [[dogc]]>>=
 long	dogc;
 @
@@ -6066,6 +7090,17 @@ dogc = 0;
 %******************************************************************************
 \chapter{Process control}
 %******************************************************************************
+\label{chap:process-control}
+
+%claude:
+This chapter presents the [[acid]] builtins for controlling
+the debugged process. They all follow the same pattern:
+evaluate the PID argument, then write a message to the
+process's [[/proc/<pid>/ctl]] file via [<msg()>].
+The different messages correspond to the kernel operations
+described in Chapter~\ref{chap:kernel-support}: [[start]]
+resumes, [[stop]] halts, [[startstop]] resumes then waits,
+and [[waitstop]] just waits.
 
 <<[[tab]] entries>>=
 "start",	start,
@@ -6129,6 +7164,14 @@ stop(Node *r, Node *args)
 @
 
 \section{[[acid: startstop()]]}
+
+%claude:
+[<startstop()>] is the most important process control builtin:
+it resumes the target and blocks until the target stops again
+(at a breakpoint, fault, or system call). This is the core
+of the ``continue until something happens'' operation.
+After the target stops, it reads pending notes and calls
+the [[stopped]] callback.
 
 <<function [[startstop]]>>=
 void
@@ -6228,6 +7271,13 @@ getstatus(int pid)
 %******************************************************************************
 \chapter{Printing and Introspection}
 %******************************************************************************
+\label{chap:printing}
+
+%claude:
+This chapter covers [[acid]]'s output: the [[print]] builtin,
+the [[prnt]] node used to auto-print expression results in
+the REPL, the [[whatis]] command for introspection, and the
+AST pretty-printer used to display function definitions.
 
 <<global [[prnt]]>>=
 Node*	prnt;
@@ -6238,7 +7288,17 @@ Node*	prnt;
 %******************************************************************************
 \chapter{Source level C Debugging}
 %******************************************************************************
+\label{chap:source-level}
 % C support
+
+%claude:
+Source-level debugging requires cooperation between the
+compiler (which generates line number tables), the linker
+(which preserves them in the executable), and [[libmach]]
+(which provides lookup functions like [[fileline()]] and
+[[pc2line()]]). The [[acid]] library functions [[src()]]
+and [[Bsrc()]] use these to display source code around
+a given address.
 
 \section{[[acid: src()]]}
 
@@ -6252,23 +7312,78 @@ Node*	prnt;
 %******************************************************************************
 \chapter{The [[acid]] Library}
 %******************************************************************************
+\label{chap:acid-library}
+
+%claude:
+Most of [[acid]]'s user-facing functionality is implemented not
+in C but in [[acid]]'s own language, in library files loaded at
+startup. This is the essence of [[acid]]'s design: the C code
+provides low-level primitives (process control, memory access,
+expression evaluation), and the [[acid]] library builds
+higher-level debugging commands on top. Users can redefine any
+library function or write new ones.
 
 \section{[[/lib/acid/port]]}
 
+%claude:
+The portable library defines the core debugging functions:
+[[new()]] (start a process, set a breakpoint at [[main]],
+continue to it), [[bpset()]]/[[bpdel()]] (breakpoint management),
+[[cont()]] (continue execution), [[step()]] (single-step),
+[[stk()]] (print call stack), [[src()]] (show source),
+[[asm()]] (disassemble), [[regs()]] (print registers),
+[[mem()]] (display memory), and [[stkrace()]] (stack trace).
+These functions use the builtins from the Interpreting and
+Process Control chapters.
+
 \subsection{[[acid: new()]]}
+
+%claude:
+The [[new()]] function is the typical entry point for a
+debugging session. It clears the breakpoint list, calls
+[[newproc()]] to fork/exec the target, sets a breakpoint
+at [[main]], continues to it, then removes the breakpoint.
+After [[new()]], the target is stopped at the first
+instruction of [[main]], ready for inspection.
 
 \section{[[/lib/acid/arm]]}
 %\section{[[386]]}
 
 %\section{...} lots of files
 
+%claude:
+The architecture-specific library files define functions
+that depend on register names and calling conventions:
+[[regs()]] prints the architecture's register set,
+[[stk()]] uses the frame pointer chain to walk the stack,
+and [[step()]] uses [[follow()]] to find the next
+instruction(s) and single-step correctly over branches
+and delay slots.
+
 \section{[[/lib/acid/truss]]}
 % ratrace using acid program
+
+%claude:
+The [[truss]] library implements system call tracing
+entirely in [[acid]]'s own language---it is a software-only
+alternative to [[ratrace]]. Loading it with [[acid -l truss]]
+adds functions that set breakpoints on system call entry
+points, decode the arguments, and print them in a readable
+format. This demonstrates [[acid]]'s programmability: even
+a tracer can be written as a debugging script.
 
 
 %******************************************************************************
 \chapter{Advanced Features}
 %******************************************************************************
+\label{chap:advanced-features}
+
+%claude:
+This chapter covers features that go beyond basic debugging:
+memory leak detection and code coverage (both implemented as
+[[acid]] library scripts), binary patching with [[-w]],
+kernel debugging with [[-k]], remote debugging with [[-r]],
+and cross-architecture debugging with [[-m]].
 
 \section{Memory leak detection}
 
@@ -6276,11 +7391,34 @@ Node*	prnt;
 
 % also leak.rc, umem.rc, kmem.rc
 
+%claude:
+The [[/lib/acid/leak]] library implements memory leak detection
+by tracking [[malloc]] and [[free]] calls. It sets breakpoints on
+the memory allocator functions and records each allocation in
+an [[acid]] list. When the user calls [[leaks()]], it reports
+allocations that were never freed. This is similar in spirit to
+Valgrind's leak detector but implemented entirely as an [[acid]]
+script, running the target at native speed between breakpoints.
+
 \section{Code coverage}
 
 %/lib/acid/coverage
 
+%claude:
+The [[/lib/acid/coverage]] library implements basic code coverage
+by setting breakpoints on every function entry point and recording
+which ones are hit during execution. After a test run, it reports
+which functions were never called.
+
 \section{Modifying code: [[acid -w]]}
+
+%claude:
+Normally [[acid]] opens the executable file read-only.
+With [[-w]], it opens it for writing too, allowing the user
+to patch the binary on disk---for instance, to replace
+an instruction with a [[NOP]] or change a constant.
+This is a powerful but dangerous feature; changes are
+permanent in the file.
 
 <<global wtflag (acid/globals.c)>>=
 bool	wtflag;
@@ -6304,6 +7442,13 @@ if(wtflag)
 
 %http://ddeville.me/2015/08/kernel-debugging-with-lldb-and-vmware-fusion/
 
+%claude:
+With [[-k]], [[acid]] debugs the kernel rather than a user
+process. It reads kernel registers from [[/proc/<pid>/kregs]]
+instead of [[/proc/<pid>/regs]], and uses the kernel's
+text file as the executable. This requires a running kernel
+process to attach to (specified by PID).
+
 <<global [[kernel]]>>=
 int	kernel;
 @
@@ -6326,6 +7471,15 @@ if(kernel) {
 
 
 \section{Remote debugging: [[acid -r]]}
+
+%claude:
+Remote debugging exploits \plan's [[import]] command: you
+can import a remote machine's [[/proc]] into your local
+namespace, then run [[acid -r]] against it as if the process
+were local. The [[-r]] flag implies [[-k]] (kernel mode)
+and defaults PID to~1. This is a beautiful demonstration of
+\plan's ``everything is a file'' philosophy---the same
+[[/proc]] interface works across network boundaries.
 
 <<global [[remote]]>>=
 int	remote;
@@ -6356,6 +7510,15 @@ case 'r':
 % was also db -m
 
 % import /proc !! beautiful. Power of 9p and libmach.
+
+%claude:
+With [[-m]], [[acid]] can debug a binary compiled for a
+different architecture than the host. For instance, you
+can run [[acid -m arm]] on an x86 machine to disassemble
+and debug an ARM binary. Combined with [[import]]'ed
+[[/proc]] from a remote ARM machine, this gives full
+cross-architecture debugging. The [[-m]] flag overrides
+the automatic architecture detection from [<crackhdr()>].
 
 <<global [[mtype]]>>=
 static char*	mtype;
@@ -6395,9 +7558,22 @@ if(mtype != nil){
 %******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
+\label{chap:advanced-topics}
 
 \section{Time travel}
 % checkpoints
+
+%claude:
+Time-travel debugging---the ability to step backward through
+execution---is not implemented in [[acid]], but the concept
+is worth mentioning. Tools like [[rr]] on Linux achieve this
+by recording every non-deterministic event (system call results,
+signal deliveries, thread scheduling) during execution, then
+replaying deterministically. [[ocamldebug]] achieves a simpler
+form by periodically checkpointing the bytecode interpreter
+state. In principle, [[acid]]'s [[/proc]] interface could support
+a checkpoint-based approach: save process memory at each
+breakpoint and restore it to ``go back.''
 
 %alt: \section{Cross machine debugging}
 %alt: \section{Kernel debugging}
@@ -6581,6 +7757,7 @@ making the mechanism especially transparent.
 %******************************************************************************
 \chapter{Debugging}
 %******************************************************************************
+\label{chap:debugging-appendix}
 % debugging the debugger :)
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
@@ -7083,7 +8260,7 @@ pstr(String *s)
 %******************************************************************************
 \chapter{Error Management}
 %******************************************************************************
-
+\label{chap:error-management}
 
 \section{[[die()]]}
 
@@ -7153,6 +8330,15 @@ yyerror(char *fmt, ...)
 
 % setjmp/longjmp poor's man exception in C, see Libcore
 
+%claude:
+[<error()>] is [[acid]]'s exception mechanism: it prints
+the error message, unwinds any stacked I/O channels,
+resets the [[interactive]] flag, and [[longjmp]]s back to
+the REPL's [[setjmp]] point. This is the C equivalent of
+throwing an exception---any error during parsing or execution
+is caught at the top level, and the user gets back to the
+[[acid:]] prompt.
+
 <<global [[err]]>>=
 jmp_buf	err;
 @
@@ -7187,6 +8373,12 @@ error(char *fmt, ...)
 @
 
 
+
+%claude:
+[<unwind()>] restores all symbol table entries to their
+global values by popping the entire [[pop]] chain for
+every symbol. This cleans up local variable bindings
+left behind when an error occurs inside a function call.
 
 <<function [[unwind]]>>=
 void
@@ -7235,6 +8427,16 @@ if(iop != 0) {
 \section{Interrupt management}
 
 % got interrupted
+
+%claude:
+When the user presses Ctrl-C, the kernel delivers an
+interrupt note to [[acid]]. The [<catcher()>] signal handler
+sets [[gotint]] to true and continues. The [[gotint]] flag
+is checked at three points: in [<lexc()>] (while reading input),
+in [<execute()>] (while running code), and in [<yylex()>]
+(at EOF). This ensures that long-running [[acid]] scripts
+can be interrupted without corrupting internal state.
+
 <<global [[gotint]]>>=
 bool	gotint;
 @
@@ -7286,6 +8488,7 @@ gotint = false;
 %******************************************************************************
 \chapter{Utilities}
 %******************************************************************************
+\label{chap:utilities-appendix}
 
 <<function [[isnumeric]]>>=
 bool
@@ -7304,11 +8507,13 @@ isnumeric(char *s)
 %******************************************************************************
 \chapter{ARM Disassembler}
 %******************************************************************************
+\label{chap:arm-disasm}
 
 
 %******************************************************************************
 \chapter{[[db]]}
 %******************************************************************************
+\label{chap:db}
 
 #include "db.nw"
 
