@@ -1,4 +1,4 @@
-/*s: tracers/strace.c */
+/*s: tracers/ratrace.c */
 // System calls tracer
 
 #include <u.h>
@@ -8,14 +8,13 @@
 #include <thread.h>
 
 // was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
-// but most people knows better 'strace'
 
-/*s: enum [[_anon_ (strace)]] */
+/*s: enum [[_anon_ (ratrace)]] */
 enum {
     Stacksize   = 8*1024,
     Bufsize     = 8*1024,
 };
-/*e: enum [[_anon_ (strace)]] */
+/*e: enum [[_anon_ (ratrace)]] */
 
 /*s: global [[out]] */
 // chan<ref<string>> listener = writer(), sender = reader()
@@ -215,14 +214,14 @@ done:
 }
 /*e: function [[writer]] */
 
-/*s: function usage (tracers/strace.c) */
+/*s: function usage (tracers/ratrace.c) */
 void
 usage(void)
 {
     fprint(STDERR, "Usage: ratrace [-c cmd [arg...]] | [pid]\n");
     exits("usage");
 }
-/*e: function usage (tracers/strace.c) */
+/*e: function usage (tracers/ratrace.c) */
 
 /*s: function [[hang]] */
 void
@@ -306,4 +305,4 @@ threadmain(int argc, char **argv)
     reader((void*)pid);
 }
 /*e: function [[threadmain]] */
-/*e: tracers/strace.c */
+/*e: tracers/ratrace.c */
