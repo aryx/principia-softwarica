@@ -37,11 +37,11 @@ static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 /*s: global [[typenames]] */
 char *typenames[] =
 {
-    [TINT]		"integer",
+    [TINT]	"integer",
     [TFLOAT]	"float",
     [TSTRING]	"string",
-    [TLIST]		"list",
-    [TCODE]		"code",
+    [TLIST]	"list",
+    [TCODE]	"code",
 };
 /*e: global [[typenames]] */
 

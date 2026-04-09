@@ -58,6 +58,7 @@ unwind(void)
 
     for(i = 0; i < Hashsize; i++) {
         for(s = hash[i]; s; s = s->hash) {
+
             while(s->v->pop) {
                 v = s->v->pop;
                 free(s->v);
@@ -75,46 +76,55 @@ execute(Node *n)
 {
     Node *l, *r;
     Value *v;
+    Node res;
+    /*s: [[execute()]] other locals */
+    static int stmnt;
+    /*x: [[execute()]] other locals */
     Lsym *sl;
     vlong i, s, e;
-    Node res, xx;
-    static int stmnt;
+    Node xx;
+    /*e: [[execute()]] other locals */
 
     gc();
-
     /*s: [[execute()]] if [[gotint]] */
     if(gotint)
         error("interrupted");
     /*e: [[execute()]] if [[gotint]] */
-
     if(n == nil)
         return;
-
+    /*s: [[execute()]] if big statements count */
     if(stmnt++ > 5000) {
         Bflush(bout);
         stmnt = 0;
     }
+    /*e: [[execute()]] if big statements count */
 
     l = n->left;
     r = n->right;
-
     switch(n->op) {
+    /*s: [[execute()]] switch [[n->op]] cases */
     default:
         expr(n, &res);
 
         if(ret || (res.type == TLIST && res.l == 0 && n->op != OADD))
             break;
+
         prnt->right = &res;
         expr(prnt, &xx);
 
         break;
+    /*x: [[execute()]] switch [[n->op]] cases */
     case OASGN:
     case OCALL:
         expr(n, &res);
         break;
-    case OCOMPLEX:
-        decl(n);
-        break;
+    /*x: [[execute()]] switch [[n->op]] cases */
+    case ORET:
+        if(ret == 0)
+            error("return not in function");
+        expr(n->left, ret->val);
+        longjmp(ret->rlab, 1);
+    /*x: [[execute()]] switch [[n->op]] cases */
     case OLOCAL:
         for(n = n->left; n; n = n->left) {
             if(ret == 0)
@@ -124,23 +134,22 @@ execute(Node *n)
                 error("%s declared twice", sl->name);
             v = gmalloc(sizeof(Value));
             v->ret = ret;
+
             v->pop = sl->v;
             sl->v = v;
+
             v->scope = 0;
             *(ret->tail) = sl;
             ret->tail = &v->scope;
             v->set = 0;
         }
         break;
-    case ORET:
-        if(ret == 0)
-            error("return not in function");
-        expr(n->left, ret->val);
-        longjmp(ret->rlab, 1);
+    /*x: [[execute()]] switch [[n->op]] cases */
     case OLIST:
         execute(n->left);
         execute(n->right);
         break;
+    /*x: [[execute()]] switch [[n->op]] cases */
     case OIF:
         expr(l, &res);
         if(r && r->op == OELSE) {
@@ -152,6 +161,7 @@ execute(Node *n)
         else if(fbool(&res))
             execute(r);
         break;
+    /*x: [[execute()]] switch [[n->op]] cases */
     case OWHILE:
         for(;;) {
             expr(l, &res);
@@ -160,6 +170,7 @@ execute(Node *n)
             execute(r);
         }
         break;
+    /*x: [[execute()]] switch [[n->op]] cases */
     case ODO:
         expr(l->left, &res);
         if(res.type != TINT)
@@ -172,6 +183,11 @@ execute(Node *n)
         for(i = s; i <= e; i++)
             execute(r);
         break;
+    /*x: [[execute()]] switch [[n->op]] cases */
+    case OCOMPLEX:
+        decl(n);
+        break;
+    /*e: [[execute()]] switch [[n->op]] cases */
     }
 }
 /*e: function [[execute]] */

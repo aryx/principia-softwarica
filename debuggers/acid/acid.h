@@ -1,6 +1,6 @@
 /*s: acid/acid.h */
-/*s: enum [[_anon_ (acid/acid.h)]] */
 /* acid.h */
+/*s: enum [[_anon_ (acid/acid.h)]] */
 enum
 {
     /*s: acid constants */
@@ -16,7 +16,6 @@ enum
     /*x: acid constants */
     Strsize		= 4096,
     /*x: acid constants */
-    Maxval		= 10,
     Mempergc	= 1024*1024,
     /*e: acid constants */
 };
@@ -182,9 +181,11 @@ struct Value
     /*s: [[Value]] other fields */
     char	set;
     /*x: [[Value]] other fields */
-    Value*	pop;
     Lsym*	scope;
+    /*x: [[Value]] other fields */
     Rplace*	ret;
+    /*x: [[Value]] other fields */
+    Value*	pop;
     /*e: [[Value]] other fields */
 };
 /*e: struct [[Value]] */
@@ -205,9 +206,10 @@ struct Lsym
     Node*	proc;
     /*x: [[Lsym]] other fields */
     Type*	lt;
-    Frtype*	local;
     /*x: [[Lsym]] other fields */
     void	(*builtin)(Node*, Node*);
+    /*x: [[Lsym]] other fields */
+    Frtype*	local;
     /*e: [[Lsym]] other fields */
 
     // Extra fields

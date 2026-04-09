@@ -30,7 +30,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - removed deadcode (BADREG, maxfile, regdirty, exitflg)
+% - removed deadcode (BADREG, maxfile, regdirty, exitflg, Maxval)
 
 %thx to codemap/codegraph:
 
@@ -1700,16 +1700,6 @@ struct Type
 
 
 
-%XXX???
-<<struct [[Frtype]]>>=
-struct Frtype
-{
-    Lsym*	var;
-    Type*	type;
-    Frtype*	next;
-};
-@
-
 
 \section{Runtime values}
 
@@ -1769,9 +1759,7 @@ char	set;
 
 %XXX
 <<[[Value]] other fields>>=
-Value*	pop;
 Lsym*	scope;
-Rplace*	ret;
 @
 
 
@@ -1937,7 +1925,6 @@ Node*	proc;
 %XXX
 <<[[Lsym]] other fields>>=
 Type*	lt;
-Frtype*	local;
 @
 
 \subsection{[[hash]]}
@@ -4701,105 +4688,69 @@ execute(Node *n)
 {
     Node *l, *r;
     Value *v;
-    Lsym *sl;
-    vlong i, s, e;
-    Node res, xx;
-    static int stmnt;
+    Node res;
+    <<[[execute()]] other locals>>
 
     gc();
-
     <<[[execute()]] if [[gotint]]>>
-
     if(n == nil)
         return;
-
-    if(stmnt++ > 5000) {
-        Bflush(bout);
-        stmnt = 0;
-    }
+    <<[[execute()]] if big statements count>>
 
     l = n->left;
     r = n->right;
-
     switch(n->op) {
-    default:
-        expr(n, &res);
-
-        if(ret || (res.type == TLIST && res.l == 0 && n->op != OADD))
-            break;
-        prnt->right = &res;
-        expr(prnt, &xx);
-
-        break;
-    case OASGN:
-    case OCALL:
-        expr(n, &res);
-        break;
-    case OCOMPLEX:
-        decl(n);
-        break;
-    case OLOCAL:
-        for(n = n->left; n; n = n->left) {
-            if(ret == 0)
-                error("local not in function");
-            sl = n->sym;
-            if(sl->v->ret == ret)
-                error("%s declared twice", sl->name);
-            v = gmalloc(sizeof(Value));
-            v->ret = ret;
-            v->pop = sl->v;
-            sl->v = v;
-            v->scope = 0;
-            *(ret->tail) = sl;
-            ret->tail = &v->scope;
-            v->set = 0;
-        }
-        break;
-    case ORET:
-        if(ret == 0)
-            error("return not in function");
-        expr(n->left, ret->val);
-        longjmp(ret->rlab, 1);
-    case OLIST:
-        execute(n->left);
-        execute(n->right);
-        break;
-    case OIF:
-        expr(l, &res);
-        if(r && r->op == OELSE) {
-            if(fbool(&res))
-                execute(r->left);
-            else
-                execute(r->right);
-        }
-        else if(fbool(&res))
-            execute(r);
-        break;
-    case OWHILE:
-        for(;;) {
-            expr(l, &res);
-            if(!fbool(&res))
-                break;
-            execute(r);
-        }
-        break;
-    case ODO:
-        expr(l->left, &res);
-        if(res.type != TINT)
-            error("loop must have integer start");
-        s = res.ival;
-        expr(l->right, &res);
-        if(res.type != TINT)
-            error("loop must have integer end");
-        e = res.ival;
-        for(i = s; i <= e; i++)
-            execute(r);
-        break;
+    <<[[execute()]] switch [[n->op]] cases>>
     }
 }
 @
 
+
+<<[[execute()]] other locals>>=
+static int stmnt;
+@
+<<[[execute()]] if big statements count>>=
+if(stmnt++ > 5000) {
+    Bflush(bout);
+    stmnt = 0;
+}
+@
+% ?? seems dead
+
+
+%XXX
+<<[[execute()]] other locals>>=
+Lsym *sl;
+vlong i, s, e;
+Node xx;
+@
+
+
+
+
+
 \section{Expressions}
+
+<<[[execute()]] switch [[n->op]] cases>>=
+default:
+    expr(n, &res);
+
+    if(ret || (res.type == TLIST && res.l == 0 && n->op != OADD))
+        break;
+
+    prnt->right = &res;
+    expr(prnt, &xx);
+
+    break;
+@
+
+<<[[execute()]] switch [[n->op]] cases>>=
+case OASGN:
+case OCALL:
+    expr(n, &res);
+    break;
+@
+
 
 <<macro [[expr]]>>=
 #define expr(n, r) do{(r)->comt=nil; (*expop[(n)->op])(n, r);}while(0)
@@ -5496,7 +5447,66 @@ orsh(Node *n, Node *res)
 }
 @
 
-\subsection{Call}
+\section{Call, locals, and return}
+
+%XXX ??
+<<global [[ret]]>>=
+Rplace*	ret;
+@
+<<[[Value]] other fields>>=
+Rplace*	ret;
+@
+
+<<struct [[Rplace]]>>=
+struct Rplace
+{
+    jmp_buf	rlab;
+    Node*	stak;
+    Node*	val;
+    Lsym*	local;
+    Lsym**	tail;
+};
+@
+
+
+<<[[execute()]] switch [[n->op]] cases>>=
+case ORET:
+    if(ret == 0)
+        error("return not in function");
+    expr(n->left, ret->val);
+    longjmp(ret->rlab, 1);
+@
+
+%\section{Definition}
+
+% for locals shadowing globals (or other locals)
+<<[[Value]] other fields>>=
+Value*	pop;
+@
+
+<<[[execute()]] switch [[n->op]] cases>>=
+case OLOCAL:
+    for(n = n->left; n; n = n->left) {
+        if(ret == 0)
+            error("local not in function");
+        sl = n->sym;
+        if(sl->v->ret == ret)
+            error("%s declared twice", sl->name);
+        v = gmalloc(sizeof(Value));
+        v->ret = ret;
+
+        v->pop = sl->v;
+        sl->v = v;
+
+        v->scope = 0;
+        *(ret->tail) = sl;
+        ret->tail = &v->scope;
+        v->set = 0;
+    }
+    break;
+@
+
+
 
 <<function [[ocall]]>>=
 void
@@ -5529,8 +5539,200 @@ ocall(Node *n, Node *res)
 }
 @
 
+<<global [[na]]>>=
+int	na;
+@
+
+<<function [[call]]>>=
+void
+call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
+{
+    int np, i;
+    Rplace rlab;
+    Node *n, res;
+    Value *v, *f;
+    Lsym *s, *next;
+    Node *avp[Maxarg], *ava[Maxarg];
+
+    rlab.local = 0;
+
+    na = 0;
+    flatten(avp, parameters);
+    np = na;
+    na = 0;
+    flatten(ava, local);
+    if(np != na) {
+        if(np < na)
+            error("%s: too few arguments", fn);
+        error("%s: too many arguments", fn);
+    }
+
+    rlab.tail = &rlab.local;
+
+    ret = &rlab;
+    for(i = 0; i < np; i++) {
+        n = ava[i];
+        switch(n->op) {
+        default:
+            error("%s: %d formal not a name", fn, i);
+        case ONAME:
+            expr(avp[i], &res);
+            s = n->sym;
+            break;
+        case OINDM:
+            res.cc = avp[i];
+            res.type = TCODE;
+            res.comt = 0;
+            if(n->left->op != ONAME)
+                error("%s: %d formal not a name", fn, i);
+            s = n->left->sym;
+            break;
+        }
+        if(s->v->ret == ret)
+            error("%s already declared at this scope", s->name);
+
+        v = gmalloc(sizeof(Value));
+        v->ret = ret;
+        v->pop = s->v;
+        s->v = v;
+        v->scope = 0;
+        *(rlab.tail) = s;
+        rlab.tail = &v->scope;
+
+        v->Store = res.Store;
+        v->type = res.type;
+        v->set = 1;
+    }
+
+    ret->val = retexp;
+    if(setjmp(rlab.rlab) == 0)
+        execute(body);
+
+    for(s = rlab.local; s; s = next) {
+        f = s->v;
+        next = f->scope;
+        s->v = f->pop;
+        free(f);
+    }
+}
+@
+
+
 
 \section{Statements}
+
+<<[[execute()]] switch [[n->op]] cases>>=
+case OLIST:
+    execute(n->left);
+    execute(n->right);
+    break;
+@
+
+<<[[execute()]] switch [[n->op]] cases>>=
+case OIF:
+    expr(l, &res);
+    if(r && r->op == OELSE) {
+        if(fbool(&res))
+            execute(r->left);
+        else
+            execute(r->right);
+    }
+    else if(fbool(&res))
+        execute(r);
+    break;
+@
+<<[[execute()]] switch [[n->op]] cases>>=
+case OWHILE:
+    for(;;) {
+        expr(l, &res);
+        if(!fbool(&res))
+            break;
+        execute(r);
+    }
+    break;
+@
+<<[[execute()]] switch [[n->op]] cases>>=
+case ODO:
+    expr(l->left, &res);
+    if(res.type != TINT)
+        error("loop must have integer start");
+    s = res.ival;
+    expr(l->right, &res);
+    if(res.type != TINT)
+        error("loop must have integer end");
+    e = res.ival;
+    for(i = s; i <= e; i++)
+        execute(r);
+    break;
+@
+
+
+\section{Complex}
+
+<<[[execute()]] switch [[n->op]] cases>>=
+case OCOMPLEX:
+    decl(n);
+    break;
+@
+
+
+%XXX???
+<<struct [[Frtype]]>>=
+struct Frtype
+{
+    Lsym*	var;
+    Type*	type;
+    Frtype*	next;
+};
+@
+
+<<[[Lsym]] other fields>>=
+Frtype*	local;
+@
+
+
+<<function [[decl]]>>=
+void
+decl(Node *n)
+{
+    Node *l;
+    Value *v;
+    Frtype *f;
+    Lsym *type;
+
+    type = n->sym;
+    if(type->lt == 0)
+        error("%s is not a complex type", type->name);
+
+    l = n->left;
+    if(l->op == ONAME) {
+        v = l->sym->v;
+        v->comt = type->lt;
+        v->fmt = 'a';
+        return;
+    }
+
+    /*
+     * Frame declaration
+     */
+    for(f = l->sym->local; f; f = f->next) {
+        if(f->var == l->left->sym) {
+            f->type = n->sym->lt;
+            return;
+        }
+    }
+    f = malloc(sizeof(Frtype));
+    if(f == 0)
+        fatal("out of memory");
+
+    f->type = type->lt;
+
+    f->var = l->left->sym;
+    f->next = l->sym->local;
+    l->sym->local = f;
+}
+@
+
 
 \section{Builtins}
 
@@ -5722,12 +5924,68 @@ lexio->ip--;
 
 \section{Garbage collection}
 
+\subsection{[[gc()]]}
+
+<<function [[gc]]>>=
+void
+gc(void)
+{
+    int i;
+    Lsym *f;
+    Value *v;
+    Gc *m, **p, *next;
+
+    <<[[gc()]] return if still enough memory>>
+
+    /* Mark */
+    for(m = gcl; m; m = m->gclink)
+        m->gcmark = 0;
+
+    /* Scan */
+    for(i = 0; i < Hashsize; i++) {
+        for(f = hash[i]; f; f = f->hash) {
+            marktree(f->proc);
+            if(f->lexval != Tid)
+                continue;
+            for(v = f->v; v; v = v->pop) {
+                switch(v->type) {
+                case TSTRING:
+                    v->string->gcmark = 1;
+                    break;
+                case TLIST:
+                    marklist(v->l);
+                    break;
+
+                case TCODE:
+                    marktree(v->cc);
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Free */
+    p = &gcl;
+    for(m = gcl; m; m = next) {
+        next = m->gclink;
+        if(m->gcmark == 0) {
+            *p = next;
+            free(m);	/* Sleazy reliance on my malloc */
+        }
+        else
+            p = &m->gclink;
+    }
+}
+@
+
+\subsection{[[marktree()]] and [[marklist()]]}
+
 <<function [[marktree]]>>=
 void
 marktree(Node *n)
 {
 
-    if(n == 0)
+    if(n == nil)
         return;
 
     marktree(n->left);
@@ -5744,6 +6002,7 @@ marktree(Node *n)
     case TLIST:
         marklist(n->l);
         break;
+
     case TCODE:
         marktree(n->cc);
         break;
@@ -5773,57 +6032,35 @@ marklist(List *l)
 }
 @
 
-<<function [[gc]]>>=
-void
-gc(void)
+\subsection{[[gmalloc()]] and [[dogc]]}
+
+% do gc (not dog)
+<<global [[dogc]]>>=
+long	dogc;
+@
+
+<<function [[gmalloc]]>>=
+void*
+gmalloc(long l)
 {
-    int i;
-    Lsym *f;
-    Value *v;
-    Gc *m, **p, *next;
+    void *p;
 
-    if(dogc < Mempergc)
-        return;
-    dogc = 0;
-
-    /* Mark */
-    for(m = gcl; m; m = m->gclink)
-        m->gcmark = 0;
-
-    /* Scan */
-    for(i = 0; i < Hashsize; i++) {
-        for(f = hash[i]; f; f = f->hash) {
-            marktree(f->proc);
-            if(f->lexval != Tid)
-                continue;
-            for(v = f->v; v; v = v->pop) {
-                switch(v->type) {
-                case TSTRING:
-                    v->string->gcmark = 1;
-                    break;
-                case TLIST:
-                    marklist(v->l);
-                    break;
-                case TCODE:
-                    marktree(v->cc);
-                    break;
-                }
-            }
-        }
-    }
-
-    /* Free */
-    p = &gcl;
-    for(m = gcl; m; m = next) {
-        next = m->gclink;
-        if(m->gcmark == 0) {
-            *p = next;
-            free(m);	/* Sleazy reliance on my malloc */
-        }
-        else
-            p = &m->gclink;
-    }
+    dogc += l;
+    p = malloc(l);
+    if(p == nil)
+        fatal("out of memory");
+    return p;
 }
+@
+
+<<acid constants>>=
+Mempergc	= 1024*1024,
+@
+
+<<[[gc()]] return if still enough memory>>=
+if(dogc < Mempergc)
+    return;
+dogc = 0;
 @
 
 %******************************************************************************
@@ -5996,6 +6233,8 @@ getstatus(int pid)
 Node*	prnt;
 @
 
+
+
 %******************************************************************************
 \chapter{Source level C Debugging}
 %******************************************************************************
@@ -6003,12 +6242,12 @@ Node*	prnt;
 
 \section{[[acid: src()]]}
 
-
 %alt: when using db
 %\chapter{Command Input}
 %\chapter{Command Parsing}
 %\chapter{Commands}
 %\chapter{[[acid]]}
+
 
 %******************************************************************************
 \chapter{The [[acid]] Library}
@@ -6163,7 +6402,7 @@ if(mtype != nil){
 %alt: \section{Cross machine debugging}
 %alt: \section{Kernel debugging}
 
-\section{Signals and notes}
+%\section{Signals and notes}
 
 
 %******************************************************************************
@@ -6378,6 +6617,8 @@ Lfmt(Fmt *f)
 
 \section{AST dumper}
 
+% invoked by eval?
+
 <<global [[binop]]>>=
 static char *binop[] =
 {
@@ -6410,11 +6651,11 @@ static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 <<global [[typenames]]>>=
 char *typenames[] =
 {
-    [TINT]		"integer",
+    [TINT]	"integer",
     [TFLOAT]	"float",
     [TSTRING]	"string",
-    [TLIST]		"list",
-    [TCODE]		"code",
+    [TLIST]	"list",
+    [TCODE]	"code",
 };
 @
 
@@ -6957,6 +7198,7 @@ unwind(void)
 
     for(i = 0; i < Hashsize; i++) {
         for(s = hash[i]; s; s = s->hash) {
+
             while(s->v->pop) {
                 v = s->v->pop;
                 free(s->v);
@@ -7046,38 +7288,18 @@ gotint = false;
 %******************************************************************************
 
 <<function [[isnumeric]]>>=
-int
+bool
 isnumeric(char *s)
 {
     while(*s) {
         if(*s < '0' || *s > '9')
-            return 0;
+            return false;
         s++;
     }
-    return 1;
+    return true;
 }
 @
 
-
-
-% move to Gc chapter/section?
-<<global [[dogc]]>>=
-long	dogc;
-@
-
-<<function [[gmalloc]]>>=
-void*
-gmalloc(long l)
-{
-    void *p;
-
-    dogc += l;
-    p = malloc(l);
-    if(p == nil)
-        fatal("out of memory");
-    return p;
-}
-@
 
 %******************************************************************************
 \chapter{ARM Disassembler}

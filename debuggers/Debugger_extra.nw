@@ -6237,36 +6237,22 @@ static	void	readstack(void);
 
 \subsection{[[acid/acid.h]]}
 
-<<acid constants>>=
-Maxval		= 10,
-Mempergc	= 1024*1024,
-@
-
+%dead:
+%<<acid constants>>=
+%Maxval		= 10,
+%@
 
 <<enum [[_anon_ (acid/acid.h)]]>>=
-/* acid.h */
 enum
 {
     <<acid constants>>
 };
 @
 
-
-<<struct [[Rplace]]>>=
-struct Rplace
-{
-    jmp_buf	rlab;
-    Node*	stak;
-    Node*	val;
-    Lsym*	local;
-    Lsym**	tail;
-};
-@
-
-
 %-------------------------------------------------------------
 
 <<acid/acid.h>>=
+/* acid.h */
 <<enum [[_anon_ (acid/acid.h)]]>>
 
 #pragma varargck type "L"	void
@@ -6423,23 +6409,6 @@ int	yyparse(void);
 
 \subsection{[[acid/globals.c]]}
 
-
-<<global [[na]]>>=
-int	na;
-@
-
-
-<<global [[ret]]>>=
-Rplace*	ret;
-@
-
-
-
-<<global [[tracelist]]>>=
-List*	tracelist;
-@
-
-
 %-------------------------------------------------------------
 
 <<acid/globals.c>>=
@@ -6476,10 +6445,8 @@ List*	tracelist;
 <<global [[tracelist]]>>
 <<global [[initialising]]>>
 <<global [[quiet]]>>
-
 <<global [[ptab]]>>
 @
-
 
 \subsection{[[acid/lex.c]]}
 
@@ -6639,7 +6606,6 @@ void	loadmoduleobjtype(void);
 <<function [[readtext]]>>
 
 <<function [[an]]>>
-
 <<function [[al]]>>
 
 <<function [[con]]>>
@@ -6649,7 +6615,6 @@ void	loadmoduleobjtype(void);
 <<function [[yyerror]]>>
 
 <<function [[marktree]]>>
-
 <<function [[marklist]]>>
 
 <<function [[gc]]>>
@@ -6864,10 +6829,6 @@ scmp(String *sr, String *sl)
 
 
 \subsection{[[acid/exec.c]]}
-
-
-
-
 
 <<function [[convflt]]>>=
 void
@@ -7115,80 +7076,6 @@ windir(Map *m, Node *addr, Node *rval, Node *r)
 }
 @
 
-<<function [[call]]>>=
-void
-call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
-{
-    int np, i;
-    Rplace rlab;
-    Node *n, res;
-    Value *v, *f;
-    Lsym *s, *next;
-    Node *avp[Maxarg], *ava[Maxarg];
-
-    rlab.local = 0;
-
-    na = 0;
-    flatten(avp, parameters);
-    np = na;
-    na = 0;
-    flatten(ava, local);
-    if(np != na) {
-        if(np < na)
-            error("%s: too few arguments", fn);
-        error("%s: too many arguments", fn);
-    }
-
-    rlab.tail = &rlab.local;
-
-    ret = &rlab;
-    for(i = 0; i < np; i++) {
-        n = ava[i];
-        switch(n->op) {
-        default:
-            error("%s: %d formal not a name", fn, i);
-        case ONAME:
-            expr(avp[i], &res);
-            s = n->sym;
-            break;
-        case OINDM:
-            res.cc = avp[i];
-            res.type = TCODE;
-            res.comt = 0;
-            if(n->left->op != ONAME)
-                error("%s: %d formal not a name", fn, i);
-            s = n->left->sym;
-            break;
-        }
-        if(s->v->ret == ret)
-            error("%s already declared at this scope", s->name);
-
-        v = gmalloc(sizeof(Value));
-        v->ret = ret;
-        v->pop = s->v;
-        s->v = v;
-        v->scope = 0;
-        *(rlab.tail) = s;
-        rlab.tail = &v->scope;
-
-        v->Store = res.Store;
-        v->type = res.type;
-        v->set = 1;
-    }
-
-    ret->val = retexp;
-    if(setjmp(rlab.rlab) == 0)
-        execute(body);
-
-    for(s = rlab.local; s; s = next) {
-        f = s->v;
-        next = f->scope;
-        s->v = f->pop;
-        free(f);
-    }
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -7219,23 +7106,6 @@ call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
 
 
 \subsection{[[acid/proc.c]]}
-
-<<function [[waitfor]]>>=
-Waitmsg*
-waitfor(int pid)
-{
-    Waitmsg *w;
-
-    for(;;) {
-        if((w = wait()) == nil)
-            error("wait %r");
-        if(w->pid == pid)
-            return w;
-        free(w);
-    }
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -7531,6 +7401,11 @@ listparams(Map *map, Symbol *fn, uvlong fp)
 }
 @
 
+
+<<global [[tracelist]]>>=
+List*	tracelist;
+@
+
 <<function [[trlist]]>>=
 void
 trlist(Map *map, uvlong pc, uvlong sp, Symbol *sym)
@@ -7728,47 +7603,6 @@ defcomplex(Node *tn, Node *m)
 }
 @
 
-<<function [[decl]]>>=
-void
-decl(Node *n)
-{
-    Node *l;
-    Value *v;
-    Frtype *f;
-    Lsym *type;
-
-    type = n->sym;
-    if(type->lt == 0)
-        error("%s is not a complex type", type->name);
-
-    l = n->left;
-    if(l->op == ONAME) {
-        v = l->sym->v;
-        v->comt = type->lt;
-        v->fmt = 'a';
-        return;
-    }
-
-    /*
-     * Frame declaration
-     */
-    for(f = l->sym->local; f; f = f->next) {
-        if(f->var == l->left->sym) {
-            f->type = n->sym->lt;
-            return;
-        }
-    }
-    f = malloc(sizeof(Frtype));
-    if(f == 0)
-        fatal("out of memory");
-
-    f->type = type->lt;
-
-    f->var = l->left->sym;
-    f->next = l->sym->local;
-    l->sym->local = f;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -8639,6 +8473,24 @@ rc(Node *r, Node *args)
     r->fmt = 's';
 }
 @
+
+<<function [[waitfor]]>>=
+Waitmsg*
+waitfor(int pid)
+{
+    Waitmsg *w;
+
+    for(;;) {
+        if((w = wait()) == nil)
+            error("wait %r");
+        if(w->pid == pid)
+            return w;
+        free(w);
+    }
+}
+@
+
+
 
 <<function [[doerror]]>>=
 void

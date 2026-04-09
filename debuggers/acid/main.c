@@ -439,7 +439,6 @@ an(int op, Node *l, Node *r)
     return n;
 }
 /*e: function [[an]] */
-
 /*s: function [[al]] */
 List*
 al(int t)
@@ -512,7 +511,7 @@ void
 marktree(Node *n)
 {
 
-    if(n == 0)
+    if(n == nil)
         return;
 
     marktree(n->left);
@@ -529,13 +528,13 @@ marktree(Node *n)
     case TLIST:
         marklist(n->l);
         break;
+
     case TCODE:
         marktree(n->cc);
         break;
     }
 }
 /*e: function [[marktree]] */
-
 /*s: function [[marklist]] */
 void
 marklist(List *l)
@@ -567,9 +566,11 @@ gc(void)
     Value *v;
     Gc *m, **p, *next;
 
+    /*s: [[gc()]] return if still enough memory */
     if(dogc < Mempergc)
         return;
     dogc = 0;
+    /*e: [[gc()]] return if still enough memory */
 
     /* Mark */
     for(m = gcl; m; m = m->gclink)
@@ -589,6 +590,7 @@ gc(void)
                 case TLIST:
                     marklist(v->l);
                     break;
+
                 case TCODE:
                     marktree(v->cc);
                     break;
@@ -711,15 +713,15 @@ system(void)
 /*e: function [[system]] */
 
 /*s: function [[isnumeric]] */
-int
+bool
 isnumeric(char *s)
 {
     while(*s) {
         if(*s < '0' || *s > '9')
-            return 0;
+            return false;
         s++;
     }
-    return 1;
+    return true;
 }
 /*e: function [[isnumeric]] */
 
