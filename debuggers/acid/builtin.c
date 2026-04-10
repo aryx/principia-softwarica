@@ -95,14 +95,14 @@ struct Btab
     /*x: [[tab]] entries */
     "interpret",interpret,
     /*x: [[tab]] entries */
+    "newproc",	newproc,
+    /*x: [[tab]] entries */
     "start",	start,
     "startstop",startstop,
     "stop",	stop,
     "waitstop",	waitstop,
     /*x: [[tab]] entries */
     "status",	status,
-    /*x: [[tab]] entries */
-    "newproc",	newproc,
     /*e: [[tab]] entries */
     0
 };
