@@ -2622,6 +2622,47 @@ collected into [<COUNTER>] records, sorted by time, and
 printed. The [[PCRES]] constant (8) matches the kernel's
 [[LRESPROF]] bucket size.
 
+%claude:
+The parallel walk is the core of the algorithm and worth
+visualizing. Suppose the binary has three functions
+[[main]], [[foo]], [[bar]] at addresses [[0x1000]], [[0x1040]],
+[[0x1080]] respectively, and after sampling we get the
+following [[data]] array:
+\begin{verbatim}
+   text segment (8-byte buckets, PCRES=8):
+
+   address    function   bucket index   sample count
+   --------   --------   ------------   ------------
+   0x1000     main       data[2]=8      8
+   0x1008     main       data[3]=2      2
+   0x1010     main       data[4]=0      0
+   ...        main       ...            0
+   0x1040     foo        data[10]=30    30  <-- s.value moves here
+   0x1048     foo        data[11]=25    25
+   0x1050     foo        data[12]=5     5
+   ...        foo        ...
+   0x1080     bar        data[18]=15    15  <-- s.value moves here
+   ...        bar
+\end{verbatim}
+%
+The walk uses two indices: [[i]] iterates over symbols (via
+[[textsym(&s, i)]]), and [[j]] iterates over the [[data]]
+array. For each function, the inner [[while]] loop accumulates
+all buckets whose address falls before the \emph{next} symbol's
+address---that is, all buckets within the current function's
+range. The result is a per-function sum, which is recorded in
+the [[cp]] array if non-zero. After the walk:
+\begin{verbatim}
+   cp[0] = {name="main", time=10}   (8+2)
+   cp[1] = {name="foo",  time=60}   (30+25+5)
+   cp[2] = {name="bar",  time=15}
+\end{verbatim}
+%
+The [[+2]] in the initial value of [[j]] accounts for the
+two reserved entries at the start of [[data]]: [[data[0]]]
+holds the total time and [[data[1]]] holds the time outside
+the text segment (used to compute [[delta]]).
+
 <<constant PCRES (misc/tprof.c)>>=
 #define	PCRES	8
 @
@@ -2944,6 +2985,18 @@ gets a horizontal row. The main data structures are [[TEvent]]
 
 \section{Data structures}
 
+%claude:
+[[TEvent]] is a thin extension of the kernel's [[Traceevent]]
+struct (the raw event read from [[/proc/trace]]) with one
+extra field: [[etime]], the elapsed time from this event to
+the next one for the same process. The kernel only timestamps
+each event individually; computing the duration of each state
+(running, ready, sleeping) is the user-space tool's job.
+The anonymous struct [[Traceevent;]] is a kencc extension
+that embeds all of [[Traceevent]]'s fields directly into
+[[TEvent]], so [[e->pid]] reads the embedded [[Traceevent.pid]]
+without needing [[e->traceevent.pid]].
+
 <<struct [[TEvent]]>>=
 struct TEvent {
     Traceevent;
@@ -2951,11 +3004,31 @@ struct TEvent {
 };
 @
 
+%claude:
+[[Task]] is the per-process state that [[trace]] maintains.
+It collects:
+\begin{itemize}
+\item identification: [[pid]] and [[name]];
+\item the event ring buffer: [[events]] (size [[nevents]]);
+\item statistics for the running state: [[runtime]] (total
+running time), [[runmax]] (longest single run), [[runthis]]
+(current run), [[runs]] (number of times scheduled);
+\item per-event-type counters: [[tevents[]]] (e.g., how many
+[[SSleep]] vs [[SRun]] events occurred);
+\item display state: [[tstart]] (when this row started) and
+[[total]] (total wall-clock time observed).
+\end{itemize}
+%
+The event ring buffer is fixed-size ([[Nevents=1024]]),
+so old events are overwritten when the buffer fills---which
+keeps [[trace]] bounded in memory regardless of how long it
+runs.
+
 <<struct [[Task]]>>=
 struct Task {
     int	pid;
     char	*name;
-    int	nevents;	
+    int	nevents;
     TEvent	*events;
     vlong	tstart;
     vlong	total;
@@ -2975,6 +3048,17 @@ enum {
 };
 @
 
+
+%claude:
+[[trace]] is interactive: the user can zoom in and out on the
+timeline. Each zoom level is a fixed entry in the [[scales]]
+table, ranging from 500~$\mu$s/screen to 1000~s/screen. Each
+entry says how wide the screen represents in time ([[scale]]),
+how often to draw a major tick mark ([[bigtics]]) and a minor
+one ([[littletics]]), and how long to sleep between redraws
+([[sleep]] in milliseconds---larger scales need less frequent
+updates). Pressing [[+]] / [[-]] in the [[trace]] window cycles
+through this table.
 
 <<struct [[scale]]>>=
 struct scale {
@@ -3011,6 +3095,27 @@ struct scale scales[] = {
 @
 
 \section{[[main()]]}
+
+%claude:
+[[trace]]'s entry point is [<threadmain()>] (it is a
+[[libthread]] program because it needs to multiplex the
+GUI event loop, the trace reader, and the redraw loop).
+The startup sequence is:
+\begin{enumerate}
+\item Parse command-line flags (the [[-d]] device override,
+the [[-w]] new-window flag, the [[-t]] trigger PID, and the
+list of PIDs to enable tracing on).
+\item For each PID on the command line, write [[trace 1]]
+to its [[/proc/<pid>/ctl]] to enable kernel-side tracing.
+\item Call [[drawtrace()]] which initializes the GUI
+(window, fonts, colors), spawns the trace reader thread,
+and enters the redraw/event loop.
+\end{enumerate}
+%
+The kernel is doing the heavy lifting: hooks in [[ready()]],
+[[runproc()]], [[sleep()]], and [[pexit()]] generate events
+into a circular buffer, which the user-space tool then drains
+through [[/proc/trace]].
 
 <<global verbose (misc/trace.c)>>=
 static int verbose;
@@ -3084,6 +3189,17 @@ threadmain(int argc, char **argv)
 }
 @
 
+%claude:
+Each process gets a different color, cycling through six.
+[<mkcol()>] allocates four shades for each color: a
+background (light), a fill (medium), a border (dark), and
+a separator. The four shades let [[trace]] distinguish
+the running, ready, and sleeping states for the same process
+in the same row without confusion. We can see the four
+shades for the six colors below:
+
+%TODO insert example image here
+
 <<function [[mkcol]]>>=
 static void
 mkcol(int i, int c0, int c1, int c2)
@@ -3135,6 +3251,30 @@ colinit(void)
 <<function [[time2x]]>>=
 #define time2x(t)	((int)(((t) - oldestts) / ppp))
 @
+
+%claude:
+[<redraw()>] redraws the entire timeline. The main idea is
+to map time to X coordinates: a fixed window width (in pixels)
+represents a fixed time span ([[scales[scaleno].scale]]), so
+each pixel covers [[ppp = period / Width]] nanoseconds.
+The [[time2x]] macro converts a timestamp to the corresponding
+X coordinate.
+%
+For each task, the function:
+\begin{enumerate}
+\item Scrolls the existing image left to make room for new
+events on the right (via [<draw()>] from the image to itself
+with an offset);
+\item Discards events that have scrolled off the left edge;
+\item Iterates through the remaining events, drawing a colored
+horizontal bar from each [[SRun]] timestamp to its [[etime]]
+end timestamp.
+\end{enumerate}
+%
+The scrolling trick (rather than redrawing every event from
+scratch) is what keeps [[trace]] responsive even at high event
+rates---only the new portion at the right edge needs to be
+redrawn each frame.
 
 <<function [[redraw]]>>=
 static void
@@ -3375,6 +3515,14 @@ redraw(int scaleno)
 }
 @
 
+%claude:
+[<newtask()>] allocates a new [[Task]] entry for a previously
+unseen PID. The process name is read from [[/proc/<pid>/status]]
+(the first space-separated token, which is the program name
+that [[exec]] was called with). When [[newwin]] is set, the
+window is resized to add a row for the new process; otherwise
+the existing window's height is divided evenly among all tasks.
+
 <<function [[newtask]]>>=
 Task*
 newtask(ulong pid)
@@ -3415,6 +3563,22 @@ newtask(ulong pid)
     return t;
 }
 @
+
+%claude:
+[<doevent()>] is the heart of the trace processing logic.
+For each new event from the kernel, it: (1)~increments
+the per-event-type counter [[t->tevents[etype]]],
+(2)~appends the event to the task's event ring,
+(3)~for state-leaving events ([[SSleep]], [[SYield]],
+[[SReady]], [[SSlice]]), looks back for the matching
+[[SRun]] event and computes the run duration, updating
+[[runtime]], [[runmax]], and [[runthis]],
+and (4)~for [[SDead]], removes the task from the task list.
+%
+The look-back loop is the key: when we see ``the process
+left the run state'', we want to know how long it had been
+running. The kernel reports each transition individually
+with a timestamp, and the user-space tool pairs them up.
 
 <<function [[doevent]]>>=
 void
@@ -3472,6 +3636,26 @@ print("task died %ld %t %s\n", event->pid, event->time, schedstatename[event->et
     }
 }
 @
+
+%claude:
+[<drawtrace()>] is the main GUI loop. After initializing the
+window, mouse, keyboard, and color palette, it enters an
+[[alt()]] loop that multiplexes:
+\begin{itemize}
+\item mouse events (channel 0): unused for now;
+\item resize events (channel 1): re-attach the window;
+\item keyboard events (channel 2): pause/resume ([[p]]),
+zoom in/out ([[+]]/[[-]]), reset stats ([[r]]), quit ([[q]]);
+\item the default branch (no channel ready): read pending
+events from [[/proc/trace]] via [<read()>], dispatch each to
+[<doevent()>], and call [<redraw()>].
+\end{itemize}
+%
+The default-branch trick (a [[CHANNOBLK]] [[Alt]] entry) makes
+the [[alt()]] return immediately if no input event is pending,
+keeping the redraw loop running at the rate set by
+[[scales[scaleno].sleep]]. This is how [[trace]] combines
+event-driven input handling with periodic time-driven redraw.
 
 <<function [[drawtrace]]>>=
 void
@@ -3707,6 +3891,17 @@ and sleeps for one second.
 
 \section{Data structures}
 
+%claude:
+[[stats]] uses two main data structures: [[Graph]] (one per
+displayed metric) and [[Machine]] (one per monitored host).
+Each [[Graph]] has its own ring buffer of historical samples
+plus two function pointers: [[newvalue]] reads a new sample
+from the [[Machine]] (e.g., ``read context-switch counter''),
+and [[update]] redraws the graph with the new value. This
+function-pointer approach means [[stats]] can support arbitrary
+metrics without a giant switch statement---the metric type is
+encoded in which functions a [[Graph]] points to.
+
 <<constant [[MAXNUM]]>>=
 // a GUI system monitoring tool
 
@@ -3756,6 +3951,18 @@ enum
     Err0,
 };
 @
+
+%claude:
+A [[Machine]] is the connection to one host being monitored.
+It holds open file descriptors for each kernel pseudo-file
+([[#c/sysstat]], [[#c/swap]], the ethernet stats, the battery,
+the temperature sensor, etc.) and the most recent values read
+from each. The [[prev*]] fields hold the previous reading so
+that the graphs can compute deltas (e.g., context switches per
+second = current - previous, since the kernel exposes monotonic
+counters). Multiple [[Machine]]s can be active at once when
+[[stats]] is invoked with several remote hosts via [[srv]] /
+[[mount]] over 9P.
 
 <<struct [[Machine]]>>=
 struct Machine
@@ -3869,6 +4076,19 @@ Menu	menu2 = {menu2str, nil};
 <<global [[present]]>>=
 int	present[Nmenu2];
 @
+
+%claude:
+[[newvaluefn]] is the dispatch table that maps each menu entry
+(metric type) to its sample-reading function. When [[stats]]
+adds a graph for, say, [[Mcontext]] (context switches), the
+graph's [[newvalue]] field is set to [[contextval]], which
+knows how to read the context-switch counter from
+[[/dev/sysstat]] and compute the delta from the previous
+reading. Each [[*val]] function follows the same pattern:
+read the current value, compute the difference from the
+saved previous value, save the new value as previous,
+and return both the current value and the rolling maximum
+(used to scale the graph's Y axis).
 
 <<global [[newvaluefn]]>>=
 void	(*newvaluefn[Nmenu2])(Machine*, uvlong*, uvlong*, int init) = {
@@ -4113,6 +4333,24 @@ main(int argc, char *argv[])
     }
 }
 @
+
+%claude:
+The main loop is short and elegant: read all machines,
+update all graphs, sleep for one tick, repeat. The
+[[graph[i].newvalue]] / [[graph[i].update]] indirection
+through function pointers means the loop is the same
+regardless of which metrics the user selected---each graph
+knows how to read its own value and how to draw it.
+This is the strength of the function-pointer approach
+for dispatch tables: adding a new metric just requires
+writing a [[*val]] function and adding an entry to
+[[newvaluefn]], no changes to the main loop.
+%
+The [[parity]] toggle alternates between two background
+shades each frame; combined with the textured backgrounds
+defined in [<colinit()>], this avoids visible diagonal
+patterns in the graph background that would otherwise
+distract from the data.
 %$
 
 
