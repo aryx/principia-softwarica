@@ -59,7 +59,7 @@ struct TEvent {
 struct Task {
     int	pid;
     char	*name;
-    int	nevents;	
+    int	nevents;
     TEvent	*events;
     vlong	tstart;
     vlong	total;
