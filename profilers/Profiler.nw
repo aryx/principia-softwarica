@@ -1222,7 +1222,7 @@ event stream and draws the graphical timeline.
 The event types are defined in [[/sys/include/trace.h]],
 which is shared between the kernel and [[/bin/trace]].
 
-\section{[[TOS]]}
+\section{Cycle-accurate timing: [[TOS]]}
 
 %claude:
 Function-level profiling ([[prof]]) needs to measure the time
@@ -1313,7 +1313,7 @@ stream and can insert extra instructions after [[TEXT]]
 The linker supports two profiling strategies, selected
 by [[5l -p]] (the default) or [[5l -p -1]].
 
-\section{[[5l -p]]}
+\section{Time-per-function profiling: [[5l -p]]}
 
 %claude:
 The default strategy ([[5l -p]]) measures the \emph{time
@@ -1356,7 +1356,7 @@ initialize the profiling data structures before entering
 the accumulated data to [[prof.<pid>]], which [[/bin/prof]]
 then reads.
 
-\section{[[5l -p1]]}
+\section{Call counts: [[5l -p1]]}
 
 %claude:
 The simpler strategy ([[5l -p -1]]) only counts \emph{how
@@ -1479,7 +1479,7 @@ seconds. Even this trivial program takes 10 milliseconds of
 real time (process creation overhead), while its actual user
 and system time round to zero.
 
-\section{[[main()]]}
+\section{Entry point: [[main()]]}
 
 %yoann: as said in previous section, Waitmsg, fork/exec/wait is all you need
 %claude:
@@ -1805,7 +1805,7 @@ struct Pc
 
 
 
-\section{[[main()]]}
+\section{Entry point: [[main()]]}
 
 %claude:
 The main function has three phases: load the symbol table
@@ -2464,7 +2464,7 @@ The tool must be run while the target process is still
 alive, since the profile data lives in the process's
 text segment.
 
-\section{[[main()]]}
+\section{Entry point: [[main()]]}
 
 %claude:
 Like [[prof]], [[main()]] has three phases: read the
@@ -2878,6 +2878,25 @@ struct COUNTER
 @
 
 
+%claude:
+The display logic mirrors [[tprof]]'s parallel walk over the
+symbol table and the data array, with two kprof-specific
+twists. First, it splits [[data[0]]] (total ticks) into
+{in-kernel-text} (ticks where the PC fell within a kernel
+function) and {outside-kernel-text} (ticks attributed to
+[[data[1]]], which the kernel uses for ``not in any text
+symbol''---typically idle or user-mode time on the CPU).
+Second, it converts each symbol's address to a bucket index
+relative to the kernel base ([[mach->kbase]]) rather than to a
+page-aligned user text address.
+%
+The header line ``[[KTZERO PGSIZE]]'' lets the user
+double-check that the kernel binary they passed matches the
+running kernel: [[mach->kbase]] should agree with the first
+text symbol rounded down to a page boundary, otherwise the
+buckets would be misaligned and the per-function counts would
+be meaningless.
+
 <<[[main()]](kprof.c) display profile data>>=
 delta = data[0]-data[1];
 print("total: %ld	in kernel text: %ld	outside kernel text: %ld\n",
@@ -3094,7 +3113,7 @@ struct scale scales[] = {
 };
 @
 
-\section{[[main()]]}
+\section{Entry point: [[main()]]}
 
 %claude:
 [[trace]]'s entry point is [<threadmain()>] (it is a
@@ -3830,6 +3849,18 @@ drawtrace(void)
 }
 @
 
+%claude:
+[<timeconv()>] is a custom format handler installed via
+[[fmtinstall('t', timeconv)]] in [<threadmain()>], so that
+[[print("%t", t)]] anywhere in [[trace]] formats a [[vlong]]
+nanosecond value into the most readable unit
+([[ns]] / $\mu$s / [[ms]] / [[s]]). The trick is the unit
+selection cascade: pick seconds if [[t > 1s]], milliseconds
+if [[t > 1ms]], etc., and always print three decimal digits
+in the chosen unit. The [[OneRound]] / [[MilliRound]] additions
+implement banker-style rounding so that boundaries like
+[[999.9ms]] do not silently truncate to [[999ms]].
+
 <<function [[timeconv]]>>=
 int
 timeconv(Fmt *f)
@@ -4177,7 +4208,7 @@ int 	sleeptime = 1000;
 char	*procnames[NPROC] = {"main", "mouse"};
 @
 
-\section{[[main()]]}
+\section{Entry point: [[main()]]}
 
 <<function main (misc/stats.c)>>=
 void
