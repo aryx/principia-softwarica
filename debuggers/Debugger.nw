@@ -2579,6 +2579,24 @@ enum symbol_type
 
 % ?? Diff with Symbol?
 
+%claude:
+[[Sym]] and [[Symbol]] are easy to confuse but play different roles:
+\begin{itemize}
+\item [[Sym]] is the {raw} on-disk record: just a value, a type
+character, and a name string. It is what [<syminit()>] reads
+from the executable file into the [[symbols[]]] array.
+[[Sym]] is internal to [[libmach/sym.c]].
+\item [[Symbol]] is the {cooked} structure returned to clients
+of [[libmach]] (like [[acid]]). It carries the same fields plus
+a [[class]] (CAUTO, CPARAM, CTEXT, \ldots), an [[index]], and
+an opaque [[handle]] used by [[libmach]] to track the parent
+function for locals.
+\end{itemize}
+The lookup functions ([<lookup()>], [<findlocal()>], [<textsym()>])
+take a [[Sym]] from the array and ``fill'' a caller-provided
+[[Symbol]] via [[fillsym()]]. Clients only ever see [[Symbol]];
+[[Sym]] is an implementation detail.
+
 
 \section{[[acid]], [[libmach]], and [[/proc]]}
 
@@ -2666,6 +2684,29 @@ optional extra fields for the symbol, type, and literal
 value.
 %
 Note that nodes are garbage-collected (they embed a [<Gc>] header).
+
+%claude:
+For example, the [[acid]] expression
+\begin{verbatim}
+   *main + 3
+\end{verbatim}
+parses into the following tree:
+\begin{verbatim}
+                  Node{op=OADD}
+                  /          \
+             Node             Node{op=OCONST,
+            {op=OINDM}         type=TINT, ival=3}
+             /
+        Node{op=ONAME,
+             sym=Lsym{name="main"}}
+\end{verbatim}
+%
+The yacc grammar rules build this tree by calling [<an()>]
+bottom-up: first the [[ONAME]] leaf, then the [[OINDM]]
+unary, then the [[OCONST]] for the literal, and finally the
+[[OADD]] root that joins them. The interpreter ([<execute()>])
+later walks the tree top-down, dispatching on each node's
+opcode through the [<expop>] table.
 
 \subsection{[[Node]]}
 
@@ -3157,6 +3198,30 @@ keyword tokens, builtin function pointers, and complex type
 descriptions. At startup, [<varsym()>] populates it with
 entries from the target's symbol table, so that typing
 [[main]] at the [[acid]] prompt gives the address of [[main]].
+
+%claude:
+The two symbol tables are easy to confuse. Here is the
+distinction:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+                  & {\bf [[libmach]] symbol table} & {\bf [[acid]] symbol table} \\
+\midrule
+data type         & [[Sym]] (and [[Symbol]])       & [[Lsym]] (in [[hash[]]]) \\
+source            & target binary on disk          & built at runtime \\
+key               & address                        & name (string) \\
+contents          & target's functions, globals    & everything: targets's syms,\\
+                  & locals                         & keywords, user vars, fns, types\\
+read by           & [<lookup()>], [<getsym()>]    & [<look()>], [<mkvar()>] \\
+\bottomrule
+\end{tabular}
+\end{center}
+%
+At startup, [[acid]] reads the libmach symbol table (via
+[<syminit()>]) and copies each entry into its own [[hash[]]]
+table (via [<varsym()>]), so that target program names become
+queryable as [[acid]] variables. From that point on, the user
+operates on the [[acid]]-side table.
 
 \subsection{[[Lsym]]}
 
@@ -3864,6 +3929,16 @@ uvlong length;
 
 \subsection{Setting [[objtype]] and [[textfile]]}
 
+%claude:
+After parsing the executable header, [<readtext()>] populates
+two predefined [[acid]] string variables: [[objtype]] (the
+architecture name from [[mach->name]], e.g., [["386"]] or
+[["arm"]]) and [[textfile]] (the path of the binary being
+debugged). These are used by the [[acid]] library files: for
+instance, [[/lib/acid/port]] uses [[objtype]] to decide which
+architecture-specific library to load, and [[textfile]] is
+displayed in some prompts.
+
 <<[[readtext()]] locals>>=
 Lsym *l;
 Value *v;
@@ -3891,11 +3966,25 @@ v->type = TSTRING;
 
 \subsection{Setting [[SB]]}
 
+%claude:
+Some architectures (notably ARM and MIPS in the \plan toolchain)
+use a {static base} register to address global data: the
+register holds a fixed pointer near the data segment, and global
+references are encoded as offsets from this register. The
+linker reserves a symbol (e.g., [[setR12]] on ARM) to record
+the static base value, and the debugger needs to know it to
+display addresses correctly.
+%
+[<readtext()>] looks up the static base symbol in the target's
+symbol table (via [<lookup()>]), records its value in [[mach->sb]],
+and exposes it as the [[acid]] variable [[SB]] so the user can
+inspect or override it. On x86 there is no static base register,
+so [[mach->sbreg]] is null and this step is skipped.
+
 <<[[readtext()]] locals>>=
 Symbol sym;
 @
 
-%???
 <<[[readtext()]] if [[mach->sbreg]]>>=
 if(mach->sbreg && lookup(0, mach->sbreg, &sym)) {
     mach->sb = sym.value;
@@ -4211,6 +4300,23 @@ varsym(void)
 
 % move to advanced feature? group with acidinit?
 
+%claude:
+[[acidmap]] is an optional callback hook the user (or a loaded
+library) may define. After [[acid]] finishes loading symbols and
+modules, it looks up an [[acid]] function called [[acidmap]] and,
+if found, calls it with no arguments. The convention is that
+[[acidmap]] sets up complex type declarations for the target
+program (e.g., declaring [[Node]], [[Lsym]], and so on as
+[[aggr]] types) so that the user can immediately type
+[[*addr.field]] and get sensible output. Without [[acidmap]],
+the user would have to load these declarations manually each
+session.
+%
+The pattern below---building an [[ONAME]] node, wrapping it in
+an [[OCALL]] node, then calling [<execute()>]---is how C code
+inside [[acid]] invokes a user-defined [[acid]] function. We
+will see the same pattern again in [<dostop()>] and [<userinit()>].
+
 <<[[main()]](acid) other locals>>=
 Lsym *l;
 Node *n;
@@ -4232,27 +4338,28 @@ if(l && l->proc) {
 
 %claude:
 When the user types [[new()]] at the [[acid]] prompt, the
-[[acid]] library function [[new()]] (defined in [[/lib/acid/port.acid]])
-calls the builtin [<newproc()>], which forks a child process
-to run the target program. 
-
-%Here is the [[new()]] definition from the library:
-
-% can't explain full path, but at some point will type
-% acid: new()
-% which is defined in /lib/acid/port.acid with:
-
-%   defn new()
-%   {
-%   	bplist = {};
-%   	newproc(progargs);
-%   	// Dont miss the delay slot calls
-%   	bpset(follow(main)[0]);
-%   	cont();
-%   	bpdel(*PC);
-%   }
-
-% so will call newproc() that will fork and modify ptab
+[[acid]] library function [[new()]] (defined in
+[[/lib/acid/port.acid]]) calls the builtin [<newproc()>],
+which forks a child process to run the target program.
+%
+For reference, here is what [[new()]] looks like in the library:
+\begin{verbatim}
+   defn new() {
+       bplist = {};               // reset breakpoint list
+       newproc(progargs);         // fork+exec the target
+       bpset(follow(main)[0]);    // bp at main (handles delay slots)
+       cont();                    // run until that breakpoint
+       bpdel(*PC);                // remove the bp
+   }
+\end{verbatim}
+%
+So [[new()]] is itself a small composition of more primitive
+operations: [[newproc]] (a C builtin) plus [[bpset]] / [[cont]] /
+[[bpdel]] (other library functions). The user can read this
+definition with [[whatis new]] at the prompt and override it
+freely. This is the essence of a programmable debugger: the
+``run a program'' command is not built in, it is written in
+[[acid]] itself.
 
 \subsection{[[newproc()]]}
 
@@ -6037,6 +6144,19 @@ case '-':
 
 \subsection{Format [[X\F]]}
 
+%claude:
+The backslash starts a {format suffix}: a single character
+that controls how an expression is printed. For example,
+\verb+x\D+ means ``print [[x]] in decimal'' and
+\verb+*PC\i+ means ``disassemble the instruction at PC''.
+The lexer checks the character after the backslash against
+[[vfmt]] (the table of valid format characters defined in
+[[print.c]]); if valid, it returns a [[Tfmt]] token carrying
+the format character as its value, which the parser combines
+into an [[OFMT]] AST node. If the character is not a known
+format, the lexer treats the backslash as a stray character
+and returns it literally.
+
 <<[[yylex]] other locals>>=
 extern char vfmt[];
 @
@@ -6215,8 +6335,21 @@ prog
 @
 
 
+%claude:
+A [[name]] is either a bare identifier (e.g., [[main]],
+[[x]]) or a {qualified name} of the form [[func:var]] (e.g.,
+[[main:argc]]). The qualified form is what lets the user
+access local variables and parameters of a specific function:
+[[main:argc]] means ``the parameter [[argc]] in function
+[[main]]''. The grammar produces an [[OFRAME]] node carrying
+the function symbol on the left and the variable name on
+the right; at runtime, [<oframe()>] uses [<localaddr()>]
+to compute the actual stack address from the function's
+frame pointer and the variable's frame offset (read from
+the [[a]]/[[p]] symbol table entries).
+
 <<name rules>>=
-name 
+name
   : Tid
   {
    $$ = an(ONAME, ZN, ZN);
@@ -6288,6 +6421,25 @@ zsemi
 
 
 \subsection{Statements}
+
+%claude:
+The [[stmnt]] rule covers all statement forms. Each rule
+builds a single AST node carrying the operator and one or two
+sub-trees. A subtle point is the encoding of [[if/else]]
+and [[loop]]: they pack two operands into one [[Node]]
+slot by introducing an intermediate [[OELSE]] or [[OLIST]]
+node. For example, [[if e then s1 else s2]] becomes:
+\begin{verbatim}
+              OIF
+              / \
+             e   OELSE
+                  / \
+                 s1  s2
+\end{verbatim}
+This trick is how a binary tree encodes a 3-ary node.
+We will see the same trick in [[loop start, end do body]]:
+[[start]] and [[end]] are wrapped in an [[OLIST]] under the
+[[ODO]] node's left child.
 
 <<statements rules>>=
 stmnt
@@ -6639,6 +6791,25 @@ Most expression evaluators follow the
 same pattern: evaluate left and right children recursively,
 check types, compute the result, and store it in [[res]]
 with [[op]] set to [[OCONST]].
+
+%claude:
+The [[default]] case is more subtle than it looks: after
+evaluating the expression, it auto-prints the result by
+splicing it into the [[prnt]] node and re-evaluating that.
+This is what makes the [[acid]] REPL behave like
+``type [[*main]] and the value appears''---there is no
+explicit [[print]] call, the interpreter prints any
+non-empty top-level expression result automatically. The
+[[ret || (...empty list...)]] condition skips auto-printing
+in two cases: (1) when a [[return]] is in flight (we should
+not print, we should propagate), and (2) when the result is
+the empty list (typically a function that returned nothing).
+%
+[[OASGN]] and [[OCALL]] have their own cases because
+assignments and calls are evaluated for their side effects
+and should \emph{not} auto-print---otherwise [[x = 42]]
+would print [[42]] back after assigning, and every
+[[bpset(addr)]] call would dump its return value.
 
 <<[[execute()]] switch [[n->op]] cases>>=
 default:
@@ -7374,7 +7545,55 @@ orsh(Node *n, Node *res)
 Function calls in [[acid]] use a scope-based approach for
 local variables. Each call pushes new [[Value]] nodes onto
 the symbol table entries (shadowing the previous values via
-the [[pop]] chain), and each return pops them off. 
+the [[pop]] chain), and each return pops them off.
+
+%claude:
+The shadowing trick is worth a diagram because the same
+[[Lsym]] entry can carry multiple values at once, one per
+active scope. Suppose the user defines:
+\begin{verbatim}
+   defn outer() {
+       local x;
+       x = 10;
+       inner();
+   }
+   defn inner() {
+       local x;
+       x = 20;
+       /* HERE: both scopes are alive */
+   }
+\end{verbatim}
+At the moment marked HERE, the [[Lsym]] for [[x]] looks like:
+\begin{verbatim}
+                   Lsym{name="x"}
+                          |
+                          v
+                  +---------------+
+                  | Value         |
+                  | { ival=20,    |
+                  |   ret=inner,  |
+                  |   pop=----+   |
+                  +-----------|---+
+                              |
+                              v
+                  +---------------+
+                  | Value         |
+                  | { ival=10,    |
+                  |   ret=outer,  |
+                  |   pop=----+   |
+                  +-----------|---+
+                              v
+                       (global x, or nil)
+\end{verbatim}
+%
+Each new [[local]] declaration in a function pushes a fresh
+[[Value]] onto the head of the chain via the [[pop]] field;
+each return pops the head off and frees it. The [[ret]] field
+records which call frame ([[Rplace]]) owns the binding, so
+[[call()]] can recognize ``its'' bindings during cleanup.
+This is just a per-symbol stack, but stored inside-out: the
+chain belongs to the [[Lsym]] entry rather than to a single
+global stack of frames.
 
 % for locals shadowing globals (or other locals)
 <<[[Value]] other fields>>=
@@ -8476,7 +8695,64 @@ a given address.
 
 \section{[[acid: src(<coderef>)]]}
 
+%claude:
+The [[src()]] command takes an address (typically [[*PC]],
+the current program counter) and prints the source code around
+that location, with the matching line marked. The library
+implementation is straightforward:
+\begin{verbatim}
+   defn src(addr) {
+       local file, line, str, top, bot;
+
+       str = pcfile(addr);
+       line = pcline(addr);
+       if str == "" then return {};
+       top = line - 5;
+       bot = line + 5;
+       /* read file and print lines top..bot, mark `line' with > */
+   }
+\end{verbatim}
+%
+The two builtins doing the real work are:
+\begin{itemize}
+\item [<pcfile()>]: given an address, return the source file
+that contains it. Implemented in [[libmach]] by walking the
+[[z]]-type history entries to reconstruct the file path.
+\item [<pcline()>]: given an address, return the source line
+number. Implemented by binary-searching the line number-PC
+table the linker emitted.
+\end{itemize}
+%
+Once the file and line are known, [[src()]] reads a window of
+nearby lines and prints them. The user can also use [[Bsrc()]]
+which opens the source file in an external editor (typically
+[[acme]]) at the right line---a primitive form of IDE integration.
+
 \section{Frames and complex}
+
+%claude:
+Source-level inspection of \emph{values} (not just lines) needs
+two more pieces:
+\begin{itemize}
+\item {Frame walking}: to display local variables, the debugger
+needs to find each function's stack frame on the call stack.
+The library function [[stk()]] uses the builtin [<strace>],
+which calls [[libmach]]'s [[ctrace]] follow-set walker. For each
+frame, [[ctrace]] returns the PC, frame pointer, and a list of
+local variable addresses (from the [[a]]/[[p]] symbol entries).
+The library then prints them via [[print()]].
+\item {Complex types}: to display structs and unions, the user
+declares them as [[complex]] (or [[aggr]]) types using the
+syntax we saw in the Interpreting chapter. With a complex
+declaration loaded, the [[.]] operator dispatches to [<odot()>]
+which reads the right offset through [[cormap]]. Without it,
+[[acid]] only sees raw addresses and integers.
+\end{itemize}
+%
+Together, these mechanisms approximate what gdb does with DWARF.
+The result is more limited (no inlining info, no support for
+optimized-out variables) but the implementation is two orders
+of magnitude smaller.
 
 
 %******************************************************************************
