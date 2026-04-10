@@ -316,7 +316,7 @@ zexpr
   ;
 /*e: expressions rules */
 /*s: name rules */
-name 
+name
   : Tid
   {
    $$ = an(ONAME, ZN, ZN);
