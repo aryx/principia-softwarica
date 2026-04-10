@@ -6862,15 +6862,20 @@ statements (control flow, assignments, function calls), while
 the [[expr()]] macro dispatches expression evaluation through
 a function pointer table [<expop>].
 
-\section{Entry point: [[execute()]]}
+\section{Interpreter entry point: [[execute()]]}
 
 %claude:
-[<execute()>] is the main statement executor. It pattern-matches
-on the node's opcode: [[OLIST]] sequences two statements,
-[[OIF]] and [[OWHILE]] implement control flow, [[OLOCAL]]
-declares local variables, and [[ORET]] returns from a function
-via [[longjmp]]. For expression statements, it falls through
-to [[expr()]] and prints the result using [[prnt]].
+[<execute()>] is the entry point of the interpreter. It is
+called from [[yyparse()]] (via the [[bigstmnt]] grammar rule)
+on each top-level AST node and handles both statements and
+expressions by dispatching on the node's opcode. Control-flow
+statements ([[OIF]], [[OWHILE]], [[ODO]]), local declarations
+([[OLOCAL]]), and returns ([[ORET]]) are handled directly by
+the switch; expressions fall through to the [[default]] case,
+which delegates to [[expr()]] (the expression evaluator
+described in the next section). Assignments and calls
+([[OASGN]], [[OCALL]]) get their own cases so that
+[[expr()]] is called without auto-printing the result.
 
 <<function [[execute]]>>=
 /// main (acidmap) | ?? -> <>
@@ -7683,6 +7688,16 @@ orsh(Node *n, Node *res)
 
 \subsection{List and string operations}
 
+%claude:
+The list and string operators ([[head]], [[tail]], [[append]],
+[[delete]], [[+]] for concatenation, [[[]]] for indexing) follow
+the same pattern as the arithmetic operators above: each is a
+small function that evaluates its operands recursively, type-checks
+them, builds a new [[Value]], and stores it in [[res]]. The
+implementations live in [[acid/list.c]] and the relevant chunks
+of [[Debugger\_extra.nw]]; we do not detail them here as they
+do not introduce new mechanisms.
+
 \section{Call, locals, and return}
 
 %claude:
@@ -7958,7 +7973,16 @@ call(char *fn, Node *parameters, Node *local, Node *body, Node *retexp)
 
 
 
-\section{Statements}
+\section{Statement handlers}
+
+%claude:
+The four control-flow opcodes ([[OLIST]] sequence, [[OIF]],
+[[OWHILE]], [[ODO]] counted loop) are handled directly inside
+[<execute()>]'s opcode switch. Each is a small recursive call
+back into [<execute()>] for the body, with [[expr()]] used to
+evaluate the condition. Note that loop bounds in [[ODO]]
+([[loop start, end do body]]) must be integers---this is the
+only place [[acid]] enforces a type at statement level.
 
 <<[[execute()]] switch [[n->op]] cases>>=
 case OLIST:
@@ -8893,7 +8917,28 @@ getstatus(int pid)
 
 \section{Breakpoints}
 
+%claude:
+The four breakpoint commands ([[bpset]], [[bpdel]], [[cont]],
+[[step]]) are written entirely in the [[acid]] language, in
+[[/lib/acid/port.acid]]. They use the same building blocks
+the user would use at the prompt: [[*addr]] to write through
+[[cormap]], [[@addr]] to read the original byte from [[symmap]],
+[[bpinst]] (the architecture's breakpoint instruction string),
+and [[startstop()]] to resume the target. The actual
+state---which addresses currently have breakpoints---lives in
+the global [[acid]] list [[bplist]], which the user can also
+inspect or manipulate directly.
+
 \subsection{Setting a breakpoint: [[bpset(<func>)]]}
+
+%claude:
+[[bpset()]] is the simplest of the four. It first ensures the
+target is stopped (otherwise we cannot patch its memory), then
+checks for duplicates, and finally writes the breakpoint
+instruction at the target address ([[*fmt(addr, bpfmt) = bpinst]])
+and adds it to [[bplist]]. The [[fmt(addr, bpfmt)]] dance is
+needed because [[bpinst]] is a multi-byte string and the [[*]]
+write needs to know the format width.
 
 <<function [[bpset]]>>=
 defn bpset(addr)                                // set a breakpoint
@@ -8910,6 +8955,14 @@ defn bpset(addr)                                // set a breakpoint
         }
 }
 @
+
+%claude:
+[[bpdel()]] is the inverse: it restores the original instruction
+at the breakpoint address using the [[*addr = @addr]] idiom
+(read original from [[symmap]] via [[@]], write to [[cormap]]
+via [[*]]). It then walks [[bplist]] and rebuilds it without
+the deleted entry---a typical functional-style list filter
+written in [[acid]]'s own language.
 
 <<function [[bpdel]]>>=
 defn bpdel(addr)                                // delete a breakpoint
@@ -8938,6 +8991,18 @@ defn bpdel(addr)                                // delete a breakpoint
 
 \subsection{Continue: [[cont()]]}
 
+%claude:
+[[cont()]] resumes execution. The non-obvious case is when
+the target is currently \emph{stopped on a breakpoint}: if we
+just sent [[startstop]] now, the breakpoint instruction would
+fire again immediately and we would be stuck. So [[cont()]]
+first checks whether the current PC is in [[bplist]], and if
+so, restores the original instruction, single-steps over it
+(so the original is executed once), then re-inserts the
+breakpoint before resuming. This is the same step-over-the-bp
+trick that real-hardware debuggers use; in [[acid]] it lives
+in the [[acid]] library rather than in C.
+
 <<function [[cont]]>>=
 defn cont()                                     // continue execution
 {
@@ -8954,6 +9019,39 @@ defn cont()                                     // continue execution
 @
 
 \subsection{One step execution: [[step()]]}
+
+%claude:
+[[step()]] is where the breakpoint dance from
+Chapter~\ref{chap:kernel-support} actually happens. It is one
+of the cleverer pieces of [[acid]] because the ARM does not
+have a hardware single-step flag (unlike x86's [[TF]] bit
+or [[ptrace(PTRACE\_SINGLESTEP)]] on Linux). [[acid]] has to
+simulate single-step using only breakpoints:
+\begin{enumerate}
+\item If the PC is currently sitting on a breakpoint, save
+the breakpoint address and restore the original instruction
+([[*bput = @bput]] reads the original byte from [[symmap]]
+and writes it through [[cormap]]).
+\item Compute the {follow set}---the addresses of every
+instruction the next-executed instruction can possibly jump
+to ([[follow(*PC)]]). For a normal instruction this is just
+[[*PC + 4]]; for a branch it could be [[*PC + 4]] OR the branch
+target; for a return it is [[*LR]]; for a conditional branch
+it is two addresses.
+\item Insert breakpoint instructions at every address in the
+follow set.
+\item Resume the target with [[startstop(pid)]]. The target
+runs exactly one instruction and hits one of the new breakpoints.
+\item Remove all the breakpoints from the follow set, restoring
+the original instructions.
+\item If we cleared a real breakpoint at step~1, re-insert it.
+\end{enumerate}
+%
+The follow-set technique is the standard way to single-step
+on ARM and other architectures without a hardware step flag.
+The downside is that the follow-set computation needs to
+understand every branch instruction, which is why
+[[machdata->foll]] is architecture-specific.
 
 <<function [[step]]>>=
 defn step()                                     // single step the process
