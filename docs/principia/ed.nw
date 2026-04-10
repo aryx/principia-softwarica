@@ -1,6 +1,23 @@
 
 %yoann: explain goal of this appendix which is to show concrete example of literate program to make things more concrete. Also editor which is a nice program we talked a lot before in previous appendix.
-
+%claude:
+This appendix has two purposes. First, it is a worked
+{example of a literate program}---a complement to
+Section~\ref{sec:literate-programming} of the main book,
+which presented literate programming in the abstract
+(Knuth, [[noweb]], chunks, prose-and-code interleaving).
+Reading the source of a real program presented in
+literate form is the best way to see what literate
+programming actually buys you, and to learn the [[noweb]]
+conventions (\verb+<<chunk name>>=+, \verb+@+, and
+\verb+[[code]]+ for inline code references) by example.
+%
+Second, [[ed]] is a {tutorial introduction to a real \plan
+program}: it is small enough (under 2000~lines of C) to
+fit in one appendix, yet old enough and famous enough
+that almost every modern editor descends from it in some
+way. Reading its source is a quick way to see how a
+non-trivial \unix tool was structured in the 1970s.
 
 \section{Introduction}
 
@@ -61,6 +78,7 @@ or Kernighan's two tutorials from the Bell Labs technical reports.
 
 
 \section{Motivations: [[mkenam]]}
+\label{sec:motivations-mkenam}
 
 % ex of powerful ed command used in principia/goken mkenam:
 %claude:
@@ -93,6 +111,30 @@ Q
 % by end of chapter you will understand this script :)
 
 %yoann: show part of 5.out.h and part of enam.c so can understand goal in 2 columns
+%claude:
+To make the goal concrete, here is what a snippet of the input
+file [[5.out.h]] looks like (left) and what the output [[enam.c]]
+is supposed to look like (right):
+\begin{verbatim}
+   5.out.h (input)            enam.c (generated output)
+   ----------------           ---------------------------
+   enum    As {               char* anames[] =
+       AXXX,                   {
+       ANOP,                       "XXX",
+       AAND,                       "NOP",
+       AORR,                       "AND",
+       AEOR,                       "ORR",
+       AADD,                       "EOR",
+       ASUB,                       "ADD",
+       ...                         "SUB",
+   };                              ...
+                              };
+\end{verbatim}
+%
+The transformation: keep only lines starting with a tab followed
+by [[A]] (the opcode names), strip that prefix, wrap each name in
+double quotes followed by a comma, and add the
+\verb+char* anames[]+ array header and trailing brace.
 
 %claude:
 The script uses [[ed -]] (quiet mode, suppressing character counts)
@@ -232,12 +274,40 @@ and inserts new offsets into [[zero]].
 The temporary file only grows; it is never compacted.
 
 %yoann: ASCII diagram to better illustrate
+%claude:
+Concretely, suppose the user has the following text in the buffer:
+\begin{verbatim}
+                              tfile (the temporary file on disk)
+                              +--------------------------------+
+                              |hello world\n                   |
+                              |second line\n                   |
+                              |third line\n                    |
+                              |a deleted line that's still here\n
+                              +--------------------------------+
+                              ^0           ^12          ^24    ^36
+
+   zero (in memory)
+   +-------+--------+--------+--------+
+   | unused| 0      | 12     | 24     |
+   +-------+--------+--------+--------+
+   index:  0   1        2        3
+              line 1   line 2   line 3
+\end{verbatim}
+%
+Three lines are visible to the user (the [[$]] address is~3),
+even though the temporary file on disk also contains a fourth
+line at offset~36 that was previously deleted. Editing operations
+shift entries within [[zero]]: deleting line~2 would move
+[[zero[3]]] (the offset~24) into [[zero[2]]], leaving the actual
+text at offset~12 in [[tfile]] orphaned but harmless. This is
+why ``ed never compacts the temp file''---deletes are O(1)
+in [[zero]] and zero work on disk.
 
 <<globals ed.c>>=
 ulong   nlall = 128;
 // growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
 // where the ints are file offsets in tfname corresponding to different lines
-int*    zero; 
+int*    zero;
 @
 
 % see chatGPT explanation of full ed.nw.
@@ -277,14 +347,6 @@ int*    zero;
 
 % called zero because zero itself points to zero[0] which
 % is not line1, it's 0.
-%claude:
-Note the [[sizeof(int*)]] in the allocation---this is actually a
-bug (it should be [[sizeof(int)]]), but it is harmless on
-architectures where pointers and ints have the same size.
-On 32-bit systems both are 4~bytes; on 64-bit systems pointers
-are 8~bytes but ints are still 4, so the bug over-allocates
-(wasting memory but never crashing).
-%yoann1: actually the code using sizeof(int*) is not shown here so maybe this paragraoh should be moved
 
 \subsection{Cursors: [[dot]] and [[dol]]}
 %alt: Addresses? Line Pointers?
@@ -310,6 +372,13 @@ int*    dol;
 % The user will enter '$' and '.' in commands.
 
 %yoann: can actually reference motivation section and script where was using 1,$ for range of lines
+%claude:
+This is where the [[1,$]] address range from the [[mkenam]] script
+in Section~\ref{sec:motivations-mkenam} comes from.
+The substitute command in that script means ``from line~1 to [[$]]
+(the last line), substitute \ldots''---and now we know that [[$]] is
+just the user spelling for [[dol]]. Similarly, the [[.]] in commands
+like [[.s/old/new/]] refers to [[dot]].
 
 %Classic ed addresses include:
 %- 0 (before first line)
@@ -426,6 +495,15 @@ main(int argc, char *argv[])
 }
 @
 % init(), commands(), quit()
+
+%claude:
+The [[sizeof(int*)]] in the [[zero = malloc(...)]] line is actually
+a bug---it should be [[sizeof(int)]], since [[zero]] holds [[int]]
+file offsets, not pointers. The bug is harmless on architectures
+where pointers and ints have the same size (32-bit systems);
+on 64-bit systems, pointers are 8~bytes while [[int]] is still 4,
+so the allocation simply over-reserves memory without causing any
+incorrect behavior. Even Ken Thompson wrote slightly buggy C code.
 
 % globp = "r" = automatic command to do first = read file! important command
 %  rarely called explicitely, but important nonetheless
@@ -700,6 +778,27 @@ check must leave room for one full multi-byte character plus
 the possibility that [[lp]] already advanced past the check.
 
 %yoann: maybe ASCII diagram to better understand putchr, and especially the worst case scenario mentioned before
+%claude:
+\begin{verbatim}
+   line[]:
+   +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
+   | h | e | l | l | o |   | w | o | r | l | d |   |     |   |   |   |   |   |
+   +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
+   ^                                                ^                          ^
+   line                                            linp                line+sizeof
+                                                                       (line)-5
+                                                    |<--- worst-case --->|
+                                                       4-byte UTF-8 rune
+                                                       + safety margin
+\end{verbatim}
+%
+[[linp]] tracks how full the buffer is. The flush check
+[[lp >= &line[sizeof(line)-5]]] reserves 5~bytes at the end of
+the buffer because: (1)~UTF-8 runes can be up to 4~bytes each
+(``hello''~$\mu$~``s'' ends with a 2-byte rune that
+[[runetochar()]] writes after [[lp]] is checked), and (2)~one
+extra byte for safety. Without this margin, a multi-byte rune
+arriving when the buffer is nearly full could overrun the array.
 
 <<function [[putchr]](ed.c)>>=
 /// error | putst | ... -> <>
@@ -1274,6 +1373,50 @@ putline(void)
 @
 
 %yoann: maybe ascii diagram where see content of tfile on disk and some operations
+%claude:
+A short example of how [[zero]] and [[tfile]] evolve. Suppose
+the user types:
+\begin{verbatim}
+   r foo.txt   (file contains: "alpha\nbeta\ngamma\n")
+   2d          (delete line 2)
+   1a          (append after line 1)
+   delta       (the new text)
+   .
+\end{verbatim}
+%
+After [[r]] reads the three lines:
+\begin{verbatim}
+   tfile (offsets):   0      6     11     17
+                      +------+-----+------+
+                      |alpha\|beta\|gamma\|
+                      +------+-----+------+
+   zero:  [_, 0, 6, 11]    (3 lines, dot=3)
+\end{verbatim}
+%
+After [[2d]] (delete line 2: shift entries down in [[zero]],
+do nothing on disk):
+\begin{verbatim}
+   tfile:             unchanged (offset 6 'beta' is orphaned)
+   zero:  [_, 0, 11]       (2 lines, dot=2)
+\end{verbatim}
+%
+After [[1a]] then [[delta]] then [[.]] (append ``delta'' after
+line 1, [[putline()]] writes ``delta\\n'' to the end of [[tfile]]
+at offset~17, [[append()]] inserts the new offset into [[zero]]):
+\begin{verbatim}
+   tfile:             0      6     11     17     23
+                      +------+-----+------+------+
+                      |alpha\|beta\|gamma\|delta\|
+                      +------+-----+------+------+
+                                          ^new
+   zero:  [_, 0, 17, 11]    (3 lines, dot=2)
+\end{verbatim}
+%
+Notice that [[tfile]] grew by one line ([[delta]]), but the
+``deleted'' [[beta]] is still on disk---it just is no longer
+referenced by [[zero]]. This is why ed can do bounded edits in
+constant time but the temp file can become arbitrarily large
+during a long session.
 
 \subsection{[[exfile()]]}
 
@@ -1748,6 +1891,40 @@ the whole range.  This rearranges [[zero]] entries in-place
 without any temporary storage.
 
 %yoann: ASCII diagram illustrating triple reverse algo (and maybe add a reference?)
+%claude:
+The triple-reverse trick is well known among C programmers
+but easy to forget. Here is how it rotates a block to the left
+in three reversal passes. Suppose [[zero]] looks like this and
+we want to move lines 4--5 (the block ``DE'') in front of
+line~2 (i.e., between line~1 and the current line~2):
+\begin{verbatim}
+   start:           A B C D E F
+                    1 2 3 4 5 6
+                       ^   ^^^
+                       adt ad1..ad2
+
+   reverse(adt, ad1):     reverse [B C] -> [C B]
+                    A C B D E F
+
+   reverse(ad1, ad2):     reverse [D E] -> [E D]
+                    A C B E D F
+
+   reverse(adt, ad2):     reverse [C B E D] -> [D E B C]
+                    A D E B C F
+                       ^^^
+                       moved!
+\end{verbatim}
+%
+This is the same algorithm Brian Kernighan attributes to Doug
+McIlroy in {\em Programming Pearls}: rotating an array can be
+done in-place in $O(n)$ time and $O(1)$ extra space using three
+reversals, no temporary buffer required. Compare with the naive
+approach (allocate a temp array, copy, shift, copy back) which
+needs $O(n)$ extra memory.
+%
+The opposite case (moving a block forward instead of backward)
+is symmetric: [<move()>] picks one of the two branches based on
+whether the destination is before or after the source.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'm':
@@ -1851,6 +2028,14 @@ The address-parsing code runs before the command character is read,
 so every command benefits from the same rich addressing syntax.
 
 %yoann: reference again the motivations section; the reader should now understand better the script by now with those 1,$
+%claude:
+Returning to the [[mkenam]] script in
+Section~\ref{sec:motivations-mkenam}, you can now read the
+address parts of each line. The substitution line is two
+addresses ([[1]] and [[$]]) followed by the [[s]] command;
+the [[v]] line is a global-not-match command (no address part,
+matches operate on the whole buffer); [[1i]] is a single
+address (line~1) followed by [[i]] (insert before).
 
 \subsection{Reading [[addr1]] and [[addr2]]}
 
@@ -2770,12 +2955,31 @@ global(int k)
 % restart from zero but hopefully with one less marked line this time.
 
 %yoann: say that by now you finally understand what grep origin is
-
-
+%claude:
+With this in hand, the origin of [[grep]] should now be obvious.
+The classic [[ed]] one-liner [[g/re/p]] means ``for every line
+matching the regular expression [[re]], execute the [[p]]
+command (print)''---i.e., {global / regular expression / print}.
+This was such a common idiom that Ken Thompson and the early
+\unix folks pulled it out into its own standalone tool, named
+literally after the ed command: [[g]] - [[re]] - [[p]] $\to$
+[[grep]]. The original [[grep]] manual page even said
+``[[grep]] is derived from a [[g/re/p]] command in the editor [[ed]].''
 
 \section{Advanced features}
 
 %yoann: small paragraph introducing this section's purpose and %toc: maybe
+%claude:
+%toc:
+The previous sections covered the core editing commands, the
+addressing system, and search-and-replace. This section
+collects the rest: shell escapes ([[!]]), advanced display
+modes ([[l]] for unambiguous listing, [[n]] for numbered
+output), line joining ([[j]]), the [[b]]rowse paginator,
+re-editing the remembered file ([[e]]), and the special
+treatment of append-only files. None of these introduce new
+mechanisms---they are mostly small additions to the command
+dispatcher in [<commands()>].
 
 \subsection{Running a shell command: [[!]]}
 % still M-! on Emacs?
@@ -2937,7 +3141,12 @@ if(c == 'p' || c == 'l' || c == 'n') {
 @
 
 %yoann: again can reference grep origin here
-
+%claude:
+The [[p]] suffix (as in [[3p]] or [[/foo/p]]) is the same [[p]]
+that gave [[grep]] its name. The script form
+[[g/re/p]]---``global, regexp, print''---is just the [[g]]
+command from the previous section composed with the [[p]]
+suffix here.
 
 <<[[printcom()]] reset flags>>=
 listf = false;
@@ -2950,6 +3159,12 @@ pflag = false;
 \subsection{Advanced listing: [[n]]}
 
 %yoann: small intro paragraph for the feature
+%claude:
+The [[n]] suffix prepends the line number before each printed
+line. It is useful when the user is working with addresses and
+wants to remember which line is which without typing [[=]]
+repeatedly. Like [[l]], [[n]] is implemented as a flag set in
+[<newline()>] and consumed by [<printcom()>].
 
 <<globals ed.c>>=
 // 'n' flag
@@ -3233,6 +3448,45 @@ flag---it is always flushed on eviction because it is only used by
 writes, so it is always dirty.
 
 %yoann: maybe ascii diagram so can better understand chose block operations
+%claude:
+\begin{verbatim}
+   tfile (on disk):
+   +-----------+-----------+-----------+-----------+-----...
+   |  block 0  |  block 1  |  block 2  |  block 3  |
+   |  4096 B   |  4096 B   |  4096 B   |  4096 B   |
+   +-----------+-----------+-----------+-----------+-----...
+
+   getblock(atl, iof):
+       bno = atl / (BLKSIZE/sizeof(Rune))    -> which block
+       off = (atl*sizeof(Rune)) & (BLKSIZE-1) -> byte offset within block
+
+   In-memory caches (ed.c globals):
+
+       ibuff[4096]  <- iblock (currently cached read block)
+       obuff[4096]  <- oblock (currently cached write block)
+       ichanged                (dirty bit for ibuff)
+
+   Three cases:
+
+       1. bno == iblock      -> cache hit on read buffer
+                                return &ibuff[off]
+                                if iof==OWRITE, set ichanged
+
+       2. bno == oblock      -> cache hit on write buffer
+                                return &obuff[off]
+
+       3. miss               -> evict the appropriate buffer
+                                (flush if ichanged or oblock>=0),
+                                read or allocate the new block,
+                                return its address
+\end{verbatim}
+%
+The split between [[ibuff]] and [[obuff]] avoids ping-pong: a
+typical [[ed]] session keeps reading lines from one part of
+[[tfile]] (cached in [[ibuff]]) while writing modified lines
+to the growing tail of [[tfile]] (cached in [[obuff]]). With a
+single buffer the cache would constantly be evicted as the
+program alternates reads and writes; with two, both stay warm.
 
 <<globals ed.c>>=
 int iblock;
