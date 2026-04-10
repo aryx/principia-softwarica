@@ -525,6 +525,20 @@ not the return value.
 % Awesome (remember efuns.byte crashes).
 
 %claude:
+Where a tracer just observes system calls from outside, a
+debugger goes much further: it controls the target program
+itself and can stop it at arbitrary points, read and modify
+its memory and registers, and resume it. This section
+presents the principles common to most debuggers: how the
+debugger talks to the target process, the standard ways
+to stop it ({breakpoints} and {watchpoints}), the
+inspection facilities for examining its state, and the
+{disassembler} and {source-level} mechanisms that turn raw
+addresses and bytes back into something the user can read.
+
+\subsection{Controlling another program}
+
+%claude:
 A {debugger} is a program that controls another program.
 One naive approach is full interpretation (as in the
 \book{Emulator}), which gives total control but is far
@@ -535,23 +549,19 @@ efficiently.
 %claude:
 The basic mechanism is simple: the debugger is a separate
 process that can read and write the target's memory and
-registers through kernel facilities ([[/proc]] on \plan,
-[[ptrace]] on Linux). To set a {breakpoint}, the debugger
-replaces an instruction at the desired address with one
-that causes a fault (e.g., [[BKPT]] on ARM, [[INT 3]] on
-x86). When the target reaches that address, the fault
-stops execution and gives control back to the debugger.
-The debugger can then inspect registers and memory, and
-resume execution after restoring the original instruction.
+registers through kernel facilities. The debugger can stop
+the target at chosen addresses (via {breakpoints}, presented
+in the next subsection), inspect its state, modify it,
+and let it resume.
 
 %yoann: what about debuggers in old OSes without a /proc? Debuggers always required kernel support?
 %claude:
-Debuggers have always required some form of kernel cooperation,
-even on systems without a [[/proc]] file system. The need for
-kernel support is fundamental: without it, a user process has
-no way to access another process's memory or registers because
-the OS isolates address spaces for security and stability.
-The interface, however, varies a lot between systems:
+The need for kernel cooperation is fundamental: without it,
+a user process has no way to access another process's memory
+or registers, because the OS isolates address spaces for
+security and stability. Debuggers have always relied on some
+form of this cooperation, even on systems without a [[/proc]]
+file system. The interface, however, varies a lot:
 
 %claude:
 \begin{itemize}
@@ -605,22 +615,29 @@ to fire after every instruction. Tools like Borland's
 \end{itemize}
 
 %claude:
-The trap-based breakpoint mechanism (replace an instruction
-with one that faults) is universal across all these systems,
-because it relies on hardware features ([[INT 3]] on x86,
-[[BKPT]] on ARM) that predate modern operating systems.
-What differs is how the debugger receives the resulting
-fault and how it accesses the target's state.
+What differs across these systems is how the debugger
+receives fault notifications and how it accesses the
+target's state. The fundamental {trap-based breakpoint
+mechanism}, on the other hand, is universal---we look at
+it next.
 
 \subsection{Breakpoint}
 
 %claude:
-A {breakpoint} stops execution at a specific address.
-As described above, the debugger patches the instruction
-at the target address to cause a fault, waits for the
-fault, then restores the original instruction. Breakpoints
-can be conditional (stop only when a condition is true)
-or counted (stop only after the $n$-th hit).
+A {breakpoint} stops execution at a specific address. The
+debugger sets one by replacing the instruction at the target
+address with a one-byte instruction that causes a fault
+(e.g., [[INT 3]] on x86, [[BKPT]] on ARM). When the target
+reaches that address, the fault stops execution and gives
+control back to the debugger; after inspection, the debugger
+restores the original instruction, single-steps over it, and
+re-inserts the trap so the breakpoint stays active. This
+mechanism is universal because it relies on hardware
+features that predate modern operating systems.
+%
+Breakpoints can be conditional (stop only when a condition
+is true) or counted (stop only after the $n$-th hit), but
+the underlying trap mechanism is the same.
 %
 An important detail is that the debugger modifies the
 instruction in the target process's {memory image}, not
@@ -836,7 +853,7 @@ that divides by zero:
 #include <u.h>
 #include <libc.h>
 
-int foo(int x, int y) { 
+int foo(int x, int y) {
     return x / y;
 }
 
@@ -857,6 +874,16 @@ main(int argc, char **argv)
 @
 %use argc so see it in the call stack (otherwise if unused don't see it)
 % and also to avoid some opti on constant folding
+
+\subsection{Running to a breakpoint}
+
+%claude:
+The first half of the session covers a typical happy-path
+inspection: start the program, set a breakpoint at a function
+of interest, continue to it, and look around. This is the
+basic debugging workflow you would use even on a program that
+is not yet failing---for example, to understand the state at
+the entry of a suspicious function.
 
 We compile it, start [[acid]], set a breakpoint on [[bar]],
 run to it, and inspect the state:
@@ -902,6 +929,15 @@ acid: src(*PC)
 
 Up until this point, no bug. Let's continue.
 % haha
+
+\subsection{Catching the divide-by-zero}
+
+%claude:
+The second half is where the actual debugging happens. We
+resume execution, hit a fault, then use [[acid]]'s inspection
+commands to find out what went wrong: read the parameters
+that caused the fault, look at the offending machine
+instruction, and check the register state.
 
 \begin{verbatim}
 acid: cont()
@@ -970,6 +1006,72 @@ to read it: it lives at offset [[+0x4]] from the frame pointer
 of [[foo]]'s stack frame.
 This is the typical acid debugging workflow: inspect source,
 read variables, check assembly, examine registers.
+
+\subsection{Variables are addresses, not values}
+
+%claude:
+A common surprise for first-time [[acid]] users is that
+\emph{every variable behaves like a pointer}, even ones that
+are plain integers in the C source. In our example,
+[[foo]] takes [[int x]] and [[int y]]---two ordinary [[int]]
+parameters. Yet to see their values at the [[acid]] prompt,
+we wrote [[*foo:y]] and [[*foo:x]] with an explicit dereference.
+Why?
+
+%claude:
+Because in [[acid]], a name like [[foo:x]] resolves to the
+{address} where [[x]] lives in memory (the offset of [[x]]
+within [[foo]]'s stack frame, plus the current frame pointer),
+not the value stored there. To get the value, you have to
+dereference the address with [[*]]. The same is true for
+global variables: typing [[main]] at the prompt gives you the
+address of [[main]] (e.g., [[0x1020]]), not the bytes of code
+at that address. Even register names work this way:
+[[PC]] is an offset into [[/proc/<pid>/regs]], and [[*PC]]
+is the actual program counter value.
+%
+This convention makes [[acid]] more uniform than C: every
+identifier is an address, and dereferencing is always
+explicit. It also matches how a debugger thinks: the debugger
+already knows where every variable lives, what it cannot
+guess is when you want to look at the variable's location
+versus the value stored there.
+
+\subsection{[[*]] vs [[@]]: live process vs binary file}
+
+%claude:
+There are actually \emph{two} dereference operators in
+[[acid]]: [[*]] and [[@]]. They look similar but read from
+two different places:
+\begin{itemize}
+\item [[*addr]] reads from [[cormap]]---the {live process
+memory} via [[/proc/<pid>/mem]]. This gives you the current
+runtime state: actual values of variables, contents of the
+stack, current instructions (which may include breakpoints
+that [[acid]] inserted).
+\item [[@addr]] reads from [[symmap]]---the {executable
+file} on disk. This gives you the original, unmodified
+contents: the code as the linker laid it out, before any
+breakpoint patches.
+\end{itemize}
+%
+For \emph{data} segments, the two are typically the same
+right after [[exec]] (the kernel maps the file's data segment
+into memory), but they diverge as soon as the program writes
+to a global variable: [[*]] sees the new value, [[@]] sees
+the original.
+%
+For \emph{text}, they differ whenever [[acid]] has set a
+breakpoint: [[*addr]] returns the breakpoint instruction
+([[INT 3]] / [[BKPT]]), while [[@addr]] returns the original
+instruction. This is exactly how [[bpdel()]] restores the
+original byte---it reads it back from [[symmap]] via [[@]]
+and writes it through [[cormap]] via [[*]].
+%
+Most of the time you want [[*]]: it is the equivalent of
+``inspect this running process.'' You only need [[@]] for
+unusual tasks like patching, restoring instructions, or
+comparing the file against the running image.
 
 \section{Code organization}
 
