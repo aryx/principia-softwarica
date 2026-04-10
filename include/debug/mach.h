@@ -2,6 +2,8 @@
 /*
  *      Architecture-dependent application data
  */
+
+// This define the Exec and Sym structures.
 #include "a.out.h"
 //TODO: include "elf.h" too? and macho.h?
 

@@ -2681,6 +2681,19 @@ enum symbol_type
 
 % ?? Diff with Symbol?
 
+The [[Sym]] type is defined in [[include/a.out.h]] that is included
+by libmach [[mach.h]].
+
+\begin{verbatim}
+struct	Sym
+{
+    vlong	value;
+    uint	sig;
+    char	type;
+    char	*name;
+};
+\end{verbatim}
+
 %claude:
 [[Sym]] and [[Symbol]] are easy to confuse but play different roles:
 \begin{itemize}
@@ -4320,6 +4333,24 @@ if(p != nil) {
 @
 
 
+<<function [[acidinit]](arm)>>=
+defn acidinit()                 // Called after all the init modules are loaded
+{
+        bplist = {};
+        bpfmt = 'X';
+
+        srcpath = {
+                "./",
+                "/sys/src/libc/port/",
+                "/sys/src/libc/9sys/",
+                "/sys/src/libc/arm/"
+        };
+
+        srcfiles = {};                  // list of loaded files
+        srctext = {};                   // the text of the files
+}
+@
+
 %\section{Setting [[symbols]]}
 \subsection{Importing target symbols}
 
@@ -4448,7 +4479,7 @@ if(l && l->proc) {
 
 %claude:
 When the user types [[new()]] at the [[acid]] prompt, the
-[[acid]] library function [[new()]] (defined in
+[[acid]] library function [<new()>] (defined in
 [[/lib/acid/port.acid]]) calls the builtin [<newproc()>],
 which forks a child process to run the target program.
 %
@@ -8546,6 +8577,94 @@ instruction(s) and single-step correctly over branches
 and delay slots.
 
 
+<<lib/acid/arm.acid>>=
+// ARM support
+
+<<function [[acidinit]](arm)>>
+
+<<function [[linkreg]](arm)>>
+<<function [[stk]](arm)>>
+
+defn lstk()                             // trace with locals
+{
+        _stk(*PC, *SP, linkreg(0), 1);
+}
+
+<<function [[gpr]](arm)>>
+<<function [[regs]](arm)>>
+
+defn pstop(pid)
+{
+        local l;
+        local pc;
+
+        pc = *PC;
+
+        print(pid,": ", reason(*TYPE), "\t");
+        print(fmt(pc, 'a'), "\t", fmt(pc, 'i'), "\n");
+
+        if notes then {
+                if notes[0] != "sys: breakpoint" then {
+                        print("Notes pending:\n");
+                        l = notes;
+                        while l do {
+                                print("\t", head l, "\n");
+                                l = tail l;
+                        }
+                }
+        }
+}
+
+sizeofUreg=72;
+aggr Ureg
+{
+        'U' 0 r0;
+        'U' 4 r1;
+        'U' 8 r2;
+        'U' 12 r3;
+        'U' 16 r4;
+        'U' 20 r5;
+        'U' 24 r6;
+        'U' 28 r7;
+        'U' 32 r8;
+        'U' 36 r9;
+        'U' 40 r10;
+        'U' 44 r11;
+        'U' 48 r12;
+        'U' 52 r13;
+        'U' 56 r14;
+        'U' 60 type;
+        'U' 64 psr;
+        'U' 68 pc;
+};
+
+defn
+Ureg(addr) {
+        complex Ureg addr;
+        print(" r0      ", addr.r0, "\n");
+        print(" r1      ", addr.r1, "\n");
+        print(" r2      ", addr.r2, "\n");
+        print(" r3      ", addr.r3, "\n");
+        print(" r4      ", addr.r4, "\n");
+        print(" r5      ", addr.r5, "\n");
+        print(" r6      ", addr.r6, "\n");
+        print(" r7      ", addr.r7, "\n");
+        print(" r8      ", addr.r8, "\n");
+        print(" r9      ", addr.r9, "\n");
+        print(" r10     ", addr.r10, "\n");
+        print(" r11     ", addr.r11, "\n");
+        print(" r12     ", addr.r12, "\n");
+        print(" r13     ", addr.r13, "\n");
+        print(" r14     ", addr.r14, "\n");
+        print(" type    ", addr.type, "\n");
+        print(" psr     ", addr.psr, "\n");
+        print(" pc      ", addr.pc, "\n");
+};
+
+print("/lib/acid/arm.acid");
+@
+
+
 %******************************************************************************
 \chapter{The [[acid]] Commands}
 %******************************************************************************
@@ -8561,6 +8680,9 @@ implemented as combinations of [[acid]] library functions
 (in [[/lib/acid/port.acid]] and [[/lib/acid/$objtype.acid]]) calling C
 builtins from [[acid/builtin.c]].
 
+%yoann: remember globals set in loadvars(), newproc(), acidinit() etc
+% such as [[pid]], [[proc]], [[bplist]], etc.
+
 \section{Start the program: [[new()]]}
 
 %claude:
@@ -8572,42 +8694,25 @@ at [[main]], continues to it, then removes the breakpoint.
 After [[new()]], the target is stopped at the first
 instruction of [[main]], ready for inspection.
 
+<<function [[new]]>>=
+defn new()
+{
+        bplist = {};
+        newproc(progargs);
+        // Dont miss the delay slot calls
+        bpset(follow(main)[0]);
+        cont();
+        bpdel(*PC);
+}
+@
+
+<<global [[progargs]]>>=
+progargs="";
+@
+
 <<[[tab]] entries>>=
 "newproc",	newproc,
 @
-
-
-\section{Breakpoints}
-
-\subsection{Setting a breakpoint: [[bpset(<func>)]]}
-
-\subsection{Continue: [[cont()]]}
-
-\section{Inspecting}
-%alt:\chapter{Printing and Introspection}
-
-\subsection{Printing values: [[print(<expr>)]]}
-\label{sec:printing}
-
-%claude:
-This section covers [[acid]]'s output: the [[print]] builtin,
-the [[prnt]] node used to auto-print expression results in
-the REPL, the [[whatis]] command for introspection, and the
-AST pretty-printer used to display function definitions.
-
-<<global [[prnt]]>>=
-Node*	prnt;
-@
-
-% can also just use expr and it will be printed by default in most cases
-% like foo:x or foo:x\d
-
-\subsection{Stack trace: [[stk()]]}
-
-\subsection{Register dump: [[regs()]]}
-
-\subsection{Disassembly: [[asm(<coderef>)]]}
-
 
 
 \section{Process control}
@@ -8786,6 +8891,256 @@ getstatus(int pid)
 
 
 
+\section{Breakpoints}
+
+\subsection{Setting a breakpoint: [[bpset(<func>)]]}
+
+<<function [[bpset]]>>=
+defn bpset(addr)                                // set a breakpoint
+{
+        if status(pid) != "Stopped" then {
+                print("Waiting...\n");
+                stop(pid);
+        }
+        if match(addr, bplist) >= 0 then
+                print("breakpoint already set at ", fmt(addr, 'a'), "\n");
+        else {
+                *fmt(addr, bpfmt) = bpinst;
+                bplist = append bplist, addr;
+        }
+}
+@
+
+<<function [[bpdel]]>>=
+defn bpdel(addr)                                // delete a breakpoint
+{
+        local n, pc, nbplist;
+
+        n = match(addr, bplist);
+        if n < 0  then {
+                print("no breakpoint at ", fmt(addr, 'a'), "\n");
+                return {};
+        }
+
+        addr = fmt(addr, bpfmt);
+        *addr = @addr;
+
+        nbplist = {};                           // delete from list
+        while bplist do {
+                pc = head bplist;
+                if pc != addr then
+                        nbplist = append nbplist, pc;
+                bplist = tail bplist;
+        }
+        bplist = nbplist;                       // delete from memory
+}
+@
+
+\subsection{Continue: [[cont()]]}
+
+<<function [[cont]]>>=
+defn cont()                                     // continue execution
+{
+        local addr;
+
+        addr = fmt(*PC, bpfmt);
+        if match(addr, bplist) >= 0 then {      // Sitting on a breakpoint
+                *addr = @addr;
+                step();                         // Step over
+                *addr = bpinst;
+        }
+        startstop(pid);                         // Run
+}
+@
+
+\subsection{One step execution: [[step()]]}
+
+<<function [[step]]>>=
+defn step()                                     // single step the process
+{
+        local lst, lpl, addr, bput;
+
+        bput = 0;
+        if match(*PC, bplist) >= 0 then {       // Sitting on a breakpoint
+                bput = fmt(*PC, bpfmt);
+                *bput = @bput;
+        }
+
+        lst = follow(*PC);
+
+        lpl = lst;
+        while lpl do {                          // place break points
+                *(head lpl) = bpinst;
+                lpl = tail lpl;
+        }
+
+        startstop(pid);                         // do the step
+
+        while lst do {                          // remove the breakpoints
+                addr = fmt(head lst, bpfmt);
+                *addr = @addr;
+                lst = tail lst;
+        }
+        if bput != 0 then
+                *bput = bpinst;
+}
+@
+
+
+\section{Inspecting}
+%alt:\chapter{Printing and Introspection}
+
+\subsection{Printing values: [[print(<expr>)]]}
+\label{sec:printing}
+
+%claude:
+This section covers [[acid]]'s output: the [[print]] builtin,
+the [[prnt]] node used to auto-print expression results in
+the REPL, the [[whatis]] command for introspection, and the
+AST pretty-printer used to display function definitions.
+
+<<global [[prnt]]>>=
+Node*	prnt;
+@
+
+% can also just use expr and it will be printed by default in most cases
+% like foo:x or foo:x\d
+
+\subsection{Stack trace: [[stk()]]}
+
+<<function [[stk]](arm)>>=
+defn stk()                              // trace
+{
+        _stk(*PC, *SP, linkreg(0), 0);
+}
+@
+
+<<function [[linkreg]](arm)>>=
+defn linkreg(addr)
+{
+        return *R14;
+}
+@
+
+<<function [[_stk]]>>=
+// print a stack trace
+//
+// in a run of leading frames in files matched by regexps in stkignore,
+// only print the last one.
+defn _stk(pc, sp, link, dolocals)
+{
+        local stk, ign, last, lastpc;
+
+        stk = strace(pc, sp, link);
+        if stkignore then
+                ign = 1;
+        else
+                ign = 0;
+        last = stk;
+        lastpc = pc;
+        while stk do {
+                if ign then {
+                        if !_stkign(pcfile(pc)) then {
+                                ign = 0;
+                                stk = last;
+                                pc = lastpc;
+                        }
+                }
+                frame = head stk;
+                if !ign then {
+                        print(stkprefix, fmt(frame[0], 'a'), "(");
+                        params(frame[2]);
+                        print(")+", itoa(pc-frame[0], "%ux"), " ");
+                        pfl(pc);
+                        if dolocals then
+                                locals(frame[3]);
+                }
+                last = stk;
+                lastpc = pc;
+                stk = tail stk;
+                pc = frame[1];
+        }
+        print(stkprefix, fmt(pc, 'a'), " ");
+        pfl(pc);
+}
+@
+
+\subsection{Register dump: [[regs()]]}
+
+<<function [[regs]](arm)>>=
+defn regs()                             // print all registers
+{
+        gpr();
+}
+@
+
+<<function [[gpr]](arm)>>=
+defn gpr()                      // print general purpose registers
+{
+        print("R0\t", *R0, " R1\t", *R1, " R2\t", *R2, "\n");
+        print("R3\t", *R3, " R4\t", *R4, " R5\t", *R5, "\n");
+        print("R6\t", *R6, " R7\t", *R7, " R8\t", *R8, "\n");
+        print("R9\t", *R9, " R10\t", *R10, " R11\t", *R11, "\n");
+        print("R12\t", *R12, " R13\t", *R13, " R14\t", *R14, "\n");
+        print("R15\t", *R15, "\n");
+}
+@
+
+\subsection{Disassembly: [[asm(<coderef>)]]}
+
+<<function [[asm]]>>=
+defn asm(addr)
+{
+        local bound;
+
+        bound = fnbound(addr);
+
+        addr = fmt(addr, 'i');
+        loop 1,_asmlines do {
+                print(fmt(addr, 'a'), " ", fmt(addr, 'X'));
+                print("\t", @addr++, "\n");
+                if bound != {} && addr > bound[1] then {
+                        lasmaddr = addr;
+                        return {};
+                }
+        }
+        lasmaddr = addr;
+}
+@
+
+<<constant [[_asmlines]]>>=
+_asmlines = 30;
+@
+
+\subsection{Locals and params: [[locals()]] and [[params()]]}
+
+<<function [[locals]]>>=
+defn locals(l)
+{
+        local sym;
+
+        while l do {
+                sym = head l;
+                print(stkprefix, "\t", sym[0], "=", itoa(sym[1], "%ux"), "\n");
+                l = tail l;
+        }       
+}
+@
+
+<<function [[params]]>>=
+defn params(param)
+{
+        while param do {
+                sym = head param;
+                print(sym[0], "=", itoa(sym[1], "%ux"));
+                param = tail param;
+                if param then
+                        print (",");
+        }       
+}
+@
+
+
 %******************************************************************************
 \chapter{Source level C Debugging}
 %******************************************************************************
@@ -8810,33 +9165,84 @@ The [[src()]] command takes an address (typically [[*PC]],
 the current program counter) and prints the source code around
 that location, with the matching line marked. The library
 implementation is straightforward:
-\begin{verbatim}
-   defn src(addr) {
-       local file, line, str, top, bot;
 
-       str = pcfile(addr);
-       line = pcline(addr);
-       if str == "" then return {};
-       top = line - 5;
-       bot = line + 5;
-       /* read file and print lines top..bot, mark `line' with > */
-   }
-\end{verbatim}
-%
+<<function [[src]]>>=
+defn src(addr)
+{
+        local src, file, line, cline, text;
+
+        file = pcfile(addr);
+        src = match(file, srcfiles);
+
+        if src >= 0 then
+                src = srctext[src];
+        else
+                src = findsrc(file);
+
+        if src == {} then {
+                print("no source for ", file, "\n");
+                return {};
+        }
+
+        cline = pcline(addr)-1;
+        print(file, ":", cline+1, "\n");
+        line = cline-5;
+        loop 0,10 do {
+                if line >= 0 then {
+                        text = src[line];
+                        if text == {} then
+                                return {};
+                        if line == cline then
+                                print(">");
+                        else
+                                print(" ");
+                        print(line+1, "\t", text, "\n");
+                }
+                line = line+1;
+        }       
+}
+@
+
+
 The two builtins doing the real work are:
 \begin{itemize}
+
 \item [<pcfile()>]: given an address, return the source file
 that contains it. Implemented in [[libmach]] by walking the
 [[z]]-type history entries to reconstruct the file path.
+
 \item [<pcline()>]: given an address, return the source line
 number. Implemented by binary-searching the line number-PC
 table the linker emitted.
+
 \end{itemize}
 %
 Once the file and line are known, [[src()]] reads a window of
 nearby lines and prints them. The user can also use [[Bsrc()]]
 which opens the source file in an external editor (typically
 [[acme]]) at the right line---a primitive form of IDE integration.
+
+\section{One statement execution: [[next()]]}
+
+<<function [[next]]>>=
+defn next()
+{
+        local sp, bound;
+
+        sp = *SP;
+        bound = fnbound(*PC);
+        stmnt();
+        pc = *PC;
+        if pc >= bound[0] && pc < bound[1] then
+                return {};
+
+        while (pc < bound[0] || pc > bound[1]) && sp >= *SP do {
+                step();
+                pc = *PC;
+        }
+        src(*PC);
+}
+@
 
 \section{Frames and complex}
 
