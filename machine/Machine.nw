@@ -7243,6 +7243,60 @@ if(sysdbg)
 \subsection{Stack trace}
 % could be in dumpers section
 
+%claude:
+The stack trace command (\verb+$C+) walks the call chain backwards
+from the current function up to [[_main]], printing each frame
+with its parameters and source location. Walking the stack
+requires three pieces of information that the linker emits in
+the symbol table:
+\begin{itemize}
+\item the {function symbol} for each [[T]] entry, found by
+[<findsym()>] using the saved PC;
+\item the {[[.frame]] pseudo-symbol} (an [[m]]-type entry)
+emitted by the linker for each function, whose value is the
+size of the function's stack frame (used to find the next frame);
+\item the {parameter offsets} (the [[p]] entries inside the
+function), used by [<printparams()>] to read each parameter
+from the stack at [[fp + s.value + sizeof(saved_pc)]].
+\end{itemize}
+
+%claude:
+Here is what the ARM call stack looks like, walked from the
+current function up to its caller. Note that ARM's link
+register ([[R14]]) holds the return address of the
+\emph{innermost} call, so the very first frame uses
+[[reg.r[REGLINK]]] for the saved PC, while deeper frames
+read it from memory at [[*sp]]:
+\begin{verbatim}
+   high addresses
+   +-------------------+ <-- _main()'s frame
+   |   saved PC        |
+   +-------------------+
+   |   ...locals...    |
+   +-------------------+ <-- caller frame: SP at outer call
+   |   saved PC        |     (read by getmem_4(sp))
+   +-------------------+
+   |  param1, param2   |     (printparams reads these)
+   +-------------------+
+   |   ...locals...    |
+   +-------------------+ <-- current frame: SP now
+   |  saved PC (or LR) |
+   +-------------------+
+   |   ...locals...    |
+   +-------------------+ <-- reg.r[REGSP]
+   low addresses
+
+   sp += f.value     advances to caller's frame top
+                     (f.value is .frame size for current func)
+\end{verbatim}
+%
+At each step, [<stktrace()>] prints the current function name
+and parameters, then advances [[pc]] and [[sp]] to the caller's
+frame: [[pc]] is read from the saved return slot in the current
+frame, and [[sp]] is bumped by the current frame's size.
+The loop stops when it reaches [[_main]] or when it cannot find
+a valid frame symbol (typically meaning the chain is broken).
+
 <<constant [[STRINGSZ]]>>=
 #define	STRINGSZ	128
 @
@@ -7352,6 +7406,24 @@ stktrace(int modif)
 
 \subsection{Call tree trace}
 
+%claude:
+The call tree trace prints function entries (when [[BL]]
+is executed) and returns (when the link register [[R14]] is
+copied back into the program counter). It has two hooks
+because ARM has no dedicated [[CALL]] / [[RET]] instructions:
+calls are done with [[BL]] (branch-and-link), and returns are
+done by moving [[R14]] into [[R15]] using a regular
+data-processing instruction (typically [[MOV PC, LR]]
+or [[ADD PC, LR, \#0]]).
+The hook in [<Ibl()>] catches calls; the hook in [<dpex()>]
+catches the synthetic ``return'' by detecting any
+data-processing instruction whose destination is the program
+counter ([[rd == REGPC]]). This is one place where ARM's
+unified register file leaks into the emulator: in
+architectures with explicit [[CALL]] / [[RET]] instructions,
+neither hook would be needed---the trace could be added
+right next to the existing handlers.
+
 <<global [[calltree]]>>=
 bool calltree;
 @
@@ -7399,6 +7471,28 @@ equals a specific value. Breakpoints are stored in a linked list
 and checked on every instruction fetch (code breakpoints) or
 memory access (data watchpoints, via the [[membpt]] flag in
 Chapter~\ref{chap:memory}).
+
+%claude:
+Note how different this is from a hardware debugger. A real
+debugger like \book{Debugger}'s [[acid]] cannot afford to check
+a list on every instruction---that would slow the target by
+orders of magnitude. Instead, it patches the instruction at
+the breakpoint address with a trap instruction ([[BKPT]] on ARM,
+[[INT 3]] on x86), which costs nothing until the breakpoint
+fires. Watchpoints in real debuggers are even harder---they
+require either a small number of hardware debug registers (with
+strict alignment and count limits) or expensive page-fault
+trickery.
+%
+[[5i]] does not have this problem. Because every instruction
+already goes through the interpreter loop, adding a list check
+costs almost nothing relative to the simulation overhead, and
+watchpoints are just another check inside [<getmem_x()>] /
+[<putmem_x()>]. There is no limit on the number of watchpoints,
+no alignment restriction, and watchpoints can fire on any byte
+of the address space. This is one of the underrated benefits of
+emulation: features that are hard or impossible on real hardware
+become trivial in software.
 
 <<enum [[breakpoint_kind]]>>=
 enum breakpoint_kind
@@ -7632,6 +7726,33 @@ per-address counts stored in the [[iprof]] array (indexed by
 The [[$Q]] and [[$i]] debugger commands display this data
 as instruction mix summaries, TLB statistics, memory segment
 usage, and per-function hotspot profiles sorted by cycle count.
+
+%claude:
+Like watchpoints in the previous chapter, this is something
+that emulation makes essentially free, but real-hardware
+profilers cannot afford. The two main approaches on real
+hardware are both lossy or expensive:
+\begin{itemize}
+\item {Sampling} (\book{Profiler}'s [[tprof]], Linux's
+[[perf]], macOS's [[Instruments]] / [[DTrace]]): the kernel
+periodically interrupts the program and records the current
+PC. Cheap, but only statistical---short-running functions are
+likely to be missed entirely.
+\item {Instrumentation} (\book{Profiler}'s [[prof]], gcc's
+[[gprof]], Valgrind's [[callgrind]]): the toolchain inserts
+extra code at function entry and exit. Precise, but
+distorts timings and slows the program.
+\end{itemize}
+%
+Because [[5i]] dispatches through a function pointer table on
+every instruction anyway, adding a counter increment costs no
+extra dispatch and no extra overhead relative to the simulation
+itself. The profile is exact---every executed instruction
+contributes to its bucket---and per-instruction granularity is
+free. The trade-off, of course, is that the simulation runs
+much slower than the original program would on real hardware,
+so absolute timings are meaningless; only relative counts
+matter.
 
 %claude:
 The profiling data structures are simple. Each entry in the [[Inst]]
