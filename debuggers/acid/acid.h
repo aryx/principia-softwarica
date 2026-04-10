@@ -21,54 +21,54 @@ enum
 };
 /*e: enum [[_anon_ (acid/acid.h)]] */
 
-#pragma varargck type "L"	void
+#pragma varargck type "L"       void
 
-typedef struct Node	Node;
-typedef struct String	String;
-typedef struct Lsym	Lsym;
-typedef struct List	List;
-typedef struct Store	Store;
-typedef struct Gc	Gc;
-typedef struct Strc	Strc;
-typedef struct Rplace	Rplace;
-typedef struct Ptab	Ptab;
-typedef struct Value	Value;
-typedef struct Type	Type;
-typedef struct Frtype	Frtype;
+typedef struct Node     Node;
+typedef struct String   String;
+typedef struct Lsym     Lsym;
+typedef struct List     List;
+typedef struct Store    Store;
+typedef struct Gc       Gc;
+typedef struct Strc     Strc;
+typedef struct Rplace   Rplace;
+typedef struct Ptab     Ptab;
+typedef struct Value    Value;
+typedef struct Type     Type;
+typedef struct Frtype   Frtype;
 
-extern int	kernel;
-extern int	remote;
-extern int	text;
-extern int	silent;
-extern Fhdr	fhdr;
-extern int	line;
-extern Biobuf*	bout;
-extern Biobuf*	io[32];
-extern int	iop;
-extern char	symbol[Strsize];
-extern int	interactive;
-extern int	na;
-extern int	wtflag;
-extern Map*	cormap;
-extern Map*	symmap;
-extern Lsym*	hash[Hashsize];
-extern long	dogc;
-extern Rplace*	ret;
-extern char*	aout;
-extern bool	gotint;
-extern Gc*	gcl;
-extern int	stacked;
-extern jmp_buf	err;
-extern Node*	prnt;
-extern List*	tracelist;
-extern int	initialising;
-extern int	quiet;
+extern int      kernel;
+extern int      remote;
+extern int      text;
+extern int      silent;
+extern Fhdr     fhdr;
+extern int      line;
+extern Biobuf*  bout;
+extern Biobuf*  io[32];
+extern int      iop;
+extern char     symbol[Strsize];
+extern int      interactive;
+extern int      na;
+extern int      wtflag;
+extern Map*     cormap;
+extern Map*     symmap;
+extern Lsym*    hash[Hashsize];
+extern long     dogc;
+extern Rplace*  ret;
+extern char*    aout;
+extern bool     gotint;
+extern Gc*      gcl;
+extern int      stacked;
+extern jmp_buf  err;
+extern Node*    prnt;
+extern List*    tracelist;
+extern int      initialising;
+extern int      quiet;
 
-extern void	(*expop[])(Node*, Node*);
+extern void     (*expop[])(Node*, Node*);
 /*s: macro [[expr]] */
 #define expr(n, r) do{(r)->comt=nil; (*expop[(n)->op])(n, r);}while(0)
 /*e: macro [[expr]] */
-extern int	fmtsize(Value *v) ;
+extern int      fmtsize(Value *v) ;
 
 /*s: enum [[_anon_ (acid/acid.h)]]2 */
 enum Type_kind
@@ -115,7 +115,7 @@ struct Ptab
 };
 /*e: struct [[Ptab]] */
 
-extern Ptab	ptab[Maxproc];
+extern Ptab     ptab[Maxproc];
 
 /*s: struct [[Rplace]] */
 struct Rplace
@@ -183,9 +183,9 @@ struct Value
     /*x: [[Value]] other fields */
     Lsym*	scope;
     /*x: [[Value]] other fields */
-    Rplace*	ret;
-    /*x: [[Value]] other fields */
     Value*	pop;
+    /*x: [[Value]] other fields */
+    Rplace*	ret;
     /*e: [[Value]] other fields */
 };
 /*e: struct [[Value]] */
@@ -237,7 +237,6 @@ struct Node
     // enum<Type_kind> ?
     char	type;
 
-
     // ??
     int	builtin;
 
@@ -264,79 +263,79 @@ struct String
 };
 /*e: struct [[String]] */
 
-List*	addlist(List*, List*);
-List*	al(int);
-Node*	an(int, Node*, Node*);
-void	append(Node*, Node*, Node*);
-int	fbool(Node*);
-void	build(Node*);
-void	call(char*, Node*, Node*, Node*, Node*);
-void	catcher(void*, char*);
-void	checkqid(int, int);
-void	cmd(void);
-Node*	con(vlong);
-List*	construct(Node*);
-void	ctrace(int);
-void	decl(Node*);
-void	defcomplex(Node*, Node*);
-void	deinstall(int);
-void	delete(List*, int n, Node*);
-void	dostop(int);
-Lsym*	enter(char*, int);
-void	error(char*, ...);
-void	execute(Node*);
-void	fatal(char*, ...);
-void	flatten(Node**, Node*);
-void	gc(void);
-char*	getstatus(int);
-void*	gmalloc(long);
-void	indir(Map*, uvlong, char, Node*);
-void	installbuiltin(void);
-void	kinit(void);
-int	Lfmt(Fmt*);
-int	listcmp(List*, List*);
-int	listlen(List*);
-List*	listvar(char*, vlong);
-void	loadmodule(char*);
-void	loadvars(void);
-Lsym*	look(char*);
-void	ltag(char*);
-void	marklist(List*);
-Lsym*	mkvar(char*);
-void	msg(int, char*);
-void	notes(int);
-int	nproc(char**);
-void	nthelem(List*, int, Node*);
-int	numsym(char);
-void	odot(Node*, Node*);
-void	pcode(Node*, int);
-void	pexpr(Node*);
-int	popio(void);
-void	pstr(String*);
-void	pushfile(char*);
-void	pushstr(Node*);
-void	readtext(char*);
-void	restartio(void);
-uvlong	rget(Map*, char*);
-String	*runenode(Rune*);
-int	scmp(String*, String*);
-void	sproc(int);
-String*	stradd(String*, String*);
-String*	straddrune(String*, Rune);
-String*	strnode(char*);
-String*	strnodlen(char*, int);
-char*	system(void);
-void	trlist(Map*, uvlong, uvlong, Symbol*);
-void	unwind(void);
-void	userinit(void);
-void	varreg(void);
-void	varsym(void);
-Waitmsg*	waitfor(int);
-void	whatis(Lsym*);
-void	windir(Map*, Node*, Node*, Node*);
-void	yyerror(char*, ...);
-int	yylex(void);
-int	yyparse(void);
+List*   addlist(List*, List*);
+List*   al(int);
+Node*   an(int, Node*, Node*);
+void    append(Node*, Node*, Node*);
+int     fbool(Node*);
+void    build(Node*);
+void    call(char*, Node*, Node*, Node*, Node*);
+void    catcher(void*, char*);
+void    checkqid(int, int);
+void    cmd(void);
+Node*   con(vlong);
+List*   construct(Node*);
+void    ctrace(int);
+void    decl(Node*);
+void    defcomplex(Node*, Node*);
+void    deinstall(int);
+void    delete(List*, int n, Node*);
+void    dostop(int);
+Lsym*   enter(char*, int);
+void    error(char*, ...);
+void    execute(Node*);
+void    fatal(char*, ...);
+void    flatten(Node**, Node*);
+void    gc(void);
+char*   getstatus(int);
+void*   gmalloc(long);
+void    indir(Map*, uvlong, char, Node*);
+void    installbuiltin(void);
+void    kinit(void);
+int     Lfmt(Fmt*);
+int     listcmp(List*, List*);
+int     listlen(List*);
+List*   listvar(char*, vlong);
+void    loadmodule(char*);
+void    loadvars(void);
+Lsym*   look(char*);
+void    ltag(char*);
+void    marklist(List*);
+Lsym*   mkvar(char*);
+void    msg(int, char*);
+void    notes(int);
+int     nproc(char**);
+void    nthelem(List*, int, Node*);
+int     numsym(char);
+void    odot(Node*, Node*);
+void    pcode(Node*, int);
+void    pexpr(Node*);
+int     popio(void);
+void    pstr(String*);
+void    pushfile(char*);
+void    pushstr(Node*);
+void    readtext(char*);
+void    restartio(void);
+uvlong  rget(Map*, char*);
+String  *runenode(Rune*);
+int     scmp(String*, String*);
+void    sproc(int);
+String* stradd(String*, String*);
+String* straddrune(String*, Rune);
+String* strnode(char*);
+String* strnodlen(char*, int);
+char*   system(void);
+void    trlist(Map*, uvlong, uvlong, Symbol*);
+void    unwind(void);
+void    userinit(void);
+void    varreg(void);
+void    varsym(void);
+Waitmsg*        waitfor(int);
+void    whatis(Lsym*);
+void    windir(Map*, Node*, Node*, Node*);
+void    yyerror(char*, ...);
+int     yylex(void);
+int     yyparse(void);
 
 /*s: enum [[_anon_ (acid/acid.h)]]3 */
 enum Opcode

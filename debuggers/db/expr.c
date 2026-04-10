@@ -1,16 +1,16 @@
 /*s: db/expr.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 
 #include "defs.h"
 #include "fns.h"
 
-static long	round(long, long);
+static long     round(long, long);
 
-extern	ADDR	ditto;
+extern  ADDR    ditto;
 
 /*s: function [[ascval]] */
 static WORD
@@ -21,7 +21,7 @@ ascval(void)
     if (readchar() == 0)
         return (0);
     r = lastc;
-    while(quotchar())	/*discard chars to ending quote */
+    while(quotchar())   /*discard chars to ending quote */
         ;
     return((WORD) r);
 }
@@ -269,7 +269,7 @@ item(int a)
 /*e: function [[item]] */
 
 /*s: constant [[MAXBASE]] */
-#define	MAXBASE	16
+#define MAXBASE 16
 /*e: constant [[MAXBASE]] */
 
 /*s: function [[getnum]] */
@@ -341,7 +341,7 @@ getnum(int (*rdf)(void))
 void
 readsym(char *isymbol)
 {
-    char	*p;
+    char        *p;
     Rune r;
 
     p = isymbol;
@@ -360,8 +360,8 @@ readsym(char *isymbol)
 void
 readfname(char *filename)
 {
-    char	*p;
-    Rune	c;
+    char        *p;
+    Rune        c;
 
     /* snarf chars until un-escaped char in terminal char set */
     p = filename;

@@ -205,7 +205,7 @@ oindex(Node *n, Node *res)
     case TSTRING:
         res->ival = 0;
         if(r.ival >= 0 && r.ival < l.string->len) {
-            int xx8;	/* to get around bug in vc */
+            int xx8;    /* to get around bug in vc */
             xx8 = r.ival;
             res->ival = l.string->string[xx8];
         }
@@ -957,7 +957,7 @@ oeinc(Node *n, Node *res)
             v->ival -= fmtsize(v);
         else
             v->ival += fmtsize(v);
-        break;			
+        break;                  
     case TFLOAT:
         if(n->op == OEDEC)
             v->fval--;
@@ -987,7 +987,7 @@ opinc(Node *n, Node *res)
             v->ival -= fmtsize(v);
         else
             v->ival += fmtsize(v);
-        break;			
+        break;                  
     case TFLOAT:
         if(n->op == OPDEC)
             v->fval--;
@@ -1044,7 +1044,7 @@ ofmt(Node *n, Node *res)
 void
 owhat(Node *n, Node *res)
 {
-    res->op = OCONST;		/* Default return value */
+    res->op = OCONST;           /* Default return value */
     res->type = TLIST;
     res->l = 0;
     whatis(n->sym);
@@ -1056,7 +1056,7 @@ void (*expop[])(Node*, Node*) =
 {
     /*s: [[expop]] entries */
     [ONAME]	oname,
-    [OCONST]	oconst,
+    [OCONST] oconst,
     [OMUL]	omul,
     [ODIV]	odiv,
     [OMOD]	omod,

@@ -1,7 +1,7 @@
 /*s: db/pcs.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 

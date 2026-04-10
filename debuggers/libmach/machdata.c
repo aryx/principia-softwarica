@@ -9,22 +9,22 @@
 #include <mach.h>
 
 /*s: constant [[STARTSYM]] */
-#define STARTSYM	"_main"
+#define STARTSYM        "_main"
 /*e: constant [[STARTSYM]] */
 /*s: constant [[PROFSYM]] */
-#define PROFSYM		"_mainp"
+#define PROFSYM         "_mainp"
 /*e: constant [[PROFSYM]] */
 /*s: constant [[FRAMENAME]] */
-#define	FRAMENAME	".frame"
+#define FRAMENAME       ".frame"
 /*e: constant [[FRAMENAME]] */
 
-extern	Machdata	mipsmach;
+extern  Machdata        mipsmach;
 
 /*s: global [[asstype]] */
-int	asstype = AARM;		/* disassembler type */
+int     asstype = AARM;         /* disassembler type */
 /*e: global [[asstype]] */
 /*s: global [[machdata]] */
-Machdata *machdata;		/* machine-dependent functions */
+Machdata *machdata;             /* machine-dependent functions */
 /*e: global [[machdata]] */
 
 /*s: function [[localaddr]] */
@@ -64,7 +64,7 @@ localaddr(Map *map, char *fn, char *var, uvlong *r, Rgetter rget)
     case CAUTO:
         *r = fp - s.value;
         break;
-    case CPARAM:		/* assume address size is stack width */
+    case CPARAM:                /* assume address size is stack width */
         *r = fp + s.value + mach->szaddr;
         break;
     default:
@@ -86,7 +86,7 @@ symoff(char *buf, int n, uvlong v, int space)
     int r;
     long delta;
 
-    r = delta = 0;		/* to shut compiler up */
+    r = delta = 0;              /* to shut compiler up */
     if (v) {
         r = findsym(v, space, &s);
         if (r)
@@ -107,14 +107,14 @@ symoff(char *buf, int n, uvlong v, int space)
 
 /*s: function [[fpformat]] */
 /*
- *	Format floating point registers
+ *      Format floating point registers
  *
- *	Register codes in format field:
- *	'X' - print as 32-bit hexadecimal value
- *	'F' - 64-bit double register when modif == 'F'; else 32-bit single reg
- *	'f' - 32-bit ieee float
- *	'8' - big endian 80-bit ieee extended float
- *	'3' - little endian 80-bit ieee extended float with hole in bytes 8&9
+ *      Register codes in format field:
+ *      'X' - print as 32-bit hexadecimal value
+ *      'F' - 64-bit double register when modif == 'F'; else 32-bit single reg
+ *      'f' - 32-bit ieee float
+ *      '8' - big endian 80-bit ieee extended float
+ *      '3' - little endian 80-bit ieee extended float with hole in bytes 8&9
  */
 int
 fpformat(Map *map, Reglist *rp, char *buf, int n, int modif)
@@ -129,7 +129,7 @@ fpformat(Map *map, Reglist *rp, char *buf, int n, int modif)
             return -1;
         snprint(buf, n, "%lux", r);
         break;
-    case 'F':	/* first reg of double reg pair */
+    case 'F':   /* first reg of double reg pair */
         if (modif == 'F')
         if ((rp->rformat=='F') || (((rp+1)->rflags&RFLT) && (rp+1)->rformat == 'f')) {
             if (get1(map, rp->roffs, (uchar *)reg, 8) < 0)
@@ -138,30 +138,30 @@ fpformat(Map *map, Reglist *rp, char *buf, int n, int modif)
             if (rp->rformat == 'F')
                 return 1;
             return 2;
-        }	
+        }       
             /* treat it like 'f' */
         if (get1(map, rp->roffs, (uchar *)reg, 4) < 0)
             return -1;
         machdata->sftos(buf, n, reg);
         break;
-    case 'f':	/* 32 bit float */
+    case 'f':   /* 32 bit float */
         if (get1(map, rp->roffs, (uchar *)reg, 4) < 0)
             return -1;
         machdata->sftos(buf, n, reg);
         break;
-    case '3':	/* little endian ieee 80 with hole in bytes 8&9 */
+    case '3':   /* little endian ieee 80 with hole in bytes 8&9 */
         if (get1(map, rp->roffs, (uchar *)reg, 10) < 0)
             return -1;
-        memmove(reg+10, reg+8, 2);	/* open hole */
-        memset(reg+8, 0, 2);		/* fill it */
+        memmove(reg+10, reg+8, 2);      /* open hole */
+        memset(reg+8, 0, 2);            /* fill it */
         leieee80ftos(buf, n, reg);
         break;
-    case '8':	/* big-endian ieee 80 */
+    case '8':   /* big-endian ieee 80 */
         if (get1(map, rp->roffs, (uchar *)reg, 10) < 0)
             return -1;
         beieee80ftos(buf, n, reg);
         break;
-    default:	/* unknown */
+    default:    /* unknown */
         break;
     }
     return 1;
@@ -305,7 +305,7 @@ beieee80ftos(char *buf, int n, void *s)
     uchar *reg = (uchar*)s;
     int i;
     ulong x;
-    uchar ieee[8+8];	/* room for slop */
+    uchar ieee[8+8];    /* room for slop */
     uchar *p, *q;
 
     memset(ieee, 0, sizeof(ieee));
@@ -315,20 +315,20 @@ beieee80ftos(char *buf, int n, void *s)
 
     /* exponent */
     x = ((reg[0]&0x7F)<<8) | reg[1];
-    if(x == 0)		/* number is + or - 0 */
+    if(x == 0)          /* number is + or - 0 */
         goto done;
     if(x == 0x7FFF){
         if(memcmp(reg+4, ieee+1, 8) == 0){ /* infinity */
             x = 2047;
-        }else{				/* NaN */
+        }else{                          /* NaN */
             x = 2047;
-            ieee[7] = 0x1;		/* make sure */
+            ieee[7] = 0x1;              /* make sure */
         }
         ieee[0] |= x>>4;
         ieee[1] |= (x&0xF)<<4;
         goto done;
     }
-    x -= 0x3FFF;		/* exponent bias */
+    x -= 0x3FFF;                /* exponent bias */
     x += 1023;
     if(x >= (1<<11) || ((reg[4]&0x80)==0 && x!=0))
         return snprint(buf, n, "not in range");
@@ -338,7 +338,7 @@ beieee80ftos(char *buf, int n, void *s)
     /* mantissa */
     p = reg+4;
     q = ieee+1;
-    for(i=0; i<56; i+=8, p++, q++){	/* move one byte */
+    for(i=0; i<56; i+=8, p++, q++){     /* move one byte */
         x = (p[0]&0x7F) << 1;
         if(p[1] & 0x80)
             x |= 1;
@@ -391,7 +391,7 @@ cisctrace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
         if (geta(map, sp, &pc) < 0)
             break;
         (*trace)(map, pc, sp, &s);
-        sp += mach->szaddr;	/*assumes address size = stack width*/
+        sp += mach->szaddr;     /*assumes address size = stack width*/
         if(++i > 40)
             break;
     }
@@ -412,7 +412,7 @@ risctrace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
         if(strcmp(STARTSYM, s.name) == 0 || strcmp(PROFSYM, s.name) == 0)
             break;
 
-        if(pc == s.value)	/* at first instruction */
+        if(pc == s.value)       /* at first instruction */
             f.value = 0;
         else if(findlocal(&s, FRAMENAME, &f) == 0)
             break;
@@ -455,7 +455,7 @@ ciscframe(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
             return sp;
         if (geta(map, sp, &pc) < 0)
             break;
-        sp += mach->szaddr;	/*assumes sizeof(addr) = stack width*/
+        sp += mach->szaddr;     /*assumes sizeof(addr) = stack width*/
     }
     return 0;
 }
@@ -471,7 +471,7 @@ riscframe(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
         if(strcmp(STARTSYM, s.name) == 0 || strcmp(PROFSYM, s.name) == 0)
             break;
 
-        if(pc == s.value)	/* at first instruction */
+        if(pc == s.value)       /* at first instruction */
             f.value = 0;
         else
         if(findlocal(&s, FRAMENAME, &f) == 0)

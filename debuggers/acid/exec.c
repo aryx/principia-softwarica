@@ -369,16 +369,16 @@ indir(Map *m, uvlong addr, char fmt, Node *r)
         machdata->dftos(buf, sizeof(buf), (void*) buf);
         convflt(r, buf);
         break;
-    case '3':	/* little endian ieee 80 with hole in bytes 8&9 */
+    case '3':   /* little endian ieee 80 with hole in bytes 8&9 */
         ret = get1(m, addr, (uchar*)reg, 10);
         if (ret < 0)
             error("indir: %r");
-        memmove(reg+10, reg+8, 2);	/* open hole */
-        memset(reg+8, 0, 2);		/* fill it */
+        memmove(reg+10, reg+8, 2);      /* open hole */
+        memset(reg+8, 0, 2);            /* fill it */
         leieee80ftos(buf, sizeof(buf), reg);
         convflt(r, buf);
         break;
-    case '8':	/* big-endian ieee 80 */
+    case '8':   /* big-endian ieee 80 */
         ret = get1(m, addr, (uchar*)reg, 10);
         if (ret < 0)
             error("indir: %r");

@@ -1,54 +1,54 @@
 /*s: libmach/setmach.c */
-#include	<u.h>
-#include	<libc.h>
-#include	<bio.h>
-#include	<mach.h>
+#include        <u.h>
+#include        <libc.h>
+#include        <bio.h>
+#include        <mach.h>
         /* table for selecting machine-dependent parameters */
 
-typedef	struct machtab Machtab;
+typedef struct machtab Machtab;
 
 /*s: struct [[machtab]] */
 struct machtab
 {
-    char	*name;			/* machine name */
-    short	type;			/* executable type */
-    short	boottype;		/* bootable type */
-    int		asstype;		/* disassembler code */
-    Mach	*mach;			/* machine description */
-    Machdata	*machdata;		/* machine functions */
+    char        *name;                  /* machine name */
+    short       type;                   /* executable type */
+    short       boottype;               /* bootable type */
+    int         asstype;                /* disassembler code */
+    Mach        *mach;                  /* machine description */
+    Machdata    *machdata;              /* machine functions */
 };
 /*e: struct [[machtab]] */
 
-extern	Mach		mi386, marm, mmips;
-extern	Machdata	i386mach, armmach, mipsmach;
+extern  Mach            mi386, marm, mmips;
+extern  Machdata        i386mach, armmach, mipsmach;
 
 /*s: global [[machines]] */
 /*
- *	machine selection table.  machines with native disassemblers should
- *	follow the plan 9 variant in the table; native modes are selectable
- *	only by name.
+ *      machine selection table.  machines with native disassemblers should
+ *      follow the plan 9 variant in the table; native modes are selectable
+ *      only by name.
  */
-Machtab	machines[] =
+Machtab machines[] =
 {
-    {	"386",				/*plan 9 386*/
+    {   "386",                          /*plan 9 386*/
         FI386,
         FI386B,
         AI386,
         &mi386,
-        &i386mach,	},
-    {	"arm",				/*ARM*/
+        &i386mach,      },
+    {   "arm",                          /*ARM*/
         FARM,
         FARMB,
         AARM,
         &marm,
-        &armmach,	},
-    {	"mips",				/*plan 9 mips*/
+        &armmach,       },
+    {   "mips",                         /*plan 9 mips*/
  FMIPS,
  FMIPSB,
  AMIPS,
  &mmips,
- &mipsmach, 	},
-    {	0		},		/*the terminator*/
+ &mipsmach,     },
+    {   0               },              /*the terminator*/
 };
 /*e: global [[machines]] */
 
@@ -74,7 +74,7 @@ machbytype(int type)
 /*e: function [[machbytype]] */
 /*s: function [[machbyname]] */
 /*
- *	select a machine by name
+ *      select a machine by name
  */
 int
 machbyname(char *name)

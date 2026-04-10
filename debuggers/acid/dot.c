@@ -83,7 +83,7 @@ buildtype(Node *m, int d)
 
     switch(m->op) {
     case OLIST:
-        buildtype(m->left, d);		
+        buildtype(m->left, d);          
         buildtype(m->right, d);
         break;
 
@@ -99,7 +99,7 @@ buildtype(Node *m, int d)
         t->offset = m->ival;
         if(m->left) {
             t->type = m->left->sym;
-            t->fmt = 'a';			
+            t->fmt = 'a';                       
         }
         else {
             t->type = 0;
@@ -110,7 +110,7 @@ buildtype(Node *m, int d)
 
         *tail = t;
         tail = &t->next;
-    }			
+    }                   
 }
 /*e: function [[buildtype]] */
 

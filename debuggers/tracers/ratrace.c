@@ -283,8 +283,10 @@ threadmain(int argc, char **argv)
         if(pid == 0) {
             hang();
             exec(cmd, args);
+            // here when cmd didn't exist; try /bin/cmd is not given full path
             if(cmd[0] != '/')
                 exec(smprint("/bin/%s", cmd), args);
+            // should not be reached if the cmd exists
             sysfatal("exec %s failed: %r", cmd);
         }
     }

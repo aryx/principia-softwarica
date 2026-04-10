@@ -1,68 +1,68 @@
 /*s: libmach/executable.c */
-#include	<u.h>
-#include	<libc.h>
-#include	<bio.h>
+#include        <u.h>
+#include        <libc.h>
+#include        <bio.h>
 
-#include	<bootexec.h>
-#include	<mach.h>
+#include        <bootexec.h>
+#include        <mach.h>
 
-#include	"elf.h"
+#include        "elf.h"
 
 /*
- *	All a.out header types.  The dummy entry allows canonical
- *	processing of the union as a sequence of longs
+ *      All a.out header types.  The dummy entry allows canonical
+ *      processing of the union as a sequence of longs
  */
 
 typedef struct {
     union{
         struct {
-            Exec;		/* a.out.h */
+            Exec;               /* a.out.h */
             uvlong hdr[1];
         };
-        Ehdr;			/* elf.h */
+        Ehdr;                   /* elf.h */
         //TODO: struct mipsexec;       /* bootexec.h */
     } e;
-    long dummy;			/* padding to ensure extra long */
+    long dummy;                 /* padding to ensure extra long */
 } ExecHdr;
 
-static	int	common(int, Fhdr*, ExecHdr*);
+static  int     common(int, Fhdr*, ExecHdr*);
 
-static	int	adotout(int, Fhdr*, ExecHdr*);
-static	int	elfdotout(int, Fhdr*, ExecHdr*);
-static	int	armdotout(int, Fhdr*, ExecHdr*);
+static  int     adotout(int, Fhdr*, ExecHdr*);
+static  int     elfdotout(int, Fhdr*, ExecHdr*);
+static  int     armdotout(int, Fhdr*, ExecHdr*);
 
-static	void	setsym(Fhdr*, long, long, long, vlong);
-static	void	setdata(Fhdr*, uvlong, long, vlong, long);
-static	void	settext(Fhdr*, uvlong, uvlong, long, vlong);
-static	void	hswal(void*, int, ulong(*)(ulong));
-static	uvlong	_round(uvlong, ulong);
+static  void    setsym(Fhdr*, long, long, long, vlong);
+static  void    setdata(Fhdr*, uvlong, long, vlong, long);
+static  void    settext(Fhdr*, uvlong, uvlong, long, vlong);
+static  void    hswal(void*, int, ulong(*)(ulong));
+static  uvlong  _round(uvlong, ulong);
 
 /*s: struct [[Exectable]] */
 /*
- *	definition of per-executable file type structures
+ *      definition of per-executable file type structures
  */
 typedef struct Exectable{
-    long	magic;			/* big-endian magic number of file */
-    char	*name;			/* executable identifier */
-    char	*dlmname;		/* dynamically loadable module identifier */
-    uchar	type;			/* Internal code */
-    uchar	_magic;			/* _MAGIC() magic */
-    Mach	*mach;			/* Per-machine data */
-    long	hsize;			/* header size */
-    ulong	(*swal)(ulong);		/* beswal or leswal */
-    int	(*hparse)(int, Fhdr*, ExecHdr*);
+    long        magic;                  /* big-endian magic number of file */
+    char        *name;                  /* executable identifier */
+    char        *dlmname;               /* dynamically loadable module identifier */
+    uchar       type;                   /* Internal code */
+    uchar       _magic;                 /* _MAGIC() magic */
+    Mach        *mach;                  /* Per-machine data */
+    long        hsize;                  /* header size */
+    ulong       (*swal)(ulong);         /* beswal or leswal */
+    int (*hparse)(int, Fhdr*, ExecHdr*);
 } ExecTable;
 /*e: struct [[Exectable]] */
 
 //PAD: removed many archi
-extern	Mach	mi386;
-extern	Mach	marm;
-extern	Mach	mmips;
+extern  Mach    mi386;
+extern  Mach    marm;
+extern  Mach    mmips;
 
 /*s: global [[exectab]] */
 ExecTable exectab[] =
 {
-    { I_MAGIC,			/* I386 8.out & boot image */
+    { I_MAGIC,                  /* I386 8.out & boot image */
         "386 plan 9 executable",
         "386 plan 9 dlm",
         FI386,
@@ -71,7 +71,7 @@ ExecTable exectab[] =
         sizeof(Exec),
         beswal,
         common },
-    { ELF_MAG,			/* any ELF */
+    { ELF_MAG,                  /* any ELF */
         "elf executable",
         nil,
         FNONE,
@@ -80,7 +80,7 @@ ExecTable exectab[] =
         sizeof(Ehdr),
         nil,
         elfdotout },
-    { E_MAGIC,			/* Arm 5.out and boot image */
+    { E_MAGIC,                  /* Arm 5.out and boot image */
         "arm plan 9 executable",
         "arm plan 9 dlm",
         FARM,
@@ -188,7 +188,7 @@ hswal(void *v, int n, ulong (*swap)(ulong))
 
 /*s: function [[adotout]] */
 /*
- *	Crack a normal a.out-type header
+ *      Crack a normal a.out-type header
  */
 static int
 adotout(int fd, Fhdr *fp, ExecHdr *hp)
@@ -213,7 +213,7 @@ commonboot(Fhdr *fp)
     if (!(fp->entry & mach->ktmask))
         return;
 
-    switch(fp->type) {				/* boot image */
+    switch(fp->type) {                          /* boot image */
     case FI386:
         fp->type = FI386B;
         fp->txtaddr = (u32int)fp->entry;
@@ -229,14 +229,14 @@ commonboot(Fhdr *fp)
     default:
         return;
     }
-    fp->hdrsz = 0;			/* header stripped */
+    fp->hdrsz = 0;                      /* header stripped */
 }
 /*e: function [[commonboot]] */
 
 /*s: function [[common]] */
 /*
- *	_MAGIC() style headers and
- *	alpha plan9-style bootable images for axp "headerless" boot
+ *      _MAGIC() style headers and
+ *      alpha plan9-style bootable images for axp "headerless" boot
  *
  */
 static int
@@ -351,7 +351,7 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *hp)
          * Text+Data+BSS are represented by ph[0].  Symbols
          * are represented by ph[1]:
          *
-         *		filesz, memsz, vaddr, paddr, off
+         *              filesz, memsz, vaddr, paddr, off
          * ph[0] : txtsz+datsz, txtsz+datsz+bsssz, txtaddr-KZERO, datasize, txtoff
          * ph[1] : symsz, lcsz, 0, 0, symoff
          */
@@ -416,10 +416,10 @@ armdotout(int fd, Fhdr *fp, ExecHdr *hp)
     setsym(fp, hp->e.syms, hp->e._unused, hp->e.pcsz, fp->datoff+fp->datsz);
 
     kbase = 0xF0000000;
-    if ((fp->entry & kbase) == kbase) {		/* Boot image */
+    if ((fp->entry & kbase) == kbase) {         /* Boot image */
         fp->txtaddr = kbase+sizeof(Exec);
         fp->name = "ARM *BSD boot image";
-        fp->hdrsz = 0;		/* header stripped */
+        fp->hdrsz = 0;          /* header stripped */
         fp->dataddr = kbase+fp->txtsz;
     }
     return 1;

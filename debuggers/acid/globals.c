@@ -81,7 +81,7 @@ jmp_buf	err;
 Node*	prnt;
 /*e: global [[prnt]] */
 /*s: global [[tracelist]] */
-List*	tracelist;
+List*   tracelist;
 /*e: global [[tracelist]] */
 /*s: global [[initialising]] */
 int	initialising;

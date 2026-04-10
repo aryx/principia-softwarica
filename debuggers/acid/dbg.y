@@ -49,7 +49,7 @@
 
 %token <ival> Tfmt
 
-%token Tif Tdo Tthen Telse Twhile Tloop
+%token Tif Tdo Tthen Telse Twhile  Tloop
 %token Thead Ttail Tappend
 %token Tfn Tret Tlocal
 %token Tcomplex Twhat Tdelete Teval Tbuiltin

@@ -12,21 +12,21 @@
 #include "obj.h"
 
 /*s: function [[islocal]] */
-#define islocal(t)	((t)=='a' || (t)=='p')
+#define islocal(t)      ((t)=='a' || (t)=='p')
 /*e: function [[islocal]] */
 
 /*s: enum [[_anon_ (libmach/obj.c)]] */
 enum
 {
-    NNAMES	= 50,
-    MAXIS	= 8,		/* max length to determine if a file is a .? file */
-    MAXOFF	= 0x7fffffff,	/* larger than any possible local offset */
-    NHASH	= 1024,		/* must be power of two */
-    HASHMUL	= 79L,
+    NNAMES      = 50,
+    MAXIS       = 8,            /* max length to determine if a file is a .? file */
+    MAXOFF      = 0x7fffffff,   /* larger than any possible local offset */
+    NHASH       = 1024,         /* must be power of two */
+    HASHMUL     = 79L,
 };
 /*e: enum [[_anon_ (libmach/obj.c)]] */
 
-int			/* in [$OS].c */ //$
+int                     /* in [$OS].c */ //$
   _is5(char*),
   _is8(char*),
   _isv(char*),
@@ -35,47 +35,47 @@ int			/* in [$OS].c */ //$
   _readv(Biobuf*, Prog*);
 
 
-typedef struct Obj	Obj;
-typedef struct Symtab	Symtab;
+typedef struct Obj      Obj;
+typedef struct Symtab   Symtab;
 
 /*s: struct [[Obj]] */
-struct	Obj		/* functions to handle each intermediate (.$O) file */
+struct  Obj             /* functions to handle each intermediate (.$O) file */
 {
-    char	*name;				/* name of each $O file */
-    int	(*is)(char*);			/* test for each type of $O file */
-    int	(*read)(Biobuf*, Prog*);	/* read for each type of $O file*/
+    char        *name;                          /* name of each $O file */
+    int (*is)(char*);                   /* test for each type of $O file */
+    int (*read)(Biobuf*, Prog*);        /* read for each type of $O file*/
 };
 /*e: struct [[Obj]] */
 
 /*s: global [[obj]] */
-static Obj	obj[] =
-{			/* functions to identify and parse each type of obj */
-    [ObjArm]	"arm .5",	_is5, _read5,
-    [Obj386]	"386 .8",	_is8, _read8,
+static Obj      obj[] =
+{                       /* functions to identify and parse each type of obj */
+    [ObjArm]    "arm .5",       _is5, _read5,
+    [Obj386]    "386 .8",       _is8, _read8,
     [ObjMips]  "mips .v",      _isv, _readv,
-    [Maxobjtype]	0, 0
+    [Maxobjtype]        0, 0
 };
 /*e: global [[obj]] */
 
 /*s: struct [[Symtab]] */
-struct	Symtab
+struct  Symtab
 {
-    struct	Sym 	s;
-    struct	Symtab	*next;
+    struct      Sym     s;
+    struct      Symtab  *next;
 };
 /*e: struct [[Symtab]] */
 
 /*s: global hash (libmach/obj.c) */
-static	Symtab *hash[NHASH];
+static  Symtab *hash[NHASH];
 /*e: global hash (libmach/obj.c) */
 /*s: global [[names]] */
-static	Sym	*names[NNAMES];	/* working set of active names */
+static  Sym     *names[NNAMES]; /* working set of active names */
 /*e: global [[names]] */
 
-static	int	processprog(Prog*,int);	/* decode each symbol reference */
-static	void	objreset(void);
-static	void	objlookup(int, char *, int, uint);
-static	void 	objupdate(int, int);
+static  int     processprog(Prog*,int); /* decode each symbol reference */
+static  void    objreset(void);
+static  void    objlookup(int, char *, int, uint);
+static  void    objupdate(int, int);
 
 /*s: function [[objtype]] */
 int
@@ -150,9 +150,9 @@ readar(Biobuf *bp, int objtype, vlong end, int doautos)
 
 /*s: function [[processprog]] */
 /*
- *	decode a symbol reference or definition
+ *      decode a symbol reference or definition
  */
-static	int
+static  int
 processprog(Prog *p, int doautos)
 {
     if(p->kind == aNone)
@@ -251,7 +251,7 @@ objlookup(int id, char *name, int type, uint sig)
 /*e: function [[objlookup]] */
 /*s: function [[objtraverse]] */
 /*
- *	traverse the symbol lists
+ *      traverse the symbol lists
  */
 void
 objtraverse(void (*fn)(Sym*, void*), void *pointer)

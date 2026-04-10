@@ -1,7 +1,7 @@
 /*s: db/command.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 
@@ -9,13 +9,13 @@
 #include "fns.h"
 
 /*s: global [[BADEQ]] */
-char	BADEQ[] = "unexpected `='";
+char    BADEQ[] = "unexpected `='";
 /*e: global [[BADEQ]] */
 
 /*s: global [[executing]] */
 bool	executing;
 /*e: global [[executing]] */
-extern	Rune	*lp;
+extern  Rune    *lp;
 
 /*s: global [[eqformat]] */
 char	eqformat[ARB] = "z";

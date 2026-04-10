@@ -18,7 +18,7 @@ typedef uvlong ADDR;
 typedef ulong WORD;
 /*e: type [[WORD]] */
 
-typedef struct bkpt	BKPT;
+typedef struct bkpt     BKPT;
 
 /*s: constant HUGEINT (db) */
 #define	HUGEINT	0x7fffffff	/* enormous WORD */
@@ -28,7 +28,7 @@ typedef struct bkpt	BKPT;
 #define	MAXOFF	0x1000000
 /*e: constant [[MAXOFF]] */
 /*s: constant [[INCDIR]] */
-#define	INCDIR	"/usr/lib/adb"
+#define INCDIR  "/usr/lib/adb"
 /*e: constant [[INCDIR]] */
 /*s: constant [[DBNAME]] */
 #define	DBNAME	"db\n"
@@ -41,7 +41,7 @@ typedef struct bkpt	BKPT;
 #define MAXPOS	80
 /*e: constant [[MAXPOS]] */
 /*s: constant [[MAXLIN]] */
-#define MAXLIN	128
+#define MAXLIN  128
 /*e: constant [[MAXLIN]] */
 /*s: constant [[ARB]] */
 #define	ARB	512
@@ -56,7 +56,7 @@ typedef struct bkpt	BKPT;
 #define LINSIZ	4096
 /*e: constant [[LINSIZ]] */
 /*s: constant [[MAXSYM]] */
-#define	MAXSYM	255
+#define MAXSYM  255
 /*e: constant [[MAXSYM]] */
 
 /*s: constant [[EOR]] */
@@ -70,10 +70,10 @@ typedef struct bkpt	BKPT;
 /*e: constant [[TB]] */
 
 /*s: constant [[TRUE]] */
-#define	TRUE	(-1)
+#define TRUE    (-1)
 /*e: constant [[TRUE]] */
 /*s: constant [[FALSE]] */
-#define	FALSE	0
+#define FALSE   0
 /*e: constant [[FALSE]] */
 
 /*
@@ -131,43 +131,43 @@ struct bkpt {
  * common globals
  */
 
-extern	ADDR	dot;
-extern	int	dotinc;
-extern ADDR	ditto;
+extern  ADDR    dot;
+extern  int     dotinc;
+extern ADDR     ditto;
 
-extern	int	adrflg;
-extern	WORD	adrval;
+extern  int     adrflg;
+extern  WORD    adrval;
 
-extern	int	cntflg;
-extern	WORD	cntval;
-extern	WORD	loopcnt;
+extern  int     cntflg;
+extern  WORD    cntval;
+extern  WORD    loopcnt;
 
-extern	uvlong	expv;
+extern  uvlong  expv;
 
-extern	ADDR	maxoff;
+extern  ADDR    maxoff;
 
-extern	int	pid;
-extern	char	*corfil, *symfil;
-extern	int	fcor, fsym;
-extern	Map	*cormap, *symmap, *dotmap;
-extern	int	pcsactive;
-extern	int	ending;
-extern	bool	mkfault;
+extern  int     pid;
+extern  char    *corfil, *symfil;
+extern  int     fcor, fsym;
+extern  Map     *cormap, *symmap, *dotmap;
+extern  int     pcsactive;
+extern  int     ending;
+extern  bool    mkfault;
 
-extern	BKPT	*bkpthead;
+extern  BKPT    *bkpthead;
 
-extern	int	lastc, peekc;
+extern  int     lastc, peekc;
 
 /*s: constant [[NNOTE]] */
 #define	NNOTE 10
 /*e: constant [[NNOTE]] */
-extern	int	nnote;
-extern	char	note[NNOTE][ERRMAX];
+extern  int     nnote;
+extern  char    note[NNOTE][ERRMAX];
 
-extern	int	xargc;
+extern  int     xargc;
 
-extern	bool	wtflag;
-extern	bool	kflag;
+extern  bool    wtflag;
+extern  bool    kflag;
 
 // new decl, was in main.c before
 extern char *errmsg;

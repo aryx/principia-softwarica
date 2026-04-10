@@ -1,7 +1,7 @@
 /*s: db/output.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 

@@ -425,7 +425,8 @@ loop:
     /*x: [[yylex()]] switch [[c]] cases */
     case '/':
         c = lexc();
-        if(c == '/') {
+        //pad: the '*' case is just to support syncweb comments
+        if(c == '/' || c == '*') {
             eatnl();
             goto loop;
         }

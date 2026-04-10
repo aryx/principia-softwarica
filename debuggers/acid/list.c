@@ -61,7 +61,7 @@ build(Node *n)
         l = al(res.type);
         l->Store = res.Store;
         *tail = l;
-        tail = &l->next;	
+        tail = &l->next;        
     }
 }
 /*e: function [[build]] */
@@ -250,7 +250,7 @@ listparams(Map *map, Symbol *fn, uvlong fp)
 
     l2 = 0;
     tail = &l2;
-    fp += mach->szaddr;			/* skip saved pc */
+    fp += mach->szaddr;                 /* skip saved pc */
     s = *fn;
     for(i = 0; localsym(&s, i); i++) {
         if (s.class != CPARAM)
@@ -273,7 +273,7 @@ trlist(Map *map, uvlong pc, uvlong sp, Symbol *sym)
 
     static List **tail;
 
-    if (tracelist == 0) {		/* first time */
+    if (tracelist == 0) {               /* first time */
         tracelist = al(TLIST);
         tail = &tracelist;
     }
@@ -282,21 +282,21 @@ trlist(Map *map, uvlong pc, uvlong sp, Symbol *sym)
     *tail = q;
     tail = &q->next;
 
-    l = al(TINT);			/* Function address */
+    l = al(TINT);                       /* Function address */
     q->l = l;
     l->ival = sym->value;
     l->fmt = 'X';
 
-    l->next = al(TINT);		/* called from address */
+    l->next = al(TINT);         /* called from address */
     l = l->next;
     l->ival = pc;
     l->fmt = 'Y';
 
-    l->next = al(TLIST);		/* make list of params */
+    l->next = al(TLIST);                /* make list of params */
     l = l->next;
     l->l = listparams(map, sym, sp);
 
-    l->next = al(TLIST);		/* make list of locals */
+    l->next = al(TLIST);                /* make list of locals */
     l = l->next;
     l->l = listlocals(map, sym, sp);
 }

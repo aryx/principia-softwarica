@@ -1,25 +1,25 @@
 /*s: db/print.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 #include "defs.h"
 #include "fns.h"
 
-extern	int	infile;
-extern	int	outfile;
-extern	int	maxpos;
+extern  int     infile;
+extern  int     outfile;
+extern  int     maxpos;
 
 /* general printing routines ($) */
 
 /*s: global [[Ipath]] */
-char	*Ipath = INCDIR;
+char    *Ipath = INCDIR;
 /*e: global [[Ipath]] */
 /*s: global [[tracetype]] */
 static	int	tracetype;
 /*e: global [[tracetype]] */
-static void	printfp(Map*, int);
+static void     printfp(Map*, int);
 
 /*s: function [[ptrace]] */
 /*

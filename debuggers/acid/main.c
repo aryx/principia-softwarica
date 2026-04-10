@@ -25,11 +25,11 @@ static int	nlm;
 static char*	mtype;
 /*e: global [[mtype]] */
 
-static	int attachfiles(char*, int);
-int	xfmt(Fmt*);
-int	isnumeric(char*);
-void	die(void);
-void	loadmoduleobjtype(void);
+static  int attachfiles(char*, int);
+int     xfmt(Fmt*);
+int     isnumeric(char*);
+void    die(void);
+void    loadmoduleobjtype(void);
 
 /*s: function usage (acid/main.c) */
 void
@@ -108,8 +108,11 @@ main(int argc, char *argv[])
 
             if(argc > 1)
                 aout = argv[1];
-            else if(kernel)
-                aout = system();
+            else
+              /*s: [[main()]](acid) when [[acid pid]] if [[kernel]] */
+              if(kernel)
+                 aout = system();
+              /*e: [[main()]](acid) when [[acid pid]] if [[kernel]] */
         }
         /*e: [[main()]](acid) if [[acid pid]] */
         else {
@@ -156,14 +159,14 @@ main(int argc, char *argv[])
     /*e: [[main()]](acid) [[attachfiles(aout, pid)]] */
 
     /*s: [[main()]](acid) load modules */
-    loadmodule("/lib/acid/port");
+    loadmodule("/lib/acid/port.acid");
     loadmoduleobjtype();
     /*s: [[main()]](acid) load [[-l]] modules */
     for(i = 0; i < nlm; i++) {
         if(access(lm[i], AREAD) >= 0)
             loadmodule(lm[i]);
         else {
-            s = smprint("/lib/acid/%s", lm[i]);
+            s = smprint("/lib/acid/%s.acid", lm[i]);
             loadmodule(s);
             free(s);
         }
@@ -275,7 +278,7 @@ loadmoduleobjtype(void)
 {
     char *buf;
 
-    buf = smprint("/lib/acid/%s", mach->name);
+    buf = smprint("/lib/acid/%s.acid", mach->name);
     loadmodule(buf);
     free(buf);
 }
@@ -384,6 +387,7 @@ readtext(char *s)
         print("%s: (error) syminit: %r\n", argv0);
         return;
     }
+    // first output! the executable and archi
     print("%s:%s\n", s, fhdr.name);
 
     /*s: [[readtext()]] if [[mach->sbreg]] */
@@ -635,8 +639,10 @@ checkqid(int f1, int pid)
     Dir *d1, *d2;
     char buf[128];
 
+    /*s: [[checkqid() return if [[kernel]] */
     if(kernel)
         return;
+    /*e: [[checkqid() return if [[kernel]] */
 
     d1 = dirfstat(f1);
     if(d1 == nil){

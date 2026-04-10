@@ -10,13 +10,13 @@
 #include <5.out.h>
 #include "obj.h"
 
-typedef struct Addr	Addr;
+typedef struct Addr     Addr;
 /*s: struct [[Addr]](arm) */
 struct Addr
 {
-    char	type;
-    char	sym;
-    char	name;
+    char        type;
+    char        sym;
+    char        name;
 };
 /*e: struct [[Addr]](arm) */
 static Addr addr(Biobuf*);
@@ -27,10 +27,10 @@ static void skip(Biobuf*, int);
 int
 _is5(char *s)
 {
-    return  s[0] == ANAME				/* ANAME */
-        && s[1] == N_FILE			/* type */
-        && s[2] == 1				/* sym */
-        && s[3] == '<';				/* name of file */
+    return  s[0] == ANAME                               /* ANAME */
+        && s[1] == N_FILE                       /* type */
+        && s[2] == 1                            /* sym */
+        && s[3] == '<';                         /* name of file */
 }
 /*e: function [[_is5]](arm) */
 
@@ -41,7 +41,7 @@ _read5(Biobuf *bp, Prog *p)
     int as, n;
     Addr a;
 
-    as = Bgetc(bp);			/* as */
+    as = Bgetc(bp);                     /* as */
     if(as < 0)
         return 0;
     p->kind = aNone;
@@ -52,8 +52,8 @@ _read5(Biobuf *bp, Prog *p)
             p->sig = leswal(p->sig);
         }
         p->kind = aName;
-        p->type = type2char(Bgetc(bp));		/* type */
-        p->sym = Bgetc(bp);			/* sym */
+        p->type = type2char(Bgetc(bp));         /* type */
+        p->sym = Bgetc(bp);                     /* sym */
         n = 0;
         for(;;) {
             as = Bgetc(bp);
@@ -75,7 +75,7 @@ _read5(Biobuf *bp, Prog *p)
         p->kind = aText;
     else if(as == AGLOBL)
         p->kind = aData;
-    skip(bp, 6);		/* scond(1), reg(1), lineno(4) */
+    skip(bp, 6);                /* scond(1), reg(1), lineno(4) */
     a = addr(bp);
     addr(bp);
     if(a.type != D_OREG || a.name != N_INTERN && a.name != N_EXTERN)
@@ -92,10 +92,10 @@ addr(Biobuf *bp)
     Addr a;
     long off;
 
-    a.type = Bgetc(bp);	/* a.type */
-    skip(bp,1);		/* reg */
-    a.sym = Bgetc(bp);	/* sym index */
-    a.name = Bgetc(bp);	/* sym type */
+    a.type = Bgetc(bp); /* a.type */
+    skip(bp,1);         /* reg */
+    a.sym = Bgetc(bp);  /* sym index */
+    a.name = Bgetc(bp); /* sym type */
     switch(a.type){
     default:
     case D_NONE:
@@ -133,11 +133,11 @@ static char
 type2char(int t)
 {
     switch(t){
-    case N_EXTERN:		return 'U';
-    case N_INTERN:		return 'b';
-    case N_LOCAL:		return 'a';
-    case N_PARAM:		return 'p';
-    default:		return UNKNOWN;
+    case N_EXTERN:              return 'U';
+    case N_INTERN:              return 'b';
+    case N_LOCAL:               return 'a';
+    case N_PARAM:               return 'p';
+    default:            return UNKNOWN;
     }
 }
 /*e: function [[type2char]](arm) */

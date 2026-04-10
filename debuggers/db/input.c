@@ -1,14 +1,14 @@
 /*s: db/input.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 
 #include "defs.h"
 #include "fns.h"
 
-extern	int	infile;
+extern  int     infile;
 
 /*s: global [[line]] */
 Rune	line[LINSIZ];
@@ -176,12 +176,12 @@ getformat(char *deformat)
 
 /*s: function [[isfileref]] */
 /*
- *	check if the input line if of the form:
- *		<filename>:<digits><verb> ...
+ *      check if the input line if of the form:
+ *              <filename>:<digits><verb> ...
  *
- *	we handle this case specially because we have to look ahead
- *	at the token after the colon to decide if it is a file reference
- *	or a colon-command with a symbol name prefix. 
+ *      we handle this case specially because we have to look ahead
+ *      at the token after the colon to decide if it is a file reference
+ *      or a colon-command with a symbol name prefix. 
  */
 
 int
@@ -190,7 +190,7 @@ isfileref(void)
     Rune *cp;
 
     for (cp = lp-1; *cp && !strchr(CMD_VERBS, *cp); cp++)
-        if (*cp == '\\' && cp[1])	/* escape next char */
+        if (*cp == '\\' && cp[1])       /* escape next char */
             cp++;
     if (*cp && cp > lp-1) {
         while (*cp == ' ' || *cp == '\t')

@@ -8,23 +8,23 @@
 
 // ktrace - interpret kernel stack dumps
 
-static	int	rtrace(uvlong, uvlong, uvlong);
-static	int	i386trace(uvlong, uvlong, uvlong);
+static  int     rtrace(uvlong, uvlong, uvlong);
+static  int     i386trace(uvlong, uvlong, uvlong);
 
-static	uvlong	getval(uvlong);
-static	void	inithdr(int);
-static	void	fatal(char*, ...);
-static	void	readstack(void);
+static  uvlong  getval(uvlong);
+static  void    inithdr(int);
+static  void    fatal(char*, ...);
+static  void    readstack(void);
 
 /*s: global [[fhdr]] */
-static	Fhdr	fhdr;
+static  Fhdr    fhdr;
 /*e: global [[fhdr]] */
 /*s: global [[interactive]] */
-static	int	interactive = 0;
+static  int     interactive = 0;
 /*e: global [[interactive]] */
 
 /*s: constant FRAMENAME (ktrace) */
-#define	FRAMENAME	".frame"
+#define FRAMENAME       ".frame"
 /*e: constant FRAMENAME (ktrace) */
 
 /*s: function [[usage]] */
@@ -110,10 +110,10 @@ main(int argc, char *argv[])
         fatal("can't open %s: %r", argv[0]);
     inithdr(fd);
     switch(fhdr.magic){
-    case I_MAGIC:	/* intel 386 */
+    case I_MAGIC:       /* intel 386 */
         t = i386trace;
         break;
-    case E_MAGIC:	/* arm 7-something */
+    case E_MAGIC:       /* arm 7-something */
         t = rtrace;
         break;
     default:
@@ -151,7 +151,7 @@ rtrace(uvlong pc, uvlong sp, uvlong link)
 
     i = 0;
     while(findsym(pc, CTEXT, &s)) {
-        if(pc == s.value)	/* at first instruction */
+        if(pc == s.value)       /* at first instruction */
             f.value = 0;
         else if(findlocal(&s, FRAMENAME, &f) == 0)
             break;
@@ -199,18 +199,18 @@ i386trace(uvlong pc, uvlong sp, uvlong link)
         symoff(buf, sizeof buf, pc, CANY);
         fmt(buf, pc);
 
-        if(pc != s.value) {	/* not at first instruction */
+        if(pc != s.value) {     /* not at first instruction */
             if(findlocal(&s, FRAMENAME, &f) == 0)
                 break;
             sp += f.value-mach->szaddr;
         }else if(strcmp(s.name, "forkret") == 0){
             print("//passing interrupt frame; last pc found at sp=%#llux\n", osp);
-            sp +=  15 * mach->szaddr;		/* pop interrupt frame */
+            sp +=  15 * mach->szaddr;           /* pop interrupt frame */
         }
 
         pc = getval(sp);
         if(pc == 0 && strcmp(s.name, "forkret") == 0){
-            sp += 3 * mach->szaddr;			/* pop iret eip, cs, eflags */
+            sp += 3 * mach->szaddr;                     /* pop iret eip, cs, eflags */
             print("//guessing call through invalid pointer, try again at sp=%#llux\n", sp);
             s.name = "";
             pc = getval(sp);
@@ -223,7 +223,7 @@ i386trace(uvlong pc, uvlong sp, uvlong link)
 
         sp += mach->szaddr;
         if(strcmp(s.name, "forkret") == 0)
-            sp += 2 * mach->szaddr;			/* pop iret cs, eflags */
+            sp += 2 * mach->szaddr;                     /* pop iret cs, eflags */
 
         if(++i > 40)
             break;

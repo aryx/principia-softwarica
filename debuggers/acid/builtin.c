@@ -8,40 +8,40 @@
 #include "acid.h"
 #include "y.tab.h"
 
-void	cvtatof(Node*, Node*);
-void	cvtatoi(Node*, Node*);
-void	cvtitoa(Node*, Node*);
-void	bprint(Node*, Node*);
-void	funcbound(Node*, Node*);
-void	printto(Node*, Node*);
-void	getfile(Node*, Node*);
-void	fmt(Node*, Node*);
-void	pcfile(Node*, Node*);
-void	pcline(Node*, Node*);
-void	setproc(Node*, Node*);
-void	strace(Node*, Node*);
-void	follow(Node*, Node*);
-void	reason(Node*, Node*);
-void	newproc(Node*, Node*);
-void	startstop(Node*, Node*);
-void	match(Node*, Node*);
-void	status(Node*, Node*);
-void	kill(Node*,Node*);
-void	waitstop(Node*, Node*);
-void	stop(Node*, Node*);
-void	start(Node*, Node*);
-void	filepc(Node*, Node*);
-void	doerror(Node*, Node*);
-void	rc(Node*, Node*);
-void	doaccess(Node*, Node*);
-void	map(Node*, Node*);
-void	readfile(Node*, Node*);
-void	interpret(Node*, Node*);
-void	include(Node*, Node*);
-void	regexp(Node*, Node*);
-void	dosysr1(Node*, Node*);
-void	fmtof(Node*, Node*) ;
-void	dofmtsize(Node*, Node*) ;
+void    cvtatof(Node*, Node*);
+void    cvtatoi(Node*, Node*);
+void    cvtitoa(Node*, Node*);
+void    bprint(Node*, Node*);
+void    funcbound(Node*, Node*);
+void    printto(Node*, Node*);
+void    getfile(Node*, Node*);
+void    fmt(Node*, Node*);
+void    pcfile(Node*, Node*);
+void    pcline(Node*, Node*);
+void    setproc(Node*, Node*);
+void    strace(Node*, Node*);
+void    follow(Node*, Node*);
+void    reason(Node*, Node*);
+void    newproc(Node*, Node*);
+void    startstop(Node*, Node*);
+void    match(Node*, Node*);
+void    status(Node*, Node*);
+void    kill(Node*,Node*);
+void    waitstop(Node*, Node*);
+void    stop(Node*, Node*);
+void    start(Node*, Node*);
+void    filepc(Node*, Node*);
+void    doerror(Node*, Node*);
+void    rc(Node*, Node*);
+void    doaccess(Node*, Node*);
+void    map(Node*, Node*);
+void    readfile(Node*, Node*);
+void    interpret(Node*, Node*);
+void    include(Node*, Node*);
+void    regexp(Node*, Node*);
+void    dosysr1(Node*, Node*);
+void    fmtof(Node*, Node*) ;
+void    dofmtsize(Node*, Node*) ;
 
 typedef struct Btab Btab;
 /*s: global [[tab]] */
@@ -634,7 +634,7 @@ doaccess(Node *r, Node *args)
 
     r->op = OCONST;
     r->type = TINT;
-    r->ival = 0;		
+    r->ival = 0;                
     if(access(res.string->string, 4) == 0)
         r->ival = 1;
 }
@@ -923,7 +923,7 @@ map(Node *r, Node *args)
             i = findseg(m, ent);
         }
         if(i < 0)
-            error("%s is not a map entry", ent);	
+            error("%s is not a map entry", ent);        
         l = l->next;
         if(l->type != TINT)
             error("map entry not int");
@@ -1358,7 +1358,7 @@ pcfile(Node *r, Node *args)
     if(p == 0)
         error("pcfile(addr): funny file %s", buf);
     *p = '\0';
-    r->string = strnode(buf);	
+    r->string = strnode(buf);   
 }
 /*e: function [[pcfile]] */
 
@@ -1385,7 +1385,7 @@ pcline(Node *r, Node *args)
     p = strrchr(buf, ':');
     if(p == 0)
         error("pcline(addr): funny file %s", buf);
-    r->ival = strtol(p+1, 0, 0);	
+    r->ival = strtol(p+1, 0, 0);        
 }
 /*e: function [[pcline]] */
 

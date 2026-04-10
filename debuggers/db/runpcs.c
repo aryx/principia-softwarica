@@ -1,7 +1,7 @@
 /*s: db/runpcs.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 

@@ -6,14 +6,14 @@
 #include "fns.h"
 
 
-extern	bool	executing;
-extern	int	infile;
-extern	int	eof;
+extern  bool    executing;
+extern  int     infile;
+extern  int     eof;
 
-int	alldigs(char*);
-void	fault(void*, char*);
+int     alldigs(char*);
+void    fault(void*, char*);
 
-extern	char	*Ipath;
+extern  char    *Ipath;
 extern jmp_buf env;
 extern char *errmsg;
 

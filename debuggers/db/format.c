@@ -1,7 +1,7 @@
 /*s: db/format.c */
 /*
  *
- *	debugger
+ *      debugger
  *
  */
 

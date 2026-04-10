@@ -8,9 +8,9 @@
 #include <bio.h>
 #include <mach.h>
 
-static	int	mget(Map*, uvlong, void*, int);
-static	int	mput(Map*, uvlong, void*, int);
-static	struct	segment*	reloc(Map*, uvlong, vlong*);
+static  int     mget(Map*, uvlong, void*, int);
+static  int     mput(Map*, uvlong, void*, int);
+static  struct  segment*        reloc(Map*, uvlong, vlong*);
 
 /*s: function [[geta]] */
 /*
@@ -226,7 +226,7 @@ mget(Map *map, uvlong addr, void *buf, int size)
         werrstr("unreadable map");
         return -1;
     }
-    for (i = j = 0; i < 2; i++) {	/* in case read crosses page */
+    for (i = j = 0; i < 2; i++) {       /* in case read crosses page */
         k = spread(s, (void*)((uchar *)buf+j), size-j, off+j);
         if (k < 0) {
             werrstr("can't read address %llux: %r", addr);
@@ -257,7 +257,7 @@ mput(Map *map, uvlong addr, void *buf, int size)
     }
 
     seek(s->fd, off, 0);
-    for (i = j = 0; i < 2; i++) {	/* in case read crosses page */
+    for (i = j = 0; i < 2; i++) {       /* in case read crosses page */
         k = write(s->fd, buf, size-j);
         if (k < 0) {
             werrstr("can't write address %llux: %r", addr);
@@ -274,7 +274,7 @@ mput(Map *map, uvlong addr, void *buf, int size)
 
 /*s: function [[reloc]] */
 /*
- *	convert address to file offset; returns nonzero if ok
+ *      convert address to file offset; returns nonzero if ok
  */
 static struct segment*
 reloc(Map *map, uvlong addr, vlong *offp)
