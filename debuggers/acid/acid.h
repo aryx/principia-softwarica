@@ -4,9 +4,9 @@
 enum
 {
     /*s: acid constants */
-    Hashsize	= 128,
-    /*x: acid constants */
     Maxproc		= 50,
+    /*x: acid constants */
+    Hashsize	= 128,
     /*x: acid constants */
     Maxarg		= 512,
     /*x: acid constants */
