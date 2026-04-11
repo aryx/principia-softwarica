@@ -650,6 +650,64 @@ drivers) to explain in full detail. Its design, based on
 Porter-Duff compositing of rectangular images, was influential
 enough to inspire both X Render and Go's image libraries.
 
+%claude:
+Before diving into the chapters, here is the layered picture
+of what we will be reading. The four directories listed in
+the code-organisation section live at four very different
+distances from the metal:
+\begin{verbatim}
+   user space
+   +---------------------------------------------------------+
+   | application: hellodraw, acme, sam, rio itself, ...      |
+   +---------------------------------------------------------+
+                              | calls draw.h functions
+                              v
+   +---------------------------------------------------------+
+   | libdraw  (lib_graphics/libdraw/)                        |
+   |   thin C wrappers: line(), draw(), string(), allocimage |
+   |   they marshal arguments into binary commands and       |
+   |   write them into /dev/draw/x/data                      |
+   +---------------------------------------------------------+
+                              | 9P read/write
+                              v
+   ===========================================================
+   kernel space
+   +---------------------------------------------------------+
+   | devdraw  (kernel/devices/screen/devdraw.c)              |
+   |   the /dev/draw/ filesystem; per-client subdirectories; |
+   |   drawmesg() switch dispatches every command character  |
+   +---------------------------------------------------------+
+                              | calls
+                              v
+   +---------------------------------------------------------+
+   | libmemdraw  (lib_graphics/libmemdraw/)                  |
+   |   the actual rasteriser: memimagedraw(), memimageline() |
+   |   operates on Memimage (no /dev/draw, no client state)  |
+   +---------------------------------------------------------+
+                              | + libmemlayer for stacked windows
+                              v
+   +---------------------------------------------------------+
+   | hardware abstraction: vgascreen.c (PC) / bcm.c (RPi)    |
+   |   provides a frame buffer pointer + flush hooks         |
+   +---------------------------------------------------------+
+                              |
+                              v
+                  graphics card / framebuffer
+\end{verbatim}
+%
+Two things are worth keeping in mind as you read what follows.
+First, the same library can be linked twice---[[libmemdraw]]
+runs both inside the kernel (as the back end of [[devdraw]])
+and inside the user-space [[memdrawtest]] program, which
+makes it possible to debug the rasteriser as a normal C
+program with [[acid]]. Second, every chapter in this book
+covers exactly one slab of this picture: ``Core Data
+Structures'' is the [[Memimage]] / [[Image]] split, ``Images''
+and ``Drawing Shapes'' are inside [[libmemdraw]], ``User/Kernel
+Bridge'' is the seam between [[libdraw]] and [[devdraw]], and
+``Overlapping Layers'' is [[libmemlayer]]. The {\em vertical}
+direction in the diagram is what gives the book its order.
+
 \l lots of other graphics systems, see the comment in the .nw
 %#industry:
 % - GDI (quite limited apparently), Direct2D (lots of optis), DirectX. 
@@ -952,8 +1010,48 @@ those images on the screen.
 Graphics systems are usually implemented as display servers.
 %alt: just lib for old style DOS games? or mirage style?
 A {\em display server} is a program that accepts {\em drawing commands}
-from multiple {\em clients} via a {\em communication protocol}, 
+from multiple {\em clients} via a {\em communication protocol},
 and then translates those commands into instructions to the graphics card.
+
+%claude:
+The display-server idea is realised differently on every
+mainstream OS, and the choice has visible consequences for
+how applications are written and how they perform. The main
+contrast is {\em where} the server runs and {\em what} the
+protocol looks like:
+\begin{verbatim}
+   system        server runs in     protocol             scope
+   -----------   ----------------   ------------------   -------------
+   \plan draw    kernel device      9P + binary cmds     graphics only
+                 (devdraw)          via /dev/draw/x/data
+   X11 (Xorg)    user-space         X11 wire protocol    graphics +
+                 daemon             over Unix/TCP        windowing
+   Wayland       user-space         wayland protocol     graphics +
+                 compositor         over Unix socket     windowing
+   Quartz        user-space         Mach IPC             graphics +
+                 (WindowServer)                          windowing
+   Win32 GDI     kernel (win32k)    syscalls             graphics +
+                                                         windowing
+   DirectX/      kernel + user      DXGI / DirectComp    graphics +
+   Direct2D      driver                                  GPU offload
+   Android       SurfaceFlinger     Binder IPC + EGL     graphics +
+                                                         windowing
+\end{verbatim}
+%
+Two things stand out about \plan's choice. First, the
+``server'' is a kernel device, not a user process---there
+is no [[devdraw]] daemon, just a [[devdraw.c]] linked into
+the kernel that responds to [[read]]/[[write]] on
+[[/dev/draw/x/data]]. This is the same trick \plan plays
+for every other service: by reusing the file-system protocol
+([[9P]]) instead of inventing a new one, the graphics system
+inherits namespaces, network transparency, and ACL
+enforcement for free. Second, [[draw]] is {\em only} a
+graphics system; window management is a separate program
+([[rio]], in \book{Windows}) that {\em uses} [[draw]] like
+any other client. Every other system in the table fuses the
+two, which is part of why their codebases are an order of
+magnitude larger.
 %(and changed) intro/motivations  intro/draw  intro/other-system
 Designers of graphics systems often used a client/server architecture 
 because graphics systems are usually coupled with a windowing system. 
@@ -1209,6 +1307,48 @@ it is the building block used by all the other drawing functions;
 drawing a line, a polygon, or a circle involves at some
 point many internal calls to [[draw()]].
 \n actually [[memimagedraw()]]
+
+%claude:
+The ``composition operator [[op]]'' mentioned above deserves
+to be made concrete, because it is what makes a single
+[[draw()]] call subsume copy, fill, mask, and translucency
+in one mechanism. The classic Porter--Duff
+paper~\cite{porter-duff} enumerates twelve operators that
+combine a source pixel ([[s]]) and a destination pixel
+([[d]]) using their alpha channels ([[s.a]] and [[d.a]]).
+With shorthand [[as = s.a]] and [[ad = d.a]] and writing
+each pixel as colour times coverage, the operators are:
+\begin{verbatim}
+   name         d.rgb' formula                d.a' formula
+   ----------   ---------------------------   --------------------
+   Clear        0                             0
+   Src          s                             as
+   Dst          d                             ad
+   SrcOver      s   + d*(1-as)                as + ad*(1-as)
+   DstOver      s*(1-ad) + d                  as*(1-ad) + ad
+   SrcIn        s*ad                          as*ad
+   DstIn        d*as                          as*ad
+   SrcOut       s*(1-ad)                      as*(1-ad)
+   DstOut       d*(1-as)                      ad*(1-as)
+   SrcAtop      s*ad + d*(1-as)               ad
+   DstAtop      s*(1-ad) + d*as               as
+   Xor          s*(1-ad) + d*(1-as)           as*(1-ad) + ad*(1-as)
+\end{verbatim}
+%
+[[draw]] does not expose all twelve as separate API entries.
+Instead, it lets the caller pass a {\em mask} image alongside
+[[s]] and [[d]], and computes the equivalent of [[SrcOver]]
+modulated by the mask: [[d' = (s if mask else d)]] for opaque
+masks, and a smooth blend in between for partially-opaque ones.
+A copy is [[draw(d, r, s, nil, p)]] (mask is the constant
+``opaque''); a fill is the same call with [[s]] being a
+1$\times$1 colour; a stencil-style mask is the same call with
+[[mask]] being an alpha-only image; a font glyph blit is
+identical to a stencil mask blit. So the twelve Porter--Duff
+operators collapse into one library entry plus three argument
+patterns---the simplification that lets [[memimagedraw]] fit
+in roughly 200 lines while doing the work that takes a
+thousand lines of [[Pixman]] on Linux.
 
 \l FIGURE Indeed in Figure X a line is a set of horizontal or vertical
 % lines which can be set through bitblt.
@@ -22729,6 +22869,65 @@ When a program calls [[initdraw()]], it negotiates with
 [<screen>] (a [<Screen>] structure for creating sub-layers).
 The [<gengetwindow()>] function handles window resize events
 by re-reading the window image from [[/dev/winname]].
+
+%claude:
+The handshake itself is worth seeing as a sequence diagram,
+because the indirection through [[/dev/winname]] is one of
+those ``it is not magic, just files'' patterns that takes a
+moment to appreciate. When the user clicks ``new window''
+in [[rio]] and the launched program calls [[initdraw()]],
+the following exchange happens through three filesystem
+endpoints---no shared memory, no IPC primitive, just files
+the kernel and [[rio]] arbitrate:
+\begin{verbatim}
+   rio                          devdraw (/dev/draw/)        the app
+    |                                  |                     |
+    |--allocimage(W, win-rect)-------->|                     |
+    |<--Image *winimg------------------|                     |
+    |--nameimage(winimg, "noborder.W")>|                     |
+    |  publish winimg under that name  |                     |
+    |                                                        |
+    |--mount /srv/rio.W as namespace-->/dev/winname (per app)|
+    |  contents = "noborder.W"                               |
+    |                                                        |
+    |--exec /bin/foo, in mounted ns------------------------->|
+    |                                                        |--initdraw()
+    |                                                        |     |
+    |                                  |<--namedimage("noborder.W")|
+    |                                  |  (resolves via the kernel |
+    |                                  |   image-name table)       |
+    |                                  |--Image *winimg----------->|
+    |                                                        |
+    |                                                        |  *view = winimg
+    |                                                        |  *screen = allocscreen(view)
+    |                                                        |  draw(view, ...)
+    |                                                        |
+    |  later: user resizes the window                        |
+    |--reallocimage(W, new-rect)------>|                     |
+    |--update /dev/winname for app---->|                     |
+    |--note "interrupt" (resize)----------------------------->| getwindow()
+    |                                                        |  reads /dev/winname
+    |                                                        |  -> "noborder.W2"
+    |                                                        |  namedimage("noborder.W2")
+    |                                                        |  *view = new winimg
+\end{verbatim}
+%
+Three properties fall out of doing it this way. (1)~The app
+never has to know whether it is running under [[rio]] or on
+the bare framebuffer: in the standalone case
+[[/dev/winname]] simply does not exist (or contains
+``noborder''), and [[gengetwindow]] falls through to
+[[display->image]]---same code path, no special case.
+(2)~Resize is a {\em note}, not a callback: [[rio]]
+republishes [[/dev/winname]] with a new name, sends the
+``interrupt'' note, and the app eventually calls
+[[getwindow]] when it is ready. There is no synchronous
+``expose'' protocol like X11's, and no risk of the app
+losing draw commands while it is busy. (3)~Because the
+window image lives in [[devdraw]]'s pool, [[rio]] and the
+app are drawing into the same pixels through different
+[[Image*]] handles---the kernel is the only thing that
+needs to know which physical bytes are involved.
 
 %trans:
 % Saw windows chapter before. Can be used for regular app. e.g., acme.
