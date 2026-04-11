@@ -2,6 +2,7 @@
 #include "aa.h"
 
 /*s: function [[ieeedtod]] */
+/// ?? -> <>
 void
 ieeedtod(Ieee *ieee, double native)
 {
