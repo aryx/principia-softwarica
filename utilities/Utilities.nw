@@ -453,6 +453,46 @@ command-line environment. Most of these programs are thin
 wrappers around one or two system calls, which makes them
 a good introduction to the \plan system call interface.
 
+%claude:
+The ``thin wrapper'' claim is concrete enough to spell out as
+a table. For each utility in this chapter, here is the system
+call (or two) that does the real work, with everything else
+being argument parsing, path canonicalization, and output
+formatting:
+\begin{verbatim}
+   utility   real work                  system call(s)
+   -------   ------------------------   ------------------------
+   cat       copy bytes                 read + write
+   ls        list directory entries     dirread / dirstat
+   touch     update timestamps          dirwstat / create
+   mkdir     create directory           create (mode | DMDIR)
+   rm        unlink file                remove
+   cp        copy bytes                 open + read + write +
+                                        create + close
+   mv        rename or copy+remove      rename (or fall back
+                                        to cp + remove)
+   chmod     change file mode bits      dirwstat
+   chgrp     change group ownership     dirwstat
+   mtime     read modification time     dirstat
+   pwd       get working directory      fd2path / getwd
+   wc        count bytes/words/lines    read in a loop
+   du        recursive size             dirread + recurse
+\end{verbatim}
+%
+Two patterns fall out of staring at this column. First, an
+astonishing amount of the work is done by exactly one syscall,
+[[dirstat]] / [[dirread]] / [[dirwstat]]---they cover not just
+the obviously-stat-related tools but also [[touch]], [[chmod]],
+and [[chgrp]], because in \plan ``change a file's metadata''
+is uniformly ``call [[dirwstat]] with the field you want to
+update.'' On \unix the same job needs separate [[utimes]],
+[[chmod]], and [[chown]] syscalls; \plan collapses them into
+one. Second, the only ``creative'' tool in the table is
+[[cp]], because it has to compose four primitives and decide
+between [[rename]] and [[copy+remove]] for the cross-device
+case---and even there the source is roughly 200 lines, the
+shortest non-trivial copy implementation in this book.
+
 \section{[[cat]]}
 % see also pr(1), print listing
 
@@ -3024,6 +3064,74 @@ a state's [[next]] entry is null, [[increment]] computes and
 caches the transition lazily---this is DFA construction on
 demand, avoiding the exponential blowup of building the full
 DFA up front.
+
+%claude:
+The lazy DFA trick is worth a worked example, because it
+explains what otherwise looks like a contradiction: regex
+engines are typically described as either ``slow Thompson NFA''
+or ``fast precomputed DFA,'' and \plan [[grep]] manages to be
+both. Suppose we compile the pattern \verb+a(b|c)*d+ into the
+[[Re]] graph (this is what [[yyparse]] produces from the
+grammar):
+\begin{verbatim}
+   The Re graph (NFA, fixed size, built once at startup):
+
+      .-[a]-.       .---[b]---.
+      |     |       |         |
+   --(0)-->(1)--->(2)        (5)-[d]-->(6) MATCH
+                  |   .-[c]-.    ^
+                  |   |     |    |
+                  '->(3)-->(4)---'
+                  ^                  |
+                  |                  |
+                  '------------------'  (loop back via Talt for *)
+
+   Each node is a Re struct (Tclass for [a], [b], [c], [d];
+   Tor between b/c; Talt for the * loop).
+\end{verbatim}
+%
+A pure Thompson NFA simulator would, for each input byte, walk
+\emph{every} reachable Re node in parallel and follow the right
+edges---correct but slow because it re-does the same walk
+on every input. A pure DFA approach precomputes a State for
+\emph{every reachable subset} of NFA nodes ahead of time, which
+is fast at search time but can blow up exponentially (the
+classic ``$2^n$ states'' problem). \plan [[grep]] takes the
+middle road:
+\begin{verbatim}
+   The State graph (DFA, grown lazily as input arrives):
+
+   state0 = { node 0 }                  -- starting state
+                              ^
+                              | input 'a'
+                              v
+   state1 = { node 1, 2, 3, 5 }         -- closure after 'a'
+                              ^
+                              | input 'b'
+                              v
+   state2 = { node 4, 2, 3, 5 }         -- closure after 'a' 'b'
+                              ^
+                              | input 'd'
+                              v
+   state3 = { node 6 }                  -- MATCH
+
+   state->next[256] is the transition table; state->re is
+   the set of NFA nodes this state represents.
+\end{verbatim}
+%
+At startup, only [[state0]] exists. The first time the search
+loop reads an [['a']] in this state, [[increment(state0,'a')]]
+computes the closure---``which NFA nodes can we be in after
+consuming an [['a']]?''---allocates a new [[State]] for the
+result, and stores the pointer in [[state0->next['a']]]. Every
+subsequent [['a']] in this state takes the cached transition
+in O(1). Bytes that never appear in the input never trigger a
+[[State]] allocation, so the DFA stays bounded by the
+\emph{actually observed} input alphabet, not the full 256-byte
+range. This is why grepping a megabyte of ASCII text builds at
+most a few dozen states even for a hairy pattern, and why the
+search loop in [[search()]] can afford to be a tight
+[[s = s->next[c]]] dispatch with no parsing logic at all.
 %
 The loop is duplicated: one copy for normal matching and one for
 case-insensitive ([[-i]]) matching with inline lowercasing.
@@ -3432,9 +3540,116 @@ trees, then [[run]] walks the tree to execute it.
 
 \section{Introduction}
 
+%claude:
+[[awk]] occupies an unusual niche in the \unix toolbox: it is
+the smallest tool in this book that is also a complete
+programming language with variables, arrays, functions, regular
+expressions, control flow, and dynamic typing. Most of the
+other utilities you have seen in this book do one thing; [[awk]]
+does anything you can express in its little language. Yet the
+implementation is roughly 6\,000 lines of C---less than [[grep]]
+would be if you counted [[libregexp]] separately.
+
+%claude:
+Where does [[awk]] sit in the spectrum of text-processing
+tools? Each tool in the table below adds expressive power
+along one specific axis, with the cost being implementation
+size:
+\begin{verbatim}
+   tool       data model        control      LOC (orig)
+   --------   ---------------   ----------   ----------
+   tr         single byte       none         300
+   cut        column            none         300
+   sed        line + 2 buffers  goto/branch  1500
+   grep       line              none         600
+   awk        line + fields +   if/while/    6000
+              assoc arrays      for/func
+   perl       arbitrary objects + everything 200000+
+   python     arbitrary objects + everything 1M+
+\end{verbatim}
+%
+The interesting jump is from [[sed]] to [[awk]]: by adding
+\emph{associative arrays} and \emph{user-defined functions},
+[[awk]] crosses the line from ``advanced filter'' to
+``programming language.'' Larry Wall famously called Perl
+``a cleaned-up [[awk]]''---if you trace the history forward,
+[[awk]] $\to$ Perl $\to$ Ruby $\to$ Python's regex/os
+modules covers most of the ``Unix scripting'' lineage. The
+fact that the original [[awk]] paper~\cite{aho-weinberger-kernighan}
+predates Perl by a decade and Python by 15 years makes it the
+true ancestor of every text-mostly scripting language.
+
+%claude:
+[[awk]]'s programming model is also distinctive enough to be
+worth spelling out. An [[awk]] program is a list of
+\emph{pattern--action} pairs, plus optional [[BEGIN]] and
+[[END]] blocks. The implicit main loop is:
+\begin{verbatim}
+   run BEGIN block
+   for each line in the input:
+       split it on FS into $1, $2, ..., $NF
+       for each pattern-action pair:
+           if pattern matches the current line:
+               run the action
+   run END block
+\end{verbatim}
+%
+That implicit loop is what makes one-liners short:
+\verb+awk -F: '$3>1000{print $1}' /etc/passwd+ prints user
+names whose UID exceeds 1000, with no [[for]], no [[open]],
+no [[split]] in the user code---the language already knows
+the program will be ``do this for every line.'' This is the
+same trade-off [[sed]] makes (one buffer, one pass), pushed
+one notch further up the expressive-power axis. Patterns can
+be regular expressions, range pairs, or arbitrary boolean
+expressions; if the pattern is omitted, the action runs on
+every line; if the action is omitted, the pattern's
+matching-or-not becomes a default [[print]] of the line.
+
 \section{Data structures}
 
+%claude:
+[[awk]] has \emph{three} major data structures: [[Cell]] for
+runtime values, [[Node]] for parse trees, and [[Array]] for
+associative arrays. The interesting one is [[Cell]], because
+it is what gives [[awk]] its peculiar dual-typed semantics
+where [[$1]] can be both the string [["42"]] and the number
+[[42]] simultaneously.
+
 \subsection{[[Cell]]}
+
+%claude:
+A [[Cell]] is the awk-level value: a string, a number, a
+function, an array, or a variable holding any of those. The
+key trick is that the [[tval]] field is a bitset rather than
+an enum---a Cell can carry [[NUM | STR]] simultaneously,
+meaning ``this value has both a string form and a numeric
+form, and both are currently consistent.'' This is what lets
+\verb+$1=="42"+ and \verb+$1==42+ both work without an
+explicit cast.
+\begin{verbatim}
+   tval bits         meaning
+   ---------------   ---------------------------------
+   NUM               fnval is the canonical form
+   STR               sval is the canonical form
+   NUM | STR         both are present and consistent
+                     (after a comparison forces conversion)
+   STR | DONTFREE    sval points to literal text in the
+                     program, do not free
+   ARR               sval points to an Array (assoc. table)
+   FCN               sval points to a Node (function body)
+\end{verbatim}
+%
+The state transitions are: a freshly-read field [[$1]] starts
+as [[STR]]; the first arithmetic that touches it sets the
+[[NUM]] bit and computes [[fnval]] via [[atof]]; assigning a
+new value clears both bits and re-sets one. Comparisons are
+where the famous awk surprise lives: if both operands have
+[[NUM]] set, they compare as numbers, otherwise as strings,
+which is why \verb+"10" < "9"+ is true (lexicographic) but
+\verb+10 < 9+ is false (numeric). The dual-typing is
+\emph{the} thing that makes awk one-liners short and awk gotchas
+long.
 
 \subsection{Symbol table}
 
@@ -6029,6 +6244,63 @@ using Gregorian and Julian calendar rules. The code even handles
 the 1752 calendar reform, when September lost 11 days as
 Britain switched from the Julian to the Gregorian calendar.
 
+%claude:
+The 1752 hack is worth slowing down on, because running
+\verb+cal 9 1752+ on any \unix-derived system literally prints
+a September with eleven missing days---a piece of historical
+weirdness baked into the calendar code:
+\begin{verbatim}
+   $ cal 9 1752
+        September 1752
+    S  M Tu  W Th  F  S
+          1  2 14 15 16
+   17 18 19 20 21 22 23
+   24 25 26 27 28 29 30
+\end{verbatim}
+%
+The story: until 1582, the entire Christian world used the
+\emph{Julian} calendar, which assumes a year is exactly
+365.25~days. The real solar year is shorter by about 11~minutes,
+so by the 1500s the Julian calendar had drifted about 10~days
+ahead of the actual seasons. Pope Gregory~XIII fixed this in
+1582 by (a)~skipping 10~days that October so the spring equinox
+landed back on March~21, and (b)~changing the leap-year rule:
+century years are leap years \emph{only} if divisible by 400.
+That is the famous \verb+if (year%4==0 && (year%100!=0 || year%400==0))+
+test every programmer eventually writes.
+
+%claude:
+Catholic countries adopted the new calendar immediately;
+Protestant Britain and its colonies dragged their feet for
+170 years. By 1752 the gap had grown from 10 to 11 days, so
+when Britain finally switched, Wednesday September~2~1752 was
+followed directly by Thursday September~14~1752---eleven days
+that historically did not exist on British soil, including
+British North America (this is why some early American
+historical records have peculiar gaps). [<jan1()>] encodes
+this in three rules:
+\begin{verbatim}
+   d = 4 + y + (y+3)/4              ; Julian: leap day every 4 years
+   if y > 1800:                     ; switch to proper Gregorian rule
+       d -= (y-1701)/100            ;   subtract century years
+       d += (y-1601)/400            ;   add back the /400 ones
+   if y > 1752:                     ; the British switch
+       d += 3                       ;   shift by 11-day gap
+                                    ;   (modulo 7 = 4 weekdays + 4)
+   return d % 7
+\end{verbatim}
+%
+And [<cal()>] makes September 1752 explicitly short: when it
+detects [[mon[m]==19]] (its sentinel for ``the short September'')
+and the print loop reaches day~3, it jumps to day~14 and
+extends the month length so the loop ends at the right place.
+This is where the magic [[mon[9] = 19]] in [<cal()>] comes
+from---it is not a typo, it is the encoded length of September
+1752 specifically. POSIX [[cal]] inherits this behaviour from
+\plan/Berkeley [[cal]], which inherited it from Research \unix,
+which inherited it from \ldots\ a real piece of British
+political history.
+
 <<constants cal.c>>=
 char    dayw[] =
 {
@@ -7219,6 +7491,42 @@ This chapter covers utilities that work at the byte level:
 hex dumpers, the byte-level copy tool [[dd]], and [[split]]
 for breaking large files into pieces.
 
+%claude:
+The four tools in this chapter exist because text-oriented
+utilities like [[cat]] and [[grep]] become useless the moment
+you point them at a binary file: control bytes corrupt the
+terminal, multi-byte UTF-8 sequences get split, and there is
+no notion of a ``line'' to count. The byte-level tools fill
+this gap with four different views of the same raw bytes:
+\begin{verbatim}
+   tool    role                       canonical example output
+   -----   ------------------------   --------------------------
+   xd      hex+ASCII side-by-side     0000000  48 65 6c 6c 6f
+                                               20 77 6f 72 6c 64
+                                               0a Hello world.
+   od      octal/hex/decimal/char     0000000   062510 066154
+                                               032157 067127
+   dd      copy bytes with optional   dd if=/dev/zero bs=1k
+           block size, count, offset  count=4 of=/tmp/foo
+   split   break a file into named    split -n 1000 huge.log
+           pieces                     -> xaa xab xac ...
+\end{verbatim}
+%
+Each tool is more or less the simplest possible thing it can
+be. [[xd]] and [[od]] are read-loops with a hex-formatted
+[[printf]]; [[dd]] is a read-into-buffer / write-from-buffer
+loop with explicit block sizes (its arcane
+\verb+if=/of=/bs=/count=+ syntax is a relic of its 1970s job,
+copying between magnetic tapes whose blocks had to match
+exactly); [[split]] reads lines and rotates output files
+when the count threshold is reached. None has any internal
+state worth diagramming. The interesting one is [[split]]'s
+[[-e]] regex mode, which lets you split a log file every time
+a pattern appears---this is the byte-level cousin of
+\verb+csplit+ from GNU coreutils, and the only [[split]]
+feature that goes beyond ``copy N lines, then close and
+open the next file.''
+
 \section{[[xd]]}
 % hexadecimal dumper?
 
@@ -7530,6 +7838,71 @@ and operators pop their arguments and push the result. The
 implementation is essentially a stack machine interpreter with
 its own memory management, where numbers are stored as
 variable-length byte strings in [[Blk]] structures.
+
+%claude:
+A worked example clarifies what RPN ``feels like'' for someone
+who has only used infix calculators. The expression
+\verb+(3 + 4) * 5+ becomes the [[dc]] input \verb+3 4 + 5 * p+,
+where [[p]] prints the top of the stack:
+\begin{verbatim}
+   input    stack (top on right)   action
+   ------   --------------------   --------------------------
+   3        [3]                    push 3
+   4        [3, 4]                 push 4
+   +        [7]                    pop 4, pop 3, push 3+4
+   5        [7, 5]                 push 5
+   *        [35]                   pop 5, pop 7, push 7*5
+   p        [35]                   print top: 35
+\end{verbatim}
+%
+Two things fall out. First, there are \emph{no parentheses
+ever}---the operator order encodes the parse tree directly,
+which is why the [[commnds()]] inner loop in [[dc]] can be a
+single switch with no recursive descent. Second, the same
+input syntax doubles as the bytecode for a stack machine: a
+[[dc]] script is, quite literally, the instructions of a
+virtual machine, and when [[bc]] (the algebraic frontend)
+compiles \verb+(3+4)*5+ it emits exactly the byte sequence
+above. The [[bc]]/[[dc]] split is one of the earliest
+examples of the ``compile to a stack VM'' pattern that
+later showed up in the JVM, .NET CLR, Lua, Python, Forth,
+and PostScript.
+
+%claude:
+[[dc]] sits in a long lineage of stack-based calculator
+languages, each occupying a slightly different niche:
+\begin{verbatim}
+   year   tool             notes
+   ----   --------------   ----------------------------------
+   1968   HP calculators   the original Reverse Polish hardware
+                           (HP-35, HP-41, HP-48, HP-50g)
+   1970   Forth            stack-based programming language
+   1971   dc               on PDP-11 \unix; predates the C
+                           compiler! original by Lorinda Cherry
+   1971   bc               algebraic preprocessor for dc
+                           (Robert Morris and Lorinda Cherry)
+   1982   PostScript       stack-based page description /
+                           printer language (heavily influenced
+                           by Forth)
+   1990s  Joy, Cat,        ``concatenative'' programming
+          Factor           languages---direct descendants of
+                           Forth and PostScript
+   1996   Java JVM         operand stack instead of registers
+                           (same idea, much bigger VM)
+\end{verbatim}
+%
+The historical importance of [[dc]] is hard to overstate: it
+was the \emph{first} program written for \unix on the PDP-11,
+written even before [[ed]] and well before the C compiler
+existed (so the original was in assembler). The choice of
+RPN over algebraic notation was pragmatic---the parser fits
+in a switch statement---but it also turned [[dc]] into the
+direct ancestor of every stack-VM language that followed.
+[[bc]] is built \emph{on top of} [[dc]] (it is just a parser
+that emits [[dc]] commands), making the [[bc]]/[[dc]] pair
+one of the earliest worked examples of the
+``compiler-targeting-a-bytecode-interpreter'' architecture
+that now powers most scripting languages.
 
 \subsection{Data structures}
 
