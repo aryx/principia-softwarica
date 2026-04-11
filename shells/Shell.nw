@@ -1254,6 +1254,51 @@ When a bytecode like [<Xsimple()>] needs to run a command,
 it pops the top list from [[argv]] and uses it as the command
 and its arguments.
 
+%claude:
+The two-level structure is easier to grasp on a concrete
+example. Running the single command [[ls -l /tmp]] compiles
+roughly to the sequence
+[[Xmark; Xword "/tmp"; Xword "-l"; Xword "ls"; Xsimple]].
+Here is what [[runq->argv]] looks like after each of those
+four bytecodes has executed (bytecodes push to the
+{front} of the current word list, so words end up in
+source order):
+\begin{verbatim}
+  after Xmark                after Xword "/tmp"
+
+  argv ---+                  argv ---+
+          v                          v
+        +---+                      +---+
+        |nil|                      |   |-----> Word("/tmp") -> nil
+        +---+                      +---+
+          |                          |
+          v                          v
+        (rest of stack)            (rest of stack)
+
+  after Xword "-l"           after Xword "ls"
+
+  argv ---+                  argv ---+
+          v                          v
+        +---+                      +---+
+        |   |->W("-l")->W("/tmp")  |   |->W("ls")->W("-l")->W("/tmp")
+        +---+                      +---+
+
+  Xsimple then pops the top List, forks, and calls
+  exec("ls", {"ls","-l","/tmp",nil}).
+\end{verbatim}
+%claude:
+Why a two-level list rather than one flat word list?
+Because the interpreter needs to stack arguments: a pipeline
+like [[ls | wc]] must build two argument lists concurrently,
+an [[if]]-condition must suspend the argument list of its
+surrounding command while it evaluates the test, and a
+command substitution like [[echo `{date}]] must evaluate
+an inner thread whose argv pushes don't interfere with the
+outer [[echo]]. [[Xmark]] introduces a new top-of-stack
+whenever we are about to start accumulating a fresh word
+list; the previous lists sit underneath, ready to be
+restored when the current one is consumed.
+
 <<[[Thread]] other fields>>=
 // list<list<ref_own<word>>> (next = List.next)
 struct List *argv;		/* argument stack */
@@ -1523,6 +1568,53 @@ a variable by name.
 [<vlook()>] first searches the local variables of the current
 thread (stored in [[runq->local]]), then falls back to the
 global variable table via [<gvlook()>].
+
+%claude:
+Pictorially, a lookup for [[x]] inside a function call
+where [[x]] has been declared local walks the current
+thread's [[local]] chain first, and only on miss does it
+hash into [[gvar]]:
+\begin{verbatim}
+          runq (top of thread stack)
+           |
+           v
+        +--------+
+        | thread |  local ---> Var("x") -> Var("tmp") -> nil
+        |  fn f  |                ^
+        +--------+                |
+           |                      | vlook("x") matches here,
+           | ret                  | global "x" is never consulted.
+           v                      |
+        +--------+                |
+        | thread |                |
+        |bootstrap|                |
+        +--------+                |
+                                  |
+           gvar[]       (NVAR = 521 buckets, hashed by name)
+           +---+                  |
+           | 0 |----------------> Var("path") -> Var("home") -> nil
+           +---+
+           | 1 |                  |
+           +---+                  |
+           |...|                  |
+           +---+                  |
+           |hash("x")|----------> Var("x") (global)  -> nil
+           +---+                     ^
+                                     |
+                            found only if no local x above
+\end{verbatim}
+%claude:
+The lookup order matters because [[for x in ...]] and
+[[fn f { x=42; ... }]] introduce names that must shadow
+any pre-existing global [[x]] for the duration of the
+block, and then disappear when the block exits. Making
+[[vlook]] search [[local]] first---and making [[Xlocal]]
+prepend rather than mutate---gives shadowing and
+restoration for free: when the thread pops, its [[local]]
+list is discarded and the global [[x]] is visible again.
+There is no separate ``scope chain'' structure: the
+chain is just [[Thread.local]] walked from the top of
+[[runq]].
 
 <<function [[setvar]]>>=
 void
@@ -2537,6 +2629,43 @@ the same character until [<advance()>] is called to consume it.
 The helper [<nextis()>] combines both: it checks whether the next
 character matches, and consumes it if so.
 
+%claude:
+[[rc]] actually has {two} separate one-character
+lookahead slots, each living at a different layer:
+\begin{verbatim}
+  |-----------------------|
+  |   yylex()             |  wants "next non-space token char"
+  |-----------------------|
+           |
+           v
+  |-----------------------|
+  |   nextc / advance     |  slot: future    (lexer level)
+  |-----------------------|
+           |
+           v
+  |-----------------------|
+  |   getnext()           |  slot: peekc     (char-stream level)
+  |-----------------------|
+           |
+           v
+  |-----------------------|
+  |   rchr(runq->cmdfd)   |  raw bufio read
+  |-----------------------|
+\end{verbatim}
+%claude:
+[[peekc]] is internal to [<getnext()>] and exists only to
+handle the backslash-escape case: when [<getnext()>] reads
+a [['\\']] and then finds that the next byte is {not} a
+newline, it has already consumed a byte it cannot
+``return,'' so it stashes it in [[peekc]] for the next
+call. [[future]], by contrast, is the lookahead for the
+lexer proper---it lets [<yylex()>] probe the next
+character without committing to consume it, which is how
+[[&]] / [[&&]] and [[|]] / [[||]] disambiguation works.
+The two slots never interact: [[future]] is always filled
+by a fresh [<getnext()>] call, and [[peekc]] is an
+invisible fast-path inside that call.
+
 <<global [[future]]>>=
 int future = EOF;
 @
@@ -3474,6 +3603,60 @@ The distinction between [[first]] and [[word]] is important:
 a [[first]] cannot be a keyword, so that [[if]] in command
 position is recognized as a keyword, but [[echo if]]
 treats [[if]] as a regular word argument.
+
+%claude:
+Here is what the AST looks like for [[ls -l /tmp]].
+[[simple]] is left-recursive, so each additional argument
+wraps the previous one in an [[ARGLIST]] node; the
+[<simplemung()>] post-pass then hoists the whole thing
+under a [[SIMPLE]] node:
+\begin{verbatim}
+  after parsing simple:        after simplemung():
+
+         ARGLIST                      SIMPLE
+          /   \                         |
+     ARGLIST  WORD("/tmp")            ARGLIST
+      /   \                           /   \
+    WORD  WORD("-l")              ARGLIST  WORD("/tmp")
+     |                             /   \
+  "ls"                           WORD  WORD("-l")
+                                  |
+                               "ls"
+\end{verbatim}
+%claude:
+A slightly more interesting example is [[ls -l | wc -l]]:
+the [[PIPE]] binds two [[SIMPLE]] subtrees, and at the
+top a [[cmd]] rule would normally wrap the whole thing.
+Note that the [[PIPE]] carries the [[fd0]]/[[fd1]]
+pair (defaults~1/0) on the tree node itself, which is
+why [[Tree]] has redirection-specific fields---the lexer
+emitted a [[PIPE]] tree already, and the parser just
+hangs the two children on it:
+\begin{verbatim}
+                  PIPE (fd0=1, fd1=0)
+                 /    \
+           SIMPLE      SIMPLE
+             |           |
+          ARGLIST      ARGLIST
+          /    \       /    \
+       WORD  WORD("-l")  WORD  WORD("-l")
+         |                  |
+        "ls"               "wc"
+\end{verbatim}
+%claude:
+Two subtleties fall out of this shape. First, the
+[[SIMPLE]] pass is not strictly needed for correctness
+but makes code generation uniform: [<outcode()>] can
+handle any command as ``push a mark, walk the [[ARGLIST]]
+chain emitting [[Xword]]s, then [[Xsimple]]''. Without
+the [[SIMPLE]] wrapper, the generator would need a
+separate entry-point for bare [[ARGLIST]] subtrees at
+the top. Second, the [[PIPE]] tree is built by the lexer
+rather than the parser because the tree needs [[fd0]]
+and [[fd1]] fields that depend on the concrete bracket
+syntax ([[>[2=1]]], [[|[2]]], etc.)---encoding that in
+the [[yacc]] grammar would require many more tokens,
+so the lexer returns a pre-built [[Tree]] instead.
 
 <<line rule>>=
 line:   
@@ -7613,6 +7796,66 @@ Users can define signal handlers with \verb+fn sigint {...}+,
 \verb+fn sighup {...\}+, etc. If no handler is defined,
 the default behavior applies (usually terminating the process).
 
+%claude:
+The full path of a [[^C]] from keystroke to user-defined
+handler is therefore asynchronous in the kernel half and
+synchronous in the interpreter half:
+\begin{verbatim}
+  user        kernel                    rc interpreter loop
+  ----        ------                    -------------------
+   ^C
+    |         deliver "interrupt"
+    |          note to rc
+    |               |
+    |               v
+    |         notifyf(s="interrupt")    (currently running, say,
+    |           trap[SIGINT]++          inside Xsimple of a nested
+    |           ntrap++                 for-loop)
+    |           noted(NCONT)
+    |               |
+    |               v
+    |         rc resumes where interrupted
+    |                                       |
+    |                                       v
+    |                                   finish current bytecode
+    |                                       |
+    |                                       v
+    |                                   main() loop top:
+    |                                     if(ntrap) dotrap();
+    |                                       |
+    |                                       v
+    |                                   dotrap() looks up
+    |                                   vlook("sigint")->fn:
+    |                                     - if user defined one,
+    |                                       start() a new thread
+    |                                       running the fn body
+    |                                     - otherwise, pop threads
+    |                                       via Xreturn() until we
+    |                                       reach the iflag REPL
+\end{verbatim}
+%claude:
+Two design points are worth calling out. First, the
+deferral via [[ntrap]] is the only way to keep the
+interpreter's invariants intact: a bytecode like
+[<Xassign>] is in the middle of re-linking [[argv]],
+freeing old values, and installing new ones; if a shell
+function were run at an arbitrary point inside it, the
+word lists would be in an inconsistent state and the
+heap would leak. The same argument applies to any
+language runtime with safe-points---[[rc]] just happens
+to have very coarse safe-points (once per bytecode)
+because its bytecodes are large compared to a CPU
+instruction. Second, the ``pop threads until [[iflag]]''
+unwinding in [<dotrap>] is how [[^C]] abandons a
+deeply nested script or for-loop and returns to the
+interactive prompt: each [[Xreturn]] pops one frame
+off [[runq]], just as if the function had returned
+normally, and eventually uncovers the bootstrap thread
+that loops in [<Xrdcmds()>]. If no such interactive
+thread exists (for non-interactive [[rc]]), the final
+[[Xreturn]] terminates the shell---which is the
+correct behaviour for [[^C]] in a script.
+
 <<constant [[NSIG]]>>=
 #define	NSIG	32
 @
@@ -7997,6 +8240,35 @@ This way, the rest of the shell can distinguish a literal [[*]]
 (with a [[GLOB]] prefix). The [<deglob()>] function removes
 these markers when they are no longer needed.
 
+%claude:
+Concretely, here is how the two patterns [[*.c]] and
+[['*.c']] end up in memory after lexing. Both produce a
+single [[Word]] with a [[word]] field of length~4,
+but the bytes differ:
+\begin{verbatim}
+  wildcard *.c  ->   byte:  \001  '*'  '.'  'c'  '\0'
+                            ^^^^   ^
+                            GLOB   wild
+
+  quoted '*.c'  ->   byte:  '*'  '.'  'c'  '\0'
+                            (no GLOB marker, literal star)
+\end{verbatim}
+%claude:
+The in-band marker solves a real tension: the shell
+needs to carry these strings through [[^]] concatenation,
+variable substitution, and command substitution without
+losing the ``is this [[*]] a wildcard?'' bit. Using a
+parallel bitmap or a separate struct would require
+every string-manipulation function ([[strdup]], [[strcat]],
+[[emalloc]]) to also know about the bitmap. The
+[[\001]] byte sneaks alongside the normal UTF-8 bytes
+(which never contain [[\001]] because that is a
+C0-control code and not a valid start byte for any
+Rune sequence) so that ordinary [[strcpy]] just works.
+The only cost is that [[match]] must skip over the
+marker, and [[deglob]] must strip it once matching is
+done.
+
 <<constant [[GLOB]]>>=
 /*
  * Glob character escape in strings:
@@ -8106,6 +8378,51 @@ the pattern for the first component containing a metacharacter,
 reads the corresponding directory, and recurses for
 each matching entry. The results are sorted alphabetically
 by [<globsort()>].
+
+%claude:
+Walking through [[ls src/*.c]] makes the recursion
+concrete. After lexing, the argument is the byte string
+[[src/\001*.c]]. [<globdir>] is called with [[p]]
+pointing at the start of that pattern and [[namep]]
+pointing at the start of an empty [[globname]] buffer.
+The loop copies literal bytes into [[globname]] until it
+hits the first [[GLOB]] marker:
+\begin{verbatim}
+  step 1 : copy "src/" into globname, advance p past it
+           globname = "src/"
+           p        = "\001*.c"
+           namep    = &globname[4]   (right after the slash)
+
+  step 2 : open directory "src/", iterate entries
+           for each entry name, run match(name, "\001*.c")
+           keeping only those that match "*.c":
+              hello.c      MATCH
+              hello.h      no
+              Makefile     no
+              util.c       MATCH
+
+  step 3 : for each match, copy the name into globname
+           at namep and recurse with newp = "" (the suffix
+           after the matched component is empty).
+           The recursive call sees *p=='\0' and pushes
+           "src/hello.c" and "src/util.c" onto globv.
+\end{verbatim}
+%claude:
+Two subtleties of this design are worth naming. First,
+[[globdir]] recurses {per component}, not per character:
+a pattern like [[*/*.c]] visits every directory in the
+current directory with a first-level call, then for each
+matching directory makes a second-level call that scans
+its entries. This is why [[match]] stops at the first
+slash---it only ever matches a single component at a
+time. Second, if nothing matches, [[glob]] returns the
+{pattern itself} (with [[GLOB]] bytes stripped) as the
+only result; this is the ``no expansion'' behaviour
+inherited from \unix. It means that in [[rc]], typing
+[[echo *.nonsense]] in an empty directory prints
+``[[*.nonsense]]'' literally instead of erroring out,
+which occasionally surprises users but lets scripts
+pass glob patterns around as ordinary strings.
 
 <<global [[globname]]>>=
 char *globname;
