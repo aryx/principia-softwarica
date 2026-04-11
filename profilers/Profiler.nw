@@ -634,6 +634,34 @@ Moreover, the instrumentation needs extra data structures
 to store the counts and times---typically a buffer of
 profiling records allocated at program startup.
 
+%claude:
+Instrumentation profilers come in roughly three flavors,
+differentiated by who inserts the hooks:
+\begin{verbatim}
+   who instruments            example tools
+   ------------------------   --------------------------------
+   the compiler/linker        \plan 5l -p, gcc -pg (gprof),
+                              Go's -cover, Rust's -C profile-generate
+   a binary rewriter          Valgrind/Callgrind, Pin, DynamoRIO,
+                              Intel SDE
+   the language runtime       Java -agentlib:hprof, -XX:+DTrace,
+                              Python cProfile, Ruby TracePoint,
+                              Node.js --prof
+\end{verbatim}
+%
+\plan's [[5l -p]] is at the simplest end of that spectrum:
+the linker has already lowered the program to machine code,
+so it can see every [[TEXT]] pseudo-instruction and emit a
+[[BL _profin]] / [[BL _profout]] pair right next to it.
+Binary rewriters like Valgrind go one step further---they
+interpret every instruction in a JIT, which lets them
+observe things like memory access patterns, but at a 10--50x
+slowdown. Runtime-level instrumentation (Java agents, Python
+cProfile) hooks into the interpreter's function-dispatch
+path, so it sees exactly what the language already considers
+a ``call''---closer to the source-level picture but blind
+to inlined and native code.
+
 \subsection{Sampling profilers}
 
 %yoann: give more details on how sampling works
@@ -655,7 +683,7 @@ top-level PC.
 %claude:
 Sampling has two key advantages: it requires no
 recompilation or relinking, and it has very low overhead
-(just one interrupt every few milliseconds). 
+(just one interrupt every few milliseconds).
 The disadvantage is that you only get statistical estimates---a
 function that runs for a very short time may never be
 sampled, and you cannot recover call counts or call graphs
@@ -663,6 +691,41 @@ from sampling data alone.
 (The binary must still contain a symbol table so that
 the profiler can map PC values back to function names,
 but no relinking or recompilation is needed.)
+
+%claude:
+Every modern operating system ships a sampling profiler, and
+they differ mainly in what the ``sample'' is allowed to
+contain:
+\begin{verbatim}
+   OS / tool              sample source          what else per sample
+   --------------------   --------------------   ----------------------
+   \plan tprof/kprof      kernel profclock tick  just PC (8-byte bucket)
+   Linux perf             PMU overflow IRQ       PC + user/kernel stack,
+                                                 HW counters
+   Linux eBPF profile     perf_event + BPF prog  arbitrary BPF-computed
+   macOS Instruments      Mach thread_suspend    PC + stack + DTrace-
+                                                 derived data
+   Solaris/illumos DTrace profile:::profile-Nhz  PC + stack + kernel
+                                                 probe arguments
+   Windows ETW / Xperf    PROFILE event          PC + stack, kernel
+                                                 flight recorder
+   Intel VTune            PEBS (precise PMU)     PC + regs + memory
+                                                 addr + latency
+\end{verbatim}
+%
+The progression is cumulative: each newer tool collects
+strictly more data per sample than the one before.
+[[tprof]] at one extreme records only the interrupted
+PC, which is why its output is a single flat histogram.
+Linux [[perf]] walks the user stack at each sample (using
+frame pointers, DWARF unwind info, or the kernel's LBR
+registers), which is what turns sampled profiles into the
+flame graphs you see everywhere today. PEBS on Intel even
+tells you the exact faulting memory address, enabling
+per-cache-line profiling that no software solution can
+reproduce. The price of all that data is a more intricate
+toolchain---[[tprof]] is under 200 lines precisely because
+it only needs to map a bucket index to a symbol name.
 
 \subsection{Tracing and monitoring profilers}
 
@@ -1202,6 +1265,45 @@ To activate profiling, the user writes ``[[profile]]'' to
 array. The [[/bin/tprof]] tool then reads
 [[/proc/<pid>/profile]] and correlates the buckets
 with symbol information from the binary.
+
+%claude:
+To make the whole loop concrete, here is what happens when
+the profiling timer fires while a process is executing
+instruction at PC [[0x1048]] (inside [[foo]], whose entry is
+at [[0x1040]]):
+\begin{verbatim}
+   1. HW timer interrupt fires on the CPU
+        \|/
+   2. kernel trap entry saves user PC in Ureg
+        \|/
+   3. profclock(Ureg *ur)  (runs in interrupt context)
+        p = up                            ; current process
+        if (!p || !p->prof.pp) return     ; not profiling?
+        seg = p->seg[TSEG]                ; text segment
+        if (seg->profile == nil) return   ; segment has no buckets
+        if (up in user mode) {
+            bucket = (ur->pc - seg->base) >> LRESPROF
+                   = (0x1048  -  0x1000 ) >> 3    = 9
+            seg->profile[bucket + 2]++    ; +2 for [0]=total, [1]=outside
+            seg->profile[0]++             ; total ms counter
+        } else {
+            seg->profile[1]++             ; outside text
+        }
+        \|/
+   4. trap return; user code resumes at 0x1048
+\end{verbatim}
+%
+Three things are worth calling out. First, the hook runs
+entirely on the interrupt stack and does not touch any
+sleeping lock---it is a handful of integer operations, so
+the overhead per tick is measured in dozens of nanoseconds.
+Second, buckets [[0]] and [[1]] exist precisely so [[tprof]]
+can later compute [[delta = data[0] - data[1]]] (in-text
+time), which is the denominator of every percentage it
+prints. Third, the ``outside text'' branch catches PCs
+that fall in the kernel, in shared libraries, or in [[etext]]
+padding---ticks are never lost, they are just binned into
+[[profile[1]]] when they have nowhere else to go.
 
 \section{[[/proc/trace]]}
 % for /bin/trace
@@ -3016,6 +3118,66 @@ that embeds all of [[Traceevent]]'s fields directly into
 [[TEvent]], so [[e->pid]] reads the embedded [[Traceevent.pid]]
 without needing [[e->traceevent.pid]].
 
+%claude:
+A concrete example makes the raw event stream and the
+derived [[etime]] clearer. Suppose a process with pid~42 is
+scheduled, runs for 5~ms, sleeps on a channel for 3~ms, is
+made ready, runs another 2~ms, and exits. The kernel would
+emit this sequence on [[/proc/trace]]:
+\begin{verbatim}
+   raw Traceevent stream (one entry per state change):
+
+   ts=1000  pid=42 etype=SRun    (start of first run)
+   ts=1005  pid=42 etype=SSleep  (blocks on channel)
+   ts=1008  pid=42 etype=SReady  (wakeup)
+   ts=1009  pid=42 etype=SRun    (scheduled again, 1ms later)
+   ts=1011  pid=42 etype=SDead   (exits)
+
+   after user-space post-processing into TEvent:
+
+     [SRun, ts=1000, etime=5]     -> draw 5ms "run" bar
+     [SSleep, ts=1005, etime=3]   -> draw 3ms "sleep" gap
+     [SReady, ts=1008, etime=1]   -> 1ms "ready but not running"
+     [SRun, ts=1009, etime=2]     -> draw 2ms "run" bar
+     [SDead, ts=1011, etime=0]    -> terminates the row
+\end{verbatim}
+%
+The post-processing rule is simple: [[etime[i] = ts[i+1] -
+ts[i]]] for consecutive events belonging to the same pid.
+The reason the kernel does not precompute [[etime]] itself
+is that at the moment an event is emitted, the kernel
+genuinely does not know when the next state change will
+happen---the process might sleep indefinitely. Only a
+tool that can see the whole (rolling) stream can close
+each interval.
+
+%claude:
+This design is essentially the same as every kernel
+flight-recorder tool across OSes, but spelled differently:
+\begin{verbatim}
+   OS           kernel source         format     user-space consumer
+   ----------   -------------------   --------   -------------------
+   \plan        /proc/trace           binary     /bin/trace
+   Linux        ftrace ring buffer    text/raw   trace-cmd, KernelShark
+   Linux        perf_event ring       binary     perf sched, perfetto
+   Linux        LTTng ust/kernel      CTF        babeltrace, tracecompass
+   macOS/iOS    os_signpost + ktrace  signpost   Instruments
+   Solaris      DTrace aggregations   varies     dtrace(1)
+   Windows      ETW sessions          ETL        wpa.exe, PerfView
+\end{verbatim}
+%
+All of these share three design choices that [[trace]] also
+makes: (1)~the kernel writes into a bounded circular buffer
+so a slow reader cannot back-pressure the scheduler;
+(2)~events carry a timestamp but not a duration, because
+duration is a user-space concept that depends on which
+event you pair with which; (3)~the event type is a small
+enum, so the producer side is cheap enough to run on every
+context switch. [[trace]] is thus the smallest reasonable
+point in this design space: one enum ([[Sstate]]), one
+ring buffer, one GUI. Every other tool in the table adds
+features---but also thousands of lines of plumbing.
+
 <<struct [[TEvent]]>>=
 struct TEvent {
     Traceevent;
@@ -4412,6 +4574,38 @@ The implementation (roughly 1500 lines across [[iostats.c]],
 and cumulative time, then forwards the message to the real server.
 On exit, it prints the accumulated statistics.
 The code for [[iostats]] is in [[Profiler\_extra.nw]].
+
+%claude:
+The ``observe I/O without modifying the program'' problem has
+several well-known solutions, and comparing [[iostats]] to
+them is instructive because [[iostats]] solves it without
+any kernel-side support at all:
+\begin{verbatim}
+   tool                  mechanism              where the hook lives
+   -------------------   --------------------   ---------------------
+   \plan iostats         9P proxy file server   user-space namespace
+   Linux strace          ptrace(PTRACE_SYSCALL) kernel trap trampoline
+   Linux ltrace          breakpoints on PLT     user-space dyld hooks
+   Solaris/macOS dtruss  DTrace syscall probes  kernel probes
+   Linux bpftrace -e 't' tracepoint + BPF       kernel tracepoint
+   Windows procmon       filesystem mini-filter kernel filter driver
+   LD_PRELOAD wrappers   function interposition user-space linker
+\end{verbatim}
+%
+Every entry in this table except [[iostats]] and the
+LD\_PRELOAD trick needs help from the kernel: either a
+debugger hook ([[ptrace]]), a tracing framework (DTrace,
+bpftrace, ETW), or an in-kernel filter driver. [[iostats]]
+cheats in the cleanest way possible: because on \plan every
+I/O is a 9P message and every filesystem is a user-space
+server accessed via the namespace, you can put a \emph{new
+user process} between the client and the real server and be
+done. No kernel code, no debugger tricks, no
+function-interposition voodoo---just [[bind]] the proxy
+into the target's namespace and [[exec]] the program.
+This is the same move that makes \plan's [[rio]] a window
+system, [[import]] a remote-mount, and [[fuse2p]] a FUSE
+bridge: structural interposition replaces ad-hoc hooks.
 
 %******************************************************************************
 \chapter{Conclusion}
