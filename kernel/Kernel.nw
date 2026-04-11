@@ -4228,6 +4228,49 @@ char *statename[] =
 % Process chapter
 
 %claude:
+The transitions between these states are driven by events
+in the process's life---being picked by the scheduler,
+blocking on a lock, waking up from a sleep, dying. The
+core loop is the small triangle [[Ready]] -- [[Running]]
+-- [[Wakeme]]:
+\begin{verbatim}
+                      +-------+
+     new proc ------->| Ready |<------- wakeup()
+                      +-------+         (event arrived)
+                          ^ |                 ^
+                  preempt | | schedule()      |
+                          | v                 |
+                      +---------+   sleep()   |
+                      | Running |------------>+
+                      +---------+             |
+                          | exits             |
+                          v              +--------+
+                     +----------+        | Wakeme |
+                     | Moribund |        +--------+
+                     +----------+
+                          | waited on
+                          v
+                      +------+
+                      | Dead |
+                      +------+
+\end{verbatim}
+%claude:
+A newly created process enters [[Ready]], is promoted to
+[[Running]] by the scheduler, and falls back to [[Ready]]
+on a preemption (clock tick). A [[Running]] process moves
+to [[Wakeme]] when it calls [[sleep()]] to wait for a
+condition, and another process (or an interrupt handler)
+calls [[wakeup()]] to push it back to [[Ready]]. The three
+[[Queueing]] variants ([[Queueing]], [[QueueingR]],
+[[QueueingW]]) are subtypes of the sleeping state used
+specifically by [[QLock]] and [[RWLock]] queues---they are
+distinct so that [[ps]] can show which kind of lock a
+process is waiting on. [[Moribund]] and [[Dead]] are the
+two phases of death: a process exits into [[Moribund]] and
+stays there until its parent collects the exit status,
+after which its slot becomes [[Dead]] and can be reused.
+
+%claude:
 Like [[cpu]], the [[up]] pointer (``user process'') is
 per-processor: it points to the [[Proc]] currently running
 on this CPU. On ARM it is stored in [[R9]]. The [[5c]]
@@ -4304,6 +4347,52 @@ struct Chan
 % could put 'dev' closer to device for fs where want more than just type
 
 % type =~ major, and dev =~ minor
+
+%claude:
+Pictorially, this is the chain of pointers starting at a
+user's file descriptor and ending at the actual file object:
+\begin{verbatim}
+ user process              kernel
+ ------------              ------
+                         +------------+
+  proc->fd[3] ---------->|    Chan    |  (one per open file)
+                         |------------|
+                         |  type = 5  |----> devtab[5] = &sddevtab
+                         |  dev  = 0  |      (SD card driver)
+                         |            |
+                         |  qid   ----|----> Qid { path=4711,
+                         |            |           vers=2,
+                         |            |           type=QTFILE }
+                         |  path  ----|----> Path { "/usr/glenda/hello.c" }
+                         |  offset=20 |
+                         |  mode=OREAD|
+                         |  Ref { 2 } |  (shared with a dup'ed fd)
+                         +------------+
+\end{verbatim}
+%claude:
+The file descriptor~[[3]] is just an index into a small
+per-process array of [[Chan]] pointers.
+The [[Chan]] holds the ``where am I reading, and in what
+mode'' state that is private to this file descriptor---so
+that two independent [[open]] calls on the same file have
+independent [[offset]]s.
+The [[Qid]], together with the [[type]]/[[dev]] pair,
+identifies the underlying file object, which is
+shared---two [[open]]s of the same file yield two distinct
+[[Chan]]s that carry identical [[Qid]]s.
+A [[dup(2)]]'ed descriptor, by contrast, does not allocate
+a new [[Chan]]: it bumps the [[Ref]] counter on the
+existing one, so both file descriptors share the
+same [[offset]].
+%claude: %unix:
+In \unix this chain is very similar, but the names and
+split differ. The kernel's ``open file'' object is called
+a [[struct file]], and it points to a [[struct inode]]
+(\plan's [[Qid]] plus some metadata).
+The interesting difference is that in \plan the [[type]]
+field inside [[Chan]] is a pure index into [[devtab]], so
+there is no distinction between block and character
+devices---everything is just a file server.
 
 %yoann: explain a few Proc fields have the Chan type
 %claude:
@@ -13432,6 +13521,75 @@ hardware AP bits ([[Uro]] or [[Urw]]):
 
 
 
+
+%claude:
+Before reading the code, it helps to see the structure
+that [[fixfault]] walks. A [[Segment]] owns a
+two-level software page table that is independent from
+the hardware L1/L2 tables maintained by
+[[arch_putmmu]]. The first level, [[pagedir]], has one
+entry per [[PAGETABMAPMEM]]-sized chunk of virtual
+address space and each entry either is [[nil]] or points
+at a [[Pagetable]]; the second level, [[pagetab[]]],
+has one slot per page, each either [[nil]] (page not
+yet materialised), a pointer to a [[Page]] (resident),
+or an opaque swap/daddr marker (paged out):
+\begin{verbatim}
+  Segment s (e.g. the BSS of /bin/ls)
+    base  = 0x00400000
+    top   = 0x00410000
+    pagedir ----> +-----------+
+                  |    [0] ---|---> Pagetable
+                  |    [1] ---|---> Pagetable
+                  |    ...    |
+                  |   [255]nil|
+                  +-----------+
+
+  Pagetable (one per 1 MiB chunk)
+    pagetab[0]  ----> Page { pa=0x3fa000, ref=2, va=..., next, ... }
+    pagetab[1]  ----> nil                (will fault on first touch)
+    pagetab[2]  ----> <daddr>|PG_ONSWAP  (will fault, then swap in)
+    pagetab[..] ....
+    first, last  (bounds for fast iteration during teardown)
+\end{verbatim}
+%claude:
+A concrete first-touch write fault on a BSS page makes
+this less abstract. Suppose the user does
+[[*(int*)0x404050 = 1;]] on a process that has never
+touched that address before:
+\begin{enumerate}
+\item The ARM writes to [[0x404050]], the MMU has no
+L2 entry, hardware raises a data abort at virtual
+address [[0x404050]]. Control ends up in [[faultarm]],
+then [[fault]], then [[fixfault]] with [[addr=0x404050]].
+\item [[soff = 0x404050 - 0x400000 = 0x4050]]. Dividing
+by [[PAGETABMAPMEM]] (1~MiB) gives [[pagedir]] index~0.
+[[*pde]] is [[nil]] on first access, so [[ptalloc]]
+allocates a new [[Pagetable]] on the fly.
+\item Inside the new [[Pagetable]], the per-page index
+is [[(0x4050 \& 0xFFFFF) / 0x1000 = 4]]. [[pagetab[4]]]
+is [[nil]]---this is the telltale of ``untouched BSS,''
+which falls into the [[SG_BSS]] branch.
+\item [[newpage(true, ...)]] returns a fresh zeroed
+[[Page]] and stores it in [[pagetab[4]]]. The code
+falls through [[goto common]]: the page has one
+reference, no image, so copy-on-write does not apply.
+[[mmupte = PPN(page->pa) | PTEWRITE | PTEVALID]].
+\item [[arch_putmmu]] installs the hardware L1/L2 entry
+for [[0x404000]] and invalidates the TLB for that
+address.
+\item The user instruction is restarted by [[RFE]];
+this time the MMU finds the mapping and the write
+completes.
+\end{enumerate}
+%claude:
+The [[SG_TEXT]] branch is similar, except
+[[pagedout]] is possible (the text page is on disk in
+the executable) and the resulting PTE is [[PTERONLY]].
+The [[SG_DATA]] branch adds the copy-on-write check:
+if the faulting access is a write and the refcount is
+above one, a fresh private copy is allocated before the
+new mapping is installed.
 
 % The big one! very important function!
 %ret_code
@@ -23598,6 +23756,39 @@ via [[\hlink{undomount}]], returning to the channel that was originally
 mounted upon. The [[didmount]] flag tracks which side of a mount
 point the current channel is on.
 
+%claude:
+A concrete example helps. Suppose the namespace has
+[[/usr/glenda]] bound to an on-disk filesystem served by
+[[devsd]] (the SD-card driver), and the user opens the path
+[[/usr/glenda/src/hello.c]]. The caller has already split
+that path into the four elements [[usr, glenda, src, hello.c]],
+and [[walk]] starts with [[c]] pointing at the root channel.
+The loop then executes:
+
+\begin{verbatim}
+  iter  nhave  c (device)      ewalk names returned   mount?
+  ----  -----  --------------  --------------------   ------
+   1      0    devroot         "usr","glenda"       -> yes,
+                                                       cross to devsd
+   2      2    devsd           "src","hello.c"      -> no
+   3      4    -- loop exits, nnames reached --
+\end{verbatim}
+%claude:
+In the first iteration, [[ewalk]] asks [[devroot]] to walk
+[[usr,glenda]]. [[devroot]] succeeds for both. The
+mount-point check then sees that the [[Qid]] of [[glenda]]
+is mounted: [[findmount]] returns [[nc]] pointing at the
+[[devsd]] root of the mounted tree, [[didmount]] is set,
+and [[n]] is set to~2 so the second iteration starts after
+``glenda''. In the second iteration [[c]] is on [[devsd]];
+[[ewalk]] walks [[src,hello.c]] within that device, finds
+no further mounts, and the loop exits after four elements.
+The resulting [[Path]] string is [[/usr/glenda/src/hello.c]]
+---but the channel [[c]] now lives in [[devsd]], not
+[[devroot]]. A later [[..]] from here would call
+[[undomount]] to return to the original [[devroot]] channel
+that [[glenda]] was mounted on.
+
 <<function [[walk]]>>=
 /*
  * Either walks all the way or not at all.  No partial results in *cp.
@@ -24192,6 +24383,51 @@ enum Dirmode {
 % be defined here I think.
 %DMAPPEND = 0x40000000,  /* mode bit for append only files */
 
+%claude:
+Before the two helper functions below, it helps to know
+what the {serialized} form of a [[DirEntry]] looks like in
+memory---because those helpers poke at raw byte offsets,
+not C fields. When a device's [[stat]] method fills a
+buffer, it writes a byte sequence that exactly matches the
+9P ``Rstat'' message wire format. Every field has a fixed
+encoding ([[BIT16SZ]] = 2, [[BIT32SZ]] = 4, [[BIT64SZ]] = 8):
+\begin{verbatim}
+  offset  size   field
+  ------  -----  ------------------------
+       0    2    total size (not counted in itself)
+       2    2    type
+       4    4    dev
+       8    1    qid.type
+       9    4    qid.vers
+      13    8    qid.path
+      21    4    mode
+      25    4    atime
+      29    4    mtime
+      33    8    length
+      41    2    len(name)   <-+
+      43    n    name          |  variable-length
+                 +2   len(uid)    strings, each
+                      ...        preceded by a
+                                 2-byte length
+\end{verbatim}
+%claude:
+So [[offsetof_name_direntry]] is not computing a C
+[[offsetof]]---it is walking the fixed-size prefix
+(2+2+4 + 1+4+8 + 4+4+4 + 8 = 41~bytes) to land on the
+2-byte length of the [[name]] string, and then returning
+a pointer to the first character of the name itself. The
+[[BIT*SZ]] constants are written out one per group so the
+reader can match them against the four field groups in the
+diagram above (header, qid, mode/times, length).
+%claude:
+[[direntry_setname]] uses this to rewrite the name field
+in place after a stat, when the kernel wants to replace
+whatever name the device reported with the last element of
+the user-visible path. Because [[name]] has variable
+length, the trailing strings ([[uid]], [[gid]], [[muid]])
+must be shifted by [[len - olen]] bytes, and the overall
+length header at offset~0 must be updated accordingly.
+
 <<function [[direntry_setname]]>>=
 static long
 direntry_setname(char *name, int len, byte *p, long n, long maxn)
@@ -24503,6 +24739,54 @@ what is mounted there. For a simple bind or mount, there is one
 [[\hlink{Mount}]] entry. For a union mount, there are multiple entries
 in the list, and the order matters: when walking a name through a
 union directory, the kernel tries each mount's channel in list order.
+
+%claude:
+Pictorially, a [[Pgrp]] with three bindings---one simple
+([[#c]] replacing [[/dev]]) and one union ([[/386/bin]]
+and [[/rc/bin]] both appearing as [[/bin]])---looks like
+this. Note how the [[Pgrp.mnthash]] is a small hash keyed
+by [[qid.path]], each bucket chains [[Mhead]]s via
+[[Mhead.hash]], and each [[Mhead]] owns its own list of
+[[Mount]]s via [[Mount.next]]:
+\begin{verbatim}
+  Pgrp                              Mhead (for /dev)
+   mnthash[k1] ---hash---> from --> Chan (/dev directory, devroot)
+       |                  mount --> Mount { to: Chan(#c),
+       |                                     next: nil }
+       |
+   mnthash[k2] ---hash---> Mhead (for /bin)
+                           from --> Chan (/bin directory)
+                           mount --> Mount { to: Chan(/386/bin)
+                                              flag: MBEFORE,
+                                              next: ----+
+                                                        |
+                                    Mount { to: Chan(/rc/bin)<-+
+                                            flag: MAFTER,
+                                            next: nil }
+\end{verbatim}
+%claude:
+When [[namec]] walks into [[/bin/ls]], it looks up
+[[/bin]]'s [[qid]] in [[mnthash]] via [[MOUNTH]], finds
+the [[Mhead]], and iterates the [[Mount]] list until some
+device reports that it has a file called [[ls]]. If
+[[/386/bin/ls]] exists, it wins because [[MBEFORE]] made
+its [[Mount]] the first in the list; otherwise the walk
+falls through to [[/rc/bin/ls]]. For [[MREPL]], there is
+only one [[Mount]] and the original [[from]] directory
+is not added to the list---so the ``dev'' directory
+[[Mount]] above has no link back to the real [[/dev]].
+
+%claude:
+Two implementation details justify the split into
+[[Mhead]] and [[Mount]]. First, multiple places in the
+kernel want to keep a pointer to ``the top of this mount
+stack'' (the [[Pgrp]] hash, the [[Chan.mh]] field returned
+by [[findmount]], transiently some [[createdir]] paths).
+A shared [[Mhead]] with its own [[Ref]] makes this sound.
+Second, the [[RWlock]] on [[Mhead]] protects modifications
+to the [[Mount]] list while readers (walkers) traverse it
+without holding the [[Pgrp]] write lock---this is critical
+because walks are common and mount changes are rare.
 
 \section{Mount point}
 
@@ -28240,6 +28524,63 @@ struct Queue
 };
 @
 
+%claude:
+Pictorially, a queue is the head of a singly-linked list
+of [[Block]]s. [[bfirst]] points at the oldest unread
+block, [[blast]] at the newest, and each block carries a
+read pointer [[rp]] and a write pointer [[wp]] into its
+own byte array. In message mode each block is exactly one
+message; in stream mode the block boundaries are invisible
+to the reader:
+\begin{verbatim}
+    Queue {
+       bfirst ---+                             blast ---+
+       blast  ---|------------------------------+       |
+       dlen=9,   |                              |       |
+       limit=64  |                              |       |
+    }             v                              v
+                  +-------+    +-------+    +-------+
+                  | Block |--->| Block |--->| Block |--> nil
+                  +-------+    +-------+    +-------+
+                  |rp wp  |    |rp wp  |    |rp wp  |
+                  | "he"  |    | "llo" |    | " wo" |
+                  +-------+    +-------+    +-------+
+
+    BLEN(b) = b->wp - b->rp     (bytes readable from b)
+    q->dlen = sum of BLEN over all blocks  = 9
+    q->len  = sum of BALLOC    over all blocks (allocated bytes)
+\end{verbatim}
+%claude:
+Producer and consumer communicate flow control purely
+through the [[Qflow]] and [[Qstarve]] bits, which form a
+tiny two-state synchronization protocol:
+\begin{verbatim}
+    producer side                     consumer side
+    -------------                     -------------
+    q->dlen >= limit ?                q->bfirst == nil ?
+         |                                 |
+         | yes: set Qflow                  | yes: set Qstarve
+         |      sleep on q->wr             |      sleep on q->rr
+         v                                 v
+    wait until a qget drops           wait until a qwrite adds
+    q->len below limit/2              a block; qwrite sees
+    and clears Qflow, then            Qstarve and wakeup(&q->rr)
+    wakeup(&q->wr)
+\end{verbatim}
+%claude:
+Two details are worth calling out. First, the flow-control
+threshold is {hysteretic}: the producer stops at [[limit]]
+but is only resumed once [[q->len]] falls below
+[[limit/2]]. Without this gap, a queue that hovers near
+the limit would thrash---every consumed byte would wake
+the producer, which would immediately refill the queue
+and re-block. Second, [[Qstarve]] is set {lazily} by the
+consumer, not eagerly by the producer: the producer does
+not look at anything the consumer maintains, it just
+checks [[Qstarve]] after adding a block and wakes the
+sleeper if the flag was set. This keeps [[qwrite]] cheap
+in the common case when the consumer is already running.
+
 <<function [[pullupqueue]]>>=
 /*
  *  make sure the first block has at least n bytes
@@ -31363,6 +31704,60 @@ previous [[NFrame]] ([[old]]) for nested notes. The [[ip]] field is set to
 zero, acting as a return address that will cause a fault if the handler
 tries to return normally instead of calling [[noted()]].
 
+%claude:
+Here is the user stack before and after [[arch__notify]]
+delivers a note. The trick is that the kernel returns to
+user mode with [[PC]] reset to the [[notify]] handler and
+[[SP]] pointing into a synthesized frame that looks like
+a normal C call frame:
+\begin{verbatim}
+  Before arch__notify (interrupted user code):
+
+    high  |     ...existing user stack...    |
+          +----------------------------------+
+    sp -> | (user's current stack frame)     |
+          +----------------------------------+
+    low   |     ...available stack...        |
+
+  After arch__notify (about to return to user):
+
+    high  |     ...existing user stack...    |
+          +----------------------------------+
+          |  ureg: copy of interrupted regs  |  <-+
+          |        (pc,sp,r0..r14,cpsr)      |    |
+          +----------------------------------+    |
+          |  old: previous up->ureg          |    |
+          +----------------------------------+    |
+          |  msg: "sys: trap: ... pc=0x1234" |    |
+          +----------------------------------+    |
+          |  arg1: &msg[0]  -----------------|----|----> used as 2nd arg
+          +----------------------------------+    |
+          |  arg0: &ureg    -----------------|----+    used as 1st arg
+          +----------------------------------+
+    sp -> |  ip = 0  (fault if handler RETs) |
+          +----------------------------------+
+          |     ...available stack...        |
+    low
+\end{verbatim}
+%claude:
+After the kernel restores user mode, execution resumes at
+[[up->notify]] with [[sp]] pointing at the fake return
+address (the zeroed [[ip]]) and [[r0]] set to the
+[[Ureg*]]. From the handler's perspective it has been
+called as [[notify(ureg, msg)]], following the normal C
+calling convention. The handler must explicitly call
+[[noted(NCONT)]] or [[noted(NDFLT)]]---if it tries to
+[[return]] like a normal C function, it will jump to
+address~0 and crash. That is a deliberate safety check:
+the kernel needs to know how the handler wants to resume,
+and ``resume as if nothing happened'' is not a valid
+option. [[noted()]] finds the [[NFrame]] via [[up->ureg]]
+(which was just overwritten to point at [[nf]]), copies
+the saved [[Ureg]] back into the kernel's own trap frame,
+restores the previous [[up->ureg]] from [[nf->old]], and
+returns---dropping through the usual trap-return path and
+resuming the interrupted code at its original [[pc]].
+
 <<struct [[NFrame]](arm)>>=
 struct NFrame {
     uintptr ip;
@@ -33223,6 +33618,73 @@ call as in \unix. The debugger simply reads and writes files like
 [[/proc/\emph{pid}/ctl]].
 
 %claude:
+Other operating systems reach these same three primitives
+by very different routes. Linux and the BSDs add a
+dedicated system call, [[ptrace]], with dozens of
+sub-commands ([[PEEKDATA]], [[POKEDATA]], [[GETREGS]],
+[[SYSCALL]], [[SINGLESTEP]]\ldots) that in effect form a
+small RPC language---conceptually similar to reading and
+writing files, but encoded as opcodes and copied through
+kernel buffers. Darwin/macOS keeps [[ptrace]] for source
+compatibility but layers the real debugger interface on
+Mach {exception ports}: when a task hits a breakpoint the
+kernel synthesizes a Mach IPC message and delivers it to
+whatever port the debugger subscribed to---turning ``stop
+and inspect'' into ``receive a message.'' Windows goes the
+other way and makes debugging a scheduling event: a
+debuggee is attached with [[DebugActiveProcess]], which
+causes [[WaitForDebugEvent]] to be the thread's natural
+blocking point whenever the debuggee faults. Historically,
+debuggers on DOS and CP/M patched [[INT 3]] directly into
+the code and installed their own interrupt vector. Plan~9's
+choice---route everything through named files---is the
+most austere of the lot: there are no new system calls,
+no new IPC primitives, and no kernel-side protocol
+parser. [[/proc/\emph{pid}/mem]] is literally a
+[[read]]/[[write]] on a [[Chan]], so any program that can
+open a file can, in principle, implement a debugger.
+
+%claude:
+The stop/inspect/resume cycle then looks like this in
+terms of the three processes involved (the debugger, the
+kernel, and the target):
+\begin{verbatim}
+   debugger                kernel                  target
+   --------                ------                  ------
+      |                       |                       |
+      |--open /proc/pid/ctl-->|                       |   (running)
+      |--write "stop" ------->|                       |
+      |                       |-- set procctl=Stopme->|
+      |                       |                       |
+      |                       |<---trap/syscall ret---|
+      |                       |  notify()->procctl()  |
+      |                       |   state = Stopped     |
+      |<--wakeup debug sleeper-|  sched()              |   (stopped)
+      |                       |                       |
+      |--open /proc/pid/regs->|                        |
+      |--read regs ---------->|-- copy from Ureg ---->| (still stopped)
+      |<---- registers -------|                       |
+      |                       |                       |
+      |--write "start" ------>|-- ready(target) ----->|
+      |                       |                       |   (running)
+\end{verbatim}
+%claude:
+The point to notice is that the kernel never synchronously
+suspends another process: the ``stop'' write only sets the
+[[procctl]] flag on the target and returns. The target
+actually stops itself the next time it passes through
+[[notify()]], i.e.\ on its next trap or syscall return.
+This is the same deferred-delivery mechanism used for
+notes (signals), and it means the debugger may have to
+wait a little (\plan blocks the debugger on the
+[[Proc.sleepr]] rendezvous until [[procctl()]] actually
+fires). The benefit is huge: the kernel never has to
+preempt another CPU mid-instruction, never has to worry
+about what state the stopped process was in, and the
+``safe points'' are exactly the points at which
+[[Ureg]] is already saved on the kernel stack.
+
+%claude:
 Breakpoints are implemented using the ARM BKPT instruction.
 When the processor hits this instruction, it triggers a prefetch
 fault, and the trap handler recognizes it as a debug event.
@@ -34884,6 +35346,65 @@ LRESPROF  = 3,
 % we don't count exactly each pc, anyway we are sampling,
 % so we >>3 the pc
 
+
+%claude:
+The profile array is a fixed-resolution histogram of the
+text segment: each bucket covers $2^{[[LRESPROF]]} = 8$
+bytes of code, and [[segclock]] maps a sampled program
+counter into a bucket by shifting [[(pc-base) >> LRESPROF]].
+If a process's text segment runs from [[0x1000]] to
+[[0x3000]] (8~KiB), its profile will contain
+$0x2000 / 8 = 1024$ buckets, plus bucket~[[0]] which
+is reserved for ``total time'' and does not correspond to
+any instruction:
+\begin{verbatim}
+                text segment                profile[]
+        +-----------------------+         +------------+
+ base=  | ...                   |<-----+  | 0: totalms |
+ 0x1000 |                       |      |  +------------+
+        |                       |      |  | 1: count   | <- pc 0x1000..0x1007
+        |   foo:   0x1100       |      |  +------------+
+        |   loop:  0x1104       |---+  |  |      :     |
+        |                       |   |  |  +------------+
+        |   bar:   0x1e40       |   +--|->| 32: count  | <- pc 0x1100..0x1107
+        |                       |      |  +------------+
+        |                       |      |  |      :     |
+ top=   | ...                   |      |  +------------+
+ 0x3000 +-----------------------+      |  | 1024: ...  |
+                                       |  +------------+
+\end{verbatim}
+%claude:
+The [[8]]-byte granularity is a deliberate trade-off.
+Finer resolution (say, one bucket per instruction) would
+quadruple the memory overhead and would not add much
+accuracy, because the sampled PC can land anywhere inside
+a small function even if the function is really the ``hot''
+spot. Coarser resolution would start merging unrelated
+functions into the same bucket. Eight bytes matches two
+ARM instructions---enough to keep individual basic blocks
+distinct without blowing up the array.
+
+%claude:
+The next subtle point is the choice of sampling frequency.
+[[profclock]] is registered as a {secondary} clock callback
+via [[addclock0link(profclock, 113)]]. The [[113]] is a
+period in HZ units, and the comment ``relative prime to
+[[HZ]]'' hides one of the more important correctness
+conditions in a sampling profiler. Suppose [[HZ]] is
+[[100]] and we naively sampled at [[100]] or [[50]] or
+[[25]]: the profiler would fire exactly in sync with the
+main system clock, and any code that tends to run right
+after a clock tick (a handler, a scheduled task) would be
+massively over-represented---the profiler would
+systematically ``see'' the same instructions that the
+clock tick tends to interrupt. This is aliasing, the same
+phenomenon that makes a wagon wheel appear to spin
+backwards in a film. Picking a period that is relatively
+prime to [[HZ]] guarantees that, over time, the samples
+drift across every phase of the main clock, so that no
+region of code is systematically favoured. [[113]] is a
+prime just above [[HZ]] and is a standard choice in
+samplers inherited from the BSDs.
 
 <<[[proc_init()]] other init>>=
 addclock0link((void (*)(void))profclock, 113);  /* Relative prime to HZ */
@@ -40352,6 +40873,58 @@ then enters the reader gate: processes take turns being the
 ``reader in progress'' ([[rip]]). The reader calls [mntrpcread]
 to receive a reply, then [mountmux] to match the reply's tag to
 the correct waiting [[Mntrpc]] and wake up that process.
+
+%claude:
+The reader gate deserves a picture, because it is what
+distinguishes [[devmnt]] from a naive RPC stub. Many
+processes can have an outstanding 9P request on the same
+[[Mnt]] at the same time, but only one of them can be
+blocked on [[read(m->c)]] at any given moment---the
+underlying network channel is a single byte stream. The
+[[rip]] (``reader in progress'') field nominates that
+process; the others sleep on their own per-request
+[[Rendez]] and rely on whoever happens to be [[rip]] to
+deliver their reply and wake them up. When [[rip]]
+finishes its own call, [[mntgate]] elects a successor
+from the queue of sleeping callers:
+\begin{verbatim}
+  client A      client B      kernel Mnt          server (over c)
+  --------      --------      ----------          --------------
+      |             |              |                     |
+  mountrpc(A)       |              |                     |
+      |             |              |                     |
+      |---write----->|------Twrite Tattach(A)------------>
+      |         (not rip, sleep on B->r)                  |
+  (I am rip)        |              |                     |
+      |             |              |                     |
+      |----read m->c, recv reply-->|                     |
+      |             |              |<---Rattach(B)-------|
+      |---mountmux--+->tag==B ?                           |
+      |             |                                    |
+      |             | wakeup(&B->r)                      |
+      |             |                                    |
+      |             |                                    |
+      |---read m->c, recv reply-->|<---Rattach(A)--------|
+      |---mountmux--+->tag==A ?                           |
+      |   done                                             |
+      | mntgate(): pick next reader from queue            |
+      |             |                                    |
+      |             |-- becomes rip, resumes reading ----|
+\end{verbatim}
+%claude:
+Three consequences of this design are worth noting.
+First, replies can arrive in any order---[[mountmux]]
+demultiplexes on the 9P [[tag]] field, so the server is
+free to reorder as long as it tags replies correctly.
+Second, the process that sent request~$X$ is {not}
+necessarily the process that will receive reply~$X$:
+some other process may be [[rip]] when~$X$'s reply
+arrives, match the tag, and wake the original sender.
+Third, if [[rip]] is interrupted by a note, [[mntgate]]
+must hand the channel off cleanly, otherwise all the
+sleeping peers would deadlock. This is why the outer
+loop of [[mountio]] checks [[waserror]] and calls
+[[mntgate]] before re-entering.
 
 <<function [[mountrpc]]>>=
 void
