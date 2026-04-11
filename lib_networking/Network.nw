@@ -137,6 +137,19 @@ Dave Presotto and Phil Winterbottom\\
 The goal of this book is to present with full details the source code of
 a {network stack}.
 
+%claude:
+``Network stack'' means more than just TCP/IP. In this book it
+refers to the whole vertical slice of code that turns an
+[[open("/net/tcp/clone", ...)]] call on one machine into a
+series of Ethernet frames on a wire and back: the device
+driver for the NIC, the Ethernet medium layer, ARP for local
+address resolution, IP for routing and fragmentation, UDP/IL/TCP
+for transport, and the file-based control plane
+([[/net/ipifc/]], [[/net/arp]], [[/net/iproute]]) that lets
+user-space programs like [[ipconfig]] configure all of it. The
+\plan stack implements that whole vertical in about
+10\,000 lines of C, which is the main reason it fits in a book.
+
 \section{Motivations}
 
 Why a network stack? Because I think you are a better programmer if
@@ -1109,6 +1122,56 @@ IL, etc.), each of which manages a set of [[Conv]]ersations
 (individual connections). On the hardware side, [[Ipifc]]
 (IP interface) binds an IP address to a physical [[Medium]]
 (like Ethernet), which connects to an [[Ether]] controller.
+
+%claude:
+It is worth pausing at this diagram before the code. Everything
+below hangs off a single [<Fs>] instance:
+
+\begin{verbatim}
+                         Fs (one per IP stack)
+                          |
+             +------------+-------------+-------------+
+             |            |             |             |
+             v            v             v             v
+           arp         iproute       ndb          p[Maxproto]
+         (cache)      (routes)     (database)     (protocols)
+                                                       |
+                             +------+------+------+------+------+
+                             |      |      |      |      |      |
+                             v      v      v      v      v      v
+                           ipifc   tcp    udp    il    icmp  icmp6
+                          (pseudo) (real protocols, each a Proto)
+                             |
+                             v
+                          conv[nc]  (conversations = connections)
+                             |
+                             v
+                           Ipifc (private data of ipifc conv[i])
+                             |
+                             +-- Medium*  (ether, null, loopback, ...)
+                             |
+                             +-- Iplifc  (local ip addresses)
+                                    |
+                                    v
+                                 Ether (in etherxx[])
+                                    |
+                                    v
+                                 Dp8390  (NE2000 driver, or other)
+\end{verbatim}
+
+%claude:
+The surprise is that [[ipifc]] is itself modelled as a [[Proto]]
+(registered via [[ipifcinit]]), not a special kind of device.
+An IP interface is configured by writing control messages to
+[[/net/ipifc/clone]] and [[/net/ipifc/N/ctl]]---exactly the
+same pattern used to open a TCP or UDP connection. The actual
+physical link information hangs off the [[Conv]]'s private
+data, via a [<Medium>] pointer that dispatches [[bwrite]] to
+[[ethermedium]] or [[nullmedium]] or [[loopbackmedium]]. This
+uniformity is the central design choice of the file: there is
+one plumbing system (protocols, conversations, ctl files) and
+everything---TCP streams, ARP caches, interface binding---is
+expressed in it.
 
 \section{IP addresses}
 % machine identifier
@@ -3135,6 +3198,22 @@ etherattach(char* spec)
 % the attach method
 
 \section{User side}
+
+%claude:
+From user space, ``initialization'' means two different things
+depending on whether you are the administrator or the
+application. The administrator runs [[ipconfig]] (typically at
+boot) to bind an interface, assign an IP address, and install
+a default route---this populates [[/net/ipifc/0/]],
+[[/net/arp]], and [[/net/iproute]] so that subsequent network
+activity has somewhere to go. An ordinary application does
+something much smaller: it opens [[/net/tcp/clone]], writes a
+[[connect]] line, and starts reading and writing. The kernel
+work of allocating a conversation, allocating sequence numbers,
+and driving the handshake state machine happens inside those
+[[write]] and [[read]] syscalls---there is no separate
+``initialize TCP'' step because everything the application
+needs is plumbed through the file interface.
 
 \subsection{Connect manually}
 
@@ -11009,6 +11088,24 @@ illocalclose(Conv *c)
 
 \section{Features}
 
+%claude:
+It is worth stepping back and listing what ``reliable'' actually
+means in a protocol like IL (or TCP). Each of the subsections
+below corresponds to one promise the protocol makes to its user
+and one machinery in the code that implements it. Taken
+together, they are the difference between UDP and IL: UDP gives
+you a best-effort datagram, and you are on your own if it is
+lost, corrupted, delivered twice, or delivered out of order. IL
+fills those four gaps with four separate mechanisms---a
+checksum for corruption, sequence numbers for ordering, acks
+plus retransmission for loss, and a per-connection sequence
+window for duplicates---plus adaptive timeouts to tune
+retransmission, and keep-alive probes to detect a dead peer.
+None of these pieces is novel; what is notable is how small the
+IL implementation stays relative to TCP by {omitting} the
+features that would not fit in this list (congestion control,
+urgent data, byte-stream reassembly, window scaling).
+
 %\subsection{Delimiters preservation} ??
 % apparently TCP does not have this
 
@@ -11108,6 +11205,21 @@ The implementation is the most complex protocol in the stack,
 with a state machine (SYN, ESTABLISHED, FIN-WAIT, etc.),
 sliding windows, round-trip time estimation, and Van Jacobson's
 congestion control algorithms.
+
+%claude:
+I do not cover the full TCP implementation in this book. Every
+important idea---connection state, sequence numbers, acks,
+retransmission, adaptive timers---already appears in IL
+(see Chapter~\ref{chap:il}), so the previous chapter is the
+real pedagogical vehicle. What TCP adds on top of IL's core
+is mostly a set of optimizations (Van Jacobson congestion
+avoidance, slow start, fast retransmit), a more complex state
+machine for the four-way close handshake (FIN-WAIT-1, FIN-WAIT-2,
+CLOSE-WAIT, TIME-WAIT), and byte-stream instead of datagram
+semantics. Each of those is worth an article in its own right
+but does not change the overall shape of the code. Reading
+[[tcp.c]] after finishing the IL chapter is mostly an exercise
+in matching IL structures to their TCP counterparts.
 
 <<function [[tcpinit]]>>=
 void
@@ -12235,8 +12347,32 @@ case Qsnoop:
 \chapter{Profiling}
 %******************************************************************************
 
+%claude:
+The network stack does not have a profiler in the traditional
+sense (sample-based CPU profiling belongs in the \book{Profiler}),
+but every protocol exposes a [[stats]] file that is effectively
+a running profile of its behavior: how many packets sent and
+received, how many retransmitted, how many dropped, how many
+connections established, and so on. These counters are the
+first place to look when a network problem is suspected---they
+tell you whether packets are being lost at the IP layer, dropped
+at the interface, or rejected by a protocol state machine
+without ever running a packet capture.
 
 \section{[[/net/x/stats]]}
+
+%claude:
+Each protocol registers a [[stats]] method on its [[Proto]]
+structure and that method is invoked when a client reads
+[[/net/ipifc/stats]], [[/net/tcp/stats]], [[/net/udp/stats]],
+[[/net/il/stats]], or [[/net/icmp/stats]]. The returned text
+is a block of [[name: value]] lines: IP MIB-II counters
+([[InReceives]], [[InHdrErrors]], [[ForwDatagrams]],
+[[OutDiscards]]) under [[ipifc]], TCP-specific counters
+([[EstabResets]], [[RetransSegs]], [[InErrs]]) under [[tcp]],
+and so on. The same [[/net/]] file interface that serves data
+also serves telemetry---no separate [[netstat]] syscall is
+needed because [[cat /net/tcp/stats]] already does the job.
 
 % /net/x/stats? hmm it's more for user than for programmer of the
 % network stack itself, but yes it can be useful too.
@@ -12250,8 +12386,30 @@ case Qsnoop:
 \chapter{Error Management}
 %******************************************************************************
 
-% have seen already all those err, most protocol methods return
-% a char* which is an error string or nil.
+%claude:
+The network stack propagates errors in two different styles,
+and it is worth understanding which is used where. Inside the
+kernel (the code that dispatches [[ipopen]], [[ipwrite]], and
+so on), errors use \plan's [[error()]]/[[waserror()]]
+long-jump mechanism: a function calls [[error("bad address")]],
+which unwinds the stack to the nearest [[waserror()]]
+checkpoint. Protocol-level callbacks such as
+[[proto->connect]], [[proto->announce]], and [[proto->ctl]]
+instead return a [[char*]] error string (or [[nil]] on
+success)---which the caller then hands to [[error()]]. The
+two styles coexist because protocol methods are data-driven
+dispatchers (the generic [[ipwrite()]] does not know which
+errors a given protocol can produce), while kernel-internal
+paths can use the faster long-jump form directly.
+
+%claude:
+The error strings themselves are the same ones a user program
+sees when a [[connect 1.2.3.4!80]] write to [[/net/tcp/N/ctl]]
+fails: [[/net/tcp/N/err]] will contain the string, and
+[[errstr()]] in the caller's process will report it. This is
+the same story as the Windows.nw book: errors cross a
+protocol boundary (9P here, the [[Rerror]] message), so they
+must be human-readable strings rather than numeric codes.
 
 %******************************************************************************
 \chapter{Ethernet NE2000 Driver}
@@ -13377,6 +13535,20 @@ ne2000match(Ether* edev, int id)
 %******************************************************************************
 \chapter{Utilities}
 %******************************************************************************
+
+%claude:
+A few small helpers do not belong to any particular protocol
+and are collected here. The most interesting is the pattern
+matcher used by [[/net/log]] and similar control interfaces:
+several [[ctl]] messages let you enable or disable groups of
+protocols or addresses using shell-style globs, and the same
+[[name-with-asterisk]] matching logic is reused in different
+places. None of these utilities is conceptually deep, but
+they illustrate one recurring idea: when the kernel offers a
+textual file interface to user space, it inherits the user's
+expectation of shell-style conveniences, so a tiny glob
+matcher earns its keep by avoiding a per-protocol argument
+grammar.
 
 \section{Globbing}
 
