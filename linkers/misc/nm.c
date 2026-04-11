@@ -75,7 +75,7 @@ void	zenter(Sym*);
 static void
 usage(void)
 {
-    fprint(2, "usage: nm [-aghnsTu] file ...\n");
+    fprint(STDERR, "usage: nm [-aghnsTu] file ...\n");
     exits("usage");
 }
 /*e: function usage (linkers/misc/nm.c) */
@@ -87,7 +87,7 @@ main(int argc, char *argv[])
     int i;
     Biobuf	*bin;
 
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
     argv0 = argv[0];
     ARGBEGIN {
     default:	usage();
@@ -106,14 +106,14 @@ main(int argc, char *argv[])
     for(i=0; i<argc; i++){
         filename = argv[i];
         bin = Bopen(filename, OREAD);
-        if(bin == 0){
+        if(bin == nil){
             error("cannot open %s", filename);
             continue;
         }
         if (isar(bin))
             doar(bin);
         else{
-            Bseek(bin, 0, 0);
+            Bseek(bin, 0, SEEK__START);
             dofile(bin);
         }
         Bterm(bin);

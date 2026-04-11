@@ -363,7 +363,7 @@ immhalf(long v)
 /*e: function [[immhalf]](arm) */
 
 /*s: function [[aclass]](arm) */
-// oplook | ... -> <>
+/// oplook | ... -> <>
 int
 aclass(Adr *a)
 {
@@ -526,7 +526,7 @@ aclass(Adr *a)
                 }
                 /*e: [[aclass()]] in [[D_ADDR]] case, [[SDATA]] case, if dlm */
                 instoffset = s->value + a->offset - BIG;
-                if(immrot(instoffset) && instoffset != 0) {// VERY IMPORTANT != 0
+                if(immrot(instoffset) && instoffset != 0) {// VERY IMPORTANT != 0 for setR12 bootstrapping
                      return C_RECON;
                 } else {
                     instoffset = s->value + a->offset + INITDAT;
@@ -627,7 +627,7 @@ oplook(Prog *p)
     /*e: [[oplook()]] sanity check o */
 
     /*s: [[oplook()]] debug */
-    if(debug['t']) {
+    if(debug['O']) {
         print("oplook %P %A %d %d %d\n",
             p, (int)p->as, a1, a2, a3);
     }

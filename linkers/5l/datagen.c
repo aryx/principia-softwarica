@@ -125,7 +125,7 @@ datblk(long s, long n, bool sstring)
 
         a = p->from.sym->value + p->from.offset;
         l = a - s;
-        c = p->reg;
+        c = p->reg; // size of DATA.In DATA foo+0(SB)/4, 0xa0 => 4
 
         i = 0;
         if(l < 0) {

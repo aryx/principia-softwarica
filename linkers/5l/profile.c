@@ -15,6 +15,8 @@ doprof1(void)
 
     s = lookup("__mcount", 0);
     n = 1;
+    // start from firstp->link, not firstp so skip first instruction/procedure
+    // (usually _main?) as SB might not have been set yet
     for(p = firstp->link; p != P; p = p->link) {
         if(p->as == ATEXT) {
 

@@ -43,7 +43,7 @@ main(int argc, char *argv[])
     outfile = "5.out";
 
     /*s: [[main()]] debug initialization(arm) */
-    Binit(&bso, 1, OWRITE);
+    Binit(&bso, STDOUT, OWRITE);
     listinit(); // fmtinstall()
     /*e: [[main()]] debug initialization(arm) */
 
@@ -199,7 +199,7 @@ main(int argc, char *argv[])
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg(arm) */
     /*x: [[main()]] initialize globals(arm) */
-    nuxiinit(); // ???
+    nuxiinit(); // endianess conversion tables
     /*x: [[main()]] initialize globals(arm) */
     buildop();
     /*x: [[main()]] initialize globals(arm) */
