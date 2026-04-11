@@ -9814,6 +9814,198 @@ This is similar in spirit to
 Valgrind's leak detector but implemented entirely as an [[acid]]
 script, running the target at native speed between breakpoints.
 
+<<lib/acid/leak.acid>>=
+//
+// usage: acid -l pool -l leak
+//
+include("/sys/src/libc/port/pool.acid");
+
+defn
+dumppool(p, sum)
+{
+        complex Pool p;
+        a = p.arenalist;
+
+        print("A: ", p.arenalist\X, "\n");
+        while a != 0 && a < 0xff000000 do {
+                complex Arena a;
+                dumparena(a, sum);
+                a = a.down;
+        }
+}
+
+defn
+dumparena(arena, sum)
+{
+        local atail, b, nb;
+
+        atail = A2TB(arena);
+        complex Bhdr arena;
+        b = a;
+        print("B: ", b\X, " ", atail\X, "\n");
+        while b < atail && b.magic != ARENATAIL_MAGIC do {
+                dumpblock(b, sum);
+                nb = B2NB(b);
+                if nb == b then {
+                        print("B2NB(", b\X, ") = b\n");
+                        b = atail;      // end loop
+                }
+                if nb > atail then {
+                        b = (Bhdr)(b+4);
+                        print("lost at block ", (b-4)\X, ", scanning forward\n");
+                        while b < atail && b.magic != ALLOC_MAGIC && b.magic != FREE_MAGIC do
+                                b = (Bhdr)(b+4);
+                        print("stopped at ", b\X, " ", *b\X, "\n");
+                }else
+                        b = nb;
+        }
+        if b != atail then
+                print("found wrong tail to arena ", arena\X, " wanted ", atail\X, "\n");
+}
+
+defn
+isptr(a)
+{
+        if end <= a && a < xbloc then
+                return 1;
+        if 0xdefff000 <= a && a < 0xdffff000 then
+                return 1;
+        return 0;
+}
+
+lastalloc = 0;
+lastcount = 0;
+lastsize = 0;
+defn
+emitsum()
+{
+        if lastalloc then
+                print("summary ", lastalloc\a, " ", lastcount\D, " ", lastsize\D, "\n");
+        lastalloc = 0;
+        lastcount = 0;
+        lastsize = 0;
+}
+
+defn
+dumpblock(addr, sum)
+{
+        complex Bhdr addr;
+
+        if addr.magic == ALLOC_MAGIC || (!sum && addr.magic == FREE_MAGIC) then {
+                local a, x, s;
+
+                a = addr;
+                complex Alloc a;
+
+                x = addr+8;
+                if sum then {
+                        if *(addr+8) != lastalloc then {
+                                emitsum();
+                                lastalloc = *(addr+8);
+                        }
+                        lastcount = lastcount+1;
+                        lastsize = lastsize+a.size;
+                }else{
+                        if addr.magic == ALLOC_MAGIC then
+                                s = "block";
+                        else
+                                s = "free";
+                        print(s, " ", addr\X, " ", a.size\X, " ");
+                        print(*(addr+8)\X, " ", *(addr+12)\X, " ",
+                                *(addr+8)\a, " ", *(addr+12)\a, "\n");
+                }
+        }
+}
+
+defn
+dumprange(s, e, type)
+{
+        local x, y;
+
+        print("range ", type, " ", s\X, " ", e\X, "\n");
+        x = s;
+        while x < e do {
+                y = *(x\X);
+                if isptr(y) then print("data ", x\X, " ", y\X, " ", type, "\n");
+                x = x + 4;
+        }
+}
+
+defn
+stacktop()
+{
+        local e, m;
+        
+        m = map();
+        while m != {} do {
+                e = head m;
+                if e[0] == "*data" then
+                        return e[2];
+                m = tail m;
+        }
+        return 0xdffff000;
+}
+                        
+defn
+dumpmem()
+{
+        local s, top;
+
+        xbloc = *bloc;
+        // assume map()[1] is "data" 
+        dumprange(map()[1][1], end, "bss");     // bss
+        dumprange(end, xbloc, "alloc"); // allocated
+
+        top = stacktop() - 8;
+        if top-0x01000000 < *SP && *SP < top then
+                s = *SP;
+        else
+                s = top-32*1024;
+
+        dumprange(s, top, "stack");
+}
+
+defn
+dumpregs()
+{
+        dumprange(0, sizeofUreg, "reg");
+}
+
+
+defn
+leakdump(l)
+{
+        print("==LEAK BEGIN==\n");
+        dumppool(*mainmem, 0);
+        dumpmem();
+        dumpregs();
+        while l != {} do {
+                setproc(head l);
+                dumpregs();
+                l = tail l;
+        }
+        print("==LEAK END==\n");
+}
+
+defn
+blockdump()
+{
+        print("==BLOCK BEGIN==\n");
+        dumppool(*mainmem, 0);
+        print("==BLOCK END==\n");
+}
+
+defn
+blocksummary()
+{
+        print("==BLOCK BEGIN==\n");
+        dumppool(*mainmem, 1);
+        emitsum();
+        print("==BLOCK END==\n");
+}
+
+@
+
 \section{Code coverage: [[/lib/acid/coverage.acid]]}
 
 %claude:
@@ -9821,6 +10013,138 @@ The [[/lib/acid/coverage.acid]] library implements basic code coverage
 by setting breakpoints on every function entry point and recording
 which ones are hit during execution. After a test run, it reports
 which functions were never called.
+
+<<lib/acid/coverage.acid>>=
+// Coverage library
+
+defn coverage()
+{
+        local lmap, lp, e, pc, n, l;
+
+        new();
+
+        bblock = {};
+
+        // find the first location in the text
+        e = (map()[0][1])\i;
+
+        while e < etext-4 do {
+                l = follow(e);
+                if tail l != {} then {
+                        if match(l[0], bblock) < 0 then
+                                bblock = append bblock, l[0];
+                        if match(l[1], bblock) < 0 then
+                                bblock = append bblock, l[1];
+                }
+                e++;
+        }
+
+        l = bblock;
+        while l != {} do {
+                *fmt(head l, bpfmt) = bpinst;
+                l = tail l;
+        }
+
+        while 1 do {
+                cont();
+                pc = *PC;
+                n = match(pc, bblock);
+                if n >= 0 then {
+                        pc = fmt(pc, bpfmt);
+                        *pc = @pc;
+                        bblock = delete bblock, n;
+                }
+                else {
+                        pstop(pid);
+                        return {};
+                }
+        }
+}
+
+defn eblock(addr)
+{
+        addr = addr\i;
+
+        while addr < etext do {
+                if (tail follow(addr)) != {} then
+                        return pcline(addr);
+                addr++;
+        }
+        return 0;
+}
+
+defn basic(stsrc, ensrc, file)
+{
+        local src, text;
+
+        if stsrc >= ensrc then
+                return {};
+
+        print(file, ":", stsrc, ",", ensrc, "\n");
+        src = match(file, srcfiles);
+
+        if src >= 0 then
+                src = srctext[src];
+        else
+                src = findsrc(file);
+
+        if src == {} then
+                print("no source for ", file, "\n");
+        else {
+                while stsrc <= ensrc do {
+                        text = src[stsrc];
+                        if text != {} then
+                                print("\t", stsrc, ":", text, "\n");
+                        stsrc = stsrc+1;
+                }
+        }
+}
+
+defn analyse(fnaddr)
+{
+        local addr, l, tfn;
+
+        new();
+
+        tfn = fnbound(fnaddr);
+
+        l = bblock;
+        while l do {
+                addr = head l;
+
+                if addr >= tfn[0] && addr < tfn[1] then
+                        basic(pcline(addr), eblock(addr), pcfile(addr));
+                
+                l = tail l;
+        }
+        kill(pid);
+}
+
+defn report()
+{
+        local addr, l;
+
+        new();
+
+        l = bblock;
+        while l do {
+                addr = head l;
+
+                basic(pcline(addr), eblock(addr), pcfile(addr));
+                
+                l = tail l;
+        }
+        kill(pid);
+}
+
+defn stopped(pid)
+{
+        return {};
+}
+
+print("/sys/lib/acid/coverage");
+
+@
 
 \section{Yet another system call tracer: [[/lib/acid/truss.acid]]}
 \label{sec:truss}
@@ -9838,6 +10162,294 @@ format.
 %
 This demonstrates [[acid]]'s programmability: even
 a tracer can be written as a debugging script.
+
+
+<<lib/acid/truss.acid>>=
+// poor emulation of SVR5 truss command - traces system calls
+
+include("/lib/acid/syscall");
+
+_stoprunning = 0;
+
+defn stopped(pid) {
+        local l;
+        local pc;
+        pc = *PC;
+        if notes then {
+                if (notes[0]!="sys: breakpoint") then
+                {
+                        print(pid,": ",trapreason(),"\t");
+                        print(fmt(pc,97),"\t",fmt(pc,105),"\n");
+                        print("Notes pending:\n");
+                        l = notes;
+                        while l do
+                        {
+                                print("\t",head l,"\n");
+                                l = tail l;
+                        }
+                        _stoprunning = 1;
+                }
+        }
+}
+
+defn _addressof(pattern) {
+        local s, l;
+        l = symbols;
+        pattern = "^\\$*"+pattern+"$";
+        while l do
+        {
+                s = head l;
+                if regexp(pattern, s[0]) && ((s[1] == 'T') || (s[1] == 'L')) then
+                        return s[2];
+                l = tail l;
+        }
+        return 0;
+}
+
+stopPC = {};
+readPC = {};
+fd2pathPC = {};
+errstrPC = {};
+awaitPC = {};
+_waitPC = {};
+_errstrPC = {};
+trusscalls = {
+                "sysr1",
+                "_errstr",
+                "bind",
+                "chdir",
+                "close",
+                "dup",
+                "alarm",
+                "exec",
+                "_exits",
+                "_fsession",
+                "fauth",
+                "_fstat",
+                "segbrk",
+                "_mount",
+                "open",
+                "_read",
+                "oseek",
+                "sleep",
+                "_stat",
+                "rfork",
+                "_write",
+                "pipe",
+                "create",
+                "fd2path",
+                "brk_",
+                "remove",
+                "_wstat",
+                "_fwstat",
+                "notify",
+                "noted",
+                "segattach",
+                "segdetach",
+                "segfree",
+                "segflush",
+                "rendezvous",
+                "unmount",
+                "_wait",
+                "seek",
+                "fversion",
+                "errstr",
+                "stat",
+                "fstat",
+                "wstat",
+                "fwstat",
+                "mount",
+                "await",
+                "pread",
+                "pwrite",
+        };
+
+trussapecalls = {
+                "_SYSR1",
+                "__ERRSTR",
+                "_BIND",
+                "_CHDIR",
+                "_CLOSE",
+                "_DUP",
+                "_ALARM",
+                "_EXEC",
+                "_EXITS",
+                "__FSESSION",
+                "_FAUTH",
+                "__FSTAT",
+                "_SEGBRK",
+                "__MOUNT",
+                "_OPEN",
+                "__READ",
+                "_OSEEK",
+                "_SLEEP",
+                "__STAT",
+                "_RFORK",
+                "__WRITE",
+                "_PIPE",
+                "_CREATE",
+                "_FD2PATH",
+                "_BRK_",
+                "_REMOVE",
+                "__WSTAT",
+                "__FWSTAT",
+                "_NOTIFY",
+                "_NOTED",
+                "_SEGATTACH",
+                "_SEGDETACH",
+                "_SEGFREE",
+                "_SEGFLUSH",
+                "_RENDEZVOUS",
+                "_UNMOUNT",
+                "__WAIT",
+                "_SEEK",
+                "__NFVERSION",
+                "__NERRSTR",
+                "_STAT",
+                "__NFSTAT",
+                "__NWSTAT",
+                "__NFWSTAT",
+                "__NMOUNT",
+                "__NAWAIT",
+                "_PREAD",
+                "_PWRITE",
+        };
+
+defn addressof(pattern) {
+        // translate to ape system calls if we have an ape binary
+        if _addressof("_EXITS") == 0 then
+                return _addressof(pattern);
+        return _addressof(trussapecalls[match(pattern, trusscalls)]);
+}
+
+defn setuptruss() {
+        local lst, offset, name, addr;
+
+        trussbpt = {};
+        offset = trapoffset();
+        lst = trusscalls;
+        while lst do
+        {
+                name = head lst;
+                lst = tail lst;
+                addr = addressof(name);
+                if addr then
+                {
+                        bpset(addr+offset);
+                        trussbpt = append trussbpt, (addr+offset);
+                        // sometimes _exits is renamed $_exits
+                        if(regexp("exits|exec", name)) then stopPC = append stopPC, (addr+offset);
+                        if(regexp("read", name)) then readPC = append readPC, (addr+offset);
+                        if(regexp("fd2path", name)) then fd2pathPC = append fd2pathPC, (addr+offset);
+                        if(regexp("^\\$*await", name)) then awaitPC = append awaitPC, (addr+offset);
+                        if(regexp("^\\$*errstr", name)) then errstrPC = append errstrPC, (addr+offset);
+                        // compatibility hacks for old kernel
+                        if(regexp("_wait", name)) then _waitPC = append _waitPC, (addr+offset);
+                        if(regexp("_errstr", name)) then _errstrPC = append _errstrPC, (addr+offset);
+                }
+        }
+}
+
+defn trussflush() {
+        stop(pid);              // already stopped, but flushes output
+}
+
+defn new() {
+        bplist = {};
+        newproc(progargs);
+        bpset(follow(main)[0]);
+        cont();
+        bpdel(*PC);
+        // clear the hang bit, which is left set by newproc, so programs we fork/exec don't hang
+        printto("/proc/"+itoa(pid)+"/ctl", "nohang");
+}
+
+defn truss() {
+        local pc, lst, offset, prevpc, pcspret, ret;
+
+        offset = trapoffset();
+
+        stop(pid);
+        _stoprunning = 0;
+        setuptruss();
+        pcspret = UPCSPRET();
+
+        while !_stoprunning do {
+                cont();
+                if notes[0]!="sys: breakpoint" then {
+                        cleantruss();
+                        return {};
+                }
+                pc = *PC;
+                if match(*PC, stopPC)>=0 then {
+                        print(pid,": ",trapreason(),"\t");
+                        print(fmt(pc,'a'),"\t",fmt(pc,'i'),"\n");
+                        cleantruss();
+                        return {};
+                }
+                if match(*PC, trussbpt)>=0 then {
+                        usyscall();
+                        trussflush();
+                        prevpc = *PC;
+                        step();
+                        ret = eval pcspret[2];
+                        print("\treturn value: ", ret\D, "\n");
+                        if (ret>=0) && (match(prevpc, readPC)>=0) then {
+                                print("\tdata: ");
+                                printtextordata(*((eval pcspret[1])+4), ret);
+                                print("\n");
+                        }
+                        if (ret>=0) && (match(prevpc, fd2pathPC)>=0) then {
+                                print("\tdata: \"", *(*((eval pcspret[1])+4)\s), "\"\n");
+                        }
+                        if (ret>=0) && (match(prevpc, errstrPC)>=0) then {
+                                print("\tdata: \"", *(*(eval pcspret[1])\s), "\"\n");
+                        }
+                        if (ret>=0) && (match(prevpc, awaitPC)>=0) then {
+                                print("\tdata: ");
+                                printtextordata(*(eval pcspret[1]), ret);
+                                print("\n");
+                        }
+                        // compatibility hacks for old kernel:
+                        if (ret>=0) && (match(prevpc, _waitPC)>=0) then {
+                                print("\tdata: ");
+                                printtextordata(*(eval pcspret[1]), 12+3*12+64);
+                                print("\n");
+                        }
+                        if (ret>=0) && (match(prevpc, _errstrPC)>=0) then {
+                                print("\tdata: ");
+                                printtextordata(*(eval pcspret[1]), 64);
+                                print("\n");
+                        }
+                }
+                trussflush();
+        }
+}
+
+defn cleantruss() {
+        local lst, offset, addr;
+
+        stop(pid);
+        offset = trapoffset();
+        lst = trussbpt;
+        while lst do
+        {
+                addr = head lst;
+                lst = tail lst;
+                bpdel(addr);
+        }
+        trussbpt = {};
+        **PC = @*PC;    // repair current instruction
+}
+
+defn untruss() {
+        cleantruss();
+        start(pid);
+}
+
+print("/lib/acid/truss");
+
+@
 
 \section{Multi-threaded debugging}
 
