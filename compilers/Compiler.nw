@@ -19952,6 +19952,63 @@ The dispatch can be a binary search ([[swit1]]) for sparse
 cases or a jump table ([[swit2]]) for dense ranges,
 chosen by heuristic.
 
+%claude:
+The choice of dispatch strategy is what makes [[switch]]
+faster than a chain of [[if]]s. The heuristic in
+[[swit2]] is concrete and worth understanding:
+\begin{itemize}
+\item Fewer than 5 cases: emit a sequence of compares
+([[CMP $val,reg; B.EQ label]] for each case). Linear
+search wins because the constant overhead of a jump
+table dwarfs 4 compares.
+\item 3 cases or more {and} the value range
+\verb!(max - min)! is less than $2 \times nc$ (i.e.,
+the cases are dense): emit a {direct jump table}.
+The runtime [[CASE]] pseudo-instruction subtracts
+[[min]], range-checks against [[max-min]], then
+indexes into a table of [[BCASE]] branches---one
+per integer in the range, with holes pointing at
+[[default]].
+\item Otherwise: {recursive binary search}. Pick the
+median case, compare against it, branch to the
+matching label on equal, and recursively dispatch on
+the lower or upper half. This is $O(\log n)$ compares.
+\end{itemize}
+%
+A worked example. For the C source
+\begin{verbatim}
+  switch(x) {
+  case 1:  return "a";
+  case 2:  return "b";
+  case 3:  return "c";
+  case 4:  return "d";
+  case 100: return "x";
+  default: return "?";
+  }
+\end{verbatim}
+%
+Sorted: $\{1,2,3,4,100\}$, range $= 99$, $nc = 5$.
+$99 \not< 10$, so the dense-table heuristic fails. With
+$nc = 5$ the linear branch fails too, so [[swit2]]
+falls through to binary search and recurses on
+$\{1,2\}$ and $\{4,100\}$ around the median~3. Now drop
+the outlier and try
+\verb!switch(x) { case 1..4: ... default: ...}!. The
+range is~3, $nc=4$, so $3 < 8$ and we get a direct table:
+\begin{verbatim}
+  SUB    $1, R(x)        ; rebase
+  CASE   $3, R(x)        ; range check (default if x>3)
+  BCASE  case_1
+  BCASE  case_2
+  BCASE  case_3
+  BCASE  case_4
+\end{verbatim}
+%
+The linker (\book{Linker}) collapses this idiom into
+two instructions on most architectures: a bound-check
+and a load--branch through a PC-relative table. Constant
+time, regardless of [[nc]].
+
 <<[[gen()]] locals>>=
 Case *cn;
 @
@@ -22133,6 +22190,54 @@ such a decomposition using a precomputed table of shift/add
 [[divcon]] replaces constant division by multiplication by
 a magic reciprocal.
 
+%claude:
+Why bother? On classic ARM, [[MUL]] takes 4--16 cycles
+depending on the multiplier (Booth's algorithm runs faster
+on small operands), while a shift-and-add fuses into a
+single barrel-shifted [[ADD]] (one cycle). Two or three
+chained shift-adds still beat one [[MUL]], and they leave
+no result-use stall. Cortex-M0 and other small cores have
+no hardware multiplier at all---there, [[MUL]] is a libcall,
+and replacing it pays for itself many times over. The
+compiler caps the search at [[maxmulops = 3]] operations
+because beyond three the win disappears.
+
+%claude:
+The ``code'' string in [[Multab]] is a tiny stack-machine
+program for the multiply. Each step is a 2-character
+instruction:
+\begin{itemize}
+\item \verb!a..z 0..7!---a {shift}: letter
+$c \in \{a,\ldots,z\}$ encodes a shift count of $c-\verb!a!$;
+the digit selects the source/dest register pair.
+\item \verb!+ 0..7! or \verb!- 0..7!---an {add} or
+{subtract} of two of the three slots ([[r0]], [[r1]],
+result), where the digit packs three 1-bit selectors
+[[r,n,l]] into 0--7.
+\end{itemize}
+%
+For multiplication by 5, the search produces the code
+\verb!c1+1\0! (one shift then one add). [[mulcon]] walks
+this code, allocates two registers [[nod1]] and [[nod2]],
+and emits two instructions:
+\begin{verbatim}
+  c1   ->  ASHL  $2, R(nod1), R(nod2)   ; nod2 = nod1 << 2  = 4*x
+  +1   ->  ADD   R(nod1), R(nod2), R(nod1) ; nod1 = nod1 + nod2 = 5*x
+  \0   ->  MOV   R(nod1), R(result)     ; emit final move
+\end{verbatim}
+%
+For multiplication by 100, the search finds
+\verb!c1+1d2\0!: shift left by 2 ($\times 4$), add ($\times 5$),
+shift left by 4 ($\times 80$), \ldots. Wait---that does not
+quite reach 100. The actual code is found by [[mulcon0]]'s
+recursive ``shift suffix'' branch: $100 = 25 \times 4$, and
+$25$ has its own program $c1+1c2$, so the result is
+\verb!c1+1c2c0!. Notice the elegance: any multiplier whose
+binary representation has few set bits decomposes cheaply,
+and the cache of recently computed programs (the [[multab]]
+ring) means a hot loop with the same constant only pays the
+search cost once.
+
 <<[[cgenrel()]] when OMUL/OLMUL, mulcon opportunity>>=
 if(o == OMUL || o == OLMUL) {
     if(mulcon(n, nn))
@@ -22957,6 +23062,51 @@ of terms [[(1,a), (2,b), (-1,a)]], then combines like terms
 of 10 means expressions with more than 10 leaves are not
 fully optimized.
 
+%claude:
+A worked example. Suppose the parser builds the tree for
+\verb!2 * (a + 3) - a + 4 * a! (a contrived but realistic
+result of macro expansion). Element~0 of [[term]] is
+reserved for the running constant, and [[acom1]] walks
+the tree, distributing each multiplier [[v]] downward:
+\begin{verbatim}
+  Step 1, flatten with acom1(1, root):
+                    OSUB                  (visit left then right with v=1, -1)
+                   /    \
+                 OADD    OMUL
+                /    \   /   \
+              OMUL    a 4     a
+              /  \
+             2   OADD
+                 /  \
+                a    3
+
+  Effect on the term[] array (shown by index : mult x node):
+    term[0] : +0 + 1*(2*3)   = 6      (constant term, accumulated)
+    term[1] : 1*(2*a)        =  2 * a
+    term[2] : -1 * a         = -1 * a
+    term[3] : 1*(4*a)        =  4 * a
+
+  Step 2, sort by node identity, merge like terms:
+    term[0] : 6
+    term[1] : (2 + -1 + 4) * a = 5 * a
+
+  Step 3, rebuild:
+    OADD
+    /  \
+  OMUL  OCONST(6)
+  /  \
+  5   a
+\end{verbatim}
+%
+The original tree had 6 leaves and 5 internal nodes; the
+rebuilt tree has 2 leaves and 2 internal nodes. The win
+compounds inside loops where the same expression appears
+many times---one [[acom]] pass is worth dozens of peephole
+applications. The hard limit [[NTERM = 10]] keeps the
+search bounded; if an expression has more than 10
+distinct atoms, [[acom]] gives up on it (the recursive
+call tree would otherwise explode for nested polynomials).
+
 <<constant [[NTERM]]>>=
 #define	NTERM		10
 @
@@ -23571,6 +23721,86 @@ and passes 6--9 rewrite the instructions to use the assigned
 registers. The allocator works on [[Var]] and [[Reg]] structures
 that map variables to registers and track which registers are
 available.
+
+%claude:
+Why a separate post-pass? Recall from the [[cgen]]
+chapter that the inline code generator only does
+{local} register allocation: a temporary lives from
+its [[regalloc]] to its [[regfree]], and at any
+function call all caller-save registers are spilled.
+The result of [[cgen]] is correct but conservative---a
+local [[int x]] declared at the top of a function is
+loaded from [[xoffset(SP)]] every time it is read and
+stored back every time it is written, even when it
+sits live across the whole function with no
+intervening call. The job of [[regopt]] is to {hoist}
+that local into a real register, replacing every
+[[MOV xoffset(SP), R0]] with a register reference and
+deleting the now-dead loads and stores. On a
+register-rich machine like ARM (10 callee-save
+registers in the kernel calling convention), this is
+typically a 30--50\% speedup on integer-heavy code.
+
+%claude:
+Here is the conceptual flow of the 9 passes:
+\begin{verbatim}
+                   instruction list from cgen
+                                |
+                                v
+   pass 1 ---> build Reg nodes; for each instr, record
+              variables-used and variables-set
+                                |
+                                v
+   pass 2 ---> resolve branch targets to Reg* pointers,
+              link successors and predecessors
+                                |
+                                v
+  pass 2.5 --> identify natural loops via dominator analysis
+                                |
+                                v
+   pass 3 ---> backwards liveness dataflow, fixed-point
+              iteration; result: at each Reg, which vars
+              are live
+                                |
+                                v
+   pass 4 ---> forward synchrony: which vars hold the
+              same value as which registers
+                                |
+                                v
+   pass 5 ---> for each variable, walk its live region
+              and compute a benefit score (loops weight
+              5x via the log5 sampling); sort by score
+                                |
+                                v
+   pass 6 ---> greedy assignment: for each region in
+              decreasing-score order, pick a free
+              register and rewrite all instructions in
+              the region to use it (paint2/paint3)
+                                |
+                                v
+   pass 7 ---> peephole on the rewritten code
+                                |
+                                v
+   pass 8 ---> recompute pc values, fix branch targets
+                                |
+                                v
+   pass 9 ---> final cleanup and emit
+\end{verbatim}
+%
+The interesting design choice is the {greedy} pass~6,
+not graph coloring. Classic register allocators (e.g.,
+Chaitin's algorithm in gcc) build an interference graph
+and color it; if coloring fails, they iteratively spill
+and retry. [[5c]] takes a much simpler route:
+``compute a benefit score for each variable, sort, walk
+in decreasing order, pick the first free register that
+covers the variable's live range.'' This misses some
+opportunities a coloring allocator would catch, but it
+runs in $O(n \log n)$ instead of cubic time, and---in
+practice on the small functions typical of \plan
+code---produces nearly identical assembly. Speed of
+compilation was always a higher priority than peak
+optimization in [[5c]].
 
 % big one
 
@@ -28419,6 +28649,59 @@ locate the field within its word), and code generation
 The complexity comes from packing adjacent bitfields into the
 same machine word while respecting alignment.
 
+%claude:
+A worked example makes this concrete. Take the struct
+\begin{verbatim}
+  struct Pkt {
+      uint  flag  :1;
+      uint  kind  :3;
+      uint  len   :12;
+      uint  pad   :16;
+  };
+\end{verbatim}
+The compiler packs all four fields into a single 32-bit
+word. As [[dodecl]] processes each [[OBIT]], it advances
+[[lastbit]] by the requested width and stores the resulting
+[[shift]] (bit offset within the word) and [[nbits]] (width
+in bits) on the field's [[Type]]. The final layout, on a
+little-endian ARM:
+\begin{verbatim}
+  bit 31                                                    bit 0
+   +-------------------------------+--------------+----+----+----+
+   |               pad             |     len      |  kind   |flag|
+   |             16 bits           |   12 bits    |  3 bits | 1  |
+   +-------------------------------+--------------+----+----+----+
+                                                  ^         ^    ^
+                                                  shift=4   1    0
+                                                  nbits=12  3    1
+\end{verbatim}
+%
+To {read} \verb+p->kind+, the code generator emits a load
+of the whole word followed by a shift+mask sequence that
+[[bitload]] generates:
+\begin{verbatim}
+  MOVW   p+0(R0), R1     ; load the word
+  ASHL   $28, R1, R1     ; (32 - shift - nbits) = 28, push to top
+  ASHR   $29, R1, R1     ; (32 - nbits) = 29, sign-extend back down
+\end{verbatim}
+%
+The two-step shift is the trick that makes bitfield
+extraction sign-correct in one shot. Pushing the field to
+the top of the register and then arithmetic-shifting back
+either sign-extends (for [[int]] fields) or zero-extends
+(for [[unsigned]], using [[LSHR]] instead of [[ASHR]]) the
+result. To {write} \verb+p->kind = 5+, [[bitstore]]
+load--mask--or--store: load the word, AND with
+\verb!~(mask << shift)! to clear the field, OR in the
+new value shifted into place, and store the word back.
+%
+The constraint that triggers a fresh storage word is in
+the parser: when [[lastbit + new_field_width > tfield_bits]],
+[[lastbit]] is reset to the new field's width and the next
+field starts a new 32-bit cell. This is why
+\verb+int :0+ is a useful idiom: a zero-width unnamed
+field forces alignment to the next storage unit.
+
 %\subsubsection{Parsing}
 
 % struct x { int foo:1, bar:2, xxx:14; }
@@ -31047,6 +31330,59 @@ rewrites [[vlong]] expressions in the AST into sequences of
 generator ([[bool64]], [[cgen64]]) emits the corresponding
 instruction pairs. This is similar to how a modern compiler's
 lowering pass handles types wider than the native word size.
+
+%claude:
+[[5c]]'s strategy is interesting because it does {not} inline
+the 32-bit pairs the way most compilers do. Instead it
+rewrites every [[vlong]] arithmetic operation into a call
+to a runtime helper in [[libc]]: [[a + b]] (where both are
+[[vlong]]) becomes [[_addv(a, b)]]. The helpers
+([[_addv]], [[_subv]], [[_mulv]], [[_divv]], etc.) live in
+[[lib_core/libc/arm/vlop.s]] and are hand-written ARM
+assembly.
+%
+For example, the C source
+\begin{verbatim}
+  vlong  add_vlong(vlong a, vlong b) { return a + b; }
+\end{verbatim}
+compiles roughly to
+\begin{verbatim}
+  TEXT   add_vlong+0(SB),$24
+  MOVW   a_lo+0(FP), R0     ; first 4 bytes of a
+  MOVW   a_hi+4(FP), R1     ; next 4 bytes of a
+  MOVW   b_lo+8(FP), R2
+  MOVW   b_hi+12(FP), R3
+  BL     ,_addv(SB)
+  MOVW   R0, ret_lo+16(FP)  ; _addv leaves the result in R0/R1
+  MOVW   R1, ret_hi+20(FP)
+  RET
+\end{verbatim}
+%
+The trade-off versus inlining is clear. Inlining a 64-bit
+add as ``[[ADDS r0,r2; ADC r1,r3]]'' (using the carry flag)
+gives 2 instructions versus a function call's prologue,
+[[BL]], and epilogue. But [[5c]] is a one-pass compiler
+with no global instruction selector and no carry-tracking
+in its register allocator, so wiring up the [[ADDS]]/[[ADC]]
+pair through the rest of the pipeline would have required
+plumbing condition codes through every node. The
+function-call approach keeps the compiler small (com64.c
+is 700 lines, vs.\ the thousands gcc spends on this) at
+the cost of slower [[vlong]] arithmetic. In practice
+[[vlong]] is rare in \plan code---it is mostly used for
+file offsets and timestamps---so the slowdown rarely
+matters.
+
+%claude:
+The mapping in [[com64]] is mechanical: each AST opcode
+gets translated to its corresponding runtime helper node
+([[OADD]] $\to$ [[nodaddv]], [[OMUL]] $\to$ [[nodmulv]],
+etc.) and the original binary node is rewritten into an
+[[OFUNC]] call with the two operands as arguments. The
+compound assignments ([[OASADD]], [[OASSUB]], \ldots)
+share a single helper [[_vasop]] that takes a code byte
+identifying which operation; this avoids inflating
+[[libc]] with $N$ versions of each operator.
 
 % related to complex values
 
