@@ -2027,6 +2027,59 @@ a line number ([[3p]]), a range ([[1,5d]]), the current line
 The address-parsing code runs before the command character is read,
 so every command benefits from the same rich addressing syntax.
 
+%claude:
+Here is a cheat sheet of the address primitives and how they
+eventually show up in the code:
+\begin{verbatim}
+   syntax      meaning                      handled by
+   ------      --------------------------   -------------------
+   N           absolute line N              getnum() in address()
+   .           dot (current line)           case '.' in address()
+   $           dol (last line)              case '$' in address()
+   'x          line previously marked x     case '\'' (see 'k')
+   /re/        next line matching re        case '/'  in address()
+   ?re?        previous line matching re    case '?'  in address()
+   A+N  A-N    A offset by N                + and - operators
+   A,B         range (addr1=A, addr2=B)     top-level in commands()
+   A;B         range with side effect dot=A ';' case in commands()
+\end{verbatim}
+%
+All these forms feed a single recursive-descent parser. The two
+address separators [[,]] and [[;]] are parsed in [<commands()>]
+itself; everything to the left or right of a separator is parsed
+by [<address()>].
+
+%claude:
+A worked example makes this concrete. Suppose the user types
+[[.+2,/foo/p]] when [[dot]] points to line~5 and the next line
+matching [[foo]] is line~11. The parse proceeds as follows:
+\begin{verbatim}
+   outer loop in commands():
+     a1 = address()       -> parses ".+2"
+        step 1: c='.'   -> a=dot (line 5), opcnt=1
+        step 2: c='+'   -> sign=+, nextopand=2, loop
+        step 3: c='2'   -> a += 2 (line 7), opcnt=2
+        step 4: c=','   -> push back, return a (line 7)
+     c = ','              -> separator, loop again
+     addr1 = 7
+     a1 = address()       -> parses "/foo/"
+        step 1: c='/'   -> compile(/foo/); scan from dot
+                            until match -> a=line 11
+        step 2: c='p'   -> push back, return a (line 11)
+     c = 'p'              -> not a separator, exit loop
+     addr2 = 11; given = true
+     switch(c='p') -> print lines 7..11
+\end{verbatim}
+%
+Two things are worth noticing. First, the address parser is
+strictly left-to-right with no precedence---every operator is
+applied in sequence, so [[1+2-3]] means [[((1+2)-3)]], never
+[[1+(2-3)]]. Second, the search forms [[/re/]] and [[?re?]]
+are resolved \emph{during} parsing: [<address()>] actually scans
+the buffer and returns a concrete line pointer, which is why
+compiling the regexp happens inline in [[address()]] rather
+than later at execution time.
+
 %yoann: reference again the motivations section; the reader should now understand better the script by now with those 1,$
 %claude:
 Returning to the [[mkenam]] script in
@@ -2234,6 +2287,46 @@ applies commands to all matching lines.
 The actual regular expression engine is in [[libregexp]]
 (see \book{Libcore}); [[ed]] just reads and compiles patterns via
 [<compile()>] and tests matches via [<match()>].
+
+%claude:
+Before diving in, it helps to see the buffers and pointers that
+the substitute machinery juggles together. A single [[s/re/rhs/]]
+command touches five distinct pieces of state:
+\begin{verbatim}
+                +-----------------------------+
+     pattern -->|  libregexp Reprog  (NFA)    |   compiled RE
+                +-----------------------------+
+
+                +-----------------------------+
+     rhsbuf  :  |  replacement with ESCFLG    |   parsed by compsub()
+                |  markers for \1..\9 and &   |
+                +-----------------------------+
+
+                +-----------------------------+
+     linebuf :  |  current line from tfile    |
+                +--^-----------------^--------+
+                   |                 |
+                   loc1 (match start) loc2 (match end)
+                        set by match() via subexp[0]
+
+                +-----------------------------+
+     genbuf  :  |  scratch: being assembled   |
+                |  [linebuf..loc1) + rhs      |
+                |  expanded + [loc2..end)     |
+                +-----------------------------+
+\end{verbatim}
+%
+The flow of a substitution is always the same: (1)~[<getline()>]
+fills [[linebuf]] from [[tfile]]; (2)~[<match()>] runs [[rregexec]]
+on [[linebuf]] and records the hit as [[loc1]]/[[loc2]] pointers
+\emph{into} [[linebuf]]; (3)~[<dosub()>] walks [[linebuf]] and
+[[rhsbuf]] together, emitting the result into [[genbuf]], then
+copies [[genbuf]] back into [[linebuf]]; (4)~[<putline()>] writes
+[[linebuf]] to [[tfile]] and the new offset replaces the old one
+in [[zero]]. The two-buffer dance is what makes the [[g]] flag
+work: after [[dosub()]] the new [[loc2]] points into the updated
+[[linebuf]], so a fresh [[match(nil)]] can resume scanning right
+where the previous hit ended.
 
 \subsection{Search as addresses: [[/re/]] and [[?re?]]}
 
@@ -2595,6 +2688,49 @@ after assembly, [[sp]] points into [[genbuf]] where the tail
 next call to [[match(nil)]] in the [[g]] flag loop will resume
 searching from the correct position in the updated [[linebuf]].
 
+%claude:
+A concrete trace of [[s/world/earth/]] on [[linebuf = "hello world!"]]
+shows the four phases of [<dosub()>]:
+\begin{verbatim}
+   initial state (after match() on linebuf):
+     linebuf: "hello world!\0"
+               ^      ^    ^
+               |      loc1 loc2
+               lp starts here
+     rhsbuf:  "earth\0"
+     genbuf:  (empty, sp at start)
+
+   phase 1: copy linebuf[..loc1) -> genbuf
+     genbuf:  "hello "
+                     ^sp
+
+   phase 2: expand rhsbuf into genbuf
+     (no & or \N, so plain copy)
+     genbuf:  "hello earth"
+                          ^sp
+
+   phase 3: the famous pointer shuffle
+     loc2 = sp - genbuf + linebuf
+          = 11        - 0       + linebuf
+          -> points into linebuf at offset 11 (the '!')
+     This is where the next match(nil) would start.
+
+   phase 4: copy linebuf[loc2..] -> genbuf, then genbuf -> linebuf
+     genbuf:  "hello earth!\0"
+     linebuf: "hello earth!\0"
+\end{verbatim}
+%
+Phase~3 is subtle because [[loc2]] must end up pointing into the
+\emph{new} [[linebuf]], not the old one. At the moment of the
+assignment, [[linebuf]] still holds the pre-substitution text, but
+we know the new prefix (``hello earth'') will occupy bytes
+[[linebuf[0..11)]] once phase~4 runs. So [[sp-genbuf]] (the
+length of that prefix) plus [[linebuf]] (the base) is the
+correct future location. It is a deliberate compute-first,
+copy-later trick---if the assignment were reordered after the
+final copy, [[sp]] would already have advanced and the
+arithmetic would break.
+
 <<function [[dosub]](ed.c)>>=
 void
 dosub(void)
@@ -2865,6 +3001,45 @@ dangling. Resetting [[a1 = zero]] picks up the (possibly new) base,
 and the loop re-scans from the beginning---this is safe because
 each executed line has its mark cleared, so it won't be processed
 again.
+
+%claude:
+Visually, a [[g/foo/d]] on a four-line buffer goes through the
+following two phases. Bit~0 of each [[zero]] entry is stolen as
+the ``matched'' mark; I show it as [[M]] when set, [[.]] when
+clear:
+\begin{verbatim}
+   initial:                after phase 1 (mark):
+   zero[1] = 0x40          zero[1] = 0x40   .   "alpha"
+   zero[2] = 0x48          zero[2] = 0x49   M   "foobar"   <- matched
+   zero[3] = 0x56          zero[3] = 0x56   .   "beta"
+   zero[4] = 0x62          zero[4] = 0x63   M   "foo"      <- matched
+
+   phase 2 iteration:
+     a1 = zero+1          .  skip
+     a1 = zero+2          M  clear mark; dot=a1;
+                              globp = "d\n"; commands();
+                              (runs 'd' -> rdelete shifts entries down)
+                              a1 = zero (restart from base)
+     a1 = zero+1          .  skip (old alpha)
+     a1 = zero+2          .  skip (was beta, shifted down)
+     a1 = zero+3          M  clear mark; delete; a1 = zero
+     a1 = zero+1          .  skip
+     a1 = zero+2          .  skip
+     dol is now zero+2    loop exits
+\end{verbatim}
+%
+Three consequences follow from this design.
+(1)~The marks must live \emph{inside} [[zero]] rather than in a
+parallel bitmap, because [<rdelete()>] shifts [[zero]] entries
+around and a parallel bitmap would go out of sync instantly.
+Putting the mark in the low bit of the offset means delete,
+move, and substitute all carry marks along for free.
+(2)~The low bit is safe to steal because [[tline]] starts at~2
+and grows in multiples of~2 (aligned [[Rune]] boundaries), so
+legitimate offsets never have bit~0 set.
+(3)~The restart-from-[[zero]] loop is O(n$^2$) in the worst case
+(one full pass per matched line), which is why [<gdelete()>]
+exists as a special case for [[g/.../d]].
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'g':
@@ -3638,6 +3813,35 @@ calls [[longjmp(savej, 1)]] to jump back to just before
 This is why [[ed]]'s error messages are so famously cryptic---most
 errors just print [[?]] with an empty string.
 
+%claude:
+This is an instance of a pattern that shows up in many
+command-interpreter loops across languages, just with different
+plumbing. The comparison is worth spelling out because the
+design problem ([[how do I abort a deeply nested command and
+return to the prompt?]]) is universal, but the language-level
+answers vary:
+\begin{verbatim}
+   ed (C, 1970s)        setjmp/longjmp across a stack of fn calls
+   sh, bash             setjmp/longjmp (builtin traps use the same)
+   Python REPL          raise SystemExit / KeyboardInterrupt
+   OCaml (utop, orc)    exception / with; see \book{Editor} orc
+   Go                   panic/recover at the REPL boundary
+   Rust                 Result<T,E> bubbled up via '?'
+   Common Lisp          catch/throw or the condition system
+\end{verbatim}
+%
+What they all share is a single ``frame'' registered at the top
+of the command loop where control can land no matter how deeply
+the current command has descended. What differs is (a)~whether
+the mechanism can run destructor-like cleanup on the way out
+(C~[[longjmp]] cannot; Python and OCaml can); and (b)~whether
+the abort is typed, so the handler can distinguish an internal
+bug from a user error. [[ed]] has neither: every error is just
+[[longjmp(savej, 1)]] with a string, and cleanup is manual
+([[error_1]] resets the globals by hand). The price of this
+simplicity is paid in [[error_1()]] below, which has to
+enumerate every piece of transient state that might be dirty.
+
 \subsection{[[error()]]}
 
 <<[[main()]](ed.c) before [[commands()]]>>=
@@ -3721,6 +3925,43 @@ equivalent of [[siglongjmp]]).
 On a ``hangup'' note (terminal disconnected), it calls
 [<rescue()>], which saves the buffer to [[ed.hup]] before
 exiting---a safety net so you do not lose unsaved work.
+
+%claude: %unix:
+The difference between \plan notes and \unix signals is worth
+spelling out because it affects what an [[ed]]-like program
+can do in the handler. Signals on \unix are delivered
+asynchronously by the kernel, identified by a small integer
+([[SIGINT]], [[SIGHUP]], \ldots), and the handler runs on the
+current stack with very few things it is allowed to touch
+(see the ``async-signal-safe'' list in [[signal(7)]]).
+Notes on \plan, by contrast, are \emph{strings}
+([[{}"interrupt"{}]], [[{}"hangup"{}]], [[{}"sys: ..."{}]]) that
+the kernel writes to [[/proc/$pid/note]]; the receiving process
+reads them out via its registered [<notifyf()>] callback and
+decides what to do by calling [[noted(NCONT)]] (resume) or
+[[noted(NDFLT)]] (default action).
+\begin{verbatim}
+   \unix signals              \plan notes
+   ------------------------   -------------------------------
+   int id (SIGINT, SIGHUP)    string ("interrupt", "hangup")
+   kernel async delivery      kernel writes /proc/$pid/note
+   handler on the same stack  handler via notified user thread
+   sigjmp_buf + siglongjmp    Label + notejmp (same idea)
+   SA_RESTART / EINTR dance   restartable by default; noted()
+   limited to async-safe fns  fewer restrictions in practice
+\end{verbatim}
+%
+For [[ed]] specifically, three things follow from being on
+\plan. First, the handler can [[strcmp]] the string instead
+of switching on an integer, which is why [<notifyf()>] starts
+with [[strcmp(s, "interrupt")]]. Second, [[notejmp]] replaces
+[[siglongjmp]]: it restores the [[Label]] saved by [[setjmp]]
+and then tells the kernel the note has been handled. Third,
+the [[rescuing]] and [[waiting]] flags exist to short-circuit
+recursive notes: if an interrupt arrives while we are already
+saving [[ed.hup]], or while [[callunix]] is blocked in
+[[waitpid]], we do not want to restart the save or kill the
+child---we just call [[noted(NCONT)]] and resume.
 
 <<globals ed.c>>=
 bool rescuing;
