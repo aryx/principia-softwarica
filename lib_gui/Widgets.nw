@@ -1242,6 +1242,41 @@ fills in these pointers with its own implementation.
 The default values are error-raising stubs set by [<pl_newpanel()>],
 so forgetting to initialize them is caught immediately.
 
+%claude:
+This pattern---a struct of function pointers serving as a vtable---is
+how C libraries do polymorphism, and it shows up in nearly every
+serious C codebase under a different name. The variations are mostly
+about \emph{where} the pointers live and \emph{who} fills them in:
+\begin{verbatim}
+   library/system     vtable name              dispatch site
+   ----------------   ----------------------   --------------------
+   libpanel           Panel.{draw,hit,type}    inline in Panel
+   Linux kernel VFS   struct file_operations   one per filesystem
+   Linux kernel       struct device_driver     one per device class
+   GTK / GObject      GObjectClass             allocated per type id
+   Qt                 vtbl (C++ generated)     compiler-emitted
+   COM (Windows)      IUnknown vtable          ABI-fixed offset 0
+   SQLite vtab        sqlite3_module           one per virtual table
+   stdio FILE         _IO_jump_t (glibc)       inline pointer in FILE
+   Plan 9 Dev         struct Dev               one per device
+   Go                 itab (interface table)   runtime-built
+\end{verbatim}
+%
+Two design choices distinguish [[libpanel]] from the heavier
+options. (1)~The vtable is \emph{inlined} in [[Panel]] itself
+rather than living in a separate ``class'' struct shared by all
+instances of a kind. This costs roughly 60 extra bytes per widget
+(eight pointers $\times$ 8 bytes) but means the same [[Panel]]
+can be \emph{reinitialized} in place to a different widget kind
+just by overwriting the pointers, which is exactly what the
+[[plinitxxx()]] reinitialization pattern relies on. (2)~There
+is no class-id field and no [[isa]] check: a widget's ``type''
+is simply the set of function pointers it carries. The library
+never asks ``is this a button?''---it just calls [[p->hit(p,m)]]
+and lets the right implementation run. The result is OO with
+zero runtime type information, the absolute minimum the technique
+needs to work.
+
 <<[[Panel]] main methods>>=
 void (*draw)(Panel *);				/* draw panel and children */
 
@@ -2141,6 +2176,45 @@ The second pass, [<pl_setrect()>], walks the tree {top-down}:
 starting from the available window rectangle, each widget
 is assigned an actual position and size, and the remaining
 space is divided among its children according to the packing flags.
+
+%claude:
+The bottom-up-then-top-down pattern is universal in GUI toolkits,
+but the names and the algorithm running inside each pass differ
+considerably:
+\begin{verbatim}
+   toolkit            pass 1 (bottom-up)         pass 2 (top-down)
+   ----------------   ------------------------   ------------------------
+   libpanel           pl_sizereq()               pl_setrect() + packer
+   Tk                 -reqwidth/-reqheight       pack/place/grid manager
+   GTK                gtk_widget_size_request    gtk_widget_size_allocate
+   Qt                 sizeHint() + minimumSize   QLayout::setGeometry
+   Android            onMeasure()                onLayout()
+   Cocoa AppKit       intrinsicContentSize +     setFrame: + Auto Layout
+                      NSLayoutConstraint
+   SwiftUI            preferredSize              place(at:proposal:)
+   Web (CSS layout)   intrinsic / preferred      flex/grid/normal flow
+   Win32              WM_GETMINMAXINFO           WM_SIZE / MoveWindow
+   Flutter            performLayout (single      same call computes both
+                      pass with constraints
+                      flowing both ways)
+\end{verbatim}
+%
+Three things follow from looking across the column. First,
+\emph{everyone} except a true constraint solver runs two passes,
+because there is no other way to reconcile ``what the children
+want'' with ``what the parent can give''---one direction must
+go first. Second, the algorithm in pass 2 is what really
+distinguishes toolkits: Tk's [[pack]] (which [[libpanel]] copies)
+carves strips from one side at a time, GTK's [[GtkBox]] is
+similar, Qt's [[QGridLayout]] solves a small linear system,
+CSS Flexbox is a fixed-point loop, and Android can call
+[[onMeasure]] multiple times if a child reports a constraint
+that the parent must propagate back. Third, Flutter is the
+exception: it merges both passes by passing constraints
+\emph{down} and sizes \emph{up} in the same recursive call,
+which is faster but requires every widget to be a pure function
+of its constraints---no mutable layout state. [[libpanel]]'s
+two passes are the simplest possible point on this spectrum.
 
 % eresized -> <>
 %claude:
@@ -4299,6 +4373,47 @@ so a single Frame widget serves both purposes.
 Note the [[LEAF]] flag is \emph{not} set, allowing children to be
 added via subsequent [[pl_newpanel]] calls with this frame as parent.
 
+%claude:
+The container vocabulary varies considerably across toolkits, and
+the differences are a good lens for [[libpanel]]'s minimalism.
+The same intent---``put these children in a row, in a column,
+in a labelled box, in a notebook, in a grid''---is expressed
+through very different sets of widgets:
+\begin{verbatim}
+   intent             libpanel              GTK 3                Qt
+   ----------------   -------------------   ------------------   --------------
+   row of widgets     plframe + PACKW       GtkBox(HORIZONTAL)   QHBoxLayout
+                      or PACKE                                   in QFrame
+   column of widgets  plframe + PACKN       GtkBox(VERTICAL)     QVBoxLayout
+                                                                 in QFrame
+   no border          plgroup               GtkBox (no border)   QWidget +
+                                                                 layout
+   labelled border    --- (build with       GtkFrame             QGroupBox
+                      pllabel + plframe)
+   2D grid            --- (nest two         GtkGrid              QGridLayout
+                      frames)
+   tabs               --- (build with       GtkNotebook          QTabWidget
+                      pulldown + show/hide)
+   freeform position  --- (use FIXED +      GtkFixed             QWidget at
+                      pad)                                       absolute coords
+   resizable split    --- (manual)          GtkPaned             QSplitter
+\end{verbatim}
+%
+The absences in the [[libpanel]] column are deliberate. There
+are only \emph{two} containers in the whole library---visible
+([[plframe]]) and invisible ([[plgroup]])---and direction is a
+property of the children, not the parent. The result is that
+adding a new container kind is a non-event: a vertical menu and
+a horizontal menu bar use the same [[plgroup]], differing only
+in whether their children carry [[PACKN]] or [[PACKW]]. GTK
+needs [[GtkVBox]] and [[GtkHBox]] (and now [[GtkBox]] with an
+orientation property because the split was a mistake), Qt
+needs [[QHBoxLayout]] and [[QVBoxLayout]], etc. The
+[[libpanel]] approach scales worse to genuinely 2D layouts
+(no [[GtkGrid]] equivalent), but it scales better to ``one
+more menu, in the other direction'': zero new lines of library
+code.
+
 \subsection{Initializing}
 
 <<function [[plframe]]>>=
@@ -5533,6 +5648,45 @@ dispatched to the menu panel (via a recursive [<plmouse()>] call).
 When the button is released, the saved image is restored,
 hiding the menu cleanly.
 
+%claude:
+Drawn out, the four states and their transitions look like this:
+\begin{verbatim}
+                              btn1 down                .---------.
+                          .--------------------------->| DOWN1   |
+                          |                            | (pop[0])|
+                          |   btn2 down                '---+-----'
+                       +--+-------------.                  |
+                       |                |                  | btn release:
+                       |              .-v-------.          | restore save,
+       .-----.  any motion / no btn   | DOWN2   |          | invis(menu)
+       | UP  |<------------------+    | (pop[1])|          v
+       '-----'                   |    '---------'        +-----+
+          ^   btn3 down          |        ^               | UP  |
+          |   ----------.        |        |               '-----'
+          |             v        |        | btn release   ^
+          |          .---------. |        | (same as 1)   |
+          |          | DOWN3   | |        |               |
+          |          | (pop[2])| |        '---------------'
+          |          '----+----' |
+          |               |      |
+          '---------------+------'
+                btn release: restore save image, invis(menu)
+\end{verbatim}
+%
+Three things make this state machine work in only one [[hit]]
+call. (1)~The state \emph{is} the answer to ``which menu do I
+forward to?''---no separate ``current menu'' field is needed
+because [[DOWN1]]/[[DOWN2]]/[[DOWN3]] already encode it.
+(2)~The save-and-restore is symmetric on the [[UP]]$\to$[[DOWNX]]
+edge (allocate save image, blit screen into it, draw menu) and
+the [[DOWNX]]$\to$[[UP]] edge (blit save image back, free it),
+so the popup leaves no residue when dismissed. (3)~The menu
+panels in [[pop[]]] are not children of the popup widget---they
+live in [[INVIS]] limbo until needed, which is why the
+[[INVIS]] flag exists at all. Without it, the recursive
+[[pl_drawall]] would render the menus all the time, in the
+wrong place.
+
 <<[[Style]] other cases>>=
 DOWN1,
 DOWN2,
@@ -6727,6 +6881,53 @@ Three convenience constructors---[<plrtstr()>], [<plrtbitmap()>],
 and [<plrtpanel()>]---create nodes of each type and append them
 to a list.
 
+%claude:
+A worked example clarifies how a rendered HTML fragment
+becomes a chain of [[Rtext]] nodes. Suppose [[mothra]] is asked
+to display the very simple page:
+\begin{verbatim}
+   <p>Click <b>here</b> for the <img src="logo.png"> manual.</p>
+\end{verbatim}
+%
+After parsing, the text view would hold something like this:
+\begin{verbatim}
+   text -> [Rtext "Click"]            font=roman flags=0
+            |
+            v space=4 indent=0
+           [Rtext "here"]             font=bold  flags=PL_HOT
+            |
+            v space=4 indent=0
+           [Rtext "for the"]          font=roman flags=0
+            |
+            v space=4 indent=0
+           [Rtext (logo.png)]         b=Image*   flags=0
+            |
+            v space=4 indent=0
+           [Rtext "manual."]          font=roman flags=0
+            |
+            v
+           nil
+\end{verbatim}
+%
+A few details fall out of looking at this list. (1)~A
+\emph{font change} between two adjacent words is just a new
+node with a different [[font]] field; the surrounding nodes do
+not need to know about it, because the layout pass
+([<pl_rtfmt()>]) walks the chain and asks each node for its
+own width. (2)~An \emph{image} is structurally identical to a
+piece of text---same struct, just [[b]] non-nil instead of
+[[text]]---which is what lets [[mothra]] mix bitmaps and prose
+inline without a separate widget hierarchy. (3)~A
+\emph{hyperlink} is the [[PL_HOT]] flag plus the [[user]] field
+holding the URL; the underline drawn under the hot word in
+[<pl_rtdraw()>] is the only visual cue. (4)~The [[space]]
+field is what allows ``manual.'' (a noun glued to a period) to
+stay together: setting [[space=0]] before the period would
+make [[pl_rtfmt()]] treat the two as one word for line-breaking
+purposes. The same trick is what lets [[mothra]] render
+``[[plinitlabel()]]'' as a single token even though the
+parentheses are in a different font.
+
 <<struct [[Rtext]]>>=
 struct Rtext{
     int flags;		/* responds to hits? text selection? */
@@ -6969,6 +7170,45 @@ Copy/paste in \plan uses [[/dev/snarf]] as a shared clipboard
 provide its own implementation: entries snarf their text content;
 edit widgets snarf the current selection. Widgets that do not
 support copy/paste leave these pointers [[nil]].
+
+%claude:
+The clipboard is one of the few user-level IPC primitives every
+GUI has, and the implementations differ wildly in complexity:
+\begin{verbatim}
+   system           interface                    paid complexity
+   --------------   --------------------------   ----------------
+   \plan            read/write /dev/snarf        none; it is a file
+   X11              ICCCM selection protocol     enormous: clients
+                    (PRIMARY, CLIPBOARD,         negotiate format,
+                    SECONDARY) + targets         own the selection,
+                                                 respond to events
+   Wayland          wl_data_device protocol      simpler than X11 but
+                                                 still client/server
+                                                 negotiation
+   macOS            NSPasteboard / UIPasteboard  multi-format,
+                                                 promised content,
+                                                 universal clipboard
+   Windows          Open/Close/SetClipboardData  multi-format with
+                    + format negotiation         delayed rendering
+   Web              navigator.clipboard +        async, requires
+                    Clipboard API + events       user gesture, MIME
+   Android          ClipboardManager / ClipData  MIME items, drag/drop
+                                                 unification
+\end{verbatim}
+%
+\plan's choice has two virtues that fall out of treating the
+clipboard as a regular file. First, \emph{any} program can
+participate---a shell script can do
+[[echo hello world > /dev/snarf]] to put text on the clipboard,
+or [[cat /dev/snarf]] to read it; no GUI library required.
+Second, there is no protocol to lose: the clipboard has only
+one format (UTF-8 text), so there is nothing to negotiate. The
+cost is exactly that single format: \plan cannot copy a styled
+range, an image, or a file reference, the way every other
+system in the table can. For [[libpanel]]'s use cases (text
+entries, code, web page snippets), text is enough; for a
+modern desktop where users expect to copy a styled fragment
+from a browser into a word processor, it would not be.
 
 <<[[Panel]] other methods>>=
 char* (*snarf)(Panel *);			/* snarf text from panel */
