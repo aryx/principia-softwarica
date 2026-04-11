@@ -1526,6 +1526,36 @@ a breakpoint.
 The layout of the register file is
 architecture-dependent; [[libmach]]'s [<Reglist>] structure
 describes the offset of each register within this blob.
+
+%claude:
+Reading and writing another process's registers is something
+every debugger has to do, but the OS interface differs widely:
+\begin{verbatim}
+   OS                  read regs                  write regs
+   -----------------   ------------------------   --------------------
+   \plan               read /proc/$pid/regs       write /proc/$pid/regs
+   Linux               ptrace(PTRACE_GETREGS)     ptrace(PTRACE_SETREGS)
+   Linux (modern)      ptrace(PTRACE_GETREGSET)   ptrace(PTRACE_SETREGSET)
+   FreeBSD             ptrace(PT_GETREGS, ...)    ptrace(PT_SETREGS, ...)
+   macOS / Mach        thread_get_state()         thread_set_state()
+   Windows             GetThreadContext()         SetThreadContext()
+   gdb remote (GDB)    ``g'' packet (hex blob)    ``G'' packet
+\end{verbatim}
+%
+\plan's choice is the simplest of these: the register state
+is a regular file. You can [[cat /proc/$pid/regs | xd]] from
+the shell, no debugger required, and a script that wants to
+nudge the PC can do it with [[echo]] and [[seek]] alone. The
+\unix tradition multiplexes everything through one fat
+[[ptrace]] syscall whose request enum has grown to dozens of
+opcodes; Mach uses opaque thread ports; Windows packs
+everything into a giant [[CONTEXT]] struct whose layout is
+architecture-specific. The cost of \plan's everything-is-a-file
+approach is that the layout of the blob is undocumented in
+the file itself---you still need [[libmach]]'s [<Reglist>]
+to know which 4-byte slot is the PC. The benefit is that the
+mechanism composes with every other tool in the system: a
+crashed process is just a file you [[grep]] through.
 %
 A typical example of writing the PC is the breakpoint cycle:
 when the target hits a breakpoint (e.g., [[INT 3]] on x86),
@@ -1554,6 +1584,44 @@ a trap when executed. On ARM, this is the [[BKPT]] instruction;
 on x86, it is [[INT 3]] (a single byte, [[0xCC]]).
 The [<Machdata>] structure stores the breakpoint instruction
 bytes in [[bpinst]] and its size in [[bpsize]].
+
+%claude:
+The encoding details vary considerably across ISAs, and the
+choice has consequences for [[bpsize]]:
+\begin{verbatim}
+   ISA          mnemonic   encoding         size   notes
+   ----------   --------   --------------   ----   ----------------------
+   x86 / x64    INT3       0xCC             1 B    deliberately one byte
+                                                   so any instruction
+                                                   can be patched in place
+   ARM A32      BKPT       0xE1200070       4 B    fixed-width
+   ARM T32      BKPT       0xBE00           2 B    Thumb half-word
+   ARM64        BRK #0     0xD4200000       4 B    fixed-width
+   RISC-V       EBREAK     0x00100073       4 B    or 0x9002 (C.EBREAK)
+   MIPS         BREAK      0x0000000D       4 B
+   PowerPC      TRAP       0x7FE00008       4 B    aka tw 31,0,0
+   SPARC        TA 1       0x91D02001       4 B
+\end{verbatim}
+%
+The x86 [[INT3]] is the historical reason debuggers ever
+worked the way they do. Intel deliberately made [[INT3]] a
+\emph{one-byte} instruction (0xCC) so a debugger could overwrite
+\emph{any} instruction at \emph{any} address with a breakpoint
+without disturbing the surrounding code, even if the original
+instruction was a single byte itself. On a fixed-width
+RISC like ARM, this is a non-issue: every instruction is
+already aligned to 4~bytes (or 2 in Thumb), so the breakpoint
+slot is the same width as anything you might patch over.
+%
+For [[acid]], [[bpsize]] is what tells [<bpset()>] how many
+bytes to save in [[bplist]] before overwriting, and how many
+to write back when [<bpdel()>] removes the breakpoint. On
+multi-byte architectures the save/restore must be atomic with
+respect to the running process: if the kernel happened to
+schedule the target between the save and the overwrite, it
+could fetch a half-patched instruction. \plan side-steps this
+by requiring the process to be stopped (via [[/proc/$pid/ctl]])
+before any breakpoint operation.
 %
 To set a breakpoint, the debugger saves the original
 instruction at the target address, then overwrites it with
@@ -2739,6 +2807,65 @@ Map*	cormap;
 
 %\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
 
+\subsection{Process table}
+% used for 'acid <pid>' and after newproc() (<- new())
+
+%claude:
+[[acid]] can debug multiple processes simultaneously
+(e.g., parent and child after a fork). The [<ptab>] array
+maps PIDs to open [[/proc/<pid>/ctl]] file descriptors.
+The [<msg()>] function looks up a PID in this table and
+writes a control message to the corresponding [[ctl]] fd.
+[<install()>] adds an entry, [<deinstall()>] removes one.
+%yoann1: maybe say can debug multi-threaded programs! in plan9 (and linux?) system-level threads are processes that just happen to share memory
+
+<<struct [[Ptab]]>>=
+struct Ptab
+{
+    int	pid;
+    fdt	ctl;
+};
+@
+
+%\subsubsection{The table: [[ptab]]}
+
+<<global [[ptab]]>>=
+// hash<pid, fdt>
+Ptab	ptab[Maxproc];
+@
+<<acid constants>>=
+Maxproc		= 50,
+@
+
+\subsection{Sending control messages: [[msg()]]}
+
+
+<<function [[msg]]>>=
+void
+msg(int pid, char *msg)
+{
+    int i;
+    int l;
+    char err[ERRMAX];
+
+    for(i = 0; i < Maxproc; i++) {
+
+        if(ptab[i].pid == pid) {
+            l = strlen(msg);
+            if(write(ptab[i].ctl, msg, l) != l) {
+                errstr(err, sizeof err);
+                if(strcmp(err, "process exited") == 0)
+                    deinstall(pid);
+                error("msg: pid=%d %s: %s", pid, msg, err);
+            }
+            return;
+        }
+    }
+    error("msg: pid=%d: not found for %s", pid, msg);
+}
+@
+
+
 
 \section{Tokens}
 
@@ -3006,7 +3133,39 @@ enum Type_kind
 };
 @
 
-%XXX?
+%claude:
+The five-type runtime [[Type_kind]] above is for [[acid]]
+\emph{values}---what arithmetic and assignment operate on.
+The [[Type]] struct below is something else entirely: it
+describes a \emph{C-level} aggregate (a struct or union from
+the program being debugged), so that [[acid]] can walk the
+fields of a [[Proc]] or a [[Pgrp]] from the running kernel
+and print them by name. Each [[Type]] is one row in a
+field list; multiple rows are linked through [[next]] to
+form the full layout of an aggregate. The interesting fields
+are:
+\begin{itemize}
+\item [[offset]]: byte offset of this field within the
+parent struct (the value the C compiler hardcoded into
+[[loadword]] instructions);
+\item [[fmt]]: a single-character format spec ([[X]] for
+hex, [[D]] for decimal, [[s]] for string, etc.) telling
+[[acid]] how to print the raw bytes;
+\item [[depth]]: pointer-indirection depth, so [[fmt='X']],
+[[depth=2]] means ``pointer-to-pointer-to-hex'';
+\item [[type]] / [[tag]] / [[base]]: links into the
+[[Lsym]] symbol table that name the field, the parent
+aggregate, and (for nested aggregates) the inner type.
+\end{itemize}
+%
+The split between value-level [[Type_kind]] and field-level
+[[Type]] is what lets [[acid]] type-check its own scripting
+language while still letting the user write
+[[complex Proc { 'X' 0 p; 'X' 4 next; }]] and then say
+[[print(*((Proc)addr).p)]] without ever rebuilding the
+debugger. The C type description is data inside [[acid]],
+not code.
+
 <<struct [[Type]]>>=
 struct Type
 {
@@ -3522,66 +3681,6 @@ struct Btab
 void	(*builtin)(Node*, Node*);
 @
 % will be set by installbuiltin()
-
-
-
-\section{Process table}
-% used for 'acid <pid>' and after newproc() (<- new())
-
-%claude:
-[[acid]] can debug multiple processes simultaneously
-(e.g., parent and child after a fork). The [<ptab>] array
-maps PIDs to open [[/proc/<pid>/ctl]] file descriptors.
-The [<msg()>] function looks up a PID in this table and
-writes a control message to the corresponding [[ctl]] fd.
-[<install()>] adds an entry, [<deinstall()>] removes one.
-
-<<struct [[Ptab]]>>=
-struct Ptab
-{
-    int	pid;
-    fdt	ctl;
-};
-@
-
-
-\subsection{The table: [[ptab]]}
-
-<<global [[ptab]]>>=
-// hash<pid, fdt>
-Ptab	ptab[Maxproc];
-@
-<<acid constants>>=
-Maxproc		= 50,
-@
-
-\subsection{Sending control messages: [[msg()]]}
-
-
-<<function [[msg]]>>=
-void
-msg(int pid, char *msg)
-{
-    int i;
-    int l;
-    char err[ERRMAX];
-
-    for(i = 0; i < Maxproc; i++) {
-
-        if(ptab[i].pid == pid) {
-            l = strlen(msg);
-            if(write(ptab[i].ctl, msg, l) != l) {
-                errstr(err, sizeof err);
-                if(strcmp(err, "process exited") == 0)
-                    deinstall(pid);
-                error("msg: pid=%d %s: %s", pid, msg, err);
-            }
-            return;
-        }
-    }
-    error("msg: pid=%d: not found for %s", pid, msg);
-}
-@
 
 
 %******************************************************************************
@@ -9094,8 +9193,11 @@ defn step()                                     // single step the process
 %claude:
 This section covers [[acid]]'s output: the [[print]] builtin,
 the [[prnt]] node used to auto-print expression results in
-the REPL, the [[whatis]] command for introspection, and the
-AST pretty-printer used to display function definitions.
+the REPL.
+
+% the [<whatis()>] command for introspection, and the
+%AST pretty-printer used to display function definitions.
+%TODO: shown in appendix
 
 <<global [[prnt]]>>=
 Node*	prnt;
@@ -9238,6 +9340,22 @@ defn params(param)
 }
 @
 
+\subsection{Global symbols: [[symbols]] and [[symbols()]]}
+
+<<function [[symbols]]>>=
+defn symbols(pattern)
+{
+        local l, s;
+
+        l = symbols;
+        while l do {
+                s = head l;
+                if regexp(pattern, s[0]) then
+                        print(s[0], "\t", s[1], "\t", s[2], "\n");
+                l = tail l;
+        }
+}
+@
 
 %******************************************************************************
 \chapter{Source level C Debugging}
@@ -9322,6 +9440,61 @@ which opens the source file in an external editor (typically
 
 \section{One statement execution: [[next()]]}
 
+%claude:
+The [[next()]] command is the source-level ``step over'':
+it advances by one statement of the current function,
+treating any function call inside that statement as a single
+opaque step. This is what the user wants 99\% of the time
+when single-stepping---raw [[step()]] (which advances by one
+machine instruction) would dive into every callee, including
+the entire C library.
+
+%claude:
+The implementation is short but the algorithm deserves a
+walkthrough because it shows the trade-off [[acid]] makes
+relative to gdb. The idea is:
+\begin{verbatim}
+   sp    = current stack pointer  (used as a "depth" marker)
+   bound = [start-pc, end-pc] of current function
+            (from the symbol table)
+
+   stmnt()              ; advance by one source statement worth
+                        ; of machine instructions, using the line
+                        ; table to know when we've crossed a line
+   if PC still within bound -> done; we're on the next stmt
+
+   ; otherwise we either fell out of the function or stepped
+   ; into a callee. step() until we're back in the same
+   ; function AND not deeper than where we started:
+   while PC outside bound and SP >= original sp:
+       step()
+\end{verbatim}
+%
+The [[sp >= *SP]] guard is the trick. When you call a function,
+the stack \emph{grows downward}, so the new [[SP]] is
+\emph{less} than the saved one; the guard becomes false and
+the loop exits, leaving you stepping inside the callee. But
+wait---that is the opposite of what we want, isn't it? Read
+it again: the loop continues only while [[sp >= *SP]], i.e.\
+while we are at the same call depth or deeper. So as long
+as we are inside a callee, we keep [[step]]ping; the moment
+the callee returns and the stack pointer pops back up
+(making [[*SP > sp]]), the guard fails and we stop. This is
+exactly the ``step over'' semantics: dive in, run to
+completion, surface back.
+
+%claude:
+The same problem in gdb is solved with DWARF-level frame
+descriptors and a hardware-assisted ``step until SP changes''
+loop, but the underlying idea is identical. [[acid]] gets
+away with a four-line algorithm because it has only two
+levers it needs: the symbol table (for [[fnbound]]) and
+[[*SP]] (for depth comparison). The cost is that [[next()]]
+cannot tell the difference between a normal return and a
+[[longjmp]] that unwinds several frames at once---both will
+satisfy [[*SP > sp]] and stop the loop, possibly far from
+the user's expected next statement.
+
 <<function [[next]]>>=
 defn next()
 {
@@ -9342,12 +9515,14 @@ defn next()
 }
 @
 
-\section{Frames and complex}
+%\section{Frames and complex}
+\section{Displaying data-structures}
 
 %claude:
 Source-level inspection of \emph{values} (not just lines) needs
 two more pieces:
 \begin{itemize}
+
 \item {Frame walking}: to display local variables, the debugger
 needs to find each function's stack frame on the call stack.
 The library function [[stk()]] uses the builtin [<strace>],
@@ -9355,6 +9530,7 @@ which calls [[libmach]]'s [[ctrace]] follow-set walker. For each
 frame, [[ctrace]] returns the PC, frame pointer, and a list of
 local variable addresses (from the [[a]]/[[p]] symbol entries).
 The library then prints them via [[print()]].
+
 \item {Complex types}: to display structs and unions, the user
 declares them as [[complex]] (or [[aggr]]) types using the
 syntax we saw in the Interpreting chapter. With a complex
@@ -9421,6 +9597,9 @@ format.
 This demonstrates [[acid]]'s programmability: even
 a tracer can be written as a debugging script.
 
+\section{Multi-threaded debugging}
+
+% setproc()?
 
 \section{Modifying code: [[acid -w]]}
 \label{sec:acid-w}
@@ -9853,7 +10032,7 @@ making the mechanism especially transparent.
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
 
-\section{Dumpers}
+\section{Format dumpers}
 
 <<[[main()]](acid) format initializations>>=
 fmtinstall('L', Lfmt);
@@ -9883,7 +10062,9 @@ Lfmt(Fmt *f)
 }
 @
 
-\section{AST dumper}
+\section{[[acid: whatis]]}
+
+%\section{AST dumper}
 
 % invoked by eval?
 
