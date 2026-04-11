@@ -929,6 +929,21 @@ the trace of a call to a drawing function by the program running in this window.
 \subsection{Processes,  procs, and threads relationships}
 \label{sec:thread-archi}
 
+%claude:
+The figure below is the single most important diagram in this
+book. If you understand it, you understand [[rio]]'s shape: a
+shared-memory {main-proc} with many cooperative threads (one
+per window, plus keyboard/mouse/worker-allocator), two dedicated
+I/O procs that absorb blocking reads on [[/dev/cons]] and
+[[/dev/mouse]], a filesystem proc that runs the 9P loop, and a
+pool of short-lived worker threads that handle one 9P request
+each. Everything above the dashed rectangle shares one address
+space; everything below it is a separate \plan process
+communicating via the 9P pipe. Spend a moment matching the
+windows you see in Figure~\ref{fig:hellorio-and-shell} to the
+window threads in the diagram, then the shell and [[hellorio]]
+processes to the boxes outside [[rio]]'s address space.
+
 Figure~\ref{fig:soft-archi-threads} presents the threads
 and processes resulting from the execution of [[rio]]
 and two other programs in two different windows,
@@ -3803,6 +3818,17 @@ with what the program has drawn so far.
 
 
 \section{Keyboard initialization}
+
+%claude:
+Keyboard initialization mirrors mouse initialization: [<initkeyboard()>]
+opens [[/dev/cons]] (the raw keyboard file), spawns an I/O proc
+that reads runes and forwards them on a channel, and returns a
+[<Keyboardctl>] handle. The split between a reader proc and a
+channel exists for the same reason as on the mouse side: reading
+from [[/dev/cons]] is a blocking syscall, and running it in a
+thread would stall every other thread in the same proc. Putting
+the blocking read in its own proc isolates the stall and lets
+the thread scheduler keep serving the rest of [[rio]].
 
 <<[[main()]] keyboard initialisation>>=
 keyboardctl = initkeyboard(nil);
@@ -20360,6 +20386,30 @@ architectures.
 %******************************************************************************
 \label{chap:debugging-appendix}
 
+%claude:
+Debugging [[rio]] has a particular circular problem: [[rio]] is
+the program that owns the screen and [[/dev/cons]], so any
+[[fprint(STDERR, ...)]] it tries to emit would normally land in
+its own display---which is frozen when [[rio]] misbehaves. Two
+tricks help. First, you can launch [[rio]] from a parent shell
+and redirect standard error outside the graphical session:
+[[rio >[2] /tmp/errors]] sends all diagnostics to a file you can
+tail from another window or read from the serial console. Second,
+since [[rio]] can run recursively (Section~\ref{sec:recursive-rio}),
+you can debug a freshly-built [[rio]] from inside a known-working
+[[rio]], keeping a rescue copy of the old binary at a path like
+[[/save/rio_old]] in case the new one refuses to start.
+
+%claude:
+The only built-in debugging facility is the [[DEBUG]] compile-time
+flag in [[fsys.c]]. When enabled, [[filsysproc]] dumps each
+incoming 9P message on [[STDERR]] and [[filsysrespond()]] dumps
+each reply, using [[fmtinstall('F', fcallfmt)]] to install a
+[[%F]] format specifier for [[Fcall]] structures. Combined with
+the stderr redirect above, this gives a readable trace of the
+[[mount]]/[[attach]]/[[walk]]/[[open]]/[[read]]/[[write]] sequence
+for any client running inside [[rio]].
+
 % hard to see the error message because they are written on
 % /dev/cons which is disabled when you run in graphic mode, so easier
 % to redirect error to a file:
@@ -20396,6 +20446,18 @@ if(DEBUG)
 \chapter{Error Management}
 %******************************************************************************
 \label{chap:error}
+
+%claude:
+[[rio]]'s error strings are all lowercase, terse, and stored as
+global [[char]] arrays because they cross a {9P protocol boundary}:
+when [<filsysrespond()>] is called with an error, the string is
+copied into an [[Rerror]] message and sent back through the pipe
+to the client's kernel, which in turn reports it via the client's
+[[errstr()]] or [[%r]] format. The conventions match those of
+other \plan fileservers (e.g., ``permission denied'',
+``file does not exist''), which means a client program written
+to expect \plan-style error reporting can display rio-produced
+errors without knowing they came from [[rio]] specifically.
 
 \section{Error codes}
 
@@ -20491,6 +20553,27 @@ char Ebadoffset[] = 	"window read not on scan line boundary";
 
 \section{[[error()]], [[derror()]]}
 
+%claude:
+[[error()]] has a two-phase behavior controlled by
+[[errorshouldabort]]. Before graphics is fully initialized,
+[[errorshouldabort]] is [[false]] and an error just calls
+[[threadexitsall()]] to tear down gracefully---a failure here
+means [[rio]] never reached a usable state, so a clean exit is
+fine. Once everything is set up, [[errorshouldabort]] flips to
+[[true]] and [[error()]] calls [[abort()]] instead of exiting.
+The reason for [[abort()]] rather than [[exits()]] is that
+[[abort()]] leaves a core file (via [[SIGABRT]]-like behavior)
+and puts the process in \plan's ``broken'' state so it can be
+inspected later with [[acid]] (see the \book{Debugger}): you
+lose the running rio, but you gain a post-mortem.
+
+%claude:
+[<derror()>] exists only to adapt [[error()]] to the signature
+[[libdraw]] expects from a user-supplied error callback. It is
+registered via [[geninitdraw()]] so that when the draw library
+encounters a protocol error on [[/dev/draw]], the failure is
+routed through [[rio]]'s own abort-with-core path instead of
+[[libdraw]]'s default.
 
 <<global [[errorshouldabort]]>>=
 bool errorshouldabort = false;
@@ -20534,6 +20617,24 @@ derror(Display*, char *errorstr)
 \chapter{Utilities}
 %******************************************************************************
 \label{chap:utilities}
+
+%claude:
+The utility functions here fall into three groups. The first is
+{abort-on-failure} wrappers around [[malloc]], [[realloc]], and
+[[strdup]]: [<emalloc()>], [<erealloc()>], and [<estrdup()>] call
+[<error()>] if allocation fails, so the rest of [[rio]] can
+assume a non-[[nil]] return and avoid cluttering every call site
+with sanity checks. The pattern is common in \plan programs and
+matches the e-prefix convention in [[libc]] (see the \book{Libcore}).
+The second group is {rune-aware} variants of standard string
+routines ([<runemalloc()>], [<runemove()>], [<strrune()>],
+[<cvttorunes()>]): [[rio]] stores text as [[Rune]] arrays
+internally but has to convert to and from UTF-8 at I/O boundaries,
+so these wrappers centralize the conversion and rune-sized
+arithmetic. The third is [<min>]/[<max>]/[<isalnum>] ---
+small helpers that exist because the standard headers either do
+not provide them (no generic [[min]] in C) or provide ASCII-only
+versions that fail on non-ASCII runes.
 
 <<function [[min]]>>=
 int
