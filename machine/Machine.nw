@@ -115,6 +115,21 @@ with code from\\
 The goal of this book is to present with full details the source code of
 a {processor emulator}.
 
+%claude:
+This book plays an unusual role in the \principia series. The
+other books describe software---assemblers, linkers, shells,
+compilers, kernels---that ultimately runs {on} a processor.
+This book describes the processor itself, but expressed as a
+piece of software (an emulator) rather than as a hardware
+description. The payoff is that the same literate-programming
+machinery used to explain [[5a]] and [[5l]] in the \book{Assembler}
+and \book{Linker} can be applied to the ARM ISA they target: you
+can read a C function and learn exactly what a given instruction
+does to the machine's registers, flags, and memory. In effect,
+the book is an executable ARM reference manual, and the
+accompanying \book{Assembler} and \book{Linker} books become
+much easier to follow with it open on another screen.
+
 \section{Motivations}
 
 Why a processor emulator?
@@ -4845,6 +4860,20 @@ case 7:	/* coprocessor crap */ // and syscall
 
 \section{Unimplemented instructions}
 
+%claude:
+A user-mode emulator can cut a lot of corners that a
+system-mode emulator cannot. [[5i]] does not implement the
+coprocessor instructions ([[MCR]]/[[MRC]]), the exception
+return ([[RFE]]), the cache management ops, or any of the
+other privileged instructions that only the kernel would use.
+If the guest program executes one of these, the decode table
+routes it to [<undef()>], which prints a diagnostic and
+[[longjmp]]s back to the REPL via [<errjmp>]. This is the same
+philosophy Linux's [[qemu-user]] uses: trapping an unimplemented
+instruction and falling back to an error is much cheaper than
+implementing the full privileged mode, and no well-behaved
+user program should ever hit one.
+
 % - MCR, and other very low level stuff
 % - ADC/... transfer to undef
 % - RFE see above
@@ -6564,6 +6593,20 @@ case '>':
 
 
 \section{Interface}
+
+%claude:
+The debugger's interface borrows heavily from [[adb]]---the
+classic Unix debugger---which Plan 9's [[db]] also descends
+from. A command is a target address (an expression that can
+mix symbols, literals, and the dot register), an operator
+([[?]] to dump, [[/]] to dump memory, [[=]] to evaluate,
+[[>]] to set, [[:]] for control, [[$]] for inspection), and
+an optional count and format letter. So [[100,20?X]] dumps
+twenty words starting at address 100 in hex, and [[main?i]]
+disassembles the instruction at [[main]]. The concision is
+deliberate: the debugger doubles as the REPL for stepping
+through [[5i]], so typing [[:s]] to step needs to stay
+three keystrokes long to be usable for more than five minutes.
 
 <<global [[fmt]]>>=
 char	fmt = 'X';
@@ -8331,6 +8374,23 @@ optimizations on top of this fundamental loop.
 \label{chap:debugging}
 % the emulator itself, to debug it! debug the debugger!
 
+%claude:
+There is a certain irony in a debugging appendix for an emulator
+that is itself a debugger. The facilities here are for debugging
+{\em [[5i]] itself}---not the guest program running inside it.
+When you suspect that the interpreter is mis-decoding an
+instruction, or that the page-table code is handing out the
+wrong physical page, you flip the [[trace]] global to [[true]]
+and every executed instruction is dumped by [<itrace()>] with
+its address, encoded word, and opcode index. The formatted
+output reuses the disassembler tables ([<shtype>] for shift
+types, [<cond>] for condition codes) so the dump looks like
+Plan 9 ARM assembler rather than raw hex. The reason [<itrace()>]
+flushes [<bout>] after every line is that a subsequent fatal
+decode error would otherwise lose the last few thousand
+instructions' worth of context---an expensive lesson learned
+the hard way.
+
 <<global [[trace]]>>=
 bool trace;
 @
@@ -8385,6 +8445,23 @@ static	char*	cond[16] =
 %******************************************************************************
 \label{chap:error}
 
+%claude:
+Error handling in [[5i]] has two regimes. {Fatal} errors---out
+of memory, malformed binary, unrecoverable decode failure---go
+through [<fatal()>], which prints a diagnostic to
+[[STDERR]] and calls [[exits()]]. {Recoverable} errors---the
+guest program executes an undefined instruction, or the REPL
+parses a bad command---go through the global [<errjmp>] using
+[[setjmp]]/[[longjmp]]. [<cmd()>] installs the [[setjmp]]
+checkpoint once at the start of its REPL loop; any
+[[longjmp(errjmp, 0)]] anywhere in the interpreter unwinds
+back to the prompt, giving the user another chance to inspect
+state and try again. The same pattern appears in [[ed]] and
+the Plan 9 shell (see the \book{Editor} and \book{Shell}): a
+long-lived interactive process wraps each command in a
+setjmp so a deep failure drops you back to the prompt rather
+than killing the whole session.
+
 <<function [[fatal]]>>=
 void
 fatal(bool syserr, char *fmt, ...)
@@ -8428,6 +8505,19 @@ undef(instruction inst)
 \chapter{Utilities}
 %******************************************************************************
 \label{chap:utilities}
+
+%claude:
+[[5i]] has very few utilities of its own because it leans
+heavily on [[libc]] and [[libbio]]: the instruction dumper uses
+[[print]] and [[seprint]], the REPL uses [[Bioread]], and the
+guest-memory copy routines use plain [[memmove]]. The one class
+of helper the emulator does define is abort-on-failure
+allocators ([[emalloc]], [[erealloc]]) that wrap [[malloc]] and
+route failures through [<fatal()>] from the previous chapter,
+so the rest of the code can assume allocation always succeeds
+and skip per-call null checks. This is the same {e-prefix}
+convention used across the Plan 9 userland (see the
+\book{Windows} and \book{Libcore}).
 
 \section{Memory Management}
 
