@@ -675,6 +675,38 @@ The end of the list is represented by the null pointer ([[nil]] in \plan).
 % FIGURE? or too simple? does not hurt maybe, so can also see
 % different namespaces?
 
+%claude:
+A {single} bucket array can hold entries from {all} namespaces at
+once, because the namespace is folded into the hash key. Two symbols
+that hash to the same slot may belong to entirely different namespaces
+and still chain together, as in the diagram below where a variable
+([[S_VAR]]) and a target ([[S_TARGET]]) coexist in bucket~17:
+
+\begin{verbatim}
+  hash[]
+   +------+
+ 0 |  *---+--> ("CFLAGS",S_VAR)----+
+   +------+                        v
+ 1 | nil  |                       nil
+   +------+
+   |  ... |
+   +------+
+17 |  *---+--> ("hello",S_TARGET)--> ("CC",S_VAR)--+
+   +------+   .u.ptr -> Rule         .u.ptr -> Word v
+   |  ... |                                        nil
+   +------+
+\end{verbatim}
+
+%claude:
+[<symlook()>] does linear chain walking, so collisions stay cheap as
+long as buckets are short. The chosen size [[NHASH=4099]] is prime to
+spread keys evenly, and the multiplier [[HASHMUL=79]] is folded byte
+by byte into the running hash. The lazy-create path (when [[install]]
+is non-[[nil]]) means that callers can use [<symlook()>] both as a
+lookup and as a defaulting insert in one call---a common idiom that
+avoids the lookup-then-insert race that would be necessary in a
+threaded implementation.
+
 %dup: Linker.nw
 The main interface to the symbol table is the
 function [[symlook()]] below, which internally uses the global [<hash>].
@@ -1942,6 +1974,52 @@ struct Job	*next;
 %trans:?
 % draw diagram showing relations to each other, what includes what?
 
+%claude:
+It is worth pausing here to see how the core data structures
+fit together before [<main()>] starts using them. The diagram
+below shows the {static} side ([<Rule>]s in [<rules>]/[<metarules>],
+indexed by [<S_TARGET>] in the symbol table) versus the {dynamic} side
+([<Node>]s and [<Arc>]s built once a target is requested, with
+[<Job>]s carved out of that graph for the scheduler):
+
+\begin{verbatim}
+   parsing phase                building phase
+   -------------                --------------
+
+   Rule (in rules,               Node (one per file,
+         metarules)                  cached in S_NODE)
+   +------------+               +-------------+
+   | target     |<--+           | name        |
+   | prereqs    |   |           | time        |
+   | recipe     |   |           | flags       |
+   | alltargets |   |           | arcs *------+--+
+   | next *-----+   |           +-------------+  |
+   | chain *----+---+                            v
+   +------------+                          Arc
+                                          +-------+
+       symbol table                       | n *---+--> Node
+         S_TARGET                         | r *---+--> Rule
+       "hello.5"                          | stem  |
+       "world.5"                          | next  |
+                                          +-------+
+
+       job queue          Job
+       (jobs)           +--------+
+                        | r *----+--> Rule (master)
+                        | n *----+--> Node list
+                        | t,p,stem|    (targets, prereqs)
+                        +--------+
+\end{verbatim}
+
+%claude:
+The split is deliberate. [<Rule>]s describe the [[mkfile]] verbatim
+and never change after parsing. [<Node>]s and [<Arc>]s are an
+{instantiation} of those rules against the actual files in the
+project: a meta rule [[%.5: %.c]] becomes one arc per concrete pair
+([[hello.5]]\(\to\)[[hello.c]], [[world.5]]\(\to\)[[world.c]]). A
+[<Job>] then captures one in-flight execution---it points back into
+the rule for the recipe and into the node list for graph updates,
+but owns nothing itself.
 
 
 
@@ -1960,8 +2038,20 @@ I now switch from the bottom-up approach of Chapter~\ref{chap:core-ds}
 to a top-down approach;
 %toc:
 Indeed,
-I will describe in the following chapters the main functions of [[mk]], 
+I will describe in the following chapters the main functions of [[mk]],
 starting in this chapter with [[main()]], the entry point of [[mk]].
+
+%claude:
+[<main()>] is mostly a sequencer. It does almost no real work itself;
+it threads four phases together: initialize globals, parse the
+[[mkfile]] (filling [<rules>], [<metarules>], and the symbol table),
+build and walk the graph for each target with [<mk()>], and
+optionally print profiling stats before exiting. The interesting
+subtlety is that command-line arguments are processed in {three}
+passes (flags, then [[var=value]] assignments, then the remaining
+target names), with [[$MKFLAGS]] and [[$MKARGS]] saved before the
+[[var=value]] entries are nulled out so recursive [[mk]] calls can
+inherit the original invocation.
 
 \section{[[main()]] skeleton}
 
@@ -2553,8 +2643,25 @@ as explained in the following sections.
 % a bit complicated.
 %real-world: Unix Make was actually using yacc.
 %ocaml: cleaner to use Yacc. But, in recipe the tokens
-% have a different meaning so you need a lexer with different states/modes 
+% have a different meaning so you need a lexer with different states/modes
 % (a la Perl/PHP). Also escaping is tricky. Unicode also is tricky.
+
+%claude:
+Why a hand-written line-oriented parser instead of a yacc grammar
+like Unix Make used? Three reasons. First, recipes are {opaque}
+strings handed verbatim to the shell---they have their own escaping
+and tokenization that does not fit a uniform grammar. Second,
+[[mk]]'s syntax is {context-sensitive} at the line level: a
+[['#']] starts a comment in normal text but is just a character
+inside a quoted filename, and the [[':' '=' '<']] separators have
+meaning only in a rule head, not inside variable values. Third,
+the line is the natural unit for {variable expansion}, which must
+happen at parse time so the dependency graph can be built statically
+(see Chapter~\ref{chap:graph}). The result is a parser organized
+around two layers: [<assline()>] assembles a logical line from
+the input (handling escaped newlines, comments, and quoted regions),
+and [<rhead()>] then dispatches on the separator character to
+populate rules, definitions, or inclusions.
 
 \section{[[parse()]]}
 \label{sec:parse}
@@ -5011,6 +5118,20 @@ to [<newarc()>] instead of the empty string.
 
 \subsection{Matching a pattern: [[match()]]}
 
+%claude:
+[[match()]] is the [[mk]] equivalent of one half of [[fnmatch()]]:
+it tests whether [[name]] fits a [[template]] containing exactly
+one wildcard, and if so it captures the wildcard text as the
+{stem}. There is no backtracking because there is at most one
+[[%]] in the template, so the algorithm is just: walk both
+strings until you hit [[%]] in the template, anchor the rest of
+the template at the {end} of the name (using the length
+difference to compute where the stem ends), and copy the stem
+out. The pair of [[match()]] (read) and [<subst()>] (write) is
+how a meta rule like [[%.5: %.c]] becomes a concrete arc:
+[[match("hello.5", "%.5", stem)]] sets [[stem="hello"]], and
+then [[subst("hello", "%.c", buf)]] writes [[buf="hello.c"]].
+
 [[match()]] below iterates over two string parameters
 ([[name]] and [[template]])
 at the same time by incrementing both pointers until it finds the special
@@ -5326,6 +5447,27 @@ in the following sections.
 \subsection{Cycle detection}
 \label{sec:cycle-check}
 
+%claude:
+Cycle detection here uses a classic DFS trick: mark on entry,
+unmark on exit. The {set} flag while a node is on the recursion
+stack distinguishes a true back edge (cycle) from a cross edge
+(harmless DAG sharing). If [[mk]] used a permanent ``visited''
+flag instead, it would falsely report a cycle the second time
+it walked into a shared node like [[common.h]] from a different
+parent. The downside is that the cost is proportional to the
+number of {paths} through the graph, not the number of nodes,
+which would be a problem for very large graphs but is fine for
+the [[mkfile]]s [[mk]] is built to handle.
+
+%claude:
+GNU Make's behavior here is different and arguably worse: it
+detects cycles dynamically while building, prints
+``Circular X $\leftarrow$ Y dependency dropped,'' then keeps
+going as if the back edge did not exist---which can leave the
+user with a build that succeeds but produces incorrect output.
+[[mk]] takes the strict path: a cycle is always an error, and
+the static graph means [[mk]] catches it before any recipe runs.
+
 %trans:
 The first error [[mk]] can detect is the presence of a {\em cycle}
 in the graph, as shown in Figure~\ref{fig:graph-cycle}.
@@ -5452,6 +5594,20 @@ Without the last instruction in [<cyclechk()>],
 %   make: Circular foo.h <- foo dependency dropped.
 
 \subsection{Infinite rule detection}%$
+
+%claude:
+The infinite-rule problem cannot exist for {simple} rules
+because they refer to concrete filenames and the cycle check
+catches those. It is unique to meta rules, where applying the
+same rule with a different stem yields a fresh target name
+([[foo]] $\to$ [[foo.5]] $\to$ [[foo.5.5]] $\to$ \ldots) that
+the cycle check would never see as a repeat. The fix is to
+count rule {applications} along the current DFS branch and
+cap each rule at [[nreps]] (default~1). The crucial detail is
+the [[cnt[r->rule]++]] before recursing and [[cnt[r->rule]--]]
+after: the cap is per-branch, not global, so a meta rule like
+[[%.5: %.c]] can still fire many times in independent branches
+of the graph.
 
 %trans:
 The second mistake [[mk]] can detect is the presence of
@@ -6845,13 +7001,28 @@ for(a = n->arcs; a; a = a->next){
 \label{chap:scheduling}
 \l Fixing outdated files (after finding outdated files)
 
+%claude:
+The scheduler has three responsibilities split across three
+functions, and the split is worth understanding before diving
+into the code. [<run()>] is the {producer} side: it appends a
+new job to [<jobs>] and, if a processor slot is free, kicks
+[<sched()>] to start it immediately. [<sched()>] is the
+{launcher}: it pops a job, hands it to [<execsh()>] to fork
+a shell, and records the resulting process id in the [<events>]
+slot table. [<waitup()>] is the {reaper}: it blocks on
+[[wait()]], looks the returned pid up in [<events>] to find
+which job finished, calls [<update()>] to mark the targets
+[<MADE>], and then calls [<sched()>] again to launch the next
+queued job. The slot table is the glue: it is the only mapping
+from kernel-level pids back to graph-level nodes.
+
 %trans:
 In this chapter, you will see the remaining important functions
 of [[mk]] that I introduced in Figure~\ref{fig:controlflow}.
 %trans: %flow:
-I mentioned 
+I mentioned
 [<run()>] (called from [<dorecipe()>] before),
-which {enqueues} a job, and 
+which {enqueues} a job, and
 [<waitup()>] (called from [<mk()>]),
 which {waits} for a job to finish.
 \l (and which calls update() to change the building status of a node to MADE)
@@ -7178,6 +7349,48 @@ if(jobs == nil){
 
 \section{Executing Jobs: [[execsh()]]}
 
+%claude:
+[<execsh()>] is the bridge between [[mk]] and the shell. The
+two-fork dance below is not gratuitous: there are two reasonable
+ways to feed a recipe to a shell, and [[mk]] picks the harder
+one for good reasons. The simple way is [[sh -c "recipe text"]],
+which would mean stuffing the recipe through the [[argv]] of
+[[execl()]]; the problem is that the recipe may contain quotes,
+backslashes, and other characters that [[mk]] would have to
+re-escape to survive the shell's command-line parsing. The
+[[mk]] way is to feed the recipe through {standard input}: the
+shell sees raw bytes, no re-escaping is needed, and the recipe
+can be arbitrarily long. The price is that something must
+{produce} those bytes on the writing end of a pipe while the
+shell consumes them, hence the second fork:
+
+\begin{verbatim}
+       mk parent
+           |
+           | rfork(RFPROC|RFFDG|RFENVG)
+           v
+       child (will exec the shell)
+       in[0] = read end, in[1] = write end of pipe
+           |
+           | fork()
+           v
+       grandchild
+       (writes recipe bytes into in[1], then exits)
+
+       child after grandchild forks:
+           dup(in[0], STDIN); close(in[0]); close(in[1]);
+           execl(shell, ...)
+\end{verbatim}
+
+%claude:
+The reason the {child} (not the grandchild) execs the shell is
+that the [[mk]] parent needs to know the shell's pid for
+[<waitup()>], and only the direct child's pid is reported back
+through [[rfork()]]. The grandchild that does the writing exits
+quickly, before the shell finishes; its termination is reaped
+incidentally by [<waitup()>] and discarded by the
+[<NOT_A_JOB_PROCESS>] code path.
+
 [<execsh()>] relies on the global below to know which shell to execute.
 %
 Under \plan, [[mk]] uses the shell [[rc]] (see the \book{Shell}):
@@ -7370,6 +7583,25 @@ if(err < 0){
 
 \section{Waiting for jobs to finish}
 \label{sec:waiting-processes}
+
+%claude:
+The complication of [<waitup()>] comes from a constraint imposed
+by the kernel: under \plan (and \unix), [[wait()]]/[[await()]]
+cannot ask ``has process \emph{X} finished?'' It can only ask
+``has \emph{any} child finished?'' This means [[mk]] cannot
+isolate job processes from {other} children it may have forked
+for unrelated reasons---backquote command substitution
+(Section~\ref{sec:backquotes}), dynamic [[mkfile]] inclusion
+(Section~\ref{sec:dynamic-mkfile}), and custom dependency
+comparison programs (Section~\ref{sec:custom-comparison}) all
+spawn processes that will eventually be reported by [[wait()]]
+on a future [<waitup()>] call. This is why [<waitup()>] has to
+look up every returned pid in the [<events>] slot table and
+gracefully handle the case where the pid is {not} a job---the
+[<NOT_A_JOB_PROCESS>] return value covers exactly that case.
+On Linux, [[waitpid(pid, ...)]] would let [[mk]] target a
+specific child and avoid this whole class of edge cases, but
+\plan's [[await()]] does not offer that.
 
 %trans:
 The interface of [[waitup()]] is complex.
@@ -7683,6 +7915,23 @@ Exit(void)
 
 \section{Notes (signals) management}
 
+%claude:
+Pressing [[^C]] on a build that is compiling ten files in
+parallel is the dangerous case. Under \plan, the interrupt
+note is delivered to all processes in the same {note group};
+[[mk]] and its forked shells all receive it together. The
+naive response---let [[mk]] [[exit]] right away---is wrong
+for the same reason killing a build with [[Ctrl-C]] in Make
+sometimes leaves half-written object files: a child compiler
+that gets cut mid-write may leave a corrupt file on disk that
+{looks} up-to-date the next time you build, and [[mk]] (or
+Make) will skip recompiling it. The fix in [[killchildren()]]
+below is to clear the job queue (so no new jobs start), keep
+[<waitup()>] alive long enough for all running children to
+finish their current operation, and only then [<Exit()>].
+This is the same reason ordinary error handling routes
+through [<Exit()>] instead of [[exits()]] directly.
+
 \t [[C-c]] => C-c all? who gets C-c? Which process
 % connected to stdin? mk? shell? which shell?
 % (not shell! shell stdin connected to pipe!)
@@ -7772,6 +8021,21 @@ the values of [[mk]]'s special variables (e.g., [[$target]], [[$stem]]) or
 user variables (e.g., [[$CFLAGS]]) %$
 used in the recipes.
 %dup: which simplifies many things compared to Make (said later)
+
+%claude:
+Why route variables through the {environment} rather than splicing
+them into the recipe text? Because the recipe text is opaque to
+[[mk]]: a recipe like [[5c $CFLAGS -c $stem.c]] is handed to the
+shell verbatim and {the shell} expands [[$CFLAGS]] and [[$stem]]
+using its own variable lookup. By writing those values into
+[[/env/]] before the [[exec]], [[mk]] makes them available to the
+shell without ever touching the recipe string. This is the
+``minimal extension'' philosophy at work: [[mk]] does not
+reimplement variable expansion, it just feeds the shell from the
+side. As a side benefit, this is also why [[mk]]'s recipes do not
+need the [[$$i]] double-dollar escape Make requires---there is no
+distinction between Make variables and shell variables to maintain,
+because there is only one expander.
 
 %\section{Interacting with the shell}
 
@@ -9012,6 +9276,23 @@ if(r->attr&REGEXP)
 \section{Shell-command expansion: [[`]]{\em cmd}[[`]]}
 \label{sec:backquotes}
 
+%claude:
+Backquote expansion is the [[mkfile]] equivalent of the shell's
+[[$(ls *.c)]]: it runs a command at parse time and substitutes
+its standard output back into the line being assembled. The most
+common use is generating a list of source files
+([[OFILES=`{ls *.c | sed 's/.c/.o/'}]]), which would otherwise
+require either listing every file by hand or hoping a meta rule
+covers them all. The implementation in [<bquote()>] is subtle
+because the same [<Bufblock>] holds the command text on the way
+out and the command's output on the way back: [<bquote()>]
+remembers the start position before invoking [<execsh()>] and
+rewinds [[buf->current]] to that point so the output overwrites
+the command in place. The grandchild-pipe trick from
+Section~\ref{sec:backquotes} is reused here, this time with the
+parent capturing the pipe's read end into [[buf]] instead of
+discarding it.
+
 % actually two styles, `{...} or `...`
 
 % Useful for `stuff that generates data`. 
@@ -9190,6 +9471,21 @@ if(buf){
 \section{Dynamic [[mkfile]]: [[<|]]{\em prog}}
 \label{sec:dynamic-mkfile}
 
+%claude:
+GNU Make has [[ifdef]]/[[ifeq]]/[[else]] for conditional sections.
+[[mk]] does not, and on purpose. Instead of growing the DSL with a
+preprocessor, [[mk]] reuses the file-inclusion mechanism but lets
+the included ``file'' be the {output of a program}: [[<|prog]]
+runs [[prog]], pipes its stdout into [<parse()>], and the result is
+a fragment of [[mkfile]] computed at run time. This is how the
+\plan kernel's [[mkfile]]s pull configuration data from a separate
+config program, and how a build can branch on environment without
+adding control flow to the [[mkfile]] grammar. The implementation
+reuses [<parse()>] reentrantly: the recursive [<parse()>] call on
+the pipe descriptor is the same one that handles a normal
+[[<file]] include---one of several places where keeping the parser
+in a single function pays off.
+
 % How to do the ifdef I use in pfff's makefiles? dynamic mkfile!
 % Useful to provide an alternative to ifdef in Make.
 % instead you put the configurable part in an external
@@ -9316,6 +9612,21 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 \label{sec:transform-list}
 \label{sec:var-generator}
 \label{sec:subst-var}
+
+%claude:
+This is [[mk]]'s answer to a real problem: given a list of source
+files, derive the corresponding list of object files without
+listing both. The syntax [[${OFILES:%.c=%.o}]] takes the value
+of [[$OFILES]], matches each word against [[%.c]], and rewrites
+the [[%]] into [[.o]]. Compared to GNU Make's
+[[$(patsubst \%.c,\%.o,$(OFILES))]], it is shorter and reuses
+the same [[%]] pattern character that meta rules use, so there
+is one matching mechanism to learn instead of two. The catch is
+that the parser must recognize [[${]] $\ldots$ [[}]] as
+{atomic}---the [[:]] inside would otherwise look like the rule
+separator [<rhead()>] is hunting for, hence the [[vargen]] flag
+in [<charin()>] that suppresses separator detection between
+[[${]] and [[}]].
 
 
 % 2 uses for ${}. One for escaping, or for concatenation
@@ -9589,6 +9900,26 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 \label{sec:rule-attributes-advanced}
 \n Advanced? well I know explain all rule attributes here except fake one
 \n  like META or REGEXP.
+
+%claude:
+A {rule attribute} is a single-letter flag attached to a rule
+between two colons, as in [[clean:V:]] for a virtual target.
+Attributes let the user override individual aspects of [[mk]]'s
+default behavior on a per-rule basis without bloating the syntax:
+[[V]] (virtual: do not check for a file with this name),
+[[Q]] (quiet: do not echo the recipe),
+[[D]] (delete the target if the recipe fails),
+[[E]] (execute the recipe shell without [[-e]]),
+[[N]] (no warning if the recipe is empty),
+[[P]] (use a custom program to compare timestamps), and
+[[R]] (the target is a regular expression).
+%
+The implementation pattern is the same for all of them:
+[<rhead()>] sets a bit in [[Rule.attr]] when it sees the
+letter, [<attribute()>] propagates the bit from rules onto the
+nodes that use them (so [<work()>], [<dorecipe()>], and
+[<waitup()>] can consult the node directly without re-walking
+arcs), and the relevant code path checks the flag.
 
 
 
@@ -10573,6 +10904,23 @@ if(strchr(arc->n->name, '(') && arc->n->time == 0)
 \subsection{Missing-intermediates optimization: [[mk -I]]}
 \label{sec:pretending}
 
+%claude:
+The motivation for ``pretending'' is historical. On 1970s and
+1980s machines disk space was scarce, and users would routinely
+[[rm *.o]] after building a library to reclaim space. The next
+[[mk]] run would then see the [[.o]] files missing and rebuild
+the entire library, even though nothing in the source had
+changed and the [[.a]] file was newer than every [[.c]]. The
+fix is to {pretend} a missing intermediate file is up-to-date,
+{provided} the next level up in the graph is also up-to-date.
+The flags [[CANPRETEND]] and [[PRETENDING]] track this two-step
+state machine: a node ``can pretend'' if its name does not look
+like an archive member, and it is ``pretending'' once [<work()>]
+has actually elided it. The catch is that if anything {below} a
+pretending node turns out to be modified after all, [[mk]] must
+{unpretend} the node and treat it as missing again, hence the
+backtracking pass at the end of the [[work()]] arc loop.
+
 % mk -i suppress this behavior
 % pad: mk -I! new mode :) because I don't like the default mode!
 
@@ -10820,6 +11168,30 @@ symlook(name, S_TIME, (void*)t);		/* install time in cache */
 % in addition to time cache, mk also batch the call to time
 % by reading/caching the dir?
 
+%claude:
+There is a layered cache here. The first layer (Section~\ref{sec:time-cache})
+is per-file: the first call to [<timeof()>] for a given path
+remembers the result. The second layer is per-{directory}: rather
+than [[stat]]-ing each file individually, [[mk]] reads the entire
+directory once and prepopulates [<S_TIME>] for every entry. On
+projects with many files in one directory this turns $N$ system
+calls into one. The trade-off is the {first-touch} cost---if
+[[mk]] only ever needs the time of one file in a 10\,000-file
+directory, the bulk read is wasted---but in practice [[mk]]
+visits most files in a directory anyway during graph construction.
+
+%claude:
+The cautionary tale in the [[%subtle:]] note above is real and
+worth understanding. On a case-insensitive filesystem like VFAT,
+[[dirstat("helloc.c")]] succeeds even when the on-disk name is
+[[HELLOC.C]]. But the bulk read populates [<S_TIME>] under the
+{on-disk} name [[HELLOC.C]], so a later cache lookup for
+[[helloc.c]] misses, returns 0 (``does not exist''), and [[mk]]
+concludes the source is missing. The lesson: any time you cache
+results keyed by a string, you must canonicalize the key the
+{same way} on insert and on lookup, or the cache will silently
+shadow real data.
+
 <<[[mkmtime]] locals>>=
 //char *s, *ss;
 //char carry;
@@ -10960,6 +11332,20 @@ if(aflag)
 %old: weoutofdate = aflag;
 
 \section{Recursive [[mk]]}
+
+%claude:
+{Recursive [[mk]]} is the pattern of one [[mkfile]]'s recipe
+calling [[mk]] in a subdirectory---common in \plan, where the
+top-level [[/sys/src/mkfile]] descends into [[cmd/]], [[lib/]],
+and so on. The challenge is that the inner [[mk]] should inherit
+the {original} command-line flags and variable assignments
+({not} the targets, since those were already consumed by the
+outer [[mk]]). [[$MKFLAGS]] and [[$MKARGS]] solve this: [<main()>]
+captures both before nulling out the [[var=value]] entries in
+[[argv]], and exports them through the symbol table. A child
+[[mkfile]] can then recursively invoke [[mk $MKFLAGS $MKARGS
+target]] and the inner build inherits the same [[-k]], [[-n]],
+or [[CFLAGS=-O2]] settings the user originally typed.
 
 % if one of the mk return error codes, then should stop mk right?
 % convenient then.

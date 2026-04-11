@@ -168,10 +168,25 @@ recommends [[mk]] as a better system.
 \t cite?
 \l mk is to plan9 what make was to unix, and plan9 successor to unix
 
+%claude:
+The interesting design lesson in [[mk]] is that ``simpler and
+more powerful'' are not in tension here. Most of [[mk]]'s
+improvements over Make come from {removing} things rather than
+adding them: there is no [[$(VAR)]] vs.\ [[$VAR]] distinction
+because [[mk]] reuses the shell's variable syntax verbatim;
+there is no [[=]] vs.\ [[:=]] vs.\ [[?=]] because [[mk]]'s
+variables are constants; there is no [[$$i]] double-dollar
+escape because recipes are passed to the shell uninterpreted.
+Each removal eliminates an entire class of confusion. The
+power comes from a single architectural decision (build the
+full dependency graph statically before doing any work) which
+in turn enables parallel execution and exhaustive cycle and
+ambiguity checks.
+
 [[mk]] is modeled after Make, like many other build systems,
 but [[mk]] is both simpler and more powerful than Make.
 %
-For instance, [[mk]] does not suffer from 
+For instance, [[mk]] does not suffer from
 the infamous [[TAB]] requirement in the first column
 from Make\footnote{
 See \url{http://www.catb.org/esr/writings/taoup/html/ch15s04.html}
@@ -2106,9 +2121,22 @@ is marked as [[BeingMade]], then the status should be kept as [[NotMade]].
 
 \end{itemize}
 
+%claude:
+The wave model is what trades latency for parallelism. A
+synchronous design (run the DFS once, blocking on each recipe
+in turn) is simpler but only ever uses one processor. The
+wave model lets [[mk]] launch every {independent} recipe in
+the current frontier, then wait for any one to finish, then
+launch whatever became eligible---which on a four-core
+machine can run four compiles concurrently with no extra
+bookkeeping in the rules. The cost of each wave is small:
+the DFS skips already-[[Made]] nodes and only re-examines
+the [[BeingMade]] frontier, so most of the work is done in
+the first wave.
+
 [[mk]] will run the DFS in a loop multiple times until
-the root node is marked as [[Made]]. 
-During each of those loops, the DFS will find new jobs 
+the root node is marked as [[Made]].
+During each of those loops, the DFS will find new jobs
 to run in parallel.
 \l mk needs also to wait for process to finish in this loop.
 \l can have multiple waves before first wait if lots of processors!
