@@ -7371,6 +7371,16 @@ a rotatable constant ([<C_RCON>]) or a negative rotatable constant
 ([<C_NCON>]).
 \l FIGURE VENN diagram
 \l But if rule C_RCON, match only C_RCON!
+%claude:
+Visually, the relationship is a nested set:
+\begin{verbatim}
+   +-------------------------------------------+
+   |                  C_LCON                   |
+   |    +----------------+   +-------------+   |
+   |    |    C_RCON      |   |   C_NCON    |   |
+   |    +----------------+   +-------------+   |
+   +-------------------------------------------+
+\end{verbatim}
 Thanks to this encoding of inclusion via cases of [<cmp()>],
 a single rule can match many different kinds of instructions.
 %
@@ -7955,11 +7965,29 @@ imposes a big-endian order for the numbers in the header.
 \label{chap:arm-codegen}
 
 \t could put schematic of instruction format?
+%claude:
+The general shape of an ARM data-processing instruction,
+which most of the cases in [<asmout()>] are filling in,
+is a single 32-bit word with the following layout:
+\begin{verbatim}
+  bit  31    28 27   26 25 24    21 20 19  16 15  12 11    0
+       +-------+-------+--+--------+--+------+------+------+
+       | cond  |  00   | I|  opcode|S|  Rn  |  Rd  | oprnd |
+       +-------+-------+--+--------+--+------+------+------+
+\end{verbatim}
+[[cond]] is one of 16 condition codes (always [[1110]] =
+AL for unconditional), [[I]] selects between register
+and rotated-immediate operand, [[opcode]] picks
+ADD/SUB/AND/EOR/etc, [[S]] enables condition-flag
+updates, and [[Rn]]/[[Rd]] are the 4-bit register
+fields. Almost every line in the upcoming
+[<asmout()>] cases is ORing one of these subfields into
+[[o1]].
 
 %trans: ??
 % seen most of preparation, optable, now concrete optab entries
 % and asmout cases.
-% optab, o1, o2, o3, ... 
+% optab, o1, o2, o3, ...
 The cases of the first [[switch]] in [<asmout()>] will rely
 on a set of temporary variables to store registers
 and symbols:
@@ -8273,8 +8301,8 @@ immrot(ulong v)
 [[immrot(255)]] will return when [[i == 0]] since
 [[255 & ~255 == 0]].
 %
-For $2^31$, the first iteration will not return as this number 
-is not between 0 and [[0xff]]. 
+For $2^31$, the first iteration will not return as this number
+is not between 0 and [[0xff]].
 So, [[v]] will be rotated to the left 2 times, and the
 2 upper bits will be put back to the beginning by bitshiting
 the number to the right by 30. Now [[i==1]] and [[v==2]]
@@ -12209,9 +12237,38 @@ uses [[i]] to adjust [<symsize>] but it does add
 
 \subsubsection{Program counter line table format}
 
+%claude:
+The naive encoding of ``which source line did each
+instruction come from'' would store one 32-bit line
+number per 4-byte instruction, doubling the size of the
+executable. [[asmlc]] reduces this to roughly one byte
+per instruction by storing {\em deltas} since the
+previous entry, exploiting the fact that adjacent
+instructions usually advance both PC and line by small
+amounts.
+
+The encoding partitions the byte 0--255 into ranges:
+\begin{verbatim}
+  0          : escape, next 4 bytes are a signed
+               line-number delta (for big jumps and
+               cross-file transitions)
+  1..64      : line += this value, pc += MINLC (4)
+  65..128    : line -= (this - 64), pc += MINLC
+  129..255   : pc += (this - 128) * MINLC, no line change
+\end{verbatim}
+%
+A line of source that compiled to two ARM instructions
+takes two bytes: one in the [[129..255]] range (advance
+pc by 4 with no line change) and one in the [[1..64]]
+range (advance both). A jump backwards by 14 lines
+becomes \verb!0x4F! (65 + 14, the ``minus 14'' bucket).
+The escape \verb!0x00! followed by 4 bytes handles
+cross-file transitions where the line number can swing
+arbitrarily.
+
 %trans: Now that info in Hists are encoded in a way in exec
 % via multiple symbols, time for global line numbers of Instruction.
-% When machine code, line info disappear. 
+% When machine code, line info disappear.
 % Need program counter -> global line. The program counter line table!
 
 % Idea is Instr.line, global line number of each instr (which is not
