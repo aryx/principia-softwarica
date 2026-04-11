@@ -3689,6 +3689,68 @@ overwrite the next block's magic, which the allocator checks
 on every operation. The [[Btail]] structure at the end of each
 block provides bidirectional traversal.
 
+%claude:
+Here is what a contiguous slice of an arena looks like with one
+allocated block followed by a free block. The arena grows from
+low addresses at the bottom of the diagram to high addresses at
+the top, the same convention we use throughout this book:
+
+\begin{verbatim}
+high addr
+  +-----------------------------+  <- B2NB(free block)
+  |  Bhdr { magic, size }       |  next neighbor (some other block)
+  +-----------------------------+
+  |  Btail { magic0, datasize,  |  size = 40 (matches Bhdr)
+  |          magic1, size=40 }  |
+  +-----------------------------+
+  |  prev, next  (free list)    |  chains equal-size blocks
+  |  left, right (free tree)    |  balanced tree keyed on size
+  +-----------------------------+  <- fb (Free*)
+  |  Bhdr { FREE_MAGIC, 40 }    |
+  +=============================+  <- B2NB(alloc block) = T2HDR +sizeof(Btail)
+  |  Btail { ..., size=24 }     |  same size echoed at the tail
+  +-----------------------------+
+  |  user data   (16 bytes)     |  what malloc() returns points here
+  +-----------------------------+  <- v returned by malloc
+  |  Bhdr { ALLOC_MAGIC, 24 }   |  block size = data + header + tail
+  +-----------------------------+
+low addr
+\end{verbatim}
+
+%claude:
+The interesting design decision is [[Btail]]. A header-only
+scheme ([[Bhdr]] at the front of each block) is enough to walk
+the arena forward---[[B2NB]] just adds [[size]] to the current
+header---so why duplicate [[size]] at the tail?
+%
+The reason is coalescing on [[free()]]. When a block is freed,
+the allocator wants to merge it with its neighbor on the
+\emph{left} (lower address) if that neighbor is also free, to
+avoid fragmentation. Without a tail, finding the left neighbor
+would require a linear walk from the start of the arena, making
+[[free()]] O(n). With the tail, [[B2PT]] subtracts
+[[sizeof(Btail)]] from the current header to land on the
+previous block's [[Btail]], and [[T2HDR]] then jumps back by
+[[size]] to reach its [[Bhdr]]. The whole operation is O(1).
+This is the classic {boundary tag} trick from Knuth's
+\emph{The Art of Computer Programming} volume~1, and it is the
+same trick that [[dlmalloc]], [[jemalloc]], and most modern
+general-purpose allocators still use.
+
+%claude:
+The [[Free]] struct uses the \plan anonymous-field idiom
+([[Bhdr;]] with no name), which lets a [[Free*]] be used
+wherever a [[Bhdr*]] is expected without an explicit cast or
+member access. That is why [[fb->size]] works even though
+[[size]] is declared in [[Bhdr]], not in [[Free]]. The same
+idiom is used for [[Alloc]] and [[Arena]], which are all
+[[Bhdr]]-prefixed. The [[/* notused */]] comment on [[Alloc]]
+hints at a subtle 8c constraint: if [[Alloc]] were a bare
+[[typedef]] for [[Bhdr]], 8c would not distinguish the two
+types in its type checking, so the wrapper struct exists
+purely to give the compiler a distinct name to complain about
+when the wrong one is passed.
+
 <<struct [[Bhdr]]>>=
 struct Bhdr {
     ulong   magic;
@@ -3876,6 +3938,37 @@ free(void *v)
 
 \section{[[poolalloc()]]}
 
+%claude:
+With the block-header layout understood, the allocator's
+main loop is short. [[poolallocl()]] converts the user's
+requested [[dsize]] (data size) into a [[bsize]] (block
+size---data plus header plus tail, rounded up to the pool's
+[[quantum]]), searches the free tree for the smallest free
+block that is at least [[bsize]] bytes long
+([[treelookupgt]]), and returns it. If no free block is
+large enough, it grows the arena with [[poolnewarena]] and
+tries again. The [[trim]] call handles the common case
+where the matching free block is strictly larger than
+needed: it splits the block, keeping only the requested
+size for the caller and putting the remainder back on the
+free tree. The returned pointer is converted from block
+address to data address with [[B2D]] (which adds
+[[sizeof(Bhdr)]] to step over the header).
+
+%claude:
+The outer [[poolalloc()]] wrapper exists to enforce
+thread safety and debugging instrumentation around the
+hot inner loop. The [[lock]]/[[unlock]] pair serializes
+concurrent callers (remember that after [[rfork(RFMEM)]],
+several processes share [[mainmem]]). The [[paranoia]] and
+[[verbosity]] macros are compile-time no-ops in a release
+build; under [[POOL_PARANOIA]] they walk every block in
+every arena to verify magic numbers and size fields, and
+under [[POOL_VERBOSITY]] they dump the allocator state
+after every operation. These are expensive but invaluable
+when debugging heap corruption---the allocator can report
+the exact call at which a block was damaged.
+
 <<function [[poolalloc]]>>=
 void*
 poolalloc(Pool *p, ulong n)
@@ -3943,6 +4036,41 @@ poolallocl(Pool *p, ulong dsize)
 
 \section{[[poolfree()]]}
 
+%claude:
+[[poolfreel()]] is where the boundary-tag trick described
+in Section~\ref{chap:malloc}'s ``Block headers and free
+list'' pays off. After converting the user pointer [[v]]
+back to an [[Alloc*]] with [[D2B]], the function looks at
+its two neighbors:
+%
+\begin{itemize}
+\item [[back = T2HDR(B2PT(ab))]]: walk back through the
+previous block's [[Btail]] to reach its [[Bhdr]]. If that
+[[Bhdr]]'s magic is [[FREE_MAGIC]], merge the two blocks
+into one.
+\item [[fwd = B2NB(ab)]]: walk forward by adding the block's
+own [[size]] to get the next block's [[Bhdr]]. If that one
+is also free, merge again.
+\end{itemize}
+%
+After up to two merges, the resulting (possibly larger)
+free block is inserted into the free tree via [[pooladd]].
+This is the constant-time coalescing that distinguishes a
+real allocator from a toy one: without it, a program that
+allocates and frees in a pattern would gradually fragment
+the heap until no contiguous block was large enough to
+satisfy a request.
+
+%claude:
+The [[POOL_NOREUSE]] branch is a debugging mode: instead
+of coalescing, it leaves the block marked [[DEAD_MAGIC]]
+and fills it with the poison byte [[0xDA]]. Subsequent
+use-after-free will see the poison and (because the magic
+is wrong) blow up on the next [[blockcheck]]. This is like
+[[MALLOC_PROTECT]] on Linux or the guard pages Valgrind
+inserts---with the difference that \plan's version is
+cheap enough to run in production if desired.
+
 <<function [[poolfree]]>>=
 void
 poolfree(Pool *p, void *v)
@@ -4009,6 +4137,32 @@ poolfreel(Pool *p, void *v)
 
 
 \section{Other functions}
+
+%claude:
+[[mallocz]] is ``malloc zero''---it allocates and optionally
+zeros the memory. When the [[clr]] argument is true, the
+result is guaranteed to be all zeros, exactly like
+[[calloc]] in POSIX. The separate flag exists because many
+call sites know they are about to overwrite every byte of
+the allocation (e.g., filling in a struct field by field),
+in which case the extra [[memset]] is wasted work. Passing
+[[false]] gives them an uninitialized block and saves a
+memory-bandwidth-sized chunk of work on every allocation.
+
+%claude:
+[[realloc]] has to unwind the [[Npadlong]] debugging shim
+before it can reach the underlying block. Recall that
+when debugging is enabled, [[malloc]] hands the caller a
+pointer that is [[Npadlong]] words {\em past} the real
+allocation (so there is room to record the caller's PC in
+front of the data). To pass the block to [[poolrealloc]],
+[[realloc]] subtracts [[Npadlong]] from [[v]] to find the
+real start, adjusts [[size]] to include the padding, and
+then adds [[Npadlong]] back to the result. The
+[[setrealloctag]] call then records which caller triggered
+the reallocation---this is the hook that [[leak(8)]] and
+other \plan memory debugging tools use to trace the origin
+of every live block.
 
 <<function [[mallocz]]>>=
 void*
@@ -4129,6 +4283,34 @@ poolmsize(Pool *p, void *v)
 @
 
 \section{Debugging support}
+
+%claude:
+The tag functions store the program counter of the caller
+that allocated or reallocated each block, directly in the
+[[Npadlong]] words reserved in front of the data. The
+layout, with [[Npadlong=2]], [[MallocOffset=0]], and
+[[ReallocOffset=1]]:
+\begin{verbatim}
+  Block header area:
+  +----------------+
+  |  Bhdr          |
+  +----------------+
+  |  getcallerpc() | <- u[-2]  MallocOffset     (set by malloc)
+  +----------------+
+  |  getcallerpc() | <- u[-1]  ReallocOffset    (set by realloc)
+  +----------------+
+  |  user data     | <- v      what the caller sees
+  +----------------+
+\end{verbatim}
+%
+When a heap debugging tool like [[leak(8)]] walks the live
+blocks later, it reads these PC values to identify exactly
+which line of C code allocated the block. The checks on
+[[Npadlong <= MallocOffset]] at the top of each function
+allow the whole tagging scheme to compile out cleanly when
+[[Npadlong]] is zero (release build): the tag functions
+become no-ops, and [[malloc]] returns the bare pool
+pointer with no slowdown.
 
 <<function [[setmalloctag]]>>=
 void
@@ -4293,6 +4475,23 @@ enum Fmt_flag {
 
 \section{[[print()]] and [[vfprint()]]}
 
+%claude:
+[[print]] is declared as a {\em function pointer}, not a
+function. This is unusual: almost every libc in existence
+defines [[printf]] as a plain extern function. The reason
+for the indirection is that \plan reuses the same source
+code for the user-space library and for the kernel. In
+user space, [[print]] points to [[libc_print]], which
+formats into a buffer and writes to file descriptor~1.
+In the kernel, the kernel's startup code reassigns
+[[print]] to its own implementation, which writes to the
+console or serial port instead. Both worlds can then
+share [[dofmt]], [[fmtinstall]], and all the format verbs
+without any conditional compilation. This is why [[print]]
+is initialized with an explicit [[&libc_print]]: the
+global symbol always exists, but its target can be
+overridden at link time.
+
 <<global [[print]]>>=
 int (*print)(char *fmt, ...) = &libc_print;
 @
@@ -4330,6 +4529,53 @@ vfprint(int fd, char *fmt, va_list args)
 @
 
 \section{[[dofmt()]]}
+
+%claude:
+[[dofmt]] is the core of the whole formatted-output system.
+It is a tiny state machine with exactly two states:
+``copying literal characters'' and ``interpreting a format
+verb.'' The outer [[for(;;)]] loop alternates between them:
+%
+\begin{verbatim}
+         +----------------------+
+         |  copy literal chars  |
+         |  into f->to buffer   |
+         +----------+-----------+
+                    |  hit '%'
+                    v
+         +----------------------+
+         |  _fmtdispatch()      |
+         |  parses width/prec,  |
+         |  calls verb handler  |
+         +----------+-----------+
+                    |  verb done
+                    +----------->  back to literal copy
+\end{verbatim}
+%
+The literal-copy branch is duplicated: one copy for byte
+output ([[f->runes == 0]]) and one for rune output
+([[f->runes != 0]]), because [[Biobuf]]'s rune mode needs
+to write 32-bit runes into a [[Rune*]] buffer instead of
+bytes into a [[char*]] buffer. The duplication avoids a
+type-test inside the hot inner loop. When the destination
+buffer fills up ([[t + n > s]]), [[_fmtflush]] is called:
+for [[fprint]] it writes the buffer to the file
+descriptor; for [[sprint]]/[[snprint]] it reports that the
+buffer is full; for [[Bprint]] it forwards to the Biobuf's
+own flush. This is the closure-like use of [[f->flush]]
+mentioned in the [[Fmt]] section above.
+
+%claude:
+Note how [[dofmt]] never calls [[malloc]] on the hot path.
+The [[Fmt]] struct lives on the caller's stack and writes
+into a caller-supplied buffer ([[buf[256]]] for [[fprint]],
+the user's buffer for [[sprint]]). This matters because
+the memory allocator itself uses [[print]] for debugging
+output: if [[dofmt]] allocated, then a paranoid
+[[poolcheck]] that printed the current arena state would
+re-enter the allocator and deadlock on the pool lock. The
+same reasoning is why the kernel can safely use [[print]]
+from interrupt context.
 
 <<function [[dofmt]]>>=
 /* format the output into f->to and return the number of characters fmted  */
@@ -4871,6 +5117,56 @@ maximum code point that fits in an [[i]]-byte encoding.
 The decoder loop in [<chartorune()>] XORs each
 continuation byte with [[Tx]] ([[0x80]]) to strip the
 prefix, then shifts and accumulates the payload bits.
+
+%claude:
+Here is the full UTF-8 layout for reference, with the
+free bits available for the rune payload marked [[x]]:
+\begin{verbatim}
+  Range          Byte 1     Byte 2     Byte 3     Byte 4
+  -----          ------     ------     ------     ------
+  U+0000-007F    0xxxxxxx                                  (7  bits)
+  U+0080-07FF    110xxxxx   10xxxxxx                       (11 bits)
+  U+0800-FFFF    1110xxxx   10xxxxxx   10xxxxxx            (16 bits)
+  U+10000-10FFFF 11110xxx   10xxxxxx   10xxxxxx   10xxxxxx (21 bits)
+\end{verbatim}
+%
+A continuation byte is always [[10xxxxxx]], so the test
+\verb!c[i] ^= Tx; if(c[i] & Testx) goto bad;! checks
+that the top two bits were exactly [[10]]. The payload
+bits are then shifted into [[l]] left-to-right.
+%
+For a worked example, take the Greek letter $\beta$
+(U+03B2 = 0x03B2 = binary \verb+0000 0011 1011 0010+).
+This needs 11 bits, so it falls in the 2-byte range:
+\begin{verbatim}
+  Rune bits:        000 1110 11 0010
+  Split for UTF-8:  000 1110         (top 5 bits)
+                            11 0010  (bottom 6 bits)
+  Add prefixes:     110 01110         (T2 = 0xC0)
+                            10 110010 (Tx = 0x80)
+  Final bytes:      0xCE     0xB2
+\end{verbatim}
+%
+Decoding reverses this. [[chartorune]] reads [[0xCE]],
+sees that it is $\geq T(2)$ but $<T(3)$, so it knows the
+sequence is exactly 2 bytes. It strips the [[110]] prefix,
+shifts left by 6, ORs in the bottom 6 bits of [[0xB2]]
+(after stripping [[10]]), and returns U+03B2 with a length
+of 2.
+
+%claude:
+Two checks at the end of the loop reject {malformed} input
+that would otherwise round-trip cleanly. First, ``overlong''
+encodings: the test \verb+l <= RuneX(i)+ rejects sequences
+that use more bytes than the rune actually needs. For
+example, encoding U+002F (the ASCII slash) as the 2-byte
+sequence [[0xC0 0xAF]] is bit-legal but forbidden, because
+otherwise an attacker could smuggle a [[/]] past a path
+sanitizer that scanned for the literal byte. Second,
+surrogate code points (U+D800--U+DFFF) are reserved by the
+Unicode standard for UTF-16 and have no business appearing
+in UTF-8; the [[SurrogateMin <= l && l <= SurrogateMax]]
+check rejects them.
 
 <<macro [[Bit]]>>=
 #define Bit(i) (7-(i))
@@ -9335,22 +9631,50 @@ small data, and zlib wrappers add the framing and checksums
 expected by [[zip]] and HTTP's [[Content-Encoding: deflate]].
 
 %claude:
-A typical compression looks like this:
+A typical compression looks like this. Suppose we have a
+2\,KB log file in memory and want to gzip it. We define a
+trivial reader that hands [[deflate]] successive chunks of
+the buffer, and a writer that appends to an output
+[[Biobuf]]:
 \begin{verbatim}
+  typedef struct { char *p; int n; } Mem;
+
+  static int memread(void *r, void *buf, int n) {
+      Mem *m = r;
+      if(n > m->n) n = m->n;
+      memmove(buf, m->p, n);
+      m->p += n; m->n -= n;
+      return n;
+  }
+  static int biowrite(void *w, void *buf, int n) {
+      return Bwrite((Biobuf*)w, buf, n);
+  }
+
+  Mem in = { logbuf, 2048 };
+  Biobuf *out = Bopen("log.gz", OWRITE);
+
   deflateinit();
-  err = deflate(&out, mywrite, &in, myread, 6, 0);
+  err = deflate(out, biowrite, &in, memread, 6, 0);
   if(err != FlateOk)
       sysfatal("deflate: %s", flateerr(err));
 \end{verbatim}
-%claude:
-And decompression:
+%
+The level argument [[6]] is the standard zlib default
+(higher = slower but smaller). Decompression mirrors the
+same shape, with [[inflate]] taking a single-byte get
+callback instead of a buffered read:
 \begin{verbatim}
   inflateinit();
-  err = inflate(&out, mywrite, &in, mygetc);
+  err = inflate(&outmem, memwrite, in_biobuf, Bgetc);
   if(err != FlateOk)
       sysfatal("inflate: %s", flateerr(err));
 \end{verbatim}
-%yoann1: use more concrete example with actuall string to compress; myread/mywrite are too abstract
+%
+[[Bgetc]] is reused directly as the get callback, since it
+already has the right signature: take an opaque pointer,
+return the next byte or $-1$ at EOF. The library never
+sees the [[Biobuf]] type---it just calls through the
+function pointer.
 
 <<signature [[deflate]]>>=
 int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, void*, int), int level, int debug);
@@ -9424,6 +9748,41 @@ redundancy at the string level, and Huffman coding removes
 redundancy at the symbol level.
 
 %yoann: maybe big ASCII diagram with also concrete example?
+
+%claude:
+Here is a tiny worked example. Take the input string
+\verb+abracadabra abracadabra+ (23 bytes). LZ77 finds the
+two repetitions of \verb+abracadabra+ and emits a
+back-reference for the second one:
+\begin{verbatim}
+  Pass 1 (LZ77):
+    'a' 'b' 'r' 'a' 'c' 'a' 'd' 'a' 'b' 'r' 'a' ' '
+    <length=11, distance=12>
+
+  After LZ77 we have 12 literals plus 1 back-reference,
+  instead of 23 literals.
+\end{verbatim}
+%
+The back-reference says ``copy 11 bytes from 12 positions
+back in the output.'' At decompression time the decoder
+walks the output window backwards by 12, then copies 11
+bytes forward. Note that the source range may overlap the
+destination---a classic trick that lets one back-reference
+encode a repeating pattern like \verb+aaaa+ as
+\verb+'a' <length=3,distance=1>+.
+%
+Then Huffman coding assigns shorter bit codes to the more
+frequent symbols. With four [[a]]s, [[b]] and [[r]]
+appearing twice, and other letters once, [[a]] might get
+2 bits while [[d]] gets 5. The space character and the
+length/distance codes are encoded the same way. The whole
+output ends up being a stream of variable-length bit
+codes, much shorter than the original 23 bytes.
+%
+Real DEFLATE is more elaborate---length/distance codes have
+``extra bits'' for fine-grained values, and dynamic blocks
+ship a meta-Huffman code for the code-length table itself---but
+the two-pass structure is exactly this.
 
 %claude:
 The following diagram shows the data flow:
@@ -11206,13 +11565,12 @@ built on top.
 %claude:
 File I/O in \plan is built on five functions: [[open]],
 [[create]], [[read]], [[write]], and [[close]]. The \plan
-interface differs from \unix in a few ways: there is no
-separate [[creat]] call (use [[create]]), [[read]] and [[write]]
-are implemented as wrappers around [[pread]]/[[pwrite]] (which
-take an explicit offset, making them atomic for concurrent
-access), and file modes include \plan-specific bits like
-[[OEXCL]] (exclusive create) and [[ORCLOSE]] (remove on close).
-%yoann1: confusing the separate creat; obvious it is the same than create
+interface differs from \unix in a few ways: [[read]] and
+[[write]] are implemented as wrappers around
+[[pread]]/[[pwrite]] (which take an explicit offset,
+making them atomic for concurrent access), and file modes
+include \plan-specific bits like [[OEXCL]] (exclusive
+create) and [[ORCLOSE]] (remove on close).
 
 %yoann: actually create() seen in directory chapter later
 
@@ -13061,6 +13419,46 @@ processes dot-dot in a single forward scan---the [[d]] pointer
 tracks the output position while [[s]] advances through the
 input.
 
+%claude:
+Some worked examples, showing the rewrite as a series of
+steps:
+\begin{verbatim}
+  Input               After dedup //   After ./..       Output
+  -------------       --------------   --------------   --------
+  /usr//rsc/.         /usr/rsc/.       /usr/rsc         /usr/rsc
+  a/b/../c            a/b/../c         a/c              a/c
+  /a/../../b          /a/../../b       /b               /b
+  ../foo              ../foo           ../foo           ../foo
+  ""                                                    .
+  #c/cons             #c/cons          #c/cons          #c/cons
+\end{verbatim}
+%
+Two cases are worth noticing. \verb+/a/../../b+ becomes
+\verb+/b+: at the absolute root, an extra \verb+..+ is
+swallowed (because \verb+/..+ equals \verb+/+ in
+\plan---and in \unix---rather than being an error).
+By contrast, \verb+../foo+ stays \verb+../foo+: a relative
+path can keep leading \verb+..+ components, because there
+is no way to know without consulting the filesystem how
+many levels above the cwd the result actually lives. The
+[[d0]] pointer is used to mark this: while [[d]] is still
+sitting at [[d0]] and the path is not rooted, the
+\verb+..+ branch advances [[d0]] past it instead of
+deleting anything.
+
+%claude:
+This {lexical} resolution---working from the path string
+alone, with no system calls---is what makes \plan
+namespaces possible. Because [[..]] is resolved by
+[[cleanname]] rather than by the filesystem, the parent of
+\verb+/foo+ is always \verb+/+, even after
+\verb+bind /home/x /foo+ has remapped \verb+/foo+ to
+something completely different. \unix's
+[[realpath()]] follows the filesystem's parent pointers
+instead, which gives the wrong answer through bind mounts
+and symbolic links and is one of the reasons \plan never
+adopted symlinks.
+
 <<macro [[SEP]]>>=
 #define SEP(x)  ((x)=='/' || (x) == '\0')
 @
@@ -14544,6 +14942,49 @@ efficient kernel-mediated blocking when a userspace spin
 would waste CPU cycles. All the higher-level primitives
 ([[QLock]], [[Rendez]], channels) are built on [[rendezvous]]
 plus atomic operations.
+
+%claude:
+A sequence diagram makes the meet-and-swap behavior
+concrete. Suppose two processes [[A]] and [[B]] both want
+to meet at tag [[t]]:
+\begin{verbatim}
+  Process A                Kernel              Process B
+  ---------                ------              ---------
+  rendezvous(t, "hi")
+       |
+       | (no peer yet)
+       v
+       sleep ...
+                                            rendezvous(t, "yo")
+                                                  |
+                                                  v
+                          finds A waiting at t
+                          swap values:
+                            A.value <- "yo"
+                            B.value <- "hi"
+                          wake A
+       <----- "yo"                                 <----- "hi"
+\end{verbatim}
+%
+The first arrival blocks; the second arrival completes
+both calls atomically with the values swapped. Note that
+this is fundamentally a {two-party} rendezvous, not a
+broadcast: a third process arriving at [[t]] would have to
+wait for the next pair. The library exploits this in
+[[QLock]] by using each [[QLp]] node's address as a
+unique tag, so the unlocker's [[rendezvous]] picks exactly
+the head waiter.
+
+%claude:
+There is one subtlety the loop \verb!while((*_rendezvousp)(mp, ...) == (void*)~0)! is
+guarding against. The [[rendezvous]] syscall returns
+[[(void*)~0]] (all bits set, an otherwise impossible
+pointer) when it was interrupted by a note before the
+peer arrived. The loop simply retries in that case. This
+is the same pattern as the [[EINTR]] retry loop around
+\unix [[read]], but expressed with a sentinel pointer
+because [[rendezvous]] returns a [[void*]], not an
+[[int]] errno.
 
 \section{Locks}
 
@@ -16998,6 +17439,105 @@ threads across proc boundaries. Functions prefixed with
 \section{A toy example}
 
 % lib_thread/tests/!! example.c! include early
+
+%claude:
+Before diving into the data structures, here is a complete
+[[libthread]] program that exercises the main features---channels,
+[[threadcreate]], and the [[threadmain]] entry point. The
+program forks a producer thread and a consumer thread that
+communicate through a 4-element buffered channel:
+\begin{verbatim}
+  #include <u.h>
+  #include <libc.h>
+  #include <thread.h>
+
+  enum { Nmsg = 5 };
+
+  static void
+  producer(void *arg)
+  {
+      Channel *c = arg;
+      int i;
+
+      for(i = 1; i <= Nmsg; i++){
+          print("producer: sending %d\n", i);
+          send(c, &i);
+      }
+      chanclose(c);
+      threadexits(nil);
+  }
+
+  static void
+  consumer(void *arg)
+  {
+      Channel *c = arg;
+      int v;
+
+      while(recv(c, &v) > 0)
+          print("consumer: got %d\n", v);
+      threadexits(nil);
+  }
+
+  void
+  threadmain(int argc, char *argv[])
+  {
+      Channel *c;
+
+      c = chancreate(sizeof(int), 4);
+      threadcreate(producer, c, 8192);
+      threadcreate(consumer, c, 8192);
+      threadexits(nil);
+  }
+\end{verbatim}
+%
+Notice that [[main]] does not exist---[[libthread]] replaces
+it with [[threadmain]] (we will see how in the
+[[libthread/main.c]] section). The runtime starts a single
+proc, runs [[threadmain]] inside it, and only when
+[[threadmain]] returns does the proc tear down. The two
+[[threadcreate]] calls do {\em not} create OS processes;
+they create coroutines that share the proc's address space
+and run cooperatively. Because both threads live in the
+same proc, accessing the channel does not need any
+explicit lock---only [[chanlock]] inside the library.
+
+%claude:
+Here is the rough sequence of events when this program
+runs. Each box is a scheduler step; the arrows show which
+thread is running and what it is doing:
+\begin{verbatim}
+  threadmain         producer           consumer       channel c
+  ----------         --------           --------       ---------
+  chancreate(int,4) ---------------------------------> [_,_,_,_]
+  threadcreate(producer)
+  threadcreate(consumer)
+  threadexits ----.
+                  |
+                  v
+                  send 1                                [1,_,_,_]
+                  send 2                                [1,2,_,_]
+                  send 3                                [1,2,3,_]
+                  send 4                                [1,2,3,4]
+                  send 5 (full, block)
+                                       recv -> 1        [2,3,4,_]
+                                       recv -> 2        [3,4,_,_]
+                  send 5 (wakes)                        [3,4,5,_]
+                  chanclose(c)         recv -> 3        [4,5,_,_]
+                                       recv -> 4        [5,_,_,_]
+                                       recv -> 5        [_,_,_,_]
+                                       recv -> 0 (closed)
+                                       threadexits
+\end{verbatim}
+%
+The block-on-full and block-on-empty cases are exactly
+where [[libthread]]'s scheduler kicks in: the blocked
+thread does a [[longjmp]] back to the proc's scheduler
+context, which then picks the next ready thread. With one
+proc and two threads, the scheduling is trivial---there is
+always at most one ready thread at any moment, and the
+``switch'' is just a [[setjmp]]/[[longjmp]] pair. With
+multiple procs (using [[proccreate]] instead), real OS
+parallelism kicks in and the [[chanlock]] starts to matter.
 
 \section{Core data structures}
 
@@ -20579,6 +21119,62 @@ equivalent: [[announce("tcp!*!echo", dir)]] to listen,
 [[socket]], [[bind]], [[setsockopt]], or [[sockaddr_in]]---the
 file system abstraction handles all of that.
 
+%claude:
+The complete echo server fits in a few dozen lines:
+\begin{verbatim}
+  void
+  main(void)
+  {
+      char dir[40], ndir[40], buf[1024];
+      int actl, lctl, fd, n;
+
+      actl = announce("tcp!*!7", dir);
+      if(actl < 0)
+          sysfatal("announce: %r");
+      for(;;){
+          lctl = listen(dir, ndir);
+          if(lctl < 0)
+              sysfatal("listen: %r");
+          if(fork() == 0){
+              fd = accept(lctl, ndir);
+              if(fd >= 0){
+                  while((n = read(fd, buf, sizeof buf)) > 0)
+                      write(fd, buf, n);
+                  close(fd);
+              }
+              exits(nil);
+          }
+          close(lctl);
+      }
+  }
+\end{verbatim}
+%
+What [[announce]] really does is open
+\verb+/net/tcp/clone+, which causes the TCP device to
+allocate a fresh connection slot (say, [[/net/tcp/42]]),
+and write \verb+announce 7+ to its [[ctl]] file. After
+[[announce]] returns, the running namespace contains, among
+other things:
+\begin{verbatim}
+  /net/tcp/42/ctl       control file (fd = actl)
+  /net/tcp/42/listen    blocks until a client arrives
+  /net/tcp/42/local     "192.168.1.4!7"
+  /net/tcp/42/remote    (empty until connected)
+  /net/tcp/42/status    "Listen"
+\end{verbatim}
+%
+[[listen]] then opens [[/net/tcp/42/listen]] and blocks
+until a SYN arrives. When a client connects, the open
+returns a control fd for a {fresh} connection (say, slot
+43), and [[accept]] opens slot~43's [[data]] file---a
+plain bidirectional byte stream that we can [[read]] and
+[[write]] like any other file. The kernel TCP stack does
+the protocol work, but from the program's point of view it
+is just files. This is also why an SSL/TLS layer can be
+slid in by [[bind]]ing a TLS file server over [[/net]]:
+the echo server above continues to work without
+recompilation.
+
 \section{[[netmkaddr()]]}
 
 %claude:
@@ -21397,6 +21993,41 @@ current time using the appropriate measurement method
 subtracting it from the node's accumulator---the matching
 subtraction in [[_profout]] will yield the elapsed time.
 
+%claude:
+The subtract-on-entry/add-on-exit accounting deserves a
+walkthrough. Suppose [[p->time]] starts at zero, and we
+enter a function at cycle counter [[t1=100]] and leave at
+[[t2=140]]. [[_profin]] does \verb!p->time -= t1!, so
+[[p->time = -100]]. [[_profout]] does
+\verb!p->time += t2!, so [[p->time = -100 + 140 = 40]],
+the elapsed cycles. The same trick works recursively
+across nested calls---each level subtracts on entry and
+adds on exit, so the {self-time} of each function is
+its own subtract+add minus the children's. Equivalently,
+[[p->time]] always holds (sum of exit times so far) minus
+(sum of entry times so far); when the function is not
+currently on the stack these balance and give the
+cumulative inclusive time.
+\begin{verbatim}
+                         t=100        t=110         t=130      t=140
+  outer  enter outer ----.                                       ^---- exit outer
+                         |  -100                            +140 |
+                         v                                       |
+                            inner enter ---.       ----- exit inner
+                                            -110  +130
+                                              v       ^
+                                                ...
+
+  outer.time at end = -100 + 140 = 40   (40 cycles inclusive)
+  inner.time at end = -110 + 130 = 20   (20 cycles inclusive)
+\end{verbatim}
+%
+Note that the cleverness pays for itself only because the
+subtract and add are O(1) and can be inlined into the
+prologue/epilogue insertion that the linker is doing
+anyway---an additive accumulator avoids any per-function
+``start time'' field.
+
 % pragma profile turned off for those functins
 <<function [[_profin]]>>=
 // Called at every procedure entry when use 5l -p, see Linker.nw
@@ -21763,7 +22394,7 @@ user space and the kernel, parameterized by different
 backing functions. This pattern---one algorithm, multiple
 deployment contexts---appears in database buffer pools,
 GPU memory managers, and JVM heap allocators. Any system
--that manages a scarce resource in chunks faces the same
+that manages a scarce resource in chunks faces the same
 fragmentation and coalescing trade-offs.
 
 \item \emph{Channels instead of locks}: [[libthread]]'s
