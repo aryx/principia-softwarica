@@ -2382,6 +2382,36 @@ the same PC already appears in the chain. If so, it prints
 [[-r]] flag disables this compression, printing the full
 (potentially very long) recursive call graph.
 
+%claude:
+The [[pc]] parameter threads a stack-allocated linked list
+through the recursive calls---each frame of [<graph()>]
+adds one [<Pc>] record on its own C stack frame, so there
+is no heap allocation. Suppose [[main]] calls [[f]], and
+[[f]] recursively calls itself, which calls [[g]]. Walking
+into the nested [[f]] the chain looks like:
+\begin{verbatim}
+   C stack of graph()           pc argument seen at each level
+   --------------------------   ------------------------------
+   graph(main, pc=nil)          nil
+       graph(f, pc=&{main})           main -> nil
+           graph(f, pc=&{f,main})     f -> main -> nil
+               graph(g, ...)          <-- before descending, scan:
+                                          new prgm = f? YES -> print "...",
+                                          return (no recursion into inner f).
+\end{verbatim}
+%
+Two details are worth noticing. First, the list is built
+head-first: each frame prepends its own [[prgm]] with
+[[lpc.next = pc]], so the most recent caller is at the
+head and the root is at the tail. Second, the recursion
+check happens \emph{before} the descent but \emph{after}
+the current node is printed---so the first occurrence of
+a recursive function still shows up with its time; only
+the re-entry is suppressed. Without this trick, a tight
+recursive loop in the traced program would make [<graph()>]
+loop forever walking the tree path that encodes the same
+cycle many times.
+
 <<function [[graph]]>>=
 void
 graph(int ind, ulong i, Pc *pc)
@@ -3216,6 +3246,44 @@ The event ring buffer is fixed-size ([[Nevents=1024]]),
 so old events are overwritten when the buffer fills---which
 keeps [[trace]] bounded in memory regardless of how long it
 runs.
+
+%claude:
+The per-task [[events]] array is used as a circular buffer
+indexed modulo [[Nevents]]. [[nevents]] counts the total
+number of events ever stored (not the current occupancy),
+so the slot where the next event lands is
+[[events[nevents \% Nevents]]], and the oldest still-live
+event sits at [[events[(nevents - Nevents) \% Nevents]]]
+once the buffer has wrapped. Picture a 1024-slot ring for
+a busy task that has already received 1030 events:
+\begin{verbatim}
+  events[]  (Nevents = 1024 slots, arranged circularly)
+
+             slot 0     slot 5     slot 6        slot 1023
+              ...         |          |              ...
+              v           v          v               v
+           [1024]------[1029]------[1030?]--------[1023]
+              ^          ^            ^                ^
+              |          |            |                |
+        wrote "1024th"  "1029th"  next write        "1023rd"
+        over old [0]    over [5]  will overwrite      (still
+        (already        (already   slot 6 when        alive,
+         overwritten)   overwritten)  nevents=1030)   oldest)
+
+  head = nevents % Nevents      = 6
+  tail = (nevents - Nevents) % Nevents = 7
+\end{verbatim}
+%
+This is the same flight-recorder discipline Linux's
+[[perf_event]] and ftrace use, but with the indirection
+stripped out: there is no separate head/tail pair, no
+producer/consumer synchronization, and no reader catching
+up. The drawing code simply iterates the most recent
+[[min(nevents, Nevents)]] slots in reverse when redrawing
+the timeline, and accepts that anything older than
+[[Nevents]] events ago is gone forever---which is fine
+for a visualization tool because screen pixels run out
+long before 1024 events do.
 
 <<struct [[Task]]>>=
 struct Task {
@@ -4107,6 +4175,40 @@ function-pointer approach means [[stats]] can support arbitrary
 metrics without a giant switch statement---the metric type is
 encoded in which functions a [[Graph]] points to.
 
+%claude:
+The [[data]] array inside [<Graph>] is a sliding window
+of samples sized to the graph's pixel width: [[ndata]]
+equals the width of [[r]] in pixels, so each stored sample
+maps directly to one column on screen. On every tick,
+[[stats]] shifts the window left by one (dropping the
+oldest sample) and appends the new reading at the right
+edge, producing the classic right-to-left scrolling
+behavior you see in [[top]], Task Manager's CPU graph,
+Activity Monitor, and [[htop]]:
+\begin{verbatim}
+  tick N:
+    data[]:  [s0 | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 ]
+              |                                          ^
+              |                                          |
+          oldest (left edge of graph)        newest (right edge)
+
+  tick N+1 (shift left, append fresh sample s9):
+    data[]:  [s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 ]
+                                                        ^
+                                                      appended
+\end{verbatim}
+%
+Because [[ndata]] is tied to pixel width rather than
+wall-clock time, resizing the window transparently
+re-allocates [[data]] and changes how much history is
+visible without changing the sampling rate. The rolling
+maximum used to scale the Y axis is recomputed on each
+tick from whatever values are still in the window---so
+old spikes eventually scroll off the left edge and let
+the Y axis recover to a tighter scale, whereas a static
+high-water mark would leave the graph permanently
+compressed after a single burst.
+
 <<constant [[MAXNUM]]>>=
 // a GUI system monitoring tool
 
@@ -4618,6 +4720,95 @@ into the target's namespace and [[exec]] the program.
 This is the same move that makes \plan's [[rio]] a window
 system, [[import]] a remote-mount, and [[fuse2p]] a FUSE
 bridge: structural interposition replaces ad-hoc hooks.
+
+%claude:
+Concretely, [[iostats ls /tmp]] reshapes the target's
+namespace in one [[bind]]. Before the child [[exec]]s,
+its mount table looks like the leftmost diagram; after
+the interposition [[bind]], it looks like the rightmost:
+\begin{verbatim}
+   Before iostats:                      After `iostats ls /tmp':
+
+    child process                        child process
+        |                                    |
+        | fd = open("/tmp/x")                | fd = open("/tmp/x")
+        v                                    v
+   +---------------+                    +----------------+
+   | kernel 9P mux |                    |  kernel 9P mux |
+   +-------+-------+                    +--------+-------+
+           |                                     |
+           v                                     v
+   +---------------+                    +----------------+
+   |  real server  |                    | iostats server | <-- counts,
+   |  (kfs/fossil) |                    |  (user proc)   |     times,
+   +---------------+                    +-------+--------+     per-fid
+                                                |              stats
+                                                v
+                                        +----------------+
+                                        |  real server   |
+                                        |  (kfs/fossil)  |
+                                        +----------------+
+\end{verbatim}
+%
+Every [[Tread]], [[Twrite]], [[Topen]] issued by the
+child now traverses the [[iostats]] process, which logs
+it into a [[Rpc]] slot (one per 9P message type) and a
+[[Fid]] entry (one per open file descriptor), forwards
+the message verbatim to the real server, copies the reply
+back, and updates the byte and latency counters. The
+child cannot tell the difference because the wire protocol
+is unchanged---[[iostats]] speaks the same 9P on both
+sides, like an HTTP reverse proxy that just happens to
+count requests. When the child exits, the post-mortem
+report walks [[stats->rpc[]]] and the [[File]] tree (built
+from the observed [[Twalk]] messages, not a real directory
+listing) and prints both per-message-type totals and
+per-file byte counts.
+
+%claude:
+The two accounting tables behind the report are worth
+seeing side by side. [[Stats.rpc[]]] is indexed by 9P
+message type---one slot per [[T]]-message---and records
+call count, cumulative time, min/max latency, and total
+bytes in and out. [[fhash[]]] is a small closed-chain
+hash table (size [[FHASHSIZE=64]]) indexed by fid number,
+holding per-open-file [<Fid>] records that in turn point
+into the [<File>] tree built from observed [[Twalk]]s:
+\begin{verbatim}
+   stats->rpc[]                        fhash[]  (FHASHSIZE=64)
+   (one slot per 9P T-message)
+
+     index    name      count  time    slot  chain (fid % 64)
+     -----    ----      -----  ----    ----  ----------------
+     Tversion "version"   1     3us    [0]-> Fid{0}--Fid{64}--nil
+     Tattach  "attach"    1    12us    [1]-> nil
+     Twalk    "walk"     47   830us    [2]-> Fid{2}--Fid{66}--nil
+     Topen    "open"     12   210us    [3]-> nil
+     Tread    "read"    128    41ms    ...
+     Twrite   "write"    33     8ms    [n]-> Fid{n}-----+
+     Tclunk   "clunk"    12    40us                     |
+     ...                                                v
+                                                  File{"/tmp/x",
+                                                       qid, parent ->
+                                                       File{"/tmp",
+                                                            parent -> root}}
+\end{verbatim}
+%
+The two tables are orthogonal: [[Stats.rpc[]]] answers
+``how often and how slow is each 9P message type?'' while
+the [[fhash]]/[<File>] structure answers ``which files
+received how many bytes?'' Because fids are reused across
+the lifetime of a connection---[[Tclunk]] frees the
+[<Fid>] entry and the number can be reassigned---the
+per-file byte totals live in [<File>] (keyed by
+[[qid.path]]) rather than in [<Fid>], so a short-lived
+open on the same file gets its bytes added to the same
+[<File>] node. This matches the design of every
+filesystem monitor (Linux's [[iotop]], macOS's [[fs_usage]],
+Windows procmon): message-type histograms tell you
+\emph{what} is slow, per-path counters tell you
+\emph{where}, and you need both to distinguish a hot file
+from a hot syscall.
 
 %******************************************************************************
 \chapter{Conclusion}

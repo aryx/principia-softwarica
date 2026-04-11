@@ -2793,6 +2793,28 @@ may have been given in the wrong order---useful after interactive
 operations like rubber-band selection where the user can drag in
 any direction.
 
+%claude:
+I find it easier to see the half-open convention on a tiny
+$3 \times 2$ rectangle than to argue about it in words. Screen
+coordinates grow to the right and {\em down} (unlike math paper),
+and the pixels actually painted are the ones marked \verb+#+:
+\begin{verbatim}
+       x=2 3 4 5
+      +---------+
+  y=1 | # # #   |      r.min = (2,1)   included
+      | # # #   |      r.max = (5,3)   excluded (first row/col outside)
+      +---------+
+                       Dx = 5-2 = 3    width
+                       Dy = 3-1 = 2    height
+\end{verbatim}
+So [[Rect(2,1, 5,3)]] paints exactly $3 \times 2 = 6$ pixels,
+and the neighbouring rectangle [[Rect(5,1, 8,3)]] touches this
+one edge-to-edge with no overlap and no gap. This is why
+[<ptinrect()>] uses strict \verb+<+ against [[max]] but \verb+>=+
+against [[min]]: [[max]] is the first point {\em outside}. The
+same ``size encoded in [[max]]'' trick is what lets [[Dx]] and
+[[Dy]] be a single subtraction instead of [[max-min+1]].
+
 <<struct [[Rectangle]]>>=
 struct Rectangle
 {
@@ -3599,6 +3621,31 @@ that owns it (see [[memimagemove]]).
 The [[ref]] count tracks how many [[Memimage]]s share this
 buffer---the screen's [[Memdata]] may be referenced by
 dozens of window images simultaneously.
+
+%claude:
+Here is the two-level indirection in memory, with the pool
+allocation at the bottom and the per-[[Memimage]] view at the
+top. I draw the pixel words below the header so that when
+[[zero]] is added to [[bdata]], I land on pixel $(0,0)$ even
+when the image's rectangle does not start at the origin:
+\begin{verbatim}
+    Memdata                image pool
+    +---------+            +----------------------+
+    | base  --|----------> | back-ptr to Memdata  |  <- base
+    | bdata --|--+         +----------------------+
+    | ref     |  |         | callerpc (debug)     |
+    +---------+  |         +----------------------+
+                 +-------> | pixel word 0         |  <- bdata
+                           | pixel word 1         |
+                           |   ...                |
+                           | pixel at (0,0) here  |  <- bdata + zero
+                           |   ...                |
+                           +----------------------+
+\end{verbatim}
+When the pool compacts and moves the block, it reads the
+back-pointer word, finds the owning [[Memdata]], and patches
+[[base]] and [[bdata]] in one place---every sharer sees the
+new address through its single [[data]] pointer.
 
 <<struct [[Memdata]]>>=
 /*
@@ -6533,6 +6580,31 @@ little-endian order. [[BPLONG]] and [[BPSHORT]] write values;
 reserves space in the display's command buffer, flushing it
 to the kernel via [[doflush]] (a [[write]] to [[/dev/draw/x/data]])
 when the buffer is full.
+
+%claude:
+Each command is a variable-length frame starting with a
+single letter opcode followed by fixed-layout operand bytes.
+There is no length prefix: the opcode alone determines the
+frame size, and [<drawmesg()>] advances a byte cursor by that
+amount after dispatch. For example, the \verb+'L'+ (line)
+command packs into 45 bytes:
+\begin{verbatim}
+  offset: 0    1           5           13          21   25   29
+          +----+-----------+-----------+-----------+----+----+----+
+  bytes:  | 'L'| dstid[4]  | p0[2*4]   | p1[2*4]   |e0  |e1  |rad |
+          +----+-----------+-----------+-----------+----+----+----+
+          33          37          45
+          +-----------+-----------+
+          | srcid[4]  | sp[2*4]   |
+          +-----------+-----------+
+\end{verbatim}
+All multi-byte fields are stored little-endian regardless of
+host byte order---this matters because [[/dev/draw/x/data]]
+could be imported via 9P from a machine with the opposite
+endianness. The compactness (one byte of dispatch, no length,
+no padding) is why the whole protocol stays around 20 opcodes
+and a few thousand lines of kernel code, compared with X11's
+hundreds of request types and their generated stub tables.
 
 % G = Get, P = Put
 % B = Binary? Bytes? Buffer?
@@ -12538,6 +12610,37 @@ struct	Subfont
 % remember though that Image is just an id. Actual data is in kernel.
 
 % n+1 so can have width of last char
+
+%claude:
+Here is how a three-character subfont \verb+"Hi!"+ is laid out
+inside a single wide [[bits]] image, plus the parallel
+[[info]] array of four [[Fontchar]] entries (one sentinel at
+the end so we can always compute the last glyph's width with
+[[info[c+1].x - info[c].x]]):
+\begin{verbatim}
+  Subfont.bits       x=0   5      8 9
+                     +-----+------+-+-+
+              y=0    | . H .| . i .| |.|
+                     | .H H.| . i .| |.|
+                     | HHHH.| . i .| |.|
+                     | .H H.| . i .| | |
+              y=4    | . H .| . . .| |.|
+                     +-----+------+-+-+
+                      glyph 'H'  'i'  '!'
+
+  info[0] = { x=0, top=0, bottom=5, left=0, width=5 }   // 'H'
+  info[1] = { x=5, top=0, bottom=5, left=0, width=3 }   // 'i'
+  info[2] = { x=8, top=0, bottom=5, left=0, width=2 }   // '!'
+  info[3] = { x=9, ... }                                // sentinel
+\end{verbatim}
+[[info[c].x]] and [[info[c+1].x]] bracket the source column
+range in [[bits]], [[top]]/[[bottom]] trim the empty scanlines
+so that tall characters like H and short ones like a lowercase
+i can share the strip, and [[width]] is the cursor advance to
+the next character---it can differ from [[info[c+1].x-info[c].x]]
+for kerning or for glyphs with padding built into the strip.
+The [[left]] field lets a glyph overhang the cursor to the left,
+which is how italic shapes hang over the previous letter.
 
 <<struct [[Fontchar]]>>=
 struct	Fontchar
@@ -20247,6 +20350,34 @@ Image       *next;  /* next in list of windows */
 
 % double linked list of windows.
 
+%claude:
+The layer stack is a doubly linked list threaded through the
+[[Memlayer]] structures themselves, with the [[Memscreen]] holding
+the two endpoints. [[frontmost]] is the topmost window (the one
+the user sees uncovered), [[rearmost]] is the one furthest behind,
+and each layer points to its neighbour in both directions:
+\begin{verbatim}
+  Memscreen
+    +-----------+
+    | frontmost |--+
+    | rearmost -|--|-------------------+
+    +-----------+  |                   |
+                   v                   v
+                 +--------+  rear   +--------+  rear   +--------+
+                 | Layer A| ------> | Layer B| ------> | Layer C|
+                 | (top)  | <------ |        | <------ | (bot)  |
+                 +--------+  front  +--------+  front  +--------+
+                    nil<-front                rear->nil
+\end{verbatim}
+Front-to-back order matters because hiding a window needs to
+copy away the pixels that {\em would} have been visible, which
+means walking from the window outward toward [[frontmost]] to
+subtract everything stacked above it. Exposing is symmetric in
+the other direction. The list lives inside the layers rather
+than in a separate array so that when [[rio]] raises a window,
+all it has to do is splice four pointers---there is no O(n)
+index shuffle and no allocation.
+
 <<[[Memscreen]] stack windows fields>>=
 // list<ref<Memimage>> (next = Memimage.layer->rear)
 Memimage	*frontmost;	/* frontmost layer on screen */
@@ -21669,6 +21800,34 @@ back, clipping against each layer in front to find the
 actually-visible portions, and copies those pixels from the
 screen to [[save]]. This is the ``save'' half of the
 backing-store mechanism.
+
+%claude:
+Consider window B about to be hidden under window A, which
+partially covers it. The actually-visible region of B is not
+a rectangle---it is a rectangle minus the intersection with A,
+which in general decomposes into up to four sub-rectangles.
+Only those pixels are on the screen at the moment of hiding;
+the rest are already in A's save area (or will be re-painted
+by refresh) so copying them would be wrong:
+\begin{verbatim}
+         +------------------+                +---+------------+
+         |       A          |                |   |    A       |
+         |  +---------------+------+         |   +------------+
+         |  |///////////////|      |         |   |XX| visible |
+         +--|---------------+      |   ==>   +---+--+---------+
+            |     B                |             |    B      |
+            |                      |             |           |
+            +----------------------+             +-----------+
+           /// = covered by A (skip)             XX, visible = copy to B.save
+\end{verbatim}
+[[_memlayerop]] is the generic walker that decomposes the
+input rectangle into such pieces. It traverses the stack from
+[[frontmost]] back to the target layer, subtracting each
+higher layer's rectangle, and invokes the callback
+([[lhideop]] here, [[lexposeop]] for the inverse operation)
+on every remaining fragment together with the flag [[insave]]
+that says whether the current fragment already lives in some
+other layer's backing store rather than on the screen.
 
 % rectangle in screen coordinate!
 <<function [[memlhide]]>>=

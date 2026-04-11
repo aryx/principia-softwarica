@@ -1379,6 +1379,43 @@ file system: each process is represented as a directory
 [[/proc/<pid>/]] containing files that expose process state
 and accept control messages.
 
+%claude:
+Before looking at each file individually, here is the map of
+the [[/proc/<pid>/]] directory from the debugger's point of
+view---which files are control channels (write to command the
+target), which are data channels (read for state), and which
+are mixed:
+\begin{verbatim}
+    /proc/<pid>/
+    +----- ctl        W    commands: hang, start, stop,
+    |                      waitstop, startstop, startsyscall
+    +----- status     R    name, state, user, wait chan
+    +----- mem        R/W  entire address space: text, data,
+    |                      bss, heap, stack (seek = vaddr)
+    +----- text       R    on-disk a.out (symbols, line table,
+    |                      SP-PC table; text+data segments)
+    +----- regs       R/W  general-purpose regs + PC + SP
+    +----- fpregs     R/W  floating-point regs
+    +----- segment    R    list of mapped segments (text,
+    |                      data, bss, stack, heap, shared)
+    +----- note       R/W  pending and posted notes (signals)
+    +----- fd         R    open file descriptors
+    +----- syscall    R    system call trace (used by ratrace)
+    +----- proc       R    per-thread info
+    +----- ns         R    namespace (mount table)
+    +----- kregs      R    kernel-mode saved registers
+\end{verbatim}
+%
+Roughly, [[ctl]] is how the debugger \emph{drives} the target
+(one syscall per command, the kernel interprets the text), and
+all the other files are how it \emph{observes} it. The split
+is deliberate: there is no single \verb+ptrace()+-like fat
+syscall with a request enum; there is a small vocabulary of
+control words that any shell script or [[acid]] function can
+[[echo]] into [[ctl]], plus a handful of regular files you
+[[read]] and [[seek]] through. Each section below walks
+through one of these files.
+
 \section{Process control: [[/proc/<pid>/ctl]]}
 
 % useful for ratrace too.
@@ -3571,6 +3608,47 @@ Type*	lt;
 \subsection{Hash table: [[hash]]}
 
 %claude:
+Concretely, after loading a target and defining a couple of
+user variables, the [[hash[]]] array looks like this (with
+[[Hashsize]]~=~128 buckets, separate chaining via the
+[[Lsym.hash]] field):
+\begin{verbatim}
+   hash[]                 buckets (linked via Lsym.hash)
+   +-------+
+   |   0   |---> nil
+   +-------+
+   |   1   |---> Lsym{"while", lexval=Twhile} -> nil
+   +-------+       (keyword, installed by kinit)
+   |  ...  |
+   +-------+
+   |  17   |---> Lsym{"main", lexval=Tid,     -> Lsym{"x", lexval=Tid,
+   +-------+           v=Value{TINT, 0x1020}}        v=Value{TINT, 42}} -> nil
+   |  ...  |     (target symbol from varsym)  (user var, from enter)
+   +-------+
+   |  42   |---> Lsym{"bpset", lexval=Tid,    -> nil
+   +-------+           proc=Node{OCALL...}, builtin=bpset_c}
+   |  ...  |     (function, both a user-defined proc AND a C builtin)
+   +-------+
+   |  127  |---> nil
+   +-------+
+\end{verbatim}
+%
+Three things are worth noting from this picture. First, the
+same bucket holds entries of very different kinds: keywords,
+target symbols, user variables, functions---they all share
+one flat namespace because [[acid]] is an untyped interpreter
+and [[lexval]] is how the lexer decides whether a name tokenises
+as [[Tid]] or as a reserved keyword. Second, a single [[Lsym]]
+can have \emph{both} a [[proc]] AST and a [[builtin]] pointer,
+and at call time the interpreter prefers the user's [[proc]]---this
+is how [[/lib/acid/port.acid]] overrides the built-in
+[[bpset]] with its own library implementation while keeping
+the C version reachable. Third, because the scope of a name
+is always the whole table, there is no lexical scoping at the
+hash-table level; function locals get their separate stack
+mechanism described later.
+
+%claude:
 The hash table uses a simple multiplicative hash
 ([[h = h*3 + *p]]) with separate chaining. [<look()>]
 searches for an existing entry; [<enter()>] creates a
@@ -5761,6 +5839,55 @@ when that file is exhausted, it pops back to the previous source.
 % diff with cpp: no macro, just include, so simpler
 
 \subsection{Input source stack: [[IOstack]]}
+
+%claude:
+The stack is a plain singly-linked list rooted at the global
+[[lexio]], with each frame remembering the line number at
+which it was suspended so that an error inside a nested include
+can still report the right location in the outer file. After
+[[acid]]'s startup has loaded the port library, the architecture
+file, and the user's [[~/lib/acid]], and the user is typing at
+the REPL prompt, [[lexio]] looks like:
+\begin{verbatim}
+   lexio                                                   (top of stack)
+    |
+    v
+   +----------------------------+
+   | IOstack                    |
+   |   name = "<stdin>"         |     <-- current input
+   |   fin  = Biobuf(/fd/0)     |         (yylex reads here)
+   |   line = 5                 |
+   |   prev -+                  |
+   +---------|------------------+
+             v
+   +----------------------------+
+   | IOstack                    |
+   |   name = "~/lib/acid"      |     <-- userinit file
+   |   fin  = Biobuf(a.out)     |         (was reading at line 12
+   |   line = 12                |         when it finished and was
+   |   prev -+                  |         NOT yet popped in this pic)
+   +---------|------------------+
+             v
+   +----------------------------+
+   | IOstack                    |
+   |   name = "/lib/acid/port"  |
+   |   fin  = Biobuf(...)       |
+   |   line = 47                |
+   |   prev -> nil              |     <-- bottom (initial push)
+   +----------------------------+
+\end{verbatim}
+%
+[<pushfile()>] allocates a new frame, stashes the current
+global [[line]] into the \emph{old} top's [[line]] field, and
+makes its own frame the new top. [<popio()>] reverses that:
+close the [[Biobuf]], restore [[line]] from the frame it is
+about to discard, and point [[lexio]] at [[prev]]. Because
+all the state the lexer needs---the [[Biobuf]], the filename
+for error messages, the line counter---lives in one struct,
+the lexer itself ([<yylex()>]) does not need to know about
+includes at all: it reads a character through [<lexc()>], and
+whenever the current [[fin]] hits EOF the pop happens
+transparently underneath.
 
 <<struct [[IOstack]]>>=
 struct IOstack
@@ -9051,6 +9178,45 @@ state---which addresses currently have breakpoints---lives in
 the global [[acid]] list [[bplist]], which the user can also
 inspect or manipulate directly.
 
+%claude:
+Conceptually, the bookkeeping a traditional debugger stores in
+a C-level ``breakpoint table'' is kept here in two places: the
+active breakpoint instruction lives {in the target's own
+memory} (patched over the original via [[/proc/<pid>/mem]]),
+and the list of patched addresses lives in [[acid]]'s
+[[bplist]]. The ``saved original instruction'' column that a
+[[gdb]]-style debugger would store in RAM is, in [[acid]],
+looked up on demand from [[symmap]] via the [[@addr]] operator
+(read through the on-disk text) whenever the breakpoint is
+removed:
+\begin{verbatim}
+    bplist (acid list)          target memory          a.out file
+                                (via /proc/<pid>/mem)  (via symmap)
+    list {                      +------------------+   +-----------+
+      0x1038,   ------------->  | 0x1038: <bpinst> |   |  0x1038:  |
+      0x1054,   -----.          | 0x103C: ...      |   |    ADD    |
+      0x10A0    --.  |          |                  |   |    SUB    |
+    }            |  '-------->  | 0x1054: <bpinst> |   |  0x1054:  |
+                 |              | 0x1058: ...      |   |    MOV    |
+                 |              |                  |   |    MUL    |
+                 '---------->   | 0x10A0: <bpinst> |   |  0x10A0:  |
+                                | 0x10A4: ...      |   |    STR    |
+                                +------------------+   +-----------+
+                                    (live text)        (original text,
+                                                        immutable)
+\end{verbatim}
+%
+So [[bpdel(addr)]]'s [[*addr = @addr]] idiom reads right:
+``write to the live process (`*`) the byte that the on-disk
+file (`@`) has at the same address''---exactly what is needed
+to restore the original instruction, and the reason the
+[[symmap]]/[[cormap]] split exists in the first place. No
+separate saved-instruction column is needed because the
+on-disk text is treated as an immutable reference copy.
+Keeping [[bplist]] as a plain [[acid]] list means the user
+can [[print bplist]] at any prompt to see what is patched,
+or script batch operations over it with [[head]]/[[tail]].
+
 \subsection{Setting a breakpoint: [[bpset(<func>)]]}
 
 %claude:
@@ -9230,6 +9396,59 @@ Node*	prnt;
 % like foo:x or foo:x\d
 
 \subsection{Stack trace: [[stk()]]}
+
+%claude:
+The [[stk()]] command builds its output by walking the chain
+of call frames down from the current PC/SP. The heavy lifting
+is delegated to the [[strace]] builtin, which returns an
+[[acid]] list of 4-element frame records; [<_stk()>] just
+iterates over that list, printing one line per frame and
+updating [[pc]] to the caller's return address. Each frame
+record has this shape:
+\begin{verbatim}
+    frame = { fnpc, retpc, params, locals }
+             |     |      |        |
+             |     |      |        +-- list { {name,addr}, ... }
+             |     |      +---------- list { {name,val},  ... }
+             |     +----------------- return PC into caller
+             +----------------------- entry PC of current fn
+\end{verbatim}
+%
+Visually, a three-deep stack trace for a crash in [[baz()]]
+called from [[bar()]] called from [[main()]] looks like:
+\begin{verbatim}
+                                    stk = strace(*PC,*SP,*R14)
+                                    |
+    high address                    |
+    +---------------------+  <---- SP at entry to main
+    | main frame          |         |
+    |   .frame size       |         v
+    |   params, locals    |    frame[0]: {main,  start_addr, params, locals}
+    +---------------------+         |   ^
+    | saved R14 (ret PC) -|---------|---'  = frame[1] of caller below
+    +---------------------+         |
+    | bar frame           |         v
+    |   ...               |    frame[1]: {bar,   retpc_in_main, ...}
+    +---------------------+         |
+    | saved R14           |---.     v
+    +---------------------+   |
+    | baz frame           |   |     v
+    |   ...               |   '---> frame[2]: {baz,   retpc_in_bar, ...}
+    +---------------------+
+    | current *SP         |  <---- walk starts here
+    low address
+\end{verbatim}
+%
+At each iteration [[_stk()]] pulls the head frame, prints
+[[fnpc(params)+offset file:line]] (offset~=~[[pc - frame[0]]]),
+optionally dumps the [[locals]] list, and then sets [[pc~=~frame[1]]]
+so the next iteration's line number resolves inside the caller's
+body rather than at the call site. [[stkignore]] is a cosmetic
+layer on top: when a run of leading frames lives in files
+matching ignored regular expressions (typically runtime glue
+or system-call wrappers), only the last one of that run is
+printed, so the user sees their own frames without the
+bookkeeping noise.
 
 <<function [[stk]](arm)>>=
 defn stk()                              // trace

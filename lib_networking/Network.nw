@@ -1499,6 +1499,25 @@ issues---the network byte order is always big-endian, and
 using raw bytes with explicit accessor macros ([[nhgets]],
 [[hnputs]], etc.) keeps the code portable.
 
+%claude:
+Here is the wire layout of the fixed 20-byte IPv4 header as
+traversed left-to-right by [[bp->rp]] when a packet arrives:
+\begin{verbatim}
+ off:  0     1     2     4     6     8     9    10    12         16         20
+       +-----+-----+-----+-----+-----+-----+-----+-----+----------+----------+
+       |vihl | tos |length| id  |frag | ttl |proto|cksum|  src IP  |  dst IP  |
+       +-----+-----+-----+-----+-----+-----+-----+-----+----------+----------+
+        4+4b   1B    2B    2B    2B    1B    1B    2B      4B         4B
+        ^^^^
+        ver | ihl (header length in 32-bit words, normally 5 -> 20 bytes)
+\end{verbatim}
+Two subtleties worth noting. First, [[vihl]] packs version
+(upper nibble) and header length in 32-bit words (lower nibble);
+[[BLKIPVER]] masks \verb+0xF0+ to get the version without a shift.
+Second, the field order is frozen by RFC 791, not by us---the
+comment warning below ``Do not change the order here!'' is there
+because any reordering silently corrupts every packet on the wire.
+
 <<struct [[Ip4hdr]]>>=
 /* on the wire packet header */
 struct Ip4hdr
@@ -2922,6 +2941,34 @@ address-range comparisons: left for ranges entirely below,
 right for ranges entirely above, and mid for overlapping
 ranges (more specific routes). This structure supports
 longest-prefix matching efficiently.
+
+%claude:
+Pictorially, [[Fs.v4root]] is a fan-out array of 1024 tree roots,
+each pointing to a ternary-tree of [[Route]] nodes:
+\begin{verbatim}
+ Fs.v4root[]       (each Route holds V4route {address, endaddress, gate})
+ +--------+
+ |   0    |---> nil
+ +--------+
+ |   1    |---> [10.0.0.0 .. 10.0.0.255 -> ether0]
+ +--------+        |   \
+ |  ...   |      left  mid---> [10.0.0.42 .. 10.0.0.42 -> ppp0]  (more specific)
+ +--------+        |   \
+ | V4H(ip)|---> [ range containing ip ]
+ +--------+        /   \
+ | ...    |     left  right
+ +--------+
+ | 1023   |---> ...
+ +--------+
+\end{verbatim}
+The [[mid]] pointer is what makes this a \emph{ternary} tree rather
+than a binary one: when a new range sits strictly inside an existing
+range (e.g.\ a /32 host route inside a /24 subnet route), it hangs
+off [[mid]]. [[v4lookup]] descends [[mid]] as long as the address
+fits, so it naturally returns the most specific match---no separate
+longest-prefix-match pass is needed. Compared to Linux's FIB\_TRIE
+(a patricia trie with path compression) or BSD's original radix
+tree, \plan's forest is cruder but short and debuggable.
 
 <<[[Fs(kernel)]] routing fields>>=
 // hash<ip, ref<Route>> where hash function is V4H
@@ -6038,6 +6085,23 @@ myetheraddr(uchar *to, char *dev)
 An Ethernet frame header is 14 bytes: destination MAC ([[d]]),
 source MAC ([[s]]), and a 2-byte type field ([[t]]) identifying
 the payload protocol (0x0800 for IPv4, 0x0806 for ARP).
+
+%claude:
+On the wire the 14-byte header is laid out as:
+\begin{verbatim}
+ offset  0              6              12  14
+         +--------------+--------------+----+------------------+
+         | dest MAC (6) | src MAC (6)  | t  | payload (<=1500) |
+         +--------------+--------------+----+------------------+
+                                       ^^^^
+                                       0x0800 = IPv4
+                                       0x0806 = ARP
+                                       0x86DD = IPv6
+\end{verbatim}
+I note that the [[t]] field does double duty on modern networks: values
+$\geq 1536$ are EtherType protocol IDs as here, while values $\leq 1500$
+are IEEE 802.3 length fields. \plan\ only speaks the DIX form, so
+[[Etherhdr.t]] is always a protocol ID.
 
 <<struct [[Etherhdr]]>>=
 struct Etherhdr
@@ -9269,6 +9333,22 @@ is laid out so that casting a [[Block]]'s read pointer to
 [[Udp4hdr*]] gives direct access to all fields without
 parsing.
 
+%claude:
+The full 28-byte pre-payload layout is:
+\begin{verbatim}
+   IP header (20 bytes)                         UDP header (8 bytes)
+ +---------------------------------------+   +---------------------------+
+ |vihl|tos|len|id|frag|ttl|udpproto|cksum|   |sport|dport|udplen|udpcksum|
+ | 0  | 1 | 2 | 4|  6 | 8 |   9    |  10 |   | 20  | 22  |  24  |   26   |
+ +---------------------------------------+---+---------------------------+
+       src IP @ 12         dst IP @ 16
+\end{verbatim}
+I find the UDP header delightfully small: just two ports, a length,
+and a checksum. The checksum is the only nontrivial part---it is
+computed over a ``pseudo-header'' that includes the IP source/dest
+and protocol bytes, which is why [[Udp4hdr]] keeps the IP fields
+inline as a single cast target rather than as a separate struct.
+
 <<struct [[Udp4hdr]]>>=
 struct Udp4hdr
 {
@@ -10701,6 +10781,39 @@ type that handles acks, data delivery, retransmission
 requests ([[Ilquery]]/[[Ildataquery]]), and close
 sequencing. [[ilsendctl]] sends control packets (sync,
 ack, close) without user data.
+
+%claude:
+The six-state machine dispatched by [[ilprocess]] is:
+\begin{verbatim}
+                    connect(c)                listen accept
+                        |                          |
+                        v                          v
+                +---------------+          +---------------+
+                |    Syncer     |          |    Syncee     |
+                +---------------+          +---------------+
+      rcv sync+ack |                            | rcv sync
+                   v                            v
+                  +------------------------------+
+                  |         Established          |<----+
+                  +------------------------------+     | data/ack
+                           |    ^                      |
+                     close |    |  rcv close           |
+                           v    |                      |
+                  +------------------------------+-----+
+                  |           Closing            |
+                  +------------------------------+
+                                 |
+                                 v
+                              Closed
+\end{verbatim}
+Compared to TCP's eleven states with its infamous
+[[TIME_WAIT]]/[[FIN_WAIT_1]]/[[FIN_WAIT_2]]/[[CLOSE_WAIT]]
+four-way close, IL collapses everything on either side of
+[[Ilestablished]] into symmetric [[Syncer]]/[[Syncee]] opens and
+a single [[Ilclosing]] state. The trade-off is that IL runs on
+IP (not on a bytestream abstraction), so it keeps datagram
+boundaries and avoids the half-close problem that forces TCP's
+asymmetry.
 
 % two-way handshake
 
@@ -13044,6 +13157,35 @@ length), copies the packet data from card memory to a kernel
 deliver it to the appropriate [[Netfile]]. The receive ring
 wraps at [[pstop]]: when [[nxtpkt]] reaches the end, it
 wraps back to [[pstart]].
+
+%claude:
+The on-card memory layout of the DP8390 is a page-granular ring
+(each page is 256 bytes, [[Dp8390BufSz]]):
+\begin{verbatim}
+ on-card memory (16KB typical)
+
+  page:    0x40     0x46                                    0x80
+           +--------+----------------------------------------+
+           |   TX   |             RX ring                    |
+           | (6 pg) |                                        |
+           +--------+----------------------------------------+
+           tstart    pstart                                  pstop
+                     ^              ^
+                     |              |
+                     nxtpkt         curr  (hw write pointer)
+                    (sw read ptr)   <--- read this page's 4-byte Hdr:
+                                         +------+-----+--------+
+                                         |status|next |len (2B)|
+                                         +------+-----+--------+
+\end{verbatim}
+The hardware advances [[curr]] on every received frame and writes
+a 4-byte header in front of the payload; software advances
+[[nxtpkt]] as it drains. The invariant [[nxtpkt != curr]] tells
+the driver whether more packets are waiting, and the [[next]]
+field inside each header is the page number of the following
+packet---so the driver never has to compute the length rounded
+up to a page boundary itself. Wraparound is handled in hardware:
+reaching [[pstop]] silently loops back to [[pstart]].
 
 <<function [[interrupt]]([[(kernel/network/386/ether8390.c)]])>>=
 static void

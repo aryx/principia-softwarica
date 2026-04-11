@@ -441,6 +441,34 @@ This generic structure is compact but means that many fields
 certain node kinds; the dumper [[prtree]] in the Debugging
 chapter is the best guide to which fields apply where.
 
+%claude:
+For instance, the expression \verb+1+2*3+ produces this tree
+(each box is one [[Node]], with its [[op]] and its [[left]]/[[right]]
+pointers; leaves hold their value in [[vconst]]):
+\begin{verbatim}
+              +---------+
+              |  OADD   |
+              +---------+
+             /           \
+            L             R
+           v               v
+     +---------+     +---------+
+     | OCONST  |     |  OMUL   |
+     | vconst=1|     +---------+
+     +---------+    /           \
+                   L             R
+                  v               v
+            +---------+     +---------+
+            | OCONST  |     | OCONST  |
+            | vconst=2|     | vconst=3|
+            +---------+     +---------+
+\end{verbatim}
+Every node has the same four mandatory fields ([[op]], [[left]],
+[[right]], [[lineno]]) plus a grab-bag of optional ones. A statement
+list reuses the same shape: [[OLIST]]'s [[left]] is the first
+statement, [[right]] is an [[OLIST]] for the rest --- a cons cell
+pretending to be a binary tree.
+
 <<enum [[node_kind]]>>=
 enum Node_kind
 {
@@ -692,6 +720,32 @@ components through these links. The basic scalar types
 ([[TCHAR]] through [[TUVLONG]], [[TFLOAT]], [[TDOUBLE]]) are
 pre-allocated at startup in the global [[types]] array and
 shared by reference.
+
+%claude:
+Concretely, the declaration \verb+struct Foo { int x; int y; }; struct Foo *p;+
+builds the following graph after parsing. I draw [[link]] as a
+vertical arrow and [[down]] as a horizontal one; shared leaves
+point at the global [[types]][] slots:
+\begin{verbatim}
+    p's type                 field chain
+   +---------+           +---------+   down   +---------+
+   |  TIND   |          >|TSTRUCT  |--------->|TSTRUCT  |
+   +---------+         / | sym=x   |          | sym=y   |
+        | link       /   +---------+          +---------+
+        v         /           | link              | link
+   +---------+  / link         v                   v
+   | TSTRUCT |<            +---------+         +---------+
+   | tag=Foo |             |  TINT   |         |  TINT   |
+   +---------+             +---------+         +---------+
+        | link             (shared, points into types[TINT])
+        v
+   [ first field ]
+\end{verbatim}
+Note that the struct tag [[Foo]] lives in [[Sym.suetag]], and
+the fields' names live in [[Type.sym]] --- two different uses of
+the symbol table glued onto two different levels of this graph.
+For [[TFUNC]] the same layout means [[link]] is the return type
+and [[down]] is the parameter list.
 
 <<enum [[type_kind]]>>=
 enum Type_kind
@@ -1546,6 +1600,37 @@ overwriting them. When the block ends ([[revertdcl]]), the stack
 is popped back to the [[DMARK]], restoring every shadowed symbol
 to its previous meaning.
 
+%claude:
+For a program like \verb+int x; void foo(int y) { int x; ... }+
+the [[dclstack]] looks like this while the compiler is inside
+[[foo]]'s body (top of stack on the left, [[link]] pointers
+run right-to-left):
+\begin{verbatim}
+  dclstack
+    |
+    v
+  +-------+   +-------+   +-------+   +-------+
+  | DAUTO |-->| DAUTO |-->| DMARK |-->| DMARK |-->D
+  | sym=x |   | sym=y |   | block=0|  | block=0|
+  | old:  |   | old:  |   | autoff|   | autoff|
+  |  type |   |  (S,  |   | =0    |   | =0    |
+  |  =int |   |  -,-) |   +-------+   +-------+
+  |  cls  |   +-------+       ^           ^
+  |  =Auto|   saved default   |           |
+  |  off=-4|  for new y       |           global scope mark
+  +-------+                   function body mark
+      ^
+      saved previous (global) x: class=Glob, type=int
+\end{verbatim}
+Each non-mark entry is the \emph{old} value of its symbol, not
+the new one --- the live meaning sits in the [[Sym]] itself and
+the stack is purely the undo log. [[revertdcl]] walks the stack
+to the next [[DMARK]] and copies each saved triple back into its
+[[Sym]], so the inner \verb+x+ evaporates and the outer global
+\verb+x+ springs back into view. The [[blockno]] in each
+[[DMARK]] is what lets duplicate-declaration diagnostics know
+whether a name was introduced in the current block or inherited.
+
 % the different "namespaces"
 <<enum [[dxxx]]>>=
 enum Namespace
@@ -1933,6 +2018,32 @@ instruction back to the C source line that generated it,
 which is essential for the debugger. This is the same [[Prog]]
 structure used by the assembler and linker (see
 \book{Assembler} and \book{Linker}).
+
+%claude:
+Compiling \verb+int f(void) { return 1+2; }+ produces a chain of
+[[Prog]] nodes along [[firstp]]/[[lastp]] that looks like this
+(recall Plan 9 assembly puts the destination last, so
+\verb+MOVW $3, R0+ moves the constant 3 into R0):
+\begin{verbatim}
+  firstp                                                  lastp
+    |                                                       |
+    v                                                       v
+  +---------+    +---------+    +---------+    +---------+
+  | ATEXT   |--->| MOVW    |--->| MOVW    |--->| RET      |-->P
+  | from:   |    | from:   |    | from:R0 |    |          |
+  |  sym=f  |    |  $3     |    | to:     |    |          |
+  | to:     |    | to:R0   |    |  8(FP)  |    |          |
+  |  $framesz|   |         |    |         |    |          |
+  +---------+    +---------+    +---------+    +---------+
+       ^
+       backpatched after gen() with stkoff + maxargsafe
+\end{verbatim}
+The list is built head-to-tail by [[nextpc]], which appends one
+[[Prog]] and bumps the global [[pc]]. Branches are encoded as
+forward [[Prog*]] pointers in [[to.offset]] (see [[patch]]),
+which keeps the list editable all the way through [[regopt]]
+and [[peep]] --- there are no numeric addresses to rewrite
+when an instruction is inserted or removed.
 
 <<struct [[Prog]](arm)>>=
 struct	Prog
@@ -14752,6 +14863,32 @@ and pre-incremented to 1 so they are never allocated for
 temporaries. [[regalloc]] finds the first free register,
 and [[regfree]] decrements the count.
 
+%claude:
+After [[ginit]] the reference-count array pins the ABI-mandated
+registers so that [[regalloc]] will simply skip over them:
+\begin{verbatim}
+   index  name      initial  role
+   -----  --------  -------  ---------------------------------
+   R0     REGARG    = 0      first arg / return value (alloc.)
+   R1                = 0      general (allocatable)
+   R2..R8            = 0      general (REGMIN..REGMAX)
+   R9                = 0      general
+   R10    REGEXT    = 0      external base (allocatable)
+   R11    REGTMP    = 1      reserved: gmove/gins scratch
+   R12    REGSB     = 1      reserved: static base
+   R13    REGSP     = 1      reserved: stack pointer
+   R14    REGLINK   = 1      reserved: link register (LR)
+   R15    REGPC     = 1      reserved: program counter
+\end{verbatim}
+The initial values are snapshot into [[resvreg]] so that
+[[gclean]] can, at the end of every function, assert that every
+count has returned to its baseline --- a cheap end-to-end check
+that no [[regalloc]]/[[regfree]] pair was forgotten in [[cgen]].
+Note that R0 plays two roles: it is the first-argument register
+([[REGARG]]) \emph{and} the return-value register ([[REGRET]]),
+which is why [[codgen]]'s [[REGARG]] prologue has to pre-allocate
+it when the function actually uses its first parameter.
+
 
 <<global [[reg]](arm)>>=
 // map<enum<registr>, int>
@@ -16160,10 +16297,38 @@ if(n->addable >= INDEXED) {
 \subsubsection{Parameters}
 
 %claude:
-Parameters are laid out in the stack frame at positive offsets
-from [[FP]]. [[autoffset]] is advanced by each parameter's
-aligned size via the two-phase [[align]] calls ([[Aarg1]] for
-the start, [[Aarg2]] for the end). The first parameter is
+Parameters live at \emph{positive} offsets from the frame pointer
+[[FP]] (which is a fiction of the assembler that the linker
+turns into an [[SP]]-relative address after the prologue), and
+locals live at \emph{negative} offsets, so both grow outward from
+the same anchor. For
+\verb+int f(int a, int b) { int x; int y; ... }+ the resulting
+frame looks like this (high addresses at the top, as memory
+naturally runs):
+\begin{verbatim}
+     high address
+   +-----------------+
+   |       b         |  8(FP)    CPARAM,  autoffset grows up
+   +-----------------+
+   |       a         |  4(FP)    CPARAM   (or REGARG in R0)
+   +-----------------+
+   |  return addr    |  0(FP)    saved LR, placed by TEXT
+   +-----------------+  <---- conceptual FP  (== entry SP)
+   |       x         | -4(SP)    CAUTO,   autoffset grows down
+   +-----------------+           stkoff tracks max
+   |       y         | -8(SP)    CAUTO
+   +-----------------+
+   |  arg build area |           for nested calls, sized by
+   |  (maxargsafe)   |           maxargsafe, added by codgen
+   +-----------------+  <---- runtime SP after prologue
+     low address
+\end{verbatim}
+The [[TEXT]] instruction's size operand initially holds just
+[[stkoff]] (locals); [[codgen]] adds [[maxargsafe]] at the very
+end once every nested call in the body has been seen. [[adecl]]
+assigns each parameter a positive offset and each local a
+negative one via the two-phase [[align]] calls ([[Aarg1]]/[[Aarg2]]
+for params, [[Aaut3]] for autos). The first parameter is
 tracked specially for the [[REGARG]] optimization.
 
 <<[[adecl()]] switch class cases>>=

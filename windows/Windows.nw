@@ -2742,6 +2742,32 @@ library's support for
 that overlap each other.
 [[rio]] allocates a [[Screen]] on top of [[view]] to serve as the
 ``desktop'': every window will be a layer on this desktop.
+%claude:
+The whole graphics stack that [[rio]] assembles at startup is a small
+three-level tree, which I find easier to picture before the window
+fields arrive:
+%
+\begin{verbatim}
+  view                      (/dev/winname, the physical framebuffer)
+   |
+   +-- background            (solid color, fills view)
+   |
+   +-- desktop : Screen      (overlapping-layers manager on top of view)
+        |
+        +-- windows[0]->i    (w0 Image, client draws here)
+        +-- windows[1]->i    (w1 Image, possibly overlapping w0)
+        +-- windows[2]->i    (w2 Image, topmost if w2->topped is max)
+        +-- ...
+\end{verbatim}
+%claude:
+[[view]] is the only thing that actually corresponds to framebuffer
+pixels; everything below it is a window-managed region whose
+repaints are serialized through [[desktop]]. When two windows
+overlap, libdraw's [[Screen]] takes care of clipping one against the
+other---so [[rio]]'s own code never needs an explicit clipping-region
+pass. This is the single biggest reason [[rio]]'s C is so short
+compared to an X11 window manager: the hard part of the job sits in
+\book{Graphics}, not here.
 
 <<global [[desktop]]>>=
 Screen	*desktop;
@@ -4534,6 +4560,45 @@ break;
 % moving??
 
 % important function
+%claude:
+The loop iterates over all windows, keeps only those whose [[screenr]]
+contains [[pt]], and picks the one with the largest [[topped]] counter.
+Because [[topped]] is bumped every time a window is raised
+([[w->topped = ++topped]]), the window most recently brought to the
+front wins. I find it helpful to trace a concrete case with three
+overlapping windows:
+%
+\begin{verbatim}
+  windows[] = { A, B, C }           topped counters
+                                    A.topped = 7
+  view (desktop)                    B.topped = 12
+  +------------------------------+  C.topped = 15  (most recent)
+  |   A         .                |
+  |   +---------+..              |
+  |   |         | B              |
+  |   |   +-----+-------+        |
+  |   +---|     |       |        |
+  |       |     |   C   |        |
+  |       |  +--+-------+----+   |
+  |       |  |  |       |    |   |
+  |       +--|  +-------+    |   |   click at pt
+  |          |       *       |   |   (* = pt)
+  |          +---------------+   |
+  +------------------------------+
+
+  wpointto(pt):
+    i=0 A: ptinrect? no          -> w = nil
+    i=1 B: ptinrect? no          -> w = nil
+    i=2 C: ptinrect? yes         -> w = C   (returned)
+\end{verbatim}
+%claude:
+If the click had landed in the small sliver where [[B]] and [[C]]
+overlap but not [[A]], both would pass [[ptinrect]] and the
+[[v->topped > w->topped]] tie-break would still pick [[C]] because
+[[15 > 12]]. The cost is linear in [[nwindow]], which is fine for a
+human-scale desktop but would hurt if [[rio]] managed thousands of
+layers---in that case, I would keep a sorted z-list instead and stop
+at the first hit.
 <<function [[wpointto]]>>=
 Window*
 wpointto(Point pt)
@@ -10443,6 +10508,37 @@ expected an action), but missing intermediate moves does not (only
 the final position matters). The [[counter]]/[[lastcounter]] pair
 tracks whether there is a new event: if they differ, the client gets
 the latest state on the next [[read]].
+%claude:
+The shape of the buffer is easier to see when drawn. Here is a
+window whose client has already consumed four mouse events and is
+about to read a fifth, with two more enqueued behind it:
+%
+\begin{verbatim}
+             ri=4                         wi=7
+              v                            v
+  queue[16]: +---+---+---+---+---+---+---+---+---+---+ ...
+             | . | . | . | . |Mv |Lk |Mv | _ | _ | _ |
+             +---+---+---+---+---+---+---+---+---+---+
+              0   1   2   3   4   5   6   7
+               (already read)  ^^^^^^^^^^^
+                                to deliver
+                                (Lk = left click, Mv = move)
+
+   counter     = 423   <- bumped by winctl on every enqueue
+   lastcounter = 419   <- snapshot client saw on previous read
+   -> counter != lastcounter: there is something new
+\end{verbatim}
+%claude:
+The 16-slot ring is tiny on purpose: if the client falls that far
+behind, [[qfull]] is set and further events are silently dropped
+until [[ri == wi]] again. Move events in particular are coalesced
+at the producer side---winctl overwrites the latest position instead
+of pushing it---so the 16 slots effectively hold up to 16 distinct
+click/release transitions, which is plenty even for a user
+double-clicking frantically. This is the exact opposite of keyboard
+events, where dropping a rune would swallow user input; there
+[[nraw]] is strictly append-and-consume (see the raw-keys queue
+later).
 
 <<struct [[Mouseinfo]]>>=
 struct Mouseinfo
@@ -10911,6 +11007,54 @@ The application calls [[getwindow()]] to remap the new window image.
 
 % actually abuse the mouse device for that, a big ugly.
 \l should have a /dev/resize, would be cleaner
+
+%claude:
+The full handshake ties together four actors: the user dragging a
+border, the mouse thread inside [[rio]], the target window's
+[[winctl]] thread, and the client application blocked on
+[[/mnt/wsys/mouse]]. It is worth walking through end-to-end because
+the ``r''-prefix trick is the only hint the client gets that anything
+structural changed:
+%
+\begin{verbatim}
+  user         mousethread    winctl       xfidread         client
+   |               |            |              |              |
+   | drag border   |            |              |              |
+   |-------------->|            |              |              |
+   |               | bandsize() |              |              |
+   |               |----------->|              |              |
+   |               |            | Reshaped msg |              |
+   |               |            |-------->|    |              |
+   |               |            |  wresize()   |              |
+   |               |            |  w->resized=1|              |
+   |               |            |  counter++   |              |
+   |               |            |              |              |
+   |               |            |              | read /mouse  |
+   |               |            |              |<-------------|
+   |               |            |              |              |
+   |               |            |              | c = 'r'      |
+   |               |            |              | (not 'm')    |
+   |               |            |              | w->resized=0 |
+   |               |            |              |------------->|
+   |               |            |              |              |
+   |               |            |              | getwindow()  |
+   |               |            |              |<-------------|
+   |               |            |              | read winname |
+   |               |            |              |<-------------|
+\end{verbatim}
+%claude:
+The reason rio piggybacks on [[/mnt/wsys/mouse]] instead of using a
+dedicated [[/dev/resize]] file is backward compatibility: every
+graphical client already blocks on the mouse stream in its main
+event loop, so no extra select/alt is needed to notice a resize. The
+``r'' byte is simply a one-character tag at the start of the same
+text packet that normally carries [[m x y buttons msec]]. [[libdraw]]'s
+[[getwindow()]] wrapper (in \book{Graphics}) hides this from
+applications---they just see a resize event surface through their
+normal mouse channel. The cost is that a resize is invisible to any
+client that is not reading the mouse, and that the [[resized]] flag
+must be cleared in [[xfidread]] so the client does not get the same
+``r'' over and over.
 
 <<[[xfidread()]] when Qmouse, adjust c for resize message if resized>>=
 if(w->resized)
@@ -15927,6 +16071,48 @@ processes. Through these files, programs can discover their own window
 identity ([[winid]], [[label]]), query the screen ([[screen]]),
 access other windows ([[wsys/]]), and control windows
 programmatically ([[wctl]]).
+%claude:
+The full shape of the per-window filesystem that [[rio]] serves is
+the union of all the [[dirtab]] entries scattered across the book,
+which makes it hard to picture. Here is a consolidated view of what
+a client sees when it mounts [[/mnt/wsys/]] (files introduced in
+earlier chapters are marked \verb+[done]+, files introduced in this
+chapter are marked \verb+[here]+):
+%
+\begin{verbatim}
+  /mnt/wsys/                          (Qdir,     per-window root)
+  |
+  +-- cons          [done]  (Qcons)    text console read/write
+  +-- consctl       [done]  (Qconsctl) raw/cooked mode toggle
+  +-- mouse         [done]  (Qmouse)   mouse events (+ resize piggyback)
+  +-- cursor        [done]  (Qcursor)  custom cursor image
+  +-- winname       [done]  (Qwinname) current window-image name
+  +-- window        [done]  (Qwindow)  raw pixels of this window
+  |
+  +-- winid         [here]  (Qwinid)   numeric id (text)
+  +-- label         [here]  (Qlabel)   human label (rw)
+  +-- screen        [here]  (Qscreen)  full desktop image (shared)
+  +-- wctl          [here]  (Qwctl)    window-control commands
+  +-- text          [done]  (Qtext)    textual-window buffer
+  +-- snarf         [adv ]  (Qsnarf)   clipboard
+  |
+  +-- wsys/                  (Qwsys,   directory of window dirs)
+      +-- 1/        -+
+      +-- 2/         |  same tree recursively,
+      +-- 3/         |  one subdir per existing window
+      +-- ...       -+
+\end{verbatim}
+%claude:
+The whole tree lives inside one process ([[rio]]), and the contents
+of a given file depend on which window the fid is attached to:
+opening [[/mnt/wsys/cons]] in window~2 is not the same file as opening
+it in window~3, even though the path string is identical. The [[Qid.path]]
+trick from Section~\ref{sec:additional-data-structures}
+([[QID(winid, qxxx)]]) is what lets the server tell them apart. The
+[[wsys/N/]] subtree is the one escape hatch: by walking through
+[[wsys/]] to a numeric name, a client can reach any other window's
+files and drive it remotely, which is how the [[wctl(1)]] command and
+tools like [[acme]]'s win interact with specific windows.
 
 \section{[[/mnt/wsys/winid]]}
 

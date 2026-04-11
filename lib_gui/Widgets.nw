@@ -1720,6 +1720,31 @@ void pl_drawall(Panel *p, Image *b){
 @
 %alt? why need to store in p->b? could pass it to the draw method?
 
+%claude:
+The traversal is a preorder depth-first walk: every widget paints
+itself \emph{before} recursing into its children, so children
+overlay their parent. On a frame with a label, a scrollable list,
+and a scroll bar, the draw order is:
+\begin{verbatim}
+  (1) frame              <- paints its background + relief
+       |
+       +-- (2) label     <- paints on top of frame
+       |
+       +-- (3) listbox   <- paints on top of frame
+       |        |
+       |        +-- (4) visible items
+       |
+       +-- (5) scrollbar <- paints on top of frame
+
+  draw order: 1 -> 2 -> 3 -> 4 -> 5
+\end{verbatim}
+This is the opposite of a bottom-up compositor (the model used
+by Wayland or Core Animation, where leaves are rendered first
+and parents assemble them). [[libpanel]] paints directly on
+[[view]], so a parent must paint first to avoid erasing its
+own children; each child then happily clobbers the parent's
+pixels in its [[p->r]] rectangle.
+
 \section{Drawing helpers}
 
 %ul = upper left
@@ -2001,6 +2026,38 @@ Panel *pl_ptinpanel(Point p, Panel *g){
 
 %dup: g->r is set by plpack()
 
+%claude:
+Here is how [<pl_ptinpanel()>] resolves a click at point [[p]] on
+a tree where a popup menu (priority 1) hovers over a text area
+(priority 0) inside a frame. The click lands inside all three
+rectangles, so every level of the recursion has a candidate:
+\begin{verbatim}
+             frame (pri=0) r = (0,0)-(400,300)
+             /         \
+            /           \
+       textarea (0)    popup (1)  r = (50,80)-(200,180)
+       r=(0,20)-(400,300)
+                        |
+                        *  <- click p=(120,120)
+
+  pl_ptinpanel(p, frame):
+      p in frame->r        yes
+      recurse on textarea:
+          p in textarea->r yes
+          recurse (no children) -> nil
+          return textarea (pri 0)
+      recurse on popup:
+          p in popup->r    yes
+          recurse (no children) -> nil
+          return popup (pri 1)
+      compare: popup.pri(1) >= textarea.pri(0) -> popup wins
+      return popup
+\end{verbatim}
+The recursion visits children in sibling order but always keeps
+the \emph{highest priority} hit, which is why a popup declared
+as a sibling of the textarea still intercepts the click even
+though the textarea is listed first.
+
 \subsection{Mouse leaving the widget}
 
 %claude:
@@ -2172,6 +2229,36 @@ dereference a dangling pointer.
 if(p==plkbfocus)
     plkbfocus=nil;
 @
+
+%claude:
+Three independent pieces of state together encode ``who is
+currently grabbing input.'' They live in different places and
+answer different questions:
+\begin{verbatim}
+  where stored              what it captures
+  ------------------------  --------------------------------
+  plkbfocus (global ptr)    keyboard focus: next plkeyboard()
+                            goes here, regardless of mouse
+  root->lastmouse           last widget reached by hit test;
+                            used to send OUT on leave
+  root->flags & REMOUSE     sticky mouse capture: bypass hit
+                            test and resend to lastmouse
+
+  typical text entry drag:
+     click inside entry  -> plkbfocus = entry   (grabkb)
+                            lastmouse  = entry
+                            REMOUSE    = 0      (hit returned false)
+     type 'a'            -> plkeyboard -> entry->type
+     click-drag slider   -> lastmouse  = slider
+                            REMOUSE    = 1      (hit returned true)
+                            plkbfocus  unchanged (still entry!)
+     release mouse       -> REMOUSE    = 0
+\end{verbatim}
+Keyboard focus and mouse capture are deliberately decoupled: a
+user dragging a slider does not lose the typing focus on a text
+entry elsewhere in the window. The only widget-side work needed
+to opt into keyboard input is calling [<plgrabkb()>] from [[hit]];
+everything else is bookkeeping by [<plmouse()>] on the root.
 
 %claude:
 We have now seen the three core operations: drawing (top-down tree
@@ -3423,6 +3510,35 @@ if(ep->entp>ep->eent){
 \subsubsection{Special keys}
 
 %adv topics?
+
+%claude:
+The backspace case is more subtle than it looks because [[entry]]
+is a UTF-8 \emph{byte} buffer but what the user wants to erase is a
+\emph{rune}. A single non-ASCII rune can occupy 2, 3, or 4 bytes,
+and [[entp]] is a byte pointer, not a rune index. The loop walks
+backward across any number of UTF-8 trail bytes until it hits a
+lead byte (recognized by [[pl_rune1st]]), then erases that lead
+byte too. For the French word ``\'et\'e'' (\'e = U+00E9 = [[0xC3 0xA9]])
+the buffer and pointers look like this before a backspace on the
+final \'e:
+\begin{verbatim}
+  byte index:    0    1    2    3    4    5    6
+  entry:      [ 'C3 A9'  't'  'C3 A9'  '\0'  ...]
+                '---'        '---'
+                 e=U+00E9     e=U+00E9
+                                    ^
+                                    entp  (byte offset 5, rune offset 3)
+
+  backspace:
+    step 1: entp[-1]=0xA9, not a rune start -> clear, --entp (byte 4)
+    step 2: entp[-1]=0xC3, is  a rune start -> stop
+    step 3: final --entp, clear byte 3             (byte 3)
+\end{verbatim}
+After the backspace, [[entp]] points at byte~3 (rune~2), the buffer
+contains ``\'et'', and the invariant ``[[entp]] always points at
+a rune boundary'' holds. A naive [[--entp]] would have left the
+buffer stuck on the trailing [[0xA9]] and corrupted the next
+[[runetochar]] on insert.
 
 <<[[pl_typeentry()]] handle special characters>>=
 if(c < 0x20 || (c & 0xFF00) == KF || (c & 0xFF00) == Spec)
@@ -5357,6 +5473,35 @@ out:
 if(pos<0) pos=0;
 else if(pos>len) pos=len;
 @
+
+%claude:
+The trough-to-logical mapping is a single linear transform. The
+scrollbar's pixel track is [[[0, len]]] (the interior height
+in pixels after stripping the relief border), and the current
+thumb spans the \emph{pixel} range [[[sp->lo, sp->hi]]]. Left-click
+at pixel [[pos]] scrolls \emph{up} by a fraction of the thumb
+span; right-click scrolls down by the same amount:
+\begin{verbatim}
+  pixel space (what the user sees)
+       0                                     len
+       +------------------------------------+
+       |......[==== thumb ====]............|
+              ^               ^
+              sp->lo          sp->hi
+                     ^
+                     pos (click)
+
+  dy = pos * (sp->hi - sp->lo) / len
+     = (click fraction) * (thumb span)
+
+  left click:  preview = [sp->lo - dy, sp->hi - dy]  (scroll up)
+  right click: preview = [sp->lo + dy, sp->hi + dy]  (scroll down)
+  middle click: absolute jump -> pos/len directly
+\end{verbatim}
+The scrollee later re-interprets [[sp->lo]] and [[sp->hi]] in
+its own logical units (byte offsets for a text view, item indices
+for a list), but the scrollbar itself never knows: its only job
+is this pixel arithmetic plus a redraw.
 
 <<[[pl_hitscrollbar()]] switch buttons cases>>=
 case CLICK_LEFT:

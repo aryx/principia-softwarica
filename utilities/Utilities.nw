@@ -975,6 +975,39 @@ fileflag(Dir *db)
 @
 
 
+%claude:
+The long-listing output of [[ls -l]] is computed in two passes
+over the directory array. [[dowidths]] is the first pass: it
+walks every [[Dir]] and keeps a running maximum of the width
+each column would need; [<format>] is the second pass and
+actually prints each entry using those maxima as [[%*ud]]
+field widths. Seven per-column globals
+([[swidth]], [[qwidth]], [[vwidth]], [[uwidth]],
+[[mwidth]], [[lwidth]], [[gwidth]]) hold those maxima, one per
+optional flag:
+\begin{verbatim}
+    Dir 0: [ size=42 uid=bob   gid=staff  length=128  mtime=... ]
+    Dir 1: [ size=7  uid=alice gid=wheel  length=1024 mtime=... ]
+    Dir 2: [ size=1  uid=root  gid=sys    length=9    mtime=... ]
+              \___/  \_____/   \_____/    \________/
+               |       |         |          |
+               |       |         |          v
+    dowidths:  swidth=2,uwidth=5,gwidth=5, lwidth=4
+               |       |         |          |
+               v       v         v          v
+    format:    "42 bob   staff   128 ..."
+               " 7 alice wheel  1024 ..."
+               " 1 root  sys       9 ..."
+\end{verbatim}
+%
+The reason for the split is that column widths cannot be known
+until the widest row has been seen, and \plan's [[Bprint]] has
+no deferred-flush or reflow machinery. The naive alternative
+would be to sprint each row into a string, remember them, and
+pad at the end---but that doubles the memory cost of [[ls]] on
+a large directory. The two-pass arrangement keeps each [[Dir]]
+live only once and never allocates a scratch row.
+
 <<function [[dowidths]](ls.c)>>=
 void
 dowidths(Dir *db)
@@ -4542,6 +4575,43 @@ vlong nc = 1;
 vlong l = 1;
 @
 
+%claude:
+The read loop maintains two independent 64\,KB sliding windows,
+one per file, each described by a (start, end) pointer pair
+into its [[BUF]]-byte backing buffer. The pairs are not kept
+in lockstep: if one file has 40\,KB left in its window and the
+other has only 5\,KB, the next [[memcmp]] only covers 5\,KB,
+both starts advance by 5\,KB, and the next iteration refills
+whichever window emptied first. The ``is empty, refill''
+check at the top of each iteration treats the buffer as a
+ring: when [[b1s]] reaches [[&buf1[BUF]]] the pointer wraps
+back to [[buf1]] before the [[read]]. The layout for a
+concrete two-iteration trace on two files looks like:
+\begin{verbatim}
+  buf1 [ . . . . . . . . . . . . . . . . . ]  BUF=65536
+         ^b1s                         ^b1e     window = 40 KB
+  buf2 [ . . . . . . . . . . . . . . . . . ]
+         ^b2s        ^b2e                      window =  5 KB
+         |----n=5KB--|
+         memcmp(b1s, b2s, n)   -> equal
+         b1s += 5KB, b2s += 5KB   (b2 window now empty)
+
+  iter 2:
+  buf1 [ . . . . . . . . . . . . . . . . . ]
+                     ^b1s             ^b1e     window = 35 KB
+  buf2 [ . . . . . . . . . . . . . . . . . ]
+         ^b2s                              ^b2e   refilled 64 KB
+         |----n=35KB----|
+\end{verbatim}
+%
+Two windows rather than one shared buffer is the key point:
+[[read]] on one file can return short without forcing a
+resync on the other, and [[memcmp]] on the overlap is fast
+enough that the whole loop is I/O-bound rather than
+CPU-bound. Only on a mismatch does the code fall into the
+slow per-byte [[for(p=b1s,q=b2s...)]] reporting loop, which
+also maintains the line counter [[l]] for the [[-L]] flag.
+
 <<function [[main]](cmp.c)>>=
 void
 main(int argc, char *argv[])
@@ -4701,6 +4771,35 @@ Biobuf *ib2;
 <<constant [[LB]](comm.c)>>=
 #define LB 2048
 @
+
+%claude:
+The main loop is the textbook two-way merge of sorted streams,
+but with the twist that equal lines are output to a
+\emph{third} column rather than dropped. The leader strings
+[[ldr[0..2]]] are ``'', one tab, two tabs, so that the
+three columns line up when output is plain text; the
+[[-1]]/[[-2]] flags rewrite those leaders to shorter strings so
+the remaining columns shift left. A concrete run of
+\verb+comm file1 file2+ on [[apple,cherry,date]] versus
+[[banana,cherry,elderberry]] produces:
+\begin{verbatim}
+  lb1     lb2         compare   action      output line
+  ------  ----------  --------  ----------  -------------------
+  apple   banana      1         wr(lb1,1)   "apple"
+  cherry  banana      2         wr(lb2,2)   "\tbanana"
+  cherry  cherry      0         wr(lb1,3)   "\t\tcherry"
+  date    elderberry  1         wr(lb1,1)   "date"
+  (EOF)   elderberry  -         copy(ib2,2) "\telderberry"
+\end{verbatim}
+%
+The [[compare]] function returns 1/2/0 instead of the usual
+negative/positive/zero convention because those values double
+as direct indices into [[ldr]] and as the column argument to
+[[wr]]; the trailing [[copy]] helper drains whichever file
+still has lines when the other hits EOF. Notice also that
+after a match ([[case 0]]) \emph{both} files are advanced,
+whereas in the unequal cases only the smaller side moves---the
+standard merge invariant.
 
 <<function [[main]](comm.c)>>=
 void
@@ -7091,6 +7190,44 @@ int mintab=1;
 int maxwidth=0;
 @
 
+%claude:
+The inner loop uses a strided sampling trick that is worth
+unpacking because it is not obvious at first read. Given
+[[nwords]] items, a maximum word width of [[maxwidth]], and
+a terminal width of [[linewidth]], the function computes
+\verb+words_per_line = linewidth/maxwidth+ and
+\verb+nlines = ceil(nwords/words_per_line)+, then prints row
+[[i]] by picking words at indices
+[[i, i+nlines, i+2*nlines, ...]]. The stride [[nlines]]
+gives the top-to-bottom fill order that programmers expect
+from [[ls]]: alphabetical neighbours sit in the same column,
+not the same row. Concretely, with 10 words and a 24-column
+terminal where the widest word is 7 characters
+([[words_per_line = 3]], [[nlines = 4]]):
+\begin{verbatim}
+  word[] = a b c d e f g h i j
+
+  print layout (row i, then word[j] for j = i, i+4, i+8):
+                       col0   col1   col2
+              row 0:   a      e      i
+              row 1:   b      f      j
+              row 2:   c      g
+              row 3:   d      h
+\end{verbatim}
+%
+Had the code instead walked [[word]] linearly with stride 1
+and wrapped at [[words_per_line]] the columns would read
+[[a b c | d e f | g h i | j]]---row-major order, which is
+what GNU \verb+ls+ does by default but which splits
+alphabetically adjacent names across columns. The stride
+trick achieves column-major ordering without any
+transposition step: [[word]] stays a single flat array and
+the indexing formula is all that differs. The padding loop
+at the bottom of the inner [[for]] handles the last column
+specially: the final word on each row gets no trailing
+padding, so short last columns don't leave a rectangle of
+spaces that confuses downstream tools.
+
 <<function [[columnate]](mc.c)>>=
 void
 columnate(void)
@@ -7219,6 +7356,51 @@ processing pipelines.
 %medium.com
 %+1
 %.
+
+%claude:
+Unix [[sort]] is an \emph{external} sort: it is designed to
+handle input larger than RAM, which is the case that
+in-memory [[qsort]] cannot serve. The classical structure
+has three phases, forming a small pipeline inside the one
+process:
+\begin{verbatim}
+  phase 1: read input in chunks that fit in memory,
+           qsort each chunk in place, write it out as
+           a temporary ``run'' file
+
+         input  --->  run_0  run_1  run_2  ...  run_k
+         (tens of GB)    (each ~1 MB, sorted)
+
+  phase 2: k-way merge the run files using a priority
+           queue (binary heap) keyed on the current head
+           line of each run
+
+         run_0   --\
+         run_1     \
+         run_2      >---(min-heap of k heads)---> output
+         ...       /
+         run_k   --/
+
+  phase 3: if k exceeds the file-descriptor budget or the
+           heap gets too wide, merge runs in passes:
+           merge 16 runs at a time into intermediate runs,
+           repeat log_16(k) passes until one run remains
+\end{verbatim}
+%
+The first phase is the ``replacement-selection'' or simple
+quicksort version depending on the implementation; the
+second phase is the reason people still teach priority queues
+in CS courses; the third phase is why old Unix [[sort]]
+manpages talk about [[-T]] (temp directory) and why on a
+busy system [[sort huge.log]] can generate a conspicuous
+amount of disk traffic even though the final output looks
+like a single stream. The \plan source for [[sort]] is not
+reproduced in this book---it is one of the larger utilities
+and the algorithm is standard---but it is useful to remember
+that the friendly one-liner
+\verb+sort file | uniq -c | sort -rn+ hides an external
+merge, a linear scan, and a second external merge behind
+two pipes.
 
 \subsection*{Basic sort}
 
@@ -7564,6 +7746,42 @@ a pattern appears---this is the byte-level cousin of
 \verb+csplit+ from GNU coreutils, and the only [[split]]
 feature that goes beyond ``copy N lines, then close and
 open the next file.''
+
+%claude:
+Both [[xd]] and [[od]] read bytes in fixed-size chunks
+(typically 16 bytes per display line) and emit three aligned
+fields per line: a running byte offset on the left, the 16
+bytes rendered in the chosen radix in the middle, and, for
+[[xd]], the same 16 bytes as printable ASCII on the right
+(dots for non-printables). The alignment is what makes the
+output useful for eyeballing binary structures---bit-field
+boundaries, magic numbers, length-prefixed strings---so the
+formatting is fixed rather than content-dependent:
+\begin{verbatim}
+    offset      hex bytes (2 chars + space = 3 per byte)          ascii
+    --------   ------------------------------------------------   ----------------
+    0000000    7f 45 4c 46  02 01 01 00  00 00 00 00  00 00 00 00  .ELF............
+    0000010    02 00 3e 00  01 00 00 00  b0 04 40 00  00 00 00 00  ..>...........@.
+    0000020    40 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00  @...............
+
+    column:    0          11          22          33          44  48             64
+               |          |           |           |           |   |              |
+               offset     byte 0      byte 4      byte 8      byte 12             ascii end
+               (7 chars)  (12 chars)  (12 chars)  (12 chars)  (12 chars, no sep)  (16 chars)
+\end{verbatim}
+%
+The split of 16 bytes into 4 groups of 4 with an extra space
+between groups is pure ergonomics: 32-bit words become visible
+at a glance, which is the most common thing one is actually
+hunting for in a hex dump (pointers, lengths, opcodes). [[od]]
+by default uses \emph{octal} 16-bit words rather than hex
+bytes---same skeleton, different field width and radix---which
+is a historical relic of the PDP-11 where machine instructions
+were 16 bits and octal was the native way to read them. Modern
+users almost always run [[od -c]] or [[od -x]] or [[od -A x]]
+to get something closer to [[xd]]. Either tool's \emph{source}
+is dominated by the loop that pads and aligns these fields;
+the actual ``dumping'' is a trivial loop over [[read]] buffers.
 
 \section{[[xd]]}
 % hexadecimal dumper?

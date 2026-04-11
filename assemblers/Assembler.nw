@@ -983,6 +983,42 @@ Gen operand3 = { .type = D_REG;   .reg = 3; ... };
 outcode(ASUB, Always, &operand1, 2, &operand3);
 \end{verbatim}
 
+%claude:
+Since [[5a]] does not define a single ``instruction record'' type
+(no [[Prog]]-like struct as you will see in the \book{Linker}),
+the five parameters of [<outcode()>] {\em are} the in-memory
+form of one instruction while a grammar action is running.
+The diagram below shows how the call
+[[outcode(ASUB, Always, &operand1, 2, &operand3)]] from the
+example above maps to the six slots of a serialized instruction
+described in Section~\ref{sec:object-format-part1}:
+\begin{verbatim}
+    outcode(ASUB, Always, &operand1, 2, &operand3)
+             |     |         |       |      |
+             |     |         |       |      +---- serialized last
+             |     |         |       |            (second/destination operand)
+             |     |         |       +----------- third register R2
+             |     |         |                    (1 byte, before opd)
+             |     |         +------------------- serialized first
+             |     |                              (first operand)
+             |     +----------------------------- scond byte
+             +----------------------------------- opcode byte
+
+    +-----------+---------+------+---------+---------+---------+
+    |  opcode   | scond   | reg  | line#   | opd1    | opd3    |
+    | (1 byte)  | (1 byte)|(1 B) | (4 B)   |(variable|(variable|
+    +-----------+---------+------+---------+---------+---------+
+      ASUB       Always    2      lineno    D_CONST   D_REG
+                                            .off=14   .reg=3
+\end{verbatim}
+The middle-operand-is-always-a-register asymmetry (why [[reg]]
+is an [[int]] while [[opd1]] and [[opd3]] are [[Gen*]]) lets
+[[5a]] serialize the three-address ARM format without allocating
+a third [<Gen>] just to hold one register number. That byte is
+simply written between the line number and the two variable-sized
+operand blobs; you will see the code in [<outcode()>] later in
+Section~\ref{sec:object-format-complete}.
+
 The [<Always>] constant in the second argument to [<outcode()>]
 is used to represent the {\em conditional execution} of an instruction.
 It is an ARM feature I will explain later in Section~\ref{sec:cond-exec}.
@@ -1236,6 +1272,60 @@ in this book, but the first entry is shown above for [[NOP]].
 
 \l actually this array is used in xinit to populate hash table of symbols
 \l so it's fast.
+
+%claude:
+The three data structures I have introduced in this section
+(the Yacc [[%union]], the [[y.tab.h]] codes, and [<itab>])
+click together only once you trace a single identifier through
+[[5a]] end-to-end. Below I sketch the path of the string
+[["SUB"]] from the input file all the way to what [<yylex()>]
+returns to [<yyparse()>]:
+\begin{verbatim}
+    source byte-stream           "...  SUB $1, R2, R3 ..."
+                                        |
+                                        v lexer reads word
+                                   symb = "SUB"
+                                        |
+                                        v lookup(): hash the string
+                                   hash[h] --> Sym{
+                                                 name  = "SUB"
+                                                 type  = LARITH     (set by cinit)
+                                                 value = ASUB       (set by cinit)
+                                               }
+                                        |
+                                        v yylex() returns
+                                (tokencode, tokenvalue)
+                                (LARITH ,  ASUB     )
+                                    ^         ^
+                                    |         |
+                             %token<lval>     |
+                              directive       union field lval
+                              picks LARITH    of %union{...}
+
+    itab[]   (static table, walked once by cinit)
+    +----------+-------+--------+
+    |  "NOP"   | LMISC | ANOP   |   --> slookup("NOP")->type/value
+    |  "SUB"   | LARITH| ASUB   |   --> slookup("SUB")->type/value
+    |  "R0"    | LREG  | 0      |   --> slookup("R0") ->type/value
+    |  ...     |  ...  | ...    |
+    +----------+-------+--------+
+\end{verbatim}
+[<itab>] is thus just the {\em static seed} of the symbol table.
+At startup, [<cinit()>] loops over [<itab>],
+calls [<slookup()>] for each entry, and copies [[type]] and
+[[value]] into the freshly-allocated [<Sym>]. After that,
+the lexer no longer needs [<itab>] at all: every predefined
+mnemonic or register is now a regular symbol that lives in
+[<hash>] side-by-side with the user's labels.
+%claude:
+The two fields of [[Itab]] are overloaded: for [[LARITH]] entries
+the [[value]] is an [<Opcode>], for [[LREG]] it is a register number,
+for [[LCOND]] it is a condition code, and so on. The interpretation
+is dictated by [[type]], which is exactly what the Yacc [[%type]] /
+[[%union]] machinery needs to know in order to decide which union
+field to use when an action accesses \$$n$. So [<itab>] is really
+a tiny untyped map and the Yacc directives bolt a type system
+back onto it.
 
 \section{[[Sym]]bols and [[hash]] table}
 \label{sec:symbol-table}
@@ -7817,11 +7907,62 @@ hence the [[goto]].
 \t so increment
 \l this is very very subtle (too subtle I think).
 The extra condition about [[oldsymcounter]] is to avoid
-an infinite loop in [<outcode()>] with code such 
+an infinite loop in [<outcode()>] with code such
 as [[MOVW bar(SB), bar(SB)]].
 \l even though invalid instructions anway rejected by the linker
 
 \l Figure? tricky to understand loop and ref.
+
+%claude:
+The circular buffer [<h>] is easier to picture if I walk through
+a small source that deliberately exercises the wrap-around. Imagine
+[[NSYM]] was just 4 instead of 50 and the assembly file was:
+\begin{verbatim}
+        MOVW    a(SB), R0
+        MOVW    b(SB), R0
+        MOVW    c(SB), R0
+        MOVW    a(SB), R0           ; "a" has been evicted by now
+\end{verbatim}
+The time-lapse of [<h>] and [<symcounter>] is then:
+\begin{verbatim}
+    step        h[0]   h[1]   h[2]   h[3]   symcounter    emits ANAME?
+    ----        ----   ----   ----   ----   ----------    ------------
+    init         -      -      -      -          1             -
+    a (sf=1)     -      a      -      -          2         ANAME "a" idx=1
+    b (st=2)     -      a      b      -          3         ANAME "b" idx=2
+    c (st=3)     -      a      b      c          1  wrap   ANAME "c" idx=3
+    a (sf=1)     -      a*     b      c          2         ANAME "a" idx=1 (!)
+\end{verbatim}
+The last row shows the trick: the first time [[a]] was seen,
+[<symidx_of_symopt()>] set [[a->symidx = 1]] and [[h[1].sym = a]].
+A few instructions later, the same slot was needed for [[a]] again,
+so [[5a]] must re-emit an [[ANAME]] entry with [[symidx = 1]] to
+reassign the meaning of index~1 in the linker. The linker
+rebuilds its own copy of [<h>] on the fly while reading the
+object file, so whenever it encounters an operand with
+[[symidx = 1]], it uses whatever symbol currently lives in
+slot~1 of its reconstruction.
+
+%claude:
+The [[jackpot]] condition guards one extra wrinkle. Suppose an
+instruction has the same fresh symbol in both operands, as in
+[[MOVW foo(SB), foo(SB)]] with [[foo]] not yet seen. The first
+call to [<symidx_of_symopt()>] for [[g1]] writes [[foo]] into
+slot [[symcounter]] and increments [[symcounter]]; the second
+call for [[g2]] sees [[foo->symidx]] already set to the same
+value and returns immediately. So [[sf == st]] and we are fine.
+But now change the example to [[MOVW bar(SB), foo(SB)]]
+with a tiny [[NSYM]] and a buffer that has gone all the way
+around: [[bar]] lands at index~10 (say), [[foo]] also lands at
+index~10 because [[symcounter]] has just wrapped and
+re-overwritten the slot [[bar]] used one nanosecond ago. Now
+[[sf == st == 10]] but [[sf]] points at [[foo]], not [[bar]].
+The test [[sf == st \&\& sf != 0 \&\& symcounter != oldsymcounter]]
+detects exactly this case and jumps back to [[jackpot]] to
+recompute [[sf]]. The [[symcounter != oldsymcounter]] guard
+stops the degenerate [[MOVW bar(SB), bar(SB)]] case from
+looping forever, since on the second attempt no new [[ANAME]]
+is emitted and the counters stay equal.
 
 \t summary? copy paste figure of Linker? solidify with Jarod's comment:
 % Si j'ai bien compris, quand tu lis le fichier code objet, comme tu
@@ -8581,6 +8722,47 @@ expr:
 | expr '|' expr     { $$ = $1 | $3; }
 
 @
+%claude:
+Notice that the type of [[expr]] is just [[lval]], a [[long]].
+So the actions above are not building an expression tree;
+each reduce {\em immediately evaluates} the sub-expression and
+propagates a plain integer. Asm5 therefore has no notion of
+a symbolic constant expression in its AST---by the time an
+operand reaches [<outcode()>], the expression has already
+collapsed to a single number. This fold-at-reduce is easiest
+to see on a concrete input. Consider [[$(4+3)*8]] which
+appears inside a [[MOVW]] operand: Yacc drives the reductions
+bottom-up, and each action writes back one [[long]]:
+\begin{verbatim}
+    source:                  $ ( 4 + 3 ) * 8
+
+    tokens:                    '(' LCONST '+' LCONST ')' '*' LCONST
+                                    4           3               8
+
+    stack after each reduce:
+      1. con: LCONST           (      4                  )         -- $$ = 4
+      2. expr: con             expr(4)                             -- $$ = 4
+      3. con: LCONST                  con(3)                       -- $$ = 3
+      4. expr: con                    expr(3)                      -- $$ = 3
+      5. expr: expr '+' expr   expr(7)                             -- $$ = 4+3 = 7
+      6. con: '(' expr ')'     con(7)                              -- $$ = 7
+      7. expr: con             expr(7)                             -- $$ = 7
+      8. con: LCONST                             con(8)            -- $$ = 8
+      9. expr: con                               expr(8)           -- $$ = 8
+     10. expr: expr '*' expr   expr(56)                            -- $$ = 7*8 = 56
+
+    action in imm rule:      $$.type = D_CONST; $$.offset = 56;
+\end{verbatim}
+Every intermediate [[$$]] is a [[long]] that lives in Yacc's
+value stack; no [[Expr]] node is ever allocated. Compared to
+[[5c]] or [[5l]], which do build expression trees for much
+the same operators, [[5a]] gets away with folding everything
+inline because Asm5 has no variables that could be unknown
+at parse time---[[LVAR]] symbolic constants are resolved
+through [<Sym.value>], which is itself a [[long]]. The
+concrete syntax [[$bits>>24]] compiles to a single
+[[D_CONST]] operand in exactly the same way as [[$0x01000000]]
+would; the linker never sees a trace of the shift.
 
 
 

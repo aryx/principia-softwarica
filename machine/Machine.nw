@@ -1811,6 +1811,45 @@ Registers reg;
 % R15 is 1020 in general, because first page and after a.out header.
 
 %claude:
+Here is the logical layout of the simulated CPU state as
+[[5i]] grows it across the book---the general-purpose bank
+plus the bookkeeping fields that [[itab]] handlers and [<run()>]
+sprinkle into [<Registers>] as they get introduced:
+\begin{verbatim}
+  struct Registers
+  +----------------------------------+
+  | r[0]   R0     arg0 / return      |  <-- REGARG / REGRET
+  | r[1]   R1                        |
+  | ...                              |
+  | r[12]  R12                       |
+  | r[13]  R13    stack pointer (SP) |  <-- REGSP
+  | r[14]  R14    link register (LR) |  <-- REGLINK
+  | r[15]  R15    program counter(PC)|  <-- REGPC
+  +----------------------------------+
+  | cbit          latched carry      |  (ARM C flag, lazy)
+  | cout          shifter carry out  |  (set by shift())
+  | cc1, cc2      lazy flag inputs   |  (for Z/N/V eval)
+  | compare_op    CCcmp / CCnone     |
+  | instr_cond    bits 28..31        |
+  +----------------------------------+
+  | ar            internal PC copy   |  } fetched each
+  | instr         32-bit word        |  } iteration of
+  | instr_opcode  itab index         |  } the run() loop
+  | ip            &itab[opcode]      |  }
+  +----------------------------------+
+\end{verbatim}
+%
+The four fields in the bottom group are pipeline-stage
+snapshots owned by [<run()>]; they sit inside [<Registers>]
+by convention (like hidden pipeline latches in real hardware)
+but are not visible to the guest program.
+Real ARM hardware also has a packed [[CPSR]] word with N/Z/C/V
+flag bits; [[5i]] keeps those as separate ints and even
+defers most flag evaluation until a [[Bxx]] branch actually
+needs them---hence [[cc1]]/[[cc2]]/[[compare_op]] described
+in Section~\ref{sec:addoverflow}.
+
+%claude:
 The special registers are given symbolic names so the code
 can say [[reg.r[REGPC]]] instead of [[reg.r[15]]]:
 
@@ -2777,6 +2816,43 @@ run(void)
 % Ixxx we have anyway).
 
 %claude:
+Visually, each iteration walks a 32-bit instruction word
+through four stages before advancing the PC:
+\begin{verbatim}
+        reg.ar = reg.r[REGPC]
+             |
+             v
+    +----------------+
+    |   ifetch()     |   read 4 bytes from Text page,
+    |                |   little-endian reassemble
+    +-------+--------+
+            | reg.instr  (32-bit word)
+            v
+    +----------------+
+    |  arm_class()   |   (instr >> 25) & 7  first switch,
+    |                |   then refine within each class
+    +-------+--------+
+            | reg.instr_opcode  (index into itab)
+            v
+    +----------------+
+    |  &itab[opcode] |   -> reg.ip (Inst*: func+name+type)
+    +-------+--------+
+            |
+            v
+    +----------------+     skipped if ARM condition code
+    | cond check     |     (bits 28..31) evaluates false
+    +-------+--------+
+            | execute==true
+            v
+    +----------------+
+    | reg.ip->func() |   the dispatch: Idp1, Iload, Bsr,
+    |                |   Ssyscall, ...
+    +-------+--------+
+            |
+            v
+       reg.r[REGPC] += 4
+\end{verbatim}
+%
 Each iteration: {fetch} the instruction word from memory
 ([<ifetch()>]), {decode} it into an opcode index
 ([<arm_class()>]), check the ARM condition code to decide
@@ -2840,6 +2916,32 @@ arm_class(instruction w)
 %case 6:	/* vfp load / store */ ; // go to default now
 % I used to have only int op; for local, but better to split
 % and have "class", and x
+
+%claude:
+The 3-bit class field selects one of eight top-level groups.
+Each [[case]] of the outer switch further refines using other
+bits of the instruction to land on a single [[itab]] entry:
+\begin{verbatim}
+  class  bits 27..25  meaning                    refiner
+  -----  -----------  -----------------------    ------------
+    0       000       data-processing (r,r,r)    bits 4..7 + 21..24
+    1       001       data-processing (imm)      bits 21..24
+    2       010       load/store (imm offset)    bits 20..22
+    3       011       load/store (reg offset)    bits 20..22
+    4       100       load/store multiple        bit 20 (L)
+    5       101       branch / branch-and-link   bit 24 (L)
+    6       110       coprocessor LDC/STC        -> OUNDEF
+    7       111       SWI / coprocessor          bit 25 -> OSWI
+\end{verbatim}
+%
+So the decoder is a two-level dispatch: 3 bits for ``what kind
+of instruction'' then a handful more to distinguish the exact
+operation within that kind. The outer switch is big enough
+to fit in an 8-entry jump table and the inner refinements
+are shallow---one reason [[arm_class()]] stays under a hundred
+lines for the whole ARM-v5 ISA. Real ARM decoders do
+essentially the same thing with combinational logic: fanning
+out bits 25--27 into wordlines that enable per-class sub-decoders.
 
 
 
@@ -3517,6 +3619,37 @@ if(trace)
 @
 \fi
 
+
+%claude:
+The four shift modes correspond to the 2-bit [[st]] field
+(bits 5--6 of the instruction word). Here is what each one
+does to a 32-bit operand, with the bit that lands in [[reg.cout]]
+marked as [[C]]:
+\begin{verbatim}
+  st=0  LSL sc          st=1  LSR sc
+        +----+---------+       +----+---------+
+    +-->|bits|0 0 0 ...|    ...|bits|0 0 ... 0|<--+
+    C   +----+---------+       +----+---------+   C
+                               (fills with zeros)
+
+  st=2  ASR sc          st=3  ROR sc
+        +----+---------+       +----+---------+
+   s -->|bits|s s ... s|    +->|bits|b b ... b|<--+
+  ...   +----+---------+    |  +----+---------+   C
+        (s = sign bit)      +------ wrap around --+
+\end{verbatim}
+%
+The shift count [[sc]] comes either from an immediate
+field ([[Idp1]]) or from a register ([[Idp2]], which passes
+the low 8 bits of [[R[rs]]]).
+The special case [[sc == 0]] is handled separately because
+the ARM spec gives it idiosyncratic semantics per shift type:
+e.g., [[LSR #0]] actually means ``shift by 32'' so [[cout]]
+is the top bit, while [[ROR #0]] with an immediate means
+RRX (rotate right through the old carry).
+Real ARM cores implement this as a dedicated combinational
+{barrel shifter} on the B-bus so the shift is free in the
+instruction's cycle count; [[5i]] just uses a C switch.
 
 % shift(rm, op, rs or #, true if rs)
 <<function [[shift]]>>=
@@ -5135,6 +5268,36 @@ instruction cache, looks up the page via [[page_of_vaddr()]], and
 finally reassembles the 32-bit instruction from four bytes in
 little-endian order.
 
+%claude:
+The little-endian reassembly on the last line is worth
+unpacking. On disk and in the text segment, an instruction
+word is stored as four consecutive bytes, lowest-significance
+first:
+\begin{verbatim}
+  memory layout at va = reg.ar  (little-endian)
+
+   va+0    va+1    va+2    va+3
+  +-------+-------+-------+-------+
+  | 0x03  | 0x10  | 0x82  | 0xE0  |     bytes on the page
+  +---+---+---+---+---+---+---+---+
+      |       |       |       |
+      v       v<<8    v<<16   v<<24
+      |       |       |       |
+      +-------+-------+-------+
+              |
+              v
+        0xE0821003      = reg.instr
+        AL ADD R2,R1,R3 (ARM encoding of ADD R2,R3,R1 in Plan 9 syntax)
+\end{verbatim}
+%
+The code does not cast [[(uint*)va]] and dereference, which
+would be tempting but unsafe: the host might be big-endian,
+or have stricter alignment than the guest's 4-byte rule
+(e.g., old SPARC). Doing the byte-by-byte OR keeps [[5i]]
+portable across host architectures and makes the endianness
+explicit in the source---a rare case where the slow path is
+also the correct path.
+
 <<function [[ifetch]]>>=
 instruction
 ifetch(uintptr addr)
@@ -5587,6 +5750,46 @@ char*	sysctab[] =
 \fi
 
 % itab[CSYSCALL].instr = <>
+
+%claude:
+The full path from a [[SWI]] instruction in the guest to
+a real host OS call crosses three dispatch tables. Here is
+the trip an [[open("/tmp/x", 0)]] takes through [[5i]]:
+\begin{verbatim}
+  guest code                     emulator
+  -----------                    --------
+  MOVW  $OPEN, R0
+  SWI   $0                 ---> ifetch() sees 0xEF000000
+                                arm_class() -> op = OSWI
+                                itab[OSWI].func = Ssyscall
+                                  |
+                                  v
+                                Ssyscall(w):
+                                  call = reg.r[REGARG]  (= OPEN)
+                                  bounds check systab
+                                  (*systab[OPEN])()
+                                  |
+                                  v                host OS
+                                sysopen():           ------
+                                  mem-copy path arg
+                                  translate flags -> open(2)
+                                  r[REGRET] = host fd
+\end{verbatim}
+%
+Three levels of indirection in a row: the hardware [[SWI]]
+decodes to one [[itab]] slot ([[OSWI]]) that always goes
+through the single [<Ssyscall>] thunk, which then looks up
+the actual handler in [[systab]] keyed by the syscall number
+the guest left in [[R0]].
+A real ARM would vector through the exception base ([[0x08]]
+on classic ARM, [[VBAR]] on newer cores) into kernel mode;
+the syscall number convention (R0 vs \#imm in the [[SWI]]
+word) is an ABI choice---\plan picks R0, Linux ARM EABI also
+uses R7, and the instruction's own 24-bit immediate field is
+ignored by both.
+Because [[5i]] is user-mode only, there is no stack switch,
+no [[SPSR]] save, no return-from-exception; [[Ssyscall()]]
+is an ordinary C function call.
 
 %claude:
 [[Ssyscall()]] is the entry point for all system calls---it is

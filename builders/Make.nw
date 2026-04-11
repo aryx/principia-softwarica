@@ -2805,6 +2805,57 @@ I will describe in the next sections the cases of the [[switch]] above.
 \t FIGURE? where start from file and then group in line and
 \t  then expand var? summary of the process.
 
+%claude:
+To answer the author's thinking note above, here is the
+text-to-[<Word>]-list pipeline that each meaningful line of the
+[[mkfile]] traverses. I use the line
+\verb+OFILES=`{echo foo.$O bar.$O} $EXTRA+ as a running example,
+assuming [[O=5]] and [[EXTRA=baz.5]] are already in the symbol table:
+
+\begin{verbatim}
+   bytes on disk
+       |  Bgetrune (libbio, UTF-8 decoding)
+       v
+   runes, escaped-\n-and-# stripped     <-- nextrune()
+       |
+       v
+   logical line (one Bufblock)          <-- assline()
+       "OFILES=`{echo foo.$O bar.$O} $EXTRA"
+       |
+       v                                <-- rhead()
+   head = "OFILES"     sep = '='    tail = "`{echo foo.$O bar.$O} $EXTRA"
+       |                                 |
+       |                                 | stow() --> nextword() loop
+       |                                 v
+       |                         case '`':  bquote() forks a shell,
+       |                         captures   "foo.5 bar.5"
+       |                         case '$':  varsub() looks up EXTRA,
+       |                         returns    {baz.5}
+       |                                 |
+       |                                 v
+       |                         Word list: [foo.5] -> [bar.5] -> [baz.5]
+       |                                 |
+       +---------------------------------+
+                         |
+                         v
+              symbol table: S_VAR["OFILES"] = {foo.5, bar.5, baz.5}
+\end{verbatim}
+
+%claude:
+Two observations are worth making about this pipeline before I
+dive into the individual stages. First, the split between the
+{line layer} (everything above [<rhead()>]) and the {word layer}
+(everything below) is what lets [[mk]] reuse [<assline()>] /
+[<nextrune()>] unchanged for rules, variable definitions, and
+includes: only the per-line action in [<parse()>] differs.
+Second, variable and backquote expansion happens inside
+[<nextword()>], not as a separate preprocessing pass, because a
+single [['$']] can expand to several words---so the expander
+must be able to push multiple [<Word>]s back into the caller's
+list, which is easier if expansion lives inside the word splitter
+than if it tries to rewrite the raw line.
+
+
 %dup: Windows.nw
 The skeleton of [<parse()>] above omits the error management
 code shown below:
@@ -4152,6 +4203,46 @@ when the special character returned by [<rhead()>] is [[':']].
 <<[[parse()]] other locals>>=
 char *body;
 @
+%claude:
+Before showing the code, I find it useful to look at what the
+rule action receives after [<rhead()>] and [<rbody()>] are done.
+For the input
+\begin{verbatim}
+   hello.5 world.5:QV: hello.c mk.h
+       pic $prereq | tbl | troff -ms
+       cp $target /tmp
+\end{verbatim}
+the parse action sees a flat structure that I can draw as a
+pseudo-parse-tree (each field already a list of [<Word>]s, not a
+raw string):
+
+\begin{verbatim}
+                         rule
+              ___________/|\_____________________
+             /            |        |             \
+         head=            tail=    attr=          body=
+         {hello.5,       {hello.c, (Q|V)          "\tpic $prereq ...\n"
+          world.5}        mk.h}                   "\tcp $target ...\n"
+             |            | |
+         (Word list)   (Word list)
+             |            | |
+             v            v v
+           [hello.5]    [hello.c]
+              -> [world.5]  -> [mk.h]
+\end{verbatim}
+
+%claude:
+Three things to note. The targets and prerequisites are {already}
+expanded [<Word>] lists---variables, quotes, and backquotes have
+been resolved by [<nextword()>] by the time [<addrules()>] runs,
+which is why the dependency graph can be built statically.
+The [[attr]] bitset comes from the characters between the two
+[[':']], here [[Q]] (quiet) and [[V]] (virtual), and will be
+propagated into every [<Rule>] created from this line. The body,
+in contrast, is a raw string with [[$prereq]] and [[$target]]
+still visible; those will be substituted at recipe execution time
+from the shell environment built by [<buildenv()>], not here.
+
 <<[[parse()]] switch rhead cases>>=
 case ':':
     body = rbody(&in);
@@ -4890,6 +4981,71 @@ Section~\ref{sec:parallel-mode} with a list of words).
 %toc:
 I will explain the code to apply rules and meta rules
 in the next two sections.
+
+%claude:
+To make the recursive structure of [<applyrules()>] concrete, here
+is the graph it builds for a tiny three-target project. The
+[[mkfile]] is
+\begin{verbatim}
+   all:V: hello world
+   hello: hello.o libutil.a
+   world: world.o libutil.a
+   %.o: %.c
+       cc -c $stem.c
+\end{verbatim}
+and the user runs [[mk all]]. [<applyrules()>] is called on
+[[all]], recurses on [[hello]] and [[world]], which each recurse
+on their [[.o]] targets (matched through the meta rule [[%.o: %.c]])
+and on [[libutil.a]]. The node cache ensures that [[libutil.a]]
+gets a single [<Node>] shared by both parents, turning the tree
+into a proper DAG:
+
+\begin{verbatim}
+                      +-----+
+                      | all |  (virtual target, Rule.attr has VIR)
+                      +--+--+
+                         |
+                +--------+--------+
+                |                 |
+           arc, r=all:V       arc, r=all:V
+                |                 |
+                v                 v
+           +---------+       +---------+
+           | hello   |       | world   |
+           +----+----+       +----+----+
+                |                 |
+           +----+----+       +----+----+
+           |         |       |         |
+           v         v       v         v
+        +------+  +-------+ +------+  (libutil.a node reused via
+        |hello |  |libutil| |world |   node cache, arrow from 'world'
+        | .o   |  | .a    | | .o   |   points at the SAME Node)
+        +---+--+  +-------+ +---+--+
+            |                   |
+       arc, stem="hello"   arc, stem="world"
+       r = %.o:%.c          r = %.o:%.c
+            |                   |
+            v                   v
+        +------+            +------+
+        |hello |            |world |
+        | .c   |            | .c   |
+        +------+            +------+
+         (leaf)              (leaf)
+\end{verbatim}
+
+%claude:
+The details worth pausing on: each [<Arc>] carries its own
+[[stem]] because the same meta rule [[%.o: %.c]] is instantiated
+twice, once with [[stem="hello"]] and once with [[stem="world"]],
+and the shell will need the right value when the recipe runs.
+The [[libutil.a]] node has {two incoming arcs} but still only
+one [<Node>] in memory---without the node cache [[cc -c]] would
+run for it twice. The [[all]] node has a [[VIR]] attribute and
+no recipe; its two arcs exist only to pull the real targets into
+the DAG, as I explained in Section~\ref{sec:virtual}. Finally,
+the leaves [[hello.c]] and [[world.c]] have no matching rule and
+no prerequisites---[<applyrules()>] stops there and [<timeof()>]
+reads their on-disk modification time into [<Node.time>].
 
 \section{Finding the simple rule(s) for a target}
 \label{sec:finding-simple-rules}
@@ -7187,6 +7343,50 @@ static int nevents;
 array is called a {\em slot}.
 %
 The growing array is initialized in [<nproc()>]:
+
+%claude:
+It is easier to see what a {slot} is by drawing [<events>] at a
+single point during a parallel build. Suppose [[mk -P3]] is
+building the tiny project from Section~\ref{sec:graph-applyrules}
+with [[nproclimit=3]]. At the moment shown, the two [[cc -c]]
+jobs for [[hello.o]] and [[world.o]] are already running, the
+[[ar]] job for [[libutil.a]] is waiting on its [[.o]] prereqs
+(which are not in this project so it is ready too), and the
+final link for [[hello]] is still in the [<jobs>] queue because
+its prereq [[hello.o]] is [[BEINGMADE]]:
+
+\begin{verbatim}
+                 events[] (size = nproclimit = 3)
+
+       slot  pid    job                 state
+       ----  -----  ------------------  ------------------
+        0    4217   cc -c hello.c       running  (SIGCHLD
+                                                  will land
+                                                  in pidslot)
+        1    4219   cc -c world.c       running
+        2     0     -                   free  (nextslot()
+                                                returns 2)
+
+                 jobs (linked list, waiting)
+
+       head -> [ link hello   (waits on hello.o BEINGMADE) ]
+            -> [ link world   (waits on world.o BEINGMADE) ]
+            -> nil
+\end{verbatim}
+
+%claude:
+Three details hide in this picture. [<nextslot()>] uses
+[[pid <= 0]] as the ``free'' predicate, so a slot is reclaimed
+simply by zeroing its [[pid]] in [<waitup()>]---no list splicing.
+[<pidslot()>] is the inverse: given the pid reported by [[await()]],
+it scans [<events>] linearly until it finds the match, which is
+fine because [[nproclimit]] is tiny (the number of CPU cores,
+not the number of jobs). And the jobs whose prereqs are still
+[[BEINGMADE]] never reach this table at all---they sit in
+[<jobs>] until [<waitup()>] calls [<update()>] on a finished
+node, which then re-evaluates whether any waiting job can be
+enqueued into [[events]] by a follow-up [<sched()>] call.
+
 
 <<[[nproc()]] grow nevents if necessary>>=
 if(nproclimit > nevents){

@@ -5499,6 +5499,37 @@ first redirect stdout to [[foo]], then duplicate fd~2 from fd~1.
 before performing any [[dup()]] calls, so the deepest (oldest)
 redirection executes first---restoring the original left-to-right order.
 % execexec -> <>
+%claude:
+Concretely, for \verb+cmd > foo >[2=1]+ the stack and recursion
+unroll as follows. At parse/eval time each [[pushredir]] prepends,
+so the newest redirection sits at the head. Then [<doredir()>]
+recurses to the tail before touching any descriptor, producing a
+call chain that applies the oldest entry first:
+\begin{verbatim}
+  runq->redir (after both Xwrite / Xdup2 have pushed):
+
+      head                                         tail
+       |                                            |
+       v                                            v
+    +--------------+      +--------------+      +---+
+    | >[2=1]       | ---> | > foo        | ---> |nil|
+    | pushed last  |      | pushed first |      +---+
+    +--------------+      +--------------+
+
+  doredir() recursion (left-to-right in source order):
+
+    doredir(>[2=1])
+      doredir(>foo)
+        doredir(nil)     <- returns
+        apply: dup(fd_foo, 1); close(fd_foo)
+      apply: dup(1, 2)   <- now fd 2 points where foo went
+\end{verbatim}
+The same recursion is what makes the [[startredir]] ``inheritance
+point'' work on the rewind path: [<turfredir()>] iterates
+[[while(runq->redir != runq->startredir)]], popping (via
+[<Xpopredir>]) only the records pushed since this thread started,
+stopping exactly at the frontier it inherited from its parent.
+
 <<function [[doredir]]>>=
 void
 doredir(redir *rp)
@@ -5516,6 +5547,32 @@ doredir(redir *rp)
 
 % so when do cmd > foo < bar, what is done first?
 % more importantly when do cmd > foo >[2=1] ?  vs cmd >[2=1] > foo ?
+
+%claude:
+The [[ROPEN]] case is the file descriptor plumbing itself.
+It is worth tracing concretely what happens for \verb+ls > out+.
+At parse time [<Xwrite>] calls [[Creat("out")]] and gets back
+some arbitrary free fd (say~3), and pushes [[ROPEN{from=3, to=1}]].
+In the child, [<doredir()>] then maps fd~3 onto fd~1 (stdout)
+via [[dup]], and closes the original fd~3 so [[ls]] inherits a
+clean descriptor table:
+\begin{verbatim}
+  before Xwrite (in parent, after fork):      after doredir (in child):
+    fd 0 -> /dev/cons  (stdin)                  fd 0 -> /dev/cons
+    fd 1 -> /dev/cons  (stdout)                 fd 1 -> out  *** dup'd
+    fd 2 -> /dev/cons  (stderr)                 fd 2 -> /dev/cons
+    fd 3 -> (free)                              fd 3 -> (closed)
+
+  after Xwrite (Creat'd "out"):
+    fd 0 -> /dev/cons
+    fd 1 -> /dev/cons
+    fd 2 -> /dev/cons
+    fd 3 -> out            Redir{from=3,to=1}
+\end{verbatim}
+The [[if(rp->from != rp->to)]] guard handles the rare case where
+[[Creat()]] happens to hand back exactly the target fd (possible
+when stdout was previously closed), in which case the [[dup]] and
+[[close]] would defeat each other.
 
 <<[[doredir()]] switch redir type cases>>=
 case ROPEN:
@@ -6626,6 +6683,39 @@ fnstr(tree *t)
 @
 
 
+
+%claude:
+The key move in [<Xfn()>] is that it stores a pointer to the
+{\em same} bytecode vector the surrounding script is currently
+executing, plus an offset into it. It does not compile a separate
+closure object. After defining \verb+fn greet { echo hi }+, the
+global variable [[greet]] looks like this:
+\begin{verbatim}
+  var{ name="greet" }
+    |
+    | v->fn ---------+         v->pc -----+
+    | v->pc          |                    |
+    +----------------+                    |
+                     v                    v
+  runq->code (shared bytecode vector, refcnt++):
+    ... Xmark Xfn <end> "greet;" Xassign ... Xecho "hi" Xunlocal Xreturn ...
+                 ^         ^     ^                       ^
+                 |         |     |                       |
+                 pc here   |     v->pc points here       Xreturn ends call
+                 at Xfn    stuffdot patches this
+                           to "end of body"
+\end{verbatim}
+The [[end]] slot was emitted as a forward reference in [[outcode()]]
+and patched by [[stuffdot(p)]] once the body had been emitted; at run
+time [<Xfn>] uses it to {\em skip over} the body (\verb+runq->pc = end+)
+so the definition itself is a no-op for the enclosing script. When the
+function is later invoked, [<execfunc()>] calls [[start(func->fn,
+func->pc, ...)]], which creates a new thread that resumes right after
+the [[Xfn]] and runs until the matching [[Xreturn]].
+Because several variables can alias the same code vector (e.g.
+\verb+fn a b c { ... }+ defines three functions with one body), the
+vector is refcounted and [<codecopy>]/[[codefree()]] bump the count
+on entry and drop it on redefinition.
 
 <<function [[Xfn]]>>=
 void
@@ -9297,6 +9387,38 @@ hexnum(char *p, int n)
 }
 @
 
+%claude:
+[<heredoc()>] performs a lexical trick: on the first pass through the
+source, it does not capture the document body at all. Instead, it
+replaces the [[<<EOF]] tag {\em in the token stream} with a fresh
+[[/tmp/hereXXXX.YYYY]] filename (pid and serial counter), so the parser
+sees a plain [[<]]-redirection from that file. It then pushes a [[Here]]
+record on the [[here]] linked list recording the original tag and the
+temp name for later body capture. Here is what the rewrite looks like
+for \verb+grep foo <<EOF+:
+\begin{verbatim}
+  source line as lexed:       grep foo << EOF
+
+  what yylex()/heredoc() give to the parser:
+                              grep foo <  /tmp/here0a3f.0001
+                                       ^
+                                       rtype = HERE (not READ)
+
+  global `here` list after compile():
+    +--------+     +--------+
+    | h->tag | --> | "EOF"  |
+    | h->name| --> | "/tmp/here0a3f.0001"
+    | h->next|---> nil
+    +--------+
+\end{verbatim}
+After [<compile()>] finishes emitting bytecode for the whole line,
+[<readhere()>] walks this list: for each entry it [[Creat()]]s the
+temp file, then reads one line at a time from [[runq->cmdfd]] until a
+line matches [[h->tag]], writing the others to the file (with variable
+substitution via [<psubst()>] unless the tag was quoted). At runtime
+the [[HERE]] redirection becomes an ordinary [<Xread>] of the temp
+file, and a matching [<Xdelhere>] bytecode deletes it afterwards.
+
 <<function [[heredoc]]>>=
 //@Scheck: used by syn.y
 tree* heredoc(tree *tag)
@@ -11315,6 +11437,45 @@ errc(int c)
 <<constant [[NBUF]]>>=
 #define	NBUF	512
 @
+
+%claude:
+The [[Io]] struct serves three different roles depending on which
+fields are populated, which is why it looks strangely overloaded.
+In fd mode (used by [[openfd]]), [[fd]] is a real file descriptor,
+[[strp]] is [[nil]], and the inline [[buf]] array is the read/write
+window. In string mode (used by [[openstr]]), [[fd]] is $-1$, [[strp]]
+owns a heap-grown buffer, and [[bufp]]/[[ebuf]] walk that buffer instead
+of [[buf]]. In core mode (used by [[opencore]]), [[fd]] is also $-1$
+but [[strp]] points to a preloaded read-only buffer of known length.
+The three modes coexist without a tag because [[flush()]] and
+[[emptybuf()]] branch on \verb+f->strp != nil+ and \verb+f->fd == -1+.
+\begin{verbatim}
+  fd mode (openfd):
+    fd  = 5           strp = nil
+    +--------- Io ----------+
+    | fd=5                  |
+    | strp=nil              |
+    | bufp ----+  ebuf --+  |
+    | buf[0]   |         |  |
+    |  [  d  a  t  a     ]  |  <- bufp walks buf[]
+    | buf[NBUF-1]           |
+    +-----------------------+
+
+  string mode (openstr, growing):
+    fd  = -1          strp -> heap
+    +--------- Io ----------+      +----------------+
+    | fd=-1                 |      | 'f' 'o' 'o' \0 | (realloc'd
+    | strp -----------------+----->|                |  in flush)
+    | bufp (in heap buf)    |      | ...            |
+    | ebuf (in heap buf)    |      +----------------+
+    | buf[] unused          |
+    +-----------------------+
+
+  core mode (opencore, read-only):
+    fd = -1, strp owns a fixed-length preloaded buffer.
+\end{verbatim}
+The unused inline [[buf]] in string and core modes costs one [[NBUF]]
+per [[Io]] object, but avoids a second allocation in the common fd case.
 
 <<struct [[Io]]>>=
 struct Io {

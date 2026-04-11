@@ -3833,6 +3833,43 @@ struct Btail {
 #define T2HDR(t) ((Bhdr*)((uchar*)(t)+sizeof(Btail)-(t)->size))
 @
 
+%claude:
+The two pointer pairs are not redundant: [[left]]/[[right]]
+form a balanced binary search tree keyed on block \emph{size},
+while [[next]]/[[prev]] form a doubly-linked list of blocks
+that share the same size. Only one block per size sits in the
+tree---the ``representative''---and the others hang off it via
+[[next]]/[[prev]]. A request for [[n]] bytes walks the tree
+once in $O(\log k)$ (where $k$ is the number of distinct sizes),
+then pops the first element from the sibling list in $O(1)$.
+Here is a snapshot of [[freeroot]] with free blocks of sizes
+$64$, $128$, and $256$ (two of them):
+\begin{verbatim}
+high addr
+                      freeroot
+                         |
+                         v
+                    +---------+
+                    | size=128|  <-- tree node
+                    +---------+
+                    /         \
+              left /           \ right
+                  v             v
+             +--------+     +--------+
+             | size=64|     |size=256|---+
+             +--------+     +--------+   | next
+                                   ^     v
+                                   | +--------+
+                              prev | |size=256|
+                                   +-+--------+
+low addr
+\end{verbatim}
+%
+The sibling list is a micro-optimization: without it, a run
+of [[malloc(256)]] calls would keep rebalancing the tree. With
+it, the tree changes only when a size class becomes empty or
+appears for the first time.
+
 <<struct [[Free]]>>=
 struct Free {
             Bhdr;
@@ -9828,6 +9865,30 @@ build optimal Huffman trees (complex). This asymmetry is
 reflected in the code: [[deflate.c]] is roughly twice the
 size of [[inflate.c]].
 
+%claude:
+Each block starts with a tiny 3-bit header that drives the
+top-level dispatch in [<inflate()>]:
+\begin{verbatim}
+    bit 0         bits 1-2
+  +--------+--------------------+
+  | BFINAL |       BTYPE        |
+  +--------+--------------------+
+    |         |
+    |         +-- 00 = stored (uncompressed)
+    |             01 = fixed Huffman
+    |             10 = dynamic Huffman
+    |             11 = reserved (error)
+    |
+    +---- 1 if this is the last block, 0 otherwise
+\end{verbatim}
+%
+The decoder reads these 3 bits via [<sregfill()>], switches
+on [[BTYPE]] to pick a block parser, and loops until
+[[BFINAL]] is set. Because blocks are byte-unaligned---the
+next block starts wherever the current one ended, down to the
+bit---DEFLATE streams need a running bit buffer; that is the
+job of the [[sreg]]/[[nbits]] pair in [[Input]].
+
 \section{Inflation (decompression)}
 
 %claude:
@@ -15216,6 +15277,36 @@ it to prevent writer starvation. The [[wunlock]] function
 wakes either the next writer or a batch of consecutive
 readers from the wait queue.
 
+%claude:
+Here is what the wait queue looks like in a typical
+contention scenario---two readers are active, a writer is
+parked behind them, and three late readers and another
+writer have piled up after that writer:
+\begin{verbatim}
+  readers = 2    (active, not in queue)
+  writer  = 0
+
+       head                                          tail
+         |                                            |
+         v                                            v
+      +-----+   +-----+   +-----+   +-----+   +-----+
+      |  W  |-->|  R  |-->|  R  |-->|  R  |-->|  W  |
+      +-----+   +-----+   +-----+   +-----+   +-----+
+  QueuingW   QueuingR   QueuingR   QueuingR   QueuingW
+\end{verbatim}
+%
+When the two active readers call [<runlock()>], the last one
+to leave wakes the head of the queue. Since the head is a
+writer, exactly one thread is released, and it becomes the
+lock holder. When that writer eventually calls [<wunlock()>],
+the code walks the queue as long as the head is a [[QueuingR]]
+node, releasing them all at once: the three parked readers
+run in parallel, and the trailing [[QueuingW]] stays parked.
+This policy prevents writer starvation (readers arriving
+during a writer's tenure cannot slip ahead of it) while still
+letting a burst of readers share the lock when one becomes
+available.
+
 <<type [[RWLock]]>>=
 struct RWLock {
     Lock    lock;
@@ -16429,6 +16520,32 @@ read9pmsg(fdt fd, void *abuf, uint n)
 \subsection{Parsing}
 
 \subsubsection{String to message, [[convM2S()]]}
+
+%claude:
+Every 9P message on the wire shares a 7-byte preamble:
+a 4-byte [[size]] (total message length including the size
+field itself), a 1-byte [[type]], and a 2-byte [[tag]]. The
+remainder depends on [[type]]. Here is a [[Twrite]] message
+asking to write 5 bytes at offset 100 on [[fid]] 4:
+\begin{verbatim}
+  offset  bytes  field        value
+  ------  -----  ----------   -------------
+   0       4     size         24
+   4       1     type         118 (Twrite)
+   5       2     tag          7
+   7       4     fid          4
+  11       8     offset       100
+  19       4     count        5
+  23       5     data         "hello"
+                              -------
+                              24 bytes total
+\end{verbatim}
+%
+All integers are little-endian, independent of the host
+architecture---this is what [[GBIT32]]/[[PBIT32]] encode.
+Strings on the wire are a 2-byte length followed by the
+raw bytes (no null terminator), which is why the parser
+cannot just cast the buffer into an [[Fcall]].
 
 %claude:
 [[convM2S]] deserializes a 9P message from its wire format
@@ -17681,12 +17798,39 @@ struct Channel {
     volatile int nentry;	/* # of entries malloc-ed */
     volatile int closed;	/* channel is closed */
 
-    // must be at the end of the struct! 
+    // must be at the end of the struct!
     byte	v[1];		/* Array of s values in the channel */
 };
 @
 % no Lock?
 % volatile?
+
+%claude:
+The buffer [[v]] is a classic circular queue: [[f]] is the
+head (next element to extract), the count [[n]] is how many
+slots are filled, and the tail (next insertion slot) is
+[[(f+n)\%s]]. Here is a buffered channel with [[s=4]] just
+after three sends followed by one receive, holding two live
+elements:
+\begin{verbatim}
+  v[]    slot 0    slot 1    slot 2    slot 3
+       +---------+---------+---------+---------+
+       |  (old)  |   B     |   C     |  (free) |
+       +---------+---------+---------+---------+
+                     ^                    ^
+                     f = 1                (f+n) % 4 = 3
+                     n = 2
+
+  After the first recv, the ``A'' in slot 0 is stale but not
+  cleared; f moved from 0 to 1, and n dropped from 3 to 2.
+\end{verbatim}
+%
+Allocating [[v]] inline at the end of the struct (via the
+[[byte v[1]]] trailing-array trick) means [[chancreate]] does
+one [[malloc]] for the header and the payload together. This
+matters because channels are the fundamental coordination
+primitive---a program with many small channels should not
+pay a double-allocation overhead per channel.
 
 <<global [[chanlock]]>>=
 static Lock chanlock;		/* central channel access lock */
@@ -18576,6 +18720,36 @@ the current thread (marking it Ready) and switches to the
 next one. This is the core of cooperative scheduling: a
 thread runs until it explicitly yields, sends/receives on a
 channel, or exits.
+
+%claude:
+The context-switch dance uses \emph{two} [[jmp_buf]]s per
+proc, one in [[Proc.sched]] (the scheduler's saved context)
+and one per thread in [[Thread.sched]]. A yield from thread
+$T_1$ to thread $T_2$ proceeds as follows:
+\begin{verbatim}
+  T1 running
+     |
+     | _sched():
+     |   setjmp(T1->sched)   <-- remember where T1 paused
+     |   longjmp(p->sched)   <-- jump to scheduler
+     v
+  scheduler loop (longjmp target)
+     |
+     | runthread() picks T2 from p->ready
+     | p->thread = T2
+     | longjmp(T2->sched)    <-- resume T2 where it paused
+     v
+  T2 running
+\end{verbatim}
+%
+The [[setjmp]] at the top of [[_schedinit]] is the landing
+pad for \emph{every} [[longjmp(p->sched)]]: each yielding
+thread returns to exactly the same point in the scheduler
+loop, which then picks the next ready thread. The elegant
+part is that a brand-new thread looks identical to a paused
+one: [[_threadinitstack]] forges a [[jmp_buf]] whose PC is
+[[launcher386]] and whose SP points into the new stack, so
+the scheduler can [[longjmp]] into it with no special case.
 
 <<global [[_psstate]]>>=
 static char *_psstate[] = {

@@ -13944,6 +13944,45 @@ instead of reading from disk. Pages in the cache can be
 simultaneously in use (referenced by a segment) or free
 (on [[palloc]]'s free list but still in the hash table,
 ready to be reclaimed if needed before being recycled).
+%claude:
+The same [[Page]] can be chained into {two} lists at
+once: [[palloc.hash]] (the page cache, keyed by
+[[daddr]]) and [[palloc.head]]/[[palloc.tail]] (the LRU
+free list). The chains use different link fields---
+[[Page.hash]] for the cache, [[Page.next]]/[[Page.prev]]
+for the LRU---so they do not collide:
+\begin{verbatim}
+  palloc.hash[pghash(daddr)]         palloc.head (MRU)
+       |                                  |
+       v                                  v
+   +---------+     +---------+        +---------+
+   | Page A  |     | Page B  |        | Page A  |
+   | ref = 2 |     | ref = 0 |        | ref = 0 |
+   | image=X |     | image=X |        |  (free) |
+   | daddr=0 |     | daddr=1 |        +---------+
+   |  .hash -+---->|  .hash -+->nil        |
+   +---------+     +---------+         .next/.prev
+                        ^                  v
+                        |              +---------+
+                        +--------------| Page B  |
+                                       | (cached)|
+                                       +---------+
+                                            v
+                                        ... tail (LRU)
+\end{verbatim}
+%claude:
+Page~A has [[ref == 2]] (two segments map it) so it is
+only in the hash chain. Page~B has [[ref == 0]]---it was
+freed but its [[image]]/[[daddr]] are still set, so it
+lives in {both} the hash chain {and} the free list.
+[<lookpage()>] on [[(X, 1)]] still finds Page~B and calls
+[[pageunchain()]] to pull it off the LRU, bumping
+[[ref]] back to~1---a cache hit with zero disk I/O.
+This is why [<putpage()>] puts cached pages at the
+{tail} of the free list (via [[pagechaintail()]]) while
+uncached ones go to the {head}: tail pages are the
+last to be recycled, giving the cache the longest
+possible window.
 
 % When we load(pagein) a page from the Text of a binary, this page now
 % contains a "cache" of a portion of a file. If we do another exec
@@ -18192,6 +18231,35 @@ alarms, periodic callbacks, etc.). The solution is a
 sorted linked list of software [[Timer]] structures: only
 the earliest one is programmed into the hardware. When it
 fires, [[timerintr()]] processes it and programs the next.
+%claude:
+Here is a snapshot of CPU~0's list after the kernel has armed
+a [[hzclock]] at 10~ms, a process [[sleep(50)]], and an
+Ethernet poll at 80~ms (times in fasttick units, relative to
+[[now]]):
+\begin{verbatim}
+  timers[0].head
+       |
+       v
+    +-------+     +-------+     +-------+
+    | twhen |     | twhen |     | twhen |
+    |  10ms |---->|  50ms |---->|  80ms |----> nil
+    | hzclk |     | wakeup|     | ethpol|
+    +-------+     +-------+     +-------+
+       ^
+       |
+   arch_timerset(10ms)   <-- only the head is loaded
+                             into the hardware compare
+                             register (c3 on ARM)
+\end{verbatim}
+%claude:
+When the hardware fires at 10~ms, [<timerintr()>] pops
+the head, invokes its callback, re-adds it (for periodic
+timers like [[hzclock]]) or drops it, and then calls
+[[arch_timerset()]] on the new head (now 50~ms away). This
+is the classic {timer wheel collapsed to a list}: cheap
+when only a few timers are outstanding, but
+$O(n)$ to insert. The kernel gets away with the linear
+scan because the list is usually short.
 
 \subsection{[[Timer]]}
 
@@ -30793,14 +30861,26 @@ struct Block
 
 %claude:
 The layout of a [[Block]] buffer is:
-%
-%  base        rp           wp        lim
-%  |--header---|---data------|--free---|
-%
+\begin{verbatim}
+   base         rp              wp           lim
+    |            |               |            |
+    v            v               v            v
+    +------------+---------------+------------+
+    | header     | data          | free       |
+    | space      | (BLEN bytes)  | trailer    |
+    | (Hdrspc)   |               | space      |
+    +------------+---------------+------------+
+    <--------- BALLOC = lim - base ----------->
+\end{verbatim}
+%claude:
 The region before [[rp]] is header space ([[Hdrspc]] bytes). Protocol
-layers prepend headers by decrementing [[rp]], avoiding copies.
-[[BLEN]] gives the number of data bytes; [[BALLOC]] gives the total
-allocated size.
+layers prepend headers by decrementing [[rp]], avoiding copies---an IP
+header gets pushed in front of a TCP segment that already sits in
+front of the payload, all without touching the data bytes. [[BLEN]]
+gives the number of data bytes currently between [[rp]] and [[wp]];
+[[BALLOC]] gives the total allocated size. When the initial [[Hdrspc]]
+runs out, [padblock] allocates a bigger buffer and copies; the
+common case skips the copy.
 
 <<function [[BLEN]]>>=
 #define BLEN(s) ((s)->wp - (s)->rp)
@@ -32105,6 +32185,28 @@ Plan 9 pipes are bidirectional: both ends can read and write. A pipe is
 a pair of [[Queue]]s: writing to [[fd[0]]] enqueues on [[q[1]]] (which
 [[fd[1]]] reads from), and vice versa. A single pipe suffices for two-way
 communication, whereas Unix requires two.
+%claude:
+The cross-wiring is what makes one pipe act like two Unix pipes. Each
+endpoint's ``read'' and ``write'' paths hit different queues, so a byte
+written at one end always comes out at the other:
+\begin{verbatim}
+                     Pipe
+              +------------------+
+              |                  |
+   fd[0]      |   Queue q[0]     |      fd[1]
+   read  <----+<---------------<-+----  write
+              |                  |
+              |   Queue q[1]     |
+   write ---->+--------------->->+----> read
+              |                  |
+              +------------------+
+\end{verbatim}
+%claude:
+The [[qref[2]]] array counts how many open channels reference each
+side; when a side's refcount drops to zero, the opposite queue is
+hung up (sending EOF to the peer). Closing [[fd[0]]] thus delivers
+EOF to whoever is still reading at [[fd[1]]]---the same contract as
+a Unix pipe, just achieved symmetrically.
 %claude:
 [syspipe] creates a pipe by attaching to the pipe device ([[#|]]),
 cloning the channel, then walking each clone to [[data]] and [[data1]].

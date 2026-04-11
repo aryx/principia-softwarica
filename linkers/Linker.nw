@@ -725,6 +725,37 @@ of the linking pipeline.
 One way to implement a hash table in C is to use a big array
 of lists, also known as an array of {buckets}:
 
+%claude:
+Concretely, after loading two object files that both define a
+private [[tmp]] and a public [[memcpy]], the table looks roughly
+like this (the bucket indices are hypothetical):
+\begin{verbatim}
+  hash[NHASH]
+    +---+
+  0 |   |
+    +---+
+    |...|
+    +---+
+ 42 | *---->+------------+     +------------+
+    +---+   | "memcpy"   |     | "tmp"      |
+    |...|   | version=0  |---->| version=2  |---> S (nil)
+    +---+   | type=STEXT |     | type=STEXT |
+917 | *---->+------------+     +------------+
+    +---+   | "tmp"      |
+    |...|   | version=1  |---> S (nil)
+    +---+   | type=STEXT |
+            +------------+
+\end{verbatim}
+%claude:
+Two observations. First, public and private symbols coexist in
+the same array: only the [[(name, version)]] pair is the key, so
+collisions between versions fall onto their chain-walk anyway.
+Second, the [[link]] field is embedded in [<Sym>] rather than
+stored in a separate [[Bucket]] struct---this intrusive-list idiom
+is the same trick used by [[5a]]'s symbol table and by most Plan 9
+kernel data structures, and saves one allocation per insert at
+the cost of making a [<Sym>] belong to exactly one chain.
+
 <<global hash linker>>=
 // hash<Sym.name * Sym.version, ref_own<Sym>> (next = Sym.link in bucket)
 Sym*	hash[NHASH];
@@ -2093,6 +2124,44 @@ long OFFSET;
 %toc: ???
 \t toc? or put before when see high-level view of code/
 
+%claude:
+Because the chunks above are presented in execution order (text,
+data, symbols, header), it is easy to lose sight of how the pieces
+are arranged on disk. [<asmb()>] writes them out of order but seeks
+back to each slab's offset, so the final [[a.out]] file looks like
+this:
+\begin{verbatim}
+  file offset           section
+  +---------------------+
+  | 0                   | a.out header  (HEADR = 32 bytes)
+  +---------------------+   -- magic, textsize, datsize, bsssize,
+  | HEADR               |      symsize, entry, 0, lcsize
+  |                     | TEXT section  (textsize bytes)
+  |                     |   ARM instructions, then literal pools,
+  |                     |   then inlined strings in text segment
+  +---------------------+
+  | HEADR+textsize      | DATA section  (datsize bytes)
+  |                     |   initialised globals (no BSS: it is
+  |                     |   zero-filled by the kernel at exec)
+  +---------------------+
+  | HEADR+textsize      | SYMS section  (symsize bytes)
+  |   +datsize          |   stream of putsymb() entries
+  +---------------------+
+  |  + symsize          | PCLN section  (lcsize bytes)
+  |                     |   delta-encoded pc/line table
+  +---------------------+
+\end{verbatim}
+%claude:
+The header is written last because [<symsize>] and [<lcsize>]
+are only known after [<asmsym()>] and [<asmlc()>] run, but those
+sizes must be stored in the header at offset 0. [<asmb()>] handles
+this by seeking back to 0 at the very end. Note the asymmetry
+between text and data on one hand and BSS on the other: BSS has
+a size in the header but no bytes in the file, since the kernel
+will zero-fill those pages at [[exec]] time---a design shared with
+all [[a.out]]/ELF variants and a major reason executable files are
+much smaller than the running process image.
+
 \subsection{Header}
 \label{sec:gen-header}
 
@@ -2877,9 +2946,40 @@ are separated by the [[AEND]] opcode.
 
 \subsection{Single instruction input}
 
+%claude:
+Figure~\ref{fig:object-format-complete} shows the high-level layout
+of an instruction record, but it helps to see the raw bytes the
+reader walks through. A minimum instruction is 7 bytes (opcode
+header) plus at least 4 bytes per operand, so the smallest record
+is 15 bytes and most are 15 or 16:
+\begin{verbatim}
+  byte   0    1      2    3 4 5 6     7 .. r-1   r .. size-1
+       +----+------+----+-----------+-----------+-----------+
+       | as | scond| reg|   line    |  from     |    to     |
+       +----+------+----+-----------+-----------+-----------+
+       ^    ^      ^    ^           ^           ^
+       |    |      |    |           |           +-- Operand 2
+       |    |      |    |           +-- Operand 1 (variable)
+       |    |      |    +-- source line (4 bytes, little endian)
+       |    |      +-- register field (1 byte)
+       |    +-- condition code (ARM-specific, 1 byte)
+       +-- opcode index (1 byte, [[Opcode]] enum)
+\end{verbatim}
+%claude:
+Two details are worth noting. First, [[line]] uses a 4-byte
+little-endian encoding while the rest of the linker treats numbers
+as native-endian---this record format has to be portable between
+the assembler (which may cross-compile on a big-endian host) and
+[[5l]], so the object file commits to little-endian on the wire.
+Second, the opcode is deliberately the first byte so that
+[[ldobj()]] can peek at [[bloc[0]]] to dispatch [[ANAME]],
+[[ASIGNAME]] and [[AHISTORY]] entries {before} allocating a
+[<Prog>]---those pseudo-opcodes don't represent instructions and
+would waste a [[Prog]] struct.
+
 %trans:
 An important chunk of [<ldobj()>] deals with the parsing
-of one instruction whose format is described 
+of one instruction whose format is described
 in the middle of Figure~\ref{fig:object-format-complete}.
 %assembler:
 The code below does mostly the reverse operation
@@ -2994,6 +3094,38 @@ but the important result is that [<Operand.sym>] will point
 to a symbol in the symbol table [<hash>].
 
 The operands have variable size depending on the operand kind:
+
+%claude:
+This is the only place in the object-file record where the
+encoding departs from fixed-size fields. The 4-byte opcode header
+(type, reg, symidx, symkind) is always present, and then a
+kind-dependent tail grows the record:
+\begin{verbatim}
+  byte   0     1     2       3        4 .. size-1
+       +------+----+--------+---------+------------------+
+       | type | reg| symidx | symkind | kind-specific    |
+       +------+----+--------+---------+------------------+
+
+  kind         tail size   what it carries
+  ----------   ---------   -------------------------------
+  D_NONE           0       (no payload)
+  D_REG            0       register number is in reg above
+  D_PSR            0       program status register reference
+  D_REGREG         1       second register (p[4])
+  D_CONST          4       signed 32-bit constant, LE
+  D_ADDR           4       address offset to a symbol
+  D_SHIFT          4       encoded shifter operand
+  D_OREG           4       offset for MOVW foo(Rn), ...
+  D_BRANCH         4       absolute virtual pc for B/BL
+  D_SCONST         8       inline 8-byte string constant
+\end{verbatim}
+%claude:
+The trailing return value of [[inopd()]] tells the caller how far
+to advance [[bloc]]---there is no length field in the header, so
+the reader must dispatch on [[type]] before it can find the next
+operand. This is the same reason the assembler has to agree with
+the linker on this table: a mismatch silently corrupts the rest
+of the instruction stream rather than producing a parse error.
 
 <<[[inopd()]] cases>>=
 // 0 byte
@@ -10697,7 +10829,42 @@ in this section, in the following ARM instructions:
 
 \subsection{[[blitrl/elitrl]]}
 
-The literal pool, which is a list of [[WORD]] instructions, 
+%claude:
+Before diving into the code, it helps to visualise where pools
+sit in the final text layout. Unlike x86, where a 32-bit immediate
+can be embedded right after the opcode, ARM loads a large constant
+with \verb+LDR Roff(R15), Rdst+ where the 12-bit offset must reach
+a [[WORD]] datum. The linker therefore scatters small pools
+{inside} the text section, typically right after an unconditional
+branch so execution skips over them:
+\begin{verbatim}
+  text addr
+    ...
+   1f00: LDR  1008(R15), R11     ; from ADD $0xffff...
+   1f04: ADD  R11, R2, R3
+   1f08: LDR  1004(R15), R11     ; from MOVW 0xffce(R1), R2
+   1f0c: LDR  R11(R1), R2
+   1f10: B    1f20                ; branch over pool (inserted)
+   1f14: WORD $0xffff              |
+   1f18: WORD $0xffce              |  <- literal pool
+   1f1c: WORD $0xdead              |     (blitrl..elitrl)
+   1f20: MOVW ...                  ; next real instruction
+\end{verbatim}
+%claude:
+Two properties fall out of this layout. First, each pool has to
+stay within $\pm$4KB (a 12-bit offset) of every instruction that
+references it; [<checkpool()>] flushes the pool early when that
+window threatens to close, which is why pools can appear
+mid-function rather than only at its end. Second, the pool itself
+lives in the text section, not in data, because only text has
+a stable PC-relative relationship with the loads: putting pools
+in [[.data]] would work on ELF but would need real relocations
+and a larger addressing window. Java bytecode and Swift take the
+opposite end of this design space, with a dedicated constant pool
+per class or module; ARM's limited immediates push [[5l]] closer
+to a per-function micro-pool.
+
+The literal pool, which is a list of [[WORD]] instructions,
 is represented by the globals [[blitrl]] and [[elitrl]]
 which respectively stores the beginning and end of this list:
 
