@@ -1976,13 +1976,51 @@ if(of < 0) {
 \t  but maybe it's ok for this book. Error managment code is small and rare.
 
 [<assemble()>] calls [<yyparse()>]
-two times, with the appropriate value set in [<pass>] first, 
-and after having also initialized some globals related to the input file 
+two times, with the appropriate value set in [<pass>] first,
+and after having also initialized some globals related to the input file
 with [<pinit()>].
 %
 This means the input assembly file is parsed two times, but
 the actions in the grammar do different things the second time.
 %ocaml: ugly globals, dont see clearly, also ugly parse two times
+
+%claude:
+A tiny concrete example shows what each pass contributes.
+Suppose the input file contains a forward jump to a label
+that is only defined further down:
+\begin{verbatim}
+   TEXT    main(SB), $0
+           MOVW    $0, R0
+           B       later     ; forward reference -- not yet known
+           MOVW    $1, R1
+   later:
+           RET
+\end{verbatim}
+\begin{verbatim}
+   pass           | outcode() behaviour   | label table (Sym.value)
+   ---------------+-----------------------+-------------------------
+   pass == 1      | returns immediately   | MOVW at virtual pc 0
+   (``seek        | after pc++            | B    at virtual pc 1
+    labels'')     |                       | MOVW at virtual pc 2
+                  |                       | later: defined = 3
+                  |                       | RET  at virtual pc 3
+   ---------------+-----------------------+-------------------------
+   pass == 2      | actually serializes   | every label Sym already
+   (``emit        | each instruction to   | has its final .value,
+    bytes'')      | obuf                  | so B can resolve
+                  |                       | "later" to offset 3
+\end{verbatim}
+%claude:
+Note that the grammar is the same in both passes---it is
+only the {semantic actions} that diverge. [<outcode()>]
+checks [[if(pass == 1) goto out;]] and bails out before
+writing any bytes in pass~1, but still increments [[pc]].
+The label-definition rules in [[a.y]] always record the
+current [[pc]] into the [[Sym]] they are defining, so by
+the end of pass~1 the symbol table holds the final
+virtual address of every label. Pass~2 then emits bytes
+and, whenever it encounters a label use, looks up the
+(now-known) [[Sym.value]] to compute the branch offset.
 
 
 [<assemble()>] returns the number of errors it found
@@ -6172,6 +6210,32 @@ rcon:
 \l really does too much work here and close to ARM concrete bits
 %ocaml: ugly to encode so much stuff in offset
 \n no leading dollar here, hmmm
+
+%claude:
+Putting the four fields together, here is what [[Gen.offset]]
+actually looks like for a single shifted-register operand:
+\begin{verbatim}
+  bit:  11  10   9   8 | 7 | 6   5 | 4 | 3   2   1   0
+       +---+---+---+---+---+---+---+---+---+---+---+---+
+       |  shift amt / reg  | kind  |isr|  base register |
+       +---+---+---+---+---+---+---+---+---+---+---+---+
+
+  base register (bits 0..3):  R0 .. R15
+  isr           (bit  4)   :  0 = shift amount is a constant
+                              1 = shift amount is a register
+  kind          (bits 5..6):  00 = LSL (<<)    10 = ASR (->)
+                              01 = LSR (>>)    11 = ROR (@>)
+  shift amount  :  if isr = 0, bits 7..11 hold a 5-bit constant
+                   if isr = 1, bits 8..11 hold a register number
+                               (bit 7 stays 0)
+\end{verbatim}
+%claude:
+For example, [[R1 << 4]] is encoded as
+[[1 | (4<<7) | (0<<5) = 0x201]]: register~1 in bits 0..3,
+the 5-bit constant 4 in bits 7..11, shift kind LSL (zero)
+in bits 5..6, and [[isr]] zero. Each action in the
+[[shift]] and [[rcon]] rules above contributes one slot
+of this picture.
 
 The tricky [[Gen.offset]] encoding for bitshifted registers
 reflects how such operands are actually encoded in the binary
