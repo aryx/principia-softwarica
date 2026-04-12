@@ -1,6 +1,34 @@
 
 \section{Overview}
 
+%claude:
+[[db]] is the traditional \plan debugger, descended from Ken
+Thompson's original \unix [[db]] and Steve Bourne's [[adb]].
+It provides a fixed set of single-character commands for
+inspecting and controlling a target process, in contrast to
+[[acid]]'s programmable language. Both debuggers use the same
+kernel interface ([[/proc/<pid>/]]) and the same [[libmach]]
+library for symbol tables, disassembly, and follow-set
+computation, so the underlying debugging \emph{mechanisms} are
+identical---what differs is the user interface.
+%
+The main architectural difference:
+\begin{verbatim}
+   acid                                db
+   ----                                --
+   yacc parser + interpreter           hand-written [addr][,count][cmd]
+   user-defined functions (defn)       fixed command set
+   type system (complex/aggr)          no type awareness
+   garbage-collected AST/values        no heap allocation for values
+   ~5000 LOC (acid/ + /lib/acid/)      ~2000 LOC (db/)
+\end{verbatim}
+%
+Because [[acid]] is strictly more powerful than [[db]], the main
+book focuses on [[acid]]. This appendix presents [[db]] for
+historical interest and because its compact code makes the
+shared debugging mechanisms (breakpoints, single-step, stack
+trace) easier to see without the interpreter overhead.
+
 \subsection{[[db]] services}
 
 <<[[main()]] print usage and exit (db)>>=
@@ -12,6 +40,31 @@ exits("usage");
 
 % see also Machine.nw, which has a similar interface.
 % acid has actually similar CLI flags
+
+%claude:
+The command grammar is inherited from [[adb]] and is extremely
+terse---every command is a single character from this set:
+\begin{verbatim}
+   [address] [,count] [command]
+
+   Commands:
+     ?    inspect text (symmap)       :r   run program
+     /    inspect data (cormap)       :c   continue
+     =    print expression value      :s   single step (asm)
+     $    dump state ($r,$c,$b,...)   :S   single step (C line)
+     >    set register                :b   set breakpoint
+     !    shell escape                :d   delete breakpoint
+     :    process control             :k   kill process
+                                      :h   halt (stop)
+                                      :x   unhalt (resume)
+\end{verbatim}
+%
+The key idea is that [[?]] reads from the text file ([[symmap]]),
+[[/]] reads from the live process memory ([[cormap]]), and [[=]]
+just prints the expression value without reading memory at all.
+This three-way split was a source of confusion in [[adb]] and is
+one reason [[acid]] collapsed everything into [[*address]]
+(dereference through [[cormap]]).
 
 <<constant [[CMD_VERBS]]>>=
 #define CMD_VERBS	"?/=>!$: \t"
@@ -96,6 +149,42 @@ exits("usage");
 % without wasting disk space in a core dump)
 
 \section{Core data structures}
+
+%claude:
+[[db]] uses the same [[libmach]] types as [[acid]]: [[Map]] for
+memory access ([[symmap]] for the executable file, [[cormap]]
+for the live process), [[Fhdr]] for the parsed header, and the
+symbol table functions ([[findsym]], [[fileline]], [[pc2line]]).
+The difference is that [[db]] manages process control directly
+through global file descriptors ([[msgfd]] for [[/proc/<pid>/ctl]],
+[[notefd]] for [[/proc/<pid>/note]]) rather than through
+[[acid]]'s [[ptab[]]] array. Where [[acid]]'s [<msg()>] looks
+up a PID in [[ptab]] to find the right [[ctl]] fd, [[db]]'s
+[<msgpcs()>] just writes to the single global [[msgfd]]---because
+[[db]] can only debug one process at a time.
+%
+Here is the relationship between [[db]]'s main data structures
+and the files they point to:
+\begin{verbatim}
+   db globals            /proc/<pid>/         executable file
+   ----------            ---------------      ---------------
+   symmap  ----------->  (not /proc)  ------> a.out or 8.out
+     .seg[0] "text"                           text segment
+     .seg[1] "data"                           data segment
+
+   cormap  ----------->  /proc/<pid>/mem
+     .seg[0] "regs"  ->  /proc/<pid>/regs
+     .seg[1] "fpregs"->  /proc/<pid>/fpregs
+     .seg[2] "text"  ->  /proc/<pid>/mem      (text range)
+     .seg[3] "data"  ->  /proc/<pid>/mem      (data range)
+
+   msgfd   ----------->  /proc/<pid>/ctl      (write "start" etc.)
+   notefd  ----------->  /proc/<pid>/note     (read/write notes)
+\end{verbatim}
+%
+This is structurally identical to [[acid]]'s setup (compare with
+the [[symmap]]/[[cormap]] diagram in Chapter~\ref{chap:core-ds}),
+just with fewer globals since there is no multi-process support.
 
 \subsection{[[/proc/x/text]] and [[symmap]]}
 
@@ -190,6 +279,20 @@ if(ret < 0 && !ending){
 
 \subsection{[[Addr]] and [[dot]]}
 
+%claude:
+The [[dot]] variable is [[db]]'s central concept---it is the
+``current address'' that most commands operate on implicitly.
+After [[main ?i]], dot is at [[main]]; after printing three
+instructions with [[3i]], dot advances by 12 bytes (3 $\times$ 4
+for ARM). Pressing Enter repeats the last command at the new
+dot, so you can page through code or data just by hitting
+Enter. This implicit-current-address model is what makes [[adb]]
+terse: you rarely need to type an address twice.
+%
+[[acid]] has no equivalent of dot. Every operation takes an
+explicit address argument: [[*main\textbackslash{}i]] instead of
+[[main ?i]] then Enter.
+
 <<type [[ADDR]]>>=
 typedef uvlong ADDR;
 @
@@ -214,6 +317,31 @@ WORD cntval;
 
 
 \subsection{[[Bkpt]] and [[bkpthead]]}
+
+%claude:
+The [[Bkpt]] struct is [[db]]'s version of [[acid]]'s breakpoint
+list ([[bplist]]). The key difference is that [[db]] stores
+breakpoints in a linked list of C structs with a [[flag]] field
+tracking their state, while [[acid]] stores them as an [[acid]]
+list of addresses and uses library functions to manage them.
+%
+The [[save[4]]] field holds the original instruction bytes that
+were overwritten by the breakpoint trap---[[db]] saves and
+restores them through [<bkput()>], using exactly the same
+[[get1]]/[[put1]] mechanism as [[acid]].
+%
+The [[flag]] field tracks a small state machine:
+\begin{verbatim}
+   BKPTCLR  (0) ---[user :b]---> BKPTSET (1)
+   BKPTSET  (1) ---[bp hit]----> BKPTSKIP (2)  (skip next time)
+   BKPTSKIP (2) ---[stepped]---> BKPTSET (1)   (re-arm)
+   BKPTTMP  (3) ---[bp hit]----> BKPTCLR (0)   (one-shot, for :s)
+\end{verbatim}
+The [[BKPTSKIP]] state exists to handle the ``step over a
+breakpoint'' problem: after a breakpoint fires, the debugger
+must single-step past the original instruction before
+re-inserting the trap. [[acid]] solves the same problem in
+its [[cont()]] library function.
 
 <<struct [[bkpt]]>>=
 struct bkpt {
@@ -302,6 +430,31 @@ int nnote;
 
 
 \section{[[/bin/db]]}
+
+%claude:
+The overall structure of [[db]] is much simpler than [[acid]]'s
+because there is no interpreter:
+\begin{verbatim}
+   main()
+     |
+     +-- setsym()         (parse executable, load symbols)
+     +-- setcor()         (open /proc/<pid>/mem if attached)
+     |
+     +-- for(;;)          (REPL loop)
+           |
+           +-- clrinp()   (reset input)
+           +-- rdc()      (skip whitespace)
+           +-- command()  (parse and execute one command)
+                 |
+                 +-- expr()       (parse optional address)
+                 +-- expr()       (parse optional count)
+                 +-- switch(cmd)  (dispatch: ?, /, =, $, :, >, !)
+\end{verbatim}
+%
+Compare with [[acid]]'s flow: [[main]] $\to$ [[yyparse]] $\to$
+[[execute]] $\to$ [[expop]] dispatch. [[db]] has no parse tree,
+no values, no garbage collector---it reads a command character,
+dispatches on it, and calls [[libmach]] functions directly.
 
 \subsection{[[main()]]}
 
@@ -870,6 +1023,31 @@ reread(void)
 
 \subsection{Interpreter: [[command()]]}
 
+%claude:
+[<command()>] is [[db]]'s equivalent of [[acid]]'s
+[[yyparse]]+[[execute]]---it parses and executes one command
+line in the [[adb]] grammar
+(\emph{address, count, command}).
+The parsing is entirely manual: [<expr()>]
+parses the optional address, [<rdc()>] checks for a comma and
+count, and a [[switch]] dispatches on the command character.
+%
+A concrete example:
+\begin{verbatim}
+   Input:  main+4,3?i
+
+   expr(0)  -> parses "main+4", sets dot = main+4
+   rdc()    -> sees ',', expr(0) -> parses "3", sets cntval = 3
+   rdc()    -> reads '?', sets lastcom = '?'
+   switch:  case '?' -> acommand('?')
+                      -> getformat("i")
+                      -> scanform(3, ...) -> exform() x3
+                         (disassembles 3 instructions from main+4)
+\end{verbatim}
+%
+Note the [[do \ldots while(rdc()==';')]] loop: commands can be
+chained with semicolons on one line, e.g., [[main:b; :r]].
+
 % have seen the repl loop before, so the 'l' and
 % the initializations for the 'r' and 'p', here
 % we see the 'rep'
@@ -1137,6 +1315,34 @@ nextchar(void)
 @
 
 \section{Command Parsing}
+
+%claude:
+The expression parser ([<expr>] $\to$ [<term>] $\to$ [<item>])
+is a hand-written recursive descent parser for [[adb]]'s address
+expressions. It supports arithmetic ([[+]], [[-]], [[*]], etc.),
+symbol lookup ([[main]], [[main.x]]), register access ([[<PC]]),
+and memory dereference ([[*addr]] for [[cormap]], [[@addr]] for
+[[symmap]]). The dereference operators highlight the key
+difference from [[acid]]: in [[db]], [[*]] reads through
+[[cormap]] and [[@]] reads through [[symmap]], while in [[acid]]
+the single [[*]] operator uses whichever map the address falls
+in.
+%
+A worked example of address parsing:
+\begin{verbatim}
+   Input: main.x+8
+
+   item():
+     "main" -> lookup(0, "main", &s) -> s.value = 0x1020
+     '.'    -> "x"
+     localaddr(cormap, "main", "x", &e) -> e = 0x1020 + frame - 4
+     expv = 0x103c (say)
+
+   expr():
+     lhs = 0x103c
+     '+' -> term() -> "8" -> expv = 8
+     expv = 0x103c + 8 = 0x1044
+\end{verbatim}
 
 <<global [[expv]]>>=
 // was in expr.c
@@ -1757,6 +1963,30 @@ case 'M':
 @
 
 \section{Inspecting commands, [[?/=]]}
+
+%claude:
+The inspection commands ([[?]], [[/]], [[=]]) are [[db]]'s main
+output mechanism. Each reads memory (or an expression value)
+and formats it according to a {format string}---a sequence of
+single-character format specifiers like [[i]] (instruction),
+[[X]] (hex word), [[s]] (string), [[c]] (char). The default
+format is [["zMi"]]: print the source location ([[z]]), the hex
+dump of the instruction ([[M]]), and the disassembly ([[i]]).
+%
+The format system is a mini-language of its own:
+\begin{verbatim}
+   main,5?i         disassemble 5 instructions from main
+   main?X           print 4-byte hex word at main
+   main?s           print null-terminated string at main
+   main?3XnXn       print 3 hex words, newline, 1 more, newline
+   main=X           print main's ADDRESS in hex (no memory read)
+\end{verbatim}
+%
+[[acid]] has no equivalent of this format system. Instead, you
+use format suffixes on expressions: [[main\textbackslash{}X]],
+[[*main\textbackslash{}i]], or call library functions like
+[[asm()]] and [[mem()]].
+
 % and modifying
 
 <<[[command()]] switch lastcom cases>>=
@@ -2492,7 +2722,25 @@ newline(void)
 @
 %less: inline
 
-\section{Sub process control commands, [[:]]}%$
+\section{Sub process control commands, [[:]]}
+
+%claude:
+The colon commands ([[:r]], [[:c]], [[:s]], [[:b]], [[:d]],
+[[:k]], [[:h]], [[:x]]) map directly to [[acid]] library
+functions: [[:r]] is [[new()]], [[:c]] is [[cont()]], [[:s]] is
+the single-step loop in [[cont()]], [[:b]] is [[bpset()]], and
+so on. The underlying mechanism is identical: they write
+[[start]], [[stop]], [[startstop]], [[waitstop]], [[hang]], or
+[[kill]] to [[/proc/<pid>/ctl]] through [<msgpcs()>] (the
+equivalent of [[acid]]'s [<msg()>]).
+%
+The main difference is that [[acid]] exposes these as
+programmable functions the user can compose (e.g., ``set a
+breakpoint, continue, print a variable, delete the breakpoint,
+repeat 100 times''), while [[db]] offers them only as
+single-keystroke commands with a count parameter.
+
+%$
 
 <<[[command()]] switch lastcom cases>>=
 case ':':
@@ -2623,6 +2871,21 @@ printsource(ADDR dot)
 
 \subsubsection{[[runpcs()]]}
 
+%claude:
+[<runpcs()>] is the main execution loop, called by both
+[[:c]] (continue, [[CONTIN]] mode) and [[:s]] (single-step,
+[[SINGLE]] mode). In [[CONTIN]] mode it installs all breakpoints,
+resumes with [[startstop]], then handles whatever stopped the
+target: a breakpoint hit, a note (signal), or an unexpected
+stop. The [[BKPTSKIP]] state handles the ``step over the
+breakpoint we just hit'' problem: the breakpoint is temporarily
+removed, one instruction is stepped, then the breakpoint is
+re-inserted.
+%
+This is the same logic as [[acid]]'s [[cont()]] function in
+[[/lib/acid/port.acid]], just written in C instead of in the
+[[acid]] language.
+
 % subpcs -> <>
 <<function [[runpcs]]>>=
 /* service routines for sub process control */
@@ -2749,6 +3012,14 @@ setup(void)
 }
 @
 % break point not installed yet, will be in setbp
+
+%claude:
+[<startpcs()>] is [[db]]'s version of [[acid]]'s
+[<newproc()>]/[<nproc()>]. It uses the same fork/hang/exec
+pattern: the child writes [[hang]] to its own [[ctl]] before
+calling [[exec]], so the parent can intercept it at the first
+instruction. Compare with the sequence diagram in
+Chapter~\ref{chap:kernel-support}---the protocol is identical.
 
 % setup | ??? -> <>
 <<function [[startpcs]]>>=
@@ -2924,6 +3195,19 @@ defval(WORD w)
         return (w);
 }
 @
+
+%claude:
+[<runstep()>] implements single-stepping using the same
+follow-set mechanism as [[acid]]: call [[machdata->foll()]]
+(from [[libmach/5db.c]]) to compute the possible next PCs,
+set temporary breakpoints at each, resume with [[startstop]],
+then remove the temporary breakpoints. This is identical to
+how [[acid]]'s [[cont()]] library function handles
+single-stepping---the code path through [[libmach]] is shared.
+%
+[[db]]'s version is slightly more explicit because it manages
+the temporary [[BKPT]] structs inline rather than going through
+an [[acid]] list.
 
 % runpcs (when SINGLE) -> <>
 <<function [[runstep]]>>=
@@ -3201,6 +3485,21 @@ case 'C':
 
 \subsection{Installing breakpoints}
 
+%claude:
+Breakpoint installation in [[db]] uses the same [[get1]]/[[put1]]
+mechanism as [[acid]]: save the original bytes at the breakpoint
+address, then overwrite with [[machdata->bpinst]] (the trap
+instruction). The [[bpin]] flag tracks whether breakpoints are
+currently ``live'' in the target's memory, to avoid double-installing
+or double-removing. [[acid]] does not need this flag because its
+[[bpset()]] function installs each breakpoint individually.
+%
+The lazy install/remove pattern matters for correctness:
+breakpoints are installed just before resuming ([[setbp]]) and
+removed as soon as the target stops ([[delbp]]). This ensures
+the debugger never sees breakpoint instructions when
+disassembling or inspecting memory.
+
 <<function [[setbp]]>>=
 /*
  * install all the breakpoints
@@ -3318,6 +3617,16 @@ case '>':
 
 \section{Source level C Debugging}
 
+%claude:
+[[db]] provides two source-level features: [[:S]] (step one C
+line) and [[$C]] (stack trace with local variable values). Both
+rely on the line number and symbol table metadata from the
+compiler/linker (Chapter~\ref{chap:toolchain-support}).
+[[acid]] offers the same capabilities through its [[step()]]
+and [[stk()]] library functions, but [[acid]]'s programmability
+lets users build higher-level commands on top (e.g., ``step
+until variable [[x]] changes''), while [[db]] can only repeat
+[[:S]] with a count.
 
 \subsection{Stepping: [[:S]]}
 
@@ -3401,6 +3710,20 @@ printlocals(Symbol *fn, ADDR fp)
 
 
 \subsection{Conditional breakpoints}
+
+%claude:
+[[db]]'s conditional breakpoints are a limited form of
+programmability: each breakpoint can have an attached command
+string (stored in [[bk->comm]]) that is executed when the
+breakpoint fires. If the command returns non-zero (i.e., it
+sets [[dot]] to a non-zero address), the breakpoint ``counts''
+and [[db]] continues. This lets you write things like
+[[main:b *x/X]] (``at [[main]], print [[*x]] as hex and
+continue''). But the command language is still the fixed [[adb]]
+grammar---you cannot define new functions or use control flow.
+This is exactly the limitation that motivated [[acid]]'s
+design: Phil Winterbottom wanted breakpoint actions to be
+written in a real programming language.
 
 <<constant [[MAXCOM]]>>=
 #define MAXCOM	64
