@@ -745,14 +745,14 @@ text-segment memory that changes across phases:
        |                 |             0x1020: INT3   <--- overwritten
        |                 |             0x1023: CALL foo
        |                 |             0x1028: ...
-  write "start" -------->|
+  write "startstop" ---->|
        |                 |-- resume -->| (runs until 0x1020)
        |                 |             |
        |                 |<-- trap ----| (INT3 fires, fault
        |                 |              takes debuggee into
        |                 |              kernel mode, kernel
        |                 |              marks proc Stopped)
-  waitstop wakes up <----|
+       |<-- returns -----|             | (startstop unblocks)
        |                 |
   read regs, mem,        |
   call stack             |
@@ -760,14 +760,34 @@ text-segment memory that changes across phases:
   restore orig byte      |
        |--- write /proc/<pid>/mem --->|
        |                 |             0x1020: MOVL $1,AX  <--- restored
-  single-step ---------->|-- step -----| (executes the MOVL)
-       |                 |<-- stop ----|
-  re-insert INT3         |
+  set bp at 0x1023       |             (next instruction after 0x1020)
+       |--- write /proc/<pid>/mem --->|
+       |                 |             0x1023: INT3
+  write "startstop" ---->|-- resume -->| (executes the MOVL,
+       |                 |<-- trap ----| traps immediately at 0x1023)
+       |<-- returns -----|
+  remove bp at 0x1023    |
+  re-insert bp at 0x1020 |
        |--- write /proc/<pid>/mem --->|
        |                 |             0x1020: INT3  <--- re-inserted
-  write "start" -------->|-- resume -->| (back to normal execution)
+       |                 |             0x1023: CALL foo <--- restored
+  write "startstop" ---->|-- resume -->| (back to normal execution)
 \end{verbatim}
 %
+The diagram uses [[startstop]] (not [[start]]) because the debugger
+needs to \emph{wait} for the target to hit the next trap before
+inspecting it; a plain [[start]] would resume the target without
+blocking.
+%
+Note also how \plan implements single-stepping: there is no
+dedicated ``step'' message in [[/proc/<pid>/ctl]]. Instead, [[acid]]
+uses [<follow()>] (backed by [[machdata->foll]]) to compute the
+set of possible next PCs from the current instruction, sets a
+temporary breakpoint at each of them, resumes with [[startstop]],
+and then removes those temporary breakpoints. This software-based
+approach works on all architectures without requiring hardware
+single-step support (which ARM, unlike x86, does not have).
+
 Two things are worth noting. First, the debugger never touches
 the debuggee directly---every arrow that reaches the target
 goes through the kernel via [[/proc/<pid>/mem]] and
@@ -799,6 +819,31 @@ interest and silently resume otherwise---a lot of overhead
 if the watched variable lives among many others on the
 same page.
 
+%yoann: ASCII diagram illustrating watchpoint
+%claude:
+Here is how a hardware watchpoint works compared to a
+software (page-protection) watchpoint, watching variable
+[[x]] at address [[0x4010]]:
+\begin{verbatim}
+   Hardware watchpoint              Software watchpoint
+   (debug register)                 (page protection)
+
+   CPU debug reg DR0 = 0x4010       Page containing 0x4010
+   DR7 = write, 4 bytes            marked PROT_NONE (no access)
+
+   Any instruction writes           Any instruction accesses
+   to 0x4010..0x4013:               anything on page 0x4000..0x4FFF:
+     -> CPU raises #DB fault          -> CPU raises page fault
+     -> kernel stops debuggee         -> kernel stops debuggee
+     -> debugger inspects             -> debugger checks: was the
+                                        faulting address 0x4010?
+   Precise, no false positives.       - yes: real watchpoint hit
+   Limited number (4 on x86,         - no: false positive,
+   typically 2-16 on ARM).              resume silently.
+                                    Many false positives because
+                                    page = 4KB granularity.
+\end{verbatim}
+
 \subsection{Inspector}
 
 %claude:
@@ -809,6 +854,35 @@ Even without any metadata, a debugger can do a lot if the
 kernel provides good introspection on the target process:
 register values, memory contents, the call stack.
 %and the ability to single-step.
+
+%yoann: ASCII diagram with all the process state one can display and maybe discussion on how in plan9 vs linux
+%claude:
+Here is the map of process state a debugger can display,
+and the interface each OS provides to access it:
+\begin{verbatim}
+   Process state            Plan 9              Linux
+   to inspect               (/proc/<pid>/)      (ptrace / /proc/)
+   =====================    ================    ==================
+   General registers        read regs           PTRACE_GETREGS
+   Floating-point regs      read fpregs         PTRACE_GETFPREGS
+   Memory (code/data/       read/seek mem       PTRACE_PEEKDATA or
+     stack/heap)                                  /proc/<pid>/mem
+   Open file descriptors    read fd             /proc/<pid>/fd/
+   Mapped segments          read segment        /proc/<pid>/maps
+   Namespace / mounts       read ns             /proc/<pid>/mounts
+   Process status           read status         /proc/<pid>/status
+   Pending signals/notes    read note           /proc/<pid>/status
+   Kernel registers         read kregs          (not exposed)
+\end{verbatim}
+%
+The key difference is that \plan exposes everything as regular
+files you can [[read]] and [[seek]]---the same system calls
+used for ordinary I/O. Linux splits the interface between
+[[ptrace]] calls (for registers and memory) and [[/proc]]
+pseudo-files (for metadata like maps and fd). The \plan
+approach is more uniform: any tool that can read files can
+inspect a process, and the interface extends naturally across
+the network through 9P.
 
 However, for a good user experience, the debugger
 needs {metadata} generated by the toolchain: a {symbol table}
@@ -854,15 +928,59 @@ With type information (e.g., from [[acid]]'s type descriptions
 or DWARF on other systems), it can even display structured data
 types like structs and arrays in a readable format.
 
+\subsection{Stack trace}
+
+%yoann: explain principle, maybe SP-PC mention for plan9 and other technique in other OSes (ebp frame pointer?)
+%claude:
+A {stack trace} (or {backtrace}) reconstructs the chain of
+function calls that led to the current point of execution.
+The debugger walks backward through the stack frames, reporting
+each caller's name and program counter.
+%
+The challenge is that the debugger needs to know how large each
+frame is in order to find the next one. Different systems solve
+this differently:
+\begin{itemize}
+\item On x86 with the traditional {frame pointer} convention,
+each function starts with [[push ebp; mov ebp,esp]], creating
+a linked list of frame pointers on the stack. The debugger
+follows the [[ebp]] chain: each saved [[ebp]] points to the
+previous frame, and the return address sits at [[ebp+4]]. This
+is simple but costs one register.
+\item \plan uses a {SP-PC table} instead: the linker generates
+a table mapping each PC value to the corresponding stack
+pointer offset at that point. Given the current PC and SP, the
+debugger looks up the SP offset in the table, computes the
+caller's SP, reads the return address from the stack, and
+repeats. This avoids dedicating a register to frame pointers.
+\item Modern compilers on Linux typically omit the frame pointer
+([[gcc -fomit-frame-pointer]], the default since 2005) and rely
+on {DWARF} [[.debug_frame]] / [[.eh_frame]] tables, which encode
+the same information as \plan's SP-PC table but in a far more
+complex format (a stack machine bytecode called the DWARF Call
+Frame Information, or CFI).
+\end{itemize}
+%
+All three approaches solve the same problem---``given the
+current PC and SP, how big is this frame?''---but trade off
+runtime cost (frame pointer burns a register), metadata size
+(DWARF is verbose), and simplicity (\plan's approach is a
+compact array).
+
 \subsection{Disassembler}
 
 %claude:
 A {disassembler} converts machine code back into assembly
 mnemonics, allowing the user to see what instructions the
-processor will execute. This is the reverse of what the
+processor will execute.
+%
+This is the reverse of what the
 assembler does. The debugger typically uses a library
 (e.g., [[libmach]] in \plan) to decode the binary
 instructions at a given address.
+Appendix~\ref{chap:arm-disasm} presents the ARM disassembler
+in [[libmach/5db.c]], which decodes 32-bit ARM instructions
+back into \plan assembly syntax.
 
 \subsection{Source-level debugging}
 
@@ -876,6 +994,7 @@ source positions in both directions. Source-level debugging
 is what most developers expect, but it requires cooperation
 from the entire toolchain: the compiler must emit line tables,
 the linker must preserve them, and the debugger must read them.
+%
 The diagram above already illustrates the two tables involved.
 
 \section{[[acid]] services}
@@ -1307,7 +1426,7 @@ Total                          &                               &                
 %claude:
 The overall architecture involves two processes:
 the {debugging process} ([[acid]]) and the
-{debugged process} (the target program).
+{debugged process} (the debuggee).
 [[acid]] controls the debugged process by writing
 messages to its [[/proc/<pid>/ctl]] file ([[start]],
 [[stop]], [[waitstop]], [[startstop]], [[hang]]),
@@ -1345,7 +1464,7 @@ offsets for unwinding the call stack.
   | readtext()  | | loadmodule |    |  yyparse()  |
   | attachfiles | | /lib/acid/ |    +--+-------+--+
   +------+------+ +-----+------+       |       |
-         |              |        (rules)       | (yacc->lex)
+         |              |       (grammar rules)| (yacc->lex)
   +------v------+ +-----v----+         |       |
   | crackhdr()  | | yyparse()|    +----v----+  |  +----------+
   | syminit()   | +----------+    |execute()|  +->|  yylex() |
@@ -1356,25 +1475,48 @@ offsets for unwinding the call stack.
   | Map, Symbol |                 +----+----+
   +-------------+                      |
                                   +----v----+
-                                  | ocall() |
+                                  | expop[] |
                                   +----+----+
                                        |
-                                +------v------+
-                                |   msg()     |
-                                | /proc/x/ctl |
-                                +------+------+
-                                       |
-                              +--------v--------+
-                              |  /proc/<pid>/   |
-                              | ctl mem regs    |
-                              +-----------------+
+                    +----------+-------+-------+---------+
+                    |          |       |       |         |
+                 ocall()   oindm()  oasgn() ofmt()   owhat()
+                    |        (*)     (=)    (\fmt)  (whatis)
+                    |
+              +-----v------+
+              | builtin?   |
+              +--yes---no--+
+              |            |
+         +----v---+   +----v-----+
+         |tab[] C |   |acid defn |
+         |builtins|   |(user fn) |
+         +----+---+   +----------+
+              |
+    +---------+---------+---------+
+    |         |         |         |
+  start() startstop() stop() bpset()
+    |         |         |         |
+    +----+----+---------+----+----+
+         |                   |
+    +----v----+         +----v----+
+    | msg()   |         | put1()  |
+    |ctl write|         |mem write|
+    +----+----+         +----+----+
+         |                   |
+    +----v-------------------v----+
+    |      /proc/<pid>/           |
+    |   ctl  mem  regs  syscall   |
+    +-----------------------------+
 \end{verbatim}
-\caption{Control flow diagram of [[acid]]. Note that [[execute()]] is
-not called directly from [[main()]] but from yacc grammar actions
-inside [[yyparse()]] (the [[bigstmnt]] rule executes each statement
-as soon as it is parsed). [[yyparse()]] in turn calls [[yylex()]]
-to get the next token.}\label{fig:controlflow}
+\caption{Control flow diagram of [[acid]]. [[execute()]] dispatches
+through the [[expop]] table; [[ocall()]] checks whether the callee
+is a C builtin (dispatched through [[tab[]]]) or a user-defined
+[[acid]] function. The C builtins for process control
+([[start]], [[startstop]], [[stop]]) write to [[/proc/<pid>/ctl]]
+via [[msg()]]; memory-modifying builtins like [[bpset]] write through
+[[put1()]] to [[/proc/<pid>/mem]].}\label{fig:controlflow}
 \end{figure}
+
 
 \begin{figure}[!tbp]\centering
 \begin{verbatim}
@@ -7410,7 +7552,6 @@ void (*expop[])(Node*, Node*) =
 [OCAST]	ocast,
 [OFMT]	ofmt,
 [OEVAL]	oeval,
-[OWHAT]	owhat,
 @
 
 
@@ -11229,138 +11370,48 @@ making the mechanism especially transparent.
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
 
-\section{Format dumpers}
-
-<<[[main()]](acid) format initializations>>=
-fmtinstall('L', Lfmt);
-@
-
-<<function [[Lfmt]]>>=
-int
-Lfmt(Fmt *f)
-{
-    int i;
-    char buf[1024];
-    IOstack *e;
-
-    e = lexio;
-    if(e) {
-        i = snprint(buf, sizeof(buf), "%s:%d", e->name, line);
-        while(e->prev) {
-            e = e->prev;
-            if(initialising && e->prev == 0)
-                break;
-            i += snprint(buf+i, sizeof(buf)-i, " [%s:%d]", e->name, e->line);
-        }
-    } else
-        snprint(buf, sizeof(buf),  "no file:0");
-    fmtstrcpy(f, buf);
-    return 0;
-}
-@
-
 \section{[[acid: whatis]]}
 
-%\section{AST dumper}
+%yoann: like Emacs, acid is a self-documenting program
+%claude:
+Like Emacs, [[acid]] is a {self-documenting} program.
+The [[whatis]] command lets the user inspect any name in
+the system: variable values and their formats, function
+definitions (printed back as [[acid]] source), type
+descriptions (the [[complex]]/[[aggr]] layouts from
+[[cc -a]]), and even lists of all defined functions.
+This means the user never has to leave the debugger to look
+up what a library function does or how a type is laid out---just
+type [[whatis stk]] or [[whatis Proc]].
 
-% invoked by eval?
+%yoann: what is not a builtin, it's a keyword
+%claude:
+Note that [[whatis]] is not a builtin function dispatched through
+[[tab[]]] like [[start()]] or [[stop()]]. It is a {keyword}
+of the [[acid]] language, parsed directly by the yacc grammar
+(the [[OWHAT]] token) and dispatched through the [[expop]]
+table like other expression operators. This means you write
+[[whatis name]] (no parentheses, no arguments), not
+[[whatis("name")]].
 
-<<global [[binop]]>>=
-static char *binop[] =
-{
-    [OMUL]	"*",
-    [ODIV]	"/",
-    [OMOD]	"%",
-    [OADD]	"+",
-    [OSUB]	"-",
-    [ORSH]	">>",
-    [OLSH]	"<<",
-    [OLT]	"<",
-    [OGT]	">",
-    [OLEQ]	"<=",
-    [OGEQ]	">=",
-    [OEQ]	"==",
-    [ONEQ]	"!=",
-    [OLAND]	"&",
-    [OXOR]	"^",
-    [OLOR]	"|",
-    [OCAND]	"&&",
-    [OCOR]	"||",
-    [OASGN]	" = ",
-};
+<<[[expop]] entries>>=
+[OWHAT]	owhat,
 @
 
-<<global [[tabs]]>>=
-static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-@
-
-<<global [[typenames]]>>=
-char *typenames[] =
-{
-    [TINT]	"integer",
-    [TFLOAT]	"float",
-    [TSTRING]	"string",
-    [TLIST]	"list",
-    [TCODE]	"code",
-};
-@
-
-<<function [[cmp]]>>=
-int
-cmp(void *va, void *vb)
-{
-    char **a = va;
-    char **b = vb;
-
-    return strcmp(*a, *b);
-}
-@
-
-<<function [[fundefs]]>>=
+<<function [[owhat]]>>=
 void
-fundefs(void)
+owhat(Node *n, Node *res)
 {
-    Lsym *l;
-    char **vec;
-    int i, j, n, max, col, f, g, s;
-
-    max = 0;
-    f = 0;
-    g = 100;
-    vec = malloc(sizeof(char*)*g);
-    if(vec == 0)
-        fatal("out of memory");
-
-    for(i = 0; i < Hashsize; i++) {
-        for(l = hash[i]; l; l = l->hash) {
-            if(l->proc == 0 && l->builtin == 0)
-                continue;
-            n = strlen(l->name);
-            if(n > max)
-                max = n;
-            if(f >= g) {
-                g *= 2;
-                vec = realloc(vec, sizeof(char*)*g);
-                if(vec == 0)
-                    fatal("out of memory");
-            }
-            vec[f++] = l->name;
-        }
-    }
-        qsort(vec, f, sizeof(char*), cmp);
-    max++;
-    col = 60/max;
-    s = (f+col-1)/col;
-
-    for(i = 0; i < s; i++) {
-        for(j = i; j < f; j += s)
-            Bprint(bout, "%-*s", max, vec[j]);
-        Bprint(bout, "\n");
-    }
+    res->op = OCONST;           /* Default return value */
+    res->type = TLIST;
+    res->l = 0;
+    whatis(n->sym);
 }
 @
+
 
 <<function [[whatis]]>>=
+/// user:whatis -> execute -> expr -> expop -> owhat -> <>
 void
 whatis(Lsym *l)
 {
@@ -11368,7 +11419,7 @@ whatis(Lsym *l)
     int def;
     Type *ti;
 
-    if(l == 0) {
+    if(l == nil) {
         fundefs();
         return;
     }
@@ -11423,21 +11474,83 @@ whatis(Lsym *l)
 }
 @
 
-<<function [[slist]]>>=
+\subsection{Variable}
+
+\subsection{Function}
+
+\subsection{Builtin}
+
+\subsection{Complex}
+
+\subsection{List of functions}
+
+<<function [[fundefs]]>>=
 void
-slist(Node *n, int d)
+fundefs(void)
 {
-    if(n == 0)
-        return;
-    if(n->op == OLIST)
-        Bprint(bout, "%.*s{\n", d-1, tabs);
-    pcode(n, d);
-    if(n->op == OLIST)
-        Bprint(bout, "%.*s}\n", d-1, tabs);
+    Lsym *l;
+    char **vec;
+    int i, j, n, max, col, f, g, s;
+
+    max = 0;
+    f = 0;
+    g = 100;
+    vec = malloc(sizeof(char*)*g);
+    if(vec == 0)
+        fatal("out of memory");
+
+    for(i = 0; i < Hashsize; i++) {
+        for(l = hash[i]; l; l = l->hash) {
+            if(l->proc == 0 && l->builtin == 0)
+                continue;
+            n = strlen(l->name);
+            if(n > max)
+                max = n;
+            if(f >= g) {
+                g *= 2;
+                vec = realloc(vec, sizeof(char*)*g);
+                if(vec == 0)
+                    fatal("out of memory");
+            }
+            vec[f++] = l->name;
+        }
+    }
+        qsort(vec, f, sizeof(char*), cmp);
+    max++;
+    col = 60/max;
+    s = (f+col-1)/col;
+
+    for(i = 0; i < s; i++) {
+        for(j = i; j < f; j += s)
+            Bprint(bout, "%-*s", max, vec[j]);
+        Bprint(bout, "\n");
+    }
 }
 @
 
+\section{AST dumper}
+
+% invoked by whatis?
+
+<<global [[tabs]]>>=
+static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+@
+
+<<function [[cmp]]>>=
+int
+cmp(void *va, void *vb)
+{
+    char **a = va;
+    char **b = vb;
+
+    return strcmp(*a, *b);
+}
+@
+
+\subsection{Statement dumper: [[pcode()]]}
+
 <<function [[pcode]]>>=
+/// user:whatis -> ... -> whatis -> <>
 void
 pcode(Node *n, int d)
 {
@@ -11507,6 +11620,48 @@ pcode(Node *n, int d)
         slist(r, d+1);
     }
 }
+@
+
+
+<<function [[slist]]>>=
+void
+slist(Node *n, int d)
+{
+    if(n == 0)
+        return;
+    if(n->op == OLIST)
+        Bprint(bout, "%.*s{\n", d-1, tabs);
+    pcode(n, d);
+    if(n->op == OLIST)
+        Bprint(bout, "%.*s}\n", d-1, tabs);
+}
+@
+
+\subsection{Expression dumper: [[pexpr()]]}
+
+<<global [[binop]]>>=
+static char *binop[] =
+{
+    [OMUL]	"*",
+    [ODIV]	"/",
+    [OMOD]	"%",
+    [OADD]	"+",
+    [OSUB]	"-",
+    [ORSH]	">>",
+    [OLSH]	"<<",
+    [OLT]	"<",
+    [OGT]	">",
+    [OLEQ]	"<=",
+    [OGEQ]	">=",
+    [OEQ]	"==",
+    [ONEQ]	"!=",
+    [OLAND]	"&",
+    [OXOR]	"^",
+    [OLOR]	"|",
+    [OCAND]	"&&",
+    [OCOR]	"||",
+    [OASGN]	" = ",
+};
 @
 
 <<function [[pexpr]]>>=
@@ -11725,6 +11880,51 @@ pstr(String *s)
 @
 
 
+\subsection{Type dumper}
+
+<<global [[typenames]]>>=
+char *typenames[] =
+{
+    [TINT]	"integer",
+    [TFLOAT]	"float",
+    [TSTRING]	"string",
+    [TLIST]	"list",
+    [TCODE]	"code",
+};
+@
+
+\section{Format dumpers}
+%alt: with code using %L, in fatal() for example
+
+% %L used in error message mainly
+
+<<[[main()]](acid) format initializations>>=
+fmtinstall('L', Lfmt);
+@
+
+<<function [[Lfmt]]>>=
+int
+Lfmt(Fmt *f)
+{
+    int i;
+    char buf[1024];
+    IOstack *e;
+
+    e = lexio;
+    if(e) {
+        i = snprint(buf, sizeof(buf), "%s:%d", e->name, line);
+        while(e->prev) {
+            e = e->prev;
+            if(initialising && e->prev == 0)
+                break;
+            i += snprint(buf+i, sizeof(buf)-i, " [%s:%d]", e->name, e->line);
+        }
+    } else
+        snprint(buf, sizeof(buf),  "no file:0");
+    fmtstrcpy(f, buf);
+    return 0;
+}
+@
 
 %******************************************************************************
 \chapter{Error Management}

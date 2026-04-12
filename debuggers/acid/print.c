@@ -101,6 +101,7 @@ fundefs(void)
 /*e: function [[fundefs]] */
 
 /*s: function [[whatis]] */
+/// user:whatis -> execute -> expr -> expop -> owhat -> <>
 void
 whatis(Lsym *l)
 {
@@ -108,7 +109,7 @@ whatis(Lsym *l)
     int def;
     Type *ti;
 
-    if(l == 0) {
+    if(l == nil) {
         fundefs();
         return;
     }
@@ -178,6 +179,7 @@ slist(Node *n, int d)
 /*e: function [[slist]] */
 
 /*s: function [[pcode]] */
+/// user:whatis -> ... -> whatis -> <>
 void
 pcode(Node *n, int d)
 {

@@ -267,24 +267,31 @@ extern  int     asstype;        /* dissembler type - machdata.c */
 extern  Machdata *machdata;     /* jump vector - machdata.c */
 
 Map*            attachproc(int /*pidt*/, int, int, Fhdr*);
+
 int             beieee80ftos(char*, int, void*);
 int             beieeesftos(char*, int, void*);
 int             beieeedftos(char*, int, void*);
 ushort          beswab(ushort);
 ulong           beswal(ulong);
 uvlong          beswav(uvlong);
+
 uvlong          ciscframe(Map*, uvlong, uvlong, uvlong, uvlong);
 int             cisctrace(Map*, uvlong, uvlong, uvlong, Tracer);
+
 int             crackhdr(int fd, Fhdr*);
+
 uvlong          file2pc(char*, long);
 int             fileelem(Sym**, uchar *, char*, int);
 long            fileline(char*, int, uvlong);
 int             filesym(int, char*, int);
 int             findlocal(Symbol*, char*, Symbol*);
+
 int             findseg(Map*, char*);
+
 int             findsym(uvlong, int, Symbol *);
 int             fnbound(uvlong, uvlong*);
 int             fpformat(Map*, Reglist*, char*, int, int);
+
 int             get1(Map*, uvlong, uchar*, int);
 int             get2(Map*, uvlong, ushort*);
 int             get4(Map*, uvlong, ulong*);
@@ -294,40 +301,54 @@ int             getauto(Symbol*, int, int, Symbol*);
 Sym*            getsym(int);
 int             globalsym(Symbol *, int);
 char*           _hexify(char*, ulong, int);
+
 int             ieeesftos(char*, int, ulong);
 int             ieeedftos(char*, int, ulong, ulong);
+
 int             isar(Biobuf*);
+
 int             leieee80ftos(char*, int, void*);
 int             leieeesftos(char*, int, void*);
 int             leieeedftos(char*, int, void*);
+
 ushort          leswab(ushort);
 ulong           leswal(ulong);
 uvlong          leswav(uvlong);
 uvlong          line2addr(long, uvlong, uvlong);
+
 Map*            loadmap(Map*, int, Fhdr*);
+
 int             localaddr(Map*, char*, char*, uvlong*, Rgetter);
 int             localsym(Symbol*, int);
 int             lookup(char*, char*, Symbol*);
+
 void            machbytype(int);
 int             machbyname(char*);
+
 int             nextar(Biobuf*, int, char*);
 Map*            newmap(Map*, int);
 void            objtraverse(void(*)(Sym*, void*), void*);
 int             objtype(Biobuf*, char**);
 uvlong          pc2sp(uvlong);
 long            pc2line(uvlong);
+
 int             put1(Map*, uvlong, uchar*, int);
 int             put2(Map*, uvlong, ushort);
 int             put4(Map*, uvlong, ulong);
 int             put8(Map*, uvlong, uvlong);
 int             puta(Map*, uvlong, uvlong);
+
 int             readar(Biobuf*, int, vlong, int);
 int             readobj(Biobuf*, int);
+
 uvlong          riscframe(Map*, uvlong, uvlong, uvlong, uvlong);
 int             risctrace(Map*, uvlong, uvlong, uvlong, Tracer);
+
 int             setmap(Map*, int, uvlong, uvlong, vlong, char*);
+
 Sym*            symbase(long*);
 int             syminit(int, Fhdr*);
+
 int             symoff(char*, int, uvlong, int);
 void            textseg(uvlong, Fhdr*);
 int             textsym(Symbol*, int);

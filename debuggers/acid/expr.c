@@ -1103,6 +1103,7 @@ void (*expop[])(Node*, Node*) =
     [OCAST]	ocast,
     [OFMT]	ofmt,
     [OEVAL]	oeval,
+    /*x: [[expop]] entries */
     [OWHAT]	owhat,
     /*e: [[expop]] entries */
 };

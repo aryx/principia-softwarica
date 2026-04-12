@@ -22,8 +22,6 @@ static int debug = 0;
 #define ROR(v, s)       (LSR((v), (s)) | (((v) & ((1 << (s))-1)) << (32 - (s))))
 /*e: function [[ROR]](arm) */
 
-
-
 typedef struct  Instr   Instr;
 /*s: struct [[Instr]](arm) */
 struct  Instr

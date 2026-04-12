@@ -6,5 +6,4 @@
 //TODO: could remove this file?
 #define LOAD PT_LOAD
 /*e: constant [[LOAD]] */
-
 /*e: libmach/elf.h */
