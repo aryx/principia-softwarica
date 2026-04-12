@@ -12178,10 +12178,61 @@ isnumeric(char *s)
 %******************************************************************************
 \label{chap:arm-disasm}
 
+%claude:
+This appendix presents the ARM disassembler in [[libmach/5db.c]].
+It is the reverse of the \book{Assembler}: where [[5a]] turns
+assembly mnemonics into 32-bit machine words, [[5db.c]] turns
+machine words back into \plan assembly syntax.
+%
+The disassembler serves two roles inside [[acid]]:
+\begin{enumerate}
+\item \textbf{Display}: the [[asm()]] and [[das()]] commands print
+disassembled instructions for the user to read.
+\item \textbf{Follow-set}: the [<armfoll()>] function computes where
+execution \emph{will go next} from a given PC, which is how [[acid]]
+implements single-stepping (set a breakpoint at the follow address,
+resume, wait).
+\end{enumerate}
+
+%claude:
+The pipeline from a raw 32-bit word to a printed instruction is:
+\begin{verbatim}
+    +--------+       +----------+      +-------------+      +--------+
+    | get4() | ----> | decode() | ---> | armclass(w) | ---> | op idx |
+    | read 4 |       | extract  |      | classify    |      | 0..127 |
+    | bytes  |       | cond,    |      | instruction |      +---+----+
+    | from   |       | fill     |      | category    |          |
+    | map    |       | Instr    |      +-------------+          |
+    +--------+       +----------+                               |
+                                                                v
+                     +----------+      +-------------+      +---+------+
+                     | output   | <--- | format()    | <--- |opcodes[] |
+                     | buffer   |      | mini-printf |      | .o  name |
+                     | "ADD R1, |      | expand %C,  |      | .fmt fn  |
+                     |  R2,R3"  |      | %d, %s ...  |      | .foll fn |
+                     +----------+      +-------------+      | .a  args |
+                                                            +----------+
+\end{verbatim}
+%
+[<armclass()>] is the heart: a 150-line switch statement that
+decodes the top 3 bits of the instruction word (bits 25--27,
+the ``major opcode'') and then refines with sub-fields to produce
+an index into the [[opcodes[]]] table. Each table entry names
+the \plan mnemonic, a format handler that extracts operand fields
+into the [[Instr]] struct, and an optional follow-set function
+for single-stepping.
 
 <<global debug (libmach/5db.c)(arm)>>=
 static int debug = 0;
 @
+
+%claude:
+Four macros for bit manipulation on 32-bit instruction words.
+[[BITS(a,b)]] produces a bitmask from bit [[a]] to bit [[b]]
+inclusive. [[LSR]], [[ASR]], and [[ROR]] are logical shift right,
+arithmetic shift right, and rotate right---the same operations
+as the ARM barrel shifter, used here to decode immediate operands
+with rotation (the ARM ``flexible second operand'').
 
 <<function [[BITS]](arm)>>=
 #define BITS(a, b)      ((1<<(b+1))-(1<<a))
@@ -12200,6 +12251,24 @@ static int debug = 0;
 @
 
 % >> >> >>
+
+%claude:
+The [[Instr]] struct holds the decoded state of one instruction.
+After [<decode()>] reads the raw 32-bit word [[w]] from the map,
+it extracts the condition code ([[cond]], bits 28--31) and calls
+[<armclass()>] to set [[op]] (the index into [[opcodes[]]]).
+The format handler then fills [[rd]], [[rn]], [[rs]], [[imm]],
+and [[store]] from the remaining bit fields---these correspond
+directly to the fields in the ARM instruction encoding:
+\begin{verbatim}
+   31..28  27..25  24..21  20  19..16  15..12  11..0
+   +------+-------+-------+---+-------+-------+--------+
+   | cond | major | minor | S |  Rn   |  Rd   | operand|
+   +------+-------+-------+---+-------+-------+--------+
+     .cond   (armclass)  .store  .rn     .rd    .rs/.imm
+\end{verbatim}
+The [[curr]]/[[end]] pair is a write cursor into the output
+buffer---[<bprint()>] and [<format()>] append text here.
 
 <<struct [[Instr]](arm)>>=
 struct  Instr
@@ -12223,6 +12292,25 @@ struct  Instr
 };
 @
 
+%claude:
+The [[Opcode]] struct is the schema for one row in the
+[[opcodes[]]] table. Each instruction class has one entry:
+\begin{itemize}
+\item [[o]]: the \plan mnemonic template, e.g., [["ADD\%C\%S"]].
+The [[%C]] and [[%S]] are expanded by [<format()>] into the
+condition suffix and the S-bit flag.
+\item [[fmt]]: the format handler that extracts operand fields
+from the raw word into the [[Instr]] struct, then calls
+[<format()>] to print the result.
+\item [[foll]]: the follow-set function. If non-nil, it computes
+the next PC when [[acid]] single-steps through this instruction.
+Only instructions that can change control flow (branches, moves
+into PC) have a non-nil [[foll]].
+\item [[a]]: the operand template, e.g., [["R\%s,R\%n,R\%d"]].
+[<format()>] expands [[%s]], [[%n]], [[%d]] to the register
+numbers extracted by the format handler.
+\end{itemize}
+
 <<struct [[Opcode]](arm)>>=
 struct Opcode
 {
@@ -12236,6 +12324,16 @@ struct Opcode
 <<global [[FRAMENAME]](arm)>>=
 static  char    FRAMENAME[] = ".frame";
 @
+
+%claude:
+The [[armmach]] structure is the ARM instance of the [[Machdata]]
+vtable described in Chapter~\ref{chap:core-ds}. It wires up the
+disassembler, follow-set, and stack-tracing functions so that
+[[acid]] can call them through the [[machdata]] pointer without
+knowing which architecture it is debugging. Note [[bpinst]]:
+the ARM [[BKPT]] instruction is [[0xE1200070]] (4 bytes, stored
+little-endian as [[70 00 20 E1]])---confirming the point from
+Chapter~\ref{chap:overview} that ARM breakpoints are not one byte.
 
 <<global [[armmach]](arm)>>=
 /*
@@ -12290,6 +12388,14 @@ armexcep(Map *map, Rgetter rget)
 }
 @
 
+%claude:
+The [[cond]] table maps the 4-bit condition field (bits 31--28)
+to the \plan condition suffix. Entry~14 is nil because it means
+``always'' (no suffix printed); entry~15 is [["NV"]] (never
+execute, mostly unused). For example, condition code [[0]] is
+[["EQ"]] (equal / zero flag set), so [[ADD.EQ]] means ``add
+only if the Z flag is set.''
+
 <<global [[cond]](arm)>>=
 static
 char*   cond[16] =
@@ -12324,6 +12430,54 @@ char*   addsub[2] =
     "-",        "+",
 };
 @
+
+%claude:
+[<armclass()>] is the core of the disassembler: given a 32-bit
+instruction word, it returns an index into the [[opcodes[]]]
+table. The first dispatch is on bits 27--25 (the ``major opcode''),
+which partitions the ARM instruction set into 8 groups:
+\begin{verbatim}
+   bits 27-25    group             opcodes[] range
+   ----------    -----             ---------------
+      000        data proc r,r,r   0..47 (3 variants x 16 ALU ops)
+      001        data proc imm     48..63
+      010        load/store imm    72..75
+      011        load/store reg    76..79
+      100        block transfer    80..81
+      101        branch / BL       82..83
+      110        VFP load/store    122..123
+      111        coprocessor       84..91
+\end{verbatim}
+%
+Within each group, sub-fields further refine the index. For
+example, data processing instructions (groups 0--1) use bits
+24--21 to select one of 16 ALU operations (AND, EOR, SUB, RSB,
+ADD, \ldots, MVN), each appearing three times in the table:
+once for the plain register form (indices 0--15), once with a
+constant shift (16--31), and once with a register shift (32--47).
+%
+Let us trace a concrete example. The instruction
+[[ADD R1, R2, R3]] encodes as [[0xE0821003]]:
+\begin{verbatim}
+   0xE0821003 = 1110 000 0100 0 0010 0001 00000000 0011
+                cond maj  op  S  Rn   Rd           Rm
+                 AL  000 0100 0  R2   R1           R3
+
+   armclass(0xE0821003):
+     bits 27-25 = 000 -> case 0 (data proc r,r,r)
+     bits 7-4   = 0000 -> not 0x9 (not mul/swp)
+                       -> not 0x9/0xB (not halfword)
+     bits 24-21 = 0100 -> op = 4 (ADD)
+     bit 4 = 0, bits 7-11 = 0, bit 5 = 0
+       -> no shift, stays in base range
+     return 4
+
+   opcodes[4] = { "ADD%C%S", armdps, armfadd, "R%s,R%n,R%d" }
+   -> armdps extracts Rn=2, Rd=1, Rs=3
+   -> format prints: ADD  R3,R2,R1
+\end{verbatim}
+Note the \plan syntax is destination-last (opposite of standard
+ARM syntax).
 
 <<function [[armclass]](arm)>>=
 int
@@ -12488,6 +12642,13 @@ armclass(long w)
 }
 @
 
+%claude:
+[<decode()>] is the thin wrapper that reads a 4-byte instruction
+word from the [[Map]] at address [[pc]], extracts the condition
+code from bits 31--28, and calls [<armclass()>] to set the
+opcode index. After [[decode]] returns, the [[Instr]] is ready
+for the format handler.
+
 <<function [[decode]](arm)>>=
 static int
 decode(Map *map, uvlong pc, Instr *i)
@@ -12518,6 +12679,16 @@ bprint(Instr *i, char *fmt, ...)
     va_end(arg);
 }
 @
+
+%claude:
+[<plocal()>] tries to resolve a memory reference relative to
+the stack pointer (R13) into a symbolic local variable or
+parameter name. It looks up the current function via the PC,
+finds the [[.frame]] symbol to get the frame size, then
+determines whether the offset falls in the auto (local) or
+param region. If it finds a match, it prints [[name-offset(SP)]]
+or [[name+offset(FP)]] instead of a raw hex address---this is
+what makes [[acid]]'s disassembly output readable.
 
 <<function [[plocal]](arm)>>=
 static int
@@ -12557,6 +12728,14 @@ plocal(Instr *i)
 }
 @
 
+%claude:
+[<gsymoff()>] resolves a raw address into [[symbol+offset]]
+form by looking up the nearest symbol below the address. If
+the distance exceeds 4096 bytes, or the address is in a
+[["\.string"]] section, it falls back to a plain hex literal.
+This is what turns [[0x11B0]] into [["printf"]] in the
+disassembly output.
+
 <<function [[gsymoff]](arm)>>=
 /*
  * Print value v as name[+offset]
@@ -12588,6 +12767,24 @@ gsymoff(char *buf, int n, ulong v, int space)
         return snprint(buf, n, "#%lux", v);
 }
 @
+
+%claude:
+The format handlers below each correspond to one instruction
+\emph{encoding format}. ARM has several: data processing with
+register operand ([<armdps>]), data processing with immediate
+([<armdpi>]), single data transfer with immediate offset
+([<armsdti>]), single data transfer with register offset
+([<armsdts>]), block data transfer ([<armbdt>]), branch
+([<armb>]), and so on. Each handler extracts the operand
+fields specific to its format, then calls [<format()>] to
+produce the output string.
+
+%claude:
+[<armdps()>] handles data processing instructions with register
+operands (the first 48 entries in [[opcodes[]]]). It extracts
+the S bit, Rn, Rd, and Rs fields. Special cases detect MSR/MRS
+(moves to/from the status register), which share the same
+encoding space.
 
 <<function [[armdps]](arm)>>=
 static void
@@ -12630,6 +12827,19 @@ armdps(Opcode *o, Instr *i)
     format(o->o, i, o->a);
 }
 @
+
+%claude:
+[<armdpi()>] handles data processing with an {immediate} operand.
+The ARM encoding packs an 8-bit value and a 4-bit rotation into
+12 bits: the immediate is the 8-bit value rotated right by
+$2 \times$ the 4-bit field. This allows encoding common constants
+like [[0xFF]], [[0xFF00]], and [[0xFF000000]] in a single
+instruction. The [[while(c)]] loop performs this rotation.
+%
+Two special cases detect [[RET]] (encoded as
+[[ADD \$0,R14,R15]]---add zero to the link register and store in
+PC) and indirect branches through a register
+([[ADD \$0,Rn,R15]]).
 
 <<function [[armdpi]](arm)>>=
 static void
@@ -12768,6 +12978,32 @@ armunk(Opcode *o, Instr *i)
 }
 @
 
+%claude:
+[<armb()>] handles B (branch) and BL (branch-and-link). The
+24-bit offset is sign-extended and shifted left by 2 (since ARM
+instructions are 4-byte aligned, the bottom 2 bits are always
+zero and can be left out of the encoding). The +8 accounts for
+the ARM pipeline: the PC used for the offset calculation is
+2 instructions ahead of the branch itself.
+%
+Concrete example: [[BL printf]] at address [[0x10A0]]
+with encoding [[0xEB000042]]:
+\begin{verbatim}
+   0xEB000042:
+     cond = 0xE (AL = always)
+     bits 27-25 = 101 -> case 5 (branch)
+     bit 24 = 1 -> BL (not B)
+     offset bits 23-0 = 0x000042
+
+   armb():
+     v = 0x000042
+     bit 23 = 0, so no sign extension
+     imm = (0x42 << 2) + 0x10A0 + 8
+         = 0x108 + 0x10A8
+         = 0x11B0
+     -> "BL  printf"  (if symtab has printf at 0x11B0)
+\end{verbatim}
+
 <<function [[armb]](arm)>>=
 static void
 armb(Opcode *o, Instr *i)
@@ -12815,6 +13051,15 @@ armco(Opcode *o, Instr *i)              /* coprocessor instructions */
 }
 @
 
+%claude:
+[<armcondpass()>] evaluates whether a conditional instruction
+would actually execute, given the current CPSR flags. It reads
+the PSR register through the [[rget]] callback, extracts the
+N/Z/C/V flags, and evaluates the condition code. This is
+essential for the follow-set: a conditional branch that
+\emph{would not be taken} should return [[pc+4]] (fall through),
+not the branch target.
+
 <<function [[armcondpass]](arm)>>=
 static int
 armcondpass(Map *map, Rgetter rget, uchar cond)
@@ -12852,6 +13097,16 @@ armcondpass(Map *map, Rgetter rget, uchar cond)
     }
 }
 @
+
+%claude:
+[<armshiftval()>] evaluates the ARM ``flexible second operand''
+(the {barrel shifter}). For the follow-set functions, the
+disassembler needs the \emph{actual computed value}, not just
+the encoding. If bit~25 is set, the operand is an 8-bit immediate
+rotated by a 4-bit field (same as [<armdpi>]). Otherwise, it is
+a register value shifted by one of four modes: [[LSL]], [[LSR]],
+[[ASR]], or [[ROR]], with the shift amount coming from either
+an immediate (bits 11--7) or another register (bits 11--8).
 
 <<function [[armshiftval]](arm)>>=
 static ulong
@@ -13005,6 +13260,30 @@ armaddr(Map *map, Rgetter rget, Instr *i)
 }
 @
 
+%claude:
+The [[armf*]] functions compute the {follow set}---the address(es)
+where execution will go after a given instruction. [[acid]] calls
+them through [<armfoll()>] to implement single-stepping. The key
+insight is that on ARM, \emph{any} instruction that writes to
+R15 (the PC) is a control-flow transfer, not just branches. So
+there are five cases:
+\begin{itemize}
+\item [<armfadd>]: data processing instructions (ADD, SUB, etc.)
+whose destination is R15. Computes [[Rn + shifter\_operand]].
+\item [<armfbranch>]: B and BL. The target is PC-relative with a
+24-bit signed offset, plus the 8-byte pipeline advance.
+\item [<armfbx>]: BX/BLX register. Target is the register value.
+\item [<armfmov>]: MOV or LDR into R15. MOV returns the shifted
+operand; LDR reads the target address from memory.
+\item [<armfmovm>]: block load (LDM) that includes R15 in the
+register list. Computes the stack address where R15 would be
+loaded from.
+\end{itemize}
+%
+All of them first call [<armcondpass()>] to check whether the
+condition passes. If not, the follow address is simply [[pc+4]]
+(the instruction is a no-op).
+
 <<function [[armfadd]](arm)>>=
 static uvlong
 armfadd(Map *map, Rgetter rget, Instr *i, uvlong pc)
@@ -13095,6 +13374,45 @@ armfmov(Map *map, Rgetter rget, Instr *i, uvlong pc)
     return v;
 }
 @
+
+%claude:
+The [[opcodes[]]] table has 128 entries, laid out so that
+[<armclass()>] can compute the index with simple arithmetic
+on bit fields. The layout mirrors the ARM instruction encoding:
+\begin{verbatim}
+   Index range   Group                       Handler
+   -----------   -----                       -------
+     0..15       data proc reg, no shift     armdps
+    16..31       data proc reg, imm shift    armdps
+    32..47       data proc reg, reg shift    armdps
+    48..63       data proc immediate         armdpi
+    64..67       multiply, swap              armdpi
+    68..71       halfword load/store         armhwby
+    72..75       word/byte load/store imm    armsdti
+    76..79       word/byte load/store reg    armsdts
+    80..81       block data transfer         armbdt
+    82..83       branch / branch-link        armb
+    84..87       coprocessor                 armco
+    88..91       long multiply               armdpi
+    92           unknown                     armunk
+    93..98       ARMv7 (LDREX, barriers)     armdpi/armunk
+    99           RFE                         armbdt
+   100..123      VFP instructions            armdps/armvstdi
+   124..127      BKPT, BX, BLX              armbpt/armdps
+\end{verbatim}
+%
+Each row has four columns: the mnemonic template [[o]] (with
+[[%C]]/[[%S]] placeholders for condition and S-bit), the format
+handler [[fmt]], the optional follow-set function [[foll]] (nil
+for instructions that never change control flow), and the
+operand template [[a]].
+%
+For example, entry~82 is
+\verb+{ "B%C", armb, armfbranch, "%b" }+:
+the mnemonic is [["B"]] with an optional condition suffix,
+[<armb()>] extracts the 24-bit offset, [<armfbranch()>] computes
+the follow address, and [[%b]] formats the target as a symbol
+name.
 
 <<global [[opcodes]](arm)>>=
 static Opcode opcodes[] =
@@ -13290,6 +13608,38 @@ static  char *pw[] = { "P", "PW", 0, "W" };
 <<global [[sw]](arm)>>=
 static  char *sw[] = { 0, "W", "S", "SW" };
 @
+
+%claude:
+[<format()>] is a mini-[[printf]] specialized for ARM disassembly.
+It processes both the mnemonic template ([[o]]) and the operand
+template ([[a]]) from the [[Opcode]] entry, expanding format
+specifiers into the output buffer. The main specifiers are:
+\begin{verbatim}
+   %C  condition suffix      (EQ, NE, CS, ... from cond[])
+   %S  S-bit suffix          (.S if set-flags bit is on)
+   %d  destination register  (Rd, bits 15-12)
+   %n  first operand reg     (Rn, bits 19-16)
+   %s  second operand reg    (Rs, bits 3-0)
+   %i  immediate value       (i->imm, in hex)
+   %b  branch target         (resolved to symbol name)
+   %I  memory operand        (#offset(Rn), with plocal() for SP)
+   %r  register list         (for LDM/STM: R0-R3,R14)
+   %P  block mode            (IA, DB, IB from mode[])
+   %p  P/W bits              (P, PW, W for pre/post/writeback)
+   %h  shift type            (<<, >>, ->, @> from shtype[])
+   %m  shift amount          (5-bit immediate)
+   %f  VFP precision         (F or D)
+\end{verbatim}
+%
+The function calls itself recursively: first with the mnemonic
+(to print the opcode name), then with nil mnemonic and the
+operand template (to print the arguments, separated by a tab).
+%
+For the [[ADD R1,R2,R3]] example from [<armclass()>] above,
+the mnemonic template [["ADD\%C\%S"]] expands to just [["ADD"]]
+(condition 14 = always, S-bit = 0), and the operand template
+[["R\%s,R\%n,R\%d"]] expands to [["R3,R2,R1"]] (\plan
+destination-last syntax).
 
 <<function [[format]](arm)>>=
 static void
@@ -13526,6 +13876,25 @@ format(char *mnemonic, Instr *i, char *f)
     *i->curr = 0;
 }
 @
+
+%claude:
+The four entry points below are wired into the [[armmach]]
+vtable and called through [[machdata->]] pointers:
+\begin{itemize}
+\item [<arminst()>] / [<printins()>]: disassemble one instruction
+into \plan assembly syntax. This is what [[acid]]'s [[asm()]]
+command calls.
+\item [<armdas()>]: the ``hex dump'' disassembler---produces just
+the raw hex bytes, used by [[acid]]'s hex-format display.
+\item [<arminstlen()>]: returns the instruction length (always 4
+for ARM A32).
+\item [<armfoll()>]: the follow-set entry point. It decodes the
+instruction, then delegates to the [[foll]] function pointer
+from the [[opcodes[]]] entry (or returns [[pc+4]] if the
+instruction cannot change control flow). This is the function
+that [[acid]]'s single-stepper calls to decide where to place
+the temporary breakpoint.
+\end{itemize}
 
 <<function [[printins]](arm)>>=
 static int
