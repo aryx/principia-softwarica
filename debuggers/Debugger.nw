@@ -180,7 +180,16 @@ for ARM, x86, MIPS, or any other architecture that \plan supports.
 %
 [[libmach]] is also used by [[db]], the \plan emulators, and
 the profiling tools.
-%yoann1: maybe say also was designed for Alef originally and so to debug multithreaded programs?
+%
+Historically, [[acid]] was designed to debug {Alef} programs,
+\plan's original concurrent-with-channels language (a precursor
+to [[libthread]] and, much later, Go). This shaped [[acid]]'s
+process-table and multi-process control features from the start:
+because an Alef program could spawn many cooperating processes,
+the debugger had to follow forks, attach to children, and stop
+or resume any subset of them. The same machinery works unchanged
+for today's [[libthread]] programs, which are just Alef's ideas
+re-expressed as a C library.
 
 [[ratrace]] is much simpler than [[acid]]: it traces the system calls
 made by a process by reading the kernel's [[/proc]] interface.
@@ -451,7 +460,28 @@ Linux's [[strace]] and \plan's [[ratrace]] work this way.
 There is also [[ltrace]] on Linux, which traces library
 calls rather than system calls.
 
-%yoann: maybe discuss recent trend like opentelemetry, datadog, which also trace function calls to important APIs for observability 
+%yoann: maybe discuss recent trend like opentelemetry, datadog, which also trace function calls to important APIs for observability
+%claude:
+Modern {observability} tools (OpenTelemetry, Datadog APM, New
+Relic, Honeycomb, Jaeger) are a direct descendant of this same
+idea, just moved up the stack. Where [[ratrace]] traces
+\emph{system calls} at the kernel boundary, an OpenTelemetry
+SDK traces \emph{function calls} at API boundaries: an incoming
+HTTP request, an outgoing database query, a message publish,
+an RPC call. Each ``span'' records the function name, its
+arguments (tagged as attributes), the return value or error,
+and a high-resolution timestamp---exactly what [[ratrace]]
+prints, only for application-level operations instead of
+syscalls. The principle is identical: tracing at a well-chosen
+boundary turns silent bugs into visible ones, without modifying
+the program's logic. The main differences are that modern
+tracers report to a centralized collector instead of stderr,
+support distributed traces that span multiple machines by
+propagating a {trace ID} through request headers, and sample
+aggressively because tracing \emph{every} HTTP call in a
+production system would overwhelm the collector---a scale
+problem [[ratrace]] never has to solve, because a single
+[[ratrace]] session targets a single process.
 
 % Good first way to debug issues, to get more insight on what's going on.
 % Simple, and very effective at finding many bugs, like
@@ -563,6 +593,19 @@ inspection facilities for examining its state, and the
 addresses and bytes back into something the user can read.
 
 %yoann: maybe worth saying 3 actors: kernel, debugger, debuggee?
+%claude:
+A debugging session always involves {three actors}: the
+{debugger} process (the controller), the {debuggee} (or
+{target}) process being observed, and the {kernel} that sits
+between them enforcing process isolation. All the interesting
+operations in the rest of this section are triangular---the
+debugger cannot touch the target directly, only by asking the
+kernel to do it on its behalf. Every facility below
+(controlling, breakpoints, watchpoints, inspection, disassembly,
+source-level mapping) fits into this three-actor pattern, and
+keeping the three roles in mind makes it easier to see why
+each feature requires kernel cooperation and why the
+[[/proc]] interface is structured the way it is.
 
 \subsection{Controlling another program}
 
@@ -653,16 +696,24 @@ it next.
 
 %claude:
 A {breakpoint} stops execution at a specific address. The
-debugger sets one by replacing the instruction at the target
-address with a one-byte instruction that causes a fault
-(e.g., [[INT 3]] on x86, [[BKPT]] on ARM). When the target
-reaches that address, the fault stops execution and gives
-control back to the debugger; after inspection, the debugger
-restores the original instruction, single-steps over it, and
-re-inserts the trap so the breakpoint stays active. This
-mechanism is universal because it relies on hardware
+debugger sets one by overwriting the instruction at the target
+address with a dedicated {trap instruction} that causes a
+fault. On x86 this trap is [[INT 3]], which is the famous
+single-byte [[0xCC]]---deliberately one byte wide in the ISA
+for exactly this use case, so the debugger can poke it over
+any instruction without worrying about alignment. On ARM and
+most RISC architectures the trap is full-width: ARM [[BKPT]]
+is 4 bytes in A32 (2 in Thumb), ARM64 [[BRK]] is 4 bytes,
+RISC-V [[EBREAK]] is 4 bytes. The debugger saves the overwritten
+bytes and restores them when the breakpoint is removed or
+stepped over.
+%
+When the target reaches that address, the fault stops execution
+and gives control back to the debugger; after inspection, the
+debugger restores the original instruction, single-steps over
+it, and re-inserts the trap so the breakpoint stays active.
+This mechanism is universal because it relies on hardware
 features that predate modern operating systems.
-%yoann1: actually BKPT is not one-byte instruction
 
 
 Breakpoints can be conditional (stop only when a condition
@@ -680,6 +731,53 @@ read-only and shared between processes---typically done via
 copy-on-write.
 
 %yoann: maybe ASCII diagram to illustrate kernel and debugger and debuggee and how it works to just modify text at a certain place and how fault give control to kernel to STOP the debuggee and then scheduler at some point give control to debugger which can inspect
+%claude:
+Here is the full breakpoint life cycle for a single hit,
+showing the three actors (debugger, kernel, debuggee) and the
+text-segment memory that changes across phases:
+\begin{verbatim}
+   debugger           kernel           debuggee text segment
+   --------           ------           ---------------------
+       |                 |             0x1020: MOVL $1,AX
+  set bp at 0x1020       |             0x1023: CALL foo
+       |                 |             0x1028: ...
+       |--- write /proc/<pid>/mem --->|
+       |                 |             0x1020: INT3   <--- overwritten
+       |                 |             0x1023: CALL foo
+       |                 |             0x1028: ...
+  write "start" -------->|
+       |                 |-- resume -->| (runs until 0x1020)
+       |                 |             |
+       |                 |<-- trap ----| (INT3 fires, fault
+       |                 |              takes debuggee into
+       |                 |              kernel mode, kernel
+       |                 |              marks proc Stopped)
+  waitstop wakes up <----|
+       |                 |
+  read regs, mem,        |
+  call stack             |
+       |                 |
+  restore orig byte      |
+       |--- write /proc/<pid>/mem --->|
+       |                 |             0x1020: MOVL $1,AX  <--- restored
+  single-step ---------->|-- step -----| (executes the MOVL)
+       |                 |<-- stop ----|
+  re-insert INT3         |
+       |--- write /proc/<pid>/mem --->|
+       |                 |             0x1020: INT3  <--- re-inserted
+  write "start" -------->|-- resume -->| (back to normal execution)
+\end{verbatim}
+%
+Two things are worth noting. First, the debugger never touches
+the debuggee directly---every arrow that reaches the target
+goes through the kernel via [[/proc/<pid>/mem]] and
+[[/proc/<pid>/ctl]]. Second, between ``trap fires'' and
+``[[waitstop]] wakes up'', the debuggee is in the [[Stopped]]
+state and the scheduler simply does not run it; the kernel is
+free to schedule any other process in the meantime. The
+debugger regains control \emph{asynchronously} when the
+scheduler next picks it, not immediately at the moment of the
+trap.
 
 \subsection{Watchpoint}
 
@@ -2886,7 +2984,21 @@ maps PIDs to open [[/proc/<pid>/ctl]] file descriptors.
 The [<msg()>] function looks up a PID in this table and
 writes a control message to the corresponding [[ctl]] fd.
 [<install()>] adds an entry, [<deinstall()>] removes one.
-%yoann1: maybe say can debug multi-threaded programs! in plan9 (and linux?) system-level threads are processes that just happen to share memory
+%
+The same machinery is what lets [[acid]] debug multi-threaded
+programs. In \plan, there are no threads as a separate kernel
+concept: a multi-threaded program is just a group of processes
+created with [[rfork(RFPROC|RFMEM)]], which share their address
+space but each have their own pid, stack, and entry in
+[[/proc/]]. Linux takes essentially the same view under the
+hood---[[clone(CLONE_VM|...)]] creates a new task that shares
+memory with its parent, and each thread has its own tid visible
+in [[/proc/<pid>/task/]]. Because every thread is an independent
+entry in [[/proc/]], [[acid]] debugs threads exactly the way
+it debugs separate processes: install each one in [<ptab>],
+send [[stop]]/[[start]]/[[waitstop]] to its own [[ctl]] file,
+and read its registers from its own [[regs]] file. No
+thread-specific API is needed.
 
 <<struct [[Ptab]]>>=
 struct Ptab
@@ -8964,6 +9076,27 @@ builtins from [[acid/builtin.c]].
 
 %yoann: remember globals set in loadvars(), newproc(), acidinit() etc
 % such as [[pid]], [[proc]], [[bplist]], etc.
+%claude:
+Before diving into the commands, it is worth recalling the
+ambient state that most of them rely on. During initialization
+and process attachment, [[acid]] sets a handful of globals that
+the library commands read without passing them around
+explicitly. [<loadvars()>] creates the per-machine register
+variables ([[PC]], [[SP]], [[R0]]\ldots) and a few predefined
+identifiers like [[bpinst]], [[bplist]], and [[notes]];
+[<newproc()>] (and [<sproc()>] for [[acid pid]]) sets [[pid]]
+to the current target's process id and adds an entry to
+[<ptab>] so [<msg()>] knows which [[ctl]] file to write to;
+[[acidinit]] (the user's library-level hook) typically binds
+[[proc]] to [[pid]] as well. The commands below treat these
+as implicit arguments: [<bpset()>] reads [[bpinst]] and updates
+[[bplist]], [<cont()>] reads [[pid]] to drive [[start]], and
+[<stk()>] reads [[PC]] and [[SP]] through [[cormap]]. Once you
+keep this set of globals in mind, the short bodies of the
+commands stop looking mysterious---they are mostly
+one-liners that route a control message or a memory read to
+``the current process'', where the current process is
+whichever [[pid]] was last made the focus.
 
 \section{Start the program: [[new()]]}
 
