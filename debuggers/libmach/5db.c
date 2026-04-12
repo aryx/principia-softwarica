@@ -83,12 +83,16 @@ Machdata armmach =
     leswab,                     /* short to local byte order */
     leswal,                     /* long to local byte order */
     leswav,                     /* long to local byte order */
+
     risctrace,          /* C traceback */
     riscframe,          /* Frame finder */
+
     armexcep,                   /* print exception */
     0,                  /* breakpoint fixup */
+
     0,                  /* single precision float printer */
     0,                  /* double precision float printer */
+
     armfoll,            /* following addresses */
     arminst,            /* print instruction */
     armdas,                     /* dissembler */

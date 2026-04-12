@@ -12186,13 +12186,18 @@ machine words back into \plan assembly syntax.
 %
 The disassembler serves two roles inside [[acid]]:
 \begin{enumerate}
+
 \item \textbf{Display}: the [[asm()]] and [[das()]] commands print
 disassembled instructions for the user to read.
+
 \item \textbf{Follow-set}: the [<armfoll()>] function computes where
 execution \emph{will go next} from a given PC, which is how [[acid]]
 implements single-stepping (set a breakpoint at the follow address,
 resume, wait).
+
 \end{enumerate}
+
+\section{Overview}
 
 %claude:
 The pipeline from a raw 32-bit word to a printed instruction is:
@@ -12217,7 +12222,7 @@ The pipeline from a raw 32-bit word to a printed instruction is:
 [<armclass()>] is the heart: a 150-line switch statement that
 decodes the top 3 bits of the instruction word (bits 25--27,
 the ``major opcode'') and then refines with sub-fields to produce
-an index into the [[opcodes[]]] table. Each table entry names
+an index into the [<opcodes>] table. Each table entry names
 the \plan mnemonic, a format handler that extracts operand fields
 into the [[Instr]] struct, and an optional follow-set function
 for single-stepping.
@@ -12250,13 +12255,21 @@ with rotation (the ARM ``flexible second operand'').
 #define ROR(v, s)       (LSR((v), (s)) | (((v) & ((1 << (s))-1)) << (32 - (s))))
 @
 
+\section{Data structures}
+
 % >> >> >>
+
+The [[curr]]/[[end]] pair is a write cursor into the output
+buffer---[<bprint()>] and [<format()>] append text here.
+
+
+\subsection{[[Instr]]}
 
 %claude:
 The [[Instr]] struct holds the decoded state of one instruction.
 After [<decode()>] reads the raw 32-bit word [[w]] from the map,
 it extracts the condition code ([[cond]], bits 28--31) and calls
-[<armclass()>] to set [[op]] (the index into [[opcodes[]]]).
+[<armclass()>] to set [[op]] (the index into [<opcodes>]).
 The format handler then fills [[rd]], [[rn]], [[rs]], [[imm]],
 and [[store]] from the remaining bit fields---these correspond
 directly to the fields in the ARM instruction encoding:
@@ -12267,8 +12280,6 @@ directly to the fields in the ARM instruction encoding:
    +------+-------+-------+---+-------+-------+--------+
      .cond   (armclass)  .store  .rn     .rd    .rs/.imm
 \end{verbatim}
-The [[curr]]/[[end]] pair is a write cursor into the output
-buffer---[<bprint()>] and [<format()>] append text here.
 
 <<struct [[Instr]](arm)>>=
 struct  Instr
@@ -12292,9 +12303,11 @@ struct  Instr
 };
 @
 
+\subsection{[[Opcode]]}
+
 %claude:
 The [[Opcode]] struct is the schema for one row in the
-[[opcodes[]]] table. Each instruction class has one entry:
+[<opcodes>] table. Each instruction class has one entry:
 \begin{itemize}
 \item [[o]]: the \plan mnemonic template, e.g., [["ADD\%C\%S"]].
 The [[%C]] and [[%S]] are expanded by [<format()>] into the
@@ -12321,6 +12334,223 @@ struct Opcode
 };
 @
 
+
+\subsection{[[opcodes]] table}
+
+%claude:
+The [<opcodes>] table has 128 entries, laid out so that
+[<armclass()>] can compute the index with simple arithmetic
+on bit fields. The layout mirrors the ARM instruction encoding:
+\begin{verbatim}
+   Index range   Group                       Handler
+   -----------   -----                       -------
+     0..15       data proc reg, no shift     armdps
+    16..31       data proc reg, imm shift    armdps
+    32..47       data proc reg, reg shift    armdps
+    48..63       data proc immediate         armdpi
+    64..67       multiply, swap              armdpi
+    68..71       halfword load/store         armhwby
+    72..75       word/byte load/store imm    armsdti
+    76..79       word/byte load/store reg    armsdts
+    80..81       block data transfer         armbdt
+    82..83       branch / branch-link        armb
+    84..87       coprocessor                 armco
+    88..91       long multiply               armdpi
+    92           unknown                     armunk
+    93..98       ARMv7 (LDREX, barriers)     armdpi/armunk
+    99           RFE                         armbdt
+   100..123      VFP instructions            armdps/armvstdi
+   124..127      BKPT, BX, BLX              armbpt/armdps
+\end{verbatim}
+%
+Each row has four columns: the mnemonic template [[o]] (with
+[[%C]]/[[%S]] placeholders for condition and S-bit), the format
+handler [[fmt]], the optional follow-set function [[foll]] (nil
+for instructions that never change control flow), and the
+operand template [[a]].
+%
+For example, entry~82 is
+\verb+{ "B%C", armb, armfbranch, "%b" }+:
+the mnemonic is [["B"]] with an optional condition suffix,
+[<armb()>] extracts the 24-bit offset, [<armfbranch()>] computes
+the follow address, and [[%b]] formats the target as a symbol
+name.
+
+<<global [[opcodes]](arm)>>=
+static Opcode opcodes[] =
+{
+    "AND%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "EOR%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "SUB%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "RSB%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "ADD%C%S",  armdps, armfadd,        "R%s,R%n,R%d",
+    "ADC%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "SBC%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "RSC%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "TST%C%S",  armdps, 0,      "R%s,R%n",
+    "TEQ%C%S",  armdps, 0,      "R%s,R%n",
+    "CMP%C%S",  armdps, 0,      "R%s,R%n",
+    "CMN%C%S",  armdps, 0,      "R%s,R%n",
+    "ORR%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "MOVW%C%S", armdps, armfmov,        "R%s,R%d",
+    "BIC%C%S",  armdps, 0,      "R%s,R%n,R%d",
+    "MVN%C%S",  armdps, 0,      "R%s,R%d",
+
+/* 16 */
+    "AND%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "EOR%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "SUB%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "RSB%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "ADD%C%S",  armdps, armfadd,        "(R%s%h%m),R%n,R%d",
+    "ADC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "SBC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "RSC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "TST%C%S",  armdps, 0,      "(R%s%h%m),R%n",
+    "TEQ%C%S",  armdps, 0,      "(R%s%h%m),R%n",
+    "CMP%C%S",  armdps, 0,      "(R%s%h%m),R%n",
+    "CMN%C%S",  armdps, 0,      "(R%s%h%m),R%n",
+    "ORR%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "MOVW%C%S", armdps, armfmov,        "(R%s%h%m),R%d",
+    "BIC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
+    "MVN%C%S",  armdps, 0,      "(R%s%h%m),R%d",
+
+/* 32 */
+    "AND%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "EOR%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "SUB%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "RSB%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "ADD%C%S",  armdps, armfadd,        "(R%s%hR%M),R%n,R%d",
+    "ADC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "SBC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "RSC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "TST%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
+    "TEQ%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
+    "CMP%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
+    "CMN%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
+    "ORR%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "MOVW%C%S", armdps, armfmov,        "(R%s%hR%M),R%d",
+    "BIC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
+    "MVN%C%S",  armdps, 0,      "(R%s%hR%M),R%d",
+
+/* 48 */
+    "AND%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "EOR%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "SUB%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "RSB%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "ADD%C%S",  armdpi, armfadd,        "$#%i,R%n,R%d",
+    "ADC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "SBC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "RSC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "TST%C%S",  armdpi, 0,      "$#%i,R%n",
+    "TEQ%C%S",  armdpi, 0,      "$#%i,R%n",
+    "CMP%C%S",  armdpi, 0,      "$#%i,R%n",
+    "CMN%C%S",  armdpi, 0,      "$#%i,R%n",
+    "ORR%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "MOVW%C%S", armdpi, armfmov,        "$#%i,R%d",
+    "BIC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
+    "MVN%C%S",  armdpi, 0,      "$#%i,R%d",
+
+/* 48+16 */
+    "MUL%C%S",  armdpi, 0,      "R%M,R%s,R%n",
+    "MULA%C%S", armdpi, 0,      "R%M,R%s,R%n,R%d",
+    "SWPW",             armdpi, 0,      "R%s,(R%n),R%d",
+    "SWPB",             armdpi, 0,      "R%s,(R%n),R%d",
+
+/* 48+16+4 */
+    "MOV%u%C%p",        armhwby, 0,     "R%d,(R%n%UR%M)",
+    "MOV%u%C%p",        armhwby, 0,     "R%d,%I",
+    "MOV%u%C%p",        armhwby, armfmov,       "(R%n%UR%M),R%d",
+    "MOV%u%C%p",        armhwby, armfmov,       "%I,R%d",
+
+/* 48+24 */
+    "MOVW%C%p", armsdti, 0,     "R%d,%I",
+    "MOVB%C%p", armsdti, 0,     "R%d,%I",
+    "MOVW%C%p", armsdti, armfmov,       "%I,R%d",
+    "MOVBU%C%p",        armsdti, armfmov,       "%I,R%d",
+
+    "MOVW%C%p", armsdts, 0,     "R%d,(R%s%h%m)(R%n)",
+    "MOVB%C%p", armsdts, 0,     "R%d,(R%s%h%m)(R%n)",
+    "MOVW%C%p", armsdts, armfmov,       "(R%s%h%m)(R%n),R%d",
+    "MOVBU%C%p",        armsdts, armfmov,       "(R%s%h%m)(R%n),R%d",
+
+    "MOVM%C%P%a",       armbdt, armfmovm,               "[%r],(R%n)",
+    "MOVM%C%P%a",       armbdt, armfmovm,               "(R%n),[%r]",
+
+    "B%C",              armb, armfbranch,               "%b",
+    "BL%C",             armb, armfbranch,               "%b",
+
+    "CDP%C",    armco, 0,               "",
+    "CDP%C",    armco, 0,               "",
+    "MCR%C",    armco, 0,               "",
+    "MRC%C",    armco, 0,               "",
+
+/* 48+24+4+4+2+2+4 */
+    "MULLU%C%S",        armdpi, 0,      "R%M,R%s,(R%n,R%d)",
+    "MULALU%C%S",       armdpi, 0,      "R%M,R%s,(R%n,R%d)",
+    "MULL%C%S", armdpi, 0,      "R%M,R%s,(R%n,R%d)",
+    "MULAL%C%S",        armdpi, 0,      "R%M,R%s,(R%n,R%d)",
+
+/* 48+24+4+4+2+2+4+4 = 92 */
+    "UNK",              armunk, 0,      "",
+
+    /* new v7 arch instructions */
+/* 93 */
+    "LDREX",    armdpi, 0,      "(R%n),R%d",
+    "STREX",    armdpi, 0,      "R%s,(R%n),R%d",
+    "CLREX",    armunk, 0,      "",
+
+/* 96 */
+    "DSB",              armunk, 0,      "",
+    "DMB",              armunk, 0,      "",
+    "ISB",              armunk, 0,      "",
+
+/* 99 */
+    "RFEV7%P%a",        armbdt, 0,      "(R%n)",
+
+/* 100 */
+    "MLA%f%C",  armdps, 0,      "F%s,F%n,F%d",
+    "MLS%f%C",  armdps, 0,      "F%s,F%n,F%d",
+    "NMLS%f%C", armdps, 0,      "F%s,F%n,F%d",
+    "NMLA%f%C", armdps, 0,      "F%s,F%n,F%d",
+    "MUL%f%C",  armdps, 0,      "F%s,F%n,F%d",
+    "NMUL%f%C", armdps, 0,      "F%s,F%n,F%d",
+    "ADD%f%C",  armdps, 0,      "F%s,F%n,F%d",
+    "SUB%f%C",  armdps, 0,      "F%s,F%n,F%d",
+    "DIV%f%C",  armdps, 0,      "F%s,F%n,F%d",
+
+/* 109 */
+    "MOV%f%C",  armdps, 0,      "F%s,F%d",
+    "ABS%f%C",  armdps, 0,      "F%s,F%d",
+    "NEG%f%C",  armdps, 0,      "F%s,F%d",
+    "SQRT%f%C", armdps, 0,      "F%s,F%d",
+    "CMP%f%C",  armdps, 0,      "F%s,F%d",
+    "CMPE%f%C", armdps, 0,      "F%s,F%d",
+    "CMP%f%C",  armdps, 0,      "$0.0,F%d",
+    "CMPE%f%C", armdps, 0,      "$0.0,F%d",
+
+/* 117 */
+    "MOV%F%R%C",        armdps, 0,      "F%s,F%d",
+
+/* 118 */
+    "MOVW%C",   armdps, 0,      "R%d,F%n",
+    "MOVW%C",   armdps, 0,      "F%n,R%d",
+    "MOVW%C",   armdps, 0,      "R%d,%x",
+    "MOVW%C",   armdps, 0,      "%x,R%d",
+
+/* 122 */
+    "MOV%f%C",  armvstdi,       0,      "F%d,%I",
+    "MOV%f%C",  armvstdi,       0,      "%I,F%d",
+
+/* 124 */
+    "BKPT%C",   armbpt, 0,              "$#%i",
+    "BX%C",             armdps, armfbx, "(R%s)",
+    "BXJ%C",    armdps, armfbx, "(R%s)",
+    "BLX%C",    armdps, armfbx, "(R%s)",
+};
+@
+
+\section{XXX}
+
 <<global [[FRAMENAME]](arm)>>=
 static  char    FRAMENAME[] = ".frame";
 @
@@ -12332,8 +12562,8 @@ disassembler, follow-set, and stack-tracing functions so that
 [[acid]] can call them through the [[machdata]] pointer without
 knowing which architecture it is debugging. Note [[bpinst]]:
 the ARM [[BKPT]] instruction is [[0xE1200070]] (4 bytes, stored
-little-endian as [[70 00 20 E1]])---confirming the point from
-Chapter~\ref{chap:overview} that ARM breakpoints are not one byte.
+little-endian as [[70 00 20 E1]]).
+%---confirming the point from Chapter~\ref{chap:overview} that ARM breakpoints are not one byte.
 
 <<global [[armmach]](arm)>>=
 /*
@@ -12347,12 +12577,16 @@ Machdata armmach =
     leswab,                     /* short to local byte order */
     leswal,                     /* long to local byte order */
     leswav,                     /* long to local byte order */
+
     risctrace,          /* C traceback */
     riscframe,          /* Frame finder */
+
     armexcep,                   /* print exception */
     0,                  /* breakpoint fixup */
+
     0,                  /* single precision float printer */
     0,                  /* double precision float printer */
+
     armfoll,            /* following addresses */
     arminst,            /* print instruction */
     armdas,                     /* dissembler */
@@ -12431,9 +12665,11 @@ char*   addsub[2] =
 };
 @
 
+\section{[[armclass()]]}
+
 %claude:
 [<armclass()>] is the core of the disassembler: given a 32-bit
-instruction word, it returns an index into the [[opcodes[]]]
+instruction word, it returns an index into the [<opcodes>]
 table. The first dispatch is on bits 27--25 (the ``major opcode''),
 which partitions the ARM instruction set into 8 groups:
 \begin{verbatim}
@@ -12781,7 +13017,7 @@ produce the output string.
 
 %claude:
 [<armdps()>] handles data processing instructions with register
-operands (the first 48 entries in [[opcodes[]]]). It extracts
+operands (the first 48 entries in [<opcodes>]). It extracts
 the S bit, Rn, Rd, and Rs fields. Special cases detect MSR/MRS
 (moves to/from the status register), which share the same
 encoding space.
@@ -13375,217 +13611,6 @@ armfmov(Map *map, Rgetter rget, Instr *i, uvlong pc)
 }
 @
 
-%claude:
-The [[opcodes[]]] table has 128 entries, laid out so that
-[<armclass()>] can compute the index with simple arithmetic
-on bit fields. The layout mirrors the ARM instruction encoding:
-\begin{verbatim}
-   Index range   Group                       Handler
-   -----------   -----                       -------
-     0..15       data proc reg, no shift     armdps
-    16..31       data proc reg, imm shift    armdps
-    32..47       data proc reg, reg shift    armdps
-    48..63       data proc immediate         armdpi
-    64..67       multiply, swap              armdpi
-    68..71       halfword load/store         armhwby
-    72..75       word/byte load/store imm    armsdti
-    76..79       word/byte load/store reg    armsdts
-    80..81       block data transfer         armbdt
-    82..83       branch / branch-link        armb
-    84..87       coprocessor                 armco
-    88..91       long multiply               armdpi
-    92           unknown                     armunk
-    93..98       ARMv7 (LDREX, barriers)     armdpi/armunk
-    99           RFE                         armbdt
-   100..123      VFP instructions            armdps/armvstdi
-   124..127      BKPT, BX, BLX              armbpt/armdps
-\end{verbatim}
-%
-Each row has four columns: the mnemonic template [[o]] (with
-[[%C]]/[[%S]] placeholders for condition and S-bit), the format
-handler [[fmt]], the optional follow-set function [[foll]] (nil
-for instructions that never change control flow), and the
-operand template [[a]].
-%
-For example, entry~82 is
-\verb+{ "B%C", armb, armfbranch, "%b" }+:
-the mnemonic is [["B"]] with an optional condition suffix,
-[<armb()>] extracts the 24-bit offset, [<armfbranch()>] computes
-the follow address, and [[%b]] formats the target as a symbol
-name.
-
-<<global [[opcodes]](arm)>>=
-static Opcode opcodes[] =
-{
-    "AND%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "EOR%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "SUB%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "RSB%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "ADD%C%S",  armdps, armfadd,        "R%s,R%n,R%d",
-    "ADC%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "SBC%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "RSC%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "TST%C%S",  armdps, 0,      "R%s,R%n",
-    "TEQ%C%S",  armdps, 0,      "R%s,R%n",
-    "CMP%C%S",  armdps, 0,      "R%s,R%n",
-    "CMN%C%S",  armdps, 0,      "R%s,R%n",
-    "ORR%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "MOVW%C%S", armdps, armfmov,        "R%s,R%d",
-    "BIC%C%S",  armdps, 0,      "R%s,R%n,R%d",
-    "MVN%C%S",  armdps, 0,      "R%s,R%d",
-
-/* 16 */
-    "AND%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "EOR%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "SUB%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "RSB%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "ADD%C%S",  armdps, armfadd,        "(R%s%h%m),R%n,R%d",
-    "ADC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "SBC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "RSC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "TST%C%S",  armdps, 0,      "(R%s%h%m),R%n",
-    "TEQ%C%S",  armdps, 0,      "(R%s%h%m),R%n",
-    "CMP%C%S",  armdps, 0,      "(R%s%h%m),R%n",
-    "CMN%C%S",  armdps, 0,      "(R%s%h%m),R%n",
-    "ORR%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "MOVW%C%S", armdps, armfmov,        "(R%s%h%m),R%d",
-    "BIC%C%S",  armdps, 0,      "(R%s%h%m),R%n,R%d",
-    "MVN%C%S",  armdps, 0,      "(R%s%h%m),R%d",
-
-/* 32 */
-    "AND%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "EOR%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "SUB%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "RSB%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "ADD%C%S",  armdps, armfadd,        "(R%s%hR%M),R%n,R%d",
-    "ADC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "SBC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "RSC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "TST%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
-    "TEQ%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
-    "CMP%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
-    "CMN%C%S",  armdps, 0,      "(R%s%hR%M),R%n",
-    "ORR%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "MOVW%C%S", armdps, armfmov,        "(R%s%hR%M),R%d",
-    "BIC%C%S",  armdps, 0,      "(R%s%hR%M),R%n,R%d",
-    "MVN%C%S",  armdps, 0,      "(R%s%hR%M),R%d",
-
-/* 48 */
-    "AND%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "EOR%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "SUB%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "RSB%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "ADD%C%S",  armdpi, armfadd,        "$#%i,R%n,R%d",
-    "ADC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "SBC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "RSC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "TST%C%S",  armdpi, 0,      "$#%i,R%n",
-    "TEQ%C%S",  armdpi, 0,      "$#%i,R%n",
-    "CMP%C%S",  armdpi, 0,      "$#%i,R%n",
-    "CMN%C%S",  armdpi, 0,      "$#%i,R%n",
-    "ORR%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "MOVW%C%S", armdpi, armfmov,        "$#%i,R%d",
-    "BIC%C%S",  armdpi, 0,      "$#%i,R%n,R%d",
-    "MVN%C%S",  armdpi, 0,      "$#%i,R%d",
-
-/* 48+16 */
-    "MUL%C%S",  armdpi, 0,      "R%M,R%s,R%n",
-    "MULA%C%S", armdpi, 0,      "R%M,R%s,R%n,R%d",
-    "SWPW",             armdpi, 0,      "R%s,(R%n),R%d",
-    "SWPB",             armdpi, 0,      "R%s,(R%n),R%d",
-
-/* 48+16+4 */
-    "MOV%u%C%p",        armhwby, 0,     "R%d,(R%n%UR%M)",
-    "MOV%u%C%p",        armhwby, 0,     "R%d,%I",
-    "MOV%u%C%p",        armhwby, armfmov,       "(R%n%UR%M),R%d",
-    "MOV%u%C%p",        armhwby, armfmov,       "%I,R%d",
-
-/* 48+24 */
-    "MOVW%C%p", armsdti, 0,     "R%d,%I",
-    "MOVB%C%p", armsdti, 0,     "R%d,%I",
-    "MOVW%C%p", armsdti, armfmov,       "%I,R%d",
-    "MOVBU%C%p",        armsdti, armfmov,       "%I,R%d",
-
-    "MOVW%C%p", armsdts, 0,     "R%d,(R%s%h%m)(R%n)",
-    "MOVB%C%p", armsdts, 0,     "R%d,(R%s%h%m)(R%n)",
-    "MOVW%C%p", armsdts, armfmov,       "(R%s%h%m)(R%n),R%d",
-    "MOVBU%C%p",        armsdts, armfmov,       "(R%s%h%m)(R%n),R%d",
-
-    "MOVM%C%P%a",       armbdt, armfmovm,               "[%r],(R%n)",
-    "MOVM%C%P%a",       armbdt, armfmovm,               "(R%n),[%r]",
-
-    "B%C",              armb, armfbranch,               "%b",
-    "BL%C",             armb, armfbranch,               "%b",
-
-    "CDP%C",    armco, 0,               "",
-    "CDP%C",    armco, 0,               "",
-    "MCR%C",    armco, 0,               "",
-    "MRC%C",    armco, 0,               "",
-
-/* 48+24+4+4+2+2+4 */
-    "MULLU%C%S",        armdpi, 0,      "R%M,R%s,(R%n,R%d)",
-    "MULALU%C%S",       armdpi, 0,      "R%M,R%s,(R%n,R%d)",
-    "MULL%C%S", armdpi, 0,      "R%M,R%s,(R%n,R%d)",
-    "MULAL%C%S",        armdpi, 0,      "R%M,R%s,(R%n,R%d)",
-
-/* 48+24+4+4+2+2+4+4 = 92 */
-    "UNK",              armunk, 0,      "",
-
-    /* new v7 arch instructions */
-/* 93 */
-    "LDREX",    armdpi, 0,      "(R%n),R%d",
-    "STREX",    armdpi, 0,      "R%s,(R%n),R%d",
-    "CLREX",    armunk, 0,      "",
-
-/* 96 */
-    "DSB",              armunk, 0,      "",
-    "DMB",              armunk, 0,      "",
-    "ISB",              armunk, 0,      "",
-
-/* 99 */
-    "RFEV7%P%a",        armbdt, 0,      "(R%n)",
-
-/* 100 */
-    "MLA%f%C",  armdps, 0,      "F%s,F%n,F%d",
-    "MLS%f%C",  armdps, 0,      "F%s,F%n,F%d",
-    "NMLS%f%C", armdps, 0,      "F%s,F%n,F%d",
-    "NMLA%f%C", armdps, 0,      "F%s,F%n,F%d",
-    "MUL%f%C",  armdps, 0,      "F%s,F%n,F%d",
-    "NMUL%f%C", armdps, 0,      "F%s,F%n,F%d",
-    "ADD%f%C",  armdps, 0,      "F%s,F%n,F%d",
-    "SUB%f%C",  armdps, 0,      "F%s,F%n,F%d",
-    "DIV%f%C",  armdps, 0,      "F%s,F%n,F%d",
-
-/* 109 */
-    "MOV%f%C",  armdps, 0,      "F%s,F%d",
-    "ABS%f%C",  armdps, 0,      "F%s,F%d",
-    "NEG%f%C",  armdps, 0,      "F%s,F%d",
-    "SQRT%f%C", armdps, 0,      "F%s,F%d",
-    "CMP%f%C",  armdps, 0,      "F%s,F%d",
-    "CMPE%f%C", armdps, 0,      "F%s,F%d",
-    "CMP%f%C",  armdps, 0,      "$0.0,F%d",
-    "CMPE%f%C", armdps, 0,      "$0.0,F%d",
-
-/* 117 */
-    "MOV%F%R%C",        armdps, 0,      "F%s,F%d",
-
-/* 118 */
-    "MOVW%C",   armdps, 0,      "R%d,F%n",
-    "MOVW%C",   armdps, 0,      "F%n,R%d",
-    "MOVW%C",   armdps, 0,      "R%d,%x",
-    "MOVW%C",   armdps, 0,      "%x,R%d",
-
-/* 122 */
-    "MOV%f%C",  armvstdi,       0,      "F%d,%I",
-    "MOV%f%C",  armvstdi,       0,      "%I,F%d",
-
-/* 124 */
-    "BKPT%C",   armbpt, 0,              "$#%i",
-    "BX%C",             armdps, armfbx, "(R%s)",
-    "BXJ%C",    armdps, armfbx, "(R%s)",
-    "BLX%C",    armdps, armfbx, "(R%s)",
-};
-@
 
 <<function [[gaddr]](arm)>>=
 static void
@@ -13608,6 +13633,9 @@ static  char *pw[] = { "P", "PW", 0, "W" };
 <<global [[sw]](arm)>>=
 static  char *sw[] = { 0, "W", "S", "SW" };
 @
+
+
+\section{[[format()]] mini-[[printf]]}
 
 %claude:
 [<format()>] is a mini-[[printf]] specialized for ARM disassembly.
@@ -13890,7 +13918,7 @@ the raw hex bytes, used by [[acid]]'s hex-format display.
 for ARM A32).
 \item [<armfoll()>]: the follow-set entry point. It decodes the
 instruction, then delegates to the [[foll]] function pointer
-from the [[opcodes[]]] entry (or returns [[pc+4]] if the
+from the [<opcodes>] entry (or returns [[pc+4]] if the
 instruction cannot change control flow). This is the function
 that [[acid]]'s single-stepper calls to decide where to place
 the temporary breakpoint.
