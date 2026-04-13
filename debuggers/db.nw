@@ -64,9 +64,10 @@ terse---every command is a single character from this set:
 The key idea is that [[?]] reads from the text file ([[symmap]]),
 [[/]] reads from the live process memory ([[cormap]]), and [[=]]
 just prints the expression value without reading memory at all.
-This three-way split was a source of confusion in [[adb]] and is
-one reason [[acid]] collapsed everything into [[*address]]
-(dereference through [[cormap]]).
+[[acid]] retains the same [[*]] and [[@]] dereference operators
+(through [[cormap]] and [[symmap]] respectively), but in practice
+most users interact through higher-level library functions like
+[[src()]], [[stk()]], and [[mem()]] that hide the map choice.
 
 <<constant [[CMD_VERBS]]>>=
 #define CMD_VERBS	"?/=>!$: \t"
@@ -76,6 +77,38 @@ one reason [[acid]] collapsed everything into [[*address]]
 \subsection{Debugging [[hello_bug.c]]}
 
 %yoann: adapt the example we saw in Overview chapter to use db instead of acid
+%claude:
+Here is the same [[hello_bug.c]] debugging session from
+Section~\ref{sec:hello-bug}, but using [[db]] instead of
+[[acid]]. The same bug (divide by zero), the same program,
+the same executable---only the debugger interface differs:
+\begin{verbatim}
+   acid session                    db session
+   ============                    ==========
+   $ acid ./hello_bug              $ db ./hello_bug
+   acid: new()                     :r
+   acid: bpset(bar)                bar:b
+   acid: cont()                    :c
+   66: breakpoint bar ...          breakpoint
+   acid: stk()                     $c
+   bar(a=0x2a,b=0x0)               bar(a=2a,b=0) ...
+   main(argc=0x1) ...                main(argc=1) ...
+   acid: src(*PC)                  (no equivalent; use ?i)
+   acid: cont()                    :c
+   -- divide fault --              stopped at
+                                     foo+0x5/ IDIVL AX,CX
+   acid: stk()                     $C
+   foo(x=0x2a,y=0x0) ...            foo(x=2a,y=0) ...
+   bar(a=0x2a,b=0x0) ...              bar(a=2a,b=0) ...
+\end{verbatim}
+%
+The key observations: [[db]] commands are single characters
+([[:r]] vs [[new()]], [[bar:b]] vs [[bpset(bar)]],
+[[$c]] vs [[stk()]]), which makes them faster to type but
+harder to remember. [[db]] has no [[src()]] command---you
+inspect code with [[?i]] (disassembly) rather than source
+lines. And [[db]]'s [[$C]] includes local variables
+automatically (like [[acid]]'s [[lstk()]]).
 
 % command language syntax: [addr] [,count] [command]
 % notion of 'dot', current address.
@@ -191,7 +224,7 @@ This is structurally identical to [[acid]]'s setup (compare with
 the [[symmap]]/[[cormap]] diagram in Chapter~\ref{chap:core-ds}),
 just with fewer globals since there is no multi-process support.
 
-\subsection{[[/proc/x/text]] and [[symmap]]}
+\subsection{[[/proc/<pid>/text]] and [[symmap]]}
 
 <<global [[symmap]]>>=
 // was in setup.c
@@ -201,7 +234,7 @@ Map	*symmap;
 
 % will be accessed via symmap
 
-\subsection{[[/proc/x/mem]] and [[cormap]]}
+\subsection{[[/proc/<pid>/mem]] and [[cormap]]}
 
 <<global [[cormap]]>>=
 Map	*cormap;
@@ -212,7 +245,7 @@ Map	*cormap;
 % to generate some fault (and so some notes)
 % via put1(), will also get stuff via get1(), rget(), etc.
 
-\subsection{[[/proc/x/ctl]], [[msgfd]], and [[msgpcs()]]}
+\subsection{[[/proc/<pid>/ctl]], [[msgfd]], and [[msgpcs()]]}
 
 <<global [[msgfd]]>>=
 fdt msgfd = -1;
@@ -400,7 +433,7 @@ int	count;
 int	initcnt;
 @
 
-\subsection{[[/proc/x/note]], [[notefd]], and [[notes]]}
+\subsection{[[/proc/<pid>/note]], [[notefd]], and [[notes]]}
 
 <<global [[notefd]]>>=
 fdt notefd = -1;
@@ -1327,12 +1360,14 @@ is a hand-written recursive descent parser for [[adb]]'s address
 expressions. It supports arithmetic ([[+]], [[-]], [[*]], etc.),
 symbol lookup ([[main]], [[main.x]]), register access ([[<PC]]),
 and memory dereference ([[*addr]] for [[cormap]], [[@addr]] for
-[[symmap]]). The dereference operators highlight the key
-difference from [[acid]]: in [[db]], [[*]] reads through
-[[cormap]] and [[@]] reads through [[symmap]], while in [[acid]]
-the single [[*]] operator uses whichever map the address falls
-in.
-%yoann1: really? acid also has the @ and * operator and symmap and cormap
+[[symmap]]). Both [[acid]] and [[db]] have the same [[*]] and
+[[@]] operators with the same semantics: [[*]] reads through
+[[cormap]] (live process memory) and [[@]] reads through
+[[symmap]] (the executable file). The real difference is in
+how most users interact with them: [[acid]]'s library functions
+like [[stk()]] and [[src()]] hide the map choice behind
+higher-level abstractions, while in [[db]] you choose [[?]]
+or [[/]] explicitly for every inspection command.
 
 %
 A worked example of address parsing:
