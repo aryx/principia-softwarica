@@ -431,11 +431,16 @@ who wrote in some sense most of this book.
 %******************************************************************************
 
 %claude:
-Before showing the source code of [[acid]] and [[ratrace]] in
-the following chapters, I first give an overview of the general
-principles of tracers and debuggers, then describe the services
-that [[ratrace]] and [[acid]] provide.
-%yoann1: expand like in my other books about code orga, soft archi, etc.
+Before showing the source code of [[acid]] and [[ratrace]]
+in the following chapters, I first give an overview in this
+chapter of the general principles of tracers and debuggers.
+%
+I also describe the services provided by [[ratrace]] and
+[[acid]], walk through a small debugging session on
+[[hello_bug.c]] to show [[acid]] in action, and finally
+explain how the code is organized, what the software
+architecture of both tools looks like, and how the rest
+of this book is structured.
 
 \section{Tracer principles}
 
@@ -10633,6 +10638,19 @@ defn step()                                     // single step the process
 
 %yoann: say saw print() before to print value and auto print also expr
 % and also fmt() and special x\F format expression modifier
+%claude:
+We have already met the basic printing facilities:
+[[print()]] to dump a variable or register from the
+[[acid]] prompt, the REPL's automatic printing of any
+expression typed at top level, the [[fmt()]] helper that
+attaches a print format to a value, and the [[\F]] format
+modifier that applies a format inline to an expression.
+This section covers the step up from {printing a value}
+to {inspecting process state}: the call stack with
+[[stk()]], the full register file with [[regs()]], the
+disassembly around the current PC with [[asm()]], and
+the enumeration of local, parameter, and global symbols
+via [[locals()]], [[params()]], and the [[symbols]] list.
 
 %alt: \subsection{Printing values: [[print(<expr>)]]}
 
@@ -12330,6 +12348,20 @@ making the mechanism especially transparent.
 \label{chap:debugging-appendix}
 
 %yoann: intro to appendix. Also debugging the debugger :)
+%claude:
+This appendix collects the facilities [[acid]] provides
+for {debugging itself}---the meta question every
+programmable debugger has to face eventually. A user
+writing non-trivial [[acid]] functions inevitably hits
+a bug in their own code (or in a library function like
+[[stk()]]) and wants the same inspection tools for
+[[acid]] that [[acid]] provides for C programs. Rather
+than shipping a separate meta-debugger, Winterbottom
+wrote a handful of builtins---[[whatis]] for
+self-introspection, the trace mode flags on the
+interpreter, and a few helpers described below---that
+let [[acid]] debug itself from inside the [[acid]]
+prompt.
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
 
@@ -13349,6 +13381,15 @@ nbits(ulong v)
 % >> >> >>
 
 %yoann: introduce the section
+%claude:
+The ARM disassembler is built around three data
+structures: the [[Instr]] struct, which holds the
+decoded fields of one instruction; the [[Opcode]] table
+entry, which describes the class handler and format
+template for every opcode; and the shared [[Map]]
+abstraction from [[libmach/access.c]], used to read the
+raw instruction bytes from either an executable file
+or a live process.
 
 
 \subsection{[[Instr]]}
@@ -13650,6 +13691,16 @@ static Opcode opcodes[] =
 \section{Decoding pipeline}
 
 %yoann: introducing the section and transition with previous section
+%claude:
+With the [[Instr]] struct and the [[opcodes]] table now
+in hand, we can look at the decoding pipeline that turns
+a 4-byte word at some [[pc]] into a filled [[Instr]]
+ready for printing. The pipeline is three layers deep:
+[<decode()>] reads the raw word from the [[Map]],
+[<armclass()>] computes an opcode index by walking a
+decision table on the top bits, and the format handler
+pulled from [[opcodes[i.op]]] fills in the remaining
+per-class operand fields.
 
 \subsection{[[decode()]]}
 
@@ -14638,6 +14689,21 @@ armco(Opcode *o, Instr *i)              /* coprocessor instructions */
 \section{ARM follow set}
 
 %yoann: transition and introduce section
+%claude:
+The last piece of the ARM backend is the {follow set}
+computation: given the current [[pc]], return the set
+of possible next program counters. ARM has no hardware
+single-step flag (unlike x86's [[TF]]), so [[acid]]
+implements single-stepping in software by planting a
+temporary breakpoint at each follow-set address,
+resuming the process with [[startstop]], and removing
+them after the next stop (see the [[step()]] function
+covered earlier in the [[acid]] builtins chapter).
+This section walks
+through [<armfoll()>], the top-level dispatch, and the
+per-class helpers that handle branches, conditional
+branches, and load/store-multiple instructions that can
+write to [[PC]].
 
 \subsection{[[armfoll()]]}
 
