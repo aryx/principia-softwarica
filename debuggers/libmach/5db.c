@@ -81,26 +81,26 @@ static  int     arminstlen(Map*, uvlong);
  */
 Machdata armmach =
 {
-    {0x70, 0x00, 0x20, 0xE1},           /* break point */       /* E1200070 */
-    4,                  /* break point size */
+  .bpinst= {0x70, 0x00, 0x20, 0xE1},         /* break point */       /* E1200070 */
+  .bpsize= 4,                  /* break point size */
 
-    leswab,                     /* short to local byte order */
-    leswal,                     /* long to local byte order */
-    leswav,                     /* long to local byte order */
+  .swab= leswab,                     /* short to local byte order */
+  .swal= leswal,                     /* long to local byte order */
+  .swav= leswav,                     /* long to local byte order */
 
-    risctrace,          /* C traceback */
-    riscframe,          /* Frame finder */
+  .ctrace=  risctrace,          /* C traceback */
+  .findframe=  riscframe,          /* Frame finder */
 
-    armexcep,                   /* print exception */
-    0,                  /* breakpoint fixup */
+  .excep= armexcep,                   /* print exception */
+  .bpfix= nil,                  /* breakpoint fixup */
 
-    0,                  /* single precision float printer */
-    0,                  /* double precision float printer */
+  .sftos= nil,                  /* single precision float printer */
+  .dftos= nil,                  /* double precision float printer */
 
-    armfoll,            /* following addresses */
-    arminst,            /* print instruction */
-    armdas,             /* dissembler */
-    arminstlen,         /* instruction size */
+  .foll= armfoll,            /* following addresses */
+  .das=  arminst,            /* print instruction */
+  .hexinst=  armdas,             /* dissembler */
+  .instsize=  arminstlen,         /* instruction size */
 };
 /*e: global [[armmach]](arm) */
 
