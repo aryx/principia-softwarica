@@ -1279,8 +1279,14 @@ prints the arguments (this is exactly what [[/lib/acid/truss]]
 does---a system call tracer written in 100 lines of [[acid]]).
 You could also write a function that detects memory leaks by
 hooking [[malloc]] and [[free]], or one that records every
-function entry/exit to produce a trace
-(see [[/lib/acid/leak]] and [[/lib/acid/coverage]]).
+function entry/exit to produce a trace. Scripts with similar
+goals already exist in [[/lib/acid/leak]] and
+[[/lib/acid/coverage]]---though, as we will see in
+Chapter~\ref{chap:advanced-features}, they take a different
+route: [[leak.acid]] walks the heap and scans roots in the
+style of a conservative garbage collector (no malloc hook at
+all), and [[coverage.acid]] sets breakpoints on basic-block
+boundaries rather than function entry/exit.
 With [[db]] or basic [[gdb]] commands, these tasks would
 require manually issuing dozens of commands or writing an
 external script that drives the debugger through a command
@@ -11068,14 +11074,43 @@ and cross-architecture debugging with [[-m]].
 
 %claude:
 The [[/lib/acid/leak.acid]] library implements memory leak detection
-by tracking [[malloc]] and [[free]] calls. It sets breakpoints on
-the memory allocator functions and records each allocation in
-an [[acid]] list. When the user calls [[leaks()]], it reports
-allocations that were never freed.
+in the style of a conservative garbage collector. It never sets a
+breakpoint and never intercepts [[malloc]] or [[free]]. Instead, it
+dumps the heap and every root region (bss, stack, and each thread's
+registers) from the target process through [[acid]]'s [[*addr]]
+read-from-target-memory operator, and prints the raw data for an
+external tool to post-process.
 %
-This is similar in spirit to
-Valgrind's leak detector but implemented entirely as an [[acid]]
-script, running the target at native speed between breakpoints.
+Two facts make this work. First, \plan's pool allocator tags each
+block with a magic number: [[ALLOC_MAGIC]] for live blocks,
+[[FREE_MAGIC]] for freed ones (see [[lib_core/libc/port/pool.c]]).
+The script walks each arena's block chain by advancing [[B2NB(b)]]
+and inspecting [[addr.magic]], so it can list every live allocation
+without ever running code in the target. Second, [[malloc()]] calls
+[[setmalloctag()]] (see [[lib_core/libc/port/malloc.c]]), which
+stores the caller PC in the padding longs sitting just before the
+user data. The script reads [[*(addr+8)]] and [[*(addr+12)]] to
+recover the allocator and reallocator PCs---so each dumped block
+carries a back-reference to the line of source that allocated it.
+
+%claude:
+The ``reachability'' half of the algorithm runs outside [[acid]].
+[[dumpmem()]] and [[dumpregs()]] walk every 4-byte word in bss,
+heap, stack, and register file, and print those whose value happens
+to fall inside the heap range (as judged by [[isptr]]). Feeding that
+to companion [[rc]] scripts (the [[% also leak.rc, umem.rc, kmem.rc]]
+comment) gives a graph of ``which block is pointed to by which root
+or which other block'', from which the set of unreachable blocks is
+the leak report. This is exactly how Boehm's conservative garbage
+collector (and its leak-detection mode) works: treat every aligned
+word as a potential pointer, and call anything not reachable from
+the roots garbage. The \plan variant is striking because it needs
+no runtime support and no recompilation: pool tags and the padlong
+PC are already there, and [[acid]]'s [[*addr]] primitive does the
+rest. Compare Valgrind, which has to interpret every load and store
+through its synthetic CPU to track reachability, or ASan, which
+inserts redzone checks at compile time---both give more precise
+answers at a much higher engineering cost.
 
 <<lib/acid/leak.acid>>=
 //
@@ -11272,10 +11307,29 @@ blocksummary()
 \section{Code coverage: [[/lib/acid/coverage.acid]]}
 
 %claude:
-The [[/lib/acid/coverage.acid]] library implements basic code coverage
-by setting breakpoints on every function entry point and recording
-which ones are hit during execution. After a test run, it reports
-which functions were never called.
+The [[/lib/acid/coverage.acid]] library implements {basic-block}
+coverage, not function-level coverage. It walks every instruction
+in the text segment and calls [[follow(e)]] at each address, which
+returns the possible successor PCs. Most instructions have exactly
+one successor (fall-through), so [[tail l == {}]] and they are
+ignored. When [[follow]] returns two successors---i.e. the
+instruction is a branch---the script adds \emph{both} the
+fall-through and the branch target to the [[bblock]] set. These
+are exactly the basic-block entry points.
+%
+[[coverage()]] then patches a breakpoint instruction into every
+entry in [[bblock]] and calls [[cont()]] in a loop. Each time the
+target stops on a known breakpoint, the script removes it from
+[[bblock]] (a hit block never stops the program again, so the
+target runs at near-native speed after the first hit of each
+block). When execution ends, whatever remains in [[bblock]] is
+the set of basic blocks that were never reached. [[report()]] then
+uses [[pcline()]] and [[pcfile()]] to translate those addresses
+back to source lines, giving a list of unexercised lines---the
+same granularity as [[gcov]]'s line coverage, but produced with no
+compiler instrumentation at all: [[acid]]'s symbol table and the
+architecture-specific [[follow()]] helper supply everything
+[[gcov]] normally gets from [[-fprofile-arcs]].
 
 <<lib/acid/coverage.acid>>=
 // Coverage library
@@ -12315,18 +12369,25 @@ free, buffer overflows, uninitialized reads) by
 instrumenting memory accesses, which can find subtle
 bugs that breakpoint-based debugging cannot catch.
 [[acid]] addresses a small slice of this through
-the [[/lib/acid/leak.acid]] script (allocation tracking
-via breakpoints on [[malloc]]/[[free]]) and the
-[[/lib/acid/malloc.acid]] script (heap inspection),
-but these are far less comprehensive than Valgrind:
-they catch leaks but not buffer overflows,
+the [[/lib/acid/leak.acid]] script (conservative
+reachability analysis over the heap and root regions,
+using the pool allocator's magic tags and the
+per-block caller [[PC]] stored by [[setmalloctag]])
+and the [[/lib/acid/malloc.acid]] script (heap
+inspection), but these are far less comprehensive than
+Valgrind: they catch leaks but not buffer overflows,
 uninitialized reads, or use-after-free.
 %
-That is essentially because [[acid]]'s approach
-relies on breakpoints (one stop per allocation event)
-rather than instrumenting every memory access, which
-would require either a synthetic CPU (Valgrind) or
-compile-time rewriting (ASan).
+That is essentially a consequence of the ``passive
+observer'' approach: [[leak.acid]] only ever
+\emph{reads} target memory through the [[*addr]]
+primitive, so it can tell which blocks are unreachable
+but cannot see an out-of-bounds store or an
+uninitialized load as they happen. Catching those
+requires either a synthetic CPU (Valgrind) or
+compile-time rewriting (ASan)---both of which intercept
+every load and store, at much higher engineering and
+runtime cost.
 
 \end{itemize}
 
