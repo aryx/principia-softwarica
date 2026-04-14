@@ -49,9 +49,13 @@ typedef struct Opcode Opcode;
 /*s: struct [[Opcode]](arm) */
 struct Opcode
 {
+    // opcode template
     char*       o;
+    // operand extractor
     void        (*fmt)(Opcode*, Instr*);
+    // option<func> non-nil when branch or MOVE PC instruction
     uvlong      (*foll)(Map*, Rgetter, Instr*, uvlong);
+    // operands template
     char*       a;
 };
 /*e: struct [[Opcode]](arm) */
@@ -1382,7 +1386,7 @@ printins(Map *map, uvlong pc, char *buf, int n)
 /*e: function [[printins]](arm) */
 
 /*s: function [[arminst]](arm) */
-/// ??? -> <>
+/// bprint -> patom (when 'i' format) -> armmach.das -> <>
 static int
 arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
 {
@@ -1392,6 +1396,7 @@ arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
 /*e: function [[arminst]](arm) */
 
 /*s: function [[armdas]](arm) */
+/// ?? -> armmach.hexinst -> <>
 static int
 armdas(Map *map, uvlong pc, char *buf, int n)
 {
@@ -1409,6 +1414,7 @@ armdas(Map *map, uvlong pc, char *buf, int n)
 /*e: function [[armdas]](arm) */
 
 /*s: function [[arminstlen]](arm) */
+/// fmtsize -> armmach.instsize
 static int
 arminstlen(Map *map, uvlong pc)
 {

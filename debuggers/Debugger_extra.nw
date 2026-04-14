@@ -3470,22 +3470,6 @@ fpformat(Map *map, Reglist *rp, char *buf, int n, int modif)
 }
 @
 
-<<function [[_hexify]]>>=
-char *
-_hexify(char *buf, ulong p, int zeros)
-{
-    ulong d;
-
-    d = p/16;
-    if(d)
-        buf = _hexify(buf, d, zeros-1);
-    else
-        while(zeros--)
-            *buf++ = '0';
-    *buf++ = "0123456789abcdef"[p&0x0f];
-    return buf;
-}
-@
 
 <<function [[ieeedftos]]>>=
 /*
@@ -4455,7 +4439,7 @@ printaddr(char *addr, uvlong pc)
 static void (*fmt)(char*, uvlong) = printaddr;
 @
 
-<<function [[main]]>>=
+<<function [[main]](ktrace.c)>>=
 void
 main(int argc, char *argv[])
 {
@@ -4735,7 +4719,7 @@ static  void    readstack(void);
 
 <<global [[fmt]]>>
 
-<<function [[main]]>>
+<<function [[main]](ktrace.c)>>
 
 <<function [[inithdr]]>>
 
@@ -5115,7 +5099,7 @@ void    loadmoduleobjtype(void);
 
 <<function usage (acid/main.c)>>
 
-<<function main (acid/main.c)>>
+<<function [[main]]>>
 
 <<function [[attachfiles]]>>
 
@@ -6225,29 +6209,6 @@ static int fsize[] =
 };
 @
 
-<<function [[fmtsize]]>>=
-int
-fmtsize(Value *v)
-{
-    int ret;
-
-    switch(v->fmt) {
-    default:
-        return  fsize[v->fmt];
-    case 'i':
-    case 'I':
-        if(v->type != TINT || machdata == 0)
-            error("no size for i fmt pointer ++/--");
-        ret = (*machdata->instsize)(cormap, v->ival);
-        if(ret < 0) {
-            ret = (*machdata->instsize)(symmap, v->ival);
-            if(ret < 0)
-                error("%r");
-        }
-        return ret;
-    }
-}
-@
 
 <<function [[chklval]]>>=
 void
@@ -7454,35 +7415,6 @@ regexp(Node *r, Node *args)
 
 
 
-<<function [[blprint]]>>=
-void
-blprint(List *l)
-{
-    Bprint(bout, "{");
-    while(l) {
-        switch(l->type) {
-        default:
-            patom(l->type, &l->Store);
-            break;
-        case TSTRING:
-            Bputc(bout, '"');
-            patom(l->type, &l->Store);
-            Bputc(bout, '"');
-            break;
-        case TLIST:
-            blprint(l->l);
-            break;
-        case TCODE:
-            pcode(l->cc, 0);
-            break;
-        }
-        l = l->next;
-        if(l)
-            Bprint(bout, ", ");
-    }
-    Bprint(bout, "}");
-}
-@
 
 
 
@@ -7615,32 +7547,6 @@ void fmtof(Node *r, Node *args)
 }
 @
 
-<<function [[dofmtsize]]>>=
-void dofmtsize(Node *r, Node *args)
-{
-    Node *av[Maxarg];
-    Node res;
-    Store * s ;
-    Value v ;
-
-    na = 0;
-    flatten(av, args);
-    if(na < 1)
-        error("fmtsize(obj): no argument");
-    if(na > 1)
-        error("fmtsize(obj): too many arguments") ;
-    expr(av[0], &res);
-
-    v.type = res.type ;
-    s = &v.Store ;
-    *s = res ;
-
-    r->op = OCONST;
-    r->type = TINT ;
-    r->ival = fmtsize(&v) ;
-    r->fmt = 'D';
-}
-@
 
 
 %-------------------------------------------------------------
@@ -7794,371 +7700,7 @@ typedef struct Btab Btab;
 %old: was originally in /sys/lib/acid/port but I moved to /lib to simplify
 % and added .acid extension otherwise syncweb complains
 
-<<lib/acid/port.acid>>=
-// portable acid for all architectures
-
-defn pfl(addr)
-{
-        print(pcfile(addr), ":", pcline(addr), "\n");
-}
-
-defn
-notestk(addr)
-{
-        local pc, sp;
-        complex Ureg addr;
-
-        pc = addr.pc\X;
-        sp = addr.sp\X;
-
-        print("Note pc:", pc, " sp:", sp, " ", fmt(pc, 'a'), " ");
-        pfl(pc);
-        _stk(pc, sp, linkreg(addr), 1);
-}
-
-defn
-notelstk(addr)
-{
-        local pc, sp;
-        complex Ureg addr;
-
-        pc = addr.pc\X;
-        sp = addr.sp\X;
-
-        print("Note pc:", pc, " sp:", sp, " ", fmt(pc, 'a'), " ");
-        pfl(pc);
-        _stk(pc, sp, linkreg(addr), 1);
-}
-
-defn labstk(l)                          // trace from a label
-{
-        _stk(*(l+4), *l, linkreg(0), 0);
-}
-
-<<function [[params]]>>
-
-stkprefix = "";
-stkignore = {};
-stkend = 0;
-
-<<function [[locals]]>>
-
-defn _stkign(file)
-{
-        s = stkignore;
-        while s do {
-                if regexp(head s, file) then
-                        return 1;
-                s = tail s;
-        }
-        return 0;
-}
-
-<<function [[_stk]]>>
-
-defn findsrc(file)
-{
-        local lst, src;
-
-        if file[0] == '/' then {
-                src = file(file);
-                if src != {} then {
-                        srcfiles = append srcfiles, file;
-                        srctext = append srctext, src;
-                        return src;
-                }
-                return {};
-        }
-
-        lst = srcpath;
-        while head lst do {
-                src = file(head lst+file);
-                if src != {} then {
-                        srcfiles = append srcfiles, file;
-                        srctext = append srctext, src;
-                        return src;
-                }
-                lst = tail lst;
-        }
-}
-
-defn line(addr)
-{
-        local src, file;
-
-        file = pcfile(addr);
-        src = match(file, srcfiles);
-
-        if src >= 0 then
-                src = srctext[src];
-        else
-                src = findsrc(file);
-
-        if src == {} then {
-                print("no source for ", file, "\n");
-                return {};
-        }
-        line = pcline(addr)-1;
-        print(file, ":", src[line], "\n");
-}
-
-defn addsrcdir(dir)
-{
-        dir = dir+"/";
-
-        if match(dir, srcpath) >= 0 then {
-                print("already in srcpath\n");
-                return {};
-        }
-
-        srcpath = {dir}+srcpath;
-}
-
-defn source()
-{
-        local l;
-
-        l = srcpath;
-        while l do {
-                print(head l, "\n");
-                l = tail l;
-        }
-        l = srcfiles;
-
-        while l do {
-                print("\t", head l, "\n");
-                l = tail l;
-        }
-}
-
-defn Bsrc(addr)
-{
-        local lst;
-
-        lst = srcpath;
-        file = pcfile(addr);
-        if file[0] == '/' && access(file) then {
-                rc("B "+file+":"+itoa(pcline(addr)));
-                return {};
-        }
-        while head lst do {
-                name = head lst+file;
-                if access(name) then {
-                        rc("B "+name+":"+itoa(pcline(addr)));
-                        return {};
-                }
-                lst = tail lst;
-        }
-        print("no source for ", file, "\n");
-}
-
-defn srcline(addr)
-{
-        local text, cline, line, file, src;
-        file = pcfile(addr);
-        src = match(file,srcfiles);
-        if (src>=0) then
-                src = srctext[src];
-        else
-                src = findsrc(file);
-        if (src=={}) then
-        {
-                return "(no source)";
-        }
-        return src[pcline(addr)-1];
-}
-
-<<function [[src]]>>
-
-<<function [[step]]>>
-
-<<function [[bpset]]>>
-
-defn bptab()                                    // print a table of breakpoints
-{
-        local lst, addr;
-
-        lst = bplist;
-        while lst do {
-                addr = head lst;
-                print("\t", fmt(addr, 'X'), " ", fmt(addr, 'a'), "  ", fmt(addr, 'i'), "\n");
-                lst = tail lst;
-        }
-}
-
-<<function [[bpdel]]>>
-
-<<function [[cont]]>>
-
-defn stopped(pid)               // called from acid when a process changes state
-{
-        pstop(pid);             // stub so this is easy to replace
-}
-
-defn procs()                    // print status of processes
-{
-        local c, lst, cpid;
-
-        cpid = pid;
-        lst = proclist;
-        while lst do {
-                np = head lst;
-                setproc(np);
-                if np == cpid then
-                        c = '>';
-                else
-                        c = ' ';
-                print(fmt(c, 'c'), np, ": ", status(np), " at ", fmt(*PC, 'a'), " setproc(", np, ")\n");
-                lst = tail lst;
-        }
-        pid = cpid;
-        if pid != 0 then
-                setproc(pid);
-}
-
-<<constant [[_asmlines]]>>
-
-<<function [[asm]]>>
-
-defn casm()
-{
-        asm(lasmaddr);
-}
-
-defn win()
-{
-        local npid, estr;
-
-        bplist = {};
-        notes = {};
-
-        estr = "/sys/lib/acid/window '0 0 600 400' "+textfile;
-        if progargs != "" then
-                estr = estr+" "+progargs;
-
-        npid = rc(estr);
-        npid = atoi(npid);
-        if npid == 0 then
-                error("win failed to create process");
-
-        setproc(npid);
-        stopped(npid);
-}
-
-defn win2()
-{
-        local npid, estr;
-
-        bplist = {};
-        notes = {};
-
-        estr = "/sys/lib/acid/transcript '0 0 600 400' '100 100 700 500' "+textfile;
-        if progargs != "" then
-                estr = estr+" "+progargs;
-
-        npid = rc(estr);
-        npid = atoi(npid);
-        if npid == 0 then
-                error("win failed to create process");
-
-        setproc(npid);
-        stopped(npid);
-}
-
-<<function [[new]]>>
-
-defn stmnt()                    // step one statement
-{
-        local line;
-
-        line = pcline(*PC);
-        while 1 do {
-                step();
-                if line != pcline(*PC) then {
-                        src(*PC);
-                        return {};
-                }
-        }
-}
-
-defn func()                     // step until we leave the current function
-{
-        local bound, end, start, pc;
-
-        bound = fnbound(*PC);
-        if bound == {} then {
-                print("cannot locate text symbol\n");
-                return {};
-        }
-
-        pc = *PC;
-        start = bound[0];
-        end = bound[1];
-        while pc >= start && pc < end do {
-                step();
-                pc = *PC;
-        }
-}
-
-<<function [[next]]>>
-
-defn dump(addr, n, fmt)
-{
-        // see definition of dump in acid manual: it does n+1 iterations
-        loop 0, n do {
-                print(fmt(addr, 'X'), ": ");
-                addr = mem(addr, fmt);
-        }
-}
-
-defn mem(addr, fmt)
-{
-
-        local i, c, n;
-
-        i = 0;
-        while fmt[i] != 0 do {
-                c = fmt[i];
-                n = 0;
-                while '0' <= fmt[i] && fmt[i] <= '9' do {
-                        n = 10*n + fmt[i]-'0';
-                        i = i+1;
-                }
-                if n <= 0 then n = 1;
-                addr = fmt(addr, fmt[i]);
-                while n > 0 do {
-                        print(*addr++, " ");
-                        n = n-1;
-                }
-                i = i+1;
-        }
-        print("\n");
-        return addr;
-}
-
-<<function [[symbols]]>>
-
-defn spsrch(len)
-{
-        local addr, a, s, e;
-
-        addr = *SP;
-        s = origin & 0x7fffffff;
-        e = etext & 0x7fffffff;
-        loop 1, len do {
-                a = *addr++;
-                c = a & 0x7fffffff;
-                if c > s && c < e then {
-                        print("src(", a, ")\n");
-                        pfl(a);
-                }                       
-        }
-}
-
-<<global [[progargs]]>>
-
-print("/lib/acid/port.acid");
-@
+% Now in Debugger.nw
 
 \subsection{[[lib/acid/arm.acid]]}
 

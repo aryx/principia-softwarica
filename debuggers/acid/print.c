@@ -106,7 +106,7 @@ void
 whatis(Lsym *l)
 {
     int t;
-    int def;
+    bool def = false;
     Type *ti;
 
     if(l == nil) {
@@ -114,7 +114,6 @@ whatis(Lsym *l)
         return;
     }
 
-    def = 0;
     if(l->v->set) {
         t = l->v->type;
         Bprint(bout, "%s variable", typenames[t]);
@@ -123,7 +122,7 @@ whatis(Lsym *l)
         if(l->v->comt)
             Bprint(bout, " complex %s", l->v->comt->base->name);
         Bputc(bout, '\n');
-        def = 1;
+        def = true;
     }
     if(l->lt) {
         Bprint(bout, "complex %s {\n", l->name);
@@ -145,7 +144,7 @@ whatis(Lsym *l)
                 ti->fmt, ti->offset, ti->tag->name);
         }
         Bprint(bout, "};\n");
-        def = 1;
+        def = true;
     }
     if(l->proc) {
         Bprint(bout, "defn %s(", l->name);
@@ -153,13 +152,13 @@ whatis(Lsym *l)
         Bprint(bout, ") {\n");
         pcode(l->proc->right, 1);
         Bprint(bout, "}\n");
-        def = 1;
+        def = true;
     }
     if(l->builtin) {
         Bprint(bout, "builtin function\n");
-        def = 1;
+        def = true;
     }
-    if(def == 0)
+    if(!def)
         Bprint(bout, "%s is undefined\n", l->name);
 }
 /*e: function [[whatis]] */
@@ -179,7 +178,7 @@ slist(Node *n, int d)
 /*e: function [[slist]] */
 
 /*s: function [[pcode]] */
-/// user:whatis -> ... -> whatis -> <>
+/// (user:whatis -> ... -> whatis) | bprint -> <>
 void
 pcode(Node *n, int d)
 {
@@ -252,6 +251,7 @@ pcode(Node *n, int d)
 /*e: function [[pcode]] */
 
 /*s: function [[pexpr]] */
+/// whatis | pcode -> <>
 void
 pexpr(Node *n)
 {

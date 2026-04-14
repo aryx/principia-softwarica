@@ -1383,7 +1383,7 @@ memory map                     & \ref{chap:libmach}            & [[libmach/map.c
 memory access                  & \ref{chap:libmach}            & [[libmach/access.c]]       & [<get1()>] [<put1()>] [<attachproc()>]         & 295 \\
 machine data                   & \ref{chap:libmach}            & [[libmach/machdata.c]]     & [<symoff()>]                                   & 493 \\
 ARM support                    & \ref{chap:libmach}            & [[libmach/5.c]], [[5db.c]] & [<armreglist>] [<armdas()>]                    & 1514 \\
-x86 support                    & \ref{chap:libmach}            & [[libmach/8.c]], [[8db.c]] & [<i386reglist>] [<i386das()>]                  & 2426 \\
+%x86 support                    & \ref{chap:libmach}            & [[libmach/8.c]], [[8db.c]] & [<i386reglist>] [<i386das()>]                  & 2426 \\
 \midrule
 lexer                          & \ref{chap:parsing}            & [[lex.c]]          & [<yylex()>] [<numsym()>] [<pushfile()>]        & 734 \\
 parser                         & \ref{chap:parsing}            & [[dbg.y]]          & [<yyparse()>]                                  & 360 \\
@@ -2775,7 +2775,7 @@ enum executable_type
 %    FARM64B,		/* arm64 bootable */
 
 
-\subsection{Architecture description: [[Mach]] and [[mach]]}
+\subsection{Architecture description: [[Mach]] and [[mach]] (ARM)}
 
 % put1? get1?
 % rput? rget? register put/get
@@ -2889,7 +2889,7 @@ enum {					/* bits in rflags field */
 %$
 
 
-\subsection{Architecture-specific operations: [[Machdata]] and [[machdata]]}
+\subsection{Architecture-specific operations: [[Machdata]] and [[machdata]] (ARM)}
 
 %machdata->bpinst ! the instruction generating a sys: breakpoint
 
@@ -4125,7 +4125,7 @@ format handlers, keyword table, lexer setup, builtins, symbol
 loading, module loading, and the user's [[acidinit]] function.
 Finally it enters the infinite REPL loop.
 
-<<function main (acid/main.c)>>=
+<<function [[main]]>>=
 void
 main(int argc, char *argv[])
 {
@@ -4997,8 +4997,8 @@ For reference, here is what [[new()]] looks like in the library:
 \end{verbatim}
 %
 So [[new()]] is itself a small composition of more primitive
-operations: [[newproc]] (a C builtin) plus [[bpset]] / [[cont]] /
-[[bpdel]] (other library functions). The user can read this
+operations: [[newproc]] (a C builtin) plus [<bpset()>] / [<cont()>] /
+[<bpdel()>] (other library functions). The user can read this
 definition with [[whatis new]] at the prompt and override it
 freely. This is the essence of a programmable debugger: the
 ``run a program'' command is not built in, it is written in
@@ -8748,14 +8748,13 @@ result back in the result node.
 @
 
 <<[[tab]] entries>>=
+"setproc",	setproc,
 "kill",	kill,
-@
-<<[[tab]] entries>>=
-"error",	doerror,
 @
 
 <<[[tab]] entries>>=
-"follow",	follow,
+"printto",	printto,
+"fmtof",	fmtof,
 @
 
 <<[[tab]] entries>>=
@@ -8764,31 +8763,27 @@ result back in the result node.
 @
 
 <<[[tab]] entries>>=
+"follow",	follow,
+@
+
+
+<<[[tab]] entries>>=
+"error",	doerror,
+@
+<<[[tab]] entries>>=
 "rc",	rc,
 @
 <<[[tab]] entries>>=
 "reason",	reason,
 @
-
-<<[[tab]] entries>>=
-"setproc",	setproc,
-@
-
 <<[[tab]] entries>>=
 "map",	map,
 @
-
-
 <<[[tab]] entries>>=
 "strace",	strace,
 "sysr1",	dosysr1,
 @
 
-<<[[tab]] entries>>=
-"printto",	printto,
-"fmtof",	fmtof,
-"fmtsize",	dofmtsize,
-@
 
 
 \subsection{Including a file: [[include()]]}
@@ -8953,8 +8948,24 @@ lexio->ip--;
 @
 
 \subsection{Printing: [[print()]]}
+\label{sec:printing}
 
-%yoann: say remember implicit print when type just expression like main\i
+% say remember implicit print when type just expression like main\i
+% can also just use expr and it will be printed by default in most cases
+% like foo:x or foo:x\d
+
+%claude:
+This section covers [[acid]]'s output: the [[print]] builtin,
+the [[prnt]] node used to auto-print expression results in
+the REPL.
+
+% the [<whatis()>] command for introspection, and the
+%AST pretty-printer used to display function definitions.
+%TODO: shown in appendix
+
+<<global [[prnt]]>>=
+Node*	prnt;
+@
 
 <<[[tab]] entries>>=
 "print",	bprint,
@@ -8993,6 +9004,39 @@ bprint(Node *r, Node *args)
 }
 @
 
+% pcode is in appendix
+
+<<function [[blprint]]>>=
+void
+blprint(List *l)
+{
+    Bprint(bout, "{");
+    while(l) {
+        switch(l->type) {
+        default:
+            patom(l->type, &l->Store);
+            break;
+        case TSTRING:
+            Bputc(bout, '"');
+            patom(l->type, &l->Store);
+            Bputc(bout, '"');
+            break;
+        case TLIST:
+            blprint(l->l);
+            break;
+        case TCODE:
+            pcode(l->cc, 0);
+            break;
+        }
+        l = l->next;
+        if(l)
+            Bprint(bout, ", ");
+    }
+    Bprint(bout, "}");
+}
+@
+
+
 
 <<function [[comx]]>>=
 int
@@ -9025,6 +9069,7 @@ comx(Node res)
 
 
 <<function [[patom]]>>=
+/// bprint | printto -> <>
 void
 patom(char type, Store *res)
 {
@@ -9167,6 +9212,70 @@ fmt(Node *r, Node *args)
     expr(av[0], r);
 
     r->fmt = res.ival;
+}
+@
+
+
+\subsection{Instruction size: [[fmtsize()]]}
+
+<<[[tab]] entries>>=
+"fmtsize",	dofmtsize,
+@
+
+<<function [[dofmtsize]]>>=
+void dofmtsize(Node *r, Node *args)
+{
+    Node *av[Maxarg];
+    Node res;
+    Store * s ;
+    Value v ;
+
+    na = 0;
+    flatten(av, args);
+    if(na < 1)
+        error("fmtsize(obj): no argument");
+    if(na > 1)
+        error("fmtsize(obj): too many arguments") ;
+    expr(av[0], &res);
+
+    v.type = res.type ;
+    s = &v.Store ;
+    *s = res ;
+
+    r->op = OCONST;
+    r->type = TINT ;
+    r->ival = fmtsize(&v) ;
+    r->fmt = 'D';
+}
+@
+
+
+% important when do main+1, main++, etc. to increment
+% differently on architecture, and also to understand instruction
+% format on x86 which may vary
+% will see later the instsize method for each arch
+
+<<function [[fmtsize]]>>=
+int
+fmtsize(Value *v)
+{
+    int ret;
+
+    switch(v->fmt) {
+    default:
+        return  fsize[v->fmt];
+    case 'i':
+    case 'I':
+        if(v->type != TINT || machdata == 0)
+            error("no size for i fmt pointer ++/--");
+        ret = (*machdata->instsize)(cormap, v->ival);
+        if(ret < 0) {
+            ret = (*machdata->instsize)(symmap, v->ival);
+            if(ret < 0)
+                error("%r");
+        }
+        return ret;
+    }
 }
 @
 
@@ -9368,6 +9477,373 @@ continue to it),
 These functions use the builtins from the Interpreting and
 Process Control chapters.
 
+
+<<lib/acid/port.acid>>=
+// portable acid for all architectures
+
+defn pfl(addr)
+{
+        print(pcfile(addr), ":", pcline(addr), "\n");
+}
+
+defn
+notestk(addr)
+{
+        local pc, sp;
+        complex Ureg addr;
+
+        pc = addr.pc\X;
+        sp = addr.sp\X;
+
+        print("Note pc:", pc, " sp:", sp, " ", fmt(pc, 'a'), " ");
+        pfl(pc);
+        _stk(pc, sp, linkreg(addr), 1);
+}
+
+defn
+notelstk(addr)
+{
+        local pc, sp;
+        complex Ureg addr;
+
+        pc = addr.pc\X;
+        sp = addr.sp\X;
+
+        print("Note pc:", pc, " sp:", sp, " ", fmt(pc, 'a'), " ");
+        pfl(pc);
+        _stk(pc, sp, linkreg(addr), 1);
+}
+
+defn labstk(l)                          // trace from a label
+{
+        _stk(*(l+4), *l, linkreg(0), 0);
+}
+
+<<function [[params]]>>
+
+stkprefix = "";
+stkignore = {};
+stkend = 0;
+
+<<function [[locals]]>>
+
+defn _stkign(file)
+{
+        s = stkignore;
+        while s do {
+                if regexp(head s, file) then
+                        return 1;
+                s = tail s;
+        }
+        return 0;
+}
+
+<<function [[_stk]]>>
+
+defn findsrc(file)
+{
+        local lst, src;
+
+        if file[0] == '/' then {
+                src = file(file);
+                if src != {} then {
+                        srcfiles = append srcfiles, file;
+                        srctext = append srctext, src;
+                        return src;
+                }
+                return {};
+        }
+
+        lst = srcpath;
+        while head lst do {
+                src = file(head lst+file);
+                if src != {} then {
+                        srcfiles = append srcfiles, file;
+                        srctext = append srctext, src;
+                        return src;
+                }
+                lst = tail lst;
+        }
+}
+
+defn line(addr)
+{
+        local src, file;
+
+        file = pcfile(addr);
+        src = match(file, srcfiles);
+
+        if src >= 0 then
+                src = srctext[src];
+        else
+                src = findsrc(file);
+
+        if src == {} then {
+                print("no source for ", file, "\n");
+                return {};
+        }
+        line = pcline(addr)-1;
+        print(file, ":", src[line], "\n");
+}
+
+defn addsrcdir(dir)
+{
+        dir = dir+"/";
+
+        if match(dir, srcpath) >= 0 then {
+                print("already in srcpath\n");
+                return {};
+        }
+
+        srcpath = {dir}+srcpath;
+}
+
+defn source()
+{
+        local l;
+
+        l = srcpath;
+        while l do {
+                print(head l, "\n");
+                l = tail l;
+        }
+        l = srcfiles;
+
+        while l do {
+                print("\t", head l, "\n");
+                l = tail l;
+        }
+}
+
+defn Bsrc(addr)
+{
+        local lst;
+
+        lst = srcpath;
+        file = pcfile(addr);
+        if file[0] == '/' && access(file) then {
+                rc("B "+file+":"+itoa(pcline(addr)));
+                return {};
+        }
+        while head lst do {
+                name = head lst+file;
+                if access(name) then {
+                        rc("B "+name+":"+itoa(pcline(addr)));
+                        return {};
+                }
+                lst = tail lst;
+        }
+        print("no source for ", file, "\n");
+}
+
+defn srcline(addr)
+{
+        local text, cline, line, file, src;
+        file = pcfile(addr);
+        src = match(file,srcfiles);
+        if (src>=0) then
+                src = srctext[src];
+        else
+                src = findsrc(file);
+        if (src=={}) then
+        {
+                return "(no source)";
+        }
+        return src[pcline(addr)-1];
+}
+
+<<function [[src]]>>
+
+<<function [[step]]>>
+
+<<function [[bpset]]>>
+
+defn bptab()                                    // print a table of breakpoints
+{
+        local lst, addr;
+
+        lst = bplist;
+        while lst do {
+                addr = head lst;
+                print("\t", fmt(addr, 'X'), " ", fmt(addr, 'a'), "  ", fmt(addr, 'i'), "\n");
+                lst = tail lst;
+        }
+}
+
+<<function [[bpdel]]>>
+
+<<function [[cont]]>>
+
+defn stopped(pid)               // called from acid when a process changes state
+{
+        pstop(pid);             // stub so this is easy to replace
+}
+
+defn procs()                    // print status of processes
+{
+        local c, lst, cpid;
+
+        cpid = pid;
+        lst = proclist;
+        while lst do {
+                np = head lst;
+                setproc(np);
+                if np == cpid then
+                        c = '>';
+                else
+                        c = ' ';
+                print(fmt(c, 'c'), np, ": ", status(np), " at ", fmt(*PC, 'a'), " setproc(", np, ")\n");
+                lst = tail lst;
+        }
+        pid = cpid;
+        if pid != 0 then
+                setproc(pid);
+}
+
+<<constant [[_asmlines]]>>
+
+<<function [[asm]]>>
+
+defn casm()
+{
+        asm(lasmaddr);
+}
+
+defn win()
+{
+        local npid, estr;
+
+        bplist = {};
+        notes = {};
+
+        estr = "/sys/lib/acid/window '0 0 600 400' "+textfile;
+        if progargs != "" then
+                estr = estr+" "+progargs;
+
+        npid = rc(estr);
+        npid = atoi(npid);
+        if npid == 0 then
+                error("win failed to create process");
+
+        setproc(npid);
+        stopped(npid);
+}
+
+defn win2()
+{
+        local npid, estr;
+
+        bplist = {};
+        notes = {};
+
+        estr = "/sys/lib/acid/transcript '0 0 600 400' '100 100 700 500' "+textfile;
+        if progargs != "" then
+                estr = estr+" "+progargs;
+
+        npid = rc(estr);
+        npid = atoi(npid);
+        if npid == 0 then
+                error("win failed to create process");
+
+        setproc(npid);
+        stopped(npid);
+}
+
+<<function [[new]]>>
+
+defn stmnt()                    // step one statement
+{
+        local line;
+
+        line = pcline(*PC);
+        while 1 do {
+                step();
+                if line != pcline(*PC) then {
+                        src(*PC);
+                        return {};
+                }
+        }
+}
+
+defn func()                     // step until we leave the current function
+{
+        local bound, end, start, pc;
+
+        bound = fnbound(*PC);
+        if bound == {} then {
+                print("cannot locate text symbol\n");
+                return {};
+        }
+
+        pc = *PC;
+        start = bound[0];
+        end = bound[1];
+        while pc >= start && pc < end do {
+                step();
+                pc = *PC;
+        }
+}
+
+<<function [[next]]>>
+
+defn dump(addr, n, fmt)
+{
+        // see definition of dump in acid manual: it does n+1 iterations
+        loop 0, n do {
+                print(fmt(addr, 'X'), ": ");
+                addr = mem(addr, fmt);
+        }
+}
+
+defn mem(addr, fmt)
+{
+
+        local i, c, n;
+
+        i = 0;
+        while fmt[i] != 0 do {
+                c = fmt[i];
+                n = 0;
+                while '0' <= fmt[i] && fmt[i] <= '9' do {
+                        n = 10*n + fmt[i]-'0';
+                        i = i+1;
+                }
+                if n <= 0 then n = 1;
+                addr = fmt(addr, fmt[i]);
+                while n > 0 do {
+                        print(*addr++, " ");
+                        n = n-1;
+                }
+                i = i+1;
+        }
+        print("\n");
+        return addr;
+}
+
+<<function [[symbols]]>>
+
+defn spsrch(len)
+{
+        local addr, a, s, e;
+
+        addr = *SP;
+        s = origin & 0x7fffffff;
+        e = etext & 0x7fffffff;
+        loop 1, len do {
+                a = *addr++;
+                c = a & 0x7fffffff;
+                if c > s && c < e then {
+                        print("src(", a, ")\n");
+                        pfl(a);
+                }                       
+        }
+}
+
+<<global [[progargs]]>>
+
+print("/lib/acid/port.acid");
+@
+
 \section{The ARM library: [[/lib/acid/arm.acid]]}
 %\section{[[386]]}
 
@@ -9532,6 +10008,7 @@ defn new()
         bpdel(*PC);
 }
 @
+\noindent{\footnotesize Uses [<bplist>], [<newproc()>], [<bpset()>], [<cont()>], [<bpdel>]}
 
 <<global [[progargs]]>>=
 progargs="";
@@ -9930,24 +10407,11 @@ defn step()                                     // single step the process
 \section{Inspecting}
 %alt:\chapter{Printing and Introspection}
 
-\subsection{Printing values: [[print(<expr>)]]}
-\label{sec:printing}
+%yoann: say saw print() before to print value and auto print also expr
+% and also fmt() and special x\F format expression modifier
 
-%claude:
-This section covers [[acid]]'s output: the [[print]] builtin,
-the [[prnt]] node used to auto-print expression results in
-the REPL.
+%alt: \subsection{Printing values: [[print(<expr>)]]}
 
-% the [<whatis()>] command for introspection, and the
-%AST pretty-printer used to display function definitions.
-%TODO: shown in appendix
-
-<<global [[prnt]]>>=
-Node*	prnt;
-@
-
-% can also just use expr and it will be printed by default in most cases
-% like foo:x or foo:x\d
 
 \subsection{Stack trace: [[stk()]]}
 
@@ -11640,7 +12104,8 @@ making the mechanism especially transparent.
 \chapter{Debugging}
 %******************************************************************************
 \label{chap:debugging-appendix}
-% debugging the debugger :)
+
+%yoann: intro to appendix. Also debugging the debugger :)
 
 %less: have a -v where have more dprint(), e.g. in msgpcs()
 
@@ -11654,6 +12119,7 @@ the system: variable values and their formats, function
 definitions (printed back as [[acid]] source), type
 descriptions (the [[complex]]/[[aggr]] layouts from
 [[cc -a]]), and even lists of all defined functions.
+%
 This means the user never has to leave the debugger to look
 up what a library function does or how a type is laid out---just
 type [[whatis stk]] or [[whatis Proc]].
@@ -11690,7 +12156,7 @@ void
 whatis(Lsym *l)
 {
     int t;
-    int def;
+    bool def = false;
     Type *ti;
 
     if(l == nil) {
@@ -11698,7 +12164,6 @@ whatis(Lsym *l)
         return;
     }
 
-    def = 0;
     if(l->v->set) {
         t = l->v->type;
         Bprint(bout, "%s variable", typenames[t]);
@@ -11707,7 +12172,7 @@ whatis(Lsym *l)
         if(l->v->comt)
             Bprint(bout, " complex %s", l->v->comt->base->name);
         Bputc(bout, '\n');
-        def = 1;
+        def = true;
     }
     if(l->lt) {
         Bprint(bout, "complex %s {\n", l->name);
@@ -11729,7 +12194,7 @@ whatis(Lsym *l)
                 ti->fmt, ti->offset, ti->tag->name);
         }
         Bprint(bout, "};\n");
-        def = 1;
+        def = true;
     }
     if(l->proc) {
         Bprint(bout, "defn %s(", l->name);
@@ -11737,13 +12202,13 @@ whatis(Lsym *l)
         Bprint(bout, ") {\n");
         pcode(l->proc->right, 1);
         Bprint(bout, "}\n");
-        def = 1;
+        def = true;
     }
     if(l->builtin) {
         Bprint(bout, "builtin function\n");
-        def = 1;
+        def = true;
     }
-    if(def == 0)
+    if(!def)
         Bprint(bout, "%s is undefined\n", l->name);
 }
 @
@@ -11804,7 +12269,7 @@ fundefs(void)
 
 \section{AST dumper}
 
-% invoked by whatis?
+% invoked by whatis but also bprint when code expression
 
 <<global [[tabs]]>>=
 static char *tabs = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
@@ -11824,7 +12289,7 @@ cmp(void *va, void *vb)
 \subsection{Statement dumper: [[pcode()]]}
 
 <<function [[pcode]]>>=
-/// user:whatis -> ... -> whatis -> <>
+/// (user:whatis -> ... -> whatis) | bprint -> <>
 void
 pcode(Node *n, int d)
 {
@@ -11939,6 +12404,7 @@ static char *binop[] =
 @
 
 <<function [[pexpr]]>>=
+/// whatis | pcode -> <>
 void
 pexpr(Node *n)
 {
@@ -12600,9 +13066,13 @@ numbers extracted by the format handler.
 <<struct [[Opcode]](arm)>>=
 struct Opcode
 {
+    // opcode template
     char*       o;
+    // operand extractor
     void        (*fmt)(Opcode*, Instr*);
+    // option<func> non-nil when branch or MOVE PC instruction
     uvlong      (*foll)(Map*, Rgetter, Instr*, uvlong);
+    // operands template
     char*       a;
 };
 @
@@ -12635,13 +13105,14 @@ on bit fields. The layout mirrors the ARM instruction encoding:
    100..123      VFP instructions            armdps/armvstdi
    124..127      BKPT, BX, BLX              armbpt/armdps
 \end{verbatim}
-%
-Each row has four columns: the mnemonic template [[o]] (with
-[[%C]]/[[%S]] placeholders for condition and S-bit), the format
-handler [[fmt]], the optional follow-set function [[foll]] (nil
-for instructions that never change control flow), and the
-operand template [[a]].
-%
+
+
+%Each row has four columns: the mnemonic template [[o]] (with
+%[[%C]]/[[%S]] placeholders for condition and S-bit), the format
+%handler [[fmt]], the optional follow-set function [[foll]] (nil
+%for instructions that never change control flow), and the
+%operand template [[a]].
+
 For example, entry~82 is
 \verb+{ "B%C", armb, armfbranch, "%b" }+:
 the mnemonic is [["B"]] with an optional condition suffix,
@@ -12849,7 +13320,7 @@ the temporary breakpoint.
 \end{itemize}
 
 <<function [[arminst]](arm)>>=
-/// ??? -> <>
+/// bprint -> patom (when 'i' format) -> armmach.das -> <>
 static int
 arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
 {
@@ -12874,7 +13345,25 @@ printins(Map *map, uvlong pc, char *buf, int n)
 }
 @
 
+
+<<function [[arminstlen]](arm)>>=
+/// fmtsize -> armmach.instsize
+static int
+arminstlen(Map *map, uvlong pc)
+{
+    Instr i;
+
+    if(decode(map, pc, &i) < 0)
+        return -1;
+    return 4;
+}
+@
+
+
+
+
 <<function [[armdas]](arm)>>=
+/// ?? -> armmach.hexinst -> <>
 static int
 armdas(Map *map, uvlong pc, char *buf, int n)
 {
@@ -12891,17 +13380,23 @@ armdas(Map *map, uvlong pc, char *buf, int n)
 }
 @
 
-<<function [[arminstlen]](arm)>>=
-static int
-arminstlen(Map *map, uvlong pc)
+<<function [[_hexify]]>>=
+char *
+_hexify(char *buf, ulong p, int zeros)
 {
-    Instr i;
+    ulong d;
 
-    if(decode(map, pc, &i) < 0)
-        return -1;
-    return 4;
+    d = p/16;
+    if(d)
+        buf = _hexify(buf, d, zeros-1);
+    else
+        while(zeros--)
+            *buf++ = '0';
+    *buf++ = "0123456789abcdef"[p&0x0f];
+    return buf;
 }
 @
+
 
 
 \section{Decoding pipeline}

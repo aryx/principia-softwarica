@@ -65,29 +65,27 @@ struct Btab
     "pcfile",	pcfile,
     "pcline",	pcline,
     /*x: [[tab]] entries */
+    "setproc",	setproc,
     "kill",	kill,
     /*x: [[tab]] entries */
-    "error",	doerror,
-    /*x: [[tab]] entries */
-    "follow",	follow,
+    "printto",	printto,
+    "fmtof",	fmtof,
     /*x: [[tab]] entries */
     "match",	match,
     "regexp",	regexp,
+    /*x: [[tab]] entries */
+    "follow",	follow,
+    /*x: [[tab]] entries */
+    "error",	doerror,
     /*x: [[tab]] entries */
     "rc",	rc,
     /*x: [[tab]] entries */
     "reason",	reason,
     /*x: [[tab]] entries */
-    "setproc",	setproc,
-    /*x: [[tab]] entries */
     "map",	map,
     /*x: [[tab]] entries */
     "strace",	strace,
     "sysr1",	dosysr1,
-    /*x: [[tab]] entries */
-    "printto",	printto,
-    "fmtof",	fmtof,
-    "fmtsize",	dofmtsize,
     /*x: [[tab]] entries */
     "include",	include,
     /*x: [[tab]] entries */
@@ -96,6 +94,8 @@ struct Btab
     "print",	bprint,
     /*x: [[tab]] entries */
     "fmt",	fmt,
+    /*x: [[tab]] entries */
+    "fmtsize",	dofmtsize,
     /*x: [[tab]] entries */
     "newproc",	newproc,
     /*x: [[tab]] entries */
@@ -1075,6 +1075,7 @@ fmt(Node *r, Node *args)
 /*e: function [[fmt]] */
 
 /*s: function [[patom]] */
+/// bprint | printto -> <>
 void
 patom(char type, Store *res)
 {
