@@ -349,7 +349,6 @@ decode(Map *map, uvlong pc, Instr *i)
 }
 /*e: function [[decode]](arm) */
 
-// ?? but bprint does not take format directly, it takes 2 Nodes
 #pragma varargck        argpos  bprint          2
 
 /*s: function [[bprint]](arm) */
