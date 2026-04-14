@@ -72,7 +72,7 @@ printaddr(char *addr, uvlong pc)
 static void (*fmt)(char*, uvlong) = printaddr;
 /*e: global [[fmt]] */
 
-/*s: function [[main]] */
+/*s: function [[main]](ktrace.c) */
 void
 main(int argc, char *argv[])
 {
@@ -124,7 +124,7 @@ main(int argc, char *argv[])
     (*t)(pc, sp, link);
     exits(0);
 }
-/*e: function [[main]] */
+/*e: function [[main]](ktrace.c) */
 
 /*s: function [[inithdr]] */
 static void

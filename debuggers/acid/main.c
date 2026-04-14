@@ -40,7 +40,7 @@ usage(void)
 }
 /*e: function usage (acid/main.c) */
 
-/*s: function main (acid/main.c) */
+/*s: function [[main]] */
 void
 main(int argc, char *argv[])
 {
@@ -218,7 +218,7 @@ main(int argc, char *argv[])
     /*e: [[main()]](acid) infinite loop */
     /* not reached */
 }
-/*e: function main (acid/main.c) */
+/*e: function [[main]] */
 
 /*s: function [[attachfiles]] */
 /// main -> <>
