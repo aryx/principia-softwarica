@@ -431,6 +431,7 @@ static  int     arminstlen(Map*, uvlong);
 
 <<function [[decode]](arm)>>
 
+// ?? but bprint does not take format directly, it takes 2 Nodes
 #pragma varargck        argpos  bprint          2
 
 <<function [[bprint]](arm)>>
@@ -7455,143 +7456,7 @@ regexp(Node *r, Node *args)
 }
 @
 
-<<function [[fmt]]>>=
-void
-fmt(Node *r, Node *args)
-{
-    Node res;
-    Node *av[Maxarg];
 
-    na = 0;
-    flatten(av, args);
-    if(na != 2)
-        error("fmt(obj, fmt): arg count");
-    expr(av[1], &res);
-    if(res.type != TINT || strchr(vfmt, res.ival) == 0)
-        error("fmt(obj, fmt): bad format '%c'", (char)res.ival);
-    expr(av[0], r);
-    r->fmt = res.ival;
-}
-@
-
-<<function [[patom]]>>=
-void
-patom(char type, Store *res)
-{
-    int i;
-    char buf[512];
-    extern char *typenames[];
-
-    switch(res->fmt) {
-    case 'c':
-        Bprint(bout, "%c", (int)res->ival);
-        break;
-    case 'C':
-        if(res->ival < ' ' || res->ival >= 0x7f)
-            Bprint(bout, "%3d", (int)res->ival&0xff);
-        else
-            Bprint(bout, "%3c", (int)res->ival);
-        break;
-    case 'r':
-        Bprint(bout, "%C", (int)res->ival);
-        break;
-    case 'B':
-        memset(buf, '0', 34);
-        buf[1] = 'b';
-        for(i = 0; i < 32; i++) {
-            if(res->ival & (1<<i))
-                buf[33-i] = '1';
-        }
-        buf[35] = '\0';
-        Bprint(bout, "%s", buf);
-        break;
-    case 'b':
-        Bprint(bout, "%.2x", (int)res->ival&0xff);
-        break;
-    case 'X':
-        Bprint(bout, "%.8lux", (ulong)res->ival);
-        break;
-    case 'x':
-        Bprint(bout, "%.4lux", (ulong)res->ival&0xffff);
-        break;
-    case 'D':
-        Bprint(bout, "%d", (int)res->ival);
-        break;
-    case 'd':
-        Bprint(bout, "%d", (ushort)res->ival);
-        break;
-    case 'u':
-        Bprint(bout, "%d", (int)res->ival&0xffff);
-        break;
-    case 'U':
-        Bprint(bout, "%lud", (ulong)res->ival);
-        break;
-    case 'Z':
-        Bprint(bout, "%llud", res->ival);
-        break;
-    case 'V':
-        Bprint(bout, "%lld", res->ival);
-        break;
-    case 'W':
-        Bprint(bout, "%.8llux", res->ival);
-        break;
-    case 'Y':
-        Bprint(bout, "%.16llux", res->ival);
-        break;
-    case 'o':
-        Bprint(bout, "0%.11uo", (int)res->ival&0xffff);
-        break;
-    case 'O':
-        Bprint(bout, "0%.6uo", (int)res->ival);
-        break;
-    case 'q':
-        Bprint(bout, "0%.11o", (short)(res->ival&0xffff));
-        break;
-    case 'Q':
-        Bprint(bout, "0%.6o", (int)res->ival);
-        break;
-    case 'f':
-    case 'F':
-    case '3':
-    case '8':
-        if(type != TFLOAT)
-            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
-        else
-            Bprint(bout, "%g", res->fval);
-        break;
-    case 's':
-    case 'g':
-    case 'G':
-        if(type != TSTRING)
-            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
-        else
-            Bwrite(bout, res->string->string, res->string->len);
-        break;
-    case 'R':
-        if(type != TSTRING)
-            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
-        else
-            Bprint(bout, "%S", (Rune*)res->string->string);
-        break;
-    case 'a':
-    case 'A':
-        symoff(buf, sizeof(buf), res->ival, CANY);
-        Bprint(bout, "%s", buf);
-        break;
-    case 'I':
-    case 'i':
-        if(type != TINT)
-            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
-        else {
-            if (symmap == nil || (*machdata->das)(symmap, res->ival, res->fmt, buf, sizeof(buf)) < 0)
-                Bprint(bout, "no instruction");
-            else
-                Bprint(bout, "%s", buf);
-        }
-        break;
-    }
-}
-@
 
 <<function [[blprint]]>>=
 void
@@ -7623,66 +7488,7 @@ blprint(List *l)
 }
 @
 
-<<function [[comx]]>>=
-int
-comx(Node res)
-{
-    Lsym *sl;
-    Node *n, xx;
 
-    if(res.fmt != 'a' && res.fmt != 'A')
-        return 0;
-
-    if(res.comt == 0 || res.comt->base == 0)
-        return 0;
-
-    sl = res.comt->base;
-    if(sl->proc) {
-        res.left = ZN;
-        res.right = ZN;
-        n = an(ONAME, ZN, ZN);
-        n->sym = sl;
-        n = an(OCALL, n, &res);
-            n->left->sym = sl;
-        expr(n, &xx);
-        return 1;
-    }
-    print("(%s)", sl->name);
-    return 0;
-}
-@
-
-<<function [[bprint]]>>=
-void
-bprint(Node *r, Node *args)
-{
-    int i, nas;
-    Node res, *av[Maxarg];
-
-    USED(r);
-    na = 0;
-    flatten(av, args);
-    nas = na;
-    for(i = 0; i < nas; i++) {
-        expr(av[i], &res);
-        switch(res.type) {
-        default:
-            if(comx(res))
-                break;
-            patom(res.type, &res.Store);
-            break;
-        case TCODE:
-            pcode(res.cc, 0);
-            break;
-        case TLIST:
-            blprint(res.l);
-            break;
-        }
-    }
-    if(ret == 0)
-        Bputc(bout, '\n');
-}
-@
 
 <<function [[printto]]>>=
 void

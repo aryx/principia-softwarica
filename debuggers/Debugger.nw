@@ -2930,6 +2930,45 @@ struct	Machdata {		/* Machine-dependent debugger support */
 
 %TODO: aspectize and keep just the important fields mentioned by claude above
 
+%claude:
+The [[armmach]] structure is the ARM instance of the [[Machdata]]
+vtable described in Chapter~\ref{chap:core-ds}. It wires up the
+disassembler, follow-set, and stack-tracing functions so that
+[[acid]] can call them through the [[machdata]] pointer without
+knowing which architecture it is debugging. Note [[bpinst]]:
+the ARM [[BKPT]] instruction is [[0xE1200070]] (4 bytes, stored
+little-endian as [[70 00 20 E1]]).
+%---confirming the point from Chapter~\ref{chap:overview} that ARM breakpoints are not one byte.
+
+<<global [[armmach]](arm)>>=
+/*
+ *      Debugger interface
+ */
+Machdata armmach =
+{
+    {0x70, 0x00, 0x20, 0xE1},           /* break point */       /* E1200070 */
+    4,                  /* break point size */
+
+    leswab,                     /* short to local byte order */
+    leswal,                     /* long to local byte order */
+    leswav,                     /* long to local byte order */
+
+    risctrace,          /* C traceback */
+    riscframe,          /* Frame finder */
+
+    armexcep,                   /* print exception */
+    0,                  /* breakpoint fixup */
+
+    0,                  /* single precision float printer */
+    0,                  /* double precision float printer */
+
+    armfoll,            /* following addresses */
+    arminst,            /* print instruction */
+    armdas,             /* dissembler */
+    arminstlen,         /* instruction size */
+};
+@
+
 \subsection{Memory mapping abstraction: [[Map]]}
 
 % cormap, symmap, dotmap
@@ -8692,52 +8731,57 @@ result back in the result node.
 @
 
 <<[[tab]] entries>>=
-"error",	doerror,
 "file",	        getfile,
 "readfile",	readfile,
 "access",	doaccess,
 @
+
 <<[[tab]] entries>>=
 "filepc",	filepc,
 "fnbound",	funcbound,
-@
-<<[[tab]] entries>>=
-"fmt",	fmt,
-"follow",	follow,
-@
-<<[[tab]] entries>>=
-"kill",	kill,
-"match",	match,
-@
-<<[[tab]] entries>>=
 "pcfile",	pcfile,
 "pcline",	pcline,
 @
+
 <<[[tab]] entries>>=
-"print",	bprint,
-"printto",	printto,
+"kill",	kill,
 @
+<<[[tab]] entries>>=
+"error",	doerror,
+@
+
+<<[[tab]] entries>>=
+"follow",	follow,
+@
+
+<<[[tab]] entries>>=
+"match",	match,
+"regexp",	regexp,
+@
+
 <<[[tab]] entries>>=
 "rc",	rc,
 @
 <<[[tab]] entries>>=
 "reason",	reason,
 @
+
 <<[[tab]] entries>>=
 "setproc",	setproc,
 @
+
+<<[[tab]] entries>>=
+"map",	map,
+@
+
+
 <<[[tab]] entries>>=
 "strace",	strace,
 "sysr1",	dosysr1,
 @
+
 <<[[tab]] entries>>=
-"map",	map,
-@
-<<[[tab]] entries>>=
-"include",	include,
-@
-<<[[tab]] entries>>=
-"regexp",	regexp,
+"printto",	printto,
 "fmtof",	fmtof,
 "fmtsize",	dofmtsize,
 @
@@ -8755,6 +8799,10 @@ mechanisms: [[include()]] (loading another [[acid]] file at
 runtime), [[interpret()]] (evaluating a string as code, also
 known as ``eval''), and a few others as we encounter them in
 later chapters.
+
+<<[[tab]] entries>>=
+"include",	include,
+@
 
 <<function [[include]]>>=
 void
@@ -8899,6 +8947,225 @@ return c;
 <<[[unlexc()]] when no [[fin]]>>=
 lexio->ip--;
 @
+
+\subsection{Printing: [[print()]]}
+
+%yoann: say remember implicit print when type just expression like main\i
+
+<<[[tab]] entries>>=
+"print",	bprint,
+@
+
+
+<<function [[bprint]]>>=
+void
+bprint(Node *r, Node *args)
+{
+    int i, nas;
+    Node res, *av[Maxarg];
+
+    USED(r);
+    na = 0;
+    flatten(av, args);
+    nas = na;
+    for(i = 0; i < nas; i++) {
+        expr(av[i], &res);
+        switch(res.type) {
+        default:
+            if(comx(res))
+                break;
+            patom(res.type, &res.Store);
+            break;
+        case TCODE:
+            pcode(res.cc, 0);
+            break;
+        case TLIST:
+            blprint(res.l);
+            break;
+        }
+    }
+    if(ret == 0)
+        Bputc(bout, '\n');
+}
+@
+
+
+<<function [[comx]]>>=
+int
+comx(Node res)
+{
+    Lsym *sl;
+    Node *n, xx;
+
+    if(res.fmt != 'a' && res.fmt != 'A')
+        return 0;
+
+    if(res.comt == 0 || res.comt->base == 0)
+        return 0;
+
+    sl = res.comt->base;
+    if(sl->proc) {
+        res.left = ZN;
+        res.right = ZN;
+        n = an(ONAME, ZN, ZN);
+        n->sym = sl;
+        n = an(OCALL, n, &res);
+            n->left->sym = sl;
+        expr(n, &xx);
+        return 1;
+    }
+    print("(%s)", sl->name);
+    return 0;
+}
+@
+
+
+<<function [[patom]]>>=
+void
+patom(char type, Store *res)
+{
+    int i;
+    char buf[512];
+    extern char *typenames[];
+
+    switch(res->fmt) {
+    case 'c':
+        Bprint(bout, "%c", (int)res->ival);
+        break;
+    case 'C':
+        if(res->ival < ' ' || res->ival >= 0x7f)
+            Bprint(bout, "%3d", (int)res->ival&0xff);
+        else
+            Bprint(bout, "%3c", (int)res->ival);
+        break;
+    case 'r':
+        Bprint(bout, "%C", (int)res->ival);
+        break;
+    case 'B':
+        memset(buf, '0', 34);
+        buf[1] = 'b';
+        for(i = 0; i < 32; i++) {
+            if(res->ival & (1<<i))
+                buf[33-i] = '1';
+        }
+        buf[35] = '\0';
+        Bprint(bout, "%s", buf);
+        break;
+    case 'b':
+        Bprint(bout, "%.2x", (int)res->ival&0xff);
+        break;
+    case 'X':
+        Bprint(bout, "%.8lux", (ulong)res->ival);
+        break;
+    case 'x':
+        Bprint(bout, "%.4lux", (ulong)res->ival&0xffff);
+        break;
+    case 'D':
+        Bprint(bout, "%d", (int)res->ival);
+        break;
+    case 'd':
+        Bprint(bout, "%d", (ushort)res->ival);
+        break;
+    case 'u':
+        Bprint(bout, "%d", (int)res->ival&0xffff);
+        break;
+    case 'U':
+        Bprint(bout, "%lud", (ulong)res->ival);
+        break;
+    case 'Z':
+        Bprint(bout, "%llud", res->ival);
+        break;
+    case 'V':
+        Bprint(bout, "%lld", res->ival);
+        break;
+    case 'W':
+        Bprint(bout, "%.8llux", res->ival);
+        break;
+    case 'Y':
+        Bprint(bout, "%.16llux", res->ival);
+        break;
+    case 'o':
+        Bprint(bout, "0%.11uo", (int)res->ival&0xffff);
+        break;
+    case 'O':
+        Bprint(bout, "0%.6uo", (int)res->ival);
+        break;
+    case 'q':
+        Bprint(bout, "0%.11o", (short)(res->ival&0xffff));
+        break;
+    case 'Q':
+        Bprint(bout, "0%.6o", (int)res->ival);
+        break;
+    case 'f':
+    case 'F':
+    case '3':
+    case '8':
+        if(type != TFLOAT)
+            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
+        else
+            Bprint(bout, "%g", res->fval);
+        break;
+    case 's':
+    case 'g':
+    case 'G':
+        if(type != TSTRING)
+            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
+        else
+            Bwrite(bout, res->string->string, res->string->len);
+        break;
+    case 'R':
+        if(type != TSTRING)
+            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
+        else
+            Bprint(bout, "%S", (Rune*)res->string->string);
+        break;
+    case 'a':
+    case 'A':
+        symoff(buf, sizeof(buf), res->ival, CANY);
+        Bprint(bout, "%s", buf);
+        break;
+    case 'I':
+    case 'i':
+        if(type != TINT)
+            Bprint(bout, "*%c<%s>*", res->fmt, typenames[type]);
+        else {
+            if (symmap == nil || (*machdata->das)(symmap, res->ival, res->fmt, buf, sizeof(buf)) < 0)
+                Bprint(bout, "no instruction");
+            else
+                Bprint(bout, "%s", buf);
+        }
+        break;
+    }
+}
+@
+
+
+\subsection{Formatting: [[fmt()]]}
+
+<<[[tab]] entries>>=
+"fmt",	fmt,
+@
+
+<<function [[fmt]]>>=
+void
+fmt(Node *r, Node *args)
+{
+    Node res;
+    Node *av[Maxarg];
+
+    na = 0;
+    flatten(av, args);
+    if(na != 2)
+        error("fmt(obj, fmt): arg count");
+    expr(av[1], &res);
+    if(res.type != TINT || strchr(vfmt, res.ival) == 0)
+        error("fmt(obj, fmt): bad format '%c'", (char)res.ival);
+    expr(av[0], r);
+
+    r->fmt = res.ival;
+}
+@
+
 
 \section{Garbage collection}
 
@@ -9832,6 +10099,8 @@ defn asm(addr)
         lasmaddr = addr;
 }
 @
+
+% most of the magic is 'i' format
 
 <<constant [[_asmlines]]>>=
 _asmlines = 30;
@@ -12225,12 +12494,8 @@ decodes the top 3 bits of the instruction word (bits 25--27,
 the ``major opcode'') and then refines with sub-fields to produce
 an index into the [<opcodes>] table. Each table entry names
 the \plan mnemonic, a format handler that extracts operand fields
-into the [[Instr]] struct, and an optional follow-set function
+into the [<Instr>] struct, and an optional follow-set function
 for single-stepping.
-
-<<global debug (libmach/5db.c)(arm)>>=
-static int debug = 0;
-@
 
 %claude:
 Four macros for bit manipulation on 32-bit instruction words.
@@ -12260,8 +12525,7 @@ with rotation (the ARM ``flexible second operand'').
 
 % >> >> >>
 
-The [[curr]]/[[end]] pair is a write cursor into the output
-buffer---[<bprint()>] and [<format()>] append text here.
+%yoann: introduce the section
 
 
 \subsection{[[Instr]]}
@@ -12310,16 +12574,20 @@ struct  Instr
 The [[Opcode]] struct is the schema for one row in the
 [<opcodes>] table. Each instruction class has one entry:
 \begin{itemize}
+
 \item [[o]]: the \plan mnemonic template, e.g., [["ADD\%C\%S"]].
 The [[%C]] and [[%S]] are expanded by [<format()>] into the
 condition suffix and the S-bit flag.
+
 \item [[fmt]]: the format handler that extracts operand fields
 from the raw word into the [[Instr]] struct, then calls
 [<format()>] to print the result.
+
 \item [[foll]]: the follow-set function. If non-nil, it computes
 the next PC when [[acid]] single-steps through this instruction.
 Only instructions that can change control flow (branches, moves
 into PC) have a non-nil [[foll]].
+
 \item [[a]]: the operand template, e.g., [["R\%s,R\%n,R\%d"]].
 [<format()>] expands [[%s]], [[%n]], [[%d]] to the register
 numbers extracted by the format handler.
@@ -12550,123 +12818,121 @@ static Opcode opcodes[] =
 };
 @
 
-\section{XXX}
 
-<<global [[FRAMENAME]](arm)>>=
-static  char    FRAMENAME[] = ".frame";
-@
+\section{[[Machdata]] ARM methods}
 
 %claude:
-The [[armmach]] structure is the ARM instance of the [[Machdata]]
-vtable described in Chapter~\ref{chap:core-ds}. It wires up the
-disassembler, follow-set, and stack-tracing functions so that
-[[acid]] can call them through the [[machdata]] pointer without
-knowing which architecture it is debugging. Note [[bpinst]]:
-the ARM [[BKPT]] instruction is [[0xE1200070]] (4 bytes, stored
-little-endian as [[70 00 20 E1]]).
-%---confirming the point from Chapter~\ref{chap:overview} that ARM breakpoints are not one byte.
+The four entry points below are wired into the [<armmach>]
+vtable and called through [[machdata->]] pointers:
+\begin{itemize}
 
-<<global [[armmach]](arm)>>=
-/*
- *      Debugger interface
- */
-Machdata armmach =
+\item [<arminst()>] / [<printins()>]: disassemble one instruction
+into \plan assembly syntax. This is what [[acid]]'s [[asm()]]
+command calls.
+
+\item [<armdas()>]: the ``hex dump'' disassembler---produces just
+the raw hex bytes, used by [[acid]]'s hex-format display.
+
+\item [<arminstlen()>]: returns the instruction length (always 4
+for ARM A32).
+
+\item [<armfoll()>]: the follow-set entry point. It decodes the
+instruction, then delegates to the [[foll]] function pointer
+from the [<opcodes>] entry (or returns [[pc+4]] if the
+instruction cannot change control flow). This is the function
+that [[acid]]'s single-stepper calls to decide where to place
+the temporary breakpoint.
+\end{itemize}
+
+<<function [[arminst]](arm)>>=
+/// ??? -> <>
+static int
+arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
 {
-    {0x70, 0x00, 0x20, 0xE1},           /* break point */       /* E1200070 */
-    4,                  /* break point size */
-
-    leswab,                     /* short to local byte order */
-    leswal,                     /* long to local byte order */
-    leswav,                     /* long to local byte order */
-
-    risctrace,          /* C traceback */
-    riscframe,          /* Frame finder */
-
-    armexcep,                   /* print exception */
-    0,                  /* breakpoint fixup */
-
-    0,                  /* single precision float printer */
-    0,                  /* double precision float printer */
-
-    armfoll,            /* following addresses */
-    arminst,            /* print instruction */
-    armdas,                     /* dissembler */
-    arminstlen,         /* instruction size */
-};
-@
-
-<<function [[armexcep]](arm)>>=
-static char*
-armexcep(Map *map, Rgetter rget)
-{
-    uvlong c;
-
-    c = (*rget)(map, "TYPE");
-    switch ((int)c&0x1f) {
-    case 0x11:
-        return "Fiq interrupt";
-    case 0x12:
-        return "Mirq interrupt";
-    case 0x13:
-        return "SVC/SWI Exception";
-    case 0x17:
-        return "Prefetch Abort/Breakpoint";
-    case 0x18:
-        return "Data Abort";
-    case 0x1b:
-        return "Undefined instruction/Breakpoint";
-    case 0x1f:
-        return "Sys trap";
-    default:
-        return "Undefined trap";
-    }
+    USED(modifier);
+    return printins(map, pc, buf, n);
 }
 @
 
+<<function [[printins]](arm)>>=
+static int
+printins(Map *map, uvlong pc, char *buf, int n)
+{
+    Instr i;
+
+    i.curr = buf;
+    i.end = buf+n-1;
+    if(decode(map, pc, &i) < 0)
+        return -1;
+
+    (*opcodes[i.op].fmt)(&opcodes[i.op], &i);
+    return 4;
+}
+@
+
+<<function [[armdas]](arm)>>=
+static int
+armdas(Map *map, uvlong pc, char *buf, int n)
+{
+    Instr i;
+
+    i.curr = buf;
+    i.end = buf+n;
+    if(decode(map, pc, &i) < 0)
+        return -1;
+    if(i.end-i.curr > 8)
+        i.curr = _hexify(buf, i.w, 7);
+    *i.curr = 0;
+    return 4;
+}
+@
+
+<<function [[arminstlen]](arm)>>=
+static int
+arminstlen(Map *map, uvlong pc)
+{
+    Instr i;
+
+    if(decode(map, pc, &i) < 0)
+        return -1;
+    return 4;
+}
+@
+
+
+\section{Decoding pipeline}
+
+%yoann: introducing the section and transition with previous section
+
+\subsection{[[decode()]]}
+
 %claude:
-The [[cond]] table maps the 4-bit condition field (bits 31--28)
-to the \plan condition suffix. Entry~14 is nil because it means
-``always'' (no suffix printed); entry~15 is [["NV"]] (never
-execute, mostly unused). For example, condition code [[0]] is
-[["EQ"]] (equal / zero flag set), so [[ADD.EQ]] means ``add
-only if the Z flag is set.''
+[<decode()>] is the thin wrapper that reads a 4-byte instruction
+word from the [[Map]] at address [[pc]], extracts the condition
+code from bits 31--28, and calls [<armclass()>] to set the
+opcode index. After [[decode]] returns, the [[Instr]] is ready
+for the format handler.
 
-<<global [[cond]](arm)>>=
-static
-char*   cond[16] =
+<<function [[decode]](arm)>>=
+static int
+decode(Map *map, uvlong pc, Instr *i)
 {
-    "EQ",       "NE",   "CS",   "CC",
-    "MI",       "PL",   "VS",   "VC",
-    "HI",       "LS",   "GE",   "LT",
-    "GT",       "LE",   0,      "NV"
-};
+    ulong w;
+
+    if(get4(map, pc, &w) < 0) {
+        werrstr("can't read instruction: %r");
+        return -1;
+    }
+    i->w = w;
+    i->addr = pc;
+    i->cond = (w >> 28) & 0xF;
+    i->op = armclass(w);
+    i->map = map;
+    return 1;
+}
 @
 
-<<global [[shtype]](arm)>>=
-static
-char*   shtype[4] =
-{
-    "<<",       ">>",   "->",   "@>"
-};
-@
-
-<<global [[hb]](arm)>>=
-static
-char *hb[4] =
-{
-    "???",      "HU", "B", "H"
-};
-@
-
-<<global [[addsub]](arm)>>=
-static
-char*   addsub[2] =
-{
-    "-",        "+",
-};
-@
-
-\section{[[armclass()]]}
+\subsection{[[armclass()]]}
 
 %claude:
 [<armclass()>] is the core of the disassembler: given a 32-bit
@@ -12879,131 +13145,279 @@ armclass(long w)
 }
 @
 
+\subsection{[[format()]] mini-[[printf]]}
+
 %claude:
-[<decode()>] is the thin wrapper that reads a 4-byte instruction
-word from the [[Map]] at address [[pc]], extracts the condition
-code from bits 31--28, and calls [<armclass()>] to set the
-opcode index. After [[decode]] returns, the [[Instr]] is ready
-for the format handler.
+[<format()>] is a mini-[[printf]] specialized for ARM disassembly.
+It processes both the mnemonic template ([[o]]) and the operand
+template ([[a]]) from the [[Opcode]] entry, expanding format
+specifiers into the output buffer. The main specifiers are:
+\begin{verbatim}
+   %C  condition suffix      (EQ, NE, CS, ... from cond[])
+   %S  S-bit suffix          (.S if set-flags bit is on)
+   %d  destination register  (Rd, bits 15-12)
+   %n  first operand reg     (Rn, bits 19-16)
+   %s  second operand reg    (Rs, bits 3-0)
+   %i  immediate value       (i->imm, in hex)
+   %b  branch target         (resolved to symbol name)
+   %I  memory operand        (#offset(Rn), with plocal() for SP)
+   %r  register list         (for LDM/STM: R0-R3,R14)
+   %P  block mode            (IA, DB, IB from mode[])
+   %p  P/W bits              (P, PW, W for pre/post/writeback)
+   %h  shift type            (<<, >>, ->, @> from shtype[])
+   %m  shift amount          (5-bit immediate)
+   %f  VFP precision         (F or D)
+\end{verbatim}
+%
+The function calls itself recursively: first with the mnemonic
+(to print the opcode name), then with nil mnemonic and the
+operand template (to print the arguments, separated by a tab).
+%
+For the [[ADD R1,R2,R3]] example from [<armclass()>] above,
+the mnemonic template [["ADD\%C\%S"]] expands to just [["ADD"]]
+(condition 14 = always, S-bit = 0), and the operand template
+[["R\%s,R\%n,R\%d"]] expands to [["R3,R2,R1"]] (\plan
+destination-last syntax).
 
-<<function [[decode]](arm)>>=
-static int
-decode(Map *map, uvlong pc, Instr *i)
-{
-    ulong w;
-
-    if(get4(map, pc, &w) < 0) {
-        werrstr("can't read instruction: %r");
-        return -1;
-    }
-    i->w = w;
-    i->addr = pc;
-    i->cond = (w >> 28) & 0xF;
-    i->op = armclass(w);
-    i->map = map;
-    return 1;
-}
-@
-
-<<function [[bprint]](arm)>>=
+<<function [[format]](arm)>>=
 static void
-bprint(Instr *i, char *fmt, ...)
+format(char *mnemonic, Instr *i, char *f)
 {
-    va_list arg;
+    int j, k, m, n;
+    int g;
+    char *fmt;
 
-    va_start(arg, fmt);
-    i->curr = vseprint(i->curr, i->end, fmt, arg);
-    va_end(arg);
+    if(mnemonic)
+        format(0, i, mnemonic);
+    if(f == 0)
+        return;
+    if(mnemonic)
+        if(i->curr < i->end)
+            *i->curr++ = '\t';
+    for ( ; *f && i->curr < i->end; f++) {
+        if(*f != '%') {
+            *i->curr++ = *f;
+            continue;
+        }
+        switch (*++f) {
+
+        case 'C':       /* .CONDITION */
+            if(cond[i->cond])
+                bprint(i, ".%s", cond[i->cond]);
+            break;
+
+        case 'S':       /* .STORE */
+            if(i->store)
+                bprint(i, ".S");
+            break;
+
+        case 'P':       /* P & U bits for block move */
+            n = (i->w >>23) & 0x3;
+            if (mode[n])
+                bprint(i, ".%s", mode[n]);
+            break;
+
+        case 'p':       /* P & W bits for single data xfer*/
+            if (pw[i->store])
+                bprint(i, ".%s", pw[i->store]);
+            break;
+
+        case 'a':       /* S & W bits for single data xfer*/
+            if (sw[i->store])
+                bprint(i, ".%s", sw[i->store]);
+            break;
+
+        case 's':
+            bprint(i, "%d", i->rs & 0xf);
+            break;
+                
+        case 'M':
+            bprint(i, "%lud", (i->w>>8) & 0xf);
+            break;
+                
+        case 'm':
+            bprint(i, "%lud", (i->w>>7) & 0x1f);
+            break;
+
+        case 'h':
+            bprint(i, shtype[(i->w>>5) & 0x3]);
+            break;
+
+        case 'u':               /* Signed/unsigned Byte/Halfword */
+            bprint(i, hb[(i->w>>5) & 0x3]);
+            break;
+
+        case 'I':
+            if (i->rn == 13) {
+                if (plocal(i))
+                    break;
+            }
+            g = 0;
+            fmt = "#%lx(R%d)";
+            if (i->rn == 15) {
+                /* convert load of offset(PC) to a load immediate */
+                if (get4(i->map, i->addr+i->imm+8, (ulong*)&i->imm) > 0)
+                {
+                    g = 1;
+                    fmt = "";
+                }
+            }
+            if (mach->sb)
+            {
+                if (i->rd == 11) {
+                    ulong nxti;
+
+                    if (get4(i->map, i->addr+4, &nxti) > 0) {
+                        if ((nxti & 0x0e0f0fff) == 0x060c000b) {
+                            i->imm += mach->sb;
+                            g = 1;
+                            fmt = "-SB";
+                        }
+                    }
+                }
+                if (i->rn == 12)
+                {
+                    i->imm += mach->sb;
+                    g = 1;
+                    fmt = "-SB(SB)";
+                }
+            }
+            if (g)
+            {
+                gaddr(i);
+                bprint(i, fmt, i->rn);
+            }
+            else
+                bprint(i, fmt, i->imm, i->rn);
+            break;
+        case 'U':               /* Add/subtract from base */
+            bprint(i, addsub[(i->w >> 23) & 1]);
+            break;
+
+        case 'n':
+            bprint(i, "%d", i->rn);
+            break;
+
+        case 'd':
+            bprint(i, "%d", i->rd);
+            break;
+
+        case 'i':
+            bprint(i, "%lux", i->imm);
+            break;
+
+        case 'b':
+            i->curr += symoff(i->curr, i->end-i->curr,
+                (ulong)i->imm, CTEXT);
+            break;
+
+        case 'g':
+            i->curr += gsymoff(i->curr, i->end-i->curr,
+                i->imm, CANY);
+            break;
+
+        case 'f':
+            switch((i->w >> 8) & 0xF){
+            case 10:
+                bprint(i, "F");
+                break;
+            case 11:
+                bprint(i, "D");
+                break;
+            }
+            break;
+
+        case 'F':
+            switch(((i->w >> 15) & 0xE) + ((i->w >> 8) & 0x1)){
+            case 0x0:
+                bprint(i, ((i->w >> 7) & 0x1)? "WF" : "WF.U");
+                break;
+            case 0x1:
+                bprint(i, ((i->w >> 7) & 0x1)? "WD" : "WD.U");
+                break;
+            case 0x8:
+                bprint(i, "FW.U");
+                break;
+            case 0x9:
+                bprint(i, "DW.U");
+                break;
+            case 0xA:
+                bprint(i, "FW");
+                break;
+            case 0xB:
+                bprint(i, "DW");
+                break;
+            case 0xE:
+                bprint(i, "FD");
+                break;
+            case 0xF:
+                bprint(i, "DF");
+                break;
+            }
+            break;
+
+        case 'R':
+            if(((i->w >> 7) & 0x1) == 0)
+                bprint(i, "R");
+            break;
+
+        case 'x':
+            switch(i->rn){
+            case 0:
+                bprint(i, "FPSID");
+                break;
+            case 1:
+                bprint(i, "FPSCR");
+                break;
+            case 2:
+                bprint(i, "FPEXC");
+                break;
+            default:
+                bprint(i, "FPS(%d)", i->rn);
+                break;
+            }
+            break;
+
+        case 'r':
+            n = i->imm&0xffff;
+            j = 0;
+            k = 0;
+            while(n) {
+                m = j;
+                while(n&0x1) {
+                    j++;
+                    n >>= 1;
+                }
+                if(j != m) {
+                    if(k)
+                        bprint(i, ",");
+                    if(j == m+1)
+                        bprint(i, "R%d", m);
+                    else
+                        bprint(i, "R%d-R%d", m, j-1);
+                    k = 1;
+                }
+                j++;
+                n >>= 1;
+            }
+            break;
+
+        case '\0':
+            *i->curr++ = '%';
+            return;
+
+        default:
+            bprint(i, "%%%c", *f);
+            break;
+        }
+    }
+    *i->curr = 0;
 }
 @
 
-%claude:
-[<plocal()>] tries to resolve a memory reference relative to
-the stack pointer (R13) into a symbolic local variable or
-parameter name. It looks up the current function via the PC,
-finds the [[.frame]] symbol to get the frame size, then
-determines whether the offset falls in the auto (local) or
-param region. If it finds a match, it prints [[name-offset(SP)]]
-or [[name+offset(FP)]] instead of a raw hex address---this is
-what makes [[acid]]'s disassembly output readable.
+\subsection{Format helpers}
 
-<<function [[plocal]](arm)>>=
-static int
-plocal(Instr *i)
-{
-    char *reg;
-    Symbol s;
-    char *fn;
-    int class;
-    int offset;
-
-    if(!findsym(i->addr, CTEXT, &s)) {
-        if(debug)fprint(2,"fn not found @%llux: %r\n", i->addr);
-        return 0;
-    }
-    fn = s.name;
-    if (!findlocal(&s, FRAMENAME, &s)) {
-        if(debug)fprint(2,"%s.%s not found @%s: %r\n", fn, FRAMENAME, s.name);
-            return 0;
-    }
-    if(s.value > i->imm) {
-        class = CAUTO;
-        offset = s.value-i->imm;
-        reg = "(SP)";
-    } else {
-        class = CPARAM;
-        offset = i->imm-s.value-4;
-        reg = "(FP)";
-    }
-    if(!getauto(&s, offset, class, &s)) {
-        if(debug)fprint(2,"%s %s not found @%ux: %r\n", fn,
-            class == CAUTO ? " auto" : "param", offset);
-        return 0;
-    }
-    bprint(i, "%s%c%lld%s", s.name, class == CPARAM ? '+' : '-', s.value, reg);
-    return 1;
-}
-@
-
-%claude:
-[<gsymoff()>] resolves a raw address into [[symbol+offset]]
-form by looking up the nearest symbol below the address. If
-the distance exceeds 4096 bytes, or the address is in a
-[["\.string"]] section, it falls back to a plain hex literal.
-This is what turns [[0x11B0]] into [["printf"]] in the
-disassembly output.
-
-<<function [[gsymoff]](arm)>>=
-/*
- * Print value v as name[+offset]
- */
-static int
-gsymoff(char *buf, int n, ulong v, int space)
-{
-    Symbol s;
-    int r;
-    long delta;
-
-    r = delta = 0;              /* to shut compiler up */
-    if (v) {
-        r = findsym(v, space, &s);
-        if (r)
-            delta = v-s.value;
-        if (delta < 0)
-            delta = -delta;
-    }
-    if (v == 0 || r == 0 || delta >= 4096)
-        return snprint(buf, n, "#%lux", v);
-    if (strcmp(s.name, ".string") == 0)
-        return snprint(buf, n, "#%lux", v);
-    if (!delta)
-        return snprint(buf, n, "%s", s.name);
-    if (s.type != 't' && s.type != 'T')
-        return snprint(buf, n, "%s+%llux", s.name, v-s.value);
-    else
-        return snprint(buf, n, "#%lux", v);
-}
-@
+\subsection{Format handlers}
 
 %claude:
 The format handlers below each correspond to one instruction
@@ -13288,6 +13702,189 @@ armco(Opcode *o, Instr *i)              /* coprocessor instructions */
 }
 @
 
+\section{ARM follow set}
+
+%yoann: transition and introduce section
+
+\subsection{[[armfoll()]]}
+
+<<function [[armfoll]](arm)>>=
+static int
+armfoll(Map *map, uvlong pc, Rgetter rget, uvlong *foll)
+{
+    uvlong d;
+    Instr i;
+
+    if(decode(map, pc, &i) < 0)
+        return -1;
+
+    if(opcodes[i.op].foll) {
+        d = (*opcodes[i.op].foll)(map, rget, &i, pc);
+        if(d == -1)
+            return -1;
+    } else
+        d = pc+4;
+
+    foll[0] = d;
+    return 1;
+}
+@
+
+\subsection{[[armfxxx()]]}
+
+%claude:
+The [[armf*]] functions compute the {follow set}---the address(es)
+where execution will go after a given instruction. [[acid]] calls
+them through [<armfoll()>] to implement single-stepping. The key
+insight is that on ARM, \emph{any} instruction that writes to
+R15 (the PC) is a control-flow transfer, not just branches. So
+there are five cases:
+\begin{itemize}
+
+\item [<armfadd>]: data processing instructions (ADD, SUB, etc.)
+whose destination is R15. Computes [[Rn + shifter\_operand]].
+
+\item [<armfbranch>]: B and BL. The target is PC-relative with a
+24-bit signed offset, plus the 8-byte pipeline advance.
+
+\item [<armfbx>]: BX/BLX register. Target is the register value.
+
+\item [<armfmov>]: MOV or LDR into R15. MOV returns the shifted
+operand; LDR reads the target address from memory.
+
+\item [<armfmovm>]: block load (LDM) that includes R15 in the
+register list. Computes the stack address where R15 would be
+loaded from.
+
+\end{itemize}
+
+
+All of them first call [<armcondpass()>] to check whether the
+condition passes. If not, the follow address is simply [[pc+4]]
+(the instruction is a no-op).
+
+
+
+
+<<function [[armfadd]](arm)>>=
+static uvlong
+armfadd(Map *map, Rgetter rget, Instr *i, uvlong pc)
+{
+    char buf[8];
+    int r;
+
+    r = (i->w >> 12) & 0xf;
+    if(r != 15 || !armcondpass(map, rget, (i->w >> 28) & 0xf))
+        return pc+4;
+
+    r = (i->w >> 16) & 0xf;
+    sprint(buf, "R%d", r);
+
+    return rget(map, buf) + armshiftval(map, rget, i);
+}
+@
+
+<<function [[armfbx]](arm)>>=
+static uvlong
+armfbx(Map *map, Rgetter rget, Instr *i, uvlong pc)
+{
+    char buf[8];
+    int r;
+
+    if(!armcondpass(map, rget, (i->w>>28)&0xf))
+        return pc+4;
+    r = (i->w >> 0) & 0xf;
+    sprint(buf, "R%d", r);
+    return rget(map, buf);
+}
+@
+
+<<function [[armfmovm]](arm)>>=
+static uvlong
+armfmovm(Map *map, Rgetter rget, Instr *i, uvlong pc)
+{
+    ulong v;
+    ulong addr;
+
+    v = i->w & 1<<15;
+    if(!v || !armcondpass(map, rget, (i->w>>28)&0xf))
+        return pc+4;
+
+    addr = armmaddr(map, rget, i) + nbits(i->w & BITS(0,15));
+    if(get4(map, addr, &v) < 0) {
+        werrstr("can't read addr: %r");
+        return -1;
+    }
+    return v;
+}
+@
+
+<<function [[armfbranch]](arm)>>=
+static uvlong
+armfbranch(Map *map, Rgetter rget, Instr *i, uvlong pc)
+{
+    if(!armcondpass(map, rget, (i->w >> 28) & 0xf))
+        return pc+4;
+
+    return pc + (((signed long)i->w << 8) >> 6) + 8;
+}
+@
+
+<<function [[armfmov]](arm)>>=
+static uvlong
+armfmov(Map *map, Rgetter rget, Instr *i, uvlong pc)
+{
+    ulong rd, v;
+
+    rd = (i->w >> 12) & 0xf;
+    if(rd != 15 || !armcondpass(map, rget, (i->w>>28)&0xf))
+        return pc+4;
+
+     /* LDR */
+    /* BUG: Needs LDH/B, too */
+    if(((i->w>>26)&0x3) == 1) {
+        if(get4(map, armaddr(map, rget, i), &v) < 0) {
+            werrstr("can't read instruction: %r");
+            return pc+4;
+        }
+        return v;
+    }
+
+     /* MOV */
+    v = armshiftval(map, rget, i);
+
+    return v;
+}
+@
+
+\section{YYY}
+
+\subsection{XXX}
+
+<<function [[gaddr]](arm)>>=
+static void
+gaddr(Instr *i)
+{
+    *i->curr++ = '$';
+    i->curr += gsymoff(i->curr, i->end-i->curr, i->imm, CANY);
+}
+@
+%$
+
+<<global [[mode]](arm)>>=
+static  char *mode[] = { 0, "IA", "DB", "IB" };
+@
+
+<<global [[pw]](arm)>>=
+static  char *pw[] = { "P", "PW", 0, "W" };
+@
+
+<<global [[sw]](arm)>>=
+static  char *sw[] = { 0, "W", "S", "SW" };
+@
+
+\subsection{XXX}
+
 %claude:
 [<armcondpass()>] evaluates whether a conditional instruction
 would actually execute, given the current CPSR flags. It reads
@@ -13411,6 +14008,115 @@ armshiftval(Map *map, Rgetter rget, Instr *i)
 }
 @
 
+\subsection{XXX}
+
+<<function [[bprint]](arm)>>=
+static void
+bprint(Instr *i, char *fmt, ...)
+{
+    va_list arg;
+
+    va_start(arg, fmt);
+    i->curr = vseprint(i->curr, i->end, fmt, arg);
+    va_end(arg);
+}
+@
+
+%claude:
+[<plocal()>] tries to resolve a memory reference relative to
+the stack pointer (R13) into a symbolic local variable or
+parameter name. It looks up the current function via the PC,
+finds the [[.frame]] symbol to get the frame size, then
+determines whether the offset falls in the auto (local) or
+param region. If it finds a match, it prints [[name-offset(SP)]]
+or [[name+offset(FP)]] instead of a raw hex address---this is
+what makes [[acid]]'s disassembly output readable.
+
+<<function [[plocal]](arm)>>=
+static int
+plocal(Instr *i)
+{
+    char *reg;
+    Symbol s;
+    char *fn;
+    int class;
+    int offset;
+
+    if(!findsym(i->addr, CTEXT, &s)) {
+        if(debug)fprint(2,"fn not found @%llux: %r\n", i->addr);
+        return 0;
+    }
+    fn = s.name;
+    if (!findlocal(&s, FRAMENAME, &s)) {
+        if(debug)fprint(2,"%s.%s not found @%s: %r\n", fn, FRAMENAME, s.name);
+            return 0;
+    }
+    if(s.value > i->imm) {
+        class = CAUTO;
+        offset = s.value-i->imm;
+        reg = "(SP)";
+    } else {
+        class = CPARAM;
+        offset = i->imm-s.value-4;
+        reg = "(FP)";
+    }
+    if(!getauto(&s, offset, class, &s)) {
+        if(debug)fprint(2,"%s %s not found @%ux: %r\n", fn,
+            class == CAUTO ? " auto" : "param", offset);
+        return 0;
+    }
+    bprint(i, "%s%c%lld%s", s.name, class == CPARAM ? '+' : '-', s.value, reg);
+    return 1;
+}
+@
+
+
+<<global debug (libmach/5db.c)(arm)>>=
+static bool debug = false;
+@
+
+
+%claude:
+[<gsymoff()>] resolves a raw address into [[symbol+offset]]
+form by looking up the nearest symbol below the address. If
+the distance exceeds 4096 bytes, or the address is in a
+[["\.string"]] section, it falls back to a plain hex literal.
+This is what turns [[0x11B0]] into [["printf"]] in the
+disassembly output.
+
+<<function [[gsymoff]](arm)>>=
+/*
+ * Print value v as name[+offset]
+ */
+static int
+gsymoff(char *buf, int n, ulong v, int space)
+{
+    Symbol s;
+    int r;
+    long delta;
+
+    r = delta = 0;              /* to shut compiler up */
+    if (v) {
+        r = findsym(v, space, &s);
+        if (r)
+            delta = v-s.value;
+        if (delta < 0)
+            delta = -delta;
+    }
+    if (v == 0 || r == 0 || delta >= 4096)
+        return snprint(buf, n, "#%lux", v);
+    if (strcmp(s.name, ".string") == 0)
+        return snprint(buf, n, "#%lux", v);
+    if (!delta)
+        return snprint(buf, n, "%s", s.name);
+    if (s.type != 't' && s.type != 'T')
+        return snprint(buf, n, "%s+%llux", s.name, v-s.value);
+    else
+        return snprint(buf, n, "#%lux", v);
+}
+@
+
+
 <<function [[nbits]](arm)>>=
 static int
 nbits(ulong v)
@@ -13497,510 +14203,87 @@ armaddr(Map *map, Rgetter rget, Instr *i)
 }
 @
 
-%claude:
-The [[armf*]] functions compute the {follow set}---the address(es)
-where execution will go after a given instruction. [[acid]] calls
-them through [<armfoll()>] to implement single-stepping. The key
-insight is that on ARM, \emph{any} instruction that writes to
-R15 (the PC) is a control-flow transfer, not just branches. So
-there are five cases:
-\begin{itemize}
-\item [<armfadd>]: data processing instructions (ADD, SUB, etc.)
-whose destination is R15. Computes [[Rn + shifter\_operand]].
-\item [<armfbranch>]: B and BL. The target is PC-relative with a
-24-bit signed offset, plus the 8-byte pipeline advance.
-\item [<armfbx>]: BX/BLX register. Target is the register value.
-\item [<armfmov>]: MOV or LDR into R15. MOV returns the shifted
-operand; LDR reads the target address from memory.
-\item [<armfmovm>]: block load (LDM) that includes R15 in the
-register list. Computes the stack address where R15 would be
-loaded from.
-\end{itemize}
-%
-All of them first call [<armcondpass()>] to check whether the
-condition passes. If not, the follow address is simply [[pc+4]]
-(the instruction is a no-op).
+\subsection{XXX}
 
-<<function [[armfadd]](arm)>>=
-static uvlong
-armfadd(Map *map, Rgetter rget, Instr *i, uvlong pc)
-{
-    char buf[8];
-    int r;
+The [[curr]]/[[end]] pair is a write cursor into the output
+buffer---[<bprint()>] and [<format()>] append text here.
 
-    r = (i->w >> 12) & 0xf;
-    if(r != 15 || !armcondpass(map, rget, (i->w >> 28) & 0xf))
-        return pc+4;
 
-    r = (i->w >> 16) & 0xf;
-    sprint(buf, "R%d", r);
-
-    return rget(map, buf) + armshiftval(map, rget, i);
-}
+<<global [[FRAMENAME]](arm)>>=
+static  char    FRAMENAME[] = ".frame";
 @
 
-<<function [[armfbx]](arm)>>=
-static uvlong
-armfbx(Map *map, Rgetter rget, Instr *i, uvlong pc)
+
+<<function [[armexcep]](arm)>>=
+static char*
+armexcep(Map *map, Rgetter rget)
 {
-    char buf[8];
-    int r;
+    uvlong c;
 
-    if(!armcondpass(map, rget, (i->w>>28)&0xf))
-        return pc+4;
-    r = (i->w >> 0) & 0xf;
-    sprint(buf, "R%d", r);
-    return rget(map, buf);
-}
-@
-
-<<function [[armfmovm]](arm)>>=
-static uvlong
-armfmovm(Map *map, Rgetter rget, Instr *i, uvlong pc)
-{
-    ulong v;
-    ulong addr;
-
-    v = i->w & 1<<15;
-    if(!v || !armcondpass(map, rget, (i->w>>28)&0xf))
-        return pc+4;
-
-    addr = armmaddr(map, rget, i) + nbits(i->w & BITS(0,15));
-    if(get4(map, addr, &v) < 0) {
-        werrstr("can't read addr: %r");
-        return -1;
+    c = (*rget)(map, "TYPE");
+    switch ((int)c&0x1f) {
+    case 0x11:
+        return "Fiq interrupt";
+    case 0x12:
+        return "Mirq interrupt";
+    case 0x13:
+        return "SVC/SWI Exception";
+    case 0x17:
+        return "Prefetch Abort/Breakpoint";
+    case 0x18:
+        return "Data Abort";
+    case 0x1b:
+        return "Undefined instruction/Breakpoint";
+    case 0x1f:
+        return "Sys trap";
+    default:
+        return "Undefined trap";
     }
-    return v;
-}
-@
-
-<<function [[armfbranch]](arm)>>=
-static uvlong
-armfbranch(Map *map, Rgetter rget, Instr *i, uvlong pc)
-{
-    if(!armcondpass(map, rget, (i->w >> 28) & 0xf))
-        return pc+4;
-
-    return pc + (((signed long)i->w << 8) >> 6) + 8;
-}
-@
-
-<<function [[armfmov]](arm)>>=
-static uvlong
-armfmov(Map *map, Rgetter rget, Instr *i, uvlong pc)
-{
-    ulong rd, v;
-
-    rd = (i->w >> 12) & 0xf;
-    if(rd != 15 || !armcondpass(map, rget, (i->w>>28)&0xf))
-        return pc+4;
-
-     /* LDR */
-    /* BUG: Needs LDH/B, too */
-    if(((i->w>>26)&0x3) == 1) {
-        if(get4(map, armaddr(map, rget, i), &v) < 0) {
-            werrstr("can't read instruction: %r");
-            return pc+4;
-        }
-        return v;
-    }
-
-     /* MOV */
-    v = armshiftval(map, rget, i);
-
-    return v;
-}
-@
-
-
-<<function [[gaddr]](arm)>>=
-static void
-gaddr(Instr *i)
-{
-    *i->curr++ = '$';
-    i->curr += gsymoff(i->curr, i->end-i->curr, i->imm, CANY);
-}
-@
-%$
-
-<<global [[mode]](arm)>>=
-static  char *mode[] = { 0, "IA", "DB", "IB" };
-@
-
-<<global [[pw]](arm)>>=
-static  char *pw[] = { "P", "PW", 0, "W" };
-@
-
-<<global [[sw]](arm)>>=
-static  char *sw[] = { 0, "W", "S", "SW" };
-@
-
-
-\section{[[format()]] mini-[[printf]]}
-
-%claude:
-[<format()>] is a mini-[[printf]] specialized for ARM disassembly.
-It processes both the mnemonic template ([[o]]) and the operand
-template ([[a]]) from the [[Opcode]] entry, expanding format
-specifiers into the output buffer. The main specifiers are:
-\begin{verbatim}
-   %C  condition suffix      (EQ, NE, CS, ... from cond[])
-   %S  S-bit suffix          (.S if set-flags bit is on)
-   %d  destination register  (Rd, bits 15-12)
-   %n  first operand reg     (Rn, bits 19-16)
-   %s  second operand reg    (Rs, bits 3-0)
-   %i  immediate value       (i->imm, in hex)
-   %b  branch target         (resolved to symbol name)
-   %I  memory operand        (#offset(Rn), with plocal() for SP)
-   %r  register list         (for LDM/STM: R0-R3,R14)
-   %P  block mode            (IA, DB, IB from mode[])
-   %p  P/W bits              (P, PW, W for pre/post/writeback)
-   %h  shift type            (<<, >>, ->, @> from shtype[])
-   %m  shift amount          (5-bit immediate)
-   %f  VFP precision         (F or D)
-\end{verbatim}
-%
-The function calls itself recursively: first with the mnemonic
-(to print the opcode name), then with nil mnemonic and the
-operand template (to print the arguments, separated by a tab).
-%
-For the [[ADD R1,R2,R3]] example from [<armclass()>] above,
-the mnemonic template [["ADD\%C\%S"]] expands to just [["ADD"]]
-(condition 14 = always, S-bit = 0), and the operand template
-[["R\%s,R\%n,R\%d"]] expands to [["R3,R2,R1"]] (\plan
-destination-last syntax).
-
-<<function [[format]](arm)>>=
-static void
-format(char *mnemonic, Instr *i, char *f)
-{
-    int j, k, m, n;
-    int g;
-    char *fmt;
-
-    if(mnemonic)
-        format(0, i, mnemonic);
-    if(f == 0)
-        return;
-    if(mnemonic)
-        if(i->curr < i->end)
-            *i->curr++ = '\t';
-    for ( ; *f && i->curr < i->end; f++) {
-        if(*f != '%') {
-            *i->curr++ = *f;
-            continue;
-        }
-        switch (*++f) {
-
-        case 'C':       /* .CONDITION */
-            if(cond[i->cond])
-                bprint(i, ".%s", cond[i->cond]);
-            break;
-
-        case 'S':       /* .STORE */
-            if(i->store)
-                bprint(i, ".S");
-            break;
-
-        case 'P':       /* P & U bits for block move */
-            n = (i->w >>23) & 0x3;
-            if (mode[n])
-                bprint(i, ".%s", mode[n]);
-            break;
-
-        case 'p':       /* P & W bits for single data xfer*/
-            if (pw[i->store])
-                bprint(i, ".%s", pw[i->store]);
-            break;
-
-        case 'a':       /* S & W bits for single data xfer*/
-            if (sw[i->store])
-                bprint(i, ".%s", sw[i->store]);
-            break;
-
-        case 's':
-            bprint(i, "%d", i->rs & 0xf);
-            break;
-                
-        case 'M':
-            bprint(i, "%lud", (i->w>>8) & 0xf);
-            break;
-                
-        case 'm':
-            bprint(i, "%lud", (i->w>>7) & 0x1f);
-            break;
-
-        case 'h':
-            bprint(i, shtype[(i->w>>5) & 0x3]);
-            break;
-
-        case 'u':               /* Signed/unsigned Byte/Halfword */
-            bprint(i, hb[(i->w>>5) & 0x3]);
-            break;
-
-        case 'I':
-            if (i->rn == 13) {
-                if (plocal(i))
-                    break;
-            }
-            g = 0;
-            fmt = "#%lx(R%d)";
-            if (i->rn == 15) {
-                /* convert load of offset(PC) to a load immediate */
-                if (get4(i->map, i->addr+i->imm+8, (ulong*)&i->imm) > 0)
-                {
-                    g = 1;
-                    fmt = "";
-                }
-            }
-            if (mach->sb)
-            {
-                if (i->rd == 11) {
-                    ulong nxti;
-
-                    if (get4(i->map, i->addr+4, &nxti) > 0) {
-                        if ((nxti & 0x0e0f0fff) == 0x060c000b) {
-                            i->imm += mach->sb;
-                            g = 1;
-                            fmt = "-SB";
-                        }
-                    }
-                }
-                if (i->rn == 12)
-                {
-                    i->imm += mach->sb;
-                    g = 1;
-                    fmt = "-SB(SB)";
-                }
-            }
-            if (g)
-            {
-                gaddr(i);
-                bprint(i, fmt, i->rn);
-            }
-            else
-                bprint(i, fmt, i->imm, i->rn);
-            break;
-        case 'U':               /* Add/subtract from base */
-            bprint(i, addsub[(i->w >> 23) & 1]);
-            break;
-
-        case 'n':
-            bprint(i, "%d", i->rn);
-            break;
-
-        case 'd':
-            bprint(i, "%d", i->rd);
-            break;
-
-        case 'i':
-            bprint(i, "%lux", i->imm);
-            break;
-
-        case 'b':
-            i->curr += symoff(i->curr, i->end-i->curr,
-                (ulong)i->imm, CTEXT);
-            break;
-
-        case 'g':
-            i->curr += gsymoff(i->curr, i->end-i->curr,
-                i->imm, CANY);
-            break;
-
-        case 'f':
-            switch((i->w >> 8) & 0xF){
-            case 10:
-                bprint(i, "F");
-                break;
-            case 11:
-                bprint(i, "D");
-                break;
-            }
-            break;
-
-        case 'F':
-            switch(((i->w >> 15) & 0xE) + ((i->w >> 8) & 0x1)){
-            case 0x0:
-                bprint(i, ((i->w >> 7) & 0x1)? "WF" : "WF.U");
-                break;
-            case 0x1:
-                bprint(i, ((i->w >> 7) & 0x1)? "WD" : "WD.U");
-                break;
-            case 0x8:
-                bprint(i, "FW.U");
-                break;
-            case 0x9:
-                bprint(i, "DW.U");
-                break;
-            case 0xA:
-                bprint(i, "FW");
-                break;
-            case 0xB:
-                bprint(i, "DW");
-                break;
-            case 0xE:
-                bprint(i, "FD");
-                break;
-            case 0xF:
-                bprint(i, "DF");
-                break;
-            }
-            break;
-
-        case 'R':
-            if(((i->w >> 7) & 0x1) == 0)
-                bprint(i, "R");
-            break;
-
-        case 'x':
-            switch(i->rn){
-            case 0:
-                bprint(i, "FPSID");
-                break;
-            case 1:
-                bprint(i, "FPSCR");
-                break;
-            case 2:
-                bprint(i, "FPEXC");
-                break;
-            default:
-                bprint(i, "FPS(%d)", i->rn);
-                break;
-            }
-            break;
-
-        case 'r':
-            n = i->imm&0xffff;
-            j = 0;
-            k = 0;
-            while(n) {
-                m = j;
-                while(n&0x1) {
-                    j++;
-                    n >>= 1;
-                }
-                if(j != m) {
-                    if(k)
-                        bprint(i, ",");
-                    if(j == m+1)
-                        bprint(i, "R%d", m);
-                    else
-                        bprint(i, "R%d-R%d", m, j-1);
-                    k = 1;
-                }
-                j++;
-                n >>= 1;
-            }
-            break;
-
-        case '\0':
-            *i->curr++ = '%';
-            return;
-
-        default:
-            bprint(i, "%%%c", *f);
-            break;
-        }
-    }
-    *i->curr = 0;
 }
 @
 
 %claude:
-The four entry points below are wired into the [[armmach]]
-vtable and called through [[machdata->]] pointers:
-\begin{itemize}
-\item [<arminst()>] / [<printins()>]: disassemble one instruction
-into \plan assembly syntax. This is what [[acid]]'s [[asm()]]
-command calls.
-\item [<armdas()>]: the ``hex dump'' disassembler---produces just
-the raw hex bytes, used by [[acid]]'s hex-format display.
-\item [<arminstlen()>]: returns the instruction length (always 4
-for ARM A32).
-\item [<armfoll()>]: the follow-set entry point. It decodes the
-instruction, then delegates to the [[foll]] function pointer
-from the [<opcodes>] entry (or returns [[pc+4]] if the
-instruction cannot change control flow). This is the function
-that [[acid]]'s single-stepper calls to decide where to place
-the temporary breakpoint.
-\end{itemize}
+The [[cond]] table maps the 4-bit condition field (bits 31--28)
+to the \plan condition suffix. Entry~14 is nil because it means
+``always'' (no suffix printed); entry~15 is [["NV"]] (never
+execute, mostly unused). For example, condition code [[0]] is
+[["EQ"]] (equal / zero flag set), so [[ADD.EQ]] means ``add
+only if the Z flag is set.''
 
-<<function [[printins]](arm)>>=
-static int
-printins(Map *map, uvlong pc, char *buf, int n)
+<<global [[cond]](arm)>>=
+static
+char*   cond[16] =
 {
-    Instr i;
-
-    i.curr = buf;
-    i.end = buf+n-1;
-    if(decode(map, pc, &i) < 0)
-        return -1;
-
-    (*opcodes[i.op].fmt)(&opcodes[i.op], &i);
-    return 4;
-}
+    "EQ",       "NE",   "CS",   "CC",
+    "MI",       "PL",   "VS",   "VC",
+    "HI",       "LS",   "GE",   "LT",
+    "GT",       "LE",   0,      "NV"
+};
 @
 
-<<function [[arminst]](arm)>>=
-static int
-arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
+<<global [[shtype]](arm)>>=
+static
+char*   shtype[4] =
 {
-    USED(modifier);
-    return printins(map, pc, buf, n);
-}
+    "<<",       ">>",   "->",   "@>"
+};
 @
 
-<<function [[armdas]](arm)>>=
-static int
-armdas(Map *map, uvlong pc, char *buf, int n)
+<<global [[hb]](arm)>>=
+static
+char *hb[4] =
 {
-    Instr i;
-
-    i.curr = buf;
-    i.end = buf+n;
-    if(decode(map, pc, &i) < 0)
-        return -1;
-    if(i.end-i.curr > 8)
-        i.curr = _hexify(buf, i.w, 7);
-    *i.curr = 0;
-    return 4;
-}
+    "???",      "HU", "B", "H"
+};
 @
 
-<<function [[arminstlen]](arm)>>=
-static int
-arminstlen(Map *map, uvlong pc)
+<<global [[addsub]](arm)>>=
+static
+char*   addsub[2] =
 {
-    Instr i;
-
-    if(decode(map, pc, &i) < 0)
-        return -1;
-    return 4;
-}
+    "-",        "+",
+};
 @
-
-<<function [[armfoll]](arm)>>=
-static int
-armfoll(Map *map, uvlong pc, Rgetter rget, uvlong *foll)
-{
-    uvlong d;
-    Instr i;
-
-    if(decode(map, pc, &i) < 0)
-        return -1;
-
-    if(opcodes[i.op].foll) {
-        d = (*opcodes[i.op].foll)(map, rget, &i, pc);
-        if(d == -1)
-            return -1;
-    } else
-        d = pc+4;
-
-    foll[0] = d;
-    return 1;
-}
-@
-
 
 %******************************************************************************
 \chapter{[[db]]}

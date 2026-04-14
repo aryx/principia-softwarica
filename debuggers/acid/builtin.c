@@ -56,25 +56,23 @@ struct Btab
     "atoi",	cvtatoi,
     "itoa",	cvtitoa,
     /*x: [[tab]] entries */
-    "error",	doerror,
     "file",	        getfile,
     "readfile",	readfile,
     "access",	doaccess,
     /*x: [[tab]] entries */
     "filepc",	filepc,
     "fnbound",	funcbound,
-    /*x: [[tab]] entries */
-    "fmt",	fmt,
-    "follow",	follow,
-    /*x: [[tab]] entries */
-    "kill",	kill,
-    "match",	match,
-    /*x: [[tab]] entries */
     "pcfile",	pcfile,
     "pcline",	pcline,
     /*x: [[tab]] entries */
-    "print",	bprint,
-    "printto",	printto,
+    "kill",	kill,
+    /*x: [[tab]] entries */
+    "error",	doerror,
+    /*x: [[tab]] entries */
+    "follow",	follow,
+    /*x: [[tab]] entries */
+    "match",	match,
+    "regexp",	regexp,
     /*x: [[tab]] entries */
     "rc",	rc,
     /*x: [[tab]] entries */
@@ -82,18 +80,22 @@ struct Btab
     /*x: [[tab]] entries */
     "setproc",	setproc,
     /*x: [[tab]] entries */
+    "map",	map,
+    /*x: [[tab]] entries */
     "strace",	strace,
     "sysr1",	dosysr1,
     /*x: [[tab]] entries */
-    "map",	map,
-    /*x: [[tab]] entries */
-    "include",	include,
-    /*x: [[tab]] entries */
-    "regexp",	regexp,
+    "printto",	printto,
     "fmtof",	fmtof,
     "fmtsize",	dofmtsize,
     /*x: [[tab]] entries */
+    "include",	include,
+    /*x: [[tab]] entries */
     "interpret",interpret,
+    /*x: [[tab]] entries */
+    "print",	bprint,
+    /*x: [[tab]] entries */
+    "fmt",	fmt,
     /*x: [[tab]] entries */
     "newproc",	newproc,
     /*x: [[tab]] entries */
@@ -1067,6 +1069,7 @@ fmt(Node *r, Node *args)
     if(res.type != TINT || strchr(vfmt, res.ival) == 0)
         error("fmt(obj, fmt): bad format '%c'", (char)res.ival);
     expr(av[0], r);
+
     r->fmt = res.ival;
 }
 /*e: function [[fmt]] */

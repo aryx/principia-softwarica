@@ -5,7 +5,7 @@
 #include <mach.h>
 
 /*s: global debug (libmach/5db.c)(arm) */
-static int debug = 0;
+static bool debug = false;
 /*e: global debug (libmach/5db.c)(arm) */
 
 /*s: function [[BITS]](arm) */
@@ -95,7 +95,7 @@ Machdata armmach =
 
     armfoll,            /* following addresses */
     arminst,            /* print instruction */
-    armdas,                     /* dissembler */
+    armdas,             /* dissembler */
     arminstlen,         /* instruction size */
 };
 /*e: global [[armmach]](arm) */
@@ -345,6 +345,7 @@ decode(Map *map, uvlong pc, Instr *i)
 }
 /*e: function [[decode]](arm) */
 
+// ?? but bprint does not take format directly, it takes 2 Nodes
 #pragma varargck        argpos  bprint          2
 
 /*s: function [[bprint]](arm) */
@@ -1381,6 +1382,7 @@ printins(Map *map, uvlong pc, char *buf, int n)
 /*e: function [[printins]](arm) */
 
 /*s: function [[arminst]](arm) */
+/// ??? -> <>
 static int
 arminst(Map *map, uvlong pc, char modifier, char *buf, int n)
 {
