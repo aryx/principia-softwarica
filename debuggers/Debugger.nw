@@ -610,27 +610,18 @@ two [[/proc/1234/]] files they communicate through:
   ... loop back to pread /proc/1234/syscall ...
 \end{verbatim}
 %
-Three things are worth noticing. First, the actual work
+Two things are worth noticing. First, the actual work
 of [[Pwrite]]---copying bytes out to the file---runs
 \emph{in between} the two tracer stops, executed by the
 kernel's [[systab[PWRITE]]] handler on behalf of the
 target. The target thread is suspended in kernel mode the
 whole time; it never gets back to user mode until both
-halves of the trace are done.
+halves of the trace are done, which is why [[ratrace]]'s
+single [[pread]] loop iterates twice per traced syscall
+(once for the [[syscallfmt]] record, once for the
+[[sysretfmt]] record).
 %
-Second, kernel cooperation therefore happens \emph{twice}
-per traced syscall: once at entry (so [[syscallfmt]]
-records the call name and arguments \emph{before} the
-syscall body runs) and once at exit (so [[sysretfmt]]
-appends the return value and ends the line with [[\n]]).
-[[ratrace]]'s single [[pread]] loop iterates twice per
-syscall, and the two records print on the same line
-because only the second carries a newline---which is why
-an interleaved stdout write from the target can appear
-to split the call and its return onto separate lines, as
-we saw in the [[echo hello]] example above.
-%
-Third, [[ratrace]] and the target never communicate
+Second, [[ratrace]] and the target never communicate
 directly: every arrow between the two outer columns goes
 through the kernel via [[/proc/1234/ctl]] and
 [[/proc/1234/syscall]], matching the three-actor picture
@@ -798,18 +789,14 @@ addresses and bytes back into something the user can read.
 
 %yoann: maybe worth saying 3 actors: kernel, debugger, debuggee?
 %claude:
-A debugging session always involves {three actors}: the
-{debugger} process (the controller), the {debuggee} (or
-{target}) process being observed, and the {kernel} that sits
-between them enforcing process isolation. All the interesting
-operations in the rest of this section are triangular---the
-debugger cannot touch the target directly, only by asking the
-kernel to do it on its behalf. Every facility below
-(controlling, breakpoints, watchpoints, inspection, disassembly,
-source-level mapping) fits into this three-actor pattern, and
-keeping the three roles in mind makes it easier to see why
-each feature requires kernel cooperation and why the
-[[/proc]] interface is structured the way it is.
+The three-actor picture introduced in
+Section~\ref{sec:observing-another-program} ({debugger},
+{target}, and the {kernel} in the middle) applies here
+verbatim; a debugger just adds the {write} and {control}
+verbs on top of the read-only interface that a tracer
+already uses. Every facility below (controlling, breakpoints,
+watchpoints, inspection, disassembly, source-level mapping)
+fits into that same three-actor pattern.
 
 \subsection{Controlling another program}
 \label{sec:controlling-another-program}
@@ -832,31 +819,34 @@ and let it resume.
 
 %yoann: what about debuggers in old OSes without a /proc? Debuggers always required kernel support?
 %claude:
-The need for kernel cooperation is fundamental: without it,
-a user process has no way to access another process's memory
-or registers, because the OS isolates address spaces for
-security and stability. Debuggers have always relied on some
-form of this cooperation, even on systems without a [[/proc]]
-file system. The interface, however, varies a lot:
+Debuggers have always relied on some form of kernel
+cooperation, even on systems with no [[/proc]] file
+system---the specific interface is the part that varies
+a lot across operating systems:
 
 %claude:
 \begin{itemize}
 
-\item \unix and Linux use the [[ptrace]] system call,
-introduced in Version~6 \unix in 1975. [[ptrace]] is a
-catch-all syscall with many request codes:
-[[PTRACE_ATTACH]], [[PTRACE_PEEKDATA]], [[PTRACE_POKEDATA]],
-[[PTRACE_GETREGS]], [[PTRACE_CONT]], [[PTRACE_SINGLESTEP]],
-and so on. Both [[gdb]] and [[strace]] are built on top of it.
-The downside is the awkward API---a single syscall whose
-behavior depends entirely on a request constant.
+\item \unix and Linux extend the [[ptrace]] syscall we
+already met in the tracer case with write and control
+request codes: [[PTRACE_ATTACH]] to take control of an
+existing process, [[PTRACE_POKEDATA]] to write a word of
+target memory (needed to plant breakpoints, see below),
+[[PTRACE_SETREGS]] to modify registers, [[PTRACE_CONT]]
+to resume, and [[PTRACE_SINGLESTEP]] to advance by one
+instruction. [[ptrace]] was introduced in Version~6 \unix
+in 1975 as a single catch-all syscall whose behavior
+depends entirely on its request constant---an awkward
+API, but one [[gdb]] is built on.
 
-\item \plan exposes the same operations as files under
-[[/proc/<pid>/]]. Reading and writing these files replaces
-[[ptrace]]'s many request codes. The advantage is composability:
-any tool that can read and write files can act as a debugger,
-and the interface naturally extends across the network through
-\plan's distributed file system protocol.
+\item \plan, whose read side we already saw, exposes the
+write and control verbs through the same [[/proc/<pid>/]]
+files: writing to [[mem]] patches the target's code (so a
+debugger plants a breakpoint with an ordinary [[write]]
+syscall), writing to [[regs]] modifies its registers, and
+writing control messages such as [[startstop]] to [[ctl]]
+halts and resumes it. No extra syscall is needed, and the
+interface extends naturally across the network through 9P.
 
 \item macOS does not use [[ptrace]] (well, it has a partial
 implementation for compatibility, but it is unreliable).
