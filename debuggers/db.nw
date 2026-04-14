@@ -1268,6 +1268,22 @@ done(void)
 
 % modifies peekc, lastc, lp
 
+%claude:
+[[db]]'s input handling is a small hand-written lexer made
+of three functions and four globals. [<readchar()>] produces
+the next input character, [<rdc()>] skips whitespace and
+returns the next significant character, and [<reread()>]
+pushes one character back into the input stream for
+one-character lookahead. The shared state is four globals:
+[<lp>] points into the current line buffer, [<peekc>] is the
+pushback slot used by [<reread>], [<lastc>] holds the last
+character [<readchar>] returned, and [<line>] is a 4096-rune
+buffer that gets refilled one line at a time. There is no
+separate token layer---every command handler consumes
+characters directly out of the stream, which is why the
+[[adb]] grammar can be single-character ([[?]], [[,]], [[$]])
+without any keyword framing.
+
 <<function [[readchar]]>>=
 int
 readchar(void)
@@ -3362,6 +3378,19 @@ bool bpin;
 \subsection{Halting: [[:h]]}
 % happens when we attach to a process and we want to stop it.
 
+%claude:
+[[:h]] and the symmetric [[:x]] are the ``attach to a
+running process'' commands: after [[db 1234]] you can stop
+and resume pid 1234 without going through breakpoints.
+[[:h]] writes [[stop]] to [[/proc/1234/ctl]] via [<grab()>],
+which transitions the target into the [[Stopped]] state;
+[[:x]] writes [[start]] via [<ungrab()>] to resume it. The
+[[acid]] equivalents are [[stop(pid)]] and [[start(pid)]],
+built on the same [[ctl]] messages. These two commands are
+what make [[db 1234]] useful for inspecting a process that
+is misbehaving but not yet crashed---handy when a program
+is stuck in a tight loop and you want to see where.
+
 <<[[subpcs()]] switch modif cases>>=
 /* halt the current process */
 case 'h':	
@@ -4066,6 +4095,23 @@ if (name && machbyname(name) == 0)
 
 \subsection{Kernel debugging}
 
+%claude:
+[[db -k]] is the kernel-debugging mode: it tells [[db]] the
+symbol file is a kernel image rather than a user-space
+binary, and adjusts [[symmap]] so that its segment addresses
+match the kernel's virtual address space at runtime.
+[<kmsys()>] does this by masking off the top bits of the
+text segment (because the kernel is mapped at a fixed high
+virtual address, so the on-disk addresses need the
+high-bit mask stripped) and OR-ing the data segment address
+with [[mach->kbase]] (the kernel data base). Without this
+translation, every [[?i]] on a kernel symbol would miss
+because the executable's addresses would not line up with
+what you see through [[/proc/1/mem]]. The analogous feature
+on Linux is [[gdb]] with a [[vmlinux]] image and a
+[[/proc/kcore]] target, or [[kgdb]] for live kernel
+debugging.
+
 \subsubsection{[[db -k]]}
 
 <<global [[kflag]]>>=
@@ -4139,6 +4185,37 @@ kmsys(void)
 
 \subsection{Signals and notes}
 
+%claude:
+Like any interactive REPL that drives a child process,
+[[db]] has to juggle {two separate note streams}: notes
+delivered to the debugger itself (the common case is
+Ctrl-C from the user) and notes the kernel generates for
+the debuggee (a segfault, a user-sent note, or a
+[[sys: breakpoint]] fault when one of [[db]]'s own trap
+instructions fires). The two are handled very differently.
+%
+The {debugger's own} notes are caught by the
+[[notify(fault)]] registration in [<main()>]; the
+[<fault()>] handler sets the [[mkfault]] flag and returns,
+which causes [<readchar()>] and [<dprint()>] to abandon
+what they are doing and [[longjmp]] back to the REPL via
+[<error()>]. This is the same setjmp/longjmp REPL-abort
+pattern used by [[ed]], [[acid]], and the \plan shell: a
+Ctrl-C anywhere in the program forces an immediate return
+to the command prompt without unwinding the C call stack
+by hand.
+%
+The {debuggee's} notes are pulled from [[/proc/<pid>/note]]
+by [<unloadnote()>] whenever the target stops, and parked
+in the [[note[]]] array for the user to inspect with
+[[:n]] or re-deliver to the process with [<loadnote()>].
+There is one subtlety worth calling out: [<unloadnote()>]
+silently \emph{discards} any note matching
+[[sys: breakpoint]], because those are not real signals
+but the trap instructions [[db]] itself planted firing,
+and the user does not care about them. Every other note
+is kept, which is why a real segfault in the target shows
+up in [[$?]] output while a breakpoint hit does not.
 
 \subsubsection{Debugger notes}
 
