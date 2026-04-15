@@ -739,6 +739,109 @@ reproduce. The price of all that data is a more intricate
 toolchain---[[tprof]] is under 200 lines precisely because
 it only needs to map a bucket index to a symbol name.
 
+\subsection{Self time vs cumulative time}
+
+%claude:
+Once a profiler has collected its data, there is still a
+choice in how to present it. The same numbers can be totalled
+two different ways, and the difference is the single most
+common source of confusion when reading profile output.
+
+%claude:
+{Self time} (also called {flat} or {exclusive} time) is the
+time spent executing inside a function's own body, not
+counting time spent in functions it calls. {Cumulative time}
+(also called {inclusive} or {total} time) includes every
+callee transitively. The two views answer different questions:
+self time answers ``which function is slow?'', cumulative
+time answers ``which function is responsible for the slowness?''.
+
+%claude:
+A tiny example makes the difference concrete. Suppose
+[[main]] calls [[foo]], which calls [[bar]], and [[bar]] is
+the only function that does real work:
+\begin{verbatim}
+   function   self    cumulative
+   --------   -----   ----------
+   main         0%        100%
+   foo          0%        100%
+   bar        100%        100%
+\end{verbatim}
+%
+The cumulative view puts [[main]] at the top of the list
+(it ``took'' 100\% of the run), but that is true of [[main]]
+in every program ever profiled. The self view correctly
+fingers [[bar]] as the hot spot. Conversely, if a slow
+operation is spread across ten small leaf functions called
+from one parent, the self view scatters the cost across ten
+rows while the cumulative view collapses it onto the parent,
+which is what you want when deciding where to cut.
+
+%claude:
+\plan's [[prof]] shows self time by default (the [[%]] column
+in its main output) and switches to a cumulative call-tree
+presentation under [[prof -d]]. [[gprof]] on Unix showed both
+columns side by side from the start; modern tools
+([[pprof]], [[perf report]], Instruments, async-profiler)
+let the user toggle. Sampling profilers like [[tprof]] can
+only report self time directly, because without stack walking
+they do not know who called the sampled PC---which is one
+reason stack-sampling perf-style profilers are now standard
+on Linux and macOS.
+
+\subsection{Flat list, call tree, flamegraph}
+
+%claude:
+The same per-function histogram can be presented in three
+standard ways, and which ones a tool offers is a good
+indicator of how much data it collected. The choice is
+independent of whether the data came from instrumentation
+or sampling---it is purely a question of how to display
+totals, callers, and visual proportion.
+
+%claude:
+The {flat list} is the simplest: one row per function,
+sorted by self time, with a percentage column. \plan's
+[[prof]] without [[-d]] shows exactly this. It answers
+``which function should I open first?'' in a single glance,
+but says nothing about who called whom.
+
+%claude:
+The {call tree} adds caller-callee relationships: each row
+is indented under its caller, with the tree rooted at
+[[main]]. This is also where the cumulative view from the
+previous subsection becomes actually useful---each parent
+shows the total time inherited from everything beneath it.
+[[prof -d]] shows a call tree, as do [[gprof]]'s ``call
+graph'' section and [[pprof --tree]]. A call tree needs
+more data than a flat list---either an instrumentation
+profiler that records each call arc (the [[prof]] route),
+or a sampling profiler that walks the stack at each tick
+to recover the call chain.
+
+%claude:
+The {flamegraph} (Brendan Gregg, 2011) is the third view.
+Each stack sample becomes a vertical stack of boxes,
+callers at the bottom and callees on top, and identical
+adjacent columns are merged horizontally:
+\begin{verbatim}
+   |             bar             |  <- top row, hottest leaf
+   |             foo             |
+   |            main             |  <- bottom row, root
+\end{verbatim}
+%
+Box width is proportional to time, so wide boxes near the
+top are the hot spots and narrow boxes are noise. The
+flamegraph needs the same caller-chain data as a call tree
+but visualizes it as area instead of indentation, which
+scales to thousands of unique stacks in one page. [[tprof]]
+cannot produce one because it samples only the top-level PC,
+with no stack information; producing flamegraphs is the main
+reason modern sampling profilers ([[perf]],
+[[async-profiler]], Instruments, Chrome DevTools,
+[[speedscope]], [[py-spy]]) all walk the stack on every
+sample.
+
 \subsection{Tracing and monitoring profilers}
 
 %claude:
@@ -1426,6 +1529,25 @@ stream and can insert extra instructions after [[TEXT]]
 (function entry) and before [[RET]] (function return).
 The linker supports two profiling strategies, selected
 by [[5l -p]] (the default) or [[5l -p -1]].
+
+%claude:
+This is the opposite of the usual division of labor. [[gcc
+-pg]] (gprof's instrumentation flag) emits the [[mcount]]
+call from the C compiler itself, so every [[.o]] file must
+be recompiled with [[-pg]]; LLVM's
+[[-fprofile-instr-generate]] does the same. The argument
+for compile-time instrumentation is that the compiler
+already knows function entry and exit points and can use
+that information to optimize the call (for instance, omitting
+the hook in leaf functions). The argument for link-time
+instrumentation is that nothing has to be recompiled to
+enable profiling, and every function---including ones from
+libraries you do not have source for---is uniformly
+instrumented. \plan picks the second trade-off, which is
+consistent with its overall style: the linker already
+understands the calling convention well enough to insert a
+[[BL _profin]] without clobbering arguments, so there is no
+reason to duplicate that knowledge in the compiler.
 
 \section{Time-per-function profiling: [[5l -p]]}
 
@@ -2924,6 +3046,32 @@ The usage is:
   % echo stop > /dev/kpctl
   % kprof /arm/9 /dev/kpdata
 \end{verbatim}
+
+%claude:
+Kernel profiling has different principles from user-space
+profiling because the profiler is itself kernel code. It
+cannot be attached to or paused from outside, so it has to
+{self-sample}: a high-priority timer interrupt fires on
+every tick, and the ISR records the interrupted PC into a
+histogram keyed by absolute kernel virtual address. There
+is no [[pid]] to address either, so enabling and disabling
+profiling goes through a dedicated control device
+[[/dev/kpctl]] (the [[#K]] device) that toggles a global
+flag the ISR checks each tick. Samples taken while the
+kernel is in a critical section with interrupts disabled
+are simply lost, which is the price of running inside the
+component being profiled.
+
+%claude:
+Every modern OS solves this same chicken-and-egg in its own
+way. Linux folds kernel profiling into [[perf record -a]]
+(``-a'' meaning all CPUs including kernel), reusing the
+same tool as user-space sampling. macOS uses [[kdebug]] and
+Instruments' ``System Trace''. Windows uses the ETW Kernel
+Logger. Solaris and illumos use [[lockstat -k]] or
+[[dtrace -n 'profile-997']]. \plan keeps [[kprof]] as a
+separate tool because all its other profilers assume a
+target process, and the kernel simply does not have one.
 
 %claude:
 The code is nearly identical to [[tprof.c]]. The main
