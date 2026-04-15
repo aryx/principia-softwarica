@@ -994,14 +994,206 @@ operation on simulated state (registers, memory), and advances
 to the next instruction. This is exactly the fetch-decode-execute
 loop that a real processor performs in hardware---except that
 [[5i]] does it in a C [[while]] loop.
-%
-The term ``emulator'' (as opposed to ``simulator'') sometimes
-implies that the goal is to run real programs, not just to model
-timing or performance. [[5i]] does not simulate the pipeline,
-caches, or cycle counts of a real ARM processor---it only
-reproduces the functional behavior, which is all that matters
-for running programs correctly.
 
+\subsection{Emulator vs simulator}
+\label{sec:princ-emu-vs-sim}
+
+%claude:
+The word ``emulator'' is used loosely in practice, but in the
+architecture community it is traditionally distinguished from
+``simulator'' by what exactly is being reproduced. An
+{emulator} reproduces the {functional behavior} of a
+processor: given the same instructions and the same inputs,
+it produces the same outputs, so that real programs written
+for the target architecture run correctly. A {simulator}
+reproduces {timing and microarchitectural behavior}: pipeline
+stages, cache hit and miss patterns, branch predictor state,
+out-of-order issue, retirement latency. The two goals pull
+in opposite directions.
+
+%claude:
+A tool at the functional-behavior end can take shortcuts a
+real CPU cannot: it can execute one instruction ``in zero
+time'', skip the pipeline entirely and just compute the
+result, or even recognize a whole pattern of instructions
+and emit the answer in one step. That is fine because the
+guest program never measures how long its own code takes to
+run; it just observes that the answer is right. A
+cycle-accurate tool has to refuse those shortcuts---the whole
+point is to tell you how many cycles a real CPU would have
+spent. It therefore ends up orders of magnitude slower than
+functional emulation, and is mostly used for compiler back-end
+tuning, architecture research papers, and evaluating cache
+designs before committing silicon.
+
+%claude:
+The landscape sits along that axis:
+\begin{verbatim}
+   tool             kind              used for
+   --------------   ---------------   ---------------------------
+   \plan 5i         functional        run ARM user programs
+   QEMU             functional        run whole OSes + user progs
+   Bochs            functional        debug x86 OS kernels
+   SPIM             functional        teach MIPS
+   Dolphin          functional        run GameCube games
+   gem5             cycle-accurate    architecture research
+\end{verbatim}
+
+%claude:
+[[5i]] sits firmly on the functional side: it emulates ARM
+instructions well enough to run real \plan binaries, but it
+has no model of pipeline, cache, or memory latency. This is
+the right trade-off for a debugging and teaching tool---you
+can single-step a program, watch every instruction fire, and
+get a trace that is readable rather than lost inside a
+million pipeline-stage entries. It also keeps the code under
+3k lines, because one C [[switch]] statement can cover the
+whole ARM ISA.
+
+\subsection{User-mode vs full-system emulation}
+\label{sec:princ-user-vs-system}
+
+%claude:
+The second big design choice an emulator has to make is
+{how much of the target machine to emulate}. At one extreme
+is {full-system emulation}: the emulator models not just
+the CPU but also the memory controller, the MMU, the
+interrupt controller, the disk, the network card, the
+timer, the video output---enough hardware that a stock OS
+kernel can boot inside the emulator and never notice it is
+not running on real silicon. At the other extreme is
+{user-mode emulation}: the emulator reproduces only the
+user-mode CPU, and every time the guest program issues a
+system call the emulator catches it and forwards the
+request to the host OS instead of emulating the kernel
+that would normally service it.
+
+%claude:
+The full-system route is more faithful but much more work.
+QEMU's system mode has millions of lines devoted to modelling
+peripherals, and every new supported machine (each Raspberry
+Pi variant, each embedded board) takes weeks of per-device
+engineering. Bochs, Dolphin (GameCube), and RPCS3 (PS3) are
+all full-system emulators because their goal is to run
+unmodified kernels or console firmware, for which there is
+no other choice. The user-mode route is a huge shortcut:
+no MMU page-walking, no device drivers to emulate, no
+interrupt dispatch---the ``kernel'' is whatever kernel is
+already running on the host, reached through a thin syscall
+forwarding layer.
+
+%claude:
+Every major ISA emulator offers both modes or has a
+user-mode cousin:
+\begin{verbatim}
+   target ISA            user-mode tool    full-system tool
+   -------------------   ---------------   -----------------
+   ARM on x86            qemu-arm          qemu-system-arm
+   x86 on ARM            qemu-i386         qemu-system-i386
+   x86 on macOS (ARM)    Rosetta 2         (none, uses host)
+   x86 on Windows ARM    xtajit (WoW64)    Hyper-V
+   Win32 on Linux        Wine              (API layer only,
+                                            no CPU emulation)
+   \plan ARM on host     5i                (none)
+\end{verbatim}
+%
+The user-mode versions all share one simplifying assumption:
+the guest program is pure user-space code that only touches
+the world through the syscall boundary. That covers almost
+every interesting program but excludes device drivers,
+kernel modules, and anything that pokes at physical memory
+directly. Wine is a slightly different animal because it
+does not emulate the x86 CPU at all---it runs native x86
+code on a native x86 host and only translates the Win32
+API calls to POSIX equivalents. That is user-mode
+``emulation'' in the same sense as [[5i]], just with the
+CPU layer removed.
+
+%claude:
+[[5i]] is a pure user-mode emulator and does not pretend
+otherwise. When the guest ARM binary hits a [[SWI]]
+instruction (the ARM system call trap), [[5i]] does not
+dispatch it into a simulated kernel---there is no
+simulated kernel. Instead it reads the guest's registers
+to recover the syscall number and arguments, copies any
+pointer arguments out of the guest's simulated memory into
+real buffers, performs the equivalent host syscall (opening
+a real file, reading from a real fd, writing to real
+stdout), and writes the result back into the guest's
+registers. The ``OS'' the guest sees is the host \plan
+kernel, reached through Chapter~\ref{chap:syscalls}. This
+is the ``cheating'' the section-head comment refers to, and
+it is what keeps the whole emulator under 3k lines: no
+page tables, no scheduler, no device drivers, no interrupt
+vectors---just a big syscall-forwarding [[switch]] statement.
+
+\subsection{Interpretation styles}
+\label{sec:princ-interp-styles}
+
+%claude:
+Once the scope of emulation is settled (functional or
+cycle-accurate, user-mode or full-system), the last
+fundamental choice is {how to dispatch from one instruction
+to the next}. The naive loop reads the next instruction,
+figures out what it is, and calls a handler---but there
+are several ways to organize that dispatch, and they differ
+by more than an order of magnitude in speed.
+
+%claude:
+The simplest form is {switch dispatch}: one C [[switch]]
+with one [[case]] per opcode, inside a [[while]] loop.
+Each iteration fetches the next instruction, masks off the
+opcode bits, and lets the [[switch]] pick the right handler.
+This is how [[5i]] works, and also Bochs, SPIM, and most
+small teaching emulators. The code looks exactly like you
+would write it by hand in an afternoon, which is a big part
+of why it is the starting point for every emulator. The
+cost is that every instruction pays the price of a computed
+branch back to the top of the loop plus a switch dispatch,
+typically ten to fifteen native instructions of overhead
+per guest instruction, putting throughput around ten times
+slower than native execution.
+
+%claude:
+{Threaded code} (also called ``computed goto'' or
+``direct-threaded interpretation'') replaces the
+[[while]]+[[switch]] with one label per handler and a
+[[goto *next]] at the end of each handler. This removes
+the per-iteration dispatch overhead---the CPU sees a jump
+directly from one handler to the next, and its branch
+predictor can learn common patterns. GCC's [[&&label]]
+extension makes this practical in C; CPython's bytecode
+loop, OCaml's bytecode interpreter, and Lua 5's VM all use
+the technique, typically landing around three to five
+times slower than native.
+
+%claude:
+{Dynamic binary translation}, better known as {JIT},
+abandons instruction-at-a-time dispatch entirely. It reads
+a whole basic block of guest instructions, translates them
+into native host instructions once, caches the translation,
+and then runs native code until the block ends. QEMU's Tiny
+Code Generator works this way; so do Apple Rosetta 2,
+Android's ART, HotSpot, V8, and FEX-Emu. JIT gets within
+1.1 to 2x of native but is a much larger engineering
+undertaking, because every guest instruction needs a
+native-code template and the runtime has to manage
+translation caches, invalidation on self-modifying code,
+and signal-handling re-entry in the middle of translated
+code.
+
+%claude:
+[[5i]] picks switch dispatch and sticks with it. The whole
+instruction interpreter is one [[for]] loop in [<run()>]
+containing an [<arm_class()>] dispatch that leads to
+per-class handlers (data processing, memory access, control
+flow). Given this book's goal of {explaining} how an
+emulator works, switch dispatch is the right trade-off: a
+threaded interpreter would obscure the dispatch in macro
+tricks, and a JIT would require an entire extra codegen
+layer worth more than the rest of the book. The slowness
+does not matter for a teaching and debugging tool where the
+user is likely to be single-stepping instructions anyway.
 
 \section{[[5i]] interfaces}
 
