@@ -140,7 +140,7 @@ sysfd2path(ulong* arg)
 
     validaddr(arg[1], arg[2], true);
     c = fdtochan(arg[0], -1, false, true);
-    snprint((char*)arg[1], arg[2], "%s", 
+    snprint((char*)arg[1], arg[2], "%s",
               chanpath(c));
     cclose(c);
     return 0;

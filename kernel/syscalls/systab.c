@@ -70,6 +70,8 @@ Syscall *systab[] = {
     /*s: [[systab]] file syscalls */
     [OPEN]      sysopen,
     [CLOSE]     sysclose,
+    [DUP]       sysdup,
+    [FD2PATH]   sysfd2path, // =~ pwd
     [PREAD]     syspread,
     [PWRITE]    syspwrite,
     [SEEK]      sysseek,
@@ -79,7 +81,6 @@ Syscall *systab[] = {
     [REMOVE]    sysremove,
 
     [CHDIR]     syschdir,
-    [FD2PATH]   sysfd2path, // =~ pwd
 
     [STAT]      sysstat,
     [FSTAT]     sysfstat,
@@ -114,9 +115,6 @@ Syscall *systab[] = {
     [SEMRELEASE]    syssemrelease,
     [TSEMACQUIRE]   systsemacquire,
     /*e: [[systab]] concurrency syscalls */
-    /*s: [[systab]] special file syscalls */
-    [DUP]       sysdup,
-    /*e: [[systab]] special file syscalls */
     /*s: [[systab]] security syscalls */
     [FAUTH]     sysfauth,
     [FVERSION]  sysfversion,

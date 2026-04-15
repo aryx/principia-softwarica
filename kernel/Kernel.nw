@@ -668,7 +668,6 @@ a small integer used as an index into a dispatch table
 <<[[sys.h]] time syscalls>>
 <<[[sys.h]] ipc syscalls>>
 <<[[sys.h]] concurrency syscalls>>
-<<[[sys.h]] special file syscalls>>
 <<[[sys.h]] security syscalls>>
 #define ERRSTR      39
 @ 
@@ -810,14 +809,19 @@ The C prototype is:
 %claude:
 The file syscalls are the workhorses of the interface.
 Because so many things in \plan are files, most of
-the kernel's services are accessed through these five calls.
+the kernel's services are accessed through these seven calls.
+They split into two groups: fd-slot lifecycle
+([[OPEN]], [[CLOSE]], [[DUP]], [[FD2PATH]]) and channel I/O
+([[PREAD]], [[PWRITE]], [[SEEK]]).
 
 <<[[sys.h]] file syscalls>>=
 #define OPEN        6
 #define CLOSE       7
-#define PREAD       8
-#define PWRITE      9
-#define SEEK        10
+#define DUP         8
+#define FD2PATH     9
+#define PREAD       10
+#define PWRITE      11
+#define SEEK        12
 @
 % pread/pwrite? what is the p for? page read? page write?
 % it does have an extra arg for seek, so have atomic seek;read?
@@ -832,10 +836,20 @@ The C prototypes are:
 \begin{verbatim}
   int   open(char *file, int omode);
   int   close(int fd);
+  int   dup(int oldfd, int newfd);            // -1 newfd = allocate
+  int   fd2path(int fd, char *buf, int nbuf);
   long  pread(int fd, void *buf, long n, vlong offset);
   long  pwrite(int fd, void *buf, long n, vlong offset);
   vlong seek(int fd, vlong n, int type);
 \end{verbatim}
+
+%claude: %unix:
+[[dup]] matches \unix's [[dup2]] (with [[-1]] for ``allocate a new
+slot'' in place of the \unix [[dup]] form).
+[[fd2path]] has no \unix equivalent: in \plan, with per-process
+namespaces, the same file can be reached via different paths in
+different processes and \verb+..+ is resolved lexically, so the
+kernel remembers the path used to open each fd.
 
 %claude: %unix:
 Note [[PREAD]] and [[PWRITE]] instead of the traditional
@@ -850,26 +864,23 @@ them into a single [[pread]] call. (\unix later adopted
 
 \subsection{Directory syscalls}
 
-%yoann: small paragraph explaining those syscalls, why all the xSTAT variation? fd2path seems original too
+%yoann: small paragraph explaining those syscalls, why all the xSTAT variation?
 %claude:
 The directory syscalls include [[CREATE]], [[REMOVE]],
 [[CHDIR]], and a family of [[STAT]] variants. The
 proliferation of [[STAT]]/[[FSTAT]]/[[WSTAT]]/[[FWSTAT]]
 comes from two axes: [[STAT]] vs.\ [[FSTAT]] (take a
 path name vs.\ a file descriptor), and read vs.\ write
-(``w'' for write, i.e., change metadata). [[FD2PATH]]
-returns the file name associated with an open file
-descriptor.
+(``w'' for write, i.e., change metadata).
 
 <<[[sys.h]] directory syscalls>>=
-#define CREATE      11
-#define REMOVE      12
-#define CHDIR       13
-#define FD2PATH     14
-#define STAT        15
-#define FSTAT       16
-#define WSTAT       17
-#define FWSTAT      18
+#define CREATE      13
+#define REMOVE      14
+#define CHDIR       15
+#define STAT        16
+#define FSTAT       17
+#define WSTAT       18
+#define FWSTAT      19
 @
 % why so many stat, ugly a bit. each time variant where take name
 % or file descriptor (the f stands for fd). Could remove maybe.
@@ -880,7 +891,6 @@ The C prototypes are:
   int   create(char *file, int omode, ulong perm);
   int   remove(char *file);
   int   chdir(char *dir);
-  int   fd2path(int fd, char *buf, int nbuf);
   int   stat(char *file, uchar *buf, int nbuf);
   int   fstat(int fd, uchar *buf, int nbuf);
   int   wstat(char *file, uchar *buf, int nbuf);
@@ -892,12 +902,6 @@ Note [[CREATE]] with the full spelling---in \unix, the
 syscall was famously called [[creat]] without the final
 `e'. Ken Thompson once said the one thing he would change
 about \unix is ``I'd spell creat with an e.''
-%
-[[FD2PATH]] has no \unix equivalent. In \plan, with
-per-process namespaces, the same file can be reached via
-different paths in different processes, and \verb+..+ is
-resolved lexically. The kernel remembers the path used to
-open each file descriptor; [[fd2path]] returns it.
 
 \subsection{Namespace syscalls}
 
@@ -915,9 +919,9 @@ process can have its own [[/dev]] populated by different
 servers.
 
 <<[[sys.h]] namespace syscalls>>=
-#define BIND        19
-#define MOUNT       20
-#define UNMOUNT     21
+#define BIND        20
+#define MOUNT       21
+#define UNMOUNT     22
 @
 
 % alternative to namespace and fileservers and uniondir?
@@ -956,8 +960,8 @@ they arrived 20~years after \plan had the same capability.
 %yoann: intro paragraph for those syscalls?
 
 <<[[sys.h]] time syscalls>>=
-#define SLEEP       22
-#define ALARM       23
+#define SLEEP       23
+#define ALARM       24
 @
 % alarm very useful, e.g. for timeout in a program
 % SLEEP is also for sleep/wakeup and synchronization?
@@ -989,16 +993,16 @@ The IPC syscalls cover pipes, notes (signals), and shared
 memory segments.
 
 <<[[sys.h]] ipc syscalls>>=
-#define PIPE        26
+#define PIPE        27
 
-#define NOTIFY      24
-#define NOTED       25
+#define NOTIFY      25
+#define NOTED       26
 
-#define SEGATTACH   27
-#define SEGDETACH   28
-#define SEGFREE     29
-#define SEGFLUSH    30
-#define SEGBRK      31
+#define SEGATTACH   28
+#define SEGDETACH   29
+#define SEGFREE     30
+#define SEGFLUSH    31
+#define SEGBRK      32
 @
 % pipe! one of unix greatest invention!
 % segxxx =~ mmap (important for speed for some programs)
@@ -1038,10 +1042,10 @@ blocks on top of which the user-level thread library
 ([[libthread]], see \book{Libcore}) is implemented.
 
 <<[[sys.h]] concurrency syscalls>>=
-#define RENDEZVOUS  32
-#define SEMACQUIRE  33
-#define SEMRELEASE  34
-#define TSEMACQUIRE 35
+#define RENDEZVOUS  33
+#define SEMACQUIRE  34
+#define SEMRELEASE  35
+#define TSEMACQUIRE 36
 @
 %TSEMACQUIRE ? timed semacquire?
 
@@ -1059,12 +1063,7 @@ The C prototypes are:
 is Linux's [[futex]], which also provides user-space fast
 paths with kernel fallback, but is more complex.
 
-\subsection{Special file and security syscalls}
-
-<<[[sys.h]] special file syscalls>>=
-#define DUP         36
-@
-% meh. Can't do without?
+\subsection{Security syscalls}
 
 %yoann: security related syscalls?
 %claude:
@@ -1085,7 +1084,6 @@ authentication rather than on a global user database.
 %claude:
 The C prototypes are:
 \begin{verbatim}
-  int   dup(int oldfd, int newfd);
   int   fversion(int fd, int bufsize, char *version, int nversion);
   int   fauth(int fd, char *aname);
 \end{verbatim}
@@ -3491,7 +3489,6 @@ Syscall *systab[] = {
     <<[[systab]] time syscalls>>
     <<[[systab]] ipc syscalls>>
     <<[[systab]] concurrency syscalls>>
-    <<[[systab]] special file syscalls>>
     <<[[systab]] security syscalls>>
     [ERRSTR]    syserrstr,
 };
@@ -21755,6 +21752,8 @@ and the on-disk file system.
 <<[[systab]] file syscalls>>=
 [OPEN]      sysopen,
 [CLOSE]     sysclose,
+[DUP]       sysdup,
+[FD2PATH]   sysfd2path, // =~ pwd
 [PREAD]     syspread,
 [PWRITE]    syspwrite,
 [SEEK]      sysseek,
@@ -21765,6 +21764,8 @@ The C prototypes are:
 \begin{verbatim}
   int   open(char *file, int omode);
   int   close(int fd);
+  int   dup(int oldfd, int newfd);            // -1 newfd = allocate
+  int   fd2path(int fd, char *buf, int nbuf);
   long  pread(int fd, void *buf, long n, vlong offset);  // -1 = current
   long  pwrite(int fd, void *buf, long n, vlong offset);
   vlong seek(int fd, vlong n, int type);
@@ -21784,7 +21785,8 @@ The C prototypes are:
 
 %claude:
 In this chapter, I present the file-related system calls:
-[[sysopen()]], [[sysclose()]], [[syspread()]], [[syspwrite()]], and [[sysseek()]].
+[[sysopen()]], [[sysclose()]], [[sysdup()]], [[sysfd2path()]],
+[[syspread()]], [[syspwrite()]], and [[sysseek()]].
 In \plan, files are the universal abstraction --- not just for
 storage but for devices, network connections, and system services.
 The key data structures were introduced in Chapter~\ref{chap:core_ds}:
@@ -23370,6 +23372,109 @@ sseek(ulong *arg)
 % note that no seek Dev method, see the comment next to Dev for why
 
 
+\section{[[sysdup()]]}
+
+\l diff between dup fd1 fd2  and close fd2; and reopening the same
+% file than the one use for fd1? when dup it's more shared?
+
+%claude:
+The [[dup()]] system call duplicates a file descriptor. If [[newfd]]
+is $-1$, a new descriptor is allocated. Otherwise, the specified
+slot is used, and any existing channel there is closed \emph{after}
+the dup---this ordering matters for idioms like
+[[date > #d/1]] where stdout is being replaced.
+
+<<syscall dup>>=
+// int dup(int oldfd, int newfd);
+long
+sysdup(ulong* arg)
+{
+    int fd;
+    Chan *c, *oc;
+    Fgrp *f = up->fgrp;
+
+    /*
+     * Close after dup'ing, so date > #d/1 works
+     */
+    c = fdtochan(arg[0], -1, false, true);
+    fd = arg[1];
+    if(fd != -1){
+        lock(f);
+        if(fd<0 || growfd(f, fd)<0) {
+            unlockfgrp(f);
+            cclose(c);
+            error(Ebadfd);
+        }
+        if(fd > f->maxfd)
+            f->maxfd = fd;
+
+        oc = f->fd[fd];
+        f->fd[fd] = c;
+        unlockfgrp(f);
+        if(oc)
+            cclose(oc);
+    }else{
+        if(waserror()) {
+            cclose(c);
+            nexterror();
+        }
+        fd = newfd(c);
+        if(fd < 0)
+            error(Enofd);
+        poperror();
+    }
+
+    return fd;
+}
+@
+
+% [[/fd/]] device (devdup) exposes Fgrp as files; described later in
+% Chapter~\ref{chap:special-fileservers}.
+
+
+\section{[[sysfd2path()]] (a.k.a [[pwd()]])}
+
+%claude:
+[[fd2path]] returns the full pathname associated with an open file
+descriptor. This is why the kernel must track [[\hlink{Path}]] objects
+on every channel --- without them, there would be no way to answer
+``what file is fd 3 pointing to?''. The implementation is trivial:
+look up the fd, return [[c->path->s]].
+
+% does a realpath? plan9 has symlinks?
+
+<<syscall fd2path>>=
+// int fd2path(int fd, char *buf, int nbuf);
+long
+sysfd2path(ulong* arg)
+{
+    Chan *c;
+
+    validaddr(arg[1], arg[2], true);
+    c = fdtochan(arg[0], -1, false, true);
+    snprint((char*)arg[1], arg[2], "%s",
+              chanpath(c));
+    cclose(c);
+    return 0;
+}
+@
+
+% also used by nameerror
+<<function [[chanpath]]>>=
+char*
+chanpath(Chan *c)
+{
+    if(c == nil)
+        return "<nil chan>";
+    if(c->path == nil)
+        return "<nil path>";
+    if(c->path->s == nil)
+        return "<nil path.s>";
+    return c->path->s;
+}
+@
+
+
 \section{Collecting unclosed files}
 
 %claude:
@@ -23640,7 +23745,6 @@ if(omode & ORCLOSE)
 [REMOVE]    sysremove,
 
 [CHDIR]     syschdir,
-[FD2PATH]   sysfd2path, // =~ pwd
 
 [STAT]      sysstat,
 [FSTAT]     sysfstat,
@@ -23654,7 +23758,6 @@ The C prototypes are:
   int   create(char *file, int omode, ulong perm);
   int   remove(char *file);
   int   chdir(char *dir);
-  int   fd2path(int fd, char *buf, int nbuf);
   int   stat(char *file, uchar *buf, int nbuf);   // 9P wire format
   int   fstat(int fd, uchar *buf, int nbuf);
   int   wstat(char *file, uchar *buf, int nbuf);   // w = write metadata
@@ -23665,7 +23768,7 @@ The C prototypes are:
 
 %claude:
 This chapter covers the directory-related syscalls: [[create]], [[remove]],
-[[chdir]], [[fd2path]], [[stat]]/[[fstat]], and [[wstat]]/[[fwstat]].
+[[chdir]], [[stat]]/[[fstat]], and [[wstat]]/[[fwstat]].
 Directories in \plan\ are not fundamentally different from files ---
 they are channels whose [[qid.type]] has the [[QTDIR]] bit set.
 The kernel enforces a few directory-specific rules (no writing,
@@ -24571,49 +24674,6 @@ case Atodir:
 @
 % comments can be understood only in relation to other cases and 
 % the understanding of domount()
-
-\section{[[sysfd2path()]] (a.k.a [[pwd()]])}
-
-%claude:
-[[fd2path]] returns the full pathname associated with an open file
-descriptor. This is why the kernel must track [[\hlink{Path}]] objects
-on every channel --- without them, there would be no way to answer
-``what file is fd 3 pointing to?''. The implementation is trivial:
-look up the fd, return [[c->path->s]].
-
-% does a realpath? plan9 has symlinks?
-
-<<syscall fd2path>>=
-// int fd2path(int fd, char *buf, int nbuf);
-long
-sysfd2path(ulong* arg)
-{
-    Chan *c;
-
-    validaddr(arg[1], arg[2], true);
-    c = fdtochan(arg[0], -1, false, true);
-    snprint((char*)arg[1], arg[2], "%s", 
-              chanpath(c));
-    cclose(c);
-    return 0;
-}
-@
-
-% also used by nameerror
-<<function [[chanpath]]>>=
-char*
-chanpath(Chan *c)
-{
-    if(c == nil)
-        return "<nil chan>";
-    if(c->path == nil)
-        return "<nil path>";
-    if(c->path->s == nil)
-        return "<nil path.s>";
-    return c->path->s;
-}
-@
-
 
 \section{[[DirEntry]]}
 
@@ -43465,76 +43525,9 @@ process's file descriptors as files. Opening [[/fd/0]] gives you
 a new reference to file descriptor 0. This is used during
 boot to set up standard I/O: the boot script opens the console
 device and then uses [[/fd/0]], [[/fd/1]], [[/fd/2]] to wire up
-stdin, stdout, and stderr. The [[dup()]] system call below provides
-programmatic access to the same functionality.
-
-\subsection{[[sysdup()]]}
-
-\l diff between dup fd1 fd2  and close fd2; and reopening the same
-% file than the one use for fd1? when dup it's more shared?
-
-<<[[systab]] special file syscalls>>=
-[DUP]       sysdup,
-@
-
-%claude:
-The C prototype is:
-\begin{verbatim}
-  int   dup(int oldfd, int newfd);  // -1 = allocate new
-\end{verbatim}
-
-%claude:
-The [[dup()]] system call duplicates a file descriptor. If [[newfd]]
-is $-1$, a new descriptor is allocated. Otherwise, the specified
-slot is used, and any existing channel there is closed \emph{after}
-the dup---this ordering matters for idioms like
-[[date > #d/1]] where stdout is being replaced.
-
-<<syscall dup>>=
-// int dup(int oldfd, int newfd);
-long
-sysdup(ulong* arg)
-{
-    int fd;
-    Chan *c, *oc;
-    Fgrp *f = up->fgrp;
-
-    /*
-     * Close after dup'ing, so date > #d/1 works
-     */
-    c = fdtochan(arg[0], -1, false, true);
-    fd = arg[1];
-    if(fd != -1){
-        lock(f);
-        if(fd<0 || growfd(f, fd)<0) {
-            unlockfgrp(f);
-            cclose(c);
-            error(Ebadfd);
-        }
-        if(fd > f->maxfd)
-            f->maxfd = fd;
-
-        oc = f->fd[fd];
-        f->fd[fd] = c;
-        unlockfgrp(f);
-        if(oc)
-            cclose(oc);
-    }else{
-        if(waserror()) {
-            cclose(c);
-            nexterror();
-        }
-        fd = newfd(c);
-        if(fd < 0)
-            error(Enofd);
-        poperror();
-    }
-
-    return fd;
-}
-@
-
-\subsection{[[/fd/]]}
+stdin, stdout, and stderr. The [[\hlink{sysdup}]] system call
+(see Chapter~\ref{chap:files}) provides programmatic access to
+the same functionality.
 
 % devdup.c in Kernel_extra.nw
 
