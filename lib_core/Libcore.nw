@@ -4946,6 +4946,114 @@ for a rune, and [[utfutf]] finds a UTF-8 substring.
 %\section{Conversions}
 % see Mathematics section and Parsing subsections
 
+\section{Strings and UTF-8 principles}
+\label{sec:princ-strings}
+
+%claude:
+Before diving into the code, it helps to separate three
+concepts that get casually conflated in everyday
+conversation: the {\em abstract character}, the {\em
+code point}, and the {\em encoded byte sequence}. An
+abstract character is a user-perceived unit: the Latin
+letter ``A'', the Greek letter $\beta$, the euro sign, a
+Han ideograph. A code point is the Unicode Consortium's
+numeric {\sc id} for an abstract character---a
+non-negative integer up to [[0x10FFFF]], conventionally
+written [[U+03B2]] for the Greek beta. A code point is a
+pure number; it has no intrinsic width in memory. To
+actually {\em store} it you need an {\em encoding}: a
+rule that turns the number into some specific sequence
+of bytes. Different encodings give different byte
+sequences for the same code point, and picking one
+requires a set of trade-offs that the rest of this
+section is about.
+
+%claude:
+The obvious encodings fall into two camps.
+{\em Fixed-width} encodings pick a single size---8 bits
+({\sc ascii}, {\sc iso}-8859-1), 16 bits ({\sc ucs}-2,
+Windows ``Unicode'', Java [[char]]), or 32 bits
+({\sc ucs}-4, the [[wchar_t]] on most Unix systems)---and
+store every code point at that size. Indexing and random
+access are trivial and [[strlen]] is $O(1)$ (divide bytes
+by width). The catches are that 8 bits is too small for
+anything beyond Western European text, 16 bits is too
+small for the full Unicode range (Unicode outgrew the
+Basic Multilingual Plane in~2001, so {\sc ucs}-2 became
+technically invalid and Java, JavaScript, and the Windows
+{\sc api} quietly redefined their ``wide'' char as a
+UTF-16 {\em code unit} with {\em surrogate pairs} for
+code points above [[U+FFFF]]), and 32 bits wastes four
+bytes on every ASCII character. {\em Variable-width}
+encodings use one to four bytes depending on the code
+point, trading constant-time indexing for compactness.
+Shift-JIS, {\sc euc}-JP, Big5, and UTF-8 are all
+variable-width; the first three are region-specific, the
+last is universal. An orthogonal issue---{\em byte
+order}---turns every 16-bit and 32-bit encoding into a
+cross-machine headache, which is why they need a
+byte-order mark ({\sc bom}) or explicit
+[[UTF-16LE]]/[[UTF-16BE]] variants.
+
+%claude:
+UTF-8, the encoding this chapter is built around, was
+designed by Ken Thompson and Rob Pike on the back of a
+New Jersey diner placemat in September~1992 as a
+last-minute alternative to {\sc ibm}'s FSS-UTF proposal
+at an X/Open meeting; it was implemented in \plan's
+[[libc]] within days ([[chartorune]] and [[runetochar]]
+below are direct descendants) and is now the universal
+text encoding on every operating system except Microsoft
+Windows, which kept UTF-16 for historical compatibility.
+Four properties explain why it won. {\em ASCII-compatible}:
+every byte in the range [[0x00]]--[[0x7F]] is already a
+valid one-byte UTF-8 sequence, so every ASCII file is
+already a UTF-8 file and no embedded null bytes ever
+appear---C strings continue to work unchanged. {\em
+Self-synchronizing}: given any pointer into the middle of
+a UTF-8 byte stream, the start of the next rune is at
+most three bytes away (you walk forward past bytes whose
+top two bits are [[10]]), which is essential for
+[[grep]]/[[sed]]/regex and for error recovery after a
+truncated read. {\em Byte-order-independent and
+order-preserving}: the unit is a byte, so there is no
+big-endian/little-endian issue and no byte-order mark is
+needed, and sorting UTF-8 strings as byte strings gives
+the same answer as sorting by code point. {\em Variable
+width 1--4 bytes}: the common case (ASCII) costs exactly
+one byte, and the first byte of a multi-byte sequence
+encodes the total length via a prefix pattern so that
+decoders can read the length without scanning ahead.
+UTF-8 is today the {\sc w3c}'s mandatory encoding for
+HTML~5, the default for Python~3, Go, and Rust string
+types, and over 98\% of public web pages are served as
+UTF-8.
+
+%claude:
+\plan\ was the birthplace of UTF-8 and uses a
+deliberately plain three-level vocabulary that maps
+cleanly onto the hierarchy above. A [[char]] is a single
+byte, just as in standard C---but because UTF-8 code
+points can be longer than one byte, iterating a \plan\
+string ``character by character'' in the colloquial
+sense does {\em not} mean iterating by [[char]]. For that
+you use a [[Rune]], a 32-bit integer holding one Unicode
+code point. The conversion between the two is the job of
+[[chartorune]] (read the next UTF-8 sequence at a
+[[char*]] pointer, return the decoded [[Rune]] and the
+number of bytes consumed) and [[runetochar]] (encode one
+[[Rune]] into a [[char*]] buffer, return the number of
+bytes written). The rest of this chapter is organized
+along exactly that split: first the plain C-string
+functions ([[strlen]], [[strcmp]], [[strcpy]], \ldots)
+that treat a string as a null-terminated byte array
+without regard for UTF-8; then [[chartorune]] and
+[[runetochar]] themselves; then the [[runestr*]]
+functions, which are the rune-array mirror of the
+C-string functions; and finally the [[utf*]] functions
+that operate on UTF-8 byte strings directly without
+decoding to a [[Rune]] array first.
+
 \section{Plain C strings}
 
 % C strings. end of string marked with null character.
@@ -7594,18 +7702,6 @@ are in assembly because the ARM has no hardware divide
 instruction (see \book{Assembler}).
 
 %claude:
-The polynomial coefficients used throughout this chapter come
-from Hart et al.'s {\em Computer Approximations}~\cite{hart},
-a classic reference that tabulates thousands of {minimax}
-rational approximations for mathematical functions.
-A minimax approximation is a polynomial (or ratio of
-polynomials) whose coefficients are chosen to minimize the
-{\em maximum} error over a given range---giving the best
-worst-case accuracy for a given polynomial degree. This is
-why the coefficients in this chapter look like magic numbers:
-they were computed by optimization algorithms, not derived
-by hand.
-%
 For a broader treatment of numerical algorithms in C---including
 root finding, interpolation, integration, and random number
 generation---see Press et al.'s {\em Numerical
@@ -7676,6 +7772,113 @@ Most of these are standard C, but a few are \plan additions:
 integer-exponent variant, and [[nrand(n)]] returns a
 uniform random integer in $[0,n)$---more convenient than
 the \verb+rand() % n+ idiom which has modulo bias.
+
+\section{Floating-point principles}
+\label{sec:princ-math}
+
+%claude:
+Every line of code in this chapter assumes one particular
+answer to the question of how a real number is represented
+in a computer: the {\sc ieee}~754 standard for binary
+floating-point arithmetic, published in~1985 and revised
+in~2008 and~2019. Its central idea is to store a number
+in scientific notation in base two: a sign bit, an
+{\em exponent} field, and a {\em mantissa} (or {\em
+significand}) field, so that the value is
+$\pm\,\text{mantissa}\times 2^{\text{exponent}}$. A
+64-bit [[double]]---the format this chapter's functions
+operate on exclusively---uses 1~bit of sign, 11~bits of
+exponent, and 52~bits of mantissa, giving about
+15~decimal digits of precision. The exponent is stored
+{\em biased} (add~$1023$) so that bit-level comparison of
+two positive floats matches numeric comparison, and the
+mantissa's leading 1~bit is implicit ({\em normalized
+form}) so that one bit of precision is recovered for
+free.
+
+%claude:
+The standard devotes four of its exponent encodings to
+{\em special values} that do not represent ordinary
+numbers but are essential to a clean numerical system.
+{\em Signed zero} ($+0$ and $-0$) distinguishes
+``approached zero from above'' from ``approached zero
+from below,'' so that $1/(+0) = +\infty$ and
+$1/(-0) = -\infty$ give the right sign. {\em Signed
+infinity} is the result of operations that overflow the
+exponent range, letting the computation continue instead
+of trapping. {\em NaN} (``Not a Number'') is the result
+of operations that have no meaningful real answer
+($0/0$, $\sqrt{-1}$, $\infty - \infty$) and propagates
+through every subsequent operation---a kind of sticky
+error flag at the bit level---which is why \plan\
+provides the [[isNaN]] predicate to detect it and why
+ordinary comparisons like \verb+x == x+ can return
+false. {\em Subnormal} (or {\em denormal}) numbers live
+at the bottom of the exponent range and trade precision
+for range, preventing a sudden ``hole'' where $x \ne y$
+but $x - y$ underflows to zero---a property called
+{\em gradual underflow}. All four categories are why
+the [[NaN()]] and [[Inf()]] constructors exist in
+\plan's [[libc]] in the first place.
+
+%claude:
+The hard problem that occupies most of this chapter is
+computing {\em transcendental} functions---[[sin]],
+[[cos]], [[exp]], [[log]], [[sqrt]], [[pow]], and so
+on. None has a finite closed form in the basic arithmetic
+operations, so every implementation must {\em
+approximate}. Three steps appear in essentially every
+transcendental routine. First, {\em argument reduction}:
+use an identity to translate the input into a small
+interval where an approximation is accurate---$\sin x =
+\sin(x \bmod 2\pi)$, $\exp x = 2^{n} \cdot \exp(r)$ with
+$n = \lfloor x \log_2 e \rfloor$, and so on. Second,
+{\em polynomial} (or rational) approximation of the
+function on that small interval, with coefficients chosen
+offline to minimize error. Third, {\em reconstruction}:
+undo the reduction to recover the full-range answer.
+Each step introduces rounding error, and keeping the
+total error within one ``unit in the last place'' (ulp)
+of the true answer is the numerical-analyst job that
+determines the coefficients in step two. In extreme
+cases, correctly rounding a transcendental to the nearest
+[[double]] requires evaluating the function to hundreds
+of bits of precision---a problem known as the {\em
+table-maker's dilemma}---which is why truly
+``correctly-rounded'' libms like {\sc gnu}'s {\sc
+crlibm} and the more recent CORE-MATH project are much
+larger and slower than what ships with most C libraries.
+
+%claude:
+\plan's math library takes the traditional answer: for
+each transcendental, pick an argument reduction, then
+evaluate a {\em minimax rational approximation}---a
+ratio of two polynomials whose coefficients have been
+chosen by a Remez-style optimization to minimize the
+{\em worst-case} error over the reduced interval, rather
+than minimizing the average error the way a Taylor
+series would. The coefficients all come from Hart et
+al.'s 1968 book {\em Computer Approximations}, which
+tabulates thousands of such rational approximations and
+is why the polynomial coefficients in this chapter
+look like magic numbers---they were computed by
+optimization, not derived by hand. Each transcendental
+lives in its own short file ([[sin.c]], [[exp.c]],
+[[log.c]], \ldots), each file contains one argument
+reduction followed by one polynomial evaluation, and
+the whole library is a few hundred lines. The price
+\plan\ pays for this simplicity is accuracy at the edges
+of the input range: it aims for ``close enough for most
+uses,'' not the correctly-rounded-last-bit guarantees
+of {\sc crlibm} or CORE-MATH, and not the handcrafted
+table-lookup tricks of Sun's [[fdlibm]] (the ancestor of
+glibc's and {\sc musl}'s [[libm]]). The rest of this
+chapter works bottom-up: basic helpers ([[abs]],
+[[fabs]], [[floor]], [[ceil]]) first, then [[sqrt]],
+then the exponential family ([[exp]], [[log]],
+[[pow]]), then the trigonometric family ([[sin]],
+[[cos]], [[tan]] and their inverses), and finally
+number parsing and random numbers.
 
 \section{Basics}
 
@@ -9946,6 +10149,95 @@ int	deflate(void *wr, int (*w)(void*, void*, int), void *rr, int (*r)(void*, voi
 <<signature [[inflate]]>>=
 int	inflate(void *wr, int (*w)(void*, void*, int), void *getr, int (*get)(void*));
 @
+
+\section{Compression principles}
+\label{sec:princ-compression}
+
+%claude:
+Compression is the art of representing the same
+information in fewer bits. It splits into two worlds.
+{\em Lossless} compression reconstructs the original
+bytes {\em exactly} and is the only choice for text,
+source code, executables, filesystem archives, network
+protocols, and most scientific data---anything where a
+changed bit is a bug. {\em Lossy} compression (JPEG for
+photos, MP3 for audio, H.264 for video) throws away
+information the human eye or ear is unlikely to notice,
+achieving ratios that would be impossible under a
+round-trip guarantee. The rest of this section and all
+of [[libflate]] are about the lossless world.
+
+%claude:
+Lossless compressors are all built from just two ideas,
+combined in different proportions. The first is
+{\em dictionary coding}, introduced by Jacob Ziv and
+Abraham Lempel in two landmark papers. {\sc lz}77
+(1977) scans the input with a sliding window and
+replaces each repeated substring with a reference to
+its earlier occurrence (``go back 83 bytes, copy the
+next 9''); {\sc lz}78 (1978) instead keeps a growing
+explicit dictionary of phrases seen so far and emits
+dictionary indexes. Most modern compressors descend
+from one or the other: {\sc lzss} and {\sc lzma}
+(used in 7-Zip and [[xz]]) from {\sc lz}77; {\sc lzw}
+(Welch~1984, used in Unix [[compress]] and {\sc gif})
+from {\sc lz}78. The second idea is {\em entropy
+coding}: given a probability distribution over
+symbols, assign shorter codes to the more frequent ones
+and longer codes to the rarer ones. David Huffman's
+1952 algorithm builds the optimal {\em prefix} code
+for a known distribution; arithmetic coding, range
+coding, and modern asymmetric numeral systems go
+beyond integer bit counts to squeeze closer to the
+entropy limit. Real compressors chain the two:
+dictionary first to eliminate repetition, then entropy
+coding to pack whatever is left.
+
+%claude:
+{\sc deflate}, the algorithm this chapter implements,
+is precisely {\sc lz}77 followed by Huffman coding.
+Phil Katz designed it in~1989 for the {\sc pkzip}
+archiver, and it was standardized as {\sc rfc}~1951 in
+1996. A {\sc deflate} stream is a sequence of blocks;
+each block names a pair of Huffman trees---one for
+literal bytes and match lengths, one for match
+distances---and then a sequence of Huffman-coded
+symbols. Match references can reach back up to 32\,KB
+(the sliding window) and cover 3--258 bytes each. Katz
+deliberately designed {\sc deflate} to sidestep the
+Unisys patent on {\sc lzw}---the ``{\sc gif} patent''
+that was causing legal trouble for every free-software
+project in the early~1990s---and {\sc deflate}
+replaced {\sc lzw} almost overnight as the universal
+workhorse. It is what [[gzip]]/[[gunzip]] use
+({\sc rfc}~1952), what [[zlib]] wraps ({\sc rfc}~1950),
+what the {\sc png} image format uses for pixels, what
+the {\sc zip} file format uses for individual entries,
+and what HTTP's [[Content-Encoding: gzip]] layer uses
+on every compressed web page.
+
+%claude:
+{\sc deflate} is no longer state of the art. Modern
+replacements include {\sc zstd} (Facebook, 2015: a
+similar ratio to {\sc deflate} at matching compression
+levels but much faster to decode, and drastically
+better at high levels---now the default in the Linux
+kernel, Btrfs, and most major package managers);
+[[brotli]] (Google, 2013: beats {\sc deflate} for
+short text and is the current {\sc http}-over-Chrome/
+Firefox/Safari successor); {\sc lz}4 and Snappy
+(extreme-speed dictionary-only schemes used inside
+Cassandra, Kafka, LevelDB, and filesystem fast paths);
+and {\sc xz}/{\sc lzma} (highest ratio, slow
+compression, used for Linux package archives and
+scientific data). [[libflate]] is not trying to beat
+any of them on ratio or speed: it is, like the rest of
+this book's code, small enough to read end to end. The
+rest of this chapter works through its two halves---the
+[[deflate]] side that scans for repetitions and builds
+the Huffman trees, and the [[inflate]] side that
+rehydrates them---plus the zlib and gzip framing
+layers that sit on top.
 
 \section{Data structures and interface}
 
