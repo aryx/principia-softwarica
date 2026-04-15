@@ -389,6 +389,8 @@ organized.
 % list of utilities specified in POSIX 1002.3
 % see MISC/BIG/ape_cmd/README
 
+\subsection{The \unix philosophy}
+
 %claude:
 The \unix philosophy, as articulated by Doug McIlroy, is:
 {\em write programs that do one thing and do it well;
@@ -404,16 +406,90 @@ $ ls /sys/src | grep '\.c$' | wc -l
 \end{verbatim}
 %
 counts all C source files in a directory, using three programs
-that know nothing about each other.
+that know nothing about each other. The next three subsections
+unpack the three halves of McIlroy's motto in turn.
+
+\subsection{Text streams as a universal interface}
 
 %claude:
-Most utilities follow the same structure: parse command-line
-flags, then for each input file (or standard input if none
-is given), read the input, process it, and write the result
-to standard output. Errors go to standard error. This
-uniformity is what makes pipes and scripts work---each
-program can be a stage in a pipeline without any special
-adaptation.
+The glue that makes utility composition possible is the choice of
+a {\em universal interchange format}. \unix picked plain
+line-oriented text: {\sc ascii} (and later UTF-8) bytes separated
+by newlines, with no schema and no framing beyond what the data
+itself suggests. This decision is famously illustrated by Jon
+Bentley's {\em Programming Pearls} column from~1986, where he
+asked Donald Knuth and Doug McIlroy each to write a program that
+prints the $N$ most-common words in a text file. Knuth's answer
+was a ten-page literate Pascal ({\sc web}) program with a
+hand-built trie and its own {\em ad hoc} I/O routines. McIlroy's
+reply was six lines of pipeline:
+\begin{verbatim}
+  tr -cs A-Za-z '\n' | tr A-Z a-z | sort | uniq -c | sort -rn | sed ${N}q
+\end{verbatim}
+%
+Every stage is one of the utilities in this book ([[tr]], [[sort]],
+[[uniq]], [[sed]]), and the whole composition runs in constant
+memory, streams through the data, and is correct by inspection.
+The point is not that text streams are always the right
+representation: sometimes you need [[xd]] to dump binary bytes,
+or a purpose-built tool like [[jq]] for {\sc json}. The point is
+that for the common case of tabular, line-oriented data, text is
+the lingua franca that lets programs written decades apart by
+different authors compose effortlessly---which is precisely what
+Windows PowerShell (which pipes typed objects) and nushell (which
+pipes typed tables) give up in exchange for stronger typing.
+
+\subsection{Pipes and composition}
+
+%claude:
+The mechanism that connects those text streams is the {\em pipe}:
+a kernel-buffered byte channel between two processes where one's
+standard output feeds the other's standard input. The idea was
+suggested by Doug McIlroy in a 1964 memo and sat unimplemented
+for almost a decade before Ken Thompson finally added the [[pipe]]
+system call to \unix~V3 in~1973, together with the shell's
+[['|']] syntax. The kernel buffer (a few kilobytes on historical
+\unix, 64\,{\sc kb} on modern Linux) is what makes the scheme
+work. If the downstream reader is slower than the upstream
+writer, the writer blocks when the buffer fills, giving you
+{\em back-pressure} for free; if the reader is faster, it blocks
+on an empty buffer until more data arrives. And when the reader
+closes its end, the writer's next [[write]] receives
+[[SIGPIPE]]---by default terminating the process---which is why
+a pipeline shuts down promptly once a stage like [[sed 10q]] or
+[[head]] has decided it has seen enough.
+
+%claude:
+The consequences of this one mechanism are far-reaching. A
+pipeline {\em streams} rather than buffers the whole dataset in
+memory, so it can process files larger than {\sc ram}. Each
+stage runs in its own process, so a pipeline on a multi-core
+machine is implicitly parallel at no cost to the programmer.
+And composition with [['|']] is mathematically just function
+composition with streams in place of values: [[f | g | h]]
+applies [[h]] first, then [[g]], then [[f]]. This deeply simple
+primitive is also why modern distributed-data frameworks
+(Apache Beam, Kafka Streams, Flink, Spark Structured Streaming)
+are sometimes described as ``\unix pipes scaled out to
+clusters''---the operator-graph model they all share is, at
+bottom, the same idea Thompson shipped in~1973.
+
+\subsection{The common utility structure}
+
+%claude:
+Most utilities in this book follow the same skeleton: parse
+command-line flags, then for each input file (or standard input
+if none is given), read the input, process it, and write the
+result to standard output. Errors go to standard error. This
+uniformity is what makes pipes and scripts work---each program
+can be a stage in a pipeline without any special adaptation---and
+it is a consequence, not a cause, of the three ideas above:
+because the universal interface is text (previous subsection),
+because composition happens through pipes (subsection before),
+and because each program does one thing
+(the philosophy subsection), the simplest possible program
+shape---read input, emit output, report errors on {\sc stderr},
+exit with a status code---turns out to be all you need.
 
 \section{Command-line interfaces}
 
