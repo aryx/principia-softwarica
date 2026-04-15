@@ -1252,6 +1252,66 @@ it would not be difficult to extend [[rio]] to include a compositor
 to support those effects.
 \l just change /dev/winname to off-screen image
 
+\subsection{Stacking, tiling, and compositing}
+\label{sec:princ-layout}
+
+%claude:
+In a {stacking} system, windows live on an abstract Z-axis
+and can overlap. The one with the highest Z value sits on
+top and its pixels hide whatever is underneath. Classic X11
+without a compositor, old Microsoft Windows, [[rio]], and
+every ``desktop'' system most users know work this way. The
+benefit is that the user can put twenty windows on screen
+even if only ten fit; hidden windows sit patiently under the
+visible ones and re-emerge on demand. The cost is that every
+motion of a window forces the newly exposed region to be
+repainted by whichever program owned it---the origin of
+X11's [[Expose]] events.
+
+%claude:
+A {tiling} system forbids overlap. Every window gets a
+non-overlapping rectangular region, and the manager
+redivides the screen whenever a window is created,
+destroyed, or resized. \plan's own [[8½]]---the
+predecessor to [[rio]]---was a tiler. Today the idea lives
+on in keyboard-driven managers like [[i3]], [[dwm]],
+[[xmonad]], [[awesome]], and [[Sway]]. The benefit is that
+every window is always fully visible, so the user never
+forgets where things are; the cost is that a window cannot
+be bigger than its slice, so workflows that rely on
+swapping many windows in and out quickly feel cramped.
+Pike moved \plan from [[8½]] to [[rio]] precisely because
+users wanted more windows than fit on screen at once, which
+pure tiling cannot give without scrolling or workspaces.
+
+%claude:
+A {compositing} system is the modern answer: every window
+draws into its own off-screen buffer, and a dedicated
+{compositor} combines those buffers into the final
+framebuffer with effects like alpha-blending, drop shadows,
+scaling, or 3D transforms. macOS Quartz (2000), Windows DWM
+(Vista, 2007), [[compton]]/[[picom]], and every Wayland
+compositor (Weston, Sway, Mutter, KWin) take this route.
+Compositing subsumes stacking and also eliminates
+[[Expose]]-style repaint storms: a hidden window's pixels
+stay in its buffer, so moving another window in front of it
+costs only a composite pass, not a repaint by the owning
+program. The cost is GPU memory for all those buffers plus
+a rendering pipeline running at vsync, which is why
+compositing only became practical once GPUs became
+universal.
+
+%claude:
+[[rio]] is a pure stacker. It has no compositor and no
+tiling mode; windows overlap freely, and the only data
+structure the manager needs is a [[topped]] counter per
+window---the most recently raised window wins at any pixel
+where multiple overlap. Section~\ref{sec:compositor}
+already noted that nothing in [[rio]]'s architecture would
+prevent a compositor being added later; for now, every
+window draws directly onto the display server, and
+[[wpointto()]] picks the owner of a given pixel by scanning
+the [[windows]] array for the highest [[topped]] value.
 
 \subsection{Window manager}
 \label{sec:window-manager}
@@ -1328,6 +1388,80 @@ no title bar, no icon, just a thin blue window border
 % can launch new processes
 % could be separate program than wm, e.g., the Dock under macOS.
 
+\subsection{Input focus}
+\label{sec:princ-focus}
+
+%claude:
+The previous subsection introduced the window manager's
+role as the dispatcher of mouse and keyboard input. Mouse
+input has an obvious target: the window under the pointer.
+Keyboard input does not, because the keyboard has no
+pointer. The windowing system must therefore maintain an
+explicit notion of {input focus}: a designated window that
+receives keystrokes until something changes it. How that
+``something'' is chosen is one of the oldest and most
+opinionated design questions in the field.
+
+%claude:
+Windowing systems have tried roughly four focus policies:
+
+\begin{itemize}
+
+\item {Click-to-focus.} A window only gains focus when
+you click it, and keeps it until you click another
+window. This is the default on Microsoft Windows, macOS,
+and most modern X11 and Wayland desktops. The argument in
+favour is that focus changes are deliberate: you never
+lose a keystroke to the wrong window just because the
+mouse drifted over it.
+
+\item {Focus-follows-mouse (sloppy focus).} The window
+under the pointer receives keyboard input, and focus
+changes silently every time the pointer crosses a border.
+This was common on classic X11 and is still used by many
+tiling window managers (i3, dwm, xmonad). The argument is
+speed: moving to a terminal and typing needs no click.
+The cost is that you can type into the wrong window if
+the pointer happens to sit somewhere you forgot, and
+focusing a window without moving the pointer (e.g.\ via a
+keyboard shortcut) becomes awkward.
+
+\item {Focus-on-pointer (strict pointer focus).} Like
+sloppy focus but with no memory: the instant the pointer
+leaves the window, focus is gone, even if you have not
+entered another. Typing into empty desktop does nothing.
+This was the original X11 behaviour and is rarely used
+today because it is hard to keep the pointer inside the
+window you wanted.
+
+\item {Compositor-controlled focus with activation tokens.}
+Wayland adds a layer on top of click-to-focus: a client
+cannot ``raise and focus itself'' the way an X11 client
+could; it has to present an {activation token} the
+compositor issued when the user performed some deliberate
+action (clicking a link, opening a file). This is why on
+Wayland a background program calling ``show my window''
+from a script does not steal focus the way its X11
+equivalent did. The goal is {focus-stealing prevention}:
+the user, not the program, decides where keystrokes go.
+
+\end{itemize}
+
+%claude:
+[[rio]] sits on the click-to-focus side. A left-click on
+an unfocused window both raises it to the top of the stack
+and updates the global [[input]] pointer---the window that
+receives keystrokes from the keyboard dispatcher. The
+focused window keeps the focus until another click changes
+it or the window is deleted. There is no persistent focus
+policy menu, no sloppy-focus option, no activation tokens,
+no focus-stealing prevention---just one global pointer and
+one rule for updating it. Chapter~\ref{chap:wm}'s
+``Window focus'' section shows the actual code path:
+[[wpointto()]] finds the window under the click, [[wtop()]]
+raises it via the graphics library's [[topwindow()]], and
+[[wcurrent()]] assigns the new [[input]] and repaints the
+border colors so the user can see which window is focused.
 
 \subsection{Terminal emulator}
 \label{sec:terminal-emulator}
