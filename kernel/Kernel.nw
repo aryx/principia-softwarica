@@ -906,30 +906,6 @@ between ordinary kernel code and interrupt handlers.
 lock). See Chapter~\ref{chap:concurrency} for the
 implementations.
 
-%claude:
-A historical aside. Kernels were arguably the first
-widely-deployed {\em concurrent} programs: they had to
-juggle multiple processes sharing a single CPU long
-before multi-threaded user applications were common.
-Most of the vocabulary and algorithms that user-space
-programmers now take for granted---semaphores (Dijkstra,
-1965, for the {\sc the} operating system), monitors
-(Hoare, 1974, explicitly framed as an OS-structuring
-primitive), atomic test-and-set, wait-free data
-structures---were invented {for} kernel programming and
-only later adopted by application developers. The same
-story repeated with SMP: early commercial multiprocessors
-(VAX/VMS in~1980, Sequent in~1983) forced kernel authors
-to confront multi-core correctness {decades} before
-ordinary application programmers had to worry about it,
-which only happened around~2005 when Intel hit the
-frequency wall and multi-core CPUs became standard in
-desktops. This is why this book opens with a concurrency
-chapter before you see any ``real'' kernel code: getting
-it right is prerequisite for reading everything that
-follows, and the kernel's solutions still inform most
-of today's user-space patterns.
-
 \subsection{User stack and kernel stack}
 \label{sec:princ-stacks}
 
@@ -1078,28 +1054,135 @@ shown later in this chapter. Process creation,
 Chapter~\ref{chap:processes} and
 Chapter~\ref{chap:scheduling}.
 
+\subsection{Files, descriptors, and the file-system interface}
+\label{sec:princ-files}
+
 %claude:
-A closing analogy for readers coming from the
-application-programming world. A kernel can be read as
-an unusual concurrent program whose ``threads'' are
-the per-process kernel stacks described above: one per
-process, each with its own call stack and saved state,
-all sharing the same heap (the kernel address space
-with its globals and dynamically-allocated data
-structures---which is why the kernel needs locks in
-the first place). What is unusual, compared to a Java
-server or a Go program, is that {most of these threads
-are dormant almost all of the time}: either the
-process is running in user mode and its kernel-side
-thread has nothing to do, or it is blocked in a syscall
-with its kernel stack frozen on a wait queue. A kernel
-``thread'' only comes alive when an event on its
-process's behalf (a syscall, a signal, an I/O
-completion) wakes it up---which is also why the kernel's
-[[sleep]]/[[wakeup]] primitives look a bit different
-from user-space [[pthread_cond_wait]]: the underlying
-idea is the same, just adapted to this wake-on-event
-shape.
+A process's only window onto persistent storage, devices,
+networks, and inter-process communication is a small set
+of calls on {\em file descriptors}---small integers
+returned by [[open]] that the kernel uses as indices into
+a per-process table of opaque handles. Each handle
+ultimately points at a kernel-internal object (Linux's
+[[struct file]], BSD's {\em vnode}, Windows' [[HANDLE]])
+that carries enough state to route the next
+[[read]]/[[write]]/[[close]] to the right implementation.
+The calls themselves arrive via the usual syscall trap
+(Section~\ref{sec:princ-interrupts}); the small-integer
+form of the descriptor is what makes [[fork]], [[dup]],
+and [[exec]] cheap, because nothing but the integer gets
+copied.
+
+%claude:
+The whole point of the descriptor is {\em uniformity}.
+The same handful of calls that read a regular file also
+read a pipe, a TTY, a network socket, a tape drive, or
+a kernel-internal data structure exposed as a pseudo-file
+(Linux [[/proc]] and [[/sys]], BSD [[sysctl]] proxied
+through [[/dev]]). The kernel achieves this by routing
+every call through an {\em operations table}---a struct
+of function pointers, one per supported operation, that
+every file-system or device type fills in. Touching a
+regular file walks to the ext4 ops table; touching a
+socket walks to the TCP ops table; the user-side code
+is identical. This is the C-style object dispatch the
+book will keep meeting:
+\begin{verbatim}
+   user       kernel
+   code
+              per-process        Chan            Dev ops table
+              fd table         +--------+       +-------------+
+   read(3,    +------+         | type   |------>| open        |
+     buf,     | fd 0 |         | qid    |       | read    ----+--> devether.c:
+     n)       | fd 1 |         | flag   |       | write       |    etherread(...)
+              | fd 2 |         | offset |       | stat        |
+              | fd 3 |-------->| ops   -+-----/ | close       |
+              | ...  |         +--------+       +-------------+
+              +------+
+\end{verbatim}
+
+%claude:
+Where \unix\ stops at ``everything that can be read or
+written is a file'', \plan\ pushes further: {\em every
+service is a file server}. The process table, the window
+system, the network stack, the debugger interface, and
+every in-kernel device appear as directories and files
+in a namespace, served either by in-kernel code or by an
+out-of-kernel user process speaking the {\em 9P} protocol
+over a pipe. There is no [[kill]] syscall---you write
+the string ``kill'' into [[/proc/pid/note]]; there is no
+[[ps]] or [[netstat]]---you [[read]] [[/proc]] or
+[[/net]]. The consequence is that the kernel's total
+syscall surface shrinks to around~30 calls (against
+Linux's~400-odd) while the set of things programs can
+do {grows}, because adding a new service means writing
+a file server, not extending the kernel. It also makes
+the system trivially distributable: since every service
+already speaks 9P, reaching a {remote} service is the
+same code path as reaching a local one (see \book{Network}).
+
+%claude:
+\plan's concrete objects for this story are [[Chan]]
+(the in-kernel handle behind a user file descriptor),
+[[Dev]] (its operations table), [[Qid]] (the
+type-plus-instance identifier, matching \unix's inode
+number but carrying a version tag that lets clients
+detect stale caches), and [[Fgrp]] (the per-process
+descriptor table mapping small integers to [[Chan]]
+pointers). [[Chan]], [[Qid]], [[Fgrp]], and the [[Dev]]
+structure are introduced in Chapter~\ref{chap:core-ds};
+the device chapters that follow are essentially one
+[[Dev]] implementation each, and 9P itself along with
+the [[devmnt]] driver that turns a remote file server
+into a local [[Chan]] are covered in
+Chapter~\ref{chap:special-fileservers}.
+
+\subsection{The kernel as a concurrent program}
+\label{sec:princ-kernel-as-concurrent}
+
+%claude:
+Kernels were arguably the first widely-deployed
+{\em concurrent} programs: they had to juggle multiple
+processes sharing a single CPU long before multi-threaded
+user applications were common. Most of the vocabulary
+and algorithms that user-space programmers now take for
+granted---semaphores (Dijkstra, 1965, for the {\sc the}
+operating system), monitors (Hoare, 1974, explicitly
+framed as an OS-structuring primitive), atomic
+test-and-set, wait-free data structures---were invented
+{for} kernel programming and only later adopted by
+application developers. The same story repeated with
+SMP: early commercial multiprocessors (VAX/VMS in~1980,
+Sequent in~1983) forced kernel authors to confront
+multi-core correctness {decades} before ordinary
+application programmers had to worry about it, which
+only happened around~2005 when Intel hit the frequency
+wall and multi-core CPUs became standard in desktops.
+The kernel's solutions still inform most of today's
+user-space patterns.
+
+%claude:
+That history is more than trivia: it is also the right
+{reading lens} for the chapters that follow. A kernel
+can be read as an unusual concurrent program whose
+``threads'' are the per-process kernel stacks from
+Section~\ref{sec:princ-stacks}: one per process, each
+with its own call stack and saved state, all sharing
+the same heap (the kernel address space with its
+globals and dynamically-allocated data structures---which
+is why the kernel needs locks in the first place). What
+is unusual, compared to a Java server or a Go program,
+is that {most of these threads are dormant almost all
+of the time}: either the process is running in user
+mode and its kernel-side thread has nothing to do, or
+it is blocked in a syscall with its kernel stack frozen
+on a wait queue. A kernel ``thread'' only comes alive
+when an event on its process's behalf (a syscall, a
+signal, an I/O completion) wakes it up---which is also
+why the kernel's [[sleep]]/[[wakeup]] primitives look
+a bit different from user-space [[pthread_cond_wait]]:
+the underlying idea is the same, just adapted to this
+wake-on-event shape.
 
 
 
