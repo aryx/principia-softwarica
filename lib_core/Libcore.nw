@@ -3430,9 +3430,7 @@ memchr(void *ap, int c, ulong n)
 This chapter covers the memory allocator: from the [[brk()]]
 system call that extends the heap, through the pool-based
 allocator that manages free blocks, to the [[malloc]]/[[free]]
-interface that programs use. The allocator organizes memory
-into arenas obtained from [[sbrk]], with free blocks managed
-in a binary tree for efficient best-fit allocation.
+interface that programs use.
 
 <<signatures memory management functions>>=
 extern  void*   malloc(ulong);
@@ -3449,6 +3447,114 @@ adds [[mallocz]] (allocate and optionally zero---the [[bool]]
 parameter controls zeroing) and [[msize]] (return the usable
 size of an allocated block, useful when the allocator rounds
 up).
+
+\section{Memory allocator principles}
+\label{sec:princ-malloc}
+
+%claude:
+An allocator's job sounds simple: give the caller
+$N$~contiguous bytes now, take them back on a later
+[[free]] call, and do both fast. The hard parts hide
+in three places. First, {\em fragmentation}: a long
+run of allocations and frees leaves the heap dotted
+with holes of wrong sizes. {\em External fragmentation}
+is having enough {\em total} free memory but no
+contiguous run big enough to satisfy a request;
+{\em internal fragmentation} is handing out a 40-byte
+block for a 33-byte request because 40 is the nearest
+size the allocator tracks. Every real allocator trades
+some of one for some of the other. Second, {\em speed}:
+[[malloc]] and [[free]] sit on the hottest path of
+every C program, so even a few nanoseconds per call
+show up in the profile. Third, {\em concurrency}:
+modern allocators are shared by many threads and must
+let several of them allocate simultaneously without
+tripping over each other.
+
+%claude:
+Behind the huge literature on allocators, every design
+picks a point on four essentially orthogonal axes.
+{\em Where are the free blocks kept?} A sorted free
+list (simplest), a tree keyed by size (faster lookup),
+a bitmap, or an array of per-size ``bucket'' free
+lists (fastest for common sizes). {\em Which free
+block do you pick?} {\em First-fit} scans the list and
+takes the first block large enough (fast, tends to
+fragment near the head); {\em best-fit} takes the
+smallest block that still fits (tighter packing, slower
+search); {\em next-fit} remembers where the last
+allocation landed and starts from there; the {\em
+buddy} scheme rounds up to a power of two and splits.
+{\em When do you coalesce adjacent free blocks?} On
+every [[free]] (simple but slower), or lazily from a
+background scan. {\em Where does the metadata live?}
+{\em In-band headers} put a size-plus-free-flag word
+immediately before each block---which makes coalescing
+$O(1)$ and is the Knuth {\em boundary-tag} trick
+from~1973; {\em out-of-band metadata} keeps a separate
+bookkeeping table so user blocks are exactly their
+requested size, at the cost of an extra lookup on every
+call.
+
+%claude:
+Most real allocators fall into one of three families.
+{\em Boundary-tag free-list} allocators---Knuth's
+original design---put a header before each block
+holding its size and a free-or-used bit, chain the free
+blocks together, coalesce neighbors on [[free]] by
+walking backward and forward through the headers, and
+pick a free block by first-fit, best-fit, or a tree
+lookup. K\&R's 50-line allocator, Doug Lea's
+[[dlmalloc]], glibc's [[ptmalloc2]] ([[dlmalloc]] plus
+per-arena locks), and \plan's [[Pool]] all belong
+here. {\em Buddy allocators}, invented by Kenneth
+Knowlton in~1965, round every request up to a power of
+two and split the heap recursively in halves until the
+smallest-enough block is reached; freed blocks are
+merged with their ``buddy'' if that buddy is also
+free. This makes split and merge $O(\log N)$ but
+wastes up to half the memory to internal fragmentation,
+which is why it is used mainly for the Linux kernel's
+{\em page} allocator, not for bytes. {\em Slab} or
+{\em size-class} allocators, popularized by Jeff
+Bonwick's 1994 {\sc usenix} paper on SunOS, pre-compute
+a set of size classes (8, 16, 24, 32, \ldots, 4096
+bytes) and maintain a separate free list per class.
+Allocation and free are $O(1)$ because no search is
+involved, and no coalescing is needed because all
+blocks on a list have the same size. This is the
+design of the Linux kernel's [[slab]]/[[slub]]/[[slob]]
+caches, FreeBSD's {\sc uma} zones, Google's
+[[tcmalloc]], Facebook's [[jemalloc]], Microsoft's
+[[mimalloc]], and Go's runtime allocator. All three of
+them typically add a {\em per-thread cache} on top---a
+small private freelist per thread that absorbs the
+common case without taking any global lock---which is
+the main reason modern allocators scale on
+many-core machines.
+
+%claude:
+\plan's allocator, called [[Pool]], sits in the
+boundary-tag free-list family: each block has a header
+holding its size and a free flag, adjacent headers let
+[[free]] coalesce neighbors in $O(1)$, and the free
+blocks are indexed in a tree keyed by size so that
+[[malloc]] can find a best-fit block in $O(\log N)$.
+What makes [[Pool]] unusual is not its data structure
+but its code sharing: the same [[Pool]] implementation
+runs in user-space libc {\em and} inside the \plan\
+kernel, with different backing-store providers
+([[sbrk]] in user space, [[xalloc]] in the kernel). It
+has no per-thread cache and no lock-free fast path---[[Pool]]
+protects itself with a single lock---so on
+highly-parallel workloads it is slower than
+[[jemalloc]] or [[tcmalloc]]. In exchange it is small
+enough to read end to end, which is exactly what the
+rest of this chapter does: starting with [[brk]] (the
+system call that asks the kernel for more heap),
+building [[Pool]] on top of that, and finally wiring
+[[malloc]]/[[free]]/[[realloc]]/[[mallocz]] onto the
+[[Pool]] interface.
 
 %last:
 % - https://silent-tower.net/projects/visual-overview-malloc
@@ -3758,10 +3864,10 @@ would require a linear walk from the start of the arena, making
 [[sizeof(Btail)]] from the current header to land on the
 previous block's [[Btail]], and [[T2HDR]] then jumps back by
 [[size]] to reach its [[Bhdr]]. The whole operation is O(1).
-This is the classic {boundary tag} trick from Knuth's
-\emph{The Art of Computer Programming} volume~1, and it is the
-same trick that [[dlmalloc]], [[jemalloc]], and most modern
-general-purpose allocators still use.
+This is the concrete mechanism behind the Knuth boundary-tag
+trick introduced in Section~\ref{sec:princ-malloc}---[[Bhdr]]
+plus [[Btail]] is what lets [[Pool]] find the left neighbor
+without walking the arena.
 
 %claude:
 The [[Free]] struct uses the \plan anonymous-field idiom
@@ -6457,14 +6563,106 @@ are byte strings, but character classes and [[.]] operate
 on runes, not bytes. Rune-string variants ([<rregexec()>],
 [<rregsub()>]) are also provided.
 
+\section{Regular expression principles}
+\label{sec:princ-regexp}
+
 %claude:
-The implementation uses Thompson's NFA simulation algorithm,
-which guarantees linear-time matching regardless of the
-pattern. This is in contrast to backtracking engines (as
-in Perl or Python) that can take exponential time on
-pathological inputs like [[a?^na^n]] matched against
-[[a^n]]. See Russ Cox's well-known articles on regular
-expression matching for a thorough comparison.
+Before diving into [[libregexp]]'s data structures, it
+helps to step back. A regex engine is a two-phase tool:
+a {\em compiler} turns a pattern string (the tiny
+language of alternation, repetition, character classes,
+and grouping) into some internal form, and a {\em
+matcher} runs that internal form against input strings.
+The API usually hides both phases behind two or three
+function calls, so it is easy to assume the implementation
+question is uninteresting. It is not. Different engines
+pick radically different internal forms, and the choice
+determines whether a match against a sufficiently nasty
+pattern takes microseconds or days. The textbook example
+is \verb+(a?){30}a{30}+ matched against thirty [[a]]'s:
+work that is almost free in theory, yet hangs some
+popular engines for minutes.
+
+%claude:
+Three families of regex engines dominate in practice.
+{\em NFA simulation}, introduced by Ken Thompson in~1968
+for the {\sc ctss} editor [[qed]] and soon reused in
+[[ed]] and [[grep]], compiles the pattern to a
+nondeterministic finite automaton and at match time
+tracks the {\em set} of all states the automaton could
+currently be in. It runs in linear time and linear
+memory, and it is the algorithm behind \plan's
+[[libregexp]], Go's [[regexp]] package, the {\sc re2}
+library, and Rust's [[regex]] crate. {\em DFA
+compilation} converts the NFA to a deterministic
+automaton up front by powerset construction, making
+matching one table lookup per input byte---the fastest
+inner loop around---at the risk of exponential state
+blow-up, so real implementations fall back to NFA
+simulation on tricky patterns or build the DFA lazily
+on first use. This is the approach of classic [[lex]]
+and [[flex]], of [[fgrep]] and Aho-Corasick multi-string
+matchers, and (with lazy construction) of {\sc re2}.
+{\em Backtracking interpretation} compiles the pattern
+to a syntax tree and matches by recursive trial and
+error, saving a stack frame at every alternation so the
+matcher can back up and try the other branch. It is
+easy to implement and supports features the other two
+approaches cannot---back-references, look-behind,
+recursive patterns---but it is exponential in the worst
+case, and the pattern \verb+^(a+)+$+ matched against
+\verb+aaaaaaaaaaaaaaaaaX+ is the textbook disaster case
+that underlies almost every ``ReDoS'' regex
+denial-of-service {\sc cve}. Perl, {\sc pcre}, Python's
+[[re]], JavaScript's [[RegExp]], Ruby, and Java's
+[[java.util.regex]] all backtrack.
+
+%claude:
+The key insight behind the NFA approach, due to Thompson,
+is that at any point during matching you do not need to
+guess which branch of an alternation to take---you can
+simulate all branches in parallel by tracking the
+{\em full set} of currently-active NFA states. At each
+input character you advance every active state through
+its transition function, producing a new set. The set
+is bounded by the number of states in the NFA (linear in
+the pattern length), and you advance it exactly once per
+input character, so the total work is bounded by
+{pattern-length} $\times$ {input-length}. The approach
+is equivalent to building a DFA on the fly, with the
+subset of states reachable from the current position
+computed on demand rather than memoized---which is why
+it avoids both the exponential matching time of
+backtracking and the exponential space blow-up of
+precomputed DFAs. Russ Cox's series of articles at
+\url{https://swtch.com/~rsc/regexp/} is the standard
+modern exposition and should be required reading for
+anyone touching regex performance.
+
+%claude:
+\plan's [[libregexp]] is a specific variant of Thompson's
+idea known as the {\em Pike VM}, named after Rob Pike who
+first encoded it this way in~1987. Instead of representing
+the NFA as a graph of state pointers, the compiler emits
+a small {\em bytecode program} whose instructions are
+roughly [[RUNE]] (match one rune and advance),
+[[OR]] (nondeterministic branch to two successors),
+[[CCLASS]]/[[NCCLASS]] (character class),
+[[LBRA]]/[[RBRA]] (record the start or end of a submatch),
+[[BOL]]/[[EOL]] (anchors), and [[END]]. The matcher is
+then a tiny virtual machine that tracks the set of
+currently-active ``program counters''---confusingly
+called {\em threads} in the Pike VM literature, with no
+relation to operating-system threads---and advances them
+all on each input character until one reaches [[END]].
+This is why the [[Reprog]] struct below calls its
+[[firstinst]] array ``the [[.text]] segment'' and its
+[[class]] array ``the [[.data]] segment'': a compiled
+regex really is a little program. The rest of this
+chapter is the compiler for that program ([[regcomp]]),
+the interpreter that runs it ([[regexec]]), and the
+substituter that layers text rewriting on top
+([[regsub]]).
 
 %claude:
 A typical use looks like this:
@@ -6490,14 +6688,16 @@ extern void regsub(char*, char*, int, Resub*, int);
 \section{Data structures: [[Reprog]], [[Reinst]], [[Reclass]], [[Resub]]}
 
 %claude:
-The compiled form of a regular expression is a [<Reprog>]---a
-small virtual machine. The naming follows the metaphor:
-[[startinst]] is the program counter, [[firstinst]] is the
-``.text'' segment (the instruction array), and [[class]] is
-the ``.data'' segment (character class tables). The [[firstinst]]
-array is declared with only 5 entries, but [<regcomp()>]
-[[malloc]]s a [<Reprog>] large enough for the actual program---the
-array extends past the end of the struct.
+Mechanically, a [[Reprog]] is three fields: [[startinst]],
+a pointer to the instruction where matching begins (the
+Pike VM's initial program counter); [[class]], the array
+of character-class tables; and [[firstinst]], the
+instruction array itself. [[firstinst]] is declared with
+only five entries, but [<regcomp()>] [[malloc]]s a
+[<Reprog>] large enough for the full compiled program
+and lets the array extend past the end of the struct---the
+standard C ``struct hack'' used when a trailing array's
+length is only known at allocation time.
 
 <<struct [[Reprog]]>>=
 /*
@@ -17486,6 +17686,112 @@ type-safe, blocking communication between threads, and [[alt]]
 enables waiting on multiple channels simultaneously (like Go's
 [[select]]).
 
+\section{Concurrency model principles}
+\label{sec:princ-threads}
+
+%claude:
+Concurrency is the art of letting multiple logical flows
+of control make progress ``at the same time.'' Every
+concurrency system has to answer two questions: how do
+flows {\em communicate}, and how do they {\em
+synchronize}. The two dominant answers form two
+philosophies. {\em Shared-memory} concurrency
+(C/{\sc posix} threads, Java, C\texttt{++} threads, C\#,
+Rust's default [[std::thread]]) lets every flow see a
+common heap; communication is just reads and writes, and
+synchronization is via locks, condition variables, and
+atomic operations---simple to set up, notoriously hard
+to get right. {\em Message-passing} concurrency (Erlang,
+Go, occam, Ada tasks, Rust with channels, and Hoare's
+original {\sc csp} paper from~1978) gives each flow
+private state and requires explicit messages over
+channels; no locks, no barriers, no atomic primitives in
+user code. The price is that everything must flow
+through the channel, even when sharing would be natural.
+
+%claude:
+Orthogonal to the communication model is the question
+of {\em how} the flows are actually scheduled onto
+{\sc cpu}s. {\em Preemptive OS threads} (Linux
+[[pthreads]], Windows threads, FreeBSD threads) are
+scheduled by the kernel: each thread is a full
+kernel-schedulable entity, and a timer interrupt can
+yank the {\sc cpu} at any instruction, so every
+shared-memory access is a potential race. {\em
+Cooperative user-space threads}, also known as {\em
+green threads}, are scheduled entirely in user space by
+a library: they only yield at explicit synchronization
+points---a [[send]] or [[recv]] on an empty channel, a
+[[sleep]], or an explicit [[yield]]. Cooperative threads
+within one OS process never run concurrently, so they
+sidestep the race-condition problem for anything they
+don't share across OS-process boundaries: no locks, no
+atomics, no memory barriers in user code. The price is
+that a thread hogging the {\sc cpu} blocks all its
+siblings, and blocking on a slow syscall freezes
+everyone unless the library arranges to hand that
+syscall off to a helper. Green threads are an old idea:
+Modula-2 coroutines, Saber~C, Stackless Python, Lua
+coroutines, OCaml's [[lwt]], and early Go all used
+variants of it.
+
+%claude:
+\plan's [[libthread]] picks a specific and unusually
+productive point in this design space: {\em message
+passing for communication, cooperative scheduling for
+responsiveness, and multiple OS procs for parallelism}.
+Inside a single proc (a full OS-level process created
+with [[rfork(RFMEM)]]), threads never race because they
+are cooperative. Across procs, threads really are
+parallel; communication between them goes through
+channels, which are therefore shared-memory objects
+protected by one global lock. This is the classic
+{\em M:N threading} design---M user threads mapped onto
+N OS threads---with a user-space scheduler handling the
+fine-grained context switches:
+\begin{verbatim}
+  Proc 1  (rfork RFMEM)           Proc 2  (rfork RFMEM)
+  +----------------------+        +----------------------+
+  | user-space scheduler |        | user-space scheduler |
+  |                      |        |                      |
+  |  T1  T2  T3  T4      |        |  T5  T6  T7          |
+  |  (cooperative)       |        |  (cooperative)       |
+  +----------+-----------+        +----------+-----------+
+             |                               |
+             v                               v
+       +--------------- shared memory ---------------+
+       |            Channels (chanlock)              |
+       |             send / recv / alt               |
+       +---------------------------------------------+
+
+  Within a proc:  only one thread runs at a time (cooperative)
+  Across procs:   real parallelism via rfork RFMEM
+\end{verbatim}
+The same design was later carried into the early Go
+runtime by Rob Pike and Russ Cox, and the direct language
+lineage runs \plan\ $\to$ Newsqueak (Pike)
+$\to$ Alef (Winterbottom) $\to$ [[libthread]] $\to$ Go
+channels---which is why Go's [[go func()]] and [[<-chan]]
+syntax feel so closely related to the [[send]] and
+[[recv]] below. (Go later added preemptive goroutine
+scheduling in its runtime, for latency reasons, but the
+M:N shape is unchanged.)
+
+%claude:
+[[libthread]] itself is split into a cooperative
+scheduler, channel operations (including the
+multi-channel [[alt]], analogous to Go's [[select]]),
+proc and thread creation, and a set of wrappers that
+turn blocking system calls into channel operations, so
+that one cooperative thread's disk read doesn't freeze
+every other thread in its proc. The public API is
+[[threadcreate]], [[proccreate]], [[send]], [[recv]],
+and [[alt]]; everything with an \verb+_+ prefix is
+internal. The rest of this chapter walks these pieces
+in that order, starting with a small producer/consumer
+program that exercises all five of the public functions
+at once.
+
 \section{Overview}
 
 % thread OS vs thread lib OS! already have "threads" rfork with shared memory!
@@ -17512,12 +17818,14 @@ enables waiting on multiple channels simultaneously (like Go's
 \subsection{Code organization}
 
 %claude:
-The library is split between a public API ([[thread.h]])
-and private implementation details ([[threadimpl.h]]).
-The core modules are: [[sched.c]] (the cooperative scheduler),
-[[channel.c]] (channel operations and [[alt]]), [[create.c]]
-(proc/thread creation), and the [[io*.c]] files that provide
-thread-safe wrappers for blocking system calls.
+The source files group naturally along the five pieces
+listed in the principles section above: [[sched.c]] is
+the cooperative scheduler, [[channel.c]] the channel
+operations and [[alt]], [[create.c]] the
+[[threadcreate]]/[[proccreate]] machinery, and the
+[[io*.c]] files the blocking-syscall wrappers. The
+public API lives in [[thread.h]]; private implementation
+details are in [[threadimpl.h]].
 
 %include/thread.h: public API
 %threadimpl.h: private DS
@@ -17569,15 +17877,13 @@ thread-safe wrappers for blocking system calls.
 % threads. Used concurrently.
 
 %claude:
-The architecture has two levels: OS-level processes (procs)
-provide true parallelism via [[rfork(RFMEM)]], while
-user-level threads within each proc are cooperatively
-scheduled using [[setjmp]]/[[longjmp]]. Channels sit in
-shared memory, protected by a single global [[chanlock]],
-and use the [[rendezvous]] system call to block/wake
-threads across proc boundaries. Functions prefixed with
-\verb+_+ are internal; the public API is [[threadcreate]],
-[[proccreate]], [[send]], [[recv]], [[alt]], etc.
+Two implementation details worth naming up front. First,
+the user-space scheduler uses [[setjmp]]/[[longjmp]] for
+the context switch between threads, so no hand-written
+assembly is needed. Second, channels live in shared
+memory and are protected by one global [[chanlock]];
+cross-proc wakeups go through the [[rendezvous]] system
+call introduced in the IPC chapter.
 
 \section{A toy example}
 
