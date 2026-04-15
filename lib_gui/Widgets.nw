@@ -492,8 +492,86 @@ now showing this portion of the total.''
 This two-way communication is one of the more interesting
 design problems in a widget library.
 
+\subsection{Retained mode versus immediate mode}
+\label{sec:princ-retained-mode}
 
+%claude:
+One last distinction is worth naming explicitly, because
+it cuts across everything in the previous four
+subsections. Every widget library in the world sits in
+one of two camps depending on {\em what exists in memory
+between frames}. A {\em retained-mode} library---the
+design used by [[libpanel]], Tk, GTK, Qt, Cocoa, Swing,
+WPF, HTML's {\sc dom}, and essentially every traditional
+operating-system toolkit---has the application build a
+persistent tree of widget objects once and then
+incrementally mutate it in response to events. The
+library owns the tree, redraws only what has changed,
+and dispatches events into it. The widgets {\em exist}
+as long-lived C structs (or Java objects, or Objective-C
+instances, or {\sc dom} nodes); clicking a button that
+is no longer on screen is still a call to a real method
+on a real object.
 
+%claude:
+An {\em immediate-mode} library, by contrast, keeps
+{\em no} widget objects between frames. The application
+redescribes the entire UI from scratch on every frame
+inside its main loop, roughly like this:
+\begin{verbatim}
+  while running:
+      begin_frame()
+      if button("OK"):        // draws AND hit-tests in one call
+          save_file()
+      label("Hello, " + name)
+      end_frame()
+\end{verbatim}
+Each call like [[button("OK")]] both draws the button
+and returns whether it was clicked this frame, so there
+is no persistent [[Button]] object, no tree to mutate,
+no callback to register, and no invalidation
+protocol---the state of the UI is always equal to
+whatever the surrounding code chose to emit. This
+style was popularized by Casey Muratori's {\em Dear
+ImGui} in~2014 and is now standard in game-engine debug
+and editor {\sc ui}s, in the Nuklear C library, and in
+most 3D-accelerated toolkits where redrawing is cheap.
+
+%claude:
+The two styles trade different properties. Retained
+mode is {\em economical} (the framework can be told to
+redraw only what changed), {\em data-driven} (the tree
+is the model and can be queried, styled, observed, and
+walked by a screen reader), and the default choice
+whenever the widget set needs to persist beyond a
+single frame. It pays for these properties with an
+{\em explicit update protocol}: the programmer must
+call a refresh after mutating the tree (as [[libpanel]]
+does) or the library must watch the tree with signals,
+observers, or reactive bindings (as GTK, Qt, and WPF
+do). Immediate mode is {\em stateless} (no tree
+lifetime to manage), {\em declarative} (the UI is
+whatever the code just said it was), and dramatically
+simpler to implement---a complete immediate-mode
+library can fit in a few hundred lines. The cost is
+that the {\sc cpu} redraws everything every frame
+whether or not anything changed, and accessibility is
+harder because there are no persistent widget objects
+to hand to assistive software.
+
+%claude:
+[[libpanel]] is squarely retained-mode, and most of
+what makes the following chapters interesting is
+exactly the machinery that retained-mode design
+requires: a [[Panel]] structure to hold widget state
+between frames, a tree-building {\sc api} to assemble
+it, a two-pass layout algorithm to resize it when its
+container changes, a dispatch mechanism to deliver
+events into it, and cross-linked pointers for
+scrolling. None of these would exist in an
+immediate-mode library, and naming the contrast now is
+what explains why [[libpanel]]'s design looks the way
+it does.
 
 
 \section{[[hellopanel.c]]}
@@ -1940,6 +2018,88 @@ the first).
 The application's event loop receives raw mouse and keyboard events
 from \plan's event system, then calls [<plmouse()>] or
 [<plkeyboard()>] to route them to the right widget.
+
+\section{Event dispatch principles}
+\label{sec:princ-event-dispatch}
+
+%claude:
+Every widget library has the same starting problem: the
+operating system hands the application a stream of raw
+input events (mouse moved to $(x,y)$; key pressed;
+button clicked) and the library must figure out which
+of the many widgets on screen should receive each
+event, then invoke the right code inside that widget.
+Doing this well is most of what distinguishes widget
+libraries from one another, because it is where the
+design choices about focus, modality, popups, and
+event consumption all come together.
+
+%claude:
+Four dispatch models dominate practical widget
+libraries. The {\em capture/target/bubble} model,
+invented for Smalltalk and generalized by the
+W3C~{\sc dom}, walks the event from the root of the
+tree {\em down} to the leafward widget under the mouse
+(the capture phase), delivers it there (target), and
+then walks back {\em up} toward the root (bubble)---every
+ancestor gets a chance to intercept on the way down or
+on the way up. Browsers, React, and most modern web
+frameworks use this. The {\em responder chain} model
+(Apple's Cocoa and UIKit) skips the capture phase: an
+event is delivered to the view under the mouse, and if
+that view does not handle it, the event walks upward
+through parent views until someone claims it---a
+cleaner single-pass traversal that fits Apple's
+view-controller architecture. The {\em centralized
+procedure} model (Win32 [[WndProc]] and classic X11
+event-handler callbacks) routes every event to a single
+event procedure on the top-level window, which is then
+responsible for dispatching internally however it
+likes---maximally flexible, minimally structured, and
+the oldest of the four. Finally, the {\em
+priority-based} model, used by [[libpanel]] and a
+handful of older toolkits such as the {\sc x} Athena
+widget set, gives every widget a priority number and
+picks the highest-priority widget whose rectangle
+contains the hit-test point, regardless of depth in the
+tree.
+
+%claude:
+[[libpanel]]'s priority-based model is the simplest of
+the four to implement---no phases to walk, no chain to
+define, no centralized procedure to maintain---but it
+is also the most unusual to a reader coming from web
+or Cocoa. Its one big strength shows up with popup
+menus, tooltips, and modal dialogs: a popup declared as
+a sibling of a text area still wins hit tests over the
+text area while visible, because its higher priority
+trumps depth in the tree. The same trick avoids the
+need for a separate ``capture'' phase; you just hand
+the popup widget a high priority and it intercepts
+events over whatever it is covering. The price is that
+priorities are a global property of each widget, so
+two popups on screen at once have to coordinate their
+priorities manually---but in practice only one modal
+element is typically active at a time, so the friction
+rarely appears.
+
+%claude:
+The rest of this chapter walks through how [[libpanel]]
+turns the abstract dispatch model into C code. The
+mouse path starts at [[plmouse()]], which calls
+[[pl_ptinpanel()]] to recursively find the
+highest-priority widget whose rectangle contains the
+mouse point and then invokes that widget's [[hit]]
+method. The chapter also covers the [[OUT]]-bit trick
+for notifying a widget that the mouse has left it
+(reusing the existing [[hit]] method rather than adding
+a separate leave method), the [[REMOUSE]] mechanism
+for widgets that want to keep grabbing events even
+after the mouse has moved elsewhere, and the
+keyboard-event counterpart [[plkeyboard()]]---which has
+to use a different strategy because keyboard events do
+not have a natural hit-test point the way mouse events
+do.
 
 \section{Mouse events}
 
@@ -7723,10 +7883,15 @@ pattern and two-way data binding in reactive frameworks.
 
 \item \emph{Explicit update model}: the application calls
 [[plpack()]] and [[pldraw()]] rather than having the
-framework detect changes. This pull-based approach also
-characterizes immediate-mode GUI libraries like Dear ImGui
-and game render loops. It trades convenience for
-predictability.
+framework auto-refresh on mutation. Retained-mode
+toolkits like GTK, Qt, and WPF instead watch the widget
+tree via signals, observers, or reactive bindings---they
+pay an ongoing cost in framework complexity for the
+convenience of ``just works.'' [[libpanel]]'s design is
+simpler to implement and more predictable, at the price
+of putting the responsibility on the application
+programmer. See Section~\ref{sec:princ-retained-mode}
+for the broader retained-versus-immediate-mode contrast.
 
 \end{itemize}
 
