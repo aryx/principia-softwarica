@@ -1088,9 +1088,215 @@ fork, exec, wait, repeat.
 
 %\subsection{Globbing}
 
+\subsection{Globbing}
+\label{sec:princ-globbing}
 
+%claude:
+A core shell convenience is letting the user write a {pattern}
+that stands for many filenames. Typing [[ls *.c]] should list
+every C file in the current directory without forcing the
+user to enumerate them by hand. {Globbing} (or {filename
+expansion}) is the mechanism that turns [[*.c]] into the
+actual list [[a.c b.c c.c]] before [[ls]] even runs.
 
+%claude:
+The fundamental design choice is {who} expands the pattern.
+\unix shells and [[rc]] take it on themselves: when the shell
+parses [[ls *.c]], it walks the current directory, matches
+each entry against the pattern, and rewrites the command
+into [[ls a.c b.c c.c]] before calling [[exec]]. The [[ls]]
+program never sees the [[*]]---it just receives a normal
+[[argv]] of literal filenames and has nothing special to do.
+%
+On Windows the convention is the opposite: [[cmd.exe]] passes
+[[*.c]] through verbatim and each program is responsible for
+expanding its own arguments (typically by linking with
+[[setargv.obj]]). Programs that forget to do so simply
+receive [[*.c]] as a literal string---which is why porting
+\unix tools to Windows often involves debugging ``no such
+file'' errors on patterns that worked everywhere else.
 
+%claude:
+The shell-side approach has two big consequences. First,
+every program automatically gets globbing for free, with
+identical semantics, just by being launched from the shell.
+Second, since expansion happens before [[exec]], the shell
+needs a way to {suppress} it---hence quoting: [[ls '*.c']]
+tells the shell ``don't expand this, pass it through
+literally''. Forgetting the quotes around a pattern that
+was meant as a literal is one of the most common shell bugs.
+
+%claude:
+Globbing patterns are usually a tiny grammar: [[*]] for any
+sequence of characters, [[?]] for any single character, and
+\verb+[a-z]+ for a character class. [[rc]] supports exactly
+these three. [[bash]] and [[zsh]] extend the grammar with
+[[**]] for recursive directory walks, [[{a,b,c}]] for brace
+expansion, and various extended-glob predicates; [[zsh]]'s
+globbing is famously powerful enough to replace [[find]] for
+many tasks. Chapter~\ref{chap:globbing} shows how [[rc]]
+implements its three-operator subset---the patterns are
+tagged with an in-band {GLOB byte} during lexing, then
+expanded to a [[Word]] list during execution.
+
+\subsection{Quoting}
+\label{sec:princ-quoting}
+
+%claude:
+The previous subsection showed that the shell expands [[*]]
+before [[exec]], which is convenient until the user actually
+wants a literal star. The same problem applies to every
+{metacharacter} the shell recognizes---spaces, [[$]], [[&]],
+[[|]], [[<]], [[>]], parentheses, semicolons, newline. The
+shell needs a way to mark a stretch of text as ``please pass
+through verbatim''. That mechanism is {quoting}.
+
+%claude:
+Most \unix shells offer several quoting modes with
+overlapping but not identical rules. [[sh]] and [[bash]]
+have single quotes ([['...']]), double quotes ([["..."]]),
+and backslash escapes ([[\]]). Single quotes suppress
+everything; double quotes still expand [[$x]] and command
+substitutions but suppress globbing and word splitting;
+backslash escapes only the next character. The interactions
+are subtle: [[\$]] inside double quotes is a literal dollar,
+but [[\$]] inside single quotes is the two literal
+characters [[\]] and [[$]]. The same character means
+different things depending on which kind of quote it sits in.
+
+%claude:
+The deeper trap is {word splitting on unquoted variable
+expansion}. In [[sh]] and [[bash]], if [[x]] holds
+[[hello world]], then [[ls $x]] runs [[ls hello world]]
+(two arguments), while [[ls "$x"]] runs [[ls 'hello world']]
+(one argument). The rule depends on a global variable
+[[IFS]] that controls which characters split words.
+Forgetting to quote a variable that might contain spaces
+is the source of an enormous class of \unix shell bugs,
+and explains the defensive idiom of writing
+\verb+"$@"+ instead of \verb+$@+ in scripts.
+
+%claude:
+[[rc]] eliminates almost all of this. There is exactly one
+quoting form: single quotes, with the convention that an
+embedded single quote is written by doubling it
+([['it''s']]). There are no double quotes, no backslash
+escapes, no [[IFS]], and no word splitting at all---because
+in [[rc]] every variable is already a list of strings, not
+a single string. If [[x]] holds two elements [[hello]] and
+[[world]], then [[ls $x]] always passes two arguments. If
+you wanted one argument [[hello world]] you would have
+stored it that way to begin with. The whole class of
+``forgot to quote a variable'' bugs simply does not exist,
+which is why [[rc]]'s designers consider it one of the
+best things the shell does differently from [[sh]].
+
+\subsection{Asynchronous execution}
+\label{sec:princ-async}
+
+%claude:
+A long-running command should not block the shell. If you
+type [[compile-everything &]], you want the prompt back
+immediately and the command to keep running in the
+background. This is {asynchronous execution}, and every
+shell has some form of it---but how much machinery sits
+behind the [[&]] varies enormously.
+
+%claude:
+At one end of the spectrum is the minimal approach: [[&]]
+forks a child, the shell does not [[wait]] for it, the
+child is isolated just enough that the shell's terminal and
+signals do not interfere with it, and that is the entire
+feature. The user can later type a [[wait]] builtin to reap
+any finished children, and that is the only way the shell
+tracks them. [[rc]] takes this minimal path: no job table,
+no [[%1]]/[[%2]] job specs, no [[fg]]/[[bg]], no
+notification when a background job finishes. The shell
+starts the process, isolates it, and forgets about it.
+
+%claude:
+At the other end is full {job control}, introduced by
+[[csh]] in 1980 and inherited by [[bash]] and [[zsh]]. The
+shell maintains a job table indexed by job number; each
+job is its own process group; [[Ctrl-Z]] sends [[SIGTSTP]]
+to the foreground group to suspend it; [[fg]]/[[bg]] resumes
+it in the foreground or background; a [[SIGCHLD]] handler
+updates the table when children change state; the prompt
+notifies the user about completed background jobs. This is
+a substantial amount of code, much of it concerned with
+terminal-foreground-group management ([[tcsetpgrp]]) so
+that the shell can hand the controlling terminal back and
+forth between itself and its children.
+
+%claude:
+Why does [[rc]] get away with the minimal approach? Largely
+because \plan replaces a lot of what job control gives you
+with cleaner OS primitives. A backgrounded process can be
+addressed by its [[pid]] and controlled through
+[[/proc/<pid>/]] (read state, send notes, debug with
+[[acid]]) just as well as through a shell-private job
+number; [[rfork]] gives finer control over what is shared
+with the child than a single [[&]]; and [[rio]] makes it
+natural to start each long command in its own window
+instead of multiplexing multiple jobs through one terminal.
+The shell-side feature exists only where the OS does not
+already cover it. Section~\ref{sec:async-exec} will show
+that the [[&]] case reduces to a fork-without-wait plus a
+few lines to put the child in its own note group and
+redirect its stdin to [[/dev/null]].
+
+\subsection{An interactive interpreter}
+\label{sec:princ-interactive}
+
+%claude:
+A shell is used in two modes: as a {scripting language}
+running a saved file, and as an {interactive command
+interpreter} typed live at a terminal. We have already seen
+that [[rc]] tries to make the same engine serve both. The
+interactive mode adds a separate cluster of features---line
+editing, history recall, tab completion, themed prompts,
+syntax highlighting---that have nothing to do with running
+commands and everything to do with making the typing
+experience pleasant.
+
+%claude:
+The fundamental design choice is {where} those features
+live. [[bash]], [[zsh]], and [[fish]] bake them all into
+the shell itself: [[bash]] uses the GNU readline library
+for line editing and history, [[zsh]] has its own [[zle]]
+line editor with hundreds of widgets, and [[fish]] was
+created largely to have first-class syntax highlighting
+and autosuggestions out of the box. This makes for a great
+interactive experience but inflates the shell---[[bash]]
+is around 50 thousand lines, [[zsh]] over a hundred
+thousand, mostly because of the interactive layer.
+
+%claude:
+[[rc]] takes the opposite position: the shell does as
+little interactive work as possible. There is no built-in
+line editor, no history recall, no tab completion, no
+syntax highlighting. Reading a command is just a [[read()]]
+from file descriptor 0 (Section~\ref{sec:reading-commands}
+shows the exact code). If you want line editing, you wrap
+[[rc]] in [[rlwrap]], or you run it inside an [[acme]]
+window where the editor itself provides editing, search,
+and history through its normal commands. The shell stays
+around 7 thousand lines; the interactive features stay in
+the tools that already do them well.
+
+%claude:
+This split reflects the broader \plan attitude that text
+editors are the right place to edit text, including command
+lines. In [[rio]], every command lives in a window where
+you can scroll back through previous output and re-execute
+old commands by selecting them with the mouse. In [[acme]],
+commands and their output share the same buffer as your
+source code, and ``running a command'' is just executing
+a line from the buffer. Neither approach needs the shell
+to know what a cursor is. The price is that running [[rc]]
+bare in a vt100 terminal gives a pretty stark experience---
+which is fine if you live in [[acme]], less fine if you do
+not.
 
 \section{[[rc]] command-line interface}
 
