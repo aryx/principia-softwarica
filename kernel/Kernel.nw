@@ -18800,16 +18800,104 @@ The C prototypes are:
   long  alarm(ulong millisecs);  // 0 = cancel; returns previous
 \end{verbatim}
 
+\section{Time principles}
+\label{sec:princ-time}
+
+%claude:
+Two separate concepts get lumped under the word
+``time'' inside a kernel, and they are worth distinguishing
+before reading any code. The first is {\em elapsed-time
+measurement}: how long ago did this process start, how
+long has the current function been running, in how many
+microseconds must we retransmit that TCP packet. The
+second is {\em wall-clock time}: what date and time is it,
+so that a log line can be timestamped and a file's mtime
+can mean what users expect. The two are served by
+radically different hardware sources, have different
+precision and stability trade-offs, and---as we will see
+below---should never be confused with one another. Modern
+hardware usually offers several time sources at once: an
+x86 machine has the {\sc tsc} (per-core cycle counter),
+the {\sc hpet} (high-precision event timer), and the
+{\sc rtc} (a real-time clock on a battery); a
+Raspberry~Pi-class ARM machine has a free-running system
+counter at 1\,{\sc mhz}, an ARM timer at 250\,{\sc mhz},
+and a per-{\sc cpu} generic timer.
+
+%claude:
+Every kernel needs a {large} number of software timers---
+[[sleep]]-style deadlines, [[alarm]]/timeout fires, TCP
+retransmits, scheduler preemption, filesystem delayed
+writeback---but it typically has only {one} hardware
+timer it can program to raise an interrupt. The standard
+answer is to multiplex: keep a sorted queue of
+(deadline, callback) pairs, and on each hardware tick
+advance a global counter and fire any callbacks whose
+deadlines have passed. The tick rate---the famous [[HZ]]
+constant---is a trade-off: a faster tick (1000\,Hz) gives
+more accurate sleep and finer scheduler granularity but
+wastes power; a slower tick (100\,Hz) is the opposite.
+Since Linux~2.6.21 (2007), the ``tickless'' or {\em
+dynamic tick} design has reprogrammed the hardware to
+fire at exactly the next deadline instead of every
+[[HZ]] tick, which lets idle laptops reach deep sleep
+states; FreeBSD~9 and Windows~8 followed. The underlying
+multiplexing structure is unchanged---only the firing
+schedule is.
+
+%claude:
+The single most important distinction among kernel clocks
+is {\em monotonic time} versus {\em wall-clock time}.
+Monotonic time (POSIX [[CLOCK_MONOTONIC]],
+[[clock_gettime]] with various flavors) counts elapsed
+time since some arbitrary boot-time zero and {never goes
+backward}. Wall-clock time (POSIX [[CLOCK_REALTIME]] and
+[[gettimeofday]]) tracks the real date and time, and
+{can jump}, either forward or backward, whenever
+{\sc ntp} slews the clock, the sysadmin runs [[date -s]],
+or DST starts. Any code measuring elapsed intervals---
+``how long did this take'', ``have we exceeded the
+timeout'', ``is it time to retransmit''---{must} use
+monotonic time. Any code exposing a human-readable
+timestamp (log lines, file mtimes, the [[date]] command)
+uses wall-clock time. Confusing the two is a famous bug
+class: cron jobs firing twice during autumn DST,
+distributed consensus systems electing two leaders
+during an {\sc ntp} slew, network retransmit timers
+misbehaving immediately after [[ntpdate]]. \plan\ makes
+the same internal split: [[fastticks]] is monotonic;
+[[/dev/time]] is wall.
+
+%claude:
+\plan's kernel heartbeat is [[hzclock()]], a function
+called from the hardware-timer interrupt service routine
+[[HZ]] times per second. [[hzclock()]] is where the
+scheduler counts process {\sc cpu} time, where [[sleep]]
+and [[alarm]] deadlines are checked, and where
+runaway-process detection happens. Alongside it sit two
+higher-resolution counters: [[fastticks]] (a 64-bit
+monotonic counter used for profiling and sub-tick sleep
+accounting) and [[perfticks]] (the ARM timer at
+250\,{\sc mhz}, used for cycle-level measurements).
+Wall-clock time, in keeping with the
+``everything is a file'' principle
+(Section~\ref{sec:princ-files}), is {not} exposed as a
+dedicated syscall like \unix's [[gettimeofday]]; instead
+it is [[read]] from [[/dev/time]], served by the
+[[cons]] device. The two time-related syscalls
+[[sleep]] and [[alarm]] above are the {only} ones. The
+rest of this chapter walks through the Raspberry Pi
+hardware-timer setup, [[hzclock()]], [[sleep]]/[[alarm]],
+and the generic ``call this function in N milliseconds''
+mechanism built on top.
+
 \section{Overview (ARM)}
 
 %claude:
-This chapter covers the kernel's time infrastructure:
-how hardware timers generate interrupts, how the kernel
-multiplexes a single hardware timer into many software
-timers, and the time-related syscalls ([[sleep]] and
-[[alarm]]). We saw [[hzclock()]] in the Scheduling chapter;
-here we see how it gets called and what else runs on
-each clock tick.
+We saw [[hzclock()]] briefly in the Scheduling chapter;
+here we see how it is actually wired up to the hardware,
+and what else runs on each clock tick.
+
 %claude:
 The Raspberry Pi has several hardware timers running at
 different frequencies. The kernel uses system timer~3
@@ -25748,6 +25836,91 @@ is an authentication fd ($-1$ if none), [[old]] is the
 mount point, [[flags]] is [[MBEFORE]]/[[MAFTER]]/[[MREPL]],
 and [[aname]] names which tree to attach to.
 
+\section{Namespace principles}
+\label{sec:princ-namespaces}
+
+%claude:
+Every operating system kernel has to solve the same
+problem dozens of times a second: a user program hands
+it a path like [[/usr/bin/ls]], and the kernel has to
+turn that string into a kernel object (a file, a device,
+a pipe, a socket) that subsequent [[read]]/[[write]]
+calls can be dispatched on. The function that does this
+goes by many names---[[namei]] in historical \unix\ and
+BSD, [[path_walk]] (or [[filename_lookup]]) in Linux,
+[[ObReferenceObjectByName]] in Windows, and [[namec]] in
+\plan. The algorithm is everywhere the same: split the
+path at ``/'', and walk the directory tree one component
+at a time, asking ``does this directory contain an entry
+named X?'' at each step, until the components are
+exhausted or an error is reported.
+
+%claude:
+On top of that plain walk sits one crucial twist: at
+some directories, the walk is intercepted and redirected
+into a {different} subtree. Such a directory is called a
+{\em mount point}, and the rule governing it lives in an
+auxiliary data structure called a {\em mount table}. The
+classic use is attaching a filesystem: you plug in a
+{\sc usb} disk and tell the kernel ``attach this disk's
+root at [[/mnt/usb]]''; thereafter, when the
+name-resolution walk reaches [[/mnt/usb]], it jumps into
+the disk's root instead of continuing in the original
+tree, and the remaining components (say, [[/photos/2024]])
+are resolved {\em there}. [[chroot]] is a degenerate
+version of the same idea, one that redirects only the
+{start} of the walk. The same mechanism exists everywhere
+under different names: \unix\ [[mount]], Linux
+{bind mounts}, Windows junction points and reparse
+points, BSD [[nullfs]], macOS synthetic firmlinks.
+
+%claude:
+A subtler generalization turns the mount table from a
+global thing into a {\em per-process} thing: different
+processes can have different mount tables, so that the
+same string [[/home/alice]] resolves to different kernel
+objects depending on who is asking. This is how modern
+containers work: Linux {\em mount namespaces} (introduced
+in~2002, used by Docker, {\sc lxc}, Kubernetes,
+[[systemd-nspawn]]) give each container its own copy of
+the mount table, so one container's [[/etc/passwd]] is
+invisible to another's. FreeBSD jails and Solaris zones
+are earlier, coarser versions of the same idea. In every
+case, the operating system is generalizing ``where does
+[[/]] live'' into a per-process attribute---which \plan\
+had from day one, not as a late bolt-on.
+
+%claude:
+In \plan, per-process namespaces were the whole {\em
+point} of the system: the primitives that define a
+process's file-system view---[[bind]], [[mount]],
+[[unmount]], and the implicit namespace-copy that happens
+at [[rfork]]---are the ones \plan\ programs use every
+day to rearrange their view of the world. The kernel
+data structures behind this are [[Pgrp]] (the process
+group's mount table), [[Mhead]] (the ``from'' channel at
+a mount point), [[Mount]] (a linked list of ``to''
+channels), and [[namec]] (the walker itself). A
+distinctive feature is the {\em union mount}: multiple
+``to'' channels can be attached at the same mount point
+and walked in order, so that [[/bin]] can simultaneously
+expose programs from several filesystems:
+\begin{verbatim}
+  bind -a /usr/alice/bin /bin
+  bind -a /rc/bin        /bin
+
+  /bin  ---> [ original /bin  ]
+        ---> [ /usr/alice/bin ]   (MAFTER)
+        ---> [ /rc/bin        ]   (MAFTER)
+\end{verbatim}
+Opening [[/bin/ls]] then walks each attached channel in
+order and returns the first [[ls]] it finds. This is
+\plan's equivalent of \unix's [[$PATH]] search, except
+that it is built into name resolution itself instead of
+being a shell convention. The rest of this chapter is
+the implementation of [[Pgrp]], [[Mhead]], [[Mount]],
+and [[namec]].
+
 \section{Overview}
 
 % Mount point, Mount table, Namespace (per process mount table), Union mount
@@ -25757,14 +25930,11 @@ and [[aname]] names which tree to attach to.
 % "being on the left part, right part of a mount point".
 
 %claude:
-Namespaces are \plan's most distinctive kernel feature. Each process has
-its own namespace --- a private view of the file hierarchy, defined by a
-mount table ([[\hlink{Pgrp}]]). The [[bind]] and [[mount]] syscalls modify
-this table, and [[\hlink{namec}]] consults it when resolving paths.
-A mount point pairs a ``from'' channel ([[\hlink{Mhead}]]) with one or more
-``to'' channels ([[\hlink{Mount}]] list). Union mounts allow multiple
-directories to appear merged at a single path, ordered by
-[[MBEFORE]], [[MAFTER]], or replaced entirely with [[MREPL]].
+With those ideas in hand we can dive into the \plan\
+code. We start with the [[MountFlags]] that control
+the order-of-attachment at a mount point, then look at
+[[Mhead]] and [[Mount]], and finally [[namec]]---the
+walker that ties it all together.
 
 % also in libc.h
 <<enum [[mount]]>>=
@@ -27848,6 +28018,111 @@ keyboard (interrupt-driven scan code processing), the screen
 For the keyboard and screen, I use the PC (x86) version rather
 than the Raspberry~Pi version, because the PC hardware interface
 is simpler (direct I/O ports vs.\ USB).
+
+\section{Driver model principles}
+\label{sec:princ-drivers}
+
+%claude:
+Every device driver sits between two worlds. On one side
+is the generic file-like interface every program sees: the
+[[open]]/[[read]]/[[write]]/[[close]] calls routed through
+the [[Dev]] operations table from
+Section~\ref{sec:princ-files}. On the other side is one
+specific, usually baroque piece of hardware: the chipset's
+memory-mapped registers, its interrupt line, its {\sc dma}
+quirks, its bus-protocol handshake. The driver's job is to
+translate one side to the other. At this structural level,
+Linux, BSD, and Windows drivers are all identical---a
+struct of function pointers registered with the kernel at
+boot, plus an interrupt handler registered with the
+interrupt controller; only the calling conventions and the
+names differ.
+
+%claude:
+The single most important design idea in a driver is that
+its code runs in two radically different contexts. The
+{\em top half}---also called the {\em interrupt service
+routine} ({\sc isr}) or {\em fast path}---runs the instant
+hardware fires an interrupt
+(Section~\ref{sec:princ-interrupts}). It runs with most
+interrupts disabled, cannot sleep, cannot block on locks
+that another driver might hold, and must return as fast
+as possible because every cycle it spends keeps the rest
+of the system frozen. The {\em bottom half}---called a
+{\em deferred procedure call} on Windows ({\sc dpc}),
+{\em softirq}/{\em tasklet}/{\em workqueue} on Linux,
+{\em ithread} on FreeBSD---runs later, in ordinary kernel
+context, where it can sleep, grab sleeping locks, and do
+the heavy lifting the {\sc isr} could not. The two halves
+communicate via a lock-free or interrupt-safe queue that
+the top half produces into and the bottom half consumes
+from:
+\begin{verbatim}
+  user process        read(fd, buf, n)
+                           |
+  =========================================  syscall boundary
+  kernel, process
+  context                  v
+                    [ bottom half ]       <-- Dev.read entry:
+                           ^                  drains queue,
+                           |                  may block
+                        +-----+
+                        |queue|
+                        +-----+
+                           ^
+                           |
+  =========================================  interrupt boundary
+  kernel, interrupt
+  context           [ top half ]          <-- ISR: short,
+                           ^                  no sleeping
+                           |
+                           | IRQ
+                      +--------+
+                      | device |
+                      +--------+
+\end{verbatim}
+
+%claude:
+A driver has three ways to actually move data between the
+device and the kernel, and most real drivers combine all
+three. {\em Polling} (the {\sc cpu} repeatedly reads a
+status register in a loop until the device says ``ready'')
+is the oldest and simplest scheme; it is still used for
+very-rare or latency-critical events, and during early
+boot before the interrupt controller itself is up.
+{\em Interrupt-driven} I/O (the device raises its {\sc irq}
+line when something happens; the {\sc cpu} runs the handler)
+is the default for keyboards, timers, and most network and
+storage devices, because it lets the {\sc cpu} do useful
+work while the device is idle. {\em {\sc dma}}
+({\em direct memory access}: the device is programmed with
+a RAM address and a byte count, and then transfers bytes
+{\em directly} between itself and memory, bypassing the
+{\sc cpu}) is the choice for high-bandwidth devices such
+as disks, Ethernet, and graphics, because it moves data
+at memory speed rather than at the cost of a per-byte
+{\sc pio} load-store loop.
+
+%claude:
+\plan's concrete version of this model is the one the
+Files/VFS subsection already previewed. Every driver is
+a struct of type [[Dev]] registered in a global
+[[devtab]] (Chapter~\ref{chap:filesystems}), with a short
+prefix-letter name ([['#c']] for [[devcons]], [['#l']]
+for [[devether]], [['#m']] for [[devmouse]], and so on).
+Its top half is an ordinary C function registered with
+the platform's interrupt code (via [[intrenable]] on
+ARM); its bottom half is the [[read]]/[[write]] entry in
+the [[Dev]] struct, called from user syscalls. The two
+halves communicate through [[Queue]]s
+(Chapter~\ref{chap:queues})---a \plan-specific,
+flow-controlled blocking byte queue designed for exactly
+this pattern. Of the three drivers this chapter walks
+through, the keyboard is the canonical {\sc isr}-plus-queue
+driver (top half, bottom half, and [[Queue]] all visible);
+the screen has no interrupts at all (it is purely a
+memory-mapped framebuffer); and the console is the glue
+that ties the first two into [[/dev/cons]].
 
 \section{The keyboard}
 
