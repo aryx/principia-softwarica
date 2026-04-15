@@ -682,6 +682,102 @@ the trickiest parts of a network stack, because the
 protocol must handle arbitrarily delayed, duplicated,
 and reordered packets.
 
+\subsection{Flow control and congestion control}
+\label{sec:princ-flow-congestion}
+
+%claude:
+The mechanisms described above---sequence numbers, acks,
+and retransmit timers---solve the {\em reliability}
+problem: making sure every byte sent eventually arrives,
+in order and uncorrupted. They answer ``did the data get
+there?''. A serious reliable transport has to answer two
+more questions that are easy to conflate with
+reliability yet are entirely distinct. {\em Flow
+control} asks ``can the {\em receiver} keep up?''---a
+slow consumer talking to a fast producer will see its
+receive buffer fill and drop packets even over a
+perfectly reliable link. {\em Congestion control} asks
+``can the {\em network in the middle} keep up?''---dozens
+of senders competing for one bottleneck router will all
+see losses and timeouts even if every individual endpoint
+is perfectly reliable. Conflating these three concerns is
+one of the classic bugs in network code, and the
+differing answers to them are what make {\sc tcp} big
+and IL small.
+
+%claude:
+The standard mechanism for flow control is the {\em
+sliding window}. The receiver reports, with every ack,
+how many more bytes of data its buffer can still hold
+(its {\em receive window}). The sender is not allowed
+to have more than that many unacked bytes in flight at
+a time and must wait for acknowledgments that free up
+window space before sending more. A window of zero
+means ``pause''---at which point the sender must
+periodically probe the receiver to learn when the
+window reopens (the {\em zero-window probe}, because
+acks in the reverse direction are not guaranteed to
+arrive). The sliding window also doubles as the
+retransmission-bookkeeping mechanism: the sender keeps
+a copy of every unacked byte in a send buffer, and the
+sliding window is the reason that buffer has a bounded
+size.
+
+%claude:
+Congestion control is a younger idea. In October~1986
+the {\sc arpanet} experienced its first {\em congestion
+collapse}: bandwidth on the Berkeley--{\sc lbl} link
+dropped from~32\,kbps to 40~{\em bits} per second as
+every {\sc tcp} endpoint aggressively retransmitted
+into an already-saturated router. Van Jacobson's
+1988~{\sc sigcomm} paper {\em Congestion Avoidance and
+Control} gave {\sc tcp} the four mechanisms still at
+its core today: {\em slow start} (ramp the send rate
+up from one packet per round trip, doubling every
+{\sc rtt}, until a loss occurs); {\em congestion
+avoidance} (after a loss, treat the attained rate as
+the ``safe'' ceiling and grow additively from there);
+{\em fast retransmit} (treat three duplicate acks as a
+loss signal instead of waiting for the timer); and
+{\em fast recovery} (halve the rate after a fast
+retransmit instead of restarting from one). Together
+these form an {\sc aimd} policy
+(additive-increase/multiplicative-decrease) whose
+emergent property, after much theoretical analysis, is
+approximate fairness across competing flows sharing a
+bottleneck. Modern {\sc tcp} implementations have
+replaced Jacobson's original algorithms with variants
+matched to today's networks: {\sc cubic} (Linux default
+since~2006) uses a cubic function for faster recovery
+on long high-bandwidth links; {\sc bbr} (Google, 2016)
+abandons loss-based signals altogether and models the
+bottleneck bandwidth and {\sc rtt} directly; historical
+names worth knowing include Reno, New~Reno, Vegas,
+Westwood, and {\sc dctcp}.
+
+%claude:
+The fundamental reason congestion control is hard is
+that the sender cannot directly observe the network: it
+must {\em infer} congestion from the timing and pattern
+of losses, and random loss (from a noisy wireless link,
+a flaky cable, a bad {\sc nic}) is indistinguishable
+from congestion loss at the endpoint level. Getting the
+heuristics right is most of the source code of any
+modern {\sc tcp} stack. \plan's IL protocol sidesteps
+both concerns entirely: it was designed for the Bell
+Labs local area networks where packet loss is near-zero
+and {\sc rtt} is low, so it needs neither a sliding
+receive window (LAN peers have abundant buffer) nor a
+congestion-control algorithm (there is no bottleneck
+router to congest). This is exactly what lets IL stay
+in roughly 1500 lines of C, while \plan's {\sc tcp}
+(Chapter~\ref{chap:tcp}) runs to around~3600. Every one
+of those extra 2000 lines is either flow control,
+congestion control, a larger state machine for the
+four-way close handshake, or an adaptive
+retransmit timer that must handle much wider {\sc rtt}
+variance than IL's simple LAN case.
+
 \subsection{Network stack}
 
 % ip stack goal is to multiplex access to network device.
@@ -698,6 +794,64 @@ must be dispatched to the right process based on addresses
 and port numbers). It also provides different protocols
 offering different levels of service: UDP for simple
 unreliable datagrams, TCP/IL for reliable streams.
+
+\subsection{Ports and demultiplexing}
+\label{sec:princ-ports}
+
+%claude:
+When a packet arrives at a machine, the network stack has
+to decide which of the many processes running on that
+machine should receive it. The IP address alone is not
+enough---every process on the machine shares the same IP
+address. The extra piece of identification is a 16-bit
+number called a {\em port}: each transport-layer packet
+({\sc tcp} or {\sc udp}) carries a source port and a
+destination port in its header, and the network stack
+demultiplexes incoming packets by looking up the
+destination port in a per-protocol table of listening
+conversations. Ports are a purely transport-layer
+concept---they do not exist in {\sc ip}, Ethernet, or any
+layer below---and they are what lets a single machine run
+a web server, an {\sc ssh} daemon, and a {\sc dns}
+resolver simultaneously on the same interface.
+
+%claude:
+The 16-bit port space is traditionally divided into three
+ranges. {\em Well-known} ports (0 through~1023, including
+{\sc ssh} on~22, {\sc smtp} on~25, {\sc dns} on~53,
+{\sc http} on~80, {\sc https} on~443) are assigned by
+{\sc iana} to standard services and are historically
+restricted to root-owned processes on \unix, so only a
+privileged daemon can bind to them. {\em Registered}
+ports (1024 through~49151) are assigned by {\sc iana} to
+specific applications on request but are usable by any
+process. {\em Ephemeral} or {\em dynamic} ports
+(49152--65535 by current {\sc iana} recommendation,
+though Linux defaults to 32768--60999) are what the
+kernel hands out when a client calls [[connect]] without
+binding a specific source port first. The ephemeral range
+is what lets thousands of outgoing connections from the
+same client coexist on the same local address: each new
+[[connect]] is assigned a fresh ephemeral port, so the
+4-tuple {\em (src~addr, src~port, dst~addr, dst~port)} is
+unique and the receiving side can demultiplex return
+traffic back to the right conversation.
+
+%claude:
+\plan exposes ports through the file interface from
+Section~\ref{sec:princ-file-vs-socket}: when a client
+writes [[connect 192.168.1.1!80]] to a new conversation's
+[[ctl]] file, the kernel picks an ephemeral source port
+automatically; when a server writes [[announce tcp!*!80]],
+it binds to port~80 on every interface. The
+[[/net/tcp/42/local]] and [[/net/tcp/42/remote]] files
+expose the resulting endpoints as plain text. Ephemeral
+port selection and the privileged-port rule are both
+handled entirely inside the [[devip]] kernel file
+server---there is no separate [[bind]] syscall and no
+[[setsockopt]] with [[SO_REUSEADDR]]; port reuse is a
+policy of the [[ctl]] command parser, not a property of a
+socket object.
 
 \subsection{Layers}
 % OSI
@@ -724,7 +878,97 @@ and strips it on the receiving side. The \plan network
 stack follows this layered structure closely, with each
 protocol implemented as a [[Proto]] module.
 
+\subsection{File interface versus socket API}
+\label{sec:princ-file-vs-socket}
 
+%claude:
+The dominant way to do networking on every mainstream
+operating system today is the {\em socket {\sc api}},
+introduced by {\sc bsd}~4.2 in~1983 and subsequently
+inherited by Linux, macOS, Solaris, and Windows (as
+Winsock2). Conceptually a socket is a special kind of
+file descriptor that the kernel tracks through its own
+object system: you create it with
+[[socket(AF_INET, SOCK_STREAM, 0)]], set it up with
+[[bind]]/[[connect]]/[[listen]]/[[accept]], send and
+receive bytes with
+[[send]]/[[recv]]/[[sendto]]/[[recvfrom]], configure it
+with [[setsockopt]] (passing integer option codes like
+[[SO_REUSEADDR]] or [[TCP_NODELAY]]), and multiplex
+{\sc i/o} with a dedicated primitive---[[select]],
+[[poll]], [[epoll]], [[kqueue]], or Windows {\sc iocp}.
+The {\sc api} has something like thirty entry points
+and dozens of type and option constants; it forms a
+dedicated namespace of concepts bolted onto the
+\unix file model without quite fitting it (a file
+descriptor to a socket behaves differently from a
+file descriptor to a regular file in a hundred subtle
+ways).
+
+%claude:
+\plan makes the same choice for graphics and for almost
+every other kernel service: expose the subsystem as a
+small file tree rather than as a dedicated {\sc api}.
+For networking, the tree is rooted at [[/net/]], with
+one subtree per protocol ([[/net/tcp]], [[/net/udp]],
+[[/net/il]]). Opening a connection is three ordinary
+file operations: read [[/net/tcp/clone]] (which
+allocates a fresh conversation directory, say
+[[/net/tcp/42/]], and returns an open file descriptor
+to its [[ctl]] file); write a string like [[connect
+192.168.1.1!80]] to [[/net/tcp/42/ctl]]; then open and
+read or write [[/net/tcp/42/data]] for the byte stream.
+Configuration uses human-readable text commands written
+to [[ctl]] (e.g., [[keepalive 30]]); status is
+text read from sibling files like
+[[/net/tcp/42/status]], [[/net/tcp/42/local]], and
+[[/net/tcp/42/remote]]; {\sc i/o} multiplexing uses the
+same file-descriptor select machinery as any other
+file. There is no socket type, no [[setsockopt]], no
+[[ioctl]]---just files.
+
+%claude:
+The consequences show up in surprising places. Any
+programming language that can read and write files
+gets networking for free, without an {\sc ffi} to a
+socket library; \plan's shell [[rc]] can open a
+{\sc tcp} connection with nothing but file redirection.
+Network services can be {\em delegated} through
+namespaces: [[bind]]ing or [[mount]]ing another
+machine's [[/net]] over your own gives you its network
+stack, which is one way \plan implements what
+elsewhere requires a {\sc vpn}, [[ssh]] port
+forwarding, or a container network namespace.
+Firewalling a process is just removing
+[[/net/tcp/clone]] from its namespace---no
+[[iptables]], no packet filter, no seccomp rules to
+maintain---because without [[clone]] the process
+cannot allocate a new conversation in the first place.
+And standard tools like [[cat]], [[grep]], [[wc]], and
+[[dd]] work unmodified on network connections, which
+is why \plan has no dedicated [[netcat]]: every
+program is already [[netcat]] by composition.
+
+%claude:
+The historical cost of this design was performance:
+routing every network read and write through the
+file-system protocol was slower than calling a
+dedicated socket syscall on Linux or {\sc bsd}. On
+modern hardware that gap has largely closed, and
+mainstream operating systems have themselves drifted
+toward file-like networking: Linux offers abstract
+sockets in the filesystem namespace, [[/proc/net/*]]
+for stack introspection, [[netlink]] for configuration,
+and most recently [[io_uring]] for a single unified
+async interface that treats sockets and files alike.
+The interesting trade-off today is less about raw
+performance than about {\em code size} and
+{\em namespace composability}: \plan's whole networking
+stack fits in roughly 22\,000 lines largely because it
+did not need to grow a dedicated socket {\sc api} and
+its corresponding kernel object layer. The rest of
+this chapter's [[/net]] file-server interface section
+is what that choice looks like in concrete terms.
 
 \section{[[/net/]] files interface}
 
@@ -743,20 +987,17 @@ protocol implemented as a [[Proto]] module.
 % /net/iproute
 
 %claude:
-In \plan, every kernel service is accessed through files,
-and networking is no exception. A network connection is
-a directory of files under [[/net/]]. To open a TCP
-connection, you read [[/net/tcp/clone]] (which allocates
-a new conversation directory, say [[/net/tcp/0/]]),
-write a [[connect]] command to [[/net/tcp/0/ctl]],
-and then read and write data through [[/net/tcp/0/data]].
-%
-This contrasts with the \unix socket interface, where
-connections are created with [[socket()]], configured with
-[[ioctl()]] or [[setsockopt()]], and accessed through a
-special file descriptor type. In \plan, there is no special
-API---just [[open]], [[read]], [[write]], and [[close]]
-on regular files.
+With the file-versus-socket framing from
+Section~\ref{sec:princ-file-vs-socket} in hand, this
+section zooms in on the concrete shape of \plan's
+[[/net/]] tree: what files exist, what each is for, and
+how the three-level directory hierarchy is laid out.
+A network connection appears as a directory of files
+under [[/net/]]: to open a {\sc tcp} connection, you
+read [[/net/tcp/clone]] (which allocates a new
+conversation directory, say [[/net/tcp/0/]]), write a
+[[connect]] command to [[/net/tcp/0/ctl]], and then read
+and write data through [[/net/tcp/0/data]].
 
 % maybe can put early the 
 %    echo 'bind ether /net/ether0' > /net/ipifc/x/ctl
@@ -11435,7 +11676,102 @@ opposite of traditional remote login.
 operations (open, read, write, stat, etc.). Every file server
 in \plan speaks 9P, and [[mount]] connects a 9P-speaking
 server to the local namespace. The marshalling code for 9P
-messages ([[convS2M]], [[convM2S]]) is in \book{Libcore}.
+messages ([[convS2M]], [[convM2S]]) lives in \book{Libcore}.
+
+\section{RPC and wire-protocol principles}
+\label{sec:princ-9p}
+
+%claude:
+A {\em remote procedure call} ({\sc rpc}) is the
+networking generalization of a local function call: the
+caller wants some work done elsewhere and receives a
+result, with the network transport and the argument
+serialization hidden behind an {\sc api} that looks the
+same as an in-process call. Designing an {\sc rpc}
+system forces a handful of decisions that every protocol
+has to answer, even when it answers them silently:
+{\em what is the transport} ({\sc tcp}, {\sc udp}, Unix
+domain socket, {\sc http}, a named pipe);
+{\em what is the encoding} of arguments and results
+(binary struct vs text, self-describing vs schema-required);
+{\em how are errors represented} (status codes, typed
+exceptions, free-form strings); {\em is the call
+synchronous} (caller blocks) {\em or asynchronous /
+streaming} (caller sends many requests at once);
+{\em what state does the server keep} per client; and
+{\em how are types agreed on} between peers (schema file
+compiled in advance? runtime discovery? no schema at all?).
+Different answers to these questions yield wildly
+different protocols, and each {\sc rpc} system's choice
+of defaults shapes every application built on top of it.
+
+%claude:
+The first widely deployed {\sc rpc} system was Sun
+{\sc rpc}, designed in~1984 by Bob Lyon at Sun
+Microsystems for {\sc nfs}. It runs over {\sc tcp} or
+{\sc udp}, uses a binary encoding called {\sc xdr}
+({\em eXternal Data Representation}), and provides a
+code generator called [[rpcgen]] that turns a [[.x]]
+schema file into client and server stubs---the blueprint
+that almost every subsequent binary {\sc rpc} has
+followed. {\sc dce}~{\sc rpc} (1990, descended from
+Apollo's {\sc ncs}) added an {\sc idl} compiler and was
+later adapted by Microsoft as {\sc msrpc}, the plumbing
+under {\sc dcom}, {\sc com}, and half the Windows
+{\sc api}. {\sc corba} (1991) tried to unify all of this
+under a language-neutral distributed-object model and
+became notorious for its complexity. On the text side,
+{\sc xml-rpc} (1998) was Dave Winer's ``send {\sc xml}
+over {\sc http} and call a method'' hack, which morphed
+into {\sc soap} by the early~2000s before everyone gave
+up and switched to {\sc json-rpc} and then to {\sc rest}
+(Roy Fielding's 2000 dissertation about what {\sc http}
+already gave you for free). The current generation is
+mostly binary again: {\sc grpc} (Google, 2016) with
+Protocol Buffers, Apache Thrift (Facebook, 2007),
+Cap'n~Proto (Kenton Varda, 2013), Avro (Hadoop, 2009),
+and MessagePack---all schema-based, all
+code-generator-driven, all fighting the same trade-offs
+Sun {\sc rpc} already confronted in~1984.
+
+%claude:
+9P takes a radically different position in this design
+space. It is not a general-purpose {\sc rpc} at all: it
+is specifically the {\em wire protocol for the file
+system API}, so its message set is small because it has
+to model only whatever the \plan kernel's file interface
+does. The entire protocol is around a dozen request
+types, each with a matching reply: [[Tversion]]/[[Rversion]]
+to negotiate protocol version and maximum message size,
+[[Tauth]]/[[Rauth]] to set up an authentication
+[[fid]], [[Tattach]]/[[Rattach]] to open a session and
+obtain the [[fid]] for a tree root, [[Twalk]]/[[Rwalk]]
+to descend one or more path components from a [[fid]],
+[[Topen]]/[[Ropen]] to open a file for reading or
+writing, [[Tcreate]]/[[Rcreate]] to create a new file,
+[[Tread]]/[[Rread]] and [[Twrite]]/[[Rwrite]] for
+{\sc i/o}, [[Tclunk]]/[[Rclunk]] to release a [[fid]],
+[[Tremove]]/[[Rremove]] to delete a file,
+[[Tstat]]/[[Rstat]] and [[Twstat]]/[[Rwstat]] for
+get-metadata and set-metadata, and [[Tflush]]/[[Rflush]]
+to cancel a pending request. The critical concept is the
+{\em fid} (file identifier): a client-chosen 32-bit
+integer that the server associates with one of its file
+objects for the duration of the session, much like a
+\unix file descriptor but allocated by the client rather
+than by the server. Once a [[fid]] is attached to a root,
+the client walks, opens, reads, and writes through that
+[[fid]], and all of 9P's state lives in the server's
+[[fid]]-to-file mapping. The encoding is hand-written in
+[[libcore]]'s [[convS2M]] and [[convM2S]] functions---no
+code generator, no {\sc idl}, no schema file---because
+the message set is small enough that writing twelve
+marshal/unmarshal pairs by hand takes less code than
+adopting a code-generator framework. The chapter that
+follows covers the server side that listens for 9P
+requests, with the client side living in the kernel's
+[[devmnt]] driver from \book{Kernel} and the
+marshalling in \book{Libcore}.
 
 % See Libcore.nw
 
@@ -11446,16 +11782,106 @@ messages ([[convS2M]], [[convM2S]]) is in \book{Libcore}.
 % the logical conclusion for all of that.
 
 %claude:
-[[exportfs]] is the logical culmination of \plan's ``everything
-is a file'' design: it serves a local namespace over the
-network via 9P, allowing a remote machine to access your files,
-devices, and even your window system. Combined with [[cpu]],
-which exports {\em your} namespace to a {\em remote} CPU, this
-inverts the traditional client-server model---your local
-context follows you to any machine on the network.
+[[exportfs]] is the logical culmination of \plan's
+``everything is a file'' design: it serves a local
+namespace over the network via 9P, allowing a remote
+machine to access your files, devices, and even your
+window system.
 
-% con and exportfs
-% NFS like?
+\section{Network filesystem principles}
+\label{sec:princ-netfs}
+
+%claude:
+Before diving into [[exportfs]], it helps to step back
+and look at what a {\em network filesystem} actually has
+to do. The basic requirement---access files on another
+machine---sounds like ``just send bytes over a socket,''
+but real networked file access requires {transparency}
+(a program should not need to know whether a file is
+local or remote), {consistency} (what happens when two
+machines modify the same file simultaneously?),
+{caching} (reading every byte from the network is too
+slow), {authentication} (who is allowed to access
+what?), {directory operations} (listing, creating,
+renaming), and a model for what a remote file
+{\em is} (does the remote side track open files? how are
+locks propagated?). The answers to these questions
+determine whether the system feels like a fast local
+disk or like a slow web service.
+
+%claude:
+Network filesystems have been a research topic since the
+early~1980s, and each generation made different
+trade-offs. {\em Sun {\sc nfs}} (1984) was designed to
+be {\em stateless}: the server keeps no per-client
+state, so a crashed client never corrupts the server and
+a crashed server can restart without notifying anyone.
+The price is that {\sc nfs} cannot implement {\sc posix}
+open-file semantics faithfully, and cross-client
+consistency is loose. {\em {\sc smb}}/{\em {\sc cifs}}
+(Microsoft, from~1984) took the opposite choice---explicitly
+stateful with per-client session state and byte-range
+locks---to match Windows file-sharing semantics.
+{\em Andrew File System} ({\sc afs}, {\sc cmu}, 1983)
+introduced aggressive client-side caching with
+server-issued {\em callback promises}: the server tells
+each client which files it has cached and revokes those
+callbacks when the file is modified on another client.
+{\em Coda} ({\sc cmu}, 1987) extended {\sc afs} with
+{\em disconnected operation}: a laptop can keep a local
+copy, work offline, and reconcile on reconnect. The
+current generation---{\em Ceph}, {\em Lustre},
+{\em GlusterFS}---went distributed, spreading storage
+across many servers for capacity and fault tolerance.
+Every one of these systems has its own wire protocol,
+its own kernel module on every client, and its own
+configuration model.
+
+%claude:
+\plan gets all of that for free by exploiting the fact
+that it already speaks 9P to its {\em local} file
+system. If every application reads and writes through
+9P anyway, then a {\em remote} file server is just a 9P
+server accessible over a network connection instead of
+a local pipe. No new protocol, no new kernel module, no
+new abstraction: [[exportfs]] is a user-level program
+that accepts 9P messages on standard input (typically
+from a network connection), dispatches them against a
+{\em local} namespace (whatever subtree of [[/]] the
+invoker chose), and writes the 9P replies back out. The
+client side is equally simple: [[mount]] an
+[[exportfs]] connection the same way you mount any
+other 9P server, and the remote tree appears in the
+client's namespace. There is nothing filesystem-specific
+about [[exportfs]] at all---the protocol work lives in
+9P (Chapter~\ref{chap:rpc}) and the server-side adapter
+from local-file-access to 9P is just a handful of
+dispatch functions.
+
+%claude:
+The more interesting twist is what [[exportfs]] enables
+when combined with \plan's per-process namespaces. The
+[[cpu]] command runs a shell on a remote machine but,
+crucially, arranges for [[exportfs]] to serve {\em your}
+local namespace over the network {\em back} to that
+remote shell. The remote [[cpu]] session then sees your
+local home directory, your local [[/dev]], your local
+[[/net]], even your local window system---because all
+of those are just 9P-speaking files that the remote
+shell can reach through the 9P connection. This inverts
+the traditional client-server model: rather than your
+local machine being a client of remote services, the
+remote machine becomes a client of {\em your} local
+services, and your entire environment follows you to
+any machine on the network. The trick is impossible on
+\unix-family systems because they do not have
+first-class per-process namespaces or a universal wire
+protocol that every file-like object already speaks.
+The rest of this chapter walks through the [[exportfs]]
+code, which turns out to be mostly a server loop
+translating incoming 9P messages into local
+[[open]]/[[read]]/[[write]]/[[close]] calls against the
+chosen local subtree.
 
 %******************************************************************************
 \chapter{Name Resolution: DNS}
@@ -11465,13 +11891,107 @@ context follows you to any machine on the network.
 %TODO? move earlier? pretty fundamental
 
 %claude:
-DNS translates human-readable names (like \verb+google.com+)
-into IP addresses. In \plan, name resolution goes through
-the connection server ([[cs]]), which reads the local network
-database ([[/lib/ndb/local]]) and queries DNS servers as
-needed. The [[dial]] function from \book{Libcore} calls
-[[cs]] transparently, so most programs never interact with
-DNS directly.
+This chapter covers the code that turns human-readable
+names like [[mail.example.com]] into IP addresses, and
+the name-resolution infrastructure that supports it. In
+\plan, this work lives in a user-level file server---the
+{\em connection server} ([[cs]])---rather than a [[libc]]
+function, so clients interact with it through the file
+interface rather than by calling [[getaddrinfo]] or
+[[gethostbyname]].
+
+\section{Name resolution principles}
+\label{sec:princ-dns}
+
+%claude:
+Every layer in the network stack uses numeric
+identifiers: Ethernet has 48-bit {\sc mac} addresses,
+{\sc ip} has 32-bit (or 128-bit) addresses, transport
+protocols have 16-bit ports. None of these are what
+humans type into a browser or email client. {\em Name
+resolution} is the bridge: the system that lets a human
+type [[mail.example.com]] and get back
+[[142.251.46.206]]. The question of how that bridge
+works is deceptively deep, because it has to scale from
+a handful of machines in a lab to hundreds of millions
+of hosts on the public Internet, with administrative
+control spread across uncoordinated organizations.
+
+%claude:
+The simplest name-resolution scheme is a {\em flat
+file}: the [[/etc/hosts]] file on \unix (and
+[[C:\Windows\System32\drivers\etc\hosts]] on Windows)
+maps each name to an address directly. This works for a
+small network but breaks down at scale---every machine
+needs a complete copy, and updates must be propagated
+manually. The response, standardized as {\sc rfc}
+1034/1035 in~1987 by Paul Mockapetris, is the
+{\em Domain Name System} ({\sc dns}): a {\em
+hierarchical} namespace where each level of the
+dot-separated name corresponds to a level of
+administrative delegation. The root zone (managed by
+{\sc iana}) delegates each top-level domain
+({\sc tld}---[[com]], [[org]], [[edu]], country codes
+like [[fr]] or [[jp]]) to one or more authoritative name
+servers; those in turn delegate second-level domains
+([[google.com]], [[wikipedia.org]]) to the
+organizations that registered them. No single machine
+holds the whole map---each authoritative server is
+responsible only for its own sub-tree---and
+administrative boundaries are exactly the delegation
+points.
+
+%claude:
+A client asking ``what is the address of
+[[mail.example.com]]?'' can resolve the name in two
+ways. {\em Iterative} resolution starts at a root
+server, which replies ``I don't know, but here is the
+authoritative server for [[com]]''; that one points at
+the authoritative server for [[example.com]], which
+points at the one for [[mail.example.com]], and so on
+until the leaf is reached. {\em Recursive} resolution,
+the pattern most clients actually use, outsources the
+walk to a separate {\em recursive resolver} (at your
+{\sc isp}, on your router, or at a public service like
+[[8.8.8.8]] or [[1.1.1.1]]): the client asks one
+question and the resolver does the iterative work. DNS
+servers return {\em resource records} tagged with a
+type---[[A]] (IPv4 address), [[AAAA]] (IPv6), [[CNAME]]
+(alias), [[MX]] (mail exchanger), [[NS]] (nameserver
+delegation), [[PTR]] (reverse lookup), [[TXT]]
+(free-form, used for {\sc spf}, {\sc dkim}, and domain
+verification), [[SRV]] (service discovery)---each
+carrying a {\em time-to-live} ({\sc ttl}) that tells
+resolvers how long they may cache the answer. Aggressive
+caching at every level of the hierarchy is what keeps
+the root and {\sc tld} servers from collapsing under
+load.
+
+%claude:
+\plan takes its usual simplifying stance: rather than
+expose name resolution as a library function every
+program must call, it runs a user-level file server
+called the {\em connection server} ([[cs]]) that
+clients query through the file interface, in exactly
+the same way they query [[/net/tcp]]
+(Section~\ref{sec:princ-file-vs-socket}). When a program
+calls [[dial("tcp!mail.example.com!25")]] from
+\book{Libcore}, the [[dial]] implementation writes the
+string to [[cs]]'s request file; [[cs]] first consults
+the local network database ([[/lib/ndb/local]]) for
+static overrides, and falls back to {\sc dns} for
+anything it does not find. DNS proper is implemented as
+a second user-level server that talks to upstream
+name servers over {\sc udp} on port~53, parses the
+binary response records, caches them, and returns the
+result to [[cs]]. The whole thing is ordinary user-space
+code accessed through the file interface, with no
+kernel syscalls and no linked-in resolver library:
+neither [[getaddrinfo]] nor [[gethostbyname]] exists in
+\plan at all. The rest of this chapter walks through the
+[[ndb]] parser, the [[cs]] dispatch logic, and the
+{\sc dns} client that does the actual RFC~1035 protocol
+work.
 
 %******************************************************************************
 \chapter{Security}
