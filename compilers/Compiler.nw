@@ -5837,6 +5837,58 @@ than a multi-pass compiler. C's declaration syntax is
 notoriously complex (types are split across multiple
 grammar rules), and this chapter reflects that complexity.
 
+\section{Single-pass compilation}
+\label{sec:single-pass}
+
+%claude:
+[[5c]] is a {single-pass} compiler in the [[pcc]]/[[lcc]]
+lineage. Each function is lexed, preprocessed, parsed,
+checked, code-generated, and written to the object file
+before the next function is read. The compiler never holds
+more than one function's worth of AST in memory at a time,
+and the top-level [[prog]] rule in the grammar never
+returns an AST for the whole translation unit---it just
+loops on external declarations, handing each one off to
+the back end as soon as the closing brace is parsed.
+
+%claude:
+This is how every C compiler worked before the late 1980s,
+for one very practical reason: machines did not have enough
+RAM to hold an entire translation unit's AST plus all the
+symbol tables. [[pcc]] (Steve Johnson's Portable C Compiler,
+1978) on the PDP-11 had to fit in 64 KB of text and data
+combined; holding more than a function was simply not an
+option. Ritchie's original C compiler worked the same way.
+[[lcc]] (Fraser and Hanson, 1995) kept the design on
+purpose as a teaching and research vehicle because the
+whole compiler then fits in a 300-page book. [[gcc 1.x]]
+was single-pass too; the move to holding the whole
+translation unit came later and was what enabled the
+GIMPLE / RTL / SSA pipelines we saw in the previous
+chapter-intro section. Modern compilers---[[clang]],
+[[rustc]], [[Swift]], [[ghc]]---all hold the full AST plus
+multiple IRs and run many passes over them.
+
+%claude:
+The single-pass approach has two visible consequences in
+[[5c]]. First, code generation is triggered {during} the
+grammar rule for a function definition, not after the
+parser returns---you will see the [[codgen()]] call right
+inside [[cc.y]]. Second, optimizations that need
+information from later in the file are simply impossible:
+[[5c]] cannot inline a function defined after the call
+site, cannot check whether a global is ever read before
+generating its initializer, and cannot decide register
+assignments based on whole-program use counts. Whole
+classes of modern optimization (link-time optimization,
+profile-guided optimization, whole-program devirtualization)
+have no place to live in a single-pass compiler and are
+left to the linker---and [[5l]] does in fact do a few of
+them, as covered in \book{Linker}. The trade, as with
+the no-IR choice, is compile speed and small code size
+for peak generated-code performance, and the trade made
+sense for \plan.
+
 \section{Overview}
 
 % I assume you understand Yacc! if not read the O'Reilly book on Lex&Yacc
@@ -13507,6 +13559,51 @@ instruction based on the node's type and ``addressability''
 register, memory, constant, etc.). The result is a linked
 list of [[Prog]] instructions written to the object file
 by [[outcode]].
+
+\section{No intermediate representation}
+\label{sec:no-ir}
+
+%claude:
+Every mainstream compiler in 2026 has at least one
+intermediate representation. [[gcc]] has {GIMPLE}, a
+tree-shaped IR added in 2003, plus {RTL}, a low-level
+expression-tree IR that goes back to the 1980s. [[LLVM]]
+has its SSA-based IR, which the whole toolchain was
+designed around from its first release in 2003. [[rustc]]
+has {MIR} (2016); Swift has {SIL} (2014). SSA itself was
+invented by Cytron, Ferrante, Rosen, Wegman, and Zadeck at
+IBM in 1988. None of these existed when [[5c]]'s ancestors
+were built. [[pcc]] (Johnson, 1978), Ritchie's original C
+compiler, and [[lcc]] (Fraser and Hanson, 1995) all
+tree-walk the typed AST and emit target-specific
+instructions directly, exactly the way [[5c]] does. The
+absence of an IR is not a simplification choice [[5c]] made
+for this book; it is the older way compilers worked,
+preserved in the \plan toolchain because Ken Thompson and
+Rob Pike valued compile speed and small code size over peak
+generated-code performance.
+
+%claude:
+Working without an IR has a real cost. Classical
+optimizations that rely on a control-flow graph---dead code
+elimination across basic blocks, common subexpression
+elimination, loop-invariant code motion, induction-variable
+analysis, register allocation via graph coloring---are
+either impossible or painful to implement on a raw AST.
+[[5c]] gets away with the trade-off for three reasons.
+First, ARM assembly is regular and its instruction set maps
+cleanly onto C operators, so a naive one-to-one translation
+already produces reasonable code. Second, AST-level rewrites
+in [<ccom()>] (Chapter~\ref{chap:ast-opt}) catch the easy
+wins: constant folding, algebraic simplification, strength
+reduction for multiplies by a constant. Third, a simple
+peephole pass and a linear-scan register allocator in
+[<peep()>] and [<regopt()>] (Chapter~\ref{chap:asm-opt})
+catch most of what remains. The compiler fits in a few
+thousand lines of C and produces code that runs perhaps
+20\% slower than [[gcc]]'s---an acceptable trade when the
+speed of {compilation} matters more than the speed of
+compiled code, as it did for \plan.
 
 \section{Overview}
 
