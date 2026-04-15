@@ -16913,6 +16913,119 @@ setswapchan(Chan *c)
 %less: virtual CPU?
 %less: add (clock interrupt) in title? to relate to Interrupt chapter?
 
+\section{Scheduling principles}
+\label{sec:princ-scheduling}
+
+%claude:
+The scheduler is the piece of the kernel that decides,
+many times a second, which of the currently ready
+processes should run next on a given {\sc cpu}. Its
+core loop is small: pick a winner from a {\em run
+queue} of ready processes, context-switch to it
+(Section~\ref{sec:princ-processes}), let it run until
+it blocks on I/O or is forcibly preempted, then repeat.
+Every user-visible performance property of a
+system---interactive responsiveness, background-job
+throughput, fairness between users, the ability of a
+real-time process to meet its deadline---emerges from
+the scheduler's choice of who runs next, which makes
+this the most heavily studied subsystem in any kernel.
+
+%claude:
+The first question a scheduler asks is whether control
+returns to it voluntarily or must be taken back by
+force. {\em Cooperative} schedulers wait for the running
+process to call [[yield()]] or to block on I/O, and
+only then pick the next one; this was the model in
+classic Mac~OS through version~9, in Windows~3.x, and---
+by deliberate choice---in modern Go's goroutine runtime.
+{\em Preemptive} schedulers use a hardware timer
+interrupt to forcibly stop the running process after a
+fixed {\em quantum}, save its state, and run the
+scheduler whether the process agreed or not. Preemptive
+scheduling has been the default in every serious kernel
+since \unix~V1 in~1971, because the alternative is that
+a single buggy or malicious process hangs the entire
+machine---a property that was a daily experience on
+Windows~3.x. \plan, like every modern kernel, is
+preemptive, but it also exposes the cooperative
+primitives ([[sched()]], [[sleep()]], [[wakeup()]])
+because most of its own internal yielding is voluntary:
+I/O-bound processes almost always block {\em before}
+their quantum runs out.
+
+%claude:
+The interesting variety in schedulers is not the
+``save and restore the context'' mechanism---which we
+already covered in
+Section~\ref{sec:princ-processes}---but the {\em policy}
+that picks {\em which} ready process runs next. The
+simplest policy is round-robin over a single
+{\sc fifo}: good for fairness, terrible for interactive
+latency. Priority-based scheduling assigns each process
+a number and always picks the highest, and is the
+classic \unix\ design; to avoid starving low-priority
+processes it requires {\em dynamic} priority adjustment.
+{\em Multilevel feedback queues}, first introduced in
+the {\sc ctss} system at {\sc mit} in~1962 and standard
+in historical \unix, keep one queue per priority and
+move processes between queues based on recent {\sc
+cpu} usage---an interactive process that blocks often
+floats up, a compute-bound one sinks. {\em Fair-share}
+schedulers such as Linux's {\sc cfs} (2007--2023) track
+each process's accumulated ``virtual runtime'' and
+always pick the one that has had the least, using a
+red-black tree as their run queue instead of a priority
+array; Linux~6.6 (2023) replaced {\sc cfs} with
+{\sc eevdf}, a refinement adding deadline-like virtual
+eligible time. Orthogonal to all of this, {\em real-time}
+schedulers provide hard priority classes (POSIX
+[[SCHED_FIFO]] and [[SCHED_RR]], Windows' real-time
+class) where a high-priority process really does run
+to the exclusion of every lower one, for code that
+cannot tolerate any scheduling jitter.
+
+%claude:
+\plan's scheduler is a classic multilevel-priority
+design, deliberately kept simple enough to be read
+end-to-end in a single chapter---no red-black trees,
+no virtual runtime, no control groups. There are
+twenty priority levels (the constant [[Npriq]]), with
+normal user processes starting at [[PriNormal = 10]]
+and kernel processes at [[PriKproc = 13]]; higher
+numbers win. The run queue is an array of twenty
+doubly-linked lists, one per level, and [[sched()]]
+simply scans them from the top down and takes the head
+of the first non-empty one:
+\begin{verbatim}
+  runq[]:  array of Npriq (=20) doubly-linked lists
+
+  pri 19  ------> (empty)
+  pri 18  ------> (empty)
+   ...
+  pri 13  ------> [ kproc A ] -> [ kproc B ]          <- PriKproc
+   ...
+  pri 10  ------> [ proc X  ] -> [ proc Y ] -> [ Z ]  <- PriNormal
+  pri  9  ------> [ proc W  ]
+   ...
+  pri  0  ------> (empty)
+
+  sched() scans top-to-bottom and picks the head
+  of the first non-empty queue.
+\end{verbatim}
+Priorities are adjusted dynamically to keep things
+fair: a process that has just woken up from sleeping
+on I/O is boosted (reward for interactivity); a process
+that has consumed its full quantum is demoted (penalty
+for being compute-bound). Preemption is driven by
+[[hzclock()]], introduced in Chapter~\ref{chap:time},
+which decrements the running process's quantum and
+calls [[sched()]] when it reaches zero. The chapter
+that follows is split into those two halves: the
+cooperative path ([[sched()]], [[sleep()]], [[wakeup()]])
+first, then the preemptive path ([[hzclock()]] and the
+timer-driven context switch).
+
 \section{Overview}
 
 % In essence the main role of an OS is to manage programs and so in essence
@@ -16934,22 +17047,11 @@ setswapchan(Chan *c)
 % trace scheduler events
 
 %claude:
-The scheduler decides which process runs next. Its
-central function is [[sched()]] (and its twin
-[[schedinit()]]). The chapter has two halves:
-{cooperative scheduling}, where kernel code voluntarily
-calls [[sched()]] or [[sleep()]]/[[wakeup()]] to yield
-the processor; and {preemptive scheduling}, where the
-clock interrupt forces a context switch after a time
-quantum (100~ms by default). Both halves ultimately
-funnel through the same mechanism: save the current
-process's context, pick the next one from the run queue,
-and restore its context.
-%claude:
-Processes are organized into priority queues. The
-scheduler always picks the highest-priority ready process,
-but priorities are dynamically adjusted to prevent
-starvation.
+The chapter's central function is [[sched()]] (with its
+twin [[schedinit()]]); everything else is plumbing
+around it. We begin with the priority mechanism: how
+each process gets a priority number, and how those
+numbers are adjusted at runtime.
 
 \section{Process priority}
 %adjustable priority actually
