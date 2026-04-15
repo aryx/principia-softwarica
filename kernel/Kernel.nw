@@ -616,14 +616,312 @@ will cover.
 % microkernel point of view: kernel should only support
 %  address spaces, threads, scheduling, and IPC
 
-Entire books have been written on those subjects.
-I assume you already know what is an operating system
-and we will now focus on the concrete services (API) a kernel
-provides to the user programs. Again, 
-standard OS textbooks such as
+Entire books have been written on each of those topics,
+and standard OS textbooks such as
 Tanenbaum~\cite{tannenbaum-os} and
-Silberschatz~\cite{silberschatz-os}
-provide the theoretical background.
+Silberschatz~\cite{silberschatz-os} provide the full
+theoretical treatment. I will not try to compete with
+them. But there are a handful of concepts that come up
+{repeatedly} in the code to follow, and rather than
+assume the reader has the right textbook open in another
+tab, I devote the next few subsections to a brief recap
+of each---just enough to make the rest of the book readable
+on its own. These recaps are deliberately OS-agnostic;
+each subsection then points at the chapter where the
+concrete \plan\ version lives.
+
+\subsection{Kernel mode vs user mode}
+\label{sec:princ-modes}
+
+%claude:
+Every mainstream CPU provides at least two {\em privilege
+levels}: a {privileged} mode (the kernel runs here) with
+unrestricted access to every hardware register, memory
+page, and instruction; and a {restricted} mode (user
+programs run here) where many instructions are forbidden,
+many memory regions are inaccessible, and every attempt
+to touch hardware goes through the kernel. The hardware
+{enforces} the split: user code physically cannot disable
+interrupts, reload the page-table pointer, or poke the
+disk controller.
+
+%claude:
+The reason is isolation. If every program could touch
+every register, a single buggy or malicious process would
+take down the machine or leak data from every other
+process. Privilege levels let the kernel be the sole
+arbiter of who gets to do what, which in turn makes it
+possible to {multiplex} the CPU, memory, and I/O devices
+safely among untrusting programs. It is also what makes
+the kernel's job so delicate: a bug in {kernel} code
+cannot be sandboxed, because the kernel is already below
+the sandbox.
+
+%claude:
+Transitions between modes are never voluntary from the
+user side. The CPU switches to privileged mode
+automatically in response to one of a fixed set of
+hardware events---a timer interrupt, a page fault, a
+deliberate {trap} instruction such as a system call---and
+each event vectors execution into a preconfigured kernel
+entry point. There is no ``please switch me to supervisor
+mode'' instruction available in user mode; the only way
+in is through an entry point the kernel itself chose.
+Different architectures spell the modes differently
+([[ring~0]] vs [[ring~3]] on x86, [[SVC]] vs [[USR]]
+on ARM, [[M]]/[[S]]/[[U]] on RISC-V), and some define
+more than two levels (ARM and RISC-V each have a
+hypervisor mode for running VMs), but the core idea is
+the same everywhere. \plan's kernel runs in supervisor
+mode and user processes run in user mode; see
+Chapter~\ref{chap:interrupts} for the actual entry and
+return code on ARM.
+
+\subsection{Virtual memory and address spaces}
+\label{sec:princ-vm}
+
+%claude:
+Modern CPUs almost never let software touch physical
+memory directly. Instead, every memory access goes through
+a hardware translation unit called the {\em MMU}, which
+maps a {\em virtual address} (what the program sees) to
+a {\em physical address} (what the RAM chips see). The
+translation is driven by per-process data structures
+called {\em page tables} that the kernel sets up and
+the MMU walks on every access (with a cache, the TLB,
+to make it fast). At any moment the MMU is using the
+page tables of a specific process---its {\em address
+space}---and will fault if code touches a virtual
+address that has no mapping.
+
+%claude:
+This apparatus does three things at once. It gives each
+process the illusion of owning the whole address space
+from address~0 upward, which makes linking and loading
+trivial (every program can be linked at the same fixed
+address). It {\em isolates} processes from each other:
+process~A has no mapping for process~B's pages, so a
+stray pointer in~A can at worst corrupt~A. And it lets
+the kernel implement {\em on-demand} memory
+management---pages can be created lazily on first
+access (demand-zero), shared between processes
+(copy-on-write fork), backed by a file (memory-mapped
+I/O), or even written out to disk (swap)---all by
+editing page-table entries rather than moving bytes
+around.
+
+%claude:
+A typical user process's virtual address space is
+organized into a handful of {\em segments}: a read-only
+{text} segment holding the code, an initialized-data
+segment ({data}), a zero-initialized segment ({bss}),
+a dynamically-growing {heap}, and a downward-growing
+{stack}. The layout is conventionally drawn with low
+addresses at the bottom and high addresses at the top,
+like this:
+\begin{verbatim}
+          +-----------------+  USTKTOP (high addresses)
+          |   user stack    |
+          |        |        |
+          |        v        |
+          +-----------------+
+          |      (gap)      |
+          +-----------------+
+          |       ^         |
+          |       |         |
+          |     heap        |
+          +-----------------+
+          |      bss        |
+          +-----------------+
+          |     data        |
+          +-----------------+
+          |     text        |
+          +-----------------+  UTZERO (low addresses)
+\end{verbatim}
+The kernel lives in an entirely separate region of the
+virtual address space, typically at high addresses
+above some [[KZERO]] boundary, and is mapped identically
+in {every} process so that a trap from any user process
+lands in the {same} kernel without changing page tables.
+Only the kernel can read or write its own region
+thanks to the privilege check from
+Section~\ref{sec:princ-modes}. Different operating
+systems arrange the details differently---Linux on
+x86-64 splits the canonical 48-bit address space in
+half at [[0xffff800000000000]], Windows splits 32-bit
+space at [[0x80000000]]---but the ``user low, kernel
+high, kernel shared'' shape is near-universal. \plan's
+specific layout is shown in the memory-layout diagrams
+later in this chapter, and the full virtual memory
+implementation lives in Chapter~\ref{chap:virtual-memory}.
+
+\subsection{Interrupts, exceptions, traps, and syscalls}
+\label{sec:princ-interrupts}
+
+%claude:
+These four words get thrown around interchangeably in
+casual conversation, but the underlying hardware mechanisms
+split them along two clean axes: {synchronous vs
+asynchronous} and {deliberate vs accidental}. The usual
+taxonomy is:
+\begin{itemize}
+\item An {\em interrupt} is {\bf asynchronous} and always
+comes from outside the CPU: a timer tick, a network
+packet arriving, a keystroke on a keyboard, a disk
+finishing a read. It can land between {any two} user
+instructions, and the running program is not involved
+in requesting it.
+
+\item An {\em exception} is {\bf synchronous} and caused
+{accidentally} by the currently executing instruction:
+dividing by zero, executing an illegal opcode, touching
+a virtual address with no mapping. The instruction {is}
+the cause, so the faulting [[PC]] is reproducible.
+
+\item A {\em trap} (also called a {\em software interrupt})
+is {\bf synchronous} and {\bf deliberate}: the program
+executes a special instruction---[[SWI]] on ARM, [[INT]]
+on x86, [[ECALL]] on RISC-V---to request service from
+the kernel. Breakpoints (the debugger instruction
+[[BKPT]]/[[INT3]]) are another flavor of trap.
+
+\item A {\em system call} is a specific kind of trap
+whose purpose is to ask the kernel to perform an operation
+on the process's behalf: open a file, send on a pipe,
+fork. The ``syscall number'' passed in a register tells
+the kernel which operation.
+\end{itemize}
+
+%claude:
+The two axes fit naturally into a 2{\times}2 table:
+\begin{verbatim}
+                    Synchronous             Asynchronous
+                 (caused by current       (from outside
+                  instruction)             the CPU)
+               +----------------------+----------------------+
+  Accidental   |      exception       |      interrupt       |
+   (not asked  |  div by zero,        |  timer tick,         |
+    for)       |  page fault,         |  keystroke,          |
+               |  illegal opcode      |  disk done,          |
+               |                      |  network packet      |
+               +----------------------+----------------------+
+  Deliberate   |        trap          |        IPI           |
+   (requested  |  SWI / INT / ECALL,  |  (inter-processor    |
+    by the     |  breakpoint,         |   interrupt: one CPU |
+    program)   |  system call         |   signals another)   |
+               +----------------------+----------------------+
+\end{verbatim}
+The deliberate/asynchronous cell is the rarest of the
+four and only matters on multi-processor systems, where
+one CPU can ask another to run a handler via an IPI
+(used, for example, to tell every other core ``flush
+your TLB, I just changed a page table'').
+
+%claude:
+All four route through the same mechanism from the CPU's
+point of view: a hardware {\em vector table} (ARM has
+eight entries, x86 has 256, RISC-V's [[mtvec]] points
+at a single handler that demultiplexes). When any of
+these events fires, the CPU switches to privileged mode
+(see Section~\ref{sec:princ-modes}), jumps to the
+corresponding entry point, and starts running kernel
+code. The kernel's first job is always the same: save
+enough of the interrupted program's state to be able
+to resume it later. Its next job depends on {which}
+kind of event fired---a timer interrupt drives the
+scheduler, a page-fault exception walks the page tables,
+a syscall trap dispatches through a table of function
+pointers---but the entry, state-save, and exit
+machinery are shared.
+
+%claude:
+The synchronous/asynchronous distinction has a
+far-reaching consequence: because interrupts can land
+between {any two} instructions, every piece of kernel
+code that touches shared state must either disable
+interrupts around the critical section or use a lock
+that interrupts respect. This is why the book has an
+entire chapter on {concurrency} (Chapter~\ref{chap:concurrency})
+before you see any ``real'' kernel code---getting
+interrupt safety right is the first thing a kernel
+must do. The actual mechanics of ARM exception vectors,
+syscall dispatch, and IRQ delivery then live in
+Chapter~\ref{chap:interrupts}.
+
+\subsection{User stack and kernel stack}
+\label{sec:princ-stacks}
+
+%claude:
+Every process in a modern operating system owns {two}
+stacks. The {user stack} lives in user-mode virtual
+memory and is manipulated by ordinary user code using
+the CPU's stack pointer register. When a trap, exception,
+or interrupt (Section~\ref{sec:princ-interrupts}) vectors
+execution into the kernel, the CPU switches the stack
+pointer to a separate {kernel stack} that lives in kernel
+memory, and every stack frame pushed by kernel code while
+it is handling the event lands on that kernel stack.
+When the kernel returns to user mode, the user stack
+pointer is restored and the user stack resumes where it
+left off.
+
+%claude:
+Two reasons for the split. First, {safety}: when a trap
+fires, the user stack pointer could be anything---pointing
+into unmapped memory, into a deliberately crafted region,
+or into a valid but nearly-exhausted stack. The kernel
+refuses to trust it at all; it switches to a known-good
+kernel stack as its very first action. Second,
+{re-entrancy}: if the kernel were to keep running on the
+user stack, then a trap taken {while} the kernel is
+already running (because a timer interrupt arrived during
+a syscall) would have nowhere to push its state. A
+dedicated kernel stack solves this cleanly.
+
+%claude:
+There is one more design choice: whose kernel stack does
+the kernel use? Some historical systems had a {single}
+kernel stack per CPU, which forced kernel code to run to
+completion without blocking---once it started, nothing
+else could enter the kernel on that CPU until it was done.
+Modern systems, including \plan, instead give {every
+process} its own kernel stack, living either inside or
+next to the process's [[Proc]] structure. A process that
+has trapped into the kernel can therefore sleep
+mid-syscall (e.g., waiting for a disk read to complete);
+its kernel-side execution state---saved registers, return
+addresses, local variables---sits frozen on its own
+kernel stack, and a different process can safely be
+scheduled onto the CPU. When the sleeper is eventually
+woken, the scheduler restores its stack pointer and
+execution resumes exactly where it left off.
+\begin{verbatim}
+  User virtual memory               Kernel virtual memory
+  (one per process)                 (shared by all processes)
+
+      Process P1                           Process P1
+  +---------------+                     +---------------+
+  |   user stack  |   <-- user SP       |  kernel stack |  <-- kernel SP
+  |       |       |       (while in         (while P1 is in
+  |       v       |        user mode)        a syscall)
+  +---------------+                     +---------------+
+  |     heap      |
+  |     ...       |                         Process P2
+  |  text, data   |                     +---------------+
+  +---------------+                     |  kernel stack |
+                                        +---------------+
+      Process P2
+  +---------------+
+  |   user stack  |
+  |     ...       |
+  +---------------+
+\end{verbatim}
+\plan's concrete version of this picture, including the
+[[Ureg]] structure saved on entry and the [[Label]]
+structure used to park a blocked kernel-side execution,
+is shown later in this chapter (in the calling-convention
+diagram of the C-and-assembly section) and in full detail
+in Chapter~\ref{chap:processes}.
 
 
 \section{[[9]]'s syscall interface}
