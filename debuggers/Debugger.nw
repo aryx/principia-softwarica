@@ -62,6 +62,9 @@ Principia Softwarica: The Plan~9 Debuggers and Tracers
 }\\
 {version 0.1}
 }
+%debuggers: acid and db
+%tracers: ratrace, but maybe also ktrace and /lib/acid/truss ?
+
 \author{
 Yoann Padioleau\\
 \texttt{yoann.padioleau@gmail.com}\\
@@ -119,7 +122,8 @@ looked like.
 When a program misbehaves silently, a tracer
 reveals every system call it makes, often pointing directly
 to the problem.
-%
+
+
 Yet very few programmers know how these tools actually work.
 %
 Understanding the internals of a debugger also deepens your
@@ -164,17 +168,17 @@ save, and what does the debugger reconstruct from it?
 struct field {by name}, and how does it know the type
 of the value at a given address?
 
-\item How does a debugger {attach} to an already-running
-process without restarting it, and how is that different
-from launching a program under the debugger?
+%\item How does a debugger {attach} to an already-running
+%process without restarting it, and how is that different
+%from launching a program under the debugger?
 
-\item When the target program takes a fault or receives a
-signal, how does the debugger decide whether to intercept
-it or let the program handle it normally?
+%\item When the target program takes a fault or receives a
+%signal, how does the debugger decide whether to intercept
+%it or let the program handle it normally?
 
-\item How does the debugger turn a region of memory into
-machine instructions it can show to the user, and how
-does that work across different CPU architectures?
+%\item How does the debugger turn a region of memory into
+%machine instructions it can show to the user, and how
+%does that work across different CPU architectures?
 
 %\item What is a programmable debugger? How can debugging
 %operations be expressed as functions in a language?
@@ -435,7 +439,8 @@ the related observability tools, [[docs/man/3/proc]] for
 the [[/proc]] filesystem interface that backs both
 [[acid]] and [[ratrace]], and [[docs/man/2/debugger]] and
 [[docs/man/2/mach]] for the [[libmach]] API.
-%
+
+%claude:
 The [[debuggers/docs/]] directory contains the two
 foundational papers by Phil Winterbottom:
 [[debuggers/docs/acidpaper.pdf]] (``ACID: A Debugger Built
@@ -473,8 +478,8 @@ in the following chapters, I first give an overview in this
 chapter of the general principles of tracers and debuggers.
 %
 I also describe the services provided by [[ratrace]] and
-[[acid]], walk through a small debugging session on
-[[hello_bug.c]] to show [[acid]] in action, and finally
+[[acid]], walk through a small debugging session
+to show [[acid]] in action, and finally
 explain how the code is organized, what the software
 architecture of both tools looks like, and how the rest
 of this book is structured.
@@ -1302,7 +1307,8 @@ The key functions available at the [[acid: ]] prompt include:
 [[regs()]] (print registers),
 and [[print()]] (display a value).
 % classic gdb-like, just more verbose
-%
+
+
 Because these are regular [[acid]] functions defined in
 the standard library---not built-in commands---the user can
 redefine them or write new ones to automate complex
@@ -1318,14 +1324,15 @@ You could also write a function that detects memory leaks by
 hooking [[malloc]] and [[free]], or one that records every
 function entry/exit to produce a trace. Scripts with similar
 goals already exist in [[/lib/acid/leak]] and
-[[/lib/acid/coverage]]---though, as we will see in
+[[/lib/acid/coverage]] (though, as we will see in
 Chapter~\ref{chap:advanced-features}, they take a different
-route: [[leak.acid]] walks the heap and scans roots in the
-style of a conservative garbage collector (no malloc hook at
-all), and [[coverage.acid]] sets breakpoints on basic-block
-boundaries rather than function entry/exit.
+route).
+% [[leak.acid]] walks the heap and scans roots in the
+%style of a conservative garbage collector (no malloc hook at
+%all), and [[coverage.acid]] sets breakpoints on basic-block
+%boundaries rather than function entry/exit.
 With [[db]] or basic [[gdb]] commands, these tasks would
-require manually issuing dozens of commands or writing an
+%require manually issuing dozens of commands or writing an
 external script that drives the debugger through a command
 file---neither approach scales.
 
@@ -5991,127 +5998,6 @@ machbytype(int type)
 }
 @
 
-\section{Mapping process memory: [[attachproc()]]}
-
-%claude:
-[<attachproc()>] creates a [[Map]] for a live process by
-opening [[/proc/<pid>/regs]] (and [[fpregs]] for floating-point
-registers) and combining them with the [[/proc/<pid>/mem]]
-file descriptor.
-%
-The resulting map has four segments:
-registers, FP registers, text, and data. The text and data
-segments are mapped through [[mem]], so reading an address
-in the map reads the corresponding virtual address in the
-live process.
-
-<<function [[attachproc]]>>=
-Map*
-attachproc(int pid, int kflag, int corefd, Fhdr *fp)
-{
-    char buf[64], *regs;
-    int fd;
-    Map *map;
-    uvlong n;
-
-    map = newmap(0, 4);
-    if (!map)
-        return 0;
-    if(kflag)
-        regs = "kregs";
-    else
-        regs = "regs";
-    if (mach->regsize) {
-        sprint(buf, "/proc/%d/%s", pid, regs);
-        fd = open(buf, ORDWR);
-        if(fd < 0)
-            fd = open(buf, OREAD);
-        if(fd < 0) {
-            free(map);
-            return 0;
-        }
-        setmap(map, fd, 0, mach->regsize, 0, "regs");
-    }
-    if (mach->fpregsize) {
-        sprint(buf, "/proc/%d/fpregs", pid);
-        fd = open(buf, ORDWR);
-        if(fd < 0)
-            fd = open(buf, OREAD);
-        if(fd < 0) {
-            close(map->seg[0].fd);
-            free(map);
-            return 0;
-        }
-        setmap(map, fd, mach->regsize, mach->regsize+mach->fpregsize, 0, "fpregs");
-    }
-    setmap(map, corefd, fp->txtaddr, fp->txtaddr+fp->txtsz, fp->txtaddr, "text");
-    if(kflag || fp->dataddr >= mach->utop) {
-        setmap(map, corefd, fp->dataddr, ~0, fp->dataddr, "data");
-        return map;
-    }
-    n = stacktop(pid);
-    if (n == 0) {
-        setmap(map, corefd, fp->dataddr, mach->utop, fp->dataddr, "data");
-        return map;
-    }
-    setmap(map, corefd, fp->dataddr, n, fp->dataddr, "data");
-    return map;
-}
-@
-
-%yoann: ASCII diagram after attachproc() done?
-%claude:
-After [<attachproc()>] returns, the [[Map]] has up to four
-segments wired up like this:
-\begin{verbatim}
-   Map* (cormap)
-   +---------------------------------+
-   | nsegs = 4                       |
-   +---------------------------------+
-   | seg[0] "regs"                   |
-   |   fd  -> /proc/<pid>/regs       |
-   |   b=0, e=mach->regsize          |
-   +---------------------------------+
-   | seg[1] "fpregs"                 |
-   |   fd  -> /proc/<pid>/fpregs     |
-   |   b=regsize, e=regsize+fpregsize|
-   +---------------------------------+
-   | seg[2] "text"                   |
-   |   fd  -> /proc/<pid>/mem        |
-   |   b=fp->txtaddr,                |
-   |   e=fp->txtaddr+fp->txtsz       |
-   +---------------------------------+
-   | seg[3] "data"                   |
-   |   fd  -> /proc/<pid>/mem        |
-   |   b=fp->dataddr,                |
-   |   e=stacktop(pid)               |
-   +---------------------------------+
-\end{verbatim}
-%
-Note that text and data both point to the same [[/proc/<pid>/mem]]
-fd, but with different address ranges; the [[Map]] abstraction
-demultiplexes them by checking which segment contains the address
-being read.
-
-<<function [[findseg]]>>=
-int
-findseg(Map *map, char *name)
-{
-    int i;
-
-    if (!map)
-        return -1;
-    for (i = 0; i < map->nsegs; i++)
-        if (map->seg[i].inuse && !strcmp(map->seg[i].name, name))
-            return i;
-    return -1;
-}
-@
-
-
-%\section{ARM}
-%\section{[[Map]], [[syminit()]], and [[loadmap()]]}
-
 \section{Mapping the executable file: [[loadmap()]]}
 
 %claude:
@@ -6379,6 +6265,127 @@ symbase(long *n)
 
 %\section{Symbol table}
 
+
+\section{Mapping process memory: [[attachproc()]]}
+
+%claude:
+[<attachproc()>] creates a [[Map]] for a live process by
+opening [[/proc/<pid>/regs]] (and [[fpregs]] for floating-point
+registers) and combining them with the [[/proc/<pid>/mem]]
+file descriptor.
+%
+The resulting map has four segments:
+registers, FP registers, text, and data. The text and data
+segments are mapped through [[mem]], so reading an address
+in the map reads the corresponding virtual address in the
+live process.
+
+<<function [[attachproc]]>>=
+Map*
+attachproc(int pid, int kflag, int corefd, Fhdr *fp)
+{
+    char buf[64], *regs;
+    int fd;
+    Map *map;
+    uvlong n;
+
+    map = newmap(0, 4);
+    if (!map)
+        return 0;
+    if(kflag)
+        regs = "kregs";
+    else
+        regs = "regs";
+    if (mach->regsize) {
+        sprint(buf, "/proc/%d/%s", pid, regs);
+        fd = open(buf, ORDWR);
+        if(fd < 0)
+            fd = open(buf, OREAD);
+        if(fd < 0) {
+            free(map);
+            return 0;
+        }
+        setmap(map, fd, 0, mach->regsize, 0, "regs");
+    }
+    if (mach->fpregsize) {
+        sprint(buf, "/proc/%d/fpregs", pid);
+        fd = open(buf, ORDWR);
+        if(fd < 0)
+            fd = open(buf, OREAD);
+        if(fd < 0) {
+            close(map->seg[0].fd);
+            free(map);
+            return 0;
+        }
+        setmap(map, fd, mach->regsize, mach->regsize+mach->fpregsize, 0, "fpregs");
+    }
+    setmap(map, corefd, fp->txtaddr, fp->txtaddr+fp->txtsz, fp->txtaddr, "text");
+    if(kflag || fp->dataddr >= mach->utop) {
+        setmap(map, corefd, fp->dataddr, ~0, fp->dataddr, "data");
+        return map;
+    }
+    n = stacktop(pid);
+    if (n == 0) {
+        setmap(map, corefd, fp->dataddr, mach->utop, fp->dataddr, "data");
+        return map;
+    }
+    setmap(map, corefd, fp->dataddr, n, fp->dataddr, "data");
+    return map;
+}
+@
+
+%yoann: ASCII diagram after attachproc() done?
+%claude:
+After [<attachproc()>] returns, the [[Map]] has up to four
+segments wired up like this:
+\begin{verbatim}
+   Map* (cormap)
+   +---------------------------------+
+   | nsegs = 4                       |
+   +---------------------------------+
+   | seg[0] "regs"                   |
+   |   fd  -> /proc/<pid>/regs       |
+   |   b=0, e=mach->regsize          |
+   +---------------------------------+
+   | seg[1] "fpregs"                 |
+   |   fd  -> /proc/<pid>/fpregs     |
+   |   b=regsize, e=regsize+fpregsize|
+   +---------------------------------+
+   | seg[2] "text"                   |
+   |   fd  -> /proc/<pid>/mem        |
+   |   b=fp->txtaddr,                |
+   |   e=fp->txtaddr+fp->txtsz       |
+   +---------------------------------+
+   | seg[3] "data"                   |
+   |   fd  -> /proc/<pid>/mem        |
+   |   b=fp->dataddr,                |
+   |   e=stacktop(pid)               |
+   +---------------------------------+
+\end{verbatim}
+%
+Note that text and data both point to the same [[/proc/<pid>/mem]]
+fd, but with different address ranges; the [[Map]] abstraction
+demultiplexes them by checking which segment contains the address
+being read.
+
+<<function [[findseg]]>>=
+int
+findseg(Map *map, char *name)
+{
+    int i;
+
+    if (!map)
+        return -1;
+    for (i = 0; i < map->nsegs; i++)
+        if (map->seg[i].inuse && !strcmp(map->seg[i].name, name))
+            return i;
+    return -1;
+}
+@
+
+
+%\section{ARM}
+%\section{[[Map]], [[syminit()]], and [[loadmap()]]}
 
 %******************************************************************************
 \chapter{Parsing [[acid]] code}
