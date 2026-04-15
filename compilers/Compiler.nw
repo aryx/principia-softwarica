@@ -2996,6 +2996,64 @@ The main loop in [[yylex]] reads characters via [[GETC]]
 (which goes through the preprocessor's macro expansion),
 classifies them, and returns token codes for the yacc parser.
 
+\section{Hand-written vs generated lexers}
+\label{sec:handwritten-lexer}
+
+%claude:
+There is a long-running debate in compiler construction
+about whether the lexer should be hand-written or generated
+from a specification. The generated option is older and
+more respectable: [[lex]] (Lesk, 1975) turns a list of
+regular expressions into an efficient DFA at build time;
+its modern descendants---[[flex]], [[re2c]], [[ragel]],
+OCaml's [[ocamllex]]---do the same with various refinements.
+The generated lexer is compact, provably correct with
+respect to its grammar, and easy to extend by editing one
+file. That is exactly how most compiler textbooks tell you
+to build a lexer.
+
+%claude:
+And yet, almost every production C compiler hand-writes
+its lexer. [[5c]] hand-writes it; [[gcc]]'s [[libcpp]]
+hand-writes it; [[clang]]'s [[Lexer.cpp]] hand-writes it;
+[[tcc]] hand-writes it. The reasons are not primarily
+about performance, though performance helps: a hand-written
+lexer can make a lookahead decision based on information
+only the parser or the symbol table knows. The killer
+example in C is the {typedef trick}: after
+\begin{verbatim}
+  typedef int foo;
+\end{verbatim}
+the identifier [[foo]] must lex as a type name, not as an
+ordinary identifier, because [[foo *x]] is a declaration
+and not a multiplication. This requires the lexer to
+consult the symbol table, which a pure-regex DFA cannot
+do. Other reasons to hand-write include integrating the
+preprocessor's macro expansion into [[GETC]] so the parser
+never sees the distinction, producing precise diagnostics
+with source-file and line-column pointers, handling
+Unicode identifiers with their own rules (XID\_Start,
+XID\_Continue) that regular expressions express awkwardly,
+and recovering from an invalid character by resuming at
+a sensible boundary.
+
+%claude:
+Non-C compilers make the same choice for similar reasons.
+Go's lexer is hand-written in
+[[cmd/compile/internal/syntax/scanner.go]]. Rust's is
+hand-written in [[rustc_lexer]]. Java's [[javac]] and
+Kotlin's compilers are hand-written. The generated-lexer
+approach wins mostly for simple domain-specific languages
+and configuration files where performance and
+typedef-style context-sensitivity do not matter---things
+like [[awk]]'s action parser, [[cpp]] directives, or most
+protocol-message parsers. In [[5c]], the hand-written
+approach pays for itself in the first 200 lines of
+[[yylex]] precisely because C's declaration syntax is
+context-sensitive and the same character sequence can
+mean different things depending on what the symbol table
+says.
+
 \section{[[yylex()]]}
 
 %claude:
@@ -20666,6 +20724,55 @@ indices, avoiding redundant symbol name output. The file
 history ([[outhist]]) records which source files contributed
 to each range of instructions, enabling the debugger to map
 object code back to C source lines.
+
+\section{Instruction-stream object files}
+\label{sec:instruction-stream-obj}
+
+%claude:
+Most modern object-file formats---ELF, Mach-O, COFF, PE---are
+{section-oriented}. The file is a header, a section table,
+and for each section a block of already-assembled machine
+code plus a relocation table that tells the linker how to
+patch addresses when the section is placed at a final load
+address. The assembler has already emitted final instruction
+encodings; the linker's job is to concatenate sections,
+resolve symbols, and rewrite the relocations. Once assembly
+is done the instructions are opaque bytes from the linker's
+point of view.
+
+%claude:
+\plan's [[.5]], [[.8]], [[.6]], and [[.v]] object files
+take a different route. They are a {serialized stream of
+[[Prog]] records}---the same [[Prog]] instruction structure
+the compiler and assembler keep in memory---written out
+with a compact per-instruction symbol-index table
+([[Htab]]) so that symbol names appear only once. Because
+the instructions are still in structured form, the linker
+can do work that section-oriented formats make difficult:
+a second pass of peephole optimization after symbol
+resolution, ARM-specific tricks like immediate rotation
+when the final constant becomes known, leaf-function
+optimization that needs to see all call sites, and in-place
+editing of individual instructions. This is why
+\book{Linker} is unusually meaty for a \plan tool---the
+linker is a second-stage optimizer that still sees and
+rewrites machine instructions, not just a loader that
+patches relocations.
+
+%claude:
+The design is Ken Thompson's, reused across the whole
+\plan toolchain. [[LLVM]] bitcode (2003) is the closest
+modern analogue in spirit, except that LLVM stores
+high-level SSA IR rather than target-specific machine
+instructions, and bitcode's purpose is to defer {code
+generation} to link time, whereas \plan's purpose is to
+defer {final optimization}. ELF and Mach-O still dominate
+in the mainstream world because section-oriented linkers
+are easier to parallelize, easier to standardize across
+competing toolchains, and do not tie the linker to any one
+compiler's internal representation. \plan pays those costs
+because it owns the whole toolchain and Ken valued
+pass-composition over standardization.
 
 \section{Object format}
 
