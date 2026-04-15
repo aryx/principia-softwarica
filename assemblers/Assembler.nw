@@ -7344,6 +7344,115 @@ is generated from the object files and how those object files
 are combined to form an executable.
 \n 5l/optab.c does this
 
+\section{Object file principles}
+\label{sec:princ-object}
+
+%claude:
+An {\em object file} is the assembler's output---a
+binary artifact containing the translated machine code
+plus enough bookkeeping for the linker to combine it
+with other object files into a final executable. The
+essential question an object format has to answer is:
+{\em what information does the linker need to do its
+job?}. At minimum the linker needs the machine code
+itself (so it has something to relocate and
+concatenate), a list of {\em symbols defined} in this
+file (so other files can reference them), a list of
+{\em symbols used} but not defined in this file (so the
+linker can resolve them against other files' symbol
+tables), and a list of {\em relocation entries}
+telling the linker where in the code to patch addresses
+once the final layout is known. Every serious object
+format then piles on optional extras: multiple
+code/data sections, debug information, per-function
+exception-handling metadata, constructor/destructor
+tables, version information, link-time optimization
+bitcode, and so on.
+
+%claude:
+Object formats have evolved in a handful of distinct
+lineages. {\em a.out} (``assembler output'') was the
+original \unix format, introduced with Ken Thompson's
+first \unix on the PDP-11 in~1971---a flat header plus
+text, data, bss, symbol table, and relocations, with no
+notion of multiple sections. {\em {\sc coff}}
+({\em Common Object File Format}) was introduced with
+AT\&T \unix System~V in~1983 to add arbitrary named
+sections, becoming the model for every modern format to
+follow. {\em {\sc elf}} ({\em Executable and Linkable
+Format}), shipped with {\sc svr}4 in~1988, is now the
+Linux, BSD, and Solaris standard; it extended
+{\sc coff} with a cleaner section header table, a
+program header table for runtime loading, and explicit
+dynamic-linking slots. {\em Mach-O} is {\sc next}step's
+format (derived from the Mach microkernel work at
+Carnegie Mellon), inherited by macOS, iOS, and the
+other Apple platforms. {\em {\sc pe}} ({\em Portable
+Executable}) is Microsoft's \unix-free variant of
+{\sc coff}, wrapped in an {\sc ms-dos} ``{\sc mz}''
+header for compatibility and used by every Windows
+executable and {\sc dll} since NT. \plan, going against
+the grain, stayed with a revised {\em a.out}: it keeps
+the 1971 design's simplicity while dropping the parts
+that did not survive, adding only what is strictly
+necessary for a working toolchain.
+
+%claude:
+Regardless of lineage, every object format has to
+store four kinds of information. {\em Sections} divide
+the object into coarse regions with different
+properties: [[.text]] (executable code), [[.data]]
+(initialized data), [[.bss]] (zero-initialized, takes
+no file space), [[.rodata]] (read-only data), plus
+debug and metadata sections that the runtime ignores.
+{\em Symbol tables} list every name the file defines or
+references, each tagged with its section, its offset,
+its size, its scope (local, global, weak), and its type
+(function, object, section). {\em Relocation entries}
+tell the linker ``at this offset in [[.text]] there is
+a reference to symbol [[foo]] that needs to be patched
+once [[foo]] gets its final address'', along with a
+relocation {\em type} that encodes how to do the
+patch---absolute 32-bit, {\sc pc}-relative, upper 16
+bits of a 32-bit constant for ARM, and so on, with
+dozens of type codes per architecture. {\em Debug
+information} lets debuggers map machine addresses back
+to source file and line, stack frames to local-variable
+names, and instructions to expression trees; the
+historical format was {\em {\sc stabs}} (AT\&T, 1980s,
+lines of text embedded in the symbol table), replaced
+by {\em {\sc dwarf}} ({\sc dwarf}~1 in~1992, now at
+version~5---a relatively compact binary tree of
+{\em debugging information entries}), with Microsoft's
+{\em CodeView} and {\em {\sc pdb}} as the Windows
+equivalents.
+
+%claude:
+\plan's object format is striking mainly for what it
+{\em omits}. There are no named sections: the object
+file contains TEXT, DATA, and BSS as fixed parts, not
+as a general section list the way {\sc coff} and
+{\sc elf} have. There are no weak symbols, no version
+symbols, no constructor/destructor tables, no
+thread-local storage section, no {\sc dwarf}, no
+exception-handling metadata, no dynamic-loader
+relocations. Debug information is reduced to a compact
+{\em line-origin history} that records which source
+file each range of instructions came from ([[Hist]],
+covered in Chapter~\ref{chap:debugging}); local-variable
+debug info is recovered from the compiler's symbol
+emission by [[acid]] rather than from {\sc dwarf}
+expressions. The entire format fits in a few hundred
+lines of C in both [[5a]] and [[5l]], a fraction of
+what any modern \unix toolchain devotes to
+object-format handling. The rest of this chapter walks
+through the \plan format concretely: what [[5a]] writes
+for each Asm5 instruction ([[outcode]]), how operands
+are serialized ([[outopd]]), and how the symbol table
+is emitted (the [[ANAME]] table and [[h]] hash). The
+corresponding reader side lives in the linker [[5l]]
+and is covered in \book{Linker}.
+
 \section{Object format}
 \label{sec:object-format-complete}
 

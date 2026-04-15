@@ -594,6 +594,8 @@ to understand the code I will show later.
 
 \section{Assembler principles}
 
+\subsection{Assemblers and assembly language}
+
 An {\em assembler} is a program that translates source code
 written in an {assembly} programming language into
 {machine code}, or into an {object code} close to machine code.
@@ -611,6 +613,8 @@ Note that each assembly language is specific to a computer architecture.
 \l and in fact even different assembler for same arch use different syntax
 \n so it is not portable; C is a portable assembler! Or need meta-assembler.
 \t etymology of assembler/assembly? why call that way?
+
+\subsection{Mnemonics, opcodes, and operands}
 
 Assembly languages use {\em mnemonics} to denote low-level {instructions}.
 %without:
@@ -630,6 +634,108 @@ and to put the result in the fourth register.
 \n note that cant have ADD R1, 15, R4 because ARM restrictions on ADD
 \n also note att syntax, left to right
 \t footnote if use left-to-right assignment syntax, known as ATT syntax
+
+\subsection{Syntax families: Intel, AT\&T, and \plan}
+
+%claude:
+Unlike C or Python, which have language standards agreed
+upon across implementations, {\em assembly languages are
+not standardized}. Each assembler's author chooses their
+own syntax, and two assemblers for the {\em same}
+processor often accept wildly different input. Reading
+assembly code from an unfamiliar toolchain can feel like
+learning a new language even when the underlying machine
+instructions are identical. Three syntax families
+dominate in practice, and every low-level programmer
+eventually meets all three.
+
+%claude:
+{\em Intel syntax}, used by Intel's own reference
+manuals and by the dominant Windows assemblers---{\sc
+masm} (Microsoft), {\sc tasm} (Borland), {\sc nasm},
+{\sc fasm}, {\sc yasm}, and Intel's [[icc]]---writes
+the destination {\em first} and the source {\em second}.
+The instruction \verb+mov eax, 42+ means ``store 42
+into [[eax]]''. Register names appear unadorned
+([[eax]], [[ebx]]), memory addressing uses square
+brackets (\verb+[ebx+4]+), and operand sizes are noted
+with keywords like [[byte ptr]] and [[dword ptr]] when
+the context does not make them obvious. Hex constants
+use the [[0x]] prefix or the Intel-native [[h]] suffix
+([[0x2a]] or [[2ah]]).
+
+%claude:
+{\em AT\&T syntax}, the default for the {\sc gnu}
+assembler [[gas]] (and therefore for [[gcc]] output,
+the Linux kernel, and essentially everything else
+built with {\sc gnu} tools), inverts the operand
+order: source first, destination last. It marks
+register names with a [[%]] sigil and constants with
+a [[$]] sigil, and it encodes operand size in the
+mnemonic itself as a single-letter suffix---[[movb]]
+for byte, [[movw]] for 16-bit word, [[movl]] for
+32-bit long, [[movq]] for 64-bit quadword. So
+``store 42 into [[eax]]'' becomes
+\verb+movl $42, %eax+. Memory references use a
+baroque \verb+offset(base, index, scale)+ form,
+inherited directly from the original AT\&T \unix
+assembler written for the {\sc dec} PDP-11 in the
+early~1970s, from which the whole \unix assembler
+lineage descends.
+
+%claude:
+{\em \plan syntax}, the form used by [[5a]] and every
+other \plan assembler, inherits the
+source-first/destination-last order from its AT\&T
+ancestor but makes several deliberate departures. It
+drops the [[%]] sigil, so register names are unadorned
+([[R0]], [[AX]]). It makes the mnemonic {\em generic}
+across operand sizes: [[MOVW]] means ``move a 32-bit
+word'' on any architecture, and the assembler or
+linker picks the correct underlying instruction from
+the operand types. It adds ARM-specific condition
+suffixes ([[BEQ]], [[ADDCS]]) and addressing-mode
+suffixes ([[.P]] for post-increment, [[.W]] for
+write-back, [[.S]] for set-flags). It introduces four
+{\em pseudo-registers}---[[SB]] (static base),
+[[FP]] (frame pointer), [[SP]] (stack pointer),
+[[PC]]---that are separate concepts from the hardware
+registers of the same name. And a handful of
+{\em virtual instructions} like [[RET]] and [[NOP]]
+have no direct machine encoding at all and are
+expanded by the linker. \plan syntax outlived \plan's
+commercial decline because Rob Pike brought it into
+the Go language toolchain at Google: Go's compiler
+emits \plan-style assembly and the Go runtime's
+architecture-specific code is written in it, which is
+why anyone reading modern Go internals has to learn
+the form.
+
+%claude:
+Here is ``store the literal value~42 into the first
+general-purpose register'' in all three styles, on
+x86:
+\begin{verbatim}
+  operation       Intel            AT&T                Plan 9
+  -------------   --------------   ------------------  ----------------
+  load imm 42     mov  eax, 42     movl $42, %eax      MOVL $42, AX
+  load from mem   mov  eax, [ebx]  movl (%ebx), %eax   MOVL (BX), AX
+  store to mem    mov  [ebx], eax  movl %eax, (%ebx)   MOVL AX, (BX)
+  add register    add  eax, ebx    addl %ebx, %eax     ADDL BX, AX
+\end{verbatim}
+%
+The three forms encode exactly the same underlying
+x86 instructions but look nothing like one another,
+and they trip up anyone who knows one syntax well and
+meets another cold. On ARM, \plan syntax stays the
+same in spirit but uses ARM-specific register names
+([[R0]] through [[R15]]); \verb+MOVW $42, R0+ is the
+ARM equivalent of \verb+MOVL $42, AX+ above. The rest
+of this book uses \plan syntax exclusively, which
+from Section~\ref{sec:helloworld} onward I call
+{\em Asm5} for the ARM variant.
+
+\subsection{Symbolic addresses}
 
 A key feature of assemblers is to allow the use of {\em symbolic addresses}
 as operands, freeing the programmer from tedious manual calculations.
@@ -651,6 +757,8 @@ the size of each instruction, and each further modification of the program
 could entail the recalculation of all those addresses.
 \n actually jumps are relative in the ARM
 
+\subsection{The phases of assembly}
+
 To summarize, the main functions of an assembler are typically the following:
 \n function almost in a literal way; those phases correspond almost to 5a funcs
 \begin{enumerate}
@@ -670,6 +778,8 @@ defined later in the file)
 \n again 5a is special here
 
 \end{enumerate}
+
+\subsection{Object code and the linker}
 
 In fact, most assemblers do not generate the final machine code but instead
 generate an {\em object code}, which is mostly machine code but
