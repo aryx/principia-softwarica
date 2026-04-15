@@ -764,6 +764,66 @@ On ARM, memory access follows a {load/store} discipline:
 arithmetic instructions operate only on registers, never
 directly on memory.
 
+\subsection{Registers}
+\label{sec:princ-registers}
+
+%claude:
+Memory is slow. Even with a cache, reading from main memory
+takes tens or hundreds of CPU cycles---far too much for the
+inner loop of a program that reads and writes its working
+variables on every instruction. Every processor therefore
+provides a small, dedicated bank of {registers}: fast
+storage locations inside the CPU itself, named directly by
+a few bits inside each instruction. On a load/store
+architecture like ARM, arithmetic instructions can only
+operate on registers, so the compiler spends a good deal of
+effort on {register allocation}: deciding which variables
+to keep in registers and which to spill to memory.
+
+%claude:
+The number of registers a processor exposes is a design
+trade-off. More registers means less spilling and faster
+code, but also more bits per instruction to encode the
+register number, which either enlarges the instruction or
+leaves fewer bits for everything else. x86 (1978) had eight
+32-bit general-purpose registers named [[EAX]], [[EBX]],
+[[ECX]], [[EDX]], [[ESI]], [[EDI]], [[EBP]], [[ESP]];
+x86-64 doubled that to sixteen by adding [[R8]] through
+[[R15]]. Classic MIPS (1985) and RISC-V (2010) both went
+with thirty-two registers, using five bits per register
+field. ARM (1985) sits in between with sixteen---a four-bit
+field per register---precisely because those extra four
+bits were spent on the condition code and the [[S]] bit
+that the next subsections will introduce.
+
+%claude:
+ARM's register file is unusual in three other ways. By
+convention [[R13]] is used as the stack pointer and [[R14]]
+as the {link register} holding the return address for a
+[[BL]] (branch and link) call. These are not
+hardware-reserved---a program is free to use them as
+general-purpose registers---but every piece of system
+software assumes the convention. More surprisingly, [[R15]]
+{is} the program counter, directly exposed to user
+instructions. Writing to [[R15]] is a jump; reading it
+returns the address of the currently executing instruction
+plus eight, because of the original ARM1 prefetch pipeline.
+So [[ADD R15, R15, #4]] is literally an unconditional
+branch, and many of ARM's addressing modes use [[R15]] as
+an implicit base register to get PC-relative data access.
+x86, MIPS, and RISC-V all hide the PC from ordinary
+instructions, which is the more common design.
+
+%claude:
+Section~\ref{sec:regs-ds} shows how [[5i]] represents the
+register file: a [[Registers]] struct with 16 [[u32int]]
+slots plus a [[CPSR]] for the flags. Every instruction
+handler in the interpreter chapter reads and writes this
+struct directly, and has to special-case [[reg[15]]] in
+exactly the ways ARM's architecture reference manual
+prescribes---which is where the ``PC plus eight'' quirk
+starts to matter.
+
 \subsection{Instruction format}
 
 %claude:
@@ -979,6 +1039,73 @@ when the [[S]] bit is set (see Chapter~\ref{chap:interpreter}).
 % mini interpreter in machine is a kind of universal turing machine:
 % it take in its memory/tape a program M and runs it
 
+\subsection{Condition codes}
+\label{sec:princ-flags}
+
+%claude:
+Most arithmetic instructions do not just produce a result;
+they also update a small set of single-bit {condition codes}
+(also called {flags} or {status bits}) that summarize
+properties of the result. Conditional branches and, on some
+ISAs, conditional execution of arbitrary instructions, then
+read those bits to decide what to do next. The classic four
+flags, shared by almost every ISA that has them, are:
+\begin{verbatim}
+   N   result was negative       (= high bit of result)
+   Z   result was zero
+   C   unsigned carry or borrow out of the high bit
+   V   signed overflow (two's complement wraparound)
+\end{verbatim}
+%
+ARM stores them in the top four bits of the {current program
+status register} ([[CPSR]]); x86 has them in its {flags
+register} ([[EFLAGS]] or [[RFLAGS]]); PowerPC has eight
+four-bit {condition register fields} ([[CR0]]--[[CR7]]).
+
+%claude:
+The reason this tiny bundle of bits gets a dedicated
+register is that comparisons and conditional jumps use it
+as their sole communication channel. Writing
+[[if (a < b) goto L]] in the source language becomes, in
+machine code, {subtract [[a]] from [[b]]} followed by
+{branch if the flags say the result was negative}. The
+subtraction is the comparison; the flags {are} its output.
+With N and Z alone you can encode equal/not-equal/less-than/
+greater-than for signed integers; adding C and V lets you do
+the same for unsigned values and distinguish signed from
+unsigned overflow. Almost every ISA with flags implements
+the same set of 14-to-16 named condition codes ([[EQ]],
+[[NE]], [[LT]], [[GE]], [[HI]], [[LS]]\ldots) that are
+just boolean expressions over these four bits.
+
+%claude:
+Not every architecture takes this route. [[RISC-V]]
+deliberately has no flags register at all: its designers
+argued that flags create a serialization hazard on
+superscalar processors (every arithmetic instruction writes
+a single shared register that later branches read) and
+instead provide {compare-and-branch} instructions like
+[[BLT rs1, rs2, label]] that do the comparison and the
+branch in one step. MIPS made the same choice decades
+earlier. The cost is that multi-word arithmetic (add with
+carry) becomes harder to express, but the benefit is a
+cleaner out-of-order execution model.
+
+%claude:
+ARM pushes the flag design to its extreme. Most instructions
+{do not} update flags by default---only the ones whose
+encoding sets the [[S]] bit do. This lets the compiler emit
+arithmetic whose flags survive for several instructions, so
+that a later [[BEQ]] can still see the result of an earlier
+[[CMP]]. ARM also takes the flag idea further than any other
+mainstream ISA by offering {conditional execution} of
+ordinary instructions: almost every ARM instruction has a
+4-bit condition-code field, so [[ADDGT]] means ``add if the
+flags say greater-than'', turning a branchless [[if]] into
+two instructions. Section~\ref{sec:condexec} shows how
+[[5i]] handles this by checking the flags before every
+instruction regardless of whether it happens to be a real
+conditional.
 
 \section{Emulator principles}
 \l emulator vs simulator?
@@ -1194,6 +1321,62 @@ tricks, and a JIT would require an entire extra codegen
 layer worth more than the rest of the book. The slowness
 does not matter for a teaching and debugging tool where the
 user is likely to be single-stepping instructions anyway.
+
+\subsection{Memory model}
+\label{sec:princ-mem-model}
+
+%claude:
+One last design choice remains: {how to store the guest's
+address space inside the host's}. The guest program expects
+a flat 32-bit virtual address space that it can load and
+store at any aligned byte offset; the emulator has to make
+that work using nothing but ordinary host memory. The range
+of options is surprisingly wide.
+
+%claude:
+The simplest option is a {flat array}: [[char mem[4G]]] (or
+as much as the guest can plausibly use), indexed directly
+by the guest address. The smallest teaching emulators
+(SPIM, many undergraduate-course projects) do exactly this.
+The code is trivial---[[mem[addr]]] in C---but the model
+has two serious limitations. First, it commits an enormous
+host allocation up front even if the guest only touches a
+tiny fraction of its address space. Second, every address
+is always valid, so the emulator cannot model a
+segmentation fault on an unmapped page the way a real
+program would see one.
+
+%claude:
+[[5i]] and QEMU's [[softmmu]] (and Bochs before them) take
+the next step up: a {paged} model with a {software TLB}.
+The guest address space is split into fixed-size pages;
+pages are allocated on demand as the guest touches them
+(producing a real fault when it touches an unmapped one);
+and a small hash or direct-mapped cache of recent
+guest-page to host-pointer translations sits in front of
+the allocator so that the common case (touching a page you
+touched recently) is a single table lookup and a
+base-plus-offset load. [[5i]] builds this out of
+[<page_of_vaddr()>], a [<Tlb>] struct, and a separate
+[<ifetch()>] path that layers an instruction cache on top,
+all described in Chapter~\ref{chap:memory}.
+
+%claude:
+The fastest option abandons the software TLB entirely and
+{mmap}s the guest's address space directly onto the host's,
+so that guest loads and stores become plain host loads and
+stores with no software lookup in between. QEMU's Linux
+user-mode target does this when the host and guest have
+the same word size, and Apple Rosetta 2 does it throughout,
+which is part of why Rosetta's overhead is closer to 15\%
+than the 10x of a switch-dispatch interpreter. The cost is
+that the host and guest must agree on pointer layout (no
+64-bit guest on a 32-bit host), the host OS's MMU becomes
+implicitly part of the emulator, and the guest can no
+longer be traced through the emulator's own memory handlers
+for debugging. [[5i]] gives that speed up in exchange for
+keeping the whole memory layer under a thousand lines of
+straightforward C that you can step through.
 
 \section{[[5i]] interfaces}
 
@@ -1976,6 +2159,7 @@ gradually in Chapter~\ref{chap:interpreter}.
 %  [OMUL] =  { Imul,	"MUL",	Iarith },
 
 \section{[[Registers]] and [[reg]]}
+\label{sec:regs-ds}
 
 %claude:
 The set of registers is the core state of the simulated processor.
