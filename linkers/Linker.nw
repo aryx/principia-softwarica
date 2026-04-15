@@ -6974,7 +6974,7 @@ The final step in the linking pipeline is the machine code generation.
 You saw already [<asmb()>] in Section~\ref{sec:gen-executable},
 which generates the [[a.out]] header and contains some of the
 logic to generate the code and data sections.
-The only missing pieces were the functions 
+The only missing pieces were the functions
 [<oplook()>] and [<asmout()>]:
 
 <<[[asmb()]] Text section, in iteration over instruction [[p]](repeated code)>>=
@@ -6983,7 +6983,7 @@ The only missing pieces were the functions
 @
 
 %toc:
-Those two functions work together 
+Those two functions work together
 to generate the ARM instructions and will be covered in this chapter.
 But before, I will
 %alt: describe the binary format of the ARM instructions and
@@ -6993,6 +6993,58 @@ used by [<oplook()>] and [<asmout()>], especially [<Optab>].
 %real-world: what do they do at this stage in ld? just patching?
 
 %alt: \section{ARM instruction format}
+
+\section{The linker as second-stage compiler}
+\label{sec:linker-as-codegen}
+
+%claude:
+The paragraph above calls out something unusual: the final
+step of \plan's linking pipeline is machine code generation.
+Most linkers (GNU [[ld]], LLVM [[lld]], [[gold]], [[mold]],
+and every mainstream \unix linker) do not generate any
+machine code at all. They read object files whose
+instructions are already fully assembled by the compiler or
+assembler, and their job is a {layout engine}: concatenate
+sections, assign final addresses, rewrite relocation records,
+write the executable header, and emit the result. The
+instructions themselves pass through unchanged---the linker
+never peeks inside one, never rewrites one, never needs to
+know what an [[ADD]] looks like on the target ISA.
+
+%claude:
+[[5l]] is different because [[5a]] and [[5c]] deliberately
+hand it unfinished work. The object files contain in-memory
+[[Prog]] instruction records with symbolic operands
+(Chapter~\ref{chap:loading-objects}), and [[5l]] picks
+actual ARM machine instructions from a rule table
+([[oplook]]/[[asmout]]), handles ARM's constrained
+rotated-immediate encoding via the {literal pool} and the
+[[setR12]] base-register trick, applies leaf-function
+optimization once it knows all call sites, inserts
+stack-frame code at function entries, and runs a second
+pass of peephole optimization after symbol resolution.
+[[5a]]'s output is closer to a ``linearized AST of assembly
+instructions'' than to finished machine code; [[5l]]
+completes what [[5a]] started, and the whole
+compiler/assembler/linker pipeline is effectively one
+compiler split across three processes.
+
+%claude:
+The modern \unix world has caught up with this idea under
+a different name: {link-time optimization} (LTO). With
+[[gcc -flto]] or [[clang -flto]], the compiler emits
+{GIMPLE} or {LLVM bitcode} IR into the object file instead
+of finished machine code, and the linker runs the back end
+across all translation units, which enables inlining,
+devirtualization, dead-code elimination, and register
+allocation that see the whole program. The spirit is
+identical to what \plan has been doing since the first
+version---defer code generation to the linker so the
+linker has more information---but LTO is layered on top of
+section-oriented ELF and Mach-O object files and separate
+front- and back-ends, so it needs its own IR format and
+its own plumbing. \plan just designed the object format
+around the idea from the start.
 
 \section{Additional data structures}
 \l rules, patterns, ranges, classes
@@ -11290,6 +11342,55 @@ the {\em program counter and line table}.
 \t also how stacktrace? caller? need special layout convention?
 
 \l intro what is debugging? meh
+
+\section{Debug tables vs DWARF}
+\label{sec:debug-tables-vs-dwarf}
+
+%claude:
+The modern mainstream standard for debug information on
+\unix systems is {DWARF}. DWARF was introduced in 1988 for
+\unix System~V Release~4; it went through several revisions
+(DWARF~2 in 1993, DWARF~5 in 2017) and is now roughly a
+thousand pages of specification. It encodes, for each
+compiled program, the full tree of types, scopes, variables,
+functions, inlined call sites, macros, source-file and
+line-number tables, call-frame unwind information, and
+much else. [[gdb]], [[lldb]], and every other modern \unix
+debugger depend on DWARF for essentially all of their
+functionality, and the debug information for a typical C++
+program compiled with [[-g]] is often larger than the
+program itself.
+
+%claude:
+\plan takes the opposite approach. The debug information
+[[5l]] emits into the executable is just {two small tables}:
+a symbol table with one entry per function, global, or
+static (name, value, kind), and a compact PC-to-line table
+encoded as delta bytes on top of a base line number. There
+is no type information, no variable-location expressions,
+no call-frame unwind tables, no inlined-frame records. The
+symbol table alone is enough for [[db]] and [[acid]] to
+report which function the PC is in, what file and line it
+came from, and---with the help of the standard frame layout
+the compiler and assembler both agree on---to walk back up
+the call chain. The entire metadata infrastructure across
+the compiler, assembler, and linker is well under a
+thousand lines.
+
+%claude:
+The trade-off is real. [[acid]] cannot display the type
+and value of a local variable the way [[gdb]] can, because
+the type is not in the executable; [[5c]] records just
+enough in the object file for [[acid]]'s built-in [[complex]]
+declarations to work, but nowhere near what DWARF's
+[[DW_AT_location]] expressions encode for optimized code.
+On the other hand, the entire debugging workflow survives
+compiler changes without needing new debugger support, and
+the resulting binaries are much smaller---a kilobyte-scale
+symbol table instead of a section that can easily dwarf the
+code. \plan pays in power for what it saves in complexity,
+and the two small tables stay tractable enough to be
+described and generated in a single chapter.
 
 \section{[[asmb()]] and the debugging tables}
 
