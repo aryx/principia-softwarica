@@ -435,23 +435,20 @@ tagged structures), and subtle interactions with the hardware.
 A very good knowledge of C is required.
 
 \item Operating system:
-This book is not an introduction to operating systems. The goal
-of this book is to explain with full details a kernel but we assume
-you already have a vague idea of how an operating system
-works and so that you are familiar with concepts such as 
-{virtual memory}, 
-{critical regions}, 
-{interrupts}, 
-{system calls}, etc.
-I assume you already know most of the theory; this book is here to
-cover the practice.
-%The details! And they matter!
-% OS vs kernel. Used interchanbly here.
-%claude:
-Standard OS textbooks such as
-Tanenbaum~\cite{tannenbaum-os} and
-Silberschatz~\cite{silberschatz-os}
-provide the theoretical background.
+This book is not an introduction to operating systems; its
+goal is to explain a {real} kernel in full detail rather
+than to teach OS theory from scratch. That said, the
+Overview chapter opens with a short OS-agnostic recap of
+the concepts that come up repeatedly in the code to
+follow---privilege levels, virtual memory, interrupts,
+stacks, concurrency and races---so you do not need to
+keep a textbook at your side just to get through the
+first few chapters. Beyond that recap, familiarity with
+{virtual memory}, {critical regions}, {interrupts}, and
+{system calls} is helpful, and standard OS textbooks such
+as Tanenbaum~\cite{tannenbaum-os} and
+Silberschatz~\cite{silberschatz-os} provide the full
+theoretical treatment for readers who want it.
 %
 For kernel source code walkthroughs similar in spirit to
 this book, see
@@ -851,6 +848,88 @@ must do. The actual mechanics of ARM exception vectors,
 syscall dispatch, and IRQ delivery then live in
 Chapter~\ref{chap:interrupts}.
 
+\subsection{Concurrency, races, and locks}
+\label{sec:princ-concurrency}
+
+%claude:
+Consider two pieces of code that both execute
+[[counter = counter + 1]] on a shared variable. On a
+real machine this compiles to something like {load},
+{add~1}, {store}. If an interrupt fires between the
+{load} and the {store}, or if a second CPU runs its
+own {load} in the middle, both executions can end up
+observing the same old value, each adding~1, and each
+writing it back---losing one of the two increments.
+This kind of bug is called a {\em data race}, and it is
+the foundational problem of concurrent programming.
+The region of code that must execute ``all-or-nothing''
+relative to other parallel executions (here, the three
+instructions around [[counter]]) is called a
+{\em critical section}.
+
+%claude:
+Kernels have two sources of concurrency to worry about.
+The first is {\em asynchronous interrupts}: even on a
+single CPU with a single process, an interrupt handler
+can fire between any two instructions of kernel code
+(see Section~\ref{sec:princ-interrupts}), so any kernel
+data structure also touched by a handler is potentially
+racing with that handler. The simplest fix on a
+uniprocessor is to {disable interrupts} for the duration
+of the critical section---brutal but effective. The
+second source is {\em multiple CPUs}: on an SMP machine,
+two physical cores can be running kernel code
+simultaneously, and disabling interrupts on one core
+does nothing to stop the other. For that you need a
+proper {\em lock}: a piece of shared state that can be
+held by at most one CPU at a time, combined with a
+hardware {atomic} instruction (test-and-set, compare-and-swap)
+that guarantees the ``check if free, then claim'' step
+itself executes all-or-nothing.
+
+%claude:
+Kernels typically offer a small zoo of lock variants
+because the cost of waiting is context-dependent. A
+{\em spinlock} simply busy-waits (``spin'') until the
+lock is free, which is the right choice for very short
+critical sections where yielding the CPU would cost
+more than a few wasted cycles. A {\em sleeping lock}
+parks the waiter on a wait queue and schedules another
+process, which is the right choice for long critical
+sections or when the lock holder itself may sleep. An
+{\em interrupt-disabling lock} combines a spinlock with
+local interrupt-disable, for data structures shared
+between ordinary kernel code and interrupt handlers.
+\plan\ has one of each: [[Lock]] (spinlock), [[ILock]]
+(spinlock that also disables interrupts), [[QLock]]
+(sleeping lock), and [[RWLock]] (reader/writer sleeping
+lock). See Chapter~\ref{chap:concurrency} for the
+implementations.
+
+%claude:
+A historical aside. Kernels were arguably the first
+widely-deployed {\em concurrent} programs: they had to
+juggle multiple processes sharing a single CPU long
+before multi-threaded user applications were common.
+Most of the vocabulary and algorithms that user-space
+programmers now take for granted---semaphores (Dijkstra,
+1965, for the {\sc the} operating system), monitors
+(Hoare, 1974, explicitly framed as an OS-structuring
+primitive), atomic test-and-set, wait-free data
+structures---were invented {for} kernel programming and
+only later adopted by application developers. The same
+story repeated with SMP: early commercial multiprocessors
+(VAX/VMS in~1980, Sequent in~1983) forced kernel authors
+to confront multi-core correctness {decades} before
+ordinary application programmers had to worry about it,
+which only happened around~2005 when Intel hit the
+frequency wall and multi-core CPUs became standard in
+desktops. This is why this book opens with a concurrency
+chapter before you see any ``real'' kernel code: getting
+it right is prerequisite for reading everything that
+follows, and the kernel's solutions still inform most
+of today's user-space patterns.
+
 \subsection{User stack and kernel stack}
 \label{sec:princ-stacks}
 
@@ -926,6 +1005,78 @@ structure used to park a blocked kernel-side execution,
 is shown later in this chapter (in the calling-convention
 diagram of the C-and-assembly section) and in full detail
 in Chapter~\ref{chap:processes}.
+
+\subsection{Processes, threads, and context switching}
+\label{sec:princ-processes}
+
+%claude:
+Everything above---the user/kernel split, the per-process
+address space, the user and kernel stacks---adds up to the
+kernel's most fundamental abstraction: the {\em process}.
+A process is a bundle of state that makes it look, from
+the program's own perspective, as if it owns the entire
+machine. The state has two halves. The static half is
+the {address space}: the page tables that define which
+virtual addresses exist and what they map to (see
+Section~\ref{sec:princ-vm}). The dynamic half is the
+{execution state}: the program counter, the
+general-purpose registers, the user stack pointer, and,
+whenever the process has trapped into the kernel, the
+kernel stack pointer and whatever kernel-side frames
+are currently parked on it.
+
+%claude:
+A brief word on {\em threads}. In the usual textbook
+picture, multiple threads can live inside the same
+address space---sharing the static half, each with its
+own dynamic half---so that switching between them avoids
+reloading the page tables. This picture is not how
+\plan\ uses the word: in \plan\ the kernel-schedulable
+entity is always called a {\em process}, and ``thread''
+(in the sense of [[libthread]]) is a {\em user-space
+cooperative} construct built inside a single process
+(see \book{Libcore}). For the rest of this book,
+``process'' means the kernel-schedulable entity with
+its own address space and its own dynamic state; when
+two such processes want to share memory, \plan\ has
+[[rfork]] flags for it, but each remains its own
+process from the kernel's point of view.
+
+%claude:
+A {\em context switch} is the act of pausing one process
+and resuming another on the same CPU. Mechanically it is
+just a save-and-restore of the dynamic half: store the
+current registers into a per-process save area, load
+another process's saved registers, update the page-table
+base register if the address space is changing, and
+jump to the new PC. Context switches come in two flavors.
+A {\em voluntary} switch happens when the running
+process explicitly gives up the CPU---for instance
+because it is waiting on I/O and calls a [[sleep()]]-style
+kernel routine. Because the process {knows} the switch
+is about to happen, only a small save area is needed
+(essentially [[SP]]+[[PC]] plus a handful of bookkeeping
+registers). An {\em involuntary} switch happens when an
+interrupt fires and the scheduler decides to run
+something else; the interrupted process had no say in
+the matter, so the kernel must save {\em every} register
+before switching. The combination of voluntary {and}
+involuntary switches is what makes scheduling
+{preemptive}: a misbehaving process cannot hog the CPU
+because the timer interrupt will eventually take it away.
+
+%claude:
+\plan's concrete objects for all of this are [[Proc]]
+(the process structure, one per process), [[Label]]
+(the small save area used by voluntary switches),
+[[Ureg]] (the full-register save area used by involuntary
+switches), and [[Segment]] (per-address-space region
+records). [[Proc]], [[Label]], and [[Segment]] are
+introduced in Chapter~\ref{chap:core-ds}; [[Ureg]] is
+shown later in this chapter. Process creation,
+[[sleep]]/[[wakeup]], and the scheduler itself live in
+Chapter~\ref{chap:processes} and
+Chapter~\ref{chap:scheduling}.
 
 
 
