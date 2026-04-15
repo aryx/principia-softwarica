@@ -1178,6 +1178,7 @@ if(p->f==Xfalse || p->f==Xtrue
 
 
 \section{[[Thread]] and [[runq]]eue}
+\label{sec:thread-runq}
 
 % why called threads?
 % because they contains bytecodes to execute.
@@ -4279,6 +4280,48 @@ because it helps to see the bytecodes generated from a given AST node
 together with the functions that interpret those bytecodes.
 We could also group them with the related parsing, but the parser
 can be understood in isolation.
+
+%claude:
+Why bytecode at all? Most shells---[[bash]], [[dash]],
+[[zsh]], [[fish]]---execute commands by walking the AST node
+by node, firing a function for each node type. [[rc]] takes
+a different route: it compiles the AST to a stack-machine
+bytecode and runs the bytecodes through a dispatch loop, in
+the same spirit as a small Lisp, Forth, or PostScript
+implementation. The compiled form lives in a [[codebuf]] of
+[[code]] cells, each holding either an opcode function
+pointer or an inline argument (a string, an integer, or a
+chained-buffer pointer). Running the program means advancing
+a [[runq->pc]] index through that buffer.
+
+%claude:
+The argument for tree-walking is simplicity: no separate
+compile step, the parser hands its tree directly to the
+interpreter, and there is one less data structure to
+design. The argument for bytecode---which [[rc]] picks---is
+that tree-walking conflates control flow with tree shape,
+which gets awkward for things that do not match the tree
+(jumps out of loops, function returns, signal handlers
+that need to resume execution at a known point, sourcing
+one script from inside another via the [[.]] builtin).
+With bytecodes, all of those become PC manipulations on a
+single linear buffer, which is exactly the same model as a
+CPU running machine code. The [[runq]] {thread} structure
+that holds [[pc]] alongside its arguments and locals
+(Section~\ref{sec:thread-runq}) is the shell's equivalent
+of a userspace process control block, and its existence is
+what lets [[rc]] interleave multiple bytecode programs
+(the bootstrap, the user script, sourced files, function
+calls) without any explicit reentrancy in the C code.
+
+%claude:
+[[csh]] also uses a bytecode-like representation, but its
+opcodes are closer to a tokenized command list. [[rc]]'s
+opcodes go further: each one is a C function that operates
+on a per-thread argument stack, the same way Forth or
+PostScript does. The result is that the C side stays small
+(one [[for]] loop dispatching to the next opcode) while
+the language side stays expressive.
 
 \section{Overview}
 
@@ -8136,6 +8179,62 @@ real initialization sequence: how [[rc]] fabricates its own
 bootstrap bytecodes, sources the [[rcmain]] script to set up
 the default environment, and transitions into the
 read-eval-print loop that makes an interactive shell usable.
+
+%claude:
+Initialization is the single most confusing topic in the
+\unix shell world, and it is worth understanding the
+problem before looking at how [[rc]] solves it. A shell can
+be invoked in three different contexts, each wanting a
+different subset of setup. A {login} session (the one the
+display manager or [[ssh]] starts) needs the full
+environment configured: [[$path]], [[$home]], [[$term]],
+locale, mail spool, anything other programs will inherit.
+An {interactive non-login} shell (every new terminal window
+you open inside that session) only needs personalization---
+prompt, aliases, key bindings---because the heavy
+environment is already inherited from the login shell. A
+{non-interactive} shell running a script needs neither;
+both kinds of customization would just slow the script down
+or, worse, change its behavior in ways the script author
+did not anticipate.
+
+%claude:
+[[bash]] handles this by spreading the work across several
+files and asking the user to remember which file runs in
+which case. A login shell sources [[/etc/profile]] then the
+first of [[~/.bash_profile]], [[~/.bash_login]], or
+[[~/.profile]] that exists. An interactive non-login shell
+sources [[/etc/bash.bashrc]] then [[~/.bashrc]]. A
+non-interactive shell sources nothing unless [[BASH_ENV]]
+is set. The result is that [[~/.bashrc]] is not read by
+login shells unless [[~/.bash_profile]] explicitly sources
+it, which is the source of the famous ``my [[PATH]] works
+in xterm but not in tmux'' class of bug. [[zsh]] has a
+four-file ladder---[[.zshenv]] then [[.zprofile]] then
+[[.zshrc]] then [[.zlogin]], invoked in that order
+depending on shell type. [[fish]] collapses everything into
+a single [[~/.config/fish/config.fish]]. None of these are
+obviously right; they are just compromises between ``run
+the right things'' and ``stay backwards compatible with
+/bin/sh''.
+
+%claude:
+[[rc]] takes a much simpler position. Every invocation,
+login or not, runs exactly one file: [[/rc/lib/rcmain]]
+(system-wide, sourced by the bootstrap bytecodes shown
+below). For login shells, [[rcmain]] then sources
+[[$home/lib/profile]] for user customization. That is the
+entire ladder---two files instead of six, with the same
+logic regardless of how the shell was started. The price
+is that there is no separate ``interactive only'' file:
+if you want a setting in interactive shells only, you test
+[[$prompt]] inside [[profile]] yourself. The benefit is
+that nothing surprises you, because nothing depends on
+which entry point invoked the shell. The sections below
+walk through the actual bootstrap bytecodes that source
+[[rcmain]], the [[-m]] flag for picking a different one,
+and how the [[$home/lib/profile]] mechanism plugs into
+the chain.
 
 \section{Actual bootstrapping code}
 
