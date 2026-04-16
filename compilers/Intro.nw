@@ -471,6 +471,24 @@ I will be brief here and focus on the aspects most relevant
 to understanding [[5c]].
 
 %claude:
+The compiler lineage starts with Fortran (John Backus,
+{\sc ibm}, 1957)---the first {\em optimizing} compiler,
+which proved that a high-level language could produce code
+competitive with hand-written assembly. C (Dennis Ritchie,
+1972) was the first language whose compiler was good
+enough to write an operating system kernel in. {\sc gnu}'s
+[[gcc]] (Richard Stallman, 1987) became the dominant open
+source compiler for two decades. {\sc llvm} (Chris
+Lattner, 2003) offered a modular architecture that made
+it easy to add new frontends (Clang for C/C\texttt{++},
+Rust, Swift) and new backends (ARM, x86, RISC-V, WebAssembly),
+and is now the foundation of most non-{\sc gnu} toolchains.
+[[5c]] sits at the minimal end of this spectrum: around
+10\,000 lines of C, readable end-to-end, with none of the
+framework machinery that makes [[gcc]] or {\sc llvm}
+powerful but enormous.
+
+%claude:
 Compilers are traditionally divided into a {\em frontend}
 (parsing and analysis) and a {\em backend} (code generation
 and optimization). The following diagram shows the main
@@ -513,6 +531,16 @@ If you have read the \book{Assembler} or \book{Shell},
 you have already seen all three phases---the same techniques
 (hand-written lexer, macro expansion, grammar-driven parsing)
 appear in [[5c]], applied to the more complex syntax of C.
+
+%claude:
+Modern compilers overwhelmingly use hand-written
+recursive-descent parsers rather than generated ones:
+{\sc gcc} moved from [[yacc]] to hand-written in~2004
+for better error recovery, Clang was always
+hand-written, and Rust, Go, and Swift followed suit.
+[[5c]] is an exception---it still uses [[yacc]], which
+keeps the grammar readable but limits error-message
+quality.
 
 \subsection{Scope resolution}
 % Resolving, naming.
@@ -595,6 +623,22 @@ The type checker also classifies expressions as {\em lvalues}
 (values that can only be read), which determines what
 operations are legal on each expression.
 
+%claude:
+C's type system is relatively weak: no generics, no sum
+types, [[void*]] as a universal escape hatch, and
+implicit integer conversions that silently lose data.
+Modern languages push the type checker much further:
+Rust's {\em borrow checker} tracks ownership and
+lifetimes at compile time to prevent use-after-free
+without a garbage collector; OCaml's {\em algebraic
+types} make unhandled cases a compile error; Haskell's
+{\em type classes} express abstractions the C type
+system cannot even name. The trade-off is the familiar
+``worse is better'' question: C's weak types are simpler
+and more permissive, letting more bugs through but also
+letting more code compile without fighting the type
+checker.
+
 \subsection{Backend}
 
 % Assembly is essentially:
@@ -620,7 +664,7 @@ flat instruction sequence. This bridge can be understood
 as three translations, which I call {\em labelization},
 {\em linearization}, and {\em frameization}.
 
-\subsection{Labelization}
+\subsection{Labelization and control-flow lowering}
 
 % - statements, more structured forms than jmp.
 
@@ -647,7 +691,7 @@ loop becomes a backward jump to the condition test.
                             L2:
 \end{verbatim}
 
-\subsection{Linearization}
+\subsection{Linearization and three-address code}
 % registerization
 
 % - expression like x+y*z decomposed into multi mov, add, etc. Fortran!
@@ -678,7 +722,39 @@ decomposed into byte-level accesses at computed offsets.
                                 MOVW  R0, z
 \end{verbatim}
 
-\subsection{Frameization}
+\subsection{Instruction selection}
+
+%claude:
+After linearization decomposes expressions into simple
+operations (load, add, multiply, store), the compiler
+must choose which {\em machine instructions} implement
+each operation. This is {\em instruction selection}, and
+it is less trivial than it sounds: ARM offers many ways
+to compute the same result. A multiply by~4 can be a
+shift left by~2. An add of a small constant can use an
+immediate operand instead of loading the constant into a
+register first. A load followed by an add can sometimes
+be combined into a single load-with-offset instruction.
+Choosing the best instruction (or sequence) for each
+operation is what separates good generated code from
+mediocre.
+
+%claude:
+Classical compiler textbooks describe {\em tree pattern
+matching} (BURG, Aho and Johnson 1976): the compiler
+tiles each expression tree with instruction patterns and
+picks the minimum-cost tiling. {\sc gcc} and {\sc llvm}
+use elaborate machine-description files that
+automatically generate instruction selectors from
+declarative rules. [[5c]] uses a simpler approach:
+hand-written C code that walks the AST and emits
+instructions directly, with ad hoc rules for the special
+cases (shift-for-multiply, immediate folding, combined
+addressing modes). This is less systematic but far easier
+to read, and the ARM's relatively regular instruction set
+means the number of special cases stays manageable.
+
+\subsection{Frameization and stack-frame layout}
 
 % - parameters, arguments, locals, more structured forms than just plain stack
 % => see codegen: tag
@@ -693,6 +769,20 @@ the stack pointer), and tears it down on exit. The
 {\em calling convention} defines which registers hold arguments,
 where the return value goes, and which registers must be saved
 and restored across calls.
+
+%claude:
+Calling conventions vary across architectures and
+operating systems. ARM's {\sc aapcs} (ARM Architecture
+Procedure Call Standard) puts the first four arguments
+in [[R0]]--[[R3]] and the rest on the stack; x86-64
+System~V (Linux, macOS) uses six registers; Windows x64
+uses four different registers. \plan defines its own
+convention ([[R0]] for first argument and return value,
+described in \book{Libcore}'s assembly crash course).
+Getting the calling convention wrong produces bugs that
+are extraordinarily hard to diagnose: the callee reads
+its arguments from the wrong registers, and the program
+crashes far from the actual error.
 
 %yoann: concrete diagram example of C on left and assembly on right
 %claude:
@@ -719,6 +809,120 @@ optimizations (register allocation across basic blocks,
 and peephole optimization to eliminate redundant instructions).
 These are modest compared to what GCC or LLVM do, but
 they are effective and easy to understand.
+
+%claude:
+To put [[5c]]'s modest optimization in perspective:
+{\sc gcc} runs roughly 200 optimization passes over its
+{\sc ir}, {\sc llvm} runs about 100, and [[5c]] runs
+about 10---a difference that reflects the ``worse is
+better'' trade-off between peak code quality and compiler
+simplicity.
+
+\subsection{Intermediate representations and SSA}
+
+%claude:
+Most modern compilers do not translate directly from AST
+to assembly. Instead, they lower the AST into an
+{\em intermediate representation} ({\sc ir})---a language
+simpler than C but richer than assembly---and perform
+most optimizations there. {\sc gcc} has two {\sc ir}s:
+{\sc gimple} (a simplified C-like tree) and {\sc rtl}
+(register transfer language, close to assembly). {\sc
+llvm}'s {\sc ir} is a single, well-defined language that
+every frontend (Clang, Rust, Swift) compiles {\em into}
+and every backend (ARM, x86, RISC-V) compiles {\em out
+of}---which is what makes {\sc llvm} so modular.
+
+%claude:
+The most important property of modern {\sc ir}s is
+{\em Static Single Assignment} ({\sc ssa}), formalized by
+Cytron et al.\ in~1991: every variable is assigned
+exactly once, and when a variable needs to be updated, a
+new version is created. This sounds restrictive but it
+makes dataflow analysis trivial---you can follow any
+value back to its unique definition without searching
+through a list of possible assignments---which enables
+optimizations like constant propagation, dead-code
+elimination, and common-subexpression elimination to be
+expressed as simple graph walks. {\sc gcc} adopted {\sc
+ssa} in~2004 ({\sc gcc}~4.0); {\sc llvm}'s {\sc ir} has
+been {\sc ssa} from the start.
+
+%claude:
+[[5c]] has {\em neither} an {\sc ir} nor {\sc ssa}. It
+goes straight from the AST to an assembly instruction
+list, performing optimizations directly on both. This is
+a deliberate ``worse is better'' simplification: it keeps
+the compiler small (no {\sc ir} data structures to
+maintain, no {\sc ssa} $\phi$-node insertion pass) at the
+cost of missing the cross-function and global
+optimizations that {\sc ssa}-based compilers excel at.
+For the workloads \plan was designed for---operating
+system code, command-line tools, compilers
+themselves---the simpler approach was fast enough.
+
+\subsection{Register allocation}
+
+%claude:
+One backend problem deserves its own mention because it
+is the most studied optimization in compiler history.
+The AST and linearization phase can use as many temporary
+values as they want, but the {\sc cpu} has a finite
+number of registers (16 on ARM, even fewer effectively
+available after reserving [[SP]], [[LR]], [[PC]], and
+[[SB]]). {\em Register allocation} is the mapping from
+an unlimited set of virtual temporaries to this finite
+set, with any overflow {\em spilled} to the stack.
+
+%claude:
+The classical formulation (Gregory Chaitin, {\sc ibm},
+1981) models the problem as {\em graph coloring}: build
+an {\em interference graph} whose nodes are temporaries
+and whose edges connect temporaries that are live at the
+same time; then color the graph with $k$ colors (one per
+physical register). If a node cannot be colored, its
+temporary is spilled. This produces excellent code but is
+expensive (graph coloring is NP-complete in general,
+though Chaitin's heuristic works well in practice).
+{\em Linear scan} (Poletto and Sarkar, 1999) trades some
+code quality for speed: it walks the instruction list
+once, assigning registers in order of live-range start,
+and is the algorithm of choice for {\sc jit} compilers
+({\sc jvm} HotSpot's C1, V8's Crankshaft) where
+compilation speed matters more than the last 5\% of code
+quality. [[5c]] uses a simpler per-basic-block allocation
+that is fast enough for the code sizes \plan targets.
+
+\subsection{Peephole optimization}
+
+%claude:
+After instruction selection and register allocation, the
+generated code still contains local inefficiencies: a
+value loaded into a register and then immediately moved
+to another (the move is redundant); a store followed by a
+load of the same address (the load can be eliminated); a
+conditional branch over a single instruction (on ARM, the
+instruction can be conditionally executed instead). A
+{\em peephole optimizer} fixes these by scanning a small
+sliding window of consecutive instructions---the
+``peephole'' through which it views the code, typically
+2--5 instructions wide---and applying pattern-replacement
+rules to clean up what it sees. The name comes from the
+image of looking at a long instruction list through a
+tiny hole: you can only see a few instructions at a time,
+but that is enough to spot and fix local waste.
+
+%claude:
+The idea dates to William McKeeman (1965), and the
+technique is one of the simplest in the compiler: each
+rule is a pattern match (``if you see instruction~A
+followed by instruction~B, replace with instruction~C''),
+and the whole pass is a single loop over the instruction
+list. Despite its simplicity, it produces significant
+speedups by removing the overhead that the earlier, more
+structured passes left behind. [[5c]]'s peephole
+optimizer is under 200 lines and is one of the most
+readable parts of the backend.
 
 \subsection{The most demanding reader of your code}
 
