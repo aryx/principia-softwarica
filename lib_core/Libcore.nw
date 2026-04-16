@@ -18255,6 +18255,71 @@ proposed exactly this combination, and the lineage from
 {\sc csp} through \plan's [[libthread]] to Go is a
 forty-year arc from theory to mainstream practice.
 
+\subsection{Events, threads, and the colored-function problem}
+
+%claude:
+For most applications, plain OS threads with blocking
+I/O work perfectly well. A web server handling a few
+hundred concurrent connections can dedicate one thread
+to each, block on [[read]] when waiting for data, and
+let the kernel schedule. Modern Linux handles thousands
+of threads with reasonable memory, and for the vast
+majority of programs this is the simplest, most
+readable, and most debuggable model. The push toward
+alternatives came from a specific scale requirement:
+Dan Kegel's 1999 ``C10K problem'' asked how a single
+server could handle ten thousand simultaneous
+connections. At that scale, one-thread-per-connection
+costs too much memory (each stack is 1--8\,MB). The
+{\em event model}---a single thread running a
+non-blocking I/O loop with callbacks ([[nginx]],
+Node.js, Redis)---solved the memory problem but created
+``callback hell'': deeply nested, inside-out code that
+is hard to read. John Ousterhout's 1996 talk ``Why
+Threads Are A Bad Idea (for most purposes)'' argued
+for events; von Behren, Condit, and Brewer's 2003
+paper ``Why Events Are A Bad Idea'' argued back. Both
+had a point.
+
+%claude:
+{\em Async/await} (C\# 2012, Python 2015, JavaScript
+2017, Rust 2019) was supposed to be the synthesis:
+event-loop performance with sequential-looking code.
+It largely delivered---except for one structural flaw
+that Bob Nystrom crystallized in his 2015 blog post
+{\em ``What Color Is Your Function?''}. In an
+async/await language, every function is either
+``sync'' or ``async.'' A sync function {\em cannot}
+call an async function without becoming async itself,
+and this ``color'' propagates up the entire call
+stack. The result is two parallel worlds that do not
+compose: libraries must be duplicated (sync and async
+variants), error handling diverges, and the boundary
+between the two colors is a persistent source of bugs.
+This is not a flaw in any particular implementation;
+it is inherent in the async/await model itself.
+
+%claude:
+The most promising recent answer is {\em algebraic
+effects}, as implemented in OCaml~5's [[eio]] library
+(2022). An effect handler sits at a boundary in the
+call stack and intercepts operations like ``read from
+this file descriptor'' without the code {\em performing}
+the read knowing whether it will block, be scheduled
+cooperatively, or run asynchronously. The function
+simply calls [[read]]---no [[async]], no [[await]], no
+coloring---and the handler decides. This gives
+event-loop scalability with genuinely uncolored
+sequential code. \plan's [[libthread]] was reaching for
+the same goal two decades earlier: its I/O proc
+mechanism (a dedicated OS process performing blocking
+syscalls on behalf of cooperative threads) exists
+precisely so that thread code can call blocking [[read]]
+and [[write]] without freezing siblings---sequential
+code, scheduling concern handled separately. The
+effect-handler model generalizes this idea from a
+runtime trick into a language-level primitive.
+
 \section{Overview}
 
 % thread OS vs thread lib OS! already have "threads" rfork with shared memory!
