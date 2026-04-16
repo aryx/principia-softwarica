@@ -5895,6 +5895,69 @@ than a multi-pass compiler. C's declaration syntax is
 notoriously complex (types are split across multiple
 grammar rules), and this chapter reflects that complexity.
 
+\section{Generated parser vs hand-written recursive descent}
+\label{sec:generated-vs-handwritten-parser}
+
+%claude:
+The Lexing chapter had a similar discussion for lexers;
+the same question arises for parsers, and the industry's
+answer has shifted over the decades. [[5c]] uses
+{\em yacc} (Stephen Johnson, Bell Labs, 1975), which
+reads a {\sc bnf}-style grammar specification and
+generates an {\sc lalr}(1) parser---a table-driven
+automaton that recognizes the grammar by shifting tokens
+onto a stack and reducing them when a grammar rule is
+complete. The advantage is that the grammar is an
+explicit, declarative artifact: you can read it, reason
+about it, and prove properties about it independently
+of the action code. This was the dominant approach from
+the 1970s through the 1990s, and it is how the Dragon
+Book and most textbooks still teach parsing.
+
+%claude:
+And yet, like hand-written lexers, {\em hand-written
+recursive-descent parsers} have won the modern
+mainstream. {\sc gcc} moved from a yacc grammar to
+hand-written recursive descent in~2004 ({\sc gcc}~4.0);
+Clang was hand-written from the start (2007); Rust's
+[[rustc]], Go's [[cmd/compile]], Swift's parser, and
+TypeScript's parser are all hand-written. The reasons
+parallel the lexer case: better {\em error recovery}
+(a recursive-descent parser can skip to a synchronization
+point and resume, while a yacc parser's error productions
+are notoriously hard to get right), better {\em
+diagnostics} (the parser knows where it is in the grammar
+and can say ``expected a type name after [[struct]]''
+instead of ``syntax error''), and easier {\em incremental parsing} for IDEs. The price
+is that the grammar is implicit in the code rather than
+declared in a file, so it is harder to verify that the
+parser matches the language specification. Interestingly,
+the generated-parser idea is making a comeback for a
+different audience: tree-sitter (the parser behind syntax
+highlighting in VS~Code and Neovim) takes a grammar
+written in JavaScript, generates a large C parser using
+{\sc glr} (Generalized {\sc lr}) technology, and adds
+robust error recovery and {\em incremental} re-parsing
+(only the changed region is re-parsed on each keystroke).
+It is, in a sense, yacc's grandchild---fixing the two
+weaknesses (poor error recovery, no incrementalness) that
+drove compilers to hand-written parsers in the first
+place.
+
+%claude:
+[[5c]]'s use of yacc is a historical choice that works
+well for C: the grammar is complex enough that having it
+in one file ([[cc.y]]) is a genuine aid to reading, and
+yacc's {\sc lalr}(1) table catches ambiguities that a
+hand-written parser might silently misparse. The
+trade-off is the error messages: when [[5c]] hits a
+syntax error, yacc produces the generic ``syntax error''
+and the recovery is minimal, whereas Clang's
+hand-written parser can often point to the exact token
+and suggest a fix. For a compiler whose primary user is
+the \plan build system (not a human typing interactively),
+the trade-off was acceptable.
+
 \section{Single-pass compilation}
 \label{sec:single-pass}
 
