@@ -780,6 +780,70 @@ concept. The \unix lineage picked it up gradually: early
 [[mmap]] (1986) gave user programs explicit control over
 the mapping.
 
+\subsection{Paging versus segmentation}
+\label{sec:princ-paging-vs-segmentation}
+
+%claude:
+Paging is not the only way hardware can provide virtual
+memory. The alternative, {\em segmentation}, divides the
+address space into variable-length {\em segments}, each
+with a name, a base address, a length, and access
+permissions. A pointer in a segmented system is a
+(segment, offset) pair, and the hardware checks the
+offset against the segment's length on every access.
+The idea is seductive: segments map to the logical units
+programmers actually think about---one segment for the
+code, one for the stack, one per module, one per shared
+data structure---so protection boundaries align
+naturally with program structure. Multics
+({\sc mit}/{\sc ge}/Bell Labs, 1965) built its entire
+security model around this: up to 256K segments, each
+tagged with a ring-level access mask, forming the most
+fine-grained hardware-enforced protection system ever
+deployed.
+
+%claude:
+Paging won for a prosaic reason: {\em fixed-size pages
+do not fragment}. Variable-length segments leave gaps in
+physical memory that are too small to reuse ({\em
+external fragmentation}), eventually forcing expensive
+compaction. Fixed-size pages---typically 4\,KB---have no
+external fragmentation at all: any free frame can hold
+any page, and the kernel just maintains a free-frame
+list. Paging is also invisible to the compiler: the
+program emits flat addresses, the {\sc mmu} translates
+them, and no one has to produce segment-relative code.
+The combination was so much simpler to implement and so
+much more predictable at runtime that every mainstream
+system---\unix, Windows, Linux, macOS, \plan---chose
+paging and ignored segmentation entirely.
+
+%claude:
+Intel's x86 is the monument to what might have been. The
+80286 (1982) added protected-mode segmentation with
+per-segment permissions---a microprocessor-scale Multics.
+The 80386 (1985) layered paging {\em on top of}
+segmentation, giving the programmer both. And
+then\ldots{} nobody used the segmentation half. \unix,
+Windows, and every other serious {\sc os} set all segment
+bases to~0 and all limits to the maximum, creating a
+{\em flat} address space and relying entirely on paging.
+Segments survived only for two niche uses: the [[FS]]
+and [[GS]] registers for thread-local storage (Linux
+still uses [[FS]] for the {\sc tls} base), and the
+code-segment descriptor for distinguishing 32-bit from
+64-bit mode. When AMD designed x86-64 in~2003, it made
+the surrender official: in 64-bit long mode, segment
+bases are forced to~0 except for [[FS]] and [[GS]].
+ARM and RISC-V never had segmentation at all---they
+went straight to paging, and \plan's kernel does the
+same. The elegant Multics vision of ``one segment per
+logical module, hardware-enforced'' was never
+fulfilled; modern systems achieve similar goals through
+software isolation (WebAssembly sandboxes,
+language-level capabilities) or page-level permissions
+instead.
+
 \subsection{Interrupts, exceptions, traps, and syscalls}
 \label{sec:princ-interrupts}
 
