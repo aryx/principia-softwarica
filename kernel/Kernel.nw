@@ -576,7 +576,7 @@ whether it's on a disk, network, floppy, etc
 %\item a virtual network (NFS)
 \end{itemize}
 
-%claude:
+%claude: %toc:
 The common thread is {virtualization}: each of these
 abstractions gives a process the illusion of exclusive
 access to a resource. Making this illusion work is the
@@ -666,6 +666,7 @@ each event vectors execution into a preconfigured kernel
 entry point. There is no ``please switch me to supervisor
 mode'' instruction available in user mode; the only way
 in is through an entry point the kernel itself chose.
+%others:
 Different architectures spell the modes differently
 ([[ring~0]] vs [[ring~3]] on x86, [[SVC]] vs [[USR]]
 on ARM, [[M]]/[[S]]/[[U]] on RISC-V), and some define
@@ -758,7 +759,9 @@ in {every} process so that a trap from any user process
 lands in the {same} kernel without changing page tables.
 Only the kernel can read or write its own region
 thanks to the privilege check from
-Section~\ref{sec:princ-modes}. Different operating
+Section~\ref{sec:princ-modes}.
+%others:
+Different operating
 systems arrange the details differently---Linux on
 x86-64 splits the canonical 48-bit address space in
 half at [[0xffff800000000000]], Windows splits 32-bit
@@ -847,7 +850,7 @@ instead.
 \subsection{Interrupts, exceptions, traps, and syscalls}
 \label{sec:princ-interrupts}
 
-%claude:
+%claude: %terminology:
 These four words get thrown around interchangeably in
 casual conversation, but the underlying hardware mechanisms
 split them along two clean axes: {synchronous vs
@@ -908,7 +911,9 @@ your TLB, I just changed a page table'').
 
 %claude:
 All four route through the same mechanism from the CPU's
-point of view: a hardware {\em vector table} (ARM has
+point of view: a hardware {\em vector table}
+%others:
+(ARM has
 eight entries, x86 has 256, RISC-V's [[mtvec]] points
 at a single handler that demultiplexes). When any of
 these events fires, the CPU switches to privileged mode
@@ -995,7 +1000,7 @@ between ordinary kernel code and interrupt handlers.
 lock). See Chapter~\ref{chap:concurrency} for the
 implementations.
 
-%claude: %modern:
+%claude: %others:
 The same zoo appears under different names in every
 production kernel. Linux has [[spin_lock]] (spinlock),
 [[mutex]] (sleeping lock), [[rw_semaphore]]
@@ -1121,7 +1126,7 @@ two such processes want to share memory, \plan\ has
 [[rfork]] flags for it, but each remains its own
 process from the kernel's point of view.
 
-%claude: %modern:
+%claude: %others:
 Other kernels draw the process/thread boundary
 differently. Linux's [[clone()]] syscall with the
 [[CLONE_VM]] flag creates a new schedulable entity that
@@ -1458,7 +1463,7 @@ wake-on-event shape.
 
 
 
-%claude:
+%claude: %trans:
 With those basics in hand, we can now focus on the
 concrete services---the API---that a kernel provides to
 user programs.
@@ -19172,7 +19177,7 @@ The C prototypes are:
 \section{Time principles}
 \label{sec:princ-time}
 
-%claude:
+%claude: %terminology:
 Two separate concepts get lumped under the word
 ``time'' inside a kernel, and they are worth distinguishing
 before reading any code. The first is {\em elapsed-time
@@ -19184,7 +19189,9 @@ so that a log line can be timestamped and a file's mtime
 can mean what users expect. The two are served by
 radically different hardware sources, have different
 precision and stability trade-offs, and---as we will see
-below---should never be confused with one another. Modern
+below---should never be confused with one another.
+%others:
+Modern
 hardware usually offers several time sources at once: an
 x86 machine has the {\sc tsc} (per-core cycle counter),
 the {\sc hpet} (high-precision event timer), and the
@@ -19193,7 +19200,7 @@ Raspberry~Pi-class ARM machine has a free-running system
 counter at 1\,{\sc mhz}, an ARM timer at 250\,{\sc mhz},
 and a per-{\sc cpu} generic timer.
 
-%claude: %modern:
+%claude:
 Every kernel needs a {large} number of software timers---
 [[sleep]]-style deadlines, [[alarm]]/timeout fires, TCP
 retransmits, scheduler preemption, filesystem delayed
@@ -19206,6 +19213,7 @@ deadlines have passed. The tick rate---the famous [[HZ]]
 constant---is a trade-off: a faster tick (1000\,Hz) gives
 more accurate sleep and finer scheduler granularity but
 wastes power; a slower tick (100\,Hz) is the opposite.
+%modern:
 Since Linux~2.6.21 (2007), the ``tickless'' or {\em
 dynamic tick} design has reprogrammed the hardware to
 fire at exactly the next deadline instead of every
@@ -26214,7 +26222,9 @@ problem dozens of times a second: a user program hands
 it a path like [[/usr/bin/ls]], and the kernel has to
 turn that string into a kernel object (a file, a device,
 a pipe, a socket) that subsequent [[read]]/[[write]]
-calls can be dispatched on. The function that does this
+calls can be dispatched on.
+%others:
+The function that does this
 goes by many names---[[namei]] in historical \unix\ and
 BSD, [[path_walk]] (or [[filename_lookup]]) in Linux,
 [[ObReferenceObjectByName]] in Windows, and [[namec]] in
@@ -26238,7 +26248,9 @@ the disk's root instead of continuing in the original
 tree, and the remaining components (say, [[/photos/2024]])
 are resolved {\em there}. [[chroot]] is a degenerate
 version of the same idea, one that redirects only the
-{start} of the walk. The same mechanism exists everywhere
+{start} of the walk.
+%others:
+The same mechanism exists everywhere
 under different names: \unix\ [[mount]], Linux
 {bind mounts}, Windows junction points and reparse
 points, BSD [[nullfs]], macOS synthetic firmlinks.
@@ -28400,14 +28412,16 @@ Section~\ref{sec:princ-files}. On the other side is one
 specific, usually baroque piece of hardware: the chipset's
 memory-mapped registers, its interrupt line, its {\sc dma}
 quirks, its bus-protocol handshake. The driver's job is to
-translate one side to the other. At this structural level,
+translate one side to the other.
+%others:
+At this structural level,
 Linux, BSD, and Windows drivers are all identical---a
 struct of function pointers registered with the kernel at
 boot, plus an interrupt handler registered with the
 interrupt controller; only the calling conventions and the
 names differ.
 
-%claude: %modern:
+%claude:
 The single most important design idea in a driver is that
 its code runs in two radically different contexts. The
 {\em top half}---also called the {\em interrupt service
@@ -28417,7 +28431,9 @@ hardware fires an interrupt
 interrupts disabled, cannot sleep, cannot block on locks
 that another driver might hold, and must return as fast
 as possible because every cycle it spends keeps the rest
-of the system frozen. The {\em bottom half}---called a
+of the system frozen.
+%others:
+The {\em bottom half}---called a
 {\em deferred procedure call} on Windows ({\sc dpc}),
 {\em softirq}/{\em tasklet}/{\em workqueue} on Linux,
 {\em ithread} on FreeBSD---runs later, in ordinary kernel
