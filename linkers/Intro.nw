@@ -976,6 +976,139 @@ is entirely dedicated to the topic.
 %   pretty good use of nm, objdump, readelf, etc
 % - many on format of ELF header (referenced in Adv Topics section)
 
+\subsection{Position-independent code}
+
+%claude:
+The relocation scheme from
+Section~\ref{sec:disk-image-vs-memory-image} works for
+static executables: the linker knows the final addresses
+and patches them once. But a shared library loaded by the
+dynamic linker cannot know its address in advance---different
+processes may load it at different addresses. The solution
+is {\em position-independent code} ({\sc pic}): code that
+works regardless of where in memory it is loaded, by
+accessing all global data through a level of indirection.
+
+%claude:
+In a static executable, the linker can patch a call to
+[[sin()]] with its final address (say, [[BL 0x7200]])
+because the executable is always loaded at the same
+place. A shared library does not have that luxury:
+process~A might load [[libm.so]] at address
+[[0x7f000000]] while process~B loads it at
+[[0x7f400000]]. If the library's code contained
+[[BL 0x7f000000]], it would work in~A but crash in~B.
+{\sc pic} solves this by never putting a fixed address
+in the code at all---every reference goes through a
+table that the dynamic linker fills at load time.
+
+%claude:
+On most architectures the indirection uses two tables.
+A {\em Global Offset Table} ({\sc got}) holds one pointer
+per global variable the library needs. {\sc pic} code
+reads [[errno]] not by its fixed address but by loading
+from [[GOT[errno]]]---a pointer that [[ld.so]] fills
+with [[errno]]'s actual address after loading the
+library. A {\em Procedure Linkage Table} ({\sc plt})
+does the same for function calls: calling [[sin()]]
+jumps to a {\sc plt} stub which, on the first call, asks
+[[ld.so]] to resolve [[sin]]'s address and write it into
+the {\sc got}; on subsequent calls the stub reads the
+cached {\sc got} entry and jumps directly, so the
+overhead is paid only once:
+\begin{verbatim}
+  a.out code              GOT              libm.so
+  +-----------------+    +----------+     (loaded at unknown
+  |                 |    |          |      address by ld.so)
+  | load GOT[0],R0 +--->| &errno --+---> +----------+
+  |                 |    |          |     | errno    |
+  | call PLT[sin]  +-+  | &sin ---+--+  +----------+
+  |                 | |  +----------+ |  | sin:     |
+  +-----------------+ |               +->|  ...     |
+                      |  PLT stub:       +----------+
+                      +->+----------+
+                         | load &sin|  1st call: ask ld.so
+                         | from GOT |  to resolve; cache
+                         | jump to  |  the result in GOT.
+                         | that addr|  2nd+ call: jump
+                         +----------+  directly.
+\end{verbatim}
+%
+The cost is one extra memory load per global access and
+one extra jump per uncached function call---a small price
+for the ability to share a single copy of [[libm.so]]
+across every process on the machine. The {\sc got}/{\sc
+plt} mechanism is what makes [[.so]] files on Linux,
+[[.dylib]] on macOS, and [[.dll]] on Windows work
+transparently---the calling code does not know or care
+whether [[sin()]] lives in the same executable or in a
+shared library loaded at an arbitrary address.
+
+%claude:
+\plan's [[5l]] does not generate {\sc pic} because \plan
+uses static linking and each executable has a fixed load
+address. This is one of the simplifications that keeps
+[[5l]] small---but understanding {\sc pic} and the
+{\sc got}/{\sc plt} is essential for anyone who will
+later work with Linux or macOS shared libraries.
+
+\subsection{The linker as code generator}
+
+%claude:
+In most toolchains, the compiler generates final machine
+code and the linker only patches addresses. [[gcc]] or
+[[clang]] emit complete ARM or x86 instructions; the
+assembler translates mnemonics to binary; and the linker
+(GNU [[ld]], {\sc llvm} [[lld]]) concatenates the binary,
+resolves symbols, and patches address fields in
+already-complete instructions. The linker never needs to
+know what an [[ADD]] instruction looks like---it only
+knows where the address fields sit and how to fill them.
+
+%claude:
+\plan's [[5l]] splits the work differently. The compiler
+([[5c]]) and assembler ([[5a]]) emit a {\em pseudo-code}:
+object files contain symbolic instructions ([[MOVW]],
+[[ADD]], [[BL]]) with symbolic operands, {\em not} final
+ARM machine code. The linker then selects the actual ARM
+instruction encoding, expands virtual instructions
+([[RET]] becomes \verb+MOV LR, PC+; a [[MOVW]] with a
+constant too large for an immediate field becomes a load
+from a {\em literal pool}), and allocates those literal
+pools. This makes [[5l]] much more complex than a
+``normal'' linker---it is really a linker {\em plus} a
+back-end code generator. But it has an advantage: because
+the linker sees {\em all} the code at once, it can make
+better decisions about instruction encoding and literal
+placement than a compiler or assembler that sees only one
+file at a time. Readers coming from the GNU or {\sc llvm}
+toolchains should expect this book to contain chapters
+that look more like compiler chapters than linker
+chapters---instruction selection, immediate encoding,
+literal pools---and this design choice is why.
+
+\subsection{Linker performance}
+
+%claude:
+On large codebases, linking is often the bottleneck: the
+compiler processes files in parallel, but the linker must
+see everything at once. GNU [[ld]] (the traditional
+default on Linux) is single-threaded and makes multiple
+passes, which can take minutes on a million-line project.
+Google's [[gold]] (Ian Lance Taylor, 2008) was written
+specifically to be faster. {\sc llvm}'s [[lld]] improved
+further and became the default for Chrome and the Linux
+kernel (when built with [[clang]]). Most recently,
+[[mold]] (Rui Ueyama, 2021) achieved the fastest linking
+times by parallelizing aggressively across all
+phases---linking the Chrome executable in under two
+seconds where GNU [[ld]] takes over a minute. \plan's
+[[5l]] is fast for a different reason: it does less (no
+dynamic linking, no {\sc dwarf}, no section-level garbage
+collection, no {\sc lto}) and targets a simple object
+format, so speed was never the bottleneck it became for
+Linux toolchains.
+
 \subsection{The tool nobody understands}
 
 %claude:
