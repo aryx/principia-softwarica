@@ -3621,6 +3621,57 @@ building [[Pool]] on top of that, and finally wiring
 [[malloc]]/[[free]]/[[realloc]]/[[mallocz]] onto the
 [[Pool]] interface.
 
+\subsection{Garbage collection versus manual memory}
+
+%claude:
+The entire memory-allocator chapter that follows assumes
+the programmer calls [[malloc()]] and [[free()]]
+explicitly---the {\em manual memory management} model
+that C, C\texttt{++}, and \plan use. The alternative,
+{\em garbage collection} ({\sc gc}), was invented by John
+McCarthy for Lisp in~1960. McCarthy's insight was radical
+for its era: the programmer's time is worth more than the
+machine's time, so the runtime should track which memory
+is still reachable and reclaim the rest automatically.
+When machines cost millions of dollars and programmer
+time was cheap, this seemed extravagant. When machines
+became cheap and programmer time became expensive, it
+seemed obvious.
+
+%claude:
+Java (1995) brought garbage collection to mainstream
+systems programming, and Go, Python, JavaScript, C\#,
+Ruby, and Kotlin all followed. The trade-off is well
+understood: {\sc gc} eliminates use-after-free bugs,
+double frees, and memory leaks at the cost of
+unpredictable {\em pause times} (the collector must
+occasionally stop the world to trace live objects) and
+higher memory overhead (the runtime needs headroom to
+defer collection). Then Rust (2015) found a {\em third
+path}: the compiler's {\em ownership and borrowing}
+rules track at compile time which function owns each
+allocation and when it can be freed, achieving memory
+safety {\em without} a runtime garbage collector and
+{\em without} manual [[free()]] calls. The price is a
+steep learning curve, but the result is the first
+language to offer both ``no {\sc gc} pauses'' and ``no
+use-after-free'' simultaneously.
+
+%claude:
+\plan's [[Pool]] allocator is firmly in the manual camp:
+[[malloc()]] and [[free()]], with the programmer
+responsible for getting the pairing right. The code in
+this chapter is what that choice looks like at the
+implementation level. The advantage is predictability
+(no {\sc gc} pauses, no collector thread, no memory
+overhead for the runtime) and simplicity (the allocator
+is a few hundred lines). The disadvantage is the bugs
+that manual management is famous for---use-after-free,
+double-free, leaks---which \plan mitigates through
+careful coding discipline and [[acid]]'s post-mortem
+heap analysis rather than through language-level
+guarantees.
+
 %last:
 % - https://silent-tower.net/projects/visual-overview-malloc
 % - https://blog.learngoprogramming.com/a-visual-guide-to-golang-memory-allocator-from-ground-up-e132258453ed
@@ -18148,6 +18199,61 @@ internal. The rest of this chapter walks these pieces
 in that order, starting with a small producer/consumer
 program that exercises all five of the public functions
 at once.
+
+\subsection{The return of coroutines}
+
+%claude:
+The cooperative threads in [[libthread]] are part of a
+much older story than they might appear.
+{\em Coroutines}---functions that can suspend and resume,
+yielding control to each other without returning---were
+invented by Melvin Conway in~1958 for a COBOL compiler
+(the same Conway who later gave us ``Conway's Law'':
+organizations produce systems that mirror their own
+communication structure). The idea is that two pieces of
+code can take turns running, each maintaining its own
+local state, without either being ``the caller'' or
+``the callee.'' Simula (1967) used coroutines for
+simulation; Modula-2 (1978) had explicit coroutine
+primitives; and many early concurrency experiments were
+built on cooperative switching.
+
+%claude:
+Preemptive {\em kernel threads} largely displaced
+coroutines in the~1980s and~1990s. POSIX [[pthreads]]
+(standardized~1995), Java threads (1995), and Windows
+threads gave programmers real parallelism on {\sc smp}
+hardware, and the ``just lock your shared data''
+programming model seemed workable. But as multi-core
+machines became standard in the~2000s, the difficulty of
+writing correct shared-memory concurrent code became
+apparent: data races, deadlocks, priority inversions,
+and subtle memory-ordering bugs turned out to be so
+common that many experienced engineers began calling
+threads a fundamentally broken abstraction for
+application-level concurrency.
+
+%claude:
+The response, starting around~2010, was a {\em return to
+coroutines}---repackaged in modern clothing.
+C\#'s [[async]]/[[await]] (2012) lets the programmer
+write sequential-looking code that the compiler
+transforms into a state machine of coroutine
+resumptions. Python adopted the same syntax in~2015;
+JavaScript's [[async]]/[[await]] followed in~2017; Rust
+added it in~2019. Go's goroutines (2009) are explicitly
+coroutines multiplexed onto OS threads by a user-space
+scheduler---the exact M:N model that \plan's
+[[libthread]] pioneered in the early~1990s. The insight
+that makes the comeback work is {\em channels} (or
+their equivalent): coroutines alone give you cooperative
+scheduling, but coroutines {\em plus channels} give you
+a structured way to communicate between concurrent
+flows without shared mutable state---which is what makes
+the bugs go away. Hoare's {\sc csp} paper (1978)
+proposed exactly this combination, and the lineage from
+{\sc csp} through \plan's [[libthread]] to Go is a
+forty-year arc from theory to mainstream practice.
 
 \section{Overview}
 

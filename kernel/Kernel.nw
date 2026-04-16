@@ -1328,6 +1328,63 @@ by a pragmatic rule: if it needs fast-path access to
 hardware or kernel data structures, it stays inside;
 everything else moves out.
 
+\subsection{Capabilities versus access-control lists}
+\label{sec:princ-capabilities}
+
+%claude:
+Operating systems need to decide who can access what.
+Two fundamentally different models answer this question.
+An {\em access-control list} ({\sc acl}) attaches
+permissions to the {\em resource}: a file has an owner,
+a group, and a set of read/write/execute bits
+(\unix's [[rwxrwxrwx]]), or a richer list of entries
+(Windows' {\sc dacl}/{\sc sacl}). The system checks the
+caller's identity against the list on every access. A
+{\em capability} is the mirror image: an unforgeable
+{\em token} held by the {\em caller} that grants a
+specific right to a specific resource. If you hold the
+token, you can use it; if you don't, you can't---no
+identity check needed. The idea was introduced by Jack
+Dennis and Earl Van Horn at {\sc mit} in~1966, three
+years before \unix existed.
+
+%claude:
+Capabilities are theoretically elegant: they obey the
+{\em principle of least privilege} naturally (you give a
+process exactly the tokens it needs and nothing more),
+they compose cleanly (passing a capability to another
+process is just passing a value), and they are amenable
+to formal verification. But they never caught on in
+mainstream operating systems, mainly because {\em
+revoking} a capability is hard---once you hand someone a
+token, taking it back requires cooperation or
+indirection. \unix chose {\sc acl}s (the [[rwx]] bits),
+Windows chose {\sc acl}s ({\sc dacl}s), and the
+capability idea retreated to research systems like
+Hydra, KeyKOS, and {\sc eros}. Then it started coming
+back: {\sc sel4} (2009) built its entire security model
+on formal capabilities; WebAssembly uses capabilities
+for sandboxing (a module can only access the functions
+and memory regions it was explicitly given handles to);
+and CloudFlare Workers use a capability-like model for
+isolating tenant code.
+
+%claude:
+\plan takes a third path that sidesteps the
+{\sc acl}-vs-capability dichotomy altogether. Its
+security model is the {\em per-process namespace}:
+instead of checking whether you are {\em allowed} to
+access a file, \plan controls whether you can {\em see}
+the file at all. If [[/net/tcp/clone]] is not in your
+namespace, you cannot open a TCP connection---no
+{\sc acl} check needed, because the name does not exist
+for you. This is a softer version of the capability
+idea (a namespace is, in effect, a set of capabilities
+to see certain file trees), achieved without unforgeable
+tokens or a formal capability model, using only the
+[[bind]]/[[mount]]/[[rfork]] machinery already described
+in Section~\ref{sec:princ-files}.
+
 \subsection{The kernel as a concurrent program}
 \label{sec:princ-kernel-as-concurrent}
 
