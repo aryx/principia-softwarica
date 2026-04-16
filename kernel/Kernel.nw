@@ -1190,6 +1190,80 @@ the [[devmnt]] driver that turns a remote file server
 into a local [[Chan]] are covered in
 Chapter~\ref{chap:special-fileservers}.
 
+\subsection{Monolithic versus microkernel}
+\label{sec:princ-monolithic-micro}
+
+%claude:
+Once you have kernel mode and user mode
+(Section~\ref{sec:princ-modes}), and a set of services
+the kernel provides---file systems, networking, device
+drivers, memory management---the question is: which of
+those services must run {\em inside} the kernel, and
+which could run as ordinary user-space processes? A
+{\em monolithic} kernel puts everything in kernel mode:
+device drivers, file systems, the network stack, and the
+scheduler all share one address space and call each
+other as ordinary functions. A {\em microkernel} reduces
+the kernel to the bare minimum---scheduling, {\sc ipc},
+and memory management---and runs everything else as
+user-space servers that communicate via message passing.
+
+%claude:
+The trade-off is {\em speed} versus {\em isolation}.
+Monolithic kernels are fast because a syscall that
+touches the file system, then the network stack, then a
+device driver never leaves kernel mode---each step is
+just a C function call. But a single buggy driver can
+corrupt the entire kernel's memory and crash the machine.
+Microkernels isolate each service in its own address
+space, so a buggy driver takes down only itself---but
+every inter-service call requires crossing the
+user/kernel boundary twice (out and back), which
+historically made microkernels significantly slower for
+real workloads.
+
+%claude:
+The debate came to a head publicly in~1992 when Andrew
+Tanenbaum (author of MINIX) called Torvalds's monolithic
+Linux ``a giant step back to the~1970s'' on the
+[[comp.os.minix]] newsgroup; Torvalds replied that Linux
+worked {\em now} and performance mattered. History proved
+both partially right. First-generation microkernels
+(Mach, {\sc cmu}~1985) were indeed slow, and macOS and
+iOS today run on a Mach-derived kernel ({\sc xnu}) but
+keep most services in-kernel for performance---a
+``hybrid'' that is really monolithic in practice. But
+second-generation microkernels rewrote the rules: Jochen
+Liedtke's L4 (1993) brought {\sc ipc} latency down to
+roughly one microsecond, and {\sc sel4} (2009) became
+the first operating-system kernel with a complete
+formal proof of correctness---something that remains out
+of reach for any monolithic kernel. Today {\sc sel4}
+runs in high-assurance embedded systems, and Google's
+Fuchsia uses the Zircon microkernel for its consumer
+{\sc os}.
+
+%claude:
+\plan sits at an interesting point in this spectrum. Its
+kernel is monolithic---device drivers, the network
+stack, the file-system layer, and the scheduler all
+share one address space---but its ``everything is a file
+server'' philosophy (Section~\ref{sec:princ-files})
+means that many services which would be in-kernel on
+Linux run as ordinary user-space processes: [[rio]]
+(the window manager), [[cs]] (the connection server),
+[[dns]], [[exportfs]], and the authentication daemons.
+These user-space servers communicate with the kernel
+and with each other via 9P, so they get the microkernel
+benefit of isolation and replaceability without imposing
+the {\sc ipc} cost on the {\em fast path}: the in-kernel
+[[devXxx]] drivers handle the performance-critical work
+as function calls, and only the configuration and policy
+services move out to user space. The boundary is drawn
+by a pragmatic rule: if it needs fast-path access to
+hardware or kernel data structures, it stays inside;
+everything else moves out.
+
 \subsection{The kernel as a concurrent program}
 \label{sec:princ-kernel-as-concurrent}
 
