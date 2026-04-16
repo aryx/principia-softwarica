@@ -639,21 +639,300 @@ I also define terms, explain how the code is organized,
 and more generally give the background necessary
 to understand the code I will show later.
 
-\section{Essential shell features}
+\section{Shell principles}
 \label{sec:principles}
 
 %toc:
-The following sections will explain the essential features of a shell.
-%
 A shell is a strange beast:
 \l \cite{unix-pike}, put quote? (found in abstract of paper about es-shell)
 %dup: intro/related-work/sh
-it must be both 
-an interactive command interpreter, 
+it must be both
+an interactive command interpreter,
 allowing to run commands easily on one line in a terminal, and
-a proper programming language, 
+a proper programming language,
 allowing to write complex scripts in a file.
 \l complex program
+%
+The following subsections unpack this dual nature and
+place it in the broader context of terminals, scripting
+languages, and the modern revival of the command line.
+
+\subsection{Shell versus terminal}
+
+%claude:
+A source of persistent confusion---even among experienced
+developers---is the difference between a {\em shell} and
+a {\em terminal}. A {\em terminal} (historically a
+physical device like a DEC VT100, today a {\em terminal
+emulator} like iTerm2, Windows Terminal, or Alacritty)
+handles character I/O: it displays characters on a
+screen, reads keystrokes, and sends them to whatever
+program is attached. A {\em shell} ([[rc]], [[bash]],
+[[zsh]]) is the program that reads commands and executes
+them. It does not know about screens, cursors, or
+fonts---it just reads from file descriptor~0 and writes
+to file descriptor~1.
+
+%claude:
+The full chain from power-on to prompt makes the roles
+clear. At boot, {\em init} (the first process) starts
+the system. On a traditional \unix, {\em getty} opens a
+terminal device (a serial port or virtual console),
+{\em login} authenticates the user, and {\em login}
+starts the user's {\em shell}. On \plan, [[init]] starts
+[[rc]] directly, and [[rio]] provides virtual terminals
+(each window IS a terminal that gets its own [[rc]]).
+On a modern laptop, the terminal emulator plays the role
+of getty: it creates a pseudo-terminal device, forks a
+shell, and connects the two. The shell never knows
+whether it is talking to a physical VT100, an
+[[xterm]], or a [[rio]] window---all it sees is a file
+descriptor.
+
+\subsection{A shell as a scripting language}
+\l Scripting! definition of such a language? hybrid lang? easy to "script" :)
+\l scriptometer of pixel
+
+Once you can write a sequence of commands in a script, you quickly
+want more, such as the ability to use conditionals or loops.
+\l rare to use control flow construct from the command-line
+%
+Thus, most shells are also full programming languages,
+often referred to as {\em scripting languages},
+with {\em variables} and many {\em control flow} constructs, and even
+function definitions.
+%
+A scripting language acts like a {glue}, allowing to combine many
+programs together.
+
+
+Because a scripting language must also support the basic commands you
+type on the command-line, it shares many characteristics with those
+basic commands: a scripting language does not use types and is interpreted.
+%and relies on a garbage collector.
+
+A scripting language operates mainly on strings.
+\l no bool, no int, especially in rc
+Because the string arguments you type on the command-line
+do not usually require any quotes, the use of variables requires
+then a special operator.
+%
+Most shells use [['$']] as a prefix to differentiate %$
+variables from regular string arguments, for example,
+[[find $home]].%$
+\l in the same way, newline special
+
+
+
+% interactive and scripting language. Same engine.
+% (ken thompson v6 shell was not scriptable; only interactive)
+% So for interactive use, and for programming.
+
+% dynamic language. arbitrary strings length (maybe big deal at the time
+%  when compared to C, but compared to Lisp??)
+% no memory management.
+
+% evolved gradually. But to still allow simplicify of syntax for
+% running commands, without quotes, with just newline,
+% had to alter a few things:
+% - variable prefix with $. To make diff with regular arguments to
+%   commands which can be anything
+% - skipnl trick for statements we usually want on multiple lines
+% - just strings for values
+% - actually list of strings is better basis (so no need PATH : split,
+%   no need $* vs $@)
+
+% However this goes in conflict with the ability
+% to easily run command and the minimal syntax.
+% rc uses lots of lexing tricks to mix full PL and DSL for
+% running command (ex: SUB hack, skipnl, etc)
+
+% no types. just strings.
+
+% no bool. Basis is really the cmd you run.
+% so control flow based on return status of the cmd.
+% (and just ~ word words otherwise, and again here because basis is the
+% string, the only operator is really a string matching operator).
+
+% Even if string only citezen, still wants sometimes numerical tests.
+% Enter 'test', which is really a separate program, for argument of if
+% for numerical-classic-like tests.
+
+% Shells started this "Scripting language" and also DSLs (sed/awk/...)
+% that you can combine. Later Perl/Ruby/Python came, integrating
+% in one lang, but not as interactive as shell.
+
+%claude:
+The tension between being an interactive command interpreter
+and a full programming language has shaped many design choices
+in shells.  Ken Thompson's original V6 shell was purely
+interactive---it could not be scripted.  The Bourne shell
+added scripting, but the need to keep the minimalist
+command-line syntax (no quotes, no types, newlines as
+terminators) forced compromises:
+variables need the [[$]] prefix to distinguish them from
+bare-word arguments,
+newlines must sometimes be ``skipped'' after binary operators
+so that multi-line statements work,
+and values are always strings.
+
+In [[rc]], the basis is even cleaner: all values are
+lists of strings.  This eliminates the [[sh]] distinction
+between [[$*]] (all arguments as one string) and [[$@]]
+(all arguments as separate words), and means that [[$path]]
+does not need the colon-separated encoding that [[$PATH]]
+uses in [[sh]].
+
+There are no booleans: control flow is based on the
+exit status of the command you run.  The only comparison
+operator is \texttt{\textasciitilde} (pattern matching on strings), and for
+numerical tests, the external program [[test]] is used.
+
+A shell is also a kind of universal read-eval-print loop
+(REPL): you call programs (like functions), pass arguments
+(like parameters), use environment variables (like globals),
+and get results back (via exit status and stdout).
+The core loop is simply: read a line, parse it,
+fork, exec, wait, repeat.
+
+%\subsection{A DSL}
+% now in grammar
+
+%\subsection{A universal read-eval-print loop (REPL)}
+% shell is also idea of universal repl! not like Lisp machine, Squeak, etc.
+% see Kernel.nw note on this.
+% call function from repl, pass argument, modify globals. can even get
+% help via whatis :) or man :) and return boolean result (status)
+% (as well as effect on stdout/stderr that can be captured)
+% In fact very similar to function call in PL:
+%  - arguments to function via argv
+%  - globals via environment variables (sometimes globals are useful)
+%  - other?
+% support multiple programming environment (Multics goal too).
+% cf stevens book, shell basis = read a line, parse, fork, exec, wait!
+% RPFEW
+
+%\subsection{An interactive interpreter}
+% csh, zsh, fish: lots of interactive features outside language.
+
+%\subsection{Asynchronous jobs and job control}
+% also handling signals in child process?
+
+\subsection{From scripting to programming language}
+
+%claude:
+The ``scripting language'' label that shells pioneered
+has since outgrown its origins. Perl (Larry Wall, 1987)
+started as a better [[awk]]/[[sed]]/shell combination
+and grew into a language people wrote web servers in.
+Python (Guido van Rossum, 1991) started as a scripting
+language and now drives machine learning. JavaScript
+(Brendan Eich, 1995) was designed for 10-line browser
+scripts and now runs servers, databases, and desktop
+applications. The line between ``scripting language''
+and ``real programming language'' disappeared sometime
+in the~2000s, and the distinction today says more about
+the speaker's prejudices than about any technical
+property of the language.
+
+%claude:
+Meanwhile, shell scripting itself never went away. Most
+build systems, deployment pipelines, and
+system-administration workflows still use shell scripts,
+and {\sc ai} coding agents like Claude Code have given
+the tiny-tools style a new audience by generating
+[[grep]]/[[sed]]/[[awk]] pipelines for developers who
+might never have learned those tools otherwise. [[rc]]
+sits at the minimalist end of this spectrum: it is a
+shell and nothing more, deliberately leaving the
+``real programming'' to C and the composition to pipes.
+
+\subsection{An interactive interpreter}
+\label{sec:princ-interactive}
+
+%claude:
+The previous subsections covered the scripting half of
+the shell. The other half is the {\em interactive} side:
+most of the time a shell is used live at a terminal, and
+the interactive mode adds a cluster of
+features---line editing, history recall, tab completion,
+themed prompts, syntax highlighting---that have nothing
+to do with running commands and everything to do with
+making the typing experience pleasant.
+
+%claude:
+The fundamental design choice is {where} those features
+live. [[bash]], [[zsh]], and [[fish]] bake them all into
+the shell itself: [[bash]] uses the GNU readline library
+for line editing and history, [[zsh]] has its own [[zle]]
+line editor with hundreds of widgets, and [[fish]] was
+created largely to have first-class syntax highlighting
+and autosuggestions out of the box. This makes for a great
+interactive experience but inflates the shell---[[bash]]
+is around 50 thousand lines, [[zsh]] over a hundred
+thousand, mostly because of the interactive layer.
+
+%claude:
+[[rc]] takes the opposite position: the shell does as
+little interactive work as possible. There is no built-in
+line editor, no history recall, no tab completion, no
+syntax highlighting. Reading a command is just a [[read()]]
+from file descriptor 0 (Section~\ref{sec:reading-commands}
+shows the exact code). If you want line editing, you wrap
+[[rc]] in [[rlwrap]], or you run it inside an [[acme]]
+window where the editor itself provides editing, search,
+and history through its normal commands. The shell stays
+around 7 thousand lines; the interactive features stay in
+the tools that already do them well.
+
+%claude:
+This split reflects the broader \plan attitude that text
+editors are the right place to edit text, including command
+lines. In [[rio]], every command lives in a window where
+you can scroll back through previous output and re-execute
+old commands by selecting them with the mouse. In [[acme]],
+commands and their output share the same buffer as your
+source code, and ``running a command'' is just executing
+a line from the buffer. Neither approach needs the shell
+to know what a cursor is. The price is that running [[rc]]
+bare in a vt100 terminal gives a pretty stark experience---
+which is fine if you live in [[acme]], less fine if you do
+not.
+
+\subsection{The terminal renaissance}
+
+%claude:
+The command line is experiencing its biggest growth
+period in decades. Cloud infrastructure is entirely
+{\sc cli}-driven ([[docker]], [[kubectl]], [[terraform]],
+[[aws]]). Modern terminal emulators are {\sc gpu}-accelerated
+with ligatures and inline images (Kitty, Alacritty,
+Warp, Windows Terminal). {\sc tui} frameworks
+(charm.sh's Bubbletea, Python's Textual and Rich) are
+creating a new generation of rich terminal applications.
+{\sc ai} coding agents like Claude Code live in the
+terminal and generate shell pipelines as their primary
+mode of operation. And VS Code's integrated terminal has
+made the command line the default companion to the
+graphical editor, even for developers who never used a
+standalone terminal before.
+
+%claude:
+The shell this book studies is not historical
+nostalgia---it is the program at the center of this
+revival. Every [[docker build]], every [[kubectl apply]],
+every {\sc ai}-generated [[grep]]/[[sed]]/[[awk]]
+pipeline runs inside a shell. Understanding how [[rc]]
+parses a command, forks a process, wires up a pipe, and
+waits for the result is understanding the mechanism that
+makes all of this work.
+
+\section{Essential shell features}
+
+%toc:
+The following sections describe the concrete features
+of a shell, from running commands through pipes and
+redirections to variables and builtins.
 
 \l do a minishell before showing rc?
 
@@ -955,217 +1234,7 @@ leading to more forms of components-oriented programming.
 \l In fact, the Bourne shell did not have support to defune functions
 \l like rc, or bash. Because you can save a set of commands in a script
 \l (called originally a shell procedure), this script can be called
-\l like it was a function. dollar1, dollar2 for arguments 
-
-\subsection{A shell as a scripting language}
-\l Scripting! definition of such a language? hybrid lang? easy to "script" :) 
-\l scriptometer of pixel
-
-Once you can write a sequence of commands in a script, you quickly
-want more, such as the ability to use conditionals or loops.
-\l rare to use control flow construct from the command-line
-%
-Thus, most shells are also full programming languages,
-often referred to as {\em scripting languages},
-with {\em variables} and many {\em control flow} constructs, and even
-function definitions.
-%
-A scripting language acts like a {glue}, allowing to combine many
-programs together.
-
-
-Because a scripting language must also support the basic commands you
-type on the command-line, it shares many characteristics with those
-basic commands: a scripting language does not use types and is interpreted.
-%and relies on a garbage collector.
-
-A scripting language operates mainly on strings.
-\l no bool, no int, especially in rc
-Because the string arguments you type on the command-line
-do not usually require any quotes, the use of variables requires
-then a special operator.
-%
-Most shells use [['$']] as a prefix to differentiate %$
-variables from regular string arguments, for example,
-[[find $home]].%$
-\l in the same way, newline special
-
-
-
-% interactive and scripting language. Same engine.
-% (ken thompson v6 shell was not scriptable; only interactive)
-% So for interactive use, and for programming.
-
-% dynamic language. arbitrary strings length (maybe big deal at the time
-%  when compared to C, but compared to Lisp??)
-% no memory management.
-
-% evolved gradually. But to still allow simplicify of syntax for
-% running commands, without quotes, with just newline,
-% had to alter a few things:
-% - variable prefix with $. To make diff with regular arguments to
-%   commands which can be anything
-% - skipnl trick for statements we usually want on multiple lines
-% - just strings for values
-% - actually list of strings is better basis (so no need PATH : split,
-%   no need $* vs $@)
-
-% However this goes in conflict with the ability
-% to easily run command and the minimal syntax.
-% rc uses lots of lexing tricks to mix full PL and DSL for
-% running command (ex: SUB hack, skipnl, etc)
-
-% no types. just strings.
-
-% no bool. Basis is really the cmd you run.
-% so control flow based on return status of the cmd.
-% (and just ~ word words otherwise, and again here because basis is the
-% string, the only operator is really a string matching operator).
-
-% Even if string only citezen, still wants sometimes numerical tests.
-% Enter 'test', which is really a separate program, for argument of if
-% for numerical-classic-like tests.
-
-% Shells started this "Scripting language" and also DSLs (sed/awk/...)
-% that you can combine. Later Perl/Ruby/Python came, integrating
-% in one lang, but not as interactive as shell.
-
-%claude:
-The tension between being an interactive command interpreter
-and a full programming language has shaped many design choices
-in shells.  Ken Thompson's original V6 shell was purely
-interactive---it could not be scripted.  The Bourne shell
-added scripting, but the need to keep the minimalist
-command-line syntax (no quotes, no types, newlines as
-terminators) forced compromises:
-variables need the [[$]] prefix to distinguish them from
-bare-word arguments,
-newlines must sometimes be ``skipped'' after binary operators
-so that multi-line statements work,
-and values are always strings.
-
-In [[rc]], the basis is even cleaner: all values are
-lists of strings.  This eliminates the [[sh]] distinction
-between [[$*]] (all arguments as one string) and [[$@]]
-(all arguments as separate words), and means that [[$path]]
-does not need the colon-separated encoding that [[$PATH]]
-uses in [[sh]].
-
-There are no booleans: control flow is based on the
-exit status of the command you run.  The only comparison
-operator is \texttt{\textasciitilde} (pattern matching on strings), and for
-numerical tests, the external program [[test]] is used.
-
-A shell is also a kind of universal read-eval-print loop
-(REPL): you call programs (like functions), pass arguments
-(like parameters), use environment variables (like globals),
-and get results back (via exit status and stdout).
-The core loop is simply: read a line, parse it,
-fork, exec, wait, repeat.
-
-%\subsection{A DSL}
-% now in grammar
-
-%\subsection{A universal read-eval-print loop (REPL)}
-% shell is also idea of universal repl! not like Lisp machine, Squeak, etc.
-% see Kernel.nw note on this.
-% call function from repl, pass argument, modify globals. can even get
-% help via whatis :) or man :) and return boolean result (status)
-% (as well as effect on stdout/stderr that can be captured)
-% In fact very similar to function call in PL:
-%  - arguments to function via argv
-%  - globals via environment variables (sometimes globals are useful)
-%  - other?
-% support multiple programming environment (Multics goal too).
-% cf stevens book, shell basis = read a line, parse, fork, exec, wait!
-% RPFEW
-
-%\subsection{An interactive interpreter}
-% csh, zsh, fish: lots of interactive features outside language.
-
-%\subsection{Asynchronous jobs and job control}
-% also handling signals in child process?
-
-\subsection{From scripting to programming language}
-
-%claude:
-The ``scripting language'' label that shells pioneered
-has since outgrown its origins. Perl (Larry Wall, 1987)
-started as a better [[awk]]/[[sed]]/shell combination
-and grew into a language people wrote web servers in.
-Python (Guido van Rossum, 1991) started as a scripting
-language and now drives machine learning. JavaScript
-(Brendan Eich, 1995) was designed for 10-line browser
-scripts and now runs servers, databases, and desktop
-applications. The line between ``scripting language''
-and ``real programming language'' disappeared sometime
-in the~2000s, and the distinction today says more about
-the speaker's prejudices than about any technical
-property of the language.
-
-%claude:
-Meanwhile, shell scripting itself never went away. Most
-build systems, deployment pipelines, and
-system-administration workflows still use shell scripts,
-and {\sc ai} coding agents like Claude Code have given
-the tiny-tools style a new audience by generating
-[[grep]]/[[sed]]/[[awk]] pipelines for developers who
-might never have learned those tools otherwise. [[rc]]
-sits at the minimalist end of this spectrum: it is a
-shell and nothing more, deliberately leaving the
-``real programming'' to C and the composition to pipes.
-
-\subsection{An interactive interpreter}
-\label{sec:princ-interactive}
-
-%claude:
-The previous subsections covered the scripting half of
-the shell. The other half is the {\em interactive} side:
-most of the time a shell is used live at a terminal, and
-the interactive mode adds a cluster of
-features---line editing, history recall, tab completion,
-themed prompts, syntax highlighting---that have nothing
-to do with running commands and everything to do with
-making the typing experience pleasant.
-
-%claude:
-The fundamental design choice is {where} those features
-live. [[bash]], [[zsh]], and [[fish]] bake them all into
-the shell itself: [[bash]] uses the GNU readline library
-for line editing and history, [[zsh]] has its own [[zle]]
-line editor with hundreds of widgets, and [[fish]] was
-created largely to have first-class syntax highlighting
-and autosuggestions out of the box. This makes for a great
-interactive experience but inflates the shell---[[bash]]
-is around 50 thousand lines, [[zsh]] over a hundred
-thousand, mostly because of the interactive layer.
-
-%claude:
-[[rc]] takes the opposite position: the shell does as
-little interactive work as possible. There is no built-in
-line editor, no history recall, no tab completion, no
-syntax highlighting. Reading a command is just a [[read()]]
-from file descriptor 0 (Section~\ref{sec:reading-commands}
-shows the exact code). If you want line editing, you wrap
-[[rc]] in [[rlwrap]], or you run it inside an [[acme]]
-window where the editor itself provides editing, search,
-and history through its normal commands. The shell stays
-around 7 thousand lines; the interactive features stay in
-the tools that already do them well.
-
-%claude:
-This split reflects the broader \plan attitude that text
-editors are the right place to edit text, including command
-lines. In [[rio]], every command lives in a window where
-you can scroll back through previous output and re-execute
-old commands by selecting them with the mouse. In [[acme]],
-commands and their output share the same buffer as your
-source code, and ``running a command'' is just executing
-a line from the buffer. Neither approach needs the shell
-to know what a cursor is. The price is that running [[rc]]
-bare in a vt100 terminal gives a pretty stark experience---
-which is fine if you live in [[acme]], less fine if you do
-not.
+\l like it was a function. dollar1, dollar2 for arguments
 
 %\subsection{Globbing}
 
