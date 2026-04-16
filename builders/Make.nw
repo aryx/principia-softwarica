@@ -6354,6 +6354,72 @@ with a function called [<dorecipe()>].
 The following sections will explain the code of [<mk()>], [<work()>], and
 [<dorecipe()>].
 
+\section{Mtime vs content-hash change detection}
+\label{sec:mtime-vs-hash}
+
+%claude:
+The core question this chapter answers is ``has this file
+changed since the last build?''. Every build system has to
+answer it, and there are only two real strategies. The
+{timestamp} strategy compares the file's last-modified time
+against the mtime of its dependencies: if any dependency is
+newer than the target, the target is out of date. The
+{content-hash} strategy compares a cryptographic hash of
+the file's contents against a recorded hash from the last
+build: if the hash changed, the file changed. The choice
+shapes almost everything else a build system does.
+
+%claude:
+Timestamps are simple, universal, and free. Every \unix
+filesystem records [[mtime]] to one-second resolution, so
+the check is a single [[stat()]] call per file and a few
+integer comparisons. [[mk]] uses this strategy, as do
+[[make]], [[redo]], [[tup]], [[ninja]] (with a bit of
+caching on top), and every build tool written before 2000.
+The weakness is that timestamps are an approximate proxy
+for content: clock skew across machines breaks them, NFS
+atomicity is subtle, restoring files from a backup resets
+their mtime and triggers spurious rebuilds, a touched-but-
+unchanged file forces a rebuild you did not need, and an
+edited-and-saved-back-to-the-same-bytes file does too. The
+failure modes are small in absolute terms and tolerable in
+a local development loop.
+
+%claude:
+Content hashing sidesteps all of that. [[Bazel]] (Google,
+2015, descended from internal Blaze), [[Buck]] (Facebook),
+[[Nix]] (Eelco Dolstra's 2004 thesis work, now a package
+manager), [[Shake]] (Neil Mitchell's Haskell library),
+and [[Pants]] all hash file contents to decide what is
+out of date. Hashing is more expensive---every input needs
+to be read in full every build---but it enables things
+mtime-based systems cannot reach: hermetic remote build
+caches that can serve any user who happens to need the
+same inputs, reproducible builds that detect accidental
+input changes, and distributed execution that runs compile
+jobs on a pool of machines. Hashing is what makes Google's
+build farm and Nix's binary cache possible at all; an
+mtime-based system cannot ever safely share cached outputs
+between users or machines because mtimes are meaningless
+across hosts.
+
+%claude:
+[[mk]] is firmly on the mtime side. The algorithm in
+[<work()>] walks the dependency graph in depth-first order,
+compares [[time(target) < max(time(deps))]] using the
+[[Time]] field on each [[Node]], and marks the target
+[<NOTMADE>] or [<MADE>] accordingly. There is no hash, no
+cache file, no stored ``what did this look like last
+build'' state at all---the filesystem's mtime is the only
+persistence. The simplicity is the point: the whole
+[[mk]] binary is a few thousand lines, most of the state
+fits in one process's memory, and the build loop is
+something you can trace by hand. The sharing and
+reproducibility benefits of hash-based systems are real,
+but they come with thousands of lines of cache management,
+remote-execution protocols, and sandboxing---a different
+kind of tool for a different kind of build.
+
 \section{[[mk()]]}
 \label{sec:mk}
 

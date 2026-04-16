@@ -12408,6 +12408,73 @@ extern int      runestringwidth(Font*, Rune*);
 % Hinting information = hacks to adjust glyphs at small pixel sizes
 % Advanced topic.
 
+\section{Bitmap fonts vs outline fonts}
+\label{sec:bitmap-vs-outline-fonts}
+
+%claude:
+Fonts come in two fundamentally different forms, and the
+choice between them has shaped every graphics system since
+the 1970s. A {bitmap font} stores each glyph as a small
+rectangular image of pixels---one image per character per
+size per weight per style. An {outline font} stores each
+glyph as a mathematical description of its shape (a set of
+quadratic or cubic B\'ezier curves), which a rasterizer
+turns into pixels on demand at whatever size the caller
+asks for. The two routes have opposite trade-offs almost
+everywhere you look.
+
+%claude:
+Bitmap fonts are fast, simple, and small per-glyph but
+large {in aggregate}: to support ten sizes you have to ship
+ten copies of every glyph. There is no free scaling---
+doubling the size gives you blocky pixels---no free
+rotation, no free italicizing, and no subpixel hinting. The
+pre-rendered pixels are crisp at their native size because
+a human hand-tuned them, and they cost effectively zero CPU
+to display: look up the glyph's rectangle in the subfont
+image and copy it to the destination. Every terminal and
+text-mode application in the 1970s and 1980s used bitmap
+fonts: X11 BDF and PCF, Sun's [[/usr/lib/fonts/fixed]],
+VT100 and its descendants, the original Macintosh, early
+Windows.
+
+%claude:
+Outline fonts win everywhere bitmap fonts lose. A single
+file describes the glyph at {any} size, so you ship one
+file and get arbitrary scaling, rotation, skewing, and
+affine transforms. The cost is a large and complex
+{rasterizer}: Adobe's Type~1 (1984) and Apple's TrueType
+(1991) both shipped with elaborate {hinting} bytecodes to
+make small-size rendering look acceptable on a 72-DPI
+screen. By 2000, essentially every mainstream system had
+switched over. The modern Linux stack alone runs through
+FreeType (the rasterizer, well over a hundred thousand
+lines of C), Harfbuzz (the text shaper for ligatures and
+complex scripts, comparable in size), and Pango (the
+layout engine); macOS uses CoreText on top of CoreGraphics;
+Windows uses DirectWrite on top of Direct2D. None of these
+existed, or would have been remotely possible, on a 1980s
+workstation.
+
+%claude:
+\plan stays firmly with bitmap fonts, and the trade-off is
+more deliberate than conservatism. Outline rendering brings
+in hundreds of thousands of lines of C for non-trivial
+features (hinting, subpixel antialiasing, complex shaping
+for Arabic and Devanagari, OpenType feature tables), and
+most of that complexity pays off only in typographic
+publishing workflows, not a source-code terminal. \plan
+instead ships a handful of pre-rendered bitmap sizes,
+serves them through the trivially simple [<string()>]
+function described below---look up the rune, find its
+rectangle in the subfont image, copy it to the
+destination---and accepts that scaling and rotation are
+not free. For a system whose entire UI is source-code
+windows and plain-text pipes, it is the same calculation
+that keeps the rest of the \plan toolchain tiny: optimize
+the common case, skip the features that do not pay their
+way.
+
 \section{Font files formats}
 
 %claude:
