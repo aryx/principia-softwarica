@@ -509,6 +509,19 @@ libraries ([[libdraw]], [[libmemdraw]]) are covered in
 \book{Graphics} and the widget toolkit ([[libpanel]]) in
 \book{Widgets}.
 
+%claude:
+The notion of a shared C library dates back to Dennis
+Ritchie's original \unix [[libc]] of~1973, catalogued in
+the 1978 Kernighan \& Ritchie book, and each decade
+since has raised the floor of what ``standard library''
+means. At the minimalist end sit libcs like [[musl]]
+(used by Alpine Linux and many static builds),
+[[dietlibc]], and newlib for embedded systems, all
+stripping everything down to what POSIX demands and
+nothing more. \plan's [[libc]] sits in the middle---small
+enough to read end-to-end (a few thousand lines), but
+rich enough to support the whole \plan user space.
+
 \subsection{User/kernel bridge, system calls}
 
 %yoann: each chapter has first section syscall and then build utilities on top of it
@@ -523,6 +536,22 @@ extends the process's data segment) and then builds
 buffered I/O on top. Understanding both layers---what the
 kernel provides and what the library adds---is key to
 understanding how C programs really work.
+
+%claude:
+Every \unix [[libc]] follows this two-layer design---glibc,
+musl, FreeBSD [[libc]], Apple's [[libSystem]], and
+Windows' {\sc ucrt} all sit on top of whatever system-call
+interface the kernel exposes. The separation itself dates
+to Thompson's first \unix [[libc]] on the PDP-11 in~1972,
+which added [[printf]]-style formatting and buffered I/O
+on top of the bare [[read]]/[[write]] syscalls---the
+pattern every later [[libc]] has copied. What varies
+today is the {\em thickness} of the library layer: glibc
+is roughly 1.4~million lines of C (with features going
+far beyond POSIX), musl is about 100\,000 (deliberately
+minimal), and \plan's [[libc]] is a few thousand---small
+enough to read the syscall wrapper and the library
+function side by side in the same chapter.
 
 %missing syscalls not covered yet: exec, dup, fversion, fauth
 
@@ -539,6 +568,19 @@ be careful: it cannot call [[malloc()]] itself (that would be
 circular), and certain kernel paths must avoid allocation
 entirely because they run with interrupts disabled.
 
+%claude:
+Most other systems keep the user-space allocator and the
+kernel allocator completely separate: glibc's
+[[ptmalloc2]] (descended from Doug Lea's 1987 [[dlmalloc]]),
+jemalloc, and tcmalloc live only in user space, and the
+Linux kernel has its own dedicated {\sc slab}/{\sc slub}/{\sc slob}
+allocators (descended from Jeff Bonwick's 1994 SunOS
+paper) that share no code with user-space [[malloc]].
+\plan's unified [[Pool]] is the outlier. The full
+cross-allocator family tree---boundary-tag, buddy, slab,
+and friends---lives in Chapter~\ref{chap:malloc}'s
+principles section.
+
 \subsection{Zero-cost abstractions}
 
 %yoann: if slow, everything is slow
@@ -552,6 +594,16 @@ even though C versions exist. The principle is: the
 abstractions that the library provides should cost nothing
 (or very close to nothing) compared to doing the same work
 by hand.
+
+%claude:
+The phrase {\em zero-cost abstractions} itself is Bjarne
+Stroustrup's famous motto for C\texttt{++} from the~1980s
+(``what you don't use, you don't pay for; what you do
+use, you couldn't hand-code any better''), later picked
+up as an explicit design principle by the Rust project
+in~2014. \plan's [[libc]] is more aggressive than most
+about falling back to hand-written assembly when the C
+version is not fast enough.
 
 \subsection{Thread safety and reentrancy}
 
@@ -580,6 +632,19 @@ This distinction explains a recurring pattern in the code:
 locks appear throughout the library to ensure thread safety,
 and note delivery is deferred while critical locks are held
 to avoid reentrancy deadlocks.
+
+%claude:
+This distinction was formalized in POSIX.1c (1995),
+which added threads to the \unix standard and had to
+specify exactly which functions were safe to call from a
+signal handler. That work produced the published list of
+{\em async-signal-safe} functions and the [[_r]]
+reentrant variants for many non-safe ones ([[strtok_r]],
+[[asctime_r]], [[getpwnam_r]]). The canonical example of
+a function that violates both properties is [[errno]],
+which was a plain global in V7~\unix (1979) but is now a
+per-thread storage slot in glibc, musl, and \plan's
+[[libc]] alike.
 
 \section{[[libc.h]] interface}
 
