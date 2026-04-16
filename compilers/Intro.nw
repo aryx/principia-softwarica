@@ -924,6 +924,95 @@ structured passes left behind. [[5c]]'s peephole
 optimizer is under 200 lines and is one of the most
 readable parts of the backend.
 
+\subsection{Undefined behavior}
+
+%claude:
+C grants the compiler permission to assume that certain
+operations {\em never happen}: signed integer overflow,
+dereferencing a null pointer, reading an uninitialized
+variable, shifting by more than the word width. These are
+called {\em undefined behavior} ({\sc ub}), and the
+language standard says the compiler may do ``anything''
+when they occur---including silently removing the code
+that would have detected them. Modern compilers exploit
+this aggressively: if signed overflow is {\sc ub}, {\sc
+gcc} and Clang can assume [[x + 1 > x]] is always true
+and optimize away the overflow check, which sometimes
+causes programs that ``worked'' with older compilers to
+break silently under [[-O2]].
+
+%claude:
+[[5c]] is far less aggressive. It rarely exploits {\sc
+ub} for optimization, which means it generates slower
+code but produces fewer surprises---a trade-off the
+\plan developers considered worthwhile for systems code
+where predictability matters more than peak performance.
+The {\sc ub} debate is one of the sharpest instances of
+the ``worse is better'' tension in modern C: {\sc gcc}
+and Clang choose ``better'' code at the cost of
+surprising behavior; [[5c]] and \plan choose ``worse''
+code that does what the programmer expected.
+
+\subsection{Cross-compilation}
+
+%claude:
+Most compilers treat cross-compilation---generating code
+for a different architecture than the one the compiler
+runs on---as a special configuration that requires
+passing flags like \verb+--target=arm-linux-gnueabihf+.
+\plan's toolchain was designed for cross-compilation
+{\em from the start}. The numbered-tool convention
+([[5c]]/[[5a]]/[[5l]] for ARM, [[8c]]/[[8a]]/[[8l]] for
+x86, [[6c]]/[[6a]]/[[6l]] for AMD64) makes every
+compiler a cross-compiler by default: you compile ARM
+code on an x86 machine by simply typing [[5c]] instead
+of [[8c]], with no configuration, no sysroot, no target
+triple. This is possible because the \plan compilers
+carry no host dependencies---they read source, emit
+object code, and link to \plan's own [[libc]],
+regardless of which machine they happen to be running on.
+The modern echo of this philosophy is Zig (Andrew Kelley,
+2016), which ships its own C/C\texttt{++} cross-compiler
+and has gained significant adoption precisely because
+[[zig cc --target=aarch64-linux]] ``just works'' where
+configuring a {\sc gcc} or Clang cross-toolchain is a
+multi-step ordeal. \plan got this right in the~1990s.
+
+\subsection{Bootstrapping}
+
+%claude:
+A compiler written in its own language faces a
+chicken-and-egg problem: you need the compiler to compile
+the compiler. The standard solution is {\em bootstrapping}:
+start with a version compiled by some other means (a
+previous version, a different compiler, or even a
+hand-written translator), then use that to compile the
+``real'' compiler from source. [[5c]] was bootstrapped
+from earlier \plan compilers; Go's compiler, which
+descends from the \plan toolchain, was famously rewritten
+from C to Go in~2015 and bootstrapped via a chain:
+Go~1.4 (the last C version) compiles Go~1.5 (the first
+Go version), which compiles all subsequent versions.
+
+%claude:
+Ken Thompson's 1984 Turing Award lecture {\em
+``Reflections on Trusting Trust''} revealed a deeper
+problem with bootstrapping: a compiler can be modified to
+insert a backdoor into any program it compiles---including
+{\em future versions of itself}---so that the backdoor
+propagates invisibly through every bootstrap, even if you
+read every line of the compiler's source code and find
+nothing suspicious. The attack is undetectable by source
+inspection alone. The modern response is {\em diverse
+double compilation} (David~A.\ Wheeler, 2009): compile the
+compiler with two {\em independent} compilers and verify
+that the outputs match, which catches any
+compiler-specific backdoor because the two compilers
+would have to contain the same one. Thompson's lecture
+remains one of the most cited in computer science and is
+a reminder that trust in software is always, ultimately,
+trust in the toolchain.
+
 \subsection{The most demanding reader of your code}
 
 %claude:
