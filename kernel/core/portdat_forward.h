@@ -79,11 +79,11 @@ typedef struct SDunit SDunit;
 // was in kbd.c
 typedef struct Kbscan Kbscan;
 
-/*s: portdat_forward.h pragmas */
+/*s: [[portdat_forward.h]] pragmas */
 #pragma incomplete Edf
 #pragma incomplete Mntcache
 #pragma incomplete Mntrpc
 #pragma incomplete Queue
 #pragma incomplete Timers
-/*e: portdat_forward.h pragmas */
+/*e: [[portdat_forward.h]] pragmas */
 /*e: core/portdat_forward.h */
