@@ -2426,11 +2426,14 @@ an exception (e.g., a [[SWI]]) occurs, the processor
 automatically switches to supervisor mode; the kernel must
 switch back to user mode before returning to the user program.
 The switch back is not a regular store to [[CPSR]] but a
-dedicated atomic return-from-exception sequence, such as
-[[MOVS PC, LR]] (which simultaneously reloads [[PC]] and
-copies the banked [[SPSR]] back into [[CPSR]]) or the
-ARMv6+ [[RFE]] (Return From Exception) instruction.
-%yoann1: for most of plan9 assembly we use MOV SRC, DST so the MOVS above is confusing
+dedicated atomic return-from-exception sequence: a single
+instruction that simultaneously restores [[PC]] from the
+saved link register {and} copies the banked [[SPSR]] back
+into [[CPSR]], so that mode and flags are restored together
+with the return address. ARMv6 introduced a dedicated
+mnemonic for this, [[RFE]] (Return From Exception); older
+ARM code uses a block-load instruction with the ``load PSR''
+bit set to achieve the same effect.
 
 %claude:
 The mode field is 5~bits wide (bits 4--0),
@@ -3793,8 +3796,8 @@ that transforms an input into an output. It is a {\em reactive}
 program: while user programs run, the kernel is dormant.
 It only wakes up when an {\em event} occurs---a syscall, an
 interrupt, a timer tick---handles it, and then lets
-the user program resume.
-%yoann1: maybe say kernel were first reactive program, before it became more widespread at app level, and also first concurrent program! and first multicore program!
+the user program resume (see the historical aside in
+Section~\ref{sec:princ-concurrency} for more on this).
 
 %yoann: monolithic kernel, but thx to 9P lots of user-space file-servers so ideas from microkernel too; In fact the all kernel is pretty small at 30K LOC.
 %claude:
@@ -3960,8 +3963,15 @@ Everything below [[KZERO]]
 ([[0x80000000]]) in the virtual address space belongs to
 user processes; everything at or above [[KZERO]] belongs to
 the kernel. The kernel's virtual addresses are simply the
-physical addresses plus [[KZERO]].
-%yoann1: maybe say that loaded at 0x8000 but will early on setup MMU to be in virtual KTZERO mapped to 0x8000, and maybe say also linked with -T ??? so branch will call in the kernel will work?
+physical addresses plus [[KZERO]]. Concretely, the
+Raspberry Pi bootloader drops the kernel binary at
+physical [[0x8000]], but the linker has linked it at
+virtual [[KTZERO]] (= [[KZERO]]~+~[[0x8000]]) via a
+[[-T]] flag in the [[mkfile]]. Early boot code---still
+running with the MMU off---sets up the page tables so
+that [[KTZERO]] maps to physical [[0x8000]], then enables
+the MMU; from that point on, branches and calls resolve
+to the linked virtual addresses.
 
 
 
@@ -3972,9 +3982,9 @@ physical addresses plus [[KZERO]].
 On the user side, the address space starts at [[UZERO]] (0).
 The first page is left unmapped so that null pointer
 dereferences cause a fault. User code starts at [[UTZERO]]
-(one page above zero), and the user stack grows downward
-from [[USTKTOP]]:
-%yoann1: maybe say UTZERO for User Text Zero?
+(``User Text Zero''---one page above zero, the starting
+address of the user text segment), and the user stack
+grows downward from [[USTKTOP]]:
 
 <<constant [[UZERO]](arm)>>=
 #define UZERO       0           /* user segment */
@@ -4023,11 +4033,12 @@ from [[USTKTOP]]:
 \subsubsection{Virtual address space (ARM)}
 
 %claude:
-The following diagram shows the full {\em virtual} address space.
+The following diagram shows the full {\em virtual} address space
+(same convention as in Section~\ref{sec:princ-vm}: low addresses
+at the bottom, high addresses at the top).
 The kernel and user portions coexist in every process's
 page table (though the kernel portion is shared and
 identical across all processes):
-%yoann1: mention that again diagram where convention is low address low part and high high part
 
 \begin{verbatim}
                       ...
@@ -4110,8 +4121,11 @@ configuration), [<palloc>] (the page allocator state), and
 [<procalloc>] (the process table). Finally, the [<Cpu>]
 structure (for CPU~0) occupies a single page at [<CPUADDR>],
 below the kernel text, in the small gap between [<KZERO>]
-and [<KTZERO>]. 
-%yoann1: maybe give intuition of what Cpu structure is for
+and [<KTZERO>]. The [<Cpu>] structure holds per-processor
+kernel state---the currently-running process, the
+scheduler's local run queue, saved registers for
+voluntary context switches---and is described in
+Chapter~\ref{chap:core-ds}.
 
 
 %claude:
@@ -4119,8 +4133,8 @@ On multi-processor systems (e.g.,
 Raspberry Pi~2), each additional CPU has its own [[Cpu]]
 struct allocated elsewhere; the [<cpus>] array and the
 dedicated register [[R10]] allow each processor to find
-its own.
-%yoann1: say will be explained in depth later in Section X
+its own. The details of SMP boot and per-CPU lookup are
+covered in Chapter~\ref{chap:advanced}.
 
 
 \subsubsection{Physical address space (ARM)}
@@ -4728,8 +4742,9 @@ addresses. However, a page fault {can} occur while the kernel
 is executing a syscall on behalf of a user process---for
 example, when the kernel copies data from a user buffer
 (the user's page might not be resident). The fault handler
-recognizes this case and handles it.
-%yoann1: maybe reference the relevant section in this book for this fault handler case?
+recognizes this case and handles it; see the page-fault
+section in Chapter~\ref{chap:virtual-memory} for the
+details.
 
 %yoann: why VIRTIO mapped between user and kernel? why not above KZERO instead?
 %claude:
@@ -4794,8 +4809,12 @@ The concrete addresses ([[KZERO]], [[HVECTORS]], etc.), the
 register conventions ([[R10]] for [[cpu]], [[R9]] for [[up]]),
 and the page table format (L1 sections, L2 pages) are
 ARM-specific details, but the architecture of the kernel
-would look very similar on x86 or RISC-V.
-%yoann1: say that in fact most of the kernel code is portable and many things are reused, maybe say percentage of port/ vs bcm/ in 9pi
+would look very similar on x86 or RISC-V. In fact most
+of the kernel {is} portable: the ARM-specific code in
+[[arch/arm/]] amounts to only about 1000~lines, while
+everything else---memory management, scheduling, file
+system, devices, IPC---lives in subsystem directories
+that are reused across architectures.
 
 \section{Book structure}
 
