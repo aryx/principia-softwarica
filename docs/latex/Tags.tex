@@ -33,8 +33,8 @@
 %
 % Tag       Meaning
 % --------- --------------------------------------------------------------
-% \t        "thinking" — author's reasoning, unfinished thoughts
-% \l        "less important" — tangential asides, cross-references
+% \t        "thinking" or "todo" — author's reasoning, unfinished thoughts
+% \l        "less important" — tangential asides, cross-references, lighter todo
 % \n        "note" — topic tags, internal reminders
 % %         Plain %-comments — author's own remarks
 
@@ -42,15 +42,16 @@
 % THEME TAGS — what kind of content
 %==========================================================================
 %
-% These classify the *topic* of a %claude: paragraph. They appear
-% after %claude: on the same line. A paragraph may carry at most one
+% These classify the *topic* of a paragraph (written by claude or the author).
+% They appear after %claude: on the same line if there is already a provenance
+% tag for the paragraph. A paragraph should carry at most one
 % theme tag (pick the dominant theme).
 %
 %--------------------------------------------------------------------------
 % CORE TAGS — for LaTeX environments (skip/seek navigation)
 %--------------------------------------------------------------------------
 %
-% These four tags are the highest priority. They will become visual
+% These five tags are the highest priority. They will become visual
 % LaTeX boxes (tcolorbox or similar) so that readers can quickly
 % identify and either skip or focus on certain content.
 %
@@ -78,7 +79,7 @@
 %                     me the code"             decades of Unix hindsight"
 %
 %--------------------------------------------------------------------------
-% Tag              Meaning                    Example
+% Core Tag              Meaning                    Example
 %--------------------------------------------------------------------------
 %
 % %cs-history:     Historical origin.         "gprof (Graham, Kessler,    [TODO]
@@ -109,6 +110,10 @@
 %                  fixed it.                  race that Unix's separate
 %                  (Replaces older %unix:     seek+read allows."
 %                  tag in Kernel.nw.)
+%
+%--------------------------------------------------------------------------
+% Other Tag              Meaning                    Example
+%--------------------------------------------------------------------------
 %
 % %wib:            Worse-is-better.           "5c has neither IR nor SSA.  [TODO]
 %                  Plan 9's deliberate         It goes straight from AST to
@@ -185,7 +190,7 @@
 %
 % %history:   Author's short telegraphic notes about history (e.g.,
 %             "%history: unix V1"). NOT a theme tag. %cs-history: is
-%             the rendered-prose counterpart for AI-written paragraphs.
+%             the rendered-prose counterpart for real paragraphs.
 %
 % %alt:       Author's short notes about alternatives (e.g.,
 %             "%alt: GUI widget toolkit"). NOT a theme tag. %modern:
@@ -234,9 +239,105 @@
 %==========================================================================
 %
 % Currently .nw files use {concept} (curly braces) or {\em concept}
-% for new terminology. A semantic \concept{} macro would:
+% or even sometimes \emph{concept} for new terminology.
+% A semantic \concept{} macro would:
 %   - Render as \emph{} now (backward compatible)
 %   - Later: auto-generate index entries, glossary links,
 %     marginal notes, or tooltips
 %   - Work with %terminology: tagged paragraphs to build a
 %     concept map of each book
+
+%==========================================================================
+% TAGGING PROCESS — lessons learned
+%==========================================================================
+%
+% This section documents the process for systematically tagging
+% paragraphs, so that the same approach can be followed on any machine.
+%
+% WHERE TO TAG
+% ------------
+% Focus on Principles sections (both the main "\section{XXX principles}"
+% and per-chapter "\section{YYY principles}"). These are where
+% cs-history, modern, others, terminology, and plan9-is-cleaner
+% paragraphs cluster. Use this grep to find them all:
+%   grep -rn 'section{.*principles' --include='*.nw'
+%
+% TAG PLACEMENT
+% -------------
+% Tags go on their own %-comment line, never mixed with prose text.
+% Grouping tags on one line is fine: %claude: %cs-history:
+%
+% When the whole paragraph is about the tagged topic, put the tag
+% on the %claude: line:
+%   %claude: %cs-history:
+%   Virtual memory was invented for the Atlas computer...
+%
+% When only part of a paragraph is about the tagged topic, insert
+% the tag before the relevant sentence (not at the paragraph start):
+%   ...the core idea is the same everywhere.
+%   %others:
+%   Different architectures spell the modes differently...
+%
+% This matters because tags will eventually become LaTeX environments
+% (\begin{cshistorybox}...\end{cshistorybox}), so the tagged text
+% should be a clean chunk that could plausibly be boxed.
+%
+% If the cross-system comparison or historical fact is just a brief
+% inline parenthetical like "(Linux's struct file, BSD's vnode,
+% Windows' HANDLE)", don't tag it — it's too small to be a box.
+%
+% WHAT NOT TO TAG
+% ---------------
+% Don't tag core content — paragraphs that explain what something IS,
+% how it works mechanically, or what Plan 9 specifically does. These
+% are the backbone the reader never skips.
+%
+% The %terminology: tag is reserved for paragraphs whose whole point
+% is disambiguating confusing terms (shell vs terminal, interrupt vs
+% exception vs trap, thread-safe vs reentrant, elapsed vs wall-clock
+% time). Don't use it for every paragraph that introduces a concept —
+% that would tag everything. Use \concept{} inline markup for the
+% actual defined terms instead.
+%
+% DISTINGUISHING THE CORE TAGS
+% ----------------------------
+% %cs-history: — "invented by X at Y in year Z" — who/when/where
+% %modern: — "today, the mainstream does it THIS way instead" —
+%   current competition/replacement for Plan 9's approach
+% %others: — "Linux calls it X, FreeBSD calls it Y, Windows calls
+%   it Z" — same concept, different implementation across systems.
+%   Not necessarily modern — just different. Includes cross-arch
+%   comparisons (ARM vs x86 vs RISC-V).
+% %plan9-is-cleaner: — "unlike Unix which does X, Plan 9 does Y
+%   because..." — specific improvements Plan 9 made with hindsight.
+%   Different from core content because the point is the comparison
+%   with Unix, not the Plan 9 design on its own terms.
+%
+% The test: if you removed the paragraph, would the reader still
+% understand the Plan 9 code? If yes, it's taggable (history,
+% modern, others, plan9-is-cleaner). If no, it's core content.
+%
+% PROCESS FOR A NEW BOOK
+% ----------------------
+% 1. Find all principles sections: grep -n 'section{.*principles'
+% 2. Read each section start to end
+% 3. For each %claude: paragraph, ask: is this cs-history, modern,
+%    others, plan9-is-cleaner, terminology, toc, or trans?
+%    If none — it's core content, leave it untagged.
+% 4. Place the tag at the right granularity (paragraph or sentence).
+% 5. Commit per-book.
+%
+% BOOKS COMPLETED (systematic principles pass)
+% ---------------------------------------------
+% Kernel, Libcore, Shell, Compiler, Assembler, Linker, Build system,
+% Debugger, Profiler, Graphics, Network, Utilities, Windows, Widgets.
+% (Machine and Editors have no taggable content in principles.)
+%
+% TODO FILES
+% ----------
+% docs/latex/TODO-comeback.txt     — ~25 comeback arcs to write
+% docs/latex/TODO-why-win.txt      — ~35 why-X-won stories to write
+% docs/latex/TODO-why-study.txt    — ~30 justifications to write
+% docs/latex/TODO-road-not-taken.txt — ~25 unfulfilled promises
+% docs/latex/TODO-reframe.txt      — ~40 unexpected analogies
+% docs/latex/TODO-cs-history.txt   — systematic pass still incomplete
