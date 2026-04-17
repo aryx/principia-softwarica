@@ -312,25 +312,80 @@ subsystems.
 %I want the books in \principia to form a
 %coherent set, so it is important to present a kernel that
 %is complete enough to run a real system, not a toy.
+%claude:
+For the record, \unix~V6 is Bell Labs research \unix from~1975,
+running on the PDP-11, famously annotated line-by-line by John
+Lions in the first open source-code commentary ever
+published~\cite{lions}. xv6 is MIT's teaching rewrite---x86
+in~2006, ported to RISC-V in~2019---used in the 6.828
+operating-systems course.
 
 \item XINU\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=Xinu7}
+(Douglas Comer)
 has a network stack but the kernel itself
-is too simple with no virtual memory for instance
+is too simple for this book.
 % and has multi processor support?
+%claude:
+XINU (``Xinu Is Not Unix'') was written by Douglas Comer at
+Purdue in~1984 as the companion code to his two-volume textbook
+{\em Operating System Design}~\cite{xinu,xinu2}. The second
+volume is devoted to XINU's TCP/IP implementation, which is why
+XINU is often read in networking classes. A new edition in~2015
+finally added virtual memory, but the version most readers
+encountered was the no-VM one.
 
 \item Minix\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=Minix1.1}
+(Andrew Tanenbaum et al.)
 is fairly small but it does not provide a simple windowing
 system as it relies on X11 (which is far more complicated than \plan
-Rio windowing system)
+Rio windowing system).
 % minix3 is said to be 13 000 LOC
+%claude:
+Minix was written at the Vrije Universiteit Amsterdam as the
+companion code to Tanenbaum's {\em Operating Systems: Design and
+Implementation}~\cite{minix} (1987)---the book Linus Torvalds
+was reading when he started Linux four years later. Minix~3
+(2005) rewrote the system as a proper microkernel with
+fault-isolated user-space drivers; it is small
+(\textasciitilde 13k~LOC) but has never had a user base beyond
+its own classroom.
 
-\item Linux\furl{https://kernel.org} is really big.
+\item Linux\furl{https://kernel.org} (Linus Torvalds et al.)
+is really big.
 % LOC?
 Of course the Linux kernel contains thousands of specific device drivers
 and those things could be discarded when
 presenting the {core} of the Linux kernel, but this core is still far
 bigger than \plan equivalent core.
+%claude:
+Linux was announced by Linus Torvalds on comp.os.minix in
+August~1991 (``I'm doing a (free) operating system, just a
+hobby\ldots'') and now runs most of the world's servers, phones,
+and embedded devices. It is documented at book length in Bovet
+\& Cesati's {\em Understanding the Linux Kernel}~\cite{bovet-linux-kernel}
+and in Love's {\em Linux Kernel Development}~\cite{love-linux-kernel},
+but even those cover only a fraction of what is by now a very
+large system: just the architecture-independent core (memory,
+scheduler, VFS, signals), stripped of drivers and filesystems,
+is well over 400k~LOC today.
 
+%claude:
+\item GNU Hurd\furl{https://www.gnu.org/software/hurd/} over
+Mach\furl{https://www.gnu.org/software/hurd/microkernel/mach.html}
+(Richard Stallman, Thomas Bushnell et al.)
+is a pure microkernel design---a tiny message-passing core and a
+cloud of user-space servers for filesystem, authentication,
+networking, \ldots---that would have been tempting on paper.
+Mach itself came out of Richard Rashid's group at Carnegie Mellon
+in the mid-1980s (and later became the foundation of NeXTSTEP
+and, via XNU, of macOS and iOS); the GNU project announced Hurd
+on top of Mach in~1990, shipped Hurd~0.1 in~1996, and the system
+is still marked experimental today. The combined Mach + Hurd
+codebase is far larger than the \plan kernel. \plan itself
+borrows some microkernel ideas---everything-is-a-file as a
+unified IPC bus, pushing services like [[rio]] and [[factotum]]
+out of the kernel---but keeps drivers and scheduling in a single
+address space, trading full process isolation for simplicity.
 
 \end{itemize}
 
@@ -3465,51 +3520,52 @@ Here are a few convenient constants used throughout the code.
 \section{Code organization}
 
 %claude:
-The [[9]] kernel source is split across many files organized by
-subsystem: [[core/]], [[concurrency/]], [[memory/]],
-[[processes/]], [[files/]], [[filesystems/]], [[time/]],
-[[interrupts/]], [[devices/]], [[init/]], [[console/]], etc.
-These directories map directly to the chapters in this book.
-%
-Each subsystem has both portable code (in [[port/]]) and
-architecture-specific code (in [[bcm/]] for ARM and [[9pi]]).
+The [[9]] kernel source is split into many files organized by
+subsystem, each with portable code (in [[port/]]) and
+architecture-specific code (in [[bcm/]] for ARM and [[9pi]]). Every
+subsystem directory maps to one or more chapters of this book, as
+shown in Table~\ref{tab:kernel-code-orga}.
 
 %yoann: big code orga table like in my other books, maybe too big so just dirs and representative files and total LOC for a dir, and maybe reference graphics and network code and reference explain in other book
 %claude:
 Table~\ref{tab:kernel-code-orga} gives a bird's-eye view of the
 whole kernel tree: one row per subdirectory, a few representative
-source files, the chapter that discusses that code, and the total
-lines of C, headers, and assembly in the directory. The graphics
-stack (which lives under [[devices/screen/]] and includes
-[[devdraw.c]]) and the networking stack ([[network/]]) are covered
-in the companion \book{Graphics} and \book{Network} volumes; I
-list them here only for completeness.
+source files, the chapter(s) that discuss that code, and the total
+lines of C, headers, and assembly in the directory. Some
+subsystems span more than one chapter---the [[memory/]] code, for
+example, underlies both the Memory Management and the Virtual
+Memory chapters. The graphics stack ([[devices/screen/]] with
+[[devdraw.c]] and friends) and the networking stack ([[network/]])
+are covered in the companion \book{Graphics} and \book{Network}
+volumes; I list them here only for completeness.
 
 \begin{table}[tbh!]
 \begin{center}
 \begin{tabular}{lllr}
 \toprule
-{\bf Directory} & {\bf Chapter} & {\bf Representative files} & {\bf LOC} \\
+{\bf Directory} & {\bf Chapters} & {\bf Representative files} & {\bf LOC} \\
 \otoprule
-[[core/]]           & \ref{chap:core-ds}        & [[error.c]], [[portdat.c]]                           & 1578  \\
-[[concurrency/]]    & \ref{chap:concurrency}    & [[qlock.c]], [[ref.c]]                               & 1293  \\
-[[memory/]]         & \ref{chap:memory}         & [[alloc.c]], [[page.c]], [[fault.c]]                 & 7156  \\
-[[processes/]]      & \ref{chap:processes}      & [[edf.c]], [[pgrp.c]]                                & 8330  \\
-[[interrupts/]]     & \ref{chap:interrupts}     & arch-specific trap entry                             & 3023  \\
-[[syscalls/]]       & \ref{chap:interrupts}     & [[systab.c]], [[syscallfmt.c]]                       & 1203  \\
-[[time/]]           & \ref{chap:time}           & [[alarm.c]], [[portclock.c]]                         & 1754  \\
-[[init/]]           & \ref{chap:initialization} & [[rebootcmd.c]], arch [[main.c]]                     & 4532  \\
-[[files/]]          & \ref{chap:files}          & [[chan.c]], [[dev.c]], [[allocb.c]]                  & 7196  \\
-[[devices/]]        & \ref{chap:devices}        & [[keyboard/]], [[mouse/]], [[storage/]], [[screen/]] & 33980 \\
-[[buses/]]          & \ref{chap:devices}        & [[devuart.c]], USB, I2C, SPI                         & 24148 \\
-[[console/]]        & \ref{chap:devices}        & [[devcons.c]], [[print.c]]                           & 1561  \\
-[[filesystems/]]    & \ref{chap:filesystems}    & [[devfs.c]]                                          & 6399  \\
-[[network/]]        & \book{Network}            & [[netif.c]], [[etherif.h]]                           & 23663 \\
-[[arch/]]           & (arch headers)            & arch-specific constants                              & 2932  \\
-[[lib/]], [[misc/]] & (utilities)               & small helpers                                        & 686   \\
-[[security/]]       & (security stubs)          & [[auth.c]]                                           & 164   \\
+[[core/]]           & \ref{chap:core-ds}                                              & [[error.c]], [[portdat.c]]              & 1578  \\
+[[concurrency/]]    & \ref{chap:concurrency}                                          & [[qlock.c]], [[ref.c]]                  & 1293  \\
+[[memory/]]         & \ref{chap:memory}, \ref{chap:virtual-memory}                    & [[alloc.c]], [[page.c]], [[fault.c]]    & 7156  \\
+[[processes/]]      & \ref{chap:processes}, \ref{chap:scheduling}, \ref{chap:ipc}     & [[edf.c]], [[pgrp.c]], [[sysproc.c]]    & 8330  \\
+[[interrupts/]]     & \ref{chap:interrupts}                                           & arch-specific trap entry                & 3023  \\
+[[syscalls/]]       & \ref{chap:interrupts}                                           & [[systab.c]], [[syscallfmt.c]]          & 1203  \\
+[[time/]]           & \ref{chap:time}                                                 & [[alarm.c]], [[portclock.c]]            & 1754  \\
+[[init/]]           & \ref{chap:initialization}                                       & [[rebootcmd.c]], arch [[main.c]]        & 4532  \\
+[[files/]]          & \ref{chap:files}, \ref{chap:directories}, \ref{chap:namespaces} & [[chan.c]], [[dev.c]], [[allocb.c]]     & 7196  \\
+[[devices/]]        & \ref{chap:devices}                                              & [[keyboard/]], [[mouse/]], [[storage/]] & 22321 \\
+[[devices/screen/]] & \book{Graphics}                                                 & [[devdraw.c]], [[swconsole.c]]          & 11659 \\
+[[buses/]]          & \ref{chap:devices}                                              & [[devuart.c]], USB, I2C, SPI            & 24148 \\
+[[console/]]        & \ref{chap:devices}                                              & [[devcons.c]], [[print.c]]              & 1561  \\
+[[filesystems/]]    & \ref{chap:filesystems}                                          & [[devfs.c]]                             & 6399  \\
+[[network/]]        & \book{Network}                                                  & [[netif.c]], [[etherif.h]]              & 23663 \\
+[[arch/]]           & (arch headers)                                                  & arch-specific constants                 & 2932  \\
+[[lib/]], [[misc/]] & (utilities)                                                     & small helpers                           & 686   \\
+[[security/]]       & (security stubs)                                                & [[auth.c]]                              & 164   \\
+[[conf/]]           & (build config)                                                  & [[master]], [[mkdevc]], [[mksystab]]    & 1339  \\
 \otoprule
-Total               &                           &                                                      & 129598 \\
+Total               &                                                                 &                                         & 130937 \\
 \bottomrule
 \end{tabular}
 \end{center}
