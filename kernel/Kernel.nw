@@ -731,8 +731,9 @@ organized into a handful of {\em segments}: a read-only
 segment ({data}), a zero-initialized segment ({bss}),
 a dynamically-growing {heap}, and a downward-growing
 {stack}. The layout is conventionally drawn with low
-addresses at the bottom and high addresses at the top,
-like this:
+addresses at the bottom and high addresses at the top
+(a convention I will follow for every memory-layout
+diagram throughout this book):
 
 \begin{verbatim}
           +-----------------+  USTKTOP (high addresses)
@@ -2291,8 +2292,14 @@ struct Ureg {
 %coupling: see  _vswitch and _userexcep
 
 %yoann: what is type and psr? say explained later? but where?
+%claude:
+The last two fields, [[type]] and [[psr]], are not general registers.
+[[psr]] holds the Program Status Register, which I cover in the next
+subsection. [[type]] records which exception pushed this [[Ureg]]---a
+data abort, a system call, an IRQ---and is what [[arch__trap()]]
+later switches on to pick a handler (Chapter~\ref{chap:interrupts}).
 
-% Ureg for user registers. 
+% Ureg for user registers.
 % Ureg will be used when saving state of processes.
 % Save pc/sp but also value of current registers
 % (and also of float registers, see Appendix).
@@ -2625,6 +2632,30 @@ features such as caches and the exception vector location.
 @
 
 %yoann: explain CpCmmu and say cpchv we mentioned before and explain how to access this main control register in practice (assembly code)
+%claude:
+These two bits are the ones the kernel flips when it wakes the
+MMU up. [[CpCmmu]] (the ``M'' bit) turns the MMU on: until it is
+set, every virtual address is used directly as a physical address.
+[[CpChv]] (the ``V'' bit) is the ``high vectors'' bit I already
+mentioned in the Exceptions subsection above: setting it moves the
+exception vector table from [[0x00000000]] to [[0xFFFF0000]], so
+the kernel does not have to keep page~0 mapped.
+%claude:
+Unlike normal registers, coprocessor registers are not addressed
+by name. The main control register lives on coprocessor [[CpSC]]
+(15) at primary register [[CpCONTROL]], secondary register~0,
+opcode2 [[CpMainctl]], and is read or written only through the
+[[MRC]] / [[MCR]] coprocessor-move instructions. In \plan ARM
+assembly this looks like:
+
+\begin{verbatim}
+  MRC CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl  /* R1 := ctlreg */
+  MCR CpSC, 0, R1, C(CpCONTROL), C(0), CpMainctl  /* ctlreg := R1 */
+\end{verbatim}
+
+The boot code will later read the register, OR in
+[[CpCmmu|CpChv]], and write it back---one instruction away from
+having a virtual address space.
 
 <<type CpCONTROL CpMainctl(arm)>>=
 /*
@@ -2793,7 +2824,30 @@ The [[Coarse]] type is used for the exception vectors at
 4~KiB mapping is needed.
 
 %yoann: format of L2 entry! so can maybe see also AP for an L2 entry?
+%claude:
+For completeness, here is the matching L2 entry format---what each
+of the 256 entries in an L2 table looks like when pointed to by an
+L1 [[Coarse]]:
 
+\begin{verbatim}
+  L2 entry (32 bits):
+
+  Small (bits[1:0] = 10):  maps 4 KiB directly
+  +---------------------------------------------------------+
+  | phys base (4 KiB aligned) | AP3 AP2 AP1 AP0 | C B | 1 0 |
+  +---------------------------------------------------------+
+   31                       12  11-10 9-8 7-6 5-4  3 2   1 0
+
+  Large (bits[1:0] = 01):  maps 64 KiB directly
+  Fault (bits[1:0] = 00):  unmapped
+\end{verbatim}
+
+%claude:
+The one new wrinkle compared to the L1 format is that [[AP]]
+appears four times---an ARMv4 sub-page legacy in which each 4~KiB
+page could be split into four independently-protected 1~KiB
+regions. \plan\ does not use that granularity: every sub-field
+ends up with the same value.
 
 %yoann: maybe explain a few bits, dom, flags, AP, C B that are useful to understand
 %claude:
@@ -2997,6 +3051,11 @@ the kernel system uses this framebuffer.
 \subsubsection{Input devices: USB keyboard and mouse}
 
 %yoann: small explanation
+%claude:
+Keyboard and mouse reach the kernel through the Raspberry Pi's
+on-board USB controller (a Synopsys DesignWare OTG). The
+controller is programmed by reading and writing registers at
+[[USBREGS]]:
 
 <<constant [[USBREGS]](arm)>>=
 #define  USBREGS (VIRTIO+0x980000)
@@ -3006,6 +3065,10 @@ the kernel system uses this framebuffer.
 \subsubsection{Storage device: SD card}
 
 %yoann: small explanation
+%claude:
+Persistent storage is an SD card attached to the Broadcom eMMC
+(embedded MultiMediaCard) controller. The kernel programs the
+controller through its memory-mapped registers at [[EMMCREGS]]:
 
 <<constant [[EMMCREGS]](arm)>>=
 #define EMMCREGS    (VIRTIO+0x300000)
@@ -3016,6 +3079,12 @@ the kernel system uses this framebuffer.
 \subsubsection{Other devices}
 
 %yoann: small explanation
+%claude:
+The remaining bank, [[GPIOREGS]], exposes the Raspberry Pi's
+general-purpose I/O pins. These pins drive the UART console,
+activity LEDs, the I2C/SPI buses, and the 40-pin expansion
+header that makes the Raspberry Pi useful as a hobbyist
+platform:
 
 <<constant [[GPIOREGS]](arm)>>=
 #define GPIOREGS    (VIRTIO+0x200000)
@@ -3067,6 +3136,12 @@ registers. The rest is simply unmapped.
 \l used??
 
 %yoann: say first memory layout diagram and in what follows we will use same convention low address low part of diagram and high-address high part
+%claude:
+This is the first hardware memory-layout diagram in the book. It
+follows the same convention as the user-process address-space
+diagram shown back in Section~\ref{sec:princ-vm}, and as every
+memory-layout diagram that follows: low addresses at the bottom,
+high addresses at the top, so memory grows upward on the page.
 
 %\subsection{Exceptions}
 
@@ -3431,6 +3506,13 @@ Every kernel source file starts with the same set of includes:
 %ocaml: finer-grained modules
 
 %yoann: explain maybe quickly mem.h, dat.h, fns.h and what those short names mean but not repeat what I say later about dat.h and fns.h in next subsection
+%claude:
+The three short filenames follow an old \plan kernel convention:
+[[mem.h]] holds memory-related constants (the virtual-address
+map, page sizes, section boundaries); [[dat.h]] holds the
+{data}-structure and type definitions; [[fns.h]] holds the
+function ({fns}) declarations. The next subsection looks at
+[[dat.h]] and [[fns.h]] more closely.
 
 % u.h for uchar, uint, ... can be seen also as universal :)
 % arch-specific, but almost identical for x86 and arm
@@ -3549,6 +3631,47 @@ way to see the overall structure of the kernel:
 
 
 %yoann: big code orga table like in my other books, maybe too big so just dirs and representative files and total LOC for a dir, and maybe reference graphics and network code and reference explain in other book
+%claude:
+Table~\ref{tab:kernel-code-orga} gives a bird's-eye view of the
+whole kernel tree: one row per subdirectory, a few representative
+source files, the chapter that discusses that code, and the total
+lines of C, headers, and assembly in the directory. The graphics
+stack (which lives under [[devices/screen/]] and includes
+[[devdraw.c]]) and the networking stack ([[network/]]) are covered
+in the companion \book{Graphics} and \book{Network} volumes; I
+list them here only for completeness.
+
+\begin{table}[tbh!]
+\begin{center}
+\begin{tabular}{lllr}
+\toprule
+{\bf Chapter} & {\bf Directory} & {\bf Representative files} & {\bf LOC} \\
+\otoprule
+\ref{chap:core-ds}           & [[core/]]           & [[error.c]], [[portdat.c]]                          & 1578  \\
+\ref{chap:concurrency}       & [[concurrency/]]    & [[qlock.c]], [[ref.c]]                              & 1293  \\
+\ref{chap:memory}            & [[memory/]]         & [[alloc.c]], [[page.c]], [[fault.c]]                & 7156  \\
+\ref{chap:processes}         & [[processes/]]      & [[edf.c]], [[pgrp.c]]                               & 8330  \\
+\ref{chap:files}             & [[files/]]          & [[chan.c]], [[dev.c]], [[allocb.c]]                 & 7196  \\
+\ref{chap:filesystems}       & [[filesystems/]]    & [[devfs.c]]                                         & 6399  \\
+\ref{chap:time}              & [[time/]]           & [[alarm.c]], [[portclock.c]]                        & 1754  \\
+\ref{chap:interrupts}        & [[interrupts/]]     & arch-specific trap entry                            & 3023  \\
+\ref{chap:interrupts}        & [[syscalls/]]       & [[systab.c]], [[syscallfmt.c]]                      & 1203  \\
+\ref{chap:devices}           & [[devices/]]        & [[keyboard/]], [[mouse/]], [[storage/]], [[screen/]] & 33980 \\
+\ref{chap:devices}           & [[buses/]]          & [[devuart.c]], USB, I2C, SPI                        & 24148 \\
+\ref{chap:devices}           & [[console/]]        & [[devcons.c]], [[print.c]]                          & 1561  \\
+\ref{chap:initialization}    & [[init/]]           & [[rebootcmd.c]], arch [[main.c]]                    & 4532  \\
+\book{Network}               & [[network/]]        & [[netif.c]], [[etherif.h]]                          & 23663 \\
+(arch headers)               & [[arch/]]           & arch-specific constants                             & 2932  \\
+(utilities)                  & [[lib/]], [[misc/]] & small helpers                                       & 686   \\
+(security stubs)             & [[security/]]       & [[auth.c]]                                          & 164   \\
+\otoprule
+Total                        &                     &                                                     & 129598 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Kernel subdirectories, representative files, and LOC.}
+\label{tab:kernel-code-orga}
+\end{table}
 
 
 \ifallcode
@@ -3884,6 +4007,51 @@ eventually launching [[init]] and then [[rc]] (the shell).
 See Chapter~\ref{chap:initialization} for the full code.
 
 %yoann: maybe ASCII diagram to illustrate boot sequence?
+%claude:
+Putting everything together, here is the full boot flow from
+power-on to shell prompt:
+
+\begin{verbatim}
+    power on
+       |
+       v                                   hardware / firmware
+    +-------------------------------+
+    | Broadcom on-chip ROM          |  reads SD card config.txt
+    +-------------------------------+
+       |
+       v
+    +-------------------------------+
+    | SD-card bootloader            |  loads kernel at phys 0x8000
+    +-------------------------------+
+       |
+       v                                   kernel
+    +-------------------------------+
+    | 1. hardware detection         |  populate Conf (RAM, #CPUs, ...)
+    +-------------------------------+
+       |
+       v
+    +-------------------------------+
+    | 2. environment init           |  allocators, MMU, drivers
+    +-------------------------------+
+       |
+       v
+    +-------------------------------+
+    | 3. create first user process  |  Proc[0] execs /boot/boot
+    +-------------------------------+
+       |
+       v                                   user space
+    /boot/boot    mounts root file system, spawns init
+       |
+       v
+    init          sets up environment, spawns rc
+       |
+       v
+    rc            shell prompt
+\end{verbatim}
+
+Chapter~\ref{chap:initialization} covers the kernel-side phases
+in full detail; the userspace end of the flow is in
+Chapter~\ref{chap:userspace}.
 
 % see also:
 % http://arjunsreedharan.org/post/82710718100/kernel-101-lets-write-a-kernel
@@ -4512,6 +4680,17 @@ sysnop(ulong*)
 %yoann: say print is kernel print, not libc print
 % print is a complex function! printing on the screen is actually not
 % trivial on Raspberry Pi! See \book{Graphics}?
+%claude:
+The [[print]] call here is the kernel's own [[print]], not the
+libc [[print]] that user programs invoke. The kernel binary is
+linked with libc---it pulls in concrete pieces like [[pool.c]]
+for the allocator and [[vseprintf]] for formatting---but it
+overrides key user-facing entry points with its own versions.
+[[print]] is declared as a function-pointer global and assigned
+at boot to [[devcons_print]] (Chapter~\ref{chap:devices}), which
+writes the formatted string into the [[/dev/cons]] queue; from
+there the bytes reach either the serial UART or the framebuffer
+console (covered in \book{Graphics}).
 
 %yoann: ok maybe detail the trace of a sysnop syscall from C program to nop() with exception vector lookup, who sets this vector lookup, etc.
 %claude:
@@ -4779,6 +4958,12 @@ the 32~KiB gap that the firmware leaves.
 \subsection{FAQ}
 
 %yoann: say other kind of FAQ but ARM independent
+%claude:
+The previous FAQ focused on ARM-specific mechanics. This second
+FAQ has the same spirit, but the questions are
+architecture-independent: they apply to any kernel on any CPU,
+and answering them clarifies design choices \plan makes
+regardless of which hardware it runs on.
 
 %yoann: explain "not-so-frequently asked question"
 %claude:
@@ -4788,6 +4973,21 @@ understanding of the kernel's design.
 %\l TODO: add more NSFAQ as they come up
 
 %yoann: at least one or two question and answer the reader might have
+%claude:
+{\bf When an interrupt or syscall fires while a user process
+is running, whose stack does the kernel execute on?}
+%claude:
+Not the user stack (it is untrusted---potentially corrupt, tiny,
+or read-only in a dying process) and not a single global kernel
+stack (which would break on SMP or on nested traps). Every
+[[Proc]] has its own {kernel stack} ([[kstack]]), allocated when
+the [[Proc]] is created. On every kernel entry the CPU switches
+[[SP]] into that per-process stack, the kernel runs on it until
+the handler returns, and control switches back to user mode. Two
+nice consequences follow: the kernel can sleep (block the current
+process while waiting for I/O) without disturbing any other
+process's state, and nested traps just work as long as [[kstack]]
+is deep enough.
 
 %yoann: maybe after all of this say that many things seem complicated and very arch-specific but say actually many things are the same across arch; list the essential things the kernel needs to organize and setup and even if concrete address can vary, the concept are very similar
 %claude:
@@ -5221,6 +5421,14 @@ Cpu* cpus[MAXCPUS];
 %old: MAXMACH
 
 %yoann: say MAXCPUS is arch-specific and for Raspberry Pi defined at 4 which is enough to handle Raspberry Pi 1 until ??
+%claude:
+[[MAXCPUS]] is an arch-specific ceiling---each port picks a number
+big enough to cover the hardware it expects to run on. The
+Raspberry Pi port fixes it at 4, which has been enough for every
+Raspberry Pi board from the Pi~1 (2012, single-core ARM11)
+through the Pi~5 (2023, quad-core Cortex-A76). On x86 the same
+constant is typically set higher (8 or 16) to accommodate desktop
+and server machines.
 
 % But on Raspberry Pi 1 only 1 really. On Pi 2? Pi 3?
 
@@ -5848,6 +6056,18 @@ Soc soc = {
 
 
 %yoann: say that actually most of the data structures we saw in the chapter are actually portable with only a few arch-specific "hooks"
+%claude:
+Stepping back from [[Soc]] and the other ARM-specific bits at
+the end of this chapter, notice how little of what we saw was
+actually arch-specific. The portable [[Cpu]], [[Proc]], and
+their relatives will be used unchanged in the next chapters;
+the arch-specific pieces live inside them as embedded
+[[Arch_Cpu]] and [[Arch_Proc]] fields. The handful of genuinely
+arch-specific structures---[[Ureg]] (the user-register save
+area), the page-table types, and [[Soc]]---can each be swapped
+for their x86 equivalents without touching anything else. In
+other words the kernel's data model is arch-independent; the
+arch differences live in small, named hooks.
 
 
 
