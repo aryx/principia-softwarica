@@ -240,10 +240,12 @@ Like for most books in \principia, I chose a \plan program for this book.
 The \plan kernel, called [[9]], was written by Ken Thompson---the
 creator of \unix---together with Dave Presotto and others at
 Bell Labs. 
-%unix:
+%plan9-is-cleaner:
 If \unix was ``version~1,'' then \plan is
 ``version~2'': a chance to redesign an operating system with
-decades of hindsight. The result is a kernel that is remarkably
+decades of hindsight.
+%
+The result is a kernel that is remarkably
 small, clean, and coherent---a good basis for the other
 \principia books.
 
@@ -261,15 +263,31 @@ in their title, but most of the code in this book is
 {portable} C---the same source is shared between the ARM
 and x86 ports of [[9]].
 %
-When talking specificially about the ARM and Raspeberry Pi port of [[9]],
+When talking specificially about the ARM and Raspberry Pi port of [[9]],
 I will sometimes use the name [[9pi]].
 
 %yoann: Graphics and network in other books.
 %claude:
-The graphics stack and the networking stack are covered in
+The graphics stack and the networking stack, which are parts
+of the [[9]] kernel, are covered in
 separate \principia volumes (\book{Graphics} and \book{Network}),
 so this book focuses on the kernel's core: processes, memory,
 files, and devices.
+
+%claude:
+To give a sense of scale: the [[9]] kernel is
+\textasciitilde 131{,}000 lines of C, headers, assembly, and
+build scripts in total (about~97\% C and headers, only
+\textasciitilde 3\% assembly). Table~\ref{tab:kernel-code-orga}
+shows the per-subdirectory breakdown. Stripping out the
+graphics stack ([[devices/screen/]], covered in \book{Graphics})
+and the networking stack ([[network/]], covered in
+\book{Network}) brings that down to about 96{,}000 lines, most
+of which is in [[devices/]] and [[buses/]]---the device drivers
+for the Raspberry Pi board. The portable C of the core
+subsystems---processes, memory, files, scheduling, interrupts,
+syscalls, initialization---is smaller still, about 30{,}000
+lines.
 
 %yoann: Some disadvantages of 9:
 % - more general but also probably less efficient, e.g., no buffer cache,
@@ -278,17 +296,20 @@ files, and devices.
 % - dupe memory management vs arch mmu?
 % - other stuff?
 %claude:
-Note that \plan's design has trade-offs.
-The ``everything is a file'' \unix philosophy pushed to its limit in 
-\plan is elegant but can be
+I have been praising [[9]] for being small, clean, and coherent,
+but that simplicity comes with real trade-offs that are worth
+naming before we dive in. The ``everything is a file'' \unix
+philosophy pushed to its limit in \plan is elegant but can be
 less efficient than specialized interfaces---for instance, \plan
-has no buffer cache for its file servers (unlike Linux's page cache).
-The graphics stack lives in the kernel ([[devdraw]]), which adds
-complexity to a component that could arguably be in user space.
-The physical memory is split between kernel, image cache, and user
-segments with hardcoded ratios, rather than dynamically balanced as
-in Linux. These are conscious trade-offs: \plan optimizes for
-simplicity and uniformity, sometimes at the cost of performance.
+has no buffer cache for its file servers (unlike Linux's page
+cache). The graphics stack lives in the kernel ([[devdraw]]),
+which adds complexity to a component that could arguably be in
+user space. The physical memory is split between kernel, image
+cache, and user segments with hardcoded ratios, rather than
+dynamically balanced as in Linux. These are conscious choices:
+\plan optimizes for simplicity and uniformity, sometimes at the
+cost of performance.
+
 
 \section{Other kernels}
 
@@ -298,58 +319,80 @@ which I ultimately discarded:
 
 %history:
 \item \unix V6\furl{http://minnie.tuhs.org/cgi-bin/utree.pl}
-(or its modern incarnation
-xv6\furl{http://pdos.csail.mit.edu/6.828/2014/xv6.html}) is too simple;
-there is no graphics, no network.
+(Ken Thompson et al.) runs only on the PDP-11, an architecture
+long since dead, and predates multiprocessor hardware,
+networking, and graphical displays. It is also already
+famously covered line-by-line in the Lions book~\cite{lions},
+so there is little point redoing that work here.
 %yoann: actually I will not cover graphics or network in this book, but I will
 % make other books and so want to explain something coherent.
 % Also V6 didn't handle multi processors (but xv6 does though).
 % grokking xv6: http://experiments.oskarth.com/unix00/
-%claude:
-Even though this book also does not cover graphics or networking
-(those are in \book{Graphics} and \book{Network}), the
-kernel presented here is the same one that supports those
-subsystems. 
 %I want the books in \principia to form a
 %coherent set, so it is important to present a kernel that
 %is complete enough to run a real system, not a toy.
-%claude:
-For the record, \unix~V6 is Bell Labs research \unix from~1975,
-running on the PDP-11, famously annotated line-by-line by John
-Lions in the first open source-code commentary ever
-published~\cite{lions}. xv6 is MIT's teaching rewrite---x86
-in~2006, ported to RISC-V in~2019---used in the 6.828
-operating-systems course.
+%claude: %cs-history:
+V6 is Bell Labs research \unix from 1975, the sixth edition of
+the operating system Thompson and Ritchie had been building
+since 1969. The whole kernel fits in about 9{,}000 lines of~C
+and PDP-11 assembly; Lions' 1977 commentary was the first
+published open source-code reading in the industry.
+
+\item xv6\furl{http://pdos.csail.mit.edu/6.828/2014/xv6.html},
+V6's modern incarnation (MIT's teaching rewrite for x86
+in~2006, ported to RISC-V in~2019, used in the 6.828
+operating-systems course), fixes all of the above: it runs on
+today's hardware, supports SMP, and is small---around 13{,}000
+lines of~C.
+%claude: %plan9-is-cleaner:
+Since xv6 has no graphics and no networking, the fair
+comparison is against [[9]] with those stripped---about
+35{,}000 lines, which is what this book actually covers (and
+which still includes a USB bus driver, an SD-card driver, and
+other hardware that no xv6 port touches). For those
+\textasciitilde 22{,}000 extra lines, [[9]] offers considerably
+more: per-process namespaces via [[bind]], [[mount]], and
+[[rfork]]; the 9P protocol for mounting remote file servers;
+light-weight threads sharing memory through [[rfork(RFMEM)]];
+note-based signal handling; a demand-paged memory system with
+copy-on-write [[fork]] and an image cache; and a priority/EDF
+scheduler. xv6 by contrast stays deliberately simple---
+round-robin scheduling, no copy-on-write, \unix-style
+signals---exactly what makes it a clean classroom exercise but
+not a system anyone would actually run.
 
 \item XINU\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=Xinu7}
-(Douglas Comer)
-has a network stack but the kernel itself
-is too simple for this book.
+(``Xinu Is Not Unix'', Douglas Comer) has a network stack, but
+the kernel itself is too simple for this book: the process
+model does not go much beyond ``run a routine, wait on a
+semaphore'', there are no namespaces or mounts, and the whole
+system is aimed at embedded devices rather than a
+general-purpose workstation.
 % and has multi processor support?
-%claude:
-XINU (``Xinu Is Not Unix'') was written by Douglas Comer at
-Purdue in~1984 as the companion code to his two-volume textbook
-{\em Operating System Design}~\cite{xinu,xinu2}. The second
-volume is devoted to XINU's TCP/IP implementation, which is why
-XINU is often read in networking classes. A new edition in~2015
-finally added virtual memory, but the version most readers
-encountered was the no-VM one.
+%claude: %cs-history:
+XINU was first written at Purdue in~1984 as the companion code
+to his two-volume textbook {\em Operating System
+Design}~\cite{xinu,xinu2}. The original kernel fits in around
+4{,}000 lines of~C---an order of magnitude smaller than [[9]]'s
+core---which is exactly what makes it such a good classroom
+kernel. The second volume is devoted to its TCP/IP
+implementation, which is why XINU is often read in networking
+classes. A new edition in~2015 added virtual memory.
 
 \item Minix\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=Minix1.1}
-(Andrew Tanenbaum et al.)
-is fairly small but it does not provide a simple windowing
-system as it relies on X11 (which is far more complicated than \plan
-Rio windowing system).
+(Andrew Tanenbaum et al.) is fairly small but relies on X11 for
+its windowing system, which is far more complicated than \plan's
+rio.
 % minix3 is said to be 13 000 LOC
-%claude:
-Minix was written at the Vrije Universiteit Amsterdam as the
-companion code to Tanenbaum's {\em Operating Systems: Design and
+%claude: %cs-history:
+Minix was first written at the Vrije Universiteit Amsterdam as
+the companion code to {\em Operating Systems: Design and
 Implementation}~\cite{minix} (1987)---the book Linus Torvalds
 was reading when he started Linux four years later. Minix~3
 (2005) rewrote the system as a proper microkernel with
-fault-isolated user-space drivers; it is small
-(\textasciitilde 13k~LOC) but has never had a user base beyond
-its own classroom.
+fault-isolated user-space drivers; at around 13{,}000~LOC it is
+less than half the size of [[9]]'s core, but has never had a
+user base beyond its own classroom.
 
 \item Linux\furl{https://kernel.org} (Linus Torvalds et al.)
 is really big.
@@ -381,12 +424,22 @@ Mach itself came out of Richard Rashid's group at Carnegie Mellon
 in the mid-1980s (and later became the foundation of NeXTSTEP
 and, via XNU, of macOS and iOS); the GNU project announced Hurd
 on top of Mach in~1990, shipped Hurd~0.1 in~1996, and the system
-is still marked experimental today. The combined Mach + Hurd
-codebase is far larger than the \plan kernel. \plan itself
+is still marked experimental today. And despite the ``micro''
+label, Mach itself is not particularly small: around 60--100k
+lines depending on what you count, big enough that Jochen
+Liedtke wrote L4 in the early 1990s (around 10k~LOC) as an
+explicit reaction to Mach's bloat. Add the Hurd servers on
+top and the whole stack ends up several times the size of
+[[9]]'s core, for something nobody actually runs. \plan
+itself
 borrows some microkernel ideas---everything-is-a-file as a
-unified IPC bus, pushing services like [[rio]] and [[factotum]]
-out of the kernel---but keeps drivers and scheduling in a single
-address space, trading full process isolation for simplicity.
+unified IPC bus, and pushing services out of the kernel: the
+window system [[rio]], the authentication agent [[factotum]],
+and---years before FUSE landed on Linux in~2006---entire
+filesystems like [[fossil]] and [[dossrv]] running as ordinary
+user-space file servers. \plan nonetheless keeps drivers and
+scheduling in a single address space, trading full process
+isolation for simplicity.
 
 \end{itemize}
 
@@ -5220,7 +5273,7 @@ On the Raspberry Pi, there is typically a single memory
 bank. The [[base]] is the start of {\em usable} physical RAM
 (after the kernel binary and its static allocations),
 and [[npage]] is the number of free pages. For example,
-on a Raspeberry Pi~1 with 512~MiB of RAM:
+on a Raspberry Pi~1 with 512~MiB of RAM:
 \begin{verbatim}
   Physical memory:
 
@@ -5242,7 +5295,7 @@ are computed at boot time by [[confinit()]].
 
 %yoann: explain a bit kernel arguments and how passed by bootloader and what is kernelpercent (actually it will be more 20% I think than 60)
 %claude:
-The Raspeberry Pi bootloader passes configuration parameters to the
+The Raspberry Pi bootloader passes configuration parameters to the
 \plan kernel as key-value string pairs (similar to a Linux
 kernel command line). These are stored in the [[confname]]
 and [[confval]] parallel arrays. One important parameter
