@@ -47,6 +47,7 @@ mpint*	letomp(uchar*, uint, mpint*);	/* byte array, little-endian */
 int	mptole(mpint*, uchar*, uint, uchar**);
 mpint*	betomp(uchar*, uint, mpint*);	/* byte array, little-endian */
 int	mptobe(mpint*, uchar*, uint, uchar**);
+void	mptober(mpint *b, uchar *p, int n);	/* claude: added for 9front libsec merge (fixed-size BE) */
 uint	mptoui(mpint*);			/* unsigned int */
 mpint*	uitomp(uint, mpint*);
 int	mptoi(mpint*);			/* int */

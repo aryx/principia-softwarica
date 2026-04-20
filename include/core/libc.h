@@ -272,6 +272,11 @@ extern  char*   utfutf(char*, char*);
 extern  int utfnlen(char*, long);
 extern  char*   utfecpy(char*, char*, char*);
 
+/* claude: 9front-style IDN helpers; currently stubs in
+ * lib_security/libsec/port/idnstub.c (used by the merged 9front x509.c). */
+extern	int	idn2utf(char*, char*, int);
+extern	int	utf2idn(char*, char*, int);
+
 
 //----------------------------------------------------------------------------
 // Print
