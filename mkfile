@@ -8,7 +8,7 @@ LIBS=\
  lib_core lib_math lib_strings\
  lib_graphics lib_gui\
  lib_networking\
- # used by plumb, iostats, snapfs, screenlock, etc\
+ # used by plumb, iostats, snapfs, screenlock, and now kernel (for TLS) etc\
  lib_security\
  # used by compilers/cpp (which is used by pcc) and languages/s9\
  lib_misc/libstdio\
