@@ -275,19 +275,23 @@ so this book focuses on the kernel's core: processes, memory,
 files, and devices.
 
 %claude:
-To give a sense of scale: the [[9]] kernel is
-\textasciitilde 131{,}000 lines of C, headers, assembly, and
-build scripts in total (about~97\% C and headers, only
-\textasciitilde 3\% assembly). Table~\ref{tab:kernel-code-orga}
-shows the per-subdirectory breakdown. Stripping out the
-graphics stack ([[devices/screen/]], covered in \book{Graphics})
-and the networking stack ([[network/]], covered in
-\book{Network}) brings that down to about 96{,}000 lines, most
-of which is in [[devices/]] and [[buses/]]---the device drivers
-for the Raspberry Pi board. The portable C of the core
-subsystems---processes, memory, files, scheduling, interrupts,
-syscalls, initialization---is smaller still, about 30{,}000
-lines.
+To give a sense of scale: the 9pi kernel---portable C plus
+ARM-specific code---is about 70{,}000 lines (about~98\% C and
+headers, only \textasciitilde 2\% assembly), with another
+\textasciitilde 34{,}000 lines of userspace helpers under
+each subsystem's [[user/]] subdirectory; see
+Table~\ref{tab:kernel-code-orga} for the per-subdirectory
+breakdown. The x86 port of the kernel adds another
+\textasciitilde 28{,}000 lines, covered separately in the
+companion x86 chapters of this book. Stripping out the
+graphics stack ([[devices/screen/]], covered in
+\book{Graphics}) and the networking stack ([[network/]],
+covered in \book{Network}) brings the 9pi kernel down to
+about 47{,}000 lines, most of which is in [[devices/]] and
+[[buses/]]---the device drivers for the Raspberry Pi board.
+The portable C of the core subsystems---processes, memory,
+files, scheduling, interrupts, syscalls, initialization---is
+smaller still, about 20{,}000 lines.
 
 %yoann: Some disadvantages of 9:
 % - more general but also probably less efficient, e.g., no buffer cache,
@@ -346,20 +350,25 @@ today's hardware, supports SMP, and is small---around 13{,}000
 lines of~C.
 %claude: %plan9-is-cleaner:
 Since xv6 has no graphics and no networking, the fair
-comparison is against [[9]] with those stripped---about
-35{,}000 lines, which is what this book actually covers (and
-which still includes a USB bus driver, an SD-card driver, and
-other hardware that no xv6 port touches). For those
-\textasciitilde 22{,}000 extra lines, [[9]] offers considerably
-more: per-process namespaces via [[bind]], [[mount]], and
-[[rfork]]; the 9P protocol for mounting remote file servers;
-light-weight threads sharing memory through [[rfork(RFMEM)]];
-note-based signal handling; a demand-paged memory system with
-copy-on-write [[fork]] and an image cache; and a priority/EDF
-scheduler. xv6 by contrast stays deliberately simple---
-round-robin scheduling, no copy-on-write, \unix-style
-signals---exactly what makes it a clean classroom exercise but
-not a system anyone would actually run.
+comparison is against [[9]]'s portable core---processes,
+memory, files, scheduling, interrupts, syscalls,
+initialization---which comes to about 20{,}000 lines of~C
+(the device drivers and bus controllers for the Raspberry
+Pi sit on top of that core but are not really what xv6 is
+competing with; conversely, much of [[9]]'s USB stack and
+several filesystem drivers such as [[dossrv]] live in user
+space outside the kernel altogether). For those
+\textasciitilde 7{,}000 extra lines over xv6, [[9]] offers
+considerably more: per-process namespaces via [[bind]],
+[[mount]], and [[rfork]]; the 9P protocol for mounting
+remote file servers; light-weight threads sharing memory
+through [[rfork(RFMEM)]]; note-based signal handling; a
+demand-paged memory system with copy-on-write [[fork]] and
+an image cache; and a priority/EDF scheduler. xv6 by
+contrast stays deliberately simple---round-robin
+scheduling, no copy-on-write, \unix-style signals---exactly
+what makes it a clean classroom exercise but not a system
+anyone would actually run.
 
 \item XINU\furl{http://minnie.tuhs.org/cgi-bin/utree.pl?file=Xinu7}
 (``Xinu Is Not Unix'', Douglas Comer) has a network stack, but
@@ -390,9 +399,11 @@ the companion code to {\em Operating Systems: Design and
 Implementation}~\cite{minix} (1987)---the book Linus Torvalds
 was reading when he started Linux four years later. Minix~3
 (2005) rewrote the system as a proper microkernel with
-fault-isolated user-space drivers; at around 13{,}000~LOC it is
-less than half the size of [[9]]'s core, but has never had a
-user base beyond its own classroom.
+fault-isolated user-space drivers; at around 13{,}000~LOC it
+is in the same ballpark as [[9]]'s 20{,}000-line portable
+core (though much smaller than a full 9pi kernel with its
+drivers), but has never had a user base beyond its own
+classroom.
 
 \item Linux\furl{https://kernel.org} (Linus Torvalds et al.)
 is really big.
@@ -3574,56 +3585,73 @@ Here are a few convenient constants used throughout the code.
 \section{Code organization}
 
 %claude:
-The [[9]] kernel source is split into many files organized by
-subsystem, each with portable code (in [[port/]]) and
-architecture-specific code (in [[bcm/]] for ARM and [[9pi]]). Every
-subsystem directory maps to one or more chapters of this book, as
-shown in Table~\ref{tab:kernel-code-orga}.
+The [[9]] kernel source is split into many subsystem
+directories. Within each subsystem the portable C code sits
+at the top level; architecture-specific code lives in
+[[arm/]] (for the Raspberry Pi port, a.k.a.\ 9pi) and
+[[386/]] (for the x86 port) subdirectories; and userspace
+utilities that exercise the kernel interfaces live under
+[[user/]]. Those include small helper daemons ([[disk]],
+[[usbd]], [[swap]]) and full 9P file servers such as
+[[dossrv]], which mounts a DOS/FAT disk image and serves it
+as a plain filesystem---without any FAT code ever entering
+the kernel.
+
+%Every subsystem maps to one or more chapters of this book, as shown in
+%Table~\ref{tab:kernel-code-orga}.
 
 %yoann: big code orga table like in my other books, maybe too big so just dirs and representative files and total LOC for a dir, and maybe reference graphics and network code and reference explain in other book
 %claude:
-Table~\ref{tab:kernel-code-orga} gives a bird's-eye view of the
-whole kernel tree: one row per subdirectory, a few representative
-source files, the chapter(s) that discuss that code, and the total
-lines of C, headers, and assembly in the directory. Some
-subsystems span more than one chapter---the [[memory/]] code, for
-example, underlies both the Memory Management and the Virtual
-Memory chapters. The graphics stack ([[devices/screen/]] with
-[[devdraw.c]] and friends) and the networking stack ([[network/]])
-are covered in the companion \book{Graphics} and \book{Network}
-volumes; I list them here only for completeness.
+Table~\ref{tab:kernel-code-orga} gives a bird's-eye view of
+the whole kernel tree: one row per subdirectory, the
+chapter(s) that discuss that code, a few representative
+source files, and the LOC split into portable,
+ARM-specific, and userspace parts. Since this book targets
+the \plan kernel for the Raspberry Pi (9pi), the
+x86-specific code under every [[386/]] subdirectory is
+omitted; altogether that amounts to roughly 28K additional
+lines, covered separately in the companion
+[[Kernel_x86.nw]] chapters. Some subsystems span more than
+one chapter---the [[memory/]] code, for example, underlies
+both the Memory Management and the Virtual Memory
+chapters. The graphics stack ([[devices/screen/]] with
+[[devdraw.c]] and friends) and the networking stack
+([[network/]]) are covered in the companion \book{Graphics}
+and \book{Network} volumes; I list them here for
+completeness.
 
 \begin{table}[tbh!]
 \begin{center}
-\begin{tabular}{lllr}
+\small
+\begin{tabular}{lllrrrr}
 \toprule
-{\bf Directory} & {\bf Chapters} & {\bf Representative files} & {\bf LOC} \\
+{\bf Directory} & {\bf Chapters} & {\bf Representative files} & {\bf Port} & {\bf ARM} & {\bf User} & {\bf Total} \\
 \otoprule
-[[core/]]           & \ref{chap:core-ds}                                              & [[error.c]], [[portdat.c]]              & 1578  \\
-[[concurrency/]]    & \ref{chap:concurrency}                                          & [[qlock.c]], [[ref.c]]                  & 1293  \\
-[[memory/]]         & \ref{chap:memory}, \ref{chap:virtual-memory}                    & [[alloc.c]], [[page.c]], [[fault.c]]    & 7156  \\
-[[processes/]]      & \ref{chap:processes}, \ref{chap:scheduling}, \ref{chap:ipc}     & [[edf.c]], [[pgrp.c]], [[sysproc.c]]    & 8330  \\
-[[interrupts/]]     & \ref{chap:interrupts}                                           & arch-specific trap entry                & 3023  \\
-[[syscalls/]]       & \ref{chap:interrupts}                                           & [[systab.c]], [[syscallfmt.c]]          & 1203  \\
-[[time/]]           & \ref{chap:time}                                                 & [[alarm.c]], [[portclock.c]]            & 1754  \\
-[[init/]]           & \ref{chap:initialization}                                       & [[rebootcmd.c]], arch [[main.c]]        & 4532  \\
-[[files/]]          & \ref{chap:files}, \ref{chap:directories}, \ref{chap:namespaces} & [[chan.c]], [[dev.c]], [[allocb.c]]     & 7196  \\
-[[devices/]]        & \ref{chap:devices}                                              & [[keyboard/]], [[mouse/]], [[storage/]] & 22321 \\
-[[devices/screen/]] & \book{Graphics}                                                 & [[devdraw.c]], [[swconsole.c]]          & 11659 \\
-[[buses/]]          & \ref{chap:devices}                                              & [[devuart.c]], USB, I2C, SPI            & 24148 \\
-[[console/]]        & \ref{chap:devices}                                              & [[devcons.c]], [[print.c]]              & 1561  \\
-[[filesystems/]]    & \ref{chap:filesystems}                                          & [[devfs.c]]                             & 6399  \\
-[[network/]]        & \book{Network}                                                  & [[netif.c]], [[etherif.h]]              & 23663 \\
-[[arch/]]           & (arch headers)                                                  & arch-specific constants                 & 2932  \\
-[[lib/]], [[misc/]] & (utilities)                                                     & small helpers                           & 686   \\
-[[security/]]       & (security stubs)                                                & [[auth.c]]                              & 164   \\
-[[conf/]]           & (build config)                                                  & [[master]], [[mkdevc]], [[mksystab]]    & 1339  \\
+[[core/]]           & \ref{chap:core-ds}                                              & [[error.c]], [[portdat.c]]              &   632 &   325 &     0 &    957 \\
+[[concurrency/]]    & \ref{chap:concurrency}                                          & [[qlock.c]], [[ref.c]]                  &   866 &   252 &     0 &   1118 \\
+[[memory/]]         & \ref{chap:memory}, \ref{chap:virtual-memory}                    & [[alloc.c]], [[page.c]], [[fault.c]]    &  4020 &  1026 &    66 &   5112 \\
+[[processes/]]      & \ref{chap:processes}, \ref{chap:scheduling}, \ref{chap:ipc}     & [[edf.c]], [[pgrp.c]], [[sysproc.c]]    &  5335 &   905 &     0 &   6240 \\
+[[interrupts/]]     & \ref{chap:interrupts}                                           & arch-specific trap entry                &     9 &  1109 &     0 &   1118 \\
+[[syscalls/]]       & \ref{chap:interrupts}                                           & [[systab.c]], [[syscallfmt.c]]          &   567 &   397 &   186 &   1150 \\
+[[time/]]           & \ref{chap:time}                                                 & [[alarm.c]], [[portclock.c]]            &   951 &   359 &     0 &   1310 \\
+[[init/]]           & \ref{chap:initialization}                                       & [[rebootcmd.c]], arch [[main.c]]        &   196 &  1895 &   661 &   2752 \\
+[[files/]]          & \ref{chap:files}, \ref{chap:directories}, \ref{chap:namespaces} & [[chan.c]], [[dev.c]], [[allocb.c]]     &  7001 &     0 &   195 &   7196 \\
+[[devices/]]        & \ref{chap:devices}                                              & [[keyboard/]], [[mouse/]], [[storage/]] &  9322 &   720 &  6152 &  16194 \\
+[[devices/screen/]] & \book{Graphics}                                                 & [[devdraw.c]], [[swconsole.c]]          &  3755 &   254 &  4956 &   8965 \\
+[[buses/]]          & \ref{chap:devices}                                              & [[devuart.c]], USB, I2C, SPI            &  1093 &  4012 & 16767 &  21872 \\
+[[console/]]        & \ref{chap:devices}                                              & [[devcons.c]], [[print.c]]              &  1561 &     0 &     0 &   1561 \\
+[[filesystems/]]    & \ref{chap:filesystems}                                          & [[devfs.c]]                             &  1299 &     0 &  5100 &   6399 \\
+[[network/]]        & \book{Network}                                                  & [[netif.c]], [[etherif.h]]              & 18532 &   582 &     0 &  19114 \\
+[[arch/]]           & (arch headers)                                                  & arch-specific constants                 &     0 &  1121 &     0 &   1121 \\
+[[lib/]], [[misc/]] & (utilities)                                                     & small helpers                           &   686 &     0 &     0 &    686 \\
+[[security/]]       & (security stubs)                                                & [[auth.c]]                              &   164 &     0 &     0 &    164 \\
+[[conf/]]           & (build config)                                                  & [[master]], [[mkdevc]], [[mksystab]]    &   697 &   348 &     0 &   1045 \\
 \otoprule
-Total               &                                                                 &                                         & 130937 \\
+Total               &                                                                 &                                         & 56686 & 13305 & 34083 & 104074 \\
 \bottomrule
 \end{tabular}
 \end{center}
-\caption{Kernel subdirectories, representative files, and LOC.}
+\caption{Kernel subdirectories, representative files, and LOC split across portable, ARM-specific, and userspace parts. The x86-specific code under each [[386/]] subdirectory (roughly 27.6K LOC in total) is omitted, as this book covers it separately in its x86 chapters.}
 \label{tab:kernel-code-orga}
 \end{table}
 
@@ -4045,8 +4073,10 @@ agent [[factotum]], the filesystems [[fossil]] and [[dossrv]]).
 %
 This borrows a key idea from {\em microkernel} designs: keep the
 kernel small and move services to user space. In fact,
-the entire kernel is only about 30\,000 lines of
-C---remarkably small for a complete operating system.
+the entire 9pi kernel is about 70\,000 lines of C and ARM
+assembly---remarkably small for a complete operating system
+(compare Linux's architecture-independent core at 400k+~LOC,
+graphics and network drivers excluded).
 
 %claude:
 The kernel's execution can be understood along three axes.
@@ -48736,10 +48766,15 @@ if(!kbscan->ctl){
 
 
 %******************************************************************************
-\chapter{Extra Code}
+\chapter{Extra Portable Code}
 %******************************************************************************
 
 #include "Kernel_extra.nw"
+
+%******************************************************************************
+\chapter{Extra ARM Code}
+%******************************************************************************
+
 #include "Kernel_arm.nw"
 
 \ifallcode
