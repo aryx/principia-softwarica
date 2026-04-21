@@ -50,7 +50,7 @@ derror(Display *, char *s)
 static void
 usage(void)
 {
-	fprint(2, "usage: %s [-c ncol] [-m mtpt] [-t charset] [url...]\n",
+	fprint(2, "usage: %s [-d] [-c ncol] [-m mtpt] [-t charset] [url...]\n",
 		argv0);
 	exits("usage");
 }
@@ -70,6 +70,9 @@ threadmain(int argc, char *argv[])
 		ncol = atoi(EARGF(usage()));
 		if(ncol <= 0)
 			usage();
+		break;
+	case 'd':
+		debug = true;
 		break;
 	case 'm':
 		webmountpt = EARGF(usage());

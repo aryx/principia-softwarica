@@ -92,6 +92,8 @@ urlopen(Url *u)
 	conn = atoi(buf);
 
 	snprint(buf, sizeof(buf), "url %S", u->src.r);
+	if(debug)
+		fprint(2, "abaco urlopen: writing `%s` to clone\n", buf);
 	if(write(cfd, buf, strlen(buf)) < 0){
 //		fprint(2, "write: %s: %r\n", buf);
     Err:
@@ -119,6 +121,8 @@ urlopen(Url *u)
 	}
 	u->ctype = getattr(conn, "contenttype");
 	u->act = getattr(conn, "parsed/url");
+	if(debug)
+		fprint(2, "abaco urlopen: webfs parsed/url=%S (src=%S)\n", u->act.r, u->src.r);
 	if(u->act.nr == 0)
 		copyrunestr(&u->act, &u->src);
 	close(cfd);
@@ -193,8 +197,17 @@ urlcombine(Rune *b, Rune *u)
 	if(validurl(u))
 		return erunestrdup(u);
 
-	if(b==nil || !validurl(b))
-		error("urlcombine: b==nil || !validurl(b)");
+	/* claude: under -d, report both sides so we can see what abaco tried to combine */
+	if(b == nil){
+		if(debug)
+			fprint(2, "abaco: urlcombine: b==nil, u=%S\n", u);
+		error("urlcombine: b==nil");
+	}
+	if(!validurl(b)){
+		if(debug)
+			fprint(2, "abaco: urlcombine: !validurl(b), u=%S b=%S\n", u, b);
+		error("urlcombine: !validurl(b)");
+	}
 
 	if(runestrncmp(u, L"//", 2) == 0){
 		q =  runestrchr(b, L':');
