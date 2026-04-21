@@ -74,12 +74,29 @@ void getimage(Rtext *t, Www *w){
 		goto Err;
 	if(ap->width>0 || ap->height>0){
 		s = buf;
+		/*
+		 * claude: under -d, save a copy of each decoded bitmap that's
+		 * about to be piped into resize, one file per image. If resize
+		 * crashes on an image, the corresponding .bit file survives and
+		 * can be replayed as `resize -x N -y N < /tmp/mothra-NNN.bit`.
+		 * We use a counter rather than a hash of the image URL because
+		 * mothra keeps loading images after a child resize crashes, and
+		 * we want every intermediate bitmap preserved.
+		 */
+		static int imgcount;
+		if(debug)
+			s += sprint(s, "tee /tmp/mothra-%d.bit | ", imgcount);
 		s += sprint(s, "exec resize");
 		if(ap->width>0)
 			s += sprint(s, " -x %d", ap->width);
 		if(ap->height>0)
 			s += sprint(s, " -y %d", ap->height);
 		USED(s);
+		if(debug){
+			fprint(STDERR, "getimage[%d]: piping %s through `%s` for %s\n",
+				imgcount, pixcmd[typ], buf, ap->image);
+			imgcount++;
+		}
 		if((fd = pipeline(fd, buf)) < 0)
 			goto Err;
 	}
