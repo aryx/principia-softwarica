@@ -2873,19 +2873,121 @@ listtyval(Token* tok, int dflt)
 	return ans;
 }
 
-// Attribute value when value is a URL, possibly relative to base.
-// FOR NOW: leave the url relative.
-// Caller must free the result (eventually).
+/*
+ * claude: minimal Rune-based URL resolver. Enough for aurlval below
+ * to turn raw href values into absolute URLs given a base. Not full
+ * RFC2396 -- doesn't do `..` path normalization or merge query/fragment
+ * edge cases -- but handles the cases that actually appear in live
+ * HTML: absolute URL (scheme://host/...), protocol-relative (//host/...),
+ * host-relative (/path), and path-relative (path/file).
+ *
+ * Returns a freshly _newstr'd Rune* that the caller owns.
+ */
+static Rune*
+_resolveurl(Rune *u, Rune *base)
+{
+	Rune *p, *scheme_end, *auth_end, *dir_end;
+	Rune *buf;
+	int ulen, prefixlen;
+
+	if(u == nil)
+		return nil;
+	ulen = _Strlen(u);
+	if(ulen == 0 || base == nil)
+		return _Strdup(u);
+
+	/* already absolute? scheme ':' followed by "//" before any '/' */
+	for(p = u; *p && *p != '/'; p++)
+		if(*p == ':'){
+			if(p[1] == '/' && p[2] == '/')
+				return _Strdup(u);
+			break;
+		}
+
+	/* locate base's "scheme://" and end of authority */
+	scheme_end = nil;
+	for(p = base; *p && *p != '/'; p++)
+		if(*p == ':' && p[1] == '/' && p[2] == '/'){
+			scheme_end = p;
+			break;
+		}
+	if(scheme_end == nil)
+		return _Strdup(u);	/* malformed base; can't resolve */
+	auth_end = scheme_end + 3;
+	while(*auth_end && *auth_end != '/' && *auth_end != '?' && *auth_end != '#')
+		auth_end++;
+
+	/* u begins with "//": inherit scheme only */
+	if(u[0] == '/' && u[1] == '/'){
+		prefixlen = (scheme_end - base) + 1;	/* "scheme:" */
+		buf = _newstr(prefixlen + ulen);
+		memmove(buf, base, prefixlen * sizeof(Rune));
+		memmove(buf + prefixlen, u, ulen * sizeof(Rune));
+		buf[prefixlen + ulen] = 0;
+		return buf;
+	}
+
+	/* u begins with "/": inherit scheme + authority */
+	if(u[0] == '/'){
+		prefixlen = auth_end - base;
+		buf = _newstr(prefixlen + ulen);
+		memmove(buf, base, prefixlen * sizeof(Rune));
+		memmove(buf + prefixlen, u, ulen * sizeof(Rune));
+		buf[prefixlen + ulen] = 0;
+		return buf;
+	}
+
+	/* relative path: inherit base up to and including the last '/' */
+	dir_end = base + _Strlen(base);
+	while(dir_end > auth_end && *(dir_end - 1) != '/')
+		dir_end--;
+	if(dir_end <= auth_end){
+		/* base has no path slash (e.g. "http://host"); synthesize one */
+		prefixlen = auth_end - base;
+		buf = _newstr(prefixlen + 1 + ulen);
+		memmove(buf, base, prefixlen * sizeof(Rune));
+		buf[prefixlen] = '/';
+		memmove(buf + prefixlen + 1, u, ulen * sizeof(Rune));
+		buf[prefixlen + 1 + ulen] = 0;
+		return buf;
+	}
+	prefixlen = dir_end - base;
+	buf = _newstr(prefixlen + ulen);
+	memmove(buf, base, prefixlen * sizeof(Rune));
+	memmove(buf + prefixlen, u, ulen * sizeof(Rune));
+	buf[prefixlen + ulen] = 0;
+	return buf;
+}
+
+/*
+ * Attribute value when value is a URL, possibly relative to base.
+ * Caller must free the result (eventually).
+ *
+ * claude: was `USED(base);` with a "FOR NOW: leave the url relative"
+ * TODO inherited from the original Plan 9 code and still present in
+ * 9front and plan9port. Now resolves against base so callers get an
+ * absolute URL. Visible on real sites: 9p.io serves
+ * <base href="index.html"> which, before the fix, left di->base
+ * unresolvable and every subsequent urlcombine in abaco failed.
+ */
 static Rune*
 aurlval(Token* tok, int attid, Rune* dflt, Rune* base)
 {
 	Rune*	ans;
 	Rune*	url;
+	Rune*	resolved;
 
-	USED(base);
 	ans = nil;
-	if(_tokaval(tok, attid, &url, 0) && url != nil)
+	if(_tokaval(tok, attid, &url, 0) && url != nil){
 		ans = removeallwhite(url);
+		if(ans != nil && base != nil){
+			resolved = _resolveurl(ans, base);
+			if(resolved != nil && resolved != ans){
+				free(ans);
+				ans = resolved;
+			}
+		}
+	}
 	if(ans == nil)
 		ans = _Strdup(dflt);
 	return ans;
