@@ -57,6 +57,15 @@ readline(Ibuf *b, char *buf, int len)
 
 	for(p = buf;;){
 		if(b->rp >= b->wp){
+			/* claude: reset on drain -- same upstream ring-buffer bug as
+			 * hget's readline. wp only advances; without resetting to
+			 * b->buf after the ring drains, cumulative reads push wp
+			 * past b->buf+sizeof(b->buf) and the next read() writes off
+			 * the end of the allocation. Fat-header sites
+			 * (en.wikipedia.org etc.) trip it. unreadline() already
+			 * re-anchors rp/wp at b->buf when it fires, so the two
+			 * mutators stay consistent. */
+			b->rp = b->wp = b->buf;
 			n = ioread(b->io, b->fd, b->wp, sizeof(b->buf)/2);
 			if(n < 0)
 				return -1;
