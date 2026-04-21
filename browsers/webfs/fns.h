@@ -34,7 +34,7 @@ int		httpread(Client*, Req*);
 void		httpclose(Client*);
 
 /* io.c */
-int		iotlsdial(Ioproc*, char*, char*, char*, int*, int);
+int		iotlsdial(Ioproc*, char*, char*, char*, int*, int, char*);
 int		ioprint(Ioproc*, int, char*, ...);
 #pragma varargck argpos ioprint 3
 

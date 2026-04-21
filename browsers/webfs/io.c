@@ -45,7 +45,7 @@ ioprint(Ioproc *io, int fd, char *fmt, ...)
 static long
 _iotlsdial(va_list *arg)
 {
-	char *addr, *local, *dir;
+	char *addr, *local, *dir, *servername;
 	int *cfdp, fd, tfd, usetls;
 	TLSconn conn;
 
@@ -54,6 +54,7 @@ _iotlsdial(va_list *arg)
 	dir = va_arg(*arg, char*);
 	cfdp = va_arg(*arg, int*);
 	usetls = va_arg(*arg, int);
+	servername = va_arg(*arg, char*);
 
 	fd = dial(addr, local, dir, cfdp);
 	if(fd < 0)
@@ -64,6 +65,9 @@ _iotlsdial(va_list *arg)
 	memset(&conn, 0, sizeof conn);
 	/* does no good, so far anyway */
 	// conn.chain = readcertchain("/sys/lib/ssl/vsignss.pem");
+	/* claude: SNI is required by most modern HTTPS servers */
+	if(servername != nil)
+		conn.serverName = strdup(servername);
 
 	tfd = tlsClient(fd, &conn);
 	close(fd);
@@ -74,11 +78,12 @@ _iotlsdial(va_list *arg)
 		if(conn.cert)
 			free(conn.cert);
 	}
+	free(conn.serverName);
 	return tfd;
 }
 
 int
-iotlsdial(Ioproc *io, char *addr, char *local, char *dir, int *cfdp, int usetls)
+iotlsdial(Ioproc *io, char *addr, char *local, char *dir, int *cfdp, int usetls, char *servername)
 {
-	return iocall(io, _iotlsdial, addr, local, dir, cfdp, usetls);
+	return iocall(io, _iotlsdial, addr, local, dir, cfdp, usetls, servername);
 }

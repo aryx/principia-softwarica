@@ -353,15 +353,19 @@ dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 			TLSconn conn;
 
 			memset(&conn, 0, sizeof conn);
+			/* claude: SNI is required by most modern HTTPS servers */
+			conn.serverName = strdup(u->host);
 			tfd = tlsClient(fd, &conn);
 			if(tfd < 0){
 				fprint(2, "tlsClient: %r\n");
 				close(fd);
+				free(conn.serverName);
 				return Error;
 			}
 			/* BUG: check cert here? */
 			if(conn.cert)
 				free(conn.cert);
+			free(conn.serverName);
 			close(fd);
 			fd = tfd;
 		}

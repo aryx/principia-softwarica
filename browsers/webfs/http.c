@@ -286,7 +286,7 @@ httpopen(Client *c, Url *url)
 		fprint(2, "dial %s\n", hs->netaddr);
 		fprint(2, "dial port: %s\n", url->port);
 	}
-	fd = iotlsdial(io, hs->netaddr, 0, 0, 0, url->ischeme==UShttps);
+	fd = iotlsdial(io, hs->netaddr, 0, 0, 0, url->ischeme==UShttps, url->host);
 	if(fd < 0){
 	Error:
 		if(httpdebug)
