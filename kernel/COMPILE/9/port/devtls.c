@@ -17,6 +17,33 @@
 
 #include	<libsec.h>
 
+/*
+ * claude: principia's port/alloc.c doesn't have a separate secrmem pool
+ * yet, so secalloc/secfree become plain smalloc/free. We lose the
+ * zero-on-free isolation for cipher state, but the TLS state machine
+ * still works. Upgrade to a real secrmem pool if/when principia's
+ * kernel alloc grows one.
+ */
+#define	secalloc(n)	smalloc(n)
+#define	secfree(p)	free(p)
+
+/*
+ * claude: 9front's devtls calls libsec's prng() for per-record IVs,
+ * but libsec's prng.c wraps libc rand() which pulls lrand.c, which
+ * uses the userspace Lock signature -- that collides with the kernel's
+ * Lock layout at link time. Substitute a kernel-local randfill() that
+ * uses nrand() directly (already provided by kernel/console/devcons.c).
+ * We also #define prng to route any call sites to the kernel-local
+ * version, which matches the signature libsec advertises.
+ */
+static void
+randfill(uchar *buf, int len)
+{
+	while(len-- > 0)
+		*buf++ = nrand(256);
+}
+#define	prng(buf, len)	randfill(buf, len)
+
 typedef struct OneWay	OneWay;
 typedef struct Secret	Secret;
 typedef struct TlsRec	TlsRec;
@@ -1468,6 +1495,7 @@ parsehashalg(char *p)
 		if(strcmp(p, ha->name) == 0)
 			return ha;
 	error("unsupported hash algorithm");
+	return nil;	/* claude: 8c doesn't know error() is noreturn */
 }
 
 typedef struct Encalg Encalg;
@@ -1568,6 +1596,7 @@ parseencalg(char *p)
 		if(strcmp(p, ea->name) == 0)
 			return ea;
 	error("unsupported encryption algorithm");
+	return nil;	/* claude: 8c doesn't know error() is noreturn */
 }
 
 static long
@@ -1849,25 +1878,30 @@ tlsinit(void)
 	*cp = 0;
 }
 
+/*
+ * claude: designated-initializer form so field-order differences between
+ * 9front's Dev struct and principia's don't matter. Same functions, just
+ * bound by name.
+ */
 Dev tlsdevtab = {
-	'a',
-	"tls",
+	.dc		= 'a',
+	.name		= "tls",
 
-	devreset,
-	tlsinit,
-	devshutdown,
-	tlsattach,
-	tlswalk,
-	tlsstat,
-	tlsopen,
-	devcreate,
-	tlsclose,
-	tlsread,
-	tlsbread,
-	tlswrite,
-	tlsbwrite,
-	devremove,
-	tlswstat,
+	.reset		= devreset,
+	.init		= tlsinit,
+	.shutdown	= devshutdown,
+	.attach		= tlsattach,
+	.walk		= tlswalk,
+	.stat		= tlsstat,
+	.open		= tlsopen,
+	.create		= devcreate,
+	.close		= tlsclose,
+	.read		= tlsread,
+	.bread		= tlsbread,
+	.write		= tlswrite,
+	.bwrite		= tlsbwrite,
+	.remove		= devremove,
+	.wstat		= tlswstat,
 };
 
 /* get channel associated with an fd */
