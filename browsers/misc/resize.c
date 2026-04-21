@@ -1,10 +1,32 @@
 // called by mothra via exec
 #include <u.h>
 #include <libc.h>
+#include <pool.h>
 #include <draw.h>
 #include <memdraw.h>
 
 int nflag;
+bool debug;	/* claude: -d: poolcheck before each big step, to locate heap corruption */
+
+/*
+ * claude: temporary instrumentation to locate the heap corruption that
+ * crashes freememimage(nim) at the end of main(). poolcheck walks the
+ * imagmem arena and sysfatal()s on the first bad boundary tag. Prints
+ * a "CHECK ok" line if clean, so we can see which step introduced the
+ * corruption.
+ */
+extern Pool *imagmem;
+extern Pool *mainmem;
+static void
+checkimag(char *where)
+{
+	if(!debug)
+		return;
+	fprint(2, "resize: poolcheck before %s... ", where);
+	poolcheck(imagmem);
+	poolcheck(mainmem);
+	fprint(2, "ok\n");
+}
 
 static void
 resample(Memimage *dst, Rectangle r, Memimage *src, Rectangle sr)
@@ -95,7 +117,7 @@ getsize(char *s)
 void
 usage(void)
 {
-	fprint(2, "Usage: %s [ -x width ] [ -y height ] [ file ]\n", argv0);
+	fprint(2, "Usage: %s [-d] [ -x width ] [ -y height ] [ file ]\n", argv0);
 	exits("usage");
 }
 
@@ -119,6 +141,9 @@ main(int argc, char **argv)
 		break;
 	case 'n':
 		nflag++;
+		break;
+	case 'd':
+		debug = true;
 		break;
 	default:
 		usage();
@@ -165,24 +190,31 @@ main(int argc, char **argv)
 			tchan = GREY8;
 			break;
 		}
+		checkimag("enter");
 		if(tchan != ochan){
 			if((nim = allocmemimage(im->r, tchan)) == nil)
 				sysfatal("allocimage: %r");
+			checkimag("memimagedraw1 (ochan->tchan)");
 			memimagedraw(nim, nim->r, im, im->r.min, nil, ZP, S);
+			checkimag("freememimage(im) #1");
 			freememimage(im);
 			im = nim;
 		}
 		if((nim = allocmemimage(
-			Rect(im->r.min.x, im->r.min.y, im->r.min.x+xsize, im->r.min.y+ysize), 
+			Rect(im->r.min.x, im->r.min.y, im->r.min.x+xsize, im->r.min.y+ysize),
 			tchan)) == nil)
 			sysfatal("allocmemimage: %r");
+		checkimag("resample");
 		resample(nim, nim->r, im, im->r);
+		checkimag("freememimage(im) #2");
 		freememimage(im);
 		im = nim;
 		if(tchan != ochan){
 			if((im = allocmemimage(nim->r, ochan)) == nil)
 				sysfatal("allocimage: %r");
+			checkimag("memimagedraw2 (tchan->ochan)");
 			memimagedraw(im, im->r, nim, nim->r.min, nil, ZP, S);
+			checkimag("freememimage(nim)");
 			freememimage(nim);
 		}
 	}
