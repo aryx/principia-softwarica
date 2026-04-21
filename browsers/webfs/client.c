@@ -322,9 +322,52 @@ clientctlwrite(Req *r, Client *c, char *cmd, char *arg)
 {
 	void *a;
 	Ctab *t;
+	Url *u;
+	char e[ERRMAX];
 
 	if((t = findcmd(cmd, clienttab, nelem(clienttab))) == nil)
 		return 0;
+	/*
+	 * claude: webfs's ctl interface exposes two commands per clone,
+	 * `baseurl` and `url`, with both slots stored in the Client struct
+	 * on the clone's state. The design clearly intended the RFC2396
+	 * delta-URI flow -- a caller that doesn't itself know how to
+	 * combine a base with a relative reference writes
+	 *
+	 *     baseurl https://en.wikipedia.org/wiki/Main_Page
+	 *     url     /wiki/Cat
+	 *
+	 * and webfs is supposed to resolve the relative form against the
+	 * previously-set base. But in principia's inherited code all
+	 * commands route through the same generic parseas() below, which
+	 * always calls parseurl(arg, nil). So the `url` write has no
+	 * access to c->baseurl and the relative form dies with "relative
+	 * URI given without base". Observable consequence: `baseurl` is
+	 * written, accepted, stored -- and then silently ignored by the
+	 * very next `url` write. Only clients that resolve absolute URLs
+	 * themselves (abaco, hget) work; clients that rely on webfs to
+	 * combine (mothra) fail on links like <a href="/..."> which is
+	 * most of the Web.
+	 *
+	 * 9front fixed this long ago by rewriting clientctl as a manual
+	 * dispatch that knows which slot it's writing (see
+	 * 9front/sys/src/cmd/webfs/fs.c:clientctl). We achieve the same
+	 * effect with a minimal surgery: special-case `url` here so it
+	 * passes c->baseurl to parseurl (nil baseurl falls back to the
+	 * previous behavior, i.e. absolute works, relative fails cleanly).
+	 */
+	if(strcmp(cmd, "url") == 0){
+		u = parseurl(arg, c->baseurl);
+		if(u == nil){
+			snprint(e, sizeof e, "parseurl: %r");
+			respond(r, e);
+			return 1;
+		}
+		freeurl(c->url);
+		c->url = u;
+		respond(r, nil);
+		return 1;
+	}
 	a = (void*)((uintptr)c+(uintptr)t->offset);
 	parseas(r, arg, t->type, a);
 	return 1;
