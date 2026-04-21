@@ -319,9 +319,11 @@ static uchar compressors[] = {
 };
 
 static Namedcurve namedcurves[] = {
+	/* claude: principia only ships X25519 for ECDHE. NIST curves
+	 * (secp256r1/secp384r1) need ecc.c + the mpc-generated secp*.c,
+	 * which aren't built here yet. X25519 is enough for most modern
+	 * servers; can be extended later once mpc is available. */
 	X25519, nil,
-	0x0017, secp256r1,
-	0x0018, secp384r1,
 };
 
 static uchar pointformats[] = {

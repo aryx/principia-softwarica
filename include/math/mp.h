@@ -38,6 +38,7 @@ void	mpassign(mpint *old, mpint *new);
 
 /* random bits */
 mpint*	mprand(int bits, void (*gen)(uchar*, int), mpint *b);
+mpint*	mpnrand(mpint *n, void (*gen)(uchar*, int), mpint *b);	/* claude: added for 9front libsec merge */
 
 /* conversion */
 mpint*	strtomp(char*, char**, int, mpint*);	/* ascii */
