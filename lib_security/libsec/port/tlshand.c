@@ -277,11 +277,17 @@ enum {
 };
 
 static Algs cipherAlgs[] = {
+	/* claude: ECDHE-ECDSA cipher suites commented out below -- verifying
+	 * the server's ECDSA signature on the ServerKeyExchange needs a
+	 * working ecdsaverify, which needs NIST-curve code (ecc.c +
+	 * mpc-generated secp*.c) that principia doesn't build yet. Leaving
+	 * ECDHE-RSA is fine: our X25519 key exchange path doesn't call
+	 * ecdominit. Restore once mpc lands. */
 	// ECDHE-ECDSA
-	{"ccpoly96_aead", "clear", 2*(32+12), TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305},
-	{"ccpoly64_aead", "clear", 2*32, GOOGLE_ECDHE_ECDSA_WITH_CHACHA20_POLY1305},
-	{"aes_128_gcm_aead", "clear", 2*(16+4), TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
-	{"aes_128_cbc", "sha256", 2*(16+16+SHA2_256dlen), TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256},
+	// {"ccpoly96_aead", "clear", 2*(32+12), TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305},
+	// {"ccpoly64_aead", "clear", 2*32, GOOGLE_ECDHE_ECDSA_WITH_CHACHA20_POLY1305},
+	// {"aes_128_gcm_aead", "clear", 2*(16+4), TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+	// {"aes_128_cbc", "sha256", 2*(16+16+SHA2_256dlen), TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256},
 
 	// ECDHE-RSA
 	{"ccpoly96_aead", "clear", 2*(32+12), TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305},
