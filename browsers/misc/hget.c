@@ -1293,6 +1293,24 @@ readline(int fd, char *buf, int len)
 
 	for(p = buf;;){
 		if(b.rp >= b.wp){
+			/* claude: b is styled like a ring (rp/wp pair + backing array),
+			 * but the original code never wraps -- wp only advances, and
+			 * read() always lands at wp without checking how much space is
+			 * left before b.buf+sizeof(b.buf). After enough bytes have
+			 * passed through, wp ends up within sizeof(b.buf)/2 of the end
+			 * and the next refill writes off the tail of the BSS region.
+			 * On small responses this never triggered, which is why the
+			 * bug also exists unfixed in plan9-0intro and plan9port.
+			 * en.wikipedia.org ships enough header bytes (set-cookie +
+			 * report-to JSON + nel JSON + strict-transport-security) to
+			 * push wp past the end.
+			 *
+			 * Reset both pointers to b.buf whenever the buffer drains --
+			 * rp catches wp only when there's no unread data, so we can
+			 * safely re-anchor. unreadline() independently re-anchors
+			 * rp/wp at b.buf when it fires, so the two mutators stay
+			 * consistent. */
+			b.rp = b.wp = b.buf;
 			n = read(fd, b.wp, sizeof(b.buf)/2);
 			if(n < 0)
 				return -1;
