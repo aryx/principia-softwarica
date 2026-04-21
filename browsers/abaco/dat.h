@@ -343,7 +343,7 @@ int			plumbsendfd;
 int			webctlfd;
 char			*charset;
 int			procstderr;
-bool			debug;		/* claude: -d: verbose logging of webfs I/O and URL resolution */
+bool			debugflag;	/* claude: -d: verbose logging of webfs I/O and URL resolution */
 
 enum
 {

@@ -72,7 +72,7 @@ threadmain(int argc, char *argv[])
 			usage();
 		break;
 	case 'd':
-		debug = true;
+		debugflag = true;
 		break;
 	case 'm':
 		webmountpt = EARGF(usage());
