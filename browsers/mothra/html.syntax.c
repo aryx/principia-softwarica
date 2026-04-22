@@ -6,6 +6,8 @@
 #include <panel.h>
 #include "mothra.h"
 #include "html.h"
+
+/*s: global [[tag]](mothra) */
 Tag tag[]={
 [Tag_a]         "a",            END,
 [Tag_abbr]      "abbr",         END,
@@ -94,4 +96,5 @@ Tag tag[]={
 [Tag_wbr]       "wbr",          NOEND,
 [Tag_xmp]       "xmp",          END,
 };
+/*e: global [[tag]](mothra) */
 /*e: mothra/html.syntax.c */

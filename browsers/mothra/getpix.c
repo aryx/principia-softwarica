@@ -7,6 +7,8 @@
 #include "mothra.h"
 
 typedef struct Pix Pix;
+
+/*s: struct [[Pix]](mothra) */
 struct Pix{
     Pix *next;
     Image *b;
@@ -14,7 +16,9 @@ struct Pix{
     int height;
     char name[NNAME];
 };
+/*e: struct [[Pix]](mothra) */
 
+/*s: global [[pixcmd]](mothra) */
 char *pixcmd[]={
 [GIF]   "gif -9t",
 [JPEG]  "jpg -9t",
@@ -22,6 +26,7 @@ char *pixcmd[]={
 [BMP]   "bmp -9t",
 [ICO]   "ico -c",
 };
+/*e: global [[pixcmd]](mothra) */
 
 /*s: function [[getimage]](mothra) */
 void getimage(Rtext *t, Www *w){

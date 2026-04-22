@@ -16,6 +16,8 @@ char PostContentType[] = "application/x-www-form-urlencoded";
 int httpdebug;
 
 typedef struct HttpState HttpState;
+
+/*s: struct [[HttpState]](webfs) */
 struct HttpState
 {
     int fd;
@@ -27,6 +29,7 @@ struct HttpState
     char autherror[ERRMAX];
     Ibuf        b;
 };
+/*e: struct [[HttpState]](webfs) */
 
 /*s: function [[location]](webfs) */
 static void
@@ -176,6 +179,7 @@ error:
 }
 /*e: function [[wwwauthenticate]](webfs) */
 
+/*s: global [[hdrtab]](webfs) */
 struct {
     char *name;                                                                 /* Case-insensitive */
     void (*fn)(HttpState *hs, char *value);
@@ -185,6 +189,7 @@ struct {
     { "set-cookie:", setcookie },
     { "www-authenticate:", wwwauthenticate },
 };
+/*e: global [[hdrtab]](webfs) */
 
 /*s: function [[httprcode]](webfs) */
 static int

@@ -234,7 +234,8 @@ clientthread(void *a)
     }
 }
 /*e: function [[clientthread]](webfs) */
-    
+
+/*s: enum [[Xtype]] */
 enum
 {
     Bool,
@@ -243,21 +244,27 @@ enum
     XUrl,
     Fn,
 };
+/*e: enum [[Xtype]] */
 
 typedef struct Ctab Ctab;
+/*s: struct [[Ctab]](webfs) */
 struct Ctab {
     char *name;
     int type;
     void *offset;
 };
+/*e: struct [[Ctab]](webfs) */
 
+/*s: global [[ctltab]](webfs) */
 Ctab ctltab[] = {
     "acceptcookies",    Bool,           (void*)offsetof(Ctl, acceptcookies),
     "sendcookies",              Bool,           (void*)offsetof(Ctl, sendcookies),
     "redirectlimit",            Int,            (void*)offsetof(Ctl, redirectlimit),
     "useragent",                String, (void*)offsetof(Ctl, useragent),
 };
+/*e: global [[ctltab]](webfs) */
 
+/*s: global [[globaltab]](webfs) */
 Ctab globaltab[] = {
     "chatty9p",         Int,            &chatty9p,
     "fsdebug",          Int,            &fsdebug,
@@ -265,11 +272,15 @@ Ctab globaltab[] = {
     "urldebug",         Int,            &urldebug,
     "httpdebug",                Int,            &httpdebug,
 };
+/*e: global [[globaltab]](webfs) */
 
+/*s: global [[clienttab]](webfs) */
 Ctab clienttab[] = {
     "baseurl",                  XUrl,           (void*)offsetof(Client, baseurl),
     "url",                              XUrl,           (void*)offsetof(Client, url),
 };
+/*e: global [[clienttab]](webfs) */
+
 
 /*s: function [[findcmd]](webfs) */
 static Ctab*

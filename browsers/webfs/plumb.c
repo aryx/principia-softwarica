@@ -101,6 +101,7 @@ freeattrs(Plumbmsg *m)
 }
 /*e: function [[freeattrs]](webfs) */
 
+/*s: global [[ctypes]](webfs) */
 static struct
 {
     char        *ctype;
@@ -121,6 +122,7 @@ ctypes[] =
     { "text/plain", "txt" },
     { "text/xml", "xml" },
 };
+/*e: global [[ctypes]](webfs) */
 
 /*s: function [[replumb]](webfs) */
 void

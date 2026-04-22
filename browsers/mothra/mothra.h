@@ -16,6 +16,7 @@ typedef struct Url Url;
 typedef struct Www Www;
 typedef struct Field Field;
 
+/*s: struct [[Action]](mothra) */
 struct Action{
     char *image;
     Field *field;
@@ -25,7 +26,9 @@ struct Action{
     int width;
     int height;
 };
+/*e: struct [[Action]](mothra) */
 
+/*s: struct [[Url]](mothra) */
 struct Url{
     char *basename;
     char *reltext;
@@ -34,7 +37,9 @@ struct Url{
     char contenttype[NNAME];
     int map;            /* is this an image map? */
 };
+/*e: struct [[Url]](mothra) */
 
+/*s: struct [[Www]](mothra) */
 struct Www{
     Url *url;
     void *pix;
@@ -47,7 +52,9 @@ struct Www{
     int finished;               /* reader sets this when done */
     int alldone;                /* page will not change further -- used to adjust cursor */
 };
+/*e: struct [[Www]](mothra) */
 
+/*s: enum [[XKind]](mothra) */
 enum{
     PLAIN,
     HTML,
@@ -60,7 +67,9 @@ enum{
 
     PAGE,
 };
+/*e: enum [[XKind]](mothra) */
 
+/*s: enum [[Axxx]](mothra) */
 /*
  *  authentication types
  */
@@ -68,6 +77,8 @@ enum{
     ANONE,
     ABASIC,
 };
+/*e: enum [[Axxx]](mothra) */
+
 
 Image *hrule, *bullet, *linespace;
 int chrwidth;           /* nominal width of characters in font */
@@ -75,6 +86,7 @@ Panel *text;            /* Panel displaying the current www page */
 
 bool debug;             /* command line flag */
 
+/*s: enum [[HttpMethod]](mothra) */
 /*
  * HTTP methods
  */
@@ -82,6 +94,7 @@ enum{
     GET=1,
     POST,
 };
+/*e: enum [[HttpMethod]](mothra) */
 
 void finish(Www *w);
 void plrdhtml(char *, int, Www *, int);

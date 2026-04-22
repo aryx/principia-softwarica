@@ -14,6 +14,7 @@ char *cookiefile;
 char *mtpt = "/mnt/web";
 char *service;
 
+/*s: global [[globalctl]](webfs) */
 Ctl globalctl = 
 {
     1,  /* accept cookies */
@@ -21,6 +22,7 @@ Ctl globalctl =
     10, /* redirect limit */
     "webfs/2.0 (plan 9)"        /* user agent */
 };
+/*e: global [[globalctl]](webfs) */
 
 /*s: function [[usage]](webfs) */
 void
@@ -56,7 +58,7 @@ threadmain(int argc, char **argv)
     default:
         usage();
     }ARGEND
-/*e: function [[threadmain]](webfs) */
+
 
     quotefmtinstall();
     if(argc != 0)
@@ -70,4 +72,5 @@ threadmain(int argc, char **argv)
     threadpostmountsrv(&fs, service, mtpt, MREPL);
     threadexits(nil);
 }
+/*e: function [[threadmain]](webfs) */
 /*e: webfs/main.c */

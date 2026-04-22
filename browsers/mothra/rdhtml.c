@@ -10,6 +10,7 @@
 
 typedef struct Fontdata Fontdata;
 
+/*s: global [[fontlist]](mothra) */
 struct Fontdata{
     char *name;
     Font *font;
@@ -58,7 +59,9 @@ struct Fontdata{
     "lucidasans/typeunicode.16", 0, 0,
 */
 };
+/*e: global [[fontlist]](mothra) */
 
+/*s: global [[links]](mothra) */
 static struct{
     char *prefix;
     int len;
@@ -68,6 +71,7 @@ static struct{
     {"gemini://", 9},
     {"ftp://", 6},
 };
+/*e: global [[links]](mothra) */
 
 /*s: function [[pl_whichfont]](mothra) */
 Font *pl_whichfont(int f, int s, int *space){

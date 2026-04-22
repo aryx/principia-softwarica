@@ -25,21 +25,28 @@ typedef struct Hglob Hglob;
 typedef struct Form Form;
 typedef struct Entity Entity;
 
+/*s: struct [[Pair]](mothra) */
 struct Pair{
     char *name;
     char *value;
 };
+/*e: struct [[Pair]](mothra) */
 
+/*s: struct [[Entity]](mothra) */
 struct Entity{
     char *name;
     Rune value;
 };
+/*e: struct [[Entity]](mothra) */
 
+/*s: struct [[Tag]](mothra) */
 struct Tag{
     char *name;
     int action;
 };
+/*e: struct [[Tag]](mothra) */
 
+/*s: struct [[Stack]](mothra) */
 struct Stack{
     int tag;            /* html tag being processed */
     int pre;            /* in preformatted text? */
@@ -59,7 +66,9 @@ struct Stack{
     char *link;         /* arg of <a href=...> */
     char *name;         /* arg of <a name=...> */
 };
+/*e: struct [[Stack]](mothra) */
 
+/*s: struct [[Hglob]](mothra) */
 /*
  * Globals -- these are packed up into a struct that gets passed around
  * so that multiple parsers can run concurrently
@@ -93,7 +102,9 @@ struct Hglob{
 
     Www *dst;           /* where the text goes */
 };
+/*e: struct [[Hglob]](mothra) */
 
+/*s: enum [[Txx]](mothra) */
 /*
  * Token types
  */
@@ -102,6 +113,7 @@ enum{
     ENDTAG,
     TEXT,
 };
+/*e: enum [[Txx]](mothra) */
 
 /*
  * Magic characters corresponding to
@@ -119,6 +131,7 @@ enum{
 #define EOF     -1
 /*e: constant [[EOF]](mothra) */
 
+/*s: enum [[XFonts]](mothra) */
 /*
  * fonts
  */
@@ -128,7 +141,9 @@ enum{
     BOLD,
     CWIDTH,
 };
+/*e: enum [[XFonts]](mothra) */
 
+/*s: enum [[XFontSize]](mothra) */
 /*
  * font sizes
  */
@@ -138,7 +153,9 @@ enum{
     LARGE,
     ENORMOUS,
 };
+/*e: enum [[XFontSize]](mothra) */
 
+/*s: enum [[XLenDir]](mothra) */
 /*
  * length direction
  */
@@ -146,8 +163,11 @@ enum{
     HORIZ,
     VERT,
 };
+/*e: enum [[XLenDir]](mothra) */
+
 int strtolength(Hglob *g, int dir, char *str);
 
+/*s: enum [[Tagxxx]](mothra) */
 /*
  * Token names for the html parser.
  * Tag_end corresponds to </end> tags.
@@ -245,6 +265,9 @@ enum{
     Tag_end,    /* also used to indicate unrecognized start tag */
     Tag_text,
 };
+/*e: enum [[Tagxxx]](mothra) */
+
+
 enum{
     NTAG=Tag_end,
     END=1,      /* tag must have a matching end tag */
@@ -252,6 +275,7 @@ enum{
     OPTEND,     /* tag may have a matching end tag */
     ERR,                /* tag must not occur */
 };
+
 Tag tag[];
 void rdform(Hglob *);
 void endform(Hglob *);

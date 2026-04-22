@@ -35,6 +35,7 @@
 
 int fsdebug;
 
+/*s: enum Qxxx(webfs) */
 enum
 {
     Qroot,
@@ -61,6 +62,7 @@ enum
     Qftptype,
     Qend,
 };
+/*e: enum Qxxx(webfs) */
 
 /*s: macro [[PATH]](webfs) */
 #define PATH(type, n)   ((type)|((n)<<8))
@@ -78,13 +80,16 @@ Channel *cclunk;
 Channel *cclunkwait;
 
 typedef struct Tab Tab;
+/*s: struct [[Tab]](webfs) */
 struct Tab
 {
     char *name;
     ulong mode;
     int offset;
 };
+/*e: struct [[Tab]](webfs) */
 
+/*s: global [[tab]](webfs) */
 Tab tab[] =
 {
     "/",                        DMDIR|0555,             0,
@@ -110,6 +115,7 @@ Tab tab[] =
     "fragment", 0444,                   offsetof(Url, fragment),
     "ftptype",          0444,                   offsetof(Url, ftp.type),
 };
+/*e: global [[tab]](webfs) */
 
 ulong time0;
 
@@ -640,6 +646,7 @@ takedown(Srv*)
 }
 /*e: function [[takedown]](webfs) */
 
+/*s: constant [[fs]](webfs) */
 Srv fs = 
 {
 .attach=                fssend,
@@ -652,5 +659,6 @@ Srv fs =
 .flush=         fssend,
 .end=           takedown,
 };
+/*e: constant [[fs]](webfs) */
 
 /*e: webfs/fs.c */

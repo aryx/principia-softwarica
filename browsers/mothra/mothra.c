@@ -23,16 +23,36 @@ int defdisplay=1;       /* is the default (initial) display visible? */
 int visxbar=0;  /* horizontal scrollbar visible? */
 int topxbar=0;  /* horizontal scrollbar at top? */
 
+/*s: global [[root]](mothra) */
 Panel *root;    /* the whole display */
-Panel *alt;     /* the alternate display */
-Panel *alttext; /* the alternate text window */
-Panel *cmd;     /* command entry */
-Panel *cururl;  /* label giving the url of the visible text */
-Panel *list;    /* list of previously acquired www pages */
-Panel *msg;     /* message display */
-Panel *menu3;   /* button 3 menu */
+/*e: global [[root]](mothra) */
 
+/*s: global [[alt]](mothra) */
+Panel *alt;     /* the alternate display */
+/*e: global [[alt]](mothra) */
+/*s: global [[alttext]](mothra) */
+Panel *alttext; /* the alternate text window */
+/*e: global [[alttext]](mothra) */
+/*s: global [[cmd]](mothra) */
+Panel *cmd;     /* command entry */
+/*e: global [[cmd]](mothra) */
+/*s: global [[cururl]](mothra) */
+Panel *cururl;  /* label giving the url of the visible text */
+/*e: global [[cururl]](mothra) */
+/*s: global [[list]](mothra) */
+Panel *list;    /* list of previously acquired www pages */
+/*e: global [[list]](mothra) */
+/*s: global [[msg]](mothra) */
+Panel *msg;     /* message display */
+/*e: global [[msg]](mothra) */
+/*s: global [[menu3]](mothra) */
+Panel *menu3;   /* button 3 menu */
+/*e: global [[menu3]](mothra) */
+
+/*s: global [[mothra]](mothra) */
 char mothra[] = "mothra!";
+/*e: global [[mothra]](mothra) */
+
 
 Cursor patientcurs={
     0, 0,
@@ -82,8 +102,14 @@ Cursor mothcurs={
      0x0c, 0x30, 0x04, 0x20, 0x00, 0x00, 0x00, 0x00, }
 };
 
+/*s: global [[current]](mothra) */
 Www *current=nil;
+/*e: global [[current]](mothra) */
+/*s: global [[selection]](mothra) */
 Url *selection=nil;
+/*e: global [[selection]](mothra) */
+
+
 int mothmode;
 int kickpipe[2];
 
@@ -113,6 +139,7 @@ char *buttons_[]={
 };
 
 int wwwtop=0;
+
 /*s: function [[www]](mothra) */
 Www *www(int index){
     static Www a[NWWW];

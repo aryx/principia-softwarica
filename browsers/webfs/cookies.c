@@ -15,6 +15,7 @@ int cookiedebug;
 typedef struct Cookie Cookie;
 typedef struct Jar Jar;
 
+/*s: struct [[Cookie]](webfs) */
 struct Cookie
 {
     /* external info */
@@ -36,7 +37,9 @@ struct Cookie
     int         mark;
     int         ondisk;
 };
+/*e: struct [[Cookie]](webfs) */
 
+/*s: struct [[Jar]](webfs) */
 struct Jar
 {
     Cookie      *c;
@@ -48,7 +51,9 @@ struct Jar
     char                *file;
     char                *lockfile;
 };
+/*e: struct [[Jar]](webfs) */
 
+/*s: global [[stab]](webfs) */
 struct {
     char *s;
     int offset;
@@ -61,7 +66,8 @@ struct {
     "comment",  offsetof(Cookie, comment),      1,
     "version",          offsetof(Cookie, version),              1,
 };
-
+/*e: global [[stab]](webfs) */
+/*s: global [[itab]](webfs) */
 struct {
     char *s;
     int offset;
@@ -72,6 +78,7 @@ struct {
     "explicitpath",             offsetof(Cookie, explicitpath),
     "netscapestyle",    offsetof(Cookie, netscapestyle),
 };
+/*e: global [[itab]](webfs) */
 
 #pragma varargck type "J"       Jar*
 #pragma varargck type "K"       Cookie*
@@ -1079,6 +1086,7 @@ parsecookie(Cookie *c, char *p, char **e, int isns, char *dom, char *path)
 Jar *jar;
 
 typedef struct Aux Aux;
+/*s: struct [[Aux]](webfs) */
 struct Aux
 {
     char *dom;
@@ -1088,6 +1096,8 @@ struct Aux
     char *ctext;
     int rdoff;
 };
+/*e: struct [[Aux]](webfs) */
+
 enum
 {
     AuxBuf = 4096,

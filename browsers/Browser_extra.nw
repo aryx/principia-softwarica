@@ -2,15 +2,7 @@
 
 \subsection*{[[webfs/dat.h]]}
 
-
-%-------------------------------------------------------------
-
-<<webfs/dat.h>>=
-typedef struct Client Client;
-typedef struct Ctl Ctl;
-typedef struct Ibuf Ibuf;
-typedef struct Url Url;
-
+<<struct [[Ibuf]](webfs)>>=
 /* simple buffered i/o for network connections; shared by http, ftp */
 struct Ibuf
 {
@@ -19,7 +11,9 @@ struct Ibuf
     char buf[4096];
     char *rp, *wp;
 };
+@
 
+<<struct [[Ctl]](webfs)>>=
 struct Ctl
 {
     int acceptcookies;
@@ -27,7 +21,9 @@ struct Ctl
     int redirectlimit;
     char        *useragent;
 };
+@
 
+<<struct [[Client]](webfs)>>=
 struct Client
 {
     Url *url;
@@ -49,7 +45,9 @@ struct Client
     int ref;
     void *aux;
 };
+@
 
+<<enum [[UScheme]]>>=
 /*
  * If ischeme is USunknown, then the given URL is a relative
  * URL which references the "current document" in the context of the base.
@@ -65,7 +63,10 @@ enum
     USfile,
     UScurrent,
 };
+@
 
+
+<<struct [[Url]](webfs)>>=
 struct Url
 {
     int         ischeme;
@@ -93,6 +94,25 @@ struct Url
         } ftp;
     };
 };
+@
+
+%-------------------------------------------------------------
+
+<<webfs/dat.h>>=
+typedef struct Client Client;
+typedef struct Ctl Ctl;
+typedef struct Ibuf Ibuf;
+typedef struct Url Url;
+
+<<struct [[Ibuf]](webfs)>>
+
+<<struct [[Ctl]](webfs)>>
+
+<<struct [[Client]](webfs)>>
+
+<<enum [[UScheme]]>>
+
+<<struct [[Url]](webfs)>>
 
 enum
 {
@@ -307,6 +327,51 @@ readline(Ibuf *b, char *buf, int len)
 
 
 \subsection*{[[webfs/client.c]]}
+
+<<enum [[Xtype]]>>=
+enum
+{
+    Bool,
+    Int,
+    String,
+    XUrl,
+    Fn,
+};
+@
+
+<<struct [[Ctab]](webfs)>>=
+struct Ctab {
+    char *name;
+    int type;
+    void *offset;
+};
+@
+
+<<global [[ctltab]](webfs)>>=
+Ctab ctltab[] = {
+    "acceptcookies",    Bool,           (void*)offsetof(Ctl, acceptcookies),
+    "sendcookies",              Bool,           (void*)offsetof(Ctl, sendcookies),
+    "redirectlimit",            Int,            (void*)offsetof(Ctl, redirectlimit),
+    "useragent",                String, (void*)offsetof(Ctl, useragent),
+};
+@
+
+<<global [[globaltab]](webfs)>>=
+Ctab globaltab[] = {
+    "chatty9p",         Int,            &chatty9p,
+    "fsdebug",          Int,            &fsdebug,
+    "cookiedebug",              Int,            &cookiedebug,
+    "urldebug",         Int,            &urldebug,
+    "httpdebug",                Int,            &httpdebug,
+};
+@
+
+<<global [[clienttab]](webfs)>>=
+Ctab clienttab[] = {
+    "baseurl",                  XUrl,           (void*)offsetof(Client, baseurl),
+    "url",                              XUrl,           (void*)offsetof(Client, url),
+};
+@
 
 <<function [[newclient]](webfs)>>=
 int
@@ -757,42 +822,18 @@ static void clientthread(void*);
 <<function [[clientbodyread]](webfs)>>
 
 <<function [[clientthread]](webfs)>>
-    
-enum
-{
-    Bool,
-    Int,
-    String,
-    XUrl,
-    Fn,
-};
+
+<<enum [[Xtype]]>>
 
 typedef struct Ctab Ctab;
-struct Ctab {
-    char *name;
-    int type;
-    void *offset;
-};
+<<struct [[Ctab]](webfs)>>
 
-Ctab ctltab[] = {
-    "acceptcookies",    Bool,           (void*)offsetof(Ctl, acceptcookies),
-    "sendcookies",              Bool,           (void*)offsetof(Ctl, sendcookies),
-    "redirectlimit",            Int,            (void*)offsetof(Ctl, redirectlimit),
-    "useragent",                String, (void*)offsetof(Ctl, useragent),
-};
+<<global [[ctltab]](webfs)>>
 
-Ctab globaltab[] = {
-    "chatty9p",         Int,            &chatty9p,
-    "fsdebug",          Int,            &fsdebug,
-    "cookiedebug",              Int,            &cookiedebug,
-    "urldebug",         Int,            &urldebug,
-    "httpdebug",                Int,            &httpdebug,
-};
+<<global [[globaltab]](webfs)>>
 
-Ctab clienttab[] = {
-    "baseurl",                  XUrl,           (void*)offsetof(Client, baseurl),
-    "url",                              XUrl,           (void*)offsetof(Client, url),
-};
+<<global [[clienttab]](webfs)>>
+
 
 <<function [[findcmd]](webfs)>>
 
@@ -813,6 +854,86 @@ Ctab clienttab[] = {
 
 
 \subsection*{[[webfs/cookies.c]]}
+
+
+
+<<struct [[Cookie]](webfs)>>=
+struct Cookie
+{
+    /* external info */
+    char*       name;
+    char*       value;
+    char*       dom;            /* starts with . */
+    char*       path;
+    char*       version;
+    char*       comment;                /* optional, may be nil */
+
+    uint                expire;         /* time of expiration: ~0 means when webcookies dies */
+    int         secure;
+    int         explicitdom;    /* dom was explicitly set */
+    int         explicitpath;   /* path was explicitly set */
+    int         netscapestyle;
+
+    /* internal info */
+    int         deleted;
+    int         mark;
+    int         ondisk;
+};
+@
+
+<<struct [[Jar]](webfs)>>=
+struct Jar
+{
+    Cookie      *c;
+    int         nc;
+    int         mc;
+
+    Qid         qid;
+    int         dirty;
+    char                *file;
+    char                *lockfile;
+};
+@
+
+<<global [[stab]](webfs)>>=
+struct {
+    char *s;
+    int offset;
+    int ishttp;
+} stab[] = {
+    "domain",           offsetof(Cookie, dom),          1,
+    "path",             offsetof(Cookie, path),         1,
+    "name",             offsetof(Cookie, name),         0,
+    "value",            offsetof(Cookie, value),                0,
+    "comment",  offsetof(Cookie, comment),      1,
+    "version",          offsetof(Cookie, version),              1,
+};
+@
+
+<<global [[itab]](webfs)>>=
+struct {
+    char *s;
+    int offset;
+} itab[] = {
+    "expire",                   offsetof(Cookie, expire),
+    "secure",                   offsetof(Cookie, secure),
+    "explicitdomain",   offsetof(Cookie, explicitdom),
+    "explicitpath",             offsetof(Cookie, explicitpath),
+    "netscapestyle",    offsetof(Cookie, netscapestyle),
+};
+@
+
+<<struct [[Aux]](webfs)>>=
+struct Aux
+{
+    char *dom;
+    char *path;
+    char *inhttp;
+    char *outhttp;
+    char *ctext;
+    int rdoff;
+};
+@
 
 <<function [[jarfmt]](webfs)>>=
 /* HTTP format */
@@ -1984,63 +2105,12 @@ int cookiedebug;
 typedef struct Cookie Cookie;
 typedef struct Jar Jar;
 
-struct Cookie
-{
-    /* external info */
-    char*       name;
-    char*       value;
-    char*       dom;            /* starts with . */
-    char*       path;
-    char*       version;
-    char*       comment;                /* optional, may be nil */
+<<struct [[Cookie]](webfs)>>
 
-    uint                expire;         /* time of expiration: ~0 means when webcookies dies */
-    int         secure;
-    int         explicitdom;    /* dom was explicitly set */
-    int         explicitpath;   /* path was explicitly set */
-    int         netscapestyle;
+<<struct [[Jar]](webfs)>>
 
-    /* internal info */
-    int         deleted;
-    int         mark;
-    int         ondisk;
-};
-
-struct Jar
-{
-    Cookie      *c;
-    int         nc;
-    int         mc;
-
-    Qid         qid;
-    int         dirty;
-    char                *file;
-    char                *lockfile;
-};
-
-struct {
-    char *s;
-    int offset;
-    int ishttp;
-} stab[] = {
-    "domain",           offsetof(Cookie, dom),          1,
-    "path",             offsetof(Cookie, path),         1,
-    "name",             offsetof(Cookie, name),         0,
-    "value",            offsetof(Cookie, value),                0,
-    "comment",  offsetof(Cookie, comment),      1,
-    "version",          offsetof(Cookie, version),              1,
-};
-
-struct {
-    char *s;
-    int offset;
-} itab[] = {
-    "expire",                   offsetof(Cookie, expire),
-    "secure",                   offsetof(Cookie, secure),
-    "explicitdomain",   offsetof(Cookie, explicitdom),
-    "explicitpath",             offsetof(Cookie, explicitpath),
-    "netscapestyle",    offsetof(Cookie, netscapestyle),
-};
+<<global [[stab]](webfs)>>
+<<global [[itab]](webfs)>>
 
 #pragma varargck type "J"       Jar*
 #pragma varargck type "K"       Cookie*
@@ -2111,15 +2181,8 @@ static char* parsecookie(Cookie*, char*, char**, int, char*, char*);
 Jar *jar;
 
 typedef struct Aux Aux;
-struct Aux
-{
-    char *dom;
-    char *path;
-    char *inhttp;
-    char *outhttp;
-    char *ctext;
-    int rdoff;
-};
+<<struct [[Aux]](webfs)>>
+
 enum
 {
     AuxBuf = 4096,
@@ -2145,6 +2208,87 @@ enum
 
 
 \subsection*{[[webfs/fs.c]]}
+
+<<enum Qxxx(webfs)>>=
+enum
+{
+    Qroot,
+    Qrootctl,
+    Qclone,
+    Qcookies,
+    Qclient,
+    Qctl,
+    Qbody,
+    Qbodyext,
+    Qcontenttype,
+    Qpostbody,
+    Qparsed,
+    Qurl,
+    Qscheme,
+    Qschemedata,
+    Quser,
+    Qpasswd,
+    Qhost,
+    Qport,
+    Qpath,
+    Qquery,
+    Qfragment,
+    Qftptype,
+    Qend,
+};
+@
+
+<<struct [[Tab]](webfs)>>=
+struct Tab
+{
+    char *name;
+    ulong mode;
+    int offset;
+};
+@
+
+<<global [[tab]](webfs)>>=
+Tab tab[] =
+{
+    "/",                        DMDIR|0555,             0,
+    "ctl",                      0666,                   0,
+    "clone",            0666,                   0,
+    "cookies",          0666,                   0,
+    "XXX",              DMDIR|0555,             0,
+    "ctl",                      0666,                   0,
+    "body",             0444,                   0,
+    "XXX",              0444,                   0,
+    "contenttype",      0444,                   0,
+    "postbody", 0666,                   0,
+    "parsed",           DMDIR|0555,             0,
+    "url",                      0444,                   offsetof(Url, url),
+    "scheme",           0444,                   offsetof(Url, scheme),
+    "schemedata",       0444,                   offsetof(Url, schemedata),
+    "user",             0444,                   offsetof(Url, user),
+    "passwd",           0444,                   offsetof(Url, passwd),
+    "host",             0444,                   offsetof(Url, host),
+    "port",             0444,                   offsetof(Url, port),
+    "path",             0444,                   offsetof(Url, path),
+    "query",            0444,                   offsetof(Url, query),
+    "fragment", 0444,                   offsetof(Url, fragment),
+    "ftptype",          0444,                   offsetof(Url, ftp.type),
+};
+@
+
+<<constant [[fs]](webfs)>>=
+Srv fs = 
+{
+.attach=                fssend,
+.destroyfid=    fsdestroyfid,
+.walk1=         fswalk1,
+.open=          fssend,
+.read=          fssend,
+.write=         fssend,
+.stat=          fssend,
+.flush=         fssend,
+.end=           takedown,
+};
+@
 
 <<macro [[PATH]](webfs)>>=
 #define PATH(type, n)   ((type)|((n)<<8))
@@ -2725,32 +2869,7 @@ takedown(Srv*)
 
 int fsdebug;
 
-enum
-{
-    Qroot,
-    Qrootctl,
-    Qclone,
-    Qcookies,
-    Qclient,
-    Qctl,
-    Qbody,
-    Qbodyext,
-    Qcontenttype,
-    Qpostbody,
-    Qparsed,
-    Qurl,
-    Qscheme,
-    Qschemedata,
-    Quser,
-    Qpasswd,
-    Qhost,
-    Qport,
-    Qpath,
-    Qquery,
-    Qfragment,
-    Qftptype,
-    Qend,
-};
+<<enum Qxxx(webfs)>>
 
 <<macro [[PATH]](webfs)>>
 <<macro [[TYPE]](webfs)>>
@@ -2762,38 +2881,9 @@ Channel *cclunk;
 Channel *cclunkwait;
 
 typedef struct Tab Tab;
-struct Tab
-{
-    char *name;
-    ulong mode;
-    int offset;
-};
+<<struct [[Tab]](webfs)>>
 
-Tab tab[] =
-{
-    "/",                        DMDIR|0555,             0,
-    "ctl",                      0666,                   0,
-    "clone",            0666,                   0,
-    "cookies",          0666,                   0,
-    "XXX",              DMDIR|0555,             0,
-    "ctl",                      0666,                   0,
-    "body",             0444,                   0,
-    "XXX",              0444,                   0,
-    "contenttype",      0444,                   0,
-    "postbody", 0666,                   0,
-    "parsed",           DMDIR|0555,             0,
-    "url",                      0444,                   offsetof(Url, url),
-    "scheme",           0444,                   offsetof(Url, scheme),
-    "schemedata",       0444,                   offsetof(Url, schemedata),
-    "user",             0444,                   offsetof(Url, user),
-    "passwd",           0444,                   offsetof(Url, passwd),
-    "host",             0444,                   offsetof(Url, host),
-    "port",             0444,                   offsetof(Url, port),
-    "path",             0444,                   offsetof(Url, path),
-    "query",            0444,                   offsetof(Url, query),
-    "fragment", 0444,                   offsetof(Url, fragment),
-    "ftptype",          0444,                   offsetof(Url, ftp.type),
-};
+<<global [[tab]](webfs)>>
 
 ulong time0;
 
@@ -2829,23 +2919,38 @@ ulong time0;
 
 <<function [[takedown]](webfs)>>
 
-Srv fs = 
-{
-.attach=                fssend,
-.destroyfid=    fsdestroyfid,
-.walk1=         fswalk1,
-.open=          fssend,
-.read=          fssend,
-.write=         fssend,
-.stat=          fssend,
-.flush=         fssend,
-.end=           takedown,
-};
+<<constant [[fs]](webfs)>>
 
 @
 
 
 \subsection*{[[webfs/http.c]]}
+
+<<struct [[HttpState]](webfs)>>=
+struct HttpState
+{
+    int fd;
+    Client *c;
+    char *location;
+    char *setcookie;
+    char *netaddr;
+    char *credentials;
+    char autherror[ERRMAX];
+    Ibuf        b;
+};
+@
+
+<<global [[hdrtab]](webfs)>>=
+struct {
+    char *name;                                                                 /* Case-insensitive */
+    void (*fn)(HttpState *hs, char *value);
+} hdrtab[] = {
+    { "location:", location },
+    { "content-type:", contenttype },
+    { "set-cookie:", setcookie },
+    { "www-authenticate:", wwwauthenticate },
+};
+@
 
 <<function [[location]](webfs)>>=
 static void
@@ -3393,17 +3498,8 @@ char PostContentType[] = "application/x-www-form-urlencoded";
 int httpdebug;
 
 typedef struct HttpState HttpState;
-struct HttpState
-{
-    int fd;
-    Client *c;
-    char *location;
-    char *setcookie;
-    char *netaddr;
-    char *credentials;
-    char autherror[ERRMAX];
-    Ibuf        b;
-};
+
+<<struct [[HttpState]](webfs)>>
 
 <<function [[location]](webfs)>>
 
@@ -3417,15 +3513,7 @@ struct HttpState
 
 <<function [[wwwauthenticate]](webfs)>>
 
-struct {
-    char *name;                                                                 /* Case-insensitive */
-    void (*fn)(HttpState *hs, char *value);
-} hdrtab[] = {
-    { "location:", location },
-    { "content-type:", contenttype },
-    { "set-cookie:", setcookie },
-    { "www-authenticate:", wwwauthenticate },
-};
+<<global [[hdrtab]](webfs)>>
 
 <<function [[httprcode]](webfs)>>
  
@@ -3561,6 +3649,16 @@ iotlsdial(Ioproc *io, char *addr, char *local, char *dir, int *cfdp, int usetls,
 
 \subsection*{[[webfs/main.c]]}
 
+<<global [[globalctl]](webfs)>>=
+Ctl globalctl = 
+{
+    1,  /* accept cookies */
+    1,  /* send cookies */
+    10, /* redirect limit */
+    "webfs/2.0 (plan 9)"        /* user agent */
+};
+@
+
 <<function [[usage]](webfs)>>=
 void
 usage(void)
@@ -3594,6 +3692,20 @@ threadmain(int argc, char **argv)
     default:
         usage();
     }ARGEND
+
+
+    quotefmtinstall();
+    if(argc != 0)
+        usage();
+
+    plumbinit();
+    globalctl.useragent = estrdup(globalctl.useragent);
+    initcookies(cookiefile);
+    initurl();
+    initfs();
+    threadpostmountsrv(&fs, service, mtpt, MREPL);
+    threadexits(nil);
+}
 @
 
 
@@ -3615,35 +3727,41 @@ char *cookiefile;
 char *mtpt = "/mnt/web";
 char *service;
 
-Ctl globalctl = 
-{
-    1,  /* accept cookies */
-    1,  /* send cookies */
-    10, /* redirect limit */
-    "webfs/2.0 (plan 9)"        /* user agent */
-};
+<<global [[globalctl]](webfs)>>
 
 <<function [[usage]](webfs)>>
 
 #include <pool.h>
 <<function [[threadmain]](webfs)>>
-
-    quotefmtinstall();
-    if(argc != 0)
-        usage();
-
-    plumbinit();
-    globalctl.useragent = estrdup(globalctl.useragent);
-    initcookies(cookiefile);
-    initurl();
-    initfs();
-    threadpostmountsrv(&fs, service, mtpt, MREPL);
-    threadexits(nil);
-}
 @
 
 
 \subsection*{[[webfs/plumb.c]]}
+
+
+
+<<global [[ctypes]](webfs)>>=
+static struct
+{
+    char        *ctype;
+    char        *ext;
+}
+ctypes[] =
+{
+    { "application/msword", "doc" },
+    { "application/pdf", "pdf" },
+    { "application/postscript", "ps" },
+    { "application/rtf", "rtf" },
+    { "image/gif", "gif" },
+    { "image/jpeg", "jpg" },
+    { "image/png", "png" },
+    { "image/ppm", "ppm" },
+    { "image/tiff", "tiff" },
+    { "text/html", "html" },
+    { "text/plain", "txt" },
+    { "text/xml", "xml" },
+};
+@
 
 <<function [[plumbinit]](webfs)>>=
 void
@@ -3822,26 +3940,7 @@ static void plumbsendproc(void*);
 
 <<function [[freeattrs]](webfs)>>
 
-static struct
-{
-    char        *ctype;
-    char        *ext;
-}
-ctypes[] =
-{
-    { "application/msword", "doc" },
-    { "application/pdf", "pdf" },
-    { "application/postscript", "ps" },
-    { "application/rtf", "rtf" },
-    { "image/gif", "gif" },
-    { "image/jpeg", "jpg" },
-    { "image/png", "png" },
-    { "image/ppm", "ppm" },
-    { "image/tiff", "tiff" },
-    { "text/html", "html" },
-    { "text/plain", "txt" },
-    { "text/xml", "xml" },
-};
+<<global [[ctypes]](webfs)>>
 
 <<function [[replumb]](webfs)>>
 
@@ -3850,6 +3949,118 @@ ctypes[] =
 
 
 \subsection*{[[webfs/url.c]]}
+
+
+
+<<global [[schemestrtab]](webfs)>>=
+static char*
+schemestrtab[] =
+{
+    nil,
+    "http",
+    "https",
+    "ftp",
+    "file",
+};
+@
+
+<<struct [[Retab]](webfs)>>=
+struct Retab
+{
+    char        *str;
+    Reprog      *prog;
+    int         size;
+    int         ind[5];
+};
+@
+
+<<enum [[RExxx]](webfs)>>=
+enum
+{
+    REsplit = 0,
+    REscheme,
+    REunknowndata,
+    REauthority,
+    REhost,
+    REuserinfo,
+    REabspath,
+    REquery,
+    REfragment,
+    REhttppath,
+    REftppath,
+    REfilepath,
+
+    MaxResub=   20,
+};
+@
+
+<<global [[retab]](webfs)>>=
+Retab retab[] = /* view in constant width Font */
+{
+[REsplit]
+    "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]+)?(\\?([^#]*))?(#(.*))?$", nil, 0,
+    /* |-scheme-|      |-auth.-|  |path--|    |query|     |--|frag */
+    {  2,              4,         5,          7,          9},
+
+[REscheme]
+    "^[a-z][a-z0-9+-.]*$", nil, 0,
+    { 0, },
+
+[REunknowndata]
+    "^" URICNOSLASH_2 URIC_2 "*$", nil, 0,
+    { 0, },
+
+[REauthority]
+    "^(((" USERINFO_2 "*)@)?(((\\[[^\\]@]+\\])|([^:\\[@]+))(:([0-9]*))?)?)?$", nil, 0,
+    /* |----user info-----|  |--------host----------------|  |-port-| */
+    {  3,                    7,                              11, },
+
+[REhost]
+    "^(([a-zA-Z0-9\\-.]+)|(\\[([a-fA-F0-9.:]+)\\]))$", nil, 0,
+    /* |--regular host--|     |-IPv6 literal-| */
+    {  2,                     4, },
+
+[REuserinfo]
+    "^(([^:]*)(:([^:]*))?)$", nil, 0,
+    /* |user-|  |pass-| */
+    {  2,       4, },
+
+[REabspath]
+    "^/" PSEGCHAR_3 "*$", nil, 0,
+    { 0, },
+
+[REquery]
+    "^" URIC_2 "*$", nil, 0,
+    { 0, },
+
+[REfragment]
+    "^" URIC_2 "*$", nil, 0,
+    { 0, },
+
+[REhttppath]
+    "^.*$", nil, 0,
+    { 0, },
+
+[REftppath]
+    "^(.+)(;[tT][yY][pP][eE]=([aAiIdD]))?$", nil, 0,
+    /*|--|-path              |ftptype-| */
+    { 1,                     3, }, 
+
+[REfilepath]
+    "^.*$", nil, 0,
+    { 0, },
+};
+@
+
+<<struct [[SplitUrl]](webfs)>>=
+struct SplitUrl
+{
+    struct {
+        char *s;
+        char *e;
+    } url, scheme, authority, path, query, fragment;
+};
+@
 
 <<constant [[RemoveExtraRelDotDots]](webfs)>>=
 #define RemoveExtraRelDotDots   0
@@ -4873,15 +5084,7 @@ int urldebug;
 <<constant [[RemoveExtraRelDotDots]](webfs)>>
 <<constant [[ExpandCurrentDocUrls]](webfs)>>
 
-static char*
-schemestrtab[] =
-{
-    nil,
-    "http",
-    "https",
-    "ftp",
-    "file",
-};
+<<global [[schemestrtab]](webfs)>>
 
 <<function [[ischeme]](webfs)>>
 
@@ -4962,100 +5165,19 @@ schemestrtab[] =
 <<constant [[PSEGCHAR_3]](webfs)>>
 
 typedef struct Retab Retab;
-struct Retab
-{
-    char        *str;
-    Reprog      *prog;
-    int         size;
-    int         ind[5];
-};
+<<struct [[Retab]](webfs)>>
 
-enum
-{
-    REsplit = 0,
-    REscheme,
-    REunknowndata,
-    REauthority,
-    REhost,
-    REuserinfo,
-    REabspath,
-    REquery,
-    REfragment,
-    REhttppath,
-    REftppath,
-    REfilepath,
+<<enum [[RExxx]](webfs)>>
 
-    MaxResub=   20,
-};
+<<global [[retab]](webfs)>>
 
-Retab retab[] = /* view in constant width Font */
-{
-[REsplit]
-    "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]+)?(\\?([^#]*))?(#(.*))?$", nil, 0,
-    /* |-scheme-|      |-auth.-|  |path--|    |query|     |--|frag */
-    {  2,              4,         5,          7,          9},
-
-[REscheme]
-    "^[a-z][a-z0-9+-.]*$", nil, 0,
-    { 0, },
-
-[REunknowndata]
-    "^" URICNOSLASH_2 URIC_2 "*$", nil, 0,
-    { 0, },
-
-[REauthority]
-    "^(((" USERINFO_2 "*)@)?(((\\[[^\\]@]+\\])|([^:\\[@]+))(:([0-9]*))?)?)?$", nil, 0,
-    /* |----user info-----|  |--------host----------------|  |-port-| */
-    {  3,                    7,                              11, },
-
-[REhost]
-    "^(([a-zA-Z0-9\\-.]+)|(\\[([a-fA-F0-9.:]+)\\]))$", nil, 0,
-    /* |--regular host--|     |-IPv6 literal-| */
-    {  2,                     4, },
-
-[REuserinfo]
-    "^(([^:]*)(:([^:]*))?)$", nil, 0,
-    /* |user-|  |pass-| */
-    {  2,       4, },
-
-[REabspath]
-    "^/" PSEGCHAR_3 "*$", nil, 0,
-    { 0, },
-
-[REquery]
-    "^" URIC_2 "*$", nil, 0,
-    { 0, },
-
-[REfragment]
-    "^" URIC_2 "*$", nil, 0,
-    { 0, },
-
-[REhttppath]
-    "^.*$", nil, 0,
-    { 0, },
-
-[REftppath]
-    "^(.+)(;[tT][yY][pP][eE]=([aAiIdD]))?$", nil, 0,
-    /*|--|-path              |ftptype-| */
-    { 1,                     3, }, 
-
-[REfilepath]
-    "^.*$", nil, 0,
-    { 0, },
-};
 
 <<function [[countleftparen]](webfs)>>
 
 <<function [[initurl]](webfs)>>
 
 typedef struct SplitUrl SplitUrl;
-struct SplitUrl
-{
-    struct {
-        char *s;
-        char *e;
-    } url, scheme, authority, path, query, fragment;
-};
+<<struct [[SplitUrl]](webfs)>>
 
 <<function [[merge_relative_path]](webfs)>>
 
@@ -5237,77 +5359,37 @@ strlower(char *s)
 @
 
 
+
+
+
+
 \section{[[mothra/]]}
 
 \subsection*{[[mothra/html.h]]}
 
-<<constant [[NSTACK]](mothra)>>=
-#define NSTACK  100     /* html grammar is not recursive, so 30 or so should do */
-@
 
-<<constant [[NHBUF]](mothra)>>=
-#define NHBUF   8192 //IOUNIT   /* Input buffer size */
-@
-
-<<constant [[NPEEKC]](mothra)>>=
-#define NPEEKC  3       /* Maximum lookahead */
-@
-
-<<constant [[NTOKEN]](mothra)>>=
-#define NTOKEN  65536   /* Maximum token length */
-@
-
-<<constant [[NATTR]](mothra)>>=
-#define NATTR   512     /* Maximum number of attributes of a tag */
-@
-
-<<constant [[STAG]](mothra)>>=
-#define STAG    65536
-@
-
-<<constant [[ETAG]](mothra)>>=
-#define ETAG    65537
-@
-
-<<constant [[EOF]](mothra)>>=
-#define EOF     -1
-@
-
-
-%-------------------------------------------------------------
-
-<<mothra/html.h>>=
-/*
- * Parameters
- */
-<<constant [[NSTACK]](mothra)>>
-<<constant [[NHBUF]](mothra)>>
-<<constant [[NPEEKC]](mothra)>>
-<<constant [[NTOKEN]](mothra)>>
-<<constant [[NATTR]](mothra)>>
-
-typedef struct Pair Pair;
-typedef struct Tag Tag;
-typedef struct Stack Stack;
-typedef struct Hglob Hglob;
-typedef struct Form Form;
-typedef struct Entity Entity;
-
+<<struct [[Pair]](mothra)>>=
 struct Pair{
     char *name;
     char *value;
 };
+@
 
+<<struct [[Entity]](mothra)>>=
 struct Entity{
     char *name;
     Rune value;
 };
+@
 
+<<struct [[Tag]](mothra)>>=
 struct Tag{
     char *name;
     int action;
 };
+@
 
+<<struct [[Stack]](mothra)>>=
 struct Stack{
     int tag;            /* html tag being processed */
     int pre;            /* in preformatted text? */
@@ -5327,7 +5409,9 @@ struct Stack{
     char *link;         /* arg of <a href=...> */
     char *name;         /* arg of <a name=...> */
 };
+@
 
+<<struct [[Hglob]](mothra)>>=
 /*
  * Globals -- these are packed up into a struct that gets passed around
  * so that multiple parsers can run concurrently
@@ -5361,7 +5445,9 @@ struct Hglob{
 
     Www *dst;           /* where the text goes */
 };
+@
 
+<<enum [[Txx]](mothra)>>=
 /*
  * Token types
  */
@@ -5370,17 +5456,9 @@ enum{
     ENDTAG,
     TEXT,
 };
+@
 
-/*
- * Magic characters corresponding to
- *      literal < followed by / ! or alpha,
- *      literal > and
- *      end of file
- */
-<<constant [[STAG]](mothra)>>
-<<constant [[ETAG]](mothra)>>
-<<constant [[EOF]](mothra)>>
-
+<<enum [[XFonts]](mothra)>>=
 /*
  * fonts
  */
@@ -5390,7 +5468,9 @@ enum{
     BOLD,
     CWIDTH,
 };
+@
 
+<<enum [[XFontSize]](mothra)>>=
 /*
  * font sizes
  */
@@ -5400,7 +5480,9 @@ enum{
     LARGE,
     ENORMOUS,
 };
+@
 
+<<enum [[XLenDir]](mothra)>>=
 /*
  * length direction
  */
@@ -5408,8 +5490,9 @@ enum{
     HORIZ,
     VERT,
 };
-int strtolength(Hglob *g, int dir, char *str);
+@
 
+<<enum [[Tagxxx]](mothra)>>=
 /*
  * Token names for the html parser.
  * Tag_end corresponds to </end> tags.
@@ -5507,6 +5590,93 @@ enum{
     Tag_end,    /* also used to indicate unrecognized start tag */
     Tag_text,
 };
+@
+
+<<constant [[NSTACK]](mothra)>>=
+#define NSTACK  100     /* html grammar is not recursive, so 30 or so should do */
+@
+
+<<constant [[NHBUF]](mothra)>>=
+#define NHBUF   8192 //IOUNIT   /* Input buffer size */
+@
+
+<<constant [[NPEEKC]](mothra)>>=
+#define NPEEKC  3       /* Maximum lookahead */
+@
+
+<<constant [[NTOKEN]](mothra)>>=
+#define NTOKEN  65536   /* Maximum token length */
+@
+
+<<constant [[NATTR]](mothra)>>=
+#define NATTR   512     /* Maximum number of attributes of a tag */
+@
+
+<<constant [[STAG]](mothra)>>=
+#define STAG    65536
+@
+
+<<constant [[ETAG]](mothra)>>=
+#define ETAG    65537
+@
+
+<<constant [[EOF]](mothra)>>=
+#define EOF     -1
+@
+
+
+%-------------------------------------------------------------
+
+<<mothra/html.h>>=
+/*
+ * Parameters
+ */
+<<constant [[NSTACK]](mothra)>>
+<<constant [[NHBUF]](mothra)>>
+<<constant [[NPEEKC]](mothra)>>
+<<constant [[NTOKEN]](mothra)>>
+<<constant [[NATTR]](mothra)>>
+
+typedef struct Pair Pair;
+typedef struct Tag Tag;
+typedef struct Stack Stack;
+typedef struct Hglob Hglob;
+typedef struct Form Form;
+typedef struct Entity Entity;
+
+<<struct [[Pair]](mothra)>>
+
+<<struct [[Entity]](mothra)>>
+
+<<struct [[Tag]](mothra)>>
+
+<<struct [[Stack]](mothra)>>
+
+<<struct [[Hglob]](mothra)>>
+
+<<enum [[Txx]](mothra)>>
+
+/*
+ * Magic characters corresponding to
+ *      literal < followed by / ! or alpha,
+ *      literal > and
+ *      end of file
+ */
+<<constant [[STAG]](mothra)>>
+<<constant [[ETAG]](mothra)>>
+<<constant [[EOF]](mothra)>>
+
+<<enum [[XFonts]](mothra)>>
+
+<<enum [[XFontSize]](mothra)>>
+
+<<enum [[XLenDir]](mothra)>>
+
+int strtolength(Hglob *g, int dir, char *str);
+
+<<enum [[Tagxxx]](mothra)>>
+
+
 enum{
     NTAG=Tag_end,
     END=1,      /* tag must have a matching end tag */
@@ -5514,6 +5684,7 @@ enum{
     OPTEND,     /* tag may have a matching end tag */
     ERR,                /* tag must not occur */
 };
+
 Tag tag[];
 void rdform(Hglob *);
 void endform(Hglob *);
@@ -5529,6 +5700,80 @@ void pl_htmloutput(Hglob *, int, char *, Field *);
 
 \subsection*{[[mothra/mothra.h]]}
 
+
+<<struct [[Action]](mothra)>>=
+struct Action{
+    char *image;
+    Field *field;
+    char *link;
+    char *name;
+    int ismap;
+    int width;
+    int height;
+};
+@
+
+
+<<struct [[Url]](mothra)>>=
+struct Url{
+    char *basename;
+    char *reltext;
+    char fullname[NNAME];
+    char tag[NNAME];
+    char contenttype[NNAME];
+    int map;            /* is this an image map? */
+};
+@
+
+<<struct [[Www]](mothra)>>=
+struct Www{
+    Url *url;
+    void *pix;
+    void *form;
+    char title[NTITLE];
+    Rtext *text;
+    int yoffs;
+    int gottitle;               /* title got drawn */
+    bool changed;               /* reader sets this every time it updates page */
+    int finished;               /* reader sets this when done */
+    int alldone;                /* page will not change further -- used to adjust cursor */
+};
+@
+
+<<enum [[XKind]](mothra)>>=
+enum{
+    PLAIN,
+    HTML,
+
+    GIF,
+    JPEG,
+    PNG,
+    BMP,
+    ICO,
+
+    PAGE,
+};
+@
+
+<<enum [[Axxx]](mothra)>>=
+/*
+ *  authentication types
+ */
+enum{
+    ANONE,
+    ABASIC,
+};
+@
+
+<<enum [[HttpMethod]](mothra)>>=
+/*
+ * HTTP methods
+ */
+enum{
+    GET=1,
+    POST,
+};
+@
 
 %-------------------------------------------------------------
 
@@ -5550,58 +5795,16 @@ typedef struct Url Url;
 typedef struct Www Www;
 typedef struct Field Field;
 
-struct Action{
-    char *image;
-    Field *field;
-    char *link;
-    char *name;
-    int ismap;
-    int width;
-    int height;
-};
+<<struct [[Action]](mothra)>>
 
-struct Url{
-    char *basename;
-    char *reltext;
-    char fullname[NNAME];
-    char tag[NNAME];
-    char contenttype[NNAME];
-    int map;            /* is this an image map? */
-};
+<<struct [[Url]](mothra)>>
 
-struct Www{
-    Url *url;
-    void *pix;
-    void *form;
-    char title[NTITLE];
-    Rtext *text;
-    int yoffs;
-    int gottitle;               /* title got drawn */
-    bool changed;               /* reader sets this every time it updates page */
-    int finished;               /* reader sets this when done */
-    int alldone;                /* page will not change further -- used to adjust cursor */
-};
+<<struct [[Www]](mothra)>>
 
-enum{
-    PLAIN,
-    HTML,
+<<enum [[XKind]](mothra)>>
 
-    GIF,
-    JPEG,
-    PNG,
-    BMP,
-    ICO,
+<<enum [[Axxx]](mothra)>>
 
-    PAGE,
-};
-
-/*
- *  authentication types
- */
-enum{
-    ANONE,
-    ABASIC,
-};
 
 Image *hrule, *bullet, *linespace;
 int chrwidth;           /* nominal width of characters in font */
@@ -5609,13 +5812,7 @@ Panel *text;            /* Panel displaying the current www page */
 
 bool debug;             /* command line flag */
 
-/*
- * HTTP methods
- */
-enum{
-    GET=1,
-    POST,
-};
+<<enum [[HttpMethod]](mothra)>>
 
 void finish(Www *w);
 void plrdhtml(char *, int, Www *, int);
@@ -5651,6 +5848,68 @@ Mouse mouse;
 
 
 \subsection*{[[mothra/forms.c]]}
+
+
+
+<<struct [[Form]](mothra)>>=
+struct Form{
+    int method;
+    char *ctype;
+    char *action;
+    Field *fields, *efields;
+    Form *next;
+};
+@
+
+<<struct [[Field]](mothra)>>=
+struct Field{
+    Field *next;
+    Form *form;
+    char *name;
+    char *value;
+    int checked;
+    int size;           /* should be a point, but that feature is deprecated */
+    int maxlength;
+    int type;
+    int rows, cols;
+    Option *options;
+    int multiple;
+    int state;          /* is the button marked? */
+    Panel *p;
+    Panel *pulldown;
+    Panel *textwin;
+};
+@
+
+<<enum [[FieldType]](mothra)>>=
+/*
+ * Field types
+ */
+enum{
+    TYPEIN=1,
+    CHECK,
+    PASSWD,
+    RADIO,
+    SUBMIT,
+    RESET,
+    BUTTON,
+    SELECT,
+    TEXTWIN,
+    HIDDEN,
+    INDEX,
+    FILE,
+};
+@
+
+<<struct [[Option]](mothra)>>=
+struct Option{
+    int selected;
+    int def;
+    char label[NLABEL+1];
+    char *value;
+    Option *next;
+};
+@
 
 <<constant [[BOUNDARY]](mothra)>>=
 #define BOUNDARY "nAboJ9uN6ZXsqoVGzLAdjKq97TWDTGjo"
@@ -6415,54 +6674,14 @@ int Ufmt(Fmt *f){
 
 typedef struct Field Field;
 typedef struct Option Option;
-struct Form{
-    int method;
-    char *ctype;
-    char *action;
-    Field *fields, *efields;
-    Form *next;
-};
-struct Field{
-    Field *next;
-    Form *form;
-    char *name;
-    char *value;
-    int checked;
-    int size;           /* should be a point, but that feature is deprecated */
-    int maxlength;
-    int type;
-    int rows, cols;
-    Option *options;
-    int multiple;
-    int state;          /* is the button marked? */
-    Panel *p;
-    Panel *pulldown;
-    Panel *textwin;
-};
-/*
- * Field types
- */
-enum{
-    TYPEIN=1,
-    CHECK,
-    PASSWD,
-    RADIO,
-    SUBMIT,
-    RESET,
-    BUTTON,
-    SELECT,
-    TEXTWIN,
-    HIDDEN,
-    INDEX,
-    FILE,
-};
-struct Option{
-    int selected;
-    int def;
-    char label[NLABEL+1];
-    char *value;
-    Option *next;
-};
+
+<<struct [[Form]](mothra)>>
+
+<<struct [[Field]](mothra)>>
+
+<<enum [[FieldType]](mothra)>>
+
+<<struct [[Option]](mothra)>>
 
 <<constant [[BOUNDARY]](mothra)>>
 
@@ -6475,8 +6694,10 @@ void h_submittype(Panel *, char *);
 void h_submitindex(Panel *, char *);
 void h_resetinput(Panel *, int);
 void h_select(Panel *, int, int);
+
 char *selgen(Panel *, int);
 char *nullgen(Panel *, int);
+
 <<function [[newfield]](mothra)>>
 <<function [[rdform]](mothra)>>
 <<function [[endform]](mothra)>>
@@ -6509,6 +6730,26 @@ char *nullgen(Panel *, int);
 
 
 \subsection*{[[mothra/getpix.c]]}
+
+<<struct [[Pix]](mothra)>>=
+struct Pix{
+    Pix *next;
+    Image *b;
+    int width;
+    int height;
+    char name[NNAME];
+};
+@
+
+<<global [[pixcmd]](mothra)>>=
+char *pixcmd[]={
+[GIF]   "gif -9t",
+[JPEG]  "jpg -9t",
+[PNG]   "png -9t",
+[BMP]   "bmp -9t",
+[ICO]   "ico -c",
+};
+@
 
 <<function [[getimage]](mothra)>>=
 void getimage(Rtext *t, Www *w){
@@ -6698,21 +6939,10 @@ void freepix(void *p){
 #include "mothra.h"
 
 typedef struct Pix Pix;
-struct Pix{
-    Pix *next;
-    Image *b;
-    int width;
-    int height;
-    char name[NNAME];
-};
 
-char *pixcmd[]={
-[GIF]   "gif -9t",
-[JPEG]  "jpg -9t",
-[PNG]   "png -9t",
-[BMP]   "bmp -9t",
-[ICO]   "ico -c",
-};
+<<struct [[Pix]](mothra)>>
+
+<<global [[pixcmd]](mothra)>>
 
 <<function [[getimage]](mothra)>>
 
@@ -6726,17 +6956,7 @@ char *pixcmd[]={
 
 \subsection*{[[mothra/html.syntax.c]]}
 
-
-%-------------------------------------------------------------
-
-<<mothra/html.syntax.c>>=
-#include <u.h>
-#include <libc.h>
-#include <draw.h>
-#include <event.h>
-#include <panel.h>
-#include "mothra.h"
-#include "html.h"
+<<global [[tag]](mothra)>>=
 Tag tag[]={
 [Tag_a]         "a",            END,
 [Tag_abbr]      "abbr",         END,
@@ -6828,7 +7048,61 @@ Tag tag[]={
 @
 
 
+%-------------------------------------------------------------
+
+<<mothra/html.syntax.c>>=
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
+#include <event.h>
+#include <panel.h>
+#include "mothra.h"
+#include "html.h"
+
+<<global [[tag]](mothra)>>
+@
+
+
 \subsection*{[[mothra/mothra.c]]}
+
+
+<<global [[root]](mothra)>>=
+Panel *root;    /* the whole display */
+@
+
+<<global [[alt]](mothra)>>=
+Panel *alt;     /* the alternate display */
+@
+<<global [[alttext]](mothra)>>=
+Panel *alttext; /* the alternate text window */
+@
+<<global [[cmd]](mothra)>>=
+Panel *cmd;     /* command entry */
+@
+<<global [[cururl]](mothra)>>=
+Panel *cururl;  /* label giving the url of the visible text */
+@
+<<global [[list]](mothra)>>=
+Panel *list;    /* list of previously acquired www pages */
+@
+<<global [[msg]](mothra)>>=
+Panel *msg;     /* message display */
+@
+<<global [[menu3]](mothra)>>=
+Panel *menu3;   /* button 3 menu */
+@
+
+<<global [[mothra]](mothra)>>=
+char mothra[] = "mothra!";
+@
+
+<<global [[current]](mothra)>>=
+Www *current=nil;
+@
+<<global [[selection]](mothra)>>=
+Url *selection=nil;
+@
+
 
 <<function [[www]](mothra)>>=
 Www *www(int index){
@@ -8153,16 +8427,18 @@ int defdisplay=1;       /* is the default (initial) display visible? */
 int visxbar=0;  /* horizontal scrollbar visible? */
 int topxbar=0;  /* horizontal scrollbar at top? */
 
-Panel *root;    /* the whole display */
-Panel *alt;     /* the alternate display */
-Panel *alttext; /* the alternate text window */
-Panel *cmd;     /* command entry */
-Panel *cururl;  /* label giving the url of the visible text */
-Panel *list;    /* list of previously acquired www pages */
-Panel *msg;     /* message display */
-Panel *menu3;   /* button 3 menu */
+<<global [[root]](mothra)>>
 
-char mothra[] = "mothra!";
+<<global [[alt]](mothra)>>
+<<global [[alttext]](mothra)>>
+<<global [[cmd]](mothra)>>
+<<global [[cururl]](mothra)>>
+<<global [[list]](mothra)>>
+<<global [[msg]](mothra)>>
+<<global [[menu3]](mothra)>>
+
+<<global [[mothra]](mothra)>>
+
 
 Cursor patientcurs={
     0, 0,
@@ -8212,8 +8488,10 @@ Cursor mothcurs={
      0x0c, 0x30, 0x04, 0x20, 0x00, 0x00, 0x00, 0x00, }
 };
 
-Www *current=nil;
-Url *selection=nil;
+<<global [[current]](mothra)>>
+<<global [[selection]](mothra)>>
+
+
 int mothmode;
 int kickpipe[2];
 
@@ -8243,6 +8521,7 @@ char *buttons_[]={
 };
 
 int wwwtop=0;
+
 <<function [[www]](mothra)>>
 <<function [[nwww]](mothra)>>
 
@@ -8341,6 +8620,70 @@ extern char *mtpt; /* url */
 
 
 \subsection*{[[mothra/rdhtml.c]]}
+
+
+<<global [[fontlist]](mothra)>>=
+struct Fontdata{
+    char *name;
+    Font *font;
+    int space;
+}fontlist[4][4]={
+    "dejavusans/unicode.12", 0, 0,
+    "dejavusans/unicode.12", 0, 0,
+    "dejavusans/unicode.14", 0, 0,
+    "dejavusans/unicode.16", 0, 0,
+
+    "dejavusansit/unicode.12", 0, 0,
+    "dejavusansit/unicode.12", 0, 0,
+    "dejavusansit/unicode.14", 0, 0,
+    "dejavusansit/unicode.16", 0, 0,
+
+    "dejavusansbd/unicode.12", 0, 0,
+    "dejavusansbd/unicode.12", 0, 0,
+    "dejavusansbd/unicode.14", 0, 0,
+    "dejavusansbd/unicode.16", 0, 0,
+
+    "terminus/unicode.12", 0, 0,
+    "terminus/unicode.14", 0, 0,
+    "terminus/unicode.16", 0, 0,
+    "terminus/unicode.18", 0, 0,
+
+/* original */
+/*
+    "lucidasans/unicode.7", 0, 0,
+    "lucidasans/unicode.8", 0, 0,
+    "lucidasans/unicode.10", 0, 0,
+    "lucidasans/unicode.13", 0, 0,
+
+    "lucidasans/italicunicode.7", 0, 0,
+    "lucidasans/italicunicode.8", 0, 0,
+    "lucidasans/italicunicode.10", 0, 0,
+    "lucidasans/italicunicode.13", 0, 0,
+
+    "lucidasans/boldunicode.7", 0, 0,
+    "lucidasans/boldunicode.8", 0, 0,
+    "lucidasans/boldunicode.10", 0, 0,
+    "lucidasans/boldunicode.13", 0, 0,
+
+    "lucidasans/typeunicode.7", 0, 0,
+    "pelm/unicode.8", 0, 0,
+    "lucidasans/typeunicode.12", 0, 0,
+    "lucidasans/typeunicode.16", 0, 0,
+*/
+};
+@
+
+<<global [[links]](mothra)>>=
+static struct{
+    char *prefix;
+    int len;
+}links[]={
+    {"http://", 7},
+    {"https://", 8},
+    {"gemini://", 9},
+    {"ftp://", 6},
+};
+@
 
 <<function [[pl_whichfont]](mothra)>>=
 Font *pl_whichfont(int f, int s, int *space){
@@ -9647,64 +9990,9 @@ void plrdhtml(char *name, int fd, Www *dst, int killimgs){
 
 typedef struct Fontdata Fontdata;
 
-struct Fontdata{
-    char *name;
-    Font *font;
-    int space;
-}fontlist[4][4]={
-    "dejavusans/unicode.12", 0, 0,
-    "dejavusans/unicode.12", 0, 0,
-    "dejavusans/unicode.14", 0, 0,
-    "dejavusans/unicode.16", 0, 0,
+<<global [[fontlist]](mothra)>>
 
-    "dejavusansit/unicode.12", 0, 0,
-    "dejavusansit/unicode.12", 0, 0,
-    "dejavusansit/unicode.14", 0, 0,
-    "dejavusansit/unicode.16", 0, 0,
-
-    "dejavusansbd/unicode.12", 0, 0,
-    "dejavusansbd/unicode.12", 0, 0,
-    "dejavusansbd/unicode.14", 0, 0,
-    "dejavusansbd/unicode.16", 0, 0,
-
-    "terminus/unicode.12", 0, 0,
-    "terminus/unicode.14", 0, 0,
-    "terminus/unicode.16", 0, 0,
-    "terminus/unicode.18", 0, 0,
-
-/* original */
-/*
-    "lucidasans/unicode.7", 0, 0,
-    "lucidasans/unicode.8", 0, 0,
-    "lucidasans/unicode.10", 0, 0,
-    "lucidasans/unicode.13", 0, 0,
-
-    "lucidasans/italicunicode.7", 0, 0,
-    "lucidasans/italicunicode.8", 0, 0,
-    "lucidasans/italicunicode.10", 0, 0,
-    "lucidasans/italicunicode.13", 0, 0,
-
-    "lucidasans/boldunicode.7", 0, 0,
-    "lucidasans/boldunicode.8", 0, 0,
-    "lucidasans/boldunicode.10", 0, 0,
-    "lucidasans/boldunicode.13", 0, 0,
-
-    "lucidasans/typeunicode.7", 0, 0,
-    "pelm/unicode.8", 0, 0,
-    "lucidasans/typeunicode.12", 0, 0,
-    "lucidasans/typeunicode.16", 0, 0,
-*/
-};
-
-static struct{
-    char *prefix;
-    int len;
-}links[]={
-    {"http://", 7},
-    {"https://", 8},
-    {"gemini://", 9},
-    {"ftp://", 6},
-};
+<<global [[links]](mothra)>>
 
 <<function [[pl_whichfont]](mothra)>>
 
@@ -9894,6 +10182,7 @@ snooptype(int fd)
 #include <event.h>
 #include <panel.h>
 #include <ctype.h>
+
 #include "mothra.h"
 
 <<function [[filetype]](mothra)>>
@@ -10208,12 +10497,15 @@ char *mtpt="/mnt/web";
 
 \subsection*{[[mothra/version.c]]}
 
+% autogenerated file
 
 %-------------------------------------------------------------
 
 <<mothra/version.c>>=
 char version[]="Apr-21-15:48:03-CES-2026";
 @
+
+
 
 
 \section{[[misc/]]}

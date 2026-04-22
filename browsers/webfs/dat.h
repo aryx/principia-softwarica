@@ -4,6 +4,7 @@ typedef struct Ctl Ctl;
 typedef struct Ibuf Ibuf;
 typedef struct Url Url;
 
+/*s: struct [[Ibuf]](webfs) */
 /* simple buffered i/o for network connections; shared by http, ftp */
 struct Ibuf
 {
@@ -12,7 +13,9 @@ struct Ibuf
     char buf[4096];
     char *rp, *wp;
 };
+/*e: struct [[Ibuf]](webfs) */
 
+/*s: struct [[Ctl]](webfs) */
 struct Ctl
 {
     int acceptcookies;
@@ -20,7 +23,9 @@ struct Ctl
     int redirectlimit;
     char        *useragent;
 };
+/*e: struct [[Ctl]](webfs) */
 
+/*s: struct [[Client]](webfs) */
 struct Client
 {
     Url *url;
@@ -42,7 +47,9 @@ struct Client
     int ref;
     void *aux;
 };
+/*e: struct [[Client]](webfs) */
 
+/*s: enum [[UScheme]] */
 /*
  * If ischeme is USunknown, then the given URL is a relative
  * URL which references the "current document" in the context of the base.
@@ -58,7 +65,9 @@ enum
     USfile,
     UScurrent,
 };
+/*e: enum [[UScheme]] */
 
+/*s: struct [[Url]](webfs) */
 struct Url
 {
     int         ischeme;
@@ -86,6 +95,7 @@ struct Url
         } ftp;
     };
 };
+/*e: struct [[Url]](webfs) */
 
 enum
 {

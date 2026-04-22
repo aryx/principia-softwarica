@@ -5,6 +5,7 @@
 #include <event.h>
 #include <panel.h>
 #include <ctype.h>
+
 #include "mothra.h"
 
 /*s: function [[filetype]](mothra) */

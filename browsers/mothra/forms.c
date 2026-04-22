@@ -10,6 +10,8 @@
 
 typedef struct Field Field;
 typedef struct Option Option;
+
+/*s: struct [[Form]](mothra) */
 struct Form{
     int method;
     char *ctype;
@@ -17,6 +19,9 @@ struct Form{
     Field *fields, *efields;
     Form *next;
 };
+/*e: struct [[Form]](mothra) */
+
+/*s: struct [[Field]](mothra) */
 struct Field{
     Field *next;
     Form *form;
@@ -34,6 +39,9 @@ struct Field{
     Panel *pulldown;
     Panel *textwin;
 };
+/*e: struct [[Field]](mothra) */
+
+/*s: enum [[FieldType]](mothra) */
 /*
  * Field types
  */
@@ -51,6 +59,9 @@ enum{
     INDEX,
     FILE,
 };
+/*e: enum [[FieldType]](mothra) */
+
+/*s: struct [[Option]](mothra) */
 struct Option{
     int selected;
     int def;
@@ -58,6 +69,7 @@ struct Option{
     char *value;
     Option *next;
 };
+/*e: struct [[Option]](mothra) */
 
 /*s: constant [[BOUNDARY]](mothra) */
 #define BOUNDARY "nAboJ9uN6ZXsqoVGzLAdjKq97TWDTGjo"
@@ -72,8 +84,10 @@ void h_submittype(Panel *, char *);
 void h_submitindex(Panel *, char *);
 void h_resetinput(Panel *, int);
 void h_select(Panel *, int, int);
+
 char *selgen(Panel *, int);
 char *nullgen(Panel *, int);
+
 /*s: function [[newfield]](mothra) */
 Field *newfield(Form *form){
     Field *f;

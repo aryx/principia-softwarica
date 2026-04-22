@@ -33,6 +33,7 @@ int urldebug;
 #define ExpandCurrentDocUrls    1
 /*e: constant [[ExpandCurrentDocUrls]](webfs) */
 
+/*s: global [[schemestrtab]](webfs) */
 static char*
 schemestrtab[] =
 {
@@ -42,6 +43,7 @@ schemestrtab[] =
     "ftp",
     "file",
 };
+/*e: global [[schemestrtab]](webfs) */
 
 /*s: function [[ischeme]](webfs) */
 static int
@@ -155,6 +157,7 @@ ischeme(char *s)
 /*e: constant [[PSEGCHAR_3]](webfs) */
 
 typedef struct Retab Retab;
+/*s: struct [[Retab]](webfs) */
 struct Retab
 {
     char        *str;
@@ -162,7 +165,9 @@ struct Retab
     int         size;
     int         ind[5];
 };
+/*e: struct [[Retab]](webfs) */
 
+/*s: enum [[RExxx]](webfs) */
 enum
 {
     REsplit = 0,
@@ -180,7 +185,9 @@ enum
 
     MaxResub=   20,
 };
+/*e: enum [[RExxx]](webfs) */
 
+/*s: global [[retab]](webfs) */
 Retab retab[] = /* view in constant width Font */
 {
 [REsplit]
@@ -236,6 +243,8 @@ Retab retab[] = /* view in constant width Font */
     "^.*$", nil, 0,
     { 0, },
 };
+/*e: global [[retab]](webfs) */
+
 
 /*s: function [[countleftparen]](webfs) */
 static int
@@ -273,6 +282,7 @@ initurl(void)
 /*e: function [[initurl]](webfs) */
 
 typedef struct SplitUrl SplitUrl;
+/*s: struct [[SplitUrl]](webfs) */
 struct SplitUrl
 {
     struct {
@@ -280,6 +290,7 @@ struct SplitUrl
         char *e;
     } url, scheme, authority, path, query, fragment;
 };
+/*e: struct [[SplitUrl]](webfs) */
 
 /*s: function [[merge_relative_path]](webfs) */
 /*
