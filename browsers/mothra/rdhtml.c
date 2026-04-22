@@ -450,7 +450,7 @@ char *pl_whitespace(char *s){
 char *pl_word(char *s){
     if ('a'<=*s && *s<='z' || 'A'<=*s && *s<='Z') {
         s++;
-        while('a'<=*s && *s<='z' || 'A'<=*s && *s<='Z' || '0'<=*s && *s<='9' || 
+        while('a'<=*s && *s<='z' || 'A'<=*s && *s<='Z' || '0'<=*s && *s<='9' ||
             *s=='-' || *s=='.' || *s==':') s++;
     }
     return s;

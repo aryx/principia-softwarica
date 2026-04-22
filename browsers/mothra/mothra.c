@@ -1175,7 +1175,7 @@ void geturl(char *urlname, int post, int plumb, int map){
         case HTML:
             fd = pipeline(fd, "exec uhtml");
         case PLAIN:
-            n=0; 
+            n=0;
             for(i=wwwtop-1; i>=0 && i!=(wwwtop-NWWW-1); i--){
                 w = www(i);
                 n += countpix(w->pix);
@@ -1274,7 +1274,7 @@ mothon(Www *w, int on)
     else
         message(mothra);
     /*
-     * insert or remove artificial links to the href for 
+     * insert or remove artificial links to the href for
      * images that are also links
      */
     for(t=w->text;t;t=t->next){

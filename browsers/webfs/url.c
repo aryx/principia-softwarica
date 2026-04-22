@@ -953,7 +953,7 @@ parseurl(char *url, Url *base)
         return nil;
     }
 
-    /* RFC2396 sec 3.1 says relative URIs are distinguished by absent scheme */ 
+    /* RFC2396 sec 3.1 says relative URIs are distinguished by absent scheme */
     if(su.scheme.s==nil){
         if(urldebug)
             fprint(2, "parseurl has nil scheme\n");
