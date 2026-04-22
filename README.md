@@ -48,11 +48,7 @@ cross-compiled from Linux, macOS, or Windows, which makes it easy
 to experiment with. To cross-compile, you will need
 to install [Goken](https://github.com/aryx/goken9cc).
 
-See the platform-specific instructions:
-
- - [install.txt](install.txt) — overview
- - [install_linux.txt](install_linux.txt)
- - [install_macos.txt](install_macos.txt)
- - [install_windows.txt](install_windows.txt)
+See <https://principia-softwarica.org/getting-started.html> for the
+up-to-date build and installation instructions.
 
 Enjoy.
