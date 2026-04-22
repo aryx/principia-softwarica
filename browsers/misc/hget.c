@@ -157,7 +157,7 @@ main(int argc, char **argv)
         else
             p = seprint(p, e, "%s", t);
         u.postbody = postbody;
-
+        
         break;
     default:
         usage();
@@ -173,7 +173,7 @@ main(int argc, char **argv)
     if(argc != 1)
         usage();
 
-
+    
     out.fd = 1;
     out.written = 0;
     out.offset = 0;
@@ -916,7 +916,7 @@ doftp(URL *u, URL *px, Range *r, Out *out, long mtime)
         close(ctl);
         return Eof;
     }
-
+        
     /* first try passive mode, then active */
     data = passive(ctl, u);
     if(data < 0){

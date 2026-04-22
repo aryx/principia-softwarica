@@ -1267,7 +1267,7 @@ fsend(Srv*)
 /*e: function [[fsend]](webcookies) */
 
 /*s: global [[fs]](webcookies.c) */
-Srv fs =
+Srv fs = 
 {
 .open=          fsopen,
 .read=          fsread,
