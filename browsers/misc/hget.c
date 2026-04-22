@@ -8,6 +8,7 @@
 #include <auth.h>
 
 typedef struct URL URL;
+/*s: struct [[URL]](hget.c) */
 struct URL
 {
     int method;
@@ -21,15 +22,19 @@ struct URL
     char *rhead;
     long    mtime;
 };
+/*e: struct [[URL]](hget.c) */
 
 typedef struct Range Range;
+/*s: struct [[Range]](hget.c) */
 struct Range
 {
     long    start;  /* only 2 gig supported, tdb */
     long    end;
 };
+/*e: struct [[Range]](hget.c) */
 
 typedef struct Out Out;
+/*s: struct [[Out]](hget.c) */
 struct Out
 {
     int fd;
@@ -38,6 +43,7 @@ struct Out
     DigestState *curr;      /* digest state up to offset (if known) */
     DigestState *hiwat;     /* digest state of all bytes written */
 };
+/*e: struct [[Out]](hget.c) */
 
 enum
 {
@@ -81,6 +87,7 @@ char    *net;
 char    tcpdir[NETPATHLEN];
 int headerprint;
 
+/*s: global [[method]](hget.c) */
 struct {
     char    *name;
     int (*f)(URL*, URL*, Range*, Out*, long);
@@ -90,14 +97,18 @@ struct {
     [Ftp]   { "ftp",    doftp },
     [Other] { "_______",    nil },
 };
+/*e: global [[method]](hget.c) */
 
+/*s: function [[usage]](hget.c) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-dhv] [-o outfile] [-p body] [-x netmtpt] [-r header] url\n", argv0);
     exits("usage");
 }
+/*e: function [[usage]](hget.c) */
 
+/*s: function [[main]](hget.c) */
 void
 main(int argc, char **argv)
 {
@@ -220,7 +231,9 @@ main(int argc, char **argv)
 
     exits(0);
 }
+/*e: function [[main]](hget.c) */
 
+/*s: function [[crackurl]](hget.c) */
 int
 crackurl(URL *u, char *s)
 {
@@ -292,6 +305,7 @@ crackurl(URL *u, char *s)
 
     return 0;
 }
+/*e: function [[crackurl]](hget.c) */
 
 char *day[] = {
     "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
@@ -319,6 +333,7 @@ catch(void*, char*)
     noted(NDFLT);
 }
 
+/*s: function [[dohttp]](hget.c) */
 int
 dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 {
@@ -561,7 +576,9 @@ dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 
     return tot;
 }
+/*e: function [[dohttp]](hget.c) */
 
+/*s: function [[httprcode]](hget.c) */
 /* get the http response code */
 int
 httprcode(int fd)
@@ -583,6 +600,7 @@ httprcode(int fd)
     buf[n] = 0;
     return atoi(p+1);
 }
+/*e: function [[httprcode]](hget.c) */
 
 /* read in and crack the http headers, update u and r */
 void    hhetag(char*, URL*, Range*);
@@ -593,6 +611,7 @@ void    hhuri(char*, URL*, Range*);
 void    hhlocation(char*, URL*, Range*);
 void    hhauth(char*, URL*, Range*);
 
+/*s: global [[headers]](hget.c) */
 struct {
     char *name;
     void (*f)(char*, URL*, Range*);
@@ -605,6 +624,9 @@ struct {
     { "location:", hhlocation },
     { "WWW-Authenticate:", hhauth },
 };
+/*e: global [[headers]](hget.c) */
+
+/*s: function [[httheaders]](hget.c) */
 int
 httpheaders(int fd, int cfd, URL *u, Range *r)
 {
@@ -633,7 +655,9 @@ httpheaders(int fd, int cfd, URL *u, Range *r)
     }
     return n;
 }
+/*e: function [[httheaders]](hget.c) */
 
+/*s: function [[getheader]](hget.c) */
 /*
  *  read a single mime header, collect continuations.
  *
@@ -674,6 +698,8 @@ getheader(int fd, char *buf, int n)
         fprint(STDERR, "%d <- %s\n", fd, buf);
     return p-buf;
 }
+/*e: function [[getheader]](hget.c) */
+
 
 void
 hhetag(char *p, URL *u, Range*)
@@ -846,6 +872,7 @@ int terminateftp(int, int);
 int getaddrport(char*, uchar*, uchar*);
 int ftprestart(int, Out*, URL*, Range*, long);
 
+/*s: function [[doftp]](hget.c) */
 int
 doftp(URL *u, URL *px, Range *r, Out *out, long mtime)
 {
@@ -943,7 +970,8 @@ doftp(URL *u, URL *px, Range *r, Out *out, long mtime)
         return Error;
     }
 }
-
+/*e: function [[doftp]](hget.c) */
+/*s: function [[ftpcmt]](hget.c) */
 int
 ftpcmd(int ctl, char *fmt, ...)
 {
@@ -961,7 +989,8 @@ ftpcmd(int ctl, char *fmt, ...)
         return -1;
     return 0;
 }
-
+/*e: function [[ftpcmt]](hget.c) */
+/*s: function [[ftprcode]](hget.c) */
 int
 ftprcode(int ctl, char *msg, int len)
 {
@@ -987,7 +1016,9 @@ ftprcode(int ctl, char *msg, int len)
 
     return -1;
 }
+/*e: function [[ftprcode]](hget.c) */
 
+/*s: function [[hello]](hget.c) */
 int
 hello(int ctl)
 {
@@ -1000,7 +1031,8 @@ hello(int ctl)
     }
     return 0;
 }
-
+/*e: function [[hello]](hget.c) */
+/*s: function [[getdec]](hget.c) */
 int
 getdec(char *p, int n)
 {
@@ -1011,7 +1043,8 @@ getdec(char *p, int n)
         x = x*10 + (*p++ - '0');
     return x;
 }
-
+/*e: function [[getdec]](hget.c) */
+/*s: function [[ftprestart]](hget.c) */
 int
 ftprestart(int ctl, Out *out, URL *u, Range *r, long mtime)
 {
@@ -1062,7 +1095,8 @@ ftprestart(int ctl, Out *out, URL *u, Range *r, long mtime)
 
     return 0;   /* need to do something */
 }
-
+/*e: function [[ftprestart]](hget.c) */
+/*s: function [[logon]](hget.c) */
 int
 logon(int ctl)
 {
@@ -1090,6 +1124,10 @@ logon(int ctl)
 
     return 0;
 }
+/*e: function [[logon]](hget.c) */
+
+
+
 
 int
 xfertype(int ctl, char *t)

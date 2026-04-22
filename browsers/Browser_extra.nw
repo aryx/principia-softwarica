@@ -10512,6 +10512,85 @@ char version[]="Apr-21-15:48:03-CES-2026";
 
 \subsection*{[[misc/webcookies.c]]}
 
+
+<<struct [[Cookie]](webcookies.c)>>=
+struct Cookie
+{
+    /* external info */
+    char*       name;
+    char*       value;
+    char*       dom;            /* starts with . */
+    char*       path;
+    char*       version;
+    char*       comment;        /* optional, may be nil */
+
+    uint        expire;         /* time of expiration: ~0 means when webcookies dies */
+    int secure;
+    int explicitdom;    /* dom was explicitly set */
+    int explicitpath;   /* path was explicitly set */
+    int netscapestyle;
+
+    /* internal info */
+    int deleted;
+    int mark;
+    int ondisk;
+};
+@
+
+<<struct [[Jar]](webcookies.c)>>=
+struct Jar
+{
+    Cookie      *c;
+    int nc;
+    int mc;
+
+    Qid qid;
+    int dirty;
+    char        *file;
+    char        *lockfile;
+};
+@
+
+<<global [[stab]](webcookies.c)>>=
+struct {
+    char        *s;
+    int offset;
+    int ishttp;
+} stab[] = {
+    "domain",           offsetof(Cookie, dom),          1,
+    "path",                     offsetof(Cookie, path),         1,
+    "name",                     offsetof(Cookie, name),         0,
+    "value",            offsetof(Cookie, value),        0,
+    "comment",          offsetof(Cookie, comment),      1,
+    "version",          offsetof(Cookie, version),      1,
+};
+@
+
+<<global [[itab]](webcookies.c)>>=
+struct {
+    char *s;
+    int offset;
+} itab[] = {
+    "expire",           offsetof(Cookie, expire),
+    "secure",           offsetof(Cookie, secure),
+    "explicitdomain",   offsetof(Cookie, explicitdom),
+    "explicitpath",             offsetof(Cookie, explicitpath),
+    "netscapestyle",    offsetof(Cookie, netscapestyle),
+};
+@
+
+<<global [[fs]](webcookies.c)>>=
+Srv fs = 
+{
+.open=          fsopen,
+.read=          fsread,
+.write=         fswrite,
+.destroyfid=    fsdestroyfid,
+.end=           fsend,
+};
+@
+
+
 <<function [[jarfmt]](webcookies)>>=
 /* HTTP format */
 int
@@ -11696,6 +11775,36 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND
+
+    if(argc != 0)
+        usage();
+
+    quotefmtinstall();
+    fmtinstall('J', jarfmt);
+    fmtinstall('K', cookiefmt);
+
+    if(file == nil){
+        home = getenv("home");
+        if(home == nil)
+            sysfatal("no cookie file specified and no $home");
+        file = emalloc9p(strlen(home)+30);
+        strcpy(file, home);
+        strcat(file, "/lib/webcookies");
+    }
+    if(access(file, AEXIST) < 0)
+        close(create(file, OWRITE, 0666));
+
+    jar = readjar(file);
+    if(jar == nil)
+        sysfatal("readjar: %r");
+
+    fs.tree = alloctree("cookie", "cookie", DMDIR|0555, nil);
+    closefile(createfile(fs.tree->root, "http", "cookie", 0666, (void*)Xhttp));
+    closefile(createfile(fs.tree->root, "cookies", "cookie", 0666, (void*)Xcookies));
+
+    postmountsrv(&fs, srv, mtpt, MREPL);
+    exits(nil);
+}
 @
 
 
@@ -11721,63 +11830,13 @@ int debug = 0;
 typedef struct Cookie Cookie;
 typedef struct Jar Jar;
 
-struct Cookie
-{
-    /* external info */
-    char*       name;
-    char*       value;
-    char*       dom;            /* starts with . */
-    char*       path;
-    char*       version;
-    char*       comment;        /* optional, may be nil */
+<<struct [[Cookie]](webcookies.c)>>
 
-    uint        expire;         /* time of expiration: ~0 means when webcookies dies */
-    int secure;
-    int explicitdom;    /* dom was explicitly set */
-    int explicitpath;   /* path was explicitly set */
-    int netscapestyle;
+<<struct [[Jar]](webcookies.c)>>
 
-    /* internal info */
-    int deleted;
-    int mark;
-    int ondisk;
-};
+<<global [[stab]](webcookies.c)>>
 
-struct Jar
-{
-    Cookie      *c;
-    int nc;
-    int mc;
-
-    Qid qid;
-    int dirty;
-    char        *file;
-    char        *lockfile;
-};
-
-struct {
-    char        *s;
-    int offset;
-    int ishttp;
-} stab[] = {
-    "domain",           offsetof(Cookie, dom),          1,
-    "path",                     offsetof(Cookie, path),         1,
-    "name",                     offsetof(Cookie, name),         0,
-    "value",            offsetof(Cookie, value),        0,
-    "comment",          offsetof(Cookie, comment),      1,
-    "version",          offsetof(Cookie, version),      1,
-};
-
-struct {
-    char *s;
-    int offset;
-} itab[] = {
-    "expire",           offsetof(Cookie, expire),
-    "secure",           offsetof(Cookie, secure),
-    "explicitdomain",   offsetof(Cookie, explicitdom),
-    "explicitpath",             offsetof(Cookie, explicitpath),
-    "netscapestyle",    offsetof(Cookie, netscapestyle),
-};
+<<global [[itab]](webcookies.c)>>
 
 #pragma varargck type "J"       Jar*
 #pragma varargck type "K"       Cookie*
@@ -11881,48 +11940,11 @@ enum
 
 <<function [[fsend]](webcookies)>>
 
-Srv fs = 
-{
-.open=          fsopen,
-.read=          fsread,
-.write=         fswrite,
-.destroyfid=    fsdestroyfid,
-.end=           fsend,
-};
+<<global [[fs]](webcookies.c)>>
 
 <<function [[usage]](webcookies)>>
     
 <<function [[main]](webcookies)>>
-
-    if(argc != 0)
-        usage();
-
-    quotefmtinstall();
-    fmtinstall('J', jarfmt);
-    fmtinstall('K', cookiefmt);
-
-    if(file == nil){
-        home = getenv("home");
-        if(home == nil)
-            sysfatal("no cookie file specified and no $home");
-        file = emalloc9p(strlen(home)+30);
-        strcpy(file, home);
-        strcat(file, "/lib/webcookies");
-    }
-    if(access(file, AEXIST) < 0)
-        close(create(file, OWRITE, 0666));
-
-    jar = readjar(file);
-    if(jar == nil)
-        sysfatal("readjar: %r");
-
-    fs.tree = alloctree("cookie", "cookie", DMDIR|0555, nil);
-    closefile(createfile(fs.tree->root, "http", "cookie", 0666, (void*)Xhttp));
-    closefile(createfile(fs.tree->root, "cookies", "cookie", 0666, (void*)Xcookies));
-
-    postmountsrv(&fs, srv, mtpt, MREPL);
-    exits(nil);
-}
 @
 
 
@@ -11992,32 +12014,6 @@ main(int argc, char *argv[])
     default:
         usage();
     } ARGEND;
-@
-
-
-%-------------------------------------------------------------
-
-<<misc/uhtml.c>>=
-// used by mothra, imported from 9front too
-
-#include <u.h>
-#include <libc.h>
-#include <ctype.h>
-
-// copied from Graphics.nw
-<<constant [[IOUNIT]](uhtml)>>
-
-int nbuf;
-char buf[IOUNIT+1];
-char *cset = nil;
-char *whitespace = " \t\r\n";
-
-<<function [[usage]](uhtml)>>
-
-<<function [[attr]](uhtml)>>
-
-<<function [[main]](uhtml)>>
-
     if(*argv){
         close(0);
         if(open(*argv, OREAD) != 0)
@@ -12145,6 +12141,32 @@ Found:
 @
 
 
+%-------------------------------------------------------------
+
+<<misc/uhtml.c>>=
+// used by mothra, imported from 9front too
+
+#include <u.h>
+#include <libc.h>
+#include <ctype.h>
+
+// copied from Graphics.nw
+<<constant [[IOUNIT]](uhtml)>>
+
+int nbuf;
+char buf[IOUNIT+1];
+char *cset = nil;
+char *whitespace = " \t\r\n";
+
+<<function [[usage]](uhtml)>>
+
+<<function [[attr]](uhtml)>>
+
+<<function [[main]](uhtml)>>
+
+@
+
+
 \subsection*{[[misc/webfsget.c]]}
 
 <<function [[xfer]](webfsget)>>=
@@ -12195,24 +12217,6 @@ main(int argc, char **argv)
         post = EARGF(usage());
         break;
     }ARGEND;
-@
-
-
-%-------------------------------------------------------------
-
-<<misc/webfsget.c>>=
-// was in src/cmd/webfs/webget.c before and called webget
-
-/* Example of how to use webfs */
-#include <u.h>
-#include <libc.h>
-
-<<function [[xfer]](webfsget)>>
-
-<<function [[usage]](webfsget)>>
-
-<<function [[main]](webfsget)>>
-
     if (argc != 1) 
         usage();
 
@@ -12251,6 +12255,23 @@ main(int argc, char **argv)
     xfer(fd, STDOUT);
     exits(nil);
 }
+@
+
+
+%-------------------------------------------------------------
+
+<<misc/webfsget.c>>=
+// was in src/cmd/webfs/webget.c before and called webget
+
+/* Example of how to use webfs */
+#include <u.h>
+#include <libc.h>
+
+<<function [[xfer]](webfsget)>>
+
+<<function [[usage]](webfsget)>>
+
+<<function [[main]](webfsget)>>
 @
 
 
@@ -12392,44 +12413,6 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND
-@
-
-
-%-------------------------------------------------------------
-
-<<misc/resize.c>>=
-// called by mothra via exec
-#include <u.h>
-#include <libc.h>
-#include <pool.h>
-#include <draw.h>
-#include <memdraw.h>
-
-int nflag;
-bool debug; /* claude: -d: poolcheck before each big step, to locate heap corruption */
-
-/*
- * claude: temporary instrumentation to locate the heap corruption that
- * crashes freememimage(nim) at the end of main(). poolcheck walks the
- * imagmem arena and sysfatal()s on the first bad boundary tag. Prints
- * a "CHECK ok" line if clean, so we can see which step introduced the
- * corruption.
- */
-extern Pool *imagmem;
-extern Pool *mainmem;
-<<function [[checkimag]](resize)>>
-
-<<function [[resample]](resize)>>
-
-enum {
-    PERCENT = 0x80000000,
-};
-
-<<function [[getsize]](resize)>>
-
-<<function [[usage]](resize)>>
-
-<<function [[main]](resize)>>
     fd = 0;
     if(*argv){
         fd = open(*argv, OREAD);
@@ -12507,21 +12490,47 @@ enum {
 @
 
 
-\subsection*{[[misc/hget.c]]}
-
-
 %-------------------------------------------------------------
 
-<<misc/hget.c>>=
+<<misc/resize.c>>=
+// called by mothra via exec
 #include <u.h>
 #include <libc.h>
-#include <ctype.h>
-#include <bio.h>
-#include <ip.h>
-#include <libsec.h>
-#include <auth.h>
+#include <pool.h>
+#include <draw.h>
+#include <memdraw.h>
 
-typedef struct URL URL;
+int nflag;
+bool debug; /* claude: -d: poolcheck before each big step, to locate heap corruption */
+
+/*
+ * claude: temporary instrumentation to locate the heap corruption that
+ * crashes freememimage(nim) at the end of main(). poolcheck walks the
+ * imagmem arena and sysfatal()s on the first bad boundary tag. Prints
+ * a "CHECK ok" line if clean, so we can see which step introduced the
+ * corruption.
+ */
+extern Pool *imagmem;
+extern Pool *mainmem;
+<<function [[checkimag]](resize)>>
+
+<<function [[resample]](resize)>>
+
+enum {
+    PERCENT = 0x80000000,
+};
+
+<<function [[getsize]](resize)>>
+
+<<function [[usage]](resize)>>
+
+<<function [[main]](resize)>>
+@
+
+
+\subsection*{[[misc/hget.c]]}
+
+<<struct [[URL]](hget.c)>>=
 struct URL
 {
     int method;
@@ -12535,15 +12544,17 @@ struct URL
     char *rhead;
     long    mtime;
 };
+@
 
-typedef struct Range Range;
+<<struct [[Range]](hget.c)>>=
 struct Range
 {
     long    start;  /* only 2 gig supported, tdb */
     long    end;
 };
+@
 
-typedef struct Out Out;
+<<struct [[Out]](hget.c)>>=
 struct Out
 {
     int fd;
@@ -12552,49 +12563,9 @@ struct Out
     DigestState *curr;      /* digest state up to offset (if known) */
     DigestState *hiwat;     /* digest state of all bytes written */
 };
+@
 
-enum
-{
-    Other,
-    Http,
-    Https,
-    Ftp,
-};
-
-enum
-{
-    Eof = 0,
-    Error = -1,
-    Server = -2,
-    Changed = -3,
-};
-
-bool debug;
-char *ofile;
-
-
-int doftp(URL*, URL*, Range*, Out*, long);
-int dohttp(URL*, URL*,  Range*, Out*, long);
-int crackurl(URL*, char*);
-Range*  crackrange(char*);
-int getheader(int, char*, int);
-int httpheaders(int, int, URL*, Range*);
-int httprcode(int);
-int cistrncmp(char*, char*, int);
-int cistrcmp(char*, char*);
-void    initibuf(void);
-int readline(int, char*, int);
-int readibuf(int, char*, int);
-int dfprint(int, char*, ...);
-void    unreadline(char*);
-int output(Out*, char*, int);
-void    setoffset(Out*, int);
-
-int verbose;
-char    *net;
-char    tcpdir[NETPATHLEN];
-int headerprint;
-
+<<global [[method]](hget.c)>>=
 struct {
     char    *name;
     int (*f)(URL*, URL*, Range*, Out*, long);
@@ -12604,14 +12575,18 @@ struct {
     [Ftp]   { "ftp",    doftp },
     [Other] { "_______",    nil },
 };
+@
 
+<<function [[usage]](hget.c)>>=
 void
 usage(void)
 {
     fprint(2, "usage: %s [-dhv] [-o outfile] [-p body] [-x netmtpt] [-r header] url\n", argv0);
     exits("usage");
 }
+@
 
+<<function [[main]](hget.c)>>=
 void
 main(int argc, char **argv)
 {
@@ -12734,7 +12709,10 @@ main(int argc, char **argv)
 
     exits(0);
 }
+@
 
+
+<<function [[crackurl]](hget.c)>>=
 int
 crackurl(URL *u, char *s)
 {
@@ -12806,33 +12784,9 @@ crackurl(URL *u, char *s)
 
     return 0;
 }
+@
 
-char *day[] = {
-    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-};
-
-char *month[] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
-struct
-{
-    int fd;
-    long    mtime;
-} note;
-
-void
-catch(void*, char*)
-{
-    Dir d;
-
-    nulldir(&d);
-    d.mtime = note.mtime;
-    if(dirfwstat(note.fd, &d) < 0)
-        sysfatal("catch: can't dirfwstat: %r");
-    noted(NDFLT);
-}
-
+<<function [[dohttp]](hget.c)>>=
 int
 dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 {
@@ -13075,7 +13029,9 @@ dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 
     return tot;
 }
+@
 
+<<function [[httprcode]](hget.c)>>=
 /* get the http response code */
 int
 httprcode(int fd)
@@ -13097,16 +13053,9 @@ httprcode(int fd)
     buf[n] = 0;
     return atoi(p+1);
 }
+@
 
-/* read in and crack the http headers, update u and r */
-void    hhetag(char*, URL*, Range*);
-void    hhmtime(char*, URL*, Range*);
-void    hhclen(char*, URL*, Range*);
-void    hhcrange(char*, URL*, Range*);
-void    hhuri(char*, URL*, Range*);
-void    hhlocation(char*, URL*, Range*);
-void    hhauth(char*, URL*, Range*);
-
+<<global [[headers]](hget.c)>>=
 struct {
     char *name;
     void (*f)(char*, URL*, Range*);
@@ -13119,6 +13068,9 @@ struct {
     { "location:", hhlocation },
     { "WWW-Authenticate:", hhauth },
 };
+@
+
+<<function [[httheaders]](hget.c)>>=
 int
 httpheaders(int fd, int cfd, URL *u, Range *r)
 {
@@ -13147,7 +13099,9 @@ httpheaders(int fd, int cfd, URL *u, Range *r)
     }
     return n;
 }
+@
 
+<<function [[getheader]](hget.c)>>=
 /*
  *  read a single mime header, collect continuations.
  *
@@ -13188,6 +13142,383 @@ getheader(int fd, char *buf, int n)
         fprint(STDERR, "%d <- %s\n", fd, buf);
     return p-buf;
 }
+@
+
+
+<<function [[doftp]](hget.c)>>=
+int
+doftp(URL *u, URL *px, Range *r, Out *out, long mtime)
+{
+    int pid, ctl, data, rv;
+    Waitmsg *w;
+    char msg[64];
+    char conndir[NETPATHLEN];
+    char *p;
+
+    /* untested, proxy doesn't work with ftp (I think) */
+    if(px->host == nil){
+        ctl = dial(netmkaddr(u->host, tcpdir, u->port), 0, conndir, 0);
+    } else {
+        ctl = dial(netmkaddr(px->host, tcpdir, px->port), 0, conndir, 0);
+    }
+
+    if(ctl < 0)
+        return Error;
+    if(net == nil){
+        p = strrchr(conndir, '/');
+        *p = 0;
+        snprint(tcpdir, sizeof(tcpdir), conndir);
+    }
+
+    initibuf();
+
+    rv = hello(ctl);
+    if(rv < 0)
+        return terminateftp(ctl, rv);
+
+    rv = logon(ctl);
+    if(rv < 0)
+        return terminateftp(ctl, rv);
+
+    rv = xfertype(ctl, "I");
+    if(rv < 0)
+        return terminateftp(ctl, rv);
+
+    /* if file is up to date and the right size, stop */
+    if(ftprestart(ctl, out, u, r, mtime) > 0){
+        close(ctl);
+        return Eof;
+    }
+        
+    /* first try passive mode, then active */
+    data = passive(ctl, u);
+    if(data < 0){
+        data = active(ctl, u);
+        if(data < 0)
+            return Error;
+    }
+
+    /* fork */
+    switch(pid = rfork(RFPROC|RFFDG|RFMEM)){
+    case -1:
+        close(data);
+        return terminateftp(ctl, Error);
+    case 0:
+        ftpxfer(data, out, r);
+        close(data);
+        _exits(0);
+    default:
+        close(data);
+        break;
+    }
+
+    /* wait for reply message */
+    rv = ftprcode(ctl, msg, sizeof(msg));
+    close(ctl);
+
+    /* wait for process to terminate */
+    w = nil;
+    for(;;){
+        free(w);
+        w = wait();
+        if(w == nil)
+            return Error;
+        if(w->pid == pid){
+            if(w->msg[0] == 0){
+                free(w);
+                break;
+            }
+            werrstr("xfer: %s", w->msg);
+            free(w);
+            return Error;
+        }
+    }
+
+    switch(rv){
+    case Success:
+        return Eof;
+    case TempFail:
+        return Server;
+    default:
+        return Error;
+    }
+}
+@
+
+<<function [[ftpcmt]](hget.c)>>=
+int
+ftpcmd(int ctl, char *fmt, ...)
+{
+    va_list arg;
+    char buf[2*1024], *s;
+
+    va_start(arg, fmt);
+    s = vseprint(buf, buf + (sizeof(buf)-4) / sizeof(*buf), fmt, arg);
+    va_end(arg);
+    if(debug)
+        fprint(STDERR, "%d -> %s\n", ctl, buf);
+    *s++ = '\r';
+    *s++ = '\n';
+    if(write(ctl, buf, s - buf) != s - buf)
+        return -1;
+    return 0;
+}
+@
+
+<<function [[ftprcode]](hget.c)>>=
+int
+ftprcode(int ctl, char *msg, int len)
+{
+    int rv;
+    int i;
+    char *p;
+
+    len--;  /* room for terminating null */
+    for(;;){
+        *msg = 0;
+        i = readline(ctl, msg, len);
+        if(i < 0)
+            break;
+        if(debug)
+            fprint(STDERR, "%d <- %s\n", ctl, msg);
+
+        /* stop if not a continuation */
+        rv = strtol(msg, &p, 10);
+        if(rv >= 100 && rv < 600 && p==msg+3 && *p == ' ')
+            return rv/100;
+    }
+    *msg = 0;
+
+    return -1;
+}
+@
+
+<<function [[hello]](hget.c)>>=
+int
+hello(int ctl)
+{
+    char msg[1024];
+
+    /* wait for hello from other side */
+    if(ftprcode(ctl, msg, sizeof(msg)) != Success){
+        werrstr("HELLO: %s", msg);
+        return Server;
+    }
+    return 0;
+}
+@
+
+<<function [[getdec]](hget.c)>>=
+int
+getdec(char *p, int n)
+{
+    int x = 0;
+    int i;
+
+    for(i = 0; i < n; i++)
+        x = x*10 + (*p++ - '0');
+    return x;
+}
+@
+
+<<function [[ftprestart]](hget.c)>>=
+int
+ftprestart(int ctl, Out *out, URL *u, Range *r, long mtime)
+{
+    Tm tm;
+    char msg[1024];
+    long x, rmtime;
+
+    ftpcmd(ctl, "MDTM %s", u->page);
+    if(ftprcode(ctl, msg, sizeof(msg)) != Success){
+        r->start = 0;
+        return 0;       /* need to do something */
+    }
+
+    /* decode modification time */
+    if(strlen(msg) < 4 + 4 + 2 + 2 + 2 + 2 + 2){
+        r->start = 0;
+        return 0;       /* need to do something */
+    }
+    memset(&tm, 0, sizeof(tm));
+    tm.year = getdec(msg+4, 4) - 1900;
+    tm.mon = getdec(msg+4+4, 2) - 1;
+    tm.mday = getdec(msg+4+4+2, 2);
+    tm.hour = getdec(msg+4+4+2+2, 2);
+    tm.min = getdec(msg+4+4+2+2+2, 2);
+    tm.sec = getdec(msg+4+4+2+2+2+2, 2);
+    strcpy(tm.zone, "GMT");
+    rmtime = tm2sec(&tm);
+    if(rmtime > mtime)
+        r->start = 0;
+
+    /* get size */
+    ftpcmd(ctl, "SIZE %s", u->page);
+    if(ftprcode(ctl, msg, sizeof(msg)) == Success){
+        x = atol(msg+4);
+        if(r->start == x)
+            return 1;   /* we're up to date */
+        r->end = x;
+    }
+
+    /* seek to restart point */
+    if(r->start > 0){
+        ftpcmd(ctl, "REST %lud", r->start);
+        if(ftprcode(ctl, msg, sizeof(msg)) == Incomplete){
+            setoffset(out, r->start);
+        }else
+            r->start = 0;
+    }
+
+    return 0;   /* need to do something */
+}
+@
+
+<<function [[logon]](hget.c)>>=
+int
+logon(int ctl)
+{
+    char msg[1024];
+
+    /* login anonymous */
+    ftpcmd(ctl, "USER anonymous");
+    switch(ftprcode(ctl, msg, sizeof(msg))){
+    case Success:
+        return 0;
+    case Incomplete:
+        break;  /* need password */
+    default:
+        werrstr("USER: %s", msg);
+        return Server;
+    }
+
+    /* send user id as password */
+    sprint(msg, "%s@closedmind.org", getuser());
+    ftpcmd(ctl, "PASS %s", msg);
+    if(ftprcode(ctl, msg, sizeof(msg)) != Success){
+        werrstr("PASS: %s", msg);
+        return Server;
+    }
+
+    return 0;
+}
+@
+
+%-------------------------------------------------------------
+
+<<misc/hget.c>>=
+#include <u.h>
+#include <libc.h>
+#include <ctype.h>
+#include <bio.h>
+#include <ip.h>
+#include <libsec.h>
+#include <auth.h>
+
+typedef struct URL URL;
+<<struct [[URL]](hget.c)>>
+
+typedef struct Range Range;
+<<struct [[Range]](hget.c)>>
+
+typedef struct Out Out;
+<<struct [[Out]](hget.c)>>
+
+enum
+{
+    Other,
+    Http,
+    Https,
+    Ftp,
+};
+
+enum
+{
+    Eof = 0,
+    Error = -1,
+    Server = -2,
+    Changed = -3,
+};
+
+bool debug;
+char *ofile;
+
+
+int doftp(URL*, URL*, Range*, Out*, long);
+int dohttp(URL*, URL*,  Range*, Out*, long);
+int crackurl(URL*, char*);
+Range*  crackrange(char*);
+int getheader(int, char*, int);
+int httpheaders(int, int, URL*, Range*);
+int httprcode(int);
+int cistrncmp(char*, char*, int);
+int cistrcmp(char*, char*);
+void    initibuf(void);
+int readline(int, char*, int);
+int readibuf(int, char*, int);
+int dfprint(int, char*, ...);
+void    unreadline(char*);
+int output(Out*, char*, int);
+void    setoffset(Out*, int);
+
+int verbose;
+char    *net;
+char    tcpdir[NETPATHLEN];
+int headerprint;
+
+<<global [[method]](hget.c)>>
+
+<<function [[usage]](hget.c)>>
+
+<<function [[main]](hget.c)>>
+
+<<function [[crackurl]](hget.c)>>
+
+char *day[] = {
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+};
+
+char *month[] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+struct
+{
+    int fd;
+    long    mtime;
+} note;
+
+void
+catch(void*, char*)
+{
+    Dir d;
+
+    nulldir(&d);
+    d.mtime = note.mtime;
+    if(dirfwstat(note.fd, &d) < 0)
+        sysfatal("catch: can't dirfwstat: %r");
+    noted(NDFLT);
+}
+
+<<function [[dohttp]](hget.c)>>
+
+<<function [[httprcode]](hget.c)>>
+
+/* read in and crack the http headers, update u and r */
+void    hhetag(char*, URL*, Range*);
+void    hhmtime(char*, URL*, Range*);
+void    hhclen(char*, URL*, Range*);
+void    hhcrange(char*, URL*, Range*);
+void    hhuri(char*, URL*, Range*);
+void    hhlocation(char*, URL*, Range*);
+void    hhauth(char*, URL*, Range*);
+
+<<global [[headers]](hget.c)>>
+
+<<function [[httheaders]](hget.c)>>
+
+<<function [[getheader]](hget.c)>>
+
 
 void
 hhetag(char *p, URL *u, Range*)
@@ -13360,250 +13691,17 @@ int terminateftp(int, int);
 int getaddrport(char*, uchar*, uchar*);
 int ftprestart(int, Out*, URL*, Range*, long);
 
-int
-doftp(URL *u, URL *px, Range *r, Out *out, long mtime)
-{
-    int pid, ctl, data, rv;
-    Waitmsg *w;
-    char msg[64];
-    char conndir[NETPATHLEN];
-    char *p;
+<<function [[doftp]](hget.c)>>
+<<function [[ftpcmt]](hget.c)>>
+<<function [[ftprcode]](hget.c)>>
 
-    /* untested, proxy doesn't work with ftp (I think) */
-    if(px->host == nil){
-        ctl = dial(netmkaddr(u->host, tcpdir, u->port), 0, conndir, 0);
-    } else {
-        ctl = dial(netmkaddr(px->host, tcpdir, px->port), 0, conndir, 0);
-    }
+<<function [[hello]](hget.c)>>
+<<function [[getdec]](hget.c)>>
+<<function [[ftprestart]](hget.c)>>
+<<function [[logon]](hget.c)>>
 
-    if(ctl < 0)
-        return Error;
-    if(net == nil){
-        p = strrchr(conndir, '/');
-        *p = 0;
-        snprint(tcpdir, sizeof(tcpdir), conndir);
-    }
 
-    initibuf();
 
-    rv = hello(ctl);
-    if(rv < 0)
-        return terminateftp(ctl, rv);
-
-    rv = logon(ctl);
-    if(rv < 0)
-        return terminateftp(ctl, rv);
-
-    rv = xfertype(ctl, "I");
-    if(rv < 0)
-        return terminateftp(ctl, rv);
-
-    /* if file is up to date and the right size, stop */
-    if(ftprestart(ctl, out, u, r, mtime) > 0){
-        close(ctl);
-        return Eof;
-    }
-        
-    /* first try passive mode, then active */
-    data = passive(ctl, u);
-    if(data < 0){
-        data = active(ctl, u);
-        if(data < 0)
-            return Error;
-    }
-
-    /* fork */
-    switch(pid = rfork(RFPROC|RFFDG|RFMEM)){
-    case -1:
-        close(data);
-        return terminateftp(ctl, Error);
-    case 0:
-        ftpxfer(data, out, r);
-        close(data);
-        _exits(0);
-    default:
-        close(data);
-        break;
-    }
-
-    /* wait for reply message */
-    rv = ftprcode(ctl, msg, sizeof(msg));
-    close(ctl);
-
-    /* wait for process to terminate */
-    w = nil;
-    for(;;){
-        free(w);
-        w = wait();
-        if(w == nil)
-            return Error;
-        if(w->pid == pid){
-            if(w->msg[0] == 0){
-                free(w);
-                break;
-            }
-            werrstr("xfer: %s", w->msg);
-            free(w);
-            return Error;
-        }
-    }
-
-    switch(rv){
-    case Success:
-        return Eof;
-    case TempFail:
-        return Server;
-    default:
-        return Error;
-    }
-}
-
-int
-ftpcmd(int ctl, char *fmt, ...)
-{
-    va_list arg;
-    char buf[2*1024], *s;
-
-    va_start(arg, fmt);
-    s = vseprint(buf, buf + (sizeof(buf)-4) / sizeof(*buf), fmt, arg);
-    va_end(arg);
-    if(debug)
-        fprint(STDERR, "%d -> %s\n", ctl, buf);
-    *s++ = '\r';
-    *s++ = '\n';
-    if(write(ctl, buf, s - buf) != s - buf)
-        return -1;
-    return 0;
-}
-
-int
-ftprcode(int ctl, char *msg, int len)
-{
-    int rv;
-    int i;
-    char *p;
-
-    len--;  /* room for terminating null */
-    for(;;){
-        *msg = 0;
-        i = readline(ctl, msg, len);
-        if(i < 0)
-            break;
-        if(debug)
-            fprint(STDERR, "%d <- %s\n", ctl, msg);
-
-        /* stop if not a continuation */
-        rv = strtol(msg, &p, 10);
-        if(rv >= 100 && rv < 600 && p==msg+3 && *p == ' ')
-            return rv/100;
-    }
-    *msg = 0;
-
-    return -1;
-}
-
-int
-hello(int ctl)
-{
-    char msg[1024];
-
-    /* wait for hello from other side */
-    if(ftprcode(ctl, msg, sizeof(msg)) != Success){
-        werrstr("HELLO: %s", msg);
-        return Server;
-    }
-    return 0;
-}
-
-int
-getdec(char *p, int n)
-{
-    int x = 0;
-    int i;
-
-    for(i = 0; i < n; i++)
-        x = x*10 + (*p++ - '0');
-    return x;
-}
-
-int
-ftprestart(int ctl, Out *out, URL *u, Range *r, long mtime)
-{
-    Tm tm;
-    char msg[1024];
-    long x, rmtime;
-
-    ftpcmd(ctl, "MDTM %s", u->page);
-    if(ftprcode(ctl, msg, sizeof(msg)) != Success){
-        r->start = 0;
-        return 0;       /* need to do something */
-    }
-
-    /* decode modification time */
-    if(strlen(msg) < 4 + 4 + 2 + 2 + 2 + 2 + 2){
-        r->start = 0;
-        return 0;       /* need to do something */
-    }
-    memset(&tm, 0, sizeof(tm));
-    tm.year = getdec(msg+4, 4) - 1900;
-    tm.mon = getdec(msg+4+4, 2) - 1;
-    tm.mday = getdec(msg+4+4+2, 2);
-    tm.hour = getdec(msg+4+4+2+2, 2);
-    tm.min = getdec(msg+4+4+2+2+2, 2);
-    tm.sec = getdec(msg+4+4+2+2+2+2, 2);
-    strcpy(tm.zone, "GMT");
-    rmtime = tm2sec(&tm);
-    if(rmtime > mtime)
-        r->start = 0;
-
-    /* get size */
-    ftpcmd(ctl, "SIZE %s", u->page);
-    if(ftprcode(ctl, msg, sizeof(msg)) == Success){
-        x = atol(msg+4);
-        if(r->start == x)
-            return 1;   /* we're up to date */
-        r->end = x;
-    }
-
-    /* seek to restart point */
-    if(r->start > 0){
-        ftpcmd(ctl, "REST %lud", r->start);
-        if(ftprcode(ctl, msg, sizeof(msg)) == Incomplete){
-            setoffset(out, r->start);
-        }else
-            r->start = 0;
-    }
-
-    return 0;   /* need to do something */
-}
-
-int
-logon(int ctl)
-{
-    char msg[1024];
-
-    /* login anonymous */
-    ftpcmd(ctl, "USER anonymous");
-    switch(ftprcode(ctl, msg, sizeof(msg))){
-    case Success:
-        return 0;
-    case Incomplete:
-        break;  /* need password */
-    default:
-        werrstr("USER: %s", msg);
-        return Server;
-    }
-
-    /* send user id as password */
-    sprint(msg, "%s@closedmind.org", getuser());
-    ftpcmd(ctl, "PASS %s", msg);
-    if(ftprcode(ctl, msg, sizeof(msg)) != Success){
-        werrstr("PASS: %s", msg);
-        return Server;
-    }
-
-    return 0;
-}
 
 int
 xfertype(int ctl, char *t)
@@ -14439,218 +14537,16 @@ extern char obuf[UTFmax*N]; /* maximum bloat from N runes */
 
 \subsection*{[[tcs/html.c]]}
 
-<<function [[hnamecmp]](tcs)>>=
-static int
-hnamecmp(const void *va, const void *vb)
-{
-    Hchar *a, *b;
-    
-    a = (Hchar*)va;
-    b = (Hchar*)vb;
-    return strcmp(a->s, b->s);
-}
-@
 
-<<function [[hrunecmp]](tcs)>>=
-static int
-hrunecmp(const void *va, const void *vb)
-{
-    Hchar *a, *b;
-    
-    a = (Hchar*)va;
-    b = (Hchar*)vb;
-    return a->r - b->r;
-}
-@
-
-<<function [[html_init]](tcs)>>=
-static void
-html_init(void)
-{
-    static int init;
-    int i;
-    
-    if(init)
-        return;
-    init = 1;
-    memmove(byrune, byname, sizeof byrune);
-    
-    /* Eliminate names we aren't allowed to generate. */
-    for(i=0; i<nelem(byrune); i++){
-        if(byrune[i].s[0] == '_'){
-            byrune[i].r = Runeerror;
-            byname[i].s++;
-        }
-    }
-    
-    qsort(byname, nelem(byname), sizeof byname[0], hnamecmp);
-    qsort(byrune, nelem(byrune), sizeof byrune[0], hrunecmp);
-}
-@
-
-<<function [[findbyname]](tcs)>>=
-static Rune
-findbyname(char *s)
-{
-    Hchar *h;
-    int n, m, x;
-    
-    h = byname;
-    n = nelem(byname);
-    while(n > 0){
-        m = n/2;
-        x = strcmp(h[m].s, s);
-        if(x == 0)
-            return h[m].r;
-        if(x < 0){
-            h += m+1;
-            n -= m+1;
-        }else
-            n = m;
-    }
-    return Runeerror;
-}
-@
-
-<<function [[findbyrune]](tcs)>>=
-static char*
-findbyrune(Rune r)
-{
-    Hchar *h;
-    int n, m;
-
-    if(r == Runeerror)
-        return nil;
-    h = byrune;
-    n = nelem(byrune);
-    while(n > 0){
-        m = n/2;
-        if(h[m].r == r)
-            return h[m].s;
-        if(h[m].r < r){
-            h += m+1;
-            n -= m+1;
-        }else
-            n = m;
-    }
-    return nil;
-}
-@
-
-<<function [[html_in]](tcs)>>=
-void
-html_in(int fd, long *x, struct convert *out)
-{
-    char buf[100], *p;
-    Biobuf b;
-    Rune rbuf[N];
-    Rune *r, *er;
-    int c, i;
-    
-    USED(x);
-    
-    html_init();
-    r = rbuf;
-    er = rbuf+N;
-    Binit(&b, fd, OREAD);
-    while((c = Bgetrune(&b)) != Beof){
-        if(r >= er){
-            OUT(out, rbuf, r-rbuf);
-            r = rbuf;
-        }
-        if(c == '&'){
-            buf[0] = c;
-            for(i=1; i<nelem(buf)-1;){
-                c = Bgetc(&b);
-                if(c == Beof)
-                    break;
-                buf[i++] = c;
-                if(strchr("; \t\r\n", c))
-                    break;
-            }
-            buf[i] = 0;
-            if(buf[i-1] == ';'){
-                buf[i-1] = 0;
-                if((c = findbyname(buf+1)) != Runeerror){
-                    *r++ = c;
-                    continue;
-                }
-                buf[i-1] = ';';
-                if(buf[1] == '#'){
-                    if(buf[2] == 'x')
-                        c = strtol(buf+3, &p, 16);
-                    else
-                        c = strtol(buf+2, &p, 10);
-                    if(*p != ';' || c >= NRUNE || c < 0)
-                        goto bad;
-                    *r++ = c;
-                    continue;
-                }
-            }
-        bad:
-            for(p=buf; p<buf+i; ){
-                p += chartorune(r++, p);
-                if(r >= er){
-                    OUT(out, rbuf, r-rbuf);
-                    r = rbuf;
-                }
-            }
-            continue;
-        }
-        *r++ = c;
-    }
-    if(r > rbuf)
-        OUT(out, rbuf, r-rbuf);
-    OUT(out, rbuf, 0);
-}
-@
-
-<<function [[html_out]](tcs)>>=
-/*
- * use biobuf because can use more than UTFmax bytes per rune
- */
-void
-html_out(Rune *r, int n, long *x)
-{
-    char *s;
-    Biobuf b;
-    Rune *er;
-    
-    USED(x);
-    html_init();
-    Binit(&b, 1, OWRITE);
-    er = r+n;
-    for(; r<er; r++){
-        if(*r < Runeself)
-            Bputrune(&b, *r);
-        else if((s = findbyrune(*r)) != nil)
-            Bprint(&b, "&%s;", s);
-        else
-            Bprint(&b, "&#%d;", *r);
-    }
-    Bflush(&b);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<tcs/html.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include "hdr.h"
-#include "conv.h"
-
-typedef struct Hchar Hchar;
+<<struct [[Hchar]](tcs)>>=
 struct Hchar
 {
     char *s;
     Rune r;
 };
+@
 
-/* &lt;, &gt;, &quot;, &amp; intentionally omitted */
-
+<<global [[byname]](tcs)>>=
 /*
  * Names beginning with _ are names we recognize
  * (without the underscore) but will not generate,
@@ -14925,6 +14821,217 @@ static Hchar byname[] =
     {"zwj", 8205},
     {"zwnj", 8204}
 };
+@
+
+<<function [[hnamecmp]](tcs)>>=
+static int
+hnamecmp(const void *va, const void *vb)
+{
+    Hchar *a, *b;
+    
+    a = (Hchar*)va;
+    b = (Hchar*)vb;
+    return strcmp(a->s, b->s);
+}
+@
+
+<<function [[hrunecmp]](tcs)>>=
+static int
+hrunecmp(const void *va, const void *vb)
+{
+    Hchar *a, *b;
+    
+    a = (Hchar*)va;
+    b = (Hchar*)vb;
+    return a->r - b->r;
+}
+@
+
+<<function [[html_init]](tcs)>>=
+static void
+html_init(void)
+{
+    static int init;
+    int i;
+    
+    if(init)
+        return;
+    init = 1;
+    memmove(byrune, byname, sizeof byrune);
+    
+    /* Eliminate names we aren't allowed to generate. */
+    for(i=0; i<nelem(byrune); i++){
+        if(byrune[i].s[0] == '_'){
+            byrune[i].r = Runeerror;
+            byname[i].s++;
+        }
+    }
+    
+    qsort(byname, nelem(byname), sizeof byname[0], hnamecmp);
+    qsort(byrune, nelem(byrune), sizeof byrune[0], hrunecmp);
+}
+@
+
+<<function [[findbyname]](tcs)>>=
+static Rune
+findbyname(char *s)
+{
+    Hchar *h;
+    int n, m, x;
+    
+    h = byname;
+    n = nelem(byname);
+    while(n > 0){
+        m = n/2;
+        x = strcmp(h[m].s, s);
+        if(x == 0)
+            return h[m].r;
+        if(x < 0){
+            h += m+1;
+            n -= m+1;
+        }else
+            n = m;
+    }
+    return Runeerror;
+}
+@
+
+<<function [[findbyrune]](tcs)>>=
+static char*
+findbyrune(Rune r)
+{
+    Hchar *h;
+    int n, m;
+
+    if(r == Runeerror)
+        return nil;
+    h = byrune;
+    n = nelem(byrune);
+    while(n > 0){
+        m = n/2;
+        if(h[m].r == r)
+            return h[m].s;
+        if(h[m].r < r){
+            h += m+1;
+            n -= m+1;
+        }else
+            n = m;
+    }
+    return nil;
+}
+@
+
+<<function [[html_in]](tcs)>>=
+void
+html_in(int fd, long *x, struct convert *out)
+{
+    char buf[100], *p;
+    Biobuf b;
+    Rune rbuf[N];
+    Rune *r, *er;
+    int c, i;
+    
+    USED(x);
+    
+    html_init();
+    r = rbuf;
+    er = rbuf+N;
+    Binit(&b, fd, OREAD);
+    while((c = Bgetrune(&b)) != Beof){
+        if(r >= er){
+            OUT(out, rbuf, r-rbuf);
+            r = rbuf;
+        }
+        if(c == '&'){
+            buf[0] = c;
+            for(i=1; i<nelem(buf)-1;){
+                c = Bgetc(&b);
+                if(c == Beof)
+                    break;
+                buf[i++] = c;
+                if(strchr("; \t\r\n", c))
+                    break;
+            }
+            buf[i] = 0;
+            if(buf[i-1] == ';'){
+                buf[i-1] = 0;
+                if((c = findbyname(buf+1)) != Runeerror){
+                    *r++ = c;
+                    continue;
+                }
+                buf[i-1] = ';';
+                if(buf[1] == '#'){
+                    if(buf[2] == 'x')
+                        c = strtol(buf+3, &p, 16);
+                    else
+                        c = strtol(buf+2, &p, 10);
+                    if(*p != ';' || c >= NRUNE || c < 0)
+                        goto bad;
+                    *r++ = c;
+                    continue;
+                }
+            }
+        bad:
+            for(p=buf; p<buf+i; ){
+                p += chartorune(r++, p);
+                if(r >= er){
+                    OUT(out, rbuf, r-rbuf);
+                    r = rbuf;
+                }
+            }
+            continue;
+        }
+        *r++ = c;
+    }
+    if(r > rbuf)
+        OUT(out, rbuf, r-rbuf);
+    OUT(out, rbuf, 0);
+}
+@
+
+<<function [[html_out]](tcs)>>=
+/*
+ * use biobuf because can use more than UTFmax bytes per rune
+ */
+void
+html_out(Rune *r, int n, long *x)
+{
+    char *s;
+    Biobuf b;
+    Rune *er;
+    
+    USED(x);
+    html_init();
+    Binit(&b, 1, OWRITE);
+    er = r+n;
+    for(; r<er; r++){
+        if(*r < Runeself)
+            Bputrune(&b, *r);
+        else if((s = findbyrune(*r)) != nil)
+            Bprint(&b, "&%s;", s);
+        else
+            Bprint(&b, "&#%d;", *r);
+    }
+    Bflush(&b);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<tcs/html.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include "hdr.h"
+#include "conv.h"
+
+typedef struct Hchar Hchar;
+<<struct [[Hchar]](tcs)>>
+
+/* &lt;, &gt;, &quot;, &amp; intentionally omitted */
+
+<<global [[byname]](tcs)>>
 
 static Hchar byrune[nelem(byname)];
 
@@ -14961,6 +15068,14 @@ static Hchar byrune[nelem(byname)];
 
 <<constant [[ARGBEGIN]](tcs)>>=
 #define ARGBEGIN    for((argv0? 0: (argv0= *argv)),argv++,argc--;\
+                argv[0] && argv[0][0]=='-' && argv[0][1];\
+                argc--, argv++) {\
+                char *_args, *_argt, _argc;\
+                _args = &argv[0][1];\
+                if(_args[0]=='-' && _args[1]==0){\
+                    argc--; argv++; break;\
+                }\
+                _argc=0;while(*_args) switch(_argc= *_args++)
 @
 
 <<constant [[ARGEND]](tcs)>>=
@@ -14969,6 +15084,7 @@ static Hchar byrune[nelem(byname)];
 
 <<macro [[ARGF]](tcs)>>=
 #define ARGF()      (_argt=_args, _args="",\
+                (*_argt? _argt: argv[1]? (argc--, *++argv): 0))
 @
 
 <<macro [[ARGC]](tcs)>>=
@@ -14989,17 +15105,8 @@ typedef unsigned char uchar;
     plan 9 argument parsing
 */
 <<constant [[ARGBEGIN]](tcs)>>
-                argv[0] && argv[0][0]=='-' && argv[0][1];\
-                argc--, argv++) {\
-                char *_args, *_argt, _argc;\
-                _args = &argv[0][1];\
-                if(_args[0]=='-' && _args[1]==0){\
-                    argc--; argv++; break;\
-                }\
-                _argc=0;while(*_args) switch(_argc= *_args++)
 <<constant [[ARGEND]](tcs)>>
 <<macro [[ARGF]](tcs)>>
-                (*_argt? _argt: argv[1]? (argc--, *++argv): 0))
 <<macro [[ARGC]](tcs)>>
 extern char *argv0;
 @
@@ -15543,51 +15650,7 @@ enum
 
 \subsection*{[[tcs/tcs.c]]}
 
-%-------------------------------------------------------------
-
-<<tcs/tcs.c>>=
-#ifndef PLAN9
-#include    <sys/types.h>
-#include    <stdio.h>
-#include    <unistd.h>
-#include    <stdlib.h>
-#include    <fcntl.h>
-#include    <string.h>
-#include    <errno.h>
-#include    "plan9.h"
-#else /* PLAN9 */
-#include    <u.h>
-#include    <libc.h>
-#include    <bio.h>
-#endif /* PLAN9 */
-#include    "cyrillic.h"
-#include    "misc.h"
-#include    "ms.h"
-#include    "8859.h"
-#include    "big5.h"
-#include    "gb.h"
-#include    "hdr.h"
-#include    "conv.h"
-
-void usage(void);
-void list(void);
-int squawk = 1;
-int clean = 0;
-int verbose = 0;
-long ninput, noutput, nrunes, nerrors;
-char *file = "stdin";
-char *argv0;
-Rune runes[N];
-char obuf[UTFmax*N];    /* maximum bloat from N runes */
-long tab[NRUNE];
-#ifndef PLAN9
-extern char version[];
-#endif
-
-void intable(int, long *, struct convert *);
-void unicode_in(int, long *, struct convert *);
-void unicode_out(Rune *, int, long *);
-
+<<function [[main]](tcs)>>=
 int
 main(int argc, char **argv)
 {
@@ -15662,7 +15725,9 @@ main(int argc, char **argv)
     EXIT(((nerrors && squawk)? 1:0), ((nerrors && squawk)? "conversion error":0));
     return(0);  /* shut up compiler */
 }
+@
 
+<<function [[usage]](tcs)>>=
 void
 usage(void)
 {
@@ -15671,7 +15736,9 @@ usage(void)
     list();
     EXIT(1, "usage");
 }
+@
 
+<<function [[list]](tcs)>>=
 void
 list(void)
 {
@@ -15701,8 +15768,9 @@ list(void)
     if(!verbose)
         EPR "\n");
 }
+@
 
-
+<<function [[conv]](tcs)>>=
 struct convert *
 conv(char *name, int from)
 {
@@ -15720,19 +15788,9 @@ conv(char *name, int from)
     EXIT(1, "unknown character set");
     return(0);  /* just shut the compiler up */
 }
+@
 
-void
-swab2(char *b, int n)
-{
-    char *e, p;
-
-    for(e = b+n; b < e; b++){
-        p = *b;
-        *b = b[1];
-        *++b = p;
-    }
-}
-
+<<function [[unicode_in]](tcs)>>=
 void
 unicode_in(int fd, long *notused, struct convert *out)
 {
@@ -15772,7 +15830,9 @@ unicode_in(int fd, long *notused, struct convert *out)
     }
     OUT(out, buf, 0);
 }
+@
 
+<<function [[unicode_in_be]](tcs)>>=
 void
 unicode_in_be(int fd, long *notused, struct convert *out)
 {
@@ -15802,7 +15862,9 @@ unicode_in_be(int fd, long *notused, struct convert *out)
     }
     OUT(out, buf, 0);
 }
+@
 
+<<function [[unicode_in_le]](tcs)>>=
 void
 unicode_in_le(int fd, long *notused, struct convert *out)
 {
@@ -15832,7 +15894,9 @@ unicode_in_le(int fd, long *notused, struct convert *out)
     }
     OUT(out, buf, 0);
 }
+@
 
+<<function [[unicode_out]](tcs)>>=
 void
 unicode_out(Rune *base, int n, long *notused)
 {
@@ -15849,7 +15913,9 @@ unicode_out(Rune *base, int n, long *notused)
     noutput += 2*n;
     write(1, (char *)base, 2*n);
 }
+@
 
+<<function [[unicode_out_be]](tcs)>>=
 void
 unicode_out_be(Rune *base, int n, long *notused)
 {
@@ -15868,7 +15934,9 @@ unicode_out_be(Rune *base, int n, long *notused)
     noutput += 2*n;
     write(1, (char *)base, 2*n);
 }
+@
 
+<<function [[unicode_out_le]](tcs)>>=
 void
 unicode_out_le(Rune *base, int n, long *notused)
 {
@@ -15887,7 +15955,9 @@ unicode_out_le(Rune *base, int n, long *notused)
     noutput += 2*n;
     write(1, (char *)base, 2*n);
 }
+@
 
+<<function [[intable]](tcs)>>=
 void
 intable(int fd, long *table, struct convert *out)
 {
@@ -15924,7 +15994,9 @@ intable(int fd, long *table, struct convert *out)
         EXIT(1, "input read error");
     }
 }
+@
 
+<<function [[outtable]](tcs)>>=
 void
 outtable(Rune *base, int n, long *map)
 {
@@ -15953,7 +16025,9 @@ outtable(Rune *base, int n, long *map)
     noutput += p-obuf;
     write(1, obuf, p-obuf);
 }
+@
 
+<<global [[tabascii]](tcs)>>=
 long tabascii[256] =
 {
 0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
@@ -15973,63 +16047,9 @@ long tabascii[256] =
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
 };
+@
 
-long tabmsdos[256] =    /* from jhelling@cs.ruu.nl (Jeroen Hellingman) */
-{
-0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
-0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,
-0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
-0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,
-0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,
-0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x5b,0x5c,0x5d,0x5e,0x5f,
-0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,
-0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f,
-0x00c7, 0x00fc, 0x00e9, 0x00e2, 0x00e4, 0x00e0, 0x00e5, 0x00e7, /* latin */
-0x00ea, 0x00eb, 0x00e8, 0x00ef, 0x00ee, 0x00ec, 0x00c4, 0x00c5,
-0x00c9, 0x00e6, 0x00c6, 0x00f4, 0x00f6, 0x00f2, 0x00fb, 0x00f9,
-0x00ff, 0x00d6, 0x00dc, 0x00a2, 0x00a3, 0x00a5, 0x20a7, 0x0192,
-0x00e1, 0x00ed, 0x00f3, 0x00fa, 0x00f1, 0x00d1, 0x00aa, 0x00ba,
-0x00bf, 0x2310, 0x00ac, 0x00bd, 0x00bc, 0x00a1, 0x00ab, 0x00bb,
-0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556, /* forms */
-0x2555, 0x2563, 0x2551, 0x2557, 0x255d, 0x255c, 0x255b, 0x2510,
-0x2514, 0x2534, 0x252c, 0x251c, 0x2500, 0x253c, 0x255e, 0x255f,
-0x255a, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256c, 0x2567,
-0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256b, 
-0x256a, 0x2518, 0x250c, 0x2588, 0x2584, 0x258c, 0x2590, 0x2580,
-0x03b1, 0x00df, 0x0393, 0x03c0, 0x03a3, 0x03c3, 0x00b5, 0x03c4, /* greek */
-0x03a6, 0x0398, 0x2126, 0x03b4, 0x221e, 0x2205, 0x2208, 0x2229,
-0x2261, 0x00b1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00f7, 0x2248, /* math */
-0x00b0, 0x2022, 0x00b7, 0x221a, 0x207f, 0x00b2, 0x220e, 0x00a0,
-};
-long tabmsdos2[256] =   /* from jhelling@cs.ruu.nl (Jeroen Hellingman) */
-{
-0x0000, 0x263a, 0x263b, 0x2665, 0x2666, 0x2663, 0x2660, 0x2022,
-0x25d8, 0x25cb, 0x25d9, 0x2642, 0x2640, 0x266a, 0x266b, 0x263c,
-0x25b6, 0x25c0, 0x2195, 0x203c, 0x00b6, 0x00a7, 0x2043, 0x21a8,
-0x2191, 0x2193, 0x2192, 0x2190, 0x2319, 0x2194, 0x25b2, 0x25bc,
-0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
-0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,
-0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,
-0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x5b,0x5c,0x5d,0x5e,0x5f,
-0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,
-0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f,
-0x00c7, 0x00fc, 0x00e9, 0x00e2, 0x00e4, 0x00e0, 0x00e5, 0x00e7, /* latin */
-0x00ea, 0x00eb, 0x00e8, 0x00ef, 0x00ee, 0x00ec, 0x00c4, 0x00c5,
-0x00c9, 0x00e6, 0x00c6, 0x00f4, 0x00f6, 0x00f2, 0x00fb, 0x00f9,
-0x00ff, 0x00d6, 0x00dc, 0x00a2, 0x00a3, 0x00a5, 0x20a7, 0x0192,
-0x00e1, 0x00ed, 0x00f3, 0x00fa, 0x00f1, 0x00d1, 0x00aa, 0x00ba,
-0x00bf, 0x2310, 0x00ac, 0x00bd, 0x00bc, 0x00a1, 0x00ab, 0x00bb,
-0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556, /* forms */
-0x2555, 0x2563, 0x2551, 0x2557, 0x255d, 0x255c, 0x255b, 0x2510,
-0x2514, 0x2534, 0x252c, 0x251c, 0x2500, 0x253c, 0x255e, 0x255f,
-0x255a, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256c, 0x2567,
-0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256b, 
-0x256a, 0x2518, 0x250c, 0x2588, 0x2584, 0x258c, 0x2590, 0x2580,
-0x03b1, 0x00df, 0x0393, 0x03c0, 0x03a3, 0x03c3, 0x00b5, 0x03c4, /* greek */
-0x03a6, 0x0398, 0x2126, 0x03b4, 0x221e, 0x2205, 0x2208, 0x2229,
-0x2261, 0x00b1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00f7, 0x2248, /* math */
-0x00b0, 0x2022, 0x00b7, 0x221a, 0x207f, 0x00b2, 0x220e, 0x00a0,
-};
+<<global [[convert]](tcs)>>=
 struct convert convert[] =
 {   /* if two entries have the same name, put the from one first */
     { "8859-1", "Latin-1 (Western and Northern Europe including Italian)", Table, (void *)tab8859_1 },
@@ -16142,5 +16162,145 @@ struct convert convert[] =
     { "windows-1258", "Windows Code Page 1258 (Vietnam)", Table, (void *)tabcp1258 },
     { 0 },
 };
+@
+
+%-------------------------------------------------------------
+
+<<tcs/tcs.c>>=
+#ifndef PLAN9
+#include    <sys/types.h>
+#include    <stdio.h>
+#include    <unistd.h>
+#include    <stdlib.h>
+#include    <fcntl.h>
+#include    <string.h>
+#include    <errno.h>
+#include    "plan9.h"
+#else /* PLAN9 */
+#include    <u.h>
+#include    <libc.h>
+#include    <bio.h>
+#endif /* PLAN9 */
+#include    "cyrillic.h"
+#include    "misc.h"
+#include    "ms.h"
+#include    "8859.h"
+#include    "big5.h"
+#include    "gb.h"
+#include    "hdr.h"
+#include    "conv.h"
+
+void usage(void);
+void list(void);
+int squawk = 1;
+int clean = 0;
+int verbose = 0;
+long ninput, noutput, nrunes, nerrors;
+char *file = "stdin";
+char *argv0;
+Rune runes[N];
+char obuf[UTFmax*N];    /* maximum bloat from N runes */
+long tab[NRUNE];
+#ifndef PLAN9
+extern char version[];
+#endif
+
+void intable(int, long *, struct convert *);
+void unicode_in(int, long *, struct convert *);
+void unicode_out(Rune *, int, long *);
+
+<<function [[main]](tcs)>>
+<<function [[usage]](tcs)>>
+
+<<function [[list]](tcs)>>
+<<function [[conv]](tcs)>>
+
+
+void
+swab2(char *b, int n)
+{
+    char *e, p;
+
+    for(e = b+n; b < e; b++){
+        p = *b;
+        *b = b[1];
+        *++b = p;
+    }
+}
+
+<<function [[unicode_in]](tcs)>>
+
+<<function [[unicode_in_be]](tcs)>>
+<<function [[unicode_in_le]](tcs)>>
+
+<<function [[unicode_out]](tcs)>>
+
+<<function [[unicode_out_be]](tcs)>>
+<<function [[unicode_out_le]](tcs)>>
+
+<<function [[intable]](tcs)>>
+<<function [[outtable]](tcs)>>
+
+
+<<global [[tabascii]](tcs)>>
+
+long tabmsdos[256] =    /* from jhelling@cs.ruu.nl (Jeroen Hellingman) */
+{
+0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
+0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,
+0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
+0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,
+0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,
+0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x5b,0x5c,0x5d,0x5e,0x5f,
+0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,
+0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f,
+0x00c7, 0x00fc, 0x00e9, 0x00e2, 0x00e4, 0x00e0, 0x00e5, 0x00e7, /* latin */
+0x00ea, 0x00eb, 0x00e8, 0x00ef, 0x00ee, 0x00ec, 0x00c4, 0x00c5,
+0x00c9, 0x00e6, 0x00c6, 0x00f4, 0x00f6, 0x00f2, 0x00fb, 0x00f9,
+0x00ff, 0x00d6, 0x00dc, 0x00a2, 0x00a3, 0x00a5, 0x20a7, 0x0192,
+0x00e1, 0x00ed, 0x00f3, 0x00fa, 0x00f1, 0x00d1, 0x00aa, 0x00ba,
+0x00bf, 0x2310, 0x00ac, 0x00bd, 0x00bc, 0x00a1, 0x00ab, 0x00bb,
+0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556, /* forms */
+0x2555, 0x2563, 0x2551, 0x2557, 0x255d, 0x255c, 0x255b, 0x2510,
+0x2514, 0x2534, 0x252c, 0x251c, 0x2500, 0x253c, 0x255e, 0x255f,
+0x255a, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256c, 0x2567,
+0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256b, 
+0x256a, 0x2518, 0x250c, 0x2588, 0x2584, 0x258c, 0x2590, 0x2580,
+0x03b1, 0x00df, 0x0393, 0x03c0, 0x03a3, 0x03c3, 0x00b5, 0x03c4, /* greek */
+0x03a6, 0x0398, 0x2126, 0x03b4, 0x221e, 0x2205, 0x2208, 0x2229,
+0x2261, 0x00b1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00f7, 0x2248, /* math */
+0x00b0, 0x2022, 0x00b7, 0x221a, 0x207f, 0x00b2, 0x220e, 0x00a0,
+};
+long tabmsdos2[256] =   /* from jhelling@cs.ruu.nl (Jeroen Hellingman) */
+{
+0x0000, 0x263a, 0x263b, 0x2665, 0x2666, 0x2663, 0x2660, 0x2022,
+0x25d8, 0x25cb, 0x25d9, 0x2642, 0x2640, 0x266a, 0x266b, 0x263c,
+0x25b6, 0x25c0, 0x2195, 0x203c, 0x00b6, 0x00a7, 0x2043, 0x21a8,
+0x2191, 0x2193, 0x2192, 0x2190, 0x2319, 0x2194, 0x25b2, 0x25bc,
+0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
+0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,
+0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,
+0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x5b,0x5c,0x5d,0x5e,0x5f,
+0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,
+0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f,
+0x00c7, 0x00fc, 0x00e9, 0x00e2, 0x00e4, 0x00e0, 0x00e5, 0x00e7, /* latin */
+0x00ea, 0x00eb, 0x00e8, 0x00ef, 0x00ee, 0x00ec, 0x00c4, 0x00c5,
+0x00c9, 0x00e6, 0x00c6, 0x00f4, 0x00f6, 0x00f2, 0x00fb, 0x00f9,
+0x00ff, 0x00d6, 0x00dc, 0x00a2, 0x00a3, 0x00a5, 0x20a7, 0x0192,
+0x00e1, 0x00ed, 0x00f3, 0x00fa, 0x00f1, 0x00d1, 0x00aa, 0x00ba,
+0x00bf, 0x2310, 0x00ac, 0x00bd, 0x00bc, 0x00a1, 0x00ab, 0x00bb,
+0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556, /* forms */
+0x2555, 0x2563, 0x2551, 0x2557, 0x255d, 0x255c, 0x255b, 0x2510,
+0x2514, 0x2534, 0x252c, 0x251c, 0x2500, 0x253c, 0x255e, 0x255f,
+0x255a, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256c, 0x2567,
+0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256b, 
+0x256a, 0x2518, 0x250c, 0x2588, 0x2584, 0x258c, 0x2590, 0x2580,
+0x03b1, 0x00df, 0x0393, 0x03c0, 0x03a3, 0x03c3, 0x00b5, 0x03c4, /* greek */
+0x03a6, 0x0398, 0x2126, 0x03b4, 0x221e, 0x2205, 0x2208, 0x2229,
+0x2261, 0x00b1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00f7, 0x2248, /* math */
+0x00b0, 0x2022, 0x00b7, 0x221a, 0x207f, 0x00b2, 0x220e, 0x00a0,
+};
+
+<<global [[convert]](tcs)>>
 
 @

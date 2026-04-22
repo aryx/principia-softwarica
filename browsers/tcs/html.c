@@ -6,14 +6,17 @@
 #include "conv.h"
 
 typedef struct Hchar Hchar;
+/*s: struct [[Hchar]](tcs) */
 struct Hchar
 {
     char *s;
     Rune r;
 };
+/*e: struct [[Hchar]](tcs) */
 
 /* &lt;, &gt;, &quot;, &amp; intentionally omitted */
 
+/*s: global [[byname]](tcs) */
 /*
  * Names beginning with _ are names we recognize
  * (without the underscore) but will not generate,
@@ -288,6 +291,7 @@ static Hchar byname[] =
     {"zwj", 8205},
     {"zwnj", 8204}
 };
+/*e: global [[byname]](tcs) */
 
 static Hchar byrune[nelem(byname)];
 

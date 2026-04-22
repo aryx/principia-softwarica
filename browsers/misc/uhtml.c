@@ -75,8 +75,6 @@ main(int argc, char *argv[])
     default:
         usage();
     } ARGEND;
-/*e: function [[main]](uhtml) */
-
     if(*argv){
         close(0);
         if(open(*argv, OREAD) != 0)
@@ -201,4 +199,6 @@ Found:
     waitpid();
     exits(0);
 }
+/*e: function [[main]](uhtml) */
+
 /*e: misc/uhtml.c */

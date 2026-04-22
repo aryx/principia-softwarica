@@ -16,7 +16,6 @@ typedef unsigned char uchar;
 */
 /*s: constant [[ARGBEGIN]](tcs) */
 #define ARGBEGIN    for((argv0? 0: (argv0= *argv)),argv++,argc--;\
-/*e: constant [[ARGBEGIN]](tcs) */
                 argv[0] && argv[0][0]=='-' && argv[0][1];\
                 argc--, argv++) {\
                 char *_args, *_argt, _argc;\
@@ -25,13 +24,14 @@ typedef unsigned char uchar;
                     argc--; argv++; break;\
                 }\
                 _argc=0;while(*_args) switch(_argc= *_args++)
+/*e: constant [[ARGBEGIN]](tcs) */
 /*s: constant [[ARGEND]](tcs) */
 #define ARGEND      }
 /*e: constant [[ARGEND]](tcs) */
 /*s: macro [[ARGF]](tcs) */
 #define ARGF()      (_argt=_args, _args="",\
-/*e: macro [[ARGF]](tcs) */
                 (*_argt? _argt: argv[1]? (argc--, *++argv): 0))
+/*e: macro [[ARGF]](tcs) */
 /*s: macro [[ARGC]](tcs) */
 #define ARGC()      _argc
 /*e: macro [[ARGC]](tcs) */

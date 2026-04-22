@@ -41,6 +41,7 @@ void intable(int, long *, struct convert *);
 void unicode_in(int, long *, struct convert *);
 void unicode_out(Rune *, int, long *);
 
+/*s: function [[main]](tcs) */
 int
 main(int argc, char **argv)
 {
@@ -115,7 +116,8 @@ main(int argc, char **argv)
     EXIT(((nerrors && squawk)? 1:0), ((nerrors && squawk)? "conversion error":0));
     return(0);  /* shut up compiler */
 }
-
+/*e: function [[main]](tcs) */
+/*s: function [[usage]](tcs) */
 void
 usage(void)
 {
@@ -124,7 +126,9 @@ usage(void)
     list();
     EXIT(1, "usage");
 }
+/*e: function [[usage]](tcs) */
 
+/*s: function [[list]](tcs) */
 void
 list(void)
 {
@@ -154,8 +158,8 @@ list(void)
     if(!verbose)
         EPR "\n");
 }
-
-
+/*e: function [[list]](tcs) */
+/*s: function [[conv]](tcs) */
 struct convert *
 conv(char *name, int from)
 {
@@ -173,6 +177,8 @@ conv(char *name, int from)
     EXIT(1, "unknown character set");
     return(0);  /* just shut the compiler up */
 }
+/*e: function [[conv]](tcs) */
+
 
 void
 swab2(char *b, int n)
@@ -186,6 +192,7 @@ swab2(char *b, int n)
     }
 }
 
+/*s: function [[unicode_in]](tcs) */
 void
 unicode_in(int fd, long *notused, struct convert *out)
 {
@@ -225,7 +232,9 @@ unicode_in(int fd, long *notused, struct convert *out)
     }
     OUT(out, buf, 0);
 }
+/*e: function [[unicode_in]](tcs) */
 
+/*s: function [[unicode_in_be]](tcs) */
 void
 unicode_in_be(int fd, long *notused, struct convert *out)
 {
@@ -255,7 +264,8 @@ unicode_in_be(int fd, long *notused, struct convert *out)
     }
     OUT(out, buf, 0);
 }
-
+/*e: function [[unicode_in_be]](tcs) */
+/*s: function [[unicode_in_le]](tcs) */
 void
 unicode_in_le(int fd, long *notused, struct convert *out)
 {
@@ -285,7 +295,9 @@ unicode_in_le(int fd, long *notused, struct convert *out)
     }
     OUT(out, buf, 0);
 }
+/*e: function [[unicode_in_le]](tcs) */
 
+/*s: function [[unicode_out]](tcs) */
 void
 unicode_out(Rune *base, int n, long *notused)
 {
@@ -302,7 +314,9 @@ unicode_out(Rune *base, int n, long *notused)
     noutput += 2*n;
     write(1, (char *)base, 2*n);
 }
+/*e: function [[unicode_out]](tcs) */
 
+/*s: function [[unicode_out_be]](tcs) */
 void
 unicode_out_be(Rune *base, int n, long *notused)
 {
@@ -321,7 +335,8 @@ unicode_out_be(Rune *base, int n, long *notused)
     noutput += 2*n;
     write(1, (char *)base, 2*n);
 }
-
+/*e: function [[unicode_out_be]](tcs) */
+/*s: function [[unicode_out_le]](tcs) */
 void
 unicode_out_le(Rune *base, int n, long *notused)
 {
@@ -340,7 +355,9 @@ unicode_out_le(Rune *base, int n, long *notused)
     noutput += 2*n;
     write(1, (char *)base, 2*n);
 }
+/*e: function [[unicode_out_le]](tcs) */
 
+/*s: function [[intable]](tcs) */
 void
 intable(int fd, long *table, struct convert *out)
 {
@@ -377,7 +394,8 @@ intable(int fd, long *table, struct convert *out)
         EXIT(1, "input read error");
     }
 }
-
+/*e: function [[intable]](tcs) */
+/*s: function [[outtable]](tcs) */
 void
 outtable(Rune *base, int n, long *map)
 {
@@ -406,7 +424,10 @@ outtable(Rune *base, int n, long *map)
     noutput += p-obuf;
     write(1, obuf, p-obuf);
 }
+/*e: function [[outtable]](tcs) */
 
+
+/*s: global [[tabascii]](tcs) */
 long tabascii[256] =
 {
 0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
@@ -426,6 +447,7 @@ long tabascii[256] =
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
 };
+/*e: global [[tabascii]](tcs) */
 
 long tabmsdos[256] =    /* from jhelling@cs.ruu.nl (Jeroen Hellingman) */
 {
@@ -483,6 +505,8 @@ long tabmsdos2[256] =   /* from jhelling@cs.ruu.nl (Jeroen Hellingman) */
 0x2261, 0x00b1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00f7, 0x2248, /* math */
 0x00b0, 0x2022, 0x00b7, 0x221a, 0x207f, 0x00b2, 0x220e, 0x00a0,
 };
+
+/*s: global [[convert]](tcs) */
 struct convert convert[] =
 {   /* if two entries have the same name, put the from one first */
     { "8859-1", "Latin-1 (Western and Northern Europe including Italian)", Table, (void *)tab8859_1 },
@@ -595,5 +619,6 @@ struct convert convert[] =
     { "windows-1258", "Windows Code Page 1258 (Vietnam)", Table, (void *)tabcp1258 },
     { 0 },
 };
+/*e: global [[convert]](tcs) */
 
 /*e: tcs/tcs.c */

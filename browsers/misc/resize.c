@@ -158,7 +158,6 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND
-/*e: function [[main]](resize) */
     fd = 0;
     if(*argv){
         fd = open(*argv, OREAD);
@@ -233,4 +232,5 @@ main(int argc, char **argv)
         sysfatal("writememimage: %r");
     exits(0);
 }
+/*e: function [[main]](resize) */
 /*e: misc/resize.c */

@@ -53,8 +53,6 @@ main(int argc, char **argv)
         post = EARGF(usage());
         break;
     }ARGEND;
-/*e: function [[main]](webfsget) */
-
     if (argc != 1) 
         usage();
 
@@ -93,4 +91,5 @@ main(int argc, char **argv)
     xfer(fd, STDOUT);
     exits(nil);
 }
+/*e: function [[main]](webfsget) */
 /*e: misc/webfsget.c */

@@ -18,6 +18,7 @@ int debug = 0;
 typedef struct Cookie Cookie;
 typedef struct Jar Jar;
 
+/*s: struct [[Cookie]](webcookies.c) */
 struct Cookie
 {
     /* external info */
@@ -39,7 +40,9 @@ struct Cookie
     int mark;
     int ondisk;
 };
+/*e: struct [[Cookie]](webcookies.c) */
 
+/*s: struct [[Jar]](webcookies.c) */
 struct Jar
 {
     Cookie      *c;
@@ -51,7 +54,9 @@ struct Jar
     char        *file;
     char        *lockfile;
 };
+/*e: struct [[Jar]](webcookies.c) */
 
+/*s: global [[stab]](webcookies.c) */
 struct {
     char        *s;
     int offset;
@@ -64,7 +69,9 @@ struct {
     "comment",          offsetof(Cookie, comment),      1,
     "version",          offsetof(Cookie, version),      1,
 };
+/*e: global [[stab]](webcookies.c) */
 
+/*s: global [[itab]](webcookies.c) */
 struct {
     char *s;
     int offset;
@@ -75,6 +82,7 @@ struct {
     "explicitpath",             offsetof(Cookie, explicitpath),
     "netscapestyle",    offsetof(Cookie, netscapestyle),
 };
+/*e: global [[itab]](webcookies.c) */
 
 #pragma varargck type "J"       Jar*
 #pragma varargck type "K"       Cookie*
@@ -1258,6 +1266,7 @@ fsend(Srv*)
 }
 /*e: function [[fsend]](webcookies) */
 
+/*s: global [[fs]](webcookies.c) */
 Srv fs = 
 {
 .open=          fsopen,
@@ -1266,6 +1275,7 @@ Srv fs =
 .destroyfid=    fsdestroyfid,
 .end=           fsend,
 };
+/*e: global [[fs]](webcookies.c) */
 
 /*s: function [[usage]](webcookies) */
 void
@@ -1304,7 +1314,6 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND
-/*e: function [[main]](webcookies) */
 
     if(argc != 0)
         usage();
@@ -1335,4 +1344,5 @@ main(int argc, char **argv)
     postmountsrv(&fs, srv, mtpt, MREPL);
     exits(nil);
 }
+/*e: function [[main]](webcookies) */
 /*e: misc/webcookies.c */
