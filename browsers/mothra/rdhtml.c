@@ -4,6 +4,7 @@
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
+
 #include "mothra.h"
 #include "html.h"
 #include "rtext.h"

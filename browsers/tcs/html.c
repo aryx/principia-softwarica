@@ -306,7 +306,6 @@ hnamecmp(const void *va, const void *vb)
     return strcmp(a->s, b->s);
 }
 /*e: function [[hnamecmp]](tcs) */
-
 /*s: function [[hrunecmp]](tcs) */
 static int
 hrunecmp(const void *va, const void *vb)
@@ -367,7 +366,6 @@ findbyname(char *s)
     return Runeerror;
 }
 /*e: function [[findbyname]](tcs) */
-
 /*s: function [[findbyrune]](tcs) */
 static char*
 findbyrune(Rune r)
@@ -460,7 +458,6 @@ html_in(int fd, long *x, struct convert *out)
     OUT(out, rbuf, 0);
 }
 /*e: function [[html_in]](tcs) */
-
 /*s: function [[html_out]](tcs) */
 /*
  * use biobuf because can use more than UTFmax bytes per rune

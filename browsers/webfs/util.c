@@ -7,6 +7,7 @@
 #include <thread.h>
 #include <9p.h>
 #include <ctype.h>
+
 #include "dat.h"
 #include "fns.h"
 
@@ -21,7 +22,6 @@ erealloc(void *a, uint n)
     return a;
 }
 /*e: function [[erealloc]](webfs) */
-
 /*s: function [[emalloc]](webfs) */
 void*
 emalloc(uint n)
@@ -47,7 +47,6 @@ estrdup(char *s)
     return s;
 }
 /*e: function [[estrdup]](webfs) */
-
 /*s: function [[estredup]](webfs) */
 char*
 estredup(char *s, char *e)
@@ -61,7 +60,6 @@ estredup(char *s, char *e)
     return t;
 }
 /*e: function [[estredup]](webfs) */
-
 /*s: function [[estrmanydup]](webfs) */
 char*
 estrmanydup(char *s, ...)

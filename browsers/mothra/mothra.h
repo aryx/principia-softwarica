@@ -125,5 +125,7 @@ int urlpost(Url*, char*);
 int urlget(Url*, int);
 int urlresolve(Url *);
 
+/*s: global [[mouse]](mothra) */
 Mouse mouse;
+/*e: global [[mouse]](mothra) */
 /*e: mothra/mothra.h */

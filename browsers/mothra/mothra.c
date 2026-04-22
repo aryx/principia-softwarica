@@ -124,6 +124,7 @@ void hit3(int, int);
 void mothon(Www *, int);
 void killpix(Www *w);
 
+/*s: globals [[buttons]](mothra) */
 // renamed to avoid conflict with event.h typedef buttons
 char *buttons_[]={
     "alt display",
@@ -137,6 +138,7 @@ char *buttons_[]={
     "exit",
     0
 };
+/*e: globals [[buttons]](mothra) */
 
 int wwwtop=0;
 

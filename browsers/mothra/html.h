@@ -115,13 +115,13 @@ enum{
 };
 /*e: enum [[Txx]](mothra) */
 
+/*s: constant [[STAG]](mothra) */
 /*
  * Magic characters corresponding to
  *      literal < followed by / ! or alpha,
  *      literal > and
  *      end of file
  */
-/*s: constant [[STAG]](mothra) */
 #define STAG    65536
 /*e: constant [[STAG]](mothra) */
 /*s: constant [[ETAG]](mothra) */
@@ -276,7 +276,9 @@ enum{
     ERR,                /* tag must not occur */
 };
 
+// defined in html.syntax.c
 Tag tag[];
+
 void rdform(Hglob *);
 void endform(Hglob *);
 char *pl_getattr(Pair *, char *);

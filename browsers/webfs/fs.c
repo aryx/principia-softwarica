@@ -1,4 +1,5 @@
 /*s: webfs/fs.c */
+/*s: webfs/fs.c toplevel comment */
 /*
  * Web file system.  Conventionally mounted at /mnt/web
  *
@@ -21,6 +22,7 @@
  *                      password                        password (ftp)
  *                      ftptype                 transfer mode (ftp)
  */
+/*e: webfs/fs.c toplevel comment */
 
 #include <u.h>
 #include <libc.h>
@@ -30,6 +32,7 @@
 #include <thread.h>
 #include <fcall.h>
 #include <9p.h>
+
 #include "dat.h"
 #include "fns.h"
 

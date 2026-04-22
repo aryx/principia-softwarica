@@ -1127,8 +1127,6 @@ logon(int ctl)
 /*e: function [[logon]](hget.c) */
 
 
-
-
 int
 xfertype(int ctl, char *t)
 {

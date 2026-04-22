@@ -7,6 +7,7 @@
 #include <thread.h>
 #include <9p.h>
 #include <ctype.h>
+
 #include "dat.h"
 #include "fns.h"
 
@@ -38,7 +39,6 @@ struct Cookie
     int         ondisk;
 };
 /*e: struct [[Cookie]](webfs) */
-
 /*s: struct [[Jar]](webfs) */
 struct Jar
 {
@@ -105,7 +105,6 @@ jarfmt(Fmt *fp)
     return 0;
 }
 /*e: function [[jarfmt]](webfs) */
-
 /*s: function [[cookiefmt]](webfs) */
 /* individual cookie */
 static int
@@ -217,7 +216,6 @@ freecookie(Cookie *c)
         free(*(char**)((uintptr)c+stab[i].offset));
 }
 /*e: function [[freecookie]](webfs) */
-
 /*s: function [[copycookie]](webfs) */
 static void
 copycookie(Cookie *c)
@@ -246,7 +244,6 @@ delcookie(Jar *j, Cookie *c)
     c->deleted = 1;
 }
 /*e: function [[delcookie]](webfs) */
-
 /*s: function [[addcookie]](webfs) */
 static void
 addcookie(Jar *j, Cookie *c)
@@ -300,7 +297,6 @@ purgejar(Jar *j)
     }
 }
 /*e: function [[purgejar]](webfs) */
-
 /*s: function [[addtojar]](webfs) */
 static void
 addtojar(Jar *jar, char *line, int ondisk)
@@ -345,7 +341,6 @@ addtojar(Jar *jar, char *line, int ondisk)
     addcookie(jar, &c);
 }
 /*e: function [[addtojar]](webfs) */
-
 /*s: function [[newjar]](webfs) */
 static Jar*
 newjar(void)
@@ -356,7 +351,6 @@ newjar(void)
     return jar;
 }
 /*e: function [[newjar]](webfs) */
-
 /*s: function [[expirejar]](webfs) */
 static int
 expirejar(Jar *jar, int exiting)
@@ -375,7 +369,6 @@ expirejar(Jar *jar, int exiting)
     return n;
 }
 /*e: function [[expirejar]](webfs) */
-
 /*s: function [[dumpjar]](webfs) */
 static void
 dumpjar(Jar *jar, char *desc)
@@ -405,7 +398,6 @@ dumpjar(Jar *jar, char *desc)
     print("\n");
 }
 /*e: function [[dumpjar]](webfs) */
-
 /*s: function [[syncjar]](webfs) */
 static int
 syncjar(Jar *jar)
@@ -494,7 +486,6 @@ syncjar(Jar *jar)
     return 0;
 }
 /*e: function [[syncjar]](webfs) */
-
 /*s: function [[readjar]](webfs) */
 static Jar*
 readjar(char *file)
@@ -525,7 +516,6 @@ readjar(char *file)
     return jar;
 }
 /*e: function [[readjar]](webfs) */
-
 /*s: function [[closejar]](webfs) */
 static void
 closejar(Jar *jar)
@@ -591,7 +581,6 @@ isdomainmatch(char *name, char *pattern)
     return 0;
 }
 /*e: function [[isdomainmatch]](webfs) */
-
 /*s: function [[iscookiematch]](webfs) */
 /*
  * RFC2109 4.3.4:
@@ -1083,7 +1072,9 @@ parsecookie(Cookie *c, char *p, char **e, int isns, char *dom, char *path)
 }
 /*e: function [[parsecookie]](webfs) */
 
+/*s: global [[jar]](webfs) */
 Jar *jar;
+/*e: global [[jar]](webfs) */
 
 typedef struct Aux Aux;
 /*s: struct [[Aux]](webfs) */
@@ -1130,7 +1121,6 @@ cookieopen(Req *r)
     respond(r, nil);
 }
 /*e: function [[cookieopen]](webfs) */
-
 /*s: function [[cookieread]](webfs) */
 void
 cookieread(Req *r)
@@ -1142,7 +1132,6 @@ cookieread(Req *r)
     respond(r, nil);
 }
 /*e: function [[cookieread]](webfs) */
-
 /*s: function [[cookiewrite]](webfs) */
 void
 cookiewrite(Req *r)
@@ -1165,7 +1154,6 @@ cookiewrite(Req *r)
     respond(r, nil);
 }
 /*e: function [[cookiewrite]](webfs) */
-
 /*s: function [[cookieclunk]](webfs) */
 void
 cookieclunk(Fid *fid)

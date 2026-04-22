@@ -7,12 +7,19 @@
 #include <thread.h>
 #include <fcall.h>
 #include <9p.h>
+
 #include "dat.h"
 #include "fns.h"
 
+/*s: global [[cookiefile]](webfs) */
 char *cookiefile;
+/*e: global [[cookiefile]](webfs) */
+/*s: global [[mtpt]](webfs) */
 char *mtpt = "/mnt/web";
+/*e: global [[mtpt]](webfs) */
+/*s: global [[service]](webfs) */
 char *service;
+/*e: global [[service]](webfs) */
 
 /*s: global [[globalctl]](webfs) */
 Ctl globalctl = 

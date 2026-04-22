@@ -125,7 +125,9 @@ fileget(Url *url)
 }
 /*e: function [[fileget]](mothra) */
 
+/*s: global [[mtpt]](mothra) */
 char *mtpt="/mnt/web";
+/*e: global [[mtpt]](mothra) */
 
 /*s: function [[webclone]](mothra) */
 static fdt

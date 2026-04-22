@@ -1,4 +1,5 @@
 /*s: webfs/url.c */
+/*s: webfs/url.c toplevel comment */
 /*
  * This is a URL parser, written to parse "Common Internet Scheme" URL
  * syntax as described in RFC1738 and updated by RFC2396.  Only absolute URLs 
@@ -11,6 +12,7 @@
  * defined to be composed of US-ASCII printable characters.
  * See RFC1738, RFC2396.
  */
+/*e: webfs/url.c toplevel comment */
 
 #include <u.h>
 #include <libc.h>
@@ -58,6 +60,7 @@ ischeme(char *s)
 }
 /*e: function [[ischeme]](webfs) */
 
+/*s: webfs/url.c URI splitting comment */
 /*
  * URI splitting regexp is from RFC2396, Appendix B: 
  *              ^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?
@@ -118,6 +121,7 @@ ischeme(char *s)
  * insisting they have the form "[user[:password]]".  This may need to
  * change at some point, however.
  */
+/*e: webfs/url.c URI splitting comment */
 
 /* RE character-class components -- these go in brackets */
 /*s: constant [[PUNCT]](webfs) */
@@ -927,6 +931,7 @@ postparse_file(Url *u)
 }
 /*e: function [[postparse_file]](webfs) */
 
+/*s: global [[postparse]](webfs) */
 static int (*postparse[])(Url*) = {
     nil,
     postparse_http,
@@ -934,6 +939,7 @@ static int (*postparse[])(Url*) = {
     postparse_ftp,
     postparse_file,
 };
+/*e: global [[postparse]](webfs) */
 
 /*s: function [[parseurl]](webfs) */
 Url*

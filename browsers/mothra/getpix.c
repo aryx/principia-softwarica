@@ -4,6 +4,7 @@
 #include <draw.h>
 #include <event.h>
 #include <panel.h>
+
 #include "mothra.h"
 
 typedef struct Pix Pix;

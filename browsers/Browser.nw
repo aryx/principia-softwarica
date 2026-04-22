@@ -673,28 +673,28 @@ code contained in the file is primarily discussed.
 {\bf Component}            & {\bf Ch.}                   & {\bf File}                  & {\bf Main entities}                            & {\bf LOC} \\
 \otoprule
 GUI entry point            & \ref{chap:mothra-main}      & [[mothra/mothra.c]]         & [[main()]], event loop, panels                 & 1280 \\
-HTML parser                & \ref{chap:html-parsing}     & [[mothra/rdhtml.c]]         & [[rdhtml()]], tag dispatch, [[Item]]           & 1278 \\
-MIME sniffing              & \ref{chap:content-dispatch} & [[mothra/snoop.c]]          & [[snoop()]], [[mimetotype()]]                  &  132 \\
-Forms                      & \ref{chap:forms}            & [[mothra/forms.c]]          & [[Field]], [[uencodeform]], [[mencodeform]]    &  764 \\
-Image fetcher              & \ref{chap:images}           & [[mothra/getpix.c]]         & [[getpix()]], subprocess pipeline              &  191 \\
-URL adapter                & \ref{chap:urls}             & [[mothra/url.c]]            & [[urlload]], [[urlstr]]                        &  257 \\
-HTML tag table             & \ref{chap:html-parsing}     & [[mothra/html.syntax.c]]    & tag name table                                 &   95 \\
 \midrule
+URL adapter                & \ref{chap:urls}             & [[mothra/url.c]]            & [[urlload]], [[urlstr]]                        &  257 \\
+URL algebra                & \ref{chap:urls}             & [[webfs/url.c]]             & RFC 3986                                       & 1092 \\
+CLI HTTP client            & \ref{chap:hget}             & [[misc/hget.c]]             & [[doftp]], [[dohttp]]                          & 1502 \\
 Web file server            & \ref{chap:webfs}            & [[webfs/main.c]]            & [[main()]], 9P dispatch                        &   67 \\
 9P files                   & \ref{chap:webfs}            & [[webfs/fs.c]]              & [[/mnt/web]] tree                              &  616 \\
 HTTP transport             & \ref{chap:webfs}            & [[webfs/http.c]]            & request/response, auth, redirects              &  539 \\
 Per-client thread          & \ref{chap:webfs}            & [[webfs/client.c]]          & [[Client]], [[clientbodyopen()]]               &  437 \\
 Async I/O                  & \ref{chap:webfs}            & [[webfs/io.c]]              & [[iotlsdial]], [[ioprint]]                     &   89 \\
 Cookie jar (inline)        & \ref{chap:webcookies}       & [[webfs/cookies.c]]         & [[Jar]], [[Cookie]]                            & 1173 \\
-Plumb dispatch             & \ref{chap:events}           & [[webfs/plumb.c]]           & plumb messages                                 &  165 \\
-URL algebra                & \ref{chap:urls}             & [[webfs/url.c]]             & RFC 3986                                       & 1092 \\
-\midrule
 Cookie file server         & \ref{chap:webcookies}       & [[misc/webcookies.c]]       & standalone [[Jar]] server                      & 1266 \\
-CLI HTTP client            & \ref{chap:hget}             & [[misc/hget.c]]             & [[doftp]], [[dohttp]]                          & 1502 \\
 HTML charset preprocessor  & \ref{chap:charset}          & [[misc/uhtml.c]]            & sniff meta, exec [[tcs]]                       &  194 \\
-Image scaling              & \ref{chap:images}           & [[misc/resize.c]]           & bilinear resize                                &  224 \\
-\midrule
 Charset transcoder         & \ref{chap:charset}          & [[tcs/tcs.c]]               & conversion driver                              &  596 \\
+\midrule
+HTML parser                & \ref{chap:html-parsing}     & [[mothra/rdhtml.c]]         & [[rdhtml()]], tag dispatch, [[Item]]           & 1278 \\
+HTML tag table             & \ref{chap:html-parsing}     & [[mothra/html.syntax.c]]    & tag name table                                 &   95 \\
+MIME sniffing              & \ref{chap:content-dispatch} & [[mothra/snoop.c]]          & [[snoop()]], [[mimetotype()]]                  &  132 \\
+Image fetcher              & \ref{chap:images}           & [[mothra/getpix.c]]         & [[getpix()]], subprocess pipeline              &  191 \\
+Image scaling              & \ref{chap:images}           & [[misc/resize.c]]           & bilinear resize                                &  224 \\
+Forms                      & \ref{chap:forms}            & [[mothra/forms.c]]          & [[Field]], [[uencodeform]], [[mencodeform]]    &  764 \\
+\midrule
+Plumb dispatch             & \ref{chap:events}           & [[webfs/plumb.c]]           & plumb messages                                 &  165 \\
 \bottomrule
 \end{tabular}
 \caption{Source files of the \plan browser stack covered in this book.
@@ -851,6 +851,7 @@ error management, and shared utilities.
 %******************************************************************************
 
 \section{URLs}
+
 
 <<enum [[UScheme]]>>=
 /*
@@ -1041,6 +1042,32 @@ struct HttpState
 @
 
 \section{The [[/mnt/web]] interface}
+
+
+<<webfs/fs.c toplevel comment>>=
+/*
+ * Web file system.  Conventionally mounted at /mnt/web
+ *
+ *      ctl                             send control messages (might go away)
+ *      cookies                 list of cookies, editable
+ *      clone                   open and read to obtain new connection
+ *      n                               connection directory
+ *              ctl                             control messages (like get url)
+ *              body                            retrieved data
+ *              content-type            mime content-type of body
+ *              postbody                        data to be posted
+ *              parsed                  parsed version of url
+ *                      url                             entire url
+ *                      scheme                  http, ftp, etc.
+ *                      host                            hostname
+ *                      path                            path on host
+ *                      query                   query after path
+ *                      fragment                        #foo anchor reference
+ *                      user                            user name (ftp)
+ *                      password                        password (ftp)
+ *                      ftptype                 transfer mode (ftp)
+ */
+@
 
 <<enum Qxxx(webfs)>>=
 enum
@@ -2414,6 +2441,22 @@ void killpix(Www *w){
 
 \section{Webfs's URL algebra ([[webfs/url.c]], RFC 3986)}
 
+<<webfs/url.c toplevel comment>>=
+/*
+ * This is a URL parser, written to parse "Common Internet Scheme" URL
+ * syntax as described in RFC1738 and updated by RFC2396.  Only absolute URLs 
+ * are supported, using "server-based" naming authorities in the schemes.
+ * Support for literal IPv6 addresses is included, per RFC2732.
+ *
+ * Current "known" schemes: http, ftp, file.
+ *
+ * We can do all the parsing operations without Runes since URLs are
+ * defined to be composed of US-ASCII printable characters.
+ * See RFC1738, RFC2396.
+ */
+@
+
+
 <<global [[schemestrtab]](webfs)>>=
 static char*
 schemestrtab[] =
@@ -2424,6 +2467,70 @@ schemestrtab[] =
     "ftp",
     "file",
 };
+@
+
+
+<<webfs/url.c URI splitting comment>>=
+/*
+ * URI splitting regexp is from RFC2396, Appendix B: 
+ *              ^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?
+ *               12            3  4          5       6  7        8 9
+ *
+ * Example: "http://www.ics.uci.edu/pub/ietf/uri/#Related"
+ * $2 = scheme                  "http"
+ * $4 = authority               "www.ics.uci.edu"
+ * $5 = path                    "/pub/ietf/uri/"
+ * $7 = query                   <undefined>
+ * $9 = fragment                "Related"
+ */
+
+/*
+ * RFC2396, Sec 3.1, contains:
+ *
+ * Scheme names consist of a sequence of characters beginning with a
+ * lower case letter and followed by any combination of lower case
+ * letters, digits, plus ("+"), period ("."), or hyphen ("-").  For
+ * resiliency, programs interpreting URI should treat upper case letters
+ * as equivalent to lower case in scheme names (e.g., allow "HTTP" as
+ * well as "http").
+ */
+
+/*
+ * For server-based naming authorities (RFC2396 Sec 3.2.2):
+ *    server        = [ [ userinfo "@" ] hostport ]
+ *    userinfo      = *( unreserved | escaped |
+ *                      ";" | ":" | "&" | "=" | "+" | "$" | "," )
+ *    hostport      = host [ ":" port ]
+ *    host          = hostname | IPv4address
+ *    hostname      = *( domainlabel "." ) toplabel [ "." ]
+ *    domainlabel   = alphanum | alphanum *( alphanum | "-" ) alphanum
+ *    toplabel      = alpha | alpha *( alphanum | "-" ) alphanum
+ *    IPv4address   = 1*digit "." 1*digit "." 1*digit "." 1*digit
+ *    port          = *digit
+ *
+ *  The host is a domain name of a network host, or its IPv4 address as a
+ *  set of four decimal digit groups separated by ".".  Literal IPv6
+ *  addresses are not supported.
+ *
+ * Note that literal IPv6 address support is outlined in RFC2732:
+ *    host          = hostname | IPv4address | IPv6reference
+ *    ipv6reference = "[" IPv6address "]"               (RFC2373)
+ *
+ * Since hostnames and numbers will have to be resolved by the OS anyway,
+ * we don't have to parse them too pedantically (counting '.'s, checking 
+ * for well-formed literal IP addresses, etc.).
+ *
+ * In FTP/file paths, we reject most ";param"s and querys.  In HTTP paths,
+ * we just pass them through.
+ *
+ * Instead of letting a "path" be 0-or-more characters as RFC2396 suggests, 
+ * we'll say it's 1-or-more characters, 0-or-1 times.  This way, an absent
+ * path yields a nil substring match, instead of an empty one.
+ *
+ * We're more restrictive than RFC2396 indicates with "userinfo" strings,
+ * insisting they have the form "[user[:password]]".  This may need to
+ * change at some point, however.
+ */
 @
 
 <<struct [[Retab]](webfs)>>=
@@ -2965,6 +3072,16 @@ parseurl(char *url, Url *base)
     setmalloctag(u, getcallerpc(&url));
     return u;
 }
+@
+
+<<global [[postparse]](webfs)>>=
+static int (*postparse[])(Url*) = {
+    nil,
+    postparse_http,
+    postparse_http,
+    postparse_ftp,
+    postparse_file,
+};
 @
 
 \subsection{Authority and userinfo}
@@ -9393,6 +9510,12 @@ struct Stack{
 @
 
 <<constant [[STAG]](mothra)>>=
+/*
+ * Magic characters corresponding to
+ *      literal < followed by / ! or alpha,
+ *      literal > and
+ *      end of file
+ */
 #define STAG    65536
 @
 

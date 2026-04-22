@@ -24,7 +24,6 @@ struct Ctl
     char        *useragent;
 };
 /*e: struct [[Ctl]](webfs) */
-
 /*s: struct [[Client]](webfs) */
 struct Client
 {
@@ -66,7 +65,6 @@ enum
     UScurrent,
 };
 /*e: enum [[UScheme]] */
-
 /*s: struct [[Url]](webfs) */
 struct Url
 {
