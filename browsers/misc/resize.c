@@ -1,3 +1,4 @@
+/*s: misc/resize.c */
 // called by mothra via exec
 #include <u.h>
 #include <libc.h>
@@ -17,6 +18,7 @@ bool debug; /* claude: -d: poolcheck before each big step, to locate heap corrup
  */
 extern Pool *imagmem;
 extern Pool *mainmem;
+/*s: function [[checkimag]](resize) */
 static void
 checkimag(char *where)
 {
@@ -27,7 +29,9 @@ checkimag(char *where)
     poolcheck(mainmem);
     fprint(2, "ok\n");
 }
+/*e: function [[checkimag]](resize) */
 
+/*s: function [[resample]](resize) */
 static void
 resample(Memimage *dst, Rectangle r, Memimage *src, Rectangle sr)
 {
@@ -98,11 +102,13 @@ resample(Memimage *dst, Rectangle r, Memimage *src, Rectangle sr)
         _sp.y += qp.y;
     }
 }
+/*e: function [[resample]](resize) */
 
 enum {
     PERCENT = 0x80000000,
 };
 
+/*s: function [[getsize]](resize) */
 static int
 getsize(char *s)
 {
@@ -113,14 +119,18 @@ getsize(char *s)
         v |= PERCENT;
     return v;
 }
+/*e: function [[getsize]](resize) */
 
+/*s: function [[usage]](resize) */
 void
 usage(void)
 {
     fprint(2, "Usage: %s [-d] [ -x width ] [ -y height ] [ file ]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage]](resize) */
 
+/*s: function [[main]](resize) */
 void
 main(int argc, char **argv)
 {
@@ -148,6 +158,7 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND
+/*e: function [[main]](resize) */
     fd = 0;
     if(*argv){
         fd = open(*argv, OREAD);
@@ -222,3 +233,4 @@ main(int argc, char **argv)
         sysfatal("writememimage: %r");
     exits(0);
 }
+/*e: misc/resize.c */

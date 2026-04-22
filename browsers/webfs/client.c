@@ -1,3 +1,4 @@
+/*s: webfs/client.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -13,425 +14,456 @@ int nclient;
 Client **client;
 
 static void clientthread(void*);
+/*s: function [[newclient]](webfs) */
 int
 newclient(int plumbed)
 {
-	int i;
-	Client *c;
+    int i;
+    Client *c;
 
-	for(i=0; i<nclient; i++)
-		if(client[i]->ref==0)
-			return i;
+    for(i=0; i<nclient; i++)
+        if(client[i]->ref==0)
+            return i;
 
-	c = emalloc(sizeof(Client));
-	c->plumbed = plumbed;
-	c->creq = chancreate(sizeof(Req*), 8);
-	threadcreate(clientthread, c, STACK);
+    c = emalloc(sizeof(Client));
+    c->plumbed = plumbed;
+    c->creq = chancreate(sizeof(Req*), 8);
+    threadcreate(clientthread, c, STACK);
 
-	c->io = ioproc();
-	c->num = nclient;
-	c->ctl = globalctl;
-	clonectl(&c->ctl);
-	if(nclient%16 == 0)
-		client = erealloc(client, (nclient+16)*sizeof(client[0]));
-	client[nclient++] = c;
-	return nclient-1;
+    c->io = ioproc();
+    c->num = nclient;
+    c->ctl = globalctl;
+    clonectl(&c->ctl);
+    if(nclient%16 == 0)
+        client = erealloc(client, (nclient+16)*sizeof(client[0]));
+    client[nclient++] = c;
+    return nclient-1;
 }
+/*e: function [[newclient]](webfs) */
 
+/*s: function [[closeclient]](webfs) */
 void
 closeclient(Client *c)
 {
-	if(--c->ref == 0){
-		if(c->bodyopened){
-			if(c->url && c->url->close)
-				(*c->url->close)(c);
-			c->bodyopened = 0;
-		}
-		free(c->contenttype);
-		c->contenttype = nil;
-		free(c->postbody);
-		c->postbody = nil;
-		freeurl(c->url);
-		c->url = nil;
-		free(c->redirect);
-		c->redirect = nil;
-		free(c->authenticate);
-		c->authenticate = nil;
-		c->npostbody = 0;
-		c->havepostbody = 0;
-		c->bodyopened = 0;
-	}
+    if(--c->ref == 0){
+        if(c->bodyopened){
+            if(c->url && c->url->close)
+                (*c->url->close)(c);
+            c->bodyopened = 0;
+        }
+        free(c->contenttype);
+        c->contenttype = nil;
+        free(c->postbody);
+        c->postbody = nil;
+        freeurl(c->url);
+        c->url = nil;
+        free(c->redirect);
+        c->redirect = nil;
+        free(c->authenticate);
+        c->authenticate = nil;
+        c->npostbody = 0;
+        c->havepostbody = 0;
+        c->bodyopened = 0;
+    }
 }
+/*e: function [[closeclient]](webfs) */
 
+/*s: function [[clonectl]](webfs) */
 void
 clonectl(Ctl *c)
 {
-	if(c->useragent)
-		c->useragent = estrdup(c->useragent);
+    if(c->useragent)
+        c->useragent = estrdup(c->useragent);
 }
+/*e: function [[clonectl]](webfs) */
 
+/*s: function [[clientbodyopen]](webfs) */
 void
 clientbodyopen(Client *c, Req *r)
 {
-	char e[ERRMAX], *next;
-	int i, nauth;
-	Url *u;
+    char e[ERRMAX], *next;
+    int i, nauth;
+    Url *u;
 
-	nauth = 0;
-	next = nil;
-	for(i=0; i<=c->ctl.redirectlimit; i++){
-		if(c->url == nil){
-			werrstr("nil url");
-			goto Error;
-		}
-		if(c->url->open == nil){
-			werrstr("unsupported url type");
-			goto Error;
-		}
-		if(fsdebug)
-			fprint(2, "try %s\n", c->url->url);
-		if(c->url->open(c, c->url) < 0){
-		Error:
-			if(next)
-				fprint(2, "next %s (but for error)\n", next);
-			free(next);
-			rerrstr(e, sizeof e);
-			c->iobusy = 0;
-			if(r != nil)
-				r->fid->omode = -1;
-			closeclient(c);	/* not opening */
-			if(r != nil)
-				respond(r, e);
-			return;
-		}
-		if (c->authenticate && nauth++ < 1)
-				continue;
-		if(!c->redirect)
-			break;
-		next = c->redirect;
-		c->redirect = nil;
-		if(i==c->ctl.redirectlimit){
-			werrstr("redirect limit reached");
-			goto Error;
-		}
-		if((u = parseurl(next, c->url)) == nil)
-			goto Error;
-		if(urldebug)
-			fprint(2, "parseurl %s got scheme %d\n", next, u->ischeme);
-		if(u->ischeme == USunknown){
-			werrstr("redirect with unknown URL scheme");
-			goto Error;
-		}
-		if(u->ischeme == UScurrent){
-			werrstr("redirect to URL relative to current document");
-			goto Error;
-		}
-		freeurl(c->url);
-		c->url = u;
-	}
-	free(next);
-	c->iobusy = 0;
-	if(r != nil)
-		respond(r, nil);
+    nauth = 0;
+    next = nil;
+    for(i=0; i<=c->ctl.redirectlimit; i++){
+        if(c->url == nil){
+            werrstr("nil url");
+            goto Error;
+        }
+        if(c->url->open == nil){
+            werrstr("unsupported url type");
+            goto Error;
+        }
+        if(fsdebug)
+            fprint(2, "try %s\n", c->url->url);
+        if(c->url->open(c, c->url) < 0){
+        Error:
+            if(next)
+                fprint(2, "next %s (but for error)\n", next);
+            free(next);
+            rerrstr(e, sizeof e);
+            c->iobusy = 0;
+            if(r != nil)
+                r->fid->omode = -1;
+            closeclient(c);     /* not opening */
+            if(r != nil)
+                respond(r, e);
+            return;
+        }
+        if (c->authenticate && nauth++ < 1)
+                continue;
+        if(!c->redirect)
+            break;
+        next = c->redirect;
+        c->redirect = nil;
+        if(i==c->ctl.redirectlimit){
+            werrstr("redirect limit reached");
+            goto Error;
+        }
+        if((u = parseurl(next, c->url)) == nil)
+            goto Error;
+        if(urldebug)
+            fprint(2, "parseurl %s got scheme %d\n", next, u->ischeme);
+        if(u->ischeme == USunknown){
+            werrstr("redirect with unknown URL scheme");
+            goto Error;
+        }
+        if(u->ischeme == UScurrent){
+            werrstr("redirect to URL relative to current document");
+            goto Error;
+        }
+        freeurl(c->url);
+        c->url = u;
+    }
+    free(next);
+    c->iobusy = 0;
+    if(r != nil)
+        respond(r, nil);
 }
+/*e: function [[clientbodyopen]](webfs) */
 
+/*s: function [[plumburl]](webfs) */
 void
 plumburl(char *url, char *base)
 {
-	int i;
-	Client *c;
-	Url *ubase, *uurl;
+    int i;
+    Client *c;
+    Url *ubase, *uurl;
 
-	ubase = nil;
-	if(base){
-		ubase = parseurl(base, nil);
-		if(ubase == nil)
-			return;
-	}
-	uurl = parseurl(url, ubase);
-	if(uurl == nil){
-		freeurl(ubase);
-		return;
-	}
-	i = newclient(1);
-	c = client[i];
-	c->ref++;
-	c->baseurl = ubase;
-	c->url = uurl;
-	sendp(c->creq, nil);
+    ubase = nil;
+    if(base){
+        ubase = parseurl(base, nil);
+        if(ubase == nil)
+            return;
+    }
+    uurl = parseurl(url, ubase);
+    if(uurl == nil){
+        freeurl(ubase);
+        return;
+    }
+    i = newclient(1);
+    c = client[i];
+    c->ref++;
+    c->baseurl = ubase;
+    c->url = uurl;
+    sendp(c->creq, nil);
 }
+/*e: function [[plumburl]](webfs) */
 
+/*s: function [[clientbodyread]](webfs) */
 void
 clientbodyread(Client *c, Req *r)
 {
-	char e[ERRMAX];
+    char e[ERRMAX];
 
-	if(c->url->read == nil){
-		respond(r, "unsupported url type");
-		return;
-	}
-	if(c->url->read(c, r) < 0){
-		rerrstr(e, sizeof e);
-		c->iobusy = 0;
-		respond(r, e);
-		return;
-	}
-	c->iobusy = 0;
-	respond(r, nil);
+    if(c->url->read == nil){
+        respond(r, "unsupported url type");
+        return;
+    }
+    if(c->url->read(c, r) < 0){
+        rerrstr(e, sizeof e);
+        c->iobusy = 0;
+        respond(r, e);
+        return;
+    }
+    c->iobusy = 0;
+    respond(r, nil);
 }
+/*e: function [[clientbodyread]](webfs) */
 
+/*s: function [[clientthread]](webfs) */
 static void
 clientthread(void *a)
 {
-	Client *c;
-	Req *r;
+    Client *c;
+    Req *r;
 
-	c = a;
-	if(c->plumbed) {
-		recvp(c->creq);
-		if(c->url == nil){
-			fprint(2, "bad url got plumbed\n");
-			return;
-		}
-		clientbodyopen(c, nil);
-		replumb(c);
-	}
-	while((r = recvp(c->creq)) != nil){
-		if(fsdebug)
-			fprint(2, "clientthread %F\n", &r->ifcall);
-		switch(r->ifcall.type){
-		case Topen:
-			if(c->plumbed) {
-				c->plumbed = 0;
-				c->ref--;			/* from plumburl() */
-				respond(r, nil);
-			}
-			else
-				clientbodyopen(c, r);
-			break;
-		case Tread:
-			clientbodyread(c, r);
-			break;
-		case Tflush:
-			respond(r, nil);
-		}
-		if(fsdebug)
-			fprint(2, "clientthread finished req\n");
-	}
+    c = a;
+    if(c->plumbed) {
+        recvp(c->creq);
+        if(c->url == nil){
+            fprint(2, "bad url got plumbed\n");
+            return;
+        }
+        clientbodyopen(c, nil);
+        replumb(c);
+    }
+    while((r = recvp(c->creq)) != nil){
+        if(fsdebug)
+            fprint(2, "clientthread %F\n", &r->ifcall);
+        switch(r->ifcall.type){
+        case Topen:
+            if(c->plumbed) {
+                c->plumbed = 0;
+                c->ref--;                       /* from plumburl() */
+                respond(r, nil);
+            }
+            else
+                clientbodyopen(c, r);
+            break;
+        case Tread:
+            clientbodyread(c, r);
+            break;
+        case Tflush:
+            respond(r, nil);
+        }
+        if(fsdebug)
+            fprint(2, "clientthread finished req\n");
+    }
 }
-	
+/*e: function [[clientthread]](webfs) */
+    
 enum
 {
-	Bool,
-	Int,
-	String,
-	XUrl,
-	Fn,
+    Bool,
+    Int,
+    String,
+    XUrl,
+    Fn,
 };
 
 typedef struct Ctab Ctab;
 struct Ctab {
-	char *name;
-	int type;
-	void *offset;
+    char *name;
+    int type;
+    void *offset;
 };
 
 Ctab ctltab[] = {
-	"acceptcookies",	Bool,		(void*)offsetof(Ctl, acceptcookies),
-	"sendcookies",		Bool,		(void*)offsetof(Ctl, sendcookies),
-	"redirectlimit",		Int,		(void*)offsetof(Ctl, redirectlimit),
-	"useragent",		String,	(void*)offsetof(Ctl, useragent),
+    "acceptcookies",    Bool,           (void*)offsetof(Ctl, acceptcookies),
+    "sendcookies",              Bool,           (void*)offsetof(Ctl, sendcookies),
+    "redirectlimit",            Int,            (void*)offsetof(Ctl, redirectlimit),
+    "useragent",                String, (void*)offsetof(Ctl, useragent),
 };
 
 Ctab globaltab[] = {
-	"chatty9p",		Int,		&chatty9p,
-	"fsdebug",		Int,		&fsdebug,
-	"cookiedebug",		Int,		&cookiedebug,
-	"urldebug",		Int,		&urldebug,
-	"httpdebug",		Int,		&httpdebug,
+    "chatty9p",         Int,            &chatty9p,
+    "fsdebug",          Int,            &fsdebug,
+    "cookiedebug",              Int,            &cookiedebug,
+    "urldebug",         Int,            &urldebug,
+    "httpdebug",                Int,            &httpdebug,
 };
 
 Ctab clienttab[] = {
-	"baseurl",			XUrl,		(void*)offsetof(Client, baseurl),
-	"url",				XUrl,		(void*)offsetof(Client, url),
+    "baseurl",                  XUrl,           (void*)offsetof(Client, baseurl),
+    "url",                              XUrl,           (void*)offsetof(Client, url),
 };
 
+/*s: function [[findcmd]](webfs) */
 static Ctab*
 findcmd(char *cmd, Ctab *tab, int ntab)
 {
-	int i;
+    int i;
 
-	for(i=0; i<ntab; i++)
-		if(strcmp(tab[i].name, cmd) == 0)
-			return &tab[i];
-	return nil;
+    for(i=0; i<ntab; i++)
+        if(strcmp(tab[i].name, cmd) == 0)
+            return &tab[i];
+    return nil;
 }
+/*e: function [[findcmd]](webfs) */
 
+/*s: function [[parseas]](webfs) */
 static void
 parseas(Req *r, char *arg, int type, void *a)
 {
-	Url *u;
-	char e[ERRMAX];
+    Url *u;
+    char e[ERRMAX];
 
-	switch(type){
-	case Bool:
-		if(strcmp(arg, "on")==0 || strcmp(arg, "1")==0)
-			*(int*)a = 1;
-		else
-			*(int*)a = 0;
-		break;
-	case String:
-		free(*(char**)a);
-		*(char**)a = estrdup(arg);
-		break;
-	case XUrl:
-		u = parseurl(arg, nil);
-		if(u == nil){
-			snprint(e, sizeof e, "parseurl: %r");
-			respond(r, e);
-			return;
-		}
-		freeurl(*(Url**)a);
-		*(Url**)a = u;
-		break;
-	case Int:
-		if(strcmp(arg, "on")==0)
-			*(int*)a = 1;
-		else
-			*(int*)a = atoi(arg);
-		break;
-	}
-	respond(r, nil);
+    switch(type){
+    case Bool:
+        if(strcmp(arg, "on")==0 || strcmp(arg, "1")==0)
+            *(int*)a = 1;
+        else
+            *(int*)a = 0;
+        break;
+    case String:
+        free(*(char**)a);
+        *(char**)a = estrdup(arg);
+        break;
+    case XUrl:
+        u = parseurl(arg, nil);
+        if(u == nil){
+            snprint(e, sizeof e, "parseurl: %r");
+            respond(r, e);
+            return;
+        }
+        freeurl(*(Url**)a);
+        *(Url**)a = u;
+        break;
+    case Int:
+        if(strcmp(arg, "on")==0)
+            *(int*)a = 1;
+        else
+            *(int*)a = atoi(arg);
+        break;
+    }
+    respond(r, nil);
 }
+/*e: function [[parseas]](webfs) */
 
+/*s: function [[ctlwrite]](webfs) */
 int
 ctlwrite(Req *r, Ctl *ctl, char *cmd, char *arg)
 {
-	void *a;
-	Ctab *t;
+    void *a;
+    Ctab *t;
 
-	if((t = findcmd(cmd, ctltab, nelem(ctltab))) == nil)
-		return 0;
-	a = (void*)((uintptr)ctl+(uintptr)t->offset);
-	parseas(r, arg, t->type, a);
-	return 1;
+    if((t = findcmd(cmd, ctltab, nelem(ctltab))) == nil)
+        return 0;
+    a = (void*)((uintptr)ctl+(uintptr)t->offset);
+    parseas(r, arg, t->type, a);
+    return 1;
 }
+/*e: function [[ctlwrite]](webfs) */
 
+/*s: function [[clientctlwrite]](webfs) */
 int
 clientctlwrite(Req *r, Client *c, char *cmd, char *arg)
 {
-	void *a;
-	Ctab *t;
-	Url *u;
-	char e[ERRMAX];
+    void *a;
+    Ctab *t;
+    Url *u;
+    char e[ERRMAX];
 
-	if((t = findcmd(cmd, clienttab, nelem(clienttab))) == nil)
-		return 0;
-	/*
-	 * claude: webfs's ctl interface exposes two commands per clone,
-	 * `baseurl` and `url`, with both slots stored in the Client struct
-	 * on the clone's state. The design clearly intended the RFC2396
-	 * delta-URI flow -- a caller that doesn't itself know how to
-	 * combine a base with a relative reference writes
-	 *
-	 *     baseurl https://en.wikipedia.org/wiki/Main_Page
-	 *     url     /wiki/Cat
-	 *
-	 * and webfs is supposed to resolve the relative form against the
-	 * previously-set base. But in principia's inherited code all
-	 * commands route through the same generic parseas() below, which
-	 * always calls parseurl(arg, nil). So the `url` write has no
-	 * access to c->baseurl and the relative form dies with "relative
-	 * URI given without base". Observable consequence: `baseurl` is
-	 * written, accepted, stored -- and then silently ignored by the
-	 * very next `url` write. Only clients that resolve absolute URLs
-	 * themselves (abaco, hget) work; clients that rely on webfs to
-	 * combine (mothra) fail on links like <a href="/..."> which is
-	 * most of the Web.
-	 *
-	 * 9front fixed this long ago by rewriting clientctl as a manual
-	 * dispatch that knows which slot it's writing (see
-	 * 9front/sys/src/cmd/webfs/fs.c:clientctl). We achieve the same
-	 * effect with a minimal surgery: special-case `url` here so it
-	 * passes c->baseurl to parseurl (nil baseurl falls back to the
-	 * previous behavior, i.e. absolute works, relative fails cleanly).
-	 */
-	if(strcmp(cmd, "url") == 0){
-		u = parseurl(arg, c->baseurl);
-		if(u == nil){
-			snprint(e, sizeof e, "parseurl: %r");
-			respond(r, e);
-			return 1;
-		}
-		freeurl(c->url);
-		c->url = u;
-		respond(r, nil);
-		return 1;
-	}
-	a = (void*)((uintptr)c+(uintptr)t->offset);
-	parseas(r, arg, t->type, a);
-	return 1;
+    if((t = findcmd(cmd, clienttab, nelem(clienttab))) == nil)
+        return 0;
+    /*
+     * claude: webfs's ctl interface exposes two commands per clone,
+     * `baseurl` and `url`, with both slots stored in the Client struct
+     * on the clone's state. The design clearly intended the RFC2396
+     * delta-URI flow -- a caller that doesn't itself know how to
+     * combine a base with a relative reference writes
+     *
+     *     baseurl https://en.wikipedia.org/wiki/Main_Page
+     *     url     /wiki/Cat
+     *
+     * and webfs is supposed to resolve the relative form against the
+     * previously-set base. But in principia's inherited code all
+     * commands route through the same generic parseas() below, which
+     * always calls parseurl(arg, nil). So the `url` write has no
+     * access to c->baseurl and the relative form dies with "relative
+     * URI given without base". Observable consequence: `baseurl` is
+     * written, accepted, stored -- and then silently ignored by the
+     * very next `url` write. Only clients that resolve absolute URLs
+     * themselves (abaco, hget) work; clients that rely on webfs to
+     * combine (mothra) fail on links like <a href="/..."> which is
+     * most of the Web.
+     *
+     * 9front fixed this long ago by rewriting clientctl as a manual
+     * dispatch that knows which slot it's writing (see
+     * 9front/sys/src/cmd/webfs/fs.c:clientctl). We achieve the same
+     * effect with a minimal surgery: special-case `url` here so it
+     * passes c->baseurl to parseurl (nil baseurl falls back to the
+     * previous behavior, i.e. absolute works, relative fails cleanly).
+     */
+    if(strcmp(cmd, "url") == 0){
+        u = parseurl(arg, c->baseurl);
+        if(u == nil){
+            snprint(e, sizeof e, "parseurl: %r");
+            respond(r, e);
+            return 1;
+        }
+        freeurl(c->url);
+        c->url = u;
+        respond(r, nil);
+        return 1;
+    }
+    a = (void*)((uintptr)c+(uintptr)t->offset);
+    parseas(r, arg, t->type, a);
+    return 1;
 }
+/*e: function [[clientctlwrite]](webfs) */
 
+/*s: function [[globalctlwrite]](webfs) */
 int
 globalctlwrite(Req *r, char *cmd, char *arg)
 {
-	void *a;
-	Ctab *t;
+    void *a;
+    Ctab *t;
 
-	if((t = findcmd(cmd, globaltab, nelem(globaltab))) == nil)
-		return 0;
-	a = t->offset;
-	parseas(r, arg, t->type, a);
-	return 1;
+    if((t = findcmd(cmd, globaltab, nelem(globaltab))) == nil)
+        return 0;
+    a = t->offset;
+    parseas(r, arg, t->type, a);
+    return 1;
 }
+/*e: function [[globalctlwrite]](webfs) */
 
+/*s: function [[ctlfmt]](webfs) */
 static void
 ctlfmt(Ctl *c, char *s)
 {
-	int i;
-	void *a;
-	char *t;
+    int i;
+    void *a;
+    char *t;
 
-	for(i=0; i<nelem(ctltab); i++){
-		a = (void*)((uintptr)c+(uintptr)ctltab[i].offset);
-		switch(ctltab[i].type){
-		case Bool:
-			s += sprint(s, "%s %s\n", ctltab[i].name, *(int*)a ? "on" : "off");
-			break;
-		case Int:
-			s += sprint(s, "%s %d\n", ctltab[i].name, *(int*)a);
-			break;
-		case String:
-			t = *(char**)a;
-			if(t != nil)
-				s += sprint(s, "%s %.*s%s\n", ctltab[i].name, utfnlen(t, 100), t, strlen(t)>100 ? "..." : "");
-			break;
-		}
-	}
+    for(i=0; i<nelem(ctltab); i++){
+        a = (void*)((uintptr)c+(uintptr)ctltab[i].offset);
+        switch(ctltab[i].type){
+        case Bool:
+            s += sprint(s, "%s %s\n", ctltab[i].name, *(int*)a ? "on" : "off");
+            break;
+        case Int:
+            s += sprint(s, "%s %d\n", ctltab[i].name, *(int*)a);
+            break;
+        case String:
+            t = *(char**)a;
+            if(t != nil)
+                s += sprint(s, "%s %.*s%s\n", ctltab[i].name, utfnlen(t, 100), t, strlen(t)>100 ? "..." : "");
+            break;
+        }
+    }
 }
+/*e: function [[ctlfmt]](webfs) */
 
+/*s: function [[ctlread]](webfs) */
 void
 ctlread(Req *r, Client *c)
 {
-	char buf[1024];
+    char buf[1024];
 
-	sprint(buf, "%11d \n", c->num);
-	ctlfmt(&c->ctl, buf+strlen(buf));
-	readstr(r, buf);
-	respond(r, nil);
+    sprint(buf, "%11d \n", c->num);
+    ctlfmt(&c->ctl, buf+strlen(buf));
+    readstr(r, buf);
+    respond(r, nil);
 }
+/*e: function [[ctlread]](webfs) */
 
+/*s: function [[globalctlread]](webfs) */
 void
 globalctlread(Req *r)
 {
-	char buf[1024], *s;
-	int i;
+    char buf[1024], *s;
+    int i;
 
-	s = buf;
-	for(i=0; i<nelem(globaltab); i++)
-		s += sprint(s, "%s %d\n", globaltab[i].name, *(int*)globaltab[i].offset);
-	ctlfmt(&globalctl, s);
-	readstr(r, buf);
-	respond(r, nil);
+    s = buf;
+    for(i=0; i<nelem(globaltab); i++)
+        s += sprint(s, "%s %d\n", globaltab[i].name, *(int*)globaltab[i].offset);
+    ctlfmt(&globalctl, s);
+    readstr(r, buf);
+    respond(r, nil);
 }
+/*e: function [[globalctlread]](webfs) */
+/*e: webfs/client.c */

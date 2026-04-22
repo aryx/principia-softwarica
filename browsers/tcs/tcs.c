@@ -1,3 +1,4 @@
+/*s: tcs/tcs.c */
 #ifndef PLAN9
 #include    <sys/types.h>
 #include    <stdio.h>
@@ -594,3 +595,5 @@ struct convert convert[] =
     { "windows-1258", "Windows Code Page 1258 (Vietnam)", Table, (void *)tabcp1258 },
     { 0 },
 };
+
+/*e: tcs/tcs.c */

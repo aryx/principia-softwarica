@@ -1,3 +1,4 @@
+/*s: webfs/util.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -9,78 +10,91 @@
 #include "dat.h"
 #include "fns.h"
 
+/*s: function [[erealloc]](webfs) */
 void*
 erealloc(void *a, uint n)
 {
-	a = realloc(a, n);
-	if(a == nil)
-		sysfatal("realloc %d: out of memory", n);
-	setrealloctag(a, getcallerpc(&a));
-	return a;
+    a = realloc(a, n);
+    if(a == nil)
+        sysfatal("realloc %d: out of memory", n);
+    setrealloctag(a, getcallerpc(&a));
+    return a;
 }
+/*e: function [[erealloc]](webfs) */
 
+/*s: function [[emalloc]](webfs) */
 void*
 emalloc(uint n)
 {
-	void *a;
+    void *a;
 
-	a = mallocz(n, 1);
-	if(a == nil)
-		sysfatal("malloc %d: out of memory", n);
-	setmalloctag(a, getcallerpc(&n));
-	return a;
+    a = mallocz(n, 1);
+    if(a == nil)
+        sysfatal("malloc %d: out of memory", n);
+    setmalloctag(a, getcallerpc(&n));
+    return a;
 }
+/*e: function [[emalloc]](webfs) */
 
+/*s: function [[estrdup]](webfs) */
 char*
 estrdup(char *s)
 {
-	s = strdup(s);
-	if(s == nil)
-		sysfatal("strdup: out of memory");
-	setmalloctag(s, getcallerpc(&s));
-	return s;
+    s = strdup(s);
+    if(s == nil)
+        sysfatal("strdup: out of memory");
+    setmalloctag(s, getcallerpc(&s));
+    return s;
 }
+/*e: function [[estrdup]](webfs) */
 
+/*s: function [[estredup]](webfs) */
 char*
 estredup(char *s, char *e)
 {
-	char *t;
+    char *t;
 
-	t = emalloc(e-s+1);
-	memmove(t, s, e-s);
-	t[e-s] = '\0';
-	setmalloctag(t, getcallerpc(&s));
-	return t;
+    t = emalloc(e-s+1);
+    memmove(t, s, e-s);
+    t[e-s] = '\0';
+    setmalloctag(t, getcallerpc(&s));
+    return t;
 }
+/*e: function [[estredup]](webfs) */
 
+/*s: function [[estrmanydup]](webfs) */
 char*
 estrmanydup(char *s, ...)
 {
-	char *p, *t;
-	int len;
-	va_list arg;
+    char *p, *t;
+    int len;
+    va_list arg;
 
-	len = strlen(s);
-	va_start(arg, s);
-	while((p = va_arg(arg, char*)) != nil)
-		len += strlen(p);
-	len++;
+    len = strlen(s);
+    va_start(arg, s);
+    while((p = va_arg(arg, char*)) != nil)
+        len += strlen(p);
+    len++;
 
-	t = emalloc(len);
-	strcpy(t, s);
-	va_start(arg, s);
-	while((p = va_arg(arg, char*)) != nil)
-		strcat(t, p);
-	return t;
+    t = emalloc(len);
+    strcpy(t, s);
+    va_start(arg, s);
+    while((p = va_arg(arg, char*)) != nil)
+        strcat(t, p);
+    return t;
 }
+/*e: function [[estrmanydup]](webfs) */
 
+/*s: function [[strlower]](webfs) */
 char*
 strlower(char *s)
 {
-	char *t;
+    char *t;
 
-	for(t=s; *t; t++)
-		if('A' <= *t && *t <= 'Z')
-			*t += 'a'-'A';
-	return s;
+    for(t=s; *t; t++)
+        if('A' <= *t && *t <= 'Z')
+            *t += 'a'-'A';
+    return s;
 }
+/*e: function [[strlower]](webfs) */
+/*e: webfs/util.c */

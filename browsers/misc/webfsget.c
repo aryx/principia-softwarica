@@ -1,9 +1,11 @@
+/*s: misc/webfsget.c */
 // was in src/cmd/webfs/webget.c before and called webget
 
 /* Example of how to use webfs */
 #include <u.h>
 #include <libc.h>
 
+/*s: function [[xfer]](webfsget) */
 void
 xfer(fdt from, fdt to)
 {
@@ -16,14 +18,18 @@ xfer(fdt from, fdt to)
     if(n < 0)
         sysfatal("read failed: %r");
 }
+/*e: function [[xfer]](webfsget) */
 
+/*s: function [[usage]](webfsget) */
 void
 usage(void)
 {
     fprint(2, "usage: webfsget [-b baseurl] [-m mtpt] [-p postbody] url\n");
     exits("usage");
 }
+/*e: function [[usage]](webfsget) */
 
+/*s: function [[main]](webfsget) */
 void
 main(int argc, char **argv)
 {
@@ -47,6 +53,7 @@ main(int argc, char **argv)
         post = EARGF(usage());
         break;
     }ARGEND;
+/*e: function [[main]](webfsget) */
 
     if (argc != 1) 
         usage();
@@ -86,3 +93,4 @@ main(int argc, char **argv)
     xfer(fd, STDOUT);
     exits(nil);
 }
+/*e: misc/webfsget.c */

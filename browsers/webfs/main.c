@@ -1,3 +1,4 @@
+/*s: webfs/main.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -15,53 +16,58 @@ char *service;
 
 Ctl globalctl = 
 {
-	1,	/* accept cookies */
-	1,	/* send cookies */
-	10,	/* redirect limit */
-	"webfs/2.0 (plan 9)"	/* user agent */
+    1,  /* accept cookies */
+    1,  /* send cookies */
+    10, /* redirect limit */
+    "webfs/2.0 (plan 9)"        /* user agent */
 };
 
+/*s: function [[usage]](webfs) */
 void
 usage(void)
 {
-	fprint(2, "usage: webfs [-c cookies] [-m mtpt] [-s service]\n");
-	threadexitsall("usage");
+    fprint(2, "usage: webfs [-c cookies] [-m mtpt] [-s service]\n");
+    threadexitsall("usage");
 }
+/*e: function [[usage]](webfs) */
 
 #include <pool.h>
+/*s: function [[threadmain]](webfs) */
 void
 threadmain(int argc, char **argv)
 {
-	rfork(RFNOTEG);
-	ARGBEGIN{
-	case 'd':
-		mainmem->flags |= POOL_PARANOIA|POOL_ANTAGONISM;
-		break;
-	case 'D':
-		chatty9p++;
-		break;
-	case 'c':
-		cookiefile = EARGF(usage());
-		break;
-	case 'm':
-		mtpt = EARGF(usage());
-		break;
-	case 's':
-		service = EARGF(usage());
-		break;
-	default:
-		usage();
-	}ARGEND
+    rfork(RFNOTEG);
+    ARGBEGIN{
+    case 'd':
+        mainmem->flags |= POOL_PARANOIA|POOL_ANTAGONISM;
+        break;
+    case 'D':
+        chatty9p++;
+        break;
+    case 'c':
+        cookiefile = EARGF(usage());
+        break;
+    case 'm':
+        mtpt = EARGF(usage());
+        break;
+    case 's':
+        service = EARGF(usage());
+        break;
+    default:
+        usage();
+    }ARGEND
+/*e: function [[threadmain]](webfs) */
 
-	quotefmtinstall();
-	if(argc != 0)
-		usage();
+    quotefmtinstall();
+    if(argc != 0)
+        usage();
 
-	plumbinit();
-	globalctl.useragent = estrdup(globalctl.useragent);
-	initcookies(cookiefile);
-	initurl();
-	initfs();
-	threadpostmountsrv(&fs, service, mtpt, MREPL);
-	threadexits(nil);
+    plumbinit();
+    globalctl.useragent = estrdup(globalctl.useragent);
+    initcookies(cookiefile);
+    initurl();
+    initfs();
+    threadpostmountsrv(&fs, service, mtpt, MREPL);
+    threadexits(nil);
 }
+/*e: webfs/main.c */

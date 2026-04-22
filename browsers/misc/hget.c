@@ -1,3 +1,4 @@
+/*s: misc/hget.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -1499,4 +1500,4 @@ output(Out *out, char *buf, int nb)
     }
     return n + d;
 }
-
+/*e: misc/hget.c */

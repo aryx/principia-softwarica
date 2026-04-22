@@ -1,3 +1,4 @@
+/*s: tcs/conv.h */
 void jis_in(int fd, long *notused, struct convert *out);
 void jisjis_in(int fd, long *notused, struct convert *out);
 void msjis_in(int fd, long *notused, struct convert *out);
@@ -18,7 +19,12 @@ void html_out(Rune *base, int n, long *notused);
 void tune_in(int fd, long *notused, struct convert *out);
 void tune_out(Rune *base, int n, long *notused);
 
+/*s: macro [[emit]](tcs) */
 #define     emit(x)     *(*r)++ = (x)
+/*e: macro [[emit]](tcs) */
+/*s: constant [[NRUNE]](tcs) */
 #define     NRUNE       (Runemax+1)
+/*e: constant [[NRUNE]](tcs) */
 
 extern long tab[];      /* common table indexed by Runes for reverse mappings */
+/*e: tcs/conv.h */

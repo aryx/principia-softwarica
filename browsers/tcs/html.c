@@ -1,3 +1,4 @@
+/*s: tcs/html.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -290,6 +291,7 @@ static Hchar byname[] =
 
 static Hchar byrune[nelem(byname)];
 
+/*s: function [[hnamecmp]](tcs) */
 static int
 hnamecmp(const void *va, const void *vb)
 {
@@ -299,7 +301,9 @@ hnamecmp(const void *va, const void *vb)
     b = (Hchar*)vb;
     return strcmp(a->s, b->s);
 }
+/*e: function [[hnamecmp]](tcs) */
 
+/*s: function [[hrunecmp]](tcs) */
 static int
 hrunecmp(const void *va, const void *vb)
 {
@@ -309,7 +313,9 @@ hrunecmp(const void *va, const void *vb)
     b = (Hchar*)vb;
     return a->r - b->r;
 }
+/*e: function [[hrunecmp]](tcs) */
 
+/*s: function [[html_init]](tcs) */
 static void
 html_init(void)
 {
@@ -332,7 +338,9 @@ html_init(void)
     qsort(byname, nelem(byname), sizeof byname[0], hnamecmp);
     qsort(byrune, nelem(byrune), sizeof byrune[0], hrunecmp);
 }
+/*e: function [[html_init]](tcs) */
 
+/*s: function [[findbyname]](tcs) */
 static Rune
 findbyname(char *s)
 {
@@ -354,7 +362,9 @@ findbyname(char *s)
     }
     return Runeerror;
 }
+/*e: function [[findbyname]](tcs) */
 
+/*s: function [[findbyrune]](tcs) */
 static char*
 findbyrune(Rune r)
 {
@@ -377,7 +387,9 @@ findbyrune(Rune r)
     }
     return nil;
 }
+/*e: function [[findbyrune]](tcs) */
 
+/*s: function [[html_in]](tcs) */
 void
 html_in(int fd, long *x, struct convert *out)
 {
@@ -443,7 +455,9 @@ html_in(int fd, long *x, struct convert *out)
         OUT(out, rbuf, r-rbuf);
     OUT(out, rbuf, 0);
 }
+/*e: function [[html_in]](tcs) */
 
+/*s: function [[html_out]](tcs) */
 /*
  * use biobuf because can use more than UTFmax bytes per rune
  */
@@ -468,4 +482,6 @@ html_out(Rune *r, int n, long *x)
     }
     Bflush(&b);
 }
+/*e: function [[html_out]](tcs) */
 
+/*e: tcs/html.c */

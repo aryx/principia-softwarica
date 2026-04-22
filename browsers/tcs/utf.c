@@ -1,3 +1,4 @@
+/*s: tcs/utf.c */
 #ifdef PLAN9
 #include    <u.h>
 #include    <libc.h>
@@ -26,6 +27,7 @@ int runetoisoutf(char *str, Rune *rune);
 int fullisorune(char *str, int n);
 int isochartorune(Rune *rune, char *str);
 
+/*s: function [[utf_in]](tcs) */
 void
 utf_in(int fd, long *notused, struct convert *out)
 {
@@ -63,7 +65,9 @@ utf_in(int fd, long *notused, struct convert *out)
     }
     OUT(out, runes, 0);
 }
+/*e: function [[utf_in]](tcs) */
 
+/*s: function [[utf_out]](tcs) */
 void
 utf_out(Rune *base, int n, long *notused)
 {
@@ -78,7 +82,9 @@ utf_out(Rune *base, int n, long *notused)
     noutput += p-obuf;
     write(1, obuf, p-obuf);
 }
+/*e: function [[utf_out]](tcs) */
 
+/*s: function [[isoutf_in]](tcs) */
 void
 isoutf_in(int fd, long *notused, struct convert *out)
 {
@@ -115,7 +121,9 @@ isoutf_in(int fd, long *notused, struct convert *out)
     }
     OUT(out, runes, 0);
 }
+/*e: function [[isoutf_in]](tcs) */
 
+/*s: function [[isoutf_out]](tcs) */
 void
 isoutf_out(Rune *base, int n, long *notused)
 {
@@ -129,6 +137,7 @@ isoutf_out(Rune *base, int n, long *notused)
     noutput += p-obuf;
     write(1, obuf, p-obuf);
 }
+/*e: function [[isoutf_out]](tcs) */
 
 
 enum
@@ -143,6 +152,7 @@ enum
 static  uchar   U[256];
 static  uchar   T[256];
 
+/*s: function [[mktable]](tcs) */
 static
 void
 mktable(void)
@@ -161,7 +171,9 @@ mktable(void)
         T[u] = i;
     }
 }
+/*e: function [[mktable]](tcs) */
 
+/*s: function [[isochartorune]](tcs) */
 int
 isochartorune(Rune *rune, char *str)
 {
@@ -228,7 +240,9 @@ bad:
     *rune = Bad;
     return 1;
 }
+/*e: function [[isochartorune]](tcs) */
 
+/*s: function [[runetoisoutf]](tcs) */
 int
 runetoisoutf(char *str, Rune *rune)
 {
@@ -278,7 +292,9 @@ runetoisoutf(char *str, Rune *rune)
     str[2] = T[c%Esc];
     return 3;
 }
+/*e: function [[runetoisoutf]](tcs) */
 
+/*s: function [[fullisorune]](tcs) */
 int
 fullisorune(char *str, int n)
 {
@@ -294,6 +310,7 @@ fullisorune(char *str, int n)
     }
     return 0;
 }
+/*e: function [[fullisorune]](tcs) */
 
 #ifdef PLAN9
 int errno;
@@ -336,6 +353,7 @@ enum
 #endif /* EILSEQ */
 };
 
+/*s: function [[our_wctomb]](tcs) */
 int
 our_wctomb(char *s, unsigned long wc)
 {
@@ -385,7 +403,9 @@ our_wctomb(char *s, unsigned long wc)
     s[0] = T1 | wc;
     return 1;
 }
+/*e: function [[our_wctomb]](tcs) */
 
+/*s: function [[our_mbtowc]](tcs) */
 int
 our_mbtowc(unsigned long *p, char *s, unsigned n)
 {
@@ -485,3 +505,5 @@ bad:
     errno = EILSEQ;
     return -1;
 }
+/*e: function [[our_mbtowc]](tcs) */
+/*e: tcs/utf.c */
