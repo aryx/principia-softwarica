@@ -85,24 +85,281 @@ Tom Duff, David Hogan, Russ Cox
 \label{chap:intro}
 %******************************************************************************
 
+%claude:
+The goal of this book is to explain with full details the source code of
+a {web browser}.
+
 \section{Motivations}
+
+%claude:
+Why a web browser?
+Because I think you are a better programmer if you fully understand how
+things work under the hood, and the web browser is the program through
+which most computer users now reach the rest of the software stack.
+%
+A web browser sits above the \unix-like user-space API
+(see the \book{Libcore}),
+above a windowing system (see the \book{Windows} and the \book{Widgets}),
+above the network stack (see the \book{Network}),
+and above the kernel (see the \book{Kernel}).
+%
+It exercises almost every layer of a modern operating system in one
+program: a parser, an interpreter of a text protocol, a concurrent
+I/O engine, a rendering engine, and an event-driven GUI.
+
+%claude:
+Most users spend hours every day inside a web browser: reading,
+writing, watching, shopping, working.
+%
+%modern:
+Modern engines---Gecko (Firefox), WebKit (Safari), Blink (Chrome)---have
+become some of the most complex pieces of software ever written,
+each counting in the millions of lines of code.
+They implement full CSS box layouts, JavaScript virtual machines
+with just-in-time compilers, GPU-accelerated compositing, sandboxing,
+and dozens of other features accreted over three decades.
+It is no longer realistic for a single programmer to understand
+all of that in one lifetime.
+
+%claude:
+%plan9-is-cleaner:
+Yet the {essence} of a browser is still very simple: fetch a document
+over a network protocol, parse a markup language, render the result,
+follow hyperlinks on demand. That essence, stripped of the modern
+accretions, is what [[mothra]]---the \plan web browser I will describe
+in this book---actually implements, in about 4400 lines of C.
+
+%claude:
+There are surprisingly few books explaining how a web browser works.
+%cs-history:
+The best I know of is \emph{Web Browser Engineering}~\cite{browser-engineering},
+an online textbook that builds a toy browser in Python.
+%
+\principia complements that by showing the full source code of a
+{real} browser---one that you can still launch today on \plan and
+use to read real web pages, including over HTTPS.
+
+%claude:
+Here are a few questions I hope this book will answer:
+
+\begin{itemize}
+
+\item What happens when the user types a URL in the address bar?
+What is the trace of such a request through the different layers
+of the software stack?
+
+\item What does HTTP look like in practice, at the byte level?
+How does HTTPS add confidentiality on top?
+
+\item How is HTML turned into something you can see and click on?
+Does mothra build a DOM tree? If not, what does it build instead?
+
+\item Why does \plan expose HTTP as a filesystem ([[/mnt/web]])
+rather than as a library to link?
+What does that design buy over a conventional [[libcurl]]?
+
+\item How are cookies stored and scoped? Why is [[webcookies]] a
+separate file server from [[webfs]]?
+
+\item How does a browser handle character encodings (UTF-8, Latin-1,
+Shift-JIS, GB2312, \ldots) without getting tangled in charset logic?
+
+\item How are images fetched, decoded, and scaled?
+Why do mothra's images go through three cooperating subprocesses?
+
+\item What does mothra {not} do, and why?
+No CSS, no JavaScript, no DOM---is such a browser still useful in 2026?
+
+\end{itemize}
 
 \section{The \plan web browser: [[mothra]]}
 
+%claude:
+I will explain in this book the code of the \plan web browser
+[[mothra]]~\cite{mothra}\footnote{See
+\url{http://man.9front.org/1/mothra} for its manual page.},
+which contains about 4400 lines of C code (LOC), together
+with the supporting file servers and pipeline tools it relies on:
+[[webfs]] (4500 LOC), [[webcookies]] (1300 LOC), [[hget]] (1500 LOC),
+[[tcs]] (charset conversion), [[uhtml]] (HTML charset preprocessor),
+[[resize]] (image scaling), and [[getpix]] (image subprocess fetcher).
+
+%claude:
+%dup: Shell.nw
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and
+they form together a coherent set.
+%
+Moreover, [[mothra]] is arguably simpler to use and to understand
+than any of the modern browser engines, or even than text-mode
+browsers like [[lynx]]~\cite{lynx} or [[links]]~\cite{links}
+(the most popular text browsers on \unix).
+
+%claude:
+%cs-history:
+[[mothra]] descends from [[webpage]], one of the very first graphical
+web browsers, written by Tom Duff at Bell Labs shortly after
+Tim Berners-Lee released the first description of the web in 1991.
+%
+David Hogan rewrote [[webpage]] as [[mothra]] in the mid-1990s
+for \plan~4, and [[mothra]] has been maintained since by the
+\plan community, most recently by the 9front fork, which keeps
+it building against current \plan and has added support for TLS 1.2,
+redirects, and cookies.
+
+%claude:
+%plan9-is-cleaner:
+Despite its age, [[mothra]] still works: you can point it at a real HTTPS
+URL today and it will fetch the page, parse the HTML, and render the text.
+That is a remarkable property for a 30-year-old program, and one this
+book will try to explain. The short version is that [[mothra]] delegates
+nearly everything that changes (TLS cipher suites, HTTP header trends,
+cookie standards) to helper programs and file servers beneath it, so the
+browser code itself does not need to move.
+
 \section{Other web browsers}
-%TODO: Mosaic, Netscape, IE; Lynx, Links, w3m; Firefox (Gecko),
-%      Chromium (Blink), Safari (WebKit); \plan: charon, abaco
+
+%claude:
+Web browsers fall into three broad families: text-mode browsers,
+classic graphical browsers, and modern engines.
+
+%claude:
+%cs-history:
+The text-mode family---[[lynx]] (1992), [[links]] (2000),
+[[w3m]] (1995)---renders HTML as reflowed text on a terminal.
+They are small (20--80 kLOC), fast, usable over SSH, and good at
+reading documents. They share with [[mothra]] the fundamental
+simplification of treating HTML as a flow of text with inline
+markup rather than a box-model layout. Where [[mothra]] differs
+is that it runs inside a graphical windowing system
+(see the \book{Windows}) and can display inline images;
+the text browsers cannot.
+
+%claude:
+%cs-history:
+The classic graphical family started with NCSA Mosaic (1993),
+the first browser to popularize inline images. Netscape Navigator
+(1994) commercialized Mosaic's design, Microsoft Internet Explorer
+(1995) cloned Netscape, and the two fought the ``browser wars'' of
+the late 1990s. All of these browsers were roughly in [[mothra]]'s
+weight class (tens of thousands of LOC) and all implemented
+HTML~2 or HTML~3.2 without JavaScript or CSS---exactly the subset
+[[mothra]] still handles.
+
+%claude:
+%modern:
+The modern family consists of three rendering engines:
+{Gecko} (powering Firefox, from Netscape's 1998 open-source release),
+{WebKit} (powering Safari, forked from KHTML in~2001), and
+{Blink} (powering Chrome, Edge, Opera, forked from WebKit in~2013).
+Each engine counts in the millions of LOC and implements the full
+modern web platform: CSS Grid and Flexbox layouts, a JavaScript engine
+(V8, SpiderMonkey, JavaScriptCore) with JIT compilation, WebGL,
+WebAssembly, sandboxing, and much more.
+A good engineer can understand a part of one of these engines in
+a year of work; nobody understands all of them.
+
+%claude:
+%cs-history:
+\plan itself has had more than one browser. [[mothra]]'s predecessor
+was [[webpage]] by Tom Duff; its contemporary is [[abaco]] by Federico
+Benavento, written in~2004 on top of [[libdraw]] directly (rather than
+[[libpanel]], which [[mothra]] uses). [[abaco]] has slightly better
+HTML~4 coverage through its use of [[libhtml]], a more thorough parser
+library written by Russ Cox. I will compare the two in the Conclusion.
+
+\begin{figure}[]\centering
+\includegraphics[width=\textwidth]{lineage}
+\caption{Web browsers timeline}
+\label{fig:lineage}
+\end{figure}
+
+%dup: Shell.nw
+%claude:
+Figure~\ref{fig:lineage} presents a timeline of major web browsers.
+%
+I think [[mothra]] represents the best compromise for this book:
+it implements the essential features of a graphical web browser while
+still having a small and understandable codebase (about 4400 LOC),
+and it composes cleanly with the other \plan tools covered elsewhere
+in \principia.
 
 \section{Getting started}
 
+%claude:
+To play with [[mothra]], you will first need to install the \plan fork
+used in \principia (see \urlinstall).
+%
+Once booted, launch [[rio]] (the \plan windowing system, see
+the \book{Windows}), start a new shell window, and type:
+%
+\begin{verbatim}
+    % mothra http://example.com
+\end{verbatim}
+%
+A new window will open showing the rendered page. Click on any link
+to follow it; the address bar updates and mothra fetches the new page.
+The arrow buttons navigate history; the text box lets you type a fresh URL.
+
+%claude:
+You can also pipe HTML directly into [[mothra]] for testing:
+%
+\begin{verbatim}
+    % echo '<h1>Hello</h1><p>World' | mothra
+\end{verbatim}
+%
+This is useful for driving the parser without a network.
+
 \section{Requirements}
 
+%claude:
+This book assumes a good knowledge of the {C programming
+language}~\cite{kr}. If that is not the case I suggest you first read
+\emph{The C Programming Language}~\cite{kr} and possibly also
+\emph{Advanced Programming in the Unix Environment}~\cite{apue}.
+
+%claude:
+Basic familiarity with HTTP and HTML is helpful but not required.
+The \book{Network} provides the necessary background on TCP/IP
+and \plan's [[/net]] filesystem.
+%
+The \book{Kernel} explains how the kernel exposes network devices
+(including [[/net/tls]] for TLS) and how namespaces work, which is the
+substrate on top of which [[webfs]] operates.
+%
+The \book{Libcore} covers the user-space C library: [[fork]],
+[[exec]], [[pipe]], [[print]], and the~9P client library that
+[[webfs]] uses to serve [[/mnt/web]].
+%
+The \book{Widgets} describes [[libpanel]], the widget toolkit mothra
+uses to lay out its address bar, display area, status bar, and form
+widgets.
+
+%claude:
+This is {not} an introduction to the web or to HTML. Readers wanting
+a gentler walk through how a browser works from first principles can
+read \emph{Web Browser Engineering}~\cite{browser-engineering} in
+parallel with this book.
+
 \section{About this document}
-#include "../docs/latex/About.nw"
+\input{../docs/latex/About}
 
 \section{Copyright}
+\input{../docs/latex/CopyrightPlan9Text}
 
 \section{Acknowledgments}
+
+%claude:
+I would like to acknowledge of course Tom Duff, who wrote [[webpage]],
+the ancestor of [[mothra]], and David Hogan, who rewrote it as the
+program I will describe in this book---both wrote in some sense most
+of this book.
+%
+I also want to acknowledge Russ Cox, author of [[webfs]]
+and [[libhtml]]; the 9front maintainers who keep [[mothra]] building
+against modern \plan and who added TLS, redirect, and cookie support;
+and Federico Benavento, author of [[abaco]], whose work I will
+contrast with [[mothra]]'s in the Conclusion.
 
 %###############################################################################
 
@@ -111,47 +368,480 @@ Tom Duff, David Hogan, Russ Cox
 \label{chap:overview}
 %******************************************************************************
 
+%claude:
+Before showing the source code of [[mothra]], [[webfs]], and the
+supporting tools in the following chapters, I first give an overview
+in this chapter of the general principles of a web browser.
+%
+I also describe the interfaces that make up the \plan web stack
+(the [[/mnt/web]], [[/mnt/webcookies]], and [[/net/tls]] file servers),
+walk through a complete [[hello.html]] document, explain how the
+code is organized across several directories, and give the background
+necessary to understand the code I will show later.
+
 \section{Web browser principles}
+
+%claude:
+The following sections explain the core concepts any web browser must
+address: what a hypertext viewer is, how resources are named, how they
+are fetched, how they are rendered, how the \plan design composes
+small programs to do the job, and what [[mothra]] deliberately leaves
+out.
 
 \subsection{A viewer for hypertext documents}
 
+%claude:
+A web browser is, at its core, a viewer for a particular kind of
+document: {hypertext}. What distinguishes hypertext from ordinary
+text is the {hyperlink}: a piece of marked-up text whose activation
+fetches and displays another document, potentially somewhere else on
+the network.
+%
+Stripped of the modern layers (styling, scripting, interactivity),
+a web browser is then three things glued together:
+a {fetcher} (given a name, get the bytes),
+a {parser} (given bytes, find the text and the links),
+and a {renderer} (given text and links, show them on screen and let the
+user click).
+%
+[[mothra]] implements exactly these three and nothing more.
+
 \subsection{The URL as universal name}
+
+%claude:
+%terminology:
+A {URL} (Uniform Resource Locator) is the universal name of a
+resource on the web. It has the shape
+\texttt{scheme://host:port/path?query\#fragment}, where the scheme
+(usually [[http]] or [[https]]) selects the protocol, the host and
+port identify the server, the path identifies the resource within the
+server, the query carries parameters, and the fragment names an anchor
+inside the document. URLs are the input to nearly every browser
+operation: the address bar accepts them, hyperlinks embed them,
+bookmarks record them.
+
+%claude:
+URLs can be {absolute} (they specify the scheme and host) or
+{relative} (they omit those and are resolved against the URL of
+the current page). Resolving relative URLs is a more subtle operation
+than it first appears---it involves dot-segment normalization, handling
+of paths versus authorities, and careful distinction between the URL
+of the document and the [[<base>]] declared inside it. I devote
+Chapter~\ref{chap:urls} entirely to URL parsing and resolution.
 
 \subsection{Client/server over a text protocol}
 
+%claude:
+A browser fetches resources by speaking HTTP~\cite{rfc2616}, a
+request/response protocol carried over TCP (or TLS over TCP, for HTTPS).
+%plan9-is-cleaner:
+HTTP is remarkable for being a {text} protocol: a request is literally
+a few human-readable lines, as is a response.
+%
+You can see the whole thing by running:
+%
+\begin{verbatim}
+    % hget -v http://example.com/
+\end{verbatim}
+%
+The server's response is a status line, a list of [[Name: value]]
+headers, a blank line, and the body. No binary framing, no TLVs, no
+schemas. This is one reason the web grew so fast: anybody could debug
+an HTTP exchange with [[telnet]] and a keyboard. \plan's [[hget]],
+which I describe in Chapter~\ref{chap:hget}, is not much more than
+[[telnet]] plus URL parsing plus redirect handling.
+
 \subsection{Rendering text with structure (no layout engine required)}
+
+%claude:
+Once the bytes arrive, the browser has to turn them into something
+the user can see.
+%
+%modern:
+Modern browsers use a {box model}: every HTML element becomes a
+rectangular box, boxes nest and flow according to CSS rules, and a
+layout engine (thousands of lines of code) computes positions and
+sizes. This is how a page with a three-column grid, a sticky header,
+and a pop-up menu gets laid out.
+
+%claude:
+%plan9-is-cleaner:
+[[mothra]] does none of that. It treats an HTML document as a
+{linear flow of text} with inline markup, much like a word processor:
+the tokens come out of the parser and are word-wrapped into paragraphs,
+with occasional images, form fields, or links embedded in the flow.
+There is no box model, no column layout, no CSS. Most HTML~2 and
+HTML~3.2 documents render perfectly well this way; modern pages
+designed around grids and flex boxes render as reflowed text, which
+is usually still readable if not pretty.
+
+%claude:
+This is the same simplification the text-mode browsers ([[lynx]],
+[[links]], [[w3m]]) make. The lesson [[mothra]] teaches is that
+a big portion of what a browser {\em does} can be done with a
+flow-text view and nothing more---the box model is an optimization
+for visually rich layouts, not a requirement for reading documents.
 
 \subsection{Composition through pipes and file servers}
 
+%claude:
+%plan9-is-cleaner:
+The most distinctive \plan contribution to the browser design is
+the use of {file servers} and {pipes} where other systems use
+libraries and frameworks.
+%
+Instead of linking a library like [[libcurl]] to speak HTTP, mothra
+opens files under [[/mnt/web]]; the kernel routes those opens to the
+[[webfs]] file server, which does the actual HTTP work.
+%
+Instead of linking a charset library like [[iconv]], mothra pipes
+its input through [[uhtml]] (a 200-line program), which in turn
+pipes through [[tcs]] (the \plan [[iconv]] equivalent).
+%
+Instead of forking a decoder into the browser process, mothra
+spawns a separate [[getpix]] helper to fetch and decode images.
+
+%claude:
+The benefit is twofold.
+First, each piece can be replaced independently: 9front updated
+[[libsec]] to support modern TLS cipher suites, and [[mothra]] gained
+modern HTTPS with no code change whatsoever. Second, each piece is
+reusable: [[hget]] and [[mothra]] share the same [[webfs]]; any
+program that wants to read a URL can [[open]]\,[[/mnt/web/clone]];
+charset conversion is available system-wide through [[tcs]].
+%
+Chapter~\ref{chap:webfs} explores this pattern in depth.
+
 \subsection{Mothra for the pre-CSS, pre-JS web}
+
+%claude:
+%modern:
+[[mothra]] is a browser for the {pre-CSS, pre-JavaScript} web.
+It handles HTML tags (paragraphs, headings, lists, anchors, images,
+forms, tables), follows links, submits forms, stores cookies, and
+speaks HTTPS. It does not parse CSS. It does not run JavaScript.
+It does not lay out pages as a box model. It does not handle
+cross-origin policies, web sockets, service workers, WebAssembly, or
+any of the many features modern browsers accreted since about~2005.
+
+%claude:
+%why-study:
+Why study it, then?
+Because the pre-CSS, pre-JS web {\em is} the substrate the modern web
+is built on top of. HTTP has not fundamentally changed since~1996. HTML
+tags still mean what HTML~3.2 said they meant. TCP, TLS, URLs, MIME,
+cookies, forms: all of that is in [[mothra]], in about 4400 lines of
+C you can read in a weekend. Understanding [[mothra]] gives you a
+correct mental model for the bottom 90\%{} of what any browser does,
+with none of the distractions of the top 10\%.
 
 \section{The \plan web stack interfaces}
 
+%claude:
+\plan's design shows up not through a browser library, but through a
+small set of {filesystem interfaces} that cooperating programs read
+and write. The ones relevant to the browser are listed below; each
+will get a full chapter later.
+
 \subsection{[[/mnt/web]] ([[webfs]])}
+
+%claude:
+[[/mnt/web]] is the file tree served by [[webfs]]. It turns HTTP
+(and HTTPS, and FTP) into filesystem I/O. A program that wants to
+fetch a URL opens [[/mnt/web/clone]] (allocating a new connection),
+writes the URL to the connection's [[ctl]] file, and reads the
+resulting body, headers, and metadata from companion files like
+[[body]], [[headers]], [[contenttype]], [[redirect]], and so on.
+%
+No program on \plan links [[libcurl]]. They all use [[/mnt/web]].
 
 \subsection{[[/mnt/webcookies]]}
 
+%claude:
+[[/mnt/webcookies]] is a second file tree served by the
+[[webcookies]] program. It persists cookies across [[webfs]]
+restarts and across browsers.
+%
+A subtle point, covered in Chapter~\ref{chap:webcookies}, is that
+[[webfs]] {also} has its own in-memory cookie store
+(in [[webfs/cookies.c]]). Why both? Because [[webfs]] typically runs
+per-window and its in-memory cookies die with it; [[webcookies]]
+runs once per user session and survives.
+
 \subsection{Pipelines: [[fetch | uhtml | render]]}
+
+%claude:
+Mothra does not parse charsets, and its HTML parser assumes UTF-8.
+Many pages on the web are served in other encodings---Shift-JIS,
+GB2312, ISO-8859-1---and mothra deals with this through a {pipeline}:
+the fetched bytes are piped through [[uhtml]], a tiny program
+that sniffs the declared charset and, if needed, shells out to [[tcs]]
+to transcode to UTF-8. Only then do the bytes reach mothra's parser.
+%
+Chapter~\ref{chap:charset} shows the pipeline in detail.
 
 \subsection{[[/net/tls]] and HTTPS}
 
+%claude:
+HTTPS (HTTP over TLS) is not implemented in [[webfs]] either. It is
+implemented by the \plan kernel as a device driver: [[/net/tls]] is
+a file server served by [[devtls.c]] (see the \book{Kernel}). To
+send TLS records, [[webfs]] opens [[/net/tls/clone]], negotiates a
+session via [[libsec]], and then writes plaintext: the kernel does
+the encryption. This splits the browser's HTTPS story cleanly between
+a small [[libsec]] client (thousands of LOC, in user space, replaceable)
+and a simple I/O loop on plaintext files (unchanged since the 1990s).
+
 \section{[[mothra]] command-line interface}
 
+%claude:
+The [[mothra]] command accepts a URL and a handful of flags:
+
+\begin{verbatim}
+    usage: mothra [-d] [-m mtpt] [-a] [-v] [url]
+\end{verbatim}
+
+%claude:
+The [[-d]] flag enables debug tracing (each fetched URL is logged,
+and images piped through [[resize]] are saved to [[/tmp/mothra-*.bit]]
+for inspection).
+%
+The [[-m]] flag overrides the mount point for [[webfs]] (default
+[[/mnt/web]]), useful for testing.
+%
+The [[-a]] flag starts mothra in an ``ask for URL'' mode (no initial
+page).
+%
+The [[-v]] flag prints the version and exits.
+%
+If no URL is given, mothra reads HTML from standard input, which is
+handy for testing the parser.
+
 \section{[[hello.html]]}
+
+%claude:
+To make the discussion concrete, consider the simplest meaningful
+HTML document, [[hello.html]]:
+
+\begin{verbatim}
+    <html>
+      <head>
+        <title>Hello, Principia</title>
+      </head>
+      <body>
+        <h1>Hello, web!</h1>
+        <p>This is a <b>tiny</b> document with a
+           <a href="http://example.com/">link</a>
+           and an image: <img src="logo.png">.
+        </p>
+      </body>
+    </html>
+\end{verbatim}
+
+%claude:
+Rendered by mothra, this becomes: a heading in bold type,
+a paragraph of reflowed text with {\em tiny} shown in bold,
+[[link]] shown as an underlined clickable anchor, and [[logo.png]]
+fetched by [[getpix]] and inlined as a bitmap.
+%
+Follow the [[link]] and mothra opens a new connection through
+[[/mnt/web]], fetches [[http://example.com/]], parses the returned
+HTML, and paints it in the same window. The back arrow returns here.
+
+%claude:
+Every detail in the preceding paragraph---the flow of text, the
+discovery of the image URL, the spawning of [[getpix]], the
+[[/mnt/web]] interaction, the back/forward history---will be
+explained in a separate chapter. The skeleton of the whole story
+is in Figure~\ref{fig:arch}, below.
 
 \section{Code organization}
 \label{sec:code-orga}
 
 %dup: Shell.nw
-%TODO: table of source files for mothra/, webfs/, misc/ (hget, webcookies,
-%      uhtml, resize), tcs/; file -> chapter -> entities -> LOC
+%claude:
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files that make up the \plan browser stack, together with
+the main entities (e.g., structures, functions, globals) the file
+defines, and the corresponding chapter in this document in which the
+code contained in the file is primarily discussed.
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Component}            & {\bf Ch.}                   & {\bf File}                  & {\bf Main entities}                            & {\bf LOC} \\
+\otoprule
+GUI entry point            & \ref{chap:mothra-main}      & [[mothra/mothra.c]]         & [[main()]], event loop, panels                 & 1280 \\
+HTML parser                & \ref{chap:html-parsing}     & [[mothra/rdhtml.c]]         & [[rdhtml()]], tag dispatch, [[Item]]           & 1278 \\
+MIME sniffing              & \ref{chap:content-dispatch} & [[mothra/snoop.c]]          & [[snoop()]], [[mimetotype()]]                  &  132 \\
+Forms                      & \ref{chap:forms}            & [[mothra/forms.c]]          & [[Field]], [[uencodeform]], [[mencodeform]]    &  764 \\
+Image fetcher              & \ref{chap:images}           & [[mothra/getpix.c]]         & [[getpix()]], subprocess pipeline              &  191 \\
+URL adapter                & \ref{chap:urls}             & [[mothra/url.c]]            & [[urlload]], [[urlstr]]                        &  257 \\
+HTML tag table             & \ref{chap:html-parsing}     & [[mothra/html.syntax.c]]    & tag name table                                 &   95 \\
+\midrule
+Web file server            & \ref{chap:webfs}            & [[webfs/main.c]]            & [[main()]], 9P dispatch                        &   67 \\
+9P files                   & \ref{chap:webfs}            & [[webfs/fs.c]]              & [[/mnt/web]] tree                              &  616 \\
+HTTP transport             & \ref{chap:webfs}            & [[webfs/http.c]]            & request/response, auth, redirects              &  539 \\
+Per-client thread          & \ref{chap:webfs}            & [[webfs/client.c]]          & [[Client]], [[clientbodyopen()]]               &  437 \\
+Async I/O                  & \ref{chap:webfs}            & [[webfs/io.c]]              & [[iotlsdial]], [[ioprint]]                     &   89 \\
+Cookie jar (inline)        & \ref{chap:webcookies}       & [[webfs/cookies.c]]         & [[Jar]], [[Cookie]]                            & 1173 \\
+Plumb dispatch             & \ref{chap:events}           & [[webfs/plumb.c]]           & plumb messages                                 &  165 \\
+URL algebra                & \ref{chap:urls}             & [[webfs/url.c]]             & RFC 3986                                       & 1092 \\
+\midrule
+Cookie file server         & \ref{chap:webcookies}       & [[misc/webcookies.c]]       & standalone [[Jar]] server                      & 1266 \\
+CLI HTTP client            & \ref{chap:hget}             & [[misc/hget.c]]             & [[doftp]], [[dohttp]]                          & 1502 \\
+HTML charset preprocessor  & \ref{chap:charset}          & [[misc/uhtml.c]]            & sniff meta, exec [[tcs]]                       &  194 \\
+Image scaling              & \ref{chap:images}           & [[misc/resize.c]]           & bilinear resize                                &  224 \\
+\midrule
+Charset transcoder         & \ref{chap:charset}          & [[tcs/tcs.c]]               & conversion driver                              &  596 \\
+\bottomrule
+\end{tabular}
+\caption{Source files of the \plan browser stack covered in this book.
+Tables of charset-specific data (big5, gbk, jis, ksc, \ldots)
+in [[tcs/]] are not listed.
+}
+\label{tab:code-orga}
+\end{center}
+\end{table*}
 
 \section{Software architecture}
 \label{sec:software-architecture}
 
+%claude:
+Figure~\ref{fig:arch} shows the \plan browser stack. Each box is a
+program or file server; arrows are file I/O or process spawns.
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+            +-------------------- mothra --------------------+
+            |  main event loop, panel tree, rdhtml.c parser  |
+            +-------------------+----------------------------+
+                                |
+        open/read/write         |      exec          exec
+          /mnt/web/*            |     getpix        uhtml+tcs
+                                |       |             |
+                                v       v             v
+                  +-----------+   +---------+   +-----------+
+                  |  webfs    |   | getpix  |   |  uhtml    |
+                  |           |   | + resize|   |  + tcs    |
+                  +-----+-----+   +----+----+   +-----+-----+
+                        |              |              |
+                        | TCP / TLS    | /mnt/web/*   | pipe
+                        v              v              v
+             +--------+-----+     (back to webfs)   (back to mothra)
+             | /net/tcp     |
+             | /net/tls     |
+             | (kernel)     |
+             +--------------+
+\end{verbatim}
+\caption{The \plan browser stack.
+[[mothra]] is the user-facing GUI;
+[[webfs]] is a file server exposing HTTP/HTTPS/FTP as [[/mnt/web]];
+[[getpix]] and [[resize]] are image helpers;
+[[uhtml]] and [[tcs]] are charset preprocessors;
+[[/net/tcp]] and [[/net/tls]] are kernel devices.
+}
+\label{fig:arch}
+\end{figure}
+
 \subsection{Trace of a web request: [[mothra http://example.com]]}
 
+%claude:
+The traversal of the stack for a single page load is:
+
+\begin{enumerate}
+
+\item Mothra's [[main()]] calls [[url2target]] to canonicalize
+[[http://example.com]] into an internal URL object, using
+[[mothra/url.c]] (Chapter~\ref{chap:urls}).
+
+\item Mothra opens [[/mnt/web/clone]]. The kernel routes the open
+to [[webfs]], which allocates a new [[Client]] structure and returns
+a connection number (Chapter~\ref{chap:webfs}).
+
+\item Mothra writes the URL to [[/mnt/web/$n$/ctl]]. Webfs parses
+it with its full RFC 3986 parser ([[webfs/url.c]]), opens
+[[/net/tcp/clone]] (or [[/net/tls/clone]] for HTTPS), and sends
+the HTTP request (Chapter~\ref{chap:webfs}).
+
+\item Mothra opens [[/mnt/web/$n$/contenttype]] and reads the MIME
+type. It uses [[snoop.c]] to dispatch (Chapter~\ref{chap:content-dispatch}).
+
+\item Mothra opens [[/mnt/web/$n$/body]] and reads the bytes through
+a pipe to [[uhtml]], which reads them back, sniffs the charset, and
+pipes through [[tcs]] if needed (Chapter~\ref{chap:charset}).
+
+\item The UTF-8 bytes reach mothra's [[rdhtml.c]], which tokenizes
+the HTML, dispatches on tags, and builds a flat list of [[Item]]s
+(Chapter~\ref{chap:html-parsing}).
+
+\item The [[Item]] list is walked by the layout code, which word-wraps
+it into text runs and emits libpanel draw calls
+(Chapter~\ref{chap:layout} and Chapter~\ref{chap:tag-rendering}).
+
+\item When an [[<img>]] tag is encountered, mothra [[fork]]s a
+[[getpix]] subprocess and passes it a handle on the new
+[[/mnt/web/$n$/body]]. [[getpix]] decodes the image (possibly piping
+through [[resize]] if it is too large) and writes a bitmap that
+mothra reads back and blits onto the panel
+(Chapter~\ref{chap:images}).
+
+\item The user clicks a link. Libpanel calls the anchor handler,
+which extracts the target URL, resolves it against the base, and
+goes back to step~2.
+
+\end{enumerate}
+
 \section{Book structure}
+
+%claude:
+The book is organized in three parts, preceded by a short preface of
+setup chapters and followed by a conclusion and the usual appendices.
+
+%claude:
+The {preface} (Chapters \ref{chap:intro}--\ref{chap:mothra-main})
+contains this chapter, the core data structures used throughout the
+code, and a walkthrough of mothra's [[main()]] and top-level event
+loop. Reading [[main()]] early gives you the skeleton on which every
+later chapter hangs.
+
+%claude:
+{Part~I, Retrieving the Page}, covers everything that happens before
+mothra has any bytes to render: URL parsing
+(Chapter~\ref{chap:urls}), the warmup HTTP client [[hget]]
+(Chapter~\ref{chap:hget}), the [[webfs]] file server
+(Chapter~\ref{chap:webfs}), the [[webcookies]] companion
+(Chapter~\ref{chap:webcookies}), the retrieval state machine inside
+mothra (Chapter~\ref{chap:retrieval}), and the charset pipeline
+(Chapter~\ref{chap:charset}). By the end of Part~I, clean UTF-8 bytes
+are queued up for the parser.
+
+%claude:
+{Part~II, Rendering the Page}, picks up the bytes and turns them
+into pixels: HTML parsing (Chapter~\ref{chap:html-parsing}),
+MIME-based content dispatch (Chapter~\ref{chap:content-dispatch}),
+the layout engine (Chapter~\ref{chap:layout}), the per-tag rendering
+rules (Chapter~\ref{chap:tag-rendering}), tables
+(Chapter~\ref{chap:tables}), images (Chapter~\ref{chap:images}), and
+forms (Chapter~\ref{chap:forms}). By the end of Part~II, the page is
+on screen and the user can interact with it.
+
+%claude:
+{Part~III, Beyond the Basics}, covers navigation and history
+(Chapter~\ref{chap:navigation}), event handling and integration with
+the rest of \plan (Chapter~\ref{chap:events}), developer tools
+(Chapter~\ref{chap:devtools}), and advanced topics like proxies,
+gzip, and FTP (Chapter~\ref{chap:advanced}).
+
+%claude:
+The {conclusion} (Chapter~\ref{chap:conclusion}) summarizes what has
+been covered, highlights the design patterns that recur across the
+stack, and compares mothra with [[abaco]] and with modern browsers.
+%
+The {appendices} cover cross-cutting concerns---debugging, profiling,
+error management, and shared utilities.
 
 %###############################################################################
 
@@ -539,13 +1229,258 @@ Tom Duff, David Hogan, Russ Cox
 \label{chap:conclusion}
 %******************************************************************************
 
+%dup: Make.nw
+%claude:
+You now know how the \plan web browser [[mothra]] works, to the
+smallest details, and more generally how many web browsers work at
+their core.
+%claude:
+You have followed a URL like [[http://example.com/]] from the address
+bar, through mothra's URL parser, through a 9P conversation with
+[[webfs]], through a TCP (or TLS) dial to the origin server, through
+the charset pipeline [[uhtml | tcs]], into mothra's [[rdhtml.c]]
+parser, out as a flat list of [[Item]]s, and finally onto the screen
+as word-wrapped text with clickable anchors and inlined images.
+Click a link and the same machinery runs again, one page at a time.
+
 \section{Putting it all together}
+
+%claude:
+At its core, [[mothra]] solves the browser problem by {\em refusing
+to solve most of it}. It does not have a layout engine; it treats
+documents as a flow of text. It does not have a TLS library; it opens
+[[/net/tls]] and writes plaintext. It does not have a cookie subsystem
+of its own; it delegates to [[webfs]] and [[webcookies]]. It does not
+have an image decoder; it spawns [[getpix]]. It does not have a
+charset library; it pipes through [[uhtml]] and [[tcs]].
+
+%claude:
+%plan9-is-cleaner:
+What is left in [[mothra]], once all that is subtracted, is about
+4400 lines of C that do the three things a browser cannot avoid
+doing itself: parse HTML, lay out a flow of text, and drive a
+user-facing event loop. Everything else is somebody else's job.
+
+\section{Patterns and techniques}
+
+%claude:
+Several techniques appear repeatedly across the stack, and apply
+far beyond web browsers:
+
+\begin{itemize}
+
+\item \emph{File server as API boundary}: [[/mnt/web]], [[/mnt/webcookies]],
+and [[/net/tls]] are all file servers. A program interacts with them
+through [[open]], [[read]], and [[write]]---the same operations it uses
+for ordinary files. No library needs to be linked, no versioning of
+APIs is needed: the filesystem is the ABI. This is the \plan design
+signature and appears throughout the \book{Kernel} and the
+\book{Libcore} as well.
+
+\item \emph{Pipe composition for transformation}: the
+[[fetch | uhtml | tcs]] pipeline is a chain of tiny programs, each
+doing one thing. It is literally a \plan shell pipeline, dressed up
+as a browser input stage. The same pattern appears wherever a
+sequence of transformations is more easily expressed as cooperating
+processes than as a monolithic routine; the \book{Shell} develops it
+in full.
+
+\item \emph{Subprocess per helper}: [[getpix]] is not a library call,
+it is a separate program mothra [[fork]]s. This keeps the browser's
+address space clean of decoder bugs, makes helpers replaceable, and
+gives each helper its own debug flags. Modern browsers reinvent this
+pattern in the large: Chrome's per-tab process, its GPU process, and
+its network process are all helpers-in-processes, with millions of
+lines of IPC plumbing around them.
+
+\item \emph{Content dispatch from MIME type}: [[snoop.c]] runs
+[[/bin/file -m]] as a subprocess, classifies the content, and chooses
+a renderer. Polymorphism by sniffing, rather than by type declaration.
+The same idea is behind \unix's shebang lines, \plan's [[/mnt/plumb]]
+dispatch, and HTTP's own [[Content-Type]] negotiation.
+
+\item \emph{Lenient parsing}: [[rdhtml.c]] never refuses a malformed
+document. This is the same approach every real HTML parser takes,
+because rejecting real-world HTML would reject most of the web.
+The lesson---that a public data format, once popular, cannot be made
+strict after the fact---recurs in HTTP header parsing, email, URLs,
+CSV, JSON in the wild, and every other popular text format.
+
+\item \emph{Flat item list instead of a DOM}: mothra does not build a
+tree you can query after the fact, because it never needs to. Removing
+the DOM removes tens of thousands of lines of bookkeeping; that is the
+price the modern web pays for letting JavaScript inspect the document.
+The general lesson: if nobody {\em queries} your parsed representation
+later, you do not need an inspectable tree.
+
+\end{itemize}
+
+\section{Connections to other books}
+
+%claude:
+Because mothra is a user-space graphical program that talks to a
+file-server network stack, it sits at the top of several books in
+\principia, and I encourage you to continue with any of them:
+
+\begin{itemize}
+
+\item The \book{Kernel} explains what lies behind the file servers
+mothra uses: [[/net/tcp]], [[/net/tls]] ([[devtls.c]]), the
+namespace mechanism that attaches [[/mnt/web]] into the process's
+view of the filesystem, and the [[rfork]] syscall mothra uses to
+spawn [[getpix]].
+
+\item The \book{Libcore} explains the user-space C library underneath:
+[[print]], [[Bio]] buffered I/O, [[exec]], [[pipe]], the 9P client
+library [[lib9p]] that both mothra and [[webfs]] use, and the memory
+allocator whose debug hooks are exposed by [[mothra -d]].
+
+\item The \book{Widgets} explains [[libpanel]], the toolkit mothra
+uses for its address bar, display pane, status bar, and form widgets.
+Form fields in particular are ordinary libpanel widgets
+(text entry, check box, radio group) assembled by [[forms.c]].
+
+\item The \book{Windows} explains [[rio]], the \plan window manager
+mothra runs under. Mothra's event loop, plumb integration, and
+snarf (selection) behavior only make sense in the context of rio's
+conventions.
+
+\item The \book{Network} explains the TCP/IP stack, the [[/net]]
+filesystem, DNS resolution, and TLS---everything [[webfs]] ultimately
+delegates to the kernel for.
+
+\item The \book{Shell} is, somewhat unexpectedly, relevant to the
+browser: [[uhtml]] literally execs [[rc]] to run a
+[[\{tcs -f cset || cat\} | tcs -f html]] pipeline. The charset
+stage of the browser is a shell pipeline.
+
+\end{itemize}
 
 \section{What's missing: CSS, JavaScript, modern web}
 
-\section{Comparison with abaco (newer, own UI, libhtml-based, more HTML4)}
+%claude:
+%modern:
+What you will not find in [[mothra]]:
 
-\section{Modern browser scale (Chromium, Firefox)}
+\begin{itemize}
+
+\item {CSS}. No selectors, no cascade, no box model. Styling is
+implicit in mothra's per-tag rendering defaults (headings get bold
+larger fonts, [[<code>]] gets a fixed-width font, and so on). Sites
+that rely on CSS for layout will render as linearized text.
+
+\item {JavaScript}. No script execution, no DOM, no event model
+beyond the browser-native clicks and keyboard. Pages that generate
+their content in JavaScript after load (single-page apps) will appear
+mostly empty.
+
+\item {Cross-origin policies}, CORS, service workers, web sockets,
+WebAssembly, WebGL, indexed DB, fetch API, and the long tail of modern
+web platform features. None of this exists.
+
+\item {Modern security model}: mothra will happily submit a form
+to any URL, cross-origin or not. There is no concept of a secure
+context beyond HTTPS itself.
+
+\item Incremental {layout}: mothra fetches the full document, parses
+it, and renders. It does not progressively update the page as bytes
+arrive. (It does progressively fetch images in parallel, however.)
+
+\end{itemize}
+
+%claude:
+%why-study:
+Whether any of this matters for you depends on what you want the
+browser for. For reading documents on the web, mothra still works
+surprisingly well in 2026, especially on text-heavy sites. For
+using web applications---which is what most users today mean by
+``the web''---it does not.
+
+\section{Comparison with abaco}
+
+%claude:
+\plan has another graphical browser, [[abaco]], written in~2004 by
+Federico Benavento. The two make different design choices and are
+worth comparing.
+
+\begin{itemize}
+
+\item {Size}: [[mothra]] is about 4400 LOC; [[abaco]] is about
+7900 LOC. [[abaco]] also depends on [[libhtml]], a separate
+~4500 LOC HTML library by Russ Cox, which [[mothra]] does not use.
+
+\item {Parser}: [[abaco]] uses [[libhtml]], a more thorough HTML~4
+parser with better support for tables, styles, and HTML entities.
+[[mothra]] has its own parser in [[rdhtml.c]], 1300 LOC, that trades
+coverage for simplicity.
+
+\item {UI toolkit}: [[mothra]] uses [[libpanel]] (see the \book{Widgets}),
+which gives it integration with the rest of the \plan widget ecosystem.
+[[abaco]] has its own UI layer written directly on [[libdraw]], with
+support for tabs, incremental layout, and a more modern event model.
+
+\item {Composition}: [[mothra]] uses the [[uhtml | tcs]] pipeline
+for charset handling, spawned as a subprocess. [[abaco]] links
+[[tcs]] in directly, with its own [[charsets.txt]]/[[charsets.awk]]
+generator. Mothra's is the more \plan-native design; abaco's is
+more self-contained.
+
+\item {Maintenance}: [[mothra]] is still carried and patched by the
+9front fork of \plan. [[abaco]] has been frozen since its original
+release, with only cosmetic changes since.
+
+\end{itemize}
+
+%claude:
+I chose [[mothra]] for this book because it is smaller, because its
+composition through pipes and file servers makes it a cleaner case
+study of \plan design principles, and because [[libpanel]] integration
+gives us a natural cross-reference to the \book{Widgets}.
+%
+[[abaco]] is more architecturally ambitious but tells a muddier
+design story.
+
+\section{Modern browser scale}
+
+%claude:
+%modern:
+For perspective, here are rough sizes of modern web engines compared
+to [[mothra]]:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lr}
+\toprule
+{\bf Engine / browser}      & {\bf LOC (approx.)} \\
+\midrule
+mothra + webfs + libhtml + helpers (this book) & 14 k \\
+Links                       & 85 k \\
+Lynx                        & 170 k \\
+Gecko (Firefox's engine)    & 6 M \\
+WebKit (Safari's engine)    & 9 M \\
+Chromium (Chrome, Edge, \ldots)      & 32 M \\
+\bottomrule
+\end{tabular}
+\caption{Approximate lines of code of web browsers (2026).}
+\label{tab:browser-loc}
+\end{table}
+
+%claude:
+The three orders of magnitude between [[mothra]] and Chromium are
+not gratuitous: they buy CSS layout, a JavaScript engine with JIT,
+GPU compositing, a sandbox, WebAssembly, Web APIs, modern cryptography,
+and thousands of quirks accreted over 30 years of web compatibility.
+But they also hide the essential structure that is plainly visible
+in [[mothra]]: URL, HTTP, HTML, flow layout, click to follow.
+
+%claude:
+%plan9-is-cleaner:
+The core algorithm of a browser has not changed since 1991. What
+changed is what a browser is expected to do {\em besides} displaying
+hypertext. Reading [[mothra]] is a way to see that core without the
+accretions---to understand, from end to end, what is actually
+necessary to turn a URL into a clickable page. Everything else, as
+far as pedagogy is concerned, is an optimization.
 
 %###############################################################################
 
