@@ -434,6 +434,7 @@ are {fetched}, how they are {rendered}, etc.
 %small programs to do the job, and what [[mothra]] deliberately leaves out.
 
 \subsection{A viewer for hypertext documents}
+\label{sec:principles-hypertext}
 
 %claude:
 A web browser is, at its core, a viewer for a particular kind of
@@ -451,6 +452,7 @@ a {\em renderer} (given text and links, show them on screen and let the user cli
 [[mothra]] implements exactly these three and nothing more.
 
 \subsection{The URL as universal name}
+\label{sec:principles-urls}
 
 %claude:
 %terminology:
@@ -526,9 +528,43 @@ an HTTP exchange with [[telnet]] and a keyboard. \plan's [[hget]],
 which I describe in Chapter~\ref{chap:hget}, is not much more than
 [[telnet]] plus URL parsing plus redirect handling.
 
-%yoann: maybe explain a bit more header, used for request and for response for many things, with request header, response header
+%claude:
+%terminology:
+Those [[Name: value]] lines are called {\em headers}, and they carry
+everything that is not the resource itself. They come in two flavors.
+%
+{\em Request headers} (sent by the browser) advertise what the client
+wants or can accept: [[Host:]] selects the virtual host on a shared
+server, [[User-Agent:]] identifies the browser, [[Accept:]] lists
+tolerated MIME types (Section~\ref{sec:principles-mime}),
+[[Accept-Encoding:]] gossips about [[gzip]] support,
+[[Cookie:]] echoes back session state
+(Section~\ref{sec:principles-cookies}), and
+[[Referer:]] names the page that contained the link.
+%
+{\em Response headers} (sent by the server) describe the resource
+being returned: [[Content-Type:]] is the MIME type that tells the
+browser whether to render, save, or dispatch to an external viewer
+(Section~\ref{sec:principles-mime});
+[[Content-Length:]] sizes the body;
+[[Content-Encoding:]] flags compression and interacts with charset
+handling (Section~\ref{sec:principles-charset});
+[[Location:]] carries the target of a redirect
+(Section~\ref{sec:principles-redirects});
+[[Set-Cookie:]] hands a cookie to the browser
+(Section~\ref{sec:principles-cookies});
+[[Cache-Control:]] and [[Expires:]] control caching.
+%
+A few headers can appear on either side (for example [[Date:]],
+[[Connection:]], [[Content-Type:]] when a request itself carries a
+body, as in form [[POST]]s — Section~\ref{sec:principles-forms}).
+%
+The header block is open-ended: unknown headers are ignored, which
+is how the protocol grew from a handful of fields in 1991 to dozens
+today without ever breaking older clients.
 
 \subsection{Redirects}
+\label{sec:principles-redirects}
 
 %claude:
 %terminology:
@@ -579,6 +615,7 @@ Both [[hget]] and [[webfs]] implement the redirect loop;
 Chapter~\ref{chap:hget} is the simpler of the two.
 
 \subsection{TLS and HTTPS}
+\label{sec:principles-tls}
 
 %claude:
 %terminology:
@@ -606,6 +643,7 @@ the integration point is one call to [[tlsClient()]] in [[webfs]]
 (Chapter~\ref{chap:hget}).
 
 \subsection{HTTP authentication}
+\label{sec:principles-auth}
 
 %claude:
 %terminology:
@@ -645,6 +683,7 @@ small library call. The integration is described in
 Chapter~\ref{chap:webfs}.
 
 \subsection{MIME types and content dispatch}
+\label{sec:principles-mime}
 
 %claude:
 %terminology:
@@ -674,6 +713,7 @@ I describe both the dispatch and the sniffing logic in
 Chapter~\ref{chap:content-dispatch}.
 
 \subsection{Character encodings}
+\label{sec:principles-charset}
 
 %claude:
 %terminology:
@@ -715,6 +755,7 @@ dispatcher) and [[tcs]] (the actual converter), covered in
 Chapter~\ref{chap:charset}.
 
 \subsection{Rendering text with structure}% (no layout engine required)}
+\label{sec:principles-render}
 
 %claude:
 Once the bytes arrive, the browser has to turn them into something
@@ -747,6 +788,7 @@ flow-text view and nothing more---the box model is an optimization
 for visually rich layouts, not a requirement for reading documents.
 
 \subsection{Documents reference other resources}
+\label{sec:principles-refs}
 
 %claude:
 %terminology:
@@ -812,6 +854,7 @@ machinery is still present: Chapter~\ref{chap:images} describes how
 in parallel, with placeholders rendered first.
 
 \subsection{Cookies and stateful sessions}
+\label{sec:principles-cookies}
 
 %claude:
 %terminology:
@@ -821,8 +864,12 @@ same user. That works for fetching documents, but not for logging in,
 keeping a shopping cart, or remembering preferences---so the web
 needed a way to attach session state to the otherwise-stateless
 protocol. The answer, bolted on top of HTTP in 1994 by Netscape, was
-{\em cookies}.
-%yoann1: why this term cookie?
+{\em cookies}\footnote{%
+The name was borrowed from the older Unix/X Window
+term {\em magic cookie}: an opaque token a program hands out and
+later expects back unchanged, as a way of recognizing traffic it
+already saw (for instance, X11's [[MIT-MAGIC-COOKIE-1]] authentication).
+An HTTP cookie plays exactly that role.}.
 
 %claude:
 %terminology:
@@ -861,7 +908,14 @@ The full round-trip for a login flow:
     Cookie: sess=abc                     -->         <- same cookie sent again
                                           <--  200 OK
 \end{verbatim}
-%yoann1: can maybe mention the 302 redirect we talked before?
+%
+Note how the server's response combines two of the mechanisms from
+the earlier subsections: a [[302 Found]] redirect
+(Section~\ref{sec:principles-redirects}) to steer the browser to
+[[/home]], and a [[Set-Cookie:]] header piggy-backing on the same
+response to install the session. The browser follows the redirect
+exactly as in any other case, except that from the next request
+onward it attaches the [[Cookie:]] header.
 
 The server stores no per-user state in the cookie itself; the
 \verb+sess=abc+ string is just a key into the server's session table.
@@ -882,6 +936,7 @@ The cookie file server [[webcookies]] is also covered there, along
 with the dual implementation it shares with [[webfs]].
 
 \subsection{Forms turn a viewer into a client}
+\label{sec:principles-forms}
 
 %claude:
 %terminology:
@@ -894,7 +949,14 @@ the submit button, the field values are encoded into an HTTP request
 and sent to the action URL---the browser becomes, briefly, an
 interactive client of the web application rather than a passive
 viewer of a document.
-%yoann1: was form part of the original HTML 1.0 spec? or it arrived later?
+
+%claude:
+%cs-history:
+Forms were not in the original HTML of 1991--1992 (the informal ``HTML
+1.0''); they were introduced in the [[HTML+]] drafts in 1993 and
+formalized in HTML 2.0 (RFC~1866, November 1995). The web was a
+document-viewing system for almost two years before it became
+interactive.
 
 %claude:
 %terminology:
@@ -973,7 +1035,7 @@ in the following sections.
 The [[mothra]] command accepts a URL and a handful of flags:
 
 \begin{verbatim}
-    usage: mothra [-d] [-m mtpt] [-a] [-v] [url]
+    usage: mothra [-dvak] [-m mtpt] [url]
 \end{verbatim}
 
 %claude:
@@ -984,15 +1046,19 @@ for inspection).
 The [[-m]] flag overrides the mount point for [[webfs]] (default
 [[/mnt/web]]), useful for testing.
 %
-The [[-a]] flag starts mothra in an ``ask for URL'' mode (no initial
-page).
+The [[-a]] flag starts mothra with the alternate ``ask'' panel
+visible rather than the document panel, so the user types a URL
+before any fetch happens.
 %
-The [[-v]] flag prints the version and exits.
-%yoann1: this seems incorrect; mothra -v runs mothra and does not print anything
+The [[-v]] flag turns on verbose mode: HTML parsing errors are
+written to file descriptor~2 instead of being silently swallowed.
 %
-If no URL is given, mothra reads HTML from standard input, which is
-handy for testing the parser.
-%yoann1: this also seems incorrect
+The [[-k]] flag tells mothra to skip inline images (same as toggling
+``kill images'' from the menu); useful over slow links.
+%
+If no URL argument is given, mothra falls back to the [[$url]]
+environment variable; if that is also empty, it comes up with no
+initial page and waits for the user to enter one.
 
 \subsection{[[mothra]] graphical user interface}
 
@@ -1325,10 +1391,11 @@ The traversal of the stack for a single page load is:
 
 \begin{enumerate}
 
-\item Mothra's [[main()]] calls [[url2target]] to canonicalize
-[[http://example.com]] into an internal URL object, using
-[[mothra/url.c]] (Chapter~\ref{chap:urls}).
-%yoann1: where is url2target function?
+\item Mothra's [[main()]] calls [[geturl]], which in turn calls
+[[selurl]] and [[seturl]] (in [[mothra/mothra.c]]) to wrap
+[[http://example.com]] in a [[Url]] object. The heavy parsing is
+deferred: mothra keeps the URL almost verbatim and lets [[webfs]]
+canonicalize it later (Chapter~\ref{chap:urls}).
 
 \item Mothra opens [[/mnt/web/clone]]. The kernel routes the open
 to [[webfs]], which allocates a new [[Client]] structure and returns
