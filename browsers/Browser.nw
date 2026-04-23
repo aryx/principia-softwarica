@@ -66,7 +66,6 @@ Tom Duff and Russ Cox
 %src: https://9p.io/wiki/plan9/Web_browsers/index.html
 % and also https://en.wikipedia.org/wiki/Tom_Duff
 
-
 \maketitle
 \hrule
 \input{../docs/latex/Copyright}
@@ -75,7 +74,6 @@ Tom Duff and Russ Cox
 
 \begingroup
 \hypersetup{linkcolor=blue}
-% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
 \tableofcontents
 \endgroup
 
@@ -83,8 +81,8 @@ Tom Duff and Russ Cox
 
 %******************************************************************************
 \chapter{Introduction}
-\label{chap:intro}
 %******************************************************************************
+\label{chap:intro}
 
 %claude:
 The goal of this book is to explain with full details the source code of
@@ -850,8 +848,64 @@ error management, and shared utilities.
 \label{chap:core-ds}
 %******************************************************************************
 
+%claude:
+In this chapter I introduce the data structures that the rest of the book
+revolves around. They split cleanly along the boundary between the two
+processes that together make up the browser: \verb+webfs+ owns
+the network-facing types ([<Url>], [<Client>], [<Cookie>], [<Jar>], [<Ibuf>])
+and \verb+mothra+ owns the rendering types ([<Tag>], [<Action>], [<Pair>],
+[<Entity>], [<Www>]). The 9P file interface at \verb+/mnt/web+ is the only
+thing connecting them; no shared header, no linked library.
+
+%claude:
+The relationships between the main types fit on one diagram:
+
+\begin{verbatim}
+    webfs side                          mothra side
+    ----------                          -----------
+    Client                              Www
+      url ----> Url                       url ----> Url
+      ctl                                 text ----> Rtext list
+      creq                                pix
+      io   ----> Ioproc                   form
+      aux                                 (title, yoffs, ...)
+
+    Jar                                 Rtext (libpanel)
+      c    ----> Cookie[]                 (one node per text run,
+      qid                                  links to Action for <a>/<img>)
+      file
+                                        Action
+                                          link, image, field, ...
+\end{verbatim}
+
+%claude:
+A web request becomes a \verb+Client+ inside \verb+webfs+ and a \verb+Www+
+inside \verb+mothra+. Both keep their own copy of the parsed [<Url>] (each
+side has its own \verb+url.c+ implementation, since serializing parsed URLs
+across the file-system boundary would be silly). Cookies stay entirely on
+the \verb+webfs+ side; mothra never sees them. The HTML parse tree never
+crosses the boundary either: mothra reads the body bytes from
+\verb+/mnt/web/N/body+, parses them locally into a flat list of
+\verb+Rtext+ nodes (with \verb+Action+ side-data), and hands that to
+\verb+libpanel+ for layout.
+
+%claude:
+A note on naming. Several types have the same C name in both programs but
+different definitions: \verb+webfs+'s \verb+struct Url+ carries a small
+vtable for scheme-specific I/O ([[open]], [[read]], [[close]]) used inside
+the file server, while \verb+mothra+'s \verb+struct Url+ is just the parsed
+fields it needs to display, plus a couple of book-keeping flags. I tag the
+chunks \verb+(webfs)+ and \verb+(mothra)+ to disambiguate.
+
 \section{URLs}
 
+%claude:
+A [<Url>] in \verb+webfs+ is two things in one struct: the parsed components
+of the URL (\verb+scheme+, \verb+host+, \verb+path+, \verb+query+,
+\verb+fragment+, plus userinfo for FTP), and a tiny per-scheme vtable
+([[open]], [[read]], [[close]]) so the request loop in
+\verb+client.c+ can dispatch to the right backend without knowing anything
+about HTTP, FTP, or \verb+file://+.
 
 <<enum [[UScheme]]>>=
 /*
@@ -870,6 +924,13 @@ enum
     UScurrent,
 };
 @
+
+%claude:
+The first three function pointers are what makes [<Url>] more than a record.
+\verb+UShttp+ initializes them to \verb+httpopen+/\verb+httpread+/\verb+httpclose+,
+\verb+USftp+ to the FTP equivalents, and so on. Once an URL is parsed,
+the \verb+webfs+ request loop never branches on \verb+ischeme+ again: it
+just calls \verb+u->open(c, u)+ and lets C dispatch.
 
 <<struct [[Url]](webfs)>>=
 struct Url
@@ -900,6 +961,12 @@ struct Url
     };
 };
 @
+
+%claude:
+[<SplitUrl>] is the parser's intermediate form: pairs of pointers into the
+input string, one per RFC 3986 component. No allocation happens during
+parsing; only after the components are validated does \verb+url.c+ copy them
+into the heap-allocated [<Url>].
 
 <<struct [[SplitUrl]](webfs)>>=
 struct SplitUrl
@@ -983,6 +1050,13 @@ copyurl(Url *u)
 }
 @
 
+%claude:
+\verb+rewriteurl+ enforces an invariant: \verb+u->url+ is always the canonical
+serialization of \verb+u+'s components. Whenever the request loop mutates a
+field (e.g.\ following a redirect, or filling in a relative URL against a
+base), it calls \verb+rewriteurl+ to re-derive the string. That string is
+what the kernel hands back when a client reads \verb+/mnt/web/N/parsed/url+.
+
 <<function [[rewriteurl]](webfs)>>=
 void
 rewriteurl(Url *u)
@@ -1027,6 +1101,14 @@ seturlquery(Url *u, char *query)
 
 \section{HTTP requests and responses}
 
+%claude:
+[<HttpState>] is what \verb+http.c+ keeps for each in-flight request. It
+holds the network file descriptor, a buffered reader [<Ibuf>] (so headers
+can be parsed line by line without one [[read]] per byte), and three out-
+parameters that the response parser fills in: a captured \verb+Location+ for
+redirects, captured \verb+Set-Cookie+ headers to forward to
+\verb+webcookies+, and captured \verb+WWW-Authenticate+ challenges.
+
 <<struct [[HttpState]](webfs)>>=
 struct HttpState
 {
@@ -1043,6 +1125,18 @@ struct HttpState
 
 \section{The [[/mnt/web]] interface}
 
+%claude:
+The shape of \verb+webfs+'s file tree is the entire public API of the
+network side of the browser. A client process opens \verb+/mnt/web/clone+,
+reads back a connection number~\verb+N+, then writes \verb+get http://...+
+to \verb+/mnt/web/N/ctl+ and reads bytes from \verb+/mnt/web/N/body+. There
+is no library in between; the semantics are spelled out in the kernel
+namespace, not in a header file.
+
+%claude:
+The first chunk is the comment at the top of \verb+webfs/fs.c+ describing
+that tree. I reproduce it verbatim because the comment is itself the
+specification:
 
 <<webfs/fs.c toplevel comment>>=
 /*
@@ -1068,6 +1162,14 @@ struct HttpState
  *                      ftptype                 transfer mode (ftp)
  */
 @
+
+%claude:
+Every entry in that tree corresponds to one of these \verb+Qxxx+
+constants. \verb+webfs+'s 9P implementation uses the value of
+\verb+(Qid).path+ to remember which file a fid points at; this enum is the
+encoding. \verb+Qclone+ and \verb+Qcookies+ live at the root, while everything
+from \verb+Qctl+ onwards lives inside a per-connection directory whose own
+\verb+Qid.path+ folds in the connection number.
 
 <<enum Qxxx(webfs)>>=
 enum
@@ -1098,6 +1200,11 @@ enum
 };
 @
 
+%claude:
+[<Tab>] is the static table mapping each \verb+Qxxx+ to its name and Unix
+permission bits. Walk requests look up an entry by name; \verb+stat+ requests
+look it up by \verb+offset+ (which equals the \verb+Qxxx+ value).
+
 <<struct [[Tab]](webfs)>>=
 struct Tab
 {
@@ -1106,6 +1213,13 @@ struct Tab
     int offset;
 };
 @
+
+%claude:
+[<Ctab>] is the parallel table for \verb+ctl+ commands: each entry maps a
+keyword (e.g. \verb+useragent+, \verb+headers+) to its type and to the
+offset of the corresponding field inside [<Ctl>] or [<Client>]. Writes to
+\verb+ctl+ become essentially data-driven assignments, with [<Xtype>] picking
+the parser (bool, int, string, URL, function call).
 
 <<struct [[Ctab]](webfs)>>=
 struct Ctab {
@@ -1148,6 +1262,16 @@ struct Aux
 };
 @
 
+%claude:
+[<Client>] is the per-connection state of \verb+webfs+: one of these for
+every \verb+/mnt/web/N/+ directory currently open. The fields divide into
+three groups. The URLs (\verb+url+, \verb+baseurl+) and control settings
+(\verb+ctl+) are configured by writes to \verb+ctl+. The body and headers
+(\verb+contenttype+, \verb+postbody+, \verb+redirect+, \verb+authenticate+)
+are filled in once the response arrives. The plumbing
+(\verb+creq+, \verb+io+, \verb+iobusy+, \verb+ref+) keeps a dedicated I/O
+thread alive across the long network round-trip.
+
 <<struct [[Client]](webfs)>>=
 struct Client
 {
@@ -1172,6 +1296,12 @@ struct Client
 };
 @
 
+%claude:
+[<Ibuf>] is a 4~KiB single-reader buffer wrapped around an [[Ioproc]]
+descriptor. It exists so the response parser can do \verb+readline+-style
+work without one [[read]] syscall per character. The same struct is shared
+by the HTTP and FTP back-ends.
+
 <<struct [[Ibuf]](webfs)>>=
 /* simple buffered i/o for network connections; shared by http, ftp */
 struct Ibuf
@@ -1184,6 +1314,18 @@ struct Ibuf
 @
 
 \section{Cookies ([[Jar]], [[Cookie]])}
+
+%claude:
+A [<Cookie>] in \verb+webfs+ carries everything Set-Cookie spelled out
+(name, value, domain, path, expires, secure) plus three book-keeping
+fields. \verb+netscapestyle+ remembers whether the original header used the
+Netscape format (no \verb+Version+ attribute, slightly different domain
+matching) so that the cookie is sent back in the same shape it was given.
+\verb+explicitdom+ and \verb+explicitpath+ remember whether the server set
+those fields itself or whether \verb+webfs+ defaulted them from the request
+URL --- the spec says the two cases match differently. \verb+ondisk+ flags
+cookies already persisted to \verb+/usr/web/cookies+; the in-memory jar can
+then be repacked without rewriting unchanged entries.
 
 <<struct [[Cookie]](webfs)>>=
 struct Cookie
@@ -1209,6 +1351,13 @@ struct Cookie
 };
 @
 
+%claude:
+The [<Jar>] is a flat append-only [<Cookie>] array (\verb+nc+ filled out of
+\verb+mc+ allocated). The \verb+qid+ and \verb+dirty+ fields support the
+multi-process lock-file protocol: if a second \verb+webfs+ instance has
+modified \verb+/usr/web/cookies+ on disk (its qid changed), the in-memory
+jar is reread before any cookie operation is allowed to commit.
+
 <<struct [[Jar]](webfs)>>=
 struct Jar
 {
@@ -1226,6 +1375,22 @@ struct Jar
 \section{Charset tables}
 
 \section{HTML parse tree (mothra's flat item list)}
+
+%claude:
+Mothra does not build a DOM. Instead, the parser walks the input HTML once
+and produces a flat list of \verb+Rtext+ nodes (defined in \verb+libpanel+,
+not here): one per text run or per atomic widget like an image or form
+field. ``Tag dispatch'' just means: when the lexer recognizes
+\verb+<b>+ it switches the current font, when it recognizes \verb+</b>+ it
+switches back, when it recognizes \verb+<img>+ it appends one
+[<Rtext>]+[<Action>] pair, and so on. The tree the W3C calls a DOM never
+exists; what reaches the layout engine is the same kind of stream a text
+editor would use to display a styled document.
+
+%claude:
+The next four chunks are the alphabet of that scheme: token names
+([<Tagxxx>]), their text-to-id table ([<Tag>]), token types ([<Txx>]), and
+the per-tag side-data attached to special items ([<Action>], [<Pair>]).
 
 <<enum [[Tagxxx]](mothra)>>=
 /*
@@ -1345,6 +1510,15 @@ enum{
 };
 @
 
+%claude:
+[<Action>] is the side-data hung off any [<Rtext>] that is more than plain
+text. The fields are tagged by which one is non-nil: an \verb+<a>+ anchor
+sets \verb+link+; an \verb+<img>+ sets \verb+image+; an \verb+<input>+ sets
+\verb+field+. \verb+ismap+ is the rare case where one item is both a link
+and a server-side image map, so the click handler must add the
+\verb+?x,y+ coordinate suffix. \verb+name+ is the anchor name that lets
+\verb+#fragment+ scrolling work.
+
 <<struct [[Action]](mothra)>>=
 struct Action{
     char *image;
@@ -1364,6 +1538,12 @@ struct Pair{
 };
 @
 
+%claude:
+[<Entity>] is one row of the named-character-reference table that turns
+\verb+&amp;+ into U+0026, \verb+&lambda;+ into U+03BB, and so on. The full
+table is one of the larger source files in mothra; lookup is a simple linear
+scan because it only happens during parsing.
+
 <<struct [[Entity]](mothra)>>=
 struct Entity{
     char *name;
@@ -1372,6 +1552,16 @@ struct Entity{
 @
 
 \section{Mothra's view (text runs, layout, panels)}
+
+%claude:
+[<Www>] is one open page in mothra: its URL, its parsed text (the linked
+list of \verb+Rtext+ nodes the layout panel actually walks), its title,
+and side caches for inline images (\verb+pix+) and form state
+(\verb+form+). The three flags at the bottom are the protocol between the
+reader thread and the redrawing thread: \verb+changed+ says a redraw is
+due, \verb+finished+ says the body is fully read, \verb+alldone+ says even
+the deferred image fetches have settled (so the busy cursor can finally
+go away).
 
 <<struct [[Www]](mothra)>>=
 struct Www{
@@ -1429,8 +1619,35 @@ enum{
 \label{chap:mothra-main}
 %******************************************************************************
 
+%claude:
+This chapter introduces the program at the centre of the book: the
+\verb+mothra+ binary. It is what the user actually launches; everything
+else in the book is invoked behind the scenes by mothra (\verb+webfs+
+already mounted as a service, image format converters spawned per image,
+etc.). I cover four pieces here in order: the arguments mothra accepts,
+the static layout of its window (a four-pane stack of \verb+libpanel+
+panels), the main I/O loop that runs as long as the browser is open, and
+the worker procedure that streams a URL's body into a [<Www>].
+
+%claude:
+Most of the architectural weight of mothra is in [<main()>]. Read in one
+sitting it looks unremarkable --- argument parsing, draw/initdraw,
+\verb+ARGBEGIN+, an event loop --- but if you take it apart clause by
+clause, every Plan~9 subsystem the browser uses appears at least once:
+\verb+rfork+ for the cohort group, \verb+initdraw+/\verb+plinit+ for
+graphics, \verb+einit+/\verb+eplumb+ for the event multiplexer, a
+self-pipe \verb+kickpipe+ for waking the loop from worker threads, and the
+plumb-message intake that lets external programs send a URL with one
+\verb+plumb+ command. The chapter is built around that observation.
+
 \section{Command-line arguments}
 
+%claude:
+The argument grammar is a one-line \verb+ARGBEGIN+ block, but two flags
+deserve attention: \verb+-d+ enables HTTP-tracing debug output threaded
+through the request paths in \verb+http.c+ and \verb+rdhtml.c+, and
+\verb+-m+ lets you mount a non-default \verb+webfs+ (handy when running
+two browsers side by side, each with its own cookie jar).
 
 <<function [[arg]](mothra)>>=
 char *arg(char *s){
@@ -1438,6 +1655,32 @@ char *arg(char *s){
     return s;
 }
 @
+
+%claude:
+\verb+main+ does setup, then enters an event loop. The setup is in five
+steps. First, \verb+rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)+ creates a
+``cohort'': mothra's parent process becomes a sentinel that just calls
+\verb+waitpid+ and reaps everything, while the child runs the GUI. The
+flags \verb+RFNOTEG+ and \verb+RFNAMEG+ isolate the cohort's note group
+and namespace, so a \verb+kill+ note delivered to the parent stops every
+helper at once and a per-cohort namespace lets the \verb+-m+ flag take
+effect. Second, \verb+initdraw+ sets up \verb+libdraw+, \verb+plinit+ sets
+up \verb+libpanel+, \verb+einit+ wires mouse and keyboard into the
+\verb+event(2)+ multiplexer. Third, \verb+eplumb+ subscribes to the
+\verb+web+ port so external programs can send a URL with
+\verb+plumb -d web foo.html+. Fourth, the \verb+kickpipe+ self-pipe is
+created and registered as event source \verb+Ekick+; worker threads write
+one byte to it to wake the loop without manufacturing a fake mouse event.
+Fifth, [<mkpanels()>] builds the visible four-pane layout and
+\verb+geturl()+ kicks off the initial fetch.
+
+%claude:
+The loop itself dispatches between five event sources: \verb+Ekick+
+(redraw the current page), \verb+Ekeyboard+ (scrolling and search),
+\verb+Emouse+ (clicks, side-scrolls via buttons~4 and~5), \verb+Eplumb+
+(an external URL request), and the implicit ``current page just finished
+loading'' branch at the top of the loop, which scrolls to the
+\verb+#fragment+ if any and resets the busy cursor.
 
 <<function [[main]](mothra)>>=
 void main(int argc, char *argv[]){
@@ -1615,6 +1858,36 @@ Plkey:
 
 \section{Panel layout (address bar, display, status)}
 
+%claude:
+Mothra's window is a fixed five-pane stack drawn with \verb+libpanel+
+\book{Widgets}. Top to bottom: the \verb+cururl+ label showing the visible
+page's URL; the \verb+cmd+ entry where the user types a new URL; the
+\verb+msg+ label showing transient messages (``loading\ldots'',
+``not found''); the \verb+text+ panel that displays the page itself; and
+either the \verb+list+ panel of recently visited URLs (when
+\verb+-a+ is off) or no list at all. Each pane is a global [<Panel*>]
+because the event loop needs to address them by name when scrolling or
+filling them. There is no resize logic: \verb+eresized+ tears down the
+whole layout and rebuilds it with [<mkpanels()>].
+
+\begin{verbatim}
+    +---------------------------------+
+    |  cururl  http://example.com     |  <-- label
+    +---------------------------------+
+    |  cmd     [_______________]      |  <-- text entry
+    +---------------------------------+
+    |  msg     loading...             |  <-- label
+    +---------------------------------+
+    |  text                           |
+    |    Welcome to example.com       |
+    |    This domain is for use ...   |  <-- text panel (Rtext list)
+    |                                 |
+    +---------------------------------+
+    |  list                           |
+    |    1. http://www.google.com     |  <-- visited list
+    |    2. http://example.com        |
+    +---------------------------------+
+\end{verbatim}
 
 <<global [[root]](mothra)>>=
 Panel *root;    /* the whole display */
@@ -1659,6 +1932,14 @@ Www *current=nil;
 <<global [[selection]](mothra)>>=
 Url *selection=nil;
 @
+
+%claude:
+[<www()>] returns the [<Www>] slot for index \verb+i+, modulo the static
+array size \verb+NWWW+. The whole history is therefore a circular buffer:
+visiting more than \verb+NWWW+ pages overwrites the oldest. Mothra never
+allocates a [<Www>] off the heap; the address taken from \verb+www(i)+
+remains valid forever, which simplifies the few places that keep a
+[<Www*>] across an event-loop iteration.
 
 <<function [[www]](mothra)>>=
 Www *www(int index){
@@ -1756,6 +2037,17 @@ void sidescroll(int dx, int whence)
 }
 @
 
+%claude:
+[<mkpanels()>] is the static page-builder for the window. It walks down
+the layout from top to bottom, building one [[plgroup]] per row and
+populating it with the appropriate widgets. The pattern is consistent: a
+\verb+plgroup+ packs its children north-to-south, each row uses
+\verb+PACKW+/\verb+PACKE+ to glue widgets to left/right, and the largest
+panel ([<text>]) gets \verb+EXPAND+ so it absorbs the leftover space when
+the window resizes. The two scrollbars (\verb+xbar+, \verb+ybar+) are
+created bare and then attached to \verb+text+ via \verb+plscroll+; that
+is how a libpanel scrollbar discovers what it should scroll.
+
 <<function [[mkpanels]](mothra)>>=
 void mkpanels(void){
     Panel *p, *xbar, *ybar, *swap;
@@ -1826,6 +2118,19 @@ void eresized(int new){
 
 \section{The main I/O loop}
 
+%claude:
+The previous section showed the static layout. This section covers the
+helpers that surround the main loop: cursor management, the cohort kill
+note, the URL-string accessors, and the two pieces of process-creation
+plumbing that the rest of the browser relies on, [<pipeline()>] and
+[<gettext()>].
+
+%claude:
+[<mkhome()>] is the small, common idiom for finding a per-user state
+directory: prefer \verb+$home/lib/mothra+ if \verb+$home+ is set, fall
+back to \verb+/tmp+ otherwise. It is called lazily and memoized so that
+the directory only gets created the first time something wants to write
+to it (e.g. saving a page).
 
 <<function [[mkhome]](mothra)>>=
 char* mkhome(void){
@@ -1876,6 +2181,16 @@ void drawlock(int dolock){
     }
 }
 @
+
+%claude:
+[<killcohort()>] is the cohort cleanup routine, run on \verb+atexit+. The
+three-iteration loop with one-second sleeps is defensive: a single
+\verb+kill+ note can race with a process that has notes blocked or that
+forks just as it arrives. Sending three times virtually guarantees a
+clean wipe of every helper (image fetcher, network reader, charset
+filter, format converter) before mothra itself exits. The cute comment
+\verb+It's a long way to the kitchen+ is the original Plan 9 source
+quoting the song lyric.
 
 <<function [[killcohort]](mothra)>>=
 void killcohort(void){
@@ -2039,6 +2354,17 @@ dupfds(int fd, ...)
 }
 @
 
+%claude:
+[<pipeline()>] is mothra's bridge to the Unix shell mindset, on Plan~9
+terms. Given an open input fd and an \verb+rc+ command line, it returns
+a new fd from which the caller reads what the command produced. Internally
+it does the standard rc/shell pipe trick: \verb+pipe(pfd)+, fork, child
+\verb+dup+s the input fd to its stdin and the write end of the pipe to
+its stdout, then \verb+exec+s \verb+/bin/rc -c <cmd>+. The parent closes
+the original fd and the write end and returns the read end. This is how
+mothra invokes \verb+uhtml+, \verb+tcs+, \verb+jpg+, etc. without ever
+linking against them.
+
 <<function [[pipeline]](mothra)>>=
 int pipeline(int fd, char *fmt, ...)
 {
@@ -2075,6 +2401,17 @@ int pipeline(int fd, char *fmt, ...)
     return pfd[0];
 }
 @
+
+%claude:
+[<gettext()>] is the entry point that turns a stream of bytes into the
+visual content of a [<Www>]. It forks a child whose only job is to call
+\verb+plrdhtml+ (for HTML) or \verb+plrdplain+ (for plain text), each of
+which incrementally appends \verb+Rtext+ nodes to \verb+w->text+ as it
+parses. The parent closes its end of the fd and returns; the GUI loop
+keeps polling \verb+w->changed+ to know when to redraw. \verb+RFNOWAIT+
+makes the parser process unwaited-for, since mothra's main loop has no
+particular reason to know when a single document finishes parsing ---
+\verb+w->finished+ is the more useful signal.
 
 <<function [[gettext]](mothra)>>=
 void gettext(Www *w, int fd, int type){
@@ -2136,6 +2473,18 @@ void regerror(char *msg)
     werrstr("regerror: %s", msg);
 }
 @
+
+%claude:
+[<docmd()>] handles every keystroke that gets typed in the \verb+cmd+
+entry. The first \verb+if+ implements the most common case: anything
+that does not start with a single letter followed by a space is treated
+as a URL and passed straight to [<geturl()>]. The lettered commands are
+mothra's mini language: \verb+g+ (or any URL) gets a URL, \verb+r+
+re-fetches the selection, \verb+j N+ jumps to history slot \verb+N+,
+\verb+a+ adds a bookmark via \verb+hit3+, \verb+m+ toggles ``moth mode''
+(image-suppression cursor), \verb+w+ writes a screen dump, \verb+d QUERY+ does a DuckDuckGo search by URL-encoding into a hard-coded query
+URL. There is no parser per se: a single \verb+switch+ on the first byte
+covers every case.
 
 <<function [[docmd]](mothra)>>=
 /*
@@ -2232,6 +2581,34 @@ void docmd(Panel *p, char *s){
 
 \section{Reading from a URL or stdin}
 
+%claude:
+This section is the boundary between the GUI and the network. The
+function [<geturl()>] is what every code path leading to a fetch ends up
+calling --- the address bar, link clicks, plumb messages, command-line
+URL --- so a tour of it is effectively a tour of how mothra goes from
+``user wanted this URL'' to ``page is being parsed''.
+
+%claude:
+There are five steps. (1) If the URL is just a fragment
+\verb+#anchor+, scroll to it and stop --- no fetch needed. (2) Otherwise
+[<selurl()>] turns the typed string into a [<Url>]. (3) [<urlget()>]
+talks to \verb+/mnt/web+ and returns a fd from which the response body can
+be read; if it fails, the error is shown in \verb+msg+ and the loop ends.
+(4) Detect the content type by header (\verb+contenttype+) or by sniffing
+the first bytes ([<snooptype()>]). (5) Dispatch on the type: HTML goes
+through \verb+uhtml+ via [<pipeline()>] before reaching [<gettext()>]
+(which forks the parser); PLAIN goes straight to [<gettext()>]; images
+get handed to \verb+page -w+ via [<filter()>] (which spawns it as a
+sibling); anything unknown prompts the user to save it to a file.
+
+%claude:
+The HTML/PLAIN branch also does history bookkeeping: it advances
+\verb+wwwtop+, picks the next slot in the static [<Www>] ring, frees the
+slot's old content if it is wrapping around, and copies the URL into
+\verb+w->url+. After [<gettext()>] is forked, a separate watchdog process
+is forked to write to \verb+kickpipe+ once a second whenever
+\verb+w->changed+ is set, which is what lets the page redraw
+incrementally as bytes arrive.
 
 <<function [[geturl]](mothra)>>=
 /*
@@ -2367,6 +2744,17 @@ void finish(Www *w){
 }
 @
 
+%claude:
+[<mothon()>] toggles ``moth mode''. The name is a play on \verb+mothra+
+(which itself is a pun on Mosaic, the parent in the lineage). In moth
+mode, image downloads are disabled and clickable images get an inline
+\verb+->+ marker appended (a tiny synthetic Rtext + Action). The walk
+over the text list is the easiest place to see the
+\verb+Rtext+/\verb+Action+ relationship: every ``mothable'' item is
+recognized by \verb+a->image != nil+; the click-target distinction is
+recognized by \verb+a->link != nil+. The marker insertion does a
+splice-in/splice-out of one extra Rtext rather than rebuilding the list.
+
 <<function [[mothon]](mothra)>>=
 void
 mothon(Www *w, int on)
@@ -2439,7 +2827,34 @@ void killpix(Www *w){
 \label{chap:urls}
 %******************************************************************************
 
+%claude:
+URL handling lives in two files in the browser. \verb+webfs/url.c+ is the
+big one: it parses an arbitrary URL string into the [<Url>] struct,
+applies the RFC~3986 ``relative URL against a base'' algorithm, normalizes
+\verb+./+ and \verb+../+ in paths, and handles percent-encoding for
+non-ASCII bytes and reserved characters. \verb+mothra/url.c+ is much
+smaller and lives entirely in mothra; its job is to keep mothra's lighter
+[<Url>] (the one with \verb+reltext+, \verb+basename+, \verb+fullname+,
+\verb+tag+, \verb+map+) in sync with what webfs reports back when it
+parses the URL. This chapter covers both, starting with webfs.
+
+%claude:
+\verb+webfs/url.c+ is regexp-driven. The grammar of RFC~3986 is short
+enough that a hand-rolled tokenizer would only save a screen of code, so
+the file leans on \verb+regexp(2)+ from libregexp instead. There is one
+prog per syntactic class: one for the top-level five-component split,
+one for an authority, one for an absolute path, etc. The trade-off is
+that the regexes themselves are dense (with \verb+\#define+ shorthand for
+character classes that look like RFC ABNF), but each one is local enough
+to verify against the spec without reading any other code.
+
 \section{Webfs's URL algebra ([[webfs/url.c]], RFC 3986)}
+
+%claude:
+The file opens with a long comment that is most of the spec, paraphrased.
+I keep it in the book verbatim because it is the cheapest way to remind
+the reader of the URL grammar without copying half of RFC~3986 into the
+prose.
 
 <<webfs/url.c toplevel comment>>=
 /*
@@ -2563,6 +2978,20 @@ enum
 };
 @
 
+%claude:
+[<retab>] is the table of regexes used to validate and split URL
+components. Each entry is keyed by a [<RExxx>] enum and holds the source
+string, a compiled \verb+Reprog+ filled in at startup ([<initurl()>]),
+the number of capturing groups (\verb+size+, computed from the source),
+and an \verb+ind+ array mapping ``logical capture index'' to
+``\verb+(+'' position in the source. The mapping is necessary because
+some regexes have non-capturing parens for grouping.
+
+%claude:
+The first row, \verb+REsplit+, is the master one. The expression
+\verb!^(([^:/?#]+):)?(//([^/?#]*))?([^?#]+)?(\?([^#]*))?(#(.*))?$!
+divides any URL into the five RFC~3986 components in one shot.
+
 <<global [[retab]](webfs)>>=
 Retab retab[] = /* view in constant width Font */
 {
@@ -2620,6 +3049,15 @@ Retab retab[] = /* view in constant width Font */
     { 0, },
 };
 @
+
+%claude:
+The next block of \verb+#define+s spells out the URI character classes
+of RFC~3986 in regex form. \verb+UNRES+ is the unreserved set,
+\verb+RES+ the reserved set, \verb+ESCAPED_1+ matches a single
+\verb+%XX+ escape, and the \verb+_2+/\verb+_3+ macros build up larger
+classes by reuse. The numbers in the suffix count capturing parens, so
+\verb+initurl+ knows how many \verb+Resub+ slots each subexpression
+needs.
 
 <<constant [[PUNCT]](webfs)>>=
 #define PUNCT                   "\\-_.!~*'()"
@@ -2748,6 +3186,14 @@ ismatch(int i, char *s, char *desc)
 @
 
 \subsection{Parsing absolute URLs (scheme, authority, path, query, fragment)}
+
+%claude:
+[<spliturl()>] is the first parsing step: it runs \verb+REsplit+ against
+the raw URL string and fills in the [<SplitUrl>] with five pairs of
+pointers into that string. The \verb+%00+ check is a correctness fix
+for downstream code: every other consumer (filenames, syscall args)
+treats embedded NULs as terminators, so an attacker who passed an URL
+containing \verb+%00+ could otherwise truncate a filesystem path.
 
 <<function [[spliturl]](webfs)>>=
 static int
@@ -2896,6 +3342,13 @@ parse_fragment(SplitUrl *su, Url *u)
 }
 @
 
+%claude:
+The first three lines of [<postparse_http()>] are where [<Url>]'s vtable
+gets bound. After this point the URL is fully ``armed'' with the right
+HTTP-specific [[open]], [[read]], [[close]] callbacks. The rest of the
+function builds \verb+u->http.page_spec+, the \verb+/path?query+ string
+that goes on the GET request line.
+
 <<function [[postparse_http]](webfs)>>=
 static int
 postparse_http(Url *u)
@@ -3017,6 +3470,16 @@ postparse_file(Url *u)
     return 0;
 }
 @
+
+%claude:
+[<parseurl()>] is the public entry point that everything else calls. It
+chains the previous helpers together: [<spliturl()>] first, then
+[<resolve_relative()>] if no scheme was present, then [<parse_scheme()>]
++ [<parse_fragment()>], then the per-component parsers, and finally a
+scheme-specific post-pass selected by the [<postparse>] dispatch table.
+The function is structured around a single \verb+goto Fail+ for cleanup,
+which is the cleanest way to enforce ``free a half-built [<Url>] on any
+parse error'' in C.
 
 <<function [[parseurl]](webfs)>>=
 Url*
@@ -3177,6 +3640,31 @@ parse_authority(SplitUrl *su, Url *u)
 
 \subsection{Resolving relative URLs against a base}
 
+%claude:
+The relative-URL resolution algorithm is RFC~3986 section 5.2 transcribed
+into C. The interesting case is the four-component split: given a relative
+URL like \verb+../images/foo.png+ on the page \verb+https://example.com/blog/post/+,
+the result must be \verb+https://example.com/blog/images/foo.png+. The
+algorithm decides component by component which side wins:
+authority comes from the relative URL if it has one, otherwise from the
+base; path is merged via [<merge_relative_path()>]; query is taken from
+the relative URL's own query (it is not inherited unless the reference is
+empty, the ``current document'' case); fragment likewise.
+
+%claude:
+\begin{verbatim}
+    base:     https://example.com/blog/post/
+    relative: ../images/foo.png
+    -------- per-component decision --------
+    scheme    = base.scheme           -> "https"
+    authority = base.authority        -> "example.com"
+    path      = merge(base.path, rel) -> "/blog/images/foo.png"
+    query     = (none)
+    fragment  = (none)
+    -------- result --------
+    https://example.com/blog/images/foo.png
+\end{verbatim}
+
 <<function [[resolve_relative]](webfs)>>=
 /*
  * See RFC2396 sec 5.2 for info on resolving relative URIs to absolute form.
@@ -3329,6 +3817,28 @@ resolve_relative(SplitUrl *su, Url *base, Url *u)
 
 \subsection{Path normalization (dots)}
 
+%claude:
+[<merge_relative_path()>] is RFC~3986 section 5.2 step 6 transcribed: it
+removes empty segments (\verb+./+), resolves \verb+seg/../+ pairs, and
+strips trailing \verb+seg/..+. The order matters because each step
+assumes the previous one has already run; \verb+./../+ becomes
+\verb+../+ after step (c), and only then can step (e) try to cancel a
+\verb+seg/+ before it.
+
+%claude:
+\begin{verbatim}
+    base path: /a/b/c/d/                rel path: ../../e/./f/.
+    -------- step by step --------
+    6a (drop last seg of base):  /a/b/c/d/
+    6b (append rel):             /a/b/c/d/../../e/./f/.
+    6c (collapse "./"):          /a/b/c/d/../../e/f/.
+    6d (drop trailing "."):      /a/b/c/d/../../e/f
+    6e (collapse "seg/../"):     /a/b/e/f
+    6f (drop trailing "seg/.."): (no change)
+    -------- result --------
+    /a/b/e/f
+\end{verbatim}
+
 <<constant [[RemoveExtraRelDotDots]](webfs)>>=
 #define RemoveExtraRelDotDots   0
 @
@@ -3432,6 +3942,16 @@ merge_relative_path(char *base, char *rel_st, int rel_len, char *dest)
 
 \subsection{Percent-encoding}
 
+%claude:
+Percent-encoding is the only piece of URL handling that is not just
+string slicing: a non-ASCII byte in a URL is supposed to appear as
+\verb+%HH+ where \verb+HH+ is its hex value. [<escapeurl()>] applies the
+encoding, taking a predicate that decides which characters need it (the
+RFC distinguishes which classes of bytes must be encoded in which
+positions). [<unescapeurl()>] reverses it, and rejects \verb+%00+ for
+the same reason [<spliturl()>] does: an embedded NUL would make the URL
+truncate when handed to a syscall.
+
 <<function [[dhex]](webfs)>>=
 static int
 dhex(char c)
@@ -3515,6 +4035,24 @@ unescapeurl(char *s)
 
 \section{Mothra's URL adapter ([[mothra/url.c]])}
 
+%claude:
+Mothra has its own \verb+url.c+ because it does not need most of webfs's
+machinery. A web page already contains a tag like
+\verb+<a href="../foo">+; mothra needs to remember the relative text and
+the URL of the page it appeared on (\verb+basename+) so that when the
+user clicks the link it can ask webfs ``please resolve \verb+../foo+
+against \verb+basename+ and fetch the result''. The only URLs that
+mothra parses on its own are the ones webfs does not handle: \verb+data:+
+URIs (decoded inline to a temp file) and \verb+file:+ URLs (opened
+directly).
+
+%claude:
+[<Url>] (mothra) is the lighter struct that records that intent. The
+fields divide into three groups: input (\verb+basename+, \verb+reltext+),
+output filled in by the round-trip through webfs (\verb+fullname+,
+\verb+contenttype+), and per-link state (\verb+tag+ for the
+\verb+#fragment+, \verb+map+ for ``this is an image map'').
+
 <<struct [[Url]](mothra)>>=
 struct Url{
     char *basename;
@@ -3567,6 +4105,14 @@ dechex(uchar *out, int lim, char *in, int n)
     return out - start;
 }
 @
+
+%claude:
+[<dataget()>] handles \verb+data:+ URIs (RFC~2397). The format is
+\verb+data:[<mime>][;base64],<payload>+; mothra decodes the payload
+inline to a temporary file in \verb+/tmp+ opened with \verb+ORCLOSE+ (so
+it deletes itself when closed) and returns the fd. The choice of decode
+function is the only branch: hex if the URI does not say
+\verb+;base64+, [[dec64]] otherwise.
 
 <<function [[dataget]](mothra)>>=
 static int
@@ -3644,6 +4190,17 @@ fileget(Url *url)
 }
 @
 
+%claude:
+[<webclone()>] is the entry into the \verb+/mnt/web+ protocol. Open
+\verb+/mnt/web/clone+, read back the connection number~\verb+N+, write
+\verb+baseurl <base>+ and \verb+url <reltext>+ to the new
+\verb+/mnt/web/N/ctl+. The returned fd is the open ctl file (kept open
+so the connection persists), and the caller is expected to subsequently
+open \verb+/mnt/web/N/body+ to read the page bytes. This three-step
+clone-and-write is the standard Plan~9 file-server idiom for opening a
+new logical channel; it appears identically in \verb+/net/tcp+,
+\verb+/net/dns+, and many others.
+
 <<function [[webclone]](mothra)>>=
 static fdt
 webclone(Url *url, char *buf, int nbuf)
@@ -3711,6 +4268,18 @@ urlpost(Url *url, char *ctype)
     return n;
 }
 @
+
+%claude:
+[<urlget()>] is the single entry point that mothra uses to fetch a body.
+Two cases. If \verb+body+ is negative this is a fresh fetch: try
+\verb+data:+ and \verb+file:+ first (handled inline), otherwise call
+[<webclone()>] to set up a \verb+/mnt/web/N+ connection. If
+\verb+body+ is non-negative, this is a continuation of a connection that
+already exists (e.g. for incremental reads after a redirect): re-derive
+the connection directory from the open fd. Either way, the function ends
+by opening \verb+/N/body+, reading back the parsed URL and content type,
+and inserting a transparent decompression filter via [<pipeline()>] if
+\verb+/contentencoding+ says \verb+gzip+ etc.
 
 <<function [[urlget]](mothra)>>=
 int
@@ -3799,8 +4368,31 @@ urlresolve(Url *url)
 \label{chap:hget}
 %******************************************************************************
 
+%claude:
+\verb+hget+ is Plan~9's \verb+wget+/\verb+curl+: a standalone command-line
+tool that downloads one URL and writes it to a file or to standard
+output. It exists separately from \verb+webfs+ because it is
+self-contained --- no file server to mount, no cohort to manage --- and
+because it predates \verb+webfs+ by many years. It is written in a
+classic Unix-tool style: one \verb+main+, one struct per artifact (URL,
+output file, byte range), one dispatch per protocol.
+
+%claude:
+The interesting reason to study \verb+hget+ before \verb+webfs+ is that
+the HTTP code in \verb+hget+ is much simpler than the equivalent in
+\verb+webfs/http.c+ --- no per-client thread, no 9P, no clone protocol
+--- so it gives a clean view of an HTTP request/response cycle, byte by
+byte. The two files [[ht]]tp/socket logic also share a lot of vocabulary,
+so this chapter doubles as a primer for the next one.
+
 \section{[[main()]]}
 
+%claude:
+hget's [<URL>] struct is much smaller than webfs's [<Url>] (and
+deliberately uppercased to disambiguate). It carries just enough to
+build the HTTP request line and headers: \verb+method+, \verb+host+,
+\verb+port+, \verb+page+, plus the four headers hget cares about
+(\verb+etag+, \verb+redirect+, \verb+postbody+, \verb+cred+).
 
 <<struct [[URL]](hget.c)>>=
 struct URL
@@ -3818,6 +4410,15 @@ struct URL
 };
 @
 
+%claude:
+[<Out>] tracks the output file. \verb+offset+ is where the next byte
+should land and \verb+written+ is how many bytes the protocol layer has
+actually transferred so far; the two diverge during partial writes and
+during resume-after-failure (when \verb+offset+ is reset to 0 to compute
+the digest from scratch). \verb+curr+ and \verb+hiwat+ are SHA digest
+states, used to compare against an HTTP \verb+ETag+ when resuming a
+broken transfer.
+
 <<struct [[Out]](hget.c)>>=
 struct Out
 {
@@ -3828,6 +4429,14 @@ struct Out
     DigestState *hiwat;     /* digest state of all bytes written */
 };
 @
+
+%claude:
+[<method>] is the protocol-dispatch table: for each scheme, the lowercase
+name and the function that implements one fetch attempt. Just like
+[<Url>] in webfs holds an inline vtable for the same purpose, hget
+externalizes the dispatch as a small array. \verb+http+ and \verb+https+
+share \verb+dohttp+ because (with TLS bracketed inside the connect step)
+they speak the same protocol on top.
 
 <<global [[method]](hget.c)>>=
 struct {
@@ -3849,6 +4458,17 @@ usage(void)
     exits("usage");
 }
 @
+
+%claude:
+[<main()>] is structured as a retry loop around one ``do the fetch'' call.
+The setup before the loop is straightforward (parse arguments, open the
+output file, call [<crackurl()>] to fill in the [<URL>]). The loop calls
+the per-scheme function via the [<method>] table, then dispatches on the
+return code: \verb+Eof+ means done, \verb+Error+ means try again (up to
+ten times), \verb+Server+ means a 4xx/5xx that is hopeless. Otherwise the
+return value is the number of bytes transferred this round, used to
+advance \verb+r.start+ and resume the next attempt with a partial
+\verb+Range+ request --- this is the resume-after-failure feature.
 
 <<function [[main]](hget.c)>>=
 void
@@ -4051,8 +4671,30 @@ crackurl(URL *u, char *s)
 
 \section{Connecting (TCP and TLS)}
 
+%claude:
+hget does not have a separate ``connect'' function: the connection is
+opened inline at the top of [<dohttp()>] each iteration of the redirect
+loop. The TCP side is one call to \verb+dial(netmkaddr(host, "tcp",port))+. 
+The TLS side is bracketed underneath: when the scheme is
+\verb+https+, the TCP fd is wrapped in a [[tlsClient]] call from
+\verb+libsec+, returning a new fd that transparently encrypts. The
+\verb+TLSconn.serverName+ field is filled in so that SNI works (modern
+HTTPS servers refuse the handshake otherwise).
+
 \section{Building the request ([[GET]], [[HEAD]])}
 
+%claude:
+[<dohttp()>] is the body of an HTTP transaction: connect, send request,
+parse status line, parse headers, dispatch on the status code. The whole
+thing sits inside a redirect loop bounded at 32 hops. The request
+construction is pleasantly explicit: no abstraction, just \verb+dfprint+
+calls writing literal HTTP, with conditional lines for Range,
+\verb+If-Range+, \verb+Authorization+, and the cookie header (read out of
+\verb+/mnt/webcookies/http+, which itself returns a complete
+\verb+Cookie:+ line ready to be passed through). The status-code switch
+is a textbook list: 200/201/202 succeed, 206 is partial content,
+301--307 redirect, 401 retries with \verb+Authorization+, everything
+else \verb+sysfatal+s.
 
 <<function [[dohttp]](hget.c)>>=
 int
@@ -4301,6 +4943,10 @@ dohttp(URL *u, URL *px, Range *r, Out *out, long mtime)
 
 \section{Reading the response (status, headers, body)}
 
+%claude:
+[<httprcode()>] reads the first line of the response and returns the
+three-digit status code. It only knows the format
+\verb+HTTP/X.Y CCC reason phrase+, which is what every HTTP server actually sends.
 
 <<function [[httprcode]](hget.c)>>=
 /* get the http response code */
@@ -4325,6 +4971,13 @@ httprcode(int fd)
     return atoi(p+1);
 }
 @
+
+%claude:
+[<headers>] is the small dispatch table of headers that hget actually
+acts on: ETag, Last-Modified, Content-Length, Content-Range, URI,
+Location, WWW-Authenticate. Every other header is ignored, which is
+fine for a download tool. [<httpheaders()>] iterates over each header
+line and runs the matching callback.
 
 <<global [[headers]](hget.c)>>=
 struct {
@@ -4372,6 +5025,14 @@ httpheaders(int fd, int cfd, URL *u, Range *r)
 }
 @
 
+%claude:
+[<getheader()>] reads one MIME-style header, including line
+continuations (a header value may wrap onto subsequent lines if those
+lines start with whitespace --- a misfeature of RFC~822 that survived
+into HTTP). End-of-headers is signalled either by a line with no
+\verb+:+ (i.e., a blank line) or by a line that does not start with
+whitespace, in which case it is unread for the next call.
+
 <<function [[getheader]](hget.c)>>=
 /*
  *  read a single mime header, collect continuations.
@@ -4417,8 +5078,23 @@ getheader(int fd, char *buf, int n)
 
 \section{Following redirects}
 
+%claude:
+The redirect logic is woven into the request loop in [<dohttp()>] rather
+than broken into a separate function, but it is short. When the response
+code is 301/302/303/307, [<httpheaders()>] saves the new URL into
+\verb+u->redirect+ via [<hhlocation()>], and the loop calls
+[<crackurl()>] on it to overwrite \verb+u+ in place, then continues from
+the top. The bound is 32 hops --- enough for any real site, low enough to
+foil obvious redirect loops.
+
 \section{Range requests and resume}
 
+%claude:
+[<Range>] is a half-open byte interval used both to request
+\verb+Range: bytes=start-+ and to track ``how far the loop has progressed'' across
+retries. The 512-byte alignment in [<dohttp()>] is defensive: some
+servers treat byte ranges that begin in the middle of an internal block
+as out of bounds.
 
 <<struct [[Range]](hget.c)>>=
 struct Range
@@ -4435,7 +5111,43 @@ struct Range
 \label{chap:webfs}
 %******************************************************************************
 
+%claude:
+\verb+webfs+ is what makes Plan~9 different from every other operating
+system in this book. Instead of being a library that mothra (and any
+other web client) would link against, the network layer of the browser
+is a separate process that exposes itself as a file tree mounted at
+\verb+/mnt/web+. To fetch a URL: open \verb+/mnt/web/clone+, write
+\verb+url http://example.com+ to the connection's \verb+ctl+, read bytes
+from \verb+body+. Done.
+
+%claude:
+That choice ripples through the whole book. There is no API: the file
+shape \emph{is} the API. Anyone --- mothra, hget (well, hget predates
+webfs), \verb+rc+ scripts that just \verb+cat+ a URL, image-fetch
+pipelines, even \verb+grep+ \verb+/mnt/web/N/body+ --- can be a webfs
+client. Authentication and cookies are not in any client; they live in
+webfs and the sister server \verb+webcookies+. Configuration changes
+(useragent, accept-cookies on/off) are file writes to
+\verb+/mnt/web/ctl+. The same \verb+webfs+ instance can simultaneously
+service many concurrent in-flight URLs --- mothra's images chapter
+(\book{Widgets}) walks an example with one parent text fetch + N
+parallel image fetches all served by one mounted webfs.
+
+%claude:
+This chapter is in two halves. The first covers the 9P plumbing: how the
+file server is mounted, how requests reach the right code, what the
+\verb+clone+/\verb+ctl+/\verb+body+ protocol actually looks like over
+the wire. The second is the HTTP back-end: how the bytes that arrive
+through \verb+ctl+ become a real outgoing TCP request, with redirects,
+cookies, authentication, and TLS layered on.
+
 \section{[[main()]] and the 9P loop}
+
+%claude:
+[<globalctl>] is the singleton holding the four configuration knobs that
+apply to every connection: whether to send/accept cookies, the redirect
+limit, and the user-agent string. They can be overridden per-connection
+via writes to \verb+/mnt/web/N/ctl+.
 
 <<global [[globalctl]](webfs)>>=
 Ctl globalctl = 
@@ -4455,6 +5167,16 @@ usage(void)
     threadexitsall("usage");
 }
 @
+
+%claude:
+[<threadmain()>] is webfs's entry point. The setup is straightforward:
+parse arguments, install the quote format, then call the four
+initializers in order ([<plumbinit()>] for the plumbing thread,
+[<initcookies()>] for the cookie jar, [<initurl()>] for the regex table,
+[<initfs()>] for the 9P request channels). Finally
+\verb+threadpostmountsrv+ posts the file server at the chosen service
+name and mount point and exits the bootstrap thread; the dedicated
+fsthread takes over.
 
 <<function [[threadmain]](webfs)>>=
 void
@@ -4496,8 +5218,18 @@ threadmain(int argc, char **argv)
 }
 @
 
+%claude:
+[<fs>] is the [[Srv]] dispatch table that \verb+lib9p+ uses. Almost every
+operation routes to [<fssend()>], which forwards the [[Req]] to the
+single [<fsthread>] worker. The exceptions are \verb+walk1+ and
+\verb+destroyfid+, which can run safely on the dispatch thread, and
+\verb+end+, which calls [<takedown()>] to flush cookies on shutdown. The
+single-worker design serializes all 9P operations and so removes a class
+of race conditions; correctness costs less than a tiny bit of throughput
+for a service whose main bottleneck is the network anyway.
+
 <<constant [[fs]](webfs)>>=
-Srv fs = 
+Srv fs =
 {
 .attach=                fssend,
 .destroyfid=    fsdestroyfid,
@@ -4523,6 +5255,17 @@ initfs(void)
     procrfork(fsthread, nil, STACK, RFNAMEG);
 }
 @
+
+%claude:
+[<fsthread>] is the worker that actually handles 9P traffic. It blocks
+on an \verb+alt+ over two channels: \verb+cclunk+ for fid-close events
+(which trigger cookie writes or per-client cleanup) and \verb+creq+ for
+incoming 9P requests. The request \verb+switch+ is the canonical 9P
+dispatch: \verb+Tattach+, \verb+Topen+, \verb+Tread+, \verb+Twrite+,
+\verb+Tstat+, \verb+Tflush+. Each handler responds via [[respond]]
+synchronously --- nothing in this thread blocks on the network, because
+network I/O happens in dedicated per-client threads (covered later in
+this chapter).
 
 <<function [[fsthread]](webfs)>>=
 static void
@@ -4621,6 +5364,25 @@ takedown(Srv*)
 
 
 \section{The [[clone]]/[[ctl]]/[[body]] protocol}
+
+%claude:
+The [<tab>] global is the static layout of the file tree, indexed by
+[<Qxxx>] enum value. The first four entries are the top-level files
+(\verb+/+, \verb+/ctl+, \verb+/clone+, \verb+/cookies+), then a placeholder
+\verb+XXX+ for the per-client directory whose name is generated at
+runtime, then the contents of that directory. The \verb+offset+ column
+on the bottom rows is what makes the parsed-component subtree work: each
+\verb+/parsed/X+ file is a window into the [<Url>] struct's field
+\verb+X+. \verb+fsread+ uses the offset to fish out the right \verb+char*+
+and stream it as the file contents. Adding a new parsed component is a
+matter of adding one row, with no extra C code required.
+
+%claude:
+[<PATH>], [<TYPE>], and [<NUM>] are the encoding webfs uses to fold both
+``which file'' and ``which client'' into a single 64-bit \verb+Qid.path+:
+the bottom byte is the \verb+Qxxx+ type, the rest is the client number.
+That keeps every fid's identity in one machine word and makes \verb+walk+
+purely functional.
 
 <<global [[tab]](webfs)>>=
 Tab tab[] =
@@ -4757,6 +5519,24 @@ parsedgen(int i, Dir *d, void *aux)
 }
 @
 
+%claude:
+[<fsopen()>] is the dispatch for [[Topen]]. The interesting case is
+\verb+Qclone+: when a client opens \verb+/mnt/web/clone+, [<newclient()>]
+allocates a new [<Client>] with the next free number~\verb+n+, and the
+fid is rewritten to point at \verb+/mnt/web/n/ctl+ so that subsequent
+reads/writes on the same fid see the per-connection ctl file. That is
+why \verb+webclone+ in mothra reads the connection number out of the
+opened clone fid and then immediately starts writing to the same fd ---
+the kernel-side fid has already migrated.
+
+%claude:
+[<Qbody>] (and \verb+Qbodyext+, the version that carries the file
+extension for content-sniffing) is the other interesting case: opening
+the body file kicks off the actual fetch by sending the request to the
+per-client thread via \verb+sendp(c->creq, r)+. The thread sits inside
+\verb+client.c+ (covered later) and is what does the real network work.
+Until something opens body, no HTTP traffic happens.
+
 <<function [[fsopen]](webfs)>>=
 static void
 fsopen(Req *r)
@@ -4820,6 +5600,15 @@ fsopen(Req *r)
     }
 }
 @
+
+%claude:
+[<fsread()>] dispatches reads. The tail of the switch (the long
+list of \verb+Qurl+, \verb+Qscheme+, etc.) is where the offset trick from
+[<tab>] earns its keep: one line of code reads the right field out of
+the [<Url>] struct using \verb+(char**)((uintptr)c->url+offset)+ and
+streams it back as the file contents. \verb+Qbody+ again sends the
+request off to the per-client thread; the body data does not live in
+webfs's address space, it streams in from the network on demand.
 
 <<function [[fsread]](webfs)>>=
 static void
@@ -4911,6 +5700,16 @@ fsread(Req *r)
     }
 }
 @
+
+%claude:
+[<fswrite()>] handles writes. There are three real cases:
+\verb+Qcookies+ (defer to the cookie code), \verb+Qctl+ (parse a
+keyword + argument, look up in [<Ctab>], delegate to [<ctlwrite()>] or
+the per-client variant), and \verb+Qpostbody+ (grow the [<Client>]'s
+postbody buffer, copy the new bytes in). The \verb+Qctl+ path is the only
+configuration interface in the whole browser: \verb+url URL+,
+\verb+baseurl URL+, \verb+useragent STR+, \verb+contenttype STR+,
+\verb+headers KV+, etc.
 
 <<function [[fswrite]](webfs)>>=
 static void
@@ -5084,6 +5883,16 @@ fsdestroyfid(Fid *fid)
 
 \section{Connection lifecycle}
 
+%claude:
+[<newclient()>] is the per-connection bootstrap. It first scans for a
+[<Client>] slot whose refcount is zero (a closed connection that can be
+reused) and returns its index if one exists. Otherwise it allocates a
+new [<Client>], creates a request channel \verb+creq+ for that client,
+spawns a [<clientthread>] worker on it, and grows the global
+\verb+client[]+ array if needed. The two-step ``find or create'' is what
+keeps the file tree small: long-lived processes that fetch many URLs in
+sequence end up cycling through a handful of slots forever.
+
 <<function [[newclient]](webfs)>>=
 int
 newclient(int plumbed)
@@ -5149,6 +5958,27 @@ clonectl(Ctl *c)
 
 
 \section{HTTP transport ([[http.c]])}
+
+%claude:
+\verb+http.c+ implements the three vtable callbacks for
+\verb+UShttp+/\verb+UShttps+: [<httpopen()>] (connect, send the request,
+parse the response status line and headers), [<httpread()>] (drain the
+buffered body), [<httpclose()>] (tear down the connection). After the
+[<Url>] vtable is bound in [<postparse_http()>], the caller in
+[<clientthread>] just sees opaque \verb+u->open(c, u)+ /
+\verb+u->read(c, r)+ / \verb+u->close(c)+ calls.
+
+%claude:
+[<httpopen()>] is structurally similar to hget's [<dohttp()>], but
+shorter because some pieces have been factored out: TLS dialing is
+hidden inside [<iotlsdial()>] (which dispatches on the \verb+UShttps+
+flag), header parsing is a separate function [<httpheaders()>] driven
+by the [<hdrtab>] dispatch table, and cookies come from
+[<httpcookies()>] which talks directly to the cookie jar (this webfs
+process bundles cookies; the standalone webcookies file server is for
+when you want them shared across processes). The status-code switch is
+the same long list as hget, except that 401 escalates to a credential
+fetch via the auth(2) interface rather than a fatal error.
 
 <<function [[httpopen]](webfs)>>=
 int
@@ -5588,6 +6418,16 @@ servername(char *addr)
 
 \section{Authentication (basic, digest, [[www-authenticate]])}
 
+%claude:
+HTTP authentication is reduced to one scheme: Basic. When a 401 comes
+back with a \verb+WWW-Authenticate: Basic realm="..."+ header, mothra
+defers to the kernel's auth(2) factotum to look up a username and
+password for that \verb+host+/\verb+realm+ pair, then base64-encodes
+\verb+user:pass+ and sends \verb+Authorization: Basic <b64>+ on the
+retry. The replay logic is in the [<httpopen()>] redirect/auth loop:
+after one successful credential fetch, the request is resent and either
+succeeds or fails permanently.
+
 <<enum [[Axxx]](mothra)>>=
 /*
  *  authentication types
@@ -5689,6 +6529,18 @@ unquote(char *s, char **ps)
 
 \section{Redirect handling and loop detection}
 
+%claude:
+[<clientbodyopen()>] is the redirect/auth retry loop, called once per
+\verb+Topen+ on \verb+/mnt/web/N/body+. Each iteration calls the URL's
+[[open]] callback (which sends one HTTP request and parses the response
+headers); if the response was a 3xx with a \verb+Location:+ header,
+\verb+c->redirect+ holds the new URL --- it is parsed (against the
+current URL as base, so relative redirects work) and the loop continues.
+Loop detection is by pure hop count, bounded at \verb+c->ctl.redirectlimit+
+(default 10). Authentication is the same shape: on 401 the loop reparses
+the headers, asks factotum for credentials via [<wwwauthenticate()>],
+and retries once.
+
 <<function [[setcookie]](webfs)>>=
 static void
 setcookie(HttpState *hs, char *value)
@@ -5780,6 +6632,17 @@ clientbodyopen(Client *c, Req *r)
 
 
 \section{Per-client thread dispatch ([[client.c]])}
+
+%claude:
+The \verb+/mnt/web/ctl+ files take a small command language --- one line
+each, of the form \verb+keyword arg+. Three tables drive the dispatch:
+[<ctltab>] for per-client knobs ([[acceptcookies]], [[sendcookies]],
+[[redirectlimit]], [[useragent]]); [<globaltab>] for the debug switches
+that affect the whole webfs process; [<clienttab>] for the two URL slots
+([[baseurl]], [[url]]) that drive what gets fetched. Each table maps the
+keyword to a [<Xtype>] (Bool/Int/String/XUrl) and an offset into the
+target struct. The actual write logic in [<parseas()>] is one
+\verb+switch+ on type, then a typed assignment.
 
 <<global [[ctltab]](webfs)>>=
 Ctab ctltab[] = {
@@ -6003,6 +6866,19 @@ globalctlread(Req *r)
 }
 @
 
+%claude:
+[<clientthread>] is the per-client worker that owns network I/O. One
+thread per [<Client>], each blocked on the client's own \verb+creq+
+channel. The 9P dispatch in [<fsthread>] never does network work: it
+just sends the [[Req]] over \verb+creq+ and waits. Here the request is
+matched to the right operation: \verb+Topen+ on body triggers
+[<clientbodyopen()>] (the redirect/auth loop above), \verb+Tread+
+triggers [<clientbodyread()>] (one chunk of body bytes via the URL's
+[[read]] callback), \verb+Tflush+ acknowledges and returns. This is what
+makes webfs scale to many concurrent fetches: the GUI thread is never
+blocked on the network because each connection has its own dedicated
+worker.
+
 <<function [[clientthread]](webfs)>>=
 static void
 clientthread(void *a)
@@ -6190,6 +7066,20 @@ iotlsdial(Ioproc *io, char *addr, char *local, char *dir, int *cfdp, int usetls,
 
 \section{Why a file server for the network}
 
+%claude:
+A library would have been the obvious choice. Mothra would link against
+\verb+libweb.a+, call \verb+web_get(url)+, get back a buffer; abaco would
+do the same; \verb+rc+ scripts would not get the network at all. Plan~9
+chooses the file server instead, and gets several properties for free.
+First, every existing tool that reads files becomes a web tool: \verb+cat+,
+\verb+grep+, \verb+window+, \verb+plumber+, \verb+rc+ all work on
+\verb+/mnt/web/N/body+ unmodified. Second, the same webfs instance can
+serve many clients with one cookie jar, one TLS configuration, one set of
+authentication credentials. Third, mounting \verb+/mnt/web+ from a remote
+machine over 9P (\verb+import+ or \verb+srvfs+) is the same as having
+\verb+webfs+ run there, which makes sandboxed browsers and split-namespace
+tunneling fall out of nothing.
+
 %###############################################################################
 
 %******************************************************************************
@@ -6197,8 +7087,36 @@ iotlsdial(Ioproc *io, char *addr, char *local, char *dir, int *cfdp, int usetls,
 \label{chap:webcookies}
 %******************************************************************************
 
+%claude:
+\verb+webcookies+ is a small file server that holds the cookie jar. It
+exists as a separate program, mounted at \verb+/mnt/webcookies+, even
+though webfs already has its own internal copy of the same logic
+(\verb+webfs/cookies.c+). The reason is the same one that made webfs a
+file server in the first place: cookies are session state that should be
+shared across processes (one mothra plus one webfs in this namespace,
+plus another webfs in the next, plus hget run from the shell, all want
+to see the same login session for example.com), and a shared file server
+is how Plan~9 shares state.
+
+%claude:
+The protocol is two files. \verb+/mnt/webcookies/http+ is the
+ask-and-tell channel: a client writes a URL, then reads back a complete
+\verb+Cookie:+ HTTP header that should be sent on a request to that URL
+(or empty if no cookies match). After the request completes the client
+writes the response's \verb+Set-Cookie:+ headers back, which adds them
+to the jar. \verb+/mnt/webcookies/cookies+ is the human-readable view: a
+text dump of every cookie that opens for read, accepts overwrites for
+edit. There is no per-host directory hierarchy --- one jar covers
+everything.
+
 \section{[[main()]]}
 
+%claude:
+The [<Cookie>] and [<Jar>] structs are deliberately the same as the ones
+in \verb+webfs/cookies.c+ (chapter \ref{chap:core-ds} covered the webfs
+versions). Two different translation units, two different files, same
+fields, same names; the dual cookie architecture (also covered later in
+this chapter) is what allows that.
 
 <<struct [[Cookie]](webcookies.c)>>=
 struct Cookie
@@ -6237,6 +7155,15 @@ struct Jar
     char        *lockfile;
 };
 @
+
+%claude:
+[<stab>] and [<itab>] are the parallel reflection tables that drive the
+cookie text format ([<jarfmt>], [<cookiefmt>]). One row per
+[<Cookie>] field: \verb+stab+ for string fields, \verb+itab+ for the
+integer flags. The \verb+ishttp+ column says ``include this field when
+emitting an HTTP \verb+Cookie:+ header'' (so e.g.\ \verb+name+ and
+\verb+value+ go into HTTP, but \verb+comment+ and \verb+version+ only
+go into the human-readable dump).
 
 <<global [[stab]](webcookies.c)>>=
 struct {
@@ -6285,6 +7212,14 @@ usage(void)
     exits("usage");
 }
 @
+
+%claude:
+[<main()>] is short. Parse arguments, install the formatters
+[<jarfmt>]/[<cookiefmt>], default the cookie file to
+\verb+$home/lib/webcookies+, [<readjar()>] off the disk, build the
+two-entry file tree, and \verb+postmountsrv+. The \verb+aux+ values
+\verb+Xhttp+/\verb+Xcookies+ on each tree entry let [<fsopen()>] tell
+which file is being opened without comparing strings.
 
 <<function [[main]](webcookies)>>=
 void
@@ -6345,6 +7280,15 @@ main(int argc, char **argv)
     exits(nil);
 }
 @
+
+%claude:
+[<fsopen()>] allocates a per-fid [<Aux>] state buffer when either of the
+two files is opened. For \verb+Xhttp+, the buffer holds two scratch
+strings: \verb+inhttp+ (incoming \verb+Set-Cookie:+ headers being
+accumulated) and \verb+outhttp+ (outgoing \verb+Cookie:+ header to be
+read back). For \verb+Xcookies+, the buffer holds a snapshot of the
+human-readable jar dump, regenerated on open so concurrent edits do not
+corrupt mid-read offsets.
 
 <<function [[fsopen]](webcookies)>>=
 void
@@ -6415,6 +7359,17 @@ fsread(Req *r)
     }
 }
 @
+
+%claude:
+[<fswrite()>] is the cookie protocol entry point. The \verb+Xhttp+ case
+is a tiny state machine on the per-fid \verb+Aux+: the first write must
+be a URL (\verb+http://+ or \verb+https://+ followed by host and path),
+which puts the fid into \verb+HaveUrl+ and triggers a [<cookiesearch()>]
+to populate \verb+outhttp+ with what the client should put in its
+\verb+Cookie:+ header. Subsequent writes are appended \verb+Set-Cookie:+
+header bytes, parsed and added to the jar at close (in [<fsdestroyfid()>]).
+The \verb+Xcookies+ case is the human-editable view: writes accumulate
+into \verb+ctext+, parsed at close.
 
 <<function [[fswrite]](webcookies)>>=
 void
@@ -6553,6 +7508,16 @@ fsend(Srv*)
 
 \section{Storage format}
 
+%claude:
+The cookie jar lives in \verb+$home/lib/webcookies+, a flat text file
+with one cookie per line. The format is the obvious one: every field
+that has a value is rendered as \verb+name=value+, the line ends at the
+first newline. Comments start with \verb+#+ and are preserved by
+\verb+webcookies+ on read but not written back. Two formatters drive
+the textual representation: [<jarfmt>] turns a [<Jar>] into an HTTP
+\verb+Cookie:+ header for the wire; [<cookiefmt>] turns a single
+[<Cookie>] into one line of jar text for the storage file or for the
+human view.
 
 <<function [[jarfmt]](webcookies)>>=
 /* HTTP format */
@@ -6671,6 +7636,28 @@ closejar(Jar *jar)
     free(jar);  
 }
 @
+
+%claude:
+[<syncjar()>] is the read-modify-write cycle that keeps the in-memory
+jar coherent with the disk file. The protocol uses an exclusive lock
+file (\verb+L.webcookies+ next to \verb+webcookies+) and the file's
+\verb+Qid+ to detect concurrent modification: if the on-disk qid differs
+from the last-seen one, the disk file has been edited under us and the
+jar must be reloaded. The merge logic is mark/sweep --- every in-memory
+cookie is marked, the file is read and each cookie cleared from the
+mark set as it is rediscovered, then anything still marked at the end is
+deleted (it was removed from the disk file by another process). New
+in-memory cookies that were not yet on disk get written out.
+
+%claude:
+The concurrency model deserves a moment. Multiple webfs/webcookies
+processes can run with the same \verb+$home/lib/webcookies+, e.g.\ one
+per logged-in window, each with its own namespace. Without
+[<syncjar()>]'s lock-and-rescan dance, two concurrent logins to the same
+website would each see only their own cookies. With it, every read does
+a quick stat to see if the file changed, and if so, reloads --- so the
+jars stay in sync across processes at the cost of one stat per cookie
+operation.
 
 <<function [[syncjar]](webcookies)>>=
 int
@@ -7328,6 +8315,17 @@ skipvalue(char *s, int isns)
 
 \section{Domain matching and expiry}
 
+%claude:
+The two halves of cookie semantics are which cookies match a request
+URL, and when a cookie expires. [<cookiematch()>] applies the standard
+RFC~6265 rules: the cookie's domain must be a suffix of the request
+host (with the leading dot allowing all subdomains, e.g.\
+\verb+.example.com+ matches \verb+www.example.com+ and
+\verb+example.com+); the cookie's path must be a prefix of the request
+path; if the cookie has the secure flag, the request must be HTTPS.
+[<expirejar()>] sweeps expired cookies, called from [<closejar()>] and
+opportunistically from [<syncjar()>].
+
 
 <<function [[cookiecmp]](webcookies)>>=
 /*
@@ -7499,6 +8497,18 @@ expirejar(Jar *jar, int exiting)
 @
 
 \section{The dual cookie architecture: [[webfs/cookies.c]] vs standalone [[webcookies]]}
+
+%claude:
+There are two cookie implementations in the browser: one inside webfs
+(\verb+webfs/cookies.c+, used when nothing is mounted at
+\verb+/mnt/webcookies+), one standalone (\verb+webcookies+, used when it
+is). The standalone version is what allows multiple webfs instances to
+share a single cookie jar; the inline one is the no-dependency default
+that lets webfs work on its own. Both share the same on-disk format, the
+same struct layout, and most of the parsing code by physical copy. The
+duplication is the cost of having webfs work without dragging in another
+file server, set against the benefit of having a real shared jar when
+the user wants one.
 
 
 <<global [[stab]](webfs)>>=
@@ -8679,6 +9689,16 @@ httpcookies(char *dom, char *path, int issecure)
 
 \section{Why split from [[webfs]]}
 
+%claude:
+The split is for the same reason that webfs is its own process. Cookies
+are user-session state, not per-process state. If webfs owned cookies
+exclusively, then two webfs processes (one per browser window, say) could
+not share a login session for example.com, which is exactly the
+behaviour users expect from a browser. By promoting cookies to a
+file-server protocol, any number of cookie clients can share one jar.
+The price is one more 9P round-trip per request, which is invisible
+under network latency.
+
 %###############################################################################
 
 %******************************************************************************
@@ -8705,10 +9725,45 @@ httpcookies(char *dom, char *path, int issecure)
 \label{chap:charset}
 %******************************************************************************
 
+%claude:
+The web is in dozens of character sets: Latin-1 still dominates a lot of
+old static pages, GB2312 and Big5 are common in Chinese, Shift-JIS in
+Japanese, KOI-8 in Russian, plus a dozen \verb+iso-8859-*+ variants.
+Plan~9 is UTF-8 throughout. To bridge those, mothra hands every HTML
+body to a small filter pipeline that ends in UTF-8 before the parser
+sees it.
+
+%claude:
+The pipeline has two pieces, both subprocesses. \verb+uhtml+ sniffs the
+incoming bytes and parses any \verb+<meta charset=...>+ in the head; if
+the page is already UTF-8 it passes through, otherwise it execs
+\verb+tcs -f <charset> -t utf+ on its tail. \verb+tcs+ (``translate
+character set'') is Plan~9's iconv: a generic byte stream converter
+keyed by a built-in table mapping every ISO-8859 page, every Windows
+code page, and the major East Asian encodings to and from UTF-8.
+
 \section{Why charset conversion lives outside the browser}
+
+%claude:
+Because it does not have to live inside. Every other browser links
+\verb+libiconv+ or its equivalent and pays the size in every binary
+that wants to render text. Plan~9 makes \verb+tcs+ a separate program;
+the cost is one fork+exec per page, the savings are a 5,000-line table
+and a non-trivial state machine that mothra never has to compile or
+ship. The same \verb+tcs+ binary serves every other text tool that
+might encounter non-ASCII (mail, news, IRC clients).
 
 \section{[[tcs]] as a pipe-friendly iconv (interface, not internals)}
 
+%claude:
+The point of this section is not to walk the tcs internals --- conversions
+between Shift-JIS and UTF-8 are well-trodden ground in any iconv-style
+project --- but to show the dispatch shape that makes tcs extensible. One
+[<convert>] table, one row per supported encoding, two columns
+(\verb+from+ direction and \verb+to+ direction). Adding a new charset
+means adding one row plus one rune-to-byte table or one converter
+function. The body of [<main()>] just looks up the from-table and the
+to-table and runs the data through.
 
 <<function [[main]](tcs)>>=
 int
@@ -9109,6 +10164,17 @@ long tabascii[256] =
 };
 @
 
+%claude:
+[<convert>] is the master table of every encoding tcs knows about. The
+rows fall into two flavours by the \verb+Table+ vs \verb+Func+ flag.
+\verb+Table+ rows are static 256-entry maps from byte to Rune, used by
+[<intable()>] / [<outtable()>]; this is enough for every single-byte
+encoding (8859-X, KOI-8, Windows code pages, Mac Roman, EBCDIC). Other
+rows are \verb+Func+ pairs: one for from-direction, one for
+to-direction, each pointing at a stateful converter (Big~5, GB,
+Shift-JIS, UTF-16, etc.). Adding a new encoding is one row plus its
+table or function pair.
+
 <<global [[convert]](tcs)>>=
 struct convert convert[] =
 {   /* if two entries have the same name, put the from one first */
@@ -9226,6 +10292,16 @@ struct convert convert[] =
 
 \section{[[uhtml]]: sniffing and shelling out}
 
+%claude:
+\verb+uhtml+ is the dispatcher in front of \verb+tcs+. It buffers the
+first 64~KiB of its input, sniffs the encoding from the bytes (BOMs at
+the start of the buffer, then \verb+<meta charset="...">+ and
+\verb+<?xml encoding="...">+ in the head), then either passes through if
+the data is already UTF-8 or execs
+\verb+rc -c "tcs -f <cset> | tcs -f html"+ as the rest of its tail. The two-stage tcs pipeline first
+converts to UTF-8 and then to ``html'' (which decodes named entities
+like \verb+&lambda;+ into runes), so by the time the bytes reach
+mothra's parser they are clean Plan~9 UTF-8.
 
 <<constant [[IOUNIT]](uhtml)>>=
 #define IOUNIT (64*1024)
@@ -9419,6 +10495,28 @@ Found:
 
 \section{The full pipeline: [[fetch | uhtml | render]]}
 
+%claude:
+Putting it all together: when mothra fetches an HTML page, the bytes
+flow through three subprocesses joined by pipes.
+
+\begin{verbatim}
+    /mnt/web/N/body          uhtml                tcs                    mothra
+    (raw bytes from         (sniff cs,          (Latin-1 -> UTF-8,      (parse, render)
+     webfs+http+tls)         pass thru                or pass thru
+                             or fork tcs)            via two stages)
+
+    \-----------------------/  \---------------------/  \------/
+            pipe 1                      pipe 2          pipe 3
+\end{verbatim}
+
+%claude:
+Mothra creates pipe~1 in [<urlget()>] (\verb+webclone+ + open of
+\verb+/body+), then [<geturl()>] sees \verb+typ == HTML+ and stitches
+\verb+uhtml+ onto the front via [<pipeline()>]. \verb+uhtml+ in turn may
+exec \verb+tcs+ on its tail. Mothra ends up reading clean UTF-8 from a
+fd whose far end is webfs's HTTP body, with two filters in between, none
+of which mothra had to link.
+
 %###############################################################################
 
 \part{Rendering the Page}
@@ -9428,8 +10526,44 @@ Found:
 \label{chap:html-parsing}
 %******************************************************************************
 
+%claude:
+\verb+rdhtml.c+ is the single biggest file in mothra. It is the HTML
+parser: a hand-written single-pass tokenizer + state machine that turns
+the byte stream of a \verb+<html>...</html>+ document into a flat list of
+\verb+Rtext+ nodes. ``Flat list, not DOM'' is the part to keep in mind.
+Most modern browsers build a tree of HTML elements first and lay it out
+second, partly because CSS and JavaScript want to query and mutate the
+tree. Mothra has no CSS or JavaScript and renders top-to-bottom in one
+pass, so the parser emits visual items directly. There is no
+intermediate AST.
+
+%claude:
+The flow is: an outer loop pulls one token (TAG, ENDTAG, or TEXT) from
+the byte stream; a switch dispatches on the token; for TAGs, a second
+switch dispatches on which tag (\verb+<b>+, \verb+<a href=...>+,
+\verb+<img>+, \ldots) and updates the formatting state on a small parse
+stack; for TEXTs, the current formatting state is captured into a fresh
+\verb+Rtext+ node and appended to the output. Two runtime-allocated
+buffers ([[token]], [[hbuf]]) and a fixed-size formatting stack are all
+the parser needs.
+
 \section{What mothra parses (HTML4-ish, lenient)}
 
+%claude:
+The parser is HTML4-ish in scope and lenient in posture: every tag has
+to be recognized, every tag attribute parsed, but nothing has to be
+syntactically correct. Real-world HTML is full of unclosed tags,
+mismatched closes, and missing attribute quotes; the parser tolerates
+all of them by treating the tag dispatch as advisory updates to the
+formatting stack rather than as hierarchy assertions.
+
+%claude:
+The state for a parser is bundled into one struct, [<Hglob>], that
+threads through every helper. This is so that two parsers can run in
+parallel without clobbering each other: mothra forks one parser per
+inflight page (a navigation while another page is still loading kicks
+off two simultaneous parses). \verb+Hglob+ is the per-parse context;
+[<Stack>] is one element of the formatting parse stack inside it.
 
 <<struct [[Hglob]](mothra)>>=
 /*
@@ -9466,6 +10600,15 @@ struct Hglob{
     Www *dst;           /* where the text goes */
 };
 @
+
+%claude:
+[<Stack>] is one frame of the parser's formatting stack. When the parser
+sees \verb+<b>+ it pushes a new frame whose \verb+font+ field is BOLD;
+when it sees \verb+</b>+ it pops. Same idea for \verb+<i>+,
+\verb+<pre>+, \verb+<sub>+, \verb+<a href=...>+, \verb+<img>+, list
+indentation. Every TEXT token captured inherits the top-of-stack
+formatting --- so HTML's nested-tag semantics are reduced to a stack of
+mutable formatting records, with the visible text taking a snapshot.
 
 <<struct [[Stack]](mothra)>>=
 struct Stack{
@@ -9529,6 +10672,17 @@ struct Stack{
 
 \section{Tokenization: tags, attributes, text runs}
 
+%claude:
+The tokenizer reads bytes one rune at a time, classifies each into a
+TAG, ENDTAG, or TEXT token, and stuffs the result into the \verb+Hglob+
+slots [[token]] (for TEXT runs) or [[attr]] (for parsed
+attribute/value pairs of a tag). The peeking primitives push runes back
+into the input via [<Hglob>]'s \verb+peekc+ array. Three special
+sentinels mark uncommon byte values: \verb+STAG+ = found \verb+<+ that
+starts a tag, \verb+ETAG+ = found \verb+>+ that closes one, \verb+EOF+ =
+end of input. Sticking these out-of-band values into a \verb+int+
+return type keeps the lexer's caller from confusing them with real
+runes.
 
 <<global [[fontlist]](mothra)>>=
 struct Fontdata{
@@ -9620,6 +10774,15 @@ void getfonts(void){
             pl_whichfont(f, s, nil);
 }
 @
+
+%claude:
+[<pl_pushstate()>] and [<pl_popstate()>] are the only stack ops the
+parser needs. Push duplicates the current top of stack (so that the new
+frame inherits everything that was not changed) and stamps in the new
+tag. The string fields (\verb+name+, \verb+link+, \verb+image+) are
+strdup'd because pop will free them. The size cap \verb+NSTACK+ = 100
+is wide enough that real HTML never trips it; if it does, an
+\verb+htmlerror+ is logged and the push is silently absorbed.
 
 <<function [[pl_pushstate]](mothra)>>=
 void pl_pushstate(Hglob *g, int t){
@@ -9755,6 +10918,17 @@ void pl_putback(Hglob *g, int c){
 }
 @
 
+%claude:
+[<pl_nextc()>] is the gateway between the byte-stream readers above
+([<pl_bread()>]/[<pl_readc()>]) and the higher-level token parsers below
+(\verb+pl_gettoken+ etc.). Its job is to recognize the magic
+\verb+<...>+ pattern, returning STAG when an actual tag is starting and
+ETAG when the matching close angle bracket is hit. Crucially it has to
+distinguish ``\verb+<+ as the start of a real tag'' from ``\verb+<+ as
+literal text in the document'' (which happens all the time in inline
+code samples) by peeking at the next rune: a letter, slash, or bang
+turns it into a tag-start; anything else is just a less-than sign.
+
 <<function [[pl_nextc]](mothra)>>=
 int pl_nextc(Hglob *g){
     int c;
@@ -9844,6 +11018,18 @@ void pl_dnl(char *s){
     *t='\0';
 }
 @
+
+%claude:
+[<pl_tagparse()>] is the second half of tokenization: given the
+already-collected text inside the angle brackets, split it into tag name
+and attribute/value pairs. The grammar it accepts is the lenient one
+real HTML uses: attributes may be unquoted, single-quoted, or
+double-quoted; attribute names are case-insensitive (lowercased here);
+\verb+<!--...-->+ comments and \verb+<? ... ?>+ processing instructions
+are routed to [<pl_getcomment()>]. The output goes into the parser's
+\verb+token+ slot for the tag name and the \verb+attr[]+ array for the
+parsed pairs (each entry's \verb+value+ pointer points into the
+\verb+token+ buffer).
 
 <<function [[pl_tagparse]](mothra)>>=
 void pl_tagparse(Hglob *g, char *str){
@@ -10114,6 +11300,14 @@ int pl_hasattr(Pair *attr, char *name){
 
 \section{The tag dispatch table}
 
+%claude:
+[<tag>] is the alphabetical lookup table that maps an HTML tag name to
+its [<Tagxxx>] enum and a flag column saying whether the tag is
+``end-required'' (must have a matching close) or void (\verb+<br>+,
+\verb+<img>+, \verb+<hr>+ etc.). The table is searched linearly because
+the cost is one search per tag, not one per character; a binary search
+or a perfect hash would shave off microseconds at most. Adding HTML5
+tags is just adding rows.
 
 <<global [[tag]](mothra)>>=
 Tag tag[]={
@@ -10282,6 +11476,25 @@ void pl_htmloutput(Hglob *g, int nsp, char *s, Field *field){
 
 \section{Building a flat list of items (no DOM)}
 
+%claude:
+This section is the core dispatch loop. [<plrdhtml()>] is the entry
+point: it initializes a fresh [<Hglob>], pushes the implicit
+\verb+<html>+ frame on the formatting stack, then enters the big
+[[for(;;) switch(pl_gettoken(...))]] loop. Each iteration pulls one
+token (TAG/ENDTAG/TEXT/EOF), runs the per-tag handler that mutates the
+formatting stack and appends to the [<Www>]'s text list, and loops.
+
+%claude:
+The handler set is a long switch that the rest of this section walks
+through tag by tag. Most cases fit in two or three lines: ``read this
+attribute, set this stack field, maybe emit one Rtext.'' The remarkable
+property is that the same dispatch covers tags as different as
+\verb+<a>+ (sets \verb+state->link+, then emits one Rtext-with-Action
+per text run inside it), \verb+<img>+ (emits one Rtext-with-Action
+right now, with no enclosed run), and \verb+<table>+ (almost a no-op,
+linear pass-through). The ``flat list'' invariant is maintained because
+no handler ever recurses --- they all just push, mutate, or pop the
+current formatting state.
 
 <<function [[plaintext]](mothra)>>=
 void plaintext(Hglob *g){
@@ -10354,6 +11567,29 @@ void plrdplain(char *name, int fd, Www *dst){
     finish(dst);
 }
 @
+
+%claude:
+[<plrdhtml()>] is the parser entry point. The first half is just
+clearing the [<Hglob>] and seeding the bottom-of-stack frame with the
+root document state. The interesting half is the dispatch loop. A few
+things to notice in passing through it:
+\begin{itemize}
+\item \verb+OPTEND+ tags (paragraph-like things that may or may not have
+a matching close) get handled by walking down the stack to find a
+matching open and popping back to it; the lenient real-world HTML rule
+``end tag is allowed to skip several levels'' is implemented exactly here.
+\item \verb+END+ tags (normally well-formed) just push.
+\item \verb+<img>+ resolves the \verb+src+ attribute, optionally falls
+back to ``find any URL-shaped attribute'' for sites that lazy-load
+images via JavaScript-rewritten attributes, and emits one Rtext with the
+alt text or fallback string.
+\item \verb+<a>+ stores the \verb+href+ in the current state frame and
+the \verb+name+ in the same frame for fragment-jump targets, then emits
+an empty Rtext to anchor the name.
+\item \verb+<meta http-equiv=refresh>+ is rendered as the literal
+\verb+[refresh: URL]+ text, so the user sees the redirect URL rather
+than mothra silently following it.
+\end{itemize}
 
 <<function [[plrdhtml]](mothra)>>=
 void plrdhtml(char *name, int fd, Www *dst, int killimgs){
@@ -10895,6 +12131,19 @@ void plrdhtml(char *name, int fd, Www *dst, int killimgs){
 
 \section{Entities and character references}
 
+%claude:
+HTML lets the document use \verb+&amp;+ instead of literal \verb+&+,
+\verb+&#955;+ for U+03BB ($\lambda$), \verb+&lambda;+ for the same
+thing, etc. The parser turns each of these back into a single rune via
+[<pl_rmentities()>], which scans the freshly accumulated TEXT token in
+place and replaces every recognized escape with its rune. The lookup is
+a linear scan of the [<entity>] table because there are only a few
+hundred named entities and they are touched at most once per text run.
+
+%claude:
+The numeric forms (\verb+&#NNN;+ for decimal, \verb+&#xHH;+ for hex)
+are handled inline since they do not require a table lookup.
+
 
 <<function [[alnumchar]](mothra)>>=
 int alnumchar(int c){
@@ -10985,6 +12234,18 @@ void pl_rmentities(Hglob *, char *s){
 
 \section{Surviving real-world HTML}
 
+%claude:
+Real HTML is messy. Tags get closed in the wrong order. Attributes are
+unquoted with embedded spaces. Whole sections of malformed markup get
+shovelled out by content management systems. The parser stays robust by
+following two rules: every error path calls [<htmlerror()>] (which is
+just a logger, not a fatal abort) and every state mutation is bounded
+(the formatting stack has a fixed cap, the token buffer is fixed, etc.).
+The OPTEND walking up the formatting stack is the most aggressive
+recovery: ``you said \verb+</p>+ but I am eight nesting levels deep
+inside paragraphs'' becomes ``pop everything, find the open
+\verb+<p>+, pop back to its level.''
+
 %###############################################################################
 
 %******************************************************************************
@@ -10992,8 +12253,26 @@ void pl_rmentities(Hglob *, char *s){
 \label{chap:content-dispatch}
 %******************************************************************************
 
+%claude:
+After webfs hands mothra a body fd, mothra has to decide what kind of
+content it is and which renderer to feed it to. Three strategies are
+tried in order: trust the server's \verb+Content-Type:+ header
+(transmitted via \verb+/mnt/web/N/contenttype+); if absent, sniff the
+first bytes of the body via \verb+/bin/file -m+ in a subprocess; if
+that comes back ambiguous, default to plain text. The dispatch then
+picks one of the supported viewers ([<XKind>] enum: PLAIN, HTML, GIF,
+JPEG, PNG, BMP, ICO, PAGE) and either parses the bytes inline (for HTML
+and PLAIN) or shells out to an external viewer like \verb+page -w+ (for
+images).
+
 \section{MIME sniffing ([[snoop.c]])}
 
+%claude:
+[<XKind>] is the small enum of content kinds mothra knows about. There
+is no separate ``font'' or ``video'' kind because mothra would not know
+what to do with them anyway --- those go through the unknown-content
+branch, which falls back to ``save to a file'' or ``shell out to
+\verb+page+'' depending on the type prefix.
 
 <<enum [[XKind]](mothra)>>=
 enum{
@@ -11009,6 +12288,22 @@ enum{
     PAGE,
 };
 @
+
+%claude:
+[<filetype()>] is the heart of MIME sniffing. The challenge is that the
+fd is a one-shot stream: mothra cannot read the first 4~KiB to sniff
+and then ``unread'' them. The trick: read up to 4~KiB into a buffer,
+spawn a \verb+/bin/file -m+ subprocess with three pipes
+(\verb+ifd+/\verb+ofd+/\verb+xfd+), send the buffer to \verb+file+'s
+stdin, and then a second subprocess re-emits the same buffer plus
+whatever else can be read from \verb+fd+ into a fresh fd that replaces
+\verb+fd+ via \verb+dup+. The caller never notices that bytes were peeked
+at. The MIME type comes back from \verb+file+'s stdout via a third pipe.
+
+%claude:
+This is the only place in mothra that does MIME sniffing for content
+type. The subprocess pattern (peek-and-replumb) is one of the most
+underused tricks in Unix/Plan~9 programming.
 
 <<function [[filetype]](mothra)>>=
 int
@@ -11092,6 +12387,14 @@ Err1:
 }
 @
 
+%claude:
+[<mimetotype()>] is the lookup table from MIME type strings to
+[<XKind>] values. The \verb+image/+ and \verb+text/+ rows at the bottom
+are prefix matches: anything that starts with \verb+image/+ but is not
+explicitly listed (e.g.\ \verb+image/svg+xml+) maps to PAGE so it gets
+opened with the page viewer; anything that starts with \verb+text/+ but
+is not HTML maps to PLAIN.
+
 <<function [[mimetotype]](mothra)>>=
 int
 mimetotype(char *mime)
@@ -11143,13 +12446,52 @@ snooptype(int fd)
 
 \section{MIME detection via [[/bin/file -m]] subprocess}
 
+%claude:
+The previous section's [<filetype()>] is what dispatches to
+\verb+/bin/file -m+. The \verb+-m+ flag asks \verb+file+ to print the
+MIME type instead of its usual chatty description. Mothra inherits all
+of \verb+file+'s sniffing rules (the magic-byte tables in \verb+/lib/file/magic+)
+without having to ship them itself. Adding support for a new format
+becomes ``add an entry to the magic table'' rather than ``add a sniffer
+to mothra.''
+
 \section{The viewer table (HTML, PLAIN, JPEG, GIF, PNG, \ldots)}
+
+%claude:
+The viewer table is implicit in [<geturl()>]'s switch on [<XKind>]:
+HTML and PLAIN go through the in-process \verb+plrdhtml+/\verb+plrdplain+;
+images and PAGE go through \verb+filter(fd, "exec page -w")+, which
+spawns \verb+/bin/page+ as a sibling window. Everything else falls
+through to the ``save to file'' prompt. There is no plug-in system; the
+table is hard-coded.
 
 \section{Fallback logic: [[image/]] and [[text/]] prefix rules}
 
+%claude:
+The \verb+image/+ and \verb+text/+ prefix rows at the bottom of
+[<mimetotype()>] are the fallback. Any unrecognised \verb+image/...+
+type maps to PAGE (so SVG, TIFF, WebP, etc.\ all open in
+\verb+page -w+). Any unrecognised \verb+text/...+ maps to PLAIN. This
+is enough for nearly every document type users actually encounter.
+
 \section{Dispatching to the right reader}
 
+%claude:
+Dispatch happens in [<geturl()>]'s big switch on [<XKind>], which I
+covered when introducing the function in chapter
+\ref{chap:mothra-main}. The connection to this chapter is that the
+[<XKind>] value returned by [<snooptype()>] is what the switch is
+keyed on.
+
 \section{Handling non-HTML content}
+
+%claude:
+Non-HTML, non-PLAIN, non-image content (PDF, PostScript, etc.) goes
+through PAGE which spawns \verb+page -w+ as a separate window. Anything
+that does not even fit one of those categories triggers the ``Save to
+file'' prompt. Mothra never tries to render content it does not
+understand --- that responsibility belongs to the external viewer or
+the user.
 
 %###############################################################################
 
@@ -11158,15 +12500,71 @@ snooptype(int fd)
 \label{chap:layout}
 %******************************************************************************
 
+%claude:
+``Layout'' for mothra is a thin wrapper over what \verb+libpanel+
+already does for any \verb+pltextview+ widget: take a linked list of
+\verb+Rtext+ nodes, lay them out as a flowing paragraph that respects
+the widget's current width, hand it to libdraw to render. Mothra has no
+layout engine of its own. The work it does is per-node:
+\verb+pl_htmloutput()+ chooses the font, indentation, and link colour
+for each Rtext as it is appended. Once the whole list is built,
+\verb+plrtbitmap+/\verb+plrtstr+ in libpanel handle line breaks and
+reflow on every resize.
+
 \section{From parsed items to on-screen text runs}
+
+%claude:
+This is what the parser already does. \verb+pl_htmloutput()+ in
+\verb+rdhtml.c+ takes the current formatting state from
+\verb+g.state+ and translates it into the right libpanel call:
+\verb+plrtstr+ for normal text runs, \verb+plrtbitmap+ for inline
+images, both extending the same Rtext linked list. The Rtexts are not
+``items'' in the layout sense --- they are leaves of a flowing
+paragraph that libpanel sequences with horizontal/vertical glue.
 
 \section{Word wrapping and reflow}
 
+%claude:
+Word wrapping is in libpanel \book{Widgets}, not in mothra. Each Rtext
+carries an inter-word space hint; libpanel's textview walks the linked
+list and inserts line breaks wherever the next Rtext would overflow the
+current line. Resizing the window triggers \verb+eresized+, which calls
+\verb+plpack+ on the root, which propagates new sizes down to the
+textview, which re-flows automatically. Mothra never recomputes layout
+itself.
+
 \section{Fonts and text styles}
+
+%claude:
+Mothra uses four font families ([<XFonts>]: ROMAN, ITALIC, BOLD,
+CWIDTH for typewriter) at four sizes ([<XFontSize>]: SMALL, NORMAL,
+LARGE, ENORMOUS). The 16 combinations are stored in [<fontlist>], a
+two-dimensional array initialized lazily by [<pl_whichfont()>]. The
+DejaVu Sans / Sans Italic / Sans Bold / Terminus pairing is mothra's
+default; the source comments preserve the original Lucida pairing for
+historical reference.
 
 \section{Hyperlinks and their rendering}
 
+%claude:
+A hyperlink is just an Rtext whose \verb+flags+ field has \verb+PL_HOT+
+set and whose Action's \verb+link+ slot holds the URL. libpanel
+renders hot text underlined and lets \verb+dolink+ (registered as the
+textview's click handler in [<mkpanels()>]) find the right Rtext under
+the cursor by walking back through the list to whichever node owns the
+clicked rectangle.
+
 \section{Scrolling and repaint}
+
+%claude:
+Vertical scrolling is the textview's \verb+ybar+. Horizontal scrolling
+is the optional \verb+xbar+, attached only when explicit horizontal
+overflow is needed. Both are libpanel scrollbars with no mothra-side
+state. Repaint is driven by the main loop's \verb+Ekick+ event: when a
+worker thread (HTML parser, image fetcher) sets \verb+w->changed+, the
+watchdog forked at the end of [<geturl()>] writes one byte to
+\verb+kickpipe+; the main loop wakes up, sees the changed flag, calls
+\verb+updtext()+ to rebuild the textview's content, and repaints.
 
 %###############################################################################
 
@@ -11175,17 +12573,75 @@ snooptype(int fd)
 \label{chap:tag-rendering}
 %******************************************************************************
 
+%claude:
+The tag dispatch in [<plrdhtml()>] is one big switch on \verb+g.tag+
+([<Tagxxx>]). I covered the structural pattern (push-modify-pop on the
+formatting stack) when introducing the parser's main loop. This chapter
+is a quick tour of the per-tag handlers organized by category. Most are
+two-liners; the only intricate ones are \verb+<a>+ (handles both
+\verb+href+ for hyperlinks and \verb+name+ for fragment targets) and
+\verb+<form>+ (covered in chapter \ref{chap:forms}).
+
 \section{Structural ([[<html>]], [[<head>]], [[<body>]])}
+
+%claude:
+The structural tags are no-ops in mothra's layout: \verb+<html>+ pushes
+nothing extra (the bottom-of-stack frame already represents an HTML
+document), \verb+<head>+ similarly, \verb+<body>+ is just a line break.
+The interesting head children are \verb+<title>+ (sets the page title
+for the history list) and \verb+<base href=...>+ (changes the base URL
+that subsequent relative links resolve against, by overwriting
+\verb+g.dst->url->fullname+).
 
 \section{Headings and paragraphs}
 
+%claude:
+\verb+<h1>+--\verb+<h6>+ push a frame with a larger size and bolder
+font. \verb+<p>+ inserts a blank line and an indent. \verb+<br>+ just
+sets \verb+g.linebrk+, which the next call to \verb+pl_htmloutput+
+honours by emitting an extra-large inter-word space (\verb+1000000+, a
+sentinel meaning ``always wrap here'').
+
 \section{Text styles ([[<b>]], [[<i>]], [[<tt>]], [[<em>]], \ldots)}
+
+%claude:
+Each style tag pushes a frame with a different \verb+font+ field
+(BOLD, ITALIC, etc.); the matching close tag pops back. \verb+<em>+
+maps to ITALIC, \verb+<strong>+ to BOLD, \verb+<tt>+/\verb+<code>+ to
+CWIDTH. \verb+<sub>+ and \verb+<sup>+ shift the baseline via the
+\verb+sub+ field. The set of mappings is small enough that a generic
+``style tag'' handler did not seem worth the abstraction.
 
 \section{Lists ([[<ul>]], [[<ol>]], [[<dl>]])}
 
+%claude:
+List tags push a frame with bumped \verb+margin+ and \verb+indent+
+fields. \verb+<li>+ inside an \verb+<ol>+ increments \verb+number+
+and emits its decimal value as the marker; inside \verb+<ul>+ it emits
+the static \verb+bullet+ image. \verb+<dl>+ does the same for
+description lists with \verb+<dt>+ and \verb+<dd>+ as alternating
+indent levels.
+
 \section{Breaks and rules ([[<br>]], [[<hr>]])}
 
+%claude:
+\verb+<br>+ sets the line-break flag, mentioned above. \verb+<hr>+
+emits the static \verb+hrule+ image (a 1-pixel-tall horizontal black
+line bracketed by white space) as a one-line block. Both are void
+tags --- no end tag, no nested content.
+
 \section{Anchors ([[<a>]])}
+
+%claude:
+\verb+<a>+ is the most-used tag with side-data. The handler does two
+things: if there is a \verb+name+ attribute, it is stored in the
+current state's \verb+name+ field (so a synthetic empty Rtext is
+emitted to anchor the fragment target); if there is an \verb+href+
+attribute, it is stored in \verb+state->link+. From this point until
+the matching \verb+</a>+ close, every Rtext emitted will inherit
+\verb+state->link+ via the action it carries. The textview renders
+those Rtexts as hot links because of the [[PL_HOT]] flag set in
+\verb+pl_htmloutput()+.
 
 %###############################################################################
 
@@ -11194,13 +12650,58 @@ snooptype(int fd)
 \label{chap:tables}
 %******************************************************************************
 
+%claude:
+Real HTML tables --- with rowspan, colspan, computed column widths, and
+horizontal alignment --- need a two-pass layout algorithm: pass~1
+walks the whole table to determine each column's natural width, pass~2
+lays out each cell at the chosen width with the right vertical
+alignment. That is genuinely complex, and CSS only made it more so.
+Mothra deliberately punts: tables are rendered as a flat sequence of
+cells, one cell per line, indented to suggest structure but with no
+column alignment. Most pages still read correctly because cell
+content is short and the rest of the page provides enough context.
+
 \section{HTML tables: [[<table>]], [[<tr>]], [[<td>]]}
+
+%claude:
+The relevant tags fall through to the linebreak/indent handlers. From
+[<plrdhtml()>]: \verb+<tr>+ flushes the current line; \verb+<td>+
+adds whitespace; \verb+<th>+ does the same plus switches to BOLD. The
+\verb+<table>+ tag itself is a no-op except for forcing a line break.
 
 \section{What mothra does: linear pass-through}
 
+%claude:
+The cells of a table render as their inner content with one space of
+separation. There is no column-width computation, no row alignment, no
+cell-border rendering. A simple table like
+\verb+<table><tr><td>name<td>value+ shows up as ``name~~value'' in the
+output, breaking onto multiple lines based on the surrounding context.
+
 \section{Why full table layout is hard (column widths, rowspan, colspan)}
 
+%claude:
+Three complications make table layout an order of magnitude more code
+than every other tag. Column widths require knowing every cell's
+natural minimum and maximum width before deciding the layout; that is
+two passes (or a complete in-memory model) just to start. Rowspan and
+colspan let cells overlap multiple rows/columns, so the model is no
+longer a simple 2D array. Vertical alignment within a cell needs the
+cell to be laid out at the chosen width before its content height is
+known. Real browsers solve this with several thousand lines of code; abaco
+attempts most of it; mothra opts out entirely.
+
 \section{Comparison with abaco and full browsers}
+
+%claude:
+abaco does support tables, complete with colspan/rowspan, by building a
+real DOM tree and running a two-pass layout. The table code is several
+thousand lines on its own. Modern browsers add CSS 
+\verb+display: table+ and the related properties on top, easily another 10$\times$.
+Mothra's choice not to do tables is what keeps the rendering loop a
+single linear pass; the cost is that tabular data renders as flowing
+text, which is fine for HTML used as documentation, awkward for
+spreadsheet-style content.
 
 %###############################################################################
 
@@ -11209,10 +12710,40 @@ snooptype(int fd)
 \label{chap:images}
 %******************************************************************************
 
+%claude:
+This chapter covers how an inline image goes from \verb+<img src="...">+
+in the HTML to a rendered \verb+Image+ in the textview. The pipeline
+has three stages: fetch the image bytes from the URL via webfs; sniff
+the format and run the matching format-specific decoder
+(\verb+gif+/\verb+jpg+/\verb+png+/\verb+bmp+); optionally pipe through
+\verb+resize+ for scaling. All three stages are subprocesses spawned
+by [<getpix()>] / [<getimage()>]. Mothra never links libimage formats
+directly --- they live entirely outside the binary.
+
+%claude:
+The chapter also covers the parallelism layer: [<getpix()>] runs up
+to \verb+NXPROC+ image fetches in parallel by forking and \verb+waitpid+ing
+in a sliding window, so a page with 30 images does not bottleneck on
+serial fetches.
+
 \section{The [[<img>]] tag}
+
+%claude:
+The HTML parser handler for \verb+<img>+ records the \verb+src+,
+\verb+width+, \verb+height+, and \verb+alt+ attributes into the
+current state frame and emits one Rtext as a placeholder containing
+the alt text. The actual image fetch is deferred until [<getpix()>]
+runs, which happens once the body is fully parsed. (Until then, the
+page renders with alt text in place, which lets the user start
+reading before images arrive.)
 
 \section{[[getpix]] as a subprocess image fetcher}
 
+%claude:
+[<Pix>] is one decoded image, identified by URL and target
+width/height. \verb+w->pix+ is a linked list of all images for the
+current page, used to deduplicate when the same image appears multiple
+times (e.g.\ icon strips).
 
 <<struct [[Pix]](mothra)>>=
 struct Pix{
@@ -11224,6 +12755,12 @@ struct Pix{
 };
 @
 
+%claude:
+[<pixcmd>] is the per-format decoder dispatch: an [<XKind>] enum to
+the rc command line that converts that format to Plan~9's bitmap
+format. The \verb+-9t+ flag tells \verb+gif+/\verb+jpg+/etc.\ to emit
+the standard Plan~9 image format with transparency support.
+
 <<global [[pixcmd]](mothra)>>=
 char *pixcmd[]={
 [GIF]   "gif -9t",
@@ -11233,6 +12770,15 @@ char *pixcmd[]={
 [ICO]   "ico -c",
 };
 @
+
+%claude:
+[<getpix()>] is the parallel-fetch driver. It walks the Rtext list
+looking for nodes with an \verb+image+ action, forks one
+[<getimage()>] subprocess for each, and uses a sliding-window
+\verb+worker[]+ array to cap concurrency at \verb+NXPROC+. When the
+window fills, it \verb+waitpid+s for any worker to finish before
+starting the next. This is the classic ``bounded fork pool'' pattern
+without a thread library.
 
 <<function [[getpix]](mothra)>>=
 void getpix(Rtext *t, Www *w){
@@ -11288,6 +12834,22 @@ void getpix(Rtext *t, Www *w){
     }
 }
 @
+
+%claude:
+[<getimage()>] runs in each worker subprocess. Resolve the image URL
+against the page URL, dedupe against the Pix cache, fetch through
+\verb+urlget+ (which goes through webfs), sniff the format with
+[<snooptype()>], pipe through the format decoder ([<pixcmd>]), then
+optionally pipe through \verb+resize+ if width/height was specified.
+The final \verb+readimage()+ pulls the decoded Plan~9 bitmap into
+display memory and links a fresh [<Pix>] into \verb+w->pix+.
+
+%claude:
+The \verb+-d+ debug branch saves a copy of each decoded bitmap to
+\verb+/tmp/mothra-N.bit+ before piping through resize, so a crashing
+\verb+resize+ leaves a reproducible test case behind. The numbering by
+counter (rather than by URL hash) preserves every intermediate even
+when one image fails partway through a parallel batch.
 
 <<function [[getimage]](mothra)>>=
 void getimage(Rtext *t, Www *w){
@@ -11412,10 +12974,40 @@ void freepix(void *p){
 
 \section{The three-stage pipeline: [[snooptype()]] $\rightarrow$ format filter $\rightarrow$ [[resize]]}
 
+%claude:
+The pipeline shape, reading right to left in [<getimage()>]:
+
+\begin{verbatim}
+   webfs body fd  -->  format decoder       -->  resize -x W -y H  -->  readimage
+   (raw network)       (gif/jpg/png/bmp/ico)     (optional scaling)     (Plan 9 bitmap)
+\end{verbatim}
+
+%claude:
+The format decoder is selected from the [<pixcmd>] table by sniffing
+type, the resize stage is added only if the \verb+<img>+ tag specified
+explicit dimensions, and \verb+readimage()+ pulls the result into a
+real display Image. Each pipe stage is a fork+exec; mothra never has
+to know how PNG or JPEG works internally.
+
 \section{Process management ([[rfork]], [[waitpid]])}
+
+%claude:
+Process management is the loop in [<getpix()>]: \verb+rfork+ to spawn
+each worker, \verb+waitpid+ in a sliding window to bound concurrency.
+The cohort group set up at mothra's startup ensures that all these
+descendants get killed together when mothra exits, so abandoned
+network fetches do not leak background processes after the user
+quits.
 
 \section{[[resize]] for scaling}
 
+%claude:
+\verb+resize+ is the small standalone scaler that reads a Plan~9
+bitmap on stdin and writes a resized one on stdout, controlled by
+\verb+-x N+/\verb+-y N+ flags (or \verb+-x N\%+/\verb+-y N\%+ for
+percentages). It uses bilinear interpolation; nearest-neighbour is
+available with \verb+-n+. The whole tool is about 200 lines, and is
+shared with image viewers throughout the system.
 
 <<function [[checkimag]](resize)>>=
 static void
@@ -11429,6 +13021,15 @@ checkimag(char *where)
     fprint(2, "ok\n");
 }
 @
+
+%claude:
+[<resample()>] is the bilinear interpolation kernel: for each
+destination pixel, walk back to fractional source coordinates, take
+the four surrounding source pixels, blend them by the fractional
+weights. The fixed-point trick uses 12 bits of fraction
+(\verb+<<12+/\verb+>>12+) so the four blend coefficients
+(\verb+s00..s11+) fit in 24 bits each. The inner switch handles
+1/3/4-channel pixels by falling through, doing one channel at a time.
 
 <<function [[resample]](resize)>>=
 static void
@@ -11631,9 +13232,35 @@ main(int argc, char **argv)
 
 \section{Image formats (JPEG/GIF/PNG via [[libdraw]])}
 
+%claude:
+The format decoders (\verb+gif+, \verb+jpg+, \verb+png+, \verb+bmp+,
+\verb+ico+) live in \verb+/cmd/jpg/+ and friends, not here. They are
+standalone Plan~9 image utilities that mothra invokes as subprocesses.
+Each reads its native format on stdin and writes Plan~9 bitmap on
+stdout. Adding support for a new format means writing a new decoder
+binary and adding a row to [<pixcmd>].
+
 \section{Lazy loading and placeholders}
 
+%claude:
+Mothra does not lazy-load images in the modern sense (delaying fetch
+until the image is on screen). What it does is the opposite: render the
+page without images first (using alt text as a placeholder) and then
+trigger [<getpix()>] after the body is fully parsed. This is the
+right thing for a browser whose typical document is short enough that
+all images fit in memory. Modern browsers with hundreds of viewport-sized
+images do something fancier.
+
 \section{Debug instrumentation ([[-d]] flag, [[poolcheck]], heap dumps)}
+
+%claude:
+The \verb+-d+ flag in mothra and its companion \verb+resize+ binary
+turns on three things: HTTP-tracing prints in the network paths,
+heap-validity checks ([<poolcheck()>]) at hot points in resize, and
+the per-image bitmap dump from [<getimage()>] mentioned earlier. The
+combination has caught several real bugs in the image path, where a
+crash deep in libdraw could be replayed by piping the saved bitmap
+back through resize on its own.
 
 %###############################################################################
 
@@ -11642,8 +13269,32 @@ main(int argc, char **argv)
 \label{chap:forms}
 %******************************************************************************
 
+%claude:
+Forms are the only piece of mothra that has to maintain non-textual
+state across the lifetime of a page. While the parser builds the
+visible Rtext list, [<rdform()>] is called from \verb+plrdhtml()+ for
+every form-related tag, and accumulates a parallel structure: a
+linked list of [<Form>]s, each with a linked list of [<Field>]s, each
+with optional list of [<Option>]s for selects. When the user clicks
+a submit button, [<doform()>] walks the [<Form>] for the
+clicked button, encodes the field values, and submits via GET or POST.
+
+%claude:
+The widgets themselves are libpanel widgets (\verb+plentry+ for text
+input, \verb+plbutton+ for buttons, \verb+plcheckbutton+ for
+checkboxes, etc.). Mothra registers callbacks on each so that the
+text-entry contents can be read out at submit time, and so that
+clicking a submit button kicks off [<doform()>]. The Rtexts the
+parser emits for form fields are placeholders that
+\verb+mkfieldpanel+ later replaces with the live widget.
+
 \section{The [[<form>]] tag and [[forms.c]]}
 
+%claude:
+[<Form>] holds the per-form state: HTTP method (GET or POST), encoding
+type (\verb+x-www-form-urlencoded+ or \verb+multipart/form-data+), the
+submit URL (\verb+action+), a singly-linked list of fields, and a
+\verb+next+ pointer to chain forms when the page has more than one.
 
 <<struct [[Form]](mothra)>>=
 struct Form{
@@ -11658,6 +13309,18 @@ struct Form{
 <<constant [[BOUNDARY]](mothra)>>=
 #define BOUNDARY "nAboJ9uN6ZXsqoVGzLAdjKq97TWDTGjo"
 @
+
+%claude:
+[<rdform()>] is the parser's hand-off to the forms code. The big
+switch dispatches per form-related tag: \verb+<form>+ allocates a new
+[<Form>] and stores it in \verb+g->form+; \verb+<input>+ /
+\verb+<textarea>+ / \verb+<select>+ allocate a [<Field>] and append it
+to the form's field list; \verb+<option>+ inside a \verb+<select>+
+appends a new [<Option>] to the current field's option list;
+\verb+</form>+ resets \verb+g->form+ to nil. The state-machine model
+is simple but error-prone: ill-nested forms (a \verb+<form>+ inside
+another \verb+<form>+) are detected and rejected, but most other
+malformed inputs are silently absorbed.
 
 <<function [[rdform]](mothra)>>=
 /*
@@ -11972,6 +13635,15 @@ int Ufmt(Fmt *f){
 
 \section{The [[Field]] state machine (TYPEIN, CHECK, PASSWD, RADIO, \ldots)}
 
+%claude:
+[<Field>] is one form widget. The \verb+ftype+ enum (TYPEIN, CHECK,
+RADIO, PASSWD, RESET, SUBMIT, IMAGE, BUTTON, TEXTWIN, SELECT) selects
+which widget to spawn. The \verb+state+ field is the per-field
+mutable state: text contents for TYPEIN, on/off for CHECK and RADIO,
+selected option index for SELECT. The widget pointer in \verb+p+ is
+filled in at \verb+mkfieldpanel+ time, when the parser's
+synthetic-Rtext placeholder is replaced by a live libpanel widget.
+
 
 <<enum [[FieldType]](mothra)>>=
 /*
@@ -12039,6 +13711,17 @@ Field *newfield(Form *form){
 @
 
 \section{Input widgets ([[<input type=...>]])}
+
+%claude:
+\verb+<input>+'s \verb+type=+ attribute is the dispatcher: \verb+text+
+becomes a \verb+plentry+, \verb+checkbox+ becomes a \verb+plcheckbutton+,
+\verb+radio+ becomes a \verb+plradiobutton+ in a group, \verb+submit+
+becomes a \verb+plbutton+ that calls [<doform()>], \verb+image+
+becomes a button with a fetched image, \verb+hidden+ is just stored as
+state without a visible widget. Each branch maps a \verb+ftype+ enum
+value to a libpanel widget, with the form-time data flow consistently:
+the widget's user pointer points back at the [<Field>], so events can
+update it.
 
 
 <<function [[mkfieldpanel]](mothra)>>=
@@ -12203,6 +13886,14 @@ void h_fileinput(Panel *p, int){
 
 \section{Text areas and select menus}
 
+%claude:
+\verb+<select>+ is the most complex widget. The handler uses libpanel's
+pulldown popup driven by a callback table: [<selgen()>] iterates the
+options and renders each row, [<h_select()>] handles the user picking
+an option (or, for multi-select, toggling it). The \verb+label+
+field's first byte is overloaded as a marker (\verb+'*'+ for selected,
+space for not), which lets one storage cell serve both the menu
+display and the option list.
 
 <<function [[h_select]](mothra)>>=
 void h_select(Panel *p, int, int index){
@@ -12250,10 +13941,36 @@ char *nullgen(Panel *, int ){
 
 \section{Password fields}
 
+%claude:
+Password fields (\verb+<input type=password>+) get the same widget as
+TYPEIN but with a masking flag set on the libpanel entry, so the
+display shows asterisks rather than the typed text. The character data
+itself flows through the same form-encoding paths as plain text. There
+is no special TLS warning, autofill suppression, or password-manager
+integration --- mothra is a viewing tool, not a credential manager.
+
 \section{Form encoding}
+
+%claude:
+Form submission picks one of two encodings based on the
+\verb+enctype=+ attribute. \verb+application/x-www-form-urlencoded+
+(the default) uses [<uencodeform()>]: each field becomes
+\verb+name=value+, joined by \verb+&+, with values percent-encoded
+(the URL alphabet). \verb+multipart/form-data+ (used by file uploads)
+uses [<mencodeform()>]: each field becomes a MIME part with its own
+headers, separated by a fixed boundary string. The two are similar
+shapes built from the same field walk.
 
 \subsection{[[uencodeform]] (application/x-www-form-urlencoded)}
 
+%claude:
+[<uencodeform()>] walks the field list and emits \verb+name=value+
+pairs separated by \verb+&+. Each switch case handles one [<Field>]
+type: TYPEIN/PASSWD read the live widget's contents via
+\verb+plentryval+; CHECK/RADIO/SUBMIT read the \verb+state+ flag;
+HIDDEN reads the static \verb+value+; SELECT walks selected options;
+TEXTWIN reads the multi-line entry. The \verb+%U+ format verb
+percent-encodes its string argument for safe URL use.
 
 <<function [[uencodeform]](mothra)>>=
 void uencodeform(Form *form, int fd){
@@ -12315,6 +14032,16 @@ void uencodeform(Form *form, int fd){
 
 \subsection{[[mencodeform]] (multipart/form-data)}
 
+%claude:
+[<mencodeform()>] is structurally identical but emits each field as a
+MIME part with a \verb+Content-Disposition+ header and a fixed
+boundary string between parts. The boundary itself is a hard-coded
+random string [[BOUNDARY]] picked once at compile time --- a real
+implementation should pick one per request to avoid collisions with
+field contents, but mothra trusts that 32 random base64 chars will not
+appear in any real form value. The FILE case opens the local file,
+sniffs its content type via [<filetype()>], adds the right
+\verb+Content-Type:+ header, and streams the file bytes inline.
 
 <<function [[mencodeform]](mothra)>>=
 void mencodeform(Form *form, int fd){
@@ -12399,6 +14126,18 @@ void mencodeform(Form *form, int fd){
 
 \section{Submission: GET vs POST}
 
+%claude:
+[<h_submitinput()>] is the click handler for any submit button. It
+records which submit button was pressed (a form may have several;
+each becomes its own field whose name+value goes into the encoded
+payload), then dispatches on the form method.
+
+%claude:
+For GET, the encoded payload is appended to the action URL after a
+\verb+?+ and the result handed to [<geturl()>] as a fresh fetch.
+For POST, [<urlpost()>] opens \verb+/mnt/web/N/postbody+ for writing,
+the encoded payload is streamed into it, and the page is fetched
+with the postbody flag set so webfs sends it as a POST request.
 
 <<enum [[HttpMethod]](mothra)>>=
 /*
@@ -12493,8 +14232,24 @@ void h_submitindex(Panel *p, char *){
 \label{chap:navigation}
 %******************************************************************************
 
+%claude:
+This chapter covers the user's navigation actions. Following a
+hyperlink is the most common: the user mouse-clicks a hot Rtext, the
+click handler turns the underlying URL into a [<geturl()>] call,
+mothra advances to a new history slot. The forward/back buttons just
+move \verb+wwwtop+ up or down within the [<Www>] ring buffer.
+Bookmarks are managed separately as a small file in the user's home
+directory.
+
 \section{Following links}
 
+%claude:
+[<hiturl()>] is the dispatch on which mouse button was clicked: B1
+fetches the URL into a new history slot, B2 selects the URL (so it
+can be sent to plumber or yanked into the address bar), B3 pops the
+button~3 menu (save, plumb, etc.). The map flag is for image-map
+clicks, where the click coordinates need to be appended to the URL as
+\verb+?x,y+.
 
 <<function [[hiturl]](mothra)>>=
 void hiturl(int buttons, char *url, int map){
@@ -12505,6 +14260,14 @@ void hiturl(int buttons, char *url, int map){
     }
 }
 @
+
+%claude:
+[<dolink()>] is what libpanel calls when the user clicks somewhere in
+the textview. The clicked Rtext is passed in as \verb+word+; if its
+Action carries a \verb+link+, that is the URL to follow. The image-map
+case computes the click coordinate relative to the Rtext's bounding
+rectangle and appends it to the URL --- this is the server-side
+image-map dispatch that pre-CSS sites used for clickable maps.
 
 <<function [[dolink]](mothra)>>=
 /*
@@ -12536,6 +14299,13 @@ void dolink(Panel *p, int buttons, Rtext *word){
 
 \section{Back, forward, and history}
 
+%claude:
+The history is the [<Www>] ring buffer keyed by \verb+wwwtop+ (the
+slot that the next fetch will populate). [<doprev()>] is the click
+handler on the visible history list (the bottom panel): given the
+list-index of the clicked entry, walk back to the matching slot and
+[<setcurrent()>] it. The same primitive supports the keyboard
+``j N'' (jump-to-history-N) command from the address bar.
 
 <<function [[doprev]](mothra)>>=
 /*
@@ -12621,6 +14391,16 @@ void scrollto(char *tag){
 
 \section{Bookmarks and hotlist}
 
+%claude:
+Mothra has no separate bookmark database. Instead, the ``add to
+hotlist'' (hit3 menu item~6) opens
+\verb+$home/lib/mothra/hit.html+ for append, and writes one
+\verb+<a href=...>+ line for the currently selected URL. The hotlist
+is therefore a real HTML page that the user can open in mothra itself
+via menu item~7 --- bookmarks become a self-edited web page, no
+separate UI required. This is the same trick acme uses for plumber
+rules and other application config.
+
 %###############################################################################
 
 %******************************************************************************
@@ -12628,8 +14408,29 @@ void scrollto(char *tag){
 \label{chap:events}
 %******************************************************************************
 
+%claude:
+Two kinds of integration cross mothra's boundary: keyboard/mouse input
+that drives the GUI, and the plumb~(2) protocol that connects mothra
+to the rest of Plan~9 (so that clicking a URL in acme launches mothra,
+or so that mothra's snarf works the same as in every other Plan~9
+application). This chapter covers both.
+
 \section{Mouse clicks and scrolling}
 
+%claude:
+Mouse handling lives in [<main()>]'s \verb+Emouse+ branch, covered in
+chapter \ref{chap:mothra-main}. The interesting wrinkle is button~4
+and~5: scroll-wheel events, encoded as the high mouse buttons in
+Plan~9's mouse(3) interface. Mothra reads them as ``scroll up/down by
+a quarter screen'' on whichever pane the cursor is in.
+
+%claude:
+[<hit3()>] is the right-click menu dispatch, with one item per common
+operation: swap to alt display, toggle moth mode, snarf, paste, plumb,
+search, add to hit list, view hit list, exit. Most cases are
+two-liners; the only intricate one is item~4 (plumb), which figures
+out which widget has keyboard focus and grabs its current snarf
+contents.
 
 <<function [[hit3]](mothra)>>=
 void hit3(int button, int item){
@@ -12721,8 +14522,32 @@ void hit3(int button, int item){
 
 \section{Keyboard shortcuts}
 
+%claude:
+Keyboard handling is in [<main()>]'s \verb+Ekeyboard+ branch.
+Movement keys (Home/End, PgUp/PgDn, arrows) scroll the textview.
+\verb+^F+ (\verb+Kack+) opens the search prompt. Anything else with
+focus on the cmd entry goes through the libpanel
+\verb+plkeyboard()+ for normal text input. There are no other
+mothra-specific keystrokes; the cmd entry's \verb+/+, \verb+a+,
+\verb+g+, etc.\ commands are typed plain.
+
 \section{The [[plumb(2)]] protocol}
 
+%claude:
+Plumb is Plan~9's content-routing daemon: small messages with
+attributes that get matched against a rule file and sent to a
+subscribed application. Mothra both publishes and subscribes. As a
+publisher, hit3 menu item~4 sends the selected URL to the plumber
+(rules typically open it in a different application like acme or a
+PDF viewer). As a subscriber, mothra registers
+\verb+eplumb(Eplumb, "web")+ in [<main()>] so that any other
+program that plumbs a URL with destination ``web'' triggers a fetch.
+
+%claude:
+Webfs has its own plumb subscription too: \verb+webfs+ listens on the
+``web'' port if mothra is not running, so a plumb of a URL turns into
+a webfs request and the result is delivered to whichever viewer the
+plumber rules pick.
 
 <<global [[ctypes]](webfs)>>=
 static struct
@@ -12832,8 +14657,25 @@ freeattrs(Plumbmsg *m)
 
 \section{Plumb messages: MIME type + filename}
 
+%claude:
+A plumb message is a small struct with src/dst, a working directory
+(\verb+wdir+), a list of (name,~value) attributes, and a data
+payload. For mothra's purposes the payload is the URL string and the
+attribute \verb+baseurl+ optionally carries the base for relative
+resolution. Webfs's plumb subscriber [<plumbwebproc()>] receives the
+message off the kernel queue, hands it to [<plumbwebthread()>] which
+calls [<plumburl()>] to start the fetch.
+
 \section{Spawning external viewers}
 
+%claude:
+[<replumb()>] is webfs's contribution: once a URL has been fetched and
+the content type is known, webfs sends a fresh plumb message to the
+plumber with the response's MIME type as an attribute. The plumber
+matches that against its rule file (typically routing PDFs to
+\verb+page+, images to \verb+page -w+, etc.) and forwards to the
+matching application. Mothra never has to know about external viewers
+--- the plumber rules do.
 
 <<function [[replumb]](webfs)>>=
 void
@@ -12896,6 +14738,20 @@ plumbsendproc(void *x)
 
 \section{Snarf (selection and clipboard)}
 
+%claude:
+Plan~9's clipboard is the file \verb+/dev/snarf+. Reading it returns
+the current selection, writing replaces it. Mothra's [[snarf()]] and
+[[paste()]] just read/write that file, with no special protocol or
+clipboard manager. Selecting text in mothra means highlighting it
+with the mouse, then pressing the snarf shortcut
+(B3 menu item~2 or [[^W]]); pasting takes the file contents and inserts them into the
+current focus widget.
+
+%claude:
+This works across all Plan~9 GUI applications without any of them
+having to coordinate. A select-snarf in mothra and a paste in acme is
+the same protocol as a select-snarf in acme and a paste in rio.
+
 
 <<function [[snarf]](mothra)>>=
 void snarf(Panel *p){
@@ -12921,18 +14777,69 @@ void paste(Panel *p){
 
 %******************************************************************************
 \chapter{Developer Tools}
+
+%claude:
+Mothra has small but useful inspection tools. ``View source'' is just
+a separate fetch of the same URL with the renderer overridden to
+PLAIN, so the HTML appears as text. HTTP tracing (the \verb+-d+ flag)
+prints request and response headers to stderr. The \verb+snoop+
+command in the GUI displays the MIME type that the type-sniffer
+returned for the current page, useful when content negotiation is
+acting up. ``Save page'' grabs the body and writes it to a file the
+user names. None of these is a separate subsystem; each is a thin
+wrapper around the existing fetch and dispatch primitives.
 \label{chap:devtools}
 %******************************************************************************
 
 \section{View source}
 
+%claude:
+There is no dedicated ``view source'' menu item in mothra. The
+equivalent is to type \verb+g <url>+ on the cmd entry while in
+\verb+m+ (moth) mode, which suppresses the HTML parse and renders the
+body as plain text. For occasional source inspection, plumbing the URL
+to acme is more comfortable.
+
 \section{HTTP tracing ([[-d]] flag)}
+
+%claude:
+The \verb+-d+ flag from mothra and the matching \verb+httpdebug+
+ctl-knob in webfs both turn on a stream of trace prints to stderr:
+each request line, each header line, each response code. The format is
+deliberately the same as a wire-level dump, so it can be eyeballed
+against an HTTP spec or piped through grep when chasing a regression.
 
 \section{MIME-type dumping ([[snoop.c]])}
 
+%claude:
+The \verb+snoop+ command in mothra prints the MIME type that the
+type-sniffer returned for the current page. Useful when the rendering
+looks wrong and the question is whether the bug is in the sniffer or
+the renderer.
+
 \section{The debug-instrumentation pattern (fork + [[poolcheck]] + temp files)}
 
+%claude:
+The image path uses a recurring debug pattern: when \verb+-d+ is on,
+fork an extra subprocess that captures intermediate state to
+\verb+/tmp+, and run \verb+poolcheck()+ on the libdraw allocator at
+key points to catch heap corruption early. The temp-file dumps mean
+that a crash an hour into a session can still be reproduced from disk;
+the poolchecks mean that a corruption is reported the moment it
+happens rather than at the eventual fault. This pattern would not
+exist if mothra did its image work in-process: the temp files only
+make sense because each image is a sibling subprocess that can be
+re-invoked on its own.
+
 \section{Saving a page}
+
+%claude:
+The \verb+s+ command and B3-menu equivalent both open the same modal
+file-name prompt and write the URL's body to a chosen file.
+Internally it is just a fresh fetch with the body fd's contents
+written to the named file via [<save()>]. No special encoding,
+no rewriting of relative URLs in the saved HTML --- mothra is a
+viewer, not an archiver.
 
 
 <<function [[save]](mothra)>>=
@@ -13061,20 +14968,76 @@ void search(void){
 
 %******************************************************************************
 \chapter{Advanced Topics}
+
+%claude:
+This chapter is a series of short notes on features that exist in the
+code but did not warrant their own chapter: HTTP proxy support, the
+Referer header, content compression, animated GIFs, the file://
+protocol, and FTP. Each is a few lines of code in webfs or hget that
+plug into the existing fetch pipeline.
 \label{chap:advanced}
 %******************************************************************************
 
 \section{Proxy (via [[$http_proxy]])}
 
+%claude:
+hget consults \verb+$httpproxy+ at startup; if set, the proxy URL is
+parsed into a separate [<URL>] (\verb+px+) and every request is sent
+to the proxy with the absolute URL as the request line, instead of
+directly to the origin server. webfs has no built-in proxy support;
+the user is expected to mount a different webfs or run \verb+webfs+
+behind a SOCKS or HTTP proxy at the system level.
+
 \section{Referer header}
+
+%claude:
+Mothra does not send the \verb+Referer+ header. (Yes, it is
+spelled wrong in the spec.) This is a privacy choice: the previous
+URL the user was viewing is sometimes sensitive (auth tokens in query
+strings, internal URLs), and the Referer header has historically been
+the leak. Sites that demand a Referer for hotlink protection or CSRF
+defence will fail in mothra.
 
 \section{Content encoding (gzip)}
 
+%claude:
+HTTP responses with \verb+Content-Encoding: gzip+ (or compress, or
+bzip2) are transparently decompressed by mothra: [<urlget()>] reads
+\verb+/mnt/web/N/contentencoding+ and pipes the body through the
+matching command (\verb+gunzip+, \verb+bunzip2+) before handing the
+fd back to the caller. The pipeline is just one extra
+[<pipeline()>] call --- the rest of mothra is unaware that the body
+was ever compressed.
+
 \section{Animated GIFs}
+
+%claude:
+Animated GIFs render as the first frame. The \verb+gif+ decoder
+called by [<getimage()>] reads only the first image from the stream;
+later frames are silently dropped. Real animation would need a timer
+loop to replace the displayed Image at the right intervals, which the
+flat Rtext list does not support.
 
 \section{File protocol ([[file://]])}
 
+%claude:
+\verb+file://+ URLs are handled by mothra's own [<fileget()>]
+without going through webfs. The path is parsed out, opened with
+\verb+OREAD+, and the fd returned. Relative URLs in the page resolve
+against the file's directory, so a documentation tree of HTML on disk
+works the same as one served by HTTP.
+
 \section{FTP protocol support ([[doftp]] in hget, ftp in [[webfs/url.c]])}
+
+%claude:
+FTP support exists in two places: \verb+webfs/ftpfs.c+ (proper FTP
+client used by webfs) and \verb+hget+'s [<doftp()>]. Both speak
+RFC~959: open the control connection, USER/PASS, optional CWD, then
+PASV/PORT for the data connection, then RETR or LIST. The lazy
+implementation: anonymous login if no credentials are in the URL,
+data connection in passive mode only, no resume. FTP is mostly dead
+on the modern web but stays in for the long-tail mirrors of Plan~9
+itself, which still distribute via FTP.
 
 
 <<function [[doftp]](hget.c)>>=
@@ -13338,9 +15301,36 @@ logon(int ctl)
 
 \section{External viewers via plumbing}
 
+%claude:
+Covered in chapter \ref{chap:events}. The plumber rules route by MIME
+type and filename extension: PDFs to \verb+page+, video to
+\verb+mplayer+ wrapper, etc.\ Mothra never has to know about external
+viewers because the plumber dispatches them by content rather than by
+the URL.
+
 \section{Caching in [[webfs]]}
 
+%claude:
+There is no caching layer in webfs. Each fetch is a real round-trip;
+the only persistence is the cookie jar and the per-connection
+[<Client>] state. Mothra has its own per-page [<Pix>] cache for
+images, but it is per-page only --- navigating away discards it. The
+size cap (NPIXMB) is a 5~MiB ceiling on the image cache for
+all currently-open pages, beyond which oldest pages have their
+images dropped.
+
 \section{Internationalization}
+
+%claude:
+Internationalization is split between charset conversion (chapter
+\ref{chap:charset}) and the entity table for HTML named character
+references (chapter \ref{chap:html-parsing}). Mothra's default font
+set is DejaVu Sans, which covers most of Unicode; CJK and other
+non-Latin scripts render as long as the corresponding font is
+installed under \verb+/lib/font/bit/+. There is no language-specific
+behaviour: no right-to-left layout, no complex script shaping (these
+require a real text-shaping library like Harfbuzz), no
+locale-dependent date or number formats.
 
 %###############################################################################
 
@@ -13611,17 +15601,63 @@ far as pedagogy is concerned, is an optimization.
 \label{chap:debugging}
 %******************************************************************************
 
+%claude:
+This appendix collects the debugging facilities scattered throughout
+the browser into one place: per-subsystem trace flags that control how
+chatty the code is, and the dumpers that print structured state in
+human-readable form.
+
 \section{Logging}
+
+%claude:
+There is no central log: each subsystem has its own trace flag written
+to stderr when set. \verb+debug+ in mothra controls HTTP-level traces
+and image-pipeline temp files. \verb+httpdebug+, \verb+urldebug+,
+\verb+cookiedebug+, and \verb+fsdebug+ in webfs control the matching
+subsystems. \verb+chatty9p+ in libthread controls 9P-message tracing.
+All are settable at startup (\verb+webfs -d -D+) or at runtime
+(\verb+echo httpdebug 1 > /mnt/web/ctl+).
 
 \section{Per-subsystem tracing}
 
+%claude:
+Each subsystem trace is gated by its own
+\verb+if(xxxdebug) fprint(2, ...)+ block. The tradeoff is performance vs.\ noise: the checks are
+cheap when off (one global int load), but on a busy webfs the volume
+can swamp other output. Most runs leave them all off and turn on the
+relevant one for the bug at hand.
+
 \section{Dumpers}
+
+%claude:
+Each major data type has a [[Format]] verb installed via
+[[fmtinstall()]] so that \verb+%U+ prints a Url, \verb+%K+ a Cookie,
+\verb+%J+ a Jar. The dumper is what backs both the trace prints
+above and the human-readable view of \verb+/mnt/webcookies/cookies+.
 
 \subsection{URLs}
 
+%claude:
+\verb+%U+ in mothra prints a Url's \verb+fullname+ (or
+\verb+reltext+ if the full form has not been computed yet). In webfs,
+the equivalent is the \verb+/parsed/url+ file that read returns the
+canonical serialisation of the parsed URL.
+
 \subsection{HTML items}
 
+%claude:
+There is no built-in dumper for the Rtext list, but the parser's
+\verb+htmlerror()+ logs offer a window into where in the input each
+tag was hit. For deeper inspection, a fresh fetch with the renderer
+set to PLAIN shows the raw HTML directly.
+
 \subsection{Cookie jar}
+
+%claude:
+\verb+/mnt/webcookies/cookies+ is the dumper's running output: every
+read returns the full jar in human-readable form. Edit it, write it
+back, and the changes propagate to the in-memory state. The
+\verb+webcookies -D+ flag also turns on chatty 9P tracing.
 
 %###############################################################################
 
@@ -13630,6 +15666,15 @@ far as pedagogy is concerned, is an optimization.
 \label{chap:profiling}
 %******************************************************************************
 
+%claude:
+There is no profiler in the browser. The dominant cost is network
+round-trip time, which no profiler would meaningfully measure: a flame
+graph would just show \verb+read()+ on the network socket near the
+top. For CPU bottlenecks (which would have to be in HTML parsing or
+image decoding to matter), Plan~9's [[tprof]] (\book{Profiler}) can
+be attached to mothra externally and produces a normal sample-based
+profile.
+
 %###############################################################################
 
 %******************************************************************************
@@ -13637,9 +15682,37 @@ far as pedagogy is concerned, is an optimization.
 \label{chap:errors}
 %******************************************************************************
 
+%claude:
+This appendix collects the browser's error-handling vocabulary in
+one place. There are two systems at play: in-process error returns
+(C-style \verb+-1+ + \verb+errstr+) and the 9P \verb+Rerror+
+messages that carry strings across the file-server boundary. Both end
+up as the same kind of string when the client \verb+%r+s them.
+
 \section{Per-subsystem error paths}
 
+%claude:
+Each subsystem chooses between fatal-on-error and propagate-on-error
+based on what is reasonable. Memory-allocation primitives
+([<emalloc()>], [<estrdup()>]) call \verb+sysfatal+ because there is
+no recovery from out-of-memory in any tool. Network primitives
+return \verb+-1+ and set \verb+errstr+ via \verb+werrstr()+ so the
+caller can decide whether to retry, abort the request, or fail the
+whole transaction. The HTML parser splits the difference: minor errors
+log via \verb+htmlerror()+ and continue; structural errors that would
+corrupt the parse stack reset the relevant frame and continue
+anyway.
+
 \section{9P error strings across the [[webfs]] boundary}
+
+%claude:
+9P has one kind of error: a string. Webfs and webcookies both follow
+the standard \plan convention that error strings are short, lowercase,
+and parseable: ``url is not yet set'', ``permission denied'', ``cookie
+file too large''. When mothra's [<urlget()>] sees the error string,
+it appears in the message bar via [<message()>]. There is no
+structured error format because there does not need to be: the error
+strings are the API.
 
 %###############################################################################
 
@@ -13648,6 +15721,13 @@ far as pedagogy is concerned, is an optimization.
 \label{chap:utilities}
 %******************************************************************************
 
+%claude:
+This appendix collects the small support functions used throughout
+webfs. Three categories: memory wrappers that exit on failure
+(\verb+emalloc+, \verb+erealloc+, \verb+estrdup+), string helpers
+that the standard \verb+libc+ does not include, and the buffered
+file-reading primitives ([<Ibuf>] manipulation) on top of which the
+HTTP and FTP parsers are built.
 
 <<function [[erealloc]](webfs)>>=
 void*
@@ -13660,6 +15740,14 @@ erealloc(void *a, uint n)
     return a;
 }
 @
+
+%claude:
+[<emalloc()>] is the zeroing-malloc-or-die wrapper: it calls
+\verb+mallocz(n, 1)+ to get zeroed memory and \verb+sysfatal+s on
+NULL. \verb+setmalloctag+ tags the allocation with the return PC of
+the caller, which acid uses to attribute leaks to a particular call
+site. Almost every allocation in webfs goes through this rather than
+plain \verb+malloc+.
 
 <<function [[emalloc]](webfs)>>=
 void*
@@ -13677,6 +15765,13 @@ emalloc(uint n)
 
 \section{Strings}
 
+%claude:
+The string helpers exist because libc is minimal: there is no
+\verb+strlower+, no \verb+estrdup+ that exits on failure, no
+\verb+estredup+ that takes a (start, end) pair instead of a NUL
+terminator. The browser uses (start, end) pairs heavily (the URL
+parser produces them by the dozen), so [<estredup()>] is one of the
+hot helpers.
 
 <<function [[strlower]](webfs)>>=
 char*
@@ -13742,6 +15837,15 @@ estrmanydup(char *s, ...)
 
 \section{Files}
 
+%claude:
+[<Ibuf>] is the buffered reader on top of libthread's \verb+ioproc+.
+The semantics are designed for line-oriented protocols like HTTP and
+FTP: [<readline()>] reads up to a newline, [<unreadline()>] pushes a
+line back, [<readibuf()>] reads a chunk. The single-buffer
+implementation is simple but has a subtle ring-buffer bug noted in
+the [<readline()>] body: \verb+wp+ only advances, never resets, so
+fat-headers sites used to crash mothra until the explicit reset on
+drain was added.
 
 <<function [[initibuf]](webfs)>>=
 void
@@ -13839,6 +15943,23 @@ readline(Ibuf *b, char *buf, int len)
 @
 
 \section{Dates}
+
+%claude:
+HTTP dates appear in three places: \verb+Last-Modified+ headers,
+\verb+Set-Cookie+ \verb+expires+ attributes, and \verb+If-Modified-Since+
+request headers. The grammar is the famously ugly RFC~822 / RFC~850 /
+ANSI~C trichotomy:
+
+\begin{verbatim}
+    Sun, 06 Nov 1994 08:49:37 GMT    ; RFC 822, RFC 1123 (preferred)
+    Sunday, 06-Nov-94 08:49:37 GMT   ; RFC 850, obsolete
+    Sun Nov  6 08:49:37 1994         ; ANSI C asctime() format
+\end{verbatim}
+
+%claude:
+The browser parses all three with [<strtotime()>] (used both by
+webfs's cookie code and by webcookies). The implementation is one
+hand-coded scanner per format; no \verb+strptime+ in libc.
 
 %###############################################################################
 
