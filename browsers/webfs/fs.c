@@ -650,7 +650,7 @@ takedown(Srv*)
 /*e: function [[takedown]](webfs) */
 
 /*s: constant [[fs]](webfs) */
-Srv fs = 
+Srv fs =
 {
 .attach=                fssend,
 .destroyfid=    fsdestroyfid,
