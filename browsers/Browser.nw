@@ -96,8 +96,8 @@ which most computer users now reach the rest of the software stack.
 
 %claude:
 A web browser sits
-above the \unix-like user-space API (see the \book{Libcore}),
-above a windowing system (see the \book{Windows} and the \book{Widgets}),
+%above the \unix-like user-space API (see the \book{Libcore}),
+above a windowing system (see the \book{Windows}, the \book{Graphics}, and the \book{Widgets}),
 above the network stack (see the \book{Network}), and
 above the kernel (see the \book{Kernel}).
 %
@@ -112,7 +112,7 @@ writing, watching, shopping, working.
 %reframe:
 The browser has effectively become a second operating system---one
 in which almost any task can be performed without ever launching a
-native application. ChromeOS takes the idea to its conclusion by
+native application. ChromeOS\furl{https://chromeos.google/} takes the idea to its conclusion by
 shipping a browser {as} the operating system, but even on a regular
 desktop most workflows (mail, documents, code review, video calls)
 now live inside a tab.
@@ -123,7 +123,7 @@ become some of the most complex pieces of software ever written,
 each counting in the millions of lines of code.
 They implement full CSS box layouts, JavaScript virtual machines
 with just-in-time compilers, GPU-accelerated compositing,
-and dozens of other features accreted over three decades.
+and many other features accreted over three decades.
 %
 It is no longer realistic for a single programmer to understand
 all of that in one lifetime.
@@ -188,6 +188,7 @@ No CSS, no JavaScript, no DOM---is such a browser still useful in 2026?
 
 \section{The \plan web browser: [[mothra]]}
 
+As I mentioned before,
 %claude:
 I will explain in this book the code of the \plan web browser
 [[mothra]]\footnote{See
@@ -258,7 +259,7 @@ markup rather than a box-model layout.
 %
 Where [[mothra]] differs
 is that it runs inside a graphical windowing system
-(see the \book{Windows}) and can display {inline images};
+(see the \book{Windows} and \book{Graphics}) and can display {inline images};
 the text browsers cannot.
 
 %claude: %cs-history:
@@ -427,9 +428,41 @@ necessary to understand the code I will show later.
 \section{Web browser principles}
 
 %claude:
-The following sections explain the core concepts any web browser must
-address: what a {hypertext} viewer is, how {resources} are named, how they
-are {fetched}, how they are {rendered}, etc.
+%terminology:
+The {\em World Wide Web} (or just {\em the web}) is a distributed
+hypertext system built on top of the Internet. Tim Berners-Lee
+proposed it at CERN in 1989 and wrote the first working
+browser-plus-server the following year.
+%
+It rests on three technical pillars, each the subject of a dedicated
+subsection below:
+{\em URL}, a universal naming scheme that lets any client address
+any resource on any server (Section~\ref{sec:principles-urls});
+{\em HTTP}, a simple text request/response protocol to fetch those
+resources (Section~\ref{sec:hget-d-example});
+and {\em HTML}, a lightweight markup format for the documents
+themselves (Section~\ref{sec:principles-html}).
+%
+The user-facing idea that binds the three together is {\em hypertext}:
+documents linked to each other through user-clickable anchors
+(Section~\ref{sec:principles-hypertext}).
+%
+Layered on top of the base protocol are a handful of mechanisms the
+web grew over its first decade:
+redirection (Section~\ref{sec:principles-redirects}),
+transport-level security (Section~\ref{sec:principles-tls}),
+authentication (Section~\ref{sec:principles-auth}),
+content negotiation by MIME type (Section~\ref{sec:principles-mime}),
+character-set handling (Section~\ref{sec:principles-charset}),
+embedded resources such as images (Section~\ref{sec:principles-refs}),
+session state through cookies (Section~\ref{sec:principles-cookies}),
+and user input through forms (Section~\ref{sec:principles-forms}).
+
+%claude:
+A {\em web browser} is the client side of this system: the program a
+user runs to navigate between documents. The following subsections
+explain, in turn, each core concept a browser must address --- and,
+where relevant, what [[mothra]] does with it and what it leaves out.
 % how the \plan design composes
 %small programs to do the job, and what [[mothra]] deliberately leaves out.
 
@@ -439,7 +472,7 @@ are {fetched}, how they are {rendered}, etc.
 %claude:
 A web browser is, at its core, a viewer for a particular kind of
 document: {\em hypertext}. What distinguishes hypertext from ordinary
-text is the {\em hyperlink}: a piece of {\em marked-up} text whose {activation}
+text is the {\em hyperlink} (usually called just {\em link}): a piece of {\em marked-up} text whose {activation}
 fetches and displays another document, potentially somewhere else on
 the network.
 %
@@ -450,6 +483,28 @@ a {\em parser} (given bytes, find the text and the links), and
 a {\em renderer} (given text and links, show them on screen and let the user click).
 %
 [[mothra]] implements exactly these three and nothing more.
+
+%claude:
+%cs-history:
+The web was not the first hypertext system; almost every idea in it
+has an older precursor. Vannevar Bush sketched the {\em Memex} in
+his 1945 essay {\em As We May Think}: a mechanical desk of microfilm
+that a user would stitch together into ``trails'' of linked documents.
+Ted Nelson coined the words {\em hypertext} and {\em hyperlink} in
+1965 and spent decades pushing his Xanadu design.
+Doug Engelbart built the first working hypertext system, NLS, and
+demonstrated it live in 1968 in the now-famous {\em Mother of All
+Demos}. Apple's HyperCard (1987) put linked ``cards'' on millions
+of Macintosh desktops. On the Internet itself, the web had direct
+contemporaries: Gopher (1991) served hierarchical menus of documents,
+and WAIS (1991) served keyword-searchable collections.
+%
+What the web added was three things at once that none of the
+precursors combined: a single global address space for all resources
+(the URL), one simple text protocol to fetch them (HTTP), and a
+document format that could embed images and links without requiring
+a custom client per server (HTML). That combination was enough to
+crowd out the alternatives by about 1994.
 
 \subsection{The URL as universal name}
 \label{sec:principles-urls}
@@ -482,6 +537,31 @@ URLs are the input to nearly every browser operation: the {address
 bar} accepts them, hyperlinks embed them, {bookmarks} record them.
 
 %claude:
+%terminology:
+The [[:port]] part is usually elided. Each scheme has a {\em default
+port}: [[http]] defaults to 80, [[https]] to 443, [[ftp]] to 21.
+So \verb+http://example.com/+ and \verb+http://example.com:80/+
+name the same resource, and a browser silently fills in the default
+before dialing. An explicit port is only written when the server is
+listening somewhere else---the canonical example being [[8080]],
+which non-root users can bind without elevated privileges and which
+most development HTTP servers therefore default to.
+
+%claude:
+%cs-history:
+The leading [[www.]] on so many older URLs is not part of the web
+protocol---it is just a DNS {\em subdomain} convention from the
+early 1990s. When a site ran several Internet services on the same
+domain, administrators named each service's host separately:
+\verb+ftp.example.com+, \verb+mail.example.com+,
+\verb+gopher.example.com+, and---for the web server---
+\verb+www.example.com+. Nothing forced it, but the convention stuck
+and for years users typed [[www.]] almost reflexively. These days
+most sites serve the same content at both \verb+example.com+ and
+\verb+www.example.com+, typically with a 301 redirect
+(Section~\ref{sec:principles-redirects}) from one to the other.
+
+%claude:
 URLs can be {\em absolute} (they specify the scheme and host) or
 {\em relative} (they omit those and are resolved against the URL of
 the current page). Resolving relative URLs is a more subtle operation
@@ -498,10 +578,11 @@ A URL names a resource, but only the {\em path}, {\em query}, and
 {\em fragment} are really the browser's concern. The {\em host} and
 {\em port} are handed off to lower layers: the host is resolved to
 an IP address by DNS, and a TCP connection is opened to that address
-on the named port. Both DNS and TCP/IP are covered in the \book{Network};
-on \plan, reaching them reduces to a single [[dial]] call from the
+on the named port. Both DNS and TCP/IP are covered in the \book{Network}.
+
+On \plan, reaching the host and port reduces to a single [[dial()]] call from the
 C library (\book{Libcore}), which hides DNS resolution and connection
-setup behind a file-server interface.
+setup behind a file-server interface ([[/net/]]).
 %
 In our stack, [[hget]] and [[webfs]] are the ones that actually call
 [[dial(netmkaddr(host, "tcp", port))]] (or go through
@@ -538,8 +619,9 @@ Pragma: no-cache
 <!doctype html><html>...</html>
 \end{verbatim}
 %
-The server's response is a status line, a list of [[Name: value]]
-{\em headers}, a blank line, and the body. No binary framing, no schemas.
+The server's response is a {\em status line} (\verb+HTTP/1.1 200 OK+),
+a list of [[Name: value]]
+{\em headers}, a blank line, and the {\em body}. No binary framing, no schemas.
 %
 This is one reason the web grew so fast: anybody could debug
 an HTTP exchange with [[telnet]] and a keyboard. \plan's [[hget]],
@@ -548,7 +630,7 @@ which I describe in Chapter~\ref{chap:hget}, is not much more than
 
 %claude:
 %terminology:
-Those [[Name: value]] lines are called {\em headers}, and they carry
+Those [[Name: value]] headers carry
 everything that is not the resource itself. They come in two flavors.
 %
 {\em Request headers} (sent by the browser) advertise what the client
@@ -771,6 +853,76 @@ converted before the renderer sees it. [[mothra]] does this by piping
 incoming HTML through two helper programs, [[uhtml]] (sniffer +
 dispatcher) and [[tcs]] (the actual converter), covered in
 Chapter~\ref{chap:charset}.
+
+\subsection{HTML as the document format}
+\label{sec:principles-html}
+
+%claude:
+%terminology:
+The {\em HyperText Markup Language} (HTML) is the document format
+of the web. An HTML document is plain text with embedded {\em tags}
+in angle brackets ([[<p>]], [[<a>]], [[<img>]], \ldots) that mark
+up parts of the text with semantics: ``this is a paragraph'', ``this
+is a link to that URL'', ``this is an image''. Most tags come in
+opening/closing pairs ([[<p>]]\ldots[[</p>]]) that nest into a tree;
+a few ``void'' tags ([[<img>]], [[<br>]], [[<hr>]]) stand alone.
+%
+Tags carry {\em attributes} as [[name=value]] pairs inside the
+opening tag---the essential ones for a hypertext system being
+[[href=]] on [[<a>]] (the link target) and [[src=]] on [[<img>]]
+(the image URL). Section~\ref{sec:principles-refs} discusses how
+the browser follows those references.
+
+%claude:
+A tiny but complete HTML document:
+%
+\begin{verbatim}
+    <html>
+    <head><title>Hello</title></head>
+    <body>
+      <h1>Welcome</h1>
+      <p>This is a paragraph with a
+         <a href="http://example.com/">link</a>
+         and an <img src="logo.png" alt="logo">.</p>
+    </body>
+    </html>
+\end{verbatim}
+%
+The tree is shallow: [[<html>]] contains [[<head>]] (metadata, here
+just the window [[<title>]]) and [[<body>]] (visible content). Inside
+the body, [[<h1>]] is a heading and [[<p>]] is a paragraph containing
+mixed text, one [[<a>]] anchor with an [[href=]] pointing at another
+URL, and one [[<img>]] with [[src=]] naming an image to fetch. The
+[[alt=]] attribute on [[<img>]] supplies text shown in place of the
+image if the fetch fails or the browser does not render images (as
+when [[mothra]] is invoked with [[-k]]).
+%
+Section~\ref{sec:hello-html} walks through a slightly bigger example
+end-to-end: what [[mothra]] prints, what [[webfs]] does, and how
+[[getpix]] inlines the image.
+
+%claude:
+%cs-history:
+HTML descends from SGML, IBM's heavy markup language of the 1970s,
+stripped down by Tim Berners-Lee to a handful of tags usable by
+non-experts. It was never formally standardized at version~1; the
+first real spec was HTML~2.0 (RFC~1866, 1995), which already
+introduced forms. HTML~3.2 (1997) added tables, HTML~4 (1999) added
+more semantic tags, XHTML~1.0 (2000) tried to re-cast HTML as
+strict XML (and lost), and HTML5 (2014) finally gave up on
+strictness entirely and defined a lenient parsing algorithm
+instead. Chapter~\ref{chap:html-parsing} covers what [[mothra]]
+parses.
+
+%claude:
+%plan9-is-cleaner:
+Lenient parsing is a load-bearing feature of the web: real-world
+HTML is full of unclosed tags, mismatched nesting, and pre-HTML5
+quirks, and every browser---including [[mothra]]---has to recover
+gracefully rather than reject the document. [[mothra]] accepts
+HTML~4-style markup (no HTML5-specific constructs) and is
+deliberately forgiving about everything else; I describe the
+tokenizer and tag dispatcher in Chapter~\ref{chap:html-parsing}.
 
 \subsection{Rendering text with structure}% (no layout engine required)}
 \label{sec:principles-render}
@@ -1155,6 +1307,7 @@ and a simple I/O loop on plaintext files (unchanged since the 1990s).
 
 
 \section{[[hello.html]]}
+\label{sec:hello-html}
 
 %claude:
 To make the discussion concrete, consider the simplest meaningful
