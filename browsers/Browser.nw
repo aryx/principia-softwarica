@@ -457,10 +457,21 @@ A {\em URL} (Uniform Resource Locator) is the universal name of a
 {\em port} identify the server, the {\em path} identifies the resource within the
 server, the {\em query} carries parameters, and the {\em fragment} names an
 {\em anchor} inside the document.
+
+%claude:
+A concrete URL with all components labelled:
 %
-URLs are the input to nearly every browser
-operation: the {address bar} accepts them, hyperlinks embed them,
-{bookmarks} record them.
+\begin{verbatim}
+        https :// en.wikipedia.org : 443 / wiki/Cat ? lang=en # refs
+        ^^^^^    ^^^^^^^^^^^^^^^^^   ^^^   ^^^^^^^^   ^^^^^^^   ^^^^
+        scheme   host                port  path       query     fragment
+                 \____________________ ___________/
+                                      v
+                                    authority
+\end{verbatim}
+%
+URLs are the input to nearly every browser operation: the {address
+bar} accepts them, hyperlinks embed them, {bookmarks} record them.
 
 %claude:
 URLs can be {absolute} (they specify the scheme and host) or
@@ -522,6 +533,29 @@ Redirects are pervasive: they are how sites switch from [[http]] to
 original page after authentication.
 
 %claude:
+A redirect chain in time, for a fetch of \verb+http://bit.ly/abc+
+that bounces twice before landing:
+%
+\begin{verbatim}
+    browser                    bit.ly       example.com
+    -------                    ------       -----------
+    GET /abc HTTP/1.0    -->
+                          <--   301 Moved Permanently
+                                Location: http://example.com/foo
+    GET /foo HTTP/1.0                  -->
+                                        <-- 302 Found
+                                            Location: /foo/index.html
+    GET /foo/index.html                -->
+                                        <-- 200 OK
+                                            <body>...
+\end{verbatim}
+%
+Each row is one HTTP exchange; arrows mark the direction. The browser
+walks the chain in a tight loop, calling [[parseurl]] on each
+[[Location:]] (against the current URL as base, so relative redirects
+work) and re-issuing the request.
+
+%claude:
 %terminology:
 Because a misconfigured server can redirect a URL back to itself
 (or two URLs to each other), every browser caps the number of hops
@@ -572,6 +606,22 @@ names a {\em scheme} (typically [[Basic]] or [[Digest]]) and a
 user for credentials, encode them as the scheme requires, and retry
 the request with an [[Authorization:]] header. Subsequent requests
 to the same realm re-send the cached credentials automatically.
+%
+\begin{verbatim}
+    browser                              server
+    -------                              ------
+    GET /private HTTP/1.0          -->
+                                    <--  401 Unauthorized
+                                         WWW-Authenticate: Basic realm="x"
+    [prompt user for user/passwd]
+    GET /private HTTP/1.0
+    Authorization: Basic dXNlcjpwYXNz   -->
+                                    <--  200 OK
+                                         <body>...
+\end{verbatim}
+%
+Subsequent requests in the same realm cache the
+\verb+Authorization:+ header so the user is not re-prompted.
 
 %claude:
 %plan9-is-cleaner:
@@ -603,8 +653,10 @@ decoder, [[text/plain]] to a plain-text view, anything unknown is
 typically saved to a file or handed to a separate viewer. When the
 server's [[Content-Type:]] is absent or wrong (which happens often
 on the real web), the browser falls back to {\em content sniffing}:
-peek at the first few bytes and guess. I describe both the dispatch
-and the sniffing logic in Chapter~\ref{chap:content-dispatch}.
+peek at the first few bytes and guess.
+%
+I describe both the dispatch and the sniffing logic in
+Chapter~\ref{chap:content-dispatch}.
 
 \subsection{Character encodings}
 
@@ -620,11 +672,24 @@ the modern Unicode encoding that subsumes all of them.
 
 %claude:
 A browser detects which encoding to use from three sources, in
-priority order: a {\em byte-order mark} (BOM) at the start of the
-document, the [[charset=]] parameter of the [[Content-Type:]] header,
-and a [[<meta charset="...">]] or [[<meta http-equiv="Content-Type">]]
-tag in the HTML head.
+priority order:
 %
+\begin{verbatim}
+       1. byte-order mark (BOM)         the first 2-3 bytes of the doc
+                |  no BOM
+                v
+       2. charset= in Content-Type      from the HTTP response header
+                |  no charset attr
+                v
+       3. <meta charset="...">          inside the HTML <head>
+                |  no meta either
+                v
+       4. fall back to a default        (Latin-1 or sniff for UTF-8)
+\end{verbatim}
+%
+The first source that fires wins; later sources are ignored.
+
+%claude:
 %plan9-is-cleaner:
 \plan is UTF-8 throughout, which means every non-UTF-8 page must be
 converted before the renderer sees it. [[mothra]] does this by piping
@@ -689,6 +754,34 @@ the surrounding text has to be re-laid-out. This re-layout triggered
 by deferred information is what browser literature calls {\em reflow}.
 
 %claude:
+A trivial page with two images shows the parallel-fetch and reflow
+pattern in time:
+%
+\begin{verbatim}
+    time
+     |  +------------------+
+     |  | GET /page.html   |   <- main fetch
+     |  +--------+---------+
+     |           v
+     |  parse... discover <img src="a.png">, <img src="b.png">
+     |           |  fork in parallel
+     |    +------+------+
+     |    v             v
+     |  GET a.png    GET b.png        <- subresource fetches in parallel
+     |    |             |
+     |    | (page already showing alt-text placeholders)
+     |    v             v
+     |  decode        decode
+     |    |             |
+     |    v             v
+     |  reflow        reflow            <- each image arrival re-lays out
+     v
+\end{verbatim}
+%
+The reader sees text first, then images popping in one by one with
+the surrounding text shifting each time.
+
+%claude:
 %plan9-is-cleaner:
 [[mothra]] only fetches the resources it understands: the main HTML
 document and its inline [[<img>]] images. Stylesheets and scripts are
@@ -723,6 +816,33 @@ HTTPS). The combined set of cookies a browser holds is called a
 {\em jar}.
 
 %claude:
+The full round-trip for a login flow:
+%
+\begin{verbatim}
+    browser                                    server
+    -------                                    ------
+    POST /login (user=alice&pass=...)    -->
+                                          <--  302 Found
+                                               Location: /home
+                                               Set-Cookie: sess=abc; Path=/;
+                                                           Domain=example.com;
+                                                           Expires=...
+    [add cookie to jar, scoped to example.com / path=/]
+    GET /home HTTP/1.0
+    Cookie: sess=abc                     -->
+                                          <--  200 OK  (logged-in page)
+
+    GET /messages HTTP/1.0
+    Cookie: sess=abc                     -->         <- same cookie sent again
+                                          <--  200 OK
+\end{verbatim}
+%
+The server stores no per-user state in the cookie itself; the
+\verb+sess=abc+ string is just a key into the server's session table.
+The cookie's job is to identify {which session} belongs to {which
+browser}.
+
+%claude:
 %modern:
 Cookies are also the basis of most web tracking: third-party
 cookies (set by an embedded resource on someone else's page) let
@@ -755,9 +875,44 @@ with the encoding selected by the [[enctype]] attribute:
 [[application/x-www-form-urlencoded]] (the default, the same
 \verb+name=value\&...+ format) for most forms, or
 [[multipart/form-data]] (each field as a separate MIME part) when
-file uploads are involved. I describe how [[mothra]] maps form
-widgets to [[libpanel]] widgets and how it encodes submissions in
-Chapter~\ref{chap:forms}.
+file uploads are involved. The two methods on the wire:
+%
+\begin{verbatim}
+    GET form (e.g. <form action="/search" method=GET>)
+    -------------------------------------------------
+        GET /search?q=cats&lang=en HTTP/1.0
+        Host: example.com
+                                                   <- fields in URL query
+        (no body)
+
+    POST form (e.g. <form action="/order" method=POST>)
+    ---------------------------------------------------
+        POST /order HTTP/1.0
+        Host: example.com
+        Content-Type: application/x-www-form-urlencoded
+        Content-Length: 31
+                                                   <- fields in body
+        name=Alice&item=widget&qty=3
+
+    POST form with file upload (enctype="multipart/form-data")
+    ----------------------------------------------------------
+        POST /upload HTTP/1.0
+        Content-Type: multipart/form-data; boundary=XYZ
+
+        --XYZ
+        Content-Disposition: form-data; name="caption"
+
+        my photo
+        --XYZ
+        Content-Disposition: form-data; name="file"; filename="cat.jpg"
+        Content-Type: image/jpeg
+
+        <binary jpeg bytes>
+        --XYZ--
+\end{verbatim}
+%
+I describe how [[mothra]] maps form widgets to [[libpanel]] widgets
+and how it encodes submissions in Chapter~\ref{chap:forms}.
 
 \section{[[mothra]] interfaces}
 
@@ -922,6 +1077,32 @@ discovery of the image URL, the spawning of [[getpix]], the
 explained in a separate chapter. The skeleton of the whole story
 is in Figure~\ref{fig:arch}, further below.
 
+%claude:
+Concretely, the parser's flat list of [[Rtext]] nodes for [[hello.html]]
+above looks like this (each row is one node, with its formatting state
+and any side-data):
+
+\begin{verbatim}
+    text                font   size      action               flags
+    -------------------------------------------------------------
+    "Hello, web!"       BOLD   ENORMOUS  -                    -
+    "This is a "        ROMAN  NORMAL    -                    -
+    "tiny"              BOLD   NORMAL    -                    -
+    " document with a " ROMAN  NORMAL    -                    -
+    "link"              ROMAN  NORMAL    {link="http://...",  PL_HOT
+                                          name=nil, image=nil}
+    " and an image: "   ROMAN  NORMAL    -                    -
+    "[logo.png]"        ROMAN  NORMAL    {image="logo.png",   -
+                                          link=nil}
+    "."                 ROMAN  NORMAL    -                    -
+\end{verbatim}
+%
+That is the entire intermediate representation. There is no DOM tree,
+no element nodes, no parent/child pointers---just a singly-linked
+list of text runs with per-run formatting and optional side-data. The
+layout engine in [[libpanel]] then walks this list to produce the
+on-screen pixels.
+
 
 \section{Code organization}
 \label{sec:code-orga}
@@ -1044,6 +1225,42 @@ Instead of forking a decoder into the browser process, mothra
 spawns a separate [[getpix]] helper to fetch and decode images.
 
 %claude:
+The same browser concerns get factored differently in other systems
+as shown roughly in Table~\ref{tab:concern-split}.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+{\bf Concern}   & {\bf \plan / mothra}            & {\bf Linux GUI browser}  & {\bf Modern Chrome} \\
+\midrule
+HTTP            & \verb+/mnt/web+ file server     & libcurl in-process       & network process (sandboxed) \\
+TLS             & \verb+/net/tls+ kernel device   & OpenSSL in-process       & BoringSSL in network process \\
+Cookies         & \verb+/mnt/webcookies+          & SQLite file in-process   & SQLite in network process \\
+Charset         & exec \verb+uhtml | tcs+         & libicu in-process        & ICU in renderer process \\
+Image decode    & exec \verb+jpg/png/gif+         & libjpeg/libpng linked    & decoder process per-tab \\
+Layout          & in-process (libpanel)           & in-process               & renderer process per-site \\
+\bottomrule
+\end{tabular}
+\caption{Where each browser concern lives. \plan splits along
+file-server boundaries; modern Chrome splits along process/sandbox
+boundaries; classic Linux/Unix browsers do most things in-process
+through linked libraries.}
+\label{tab:concern-split}
+\end{table}
+
+%claude:
+Two things to notice. First, modern Chrome and \plan happen to
+{both} split the browser into multiple processes---but for different
+reasons: Chrome does it for sandboxing (a compromise in one renderer
+should not give the attacker the cookie jar), \plan does it for
+sharing and replaceability (any program can mount \verb+/mnt/web+
+and any user can swap out \verb+webfs+). Second, the classic
+Linux/Unix browser is the odd one out: it links everything together
+because that is the path of least resistance when libraries are the
+unit of composition.
+
+%claude:
 The benefit is twofold.
 First, each piece can be replaced independently: 9front updated
 [[libsec]] to support modern TLS cipher suites, and [[mothra]] gained
@@ -1102,6 +1319,47 @@ which extracts the target URL, resolves it against the base, and
 goes back to step~2.
 
 \end{enumerate}
+
+%claude:
+The same trace as a sequence diagram, with time flowing top to bottom
+and each actor in its own column:
+
+\begin{verbatim}
+   user    mothra      webfs       /net/tcp     server     getpix    uhtml/tcs
+   ----    ------      -----       --------     ------     ------    ---------
+   click ->
+           open clone --->
+                       <--- conn n=7
+           write ctl  --->
+                       open ----------------> 80
+                       write GET, Host, ...
+                                    ----send---> [server thinks]
+                                    <---recv---  HTTP/1.0 200, Content-Type: ...
+                                                 <body>...
+           read contenttype ->
+                       <--- "text/html"
+           open body  --->
+                                                 \____ pipe ____/
+                                                                  ---->  uhtml
+                                                                         + tcs
+                                                            UTF-8  <----
+           parse...
+           emit Rtext list                 (page rendering starts)
+           see <img src=foo>
+           fork getpix                              \------>  getpix
+                                                              open /mnt/web/clone'
+                                                              ...fetches foo...
+                                                              decode bitmap
+           <------ bitmap ---------------------------/
+           reflow & redraw                           (image pops in)
+\end{verbatim}
+
+The reader can match each row of the diagram to one numbered step
+above. Worth noticing: the only programs mothra ever directly opens
+are \verb+/mnt/web/*+ files; everything below (TCP, TLS, charset
+conversion, image decode) is reached transitively through file
+servers and exec'd subprocesses, never through library calls inside
+the mothra address space.
 
 \section{Mothra for the pre-CSS, pre-JS web}
 
@@ -1234,37 +1492,12 @@ chunks \verb+(webfs)+ and \verb+(mothra)+ to disambiguate.
 \section{URLs}
 
 %claude:
-A [<Url>] in \verb+webfs+ is two things in one struct: the parsed components
+A [[Url]] in \verb+webfs+ is two things in one struct: the parsed components
 of the URL (\verb+scheme+, \verb+host+, \verb+path+, \verb+query+,
 \verb+fragment+, plus userinfo for FTP), and a tiny per-scheme vtable
 ([[open]], [[read]], [[close]]) so the request loop in
 \verb+client.c+ can dispatch to the right backend without knowing anything
 about HTTP, FTP, or \verb+file://+.
-
-<<enum [[UScheme]]>>=
-/*
- * If ischeme is USunknown, then the given URL is a relative
- * URL which references the "current document" in the context of the base.
- * If this is the case, only the "fragment" and "url" members will have
- * meaning, and the given URL structure may not be used as a base URL itself.
- */
-enum
-{
-    USunknown,
-    UShttp,
-    UShttps,
-    USftp,
-    USfile,
-    UScurrent,
-};
-@
-
-%claude:
-The first three function pointers are what makes [<Url>] more than a record.
-\verb+UShttp+ initializes them to \verb+httpopen+/\verb+httpread+/\verb+httpclose+,
-\verb+USftp+ to the FTP equivalents, and so on. Once an URL is parsed,
-the \verb+webfs+ request loop never branches on \verb+ischeme+ again: it
-just calls \verb+u->open(c, u)+ and lets C dispatch.
 
 <<struct [[Url]](webfs)>>=
 struct Url
@@ -1296,11 +1529,89 @@ struct Url
 };
 @
 
+<<enum [[UScheme]]>>=
+/*
+ * If ischeme is USunknown, then the given URL is a relative
+ * URL which references the "current document" in the context of the base.
+ * If this is the case, only the "fragment" and "url" members will have
+ * meaning, and the given URL structure may not be used as a base URL itself.
+ */
+enum
+{
+    USunknown,
+    UShttp,
+    UShttps,
+    USftp,
+    USfile,
+    UScurrent,
+};
+@
+
 %claude:
-[<SplitUrl>] is the parser's intermediate form: pairs of pointers into the
+The first three function pointers are what makes [[Url]] more than a record.
+\verb+UShttp+ initializes them to \verb+httpopen+/\verb+httpread+/\verb+httpclose+,
+\verb+USftp+ to the FTP equivalents, and so on. Once an URL is parsed,
+the \verb+webfs+ request loop never branches on \verb+ischeme+ again: it
+just calls \verb+u->open(c, u)+ and lets C dispatch.
+
+%claude:
+The vtable lives inline in the [<Url>] itself, not as a separate
+indirection:
+
+\begin{verbatim}
+    Url for "http://example.com/"           Url for "ftp://ftp.example.com/"
+    ---------------------------------       ----------------------------------
+    ischeme = UShttp                        ischeme = USftp
+    open    = &httpopen     -----> code     open    = &ftpopen      -----> code
+    read    = &httpread     -----> code     read    = &ftpread      -----> code
+    close   = &httpclose    -----> code     close   = &ftpclose     -----> code
+    host    = "example.com"                 host    = "ftp.example.com"
+    path    = "/"                           path    = "/"
+    ...                                     ...
+\end{verbatim}
+
+The cost is three extra pointers per [<Url>]; the win is that the
+request loop in [[client.c]] is one polymorphic call and the next
+scheme (e.g. \verb+gopher://+) is a matter of writing three
+functions and one row in [<postparse>], with no edits to the
+hot-path code.
+
+
+%claude:
+Concretely, given the URL
+\verb+https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs+,
+the [<Url>] struct is filled in like:
+
+\begin{verbatim}
+    ischeme    = UShttps
+    url        = "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
+    scheme     = "https"
+    open       = httpopen        \
+    read       = httpread         > vtable bound to https
+    close      = httpclose       /
+    authority  = "alice@en.wikipedia.org:443"
+    user       = "alice"
+    passwd     = nil
+    host       = "en.wikipedia.org"
+    port       = "443"
+    path       = "/wiki/Cat"
+    query      = "lang=en"
+    fragment   = "refs"
+    http.page_spec = "/wiki/Cat?lang=en"   (path + ? + query)
+\end{verbatim}
+%
+The full URL string \verb+u->url+ is kept alongside the components as a
+canonical serialization, maintained by [<rewriteurl>] (covered later in
+this section).
+
+
+
+%claude:
+[[SplitUrl]] is the parser's intermediate form: pairs of pointers into the
 input string, one per RFC 3986 component. No allocation happens during
 parsing; only after the components are validated does \verb+url.c+ copy them
-into the heap-allocated [<Url>].
+into the heap-allocated [<Url>]. For our example URL above, the
+[[SplitUrl]] looks like:
 
 <<struct [[SplitUrl]](webfs)>>=
 struct SplitUrl
@@ -1311,6 +1622,29 @@ struct SplitUrl
     } url, scheme, authority, path, query, fragment;
 };
 @
+
+
+\begin{verbatim}
+    input string:   "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
+                     ^   ^^ ^                       ^^         ^^      ^^   ^
+                     |    \  \______ authority _____/ \__ path _/  \query/ \frag/
+                     |     +- (skip ":")
+                     +- scheme
+
+    SplitUrl:
+        url       = (s -> "https...", e -> end)
+        scheme    = (s -> "https",    e -> "h"+5)
+        authority = (s -> "alice@...", e -> "/wiki/Cat...")
+        path      = (s -> "/wiki/Cat", e -> "?lang=en...")
+        query     = (s -> "lang=en",   e -> "#refs")
+        fragment  = (s -> "refs",      e -> end)
+\end{verbatim}
+
+Each (s, e) pair is a half-open slice into the original input.
+The next phase (\verb+parse_scheme+, \verb+parse_authority+, etc.)
+validates each slice and only then [[estredup]]s it into the
+[<Url>] struct's heap-allocated fields.
+
 
 <<function [[freeurl]](webfs)>>=
 void
@@ -1466,6 +1800,27 @@ reads back a connection number~\verb+N+, then writes \verb+get http://...+
 to \verb+/mnt/web/N/ctl+ and reads bytes from \verb+/mnt/web/N/body+. There
 is no library in between; the semantics are spelled out in the kernel
 namespace, not in a header file.
+
+%claude:
+Concretely, fetching \verb+http://example.com/+ from a shell session
+goes like:
+
+\begin{verbatim}
+    % cat /mnt/web/clone                    # open + read returns the conn number
+    7
+    % echo url http://example.com/ > /mnt/web/7/ctl
+    % cat /mnt/web/7/contenttype
+    text/html
+    % cat /mnt/web/7/parsed/host
+    example.com
+    % cat /mnt/web/7/body
+    <!doctype html><html>...</html>
+\end{verbatim}
+
+Every line here is a normal file operation: nothing in this session
+required linking a library. The same sequence inside [[mothra]]
+([[webclone]] in [[mothra/url.c]]) is ten lines of C calling
+[[open]], [[read]], [[write]], and a few [[snprint]]s.
 
 %claude:
 The first chunk is the comment at the top of \verb+webfs/fs.c+ describing
@@ -1650,7 +2005,7 @@ struct Ibuf
 \section{Cookies ([[Jar]], [[Cookie]])}
 
 %claude:
-A [<Cookie>] in \verb+webfs+ carries everything Set-Cookie spelled out
+A [[Cookie]] in \verb+webfs+ carries everything Set-Cookie spelled out
 (name, value, domain, path, expires, secure) plus three book-keeping
 fields. \verb+netscapestyle+ remembers whether the original header used the
 Netscape format (no \verb+Version+ attribute, slightly different domain
@@ -1684,6 +2039,40 @@ struct Cookie
     int         ondisk;
 };
 @
+
+
+
+%claude:
+A real cookie filled in from a wire \verb+Set-Cookie:+ header.
+Wire form:
+
+\begin{verbatim}
+    Set-Cookie: sess=abc123; Domain=.example.com; Path=/; Expires=Sun, 06-Nov-2026 08:49:37 GMT; Secure
+\end{verbatim}
+
+\noindent As parsed into a [<Cookie>] struct:
+
+\begin{verbatim}
+    name           = "sess"
+    value          = "abc123"
+    dom            = ".example.com"      <- leading dot: matches subdomains
+    path           = "/"
+    expire         = 1762416577          <- Unix time of "06-Nov-2026 08:49:37 GMT"
+    secure         = 1                   <- only sent over https://
+    explicitdom    = 1                   <- server set Domain= explicitly
+    explicitpath   = 1                   <- server set Path= explicitly
+    netscapestyle  = 1                   <- no Version attr in source
+    ondisk         = 0                   <- not yet flushed to /usr/web/cookies
+\end{verbatim}
+
+A subsequent request to \verb+https://www.example.com/anything+
+would match this cookie (the request host \verb+www.example.com+ ends
+in \verb+.example.com+, the request path \verb+/anything+ starts with
+\verb+/+, the scheme is HTTPS so the secure flag is satisfied) and
+echo it back as \verb+Cookie: sess=abc123+.
+
+
+
 
 %claude:
 The [<Jar>] is a flat append-only [<Cookie>] array (\verb+nc+ filled out of
@@ -1725,6 +2114,30 @@ editor would use to display a styled document.
 The next four chunks are the alphabet of that scheme: token names
 ([<Tagxxx>]), their text-to-id table ([<Tag>]), token types ([<Txx>]), and
 the per-tag side-data attached to special items ([<Action>], [<Pair>]).
+
+%claude:
+Concretely, the input fragment
+\verb+Click <a href="X">here</a> for X+ becomes three [<Rtext>] nodes:
+
+\begin{verbatim}
+    Rtext       text         font   action                  flags
+    -------------------------------------------------------------
+    [0]         "Click "     ROMAN  -                       -
+    [1]         "here"       ROMAN  Action{                 PL_HOT
+                                      link  = "X",
+                                      name  = nil,
+                                      image = nil,
+                                      ...
+                                    }
+    [2]         " for X"     ROMAN  -                       -
+\end{verbatim}
+
+The \verb+<a>+ open tag did not produce a node; it pushed a frame
+onto the parser's formatting stack with \verb+state->link = "X"+. The
+text run inside captured that frame into its [<Action>], and the
+[[PL_HOT]] flag tells [[libpanel]] to render it as a clickable link.
+The \verb+</a>+ close tag popped the frame, which is why
+\verb+" for X"+ has no [<Action>].
 
 <<enum [[Tagxxx]](mothra)>>=
 /*
@@ -1897,6 +2310,7 @@ due, \verb+finished+ says the body is fully read, \verb+alldone+ says even
 the deferred image fetches have settled (so the busy cursor can finally
 go away).
 
+
 <<struct [[Www]](mothra)>>=
 struct Www{
     Url *url;
@@ -1945,6 +2359,39 @@ enum{
     VERT,
 };
 @
+
+
+%claude:
+The graph of relationships between [<Www>], [<Rtext>], [<Action>],
+and [<Pix>] for one rendered page:
+
+\begin{verbatim}
+        Www                           Pix                Pix
+        ---                           ---                ---
+        url ---> Url                  next -----------> next ---> nil
+        text                          b (Image*)        b (Image*)
+        |                             ^
+        |                             |
+        v                             |
+       Rtext --> Rtext --> Rtext --> Rtext --> Rtext --> ...   (linked list)
+        text     text       text      text     text
+        font     font       font      font     font
+        flags    flags      flags     flags    flags
+        user                user
+         |                   |
+         v                   v
+        Action              Action
+        link="/foo"         image="logo.png"
+        name=nil            link=nil
+                            ...        \________________ once decoded ___> Pix.b
+\end{verbatim}
+
+The \verb+Rtext+ list is the only path from [<Www>] to the visible
+content. Everything else hangs off it: per-node [<Action>] for links
+and image refs, and the [<Pix>] cache holding the decoded bitmaps that
+\verb+Rtext+ entries point back into via their \verb+b+ field once
+[[getpix]] finishes.
+
 
 %###############################################################################
 
