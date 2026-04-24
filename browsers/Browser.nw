@@ -3055,63 +3055,16 @@ This chapter introduces the program at the centre of the book: the
 \verb+mothra+ binary. It is what the user actually launches; everything
 else in the book is invoked behind the scenes by mothra ([[webfs]]
 already mounted as a service, image format converters spawned per image,
-etc.). I cover four pieces here in order: the arguments mothra accepts,
-the static layout of its window (a four-pane stack of \verb+libpanel+
-panels), the main I/O loop that runs as long as the browser is open, and
+etc.).
+%
+I cover four pieces here in order:
+the arguments mothra accepts,
+the static layout of its window (a four-pane stack of \verb+libpanel+ panels),
+the main I/O loop that runs as long as the browser is open, and
 the worker procedure that streams a URL's body into a [<Www>].
 
-%claude:
-Most of the architectural weight of mothra is in [<main()>]. Read in one
-sitting it looks unremarkable --- argument parsing, draw/initdraw,
-\verb+ARGBEGIN+, an event loop --- but if you take it apart clause by
-clause, every Plan~9 subsystem the browser uses appears at least once:
-\verb+rfork+ for the cohort group, \verb+initdraw+/\verb+plinit+ for
-graphics, \verb+einit+/\verb+eplumb+ for the event multiplexer, a
-self-pipe \verb+kickpipe+ for waking the loop from worker threads, and the
-plumb-message intake that lets external programs send a URL with one
-\verb+plumb+ command. The chapter is built around that observation.
+\section{[[main()]] skeleton}
 
-\section{Command-line arguments}
-
-%claude:
-The argument grammar is a one-line \verb+ARGBEGIN+ block, but two flags
-deserve attention: \verb+-d+ enables HTTP-tracing debug output threaded
-through the request paths in \verb+http.c+ and \verb+rdhtml.c+, and
-\verb+-m+ lets you mount a non-default [[webfs]] (handy when running
-two browsers side by side, each with its own cookie jar).
-
-<<function [[arg]](mothra)>>=
-char *arg(char *s){
-    do ++s; while(*s==' ' || *s=='\t');
-    return s;
-}
-@
-
-%claude:
-\verb+main+ does setup, then enters an event loop. The setup is in five
-steps. First, \verb+rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)+ creates a
-``cohort'': mothra's parent process becomes a sentinel that just calls
-\verb+waitpid+ and reaps everything, while the child runs the GUI. The
-flags \verb+RFNOTEG+ and \verb+RFNAMEG+ isolate the cohort's note group
-and namespace, so a \verb+kill+ note delivered to the parent stops every
-helper at once and a per-cohort namespace lets the \verb+-m+ flag take
-effect. Second, \verb+initdraw+ sets up \verb+libdraw+, \verb+plinit+ sets
-up \verb+libpanel+, \verb+einit+ wires mouse and keyboard into the
-\verb+event(2)+ multiplexer. Third, \verb+eplumb+ subscribes to the
-\verb+web+ port so external programs can send a URL with
-\verb+plumb -d web foo.html+. Fourth, the \verb+kickpipe+ self-pipe is
-created and registered as event source \verb+Ekick+; worker threads write
-one byte to it to wake the loop without manufacturing a fake mouse event.
-Fifth, [<mkpanels()>] builds the visible four-pane layout and
-\verb+geturl()+ kicks off the initial fetch.
-
-%claude:
-The loop itself dispatches between five event sources: \verb+Ekick+
-(redraw the current page), \verb+Ekeyboard+ (scrolling and search),
-\verb+Emouse+ (clicks, side-scrolls via buttons~4 and~5), \verb+Eplumb+
-(an external URL request), and the implicit ``current page just finished
-loading'' branch at the top of the loop, which scrolls to the
-\verb+#fragment+ if any and resets the busy cursor.
 
 <<function [[main]](mothra)>>=
 void main(int argc, char *argv[]){
@@ -3286,6 +3239,61 @@ Plkey:
     }
 }
 @
+
+
+%claude:
+Most of the architectural weight of mothra is in [<main()>]. Read in one
+sitting it looks unremarkable --- argument parsing, draw/initdraw,
+\verb+ARGBEGIN+, an event loop --- but if you take it apart clause by
+clause, every Plan~9 subsystem the browser uses appears at least once:
+\verb+rfork+ for the cohort group, \verb+initdraw+/\verb+plinit+ for
+graphics, \verb+einit+/\verb+eplumb+ for the event multiplexer, a
+self-pipe \verb+kickpipe+ for waking the loop from worker threads, and the
+plumb-message intake that lets external programs send a URL with one
+\verb+plumb+ command. The chapter is built around that observation.
+
+\section{Command-line arguments}
+
+%claude:
+The argument grammar is a one-line \verb+ARGBEGIN+ block, but two flags
+deserve attention: \verb+-d+ enables HTTP-tracing debug output threaded
+through the request paths in \verb+http.c+ and \verb+rdhtml.c+, and
+\verb+-m+ lets you mount a non-default [[webfs]] (handy when running
+two browsers side by side, each with its own cookie jar).
+
+<<function [[arg]](mothra)>>=
+char *arg(char *s){
+    do ++s; while(*s==' ' || *s=='\t');
+    return s;
+}
+@
+
+%claude:
+\verb+main+ does setup, then enters an event loop. The setup is in five
+steps. First, \verb+rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)+ creates a
+``cohort'': mothra's parent process becomes a sentinel that just calls
+\verb+waitpid+ and reaps everything, while the child runs the GUI. The
+flags \verb+RFNOTEG+ and \verb+RFNAMEG+ isolate the cohort's note group
+and namespace, so a \verb+kill+ note delivered to the parent stops every
+helper at once and a per-cohort namespace lets the \verb+-m+ flag take
+effect. Second, \verb+initdraw+ sets up \verb+libdraw+, \verb+plinit+ sets
+up \verb+libpanel+, \verb+einit+ wires mouse and keyboard into the
+\verb+event(2)+ multiplexer. Third, \verb+eplumb+ subscribes to the
+\verb+web+ port so external programs can send a URL with
+\verb+plumb -d web foo.html+. Fourth, the \verb+kickpipe+ self-pipe is
+created and registered as event source \verb+Ekick+; worker threads write
+one byte to it to wake the loop without manufacturing a fake mouse event.
+Fifth, [<mkpanels()>] builds the visible four-pane layout and
+\verb+geturl()+ kicks off the initial fetch.
+
+%claude:
+The loop itself dispatches between five event sources: \verb+Ekick+
+(redraw the current page), \verb+Ekeyboard+ (scrolling and search),
+\verb+Emouse+ (clicks, side-scrolls via buttons~4 and~5), \verb+Eplumb+
+(an external URL request), and the implicit ``current page just finished
+loading'' branch at the top of the loop, which scrolls to the
+\verb+#fragment+ if any and resets the busy cursor.
+
 
 \section{Panel layout (address bar, display, status)}
 
@@ -4252,6 +4260,19 @@ void killpix(Www *w){
 %###############################################################################
 \part{Retrieving the Page}
 %###############################################################################
+
+%claude:
+This part follows bytes from the user's URL bar into a UTF-8 stream
+ready for the renderer. It opens with URL parsing---the algebra of
+splitting \verb+scheme://host/path?query#fragment+ apart and resolving
+relative URLs against a base. Next comes the actual HTTP transport,
+covered first as a standalone command-line client ([[hget]]) for
+clarity, then as the long-running file server ([[webfs]]) that mothra
+actually talks to through [[/mnt/web]]. Cookies and charset conversion
+are layered on top: [[webcookies]] is a file-backed jar that survives
+[[webfs]] restarts, and [[tcs]]/[[uhtml]] form a pre-parser filter
+chain that turns whatever encoding the server sent into UTF-8 before
+the HTML parser ever sees it.
 
 %******************************************************************************
 \chapter{Resolving URLs}
@@ -11915,6 +11936,18 @@ of which mothra had to link.
 \part{Rendering the Page}
 %###############################################################################
 
+%claude:
+With clean UTF-8 in hand, this part turns bytes into pixels. HTML
+parsing ([[rdhtml.c]]) is the central machinery: a single-pass
+tokenizer that emits a flat list of [<Rtext>] nodes---no DOM, no AST,
+no separate stylesheet pass. Content dispatch picks which parser to
+run based on the MIME type the server returned (plain text, HTML, an
+image type, a download). Layout walks the [<Rtext>] list to wrap text
+and place inline images and form widgets; the tag-by-tag rendering,
+table, image, and form chapters each cover one slice of that walk.
+All of them feed the same [<Rtext>] list and the same libpanel layout
+engine described in \book{Widgets}.
+
 %******************************************************************************
 \chapter{HTML Parsing: [[rdhtml.c]]}
 %******************************************************************************
@@ -15593,6 +15626,19 @@ void h_submitindex(Panel *p, char *){
 %###############################################################################
 \part{Beyond the Basics}
 %###############################################################################
+
+%claude:
+The first two parts cover what the browser does on a single page
+load. This part covers what makes mothra usable as a sustained tool:
+navigation and history (forward/back through mothra's [<Www>] ring
+buffer, plus bookmarks); integration with the rest of \plan---snarf
+and paste through [[/dev/snarf]], plumbing URLs to other programs
+through [[/mnt/plumb]], the alternate-display panel for opening a
+link without losing the current page; the developer-facing tools
+that ship in the same source tree; and a handful of advanced topics
+that don't fit elsewhere. The book closes with a Conclusion chapter
+and a set of appendices on debugging, profiling, error management,
+and shared utilities.
 
 %******************************************************************************
 \chapter{Navigation and History}
