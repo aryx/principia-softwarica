@@ -250,9 +250,7 @@ void mkpanels(void){
         xflags=PACKN|USERFL;
     else
         xflags=PACKS|USERFL;
-    //TODO
-    //if(!visxbar)
-    //  xflags|=IGNORE;
+
     menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
 
     root=plpopup(root, EXPAND, 0, 0, menu3);
@@ -277,12 +275,14 @@ void mkpanels(void){
 
     plgrabkb(cmd);
 
+    /*s: [[mkpanels()]](mothra) set [[alt]] */
     alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
         ybar=plscrollbar(alt, PACKW|USERFL);
         xbar=plscrollbar(alt, xflags);
         alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
         plscroll(alttext, xbar, ybar);
-
+    /*e: [[mkpanels()]](mothra) set [[alt]] */
+    /*s: [[mkpanels()]](mothra) if [[!defdisplay]] */
     if(!defdisplay){
         swap=root;
         root=alt;
@@ -291,6 +291,7 @@ void mkpanels(void){
         text=alttext;
         alttext=swap;
     }
+    /*e: [[mkpanels()]](mothra) if [[!defdisplay]] */
 }
 /*e: function [[mkpanels]](mothra) */
 /*s: global [[cohort]](mothra) */
@@ -439,6 +440,7 @@ void main(int argc, char *argv[]){
         sysfatal("initdraw: %r");
     /*s: [[main()]](mothra) extra draw settings */
     display->locking = 1;
+    /*x: [[main()]](mothra) extra draw settings */
     chrwidth=stringwidth(font, "0");
     pltabsize(chrwidth, 8*chrwidth);
     /*e: [[main()]](mothra) extra draw settings */
@@ -462,14 +464,16 @@ void main(int argc, char *argv[]){
 
     /*s: [[main()]](mothra) graphics initialisation */
     getfonts();
-
+    /*x: [[main()]](mothra) graphics initialisation */
     hrule=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
     if(hrule==nil)
         sysfatal("can't allocimage!");
     draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
+
     linespace=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
     if(linespace==nil)
         sysfatal("can't allocimage!");
+
     bullet=allocimage(display, Rect(0,0,25, 8), view->chan, 0, DWhite);
     fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
     /*e: [[main()]](mothra) graphics initialisation */

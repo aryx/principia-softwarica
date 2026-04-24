@@ -96,9 +96,12 @@ enum{
 };
 /*e: enum [[Axxx]](mothra) */
 
-
+/*s: global images (mothra) */
 Image *hrule, *bullet, *linespace;
+/*e: global images (mothra) */
+/*s: global [[chrwidth]](mothra) */
 int chrwidth;           /* nominal width of characters in font */
+/*e: global [[chrwidth]](mothra) */
 
 /*s: global [[text]](mothra) */
 Panel *text;            /* Panel displaying the current www page */
