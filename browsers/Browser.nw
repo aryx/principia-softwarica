@@ -1288,8 +1288,8 @@ Figure~\ref{fig:mothra-gui} illustrates the main elements of [[rio]]'s GUI.
 %yoann: describe main UI elements of mothra
 %claude:
 The window is divided into four stacked panels, top to bottom:
-a one-line {\em status} area on the left paired with a {\em ``Go:''}
-URL entry on the right (where the user types a URL or
+a one-line {\em status} area, a {\em ``Go:''}
+URL entry (where the user types a URL or
 [[/]]-search query); a scrollable {\em history list} of recently
 visited pages; a {\em ``Url:''} label that displays the URL of the
 page currently shown (and of any link the mouse hovers over); and
@@ -1300,10 +1300,31 @@ vertical scrollbar on the left and---when long lines are not wrapped
 Right-clicking anywhere pops up the {\em button-3 menu} shown in
 the figure, with entries [[alt display]], [[moth mode]], [[snarf]],
 [[paste]], [[plumb]], [[search]], [[save hit]], [[hit list]], and
-[[exit]]. Left-clicking a link follows it; middle-clicking a link
+[[exit]].
+%
+Left-clicking a link follows it; middle-clicking a link
 loads it in the alternate display ([[alt]]).
 
 %yoann: explain alt display and moth mode
+%claude:
+Two of the menu entries are worth a sentence each.
+{\em alt display} swaps the main text view with an
+{\em alternate} text view kept on the side; the user can park one
+page in one view and load a different one in the other, then flip
+between them. It is the closest mothra gets to ``tabs'' or to
+``open in new window''---no extra process, no extra window, just two
+panels that take turns owning the screen.
+%yoann1: are you sure? using it it looks more like a way to get a full-screen mode
+
+%claude:
+{\em moth mode} toggles
+mothra into a {\em link-snarfing} mode: a click on a hyperlink no
+longer fetches and renders the target, it instead saves the target
+to a file (handy for downloading binaries or scraping a page of
+links). In the same mode mothra also annotates image-only links
+with their underlying URL, so you can see and copy where each image
+would have gone.
+%yoann1: are you sure? using it didn't have much effect
 
 \subsection{The \plan web stack interfaces ([[/mnt/web/]], [[/mnt/webcookies/]], \ldots)}
 
@@ -2008,6 +2029,20 @@ hot-path code.
 
 
 %yoann: explain page_spec
+%claude:
+[[page_spec]] below is what goes on the request line after the verb, the
+``\verb+/wiki/Cat?lang=en+'' part of \verb+GET /wiki/Cat?lang=en HTTP/1.0+.
+%
+It is just [[path]] and [[query]] concatenated with [[?]], or [[path]]
+alone if there is no query, or [[/]] if the URL had no path at all
+(see [<postparse_http()>]). The fragment is dropped
+because it is a client-side anchor that the server never sees.
+%
+The reason it lives in the union, rather than being recomputed on
+every request, is that the same [[Url]] is reused across redirect
+chains and per-resource refetches---building the string once at
+parse time keeps the request loop in [[http.c]] free of
+allocations.
 
 <<[[Url]](webfs) union members>>=
 struct {
@@ -2219,7 +2254,7 @@ seturlquery(Url *u, char *query)
 
 \section{HTTP requests and responses}
 
-%yoann: no http request and response proper type? instead?
+%yoann: introducing the section
 
 \subsection{[[HttpState]]}
 
@@ -2338,31 +2373,59 @@ void *aux;
 @
 
 
-\subsection{[[Ctl]] and [[Aux]]}
 
-%yoann: explain
+%yoann: no http request and response proper type? instead?
+%claude:
+Note that there is no [[HttpRequest]] struct and no [[HttpResponse]] struct in
+[[webfs]]. Higher-level languages tend to materialize each direction
+as a value---Go's [[http.Request]] and [[http.Response]], Python's
+[[requests.Request]] and [[Response]], Rust's [[reqwest::Request]]
+and [[Response]]---with header maps, body readers, and the like.
+%
+Webfs takes the opposite approach: a single [<HttpState>] holds the
+in-flight state for one request/response cycle, and the request line
+and headers are formatted directly to the network with [[fprint()]],
+not built up in memory first.
+%
+The response parser then reads the
+status line and headers line by line through a buffered reader and
+writes the few interesting fields ([[Location]], [[Set-Cookie]],
+[[WWW-Authenticate]]) back into the enclosing [<Client>] for the
+file-server interface to expose.
+%
+The trade-off is the usual streaming-vs-buffered one: no per-request
+object means no introspection (you cannot programmatically inspect
+``the response object'' the way Go or Python users do), but it means
+zero allocations for headers, no copies, and the body bytes flow
+straight from the socket into [[/mnt/web/$n$/body]] without ever
+materializing in webfs's address space.
+%
+For a tiny HTTP client whose
+output is a file rather than a Python value, that is the right
+choice.
+
+
+\subsection{[[Ctl]]}
+
+%claude:
+[[Ctl]] is the bag of per-connection knobs that the user (or the
+caller program) can flip by writing to [[/mnt/web/$n$/ctl]]: should
+[[webfs]] accept [[Set-Cookie]] headers from this server and forward
+them to [[webcookies]], should it attach matching cookies on outgoing
+requests, how many redirects to follow before giving up, and what
+to put in the [[User-Agent]] header.
+%
+Each client gets its own
+[[Ctl]], so two browsers (or two windows) can have independent
+cookie/redirect/user-agent settings without affecting each other.
 
 <<struct [[Ctl]](webfs)>>=
 struct Ctl
 {
-    int acceptcookies;
-    int sendcookies;
+    bool acceptcookies;
+    bool sendcookies;
     int redirectlimit;
-    char        *useragent;
-};
-@
-
-%yoann: explain
-
-<<struct [[Aux]](webfs)>>=
-struct Aux
-{
-    char *dom;
-    char *path;
-    char *inhttp;
-    char *outhttp;
-    char *ctext;
-    int rdoff;
+    char *useragent;
 };
 @
 

@@ -112,9 +112,9 @@ main(int argc, char *argv[])
        /*e: [[main]](ls.c) default case with usage */
     }ARGEND
 
-    //XXX: doquote = needsrcquote;
+    doquote = needsrcquote;
     quotefmtinstall();
-    //XXX: fmtinstall('M', dirmodefmt);
+    fmtinstall('M', dirmodefmt);
 
     /*s: [[main]](ls.c) if [[lflag]] */
     if(lflag)
