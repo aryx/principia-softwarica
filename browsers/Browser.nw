@@ -594,7 +594,7 @@ In our stack, [[hget]] and [[webfs]] are the ones that actually call
 [[dial(netmkaddr(host, "tcp", port))]] (or go through
 [<iotlsdial()>] for HTTPS); mothra itself never sees IP addresses,
 because it delegates all fetching to [[webfs]] through
-[[/mnt/web/$n$/ctl]].
+[[/mnt/web/<n>/ctl]].
 
 \subsection{HTTP: Client/server over a text protocol}
 \label{sec:hget-d-example}
@@ -669,6 +669,8 @@ body, as in form [[POST]]s — Section~\ref{sec:principles-forms}).
 The header block is open-ended: unknown headers are ignored, which
 is how the protocol grew from a handful of fields in 1991 to dozens
 today without ever breaking older clients (including [[mothra]]).
+
+%yoann: maybe ASCII diagram with synthetic view of HTTP request and response
 
 \subsection{Redirects}
 \label{sec:principles-redirects}
@@ -795,12 +797,13 @@ Chapter~\ref{chap:webfs}.
 
 %claude:
 %terminology:
-HTTP responses include a [[Content-Type:]] header that names the
+HTTP responses include a [[Content-Type:]] response header that names the
 kind of data in the body (see the [[hget -d]] trace
 in Section~\ref{sec:hget-d-example}).
 %
 The naming scheme, borrowed from email, is
-the {\em MIME type}: a [[type/subtype]] string like [[text/html]],
+the {\em MIME type} (Multi-Purpose Internet Mail Extensions):
+a [[type/subtype]] string like [[text/html]],
 [[image/png]], [[application/pdf]], or [[application/json]]. 
 %
 The top-level [[type]] (text, image, application, audio, video, multipart,
@@ -809,13 +812,13 @@ format.
 
 %claude:
 %terminology:
-The browser uses the MIME type to decide how to render the body:
+The browser uses the MIME type to decide how to render the body from the HTTP response:
 [[text/html]] goes to the HTML parser, [[image/*]] to an image
 decoder, [[text/plain]] to a plain-text view, anything unknown is
 typically saved to a file or handed to a separate viewer. When the
 server's [[Content-Type:]] is absent or wrong (which happens often
 on the real web), the browser falls back to {\em content sniffing}:
-peek at the first few bytes and guess.
+peek at the first few bytes of the body and guess.
 %
 I describe both the dispatch and the sniffing logic in
 Chapter~\ref{chap:content-dispatch}.
@@ -829,7 +832,9 @@ The web browser receives bytes from the requested server, but
 bytes are not text. To display the bytes of an HTML document the
 browser must know which {\em character encoding} (or {\em charset})
 was used to produce them: a mapping from byte sequences to characters.
-%
+%yoann1: maybe concrete example where body contains a few bytes but they may be interpreted differently depending on country
+
+%claude:
 The web inherited many encodings from the pre-Unicode era---ISO~8859-1
 (Western Europe), Shift-JIS (Japan), Big5 (Taiwan), GB2312 (China),
 KOI-8 (Russia)---and slowly converged on {\em UTF-8},
@@ -854,6 +859,8 @@ priority order:
 \end{verbatim}
 %
 The first source that fires wins; later sources are ignored.
+
+%yoann: maybe show typical html document now with use of <meta charset="utf8">, but not too much html since we show it in the next section
 
 %claude:
 %plan9-is-cleaner:
@@ -896,7 +903,9 @@ A tiny but complete HTML document:
     </body>
     </html>
 \end{verbatim}
-%
+%yoann1: maybe add a <meta charset=... to echo the previous section
+
+%claude:
 The tree is shallow: [[<html>]] contains [[<head>]] (metadata, here
 just the window [[<title>]]) and [[<body>]] (visible content). Inside
 the body, [[<h1>]] is a heading and [[<p>]] is a paragraph containing
@@ -932,6 +941,8 @@ gracefully rather than reject the document. [[mothra]] accepts
 HTML~4-style markup (no HTML5-specific constructs) and is
 deliberately forgiving about everything else; I describe the
 tokenizer and tag dispatcher in Chapter~\ref{chap:html-parsing}.
+
+%yoann: maybe echo one of the previous paragraph where say web had 3 important features: URL, HTTP, HTML (embedding hyperlink URLs), and can say we have now seen the 3. Those are essential components of the Web!
 
 \subsection{Rendering text with structure}% (no layout engine required)}
 \label{sec:principles-render}
@@ -1119,7 +1130,7 @@ with the dual implementation it shares with [[webfs]].
 
 %claude:
 %terminology:
-HTML has {\em forms}: a small set of input widgets ([[<input>]],
+HTML has {\em forms}: a small set of {\em input widgets} ([[<input>]],
 [[<textarea>]], [[<select>]], [[<button>]]) wrapped in a [[<form>]]
 tag, with an {action} URL and a {submit} method.
 %
@@ -1288,16 +1299,18 @@ Figure~\ref{fig:mothra-gui} illustrates the main elements of [[rio]]'s GUI.
 
 %yoann: describe main UI elements of mothra
 %claude:
-The window is divided into four stacked panels, top to bottom:
-a one-line {\em status} area, a {\em ``Go:''}
-URL entry (where the user types a URL or
-[[/]]-search query); a scrollable {\em history list} of recently
-visited pages; a {\em ``Url:''} label that displays the URL of the
+The window is divided into five stacked panels, top to bottom:
+(1) a one-line {\em status} area,
+(2) a {\em ``Go:''} URL entry (where the user types a URL or
+[[/]]-search query);
+(3) a scrollable {\em history list} of recently visited pages; 
+(4) a {\em ``Url:''} label that displays the URL of the
 page currently shown (and of any link the mouse hovers over); and
-the main {\em text view} that holds the rendered document, with a
+(5) the main {\em text view} that holds the rendered document, with a
 vertical scrollbar on the left and---when long lines are not wrapped
 ---a horizontal scrollbar on top.
-%
+
+%claude:
 Right-clicking anywhere pops up the {\em button-3 menu} shown in
 the figure, with entries [[alt display]], [[moth mode]], [[snarf]],
 [[paste]], [[plumb]], [[search]], [[save hit]], [[hit list]], and
@@ -1309,12 +1322,14 @@ loads it in the alternate display ([[alt]]).
 %yoann: explain alt display and moth mode
 %claude:
 Two of the menu entries are worth a sentence each.
-{\em alt display} swaps the visible panel tree with a stripped-down
-twin built by [<mkpanels()>]: the main tree has the message label,
+{\em alt display} swaps the visible panel tree with a stripped-down twin:
+% built by [<mkpanels()>]: 
+the main tree has the message label,
 the [[Go:]] entry, the history list, the [[Url:]] label, and the
 text view; the alternate tree has only a text view (wrapped in the
-same button-3 popup) and its scrollbars. Both trees show the
-{\em same} current page, so flipping between them is essentially a
+same button-3 popup) and its scrollbars.
+%
+Both trees show the {\em same} current page, so flipping between them is essentially a
 distraction-free / full-screen toggle---you keep your scroll
 position and the page contents, you just hide or show the URL bar
 and history chrome.
@@ -1387,7 +1402,7 @@ the dashed arrows are the only encrypted hop, between the kernel's
 \begin{verbatim}
    user space                              | kernel
                                            |
-   +--------+   /mnt/web/$n$/{ctl,body}    |
+   +--------+   /mnt/web/<n>/{ctl,body}    |
    | mothra |<------------------------+    |
    +--------+                         |    |
         ^                             v    |    /net/tcp
@@ -1470,7 +1485,7 @@ Every detail in the preceding paragraph---the wrapping of text, the
 discovery of the image URL, the spawning of [[getpix]], the
 [[/mnt/web]] interaction---will be
 %the back/forward history
-explained in a separate chapter. The skeleton of the whole story
+explained in the following chapters. The skeleton of the whole story
 is in Figure~\ref{fig:arch}, further below.
 
 %yoann: maybe explain file: is also a URL (but why missing // ?)
@@ -1500,8 +1515,8 @@ Once the bytes of [[hello.html]] are in hand---whether they came
 from a [[file:]] URL or from [[/mnt/web]]---they are fed to mothra's
 HTML parser, which produces the intermediate representation that
 the rest of the browser works from. That representation is
-deliberately minimal: a flat singly-linked list of % [[Rtext]]
-{\em nodes}, one per text run, each carrying its own formatting
+deliberately minimal: a flat singly-linked list of [[Rtext]]
+{\em nodes} (see the \book{Widgets}), one per text run, each carrying its own formatting
 state and optional side-data. For [[hello.html]] above the list
 looks like this:
 
@@ -1716,6 +1731,8 @@ Chapter~\ref{chap:webfs} explores this pattern in depth.
 
 \subsection{Trace of a web request: [[mothra http://example.com]]}
 
+%yoann: transition paragraph
+
 %claude:
 The traversal of the stack for a single page load is:
 
@@ -1729,17 +1746,17 @@ canonicalize it later (Chapter~\ref{chap:urls}).
 
 \item Mothra opens [[/mnt/web/clone]]. The kernel routes the open
 to [[webfs]], which allocates a new [[Client]] structure and returns
-a connection number (Chapter~\ref{chap:webfs}).
+a connection number $n$ (Chapter~\ref{chap:webfs}).
 
-\item Mothra writes the URL to [[/mnt/web/$n$/ctl]]. Webfs parses
+\item Mothra writes the URL to [[/mnt/web/<n>/ctl]]. Webfs parses
 it with its full RFC 3986 parser ([[webfs/url.c]]), opens
 [[/net/tcp/clone]] (or [[/net/tls/clone]] for HTTPS), and sends
 the HTTP request (Chapter~\ref{chap:webfs}).
 
-\item Mothra opens [[/mnt/web/$n$/contenttype]] and reads the MIME
+\item Mothra opens [[/mnt/web/<n>/contenttype]] and reads the MIME
 type. It uses [[snoop.c]] to dispatch (Chapter~\ref{chap:content-dispatch}).
 
-\item Mothra opens [[/mnt/web/$n$/body]] and reads the bytes through
+\item Mothra opens [[/mnt/web/<n>/body]] and reads the bytes through
 a pipe to [[uhtml]], which reads them back, sniffs the charset, and
 pipes through [[tcs]] if needed (Chapter~\ref{chap:charset}).
 
@@ -1753,7 +1770,7 @@ it into text runs and emits libpanel draw calls
 
 \item When an [[<img>]] tag is encountered, mothra [[fork]]s a
 [[getpix]] subprocess and passes it a handle on the new
-[[/mnt/web/$n$/body]]. [[getpix]] decodes the image (possibly piping
+[[/mnt/web/<n>/body]]. [[getpix]] decodes the image (possibly piping
 through [[resize]] if it is too large) and writes a bitmap that
 mothra reads back and blits onto the panel
 (Chapter~\ref{chap:images}).
@@ -2411,7 +2428,7 @@ The trade-off is the usual streaming-vs-buffered one: no per-request
 object means no introspection (you cannot programmatically inspect
 ``the response object'' the way Go or Python users do), but it means
 zero allocations for headers, no copies, and the body bytes flow
-straight from the socket into [[/mnt/web/$n$/body]] without ever
+straight from the socket into [[/mnt/web/<n>/body]] without ever
 materializing in webfs's address space.
 %
 For a tiny HTTP client whose
@@ -2423,7 +2440,7 @@ choice.
 
 %claude:
 [[Ctl]] is the bag of per-connection knobs that the user (or the
-caller program) can flip by writing to [[/mnt/web/$n$/ctl]]: should
+caller program) can flip by writing to [[/mnt/web/<n>/ctl]]: should
 [[webfs]] accept [[Set-Cookie]] headers from this server and forward
 them to [[webcookies]], should it attach matching cookies on outgoing
 requests, how many redirects to follow before giving up, and what
