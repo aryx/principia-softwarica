@@ -1089,6 +1089,7 @@ struct Aux
 {
     char *dom;
     char *path;
+
     char *inhttp;
     char *outhttp;
     char *ctext;

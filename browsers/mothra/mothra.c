@@ -105,6 +105,7 @@ Cursor mothcurs={
 };
 
 /*s: global [[current]](mothra) */
+// option<ref_own<Www>>
 Www *current=nil;
 /*e: global [[current]](mothra) */
 /*s: global [[selection]](mothra) */
@@ -295,6 +296,7 @@ void mkpanels(void){
 }
 /*e: function [[mkpanels]](mothra) */
 /*s: global [[cohort]](mothra) */
+// pid
 int cohort = -1;
 /*e: global [[cohort]](mothra) */
 /*s: function [[killcohort]](mothra) */
@@ -410,12 +412,15 @@ void main(int argc, char *argv[]){
      * so that we can stop all subprocesses with a note,
      * and to isolate rendezvous from other processes
      */
-    if(cohort=rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)){
+    cohort=rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND);
+    if(cohort){
+        // parent
         atexit(killcohort);
         notify(catch);
         waitpid();
         exits(nil);
     }
+    // else child
     cohort = getpid();
     atexit(killcohort);
     /*e: [[main()]](mothra) cohort setup */

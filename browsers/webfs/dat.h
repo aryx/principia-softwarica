@@ -19,10 +19,10 @@ struct Ibuf
 /*s: struct [[Ctl]](webfs) */
 struct Ctl
 {
-    int acceptcookies;
-    int sendcookies;
+    bool acceptcookies;
+    bool sendcookies;
     int redirectlimit;
-    char        *useragent;
+    char *useragent;
 };
 /*e: struct [[Ctl]](webfs) */
 /*s: struct [[Client]](webfs) */
