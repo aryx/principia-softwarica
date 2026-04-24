@@ -1308,23 +1308,26 @@ loads it in the alternate display ([[alt]]).
 %yoann: explain alt display and moth mode
 %claude:
 Two of the menu entries are worth a sentence each.
-{\em alt display} swaps the main text view with an
-{\em alternate} text view kept on the side; the user can park one
-page in one view and load a different one in the other, then flip
-between them. It is the closest mothra gets to ``tabs'' or to
-``open in new window''---no extra process, no extra window, just two
-panels that take turns owning the screen.
-%yoann1: are you sure? using it it looks more like a way to get a full-screen mode
+{\em alt display} swaps the visible panel tree with a stripped-down
+twin built by [<mkpanels()>]: the main tree has the message label,
+the [[Go:]] entry, the history list, the [[Url:]] label, and the
+text view; the alternate tree has only a text view (wrapped in the
+same button-3 popup) and its scrollbars. Both trees show the
+{\em same} current page, so flipping between them is essentially a
+distraction-free / full-screen toggle---you keep your scroll
+position and the page contents, you just hide or show the URL bar
+and history chrome.
 
 %claude:
-{\em moth mode} toggles
-mothra into a {\em link-snarfing} mode: a click on a hyperlink no
-longer fetches and renders the target, it instead saves the target
-to a file (handy for downloading binaries or scraping a page of
-links). In the same mode mothra also annotates image-only links
-with their underlying URL, so you can see and copy where each image
-would have gone.
-%yoann1: are you sure? using it didn't have much effect
+{\em moth mode} is a smaller toggle. The visible change is that
+image-only hyperlinks get an artificial extra [[Rtext]] node
+inserted that prints the destination URL as plain text next to the
+image, so you can read and copy where the link would go (handy for
+scraping). It also alters the click handler so that a left-click on
+a [[<a><img></a>]] follows the {\em image} URL rather than the
+{\em href}---i.e. you save or inspect the picture instead of
+navigating. Beyond that, the on-screen behavior is subtle---the
+mode's name is more memorable than its day-to-day effect.
 
 \subsection{The \plan web stack interfaces ([[/mnt/web/]], [[/mnt/webcookies/]], \ldots)}
 
@@ -2255,6 +2258,16 @@ seturlquery(Url *u, char *query)
 \section{HTTP requests and responses}
 
 %yoann: introducing the section
+%claude:
+This section covers the data and helpers that [[webfs/http.c]] uses
+during the HTTP request/response cycle: the per-request state struct
+[[HttpState]], the buffered reader [<Ibuf>] that lets the response
+parser pull headers a line at a time, and the in-memory ``connection
+cache'' that lets two requests to the same host reuse one TCP
+socket. The actual request building and response parsing functions
+([[httpopen]], [[httpheaders]], [[wwwauthenticate]], etc.) come in
+the chapter on [[webfs]] itself; here I focus on the static
+shapes that those functions read and write.
 
 \subsection{[[HttpState]]}
 
@@ -3181,6 +3194,16 @@ That is mothra's entire CSS: no point sizes, no font-family stacks,
 no italic-bold combinations.
 
 %yoann: explain
+%claude:
+[[HORIZ]]/[[VERT]] is a tiny axis selector used by [[strtolength()]]
+when an HTML attribute like [[width]] or [[height]] is given in
+font-relative units ([[em]]). For ``[[2em]]'' the function returns
+[[2*M.x]] when the caller asks for [[HORIZ]] and [[2*M.y]] when the
+caller asks for [[VERT]]: same em-square, just measured along the
+right axis. The enum exists so [[strtolength()]] can be called from
+both [[<img width=...>]] (HORIZ) and [[<img height=...>]] (VERT)
+without duplicating the parsing logic.
+
 <<enum [[XLenDir]](mothra)>>=
 /*
  * length direction
@@ -3368,6 +3391,23 @@ single global is one of the things that keeps mothra simple---there
 is no notion of multiple tabs or background tabs to disambiguate.
 
 %yoann: explain
+%claude:
+This is the ``page just finished loading'' branch at the top of
+each event-loop iteration. The worker process [[urlproc]] sets
+[[current->finished = 1]] from another thread when it has appended
+the last [[Rtext]] node, but it cannot itself touch the screen
+(only the GUI thread holds the libdraw lock). So the workflow is:
+worker writes one byte to the kick pipe, the main loop wakes,
+notices [[finished]], and now does the GUI-side wrap-up:
+%
+[[updtext()]] re-blits the text panel,
+[[scrollto()]] jumps to the [[#fragment]] anchor (if the URL had one),
+the three flags get reset so the branch does not fire again,
+[[message(mothra)]] restores the title-bar string from the loading
+indicator, and [[donecurs()]] flips the cursor back from the busy
+``hourglass'' to the default arrow. The whole thing is gated on
+[[mouse.buttons==0]] so the redraw does not race a click that is
+still being handled.
 
 <<[[main()]](mothra) in event loop, if [[current]] and no buttons>>=
 if(mouse.buttons==0 && current){
@@ -3401,14 +3441,22 @@ int cohort = -1;
 
 %claude:
 The shape is two-process: the {\em parent} keeps its original pid,
-calls [[waitpid()]] in a loop,  and reaps every child the cohort forks;
-the {\em child} runs the actual GUI.
+installs a no-op note handler ([[catch]] just calls [[noted(NCONT)]]
+so notes don't tear it down), then blocks once in [[waitpid()]]
+waiting for its single direct child---the GUI cohort---to finish.
+The {\em child} (the rfork's return value of [[0]]) runs the actual
+GUI; everything mothra spawns later (the [[urlproc]] worker, the
+[[getpix]] children, the [[uhtml]]/[[tcs]] filters) inherits the
+child's note group via [[RFNOTEG]], so they are all part of the
+same cohort.
 %
-A note sent to the
-parent (typically [[kill]] or the window-close note from rio) stops
-the parent immediately, [[killcohort()]] is run as an [[atexit]]
-handler, and it sends the same note to every other process in the group.
-%yoann1: I don't see waitpid in a loop below
+When the GUI child eventually exits, [[waitpid()]] returns and the
+parent runs [[killcohort()]] (registered as [[atexit]]), which posts
+a [[kill]] note three times to the cohort's process group via
+[[postnote(PNGROUP, cohort, "kill\n")]] with one-second sleeps in
+between (the comment in [[mothra.c]] reads ``It's a long way to the
+kitchen''). This makes any helper that has not yet finished go away
+cleanly.
 
 <<[[main()]](mothra) cohort setup>>=
 /*
