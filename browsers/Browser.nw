@@ -1303,6 +1303,7 @@ the figure, with entries [[alt display]], [[moth mode]], [[snarf]],
 [[exit]]. Left-clicking a link follows it; middle-clicking a link
 loads it in the alternate display ([[alt]]).
 
+%yoann: explain alt display and moth mode
 
 \subsection{The \plan web stack interfaces ([[/mnt/web/]], [[/mnt/webcookies/]], \ldots)}
 
@@ -3279,6 +3280,13 @@ case Ekick:
 %XXX
 <<[[main()]](mothra) extra draw settings>>=
 display->locking = 1;
+@
+
+<<global [[chrwidth]](mothra)>>=
+int chrwidth;           /* nominal width of characters in font */
+@
+
+<<[[main()]](mothra) extra draw settings>>=
 chrwidth=stringwidth(font, "0");
 pltabsize(chrwidth, 8*chrwidth);
 @
@@ -3286,14 +3294,22 @@ pltabsize(chrwidth, 8*chrwidth);
 
 <<[[main()]](mothra) graphics initialisation>>=
 getfonts();
+@
 
+<<global images (mothra)>>=
+Image *hrule, *bullet, *linespace;
+@
+
+<<[[main()]](mothra) graphics initialisation>>=
 hrule=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
 if(hrule==nil)
     sysfatal("can't allocimage!");
 draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
+
 linespace=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
 if(linespace==nil)
     sysfatal("can't allocimage!");
+
 bullet=allocimage(display, Rect(0,0,25, 8), view->chan, 0, DWhite);
 fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
 @
@@ -3411,7 +3427,7 @@ Panel *cururl;  /* label giving the url of the visible text */
 Panel *text;            /* Panel displaying the current www page */
 @
 
-%yoann: explain alt those alt
+%yoann: explain those alt
 
 <<global [[alt]](mothra)>>=
 Panel *alt;     /* the alternate display */
@@ -3449,9 +3465,7 @@ void mkpanels(void){
         xflags=PACKN|USERFL;
     else
         xflags=PACKS|USERFL;
-    //TODO
-    //if(!visxbar)
-    //  xflags|=IGNORE;
+
     menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
 
     root=plpopup(root, EXPAND, 0, 0, menu3);
@@ -3476,22 +3490,14 @@ void mkpanels(void){
 
     plgrabkb(cmd);
 
-    alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
-        ybar=plscrollbar(alt, PACKW|USERFL);
-        xbar=plscrollbar(alt, xflags);
-        alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
-        plscroll(alttext, xbar, ybar);
-
-    if(!defdisplay){
-        swap=root;
-        root=alt;
-        alt=swap;
-        swap=text;
-        text=alttext;
-        alttext=swap;
-    }
+    <<[[mkpanels()]](mothra) set [[alt]]>>
+    <<[[mkpanels()]](mothra) if [[!defdisplay]]>>
 }
 @
+%TODO:
+% if(!visxbar)
+%   xflags|=IGNORE;
+% but I think libpanel I have does not support IGNORE? need latest 9front?
 
 <<global [[topxbar]](mothra)>>=
 int topxbar=0;  /* horizontal scrollbar at top? */
@@ -3501,6 +3507,27 @@ int topxbar=0;  /* horizontal scrollbar at top? */
 <<global [[menu3]](mothra)>>=
 Panel *menu3;   /* button 3 menu */
 @
+
+%XXX
+<<[[mkpanels()]](mothra) set [[alt]]>>=
+alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
+    ybar=plscrollbar(alt, PACKW|USERFL);
+    xbar=plscrollbar(alt, xflags);
+    alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
+    plscroll(alttext, xbar, ybar);
+@
+
+<<[[mkpanels()]](mothra) if [[!defdisplay]]>>=
+if(!defdisplay){
+    swap=root;
+    root=alt;
+    alt=swap;
+    swap=text;
+    text=alttext;
+    alttext=swap;
+}
+@
+
 
 \subsection{[[eresized()]]}
 
@@ -3529,7 +3556,6 @@ void eresized(bool new){
 
 
 \subsection{XXX}
-%yoann: explain
 
 
 %claude:
@@ -3639,6 +3665,246 @@ void sidescroll(int dx, int whence)
 @
 
 
+
+\section{Reading from a URL: [[geturl()]]}
+
+%claude:
+This section is the boundary between the GUI and the network. The
+function [<geturl()>] is what every code path leading to a fetch ends up
+calling --- the address bar, link clicks, plumb messages, command-line
+URL --- so a tour of it is effectively a tour of how mothra goes from
+``user wanted this URL'' to ``page is being parsed''.
+
+%claude:
+There are five steps. (1) If the URL is just a fragment
+\verb+#anchor+, scroll to it and stop --- no fetch needed. (2) Otherwise
+[<selurl()>] turns the typed string into a [<Url>]. (3) [<urlget()>]
+talks to \verb+/mnt/web+ and returns a fd from which the response body can
+be read; if it fails, the error is shown in \verb+msg+ and the loop ends.
+(4) Detect the content type by header (\verb+contenttype+) or by sniffing
+the first bytes ([<snooptype()>]). (5) Dispatch on the type: HTML goes
+through \verb+uhtml+ via [<pipeline()>] before reaching [<gettext()>]
+(which forks the parser); PLAIN goes straight to [<gettext()>]; images
+get handed to \verb+page -w+ via [<filter()>] (which spawns it as a
+sibling); anything unknown prompts the user to save it to a file.
+
+%claude:
+The HTML/PLAIN branch also does history bookkeeping: it advances
+\verb+wwwtop+, picks the next slot in the static [<Www>] ring, frees the
+slot's old content if it is wrapping around, and copies the URL into
+\verb+w->url+. After [<gettext()>] is forked, a separate watchdog process
+is forked to write to \verb+kickpipe+ once a second whenever
+\verb+w->changed+ is set, which is what lets the page redraw
+incrementally as bytes arrive.
+
+<<function [[geturl]](mothra)>>=
+/// main -> <>
+/*
+ * get the file at the given url
+ */
+void geturl(char *urlname, int post, int plumb, int map){
+    int i, fd, typ;
+    char cmd[NNAME];
+    ulong n;
+    Www *w;
+
+    if(*urlname == '#' && post < 0){
+        scrollto(urlname+1);
+        return;
+    }
+
+    selurl(urlname);
+    selection->map=map;
+
+    message("getting %s", urlstr(selection));
+    esetcursor(&patientcurs);
+    for(;;){
+        if((fd=urlget(selection, post)) < 0){
+            message("%r");
+            break;
+        }
+        message("getting %s", selection->fullname);
+        if(mothmode && !plumb)
+            typ = -1;
+        else if((typ = mimetotype(selection->contenttype)) < 0)
+            typ = snooptype(fd);
+
+        switch(typ){
+        default:
+            if(plumb){
+                message("unknown file type");
+                close(fd);
+                break;
+            }
+            snprint(cmd, sizeof(cmd), "%s", urltofile(selection));
+            if(eenter("Save to", cmd, sizeof(cmd), &mouse) <= 0){
+                close(fd);
+                break;
+            }
+            save(fd, cmd);
+            break;
+        case HTML:
+            fd = pipeline(fd, "exec uhtml");
+        case PLAIN:
+            n=0; 
+            for(i=wwwtop-1; i>=0 && i!=(wwwtop-NWWW-1); i--){
+                w = www(i);
+                n += countpix(w->pix);
+                if(n >= NPIXMB*1024*1024)
+                    killpix(w);
+            }
+            w = www(i = wwwtop++);
+            if(i >= NWWW){
+                /* wait for the reader to finish the document */
+                while(!w->finished && !w->alldone){
+                    drawlock(0);
+                    sleep(10);
+                    drawlock(1);
+                }
+                freetext(w->text);
+                freeform(w->form);
+                freepix(w->pix);
+                freeurl(w->url);
+                memset(w, 0, sizeof(*w));
+            }
+            if(selection->map)
+                w->url=copyurl(current->url);
+            else
+                w->url=copyurl(selection);
+            w->finished = 0;
+            w->alldone = 0;
+            gettext(w, fd, typ);
+            if(rfork(RFPROC|RFMEM|RFNOWAIT) == 0){
+                for(;;){
+                    sleep(1000);
+                    if(w->finished || w->alldone)
+                        break;
+                    if(w->changed)
+                        write(kickpipe[1], "C", 1);
+                }
+                _exits(0);
+            }
+            plinitlist(list, PACKN|FILLX, genwww, 8, doprev);
+            if(defdisplay) pldraw(list, view);
+            setcurrent(i, selection->tag);
+            break;
+        case GIF:
+        case JPEG:
+        case PNG:
+        case BMP:
+        case PAGE:
+            filter(fd, "exec page -w");
+            break;
+        }
+        break;
+    }
+    donecurs();
+}
+@
+
+<<function [[updtext]](mothra)>>=
+void updtext(Www *w){
+    Rtext *t;
+    Action *a;
+    if(defdisplay && w->gottitle==0 && w->title[0]!='\0')
+        pldraw(list, view);
+    for(t=w->text;t;t=t->next){
+        a=t->user;
+        if(a){
+            if(a->field)
+                mkfieldpanel(t);
+            a->field=0;
+        }
+    }
+    if(w != current)
+        return;
+    w->yoffs=plgetpostextview(text);
+    plinittextview(text, PACKE|EXPAND, Pt(0, 0), w->text, dolink);
+    plsetpostextview(text, w->yoffs);
+    pldraw(text, view);
+}
+@
+
+<<function [[finish]](mothra)>>=
+void finish(Www *w){
+    w->finished = 1;
+    write(kickpipe[1], "F", 1);
+}
+@
+
+%claude:
+[<mothon()>] toggles ``moth mode''. The name is a play on \verb+mothra+
+(which itself is a pun on Mosaic, the parent in the lineage). In moth
+mode, image downloads are disabled and clickable images get an inline
+\verb+->+ marker appended (a tiny synthetic Rtext + Action). The walk
+over the text list is the easiest place to see the
+\verb+Rtext+/\verb+Action+ relationship: every ``mothable'' item is
+recognized by \verb+a->image != nil+; the click-target distinction is
+recognized by \verb+a->link != nil+. The marker insertion does a
+splice-in/splice-out of one extra Rtext rather than rebuilding the list.
+
+<<function [[mothon]](mothra)>>=
+void
+mothon(Www *w, int on)
+{
+    Rtext *t, *x;
+    Action *a, *ap;
+
+    if(w==0 || mothmode==on)
+        return;
+    if(mothmode = on)
+        message("moth mode!");
+    else
+        message(mothra);
+    /*
+     * insert or remove artificial links to the href for 
+     * images that are also links
+     */
+    for(t=w->text;t;t=t->next){
+        a=t->user;
+        if(a == nil || a->image == nil)
+            continue;
+        if(a->link == nil){
+            if(on)
+                t->flags |= PL_HOT;
+            else
+                t->flags &= ~PL_HOT;
+            continue;
+        }
+        x = t->next;
+        if(on){
+            t->next = nil;
+            ap=emalloc(sizeof(Action));
+            ap->link = strdup(a->link);
+            plrtstr(&t->next, 0, 0, /*0,*/ t->font, strdup("->"), PL_HOT, ap);
+            t->next->next = x;
+        } else {
+            if(x) {
+                t->next = x->next;
+                x->next = nil;
+                freetext(x);
+            }
+        }
+    }
+    updtext(w);
+    donecurs();
+}
+@
+
+<<function [[killpix]](mothra)>>=
+void killpix(Www *w){
+    Rtext *t;
+
+    if(w==0 || !w->finished && !w->alldone)
+        return;
+    for(t=w->text; t; t=t->next)
+        if(t->b && t->user)
+            t->b=0;
+    freepix(w->pix);
+    w->pix=0;
+    updtext(w);
+}
+@
 
 \section{The main I/O loop}
 
@@ -4093,246 +4359,6 @@ void docmd(Panel *p, char *s){
     }
     plinitentry(cmd, EXPAND, 0, "", docmd);
     pldraw(root, view);
-}
-@
-
-\section{Reading from a URL: [[geturl()]]}
-
-%claude:
-This section is the boundary between the GUI and the network. The
-function [<geturl()>] is what every code path leading to a fetch ends up
-calling --- the address bar, link clicks, plumb messages, command-line
-URL --- so a tour of it is effectively a tour of how mothra goes from
-``user wanted this URL'' to ``page is being parsed''.
-
-%claude:
-There are five steps. (1) If the URL is just a fragment
-\verb+#anchor+, scroll to it and stop --- no fetch needed. (2) Otherwise
-[<selurl()>] turns the typed string into a [<Url>]. (3) [<urlget()>]
-talks to \verb+/mnt/web+ and returns a fd from which the response body can
-be read; if it fails, the error is shown in \verb+msg+ and the loop ends.
-(4) Detect the content type by header (\verb+contenttype+) or by sniffing
-the first bytes ([<snooptype()>]). (5) Dispatch on the type: HTML goes
-through \verb+uhtml+ via [<pipeline()>] before reaching [<gettext()>]
-(which forks the parser); PLAIN goes straight to [<gettext()>]; images
-get handed to \verb+page -w+ via [<filter()>] (which spawns it as a
-sibling); anything unknown prompts the user to save it to a file.
-
-%claude:
-The HTML/PLAIN branch also does history bookkeeping: it advances
-\verb+wwwtop+, picks the next slot in the static [<Www>] ring, frees the
-slot's old content if it is wrapping around, and copies the URL into
-\verb+w->url+. After [<gettext()>] is forked, a separate watchdog process
-is forked to write to \verb+kickpipe+ once a second whenever
-\verb+w->changed+ is set, which is what lets the page redraw
-incrementally as bytes arrive.
-
-<<function [[geturl]](mothra)>>=
-/// main -> <>
-/*
- * get the file at the given url
- */
-void geturl(char *urlname, int post, int plumb, int map){
-    int i, fd, typ;
-    char cmd[NNAME];
-    ulong n;
-    Www *w;
-
-    if(*urlname == '#' && post < 0){
-        scrollto(urlname+1);
-        return;
-    }
-
-    selurl(urlname);
-    selection->map=map;
-
-    message("getting %s", urlstr(selection));
-    esetcursor(&patientcurs);
-    for(;;){
-        if((fd=urlget(selection, post)) < 0){
-            message("%r");
-            break;
-        }
-        message("getting %s", selection->fullname);
-        if(mothmode && !plumb)
-            typ = -1;
-        else if((typ = mimetotype(selection->contenttype)) < 0)
-            typ = snooptype(fd);
-
-        switch(typ){
-        default:
-            if(plumb){
-                message("unknown file type");
-                close(fd);
-                break;
-            }
-            snprint(cmd, sizeof(cmd), "%s", urltofile(selection));
-            if(eenter("Save to", cmd, sizeof(cmd), &mouse) <= 0){
-                close(fd);
-                break;
-            }
-            save(fd, cmd);
-            break;
-        case HTML:
-            fd = pipeline(fd, "exec uhtml");
-        case PLAIN:
-            n=0; 
-            for(i=wwwtop-1; i>=0 && i!=(wwwtop-NWWW-1); i--){
-                w = www(i);
-                n += countpix(w->pix);
-                if(n >= NPIXMB*1024*1024)
-                    killpix(w);
-            }
-            w = www(i = wwwtop++);
-            if(i >= NWWW){
-                /* wait for the reader to finish the document */
-                while(!w->finished && !w->alldone){
-                    drawlock(0);
-                    sleep(10);
-                    drawlock(1);
-                }
-                freetext(w->text);
-                freeform(w->form);
-                freepix(w->pix);
-                freeurl(w->url);
-                memset(w, 0, sizeof(*w));
-            }
-            if(selection->map)
-                w->url=copyurl(current->url);
-            else
-                w->url=copyurl(selection);
-            w->finished = 0;
-            w->alldone = 0;
-            gettext(w, fd, typ);
-            if(rfork(RFPROC|RFMEM|RFNOWAIT) == 0){
-                for(;;){
-                    sleep(1000);
-                    if(w->finished || w->alldone)
-                        break;
-                    if(w->changed)
-                        write(kickpipe[1], "C", 1);
-                }
-                _exits(0);
-            }
-            plinitlist(list, PACKN|FILLX, genwww, 8, doprev);
-            if(defdisplay) pldraw(list, view);
-            setcurrent(i, selection->tag);
-            break;
-        case GIF:
-        case JPEG:
-        case PNG:
-        case BMP:
-        case PAGE:
-            filter(fd, "exec page -w");
-            break;
-        }
-        break;
-    }
-    donecurs();
-}
-@
-
-<<function [[updtext]](mothra)>>=
-void updtext(Www *w){
-    Rtext *t;
-    Action *a;
-    if(defdisplay && w->gottitle==0 && w->title[0]!='\0')
-        pldraw(list, view);
-    for(t=w->text;t;t=t->next){
-        a=t->user;
-        if(a){
-            if(a->field)
-                mkfieldpanel(t);
-            a->field=0;
-        }
-    }
-    if(w != current)
-        return;
-    w->yoffs=plgetpostextview(text);
-    plinittextview(text, PACKE|EXPAND, Pt(0, 0), w->text, dolink);
-    plsetpostextview(text, w->yoffs);
-    pldraw(text, view);
-}
-@
-
-<<function [[finish]](mothra)>>=
-void finish(Www *w){
-    w->finished = 1;
-    write(kickpipe[1], "F", 1);
-}
-@
-
-%claude:
-[<mothon()>] toggles ``moth mode''. The name is a play on \verb+mothra+
-(which itself is a pun on Mosaic, the parent in the lineage). In moth
-mode, image downloads are disabled and clickable images get an inline
-\verb+->+ marker appended (a tiny synthetic Rtext + Action). The walk
-over the text list is the easiest place to see the
-\verb+Rtext+/\verb+Action+ relationship: every ``mothable'' item is
-recognized by \verb+a->image != nil+; the click-target distinction is
-recognized by \verb+a->link != nil+. The marker insertion does a
-splice-in/splice-out of one extra Rtext rather than rebuilding the list.
-
-<<function [[mothon]](mothra)>>=
-void
-mothon(Www *w, int on)
-{
-    Rtext *t, *x;
-    Action *a, *ap;
-
-    if(w==0 || mothmode==on)
-        return;
-    if(mothmode = on)
-        message("moth mode!");
-    else
-        message(mothra);
-    /*
-     * insert or remove artificial links to the href for 
-     * images that are also links
-     */
-    for(t=w->text;t;t=t->next){
-        a=t->user;
-        if(a == nil || a->image == nil)
-            continue;
-        if(a->link == nil){
-            if(on)
-                t->flags |= PL_HOT;
-            else
-                t->flags &= ~PL_HOT;
-            continue;
-        }
-        x = t->next;
-        if(on){
-            t->next = nil;
-            ap=emalloc(sizeof(Action));
-            ap->link = strdup(a->link);
-            plrtstr(&t->next, 0, 0, /*0,*/ t->font, strdup("->"), PL_HOT, ap);
-            t->next->next = x;
-        } else {
-            if(x) {
-                t->next = x->next;
-                x->next = nil;
-                freetext(x);
-            }
-        }
-    }
-    updtext(w);
-    donecurs();
-}
-@
-
-<<function [[killpix]](mothra)>>=
-void killpix(Www *w){
-    Rtext *t;
-
-    if(w==0 || !w->finished && !w->alldone)
-        return;
-    for(t=w->text; t; t=t->next)
-        if(t->b && t->user)
-            t->b=0;
-    freepix(w->pix);
-    w->pix=0;
-    updtext(w);
 }
 @
 
