@@ -21,7 +21,9 @@ int verbose=0;          /* -v flag causes html errors to be written to file-desc
 int killimgs=0; /* should mothra kill images? */
 int defdisplay=1;       /* is the default (initial) display visible? */
 int visxbar=0;  /* horizontal scrollbar visible? */
+/*s: global [[topxbar]](mothra) */
 int topxbar=0;  /* horizontal scrollbar at top? */
+/*e: global [[topxbar]](mothra) */
 
 /*s: global [[root]](mothra) */
 Panel *root;    /* the whole display */
@@ -143,6 +145,7 @@ char *buttons_[]={
 int wwwtop=0;
 
 /*s: function [[www]](mothra) */
+/// -> <>
 Www *www(int index){
     static Www a[NWWW];
     return &a[index % NWWW];
@@ -155,6 +158,7 @@ int nwww(void){
 /*e: function [[nwww]](mothra) */
 
 /*s: function [[subpanel]](mothra) */
+/// ???? -> <>
 int subpanel(Panel *obj, Panel *subj){
     if(obj==0) return 0;
     if(obj==subj) return 1;
@@ -237,6 +241,7 @@ void sidescroll(int dx, int whence)
 /*e: function [[sidescroll]](mothra) */
 
 /*s: function [[mkpanels]](mothra) */
+/// main -> <>
 void mkpanels(void){
     Panel *p, *xbar, *ybar, *swap;
     int xflags;
@@ -249,6 +254,7 @@ void mkpanels(void){
     //if(!visxbar)
     //  xflags|=IGNORE;
     menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
+
     root=plpopup(root, EXPAND, 0, 0, menu3);
         p=plgroup(root, PACKN|FILLX);
             msg=pllabel(p, PACKN|FILLX, mothra);
@@ -268,12 +274,15 @@ void mkpanels(void){
             xbar=plscrollbar(p, xflags);
             text=pltextview(p, PACKE|EXPAND, Pt(0, 0), 0, dolink);
             plscroll(text, xbar, ybar);
+
     plgrabkb(cmd);
+
     alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
         ybar=plscrollbar(alt, PACKW|USERFL);
         xbar=plscrollbar(alt, xflags);
         alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
         plscroll(alttext, xbar, ybar);
+
     if(!defdisplay){
         swap=root;
         root=alt;
@@ -284,7 +293,9 @@ void mkpanels(void){
     }
 }
 /*e: function [[mkpanels]](mothra) */
+/*s: global [[cohort]](mothra) */
 int cohort = -1;
+/*e: global [[cohort]](mothra) */
 /*s: function [[killcohort]](mothra) */
 void killcohort(void){
     int i;
@@ -362,27 +373,38 @@ extern char *mtpt; /* url */
 
 /*s: function [[main]](mothra) */
 void main(int argc, char *argv[]){
-    Event e;
-    enum { Eplumb = 128, Ekick = 256 };
-    Plumbmsg *pm;
     char *url;
     int i;
+    Event e;
+    /*s: [[main()]](mothra) other locals */
+    enum { Eplumb = 128, Ekick = 256 };
+    /*x: [[main()]](mothra) other locals */
+    Plumbmsg *pm;
+    /*e: [[main()]](mothra) other locals */
 
+    /*s: [[main()]](mothra) fmt setup */
     quotefmtinstall();
+    /*x: [[main()]](mothra) fmt setup */
     fmtinstall('U', Ufmt);
-
+    /*e: [[main()]](mothra) fmt setup */
     ARGBEGIN{
+    /*s: [[main()]](mothra) command line processing part 1 */
     case 'd': debug=1; break;
-    case 'v': verbose=1; break;
-    case 'k': killimgs=1; break;
+    /*x: [[main()]](mothra) command line processing part 1 */
     case 'm':
         if(mtpt = ARGF())
             break;
+    /*x: [[main()]](mothra) command line processing part 1 */
+    case 'v': verbose=1; break;
+    /*x: [[main()]](mothra) command line processing part 1 */
+    case 'k': killimgs=1; break;
+    /*x: [[main()]](mothra) command line processing part 1 */
     case 'a': defdisplay=0; break;
+    /*e: [[main()]](mothra) command line processing part 1 */
     default:  goto Usage;
     }ARGEND
 
-
+    /*s: [[main()]](mothra) cohort setup */
     /*
      * so that we can stop all subprocesses with a note,
      * and to isolate rendezvous from other processes
@@ -391,46 +413,72 @@ void main(int argc, char *argv[]){
         atexit(killcohort);
         notify(catch);
         waitpid();
-        exits(0);
+        exits(nil);
     }
     cohort = getpid();
     atexit(killcohort);
+    /*e: [[main()]](mothra) cohort setup */
 
+    // command line processing part 2
     switch(argc){
-    default:
-    Usage:
-        fprint(2, "usage: %s [-dvak] [-m mtpt] [url]\n", argv0);
-        exits("usage");
+    case 1: 
+        url=argv[0];
+        break;
+    /*s: [[main()]](mothra) switch [[argc]] other cases */
     case 0:
         url=getenv("url");
         break;
-    case 1: url=argv[0]; break;
+    /*e: [[main()]](mothra) switch [[argc]] other cases */
+    default:
+    Usage:
+        fprint(STDERR, "usage: %s [-dvak] [-m mtpt] [url]\n", argv0);
+        exits("usage");
     }
+
     if(initdraw(0, 0, mothra) < 0)
         sysfatal("initdraw: %r");
+    /*s: [[main()]](mothra) extra draw settings */
     display->locking = 1;
     chrwidth=stringwidth(font, "0");
     pltabsize(chrwidth, 8*chrwidth);
+    /*e: [[main()]](mothra) extra draw settings */
+
     einit(Emouse|Ekeyboard);
+
+    /*s: [[main()]](mothra) plumb initialisation */
     eplumb(Eplumb, "web");
+    /*e: [[main()]](mothra) plumb initialisation */
+    /*s: [[main()]](mothra) kickpipe initialisation */
     if(pipe(kickpipe) < 0)
         sysfatal("pipe: %r");
     estart(Ekick, kickpipe[0], 256);
+    /*e: [[main()]](mothra) kickpipe initialisation */
+
     plinit(view->depth);
+
+    /*s: [[main()]](mothra) debug notify */
     if(debug) notify(dienow);
+    /*e: [[main()]](mothra) debug notify */
+
+    /*s: [[main()]](mothra) graphics initialisation */
     getfonts();
+
     hrule=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
-    if(hrule==0)
+    if(hrule==nil)
         sysfatal("can't allocimage!");
     draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
     linespace=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
-    if(linespace==0)
+    if(linespace==nil)
         sysfatal("can't allocimage!");
     bullet=allocimage(display, Rect(0,0,25, 8), view->chan, 0, DWhite);
     fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
+    /*e: [[main()]](mothra) graphics initialisation */
+
     mkpanels();
+
     unlockdisplay(display);
-    eresized(0);
+
+    eresized(false);
     drawlock(1);
 
     if(url && url[0])
@@ -438,98 +486,105 @@ void main(int argc, char *argv[]){
 
     mouse.buttons=0;
     for(;;){
-        if(mouse.buttons==0 && current){
-            if(current->finished){
-                updtext(current);
-                if(current->url->tag[0])
-                    scrollto(current->url->tag);
-                current->finished=0;
-                current->changed=false;
-                current->alldone=1;
-                message(mothra);
-                donecurs();
-            }
-        }
-
-        drawlock(0);
-        i=event(&e);
-        drawlock(1);
-
-        switch(i){
-        case Ekick:
-            if(mouse.buttons==0 && current && current->changed){
-                if(!current->finished)
-                    updtext(current);
-                current->changed=false;
-            }
-            break;
-        case Ekeyboard:
-            switch(e.kbdc){
-            default:
-Plkey:
-                adjkb();
-                plkeyboard(e.kbdc);
-                break;
-            case Khome:
-                scrollpanel(text, 0, 0);
-                break;
-            case Kup:
-                scrollpanel(text, -text->size.y/4, 1);
-                break;
-            case Kpgup:
-                scrollpanel(text, -text->size.y/2, 1);
-                break;
-            case Kdown:
-                scrollpanel(text, text->size.y/4, 1);
-                break;
-            case Kpgdown:
-                scrollpanel(text, text->size.y/2, 1);
-                break;
-            case Kend:
-                scrollpanel(text, -text->size.y, 2);
-                break;
-            case Kack:
-                search();
-                break;
-            case Kright:
-                if(plkbfocus)
-                    goto Plkey;
-                sidescroll(text->size.x/4, 1);
-                break;
-            case Kleft:
-                if(plkbfocus)
-                    goto Plkey;
-                sidescroll(-text->size.x/4, 1);
-                break;
-            }
-            break;
-        case Emouse:
-            mouse=e.mouse;
-            if(mouse.buttons & (8|16) && ptinrect(mouse.xy, list->r) && defdisplay){
-                if(mouse.buttons & 8)
-                    scrollpanel(list, list->r.min.y - mouse.xy.y, 1);
-                else
-                    scrollpanel(list, mouse.xy.y - list->r.min.y, 1);
-                break;
-            }
-            if(mouse.buttons & (8|16) && ptinrect(mouse.xy, text->r)){
-                if(mouse.buttons & 8)
-                    scrollpanel(text, text->r.min.y - mouse.xy.y, 1);
-                else
-                    scrollpanel(text, mouse.xy.y - text->r.min.y, 1);
-                break;
-            }
-            plmouse(root, &mouse);
-            if(mouse.buttons == 1 && root->lastmouse == root)
-                plgrabkb(nil);
-            break;
-        case Eplumb:
-            pm=e.v;
-            if(pm->ndata > 0)
-                geturl(pm->data, -1, 1, 0);
-            plumbfree(pm);
-            break;
-        }
+          /*s: [[main()]](mothra) in event loop, if [[current]] and no buttons */
+          if(mouse.buttons==0 && current){
+              if(current->finished){
+                  updtext(current);
+                  if(current->url->tag[0])
+                      scrollto(current->url->tag);
+                  current->finished=0;
+                  current->changed=false;
+                  current->alldone=1;
+                  message(mothra);
+                  donecurs();
+              }
+          }
+          /*e: [[main()]](mothra) in event loop, if [[current]] and no buttons */
+          
+          drawlock(0);
+          i=event(&e);
+          drawlock(1);
+          
+          switch(i){
+          /*s: [[main()]](mothra) in event loop, switch [[i]] cases */
+          case Ekick:
+              if(mouse.buttons==0 && current && current->changed){
+                  if(!current->finished)
+                      updtext(current);
+                  current->changed=false;
+              }
+              break;
+          /*x: [[main()]](mothra) in event loop, switch [[i]] cases */
+          case Emouse:
+              mouse=e.mouse;
+              if(mouse.buttons & (8|16) && ptinrect(mouse.xy, list->r) && defdisplay){
+                  if(mouse.buttons & 8)
+                      scrollpanel(list, list->r.min.y - mouse.xy.y, 1);
+                  else
+                      scrollpanel(list, mouse.xy.y - list->r.min.y, 1);
+                  break;
+              }
+              if(mouse.buttons & (8|16) && ptinrect(mouse.xy, text->r)){
+                  if(mouse.buttons & 8)
+                      scrollpanel(text, text->r.min.y - mouse.xy.y, 1);
+                  else
+                      scrollpanel(text, mouse.xy.y - text->r.min.y, 1);
+                  break;
+              }
+              plmouse(root, &mouse);
+              if(mouse.buttons == 1 && root->lastmouse == root)
+                  plgrabkb(nil);
+              break;
+          /*x: [[main()]](mothra) in event loop, switch [[i]] cases */
+          case Ekeyboard:
+              switch(e.kbdc){
+              default:
+              Plkey:
+                  adjkb();
+                  plkeyboard(e.kbdc);
+                  break;
+              case Khome:
+                  scrollpanel(text, 0, 0);
+                  break;
+              case Kup:
+                  scrollpanel(text, -text->size.y/4, 1);
+                  break;
+              case Kpgup:
+                  scrollpanel(text, -text->size.y/2, 1);
+                  break;
+              case Kdown:
+                  scrollpanel(text, text->size.y/4, 1);
+                  break;
+              case Kpgdown:
+                  scrollpanel(text, text->size.y/2, 1);
+                  break;
+              case Kend:
+                  scrollpanel(text, -text->size.y, 2);
+                  break;
+              case Kack:
+                  search();
+                  break;
+              case Kright:
+                  if(plkbfocus)
+                      goto Plkey;
+                  sidescroll(text->size.x/4, 1);
+                  break;
+              case Kleft:
+                  if(plkbfocus)
+                      goto Plkey;
+                  sidescroll(-text->size.x/4, 1);
+                  break;
+              }
+              break;
+          /*x: [[main()]](mothra) in event loop, switch [[i]] cases */
+          case Eplumb:
+              pm=e.v;
+              if(pm->ndata > 0)
+                  geturl(pm->data, -1, 1, 0);
+              plumbfree(pm);
+              break;
+          /*e: [[main()]](mothra) in event loop, switch [[i]] cases */
+          }
     }
 }
 /*e: function [[main]](mothra) */
@@ -576,7 +631,7 @@ void htmlerror(char *name, int line, char *m, ...){
 /*e: function [[htmlerror]](mothra) */
 
 /*s: function [[eresized]](mothra) */
-void eresized(int new){
+void eresized(bool new){
     Rectangle r;
 
     drawlock(1);
@@ -597,8 +652,9 @@ void eresized(int new){
 /*s: function [[emalloc]](mothra) */
 void *emalloc(int n){
     void *v;
+
     v=malloc(n);
-    if(v==0)
+    if(v==nil)
         sysfatal("out of memory");
     memset(v, 0, n);
     setmalloctag(v, getcallerpc(&n));
@@ -1130,6 +1186,7 @@ Url* selurl(char *urlname){
 /*e: function [[selurl]](mothra) */
 
 /*s: function [[geturl]](mothra) */
+/// main -> <>
 /*
  * get the file at the given url
  */

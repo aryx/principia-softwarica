@@ -11,6 +11,7 @@ struct Ibuf
     fdt fd;
     Ioproc *io;
     char buf[4096];
+    // read and write pointer in buf
     char *rp, *wp;
 };
 /*e: struct [[Ibuf]](webfs) */

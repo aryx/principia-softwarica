@@ -99,9 +99,14 @@ enum{
 
 Image *hrule, *bullet, *linespace;
 int chrwidth;           /* nominal width of characters in font */
-Panel *text;            /* Panel displaying the current www page */
 
+/*s: global [[text]](mothra) */
+Panel *text;            /* Panel displaying the current www page */
+/*e: global [[text]](mothra) */
+
+/*s: global [[debug]](mothra) */
 bool debug;             /* command line flag */
+/*e: global [[debug]](mothra) */
 
 /*s: enum [[HttpMethod]](mothra) */
 /*

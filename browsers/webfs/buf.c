@@ -13,7 +13,7 @@
 
 /*s: function [[initibuf]](webfs) */
 void
-initibuf(Ibuf *b, Ioproc *io, int fd)
+initibuf(Ibuf *b, Ioproc *io, fdt fd)
 {
     b->fd = fd;
     b->io = io;

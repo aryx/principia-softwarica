@@ -30,7 +30,8 @@
 %  - the tangle of CSS, JavaScript, and layout
 
 %thx to this manual, I better understand browsers:
-%  - Cookies
+%  - Cookies and stateful sessions
+%  - Pervasiveness of Redirects (used for many things)
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -3055,7 +3056,7 @@ enum{
 };
 @
 
-
+%alt: \subsection{Panels}
 
 %******************************************************************************
 \chapter{[[mothra]]: [[main()]] and Panels}
@@ -3068,8 +3069,9 @@ This chapter introduces the program at the centre of the book: the
 else in the book is invoked behind the scenes by mothra ([[webfs]]
 already mounted as a service, image format converters spawned per image,
 etc.).
-%
-I cover four pieces here in order:
+%toc:
+I cover five pieces here in order:
+the [[main()]] skeleton,
 the arguments mothra accepts,
 the static layout of its window (a four-pane stack of \verb+libpanel+ panels),
 the main I/O loop that runs as long as the browser is open, and
@@ -3078,77 +3080,71 @@ the worker procedure that streams a URL's body into a [<Www>].
 \section{[[main()]] skeleton}
 
 
+%claude:
+Most of the architectural weight of mothra is in [<main()>].
+Read in one sitting it looks unremarkable --- argument parsing, draw/initdraw,
+an event loop --- but if you take it apart clause by
+clause, every Plan~9 subsystem the browser uses appears at least once:
+\verb+initdraw+ (see \book{Graphics}) and
+\verb+plinit+ (see \book{Widgets}) for graphics,
+\verb+einit+ (and \verb+eplumb+) for the event multiplexer (see \book{Graphics}),
+\verb+rfork+ for the cohort group,
+a self-pipe \verb+kickpipe+ for waking the loop from worker threads, and the
+plumb-message intake that lets external programs send a URL with one
+\verb+plumb+ command. 
+
+
+<<global [[mothra]](mothra)>>=
+char mothra[] = "mothra!";
+@
+
 <<function [[main]](mothra)>>=
 void main(int argc, char *argv[]){
-    Event e;
-    enum { Eplumb = 128, Ekick = 256 };
-    Plumbmsg *pm;
     char *url;
     int i;
+    Event e;
+    <<[[main()]](mothra) other locals>>
 
-    quotefmtinstall();
-    fmtinstall('U', Ufmt);
-
+    <<[[main()]](mothra) fmt setup>>
     ARGBEGIN{
-    case 'd': debug=1; break;
-    case 'v': verbose=1; break;
-    case 'k': killimgs=1; break;
-    case 'm':
-        if(mtpt = ARGF())
-            break;
-    case 'a': defdisplay=0; break;
+    <<[[main()]](mothra) command line processing part 1>>
     default:  goto Usage;
     }ARGEND
 
+    <<[[main()]](mothra) cohort setup>>
 
-    /*
-     * so that we can stop all subprocesses with a note,
-     * and to isolate rendezvous from other processes
-     */
-    if(cohort=rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)){
-        atexit(killcohort);
-        notify(catch);
-        waitpid();
-        exits(0);
-    }
-    cohort = getpid();
-    atexit(killcohort);
-
+    // command line processing part 2
     switch(argc){
+    case 1: 
+        url=argv[0];
+        break;
+    <<[[main()]](mothra) switch [[argc]] other cases>>
     default:
     Usage:
-        fprint(2, "usage: %s [-dvak] [-m mtpt] [url]\n", argv0);
+        fprint(STDERR, "usage: %s [-dvak] [-m mtpt] [url]\n", argv0);
         exits("usage");
-    case 0:
-        url=getenv("url");
-        break;
-    case 1: url=argv[0]; break;
     }
+
     if(initdraw(0, 0, mothra) < 0)
         sysfatal("initdraw: %r");
-    display->locking = 1;
-    chrwidth=stringwidth(font, "0");
-    pltabsize(chrwidth, 8*chrwidth);
+    <<[[main()]](mothra) extra draw settings>>
+
     einit(Emouse|Ekeyboard);
-    eplumb(Eplumb, "web");
-    if(pipe(kickpipe) < 0)
-        sysfatal("pipe: %r");
-    estart(Ekick, kickpipe[0], 256);
+
+    <<[[main()]](mothra) plumb initialisation>>
+    <<[[main()]](mothra) kickpipe initialisation>>
+
     plinit(view->depth);
-    if(debug) notify(dienow);
-    getfonts();
-    hrule=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
-    if(hrule==0)
-        sysfatal("can't allocimage!");
-    draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
-    linespace=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
-    if(linespace==0)
-        sysfatal("can't allocimage!");
-    bullet=allocimage(display, Rect(0,0,25, 8), view->chan, 0, DWhite);
-    fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
+
+    <<[[main()]](mothra) debug notify>>
+
+    <<[[main()]](mothra) graphics initialisation>>
+
     mkpanels();
+
     unlockdisplay(display);
-    eresized(0);
+
+    eresized(false);
     drawlock(1);
 
     if(url && url[0])
@@ -3156,123 +3152,195 @@ void main(int argc, char *argv[]){
 
     mouse.buttons=0;
     for(;;){
-        if(mouse.buttons==0 && current){
-            if(current->finished){
-                updtext(current);
-                if(current->url->tag[0])
-                    scrollto(current->url->tag);
-                current->finished=0;
-                current->changed=false;
-                current->alldone=1;
-                message(mothra);
-                donecurs();
-            }
-        }
+          <<[[main()]](mothra) in event loop, if [[current]] and no buttons>>
+          
+          drawlock(0);
+          i=event(&e);
+          drawlock(1);
+          
+          switch(i){
+          <<[[main()]](mothra) in event loop, switch [[i]] cases>>
+          }
+    }
+}
+@
 
-        drawlock(0);
-        i=event(&e);
-        drawlock(1);
+%claude:
+\verb+initdraw()+ sets up \verb+libdraw+, \verb+plinit()+ sets
+up \verb+libpanel+, \verb+einit()+ wires mouse and keyboard into the
+\verb+event(2)+ multiplexer.
+[<mkpanels()>] builds the visible four-pane layout and
+[<geturl()>] kicks off the initial fetch.
 
-        switch(i){
-        case Ekick:
-            if(mouse.buttons==0 && current && current->changed){
-                if(!current->finished)
-                    updtext(current);
-                current->changed=false;
-            }
-            break;
-        case Ekeyboard:
-            switch(e.kbdc){
-            default:
-Plkey:
-                adjkb();
-                plkeyboard(e.kbdc);
-                break;
-            case Khome:
-                scrollpanel(text, 0, 0);
-                break;
-            case Kup:
-                scrollpanel(text, -text->size.y/4, 1);
-                break;
-            case Kpgup:
-                scrollpanel(text, -text->size.y/2, 1);
-                break;
-            case Kdown:
-                scrollpanel(text, text->size.y/4, 1);
-                break;
-            case Kpgdown:
-                scrollpanel(text, text->size.y/2, 1);
-                break;
-            case Kend:
-                scrollpanel(text, -text->size.y, 2);
-                break;
-            case Kack:
-                search();
-                break;
-            case Kright:
-                if(plkbfocus)
-                    goto Plkey;
-                sidescroll(text->size.x/4, 1);
-                break;
-            case Kleft:
-                if(plkbfocus)
-                    goto Plkey;
-                sidescroll(-text->size.x/4, 1);
-                break;
-            }
-            break;
-        case Emouse:
-            mouse=e.mouse;
-            if(mouse.buttons & (8|16) && ptinrect(mouse.xy, list->r) && defdisplay){
-                if(mouse.buttons & 8)
-                    scrollpanel(list, list->r.min.y - mouse.xy.y, 1);
-                else
-                    scrollpanel(list, mouse.xy.y - list->r.min.y, 1);
-                break;
-            }
-            if(mouse.buttons & (8|16) && ptinrect(mouse.xy, text->r)){
-                if(mouse.buttons & 8)
-                    scrollpanel(text, text->r.min.y - mouse.xy.y, 1);
-                else
-                    scrollpanel(text, mouse.xy.y - text->r.min.y, 1);
-                break;
-            }
-            plmouse(root, &mouse);
-            if(mouse.buttons == 1 && root->lastmouse == root)
-                plgrabkb(nil);
-            break;
-        case Eplumb:
-            pm=e.v;
-            if(pm->ndata > 0)
-                geturl(pm->data, -1, 1, 0);
-            plumbfree(pm);
-            break;
-        }
+%claude:
+The loop itself will dispatch between five event sources: \verb+Ekick+
+(redraw the current page), \verb+Ekeyboard+ (scrolling and search),
+\verb+Emouse+ (clicks, side-scrolls via buttons~4 and~5), \verb+Eplumb+
+(an external URL request), and the implicit ``current page just finished
+loading'' branch at the top of the loop, which scrolls to the
+\verb+#fragment+ if any and resets the busy cursor.
+
+%yoann: explain
+
+<<[[main()]](mothra) switch [[argc]] other cases>>=
+case 0:
+    url=getenv("url");
+    break;
+@
+
+%yoann: explain
+
+<<[[main()]](mothra) other locals>>=
+enum { Eplumb = 128, Ekick = 256 };
+@
+
+
+
+\subsection{[[current]]}
+
+%yoann: explain
+
+<<global [[current]](mothra)>>=
+Www *current=nil;
+@
+
+<<[[main()]](mothra) in event loop, if [[current]] and no buttons>>=
+if(mouse.buttons==0 && current){
+    if(current->finished){
+        updtext(current);
+        if(current->url->tag[0])
+            scrollto(current->url->tag);
+        current->finished=0;
+        current->changed=false;
+        current->alldone=1;
+        message(mothra);
+        donecurs();
     }
 }
 @
 
 
+\subsection{Cohort group}
+
+First, \verb+rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)+ creates a
+``cohort'': mothra's parent process becomes a sentinel that just calls
+\verb+waitpid+ and reaps everything, while the child runs the GUI. The
+flags \verb+RFNOTEG+ and \verb+RFNAMEG+ isolate the cohort's note group
+and namespace, so a \verb+kill+ note delivered to the parent stops every
+helper at once and a per-cohort namespace lets the \verb+-m+ flag take
+effect.
+%yoann1: introduce and explain better cohort
+
+<<global [[cohort]](mothra)>>=
+int cohort = -1;
+@
+
+<<[[main()]](mothra) cohort setup>>=
+/*
+ * so that we can stop all subprocesses with a note,
+ * and to isolate rendezvous from other processes
+ */
+if(cohort=rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)){
+    atexit(killcohort);
+    notify(catch);
+    waitpid();
+    exits(nil);
+}
+cohort = getpid();
+atexit(killcohort);
+@
+
+\subsection{Kick pipe}
+
 %claude:
-Most of the architectural weight of mothra is in [<main()>]. Read in one
-sitting it looks unremarkable --- argument parsing, draw/initdraw,
-\verb+ARGBEGIN+, an event loop --- but if you take it apart clause by
-clause, every Plan~9 subsystem the browser uses appears at least once:
-\verb+rfork+ for the cohort group, \verb+initdraw+/\verb+plinit+ for
-graphics, \verb+einit+/\verb+eplumb+ for the event multiplexer, a
-self-pipe \verb+kickpipe+ for waking the loop from worker threads, and the
-plumb-message intake that lets external programs send a URL with one
-\verb+plumb+ command. The chapter is built around that observation.
+The \verb+kickpipe+ self-pipe is
+created and registered as event source \verb+Ekick+; worker threads write
+one byte to it to wake the loop without manufacturing a fake mouse event.
+%yoann1: introduce and explain better kick pipe
+
+<<[[main()]](mothra) kickpipe initialisation>>=
+if(pipe(kickpipe) < 0)
+    sysfatal("pipe: %r");
+estart(Ekick, kickpipe[0], 256);
+@
+
+<<[[main()]](mothra) in event loop, switch [[i]] cases>>=
+case Ekick:
+    if(mouse.buttons==0 && current && current->changed){
+        if(!current->finished)
+            updtext(current);
+        current->changed=false;
+    }
+    break;
+@
+
+\subsection{XXX}
+
+%XXX
+<<[[main()]](mothra) extra draw settings>>=
+display->locking = 1;
+chrwidth=stringwidth(font, "0");
+pltabsize(chrwidth, 8*chrwidth);
+@
+
+
+<<[[main()]](mothra) graphics initialisation>>=
+getfonts();
+
+hrule=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
+if(hrule==nil)
+    sysfatal("can't allocimage!");
+draw(hrule, Rect(0,1,1,3), display->black, 0, ZP);
+linespace=allocimage(display, Rect(0, 0, 1, 5), view->chan, 1, DWhite);
+if(linespace==nil)
+    sysfatal("can't allocimage!");
+bullet=allocimage(display, Rect(0,0,25, 8), view->chan, 0, DWhite);
+fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
+@
+
 
 \section{Command-line arguments}
 
 %claude:
-The argument grammar is a one-line \verb+ARGBEGIN+ block, but two flags
+The argument grammar is handled by the \verb+ARGBEGIN+ block above. Two flags
 deserve attention: \verb+-d+ enables HTTP-tracing debug output threaded
 through the request paths in \verb+http.c+ and \verb+rdhtml.c+, and
 \verb+-m+ lets you mount a non-default [[webfs]] (handy when running
 two browsers side by side, each with its own cookie jar).
+%yoann1: rephrase, the "argument grammar" is unclear
 
+<<[[main()]](mothra) command line processing part 1>>=
+case 'd': debug=1; break;
+@
+
+
+<<global [[mtpt]](mothra)>>=
+char *mtpt="/mnt/web";
+@
+
+<<[[main()]](mothra) command line processing part 1>>=
+case 'm':
+    if(mtpt = ARGF())
+        break;
+@
+
+
+%yoann: explain those other flags
+
+<<[[main()]](mothra) command line processing part 1>>=
+case 'v': verbose=1; break;
+@
+
+<<[[main()]](mothra) command line processing part 1>>=
+case 'k': killimgs=1; break;
+@
+
+<<[[main()]](mothra) command line processing part 1>>=
+case 'a': defdisplay=0; break;
+@
+
+
+%XXX
 <<function [[arg]](mothra)>>=
 char *arg(char *s){
     do ++s; while(*s==' ' || *s=='\t');
@@ -3280,69 +3348,70 @@ char *arg(char *s){
 }
 @
 
-%claude:
-\verb+main+ does setup, then enters an event loop. The setup is in five
-steps. First, \verb+rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)+ creates a
-``cohort'': mothra's parent process becomes a sentinel that just calls
-\verb+waitpid+ and reaps everything, while the child runs the GUI. The
-flags \verb+RFNOTEG+ and \verb+RFNAMEG+ isolate the cohort's note group
-and namespace, so a \verb+kill+ note delivered to the parent stops every
-helper at once and a per-cohort namespace lets the \verb+-m+ flag take
-effect. Second, \verb+initdraw+ sets up \verb+libdraw+, \verb+plinit+ sets
-up \verb+libpanel+, \verb+einit+ wires mouse and keyboard into the
-\verb+event(2)+ multiplexer. Third, \verb+eplumb+ subscribes to the
-\verb+web+ port so external programs can send a URL with
-\verb+plumb -d web foo.html+. Fourth, the \verb+kickpipe+ self-pipe is
-created and registered as event source \verb+Ekick+; worker threads write
-one byte to it to wake the loop without manufacturing a fake mouse event.
-Fifth, [<mkpanels()>] builds the visible four-pane layout and
-\verb+geturl()+ kicks off the initial fetch.
 
-%claude:
-The loop itself dispatches between five event sources: \verb+Ekick+
-(redraw the current page), \verb+Ekeyboard+ (scrolling and search),
-\verb+Emouse+ (clicks, side-scrolls via buttons~4 and~5), \verb+Eplumb+
-(an external URL request), and the implicit ``current page just finished
-loading'' branch at the top of the loop, which scrolls to the
-\verb+#fragment+ if any and resets the busy cursor.
 
 
 \section{Panel layout (address bar, display, status)}
 
 %claude:
 Mothra's window is a fixed five-pane stack drawn with \verb+libpanel+
-\book{Widgets}. Top to bottom: the \verb+cururl+ label showing the visible
-page's URL; the \verb+cmd+ entry where the user types a new URL; the
-\verb+msg+ label showing transient messages (``loading\ldots'',
-``not found''); the \verb+text+ panel that displays the page itself; and
-either the \verb+list+ panel of recently visited URLs (when
-\verb+-a+ is off) or no list at all. Each pane is a global [<Panel*>]
-because the event loop needs to address them by name when scrolling or
-filling them. There is no resize logic: \verb+eresized+ tears down the
-whole layout and rebuilds it with [<mkpanels()>].
+(see \book{Widgets}) by [<mkpanels()>].
 
 \begin{verbatim}
     +---------------------------------+
-    |  cururl  http://example.com     |  <-- label
+    |  msg     loading...             |  <-- label
     +---------------------------------+
     |  cmd     [_______________]      |  <-- text entry
     +---------------------------------+
-    |  msg     loading...             |  <-- label
+    |  cururl  http://example.com     |  <-- label
+    +---------------------------------+
+    |  list                           |
+    |    1. http://www.google.com     |  <-- visited list
+    |    2. http://example.com        |
     +---------------------------------+
     |  text                           |
     |    Welcome to example.com       |
     |    This domain is for use ...   |  <-- text panel (Rtext list)
     |                                 |
     +---------------------------------+
-    |  list                           |
-    |    1. http://www.google.com     |  <-- visited list
-    |    2. http://example.com        |
-    +---------------------------------+
 \end{verbatim}
+
+%claude:
+Top to bottom:
+the \verb+msg+ label showing transient messages (``loading\ldots'', ``not found'');
+the \verb+cmd+ entry where the user types a new URL;
+the \verb+list+ panel of recently visited URLs (when \verb+-a+ is off) or no list at all. 
+the \verb+cururl+ label showing the visible page's URL;
+the \verb+text+ panel that displays the page itself
+
+
+Each pane is a global [<Panel*>]
+because the event loop needs to address them by name when scrolling or
+filling them.
 
 <<global [[root]](mothra)>>=
 Panel *root;    /* the whole display */
 @
+
+<<global [[msg]](mothra)>>=
+Panel *msg;     /* message display */
+@
+<<global [[cmd]](mothra)>>=
+Panel *cmd;     /* command entry */
+@
+
+<<global [[list]](mothra)>>=
+Panel *list;    /* list of previously acquired www pages */
+@
+<<global [[cururl]](mothra)>>=
+Panel *cururl;  /* label giving the url of the visible text */
+@
+
+<<global [[text]](mothra)>>=
+Panel *text;            /* Panel displaying the current www page */
+@
+
+%yoann: explain alt those alt
 
 <<global [[alt]](mothra)>>=
 Panel *alt;     /* the alternate display */
@@ -3352,37 +3421,116 @@ Panel *alt;     /* the alternate display */
 Panel *alttext; /* the alternate text window */
 @
 
-<<global [[cmd]](mothra)>>=
-Panel *cmd;     /* command entry */
+
+\subsection{[[mkpanels()]]}
+
+%claude:
+[<mkpanels()>] is the static page-builder for the window. It walks down
+the layout from top to bottom, building one [[plgroup]] per row and
+populating it with the appropriate widgets.
+%
+The pattern is consistent: a
+\verb+plgroup+ packs its children north-to-south, each row uses
+\verb+PACKW+/\verb+PACKE+ to glue widgets to left/right, and the largest
+panel ([<text>]) gets \verb+EXPAND+ so it absorbs the leftover space when
+the window resizes.
+%
+The two scrollbars (\verb+xbar+, \verb+ybar+) are
+created bare and then attached to \verb+text+ via \verb+plscroll+; that
+is how a libpanel scrollbar discovers what it should scroll.
+
+<<function [[mkpanels]](mothra)>>=
+/// main -> <>
+void mkpanels(void){
+    Panel *p, *xbar, *ybar, *swap;
+    int xflags;
+
+    if(topxbar)
+        xflags=PACKN|USERFL;
+    else
+        xflags=PACKS|USERFL;
+    //TODO
+    //if(!visxbar)
+    //  xflags|=IGNORE;
+    menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
+
+    root=plpopup(root, EXPAND, 0, 0, menu3);
+        p=plgroup(root, PACKN|FILLX);
+            msg=pllabel(p, PACKN|FILLX, mothra);
+            plplacelabel(msg, PLACEW);
+            pllabel(p, PACKW, "Go:");
+            cmd=plentry(p, PACKN|FILLX, 0, "", docmd);
+        p=plgroup(root, PACKN|FILLX);
+            ybar=plscrollbar(p, PACKW);
+            list=pllist(p, PACKN|FILLX, genwww, 8, doprev);
+            plscroll(list, 0, ybar);
+        p=plgroup(root, PACKN|FILLX);
+            pllabel(p, PACKW, "Url:");
+            cururl=pllabel(p, PACKE|EXPAND, "---");
+            plplacelabel(cururl, PLACEW);
+        p=plgroup(root, PACKN|EXPAND);
+            ybar=plscrollbar(p, PACKW|USERFL);
+            xbar=plscrollbar(p, xflags);
+            text=pltextview(p, PACKE|EXPAND, Pt(0, 0), 0, dolink);
+            plscroll(text, xbar, ybar);
+
+    plgrabkb(cmd);
+
+    alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
+        ybar=plscrollbar(alt, PACKW|USERFL);
+        xbar=plscrollbar(alt, xflags);
+        alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
+        plscroll(alttext, xbar, ybar);
+
+    if(!defdisplay){
+        swap=root;
+        root=alt;
+        alt=swap;
+        swap=text;
+        text=alttext;
+        alttext=swap;
+    }
+}
 @
 
-<<global [[cururl]](mothra)>>=
-Panel *cururl;  /* label giving the url of the visible text */
+<<global [[topxbar]](mothra)>>=
+int topxbar=0;  /* horizontal scrollbar at top? */
 @
 
-<<global [[list]](mothra)>>=
-Panel *list;    /* list of previously acquired www pages */
-@
-
-<<global [[msg]](mothra)>>=
-Panel *msg;     /* message display */
-@
 
 <<global [[menu3]](mothra)>>=
 Panel *menu3;   /* button 3 menu */
 @
 
-<<global [[mothra]](mothra)>>=
-char mothra[] = "mothra!";
+\subsection{[[eresized()]]}
+
+There is no resize logic: \verb+eresized+ tears down the
+whole layout and rebuilds it with [<mkpanels()>].
+%yoann1: are you sure? I see no call to mkpanels below
+
+<<function [[eresized]](mothra)>>=
+void eresized(bool new){
+    Rectangle r;
+
+    drawlock(1);
+    if(new && getwindow(display, Refnone) == -1) {
+        fprint(2, "getwindow: %r\n");
+        exits("getwindow");
+    }
+    r=view->r;
+    plpack(root, r);
+    plpack(alt, r);
+    pldraw(cmd, view);  /* put cmd box on screen for alt display */
+    pldraw(root, view);
+    flushimage(display, 1);
+    drawlock(0);
+}
 @
 
-<<global [[current]](mothra)>>=
-Www *current=nil;
-@
 
-<<global [[selection]](mothra)>>=
-Url *selection=nil;
-@
+\subsection{XXX}
+%yoann: explain
+
 
 %claude:
 [<www()>] returns the [<Www>] slot for index \verb+i+, modulo the static
@@ -3393,6 +3541,7 @@ remains valid forever, which simplifies the few places that keep a
 [<Www*>] across an event-loop iteration.
 
 <<function [[www]](mothra)>>=
+/// -> <>
 Www *www(int index){
     static Www a[NWWW];
     return &a[index % NWWW];
@@ -3406,6 +3555,7 @@ int nwww(void){
 @
 
 <<function [[subpanel]](mothra)>>=
+/// ???? -> <>
 int subpanel(Panel *obj, Panel *subj){
     if(obj==0) return 0;
     if(obj==subj) return 1;
@@ -3488,84 +3638,7 @@ void sidescroll(int dx, int whence)
 }
 @
 
-%claude:
-[<mkpanels()>] is the static page-builder for the window. It walks down
-the layout from top to bottom, building one [[plgroup]] per row and
-populating it with the appropriate widgets. The pattern is consistent: a
-\verb+plgroup+ packs its children north-to-south, each row uses
-\verb+PACKW+/\verb+PACKE+ to glue widgets to left/right, and the largest
-panel ([<text>]) gets \verb+EXPAND+ so it absorbs the leftover space when
-the window resizes. The two scrollbars (\verb+xbar+, \verb+ybar+) are
-created bare and then attached to \verb+text+ via \verb+plscroll+; that
-is how a libpanel scrollbar discovers what it should scroll.
 
-<<function [[mkpanels]](mothra)>>=
-void mkpanels(void){
-    Panel *p, *xbar, *ybar, *swap;
-    int xflags;
-
-    if(topxbar)
-        xflags=PACKN|USERFL;
-    else
-        xflags=PACKS|USERFL;
-    //TODO
-    //if(!visxbar)
-    //  xflags|=IGNORE;
-    menu3=plmenu(0, 0, buttons_, PACKN|FILLX, hit3);
-    root=plpopup(root, EXPAND, 0, 0, menu3);
-        p=plgroup(root, PACKN|FILLX);
-            msg=pllabel(p, PACKN|FILLX, mothra);
-            plplacelabel(msg, PLACEW);
-            pllabel(p, PACKW, "Go:");
-            cmd=plentry(p, PACKN|FILLX, 0, "", docmd);
-        p=plgroup(root, PACKN|FILLX);
-            ybar=plscrollbar(p, PACKW);
-            list=pllist(p, PACKN|FILLX, genwww, 8, doprev);
-            plscroll(list, 0, ybar);
-        p=plgroup(root, PACKN|FILLX);
-            pllabel(p, PACKW, "Url:");
-            cururl=pllabel(p, PACKE|EXPAND, "---");
-            plplacelabel(cururl, PLACEW);
-        p=plgroup(root, PACKN|EXPAND);
-            ybar=plscrollbar(p, PACKW|USERFL);
-            xbar=plscrollbar(p, xflags);
-            text=pltextview(p, PACKE|EXPAND, Pt(0, 0), 0, dolink);
-            plscroll(text, xbar, ybar);
-    plgrabkb(cmd);
-    alt=plpopup(0, PACKE|EXPAND, 0, 0, menu3);
-        ybar=plscrollbar(alt, PACKW|USERFL);
-        xbar=plscrollbar(alt, xflags);
-        alttext=pltextview(alt, PACKE|EXPAND, Pt(0, 0), 0, dolink);
-        plscroll(alttext, xbar, ybar);
-    if(!defdisplay){
-        swap=root;
-        root=alt;
-        alt=swap;
-        swap=text;
-        text=alttext;
-        alttext=swap;
-    }
-}
-@
-
-<<function [[eresized]](mothra)>>=
-void eresized(int new){
-    Rectangle r;
-
-    drawlock(1);
-    if(new && getwindow(display, Refnone) == -1) {
-        fprint(2, "getwindow: %r\n");
-        exits("getwindow");
-    }
-    r=view->r;
-    plpack(root, r);
-    plpack(alt, r);
-    pldraw(cmd, view);  /* put cmd box on screen for alt display */
-    pldraw(root, view);
-    flushimage(display, 1);
-    drawlock(0);
-}
-@
 
 \section{The main I/O loop}
 
@@ -3706,17 +3779,6 @@ int confirm(int b){
 }
 @
 
-<<function [[emalloc]](mothra)>>=
-void *emalloc(int n){
-    void *v;
-    v=malloc(n);
-    if(v==0)
-        sysfatal("out of memory");
-    memset(v, 0, n);
-    setmalloctag(v, getcallerpc(&n));
-    return v;
-}
-@
 
 <<function [[nstrcpy]](mothra)>>=
 void nstrcpy(char *to, char *from, int len){
@@ -3763,6 +3825,10 @@ void seturl(Url *url, char *urlname, char *base){
 }
 @
 
+
+<<global [[selection]](mothra)>>=
+Url *selection=nil;
+@
 <<function [[selurl]](mothra)>>=
 Url* selurl(char *urlname){
     Url *last;
@@ -4030,7 +4096,7 @@ void docmd(Panel *p, char *s){
 }
 @
 
-\section{Reading from a URL or stdin}
+\section{Reading from a URL: [[geturl()]]}
 
 %claude:
 This section is the boundary between the GUI and the network. The
@@ -4062,6 +4128,7 @@ is forked to write to \verb+kickpipe+ once a second whenever
 incrementally as bytes arrive.
 
 <<function [[geturl]](mothra)>>=
+/// main -> <>
 /*
  * get the file at the given url
  */
@@ -15027,24 +15094,6 @@ void freeform(void *p)
 }
 @
 
-<<function [[Ufmt]](mothra)>>=
-int Ufmt(Fmt *f){
-    char *s = va_arg(f->args, char*);
-    for(; *s; s++){
-        if(strchr("/$-_@.!*'(),", *s)
-        || 'a'<=*s && *s<='z'
-        || 'A'<=*s && *s<='Z'
-        || '0'<=*s && *s<='9')
-            fmtprint(f, "%c", *s);
-        else if(*s==' ')
-            fmtprint(f, "+");
-        else
-            fmtprint(f, "%%%.2X", *s & 0xFF);
-    }
-    return 0;
-}
-@
-
 \section{The [[Field]] state machine (TYPEIN, CHECK, PASSWD, RADIO, \ldots)}
 
 %claude:
@@ -15842,8 +15891,34 @@ application). This chapter covers both.
 \section{Mouse clicks and scrolling}
 
 %claude:
-Mouse handling lives in [<main()>]'s \verb+Emouse+ branch, covered in
-chapter \ref{chap:mothra-main}. The interesting wrinkle is button~4
+Mouse handling lives in [<main()>]'s \verb+Emouse+ branch.
+
+<<[[main()]](mothra) in event loop, switch [[i]] cases>>=
+case Emouse:
+    mouse=e.mouse;
+    if(mouse.buttons & (8|16) && ptinrect(mouse.xy, list->r) && defdisplay){
+        if(mouse.buttons & 8)
+            scrollpanel(list, list->r.min.y - mouse.xy.y, 1);
+        else
+            scrollpanel(list, mouse.xy.y - list->r.min.y, 1);
+        break;
+    }
+    if(mouse.buttons & (8|16) && ptinrect(mouse.xy, text->r)){
+        if(mouse.buttons & 8)
+            scrollpanel(text, text->r.min.y - mouse.xy.y, 1);
+        else
+            scrollpanel(text, mouse.xy.y - text->r.min.y, 1);
+        break;
+    }
+    plmouse(root, &mouse);
+    if(mouse.buttons == 1 && root->lastmouse == root)
+        plgrabkb(nil);
+    break;
+@
+
+
+
+The interesting wrinkle is button~4
 and~5: scroll-wheel events, encoded as the high mouse buttons in
 Plan~9's mouse(3) interface. Mothra reads them as ``scroll up/down by
 a quarter screen'' on whichever pane the cursor is in.
@@ -15948,14 +16023,90 @@ void hit3(int button, int item){
 
 %claude:
 Keyboard handling is in [<main()>]'s \verb+Ekeyboard+ branch.
+%
 Movement keys (Home/End, PgUp/PgDn, arrows) scroll the textview.
-\verb+^F+ (\verb+Kack+) opens the search prompt. Anything else with
-focus on the cmd entry goes through the libpanel
-\verb+plkeyboard()+ for normal text input. There are no other
+%
+\verb+^F+ (\verb+Kack+) opens the search prompt.
+%
+Anything else with focus on the cmd entry goes through the libpanel
+\verb+plkeyboard()+ for normal text input.
+%
+There are no other
 mothra-specific keystrokes; the cmd entry's \verb+/+, \verb+a+,
 \verb+g+, etc.\ commands are typed plain.
 
+
+<<[[main()]](mothra) in event loop, switch [[i]] cases>>=
+case Ekeyboard:
+    switch(e.kbdc){
+    default:
+    Plkey:
+        adjkb();
+        plkeyboard(e.kbdc);
+        break;
+    case Khome:
+        scrollpanel(text, 0, 0);
+        break;
+    case Kup:
+        scrollpanel(text, -text->size.y/4, 1);
+        break;
+    case Kpgup:
+        scrollpanel(text, -text->size.y/2, 1);
+        break;
+    case Kdown:
+        scrollpanel(text, text->size.y/4, 1);
+        break;
+    case Kpgdown:
+        scrollpanel(text, text->size.y/2, 1);
+        break;
+    case Kend:
+        scrollpanel(text, -text->size.y, 2);
+        break;
+    case Kack:
+        search();
+        break;
+    case Kright:
+        if(plkbfocus)
+            goto Plkey;
+        sidescroll(text->size.x/4, 1);
+        break;
+    case Kleft:
+        if(plkbfocus)
+            goto Plkey;
+        sidescroll(-text->size.x/4, 1);
+        break;
+    }
+    break;
+@
+
+
+
+
 \section{The [[plumb(2)]] protocol}
+
+
+<<[[main()]](mothra) plumb initialisation>>=
+eplumb(Eplumb, "web");
+@
+
+%claude:
+\verb+eplumb+ subscribes to the
+\verb+web+ port so external programs can send a URL with
+\verb+plumb -d web foo.html+.
+
+<<[[main()]](mothra) other locals>>=
+Plumbmsg *pm;
+@
+
+<<[[main()]](mothra) in event loop, switch [[i]] cases>>=
+case Eplumb:
+    pm=e.v;
+    if(pm->ndata > 0)
+        geturl(pm->data, -1, 1, 0);
+    plumbfree(pm);
+    break;
+@
+
 
 %claude:
 Plumb is Plan~9's content-routing daemon: small messages with
@@ -17081,6 +17232,17 @@ subsystems.
 All are settable at startup (\verb+webfs -d -D+) or at runtime
 (\verb+echo httpdebug 1 > /mnt/web/ctl+).
 
+<<global [[debug]](mothra)>>=
+bool debug;             /* command line flag */
+@
+% set by -d
+
+<<[[main()]](mothra) debug notify>>=
+if(debug) notify(dienow);
+@
+
+
+
 \section{Per-subsystem tracing}
 
 %claude:
@@ -17098,6 +17260,10 @@ Each major data type has a [[Format]] verb installed via
 \verb+%J+ a Jar. The dumper is what backs both the trace prints
 above and the human-readable view of \verb+/mnt/webcookies/cookies+.
 
+<<[[main()]](mothra) fmt setup>>=
+quotefmtinstall();
+@
+
 \subsection{URLs}
 
 %claude:
@@ -17106,6 +17272,27 @@ above and the human-readable view of \verb+/mnt/webcookies/cookies+.
 the equivalent is the \verb+/parsed/url+ file that read returns the
 canonical serialisation of the parsed URL.
 
+<<[[main()]](mothra) fmt setup>>=
+fmtinstall('U', Ufmt);
+@
+
+<<function [[Ufmt]](mothra)>>=
+int Ufmt(Fmt *f){
+    char *s = va_arg(f->args, char*);
+    for(; *s; s++){
+        if(strchr("/$-_@.!*'(),", *s)
+        || 'a'<=*s && *s<='z'
+        || 'A'<=*s && *s<='Z'
+        || '0'<=*s && *s<='9')
+            fmtprint(f, "%c", *s);
+        else if(*s==' ')
+            fmtprint(f, "+");
+        else
+            fmtprint(f, "%%%.2X", *s & 0xFF);
+    }
+    return 0;
+}
+@
 
 \subsection{HTML items}
 
@@ -17222,6 +17409,20 @@ emalloc(uint n)
         sysfatal("malloc %d: out of memory", n);
     setmalloctag(a, getcallerpc(&n));
     return a;
+}
+@
+
+% sad that dupe between mothra and webfs; should be in libc!
+<<function [[emalloc]](mothra)>>=
+void *emalloc(int n){
+    void *v;
+
+    v=malloc(n);
+    if(v==nil)
+        sysfatal("out of memory");
+    memset(v, 0, n);
+    setmalloctag(v, getcallerpc(&n));
+    return v;
 }
 @
 
