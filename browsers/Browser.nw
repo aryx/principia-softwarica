@@ -1253,6 +1253,22 @@ Figure~\ref{fig:mothra-gui} illustrates the main elements of [[rio]]'s GUI.
 \end{figure}
 
 %yoann: describe main UI elements of mothra
+%claude:
+The window is divided into four stacked panels, top to bottom:
+a one-line {\em status} area on the left paired with a {\em ``Go:''}
+URL entry on the right (where the user types a URL or
+[[/]]-search query); a scrollable {\em history list} of recently
+visited pages; a {\em ``Url:''} label that displays the URL of the
+page currently shown (and of any link the mouse hovers over); and
+the main {\em text view} that holds the rendered document, with a
+vertical scrollbar on the left and---when long lines are not wrapped
+---a horizontal scrollbar on top.
+%
+Right-clicking anywhere pops up the {\em button-3 menu} shown in
+the figure, with entries [[alt display]], [[moth mode]], [[snarf]],
+[[paste]], [[plumb]], [[search]], [[save hit]], [[hit list]], and
+[[exit]]. Left-clicking a link follows it; middle-clicking a link
+loads it in the alternate display ([[alt]]).
 
 
 \subsection{The \plan web stack interfaces ([[/mnt/web/]], [[/mnt/webcookies/]], \ldots)}
@@ -1303,6 +1319,44 @@ a small [[libsec]] client (thousands of LOC, in user space, replaceable)
 and a simple I/O loop on plaintext files (unchanged since the 1990s).
 
 %yoann: maybe ASCII diagram illustrating all the actors, and maybe sequence diagram and see data exchanged (sometimes clear, sometimes encrypted)
+%claude:
+The four actors and the data that flows between them are sketched
+below. Solid arrows carry plaintext (9P file I/O or unencrypted HTTP);
+the dashed arrows are the only encrypted hop, between the kernel's
+[[/net/tls]] device and the remote server.
+
+\begin{verbatim}
+   user space                              | kernel
+                                           |
+   +--------+   /mnt/web/$n$/{ctl,body}    |
+   | mothra |<------------------------+    |
+   +--------+                         |    |
+        ^                             v    |    /net/tcp
+        |    /mnt/webcookies      +-------+|   +--------+
+        +-------------------+     | webfs ||-->| devip  |---> server
+                            v     +-------+|   +--------+        ^
+                       +-------------+ ^   |       (HTTP)        |
+                       | webcookies  | |   |    /net/tls         |
+                       +-------------+ +---|-->+--------+        |
+                                           |   | devtls |~ ~ ~ ~ +
+                                           |   +--------+   (HTTPS)
+                                           |
+   <--- 9P plaintext ---> | <- TCP plain -> | <~ TLS encrypted ~>
+\end{verbatim}
+
+%claude:
+A few things to notice. (1) [[mothra]] never speaks HTTP and never
+opens a network socket: it only reads and writes files under
+[[/mnt/web]]. (2) [[webfs]] is the only program that ever sees
+plaintext HTTP headers and bodies---it builds requests, parses
+responses, follows redirects, and serves the result back through
+[[/mnt/web]]. (3) The TLS boundary lives in the kernel
+([[devtls.c]]): [[webfs]] hands [[/net/tls]] plaintext records and
+the kernel encrypts them. So bytes are encrypted only on the wire,
+between the [[/net/tls]] driver and the remote server; everywhere
+inside the local machine they travel in the clear. (4) [[webcookies]]
+is consulted on each request and updated on each response, but it
+never talks to the network---it is a pure key/value file server.
 
 
 \section{[[hello.html]]}
