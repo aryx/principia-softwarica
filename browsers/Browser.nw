@@ -2746,7 +2746,31 @@ jar is reread before any cookie operation is allowed to commit.
 \section{Charset tables}
 
 %yoann: say tables ommitted, in Extra code chapter; maybe give one example verbatim, like the Western europe with accents?
+%claude:
+The bulk of the charset infrastructure is data, not code: one
+\verb+long table[256]+ per single-byte encoding (mapping each byte
+to a Unicode codepoint), plus larger structures for the multi-byte
+ones (Big5, GB, GBK, JIS, KSC). Reproducing all of them here would
+add thousands of mostly hex-digit lines without teaching anything
+new, so they are deferred to Chapter~\ref{chap:extra-code}.
+%
+The format is simple. Here is a slice of [[tab8859_2]] (ISO~8859-2,
+``Latin-2'' for Central and Eastern European languages with
+diacritics) showing the upper half of the byte range, where it
+diverges from plain ASCII:
 
+\begin{verbatim}
+    /* 0xb8 .. 0xbf:  ¸ š ş ť ź ˝ ž ż */
+    0x00b8, 0x0161, 0x015f, 0x0165, 0x017a, 0x02dd, 0x017e, 0x017c,
+    /* 0xc0 .. 0xc7:  Ŕ Á Â Ă Ä Ĺ Ć Ç */
+    0x0154, 0x00c1, 0x00c2, 0x0102, 0x00c4, 0x0139, 0x0106, 0x00c7,
+\end{verbatim}
+
+Each byte's index gives a Unicode codepoint, and the encoder/decoder
+just walks the table. ISO~8859-1 is degenerate (the table is the
+identity, because Unicode was designed so that U+0000--U+00FF matches
+Latin-1 exactly); 8859-2 and the others are where the table really
+earns its keep.
 
 
 \section{HTML parse tree (mothra's flat item list)}
@@ -2791,16 +2815,7 @@ text run inside captured that frame into its [<Action>], and the
 The \verb+</a>+ close tag popped the frame, which is why
 \verb+" for X"+ has no [<Action>].
 
-\subsection{[[Tag]]}
-
-<<[[Tagxxx]] header cases>>=
-Tag_h1,
-Tag_h2,
-Tag_h3,
-Tag_h4,
-Tag_h5,
-Tag_h6,
-@
+\subsection{[[Tag]] and [[Tagxxx]]}
 
 <<enum [[Tagxxx]](mothra)>>=
 /*
@@ -2897,6 +2912,17 @@ enum{
 };
 @
 
+<<[[Tagxxx]] header cases>>=
+Tag_h1,
+Tag_h2,
+Tag_h3,
+Tag_h4,
+Tag_h5,
+Tag_h6,
+@
+
+
+
 <<struct [[Tag]](mothra)>>=
 struct Tag{
     char *name;
@@ -2906,7 +2932,16 @@ struct Tag{
 
 \subsection{Token types}
 
-%yoann: explain
+%claude:
+The lexer emits three kinds of tokens, distinguished by this enum:
+[[TAG]] for an opening tag like \verb+<p>+ or \verb+<a href="...">+
+(with attributes parsed into the [<Pair>] table next to it),
+[[ENDTAG]] for a closer like \verb+</p>+, and [[TEXT]] for any
+run of non-tag characters between them.
+%
+The parser's main loop
+just calls the lexer in a loop and dispatches on these three
+values---no rewriting, no lookahead beyond the current token.
 
 <<enum [[Txx]](mothra)>>=
 /*
@@ -2916,6 +2951,42 @@ enum{
     TAG=1,
     ENDTAG,
     TEXT,
+};
+@
+
+\subsection{[[Pair]]}
+
+%claude:
+[[Pair]] is one HTML attribute on the current tag: the [[name]] is
+[[href]] / [[src]] / [[alt]] / [[width]] / etc., and the [[value]]
+is the right-hand side of the [[=]]. While the lexer is reading an
+opening tag, it fills a fixed-size array of [[Pair]] (the [[g->attr]]
+table sized [[NATTR]] in [[rdhtml.c]]); the per-tag handlers then
+look up the attributes they care about with [[pl_getattr(attr,"href")]].
+Two design notes: the array is allocated once on the
+parser global, not per-tag (no allocation churn), and lookups are a
+linear scan because the attribute count per tag is small (typically
+under five).
+
+<<struct [[Pair]](mothra)>>=
+struct Pair{
+    char *name;
+    char *value;
+};
+@
+
+\subsection{[[Entity]]}
+
+%claude:
+[[Entity]] is one row of the named-character-reference table that turns
+\verb+&amp;+ into U+0026, \verb+&lambda;+ into U+03BB, and so on. The full
+table is one of the larger source files in mothra; lookup is a simple linear
+scan because it only happens during parsing.
+
+<<struct [[Entity]](mothra)>>=
+struct Entity{
+    char *name;
+    Rune value;
 };
 @
 
@@ -2955,27 +3026,6 @@ and a server-side image map, so the click handler must add the
 \verb+#fragment+ scrolling work.
 
 
-%yoann: explain its use
-
-<<struct [[Pair]](mothra)>>=
-struct Pair{
-    char *name;
-    char *value;
-};
-@
-
-%claude:
-[[Entity]] is one row of the named-character-reference table that turns
-\verb+&amp;+ into U+0026, \verb+&lambda;+ into U+03BB, and so on. The full
-table is one of the larger source files in mothra; lookup is a simple linear
-scan because it only happens during parsing.
-
-<<struct [[Entity]](mothra)>>=
-struct Entity{
-    char *name;
-    Rune value;
-};
-@
 
 \section{Mothra's view (text runs, layout, panels)}
 
@@ -3084,7 +3134,13 @@ and image refs, and the [<Pix>] cache holding the decoded bitmaps that
 
 \subsection{Font types}
 
-%yoann: explain
+%claude:
+The styled-text model in mothra has two orthogonal axes: a {\em
+family} and a {\em size}. The family enum has four values---[[ROMAN]]
+(the default proportional roman), [[ITALIC]] (for emphasis), [[BOLD]]
+(for strong/headings), and [[CWIDTH]] (constant-width, used for
+\verb+<pre>+ and \verb+<code>+). 
+
 
 <<enum [[XFonts]](mothra)>>=
 /*
@@ -3098,6 +3154,12 @@ enum{
 };
 @
 
+%claude:
+The size enum also has four values
+([[SMALL]], [[NORMAL]], [[LARGE]], [[ENORMOUS]]) corresponding
+roughly to the [[<small>]] tag, body text, [[<h2>]]--[[<h3>]], and
+[[<h1>]]. 
+
 <<enum [[XFontSize]](mothra)>>=
 /*
  * font sizes
@@ -3110,6 +3172,15 @@ enum{
 };
 @
 
+
+%claude:
+The four-by-four product gives the 16 font slots that
+[[fontlist]] holds and [[pl_whichfont(family, size)]] indexes.
+%
+That is mothra's entire CSS: no point sizes, no font-family stacks,
+no italic-bold combinations.
+
+%yoann: explain
 <<enum [[XLenDir]](mothra)>>=
 /*
  * length direction
@@ -3244,7 +3315,12 @@ The loop itself will dispatch between five event sources: \verb+Ekick+
 loading'' branch at the top of the loop, which scrolls to the
 \verb+#fragment+ if any and resets the busy cursor.
 
-%yoann: explain
+
+%claude:
+The no-argument case falls back to the [[$url]] environment
+variable. This is what makes \verb+plumb -d web foo.html+ from
+another window naturally end up displayed: the plumber spawns
+[[mothra]] with no argv and [[$url]] set to the plumbed string.
 
 <<[[main()]](mothra) switch [[argc]] other cases>>=
 case 0:
@@ -3252,7 +3328,16 @@ case 0:
     break;
 @
 
-%yoann: explain
+%claude:
+[[Eplumb]] and [[Ekick]] are mothra's two user-defined event sources
+on top of libevent's built-in [[Emouse]] and [[Ekeyboard]].
+%
+Libevent returns a bitmask telling which source fired, so each new source
+needs a unique high bit---hence [[128]] and [[256]], well clear of
+the standard mouse/keyboard bits. [[Eplumb]] is set when an external
+program plumbs a URL to us; [[Ekick]] is set when a worker process
+writes one byte to the [[kickpipe]] self-pipe to wake the loop after
+loading new page content.
 
 <<[[main()]](mothra) other locals>>=
 enum { Eplumb = 128, Ekick = 256 };
@@ -3262,11 +3347,27 @@ enum { Eplumb = 128, Ekick = 256 };
 
 \subsection{[[current]]}
 
-%yoann: explain
+%claude:
+[[current]] points to the [<Www>] for the page on screen right now.
+%
+Almost every event handler touches it: a new URL fetch sets it to
+the freshly-allocated [<Www>], a back/forward step rewinds it to a
+neighbour in the [<Www>] history ring, and the loop's per-iteration
+``did the page just finish loading?'' check at the top reads
+\verb+current->finished+ to know whether to scroll to the
+[[#fragment]] and update the cursor. 
 
 <<global [[current]](mothra)>>=
+// option<ref_own<Www>>
 Www *current=nil;
 @
+
+%claude:
+Holding the current page in a
+single global is one of the things that keeps mothra simple---there
+is no notion of multiple tabs or background tabs to disambiguate.
+
+%yoann: explain
 
 <<[[main()]](mothra) in event loop, if [[current]] and no buttons>>=
 if(mouse.buttons==0 && current){
@@ -3286,41 +3387,91 @@ if(mouse.buttons==0 && current){
 
 \subsection{Cohort group}
 
-First, \verb+rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)+ creates a
-``cohort'': mothra's parent process becomes a sentinel that just calls
-\verb+waitpid+ and reaps everything, while the child runs the GUI. The
-flags \verb+RFNOTEG+ and \verb+RFNAMEG+ isolate the cohort's note group
-and namespace, so a \verb+kill+ note delivered to the parent stops every
-helper at once and a per-cohort namespace lets the \verb+-m+ flag take
-effect.
-%yoann1: introduce and explain better cohort
+%claude:
+A {\em cohort} is the \plan idiom for a group of cooperating
+processes that should live and die together: mothra spawns helper
+processes (the [[kickpipe]] reader, [[getpix]] children, [[webfs]]
+slaves, the [[uhtml]]/[[tcs]] charset filters) and they all need to
+go away cleanly when the user closes the window or kills the program.
 
 <<global [[cohort]](mothra)>>=
+// pid
 int cohort = -1;
 @
+
+%claude:
+The shape is two-process: the {\em parent} keeps its original pid,
+calls [[waitpid()]] in a loop,  and reaps every child the cohort forks;
+the {\em child} runs the actual GUI.
+%
+A note sent to the
+parent (typically [[kill]] or the window-close note from rio) stops
+the parent immediately, [[killcohort()]] is run as an [[atexit]]
+handler, and it sends the same note to every other process in the group.
+%yoann1: I don't see waitpid in a loop below
 
 <<[[main()]](mothra) cohort setup>>=
 /*
  * so that we can stop all subprocesses with a note,
  * and to isolate rendezvous from other processes
  */
-if(cohort=rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND)){
+cohort=rfork(RFPROC|RFNOTEG|RFNAMEG|RFREND);
+if(cohort){
+    // parent
     atexit(killcohort);
     notify(catch);
     waitpid();
     exits(nil);
 }
+// else child
 cohort = getpid();
 atexit(killcohort);
 @
 
+%claude:
+The four flags to [[rfork]] each enable one piece of this:
+[[RFPROC]] is the actual fork;
+[[RFNOTEG]] gives the new process its
+own {\em note group} so a note delivered to one process can be
+broadcast to all members of that group (this is what
+[[killcohort()]] uses);
+[[RFNAMEG]] gives it a private {\em namespace}
+so [[-m]]'s alternate mount of [[webfs]] only affects mothra's
+helpers and not the rest of the user's session;
+[[RFREND]] gives a private {\em rendezvous group} so [[libthread]] synchronization
+inside the cohort cannot collide with rendezvous tags in other
+programs.
+%
+The combination is the standard ``isolated subsystem''
+recipe that also shows up in [[rio]], [[acme]], and the namespace
+servers in \book{Kernel}.
+
+
 \subsection{Kick pipe}
 
 %claude:
-The \verb+kickpipe+ self-pipe is
-created and registered as event source \verb+Ekick+; worker threads write
-one byte to it to wake the loop without manufacturing a fake mouse event.
-%yoann1: introduce and explain better kick pipe
+A {\em self-pipe} is the standard Unix trick for waking a blocking
+event loop from another thread. The trick: open a pipe to yourself,
+register the read end as another event source, and let any thread
+that wants to interrupt the loop write a single byte to the write
+end. The kernel makes the read end readable, the loop's [[event()]]
+call returns, and the loop sees a synthetic ``something happened''
+event without anyone having to inject a fake mouse click or
+keystroke.
+
+%claude:
+Mothra needs this because the body of every page is loaded
+asynchronously by a worker process ([[urlproc]]), and when the
+worker finishes appending an [[Rtext]] node to the current page the
+GUI loop has to redraw---but the GUI loop is sitting in
+\verb+event()+ waiting on mouse, keyboard, or plumb, none of which
+the worker can speak. So [[urlproc]] writes one byte to
+[[kickpipe[1]]] and the loop wakes up on [[Ekick]], at which point
+it calls [[updtext(current)]] to redraw. The same trick is used
+under the name ``self-pipe'' in libevent, libev, and most Unix
+single-threaded event-loop frameworks (the [[eventfd]] syscall on
+Linux exists to give a slightly cheaper version of the same
+pattern).
 
 <<[[main()]](mothra) kickpipe initialisation>>=
 if(pipe(kickpipe) < 0)
@@ -3381,12 +3532,14 @@ fillellipse(bullet, Pt(4,4), 3, 3, display->black, ZP);
 \section{Command-line arguments}
 
 %claude:
-The argument grammar is handled by the \verb+ARGBEGIN+ block above. Two flags
-deserve attention: \verb+-d+ enables HTTP-tracing debug output threaded
-through the request paths in \verb+http.c+ and \verb+rdhtml.c+, and
-\verb+-m+ lets you mount a non-default [[webfs]] (handy when running
-two browsers side by side, each with its own cookie jar).
-%yoann1: rephrase, the "argument grammar" is unclear
+The flags themselves are parsed by the \verb+ARGBEGIN+ macro in the
+[[main()]] body above. Two of them deserve a sentence: \verb+-d+
+enables HTTP-tracing debug output threaded through the request paths
+in \verb+http.c+ and \verb+rdhtml.c+ (so you can watch requests and
+responses go past on stderr); \verb+-m+ lets you mount a non-default
+[[webfs]] at a path other than [[/mnt/web]], which is handy when
+running two browsers side by side, each with its own cookie jar and
+namespace.
 
 <<[[main()]](mothra) command line processing part 1>>=
 case 'd': debug=1; break;
@@ -3405,6 +3558,22 @@ case 'm':
 
 
 %yoann: explain those other flags
+%claude:
+Three smaller flags. \verb+-v+ ({\em verbose}) prints HTML parser
+errors to file descriptor 2; without it the parser silently
+recovers from malformed input, so this flag is mostly for debugging
+broken pages.
+%
+\verb+-k+ ({\em kill images}) starts mothra in
+no-image mode---image URLs are not fetched, the [[<img>]] tag is
+rendered as a placeholder instead. Useful on slow connections or
+when you just want the text. The same toggle is reachable at
+runtime via the button-3 menu's [[moth mode]] (which is a
+super-set; see [<mothon()>]).
+%
+\verb+-a+ ({\em alt}) starts mothra
+with the alternate display visible instead of the default---the
+two-panel toggle described above, but pre-flipped at startup.
 
 <<[[main()]](mothra) command line processing part 1>>=
 case 'v': verbose=1; break;
@@ -3491,6 +3660,18 @@ Panel *text;            /* Panel displaying the current www page */
 @
 
 %yoann: explain those alt
+%claude:
+[[alt]] and [[alttext]] are the {\em alternate display}'s root and
+text panel. They mirror [[root]] and [[text]] for the second display
+that the user toggles to with the button-3 [[alt display]] menu
+entry: same widget tree shape, independent state, swapped in and out
+of view by exchanging the panel pointers (see [[hit3()]] case 0).
+%
+Holding the second display as full panel globals---rather than
+constructing it on demand---means the two pages keep their scroll
+position, [[Rtext]] list, and image cache across switches; the cost
+is double the panel allocation at startup, which is negligible for
+two text views.
 
 <<global [[alt]](mothra)>>=
 Panel *alt;     /* the alternate display */
@@ -3594,9 +3775,17 @@ if(!defdisplay){
 
 \subsection{[[eresized()]]}
 
-There is no resize logic: \verb+eresized+ tears down the
-whole layout and rebuilds it with [<mkpanels()>].
-%yoann1: are you sure? I see no call to mkpanels below
+%claude:
+There is no per-widget resize logic in mothra. \verb+eresized+ just
+re-fetches the new view rectangle (via [[getwindow]]) and calls
+[[plpack(root, view->r)]] (and the same for [[alt]]); libpanel then
+walks the existing panel tree and recomputes geometry top-down,
+honouring each panel's [[PACKW]]/[[PACKE]]/[[FILLX]]/[[EXPAND]]
+flags.
+%
+The panels are not torn down or rebuilt---all the
+[<Pix>] caches, [[Rtext]] lists, and per-panel state survive the
+resize untouched.
 
 <<function [[eresized]](mothra)>>=
 void eresized(bool new){
@@ -8868,6 +9057,8 @@ main(int argc, char **argv)
 }
 @
 
+
+
 %claude:
 [<fsopen()>] allocates a per-fid [<Aux>] state buffer when either of the
 two files is opened. For \verb+Xhttp+, the buffer holds two scratch
@@ -11120,6 +11311,37 @@ parsecookie(Cookie *c, char *p, char **e, int isns, char *dom, char *path)
     return nil;
 }
 @
+
+
+%claude:
+[[Aux]] (defined in [[webfs/cookies.c]], not in [[dat.h]]) is the
+per-fid state that the embedded cookie file server hangs off each
+open file in [[/mnt/webcookies/http]]. The [[dom]] and [[path]]
+fields remember which domain/path filter the caller asked about
+(the caller writes them to the fid's [[ctl]] before reading);
+[[inhttp]] and [[outhttp]] hold the marshalled [[Cookie:]] /
+[[Set-Cookie:]] strings the server emits on read; [[ctext]] and
+[[rdoff]] track the formatted text view of the jar for paginated
+reads.
+%
+Each [[walk]] on the fileserver allocates a fresh [[Aux]];
+each [[clunk]] frees it. This is the standard 9P pattern for
+per-fid state.
+
+<<struct [[Aux]](webfs)>>=
+struct Aux
+{
+    char *dom;
+    char *path;
+
+    char *inhttp;
+    char *outhttp;
+    char *ctext;
+    int rdoff;
+};
+@
+
+
 
 <<function [[cookieopen]](webfs)>>=
 void
