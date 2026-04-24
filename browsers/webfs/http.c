@@ -21,14 +21,19 @@ typedef struct HttpState HttpState;
 /*s: struct [[HttpState]](webfs) */
 struct HttpState
 {
-    int fd;
+    fdt fd;
+    Ibuf b;
     Client *c;
+
+    // fields filled by the response parser
     char *location;
     char *setcookie;
-    char *netaddr;
     char *credentials;
+
+    /*s: [[HttpState]](webfs) other fields */
+    char *netaddr;
     char autherror[ERRMAX];
-    Ibuf        b;
+    /*e: [[HttpState]](webfs) other fields */
 };
 /*e: struct [[HttpState]](webfs) */
 

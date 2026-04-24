@@ -41,20 +41,30 @@ int fsdebug;
 /*s: enum Qxxx(webfs) */
 enum
 {
+    // '/'
     Qroot,
+
+    // toplevel entries
     Qrootctl,
-    Qclone,
     Qcookies,
+    Qclone,
+
+    // ??
     Qclient,
+
+    // the /n/xxx entries
     Qctl,
     Qbody,
-    Qbodyext,
     Qcontenttype,
     Qpostbody,
     Qparsed,
+
+    // ??
+    Qbodyext,
+
+    // parsed url components
     Qurl,
     Qscheme,
-    Qschemedata,
     Quser,
     Qpasswd,
     Qhost,
@@ -62,7 +72,14 @@ enum
     Qpath,
     Qquery,
     Qfragment,
+
+    // ??
+    Qschemedata,
+
+    /*s: [[Qxxx]] other cases */
     Qftptype,
+    /*e: [[Qxxx]] other cases */
+
     Qend,
 };
 /*e: enum Qxxx(webfs) */
@@ -93,30 +110,36 @@ struct Tab
 /*e: struct [[Tab]](webfs) */
 
 /*s: global [[tab]](webfs) */
-Tab tab[] =
+Tab tab[Qend] =
 {
-    "/",                        DMDIR|0555,             0,
-    "ctl",                      0666,                   0,
-    "clone",            0666,                   0,
-    "cookies",          0666,                   0,
-    "XXX",              DMDIR|0555,             0,
-    "ctl",                      0666,                   0,
-    "body",             0444,                   0,
-    "XXX",              0444,                   0,
-    "contenttype",      0444,                   0,
-    "postbody", 0666,                   0,
-    "parsed",           DMDIR|0555,             0,
-    "url",                      0444,                   offsetof(Url, url),
-    "scheme",           0444,                   offsetof(Url, scheme),
-    "schemedata",       0444,                   offsetof(Url, schemedata),
-    "user",             0444,                   offsetof(Url, user),
-    "passwd",           0444,                   offsetof(Url, passwd),
-    "host",             0444,                   offsetof(Url, host),
-    "port",             0444,                   offsetof(Url, port),
-    "path",             0444,                   offsetof(Url, path),
-    "query",            0444,                   offsetof(Url, query),
-    "fragment", 0444,                   offsetof(Url, fragment),
-    "ftptype",          0444,                   offsetof(Url, ftp.type),
+    [Qroot]        = { "/",           DMDIR|0555, 0 },
+
+    [Qrootctl]     = { "ctl",         0666,       0 },
+    [Qclone]       = { "clone",       0666,       0 },
+    [Qcookies]     = { "cookies",     0666,       0 },
+
+    [Qclient]      = { "XXX",         DMDIR|0555, 0 },
+    [Qctl]         = { "ctl",         0666,       0 },
+    [Qbody]        = { "body",        0444,       0 },
+    [Qbodyext]     = { "XXX",         0444,       0 },
+
+    [Qcontenttype] = { "contenttype", 0444,       0 },
+    [Qpostbody]    = { "postbody",    0666,       0 },
+    [Qparsed]      = { "parsed",      DMDIR|0555, 0 },
+
+    [Qurl]         = { "url",         0444,       offsetof(Url, url)        },
+    [Qscheme]      = { "scheme",      0444,       offsetof(Url, scheme)     },
+    [Qschemedata]  = { "schemedata",  0444,       offsetof(Url, schemedata) },
+    [Quser]        = { "user",        0444,       offsetof(Url, user)       },
+    [Qpasswd]      = { "passwd",      0444,       offsetof(Url, passwd)     },
+    [Qhost]        = { "host",        0444,       offsetof(Url, host)       },
+    [Qport]        = { "port",        0444,       offsetof(Url, port)       },
+    [Qpath]        = { "path",        0444,       offsetof(Url, path)       },
+    [Qquery]       = { "query",       0444,       offsetof(Url, query)      },
+    [Qfragment]    = { "fragment",    0444,       offsetof(Url, fragment)   },
+    /*s: [[tab]](webfs) other elements */
+    [Qftptype]     = { "ftptype",     0444,       offsetof(Url, ftp.type)   },
+    /*e: [[tab]](webfs) other elements */
 };
 /*e: global [[tab]](webfs) */
 

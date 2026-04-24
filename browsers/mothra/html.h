@@ -177,6 +177,14 @@ int strtolength(Hglob *g, int dir, char *str);
 enum{
     Tag_comment,
 
+    /*s: [[Tagxxx]] header cases */
+    Tag_h1,
+    Tag_h2,
+    Tag_h3,
+    Tag_h4,
+    Tag_h5,
+    Tag_h6,
+    /*e: [[Tagxxx]] header cases */
     Tag_a,
     Tag_abbr,
     Tag_acronym,
@@ -207,12 +215,6 @@ enum{
     Tag_font,
     Tag_form,
     Tag_frame,  /* rm 5.8.97 */
-    Tag_h1,
-    Tag_h2,
-    Tag_h3,
-    Tag_h4,
-    Tag_h5,
-    Tag_h6,
     Tag_head,
     Tag_hr,
     Tag_html,

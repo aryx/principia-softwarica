@@ -1018,10 +1018,12 @@ freeurl(Url *u)
     case UShttp:
         free(u->http.page_spec);
         break;
+    /*s: [[freeurl()]] switch scheme other cases */
     case USftp:
         free(u->ftp.path_spec);
         free(u->ftp.type);
         break;
+    /*e: [[freeurl()]] switch scheme other cases */
     }
     free(u);
 }
@@ -1102,10 +1104,12 @@ copyurl(Url *u)
     case UShttp:
         dupp(&v->http.page_spec);
         break;
+    /*s: [[copyurl()]] switch scheme other cases */
     case USftp:
         dupp(&v->ftp.path_spec);
         dupp(&v->ftp.type);
         break;
+    /*e: [[copyurl()]] switch scheme other cases */
     }
     return v;
 }

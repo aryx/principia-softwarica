@@ -1513,6 +1513,7 @@ code contained in the file is primarily discussed.
 
 \begin{table*}[tbh!]
 \begin{center}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lcllr}
 \toprule
 {\bf Component}            & {\bf Ch.}                   & {\bf File}                  & {\bf Main entities}                            & {\bf LOC} \\
@@ -1549,6 +1550,7 @@ Plumb dispatch             & \ref{chap:events}           & [[webfs/plumb.c]]    
 Total                      &                             &                             &                                                & 12560 \\
 \bottomrule
 \end{tabular}
+}% end resizebox
 \caption{Source files of the \plan browser stack covered in this book.
 Tables of charset-specific data (big5, gbk, jis, ksc, \ldots)
 in [[tcs/]] are not listed.
@@ -1667,7 +1669,7 @@ Two things to notice. First, modern Chrome and \plan happen to
 reasons: Chrome does it for sandboxing (a compromise in one renderer
 should not give the attacker the cookie jar), \plan does it for
 sharing and replaceability (any program can mount \verb+/mnt/web+
-and any user can swap out \verb+webfs+). Second, the classic
+and any user can swap out [[webfs]]). Second, the classic
 Linux/Unix browser is the odd one out: it links everything together
 because that is the path of least resistance when libraries are the
 unit of composition.
@@ -1858,10 +1860,10 @@ error management, and shared utilities.
 %claude:
 In this chapter I introduce the data structures that the rest of the book
 revolves around. They split cleanly along the boundary between the two
-processes that together make up the browser: \verb+webfs+ owns
+processes that together make up the browser: [[webfs]] owns
 the network-facing types ([<Url>], [<Client>], [<Cookie>], [<Jar>], [<Ibuf>])
-and \verb+mothra+ owns the rendering types ([<Tag>], [<Action>], [<Pair>],
-[<Entity>], [<Www>]). The 9P file interface at \verb+/mnt/web+ is the only
+and [[mothra]] owns the rendering types ([<Tag>], [<Action>], [<Pair>],
+[<Entity>], [<Www>]). The 9P file interface at [[/mnt/web]] is the only
 thing connecting them; no shared header, no linked library.
 
 %claude:
@@ -1886,28 +1888,30 @@ The relationships between the main types fit on one diagram:
 \end{verbatim}
 
 %claude:
-A web request becomes a \verb+Client+ inside \verb+webfs+ and a \verb+Www+
-inside \verb+mothra+. Both keep their own copy of the parsed [<Url>] (each
-side has its own \verb+url.c+ implementation, since serializing parsed URLs
+A web request becomes a [[Client]] inside [[webfs]] and a [[Www]]
+inside [[mothra]]. Both keep their own copy of the parsed [[Url]] (each
+side has its own [[url.c]] implementation, since serializing parsed URLs
 across the file-system boundary would be silly). Cookies stay entirely on
-the \verb+webfs+ side; mothra never sees them. The HTML parse tree never
+the [[webfs]] side; mothra never sees them. The HTML parse tree never
 crosses the boundary either: mothra reads the body bytes from
 \verb+/mnt/web/N/body+, parses them locally into a flat list of
-\verb+Rtext+ nodes (with \verb+Action+ side-data), and hands that to
-\verb+libpanel+ for layout.
+[[Rtext]] nodes (with [[Action]] side-data), and hands that to
+[[libpanel]] for layout.
 
 %claude:
 A note on naming. Several types have the same C name in both programs but
-different definitions: \verb+webfs+'s \verb+struct Url+ carries a small
+different definitions: [[webfs]]'s \verb+struct Url+ carries a small
 vtable for scheme-specific I/O ([[open]], [[read]], [[close]]) used inside
 the file server, while \verb+mothra+'s \verb+struct Url+ is just the parsed
 fields it needs to display, plus a couple of book-keeping flags. I tag the
 chunks \verb+(webfs)+ and \verb+(mothra)+ to disambiguate.
 
-\section{URLs}
+\section{[[webfs]] URLs}
+
+\subsection{[[Url]]}
 
 %claude:
-A [[Url]] in \verb+webfs+ is two things in one struct: the parsed components
+A [[Url]] in [[webfs]] is two things in one struct: the parsed components
 of the URL (\verb+scheme+, \verb+host+, \verb+path+, \verb+query+,
 \verb+fragment+, plus userinfo for FTP), and a tiny per-scheme vtable
 ([[open]], [[read]], [[close]]) so the request loop in
@@ -1917,14 +1921,11 @@ about HTTP, FTP, or \verb+file://+.
 <<struct [[Url]](webfs)>>=
 struct Url
 {
-    int         ischeme;
+    // ref_own<string>, the full URL string
     char*       url;
+
+    // the scheme://[user[:password]@]host[:port]/path[?query][#fragment] components
     char*       scheme;
-    int         (*open)(Client*, Url*);
-    int         (*read)(Client*, Req*);
-    void                (*close)(Client*);
-    char*       schemedata;
-    char*       authority;
     char*       user;
     char*       passwd;
     char*       host;
@@ -1932,15 +1933,15 @@ struct Url
     char*       path;
     char*       query;
     char*       fragment;
+
+    // enum<USCheme>
+    int         ischeme;
+    <<[[Url]](webfs) per-scheme methods>>
     union {
-        struct {
-            char *page_spec;
-        } http;
-        struct {
-            char *path_spec;
-            char *type;
-        } ftp;
+        <<[[Url]](webfs) union members>>
     };
+
+    <<[[Url]](webfs) other fields>>
 };
 @
 
@@ -1951,26 +1952,37 @@ struct Url
  * If this is the case, only the "fragment" and "url" members will have
  * meaning, and the given URL structure may not be used as a base URL itself.
  */
-enum
+enum UScheme
 {
     USunknown,
+
     UShttp,
     UShttps,
     USftp,
     USfile,
+
     UScurrent,
 };
 @
 
-%claude:
-The first three function pointers are what makes [[Url]] more than a record.
-\verb+UShttp+ initializes them to \verb+httpopen+/\verb+httpread+/\verb+httpclose+,
-\verb+USftp+ to the FTP equivalents, and so on. Once an URL is parsed,
-the \verb+webfs+ request loop never branches on \verb+ischeme+ again: it
-just calls \verb+u->open(c, u)+ and lets C dispatch.
+<<[[Url]](webfs) per-scheme methods>>=
+int         (*open)(Client*, Url*);
+int         (*read)(Client*, Req*);
+void        (*close)(Client*);
+@
+
 
 %claude:
-The vtable lives inline in the [<Url>] itself, not as a separate
+The function pointers are what makes [[Url]] more than a record.
+[[UShttp]] initializes them to [<httpopen()>], [<httpread()>], and [<httpclose()>],
+[[USftp]] to the FTP equivalents, and so on.
+%
+Once an URL is parsed,
+the [[webfs]] request loop never branches on [[ischeme]] again: it
+just calls [[url->open(c, url)]] and lets C dispatch.
+
+%claude:
+The vtable lives inline in the [[Url]] itself, not as a separate
 indirection:
 
 \begin{verbatim}
@@ -1992,19 +2004,24 @@ functions and one row in [<postparse>], with no edits to the
 hot-path code.
 
 
+%yoann: explain page_spec
+
+<<[[Url]](webfs) union members>>=
+struct {
+    char *page_spec;
+} http;
+@
+
+
 %claude:
 Concretely, given the URL
 \verb+https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs+,
-the [<Url>] struct is filled in like:
+the [[Url]] struct is filled in like:
 
 \begin{verbatim}
-    ischeme    = UShttps
     url        = "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
+
     scheme     = "https"
-    open       = httpopen        \
-    read       = httpread         > vtable bound to https
-    close      = httpclose       /
-    authority  = "alice@en.wikipedia.org:443"
     user       = "alice"
     passwd     = nil
     host       = "en.wikipedia.org"
@@ -2012,53 +2029,18 @@ the [<Url>] struct is filled in like:
     path       = "/wiki/Cat"
     query      = "lang=en"
     fragment   = "refs"
+
+    ischeme    = UShttps
+    open       = httpopen        \
+    read       = httpread         > vtable bound to https
+    close      = httpclose       /
+    authority  = "alice@en.wikipedia.org:443"
     http.page_spec = "/wiki/Cat?lang=en"   (path + ? + query)
 \end{verbatim}
 %
 The full URL string \verb+u->url+ is kept alongside the components as a
-canonical serialization, maintained by [<rewriteurl>] (covered later in
+canonical serialization, maintained by [<rewriteurl()>] (covered later in
 this section).
-
-
-
-%claude:
-[[SplitUrl]] is the parser's intermediate form: pairs of pointers into the
-input string, one per RFC 3986 component. No allocation happens during
-parsing; only after the components are validated does \verb+url.c+ copy them
-into the heap-allocated [<Url>]. For our example URL above, the
-[[SplitUrl]] looks like:
-
-<<struct [[SplitUrl]](webfs)>>=
-struct SplitUrl
-{
-    struct {
-        char *s;
-        char *e;
-    } url, scheme, authority, path, query, fragment;
-};
-@
-
-
-\begin{verbatim}
-    input string:   "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
-                     ^   ^^ ^                       ^^         ^^      ^^   ^
-                     |    \  \______ authority _____/ \__ path _/  \query/ \frag/
-                     |     +- (skip ":")
-                     +- scheme
-
-    SplitUrl:
-        url       = (s -> "https...", e -> end)
-        scheme    = (s -> "https",    e -> "h"+5)
-        authority = (s -> "alice@...", e -> "/wiki/Cat...")
-        path      = (s -> "/wiki/Cat", e -> "?lang=en...")
-        query     = (s -> "lang=en",   e -> "#refs")
-        fragment  = (s -> "refs",      e -> end)
-\end{verbatim}
-
-Each (s, e) pair is a half-open slice into the original input.
-The next phase (\verb+parse_scheme+, \verb+parse_authority+, etc.)
-validates each slice and only then [[estredup]]s it into the
-[<Url>] struct's heap-allocated fields.
 
 
 <<function [[freeurl]](webfs)>>=
@@ -2082,21 +2064,9 @@ freeurl(Url *u)
     case UShttp:
         free(u->http.page_spec);
         break;
-    case USftp:
-        free(u->ftp.path_spec);
-        free(u->ftp.type);
-        break;
+    <<[[freeurl()]] switch scheme other cases>>
     }
     free(u);
-}
-@
-
-<<function [[dupp]](webfs)>>=
-static void
-dupp(char **p)
-{
-    if(*p)
-        *p = estrdup(*p);
 }
 @
 
@@ -2124,20 +2094,25 @@ copyurl(Url *u)
     case UShttp:
         dupp(&v->http.page_spec);
         break;
-    case USftp:
-        dupp(&v->ftp.path_spec);
-        dupp(&v->ftp.type);
-        break;
+    <<[[copyurl()]] switch scheme other cases>>
     }
     return v;
 }
 @
 
+
+%XXX
+<<[[Url]](webfs) other fields>>=
+char*       schemedata;
+char*       authority;
+@
+
+
 %claude:
-\verb+rewriteurl+ enforces an invariant: \verb+u->url+ is always the canonical
+[[rewriteurl()]] enforces an invariant: \verb+u->url+ is always the canonical
 serialization of \verb+u+'s components. Whenever the request loop mutates a
 field (e.g.\ following a redirect, or filling in a relative URL against a
-base), it calls \verb+rewriteurl+ to re-derive the string. That string is
+base), it calls [[rewriteurl()]] to re-derive the string. That string is
 what the kernel hands back when a client reads \verb+/mnt/web/N/parsed/url+.
 
 <<function [[rewriteurl]](webfs)>>=
@@ -2163,6 +2138,63 @@ rewriteurl(Url *u)
 }
 @
 
+
+
+
+\subsection{[[SplitUrl]]}
+
+%claude:
+[[SplitUrl]] is the parser's intermediate form: pairs of pointers into the
+input string, one per RFC 3986 component. No allocation happens during
+parsing; only after the components are validated does \verb+url.c+ copy them
+into the heap-allocated [<Url>].
+
+<<struct [[SplitUrl]](webfs)>>=
+struct SplitUrl
+{
+    struct {
+        char *s;
+        char *e;
+    } url, scheme, authority, path, query, fragment;
+};
+@
+
+For our example URL above, the [[SplitUrl]] looks like:
+
+\begin{verbatim}
+    input string:   "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
+                     ^   ^^ ^                       ^^         ^^      ^^   ^
+                     |    \  \______ authority _____/ \__ path _/  \query/ \frag/
+                     |     +- (skip ":")
+                     +- scheme
+
+    SplitUrl:
+        url       = (s -> "https...", e -> end)
+        scheme    = (s -> "https",    e -> "h"+5)
+        authority = (s -> "alice@...", e -> "/wiki/Cat...")
+        path      = (s -> "/wiki/Cat", e -> "?lang=en...")
+        query     = (s -> "lang=en",   e -> "#refs")
+        fragment  = (s -> "refs",      e -> end)
+\end{verbatim}
+
+Each (s, e) pair is a half-open slice into the original input.
+The next phase ([<parse_scheme()>], [<parse_authority()>], etc.)
+validates each slice and only then [[estredup]]s it into the
+[[Url]] struct's heap-allocated fields.
+
+
+
+<<function [[dupp]](webfs)>>=
+static void
+dupp(char **p)
+{
+    if(*p)
+        *p = estrdup(*p);
+}
+@
+
+
+%XXX
 <<function [[seturlquery]](webfs)>>=
 int
 seturlquery(Url *u, char *query)
@@ -2184,9 +2216,13 @@ seturlquery(Url *u, char *query)
 
 \section{HTTP requests and responses}
 
+%yoann: no http request and response proper type? instead?
+
+\subsection{[[HttpState]]}
+
 %claude:
-[<HttpState>] is what \verb+http.c+ keeps for each in-flight request. It
-holds the network file descriptor, a buffered reader [<Ibuf>] (so headers
+[[HttpState]] is what \verb+http.c+ in [[webfs]] keeps for each in-flight request.
+It holds the network file descriptor, a buffered reader [<Ibuf>] (so headers
 can be parsed line by line without one [[read]] per byte), and three out-
 parameters that the response parser fills in: a captured \verb+Location+ for
 redirects, captured \verb+Set-Cookie+ headers to forward to
@@ -2195,21 +2231,132 @@ redirects, captured \verb+Set-Cookie+ headers to forward to
 <<struct [[HttpState]](webfs)>>=
 struct HttpState
 {
-    int fd;
+    fdt fd;
+    Ibuf b;
     Client *c;
+
+    // fields filled by the response parser
     char *location;
     char *setcookie;
-    char *netaddr;
     char *credentials;
-    char autherror[ERRMAX];
-    Ibuf        b;
+
+    <<[[HttpState]](webfs) other fields>>
 };
 @
+
+%XXX
+<<[[HttpState]](webfs) other fields>>=
+char *netaddr;
+char autherror[ERRMAX];
+@
+
+
+\subsection{[[Ibuf]]}
+
+%claude:
+[<Ibuf>] is a 4~KiB single-reader buffer wrapped around an [<Ioproc>]
+descriptor. It exists so the response parser can do \verb+readline+-style
+work without one [[read]] syscall per character. The same struct is shared
+by the HTTP and FTP back-ends.
+
+<<struct [[Ibuf]](webfs)>>=
+/* simple buffered i/o for network connections; shared by http, ftp */
+struct Ibuf
+{
+    fdt fd;
+    Ioproc *io;
+    char buf[4096];
+    char *rp, *wp;
+};
+@
+
+
+\subsection{[[Client]]}
+
+%claude:
+[[Client]] is the per-connection state of [[webfs]]: one of these for
+every \verb+/mnt/web/N/+ directory currently open. The fields divide into
+three groups.
+%
+The URLs (\verb+url+, \verb+baseurl+) and control settings
+(\verb+ctl+) are configured by writes to \verb+ctl+.
+%
+The body and headers
+(\verb+contenttype+, \verb+postbody+, \verb+redirect+, \verb+authenticate+)
+are filled in once the response arrives. The plumbing
+(\verb+creq+, \verb+io+, \verb+iobusy+, \verb+ref+) keeps a dedicated I/O
+thread alive across the long network round-trip.
+
+<<struct [[Client]](webfs)>>=
+struct Client
+{
+    // URls and control settings
+    Url *url;
+    Url *baseurl;
+    Ctl ctl;
+
+    // filled once the response arrives
+    char *contenttype;
+    char *postbody;
+    char *redirect;
+    char *authenticate;
+
+    // Plumbing
+    Channel *creq;      /* chan(Req*) */
+    Ioproc *io;
+    int iobusy;
+    int ref;
+
+    <<[[Client]](webfs) other fields>>
+};
+@
+
+%XXX
+<<[[Client]](webfs) other fields>>=
+int num;
+int plumbed;
+
+char *ext;
+int npostbody;
+int havepostbody;
+int bodyopened;
+void *aux;
+@
+
+
+\subsection{[[Ctl]] and [[Aux]]}
+
+%yoann: explain
+
+<<struct [[Ctl]](webfs)>>=
+struct Ctl
+{
+    int acceptcookies;
+    int sendcookies;
+    int redirectlimit;
+    char        *useragent;
+};
+@
+
+%yoann: explain
+
+<<struct [[Aux]](webfs)>>=
+struct Aux
+{
+    char *dom;
+    char *path;
+    char *inhttp;
+    char *outhttp;
+    char *ctext;
+    int rdoff;
+};
+@
+
 
 \section{The [[/mnt/web]] interface}
 
 %claude:
-The shape of \verb+webfs+'s file tree is the entire public API of the
+The shape of [[webfs]]'s file tree is the entire public API of the
 network side of the browser. A client process opens \verb+/mnt/web/clone+,
 reads back a connection number~\verb+N+, then writes \verb+get http://...+
 to \verb+/mnt/web/N/ctl+ and reads bytes from \verb+/mnt/web/N/body+. There
@@ -2238,7 +2385,7 @@ required linking a library. The same sequence inside [[mothra]]
 [[open]], [[read]], [[write]], and a few [[snprint]]s.
 
 %claude:
-The first chunk is the comment at the top of \verb+webfs/fs.c+ describing
+The chunk below which is the comment at the top of \verb+webfs/fs.c+ describes
 that tree. I reproduce it verbatim because the comment is itself the
 specification:
 
@@ -2267,9 +2414,11 @@ specification:
  */
 @
 
+\subsection{[[Qxxx]]}
+
 %claude:
-Every entry in that tree corresponds to one of these \verb+Qxxx+
-constants. \verb+webfs+'s 9P implementation uses the value of
+Every entry in the previous tree corresponds to one of the \verb+Qxxx+
+constants below. [[webfs]]'s 9P implementation uses the value of
 \verb+(Qid).path+ to remember which file a fid points at; this enum is the
 encoding. \verb+Qclone+ and \verb+Qcookies+ live at the root, while everything
 from \verb+Qctl+ onwards lives inside a per-connection directory whose own
@@ -2278,20 +2427,30 @@ from \verb+Qctl+ onwards lives inside a per-connection directory whose own
 <<enum Qxxx(webfs)>>=
 enum
 {
+    // '/'
     Qroot,
+
+    // toplevel entries
     Qrootctl,
-    Qclone,
     Qcookies,
+    Qclone,
+
+    // ??
     Qclient,
+
+    // the /n/xxx entries
     Qctl,
     Qbody,
-    Qbodyext,
     Qcontenttype,
     Qpostbody,
     Qparsed,
+
+    // ??
+    Qbodyext,
+
+    // parsed url components
     Qurl,
     Qscheme,
-    Qschemedata,
     Quser,
     Qpasswd,
     Qhost,
@@ -2299,13 +2458,20 @@ enum
     Qpath,
     Qquery,
     Qfragment,
-    Qftptype,
+
+    // ??
+    Qschemedata,
+
+    <<[[Qxxx]] other cases>>
+
     Qend,
 };
 @
 
+\subsection{[[Tab]]}
+
 %claude:
-[<Tab>] is the static table mapping each \verb+Qxxx+ to its name and Unix
+[[Tab]] is the static table mapping each \verb+Qxxx+ to its name and Unix
 permission bits. Walk requests look up an entry by name; \verb+stat+ requests
 look it up by \verb+offset+ (which equals the \verb+Qxxx+ value).
 
@@ -2318,8 +2484,43 @@ struct Tab
 };
 @
 
+<<global [[tab]](webfs)>>=
+Tab tab[Qend] =
+{
+    [Qroot]        = { "/",           DMDIR|0555, 0 },
+
+    [Qrootctl]     = { "ctl",         0666,       0 },
+    [Qclone]       = { "clone",       0666,       0 },
+    [Qcookies]     = { "cookies",     0666,       0 },
+
+    [Qclient]      = { "XXX",         DMDIR|0555, 0 },
+    [Qctl]         = { "ctl",         0666,       0 },
+    [Qbody]        = { "body",        0444,       0 },
+    [Qbodyext]     = { "XXX",         0444,       0 },
+
+    [Qcontenttype] = { "contenttype", 0444,       0 },
+    [Qpostbody]    = { "postbody",    0666,       0 },
+    [Qparsed]      = { "parsed",      DMDIR|0555, 0 },
+
+    [Qurl]         = { "url",         0444,       offsetof(Url, url)        },
+    [Qscheme]      = { "scheme",      0444,       offsetof(Url, scheme)     },
+    [Qschemedata]  = { "schemedata",  0444,       offsetof(Url, schemedata) },
+    [Quser]        = { "user",        0444,       offsetof(Url, user)       },
+    [Qpasswd]      = { "passwd",      0444,       offsetof(Url, passwd)     },
+    [Qhost]        = { "host",        0444,       offsetof(Url, host)       },
+    [Qport]        = { "port",        0444,       offsetof(Url, port)       },
+    [Qpath]        = { "path",        0444,       offsetof(Url, path)       },
+    [Qquery]       = { "query",       0444,       offsetof(Url, query)      },
+    [Qfragment]    = { "fragment",    0444,       offsetof(Url, fragment)   },
+    <<[[tab]](webfs) other elements>>
+};
+@
+
+
+\subsection{[[Ctab]]}
+
 %claude:
-[<Ctab>] is the parallel table for \verb+ctl+ commands: each entry maps a
+[[Ctab]] is the parallel table for \verb+ctl+ commands: each entry maps a
 keyword (e.g. \verb+useragent+, \verb+headers+) to its type and to the
 offset of the corresponding field inside [<Ctl>] or [<Client>]. Writes to
 \verb+ctl+ become essentially data-driven assignments, with [<Xtype>] picking
@@ -2344,92 +2545,15 @@ enum
 };
 @
 
-<<struct [[Ctl]](webfs)>>=
-struct Ctl
-{
-    int acceptcookies;
-    int sendcookies;
-    int redirectlimit;
-    char        *useragent;
-};
-@
 
-<<struct [[Aux]](webfs)>>=
-struct Aux
-{
-    char *dom;
-    char *path;
-    char *inhttp;
-    char *outhttp;
-    char *ctext;
-    int rdoff;
-};
-@
+
+\section{Cookies}
+
+\subsection{[[Cookie]]}
 
 %claude:
-[<Client>] is the per-connection state of \verb+webfs+: one of these for
-every \verb+/mnt/web/N/+ directory currently open. The fields divide into
-three groups. The URLs (\verb+url+, \verb+baseurl+) and control settings
-(\verb+ctl+) are configured by writes to \verb+ctl+. The body and headers
-(\verb+contenttype+, \verb+postbody+, \verb+redirect+, \verb+authenticate+)
-are filled in once the response arrives. The plumbing
-(\verb+creq+, \verb+io+, \verb+iobusy+, \verb+ref+) keeps a dedicated I/O
-thread alive across the long network round-trip.
-
-<<struct [[Client]](webfs)>>=
-struct Client
-{
-    Url *url;
-    Url *baseurl;
-    Ctl ctl;
-    Channel *creq;      /* chan(Req*) */
-    int num;
-    int plumbed;
-    char *contenttype;
-    char *postbody;
-    char *redirect;
-    char *authenticate;
-    char *ext;
-    int npostbody;
-    int havepostbody;
-    int iobusy;
-    int bodyopened;
-    Ioproc *io;
-    int ref;
-    void *aux;
-};
-@
-
-%claude:
-[<Ibuf>] is a 4~KiB single-reader buffer wrapped around an [[Ioproc]]
-descriptor. It exists so the response parser can do \verb+readline+-style
-work without one [[read]] syscall per character. The same struct is shared
-by the HTTP and FTP back-ends.
-
-<<struct [[Ibuf]](webfs)>>=
-/* simple buffered i/o for network connections; shared by http, ftp */
-struct Ibuf
-{
-    int fd;
-    Ioproc *io;
-    char buf[4096];
-    char *rp, *wp;
-};
-@
-
-\section{Cookies ([[Jar]], [[Cookie]])}
-
-%claude:
-A [[Cookie]] in \verb+webfs+ carries everything Set-Cookie spelled out
-(name, value, domain, path, expires, secure) plus three book-keeping
-fields. \verb+netscapestyle+ remembers whether the original header used the
-Netscape format (no \verb+Version+ attribute, slightly different domain
-matching) so that the cookie is sent back in the same shape it was given.
-\verb+explicitdom+ and \verb+explicitpath+ remember whether the server set
-those fields itself or whether \verb+webfs+ defaulted them from the request
-URL --- the spec says the two cases match differently. \verb+ondisk+ flags
-cookies already persisted to \verb+/usr/web/cookies+; the in-memory jar can
-then be repacked without rewriting unchanged entries.
+A [[Cookie]] in [[webfs]] carries everything Set-Cookie spelled out
+(name, value, domain, path, expires, secure).
 
 <<struct [[Cookie]](webfs)>>=
 struct Cookie
@@ -2439,20 +2563,41 @@ struct Cookie
     char*       value;
     char*       dom;            /* starts with . */
     char*       path;
-    char*       version;
-    char*       comment;                /* optional, may be nil */
+    uint        expire;         /* time of expiration: ~0 means when webcookies dies */
+    bool        secure;
 
-    uint                expire;         /* time of expiration: ~0 means when webcookies dies */
-    int         secure;
-    int         explicitdom;    /* dom was explicitly set */
-    int         explicitpath;   /* path was explicitly set */
-    int         netscapestyle;
-
-    /* internal info */
-    int         deleted;
-    int         mark;
-    int         ondisk;
+    <<[[Cookie]](webfs) other fields>>
 };
+@
+
+
+<<[[Cookie]](webfs) other fields>>=
+bool         explicitdom;    /* dom was explicitly set */
+bool         explicitpath;   /* path was explicitly set */
+@
+
+%plus three book-keeping
+%fields. \verb+netscapestyle+ remembers whether the original header used the
+%Netscape format (no \verb+Version+ attribute, slightly different domain
+%matching) so that the cookie is sent back in the same shape it was given.
+%\verb+explicitdom+ and \verb+explicitpath+ remember whether the server set
+%those fields itself or whether [[webfs]] defaulted them from the request
+%URL --- the spec says the two cases match differently. \verb+ondisk+ flags
+%cookies already persisted to \verb+/usr/web/cookies+; the in-memory jar can
+%then be repacked without rewriting unchanged entries.
+
+
+%XXX
+<<[[Cookie]](webfs) other fields>>=
+char*       version;
+char*       comment;                /* optional, may be nil */
+
+int         netscapestyle;
+
+/* internal info */
+int         deleted;
+int         mark;
+bool         ondisk;
 @
 
 
@@ -2474,6 +2619,7 @@ Wire form:
     path           = "/"
     expire         = 1762416577          <- Unix time of "06-Nov-2026 08:49:37 GMT"
     secure         = 1                   <- only sent over https://
+
     explicitdom    = 1                   <- server set Domain= explicitly
     explicitpath   = 1                   <- server set Path= explicitly
     netscapestyle  = 1                   <- no Version attr in source
@@ -2488,29 +2634,43 @@ echo it back as \verb+Cookie: sess=abc123+.
 
 
 
+\subsection{[[Jar]]}
 
 %claude:
-The [<Jar>] is a flat append-only [<Cookie>] array (\verb+nc+ filled out of
-\verb+mc+ allocated). The \verb+qid+ and \verb+dirty+ fields support the
-multi-process lock-file protocol: if a second \verb+webfs+ instance has
-modified \verb+/usr/web/cookies+ on disk (its qid changed), the in-memory
-jar is reread before any cookie operation is allowed to commit.
+The [[Jar]] is a flat append-only [<Cookie>] array (\verb+nc+ filled out of
+\verb+mc+ allocated). 
 
 <<struct [[Jar]](webfs)>>=
 struct Jar
 {
+    // array<ref_own<Cookie>>, len = nc, allocated = mc
     Cookie      *c;
     int         nc;
     int         mc;
 
-    Qid         qid;
-    int         dirty;
-    char                *file;
-    char                *lockfile;
+    <<[[Jar]](webfs) other fields>>
 };
 @
 
+%XXX
+<<[[Jar]](webfs) other fields>>=
+Qid         qid;
+int         dirty;
+char                *file;
+char                *lockfile;
+@
+%claude:
+The \verb+qid+ and \verb+dirty+ fields support the
+multi-process lock-file protocol: if a second [[webfs]] instance has
+modified \verb+/usr/web/cookies+ on disk (its qid changed), the in-memory
+jar is reread before any cookie operation is allowed to commit.
+
+
 \section{Charset tables}
+
+%yoann: say tables ommitted, in Extra code chapter; maybe give one example verbatim, like the Western europe with accents?
+
+
 
 \section{HTML parse tree (mothra's flat item list)}
 
@@ -2521,7 +2681,7 @@ not here): one per text run or per atomic widget like an image or form
 field. ``Tag dispatch'' just means: when the lexer recognizes
 \verb+<b>+ it switches the current font, when it recognizes \verb+</b>+ it
 switches back, when it recognizes \verb+<img>+ it appends one
-[<Rtext>]+[<Action>] pair, and so on. The tree the W3C calls a DOM never
+[[Rtext]]+[<Action>] pair, and so on. The tree the W3C calls a DOM never
 exists; what reaches the layout engine is the same kind of stream a text
 editor would use to display a styled document.
 
@@ -2532,7 +2692,7 @@ the per-tag side-data attached to special items ([<Action>], [<Pair>]).
 
 %claude:
 Concretely, the input fragment
-\verb+Click <a href="X">here</a> for X+ becomes three [<Rtext>] nodes:
+\verb+Click <a href="X">here</a> for X+ becomes three [[Rtext]] nodes:
 
 \begin{verbatim}
     Rtext       text         font   action                  flags
@@ -2554,6 +2714,17 @@ text run inside captured that frame into its [<Action>], and the
 The \verb+</a>+ close tag popped the frame, which is why
 \verb+" for X"+ has no [<Action>].
 
+\subsection{[[Tag]]}
+
+<<[[Tagxxx]] header cases>>=
+Tag_h1,
+Tag_h2,
+Tag_h3,
+Tag_h4,
+Tag_h5,
+Tag_h6,
+@
+
 <<enum [[Tagxxx]](mothra)>>=
 /*
  * Token names for the html parser.
@@ -2564,6 +2735,7 @@ The \verb+</a>+ close tag popped the frame, which is why
 enum{
     Tag_comment,
 
+    <<[[Tagxxx]] header cases>>
     Tag_a,
     Tag_abbr,
     Tag_acronym,
@@ -2594,12 +2766,6 @@ enum{
     Tag_font,
     Tag_form,
     Tag_frame,  /* rm 5.8.97 */
-    Tag_h1,
-    Tag_h2,
-    Tag_h3,
-    Tag_h4,
-    Tag_h5,
-    Tag_h6,
     Tag_head,
     Tag_hr,
     Tag_html,
@@ -2661,6 +2827,10 @@ struct Tag{
 };
 @
 
+\subsection{Token types}
+
+%yoann: explain
+
 <<enum [[Txx]](mothra)>>=
 /*
  * Token types
@@ -2672,26 +2842,43 @@ enum{
 };
 @
 
+\subsection{[[Action]]}
+
 %claude:
-[<Action>] is the side-data hung off any [<Rtext>] that is more than plain
-text. The fields are tagged by which one is non-nil: an \verb+<a>+ anchor
-sets \verb+link+; an \verb+<img>+ sets \verb+image+; an \verb+<input>+ sets
-\verb+field+. \verb+ismap+ is the rare case where one item is both a link
-and a server-side image map, so the click handler must add the
-\verb+?x,y+ coordinate suffix. \verb+name+ is the anchor name that lets
-\verb+#fragment+ scrolling work.
+[[Action]] is the side-data hung off any [[Rtext]] that is more than plain
+text. 
 
 <<struct [[Action]](mothra)>>=
 struct Action{
+
+    // for <img src=... >
     char *image;
+    // for <input ...>
     Field *field;
+    // for <a href=... >
     char *link;
+    // anchor #fragment
     char *name;
+
     int ismap;
+
     int width;
     int height;
 };
 @
+
+%claude:
+The fields are tagged by which one is non-nil: an \verb+<a>+ anchor
+sets \verb+link+; an \verb+<img>+ sets \verb+image+; an \verb+<input>+ sets
+\verb+field+. 
+%
+\verb+ismap+ is the rare case where one item is both a link
+and a server-side image map, so the click handler must add the
+\verb+?x,y+ coordinate suffix. \verb+name+ is the anchor name that lets
+\verb+#fragment+ scrolling work.
+
+
+%yoann: explain its use
 
 <<struct [[Pair]](mothra)>>=
 struct Pair{
@@ -2701,7 +2888,7 @@ struct Pair{
 @
 
 %claude:
-[<Entity>] is one row of the named-character-reference table that turns
+[[Entity]] is one row of the named-character-reference table that turns
 \verb+&amp;+ into U+0026, \verb+&lambda;+ into U+03BB, and so on. The full
 table is one of the larger source files in mothra; lookup is a simple linear
 scan because it only happens during parsing.
@@ -2715,31 +2902,112 @@ struct Entity{
 
 \section{Mothra's view (text runs, layout, panels)}
 
+
+\subsection{[[Www]]}
+
 %claude:
-[<Www>] is one open page in mothra: its URL, its parsed text (the linked
+[[Www]] is one open page in mothra: its URL, its parsed text (the linked
 list of \verb+Rtext+ nodes the layout panel actually walks), its title,
 and side caches for inline images (\verb+pix+) and form state
-(\verb+form+). The three flags at the bottom are the protocol between the
+(\verb+form+).
+
+
+<<struct [[Www]](mothra)>>=
+struct Www{
+
+    //ref_own<Url>
+    Url *url;
+    // list<Rtext>, next= ?
+    Rtext *text;
+    char title[NTITLE];
+
+    // list<Pix>, next = Pix.next, image cache
+    void *pix;
+    // form state, type=??
+    void *form;
+
+    bool changed;               /* reader sets this every time it updates page */
+    int finished;               /* reader sets this when done */
+    int alldone;                /* page will not change further -- used to adjust cursor */
+
+    <<[[Www]] other fields>>
+};
+@
+
+%claude:
+The three flags at the bottom of [[Www]] are the protocol between the
 reader thread and the redrawing thread: \verb+changed+ says a redraw is
 due, \verb+finished+ says the body is fully read, \verb+alldone+ says even
 the deferred image fetches have settled (so the busy cursor can finally
 go away).
 
+%XXX
+<<[[Www]] other fields>>=
+int yoffs;
+int gottitle;               /* title got drawn */
+@
 
-<<struct [[Www]](mothra)>>=
-struct Www{
-    Url *url;
-    void *pix;
-    void *form;
-    char title[NTITLE];
-    Rtext *text;
-    int yoffs;
-    int gottitle;               /* title got drawn */
-    bool changed;               /* reader sets this every time it updates page */
-    int finished;               /* reader sets this when done */
-    int alldone;                /* page will not change further -- used to adjust cursor */
+
+\subsection{[[Pix]]}
+
+%claude:
+[<Pix>] is one decoded image, identified by URL and target
+width/height. \verb+w->pix+ is a linked list of all images for the
+current page, used to deduplicate when the same image appears multiple
+times (e.g.\ icon strips).
+
+<<struct [[Pix]](mothra)>>=
+struct Pix{
+    Image *b;
+
+    int width;
+    int height;
+
+    char name[NNAME];
+
+    // list<Pix>, head = Www.pix
+    Pix *next;
 };
 @
+
+
+%\subsection{Summary}
+
+%claude:
+The graph of relationships between [<Www>], [[Rtext]], [<Action>],
+and [<Pix>] for one rendered page:
+
+\begin{verbatim}
+        Www                           Pix                Pix
+        ---                           ---                ---
+        url ---> Url                  next -----------> next ---> nil
+        text                          b (Image*)        b (Image*)
+        |                             ^
+        |                             |
+        v                             |
+       Rtext --> Rtext --> Rtext --> Rtext --> Rtext --> ...   (linked list)
+        text     text       text      text     text
+        font     font       font      font     font
+        flags    flags      flags     flags    flags
+        user                user
+         |                   |
+         v                   v
+        Action              Action
+        link="/foo"         image="logo.png"
+        name=nil            link=nil
+                            ...        \________________ once decoded ___> Pix.b
+\end{verbatim}
+
+The \verb+Rtext+ list is the only path from [<Www>] to the visible
+content. Everything else hangs off it: per-node [<Action>] for links
+and image refs, and the [<Pix>] cache holding the decoded bitmaps that
+\verb+Rtext+ entries point back into via their \verb+b+ field once
+[[getpix]] finishes.
+
+
+\subsection{Font types}
+
+%yoann: explain
 
 <<enum [[XFonts]](mothra)>>=
 /*
@@ -2776,37 +3044,6 @@ enum{
 @
 
 
-%claude:
-The graph of relationships between [<Www>], [<Rtext>], [<Action>],
-and [<Pix>] for one rendered page:
-
-\begin{verbatim}
-        Www                           Pix                Pix
-        ---                           ---                ---
-        url ---> Url                  next -----------> next ---> nil
-        text                          b (Image*)        b (Image*)
-        |                             ^
-        |                             |
-        v                             |
-       Rtext --> Rtext --> Rtext --> Rtext --> Rtext --> ...   (linked list)
-        text     text       text      text     text
-        font     font       font      font     font
-        flags    flags      flags     flags    flags
-        user                user
-         |                   |
-         v                   v
-        Action              Action
-        link="/foo"         image="logo.png"
-        name=nil            link=nil
-                            ...        \________________ once decoded ___> Pix.b
-\end{verbatim}
-
-The \verb+Rtext+ list is the only path from [<Www>] to the visible
-content. Everything else hangs off it: per-node [<Action>] for links
-and image refs, and the [<Pix>] cache holding the decoded bitmaps that
-\verb+Rtext+ entries point back into via their \verb+b+ field once
-[[getpix]] finishes.
-
 
 %******************************************************************************
 \chapter{[[mothra]]: [[main()]] and Panels}
@@ -2816,7 +3053,7 @@ and image refs, and the [<Pix>] cache holding the decoded bitmaps that
 %claude:
 This chapter introduces the program at the centre of the book: the
 \verb+mothra+ binary. It is what the user actually launches; everything
-else in the book is invoked behind the scenes by mothra (\verb+webfs+
+else in the book is invoked behind the scenes by mothra ([[webfs]]
 already mounted as a service, image format converters spawned per image,
 etc.). I cover four pieces here in order: the arguments mothra accepts,
 the static layout of its window (a four-pane stack of \verb+libpanel+
@@ -2840,7 +3077,7 @@ plumb-message intake that lets external programs send a URL with one
 The argument grammar is a one-line \verb+ARGBEGIN+ block, but two flags
 deserve attention: \verb+-d+ enables HTTP-tracing debug output threaded
 through the request paths in \verb+http.c+ and \verb+rdhtml.c+, and
-\verb+-m+ lets you mount a non-default \verb+webfs+ (handy when running
+\verb+-m+ lets you mount a non-default [[webfs]] (handy when running
 two browsers side by side, each with its own cookie jar).
 
 <<function [[arg]](mothra)>>=
@@ -5563,14 +5800,14 @@ urlresolve(Url *url)
 %claude:
 \verb+hget+ is Plan~9's \verb+wget+/\verb+curl+: a standalone command-line
 tool that downloads one URL and writes it to a file or to standard
-output. It exists separately from \verb+webfs+ because it is
+output. It exists separately from [[webfs]] because it is
 self-contained --- no file server to mount, no cohort to manage --- and
-because it predates \verb+webfs+ by many years. It is written in a
+because it predates [[webfs]] by many years. It is written in a
 classic Unix-tool style: one \verb+main+, one struct per artifact (URL,
 output file, byte range), one dispatch per protocol.
 
 %claude:
-The interesting reason to study \verb+hget+ before \verb+webfs+ is that
+The interesting reason to study \verb+hget+ before [[webfs]] is that
 the HTTP code in \verb+hget+ is much simpler than the equivalent in
 \verb+webfs/http.c+ --- no per-client thread, no 9P, no clone protocol
 --- so it gives a clean view of an HTTP request/response cycle, byte by
@@ -6302,7 +6539,7 @@ struct Range
 \label{chap:webfs}
 
 %claude:
-\verb+webfs+ is what makes Plan~9 different from every other operating
+[[webfs]] is what makes Plan~9 different from every other operating
 system in this book. Instead of being a library that mothra (and any
 other web client) would link against, the network layer of the browser
 is a separate process that exposes itself as a file tree mounted at
@@ -6318,7 +6555,7 @@ pipelines, even \verb+grep+ \verb+/mnt/web/N/body+ --- can be a webfs
 client. Authentication and cookies are not in any client; they live in
 webfs and the sister server \verb+webcookies+. Configuration changes
 (useragent, accept-cookies on/off) are file writes to
-\verb+/mnt/web/ctl+. The same \verb+webfs+ instance can simultaneously
+\verb+/mnt/web/ctl+. The same [[webfs]] instance can simultaneously
 service many concurrent in-flight URLs --- mothra's images chapter
 (\book{Widgets}) walks an example with one parent text fetch + N
 parallel image fetches all served by one mounted webfs.
@@ -6574,33 +6811,6 @@ the bottom byte is the \verb+Qxxx+ type, the rest is the client number.
 That keeps every fid's identity in one machine word and makes \verb+walk+
 purely functional.
 
-<<global [[tab]](webfs)>>=
-Tab tab[] =
-{
-    "/",                        DMDIR|0555,             0,
-    "ctl",                      0666,                   0,
-    "clone",            0666,                   0,
-    "cookies",          0666,                   0,
-    "XXX",              DMDIR|0555,             0,
-    "ctl",                      0666,                   0,
-    "body",             0444,                   0,
-    "XXX",              0444,                   0,
-    "contenttype",      0444,                   0,
-    "postbody", 0666,                   0,
-    "parsed",           DMDIR|0555,             0,
-    "url",                      0444,                   offsetof(Url, url),
-    "scheme",           0444,                   offsetof(Url, scheme),
-    "schemedata",       0444,                   offsetof(Url, schemedata),
-    "user",             0444,                   offsetof(Url, user),
-    "passwd",           0444,                   offsetof(Url, passwd),
-    "host",             0444,                   offsetof(Url, host),
-    "port",             0444,                   offsetof(Url, port),
-    "path",             0444,                   offsetof(Url, path),
-    "query",            0444,                   offsetof(Url, query),
-    "fragment", 0444,                   offsetof(Url, fragment),
-    "ftptype",          0444,                   offsetof(Url, ftp.type),
-};
-@
 
 <<macro [[PATH]](webfs)>>=
 #define PATH(type, n)   ((type)|((n)<<8))
@@ -8267,7 +8477,7 @@ First, every existing tool that reads files becomes a web tool: \verb+cat+,
 serve many clients with one cookie jar, one TLS configuration, one set of
 authentication credentials. Third, mounting \verb+/mnt/web+ from a remote
 machine over 9P (\verb+import+ or \verb+srvfs+) is the same as having
-\verb+webfs+ run there, which makes sandboxed browsers and split-namespace
+[[webfs]] run there, which makes sandboxed browsers and split-namespace
 tunneling fall out of nothing.
 
 %******************************************************************************
@@ -13913,21 +14123,6 @@ reading before images arrive.)
 
 \section{[[getpix]] as a subprocess image fetcher}
 
-%claude:
-[<Pix>] is one decoded image, identified by URL and target
-width/height. \verb+w->pix+ is a linked list of all images for the
-current page, used to deduplicate when the same image appears multiple
-times (e.g.\ icon strips).
-
-<<struct [[Pix]](mothra)>>=
-struct Pix{
-    Pix *next;
-    Image *b;
-    int width;
-    int height;
-    char name[NNAME];
-};
-@
 
 %claude:
 [<pixcmd>] is the per-format decoder dispatch: an [<XKind>] enum to
@@ -15714,7 +15909,7 @@ PDF viewer). As a subscriber, mothra registers
 program that plumbs a URL with destination ``web'' triggers a fetch.
 
 %claude:
-Webfs has its own plumb subscription too: \verb+webfs+ listens on the
+Webfs has its own plumb subscription too: [[webfs]] listens on the
 ``web'' port if mothra is not running, so a plumb of a URL turns into
 a webfs request and the result is delivered to whichever viewer the
 plumber rules pick.
@@ -16151,7 +16346,7 @@ hget consults \verb+$httpproxy+ at startup; if set, the proxy URL is
 parsed into a separate [<URL>] (\verb+px+) and every request is sent
 to the proxy with the absolute URL as the request line, instead of
 directly to the origin server. webfs has no built-in proxy support;
-the user is expected to mount a different webfs or run \verb+webfs+
+the user is expected to mount a different webfs or run [[webfs]]
 behind a SOCKS or HTTP proxy at the system level.
 
 \section{Referer header}
@@ -16198,6 +16393,38 @@ works the same as one served by HTTP.
 
 
 \section{FTP protocol support ([[doftp]] in hget, ftp in [[webfs/url.c]])}
+
+%USftp scheme not aspectized, because useful for explanations
+
+<<[[freeurl()]] switch scheme other cases>>=
+case USftp:
+    free(u->ftp.path_spec);
+    free(u->ftp.type);
+    break;
+@
+
+<<[[copyurl()]] switch scheme other cases>>=
+case USftp:
+    dupp(&v->ftp.path_spec);
+    dupp(&v->ftp.type);
+    break;
+@
+
+<<[[Url]](webfs) union members>>=
+struct {
+    char *path_spec;
+    char *type;
+} ftp;
+@
+
+<<[[Qxxx]] other cases>>=
+Qftptype,
+@
+
+<<[[tab]](webfs) other elements>>=
+[Qftptype]     = { "ftptype",     0444,       offsetof(Url, ftp.type)   },
+@
+
 
 %claude:
 FTP support exists in two places: \verb+webfs/ftpfs.c+ (proper FTP

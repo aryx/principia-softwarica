@@ -24,32 +24,39 @@ struct Cookie
     char*       value;
     char*       dom;            /* starts with . */
     char*       path;
+    uint        expire;         /* time of expiration: ~0 means when webcookies dies */
+    bool        secure;
+
+    /*s: [[Cookie]](webfs) other fields */
+    bool         explicitdom;    /* dom was explicitly set */
+    bool         explicitpath;   /* path was explicitly set */
+    /*x: [[Cookie]](webfs) other fields */
     char*       version;
     char*       comment;                /* optional, may be nil */
 
-    uint                expire;         /* time of expiration: ~0 means when webcookies dies */
-    int         secure;
-    int         explicitdom;    /* dom was explicitly set */
-    int         explicitpath;   /* path was explicitly set */
     int         netscapestyle;
 
     /* internal info */
     int         deleted;
     int         mark;
-    int         ondisk;
+    bool         ondisk;
+    /*e: [[Cookie]](webfs) other fields */
 };
 /*e: struct [[Cookie]](webfs) */
 /*s: struct [[Jar]](webfs) */
 struct Jar
 {
+    // array<ref_own<Cookie>>, len = nc, allocated = mc
     Cookie      *c;
     int         nc;
     int         mc;
 
+    /*s: [[Jar]](webfs) other fields */
     Qid         qid;
     int         dirty;
     char                *file;
     char                *lockfile;
+    /*e: [[Jar]](webfs) other fields */
 };
 /*e: struct [[Jar]](webfs) */
 

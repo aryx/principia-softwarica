@@ -8,7 +8,7 @@ typedef struct Url Url;
 /* simple buffered i/o for network connections; shared by http, ftp */
 struct Ibuf
 {
-    int fd;
+    fdt fd;
     Ioproc *io;
     char buf[4096];
     char *rp, *wp;
@@ -27,24 +27,33 @@ struct Ctl
 /*s: struct [[Client]](webfs) */
 struct Client
 {
+    // URls and control settings
     Url *url;
     Url *baseurl;
     Ctl ctl;
-    Channel *creq;      /* chan(Req*) */
-    int num;
-    int plumbed;
+
+    // filled once the response arrives
     char *contenttype;
     char *postbody;
     char *redirect;
     char *authenticate;
+
+    // Plumbing
+    Channel *creq;      /* chan(Req*) */
+    Ioproc *io;
+    int iobusy;
+    int ref;
+
+    /*s: [[Client]](webfs) other fields */
+    int num;
+    int plumbed;
+
     char *ext;
     int npostbody;
     int havepostbody;
-    int iobusy;
     int bodyopened;
-    Ioproc *io;
-    int ref;
     void *aux;
+    /*e: [[Client]](webfs) other fields */
 };
 /*e: struct [[Client]](webfs) */
 
@@ -55,27 +64,26 @@ struct Client
  * If this is the case, only the "fragment" and "url" members will have
  * meaning, and the given URL structure may not be used as a base URL itself.
  */
-enum
+enum UScheme
 {
     USunknown,
+
     UShttp,
     UShttps,
     USftp,
     USfile,
+
     UScurrent,
 };
 /*e: enum [[UScheme]] */
 /*s: struct [[Url]](webfs) */
 struct Url
 {
-    int         ischeme;
+    // ref_own<string>, the full URL string
     char*       url;
+
+    // the scheme://[user[:password]@]host[:port]/path[?query][#fragment] components
     char*       scheme;
-    int         (*open)(Client*, Url*);
-    int         (*read)(Client*, Req*);
-    void                (*close)(Client*);
-    char*       schemedata;
-    char*       authority;
     char*       user;
     char*       passwd;
     char*       host;
@@ -83,15 +91,31 @@ struct Url
     char*       path;
     char*       query;
     char*       fragment;
+
+    // enum<USCheme>
+    int         ischeme;
+    /*s: [[Url]](webfs) per-scheme methods */
+    int         (*open)(Client*, Url*);
+    int         (*read)(Client*, Req*);
+    void        (*close)(Client*);
+    /*e: [[Url]](webfs) per-scheme methods */
     union {
+        /*s: [[Url]](webfs) union members */
         struct {
             char *page_spec;
         } http;
+        /*x: [[Url]](webfs) union members */
         struct {
             char *path_spec;
             char *type;
         } ftp;
+        /*e: [[Url]](webfs) union members */
     };
+
+    /*s: [[Url]](webfs) other fields */
+    char*       schemedata;
+    char*       authority;
+    /*e: [[Url]](webfs) other fields */
 };
 /*e: struct [[Url]](webfs) */
 

@@ -18,11 +18,18 @@ typedef struct Field Field;
 
 /*s: struct [[Action]](mothra) */
 struct Action{
+
+    // for <img src=... >
     char *image;
+    // for <input ...>
     Field *field;
+    // for <a href=... >
     char *link;
+    // anchor #fragment
     char *name;
+
     int ismap;
+
     int width;
     int height;
 };
@@ -41,16 +48,26 @@ struct Url{
 
 /*s: struct [[Www]](mothra) */
 struct Www{
+
+    //ref_own<Url>
     Url *url;
-    void *pix;
-    void *form;
-    char title[NTITLE];
+    // list<Rtext>, next= ?
     Rtext *text;
-    int yoffs;
-    int gottitle;               /* title got drawn */
+    char title[NTITLE];
+
+    // list<Pix>, next = Pix.next, image cache
+    void *pix;
+    // form state, type=??
+    void *form;
+
     bool changed;               /* reader sets this every time it updates page */
     int finished;               /* reader sets this when done */
     int alldone;                /* page will not change further -- used to adjust cursor */
+
+    /*s: [[Www]] other fields */
+    int yoffs;
+    int gottitle;               /* title got drawn */
+    /*e: [[Www]] other fields */
 };
 /*e: struct [[Www]](mothra) */
 

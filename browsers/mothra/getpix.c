@@ -11,11 +11,15 @@ typedef struct Pix Pix;
 
 /*s: struct [[Pix]](mothra) */
 struct Pix{
-    Pix *next;
     Image *b;
+
     int width;
     int height;
+
     char name[NNAME];
+
+    // list<Pix>, head = Www.pix
+    Pix *next;
 };
 /*e: struct [[Pix]](mothra) */
 
