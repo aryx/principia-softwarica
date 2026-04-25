@@ -1939,7 +1939,7 @@ side has its own [[url.c]] implementation, since serializing parsed URLs
 across the file-system boundary would be silly). Cookies stay entirely on
 the [[webfs]] side; mothra never sees them. The HTML parse tree never
 crosses the boundary either: mothra reads the body bytes from
-\verb+/mnt/web/N/body+, parses them locally into a flat list of
+\verb+/mnt/web/<n>/body+, parses them locally into a flat list of
 [[Rtext]] nodes (with [[Action]] side-data), and hands that to
 [[libpanel]] for layout.
 
@@ -1958,7 +1958,8 @@ chunks \verb+(webfs)+ and \verb+(mothra)+ to disambiguate.
 %claude:
 A [[Url]] in [[webfs]] is two things in one struct: the parsed components
 of the URL (\verb+scheme+, \verb+host+, \verb+path+, \verb+query+,
-\verb+fragment+, plus userinfo for FTP), and a tiny per-scheme vtable
+\verb+fragment+),%, plus userinfo for FTP), 
+and a tiny per-scheme vtable
 ([[open]], [[read]], [[close]]) so the request loop in
 \verb+client.c+ can dispatch to the right backend without knowing anything
 about HTTP, FTP, or \verb+file://+.
@@ -2045,7 +2046,7 @@ indirection:
 The cost is three extra pointers per [<Url>]; the win is that the
 request loop in [[client.c]] is one polymorphic call and the next
 scheme (e.g. \verb+gopher://+) is a matter of writing three
-functions and one row in [<postparse>], with no edits to the
+functions and one row in [<postparse()>], with no edits to the
 hot-path code.
 
 
@@ -2078,28 +2079,63 @@ Concretely, given the URL
 the [[Url]] struct is filled in like:
 
 \begin{verbatim}
-    url        = "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
+{
+    .url        = "https://alice@en.wikipedia.org:443/wiki/Cat?lang=en#refs"
 
-    scheme     = "https"
-    user       = "alice"
-    passwd     = nil
-    host       = "en.wikipedia.org"
-    port       = "443"
-    path       = "/wiki/Cat"
-    query      = "lang=en"
-    fragment   = "refs"
+    .scheme     = "https"
+    .user       = "alice"
+    .passwd     = nil
+    .host       = "en.wikipedia.org"
+    .port       = "443"
+    .path       = "/wiki/Cat"
+    .query      = "lang=en"
+    .fragment   = "refs"
 
-    ischeme    = UShttps
-    open       = httpopen        \
-    read       = httpread         > vtable bound to https
-    close      = httpclose       /
-    authority  = "alice@en.wikipedia.org:443"
-    http.page_spec = "/wiki/Cat?lang=en"   (path + ? + query)
+    .ischeme    = UShttps
+    .open       = httpopen        \
+    .read       = httpread         > vtable bound to https
+    .close      = httpclose       /
+    .authority  = "alice@en.wikipedia.org:443"
+    .http = { .page_spec = "/wiki/Cat?lang=en"   (path + ? + query) }
+}
 \end{verbatim}
-%
+
+
+%claude:
 The full URL string \verb+u->url+ is kept alongside the components as a
-canonical serialization, maintained by [<rewriteurl()>] (covered later in
-this section).
+canonical serialization, maintained by [<rewriteurl()>].
+%[[rewriteurl()]] enforces an invariant: \verb+u->url+ is always the canonical
+%serialization of \verb+u+'s components.
+Whenever the request loop mutates a
+field (e.g.\ following a redirect, or filling in a relative URL against a
+base), it calls [[rewriteurl()]] to re-derive the string. That string is
+what the kernel hands back when a client reads \verb+/mnt/web/<n>/parsed/url+.
+
+<<function [[rewriteurl]](webfs)>>=
+void
+rewriteurl(Url *u)
+{
+    char *s;
+
+    if(u->schemedata)
+        s = estrmanydup(u->scheme, ":", u->schemedata, nil);
+    else
+        s = estrmanydup(u->scheme, "://", 
+            u->user ? u->user : "",
+            u->passwd ? ":" : "", u->passwd ? u->passwd : "",
+            u->user ? "@" : "", u->host ? u->host : "", 
+            u->port ? ":" : "", u->port ? u->port : "",
+            u->path,
+            u->query ? "?" : "", u->query ? u->query : "",
+            u->fragment ? "#" : "", u->fragment ? u->fragment : "",
+            nil);
+    free(u->url);
+    u->url = s;
+}
+@
+
+
+
 
 
 <<function [[freeurl]](webfs)>>=
@@ -2166,36 +2202,6 @@ char*       schemedata;
 char*       authority;
 @
 
-
-%claude:
-[[rewriteurl()]] enforces an invariant: \verb+u->url+ is always the canonical
-serialization of \verb+u+'s components. Whenever the request loop mutates a
-field (e.g.\ following a redirect, or filling in a relative URL against a
-base), it calls [[rewriteurl()]] to re-derive the string. That string is
-what the kernel hands back when a client reads \verb+/mnt/web/N/parsed/url+.
-
-<<function [[rewriteurl]](webfs)>>=
-void
-rewriteurl(Url *u)
-{
-    char *s;
-
-    if(u->schemedata)
-        s = estrmanydup(u->scheme, ":", u->schemedata, nil);
-    else
-        s = estrmanydup(u->scheme, "://", 
-            u->user ? u->user : "",
-            u->passwd ? ":" : "", u->passwd ? u->passwd : "",
-            u->user ? "@" : "", u->host ? u->host : "", 
-            u->port ? ":" : "", u->port ? u->port : "",
-            u->path,
-            u->query ? "?" : "", u->query ? u->query : "",
-            u->fragment ? "#" : "", u->fragment ? u->fragment : "",
-            nil);
-    free(u->url);
-    u->url = s;
-}
-@
 
 
 
@@ -2283,7 +2289,7 @@ during the HTTP request/response cycle: the per-request state struct
 parser pull headers a line at a time, and the in-memory ``connection
 cache'' that lets two requests to the same host reuse one TCP
 socket. The actual request building and response parsing functions
-([[httpopen]], [[httpheaders]], [[wwwauthenticate]], etc.) come in
+([<httpopen()>], [<httpheaders()>], [<wwwauthenticate()>], etc.) come in
 the chapter on [[webfs]] itself; here I focus on the static
 shapes that those functions read and write.
 
@@ -2355,7 +2361,7 @@ initibuf(Ibuf *b, Ioproc *io, fdt fd)
 
 %claude:
 [[Client]] is the per-connection state of [[webfs]]: one of these for
-every \verb+/mnt/web/N/+ directory currently open. The fields divide into
+every \verb+/mnt/web/<n>/+ directory currently open. The fields divide into
 three groups.
 %
 The URLs (\verb+url+, \verb+baseurl+) and control settings
@@ -2467,7 +2473,7 @@ struct Ctl
 The shape of [[webfs]]'s file tree is the entire public API of the
 network side of the browser. A client process opens \verb+/mnt/web/clone+,
 reads back a connection number~\verb+N+, then writes \verb+get http://...+
-to \verb+/mnt/web/N/ctl+ and reads bytes from \verb+/mnt/web/N/body+. There
+to \verb+/mnt/web/<n>/ctl+ and reads bytes from \verb+/mnt/web/<n>/body+. There
 is no library in between; the semantics are spelled out in the kernel
 namespace, not in a header file.
 
@@ -6069,9 +6075,9 @@ fileget(Url *url)
 [<webclone()>] is the entry into the \verb+/mnt/web+ protocol. Open
 \verb+/mnt/web/clone+, read back the connection number~\verb+N+, write
 \verb+baseurl <base>+ and \verb+url <reltext>+ to the new
-\verb+/mnt/web/N/ctl+. The returned fd is the open ctl file (kept open
+\verb+/mnt/web/<n>/ctl+. The returned fd is the open ctl file (kept open
 so the connection persists), and the caller is expected to subsequently
-open \verb+/mnt/web/N/body+ to read the page bytes. This three-step
+open \verb+/mnt/web/<n>/body+ to read the page bytes. This three-step
 clone-and-write is the standard Plan~9 file-server idiom for opening a
 new logical channel; it appears identically in \verb+/net/tcp+,
 \verb+/net/dns+, and many others.
