@@ -586,95 +586,67 @@ cooperation needed because there was no kernel to speak of.
 \end{itemize}
 
 %claude:
-Suppose [[ratrace]] has attached to an already-running
-target with [[ratrace 1234]]; the target is initially
-[[Stopped]]. (The [[ratrace -c echo hello]] mode is
-similar but starts with an extra [[fork]]+[[exec]] to
-launch the target before this loop begins.) Here is one
-full syscall cycle, showing the three actors and the
-two [[/proc/1234/]] files they communicate through:
+Whatever the OS-specific interface, a tracing cycle has
+the same shape. The tracer asks the kernel to run the
+target until its next syscall, the kernel does so and
+freezes the target inside the syscall, the tracer reads
+the recorded event, prints it, and resumes the target.
+The two never communicate directly---every arrow goes
+through the kernel:
 \begin{verbatim}
-   ratrace            kernel             target (1234)
-   -------            ------             -------------
-       |                 |               Stopped (user mode)
-       |                 |                     |
-  write /proc/1234/ctl
-    "startsyscall"
-       |---------------->|
-       |                 | ready(target)
-       |                 |====== schedule ====>| Running
-       |                 |                     | ... user code
-       |                 |                     |   runs until
-       |                 |                     |   Pwrite SWI
-       |                 |<==== syscall trap ==|
-       |                 | (target now in kernel mode)
-       |                 | syscallfmt() fills
-       |                 |   up->syscalltrace
-       |                 |   with "1234 echo Pwrite ..."
-       |                 | target -> Stopped   | Stopped
-       |                 |                     |  (in kernel
-       |                 |                     |   mode, before
-       |                 |                     |   Pwrite body)
-  pread /proc/1234/syscall
-       |---------------->|
-       |<--- call record-|
-       |                 |                     |
-  print to stderr                              |
-       |                 |                     |
-  write /proc/1234/ctl
-    "startsyscall"
-       |---------------->|
-       |                 | ready(target)
-       |                 |====== schedule ====>|
-       |                 | systab[PWRITE] runs:
-       |                 |   the kernel, still
-       |                 |   in the target's
-       |                 |   context, writes 6
-       |                 |   bytes to fd 1
-       |                 |   ret = 6
-       |                 | sysretfmt() appends
-       |                 |   " = 6 "" ...\n"
-       |                 |   to up->syscalltrace
-       |                 | target -> Stopped   | Stopped
-       |                 |                     |  (in kernel
-       |                 |                     |   mode, after
-       |                 |                     |   Pwrite body)
-  pread /proc/1234/syscall
-       |---------------->|
-       |<-- return record|
-       |                 |                     |
-  print to stderr                              |
-       |                 |                     |
-  write /proc/1234/ctl
-    "startsyscall"
-       |---------------->|
-       |                 | ready(target)
-       |                 |====== schedule ====>| kernel returns
-       |                 |                     |  to user mode
-       |                 |                     | Running
-       |                 |                     | ... until the
-       |                 |                     |   next syscall
-  ... loop back to pread /proc/1234/syscall ...
+   tracer             kernel              target
+   ------             ------              ------
+                                       Stopped
+   run-to-next-syscall
+       --------------->|
+                       | resume target
+                       |==================> Running
+                       |                    ... user code
+                       |                     hits syscall
+                       |<================== (trap, args)
+                       | record args        ----- STOP 1 -----
+                       | stop target      Stopped
+                                          (before body)
+   read event
+       --------------->|
+       <--- args ------|
+   print args to stderr
+   run-to-next-syscall
+       --------------->|
+                       | run syscall body
+                       |   (kernel does the
+                       |    real work for
+                       |    the target)
+                       | record retval      ----- STOP 2 -----
+                       | stop target      Stopped
+                                          (after body)
+   read event
+       --------------->|
+       <-- retval -----|
+   print retval to stderr
+   run-to-next-syscall
+       --------------->|
+                       | resume target
+                       |==================> Running
+                                             (back to user)
+   ... loop to next syscall ...
 \end{verbatim}
 %
-Two things are worth noticing. First, the actual work
-of [[Pwrite]]---copying bytes out to the file---runs
-\emph{in between} the two tracer stops, executed by the
-kernel's [[systab[PWRITE]]] handler on behalf of the
-target. The target thread is suspended in kernel mode the
-whole time; it never gets back to user mode until both
-halves of the trace are done, which is why [[ratrace]]'s
-single [[pread]] loop iterates twice per traced syscall
-(once for the [[syscallfmt]] record, once for the
-[[sysretfmt]] record).
-%
-Second, [[ratrace]] and the target never communicate
-directly: every arrow between the two outer columns goes
-through the kernel via [[/proc/1234/ctl]] and
-[[/proc/1234/syscall]], matching the three-actor picture
-we started with. [[strace]] uses the same two-stop model
-on Linux via [[PTRACE_SYSCALL]]; the interface is
-completely different but the protocol shape is identical.
+Notice that each traced syscall produces \emph{two} stops:
+one before the kernel runs the call (so the tracer can
+record arguments) and one after (so it can record the
+return value). The work of the call itself runs in between,
+executed by the kernel on behalf of the still-frozen target.
+
+%claude:
+[[ratrace]] and [[strace]] both follow this two-stop,
+kernel-mediated protocol. The interfaces differ
+completely---[[ratrace]] writes [[startsyscall]] to a
+[[/proc]] file and reads records back, [[strace]] sends
+[[PTRACE_SYSCALL]] through a single [[ptrace]] system
+call---but the protocol shape is identical.
+Chapter~\ref{chap:ratrace} works through the concrete
+cycle for [[ratrace]] step by step.
 
 %claude:
 So much for {how} the kernel lets us watch another process.
@@ -2669,6 +2641,96 @@ and send the result to the [[writer()]] through the [[out]] channel.
 The [[waitstop]] at the start ensures the child has actually
 stopped (after the [[hang]]/[[exec]] sequence) before we begin
 tracing.
+
+%claude:
+To make the loop concrete, suppose [[ratrace]] has attached
+to an already-running target with [[ratrace 1234]]; the
+target is initially [[Stopped]].
+(The [[ratrace -c echo hello]] mode is similar but starts
+with an extra [[fork]]+[[exec]] to launch the target before
+this loop begins.) Here is one full syscall cycle, showing
+the three actors and the two [[/proc/1234/]] files they
+communicate through:
+\begin{verbatim}
+   ratrace            kernel             target (1234)
+   -------            ------             -------------
+       |                 |               Stopped (user mode)
+       |                 |                     |
+  write /proc/1234/ctl
+    "startsyscall"
+       |---------------->|
+       |                 | ready(target)
+       |                 |====== schedule ====>| Running
+       |                 |                     | ... user code
+       |                 |                     |   runs until
+       |                 |                     |   Pwrite SWI
+       |                 |<==== syscall trap ==|
+       |                 | (target now in kernel mode)
+       |                 | syscallfmt() fills
+       |                 |   up->syscalltrace
+       |                 |   with "1234 echo Pwrite ..."
+       |                 | target -> Stopped   | Stopped
+       |                 |                     |  (in kernel
+       |                 |                     |   mode, before
+       |                 |                     |   Pwrite body)
+  pread /proc/1234/syscall
+       |---------------->|
+       |<--- call record-|
+       |                 |                     |
+  print to stderr                              |
+       |                 |                     |
+  write /proc/1234/ctl
+    "startsyscall"
+       |---------------->|
+       |                 | ready(target)
+       |                 |====== schedule ====>|
+       |                 | systab[PWRITE] runs:
+       |                 |   the kernel, still
+       |                 |   in the target's
+       |                 |   context, writes 6
+       |                 |   bytes to fd 1
+       |                 |   ret = 6
+       |                 | sysretfmt() appends
+       |                 |   " = 6 "" ...\n"
+       |                 |   to up->syscalltrace
+       |                 | target -> Stopped   | Stopped
+       |                 |                     |  (in kernel
+       |                 |                     |   mode, after
+       |                 |                     |   Pwrite body)
+  pread /proc/1234/syscall
+       |---------------->|
+       |<-- return record|
+       |                 |                     |
+  print to stderr                              |
+       |                 |                     |
+  write /proc/1234/ctl
+    "startsyscall"
+       |---------------->|
+       |                 | ready(target)
+       |                 |====== schedule ====>| kernel returns
+       |                 |                     |  to user mode
+       |                 |                     | Running
+       |                 |                     | ... until the
+       |                 |                     |   next syscall
+  ... loop back to pread /proc/1234/syscall ...
+\end{verbatim}
+%
+Two things are worth noticing. First, the actual work
+of [[Pwrite]]---copying bytes out to the file---runs
+\emph{in between} the two tracer stops, executed by the
+kernel's [[systab]] entry for [[PWRITE]] on behalf of the
+target. The target thread is suspended in kernel mode the
+whole time; it never gets back to user mode until both
+halves of the trace are done, which is why [[ratrace]]'s
+single [[pread]] loop iterates twice per traced syscall
+(once for the [[syscallfmt]] record, once for the
+[[sysretfmt]] record).
+%
+Second, [[ratrace]] and the target never communicate
+directly: every arrow between the two outer columns goes
+through the kernel via [[/proc/1234/ctl]] and
+[[/proc/1234/syscall]], matching the three-actor picture
+from Section~\ref{sec:observing-another-program}.
 
 <<function [[reader]]>>=
 void
