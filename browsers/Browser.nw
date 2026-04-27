@@ -32,6 +32,7 @@
 %thx to this manual, I better understand browsers:
 %  - Cookies and stateful sessions
 %  - Pervasiveness of Redirects (used for many things)
+%  - charset detection 4-steps algorithm
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -671,6 +672,35 @@ is how the protocol grew from a handful of fields in 1991 to dozens
 today without ever breaking older clients (including [[mothra]]).
 
 %yoann: maybe ASCII diagram with synthetic view of HTTP request and response
+%claude:
+The full exchange in one picture:
+%
+\begin{verbatim}
+    browser  ---request--->  server
+    =========================================
+    GET /wiki/Cat HTTP/1.0       <- request line: verb, path, version
+    Host: en.wikipedia.org       \
+    User-Agent: Plan9/hget        |  request headers
+    Accept: text/html             /
+                                 <- blank line ends headers (no body for GET)
+
+    <---response---  server
+    =========================================
+    HTTP/1.1 200 OK              <- status line: version, code, reason
+    Content-Type: text/html      \
+    Content-Length: 42381         |  response headers
+    Connection: close             /
+                                 <- blank line ends headers
+    <!doctype html>...           \
+    ...                           |  response body (the bytes of the page)
+    ...                           /
+\end{verbatim}
+%
+Both sides of the exchange are plain ASCII lines, each terminated by
+[[CRLF]] (\verb+\r\n+). The blank line that separates headers from
+body is the only binary-looking thing, and even that is just two
+consecutive [[CRLF]]s---which is why [[telnet]] can drive an HTTP
+server directly.
 
 \subsection{Redirects}
 \label{sec:principles-redirects}
@@ -832,7 +862,15 @@ The web browser receives bytes from the requested server, but
 bytes are not text. To display the bytes of an HTML document the
 browser must know which {\em character encoding} (or {\em charset})
 was used to produce them: a mapping from byte sequences to characters.
-%yoann1: maybe concrete example where body contains a few bytes but they may be interpreted differently depending on country
+%
+The same byte can mean very different things in different countries.
+Byte [[0xe9]] is {\em é} (e-acute, U+00E9) in ISO~8859-1 (Western
+Europe), but the same byte [[0xe9]] is {\em ř} (r-caron, U+0159) in
+ISO~8859-2 (Czech, Slovak, Croatian)---and in UTF-8, [[0xe9]] is
+just the {\em first} byte of a three-byte sequence, meaning nothing
+on its own. Decode a Czech page as Latin-1 and every {\em ř}
+becomes {\em é}; the reverse turns a French page into gibberish.
+Guess wrong and the page fills with {\em mojibake}.
 
 %claude:
 The web inherited many encodings from the pre-Unicode era---ISO~8859-1
@@ -861,6 +899,26 @@ priority order:
 The first source that fires wins; later sources are ignored.
 
 %yoann: maybe show typical html document now with use of <meta charset="utf8">, but not too much html since we show it in the next section
+%claude:
+In practice, modern pages declare their encoding in the [[<head>]]
+via a [[<meta>]] tag, which is fallback source~3 in the list above:
+%
+\begin{verbatim}
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Café menu</title>
+    </head>
+    <body>...</body>
+    </html>
+\end{verbatim}
+%
+A browser that reads this page looks for source~1 (BOM, none here),
+then source~2 (a [[charset=]] on the HTTP [[Content-Type:]] header,
+possibly absent), and only if both are missing falls through to the
+[[<meta charset>]] tag. This is why the tag must be in the first
+1024~bytes of the file: the browser may not have buffered more before
+it needs to know how to decode the rest.
 
 %claude:
 %plan9-is-cleaner:
@@ -894,7 +952,10 @@ A tiny but complete HTML document:
 %
 \begin{verbatim}
     <html>
-    <head><title>Hello</title></head>
+    <head>
+      <meta charset="utf-8">
+      <title>Hello</title>
+    </head>
     <body>
       <h1>Welcome</h1>
       <p>This is a paragraph with a
@@ -903,7 +964,6 @@ A tiny but complete HTML document:
     </body>
     </html>
 \end{verbatim}
-%yoann1: maybe add a <meta charset=... to echo the previous section
 
 %claude:
 The tree is shallow: [[<html>]] contains [[<head>]] (metadata, here
@@ -943,6 +1003,19 @@ deliberately forgiving about everything else; I describe the
 tokenizer and tag dispatcher in Chapter~\ref{chap:html-parsing}.
 
 %yoann: maybe echo one of the previous paragraph where say web had 3 important features: URL, HTTP, HTML (embedding hyperlink URLs), and can say we have now seen the 3. Those are essential components of the Web!
+%claude:
+At this point we have seen all three pillars introduced at the start
+of this section. {\em URLs} give every resource a unique name
+(Section~\ref{sec:principles-urls}). {\em HTTP} is the protocol that
+fetches a resource by name and carries it back as bytes with typed
+headers (Section~\ref{sec:hget-d-example}). {\em HTML} is the format
+those bytes take: markup that embeds hyperlink URLs (via [[href=]] and
+[[src=]]) into the document itself, making the web self-referential
+(Section~\ref{sec:principles-html}).
+%
+These three are the irreducible core: you could remove cookies, forms,
+redirects, or TLS and still have a working hypertext system. You
+cannot remove any of the three and have the web.
 
 \subsection{Rendering text with structure}% (no layout engine required)}
 \label{sec:principles-render}
@@ -2050,7 +2123,6 @@ functions and one row in [<postparse()>], with no edits to the
 hot-path code.
 
 
-%yoann: explain page_spec
 %claude:
 [[page_spec]] below is what goes on the request line after the verb, the
 ``\verb+/wiki/Cat?lang=en+'' part of \verb+GET /wiki/Cat?lang=en HTTP/1.0+.
@@ -2281,7 +2353,6 @@ seturlquery(Url *u, char *query)
 
 \section{HTTP requests and responses}
 
-%yoann: introducing the section
 %claude:
 This section covers the data and helpers that [[webfs/http.c]] uses
 during the HTTP request/response cycle: the per-request state struct
@@ -3217,7 +3288,6 @@ The four-by-four product gives the 16 font slots that
 That is mothra's entire CSS: no point sizes, no font-family stacks,
 no italic-bold combinations.
 
-%yoann: explain
 %claude:
 [[HORIZ]]/[[VERT]] is a tiny axis selector used by [[strtolength()]]
 when an HTML attribute like [[width]] or [[height]] is given in
@@ -3414,7 +3484,6 @@ Holding the current page in a
 single global is one of the things that keeps mothra simple---there
 is no notion of multiple tabs or background tabs to disambiguate.
 
-%yoann: explain
 %claude:
 This is the ``page just finished loading'' branch at the top of
 each event-loop iteration. The worker process [[urlproc]] sets
@@ -3629,7 +3698,6 @@ case 'm':
 @
 
 
-%yoann: explain those other flags
 %claude:
 Three smaller flags. \verb+-v+ ({\em verbose}) prints HTML parser
 errors to file descriptor 2; without it the parser silently
@@ -3731,7 +3799,6 @@ Panel *cururl;  /* label giving the url of the visible text */
 Panel *text;            /* Panel displaying the current www page */
 @
 
-%yoann: explain those alt
 %claude:
 [[alt]] and [[alttext]] are the {\em alternate display}'s root and
 text panel. They mirror [[root]] and [[text]] for the second display
