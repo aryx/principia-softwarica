@@ -1320,7 +1320,7 @@ the main abstractions of the computer and
 to multiple programs at the same time.
 
 The kernel is the biggest program and so the biggest book in the series.
-The \plan kernel is called simply [[9]], but I will present a variant
+The \plan kernel is called simply [[9]], but I will focus on a variant
 of the kernel for the Raspberry Pi called [[9pi]].
 
 
@@ -1342,6 +1342,14 @@ utility functions.
 \l also describe thread library and regexp library now, but less important
 Note that some of the code in the C library is written in assembly.
 \l to optimize, but also because required because kernel interaction
+
+In addition to [[libc]], a few other core libraries are used by
+many programs: 
+[[libthread]] for concurrency,
+[[libbio]] for buffered IO,
+[[libflate]] for compression, and
+[[libregexp]] for regular expressions,
+that I will also present.
 
 \subsection{The shell: [[rc]]}
 \label{sec:shell}
@@ -1411,7 +1419,7 @@ so they all need the C compiler to become executables.
 I will describe [[5c]], a C compiler targeting
 ARM assembly. The [[5]] in [[5c]]
 comes from the \plan convention to name architectures
-with a number or single letter (0 is MIPS, 5 is ARM, 8 is x86, etc).
+with a single character ([[0]] is MIPS, [[5]] is ARM, [[8]] is x86, etc).
 This is why the ARM assembler and linker I will
 describe later are called respectively [[5a]] and [[5l]].
 
@@ -1459,7 +1467,9 @@ a single program;
 \l in fact could remove linking, just use cat, that's what was doing original as
 \l also at the beginning you had full program in one file
 the C compiler could take as input multiple C source
-files and produce directly an executable. 
+files and produce directly an executable\footnote{
+Actually [[gcc]] can be used that way.
+}.
 \n ocamlc kinda does that. in fact gcc does that too (but shell out gas/ld)
 However, from a software engineering point of view,
 \l and also for separate compilation? well could be smart and see cache.
@@ -1603,6 +1613,29 @@ and the profiler.
 \subsection{The text editor: [[ed]]}
 \label{sec:editor}
 
+%claude:
+A {\em text editor} is a program to help {read} and {write} text,
+including source code.
+It is perhaps the most important tool for a programmer.
+%
+\plan has a few text editors: [[ed]], [[sam]], and [[acme]].
+I will present here [[ed]], originally written by Ken Thompson
+in the 1970s for \unix.
+[[ed]] is a {line editor}, as opposed to {screen editors}
+like [[sam]], [[acme]], [[vi]], or Emacs.
+
+%claude:
+The main reason I chose [[ed]] is that it is small enough
+(under 2000 lines of C) to fit in one appendix.
+%
+This makes [[ed]] a perfect candidate to illustrate
+{literate programming} in a concrete way,
+complementing the abstract presentation in
+Section~\ref{sec:literate-programming}.
+%
+The complete source code of [[ed]] is presented in
+Appendix~\ref{chap:ed}.
+
 %ocaml:
 %\subsection{The text editor: [[efuns]]}
 %\label{sec:editor}
@@ -1661,17 +1694,17 @@ called [[mk]] and a few configuration files (the [[mkfile]]s).
 %\n also bootsrapping issue, but easy, a simple ocamlgit.tar.gz
 
 
-\subsection{The debugger: [[acid]]}
+\subsection{The debuggers: [[acid]], [[ratrace]], [[db]], [[libmach]]}
 \label{sec:debugger}
 % LATER
 
-A {\em debugger} is a program that {commands} and {inspects} another program.
+A {\em debugger} is a program that {controls} and {inspects} another program.
 %
 Programming is so difficult that invariably we make mistakes
 when writing code. Having tools to help find those mistakes is essential,
 and the debugger is the most important of those tools.
 %
-Even if many programmers, including great programmers\cite{coders-at-work},
+Even if many programmers, including great programmers~\cite{coders-at-work},
 use just [[printf()]] tracing instructions to debug their programs,
 I think a debugger can greatly accelerate the time it takes to find bugs. 
 %
@@ -1679,10 +1712,16 @@ Debuggers are also great tools to help understand programs, especially programs
 written by other people.
 \l also required to get stack trace when program dies
 
-The \plan debugger is called simply [[db]].
-\l also acid, and strace, but main one will be db.
+\plan has a few tools to help debug programs:
+[[db]] the original debugger coming from \unix,
+[[ratrace]] to {\em trace} other programs (similar to [[strace]] in Linux),
+and [[acid]] a {\em programmable debugger}.
+I will describe all of them but mostly focus on [[acid]] as well as
+the [[libmach]] library that abstracts over the executable file format
+and the architecture-specific machine details (registers, stack frames,
+binary instructions), and on which all those debuggers rely.
 
-\subsection{The profiler: [[prof]]}
+\subsection{The profilers: [[prof]], [[tprof]], [[stats]], [[iostats]]}
 \label{sec:profiler}
 % LATER
 
@@ -1692,11 +1731,18 @@ program.
 It is mainly used to optimize code by spotting where the program
 spends most of its time. It can be useful also to find bugs
 because unexpected statistics can sometimes be good hints to
-fix code where the programmer was expecting different results.
-\l cite jon bentley
+fix code where the programmer was expecting different
+results~\cite{more-programming-pearls}
 
-\t will see prof? tprof?  actually a few profiling programs, different
-\t statistics
+%claude:
+Profiling is not a single problem but a {spectrum} of needs:
+timing a command, identifying hot functions, or monitoring
+system-wide resource usage.
+\plan addresses each with a small focused tool:
+[[prof]] and [[tprof]] for function-level profiling,
+[[stats]] for live system monitoring,
+and [[iostats]] for I/O cost analysis.
+I will describe all of them.
 
 %\subsection{The typesetting system: [[troff]]}
 %alt: documentation system
@@ -1754,7 +1800,16 @@ to the screen device driver in the kernel.
 \l a bit ugly design to have lots of graphics related code in the kernel 
 \l (actually not that much LOC)
 \t called [[draw]]
-
+%claude:
+On the user side, applications do not talk to [[/dev/draw/]]
+directly but through [[libdraw]], which provides drawing
+primitives and event handling, and [[libimg]], which reads
+and writes standard image file formats (PNG, JPEG, GIF).
+%
+On the kernel side, the [[/dev/draw/]] driver itself relies
+on [[libmemdraw]] for in-memory bitmap operations
+%(Porter-Duff compositing, font rasterization)
+and [[libmemlayer]] for layer stacking and clipping.
 
 \subsection{The windowing system: [[rio]]}
 \label{sec:windowing}
@@ -1784,6 +1839,35 @@ In fact, an unusual feature of [[rio]] is that it can be run inside itself.
 % virtual screen
 
 \subsection{The graphical user interface toolkit: [[libpanel]]}
+
+%claude:
+A {\em GUI toolkit} provides the high-level {widgets} from which
+graphical applications are built: buttons, menus, sliders, 
+scroll bars, 
+%text fields, dialog boxes,
+and the {layout managers} that arrange them on screen.
+%
+A toolkit sits above the graphics stack
+% of Section~\ref{sec:graphics}
+and the windowing system:
+% of Section~\ref{sec:windowing}: 
+it turns drawing primitives
+(lines, rectangles, text) and raw input events
+(mouse clicks, key presses) into reusable interactive elements.
+
+%claude:
+The \plan toolkit is called [[libpanel]]. 
+%It is much smaller
+%than its \unix counterparts---a few thousand lines of C, compared
+%to the hundreds of thousands found in GTK, Qt, or Cocoa---yet it
+%provides the essential widget vocabulary (buttons, sliders,
+%popup menus, scrollable text) and a flexible {layout system}
+%based on nested row/column/border containers.
+%
+%[[libpanel]] is used by the few graphical applications in \plan
+%such as the [[stats]] profiler from
+%Section~\ref{sec:profiler} and the [[mothra]] web browser
+%described in Section~\ref{sec:browser}.
 
 \section{Networking}
 
@@ -1831,6 +1915,36 @@ the [[/net/]] device directory.
 
 \subsection{The web browser: [[mothra]]}
 \label{sec:browser}
+
+%claude:
+There are far too many {networking applications}
+to present in a single book---Email, Usenet news, FTP,
+telnet, and IRC, all played a role in the early Internet.
+I will focus on the one that has eclipsed all the others:
+the Web browser.
+
+%claude:
+A {\em Web browser} is a program that {fetches} hypertext
+documents over the network and {renders} them on the screen.
+%
+A modern Web browser can read mail, transfer files, chat,
+play video, and much more;
+it has grown so versatile that some treat it as an operating
+system on its own.
+
+\plan has a few experimental Web browsers but I will
+present only [[mothra]], one of the simplest one.
+It is using the [[libpanel]] GUI library I mentioned earlier.
+%
+[[mothra]] is much more
+limited than Firefox or Chrome---no JavaScript, no style
+sheets ---but its few thousand lines of C
+are small enough to read end-to-end and to understand how
+a browser is structured.
+% (HTML parsing, layout, rendering,
+%forms, image decoding, URL handling, and HTTP).
+%That is the reason I chose it for this book rather than a
+%more capable but unreadable codebase.
 
 %ocaml:
 %\subsection{The web browser: [[mmm]]}
@@ -1974,6 +2088,14 @@ It can be used to find code using {regular expressions}.
 \item [[sed]]: It can be used to help refactor code.
 \l stream editor
 \l and [[tr]]
+
+\item [[awk]]:
+%yoann: fill
+%claude:
+It generalizes the regexp-driven idea of [[grep]] and [[sed]]
+to a small {pattern-action language} that handles not just
+strings but also {numeric} computations,
+making it a very versatile and useful tool for a programmer.
 
 \item [[diff]]: It can be used to compare different versions
 of the same codebase.
