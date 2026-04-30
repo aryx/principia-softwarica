@@ -1,4 +1,4 @@
-/*s: editors/misc/ed.c */
+/*s: ed/ed.c */
 /*
  * Editor
  */
@@ -1993,4 +1993,4 @@ regerror(char *s)
     error(Q);
 }
 /*e: function [[regerror]](ed.c) */
-/*e: editors/misc/ed.c */
+/*e: ed/ed.c */
