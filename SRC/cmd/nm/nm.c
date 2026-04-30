@@ -1,1 +1,0 @@
-../../../linkers/misc/nm.c
