@@ -77,8 +77,8 @@ syscallfmt(int syscallno, ulong pc, va_list list)
     if(syscallno > nsyscall)
         fmtprint(&fmt, " %d ", syscallno);
     else
-        //pad: was "%s " but I adjusted for my iwp9 ratrace demo
-        // of changing syscall number and seing the effect
+        //pad: was "%s " but I adjusted for my IWP9 ratrace demo
+        // of changing a syscall number and seing the effect
         fmtprint(&fmt, "%7s(%02d) ", sysctab[syscallno]?
             sysctab[syscallno]: "huh?", syscallno);
 
