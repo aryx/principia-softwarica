@@ -41,6 +41,7 @@ PROGRAMS=\
  debuggers\
  profilers\
  editors\
+ version_control\
  \
  networking\
  browsers\
