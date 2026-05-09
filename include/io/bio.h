@@ -120,4 +120,7 @@ int	Bgetd(Biobufhdr*, double*);
 vlong	Boffset(Biobufhdr*);
 char*	Brdstr(Biobufhdr*, int, int);
 
+// from 9front/plan9port
+Biobuf*	Bfdopen(fdt, int);
+
 /*e: include/io/bio.h */
