@@ -4,6 +4,8 @@ A fork of Plan 9 from Bell Labs, curated for education.
 
 ![Plan 9 running under QEMU: rio windowing system with shell, compiler, networking, and graphics](docs/pics/plan9-2.png)
 
+See this <a href="https://www.youtube.com/watch?v=blVTDhr4QN8">video</a> for a presentation of the project.
+
 ## About Plan 9
 
 Plan 9 is an operating system considered by many to be the successor
