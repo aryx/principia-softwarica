@@ -31,6 +31,9 @@ enum {
 	MiB		= 1024*KiB,
 };
 
+//TODO: move in libc.h like in 9front (or 9p.h)
+#define IOUNIT	32768U	/* default buffer size for 9p io */
+
 enum {
 	GNone	= 0,
 	GCommit	= 1,
