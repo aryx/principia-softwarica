@@ -212,11 +212,11 @@ pmatch(void *p, char *s, char *start)
 {
 	Resub m;
 
-	m.sp = start;
-	m.ep = 0;
+	m.s.sp = start;
+	m.e.ep = 0;
 	if (regexec((Reprog *) p, (char *) s, &m, 1)) {
-		patbeg = m.sp;
-		patlen = m.ep-m.sp;
+		patbeg = m.s.sp;
+		patlen = m.e.ep-m.s.sp;
 		return 1;
 	}
 	patlen = -1;
