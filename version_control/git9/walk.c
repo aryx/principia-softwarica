@@ -392,16 +392,13 @@ main(int argc, char **argv)
 	Hash h;
 	Dir rn;
 
-	gitinit();
-	if(access(".git/fs/ctl", AEXIST) != 0)
-		sysfatal("no running git/fs");
+	gitinit(repopath, sizeof(repopath), &nrel);
 	if(getwd(wdirpath, sizeof(wdirpath)) == nil)
 		sysfatal("getwd: %r");
-	if(findrepo(repopath, sizeof(repopath), &nrel) == -1)
-		sysfatal("find root: %r");
 	if(chdir(repopath) == -1)
 		sysfatal("chdir: %r");
-
+	if(access(".git/fs/ctl", AEXIST) != 0)
+		sysfatal("no running git/fs");
 	ARGBEGIN{
 	case 'q':
 		quiet++;
@@ -586,7 +583,7 @@ Stale:
 					show(o, Tflg, tstr, wdir[j].path);
 				else
 					show(o, Mflg, mstr, wdir[j].path);
-			}else if(printflg & Uflg && pfxmatch(idx[i].path, argrel, argn, argc))
+			}else if(printflg & Uflg && pfxmatch(wdir[j].path, argrel, argn, argc))
 				show(o, Uflg, ustr, wdir[j].path);
 			j++;
 		}

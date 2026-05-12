@@ -4,11 +4,11 @@
 
 #include "git.h"
 
-Reprog *authorpat;
-Hash Zhash;
-
-int chattygit;
-int interactive = 1;
+Reprog	*authorpat;
+Hash	Zhash;
+int	chattygit;
+int	interactive = 1;
+int	gitdirmode = -1;
 
 enum {
 	Seed		= 2928213749ULL
@@ -85,8 +85,8 @@ hasheq(Hash *a, Hash *b)
 	return memcmp(a->h, b->h, sizeof(a->h)) == 0;
 }
 
-static int
-charval(int c, int *err)
+int
+charval(int c)
 {
 	if(c >= '0' && c <= '9')
 		return c - '0';
@@ -94,7 +94,7 @@ charval(int c, int *err)
 		return c - 'a' + 10;
 	if(c >= 'A' && c <= 'F')
 		return c - 'A' + 10;
-	*err = 1;
+	werrstr("invalid hex char");
 	return -1;
 }
 
@@ -243,9 +243,35 @@ Qfmt(Fmt *fmt)
 		return fmtprint(fmt, "%llux.%lud.%hhx", q.path, q.vers, q.type);
 }
 
-void
-gitinit(void)
+/* Finds the directory containing the git repo. */
+static void
+findrepo(char *buf, int nbuf, int *nrel)
 {
+	char *p, *suff;
+
+	suff = "/.git/HEAD";
+	if(getwd(buf, nbuf - strlen(suff) - 1) == nil)
+		sysfatal("getwd: %r");
+
+	*nrel = 0;
+	for(p = buf + strlen(buf); p != nil; p = strrchr(buf, '/')){
+		strcpy(p, suff);
+		if(access(buf, AEXIST) == 0){
+			p[p == buf] = '\0';
+			return;
+		}
+		*nrel += 1;
+		*p = '\0';
+	}
+	sysfatal("not a git repository");
+}
+
+void
+gitinit(char *root, int nroot, int *nrel)
+{
+	char repo[512] = ".git";
+	Dir *d;
+
 	fmtinstall('H', Hfmt);
 	fmtinstall('T', Tfmt);
 	fmtinstall('O', Ofmt);
@@ -254,23 +280,27 @@ gitinit(void)
 	deflateinit();
 	authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
 	osinit(&objcache);
+	if(root != nil){
+		findrepo(root, nroot, nrel);
+		snprint(repo, sizeof(repo), "%s/.git", root);
+	}
+	if((d = dirstat(repo)) == nil)
+		sysfatal("stat %s: %r", repo);
+	gitdirmode = d->mode & 0777;
+	free(d);
 }
 
 int
 hparse(Hash *h, char *b)
 {
-	int i, err;
+	int i, c0, c1;
 
-	err = 0;
-	for(i = 0; i < sizeof(h->h); i++){
-		err = 0;
-		h->h[i] = 0;
-		h->h[i] |= ((charval(b[2*i], &err) & 0xf) << 4);
-		h->h[i] |= ((charval(b[2*i+1], &err)& 0xf) << 0);
-		if(err){
-			werrstr("invalid hash");
+	for(i = 0; i < nelem(h->h); i++){
+		if((c0 = charval(b[2*i+0])) == -1)
 			return -1;
-		}
+		if((c1 = charval(b[2*i+1])) == -1)
+			return -1;
+		h->h[i] = (c0 << 4) | c1;
 	}
 	return 0;
 }
@@ -337,30 +367,6 @@ _dprint(char *fmt, ...)
 	va_start(ap, fmt);
 	vfprint(2, fmt, ap);
 	va_end(ap);
-}
-
-/* Finds the directory containing the git repo. */
-int
-findrepo(char *buf, int nbuf, int *nrel)
-{
-	char *p, *suff;
-
-	suff = "/.git/HEAD";
-	if(getwd(buf, nbuf - strlen(suff) - 1) == nil)
-		return -1;
-
-	*nrel = 0;
-	for(p = buf + strlen(buf); p != nil; p = strrchr(buf, '/')){
-		strcpy(p, suff);
-		if(access(buf, AEXIST) == 0){
-			p[p == buf] = '\0';
-			return 0;
-		}
-		*nrel += 1;
-		*p = '\0';
-	}
-	werrstr("not a git repository");
-	return -1;
 }
 
 int

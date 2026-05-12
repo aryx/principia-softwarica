@@ -8,8 +8,7 @@
 char	*pathpfx = nil;
 int	allowwrite;
 
-//_Noreturn
-static void
+_Noreturn static void
 fail(Conn *c, char *fmt, ...)
 {
 	char msg[ERRMAX];
@@ -46,7 +45,7 @@ int
 showrefs(Conn *c)
 {
 	char **names, *s, buf[256];
-	int i, r, ret, nrefs;
+	int i, ret, nrefs;
 	Hash head, *refs;
 
 	ret = -1;
@@ -54,14 +53,10 @@ showrefs(Conn *c)
 	refs = nil;
 	names = nil;
 
-	s = gethead(&head,  buf, sizeof(buf));
-	if(s != nil)
-		r = fmtpkt(c, "%H HEAD%csymref=HEAD:%s no-thin\n", head, 0, s);
-	else
-		r = fmtpkt(c, "%H HEAD%cno-thin\n", head, 0);
-	if(r == -1)
+	if((s = gethead(&head,  buf, sizeof(buf))) == nil)
+		memset(&head, 0, sizeof(Hash));
+	if(fmtpkt(c, "%H HEAD%csymref=HEAD:%s no-thin\n", head, 0, s) == -1)
 		goto error;
-
 	if((nrefs = listrefs(&refs, &names)) == -1)
 		fail(c, "listrefs: %r");
 	for(i = 0; i < nrefs; i++){
@@ -384,22 +379,20 @@ updatepack(Conn *c)
 	}
 	if(checkhash(pfd, packsz, &h) == -1){
 		dprint(1, "hash mismatch\n");
-		goto error_1;
+		goto error1;
 	}
 	if(indexpack(packtmp, idxtmp, h) == -1){
 		dprint(1, "indexing failed: %r\n");
-		goto error_1;
+		goto error1;
 	}
 	if(rename(packtmp, idxtmp, h) == -1){
 		dprint(1, "rename failed: %r\n");
-		goto error_2;
+		goto error2;
 	}
 	return 0;
 
-error_2:
-    remove(idxtmp);
-error_1:
-    remove(packtmp);
+error2:	remove(idxtmp);
+error1:	remove(packtmp);
 	return -1;
 }	
 
@@ -500,7 +493,7 @@ updaterefs(Conn *c, Hash *cur, Hash *upd, char **ref, int nupd)
 			snprint(buf, sizeof(buf), "open HEAD: %r");
 			goto error;
 		}
-		if(fprint(fd, "ref: %s", ref[0]) == -1){
+		if(fprint(fd, "ref: %s", ref[newidx]) == -1){
 			snprint(buf, sizeof(buf), "write HEAD ref: %r");
 			goto error;
 		}
@@ -508,7 +501,8 @@ updaterefs(Conn *c, Hash *cur, Hash *upd, char **ref, int nupd)
 	}
 	ret = 0;
 error:
-	fmtpkt(c, "ERR %s", buf);
+	if(ret != 0)
+		fmtpkt(c, "ERR %s", buf);
 	close(lockfd);
 	werrstr(buf);
 	return ret;
@@ -580,7 +574,6 @@ main(int argc, char **argv)
 		break;
 	}ARGEND;
 
-	gitinit();
 	interactive = 0;
 	if(rfork(RFNAMEG) == -1)
 		sysfatal("rfork: %r");
@@ -602,8 +595,7 @@ main(int argc, char **argv)
 		fail(&c, "no such repo: %s", repo);
 	if(chdir("/") == -1)
 		fail(&c, "no such repo");
-	if(access(".git", AREAD) == -1)
-		fail(&c, "no such repo");
+	gitinit(nil, 0, nil);
 	if(strcmp(cmd, "git-receive-pack") == 0)
 		recvpack(&c);
 	else if(strcmp(cmd, "git-upload-pack") == 0)

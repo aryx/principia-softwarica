@@ -350,6 +350,24 @@ range(Eval *ev)
 	return 0;
 }
 
+static int
+matchpfx(Hash *h, char *ref)
+{
+	int i, c;
+	Hash pfx;
+	char *p;
+
+	memset(&pfx, 0, sizeof(Hash));
+	for(i = 0, p = ref; *p; p++, i++){
+		if((c = charval(*p)) == -1)
+			return -1;
+		pfx.h[i/2] |= c;
+		if((i & 1) == 0)
+			pfx.h[i/2] <<= 4;
+	}
+	return expandprefix(h, pfx, i*4);
+}
+
 int
 readref(Hash *h, char *ref)
 {
@@ -357,7 +375,6 @@ readref(Hash *h, char *ref)
 	char buf[256], s[256], **pfx;
 	int r, f, n;
 
-	/* TODO: support hash prefixes */
 	if((r = hparse(h, ref)) != -1)
 		return r;
 	if(strcmp(ref, "HEAD") == 0){
@@ -383,6 +400,8 @@ readref(Hash *h, char *ref)
 		close(f);
 		goto found;
 	}
+	if((r = matchpfx(h, ref)) != -1)
+		return r;
 	return -1;
 
 found:

@@ -31,9 +31,6 @@ enum {
 	MiB		= 1024*KiB,
 };
 
-//TODO: move in libc.h like in 9front (or 9p.h)
-#define IOUNIT	32768U	/* default buffer size for 9p io */
-
 enum {
 	GNone	= 0,
 	GCommit	= 1,
@@ -264,6 +261,7 @@ extern vlong	cachemax;
 extern Hash	Zhash;
 extern int	chattygit;
 extern int	interactive;
+extern int	gitdirmode;
 
 #pragma varargck type "H" Hash
 #pragma varargck type "T" int
@@ -274,7 +272,7 @@ int Tfmt(Fmt*);
 int Ofmt(Fmt*);
 int Qfmt(Fmt*);
 
-void gitinit(void);
+void gitinit(char*, int, int*);
 
 /* object io */
 int	resolverefs(Hash **, char *);
@@ -284,6 +282,7 @@ Object	*ancestor(Object *, Object *);
 int	findtwixt(Hash *, int, Hash *, int, Object ***, int *);
 Object	*readobject(Hash);
 Object	*clearedobject(Hash, int);
+int	expandprefix(Hash*, Hash, int);
 void	parseobject(Object *);
 int	indexpack(char *, char *, Hash);
 int	writepack(int, Hash*, int, Hash*, int, Hash*);
@@ -320,10 +319,10 @@ int	hparse(Hash *, char *);
 int	hassuffix(char *, char *);
 int	swapsuffix(char *, int, char *, char *, char *);
 char	*strip(char *);
-int	findrepo(char *, int, int*);
 int	showprogress(int, int);
 u64int	murmurhash2(void*, usize);
 Qid	parseqid(char*);
+int	charval(int);
 
 /* packing */
 void	dtinit(Dtab *, Object*);

@@ -10,8 +10,7 @@ eval `''{aux/getflags $*} || exec aux/usage
 
 modified=()
 deleted=()
-idxchange=.git/INDEX9.changes
-touch $idxchange
+failed=()
 if(~ $#* 0){
 	if(~ $#listall 0)
 		awk '$1=="branch"{print $2}' < $gitfs/ctl
@@ -78,47 +77,40 @@ basedir=`{git/query -p $base}
 dirtypaths=()
 if(! ~ $#modified 0 || ! ~ $#deleted 0)
 	dirtypaths=`$nl{git/walk -cfRMA $modified $deleted}
-if(~ $#dirtypaths 0)
-	cleanpaths=($modified $deleted)
-if not {
-	cleanpaths=()
-	for(p in $modified $deleted)
-		if(! ~ $p $dirtypaths)
-			cleanpaths=($cleanpaths $p)
-}
 
-echo $commit > .git/$new
-
-for(d in $deleted){
-	if(! test -d $d){
-		rm -f $d
-		echo R NOQID 0 $d >> $idxchange
+>>[3].git/INDEX9{
+	for(d in $deleted){
+		if(! test -d $d){
+			rm -f $d
+			echo R NOQID 0 $d >>[1=3]
+		}
+	}
+	for(m in $modified $deleted) if(! ~ $m $dirtypaths){
+		d=`$nl{basename -d $m}
+		mkdir -p $d
+		# Modifications can turn a file into
+		# a directory, or vice versa, so we
+		# need to delete and copy the files
+		# over.
+		a=dir
+		b=dir
+		if(test -f $m)
+			a=file
+		if(test -f $basedir/tree/$m)
+			b=file
+		if(! ~ $a $b){
+			rm -rf $m
+			echo R NOQID 0 $m >>[1=3]
+		}
+		if(~ $b file){
+			echo T NOQID 0 $m >>[1=3]
+			cp -x -- $basedir/tree/$m $m || {echo cp failed: $m; failed=1}
+			touch -c $m
+		}
 	}
 }
-
-for(m in $cleanpaths){
-	d=`$nl{basename -d $m}
-	mkdir -p $d
-	# Modifications can turn a file into
-	# a directory, or vice versa, so we
-	# need to delete and copy the files
-	# over.
-	a=dir
-	b=dir
-	if(test -f $m)
-		a=file
-	if(test -f $basedir/tree/$m)
-		b=file
-	if(! ~ $a $b){
-		rm -rf $m
-		echo R NOQID 0 $m >> $idxchange
-	}
-	if(~ $b file){
-		cp -x -- $basedir/tree/$m $m
-		echo T NOQID 0 $m >> $idxchange
-		touch $m
-	}
-}
+modified=()
+deleted=()
 
 for(ours in $dirtypaths){
 	common=$gitfs/object/$orig/tree/$ours
@@ -128,15 +120,17 @@ for(ours in $dirtypaths){
 	if(! ~ $st '')
 		>[1=2] echo merge failed $ours: $st
 }
+dirtypaths=()
+
 if(~ $new */*)
 	mkdir -p .git/`{basename -d $new}
-if(! ~ $#stay 0){
-	echo $commit > .git/$new
+echo $commit > .git/$new
+if(! ~ $#stay 0)
 	exit
+if(~ $failed 1){
+	echo 'pull failed: fix errors and try again' >[1=2]
+	exit nopull
 }
-
-cat $idxchange >> .git/INDEX9
 echo ref: $new > .git/HEAD
 echo $new: `{git/query $new}
-rm -f $idxchange
 exit ''

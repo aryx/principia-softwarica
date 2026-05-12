@@ -266,7 +266,8 @@ fetchpack(Conn *c)
 		}
 		first = 0;
 
-		getfields(buf, sp, nelem(sp), 1, " \t\n\r");
+		if(getfields(buf, sp, nelem(sp), 1, " \t\n\r") < 2)
+			sysfatal("invalid ref line");
 		if(strstr(sp[1], "^{}"))
 			continue;
 		if(!okrefname(sp[1]))
@@ -301,10 +302,10 @@ fetchpack(Conn *c)
 	fmtcaps(c, caps, sizeof(caps));
 	for(i = 0; i < nref; i++){
 		if(hasheq(&have[i], &want[i]))
-			continue;
+			goto skip;
 		for(j = 0; j < i; j++)
 			if(hasheq(&want[i], &want[j]))
-				continue;
+				goto skip;
 		if((o = readobject(want[i])) != nil){
 			unref(o);
 			continue;
@@ -313,6 +314,7 @@ fetchpack(Conn *c)
 			sysfatal("could not send want for %H", want[i]);
 		caps[0] = 0;
 		req = 1;
+skip:;
 	}
 	flushpkt(c);
 
@@ -401,8 +403,12 @@ fetchpack(Conn *c)
 				sysfatal("read: %r");
 			if(strncmp(buf, "NAK\n", 4) == 0)
 				break;
-			if(strncmp(buf, "ACK ", 4) != 0)
-				sysfatal("bad response: '%s'", buf);
+			if(strncmp(buf, "ACK ", 4) == 0){
+				if(getfields(buf, sp, nelem(sp), 1, " \t") == 2)
+					break;
+				continue;
+			}
+			sysfatal("bad response: '%s'", buf);
 		}
 	} 
 	if(readpkt(c, buf, sizeof(buf)) == -1)
@@ -496,7 +502,7 @@ main(int argc, char **argv)
 		break;
 	}ARGEND;
 
-	gitinit();
+	gitinit(nil, 0, nil);
 	if(argc != 1)
 		usage();
 

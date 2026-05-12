@@ -57,6 +57,8 @@ lookup(Pfilt *pf, Object *o)
 {
 	int i;
 
+	if(o == nil)
+		return Zhash;
 	for(i = 0; i < o->tree->nent; i++)
 		if(strcmp(o->tree->ent[i].name, pf->elt) == 0)
 			return o->tree->ent[i].h;
@@ -72,22 +74,20 @@ matchesfilter1(Pfilt *pf, Object *t, Object *pt)
 
 	if(pf->show)
 		return 1;
-	if(t->type != pt->type)
-		return 1;
-	if(t->type != GTree)
-		return 0;
+	if(t != nil){
+		if(pt != nil && t->type != pt->type)
+			return 1;
+		if(t->type != GTree)
+			return 0;
+	}
 
 	for(i = 0; i < pf->nsub; i++){
 		ha = lookup(&pf->sub[i], t);
 		hb = lookup(&pf->sub[i], pt);
 		if(hasheq(&ha, &hb))
 			continue;
-		if(hasheq(&ha, &Zhash) || hasheq(&hb, &Zhash))
-			return 1;
-		if((a = readobject(ha)) == nil)
-			sysfatal("read %H: %r", ha);
-		if((b = readobject(hb)) == nil)
-			sysfatal("read %H: %r", hb);
+		a = readobject(ha);
+		b = readobject(hb);
 		r = matchesfilter1(&pf->sub[i], a, b);
 		unref(a);
 		unref(b);
@@ -119,7 +119,9 @@ matchesfilter(Object *o)
 		if(r)
 			return 1;
 	}
-	return o->commit->nparent == 0;
+	if(o->commit->nparent == 0)
+		return matchesfilter1(pathfilt, t, nil);
+	return 0;
 }
 
 
@@ -135,7 +137,7 @@ nextline(char *p, char *e)
 static int
 show(Object *o)
 {
-	//Tm tm;
+	Tm tm;
 	char *p, *q, *e;
 
 	assert(o->type == GCommit);
@@ -147,15 +149,13 @@ show(Object *o)
 		Bwrite(out, p, q - p);
 		Bputc(out, '\n');
 	}else{
-        // tzload is 9front only
-		//tmtime(&tm, o->commit->mtime, tzload("local"));
+		tmtime(&tm, o->commit->mtime, tzload("local"));
 		Bprint(out, "Hash:\t%H\n", o->hash);
 		Bprint(out, "Author:\t%s\n", o->commit->author);
 		if(o->commit->committer != nil
 		&& strcmp(o->commit->author, o->commit->committer) != 0)
 			Bprint(out, "Committer:\t%s\n", o->commit->committer);
-		//Bprint(out, "Date:\t%τ\n", tmfmt(&tm, "WW MMM D hh:mm:ss z YYYY"));
-+		Bprint(out, "Date:\t%s", ctime(o->commit->mtime));
+		Bprint(out, "Date:\t%τ\n", tmfmt(&tm, "WW MMM D hh:mm:ss z YYYY"));
 		Bprint(out, "\n");
 		p = o->commit->msg;
 		e = p + o->commit->nmsg;
@@ -263,8 +263,7 @@ main(int argc, char **argv)
 		break;
 	}ARGEND;
 
-	if(findrepo(repo, sizeof(repo), &nrel) == -1)
-		sysfatal("find root: %r");
+	gitinit(repo, sizeof(repo), &nrel);
 	nrepo = strlen(repo);
 	if(argc != 0){
 		if(getwd(path, sizeof(path)) == nil)
@@ -288,8 +287,7 @@ main(int argc, char **argv)
 	if(chdir(repo) == -1)
 		sysfatal("chdir: %r");
 
-	gitinit();
-	//tmfmtinstall();
+	tmfmtinstall();
 	out = Bfdopen(1, OWRITE);
 	if(queryexpr != nil)
 		showquery(queryexpr);

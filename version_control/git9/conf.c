@@ -62,22 +62,27 @@ main(int argc, char **argv)
 	int i, j, nrel;
 
 	ARGBEGIN{
-	case 'f':	file[nfile++]=EARGF(usage());	break;
 	case 'r':	findroot++;			break;
 	case 'a':	showall++;			break;
 	default:	usage();			break;
+	case 'f':
+		if(nfile == nelem(file))
+			sysfatal("too many configs");
+		file[nfile++]=EARGF(usage());
+		break;
 	}ARGEND;
 
+	gitinit(repo, sizeof(repo), &nrel);
 	if(findroot){
-		if(findrepo(repo, sizeof(repo), &nrel) == -1)
-			sysfatal("%r");
 		print("%s\n", repo);
 		exits(nil);
 	}
 	if(nfile == 0){
-		file[nfile++] = ".git/config";
+		if((file[nfile++] = smprint("%s/.git/config", repo)) == nil)
+			sysfatal("smprint: %r");
 		if((p = getenv("home")) != nil)
-			file[nfile++] = smprint("%s/lib/git/config", p);
+			if((file[nfile++] = smprint("%s/lib/git/config", p)) == nil)
+				sysfatal("smprint: %r");
 		file[nfile++] = "/sys/lib/git/config";
 	}
 
