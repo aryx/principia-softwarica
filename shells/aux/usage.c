@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
 
 void
 main(void)
@@ -30,7 +31,12 @@ main(void)
 	if(flags[0]){
 		single = 0;
 		for(p=flags; *p; ){
+			while(isspace(*p))
+				p++;
 			p += chartorune(&r, p);
+			if(*p == ':')
+				while(*p && *p != ',' && !isspace(*p))
+					p++;
 			if(*p == ',' || *p == 0){
 				if(!single){
 					fmtprint(&fmt, " [-");
@@ -41,7 +47,7 @@ main(void)
 					p++;
 				continue;
 			}
-			while(*p == ' ')
+			while(isspace(*p))
 				p++;
 			if(single){
 				fmtprint(&fmt, "]");
