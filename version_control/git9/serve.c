@@ -379,20 +379,20 @@ updatepack(Conn *c)
 	}
 	if(checkhash(pfd, packsz, &h) == -1){
 		dprint(1, "hash mismatch\n");
-		goto error1;
+		goto error_1;
 	}
 	if(indexpack(packtmp, idxtmp, h) == -1){
 		dprint(1, "indexing failed: %r\n");
-		goto error1;
+		goto error_1;
 	}
 	if(rename(packtmp, idxtmp, h) == -1){
 		dprint(1, "rename failed: %r\n");
-		goto error2;
+		goto error_2;
 	}
 	return 0;
 
-error2:	remove(idxtmp);
-error1:	remove(packtmp);
+error_2:	remove(idxtmp);
+error_1:	remove(packtmp);
 	return -1;
 }	
 

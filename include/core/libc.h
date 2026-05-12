@@ -64,6 +64,8 @@ typedef int fdt; // file descriptor type
 #define ERROR_1 1
 #define ERROR_NEG1 (-1)
 /*e: constant [[ERRORxxx]] */
+//TODO: note that this prevents to have C labels using those names
+// which caused pbs when compiling git9/serve.c for example
 /*s: type [[errorxxx]] */
 // later: unify all of that to be more consistent!
 typedef int error0; // 0 is the error value
@@ -82,6 +84,9 @@ typedef int errorn; // 1 or more means error
 /*s: function [[offsetof]] */
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
 /*e: function [[offsetof]] */
+
+//TODO: should be recognized by cc/lex.c instead
+#define _Noreturn
 
 //----------------------------------------------------------------------------
 // Exception

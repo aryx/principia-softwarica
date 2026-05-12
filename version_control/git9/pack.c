@@ -865,18 +865,18 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 	
 	if(!regexec(authorpat, buf, m, nelem(m)))
 		sysfatal("invalid author line %s", buf);
-	nm = m[1].ep - m[1].sp;
+	nm = m[1].e.ep - m[1].s.sp;
 	*name = emalloc(nm + 1);
-	memcpy(*name, m[1].sp, nm);
+	memcpy(*name, m[1].s.sp, nm);
 	buf[nm] = 0;
 	
-	nm = m[3].ep - m[3].sp;
-	memcpy(buf, m[3].sp, nm);
+	nm = m[3].e.ep - m[3].s.sp;
+	memcpy(buf, m[3].s.sp, nm);
 	buf[nm] = 0;
 	tz = atoll(buf);
 
-	nm = m[2].ep - m[2].sp;
-	memcpy(buf, m[2].sp, nm);
+	nm = m[2].e.ep - m[2].s.sp;
+	memcpy(buf, m[2].s.sp, nm);
 	buf[nm] = 0;
 	*time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
 
