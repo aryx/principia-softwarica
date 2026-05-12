@@ -46,7 +46,7 @@ pcmd(io *f, tree *t)
     case '"':	pfmt(f, "$\"%t", c0); break;
     case '&':	pfmt(f, "%t&", c0); break;
     case '^':	pfmt(f, "%t^%t", c0, c1); break;
-    case '`':	pfmt(f, "`%t", c0); break;
+    case '`':	pfmt(f, "`%t%t", c0, c1); break;
     case ANDAND:pfmt(f, "%t && %t", c0, c1); break;
     case OROR:	pfmt(f, "%t || %t", c0, c1); break;
     case BANG:	pfmt(f, "! %t", c0); break;
