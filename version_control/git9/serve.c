@@ -1,3 +1,4 @@
+/*s: git9/serve.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -8,6 +9,7 @@
 char    *pathpfx = nil;
 int allowwrite;
 
+/*s: function [[fail (git9/serve.c)]] */
 _Noreturn static void
 fail(Conn *c, char *fmt, ...)
 {
@@ -20,7 +22,9 @@ fail(Conn *c, char *fmt, ...)
     fmtpkt(c, "ERR %s\n", msg);
     sysfatal("%s", msg);
 }
+/*e: function [[fail (git9/serve.c)]] */
 
+/*s: function [[gethead]] */
 char*
 gethead(Hash *h, char *ref, int nref)
 {
@@ -40,7 +44,9 @@ gethead(Hash *h, char *ref, int nref)
         return nil;
     return s;
 }
+/*e: function [[gethead]] */
 
+/*s: function [[showrefs]] */
 int
 showrefs(Conn *c)
 {
@@ -75,7 +81,9 @@ error:
     free(refs);
     return ret;
 }
+/*e: function [[showrefs]] */
 
+/*s: function [[servnegotiate]] */
 int
 servnegotiate(Conn *c, Hash **head, int *nhead, Hash **tail, int *ntail)
 {
@@ -153,7 +161,9 @@ error:
     free(*tail);
     return -1;
 }
+/*e: function [[servnegotiate]] */
 
+/*s: function [[servpack]] */
 int
 servpack(Conn *c)
 {
@@ -168,7 +178,9 @@ servpack(Conn *c)
         fail(c, "send: %r");
     return 0;
 }
+/*e: function [[servpack]] */
 
+/*s: function [[validref]] */
 int
 validref(char *s)
 {
@@ -177,7 +189,9 @@ validref(char *s)
         return 0;
     return okref(s);
 }
+/*e: function [[validref]] */
 
+/*s: function [[recvnegotiate]] */
 int
 recvnegotiate(Conn *c, Hash **cur, Hash **upd, char ***ref, int *nupd)
 {
@@ -239,7 +253,9 @@ error:
     free(*ref);
     return -1;
 }
+/*e: function [[recvnegotiate]] */
 
+/*s: function [[rename (git9/serve.c)]] */
 int
 rename(char *pack, char *idx, Hash h)
 {
@@ -262,7 +278,9 @@ rename(char *pack, char *idx, Hash h)
         return -1;
     return 0;
 }
+/*e: function [[rename (git9/serve.c)]] */
 
+/*s: function [[checkhash (git9/serve.c)]] */
 int
 checkhash(int fd, vlong sz, Hash *hcomp)
 {
@@ -302,7 +320,9 @@ checkhash(int fd, vlong sz, Hash *hcomp)
     }
     return 0;
 }
+/*e: function [[checkhash (git9/serve.c)]] */
 
+/*s: function [[mkdir]] */
 int
 mkdir(char *dir)
 {
@@ -319,7 +339,9 @@ mkdir(char *dir)
     close(f);
     return 0;
 }
+/*e: function [[mkdir]] */
 
+/*s: function [[mkpath]] */
 int
 mkpath(char *path)
 {
@@ -341,7 +363,9 @@ mkpath(char *path)
         *p++ = '/';
     }
 }
+/*e: function [[mkpath]] */
 
+/*s: function [[updatepack]] */
 int
 updatepack(Conn *c)
 {
@@ -395,7 +419,9 @@ error_2:    remove(idxtmp);
 error_1:    remove(packtmp);
     return -1;
 }   
+/*e: function [[updatepack]] */
 
+/*s: function [[lockrepo]] */
 int
 lockrepo(void)
 {
@@ -408,7 +434,9 @@ lockrepo(void)
     }
     return -1;
 }
+/*e: function [[lockrepo]] */
 
+/*s: function [[updaterefs]] */
 int
 updaterefs(Conn *c, Hash *cur, Hash *upd, char **ref, int nupd)
 {
@@ -507,7 +535,9 @@ error:
     werrstr(buf);
     return ret;
 }
+/*e: function [[updaterefs]] */
 
+/*s: function [[recvpack]] */
 int
 recvpack(Conn *c)
 {
@@ -525,7 +555,9 @@ recvpack(Conn *c)
         sysfatal("update refs: %r");
     return 0;
 }
+/*e: function [[recvpack]] */
 
+/*s: function [[parsecmd]] */
 char*
 parsecmd(char *buf, char *cmd, int ncmd)
 {
@@ -543,14 +575,18 @@ parsecmd(char *buf, char *cmd, int ncmd)
         p++;
     return p;
 }
+/*e: function [[parsecmd]] */
 
+/*s: function [[usage (git9/serve.c)]] */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-dw] [-r rel]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/serve.c)]] */
 
+/*s: function [[main (git9/serve.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -573,6 +609,7 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+/*e: function [[main (git9/serve.c)]] */
 
     interactive = 0;
     if(rfork(RFNAMEG) == -1)
@@ -604,3 +641,4 @@ main(int argc, char **argv)
         fail(&c, "unsupported command '%s'", cmd);
     exits(nil);
 }
+/*e: git9/serve.c */

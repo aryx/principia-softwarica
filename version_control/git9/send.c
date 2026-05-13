@@ -1,3 +1,4 @@
+/*s: git9/send.c */
 #include <u.h>
 #include <libc.h>
 
@@ -20,6 +21,7 @@ int nremoved;
 int npacked;
 int nsent;
 
+/*s: function [[findref]] */
 int
 findref(char **r, int nr, char *ref)
 {
@@ -29,7 +31,9 @@ findref(char **r, int nr, char *ref)
             return i;
     return -1;
 }
+/*e: function [[findref]] */
 
+/*s: function [[findkey]] */
 int
 findkey(Map *m, int nm, char *ref)
 {
@@ -39,7 +43,9 @@ findkey(Map *m, int nm, char *ref)
             return i;
     return -1;
 }
+/*e: function [[findkey]] */
 
+/*s: function [[readours]] */
 int
 readours(Hash **tailp, char ***refp)
 {
@@ -81,7 +87,9 @@ readours(Hash **tailp, char ***refp)
     *refp = ref;
     return nu;  
 }
+/*e: function [[readours]] */
 
+/*s: function [[sendpack]] */
 int
 sendpack(Conn *c)
 {
@@ -222,14 +230,18 @@ sendpack(Conn *c)
     }
     return 0;
 }
+/*e: function [[sendpack]] */
 
+/*s: function [[usage (git9/send.c)]] */
 void
 usage(void)
 {
     fprint(2, "usage: %s remote [reponame]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/send.c)]] */
 
+/*s: function [[main (git9/send.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -267,6 +279,7 @@ main(int argc, char **argv)
         nbranch++;
         break;
     }ARGEND;
+/*e: function [[main (git9/send.c)]] */
 
     gitinit(nil, 0, nil);
     if(argc != 1)
@@ -278,3 +291,4 @@ main(int argc, char **argv)
     closeconn(&c);
     exits(nil);
 }
+/*e: git9/send.c */

@@ -1,3 +1,4 @@
+/*s: git9/log.c */
 #include <u.h>
 #include <libc.h>
 #include "git.h"
@@ -20,6 +21,7 @@ Objset  done;
 Objq    objq;
 Pfilt   *pathfilt;
 
+/*s: function [[filteradd]] */
 void
 filteradd(Pfilt *pf, char *path)
 {
@@ -51,7 +53,9 @@ filteradd(Pfilt *pf, char *path)
         filteradd(&pf->sub[pf->nsub], e);
     pf->nsub++;
 }
+/*e: function [[filteradd]] */
 
+/*s: function [[lookup (git9/log.c)]] */
 Hash
 lookup(Pfilt *pf, Object *o)
 {
@@ -64,7 +68,9 @@ lookup(Pfilt *pf, Object *o)
             return o->tree->ent[i].h;
     return Zhash;
 }
+/*e: function [[lookup (git9/log.c)]] */
 
+/*s: function [[matchesfilter1]] */
 int
 matchesfilter1(Pfilt *pf, Object *t, Object *pt)
 {
@@ -96,7 +102,9 @@ matchesfilter1(Pfilt *pf, Object *t, Object *pt)
     }
     return 0;
 }
+/*e: function [[matchesfilter1]] */
 
+/*s: function [[matchesfilter]] */
 int
 matchesfilter(Object *o)
 {
@@ -123,8 +131,10 @@ matchesfilter(Object *o)
         return matchesfilter1(pathfilt, t, nil);
     return 0;
 }
+/*e: function [[matchesfilter]] */
 
 
+/*s: function [[nextline]] */
 static char*
 nextline(char *p, char *e)
 {
@@ -133,7 +143,9 @@ nextline(char *p, char *e)
             break;
     return p;
 }
+/*e: function [[nextline]] */
 
+/*s: function [[show]] */
 static int
 show(Object *o)
 {
@@ -174,7 +186,9 @@ show(Object *o)
     Bflush(out);
     return 1;
 }
+/*e: function [[show]] */
 
+/*s: function [[showquery]] */
 static void
 showquery(char *q)
 {
@@ -196,7 +210,9 @@ showquery(char *q)
     }
     exits(nil);
 }
+/*e: function [[showquery]] */
 
+/*s: function [[showcommits]] */
 static void
 showcommits(char *c)
 {
@@ -233,14 +249,18 @@ showcommits(char *c)
         unref(e.o);
     }
 }
+/*e: function [[showcommits]] */
 
+/*s: function [[usage (git9/log.c)]] */
 static void
 usage(void)
 {
     fprint(2, "usage: %s [-s] [-e expr | -c commit] files..\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/log.c)]] */
     
+/*s: function [[main (git9/log.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -264,6 +284,7 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+/*e: function [[main (git9/log.c)]] */
 
     gitinit(repo, sizeof(repo), &nrel);
     nrepo = strlen(repo);
@@ -299,3 +320,4 @@ main(int argc, char **argv)
     Bterm(out);
     exits(nil);
 }
+/*e: git9/log.c */

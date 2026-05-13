@@ -1,8 +1,10 @@
+/*s: git9/objset.c */
 #include <u.h>
 #include <libc.h>
 
 #include "git.h"
 
+/*s: function [[osinit]] */
 void
 osinit(Objset *s)
 {
@@ -10,13 +12,17 @@ osinit(Objset *s)
     s->nobj = 0;
     s->obj = eamalloc(s->sz, sizeof(Hash));
 }
+/*e: function [[osinit]] */
 
+/*s: function [[osclear]] */
 void
 osclear(Objset *s)
 {
     free(s->obj);
 }
+/*e: function [[osclear]] */
 
+/*s: function [[osadd]] */
 void
 osadd(Objset *s, Object *o)
 {
@@ -48,7 +54,9 @@ osadd(Objset *s, Object *o)
         free(obj);
     }
 }
+/*e: function [[osadd]] */
 
+/*s: function [[osfind]] */
 Object*
 osfind(Objset *s, Hash h)
 {
@@ -59,9 +67,13 @@ osfind(Objset *s, Hash h)
             return s->obj[probe]; 
     return 0;
 }
+/*e: function [[osfind]] */
 
+/*s: function [[oshas]] */
 int
 oshas(Objset *s, Hash h)
 {
     return osfind(s, h) != nil;
 }
+/*e: function [[oshas]] */
+/*e: git9/objset.c */

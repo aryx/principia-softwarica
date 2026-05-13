@@ -1,10 +1,14 @@
+/*s: git9/repack.c */
 #include <u.h>
 #include <libc.h>
 
 #include "git.h"
 
+/*s: macro [[TMPPATH]] */
 #define TMPPATH(suff) (".git/objects/pack/repack."suff)
+/*e: macro [[TMPPATH]] */
 
+/*s: function [[cleanup]] */
 int
 cleanup(Hash h)
 {
@@ -35,14 +39,18 @@ cleanup(Hash h)
     }
     return 0;
 }
+/*e: function [[cleanup]] */
 
+/*s: function [[usage (git9/repack.c)]] */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-d]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/repack.c)]] */
 
+/*s: function [[main (git9/repack.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -58,6 +66,7 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND;
+/*e: function [[main (git9/repack.c)]] */
 
     gitinit(nil, 0, nil);
     refs = nil;
@@ -83,3 +92,4 @@ main(int argc, char **argv)
         sysfatal("cleanup: %r");
     exits(nil);
 }
+/*e: git9/repack.c */

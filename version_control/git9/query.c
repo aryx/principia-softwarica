@@ -1,3 +1,4 @@
+/*s: git9/query.c */
 #include <u.h>
 #include <libc.h>
 
@@ -11,6 +12,7 @@ int reverse;
 char *path[128];
 int npath;
 
+/*s: function [[Pfmt]] */
 int
 Pfmt(Fmt *f)
 {
@@ -21,7 +23,9 @@ Pfmt(Fmt *f)
         n += fmtprint(f, "%s/", path[i]);
     return n;
 }
+/*e: function [[Pfmt]] */
 
+/*s: function [[showdir]] */
 void
 showdir(Hash dh, char *dname, char m)
 {
@@ -47,7 +51,9 @@ showdir(Hash dh, char *dname, char m)
     unref(d);
     npath--;
 }
+/*e: function [[showdir]] */
 
+/*s: function [[show (git9/query.c)]] */
 void
 show(Dirent *e, char m)
 {
@@ -56,7 +62,9 @@ show(Dirent *e, char m)
     else
         print("%c %P%s\n", m, e->name);
 }
+/*e: function [[show (git9/query.c)]] */
 
+/*s: function [[difftrees]] */
 void
 difftrees(Object *a, Object *b)
 {
@@ -115,7 +123,9 @@ next:
     for(; bp != be; bp++)
         show(bp, '+');
 }
+/*e: function [[difftrees]] */
 
+/*s: function [[diffcommits]] */
 void
 diffcommits(Hash ah, Hash bh)
 {
@@ -141,14 +151,18 @@ diffcommits(Hash ah, Hash bh)
     unref(at);
     unref(bt);
 }
+/*e: function [[diffcommits]] */
 
+/*s: function [[usage (git9/query.c)]] */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-pcr] query\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/query.c)]] */
 
+/*s: function [[main (git9/query.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -164,6 +178,7 @@ main(int argc, char **argv)
     case 'r':   reverse ^= 1;   break;
     default:    usage();    break;
     }ARGEND;
+/*e: function [[main (git9/query.c)]] */
 
     fmtinstall('P', Pfmt);
     if(argc == 0)
@@ -195,3 +210,4 @@ main(int argc, char **argv)
     exits(nil);
 }
 
+/*e: git9/query.c */

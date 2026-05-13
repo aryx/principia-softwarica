@@ -1,3 +1,4 @@
+/*s: git9/walk.c */
 #include <u.h>
 #include <libc.h>
 #include "git.h"
@@ -5,7 +6,9 @@
 typedef struct Idxed    Idxed;
 typedef struct Idxent   Idxent;
 
+/*s: constant [[NCACHE]] */
 #define NCACHE 4096
+/*e: constant [[NCACHE]] */
 
 enum {
     Rflg    = 1 << 0,
@@ -53,6 +56,7 @@ int nwdir;
 
 void    loadwdir(char*);
 
+/*s: function [[checkedin]] */
 int
 checkedin(Idxent *e, int change)
 {
@@ -76,7 +80,9 @@ checkedin(Idxent *e, int change)
 
     return r == 0;
 }
+/*e: function [[checkedin]] */
 
+/*s: function [[pathcmp]] */
 /*
  * Tricky; we want to know if a file or dir is indexed,
  * but a dir is only indexed if we have a file with dir/
@@ -112,7 +118,9 @@ pathcmp(char *sa, char *sb, int sadir)
             return 0;
     }
 }
+/*e: function [[pathcmp]] */
 
+/*s: function [[indexed]] */
 int
 indexed(char *path, int dir)
 {
@@ -133,7 +141,9 @@ indexed(char *path, int dir)
     }
     return r == 0;
 }
+/*e: function [[indexed]] */
 
+/*s: function [[idxcmp (git9/walk.c)]] */
 int
 idxcmp(void *pa, void *pb)
 {
@@ -147,7 +157,9 @@ idxcmp(void *pa, void *pb)
     /* maintain load order if name is identical */
     return a->order < b->order ? -1 : 1;
 }
+/*e: function [[idxcmp (git9/walk.c)]] */
 
+/*s: function [[samedata]] */
 /*
  * compares whether the indexed entry 'a'
  * has the same contents and mode as
@@ -217,7 +229,9 @@ mismatch:
         close(fb);
     return same;
 }
+/*e: function [[samedata]] */
 
+/*s: function [[loadent]] */
 void
 loadent(char *dir, Dir *d, int fullpath)
 {
@@ -251,7 +265,9 @@ loadent(char *dir, Dir *d, int fullpath)
         nwdir++;
     }
 }
+/*e: function [[loadent]] */
 
+/*s: function [[loadwdir]] */
 void
 loadwdir(char *path)
 {
@@ -283,7 +299,9 @@ error:
     if(fd != -1)
         close(fd);
 }
+/*e: function [[loadwdir]] */
 
+/*s: function [[pfxmatch]] */
 int
 pfxmatch(char *p, char **pfx, int *pfxlen, int npfx)
 {
@@ -303,8 +321,10 @@ pfxmatch(char *p, char **pfx, int *pfxlen, int npfx)
     }
     return 0;
 }
+/*e: function [[pfxmatch]] */
 
 
+/*s: function [[reporel]] */
 char*
 reporel(char *s)
 {
@@ -326,7 +346,9 @@ reporel(char *s)
     memmove(s, p, strlen(p)+1);
     return s;
 }
+/*e: function [[reporel]] */
 
+/*s: function [[show (git9/walk.c)]] */
 void
 show(Biobuf *o, int flg, char *str, char *path)
 {
@@ -352,7 +374,9 @@ show(Biobuf *o, int flg, char *str, char *path)
         Bprint(o, "%s\n", path);
     }
 }
+/*e: function [[show (git9/walk.c)]] */
 
+/*s: function [[findslashes]] */
 void
 findslashes(char *path)
 {
@@ -375,14 +399,18 @@ findslashes(char *path)
         if(*p == '/')
             nslash++;
 }
+/*e: function [[findslashes]] */
 
+/*s: function [[usage (git9/walk.c)]] */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-qbcI] [-f filt] [-b base] [paths...]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/walk.c)]] */
 
+/*s: function [[main (git9/walk.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -438,6 +466,7 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND;
+/*e: function [[main (git9/walk.c)]] */
 
     if(printflg == 0)
         printflg = Tflg | Aflg | Mflg | Rflg;
@@ -629,3 +658,4 @@ Nope:
     *p = '\0';
     exits(xbuf);
 }
+/*e: git9/walk.c */

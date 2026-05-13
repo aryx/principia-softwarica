@@ -1,3 +1,4 @@
+/*s: git9/save.c */
 #include <u.h>
 #include <libc.h>
 #include "git.h"
@@ -26,6 +27,7 @@ Idxent  *idx;
 int idxsz;
 int nidx;
 
+/*s: function [[gitmode]] */
 int
 gitmode(Dirent *e)
 {
@@ -40,13 +42,17 @@ gitmode(Dirent *e)
     else
         return 0100644;
 }
+/*e: function [[gitmode]] */
 
+/*s: function [[namecmp]] */
 int
 namecmp(void *pa, void *pb)
 {
     return strcmp(*(char**)pa, *(char**)pb);
 }
+/*e: function [[namecmp]] */
 
+/*s: function [[idxcmp]] */
 int
 idxcmp(void *pa, void *pb)
 {
@@ -60,13 +66,17 @@ idxcmp(void *pa, void *pb)
     assert(a->order != b->order);
     return a-> order < b->order ? -1 : 1;
 }
+/*e: function [[idxcmp]] */
 
+/*s: function [[bwrite]] */
 static int
 bwrite(void *p, void *buf, int nbuf)
 {
     return Bwrite(p, buf, nbuf);
 }
+/*e: function [[bwrite]] */
 
+/*s: function [[objbytes]] */
 static int
 objbytes(void *p, void *buf, int nbuf)
 {
@@ -95,7 +105,9 @@ objbytes(void *p, void *buf, int nbuf)
     }
     return n;
 }
+/*e: function [[objbytes]] */
 
+/*s: function [[writeobj]] */
 void
 writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
 {
@@ -124,7 +136,9 @@ writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
         Bterm(f);
     }
 }
+/*e: function [[writeobj]] */
 
+/*s: function [[writetree]] */
 int
 writetree(Dirent *ent, int nent, Hash *h)
 {
@@ -157,7 +171,9 @@ writetree(Dirent *ent, int nent, Hash *h)
     free(txt);
     return nent;
 }
+/*e: function [[writetree]] */
 
+/*s: function [[blobify]] */
 void
 blobify(Dir *d, char *path, int *mode, Hash *bh)
 {
@@ -177,7 +193,9 @@ blobify(Dir *d, char *path, int *mode, Hash *bh)
     free(buf);
     close(f);
 }
+/*e: function [[blobify]] */
 
+/*s: function [[tracked]] */
 int
 tracked(char *path)
 {
@@ -197,7 +215,9 @@ tracked(char *path)
     }
     return 0; 
 }
+/*e: function [[tracked]] */
 
+/*s: function [[dirent]] */
 Dirent*
 dirent(Dirent **ent, int *nent, char *name)
 {
@@ -215,7 +235,9 @@ dirent(Dirent **ent, int *nent, char *name)
     d->name = estrdup(name);
     return d;
 }
+/*e: function [[dirent]] */
 
+/*s: function [[treeify]] */
 int
 treeify(Object *t, char **path, char **epath, int off, Hash *h)
 {
@@ -326,8 +348,10 @@ treeify(Object *t, char **path, char **epath, int off, Hash *h)
     free(ent);
     return nent;        
 }
+/*e: function [[treeify]] */
 
 
+/*s: function [[mkcommit]] */
 void
 mkcommit(Hash *c, vlong date, Hash tree)
 {
@@ -350,7 +374,9 @@ mkcommit(Hash *c, vlong date, Hash tree)
     writeobj(c, h, nh, s, ns);
     free(s);
 }
+/*e: function [[mkcommit]] */
 
+/*s: function [[findroot]] */
 Object*
 findroot(void)
 {
@@ -365,14 +391,18 @@ findroot(void)
         sysfatal("could not read tree for commit %H", h);
     return t;
 }
+/*e: function [[findroot]] */
 
+/*s: function [[usage (git9/save.c)]] */
 void
 usage(void)
 {
     fprint(2, "usage: %s -n name -e email -m message -d date [files...]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (git9/save.c)]] */
 
+/*s: function [[main (git9/save.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -421,6 +451,7 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+/*e: function [[main (git9/save.c)]] */
 
     if(commitmsg == nil)
         sysfatal("missing message");
@@ -483,3 +514,4 @@ main(int argc, char **argv)
     print("%H\n", ch);
     exits(nil);
 }
+/*e: git9/save.c */

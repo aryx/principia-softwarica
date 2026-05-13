@@ -1,3 +1,4 @@
+/*s: git9/get.c */
 #include <u.h>
 #include <libc.h>
 
@@ -9,6 +10,7 @@ Hash heads[64];
 int nheads;
 int listonly;
 
+/*s: function [[okrefname]] */
 /*
  * Checks the rules for a refname at
  * git/Documentation/protocol-common.txt
@@ -22,7 +24,9 @@ okrefname(char *s)
         return okref(s);
     return 0;
 }
+/*e: function [[okrefname]] */
 
+/*s: function [[resolveremote]] */
 int
 resolveremote(Hash *h, char *ref)
 {
@@ -57,7 +61,9 @@ resolveremote(Hash *h, char *ref)
         return resolveremote(h, buf + strlen("ref:"));
     return r;
 }
+/*e: function [[resolveremote]] */
 
+/*s: function [[rename]] */
 int
 rename(char *pack, char *idx, Hash h)
 {
@@ -78,7 +84,9 @@ rename(char *pack, char *idx, Hash h)
         return -1;
     return 0;
 }
+/*e: function [[rename]] */
 
+/*s: function [[checkhash]] */
 int
 checkhash(int fd, vlong sz, Hash *hcomp)
 {
@@ -114,7 +122,9 @@ checkhash(int fd, vlong sz, Hash *hcomp)
     }
     return 0;
 }
+/*e: function [[checkhash]] */
 
+/*s: function [[mkoutpath]] */
 int
 mkoutpath(char *path)
 {
@@ -135,13 +145,17 @@ mkoutpath(char *path)
     }
     return 0;
 }
+/*e: function [[mkoutpath]] */
 
+/*s: function [[prefixed]] */
 int
 prefixed(char *s, char *pfx)
 {
     return strncmp(s, pfx, strlen(pfx)) == 0;
 }
+/*e: function [[prefixed]] */
 
+/*s: function [[branchmatch]] */
 int
 branchmatch(char *br, char *pat)
 {
@@ -155,7 +169,9 @@ branchmatch(char *br, char *pat)
         snprint(name, sizeof(name), "refs/heads/%s", pat);
     return strcmp(br, name) == 0;
 }
+/*e: function [[branchmatch]] */
 
+/*s: function [[fail]] */
 void
 fail(char *pack, char *idx, char *msg, ...)
 {
@@ -171,7 +187,9 @@ fail(char *pack, char *idx, char *msg, ...)
     fprint(2, "%s", buf);
     exits(buf);
 }
+/*e: function [[fail]] */
 
+/*s: function [[enqueueparent]] */
 void
 enqueueparent(Objq *q, Object *o)
 {
@@ -187,7 +205,9 @@ enqueueparent(Objq *q, Object *o)
         unref(p);
     }
 }
+/*e: function [[enqueueparent]] */
 
+/*s: function [[fmtcaps]] */
 void
 fmtcaps(Conn *c, char *caps, int ncaps)
 {
@@ -204,7 +224,9 @@ fmtcaps(Conn *c, char *caps, int ncaps)
         p = seprint(p, e, " side-band");
     assert(p != e);
 }
+/*e: function [[fmtcaps]] */
 
+/*s: function [[sbread]] */
 int
 sbread(Conn *c, char *buf, int nbuf, char **pbuf)
 {
@@ -230,7 +252,9 @@ sbread(Conn *c, char *buf, int nbuf, char **pbuf)
         }
     }
 }
+/*e: function [[sbread]] */
 
+/*s: function [[fetchpack]] */
 int
 fetchpack(Conn *c)
 {
@@ -470,7 +494,9 @@ showrefs:
     free(have);
     return 0;
 }
+/*e: function [[fetchpack]] */
 
+/*s: function [[usage (git9/get.c)]] */
 void
 usage(void)
 {
@@ -479,7 +505,9 @@ usage(void)
     fprint(2, "remote:  fetch from this repository\n");
     exits("usage");
 }
+/*e: function [[usage (git9/get.c)]] */
 
+/*s: function [[main (git9/get.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -501,6 +529,7 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+/*e: function [[main (git9/get.c)]] */
 
     gitinit(nil, 0, nil);
     if(argc != 1)
@@ -513,3 +542,4 @@ main(int argc, char **argv)
     closeconn(&c);
     exits(nil);
 }
+/*e: git9/get.c */

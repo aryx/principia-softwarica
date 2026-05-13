@@ -1,12 +1,19 @@
+/*s: git9/proto.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
 
 #include "git.h"
 
+/*s: constant [[Useragent]] */
 #define Useragent   "useragent git/2.24.1"
+/*e: constant [[Useragent]] */
+/*s: constant [[Contenthdr]] */
 #define Contenthdr  "headers Content-Type: application/x-git-%s-pack-request"
+/*e: constant [[Contenthdr]] */
+/*s: constant [[Accepthdr]] */
 #define Accepthdr   "headers Accept: application/x-git-%s-pack-result"
+/*e: constant [[Accepthdr]] */
 
 enum {
     Nproto  = 16,
@@ -16,6 +23,7 @@ enum {
     Nbranch = 32,
 };
 
+/*s: function [[matchcap]] */
 char *
 matchcap(char *s, char *cap, int full)
 {
@@ -24,7 +32,9 @@ matchcap(char *s, char *cap, int full)
             return s + strlen(cap);
     return nil;
 }
+/*e: function [[matchcap]] */
 
+/*s: function [[parsecaps]] */
 void
 parsecaps(char *caps, Conn *c)
 {
@@ -51,8 +61,10 @@ parsecaps(char *caps, Conn *c)
         }
     }
 }
+/*e: function [[parsecaps]] */
 
 
+/*s: function [[tracepkt]] */
 void
 tracepkt(int v, char *pfx, char *b, int n)
 {
@@ -86,7 +98,9 @@ tracepkt(int v, char *pfx, char *b, int n)
     fprint(2, "%s %04x:\t%s\n", pfx, n, f);
     free(f);
 }
+/*e: function [[tracepkt]] */
 
+/*s: function [[readpkt]] */
 int
 readpkt(Conn *c, char *buf, int nbuf)
 {
@@ -121,7 +135,9 @@ readpkt(Conn *c, char *buf, int nbuf)
     tracepkt(1, "=r=>", buf, n);
     return n;
 }
+/*e: function [[readpkt]] */
 
+/*s: function [[writepkt]] */
 int
 writepkt(Conn *c, char *buf, int nbuf)
 {
@@ -136,7 +152,9 @@ writepkt(Conn *c, char *buf, int nbuf)
     tracepkt(1, "<=w=", buf, nbuf);
     return 0;
 }
+/*e: function [[writepkt]] */
 
+/*s: function [[fmtpkt]] */
 int
 fmtpkt(Conn *c, char *fmt, ...)
 {
@@ -150,14 +168,18 @@ fmtpkt(Conn *c, char *fmt, ...)
     va_end(ap);
     return n;
 }
+/*e: function [[fmtpkt]] */
 
+/*s: function [[flushpkt]] */
 int
 flushpkt(Conn *c)
 {
     dprint(1, "<=w= 0000\n");
     return write(c->wfd, "0000", 4);
 }
+/*e: function [[flushpkt]] */
 
+/*s: function [[grab]] */
 static void
 grab(char *dst, int n, char *p, char *e)
 {
@@ -169,7 +191,9 @@ grab(char *dst, int n, char *p, char *e)
     memcpy(dst, p, l);
     dst[l] = 0;
 }
+/*e: function [[grab]] */
 
+/*s: function [[parseuri]] */
 static int
 parseuri(char *uri, char *proto, char *host, char *port, char *path)
 {
@@ -224,7 +248,9 @@ parseuri(char *uri, char *proto, char *host, char *port, char *path)
     snprint(path, Npath, "%s", p);
     return 0;
 }
+/*e: function [[parseuri]] */
 
+/*s: function [[webclone]] */
 static int
 webclone(Conn *c, char *url)
 {
@@ -252,7 +278,9 @@ err:
         close(c->cfd);
     return -1;
 }
+/*e: function [[webclone]] */
 
+/*s: function [[webopen]] */
 static int
 webopen(Conn *c, char *file, int mode)
 {
@@ -264,7 +292,9 @@ webopen(Conn *c, char *file, int mode)
         return -1;
     return fd;
 }
+/*e: function [[webopen]] */
 
+/*s: function [[issmarthttp]] */
 static int
 issmarthttp(Conn *c, char *direction)
 {
@@ -298,7 +328,9 @@ issmarthttp(Conn *c, char *direction)
     }
     return 0;
 }
+/*e: function [[issmarthttp]] */
 
+/*s: function [[dialhttp]] */
 static int
 dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
 {
@@ -333,7 +365,9 @@ dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
     c->direction = estrdup(direction);
     return 0;
 }
+/*e: function [[dialhttp]] */
 
+/*s: function [[dialssh]] */
 static int
 dialssh(Conn *c, char *host, char *, char *path, char *direction)
 {
@@ -360,7 +394,9 @@ dialssh(Conn *c, char *host, char *, char *path, char *direction)
     c->wfd = dup(pfd[1], -1);
     return 0;
 }
+/*e: function [[dialssh]] */
 
+/*s: function [[githandshake]] */
 static int
 githandshake(Conn *c, char *host, char *path, char *direction)
 {
@@ -378,7 +414,9 @@ githandshake(Conn *c, char *host, char *path, char *direction)
     }
     return 0;
 }
+/*e: function [[githandshake]] */
 
+/*s: function [[dialhjgit]] */
 static int
 dialhjgit(Conn *c, char *host, char *port, char *path, char *direction, int auth)
 {
@@ -409,7 +447,9 @@ dialhjgit(Conn *c, char *host, char *port, char *path, char *direction, int auth
     c->wfd = dup(pfd[1], -1);
     return githandshake(c, host, path, direction);
 }
+/*e: function [[dialhjgit]] */
 
+/*s: function [[initconn]] */
 void
 initconn(Conn *c, int rd, int wr)
 {
@@ -417,7 +457,9 @@ initconn(Conn *c, int rd, int wr)
     c->rfd = rd;
     c->wfd = wr;
 }
+/*e: function [[initconn]] */
 
+/*s: function [[dialgit]] */
 static int
 dialgit(Conn *c, char *host, char *port, char *path, char *direction)
 {
@@ -435,7 +477,9 @@ dialgit(Conn *c, char *host, char *port, char *path, char *direction)
     c->wfd = dup(fd, -1);
     return githandshake(c, host, path, direction);
 }
+/*e: function [[dialgit]] */
 
+/*s: function [[servelocal]] */
 static int
 servelocal(Conn *c, char *path, char *direction)
 {
@@ -459,7 +503,9 @@ servelocal(Conn *c, char *path, char *direction)
     c->wfd = dup(pfd[1], -1);
     return githandshake(c, nil, path, direction);
 }
+/*e: function [[servelocal]] */
 
+/*s: function [[localrepo]] */
 static int
 localrepo(char *uri, char *path, int npath)
 {
@@ -475,7 +521,9 @@ localrepo(char *uri, char *path, int npath)
     close(fd);
     return 0;
 }
+/*e: function [[localrepo]] */
 
+/*s: function [[gitconnect]] */
 int
 gitconnect(Conn *c, char *uri, char *direction)
 {
@@ -504,7 +552,9 @@ gitconnect(Conn *c, char *uri, char *direction)
     werrstr("unknown protocol %s", proto);
     return -1;
 }
+/*e: function [[gitconnect]] */
 
+/*s: function [[writephase]] */
 int
 writephase(Conn *c)
 {
@@ -532,7 +582,9 @@ writephase(Conn *c)
     c->rfd = -1;
     return 0;
 }
+/*e: function [[writephase]] */
 
+/*s: function [[readphase]] */
 int
 readphase(Conn *c)
 {
@@ -546,7 +598,9 @@ readphase(Conn *c)
     c->wfd = -1;
     return 0;
 }
+/*e: function [[readphase]] */
 
+/*s: function [[closeconn]] */
 void
 closeconn(Conn *c)
 {
@@ -564,3 +618,5 @@ closeconn(Conn *c)
         break;
     }
 }
+/*e: function [[closeconn]] */
+/*e: git9/proto.c */

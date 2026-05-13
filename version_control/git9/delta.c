@@ -1,3 +1,4 @@
+/*s: git9/delta.c */
 #include <u.h>
 #include <libc.h>
 
@@ -44,12 +45,15 @@ static u32int geartab[] = {
     0x9984a4f4, 0xd5de43cc, 0xd294daed, 0xbecba2d2, 0xf1f6e72c, 0x5551128a, 0x83af87e2, 0x6f0342ba,
 };
 
+/*s: function [[hash]] */
 static u64int
 hash(void *p, int n)
 {
     return murmurhash2(p, n);
 }
+/*e: function [[hash]] */
 
+/*s: function [[addblk]] */
 static void
 addblk(Dtab *dt, void *buf, int len, int off, u64int h)
 {
@@ -80,7 +84,9 @@ addblk(Dtab *dt, void *buf, int len, int off, u64int h)
         free(db);
     }       
 }
+/*e: function [[addblk]] */
 
+/*s: function [[lookup]] */
 static Dblock*
 lookup(Dtab *dt, uchar *p, int n)
 {
@@ -99,7 +105,9 @@ lookup(Dtab *dt, uchar *p, int n)
     }
     return nil;
 }
+/*e: function [[lookup]] */
 
+/*s: function [[nextblk]] */
 static int
 nextblk(uchar *s, uchar *e)
 {
@@ -119,7 +127,9 @@ nextblk(uchar *s, uchar *e)
     }
     return p - s;
 }
+/*e: function [[nextblk]] */
 
+/*s: function [[dtinit]] */
 void
 dtinit(Dtab *dt, Object *obj)
 {
@@ -144,14 +154,18 @@ dtinit(Dtab *dt, Object *obj)
         o += n;
     }
 }
+/*e: function [[dtinit]] */
 
+/*s: function [[dtclear]] */
 void
 dtclear(Dtab *dt)
 {
     unref(dt->o);
     free(dt->b);
 }
+/*e: function [[dtclear]] */
 
+/*s: function [[emitdelta]] */
 static int
 emitdelta(Delta **pd, int *nd, int cpy, int off, int len)
 {
@@ -165,7 +179,9 @@ emitdelta(Delta **pd, int *nd, int cpy, int off, int len)
     d->len = len;
     return len;
 }
+/*e: function [[emitdelta]] */
 
+/*s: function [[stretch]] */
 static int
 stretch(Dtab *dt, Dblock *b, uchar *s, uchar *e, int n)
 {
@@ -190,7 +206,9 @@ stretch(Dtab *dt, Dblock *b, uchar *s, uchar *e, int n)
     }
     return n + (p - p0);
 }
+/*e: function [[stretch]] */
 
+/*s: function [[deltify]] */
 Delta*
 deltify(Object *obj, Dtab *dt, int *pnd)
 {
@@ -217,3 +235,5 @@ deltify(Object *obj, Dtab *dt, int *pnd)
     }
     return d;
 }
+/*e: function [[deltify]] */
+/*e: git9/delta.c */

@@ -1,3 +1,4 @@
+/*s: git9/fs.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -70,15 +71,33 @@ char *qroot[] = {
     "ctl",
 };
 
+/*s: constant [[Eperm]] */
 #define Eperm   "permission denied"
+/*e: constant [[Eperm]] */
+/*s: constant [[Eexist]] */
 #define Eexist  "file does not exist"
+/*e: constant [[Eexist]] */
+/*s: constant [[Enotdir]] */
 #define Enotdir "is not a directory"
+/*e: constant [[Enotdir]] */
+/*s: constant [[E2long]] */
 #define E2long  "path too long"
+/*e: constant [[E2long]] */
+/*s: constant [[Enodir]] */
 #define Enodir  "not a directory"
+/*e: constant [[Enodir]] */
+/*s: constant [[Erepo]] */
 #define Erepo   "unable to read repo"
+/*e: constant [[Erepo]] */
+/*s: constant [[Eimpl]] */
 #define Eimpl   "not implemented"
+/*e: constant [[Eimpl]] */
+/*s: constant [[Egreg]] */
 #define Egreg   "wat"
+/*e: constant [[Egreg]] */
+/*s: constant [[Ebadobj]] */
 #define Ebadobj "invalid object"
+/*e: constant [[Ebadobj]] */
 
 char    gitdir[512];
 char    *username;
@@ -90,6 +109,7 @@ vlong   nextqid = Qmax;
 
 static Object*  walklink(Gitaux *, char *, int, int, int*);
 
+/*s: function [[qpath]] */
 vlong
 qpath(Crumb *p, int idx, vlong id, vlong t)
 {
@@ -116,7 +136,9 @@ qpath(Crumb *p, int idx, vlong id, vlong t)
     c->n++;
     return (nextqid << 8) | t;
 }
+/*e: function [[qpath]] */
 
+/*s: function [[crumb]] */
 static Crumb*
 crumb(Gitaux *aux, int n)
 {
@@ -124,7 +146,9 @@ crumb(Gitaux *aux, int n)
         return &aux->crumb[aux->ncrumb - n - 1];
     return nil;
 }
+/*e: function [[crumb]] */
 
+/*s: function [[popcrumb]] */
 static void
 popcrumb(Gitaux *aux)
 {
@@ -137,7 +161,9 @@ popcrumb(Gitaux *aux)
         aux->ncrumb--;
     }
 }
+/*e: function [[popcrumb]] */
 
+/*s: function [[branchid]] */
 static vlong
 branchid(Gitaux *aux, char *path)
 {
@@ -158,7 +184,9 @@ found:
     }
     return i;
 }
+/*e: function [[branchid]] */
 
+/*s: function [[obj2dir]] */
 static void
 obj2dir(Dir *d, Crumb *c, Object *o, char *name)
 {
@@ -177,7 +205,9 @@ obj2dir(Dir *d, Crumb *c, Object *o, char *name)
     }
 
 }
+/*e: function [[obj2dir]] */
 
+/*s: function [[rootgen]] */
 static int
 rootgen(int i, Dir *d, void *p)
 {
@@ -197,7 +227,9 @@ rootgen(int i, Dir *d, void *p)
     d->mtime = c->mtime;
     return 0;
 }
+/*e: function [[rootgen]] */
 
+/*s: function [[branchgen]] */
 static int
 branchgen(int i, Dir *d, void *p)
 {
@@ -229,7 +261,9 @@ branchgen(int i, Dir *d, void *p)
         return -1;
     }
 }
+/*e: function [[branchgen]] */
 
+/*s: function [[gtreegen]] */
 static int
 gtreegen(int i, Dir *d, void *p)
 {
@@ -264,7 +298,9 @@ gtreegen(int i, Dir *d, void *p)
     d->length = o->size;
     return 0;
 }
+/*e: function [[gtreegen]] */
 
+/*s: function [[gcommitgen]] */
 static int
 gcommitgen(int i, Dir *d, void *p)
 {
@@ -313,8 +349,10 @@ gcommitgen(int i, Dir *d, void *p)
     }
     return 0;
 }
+/*e: function [[gcommitgen]] */
 
 
+/*s: function [[objgen]] */
 static int
 objgen(int i, Dir *d, void *p)
 {
@@ -354,7 +392,9 @@ objgen(int i, Dir *d, void *p)
     }
     return -1;
 }
+/*e: function [[objgen]] */
 
+/*s: function [[objread]] */
 static void
 objread(Req *r, Gitaux *aux)
 {
@@ -378,7 +418,9 @@ objread(Req *r, Gitaux *aux)
         sysfatal("invalid object type %d", o->type);
     }
 }
+/*e: function [[objread]] */
 
+/*s: function [[readcommitparent]] */
 static void
 readcommitparent(Req *r, Object *o)
 {
@@ -395,7 +437,9 @@ readcommitparent(Req *r, Object *o)
     readbuf(r, buf, p - buf);
     free(buf);
 }
+/*e: function [[readcommitparent]] */
 
+/*s: function [[gitattach]] */
 static void
 gitattach(Req *r)
 {
@@ -419,7 +463,9 @@ gitattach(Req *r)
     r->fid->aux = aux;
     respond(r, nil);
 }
+/*e: function [[gitattach]] */
 
+/*s: function [[walklink]] */
 static Object*
 walklink(Gitaux *aux, char *link, int nlink, int ndotdot, int *mode)
 {
@@ -462,7 +508,9 @@ walklink(Gitaux *aux, char *link, int nlink, int ndotdot, int *mode)
             return nil;
     return o;
 }
+/*e: function [[walklink]] */
 
+/*s: function [[objwalk1]] */
 static char *
 objwalk1(Qid *q, Object *o, Crumb *p, Crumb *c, char *name, vlong qdir, Gitaux *aux)
 {
@@ -535,7 +583,9 @@ objwalk1(Qid *q, Object *o, Crumb *p, Crumb *c, char *name, vlong qdir, Gitaux *
     }
     return e;
 }
+/*e: function [[objwalk1]] */
 
+/*s: function [[readref]] */
 static Object *
 readref(char *pathstr)
 {
@@ -567,7 +617,9 @@ readref(char *pathstr)
 
     return readobject(h);
 }
+/*e: function [[readref]] */
 
+/*s: function [[gitwalk1]] */
 static char*
 gitwalk1(Fid *fid, char *name, Qid *q)
 {
@@ -681,7 +733,9 @@ gitwalk1(Fid *fid, char *name, Qid *q)
     fid->qid = *q;
     return e;
 }
+/*e: function [[gitwalk1]] */
 
+/*s: function [[gitclone]] */
 static char*
 gitclone(Fid *o, Fid *n)
 {
@@ -704,7 +758,9 @@ gitclone(Fid *o, Fid *n)
     n->aux = aux;
     return nil;
 }
+/*e: function [[gitclone]] */
 
+/*s: function [[gitdestroyfid]] */
 static void
 gitdestroyfid(Fid *f)
 {
@@ -723,7 +779,9 @@ gitdestroyfid(Fid *f)
     free(aux->crumb);
     free(aux);
 }
+/*e: function [[gitdestroyfid]] */
 
+/*s: function [[readctl]] */
 static char *
 readctl(Req *r)
 {
@@ -752,7 +810,9 @@ readctl(Req *r)
     readstr(r, data);
     return nil;
 }
+/*e: function [[readctl]] */
 
+/*s: function [[gitread]] */
 static void
 gitread(Req *r)
 {
@@ -820,7 +880,9 @@ gitread(Req *r)
     }
     respond(r, e);
 }
+/*e: function [[gitread]] */
 
+/*s: function [[gitopen]] */
 static void
 gitopen(Req *r)
 {
@@ -848,7 +910,9 @@ gitopen(Req *r)
         break;
     }
 }
+/*e: function [[gitopen]] */
 
+/*s: function [[gitstat]] */
 static void
 gitstat(Req *r)
 {
@@ -870,6 +934,7 @@ gitstat(Req *r)
         r->d.name = estrdup9p(c->name);
     respond(r, nil);
 }
+/*e: function [[gitstat]] */
 
 Srv gitsrv = {
     .attach=gitattach,
@@ -881,6 +946,7 @@ Srv gitsrv = {
     .destroyfid=gitdestroyfid,
 };
 
+/*s: function [[usage (git9/fs.c)]] */
 void
 usage(void)
 {
@@ -888,7 +954,9 @@ usage(void)
     fprint(2, "\t-d:    debug\n");
     exits("usage");
 }
+/*e: function [[usage (git9/fs.c)]] */
 
+/*s: function [[main (git9/fs.c)]] */
 void
 main(int argc, char **argv)
 {
@@ -911,6 +979,7 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+/*e: function [[main (git9/fs.c)]] */
     if(argc != 0)
         usage();
 
@@ -925,3 +994,4 @@ main(int argc, char **argv)
     postmountsrv(&gitsrv, nil, mntpt, MCREATE);
     exits(nil);
 }
+/*e: git9/fs.c */

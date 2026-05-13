@@ -1,3 +1,4 @@
+/*s: git9/ref.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -38,13 +39,16 @@ static Object zcommit = {
     .type=GCommit
 };
 
+/*s: function [[eatspace]] */
 void
 eatspace(Eval *ev)
 {
     while(isspace(ev->p[0]))
         ev->p++;
 }
+/*e: function [[eatspace]] */
 
+/*s: function [[push]] */
 void
 push(Eval *ev, Object *o)
 {
@@ -54,7 +58,9 @@ push(Eval *ev, Object *o)
     }
     ev->stk[ev->nstk++] = o;
 }
+/*e: function [[push]] */
 
+/*s: function [[pop]] */
 Object*
 pop(Eval *ev)
 {
@@ -62,7 +68,9 @@ pop(Eval *ev)
         sysfatal("stack underflow");
     return ev->stk[--ev->nstk];
 }
+/*e: function [[pop]] */
 
+/*s: function [[peek]] */
 Object*
 peek(Eval *ev)
 {
@@ -70,13 +78,17 @@ peek(Eval *ev)
         sysfatal("stack underflow");
     return ev->stk[ev->nstk - 1];
 }
+/*e: function [[peek]] */
 
+/*s: function [[isword]] */
 int
 isword(char e)
 {
     return isalnum(e) || e == '/' || e == '-' || e == '_' || e == '.';
 }
+/*e: function [[isword]] */
 
+/*s: function [[word]] */
 int
 word(Eval *ev, char *b, int nb)
 {
@@ -94,7 +106,9 @@ word(Eval *ev, char *b, int nb)
     ev->p = e;
     return n > 0;
 }
+/*e: function [[word]] */
 
+/*s: function [[take]] */
 int
 take(Eval *ev, char *m)
 {
@@ -106,7 +120,9 @@ take(Eval *ev, char *m)
     ev->p += l;
     return 1;
 }
+/*e: function [[take]] */
 
+/*s: function [[paint]] */
 static int
 paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, int mode)
 {
@@ -262,13 +278,17 @@ error:
     free(range);
     return -1;
 }
+/*e: function [[paint]] */
 
+/*s: function [[findtwixt]] */
 int
 findtwixt(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres)
 {
     return paint(head, nhead, tail, ntail, res, nres, Twixt);
 }
+/*e: function [[findtwixt]] */
 
+/*s: function [[ancestor]] */
 Object*
 ancestor(Object *a, Object *b)
 {
@@ -281,7 +301,9 @@ ancestor(Object *a, Object *b)
     free(o);
     return r;
 }
+/*e: function [[ancestor]] */
 
+/*s: function [[lca]] */
 int
 lca(Eval *ev)
 {
@@ -302,7 +324,9 @@ lca(Eval *ev)
     free(o);
     return 0;
 }
+/*e: function [[lca]] */
 
+/*s: function [[parent]] */
 static int
 parent(Eval *ev)
 {
@@ -324,7 +348,9 @@ parent(Eval *ev)
     push(ev, p);
     return 0;
 }
+/*e: function [[parent]] */
 
+/*s: function [[range]] */
 static int
 range(Eval *ev)
 {
@@ -349,7 +375,9 @@ range(Eval *ev)
     free(o);
     return 0;
 }
+/*e: function [[range]] */
 
+/*s: function [[matchpfx]] */
 static int
 matchpfx(Hash *h, char *ref)
 {
@@ -367,7 +395,9 @@ matchpfx(Hash *h, char *ref)
     }
     return expandprefix(h, pfx, i*4);
 }
+/*e: function [[matchpfx]] */
 
+/*s: function [[readref (git9/ref.c)]] */
 int
 readref(Hash *h, char *ref)
 {
@@ -409,7 +439,9 @@ found:
         r = readref(h, s + 5);
     return r;
 }
+/*e: function [[readref (git9/ref.c)]] */
 
+/*s: function [[evalpostfix]] */
 int
 evalpostfix(Eval *ev)
 {
@@ -456,7 +488,9 @@ evalpostfix(Eval *ev)
 done:
     return 0;
 }
+/*e: function [[evalpostfix]] */
 
+/*s: function [[evalexpr]] */
 int
 evalexpr(Eval *ev, char *ref)
 {
@@ -480,7 +514,9 @@ evalexpr(Eval *ev, char *ref)
         }
     }
 }
+/*e: function [[evalexpr]] */
 
+/*s: function [[resolverefs]] */
 int
 resolverefs(Hash **r, char *ref)
 {
@@ -499,7 +535,9 @@ resolverefs(Hash **r, char *ref)
     free(ev.stk);
     return ev.nstk;
 }
+/*e: function [[resolverefs]] */
 
+/*s: function [[resolveref]] */
 int
 resolveref(Hash *r, char *ref)
 {
@@ -518,7 +556,9 @@ resolveref(Hash *r, char *ref)
     free(ev.stk);
     return 0;
 }
+/*e: function [[resolveref]] */
 
+/*s: function [[readrefdir]] */
 int
 readrefdir(Hash **refs, char ***names, int *nrefs, char *dpath, char *dname)
 {
@@ -551,7 +591,9 @@ next:       free(path);
     free(dir);
     return 0;
 }
+/*e: function [[readrefdir]] */
 
+/*s: function [[listrefs]] */
 int
 listrefs(Hash **refs, char ***names)
 {
@@ -566,3 +608,5 @@ listrefs(Hash **refs, char ***names)
     }
     return nrefs;
 }
+/*e: function [[listrefs]] */
+/*e: git9/ref.c */

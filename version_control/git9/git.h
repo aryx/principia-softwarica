@@ -1,3 +1,4 @@
+/*s: git9/git.h */
 #include <bio.h>
 #include <mp.h>
 #include <libsec.h>
@@ -206,15 +207,20 @@ struct Idxent {
     char    state;
 };
 
+/*s: macro [[GETBE16]] */
 #define GETBE16(b)\
         ((((b)[0] & 0xFFul) <<  8) | \
          (((b)[1] & 0xFFul) <<  0))
+/*e: macro [[GETBE16]] */
 
+/*s: macro [[GETBE32]] */
 #define GETBE32(b)\
         ((((b)[0] & 0xFFul) << 24) | \
          (((b)[1] & 0xFFul) << 16) | \
          (((b)[2] & 0xFFul) <<  8) | \
          (((b)[3] & 0xFFul) <<  0))
+/*e: macro [[GETBE32]] */
+/*s: macro [[GETBE64]] */
 #define GETBE64(b)\
         ((((b)[0] & 0xFFull) << 56) | \
          (((b)[1] & 0xFFull) << 48) | \
@@ -224,13 +230,17 @@ struct Idxent {
          (((b)[5] & 0xFFull) << 16) | \
          (((b)[6] & 0xFFull) <<  8) | \
          (((b)[7] & 0xFFull) <<  0))
+/*e: macro [[GETBE64]] */
 
+/*s: macro [[PUTBE16]] */
 #define PUTBE16(b, n)\
     do{ \
         (b)[0] = (n) >> 8; \
         (b)[1] = (n) >> 0; \
     } while(0)
+/*e: macro [[PUTBE16]] */
 
+/*s: macro [[PUTBE32]] */
 #define PUTBE32(b, n)\
     do{ \
         (b)[0] = (n) >> 24; \
@@ -238,7 +248,9 @@ struct Idxent {
         (b)[2] = (n) >> 8; \
         (b)[3] = (n) >> 0; \
     } while(0)
+/*e: macro [[PUTBE32]] */
 
+/*s: macro [[PUTBE64]] */
 #define PUTBE64(b, n)\
     do{ \
         (b)[0] = (n) >> 56; \
@@ -250,10 +262,15 @@ struct Idxent {
         (b)[6] = (n) >> 8; \
         (b)[7] = (n) >> 0; \
     } while(0)
+/*e: macro [[PUTBE64]] */
 
+/*s: macro [[QDIR]] */
 #define QDIR(qid)   ((int)(qid)->path & (0xff))
+/*e: macro [[QDIR]] */
+/*s: macro [[isblank]] */
 #define isblank(c) \
     (((c) != '\n') && isspace(c))
+/*e: macro [[isblank]] */
 
 extern Reprog   *authorpat;
 extern Objset   objcache;
@@ -306,8 +323,10 @@ int olsnext(Objlist *, Hash *);
 void    olsfree(Objlist *);
 
 /* util functions */
+/*s: macro [[dprint]] */
 #define dprint(lvl, ...) \
     if(chattygit >= lvl) _dprint(__VA_ARGS__)
+/*e: macro [[dprint]] */
 void    _dprint(char *, ...);
 void    *eamalloc(ulong, ulong);
 void    *emalloc(ulong);
@@ -347,3 +366,4 @@ void    qinit(Objq*);
 void    qclear(Objq*);
 void    qput(Objq*, Object*, int);
 int qpop(Objq*, Qelt*);
+/*e: git9/git.h */

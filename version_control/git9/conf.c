@@ -1,3 +1,4 @@
+/*s: git9/conf.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -9,6 +10,7 @@ int showall;
 int nfile;
 char    *file[32];
 
+/*s: function [[showconf]] */
 static int
 showconf(char *cfg, char *sect, char *key)
 {
@@ -44,8 +46,10 @@ showconf(char *cfg, char *sect, char *key)
 done:
     return found;
 }
+/*e: function [[showconf]] */
 
 
+/*s: function [[usage]] */
 void
 usage(void)
 {
@@ -54,7 +58,9 @@ usage(void)
     fprint(2, "\t r:    print repository root\n");
     exits("usage");
 }
+/*e: function [[usage]] */
 
+/*s: function [[main]] */
 void
 main(int argc, char **argv)
 {
@@ -71,6 +77,7 @@ main(int argc, char **argv)
         file[nfile++]=EARGF(usage());
         break;
     }ARGEND;
+/*e: function [[main]] */
 
     gitinit(repo, sizeof(repo), &nrel);
     if(findroot){
@@ -101,3 +108,4 @@ main(int argc, char **argv)
     }
     exits(nil);
 }
+/*e: git9/conf.c */

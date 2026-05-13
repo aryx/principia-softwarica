@@ -1,3 +1,4 @@
+/*s: git9/ols.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -8,6 +9,7 @@ enum {
     Siter,
 };
 
+/*s: function [[crackidx]] */
 static int
 crackidx(char *path, int *np)
 {
@@ -23,13 +25,17 @@ crackidx(char *path, int *np)
     *np = GETBE32(buf);
     return fd;
 }
+/*e: function [[crackidx]] */
 
+/*s: function [[isloosedir]] */
 int
 isloosedir(char *s)
 {
     return strlen(s) == 2 && isxdigit(s[0]) && isxdigit(s[1]);
 }
+/*e: function [[isloosedir]] */
 
+/*s: function [[endswith]] */
 int
 endswith(char *n, char *s)
 {
@@ -39,7 +45,9 @@ endswith(char *n, char *s)
     ns = strlen(s);
     return nn > ns && strcmp(n + nn - ns, s) == 0;
 }
+/*e: function [[endswith]] */
 
+/*s: function [[olsreadpacked]] */
 int
 olsreadpacked(Objlist *ols, Hash *h)
 {
@@ -76,8 +84,10 @@ step:
     ols->state = Sinit;
     return -1;
 }
+/*e: function [[olsreadpacked]] */
 
 
+/*s: function [[olsreadloose]] */
 int
 olsreadloose(Objlist *ols, Hash *h)
 {
@@ -121,7 +131,9 @@ step:
     ols->state = Sinit;
     return -1;
 }
+/*e: function [[olsreadloose]] */
 
+/*s: function [[mkols]] */
 Objlist*
 mkols(void)
 {
@@ -135,7 +147,9 @@ mkols(void)
     ols->fd = -1;
     return ols;
 }
+/*e: function [[mkols]] */
 
+/*s: function [[olsfree]] */
 void
 olsfree(Objlist *ols)
 {
@@ -148,7 +162,9 @@ olsfree(Objlist *ols)
     free(ols->pack);
     free(ols);
 }
+/*e: function [[olsfree]] */
 
+/*s: function [[olsnext]] */
 int
 olsnext(Objlist *ols, Hash *h)
 {
@@ -168,3 +184,5 @@ olsnext(Objlist *ols, Hash *h)
     }
     return -1;
 }
+/*e: function [[olsnext]] */
+/*e: git9/ols.c */

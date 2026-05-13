@@ -1,3 +1,4 @@
+/*s: git9/pack.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -10,7 +11,9 @@ typedef struct Meta Meta;
 typedef struct Compout  Compout;
 typedef struct Packf    Packf;
 
+/*s: macro [[max]] */
 #define max(x, y) ((x) > (y) ? (x) : (y))
+/*e: macro [[max]] */
 
 struct Metavec {
     Meta    **meta;
@@ -71,6 +74,7 @@ Packf   *packf;
 int npackf;
 int openpacks;
 
+/*s: function [[clear]] */
 static void
 clear(Object *o)
 {
@@ -106,7 +110,9 @@ clear(Object *o)
     o->data = nil;
     o->flag &= ~(Cloaded|Cparsed);
 }
+/*e: function [[clear]] */
 
+/*s: function [[unref]] */
 void
 unref(Object *o)
 {
@@ -116,14 +122,18 @@ unref(Object *o)
     if(o->refs == 0)
         clear(o);
 }
+/*e: function [[unref]] */
 
+/*s: function [[ref]] */
 Object*
 ref(Object *o)
 {
     o->refs++;
     return o;
 }
+/*e: function [[ref]] */
 
+/*s: function [[cache]] */
 void
 cache(Object *o)
 {
@@ -171,7 +181,9 @@ cache(Object *o)
         unref(p);
     }       
 }
+/*e: function [[cache]] */
 
+/*s: function [[loadpack]] */
 static int
 loadpack(Packf *pf, char *name)
 {
@@ -214,7 +226,9 @@ loadpack(Packf *pf, char *name)
     free(d);
     return 0;
 }
+/*e: function [[loadpack]] */
 
+/*s: function [[refreshpacks]] */
 static void
 refreshpacks(void)
 {
@@ -245,7 +259,9 @@ refreshpacks(void)
     npackf = nnew;
     free(d);
 }
+/*e: function [[refreshpacks]] */
 
+/*s: function [[openpack]] */
 static Biobuf*
 openpack(Packf *pf)
 {
@@ -292,13 +308,17 @@ openpack(Packf *pf)
         return nil;
     return pf->pack;
 }
+/*e: function [[openpack]] */
 
+/*s: function [[closepack]] */
 static void
 closepack(Packf *pf)
 {
     pf->refs--;
 }
+/*e: function [[closepack]] */
 
+/*s: function [[crc32]] */
 static u32int
 crc32(u32int crc, char *b, int nb)
 {
@@ -348,7 +368,9 @@ crc32(u32int crc, char *b, int nb)
         crc = (crc >> 8) ^ crctab[(crc ^ b[i]) & 0xFF];
     return crc ^ 0xFFFFFFFF;
 }
+/*e: function [[crc32]] */
 
+/*s: function [[bappend]] */
 int
 bappend(void *p, void *src, int len)
 {
@@ -366,13 +388,17 @@ bappend(void *p, void *src, int len)
     b->len += len;
     return len;
 }
+/*e: function [[bappend]] */
 
+/*s: function [[breadc]] */
 int
 breadc(void *p)
 {
     return Bgetc(p);
 }
+/*e: function [[breadc]] */
 
+/*s: function [[bdecompress]] */
 int
 bdecompress(Buf *d, Biobuf *b, vlong *csz)
 {
@@ -387,7 +413,9 @@ bdecompress(Buf *d, Biobuf *b, vlong *csz)
         *csz = Boffset(b) - o;
     return d->len;
 }
+/*e: function [[bdecompress]] */
 
+/*s: function [[decompress]] */
 int
 decompress(void **p, Biobuf *b, vlong *csz)
 {
@@ -400,7 +428,9 @@ decompress(void **p, Biobuf *b, vlong *csz)
     *p = d.data;
     return d.len;
 }
+/*e: function [[decompress]] */
 
+/*s: function [[readvint]] */
 static vlong
 readvint(char *p, char *ep, char **pp)
 {
@@ -419,7 +449,9 @@ readvint(char *p, char *ep, char **pp)
     *pp = p;
     return n;
 }
+/*e: function [[readvint]] */
 
+/*s: function [[applydelta]] */
 static int
 applydelta(Object *dst, Object *base, char *d, int nd)
 {
@@ -490,7 +522,9 @@ applydelta(Object *dst, Object *base, char *d, int nd)
 
     return nr;
 }
+/*e: function [[applydelta]] */
 
+/*s: function [[readrdelta]] */
 static int
 readrdelta(Biobuf *f, Object *o, int nd, int flag)
 {
@@ -519,7 +553,9 @@ error:
     free(d);
     return -1;
 }
+/*e: function [[readrdelta]] */
 
+/*s: function [[readodelta]] */
 static int
 readodelta(Biobuf *f, Object *o, vlong nd, vlong p, int flag)
 {
@@ -561,7 +597,9 @@ error:
     free(d);
     return -1;
 }
+/*e: function [[readodelta]] */
 
+/*s: function [[readpacked]] */
 static int
 readpacked(Biobuf *f, Object *o, int flag)
 {
@@ -624,7 +662,9 @@ readpacked(Biobuf *f, Object *o, int flag)
     o->flag |= Cloaded|flag;
     return 0;
 }
+/*e: function [[readpacked]] */
 
+/*s: function [[readloose]] */
 static int
 readloose(Biobuf *f, Object *o, int flag)
 {
@@ -679,7 +719,9 @@ error:
     free(d);
     return -1;
 }
+/*e: function [[readloose]] */
 
+/*s: function [[hashcmp]] */
 int
 hashcmp(uchar *a, uchar *b, uint nbit)
 {
@@ -693,7 +735,9 @@ hashcmp(uchar *a, uchar *b, uint nbit)
     y = b[i] >> (8 - nbit % 8); 
     return x - y;
 }
+/*e: function [[hashcmp]] */
 
+/*s: function [[searchindex]] */
 vlong
 searchindex(char *idx, int nidx, Hash h, int npfx, Hash *hret)
 {
@@ -792,7 +836,9 @@ notfound:
     werrstr("not present");
     return -1;      
 }
+/*e: function [[searchindex]] */
 
+/*s: function [[scanword]] */
 /*
  * Scans for non-empty word, copying it into buf.
  * Strips off word, leading, and trailing space
@@ -831,7 +877,9 @@ scanword(char **str, int *nstr, char *buf, int nbuf)
     *nstr = n;
     return r;
 }
+/*e: function [[scanword]] */
 
+/*s: function [[nextline (git9/pack.c)]] */
 static void
 nextline(char **str, int *nstr)
 {
@@ -842,7 +890,9 @@ nextline(char **str, int *nstr)
         *str = s + 1;
     }
 }
+/*e: function [[nextline (git9/pack.c)]] */
 
+/*s: function [[parseauthor]] */
 static int
 parseauthor(char **str, int *nstr, char **name, vlong *time)
 {
@@ -882,7 +932,9 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 
     return 0;
 }
+/*e: function [[parseauthor]] */
 
+/*s: function [[parsecommit]] */
 static void
 parsecommit(Object *o)
 {
@@ -930,7 +982,9 @@ parsecommit(Object *o)
     o->commit->msg = p;
     o->commit->nmsg = np;
 }
+/*e: function [[parsecommit]] */
 
+/*s: function [[parsetree]] */
 static void
 parsetree(Object *o)
 {
@@ -988,12 +1042,16 @@ parsetree(Object *o)
     o->tree->ent = ent;
     o->tree->nent = nent;
 }
+/*e: function [[parsetree]] */
 
+/*s: function [[parsetag]] */
 static void
 parsetag(Object *)
 {
 }
+/*e: function [[parsetag]] */
 
+/*s: function [[parseobject]] */
 void
 parseobject(Object *o)
 {
@@ -1007,7 +1065,9 @@ parseobject(Object *o)
     }
     o->flag |= Cparsed;
 }
+/*e: function [[parseobject]] */
 
+/*s: function [[readidxobject]] */
 static Object*
 readidxobject(Biobuf *idx, Hash h, int flag)
 {
@@ -1097,7 +1157,9 @@ error:
     free(new);
     return nil;
 }
+/*e: function [[readidxobject]] */
 
+/*s: function [[expandprefix]] */
 int
 expandprefix(Hash *rh, Hash h, int npfx)
 {
@@ -1129,7 +1191,9 @@ expandprefix(Hash *rh, Hash h, int npfx)
     free(d);
     return -1;
 }
+/*e: function [[expandprefix]] */
 
+/*s: function [[readobject]] */
 /*
  * Loads and returns a cached object.
  */
@@ -1144,7 +1208,9 @@ readobject(Hash h)
     ref(o);
     return o;
 }
+/*e: function [[readobject]] */
 
+/*s: function [[clearedobject]] */
 /*
  * Creates and returns a cached, cleared object
  * that will get loaded some other time. Useful
@@ -1170,7 +1236,9 @@ clearedobject(Hash h, int type)
     o->flag |= Cexist;
     return o;
 }
+/*e: function [[clearedobject]] */
 
+/*s: function [[objcmp]] */
 int
 objcmp(void *pa, void *pb)
 {
@@ -1180,14 +1248,18 @@ objcmp(void *pa, void *pb)
     b = *(Object**)pb;
     return memcmp(a->hash.h, b->hash.h, sizeof(a->hash.h));
 }
+/*e: function [[objcmp]] */
 
+/*s: function [[hwrite]] */
 static int
 hwrite(Biobuf *b, void *buf, int len, DigestState **st)
 {
     *st = sha1(buf, len, nil, *st);
     return Bwrite(b, buf, len);
 }
+/*e: function [[hwrite]] */
 
+/*s: function [[objectcrc]] */
 static u32int
 objectcrc(Biobuf *f, Object *o)
 {
@@ -1206,7 +1278,9 @@ objectcrc(Biobuf *f, Object *o)
     }
     return 0;
 }
+/*e: function [[objectcrc]] */
 
+/*s: function [[indexpack]] */
 int
 indexpack(char *pack, char *idx, Hash ph)
 {
@@ -1338,7 +1412,9 @@ error:
     Bterm(f);
     return -1;
 }
+/*e: function [[indexpack]] */
 
+/*s: function [[deltaordercmp]] */
 static int
 deltaordercmp(void *pa, void *pb)
 {
@@ -1357,7 +1433,9 @@ deltaordercmp(void *pa, void *pb)
         return (cmp < 0) ? -1 : 1;
     return memcmp(a->obj->hash.h, b->obj->hash.h, sizeof(a->obj->hash.h));
 }
+/*e: function [[deltaordercmp]] */
 
+/*s: function [[writeordercmp]] */
 static int
 writeordercmp(void *pa, void *pb)
 {
@@ -1375,7 +1453,9 @@ writeordercmp(void *pa, void *pb)
         return a->nchain - b->nchain;
     return a->mtime - b->mtime;
 }
+/*e: function [[writeordercmp]] */
 
+/*s: function [[addmeta]] */
 static void
 addmeta(Metavec *v, Objset *has, Object *o, vlong pathid, vlong mtime)
 {
@@ -1397,14 +1477,18 @@ addmeta(Metavec *v, Objset *has, Object *o, vlong pathid, vlong mtime)
     }
     v->meta[v->nmeta++] = m;
 }
+/*e: function [[addmeta]] */
 
+/*s: function [[freemeta]] */
 static void
 freemeta(Meta *m)
 {
     free(m->delta);
     free(m);
 }
+/*e: function [[freemeta]] */
 
+/*s: function [[loadtree]] */
 static int
 loadtree(Metavec *v, Objset *has, Hash tree, char *dpath, vlong mtime)
 {
@@ -1447,7 +1531,9 @@ loadtree(Metavec *v, Objset *has, Hash tree, char *dpath, vlong mtime)
     unref(t);
     return 0;
 }
+/*e: function [[loadtree]] */
 
+/*s: function [[loadcommit]] */
 static int
 loadcommit(Metavec *v, Objset *has, Hash h)
 {
@@ -1468,7 +1554,9 @@ loadcommit(Metavec *v, Objset *has, Hash h)
     unref(c);
     return r;
 }
+/*e: function [[loadcommit]] */
 
+/*s: function [[readmeta]] */
 static int
 readmeta(Hash *theirs, int ntheirs, Hash *ours, int nours, Meta ***m)
 {
@@ -1502,7 +1590,9 @@ out:
     free(v.meta);
     return -1;
 }
+/*e: function [[readmeta]] */
 
+/*s: function [[deltasz]] */
 static int
 deltasz(Delta *d, int nd)
 {
@@ -1512,7 +1602,9 @@ deltasz(Delta *d, int nd)
         sz += d[i].cpy ? 7 : d[i].len + 1;
     return sz;
 }
+/*e: function [[deltasz]] */
 
+/*s: function [[pickdeltas]] */
 static void
 pickdeltas(Meta **meta, int nmeta)
 {
@@ -1570,7 +1662,9 @@ pickdeltas(Meta **meta, int nmeta)
     if(interactive)
         fprint(2, "\b\b\b\b100%%\n");
 }
+/*e: function [[pickdeltas]] */
 
+/*s: function [[compread]] */
 static int
 compread(void *p, void *dst, int n)
 {
@@ -1583,13 +1677,17 @@ compread(void *p, void *dst, int n)
     b->off += n;
     return n;
 }
+/*e: function [[compread]] */
 
+/*s: function [[compwrite]] */
 static int
 compwrite(void *p, void *buf, int n)
 {
     return hwrite(((Compout *)p)->bfd, buf, n, &((Compout*)p)->st);
 }
+/*e: function [[compwrite]] */
 
+/*s: function [[hcompress]] */
 static int
 hcompress(Biobuf *bfd, void *buf, int sz, DigestState **st)
 {
@@ -1608,7 +1706,9 @@ hcompress(Biobuf *bfd, void *buf, int sz, DigestState **st)
     *st = o.st;
     return r;
 }
+/*e: function [[hcompress]] */
 
+/*s: function [[append]] */
 static void
 append(char **p, int *len, int *sz, void *seg, int nseg)
 {
@@ -1620,7 +1720,9 @@ append(char **p, int *len, int *sz, void *seg, int nseg)
     memcpy(*p + *len, seg, nseg);
     *len += nseg;
 }
+/*e: function [[append]] */
 
+/*s: function [[encodedelta]] */
 static int
 encodedelta(Meta *m, Object *o, Object *b, void **pp)
 {
@@ -1689,7 +1791,9 @@ encodedelta(Meta *m, Object *o, Object *b, void **pp)
     *pp = p;
     return len;
 }
+/*e: function [[encodedelta]] */
 
+/*s: function [[packhdr]] */
 static int
 packhdr(char *hdr, int ty, int len)
 {
@@ -1705,7 +1809,9 @@ packhdr(char *hdr, int ty, int len)
     }
     return i;
 }
+/*e: function [[packhdr]] */
 
+/*s: function [[packoff]] */
 static int
 packoff(char *hdr, vlong off)
 {
@@ -1721,7 +1827,9 @@ packoff(char *hdr, vlong off)
         hdr[j++] = rbuf[--i];
     return j;
 }
+/*e: function [[packoff]] */
 
+/*s: function [[genpack]] */
 static int
 genpack(int fd, Meta **meta, int nmeta, Hash *h, int odelta)
 {
@@ -1802,7 +1910,9 @@ error:
         return -1;
     return ret;
 }
+/*e: function [[genpack]] */
 
+/*s: function [[writepack]] */
 int
 writepack(int fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
 {
@@ -1818,3 +1928,5 @@ writepack(int fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
     free(meta);
     return r;
 }
+/*e: function [[writepack]] */
+/*e: git9/pack.c */

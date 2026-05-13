@@ -1,3 +1,4 @@
+/*s: git9/util.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -14,6 +15,7 @@ enum {
     Seed        = 2928213749ULL
 };
 
+/*s: function [[emptydir]] */
 Object*
 emptydir(void)
 {
@@ -33,6 +35,8 @@ emptydir(void)
     cache(e);
     return e;
 }
+/*e: function [[emptydir]] */
+/*s: function [[entcmp]] */
 int
 entcmp(void *pa, void *pb)
 {
@@ -78,13 +82,17 @@ entcmp(void *pa, void *pb)
         }
     }
 }
+/*e: function [[entcmp]] */
 
+/*s: function [[hasheq]] */
 int
 hasheq(Hash *a, Hash *b)
 {
     return memcmp(a->h, b->h, sizeof(a->h)) == 0;
 }
+/*e: function [[hasheq]] */
 
+/*s: function [[charval]] */
 int
 charval(int c)
 {
@@ -97,7 +105,9 @@ charval(int c)
     werrstr("invalid hex char");
     return -1;
 }
+/*e: function [[charval]] */
 
+/*s: function [[emalloc]] */
 void *
 emalloc(ulong n)
 {
@@ -109,7 +119,9 @@ emalloc(ulong n)
     setmalloctag(v, getcallerpc(&n));
     return v;
 }
+/*e: function [[emalloc]] */
 
+/*s: function [[eamalloc]] */
 void *
 eamalloc(ulong n, ulong sz)
 {
@@ -125,7 +137,9 @@ eamalloc(ulong n, ulong sz)
     setmalloctag(v, getcallerpc(&n));
     return v;
 }
+/*e: function [[eamalloc]] */
 
+/*s: function [[erealloc]] */
 void *
 erealloc(void *p, ulong n)
 {
@@ -137,7 +151,9 @@ erealloc(void *p, ulong n)
     setmalloctag(v, getcallerpc(&p));
     return v;
 }
+/*e: function [[erealloc]] */
 
+/*s: function [[earealloc]] */
 void *
 earealloc(void *p, ulong n, ulong sz)
 {
@@ -153,7 +169,9 @@ earealloc(void *p, ulong n, ulong sz)
     setmalloctag(v, getcallerpc(&p));
     return v;
 }
+/*e: function [[earealloc]] */
 
+/*s: function [[estrdup]] */
 char*
 estrdup(char *s)
 {
@@ -163,7 +181,9 @@ estrdup(char *s)
     setmalloctag(s, getcallerpc(&s));
     return s;
 }
+/*e: function [[estrdup]] */
 
+/*s: function [[Hfmt]] */
 int
 Hfmt(Fmt *fmt)
 {
@@ -182,7 +202,9 @@ Hfmt(Fmt *fmt)
     }
     return l;
 }
+/*e: function [[Hfmt]] */
 
+/*s: function [[Tfmt]] */
 int
 Tfmt(Fmt *fmt)
 {
@@ -202,7 +224,9 @@ Tfmt(Fmt *fmt)
     }
     return l;
 }
+/*e: function [[Tfmt]] */
 
+/*s: function [[Ofmt]] */
 int
 Ofmt(Fmt *fmt)
 {
@@ -230,7 +254,9 @@ Ofmt(Fmt *fmt)
     }
     return l;
 }
+/*e: function [[Ofmt]] */
 
+/*s: function [[Qfmt]] */
 int
 Qfmt(Fmt *fmt)
 {
@@ -242,7 +268,9 @@ Qfmt(Fmt *fmt)
     else
         return fmtprint(fmt, "%llux.%lud.%hhx", q.path, q.vers, q.type);
 }
+/*e: function [[Qfmt]] */
 
+/*s: function [[findrepo]] */
 /* Finds the directory containing the git repo. */
 static void
 findrepo(char *buf, int nbuf, int *nrel)
@@ -265,7 +293,9 @@ findrepo(char *buf, int nbuf, int *nrel)
     }
     sysfatal("not a git repository");
 }
+/*e: function [[findrepo]] */
 
+/*s: function [[gitinit]] */
 void
 gitinit(char *root, int nroot, int *nrel)
 {
@@ -289,7 +319,9 @@ gitinit(char *root, int nroot, int *nrel)
     gitdirmode = d->mode & 0777;
     free(d);
 }
+/*e: function [[gitinit]] */
 
+/*s: function [[hparse]] */
 int
 hparse(Hash *h, char *b)
 {
@@ -304,7 +336,9 @@ hparse(Hash *h, char *b)
     }
     return 0;
 }
+/*e: function [[hparse]] */
 
+/*s: function [[slurpdir]] */
 int
 slurpdir(char *p, Dir **d)
 {
@@ -316,7 +350,9 @@ slurpdir(char *p, Dir **d)
     close(f);
     return r;
 }   
+/*e: function [[slurpdir]] */
 
+/*s: function [[hassuffix]] */
 int
 hassuffix(char *base, char *suf)
 {
@@ -328,7 +364,9 @@ hassuffix(char *base, char *suf)
         return 1;
     return 0;
 }
+/*e: function [[hassuffix]] */
 
+/*s: function [[swapsuffix]] */
 int
 swapsuffix(char *dst, int dstsz, char *base, char *oldsuf, char *suf)
 {
@@ -345,7 +383,9 @@ swapsuffix(char *dst, int dstsz, char *base, char *oldsuf, char *suf)
     dst[l] = 0;
     return l;
 }
+/*e: function [[swapsuffix]] */
 
+/*s: function [[strip]] */
 char *
 strip(char *s)
 {
@@ -358,7 +398,9 @@ strip(char *s)
         *e = 0;
     return s;
 }
+/*e: function [[strip]] */
 
+/*s: function [[_dprint]] */
 void
 _dprint(char *fmt, ...)
 {
@@ -368,7 +410,9 @@ _dprint(char *fmt, ...)
     vfprint(2, fmt, ap);
     va_end(ap);
 }
+/*e: function [[_dprint]] */
 
+/*s: function [[showprogress]] */
 int
 showprogress(int x, int pct)
 {
@@ -380,7 +424,9 @@ showprogress(int x, int pct)
     }
     return pct;
 }
+/*e: function [[showprogress]] */
 
+/*s: function [[qinit]] */
 void
 qinit(Objq *q)
 {
@@ -389,13 +435,17 @@ qinit(Objq *q)
     q->heapsz = 8;
     q->heap = eamalloc(q->heapsz, sizeof(Qelt));
 }
+/*e: function [[qinit]] */
 
+/*s: function [[qclear]] */
 void
 qclear(Objq *q)
 {
     free(q->heap);
 }
+/*e: function [[qclear]] */
 
+/*s: function [[qput]] */
 void
 qput(Objq *q, Object *o, int color)
 {
@@ -419,7 +469,9 @@ qput(Objq *q, Object *o, int color)
     }
     q->nheap++;
 }
+/*e: function [[qput]] */
 
+/*s: function [[qpop]] */
 int
 qpop(Objq *q, Qelt *e)
 {
@@ -451,7 +503,9 @@ qpop(Objq *q, Qelt *e)
     }
     return 1;
 }
+/*e: function [[qpop]] */
 
+/*s: function [[murmurhash2]] */
 u64int
 murmurhash2(void *pp, usize n)
 {
@@ -486,7 +540,9 @@ murmurhash2(void *pp, usize n)
 
     return h;
 }
+/*e: function [[murmurhash2]] */
 
+/*s: function [[parseqid]] */
 Qid
 parseqid(char *s)
 {
@@ -507,7 +563,9 @@ parseqid(char *s)
         sysfatal("corrupt qid: %s (%x)", s, *e);
     return q;
 }
+/*e: function [[parseqid]] */
 
+/*s: function [[okref]] */
 /*
  * Checks the rules for valid ref names, as defined in
  *   git/Documentation/protocol-common.txt.
@@ -563,3 +621,5 @@ okref(char *ref)
         return 0;
     return slashed;
 }
+/*e: function [[okref]] */
+/*e: git9/util.c */
