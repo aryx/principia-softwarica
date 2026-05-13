@@ -1,52 +1,52 @@
-typedef struct Line	Line;
-typedef struct Cand	Cand;
-typedef struct Diff	Diff;
-typedef struct Change	Change;
+typedef struct Line Line;
+typedef struct Cand Cand;
+typedef struct Diff Diff;
+typedef struct Change   Change;
 
 struct Line {
-	int	serial;
-	int	value;
+    int serial;
+    int value;
 };
 
 struct Cand {
-	int x;
-	int y;
-	int pred;
+    int x;
+    int y;
+    int pred;
 };
 
 struct Change
 {
-	int oldx;
-	int oldy;
-	int newx;
-	int newy;
+    int oldx;
+    int oldy;
+    int newx;
+    int newy;
 };
 
 struct Diff {
-	Cand cand;
-	Line *file[2], line;
-	int len[2];
-	int binary;
-	int bindiff;
-	Line *sfile[2];	/*shortened by pruning common prefix and suffix*/
-	int slen[2];
-	int pref, suff;	/*length of prefix and suffix*/
-	int *class;	/*will be overlaid on file[0]*/
-	int *member;	/*will be overlaid on file[1]*/
-	int *klist;	/*will be overlaid on file[0] after class*/
-	Cand *clist;	/* merely a free storage pot for candidates */
-	int clen;
-	int *J;		/*will be overlaid on class*/
-	long *ixold;	/*will be overlaid on klist*/
-	long *ixnew;	/*will be overlaid on file[1]*/
-	char *file1;
-	char *file2;
-	Biobuf *input[2];
-	Biobuf *b0;
-	Biobuf *b1;
-	int firstchange;
-	Change *changes;
-	int nchanges;
+    Cand cand;
+    Line *file[2], line;
+    int len[2];
+    int binary;
+    int bindiff;
+    Line *sfile[2]; /*shortened by pruning common prefix and suffix*/
+    int slen[2];
+    int pref, suff; /*length of prefix and suffix*/
+    int *class; /*will be overlaid on file[0]*/
+    int *member;    /*will be overlaid on file[1]*/
+    int *klist; /*will be overlaid on file[0] after class*/
+    Cand *clist;    /* merely a free storage pot for candidates */
+    int clen;
+    int *J;     /*will be overlaid on class*/
+    long *ixold;    /*will be overlaid on klist*/
+    long *ixnew;    /*will be overlaid on file[1]*/
+    char *file1;
+    char *file2;
+    Biobuf *input[2];
+    Biobuf *b0;
+    Biobuf *b1;
+    int firstchange;
+    Change *changes;
+    int nchanges;
 };
 
 extern char mode;
@@ -54,13 +54,13 @@ extern char bflag;
 extern char rflag;
 extern char mflag;
 extern int anychange;
-extern Biobuf	stdout;
+extern Biobuf   stdout;
 
-#define MAXPATHLEN	1024
-#define MAXLINELEN	4096
+#define MAXPATHLEN  1024
+#define MAXLINELEN  4096
 
-#define	DIRECTORY(s)		((s)->qid.type&QTDIR)
-#define	REGULAR_FILE(s)		((s)->type == 'M' && !DIRECTORY(s))
+#define DIRECTORY(s)        ((s)->qid.type&QTDIR)
+#define REGULAR_FILE(s)     ((s)->type == 'M' && !DIRECTORY(s))
 
 int mkpathname(char *, char *, char *);
 char *mktmpfile(int, Dir **);
