@@ -61,7 +61,7 @@ Vinit(void)
       setvar(*env, wd);
       //TODO: should generalize this in main.c so it also applies for Plan9
       if(strcmp(*env, "RCMAIN") == 0) {
- Rcmain = strdup(wd->word);
+        Rcmain = strdup(wd->word);
       }
       *s='=';
       break;
