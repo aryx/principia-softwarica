@@ -1,7 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
-#include <String.h>
+#include <str.h>
 #include <fcall.h>
 
 typedef struct Seen Seen;
@@ -273,7 +273,8 @@ main(int argc, char **argv)
 
 	if((bout = Bfdopen(1, OWRITE)) == nil)
 		sysfatal("Bfdopen: %r");
-	Blethal(bout, nil);
+    //9front-only:
+	//Blethal(bout, nil);
 	if(stfmt == nil){
 		if((stfmt = s_new()) == nil)
 			sysfatal("s_new: %r");
