@@ -1,5 +1,133 @@
 \section{[[git9/]]}
 
+\subsection*{[[git9/common.rc]]}
+
+<<git9/common.rc>>=
+nl='
+'
+
+fn die{
+        >[1=2] echo $0: $*
+        exit $"*
+}
+
+fn usage{
+        >[1=2] echo -n 'usage:' $usage
+        exit 'usage'
+}
+
+fn subst {
+        awk '
+        BEGIN{ARGC=0}
+        {sub(ARGV[1], ARGV[2]); print}
+        ' $*
+}
+
+fn drop {
+        awk '
+        BEGIN{ARGC=0}
+        {
+                if(index($0, ARGV[1]) == 1)
+                        $0=substr($0, length(ARGV[1])+1)
+                print
+        }
+        ' $*
+}
+
+fn mergeperm {
+        if(~ $1 /dev/null && cmp $2 $3>/dev/null)
+                status=gone
+        if not if (~ $3 /dev/null && cmp $1 $2>/dev/null)
+                status=gone
+        if not {
+                mergedperms='-x'
+                if(test -x $2){
+                        if(test -x $1 -a -x $3)
+                                mergedperms='+x'
+                }
+                if not{
+                        if(test -x $1 -o -x $3)
+                                mergedperms='+x'
+                }
+                status=()
+        }
+}
+
+fn whoami{
+        name=`$nl{git/conf user.name}
+        email=`$nl{git/conf user.email}
+        if(test -f /adm/keys.who){
+                if(~ $name '')
+                        name=`$nl{awk -F'|' '$1=="'$user'" {x=$3} END{print x}' </adm/keys.who}
+                if(~ $email '')
+                        email=`$nl{awk -F'|' '$1=="'$user'" {x=$5} END{print x}' </adm/keys.who}
+        }
+        if(~ $name '')
+                name=$user
+        if(~ $email '')
+                email=$user@$sysname
+        status=''
+}
+
+# merge1 out ours base theirs
+fn merge1 {@{
+        rfork e
+        n=$pid
+        out=$1
+        ours=$2
+        base=$3
+        theirs=$4
+        tmp=$out.tmp
+        while(test -f $tmp){
+                tmp=$tmp.$n
+                n=`{echo $n + 1 | hoc}
+        }
+
+        if(! test -f $ours)
+                ours=/dev/null
+        if(! test -f $base)
+                base=/dev/null
+        if(! test -f $theirs)
+                theirs=/dev/null
+
+        if(mergeperm $ours $base $theirs){
+                mkdir -p `$nl{basename -d $tmp}
+                if(! merge3 $ours $base $theirs > $tmp)
+                        echo merge needed: $out >[1=2]
+                mv $tmp $out
+                git/add $out
+                chmod $mergedperms $out
+        }
+        if not {
+                rm -f $tmp $out
+                echo R NOQID 0 $out >> $gitroot/.git/INDEX9
+        }
+}}
+
+fn gitup{
+        gitroot=`$nl{git/conf -r >[2]/dev/null}
+        if(~ $#gitroot 0)
+                die 'not a git repository'
+        gitfs=$gitroot/.git/fs
+        gitrel=`$nl{pwd | drop $gitroot | sed 's@^/@@'}
+        if(~ $#gitrel 0)
+                gitrel='.'
+        if(! cd $gitroot)
+                die cd $gitroot: no repo there
+        startfs=()
+        mkdir -p $gitfs
+        if(! test -e $gitfs/ctl)
+                startfs=true
+        if(! grep -s '^repo '$gitroot'$' $gitfs/ctl >[2]/dev/null)
+                startfs=true
+        if(~ $#startfs 1)
+                git/fs >[1=2]
+        if not
+                status=''
+}
+
+@
+
 \subsection*{[[git9/add.rc]]}
 
 <<git9/add.rc>>=
@@ -22,6 +150,1378 @@ paths=`$nl{cleanname -d $gitrel $* | drop $gitroot}
 walk -f ./$paths | grep -v '^(./)?.git/' | \
         sed 's/^/'$s' NOQID 0 /' >> .git/INDEX9
 exit ''
+@
+
+\subsection*{[[git9/branch.rc]]}
+
+<<git9/branch.rc>>=
+#!/bin/rc -e
+rfork en
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='a:listall, b:baseref ref, r:remove, n:newbr, s:stay, m:merge, M:nomod'
+args='[branch]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+modified=()
+deleted=()
+failed=()
+if(~ $#* 0){
+        if(~ $#listall 0)
+                awk '$1=="branch"{print $2}' < $gitfs/ctl
+        if not
+                cd .git/refs/ && walk -f heads remotes | sort
+        exit
+}
+if(! ~ $#* 1)
+        exec auxrc/usage
+
+branch=$1
+if(~ $branch refs/heads/*)
+        new=$name
+if not if(~ $branch heads/*)
+        new=refs/$branch
+if not
+        new=refs/heads/$branch
+
+# where are we now?
+orig=`{git/query HEAD}
+origbranch=refs/`{awk '$1=="branch"{print $2}' < $gitfs/ctl}
+
+# if we're switching branches to a branch that doesn't exist,
+# but we have a remote branch that exists upstream, create a
+# new head to mirror it.
+if(~ $#newbr 0){
+        if(! ~ $#baseref 0)
+                die update would clobber $branch with $baseref
+        if(! test -e .git/$new){
+                baseref=`$nl{echo -n $new | sed s@refs/heads/@refs/remotes/origin/@}
+                if(! base=`{git/query $baseref})
+                        exit 'bad ref'
+        }
+}
+
+# figure out where we want the new branch to point to
+if (~ $#baseref 1)
+        base=`{git/query $baseref} || exit 'bad ref'
+if not if(~ $#newbr 0)
+        base=`{git/query $new} || exit 'bad ref'
+if not
+        base=`{git/query HEAD} || exit 'bad ref'
+
+modified=`$nl{git/query -c HEAD $base | grep '^[^-]' | subst '^..'}
+deleted=`$nl{git/query -c HEAD $base | grep '^-' | subst '^..'}
+
+# if we remove the current branch without switching, bad things happen
+if(~ $remove 1 && ~ $origbranch $new)
+        die 'cannot remove current branch'
+# if we're not merging, don't clobber existing changes.
+if(~ $#merge 0 && ~ $#remove 0){
+        if(! ~ $#modified 0 || ! ~ $#deleted 0){
+                git/walk -fRMA $modified $deleted || 
+                        die 'uncommitted changes would be clobbered'
+        }
+}
+if(~ $remove 1){
+        rm -f .git/$new
+        echo 'removed branch' $new
+        exit
+}
+commit=`{git/query $base} || die 'branch does not exist:' $base
+basedir=`{git/query -p $base}
+dirtypaths=()
+if(! ~ $#modified 0 || ! ~ $#deleted 0)
+        dirtypaths=`$nl{git/walk -cfRMA $modified $deleted}
+
+>>[3].git/INDEX9{
+        for(d in $deleted){
+                if(! test -d $d){
+                        rm -f $d
+                        echo R NOQID 0 $d >>[1=3]
+                }
+        }
+        for(m in $modified $deleted) if(! ~ $m $dirtypaths){
+                d=`$nl{basename -d $m}
+                mkdir -p $d
+                # Modifications can turn a file into
+                # a directory, or vice versa, so we
+                # need to delete and copy the files
+                # over.
+                a=dir
+                b=dir
+                if(test -f $m)
+                        a=file
+                if(test -f $basedir/tree/$m)
+                        b=file
+                if(! ~ $a $b){
+                        rm -rf $m
+                        echo R NOQID 0 $m >>[1=3]
+                }
+                if(~ $b file){
+                        echo T NOQID 0 $m >>[1=3]
+                        cp -x -- $basedir/tree/$m $m || {echo cp failed: $m; failed=1}
+                        touch -c $m
+                }
+        }
+}
+modified=()
+deleted=()
+
+for(ours in $dirtypaths){
+        common=$gitfs/object/$orig/tree/$ours
+        theirs=$gitfs/object/$base/tree/$ours
+        merge1 $ours $ours $common $theirs
+        st=$status
+        if(! ~ $st '')
+                >[1=2] echo merge failed $ours: $st
+}
+dirtypaths=()
+
+if(~ $new */*)
+        mkdir -p .git/`{basename -d $new}
+echo $commit > .git/$new
+if(! ~ $#stay 0)
+        exit
+if(~ $failed 1){
+        echo 'pull failed: fix errors and try again' >[1=2]
+        exit nopull
+}
+echo ref: $new > .git/HEAD
+echo $new: `{git/query $new}
+exit ''
+
+@
+
+\subsection*{[[git9/clone.rc]]}
+
+<<git9/clone.rc>>=
+#!/bin/rc
+rfork en
+. /lib/git/common.rc
+
+flagfmt='d:debug, b:branch branch'; args='remote [local]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $debug 1)
+        debug=(-d)
+
+remote=$1
+local=$2
+
+if(~ $#remote 0)
+        exec auxrc/usage
+if(~ $#local 0)
+        local=`$nl{basename `$nl{echo $remote | sed 's@.*/([^/]+)/*$@\1@'} .git}
+if(~ $#branch 1)
+        branchflag=(-b $branch)
+
+if(test -e $local && ~ `{ls $local | sed 1q | wc -l} 1)
+        die 'destination already exists:' $local
+
+fn clone{
+        flag +e
+        mkdir -p $local/.git
+        mkdir -p $local/.git/fs
+        mkdir -p $local/.git/objects/pack/
+        mkdir -p $local/.git/refs/heads/
+        
+        cd $local
+        
+        >>.git/config {
+                echo '[remote "origin"]'
+                echo '  url='$remote
+        }
+        {git/get  $debug $branchflag $remote >[2=3] | awk '
+                BEGIN{
+                        headref=""
+                        if(ENVIRON["branch"] != "")
+                                headref="refs/remotes/origin/"ENVIRON["branch"]
+                        headhash=""
+                }
+                /^symref / && headref == "" {
+                        if($2 == "HEAD"){
+                                gsub("^refs/heads", "refs/remotes/origin", $3)
+                                gsub("^refs/tags", "refs/remotes/origin/tags", $3)
+                        }
+                }
+                /^remote /{
+                        if($2=="HEAD"){
+                                headhash=$3
+                        }else if(match($2, "^refs/(heads|tags)/")){
+                                gsub("^refs/heads", "refs/remotes/origin", $2)
+                                if($2 == headref || (headref == "" && $3 == headhash))
+                                        headref=$2
+                                outfile = ".git/" $2
+                                outdir = outfile
+                                gsub("/?[^/]*/?$", "", outdir)
+                                system(sprintf("mkdir -p %q", outdir))
+                                print $3 > outfile
+                                close(outfile)
+                        }
+                }
+                END{
+                        if(headref != ""){
+                                remote = headref;
+                                refdir = headref;
+                                gsub("/?[^/]*/?$", "", refdir)
+                                gsub("^refs/remotes/origin", "refs/heads", headref)
+                                system("mkdir -p `{basename -d .git/"headref"}");
+                                system("cp .git/" remote " .git/" headref)
+                                print "ref: " headref > ".git/HEAD"
+                        }else if(headhash != ""){
+                                print "warning: detached head "headhash > "/fd/2"
+                                print headhash > ".git/HEAD"
+                        }
+                }
+        '} |[3] tr '\x0d' '\x0a' || die 'could not clone repository'
+
+        tree=.git/fs/HEAD/tree
+        lbranch=`{git/branch}
+        rbranch=`{echo $lbranch | subst 'heads' 'remotes/origin'}
+        echo checking out repository...
+        if(test -f .git/refs/$rbranch){
+                mkdir -p `{basename -d .git/refs/$lbranch}
+                cp .git/refs/$rbranch .git/refs/$lbranch
+                git/fs
+                @ {builtin cd $tree && tar cif /fd/1 .} | @ {tar xf /fd/0} \
+                        || die 'checkout failed:' $status
+                {for(f in `$nl{cd $tree && walk -f})
+                        echo 'T NOQID 0 '$f} > .git/INDEX9
+        }
+        if not{
+                echo no default branch >[1=2]
+                echo check out your code with git/branch >[1=2]
+        }
+}
+
+fn sigint {
+        echo cancelled clone $remote: cleaning $local >[1=2]
+        unmount $local/.git/fs >[2]/dev/null
+        rm -rf $local
+        exit interrupted
+}
+
+ @{clone}
+st=$status
+if(! ~ $st ''){
+        echo failed to clone $remote: cleaning $local >[1=2]
+        unmount $local/.git/fs >[2]/dev/null
+        rm -rf $local
+        exit $st
+}
+exit ''
+
+@
+
+\subsection*{[[git9/commit.rc]]}
+
+<<git9/commit.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+fn findbranch{
+        branch=`{git/branch}
+        if(test -e $gitfs/branch/$branch/tree){
+                refpath=.git/refs/$branch
+                initial=false
+        }
+        if not if(test -e $gitfs/object/$branch/tree){
+                refpath=.git/HEAD
+                initial=false
+        }
+        if not if(! test -e $gitfs/HEAD/tree){
+                refpath=.git/refs/$branch
+                initial=true
+        }
+        if not
+                die 'invalid branch:' $branch
+}
+
+# Remove commentary lines.
+# Remove leading and trailing empty lines.
+# Combine consecutive empty lines between paragraphs.
+# Remove trailing spaces from lines.
+# Ensure there's trailing newline.
+fn cleanmsg{
+        awk '
+        /^[     ]*#/ {next}
+        /^[     ]*$/ {empty = 1; next}
+
+        wet && empty {printf "\n"}
+        {wet = 1; empty = 0}
+        {sub(/[         ]+$/, ""); print $0}
+        '
+}
+
+fn editmsg{
+        if(! test -s $msgfile.tmp){
+                >$msgfile.tmp {
+                        echo '# Author:' $name '<'$email'>'
+                        echo '#'
+                        for(p in $parents)
+                                echo '# parent:' $p
+                        git/walk -fAMR $files | subst '^' '# '
+                        echo '#'
+                        echo '# Commit message:'
+                }
+                edit=1
+        }
+        if(! ~ $#edit 0){
+                giteditor=`{git/conf core.editor}
+                if(~ $#editor 0)
+                        editor=$giteditor
+                if(~ $#editor 0)
+                        editor=hold
+                $editor $msgfile.tmp
+        }
+        cleanmsg < $msgfile.tmp > $msgfile
+        if(! test -s $msgfile)
+                die 'empty commit message'
+}
+
+fn parents{
+        if(! ~ $#revise 0)
+                parents=`{cat $gitfs/HEAD/parent}
+        if not if(test -f .git/merge-parents)
+                parents=`{cat .git/merge-parents | sort | uniq}
+        if not if(~ $initial true)
+                parents=()
+        if not
+                parents=`{git/query $branch}
+}
+
+fn commit{
+        msg=`''{cat $msgfile}
+        if(! ~ $#parents 0)
+                pflags='-p'^$parents
+        hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
+}
+
+fn update{
+        mkdir -p `{basename -d $refpath}
+        # Paranoia: let's not mangle the repo.
+        if(~ $#hash 0)
+                die 'botched commit'
+        rm -f .git/merge-parents
+        echo $branch: $hash
+        echo $hash > $refpath
+        for(f in $files){
+                if(! test -e $f && ! test -e .git/object/$hash/tree/$f)
+                        echo R NOQID 0 $f >> .git/INDEX9
+                if not
+                        echo T NOQID 0 $f >> .git/INDEX9
+        }
+}
+
+fn filterdiff{
+        awk '
+                function dump(){
+                        if(n == 0)
+                                return
+
+                        print "--- a/"f >>"/dev/cons"
+                        print "+++ b/"f >>"/dev/cons"
+                        for(i = 0; i < n; i++)
+                                print lines[i] >>"/dev/cons"
+                        printf("Commit this hunk?[n]  ") >>"/dev/cons"
+                        getline ans < "/dev/cons"
+                        if(ans ~ /[yY]/)
+                                for(i = 0; i < n; i++)
+                                        print lines[i]
+                        n = 0
+                }
+                /^---/{ next }
+                /^\+\+\+/{
+                        f = substr($0, 5)
+                        print "--- "f
+                        print "+++ "f
+                        n = 0
+                        next
+                }
+                /^@@/{ dump() }
+                { lines[n++] = $0 }
+                END{ dump() }
+        '
+}
+
+fn pickhunks{
+        p=$wdir/patch
+        if(test -f .git/fs/HEAD/tree/$i)
+                #<[12]/fd/0 >[13]/fd/1 { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p }
+                { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p } || status=''
+        if not
+                diff -u /dev/null $1 >>$p || status=''
+}
+
+fn apply{
+        t=$wdir/tree/
+        p=$wdir/patch
+        ln=`{wc -l $p}
+        if(test $ln(1) -lt 3)
+                die 'no hunks seleted'
+        f=`{patch -n $p}
+        mkdir $t
+        @{cd .git/fs/HEAD/tree; tar c $f >[2]/dev/null} | @{cd $t; tar xT}
+        for(i in $f){
+                d=`{basename -d $i}
+                if(! ~ $d .){
+                        mkdir -p $t^$d
+                        bind -bc $t^$d $d
+                }
+        }
+        bind -bc $t .
+        patch <$p >/dev/null || die 'failed partial patch: '^$status
+}
+
+gitup
+
+flagfmt='m:msg message, r:revise, e:edit, p:partial'; args='[file ...]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+wdir=/mnt/git
+ramfs -m $wdir
+msgfile=$wdir/git-msg.$pid
+if(~ $#msg 1)
+        echo $msg >$msgfile.tmp
+if not if(~ $#revise 1){
+        msg=1
+        echo revising commit `{cat $gitfs/HEAD/hash}
+        cat $gitfs/HEAD/msg >$msgfile.tmp
+}
+
+files=()
+if(test -f .git/merge-parents)
+        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+if(! ~ $#* 0)
+        files=($files `$nl{git/walk -fRMA -c `$nl{cleanname -d $gitrel $*}})
+if(~ $status '' || ~ $#files 0 && ! test -f .git/merge-parents && ~ $#revise 0)
+        die 'nothing to commit'
+if(~ $#partial 1){
+        for(i in $files)
+                pickhunks $i
+        apply
+}
+
+ @{
+        flag e +
+        whoami
+        findbranch
+        parents
+        editmsg
+        commit
+        update
+} || die 'could not commit:' $status
+exit ''
+
+@
+
+\subsection*{[[git9/compat.rc]]}
+
+<<git9/compat.rc>>=
+#!/bin/rc
+
+rfork e
+
+opts=()
+args=()
+nl='
+'
+
+fn cmd_init{
+        while(! ~ $#* 0){
+                switch($1){
+                case --bare
+                        # ignore
+                case -- 
+                        # go likes to use these
+                case -*
+                        die unknown command init $*
+                case *
+                        args=($args $1)
+                }
+                shift
+        }
+        git/init $opts $args
+}
+
+fn cmd_clone{
+        branch=()
+        while( ! ~ $#* 0){
+                switch($1){
+                case -b
+                        branch=$2
+                        shift
+                case --
+                        # go likes to use these
+                case -*
+                        die unknown command clone $*
+                case *
+                        args=($args $1)
+                }
+                shift
+        }
+        git/clone $opts $args
+        if(~ $#branch 1)
+                git/branch -n -b $1 origin/$1
+}
+
+fn cmd_pull{
+        if(~ $1 -*)
+                die unknown options for pull $*
+        git/pull
+}
+
+fn cmd_fetch{
+        while(~ $#* 0){
+                switch($1){
+                case --all
+                        opts=($opts -a)
+                case -f
+                        opts=($opts -u $2)
+                        shift
+                case --
+                        # go likes to use these
+                case -*
+                        die unknown command clone $*
+                case *
+                        args=($args $1)
+                }
+                shift
+        }       
+        git/pull -f $opts
+}
+
+
+fn cmd_checkout{
+        if(~ $1 -*)
+                die unknown command pull $*
+        if(~ $#* 0)
+                die git checkout branch
+        git/branch $b
+}
+
+fn cmd_submodule {
+        if(test -f .gitmodules)
+                die 'submodules unsupported'
+}
+
+fn cmd_rev-parse{
+        while(~ $1 -*){
+                switch($1){
+                case --git-dir
+                        echo $gitroot/.git
+                        shift
+                case --abbrev-ref
+                        echo `{dcmd git9/branch | sed s@^heads/@@g}
+                        shift
+                case *
+                        die unknown option $opt
+                }
+                shift
+        }
+}
+
+fn cmd_show-ref{
+        if(~ $1 -*)
+                die unknown command pull $*
+        filter=cat
+        if(~ $#* 0)
+                filter=cat
+        if not
+                filter='-e(^|/)'^$*^'$'
+        for(b in `$nl{cd $gitroot/.git/refs/ && walk -f})
+                echo `{cat $gitroot/.git/refs/$b} refs/$b 
+}
+
+fn cmd_rev-parse{
+        switch($1){
+        case --git-dir
+                echo `{git/conf -r}^/.git
+        case *
+                die 'unknown rev-parse '$*
+        }
+}
+
+fn cmd_remote{
+        if({! ~ $#* 3 && ! ~ $#* 4} || ! ~ $1 add)
+                die unimplemented remote cmd $*
+        name=$2
+        url=$3
+        if(~ $3 '--')
+                url=$4
+        >>$gitroot/.git/config{
+                echo '[remote "'$name'"]'
+                echo '  url='$url
+        }
+}
+
+fn cmd_log{
+        count=()
+        format=''
+        while(~ $1 -*){
+                switch($1){
+                case --format
+                        format=$2
+                        shift
+                case '--format='*
+                        format=`{echo $1 | sed 's/--format=//g'}
+                case -n
+                        count=-n$2
+                        shift
+                case -n*
+                        count=$1
+                case *
+                        dprint option $opt
+                }
+                shift
+        }
+        @{cd $gitroot && git/fs}
+        switch($format){
+        case ''
+                git/log $count
+        case '%H:%ct'
+                for(c in `{git/log -s $count| awk '{print $1}'})
+                        echo $c:`{mtime $gitroot/.git/fs/object/$c/msg}
+        case '%h %cd'
+                for(c in `{git/log -s $count| awk '{print $1}'})
+                        echo $c `{date `{mtime $gitroot/.git/fs/object/$c/msg}}
+        }
+
+}
+
+fn cmd_show{
+        cmd_log -n1 $*
+}
+
+fn cmd_ls-remote{
+        if(~ $1 -q)
+                shift
+        remote=`$nl{git/conf 'remote "'$1'".url'}
+        if(~ $#remote 0)
+                remote=$1
+        git/get -l $remote | awk '/^remote/{print $3"\t"$2}'
+}
+
+fn cmd_version{
+        echo git version 2.2.0
+}
+
+fn cmd_status{
+        echo
+}
+
+fn usage{
+        echo 'git <command> <args>' >[1=2]
+        exit usage
+}
+
+fn die {
+        >[1=2] echo git $_cmdname: $*
+        exit $_cmdname: $*
+}
+
+_cmdname=$1
+if(~ $0 *compat){
+        ramfs -m /n/gitcompat
+        touch /n/gitcompat/git
+        bind $0 /n/gitcompat/git
+        path=( /n/gitcompat $path )
+        exec rc
+}
+
+if(~ $#gitcompatdebug 1)
+        echo running  $* >>/tmp/gitlog
+
+if(~ $1 -c)
+        shift 2
+if(~ $1 -c*)
+        shift 1
+if(! test -f '/env/fn#cmd_'$1)
+        die git $1: commmand not implemented
+if(! ~ $1 init && ! ~ $1 clone)
+        gitroot=`{git/conf -r} || die repo
+
+if(~ $#gitcompatdebug 1)
+        cmd_$1 $*(2-) | tee >>/tmp/gitlog
+if not
+        cmd_$1 $*(2-)
+exit ''
+
+@
+
+\subsection*{[[git9/diff.rc]]}
+
+<<git9/diff.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='c:commit branch, s:summarize, u:uncommitted'; args='[file ...]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+bparam=(-b $commit)
+if(~ $#commit 0){
+        commit=HEAD
+        cparam=()
+        bparam=()
+}
+
+files=()
+filt=MAR
+if(~ $#uncommitted 1)
+        filt=MARU
+if(! ~ $#* 0)
+        files=`{cleanname -d $gitrel $*}
+
+branch=`{git/query -p $commit}
+if(~ $summarize 1 || ~ $uncommitted 1){
+        git/walk $bparam -r$gitrel -f$filt $cparam $files
+        exit
+}
+
+showed=()
+mntgen /mnt/scratch
+bind $branch/tree/ /mnt/scratch/a
+bind . /mnt/scratch/b
+for(f in `$nl{git/walk $bparam -c -f$filt $cparam $files}){
+        if(~ $#showed 0){
+                echo diff `{git/query $commit} uncommitted
+                showed=1
+        }
+        cd /mnt/scratch
+        a=a/$f
+        b=b/$f
+        if(! test -f a/$f)
+                a=/dev/null
+        if(! test -f b/$f)
+                b=/dev/null
+        diff -u $a $b
+}
+exit ''
+
+@
+\subsection*{[[git9/export.rc]]}
+
+<<git9/export.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+
+patchname=/tmp/git.patchname.$pid
+patchfile=/tmp/git.patchfile.$pid
+fn sigexit{
+        rm -f $patchname $patchfile
+}
+
+gitup
+
+flagfmt='o:patchdir patchdir'; args='[query]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+if(~ $#patchdir 1 && ! test -d $patchdir)
+        mkdir -p $patchdir
+
+q=$*
+if(~ $#q 0)
+        q=HEAD
+commits=`{git/query $q || die $status}
+n=1
+m=$#commits
+
+
+# sleazy hack: we want to run
+# under rfork m for the web ui,
+# so don't error if we can't mount
+mntgen /mnt/scratch >[2]/dev/null || status=''
+for(c in $commits){
+        cp=`{git/query -p $c}
+        pp=`{git/query -p $c'~'}
+        fc=`$nl{git/query -c $c~ $c | sed 's/^..//'}
+
+        @{
+                rfork n
+                cd /mnt/scratch
+                if(test -d $pp/tree)
+                        bind $pp/tree a
+                if(test -d $cp/tree)
+                        bind $cp/tree b
+                
+                echo From: `{cat $cp/author}
+                echo Date: `{date -uf'WW, DD MMM YYYY hh:mm:ss Z' `{walk -em $cp/author}}
+                <$cp/msg awk '
+                NR == 1 {
+                        n = ENVIRON["n"]
+                        m = ENVIRON["m"]
+                        msg=$0
+                        if(m > 1)
+                                patch = sprintf("[PATCH %d/%d]", n, m)
+                        else
+                                patch = "[PATCH]"
+                        printf "Subject: %s %s\n\n", patch, msg
+                        
+                        gsub("^[        ]|[     ]$", "", msg)
+                        gsub("[^a-zA-Z0-9_]+", "-", msg)
+                        printf "%.4d-%s.patch", n, msg >ENVIRON["patchname"]
+                        next
+                }
+                {
+                        print
+                }'
+                echo '---'
+                echo diff `{basename $pp} `{basename $cp}
+                for(f in $fc){
+                        a=a/$f
+                        if(! test -f $a)
+                                a=/dev/null
+                        b=b/$f
+                        if(! test -f $b)
+                                b=/dev/null
+                        diff -ur $a $b
+                }
+                echo '-- '
+                echo '⑨'
+        } >$patchfile
+        if(~ $#patchdir 0){
+                cat $patchfile
+                ! ~ $n $m && echo
+        }
+        if not{
+                f=$patchdir/`{cat $patchname}
+                mv $patchfile $f
+                echo $f
+        }
+        n=`{echo $n + 1 | bc}
+}
+exit ''
+
+@
+\subsection*{[[git9/hist.rc]]}
+
+<<git9/hist.rc>>=
+#!/bin/rc
+rfork ne
+
+. /lib/git/common.rc
+gitup
+
+flagfmt='n:num count'; args='files...'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $#* 0) exec auxrc/usage
+
+fn dodiff {
+        while(t=`{read}){
+                h=$t(1)
+                o=$gitfs/object/`{git/query $h~}
+                c=$gitfs/object/$h
+                echo 'Hash:' $h
+                echo -n 'Date: '; date `{walk -em $c/msg}
+                echo -n 'Author: '; cat $c/author
+                echo -n 'Message: '; cat $c/msg
+                echo
+                for(f in $files){
+                        curr=$c/tree/$f
+                        prev=$o/tree/$f
+                        if(! test -e $curr)
+                                curr=/dev/null
+                        if(! test -e $prev)
+                                prev=/dev/null
+                        diff -u $prev $curr
+                }
+                echo --' '
+                echo ⑨
+                echo
+        }
+}
+
+files=`{cleanname -d $gitrel $*}
+args=(-s $files)
+if(! ~ $#num 0)
+        args=(-n $num $args)
+git/log $args | dodiff
+
+@
+\subsection*{[[git9/import.rc]]}
+
+<<git9/import.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+
+diffpath=/tmp/gitimport.$pid.diff
+fn sigexit {
+        rm -f $diffpath
+}
+
+fn apply1 {
+        adate=`{seconds $adate}
+        files=`$nl{patch -np1 < $diffpath}
+        if(! git/walk -q $files){
+                >[1=2] {
+                        echo patch would clobber files:
+                        git/walk $files
+                        exit clobber
+                }
+        }
+        echo applying $msg | sed 1q
+        if(! files=`$nl{patch -p1 < $diffpath})
+                die 'patch failed'
+        for(f in $files){
+                if(test -e $f)
+                        git/add $f
+                if not
+                        git/add -r $f
+        }
+        git/walk -fRMA $files
+        if(~ $#nocommit 0){
+                if(hash=`{git/save -n $aname -e $amail -N $name -E $email -m $msg -d $adate $parents $files}){
+                        echo $hash > $refpath
+                        for(f in $files)
+                                echo T NOQID 0 $f >> .git/INDEX9
+                }
+        }
+        exit ''
+}
+        
+
+fn apply @{
+        git/fs
+        amail=''
+        aname=''
+        msg=''
+        whoami
+        parents='-p'^`{git/query HEAD}
+        branch=`{git/branch}
+        if(test -e $gitfs/branch/$branch/tree)
+                refpath=.git/refs/$branch
+        if not if(test -e $gitfs/object/$branch/tree)
+                refpath=.git/HEAD
+        if not
+                die 'invalid branch:' $branch
+        awk '
+        function doapply(){
+                if(aname == "" || amail == "" || date == "" || gotmsg == "")
+                        exit("missing headers");
+                printf "%s", aname > "/env/aname"
+                printf "%s", amail > "/env/amail"
+                printf "%s", date > "/env/adate"
+                if(system("rc -c apply1") != 0)
+                        exit("patch failed");
+                close("/env/aname")
+                close("/env/amail")
+                close("/env/adate")
+                close(ENVIRON["diffpath"])
+                applied = 1
+        }
+        BEGIN{
+                state="headers"
+        }
+        state=="diff" && !/^[-+ @]|^diff|^$|^\\ No newline at end of file$/{
+                state="footers";
+                doapply();
+        }
+        state=="footers" && /^⑨$/{
+                state="headers"
+                next
+        }
+        state=="headers" && /^[fF]rom:/ {
+                sub(/^From:[ \t]*/, "", $0);
+                aname=$0;
+                amail=$0;
+                sub(/[ \t]*<.*$/, "", aname);
+                sub(/^[^<]*</, "", amail);
+                sub(/>[^>]*$/, "", amail);
+        }
+        state=="headers" && /^[Dd]ate:/{
+                sub(/^Date:[ \t]*/, "", $0)
+                date=$0
+        }
+        state=="headers" && /^Subject:/{
+                sub(/^Subject:[ \t]*([Rr][Ee]:)?[ \t]*(\[[^\]]*\][ \t]*)*/, "", $0);
+                gotmsg = 1
+                print > "/env/msg"
+        }
+        state=="headers" && /^$/ {
+                state="body"
+        }
+        (state=="headers" || state=="body") && (/^diff / || /^---( |$)/){
+                state="diff"
+                next
+        }
+        state=="body" && /^[    ]*$/ {
+                empty=1
+                next
+        }
+        state=="body" {
+                if(empty)
+                        printf "\n" > "/env/msg"
+                empty=0
+                sub(/[  ]+$/, "")
+                print > "/env/msg"
+        }
+        state=="diff" {
+                print > ENVIRON["diffpath"]
+        }
+        END{
+                if(!failed && state == "diff" && doapply() != 0){
+                        print "unable to apply patch" > "/fd/2"
+                        exit("mispatch")
+                }
+        }
+        '
+}
+
+gitup
+
+flagfmt='n:nocommit'; args='file ...'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+patches=(/fd/0)
+if(! ~ $#* 0)
+        patches=`{cleanname -d $gitrel $*}
+for(p in $patches){
+        # upas serves the decoded header and body separately,
+        # so we cat them together when applying a upas message.
+        #
+        # this allows mime-encoded or line-wrapped patches.
+        if(test -d $p && test -f $p/header && test -f $p/body)
+                {{cat $p/header; echo; cat $p/body} | apply} || die $status
+        if not
+                apply < $p
+}
+exit ''
+
+@
+
+\subsection*{[[git9/init.rc]]}
+
+<<git9/init.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+flagfmt='u:upstream upstream,b:branch branch'; args='name'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+dir=$1
+if(~ $#dir 0)
+        dir=.
+if(~ $#branch 0)
+        branch=front
+if(test -e $dir/.git)
+        die $dir/.git already exists
+name=`{basename `{cleanname -d `{pwd} $dir}}
+if(~ $#upstream 0){
+        upstream=`{git/conf 'defaults "origin".baseurl'}
+        if(! ~ $#upstream 0)
+                upstream=$upstream/$name
+}
+
+mkdir -p $dir/.git/refs/^(heads remotes)
+mkdir -p $dir/.git/^(fs objects)
+>$dir/.git/config {
+        echo '[core]'
+        echo '  repositoryformatversion = p9.0'
+        if(! ~ $#upstream 0){
+                echo '[remote "origin"]'
+                echo '  url = '$upstream
+        }
+        echo '[branch "'$branch'"]'
+        echo '  remote = origin'
+}
+>$dir/.git/INDEX9
+>$dir/.git/HEAD {
+        echo ref: refs/heads/$branch
+}
+
+exit ''
+
+@
+\subsection*{[[git9/merge.rc]]}
+
+<<git9/merge.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+fn merge{
+        ourbr=$gitfs/object/$1/tree
+        basebr=$gitfs/object/$2/tree
+        theirbr=$gitfs/object/$3/tree
+
+        all=`$nl{{git/query -c $1 $2; git/query -c $2 $3} | sed 's/^..//' | sort | uniq}
+        for(f in $all){
+                ours=$ourbr/$f
+                base=$basebr/$f
+                theirs=$theirbr/$f
+                merge1 ./$f $ours $base $theirs
+        }
+}
+
+gitup
+
+flagfmt=''; args='theirs'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+if(! ~ $#* 1)
+        exec auxrc/usage
+
+theirs=`{git/query $1}
+ours=`{git/query HEAD}
+base=`{git/query $theirs ^ ' ' ^ $ours ^ '@'}
+
+if(~ $base $theirs)
+        die 'nothing to merge, doofus'
+if(! git/walk -q)
+        die 'dirty work tree, refusing to merge'
+if(~ $base $ours){
+        >[1=2] echo 'fast forwarding...'
+        echo $theirs > .git/refs/`{git/branch}
+        git/revert .
+        exit ''
+}
+echo $ours >> .git/merge-parents
+echo $theirs >> .git/merge-parents
+
+merge $ours $base $theirs
+echo 'merge complete: remember to commit'
+exit ''
+
+@
+\subsection*{[[git9/pull.rc]]}
+
+<<git9/pull.rc>>=
+#!/bin/rc -e
+rfork en
+. /lib/git/common.rc
+
+fn update{
+        upstream=$1
+        url=$2
+        dir=$3
+        dflag=()
+        if(! ~ $#debug 0)
+                dflag='-d'
+        heads=`$nl{
+                # safe to split in awk, branch names may not
+                # have spaces or newlines.
+                git/query `$nl{
+                        cd .git/refs && \
+                        walk -f -emp heads remotes | \
+                        sort -rn | \
+                        awk '{print $2}'
+                }
+        }
+        if(! ~ $#heads 0)
+                heads='-h'^$heads
+        {git/get $dflag -u $upstream $heads $url >[2=3] || die $status} | awk '
+        /^remote refs\/(heads|tags)\//{
+                ref=$2
+                hash=$3
+                gsub("^refs/heads", "refs/remotes/'$upstream'", ref)
+                outfile = ".git/"ref
+                print outfile > "/env/outfile"
+                system("mkdir -p `$nl{basename -d $outfile}");\
+                close("/env/outfile")
+                print hash > outfile;
+                close(outfile);
+        }
+        ' |[3] tr '\x0d' '\x0a'
+}
+
+gitup
+
+flagfmt='d:debug, q:quiet, f:fetchonly,
+        u:upstream upstream'
+args=''
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+if(~ $#upstream 0)
+        upstream=origin
+remote=`$nl{git/conf 'remote "'$upstream'".url'}
+if(~ $#remote 0){
+        remote=$upstream
+        upstream=THEM
+}
+
+update $upstream $remote
+if (~ $fetchonly 1)
+        exit
+
+local=`{git/branch}
+remote=`{git/branch | subst '^(refs/)?heads' 'remotes/'$upstream}
+
+# we have local commits, but the remote hasn't changed.
+# in this case, we want to keep the local commits untouched.
+if(~ `{git/query HEAD $remote @} `{git/query $remote}){
+        echo 'up to date' >[1=2]
+        exit
+}
+# The remote repository and our HEAD have diverged: we
+# need to merge.
+if(! ~ `{git/query HEAD $remote @} `{git/query HEAD}){
+        >[1=2]{
+                echo ours:      `{git/query HEAD}
+                echo theirs:    `{git/query $remote}
+                echo common:    `{git/query HEAD $remote @}
+                echo git/merge $remote
+        }
+        exit diverged
+}
+
+oldcommit=`{git/query $local}
+newcommit=`{git/query $remote}
+
+if(~ $#quiet 0){
+        git/log -s -e $oldcommit'..'$newcommit
+        echo $remote':' $oldcommit '=>' $newcommit
+}
+
+git/branch -mnb $remote $local
+exit ''
+
+@
+\subsection*{[[git9/push.rc]]}
+
+<<git9/push.rc>>=
+#!/bin/rc -e
+rfork en
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='a:pushall, b:branch branch, f:force, d:debug,
+         r:remove remove, u:upstream upstream' args=''
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(! ~ $#* 0)
+        exec auxrc/usage
+
+if(~ $pushall 1)
+        branch=`$nl{cd .git/refs/heads && walk -f}
+if(~ $#branch 0)
+        branch=`{git/branch}
+if(~ $#branch 0)
+        die 'no branches'
+if(~ $force 1)
+        force=-f
+if(~ $debug 1)
+        debug='-d'
+
+if(~ $#upstream 0)
+        upstream=origin
+
+remotes=`$nl{git/conf -a 'remote "'$upstream'".url'}
+if(~ $#remotes 0)
+        remotes=$upstream
+branch=-b^$branch
+if(! ~ $#remove 0)
+        remove=-r^$remove
+for(remote in $remotes){
+        updates=`$nl{git/send $debug $force $branch $remove $remote} || die $status
+        for(ln in $updates){
+                u=`{echo $ln}
+                refpath=`{echo $u(2) | subst '^refs/heads/' '.git/refs/remotes/'$upstream'/'}
+                switch($u(1)){
+                case update;
+                        mkdir -p `{basename -d $refpath}
+                        echo $u(4) > $refpath
+                        echo $u(2)^':' $u(3) '=>' $u(4)
+                case delete;
+                        echo $u(2)^': removed'
+                        rm -f $refpath
+                case uptodate;
+                        echo $u(2)^': up to date'
+                }
+        }
+}
+exit ''
+
+@
+\subsection*{[[git9/rebase.rc]]}
+
+<<git9/rebase.rc>>=
+#!/bin/rc -e
+
+rfork en
+
+. /lib/git/common.rc
+gitup
+
+flagfmt='s:src src, n:nocommit'; args='onto'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $#* 0) exec auxrc/usage
+
+if(~ $#src 0)
+        src=`{git/branch}
+nflag=''
+if(~ $nocommit 1)
+        nflag='-n'
+        
+dst=`{git/query $1}
+com=`{git/query $dst  $src @}
+if(~ $dst $com)
+        die 'nothing to rebase, doofus'
+git/log -se $dst'..'$src  | awk '
+BEGIN{
+        src=ENVIRON["src"];
+        dst=ENVIRON["dst"];
+}
+{
+        if(!done)
+                print "git/branch -nb "dst" rebase.wip";
+        c=$1; $1="";
+        print "git/export "c" | git/import '$nflag'#"$0;
+        done=1
+}
+END{
+        if(!done)
+                print "git/branch -nb "dst" ";
+        else{
+                print "git/branch -nb rebase.wip "src
+                print "git/branch -r rebase.wip";
+        }
+}' 
+
+@
+
+
+\subsection*{[[git9/revert.rc]]}
+
+<<git9/revert.rc>>=
+#!/bin/rc
+rfork en
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='c:query query' args='file ...'
+if (! eval `''{auxrc/getflags $*} || ~ $#* 0)
+        exec auxrc/usage
+
+if(~ $#query 0)
+        query=HEAD
+commit=`{git/query -p $query}
+
+files=`$nl{cleanname -d $gitrel $* | drop $gitroot}
+for(f in `$nl{git/walk -c -fRM -b $query $files}){
+        mkdir -p `{basename -d $f}
+        cp -x -- $commit/tree/$f $f
+        touch -c $f
+        git/add $f
+}
+exit ''
+
+@
+
+\subsection*{[[git9/rm.rc]]}
+
+<<git9/rm.rc>>=
+#!/bin/rc -e
+
+exec git/add -r $*
 @
 
 \subsection*{[[git9/conf.c]]}
