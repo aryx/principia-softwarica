@@ -197,9 +197,9 @@ Xbackq(void)
     String *word;
 
 
-	stop = "";
-	if(runq->argv && runq->argv->words)
-		stop = runq->argv->words->word;
+    stop = "";
+    if(runq->argv && runq->argv->words)
+        stop = runq->argv->words->word;
     if(pipe(pfd)<0){
         Xerror("can't make pipe");
         return;
@@ -244,7 +244,7 @@ Xbackq(void)
         s_free(word);
         closeio(f);
         Waitfor(pid, false);
-		poplist();	/* ditch split in "stop" */
+        poplist();	/* ditch split in "stop" */
         /* v points to reversed arglist -- reverse it onto argv */
         while(v){
             nextv = v->next;

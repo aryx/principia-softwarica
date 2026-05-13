@@ -9,13 +9,13 @@
 #include "y.tab.h"
 
 /*s: constant c0 (rc/code.c) */
-#define	c0	t->child[0]
+#define c0  t->child[0]
 /*e: constant c0 (rc/code.c) */
 /*s: constant c1 (rc/code.c) */
-#define	c1	t->child[1]
+#define c1  t->child[1]
 /*e: constant c1 (rc/code.c) */
 /*s: constant c2 (rc/code.c) */
-#define	c2	t->child[2]
+#define c2  t->child[2]
 /*e: constant c2 (rc/code.c) */
 /*s: global [[codep]] */
 // idx in codebuf
@@ -25,13 +25,13 @@ int codep;
 int ncode;
 /*e: global [[ncode]] */
 /*s: function [[emitf]] */
-#define	emitf(x) ((codep!=ncode || morecode()), codebuf[codep].f = (x), codep++)
+#define emitf(x) ((codep!=ncode || morecode()), codebuf[codep].f = (x), codep++)
 /*e: function [[emitf]] */
 /*s: function [[emiti]] */
-#define	emiti(x) ((codep!=ncode || morecode()), codebuf[codep].i = (x), codep++)
+#define emiti(x) ((codep!=ncode || morecode()), codebuf[codep].i = (x), codep++)
 /*e: function [[emiti]] */
 /*s: function [[emits]] */
-#define	emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
+#define emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
 /*e: function [[emits]] */
 
 
@@ -70,7 +70,7 @@ error0 compile(tree *t)
     codep = 0;
     codebuf = (code *)emalloc(ncode*sizeof(code));
 
-    emiti(0);			/* reference count */
+    emiti(0);           /* reference count */
     outcode(t, flag['e'] ? true : false);
 
     /*s: [[compile()]] check nerror */
@@ -283,7 +283,7 @@ outcode(tree *t, bool eflag)
         q = codep;
         outcode(c0, false);
         if(q==codep)
-            emitf(Xsettrue);	/* empty condition == while(true) */
+            emitf(Xsettrue);    /* empty condition == while(true) */
         emitf(Xtrue);
         p = emiti(0);
         outcode(c1, eflag);
@@ -304,7 +304,7 @@ outcode(tree *t, bool eflag)
             emits(strdup("*"));
             emitf(Xdol);
         }
-        emitf(Xmark);		/* dummy value for Xlocal */
+        emitf(Xmark);       /* dummy value for Xlocal */
         emitf(Xmark);
         outcode(c0, eflag);
         emitf(Xlocal);
@@ -338,7 +338,7 @@ outcode(tree *t, bool eflag)
             p = emiti(0);
             emits(fnstr(c1));
             outcode(c1, eflag); // body of the function
-            emitf(Xunlocal);	/* get rid of $* */ //$
+            emitf(Xunlocal);    /* get rid of $* */ //$
             emitf(Xreturn);
             stuffdot(p);
         }
@@ -350,28 +350,28 @@ outcode(tree *t, bool eflag)
         tt = t;
         for(;t && t->type=='='; t = c2);
 
-        if(t){					/* var=value cmd */
+        if(t){                  /* var=value cmd */
             for(t = tt;t->type=='=';t = c2){
                 emitf(Xmark);
                 outcode(c1, eflag);
                 emitf(Xmark);
                 outcode(c0, eflag);
-                emitf(Xlocal);		/* push var for cmd */
+                emitf(Xlocal);      /* push var for cmd */
             }
-            outcode(t, eflag);		/* gen. code for cmd */
+            outcode(t, eflag);      /* gen. code for cmd */
             for(t = tt; t->type == '='; t = c2)
-                emitf(Xunlocal);	/* pop var */
+                emitf(Xunlocal);    /* pop var */
         }
-        else{					/* var=value */
+        else{                   /* var=value */
             for(t = tt;t;t = c2){
                 emitf(Xmark);
                 outcode(c1, eflag);
                 emitf(Xmark);
                 outcode(c0, eflag);
-                emitf(Xassign);	/* set var permanently */
+                emitf(Xassign); /* set var permanently */
             }
         }
-        t = tt;	/* so tests below will work */
+        t = tt; /* so tests below will work */
         break;
     /*x: [[outcode()]] cases */
     case '$': //$
@@ -436,16 +436,16 @@ outcode(tree *t, bool eflag)
         break;
     /*x: [[outcode()]] cases */
     case '`':
-		emitf(Xmark);
-		if(c0){
-			outcode(c0, 0);
-			emitf(Xglob);
-		} else {
-			emitf(Xmark);
-			emitf(Xword);
-			emits(strdup("ifs"));
-			emitf(Xdol);
-		}
+        emitf(Xmark);
+        if(c0){
+            outcode(c0, 0);
+            emitf(Xglob);
+        } else {
+            emitf(Xmark);
+            emitf(Xword);
+            emits(strdup("ifs"));
+            emitf(Xdol);
+        }
         emitf(Xbackq);
         p = emiti(0);
         outcode(c1, false);
@@ -475,30 +475,30 @@ outcode(tree *t, bool eflag)
 /*s: function [[codeswitch]] */
 /*
  * switch code looks like this:
- *	Xmark
- *	(get switch value)
- *	Xjump	1f
- * out:	Xjump	leave
- * 1:	Xmark
- *	(get case values)
- *	Xcase	1f
- *	(commands)
- *	Xjump	out
- * 1:	Xmark
- *	(get case values)
- *	Xcase	1f
- *	(commands)
- *	Xjump	out
+ *  Xmark
+ *  (get switch value)
+ *  Xjump   1f
+ * out: Xjump   leave
+ * 1:   Xmark
+ *  (get case values)
+ *  Xcase   1f
+ *  (commands)
+ *  Xjump   out
+ * 1:   Xmark
+ *  (get case values)
+ *  Xcase   1f
+ *  (commands)
+ *  Xjump   out
  * 1:
  * leave:
- *	Xpopm
+ *  Xpopm
  */
 void
 codeswitch(tree *t, bool eflag)
 {
-    int leave;		/* patch jump address to leave switch */
-    int out;		/* jump here to leave switch */
-    int nextcase;	/* patch jump address to next case */
+    int leave;      /* patch jump address to leave switch */
+    int out;        /* jump here to leave switch */
+    int nextcase;   /* patch jump address to next case */
     tree *tt;
 
     // c1 is BRACE { ; ; ; }
