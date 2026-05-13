@@ -45,9 +45,9 @@ PROGRAMS=\
  \
  networking\
  browsers\
+ security\
  \
  utilities\
- \
  applications\
  games\
 

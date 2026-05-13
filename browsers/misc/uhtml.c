@@ -7,7 +7,7 @@
 
 // copied from Graphics.nw
 /*s: constant [[IOUNIT]](uhtml) */
-#define IOUNIT (64*1024)
+//#define IOUNIT (64*1024)
 /*e: constant [[IOUNIT]](uhtml) */
 
 int nbuf;

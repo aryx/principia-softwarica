@@ -161,6 +161,9 @@ struct IOchunk {
 };
 /*e: type [[IOchunk]] */
 
+//alt: could be in 9p.h but used also for non 9P stuff in practice
+#define IOUNIT	32768U	/* default buffer size for 9p io */
+
 //******************************************************************************
 // Function prototypes
 //******************************************************************************

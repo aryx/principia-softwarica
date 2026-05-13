@@ -22,9 +22,6 @@ typedef struct Objq	Objq;
 typedef struct Qelt	Qelt;
 typedef struct Idxent	Idxent;
 
-//TODO: move in libc.h like in 9front (or 9p.h)
-#define IOUNIT	32768U	/* default buffer size for 9p io */
-
 enum {
 	Pathmax		= 512,
 	Npackcache	= 32,
