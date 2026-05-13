@@ -4,9 +4,9 @@
 #include "git.h"
 
 enum {
-	Minchunk	= 128,
-	Maxchunk	= 8192,
-	Splitmask	= (1<<8)-1,
+    Minchunk    = 128,
+    Maxchunk    = 8192,
+    Splitmask   = (1<<8)-1,
 };
 
 static u32int geartab[] = {
@@ -47,173 +47,173 @@ static u32int geartab[] = {
 static u64int
 hash(void *p, int n)
 {
-	return murmurhash2(p, n);
+    return murmurhash2(p, n);
 }
 
 static void
 addblk(Dtab *dt, void *buf, int len, int off, u64int h)
 {
-	int i, sz, probe;
-	Dblock *db;
+    int i, sz, probe;
+    Dblock *db;
 
-	probe = h % dt->sz;
-	while(dt->b[probe].buf != nil){
-		if(len == dt->b[probe].len && memcmp(buf, dt->b[probe].buf, len) == 0)
-			return;
-		probe = (probe + 1) % dt->sz;
-	}
-	assert(dt->b[probe].buf == nil);
-	dt->b[probe].buf = buf;
-	dt->b[probe].len = len;
-	dt->b[probe].off = off;
-	dt->b[probe].hash = h;
-	dt->nb++;
-	if(dt->sz < 2*dt->nb){
-		sz = dt->sz;
-		db = dt->b;
-		dt->sz *= 2;
-		dt->nb = 0;
-		dt->b = eamalloc(dt->sz, sizeof(Dblock));
-		for(i = 0; i < sz; i++)
-			if(db[i].buf != nil)
-				addblk(dt, db[i].buf, db[i].len, db[i].off, db[i].hash);
-		free(db);
-	}		
+    probe = h % dt->sz;
+    while(dt->b[probe].buf != nil){
+        if(len == dt->b[probe].len && memcmp(buf, dt->b[probe].buf, len) == 0)
+            return;
+        probe = (probe + 1) % dt->sz;
+    }
+    assert(dt->b[probe].buf == nil);
+    dt->b[probe].buf = buf;
+    dt->b[probe].len = len;
+    dt->b[probe].off = off;
+    dt->b[probe].hash = h;
+    dt->nb++;
+    if(dt->sz < 2*dt->nb){
+        sz = dt->sz;
+        db = dt->b;
+        dt->sz *= 2;
+        dt->nb = 0;
+        dt->b = eamalloc(dt->sz, sizeof(Dblock));
+        for(i = 0; i < sz; i++)
+            if(db[i].buf != nil)
+                addblk(dt, db[i].buf, db[i].len, db[i].off, db[i].hash);
+        free(db);
+    }       
 }
 
 static Dblock*
 lookup(Dtab *dt, uchar *p, int n)
 {
-	int probe;
-	u64int h;
+    int probe;
+    u64int h;
 
-	h = hash(p, n);
-	for(probe = h % dt->sz; dt->b[probe].buf != nil; probe = (probe + 1) % dt->sz){
-		if(dt->b[probe].hash != h)
-			continue;
-		if(n != dt->b[probe].len)
-			continue;
-		if(memcmp(p, dt->b[probe].buf, n) != 0)
-			continue;
-		return &dt->b[probe];
-	}
-	return nil;
+    h = hash(p, n);
+    for(probe = h % dt->sz; dt->b[probe].buf != nil; probe = (probe + 1) % dt->sz){
+        if(dt->b[probe].hash != h)
+            continue;
+        if(n != dt->b[probe].len)
+            continue;
+        if(memcmp(p, dt->b[probe].buf, n) != 0)
+            continue;
+        return &dt->b[probe];
+    }
+    return nil;
 }
 
 static int
 nextblk(uchar *s, uchar *e)
 {
-	u32int gh;
-	uchar *p;
+    u32int gh;
+    uchar *p;
 
-	if((e - s) < Minchunk)
-		return e - s;
-	p = s + Minchunk;
-	if((e - s) > Maxchunk)
-		e = s + Maxchunk;
-	gh = 0;
-	while(p != e){
-		gh = (gh<<1) + geartab[*p++];
-		if((gh & Splitmask) == 0)
-			break;
-	}
-	return p - s;
+    if((e - s) < Minchunk)
+        return e - s;
+    p = s + Minchunk;
+    if((e - s) > Maxchunk)
+        e = s + Maxchunk;
+    gh = 0;
+    while(p != e){
+        gh = (gh<<1) + geartab[*p++];
+        if((gh & Splitmask) == 0)
+            break;
+    }
+    return p - s;
 }
 
 void
 dtinit(Dtab *dt, Object *obj)
 {
-	uchar *s, *e;
-	u64int h;
-	vlong n, o;
-	
-	o = 0;
-	s = (uchar*)obj->data;
-	e = s + obj->size;
-	dt->o = ref(obj);
-	dt->nb = 0;
-	dt->sz = 128;
-	dt->b = eamalloc(dt->sz, sizeof(Dblock));
-	dt->base = (uchar*)obj->data;
-	dt->nbase = obj->size;
-	while(s != e){
-		n = nextblk(s, e);
-		h = hash(s, n);
-		addblk(dt, s, n, o, h);
-		s += n;
-		o += n;
-	}
+    uchar *s, *e;
+    u64int h;
+    vlong n, o;
+    
+    o = 0;
+    s = (uchar*)obj->data;
+    e = s + obj->size;
+    dt->o = ref(obj);
+    dt->nb = 0;
+    dt->sz = 128;
+    dt->b = eamalloc(dt->sz, sizeof(Dblock));
+    dt->base = (uchar*)obj->data;
+    dt->nbase = obj->size;
+    while(s != e){
+        n = nextblk(s, e);
+        h = hash(s, n);
+        addblk(dt, s, n, o, h);
+        s += n;
+        o += n;
+    }
 }
 
 void
 dtclear(Dtab *dt)
 {
-	unref(dt->o);
-	free(dt->b);
+    unref(dt->o);
+    free(dt->b);
 }
 
 static int
 emitdelta(Delta **pd, int *nd, int cpy, int off, int len)
 {
-	Delta *d;
+    Delta *d;
 
-	*nd += 1;
-	*pd = earealloc(*pd, *nd, sizeof(Delta));
-	d = &(*pd)[*nd - 1];
-	d->cpy = cpy;
-	d->off = off;
-	d->len = len;
-	return len;
+    *nd += 1;
+    *pd = earealloc(*pd, *nd, sizeof(Delta));
+    d = &(*pd)[*nd - 1];
+    d->cpy = cpy;
+    d->off = off;
+    d->len = len;
+    return len;
 }
 
 static int
 stretch(Dtab *dt, Dblock *b, uchar *s, uchar *e, int n)
 {
-	uchar *p0, *p, *q, *eb;
+    uchar *p0, *p, *q, *eb;
 
-	if(b == nil)
-		return n;
-	p = s + n;
-	q = dt->base + b->off + n;
-	p0 = p;
-	if(dt->nbase < (1<<24)-1)
-		eb = dt->base + dt->nbase;
-	else
-		eb = dt->base + (1<<24)-1;
-	while(1){
-		if(p == e || q == eb)
-			break;
-		if(*p != *q)
-			break;
-		p++;
-		q++;
-	}
-	return n + (p - p0);
+    if(b == nil)
+        return n;
+    p = s + n;
+    q = dt->base + b->off + n;
+    p0 = p;
+    if(dt->nbase < (1<<24)-1)
+        eb = dt->base + dt->nbase;
+    else
+        eb = dt->base + (1<<24)-1;
+    while(1){
+        if(p == e || q == eb)
+            break;
+        if(*p != *q)
+            break;
+        p++;
+        q++;
+    }
+    return n + (p - p0);
 }
 
 Delta*
 deltify(Object *obj, Dtab *dt, int *pnd)
 {
-	Delta *d;
-	Dblock *b;
-	uchar *s, *e;
-	vlong n, o;
-	
-	o = 0;
-	d = nil;
-	s = (uchar*)obj->data;
-	e = s + obj->size;
-	*pnd = 0;
-	while(s != e){
-		n = nextblk(s, e);
-		b = lookup(dt, s, n);
-		n = stretch(dt, b, s, e, n);
-		if(b != nil)
-			emitdelta(&d, pnd, 1, b->off, n);
-		else
-			emitdelta(&d, pnd, 0, o, n);
-		s += n;
-		o += n;
-	}
-	return d;
+    Delta *d;
+    Dblock *b;
+    uchar *s, *e;
+    vlong n, o;
+    
+    o = 0;
+    d = nil;
+    s = (uchar*)obj->data;
+    e = s + obj->size;
+    *pnd = 0;
+    while(s != e){
+        n = nextblk(s, e);
+        b = lookup(dt, s, n);
+        n = stretch(dt, b, s, e, n);
+        if(b != nil)
+            emitdelta(&d, pnd, 1, b->off, n);
+        else
+            emitdelta(&d, pnd, 0, o, n);
+        s += n;
+        o += n;
+    }
+    return d;
 }
