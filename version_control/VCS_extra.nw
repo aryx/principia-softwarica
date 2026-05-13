@@ -1,2670 +1,3 @@
-\section{[[diff/]]}
-
-\subsection*{[[diff/diff.c]]}
-
-<<function [[done]](diff)>>=
-void    
-done(int status)
-{
-    switch(status)
-    {
-    case 0:
-        exits("");
-    case 1:
-        exits("some");
-    default:
-        exits("error");
-    }
-}
-@
-
-<<function [[usage]](diff)>>=
-void
-usage(void)
-{
-    fprint(2, "usage: %s [-abcefmnrw] file1 ... file2\n", argv0);
-    exits("usage");
-}
-@
-
-<<function [[main]](diff)>>=
-void
-main(int argc, char *argv[])
-{
-    int i;
-    Dir *fsb, *tsb;
-
-    Binit(&stdout, 1, OWRITE);
-    ARGBEGIN{
-    case 'e':
-    case 'f':
-    case 'n':
-    case 'c':
-    case 'a':
-    case 'u':
-        mode = ARGC();
-        break;
-    case 'w':
-        bflag = 2;
-        break;
-
-    case 'b':
-        bflag = 1;
-        break;
-
-    case 'r':
-        rflag = 1;
-        break;
-
-    case 'm':
-        mflag = 1;  
-        break;
-
-    case 'h':
-    default:
-        usage();
-    }ARGEND;
-    if (argc < 2)
-        usage();
-    if ((tsb = dirstat(argv[argc-1])) == nil)
-        sysfatal("can't stat %s", argv[argc-1]);
-    if (argc > 2) {
-        if (!DIRECTORY(tsb))
-            sysfatal("not directory: %s", argv[argc-1]);
-        mflag = 1;
-    } else {
-        if ((fsb = dirstat(argv[0])) == nil)
-            sysfatal("can't stat %s", argv[0]);
-        if (DIRECTORY(fsb) && DIRECTORY(tsb))
-            mflag = 1;
-        free(fsb);
-    }
-    free(tsb);
-    for (i = 0; i < argc-1; i++)
-        diff(argv[i], argv[argc-1], 0);
-        
-    done(anychange);
-    /*NOTREACHED*/
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/diff.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-
-#include "diff.h"
-
-<<function [[done]](diff)>>
-
-<<function [[usage]](diff)>>
-
-<<function [[main]](diff)>>
-@
-
-
-\subsection*{[[diff/diff.h]]}
-
-<<constant [[MAXPATHLEN]](diff)>>=
-#define MAXPATHLEN  1024
-@
-
-<<constant [[MAXLINELEN]](diff)>>=
-#define MAXLINELEN  4096
-@
-
-<<macro [[DIRECTORY]](diff)>>=
-#define DIRECTORY(s)        ((s)->qid.type&QTDIR)
-@
-
-<<macro [[REGULAR_FILE]](diff)>>=
-#define REGULAR_FILE(s)     ((s)->type == 'M' && !DIRECTORY(s))
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/diff.h>>=
-typedef struct Line Line;
-typedef struct Cand Cand;
-typedef struct Diff Diff;
-typedef struct Change   Change;
-
-struct Line {
-    int serial;
-    int value;
-};
-
-struct Cand {
-    int x;
-    int y;
-    int pred;
-};
-
-struct Change
-{
-    int oldx;
-    int oldy;
-    int newx;
-    int newy;
-};
-
-struct Diff {
-    Cand cand;
-    Line *file[2], line;
-    int len[2];
-    int binary;
-    int bindiff;
-    Line *sfile[2]; /*shortened by pruning common prefix and suffix*/
-    int slen[2];
-    int pref, suff; /*length of prefix and suffix*/
-    int *class; /*will be overlaid on file[0]*/
-    int *member;    /*will be overlaid on file[1]*/
-    int *klist; /*will be overlaid on file[0] after class*/
-    Cand *clist;    /* merely a free storage pot for candidates */
-    int clen;
-    int *J;     /*will be overlaid on class*/
-    long *ixold;    /*will be overlaid on klist*/
-    long *ixnew;    /*will be overlaid on file[1]*/
-    char *file1;
-    char *file2;
-    Biobuf *input[2];
-    Biobuf *b0;
-    Biobuf *b1;
-    int firstchange;
-    Change *changes;
-    int nchanges;
-};
-
-extern char mode;
-extern char bflag;
-extern char rflag;
-extern char mflag;
-extern int anychange;
-extern Biobuf   stdout;
-
-<<constant [[MAXPATHLEN]](diff)>>
-<<constant [[MAXLINELEN]](diff)>>
-
-<<macro [[DIRECTORY]](diff)>>
-<<macro [[REGULAR_FILE]](diff)>>
-
-int mkpathname(char *, char *, char *);
-char *mktmpfile(int, Dir **);
-char *statfile(char *, Dir **);
-void *emalloc(unsigned);
-void *erealloc(void *, unsigned);
-void diff(char *, char *, int);
-void diffreg(char*, char*, char*, char*);
-void diffdir(char *, char *, int);
-void calcdiff(Diff *, char *, char *, char *, char *);
-Biobuf *prepare(Diff*, int, char *, char *);
-void check(Diff *, Biobuf *, Biobuf *);
-void change(Diff *, int, int, int, int);
-void freediff(Diff *);
-void flushchanges(Diff *);
-void fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s);
-int readline(Biobuf*, char*, int);
-@
-
-
-\subsection*{[[diff/diffdir.c]]}
-
-<<function [[itemcmp]](diff)>>=
-static int
-itemcmp(void *v1, void *v2)
-{
-    char **d1 = v1, **d2 = v2;
-
-    return strcmp(*d1, *d2);
-}
-@
-
-<<function [[scandir]](diff)>>=
-static char **
-scandir(char *name)
-{
-    char **cp;
-    Dir *db;
-    int nitems;
-    int fd, n;
-
-    if ((fd = open(name, OREAD)) < 0) {
-        fprint(2, "%s: can't open %s: %r\n", argv0, name);
-        /* fake an empty directory */
-        cp = emalloc(sizeof(char*));
-        cp[0] = 0;
-        return cp;
-    }
-    cp = 0;
-    nitems = 0;
-    if((n = dirreadall(fd, &db)) > 0){
-        while (n--) {
-            cp = erealloc(cp, (nitems+1)*sizeof(char*));
-            cp[nitems] = emalloc(strlen((db+n)->name)+1);
-            strcpy(cp[nitems], (db+n)->name);
-            nitems++;
-        }
-        free(db);
-    }
-    cp = erealloc(cp, (nitems+1)*sizeof(char*));
-    cp[nitems] = 0;
-    close(fd);
-    qsort((char *)cp, nitems, sizeof(char*), itemcmp);
-    return cp;
-}
-@
-
-<<function [[isdotordotdot]](diff)>>=
-static int
-isdotordotdot(char *p)
-{
-    if (*p == '.') {
-        if (!p[1])
-            return 1;
-        if (p[1] == '.' && !p[2])
-            return 1;
-    }
-    return 0;
-}
-@
-
-<<function [[diffdir]](diff)>>=
-void
-diffdir(char *f, char *t, int level)
-{
-    char  **df, **dt, **dirf, **dirt;
-    char *from, *to;
-    int res;
-    char fb[MAXPATHLEN+1], tb[MAXPATHLEN+1];
-
-    df = scandir(f);
-    dt = scandir(t);
-    dirf = df;
-    dirt = dt;
-    while (*df || *dt) {
-        from = *df;
-        to = *dt;
-        if (from && isdotordotdot(from)) {
-            df++;
-            continue;
-        }
-        if (to && isdotordotdot(to)) {
-            dt++;
-            continue;
-        }
-        if (!from)
-            res = 1;
-        else if (!to)
-            res = -1;
-        else
-            res = strcmp(from, to);
-        if (res < 0) {
-            if (mode == 0 || mode == 'n')
-                Bprint(&stdout, "Only in %s: %s\n", f, from);
-            df++;
-            continue;
-        }
-        if (res > 0) {
-            if (mode == 0 || mode == 'n')
-                Bprint(&stdout, "Only in %s: %s\n", t, to);
-            dt++;
-            continue;
-        }
-        if (mkpathname(fb, f, from))
-            continue;
-        if (mkpathname(tb, t, to))
-            continue;
-        diff(fb, tb, level+1);
-        df++; dt++;
-    }
-    for (df = dirf; *df; df++)
-        free(*df);
-    for (dt = dirt; *dt; dt++)
-        free(*dt);
-    free(dirf);
-    free(dirt);
-}
-@
-
-<<function [[diff]](diff)>>=
-void
-diff(char *f, char *t, int level)
-{
-    char *fp, *tp, *p, fb[MAXPATHLEN+1], tb[MAXPATHLEN+1];
-    Dir *fsb, *tsb;
-
-    fsb = nil;
-    tsb = nil;
-    if ((fp = statfile(f, &fsb)) == 0)
-        goto Return;
-    if ((tp = statfile(t, &tsb)) == 0)
-        goto Return;
-    if (DIRECTORY(fsb) && DIRECTORY(tsb)) {
-        if (rflag || level == 0)
-            diffdir(fp, tp, level);
-        else
-            Bprint(&stdout, "Common subdirectories: %s and %s\n", fp, tp);
-    }
-    else if (REGULAR_FILE(fsb) && REGULAR_FILE(tsb))
-        diffreg(fp, f, tp, t);
-    else {
-        if (REGULAR_FILE(fsb)) {
-            if ((p = utfrrune(f, '/')) == 0)
-                p = f;
-            else
-                p++;
-            if (mkpathname(tb, tp, p) == 0)
-                diffreg(fp, f, tb, t);
-        } else {
-            if ((p = utfrrune(t, '/')) == 0)
-                p = t;
-            else
-                p++;
-            if (mkpathname(fb, fp, p) == 0)
-                diffreg(fb, f, tp, t);
-        }
-    }
-Return:
-    free(fsb);
-    free(tsb);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/diffdir.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include "diff.h"
-
-<<function [[itemcmp]](diff)>>
-
-<<function [[scandir]](diff)>>
-
-<<function [[isdotordotdot]](diff)>>
-
-<<function [[diffdir]](diff)>>
-
-<<function [[diff]](diff)>>
-@
-
-
-\subsection*{[[diff/diffio.c]]}
-
-<<macro [[MIN]](diff)>>=
-#define MIN(x, y)   ((x) < (y) ? (x): (y))
-@
-
-<<function [[readline]](diff)>>=
-int
-readline(Biobuf *bp, char *buf, int nbuf)
-{
-    int c;
-    char *p, *e;
-
-    p = buf;
-    e = p + nbuf-1;
-    do {
-        c = Bgetc(bp);
-        if (c < 0) {
-            if (p == buf)
-                return -1;
-            break;
-        }
-        *p++ = c;
-        if (c == '\n')
-            break;
-    } while (p < e);
-    *p = 0;
-    if (c != '\n' && c >= 0) {
-        do c = Bgetc(bp);
-        while (c >= 0 && c != '\n');
-    }
-    return p - buf;
-}
-@
-
-<<constant [[HALFLONG]](diff)>>=
-#define HALFLONG 16
-@
-
-<<macro [[low]](diff)>>=
-#define low(x)  (x&((1L<<HALFLONG)-1))
-@
-
-<<macro [[high]](diff)>>=
-#define high(x) (x>>HALFLONG)
-@
-
-<<function [[readhash]](diff)>>=
-/*
- * hashing has the effect of
- * arranging line in 7-bit bytes and then
- * summing 1-s complement in 16-bit hunks 
- */
-static int
-readhash(Biobuf *bp, char *buf, int nbuf)
-{
-    long sum;
-    unsigned shift;
-    char *p;
-    int len, space;
-
-    sum = 1;
-    shift = 0;
-    if ((len = readline(bp, buf, nbuf)) == -1)
-        return 0;
-    p = buf;
-    switch(bflag)   /* various types of white space handling */
-    {
-    case 0:
-        while (len--) {
-            sum += (long)*p++ << (shift &= (HALFLONG-1));
-            shift += 7;
-        }
-        break;
-    case 1:
-        /*
-         * coalesce multiple white-space
-         */
-        for (space = 0; len--; p++) {
-            if (isspace(*p)) {
-                space++;
-                continue;
-            }
-            if (space) {
-                shift += 7;
-                space = 0;
-            }
-            sum += (long)*p << (shift &= (HALFLONG-1));
-            shift += 7;
-        }
-        break;
-    default:
-        /*
-         * strip all white-space
-         */
-        while (len--) {
-            if (isspace(*p)) {
-                p++;
-                continue;
-            }
-            sum += (long)*p++ << (shift &= (HALFLONG-1));
-            shift += 7;
-        }
-        break;
-    }
-    sum = low(sum) + high(sum);
-    return ((short)low(sum) + (short)high(sum));
-}
-@
-
-<<function [[prepare]](diff)>>=
-Biobuf *
-prepare(Diff *d, int i, char *arg, char *orig)
-{
-    Line *p;
-    int j, h;
-    Biobuf *bp;
-    char *cp, buf[MAXLINELEN];
-    int nbytes;
-    Rune r;
-
-    if (i == 0) {
-        d->file1 = orig;
-        d->firstchange = 0;
-    } else
-        d->file2 = orig;
-    bp = Bopen(arg, OREAD);
-    if (!bp)
-        sysfatal("cannot open %s: %r", arg);
-    if (d->binary)
-        return bp;
-    nbytes = Bread(bp, buf, MIN(1024, MAXLINELEN));
-    if (nbytes > 0) {
-        cp = buf;
-        while (cp < buf+nbytes-UTFmax) {
-            /*
-             * heuristic for a binary file in the
-             * brave new UNICODE world
-             */
-            cp += chartorune(&r, cp);
-            if (r == 0 || (r > 0x7f && r <= 0xa0)) {
-                d->binary++;
-                return bp;
-            }
-        }
-        Bseek(bp, 0, 0);
-    }
-    p = emalloc(3*sizeof(Line));
-    for (j = 0; h = readhash(bp, buf, sizeof(buf)); p[j].value = h)
-        p = erealloc(p, (++j+3)*sizeof(Line));
-    d->len[i] = j;
-    d->file[i] = p;
-    d->input[i] = bp;
-    return bp;
-}
-@
-
-<<function [[squishspace]](diff)>>=
-static int
-squishspace(char *buf)
-{
-    char *p, *q;
-    int space;
-
-    for (space = 0, q = p = buf; *q; q++) {
-        if (isspace(*q)) {
-            space++;
-            continue;
-        }
-        if (space && bflag == 1) {
-            *p++ = ' ';
-            space = 0;
-        }
-        *p++ = *q;
-    }
-    *p = 0;
-    return p - buf;
-}
-@
-
-<<function [[check]](diff)>>=
-/*
- * need to fix up for unexpected EOF's
- */
-void
-check(Diff *d, Biobuf *bf, Biobuf *bt)
-{
-    int f, t, flen, tlen;
-    char fbuf[MAXLINELEN], tbuf[MAXLINELEN];
-
-    d->ixold[0] = 0;
-    d->ixnew[0] = 0;
-    for (f = t = 1; f < d->len[0]; f++) {
-        flen = readline(bf, fbuf, sizeof(fbuf));
-        d->ixold[f] = d->ixold[f-1] + flen;     /* ftell(bf) */
-        if (d->J[f] == 0)
-            continue;
-        do {
-            tlen = readline(bt, tbuf, sizeof(tbuf));
-            d->ixnew[t] = d->ixnew[t-1] + tlen; /* ftell(bt) */
-        } while (t++ < d->J[f]);
-        if (bflag) {
-            flen = squishspace(fbuf);
-            tlen = squishspace(tbuf);
-        }
-        if (flen != tlen || strcmp(fbuf, tbuf))
-            d->J[f] = 0;
-    }
-    while (t < d->len[1]) {
-        tlen = readline(bt, tbuf, sizeof(tbuf));
-        d->ixnew[t] = d->ixnew[t-1] + tlen; /* fseek(bt) */
-        t++;
-    }
-}
-@
-
-<<function [[range]](diff)>>=
-static void
-range(int a, int b, char *separator)
-{
-    Bprint(&stdout, "%d", a > b ? b: a);
-    if (a < b)
-        Bprint(&stdout, "%s%d", separator, b);
-}
-@
-
-<<function [[fetch]](diff)>>=
-void
-fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s)
-{
-    char buf[MAXLINELEN];
-    int maxb, len;
-
-    if(a <= 1)
-        a = 1;
-    if(bp == d->input[0])
-        maxb = d->len[0];
-    else
-        maxb = d->len[1];
-    if(b > maxb)
-        b = maxb;
-    if(a > maxb)
-        return;
-    Bseek(bp, f[a-1], 0);
-    while (a++ <= b) {
-        len = readline(bp, buf, sizeof(buf));
-        if(len == 0 || buf[len-1] != '\n'){
-            Bprint(&stdout, "%s%s\n", s, buf);
-            Bprint(&stdout, "\\ No newline at end of file\n");
-        }else
-            Bprint(&stdout, "%s%s", s, buf);
-    }
-}
-@
-
-<<function [[change]](diff)>>=
-void
-change(Diff *df, int a, int b, int c, int d)
-{
-    char verb;
-    char buf[4];
-    Change *ch;
-
-    if (a > b && c > d)
-        return;
-    anychange = 1;
-    if (mflag && df->firstchange == 0) {
-        if(mode) {
-            buf[0] = '-';
-            buf[1] = mode;
-            buf[2] = ' ';
-            buf[3] = '\0';
-        } else {
-            buf[0] = '\0';
-        }
-        Bprint(&stdout, "diff %s%s %s\n", buf, df->file1, df->file2);
-        df->firstchange = 1;
-    }
-    verb = a > b ? 'a': c > d ? 'd': 'c';
-    switch(mode) {
-    case 'e':
-        range(a, b, ",");
-        Bputc(&stdout, verb);
-        break;
-    case 0:
-        range(a, b, ",");
-        Bputc(&stdout, verb);
-        range(c, d, ",");
-        break;
-    case 'n':
-        Bprint(&stdout, "%s:", df->file1);
-        range(a, b, ",");
-        Bprint(&stdout, " %c ", verb);
-        Bprint(&stdout, "%s:", df->file2);
-        range(c, d, ",");
-        break;
-    case 'f':
-        Bputc(&stdout, verb);
-        range(a, b, " ");
-        break;
-    case 'c':
-    case 'a':
-    case 'u':
-        if(df->nchanges%1024 == 0)
-            df->changes = erealloc(df->changes, (df->nchanges+1024)*sizeof(df->changes[0]));
-        ch = &df->changes[df->nchanges++];
-        ch->oldx = a;
-        ch->oldy = b;
-        ch->newx = c;
-        ch->newy = d;
-        return;
-    }
-    Bputc(&stdout, '\n');
-    if (mode == 0 || mode == 'n') {
-        fetch(df, df->ixold, a, b, df->input[0], "< ");
-        if (a <= b && c <= d)
-            Bprint(&stdout, "---\n");
-    }
-    fetch(df, df->ixnew, c, d, df->input[1], mode == 0 || mode == 'n' ? "> ": "");
-    if (mode != 0 && mode != 'n' && c <= d)
-        Bprint(&stdout, ".\n");
-}
-@
-
-<<function [[changeset]](diff)>>=
-int
-changeset(Diff *d, int i)
-{
-    while(i < d->nchanges && d->changes[i].oldy + 1 + 2*Lines > d->changes[i+1].oldx)
-        i++;
-    if(i < d->nchanges)
-        return i+1;
-    return d->nchanges;
-}
-@
-
-<<function [[flushchanges]](diff)>>=
-void
-flushchanges(Diff *df)
-{
-    vlong a, b, c, d, at, hdr;
-    vlong i, j;
-
-    if(df->nchanges == 0)
-        return;
-
-    hdr = 0;
-    for(i=0; i < df->nchanges; ){
-        j = changeset(df, i);
-        a = df->changes[i].oldx - Lines;
-        b = df->changes[j-1].oldy + Lines;
-        c = df->changes[i].newx - Lines;
-        d = df->changes[j-1].newy + Lines;
-        if(a < 1)
-            a = 1;
-        if(c < 1)
-            c = 1;
-        if(b > df->len[0])
-            b = df->len[0];
-        if(d > df->len[1])
-            d = df->len[1];
-        if(mode == 'a'){
-            a = 1;
-            b = df->len[0];
-            c = 1;
-            d = df->len[1];
-            j = df->nchanges;
-        }
-        if(mode == 'u'){
-            if(!hdr){
-                Bprint(&stdout, "--- %s\n", df->file1);
-                Bprint(&stdout, "+++ %s\n", df->file2);
-                hdr = 1;
-            }
-            Bprint(&stdout, "@@ -%lld,%lld +%lld,%lld @@\n", a, b-a+1, c, d-c+1);
-        }else{
-            Bprint(&stdout, "%s:", df->file1);
-            range(a, b, ",");
-            Bprint(&stdout, " - ");
-            Bprint(&stdout, "%s:", df->file2);
-            range(c, d, ",");
-            Bputc(&stdout, '\n');
-        }
-        at = a;
-        for(; i<j; i++){
-            fetch(df, df->ixold, at, df->changes[i].oldx-1, df->input[0], mode == 'u' ? " " : "  ");
-            fetch(df, df->ixold, df->changes[i].oldx, df->changes[i].oldy, df->input[0], mode == 'u' ? "-" : "- ");
-            fetch(df, df->ixnew, df->changes[i].newx, df->changes[i].newy, df->input[1], mode == 'u' ? "+" : "+ ");
-            at = df->changes[i].oldy+1;
-        }
-        fetch(df, df->ixold, at, b, df->input[0], mode == 'u' ? " " : "  ");
-    }
-    df->nchanges = 0;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/diffio.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <ctype.h>
-#include "diff.h"
-
-<<macro [[MIN]](diff)>>
-
-<<function [[readline]](diff)>>
-
-<<constant [[HALFLONG]](diff)>>
-<<macro [[low]](diff)>>
-<<macro [[high]](diff)>>
-
-<<function [[readhash]](diff)>>
-
-<<function [[prepare]](diff)>>
-
-<<function [[squishspace]](diff)>>
-
-<<function [[check]](diff)>>
-
-<<function [[range]](diff)>>
-
-<<function [[fetch]](diff)>>
-
-<<function [[change]](diff)>>
-
-enum
-{
-    Lines = 3,  /* number of lines of context shown */
-};
-
-<<function [[changeset]](diff)>>
-
-<<function [[flushchanges]](diff)>>
-@
-
-
-\subsection*{[[diff/diffreg.c]]}
-
-<<function [[sort]](diff)>>=
-static void 
-sort(Line *a, int n)    /*shellsort CACM #201*/
-{
-    int m;
-    Line *ai, *aim, *j, *k;
-    Line w;
-    int i;
-
-    m = 0;
-    for (i = 1; i <= n; i *= 2)
-        m = 2*i - 1;
-    for (m /= 2; m != 0; m /= 2) {
-        k = a+(n-m);
-        for (j = a+1; j <= k; j++) {
-            ai = j;
-            aim = ai+m;
-            do {
-                if (aim->value > ai->value ||
-                   aim->value == ai->value &&
-                   aim->serial > ai->serial)
-                    break;
-                w = *ai;
-                *ai = *aim;
-                *aim = w;
-
-                aim = ai;
-                ai -= m;
-            } while (ai > a && aim >= ai);
-        }
-    }
-}
-@
-
-<<function [[unsort]](diff)>>=
-static void
-unsort(Line *f, int l, int *b)
-{
-    int *a;
-    int i;
-
-    a = malloc((l+1)*sizeof(int));
-    for(i=1;i<=l;i++)
-        a[f[i].serial] = f[i].value;
-    for(i=1;i<=l;i++)
-        b[i] = a[i];
-    free(a);
-}
-@
-
-<<function [[prune]](diff)>>=
-static void
-prune(Diff *d)
-{
-    int i,j;
-
-    for(d->pref = 0; d->pref < d->len[0] && d->pref < d->len[1] &&
-        d->file[0][d->pref+1].value == d->file[1][d->pref+1].value;
-        d->pref++) ;
-    for(d->suff=0; d->suff < d->len[0] - d->pref && d->suff < d->len[1] - d->pref &&
-        d->file[0][d->len[0] - d->suff].value == d->file[1][d->len[1] - d->suff].value;
-        d->suff++) ;
-    for(j=0;j<2;j++) {
-        d->sfile[j] = d->file[j]+d->pref;
-        d->slen[j] = d->len[j]-d->pref-d->suff;
-        for(i=0;i<=d->slen[j];i++)
-            d->sfile[j][i].serial = i;
-    }
-}
-@
-
-<<function [[equiv]](diff)>>=
-static void
-equiv(Line *a, int n, Line *b, int m, int *c)
-{
-    int i, j;
-
-    i = j = 1;
-    while(i<=n && j<=m) {
-        if(a[i].value < b[j].value)
-            a[i++].value = 0;
-        else if(a[i].value == b[j].value)
-            a[i++].value = j;
-        else
-            j++;
-    }
-    while(i <= n)
-        a[i++].value = 0;
-    b[m+1].value = 0;
-    j = 0;
-    while(++j <= m) {
-        c[j] = -b[j].serial;
-        while(b[j+1].value == b[j].value) {
-            j++;
-            c[j] = b[j].serial;
-        }
-    }
-    c[j] = -1;
-}
-@
-
-<<function [[newcand]](diff)>>=
-static int
-newcand(Diff *d, int x, int  y, int pred)
-{
-    Cand *q;
-
-    d->clist = erealloc(d->clist, (d->clen+1)*sizeof(Cand));
-    q = d->clist + d->clen;
-    q->x = x;
-    q->y = y;
-    q->pred = pred;
-    return d->clen++;
-}
-@
-
-<<function [[search]](diff)>>=
-static int
-search(Diff *d, int *c, int k, int y)
-{
-    int i, j, l;
-    int t;
-
-    if(d->clist[c[k]].y < y)    /*quick look for typical case*/
-        return k+1;
-    i = 0;
-    j = k+1;
-    while((l=(i+j)/2) > i) {
-        t = d->clist[c[l]].y;
-        if(t > y)
-            j = l;
-        else if(t < y)
-            i = l;
-        else
-            return l;
-    }
-    return l+1;
-}
-@
-
-<<function [[stone]](diff)>>=
-static int
-stone(Diff *d, int *a, int n, int *b, int *c)
-{
-    int i, k,y;
-    int j, l;
-    int oldc, tc;
-    int oldl;
-
-    k = 0;
-    c[0] = newcand(d, 0, 0, 0);
-    for(i=1; i<=n; i++) {
-        j = a[i];
-        if(j==0)
-            continue;
-        y = -b[j];
-        oldl = 0;
-        oldc = c[0];
-        do {
-            if(y <= d->clist[oldc].y)
-                continue;
-            l = search(d, c, k, y);
-            if(l!=oldl+1)
-                oldc = c[l-1];
-            if(l<=k) {
-                if(d->clist[c[l]].y <= y)
-                    continue;
-                tc = c[l];
-                c[l] = newcand(d, i, y, oldc);
-                oldc = tc;
-                oldl = l;
-            } else {
-                c[l] = newcand(d, i,y,oldc);
-                k++;
-                break;
-            }
-        } while((y=b[++j]) > 0);
-    }
-    return k;
-}
-@
-
-<<function [[unravel]](diff)>>=
-static void
-unravel(Diff *d, int p)
-{
-    int i;
-    Cand *q;
-
-    for(i=0; i<=d->len[0]; i++) {
-        if (i <= d->pref)
-            d->J[i] = i;
-        else if (i > d->len[0]-d->suff)
-            d->J[i] = i+d->len[1] - d->len[0];
-        else
-            d->J[i] = 0;
-    }
-    for(q=d->clist+p; q->y != 0; q= d->clist + q->pred)
-        d->J[q->x+d->pref] = q->y+d->pref;
-}
-@
-
-<<constant [[BUF]](diff)>>=
-#define BUF 4096
-@
-
-<<function [[cmp]](diff)>>=
-static int
-cmp(Biobuf* b1, Biobuf* b2)
-{
-    int n;
-    uchar buf1[BUF], buf2[BUF];
-    int f1, f2;
-    vlong nc = 1;
-    uchar *b1s, *b1e, *b2s, *b2e;
-
-    f1 = Bfildes(b1);
-    f2 = Bfildes(b2);
-    seek(f1, 0, 0);
-    seek(f2, 0, 0);
-    b1s = b1e = buf1;
-    b2s = b2e = buf2;
-    for(;;){
-        if(b1s >= b1e){
-            if(b1s >= &buf1[BUF])
-                b1s = buf1;
-            n = read(f1, b1s,  &buf1[BUF] - b1s);
-            b1e = b1s + n;
-        }
-        if(b2s >= b2e){
-            if(b2s >= &buf2[BUF])
-                b2s = buf2;
-            n = read(f2, b2s,  &buf2[BUF] - b2s);
-            b2e = b2s + n;
-        }
-        n = b2e - b2s;
-        if(n > b1e - b1s)
-            n = b1e - b1s;
-        if(n <= 0)
-            break;
-        if(memcmp((void *)b1s, (void *)b2s, n) != 0){
-            return 1;
-        }       
-        nc += n;
-        b1s += n;
-        b2s += n;
-    }
-    if(b1e - b1s == b2e - b2s)
-        return 0;
-    return 1;   
-}
-@
-
-<<function [[calcdiff]](diff)>>=
-void
-calcdiff(Diff *d, char *f, char *fo, char *t, char *to)
-{
-    Biobuf *b0, *b1;
-    int k;
-
-    b0 = prepare(d, 0, f, fo);
-    if (!b0)
-        return;
-    b1 = prepare(d, 1, t, to);
-    if (!b1) {
-        Bterm(b0);
-        return;
-    }
-    if (d->binary){
-        // could use b0 and b1 but this is simpler.
-        if(cmp(b0, b1))
-            d->bindiff = 1;
-        Bterm(b0);
-        Bterm(b1);
-        return;
-    }
-    d->clen = 0;
-    prune(d);
-    sort(d->sfile[0], d->slen[0]);
-    sort(d->sfile[1], d->slen[1]);
-
-    d->member = (int *)d->file[1];
-    equiv(d->sfile[0], d->slen[0], d->sfile[1], d->slen[1], d->member);
-    d->member = erealloc(d->member, (d->slen[1]+2)*sizeof(int));
-
-    d->class = (int *)d->file[0];
-    unsort(d->sfile[0], d->slen[0], d->class);
-    d->class = erealloc(d->class, (d->slen[0]+2)*sizeof(int));
-
-    d->klist = emalloc((d->slen[0]+2)*sizeof(int));
-    d->clist = emalloc(sizeof(Cand));
-    k = stone(d, d->class, d->slen[0], d->member, d->klist);
-    free(d->member);
-    free(d->class);
-
-    d->J = emalloc((d->len[0]+2)*sizeof(int));
-    unravel(d, d->klist[k]);
-    free(d->clist);
-    free(d->klist);
-
-    d->ixold = emalloc((d->len[0]+2)*sizeof(long));
-    d->ixnew = emalloc((d->len[1]+2)*sizeof(long));
-    Bseek(b0, 0, 0); Bseek(b1, 0, 0);
-    check(d, b0, b1);
-}
-@
-
-<<function [[output]](diff)>>=
-static void
-output(Diff *d)
-{
-    int m, i0, i1, j0, j1;
-
-    if(d->bindiff)
-        print("binary files %s %s differ\n", d->file1, d->file2);
-    if(d->binary)
-        return;
-    m = d->len[0];
-    d->J[0] = 0;
-    d->J[m+1] = d->len[1]+1;
-    if (mode != 'e') {
-        for (i0 = 1; i0 <= m; i0 = i1+1) {
-            while (i0 <= m && d->J[i0] == d->J[i0-1]+1)
-                i0++;
-            j0 = d->J[i0-1]+1;
-            i1 = i0-1;
-            while (i1 < m && d->J[i1+1] == 0)
-                i1++;
-            j1 = d->J[i1+1]-1;
-            d->J[i1] = j1;
-            change(d, i0, i1, j0, j1);
-        }
-    } else {
-        for (i0 = m; i0 >= 1; i0 = i1-1) {
-            while (i0 >= 1 && d->J[i0] == d->J[i0+1]-1 && d->J[i0])
-                i0--;
-            j0 = d->J[i0+1]-1;
-            i1 = i0+1;
-            while (i1 > 1 && d->J[i1-1] == 0)
-                i1--;
-            j1 = d->J[i1-1]+1;
-            d->J[i1] = j1;
-            change(d, i1 , i0, j1, j0);
-        }
-    }
-    if (m == 0)
-        change(d, 1, 0, 1, d->len[1]);
-    flushchanges(d);
-}
-@
-
-<<function [[diffreg]](diff)>>=
-void
-diffreg(char *f, char *fo, char *t, char *to)
-{
-    Diff d;
-
-    memset(&d, 0, sizeof(d));
-    calcdiff(&d, f, fo, t, to);
-    output(&d);
-    freediff(&d);
-}
-@
-
-<<function [[freediff]](diff)>>=
-void
-freediff(Diff *d)
-{
-    if(d->input[0] != nil)
-        Bterm(d->input[0]);
-    if(d->input[1] != nil)
-        Bterm(d->input[1]);
-    free(d->J);
-    free(d->ixold);
-    free(d->ixnew);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/diffreg.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-
-#include "diff.h"
-
-/*  diff - differential file comparison
-*
-*   Uses an algorithm due to Harold Stone, which finds
-*   a pair of longest identical subsequences in the two
-*   files.
-*
-*   The major goal is to generate the match vector J.
-*   J[i] is the index of the line in file1 corresponding
-*   to line i file0. J[i] = 0 if there is no
-*   such line in file1.
-*
-*   Lines are hashed so as to work in core. All potential
-*   matches are located by sorting the lines of each file
-*   on the hash (called value). In particular, this
-*   collects the equivalence classes in file1 together.
-*   Subroutine equiv replaces the value of each line in
-*   file0 by the index of the first element of its 
-*   matching equivalence in (the reordered) file1.
-*   To save space equiv squeezes file1 into a single
-*   array member in which the equivalence classes
-*   are simply concatenated, except that their first
-*   members are flagged by changing sign.
-*
-*   Next the indices that point into member are unsorted into
-*   array class according to the original order of file0.
-*
-*   The cleverness lies in routine stone. This marches
-*   through the lines of file0, developing a vector klist
-*   of "k-candidates". At step i a k-candidate is a matched
-*   pair of lines x,y (x in file0 y in file1) such that
-*   there is a common subsequence of lenght k
-*   between the first i lines of file0 and the first y 
-*   lines of file1, but there is no such subsequence for
-*   any smaller y. x is the earliest possible mate to y
-*   that occurs in such a subsequence.
-*
-*   Whenever any of the members of the equivalence class of
-*   lines in file1 matable to a line in file0 has serial number 
-*   less than the y of some k-candidate, that k-candidate 
-*   with the smallest such y is replaced. The new 
-*   k-candidate is chained (via pred) to the current
-*   k-1 candidate so that the actual subsequence can
-*   be recovered. When a member has serial number greater
-*   that the y of all k-candidates, the klist is extended.
-*   At the end, the longest subsequence is pulled out
-*   and placed in the array J by unravel.
-*
-*   With J in hand, the matches there recorded are
-*   check'ed against reality to assure that no spurious
-*   matches have crept in due to hashing. If they have,
-*   they are broken, and "jackpot " is recorded--a harmless
-*   matter except that a true match for a spuriously
-*   mated line may now be unnecessarily reported as a change.
-*
-*   Much of the complexity of the program comes simply
-*   from trying to minimize core utilization and
-*   maximize the range of doable problems by dynamically
-*   allocating what is needed and reusing what is not.
-*   The core requirements for problems larger than somewhat
-*   are (in words) 2*length(file0) + length(file1) +
-*   3*(number of k-candidates installed),  typically about
-*   6n words for files of length n. 
-*/
-
-<<function [[sort]](diff)>>
-
-<<function [[unsort]](diff)>>
-
-<<function [[prune]](diff)>>
-
-<<function [[equiv]](diff)>>
-
-<<function [[newcand]](diff)>>
-
-<<function [[search]](diff)>>
-
-<<function [[stone]](diff)>>
-
-<<function [[unravel]](diff)>>
-
-<<constant [[BUF]](diff)>>
-<<function [[cmp]](diff)>>
-
-<<function [[calcdiff]](diff)>>
-
-<<function [[output]](diff)>>
-
-<<function [[diffreg]](diff)>>
-
-<<function [[freediff]](diff)>>
-@
-
-
-\subsection*{[[diff/merge3.c]]}
-
-<<macro [[min]](diff)>>=
-#define min(a, b) ((a)<(b)?(a):(b))
-@
-
-<<macro [[max]](diff)>>=
-#define max(a, b) ((a)>(b)?(a):(b))
-@
-
-<<function [[changecmp]](diff)>>=
-static int
-changecmp(void *a, void *b)
-{
-    return ((Change*)a)->oldx - ((Change*)b)->oldx;
-}
-@
-
-<<function [[addchange]](diff)>>=
-static void
-addchange(Diff *df, int a, int b, int c, int d)
-{
-    Change *ch;
-
-    if (a > b && c > d)
-        return;
-    if(df->nchanges%1024 == 0)
-        df->changes = erealloc(df->changes, (df->nchanges+1024)*sizeof(df->changes[0]));
-    ch = &df->changes[df->nchanges++];
-    ch->oldx = a;
-    ch->oldy = b;
-    ch->newx = c;
-    ch->newy = d;
-}
-@
-
-<<function [[collect]](diff)>>=
-static void
-collect(Diff *d)
-{
-    int m, i0, i1, j0, j1;
-
-    m = d->len[0];
-    d->J[0] = 0;
-    d->J[m+1] = d->len[1]+1;
-    for (i0 = m; i0 >= 1; i0 = i1-1) {
-        while (i0 >= 1 && d->J[i0] == d->J[i0+1]-1 && d->J[i0])
-            i0--;
-        j0 = d->J[i0+1]-1;
-        i1 = i0+1;
-        while (i1 > 1 && d->J[i1-1] == 0)
-            i1--;
-        j1 = d->J[i1-1]+1;
-        d->J[i1] = j1;
-        addchange(d, i1 , i0, j1, j0);
-    }
-    if (m == 0)
-        addchange(d, 1, 0, 1, d->len[1]);
-    qsort(d->changes, d->nchanges, sizeof(Change), changecmp);
-}
-@
-
-<<function [[overlaps]](diff)>>=
-static int
-overlaps(int lx, int ly, int rx, int ry)
-{
-    if(lx <= rx)
-        return ly >= rx;
-    else
-        return ry >= lx;
-}
-@
-
-<<function [[same]](diff)>>=
-static int
-same(Diff *l, Change *lc, Diff *r, Change *rc)
-{
-    char lbuf[MAXLINELEN], rbuf[MAXLINELEN];
-    int i, ll, rl, lx, ly, rx, ry;
-
-    lx = lc->newx;
-    ly = lc->newy;
-    rx = rc->newx;
-    ry = rc->newy;
-    if(ly - lx != ry - rx)
-        return 0;
-    assert(ly <= l->len[1] && ry <= r->len[1]);
-    Bseek(l->input[1], l->ixnew[lx-1], 0);
-    Bseek(r->input[1], r->ixnew[rx-1], 0);
-    for(i = 0; i <= (ly - lx); i++){
-        ll = readline(l->input[1], lbuf, sizeof(lbuf));
-        rl = readline(r->input[1], rbuf, sizeof(rbuf));
-        if(ll != rl)
-            return 0;
-        if(memcmp(lbuf, rbuf, ll) != 0)
-            return 0;
-    }
-    return 1;
-}
-@
-
-<<function [[merge]](diff)>>=
-char*
-merge(Diff *l, Diff *r)
-{
-    int lx, ly, rx, ry;
-    int il, ir, delta;
-    Change *lc, *rc;
-    char *status;
-    vlong ln;
-
-    il = 0;
-    ir = 0;
-    ln = 0;
-    status = nil;
-    collect(l);
-    collect(r);
-    while(il < l->nchanges || ir < r->nchanges){
-        lc = nil;
-        rc = nil;
-        lx = -1;
-        ly = -1;
-        rx = -1;
-        ry = -1;
-        if(il < l->nchanges){
-            lc = &l->changes[il];
-            lx = (lc->oldx < lc->oldy) ? lc->oldx : lc->oldy;
-            ly = (lc->oldx < lc->oldy) ? lc->oldy : lc->oldx;
-        }
-        if(ir < r->nchanges){
-            rc = &r->changes[ir];
-            rx = (rc->oldx < rc->oldy) ? rc->oldx : rc->oldy;
-            ry = (rc->oldx < rc->oldy) ? rc->oldy : rc->oldx;
-        }
-        if(lc != nil && rc != nil && overlaps(lx, ly, rx, ry)){
-            /*
-             * align the edges of the chunks, expanding them
-             * so that when we compare for sameness, we are
-             * comparing same-sized chunks.
-             */
-            if(lc->oldx < rc->oldx){
-                delta = rc->oldx - lc->oldx;
-                rc->oldx = max(rc->oldx-delta, 1);
-                rc->newx = max(rc->newx-delta, 1);
-            }else{
-                delta = lc->oldx - rc->oldx;
-                lc->oldx = max(lc->oldx-delta, 1);
-                lc->newx = max(lc->newx-delta, 1);
-            }
-            if(lc->oldy > rc->oldy){
-                delta = lc->oldy - rc->oldy;
-                rc->oldy = min(rc->oldy+delta, r->len[0]);
-                rc->newy = min(rc->newy+delta, r->len[1]);
-            }else{
-                delta = rc->oldy - lc->oldy;
-                lc->oldy = min(lc->oldy+delta, l->len[0]);
-                lc->newy = min(lc->newy+delta, l->len[1]);
-            }
-            if(same(l, lc, r, rc)){
-                fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
-                fetch(l, l->ixnew, lc->newx, lc->newy, l->input[1], "");
-            }else{
-                fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
-                Bprint(&stdout, "<<<<<<<<<< %s\n", l->file2);
-                fetch(l, l->ixnew, lc->newx, lc->newy, l->input[1], "");
-                Bprint(&stdout, "========== original\n");
-                fetch(l, l->ixold, lc->oldx, lc->oldy, l->input[0], "");
-                Bprint(&stdout, "========== %s\n", r->file2);
-                fetch(r, r->ixnew, rc->newx, rc->newy, r->input[1], "");
-                Bprint(&stdout, ">>>>>>>>>>\n");
-                status = "conflict";
-            }
-            ln = lc->oldy+1;
-            il++;
-            ir++;
-        }else if(lc != nil && (rc == nil || lx < rx)){
-            fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
-            fetch(l, l->ixnew, lc->newx, lc->newy, l->input[1], "");
-            ln = lc->oldy+1;
-            il++;
-        }else if(rc != nil && (lc == nil || rx < lx)){
-            fetch(l, r->ixold, ln, rc->oldx-1, r->input[0], "");
-            fetch(r, r->ixnew, rc->newx, rc->newy, r->input[1], "");
-            ln = rc->oldy+1;
-            ir++;
-        }else
-            abort();
-    }
-    if(ln <= l->len[0])
-        fetch(l, l->ixold, ln, l->len[0], l->input[0], "");
-    return status;
-}
-@
-
-<<function [[usage (diff/merge3.c)]](diff)>>=
-void
-usage(void)
-{
-    fprint(2, "usage: %s theirs base ours\n", argv0);
-    exits("usage");
-}
-@
-
-<<function [[main (diff/merge3.c)]](diff)>>=
-void
-main(int argc, char **argv)
-{
-    Diff l, r;
-    char *x;
-
-    ARGBEGIN{
-    default:
-        usage();
-    }ARGEND;
-
-    if(argc != 3)
-        usage();
-    Binit(&stdout, 1, OWRITE);
-    memset(&l, 0, sizeof(l));
-    memset(&r, 0, sizeof(r));
-    calcdiff(&l, argv[1], argv[1], argv[0], argv[0]);
-    calcdiff(&r, argv[1], argv[1], argv[2], argv[2]);
-    if(l.binary || r.binary)
-        sysfatal("cannot merge binaries");
-    x = merge(&l, &r);
-    freediff(&l);
-    freediff(&r);
-    exits(x);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/merge3.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-
-#include "diff.h"
-
-<<macro [[min]](diff)>>
-<<macro [[max]](diff)>>
-
-<<function [[changecmp]](diff)>>
-
-<<function [[addchange]](diff)>>
-
-<<function [[collect]](diff)>>
-
-<<function [[overlaps]](diff)>>
-
-<<function [[same]](diff)>>
-
-<<function [[merge]](diff)>>
-
-<<function [[usage (diff/merge3.c)]](diff)>>
-
-<<function [[main (diff/merge3.c)]](diff)>>
-@
-
-
-\subsection*{[[diff/util.c]]}
-
-<<function [[emalloc]](diff)>>=
-void *
-emalloc(unsigned n)
-{
-    register void *p;
-
-    if ((p = malloc(n)) == 0)
-        sysfatal("malloc: %r");
-    return p;
-}
-@
-
-<<function [[erealloc]](diff)>>=
-void *
-erealloc(void *p, unsigned n)
-{
-    void *rp;
-
-    if ((rp = realloc(p, n)) == 0)
-        sysfatal("realloc: %r");
-    return rp;
-}
-@
-
-<<function [[mkpathname]](diff)>>=
-int
-mkpathname(char *pathname, char *path, char *name)
-{
-    if (strlen(path) + strlen(name) > MAXPATHLEN)
-        sysfatal("pathname %s/%s too long", path, name);
-    sprint(pathname, "%s/%s", path, name);
-    return 0;
-}
-@
-
-<<function [[mktmpfile]](diff)>>=
-char *
-mktmpfile(int input, Dir **sb)
-{
-    int fd, i;
-    char *p;
-    char buf[8192];
-
-    p = mktemp(tmp[whichtmp++]);
-    /*
-     * Because we want this file to stick around
-     * for the entire run of the program, we leak
-     * the fd intentionally here; when we exit,
-     * the system will remove the file for us.
-     */
-    fd = create(p, OWRITE|ORCLOSE, 0600);
-    if (fd < 0)
-        sysfatal("cannot create %s: %r", p);
-    while ((i = read(input, buf, sizeof(buf))) > 0) {
-        if ((i = write(fd, buf, i)) < 0)
-            break;
-    }
-    *sb = dirfstat(fd);
-    if (i < 0)
-        sysfatal("cannot read/write %s: %r", p);
-    return p;
-}
-@
-
-<<function [[statfile]](diff)>>=
-char *
-statfile(char *file, Dir **sb)
-{
-    Dir *dir;
-    int input;
-
-    dir = dirstat(file);
-    if(dir == nil) {
-        if (strcmp(file, "-") || (dir = dirfstat(0)) == nil)
-            sysfatal("cannot stat %s: %r", file);
-        free(dir);
-        return mktmpfile(0, sb);
-    } else if (!REGULAR_FILE(dir) && !DIRECTORY(dir)) {
-        free(dir);
-        if ((input = open(file, OREAD)) == -1)
-            sysfatal("cannot open %s: %r", file);
-        file = mktmpfile(input, sb);
-        close(input);
-    } else
-        *sb = dir;
-    return file;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<diff/util.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include "diff.h"
-
-Biobuf  stdout;
-char    mode;           /* '\0', 'e', 'f', 'h' */
-char    bflag;          /* ignore multiple and trailing blanks */
-char    rflag;          /* recurse down directory trees */
-char    mflag;          /* pseudo flag: doing multiple files, one dir */
-int anychange;
-
-static char *tmp[] = {"/tmp/diff1XXXXXXXXXXX", "/tmp/diff2XXXXXXXXXXX"};
-static int whichtmp;
-
-<<function [[emalloc]](diff)>>
-
-<<function [[erealloc]](diff)>>
-
-<<function [[mkpathname]](diff)>>
-
-<<function [[mktmpfile]](diff)>>
-
-<<function [[statfile]](diff)>>
-@
-
-
-\section{[[misc/]]}
-
-\subsection*{[[misc/patch.c]]}
-
-<<function [[readline]](patch.c)>>=
-char*
-readline(Biobuf *f, int *lnum)
-{
-    char *ln;
-
-    if((ln = Brdstr(f, '\n', 0)) == nil)
-        return nil;
-    *lnum += 1;
-    return ln;
-}
-@
-
-<<function [[emalloc]](patch.c)>>=
-void *
-emalloc(ulong n)
-{
-    void *v;
-    
-    v = mallocz(n, 1);
-    if(v == nil)
-        fail("malloc: %r");
-    setmalloctag(v, getcallerpc(&n));
-    return v;
-}
-@
-
-<<function [[erealloc]](patch.c)>>=
-void *
-erealloc(void *v, ulong n)
-{
-    if(n == 0)
-        n++;
-    v = realloc(v, n);
-    if(v == nil)
-        fail("malloc: %r");
-    setmalloctag(v, getcallerpc(&n));
-    return v;
-}
-@
-
-<<function [[fail]](patch.c)>>=
-void
-fail(char *fmt, ...)
-{
-    char msg[ERRMAX];
-    va_list ap;
-
-    finish(0);
-    va_start(ap, fmt);
-    vsnprint(msg, sizeof(msg), fmt, ap);
-    va_end(ap);
-    fprint(2, "%s\n", msg);
-    exits(msg);
-}
-@
-
-<<function [[fileheader]](patch.c)>>=
-int
-fileheader(char *s, char *pfx, char **name)
-{
-    int len, n, nnull;
-    char *e;
-
-    if((strncmp(s, pfx, strlen(pfx))) != 0)
-        return -1;
-    for(s += strlen(pfx); *s; s++)
-        if(!isspace(*s))
-            break;
-    for(e = s; *e; e++)
-        if(isspace(*e))
-            break;
-    if(s == e)
-        return -1;
-    nnull = strlen("/dev/null");
-    if((e - s) != nnull || strncmp(s, "/dev/null", nnull) != 0){
-        n = strip;
-        while(s != e && n > 0){
-            while(s != e && *s == '/')
-                s++;
-            while(s != e && *s != '/')
-                s++;
-            n--;
-        }
-        while(*s == '/')
-            s++;
-        if(*s == '\0')
-            fail("too many components stripped");
-    }
-    len = (e - s) + 1;
-    *name = emalloc(len);
-    strecpy(*name, *name + len, s);
-    return 0;
-}
-@
-
-<<function [[hunkheader]](patch.c)>>=
-int
-hunkheader(Hunk *h, char *s, char *oldpath, char *newpath, int lnum)
-{
-    char *e;
-
-    memset(h, 0, sizeof(*h));
-    h->lnum = lnum;
-    h->oldpath = strdup(oldpath);
-    h->newpath = strdup(newpath);
-    h->origlen = 0;
-    h->origsz = 32;
-    h->orig = emalloc(h->origsz);
-    h->oldlen = 0;
-    h->oldsz = 32;
-    h->old = emalloc(h->oldsz);
-    h->newlen = 0;
-    h->newsz = 32;
-    h->new = emalloc(h->newsz);
-    cleanname(h->oldpath);
-    cleanname(h->newpath);
-    if(strncmp(s, "@@ -", 4) != 0)
-        return -1;
-    e = s + 4;
-    h->oldln = strtol(e, &e, 10);
-    h->oldcnt = 1;
-    if(*e == ','){
-        e++;
-        h->oldcnt = strtol(e, &e, 10);
-    }
-    while(*e == ' ' || *e == '\t')
-        e++;
-    if(*e != '+')
-        return -1;
-    e++;
-    h->newln = strtol(e, &e, 10);
-    h->newcnt = 1;
-    if(e == s)
-        return -1;
-    if(*e == ','){
-        e++;
-        h->newcnt = strtol(e, &e, 10);
-    }
-    if(e == s || *e != ' ')
-        return -1;
-    if(strncmp(e, " @@", 3) != 0)
-        return -1;
-    /*
-     * empty files have line number 0: keep that,
-     * otherwise adjust down.
-     */
-    if(h->oldln > 0)
-        h->oldln--;
-    if(h->newln > 0)
-        h->newln--;
-    if(h->oldln < 0 || h->newln < 0 || h->oldcnt < 0 || h->newcnt < 0)
-        fail("malformed hunk %s", s);
-    return 0;
-}
-@
-
-<<function [[addorig]](patch.c)>>=
-void
-addorig(Hunk *h, char *ln)
-{
-    int n;
-
-    n = strlen(ln);
-    while(h->origlen + n >= h->origsz){
-        h->origsz *= 2;
-        h->orig = erealloc(h->orig, h->origsz);
-    }
-    memcpy(h->orig + h->origlen, ln, n);
-    h->origlen += n;
-}
-@
-
-<<function [[addnew]](patch.c)>>=
-void
-addnew(Hunk *h, char *ln)
-{
-    int n;
-
-    ln++;
-    n = strlen(ln);
-    while(h->newlen + n >= h->newsz){
-        h->newsz *= 2;
-        h->new = erealloc(h->new, h->newsz);
-    }
-    memcpy(h->new + h->newlen, ln, n);
-    h->newlen += n;
-}
-@
-
-<<function [[addold]](patch.c)>>=
-void
-addold(Hunk *h, char *ln)
-{
-    int n;
-
-    ln++;
-    n = strlen(ln);
-    while(h->oldlen + n >= h->oldsz){
-        h->oldsz *= 2;
-        h->old = erealloc(h->old, h->oldsz);
-    }
-    memcpy(h->old + h->oldlen, ln, n);
-    h->oldlen += n;
-}
-@
-
-<<function [[addmiss]](patch.c)>>=
-int
-addmiss(Hunk *h, char *ln, int *nold, int *nnew)
-{
-    if(ln == nil)
-        return 1;
-    else if(ln[0] != '-' && ln[0] != '+')
-        return 0;
-    if(ln[0] == '-'){
-        addold(h, ln);
-        *nold += 1;
-    }else{
-        addnew(h, ln);
-        *nnew += 1;
-    }
-    return 1;
-}
-@
-
-<<function [[addhunk]](patch.c)>>=
-void
-addhunk(Patch *p, Hunk *h)
-{
-    p->hunk = erealloc(p->hunk, ++p->nhunk*sizeof(Hunk));
-    p->hunk[p->nhunk-1] = *h;
-}
-@
-
-<<function [[hunkcmp]](patch.c)>>=
-int
-hunkcmp(void *a, void *b)
-{
-    int c;
-
-    c = strcmp(((Hunk*)a)->oldpath, ((Hunk*)b)->oldpath);
-    if(c != 0)
-        return c;
-    return ((Hunk*)a)->oldln - ((Hunk*)b)->oldln;
-}
-@
-
-<<function [[swapint]](patch.c)>>=
-void
-swapint(int *a, int *b)
-{
-    int t;
-
-    t = *a;
-    *a = *b;
-    *b = t;
-}
-@
-
-<<function [[swapstr]](patch.c)>>=
-void
-swapstr(char **a, char **b)
-{
-    char *t;
-
-    t = *a;
-    *a = *b;
-    *b = t;
-}
-@
-
-<<function [[trimhunk]](patch.c)>>=
-void
-trimhunk(char c, Hunk *h)
-{
-    if((c == ' ' || c == '-') && h->oldlen > 0 && h->old[h->oldlen-1] == '\n'){
-        h->oldcnt--;
-        h->oldlen--;
-    }
-    if((c == ' ' || c == '+') && h->newlen > 0 && h->new[h->newlen-1] == '\n'){
-        h->newcnt--;
-        h->newlen--;
-    }
-}
-@
-
-<<function [[parse]](patch.c)>>=
-Patch*
-parse(Biobuf *f, char *name)
-{
-    char *ln, *old, *new, c;
-    int i, oldcnt, newcnt, lnum;
-    Patch *p;
-    Hunk h, *ph;
-
-    ln = nil;
-    lnum = 0;
-    p = emalloc(sizeof(Patch));
-comment:
-    free(ln);
-    while((ln = readline(f, &lnum)) != nil){
-        if(strncmp(ln, "--- ", 4) == 0)
-            goto patch;
-        free(ln);
-    }
-    if(p->nhunk == 0)
-        fail("%s: could not find start of patch", name);
-    goto out;
-
-patch:
-    if(fileheader(ln, "--- ", &old) == -1)
-        goto comment;
-    free(ln);
-
-    if((ln = readline(f, &lnum)) == nil)
-        goto out;
-    if(fileheader(ln, "+++ ", &new) == -1)
-        goto comment;
-    free(ln);
-
-    if((ln = readline(f, &lnum)) == nil)
-        goto out;
-hunk:
-    oldcnt = 0;
-    newcnt = 0;
-    if(hunkheader(&h, ln, old, new, lnum) == -1)
-        goto comment;
-    free(ln);
-
-    while(1){
-        if((ln = readline(f, &lnum)) == nil){
-            if(oldcnt != h.oldcnt)
-                fail("%s:%d: malformed hunk: mismatched -hunk size %d != %d", name, lnum, oldcnt, h.oldcnt);
-            if(newcnt != h.newcnt)
-                fail("%s:%d: malformed hunk: mismatched +hunk size %d != %d", name, lnum, newcnt, h.newcnt);
-            addhunk(p, &h);
-            break;
-        }
-        c = ln[0];
-        addorig(&h, ln);
-        switch(ln[0]){
-        default:
-            fail("%s:%d: malformed hunk: leading junk", name, lnum);
-        case '\\':
-            if(strncmp(ln, "\\ No newline", nelem("\\ No newline")-1) == 0)
-                trimhunk(c, &h);
-            /* ignore unknown directives */
-            break;
-        case '-':
-            addold(&h, ln);
-            oldcnt++;
-            break;
-        case '+':
-            addnew(&h, ln);
-            newcnt++;
-            break;
-        case '\n':
-            addold(&h, " \n");
-            addnew(&h, " \n");
-            oldcnt++;
-            newcnt++;
-            break;
-        case ' ':
-            addold(&h, ln);
-            addnew(&h, ln);
-            oldcnt++;
-            newcnt++;
-            break;
-        }
-        free(ln);
-        if(oldcnt > h.oldcnt || newcnt > h.newcnt)
-            fail("%s:%d: malformed hunk: oversized hunk", name, lnum);
-        if(oldcnt < h.oldcnt || newcnt < h.newcnt)
-            continue;
-
-        addhunk(p, &h);
-        if((ln = readline(f, &lnum)) == nil)
-            goto out;
-        if(strncmp(ln, "\\ No newline", nelem("\\ No newline")-1) == 0)
-            trimhunk(c, &p->hunk[p->nhunk-1]);
-        if(strncmp(ln, "--- ", 4) == 0)
-            goto patch;
-        if(strncmp(ln, "@@ ", 3) == 0)
-            goto hunk;
-        goto comment;
-    }
-
-out:
-    if(reverse){
-        for(i = 0; i < p->nhunk; i++){
-            ph = &p->hunk[i];
-            swapint(&ph->oldln, &ph->newln);
-            swapint(&ph->oldcnt, &ph->newcnt);
-            swapint(&ph->oldlen, &ph->newlen);
-            swapint(&ph->oldsz, &ph->newsz);
-            swapstr(&ph->oldpath, &ph->newpath);
-            swapstr(&ph->old, &ph->new);
-        }
-    }
-    qsort(p->hunk, p->nhunk, sizeof(Hunk), hunkcmp);
-    free(old);
-    free(new);
-    free(ln);
-    return p;
-}
-@
-
-<<function [[rename]](patch.c)>>=
-int
-rename(int fd, char *name)
-{
-    Dir st;
-    char *p;
-
-    nulldir(&st);
-    if((p = strrchr(name, '/')) == nil)
-        st.name = name;
-    else
-        st.name = p + 1;
-    return dirfwstat(fd, &st);
-}
-@
-
-<<function [[mkpath]](patch.c)>>=
-int
-mkpath(char *path)
-{
-    char *p, buf[ERRMAX];
-    int f;
-    
-    if(*path == '\0')
-        return 0;
-    for(p = strchr(path+1, '/'); p != nil; p = strchr(p+1, '/')){
-        *p = '\0';
-        if(access(path, AEXIST) != 0){
-            if((f = create(path, OREAD, DMDIR | 0777)) == -1){
-                rerrstr(buf, sizeof(buf));
-                if(strstr(buf, "exist") == nil)
-                    return -1;
-            }
-            close(f);
-        }
-        *p = '/';
-    }
-    return 0;
-}
-@
-
-<<function [[blat]](patch.c)>>=
-void
-blat(char *old, char *new, char *o, usize len, int mode)
-{
-    char *tmp;
-    int fd;
-
-    tmp = nil;
-    if(strcmp(old, "/dev/null") == 0 && !dryrun)
-        if(access(new, AEXIST) != -1)
-            fail("would clobber: %s", new);
-    if(strcmp(new, "/dev/null") != 0 && !dryrun){
-        if(mkpath(new) == -1)
-            fail("mkpath %s: %r", new);
-        if((tmp = smprint("%s.tmp%d", new, getpid())) == nil)
-            fail("smprint: %r");
-        if((fd = create(tmp, OWRITE, mode|0200)) == -1)
-            fail("open %s: %r", tmp);
-        if(write(fd, o, len) != len)
-            fail("write %s: %r", tmp);
-        close(fd);
-    }
-    if((changed = realloc(changed, (nchanged+1)*sizeof(Fchg))) == nil)
-        fail("realloc: %r");
-    if((changed[nchanged].new = strdup(new)) == nil)
-        fail("strdup: %r");
-    if((changed[nchanged].old = strdup(old)) == nil)
-        fail("strdup: %r");
-    changed[nchanged].tmp = tmp;
-    nchanged++;
-}
-@
-
-<<function [[finish]](patch.c)>>=
-int
-finish(int ok)
-{
-    Fchg *c;
-    int i, fd;
-
-    for(i = 0; i < nchanged; i++){
-        c = &changed[i];
-        if(!ok){
-            if(c->tmp != nil && remove(c->tmp) == -1)
-                fprint(2, "remove %s: %r\n", c->tmp);
-            goto Free;
-        }
-        if(!dryrun){
-            if(strcmp(c->new, "/dev/null") == 0){
-                if(remove(c->old) == -1){
-                    ok = 0;
-                    fprint(2, "remove %s: %r\n", c->old);
-                    goto Free;
-                }
-                goto Print;
-            }
-            if((fd = open(c->tmp, ORDWR)) == -1){
-                ok = 0;
-                fprint(2, "open %s: %r\n", c->tmp);
-                goto Free;
-            }
-            if(strcmp(c->old, c->new) == 0 && remove(c->old) == -1
-            || rename(fd, c->new) == -1
-            || close(fd) == -1){
-                ok = 0;
-                fprint(2, "cleanup: %r");
-            }
-        }
-Print:
-        if(strcmp(c->new, "/dev/null") == 0)
-            print("%s\n", c->old);
-        else
-            print("%s\n", c->new);
-Free:
-        free(c->tmp);
-        free(c->old);
-        free(c->new);
-    }
-    free(changed);
-    return ok;
-}
-@
-
-<<function [[slurp]](patch.c)>>=
-int
-slurp(Fbuf *f, char *path)
-{
-    int n, i, fd, sz, len, nlines, linesz;
-    char *buf;
-    int *lines;
-    Dir *d;
-
-    if((fd = open(path, OREAD)) == -1){
-        fprint(2, "open %s: %r", path);
-        return -1;
-    }
-    if((d = dirfstat(fd)) == nil)
-        fail("stat %s: %r", path);
-    sz = 8192;
-    len = 0;
-    buf = emalloc(sz);
-    while(1){
-        if(len == sz){
-            sz *= 2;
-            buf = erealloc(buf, sz);
-        }
-        n = read(fd, buf + len, sz - len);
-        if(n == 0)
-            break;
-        if(n == -1)
-            fail("read %s: %r", path);
-        len += n;
-    }
-
-    nlines = 0;
-    linesz = 32;
-    lines = emalloc(linesz*sizeof(int));
-    lines[nlines++] = 0;
-    for(i = 0; i < len; i++){
-        if(buf[i] != '\n')
-            continue;
-        if(nlines+2 == linesz){
-            linesz *= 2;
-            lines = erealloc(lines, linesz*sizeof(int));
-        }
-        lines[nlines++] = i+1;
-    }
-    lines[nlines] = len;
-    f->len = len;
-    f->buf = buf;
-    f->lines = lines;
-    f->nlines = nlines;
-    f->lastln = 0;
-    f->lastfuzz = 0;
-    f->mode = d->mode;
-    free(d);
-    close(fd);
-    return 0;
-}
-@
-
-<<function [[searchln]](patch.c)>>=
-char*
-searchln(Fbuf *f, Hunk *h, int ln)
-{
-    int off;
-
-    off = f->lines[ln];
-    if(off + h->oldlen > f->len)
-        return nil;
-    if(memcmp(f->buf + off, h->old, h->oldlen) != 0)
-        return nil;
-    f->lastln = ln + h->oldcnt;
-    f->lastfuzz = ln - h->oldln;
-    return f->buf + off;
-}
-@
-
-<<function [[search]](patch.c)>>=
-char*
-search(Fbuf *f, Hunk *h)
-{
-    int ln, oldln, fuzz, scanning;
-    char *p;
-
-    oldln = h->oldln + f->lastfuzz;
-    if(oldln + h->oldcnt > f->nlines)
-        oldln = f->nlines - h->oldcnt;
-    scanning = oldln >= f->lastln;
-    for(fuzz = 0; scanning && fuzz < 250; fuzz++){
-        scanning = 0;
-        ln = oldln - fuzz;
-        if(ln >= f->lastln){
-            scanning = 1;
-            if((p = searchln(f, h, ln)) != nil)
-                return p;
-        }
-        ln = oldln + fuzz + 1;
-        if(ln + h->oldcnt <= f->nlines){
-            scanning = 1;
-            if((p = searchln(f, h, ln)) != nil)
-                return p;
-        }
-    }
-    return nil;
-}
-@
-
-<<function [[rejected]](patch.c)>>=
-void
-rejected(Hunk *h, char *fname)
-{
-    fprint(2, "%s:%d: skipping failed hunk %s:%d\n", fname, h->lnum, h->oldpath, h->oldln);
-    fprint(rejfd, "--- %s:%d \n", h->oldpath, h->oldln);
-    fprint(rejfd, "+++ %s:%d \n", h->newpath, h->newln);
-    fprint(rejfd, "@@ -%d,%d +%d,%d @@\n", h->oldln, h->oldcnt, h->newln, h->newcnt);
-    write(rejfd, h->orig, h->origlen);
-}
-@
-
-<<function [[append]](patch.c)>>=
-char*
-append(char *o, int *sz, char *s, char *e)
-{
-    int n;
-
-    n = (e - s);
-    o = erealloc(o, *sz + n);
-    memcpy(o + *sz, s, n);
-    *sz += n;
-    return o;
-}
-@
-
-<<function [[apply]](patch.c)>>=
-int
-apply(Patch *p, char *fname)
-{
-    char *o, *s, *n, *curfile, *nextfile;
-    int i, osz;
-    Hunk *h, *prevh;
-    Fbuf f;
-
-    n = nil;
-    o = nil;
-    osz = 0;
-    curfile = nil;
-    h = nil;
-    prevh = nil;
-    nchanged = 0;
-    changed = nil;
-    for(i = 0; i < p->nhunk; i++){
-        h = &p->hunk[i];
-        if(strcmp(h->newpath, "/dev/null") == 0)
-            nextfile = h->oldpath;
-        else
-            nextfile = h->newpath;
-        if(curfile == nil || strcmp(curfile, nextfile) != 0){
-            if(curfile != nil){
-                if(!dryrun)
-                    o = append(o, &osz, n, f.buf + f.len);
-                blat(prevh->oldpath, prevh->newpath, o, osz, f.mode);
-                osz = 0;
-            }
-            if(!dryrun){
-                if(slurp(&f, h->oldpath) == -1){
-                    rejected(h, fname);
-                    goto Next;
-                }
-                n = f.buf;
-            }
-            curfile = nextfile;
-        }
-        if(!dryrun){
-            char *e;
-            s = n;
-            e = search(&f, h);
-            if(e == nil){
-                if(rejfd == -1)
-                    fail("%s:%d: unable to find hunk offset near %s:%d", fname, h->lnum, h->oldpath, h->oldln);
-                else{
-                    rejected(h, fname);
-                    goto Next;
-                }
-            }
-            o = append(o, &osz, s, e);
-            o = append(o, &osz, h->new, h->new + h->newlen);
-            n = e + h->oldlen;
-        }
-Next:
-        prevh = h;
-    }
-    if(curfile != nil){
-        if(!dryrun)
-            o = append(o, &osz, n, f.buf + f.len);
-        blat(h->oldpath, h->newpath, o, osz, f.mode);
-    }
-    free(o);
-    return 0;
-}
-@
-
-<<function [[freepatch]](patch.c)>>=
-void
-freepatch(Patch *p)
-{
-    Hunk *h;
-    int i;
-
-    for(i = 0; i < p->nhunk; i++){
-        h = &p->hunk[i];
-        free(h->oldpath);
-        free(h->newpath);
-        free(h->old);
-        free(h->new);
-    }
-    free(p->hunk);
-    free(p->name);
-    free(p);
-}
-@
-
-<<function [[usage]](patch.c)>>=
-void
-usage(void)
-{
-    fprint(2, "usage: %s [-nR] [-p nstrip] [-r rejfile] [patch...]\n", argv0);
-    exits("usage");
-}
-@
-
-<<function [[main]](patch.c)>>=
-void
-main(int argc, char **argv)
-{
-    Biobuf *f;
-    Patch *p;
-    int i, ok;
-
-    ARGBEGIN{
-    case 'd':
-        workdir = EARGF(usage());
-        break;
-    case 'r':
-        rejfile = EARGF(usage());
-        break;
-    case 'p':
-        strip = atoi(EARGF(usage()));
-        break;
-    case 'n':
-        dryrun++;
-        break;
-    case 'R':
-        reverse++;
-        break;
-    default:
-        usage();
-        break;
-    }ARGEND;
-
-    ok = 1;
-    if(rejfile != nil){
-        rejfd = create(rejfile, OWRITE, 0644);
-        if(rejfd == -1)
-            fail("open %s: %r", rejfile);
-    }
-    if(argc == 0){
-        if((f = Bfdopen(0, OREAD)) == nil)
-            fail("open stdin: %r");
-        if((p = parse(f, "stdin")) == nil)
-            fail("parse patch: %r");
-        if(workdir != nil && chdir(workdir) == -1)
-            fail("chdir %s: %r", workdir);
-        if(apply(p, "stdin") == -1){
-            fprint(2, "apply stdin: %r\n");
-            ok = 0;
-        }
-        freepatch(p);
-        Bterm(f);
-        ok = finish(ok);
-    }else{
-        for(i = 0; ok && i < argc; i++){
-            if((f = Bopen(argv[i], OREAD)) == nil)
-                fail("open %s: %r", argv[i]);
-            if((p = parse(f, argv[i])) == nil)
-                fail("parse patch: %r");
-            if(workdir != nil && chdir(workdir) == -1)
-                fail("chdir %s: %r", workdir);
-            if(apply(p, argv[i]) == -1){
-                fprint(2, "apply %s: %r\n", argv[i]);
-                ok = 0;
-            }
-            freepatch(p);
-            Bterm(f);
-            ok = finish(ok);
-        }
-    }
-    exits(ok ? nil : "failed");
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<misc/patch.c>>=
-#include <u.h>
-#include <libc.h>
-#include <ctype.h>
-#include <bio.h>
-
-typedef struct Patch Patch;
-typedef struct Hunk Hunk;
-typedef struct Fbuf Fbuf;
-typedef struct Fchg Fchg;
-
-struct Patch {
-    char    *name;
-    Hunk    *hunk;
-    usize   nhunk;
-};
-
-struct Hunk {
-    int lnum;
-
-    char    *orig;
-    int origlen;
-    int origsz;
-
-    char    *oldpath;
-    int oldln;
-    int oldcnt;
-    int oldlen;
-    int oldsz;
-    char    *old;
-
-    char    *newpath;
-    int newln;
-    int newcnt;
-    int newlen;
-    int newsz;
-    char    *new;
-};
-
-struct Fbuf {
-    int *lines;
-    int nlines;
-    int lastln;
-    int lastfuzz;
-    char    *buf;
-    int len;
-    int mode;
-};
-
-struct Fchg {
-    char    *tmp;
-    char    *old;
-    char    *new;
-};
-
-int finish(int);
-void    fail(char*, ...);
-
-int strip;
-int reverse;
-int rejfd = -1;
-char    *rejfile;
-char    *workdir;
-Fchg    *changed;
-int nchanged;
-int dryrun;
-
-<<function [[readline]](patch.c)>>
-
-<<function [[emalloc]](patch.c)>>
-
-<<function [[erealloc]](patch.c)>>
-
-<<function [[fail]](patch.c)>>
-
-<<function [[fileheader]](patch.c)>>
-
-<<function [[hunkheader]](patch.c)>>
-
-<<function [[addorig]](patch.c)>>
-
-<<function [[addnew]](patch.c)>>
-
-<<function [[addold]](patch.c)>>
-
-<<function [[addmiss]](patch.c)>>
-
-<<function [[addhunk]](patch.c)>>
-
-<<function [[hunkcmp]](patch.c)>>
-
-<<function [[swapint]](patch.c)>>
-
-<<function [[swapstr]](patch.c)>>
-
-<<function [[trimhunk]](patch.c)>>
-
-<<function [[parse]](patch.c)>>
-
-<<function [[rename]](patch.c)>>
-
-<<function [[mkpath]](patch.c)>>
-
-<<function [[blat]](patch.c)>>
-
-<<function [[finish]](patch.c)>>
-
-<<function [[slurp]](patch.c)>>
-
-<<function [[searchln]](patch.c)>>
-
-<<function [[search]](patch.c)>>
-
-<<function [[rejected]](patch.c)>>
-
-<<function [[append]](patch.c)>>
-
-<<function [[apply]](patch.c)>>
-
-<<function [[freepatch]](patch.c)>>
-
-<<function [[usage]](patch.c)>>
-
-<<function [[main]](patch.c)>>
-@
-
-
 \section{[[git9/]]}
 
 \subsection*{[[git9/conf.c]]}
@@ -12432,6 +9765,2673 @@ Nope:
     *p = '\0';
     exits(xbuf);
 }
+@
+
+
+\section{[[diff/]]}
+
+\subsection*{[[diff/diff.c]]}
+
+<<function [[done]](diff)>>=
+void    
+done(int status)
+{
+    switch(status)
+    {
+    case 0:
+        exits("");
+    case 1:
+        exits("some");
+    default:
+        exits("error");
+    }
+}
+@
+
+<<function [[usage]](diff)>>=
+void
+usage(void)
+{
+    fprint(2, "usage: %s [-abcefmnrw] file1 ... file2\n", argv0);
+    exits("usage");
+}
+@
+
+<<function [[main]](diff)>>=
+void
+main(int argc, char *argv[])
+{
+    int i;
+    Dir *fsb, *tsb;
+
+    Binit(&stdout, 1, OWRITE);
+    ARGBEGIN{
+    case 'e':
+    case 'f':
+    case 'n':
+    case 'c':
+    case 'a':
+    case 'u':
+        mode = ARGC();
+        break;
+    case 'w':
+        bflag = 2;
+        break;
+
+    case 'b':
+        bflag = 1;
+        break;
+
+    case 'r':
+        rflag = 1;
+        break;
+
+    case 'm':
+        mflag = 1;  
+        break;
+
+    case 'h':
+    default:
+        usage();
+    }ARGEND;
+    if (argc < 2)
+        usage();
+    if ((tsb = dirstat(argv[argc-1])) == nil)
+        sysfatal("can't stat %s", argv[argc-1]);
+    if (argc > 2) {
+        if (!DIRECTORY(tsb))
+            sysfatal("not directory: %s", argv[argc-1]);
+        mflag = 1;
+    } else {
+        if ((fsb = dirstat(argv[0])) == nil)
+            sysfatal("can't stat %s", argv[0]);
+        if (DIRECTORY(fsb) && DIRECTORY(tsb))
+            mflag = 1;
+        free(fsb);
+    }
+    free(tsb);
+    for (i = 0; i < argc-1; i++)
+        diff(argv[i], argv[argc-1], 0);
+        
+    done(anychange);
+    /*NOTREACHED*/
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/diff.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+#include "diff.h"
+
+<<function [[done]](diff)>>
+
+<<function [[usage]](diff)>>
+
+<<function [[main]](diff)>>
+@
+
+
+\subsection*{[[diff/diff.h]]}
+
+<<constant [[MAXPATHLEN]](diff)>>=
+#define MAXPATHLEN  1024
+@
+
+<<constant [[MAXLINELEN]](diff)>>=
+#define MAXLINELEN  4096
+@
+
+<<macro [[DIRECTORY]](diff)>>=
+#define DIRECTORY(s)        ((s)->qid.type&QTDIR)
+@
+
+<<macro [[REGULAR_FILE]](diff)>>=
+#define REGULAR_FILE(s)     ((s)->type == 'M' && !DIRECTORY(s))
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/diff.h>>=
+typedef struct Line Line;
+typedef struct Cand Cand;
+typedef struct Diff Diff;
+typedef struct Change   Change;
+
+struct Line {
+    int serial;
+    int value;
+};
+
+struct Cand {
+    int x;
+    int y;
+    int pred;
+};
+
+struct Change
+{
+    int oldx;
+    int oldy;
+    int newx;
+    int newy;
+};
+
+struct Diff {
+    Cand cand;
+    Line *file[2], line;
+    int len[2];
+    int binary;
+    int bindiff;
+    Line *sfile[2]; /*shortened by pruning common prefix and suffix*/
+    int slen[2];
+    int pref, suff; /*length of prefix and suffix*/
+    int *class; /*will be overlaid on file[0]*/
+    int *member;    /*will be overlaid on file[1]*/
+    int *klist; /*will be overlaid on file[0] after class*/
+    Cand *clist;    /* merely a free storage pot for candidates */
+    int clen;
+    int *J;     /*will be overlaid on class*/
+    long *ixold;    /*will be overlaid on klist*/
+    long *ixnew;    /*will be overlaid on file[1]*/
+    char *file1;
+    char *file2;
+    Biobuf *input[2];
+    Biobuf *b0;
+    Biobuf *b1;
+    int firstchange;
+    Change *changes;
+    int nchanges;
+};
+
+extern char mode;
+extern char bflag;
+extern char rflag;
+extern char mflag;
+extern int anychange;
+extern Biobuf   stdout;
+
+<<constant [[MAXPATHLEN]](diff)>>
+<<constant [[MAXLINELEN]](diff)>>
+
+<<macro [[DIRECTORY]](diff)>>
+<<macro [[REGULAR_FILE]](diff)>>
+
+int mkpathname(char *, char *, char *);
+char *mktmpfile(int, Dir **);
+char *statfile(char *, Dir **);
+void *emalloc(unsigned);
+void *erealloc(void *, unsigned);
+void diff(char *, char *, int);
+void diffreg(char*, char*, char*, char*);
+void diffdir(char *, char *, int);
+void calcdiff(Diff *, char *, char *, char *, char *);
+Biobuf *prepare(Diff*, int, char *, char *);
+void check(Diff *, Biobuf *, Biobuf *);
+void change(Diff *, int, int, int, int);
+void freediff(Diff *);
+void flushchanges(Diff *);
+void fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s);
+int readline(Biobuf*, char*, int);
+@
+
+
+\subsection*{[[diff/diffdir.c]]}
+
+<<function [[itemcmp]](diff)>>=
+static int
+itemcmp(void *v1, void *v2)
+{
+    char **d1 = v1, **d2 = v2;
+
+    return strcmp(*d1, *d2);
+}
+@
+
+<<function [[scandir]](diff)>>=
+static char **
+scandir(char *name)
+{
+    char **cp;
+    Dir *db;
+    int nitems;
+    int fd, n;
+
+    if ((fd = open(name, OREAD)) < 0) {
+        fprint(2, "%s: can't open %s: %r\n", argv0, name);
+        /* fake an empty directory */
+        cp = emalloc(sizeof(char*));
+        cp[0] = 0;
+        return cp;
+    }
+    cp = 0;
+    nitems = 0;
+    if((n = dirreadall(fd, &db)) > 0){
+        while (n--) {
+            cp = erealloc(cp, (nitems+1)*sizeof(char*));
+            cp[nitems] = emalloc(strlen((db+n)->name)+1);
+            strcpy(cp[nitems], (db+n)->name);
+            nitems++;
+        }
+        free(db);
+    }
+    cp = erealloc(cp, (nitems+1)*sizeof(char*));
+    cp[nitems] = 0;
+    close(fd);
+    qsort((char *)cp, nitems, sizeof(char*), itemcmp);
+    return cp;
+}
+@
+
+<<function [[isdotordotdot]](diff)>>=
+static int
+isdotordotdot(char *p)
+{
+    if (*p == '.') {
+        if (!p[1])
+            return 1;
+        if (p[1] == '.' && !p[2])
+            return 1;
+    }
+    return 0;
+}
+@
+
+<<function [[diffdir]](diff)>>=
+void
+diffdir(char *f, char *t, int level)
+{
+    char  **df, **dt, **dirf, **dirt;
+    char *from, *to;
+    int res;
+    char fb[MAXPATHLEN+1], tb[MAXPATHLEN+1];
+
+    df = scandir(f);
+    dt = scandir(t);
+    dirf = df;
+    dirt = dt;
+    while (*df || *dt) {
+        from = *df;
+        to = *dt;
+        if (from && isdotordotdot(from)) {
+            df++;
+            continue;
+        }
+        if (to && isdotordotdot(to)) {
+            dt++;
+            continue;
+        }
+        if (!from)
+            res = 1;
+        else if (!to)
+            res = -1;
+        else
+            res = strcmp(from, to);
+        if (res < 0) {
+            if (mode == 0 || mode == 'n')
+                Bprint(&stdout, "Only in %s: %s\n", f, from);
+            df++;
+            continue;
+        }
+        if (res > 0) {
+            if (mode == 0 || mode == 'n')
+                Bprint(&stdout, "Only in %s: %s\n", t, to);
+            dt++;
+            continue;
+        }
+        if (mkpathname(fb, f, from))
+            continue;
+        if (mkpathname(tb, t, to))
+            continue;
+        diff(fb, tb, level+1);
+        df++; dt++;
+    }
+    for (df = dirf; *df; df++)
+        free(*df);
+    for (dt = dirt; *dt; dt++)
+        free(*dt);
+    free(dirf);
+    free(dirt);
+}
+@
+
+<<function [[diff]](diff)>>=
+void
+diff(char *f, char *t, int level)
+{
+    char *fp, *tp, *p, fb[MAXPATHLEN+1], tb[MAXPATHLEN+1];
+    Dir *fsb, *tsb;
+
+    fsb = nil;
+    tsb = nil;
+    if ((fp = statfile(f, &fsb)) == 0)
+        goto Return;
+    if ((tp = statfile(t, &tsb)) == 0)
+        goto Return;
+    if (DIRECTORY(fsb) && DIRECTORY(tsb)) {
+        if (rflag || level == 0)
+            diffdir(fp, tp, level);
+        else
+            Bprint(&stdout, "Common subdirectories: %s and %s\n", fp, tp);
+    }
+    else if (REGULAR_FILE(fsb) && REGULAR_FILE(tsb))
+        diffreg(fp, f, tp, t);
+    else {
+        if (REGULAR_FILE(fsb)) {
+            if ((p = utfrrune(f, '/')) == 0)
+                p = f;
+            else
+                p++;
+            if (mkpathname(tb, tp, p) == 0)
+                diffreg(fp, f, tb, t);
+        } else {
+            if ((p = utfrrune(t, '/')) == 0)
+                p = t;
+            else
+                p++;
+            if (mkpathname(fb, fp, p) == 0)
+                diffreg(fb, f, tp, t);
+        }
+    }
+Return:
+    free(fsb);
+    free(tsb);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/diffdir.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include "diff.h"
+
+<<function [[itemcmp]](diff)>>
+
+<<function [[scandir]](diff)>>
+
+<<function [[isdotordotdot]](diff)>>
+
+<<function [[diffdir]](diff)>>
+
+<<function [[diff]](diff)>>
+@
+
+
+\subsection*{[[diff/diffio.c]]}
+
+<<macro [[MIN]](diff)>>=
+#define MIN(x, y)   ((x) < (y) ? (x): (y))
+@
+
+<<function [[readline]](diff)>>=
+int
+readline(Biobuf *bp, char *buf, int nbuf)
+{
+    int c;
+    char *p, *e;
+
+    p = buf;
+    e = p + nbuf-1;
+    do {
+        c = Bgetc(bp);
+        if (c < 0) {
+            if (p == buf)
+                return -1;
+            break;
+        }
+        *p++ = c;
+        if (c == '\n')
+            break;
+    } while (p < e);
+    *p = 0;
+    if (c != '\n' && c >= 0) {
+        do c = Bgetc(bp);
+        while (c >= 0 && c != '\n');
+    }
+    return p - buf;
+}
+@
+
+<<constant [[HALFLONG]](diff)>>=
+#define HALFLONG 16
+@
+
+<<macro [[low]](diff)>>=
+#define low(x)  (x&((1L<<HALFLONG)-1))
+@
+
+<<macro [[high]](diff)>>=
+#define high(x) (x>>HALFLONG)
+@
+
+<<function [[readhash]](diff)>>=
+/*
+ * hashing has the effect of
+ * arranging line in 7-bit bytes and then
+ * summing 1-s complement in 16-bit hunks 
+ */
+static int
+readhash(Biobuf *bp, char *buf, int nbuf)
+{
+    long sum;
+    unsigned shift;
+    char *p;
+    int len, space;
+
+    sum = 1;
+    shift = 0;
+    if ((len = readline(bp, buf, nbuf)) == -1)
+        return 0;
+    p = buf;
+    switch(bflag)   /* various types of white space handling */
+    {
+    case 0:
+        while (len--) {
+            sum += (long)*p++ << (shift &= (HALFLONG-1));
+            shift += 7;
+        }
+        break;
+    case 1:
+        /*
+         * coalesce multiple white-space
+         */
+        for (space = 0; len--; p++) {
+            if (isspace(*p)) {
+                space++;
+                continue;
+            }
+            if (space) {
+                shift += 7;
+                space = 0;
+            }
+            sum += (long)*p << (shift &= (HALFLONG-1));
+            shift += 7;
+        }
+        break;
+    default:
+        /*
+         * strip all white-space
+         */
+        while (len--) {
+            if (isspace(*p)) {
+                p++;
+                continue;
+            }
+            sum += (long)*p++ << (shift &= (HALFLONG-1));
+            shift += 7;
+        }
+        break;
+    }
+    sum = low(sum) + high(sum);
+    return ((short)low(sum) + (short)high(sum));
+}
+@
+
+<<function [[prepare]](diff)>>=
+Biobuf *
+prepare(Diff *d, int i, char *arg, char *orig)
+{
+    Line *p;
+    int j, h;
+    Biobuf *bp;
+    char *cp, buf[MAXLINELEN];
+    int nbytes;
+    Rune r;
+
+    if (i == 0) {
+        d->file1 = orig;
+        d->firstchange = 0;
+    } else
+        d->file2 = orig;
+    bp = Bopen(arg, OREAD);
+    if (!bp)
+        sysfatal("cannot open %s: %r", arg);
+    if (d->binary)
+        return bp;
+    nbytes = Bread(bp, buf, MIN(1024, MAXLINELEN));
+    if (nbytes > 0) {
+        cp = buf;
+        while (cp < buf+nbytes-UTFmax) {
+            /*
+             * heuristic for a binary file in the
+             * brave new UNICODE world
+             */
+            cp += chartorune(&r, cp);
+            if (r == 0 || (r > 0x7f && r <= 0xa0)) {
+                d->binary++;
+                return bp;
+            }
+        }
+        Bseek(bp, 0, 0);
+    }
+    p = emalloc(3*sizeof(Line));
+    for (j = 0; h = readhash(bp, buf, sizeof(buf)); p[j].value = h)
+        p = erealloc(p, (++j+3)*sizeof(Line));
+    d->len[i] = j;
+    d->file[i] = p;
+    d->input[i] = bp;
+    return bp;
+}
+@
+
+<<function [[squishspace]](diff)>>=
+static int
+squishspace(char *buf)
+{
+    char *p, *q;
+    int space;
+
+    for (space = 0, q = p = buf; *q; q++) {
+        if (isspace(*q)) {
+            space++;
+            continue;
+        }
+        if (space && bflag == 1) {
+            *p++ = ' ';
+            space = 0;
+        }
+        *p++ = *q;
+    }
+    *p = 0;
+    return p - buf;
+}
+@
+
+<<function [[check]](diff)>>=
+/*
+ * need to fix up for unexpected EOF's
+ */
+void
+check(Diff *d, Biobuf *bf, Biobuf *bt)
+{
+    int f, t, flen, tlen;
+    char fbuf[MAXLINELEN], tbuf[MAXLINELEN];
+
+    d->ixold[0] = 0;
+    d->ixnew[0] = 0;
+    for (f = t = 1; f < d->len[0]; f++) {
+        flen = readline(bf, fbuf, sizeof(fbuf));
+        d->ixold[f] = d->ixold[f-1] + flen;     /* ftell(bf) */
+        if (d->J[f] == 0)
+            continue;
+        do {
+            tlen = readline(bt, tbuf, sizeof(tbuf));
+            d->ixnew[t] = d->ixnew[t-1] + tlen; /* ftell(bt) */
+        } while (t++ < d->J[f]);
+        if (bflag) {
+            flen = squishspace(fbuf);
+            tlen = squishspace(tbuf);
+        }
+        if (flen != tlen || strcmp(fbuf, tbuf))
+            d->J[f] = 0;
+    }
+    while (t < d->len[1]) {
+        tlen = readline(bt, tbuf, sizeof(tbuf));
+        d->ixnew[t] = d->ixnew[t-1] + tlen; /* fseek(bt) */
+        t++;
+    }
+}
+@
+
+<<function [[range]](diff)>>=
+static void
+range(int a, int b, char *separator)
+{
+    Bprint(&stdout, "%d", a > b ? b: a);
+    if (a < b)
+        Bprint(&stdout, "%s%d", separator, b);
+}
+@
+
+<<function [[fetch]](diff)>>=
+void
+fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s)
+{
+    char buf[MAXLINELEN];
+    int maxb, len;
+
+    if(a <= 1)
+        a = 1;
+    if(bp == d->input[0])
+        maxb = d->len[0];
+    else
+        maxb = d->len[1];
+    if(b > maxb)
+        b = maxb;
+    if(a > maxb)
+        return;
+    Bseek(bp, f[a-1], 0);
+    while (a++ <= b) {
+        len = readline(bp, buf, sizeof(buf));
+        if(len == 0 || buf[len-1] != '\n'){
+            Bprint(&stdout, "%s%s\n", s, buf);
+            Bprint(&stdout, "\\ No newline at end of file\n");
+        }else
+            Bprint(&stdout, "%s%s", s, buf);
+    }
+}
+@
+
+<<function [[change]](diff)>>=
+void
+change(Diff *df, int a, int b, int c, int d)
+{
+    char verb;
+    char buf[4];
+    Change *ch;
+
+    if (a > b && c > d)
+        return;
+    anychange = 1;
+    if (mflag && df->firstchange == 0) {
+        if(mode) {
+            buf[0] = '-';
+            buf[1] = mode;
+            buf[2] = ' ';
+            buf[3] = '\0';
+        } else {
+            buf[0] = '\0';
+        }
+        Bprint(&stdout, "diff %s%s %s\n", buf, df->file1, df->file2);
+        df->firstchange = 1;
+    }
+    verb = a > b ? 'a': c > d ? 'd': 'c';
+    switch(mode) {
+    case 'e':
+        range(a, b, ",");
+        Bputc(&stdout, verb);
+        break;
+    case 0:
+        range(a, b, ",");
+        Bputc(&stdout, verb);
+        range(c, d, ",");
+        break;
+    case 'n':
+        Bprint(&stdout, "%s:", df->file1);
+        range(a, b, ",");
+        Bprint(&stdout, " %c ", verb);
+        Bprint(&stdout, "%s:", df->file2);
+        range(c, d, ",");
+        break;
+    case 'f':
+        Bputc(&stdout, verb);
+        range(a, b, " ");
+        break;
+    case 'c':
+    case 'a':
+    case 'u':
+        if(df->nchanges%1024 == 0)
+            df->changes = erealloc(df->changes, (df->nchanges+1024)*sizeof(df->changes[0]));
+        ch = &df->changes[df->nchanges++];
+        ch->oldx = a;
+        ch->oldy = b;
+        ch->newx = c;
+        ch->newy = d;
+        return;
+    }
+    Bputc(&stdout, '\n');
+    if (mode == 0 || mode == 'n') {
+        fetch(df, df->ixold, a, b, df->input[0], "< ");
+        if (a <= b && c <= d)
+            Bprint(&stdout, "---\n");
+    }
+    fetch(df, df->ixnew, c, d, df->input[1], mode == 0 || mode == 'n' ? "> ": "");
+    if (mode != 0 && mode != 'n' && c <= d)
+        Bprint(&stdout, ".\n");
+}
+@
+
+<<function [[changeset]](diff)>>=
+int
+changeset(Diff *d, int i)
+{
+    while(i < d->nchanges && d->changes[i].oldy + 1 + 2*Lines > d->changes[i+1].oldx)
+        i++;
+    if(i < d->nchanges)
+        return i+1;
+    return d->nchanges;
+}
+@
+
+<<function [[flushchanges]](diff)>>=
+void
+flushchanges(Diff *df)
+{
+    vlong a, b, c, d, at, hdr;
+    vlong i, j;
+
+    if(df->nchanges == 0)
+        return;
+
+    hdr = 0;
+    for(i=0; i < df->nchanges; ){
+        j = changeset(df, i);
+        a = df->changes[i].oldx - Lines;
+        b = df->changes[j-1].oldy + Lines;
+        c = df->changes[i].newx - Lines;
+        d = df->changes[j-1].newy + Lines;
+        if(a < 1)
+            a = 1;
+        if(c < 1)
+            c = 1;
+        if(b > df->len[0])
+            b = df->len[0];
+        if(d > df->len[1])
+            d = df->len[1];
+        if(mode == 'a'){
+            a = 1;
+            b = df->len[0];
+            c = 1;
+            d = df->len[1];
+            j = df->nchanges;
+        }
+        if(mode == 'u'){
+            if(!hdr){
+                Bprint(&stdout, "--- %s\n", df->file1);
+                Bprint(&stdout, "+++ %s\n", df->file2);
+                hdr = 1;
+            }
+            Bprint(&stdout, "@@ -%lld,%lld +%lld,%lld @@\n", a, b-a+1, c, d-c+1);
+        }else{
+            Bprint(&stdout, "%s:", df->file1);
+            range(a, b, ",");
+            Bprint(&stdout, " - ");
+            Bprint(&stdout, "%s:", df->file2);
+            range(c, d, ",");
+            Bputc(&stdout, '\n');
+        }
+        at = a;
+        for(; i<j; i++){
+            fetch(df, df->ixold, at, df->changes[i].oldx-1, df->input[0], mode == 'u' ? " " : "  ");
+            fetch(df, df->ixold, df->changes[i].oldx, df->changes[i].oldy, df->input[0], mode == 'u' ? "-" : "- ");
+            fetch(df, df->ixnew, df->changes[i].newx, df->changes[i].newy, df->input[1], mode == 'u' ? "+" : "+ ");
+            at = df->changes[i].oldy+1;
+        }
+        fetch(df, df->ixold, at, b, df->input[0], mode == 'u' ? " " : "  ");
+    }
+    df->nchanges = 0;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/diffio.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <ctype.h>
+#include "diff.h"
+
+<<macro [[MIN]](diff)>>
+
+<<function [[readline]](diff)>>
+
+<<constant [[HALFLONG]](diff)>>
+<<macro [[low]](diff)>>
+<<macro [[high]](diff)>>
+
+<<function [[readhash]](diff)>>
+
+<<function [[prepare]](diff)>>
+
+<<function [[squishspace]](diff)>>
+
+<<function [[check]](diff)>>
+
+<<function [[range]](diff)>>
+
+<<function [[fetch]](diff)>>
+
+<<function [[change]](diff)>>
+
+enum
+{
+    Lines = 3,  /* number of lines of context shown */
+};
+
+<<function [[changeset]](diff)>>
+
+<<function [[flushchanges]](diff)>>
+@
+
+
+\subsection*{[[diff/diffreg.c]]}
+
+<<function [[sort]](diff)>>=
+static void 
+sort(Line *a, int n)    /*shellsort CACM #201*/
+{
+    int m;
+    Line *ai, *aim, *j, *k;
+    Line w;
+    int i;
+
+    m = 0;
+    for (i = 1; i <= n; i *= 2)
+        m = 2*i - 1;
+    for (m /= 2; m != 0; m /= 2) {
+        k = a+(n-m);
+        for (j = a+1; j <= k; j++) {
+            ai = j;
+            aim = ai+m;
+            do {
+                if (aim->value > ai->value ||
+                   aim->value == ai->value &&
+                   aim->serial > ai->serial)
+                    break;
+                w = *ai;
+                *ai = *aim;
+                *aim = w;
+
+                aim = ai;
+                ai -= m;
+            } while (ai > a && aim >= ai);
+        }
+    }
+}
+@
+
+<<function [[unsort]](diff)>>=
+static void
+unsort(Line *f, int l, int *b)
+{
+    int *a;
+    int i;
+
+    a = malloc((l+1)*sizeof(int));
+    for(i=1;i<=l;i++)
+        a[f[i].serial] = f[i].value;
+    for(i=1;i<=l;i++)
+        b[i] = a[i];
+    free(a);
+}
+@
+
+<<function [[prune]](diff)>>=
+static void
+prune(Diff *d)
+{
+    int i,j;
+
+    for(d->pref = 0; d->pref < d->len[0] && d->pref < d->len[1] &&
+        d->file[0][d->pref+1].value == d->file[1][d->pref+1].value;
+        d->pref++) ;
+    for(d->suff=0; d->suff < d->len[0] - d->pref && d->suff < d->len[1] - d->pref &&
+        d->file[0][d->len[0] - d->suff].value == d->file[1][d->len[1] - d->suff].value;
+        d->suff++) ;
+    for(j=0;j<2;j++) {
+        d->sfile[j] = d->file[j]+d->pref;
+        d->slen[j] = d->len[j]-d->pref-d->suff;
+        for(i=0;i<=d->slen[j];i++)
+            d->sfile[j][i].serial = i;
+    }
+}
+@
+
+<<function [[equiv]](diff)>>=
+static void
+equiv(Line *a, int n, Line *b, int m, int *c)
+{
+    int i, j;
+
+    i = j = 1;
+    while(i<=n && j<=m) {
+        if(a[i].value < b[j].value)
+            a[i++].value = 0;
+        else if(a[i].value == b[j].value)
+            a[i++].value = j;
+        else
+            j++;
+    }
+    while(i <= n)
+        a[i++].value = 0;
+    b[m+1].value = 0;
+    j = 0;
+    while(++j <= m) {
+        c[j] = -b[j].serial;
+        while(b[j+1].value == b[j].value) {
+            j++;
+            c[j] = b[j].serial;
+        }
+    }
+    c[j] = -1;
+}
+@
+
+<<function [[newcand]](diff)>>=
+static int
+newcand(Diff *d, int x, int  y, int pred)
+{
+    Cand *q;
+
+    d->clist = erealloc(d->clist, (d->clen+1)*sizeof(Cand));
+    q = d->clist + d->clen;
+    q->x = x;
+    q->y = y;
+    q->pred = pred;
+    return d->clen++;
+}
+@
+
+<<function [[search]](diff)>>=
+static int
+search(Diff *d, int *c, int k, int y)
+{
+    int i, j, l;
+    int t;
+
+    if(d->clist[c[k]].y < y)    /*quick look for typical case*/
+        return k+1;
+    i = 0;
+    j = k+1;
+    while((l=(i+j)/2) > i) {
+        t = d->clist[c[l]].y;
+        if(t > y)
+            j = l;
+        else if(t < y)
+            i = l;
+        else
+            return l;
+    }
+    return l+1;
+}
+@
+
+<<function [[stone]](diff)>>=
+static int
+stone(Diff *d, int *a, int n, int *b, int *c)
+{
+    int i, k,y;
+    int j, l;
+    int oldc, tc;
+    int oldl;
+
+    k = 0;
+    c[0] = newcand(d, 0, 0, 0);
+    for(i=1; i<=n; i++) {
+        j = a[i];
+        if(j==0)
+            continue;
+        y = -b[j];
+        oldl = 0;
+        oldc = c[0];
+        do {
+            if(y <= d->clist[oldc].y)
+                continue;
+            l = search(d, c, k, y);
+            if(l!=oldl+1)
+                oldc = c[l-1];
+            if(l<=k) {
+                if(d->clist[c[l]].y <= y)
+                    continue;
+                tc = c[l];
+                c[l] = newcand(d, i, y, oldc);
+                oldc = tc;
+                oldl = l;
+            } else {
+                c[l] = newcand(d, i,y,oldc);
+                k++;
+                break;
+            }
+        } while((y=b[++j]) > 0);
+    }
+    return k;
+}
+@
+
+<<function [[unravel]](diff)>>=
+static void
+unravel(Diff *d, int p)
+{
+    int i;
+    Cand *q;
+
+    for(i=0; i<=d->len[0]; i++) {
+        if (i <= d->pref)
+            d->J[i] = i;
+        else if (i > d->len[0]-d->suff)
+            d->J[i] = i+d->len[1] - d->len[0];
+        else
+            d->J[i] = 0;
+    }
+    for(q=d->clist+p; q->y != 0; q= d->clist + q->pred)
+        d->J[q->x+d->pref] = q->y+d->pref;
+}
+@
+
+<<constant [[BUF]](diff)>>=
+#define BUF 4096
+@
+
+<<function [[cmp]](diff)>>=
+static int
+cmp(Biobuf* b1, Biobuf* b2)
+{
+    int n;
+    uchar buf1[BUF], buf2[BUF];
+    int f1, f2;
+    vlong nc = 1;
+    uchar *b1s, *b1e, *b2s, *b2e;
+
+    f1 = Bfildes(b1);
+    f2 = Bfildes(b2);
+    seek(f1, 0, 0);
+    seek(f2, 0, 0);
+    b1s = b1e = buf1;
+    b2s = b2e = buf2;
+    for(;;){
+        if(b1s >= b1e){
+            if(b1s >= &buf1[BUF])
+                b1s = buf1;
+            n = read(f1, b1s,  &buf1[BUF] - b1s);
+            b1e = b1s + n;
+        }
+        if(b2s >= b2e){
+            if(b2s >= &buf2[BUF])
+                b2s = buf2;
+            n = read(f2, b2s,  &buf2[BUF] - b2s);
+            b2e = b2s + n;
+        }
+        n = b2e - b2s;
+        if(n > b1e - b1s)
+            n = b1e - b1s;
+        if(n <= 0)
+            break;
+        if(memcmp((void *)b1s, (void *)b2s, n) != 0){
+            return 1;
+        }       
+        nc += n;
+        b1s += n;
+        b2s += n;
+    }
+    if(b1e - b1s == b2e - b2s)
+        return 0;
+    return 1;   
+}
+@
+
+<<function [[calcdiff]](diff)>>=
+void
+calcdiff(Diff *d, char *f, char *fo, char *t, char *to)
+{
+    Biobuf *b0, *b1;
+    int k;
+
+    b0 = prepare(d, 0, f, fo);
+    if (!b0)
+        return;
+    b1 = prepare(d, 1, t, to);
+    if (!b1) {
+        Bterm(b0);
+        return;
+    }
+    if (d->binary){
+        // could use b0 and b1 but this is simpler.
+        if(cmp(b0, b1))
+            d->bindiff = 1;
+        Bterm(b0);
+        Bterm(b1);
+        return;
+    }
+    d->clen = 0;
+    prune(d);
+    sort(d->sfile[0], d->slen[0]);
+    sort(d->sfile[1], d->slen[1]);
+
+    d->member = (int *)d->file[1];
+    equiv(d->sfile[0], d->slen[0], d->sfile[1], d->slen[1], d->member);
+    d->member = erealloc(d->member, (d->slen[1]+2)*sizeof(int));
+
+    d->class = (int *)d->file[0];
+    unsort(d->sfile[0], d->slen[0], d->class);
+    d->class = erealloc(d->class, (d->slen[0]+2)*sizeof(int));
+
+    d->klist = emalloc((d->slen[0]+2)*sizeof(int));
+    d->clist = emalloc(sizeof(Cand));
+    k = stone(d, d->class, d->slen[0], d->member, d->klist);
+    free(d->member);
+    free(d->class);
+
+    d->J = emalloc((d->len[0]+2)*sizeof(int));
+    unravel(d, d->klist[k]);
+    free(d->clist);
+    free(d->klist);
+
+    d->ixold = emalloc((d->len[0]+2)*sizeof(long));
+    d->ixnew = emalloc((d->len[1]+2)*sizeof(long));
+    Bseek(b0, 0, 0); Bseek(b1, 0, 0);
+    check(d, b0, b1);
+}
+@
+
+<<function [[output]](diff)>>=
+static void
+output(Diff *d)
+{
+    int m, i0, i1, j0, j1;
+
+    if(d->bindiff)
+        print("binary files %s %s differ\n", d->file1, d->file2);
+    if(d->binary)
+        return;
+    m = d->len[0];
+    d->J[0] = 0;
+    d->J[m+1] = d->len[1]+1;
+    if (mode != 'e') {
+        for (i0 = 1; i0 <= m; i0 = i1+1) {
+            while (i0 <= m && d->J[i0] == d->J[i0-1]+1)
+                i0++;
+            j0 = d->J[i0-1]+1;
+            i1 = i0-1;
+            while (i1 < m && d->J[i1+1] == 0)
+                i1++;
+            j1 = d->J[i1+1]-1;
+            d->J[i1] = j1;
+            change(d, i0, i1, j0, j1);
+        }
+    } else {
+        for (i0 = m; i0 >= 1; i0 = i1-1) {
+            while (i0 >= 1 && d->J[i0] == d->J[i0+1]-1 && d->J[i0])
+                i0--;
+            j0 = d->J[i0+1]-1;
+            i1 = i0+1;
+            while (i1 > 1 && d->J[i1-1] == 0)
+                i1--;
+            j1 = d->J[i1-1]+1;
+            d->J[i1] = j1;
+            change(d, i1 , i0, j1, j0);
+        }
+    }
+    if (m == 0)
+        change(d, 1, 0, 1, d->len[1]);
+    flushchanges(d);
+}
+@
+
+<<function [[diffreg]](diff)>>=
+void
+diffreg(char *f, char *fo, char *t, char *to)
+{
+    Diff d;
+
+    memset(&d, 0, sizeof(d));
+    calcdiff(&d, f, fo, t, to);
+    output(&d);
+    freediff(&d);
+}
+@
+
+<<function [[freediff]](diff)>>=
+void
+freediff(Diff *d)
+{
+    if(d->input[0] != nil)
+        Bterm(d->input[0]);
+    if(d->input[1] != nil)
+        Bterm(d->input[1]);
+    free(d->J);
+    free(d->ixold);
+    free(d->ixnew);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/diffreg.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+#include "diff.h"
+
+/*  diff - differential file comparison
+*
+*   Uses an algorithm due to Harold Stone, which finds
+*   a pair of longest identical subsequences in the two
+*   files.
+*
+*   The major goal is to generate the match vector J.
+*   J[i] is the index of the line in file1 corresponding
+*   to line i file0. J[i] = 0 if there is no
+*   such line in file1.
+*
+*   Lines are hashed so as to work in core. All potential
+*   matches are located by sorting the lines of each file
+*   on the hash (called value). In particular, this
+*   collects the equivalence classes in file1 together.
+*   Subroutine equiv replaces the value of each line in
+*   file0 by the index of the first element of its 
+*   matching equivalence in (the reordered) file1.
+*   To save space equiv squeezes file1 into a single
+*   array member in which the equivalence classes
+*   are simply concatenated, except that their first
+*   members are flagged by changing sign.
+*
+*   Next the indices that point into member are unsorted into
+*   array class according to the original order of file0.
+*
+*   The cleverness lies in routine stone. This marches
+*   through the lines of file0, developing a vector klist
+*   of "k-candidates". At step i a k-candidate is a matched
+*   pair of lines x,y (x in file0 y in file1) such that
+*   there is a common subsequence of lenght k
+*   between the first i lines of file0 and the first y 
+*   lines of file1, but there is no such subsequence for
+*   any smaller y. x is the earliest possible mate to y
+*   that occurs in such a subsequence.
+*
+*   Whenever any of the members of the equivalence class of
+*   lines in file1 matable to a line in file0 has serial number 
+*   less than the y of some k-candidate, that k-candidate 
+*   with the smallest such y is replaced. The new 
+*   k-candidate is chained (via pred) to the current
+*   k-1 candidate so that the actual subsequence can
+*   be recovered. When a member has serial number greater
+*   that the y of all k-candidates, the klist is extended.
+*   At the end, the longest subsequence is pulled out
+*   and placed in the array J by unravel.
+*
+*   With J in hand, the matches there recorded are
+*   check'ed against reality to assure that no spurious
+*   matches have crept in due to hashing. If they have,
+*   they are broken, and "jackpot " is recorded--a harmless
+*   matter except that a true match for a spuriously
+*   mated line may now be unnecessarily reported as a change.
+*
+*   Much of the complexity of the program comes simply
+*   from trying to minimize core utilization and
+*   maximize the range of doable problems by dynamically
+*   allocating what is needed and reusing what is not.
+*   The core requirements for problems larger than somewhat
+*   are (in words) 2*length(file0) + length(file1) +
+*   3*(number of k-candidates installed),  typically about
+*   6n words for files of length n. 
+*/
+
+<<function [[sort]](diff)>>
+
+<<function [[unsort]](diff)>>
+
+<<function [[prune]](diff)>>
+
+<<function [[equiv]](diff)>>
+
+<<function [[newcand]](diff)>>
+
+<<function [[search]](diff)>>
+
+<<function [[stone]](diff)>>
+
+<<function [[unravel]](diff)>>
+
+<<constant [[BUF]](diff)>>
+<<function [[cmp]](diff)>>
+
+<<function [[calcdiff]](diff)>>
+
+<<function [[output]](diff)>>
+
+<<function [[diffreg]](diff)>>
+
+<<function [[freediff]](diff)>>
+@
+
+
+\subsection*{[[diff/merge3.c]]}
+
+<<macro [[min]](diff)>>=
+#define min(a, b) ((a)<(b)?(a):(b))
+@
+
+<<macro [[max]](diff)>>=
+#define max(a, b) ((a)>(b)?(a):(b))
+@
+
+<<function [[changecmp]](diff)>>=
+static int
+changecmp(void *a, void *b)
+{
+    return ((Change*)a)->oldx - ((Change*)b)->oldx;
+}
+@
+
+<<function [[addchange]](diff)>>=
+static void
+addchange(Diff *df, int a, int b, int c, int d)
+{
+    Change *ch;
+
+    if (a > b && c > d)
+        return;
+    if(df->nchanges%1024 == 0)
+        df->changes = erealloc(df->changes, (df->nchanges+1024)*sizeof(df->changes[0]));
+    ch = &df->changes[df->nchanges++];
+    ch->oldx = a;
+    ch->oldy = b;
+    ch->newx = c;
+    ch->newy = d;
+}
+@
+
+<<function [[collect]](diff)>>=
+static void
+collect(Diff *d)
+{
+    int m, i0, i1, j0, j1;
+
+    m = d->len[0];
+    d->J[0] = 0;
+    d->J[m+1] = d->len[1]+1;
+    for (i0 = m; i0 >= 1; i0 = i1-1) {
+        while (i0 >= 1 && d->J[i0] == d->J[i0+1]-1 && d->J[i0])
+            i0--;
+        j0 = d->J[i0+1]-1;
+        i1 = i0+1;
+        while (i1 > 1 && d->J[i1-1] == 0)
+            i1--;
+        j1 = d->J[i1-1]+1;
+        d->J[i1] = j1;
+        addchange(d, i1 , i0, j1, j0);
+    }
+    if (m == 0)
+        addchange(d, 1, 0, 1, d->len[1]);
+    qsort(d->changes, d->nchanges, sizeof(Change), changecmp);
+}
+@
+
+<<function [[overlaps]](diff)>>=
+static int
+overlaps(int lx, int ly, int rx, int ry)
+{
+    if(lx <= rx)
+        return ly >= rx;
+    else
+        return ry >= lx;
+}
+@
+
+<<function [[same]](diff)>>=
+static int
+same(Diff *l, Change *lc, Diff *r, Change *rc)
+{
+    char lbuf[MAXLINELEN], rbuf[MAXLINELEN];
+    int i, ll, rl, lx, ly, rx, ry;
+
+    lx = lc->newx;
+    ly = lc->newy;
+    rx = rc->newx;
+    ry = rc->newy;
+    if(ly - lx != ry - rx)
+        return 0;
+    assert(ly <= l->len[1] && ry <= r->len[1]);
+    Bseek(l->input[1], l->ixnew[lx-1], 0);
+    Bseek(r->input[1], r->ixnew[rx-1], 0);
+    for(i = 0; i <= (ly - lx); i++){
+        ll = readline(l->input[1], lbuf, sizeof(lbuf));
+        rl = readline(r->input[1], rbuf, sizeof(rbuf));
+        if(ll != rl)
+            return 0;
+        if(memcmp(lbuf, rbuf, ll) != 0)
+            return 0;
+    }
+    return 1;
+}
+@
+
+<<function [[merge]](diff)>>=
+char*
+merge(Diff *l, Diff *r)
+{
+    int lx, ly, rx, ry;
+    int il, ir, delta;
+    Change *lc, *rc;
+    char *status;
+    vlong ln;
+
+    il = 0;
+    ir = 0;
+    ln = 0;
+    status = nil;
+    collect(l);
+    collect(r);
+    while(il < l->nchanges || ir < r->nchanges){
+        lc = nil;
+        rc = nil;
+        lx = -1;
+        ly = -1;
+        rx = -1;
+        ry = -1;
+        if(il < l->nchanges){
+            lc = &l->changes[il];
+            lx = (lc->oldx < lc->oldy) ? lc->oldx : lc->oldy;
+            ly = (lc->oldx < lc->oldy) ? lc->oldy : lc->oldx;
+        }
+        if(ir < r->nchanges){
+            rc = &r->changes[ir];
+            rx = (rc->oldx < rc->oldy) ? rc->oldx : rc->oldy;
+            ry = (rc->oldx < rc->oldy) ? rc->oldy : rc->oldx;
+        }
+        if(lc != nil && rc != nil && overlaps(lx, ly, rx, ry)){
+            /*
+             * align the edges of the chunks, expanding them
+             * so that when we compare for sameness, we are
+             * comparing same-sized chunks.
+             */
+            if(lc->oldx < rc->oldx){
+                delta = rc->oldx - lc->oldx;
+                rc->oldx = max(rc->oldx-delta, 1);
+                rc->newx = max(rc->newx-delta, 1);
+            }else{
+                delta = lc->oldx - rc->oldx;
+                lc->oldx = max(lc->oldx-delta, 1);
+                lc->newx = max(lc->newx-delta, 1);
+            }
+            if(lc->oldy > rc->oldy){
+                delta = lc->oldy - rc->oldy;
+                rc->oldy = min(rc->oldy+delta, r->len[0]);
+                rc->newy = min(rc->newy+delta, r->len[1]);
+            }else{
+                delta = rc->oldy - lc->oldy;
+                lc->oldy = min(lc->oldy+delta, l->len[0]);
+                lc->newy = min(lc->newy+delta, l->len[1]);
+            }
+            if(same(l, lc, r, rc)){
+                fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
+                fetch(l, l->ixnew, lc->newx, lc->newy, l->input[1], "");
+            }else{
+                fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
+                Bprint(&stdout, "<<<<<<<<<< %s\n", l->file2);
+                fetch(l, l->ixnew, lc->newx, lc->newy, l->input[1], "");
+                Bprint(&stdout, "========== original\n");
+                fetch(l, l->ixold, lc->oldx, lc->oldy, l->input[0], "");
+                Bprint(&stdout, "========== %s\n", r->file2);
+                fetch(r, r->ixnew, rc->newx, rc->newy, r->input[1], "");
+                Bprint(&stdout, ">>>>>>>>>>\n");
+                status = "conflict";
+            }
+            ln = lc->oldy+1;
+            il++;
+            ir++;
+        }else if(lc != nil && (rc == nil || lx < rx)){
+            fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
+            fetch(l, l->ixnew, lc->newx, lc->newy, l->input[1], "");
+            ln = lc->oldy+1;
+            il++;
+        }else if(rc != nil && (lc == nil || rx < lx)){
+            fetch(l, r->ixold, ln, rc->oldx-1, r->input[0], "");
+            fetch(r, r->ixnew, rc->newx, rc->newy, r->input[1], "");
+            ln = rc->oldy+1;
+            ir++;
+        }else
+            abort();
+    }
+    if(ln <= l->len[0])
+        fetch(l, l->ixold, ln, l->len[0], l->input[0], "");
+    return status;
+}
+@
+
+<<function [[usage (diff/merge3.c)]](diff)>>=
+void
+usage(void)
+{
+    fprint(2, "usage: %s theirs base ours\n", argv0);
+    exits("usage");
+}
+@
+
+<<function [[main (diff/merge3.c)]](diff)>>=
+void
+main(int argc, char **argv)
+{
+    Diff l, r;
+    char *x;
+
+    ARGBEGIN{
+    default:
+        usage();
+    }ARGEND;
+
+    if(argc != 3)
+        usage();
+    Binit(&stdout, 1, OWRITE);
+    memset(&l, 0, sizeof(l));
+    memset(&r, 0, sizeof(r));
+    calcdiff(&l, argv[1], argv[1], argv[0], argv[0]);
+    calcdiff(&r, argv[1], argv[1], argv[2], argv[2]);
+    if(l.binary || r.binary)
+        sysfatal("cannot merge binaries");
+    x = merge(&l, &r);
+    freediff(&l);
+    freediff(&r);
+    exits(x);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/merge3.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+
+#include "diff.h"
+
+<<macro [[min]](diff)>>
+<<macro [[max]](diff)>>
+
+<<function [[changecmp]](diff)>>
+
+<<function [[addchange]](diff)>>
+
+<<function [[collect]](diff)>>
+
+<<function [[overlaps]](diff)>>
+
+<<function [[same]](diff)>>
+
+<<function [[merge]](diff)>>
+
+<<function [[usage (diff/merge3.c)]](diff)>>
+
+<<function [[main (diff/merge3.c)]](diff)>>
+@
+
+
+\subsection*{[[diff/util.c]]}
+
+<<function [[emalloc]](diff)>>=
+void *
+emalloc(unsigned n)
+{
+    register void *p;
+
+    if ((p = malloc(n)) == 0)
+        sysfatal("malloc: %r");
+    return p;
+}
+@
+
+<<function [[erealloc]](diff)>>=
+void *
+erealloc(void *p, unsigned n)
+{
+    void *rp;
+
+    if ((rp = realloc(p, n)) == 0)
+        sysfatal("realloc: %r");
+    return rp;
+}
+@
+
+<<function [[mkpathname]](diff)>>=
+int
+mkpathname(char *pathname, char *path, char *name)
+{
+    if (strlen(path) + strlen(name) > MAXPATHLEN)
+        sysfatal("pathname %s/%s too long", path, name);
+    sprint(pathname, "%s/%s", path, name);
+    return 0;
+}
+@
+
+<<function [[mktmpfile]](diff)>>=
+char *
+mktmpfile(int input, Dir **sb)
+{
+    int fd, i;
+    char *p;
+    char buf[8192];
+
+    p = mktemp(tmp[whichtmp++]);
+    /*
+     * Because we want this file to stick around
+     * for the entire run of the program, we leak
+     * the fd intentionally here; when we exit,
+     * the system will remove the file for us.
+     */
+    fd = create(p, OWRITE|ORCLOSE, 0600);
+    if (fd < 0)
+        sysfatal("cannot create %s: %r", p);
+    while ((i = read(input, buf, sizeof(buf))) > 0) {
+        if ((i = write(fd, buf, i)) < 0)
+            break;
+    }
+    *sb = dirfstat(fd);
+    if (i < 0)
+        sysfatal("cannot read/write %s: %r", p);
+    return p;
+}
+@
+
+<<function [[statfile]](diff)>>=
+char *
+statfile(char *file, Dir **sb)
+{
+    Dir *dir;
+    int input;
+
+    dir = dirstat(file);
+    if(dir == nil) {
+        if (strcmp(file, "-") || (dir = dirfstat(0)) == nil)
+            sysfatal("cannot stat %s: %r", file);
+        free(dir);
+        return mktmpfile(0, sb);
+    } else if (!REGULAR_FILE(dir) && !DIRECTORY(dir)) {
+        free(dir);
+        if ((input = open(file, OREAD)) == -1)
+            sysfatal("cannot open %s: %r", file);
+        file = mktmpfile(input, sb);
+        close(input);
+    } else
+        *sb = dir;
+    return file;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<diff/util.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include "diff.h"
+
+Biobuf  stdout;
+char    mode;           /* '\0', 'e', 'f', 'h' */
+char    bflag;          /* ignore multiple and trailing blanks */
+char    rflag;          /* recurse down directory trees */
+char    mflag;          /* pseudo flag: doing multiple files, one dir */
+int anychange;
+
+static char *tmp[] = {"/tmp/diff1XXXXXXXXXXX", "/tmp/diff2XXXXXXXXXXX"};
+static int whichtmp;
+
+<<function [[emalloc]](diff)>>
+
+<<function [[erealloc]](diff)>>
+
+<<function [[mkpathname]](diff)>>
+
+<<function [[mktmpfile]](diff)>>
+
+<<function [[statfile]](diff)>>
+@
+
+
+\section{[[misc/]]}
+
+\subsection*{[[misc/patch.c]]}
+
+<<function [[readline]](patch.c)>>=
+char*
+readline(Biobuf *f, int *lnum)
+{
+    char *ln;
+
+    if((ln = Brdstr(f, '\n', 0)) == nil)
+        return nil;
+    *lnum += 1;
+    return ln;
+}
+@
+
+<<function [[emalloc]](patch.c)>>=
+void *
+emalloc(ulong n)
+{
+    void *v;
+    
+    v = mallocz(n, 1);
+    if(v == nil)
+        fail("malloc: %r");
+    setmalloctag(v, getcallerpc(&n));
+    return v;
+}
+@
+
+<<function [[erealloc]](patch.c)>>=
+void *
+erealloc(void *v, ulong n)
+{
+    if(n == 0)
+        n++;
+    v = realloc(v, n);
+    if(v == nil)
+        fail("malloc: %r");
+    setmalloctag(v, getcallerpc(&n));
+    return v;
+}
+@
+
+<<function [[fail]](patch.c)>>=
+void
+fail(char *fmt, ...)
+{
+    char msg[ERRMAX];
+    va_list ap;
+
+    finish(0);
+    va_start(ap, fmt);
+    vsnprint(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    fprint(2, "%s\n", msg);
+    exits(msg);
+}
+@
+
+<<function [[fileheader]](patch.c)>>=
+int
+fileheader(char *s, char *pfx, char **name)
+{
+    int len, n, nnull;
+    char *e;
+
+    if((strncmp(s, pfx, strlen(pfx))) != 0)
+        return -1;
+    for(s += strlen(pfx); *s; s++)
+        if(!isspace(*s))
+            break;
+    for(e = s; *e; e++)
+        if(isspace(*e))
+            break;
+    if(s == e)
+        return -1;
+    nnull = strlen("/dev/null");
+    if((e - s) != nnull || strncmp(s, "/dev/null", nnull) != 0){
+        n = strip;
+        while(s != e && n > 0){
+            while(s != e && *s == '/')
+                s++;
+            while(s != e && *s != '/')
+                s++;
+            n--;
+        }
+        while(*s == '/')
+            s++;
+        if(*s == '\0')
+            fail("too many components stripped");
+    }
+    len = (e - s) + 1;
+    *name = emalloc(len);
+    strecpy(*name, *name + len, s);
+    return 0;
+}
+@
+
+<<function [[hunkheader]](patch.c)>>=
+int
+hunkheader(Hunk *h, char *s, char *oldpath, char *newpath, int lnum)
+{
+    char *e;
+
+    memset(h, 0, sizeof(*h));
+    h->lnum = lnum;
+    h->oldpath = strdup(oldpath);
+    h->newpath = strdup(newpath);
+    h->origlen = 0;
+    h->origsz = 32;
+    h->orig = emalloc(h->origsz);
+    h->oldlen = 0;
+    h->oldsz = 32;
+    h->old = emalloc(h->oldsz);
+    h->newlen = 0;
+    h->newsz = 32;
+    h->new = emalloc(h->newsz);
+    cleanname(h->oldpath);
+    cleanname(h->newpath);
+    if(strncmp(s, "@@ -", 4) != 0)
+        return -1;
+    e = s + 4;
+    h->oldln = strtol(e, &e, 10);
+    h->oldcnt = 1;
+    if(*e == ','){
+        e++;
+        h->oldcnt = strtol(e, &e, 10);
+    }
+    while(*e == ' ' || *e == '\t')
+        e++;
+    if(*e != '+')
+        return -1;
+    e++;
+    h->newln = strtol(e, &e, 10);
+    h->newcnt = 1;
+    if(e == s)
+        return -1;
+    if(*e == ','){
+        e++;
+        h->newcnt = strtol(e, &e, 10);
+    }
+    if(e == s || *e != ' ')
+        return -1;
+    if(strncmp(e, " @@", 3) != 0)
+        return -1;
+    /*
+     * empty files have line number 0: keep that,
+     * otherwise adjust down.
+     */
+    if(h->oldln > 0)
+        h->oldln--;
+    if(h->newln > 0)
+        h->newln--;
+    if(h->oldln < 0 || h->newln < 0 || h->oldcnt < 0 || h->newcnt < 0)
+        fail("malformed hunk %s", s);
+    return 0;
+}
+@
+
+<<function [[addorig]](patch.c)>>=
+void
+addorig(Hunk *h, char *ln)
+{
+    int n;
+
+    n = strlen(ln);
+    while(h->origlen + n >= h->origsz){
+        h->origsz *= 2;
+        h->orig = erealloc(h->orig, h->origsz);
+    }
+    memcpy(h->orig + h->origlen, ln, n);
+    h->origlen += n;
+}
+@
+
+<<function [[addnew]](patch.c)>>=
+void
+addnew(Hunk *h, char *ln)
+{
+    int n;
+
+    ln++;
+    n = strlen(ln);
+    while(h->newlen + n >= h->newsz){
+        h->newsz *= 2;
+        h->new = erealloc(h->new, h->newsz);
+    }
+    memcpy(h->new + h->newlen, ln, n);
+    h->newlen += n;
+}
+@
+
+<<function [[addold]](patch.c)>>=
+void
+addold(Hunk *h, char *ln)
+{
+    int n;
+
+    ln++;
+    n = strlen(ln);
+    while(h->oldlen + n >= h->oldsz){
+        h->oldsz *= 2;
+        h->old = erealloc(h->old, h->oldsz);
+    }
+    memcpy(h->old + h->oldlen, ln, n);
+    h->oldlen += n;
+}
+@
+
+<<function [[addmiss]](patch.c)>>=
+int
+addmiss(Hunk *h, char *ln, int *nold, int *nnew)
+{
+    if(ln == nil)
+        return 1;
+    else if(ln[0] != '-' && ln[0] != '+')
+        return 0;
+    if(ln[0] == '-'){
+        addold(h, ln);
+        *nold += 1;
+    }else{
+        addnew(h, ln);
+        *nnew += 1;
+    }
+    return 1;
+}
+@
+
+<<function [[addhunk]](patch.c)>>=
+void
+addhunk(Patch *p, Hunk *h)
+{
+    p->hunk = erealloc(p->hunk, ++p->nhunk*sizeof(Hunk));
+    p->hunk[p->nhunk-1] = *h;
+}
+@
+
+<<function [[hunkcmp]](patch.c)>>=
+int
+hunkcmp(void *a, void *b)
+{
+    int c;
+
+    c = strcmp(((Hunk*)a)->oldpath, ((Hunk*)b)->oldpath);
+    if(c != 0)
+        return c;
+    return ((Hunk*)a)->oldln - ((Hunk*)b)->oldln;
+}
+@
+
+<<function [[swapint]](patch.c)>>=
+void
+swapint(int *a, int *b)
+{
+    int t;
+
+    t = *a;
+    *a = *b;
+    *b = t;
+}
+@
+
+<<function [[swapstr]](patch.c)>>=
+void
+swapstr(char **a, char **b)
+{
+    char *t;
+
+    t = *a;
+    *a = *b;
+    *b = t;
+}
+@
+
+<<function [[trimhunk]](patch.c)>>=
+void
+trimhunk(char c, Hunk *h)
+{
+    if((c == ' ' || c == '-') && h->oldlen > 0 && h->old[h->oldlen-1] == '\n'){
+        h->oldcnt--;
+        h->oldlen--;
+    }
+    if((c == ' ' || c == '+') && h->newlen > 0 && h->new[h->newlen-1] == '\n'){
+        h->newcnt--;
+        h->newlen--;
+    }
+}
+@
+
+<<function [[parse]](patch.c)>>=
+Patch*
+parse(Biobuf *f, char *name)
+{
+    char *ln, *old, *new, c;
+    int i, oldcnt, newcnt, lnum;
+    Patch *p;
+    Hunk h, *ph;
+
+    ln = nil;
+    lnum = 0;
+    p = emalloc(sizeof(Patch));
+comment:
+    free(ln);
+    while((ln = readline(f, &lnum)) != nil){
+        if(strncmp(ln, "--- ", 4) == 0)
+            goto patch;
+        free(ln);
+    }
+    if(p->nhunk == 0)
+        fail("%s: could not find start of patch", name);
+    goto out;
+
+patch:
+    if(fileheader(ln, "--- ", &old) == -1)
+        goto comment;
+    free(ln);
+
+    if((ln = readline(f, &lnum)) == nil)
+        goto out;
+    if(fileheader(ln, "+++ ", &new) == -1)
+        goto comment;
+    free(ln);
+
+    if((ln = readline(f, &lnum)) == nil)
+        goto out;
+hunk:
+    oldcnt = 0;
+    newcnt = 0;
+    if(hunkheader(&h, ln, old, new, lnum) == -1)
+        goto comment;
+    free(ln);
+
+    while(1){
+        if((ln = readline(f, &lnum)) == nil){
+            if(oldcnt != h.oldcnt)
+                fail("%s:%d: malformed hunk: mismatched -hunk size %d != %d", name, lnum, oldcnt, h.oldcnt);
+            if(newcnt != h.newcnt)
+                fail("%s:%d: malformed hunk: mismatched +hunk size %d != %d", name, lnum, newcnt, h.newcnt);
+            addhunk(p, &h);
+            break;
+        }
+        c = ln[0];
+        addorig(&h, ln);
+        switch(ln[0]){
+        default:
+            fail("%s:%d: malformed hunk: leading junk", name, lnum);
+        case '\\':
+            if(strncmp(ln, "\\ No newline", nelem("\\ No newline")-1) == 0)
+                trimhunk(c, &h);
+            /* ignore unknown directives */
+            break;
+        case '-':
+            addold(&h, ln);
+            oldcnt++;
+            break;
+        case '+':
+            addnew(&h, ln);
+            newcnt++;
+            break;
+        case '\n':
+            addold(&h, " \n");
+            addnew(&h, " \n");
+            oldcnt++;
+            newcnt++;
+            break;
+        case ' ':
+            addold(&h, ln);
+            addnew(&h, ln);
+            oldcnt++;
+            newcnt++;
+            break;
+        }
+        free(ln);
+        if(oldcnt > h.oldcnt || newcnt > h.newcnt)
+            fail("%s:%d: malformed hunk: oversized hunk", name, lnum);
+        if(oldcnt < h.oldcnt || newcnt < h.newcnt)
+            continue;
+
+        addhunk(p, &h);
+        if((ln = readline(f, &lnum)) == nil)
+            goto out;
+        if(strncmp(ln, "\\ No newline", nelem("\\ No newline")-1) == 0)
+            trimhunk(c, &p->hunk[p->nhunk-1]);
+        if(strncmp(ln, "--- ", 4) == 0)
+            goto patch;
+        if(strncmp(ln, "@@ ", 3) == 0)
+            goto hunk;
+        goto comment;
+    }
+
+out:
+    if(reverse){
+        for(i = 0; i < p->nhunk; i++){
+            ph = &p->hunk[i];
+            swapint(&ph->oldln, &ph->newln);
+            swapint(&ph->oldcnt, &ph->newcnt);
+            swapint(&ph->oldlen, &ph->newlen);
+            swapint(&ph->oldsz, &ph->newsz);
+            swapstr(&ph->oldpath, &ph->newpath);
+            swapstr(&ph->old, &ph->new);
+        }
+    }
+    qsort(p->hunk, p->nhunk, sizeof(Hunk), hunkcmp);
+    free(old);
+    free(new);
+    free(ln);
+    return p;
+}
+@
+
+<<function [[rename]](patch.c)>>=
+int
+rename(int fd, char *name)
+{
+    Dir st;
+    char *p;
+
+    nulldir(&st);
+    if((p = strrchr(name, '/')) == nil)
+        st.name = name;
+    else
+        st.name = p + 1;
+    return dirfwstat(fd, &st);
+}
+@
+
+<<function [[mkpath]](patch.c)>>=
+int
+mkpath(char *path)
+{
+    char *p, buf[ERRMAX];
+    int f;
+    
+    if(*path == '\0')
+        return 0;
+    for(p = strchr(path+1, '/'); p != nil; p = strchr(p+1, '/')){
+        *p = '\0';
+        if(access(path, AEXIST) != 0){
+            if((f = create(path, OREAD, DMDIR | 0777)) == -1){
+                rerrstr(buf, sizeof(buf));
+                if(strstr(buf, "exist") == nil)
+                    return -1;
+            }
+            close(f);
+        }
+        *p = '/';
+    }
+    return 0;
+}
+@
+
+<<function [[blat]](patch.c)>>=
+void
+blat(char *old, char *new, char *o, usize len, int mode)
+{
+    char *tmp;
+    int fd;
+
+    tmp = nil;
+    if(strcmp(old, "/dev/null") == 0 && !dryrun)
+        if(access(new, AEXIST) != -1)
+            fail("would clobber: %s", new);
+    if(strcmp(new, "/dev/null") != 0 && !dryrun){
+        if(mkpath(new) == -1)
+            fail("mkpath %s: %r", new);
+        if((tmp = smprint("%s.tmp%d", new, getpid())) == nil)
+            fail("smprint: %r");
+        if((fd = create(tmp, OWRITE, mode|0200)) == -1)
+            fail("open %s: %r", tmp);
+        if(write(fd, o, len) != len)
+            fail("write %s: %r", tmp);
+        close(fd);
+    }
+    if((changed = realloc(changed, (nchanged+1)*sizeof(Fchg))) == nil)
+        fail("realloc: %r");
+    if((changed[nchanged].new = strdup(new)) == nil)
+        fail("strdup: %r");
+    if((changed[nchanged].old = strdup(old)) == nil)
+        fail("strdup: %r");
+    changed[nchanged].tmp = tmp;
+    nchanged++;
+}
+@
+
+<<function [[finish]](patch.c)>>=
+int
+finish(int ok)
+{
+    Fchg *c;
+    int i, fd;
+
+    for(i = 0; i < nchanged; i++){
+        c = &changed[i];
+        if(!ok){
+            if(c->tmp != nil && remove(c->tmp) == -1)
+                fprint(2, "remove %s: %r\n", c->tmp);
+            goto Free;
+        }
+        if(!dryrun){
+            if(strcmp(c->new, "/dev/null") == 0){
+                if(remove(c->old) == -1){
+                    ok = 0;
+                    fprint(2, "remove %s: %r\n", c->old);
+                    goto Free;
+                }
+                goto Print;
+            }
+            if((fd = open(c->tmp, ORDWR)) == -1){
+                ok = 0;
+                fprint(2, "open %s: %r\n", c->tmp);
+                goto Free;
+            }
+            if(strcmp(c->old, c->new) == 0 && remove(c->old) == -1
+            || rename(fd, c->new) == -1
+            || close(fd) == -1){
+                ok = 0;
+                fprint(2, "cleanup: %r");
+            }
+        }
+Print:
+        if(strcmp(c->new, "/dev/null") == 0)
+            print("%s\n", c->old);
+        else
+            print("%s\n", c->new);
+Free:
+        free(c->tmp);
+        free(c->old);
+        free(c->new);
+    }
+    free(changed);
+    return ok;
+}
+@
+
+<<function [[slurp]](patch.c)>>=
+int
+slurp(Fbuf *f, char *path)
+{
+    int n, i, fd, sz, len, nlines, linesz;
+    char *buf;
+    int *lines;
+    Dir *d;
+
+    if((fd = open(path, OREAD)) == -1){
+        fprint(2, "open %s: %r", path);
+        return -1;
+    }
+    if((d = dirfstat(fd)) == nil)
+        fail("stat %s: %r", path);
+    sz = 8192;
+    len = 0;
+    buf = emalloc(sz);
+    while(1){
+        if(len == sz){
+            sz *= 2;
+            buf = erealloc(buf, sz);
+        }
+        n = read(fd, buf + len, sz - len);
+        if(n == 0)
+            break;
+        if(n == -1)
+            fail("read %s: %r", path);
+        len += n;
+    }
+
+    nlines = 0;
+    linesz = 32;
+    lines = emalloc(linesz*sizeof(int));
+    lines[nlines++] = 0;
+    for(i = 0; i < len; i++){
+        if(buf[i] != '\n')
+            continue;
+        if(nlines+2 == linesz){
+            linesz *= 2;
+            lines = erealloc(lines, linesz*sizeof(int));
+        }
+        lines[nlines++] = i+1;
+    }
+    lines[nlines] = len;
+    f->len = len;
+    f->buf = buf;
+    f->lines = lines;
+    f->nlines = nlines;
+    f->lastln = 0;
+    f->lastfuzz = 0;
+    f->mode = d->mode;
+    free(d);
+    close(fd);
+    return 0;
+}
+@
+
+<<function [[searchln]](patch.c)>>=
+char*
+searchln(Fbuf *f, Hunk *h, int ln)
+{
+    int off;
+
+    off = f->lines[ln];
+    if(off + h->oldlen > f->len)
+        return nil;
+    if(memcmp(f->buf + off, h->old, h->oldlen) != 0)
+        return nil;
+    f->lastln = ln + h->oldcnt;
+    f->lastfuzz = ln - h->oldln;
+    return f->buf + off;
+}
+@
+
+<<function [[search]](patch.c)>>=
+char*
+search(Fbuf *f, Hunk *h)
+{
+    int ln, oldln, fuzz, scanning;
+    char *p;
+
+    oldln = h->oldln + f->lastfuzz;
+    if(oldln + h->oldcnt > f->nlines)
+        oldln = f->nlines - h->oldcnt;
+    scanning = oldln >= f->lastln;
+    for(fuzz = 0; scanning && fuzz < 250; fuzz++){
+        scanning = 0;
+        ln = oldln - fuzz;
+        if(ln >= f->lastln){
+            scanning = 1;
+            if((p = searchln(f, h, ln)) != nil)
+                return p;
+        }
+        ln = oldln + fuzz + 1;
+        if(ln + h->oldcnt <= f->nlines){
+            scanning = 1;
+            if((p = searchln(f, h, ln)) != nil)
+                return p;
+        }
+    }
+    return nil;
+}
+@
+
+<<function [[rejected]](patch.c)>>=
+void
+rejected(Hunk *h, char *fname)
+{
+    fprint(2, "%s:%d: skipping failed hunk %s:%d\n", fname, h->lnum, h->oldpath, h->oldln);
+    fprint(rejfd, "--- %s:%d \n", h->oldpath, h->oldln);
+    fprint(rejfd, "+++ %s:%d \n", h->newpath, h->newln);
+    fprint(rejfd, "@@ -%d,%d +%d,%d @@\n", h->oldln, h->oldcnt, h->newln, h->newcnt);
+    write(rejfd, h->orig, h->origlen);
+}
+@
+
+<<function [[append]](patch.c)>>=
+char*
+append(char *o, int *sz, char *s, char *e)
+{
+    int n;
+
+    n = (e - s);
+    o = erealloc(o, *sz + n);
+    memcpy(o + *sz, s, n);
+    *sz += n;
+    return o;
+}
+@
+
+<<function [[apply]](patch.c)>>=
+int
+apply(Patch *p, char *fname)
+{
+    char *o, *s, *n, *curfile, *nextfile;
+    int i, osz;
+    Hunk *h, *prevh;
+    Fbuf f;
+
+    n = nil;
+    o = nil;
+    osz = 0;
+    curfile = nil;
+    h = nil;
+    prevh = nil;
+    nchanged = 0;
+    changed = nil;
+    for(i = 0; i < p->nhunk; i++){
+        h = &p->hunk[i];
+        if(strcmp(h->newpath, "/dev/null") == 0)
+            nextfile = h->oldpath;
+        else
+            nextfile = h->newpath;
+        if(curfile == nil || strcmp(curfile, nextfile) != 0){
+            if(curfile != nil){
+                if(!dryrun)
+                    o = append(o, &osz, n, f.buf + f.len);
+                blat(prevh->oldpath, prevh->newpath, o, osz, f.mode);
+                osz = 0;
+            }
+            if(!dryrun){
+                if(slurp(&f, h->oldpath) == -1){
+                    rejected(h, fname);
+                    goto Next;
+                }
+                n = f.buf;
+            }
+            curfile = nextfile;
+        }
+        if(!dryrun){
+            char *e;
+            s = n;
+            e = search(&f, h);
+            if(e == nil){
+                if(rejfd == -1)
+                    fail("%s:%d: unable to find hunk offset near %s:%d", fname, h->lnum, h->oldpath, h->oldln);
+                else{
+                    rejected(h, fname);
+                    goto Next;
+                }
+            }
+            o = append(o, &osz, s, e);
+            o = append(o, &osz, h->new, h->new + h->newlen);
+            n = e + h->oldlen;
+        }
+Next:
+        prevh = h;
+    }
+    if(curfile != nil){
+        if(!dryrun)
+            o = append(o, &osz, n, f.buf + f.len);
+        blat(h->oldpath, h->newpath, o, osz, f.mode);
+    }
+    free(o);
+    return 0;
+}
+@
+
+<<function [[freepatch]](patch.c)>>=
+void
+freepatch(Patch *p)
+{
+    Hunk *h;
+    int i;
+
+    for(i = 0; i < p->nhunk; i++){
+        h = &p->hunk[i];
+        free(h->oldpath);
+        free(h->newpath);
+        free(h->old);
+        free(h->new);
+    }
+    free(p->hunk);
+    free(p->name);
+    free(p);
+}
+@
+
+<<function [[usage]](patch.c)>>=
+void
+usage(void)
+{
+    fprint(2, "usage: %s [-nR] [-p nstrip] [-r rejfile] [patch...]\n", argv0);
+    exits("usage");
+}
+@
+
+<<function [[main]](patch.c)>>=
+void
+main(int argc, char **argv)
+{
+    Biobuf *f;
+    Patch *p;
+    int i, ok;
+
+    ARGBEGIN{
+    case 'd':
+        workdir = EARGF(usage());
+        break;
+    case 'r':
+        rejfile = EARGF(usage());
+        break;
+    case 'p':
+        strip = atoi(EARGF(usage()));
+        break;
+    case 'n':
+        dryrun++;
+        break;
+    case 'R':
+        reverse++;
+        break;
+    default:
+        usage();
+        break;
+    }ARGEND;
+
+    ok = 1;
+    if(rejfile != nil){
+        rejfd = create(rejfile, OWRITE, 0644);
+        if(rejfd == -1)
+            fail("open %s: %r", rejfile);
+    }
+    if(argc == 0){
+        if((f = Bfdopen(0, OREAD)) == nil)
+            fail("open stdin: %r");
+        if((p = parse(f, "stdin")) == nil)
+            fail("parse patch: %r");
+        if(workdir != nil && chdir(workdir) == -1)
+            fail("chdir %s: %r", workdir);
+        if(apply(p, "stdin") == -1){
+            fprint(2, "apply stdin: %r\n");
+            ok = 0;
+        }
+        freepatch(p);
+        Bterm(f);
+        ok = finish(ok);
+    }else{
+        for(i = 0; ok && i < argc; i++){
+            if((f = Bopen(argv[i], OREAD)) == nil)
+                fail("open %s: %r", argv[i]);
+            if((p = parse(f, argv[i])) == nil)
+                fail("parse patch: %r");
+            if(workdir != nil && chdir(workdir) == -1)
+                fail("chdir %s: %r", workdir);
+            if(apply(p, argv[i]) == -1){
+                fprint(2, "apply %s: %r\n", argv[i]);
+                ok = 0;
+            }
+            freepatch(p);
+            Bterm(f);
+            ok = finish(ok);
+        }
+    }
+    exits(ok ? nil : "failed");
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<misc/patch.c>>=
+#include <u.h>
+#include <libc.h>
+#include <ctype.h>
+#include <bio.h>
+
+typedef struct Patch Patch;
+typedef struct Hunk Hunk;
+typedef struct Fbuf Fbuf;
+typedef struct Fchg Fchg;
+
+struct Patch {
+    char    *name;
+    Hunk    *hunk;
+    usize   nhunk;
+};
+
+struct Hunk {
+    int lnum;
+
+    char    *orig;
+    int origlen;
+    int origsz;
+
+    char    *oldpath;
+    int oldln;
+    int oldcnt;
+    int oldlen;
+    int oldsz;
+    char    *old;
+
+    char    *newpath;
+    int newln;
+    int newcnt;
+    int newlen;
+    int newsz;
+    char    *new;
+};
+
+struct Fbuf {
+    int *lines;
+    int nlines;
+    int lastln;
+    int lastfuzz;
+    char    *buf;
+    int len;
+    int mode;
+};
+
+struct Fchg {
+    char    *tmp;
+    char    *old;
+    char    *new;
+};
+
+int finish(int);
+void    fail(char*, ...);
+
+int strip;
+int reverse;
+int rejfd = -1;
+char    *rejfile;
+char    *workdir;
+Fchg    *changed;
+int nchanged;
+int dryrun;
+
+<<function [[readline]](patch.c)>>
+
+<<function [[emalloc]](patch.c)>>
+
+<<function [[erealloc]](patch.c)>>
+
+<<function [[fail]](patch.c)>>
+
+<<function [[fileheader]](patch.c)>>
+
+<<function [[hunkheader]](patch.c)>>
+
+<<function [[addorig]](patch.c)>>
+
+<<function [[addnew]](patch.c)>>
+
+<<function [[addold]](patch.c)>>
+
+<<function [[addmiss]](patch.c)>>
+
+<<function [[addhunk]](patch.c)>>
+
+<<function [[hunkcmp]](patch.c)>>
+
+<<function [[swapint]](patch.c)>>
+
+<<function [[swapstr]](patch.c)>>
+
+<<function [[trimhunk]](patch.c)>>
+
+<<function [[parse]](patch.c)>>
+
+<<function [[rename]](patch.c)>>
+
+<<function [[mkpath]](patch.c)>>
+
+<<function [[blat]](patch.c)>>
+
+<<function [[finish]](patch.c)>>
+
+<<function [[slurp]](patch.c)>>
+
+<<function [[searchln]](patch.c)>>
+
+<<function [[search]](patch.c)>>
+
+<<function [[rejected]](patch.c)>>
+
+<<function [[append]](patch.c)>>
+
+<<function [[apply]](patch.c)>>
+
+<<function [[freepatch]](patch.c)>>
+
+<<function [[usage]](patch.c)>>
+
+<<function [[main]](patch.c)>>
 @
 
 
