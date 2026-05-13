@@ -1,17 +1,26 @@
+/*s: diff/merge3.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+
 #include "diff.h"
 
+/*s: macro [[min]](diff) */
 #define min(a, b) ((a)<(b)?(a):(b))
+/*e: macro [[min]](diff) */
+/*s: macro [[max]](diff) */
 #define max(a, b) ((a)>(b)?(a):(b))
+/*e: macro [[max]](diff) */
 
+/*s: function [[changecmp]](diff) */
 static int
 changecmp(void *a, void *b)
 {
     return ((Change*)a)->oldx - ((Change*)b)->oldx;
 }
+/*e: function [[changecmp]](diff) */
 
+/*s: function [[addchange]](diff) */
 static void
 addchange(Diff *df, int a, int b, int c, int d)
 {
@@ -27,7 +36,9 @@ addchange(Diff *df, int a, int b, int c, int d)
     ch->newx = c;
     ch->newy = d;
 }
+/*e: function [[addchange]](diff) */
 
+/*s: function [[collect]](diff) */
 static void
 collect(Diff *d)
 {
@@ -51,7 +62,9 @@ collect(Diff *d)
         addchange(d, 1, 0, 1, d->len[1]);
     qsort(d->changes, d->nchanges, sizeof(Change), changecmp);
 }
+/*e: function [[collect]](diff) */
 
+/*s: function [[overlaps]](diff) */
 static int
 overlaps(int lx, int ly, int rx, int ry)
 {
@@ -60,7 +73,9 @@ overlaps(int lx, int ly, int rx, int ry)
     else
         return ry >= lx;
 }
+/*e: function [[overlaps]](diff) */
 
+/*s: function [[same]](diff) */
 static int
 same(Diff *l, Change *lc, Diff *r, Change *rc)
 {
@@ -86,12 +101,14 @@ same(Diff *l, Change *lc, Diff *r, Change *rc)
     }
     return 1;
 }
+/*e: function [[same]](diff) */
 
+/*s: function [[merge]](diff) */
 char*
 merge(Diff *l, Diff *r)
 {
     int lx, ly, rx, ry;
-    int il, ir, δ;
+    int il, ir, delta;
     Change *lc, *rc;
     char *status;
     vlong ln;
@@ -126,22 +143,22 @@ merge(Diff *l, Diff *r)
              * comparing same-sized chunks.
              */
             if(lc->oldx < rc->oldx){
-                δ = rc->oldx - lc->oldx;
-                rc->oldx = max(rc->oldx-δ, 1);
-                rc->newx = max(rc->newx-δ, 1);
+                delta = rc->oldx - lc->oldx;
+                rc->oldx = max(rc->oldx-delta, 1);
+                rc->newx = max(rc->newx-delta, 1);
             }else{
-                δ = lc->oldx - rc->oldx;
-                lc->oldx = max(lc->oldx-δ, 1);
-                lc->newx = max(lc->newx-δ, 1);
+                delta = lc->oldx - rc->oldx;
+                lc->oldx = max(lc->oldx-delta, 1);
+                lc->newx = max(lc->newx-delta, 1);
             }
             if(lc->oldy > rc->oldy){
-                δ = lc->oldy - rc->oldy;
-                rc->oldy = min(rc->oldy+δ, r->len[0]);
-                rc->newy = min(rc->newy+δ, r->len[1]);
+                delta = lc->oldy - rc->oldy;
+                rc->oldy = min(rc->oldy+delta, r->len[0]);
+                rc->newy = min(rc->newy+delta, r->len[1]);
             }else{
-                δ = rc->oldy - lc->oldy;
-                lc->oldy = min(lc->oldy+δ, l->len[0]);
-                lc->newy = min(lc->newy+δ, l->len[1]);
+                delta = rc->oldy - lc->oldy;
+                lc->oldy = min(lc->oldy+delta, l->len[0]);
+                lc->newy = min(lc->newy+delta, l->len[1]);
             }
             if(same(l, lc, r, rc)){
                 fetch(l, l->ixold, ln, lc->oldx-1, l->input[0], "");
@@ -177,14 +194,18 @@ merge(Diff *l, Diff *r)
         fetch(l, l->ixold, ln, l->len[0], l->input[0], "");
     return status;
 }
+/*e: function [[merge]](diff) */
 
+/*s: function [[usage (diff/merge3.c)]](diff) */
 void
 usage(void)
 {
     fprint(2, "usage: %s theirs base ours\n", argv0);
     exits("usage");
 }
+/*e: function [[usage (diff/merge3.c)]](diff) */
 
+/*s: function [[main (diff/merge3.c)]](diff) */
 void
 main(int argc, char **argv)
 {
@@ -210,3 +231,5 @@ main(int argc, char **argv)
     freediff(&r);
     exits(x);
 }
+/*e: function [[main (diff/merge3.c)]](diff) */
+/*e: diff/merge3.c */

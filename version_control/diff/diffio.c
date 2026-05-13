@@ -1,11 +1,15 @@
+/*s: diff/diffio.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <ctype.h>
 #include "diff.h"
 
+/*s: macro [[MIN]](diff) */
 #define MIN(x, y)   ((x) < (y) ? (x): (y))
+/*e: macro [[MIN]](diff) */
 
+/*s: function [[readline]](diff) */
 int
 readline(Biobuf *bp, char *buf, int nbuf)
 {
@@ -32,11 +36,19 @@ readline(Biobuf *bp, char *buf, int nbuf)
     }
     return p - buf;
 }
+/*e: function [[readline]](diff) */
 
+/*s: constant [[HALFLONG]](diff) */
 #define HALFLONG 16
+/*e: constant [[HALFLONG]](diff) */
+/*s: macro [[low]](diff) */
 #define low(x)  (x&((1L<<HALFLONG)-1))
+/*e: macro [[low]](diff) */
+/*s: macro [[high]](diff) */
 #define high(x) (x>>HALFLONG)
+/*e: macro [[high]](diff) */
 
+/*s: function [[readhash]](diff) */
 /*
  * hashing has the effect of
  * arranging line in 7-bit bytes and then
@@ -97,7 +109,9 @@ readhash(Biobuf *bp, char *buf, int nbuf)
     sum = low(sum) + high(sum);
     return ((short)low(sum) + (short)high(sum));
 }
+/*e: function [[readhash]](diff) */
 
+/*s: function [[prepare]](diff) */
 Biobuf *
 prepare(Diff *d, int i, char *arg, char *orig)
 {
@@ -142,7 +156,9 @@ prepare(Diff *d, int i, char *arg, char *orig)
     d->input[i] = bp;
     return bp;
 }
+/*e: function [[prepare]](diff) */
 
+/*s: function [[squishspace]](diff) */
 static int
 squishspace(char *buf)
 {
@@ -163,7 +179,9 @@ squishspace(char *buf)
     *p = 0;
     return p - buf;
 }
+/*e: function [[squishspace]](diff) */
 
+/*s: function [[check]](diff) */
 /*
  * need to fix up for unexpected EOF's
  */
@@ -197,7 +215,9 @@ check(Diff *d, Biobuf *bf, Biobuf *bt)
         t++;
     }
 }
+/*e: function [[check]](diff) */
 
+/*s: function [[range]](diff) */
 static void
 range(int a, int b, char *separator)
 {
@@ -205,7 +225,9 @@ range(int a, int b, char *separator)
     if (a < b)
         Bprint(&stdout, "%s%d", separator, b);
 }
+/*e: function [[range]](diff) */
 
+/*s: function [[fetch]](diff) */
 void
 fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s)
 {
@@ -232,7 +254,9 @@ fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s)
             Bprint(&stdout, "%s%s", s, buf);
     }
 }
+/*e: function [[fetch]](diff) */
 
+/*s: function [[change]](diff) */
 void
 change(Diff *df, int a, int b, int c, int d)
 {
@@ -299,12 +323,14 @@ change(Diff *df, int a, int b, int c, int d)
     if (mode != 0 && mode != 'n' && c <= d)
         Bprint(&stdout, ".\n");
 }
+/*e: function [[change]](diff) */
 
 enum
 {
     Lines = 3,  /* number of lines of context shown */
 };
 
+/*s: function [[changeset]](diff) */
 int
 changeset(Diff *d, int i)
 {
@@ -314,7 +340,9 @@ changeset(Diff *d, int i)
         return i+1;
     return d->nchanges;
 }
+/*e: function [[changeset]](diff) */
 
+/*s: function [[flushchanges]](diff) */
 void
 flushchanges(Diff *df)
 {
@@ -372,3 +400,5 @@ flushchanges(Diff *df)
     }
     df->nchanges = 0;
 }
+/*e: function [[flushchanges]](diff) */
+/*e: diff/diffio.c */

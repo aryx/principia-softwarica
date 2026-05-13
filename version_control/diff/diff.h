@@ -1,3 +1,4 @@
+/*s: diff/diff.h */
 typedef struct Line Line;
 typedef struct Cand Cand;
 typedef struct Diff Diff;
@@ -56,11 +57,19 @@ extern char mflag;
 extern int anychange;
 extern Biobuf   stdout;
 
+/*s: constant [[MAXPATHLEN]](diff) */
 #define MAXPATHLEN  1024
+/*e: constant [[MAXPATHLEN]](diff) */
+/*s: constant [[MAXLINELEN]](diff) */
 #define MAXLINELEN  4096
+/*e: constant [[MAXLINELEN]](diff) */
 
+/*s: macro [[DIRECTORY]](diff) */
 #define DIRECTORY(s)        ((s)->qid.type&QTDIR)
+/*e: macro [[DIRECTORY]](diff) */
+/*s: macro [[REGULAR_FILE]](diff) */
 #define REGULAR_FILE(s)     ((s)->type == 'M' && !DIRECTORY(s))
+/*e: macro [[REGULAR_FILE]](diff) */
 
 int mkpathname(char *, char *, char *);
 char *mktmpfile(int, Dir **);
@@ -78,3 +87,4 @@ void freediff(Diff *);
 void flushchanges(Diff *);
 void fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s);
 int readline(Biobuf*, char*, int);
+/*e: diff/diff.h */

@@ -1,3 +1,4 @@
+/*s: diff/util.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -13,6 +14,7 @@ int anychange;
 static char *tmp[] = {"/tmp/diff1XXXXXXXXXXX", "/tmp/diff2XXXXXXXXXXX"};
 static int whichtmp;
 
+/*s: function [[emalloc]](diff) */
 void *
 emalloc(unsigned n)
 {
@@ -22,7 +24,9 @@ emalloc(unsigned n)
         sysfatal("malloc: %r");
     return p;
 }
+/*e: function [[emalloc]](diff) */
 
+/*s: function [[erealloc]](diff) */
 void *
 erealloc(void *p, unsigned n)
 {
@@ -32,7 +36,9 @@ erealloc(void *p, unsigned n)
         sysfatal("realloc: %r");
     return rp;
 }
+/*e: function [[erealloc]](diff) */
 
+/*s: function [[mkpathname]](diff) */
 int
 mkpathname(char *pathname, char *path, char *name)
 {
@@ -41,7 +47,9 @@ mkpathname(char *pathname, char *path, char *name)
     sprint(pathname, "%s/%s", path, name);
     return 0;
 }
+/*e: function [[mkpathname]](diff) */
 
+/*s: function [[mktmpfile]](diff) */
 char *
 mktmpfile(int input, Dir **sb)
 {
@@ -68,7 +76,9 @@ mktmpfile(int input, Dir **sb)
         sysfatal("cannot read/write %s: %r", p);
     return p;
 }
+/*e: function [[mktmpfile]](diff) */
 
+/*s: function [[statfile]](diff) */
 char *
 statfile(char *file, Dir **sb)
 {
@@ -91,3 +101,5 @@ statfile(char *file, Dir **sb)
         *sb = dir;
     return file;
 }
+/*e: function [[statfile]](diff) */
+/*e: diff/util.c */

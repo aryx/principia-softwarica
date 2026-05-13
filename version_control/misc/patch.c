@@ -1,3 +1,4 @@
+/*s: misc/patch.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -64,6 +65,7 @@ Fchg    *changed;
 int nchanged;
 int dryrun;
 
+/*s: function [[readline]](patch.c) */
 char*
 readline(Biobuf *f, int *lnum)
 {
@@ -74,7 +76,9 @@ readline(Biobuf *f, int *lnum)
     *lnum += 1;
     return ln;
 }
+/*e: function [[readline]](patch.c) */
 
+/*s: function [[emalloc]](patch.c) */
 void *
 emalloc(ulong n)
 {
@@ -86,7 +90,9 @@ emalloc(ulong n)
     setmalloctag(v, getcallerpc(&n));
     return v;
 }
+/*e: function [[emalloc]](patch.c) */
 
+/*s: function [[erealloc]](patch.c) */
 void *
 erealloc(void *v, ulong n)
 {
@@ -98,7 +104,9 @@ erealloc(void *v, ulong n)
     setmalloctag(v, getcallerpc(&n));
     return v;
 }
+/*e: function [[erealloc]](patch.c) */
 
+/*s: function [[fail]](patch.c) */
 void
 fail(char *fmt, ...)
 {
@@ -112,7 +120,9 @@ fail(char *fmt, ...)
     fprint(2, "%s\n", msg);
     exits(msg);
 }
+/*e: function [[fail]](patch.c) */
 
+/*s: function [[fileheader]](patch.c) */
 int
 fileheader(char *s, char *pfx, char **name)
 {
@@ -149,7 +159,9 @@ fileheader(char *s, char *pfx, char **name)
     strecpy(*name, *name + len, s);
     return 0;
 }
+/*e: function [[fileheader]](patch.c) */
 
+/*s: function [[hunkheader]](patch.c) */
 int
 hunkheader(Hunk *h, char *s, char *oldpath, char *newpath, int lnum)
 {
@@ -208,7 +220,9 @@ hunkheader(Hunk *h, char *s, char *oldpath, char *newpath, int lnum)
         fail("malformed hunk %s", s);
     return 0;
 }
+/*e: function [[hunkheader]](patch.c) */
 
+/*s: function [[addorig]](patch.c) */
 void
 addorig(Hunk *h, char *ln)
 {
@@ -222,7 +236,9 @@ addorig(Hunk *h, char *ln)
     memcpy(h->orig + h->origlen, ln, n);
     h->origlen += n;
 }
+/*e: function [[addorig]](patch.c) */
 
+/*s: function [[addnew]](patch.c) */
 void
 addnew(Hunk *h, char *ln)
 {
@@ -237,7 +253,9 @@ addnew(Hunk *h, char *ln)
     memcpy(h->new + h->newlen, ln, n);
     h->newlen += n;
 }
+/*e: function [[addnew]](patch.c) */
 
+/*s: function [[addold]](patch.c) */
 void
 addold(Hunk *h, char *ln)
 {
@@ -252,7 +270,9 @@ addold(Hunk *h, char *ln)
     memcpy(h->old + h->oldlen, ln, n);
     h->oldlen += n;
 }
+/*e: function [[addold]](patch.c) */
 
+/*s: function [[addmiss]](patch.c) */
 int
 addmiss(Hunk *h, char *ln, int *nold, int *nnew)
 {
@@ -269,14 +289,18 @@ addmiss(Hunk *h, char *ln, int *nold, int *nnew)
     }
     return 1;
 }
+/*e: function [[addmiss]](patch.c) */
 
+/*s: function [[addhunk]](patch.c) */
 void
 addhunk(Patch *p, Hunk *h)
 {
     p->hunk = erealloc(p->hunk, ++p->nhunk*sizeof(Hunk));
     p->hunk[p->nhunk-1] = *h;
 }
+/*e: function [[addhunk]](patch.c) */
 
+/*s: function [[hunkcmp]](patch.c) */
 int
 hunkcmp(void *a, void *b)
 {
@@ -287,7 +311,9 @@ hunkcmp(void *a, void *b)
         return c;
     return ((Hunk*)a)->oldln - ((Hunk*)b)->oldln;
 }
+/*e: function [[hunkcmp]](patch.c) */
 
+/*s: function [[swapint]](patch.c) */
 void
 swapint(int *a, int *b)
 {
@@ -297,7 +323,9 @@ swapint(int *a, int *b)
     *a = *b;
     *b = t;
 }
+/*e: function [[swapint]](patch.c) */
 
+/*s: function [[swapstr]](patch.c) */
 void
 swapstr(char **a, char **b)
 {
@@ -307,7 +335,9 @@ swapstr(char **a, char **b)
     *a = *b;
     *b = t;
 }
+/*e: function [[swapstr]](patch.c) */
 
+/*s: function [[trimhunk]](patch.c) */
 void
 trimhunk(char c, Hunk *h)
 {
@@ -320,7 +350,9 @@ trimhunk(char c, Hunk *h)
         h->newlen--;
     }
 }
+/*e: function [[trimhunk]](patch.c) */
 
+/*s: function [[parse]](patch.c) */
 Patch*
 parse(Biobuf *f, char *name)
 {
@@ -439,7 +471,9 @@ out:
     free(ln);
     return p;
 }
+/*e: function [[parse]](patch.c) */
 
+/*s: function [[rename]](patch.c) */
 int
 rename(int fd, char *name)
 {
@@ -453,7 +487,9 @@ rename(int fd, char *name)
         st.name = p + 1;
     return dirfwstat(fd, &st);
 }
+/*e: function [[rename]](patch.c) */
 
+/*s: function [[mkpath]](patch.c) */
 int
 mkpath(char *path)
 {
@@ -476,7 +512,9 @@ mkpath(char *path)
     }
     return 0;
 }
+/*e: function [[mkpath]](patch.c) */
 
+/*s: function [[blat]](patch.c) */
 void
 blat(char *old, char *new, char *o, usize len, int mode)
 {
@@ -507,7 +545,9 @@ blat(char *old, char *new, char *o, usize len, int mode)
     changed[nchanged].tmp = tmp;
     nchanged++;
 }
+/*e: function [[blat]](patch.c) */
 
+/*s: function [[finish]](patch.c) */
 int
 finish(int ok)
 {
@@ -555,7 +595,9 @@ Free:
     free(changed);
     return ok;
 }
+/*e: function [[finish]](patch.c) */
 
+/*s: function [[slurp]](patch.c) */
 int
 slurp(Fbuf *f, char *path)
 {
@@ -611,7 +653,9 @@ slurp(Fbuf *f, char *path)
     close(fd);
     return 0;
 }
+/*e: function [[slurp]](patch.c) */
 
+/*s: function [[searchln]](patch.c) */
 char*
 searchln(Fbuf *f, Hunk *h, int ln)
 {
@@ -626,7 +670,9 @@ searchln(Fbuf *f, Hunk *h, int ln)
     f->lastfuzz = ln - h->oldln;
     return f->buf + off;
 }
+/*e: function [[searchln]](patch.c) */
 
+/*s: function [[search]](patch.c) */
 char*
 search(Fbuf *f, Hunk *h)
 {
@@ -654,7 +700,9 @@ search(Fbuf *f, Hunk *h)
     }
     return nil;
 }
+/*e: function [[search]](patch.c) */
 
+/*s: function [[rejected]](patch.c) */
 void
 rejected(Hunk *h, char *fname)
 {
@@ -664,7 +712,9 @@ rejected(Hunk *h, char *fname)
     fprint(rejfd, "@@ -%d,%d +%d,%d @@\n", h->oldln, h->oldcnt, h->newln, h->newcnt);
     write(rejfd, h->orig, h->origlen);
 }
+/*e: function [[rejected]](patch.c) */
 
+/*s: function [[append]](patch.c) */
 char*
 append(char *o, int *sz, char *s, char *e)
 {
@@ -676,7 +726,9 @@ append(char *o, int *sz, char *s, char *e)
     *sz += n;
     return o;
 }
+/*e: function [[append]](patch.c) */
 
+/*s: function [[apply]](patch.c) */
 int
 apply(Patch *p, char *fname)
 {
@@ -742,7 +794,9 @@ Next:
     free(o);
     return 0;
 }
+/*e: function [[apply]](patch.c) */
 
+/*s: function [[freepatch]](patch.c) */
 void
 freepatch(Patch *p)
 {
@@ -760,14 +814,18 @@ freepatch(Patch *p)
     free(p->name);
     free(p);
 }
+/*e: function [[freepatch]](patch.c) */
 
+/*s: function [[usage]](patch.c) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-nR] [-p nstrip] [-r rejfile] [patch...]\n", argv0);
     exits("usage");
 }
+/*e: function [[usage]](patch.c) */
 
+/*s: function [[main]](patch.c) */
 void
 main(int argc, char **argv)
 {
@@ -835,3 +893,5 @@ main(int argc, char **argv)
     }
     exits(ok ? nil : "failed");
 }
+/*e: function [[main]](patch.c) */
+/*e: misc/patch.c */

@@ -1,8 +1,11 @@
+/*s: diff/diff.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+
 #include "diff.h"
 
+/*s: function [[done]](diff) */
 void    
 done(int status)
 {
@@ -16,14 +19,18 @@ done(int status)
         exits("error");
     }
 }
+/*e: function [[done]](diff) */
 
+/*s: function [[usage]](diff) */
 void
 usage(void)
 {
     fprint(2, "usage: %s [-abcefmnrw] file1 ... file2\n", argv0);
     exits("usage");
 }
+/*e: function [[usage]](diff) */
 
+/*s: function [[main]](diff) */
 void
 main(int argc, char *argv[])
 {
@@ -82,3 +89,5 @@ main(int argc, char *argv[])
     done(anychange);
     /*NOTREACHED*/
 }
+/*e: function [[main]](diff) */
+/*e: diff/diff.c */

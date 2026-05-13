@@ -1,8 +1,10 @@
+/*s: diff/diffdir.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include "diff.h"
 
+/*s: function [[itemcmp]](diff) */
 static int
 itemcmp(void *v1, void *v2)
 {
@@ -10,7 +12,9 @@ itemcmp(void *v1, void *v2)
 
     return strcmp(*d1, *d2);
 }
+/*e: function [[itemcmp]](diff) */
 
+/*s: function [[scandir]](diff) */
 static char **
 scandir(char *name)
 {
@@ -43,7 +47,9 @@ scandir(char *name)
     qsort((char *)cp, nitems, sizeof(char*), itemcmp);
     return cp;
 }
+/*e: function [[scandir]](diff) */
 
+/*s: function [[isdotordotdot]](diff) */
 static int
 isdotordotdot(char *p)
 {
@@ -55,7 +61,9 @@ isdotordotdot(char *p)
     }
     return 0;
 }
+/*e: function [[isdotordotdot]](diff) */
 
+/*s: function [[diffdir]](diff) */
 void
 diffdir(char *f, char *t, int level)
 {
@@ -111,7 +119,9 @@ diffdir(char *f, char *t, int level)
     free(dirf);
     free(dirt);
 }
+/*e: function [[diffdir]](diff) */
 
+/*s: function [[diff]](diff) */
 void
 diff(char *f, char *t, int level)
 {
@@ -153,3 +163,5 @@ Return:
     free(fsb);
     free(tsb);
 }
+/*e: function [[diff]](diff) */
+/*e: diff/diffdir.c */

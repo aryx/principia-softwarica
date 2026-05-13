@@ -1,6 +1,8 @@
+/*s: diff/diffreg.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+
 #include "diff.h"
 
 /*  diff - differential file comparison
@@ -67,6 +69,7 @@
 *   6n words for files of length n. 
 */
 
+/*s: function [[sort]](diff) */
 static void 
 sort(Line *a, int n)    /*shellsort CACM #201*/
 {
@@ -98,7 +101,9 @@ sort(Line *a, int n)    /*shellsort CACM #201*/
         }
     }
 }
+/*e: function [[sort]](diff) */
 
+/*s: function [[unsort]](diff) */
 static void
 unsort(Line *f, int l, int *b)
 {
@@ -112,7 +117,9 @@ unsort(Line *f, int l, int *b)
         b[i] = a[i];
     free(a);
 }
+/*e: function [[unsort]](diff) */
 
+/*s: function [[prune]](diff) */
 static void
 prune(Diff *d)
 {
@@ -131,7 +138,9 @@ prune(Diff *d)
             d->sfile[j][i].serial = i;
     }
 }
+/*e: function [[prune]](diff) */
 
+/*s: function [[equiv]](diff) */
 static void
 equiv(Line *a, int n, Line *b, int m, int *c)
 {
@@ -159,7 +168,9 @@ equiv(Line *a, int n, Line *b, int m, int *c)
     }
     c[j] = -1;
 }
+/*e: function [[equiv]](diff) */
 
+/*s: function [[newcand]](diff) */
 static int
 newcand(Diff *d, int x, int  y, int pred)
 {
@@ -172,7 +183,9 @@ newcand(Diff *d, int x, int  y, int pred)
     q->pred = pred;
     return d->clen++;
 }
+/*e: function [[newcand]](diff) */
 
+/*s: function [[search]](diff) */
 static int
 search(Diff *d, int *c, int k, int y)
 {
@@ -194,7 +207,9 @@ search(Diff *d, int *c, int k, int y)
     }
     return l+1;
 }
+/*e: function [[search]](diff) */
 
+/*s: function [[stone]](diff) */
 static int
 stone(Diff *d, int *a, int n, int *b, int *c)
 {
@@ -234,7 +249,9 @@ stone(Diff *d, int *a, int n, int *b, int *c)
     }
     return k;
 }
+/*e: function [[stone]](diff) */
 
+/*s: function [[unravel]](diff) */
 static void
 unravel(Diff *d, int p)
 {
@@ -252,8 +269,12 @@ unravel(Diff *d, int p)
     for(q=d->clist+p; q->y != 0; q= d->clist + q->pred)
         d->J[q->x+d->pref] = q->y+d->pref;
 }
+/*e: function [[unravel]](diff) */
 
+/*s: constant [[BUF]](diff) */
 #define BUF 4096
+/*e: constant [[BUF]](diff) */
+/*s: function [[cmp]](diff) */
 static int
 cmp(Biobuf* b1, Biobuf* b2)
 {
@@ -298,7 +319,9 @@ cmp(Biobuf* b1, Biobuf* b2)
         return 0;
     return 1;   
 }
+/*e: function [[cmp]](diff) */
 
+/*s: function [[calcdiff]](diff) */
 void
 calcdiff(Diff *d, char *f, char *fo, char *t, char *to)
 {
@@ -350,7 +373,9 @@ calcdiff(Diff *d, char *f, char *fo, char *t, char *to)
     Bseek(b0, 0, 0); Bseek(b1, 0, 0);
     check(d, b0, b1);
 }
+/*e: function [[calcdiff]](diff) */
 
+/*s: function [[output]](diff) */
 static void
 output(Diff *d)
 {
@@ -392,7 +417,9 @@ output(Diff *d)
         change(d, 1, 0, 1, d->len[1]);
     flushchanges(d);
 }
+/*e: function [[output]](diff) */
 
+/*s: function [[diffreg]](diff) */
 void
 diffreg(char *f, char *fo, char *t, char *to)
 {
@@ -403,7 +430,9 @@ diffreg(char *f, char *fo, char *t, char *to)
     output(&d);
     freediff(&d);
 }
+/*e: function [[diffreg]](diff) */
 
+/*s: function [[freediff]](diff) */
 void
 freediff(Diff *d)
 {
@@ -415,3 +444,5 @@ freediff(Diff *d)
     free(d->ixold);
     free(d->ixnew);
 }
+/*e: function [[freediff]](diff) */
+/*e: diff/diffreg.c */
