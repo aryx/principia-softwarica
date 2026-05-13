@@ -4,30 +4,16 @@
 #include <ctype.h>
 #include "diff.h"
 
-struct line {
-	int	serial;
-	int	value;
-};
-extern struct line *file[2];
-extern int len[2];
-extern long *ixold, *ixnew;
-extern int *J;
-
-static Biobuf *input[2];
-static char *file1, *file2;
-static int firstchange;
-
-#define MAXLINELEN	4096
 #define MIN(x, y)	((x) < (y) ? (x): (y))
 
-static int
-readline(Biobuf *bp, char *buf)
+int
+readline(Biobuf *bp, char *buf, int nbuf)
 {
 	int c;
 	char *p, *e;
 
 	p = buf;
-	e = p + MAXLINELEN-1;
+	e = p + nbuf-1;
 	do {
 		c = Bgetc(bp);
 		if (c < 0) {
@@ -35,9 +21,9 @@ readline(Biobuf *bp, char *buf)
 				return -1;
 			break;
 		}
+		*p++ = c;
 		if (c == '\n')
 			break;
-		*p++ = c;
 	} while (p < e);
 	*p = 0;
 	if (c != '\n' && c >= 0) {
@@ -57,7 +43,7 @@ readline(Biobuf *bp, char *buf)
  * summing 1-s complement in 16-bit hunks 
  */
 static int
-readhash(Biobuf *bp, char *buf)
+readhash(Biobuf *bp, char *buf, int nbuf)
 {
 	long sum;
 	unsigned shift;
@@ -66,7 +52,7 @@ readhash(Biobuf *bp, char *buf)
 
 	sum = 1;
 	shift = 0;
-	if ((len = readline(bp, buf)) == -1)
+	if ((len = readline(bp, buf, nbuf)) == -1)
 		return 0;
 	p = buf;
 	switch(bflag)	/* various types of white space handling */
@@ -113,21 +99,24 @@ readhash(Biobuf *bp, char *buf)
 }
 
 Biobuf *
-prepare(int i, char *arg)
+prepare(Diff *d, int i, char *arg, char *orig)
 {
-	struct line *p;
+	Line *p;
 	int j, h;
 	Biobuf *bp;
 	char *cp, buf[MAXLINELEN];
 	int nbytes;
 	Rune r;
 
+	if (i == 0) {
+		d->file1 = orig;
+		d->firstchange = 0;
+	} else
+		d->file2 = orig;
 	bp = Bopen(arg, OREAD);
-	if (!bp) {
-		panic(mflag ? 0: 2, "cannot open %s: %r\n", arg);
-		return 0;
-	}
-	if (binary)
+	if (!bp)
+		sysfatal("cannot open %s: %r", arg);
+	if (d->binary)
 		return bp;
 	nbytes = Bread(bp, buf, MIN(1024, MAXLINELEN));
 	if (nbytes > 0) {
@@ -139,24 +128,18 @@ prepare(int i, char *arg)
 			 */
 			cp += chartorune(&r, cp);
 			if (r == 0 || (r > 0x7f && r <= 0xa0)) {
-				binary++;
+				d->binary++;
 				return bp;
 			}
 		}
 		Bseek(bp, 0, 0);
 	}
-	p = MALLOC(struct line, 3);
-	for (j = 0; h = readhash(bp, buf); p[j].value = h)
-		p = REALLOC(p, struct line, (++j+3));
-	len[i] = j;
-	file[i] = p;
-	input[i] = bp;			/*fix*/
-	if (i == 0) {			/*fix*/
-		file1 = arg;
-		firstchange = 0;
-	}
-	else
-		file2 = arg;
+	p = emalloc(3*sizeof(Line));
+	for (j = 0; h = readhash(bp, buf, sizeof(buf)); p[j].value = h)
+		p = erealloc(p, (++j+3)*sizeof(Line));
+	d->len[i] = j;
+	d->file[i] = p;
+	d->input[i] = bp;
 	return bp;
 }
 
@@ -185,31 +168,32 @@ squishspace(char *buf)
  * need to fix up for unexpected EOF's
  */
 void
-check(Biobuf *bf, Biobuf *bt)
+check(Diff *d, Biobuf *bf, Biobuf *bt)
 {
 	int f, t, flen, tlen;
 	char fbuf[MAXLINELEN], tbuf[MAXLINELEN];
 
-	ixold[0] = ixnew[0] = 0;
-	for (f = t = 1; f < len[0]; f++) {
-		flen = readline(bf, fbuf);
-		ixold[f] = ixold[f-1] + flen + 1;		/* ftell(bf) */
-		if (J[f] == 0)
+	d->ixold[0] = 0;
+	d->ixnew[0] = 0;
+	for (f = t = 1; f < d->len[0]; f++) {
+		flen = readline(bf, fbuf, sizeof(fbuf));
+		d->ixold[f] = d->ixold[f-1] + flen;		/* ftell(bf) */
+		if (d->J[f] == 0)
 			continue;
 		do {
-			tlen = readline(bt, tbuf);
-			ixnew[t] = ixnew[t-1] + tlen + 1;	/* ftell(bt) */
-		} while (t++ < J[f]);
+			tlen = readline(bt, tbuf, sizeof(tbuf));
+			d->ixnew[t] = d->ixnew[t-1] + tlen;	/* ftell(bt) */
+		} while (t++ < d->J[f]);
 		if (bflag) {
 			flen = squishspace(fbuf);
 			tlen = squishspace(tbuf);
 		}
 		if (flen != tlen || strcmp(fbuf, tbuf))
-			J[f] = 0;
+			d->J[f] = 0;
 	}
-	while (t < len[1]) {
-		tlen = readline(bt, tbuf);
-		ixnew[t] = ixnew[t-1] + tlen + 1;	/* fseek(bt) */
+	while (t < d->len[1]) {
+		tlen = readline(bt, tbuf, sizeof(tbuf));
+		d->ixnew[t] = d->ixnew[t-1] + tlen;	/* fseek(bt) */
 		t++;
 	}
 }
@@ -222,43 +206,35 @@ range(int a, int b, char *separator)
 		Bprint(&stdout, "%s%d", separator, b);
 }
 
-static void
-fetch(long *f, int a, int b, Biobuf *bp, char *s)
+void
+fetch(Diff *d, long *f, int a, int b, Biobuf *bp, char *s)
 {
 	char buf[MAXLINELEN];
-	int maxb;
+	int maxb, len;
 
 	if(a <= 1)
 		a = 1;
-	if(bp == input[0])
-		maxb = len[0];
+	if(bp == d->input[0])
+		maxb = d->len[0];
 	else
-		maxb = len[1];
+		maxb = d->len[1];
 	if(b > maxb)
 		b = maxb;
 	if(a > maxb)
 		return;
 	Bseek(bp, f[a-1], 0);
 	while (a++ <= b) {
-		readline(bp, buf);
-		Bprint(&stdout, "%s%s\n", s, buf);
+		len = readline(bp, buf, sizeof(buf));
+		if(len == 0 || buf[len-1] != '\n'){
+			Bprint(&stdout, "%s%s\n", s, buf);
+			Bprint(&stdout, "\\ No newline at end of file\n");
+		}else
+			Bprint(&stdout, "%s%s", s, buf);
 	}
 }
 
-typedef struct Change Change;
-struct Change
-{
-	int a;
-	int b;
-	int c;
-	int d;
-};
-
-Change *changes;
-int nchanges;
-
 void
-change(int a, int b, int c, int d)
+change(Diff *df, int a, int b, int c, int d)
 {
 	char verb;
 	char buf[4];
@@ -267,7 +243,7 @@ change(int a, int b, int c, int d)
 	if (a > b && c > d)
 		return;
 	anychange = 1;
-	if (mflag && firstchange == 0) {
+	if (mflag && df->firstchange == 0) {
 		if(mode) {
 			buf[0] = '-';
 			buf[1] = mode;
@@ -276,8 +252,8 @@ change(int a, int b, int c, int d)
 		} else {
 			buf[0] = '\0';
 		}
-		Bprint(&stdout, "diff %s%s %s\n", buf, file1, file2);
-		firstchange = 1;
+		Bprint(&stdout, "diff %s%s %s\n", buf, df->file1, df->file2);
+		df->firstchange = 1;
 	}
 	verb = a > b ? 'a': c > d ? 'd': 'c';
 	switch(mode) {
@@ -291,10 +267,10 @@ change(int a, int b, int c, int d)
 		range(c, d, ",");
 		break;
 	case 'n':
-		Bprint(&stdout, "%s:", file1);
+		Bprint(&stdout, "%s:", df->file1);
 		range(a, b, ",");
 		Bprint(&stdout, " %c ", verb);
-		Bprint(&stdout, "%s:", file2);
+		Bprint(&stdout, "%s:", df->file2);
 		range(c, d, ",");
 		break;
 	case 'f':
@@ -303,22 +279,23 @@ change(int a, int b, int c, int d)
 		break;
 	case 'c':
 	case 'a':
-		if(nchanges%1024 == 0)
-			changes = erealloc(changes, (nchanges+1024)*sizeof(changes[0]));
-		ch = &changes[nchanges++];
-		ch->a = a;
-		ch->b = b;
-		ch->c = c;
-		ch->d = d;
+	case 'u':
+		if(df->nchanges%1024 == 0)
+			df->changes = erealloc(df->changes, (df->nchanges+1024)*sizeof(df->changes[0]));
+		ch = &df->changes[df->nchanges++];
+		ch->oldx = a;
+		ch->oldy = b;
+		ch->newx = c;
+		ch->newy = d;
 		return;
 	}
 	Bputc(&stdout, '\n');
 	if (mode == 0 || mode == 'n') {
-		fetch(ixold, a, b, input[0], "< ");
+		fetch(df, df->ixold, a, b, df->input[0], "< ");
 		if (a <= b && c <= d)
 			Bprint(&stdout, "---\n");
 	}
-	fetch(ixnew, c, d, input[1], mode == 0 || mode == 'n' ? "> ": "");
+	fetch(df, df->ixnew, c, d, df->input[1], mode == 0 || mode == 'n' ? "> ": "");
 	if (mode != 0 && mode != 'n' && c <= d)
 		Bprint(&stdout, ".\n");
 }
@@ -329,59 +306,69 @@ enum
 };
 
 int
-changeset(int i)
+changeset(Diff *d, int i)
 {
-	while(i<nchanges && changes[i].b+1+2*Lines > changes[i+1].a)
+	while(i < d->nchanges && d->changes[i].oldy + 1 + 2*Lines > d->changes[i+1].oldx)
 		i++;
-	if(i<nchanges)
+	if(i < d->nchanges)
 		return i+1;
-	return nchanges;
+	return d->nchanges;
 }
 
 void
-flushchanges(void)
+flushchanges(Diff *df)
 {
-	int a, b, c, d, at;
-	int i, j;
+	vlong a, b, c, d, at, hdr;
+	vlong i, j;
 
-	if(nchanges == 0)
+	if(df->nchanges == 0)
 		return;
-	
-	for(i=0; i<nchanges; ){
-		j = changeset(i);
-		a = changes[i].a-Lines;
-		b = changes[j-1].b+Lines;
-		c = changes[i].c-Lines;
-		d = changes[j-1].d+Lines;
+
+	hdr = 0;
+	for(i=0; i < df->nchanges; ){
+		j = changeset(df, i);
+		a = df->changes[i].oldx - Lines;
+		b = df->changes[j-1].oldy + Lines;
+		c = df->changes[i].newx - Lines;
+		d = df->changes[j-1].newy + Lines;
 		if(a < 1)
 			a = 1;
 		if(c < 1)
 			c = 1;
-		if(b > len[0])
-			b = len[0];
-		if(d > len[1])
-			d = len[1];
+		if(b > df->len[0])
+			b = df->len[0];
+		if(d > df->len[1])
+			d = df->len[1];
 		if(mode == 'a'){
 			a = 1;
-			b = len[0];
+			b = df->len[0];
 			c = 1;
-			d = len[1];
-			j = nchanges;
+			d = df->len[1];
+			j = df->nchanges;
 		}
-		Bprint(&stdout, "%s:", file1);
-		range(a, b, ",");
-		Bprint(&stdout, " - ");
-		Bprint(&stdout, "%s:", file2);
-		range(c, d, ",");
-		Bputc(&stdout, '\n');
+		if(mode == 'u'){
+			if(!hdr){
+				Bprint(&stdout, "--- %s\n", df->file1);
+				Bprint(&stdout, "+++ %s\n", df->file2);
+				hdr = 1;
+			}
+			Bprint(&stdout, "@@ -%lld,%lld +%lld,%lld @@\n", a, b-a+1, c, d-c+1);
+		}else{
+			Bprint(&stdout, "%s:", df->file1);
+			range(a, b, ",");
+			Bprint(&stdout, " - ");
+			Bprint(&stdout, "%s:", df->file2);
+			range(c, d, ",");
+			Bputc(&stdout, '\n');
+		}
 		at = a;
 		for(; i<j; i++){
-			fetch(ixold, at, changes[i].a-1, input[0], "  ");
-			fetch(ixold, changes[i].a, changes[i].b, input[0], "- ");
-			fetch(ixnew, changes[i].c, changes[i].d, input[1], "+ ");
-			at = changes[i].b+1;
+			fetch(df, df->ixold, at, df->changes[i].oldx-1, df->input[0], mode == 'u' ? " " : "  ");
+			fetch(df, df->ixold, df->changes[i].oldx, df->changes[i].oldy, df->input[0], mode == 'u' ? "-" : "- ");
+			fetch(df, df->ixnew, df->changes[i].newx, df->changes[i].newy, df->input[1], mode == 'u' ? "+" : "+ ");
+			at = df->changes[i].oldy+1;
 		}
-		fetch(ixold, at, b, input[0], "  ");
+		fetch(df, df->ixold, at, b, df->input[0], mode == 'u' ? " " : "  ");
 	}
-	nchanges = 0;
+	df->nchanges = 0;
 }
