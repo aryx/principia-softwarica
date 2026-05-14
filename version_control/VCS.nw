@@ -281,10 +281,10 @@ exit ''
 %many things:
 % - rc -e, die early on error (see \book{Shell})
 % - rfork ne, fresh env, fresh namespace (see also \book{Shell})
-% - common.rc, see appendix
-% - flagmt: auxrc/getflags utility shell functions (=~ getopt)
-% - die(), see appendix error management
 % - ^ string distribute (kind of map)
+% - common.rc, see appendix (for die here)
+% - die(), see appendix error management
+% - flagmt: auxrc/getflags utility shell functions (=~ getopt)
 
 <<[[init.rc]] set [[$name]] derived from [[$dir]]>>=
 name=`{basename `{cleanname -d `{pwd} $dir}}
@@ -374,6 +374,20 @@ paths=`$nl{cleanname -d $gitrel $* | drop $gitroot}
 %$
 
 
+<<fn [[drop]](common.rc)>>=
+fn drop {
+        awk '
+        BEGIN{ARGC=0}
+        {
+                if(index($0, ARGV[1]) == 1)
+                        $0=substr($0, length(ARGV[1])+1)
+                print
+        }
+        ' $*
+}
+@
+
+
 %XXX
 <<[[gitup()]](common.rc) start git/fs>>=
 gitfs=$gitroot/.git/fs
@@ -436,29 +450,15 @@ gitup
 flagfmt='m:msg message, r:revise, e:edit, p:partial'; args='[file ...]'
 eval `{auxrc/getflags $*} || exec auxrc/usage
 
-wdir=/mnt/git
-ramfs -m $wdir
-msgfile=$wdir/git-msg.$pid
-if(~ $#msg 1)
-        echo $msg >$msgfile.tmp
-if not if(~ $#revise 1){
-        msg=1
-        echo revising commit `{cat $gitfs/HEAD/hash}
-        cat $gitfs/HEAD/msg >$msgfile.tmp
-}
+<<[[commit.rc]] create [[$msgfile.tmp]]>>
 
 files=()
-if(test -f .git/merge-parents)
-        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+<<[[commit.rc]] adjust [[$files]] if merge parents>>
 if(! ~ $#* 0)
         files=($files `$nl{git/walk -fRMA -c `$nl{cleanname -d $gitrel $*}})
 if(~ $status '' || ~ $#files 0 && ! test -f .git/merge-parents && ~ $#revise 0)
         die 'nothing to commit'
-if(~ $#partial 1){
-        for(i in $files)
-                pickhunks $i
-        apply
-}
+<<[[commit.rc]] if [[$partial]]>>
 
  @{
         flag e +
@@ -477,11 +477,34 @@ exit ''
 
 
 
+<<[[commit.rc]] create [[$msgfile.tmp]]>>=
+wdir=/mnt/git
+ramfs -m $wdir
+msgfile=$wdir/git-msg.$pid
+if(~ $#msg 1)
+        echo $msg >$msgfile.tmp
+if not if(~ $#revise 1){
+        msg=1
+        echo revising commit `{cat $gitfs/HEAD/hash}
+        cat $gitfs/HEAD/msg >$msgfile.tmp
+}
+@
 
 
 
+<<[[commit.rc]] adjust [[$files]] if merge parents>>=
+if(test -f .git/merge-parents)
+        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+@
 
 
+<<[[commit.rc]] if [[$partial]]>>=
+if(~ $#partial 1){
+        for(i in $files)
+                pickhunks $i
+        apply
+}
+@
 
 
 <<fn [[findbranch]](commit.rc)>>=
@@ -657,16 +680,18 @@ fn apply{
 @
 
 
-
 \section{Computing the trees from an index}
 
 \subsection{Grouping index files by directories}
 
 \subsection{Building trees from directories}
 
+
 \section{Storing the date, author, and committer}
 
+
 \section{Recording the message}
+
 
 \section{Updating [[HEAD]] atomically}
 
@@ -825,6 +850,8 @@ exit ''
 
 \section{Creating a branch: [[git branch <name>]]}
 \label{sec:create-branch}
+
+% git/branch -n
 
 \section{Deleting a branch: [[git branch -d <name>]]}
 
@@ -990,6 +1017,7 @@ exit ''
 
 \subsection{Showing changes}
 
+
 \section{Commit history walker}
 
 \subsection{Basic walker}
@@ -1008,6 +1036,7 @@ exit ''
 
 \subsubsection{Topological order}
 
+
 \section{Showing the commit history: [[git log]]}
 
 \subsection{Printing a commit}
@@ -1016,6 +1045,7 @@ exit ''
 
 \subsection{Comparing trees}
 
+
 \section{Showing the status of a file: [[git status]]}
 
 \subsection{Listing staged modifications}
@@ -1023,6 +1053,8 @@ exit ''
 \subsection{Listing unstaged modifications}
 
 \subsection{Listing untracked files}
+
+
 
 \section{Archeology}
 \label{sec:archeology}
@@ -1217,7 +1249,13 @@ exit ''
 
 \subsection{Fetching objects in a pack}
 
+
+
+
 \section{Object store walker}
+
+
+
 
 \section{Pushing changes to another repository: [[git push]]}
 
@@ -1280,6 +1318,9 @@ exit ''
 \subsection{Sending objects locally}
 
 \subsection{Sending objects in a pack}
+
+
+
 
 \section{Cloning a repository: [[git clone]]}
 \label{sec:git-clone}
@@ -1466,59 +1507,35 @@ exit ''
 
 \subsection{Padding}
 
-\section{Unzip}
+%%\section{Unzip}
+%%\subsection{Overview}
+%%\subsection{Data structures}
+%%\subsection{Error management}
+%%\subsection{IO helpers}
+%%\subsubsection{Input bits helpers}
+%%\subsubsection{Output helpers}
+%%\subsection{Huffman trees}
+%%\subsection{Sliding window back references (LZ77)}
+%%\subsection{Entry point: [[inflate()]]}
+%%\subsection{[[inflate_loop()]]}
+%%\subsubsection{Head}
+%%\subsubsection{Block}
+%%\subsubsection{CData}
+%%\paragraph{[[zlen]]}
+%%\paragraph{[[zdist]]}
+%%\subsubsection{Dist}
+%%\subsubsection{CRC}
+%%\subsubsection{Done}
+%%\subsection{Advanced features}
+%%\subsubsection{Adler32 CRC}
+%%\subsubsection{No compression block type}
+%%\subsubsection{Specialized huffman tree}
+%%\subsection{Optimizations}
+%%\subsubsection{[[NeedBits]]}
+%%\subsubsection{[[DistOne]]}
 
-\subsection{Overview}
-
-\subsection{Data structures}
-
-\subsection{Error management}
-
-\subsection{IO helpers}
-
-\subsubsection{Input bits helpers}
-
-\subsubsection{Output helpers}
-
-\subsection{Huffman trees}
-
-\subsection{Sliding window back references (LZ77)}
-
-\subsection{Entry point: [[inflate()]]}
-
-\subsection{[[inflate_loop()]]}
-
-\subsubsection{Head}
-
-\subsubsection{Block}
-
-\subsubsection{CData}
-\paragraph{[[zlen]]}
-\paragraph{[[zdist]]}
-
-\subsubsection{Dist}
-
-\subsubsection{CRC}
-
-\subsubsection{Done}
-
-\subsection{Advanced features}
-
-\subsubsection{Adler32 CRC}
-
-\subsubsection{No compression block type}
-
-\subsubsection{Specialized huffman tree}
-
-\subsection{Optimizations}
-
-\subsubsection{[[NeedBits]]}
-
-\subsubsection{[[DistOne]]}
-
-\section{Zip}
-
-\subsection{Entry point: [[deflate()]]}
+%%\section{Zip}
+%%\subsection{Entry point: [[deflate()]]}
 
 \section{Diff}
 \label{sec:diff-algo}
@@ -1535,6 +1552,7 @@ exit ''
 
 \section{Diff3}
 \label{sec:diff3-algo}
+% merge3?
 
 \subsection{Overview}
 
@@ -1573,11 +1591,8 @@ exit ''
 \section{Ignoring files: [[.gitignore]]}
 
 \section{Archeology: Grafts}
-
 \subsection{Reading a graft file}
-
 \subsection{Writing a graft file}
-
 \subsection{Using a graft file}
 
 \section{Rename detection}
@@ -1592,23 +1607,16 @@ exit ''
 \label{sec:tags}
 
 \subsection{[[Tag.t]]}
-
 \subsection{Reading a tag}
-
 \subsection{Writing a tag}
-
 \subsection{[[git tag]]}
-
 \subsection{[[git clone]] and tags}
-
 \subsection{[[git pull]] and tags}
 
 \section{Reference history}
-
 \subsection{[[git reflog]]}
 
 \section{Stash}
-
 \subsection{[[git stash]]}
 
 \section{Developer commands}
@@ -1649,6 +1657,8 @@ exit ''
 \subsection{Finding code: [[git grep]]}
 
 \subsection{Creating an archive: [[git archive]]}
+
+
 
 \section{Advanced merging commands}
 
@@ -1702,23 +1712,16 @@ END{
 
 \subsection{Cherry-pick: [[git cherry-pick]]}
 
-\section{Plumbing commands}
 
-\subsection{[[git fetch]]}
-
-\subsection{[[git symbolic-ref]]}
-
-\subsection{[[git rev-list]]}
-
-\subsection{[[git diff-tree]]}
-
-\subsection{[[git commit-tree]]}
-
-\subsection{[[git ls-tree]]}
-
-\subsection{[[git remote add]]}
-
-\subsection{[[git ls-remote]]}
+%%\section{Plumbing commands}
+%%\subsection{[[git fetch]]}
+%%\subsection{[[git symbolic-ref]]}
+%%\subsection{[[git rev-list]]}
+%%\subsection{[[git diff-tree]]}
+%%\subsection{[[git commit-tree]]}
+%%\subsection{[[git ls-tree]]}
+%%\subsection{[[git remote add]]}
+%%\subsection{[[git ls-remote]]}
 
 \section{Miscellaneous commands}
 
@@ -1740,15 +1743,11 @@ END{
 
 \subsection{[[http://]]}
 
-\section{Other client/server capabilities}
-
-\subsection{Report status}
-
-\subsection{Quiet}
-
-\subsection{Thin pack}
-
-\subsection{Side band 64k}
+%\section{Other client/server capabilities}
+%\subsection{Report status}
+%\subsection{Quiet}
+%\subsection{Thin pack}
+%\subsection{Side band 64k}
 
 
 %******************************************************************************
@@ -1789,16 +1788,16 @@ END{
 %******************************************************************************
 \chapter{Debugging}
 %******************************************************************************
-\label{chap:debugging-ocamlgit}
+\label{chap:debugging-xgit}
 
 %\section{[[ocamlgit dump]]}
 %\section{[[ocamlgit test]]}
 
 
 %******************************************************************************
-\chapter{Profiling}
+%\chapter{Profiling}
 %******************************************************************************
-\label{chap:profiling-ocamlgit}
+%\label{chap:profiling-xgit}
 
 
 %******************************************************************************
@@ -1818,6 +1817,8 @@ fn die{
 \chapter{Utilities}
 %******************************************************************************
 \label{chap:utilities}
+
+%alt: could put drop() from common.rc here
 
 %\section{Common functions}
 %\section{File utilities}
