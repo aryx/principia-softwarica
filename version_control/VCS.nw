@@ -241,9 +241,171 @@ which in the end are more complicated and usually less efficient than in Git.
 
 \section{Initializing a new repository: [[git init]]}
 
+<<git9/init.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+flagfmt='u:upstream upstream,b:branch branch'; args='name'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+dir=$1
+if(~ $#dir 0)
+        dir=.
+if(~ $#branch 0)
+        branch=front
+if(test -e $dir/.git)
+        die $dir/.git already exists
+name=`{basename `{cleanname -d `{pwd} $dir}}
+if(~ $#upstream 0){
+        upstream=`{git/conf 'defaults "origin".baseurl'}
+        if(! ~ $#upstream 0)
+                upstream=$upstream/$name
+}
+
+mkdir -p $dir/.git/refs/^(heads remotes)
+mkdir -p $dir/.git/^(fs objects)
+>$dir/.git/config {
+        echo '[core]'
+        echo '  repositoryformatversion = p9.0'
+        if(! ~ $#upstream 0){
+                echo '[remote "origin"]'
+                echo '  url = '$upstream
+        }
+        echo '[branch "'$branch'"]'
+        echo '  remote = origin'
+}
+>$dir/.git/INDEX9
+>$dir/.git/HEAD {
+        echo ref: refs/heads/$branch
+}
+
+exit ''
+
+@
+
 \section{Copying an existing repository: [[cp -r]]}
 
 \section{Cloning an existing repository: [[git clone]]}
+
+<<git9/clone.rc>>=
+#!/bin/rc
+rfork en
+. /lib/git/common.rc
+
+flagfmt='d:debug, b:branch branch'; args='remote [local]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $debug 1)
+        debug=(-d)
+
+remote=$1
+local=$2
+
+if(~ $#remote 0)
+        exec auxrc/usage
+if(~ $#local 0)
+        local=`$nl{basename `$nl{echo $remote | sed 's@.*/([^/]+)/*$@\1@'} .git}
+if(~ $#branch 1)
+        branchflag=(-b $branch)
+
+if(test -e $local && ~ `{ls $local | sed 1q | wc -l} 1)
+        die 'destination already exists:' $local
+
+fn clone{
+        flag +e
+        mkdir -p $local/.git
+        mkdir -p $local/.git/fs
+        mkdir -p $local/.git/objects/pack/
+        mkdir -p $local/.git/refs/heads/
+        
+        cd $local
+        
+        >>.git/config {
+                echo '[remote "origin"]'
+                echo '  url='$remote
+        }
+        {git/get  $debug $branchflag $remote >[2=3] | awk '
+                BEGIN{
+                        headref=""
+                        if(ENVIRON["branch"] != "")
+                                headref="refs/remotes/origin/"ENVIRON["branch"]
+                        headhash=""
+                }
+                /^symref / && headref == "" {
+                        if($2 == "HEAD"){
+                                gsub("^refs/heads", "refs/remotes/origin", $3)
+                                gsub("^refs/tags", "refs/remotes/origin/tags", $3)
+                        }
+                }
+                /^remote /{
+                        if($2=="HEAD"){
+                                headhash=$3
+                        }else if(match($2, "^refs/(heads|tags)/")){
+                                gsub("^refs/heads", "refs/remotes/origin", $2)
+                                if($2 == headref || (headref == "" && $3 == headhash))
+                                        headref=$2
+                                outfile = ".git/" $2
+                                outdir = outfile
+                                gsub("/?[^/]*/?$", "", outdir)
+                                system(sprintf("mkdir -p %q", outdir))
+                                print $3 > outfile
+                                close(outfile)
+                        }
+                }
+                END{
+                        if(headref != ""){
+                                remote = headref;
+                                refdir = headref;
+                                gsub("/?[^/]*/?$", "", refdir)
+                                gsub("^refs/remotes/origin", "refs/heads", headref)
+                                system("mkdir -p `{basename -d .git/"headref"}");
+                                system("cp .git/" remote " .git/" headref)
+                                print "ref: " headref > ".git/HEAD"
+                        }else if(headhash != ""){
+                                print "warning: detached head "headhash > "/fd/2"
+                                print headhash > ".git/HEAD"
+                        }
+                }
+        '} |[3] tr '\x0d' '\x0a' || die 'could not clone repository'
+
+        tree=.git/fs/HEAD/tree
+        lbranch=`{git/branch}
+        rbranch=`{echo $lbranch | subst 'heads' 'remotes/origin'}
+        echo checking out repository...
+        if(test -f .git/refs/$rbranch){
+                mkdir -p `{basename -d .git/refs/$lbranch}
+                cp .git/refs/$rbranch .git/refs/$lbranch
+                git/fs
+                @ {builtin cd $tree && tar cif /fd/1 .} | @ {tar xf /fd/0} \
+                        || die 'checkout failed:' $status
+                {for(f in `$nl{cd $tree && walk -f})
+                        echo 'T NOQID 0 '$f} > .git/INDEX9
+        }
+        if not{
+                echo no default branch >[1=2]
+                echo check out your code with git/branch >[1=2]
+        }
+}
+
+fn sigint {
+        echo cancelled clone $remote: cleaning $local >[1=2]
+        unmount $local/.git/fs >[2]/dev/null
+        rm -rf $local
+        exit interrupted
+}
+
+ @{clone}
+st=$status
+if(! ~ $st ''){
+        echo failed to clone $remote: cleaning $local >[1=2]
+        unmount $local/.git/fs >[2]/dev/null
+        rm -rf $local
+        exit $st
+}
+exit ''
+
+@
+
 
 \section{Opening a repository}
 
@@ -255,9 +417,40 @@ which in the end are more complicated and usually less efficient than in Git.
 
 \section{Adding files: [[git add]]}
 
+<<git9/add.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='r:remove'; args='file ...'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+s=A
+if(~ $remove 1)
+        s=R
+if(~ $#* 0)
+        exec auxrc/usage
+
+paths=`$nl{cleanname -d $gitrel $* | drop $gitroot}
+walk -f ./$paths | grep -v '^(./)?.git/' | \
+        sed 's/^/'$s' NOQID 0 /' >> .git/INDEX9
+exit ''
+@
+%$
+
+
 \section{Creating a blob from a file}
 
 \section{Removing files: [[git rm]]}
+
+<<git9/rm.rc>>=
+#!/bin/rc -e
+
+exec git/add -r $*
+@
+
 
 \section{Renaming files: [[git mv]]}
 
@@ -268,6 +461,208 @@ which in the end are more complicated and usually less efficient than in Git.
 \label{chap:committing}
 
 \section{Committing the index: [[git commit]]}
+
+<<git9/commit.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+fn findbranch{
+        branch=`{git/branch}
+        if(test -e $gitfs/branch/$branch/tree){
+                refpath=.git/refs/$branch
+                initial=false
+        }
+        if not if(test -e $gitfs/object/$branch/tree){
+                refpath=.git/HEAD
+                initial=false
+        }
+        if not if(! test -e $gitfs/HEAD/tree){
+                refpath=.git/refs/$branch
+                initial=true
+        }
+        if not
+                die 'invalid branch:' $branch
+}
+
+# Remove commentary lines.
+# Remove leading and trailing empty lines.
+# Combine consecutive empty lines between paragraphs.
+# Remove trailing spaces from lines.
+# Ensure there's trailing newline.
+fn cleanmsg{
+        awk '
+        /^[     ]*#/ {next}
+        /^[     ]*$/ {empty = 1; next}
+
+        wet && empty {printf "\n"}
+        {wet = 1; empty = 0}
+        {sub(/[         ]+$/, ""); print $0}
+        '
+}
+
+fn editmsg{
+        if(! test -s $msgfile.tmp){
+                >$msgfile.tmp {
+                        echo '# Author:' $name '<'$email'>'
+                        echo '#'
+                        for(p in $parents)
+                                echo '# parent:' $p
+                        git/walk -fAMR $files | subst '^' '# '
+                        echo '#'
+                        echo '# Commit message:'
+                }
+                edit=1
+        }
+        if(! ~ $#edit 0){
+                giteditor=`{git/conf core.editor}
+                if(~ $#editor 0)
+                        editor=$giteditor
+                if(~ $#editor 0)
+                        editor=hold
+                $editor $msgfile.tmp
+        }
+        cleanmsg < $msgfile.tmp > $msgfile
+        if(! test -s $msgfile)
+                die 'empty commit message'
+}
+
+fn parents{
+        if(! ~ $#revise 0)
+                parents=`{cat $gitfs/HEAD/parent}
+        if not if(test -f .git/merge-parents)
+                parents=`{cat .git/merge-parents | sort | uniq}
+        if not if(~ $initial true)
+                parents=()
+        if not
+                parents=`{git/query $branch}
+}
+
+fn commit{
+        msg=`''{cat $msgfile}
+        if(! ~ $#parents 0)
+                pflags='-p'^$parents
+        hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
+}
+
+fn update{
+        mkdir -p `{basename -d $refpath}
+        # Paranoia: let's not mangle the repo.
+        if(~ $#hash 0)
+                die 'botched commit'
+        rm -f .git/merge-parents
+        echo $branch: $hash
+        echo $hash > $refpath
+        for(f in $files){
+                if(! test -e $f && ! test -e .git/object/$hash/tree/$f)
+                        echo R NOQID 0 $f >> .git/INDEX9
+                if not
+                        echo T NOQID 0 $f >> .git/INDEX9
+        }
+}
+
+fn filterdiff{
+        awk '
+                function dump(){
+                        if(n == 0)
+                                return
+
+                        print "--- a/"f >>"/dev/cons"
+                        print "+++ b/"f >>"/dev/cons"
+                        for(i = 0; i < n; i++)
+                                print lines[i] >>"/dev/cons"
+                        printf("Commit this hunk?[n]  ") >>"/dev/cons"
+                        getline ans < "/dev/cons"
+                        if(ans ~ /[yY]/)
+                                for(i = 0; i < n; i++)
+                                        print lines[i]
+                        n = 0
+                }
+                /^---/{ next }
+                /^\+\+\+/{
+                        f = substr($0, 5)
+                        print "--- "f
+                        print "+++ "f
+                        n = 0
+                        next
+                }
+                /^@@/{ dump() }
+                { lines[n++] = $0 }
+                END{ dump() }
+        '
+}
+
+fn pickhunks{
+        p=$wdir/patch
+        if(test -f .git/fs/HEAD/tree/$i)
+                #<[12]/fd/0 >[13]/fd/1 { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p }
+                { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p } || status=''
+        if not
+                diff -u /dev/null $1 >>$p || status=''
+}
+
+fn apply{
+        t=$wdir/tree/
+        p=$wdir/patch
+        ln=`{wc -l $p}
+        if(test $ln(1) -lt 3)
+                die 'no hunks seleted'
+        f=`{patch -n $p}
+        mkdir $t
+        @{cd .git/fs/HEAD/tree; tar c $f >[2]/dev/null} | @{cd $t; tar xT}
+        for(i in $f){
+                d=`{basename -d $i}
+                if(! ~ $d .){
+                        mkdir -p $t^$d
+                        bind -bc $t^$d $d
+                }
+        }
+        bind -bc $t .
+        patch <$p >/dev/null || die 'failed partial patch: '^$status
+}
+
+gitup
+
+flagfmt='m:msg message, r:revise, e:edit, p:partial'; args='[file ...]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+wdir=/mnt/git
+ramfs -m $wdir
+msgfile=$wdir/git-msg.$pid
+if(~ $#msg 1)
+        echo $msg >$msgfile.tmp
+if not if(~ $#revise 1){
+        msg=1
+        echo revising commit `{cat $gitfs/HEAD/hash}
+        cat $gitfs/HEAD/msg >$msgfile.tmp
+}
+
+files=()
+if(test -f .git/merge-parents)
+        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+if(! ~ $#* 0)
+        files=($files `$nl{git/walk -fRMA -c `$nl{cleanname -d $gitrel $*}})
+if(~ $status '' || ~ $#files 0 && ! test -f .git/merge-parents && ~ $#revise 0)
+        die 'nothing to commit'
+if(~ $#partial 1){
+        for(i in $files)
+                pickhunks $i
+        apply
+}
+
+ @{
+        flag e +
+        whoami
+        findbranch
+        parents
+        editmsg
+        commit
+        update
+} || die 'could not commit:' $status
+exit ''
+
+@
+
 
 \section{Computing the trees from an index}
 
@@ -290,6 +685,147 @@ which in the end are more complicated and usually less efficient than in Git.
 \chapter{Branching}
 %******************************************************************************
 \label{chap:branching}
+
+<<git9/branch.rc>>=
+#!/bin/rc -e
+rfork en
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='a:listall, b:baseref ref, r:remove, n:newbr, s:stay, m:merge, M:nomod'
+args='[branch]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+modified=()
+deleted=()
+failed=()
+if(~ $#* 0){
+        if(~ $#listall 0)
+                awk '$1=="branch"{print $2}' < $gitfs/ctl
+        if not
+                cd .git/refs/ && walk -f heads remotes | sort
+        exit
+}
+if(! ~ $#* 1)
+        exec auxrc/usage
+
+branch=$1
+if(~ $branch refs/heads/*)
+        new=$name
+if not if(~ $branch heads/*)
+        new=refs/$branch
+if not
+        new=refs/heads/$branch
+
+# where are we now?
+orig=`{git/query HEAD}
+origbranch=refs/`{awk '$1=="branch"{print $2}' < $gitfs/ctl}
+
+# if we're switching branches to a branch that doesn't exist,
+# but we have a remote branch that exists upstream, create a
+# new head to mirror it.
+if(~ $#newbr 0){
+        if(! ~ $#baseref 0)
+                die update would clobber $branch with $baseref
+        if(! test -e .git/$new){
+                baseref=`$nl{echo -n $new | sed s@refs/heads/@refs/remotes/origin/@}
+                if(! base=`{git/query $baseref})
+                        exit 'bad ref'
+        }
+}
+
+# figure out where we want the new branch to point to
+if (~ $#baseref 1)
+        base=`{git/query $baseref} || exit 'bad ref'
+if not if(~ $#newbr 0)
+        base=`{git/query $new} || exit 'bad ref'
+if not
+        base=`{git/query HEAD} || exit 'bad ref'
+
+modified=`$nl{git/query -c HEAD $base | grep '^[^-]' | subst '^..'}
+deleted=`$nl{git/query -c HEAD $base | grep '^-' | subst '^..'}
+
+# if we remove the current branch without switching, bad things happen
+if(~ $remove 1 && ~ $origbranch $new)
+        die 'cannot remove current branch'
+# if we're not merging, don't clobber existing changes.
+if(~ $#merge 0 && ~ $#remove 0){
+        if(! ~ $#modified 0 || ! ~ $#deleted 0){
+                git/walk -fRMA $modified $deleted || 
+                        die 'uncommitted changes would be clobbered'
+        }
+}
+if(~ $remove 1){
+        rm -f .git/$new
+        echo 'removed branch' $new
+        exit
+}
+commit=`{git/query $base} || die 'branch does not exist:' $base
+basedir=`{git/query -p $base}
+dirtypaths=()
+if(! ~ $#modified 0 || ! ~ $#deleted 0)
+        dirtypaths=`$nl{git/walk -cfRMA $modified $deleted}
+
+>>[3].git/INDEX9{
+        for(d in $deleted){
+                if(! test -d $d){
+                        rm -f $d
+                        echo R NOQID 0 $d >>[1=3]
+                }
+        }
+        for(m in $modified $deleted) if(! ~ $m $dirtypaths){
+                d=`$nl{basename -d $m}
+                mkdir -p $d
+                # Modifications can turn a file into
+                # a directory, or vice versa, so we
+                # need to delete and copy the files
+                # over.
+                a=dir
+                b=dir
+                if(test -f $m)
+                        a=file
+                if(test -f $basedir/tree/$m)
+                        b=file
+                if(! ~ $a $b){
+                        rm -rf $m
+                        echo R NOQID 0 $m >>[1=3]
+                }
+                if(~ $b file){
+                        echo T NOQID 0 $m >>[1=3]
+                        cp -x -- $basedir/tree/$m $m || {echo cp failed: $m; failed=1}
+                        touch -c $m
+                }
+        }
+}
+modified=()
+deleted=()
+
+for(ours in $dirtypaths){
+        common=$gitfs/object/$orig/tree/$ours
+        theirs=$gitfs/object/$base/tree/$ours
+        merge1 $ours $ours $common $theirs
+        st=$status
+        if(! ~ $st '')
+                >[1=2] echo merge failed $ours: $st
+}
+dirtypaths=()
+
+if(~ $new */*)
+        mkdir -p .git/`{basename -d $new}
+echo $commit > .git/$new
+if(! ~ $#stay 0)
+        exit
+if(~ $failed 1){
+        echo 'pull failed: fix errors and try again' >[1=2]
+        exit nopull
+}
+echo ref: $new > .git/HEAD
+echo $new: `{git/query $new}
+exit ''
+
+@
+
 
 \section{Listing branches: [[git branch]]}
 
@@ -316,6 +852,57 @@ which in the end are more complicated and usually less efficient than in Git.
 
 \section{merging branches: [[git merge]]}
 \label{sec:git-merge}
+
+<<git9/merge.rc>>=
+#!/bin/rc -e
+rfork ne
+. /lib/git/common.rc
+
+fn merge{
+        ourbr=$gitfs/object/$1/tree
+        basebr=$gitfs/object/$2/tree
+        theirbr=$gitfs/object/$3/tree
+
+        all=`$nl{{git/query -c $1 $2; git/query -c $2 $3} | sed 's/^..//' | sort | uniq}
+        for(f in $all){
+                ours=$ourbr/$f
+                base=$basebr/$f
+                theirs=$theirbr/$f
+                merge1 ./$f $ours $base $theirs
+        }
+}
+
+gitup
+
+flagfmt=''; args='theirs'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+if(! ~ $#* 1)
+        exec auxrc/usage
+
+theirs=`{git/query $1}
+ours=`{git/query HEAD}
+base=`{git/query $theirs ^ ' ' ^ $ours ^ '@'}
+
+if(~ $base $theirs)
+        die 'nothing to merge, doofus'
+if(! git/walk -q)
+        die 'dirty work tree, refusing to merge'
+if(~ $base $ours){
+        >[1=2] echo 'fast forwarding...'
+        echo $theirs > .git/refs/`{git/branch}
+        git/revert .
+        exit ''
+}
+echo $ours >> .git/merge-parents
+echo $theirs >> .git/merge-parents
+
+merge $ours $base $theirs
+echo 'merge complete: remember to commit'
+exit ''
+
+@
+
 
 \section{Merging two trees}
 
@@ -349,6 +936,59 @@ which in the end are more complicated and usually less efficient than in Git.
 \subsection{File changes}
 
 \section{Showing file differences: [[git diff]]}
+
+<<git9/diff.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='c:commit branch, s:summarize, u:uncommitted'; args='[file ...]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+bparam=(-b $commit)
+if(~ $#commit 0){
+        commit=HEAD
+        cparam=()
+        bparam=()
+}
+
+files=()
+filt=MAR
+if(~ $#uncommitted 1)
+        filt=MARU
+if(! ~ $#* 0)
+        files=`{cleanname -d $gitrel $*}
+
+branch=`{git/query -p $commit}
+if(~ $summarize 1 || ~ $uncommitted 1){
+        git/walk $bparam -r$gitrel -f$filt $cparam $files
+        exit
+}
+
+showed=()
+mntgen /mnt/scratch
+bind $branch/tree/ /mnt/scratch/a
+bind . /mnt/scratch/b
+for(f in `$nl{git/walk $bparam -c -f$filt $cparam $files}){
+        if(~ $#showed 0){
+                echo diff `{git/query $commit} uncommitted
+                showed=1
+        }
+        cd /mnt/scratch
+        a=a/$f
+        b=b/$f
+        if(! test -f a/$f)
+                a=/dev/null
+        if(! test -f b/$f)
+                b=/dev/null
+        diff -u $a $b
+}
+exit ''
+
+@
+
 
 \subsection{Computing tree changes}
 
@@ -451,6 +1091,99 @@ which in the end are more complicated and usually less efficient than in Git.
 
 \section{Pulling updates from another repository: [[git pull]]}
 
+<<git9/pull.rc>>=
+#!/bin/rc -e
+rfork en
+. /lib/git/common.rc
+
+fn update{
+        upstream=$1
+        url=$2
+        dir=$3
+        dflag=()
+        if(! ~ $#debug 0)
+                dflag='-d'
+        heads=`$nl{
+                # safe to split in awk, branch names may not
+                # have spaces or newlines.
+                git/query `$nl{
+                        cd .git/refs && \
+                        walk -f -emp heads remotes | \
+                        sort -rn | \
+                        awk '{print $2}'
+                }
+        }
+        if(! ~ $#heads 0)
+                heads='-h'^$heads
+        {git/get $dflag -u $upstream $heads $url >[2=3] || die $status} | awk '
+        /^remote refs\/(heads|tags)\//{
+                ref=$2
+                hash=$3
+                gsub("^refs/heads", "refs/remotes/'$upstream'", ref)
+                outfile = ".git/"ref
+                print outfile > "/env/outfile"
+                system("mkdir -p `$nl{basename -d $outfile}");\
+                close("/env/outfile")
+                print hash > outfile;
+                close(outfile);
+        }
+        ' |[3] tr '\x0d' '\x0a'
+}
+
+gitup
+
+flagfmt='d:debug, q:quiet, f:fetchonly,
+        u:upstream upstream'
+args=''
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+
+if(~ $#upstream 0)
+        upstream=origin
+remote=`$nl{git/conf 'remote "'$upstream'".url'}
+if(~ $#remote 0){
+        remote=$upstream
+        upstream=THEM
+}
+
+update $upstream $remote
+if (~ $fetchonly 1)
+        exit
+
+local=`{git/branch}
+remote=`{git/branch | subst '^(refs/)?heads' 'remotes/'$upstream}
+
+# we have local commits, but the remote hasn't changed.
+# in this case, we want to keep the local commits untouched.
+if(~ `{git/query HEAD $remote @} `{git/query $remote}){
+        echo 'up to date' >[1=2]
+        exit
+}
+# The remote repository and our HEAD have diverged: we
+# need to merge.
+if(! ~ `{git/query HEAD $remote @} `{git/query HEAD}){
+        >[1=2]{
+                echo ours:      `{git/query HEAD}
+                echo theirs:    `{git/query $remote}
+                echo common:    `{git/query HEAD $remote @}
+                echo git/merge $remote
+        }
+        exit diverged
+}
+
+oldcommit=`{git/query $local}
+newcommit=`{git/query $remote}
+
+if(~ $#quiet 0){
+        git/log -s -e $oldcommit'..'$newcommit
+        echo $remote':' $oldcommit '=>' $newcommit
+}
+
+git/branch -mnb $remote $local
+exit ''
+
+@
+%$
+
 \subsection{Fetching objects locally}
 
 \subsubsection{Find top common commits}
@@ -474,6 +1207,62 @@ which in the end are more complicated and usually less efficient than in Git.
 \section{Object store walker}
 
 \section{Pushing changes to another repository: [[git push]]}
+
+<<git9/push.rc>>=
+#!/bin/rc -e
+rfork en
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='a:pushall, b:branch branch, f:force, d:debug,
+         r:remove remove, u:upstream upstream' args=''
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(! ~ $#* 0)
+        exec auxrc/usage
+
+if(~ $pushall 1)
+        branch=`$nl{cd .git/refs/heads && walk -f}
+if(~ $#branch 0)
+        branch=`{git/branch}
+if(~ $#branch 0)
+        die 'no branches'
+if(~ $force 1)
+        force=-f
+if(~ $debug 1)
+        debug='-d'
+
+if(~ $#upstream 0)
+        upstream=origin
+
+remotes=`$nl{git/conf -a 'remote "'$upstream'".url'}
+if(~ $#remotes 0)
+        remotes=$upstream
+branch=-b^$branch
+if(! ~ $#remove 0)
+        remove=-r^$remove
+for(remote in $remotes){
+        updates=`$nl{git/send $debug $force $branch $remove $remote} || die $status
+        for(ln in $updates){
+                u=`{echo $ln}
+                refpath=`{echo $u(2) | subst '^refs/heads/' '.git/refs/remotes/'$upstream'/'}
+                switch($u(1)){
+                case update;
+                        mkdir -p `{basename -d $refpath}
+                        echo $u(4) > $refpath
+                        echo $u(2)^':' $u(3) '=>' $u(4)
+                case delete;
+                        echo $u(2)^': removed'
+                        rm -f $refpath
+                case uptodate;
+                        echo $u(2)^': up to date'
+                }
+        }
+}
+exit ''
+
+@
+
 
 \subsection{Sending objects locally}
 
@@ -694,6 +1483,33 @@ which in the end are more complicated and usually less efficient than in Git.
 
 \subsection{Reverting a change: [[git revert]]}
 
+<<git9/revert.rc>>=
+#!/bin/rc
+rfork en
+. /lib/git/common.rc
+
+gitup
+
+flagfmt='c:query query' args='file ...'
+if (! eval `''{auxrc/getflags $*} || ~ $#* 0)
+        exec auxrc/usage
+
+if(~ $#query 0)
+        query=HEAD
+commit=`{git/query -p $query}
+
+files=`$nl{cleanname -d $gitrel $* | drop $gitroot}
+for(f in `$nl{git/walk -c -fRM -b $query $files}){
+        mkdir -p `{basename -d $f}
+        cp -x -- $commit/tree/$f $f
+        touch -c $f
+        git/add $f
+}
+exit ''
+
+@
+
+
 \subsection{Finding the author of some code: [[git blame]]}
 
 \subsection{Finding code: [[git grep]]}
@@ -703,6 +1519,52 @@ which in the end are more complicated and usually less efficient than in Git.
 \section{Advanced merging commands}
 
 \subsection{Rebase: [[git rebase]]}
+
+<<git9/rebase.rc>>=
+#!/bin/rc -e
+
+rfork en
+
+. /lib/git/common.rc
+gitup
+
+flagfmt='s:src src, n:nocommit'; args='onto'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $#* 0) exec auxrc/usage
+
+if(~ $#src 0)
+        src=`{git/branch}
+nflag=''
+if(~ $nocommit 1)
+        nflag='-n'
+        
+dst=`{git/query $1}
+com=`{git/query $dst  $src @}
+if(~ $dst $com)
+        die 'nothing to rebase, doofus'
+git/log -se $dst'..'$src  | awk '
+BEGIN{
+        src=ENVIRON["src"];
+        dst=ENVIRON["dst"];
+}
+{
+        if(!done)
+                print "git/branch -nb "dst" rebase.wip";
+        c=$1; $1="";
+        print "git/export "c" | git/import '$nflag'#"$0;
+        done=1
+}
+END{
+        if(!done)
+                print "git/branch -nb "dst" ";
+        else{
+                print "git/branch -nb rebase.wip "src
+                print "git/branch -r rebase.wip";
+        }
+}' 
+
+@
+
 
 \subsection{Cherry-pick: [[git cherry-pick]]}
 
