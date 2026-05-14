@@ -222,17 +222,17 @@ which in the end are more complicated and usually less efficient than in Git.
 
 
 %******************************************************************************
-\chapter{Main Functions}
+%\chapter{Main Functions}
 %******************************************************************************
-\label{chap:main}
-
-\section{Main commands}
-\label{sec:main-commands}
-
-\section{[[Main.main()]]}
-
-\section{Getting help: [[git help]]}
-\label{sec:git-help}
+%\label{chap:main}
+%
+%\section{Main commands}
+%\label{sec:main-commands}
+%
+%\section{[[Main.main()]]}
+%
+%\section{Getting help: [[git help]]}
+%\label{sec:git-help}
 
 
 %******************************************************************************
@@ -300,8 +300,8 @@ name=`{basename `{cleanname -d `{pwd} $dir}}
 % will see code later
 
 
-\section{Opening a repository}
-
+%%\section{Opening a repository}
+% show gitup?
 
 %******************************************************************************
 \chapter{Staging a Diff}
@@ -315,6 +315,7 @@ name=`{basename `{cleanname -d `{pwd} $dir}}
 rfork ne
 . /lib/git/common.rc
 
+# for setting $gitroot, $gitrel
 gitup
 
 flagfmt='r:remove'; args='file ...'
@@ -388,7 +389,14 @@ fn drop {
 @
 
 
-%XXX
+
+
+%%\section{Creating a blob from a file}
+
+\section{[[git/conf -r]]}
+
+\section{[[git/fs]]}
+
 <<[[gitup()]](common.rc) start git/fs>>=
 gitfs=$gitroot/.git/fs
 startfs=()
@@ -402,8 +410,7 @@ if(~ $#startfs 1)
 if not
         status=''
 @
-
-%%\section{Creating a blob from a file}
+%$
 
 \section{Removing files: [[git rm]]}
 
@@ -420,7 +427,7 @@ if(~ $remove 1)
 @
 
 
-\section{Renaming files: [[git mv]]}
+%%\section{Renaming files: [[git mv]]}
 
 
 %******************************************************************************
@@ -477,35 +484,27 @@ exit ''
 
 
 
-<<[[commit.rc]] create [[$msgfile.tmp]]>>=
-wdir=/mnt/git
-ramfs -m $wdir
-msgfile=$wdir/git-msg.$pid
-if(~ $#msg 1)
-        echo $msg >$msgfile.tmp
-if not if(~ $#revise 1){
-        msg=1
-        echo revising commit `{cat $gitfs/HEAD/hash}
-        cat $gitfs/HEAD/msg >$msgfile.tmp
+\subsection{[[whoami()]]}
+
+<<fn [[whoami]](common.rc)>>=
+fn whoami{
+        name=`$nl{git/conf user.name}
+        email=`$nl{git/conf user.email}
+        if(test -f /adm/keys.who){
+                if(~ $name '')
+                        name=`$nl{awk -F'|' '$1=="'$user'" {x=$3} END{print x}' </adm/keys.who}
+                if(~ $email '')
+                        email=`$nl{awk -F'|' '$1=="'$user'" {x=$5} END{print x}' </adm/keys.who}
+        }
+        if(~ $name '')
+                name=$user
+        if(~ $email '')
+                email=$user@$sysname
+        status=''
 }
 @
 
-
-
-<<[[commit.rc]] adjust [[$files]] if merge parents>>=
-if(test -f .git/merge-parents)
-        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
-@
-
-
-<<[[commit.rc]] if [[$partial]]>>=
-if(~ $#partial 1){
-        for(i in $files)
-                pickhunks $i
-        apply
-}
-@
-
+\subsection{[[findbranch()]]}
 
 <<fn [[findbranch]](commit.rc)>>=
 fn findbranch{
@@ -527,23 +526,41 @@ fn findbranch{
 }
 @
 
-<<fn [[cleanmsg]](commit.rc)>>=
-# Remove commentary lines.
-# Remove leading and trailing empty lines.
-# Combine consecutive empty lines between paragraphs.
-# Remove trailing spaces from lines.
-# Ensure there's trailing newline.
-fn cleanmsg{
-        awk '
-        /^[     ]*#/ {next}
-        /^[     ]*$/ {empty = 1; next}
+\subsection{[[parents()]]}
 
-        wet && empty {printf "\n"}
-        {wet = 1; empty = 0}
-        {sub(/[         ]+$/, ""); print $0}
-        '
+<<fn [[parents]](commit.rc)>>=
+fn parents{
+        if(! ~ $#revise 0)
+                parents=`{cat $gitfs/HEAD/parent}
+        if not if(test -f .git/merge-parents)
+                parents=`{cat .git/merge-parents | sort | uniq}
+        if not if(~ $initial true)
+                parents=()
+        if not
+                parents=`{git/query $branch}
 }
 @
+
+\subsection{[[editmsg()]]}
+
+%alt:\subsection{Creating the commit message}
+
+% -m
+
+<<[[commit.rc]] create [[$msgfile.tmp]]>>=
+wdir=/mnt/git
+ramfs -m $wdir
+msgfile=$wdir/git-msg.$pid
+if(~ $#msg 1)
+        echo $msg >$msgfile.tmp
+if not if(~ $#revise 1){
+        msg=1
+        echo revising commit `{cat $gitfs/HEAD/hash}
+        cat $gitfs/HEAD/msg >$msgfile.tmp
+}
+@
+
+
 
 <<fn [[editmsg]](commit.rc)>>=
 fn editmsg{
@@ -573,18 +590,26 @@ fn editmsg{
 }
 @
 
-<<fn [[parents]](commit.rc)>>=
-fn parents{
-        if(! ~ $#revise 0)
-                parents=`{cat $gitfs/HEAD/parent}
-        if not if(test -f .git/merge-parents)
-                parents=`{cat .git/merge-parents | sort | uniq}
-        if not if(~ $initial true)
-                parents=()
-        if not
-                parents=`{git/query $branch}
+<<fn [[cleanmsg]](commit.rc)>>=
+# Remove commentary lines.
+# Remove leading and trailing empty lines.
+# Combine consecutive empty lines between paragraphs.
+# Remove trailing spaces from lines.
+# Ensure there's trailing newline.
+fn cleanmsg{
+        awk '
+        /^[     ]*#/ {next}
+        /^[     ]*$/ {empty = 1; next}
+
+        wet && empty {printf "\n"}
+        {wet = 1; empty = 0}
+        {sub(/[         ]+$/, ""); print $0}
+        '
 }
 @
+
+
+\subsection{[[commit()]]}
 
 <<fn [[commit]](commit.rc)>>=
 fn commit{
@@ -594,6 +619,8 @@ fn commit{
         hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
 }
 @
+
+\subsection{[[update()]]}
 
 <<fn [[update]](commit.rc)>>=
 fn update{
@@ -610,6 +637,30 @@ fn update{
                 if not
                         echo T NOQID 0 $f >> .git/INDEX9
         }
+}
+@
+
+
+\section{[[git/walk -fRMA]]}
+
+\section{[[git/query $branch]]}
+
+\section{[[git/save]]}
+
+\section{Advanced features}
+
+%XXX
+<<[[commit.rc]] adjust [[$files]] if merge parents>>=
+if(test -f .git/merge-parents)
+        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+@
+
+
+<<[[commit.rc]] if [[$partial]]>>=
+if(~ $#partial 1){
+        for(i in $files)
+                pickhunks $i
+        apply
 }
 @
 
@@ -680,6 +731,7 @@ fn apply{
 @
 
 
+
 \section{Computing the trees from an index}
 
 \subsection{Grouping index files by directories}
@@ -689,9 +741,7 @@ fn apply{
 
 \section{Storing the date, author, and committer}
 
-
 \section{Recording the message}
-
 
 \section{Updating [[HEAD]] atomically}
 
@@ -855,6 +905,7 @@ exit ''
 
 \section{Deleting a branch: [[git branch -d <name>]]}
 
+
 \section{Checking out a branch: [[git checkout]]}
 \label{sec:switch-branch}
 
@@ -950,11 +1001,18 @@ exit ''
 
 \subsection{Showing a commit}
 
+
+
+
 \section{Representing changes}
 
 \subsection{Tree changes}
 
 \subsection{File changes}
+
+
+
+
 
 \section{Showing file differences: [[git diff]]}
 
@@ -1007,15 +1065,19 @@ for(f in `$nl{git/walk $bparam -c -f$filt $cparam $files}){
         diff -u $a $b
 }
 exit ''
-
 @
 
+% diff -u!
+
+\subsection{[[diff -u]]}
 
 \subsection{Computing tree changes}
 
 \subsection{Computing file changes}
 
 \subsection{Showing changes}
+
+
 
 
 \section{Commit history walker}
@@ -1038,6 +1100,7 @@ exit ''
 
 
 \section{Showing the commit history: [[git log]]}
+
 
 \subsection{Printing a commit}
 
@@ -1229,6 +1292,7 @@ exit ''
 @
 %$
 
+
 \subsection{Fetching objects locally}
 
 \subsubsection{Find top common commits}
@@ -1249,7 +1313,7 @@ exit ''
 
 \subsection{Fetching objects in a pack}
 
-
+\section{[[git/get]]}
 
 
 \section{Object store walker}
@@ -1320,6 +1384,7 @@ exit ''
 \subsection{Sending objects in a pack}
 
 
+\section{[[git/send]]}
 
 
 \section{Cloning a repository: [[git clone]]}
@@ -1825,6 +1890,21 @@ fn die{
 %\section{Directory utilities}
 %\section{Generalized IO}
 %\section{Binary IO}
+
+
+%******************************************************************************
+\chapter{[[diff]]}
+%******************************************************************************
+
+%******************************************************************************
+\chapter{[[patch]]}
+%******************************************************************************
+
+% note ape/patch far bigger; Ori rewrote patch for git9 far slimmer
+% because just need to handle patches generated by diff -u.
+
+% For a long time, Torvalds considered diff/patch/tarballs better
+% than any VCS :)
 
 
 %******************************************************************************
