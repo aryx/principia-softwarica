@@ -9,6 +9,7 @@
 \DeclareUnicodeCharacter{2468}{\ensuremath{\textcircled{9}}} % ⑨ git9 record separator
 \DeclareUnicodeCharacter{03C4}{\ensuremath{\tau}} % τ
 
+% used in Intro.nw and Overview.nw and bound to ocamlgit instead in ogit.nw
 \newcommand{\xgit}{[[git9]]\xspace}
 
 %******************************************************************************
@@ -25,13 +26,13 @@
 %history: 
 %------------------------------------------------------------------------------
 
-%thx to LP, I changed for the better a few things:
+%thx to LP, I changed for the better a few things in git9:
 
 %thx to this manual, I better understand VCSs (and git):
 % - intuition of Torvalds for a stupid content tracker with very
 %   different strategies (e.g., rename handled at query time) 
-% - merge and MERGE_HEADS state?
 % - beauty of design using SHA1 used for so many things (Graydon Hoare?)
+% - merge and MERGE_HEADS state?
 
 %history LP-ization:
 % * wanted to LPize camp (simplified clone of darcs, also in Haskell)
@@ -45,8 +46,8 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO [[xxx]] other fields, [[xxx]] extra fields
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the Extra section in the main file
+% - read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the Extra section in the main file
 % - TODO understand main(), LP split main, improve TOC
 % - TODO understand main functions, LP split, cluster, improve TOC
 % - TODO LP split the structures, use datalog for flow to field info
@@ -253,25 +254,18 @@ dir=$1
 if(~ $#dir 0)
         dir=.
 if(~ $#branch 0)
-        branch=front
+        branch=master
 if(test -e $dir/.git)
         die $dir/.git already exists
-name=`{basename `{cleanname -d `{pwd} $dir}}
-if(~ $#upstream 0){
-        upstream=`{git/conf 'defaults "origin".baseurl'}
-        if(! ~ $#upstream 0)
-                upstream=$upstream/$name
-}
+<<[[init.rc]] set [[$name]] derived from [[$dir]]>>
+<<[[init.rc]] check [[$upstream]] flag>>
 
 mkdir -p $dir/.git/refs/^(heads remotes)
 mkdir -p $dir/.git/^(fs objects)
 >$dir/.git/config {
         echo '[core]'
         echo '  repositoryformatversion = p9.0'
-        if(! ~ $#upstream 0){
-                echo '[remote "origin"]'
-                echo '  url = '$upstream
-        }
+        <<[[init.rc]] set origin in [[.git/config]]>>
         echo '[branch "'$branch'"]'
         echo '  remote = origin'
 }
@@ -279,132 +273,30 @@ mkdir -p $dir/.git/^(fs objects)
 >$dir/.git/HEAD {
         echo ref: refs/heads/$branch
 }
-
 exit ''
-
 @
+%old: was branch=front, but more standard to use 'master' (or now 'main' on github)
+
+%many things:
+% - rc -e, die early on error (see \book{Shell})
+% - rfork ne, fresh env, fresh namespace (see also \book{Shell})
+% - common.rc, see appendix
+% - flagmt: auxrc/getflags utility shell functions (=~ getopt)
+% - die(), see appendix error management
+% - ^ string distribute (kind of map)
+
+<<[[init.rc]] set [[$name]] derived from [[$dir]]>>=
+name=`{basename `{cleanname -d `{pwd} $dir}}
+@
+%$
+% basename/cleanname utilities, see \book{Utilities}
+
 
 \section{Copying an existing repository: [[cp -r]]}
 
 \section{Cloning an existing repository: [[git clone]]}
 
-<<git9/clone.rc>>=
-#!/bin/rc
-rfork en
-. /lib/git/common.rc
-
-flagfmt='d:debug, b:branch branch'; args='remote [local]'
-eval `''{auxrc/getflags $*} || exec auxrc/usage
-if(~ $debug 1)
-        debug=(-d)
-
-remote=$1
-local=$2
-
-if(~ $#remote 0)
-        exec auxrc/usage
-if(~ $#local 0)
-        local=`$nl{basename `$nl{echo $remote | sed 's@.*/([^/]+)/*$@\1@'} .git}
-if(~ $#branch 1)
-        branchflag=(-b $branch)
-
-if(test -e $local && ~ `{ls $local | sed 1q | wc -l} 1)
-        die 'destination already exists:' $local
-
-fn clone{
-        flag +e
-        mkdir -p $local/.git
-        mkdir -p $local/.git/fs
-        mkdir -p $local/.git/objects/pack/
-        mkdir -p $local/.git/refs/heads/
-        
-        cd $local
-        
-        >>.git/config {
-                echo '[remote "origin"]'
-                echo '  url='$remote
-        }
-        {git/get  $debug $branchflag $remote >[2=3] | awk '
-                BEGIN{
-                        headref=""
-                        if(ENVIRON["branch"] != "")
-                                headref="refs/remotes/origin/"ENVIRON["branch"]
-                        headhash=""
-                }
-                /^symref / && headref == "" {
-                        if($2 == "HEAD"){
-                                gsub("^refs/heads", "refs/remotes/origin", $3)
-                                gsub("^refs/tags", "refs/remotes/origin/tags", $3)
-                        }
-                }
-                /^remote /{
-                        if($2=="HEAD"){
-                                headhash=$3
-                        }else if(match($2, "^refs/(heads|tags)/")){
-                                gsub("^refs/heads", "refs/remotes/origin", $2)
-                                if($2 == headref || (headref == "" && $3 == headhash))
-                                        headref=$2
-                                outfile = ".git/" $2
-                                outdir = outfile
-                                gsub("/?[^/]*/?$", "", outdir)
-                                system(sprintf("mkdir -p %q", outdir))
-                                print $3 > outfile
-                                close(outfile)
-                        }
-                }
-                END{
-                        if(headref != ""){
-                                remote = headref;
-                                refdir = headref;
-                                gsub("/?[^/]*/?$", "", refdir)
-                                gsub("^refs/remotes/origin", "refs/heads", headref)
-                                system("mkdir -p `{basename -d .git/"headref"}");
-                                system("cp .git/" remote " .git/" headref)
-                                print "ref: " headref > ".git/HEAD"
-                        }else if(headhash != ""){
-                                print "warning: detached head "headhash > "/fd/2"
-                                print headhash > ".git/HEAD"
-                        }
-                }
-        '} |[3] tr '\x0d' '\x0a' || die 'could not clone repository'
-
-        tree=.git/fs/HEAD/tree
-        lbranch=`{git/branch}
-        rbranch=`{echo $lbranch | subst 'heads' 'remotes/origin'}
-        echo checking out repository...
-        if(test -f .git/refs/$rbranch){
-                mkdir -p `{basename -d .git/refs/$lbranch}
-                cp .git/refs/$rbranch .git/refs/$lbranch
-                git/fs
-                @ {builtin cd $tree && tar cif /fd/1 .} | @ {tar xf /fd/0} \
-                        || die 'checkout failed:' $status
-                {for(f in `$nl{cd $tree && walk -f})
-                        echo 'T NOQID 0 '$f} > .git/INDEX9
-        }
-        if not{
-                echo no default branch >[1=2]
-                echo check out your code with git/branch >[1=2]
-        }
-}
-
-fn sigint {
-        echo cancelled clone $remote: cleaning $local >[1=2]
-        unmount $local/.git/fs >[2]/dev/null
-        rm -rf $local
-        exit interrupted
-}
-
- @{clone}
-st=$status
-if(! ~ $st ''){
-        echo failed to clone $remote: cleaning $local >[1=2]
-        unmount $local/.git/fs >[2]/dev/null
-        rm -rf $local
-        exit $st
-}
-exit ''
-
-@
+% will see code later
 
 
 \section{Opening a repository}
@@ -428,18 +320,73 @@ flagfmt='r:remove'; args='file ...'
 eval `''{auxrc/getflags $*} || exec auxrc/usage
 
 s=A
-if(~ $remove 1)
-        s=R
-if(~ $#* 0)
-        exec auxrc/usage
 
-paths=`$nl{cleanname -d $gitrel $* | drop $gitroot}
+<<[[add.rc]] if [[$remove]] flag>>
+<<[[add.rc]] sanity check [[$*]]>>
+
+<<[[add.rc]] set [[$paths]] derived from [[$*]]>>
 walk -f ./$paths | grep -v '^(./)?.git/' | \
         sed 's/^/'$s' NOQID 0 /' >> .git/INDEX9
 exit ''
 @
 %$
 
+%gitup explained below
+%walk = utilities, can recurse when argument is a dir
+
+% add entries in INDEX9 with A (or R when remove) based on args
+
+<<[[add.rc]] sanity check [[$*]]>>=
+if(~ $#* 0)
+        exec auxrc/usage
+@
+%$
+
+
+<<fn [[gitup]](common.rc)>>=
+fn gitup{
+        gitroot=`$nl{git/conf -r >[2]/dev/null}
+        if(~ $#gitroot 0)
+                die 'not a git repository'
+        gitfs=$gitroot/.git/fs
+        gitrel=`$nl{pwd | drop $gitroot | sed 's@^/@@'}
+        if(~ $#gitrel 0)
+                gitrel='.'
+        if(! cd $gitroot)
+                die cd $gitroot: no repo there
+
+        <<[[gitup()]](common.rc) start git/fs>>
+}
+@
+%$
+
+<<global [[nl]](common.rc)>>=
+nl='
+'
+@
+
+% `skip{} is rc extension to use scoped ifs to split output of command
+
+
+<<[[add.rc]] set [[$paths]] derived from [[$*]]>>=
+paths=`$nl{cleanname -d $gitrel $* | drop $gitroot}
+@
+%$
+
+
+%XXX
+<<[[gitup()]](common.rc) start git/fs>>=
+startfs=()
+mkdir -p $gitfs
+if(! test -e $gitfs/ctl)
+        startfs=true
+if(! grep -s '^repo '$gitroot'$' $gitfs/ctl >[2]/dev/null)
+        startfs=true
+if(~ $#startfs 1)
+        git/fs >[1=2]
+if not
+        status=''
+@
 
 \section{Creating a blob from a file}
 
@@ -449,6 +396,12 @@ exit ''
 #!/bin/rc -e
 
 exec git/add -r $*
+@
+%$
+
+<<[[add.rc]] if [[$remove]] flag>>=
+if(~ $remove 1)
+        s=R
 @
 
 
@@ -1087,6 +1040,25 @@ exit ''
 %******************************************************************************
 \label{chap:exchanging}
 
+
+<<[[init.rc]] check [[$upstream]] flag>>=
+if(~ $#upstream 0){
+        upstream=`{git/conf 'defaults "origin".baseurl'}
+        if(! ~ $#upstream 0)
+                upstream=$upstream/$name
+}
+@
+%$
+
+<<[[init.rc]] set origin in [[.git/config]]>>=
+if(! ~ $#upstream 0){
+        echo '[remote "origin"]'
+        echo '  url = '$upstream
+}
+@
+%$
+
+
 \section{Client/server architecture}
 
 \section{Pulling updates from another repository: [[git pull]]}
@@ -1270,6 +1242,127 @@ exit ''
 
 \section{Cloning a repository: [[git clone]]}
 \label{sec:git-clone}
+
+
+<<git9/clone.rc>>=
+#!/bin/rc
+rfork en
+. /lib/git/common.rc
+
+flagfmt='d:debug, b:branch branch'; args='remote [local]'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $debug 1)
+        debug=(-d)
+
+remote=$1
+local=$2
+
+if(~ $#remote 0)
+        exec auxrc/usage
+if(~ $#local 0)
+        local=`$nl{basename `$nl{echo $remote | sed 's@.*/([^/]+)/*$@\1@'} .git}
+if(~ $#branch 1)
+        branchflag=(-b $branch)
+
+if(test -e $local && ~ `{ls $local | sed 1q | wc -l} 1)
+        die 'destination already exists:' $local
+
+fn clone{
+        flag +e
+        mkdir -p $local/.git
+        mkdir -p $local/.git/fs
+        mkdir -p $local/.git/objects/pack/
+        mkdir -p $local/.git/refs/heads/
+        
+        cd $local
+        
+        >>.git/config {
+                echo '[remote "origin"]'
+                echo '  url='$remote
+        }
+        {git/get  $debug $branchflag $remote >[2=3] | awk '
+                BEGIN{
+                        headref=""
+                        if(ENVIRON["branch"] != "")
+                                headref="refs/remotes/origin/"ENVIRON["branch"]
+                        headhash=""
+                }
+                /^symref / && headref == "" {
+                        if($2 == "HEAD"){
+                                gsub("^refs/heads", "refs/remotes/origin", $3)
+                                gsub("^refs/tags", "refs/remotes/origin/tags", $3)
+                        }
+                }
+                /^remote /{
+                        if($2=="HEAD"){
+                                headhash=$3
+                        }else if(match($2, "^refs/(heads|tags)/")){
+                                gsub("^refs/heads", "refs/remotes/origin", $2)
+                                if($2 == headref || (headref == "" && $3 == headhash))
+                                        headref=$2
+                                outfile = ".git/" $2
+                                outdir = outfile
+                                gsub("/?[^/]*/?$", "", outdir)
+                                system(sprintf("mkdir -p %q", outdir))
+                                print $3 > outfile
+                                close(outfile)
+                        }
+                }
+                END{
+                        if(headref != ""){
+                                remote = headref;
+                                refdir = headref;
+                                gsub("/?[^/]*/?$", "", refdir)
+                                gsub("^refs/remotes/origin", "refs/heads", headref)
+                                system("mkdir -p `{basename -d .git/"headref"}");
+                                system("cp .git/" remote " .git/" headref)
+                                print "ref: " headref > ".git/HEAD"
+                        }else if(headhash != ""){
+                                print "warning: detached head "headhash > "/fd/2"
+                                print headhash > ".git/HEAD"
+                        }
+                }
+        '} |[3] tr '\x0d' '\x0a' || die 'could not clone repository'
+
+        tree=.git/fs/HEAD/tree
+        lbranch=`{git/branch}
+        rbranch=`{echo $lbranch | subst 'heads' 'remotes/origin'}
+        echo checking out repository...
+        if(test -f .git/refs/$rbranch){
+                mkdir -p `{basename -d .git/refs/$lbranch}
+                cp .git/refs/$rbranch .git/refs/$lbranch
+                git/fs
+                @ {builtin cd $tree && tar cif /fd/1 .} | @ {tar xf /fd/0} \
+                        || die 'checkout failed:' $status
+                {for(f in `$nl{cd $tree && walk -f})
+                        echo 'T NOQID 0 '$f} > .git/INDEX9
+        }
+        if not{
+                echo no default branch >[1=2]
+                echo check out your code with git/branch >[1=2]
+        }
+}
+
+fn sigint {
+        echo cancelled clone $remote: cleaning $local >[1=2]
+        unmount $local/.git/fs >[2]/dev/null
+        rm -rf $local
+        exit interrupted
+}
+
+ @{clone}
+st=$status
+if(! ~ $st ''){
+        echo failed to clone $remote: cleaning $local >[1=2]
+        unmount $local/.git/fs >[2]/dev/null
+        rm -rf $local
+        exit $st
+}
+exit ''
+
+@
+
+
 
 \subsection{Fetching objects}
 
@@ -1658,7 +1751,6 @@ END{
 \label{chap:debugging-ocamlgit}
 
 %\section{[[ocamlgit dump]]}
-
 %\section{[[ocamlgit test]]}
 
 
@@ -1672,6 +1764,13 @@ END{
 \chapter{Error Management}
 %******************************************************************************
 \label{chap:error}
+
+<<fn [[die]](common.rc)>>=
+fn die{
+        >[1=2] echo $0: $*
+        exit $"*
+}
+@
 
 
 %******************************************************************************
