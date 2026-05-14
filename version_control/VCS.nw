@@ -248,7 +248,7 @@ rfork ne
 . /lib/git/common.rc
 
 flagfmt='u:upstream upstream,b:branch branch'; args='name'
-eval `''{auxrc/getflags $*} || exec auxrc/usage
+eval `{auxrc/getflags $*} || exec auxrc/usage
 
 dir=$1
 if(~ $#dir 0)
@@ -276,6 +276,7 @@ mkdir -p $dir/.git/^(fs objects)
 exit ''
 @
 %old: was branch=front, but more standard to use 'master' (or now 'main' on github)
+%old: was `''{auxrc/getflags} but useless skip here I think; ifs is not overriden
 
 %many things:
 % - rc -e, die early on error (see \book{Shell})
@@ -317,7 +318,7 @@ rfork ne
 gitup
 
 flagfmt='r:remove'; args='file ...'
-eval `''{auxrc/getflags $*} || exec auxrc/usage
+eval `{auxrc/getflags $*} || exec auxrc/usage
 
 s=A
 
@@ -420,164 +421,20 @@ if(~ $remove 1)
 rfork ne
 . /lib/git/common.rc
 
-fn findbranch{
-        branch=`{git/branch}
-        if(test -e $gitfs/branch/$branch/tree){
-                refpath=.git/refs/$branch
-                initial=false
-        }
-        if not if(test -e $gitfs/object/$branch/tree){
-                refpath=.git/HEAD
-                initial=false
-        }
-        if not if(! test -e $gitfs/HEAD/tree){
-                refpath=.git/refs/$branch
-                initial=true
-        }
-        if not
-                die 'invalid branch:' $branch
-}
-
-# Remove commentary lines.
-# Remove leading and trailing empty lines.
-# Combine consecutive empty lines between paragraphs.
-# Remove trailing spaces from lines.
-# Ensure there's trailing newline.
-fn cleanmsg{
-        awk '
-        /^[     ]*#/ {next}
-        /^[     ]*$/ {empty = 1; next}
-
-        wet && empty {printf "\n"}
-        {wet = 1; empty = 0}
-        {sub(/[         ]+$/, ""); print $0}
-        '
-}
-
-fn editmsg{
-        if(! test -s $msgfile.tmp){
-                >$msgfile.tmp {
-                        echo '# Author:' $name '<'$email'>'
-                        echo '#'
-                        for(p in $parents)
-                                echo '# parent:' $p
-                        git/walk -fAMR $files | subst '^' '# '
-                        echo '#'
-                        echo '# Commit message:'
-                }
-                edit=1
-        }
-        if(! ~ $#edit 0){
-                giteditor=`{git/conf core.editor}
-                if(~ $#editor 0)
-                        editor=$giteditor
-                if(~ $#editor 0)
-                        editor=hold
-                $editor $msgfile.tmp
-        }
-        cleanmsg < $msgfile.tmp > $msgfile
-        if(! test -s $msgfile)
-                die 'empty commit message'
-}
-
-fn parents{
-        if(! ~ $#revise 0)
-                parents=`{cat $gitfs/HEAD/parent}
-        if not if(test -f .git/merge-parents)
-                parents=`{cat .git/merge-parents | sort | uniq}
-        if not if(~ $initial true)
-                parents=()
-        if not
-                parents=`{git/query $branch}
-}
-
-fn commit{
-        msg=`''{cat $msgfile}
-        if(! ~ $#parents 0)
-                pflags='-p'^$parents
-        hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
-}
-
-fn update{
-        mkdir -p `{basename -d $refpath}
-        # Paranoia: let's not mangle the repo.
-        if(~ $#hash 0)
-                die 'botched commit'
-        rm -f .git/merge-parents
-        echo $branch: $hash
-        echo $hash > $refpath
-        for(f in $files){
-                if(! test -e $f && ! test -e .git/object/$hash/tree/$f)
-                        echo R NOQID 0 $f >> .git/INDEX9
-                if not
-                        echo T NOQID 0 $f >> .git/INDEX9
-        }
-}
-
-fn filterdiff{
-        awk '
-                function dump(){
-                        if(n == 0)
-                                return
-
-                        print "--- a/"f >>"/dev/cons"
-                        print "+++ b/"f >>"/dev/cons"
-                        for(i = 0; i < n; i++)
-                                print lines[i] >>"/dev/cons"
-                        printf("Commit this hunk?[n]  ") >>"/dev/cons"
-                        getline ans < "/dev/cons"
-                        if(ans ~ /[yY]/)
-                                for(i = 0; i < n; i++)
-                                        print lines[i]
-                        n = 0
-                }
-                /^---/{ next }
-                /^\+\+\+/{
-                        f = substr($0, 5)
-                        print "--- "f
-                        print "+++ "f
-                        n = 0
-                        next
-                }
-                /^@@/{ dump() }
-                { lines[n++] = $0 }
-                END{ dump() }
-        '
-}
-
-fn pickhunks{
-        p=$wdir/patch
-        if(test -f .git/fs/HEAD/tree/$i)
-                #<[12]/fd/0 >[13]/fd/1 { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p }
-                { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p } || status=''
-        if not
-                diff -u /dev/null $1 >>$p || status=''
-}
-
-fn apply{
-        t=$wdir/tree/
-        p=$wdir/patch
-        ln=`{wc -l $p}
-        if(test $ln(1) -lt 3)
-                die 'no hunks seleted'
-        f=`{patch -n $p}
-        mkdir $t
-        @{cd .git/fs/HEAD/tree; tar c $f >[2]/dev/null} | @{cd $t; tar xT}
-        for(i in $f){
-                d=`{basename -d $i}
-                if(! ~ $d .){
-                        mkdir -p $t^$d
-                        bind -bc $t^$d $d
-                }
-        }
-        bind -bc $t .
-        patch <$p >/dev/null || die 'failed partial patch: '^$status
-}
+<<fn [[findbranch]](commit.rc)>>
+<<fn [[cleanmsg]](commit.rc)>>
+<<fn [[editmsg]](commit.rc)>>
+<<fn [[parents]](commit.rc)>>
+<<fn [[commit]](commit.rc)>>
+<<fn [[update]](commit.rc)>>
+<<fn [[filterdiff]](commit.rc)>>
+<<fn [[pickhunks]](commit.rc)>>
+<<fn [[apply]](commit.rc)>>
 
 gitup
 
 flagfmt='m:msg message, r:revise, e:edit, p:partial'; args='[file ...]'
-eval `''{auxrc/getflags $*} || exec auxrc/usage
+eval `{auxrc/getflags $*} || exec auxrc/usage
 
 wdir=/mnt/git
 ramfs -m $wdir
@@ -613,8 +470,192 @@ if(~ $#partial 1){
         update
 } || die 'could not commit:' $status
 exit ''
-
 @
+
+% flag e +  actually disable the flag, so no more exit on error inside
+% subshell because want better error message with the die after
+
+
+
+
+
+
+
+
+
+
+<<fn [[findbranch]](commit.rc)>>=
+fn findbranch{
+        branch=`{git/branch}
+        if(test -e $gitfs/branch/$branch/tree){
+                refpath=.git/refs/$branch
+                initial=false
+        }
+        if not if(test -e $gitfs/object/$branch/tree){
+                refpath=.git/HEAD
+                initial=false
+        }
+        if not if(! test -e $gitfs/HEAD/tree){
+                refpath=.git/refs/$branch
+                initial=true
+        }
+        if not
+                die 'invalid branch:' $branch
+}
+@
+
+<<fn [[cleanmsg]](commit.rc)>>=
+# Remove commentary lines.
+# Remove leading and trailing empty lines.
+# Combine consecutive empty lines between paragraphs.
+# Remove trailing spaces from lines.
+# Ensure there's trailing newline.
+fn cleanmsg{
+        awk '
+        /^[     ]*#/ {next}
+        /^[     ]*$/ {empty = 1; next}
+
+        wet && empty {printf "\n"}
+        {wet = 1; empty = 0}
+        {sub(/[         ]+$/, ""); print $0}
+        '
+}
+@
+
+<<fn [[editmsg]](commit.rc)>>=
+fn editmsg{
+        if(! test -s $msgfile.tmp){
+                >$msgfile.tmp {
+                        echo '# Author:' $name '<'$email'>'
+                        echo '#'
+                        for(p in $parents)
+                                echo '# parent:' $p
+                        git/walk -fAMR $files | subst '^' '# '
+                        echo '#'
+                        echo '# Commit message:'
+                }
+                edit=1
+        }
+        if(! ~ $#edit 0){
+                giteditor=`{git/conf core.editor}
+                if(~ $#editor 0)
+                        editor=$giteditor
+                if(~ $#editor 0)
+                        editor=hold
+                $editor $msgfile.tmp
+        }
+        cleanmsg < $msgfile.tmp > $msgfile
+        if(! test -s $msgfile)
+                die 'empty commit message'
+}
+@
+
+<<fn [[parents]](commit.rc)>>=
+fn parents{
+        if(! ~ $#revise 0)
+                parents=`{cat $gitfs/HEAD/parent}
+        if not if(test -f .git/merge-parents)
+                parents=`{cat .git/merge-parents | sort | uniq}
+        if not if(~ $initial true)
+                parents=()
+        if not
+                parents=`{git/query $branch}
+}
+@
+
+<<fn [[commit]](commit.rc)>>=
+fn commit{
+        msg=`''{cat $msgfile}
+        if(! ~ $#parents 0)
+                pflags='-p'^$parents
+        hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
+}
+@
+
+<<fn [[update]](commit.rc)>>=
+fn update{
+        mkdir -p `{basename -d $refpath}
+        # Paranoia: let's not mangle the repo.
+        if(~ $#hash 0)
+                die 'botched commit'
+        rm -f .git/merge-parents
+        echo $branch: $hash
+        echo $hash > $refpath
+        for(f in $files){
+                if(! test -e $f && ! test -e .git/object/$hash/tree/$f)
+                        echo R NOQID 0 $f >> .git/INDEX9
+                if not
+                        echo T NOQID 0 $f >> .git/INDEX9
+        }
+}
+@
+
+<<fn [[filterdiff]](commit.rc)>>=
+fn filterdiff{
+        awk '
+                function dump(){
+                        if(n == 0)
+                                return
+
+                        print "--- a/"f >>"/dev/cons"
+                        print "+++ b/"f >>"/dev/cons"
+                        for(i = 0; i < n; i++)
+                                print lines[i] >>"/dev/cons"
+                        printf("Commit this hunk?[n]  ") >>"/dev/cons"
+                        getline ans < "/dev/cons"
+                        if(ans ~ /[yY]/)
+                                for(i = 0; i < n; i++)
+                                        print lines[i]
+                        n = 0
+                }
+                /^---/{ next }
+                /^\+\+\+/{
+                        f = substr($0, 5)
+                        print "--- "f
+                        print "+++ "f
+                        n = 0
+                        next
+                }
+                /^@@/{ dump() }
+                { lines[n++] = $0 }
+                END{ dump() }
+        '
+}
+@
+
+<<fn [[pickhunks]](commit.rc)>>=
+fn pickhunks{
+        p=$wdir/patch
+        if(test -f .git/fs/HEAD/tree/$i)
+                #<[12]/fd/0 >[13]/fd/1 { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p }
+                { diff -u .git/fs/HEAD/tree/$1 $1 | filterdiff >>$p } || status=''
+        if not
+                diff -u /dev/null $1 >>$p || status=''
+}
+@
+
+<<fn [[apply]](commit.rc)>>=
+fn apply{
+        t=$wdir/tree/
+        p=$wdir/patch
+        ln=`{wc -l $p}
+        if(test $ln(1) -lt 3)
+                die 'no hunks seleted'
+        f=`{patch -n $p}
+        mkdir $t
+        @{cd .git/fs/HEAD/tree; tar c $f >[2]/dev/null} | @{cd $t; tar xT}
+        for(i in $f){
+                d=`{basename -d $i}
+                if(! ~ $d .){
+                        mkdir -p $t^$d
+                        bind -bc $t^$d $d
+                }
+        }
+        bind -bc $t .
+        patch <$p >/dev/null || die 'failed partial patch: '^$status
+}
+@
+
 
 
 \section{Computing the trees from an index}
