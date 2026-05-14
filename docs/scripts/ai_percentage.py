@@ -96,6 +96,7 @@ BOOKS = [
     ("Web browser",      "browsers",        ["Browser.nw", "Browser_extra.nw"]),
     ("CLI utilities",    "utilities",       ["Utilities.nw", "Utilities_extra.nw"]),
     ("Emulator",         "machine",         ["Machine.nw", "Machine_extra.nw"]),
+    ("VCS",         "version_control",      ["VCS.nw", "Intro.nw", "Overview.nw", "VCS_extra.nw"]),
 ]
 
 
