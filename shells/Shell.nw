@@ -9269,6 +9269,141 @@ addutf(char *p, int c)
 
 \section{Advanced constructs}
 
+\subsection{Command substitution: \texttt{`\{<cmd>\}}}
+% Command output as arguments
+% pretty useful, see git9 scripts
+
+% just like easy to run command, pretty easy to capture output
+% of command in a var. Natural extension.
+%history: also in bourne shell
+
+% by using `{} instead of ``
+% it allows to easily nest (see Design chapter in rc paper).
+
+%claude:
+Command substitution captures a command's stdout as a list
+of words.  The Bourne shell uses backticks [[`cmd`]],
+which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
+which nests naturally.
+
+The output is split into words using [[$ifs]]
+(inter-field separators, defaulting to space, tab, newline).
+The implementation forks a child connected via a pipe;
+the parent reads the output, splits on [[$ifs]] characters,
+and pushes the resulting word list onto the argv stack.
+
+<<comword rule other cases>>=
+|   '`' brace       {$$=tree2('`', nil, $2);}
+|   '`' word brace  {$$=tree2('`', $2, $3);}
+@
+
+
+<<[[outcode()]] cases>>=
+case '`':
+    emitf(Xmark);
+    if(c0){
+        outcode(c0, 0);
+        emitf(Xglob);
+    } else {
+        emitf(Xmark);
+        emitf(Xword);
+        emits(strdup("ifs"));
+        emitf(Xdol);
+    }
+    emitf(Xbackq);
+    p = emiti(0);
+    outcode(c1, false);
+    emitf(Xexit);
+    stuffdot(p);
+    break;
+@
+% false eflag here
+
+% * Xbackq{... Xreturn}			make thread for {}, push stdout
+
+<<function [[Xbackq]]>>=
+/*
+ * Who should wait for the exit from the fork?
+ */
+void
+Xbackq(void)
+{
+    int n, pid;
+    int pfd[2];
+    char *stop;
+    char utf[UTFmax+1];
+    struct Io *f;
+    word *v, *nextv;
+    Rune r;
+    String *word;
+
+
+    stop = "";
+    if(runq->argv && runq->argv->words)
+        stop = runq->argv->words->word;
+    if(pipe(pfd)<0){
+        Xerror("can't make pipe");
+        return;
+    }
+    switch(pid = fork()){
+    case -1:
+        Xerror("try again");
+        close(pfd[PRD]);
+        close(pfd[PWR]);
+        return;
+    case 0: // child
+        clearwaitpids();
+        close(pfd[PRD]);
+        start(runq->code, runq->pc+1, runq->local);
+        pushredir(ROPEN, pfd[PWR], 1);
+        return;
+    default: // parent
+        //pad: was commented at some point to remove the only dependency to
+        //str.h (libstring) that I originally didn't want to port to goken
+        addwaitpid(pid);
+        close(pfd[PWR]);
+        f = openfd(pfd[PRD]);
+        word = s_new();
+        v = nil;
+        /* rutf requires at least UTFmax+1 bytes in utf */
+        while((n = rutf(f, utf, &r)) != EOF){
+            utf[n] = '\0';
+            if(utfutf(stop, utf) == nil)
+                s_nappend(word, utf, n);
+            else
+                /*
+                 * utf/r is an ifs rune (e.g., \t, \n), thus
+                 * ends the current word, if any.
+                 */
+                if(s_len(word) > 0){
+                    v = newword(s_to_c(word), v);
+                    s_reset(word);
+                }
+        }
+        if(s_len(word) > 0)
+            v = newword(s_to_c(word), v);
+        s_free(word);
+        closeio(f);
+        Waitfor(pid, false);
+        poplist();	/* ditch split in "stop" */
+        /* v points to reversed arglist -- reverse it onto argv */
+        while(v){
+            nextv = v->next;
+            v->next = runq->argv->words;
+            runq->argv->words = v;
+            v = nextv;
+        }
+        runq->pc = runq->code[runq->pc].i;
+        return;
+    }
+}
+@
+%old: before the `split{} extension:
+% var *ifs = vlook("ifs");
+% stop = ifs->val? ifs->val->word: "";
+
+
+
 \subsection{Subshell: [[@ <cmd>]]}
 
 % why need that? () not enough? { } not enough?
@@ -10007,140 +10142,6 @@ Xpipefd(void)
     }
 }
 @
-
-
-
-\subsection{Command substitution: \texttt{`\{<cmd>\}}}
-% Command output as arguments
-
-% just like easy to run command, pretty easy to capture output
-% of command in a var. Natural extension.
-%history: also in bourne shell
-
-% by using `{} instead of ``
-% it allows to easily nest (see Design chapter in rc paper).
-
-%claude:
-Command substitution captures a command's stdout as a list
-of words.  The Bourne shell uses backticks [[`cmd`]],
-which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
-which nests naturally.
-
-The output is split into words using [[$ifs]]
-(inter-field separators, defaulting to space, tab, newline).
-The implementation forks a child connected via a pipe;
-the parent reads the output, splits on [[$ifs]] characters,
-and pushes the resulting word list onto the argv stack.
-
-<<comword rule other cases>>=
-|   '`' brace       {$$=tree2('`', nil, $2);}
-|   '`' word brace  {$$=tree2('`', $2, $3);}
-@
-
-
-<<[[outcode()]] cases>>=
-case '`':
-    emitf(Xmark);
-    if(c0){
-        outcode(c0, 0);
-        emitf(Xglob);
-    } else {
-        emitf(Xmark);
-        emitf(Xword);
-        emits(strdup("ifs"));
-        emitf(Xdol);
-    }
-    emitf(Xbackq);
-    p = emiti(0);
-    outcode(c1, false);
-    emitf(Xexit);
-    stuffdot(p);
-    break;
-@
-% false eflag here
-
-% * Xbackq{... Xreturn}			make thread for {}, push stdout
-
-<<function [[Xbackq]]>>=
-/*
- * Who should wait for the exit from the fork?
- */
-void
-Xbackq(void)
-{
-    int n, pid;
-    int pfd[2];
-    char *stop;
-    char utf[UTFmax+1];
-    struct Io *f;
-    word *v, *nextv;
-    Rune r;
-    String *word;
-
-
-    stop = "";
-    if(runq->argv && runq->argv->words)
-        stop = runq->argv->words->word;
-    if(pipe(pfd)<0){
-        Xerror("can't make pipe");
-        return;
-    }
-    switch(pid = fork()){
-    case -1:
-        Xerror("try again");
-        close(pfd[PRD]);
-        close(pfd[PWR]);
-        return;
-    case 0: // child
-        clearwaitpids();
-        close(pfd[PRD]);
-        start(runq->code, runq->pc+1, runq->local);
-        pushredir(ROPEN, pfd[PWR], 1);
-        return;
-    default: // parent
-        //pad: was commented at some point to remove the only dependency to
-        //str.h (libstring) that I originally didn't want to port to goken
-        addwaitpid(pid);
-        close(pfd[PWR]);
-        f = openfd(pfd[PRD]);
-        word = s_new();
-        v = nil;
-        /* rutf requires at least UTFmax+1 bytes in utf */
-        while((n = rutf(f, utf, &r)) != EOF){
-            utf[n] = '\0';
-            if(utfutf(stop, utf) == nil)
-                s_nappend(word, utf, n);
-            else
-                /*
-                 * utf/r is an ifs rune (e.g., \t, \n), thus
-                 * ends the current word, if any.
-                 */
-                if(s_len(word) > 0){
-                    v = newword(s_to_c(word), v);
-                    s_reset(word);
-                }
-        }
-        if(s_len(word) > 0)
-            v = newword(s_to_c(word), v);
-        s_free(word);
-        closeio(f);
-        Waitfor(pid, false);
-        poplist();	/* ditch split in "stop" */
-        /* v points to reversed arglist -- reverse it onto argv */
-        while(v){
-            nextv = v->next;
-            v->next = runq->argv->words;
-            runq->argv->words = v;
-            v = nextv;
-        }
-        runq->pc = runq->code[runq->pc].i;
-        return;
-    }
-}
-@
-%old: before the `split{} extension:
-% var *ifs = vlook("ifs");
-% stop = ifs->val? ifs->val->word: "";
 
 
 
