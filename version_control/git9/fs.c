@@ -36,17 +36,23 @@ typedef struct Crumb Crumb;
 typedef struct Cache Cache;
 typedef struct Uqid Uqid;
 
+/*s: struct [[Crumb]] */
 struct Crumb {
     char    *name;
+
     Object  *obj;
+
     Qid qid;
     int mode;
     vlong   mtime;
 };
-
+/*e: struct [[Crumb]] */
+/*s: struct [[Gitaux]] */
 struct Gitaux {
     int ncrumb;
+    // growing_array<ref_own<Crumb>> len = ncrumb
     Crumb   *crumb;
+
     char    *refpath;
     int qdir;
 
@@ -54,6 +60,7 @@ struct Gitaux {
     Objlist *ols;
     Object  *olslast;
 };
+/*e: struct [[Gitaux]] */
 
 struct Uqid {
     vlong   uqid;
@@ -107,7 +114,9 @@ char *qroot[] = {
 #define Ebadobj "invalid object"
 /*e: constant [[Ebadobj]] */
 
+/*s: global [[gitdir]] */
 char    gitdir[512];
+/*e: global [[gitdir]] */
 /*s: global [[username]] */
 char    *username;
 /*e: global [[username]] */
@@ -212,10 +221,12 @@ obj2dir(Dir *d, Crumb *c, Object *o, char *name)
     d->atime = c->mtime;
     d->mtime = c->mtime;
     d->mode = c->mode;
+
     d->name = estrdup9p(name);
     d->uid = estrdup9p(username);
     d->gid = estrdup9p(groupname);
     d->muid = estrdup9p(username);
+
     if(o->type == GBlob || o->type == GTag){
         d->qid.type = 0;
         d->mode &= 0777;
@@ -460,11 +471,14 @@ gitattach(Req *r)
     Gitaux *aux;
     Dir *d;
 
-    if((d = dirstat(".git")) == nil)
+    d = dirstat(".git");
+    if(d == nil)
         sysfatal("git/fs: %r");
     if(getwd(gitdir, sizeof(gitdir)) == nil)
         sysfatal("getwd: %r");
     aux = emalloc(sizeof(Gitaux));
+
+    /*s: [[gitattach()]] set [[aux]] */
     aux->crumb = emalloc(sizeof(Crumb));
     aux->crumb[0].qid = (Qid){Qroot, 0, QTDIR};
     aux->crumb[0].obj = nil;
@@ -472,9 +486,12 @@ gitattach(Req *r)
     aux->crumb[0].mtime = d->mtime;
     aux->crumb[0].name = estrdup("/");
     aux->ncrumb = 1;
+    /*e: [[gitattach()]] set [[aux]] */
+
     r->ofcall.qid = (Qid){Qroot, 0, QTDIR};
     r->fid->qid = r->ofcall.qid;
     r->fid->aux = aux;
+
     respond(r, nil);
 }
 /*e: function [[gitattach]] */
@@ -658,14 +675,16 @@ gitwalk1(Fid *fid, char *name, Qid *q)
     
     aux->crumb = realloc(aux->crumb, (aux->ncrumb + 1) * sizeof(Crumb));
     aux->ncrumb++;
+
     c = crumb(aux, 0);
     o = crumb(aux, 1);
     memset(c, 0, sizeof(Crumb));
     c->mode = o->mode;
     c->mtime = o->mtime;
-        c->obj = o->obj ? ref(o->obj) : nil;
+    c->obj = o->obj ? ref(o->obj) : nil;
     
     switch(QDIR(&fid->qid)){
+    /*s: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qroot:
         if(strcmp(name, "HEAD") == 0){
             *q = (Qid){Qhead, 0, QTDIR};
@@ -738,6 +757,7 @@ gitwalk1(Fid *fid, char *name, Qid *q)
     case Qcommitter:
     case Qctl:
         return Enodir;
+    /*e: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     default:
         return Egreg;
     }
@@ -758,6 +778,7 @@ gitclone(Fid *o, Fid *n)
 
     oaux = o->aux;
     aux = emalloc(sizeof(Gitaux));
+
     aux->ncrumb = oaux->ncrumb;
     aux->crumb = eamalloc(oaux->ncrumb, sizeof(Crumb));
     for(i = 0; i < aux->ncrumb; i++){
@@ -841,6 +862,7 @@ gitread(Req *r)
     e = nil;
 
     switch(QDIR(q)){
+    /*s: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qroot:
         dirread9p(r, rootgen, aux);
         break;
@@ -889,6 +911,7 @@ gitread(Req *r)
     case Qcdata:
         objread(r, aux);
         break;
+    /*e: [[gitread()]] switch [[QDIR(q)]] cases */
     default:
         e = Egreg;
     }
@@ -905,21 +928,21 @@ gitopen(Req *r)
     aux = r->fid->aux;
     c = crumb(aux, 0);
     switch(r->ifcall.mode&3){
-    default:
-        respond(r, "botched mode");
-        break;
-    case OWRITE:
-        respond(r, Eperm);
-        break;
     case OREAD:
     case ORDWR:
         respond(r, nil);
+        break;
+    case OWRITE:
+        respond(r, Eperm);
         break;
     case OEXEC:
         if((c->mode & 0111) == 0)
             respond(r, Eperm);
         else
             respond(r, nil);
+        break;
+    default:
+        respond(r, "botched mode");
         break;
     }
 }
@@ -933,13 +956,16 @@ gitstat(Req *r)
 
     aux = r->fid->aux;
     c = crumb(aux, 0);
+
     r->d.uid = estrdup9p(username);
     r->d.gid = estrdup9p(groupname);
     r->d.muid = estrdup9p(username);
+
     r->d.qid = r->fid->qid;
     r->d.mtime = c->mtime;
     r->d.atime = c->mtime;
     r->d.mode = c->mode;
+
     if(c->obj)
         obj2dir(&r->d, c, c->obj, c->name);
     else

@@ -32,15 +32,19 @@ enum {
     MiB     = 1024*KiB,
 };
 
-enum {
+/*s: enum [[Gxxx]] */
+enum Gxxx {
     GNone   = 0,
+
     GCommit = 1,
     GTree   = 2,
     GBlob   = 3,
+
     GTag    = 4,
     GOdelta = 6,
     GRdelta = 7,
 };
+/*e: enum [[Gxxx]] */
 
 enum {
     Cloaded = 1 << 0,
@@ -78,9 +82,11 @@ struct Objlist {
     int entidx;
 };
 
+/*s: struct [[Hash]] */
 struct Hash {
     uchar h[20];
 };
+/*e: struct [[Hash]] */
 
 struct Conn {
     int type;
@@ -110,15 +116,18 @@ struct Dirent {
     char islink;
 };
 
+/*s: struct [[Object]] */
 struct Object {
     /* Git data */
     Hash    hash;
+    // enum<??>
     int type;
 
     /* Cache */
     int id;
     int flag;
     int refs;
+
     Object  *next;
     Object  *prev;
 
@@ -139,6 +148,7 @@ struct Object {
         Tinfo   *tree;
     };
 };
+/*e: struct [[Object]] */
 
 struct Tinfo {
     /* Tree */
