@@ -158,6 +158,34 @@ struct Hash {
 
 % %H in fmt
 
+<<pragmas varargck>>=
+#pragma varargck type "H" Hash
+@
+<<[[gitinit()]] fmtinstall calls>>=
+fmtinstall('H', Hfmt);
+@
+<<function [[Hfmt]]>>=
+int
+Hfmt(Fmt *fmt)
+{
+    Hash h;
+    int i, n, l;
+    char c0, c1;
+
+    l = 0;
+    h = va_arg(fmt->args, Hash);
+    for(i = 0; i < sizeof h.h; i++){
+        n = (h.h[i] >> 4) & 0xf;
+        c0 = (n >= 10) ? n-10 + 'a' : n + '0';
+        n = h.h[i] & 0xf;
+        c1 = (n >= 10) ? n-10 + 'a' : n + '0';
+        l += fmtprint(fmt, "%c%c", c0, c1);
+    }
+    return l;
+}
+@
+
+
 
 \subsection{Conversion functions}
 
@@ -372,6 +400,20 @@ struct Tinfo {
     Dirent  *ent;
     int nent;
 };
+@
+
+<<struct [[Dirent]]>>=
+struct Dirent {
+    char *name;
+    int mode;
+    Hash h;
+    <<[[Dirent]] other fields>>
+};
+@
+
+%XXX
+<<[[Dirent]] other fields>>=
+char ismod;
 @
 
 
@@ -1526,24 +1568,6 @@ case Qobject:
 @
 % faster path, no need to get the dir with all content?
 
-\subsubsection{[[readobject()]]}
-
-<<function [[readobject]]>>=
-/*
- * Loads and returns a cached object.
- */
-Object*
-readobject(Hash h)
-{
-    Object *o;
-
-    if((o = readidxobject(nil, h, 0)) == nil)
-        return nil;
-    parseobject(o);
-    ref(o);
-    return o;
-}
-@
 
 \subsubsection{[[objwalk1()]]}
 
@@ -1642,16 +1666,14 @@ gtreegen(int i, Dir *d, void *p)
     c = crumb(aux, 0);
     e = c->obj;
     if(i >= e->tree->nent)
-        return -1;
+        return ERROR_NEG1;
     m = e->tree->ent[i].mode;
     if(e->tree->ent[i].ismod)
         o = emptydir();
     else if((o = readobject(e->tree->ent[i].h)) == nil)
         sysfatal("could not read object %H: %r", e->tree->ent[i].h);
 
-    if(e->tree->ent[i].islink)
-        if((l = walklink(aux, o->data, o->size, 0, &m)) != nil)
-            o = l;
+    <<[[gtreegen()]] if [[e->tree->ent[i].islink]]>>
 
     d->qid.vers = 0;
     d->qid.type = o->type == GTree ? QTDIR : 0;
@@ -1664,7 +1686,7 @@ gtreegen(int i, Dir *d, void *p)
     d->muid = estrdup9p(username);
     d->name = estrdup9p(e->tree->ent[i].name);
     d->length = o->size;
-    return 0;
+    return OK_0;
 }
 @
 
@@ -1685,9 +1707,7 @@ case GTree:
         if(!w && o->tree->ent[i].ismod)
             w = emptydir();
 
-        if(w && o->tree->ent[i].islink)
-            if((l = walklink(aux, w->data, w->size, 1, &m)) != nil)
-                w = l;
+        <<[[objwalk1()]] when [[GTree]] case, if [[o->tree->ent[i].islink]]>>
 
         if(!w)
             return Ebadobj;
@@ -2110,6 +2130,25 @@ case 'm':
 \label{chap:reading}
 
 \section{Objects}
+
+\subsection{[[readobject()]]}
+
+<<function [[readobject]]>>=
+/*
+ * Loads and returns a cached object.
+ */
+Object*
+readobject(Hash h)
+{
+    Object *o;
+
+    if((o = readidxobject(nil, h, 0)) == nil)
+        return nil;
+    parseobject(o);
+    ref(o);
+    return o;
+}
+@
 
 
 \subsection{Decompression}
@@ -3263,6 +3302,10 @@ usage(void)
 
 \subsection{[[main()]]}
 
+<<global [[commitid]](log.c)>>=
+char    *commitid;
+@
+
 <<function [[main (git9/log.c)]]>>=
 void
 main(int argc, char **argv)
@@ -3289,8 +3332,8 @@ main(int argc, char **argv)
     }ARGEND;
 
     gitinit(repo, sizeof(repo), &nrel);
-
     nrepo = strlen(repo);
+
     if(argc != 0){
         if(getwd(path, sizeof(path)) == nil)
             sysfatal("getwd: %r");
@@ -3310,34 +3353,152 @@ main(int argc, char **argv)
             free(r);
         }
     }
-    if(chdir(repo) == -1)
+    // !!chdir!!
+    if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
     //9front-only
     //tmfmtinstall();
-    out = Bfdopen(1, OWRITE);
+    out = Bfdopen(STDOUT, OWRITE);
+
     if(queryexpr != nil)
         showquery(queryexpr);
     else
         showcommits(commitid);
+
     Bterm(out);
     exits(nil);
 }
 @
 
+\subsection{[[showcommits()]]}
 
-\subsection{Printing a commit}
-\subsection{Diff summary: [[git log --name-status]]}
-\subsection{Comparing trees}
+<<function [[showcommits]]>>=
+static void
+showcommits(char *c)
+{
+    Object *o, *p;
+    Qelt e;
+    int i;
+    Hash h;
+
+    if(c == nil)
+        c = "HEAD";
+    if(resolveref(&h, c) == -1)
+        sysfatal("resolve %s: %r", c);
+    if((o = readobject(h)) == nil)
+        sysfatal("load %H: %r", h);
+    if(o->type != GCommit)
+        sysfatal("%s: not a commit", c);
+    qinit(&objq);
+    osinit(&done);
+    qput(&objq, o, 0);
+    while(qpop(&objq, &e) && (msgcount == -1 || msgcount > 0)){
+        if(matchesfilter(e.o)){
+            show(e.o);
+            if(msgcount != -1)
+                msgcount--;
+        }
+        for(i = 0; i < e.o->commit->nparent; i++){
+            if(oshas(&done, e.o->commit->parent[i]))
+                continue;
+            if((p = readobject(e.o->commit->parent[i])) == nil)
+                sysfatal("load %H: %r", o->commit->parent[i]);
+            osadd(&done, p);
+            qput(&objq, p, 0);
+        }
+        unref(e.o);
+    }
+}
+@
+
+\subsection{[[show()]]}
+
+<<function [[show]]>>=
+static int
+show(Object *o)
+{
+    //Tm tm;
+    char *p, *q, *e;
+
+    assert(o->type == GCommit);
+    if(shortlog){
+        p = o->commit->msg;
+        e = p + o->commit->nmsg;
+        q = nextline(p, e);
+        Bprint(out, "%H ", o->hash);
+        Bwrite(out, p, q - p);
+        Bputc(out, '\n');
+    }else{
+        //9front only
+        //tmtime(&tm, o->commit->mtime, tzload("local"));
+        Bprint(out, "Hash:\t%H\n", o->hash);
+        Bprint(out, "Author:\t%s\n", o->commit->author);
+        if(o->commit->committer != nil
+        && strcmp(o->commit->author, o->commit->committer) != 0)
+            Bprint(out, "Committer:\t%s\n", o->commit->committer);
+        //Bprint(out, "Date:\t%τ\n", tmfmt(&tm, "WW MMM D hh:mm:ss z YYYY"));
+        Bprint(out, "Date:\t%s", ctime(o->commit->mtime));
+        Bprint(out, "\n");
+        p = o->commit->msg;
+        e = p + o->commit->nmsg;
+        for(; p != e; p = q){
+            q = nextline(p, e);
+            Bputc(out, '\t');
+            Bwrite(out, p, q - p);
+            Bputc(out, '\n');
+            if(q != e)
+                q++;
+        }
+        Bprint(out, "\n");
+    }
+    Bflush(out);
+    return 1;
+}
+@
+
+\subsection{[[showquery()]]}
+
+<<function [[showquery]]>>=
+static void
+showquery(char *q)
+{
+    Object *o;
+    Hash *h;
+    int n, i;
+
+    if((n = resolverefs(&h, q)) == -1)
+        sysfatal("resolve: %r");
+    for(i = 0; i < n && (msgcount == -1 || msgcount > 0); i++){
+        if((o = readobject(h[i])) == nil)
+            sysfatal("read %H: %r", h[i]);
+        if(matchesfilter(o)){
+            show(o);
+            if(msgcount != -1)
+                msgcount--;
+        }
+        unref(o);
+    }
+    exits(nil);
+}
+@
+
+\subsection{Advanced features}
+
+\subsubsection{[[git log -s]] short log}
+
+%\subsection{Printing a commit}
+
+%\subsection{Diff summary: [[git log --name-status]]}
+
+%\subsection{Comparing trees}
 
 
 
-\section{Showing the content of an object: [[git show]]}
-\subsection{Showing a blob}
-\subsection{Showing a tree}
-\subsection{Showing a commit}
-
-
+%\section{Showing the content of an object: [[git show]]}
+%\subsection{Showing a blob}
+%\subsection{Showing a tree}
+%\subsection{Showing a commit}
 
 
 \section{Representing changes}
@@ -3448,14 +3609,10 @@ exit ''
 
 \section{[[Pack.t]]}
 
-\subsection{Pack data}
-
-\subsection{Pack Index}
-
-\subsubsection{Index pack v1}
-
-\subsubsection{Index pack v2}
-
+%\subsection{Pack data}
+%\subsection{Pack Index}
+%\subsubsection{Index pack v1}
+%\subsubsection{Index pack v2}
 
 \section{IO}
 
@@ -3510,23 +3667,77 @@ loadpack(Packf *pf, char *name)
 \subsection{Writing a pack}
 
 \section{Modifications to previous functions and data structures}
-
 \subsection{Object Store}
-
 \subsection{Refs}
-
 
 
 \section{Delta}
 
 
-
 \section{Pack commands}
 
-\subsection{[[git pack-objects]]}
+%\subsection{[[git pack-objects]]}
 \subsection{[[git repack]]}
-\subsection{[[git fetch-pack]]}
-\subsection{[[git receive-pack]]}
+
+\subsubsection{Usage}
+
+<<function [[usage (git9/repack.c)]]>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: %s [-d]\n", argv0);
+    exits("usage");
+}
+@
+
+\subsubsection{[[main.c]]}
+
+<<function [[main (git9/repack.c)]]>>=
+void
+main(int argc, char **argv)
+{
+    char path[128], **names;
+    int fd, nrefs;
+    Hash *refs, h;
+    Dir rn;
+
+    ARGBEGIN{
+    case 'd':
+        chattygit++;
+        break;
+    default:
+        usage();
+    }ARGEND;
+
+    gitinit(nil, 0, nil);
+    refs = nil;
+    if((nrefs = listrefs(&refs, &names)) == -1)
+        sysfatal("load refs: %r");
+    if((fd = create(TMPPATH("pack.tmp"), OWRITE, 0644)) == -1)
+        sysfatal("open %s: %r", TMPPATH("pack.tmp"));
+    if(writepack(fd, refs, nrefs, nil, 0, &h) == -1)
+        sysfatal("writepack: %r");
+    if(indexpack(TMPPATH("pack.tmp"), TMPPATH("idx.tmp"), h) == -1)
+        sysfatal("indexpack: %r");
+    close(fd);
+
+    nulldir(&rn);
+    rn.name = path;
+    snprint(path, sizeof(path), "%H.pack", h);
+    if(dirwstat(TMPPATH("pack.tmp"), &rn) == -1)
+        sysfatal("rename pack: %r");
+    snprint(path, sizeof(path), "%H.idx", h);
+    if(dirwstat(TMPPATH("idx.tmp"), &rn) == -1)
+        sysfatal("rename pack: %r");
+    if(cleanup(h) == -1)
+        sysfatal("cleanup: %r");
+    exits(nil);
+}
+@
+
+
+%\subsection{[[git fetch-pack]]}
+%\subsection{[[git receive-pack]]}
 
 %******************************************************************************
 \chapter{Exchanging}
@@ -4008,7 +4219,61 @@ exit ''
 %******************************************************************************
 \label{chap:networking}
 
+
+<<function [[gitconnect]]>>=
+/// ??? -> <>
+int
+gitconnect(Conn *c, char *uri, char *direction)
+{
+    char proto[Nproto], host[Nhost], port[Nport], path[Npath];
+
+    memset(c, 0, sizeof(Conn));
+    c->rfd = c->wfd = c->cfd = -1;
+
+    if(localrepo(uri, path, sizeof(path)) == 0)
+        return servelocal(c, path, direction);
+
+    if(parseuri(uri, proto, host, port, path) == -1){
+        werrstr("bad uri %s", uri);
+        return -1;
+    }
+    if(strcmp(proto, "ssh") == 0)
+        return dialssh(c, host, port, path, direction);
+    else if(strcmp(proto, "git") == 0)
+        return dialgit(c, host, port, path, direction);
+    else if(strcmp(proto, "hjgit") == 0)
+        return dialhjgit(c, host, port, path, direction, 1);
+    else if(strcmp(proto, "gits") == 0)
+        return dialhjgit(c, host, port, path, direction, 0);
+    else if(strcmp(proto, "http") == 0 || strcmp(proto, "https") == 0)
+        return dialhttp(c, host, port, path, direction);
+    werrstr("unknown protocol %s", proto);
+    return -1;
+}
+@
+
+
 \section{[[git://]] protocol}
+
+<<function [[dialgit]]>>=
+static int
+dialgit(Conn *c, char *host, char *port, char *path, char *direction)
+{
+    char *ds;
+    int fd;
+
+    if((ds = netmkaddr(host, "tcp", port)) == nil)
+        return -1;
+    dprint(1, "dial %s git-%s-pack %s\n", ds, direction, path);
+    fd = dial(ds, nil, nil, nil);
+    if(fd == -1)
+        return -1;
+    c->type = ConnGit;
+    c->rfd = fd;
+    c->wfd = dup(fd, -1);
+    return githandshake(c, host, path, direction);
+}
+@
 
 \subsection{Reading packets}
 \subsection{Writing packets}
@@ -4024,8 +4289,83 @@ exit ''
 \subsection{Sending pack files}
 
 \section{[[git://]] server}
-\subsection{[[git-upload-pack]]}
-\subsection{[[git-receive-pack]]}
+
+\subsection{[[git/serve]]}
+%git9:
+
+\subsubsection{Usage}
+
+<<function [[usage (git9/serve.c)]]>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: %s [-dw] [-r rel]\n", argv0);
+    exits("usage");
+}
+@
+
+\subsubsection{[[main.c]]}
+
+<<function [[main (git9/serve.c)]]>>=
+void
+main(int argc, char **argv)
+{
+    char *repo, cmd[32], buf[512];
+    Conn c;
+
+    ARGBEGIN{
+    case 'd':
+        chattygit++;
+        break;
+    case 'r':
+        pathpfx = EARGF(usage());
+        if(*pathpfx != '/')
+            sysfatal("path prefix must begin with '/'");
+        break;
+    case 'w':
+        allowwrite++;
+        break;
+    default:
+        usage();
+        break;
+    }ARGEND;
+
+    interactive = 0;
+    if(rfork(RFNAMEG) == -1)
+        sysfatal("rfork: %r");
+    if(pathpfx != nil){
+        if(bind(pathpfx, "/", MREPL) == -1)
+            sysfatal("bind: %r");
+    }
+    if(rfork(RFNOMNT) == -1)
+        sysfatal("rfork: %r");
+
+    initconn(&c, 0, 1);
+    if(readpkt(&c, buf, sizeof(buf)) == -1)
+        sysfatal("readpkt: %r");
+    repo = parsecmd(buf, cmd, sizeof(cmd));
+    cleanname(repo);
+    if(strncmp(repo, "../", 3) == 0)
+        fail(&c, "invalid path %s\n", repo);
+    if(bind(repo, "/", MREPL) == -1)
+        fail(&c, "no such repo: %s", repo);
+    if(chdir("/") == -1)
+        fail(&c, "no such repo");
+
+    gitinit(nil, 0, nil);
+
+    if(strcmp(cmd, "git-receive-pack") == 0)
+        recvpack(&c);
+    else if(strcmp(cmd, "git-upload-pack") == 0)
+        servpack(&c);
+    else
+        fail(&c, "unsupported command '%s'", cmd);
+    exits(nil);
+}
+@
+
+%\subsection{[[git-upload-pack]]}
+%\subsection{[[git-receive-pack]]}
 
 
 %******************************************************************************
@@ -4114,7 +4454,69 @@ exit ''
 \section{Tracking symbolic links}
 \label{sec:symlinks}
 
-\section{Splitting a large repository: submodules}
+<<[[Dirent]] other fields>>=
+char islink;
+@
+
+<<[[gtreegen()]] if [[e->tree->ent[i].islink]]>>=
+if(e->tree->ent[i].islink)
+    if((l = walklink(aux, o->data, o->size, 0, &m)) != nil)
+        o = l;
+@
+
+<<[[objwalk1()]] when [[GTree]] case, if [[o->tree->ent[i].islink]]>>=
+if(w && o->tree->ent[i].islink)
+    if((l = walklink(aux, w->data, w->size, 1, &m)) != nil)
+        w = l;
+@
+
+<<function [[walklink]]>>=
+static Object*
+walklink(Gitaux *aux, char *link, int nlink, int ndotdot, int *mode)
+{
+    char *p, *e, *path;
+    Object *o, *n;
+    int i;
+
+    path = emalloc(nlink + 1);
+    memcpy(path, link, nlink);
+    cleanname(path);
+
+    o = crumb(aux, ndotdot)->obj;
+    assert(o->type == GTree);
+    for(p = path; *p; p = e){
+        n = nil;
+        e = p + strcspn(p, "/");
+        if(*e == '/')
+            *e++ = '\0';
+        /*
+         * cleanname guarantees these show up at the start of the name,
+         * which allows trimming them from the end of the trail of crumbs
+         * instead of needing to keep track of full parentage.
+         */
+        if(strcmp(p, "..") == 0)
+            n = crumb(aux, ++ndotdot)->obj;
+        else if(o->type == GTree)
+            for(i = 0; i < o->tree->nent; i++)
+                if(strcmp(o->tree->ent[i].name, p) == 0){
+                    *mode = o->tree->ent[i].mode;
+                    n = readobject(o->tree->ent[i].h);
+                    break;
+                }
+        o = n;
+        if(o == nil)
+            break;
+    }
+    free(path);
+    for(i = 0; o != nil && i < aux->ncrumb; i++)
+        if(crumb(aux, i)->obj == o)
+            return nil;
+    return o;
+}
+@
+
+
+%\section{Splitting a large repository: submodules}
 
 %\section{Configuration file: [[.git/config]]}
 %\label{sec:gitconfig}
@@ -4125,16 +4527,16 @@ exit ''
 %\subsection{Stacked configurations: [[~/.gitconfig]] and [[.git/config]]}
 
 
-\section{Commit rules and checks: [[.git/hooks/]]}
+%\section{Commit rules and checks: [[.git/hooks/]]}
 
-\section{Ignoring files: [[.gitignore]]}
+%\section{Ignoring files: [[.gitignore]]}
 
-\section{Archeology: Grafts}
-\subsection{Reading a graft file}
-\subsection{Writing a graft file}
-\subsection{Using a graft file}
+%\section{Archeology: Grafts}
+%\subsection{Reading a graft file}
+%\subsection{Writing a graft file}
+%\subsection{Using a graft file}
 
-\section{Rename detection}
+%\section{Rename detection}
 
 
 %******************************************************************************
@@ -4145,7 +4547,7 @@ exit ''
 \section{Tagging a commit with a name}
 \label{sec:tags}
 
-\subsection{[[Tag.t]]}
+%\subsection{[[Tag.t]]}
 
 <<[[Gxxx]] other cases>>=
 GTag    = 4,
@@ -4163,21 +4565,342 @@ case GTag:
     break;
 @
 
-\subsection{Reading a tag}
-\subsection{Writing a tag}
-\subsection{[[git tag]]}
-\subsection{[[git clone]] and tags}
-\subsection{[[git pull]] and tags}
+%\subsection{Reading a tag}
+%\subsection{Writing a tag}
+%\subsection{[[git tag]]}
+%\subsection{[[git clone]] and tags}
+%\subsection{[[git pull]] and tags}
 
-\section{Reference history}
-\subsection{[[git reflog]]}
+%\section{Reference history}
+%\subsection{[[git reflog]]}
 
-\section{Stash}
-\subsection{[[git stash]]}
+%\section{Stash}
+%\subsection{[[git stash]]}
+
+\section{[[git/export]]}
+
+\subsection{Usage}
+
+<<[[export.rc]] command line processing>>=
+flagfmt='o:patchdir patchdir'; args='[query]'
+eval `{auxrc/getflags $*} || exec auxrc/usage
+@
+
+\subsection{[[export.rc]]}
+
+<<git9/export.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+
+patchname=/tmp/git.patchname.$pid
+patchfile=/tmp/git.patchfile.$pid
+fn sigexit{
+        rm -f $patchname $patchfile
+}
+
+gitup
+
+<<[[export.rc]] command line processing>>
+
+if(~ $#patchdir 1 && ! test -d $patchdir)
+        mkdir -p $patchdir
+
+q=$*
+if(~ $#q 0)
+        q=HEAD
+commits=`{git/query $q || die $status}
+n=1
+m=$#commits
+
+
+# sleazy hack: we want to run
+# under rfork m for the web ui,
+# so don't error if we can't mount
+mntgen /mnt/scratch >[2]/dev/null || status=''
+for(c in $commits){
+        cp=`{git/query -p $c}
+        pp=`{git/query -p $c'~'}
+        fc=`$nl{git/query -c $c~ $c | sed 's/^..//'}
+
+        @{
+                rfork n
+                cd /mnt/scratch
+                if(test -d $pp/tree)
+                        bind $pp/tree a
+                if(test -d $cp/tree)
+                        bind $cp/tree b
+                
+                echo From: `{cat $cp/author}
+                echo Date: `{date -uf'WW, DD MMM YYYY hh:mm:ss Z' `{walk -em $cp/author}}
+                <$cp/msg awk '
+                NR == 1 {
+                        n = ENVIRON["n"]
+                        m = ENVIRON["m"]
+                        msg=$0
+                        if(m > 1)
+                                patch = sprintf("[PATCH %d/%d]", n, m)
+                        else
+                                patch = "[PATCH]"
+                        printf "Subject: %s %s\n\n", patch, msg
+                        
+                        gsub("^[        ]|[     ]$", "", msg)
+                        gsub("[^a-zA-Z0-9_]+", "-", msg)
+                        printf "%.4d-%s.patch", n, msg >ENVIRON["patchname"]
+                        next
+                }
+                {
+                        print
+                }'
+                echo '---'
+                echo diff `{basename $pp} `{basename $cp}
+                for(f in $fc){
+                        a=a/$f
+                        if(! test -f $a)
+                                a=/dev/null
+                        b=b/$f
+                        if(! test -f $b)
+                                b=/dev/null
+                        diff -ur $a $b
+                }
+                echo '-- '
+                echo '⑨'
+        } >$patchfile
+        if(~ $#patchdir 0){
+                cat $patchfile
+                ! ~ $n $m && echo
+        }
+        if not{
+                f=$patchdir/`{cat $patchname}
+                mv $patchfile $f
+                echo $f
+        }
+        n=`{echo $n + 1 | bc}
+}
+exit ''
+@
+
+
+\section{[[git/import]]}
+%git9: equivalent in git? apply-patch?
+
+\subsection{Usage}
+
+<<[[import.rc]] command line processing>>=
+flagfmt='n:nocommit'; args='file ...'
+eval `{auxrc/getflags $*} || exec auxrc/usage
+@
+
+\subsection{[[import.rc]]}
+
+<<git9/import.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+
+diffpath=/tmp/gitimport.$pid.diff
+fn sigexit {
+        rm -f $diffpath
+}
+
+fn apply1 {
+        adate=`{seconds $adate}
+        files=`$nl{patch -np1 < $diffpath}
+        if(! git/walk -q $files){
+                >[1=2] {
+                        echo patch would clobber files:
+                        git/walk $files
+                        exit clobber
+                }
+        }
+        echo applying $msg | sed 1q
+        if(! files=`$nl{patch -p1 < $diffpath})
+                die 'patch failed'
+        for(f in $files){
+                if(test -e $f)
+                        git/add $f
+                if not
+                        git/add -r $f
+        }
+        git/walk -fRMA $files
+        if(~ $#nocommit 0){
+                if(hash=`{git/save -n $aname -e $amail -N $name -E $email -m $msg -d $adate $parents $files}){
+                        echo $hash > $refpath
+                        for(f in $files)
+                                echo T NOQID 0 $f >> .git/INDEX9
+                }
+        }
+        exit ''
+}
+        
+
+fn apply @{
+        git/fs
+        amail=''
+        aname=''
+        msg=''
+        whoami
+        parents='-p'^`{git/query HEAD}
+        branch=`{git/branch}
+        if(test -e $gitfs/branch/$branch/tree)
+                refpath=.git/refs/$branch
+        if not if(test -e $gitfs/object/$branch/tree)
+                refpath=.git/HEAD
+        if not
+                die 'invalid branch:' $branch
+        awk '
+        function doapply(){
+                if(aname == "" || amail == "" || date == "" || gotmsg == "")
+                        exit("missing headers");
+                printf "%s", aname > "/env/aname"
+                printf "%s", amail > "/env/amail"
+                printf "%s", date > "/env/adate"
+                if(system("rc -c apply1") != 0)
+                        exit("patch failed");
+                close("/env/aname")
+                close("/env/amail")
+                close("/env/adate")
+                close(ENVIRON["diffpath"])
+                applied = 1
+        }
+        BEGIN{
+                state="headers"
+        }
+        state=="diff" && !/^[-+ @]|^diff|^$|^\\ No newline at end of file$/{
+                state="footers";
+                doapply();
+        }
+        state=="footers" && /^⑨$/{
+                state="headers"
+                next
+        }
+        state=="headers" && /^[fF]rom:/ {
+                sub(/^From:[ \t]*/, "", $0);
+                aname=$0;
+                amail=$0;
+                sub(/[ \t]*<.*$/, "", aname);
+                sub(/^[^<]*</, "", amail);
+                sub(/>[^>]*$/, "", amail);
+        }
+        state=="headers" && /^[Dd]ate:/{
+                sub(/^Date:[ \t]*/, "", $0)
+                date=$0
+        }
+        state=="headers" && /^Subject:/{
+                sub(/^Subject:[ \t]*([Rr][Ee]:)?[ \t]*(\[[^\]]*\][ \t]*)*/, "", $0);
+                gotmsg = 1
+                print > "/env/msg"
+        }
+        state=="headers" && /^$/ {
+                state="body"
+        }
+        (state=="headers" || state=="body") && (/^diff / || /^---( |$)/){
+                state="diff"
+                next
+        }
+        state=="body" && /^[    ]*$/ {
+                empty=1
+                next
+        }
+        state=="body" {
+                if(empty)
+                        printf "\n" > "/env/msg"
+                empty=0
+                sub(/[  ]+$/, "")
+                print > "/env/msg"
+        }
+        state=="diff" {
+                print > ENVIRON["diffpath"]
+        }
+        END{
+                if(!failed && state == "diff" && doapply() != 0){
+                        print "unable to apply patch" > "/fd/2"
+                        exit("mispatch")
+                }
+        }
+        '
+}
+
+gitup
+
+<<[[import.rc]] command line processing>>
+
+patches=(/fd/0)
+if(! ~ $#* 0)
+        patches=`{cleanname -d $gitrel $*}
+for(p in $patches){
+        # upas serves the decoded header and body separately,
+        # so we cat them together when applying a upas message.
+        #
+        # this allows mime-encoded or line-wrapped patches.
+        if(test -d $p && test -f $p/header && test -f $p/body)
+                {{cat $p/header; echo; cat $p/body} | apply} || die $status
+        if not
+                apply < $p
+}
+exit ''
+@
+%$
+
+
+
+\section{[[git/hist]]}
+
+\subsection{Usage}
+
+<<[[hist.rc]] command line processing>>=
+flagfmt='n:num count'; args='files...'
+eval `{auxrc/getflags $*} || exec auxrc/usage
+if(~ $#* 0) exec auxrc/usage
+@
+
+\subsection{[[hist.rc]]}
+
+<<git9/hist.rc>>=
+#!/bin/rc
+rfork ne
+. /lib/git/common.rc
+gitup
+
+<<[[hist.rc]] command line processing>>
+
+fn dodiff {
+        while(t=`{read}){
+                h=$t(1)
+                o=$gitfs/object/`{git/query $h~}
+                c=$gitfs/object/$h
+                echo 'Hash:' $h
+                echo -n 'Date: '; date `{walk -em $c/msg}
+                echo -n 'Author: '; cat $c/author
+                echo -n 'Message: '; cat $c/msg
+                echo
+                for(f in $files){
+                        curr=$c/tree/$f
+                        prev=$o/tree/$f
+                        if(! test -e $curr)
+                                curr=/dev/null
+                        if(! test -e $prev)
+                                prev=/dev/null
+                        diff -u $prev $curr
+                }
+                echo --' '
+                echo ⑨
+                echo
+        }
+}
+
+files=`{cleanname -d $gitrel $*}
+args=(-s $files)
+if(! ~ $#num 0)
+        args=(-n $num $args)
+git/log $args | dodiff
+@
+%$
+
 
 \section{Developer commands}
 
-\subsection{Finding the diff causing a regression: [[git bisect]]}
+%\subsection{Finding the diff causing a regression: [[git bisect]]}
 
 \subsection{Reverting a change: [[git revert]]}
 
@@ -4208,11 +4931,11 @@ exit ''
 @
 
 
-\subsection{Finding the author of some code: [[git blame]]}
+%\subsection{Finding the author of some code: [[git blame]]}
 
-\subsection{Finding code: [[git grep]]}
+%\subsection{Finding code: [[git grep]]}
 
-\subsection{Creating an archive: [[git archive]]}
+%\subsection{Creating an archive: [[git archive]]}
 
 
 
@@ -4266,7 +4989,7 @@ END{
 @
 
 
-\subsection{Cherry-pick: [[git cherry-pick]]}
+%\subsection{Cherry-pick: [[git cherry-pick]]}
 
 
 %%\section{Plumbing commands}
@@ -4279,9 +5002,8 @@ END{
 %%\subsection{[[git remote add]]}
 %%\subsection{[[git ls-remote]]}
 
-\section{Miscellaneous commands}
-
-\subsection{[[git filter-branch]]}
+%\section{Miscellaneous commands}
+%\subsection{[[git filter-branch]]}
 
 
 %******************************************************************************
@@ -4291,9 +5013,76 @@ END{
 
 \section{Other clients}
 
+\subsection{[[http://]]}
+
+<<function [[dialhttp]]>>=
+static int
+dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
+{
+    char *geturl, *suff, *hsep, *psep, *isep;
+
+    suff = "";
+    hsep = "";
+    psep = "";
+    isep = "";
+    if(port && strlen(port) != 0)
+        hsep = ":";
+    if(path && path[0] != '/')
+        psep = "/";
+    if(path && path[0] && path[strlen(path)-1] != '/')
+        isep = "/";
+    memset(c, 0, sizeof(*c));
+    geturl = smprint("https://%s%s%s%s%s%s%sinfo/refs?service=git-%s-pack",
+        host, hsep, port, psep, path, suff, isep, direction);
+    c->type = ConnHttp;
+    c->url = smprint("https://%s%s%s%s%s%s%sgit-%s-pack",
+        host, hsep, port, psep, path, suff, isep, direction);
+    c->cfd = webclone(c, geturl);
+    free(geturl);
+    if(c->cfd == -1)
+        return -1;
+    c->rfd = webopen(c, "body", OREAD);
+    c->wfd = -1;
+    if(c->rfd == -1)
+        return -1;
+    if(issmarthttp(c, direction) == -1)
+        return -1;
+    c->direction = estrdup(direction);
+    return 0;
+}
+@
+
 \subsection{[[ssh://]]}
 
-\subsection{[[http://]]}
+<<function [[dialssh]]>>=
+static int
+dialssh(Conn *c, char *host, char *, char *path, char *direction)
+{
+    int pid, pfd[2];
+    char cmd[64];
+
+    if(pipe(pfd) == -1)
+        sysfatal("unable to open pipe: %r");
+    pid = fork();
+    if(pid == -1)
+        sysfatal("unable to fork");
+    if(pid == 0){
+        close(pfd[1]);
+        dup(pfd[0], 0);
+        dup(pfd[0], 1);
+        snprint(cmd, sizeof(cmd), "git-%s-pack", direction);
+        dprint(1, "exec ssh '%s' '%s' %s\n", host, cmd, path);
+        execl("/bin/ssh", "ssh", host, cmd, path, nil);
+        sysfatal("exec: %r");
+    }
+    close(pfd[0]);
+    c->type = ConnSsh;
+    c->rfd = pfd[1];
+    c->wfd = dup(pfd[1], -1);
+    return 0;
+}
+@
+
 
 \section{Other servers}
 
@@ -4351,41 +5140,23 @@ END{
 
 \section{Format dumpers}
 
+% see also 'H' and Hfmt before in SHA section
+
+
 <<pragmas varargck>>=
-#pragma varargck type "H" Hash
 #pragma varargck type "T" int
 #pragma varargck type "O" Object*
 #pragma varargck type "Q" Qid
 @
 
+
 <<[[gitinit()]] fmtinstall calls>>=
-fmtinstall('H', Hfmt);
 fmtinstall('T', Tfmt);
 fmtinstall('O', Ofmt);
 fmtinstall('Q', Qfmt);
 @
 
 
-<<function [[Hfmt]]>>=
-int
-Hfmt(Fmt *fmt)
-{
-    Hash h;
-    int i, n, l;
-    char c0, c1;
-
-    l = 0;
-    h = va_arg(fmt->args, Hash);
-    for(i = 0; i < sizeof h.h; i++){
-        n = (h.h[i] >> 4) & 0xf;
-        c0 = (n >= 10) ? n-10 + 'a' : n + '0';
-        n = h.h[i] & 0xf;
-        c1 = (n >= 10) ? n-10 + 'a' : n + '0';
-        l += fmtprint(fmt, "%c%c", c0, c1);
-    }
-    return l;
-}
-@
 
 <<function [[Tfmt]]>>=
 int
