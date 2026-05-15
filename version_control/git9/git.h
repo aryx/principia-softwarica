@@ -289,7 +289,9 @@ int Tfmt(Fmt*);
 int Ofmt(Fmt*);
 int Qfmt(Fmt*);
 
+/*s: signature [[gitinit]] */
 void gitinit(char*, int, int*);
+/*e: signature [[gitinit]] */
 
 /* object io */
 int resolverefs(Hash **, char *);

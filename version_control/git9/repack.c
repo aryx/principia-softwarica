@@ -66,7 +66,6 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND;
-/*e: function [[main (git9/repack.c)]] */
 
     gitinit(nil, 0, nil);
     refs = nil;
@@ -92,4 +91,5 @@ main(int argc, char **argv)
         sysfatal("cleanup: %r");
     exits(nil);
 }
+/*e: function [[main (git9/repack.c)]] */
 /*e: git9/repack.c */

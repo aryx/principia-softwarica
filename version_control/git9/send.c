@@ -279,7 +279,6 @@ main(int argc, char **argv)
         nbranch++;
         break;
     }ARGEND;
-/*e: function [[main (git9/send.c)]] */
 
     gitinit(nil, 0, nil);
     if(argc != 1)
@@ -291,4 +290,5 @@ main(int argc, char **argv)
     closeconn(&c);
     exits(nil);
 }
+/*e: function [[main (git9/send.c)]] */
 /*e: git9/send.c */

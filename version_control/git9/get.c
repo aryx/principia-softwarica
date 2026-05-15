@@ -529,9 +529,9 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
-/*e: function [[main (git9/get.c)]] */
 
     gitinit(nil, 0, nil);
+
     if(argc != 1)
         usage();
 
@@ -542,4 +542,5 @@ main(int argc, char **argv)
     closeconn(&c);
     exits(nil);
 }
+/*e: function [[main (git9/get.c)]] */
 /*e: git9/get.c */

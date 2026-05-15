@@ -9,78 +9,22 @@
 
 <<fn [[die]](common.rc)>>
 
-fn usage{
-        >[1=2] echo -n 'usage:' $usage
-        exit 'usage'
-}
-
-fn subst {
-        awk '
-        BEGIN{ARGC=0}
-        {sub(ARGV[1], ARGV[2]); print}
-        ' $*
-}
-
+<<fn [[subst]](common.rc)>>
 <<fn [[drop]](common.rc)>>
-
-fn mergeperm {
-        if(~ $1 /dev/null && cmp $2 $3>/dev/null)
-                status=gone
-        if not if (~ $3 /dev/null && cmp $1 $2>/dev/null)
-                status=gone
-        if not {
-                mergedperms='-x'
-                if(test -x $2){
-                        if(test -x $1 -a -x $3)
-                                mergedperms='+x'
-                }
-                if not{
-                        if(test -x $1 -o -x $3)
-                                mergedperms='+x'
-                }
-                status=()
-        }
-}
 
 <<fn [[whoami]](common.rc)>>
 
-# merge1 out ours base theirs
-fn merge1 {@{
-        rfork e
-        n=$pid
-        out=$1
-        ours=$2
-        base=$3
-        theirs=$4
-        tmp=$out.tmp
-        while(test -f $tmp){
-                tmp=$tmp.$n
-                n=`{echo $n + 1 | hoc}
-        }
-
-        if(! test -f $ours)
-                ours=/dev/null
-        if(! test -f $base)
-                base=/dev/null
-        if(! test -f $theirs)
-                theirs=/dev/null
-
-        if(mergeperm $ours $base $theirs){
-                mkdir -p `$nl{basename -d $tmp}
-                if(! merge3 $ours $base $theirs > $tmp)
-                        echo merge needed: $out >[1=2]
-                mv $tmp $out
-                git/add $out
-                chmod $mergedperms $out
-        }
-        if not {
-                rm -f $tmp $out
-                echo R NOQID 0 $out >> $gitroot/.git/INDEX9
-        }
-}}
+<<fn [[mergeperm]](common.rc)>>
+<<fn [[merge1]](common.rc)>>
 
 <<fn [[gitup]](common.rc)>>
 @
+%ori: %dead:
+%fn usage{
+%        >[1=2] echo -n 'usage:' $usage
+%        exit 'usage'
+%}
+
 
 \subsection*{[[git9/add.rc]]}
 
@@ -422,51 +366,6 @@ for(c in $commits){
 exit ''
 
 @
-\subsection*{[[git9/hist.rc]]}
-
-<<git9/hist.rc>>=
-#!/bin/rc
-rfork ne
-
-. /lib/git/common.rc
-gitup
-
-flagfmt='n:num count'; args='files...'
-eval `''{auxrc/getflags $*} || exec auxrc/usage
-if(~ $#* 0) exec auxrc/usage
-
-fn dodiff {
-        while(t=`{read}){
-                h=$t(1)
-                o=$gitfs/object/`{git/query $h~}
-                c=$gitfs/object/$h
-                echo 'Hash:' $h
-                echo -n 'Date: '; date `{walk -em $c/msg}
-                echo -n 'Author: '; cat $c/author
-                echo -n 'Message: '; cat $c/msg
-                echo
-                for(f in $files){
-                        curr=$c/tree/$f
-                        prev=$o/tree/$f
-                        if(! test -e $curr)
-                                curr=/dev/null
-                        if(! test -e $prev)
-                                prev=/dev/null
-                        diff -u $prev $curr
-                }
-                echo --' '
-                echo ⑨
-                echo
-        }
-}
-
-files=`{cleanname -d $gitrel $*}
-args=(-s $files)
-if(! ~ $#num 0)
-        args=(-n $num $args)
-git/log $args | dodiff
-
-@
 \subsection*{[[git9/import.rc]]}
 
 <<git9/import.rc>>=
@@ -616,8 +515,53 @@ for(p in $patches){
                 apply < $p
 }
 exit ''
-
 @
+
+\subsection*{[[git9/hist.rc]]}
+
+<<git9/hist.rc>>=
+#!/bin/rc
+rfork ne
+
+. /lib/git/common.rc
+gitup
+
+flagfmt='n:num count'; args='files...'
+eval `''{auxrc/getflags $*} || exec auxrc/usage
+if(~ $#* 0) exec auxrc/usage
+
+fn dodiff {
+        while(t=`{read}){
+                h=$t(1)
+                o=$gitfs/object/`{git/query $h~}
+                c=$gitfs/object/$h
+                echo 'Hash:' $h
+                echo -n 'Date: '; date `{walk -em $c/msg}
+                echo -n 'Author: '; cat $c/author
+                echo -n 'Message: '; cat $c/msg
+                echo
+                for(f in $files){
+                        curr=$c/tree/$f
+                        prev=$o/tree/$f
+                        if(! test -e $curr)
+                                curr=/dev/null
+                        if(! test -e $prev)
+                                prev=/dev/null
+                        diff -u $prev $curr
+                }
+                echo --' '
+                echo ⑨
+                echo
+        }
+}
+
+files=`{cleanname -d $gitrel $*}
+args=(-s $files)
+if(! ~ $#num 0)
+        args=(-n $num $args)
+git/log $args | dodiff
+@
+%$
 
 \subsection*{[[git9/init.rc]]}
 
@@ -631,82 +575,12 @@ exit ''
 
 \subsection*{[[git9/revert.rc]]}
 
-
 \subsection*{[[git9/rm.rc]]}
 
 
 % START OF C FILES
 
 \subsection*{[[git9/conf.c]]}
-
-<<function [[showconf]]>>=
-static int
-showconf(char *cfg, char *sect, char *key)
-{
-    char *ln, *p;
-    Biobuf *f;
-    int foundsect, nsect, nkey, found;
-
-    if((f = Bopen(cfg, OREAD)) == nil)
-        return 0;
-
-    found = 0;
-    nsect = sect ? strlen(sect) : 0;
-    nkey = strlen(key);
-    foundsect = (sect == nil);
-    while((ln = Brdstr(f, '\n', 1)) != nil){
-        p = strip(ln);
-        if(*p == '[' && sect){
-            foundsect = strncmp(sect, ln, nsect) == 0;
-        }else if(foundsect && strncmp(p, key, nkey) == 0){
-            p = strip(p + nkey);
-            if(*p != '=')
-                continue;
-            p = strip(p + 1);
-            print("%s\n", p);
-            found = 1;
-            if(!showall){
-                free(ln);
-                goto done;
-            }
-        }
-        free(ln);
-    }
-done:
-    return found;
-}
-@
-
-<<function [[usage]]>>=
-void
-usage(void)
-{
-    fprint(2, "usage: %s [-f file] [-r] keys..\n", argv0);
-    fprint(2, "\t-f:    use file 'file' (default: .git/config)\n");
-    fprint(2, "\t r:    print repository root\n");
-    exits("usage");
-}
-@
-
-<<function [[main]]>>=
-void
-main(int argc, char **argv)
-{
-    char repo[512], *p, *s;
-    int i, j, nrel;
-
-    ARGBEGIN{
-    case 'r':   findroot++;         break;
-    case 'a':   showall++;          break;
-    default:    usage();            break;
-    case 'f':
-        if(nfile == nelem(file))
-            sysfatal("too many configs");
-        file[nfile++]=EARGF(usage());
-        break;
-    }ARGEND;
-@
-
 
 %-------------------------------------------------------------
 
@@ -717,49 +591,16 @@ main(int argc, char **argv)
 
 #include "git.h"
 
-int findroot;
-int showall;
-int nfile;
-char    *file[32];
+<<global [[findroot]]>>
+<<global [[showall]]>>
+<<global [[nfile]]>>
+<<global [[file]]>>
 
 <<function [[showconf]]>>
 
-
 <<function [[usage]]>>
-
 <<function [[main]]>>
-
-    gitinit(repo, sizeof(repo), &nrel);
-    if(findroot){
-        print("%s\n", repo);
-        exits(nil);
-    }
-    if(nfile == 0){
-        if((file[nfile++] = smprint("%s/.git/config", repo)) == nil)
-            sysfatal("smprint: %r");
-        if((p = getenv("home")) != nil)
-            if((file[nfile++] = smprint("%s/lib/git/config", p)) == nil)
-                sysfatal("smprint: %r");
-        file[nfile++] = "/sys/lib/git/config";
-    }
-
-    for(i = 0; i < argc; i++){
-        if((p = strchr(argv[i], '.')) == nil){
-            s = nil;
-            p = argv[i];
-        }else{
-            *p = 0;
-            p++;
-            s = smprint("[%s]", argv[i]);
-        }
-        for(j = 0; j < nfile; j++)
-            if(showconf(file[j], s, p))
-                break;
-    }
-    exits(nil);
-}
 @
-
 
 \subsection*{[[git9/delta.c]]}
 
@@ -1023,7 +864,6 @@ static u32int geartab[] = {
 
 <<function [[deltify]]>>
 @
-
 
 \subsection*{[[git9/fs.c]]}
 
@@ -1889,48 +1729,13 @@ gitstat(Req *r)
 }
 @
 
-<<function [[usage (git9/fs.c)]]>>=
-void
-usage(void)
-{
-    fprint(2, "usage: %s [-d]\n", argv0);
-    fprint(2, "\t-d:    debug\n");
-    exits("usage");
-}
-@
-
-<<function [[main (git9/fs.c)]]>>=
-void
-main(int argc, char **argv)
-{
-    char repo[512];
-    int nelt;
-    Dir *d;
-
-    gitinit(repo, sizeof(repo), &nelt);
-    if(chdir(repo) == -1)
-        sysfatal("chdir: %r");
-
-    ARGBEGIN{
-    case 'd':
-        chatty9p++;
-        break;
-    case 'm':
-        mntpt = EARGF(usage());
-        break;
-    default:
-        usage();
-        break;
-    }ARGEND;
-@
-
-
 %-------------------------------------------------------------
 
 <<git9/fs.c>>=
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
+
 #include <fcall.h>
 #include <thread.h>
 #include <9p.h>
@@ -1959,6 +1764,7 @@ typedef struct Gitaux Gitaux;
 typedef struct Crumb Crumb;
 typedef struct Cache Cache;
 typedef struct Uqid Uqid;
+
 struct Crumb {
     char    *name;
     Object  *obj;
@@ -2011,10 +1817,10 @@ char *qroot[] = {
 <<constant [[Ebadobj]]>>
 
 char    gitdir[512];
-char    *username;
-char    *groupname;
-char    *mntpt = ".git/fs";
-char    **branches = nil;
+<<global [[username]]>>
+<<global [[groupname]]>>
+<<global [[mntpt]]>>
+<<global [[branches]]>>
 Cache   uqidcache[512];
 vlong   nextqid = Qmax;
 
@@ -2033,14 +1839,10 @@ static Object*  walklink(Gitaux *, char *, int, int, int*);
 <<function [[rootgen]]>>
 
 <<function [[branchgen]]>>
-
 <<function [[gtreegen]]>>
-
 <<function [[gcommitgen]]>>
 
-
 <<function [[objgen]]>>
-
 <<function [[objread]]>>
 
 <<function [[readcommitparent]]>>
@@ -2062,38 +1864,13 @@ static Object*  walklink(Gitaux *, char *, int, int, int*);
 <<function [[readctl]]>>
 
 <<function [[gitread]]>>
-
 <<function [[gitopen]]>>
-
 <<function [[gitstat]]>>
 
-Srv gitsrv = {
-    .attach=gitattach,
-    .walk1=gitwalk1,
-    .clone=gitclone,
-    .open=gitopen,
-    .read=gitread,
-    .stat=gitstat,
-    .destroyfid=gitdestroyfid,
-};
+<<global [[gitsrv]]>>
 
 <<function [[usage (git9/fs.c)]]>>
-
 <<function [[main (git9/fs.c)]]>>
-    if(argc != 0)
-        usage();
-
-    if((d = dirstat(".git")) == nil)
-        sysfatal("dirstat .git: %r");
-    username = strdup(d->uid);
-    groupname = strdup(d->gid);
-    free(d);
-
-    branches = emalloc(sizeof(char*));
-    branches[0] = nil;
-    postmountsrv(&gitsrv, nil, mntpt, MCREATE);
-    exits(nil);
-}
 @
 
 
@@ -2618,6 +2395,19 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+
+    gitinit(nil, 0, nil);
+
+    if(argc != 1)
+        usage();
+
+    if(gitconnect(&c, argv[0], "upload") == -1)
+        sysfatal("could not dial %s: %r", argv[0]);
+    if(fetchpack(&c) == -1)
+        sysfatal("fetch failed: %r");
+    closeconn(&c);
+    exits(nil);
+}
 @
 
 
@@ -2662,18 +2452,6 @@ int listonly;
 <<function [[usage (git9/get.c)]]>>
 
 <<function [[main (git9/get.c)]]>>
-
-    gitinit(nil, 0, nil);
-    if(argc != 1)
-        usage();
-
-    if(gitconnect(&c, argv[0], "upload") == -1)
-        sysfatal("could not dial %s: %r", argv[0]);
-    if(fetchpack(&c) == -1)
-        sysfatal("fetch failed: %r");
-    closeconn(&c);
-    exits(nil);
-}
 @
 
 
@@ -2994,7 +2772,7 @@ int Tfmt(Fmt*);
 int Ofmt(Fmt*);
 int Qfmt(Fmt*);
 
-void gitinit(char*, int, int*);
+<<signature [[gitinit]]>>
 
 /* object io */
 int resolverefs(Hash **, char *);
@@ -3335,6 +3113,42 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
+
+    gitinit(repo, sizeof(repo), &nrel);
+
+    nrepo = strlen(repo);
+    if(argc != 0){
+        if(getwd(path, sizeof(path)) == nil)
+            sysfatal("getwd: %r");
+        if(strncmp(path, repo, nrepo) != 0)
+            sysfatal("path shifted??");
+        p = path + nrepo;
+        pathfilt = emalloc(sizeof(Pfilt));
+        for(i = 0; i < argc; i++){
+            if(*argv[i] == '/'){
+                if(strncmp(argv[i], repo, nrepo) != 0)
+                    continue;
+                r = smprint("./%s", argv[i]+nrepo);
+            }else
+                r = smprint("./%s/%s", p, argv[i]);
+            cleanname(r);
+            filteradd(pathfilt, r);
+            free(r);
+        }
+    }
+    if(chdir(repo) == -1)
+        sysfatal("chdir: %r");
+
+    //9front-only
+    //tmfmtinstall();
+    out = Bfdopen(1, OWRITE);
+    if(queryexpr != nil)
+        showquery(queryexpr);
+    else
+        showcommits(commitid);
+    Bterm(out);
+    exits(nil);
+}
 @
 
 
@@ -3383,41 +3197,6 @@ Pfilt   *pathfilt;
 <<function [[usage (git9/log.c)]]>>
     
 <<function [[main (git9/log.c)]]>>
-
-    gitinit(repo, sizeof(repo), &nrel);
-    nrepo = strlen(repo);
-    if(argc != 0){
-        if(getwd(path, sizeof(path)) == nil)
-            sysfatal("getwd: %r");
-        if(strncmp(path, repo, nrepo) != 0)
-            sysfatal("path shifted??");
-        p = path + nrepo;
-        pathfilt = emalloc(sizeof(Pfilt));
-        for(i = 0; i < argc; i++){
-            if(*argv[i] == '/'){
-                if(strncmp(argv[i], repo, nrepo) != 0)
-                    continue;
-                r = smprint("./%s", argv[i]+nrepo);
-            }else
-                r = smprint("./%s/%s", p, argv[i]);
-            cleanname(r);
-            filteradd(pathfilt, r);
-            free(r);
-        }
-    }
-    if(chdir(repo) == -1)
-        sysfatal("chdir: %r");
-
-    //9front-only
-    //tmfmtinstall();
-    out = Bfdopen(1, OWRITE);
-    if(queryexpr != nil)
-        showquery(queryexpr);
-    else
-        showcommits(commitid);
-    Bterm(out);
-    exits(nil);
-}
 @
 
 
@@ -6628,6 +6407,38 @@ main(int argc, char **argv)
     case 'r':   reverse ^= 1;   break;
     default:    usage();    break;
     }ARGEND;
+
+    fmtinstall('P', Pfmt);
+    if(argc == 0)
+        usage();
+
+    gitinit(repo, sizeof(repo), &nrel);
+
+    if(chdir(repo) == -1)
+        sysfatal("chdir: %r");
+    if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
+        sysfatal("smprint: %r");
+    for(i = 0, n = 0; i < argc; i++)
+        n += strlen(argv[i]) + 1;
+    query = emalloc(n+1);
+    p = query;
+    e = query + n;
+    for(i = 0; i < argc; i++)
+        p = seprint(p, e, "%s ", argv[i]);
+    n = resolverefs(&h, query);
+    free(query);
+    if(n == -1)
+        sysfatal("resolve: %r");
+    if(changes){
+        for(i = 1; i < n; i++)
+            diffcommits(h[0], h[i]);
+    }else{
+        p = (fullpath ? objpfx : "");
+        for(j = 0; j < n; j++)
+            print("%s%H\n", p, h[reverse ? n - 1 - j : j]);
+    }
+    exits(nil);
+}
 @
 
 
@@ -6660,37 +6471,6 @@ int npath;
 <<function [[usage (git9/query.c)]]>>
 
 <<function [[main (git9/query.c)]]>>
-
-    fmtinstall('P', Pfmt);
-    if(argc == 0)
-        usage();
-    gitinit(repo, sizeof(repo), &nrel);
-    if(chdir(repo) == -1)
-        sysfatal("chdir: %r");
-    if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
-        sysfatal("smprint: %r");
-    for(i = 0, n = 0; i < argc; i++)
-        n += strlen(argv[i]) + 1;
-    query = emalloc(n+1);
-    p = query;
-    e = query + n;
-    for(i = 0; i < argc; i++)
-        p = seprint(p, e, "%s ", argv[i]);
-    n = resolverefs(&h, query);
-    free(query);
-    if(n == -1)
-        sysfatal("resolve: %r");
-    if(changes){
-        for(i = 1; i < n; i++)
-            diffcommits(h[0], h[i]);
-    }else{
-        p = (fullpath ? objpfx : "");
-        for(j = 0; j < n; j++)
-            print("%s%H\n", p, h[reverse ? n - 1 - j : j]);
-    }
-    exits(nil);
-}
-
 @
 
 
@@ -7419,24 +7199,6 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND;
-@
-
-
-%-------------------------------------------------------------
-
-<<git9/repack.c>>=
-#include <u.h>
-#include <libc.h>
-
-#include "git.h"
-
-<<macro [[TMPPATH]]>>
-
-<<function [[cleanup]]>>
-
-<<function [[usage (git9/repack.c)]]>>
-
-<<function [[main (git9/repack.c)]]>>
 
     gitinit(nil, 0, nil);
     refs = nil;
@@ -7462,6 +7224,24 @@ main(int argc, char **argv)
         sysfatal("cleanup: %r");
     exits(nil);
 }
+@
+
+
+%-------------------------------------------------------------
+
+<<git9/repack.c>>=
+#include <u.h>
+#include <libc.h>
+
+#include "git.h"
+
+<<macro [[TMPPATH]]>>
+
+<<function [[cleanup]]>>
+
+<<function [[usage (git9/repack.c)]]>>
+
+<<function [[main (git9/repack.c)]]>>
 @
 
 
@@ -7853,6 +7633,7 @@ main(int argc, char **argv)
     Object *t;
 
     gitinit(nil, 0, nil);
+
     if(access(".git", AEXIST) != 0)
         sysfatal("could not find git repo: %r");
     if(getwd(cwd, sizeof(cwd)) == nil)
@@ -8279,6 +8060,17 @@ main(int argc, char **argv)
         nbranch++;
         break;
     }ARGEND;
+
+    gitinit(nil, 0, nil);
+    if(argc != 1)
+        usage();
+    if(gitconnect(&c, argv[0], "receive") == -1)
+        sysfatal("git connect: %s: %r", argv[0]);
+    if(sendpack(&c) == -1)
+        sysfatal("send failed: %r");
+    closeconn(&c);
+    exits(nil);
+}
 @
 
 
@@ -8318,17 +8110,6 @@ int nsent;
 <<function [[usage (git9/send.c)]]>>
 
 <<function [[main (git9/send.c)]]>>
-
-    gitinit(nil, 0, nil);
-    if(argc != 1)
-        usage();
-    if(gitconnect(&c, argv[0], "receive") == -1)
-        sysfatal("git connect: %s: %r", argv[0]);
-    if(sendpack(&c) == -1)
-        sysfatal("send failed: %r");
-    closeconn(&c);
-    exits(nil);
-}
 @
 
 
@@ -9007,7 +8788,9 @@ int allowwrite;
         fail(&c, "no such repo: %s", repo);
     if(chdir("/") == -1)
         fail(&c, "no such repo");
+
     gitinit(nil, 0, nil);
+
     if(strcmp(cmd, "git-receive-pack") == 0)
         recvpack(&c);
     else if(strcmp(cmd, "git-upload-pack") == 0)
@@ -9277,56 +9060,7 @@ Qfmt(Fmt *fmt)
 }
 @
 
-<<function [[findrepo]]>>=
-/* Finds the directory containing the git repo. */
-static void
-findrepo(char *buf, int nbuf, int *nrel)
-{
-    char *p, *suff;
 
-    suff = "/.git/HEAD";
-    if(getwd(buf, nbuf - strlen(suff) - 1) == nil)
-        sysfatal("getwd: %r");
-
-    *nrel = 0;
-    for(p = buf + strlen(buf); p != nil; p = strrchr(buf, '/')){
-        strcpy(p, suff);
-        if(access(buf, AEXIST) == 0){
-            p[p == buf] = '\0';
-            return;
-        }
-        *nrel += 1;
-        *p = '\0';
-    }
-    sysfatal("not a git repository");
-}
-@
-
-<<function [[gitinit]]>>=
-void
-gitinit(char *root, int nroot, int *nrel)
-{
-    char repo[512] = ".git";
-    Dir *d;
-
-    fmtinstall('H', Hfmt);
-    fmtinstall('T', Tfmt);
-    fmtinstall('O', Ofmt);
-    fmtinstall('Q', Qfmt);
-    inflateinit();
-    deflateinit();
-    authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
-    osinit(&objcache);
-    if(root != nil){
-        findrepo(root, nroot, nrel);
-        snprint(repo, sizeof(repo), "%s/.git", root);
-    }
-    if((d = dirstat(repo)) == nil)
-        sysfatal("stat %s: %r", repo);
-    gitdirmode = d->mode & 0777;
-    free(d);
-}
-@
 
 <<function [[hparse]]>>=
 int

@@ -414,6 +414,7 @@ main(int argc, char **argv)
     Object *t;
 
     gitinit(nil, 0, nil);
+
     if(access(".git", AEXIST) != 0)
         sysfatal("could not find git repo: %r");
     if(getwd(cwd, sizeof(cwd)) == nil)

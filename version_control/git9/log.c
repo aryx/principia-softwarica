@@ -284,9 +284,9 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
-/*e: function [[main (git9/log.c)]] */
 
     gitinit(repo, sizeof(repo), &nrel);
+
     nrepo = strlen(repo);
     if(argc != 0){
         if(getwd(path, sizeof(path)) == nil)
@@ -320,4 +320,5 @@ main(int argc, char **argv)
     Bterm(out);
     exits(nil);
 }
+/*e: function [[main (git9/log.c)]] */
 /*e: git9/log.c */

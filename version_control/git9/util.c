@@ -275,19 +275,20 @@ Qfmt(Fmt *fmt)
 static void
 findrepo(char *buf, int nbuf, int *nrel)
 {
-    char *p, *suff;
+    char *p;
+    char *suffix = "/.git/HEAD";
 
-    suff = "/.git/HEAD";
-    if(getwd(buf, nbuf - strlen(suff) - 1) == nil)
+    if(getwd(buf, nbuf - strlen(suffix) - 1) == nil)
         sysfatal("getwd: %r");
 
     *nrel = 0;
     for(p = buf + strlen(buf); p != nil; p = strrchr(buf, '/')){
-        strcpy(p, suff);
+        strcpy(p, suffix);
         if(access(buf, AEXIST) == 0){
             p[p == buf] = '\0';
             return;
         }
+        // else
         *nrel += 1;
         *p = '\0';
     }
@@ -296,6 +297,7 @@ findrepo(char *buf, int nbuf, int *nrel)
 /*e: function [[findrepo]] */
 
 /*s: function [[gitinit]] */
+/// conf.c:main | fs.c:main | ... -> <>
 void
 gitinit(char *root, int nroot, int *nrel)
 {
@@ -310,6 +312,7 @@ gitinit(char *root, int nroot, int *nrel)
     deflateinit();
     authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
     osinit(&objcache);
+
     if(root != nil){
         findrepo(root, nroot, nrel);
         snprint(repo, sizeof(repo), "%s/.git", root);

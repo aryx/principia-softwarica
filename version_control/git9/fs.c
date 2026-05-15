@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
+
 #include <fcall.h>
 #include <thread.h>
 #include <9p.h>
@@ -30,6 +31,7 @@ typedef struct Gitaux Gitaux;
 typedef struct Crumb Crumb;
 typedef struct Cache Cache;
 typedef struct Uqid Uqid;
+
 struct Crumb {
     char    *name;
     Object  *obj;
@@ -100,10 +102,20 @@ char *qroot[] = {
 /*e: constant [[Ebadobj]] */
 
 char    gitdir[512];
+/*s: global [[username]] */
 char    *username;
+/*e: global [[username]] */
+/*s: global [[groupname]] */
 char    *groupname;
+/*e: global [[groupname]] */
+/*s: global [[mntpt]] */
+// can be changed by git/fs -m
 char    *mntpt = ".git/fs";
+/*e: global [[mntpt]] */
+/*s: global [[branches]] */
+// growing_array<ref_own<string>>
 char    **branches = nil;
+/*e: global [[branches]] */
 Cache   uqidcache[512];
 vlong   nextqid = Qmax;
 
@@ -262,7 +274,6 @@ branchgen(int i, Dir *d, void *p)
     }
 }
 /*e: function [[branchgen]] */
-
 /*s: function [[gtreegen]] */
 static int
 gtreegen(int i, Dir *d, void *p)
@@ -299,7 +310,6 @@ gtreegen(int i, Dir *d, void *p)
     return 0;
 }
 /*e: function [[gtreegen]] */
-
 /*s: function [[gcommitgen]] */
 static int
 gcommitgen(int i, Dir *d, void *p)
@@ -351,7 +361,6 @@ gcommitgen(int i, Dir *d, void *p)
 }
 /*e: function [[gcommitgen]] */
 
-
 /*s: function [[objgen]] */
 static int
 objgen(int i, Dir *d, void *p)
@@ -393,7 +402,6 @@ objgen(int i, Dir *d, void *p)
     return -1;
 }
 /*e: function [[objgen]] */
-
 /*s: function [[objread]] */
 static void
 objread(Req *r, Gitaux *aux)
@@ -881,7 +889,6 @@ gitread(Req *r)
     respond(r, e);
 }
 /*e: function [[gitread]] */
-
 /*s: function [[gitopen]] */
 static void
 gitopen(Req *r)
@@ -911,7 +918,6 @@ gitopen(Req *r)
     }
 }
 /*e: function [[gitopen]] */
-
 /*s: function [[gitstat]] */
 static void
 gitstat(Req *r)
@@ -936,6 +942,7 @@ gitstat(Req *r)
 }
 /*e: function [[gitstat]] */
 
+/*s: global [[gitsrv]] */
 Srv gitsrv = {
     .attach=gitattach,
     .walk1=gitwalk1,
@@ -945,17 +952,17 @@ Srv gitsrv = {
     .stat=gitstat,
     .destroyfid=gitdestroyfid,
 };
+/*e: global [[gitsrv]] */
 
 /*s: function [[usage (git9/fs.c)]] */
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-d]\n", argv0);
-    fprint(2, "\t-d:    debug\n");
+    fprint(STDERR, "usage: %s [-d]\n", argv0);
+    fprint(STDERR, "\t-d:    debug\n");
     exits("usage");
 }
 /*e: function [[usage (git9/fs.c)]] */
-
 /*s: function [[main (git9/fs.c)]] */
 void
 main(int argc, char **argv)
@@ -965,25 +972,29 @@ main(int argc, char **argv)
     Dir *d;
 
     gitinit(repo, sizeof(repo), &nelt);
-    if(chdir(repo) == -1)
+    if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
     ARGBEGIN{
+    /*s: [[main()]](fs.c) command line processing */
     case 'd':
         chatty9p++;
         break;
+    /*x: [[main()]](fs.c) command line processing */
     case 'm':
         mntpt = EARGF(usage());
         break;
+    /*e: [[main()]](fs.c) command line processing */
     default:
         usage();
         break;
     }ARGEND;
-/*e: function [[main (git9/fs.c)]] */
     if(argc != 0)
         usage();
 
-    if((d = dirstat(".git")) == nil)
+    // assume chdir() succeeded above
+    d = dirstat(".git");
+    if(d == nil)
         sysfatal("dirstat .git: %r");
     username = strdup(d->uid);
     groupname = strdup(d->gid);
@@ -994,4 +1005,5 @@ main(int argc, char **argv)
     postmountsrv(&gitsrv, nil, mntpt, MCREATE);
     exits(nil);
 }
+/*e: function [[main (git9/fs.c)]] */
 /*e: git9/fs.c */

@@ -632,7 +632,9 @@ main(int argc, char **argv)
         fail(&c, "no such repo: %s", repo);
     if(chdir("/") == -1)
         fail(&c, "no such repo");
+
     gitinit(nil, 0, nil);
+
     if(strcmp(cmd, "git-receive-pack") == 0)
         recvpack(&c);
     else if(strcmp(cmd, "git-upload-pack") == 0)

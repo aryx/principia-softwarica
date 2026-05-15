@@ -178,12 +178,13 @@ main(int argc, char **argv)
     case 'r':   reverse ^= 1;   break;
     default:    usage();    break;
     }ARGEND;
-/*e: function [[main (git9/query.c)]] */
 
     fmtinstall('P', Pfmt);
     if(argc == 0)
         usage();
+
     gitinit(repo, sizeof(repo), &nrel);
+
     if(chdir(repo) == -1)
         sysfatal("chdir: %r");
     if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
@@ -209,5 +210,5 @@ main(int argc, char **argv)
     }
     exits(nil);
 }
-
+/*e: function [[main (git9/query.c)]] */
 /*e: git9/query.c */

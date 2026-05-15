@@ -5,10 +5,19 @@
 
 #include "git.h"
 
-int findroot;
-int showall;
+/*s: global [[findroot]] */
+bool findroot;
+/*e: global [[findroot]] */
+/*s: global [[showall]] */
+bool showall;
+/*e: global [[showall]] */
+/*s: global [[nfile]] */
 int nfile;
+/*e: global [[nfile]] */
+/*s: global [[file]] */
+// array<ref_own<filename> (length=nfile)
 char    *file[32];
+/*e: global [[file]] */
 
 /*s: function [[showconf]] */
 static int
@@ -48,52 +57,64 @@ done:
 }
 /*e: function [[showconf]] */
 
-
 /*s: function [[usage]] */
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-f file] [-r] keys..\n", argv0);
-    fprint(2, "\t-f:    use file 'file' (default: .git/config)\n");
-    fprint(2, "\t r:    print repository root\n");
+    fprint(STDERR, "usage: %s [-f file] [-r] keys..\n", argv0);
+    fprint(STDERR, "\t-f:    use file 'file' (default: .git/config)\n");
+    fprint(STDERR, "\t r:    print repository root\n");
     exits("usage");
 }
 /*e: function [[usage]] */
-
 /*s: function [[main]] */
 void
 main(int argc, char **argv)
 {
-    char repo[512], *p, *s;
-    int i, j, nrel;
+    char repo[512];
+    int nrel;
+    /*s: [[main()]](conf.c) other locals */
+    char *p, *s;
+    int i, j;
+    /*e: [[main()]](conf.c) other locals */
 
     ARGBEGIN{
-    case 'r':   findroot++;         break;
-    case 'a':   showall++;          break;
-    default:    usage();            break;
+    /*s: [[main()]](conf.c) command line processing */
+    case 'r':   findroot=true;         break;
+    /*x: [[main()]](conf.c) command line processing */
+    case 'a':   showall=true;          break;
+    /*x: [[main()]](conf.c) command line processing */
     case 'f':
         if(nfile == nelem(file))
             sysfatal("too many configs");
         file[nfile++]=EARGF(usage());
         break;
+    /*e: [[main()]](conf.c) command line processing */
+    default:    usage();            break;
     }ARGEND;
-/*e: function [[main]] */
 
     gitinit(repo, sizeof(repo), &nrel);
+
+    /*s: [[main()]](conf.c) if [[findroot]] */
     if(findroot){
         print("%s\n", repo);
         exits(nil);
     }
+    /*e: [[main()]](conf.c) if [[findroot]] */
+    // else
+    /*s: [[main()]](conf.c) set default [[file]] */
     if(nfile == 0){
         if((file[nfile++] = smprint("%s/.git/config", repo)) == nil)
             sysfatal("smprint: %r");
         if((p = getenv("home")) != nil)
             if((file[nfile++] = smprint("%s/lib/git/config", p)) == nil)
                 sysfatal("smprint: %r");
-        file[nfile++] = "/sys/lib/git/config";
+        file[nfile++] = "/lib/git/config";
     }
+    /*e: [[main()]](conf.c) set default [[file]] */
 
     for(i = 0; i < argc; i++){
+        /*s: [[main()]](conf.c) show config entry for [[argv[i]]] */
         if((p = strchr(argv[i], '.')) == nil){
             s = nil;
             p = argv[i];
@@ -105,7 +126,9 @@ main(int argc, char **argv)
         for(j = 0; j < nfile; j++)
             if(showconf(file[j], s, p))
                 break;
+        /*e: [[main()]](conf.c) show config entry for [[argv[i]]] */
     }
     exits(nil);
 }
+/*e: function [[main]] */
 /*e: git9/conf.c */
