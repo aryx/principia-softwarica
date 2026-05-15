@@ -516,6 +516,7 @@ for(p in $patches){
 }
 exit ''
 @
+%$
 
 \subsection*{[[git9/hist.rc]]}
 
@@ -870,100 +871,7 @@ static u32int geartab[] = {
 
 
 
-<<function [[popcrumb]]>>=
-static void
-popcrumb(Gitaux *aux)
-{
-    Crumb *c;
 
-    if(aux->ncrumb > 1){
-        c = crumb(aux, 0);
-        free(c->name);
-        unref(c->obj);
-        aux->ncrumb--;
-    }
-}
-@
-
-<<function [[branchid]]>>=
-static vlong
-branchid(Gitaux *aux, char *path)
-{
-    int i;
-
-    for(i = 0; branches[i]; i++)
-        if(strcmp(path, branches[i]) == 0)
-            goto found;
-    branches = realloc(branches, sizeof(char *)*(i + 2));
-    branches[i] = estrdup(path);
-    branches[i + 1] = nil;
-
-found:
-    if(aux){
-        if(aux->refpath)
-            free(aux->refpath);
-        aux->refpath = estrdup(branches[i]);
-    }
-    return i;
-}
-@
-
-
-<<function [[rootgen]]>>=
-static int
-rootgen(int i, Dir *d, void *p)
-{
-    Crumb *c;
-
-    c = crumb(p, 0);
-    if (i >= nelem(qroot))
-        return -1;
-    d->mode = 0555 | DMDIR;
-    d->name = estrdup9p(qroot[i]);
-    d->qid.vers = 0;
-    d->qid.type = strcmp(qroot[i], "ctl") == 0 ? 0 : QTDIR;
-    d->qid.path = qpath(nil, i, i, Qroot);
-    d->uid = estrdup9p(username);
-    d->gid = estrdup9p(groupname);
-    d->muid = estrdup9p(username);
-    d->mtime = c->mtime;
-    return 0;
-}
-@
-
-<<function [[branchgen]]>>=
-static int
-branchgen(int i, Dir *d, void *p)
-{
-    Gitaux *aux;
-    Dir *refs;
-    Crumb *c;
-    int n;
-
-    aux = p;
-    c = crumb(aux, 0);
-    refs = nil;
-    d->qid.vers = 0;
-    d->qid.type = QTDIR;
-    d->qid.path = qpath(c, i, branchid(aux, aux->refpath), Qbranch | Internal);
-    d->mode = 0555 | DMDIR;
-    d->uid = estrdup9p(username);
-    d->gid = estrdup9p(groupname);
-    d->muid = estrdup9p(username);
-    d->mtime = c->mtime;
-    d->atime = c->mtime;
-    if((n = slurpdir(aux->refpath, &refs)) < 0)
-        return -1;
-    if(i < n){
-        d->name = estrdup9p(refs[i].name);
-        free(refs);
-        return 0;
-    }else{
-        free(refs);
-        return -1;
-    }
-}
-@
 
 <<function [[gtreegen]]>>=
 static int
@@ -1053,92 +961,8 @@ gcommitgen(int i, Dir *d, void *p)
 }
 @
 
-<<function [[objgen]]>>=
-static int
-objgen(int i, Dir *d, void *p)
-{
-    Gitaux *aux;
-    Object *o;
-    Crumb *c;
-    char name[64];
-    Objlist *ols;
-    Hash h;
 
-    aux = p;
-    c = crumb(aux, 0);
-    if(!aux->ols)
-        aux->ols = mkols();
-    ols = aux->ols;
-    o = nil;
-    /* We tried to sent it, but it didn't fit */
-    if(aux->olslast && ols->idx == i + 1){
-        snprint(name, sizeof(name), "%H", aux->olslast->hash);
-        obj2dir(d, c, aux->olslast, name);
-        return 0;
-    }
-    while(ols->idx <= i){
-        if(olsnext(ols, &h) == -1)
-            return -1;
-        if((o = readobject(h)) == nil){
-            fprint(2, "corrupt object %H\n", h);
-            return -1;
-        }
-    }
-    if(o != nil){
-        snprint(name, sizeof(name), "%H", o->hash);
-        obj2dir(d, c, o, name);
-        unref(aux->olslast);
-        aux->olslast = ref(o);
-        return 0;
-    }
-    return -1;
-}
-@
 
-<<function [[objread]]>>=
-static void
-objread(Req *r, Gitaux *aux)
-{
-    Object *o;
-
-    o = crumb(aux, 0)->obj;
-    switch(o->type){
-    case GBlob:
-        readbuf(r, o->data, o->size);
-        break;
-    case GTag:
-        readbuf(r, o->data, o->size);
-        break;
-    case GTree:
-        dirread9p(r, gtreegen, aux);
-        break;
-    case GCommit:
-        dirread9p(r, gcommitgen, aux);
-        break;
-    default:
-        sysfatal("invalid object type %d", o->type);
-    }
-}
-@
-
-<<function [[readcommitparent]]>>=
-static void
-readcommitparent(Req *r, Object *o)
-{
-    char *buf, *p, *e;
-    int i, n;
-
-    /* 40 bytes per hash, 1 per nl, 1 for terminator */
-    n = o->commit->nparent * (40 + 1) + 1;
-    buf = emalloc(n);
-    p = buf;
-    e = buf + n;
-    for (i = 0; i < o->commit->nparent; i++)
-        p = seprint(p, e, "%H\n", o->commit->parent[i]);
-    readbuf(r, buf, p - buf);
-    free(buf);
-}
-@
 
 
 <<function [[walklink]]>>=
@@ -1186,148 +1010,10 @@ walklink(Gitaux *aux, char *link, int nlink, int ndotdot, int *mode)
 }
 @
 
-<<function [[objwalk1]]>>=
-static char *
-objwalk1(Qid *q, Object *o, Crumb *p, Crumb *c, char *name, vlong qdir, Gitaux *aux)
-{
-    Object *w, *l;
-    char *e;
-    int i, m;
-
-    w = nil;
-    e = nil;
-    if(!o)
-        return Eexist;
-    switch(o->type){
-    case GBlob:
-        e = Enotdir;
-        break;
-    case GTree:
-        q->type = 0;
-        for(i = 0; i < o->tree->nent; i++){
-            if(strcmp(o->tree->ent[i].name, name) != 0)
-                continue;
-            m = o->tree->ent[i].mode;
-            w = readobject(o->tree->ent[i].h);
-            if(!w && o->tree->ent[i].ismod)
-                w = emptydir();
-            if(w && o->tree->ent[i].islink)
-                if((l = walklink(aux, w->data, w->size, 1, &m)) != nil)
-                    w = l;
-            if(!w)
-                return Ebadobj;
-            q->type = (w->type == GTree) ? QTDIR : 0;
-            q->path = qpath(p, i, w->id, qdir);
-            c->mode = m;
-            c->mode |= (w->type == GTree) ? (DMDIR|0755) : 0644;
-            c->obj = w;
-            break;
-        }
-        if(!w)
-            e = Eexist;
-        break;
-    case  GCommit:
-        q->type = 0;
-        c->mtime = o->commit->mtime;
-        c->mode = 0644;
-        assert(qdir == Qcommit || qdir == Qobject || qdir == Qtree || qdir == Qhead || qdir == Qcommitter);
-        if(strcmp(name, "msg") == 0)
-            q->path = qpath(p, 0, o->id, Qmsg);
-        else if(strcmp(name, "parent") == 0)
-            q->path = qpath(p, 1, o->id, Qparent);
-        else if(strcmp(name, "hash") == 0)
-            q->path = qpath(p, 2, o->id, Qhash);
-        else if(strcmp(name, "author") == 0)
-            q->path = qpath(p, 3, o->id, Qauthor);
-        else if(strcmp(name, "committer") == 0)
-            q->path = qpath(p, 3, o->id, Qcommitter);
-        else if(strcmp(name, "tree") == 0){
-            q->type = QTDIR;
-            q->path = qpath(p, 4, o->id, Qtree);
-            unref(c->obj);
-            c->mode = DMDIR | gitdirmode;
-            c->obj = readobject(o->commit->tree);
-            if(c->obj == nil)
-                sysfatal("could not read object %H: %r", o->commit->tree);
-        }
-        else
-            e = Eexist;
-        break;
-    case GTag:
-        e = Eimpl;
-        break;
-    }
-    return e;
-}
-@
-
-<<function [[readref]]>>=
-static Object *
-readref(char *pathstr)
-{
-    char buf[128], path[128], *p, *e;
-    Hash h;
-    int n, f;
-
-    snprint(path, sizeof(path), "%s", pathstr);
-    while(1){
-        if((f = open(path, OREAD)) == -1)
-            return nil;
-        if((n = readn(f, buf, sizeof(buf) - 1)) == -1)
-            return nil;
-        close(f);
-        buf[n] = 0;
-        if(strncmp(buf, "ref:", 4) !=  0)
-            break;
-
-        p = buf + 4;
-        while(isspace(*p))
-            p++;
-        if((e = strchr(p, '\n')) != nil)
-            *e = 0;
-        snprint(path, sizeof(path), ".git/%s", p);
-    }
-
-    if(hparse(&h, buf) == -1)
-        return nil;
-
-    return readobject(h);
-}
-@
 
 
 
 
-<<function [[readctl]]>>=
-static char *
-readctl(Req *r)
-{
-    char data[1024], ref[512], *s, *e;
-    int fd, n;
-
-    if((fd = open(".git/HEAD", OREAD)) == -1)
-        return Erepo;
-    /* empty HEAD is invalid */
-    if((n = readn(fd, ref, sizeof(ref) - 1)) <= 0)
-        return Erepo;
-    close(fd);
-
-    s = ref;
-    ref[n] = 0;
-    if(strncmp(s, "ref:", 4) == 0)
-        s += 4;
-    while(*s == ' ' || *s == '\t')
-        s++;
-    if((e = strchr(s, '\n')) != nil)
-        *e = 0;
-    if(strstr(s, "refs/") == s)
-        s += strlen("refs/");
-
-    snprint(data, sizeof(data), "branch %s\nrepo %s\n", s, gitdir);
-    readstr(r, data);
-    return nil;
-}
-@
 
 
 
@@ -1466,7 +1152,7 @@ resolveremote(Hash *h, char *ref)
     int r, f;
 
     ref = strip(ref);
-    if((r = hparse(h, ref)) != -1)
+    if((r = hparse(h, ref)) != ERROR_NEG1)
         return r;
     /* Slightly special handling: translate remote refs to local ones. */
     if(strcmp(ref, "HEAD") == 0){
@@ -1481,7 +1167,7 @@ resolveremote(Hash *h, char *ref)
         return -1;
     }
 
-    r = -1;
+    r = ERROR_NEG1;
     s = strip(buf);
     if((f = open(s, OREAD)) == -1)
         return -1;
@@ -1740,7 +1426,7 @@ fetchpack(Conn *c)
             want = earealloc(want, refsz, sizeof(want[0]));
             ref = earealloc(ref, refsz, sizeof(ref[0]));
         }
-        if(hparse(&want[nref], sp[0]) == -1)
+        if(hparse(&want[nref], sp[0]) == ERROR_NEG1)
             sysfatal("invalid hash %s", sp[0]);
         if (resolveremote(&have[nref], sp[1]) == -1)
             memset(&have[nref], 0, sizeof(have[nref]));
@@ -2267,7 +1953,7 @@ void    *earealloc(void *, ulong, ulong);
 void    *erealloc(void *, ulong);
 char    *estrdup(char *);
 int slurpdir(char *, Dir **);
-int hparse(Hash *, char *);
+errorneg1 hparse(Hash *, char *);
 int hassuffix(char *, char *);
 int swapsuffix(char *, int, char *, char *, char *);
 char    *strip(char *);
@@ -2782,7 +2468,7 @@ olsreadloose(Objlist *ols, Hash *h)
                 n = snprint(buf, sizeof(buf), "%s%s", ols->top[i].name, ols->loose[j].name);
                 if(n >= sizeof(buf))
                     goto step;
-                if(hparse(h, buf) == -1)
+                if(hparse(h, buf) == ERROR_NEG1)
                     goto step;
                 ols->state = Siter;
                 ols->topidx = i;
@@ -2802,21 +2488,6 @@ step:
 }
 @
 
-<<function [[mkols]]>>=
-Objlist*
-mkols(void)
-{
-    Objlist *ols;
-
-    ols = emalloc(sizeof(Objlist));
-    if((ols->ntop = slurpdir(".git/objects", &ols->top)) == -1)
-        sysfatal("read top level: %r");
-    if((ols->npack = slurpdir(".git/objects/pack", &ols->pack)) == -1)
-        ols->pack = nil;
-    ols->fd = -1;
-    return ols;
-}
-@
 
 
 <<function [[olsnext]]>>=
@@ -3903,22 +3574,6 @@ expandprefix(Hash *rh, Hash h, int npfx)
 }
 @
 
-<<function [[readobject]]>>=
-/*
- * Loads and returns a cached object.
- */
-Object*
-readobject(Hash h)
-{
-    Object *o;
-
-    if((o = readidxobject(nil, h, 0)) == nil)
-        return nil;
-    parseobject(o);
-    ref(o);
-    return o;
-}
-@
 
 <<function [[clearedobject]]>>=
 /*
@@ -7974,22 +7629,6 @@ charval(int c)
 
 
 
-<<function [[hparse]]>>=
-int
-hparse(Hash *h, char *b)
-{
-    int i, c0, c1;
-
-    for(i = 0; i < nelem(h->h); i++){
-        if((c0 = charval(b[2*i+0])) == -1)
-            return -1;
-        if((c1 = charval(b[2*i+1])) == -1)
-            return -1;
-        h->h[i] = (c0 << 4) | c1;
-    }
-    return 0;
-}
-@
 
 <<function [[slurpdir]]>>=
 int

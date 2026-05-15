@@ -158,8 +158,26 @@ struct Hash {
 
 % %H in fmt
 
+
 \subsection{Conversion functions}
 
+<<function [[hparse]]>>=
+errorneg1
+hparse(Hash *h, char *b)
+{
+    int i, c0, c1;
+
+    for(i = 0; i < nelem(h->h); i++){
+        if((c0 = charval(b[2*i+0])) == -1)
+            return ERROR_NEG1;
+        if((c1 = charval(b[2*i+1])) == -1)
+            return ERROR_NEG1;
+        h->h[i] = (c0 << 4) | c1;
+    }
+    return OK_0;
+}
+@
+% >>
 
 \section{[[Repository.t]]}
 \label{sec:object-store-function}
@@ -190,6 +208,8 @@ struct Object {
 
     /* Everything below here gets cleared */
     char    *all;
+
+    // Blob
     char    *data;
     /* size excludes header */
     vlong   size;
@@ -286,7 +306,7 @@ clear(Object *o)
 
 \subsection{[[Blob.t]]}
 
-\subsection{[[Tree.t]]}
+\subsection{[[Tinfo]]}
 
 <<[[Object]] union fields>>=
 Tinfo   *tree;
@@ -301,7 +321,7 @@ struct Tinfo {
 };
 @
 
-\subsection{[[Commit.t]]}
+\subsection{[[Cinfo]]}
 
 <<[[Object]] union fields>>=
 Cinfo   *commit;
@@ -347,9 +367,9 @@ struct Cinfo {
 %******************************************************************************
 \label{chap:git-conf}
 
-%git9: in ocamlgit discussion if .git/config was moved to advanced features
+%git9: in ocamlgit discussion of .git/config was moved to the advanced features
 % chapter, but in git9 the rc code is using git/conf -r and git/conf <key> early
-% so we have to explain it early
+% so we have to explain it early.
 
 \section{[[.git/config]]}
 \label{sec:gitconfig}
@@ -705,16 +725,18 @@ enum Qxxx {
 
     Qhead,
     Qbranch,
+    Qobject,
+    Qctl,
+
+    // object/
+    Qcdata,
+    Qtree,
     Qcommit,
         Qmsg,
         Qparent,
-        Qtree,
-        Qcdata,
         Qhash,
         Qauthor,
         Qcommitter,
-    Qobject,
-    Qctl,
 
     Qmax,
     Internal=1<<7,
@@ -1020,7 +1042,6 @@ obj2dir(Dir *d, Crumb *c, Object *o, char *name)
 
 \subsection{[[gitread()]]}
 
-
 <<function [[gitread]]>>=
 static void
 gitread(Req *r)
@@ -1043,8 +1064,6 @@ gitread(Req *r)
     respond(r, e);
 }
 @
-
-
 
 
 \subsection{[[gitwalk1()]]}
@@ -1100,6 +1119,24 @@ if(strcmp(name, "..") == 0){
 }
 @
 
+<<function [[popcrumb]]>>=
+static void
+popcrumb(Gitaux *aux)
+{
+    Crumb *c;
+
+    if(aux->ncrumb > 1){
+        c = crumb(aux, 0);
+        free(c->name);
+        unref(c->obj);
+        aux->ncrumb--;
+    }
+}
+@
+
+
+
+
 
 
 
@@ -1110,6 +1147,30 @@ case Qroot:
     dirread9p(r, rootgen, aux);
     break;
 @
+
+<<function [[rootgen]]>>=
+static errorneg1
+rootgen(int i, Dir *d, void *p)
+{
+    Crumb *c;
+
+    c = crumb(p, 0);
+    if (i >= nelem(qroot))
+        return ERROR_NEG1;
+
+    d->mode = 0555 | DMDIR;
+    d->name = estrdup9p(qroot[i]);
+    d->qid.vers = 0;
+    d->qid.type = strcmp(qroot[i], "ctl") == 0 ? 0 : QTDIR;
+    d->qid.path = qpath(nil, i, i, Qroot);
+    d->uid = estrdup9p(username);
+    d->gid = estrdup9p(groupname);
+    d->muid = estrdup9p(username);
+    d->mtime = c->mtime;
+    return OK_0;
+}
+@
+
 
 
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
@@ -1126,7 +1187,395 @@ case Qroot:
 
 
 
-\subsection{[[.git/fs/HEAD]]}
+\subsection{[[.git/fs/ctl]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qctl:
+    e = readctl(r);
+    break;
+@
+
+<<function [[readctl]]>>=
+static char *
+readctl(Req *r)
+{
+    char data[1024], ref[512], *s, *e;
+    fdt fd;
+    int n;
+
+    fd = open(".git/HEAD", OREAD);
+    if(fd == ERROR_NEG1)
+        return Erepo;
+    /* empty HEAD is invalid */
+    if((n = readn(fd, ref, sizeof(ref) - 1)) <= 0)
+        return Erepo;
+    close(fd);
+
+    s = ref;
+    ref[n] = '\0';
+    if(strncmp(s, "ref:", 4) == 0)
+        s += 4;
+    while(*s == ' ' || *s == '\t')
+        s++;
+    if((e = strchr(s, '\n')) != nil)
+        *e = 0;
+    if(strstr(s, "refs/") == s)
+        s += strlen("refs/");
+
+    snprint(data, sizeof(data), "branch %s\nrepo %s\n", s, gitdir);
+    readstr(r, data);
+    return nil;
+}
+@
+
+
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qctl:
+    return Enodir;
+@
+
+
+\subsection{[[.git/fs/object/]]}
+
+<<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>=
+}else if(strcmp(name, "object") == 0){
+    *q = (Qid){Qobject, 0, QTDIR};
+    c->mode = DMDIR | 0555;
+@
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qobject:
+    if(o)
+        objread(r, aux);
+    else
+        dirread9p(r, objgen, aux);
+    break;
+@
+
+% when o can be set for Qobject?? for ols caching?
+
+<<function [[objgen]]>>=
+static int
+objgen(int i, Dir *d, void *p)
+{
+    Gitaux *aux;
+    Object *o;
+    Crumb *c;
+    char name[64];
+    Objlist *ols;
+    Hash h;
+
+    aux = p;
+    c = crumb(aux, 0);
+    if(!aux->ols)
+        aux->ols = mkols();
+    ols = aux->ols;
+    o = nil;
+
+    /* We tried to sent it, but it didn't fit */
+    if(aux->olslast && ols->idx == i + 1){
+        snprint(name, sizeof(name), "%H", aux->olslast->hash);
+        obj2dir(d, c, aux->olslast, name);
+        return 0;
+    }
+    while(ols->idx <= i){
+        if(olsnext(ols, &h) == -1)
+            return -1;
+        if((o = readobject(h)) == nil){
+            fprint(2, "corrupt object %H\n", h);
+            return -1;
+        }
+    }
+    if(o != nil){
+        snprint(name, sizeof(name), "%H", o->hash);
+        obj2dir(d, c, o, name);
+        unref(aux->olslast);
+        aux->olslast = ref(o);
+        return 0;
+    }
+    return -1;
+}
+@
+
+
+
+<<function [[mkols]]>>=
+Objlist*
+mkols(void)
+{
+    Objlist *ols;
+
+    ols = emalloc(sizeof(Objlist));
+    if((ols->ntop = slurpdir(".git/objects", &ols->top)) == -1)
+        sysfatal("read top level: %r");
+    if((ols->npack = slurpdir(".git/objects/pack", &ols->pack)) == -1)
+        ols->pack = nil;
+    ols->fd = -1;
+    return ols;
+}
+@
+
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qobject:
+    if(c->obj){
+        e = objwalk1(q, o->obj, o, c, name, Qobject, aux);
+    }else{
+        if(hparse(&h, name) == -1)
+            return Ebadobj;
+        c->obj = readobject(h);
+        if(c->obj == nil)
+            return Ebadobj;
+        if(c->obj->type == GBlob || c->obj->type == GTag){
+            c->mode = 0644;
+            q->type = 0;
+        }else{
+            c->mode = DMDIR | 0755;
+            q->type = QTDIR;
+        }
+        q->path = qpath(o, Qobject, c->obj->id, Qobject);
+        q->vers = 0;
+    }
+    break;
+@
+% faster path, no need to get the dir with all content?
+
+<<function [[readobject]]>>=
+/*
+ * Loads and returns a cached object.
+ */
+Object*
+readobject(Hash h)
+{
+    Object *o;
+
+    if((o = readidxobject(nil, h, 0)) == nil)
+        return nil;
+    parseobject(o);
+    ref(o);
+    return o;
+}
+@
+
+
+<<function [[objwalk1]]>>=
+static char *
+objwalk1(Qid *q, Object *o, Crumb *p, Crumb *c, char *name, vlong qdir, Gitaux *aux)
+{
+    Object *w, *l;
+    char *e;
+    int i, m;
+
+    w = nil;
+    e = nil;
+    if(!o)
+        return Eexist;
+    switch(o->type){
+    case GBlob:
+        e = Enotdir;
+        break;
+    case GTree:
+        q->type = 0;
+        for(i = 0; i < o->tree->nent; i++){
+            if(strcmp(o->tree->ent[i].name, name) != 0)
+                continue;
+            m = o->tree->ent[i].mode;
+            w = readobject(o->tree->ent[i].h);
+            if(!w && o->tree->ent[i].ismod)
+                w = emptydir();
+            if(w && o->tree->ent[i].islink)
+                if((l = walklink(aux, w->data, w->size, 1, &m)) != nil)
+                    w = l;
+            if(!w)
+                return Ebadobj;
+            q->type = (w->type == GTree) ? QTDIR : 0;
+            q->path = qpath(p, i, w->id, qdir);
+            c->mode = m;
+            c->mode |= (w->type == GTree) ? (DMDIR|0755) : 0644;
+            c->obj = w;
+            break;
+        }
+        if(!w)
+            e = Eexist;
+        break;
+    case  GCommit:
+        q->type = 0;
+        c->mtime = o->commit->mtime;
+        c->mode = 0644;
+        assert(qdir == Qcommit || qdir == Qobject || qdir == Qtree || qdir == Qhead || qdir == Qcommitter);
+        if(strcmp(name, "msg") == 0)
+            q->path = qpath(p, 0, o->id, Qmsg);
+        else if(strcmp(name, "parent") == 0)
+            q->path = qpath(p, 1, o->id, Qparent);
+        else if(strcmp(name, "hash") == 0)
+            q->path = qpath(p, 2, o->id, Qhash);
+        else if(strcmp(name, "author") == 0)
+            q->path = qpath(p, 3, o->id, Qauthor);
+        else if(strcmp(name, "committer") == 0)
+            q->path = qpath(p, 3, o->id, Qcommitter);
+        else if(strcmp(name, "tree") == 0){
+            q->type = QTDIR;
+            q->path = qpath(p, 4, o->id, Qtree);
+            unref(c->obj);
+            c->mode = DMDIR | gitdirmode;
+            c->obj = readobject(o->commit->tree);
+            if(c->obj == nil)
+                sysfatal("could not read object %H: %r", o->commit->tree);
+        }
+        else
+            e = Eexist;
+        break;
+    case GTag:
+        e = Eimpl;
+        break;
+    }
+    return e;
+}
+@
+
+
+\subsection{[[.git/fs/object/<blobid>]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qcdata:
+    objread(r, aux);
+    break;
+@
+%old: was Qcommit: Qtree: Qcdata: before
+
+<<function [[objread]]>>=
+static void
+objread(Req *r, Gitaux *aux)
+{
+    Object *o;
+
+    o = crumb(aux, 0)->obj;
+    switch(o->type){
+    case GBlob:
+        readbuf(r, o->data, o->size);
+        break;
+    case GTag:
+        readbuf(r, o->data, o->size);
+        break;
+    case GTree:
+        dirread9p(r, gtreegen, aux);
+        break;
+    case GCommit:
+        dirread9p(r, gcommitgen, aux);
+        break;
+    default:
+        sysfatal("invalid object type %d", o->type);
+    }
+}
+@
+
+
+\subsection{[[.git/fs/object/<treeid>/]]}
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qtree:
+    e = objwalk1(q, o->obj, o, c, name, Qtree, aux);
+    break;
+@
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qtree:
+    objread(r, aux);
+    break;
+@
+% can also read the tree data?
+
+\subsection{[[.git/fs/object/<commitid>/]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qcommit:
+    objread(r, aux);
+    break;
+@
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qcommit:
+    e = objwalk1(q, o->obj, o, c, name, Qcommit, aux);
+    break;
+@
+
+
+\subsection{[[.git/fs/object/<commitid>/msg]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qmsg:
+    readbuf(r, o->commit->msg, o->commit->nmsg);
+    break;
+@
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qmsg:
+case Qparent:
+case Qcdata:
+case Qhash:
+case Qauthor:
+case Qcommitter:
+    return Enodir;
+@
+
+\subsection{[[.git/fs/object/<commitid>/parent]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qparent:
+    readcommitparent(r, o);
+    break;
+@
+
+<<function [[readcommitparent]]>>=
+static void
+readcommitparent(Req *r, Object *o)
+{
+    char *buf, *p, *e;
+    int i, n;
+
+    /* 40 bytes per hash, 1 per nl, 1 for terminator */
+    n = o->commit->nparent * (40 + 1) + 1;
+    buf = emalloc(n);
+    p = buf;
+    e = buf + n;
+    for (i = 0; i < o->commit->nparent; i++)
+        p = seprint(p, e, "%H\n", o->commit->parent[i]);
+    readbuf(r, buf, p - buf);
+    free(buf);
+}
+@
+
+\subsection{[[.git/fs/object/<commitid>/hash]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qhash:
+    snprint(buf, sizeof(buf), "%H\n", o->hash);
+    readstr(r, buf);
+    break;
+@
+
+\subsection{[[.git/fs/object/<commitid>/author]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qauthor:
+    snprint(buf, sizeof(buf), "%s\n", o->commit->author);
+    readstr(r, buf);
+    break;
+@
+
+\subsection{[[.git/fs/object/<commitid>/committer]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qcommitter:
+    snprint(buf, sizeof(buf), "%s\n", o->commit->committer);
+    readstr(r, buf);
+    break;
+@
+
+\subsection{[[.git/fs/HEAD/]]}
+
+% it's a dir this time, not like .git/HEAD
 
 <<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>=
 }else if(strcmp(name, "HEAD") == 0){
@@ -1134,6 +1583,46 @@ case Qroot:
     c->mode = DMDIR | 0555;
     c->obj = readref(".git/HEAD");
 @
+
+% .git/HEAD should contain something like  'ref: refs/heads/master'
+
+<<function [[readref]]>>=
+static Object *
+readref(char *pathstr)
+{
+    fdt f;
+    char buf[128], path[128], *p, *e;
+    Hash h;
+    int n;
+
+    snprint(path, sizeof(path), "%s", pathstr);
+    while(1){
+        if((f = open(path, OREAD)) == -1)
+            return nil;
+        if((n = readn(f, buf, sizeof(buf) - 1)) == -1)
+            return nil;
+        close(f);
+        buf[n] = '\0';
+        if(strncmp(buf, "ref:", 4) !=  0)
+            break;
+
+        // else
+        p = buf + 4;
+        while(isspace(*p))
+            p++;
+        if((e = strchr(p, '\n')) != nil)
+            *e = 0;
+        snprint(path, sizeof(path), ".git/%s", p);
+    }
+
+    if(hparse(&h, buf) == ERROR_NEG1)
+        return nil;
+
+    return readobject(h);
+}
+@
+
+
 
 <<[[gitread()]] switch [[QDIR(q)]] cases>>=
 case Qhead:
@@ -1151,6 +1640,8 @@ case Qhead:
     e = objwalk1(q, o->obj, o, c, name, Qhead, aux);
     break;
 @
+
+
 
 \subsection{[[.git/fs/branch/]]}
 
@@ -1170,6 +1661,65 @@ case Qbranch:
         dirread9p(r, branchgen, aux);
     break;
 @
+
+<<function [[branchgen]]>>=
+static int
+branchgen(int i, Dir *d, void *p)
+{
+    Gitaux *aux;
+    Dir *refs;
+    Crumb *c;
+    int n;
+
+    aux = p;
+    c = crumb(aux, 0);
+    refs = nil;
+    d->qid.vers = 0;
+    d->qid.type = QTDIR;
+    d->qid.path = qpath(c, i, branchid(aux, aux->refpath), Qbranch | Internal);
+    d->mode = 0555 | DMDIR;
+    d->uid = estrdup9p(username);
+    d->gid = estrdup9p(groupname);
+    d->muid = estrdup9p(username);
+    d->mtime = c->mtime;
+    d->atime = c->mtime;
+    if((n = slurpdir(aux->refpath, &refs)) < 0)
+        return -1;
+    if(i < n){
+        d->name = estrdup9p(refs[i].name);
+        free(refs);
+        return 0;
+    }else{
+        free(refs);
+        return -1;
+    }
+}
+@
+
+<<function [[branchid]]>>=
+static vlong
+branchid(Gitaux *aux, char *path)
+{
+    int i;
+
+    for(i = 0; branches[i]; i++)
+        if(strcmp(path, branches[i]) == 0)
+            goto found;
+    branches = realloc(branches, sizeof(char *)*(i + 2));
+    branches[i] = estrdup(path);
+    branches[i + 1] = nil;
+
+found:
+    if(aux){
+        if(aux->refpath)
+            free(aux->refpath);
+        aux->refpath = estrdup(branches[i]);
+    }
+    return i;
+}
+@
+
+
 
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qbranch:
@@ -1192,144 +1742,6 @@ case Qbranch:
 @
 
 
-\subsection{[[.git/fs/object/]]}
-
-<<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>=
-}else if(strcmp(name, "object") == 0){
-    *q = (Qid){Qobject, 0, QTDIR};
-    c->mode = DMDIR | 0555;
-@
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qobject:
-    if(o)
-        objread(r, aux);
-    else
-        dirread9p(r, objgen, aux);
-    break;
-@
-
-
-<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qobject:
-    if(c->obj){
-        e = objwalk1(q, o->obj, o, c, name, Qobject, aux);
-    }else{
-        if(hparse(&h, name) == -1)
-            return Ebadobj;
-        if((c->obj = readobject(h)) == nil)
-            return Ebadobj;
-        if(c->obj->type == GBlob || c->obj->type == GTag){
-            c->mode = 0644;
-            q->type = 0;
-        }else{
-            c->mode = DMDIR | 0755;
-            q->type = QTDIR;
-        }
-        q->path = qpath(o, Qobject, c->obj->id, Qobject);
-        q->vers = 0;
-    }
-    break;
-@
-
-
-\subsection{[[.git/fs/object/<id>/msg]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qmsg:
-    readbuf(r, o->commit->msg, o->commit->nmsg);
-    break;
-@
-
-<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qmsg:
-case Qparent:
-case Qcdata:
-case Qhash:
-case Qauthor:
-case Qcommitter:
-    return Enodir;
-@
-
-\subsection{[[.git/fs/object/<id>/parent]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qparent:
-    readcommitparent(r, o);
-    break;
-@
-
-\subsection{[[.git/fs/object/<id>/hash]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qhash:
-    snprint(buf, sizeof(buf), "%H\n", o->hash);
-    readstr(r, buf);
-    break;
-@
-
-\subsection{[[.git/fs/object/<id>/author]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qauthor:
-    snprint(buf, sizeof(buf), "%s\n", o->commit->author);
-    readstr(r, buf);
-    break;
-@
-
-\subsection{[[.git/fs/object/<id>/committer]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qcommitter:
-    snprint(buf, sizeof(buf), "%s\n", o->commit->committer);
-    readstr(r, buf);
-    break;
-@
-
-
-\subsection{[[.git/fs/object/<id>/commit]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qcommit:
-case Qtree:
-case Qcdata:
-    objread(r, aux);
-    break;
-@
-
-<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qcommit:
-    e = objwalk1(q, o->obj, o, c, name, Qcommit, aux);
-    break;
-@
-
-
-\subsection{[[.git/fs/object/<id>/tree]]}
-
-<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qtree:
-    e = objwalk1(q, o->obj, o, c, name, Qtree, aux);
-    break;
-@
-
-
-\subsection{[[.git/fs/object/<id>/cdata]]}
-
-\subsection{[[.git/fs/ctl]]}
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qctl:
-    e = readctl(r);
-    break;
-@
-
-<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qctl:
-    return Enodir;
-@
-
-
-%alt:\section{Extra flags}
 \section{Advanced features}
 
 \subsection{[[git/fs -d]]}
@@ -1362,6 +1774,7 @@ case 'm':
 \label{chap:reading}
 
 \section{Objects}
+
 
 \subsection{Decompression}
 
