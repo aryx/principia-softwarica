@@ -2815,18 +2815,18 @@ parsetree(Object *o)
          * of the git repo dir.
          */
         t->mode = gitdirmode;
-        t->ismod = 0;
-        t->islink = 0;
+        t->ismod = false;
+        t->islink = false;
         if(m & 0777){
             a = (m & 0777)>>6;
             t->mode &= ((a<<6)|(a<<3)|a);
         }
         if(m == 0160000){ /* module */
             t->mode |= DMDIR;
-            t->ismod = 1;
+            t->ismod = true;
         }else if(m == 0120000){ /* symlink */
             t->mode = 0;
-            t->islink = 1;
+            t->islink = true;
         }
         if(m & 0040000) /* dir */
             t->mode |= DMDIR;
@@ -2865,97 +2865,6 @@ parseobject(Object *o)
 }
 @
 
-<<function [[readidxobject]]>>=
-static Object*
-readidxobject(Biobuf *idx, Hash h, int flag)
-{
-    char path[Pathmax], hbuf[41];
-    Object *obj, *new;
-    int i, r, retried;
-    Biobuf *f;
-    vlong o;
-
-    if((obj = osfind(&objcache, h)) != nil){
-        if(flag & Cidx){
-            /*
-             * If we're indexing, we need to be careful
-             * to only return objects within this pack,
-             * so if the objects exist outside the pack,
-             * we don't index the wrong copy.
-             */
-            if(!(obj->flag & Cidx))
-                return nil;
-            if(obj->flag & Cloaded)
-                return obj;
-            o = Boffset(idx);
-            if(Bseek(idx, obj->off, 0) == -1)
-                return nil;
-            if(readpacked(idx, obj, flag) == -1)
-                return nil;
-            if(Bseek(idx, o, 0) == -1)
-                sysfatal("could not restore offset");
-            cache(obj);
-            return obj;
-        }
-        if(obj->flag & Cloaded)
-            return obj;
-    }
-    if(flag & Cthin)
-        flag &= ~Cidx;
-    if(flag & Cidx)
-        return nil;
-    new = nil;
-    if(obj == nil){
-        new = emalloc(sizeof(Object));
-        new->id = objcache.nobj + 1;
-        new->hash = h;
-        obj = new;
-    }
-
-    o = -1;
-    retried = 0;
-retry:
-    for(i = 0; i < npackf; i++){
-        o = searchindex(packf[i].idx, packf[i].nidx, h, SHA1dlen*8, nil);
-        if(o != -1){
-            if((f = openpack(&packf[i])) == nil)
-                goto error;
-            if((r = Bseek(f, o, 0)) != -1)
-                r = readpacked(f, obj, flag);
-            closepack(&packf[i]);
-            if(r == -1)
-                goto error;
-            parseobject(obj);
-            cache(obj);
-            return obj;
-        }
-    }
-
-    snprint(hbuf, sizeof(hbuf), "%H", h);
-    snprint(path, sizeof(path), ".git/objects/%c%c/%s", hbuf[0], hbuf[1], hbuf + 2);
-    if((f = Bopen(path, OREAD)) != nil){
-        if(readloose(f, obj, flag) == -1)
-            goto errorf;
-        Bterm(f);
-        parseobject(obj);
-        cache(obj);
-        return obj;
-    }
-
-    if(o == -1){
-        if(retried)
-            goto error;
-        retried = 1;
-        refreshpacks();
-        goto retry;
-    }
-errorf:
-    Bterm(f);
-error:
-    free(new);
-    return nil;
-}
-@
 
 <<function [[expandprefix]]>>=
 int
@@ -6710,27 +6619,6 @@ int allowwrite;
 
 \subsection*{[[git9/util.c]]}
 
-<<function [[emptydir]]>>=
-Object*
-emptydir(void)
-{
-    static Object *e;
-
-    if(e != nil)
-        return ref(e);
-    e = emalloc(sizeof(Object));
-    e->hash = Zhash;
-    e->type = GTree;
-    e->tree = emalloc(sizeof(Tinfo));
-    e->tree->ent = nil;
-    e->tree->nent = 0;
-    e->flag |= Cloaded|Cparsed;
-    e->off = -1;
-    ref(e);
-    cache(e);
-    return e;
-}
-@
 
 <<function [[entcmp]]>>=
 int
