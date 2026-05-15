@@ -236,7 +236,7 @@ sendpack(Conn *c)
 void
 usage(void)
 {
-    fprint(2, "usage: %s remote [reponame]\n", argv0);
+    fprint(STDERR, "usage: %s remote [reponame]\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (git9/send.c)]] */

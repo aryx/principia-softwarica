@@ -83,9 +83,9 @@ main(int argc, char **argv)
 
     ARGBEGIN{
     /*s: [[main()]](conf.c) command line processing */
-    case 'a':   showall=true;          break;
-    /*x: [[main()]](conf.c) command line processing */
     case 'r':   findroot=true;         break;
+    /*x: [[main()]](conf.c) command line processing */
+    case 'a':   showall=true;          break;
     /*x: [[main()]](conf.c) command line processing */
     case 'f':
         if(nfile == nelem(file))

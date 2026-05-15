@@ -181,6 +181,14 @@ which in the end are more complicated and usually less efficient than in Git.
 %******************************************************************************
 \label{chap:git-conf}
 
+%git9: in ocamlgit discussion if .git/config was moved to advanced features
+% chapter, but in git9 the rc code is using git/conf -r and git/conf <key> early
+% so we have to explain it early
+
+\section{[[.git/config]]}
+\label{sec:gitconfig}
+
+\section{\texttt{\textasciitilde/lib/git/config}}
 
 \section{Usage}
 
@@ -315,9 +323,6 @@ findrepo(char *buf, int nbuf, int *nrel)
 
 
 %XXX
-<<[[gitinit()]] set [[authorpat]]>>=
-authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
-@
 <<[[gitinit()]] set [[objcache]]>>=
 osinit(&objcache);
 @
@@ -327,6 +332,23 @@ deflateinit();
 @
 
 
+
+\section{[[git/conf -r]]}
+
+<<global [[findroot]]>>=
+bool findroot;
+@
+
+<<[[main()]](conf.c) command line processing>>=
+case 'r':   findroot=true;         break;
+@
+
+<<[[main()]](conf.c) if [[findroot]]>>=
+if(findroot){
+    print("%s\n", repo);
+    exits(nil);
+}
+@
 
 \section{[[git/conf <key>]]}
 
@@ -392,7 +414,9 @@ done:
 @
 
 
-\section{[[git/conf -a]]}
+\section{Advanced features}
+
+\subsection{[[git/conf -a]]}
 
 <<global [[showall]]>>=
 bool showall;
@@ -403,24 +427,8 @@ case 'a':   showall=true;          break;
 @
 
 
-\section{[[git/conf -r]]}
 
-<<global [[findroot]]>>=
-bool findroot;
-@
-
-<<[[main()]](conf.c) command line processing>>=
-case 'r':   findroot=true;         break;
-@
-
-<<[[main()]](conf.c) if [[findroot]]>>=
-if(findroot){
-    print("%s\n", repo);
-    exits(nil);
-}
-@
-
-\section{[[git/conf -f <config>]]}
+\subsection{[[git/conf -f <config>]]}
 
 <<[[main()]](conf.c) command line processing>>=
 case 'f':
@@ -435,6 +443,8 @@ case 'f':
 \chapter{[[git/fs]]}
 %******************************************************************************
 \label{chap:git-fs}
+
+%\section{Introduction}
 
 \section{Usage}
 
@@ -520,7 +530,7 @@ Srv gitsrv = {
 };
 @
 
-\section{[[Qxxx]], [[qroot]], and [[gitxxx()]] skeletons}
+\section{[[Qxxx]] and [[qroot]]}
 
 <<emum [[Qxxx]]>>=
 enum Qxxx {
@@ -557,7 +567,23 @@ char *qroot[] = {
 };
 @
 
-\section{[[.git/fs]]}
+\section{[[gitxxx()]] skeletons}
+
+\subsection{[[gitattach()]]}
+
+\subsection{[[gitwalk1()]]}
+
+\subsection{[[gitclone()]]}
+
+\subsection{[[gitopen()]]}
+
+\subsection{[[gitread()]]}
+
+\subsection{[[gitstat()]]}
+
+\subsection{[[gitdestroyfid()]]}
+
+\section{[[.git/fs/]]}
 
 \subsection{[[.git/fs/HEAD]]}
 
@@ -567,7 +593,8 @@ char *qroot[] = {
 
 \subsection{[[.git/fs/ctl]]}
 
-\section{Extra flags}
+%alt:\section{Extra flags}
+\section{Advanced features}
 
 \subsection{[[git/fs -d]]}
 %alt: in debugging section
@@ -588,6 +615,10 @@ case 'm':
     break;
 @
 
+
+%******************************************************************************
+%\chapter{[[git/query]]}
+%******************************************************************************
 
 %******************************************************************************
 \chapter{Reading from a Repository}
@@ -653,6 +684,11 @@ case 'm':
 
 \section{Initializing a new repository: [[git init]]}
 
+% as opposed to git/conf, git/fs, which are actually also git9 specific,
+% we gonna start see command implemented in rc! so
+% git/init which is actually copied from principia/version_control/git9/init.rc
+% and reusing functions defined in /lib/git/common.rc
+
 \subsection{[[init.rc]]}
 
 <<git9/init.rc>>=
@@ -697,7 +733,6 @@ exit ''
 % - ^ string distribute (kind of map)
 % - common.rc, see appendix (for die here)
 % - die(), see appendix error management
-% - flagmt: auxrc/getflags utility shell functions (=~ getopt)
 
 <<[[init.rc]] set [[$name]] derived from [[$dir]]>>=
 name=`{basename `{cleanname -d `{pwd} $dir}}
@@ -715,6 +750,8 @@ name=`{basename `{cleanname -d `{pwd} $dir}}
 flagfmt='u:upstream upstream,b:branch branch'; args='name'
 eval `{auxrc/getflags $*} || exec auxrc/usage
 @
+
+% - flagmt: auxrc/getflags utility shell functions (=~ getopt)
 
 \section{Copying an existing repository: [[cp -r]]}
 
@@ -802,6 +839,8 @@ nl='
 @
 
 % `skip{} is rc extension to use scoped ifs to split output of command
+% default is space, tab, newline; here just newline
+% useful for? filenames with space in it?
 
 
 <<[[add.rc]] set [[$paths]] derived from [[$*]]>>=
@@ -896,10 +935,13 @@ if(~ $status '' || ~ $#files 0 && ! test -f .git/merge-parents && ~ $#revise 0)
 
  @{
         flag e +
+
+        # prepare the commit
         whoami
         findbranch
         parents
         editmsg
+
         commit
         update
 } || die 'could not commit:' $status
@@ -959,24 +1001,31 @@ if not
 <<fn [[findbranch]](commit.rc)>>=
 fn findbranch{
         branch=`{git/branch}
-        if(test -e $gitfs/branch/$branch/tree){
-                refpath=.git/refs/$branch
-                initial=false
-        }
-        if not if(test -e $gitfs/object/$branch/tree){
-                refpath=.git/HEAD
-                initial=false
-        }
-        if not if(! test -e $gitfs/HEAD/tree){
-                refpath=.git/refs/$branch
-                initial=true
-        }
-        if not
-                die 'invalid branch:' $branch
+        <<[[findbranch()]](commit.rc) set [[$refpath]] and [[$initial]]>>
 }
+@
+% will see git/branch soon, but =~ .git/refs/heads/???
+
+<<[[findbranch()]](commit.rc) set [[$refpath]] and [[$initial]]>>=
+if(test -e $gitfs/branch/$branch/tree){
+        refpath=.git/refs/$branch
+        initial=false
+}
+if not if(test -e $gitfs/object/$branch/tree){
+        refpath=.git/HEAD
+        initial=false
+}
+if not if(! test -e $gitfs/HEAD/tree){
+        refpath=.git/refs/$branch
+        initial=true
+}
+if not
+        die 'invalid branch:' $branch
 @
 
 \subsection{[[parents()]]}
+
+% branch is a name, parents need a commitid
 
 <<fn [[parents]](commit.rc)>>=
 fn parents{
@@ -986,17 +1035,6 @@ fn parents{
         if not
                 parents=`{git/query $branch}
 }
-@
-
-<<[[parents()]](commit.rc) if revise>>=
-if(! ~ $#revise 0)
-        parents=`{cat $gitfs/HEAD/parent}
-@
-% why not simply ~ $#revise 1   like we do further below?
-
-<<[[parents()]](commit.rc) if merge parents>>=
-if not if(test -f .git/merge-parents)
-        parents=`{cat .git/merge-parents | sort | uniq}
 @
 
 <<[[parents()]](commit.rc) if initial>>=
@@ -1020,13 +1058,6 @@ if(~ $#msg 1)
 <<[[commit.rc]] when create [[$msgfile.tmp]], else if revise>>
 @
 
-<<[[commit.rc]] when create [[$msgfile.tmp]], else if revise>>=
-if not if(~ $#revise 1){
-        msg=1
-        echo revising commit `{cat $gitfs/HEAD/hash}
-        cat $gitfs/HEAD/msg >$msgfile.tmp
-}
-@
 
 
 %part 2, called later by commit.rc
@@ -1097,6 +1128,8 @@ fn commit{
         hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
 }
 @
+
+% git/save!!
 
 % not useful $"msg I think since anyway use `''{}
 
@@ -1259,11 +1292,28 @@ main(int argc, char **argv)
 
 \section{Advanced features}
 
-%XXX
-<<[[commit.rc]] adjust [[$files]] if merge parents>>=
-if(test -f .git/merge-parents)
-        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+\subsection{[[git/commit -r]]}
+% revise
+
+%git9: equivalent in git?
+
+<<[[parents()]](commit.rc) if revise>>=
+if(! ~ $#revise 0)
+        parents=`{cat $gitfs/HEAD/parent}
 @
+% why not simply ~ $#revise 1   like we do further below?
+
+
+<<[[commit.rc]] when create [[$msgfile.tmp]], else if revise>>=
+if not if(~ $#revise 1){
+        msg=1
+        echo revising commit `{cat $gitfs/HEAD/hash}
+        cat $gitfs/HEAD/msg >$msgfile.tmp
+}
+@
+
+
+\subsection{[[git/commit -p]]}
 
 
 <<[[commit.rc]] if [[$partial]]>>=
@@ -1273,6 +1323,8 @@ if(~ $#partial 1){
         apply
 }
 @
+
+\subsection{Selecting hunks}
 
 <<fn [[filterdiff]](commit.rc)>>=
 fn filterdiff{
@@ -1690,6 +1742,18 @@ fn mergeperm {
 
 \section{Committing merged branches: [[git commit]]}
 \label{sec:git-commit-merge}
+
+
+<<[[commit.rc]] adjust [[$files]] if merge parents>>=
+if(test -f .git/merge-parents)
+        files=`$nl{git/query -c `{cat .git/merge-parents} | sed 's/^..//'}
+@
+
+
+<<[[parents()]](commit.rc) if merge parents>>=
+if not if(test -f .git/merge-parents)
+        parents=`{cat .git/merge-parents | sort | uniq}
+@
 
 
 %alt: \section{Rebasing} or in advanced features?
@@ -2568,13 +2632,13 @@ exit ''
 
 \section{Splitting a large repository: submodules}
 
-\section{Configuration file: [[.git/config]]}
-\label{sec:gitconfig}
-\subsection{Initialization}
-\subsection{[[Config.t]]}
-\subsection{Reading a configuration file}
-\subsection{Writing a configuration file}
-\subsection{Stacked configurations: [[~/.gitconfig]] and [[.git/config]]}
+%\section{Configuration file: [[.git/config]]}
+%\label{sec:gitconfig}
+%\subsection{Initialization}
+%\subsection{[[Config.t]]}
+%\subsection{Reading a configuration file}
+%\subsection{Writing a configuration file}
+%\subsection{Stacked configurations: [[~/.gitconfig]] and [[.git/config]]}
 
 
 \section{Commit rules and checks: [[.git/hooks/]]}
