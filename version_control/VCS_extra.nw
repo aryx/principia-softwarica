@@ -2139,65 +2139,8 @@ crc32(u32int crc, char *b, int nb)
 }
 @
 
-<<function [[bappend]]>>=
-int
-bappend(void *p, void *src, int len)
-{
-    Buf *b = p;
-    char *n;
 
-    while(b->len + len >= b->sz){
-        b->sz = b->sz*2 + 64;
-        n = realloc(b->data, b->sz);
-        if(n == nil)
-            return -1;
-        b->data = n;
-    }
-    memmove(b->data + b->len, src, len);
-    b->len += len;
-    return len;
-}
-@
 
-<<function [[breadc]]>>=
-int
-breadc(void *p)
-{
-    return Bgetc(p);
-}
-@
-
-<<function [[bdecompress]]>>=
-int
-bdecompress(Buf *d, Biobuf *b, vlong *csz)
-{
-    vlong o;
-
-    o = Boffset(b);
-    if(inflatezlib(d, bappend, b, breadc) == -1 || d->data == nil){
-        free(d->data);
-        return -1;
-    }
-    if (csz)
-        *csz = Boffset(b) - o;
-    return d->len;
-}
-@
-
-<<function [[decompress]]>>=
-int
-decompress(void **p, Biobuf *b, vlong *csz)
-{
-    Buf d = {.len=0, .data=nil, .sz=0};
-
-    if(bdecompress(&d, b, csz) == -1){
-        free(d.data);
-        return -1;
-    }
-    *p = d.data;
-    return d.len;
-}
-@
 
 <<function [[readvint]]>>=
 static vlong
@@ -2433,62 +2376,6 @@ readpacked(Biobuf *f, Object *o, int flag)
 }
 @
 
-<<function [[readloose]]>>=
-static int
-readloose(Biobuf *f, Object *o, int flag)
-{
-    struct { char *tag; int type; } *p, types[] = {
-        {"blob", GBlob},
-        {"tree", GTree},
-        {"commit", GCommit},
-        {"tag", GTag},
-        {nil},
-    };
-    char *d, *s, *e, *ed;
-    vlong sz, n;
-    int l;
-
-    n = decompress(&d, f, nil);
-    if(n == -1)
-        return -1;
-
-    s = d;
-    ed = d + n;
-    o->type = GNone;
-    for(p = types; p->tag; p++){
-        l = strlen(p->tag);
-        if(strncmp(s, p->tag, l) == 0){
-            s += l;
-            o->type = p->type;
-            while(s != ed && !isspace(*s))
-                s++;
-            break;
-        }
-    }
-    if(o->type == GNone){
-        free(o->data);
-        return -1;
-    }
-    sz = strtol(s, &e, 0);
-    if(e == s || *e++ != 0){
-        werrstr("malformed object header");
-        goto error;
-    }
-    if(sz != n - (e - d)){
-        werrstr("mismatched sizes");
-        goto error;
-    }
-    o->size = sz;
-    o->data = e;
-    o->all = d;
-    o->flag |= Cloaded|flag;
-    return 0;
-
-error:
-    free(d);
-    return -1;
-}
-@
 
 <<function [[hashcmp]]>>=
 int
@@ -2607,105 +2494,7 @@ notfound:
 }
 @
 
-<<function [[scanword]]>>=
-/*
- * Scans for non-empty word, copying it into buf.
- * Strips off word, leading, and trailing space
- * from input.
- * 
- * Returns -1 on empty string or error, leaving
- * input unmodified.
- */
-static int
-scanword(char **str, int *nstr, char *buf, int nbuf)
-{
-    char *p;
-    int n, r;
 
-    r = -1;
-    p = *str;
-    n = *nstr;
-    while(n && isblank(*p)){
-        n--;
-        p++;
-    }
-
-    for(; n && *p && !isspace(*p); p++, n--){
-        r = 0;
-        *buf++ = *p;
-        nbuf--;
-        if(nbuf == 0)
-            return -1;
-    }
-    while(n && isblank(*p)){
-        n--;
-        p++;
-    }
-    *buf = 0;
-    *str = p;
-    *nstr = n;
-    return r;
-}
-@
-
-<<function [[nextline (git9/pack.c)]]>>=
-static void
-nextline(char **str, int *nstr)
-{
-    char *s;
-
-    if((s = strchr(*str, '\n')) != nil){
-        *nstr -= s - *str + 1;
-        *str = s + 1;
-    }
-}
-@
-
-<<[[gitinit()]] set [[authorpat]]>>=
-authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
-@
-
-<<function [[parseauthor]]>>=
-static int
-parseauthor(char **str, int *nstr, char **name, vlong *time)
-{
-    char buf[512];
-    Resub m[4];
-    vlong tz;
-    char *p;
-    int n, nm;
-
-    if((p = strchr(*str, '\n')) == nil)
-        sysfatal("malformed author line");
-    n = p - *str;
-    if(n >= sizeof(buf))
-        sysfatal("overlong author line");
-    memset(m, 0, sizeof(m));
-    memcpy(buf, *str, n);
-    buf[n] = 0;
-    *str = p;
-    *nstr -= n;
-    
-    if(!regexec(authorpat, buf, m, nelem(m)))
-        sysfatal("invalid author line %s", buf);
-    nm = m[1].e.ep - m[1].s.sp;
-    *name = emalloc(nm + 1);
-    memcpy(*name, m[1].s.sp, nm);
-    buf[nm] = 0;
-    
-    nm = m[3].e.ep - m[3].s.sp;
-    memcpy(buf, m[3].s.sp, nm);
-    buf[nm] = 0;
-    tz = atoll(buf);
-
-    nm = m[2].e.ep - m[2].s.sp;
-    memcpy(buf, m[2].s.sp, nm);
-    buf[nm] = 0;
-    *time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
-
-    return 0;
-}
-@
 
 
 
@@ -3515,12 +3304,7 @@ struct Compout {
     DigestState *st;
 };
 
-struct Buf {
-    int len;
-    int sz;
-    int off;
-    char *data;
-};
+<<struct [[Buf]]>>
 
 struct Packf {
     char    path[128];

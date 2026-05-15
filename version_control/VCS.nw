@@ -241,8 +241,16 @@ struct Object {
     <<[[Object]] extra fields>>
 
     /* Everything below here gets cleared */
-    <<[[Object]] [[all]] field>>
-    <<[[Object]] data fields>>
+
+    // raw object content after decompression
+    // option<ref_own<string>>, set after Cloaded
+    char    *all;
+    // ref_shared<string> point in Object.all after object header (used for GBlob too)
+    char    *data;
+    /* size excludes header */
+    vlong   size;
+
+    // those fields are set after Cparsed
     /* Significant win on memory use */
     union {
         <<[[Object]] union fields>>
@@ -252,9 +260,6 @@ struct Object {
 
 
 %XXX
-<<[[Object]] cache fields>>=
-int id;
-@
 <<[[Object]] indexing fields>>=
 vlong   off;
 vlong   len;
@@ -263,11 +268,6 @@ u32int  crc;
 <<[[Object]] extra fields>>=
 Object  *next;
 Object  *prev;
-@
-
-%???
-<<[[Object]] [[all]] field>>=
-char    *all;
 @
 
 
@@ -307,6 +307,7 @@ enum Cxxx {
 };
 @
 %old: I changed the order
+%alt: could have a Cnone and pass this instead of some hardcoded 0 in many places
 % >> >>
 
 
@@ -373,7 +374,8 @@ clear(Object *o)
 @
 % leak? no free(o) itself? no remain in memory, but unloaded, unparsed
 
-%TODO: no free(o->data)? leak?
+% no free(o->data)? leak? no cos data = all for Blob? or just pointer
+% passed all without header I think
 
 
 <<[[clear()]] assert [[o->flag]]>>=
@@ -393,12 +395,6 @@ assert((o->flag & Ccache) == 0);
 
 \subsection{Blobs}
 
-<<[[Object]] data fields>>=
-// when GBlob
-char    *data;
-/* size excludes header */
-vlong   size;
-@
 
 \subsection{Trees and [[Tinfo]]}
 
@@ -666,11 +662,6 @@ findrepo(char *buf, int nbuf, int *nrel)
 % nrel?
 
 
-%XXX
-<<[[gitinit()]] libflate initializations>>=
-inflateinit();
-deflateinit();
-@
 
 
 
@@ -1725,6 +1716,8 @@ gtreegen(int i, Dir *d, void *p)
 }
 @
 
+%readobject() again
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qtree:
     e = objwalk1(q, o->obj, o, c, name, Qtree, aux);
@@ -1756,6 +1749,8 @@ case GTree:
         e = Eexist;
     break;
 @
+
+%readobject() again
 
 
 \subsection{[[.git/fs/object/<commitid>/]]}
@@ -2132,6 +2127,8 @@ case Qbranch:
 @
 
 
+
+
 \section{Advanced features}
 
 \subsection{[[git/fs -d]]}
@@ -2168,6 +2165,7 @@ case 'm':
 \subsection{[[readobject()]]}
 
 <<function [[readobject]]>>=
+/// gitwalk1 | gtreegen | ... -> <>
 /*
  * Loads and returns a cached object.
  */
@@ -2188,44 +2186,20 @@ readobject(Hash h)
 \subsection{[[readidxobject()]]}
 
 <<function [[readidxobject]]>>=
+/// readobject | ?? -> <>
 static Object*
 readidxobject(Biobuf *idx, Hash h, int flag)
 {
     char path[Pathmax], hbuf[41];
     Object *obj, *new;
-    int i, r, retried;
+    int i, r;
+    bool retried;
     Biobuf *f;
     vlong o;
 
-    if((obj = osfind(&objcache, h)) != nil){
-        if(flag & Cidx){
-            /*
-             * If we're indexing, we need to be careful
-             * to only return objects within this pack,
-             * so if the objects exist outside the pack,
-             * we don't index the wrong copy.
-             */
-            if(!(obj->flag & Cidx))
-                return nil;
-            if(obj->flag & Cloaded)
-                return obj;
-            o = Boffset(idx);
-            if(Bseek(idx, obj->off, 0) == -1)
-                return nil;
-            if(readpacked(idx, obj, flag) == -1)
-                return nil;
-            if(Bseek(idx, o, 0) == -1)
-                sysfatal("could not restore offset");
-            cache(obj);
-            return obj;
-        }
-        if(obj->flag & Cloaded)
-            return obj;
-    }
-    if(flag & Cthin)
-        flag &= ~Cidx;
-    if(flag & Cidx)
-        return nil;
+    <<[[readidxobject()]] if [[h]] in object cache>>
+    <<[[readidxobject()]] if [[Cthin]] flag>>
+    <<[[readidxobject()]] if [[Cidx]] flag>>
     new = nil;
     if(obj == nil){
         new = emalloc(sizeof(Object));
@@ -2235,39 +2209,26 @@ readidxobject(Biobuf *idx, Hash h, int flag)
     }
 
     o = -1;
-    retried = 0;
+    retried = false;
 retry:
-    for(i = 0; i < npackf; i++){
-        o = searchindex(packf[i].idx, packf[i].nidx, h, SHA1dlen*8, nil);
-        if(o != -1){
-            if((f = openpack(&packf[i])) == nil)
-                goto error;
-            if((r = Bseek(f, o, 0)) != -1)
-                r = readpacked(f, obj, flag);
-            closepack(&packf[i]);
-            if(r == -1)
-                goto error;
-            parseobject(obj);
-            cache(obj);
-            return obj;
-        }
-    }
-
+    <<[[readidxobject()]] look for object in packs>>
+    // else
     snprint(hbuf, sizeof(hbuf), "%H", h);
     snprint(path, sizeof(path), ".git/objects/%c%c/%s", hbuf[0], hbuf[1], hbuf + 2);
     if((f = Bopen(path, OREAD)) != nil){
-        if(readloose(f, obj, flag) == -1)
+        if(readloose(f, obj, flag) == ERROR_NEG1)
             goto errorf;
         Bterm(f);
         parseobject(obj);
         cache(obj);
         return obj;
     }
+    // else
 
     if(o == -1){
         if(retried)
             goto error;
-        retried = 1;
+        retried = true;
         refreshpacks();
         goto retry;
     }
@@ -2279,7 +2240,83 @@ error:
 }
 @
 
-\subsection{[[parseobject()]]}
+% parseobject()!
+
+%XXX
+<<[[readidxobject()]] if [[Cthin]] flag>>=
+if(flag & Cthin)
+    flag &= ~Cidx;
+@
+<<[[readidxobject()]] if [[Cidx]] flag>>=
+if(flag & Cidx)
+    return nil;
+@
+
+\subsection{[[readloose()]] and [[Cloaded]]}
+
+<<function [[readloose]]>>=
+/// readobject -> readidxobject | ??? -> <>
+static int
+readloose(Biobuf *f, Object *o, int flag)
+{
+    struct { char *tag; int type; } *p, types[] = {
+        {"blob", GBlob},
+        {"tree", GTree},
+        {"commit", GCommit},
+        <<[[readloose()]] local [[types]] other elements>>
+        {nil},
+    };
+    char *d, *s, *e, *ed;
+    vlong sz, n;
+    int l;
+
+    n = decompress(&d, f, nil);
+    if(n == ERROR_NEG1)
+        return ERROR_NEG1;
+
+    s = d;
+    ed = d + n;
+    o->type = GNone;
+    for(p = types; p->tag; p++){
+        l = strlen(p->tag);
+        if(strncmp(s, p->tag, l) == 0){
+            s += l;
+            o->type = p->type;
+            while(s != ed && !isspace(*s))
+                s++;
+            break;
+        }
+    }
+    if(o->type == GNone){
+        free(o->data);
+        return ERROR_NEG1;
+    }
+    // else
+    sz = strtol(s, &e, 0);
+    if(e == s || *e++ != '\0'){
+        werrstr("malformed object header");
+        goto error;
+    }
+    if(sz != n - (e - d)){
+        werrstr("mismatched sizes");
+        goto error;
+    }
+    o->all = d;
+    o->data = e;
+    o->size = sz;
+    o->flag |= Cloaded|flag;
+    return OK_0;
+
+error:
+    free(d);
+    return ERROR_NEG1;
+}
+@
+
+% setting o->all, and o->data!
+
+
+\subsection{[[parseobject()]] and [[Cparsed]]}
 
 <<function [[parseobject]]>>=
 void
@@ -2296,8 +2333,84 @@ parseobject(Object *o)
 @
 
 
-
 \subsection{Decompression}
+
+<<[[gitinit()]] libflate initializations>>=
+inflateinit();
+deflateinit();
+@
+
+
+<<function [[decompress]]>>=
+/// readloose | ??? -> <>
+errorneg1
+decompress(void **p, Biobuf *b, vlong *csz)
+{
+    Buf d = {.len=0, .data=nil, .sz=0};
+
+    if(bdecompress(&d, b, csz) == ERROR_NEG1){
+        free(d.data);
+        return ERROR_NEG1;
+    }
+    *p = d.data;
+    return d.len;
+}
+@
+
+<<struct [[Buf]]>>=
+struct Buf {
+    int len;
+    int sz;
+    int off;
+    char *data;
+};
+@
+
+<<function [[bdecompress]]>>=
+int
+bdecompress(Buf *d, Biobuf *b, vlong *csz)
+{
+    vlong o;
+
+    o = Boffset(b);
+    if(inflatezlib(d, bappend, b, breadc) == -1 || d->data == nil){
+        free(d->data);
+        return -1;
+    }
+    if (csz)
+        *csz = Boffset(b) - o;
+    return d->len;
+}
+@
+
+<<function [[bappend]]>>=
+int
+bappend(void *p, void *src, int len)
+{
+    Buf *b = p;
+    char *n;
+
+    while(b->len + len >= b->sz){
+        b->sz = b->sz*2 + 64;
+        n = realloc(b->data, b->sz);
+        if(n == nil)
+            return -1;
+        b->data = n;
+    }
+    memmove(b->data + b->len, src, len);
+    b->len += len;
+    return len;
+}
+@
+
+<<function [[breadc]]>>=
+int
+breadc(void *p)
+{
+    return Bgetc(p);
+}
+@
+
 
 \subsection{Reading a blob}
 
@@ -2348,13 +2461,8 @@ parsetree(Object *o)
             a = (m & 0777)>>6;
             t->mode &= ((a<<6)|(a<<3)|a);
         }
-        if(m == 0160000){ /* module */
-            t->mode |= DMDIR;
-            t->ismod = true;
-        }else if(m == 0120000){ /* symlink */
-            t->mode = 0;
-            t->islink = true;
-        }
+        <<[[parsetree()]] if submodule>>
+        <<[[parsetree()]] if symlink>>
         if(m & 0040000) /* dir */
             t->mode |= DMDIR;
         t->name = p;
@@ -2425,6 +2533,113 @@ parsecommit(Object *o)
     o->commit->nmsg = np;
 }
 @
+
+\subsubsection{[[scanword()]]}
+
+<<function [[scanword]]>>=
+/*
+ * Scans for non-empty word, copying it into buf.
+ * Strips off word, leading, and trailing space
+ * from input.
+ * 
+ * Returns -1 on empty string or error, leaving
+ * input unmodified.
+ */
+static int
+scanword(char **str, int *nstr, char *buf, int nbuf)
+{
+    char *p;
+    int n, r;
+
+    r = -1;
+    p = *str;
+    n = *nstr;
+    while(n && isblank(*p)){
+        n--;
+        p++;
+    }
+
+    for(; n && *p && !isspace(*p); p++, n--){
+        r = 0;
+        *buf++ = *p;
+        nbuf--;
+        if(nbuf == 0)
+            return -1;
+    }
+    while(n && isblank(*p)){
+        n--;
+        p++;
+    }
+    *buf = 0;
+    *str = p;
+    *nstr = n;
+    return r;
+}
+@
+
+\subsubsection{[[nextline()]]}
+
+<<function [[nextline (git9/pack.c)]]>>=
+static void
+nextline(char **str, int *nstr)
+{
+    char *s;
+
+    if((s = strchr(*str, '\n')) != nil){
+        *nstr -= s - *str + 1;
+        *str = s + 1;
+    }
+}
+@
+
+\subsubsection{[[parseauthor()]]}
+
+<<[[gitinit()]] set [[authorpat]]>>=
+authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
+@
+
+<<function [[parseauthor]]>>=
+static int
+parseauthor(char **str, int *nstr, char **name, vlong *time)
+{
+    char buf[512];
+    Resub m[4];
+    vlong tz;
+    char *p;
+    int n, nm;
+
+    if((p = strchr(*str, '\n')) == nil)
+        sysfatal("malformed author line");
+    n = p - *str;
+    if(n >= sizeof(buf))
+        sysfatal("overlong author line");
+    memset(m, 0, sizeof(m));
+    memcpy(buf, *str, n);
+    buf[n] = 0;
+    *str = p;
+    *nstr -= n;
+    
+    if(!regexec(authorpat, buf, m, nelem(m)))
+        sysfatal("invalid author line %s", buf);
+    nm = m[1].e.ep - m[1].s.sp;
+    *name = emalloc(nm + 1);
+    memcpy(*name, m[1].s.sp, nm);
+    buf[nm] = 0;
+    
+    nm = m[3].e.ep - m[3].s.sp;
+    memcpy(buf, m[3].s.sp, nm);
+    buf[nm] = 0;
+    tz = atoll(buf);
+
+    nm = m[2].e.ep - m[2].s.sp;
+    memcpy(buf, m[2].s.sp, nm);
+    buf[nm] = 0;
+    *time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
+
+    return 0;
+}
+@
+
 
 
 \section{References}
@@ -3874,6 +4089,7 @@ exit ''
 \chapter{Packing}
 %******************************************************************************
 \label{chap:packing}
+%alt: Optimisations, and could also put object cache here
 
 \section{[[Pack.t]]}
 
@@ -3935,7 +4151,27 @@ loadpack(Packf *pf, char *name)
 \subsection{Writing a pack}
 
 \section{Modifications to previous functions and data structures}
+
 \subsection{Object Store}
+
+<<[[readidxobject()]] look for object in packs>>=
+for(i = 0; i < npackf; i++){
+    o = searchindex(packf[i].idx, packf[i].nidx, h, SHA1dlen*8, nil);
+    if(o != -1){
+        if((f = openpack(&packf[i])) == nil)
+            goto error;
+        if((r = Bseek(f, o, 0)) != -1)
+            r = readpacked(f, obj, flag);
+        closepack(&packf[i]);
+        if(r == -1)
+            goto error;
+        parseobject(obj);
+        cache(obj);
+        return obj;
+    }
+}
+@
+
 \subsection{Refs}
 
 
@@ -4726,6 +4962,13 @@ main(int argc, char **argv)
 bool_byte islink;
 @
 
+<<[[parsetree()]] if symlink>>=
+if(m == 0120000){ /* symlink */
+    t->mode = 0;
+    t->islink = true;
+}
+@
+
 <<[[gtreegen()]] if [[e->tree->ent[i].islink]]>>=
 if(e->tree->ent[i].islink)
     if((l = walklink(aux, o->data, o->size, 0, &m)) != nil)
@@ -4790,6 +5033,13 @@ walklink(Gitaux *aux, char *link, int nlink, int ndotdot, int *mode)
 bool_byte ismod;
 @
 
+<<[[parsetree()]] if submodule>>=
+if(m == 0160000){ /* module */
+    t->mode |= DMDIR;
+    t->ismod = true;
+}
+@
+
 <<[[gtreegen()]] if submodule>>=
 if(e->tree->ent[i].ismod)
     o = emptydir();
@@ -4848,7 +5098,12 @@ case GTag:
 @
 
 
+
 \subsection{Reading a tag}
+
+<<[[readloose()]] local [[types]] other elements>>=
+{"tag", GTag},
+@
 
 <<[[parseobject()]] switch [[o->type]] cases>>=
 case GTag:  parsetag(o);    break;
@@ -5417,6 +5672,14 @@ struct Objset {
 };
 @
 
+%ex:
+%        new->id = objcache.nobj + 1;
+
+<<[[Object]] cache fields>>=
+int id;
+@
+
+
 <<[[gitinit()]] set [[objcache]]>>=
 osinit(&objcache);
 @
@@ -5443,6 +5706,35 @@ osfind(Objset *s, Hash h)
             return s->obj[probe]; 
     // else
     return nil;
+}
+@
+
+
+<<[[readidxobject()]] if [[h]] in object cache>>=
+if((obj = osfind(&objcache, h)) != nil){
+    if(flag & Cidx){
+        /*
+         * If we're indexing, we need to be careful
+         * to only return objects within this pack,
+         * so if the objects exist outside the pack,
+         * we don't index the wrong copy.
+         */
+        if(!(obj->flag & Cidx))
+            return nil;
+        if(obj->flag & Cloaded)
+            return obj;
+        o = Boffset(idx);
+        if(Bseek(idx, obj->off, 0) == -1)
+            return nil;
+        if(readpacked(idx, obj, flag) == -1)
+            return nil;
+        if(Bseek(idx, o, 0) == -1)
+            sysfatal("could not restore offset");
+        cache(obj);
+        return obj;
+    }
+    if(obj->flag & Cloaded)
+        return obj;
 }
 @
 
