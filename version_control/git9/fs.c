@@ -665,6 +665,7 @@ gitwalk1(Fid *fid, char *name, Qid *q)
     aux = fid->aux;
     
     q->vers = 0;
+    /*s: [[gitwalk1()]] if dotdot */
     if(strcmp(name, "..") == 0){
         popcrumb(aux);
         c = crumb(aux, 0);
@@ -672,6 +673,8 @@ gitwalk1(Fid *fid, char *name, Qid *q)
         fid->qid = *q;
         return nil;
     }
+    /*e: [[gitwalk1()]] if dotdot */
+    // else
     
     aux->crumb = realloc(aux->crumb, (aux->ncrumb + 1) * sizeof(Crumb));
     aux->ncrumb++;
@@ -704,6 +707,7 @@ gitwalk1(Fid *fid, char *name, Qid *q)
             e = Eexist;
         }
         break;
+    /*x: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qbranch:
         if(strcmp(aux->refpath, ".git/refs/heads") == 0 && strcmp(name, "HEAD") == 0)
             snprint(path, sizeof(path), ".git/HEAD");
@@ -721,6 +725,7 @@ gitwalk1(Fid *fid, char *name, Qid *q)
             c->mode = d->mode & ~0222;
         free(d);
         break;
+    /*x: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qobject:
         if(c->obj){
             e = objwalk1(q, o->obj, o, c, name, Qobject, aux);
@@ -740,15 +745,19 @@ gitwalk1(Fid *fid, char *name, Qid *q)
             q->vers = 0;
         }
         break;
+    /*x: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qhead:
         e = objwalk1(q, o->obj, o, c, name, Qhead, aux);
         break;
+    /*x: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qcommit:
         e = objwalk1(q, o->obj, o, c, name, Qcommit, aux);
         break;
+    /*x: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qtree:
         e = objwalk1(q, o->obj, o, c, name, Qtree, aux);
         break;
+    /*x: [[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases */
     case Qparent:
     case Qmsg:
     case Qcdata:
@@ -866,39 +875,48 @@ gitread(Req *r)
     case Qroot:
         dirread9p(r, rootgen, aux);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qbranch:
         if(o)
             objread(r, aux);
         else
             dirread9p(r, branchgen, aux);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qobject:
         if(o)
             objread(r, aux);
         else
             dirread9p(r, objgen, aux);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qmsg:
         readbuf(r, o->commit->msg, o->commit->nmsg);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qparent:
         readcommitparent(r, o);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qhash:
         snprint(buf, sizeof(buf), "%H\n", o->hash);
         readstr(r, buf);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qauthor:
         snprint(buf, sizeof(buf), "%s\n", o->commit->author);
         readstr(r, buf);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qcommitter:
         snprint(buf, sizeof(buf), "%s\n", o->commit->committer);
         readstr(r, buf);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qctl:
         e = readctl(r);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qhead:
         /* Empty repositories have no HEAD */
         if(o == nil)
@@ -906,6 +924,7 @@ gitread(Req *r)
         else
             objread(r, aux);
         break;
+    /*x: [[gitread()]] switch [[QDIR(q)]] cases */
     case Qcommit:
     case Qtree:
     case Qcdata:
