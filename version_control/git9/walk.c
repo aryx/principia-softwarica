@@ -466,7 +466,6 @@ main(int argc, char **argv)
     default:
         usage();
     }ARGEND;
-/*e: function [[main (git9/walk.c)]] */
 
     if(printflg == 0)
         printflg = Tflg | Aflg | Mflg | Rflg;
@@ -658,4 +657,5 @@ Nope:
     *p = '\0';
     exits(xbuf);
 }
+/*e: function [[main (git9/walk.c)]] */
 /*e: git9/walk.c */

@@ -609,7 +609,6 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
-/*e: function [[main (git9/serve.c)]] */
 
     interactive = 0;
     if(rfork(RFNAMEG) == -1)
@@ -643,4 +642,5 @@ main(int argc, char **argv)
         fail(&c, "unsupported command '%s'", cmd);
     exits(nil);
 }
+/*e: function [[main (git9/serve.c)]] */
 /*e: git9/serve.c */

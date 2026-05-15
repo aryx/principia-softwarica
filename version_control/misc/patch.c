@@ -820,7 +820,7 @@ freepatch(Patch *p)
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-nR] [-p nstrip] [-r rejfile] [patch...]\n", argv0);
+    fprint(STDERR, "usage: %s [-nR] [-p nstrip] [-r rejfile] [patch...]\n", argv0);
     exits("usage");
 }
 /*e: function [[usage]](patch.c) */

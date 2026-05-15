@@ -20,20 +20,23 @@ char    *file[32];
 /*e: global [[file]] */
 
 /*s: function [[showconf]] */
-static int
+static bool
 showconf(char *cfg, char *sect, char *key)
 {
-    char *ln, *p;
     Biobuf *f;
-    int foundsect, nsect, nkey, found;
+    bool found, foundsect;
+    char *ln, *p;
+    int nsect, nkey;
 
-    if((f = Bopen(cfg, OREAD)) == nil)
-        return 0;
+    f = Bopen(cfg, OREAD);
+    if(f == nil)
+        return false;
 
-    found = 0;
+    found = false;
     nsect = sect ? strlen(sect) : 0;
     nkey = strlen(key);
     foundsect = (sect == nil);
+
     while((ln = Brdstr(f, '\n', 1)) != nil){
         p = strip(ln);
         if(*p == '[' && sect){
@@ -44,7 +47,7 @@ showconf(char *cfg, char *sect, char *key)
                 continue;
             p = strip(p + 1);
             print("%s\n", p);
-            found = 1;
+            found = true;
             if(!showall){
                 free(ln);
                 goto done;
@@ -80,9 +83,9 @@ main(int argc, char **argv)
 
     ARGBEGIN{
     /*s: [[main()]](conf.c) command line processing */
-    case 'r':   findroot=true;         break;
-    /*x: [[main()]](conf.c) command line processing */
     case 'a':   showall=true;          break;
+    /*x: [[main()]](conf.c) command line processing */
+    case 'r':   findroot=true;         break;
     /*x: [[main()]](conf.c) command line processing */
     case 'f':
         if(nfile == nelem(file))
@@ -115,11 +118,13 @@ main(int argc, char **argv)
 
     for(i = 0; i < argc; i++){
         /*s: [[main()]](conf.c) show config entry for [[argv[i]]] */
-        if((p = strchr(argv[i], '.')) == nil){
+        // syntax is git/fs <sect>.<key> or just <key>
+        p = strchr(argv[i], '.');
+        if(p == nil){
             s = nil;
             p = argv[i];
         }else{
-            *p = 0;
+            *p = '\0';
             p++;
             s = smprint("[%s]", argv[i]);
         }

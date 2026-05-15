@@ -397,7 +397,7 @@ findroot(void)
 void
 usage(void)
 {
-    fprint(2, "usage: %s -n name -e email -m message -d date [files...]\n", argv0);
+    fprint(STDERR, "usage: %s -n name -e email -m message -d date [files...]\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (git9/save.c)]] */
@@ -452,7 +452,6 @@ main(int argc, char **argv)
         usage();
         break;
     }ARGEND;
-/*e: function [[main (git9/save.c)]] */
 
     if(commitmsg == nil)
         sysfatal("missing message");
@@ -515,4 +514,5 @@ main(int argc, char **argv)
     print("%H\n", ch);
     exits(nil);
 }
+/*e: function [[main (git9/save.c)]] */
 /*e: git9/save.c */

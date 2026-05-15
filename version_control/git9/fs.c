@@ -9,8 +9,10 @@
 
 #include "git.h"
 
-enum {
+/*s: emum [[Qxxx]] */
+enum Qxxx {
     Qroot,
+
     Qhead,
     Qbranch,
     Qcommit,
@@ -23,9 +25,11 @@ enum {
         Qcommitter,
     Qobject,
     Qctl,
+
     Qmax,
     Internal=1<<7,
 };
+/*e: emum [[Qxxx]] */
 
 typedef struct Gitaux Gitaux;
 typedef struct Crumb Crumb;
@@ -66,12 +70,14 @@ struct Cache {
     int max;
 };
 
+/*s: constant [[qroot]] */
 char *qroot[] = {
     "HEAD",
     "branch",
     "object",
     "ctl",
 };
+/*e: constant [[qroot]] */
 
 /*s: constant [[Eperm]] */
 #define Eperm   "permission denied"
@@ -972,6 +978,7 @@ main(int argc, char **argv)
     Dir *d;
 
     gitinit(repo, sizeof(repo), &nelt);
+    // !!chdir!!
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
@@ -985,14 +992,13 @@ main(int argc, char **argv)
         mntpt = EARGF(usage());
         break;
     /*e: [[main()]](fs.c) command line processing */
-    default:
-        usage();
-        break;
+    default: usage(); break;
     }ARGEND;
+
     if(argc != 0)
         usage();
 
-    // assume chdir() succeeded above
+    // use just relative .git because chdir() above
     d = dirstat(".git");
     if(d == nil)
         sysfatal("dirstat .git: %r");

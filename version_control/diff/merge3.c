@@ -200,7 +200,7 @@ merge(Diff *l, Diff *r)
 void
 usage(void)
 {
-    fprint(2, "usage: %s theirs base ours\n", argv0);
+    fprint(STDERR, "usage: %s theirs base ours\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (diff/merge3.c)]](diff) */
@@ -219,14 +219,19 @@ main(int argc, char **argv)
 
     if(argc != 3)
         usage();
+
     Binit(&stdout, 1, OWRITE);
     memset(&l, 0, sizeof(l));
     memset(&r, 0, sizeof(r));
+
     calcdiff(&l, argv[1], argv[1], argv[0], argv[0]);
     calcdiff(&r, argv[1], argv[1], argv[2], argv[2]);
+
     if(l.binary || r.binary)
         sysfatal("cannot merge binaries");
+
     x = merge(&l, &r);
+
     freediff(&l);
     freediff(&r);
     exits(x);

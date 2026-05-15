@@ -280,10 +280,12 @@ extern int  chattygit;
 extern int  interactive;
 extern int  gitdirmode;
 
+/*s: pragmas varargck */
 #pragma varargck type "H" Hash
 #pragma varargck type "T" int
 #pragma varargck type "O" Object*
 #pragma varargck type "Q" Qid
+/*e: pragmas varargck */
 int Hfmt(Fmt*);
 int Tfmt(Fmt*);
 int Ofmt(Fmt*);

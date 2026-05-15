@@ -255,7 +255,7 @@ showcommits(char *c)
 static void
 usage(void)
 {
-    fprint(2, "usage: %s [-s] [-e expr | -c commit] files..\n", argv0);
+    fprint(STDERR, "usage: %s [-s] [-e expr | -c commit] files..\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (git9/log.c)]] */

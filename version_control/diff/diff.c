@@ -25,7 +25,7 @@ done(int status)
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-abcefmnrw] file1 ... file2\n", argv0);
+    fprint(STDERR, "usage: %s [-abcefmnrw] file1 ... file2\n", argv0);
     exits("usage");
 }
 /*e: function [[usage]](diff) */
@@ -67,8 +67,10 @@ main(int argc, char *argv[])
     default:
         usage();
     }ARGEND;
+
     if (argc < 2)
         usage();
+
     if ((tsb = dirstat(argv[argc-1])) == nil)
         sysfatal("can't stat %s", argv[argc-1]);
     if (argc > 2) {

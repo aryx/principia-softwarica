@@ -9,7 +9,9 @@ Reprog  *authorpat;
 Hash    Zhash;
 int chattygit;
 int interactive = 1;
+/*s: global [[gitdirmode]] */
 int gitdirmode = -1;
+/*e: global [[gitdirmode]] */
 
 enum {
     Seed        = 2928213749ULL
@@ -203,7 +205,6 @@ Hfmt(Fmt *fmt)
     return l;
 }
 /*e: function [[Hfmt]] */
-
 /*s: function [[Tfmt]] */
 int
 Tfmt(Fmt *fmt)
@@ -225,7 +226,6 @@ Tfmt(Fmt *fmt)
     return l;
 }
 /*e: function [[Tfmt]] */
-
 /*s: function [[Ofmt]] */
 int
 Ofmt(Fmt *fmt)
@@ -255,7 +255,6 @@ Ofmt(Fmt *fmt)
     return l;
 }
 /*e: function [[Ofmt]] */
-
 /*s: function [[Qfmt]] */
 int
 Qfmt(Fmt *fmt)
@@ -295,7 +294,6 @@ findrepo(char *buf, int nbuf, int *nrel)
     sysfatal("not a git repository");
 }
 /*e: function [[findrepo]] */
-
 /*s: function [[gitinit]] */
 /// conf.c:main | fs.c:main | ... -> <>
 void
@@ -304,15 +302,24 @@ gitinit(char *root, int nroot, int *nrel)
     char repo[512] = ".git";
     Dir *d;
 
+    /*s: [[gitinit()]] initializations */
+    /*s: [[gitinit()]] fmtinstall calls */
     fmtinstall('H', Hfmt);
     fmtinstall('T', Tfmt);
     fmtinstall('O', Ofmt);
     fmtinstall('Q', Qfmt);
+    /*e: [[gitinit()]] fmtinstall calls */
+    /*s: [[gitinit()]] libflate initializations */
     inflateinit();
     deflateinit();
+    /*e: [[gitinit()]] libflate initializations */
+    /*s: [[gitinit()]] set [[authorpat]] */
     authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
+    /*e: [[gitinit()]] set [[authorpat]] */
+    /*s: [[gitinit()]] set [[objcache]] */
     osinit(&objcache);
-
+    /*e: [[gitinit()]] set [[objcache]] */
+    /*e: [[gitinit()]] initializations */
     if(root != nil){
         findrepo(root, nroot, nrel);
         snprint(repo, sizeof(repo), "%s/.git", root);
@@ -410,7 +417,7 @@ _dprint(char *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    vfprint(2, fmt, ap);
+    vfprint(STDERR, fmt, ap);
     va_end(ap);
 }
 /*e: function [[_dprint]] */
@@ -439,7 +446,6 @@ qinit(Objq *q)
     q->heap = eamalloc(q->heapsz, sizeof(Qelt));
 }
 /*e: function [[qinit]] */
-
 /*s: function [[qclear]] */
 void
 qclear(Objq *q)
@@ -447,7 +453,6 @@ qclear(Objq *q)
     free(q->heap);
 }
 /*e: function [[qclear]] */
-
 /*s: function [[qput]] */
 void
 qput(Objq *q, Object *o, int color)
@@ -473,7 +478,6 @@ qput(Objq *q, Object *o, int color)
     q->nheap++;
 }
 /*e: function [[qput]] */
-
 /*s: function [[qpop]] */
 int
 qpop(Objq *q, Qelt *e)
