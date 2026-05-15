@@ -663,9 +663,6 @@ findrepo(char *buf, int nbuf, int *nrel)
 
 
 %XXX
-<<[[gitinit()]] set [[objcache]]>>=
-osinit(&objcache);
-@
 <<[[gitinit()]] libflate initializations>>=
 inflateinit();
 deflateinit();
@@ -2278,15 +2275,153 @@ error:
 }
 @
 
+\subsection{[[parseobject()]]}
+
+<<function [[parseobject]]>>=
+void
+parseobject(Object *o)
+{
+    if(o->flag & Cparsed)
+        return;
+    switch(o->type){
+    <<[[parseobject()]] switch [[o->type]] cases>>
+    default:    break;
+    }
+    o->flag |= Cparsed;
+}
+@
+
 
 
 \subsection{Decompression}
 
 \subsection{Reading a blob}
 
+% nothing to parse,  direct data after decompression
+
 \subsection{Reading a tree}
 
+<<[[parseobject()]] switch [[o->type]] cases>>=
+case GTree: parsetree(o);   break;
+@
+
+<<function [[parsetree]]>>=
+static void
+parsetree(Object *o)
+{
+    int m, a, entsz, nent;
+    Dirent *t, *ent;
+    char *p, *ep;
+
+    p = o->data;
+    ep = p + o->size;
+
+    nent = 0;
+    entsz = 16;
+    ent = eamalloc(entsz, sizeof(Dirent));  
+    o->tree = emalloc(sizeof(Tinfo));
+    while(p != ep){
+        if(nent == entsz){
+            entsz *= 2;
+            ent = earealloc(ent, entsz, sizeof(Dirent));    
+        }
+        t = &ent[nent++];
+        m = strtol(p, &p, 8);
+        if(*p != ' ')
+            sysfatal("malformed tree %H: *p=(%d) %c", o->hash, *p, *p);
+        p++;
+        /*
+         * only the stored permissions for the user
+         * are relevant; git fills group and world
+         * bits with whatever -- so to serve with
+         * useful permissions, replicate the mode
+         * of the git repo dir.
+         */
+        t->mode = gitdirmode;
+        t->ismod = false;
+        t->islink = false;
+        if(m & 0777){
+            a = (m & 0777)>>6;
+            t->mode &= ((a<<6)|(a<<3)|a);
+        }
+        if(m == 0160000){ /* module */
+            t->mode |= DMDIR;
+            t->ismod = true;
+        }else if(m == 0120000){ /* symlink */
+            t->mode = 0;
+            t->islink = true;
+        }
+        if(m & 0040000) /* dir */
+            t->mode |= DMDIR;
+        t->name = p;
+        p = memchr(p, 0, ep - p);
+        if(p == nil || *p++ != 0 ||  ep - p < sizeof(t->h.h))
+            sysfatal("malformed tree %H, remaining %d (%s)", o->hash, (int)(ep - p), p);
+        memcpy(t->h.h, p, sizeof(t->h.h));
+        p += sizeof(t->h.h);
+    }
+    o->tree->ent = ent;
+    o->tree->nent = nent;
+}
+@
+
+
 \subsection{Reading a commit}
+
+<<[[parseobject()]] switch [[o->type]] cases>>=
+case GCommit:   parsecommit(o); break;
+@
+
+<<function [[parsecommit]]>>=
+static void
+parsecommit(Object *o)
+{
+    char *p, *t, buf[512];
+    int np;
+
+    p = o->data;
+    np = o->size;
+    o->commit = emalloc(sizeof(Cinfo));
+    while(1){
+        if(scanword(&p, &np, buf, sizeof(buf)) == -1)
+            break;
+        if(strcmp(buf, "tree") == 0){
+            if(scanword(&p, &np, buf, sizeof(buf)) == -1)
+                sysfatal("invalid commit: tree missing");
+            if(hparse(&o->commit->tree, buf) == -1)
+                sysfatal("invalid commit: garbled tree");
+        }else if(strcmp(buf, "parent") == 0){
+            if(scanword(&p, &np, buf, sizeof(buf)) == -1)
+                sysfatal("invalid commit: missing parent");
+            o->commit->parent = realloc(o->commit->parent, ++o->commit->nparent * sizeof(Hash));
+            if(!o->commit->parent)
+                sysfatal("unable to malloc: %r");
+            if(hparse(&o->commit->parent[o->commit->nparent - 1], buf) == -1)
+                sysfatal("invalid commit: garbled parent");
+        }else if(strcmp(buf, "author") == 0){
+            parseauthor(&p, &np, &o->commit->author, &o->commit->mtime);
+        }else if(strcmp(buf, "committer") == 0){
+            parseauthor(&p, &np, &o->commit->committer, &o->commit->ctime);
+        }else if(strcmp(buf, "gpgsig") == 0){
+            /* just drop it */
+            if((t = strstr(p, "-----END PGP SIGNATURE-----")) == nil)
+            if((t = strstr(p, "-----END SSH SIGNATURE-----")) == nil)
+            if((t = strstr(p, "-----END SIGNED MESSAGE-----")) == nil)
+                sysfatal("malformed gpg signature");
+            np -= t - p;
+            p = t;
+        }
+        nextline(&p, &np);
+    }
+    while (np && isspace(*p)) {
+        p++;
+        np--;
+    }
+    o->commit->msg = p;
+    o->commit->nmsg = np;
+}
+@
+
 
 \section{References}
 
@@ -4708,8 +4843,23 @@ case GTag:
     break;
 @
 
-%\subsection{Reading a tag}
-%\subsection{Writing a tag}
+
+\subsection{Reading a tag}
+
+<<[[parseobject()]] switch [[o->type]] cases>>=
+case GTag:  parsetag(o);    break;
+@
+
+<<function [[parsetag]]>>=
+static void
+parsetag(Object *)
+{
+}
+@
+% not implemented?
+
+\subsection{Writing a tag}
+
 %\subsection{[[git tag]]}
 %\subsection{[[git clone]] and tags}
 %\subsection{[[git pull]] and tags}
@@ -5248,6 +5398,50 @@ dialssh(Conn *c, char *host, char *, char *path, char *direction)
 \section{Reliability and signals}
 
 \section{Optimizations}
+
+\subsection{Object cache}
+
+<<global [[objcache]]>>=
+Objset objcache;
+@
+
+<<struct [[Objset]]>>=
+struct Objset {
+    Object  **obj;
+    int nobj;
+    int sz;
+};
+@
+
+<<[[gitinit()]] set [[objcache]]>>=
+osinit(&objcache);
+@
+
+<<function [[osinit]]>>=
+void
+osinit(Objset *s)
+{
+    s->sz = 16;
+    s->nobj = 0;
+    s->obj = eamalloc(s->sz, sizeof(Hash));
+}
+@
+% sizeof Hash? not Object?
+
+<<function [[osfind]]>>=
+Object*
+osfind(Objset *s, Hash h)
+{
+    u32int probe;
+
+    for(probe = GETBE32(h.h) % s->sz; s->obj[probe]; probe = (probe + 1) % s->sz)
+        if(hasheq(&s->obj[probe]->hash, &h))
+            return s->obj[probe]; 
+    // else
+    return nil;
+}
+@
+
 
 \section{Fast import and export}
 
