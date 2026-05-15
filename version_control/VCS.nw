@@ -154,7 +154,12 @@ struct Hash {
 
 \subsection{Hexadecimal hashes}
 
+% requires 2 char per byte so from 20 bytes to 40 characters in hexa
+
+% %H in fmt
+
 \subsection{Conversion functions}
+
 
 \section{[[Repository.t]]}
 \label{sec:object-store-function}
@@ -165,13 +170,15 @@ struct Hash {
 struct Object {
     /* Git data */
     Hash    hash;
-    // enum<??>
+    // enum<Gxxx>
     int type;
+
+    // shared objects
+    int refs;
 
     /* Cache */
     int id;
     int flag;
-    int refs;
 
     Object  *next;
     Object  *prev;
@@ -189,8 +196,7 @@ struct Object {
 
     /* Significant win on memory use */
     union {
-        Cinfo   *commit;
-        Tinfo   *tree;
+        <<[[Object]] union fields>>
     };
 };
 @
@@ -203,32 +209,138 @@ enum Gxxx {
     GTree   = 2,
     GBlob   = 3,
 
-    GTag    = 4,
-    GOdelta = 6,
-    GRdelta = 7,
+    <<[[Gxxx]] other cases>>
 };
 @
+
+%XXX
+<<[[Gxxx]] other cases>>=
+GTag    = 4,
+GOdelta = 6,
+GRdelta = 7,
+@
+
+
+<<function [[ref]]>>=
+Object*
+ref(Object *o)
+{
+    o->refs++;
+    return o;
+}
+@
+
+
+<<function [[unref]]>>=
+void
+unref(Object *o)
+{
+    if(!o)
+        return;
+    o->refs--;
+    if(o->refs == 0)
+        clear(o);
+}
+@
+
+
+<<function [[clear]]>>=
+static void
+clear(Object *o)
+{
+    if(!o)
+        return;
+
+    assert(o->refs == 0);
+    assert((o->flag & Ccache) == 0);
+    assert(o->flag & Cloaded);
+
+    switch(o->type){
+    case GCommit:
+        if(!o->commit)
+            break;
+        free(o->commit->parent);
+        free(o->commit->author);
+        free(o->commit->committer);
+        free(o->commit);
+        o->commit = nil;
+        break;
+    case GTree:
+        if(!o->tree)
+            break;
+        free(o->tree->ent);
+        free(o->tree);
+        o->tree = nil;
+        break;
+    default:
+        break;
+    }
+
+    free(o->all);
+    o->all = nil;
+    o->data = nil;
+    o->flag &= ~(Cloaded|Cparsed);
+}
+@
+
 
 \subsection{[[Blob.t]]}
 
 \subsection{[[Tree.t]]}
 
+<<[[Object]] union fields>>=
+Tinfo   *tree;
+@
+
+<<struct [[Tinfo]]>>=
+struct Tinfo {
+    /* Tree */
+    // array<ref_own<Dirent>> len = nent
+    Dirent  *ent;
+    int nent;
+};
+@
+
 \subsection{[[Commit.t]]}
+
+<<[[Object]] union fields>>=
+Cinfo   *commit;
+@
+
+<<struct [[Cinfo]]>>=
+struct Cinfo {
+    /* Commit */
+    // array<Hash> (0, 1, or 2 parents?)
+    Hash    *parent;
+    int nparent;
+
+    Hash    tree;
+
+    char    *author;
+    char    *committer;
+
+    // ref_own<string> (len = nmsg)
+    char    *msg;
+    int nmsg;
+
+    vlong   ctime;
+    vlong   mtime;
+};
+@
+
+% a commit is a tree, parent(s), and a commit message (str, time, author, committer)
 
 \section{References}
 
 \subsection{Reference names}
-
 \subsection{[[HEAD]]}
-
 \subsection{Reference content}
-
 \subsection{Reference store}
-
 \subsection{Objectish references}
 
 \section{[[Index.t]]}
 \label{sec:index}
+% INDEX9
 
 %******************************************************************************
 \chapter{[[git/conf]]}
@@ -583,6 +695,7 @@ Srv gitsrv = {
     .destroyfid=gitdestroyfid,
 };
 @
+% write?
 
 \section{[[Qxxx]] and [[qroot]]}
 
@@ -608,10 +721,6 @@ enum Qxxx {
 };
 @
 
-<<macro [[QDIR]]>>=
-#define QDIR(qid)   ((int)(qid)->path & (0xff))
-@
-
 <<constant [[qroot]]>>=
 char *qroot[] = {
     "HEAD",
@@ -625,7 +734,7 @@ char *qroot[] = {
 
 \subsection{[[Gitaux]] and [[Crumb]]}
 
-% in Fid aux field
+% Gitaux for Fid.aux (generic) field
 
 <<struct [[Gitaux]]>>=
 struct Gitaux {
@@ -633,6 +742,7 @@ struct Gitaux {
     // growing_array<ref_own<Crumb>> len = ncrumb
     Crumb   *crumb;
 
+    // option<ref_own<string>>, ex: ".git/refs/" for Qbranch
     char    *refpath;
     int qdir;
 
@@ -646,11 +756,12 @@ struct Gitaux {
 struct Crumb {
     char    *name;
 
-    Object  *obj;
-
     Qid qid;
     int mode;
     vlong   mtime;
+
+    // option<shared_ref<Object>>
+    Object  *obj;
 };
 @
 
@@ -664,6 +775,8 @@ crumb(Gitaux *aux, int n)
 }
 @
 % tricky, why not just aux->crumb[n] ? 
+% because last entries are at the end, so crumb(0) = last entry,
+% and crumb(1) = the entry just before
 
 
 
@@ -697,6 +810,9 @@ qpath(Crumb *p, int idx, vlong id, vlong t)
 @
 % >>
 
+<<macro [[QDIR]]>>=
+#define QDIR(qid)   ((int)(qid)->path & (0xff))
+@
 
 
 \section{[[gitxxx()]] skeletons}
@@ -721,9 +837,11 @@ gitattach(Req *r)
         sysfatal("git/fs: %r");
     if(getwd(gitdir, sizeof(gitdir)) == nil)
         sysfatal("getwd: %r");
-    aux = emalloc(sizeof(Gitaux));
 
-    <<[[gitattach()]] set [[aux]]>>
+    aux = emalloc(sizeof(Gitaux));
+    aux->crumb = emalloc(sizeof(Crumb));
+    aux->ncrumb = 1;
+    <<[[gitattach()]] set [[aux->crumb]]>>
 
     r->ofcall.qid = (Qid){Qroot, 0, QTDIR};
     r->fid->qid = r->ofcall.qid;
@@ -735,14 +853,12 @@ gitattach(Req *r)
 
 % Qroot!
 
-<<[[gitattach()]] set [[aux]]>>=
-aux->crumb = emalloc(sizeof(Crumb));
+<<[[gitattach()]] set [[aux->crumb]]>>=
 aux->crumb[0].qid = (Qid){Qroot, 0, QTDIR};
 aux->crumb[0].obj = nil;
 aux->crumb[0].mode = DMDIR | 0555;
 aux->crumb[0].mtime = d->mtime;
 aux->crumb[0].name = estrdup("/");
-aux->ncrumb = 1;
 @
 
 
@@ -798,6 +914,7 @@ gitdestroyfid(Fid *f)
     free(aux);
 }
 @
+
 
 <<function [[olsfree]]>>=
 void
@@ -930,85 +1047,6 @@ gitread(Req *r)
 
 
 
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qroot:
-    dirread9p(r, rootgen, aux);
-    break;
-@
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qbranch:
-    if(o)
-        objread(r, aux);
-    else
-        dirread9p(r, branchgen, aux);
-    break;
-@
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qobject:
-    if(o)
-        objread(r, aux);
-    else
-        dirread9p(r, objgen, aux);
-    break;
-@
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qmsg:
-    readbuf(r, o->commit->msg, o->commit->nmsg);
-    break;
-@
-
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qparent:
-    readcommitparent(r, o);
-    break;
-@
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qhash:
-    snprint(buf, sizeof(buf), "%H\n", o->hash);
-    readstr(r, buf);
-    break;
-@
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qauthor:
-    snprint(buf, sizeof(buf), "%s\n", o->commit->author);
-    readstr(r, buf);
-    break;
-@
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qcommitter:
-    snprint(buf, sizeof(buf), "%s\n", o->commit->committer);
-    readstr(r, buf);
-    break;
-@
-
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qctl:
-    e = readctl(r);
-    break;
-@
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qhead:
-    /* Empty repositories have no HEAD */
-    if(o == nil)
-        r->ofcall.count = 0;
-    else
-        objread(r, aux);
-    break;
-@
-
-
-<<[[gitread()]] switch [[QDIR(q)]] cases>>=
-case Qcommit:
-case Qtree:
-case Qcdata:
-    objread(r, aux);
-    break;
-@
-
 \subsection{[[gitwalk1()]]}
 
 <<function [[gitwalk1]]>>=
@@ -1062,27 +1100,77 @@ if(strcmp(name, "..") == 0){
 }
 @
 
+
+
+
+\section{[[.git/fs/]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qroot:
+    dirread9p(r, rootgen, aux);
+    break;
+@
+
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qroot:
-    if(strcmp(name, "HEAD") == 0){
-        *q = (Qid){Qhead, 0, QTDIR};
-        c->mode = DMDIR | 0555;
-        c->obj = readref(".git/HEAD");
-    }else if(strcmp(name, "object") == 0){
-        *q = (Qid){Qobject, 0, QTDIR};
-        c->mode = DMDIR | 0555;
-    }else if(strcmp(name, "branch") == 0){
-        *q = (Qid){Qbranch, 0, QTDIR};
-        aux->refpath = estrdup(".git/refs/");
-        c->mode = DMDIR | 0555;
-    }else if(strcmp(name, "ctl") == 0){
+    if(strcmp(name, "ctl") == 0){
         *q = (Qid){Qctl, 0, 0};
         c->mode = 0644;
+    <<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>
     }else{
         e = Eexist;
     }
     break;
 @
+
+
+
+\subsection{[[.git/fs/HEAD]]}
+
+<<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>=
+}else if(strcmp(name, "HEAD") == 0){
+    *q = (Qid){Qhead, 0, QTDIR};
+    c->mode = DMDIR | 0555;
+    c->obj = readref(".git/HEAD");
+@
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qhead:
+    /* Empty repositories have no HEAD */
+    if(o == nil)
+        r->ofcall.count = 0;
+    else
+        objread(r, aux);
+    break;
+@
+
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qhead:
+    e = objwalk1(q, o->obj, o, c, name, Qhead, aux);
+    break;
+@
+
+\subsection{[[.git/fs/branch/]]}
+
+<<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>=
+}else if(strcmp(name, "branch") == 0){
+    *q = (Qid){Qbranch, 0, QTDIR};
+    aux->refpath = estrdup(".git/refs/");
+    c->mode = DMDIR | 0555;
+@
+
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qbranch:
+    if(o)
+        objread(r, aux);
+    else
+        dirread9p(r, branchgen, aux);
+    break;
+@
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qbranch:
     if(strcmp(aux->refpath, ".git/refs/heads") == 0 && strcmp(name, "HEAD") == 0)
@@ -1102,6 +1190,26 @@ case Qbranch:
     free(d);
     break;
 @
+
+
+\subsection{[[.git/fs/object/]]}
+
+<<[[gitwalk1()]] when [[Qroot]] case, switch on [[name]] other cases>>=
+}else if(strcmp(name, "object") == 0){
+    *q = (Qid){Qobject, 0, QTDIR};
+    c->mode = DMDIR | 0555;
+@
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qobject:
+    if(o)
+        objread(r, aux);
+    else
+        dirread9p(r, objgen, aux);
+    break;
+@
+
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qobject:
     if(c->obj){
@@ -1123,47 +1231,102 @@ case Qobject:
     }
     break;
 @
-<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qhead:
-    e = objwalk1(q, o->obj, o, c, name, Qhead, aux);
+
+
+\subsection{[[.git/fs/object/<id>/msg]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qmsg:
+    readbuf(r, o->commit->msg, o->commit->nmsg);
     break;
 @
+
+<<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
+case Qmsg:
+case Qparent:
+case Qcdata:
+case Qhash:
+case Qauthor:
+case Qcommitter:
+    return Enodir;
+@
+
+\subsection{[[.git/fs/object/<id>/parent]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qparent:
+    readcommitparent(r, o);
+    break;
+@
+
+\subsection{[[.git/fs/object/<id>/hash]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qhash:
+    snprint(buf, sizeof(buf), "%H\n", o->hash);
+    readstr(r, buf);
+    break;
+@
+
+\subsection{[[.git/fs/object/<id>/author]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qauthor:
+    snprint(buf, sizeof(buf), "%s\n", o->commit->author);
+    readstr(r, buf);
+    break;
+@
+
+\subsection{[[.git/fs/object/<id>/committer]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qcommitter:
+    snprint(buf, sizeof(buf), "%s\n", o->commit->committer);
+    readstr(r, buf);
+    break;
+@
+
+
+\subsection{[[.git/fs/object/<id>/commit]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qcommit:
+case Qtree:
+case Qcdata:
+    objread(r, aux);
+    break;
+@
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qcommit:
     e = objwalk1(q, o->obj, o, c, name, Qcommit, aux);
     break;
 @
+
+
+\subsection{[[.git/fs/object/<id>/tree]]}
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
 case Qtree:
     e = objwalk1(q, o->obj, o, c, name, Qtree, aux);
     break;
 @
+
+
+\subsection{[[.git/fs/object/<id>/cdata]]}
+
+\subsection{[[.git/fs/ctl]]}
+
+<<[[gitread()]] switch [[QDIR(q)]] cases>>=
+case Qctl:
+    e = readctl(r);
+    break;
+@
+
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
-case Qparent:
-case Qmsg:
-case Qcdata:
-case Qhash:
-case Qauthor:
-case Qcommitter:
 case Qctl:
     return Enodir;
 @
-
-
-
-\section{[[.git/fs/]]}
-
-
-\subsection{[[.git/fs/HEAD]]}
-
-
-\subsection{[[.git/fs/branch/]]}
-
-
-\subsection{[[.git/fs/object/]]}
-
-
-\subsection{[[.git/fs/ctl]]}
 
 
 %alt:\section{Extra flags}
