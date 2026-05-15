@@ -179,6 +179,11 @@ which in the end are more complicated and usually less efficient than in Git.
 
 
 %******************************************************************************
+\chapter{[[git/fs]]}
+%******************************************************************************
+\label{chap:git-fs}
+
+%******************************************************************************
 \chapter{Reading from a Repository}
 %******************************************************************************
 \label{chap:reading}
@@ -294,8 +299,11 @@ name=`{basename `{cleanname -d `{pwd} $dir}}
 %$
 % basename/cleanname utilities, see \book{Utilities}
 
+%note: beauty of rc choice of `{} syntax that can nest!
 
 \section{Copying an existing repository: [[cp -r]]}
+
+% simple in git! distributed VCS! carry the whole thing with it
 
 \section{Cloning an existing repository: [[git clone]]}
 
@@ -347,6 +355,8 @@ if(~ $#* 0)
 %$
 
 
+\subsection{[[gitup()]] part 1}
+
 <<fn [[gitup]](common.rc)>>=
 fn gitup{
         gitroot=`$nl{git/conf -r >[2]/dev/null}
@@ -376,6 +386,7 @@ paths=`$nl{cleanname -d $gitrel $* | drop $gitroot}
 @
 %$
 
+\subsection{[[drop()]]}
 
 <<fn [[drop]](common.rc)>>=
 fn drop {
@@ -395,24 +406,7 @@ fn drop {
 
 %%\section{Creating a blob from a file}
 
-\section{[[git/conf -r]]}
-
-\section{[[git/fs]]}
-
-<<[[gitup()]](common.rc) start git/fs>>=
-gitfs=$gitroot/.git/fs
-startfs=()
-mkdir -p $gitfs
-if(! test -e $gitfs/ctl)
-        startfs=true
-if(! grep -s '^repo '$gitroot'$' $gitfs/ctl >[2]/dev/null)
-        startfs=true
-if(~ $#startfs 1)
-        git/fs >[1=2]
-if not
-        status=''
-@
-%$
+\subsection{[[git/conf -r]]}
 
 \section{Removing files: [[git rm]]}
 
@@ -428,6 +422,7 @@ if(~ $remove 1)
         s=R
 @
 
+% will put R line in INDEX9 instead of A
 
 %%\section{Renaming files: [[git mv]]}
 
@@ -485,6 +480,24 @@ exit ''
 % subshell because want better error message with the die after
 
 
+\subsection{[[gitup()]] part 2}
+
+<<[[gitup()]](common.rc) start git/fs>>=
+gitfs=$gitroot/.git/fs
+startfs=()
+mkdir -p $gitfs
+if(! test -e $gitfs/ctl)
+        startfs=true
+if(! grep -s '^repo '$gitroot'$' $gitfs/ctl >[2]/dev/null)
+        startfs=true
+if(~ $#startfs 1)
+        git/fs >[1=2]
+if not
+        status=''
+@
+%$
+
+% not used for git/add, but will be used later
 
 \subsection{[[whoami()]]}
 
@@ -492,17 +505,22 @@ exit ''
 fn whoami{
         name=`$nl{git/conf user.name}
         email=`$nl{git/conf user.email}
-        if(test -f /adm/keys.who){
-                if(~ $name '')
-                        name=`$nl{awk -F'|' '$1=="'$user'" {x=$3} END{print x}' </adm/keys.who}
-                if(~ $email '')
-                        email=`$nl{awk -F'|' '$1=="'$user'" {x=$5} END{print x}' </adm/keys.who}
-        }
+        <<[[whomai()]](common.rc) if adm keys>>
         if(~ $name '')
                 name=$user
         if(~ $email '')
                 email=$user@$sysname
         status=''
+}
+@
+
+
+<<[[whomai()]](common.rc) if adm keys>>=
+if(test -f /adm/keys.who){
+        if(~ $name '')
+                name=`$nl{awk -F'|' '$1=="'$user'" {x=$3} END{print x}' </adm/keys.who}
+        if(~ $email '')
+                email=`$nl{awk -F'|' '$1=="'$user'" {x=$5} END{print x}' </adm/keys.who}
 }
 @
 
@@ -532,15 +550,28 @@ fn findbranch{
 
 <<fn [[parents]](commit.rc)>>=
 fn parents{
-        if(! ~ $#revise 0)
-                parents=`{cat $gitfs/HEAD/parent}
-        if not if(test -f .git/merge-parents)
-                parents=`{cat .git/merge-parents | sort | uniq}
-        if not if(~ $initial true)
-                parents=()
+        <<[[parents()]](commit.rc) if revise>>
+        <<[[parents()]](commit.rc) if merge parents>>
+        <<[[parents()]](commit.rc) if initial>>
         if not
                 parents=`{git/query $branch}
 }
+@
+
+<<[[parents()]](commit.rc) if revise>>=
+if(! ~ $#revise 0)
+        parents=`{cat $gitfs/HEAD/parent}
+@
+% why not simply ~ $#revise 1   like we do further below?
+
+<<[[parents()]](commit.rc) if merge parents>>=
+if not if(test -f .git/merge-parents)
+        parents=`{cat .git/merge-parents | sort | uniq}
+@
+
+<<[[parents()]](commit.rc) if initial>>=
+if not if(~ $initial true)
+        parents=()
 @
 
 \subsection{[[editmsg()]]}
@@ -549,12 +580,17 @@ fn parents{
 
 % -m
 
+% part 1
 <<[[commit.rc]] create [[$msgfile.tmp]]>>=
 wdir=/mnt/git
 ramfs -m $wdir
 msgfile=$wdir/git-msg.$pid
 if(~ $#msg 1)
         echo $msg >$msgfile.tmp
+<<[[commit.rc]] when create [[$msgfile.tmp]], else if revise>>
+@
+
+<<[[commit.rc]] when create [[$msgfile.tmp]], else if revise>>=
 if not if(~ $#revise 1){
         msg=1
         echo revising commit `{cat $gitfs/HEAD/hash}
@@ -563,6 +599,7 @@ if not if(~ $#revise 1){
 @
 
 
+%part 2, called later by commit.rc
 
 <<fn [[editmsg]](commit.rc)>>=
 fn editmsg{
@@ -622,6 +659,8 @@ fn commit{
 }
 @
 
+% not useful $"msg I think since anyway use `''{}
+
 \subsection{[[update()]]}
 
 <<fn [[update]](commit.rc)>>=
@@ -648,6 +687,8 @@ fn update{
 \section{[[git/query $branch]]}
 
 \section{[[git/save]]}
+
+% big one
 
 \section{Advanced features}
 
@@ -903,7 +944,7 @@ exit ''
 \section{Creating a branch: [[git branch <name>]]}
 \label{sec:create-branch}
 
-% git/branch -n
+%git9: git/branch -n
 
 \section{Deleting a branch: [[git branch -d <name>]]}
 
@@ -1197,7 +1238,7 @@ if(! ~ $#upstream 0){
 %$
 
 
-\section{Client/server architecture}
+%%\section{Client/server architecture}
 
 \section{Pulling updates from another repository: [[git pull]]}
 
@@ -1652,6 +1693,7 @@ exit ''
 \subsection{Writing a configuration file}
 
 \subsection{Stacked configurations: [[~/.gitconfig]] and [[.git/config]]}
+
 
 \section{Commit rules and checks: [[.git/hooks/]]}
 
