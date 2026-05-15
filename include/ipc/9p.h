@@ -219,7 +219,11 @@ void		_postmountsrv(Srv*, char*, char*, int);
 void		listensrv(Srv*, char*);
 void		_listensrv(Srv*, char*);
 int 		postfd(char*, int);
+
+// debug flag to set in fileserver (usually set via a -d flag)
+// alt: could use bool, but some code relies on chatty9p > 1 and chatty9p++
 int		chatty9p;
+
 void		respond(Req*, char*);
 void		responderror(Req*);
 void		threadpostmountsrv(Srv*, char*, char*, int);
