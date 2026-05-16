@@ -45,12 +45,14 @@ struct Compout {
     DigestState *st;
 };
 
+/*s: struct [[Buf]] */
 struct Buf {
     int len;
     int sz;
     int off;
     char *data;
 };
+/*e: struct [[Buf]] */
 
 struct Packf {
     char    path[128];
@@ -65,7 +67,9 @@ struct Packf {
 static int  readpacked(Biobuf *, Object *, int);
 static Object   *readidxobject(Biobuf *, Hash, int);
 
+/*s: global [[objcache]] */
 Objset objcache;
+/*e: global [[objcache]] */
 Object *lruhead;
 Object *lrutail;
 vlong   ncache;
@@ -82,9 +86,22 @@ clear(Object *o)
         return;
 
     assert(o->refs == 0);
-    assert((o->flag & Ccache) == 0);
+    /*s: [[clear()]] assert [[o->flag]] */
     assert(o->flag & Cloaded);
+    /*x: [[clear()]] assert [[o->flag]] */
+    assert((o->flag & Ccache) == 0);
+    /*e: [[clear()]] assert [[o->flag]] */
+
     switch(o->type){
+    /*s: [[clear()]] switch [[o->type]] cases */
+    case GTree:
+        if(!o->tree)
+            break;
+        free(o->tree->ent);
+        free(o->tree);
+        o->tree = nil;
+        break;
+    /*x: [[clear()]] switch [[o->type]] cases */
     case GCommit:
         if(!o->commit)
             break;
@@ -94,13 +111,7 @@ clear(Object *o)
         free(o->commit);
         o->commit = nil;
         break;
-    case GTree:
-        if(!o->tree)
-            break;
-        free(o->tree->ent);
-        free(o->tree);
-        o->tree = nil;
-        break;
+    /*e: [[clear()]] switch [[o->type]] cases */
     default:
         break;
     }
@@ -108,7 +119,9 @@ clear(Object *o)
     free(o->all);
     o->all = nil;
     o->data = nil;
+    /*s: [[clear()]] reset [[o->flag]] */
     o->flag &= ~(Cloaded|Cparsed);
+    /*e: [[clear()]] reset [[o->flag]] */
 }
 /*e: function [[clear]] */
 
@@ -309,7 +322,6 @@ openpack(Packf *pf)
     return pf->pack;
 }
 /*e: function [[openpack]] */
-
 /*s: function [[closepack]] */
 static void
 closepack(Packf *pf)
@@ -414,16 +426,16 @@ bdecompress(Buf *d, Biobuf *b, vlong *csz)
     return d->len;
 }
 /*e: function [[bdecompress]] */
-
 /*s: function [[decompress]] */
-int
+/// readloose | ??? -> <>
+errorneg1
 decompress(void **p, Biobuf *b, vlong *csz)
 {
     Buf d = {.len=0, .data=nil, .sz=0};
 
-    if(bdecompress(&d, b, csz) == -1){
+    if(bdecompress(&d, b, csz) == ERROR_NEG1){
         free(d.data);
-        return -1;
+        return ERROR_NEG1;
     }
     *p = d.data;
     return d.len;
@@ -665,6 +677,7 @@ readpacked(Biobuf *f, Object *o, int flag)
 /*e: function [[readpacked]] */
 
 /*s: function [[readloose]] */
+/// readobject -> readidxobject | ??? -> <>
 static int
 readloose(Biobuf *f, Object *o, int flag)
 {
@@ -672,7 +685,9 @@ readloose(Biobuf *f, Object *o, int flag)
         {"blob", GBlob},
         {"tree", GTree},
         {"commit", GCommit},
+        /*s: [[readloose()]] local [[types]] other elements */
         {"tag", GTag},
+        /*e: [[readloose()]] local [[types]] other elements */
         {nil},
     };
     char *d, *s, *e, *ed;
@@ -680,8 +695,8 @@ readloose(Biobuf *f, Object *o, int flag)
     int l;
 
     n = decompress(&d, f, nil);
-    if(n == -1)
-        return -1;
+    if(n == ERROR_NEG1)
+        return ERROR_NEG1;
 
     s = d;
     ed = d + n;
@@ -698,10 +713,11 @@ readloose(Biobuf *f, Object *o, int flag)
     }
     if(o->type == GNone){
         free(o->data);
-        return -1;
+        return ERROR_NEG1;
     }
+    // else
     sz = strtol(s, &e, 0);
-    if(e == s || *e++ != 0){
+    if(e == s || *e++ != '\0'){
         werrstr("malformed object header");
         goto error;
     }
@@ -709,15 +725,15 @@ readloose(Biobuf *f, Object *o, int flag)
         werrstr("mismatched sizes");
         goto error;
     }
-    o->size = sz;
-    o->data = e;
     o->all = d;
+    o->data = e;
+    o->size = sz;
     o->flag |= Cloaded|flag;
-    return 0;
+    return OK_0;
 
 error:
     free(d);
-    return -1;
+    return ERROR_NEG1;
 }
 /*e: function [[readloose]] */
 
@@ -933,7 +949,6 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
     return 0;
 }
 /*e: function [[parseauthor]] */
-
 /*s: function [[parsecommit]] */
 static void
 parsecommit(Object *o)
@@ -1017,19 +1032,24 @@ parsetree(Object *o)
          * of the git repo dir.
          */
         t->mode = gitdirmode;
-        t->ismod = 0;
-        t->islink = 0;
+        t->ismod = false;
+        t->islink = false;
         if(m & 0777){
             a = (m & 0777)>>6;
             t->mode &= ((a<<6)|(a<<3)|a);
         }
+        /*s: [[parsetree()]] if submodule */
         if(m == 0160000){ /* module */
             t->mode |= DMDIR;
-            t->ismod = 1;
-        }else if(m == 0120000){ /* symlink */
-            t->mode = 0;
-            t->islink = 1;
+            t->ismod = true;
         }
+        /*e: [[parsetree()]] if submodule */
+        /*s: [[parsetree()]] if symlink */
+        if(m == 0120000){ /* symlink */
+            t->mode = 0;
+            t->islink = true;
+        }
+        /*e: [[parsetree()]] if symlink */
         if(m & 0040000) /* dir */
             t->mode |= DMDIR;
         t->name = p;
@@ -1043,14 +1063,12 @@ parsetree(Object *o)
     o->tree->nent = nent;
 }
 /*e: function [[parsetree]] */
-
 /*s: function [[parsetag]] */
 static void
 parsetag(Object *)
 {
 }
 /*e: function [[parsetag]] */
-
 /*s: function [[parseobject]] */
 void
 parseobject(Object *o)
@@ -1058,9 +1076,13 @@ parseobject(Object *o)
     if(o->flag & Cparsed)
         return;
     switch(o->type){
+    /*s: [[parseobject()]] switch [[o->type]] cases */
     case GTree: parsetree(o);   break;
+    /*x: [[parseobject()]] switch [[o->type]] cases */
     case GCommit:   parsecommit(o); break;
+    /*x: [[parseobject()]] switch [[o->type]] cases */
     case GTag:  parsetag(o);    break;
+    /*e: [[parseobject()]] switch [[o->type]] cases */
     default:    break;
     }
     o->flag |= Cparsed;
@@ -1068,15 +1090,18 @@ parseobject(Object *o)
 /*e: function [[parseobject]] */
 
 /*s: function [[readidxobject]] */
+/// readobject | ?? -> <>
 static Object*
 readidxobject(Biobuf *idx, Hash h, int flag)
 {
     char path[Pathmax], hbuf[41];
     Object *obj, *new;
-    int i, r, retried;
+    int i, r;
+    bool retried;
     Biobuf *f;
     vlong o;
 
+    /*s: [[readidxobject()]] if [[h]] in object cache */
     if((obj = osfind(&objcache, h)) != nil){
         if(flag & Cidx){
             /*
@@ -1102,10 +1127,15 @@ readidxobject(Biobuf *idx, Hash h, int flag)
         if(obj->flag & Cloaded)
             return obj;
     }
+    /*e: [[readidxobject()]] if [[h]] in object cache */
+    /*s: [[readidxobject()]] if [[Cthin]] flag */
     if(flag & Cthin)
         flag &= ~Cidx;
+    /*e: [[readidxobject()]] if [[Cthin]] flag */
+    /*s: [[readidxobject()]] if [[Cidx]] flag */
     if(flag & Cidx)
         return nil;
+    /*e: [[readidxobject()]] if [[Cidx]] flag */
     new = nil;
     if(obj == nil){
         new = emalloc(sizeof(Object));
@@ -1115,8 +1145,9 @@ readidxobject(Biobuf *idx, Hash h, int flag)
     }
 
     o = -1;
-    retried = 0;
+    retried = false;
 retry:
+    /*s: [[readidxobject()]] look for object in packs */
     for(i = 0; i < npackf; i++){
         o = searchindex(packf[i].idx, packf[i].nidx, h, SHA1dlen*8, nil);
         if(o != -1){
@@ -1132,22 +1163,24 @@ retry:
             return obj;
         }
     }
-
+    /*e: [[readidxobject()]] look for object in packs */
+    // else
     snprint(hbuf, sizeof(hbuf), "%H", h);
     snprint(path, sizeof(path), ".git/objects/%c%c/%s", hbuf[0], hbuf[1], hbuf + 2);
     if((f = Bopen(path, OREAD)) != nil){
-        if(readloose(f, obj, flag) == -1)
+        if(readloose(f, obj, flag) == ERROR_NEG1)
             goto errorf;
         Bterm(f);
         parseobject(obj);
         cache(obj);
         return obj;
     }
+    // else
 
     if(o == -1){
         if(retried)
             goto error;
-        retried = 1;
+        retried = true;
         refreshpacks();
         goto retry;
     }
@@ -1194,6 +1227,7 @@ expandprefix(Hash *rh, Hash h, int npfx)
 /*e: function [[expandprefix]] */
 
 /*s: function [[readobject]] */
+/// gitwalk1 | gtreegen | ... -> <>
 /*
  * Loads and returns a cached object.
  */
@@ -1532,7 +1566,6 @@ loadtree(Metavec *v, Objset *has, Hash tree, char *dpath, vlong mtime)
     return 0;
 }
 /*e: function [[loadtree]] */
-
 /*s: function [[loadcommit]] */
 static int
 loadcommit(Metavec *v, Objset *has, Hash h)

@@ -13,7 +13,9 @@ struct Pfilt {
 
 Biobuf  *out;
 char    *queryexpr;
+/*s: global [[commitid]](log.c) */
 char    *commitid;
+/*e: global [[commitid]](log.c) */
 int shortlog;
 int msgcount = -1;
 
@@ -286,8 +288,8 @@ main(int argc, char **argv)
     }ARGEND;
 
     gitinit(repo, sizeof(repo), &nrel);
-
     nrepo = strlen(repo);
+
     if(argc != 0){
         if(getwd(path, sizeof(path)) == nil)
             sysfatal("getwd: %r");
@@ -307,16 +309,19 @@ main(int argc, char **argv)
             free(r);
         }
     }
-    if(chdir(repo) == -1)
+    // !!chdir!!
+    if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
     //9front-only
     //tmfmtinstall();
-    out = Bfdopen(1, OWRITE);
+    out = Bfdopen(STDOUT, OWRITE);
+
     if(queryexpr != nil)
         showquery(queryexpr);
     else
         showcommits(commitid);
+
     Bterm(out);
     exits(nil);
 }

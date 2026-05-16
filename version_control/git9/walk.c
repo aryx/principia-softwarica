@@ -421,12 +421,15 @@ main(int argc, char **argv)
     Dir rn;
 
     gitinit(repopath, sizeof(repopath), &nrel);
+
     if(getwd(wdirpath, sizeof(wdirpath)) == nil)
         sysfatal("getwd: %r");
     if(chdir(repopath) == -1)
         sysfatal("chdir: %r");
+
     if(access(".git/fs/ctl", AEXIST) != 0)
         sysfatal("no running git/fs");
+
     ARGBEGIN{
     case 'q':
         quiet++;

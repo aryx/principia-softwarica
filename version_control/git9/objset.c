@@ -65,7 +65,8 @@ osfind(Objset *s, Hash h)
     for(probe = GETBE32(h.h) % s->sz; s->obj[probe]; probe = (probe + 1) % s->sz)
         if(hasheq(&s->obj[probe]->hash, &h))
             return s->obj[probe]; 
-    return 0;
+    // else
+    return nil;
 }
 /*e: function [[osfind]] */
 

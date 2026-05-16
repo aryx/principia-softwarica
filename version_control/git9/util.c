@@ -26,12 +26,12 @@ emptydir(void)
     if(e != nil)
         return ref(e);
     e = emalloc(sizeof(Object));
-    e->hash = Zhash;
     e->type = GTree;
     e->tree = emalloc(sizeof(Tinfo));
     e->tree->ent = nil;
     e->tree->nent = 0;
     e->flag |= Cloaded|Cparsed;
+    e->hash = Zhash;
     e->off = -1;
     ref(e);
     cache(e);
@@ -104,8 +104,9 @@ charval(int c)
         return c - 'a' + 10;
     if(c >= 'A' && c <= 'F')
         return c - 'A' + 10;
+    // else
     werrstr("invalid hex char");
-    return -1;
+    return ERROR_NEG1;
 }
 /*e: function [[charval]] */
 
@@ -305,6 +306,7 @@ gitinit(char *root, int nroot, int *nrel)
     /*s: [[gitinit()]] initializations */
     /*s: [[gitinit()]] fmtinstall calls */
     fmtinstall('H', Hfmt);
+    /*x: [[gitinit()]] fmtinstall calls */
     fmtinstall('T', Tfmt);
     fmtinstall('O', Ofmt);
     fmtinstall('Q', Qfmt);
@@ -332,19 +334,19 @@ gitinit(char *root, int nroot, int *nrel)
 /*e: function [[gitinit]] */
 
 /*s: function [[hparse]] */
-int
+errorneg1
 hparse(Hash *h, char *b)
 {
     int i, c0, c1;
 
     for(i = 0; i < nelem(h->h); i++){
-        if((c0 = charval(b[2*i+0])) == -1)
-            return -1;
-        if((c1 = charval(b[2*i+1])) == -1)
-            return -1;
+        if((c0 = charval(b[2*i+0])) == ERROR_NEG1)
+            return ERROR_NEG1;
+        if((c1 = charval(b[2*i+1])) == ERROR_NEG1)
+            return ERROR_NEG1;
         h->h[i] = (c0 << 4) | c1;
     }
-    return 0;
+    return OK_0;
 }
 /*e: function [[hparse]] */
 

@@ -40,20 +40,27 @@ enum Gxxx {
     GTree   = 2,
     GBlob   = 3,
 
-    GTag    = 4,
+    /*s: [[Gxxx]] other cases */
     GOdelta = 6,
     GRdelta = 7,
+    /*x: [[Gxxx]] other cases */
+    GTag    = 4,
+    /*e: [[Gxxx]] other cases */
 };
 /*e: enum [[Gxxx]] */
 
-enum {
+/*s: enum [[Cxxx]] */
+enum Cxxx {
     Cloaded = 1 << 0,
-    Cidx    = 1 << 1,
-    Ccache  = 1 << 2,
-    Cexist  = 1 << 3,
-    Cparsed = 1 << 5,
+    Cparsed = 1 << 2,
+    /*s: [[Cxxx]] other cases */
+    Cidx    = 1 << 3,
+    Ccache  = 1 << 4,
+    Cexist  = 1 << 5,
     Cthin   = 1 << 6,
+    /*e: [[Cxxx]] other cases */
 };
+/*e: enum [[Cxxx]] */
 
 enum {
     ConnGit,
@@ -62,29 +69,40 @@ enum {
     ConnHttp,
 };
 
+/*s: struct [[Objlist]] */
 struct Objlist {
     int idx;
 
-    int fd;
+    // option<fdt> (None = -1)
+    fdt fd;
+    // ??
     int state;
     int stage;
 
+    // .git/objects/
+    // array<ref_own<Dir>> (len = ntop)
     Dir *top;
     int ntop;
     int topidx;
+
     Dir *loose;
     int nloose;
     int looseidx;
+
+    // .git/objects/pack/
+    // option<array<ref_own<Dir>> (len = npack)
     Dir *pack;
     int npack;
     int packidx;
+
     int nent;
     int entidx;
 };
+/*e: struct [[Objlist]] */
 
 /*s: struct [[Hash]] */
 struct Hash {
-    uchar h[20];
+    byte h[20];
 };
 /*e: struct [[Hash]] */
 
@@ -108,72 +126,109 @@ struct Conn {
     char *direction;
 };
 
+/*s: struct [[Dirent]] */
 struct Dirent {
     char *name;
     int mode;
     Hash h;
-    char ismod;
-    char islink;
+    /*s: [[Dirent]] other fields */
+    bool_byte islink;
+    /*x: [[Dirent]] other fields */
+    bool_byte ismod;
+    /*e: [[Dirent]] other fields */
 };
+/*e: struct [[Dirent]] */
 
 /*s: struct [[Object]] */
 struct Object {
     /* Git data */
     Hash    hash;
-    // enum<??>
+    // enum<Gxxx>
     int type;
 
-    /* Cache */
-    int id;
-    int flag;
+    /*s: [[Object]] other fields */
+    // shared objects
     int refs;
-
-    Object  *next;
-    Object  *prev;
-
-    /* For indexing */
+    /*e: [[Object]] other fields */
+    /*s: [[Object]] cache fields */
+    // enum<Cxxx>
+    int flag;
+    /*x: [[Object]] cache fields */
+    int id;
+    /*e: [[Object]] cache fields */
+    /*s: [[Object]] indexing fields */
     vlong   off;
     vlong   len;
     u32int  crc;
+    /*e: [[Object]] indexing fields */
+    /*s: [[Object]] extra fields */
+    Object  *next;
+    Object  *prev;
+    /*e: [[Object]] extra fields */
 
     /* Everything below here gets cleared */
+
+    // raw object content after decompression
+    // option<ref_own<string>>, set after Cloaded
     char    *all;
+    // ref_shared<string> point in Object.all after object header (used for GBlob too)
     char    *data;
     /* size excludes header */
     vlong   size;
 
+    // those fields are set after Cparsed
     /* Significant win on memory use */
     union {
-        Cinfo   *commit;
+        /*s: [[Object]] union fields */
+        // when GTree
         Tinfo   *tree;
+        /*x: [[Object]] union fields */
+        // when GCommit
+        Cinfo   *commit;
+        /*e: [[Object]] union fields */
     };
 };
 /*e: struct [[Object]] */
 
+/*s: struct [[Tinfo]] */
 struct Tinfo {
     /* Tree */
+    // array<ref_own<Dirent>> len = nent
     Dirent  *ent;
     int nent;
 };
+/*e: struct [[Tinfo]] */
 
+/*s: struct [[Cinfo]] */
 struct Cinfo {
     /* Commit */
+    // array<Hash> (0, 1, or 2 parents?)
     Hash    *parent;
     int nparent;
+
     Hash    tree;
+
+    // ref_own<string>
     char    *author;
+    // option<ref_own<string>>
     char    *committer;
+
+    // ref_own<string> (len = nmsg)
     char    *msg;
     int nmsg;
+
     vlong   ctime;
     vlong   mtime;
 };
+/*e: struct [[Cinfo]] */
 
+/*s: struct [[Objset]] */
 struct Objset {
     Object  **obj;
     int nobj;
     int sz;
 };
+/*e: struct [[Objset]] */
 
 struct Qelt {
     Object  *o;
@@ -292,6 +347,7 @@ extern int  gitdirmode;
 
 /*s: pragmas varargck */
 #pragma varargck type "H" Hash
+/*x: pragmas varargck */
 #pragma varargck type "T" int
 #pragma varargck type "O" Object*
 #pragma varargck type "Q" Qid
@@ -348,7 +404,7 @@ void    *earealloc(void *, ulong, ulong);
 void    *erealloc(void *, ulong);
 char    *estrdup(char *);
 int slurpdir(char *, Dir **);
-int hparse(Hash *, char *);
+errorneg1 hparse(Hash *, char *);
 int hassuffix(char *, char *);
 int swapsuffix(char *, int, char *, char *, char *);
 char    *strip(char *);

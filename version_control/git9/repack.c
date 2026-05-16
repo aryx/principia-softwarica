@@ -45,7 +45,7 @@ cleanup(Hash h)
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-d]\n", argv0);
+    fprint(STDERR, "usage: %s [-d]\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (git9/repack.c)]] */

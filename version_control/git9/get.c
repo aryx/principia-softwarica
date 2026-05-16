@@ -34,7 +34,7 @@ resolveremote(Hash *h, char *ref)
     int r, f;
 
     ref = strip(ref);
-    if((r = hparse(h, ref)) != -1)
+    if((r = hparse(h, ref)) != ERROR_NEG1)
         return r;
     /* Slightly special handling: translate remote refs to local ones. */
     if(strcmp(ref, "HEAD") == 0){
@@ -49,7 +49,7 @@ resolveremote(Hash *h, char *ref)
         return -1;
     }
 
-    r = -1;
+    r = ERROR_NEG1;
     s = strip(buf);
     if((f = open(s, OREAD)) == -1)
         return -1;
@@ -308,7 +308,7 @@ fetchpack(Conn *c)
             want = earealloc(want, refsz, sizeof(want[0]));
             ref = earealloc(ref, refsz, sizeof(ref[0]));
         }
-        if(hparse(&want[nref], sp[0]) == -1)
+        if(hparse(&want[nref], sp[0]) == ERROR_NEG1)
             sysfatal("invalid hash %s", sp[0]);
         if (resolveremote(&have[nref], sp[1]) == -1)
             memset(&have[nref], 0, sizeof(have[nref]));

@@ -136,7 +136,6 @@ readpkt(Conn *c, char *buf, int nbuf)
     return n;
 }
 /*e: function [[readpkt]] */
-
 /*s: function [[writepkt]] */
 int
 writepkt(Conn *c, char *buf, int nbuf)
@@ -366,7 +365,6 @@ dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
     return 0;
 }
 /*e: function [[dialhttp]] */
-
 /*s: function [[dialssh]] */
 static int
 dialssh(Conn *c, char *host, char *, char *path, char *direction)
@@ -524,6 +522,7 @@ localrepo(char *uri, char *path, int npath)
 /*e: function [[localrepo]] */
 
 /*s: function [[gitconnect]] */
+/// ??? -> <>
 int
 gitconnect(Conn *c, char *uri, char *direction)
 {
@@ -583,7 +582,6 @@ writephase(Conn *c)
     return 0;
 }
 /*e: function [[writephase]] */
-
 /*s: function [[readphase]] */
 int
 readphase(Conn *c)

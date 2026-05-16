@@ -113,7 +113,7 @@ olsreadloose(Objlist *ols, Hash *h)
                 n = snprint(buf, sizeof(buf), "%s%s", ols->top[i].name, ols->loose[j].name);
                 if(n >= sizeof(buf))
                     goto step;
-                if(hparse(h, buf) == -1)
+                if(hparse(h, buf) == ERROR_NEG1)
                     goto step;
                 ols->state = Siter;
                 ols->topidx = i;
@@ -140,9 +140,9 @@ mkols(void)
     Objlist *ols;
 
     ols = emalloc(sizeof(Objlist));
-    if((ols->ntop = slurpdir(".git/objects", &ols->top)) == -1)
+    if((ols->ntop = slurpdir(".git/objects", &ols->top)) == ERROR_NEG1)
         sysfatal("read top level: %r");
-    if((ols->npack = slurpdir(".git/objects/pack", &ols->pack)) == -1)
+    if((ols->npack = slurpdir(".git/objects/pack", &ols->pack)) == ERROR_NEG1)
         ols->pack = nil;
     ols->fd = -1;
     return ols;
