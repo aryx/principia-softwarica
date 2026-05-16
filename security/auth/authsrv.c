@@ -126,9 +126,9 @@ ticketrequest(Ticketreq *tr)
 
 	memset(&t, 0, sizeof(t));
 	memmove(t.chal, tr->chal, CHALLEN);
-	strcpy(t.cuid, tr->uid);
+	safecpy(t.cuid, tr->uid, sizeof(t.cuid));
 	if(speaksfor(tr->hostid, tr->uid))
-		strcpy(t.suid, tr->uid);
+		safecpy(t.suid, tr->uid, sizeof(t.suid));
 	else {
 		mkkey(akey);
 		mkkey(hkey);
@@ -353,7 +353,7 @@ domainname(void)
 
 	n = readfile("/dev/sysname", sysname, sizeof(sysname)-1);
 	if(n < 0){
-		strcpy(sysname, "kremvax");
+		safecpy(sysname, "kremvax", sizeof(sysname));
 		return sysname;
 	}
 	sysname[n] = 0;
@@ -745,7 +745,7 @@ lmhash(uchar hash[MShashlen], char *passwd)
 	char *stdtext = "KGS!@#$%";
 	int i;
 
-	strncpy((char*)buf, passwd, sizeof(buf));
+	safecpy((char*)buf, passwd, sizeof(buf));
 	for(i=0; i<sizeof(buf); i++)
 		if(buf[i] >= 'a' && buf[i] <= 'z')
 			buf[i] += 'A' - 'a';
@@ -909,6 +909,9 @@ tickauthreply(Ticketreq *tr, char *hkey)
 void
 safecpy(char *to, char *from, int len)
 {
-	strncpy(to, from, len);
-	to[len-1] = 0;
+	int n = strlen(from);
+	if(n >= len)
+		n = len - 1;
+	memcpy(to, from, n);
+	to[n] = '\0';
 }
