@@ -519,10 +519,10 @@ hardware such as the Raspberry Pi.
 To get started you first need to get the source of the \plan
 version described in this book at \url{https://github.com/aryx/principia-softwarica}.
 %
-Then you need to compile using a regular C compiler (e.g. gcc, clang)
+Then you need to {\em compile} using a regular C compiler (e.g. gcc, clang)
 the \plan C cross compilers written by Ken Thompson: \urlgoken.
 %
-Then you need to cross compile, e.g. from Linux or macOS, the \plan kernel
+Then you need to {\em cross compile}, e.g. from Linux or macOS, the \plan kernel
 using the \plan C cross compilers installed in the previous step.
 %
 You can then cross compile the whole \plan operating
@@ -534,7 +534,7 @@ on a Raspberry Pi.
 
 All of this is explained in more details at \urlinstall, which also explains
 how to cross-compile instead the x86 version of the kernel and boot it using
-Qemu\furl{http://www.qemu.org}
+Qemu\furl{http://www.qemu.org}.
 % - or a real PC.
 % - or using QEMU see qemu-system-i386 -device or qemu-system-arm -M raspi2
 
@@ -850,10 +850,10 @@ around.
 %claude:
 A typical user process's virtual address space is
 organized into a handful of {\em segments}: a read-only
-{text} segment holding the code, an initialized-data
-segment ({data}), a zero-initialized segment ({bss}),
-a dynamically-growing {heap}, and a downward-growing
-{stack}. The layout is conventionally drawn with low
+{\em text segment} holding the code, an initialized
+{\em data segment}, a zero-initialized segment (called {\em bss}),
+a dynamically-growing {\em heap}, and a downward-growing
+{\em stack}. The layout is conventionally drawn with low
 addresses at the bottom and high addresses at the top
 (a convention I will follow for every memory-layout
 diagram throughout this book):
@@ -911,19 +911,26 @@ the mapping.
 \subsection{Paging versus segmentation}
 \label{sec:princ-paging-vs-segmentation}
 
-%claude: %cs-history:
+%claude:
 Paging is not the only way hardware can provide virtual
 memory. The alternative, {\em segmentation}, divides the
 address space into variable-length {\em segments}, each
 with a name, a base address, a length, and access
-permissions. A pointer in a segmented system is a
+permissions.
+%yoann1: relate to the segment I introduced in the previous section with paging
+
+%claude:
+A pointer in a segmented system is a
 (segment, offset) pair, and the hardware checks the
 offset against the segment's length on every access.
 The idea is seductive: segments map to the logical units
 programmers actually think about---one segment for the
 code, one for the stack, one per module, one per shared
 data structure---so protection boundaries align
-naturally with program structure. Multics
+naturally with program structure. 
+
+%claude: %cs-historY:
+Multics
 ({\sc mit}/{\sc ge}/Bell Labs, 1965) built its entire
 security model around this: up to 256K segments, each
 tagged with a ring-level access mask, forming the most
@@ -1144,12 +1151,12 @@ disables interrupts---is the same everywhere.
 
 %claude:
 Every process in a modern operating system owns {two}
-stacks. The {user stack} lives in user-mode virtual
+stacks. The {\em user stack} lives in user-mode virtual
 memory and is manipulated by ordinary user code using
 the CPU's stack pointer register. When a trap, exception,
 or interrupt (Section~\ref{sec:princ-interrupts}) vectors
 execution into the kernel, the CPU switches the stack
-pointer to a separate {kernel stack} that lives in kernel
+pointer to a separate {\em kernel stack} that lives in kernel
 memory, and every stack frame pushed by kernel code while
 it is handling the event lands on that kernel stack.
 When the kernel returns to user mode, the user stack
@@ -1308,16 +1315,16 @@ Chapter~\ref{chap:scheduling}.
 A process's only window onto persistent storage, devices,
 networks, and inter-process communication is a small set
 of calls on {\em file descriptors}---small integers
-returned by [[open]] that the kernel uses as indices into
+returned by [[open()]] that the kernel uses as indices into
 a per-process table of opaque handles. Each handle
 ultimately points at a kernel-internal object (Linux's
 [[struct file]], BSD's {\em vnode}, Windows' [[HANDLE]])
 that carries enough state to route the next
-[[read]]/[[write]]/[[close]] to the right implementation.
+[[read()]]/[[write()]]/[[close()]] to the right implementation.
 The calls themselves arrive via the usual syscall trap
 (Section~\ref{sec:princ-interrupts}); the small-integer
-form of the descriptor is what makes [[fork]], [[dup]],
-and [[exec]] cheap, because nothing but the integer gets
+form of the descriptor is what makes [[fork()]], [[dup()]],
+and [[exec()]] cheap, because nothing but the integer gets
 copied.
 
 %claude:
@@ -1356,11 +1363,11 @@ system, the network stack, the debugger interface, and
 every in-kernel device appear as directories and files
 in a namespace, served either by in-kernel code or by an
 out-of-kernel user process speaking the {\em 9P} protocol
-over a pipe. There is no [[kill]] syscall---you write
+over a pipe. There is no [[kill()]] syscall---you write
 the string ``kill'' into [[/proc/pid/note]]; there is no
-[[ps]] or [[netstat]]---you [[read]] [[/proc]] or
+[[ps]] or [[netstat]]---you read [[/proc]] or
 [[/net]]. The consequence is that the kernel's total
-syscall surface shrinks to around~30 calls (against
+syscall surface shrinks to around~40 calls (against
 Linux's~400-odd) while the set of things programs can
 do {grows}, because adding a new service means writing
 a file server, not extending the kernel. It also makes
@@ -1396,9 +1403,9 @@ those services must run {\em inside} the kernel, and
 which could run as ordinary user-space processes? A
 {\em monolithic} kernel puts everything in kernel mode:
 device drivers, file systems, the network stack, and the
-scheduler all share one address space and call each
+scheduler all share one address kernel space and call each
 other as ordinary functions. A {\em microkernel} instead reduces
-the kernel to the bare minimum---scheduling, {\sc ipc},
+the kernel to the bare minimum---scheduling, IPC (Inter Process Communication),
 and memory management---and runs everything else as
 user-space servers that communicate via message passing.
 
@@ -1460,7 +1467,8 @@ These user-space servers communicate with the kernel
 and with each other via 9P, so they get the microkernel
 benefit of isolation and replaceability without imposing
 the {\sc ipc} cost on the {\em fast path}: the in-kernel
-[[devXxx]] drivers handle the performance-critical work
+[[devXxx]] drivers (e.g., [[devdraw.c]], [[devcons.c]]) handle
+the performance-critical work
 as function calls, and only the configuration and policy
 services move out to user space. The boundary is drawn
 by a pragmatic rule: if it needs fast-path access to
@@ -1521,9 +1529,9 @@ Hydra, KeyKOS, and {\sc eros}. Then it started coming
 back: {\sc sel4} (2009) built its entire security model
 on formal capabilities; WebAssembly uses capabilities
 for sandboxing (a module can only access the functions
-and memory regions it was explicitly given handles to);
-and CloudFlare Workers use a capability-like model for
-isolating tenant code.
+and memory regions it was explicitly given handles to).
+%and CloudFlare Workers use a capability-like model for
+%isolating tenant code.
 
 %claude:
 \plan takes a third path that sidesteps the
@@ -1538,7 +1546,7 @@ for you. This is a softer version of the capability
 idea (a namespace is, in effect, a set of capabilities
 to see certain file trees), achieved without unforgeable
 tokens or a formal capability model, using only the
-[[bind]]/[[mount]]/[[rfork]] machinery already described
+[[bind()]]/[[mount()]]/[[rfork()]] machinery already described
 in Section~\ref{sec:princ-files}.
 
 \subsection{The kernel as a concurrent program}
@@ -1556,8 +1564,9 @@ framed as an OS-structuring primitive), atomic
 test-and-set, wait-free data structures---were invented
 {for} kernel programming and only later adopted by
 application developers. The same story repeated with
-SMP: early commercial multiprocessors (VAX/VMS in~1980,
-Sequent in~1983) forced kernel authors to confront
+SMP: early commercial multiprocessors (VAX/VMS in~1980)
+%Sequent in~1983)
+forced kernel authors to confront
 multi-core correctness {decades} before ordinary
 application programmers had to worry about it, which
 only happened around~2005 when Intel hit the frequency
@@ -1583,8 +1592,8 @@ it is blocked in a syscall with its kernel stack frozen
 on a wait queue. A kernel ``thread'' only comes alive
 when an event on its process's behalf (a syscall, a
 signal, an I/O completion) wakes it up---which is also
-why the kernel's [[sleep]]/[[wakeup]] primitives look
-a bit different from user-space [[pthread_cond_wait]]:
+why the kernel's [[sleep()]]/[[wakeup()]] primitives look
+a bit different from user-space [[pthread_cond_wait()]]:
 the underlying idea is the same, just adapted to this
 wake-on-event shape.
 
