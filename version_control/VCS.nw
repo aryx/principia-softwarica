@@ -2668,7 +2668,87 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 
 \section{Usage}
 
+<<function [[usage (git9/query.c)]]>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: %s [-pcr] query\n", argv0);
+    exits("usage");
+}
+@
+%ori: forgot -d
+
 \section{[[main()]]}
+
+
+<<function [[main (git9/query.c)]]>>=
+void
+main(int argc, char **argv)
+{
+    char *query, repo[512];
+    char *p, *e;
+    char *objpfx;
+    int i, j, n, nrel;
+    Hash *h;
+
+    ARGBEGIN{
+    case 'd':   chattygit++;    break;
+    case 'p':   fullpath=true; break;
+    case 'c':   changes=true;  break;
+    case 'r':   reverse ^= 1;   break;
+    default:    usage();    break;
+    }ARGEND;
+
+    fmtinstall('P', Pfmt);
+    if(argc == 0)
+        usage();
+
+    gitinit(repo, sizeof(repo), &nrel);
+
+    // !! chdir !!
+    if(chdir(repo) == ERROR_NEG1)
+        sysfatal("chdir: %r");
+
+    if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
+        sysfatal("smprint: %r");
+
+    for(i = 0, n = 0; i < argc; i++)
+        n += strlen(argv[i]) + 1;
+    query = emalloc(n+1);
+    p = query;
+    e = query + n;
+    for(i = 0; i < argc; i++)
+        p = seprint(p, e, "%s ", argv[i]);
+
+    n = resolverefs(&h, query);
+    free(query);
+
+    if(n == ERROR_NEG1)
+        sysfatal("resolve: %r");
+
+    if(changes){
+        for(i = 1; i < n; i++)
+            diffcommits(h[0], h[i]);
+    }else{
+        p = (fullpath ? objpfx : "");
+        for(j = 0; j < n; j++)
+            print("%s%H\n", p, h[reverse ? n - 1 - j : j]);
+    }
+    exits(nil);
+}
+@
+
+\section{Advanced features}
+
+\subsection{[[git/query -c]]}
+% change
+
+\subsection{[[git/query -p]]}
+% fullpath
+
+\subsection{[[git/query -r]]}
+% reverae
+
 
 %******************************************************************************
 \chapter{[[git/walk]]}
@@ -5990,6 +6070,14 @@ osinit(Objset *s)
 @
 % sizeof Hash? not Object?
 
+<<function [[osclear]]>>=
+void
+osclear(Objset *s)
+{
+    free(s->obj);
+}
+@
+
 <<function [[osfind]]>>=
 Object*
 osfind(Objset *s, Hash h)
@@ -6030,6 +6118,50 @@ if((obj = osfind(&objcache, h)) != nil){
     }
     if(obj->flag & Cloaded)
         return obj;
+}
+@
+
+
+<<function [[osadd]]>>=
+void
+osadd(Objset *s, Object *o)
+{
+    u32int probe;
+    Object **obj;
+    int i, sz;
+
+    probe = GETBE32(o->hash.h) % s->sz;
+    while(s->obj[probe]){
+        if(hasheq(&s->obj[probe]->hash, &o->hash)){
+            s->obj[probe] = o;
+            return;
+        }
+        probe = (probe + 1) % s->sz;
+    }
+    assert(s->obj[probe] == nil);
+    s->obj[probe] = o;
+    s->nobj++;
+    if(s->sz < 2*s->nobj){
+        sz = s->sz;
+        obj = s->obj;
+
+        s->sz *= 2;
+        s->nobj = 0;
+        s->obj = eamalloc(s->sz, sizeof(Hash));
+        for(i = 0; i < sz; i++)
+            if(obj[i])
+                osadd(s, obj[i]);
+        free(obj);
+    }
+}
+@
+
+
+<<function [[oshas]]>>=
+int
+oshas(Objset *s, Hash h)
+{
+    return osfind(s, h) != nil;
 }
 @
 
@@ -6138,6 +6270,7 @@ Ofmt(Fmt *fmt)
 }
 @
 
+% for git/get
 <<function [[Qfmt]]>>=
 int
 Qfmt(Fmt *fmt)
@@ -6180,7 +6313,9 @@ case 'd':
 
 % can use multiple times -d to be more chatty each time (see lib9p chatty9p>1)
 
-\section{[[chattygit]] and [[dprint()]]}
+\section{[[git/xxx -d]]}
+
+%\subsection{[[chattygit]] and [[dprint()]]}
 
 <<macro [[dprint]]>>=
 #define dprint(lvl, ...) \
