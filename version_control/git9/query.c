@@ -157,7 +157,7 @@ diffcommits(Hash ah, Hash bh)
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-pcr] query\n", argv0);
+    fprint(STDERR, "usage: %s [-pcr] query\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (git9/query.c)]] */
@@ -167,14 +167,15 @@ void
 main(int argc, char **argv)
 {
     char *query, repo[512];
-    char *p, *e, *objpfx;
+    char *p, *e;
+    char *objpfx;
     int i, j, n, nrel;
     Hash *h;
 
     ARGBEGIN{
     case 'd':   chattygit++;    break;
-    case 'p':   fullpath++; break;
-    case 'c':   changes++;  break;
+    case 'p':   fullpath=true; break;
+    case 'c':   changes=true;  break;
     case 'r':   reverse ^= 1;   break;
     default:    usage();    break;
     }ARGEND;
@@ -185,10 +186,13 @@ main(int argc, char **argv)
 
     gitinit(repo, sizeof(repo), &nrel);
 
-    if(chdir(repo) == -1)
+    // !! chdir !!
+    if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
+
     if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
         sysfatal("smprint: %r");
+
     for(i = 0, n = 0; i < argc; i++)
         n += strlen(argv[i]) + 1;
     query = emalloc(n+1);
@@ -196,10 +200,13 @@ main(int argc, char **argv)
     e = query + n;
     for(i = 0; i < argc; i++)
         p = seprint(p, e, "%s ", argv[i]);
+
     n = resolverefs(&h, query);
     free(query);
-    if(n == -1)
+
+    if(n == ERROR_NEG1)
         sysfatal("resolve: %r");
+
     if(changes){
         for(i = 1; i < n; i++)
             diffcommits(h[0], h[i]);

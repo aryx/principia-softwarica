@@ -13,7 +13,6 @@ osinit(Objset *s)
     s->obj = eamalloc(s->sz, sizeof(Hash));
 }
 /*e: function [[osinit]] */
-
 /*s: function [[osclear]] */
 void
 osclear(Objset *s)
