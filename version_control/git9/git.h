@@ -85,6 +85,8 @@ struct Objlist {
     int ntop;
     int topidx;
 
+    // ??
+    // array<ref_own<Dir>> (len = nloose)
     Dir *loose;
     int nloose;
     int looseidx;
@@ -128,6 +130,7 @@ struct Conn {
 
 /*s: struct [[Dirent]] */
 struct Dirent {
+    // ref_own<string>
     char *name;
     int mode;
     Hash h;

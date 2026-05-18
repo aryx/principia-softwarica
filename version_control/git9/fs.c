@@ -1064,6 +1064,7 @@ gitstat(Req *r)
 
 /*s: global [[gitsrv]] */
 Srv gitsrv = {
+    // will attach and set gitdir too
     .attach=gitattach,
     .walk1=gitwalk1,
     .clone=gitclone,
@@ -1112,7 +1113,7 @@ main(int argc, char **argv)
     if(argc != 0)
         usage();
 
-    // use just relative .git because chdir() above
+    // can use just relative .git path because of chdir() above
     d = dirstat(".git");
     if(d == nil)
         sysfatal("dirstat .git: %r");

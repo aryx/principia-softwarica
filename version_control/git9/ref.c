@@ -20,13 +20,19 @@ enum {
     Range,
 };
 
+/*s: struct [[Eval]] */
 struct Eval {
+    // ref<string> (owner = main() query)
     char    *str;
+    // pointer in str as we parse it
     char    *p;
+
+    // stack<ref_own<Object>>, len = nstk
     Object  **stk;
     int nstk;
     int stksz;
 };
+/*e: struct [[Eval]] */
 
 static char *colors[] = {
 [Keep] "keep",
@@ -491,24 +497,24 @@ done:
 /*e: function [[evalpostfix]] */
 
 /*s: function [[evalexpr]] */
-int
+errorneg1
 evalexpr(Eval *ev, char *ref)
 {
     memset(ev, 0, sizeof(*ev));
     ev->str = ref;
     ev->p = ref;
 
-    while(1){
-        if(evalpostfix(ev) == -1)
-            return -1;
+    while(true){
+        if(evalpostfix(ev) == ERROR_NEG1)
+            return ERROR_NEG1;
         if(ev->p[0] == '\0')
-            return 0;
+            return OK_0;
         else if(take(ev, ":") || take(ev, "..")){
-            if(evalpostfix(ev) == -1)
-                return -1;
+            if(evalpostfix(ev) == ERROR_NEG1)
+                return ERROR_NEG1;
             if(ev->p[0] != '\0'){
                 werrstr("junk at end of expression");
-                return -1;
+                return ERROR_NEG1;
             }
             return range(ev);
         }
@@ -517,16 +523,20 @@ evalexpr(Eval *ev, char *ref)
 /*e: function [[evalexpr]] */
 
 /*s: function [[resolverefs]] */
-int
+// main(get.c) -> <>
+errorneg1
 resolverefs(Hash **r, char *ref)
 {
     Eval ev;
     Hash *h;
     int i;
+    errorneg1 res;
 
-    if(evalexpr(&ev, ref) == -1){
+    res = evalexpr(&ev, ref);
+
+    if(res == ERROR_NEG1){
         free(ev.stk);
-        return -1;
+        return ERROR_NEG1;
     }
     h = eamalloc(ev.nstk, sizeof(Hash));
     for(i = 0; i < ev.nstk; i++)

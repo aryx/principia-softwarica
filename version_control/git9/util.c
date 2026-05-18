@@ -7,7 +7,9 @@
 
 Reprog  *authorpat;
 Hash    Zhash;
+/*s: global [[chattygit]] */
 int chattygit;
+/*e: global [[chattygit]] */
 int interactive = 1;
 /*s: global [[gitdirmode]] */
 int gitdirmode = -1;

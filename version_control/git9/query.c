@@ -6,9 +6,17 @@
 
 #pragma varargck    type    "P" void
 
-int fullpath;
-int changes;
-int reverse;
+// flags
+/*s: global [[fullpath]](query.c) */
+bool fullpath;
+/*e: global [[fullpath]](query.c) */
+/*s: global [[changes]](query.c) */
+bool changes;
+/*e: global [[changes]](query.c) */
+/*s: global [[reverse]](query.c) */
+bool reverse;
+/*e: global [[reverse]](query.c) */
+
 char *path[128];
 int npath;
 
@@ -166,21 +174,34 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-    char *query, repo[512];
-    char *p, *e;
-    char *objpfx;
-    int i, j, n, nrel;
+    char repo[512];
+    int nrel;
+    // ref_own<string>, question
+    char *query;
+    // list<ref_own<Hash>>, answer
     Hash *h;
+    /*s: [[main()]](query.c) other locals */
+    char *p, *e;
+    int i, j, n;
+    /*x: [[main()]](query.c) other locals */
+    char *objpfx;
+    /*e: [[main()]](query.c) other locals */
 
     ARGBEGIN{
-    case 'd':   chattygit++;    break;
-    case 'p':   fullpath=true; break;
+    /*s: [[main()]](query.c) command line processing */
     case 'c':   changes=true;  break;
+    /*x: [[main()]](query.c) command line processing */
+    case 'p':   fullpath=true; break;
+    /*x: [[main()]](query.c) command line processing */
     case 'r':   reverse ^= 1;   break;
+    /*x: [[main()]](query.c) command line processing */
+    case 'd':   chattygit++;    break;
+    /*e: [[main()]](query.c) command line processing */
     default:    usage();    break;
     }ARGEND;
 
     fmtinstall('P', Pfmt);
+
     if(argc == 0)
         usage();
 
@@ -190,9 +211,13 @@ main(int argc, char **argv)
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
+    /*s: [[main()]](query.c) set [[objpfx]] */
     if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
         sysfatal("smprint: %r");
+    /*e: [[main()]](query.c) set [[objpfx]] */
 
+    /*s: [[main()]](query.c) set [[query]] derived from argv */
+    // p = concat(argv, " ")
     for(i = 0, n = 0; i < argc; i++)
         n += strlen(argv[i]) + 1;
     query = emalloc(n+1);
@@ -200,20 +225,36 @@ main(int argc, char **argv)
     e = query + n;
     for(i = 0; i < argc; i++)
         p = seprint(p, e, "%s ", argv[i]);
+    /*e: [[main()]](query.c) set [[query]] derived from argv */
 
     n = resolverefs(&h, query);
     free(query);
 
+    /*s: [[main()]](query.c) sanity check [[n]] result */
     if(n == ERROR_NEG1)
         sysfatal("resolve: %r");
+    /*e: [[main()]](query.c) sanity check [[n]] result */
 
+    /*s: [[main()]](query.c) if [[changes]] */
     if(changes){
         for(i = 1; i < n; i++)
             diffcommits(h[0], h[i]);
-    }else{
-        p = (fullpath ? objpfx : "");
-        for(j = 0; j < n; j++)
-            print("%s%H\n", p, h[reverse ? n - 1 - j : j]);
+    }
+    /*e: [[main()]](query.c) if [[changes]] */
+    else{
+        p = "";
+        /*s: [[main()]](query.c) adjust [[p]] if [[fullpath]] */
+        if (fullpath)
+           p = objpfx;
+        /*e: [[main()]](query.c) adjust [[p]] if [[fullpath]] */
+        for(j = 0; j < n; j++) {
+            i = j;
+            /*s: [[main()]](query.c) adjust [[i]] if [[reverse]] */
+            if (reverse)
+               i = n - 1 - j;
+            /*e: [[main()]](query.c) adjust [[i]] if [[reverse]] */
+            print("%s%H\n", p, h[i]);
+        }
     }
     exits(nil);
 }

@@ -26,15 +26,19 @@ struct Idxed {
 };
 
 Idxed   idxtab[NCACHE];
+
 char    repopath[1024];
 char    wdirpath[1024];
 char    relapath[1024];
+
 char    *rstr   = "R ";
 char    *mstr   = "M ";
 char    *astr   = "A ";
 char    *ustr   = "U ";
 char    *tstr   = "T ";
+
 char    *bdir = ".git/fs/HEAD/tree";
+
 int nslash;
 int nrel;
 int quiet;
@@ -266,7 +270,6 @@ loadent(char *dir, Dir *d, int fullpath)
     }
 }
 /*e: function [[loadent]] */
-
 /*s: function [[loadwdir]] */
 void
 loadwdir(char *path)
@@ -322,7 +325,6 @@ pfxmatch(char *p, char **pfx, int *pfxlen, int npfx)
     return 0;
 }
 /*e: function [[pfxmatch]] */
-
 
 /*s: function [[reporel]] */
 char*
@@ -405,11 +407,10 @@ findslashes(char *path)
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-qbcI] [-f filt] [-b base] [paths...]\n", argv0);
+    fprint(STDERR, "usage: %s [-qbcI] [-f filt] [-b base] [paths...]\n", argv0);
     exits("usage");
 }
 /*e: function [[usage (git9/walk.c)]] */
-
 /*s: function [[main (git9/walk.c)]] */
 void
 main(int argc, char **argv)
@@ -424,7 +425,9 @@ main(int argc, char **argv)
 
     if(getwd(wdirpath, sizeof(wdirpath)) == nil)
         sysfatal("getwd: %r");
-    if(chdir(repopath) == -1)
+
+    // !! chdir !!
+    if(chdir(repopath) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
     if(access(".git/fs/ctl", AEXIST) != 0)
