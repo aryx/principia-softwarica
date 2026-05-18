@@ -7,13 +7,15 @@
 
 typedef struct Eval Eval;
 
-enum {
+/*s: enum [[PaintQcolor]] */
+enum PaintQcolor {
     Blank,
+
     Keep,
     Drop,
     Skip,
 };
-
+/*e: enum [[PaintQcolor]] */
 /*s: enum [[PaintMode]] */
 enum PaintMode {
     Lca,
@@ -133,11 +135,14 @@ take(Eval *ev, char *m)
 static errorneg1
 paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, int mode)
 {
-    Qelt e;
-    Objq objq;
+    int i;
     Objset keep, drop, skip;
-    Object *o, *c, **range;
-    int i, nskip, nrange;
+    Objq objq;
+    Qelt e;
+    Object *o, *c;
+    Object **range;
+    int nrange;
+    int nskip;
 
     osinit(&keep);
     osinit(&drop);
@@ -150,29 +155,31 @@ paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, in
     for(i = 0; i < nhead; i++){
         if(hasheq(&head[i], &Zhash))
             continue;
-        if((o = readobject(head[i])) == nil){
-            fprint(2, "warning: %H does not point at commit\n", head[i]);
+        o = readobject(head[i]);
+        if(o == nil){
+            fprint(STDERR, "warning: %H does not point at commit\n", head[i]);
             werrstr("read head %H: %r", head[i]);
-            return -1;
+            return ERROR_NEG1;
         }
         if(o->type != GCommit){
-            fprint(2, "warning: %H does not point at commit\n", o->hash);
+            fprint(STDERR, "warning: %H does not point at commit\n", o->hash);
             unref(o);
             continue;
         }
         dprint(1, "init: keep %H\n", o->hash);
         qput(&objq, o, Keep);
         unref(o);
-    }       
+    }
     for(i = 0; i < ntail; i++){
         if(hasheq(&tail[i], &Zhash))
             continue;
-        if((o = readobject(tail[i])) == nil){
+        o = readobject(tail[i]);
+        if(o == nil){
             werrstr("read tail %H: %r", tail[i]);
-            return -1;
+            return ERROR_NEG1;
         }
         if(o->type != GCommit){
-            fprint(2, "warning: %H does not point at commit\n", o->hash);
+            fprint(STDERR, "warning: %H does not point at commit\n", o->hash);
             unref(o);
             continue;
         }
@@ -187,6 +194,8 @@ paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, in
             nskip--;
         if(oshas(&skip, e.o->hash))
             continue;
+        // else
+
         switch(e.color){
         case Keep:
             if(oshas(&keep, e.o->hash))
@@ -215,11 +224,13 @@ paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, in
             werrstr("not a commit: %H", o->hash);
             goto error;
         }
+
         for(i = 0; i < o->commit->nparent; i++){
-            if((c = readobject(e.o->commit->parent[i])) == nil)
+            c = readobject(e.o->commit->parent[i]);
+            if(c == nil)
                 goto error;
             if(c->type != GCommit){
-                fprint(2, "warning: %H does not point at commit\n", c->hash);
+                fprint(STDERR, "warning: %H does not point at commit\n", c->hash);
                 unref(c);
                 continue;
             }
@@ -231,7 +242,9 @@ paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, in
         }
         unref(o);
     }
+
     switch(mode){
+    /*s: [[paint()]] switch [[mode]] cases */
     case Lca:
         dprint(1, "found ancestor\n");
         o = nil;
@@ -249,18 +262,7 @@ paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, in
             (*res)[0] = o;
         }
         break;
-    case Twixt:
-        dprint(1, "found twixt\n");
-        *res = eamalloc(keep.nobj, sizeof(Object*));
-        *nres = 0;
-        for(i = 0; i < keep.sz; i++){
-            o = keep.obj[i];
-            if(o != nil && !oshas(&drop, o->hash) && !oshas(&skip, o->hash)){
-                (*res)[*nres] = o;
-                (*nres)++;
-            }
-        }
-        break;
+    /*x: [[paint()]] switch [[mode]] cases */
     case Range:
         dprint(1, "found range\n");
         *res = eamalloc(nrange, sizeof(Object*));
@@ -274,16 +276,30 @@ paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, in
         }
         free(range);
         break;
+    /*x: [[paint()]] switch [[mode]] cases */
+    case Twixt:
+        dprint(1, "found twixt\n");
+        *res = eamalloc(keep.nobj, sizeof(Object*));
+        *nres = 0;
+        for(i = 0; i < keep.sz; i++){
+            o = keep.obj[i];
+            if(o != nil && !oshas(&drop, o->hash) && !oshas(&skip, o->hash)){
+                (*res)[*nres] = o;
+                (*nres)++;
+            }
+        }
+        break;
+    /*e: [[paint()]] switch [[mode]] cases */
     }
     osclear(&keep);
     osclear(&drop);
     osclear(&skip);
-    return 0;
+    return OK_0;
 error:
     dprint(1, "paint error: %r\n");
     free(objq.heap);
     free(range);
-    return -1;
+    return ERROR_NEG1;
 }
 /*e: function [[paint]] */
 

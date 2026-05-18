@@ -48,7 +48,6 @@ enum Gxxx {
     /*e: [[Gxxx]] other cases */
 };
 /*e: enum [[Gxxx]] */
-
 /*s: enum [[Cxxx]] */
 enum Cxxx {
     Cloaded = 1 << 0,
@@ -110,8 +109,8 @@ struct Hash {
 
 struct Conn {
     int type;
-    int rfd;
-    int wfd;
+    fdt rfd;
+    fdt wfd;
 
     /* capabilities */
     char    symfrom[256];
@@ -122,7 +121,7 @@ struct Conn {
     char    report;
 
     /* only used by http */
-    int cfd;
+    fdt cfd;
     char *url;  /* note, first GET uses a different url */
     char *dir;
     char *direction;
@@ -201,7 +200,6 @@ struct Tinfo {
     int nent;
 };
 /*e: struct [[Tinfo]] */
-
 /*s: struct [[Cinfo]] */
 struct Cinfo {
     /* Commit */
@@ -227,23 +225,30 @@ struct Cinfo {
 
 /*s: struct [[Objset]] */
 struct Objset {
+    // hash_array<Hash, ref<Object>>, len = nobj (alloc = sz)
     Object  **obj;
     int nobj;
     int sz;
 };
 /*e: struct [[Objset]] */
 
+/*s: struct [[Qelt]] */
 struct Qelt {
+    // ref<Object>
     Object  *o;
     vlong   ctime;
+    //enum<Qcolor>
     int color;
 };
-
+/*e: struct [[Qelt]] */
+/*s: struct [[Objq]] */
 struct Objq {
+    // growing_array<Qelt> (len = nheap, allocated = heapsz)
     Qelt    *heap;
     int nheap;
     int heapsz;
 };
+/*e: struct [[Objq]] */
 
 struct Dtab {
     Object  *o;
@@ -280,7 +285,6 @@ struct Idxent {
         ((((b)[0] & 0xFFul) <<  8) | \
          (((b)[1] & 0xFFul) <<  0))
 /*e: macro [[GETBE16]] */
-
 /*s: macro [[GETBE32]] */
 #define GETBE32(b)\
         ((((b)[0] & 0xFFul) << 24) | \
@@ -307,7 +311,6 @@ struct Idxent {
         (b)[1] = (n) >> 0; \
     } while(0)
 /*e: macro [[PUTBE16]] */
-
 /*s: macro [[PUTBE32]] */
 #define PUTBE32(b, n)\
     do{ \
@@ -317,7 +320,6 @@ struct Idxent {
         (b)[3] = (n) >> 0; \
     } while(0)
 /*e: macro [[PUTBE32]] */
-
 /*s: macro [[PUTBE64]] */
 #define PUTBE64(b, n)\
     do{ \

@@ -26,8 +26,10 @@ void
 osadd(Objset *s, Object *o)
 {
     u32int probe;
+    /*s: [[osadd()]] other locals */
     Object **obj;
     int i, sz;
+    /*e: [[osadd()]] other locals */
 
     probe = GETBE32(o->hash.h) % s->sz;
     while(s->obj[probe]){
@@ -35,11 +37,14 @@ osadd(Objset *s, Object *o)
             s->obj[probe] = o;
             return;
         }
+        // else
         probe = (probe + 1) % s->sz;
     }
     assert(s->obj[probe] == nil);
     s->obj[probe] = o;
     s->nobj++;
+
+    /*s: [[osadd()]] realloc if needed */
     if(s->sz < 2*s->nobj){
         sz = s->sz;
         obj = s->obj;
@@ -49,9 +54,11 @@ osadd(Objset *s, Object *o)
         s->obj = eamalloc(s->sz, sizeof(Hash));
         for(i = 0; i < sz; i++)
             if(obj[i])
+                // recurse!
                 osadd(s, obj[i]);
         free(obj);
     }
+    /*e: [[osadd()]] realloc if needed */
 }
 /*e: function [[osadd]] */
 

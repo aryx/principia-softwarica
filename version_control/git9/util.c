@@ -467,20 +467,25 @@ qput(Objq *q, Object *o, int color)
     int i;
 
     assert(o->type == GCommit);
+    /*s: [[qput()]] realloc if needed */
     if(q->nheap == q->heapsz){
         q->heapsz *= 2;
         q->heap = earealloc(q->heap, q->heapsz, sizeof(Qelt));
     }
+    /*e: [[qput()]] realloc if needed */
     q->heap[q->nheap].o = o;
     q->heap[q->nheap].color = color;
     q->heap[q->nheap].ctime = o->commit->ctime;
+    /*s: [[qput()]] resort by [[ctime]] */
     for(i = q->nheap; i > 0; i = (i-1)/2){
         if(q->heap[i].ctime < q->heap[(i-1)/2].ctime)
             break;
+        // else exchange
         t = q->heap[i];
         q->heap[i] = q->heap[(i-1)/2];
         q->heap[(i-1)/2] = t;
     }
+    /*e: [[qput()]] resort by [[ctime]] */
     q->nheap++;
 }
 /*e: function [[qput]] */

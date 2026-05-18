@@ -28,7 +28,9 @@ struct Idxed {
 Idxed   idxtab[NCACHE];
 
 char    repopath[1024];
+/*s: global [[wdirpath]](walk.c) */
 char    wdirpath[1024];
+/*e: global [[wdirpath]](walk.c) */
 char    relapath[1024];
 
 char    *rstr   = "R ";
@@ -416,7 +418,8 @@ void
 main(int argc, char **argv)
 {
     char *p, *e, *ln, *base, **argrel, *parts[4], xbuf[8];
-    int i, j, c, line, wfd, *argn;
+    int i, j, c, line, *argn;
+    fdt wfd;
     Biobuf *f, *o, *w;
     Hash h;
     Dir rn;

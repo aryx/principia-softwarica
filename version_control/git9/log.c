@@ -231,9 +231,11 @@ showcommits(char *c)
         sysfatal("load %H: %r", h);
     if(o->type != GCommit)
         sysfatal("%s: not a commit", c);
+
     qinit(&objq);
     osinit(&done);
     qput(&objq, o, 0);
+
     while(qpop(&objq, &e) && (msgcount == -1 || msgcount > 0)){
         if(matchesfilter(e.o)){
             show(e.o);
