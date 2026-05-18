@@ -791,6 +791,629 @@ qpop(Objq *q, Qelt *e)
 \label{sec:index}
 
 %******************************************************************************
+\chapter{Reading from a Repository}
+%******************************************************************************
+\label{chap:reading}
+
+\section{Objects}
+
+\subsection{[[readobject()]]}
+
+% in pack.c
+<<function [[readobject]]>>=
+/// gitwalk1 | gtreegen | ... -> <>
+/*
+ * Loads and returns a cached object.
+ */
+Object*
+readobject(Hash h)
+{
+    Object *o;
+
+    if((o = readidxobject(nil, h, 0)) == nil)
+        return nil;
+    parseobject(o);
+    ref(o);
+    return o;
+}
+@
+
+
+\subsection{[[readidxobject()]]}
+
+<<function [[readidxobject]]>>=
+/// readobject | ?? -> <>
+static Object*
+readidxobject(Biobuf *idx, Hash h, int flag)
+{
+    char path[Pathmax], hbuf[41];
+    Object *obj, *new;
+    int i, r;
+    bool retried;
+    Biobuf *f;
+    vlong o;
+
+    <<[[readidxobject()]] if [[h]] in object cache>>
+    <<[[readidxobject()]] if [[Cthin]] flag>>
+    <<[[readidxobject()]] if [[Cidx]] flag>>
+    new = nil;
+    if(obj == nil){
+        new = emalloc(sizeof(Object));
+        new->id = objcache.nobj + 1;
+        new->hash = h;
+        obj = new;
+    }
+
+    o = -1;
+    retried = false;
+retry:
+    <<[[readidxobject()]] look for object in packs>>
+    // else
+    snprint(hbuf, sizeof(hbuf), "%H", h);
+    snprint(path, sizeof(path), ".git/objects/%c%c/%s", hbuf[0], hbuf[1], hbuf + 2);
+    if((f = Bopen(path, OREAD)) != nil){
+        if(readloose(f, obj, flag) == ERROR_NEG1)
+            goto errorf;
+        Bterm(f);
+        parseobject(obj);
+        cache(obj);
+        return obj;
+    }
+    // else
+
+    if(o == -1){
+        if(retried)
+            goto error;
+        retried = true;
+        refreshpacks();
+        goto retry;
+    }
+errorf:
+    Bterm(f);
+error:
+    free(new);
+    return nil;
+}
+@
+
+% parseobject()!
+
+% refreshpacks()!
+
+%XXX
+<<[[readidxobject()]] if [[Cthin]] flag>>=
+if(flag & Cthin)
+    flag &= ~Cidx;
+@
+<<[[readidxobject()]] if [[Cidx]] flag>>=
+if(flag & Cidx)
+    return nil;
+@
+
+\subsection{[[readloose()]] and [[Cloaded]]}
+
+<<function [[readloose]]>>=
+/// readobject -> readidxobject | ??? -> <>
+static int
+readloose(Biobuf *f, Object *o, int flag)
+{
+    struct { char *tag; int type; } *p, types[] = {
+        {"blob", GBlob},
+        {"tree", GTree},
+        {"commit", GCommit},
+        <<[[readloose()]] local [[types]] other elements>>
+        {nil},
+    };
+    char *d, *s, *e, *ed;
+    vlong sz, n;
+    int l;
+
+    n = decompress(&d, f, nil);
+    if(n == ERROR_NEG1)
+        return ERROR_NEG1;
+
+    s = d;
+    ed = d + n;
+    o->type = GNone;
+    for(p = types; p->tag; p++){
+        l = strlen(p->tag);
+        if(strncmp(s, p->tag, l) == 0){
+            s += l;
+            o->type = p->type;
+            while(s != ed && !isspace(*s))
+                s++;
+            break;
+        }
+    }
+    if(o->type == GNone){
+        free(o->data);
+        return ERROR_NEG1;
+    }
+    // else
+    sz = strtol(s, &e, 0);
+    if(e == s || *e++ != '\0'){
+        werrstr("malformed object header");
+        goto error;
+    }
+    if(sz != n - (e - d)){
+        werrstr("mismatched sizes");
+        goto error;
+    }
+    o->all = d;
+    o->data = e;
+    o->size = sz;
+    o->flag |= Cloaded|flag;
+    return OK_0;
+
+error:
+    free(d);
+    return ERROR_NEG1;
+}
+@
+
+% setting o->all, and o->data!
+
+
+\subsection{[[parseobject()]] and [[Cparsed]]}
+
+<<function [[parseobject]]>>=
+void
+parseobject(Object *o)
+{
+    if(o->flag & Cparsed)
+        return;
+    switch(o->type){
+    <<[[parseobject()]] switch [[o->type]] cases>>
+    default:    break;
+    }
+    o->flag |= Cparsed;
+}
+@
+
+
+\subsection{Decompression}
+
+<<[[gitinit()]] libflate initializations>>=
+inflateinit();
+deflateinit();
+@
+
+
+<<function [[decompress]]>>=
+/// readloose | ??? -> <>
+errorneg1
+decompress(void **p, Biobuf *b, vlong *csz)
+{
+    Buf d = {.len=0, .data=nil, .sz=0};
+
+    if(bdecompress(&d, b, csz) == ERROR_NEG1){
+        free(d.data);
+        return ERROR_NEG1;
+    }
+    *p = d.data;
+    return d.len;
+}
+@
+
+<<struct [[Buf]]>>=
+struct Buf {
+    int len;
+    int sz;
+    int off;
+    char *data;
+};
+@
+
+<<function [[bdecompress]]>>=
+int
+bdecompress(Buf *d, Biobuf *b, vlong *csz)
+{
+    vlong o;
+
+    o = Boffset(b);
+    if(inflatezlib(d, bappend, b, breadc) == -1 || d->data == nil){
+        free(d->data);
+        return -1;
+    }
+    if (csz)
+        *csz = Boffset(b) - o;
+    return d->len;
+}
+@
+
+<<function [[bappend]]>>=
+int
+bappend(void *p, void *src, int len)
+{
+    Buf *b = p;
+    char *n;
+
+    while(b->len + len >= b->sz){
+        b->sz = b->sz*2 + 64;
+        n = realloc(b->data, b->sz);
+        if(n == nil)
+            return -1;
+        b->data = n;
+    }
+    memmove(b->data + b->len, src, len);
+    b->len += len;
+    return len;
+}
+@
+
+<<function [[breadc]]>>=
+int
+breadc(void *p)
+{
+    return Bgetc(p);
+}
+@
+
+
+\subsection{Reading a blob}
+
+% nothing to parse,  direct data after decompression
+
+\subsection{Reading a tree}
+
+<<[[parseobject()]] switch [[o->type]] cases>>=
+case GTree: parsetree(o);   break;
+@
+
+<<function [[parsetree]]>>=
+static void
+parsetree(Object *o)
+{
+    int m, a, entsz, nent;
+    Dirent *t, *ent;
+    char *p, *ep;
+
+    p = o->data;
+    ep = p + o->size;
+
+    nent = 0;
+    entsz = 16;
+    ent = eamalloc(entsz, sizeof(Dirent));  
+    o->tree = emalloc(sizeof(Tinfo));
+    while(p != ep){
+        if(nent == entsz){
+            entsz *= 2;
+            ent = earealloc(ent, entsz, sizeof(Dirent));    
+        }
+        t = &ent[nent++];
+        m = strtol(p, &p, 8);
+        if(*p != ' ')
+            sysfatal("malformed tree %H: *p=(%d) %c", o->hash, *p, *p);
+        p++;
+        /*
+         * only the stored permissions for the user
+         * are relevant; git fills group and world
+         * bits with whatever -- so to serve with
+         * useful permissions, replicate the mode
+         * of the git repo dir.
+         */
+        t->mode = gitdirmode;
+        t->ismod = false;
+        t->islink = false;
+        if(m & 0777){
+            a = (m & 0777)>>6;
+            t->mode &= ((a<<6)|(a<<3)|a);
+        }
+        <<[[parsetree()]] if submodule>>
+        <<[[parsetree()]] if symlink>>
+        if(m & 0040000) /* dir */
+            t->mode |= DMDIR;
+        t->name = p;
+        p = memchr(p, 0, ep - p);
+        if(p == nil || *p++ != 0 ||  ep - p < sizeof(t->h.h))
+            sysfatal("malformed tree %H, remaining %d (%s)", o->hash, (int)(ep - p), p);
+        memcpy(t->h.h, p, sizeof(t->h.h));
+        p += sizeof(t->h.h);
+    }
+    o->tree->ent = ent;
+    o->tree->nent = nent;
+}
+@
+
+
+\subsection{Reading a commit}
+
+<<[[parseobject()]] switch [[o->type]] cases>>=
+case GCommit:   parsecommit(o); break;
+@
+
+<<function [[parsecommit]]>>=
+static void
+parsecommit(Object *o)
+{
+    char *p, *t, buf[512];
+    int np;
+
+    p = o->data;
+    np = o->size;
+    o->commit = emalloc(sizeof(Cinfo));
+    while(1){
+        if(scanword(&p, &np, buf, sizeof(buf)) == -1)
+            break;
+        if(strcmp(buf, "tree") == 0){
+            if(scanword(&p, &np, buf, sizeof(buf)) == -1)
+                sysfatal("invalid commit: tree missing");
+            if(hparse(&o->commit->tree, buf) == -1)
+                sysfatal("invalid commit: garbled tree");
+        }else if(strcmp(buf, "parent") == 0){
+            if(scanword(&p, &np, buf, sizeof(buf)) == -1)
+                sysfatal("invalid commit: missing parent");
+            o->commit->parent = realloc(o->commit->parent, ++o->commit->nparent * sizeof(Hash));
+            if(!o->commit->parent)
+                sysfatal("unable to malloc: %r");
+            if(hparse(&o->commit->parent[o->commit->nparent - 1], buf) == -1)
+                sysfatal("invalid commit: garbled parent");
+        }else if(strcmp(buf, "author") == 0){
+            parseauthor(&p, &np, &o->commit->author, &o->commit->mtime);
+        }else if(strcmp(buf, "committer") == 0){
+            parseauthor(&p, &np, &o->commit->committer, &o->commit->ctime);
+        }else if(strcmp(buf, "gpgsig") == 0){
+            /* just drop it */
+            if((t = strstr(p, "-----END PGP SIGNATURE-----")) == nil)
+            if((t = strstr(p, "-----END SSH SIGNATURE-----")) == nil)
+            if((t = strstr(p, "-----END SIGNED MESSAGE-----")) == nil)
+                sysfatal("malformed gpg signature");
+            np -= t - p;
+            p = t;
+        }
+        nextline(&p, &np);
+    }
+    while (np && isspace(*p)) {
+        p++;
+        np--;
+    }
+    o->commit->msg = p;
+    o->commit->nmsg = np;
+}
+@
+
+%\subsubsection{[[scanword()]]}
+% now in appendix
+
+\subsubsection{[[nextline()]]}
+
+<<function [[nextline (git9/pack.c)]]>>=
+static void
+nextline(char **str, int *nstr)
+{
+    char *s;
+
+    if((s = strchr(*str, '\n')) != nil){
+        *nstr -= s - *str + 1;
+        *str = s + 1;
+    }
+}
+@
+
+\subsubsection{[[parseauthor()]]}
+
+<<[[gitinit()]] set [[authorpat]]>>=
+authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
+@
+
+<<function [[parseauthor]]>>=
+// may raise sysfatal
+static void
+parseauthor(char **str, int *nstr, char **name, vlong *time)
+{
+    char buf[512];
+    Resub m[4];
+    vlong tz;
+    char *p;
+    int n, nm;
+
+    if((p = strchr(*str, '\n')) == nil)
+        sysfatal("malformed author line");
+    n = p - *str;
+    if(n >= sizeof(buf))
+        sysfatal("overlong author line");
+    memset(m, 0, sizeof(m));
+    memcpy(buf, *str, n);
+    buf[n] = '\0';
+    *str = p;
+    *nstr -= n;
+    
+    if(!regexec(authorpat, buf, m, nelem(m)))
+        sysfatal("invalid author line %s", buf);
+    nm = m[1].e.ep - m[1].s.sp;
+    *name = emalloc(nm + 1);
+    memcpy(*name, m[1].s.sp, nm);
+    buf[nm] = '\0';
+    
+    nm = m[3].e.ep - m[3].s.sp;
+    memcpy(buf, m[3].s.sp, nm);
+    buf[nm] = '\0';
+    tz = atoll(buf);
+
+    nm = m[2].e.ep - m[2].s.sp;
+    memcpy(buf, m[2].s.sp, nm);
+    buf[nm] = '\0';
+    *time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
+
+    return;
+}
+@
+%old: was returning 0 (OK_0 really), but result was never used in caller
+
+
+
+\section{References}
+
+% also a readref() in fs.c
+% TODO? merge?
+
+<<function [[readref (git9/ref.c)]]>>=
+errorneg1
+readref(Hash *h, char *ref)
+{
+    char buf[256], s[256];
+    errorneg1 r;
+    fdt f;
+    int n;
+    <<[[readref()]](ref.c) other locals>>
+
+    r = hparse(h, ref);
+    if(r != ERROR_NEG1)
+        return r;
+    // else
+    if(strcmp(ref, "HEAD") == 0){
+        snprint(buf, sizeof(buf), ".git/HEAD");
+        f = open(buf, OREAD);
+        if(f == ERROR_NEG1)
+            return ERROR_NEG1;
+        n = readn(f, s, sizeof(s) - 1);
+        if(n == ERROR_NEG1)
+            return ERROR_NEG1;
+        // else
+        s[n] = '\0';
+        strip(s);
+        r = hparse(h, s);
+        goto found;
+    }
+    // else
+    <<[[readref()]](ref.c) try [[.git/refs]] prefixes>>
+    <<[[readref()]](ref.c) try other prefixes>>
+    // else
+    return ERROR_NEG1;
+
+found:
+    if(r == ERROR_NEG1 && strncmp(s, "ref: ", 5) == 0)
+        // recurse!
+        r = readref(h, s + 5);
+    return r;
+}
+@
+%ori: forgot closing open file on .git/HEAD? and also on pfx
+
+\subsection{[[.refs/]] prefixes}
+
+<<[[readref()]](ref.c) other locals>>=
+static char *try[] = 
+   {"", "refs/", "refs/heads/", "refs/remotes/", "refs/tags/", nil};
+char **pfx;
+@
+
+<<[[readref()]](ref.c) try [[.git/refs]] prefixes>>=
+for(pfx = try; *pfx; pfx++){
+    snprint(buf, sizeof(buf), ".git/%s%s", *pfx, ref);
+    f = open(buf, OREAD);
+    if(f == ERROR_NEG1)
+        continue;
+    n = readn(f, s, sizeof(s) - 1);
+    if(n == ERROR_NEG1)
+        // not closing??
+        continue;
+    // else
+    s[n] = '\0';
+    strip(s);
+    r = hparse(h, s);
+    close(f);
+    goto found;
+}
+@
+
+\subsection{[[matchpfx]]}
+
+<<[[readref()]](ref.c) try other prefixes>>=
+if((r = matchpfx(h, ref)) != ERROR_NEG1)
+    return r;
+@
+
+% ??
+
+<<function [[matchpfx]]>>=
+static errorneg1
+matchpfx(Hash *h, char *ref)
+{
+    int i, c;
+    Hash pfx;
+    char *p;
+
+    memset(&pfx, 0, sizeof(Hash));
+    for(i = 0, p = ref; *p; p++, i++){
+        if((c = charval(*p)) == -1)
+            return ERROR_NEG1;
+        pfx.h[i/2] |= c;
+        if((i & 1) == 0)
+            pfx.h[i/2] <<= 4;
+    }
+    return expandprefix(h, pfx, i*4);
+}
+@
+% ??
+
+<<function [[expandprefix]]>>=
+errorneg1
+expandprefix(Hash *rh, Hash h, int npfx)
+{
+    int i, ndir;
+    fdt fd;
+    char buf[128];
+    Dir *d;
+
+    refreshpacks();
+    if(npfx < 8 || npfx % 4 != 0)
+        return ERROR_NEG1;
+    for(i = 0; i < npackf; i++)
+        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
+            return OK_0;
+    sprint(buf, ".git/objects/%x", h.h[0]);
+    if((fd = open(buf, OREAD)) == -1)
+        return ERROR_NEG1;
+    ndir = dirreadall(fd, &d);
+    close(fd);
+    if(ndir == -1)
+        return ERROR_NEG1;
+    for(i = 0; i < ndir; i++){
+        snprint(buf, sizeof(buf), "%x%s", h.h[0], d[i].name);
+        if(hparse(rh, buf) == 0 && hashcmp(h.h, rh->h, npfx) == 0){
+            free(d);
+            return OK_0;
+        }
+
+    }
+    free(d);
+    return ERROR_NEG1;
+}
+@
+
+
+\section{Index}
+
+
+%******************************************************************************
+%alt: \chapter{[[git/save]]}
+%******************************************************************************
+
+%******************************************************************************
+\chapter{Writing to a Repository}
+%******************************************************************************
+\label{chap:writing}
+
+\section{Objects}
+
+\subsection{Compression}
+
+\subsection{Locking}
+\label{sec:lock-writing-file}
+
+\subsection{Writing a blob}
+
+\subsection{Writing a tree}
+
+\subsection{Writing a commit}
+
+\section{References}
+
+\section{Index}
+
+
+%******************************************************************************
 \chapter{[[git/conf]]}
 %******************************************************************************
 \label{chap:git-conf}
@@ -2426,629 +3049,6 @@ case 'm':
     mntpt = EARGF(usage());
     break;
 @
-
-
-%******************************************************************************
-\chapter{Reading from a Repository}
-%******************************************************************************
-\label{chap:reading}
-
-\section{Objects}
-
-\subsection{[[readobject()]]}
-
-% in pack.c
-<<function [[readobject]]>>=
-/// gitwalk1 | gtreegen | ... -> <>
-/*
- * Loads and returns a cached object.
- */
-Object*
-readobject(Hash h)
-{
-    Object *o;
-
-    if((o = readidxobject(nil, h, 0)) == nil)
-        return nil;
-    parseobject(o);
-    ref(o);
-    return o;
-}
-@
-
-
-\subsection{[[readidxobject()]]}
-
-<<function [[readidxobject]]>>=
-/// readobject | ?? -> <>
-static Object*
-readidxobject(Biobuf *idx, Hash h, int flag)
-{
-    char path[Pathmax], hbuf[41];
-    Object *obj, *new;
-    int i, r;
-    bool retried;
-    Biobuf *f;
-    vlong o;
-
-    <<[[readidxobject()]] if [[h]] in object cache>>
-    <<[[readidxobject()]] if [[Cthin]] flag>>
-    <<[[readidxobject()]] if [[Cidx]] flag>>
-    new = nil;
-    if(obj == nil){
-        new = emalloc(sizeof(Object));
-        new->id = objcache.nobj + 1;
-        new->hash = h;
-        obj = new;
-    }
-
-    o = -1;
-    retried = false;
-retry:
-    <<[[readidxobject()]] look for object in packs>>
-    // else
-    snprint(hbuf, sizeof(hbuf), "%H", h);
-    snprint(path, sizeof(path), ".git/objects/%c%c/%s", hbuf[0], hbuf[1], hbuf + 2);
-    if((f = Bopen(path, OREAD)) != nil){
-        if(readloose(f, obj, flag) == ERROR_NEG1)
-            goto errorf;
-        Bterm(f);
-        parseobject(obj);
-        cache(obj);
-        return obj;
-    }
-    // else
-
-    if(o == -1){
-        if(retried)
-            goto error;
-        retried = true;
-        refreshpacks();
-        goto retry;
-    }
-errorf:
-    Bterm(f);
-error:
-    free(new);
-    return nil;
-}
-@
-
-% parseobject()!
-
-% refreshpacks()!
-
-%XXX
-<<[[readidxobject()]] if [[Cthin]] flag>>=
-if(flag & Cthin)
-    flag &= ~Cidx;
-@
-<<[[readidxobject()]] if [[Cidx]] flag>>=
-if(flag & Cidx)
-    return nil;
-@
-
-\subsection{[[readloose()]] and [[Cloaded]]}
-
-<<function [[readloose]]>>=
-/// readobject -> readidxobject | ??? -> <>
-static int
-readloose(Biobuf *f, Object *o, int flag)
-{
-    struct { char *tag; int type; } *p, types[] = {
-        {"blob", GBlob},
-        {"tree", GTree},
-        {"commit", GCommit},
-        <<[[readloose()]] local [[types]] other elements>>
-        {nil},
-    };
-    char *d, *s, *e, *ed;
-    vlong sz, n;
-    int l;
-
-    n = decompress(&d, f, nil);
-    if(n == ERROR_NEG1)
-        return ERROR_NEG1;
-
-    s = d;
-    ed = d + n;
-    o->type = GNone;
-    for(p = types; p->tag; p++){
-        l = strlen(p->tag);
-        if(strncmp(s, p->tag, l) == 0){
-            s += l;
-            o->type = p->type;
-            while(s != ed && !isspace(*s))
-                s++;
-            break;
-        }
-    }
-    if(o->type == GNone){
-        free(o->data);
-        return ERROR_NEG1;
-    }
-    // else
-    sz = strtol(s, &e, 0);
-    if(e == s || *e++ != '\0'){
-        werrstr("malformed object header");
-        goto error;
-    }
-    if(sz != n - (e - d)){
-        werrstr("mismatched sizes");
-        goto error;
-    }
-    o->all = d;
-    o->data = e;
-    o->size = sz;
-    o->flag |= Cloaded|flag;
-    return OK_0;
-
-error:
-    free(d);
-    return ERROR_NEG1;
-}
-@
-
-% setting o->all, and o->data!
-
-
-\subsection{[[parseobject()]] and [[Cparsed]]}
-
-<<function [[parseobject]]>>=
-void
-parseobject(Object *o)
-{
-    if(o->flag & Cparsed)
-        return;
-    switch(o->type){
-    <<[[parseobject()]] switch [[o->type]] cases>>
-    default:    break;
-    }
-    o->flag |= Cparsed;
-}
-@
-
-
-\subsection{Decompression}
-
-<<[[gitinit()]] libflate initializations>>=
-inflateinit();
-deflateinit();
-@
-
-
-<<function [[decompress]]>>=
-/// readloose | ??? -> <>
-errorneg1
-decompress(void **p, Biobuf *b, vlong *csz)
-{
-    Buf d = {.len=0, .data=nil, .sz=0};
-
-    if(bdecompress(&d, b, csz) == ERROR_NEG1){
-        free(d.data);
-        return ERROR_NEG1;
-    }
-    *p = d.data;
-    return d.len;
-}
-@
-
-<<struct [[Buf]]>>=
-struct Buf {
-    int len;
-    int sz;
-    int off;
-    char *data;
-};
-@
-
-<<function [[bdecompress]]>>=
-int
-bdecompress(Buf *d, Biobuf *b, vlong *csz)
-{
-    vlong o;
-
-    o = Boffset(b);
-    if(inflatezlib(d, bappend, b, breadc) == -1 || d->data == nil){
-        free(d->data);
-        return -1;
-    }
-    if (csz)
-        *csz = Boffset(b) - o;
-    return d->len;
-}
-@
-
-<<function [[bappend]]>>=
-int
-bappend(void *p, void *src, int len)
-{
-    Buf *b = p;
-    char *n;
-
-    while(b->len + len >= b->sz){
-        b->sz = b->sz*2 + 64;
-        n = realloc(b->data, b->sz);
-        if(n == nil)
-            return -1;
-        b->data = n;
-    }
-    memmove(b->data + b->len, src, len);
-    b->len += len;
-    return len;
-}
-@
-
-<<function [[breadc]]>>=
-int
-breadc(void *p)
-{
-    return Bgetc(p);
-}
-@
-
-
-\subsection{Reading a blob}
-
-% nothing to parse,  direct data after decompression
-
-\subsection{Reading a tree}
-
-<<[[parseobject()]] switch [[o->type]] cases>>=
-case GTree: parsetree(o);   break;
-@
-
-<<function [[parsetree]]>>=
-static void
-parsetree(Object *o)
-{
-    int m, a, entsz, nent;
-    Dirent *t, *ent;
-    char *p, *ep;
-
-    p = o->data;
-    ep = p + o->size;
-
-    nent = 0;
-    entsz = 16;
-    ent = eamalloc(entsz, sizeof(Dirent));  
-    o->tree = emalloc(sizeof(Tinfo));
-    while(p != ep){
-        if(nent == entsz){
-            entsz *= 2;
-            ent = earealloc(ent, entsz, sizeof(Dirent));    
-        }
-        t = &ent[nent++];
-        m = strtol(p, &p, 8);
-        if(*p != ' ')
-            sysfatal("malformed tree %H: *p=(%d) %c", o->hash, *p, *p);
-        p++;
-        /*
-         * only the stored permissions for the user
-         * are relevant; git fills group and world
-         * bits with whatever -- so to serve with
-         * useful permissions, replicate the mode
-         * of the git repo dir.
-         */
-        t->mode = gitdirmode;
-        t->ismod = false;
-        t->islink = false;
-        if(m & 0777){
-            a = (m & 0777)>>6;
-            t->mode &= ((a<<6)|(a<<3)|a);
-        }
-        <<[[parsetree()]] if submodule>>
-        <<[[parsetree()]] if symlink>>
-        if(m & 0040000) /* dir */
-            t->mode |= DMDIR;
-        t->name = p;
-        p = memchr(p, 0, ep - p);
-        if(p == nil || *p++ != 0 ||  ep - p < sizeof(t->h.h))
-            sysfatal("malformed tree %H, remaining %d (%s)", o->hash, (int)(ep - p), p);
-        memcpy(t->h.h, p, sizeof(t->h.h));
-        p += sizeof(t->h.h);
-    }
-    o->tree->ent = ent;
-    o->tree->nent = nent;
-}
-@
-
-
-\subsection{Reading a commit}
-
-<<[[parseobject()]] switch [[o->type]] cases>>=
-case GCommit:   parsecommit(o); break;
-@
-
-<<function [[parsecommit]]>>=
-static void
-parsecommit(Object *o)
-{
-    char *p, *t, buf[512];
-    int np;
-
-    p = o->data;
-    np = o->size;
-    o->commit = emalloc(sizeof(Cinfo));
-    while(1){
-        if(scanword(&p, &np, buf, sizeof(buf)) == -1)
-            break;
-        if(strcmp(buf, "tree") == 0){
-            if(scanword(&p, &np, buf, sizeof(buf)) == -1)
-                sysfatal("invalid commit: tree missing");
-            if(hparse(&o->commit->tree, buf) == -1)
-                sysfatal("invalid commit: garbled tree");
-        }else if(strcmp(buf, "parent") == 0){
-            if(scanword(&p, &np, buf, sizeof(buf)) == -1)
-                sysfatal("invalid commit: missing parent");
-            o->commit->parent = realloc(o->commit->parent, ++o->commit->nparent * sizeof(Hash));
-            if(!o->commit->parent)
-                sysfatal("unable to malloc: %r");
-            if(hparse(&o->commit->parent[o->commit->nparent - 1], buf) == -1)
-                sysfatal("invalid commit: garbled parent");
-        }else if(strcmp(buf, "author") == 0){
-            parseauthor(&p, &np, &o->commit->author, &o->commit->mtime);
-        }else if(strcmp(buf, "committer") == 0){
-            parseauthor(&p, &np, &o->commit->committer, &o->commit->ctime);
-        }else if(strcmp(buf, "gpgsig") == 0){
-            /* just drop it */
-            if((t = strstr(p, "-----END PGP SIGNATURE-----")) == nil)
-            if((t = strstr(p, "-----END SSH SIGNATURE-----")) == nil)
-            if((t = strstr(p, "-----END SIGNED MESSAGE-----")) == nil)
-                sysfatal("malformed gpg signature");
-            np -= t - p;
-            p = t;
-        }
-        nextline(&p, &np);
-    }
-    while (np && isspace(*p)) {
-        p++;
-        np--;
-    }
-    o->commit->msg = p;
-    o->commit->nmsg = np;
-}
-@
-
-%\subsubsection{[[scanword()]]}
-% now in appendix
-
-\subsubsection{[[nextline()]]}
-
-<<function [[nextline (git9/pack.c)]]>>=
-static void
-nextline(char **str, int *nstr)
-{
-    char *s;
-
-    if((s = strchr(*str, '\n')) != nil){
-        *nstr -= s - *str + 1;
-        *str = s + 1;
-    }
-}
-@
-
-\subsubsection{[[parseauthor()]]}
-
-<<[[gitinit()]] set [[authorpat]]>>=
-authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
-@
-
-<<function [[parseauthor]]>>=
-// may raise sysfatal
-static void
-parseauthor(char **str, int *nstr, char **name, vlong *time)
-{
-    char buf[512];
-    Resub m[4];
-    vlong tz;
-    char *p;
-    int n, nm;
-
-    if((p = strchr(*str, '\n')) == nil)
-        sysfatal("malformed author line");
-    n = p - *str;
-    if(n >= sizeof(buf))
-        sysfatal("overlong author line");
-    memset(m, 0, sizeof(m));
-    memcpy(buf, *str, n);
-    buf[n] = '\0';
-    *str = p;
-    *nstr -= n;
-    
-    if(!regexec(authorpat, buf, m, nelem(m)))
-        sysfatal("invalid author line %s", buf);
-    nm = m[1].e.ep - m[1].s.sp;
-    *name = emalloc(nm + 1);
-    memcpy(*name, m[1].s.sp, nm);
-    buf[nm] = '\0';
-    
-    nm = m[3].e.ep - m[3].s.sp;
-    memcpy(buf, m[3].s.sp, nm);
-    buf[nm] = '\0';
-    tz = atoll(buf);
-
-    nm = m[2].e.ep - m[2].s.sp;
-    memcpy(buf, m[2].s.sp, nm);
-    buf[nm] = '\0';
-    *time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
-
-    return;
-}
-@
-%old: was returning 0 (OK_0 really), but result was never used in caller
-
-
-
-\section{References}
-
-% also a readref() in fs.c
-% TODO? merge?
-
-<<function [[readref (git9/ref.c)]]>>=
-errorneg1
-readref(Hash *h, char *ref)
-{
-    char buf[256], s[256];
-    errorneg1 r;
-    fdt f;
-    int n;
-    <<[[readref()]](ref.c) other locals>>
-
-    r = hparse(h, ref);
-    if(r != ERROR_NEG1)
-        return r;
-    // else
-    if(strcmp(ref, "HEAD") == 0){
-        snprint(buf, sizeof(buf), ".git/HEAD");
-        f = open(buf, OREAD);
-        if(f == ERROR_NEG1)
-            return ERROR_NEG1;
-        n = readn(f, s, sizeof(s) - 1);
-        if(n == ERROR_NEG1)
-            return ERROR_NEG1;
-        // else
-        s[n] = '\0';
-        strip(s);
-        r = hparse(h, s);
-        goto found;
-    }
-    // else
-    <<[[readref()]](ref.c) try [[.git/refs]] prefixes>>
-    <<[[readref()]](ref.c) try other prefixes>>
-    // else
-    return ERROR_NEG1;
-
-found:
-    if(r == ERROR_NEG1 && strncmp(s, "ref: ", 5) == 0)
-        // recurse!
-        r = readref(h, s + 5);
-    return r;
-}
-@
-%ori: forgot closing open file on .git/HEAD? and also on pfx
-
-\subsection{[[.refs/]] prefixes}
-
-<<[[readref()]](ref.c) other locals>>=
-static char *try[] = 
-   {"", "refs/", "refs/heads/", "refs/remotes/", "refs/tags/", nil};
-char **pfx;
-@
-
-<<[[readref()]](ref.c) try [[.git/refs]] prefixes>>=
-for(pfx = try; *pfx; pfx++){
-    snprint(buf, sizeof(buf), ".git/%s%s", *pfx, ref);
-    f = open(buf, OREAD);
-    if(f == ERROR_NEG1)
-        continue;
-    n = readn(f, s, sizeof(s) - 1);
-    if(n == ERROR_NEG1)
-        // not closing??
-        continue;
-    // else
-    s[n] = '\0';
-    strip(s);
-    r = hparse(h, s);
-    close(f);
-    goto found;
-}
-@
-
-\subsection{[[matchpfx]]}
-
-<<[[readref()]](ref.c) try other prefixes>>=
-if((r = matchpfx(h, ref)) != ERROR_NEG1)
-    return r;
-@
-
-% ??
-
-<<function [[matchpfx]]>>=
-static errorneg1
-matchpfx(Hash *h, char *ref)
-{
-    int i, c;
-    Hash pfx;
-    char *p;
-
-    memset(&pfx, 0, sizeof(Hash));
-    for(i = 0, p = ref; *p; p++, i++){
-        if((c = charval(*p)) == -1)
-            return ERROR_NEG1;
-        pfx.h[i/2] |= c;
-        if((i & 1) == 0)
-            pfx.h[i/2] <<= 4;
-    }
-    return expandprefix(h, pfx, i*4);
-}
-@
-% ??
-
-<<function [[expandprefix]]>>=
-errorneg1
-expandprefix(Hash *rh, Hash h, int npfx)
-{
-    int i, ndir;
-    fdt fd;
-    char buf[128];
-    Dir *d;
-
-    refreshpacks();
-    if(npfx < 8 || npfx % 4 != 0)
-        return ERROR_NEG1;
-    for(i = 0; i < npackf; i++)
-        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
-            return OK_0;
-    sprint(buf, ".git/objects/%x", h.h[0]);
-    if((fd = open(buf, OREAD)) == -1)
-        return ERROR_NEG1;
-    ndir = dirreadall(fd, &d);
-    close(fd);
-    if(ndir == -1)
-        return ERROR_NEG1;
-    for(i = 0; i < ndir; i++){
-        snprint(buf, sizeof(buf), "%x%s", h.h[0], d[i].name);
-        if(hparse(rh, buf) == 0 && hashcmp(h.h, rh->h, npfx) == 0){
-            free(d);
-            return OK_0;
-        }
-
-    }
-    free(d);
-    return ERROR_NEG1;
-}
-@
-
-
-\section{Index}
-
-
-%******************************************************************************
-%alt: \chapter{[[git/save]]}
-%******************************************************************************
-
-%******************************************************************************
-\chapter{Writing to a Repository}
-%******************************************************************************
-\label{chap:writing}
-
-\section{Objects}
-
-\subsection{Compression}
-
-\subsection{Locking}
-\label{sec:lock-writing-file}
-
-\subsection{Writing a blob}
-
-\subsection{Writing a tree}
-
-\subsection{Writing a commit}
-
-\section{References}
-
-\section{Index}
 
 
 %******************************************************************************
@@ -6297,7 +6297,7 @@ main(int argc, char **argv)
 %###############################################################################
 
 %******************************************************************************
-\chapter{Algorithms}
+\chapter{Core Algorithms}
 %******************************************************************************
 \label{chap:algorithms}
 
