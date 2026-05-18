@@ -4089,9 +4089,11 @@ diffcommits(Hash ah, Hash bh)
 
 #pragma varargck    type    "P" void
 
-int fullpath;
-int changes;
-int reverse;
+// flags
+<<global [[fullpath]](query.c)>>
+<<global [[changes]](query.c)>>
+<<global [[reverse]](query.c)>>
+
 char *path[128];
 int npath;
 
@@ -4113,14 +4115,6 @@ int npath;
 
 \subsection{[[git9/ref.c]]}
 
-<<function [[eatspace]]>>=
-void
-eatspace(Eval *ev)
-{
-    while(isspace(ev->p[0]))
-        ev->p++;
-}
-@
 
 <<function [[push]]>>=
 void
@@ -4515,101 +4509,8 @@ found:
 }
 @
 
-<<function [[evalpostfix]]>>=
-int
-evalpostfix(Eval *ev)
-{
-    char name[256];
-    Object *o;
-    Hash h;
 
-    eatspace(ev);
-    if(!word(ev, name, sizeof(name))){
-        werrstr("expected name in expression");
-        return -1;
-    }
-    if(readref(&h, name) == -1){
-        werrstr("invalid ref %s", name);
-        return -1;
-    }
-    if(hasheq(&h, &Zhash))
-        o = &zcommit;
-    else if((o = readobject(h)) == nil){
-        werrstr("invalid ref %s (hash %H)", name, h);
-        return -1;
-    }
-    push(ev, o);
 
-    while(1){
-        eatspace(ev);
-        switch(ev->p[0]){
-        case '^':
-        case '~':
-            ev->p++;
-            if(parent(ev) == -1)
-                return -1;
-            break;
-        case '@':
-            ev->p++;
-            if(lca(ev) == -1)
-                return -1;
-            break;
-        default:
-            goto done;
-            break;
-        }   
-    }
-done:
-    return 0;
-}
-@
-
-<<function [[evalexpr]]>>=
-int
-evalexpr(Eval *ev, char *ref)
-{
-    memset(ev, 0, sizeof(*ev));
-    ev->str = ref;
-    ev->p = ref;
-
-    while(1){
-        if(evalpostfix(ev) == -1)
-            return -1;
-        if(ev->p[0] == '\0')
-            return 0;
-        else if(take(ev, ":") || take(ev, "..")){
-            if(evalpostfix(ev) == -1)
-                return -1;
-            if(ev->p[0] != '\0'){
-                werrstr("junk at end of expression");
-                return -1;
-            }
-            return range(ev);
-        }
-    }
-}
-@
-
-<<function [[resolverefs]]>>=
-int
-resolverefs(Hash **r, char *ref)
-{
-    Eval ev;
-    Hash *h;
-    int i;
-
-    if(evalexpr(&ev, ref) == -1){
-        free(ev.stk);
-        return -1;
-    }
-    h = eamalloc(ev.nstk, sizeof(Hash));
-    for(i = 0; i < ev.nstk; i++)
-        h[i] = ev.stk[i]->hash;
-    *r = h;
-    free(ev.stk);
-    return ev.nstk;
-}
-@
 
 <<function [[resolveref]]>>=
 int
@@ -4709,13 +4610,7 @@ enum {
     Range,
 };
 
-struct Eval {
-    char    *str;
-    char    *p;
-    Object  **stk;
-    int nstk;
-    int stksz;
-};
+<<struct [[Eval]]>>
 
 static char *colors[] = {
 [Keep] "keep",
@@ -6486,7 +6381,7 @@ okref(char *ref)
 
 Reprog  *authorpat;
 Hash    Zhash;
-int chattygit;
+<<global [[chattygit]]>>
 int interactive = 1;
 <<global [[gitdirmode]]>>
 

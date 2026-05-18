@@ -158,9 +158,11 @@ struct Hash {
 
 \subsection{Hexadecimal hashes}
 
+% hexa hash = char*, string of 40 characters.
+
 % requires 2 char per byte so from 20 bytes to 40 characters in hexa
 
-% %H in fmt
+% %H in fmt and seprint to get a string
 
 <<pragmas varargck>>=
 #pragma varargck type "H" Hash
@@ -665,6 +667,7 @@ findrepo(char *buf, int nbuf, int *nrel)
 
 % nrel?
 
+% search backward, first from full buf until start. reverse search, strrchr (r = reverse)
 
 
 
@@ -2679,6 +2682,11 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 %takes an expression describing a commit, or set of commits,
 %and resolves it to a list of commits.
 
+% git/query HEAD..HEAD => empty list
+% git/query HEAD~~~..HEAD => 3 commits
+
+% biggest use case is @ for ancestor between 2 commits?
+
 
 <<function [[usage (git9/query.c)]]>>=
 void
@@ -2690,6 +2698,11 @@ usage(void)
 @
 %ori: forgot -d
 
+
+\subsection{Commit expressions}
+
+% ^ ~
+
 \section{[[main()]]}
 
 
@@ -2697,21 +2710,21 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-    char *query, repo[512];
-    char *p, *e;
-    char *objpfx;
-    int i, j, n, nrel;
+    char repo[512];
+    int nrel;
+    // ref_own<string>, question
+    char *query;
+    // list<ref_own<Hash>>, answer
     Hash *h;
+    <<[[main()]](query.c) other locals>>
 
     ARGBEGIN{
-    case 'd':   chattygit++;    break;
-    case 'p':   fullpath=true; break;
-    case 'c':   changes=true;  break;
-    case 'r':   reverse ^= 1;   break;
+    <<[[main()]](query.c) command line processing>>
     default:    usage();    break;
     }ARGEND;
 
     fmtinstall('P', Pfmt);
+
     if(argc == 0)
         usage();
 
@@ -2721,46 +2734,241 @@ main(int argc, char **argv)
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
-    if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
-        sysfatal("smprint: %r");
+    <<[[main()]](query.c) set [[objpfx]]>>
 
-    for(i = 0, n = 0; i < argc; i++)
-        n += strlen(argv[i]) + 1;
-    query = emalloc(n+1);
-    p = query;
-    e = query + n;
-    for(i = 0; i < argc; i++)
-        p = seprint(p, e, "%s ", argv[i]);
+    <<[[main()]](query.c) set [[query]] derived from argv>>
 
     n = resolverefs(&h, query);
     free(query);
 
-    if(n == ERROR_NEG1)
-        sysfatal("resolve: %r");
+    <<[[main()]](query.c) sanity check [[n]] result>>
 
-    if(changes){
-        for(i = 1; i < n; i++)
-            diffcommits(h[0], h[i]);
-    }else{
-        p = (fullpath ? objpfx : "");
-        for(j = 0; j < n; j++)
-            print("%s%H\n", p, h[reverse ? n - 1 - j : j]);
+    <<[[main()]](query.c) if [[changes]]>>
+    else{
+        p = "";
+        <<[[main()]](query.c) adjust [[p]] if [[fullpath]]>>
+        for(j = 0; j < n; j++) {
+            i = j;
+            <<[[main()]](query.c) adjust [[i]] if [[reverse]]>>
+            print("%s%H\n", p, h[i]);
+        }
     }
     exits(nil);
 }
 @
 
+<<[[main()]](query.c) other locals>>=
+char *p, *e;
+int i, j, n;
+@
+
+<<[[main()]](query.c) set [[query]] derived from argv>>=
+// p = concat(argv, " ")
+for(i = 0, n = 0; i < argc; i++)
+    n += strlen(argv[i]) + 1;
+query = emalloc(n+1);
+p = query;
+e = query + n;
+for(i = 0; i < argc; i++)
+    p = seprint(p, e, "%s ", argv[i]);
+@
+
+<<[[main()]](query.c) sanity check [[n]] result>>=
+if(n == ERROR_NEG1)
+    sysfatal("resolve: %r");
+@
+
+\section{Data structures}
+
+\subsection{[[Eval]]}
+
+<<struct [[Eval]]>>=
+struct Eval {
+    // ref<string> (owner = main() query)
+    char    *str;
+    // pointer in str as we parse it
+    char    *p;
+
+    // stack<ref_own<Object>>, len = nstk
+    Object  **stk;
+    int nstk;
+    int stksz;
+};
+@
+
+\section{[[resolverefs()]]}
+
+%    n = resolverefs(&h, query);
+
+<<function [[resolverefs]]>>=
+// main(get.c) -> <>
+errorneg1
+resolverefs(Hash **r, char *ref)
+{
+    Eval ev;
+    Hash *h;
+    int i;
+    errorneg1 res;
+
+    res = evalexpr(&ev, ref);
+
+    if(res == ERROR_NEG1){
+        free(ev.stk);
+        return ERROR_NEG1;
+    }
+    h = eamalloc(ev.nstk, sizeof(Hash));
+    for(i = 0; i < ev.nstk; i++)
+        h[i] = ev.stk[i]->hash;
+    *r = h;
+    free(ev.stk);
+    return ev.nstk;
+}
+@
+
+\section{Commit expression evaluator}
+
+<<function [[evalexpr]]>>=
+errorneg1
+evalexpr(Eval *ev, char *ref)
+{
+    memset(ev, 0, sizeof(*ev));
+    ev->str = ref;
+    ev->p = ref;
+
+    while(true){
+        if(evalpostfix(ev) == ERROR_NEG1)
+            return ERROR_NEG1;
+        if(ev->p[0] == '\0')
+            return OK_0;
+        else if(take(ev, ":") || take(ev, "..")){
+            if(evalpostfix(ev) == ERROR_NEG1)
+                return ERROR_NEG1;
+            if(ev->p[0] != '\0'){
+                werrstr("junk at end of expression");
+                return ERROR_NEG1;
+            }
+            return range(ev);
+        }
+    }
+}
+@
+
+<<function [[evalpostfix]]>>=
+int
+evalpostfix(Eval *ev)
+{
+    char name[256];
+    Object *o;
+    Hash h;
+
+    eatspace(ev);
+    if(!word(ev, name, sizeof(name))){
+        werrstr("expected name in expression");
+        return -1;
+    }
+    if(readref(&h, name) == -1){
+        werrstr("invalid ref %s", name);
+        return -1;
+    }
+    if(hasheq(&h, &Zhash))
+        o = &zcommit;
+    else if((o = readobject(h)) == nil){
+        werrstr("invalid ref %s (hash %H)", name, h);
+        return -1;
+    }
+    push(ev, o);
+
+    while(1){
+        eatspace(ev);
+        switch(ev->p[0]){
+        case '^':
+        case '~':
+            ev->p++;
+            if(parent(ev) == -1)
+                return -1;
+            break;
+        case '@':
+            ev->p++;
+            if(lca(ev) == -1)
+                return -1;
+            break;
+        default:
+            goto done;
+            break;
+        }   
+    }
+done:
+    return 0;
+}
+@
+
+% readobject() also here!
+
+<<function [[eatspace]]>>=
+void
+eatspace(Eval *ev)
+{
+    while(isspace(ev->p[0]))
+        ev->p++;
+}
+@
+
 \section{Advanced features}
 
-\subsection{[[git/query -c]], list changes between two commits}
-% change
+\subsection{[[git/query -c]], list changes between commits}
+
+<<global [[changes]](query.c)>>=
+bool changes;
+@
+<<[[main()]](query.c) command line processing>>=
+case 'c':   changes=true;  break;
+@
+
+<<[[main()]](query.c) if [[changes]]>>=
+if(changes){
+    for(i = 1; i < n; i++)
+        diffcommits(h[0], h[i]);
+}
+@
 
 \subsection{[[git/query -p]], full path listing}
-% fullpath
+
+<<global [[fullpath]](query.c)>>=
+bool fullpath;
+@
+<<[[main()]](query.c) command line processing>>=
+case 'p':   fullpath=true; break;
+@
+
+<<[[main()]](query.c) other locals>>=
+char *objpfx;
+@
+<<[[main()]](query.c) set [[objpfx]]>>=
+if((objpfx = smprint("%s/.git/fs/object/", repo)) == nil)
+    sysfatal("smprint: %r");
+@
+
+<<[[main()]](query.c) adjust [[p]] if [[fullpath]]>>
+if (fullpath)
+   p = objpfx;
+@
+%old: was (fullpath ? objpfx : "");
+% but harder to aspectize
 
 \subsection{[[git/query -r]], reversed listing}
-% reverae
 
+<<global [[reverse]](query.c)>>=
+bool reverse;
+@
+<<[[main()]](query.c) command line processing>>=
+case 'r':   reverse ^= 1;   break;
+@
+
+<<[[main()]](query.c) adjust [[i]] if [[reverse]]>>=
+if (reverse)
+   i = n - 1 - j;
+@
+%old: reverse ? n - 1 - j : j
 
 %******************************************************************************
 \chapter{[[git/walk]]}
@@ -6610,6 +6818,13 @@ case 'd':
 
 %\subsection{[[chattygit]] and [[dprint()]]}
 
+<<global [[chattygit]]>>=
+int chattygit;
+@
+% this time chattygit is defined in git9 as opposed to chatty9p.
+% can also increment it to more than 1 with -d -d -d
+% hence lvl check below
+
 <<macro [[dprint]]>>=
 #define dprint(lvl, ...) \
     if(chattygit >= lvl) _dprint(__VA_ARGS__)
@@ -6625,6 +6840,10 @@ _dprint(char *fmt, ...)
     vfprint(STDERR, fmt, ap);
     va_end(ap);
 }
+@
+
+<<[[main()]](query.c) command line processing>>=
+case 'd':   chattygit++;    break;
 @
 
 %******************************************************************************
