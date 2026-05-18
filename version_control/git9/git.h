@@ -216,7 +216,7 @@ struct Cinfo {
     // option<ref_own<string>>
     char    *committer;
 
-    // ref_own<string> (len = nmsg)
+    // ref<string> (len = nmsg), point in Object.all?
     char    *msg;
     int nmsg;
 

@@ -14,11 +14,15 @@ enum {
     Skip,
 };
 
-enum {
+/*s: enum [[PaintMode]] */
+enum PaintMode {
     Lca,
-    Twixt,
     Range,
+    /*s: [[PaintMode]] other cases */
+    Twixt,
+    /*e: [[PaintMode]] other cases */
 };
+/*e: enum [[PaintMode]] */
 
 /*s: struct [[Eval]] */
 struct Eval {
@@ -41,9 +45,11 @@ static char *colors[] = {
 [Skip] "skip",
 };
 
+/*s: global [[zcommit]](ref.c) */
 static Object zcommit = {
     .type=GCommit
 };
+/*e: global [[zcommit]](ref.c) */
 
 /*s: function [[eatspace]] */
 void
@@ -58,10 +64,12 @@ eatspace(Eval *ev)
 void
 push(Eval *ev, Object *o)
 {
+    /*s: [[push()]] realloc if needed */
     if(ev->nstk == ev->stksz){
         ev->stksz = 2*ev->stksz + 1;
         ev->stk = erealloc(ev->stk, ev->stksz*sizeof(Object*));
     }
+    /*e: [[push()]] realloc if needed */
     ev->stk[ev->nstk++] = o;
 }
 /*e: function [[push]] */
@@ -70,24 +78,16 @@ push(Eval *ev, Object *o)
 Object*
 pop(Eval *ev)
 {
+    /*s: [[pop()]] sanity check empty stack */
     if(ev->nstk == 0)
         sysfatal("stack underflow");
+    /*e: [[pop()]] sanity check empty stack */
     return ev->stk[--ev->nstk];
 }
 /*e: function [[pop]] */
 
-/*s: function [[peek]] */
-Object*
-peek(Eval *ev)
-{
-    if(ev->nstk == 0)
-        sysfatal("stack underflow");
-    return ev->stk[ev->nstk - 1];
-}
-/*e: function [[peek]] */
-
 /*s: function [[isword]] */
-int
+bool
 isword(char e)
 {
     return isalnum(e) || e == '/' || e == '-' || e == '_' || e == '.';
@@ -95,7 +95,7 @@ isword(char e)
 /*e: function [[isword]] */
 
 /*s: function [[word]] */
-int
+bool
 word(Eval *ev, char *b, int nb)
 {
     char *p, *e;
@@ -129,7 +129,8 @@ take(Eval *ev, char *m)
 /*e: function [[take]] */
 
 /*s: function [[paint]] */
-static int
+/// lca | ancestor | range -> <>
+static errorneg1
 paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, int mode)
 {
     Qelt e;
@@ -295,13 +296,16 @@ findtwixt(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres
 /*e: function [[findtwixt]] */
 
 /*s: function [[ancestor]] */
+/// sendpack -> <>
 Object*
 ancestor(Object *a, Object *b)
 {
-    Object **o, *r;
+    // array<ref<Object>>
+    Object **o;
+    Object *r;
     int n;
 
-    if(paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca) == -1 || n == 0)
+    if(paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca) == ERROR_NEG1 || n == 0)
         return nil;
     r = ref(o[0]);
     free(o);
@@ -310,81 +314,95 @@ ancestor(Object *a, Object *b)
 /*e: function [[ancestor]] */
 
 /*s: function [[lca]] */
-int
+errorneg1
 lca(Eval *ev)
 {
-    Object *a, *b, **o;
+    Object *a, *b;
+    // array<ref<Object>>
+    Object **o;
     int n;
 
     if(ev->nstk < 2){
         werrstr("ancestor needs 2 objects");
-        return -1;
+        return ERROR_NEG1;
     }
     n = 0;
     b = pop(ev);
     a = pop(ev);
     paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca);
     if(n == 0)
-        return -1;
+        return ERROR_NEG1;
     push(ev, *o);
     free(o);
-    return 0;
+    return OK_0;
 }
 /*e: function [[lca]] */
 
 /*s: function [[parent]] */
-static int
+static errorneg1
 parent(Eval *ev)
 {
     Object *o, *p;
 
     o = pop(ev);
+    /*s: [[parent()]] sanity check [[o]] is a commit */
     if(o->type != GCommit){
         werrstr("not a commit: %H", o->hash);
-        return -1;
+        return ERROR_NEG1;
     }
+    /*e: [[parent()]] sanity check [[o]] is a commit */
     /* Special case: first commit has no parent. */
     if(o->commit->nparent == 0)
         p = emptydir();
-    else if ((p = readobject(o->commit->parent[0])) == nil){
-        werrstr("no parent for %H", o->hash);
-        return -1;
+    else {
+        p = readobject(o->commit->parent[0]);
+        /*s: [[parent()]] sanity check [[p]] */
+        if (p == nil){
+           werrstr("no parent for %H", o->hash);
+           return ERROR_NEG1;
+        }
+        /*e: [[parent()]] sanity check [[p]] */
     }
-        
     push(ev, p);
-    return 0;
+    return OK_0;
 }
 /*e: function [[parent]] */
 
 /*s: function [[range]] */
-static int
+static errorneg1
 range(Eval *ev)
 {
-    Object *a, *b, **o;
+    Object *a, *b;
+    // array<ref<Object>>
+    Object **o;
     int i, n;
 
     b = pop(ev);
     a = pop(ev);
+    /*s: [[range()]] if [[b]] has [[Zhash]] */
     if(hasheq(&b->hash, &Zhash))
         b = &zcommit;
+    /*e: [[range()]] if [[b]] has [[Zhash]] */
+    /*s: [[range()]] if [[a]] has [[Zhash]] */
     if(hasheq(&a->hash, &Zhash))
         a = &zcommit;
+    /*e: [[range()]] if [[a]] has [[Zhash]] */
     if(a->type != GCommit || b->type != GCommit){
         werrstr("non-commit object in range");
-        return -1;
+        return ERROR_NEG1;
     }
 
-    if(paint(&b->hash, 1, &a->hash, 1, &o, &n, Range) == -1)
-        return -1;
+    if(paint(&b->hash, 1, &a->hash, 1, &o, &n, Range) == ERROR_NEG1)
+        return ERROR_NEG1;
     for(i = 0; i < n; i++)
         push(ev, o[i]);
     free(o);
-    return 0;
+    return OK_0;
 }
 /*e: function [[range]] */
 
 /*s: function [[matchpfx]] */
-static int
+static errorneg1
 matchpfx(Hash *h, char *ref)
 {
     int i, c;
@@ -394,7 +412,7 @@ matchpfx(Hash *h, char *ref)
     memset(&pfx, 0, sizeof(Hash));
     for(i = 0, p = ref; *p; p++, i++){
         if((c = charval(*p)) == -1)
-            return -1;
+            return ERROR_NEG1;
         pfx.h[i/2] |= c;
         if((i & 1) == 0)
             pfx.h[i/2] <<= 4;
@@ -404,87 +422,126 @@ matchpfx(Hash *h, char *ref)
 /*e: function [[matchpfx]] */
 
 /*s: function [[readref (git9/ref.c)]] */
-int
+errorneg1
 readref(Hash *h, char *ref)
 {
-    static char *try[] = {"", "refs/", "refs/heads/", "refs/remotes/", "refs/tags/", nil};
-    char buf[256], s[256], **pfx;
-    int r, f, n;
+    char buf[256], s[256];
+    errorneg1 r;
+    fdt f;
+    int n;
+    /*s: [[readref()]](ref.c) other locals */
+    static char *try[] = 
+       {"", "refs/", "refs/heads/", "refs/remotes/", "refs/tags/", nil};
+    char **pfx;
+    /*e: [[readref()]](ref.c) other locals */
 
-    if((r = hparse(h, ref)) != -1)
+    r = hparse(h, ref);
+    if(r != ERROR_NEG1)
         return r;
+    // else
     if(strcmp(ref, "HEAD") == 0){
         snprint(buf, sizeof(buf), ".git/HEAD");
-        if((f = open(buf, OREAD)) == -1)
-            return -1;
-        if((n = readn(f, s, sizeof(s) - 1))== -1)
-            return -1;
-        s[n] = 0;
+        f = open(buf, OREAD);
+        if(f == ERROR_NEG1)
+            return ERROR_NEG1;
+        n = readn(f, s, sizeof(s) - 1);
+        if(n == ERROR_NEG1)
+            return ERROR_NEG1;
+        // else
+        s[n] = '\0';
         strip(s);
         r = hparse(h, s);
         goto found;
     }
+    // else
+    /*s: [[readref()]](ref.c) try [[.git/refs]] prefixes */
     for(pfx = try; *pfx; pfx++){
         snprint(buf, sizeof(buf), ".git/%s%s", *pfx, ref);
-        if((f = open(buf, OREAD)) == -1)
+        f = open(buf, OREAD);
+        if(f == ERROR_NEG1)
             continue;
-        if((n = readn(f, s, sizeof(s) - 1)) == -1)
+        n = readn(f, s, sizeof(s) - 1);
+        if(n == ERROR_NEG1)
+            // not closing??
             continue;
-        s[n] = 0;
+        // else
+        s[n] = '\0';
         strip(s);
         r = hparse(h, s);
         close(f);
         goto found;
     }
-    if((r = matchpfx(h, ref)) != -1)
+    /*e: [[readref()]](ref.c) try [[.git/refs]] prefixes */
+    /*s: [[readref()]](ref.c) try other prefixes */
+    if((r = matchpfx(h, ref)) != ERROR_NEG1)
         return r;
-    return -1;
+    /*e: [[readref()]](ref.c) try other prefixes */
+    // else
+    return ERROR_NEG1;
 
 found:
-    if(r == -1 && strncmp(s, "ref: ", 5) == 0)
+    if(r == ERROR_NEG1 && strncmp(s, "ref: ", 5) == 0)
+        // recurse!
         r = readref(h, s + 5);
     return r;
 }
 /*e: function [[readref (git9/ref.c)]] */
 
 /*s: function [[evalpostfix]] */
-int
+errorneg1
 evalpostfix(Eval *ev)
 {
     char name[256];
-    Object *o;
     Hash h;
+    Object *o;
+    errorneg1 ret;
 
     eatspace(ev);
     if(!word(ev, name, sizeof(name))){
         werrstr("expected name in expression");
-        return -1;
+        return ERROR_NEG1;
     }
-    if(readref(&h, name) == -1){
+    ret = readref(&h, name);
+    /*s: [[evalpostfix()]] sanity check [[ret]] invalid ref */
+    if(ret == ERROR_NEG1){
         werrstr("invalid ref %s", name);
-        return -1;
+        return ret;
     }
+    /*e: [[evalpostfix()]] sanity check [[ret]] invalid ref */
+    /*s: [[evalpostfix()]] if [[Zhash]] */
     if(hasheq(&h, &Zhash))
         o = &zcommit;
-    else if((o = readobject(h)) == nil){
-        werrstr("invalid ref %s (hash %H)", name, h);
-        return -1;
+    /*e: [[evalpostfix()]] if [[Zhash]] */
+    else {
+        o = readobject(h);
+        /*s: [[evalpostfix()]] sanity check [[o]] invalid ref */
+        if(o == nil){
+          werrstr("invalid ref %s (hash %H)", name, h);
+          return ERROR_NEG1;
+        }
+        /*e: [[evalpostfix()]] sanity check [[o]] invalid ref */
     }
     push(ev, o);
 
-    while(1){
+    while(true){
         eatspace(ev);
         switch(ev->p[0]){
         case '^':
         case '~':
             ev->p++;
-            if(parent(ev) == -1)
-                return -1;
+            ret = parent(ev);
+            /*s: [[evalpostfix()]] sanity check [[ret]] */
+            if(ret == ERROR_NEG1)
+                return ret;
+            /*e: [[evalpostfix()]] sanity check [[ret]] */
             break;
         case '@':
             ev->p++;
-            if(lca(ev) == -1)
-                return -1;
+            ret = lca(ev);
+            /*s: [[evalpostfix()]] sanity check [[ret]] */
+            if(ret == ERROR_NEG1)
+                return ret;
+            /*e: [[evalpostfix()]] sanity check [[ret]] */
             break;
         default:
             goto done;
@@ -492,7 +549,7 @@ evalpostfix(Eval *ev)
         }   
     }
 done:
-    return 0;
+    return OK_0;
 }
 /*e: function [[evalpostfix]] */
 

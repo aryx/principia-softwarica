@@ -6,7 +6,9 @@
 #include "git.h"
 
 Reprog  *authorpat;
+/*s: global [[Zhash]] */
 Hash    Zhash;
+/*e: global [[Zhash]] */
 /*s: global [[chattygit]] */
 int chattygit;
 /*e: global [[chattygit]] */

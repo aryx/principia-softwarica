@@ -156,6 +156,11 @@ struct Hash {
 
 % [[h.h]] then when [[Hash h]] parameter
 
+<<global [[Zhash]]>>=
+Hash    Zhash;
+@
+% Zerohash, used for loose error management
+
 \subsection{Hexadecimal hashes}
 
 % hexa hash = char*, string of 40 characters.
@@ -461,6 +466,10 @@ emptydir(void)
 }
 @
 
+% Zhash!
+
+% cache(e)!
+
 \subsection{Commits and [[Cinfo]]}
 
 <<[[Object]] union fields>>=
@@ -482,7 +491,7 @@ struct Cinfo {
     // option<ref_own<string>>
     char    *committer;
 
-    // ref_own<string> (len = nmsg)
+    // ref<string> (len = nmsg), point in Object.all?
     char    *msg;
     int nmsg;
 
@@ -505,7 +514,14 @@ case GCommit:
     break;
 @
 
-%TODO: leak msg?
+%TODO: leak msg? or part of data?
+
+<<global [[zcommit]](ref.c)>>=
+static Object zcommit = {
+    .type=GCommit
+};
+@
+% zero otherwise for all other fields, including Hash!
 
 \section{Objects and packs}
 %alt: or delay to Pack chapter?
@@ -829,8 +845,7 @@ main(int argc, char **argv)
     groupname = strdup(d->gid);
     free(d);
 
-    branches = emalloc(sizeof(char*));
-    branches[0] = nil;
+    <<[[main()]](fs.c) set [[branches]]>>
     postmountsrv(&gitsrv, nil, mntpt, MCREATE);
     exits(nil);
 }
@@ -848,11 +863,16 @@ char    *groupname;
 char    *mntpt = ".git/fs";
 @
 
+
 <<global [[branches]]>>=
 // growing_array<ref_own<string>>
 char    **branches = nil;
 @
 % who is using this global?
+<<[[main()]](fs.c) set [[branches]]>>=
+branches = emalloc(sizeof(char*));
+branches[0] = nil;
+@
 
 
 % postmountsrv() is in lib9p, linked when including 9p.h
@@ -967,6 +987,7 @@ crumb(Gitaux *aux, int n)
 
 <<[[Gitaux]] object dir fields>>=
 /* For listing object dir */
+// ref_own<Objlist> ??
 Objlist *ols;
 Object  *olslast;
 @
@@ -1023,6 +1044,7 @@ olsfree(Objlist *ols)
 
 \subsection{[[Uqid]] and [[Cache]]}
 
+% ??
 <<struct [[Uqid]]>>=
 struct Uqid {
     vlong   uqid;
@@ -1036,6 +1058,8 @@ struct Uqid {
 @
 
 %\subsection{[[Cache]]}
+
+% ?? move in opti?
 
 <<struct [[Cache]]>>=
 struct Cache {
@@ -1979,8 +2003,11 @@ case Qcommitter:
     c->obj = readref(".git/HEAD");
 @
 
+% readref() later
+
 % .git/HEAD should contain something like  'ref: refs/heads/master'
 
+%ori: diff with readread in get.c?
 <<function [[readref]]>>=
 static Object *
 readref(char *pathstr)
@@ -1991,10 +2018,10 @@ readref(char *pathstr)
     int n;
 
     snprint(path, sizeof(path), "%s", pathstr);
-    while(1){
-        if((f = open(path, OREAD)) == -1)
+    while(true){
+        if((f = open(path, OREAD)) == ERROR_NEG1)
             return nil;
-        if((n = readn(f, buf, sizeof(buf) - 1)) == -1)
+        if((n = readn(f, buf, sizeof(buf) - 1)) == ERROR_NEG1)
             return nil;
         close(f);
         buf[n] = '\0';
@@ -2159,6 +2186,7 @@ case 'm':
 
 \subsection{[[readobject()]]}
 
+% in pack.c
 <<function [[readobject]]>>=
 /// gitwalk1 | gtreegen | ... -> <>
 /*
@@ -2531,48 +2559,8 @@ parsecommit(Object *o)
 }
 @
 
-\subsubsection{[[scanword()]]}
-
-<<function [[scanword]]>>=
-/*
- * Scans for non-empty word, copying it into buf.
- * Strips off word, leading, and trailing space
- * from input.
- * 
- * Returns -1 on empty string or error, leaving
- * input unmodified.
- */
-static int
-scanword(char **str, int *nstr, char *buf, int nbuf)
-{
-    char *p;
-    int n, r;
-
-    r = -1;
-    p = *str;
-    n = *nstr;
-    while(n && isblank(*p)){
-        n--;
-        p++;
-    }
-
-    for(; n && *p && !isspace(*p); p++, n--){
-        r = 0;
-        *buf++ = *p;
-        nbuf--;
-        if(nbuf == 0)
-            return -1;
-    }
-    while(n && isblank(*p)){
-        n--;
-        p++;
-    }
-    *buf = 0;
-    *str = p;
-    *nstr = n;
-    return r;
-}
-@
+%\subsubsection{[[scanword()]]}
+% now in appendix
 
 \subsubsection{[[nextline()]]}
 
@@ -2596,7 +2584,8 @@ authorpat = regcomp("[\t ]*(.*)[\t ]+([0-9]+)[\t ]*([\\-+]?[0-9]+)?");
 @
 
 <<function [[parseauthor]]>>=
-static int
+// may raise sysfatal
+static void
 parseauthor(char **str, int *nstr, char **name, vlong *time)
 {
     char buf[512];
@@ -2612,7 +2601,7 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
         sysfatal("overlong author line");
     memset(m, 0, sizeof(m));
     memcpy(buf, *str, n);
-    buf[n] = 0;
+    buf[n] = '\0';
     *str = p;
     *nstr -= n;
     
@@ -2621,25 +2610,165 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
     nm = m[1].e.ep - m[1].s.sp;
     *name = emalloc(nm + 1);
     memcpy(*name, m[1].s.sp, nm);
-    buf[nm] = 0;
+    buf[nm] = '\0';
     
     nm = m[3].e.ep - m[3].s.sp;
     memcpy(buf, m[3].s.sp, nm);
-    buf[nm] = 0;
+    buf[nm] = '\0';
     tz = atoll(buf);
 
     nm = m[2].e.ep - m[2].s.sp;
     memcpy(buf, m[2].s.sp, nm);
-    buf[nm] = 0;
+    buf[nm] = '\0';
     *time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
 
-    return 0;
+    return;
 }
 @
+%old: was returning 0 (OK_0 really), but result was never used in caller
 
 
 
 \section{References}
+
+% also a readref() in fs.c
+% TODO? merge?
+
+<<function [[readref (git9/ref.c)]]>>=
+errorneg1
+readref(Hash *h, char *ref)
+{
+    char buf[256], s[256];
+    errorneg1 r;
+    fdt f;
+    int n;
+    <<[[readref()]](ref.c) other locals>>
+
+    r = hparse(h, ref);
+    if(r != ERROR_NEG1)
+        return r;
+    // else
+    if(strcmp(ref, "HEAD") == 0){
+        snprint(buf, sizeof(buf), ".git/HEAD");
+        f = open(buf, OREAD);
+        if(f == ERROR_NEG1)
+            return ERROR_NEG1;
+        n = readn(f, s, sizeof(s) - 1);
+        if(n == ERROR_NEG1)
+            return ERROR_NEG1;
+        // else
+        s[n] = '\0';
+        strip(s);
+        r = hparse(h, s);
+        goto found;
+    }
+    // else
+    <<[[readref()]](ref.c) try [[.git/refs]] prefixes>>
+    <<[[readref()]](ref.c) try other prefixes>>
+    // else
+    return ERROR_NEG1;
+
+found:
+    if(r == ERROR_NEG1 && strncmp(s, "ref: ", 5) == 0)
+        // recurse!
+        r = readref(h, s + 5);
+    return r;
+}
+@
+%ori: forgot closing open file on .git/HEAD? and also on pfx
+
+\subsection{[[.refs/]] prefixes}
+
+<<[[readref()]](ref.c) other locals>>=
+static char *try[] = 
+   {"", "refs/", "refs/heads/", "refs/remotes/", "refs/tags/", nil};
+char **pfx;
+@
+
+<<[[readref()]](ref.c) try [[.git/refs]] prefixes>>=
+for(pfx = try; *pfx; pfx++){
+    snprint(buf, sizeof(buf), ".git/%s%s", *pfx, ref);
+    f = open(buf, OREAD);
+    if(f == ERROR_NEG1)
+        continue;
+    n = readn(f, s, sizeof(s) - 1);
+    if(n == ERROR_NEG1)
+        // not closing??
+        continue;
+    // else
+    s[n] = '\0';
+    strip(s);
+    r = hparse(h, s);
+    close(f);
+    goto found;
+}
+@
+
+\subsection{[[matchpfx]]}
+
+<<[[readref()]](ref.c) try other prefixes>>=
+if((r = matchpfx(h, ref)) != ERROR_NEG1)
+    return r;
+@
+
+% ??
+
+<<function [[matchpfx]]>>=
+static errorneg1
+matchpfx(Hash *h, char *ref)
+{
+    int i, c;
+    Hash pfx;
+    char *p;
+
+    memset(&pfx, 0, sizeof(Hash));
+    for(i = 0, p = ref; *p; p++, i++){
+        if((c = charval(*p)) == -1)
+            return ERROR_NEG1;
+        pfx.h[i/2] |= c;
+        if((i & 1) == 0)
+            pfx.h[i/2] <<= 4;
+    }
+    return expandprefix(h, pfx, i*4);
+}
+@
+% ??
+
+<<function [[expandprefix]]>>=
+errorneg1
+expandprefix(Hash *rh, Hash h, int npfx)
+{
+    int i, ndir;
+    fdt fd;
+    char buf[128];
+    Dir *d;
+
+    refreshpacks();
+    if(npfx < 8 || npfx % 4 != 0)
+        return ERROR_NEG1;
+    for(i = 0; i < npackf; i++)
+        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
+            return OK_0;
+    sprint(buf, ".git/objects/%x", h.h[0]);
+    if((fd = open(buf, OREAD)) == -1)
+        return ERROR_NEG1;
+    ndir = dirreadall(fd, &d);
+    close(fd);
+    if(ndir == -1)
+        return ERROR_NEG1;
+    for(i = 0; i < ndir; i++){
+        snprint(buf, sizeof(buf), "%x%s", h.h[0], d[i].name);
+        if(hparse(rh, buf) == 0 && hashcmp(h.h, rh->h, npfx) == 0){
+            free(d);
+            return OK_0;
+        }
+
+    }
+    free(d);
+    return ERROR_NEG1;
+}
+@
+
 
 \section{Index}
 
@@ -2684,7 +2813,6 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 
 % git/query HEAD..HEAD => empty list
 % git/query HEAD~~~..HEAD => 3 commits
-
 % biggest use case is @ for ancestor between 2 commits?
 
 
@@ -2699,9 +2827,9 @@ usage(void)
 %ori: forgot -d
 
 
-\subsection{Commit expressions}
+\section{Commit expressions}
 
-% ^ ~
+% ^ ~ .. : @
 
 \section{[[main()]]}
 
@@ -2722,14 +2850,12 @@ main(int argc, char **argv)
     <<[[main()]](query.c) command line processing>>
     default:    usage();    break;
     }ARGEND;
-
-    fmtinstall('P', Pfmt);
-
     if(argc == 0)
         usage();
 
-    gitinit(repo, sizeof(repo), &nrel);
+    <<[[main()]](query.c) fmtinstall>>
 
+    gitinit(repo, sizeof(repo), &nrel);
     // !! chdir !!
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
@@ -2737,10 +2863,8 @@ main(int argc, char **argv)
     <<[[main()]](query.c) set [[objpfx]]>>
 
     <<[[main()]](query.c) set [[query]] derived from argv>>
-
     n = resolverefs(&h, query);
     free(query);
-
     <<[[main()]](query.c) sanity check [[n]] result>>
 
     <<[[main()]](query.c) if [[changes]]>>
@@ -2756,6 +2880,8 @@ main(int argc, char **argv)
     exits(nil);
 }
 @
+
+% seen %H, Hfmt
 
 <<[[main()]](query.c) other locals>>=
 char *p, *e;
@@ -2776,6 +2902,30 @@ for(i = 0; i < argc; i++)
 <<[[main()]](query.c) sanity check [[n]] result>>=
 if(n == ERROR_NEG1)
     sysfatal("resolve: %r");
+@
+
+
+%XXX
+<<[[main()]](query.c) fmtinstall>>=
+fmtinstall('P', Pfmt);
+@
+<<function [[Pfmt]]>>=
+int
+Pfmt(Fmt *f)
+{
+    int i, n;
+
+    n = 0;
+    for(i = 0; i < npath; i++)
+        n += fmtprint(f, "%s/", path[i]);
+    return n;
+}
+@
+<<global [[path]](query.c)>>=
+char *path[128];
+@
+<<global [[npath]](query.c)>>=
+int npath;
 @
 
 \section{Data structures}
@@ -2853,44 +3003,46 @@ evalexpr(Eval *ev, char *ref)
 }
 @
 
+\subsection{[[evalpostfix()]]}
+
+% name -> hash -> object
+
 <<function [[evalpostfix]]>>=
-int
+errorneg1
 evalpostfix(Eval *ev)
 {
     char name[256];
-    Object *o;
     Hash h;
+    Object *o;
+    errorneg1 ret;
 
     eatspace(ev);
     if(!word(ev, name, sizeof(name))){
         werrstr("expected name in expression");
-        return -1;
+        return ERROR_NEG1;
     }
-    if(readref(&h, name) == -1){
-        werrstr("invalid ref %s", name);
-        return -1;
-    }
-    if(hasheq(&h, &Zhash))
-        o = &zcommit;
-    else if((o = readobject(h)) == nil){
-        werrstr("invalid ref %s (hash %H)", name, h);
-        return -1;
+    ret = readref(&h, name);
+    <<[[evalpostfix()]] sanity check [[ret]] invalid ref>>
+    <<[[evalpostfix()]] if [[Zhash]]>>
+    else {
+        o = readobject(h);
+        <<[[evalpostfix()]] sanity check [[o]] invalid ref>>
     }
     push(ev, o);
 
-    while(1){
+    while(true){
         eatspace(ev);
         switch(ev->p[0]){
         case '^':
         case '~':
             ev->p++;
-            if(parent(ev) == -1)
-                return -1;
+            ret = parent(ev);
+            <<[[evalpostfix()]] sanity check [[ret]]>>
             break;
         case '@':
             ev->p++;
-            if(lca(ev) == -1)
-                return -1;
+            ret = lca(ev);
+            <<[[evalpostfix()]] sanity check [[ret]]>>
             break;
         default:
             goto done;
@@ -2898,9 +3050,11 @@ evalpostfix(Eval *ev)
         }   
     }
 done:
-    return 0;
+    return OK_0;
 }
 @
+%pad: I introduced errorneg1 r; to cleanup the code
+%git9: I think added ~ cos ^ used by rc for concatenation so annoying to escape
 
 % readobject() also here!
 
@@ -2912,6 +3066,400 @@ eatspace(Eval *ev)
         ev->p++;
 }
 @
+
+
+<<[[evalpostfix()]] sanity check [[ret]] invalid ref>>=
+if(ret == ERROR_NEG1){
+    werrstr("invalid ref %s", name);
+    return ret;
+}
+@
+<<[[evalpostfix()]] sanity check [[o]] invalid ref>>=
+if(o == nil){
+  werrstr("invalid ref %s (hash %H)", name, h);
+  return ERROR_NEG1;
+}
+@
+<<[[evalpostfix()]] sanity check [[ret]]>>=
+if(ret == ERROR_NEG1)
+    return ret;
+@
+
+% when can this happen?
+<<[[evalpostfix()]] if [[Zhash]]>>=
+if(hasheq(&h, &Zhash))
+    o = &zcommit;
+@
+
+
+\subsection{[[word()]]}
+%not in string utilities appendix! word semantic specific to git like '..' below
+% and also take Eval as parameter
+
+<<function [[word]]>>=
+bool
+word(Eval *ev, char *b, int nb)
+{
+    char *p, *e;
+    int n;
+
+    p = ev->p;
+    for(e = p; isword(*e) && strncmp(e, "..", 2) != 0; e++)
+        /* nothing */;
+    /* 1 for nul terminator */
+    n = e - p + 1;
+    if(n >= nb)
+        n = nb;
+    snprint(b, n, "%s", p);
+    ev->p = e;
+    return n > 0;
+}
+@
+
+<<function [[isword]]>>=
+bool
+isword(char e)
+{
+    return isalnum(e) || e == '/' || e == '-' || e == '_' || e == '.';
+}
+@
+
+
+\subsection{[[push()]] and [[pop()]]}
+
+<<function [[push]]>>=
+void
+push(Eval *ev, Object *o)
+{
+    <<[[push()]] realloc if needed>>
+    ev->stk[ev->nstk++] = o;
+}
+@
+
+<<[[push()]] realloc if needed>>=
+if(ev->nstk == ev->stksz){
+    ev->stksz = 2*ev->stksz + 1;
+    ev->stk = erealloc(ev->stk, ev->stksz*sizeof(Object*));
+}
+@
+
+<<function [[pop]]>>=
+Object*
+pop(Eval *ev)
+{
+    <<[[pop()]] sanity check empty stack>>
+    return ev->stk[--ev->nstk];
+}
+@
+
+<<[[pop()]] sanity check empty stack>>=
+if(ev->nstk == 0)
+    sysfatal("stack underflow");
+@
+
+
+\subsection{[[parent()]] and [[^]]}
+
+<<function [[parent]]>>=
+static errorneg1
+parent(Eval *ev)
+{
+    Object *o, *p;
+
+    o = pop(ev);
+    <<[[parent()]] sanity check [[o]] is a commit>>
+    /* Special case: first commit has no parent. */
+    if(o->commit->nparent == 0)
+        p = emptydir();
+    else {
+        p = readobject(o->commit->parent[0]);
+        <<[[parent()]] sanity check [[p]]>>
+    }
+    push(ev, p);
+    return OK_0;
+}
+@
+% first parent
+
+<<[[parent()]] sanity check [[o]] is a commit>>=
+if(o->type != GCommit){
+    werrstr("not a commit: %H", o->hash);
+    return ERROR_NEG1;
+}
+@
+
+<<[[parent()]] sanity check [[p]]>>=
+if (p == nil){
+   werrstr("no parent for %H", o->hash);
+   return ERROR_NEG1;
+}
+@
+
+\subsection{[[lca()]] and [[@]]}
+% least common ancestor?
+
+<<function [[lca]]>>=
+errorneg1
+lca(Eval *ev)
+{
+    Object *a, *b;
+    // array<ref<Object>>
+    Object **o;
+    int n;
+
+    if(ev->nstk < 2){
+        werrstr("ancestor needs 2 objects");
+        return ERROR_NEG1;
+    }
+    n = 0;
+    b = pop(ev);
+    a = pop(ev);
+    paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca);
+    if(n == 0)
+        return ERROR_NEG1;
+    push(ev, *o);
+    free(o);
+    return OK_0;
+}
+@
+
+
+<<function [[ancestor]]>>=
+/// sendpack -> <>
+Object*
+ancestor(Object *a, Object *b)
+{
+    // array<ref<Object>>
+    Object **o;
+    Object *r;
+    int n;
+
+    if(paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca) == ERROR_NEG1 || n == 0)
+        return nil;
+    r = ref(o[0]);
+    free(o);
+    return r;
+}
+@
+
+
+\subsection{[[range()]] and [[..]]}
+
+<<function [[range]]>>=
+static errorneg1
+range(Eval *ev)
+{
+    Object *a, *b;
+    // array<ref<Object>>
+    Object **o;
+    int i, n;
+
+    b = pop(ev);
+    a = pop(ev);
+    <<[[range()]] if [[b]] has [[Zhash]]>>
+    <<[[range()]] if [[a]] has [[Zhash]]>>
+    if(a->type != GCommit || b->type != GCommit){
+        werrstr("non-commit object in range");
+        return ERROR_NEG1;
+    }
+
+    if(paint(&b->hash, 1, &a->hash, 1, &o, &n, Range) == ERROR_NEG1)
+        return ERROR_NEG1;
+    for(i = 0; i < n; i++)
+        push(ev, o[i]);
+    free(o);
+    return OK_0;
+}
+@
+
+% when can this happen?
+<<[[range()]] if [[b]] has [[Zhash]]>>=
+if(hasheq(&b->hash, &Zhash))
+    b = &zcommit;
+@
+<<[[range()]] if [[a]] has [[Zhash]]>>=
+if(hasheq(&a->hash, &Zhash))
+    a = &zcommit;
+@
+
+
+\section{[[paint()]]}
+
+%ex: paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca)
+
+<<enum [[PaintMode]]>>=
+enum PaintMode {
+    Lca,
+    Range,
+    <<[[PaintMode]] other cases>>
+};
+@
+
+<<function [[paint]]>>=
+/// lca | ancestor | range -> <>
+static errorneg1
+paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, int mode)
+{
+    Qelt e;
+    Objq objq;
+    Objset keep, drop, skip;
+    Object *o, *c, **range;
+    int i, nskip, nrange;
+
+    osinit(&keep);
+    osinit(&drop);
+    osinit(&skip);
+    qinit(&objq);
+    range = nil;
+    nrange = 0;
+    nskip = 0;
+
+    for(i = 0; i < nhead; i++){
+        if(hasheq(&head[i], &Zhash))
+            continue;
+        if((o = readobject(head[i])) == nil){
+            fprint(2, "warning: %H does not point at commit\n", head[i]);
+            werrstr("read head %H: %r", head[i]);
+            return -1;
+        }
+        if(o->type != GCommit){
+            fprint(2, "warning: %H does not point at commit\n", o->hash);
+            unref(o);
+            continue;
+        }
+        dprint(1, "init: keep %H\n", o->hash);
+        qput(&objq, o, Keep);
+        unref(o);
+    }       
+    for(i = 0; i < ntail; i++){
+        if(hasheq(&tail[i], &Zhash))
+            continue;
+        if((o = readobject(tail[i])) == nil){
+            werrstr("read tail %H: %r", tail[i]);
+            return -1;
+        }
+        if(o->type != GCommit){
+            fprint(2, "warning: %H does not point at commit\n", o->hash);
+            unref(o);
+            continue;
+        }
+        dprint(1, "init: drop %H\n", o->hash);
+        qput(&objq, o, Drop);
+        unref(o);
+    }
+
+    dprint(1, "finding twixt commits\n");
+    while(objq.nheap != 0 && qpop(&objq, &e)){
+        if(e.color == Skip)
+            nskip--;
+        if(oshas(&skip, e.o->hash))
+            continue;
+        switch(e.color){
+        case Keep:
+            if(oshas(&keep, e.o->hash))
+                continue;
+            if(oshas(&drop, e.o->hash))
+                e.color = Skip;
+            else if(mode == Range){
+                range = earealloc(range, nrange+1, sizeof(Object*));
+                range[nrange++] = e.o;
+            }
+            osadd(&keep, e.o);
+            break;
+        case Drop:
+            if(oshas(&drop, e.o->hash))
+                continue;
+            if(oshas(&keep, e.o->hash))
+                e.color = Skip;
+            osadd(&drop, e.o);
+            break;
+        case Skip:
+            osadd(&skip, e.o);
+            break;
+        }
+        o = readobject(e.o->hash);
+        if(o->type != GCommit){
+            werrstr("not a commit: %H", o->hash);
+            goto error;
+        }
+        for(i = 0; i < o->commit->nparent; i++){
+            if((c = readobject(e.o->commit->parent[i])) == nil)
+                goto error;
+            if(c->type != GCommit){
+                fprint(2, "warning: %H does not point at commit\n", c->hash);
+                unref(c);
+                continue;
+            }
+            dprint(2, "\tenqueue: %s %H\n", colors[e.color], c->hash);
+            qput(&objq, c, e.color);
+            unref(c);
+            if(e.color == Skip)
+                nskip++;
+        }
+        unref(o);
+    }
+    switch(mode){
+    case Lca:
+        dprint(1, "found ancestor\n");
+        o = nil;
+        for(i = 0; i < keep.sz; i++){
+            o = keep.obj[i];
+            if(o != nil && oshas(&drop, o->hash) && !oshas(&skip, o->hash))
+                break;
+        }
+        if(i == keep.sz){
+            *nres = 0;
+            *res = nil;
+        }else{
+            *nres = 1;
+            *res = eamalloc(1, sizeof(Object*));
+            (*res)[0] = o;
+        }
+        break;
+    case Twixt:
+        dprint(1, "found twixt\n");
+        *res = eamalloc(keep.nobj, sizeof(Object*));
+        *nres = 0;
+        for(i = 0; i < keep.sz; i++){
+            o = keep.obj[i];
+            if(o != nil && !oshas(&drop, o->hash) && !oshas(&skip, o->hash)){
+                (*res)[*nres] = o;
+                (*nres)++;
+            }
+        }
+        break;
+    case Range:
+        dprint(1, "found range\n");
+        *res = eamalloc(nrange, sizeof(Object*));
+        *nres = 0;
+        for(i = nrange - 1; i >= 0; i--){
+            o = range[i];
+            if(!oshas(&drop, o->hash) && !oshas(&skip, o->hash)){
+                (*res)[*nres] = o;
+                (*nres)++;
+            }
+        }
+        free(range);
+        break;
+    }
+    osclear(&keep);
+    osclear(&drop);
+    osclear(&skip);
+    return 0;
+error:
+    dprint(1, "paint error: %r\n");
+    free(objq.heap);
+    free(range);
+    return -1;
+}
+@
+
+
+%XXX
+<<[[PaintMode]] other cases>>=
+Twixt,
+@
+
 
 \section{Advanced features}
 
@@ -6787,21 +7335,6 @@ Qfmt(Fmt *fmt)
 @
 
 
-
-
-<<function [[Pfmt]]>>=
-int
-Pfmt(Fmt *f)
-{
-    int i, n;
-
-    n = 0;
-    for(i = 0; i < npath; i++)
-        n += fmtprint(f, "%s/", path[i]);
-    return n;
-}
-@
-
 \section{[[git/fs -d]]}
 %alt: in git/fs chapter advanced features
 
@@ -6910,12 +7443,6 @@ fn die{
 \label{chap:utilities}
 
 %alt: could put drop() from common.rc here
-
-%%\section{Common functions}
-%%\section{File utilities}
-%%\section{Directory utilities}
-%%\section{Generalized IO}
-%%\section{Binary IO}
 
 \section{Error malloc}
 %alt: Safe malloc
@@ -7055,6 +7582,82 @@ erealloc(void *v, ulong n)
     return v;
 }
 @
+
+\section{String utilities}
+
+<<macro [[isblank]]>>=
+#define isblank(c) \
+    (((c) != '\n') && isspace(c))
+@
+
+% isspace in libc.h? isspacerune is, but isspace?
+
+
+<<function [[strip]]>>=
+char *
+strip(char *s)
+{
+    char *e;
+
+    while(isspace(*s))
+        s++;
+    e = s + strlen(s);
+    while(e > s && isspace(*--e))
+        *e = 0;
+    return s;
+}
+@
+
+
+<<function [[scanword]]>>=
+/*
+ * Scans for non-empty word, copying it into buf.
+ * Strips off word, leading, and trailing space
+ * from input.
+ * 
+ * Returns -1 on empty string or error, leaving
+ * input unmodified.
+ */
+static errorneg1
+scanword(char **str, int *nstr, char *buf, int nbuf)
+{
+    char *p;
+    int n;
+    errorneg1 r;
+
+    r = ERROR_NEG1;
+    p = *str;
+    n = *nstr;
+    while(n && isblank(*p)){
+        n--;
+        p++;
+    }
+
+    for(; n && *p && !isspace(*p); p++, n--){
+        r = OK_0;
+        *buf++ = *p;
+        nbuf--;
+        if(nbuf == 0)
+            return ERROR_NEG1;
+    }
+    while(n && isblank(*p)){
+        n--;
+        p++;
+    }
+    *buf = '\0';
+    *str = p;
+    *nstr = n;
+    return r;
+}
+@
+
+
+%%\section{Common functions}
+%%\section{File utilities}
+%%\section{Directory utilities}
+%%\section{Generalized IO}
+%%\section{Binary IO}
+
 
 %******************************************************************************
 \chapter{Extra Code}

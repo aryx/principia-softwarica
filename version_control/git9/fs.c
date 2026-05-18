@@ -57,6 +57,7 @@ struct Gitaux {
 
     /*s: [[Gitaux]] object dir fields */
     /* For listing object dir */
+    // ref_own<Objlist> ??
     Objlist *ols;
     Object  *olslast;
     /*e: [[Gitaux]] object dir fields */
@@ -677,10 +678,10 @@ readref(char *pathstr)
     int n;
 
     snprint(path, sizeof(path), "%s", pathstr);
-    while(1){
-        if((f = open(path, OREAD)) == -1)
+    while(true){
+        if((f = open(path, OREAD)) == ERROR_NEG1)
             return nil;
-        if((n = readn(f, buf, sizeof(buf) - 1)) == -1)
+        if((n = readn(f, buf, sizeof(buf) - 1)) == ERROR_NEG1)
             return nil;
         close(f);
         buf[n] = '\0';
@@ -1121,8 +1122,10 @@ main(int argc, char **argv)
     groupname = strdup(d->gid);
     free(d);
 
+    /*s: [[main()]](fs.c) set [[branches]] */
     branches = emalloc(sizeof(char*));
     branches[0] = nil;
+    /*e: [[main()]](fs.c) set [[branches]] */
     postmountsrv(&gitsrv, nil, mntpt, MCREATE);
     exits(nil);
 }

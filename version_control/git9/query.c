@@ -17,9 +17,12 @@ bool changes;
 bool reverse;
 /*e: global [[reverse]](query.c) */
 
+/*s: global [[path]](query.c) */
 char *path[128];
+/*e: global [[path]](query.c) */
+/*s: global [[npath]](query.c) */
 int npath;
-
+/*e: global [[npath]](query.c) */
 /*s: function [[Pfmt]] */
 int
 Pfmt(Fmt *f)
@@ -132,7 +135,6 @@ next:
         show(bp, '+');
 }
 /*e: function [[difftrees]] */
-
 /*s: function [[diffcommits]] */
 void
 diffcommits(Hash ah, Hash bh)
@@ -169,7 +171,6 @@ usage(void)
     exits("usage");
 }
 /*e: function [[usage (git9/query.c)]] */
-
 /*s: function [[main (git9/query.c)]] */
 void
 main(int argc, char **argv)
@@ -199,14 +200,14 @@ main(int argc, char **argv)
     /*e: [[main()]](query.c) command line processing */
     default:    usage();    break;
     }ARGEND;
-
-    fmtinstall('P', Pfmt);
-
     if(argc == 0)
         usage();
 
-    gitinit(repo, sizeof(repo), &nrel);
+    /*s: [[main()]](query.c) fmtinstall */
+    fmtinstall('P', Pfmt);
+    /*e: [[main()]](query.c) fmtinstall */
 
+    gitinit(repo, sizeof(repo), &nrel);
     // !! chdir !!
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
@@ -226,10 +227,8 @@ main(int argc, char **argv)
     for(i = 0; i < argc; i++)
         p = seprint(p, e, "%s ", argv[i]);
     /*e: [[main()]](query.c) set [[query]] derived from argv */
-
     n = resolverefs(&h, query);
     free(query);
-
     /*s: [[main()]](query.c) sanity check [[n]] result */
     if(n == ERROR_NEG1)
         sysfatal("resolve: %r");

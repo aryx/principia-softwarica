@@ -863,13 +863,14 @@ notfound:
  * Returns -1 on empty string or error, leaving
  * input unmodified.
  */
-static int
+static errorneg1
 scanword(char **str, int *nstr, char *buf, int nbuf)
 {
     char *p;
-    int n, r;
+    int n;
+    errorneg1 r;
 
-    r = -1;
+    r = ERROR_NEG1;
     p = *str;
     n = *nstr;
     while(n && isblank(*p)){
@@ -878,17 +879,17 @@ scanword(char **str, int *nstr, char *buf, int nbuf)
     }
 
     for(; n && *p && !isspace(*p); p++, n--){
-        r = 0;
+        r = OK_0;
         *buf++ = *p;
         nbuf--;
         if(nbuf == 0)
-            return -1;
+            return ERROR_NEG1;
     }
     while(n && isblank(*p)){
         n--;
         p++;
     }
-    *buf = 0;
+    *buf = '\0';
     *str = p;
     *nstr = n;
     return r;
@@ -909,7 +910,8 @@ nextline(char **str, int *nstr)
 /*e: function [[nextline (git9/pack.c)]] */
 
 /*s: function [[parseauthor]] */
-static int
+// may raise sysfatal
+static void
 parseauthor(char **str, int *nstr, char **name, vlong *time)
 {
     char buf[512];
@@ -925,7 +927,7 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
         sysfatal("overlong author line");
     memset(m, 0, sizeof(m));
     memcpy(buf, *str, n);
-    buf[n] = 0;
+    buf[n] = '\0';
     *str = p;
     *nstr -= n;
     
@@ -934,19 +936,19 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
     nm = m[1].e.ep - m[1].s.sp;
     *name = emalloc(nm + 1);
     memcpy(*name, m[1].s.sp, nm);
-    buf[nm] = 0;
+    buf[nm] = '\0';
     
     nm = m[3].e.ep - m[3].s.sp;
     memcpy(buf, m[3].s.sp, nm);
-    buf[nm] = 0;
+    buf[nm] = '\0';
     tz = atoll(buf);
 
     nm = m[2].e.ep - m[2].s.sp;
     memcpy(buf, m[2].s.sp, nm);
-    buf[nm] = 0;
+    buf[nm] = '\0';
     *time = atoll(buf) + 3600*(tz/100) + 60*(tz%100);
 
-    return 0;
+    return;
 }
 /*e: function [[parseauthor]] */
 /*s: function [[parsecommit]] */
@@ -1193,36 +1195,37 @@ error:
 /*e: function [[readidxobject]] */
 
 /*s: function [[expandprefix]] */
-int
+errorneg1
 expandprefix(Hash *rh, Hash h, int npfx)
 {
-    int i, fd, ndir;
+    int i, ndir;
+    fdt fd;
     char buf[128];
     Dir *d;
 
     refreshpacks();
     if(npfx < 8 || npfx % 4 != 0)
-        return -1;
+        return ERROR_NEG1;
     for(i = 0; i < npackf; i++)
         if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
-            return 0;
+            return OK_0;
     sprint(buf, ".git/objects/%x", h.h[0]);
     if((fd = open(buf, OREAD)) == -1)
-        return -1;
+        return ERROR_NEG1;
     ndir = dirreadall(fd, &d);
     close(fd);
     if(ndir == -1)
-        return -1;
+        return ERROR_NEG1;
     for(i = 0; i < ndir; i++){
         snprint(buf, sizeof(buf), "%x%s", h.h[0], d[i].name);
         if(hparse(rh, buf) == 0 && hashcmp(h.h, rh->h, npfx) == 0){
             free(d);
-            return 0;
+            return OK_0;
         }
 
     }
     free(d);
-    return -1;
+    return ERROR_NEG1;
 }
 /*e: function [[expandprefix]] */
 

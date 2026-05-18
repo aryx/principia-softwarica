@@ -1270,11 +1270,6 @@ int listonly;
 @
 
 
-<<macro [[isblank]]>>=
-#define isblank(c) \
-    (((c) != '\n') && isspace(c))
-@
-
 
 %-------------------------------------------------------------
 
@@ -2447,39 +2442,6 @@ notfound:
 
 
 
-<<function [[expandprefix]]>>=
-int
-expandprefix(Hash *rh, Hash h, int npfx)
-{
-    int i, fd, ndir;
-    char buf[128];
-    Dir *d;
-
-    refreshpacks();
-    if(npfx < 8 || npfx % 4 != 0)
-        return -1;
-    for(i = 0; i < npackf; i++)
-        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
-            return 0;
-    sprint(buf, ".git/objects/%x", h.h[0]);
-    if((fd = open(buf, OREAD)) == -1)
-        return -1;
-    ndir = dirreadall(fd, &d);
-    close(fd);
-    if(ndir == -1)
-        return -1;
-    for(i = 0; i < ndir; i++){
-        snprint(buf, sizeof(buf), "%x%s", h.h[0], d[i].name);
-        if(hparse(rh, buf) == 0 && hashcmp(h.h, rh->h, npfx) == 0){
-            free(d);
-            return 0;
-        }
-
-    }
-    free(d);
-    return -1;
-}
-@
 
 
 <<function [[clearedobject]]>>=
@@ -4094,9 +4056,8 @@ diffcommits(Hash ah, Hash bh)
 <<global [[changes]](query.c)>>
 <<global [[reverse]](query.c)>>
 
-char *path[128];
-int npath;
-
+<<global [[path]](query.c)>>
+<<global [[npath]](query.c)>>
 <<function [[Pfmt]]>>
 
 <<function [[showdir]]>>
@@ -4104,77 +4065,25 @@ int npath;
 <<function [[show (git9/query.c)]]>>
 
 <<function [[difftrees]]>>
-
 <<function [[diffcommits]]>>
 
 <<function [[usage (git9/query.c)]]>>
-
 <<function [[main (git9/query.c)]]>>
 @
 
 
 \subsection{[[git9/ref.c]]}
 
-
-<<function [[push]]>>=
-void
-push(Eval *ev, Object *o)
-{
-    if(ev->nstk == ev->stksz){
-        ev->stksz = 2*ev->stksz + 1;
-        ev->stk = erealloc(ev->stk, ev->stksz*sizeof(Object*));
-    }
-    ev->stk[ev->nstk++] = o;
-}
-@
-
-<<function [[pop]]>>=
-Object*
-pop(Eval *ev)
-{
-    if(ev->nstk == 0)
-        sysfatal("stack underflow");
-    return ev->stk[--ev->nstk];
-}
-@
-
-<<function [[peek]]>>=
-Object*
-peek(Eval *ev)
-{
-    if(ev->nstk == 0)
-        sysfatal("stack underflow");
-    return ev->stk[ev->nstk - 1];
-}
-@
-
-<<function [[isword]]>>=
-int
-isword(char e)
-{
-    return isalnum(e) || e == '/' || e == '-' || e == '_' || e == '.';
-}
-@
-
-<<function [[word]]>>=
-int
-word(Eval *ev, char *b, int nb)
-{
-    char *p, *e;
-    int n;
-
-    p = ev->p;
-    for(e = p; isword(*e) && strncmp(e, "..", 2) != 0; e++)
-        /* nothing */;
-    /* 1 for nul terminator */
-    n = e - p + 1;
-    if(n >= nb)
-        n = nb;
-    snprint(b, n, "%s", p);
-    ev->p = e;
-    return n > 0;
-}
-@
+%ori: %dead:
+%<<function [[peek]]>>=
+%Object*
+%peek(Eval *ev)
+%{
+%    if(ev->nstk == 0)
+%        sysfatal("stack underflow");
+%    return ev->stk[ev->nstk - 1];
+%}
+%@
 
 <<function [[take]]>>=
 int
@@ -4190,163 +4099,6 @@ take(Eval *ev, char *m)
 }
 @
 
-<<function [[paint]]>>=
-static int
-paint(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres, int mode)
-{
-    Qelt e;
-    Objq objq;
-    Objset keep, drop, skip;
-    Object *o, *c, **range;
-    int i, nskip, nrange;
-
-    osinit(&keep);
-    osinit(&drop);
-    osinit(&skip);
-    qinit(&objq);
-    range = nil;
-    nrange = 0;
-    nskip = 0;
-
-    for(i = 0; i < nhead; i++){
-        if(hasheq(&head[i], &Zhash))
-            continue;
-        if((o = readobject(head[i])) == nil){
-            fprint(2, "warning: %H does not point at commit\n", head[i]);
-            werrstr("read head %H: %r", head[i]);
-            return -1;
-        }
-        if(o->type != GCommit){
-            fprint(2, "warning: %H does not point at commit\n", o->hash);
-            unref(o);
-            continue;
-        }
-        dprint(1, "init: keep %H\n", o->hash);
-        qput(&objq, o, Keep);
-        unref(o);
-    }       
-    for(i = 0; i < ntail; i++){
-        if(hasheq(&tail[i], &Zhash))
-            continue;
-        if((o = readobject(tail[i])) == nil){
-            werrstr("read tail %H: %r", tail[i]);
-            return -1;
-        }
-        if(o->type != GCommit){
-            fprint(2, "warning: %H does not point at commit\n", o->hash);
-            unref(o);
-            continue;
-        }
-        dprint(1, "init: drop %H\n", o->hash);
-        qput(&objq, o, Drop);
-        unref(o);
-    }
-
-    dprint(1, "finding twixt commits\n");
-    while(objq.nheap != 0 && qpop(&objq, &e)){
-        if(e.color == Skip)
-            nskip--;
-        if(oshas(&skip, e.o->hash))
-            continue;
-        switch(e.color){
-        case Keep:
-            if(oshas(&keep, e.o->hash))
-                continue;
-            if(oshas(&drop, e.o->hash))
-                e.color = Skip;
-            else if(mode == Range){
-                range = earealloc(range, nrange+1, sizeof(Object*));
-                range[nrange++] = e.o;
-            }
-            osadd(&keep, e.o);
-            break;
-        case Drop:
-            if(oshas(&drop, e.o->hash))
-                continue;
-            if(oshas(&keep, e.o->hash))
-                e.color = Skip;
-            osadd(&drop, e.o);
-            break;
-        case Skip:
-            osadd(&skip, e.o);
-            break;
-        }
-        o = readobject(e.o->hash);
-        if(o->type != GCommit){
-            werrstr("not a commit: %H", o->hash);
-            goto error;
-        }
-        for(i = 0; i < o->commit->nparent; i++){
-            if((c = readobject(e.o->commit->parent[i])) == nil)
-                goto error;
-            if(c->type != GCommit){
-                fprint(2, "warning: %H does not point at commit\n", c->hash);
-                unref(c);
-                continue;
-            }
-            dprint(2, "\tenqueue: %s %H\n", colors[e.color], c->hash);
-            qput(&objq, c, e.color);
-            unref(c);
-            if(e.color == Skip)
-                nskip++;
-        }
-        unref(o);
-    }
-    switch(mode){
-    case Lca:
-        dprint(1, "found ancestor\n");
-        o = nil;
-        for(i = 0; i < keep.sz; i++){
-            o = keep.obj[i];
-            if(o != nil && oshas(&drop, o->hash) && !oshas(&skip, o->hash))
-                break;
-        }
-        if(i == keep.sz){
-            *nres = 0;
-            *res = nil;
-        }else{
-            *nres = 1;
-            *res = eamalloc(1, sizeof(Object*));
-            (*res)[0] = o;
-        }
-        break;
-    case Twixt:
-        dprint(1, "found twixt\n");
-        *res = eamalloc(keep.nobj, sizeof(Object*));
-        *nres = 0;
-        for(i = 0; i < keep.sz; i++){
-            o = keep.obj[i];
-            if(o != nil && !oshas(&drop, o->hash) && !oshas(&skip, o->hash)){
-                (*res)[*nres] = o;
-                (*nres)++;
-            }
-        }
-        break;
-    case Range:
-        dprint(1, "found range\n");
-        *res = eamalloc(nrange, sizeof(Object*));
-        *nres = 0;
-        for(i = nrange - 1; i >= 0; i--){
-            o = range[i];
-            if(!oshas(&drop, o->hash) && !oshas(&skip, o->hash)){
-                (*res)[*nres] = o;
-                (*nres)++;
-            }
-        }
-        free(range);
-        break;
-    }
-    osclear(&keep);
-    osclear(&drop);
-    osclear(&skip);
-    return 0;
-error:
-    dprint(1, "paint error: %r\n");
-    free(objq.heap);
-    free(range);
-    return -1;
-}
-@
 
 <<function [[findtwixt]]>>=
 int
@@ -4356,158 +4108,8 @@ findtwixt(Hash *head, int nhead, Hash *tail, int ntail, Object ***res, int *nres
 }
 @
 
-<<function [[ancestor]]>>=
-Object*
-ancestor(Object *a, Object *b)
-{
-    Object **o, *r;
-    int n;
 
-    if(paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca) == -1 || n == 0)
-        return nil;
-    r = ref(o[0]);
-    free(o);
-    return r;
-}
-@
 
-<<function [[lca]]>>=
-int
-lca(Eval *ev)
-{
-    Object *a, *b, **o;
-    int n;
-
-    if(ev->nstk < 2){
-        werrstr("ancestor needs 2 objects");
-        return -1;
-    }
-    n = 0;
-    b = pop(ev);
-    a = pop(ev);
-    paint(&a->hash, 1, &b->hash, 1, &o, &n, Lca);
-    if(n == 0)
-        return -1;
-    push(ev, *o);
-    free(o);
-    return 0;
-}
-@
-
-<<function [[parent]]>>=
-static int
-parent(Eval *ev)
-{
-    Object *o, *p;
-
-    o = pop(ev);
-    if(o->type != GCommit){
-        werrstr("not a commit: %H", o->hash);
-        return -1;
-    }
-    /* Special case: first commit has no parent. */
-    if(o->commit->nparent == 0)
-        p = emptydir();
-    else if ((p = readobject(o->commit->parent[0])) == nil){
-        werrstr("no parent for %H", o->hash);
-        return -1;
-    }
-        
-    push(ev, p);
-    return 0;
-}
-@
-
-<<function [[range]]>>=
-static int
-range(Eval *ev)
-{
-    Object *a, *b, **o;
-    int i, n;
-
-    b = pop(ev);
-    a = pop(ev);
-    if(hasheq(&b->hash, &Zhash))
-        b = &zcommit;
-    if(hasheq(&a->hash, &Zhash))
-        a = &zcommit;
-    if(a->type != GCommit || b->type != GCommit){
-        werrstr("non-commit object in range");
-        return -1;
-    }
-
-    if(paint(&b->hash, 1, &a->hash, 1, &o, &n, Range) == -1)
-        return -1;
-    for(i = 0; i < n; i++)
-        push(ev, o[i]);
-    free(o);
-    return 0;
-}
-@
-
-<<function [[matchpfx]]>>=
-static int
-matchpfx(Hash *h, char *ref)
-{
-    int i, c;
-    Hash pfx;
-    char *p;
-
-    memset(&pfx, 0, sizeof(Hash));
-    for(i = 0, p = ref; *p; p++, i++){
-        if((c = charval(*p)) == -1)
-            return -1;
-        pfx.h[i/2] |= c;
-        if((i & 1) == 0)
-            pfx.h[i/2] <<= 4;
-    }
-    return expandprefix(h, pfx, i*4);
-}
-@
-
-<<function [[readref (git9/ref.c)]]>>=
-int
-readref(Hash *h, char *ref)
-{
-    static char *try[] = {"", "refs/", "refs/heads/", "refs/remotes/", "refs/tags/", nil};
-    char buf[256], s[256], **pfx;
-    int r, f, n;
-
-    if((r = hparse(h, ref)) != -1)
-        return r;
-    if(strcmp(ref, "HEAD") == 0){
-        snprint(buf, sizeof(buf), ".git/HEAD");
-        if((f = open(buf, OREAD)) == -1)
-            return -1;
-        if((n = readn(f, s, sizeof(s) - 1))== -1)
-            return -1;
-        s[n] = 0;
-        strip(s);
-        r = hparse(h, s);
-        goto found;
-    }
-    for(pfx = try; *pfx; pfx++){
-        snprint(buf, sizeof(buf), ".git/%s%s", *pfx, ref);
-        if((f = open(buf, OREAD)) == -1)
-            continue;
-        if((n = readn(f, s, sizeof(s) - 1)) == -1)
-            continue;
-        s[n] = 0;
-        strip(s);
-        r = hparse(h, s);
-        close(f);
-        goto found;
-    }
-    if((r = matchpfx(h, ref)) != -1)
-        return r;
-    return -1;
-
-found:
-    if(r == -1 && strncmp(s, "ref: ", 5) == 0)
-        r = readref(h, s + 5);
-    return r;
-}
-@
 
 
 
@@ -4604,11 +4206,7 @@ enum {
     Skip,
 };
 
-enum {
-    Lca,
-    Twixt,
-    Range,
-};
+<<enum [[PaintMode]]>>
 
 <<struct [[Eval]]>>
 
@@ -4619,17 +4217,13 @@ static char *colors[] = {
 [Skip] "skip",
 };
 
-static Object zcommit = {
-    .type=GCommit
-};
+<<global [[zcommit]](ref.c)>>
 
 <<function [[eatspace]]>>
 
 <<function [[push]]>>
 
 <<function [[pop]]>>
-
-<<function [[peek]]>>
 
 <<function [[isword]]>>
 
@@ -6142,20 +5736,6 @@ swapsuffix(char *dst, int dstsz, char *base, char *oldsuf, char *suf)
 }
 @
 
-<<function [[strip]]>>=
-char *
-strip(char *s)
-{
-    char *e;
-
-    while(isspace(*s))
-        s++;
-    e = s + strlen(s);
-    while(e > s && isspace(*--e))
-        *e = 0;
-    return s;
-}
-@
 
 
 <<function [[showprogress]]>>=
@@ -6380,7 +5960,7 @@ okref(char *ref)
 #include "git.h"
 
 Reprog  *authorpat;
-Hash    Zhash;
+<<global [[Zhash]]>>
 <<global [[chattygit]]>>
 int interactive = 1;
 <<global [[gitdirmode]]>>
