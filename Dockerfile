@@ -4,6 +4,7 @@ FROM padator/goken
 WORKDIR /principia
 COPY . .
 
+#coupling: docs/getting-started.html
 # 386
 RUN cp mkconfig.pc mkconfig
 RUN mk && mk install 
