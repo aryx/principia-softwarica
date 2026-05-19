@@ -121,7 +121,7 @@ I will explain in this book the code of the \plan ARM C compiler
 [[5c]], written by Ken Thompson, which contains about 15\,000 lines
 of C (plus a Yacc grammar for parsing).
 %
-[[5c]] is written in C, with its parser using Yacc~\cite{yacc}.
+%[[5c]] is written in C, with its parser using Yacc~\cite{yacc}.
 %
 Like for most books in \principia, I chose a \plan program because
 those programs are simple, small, elegant, open source, and
@@ -157,17 +157,20 @@ which I ultimately discarded:
 %claude:
 \item Dennis Ritchie's original C compiler [[cc]] (1973) was the
 first C compiler, written for the PDP-11. It was a two-pass compiler
-with a recursive descent parser. The code is historically
-fascinating but tied to a now-obsolete architecture and
+with a recursive descent parser. Unfortunately, the code is
+% historically fascinating but
+tied to a now-obsolete architecture and would be
 hard to follow without PDP-11 knowledge.
 
 %history:
 %claude:
-\item The Portable C Compiler [[pcc]]~\cite{pcc} (1979), written by
+\item The Portable C Compiler [[pcc]] (1979), written by
+%~\cite{pcc}
 Steve Johnson, made C portable across architectures and was used
 in \unix V7 and BSD. At about 7\,000 LOC, it is a reasonable
 size, but its code-generation tables are dense and hard to read.
 [[pcc]] was the standard \unix compiler until GCC replaced it.
+%TODO: double check those claims
 
 \item gcc --- about 15\,000\,000 LOC across all frontends
 and backends. Even the C frontend alone is enormous. GCC
@@ -187,7 +190,7 @@ puts it out of reach for a book like this.
 
 \item lcc --- about 20\,000 LOC and arguably better structured
 than [[5c]], with a clean retargetable backend. But
-there is already a book on it~\cite{lcc-book}, its copyright is
+there is already a book on it~\cite{lcc}, its copyright is
 restrictive, and it does not use yacc (or lex), so
 the frontend is harder to follow.
 %maybe better actually, but already a book on it,
@@ -389,12 +392,12 @@ in the next chapter provides the essential background.
 %
 Reading the \book{Assembler} or \book{Emulator} first is recommended,
 as [[5c]] generates ARM assembly directly (there is no intermediate
-representation), so understanding the target helps.
+representation), so understanding the target really helps.
 %
 For a thorough treatment of compiler theory, see
 Aho et al.~\cite{dragon-book} (``the Dragon Book''),
 Cooper and Torczon~\cite{engineering-a-compiler}, or
-Appel~\cite{modern-compiler-ml}.
+my personal favourite: Appel~\cite{modern-compiler-ml} (``Modern compiler in ML'').
 
 %claude:
 If, while reading this book, you have specific questions on
@@ -466,27 +469,27 @@ assembly (in \plan's AST-based object format).
 %
 There are many books on compiler construction---the ``Dragon
 Book''~\cite{dragon-book}, Appel's ``Modern Compiler
-Implementation''~\cite{appel}, and others.
+Implementation''~\cite{modern-compiler-ml}, and others.
 I will be brief here and focus on the aspects most relevant
 to understanding [[5c]].
 
 %claude: %cs-history:
-The compiler lineage starts with Fortran (John Backus,
-{\sc ibm}, 1957)---the first {\em optimizing} compiler,
-which proved that a high-level language could produce code
-competitive with hand-written assembly. C (Dennis Ritchie,
-1972) was the first language whose compiler was good
-enough to write an operating system kernel in. {\sc gnu}'s
-[[gcc]] (Richard Stallman, 1987) became the dominant open
-source compiler for two decades. {\sc llvm} (Chris
-Lattner, 2003) offered a modular architecture that made
-it easy to add new frontends (Clang for C/C\texttt{++},
-Rust, Swift) and new backends (ARM, x86, RISC-V, WebAssembly),
-and is now the foundation of most non-{\sc gnu} toolchains.
-[[5c]] sits at the minimal end of this spectrum: around
-10\,000 lines of C, readable end-to-end, with none of the
-framework machinery that makes [[gcc]] or {\sc llvm}
-powerful but enormous.
+%The compiler lineage starts with Fortran (John Backus,
+%{\sc ibm}, 1957)---the first {\em optimizing} compiler,
+%which proved that a high-level language could produce code
+%competitive with hand-written assembly. C (Dennis Ritchie,
+%1972) was the first language whose compiler was good
+%enough to write an operating system kernel in. {\sc gnu}'s
+%[[gcc]] (Richard Stallman, 1987) became the dominant open
+%source compiler for two decades. {\sc llvm} (Chris
+%Lattner, 2003) offered a modular architecture that made
+%it easy to add new frontends (Clang for C/C\texttt{++},
+%Rust, Swift) and new backends (ARM, x86, RISC-V, WebAssembly),
+%and is now the foundation of most non-{\sc gnu} toolchains.
+%[[5c]] sits at the minimal end of this spectrum: around
+%15\,000 lines of C, readable end-to-end, with none of the
+%framework machinery that makes [[gcc]] or {\sc llvm}
+%powerful but enormous.
 
 %claude:
 Compilers are traditionally divided into a {\em frontend}
@@ -501,15 +504,17 @@ phases of a typical compiler:
     v         v        v          v            v          v
   text --> tokens --> AST --> typed AST --> assembly --> assembly
                                               (opt)
-          <--- Frontend --->              <--- Backend --->
+           <---     Frontend       --->     <---  Backend   --->
 \end{verbatim}
 
-%claude:
-[[5c]] follows this structure, though it blurs some boundaries:
+%claude: %5c:
+[[5c]] follows this structure, though it blurs some boundaries as
 parsing and code generation are interleaved (each function is
-compiled immediately after parsing), and there is no separate
+compiled immediately after parsing).
+%
+Note that there is no separate
 intermediate representation between the AST and the assembly
-instruction list.
+instruction list in [[5c]].
 
 \subsection{Frontend}
 
@@ -538,6 +543,7 @@ recursive-descent parsers rather than generated ones:
 {\sc gcc} moved from [[yacc]] to hand-written in~2004
 for better error recovery, Clang was always
 hand-written, and Rust, Go, and Swift followed suit.
+%5c:
 [[5c]] is an exception---it still uses [[yacc]], which
 keeps the grammar readable but limits error-message
 quality.
@@ -587,7 +593,9 @@ catches three kinds of errors: {\em use of undefined}
 entities (referencing a variable that was never declared),
 {\em redefinition} (declaring the same name twice in the
 same scope), and {\em unused} definitions (declaring
-something that is never referenced). [[5c]] performs
+something that is never referenced).
+%5c:
+[[5c]] performs
 these checks for labels, local variables, and parameters,
 and additionally includes dataflow checks for variables
 that are set but never used.
@@ -619,9 +627,9 @@ sized instructions (a [[char]] move vs.\ a [[long]] move,
 integer vs.\ floating-point arithmetic).
 %
 The type checker also classifies expressions as {\em lvalues}
-(locations that can be assigned to) or {\em rvalues}
-(values that can only be read), which determines what
-operations are legal on each expression.
+(locations that can be assigned to, on the left side of [[=]]) or {\em rvalues}
+(values that can only be read, on the right side of [[=]]),
+which determines what operations are legal on each expression.
 
 %claude: %modern:
 C's type system is relatively weak: no generics, no sum
@@ -632,8 +640,10 @@ Rust's {\em borrow checker} tracks ownership and
 lifetimes at compile time to prevent use-after-free
 without a garbage collector; OCaml's {\em algebraic
 types} make unhandled cases a compile error; Haskell's
-{\em type classes} express abstractions the C type
-system cannot even name. The trade-off is the familiar
+{\em type classes} express higher abstractions
+% the C type system cannot even name.
+%wib:
+The trade-off is the familiar
 ``worse is better'' question: C's weak types are simpler
 and more permissive, letting more bugs through but also
 letting more code compile without fighting the type
@@ -655,7 +665,8 @@ checker.
 %https://kristerw.blogspot.com/2017/08/the-structure-of-gcc-back-end.html
 
 %claude:
-The backend's job is to translate the typed AST into assembly
+The backend's job is to translate the typed AST (the final result
+from the frontend) into assembly
 instructions. Assembly is a much simpler language than C:
 arithmetic on registers, memory loads and stores, labels
 and jumps, and a manually managed stack. The compiler must
@@ -672,6 +683,7 @@ as three translations, which I call {\em labelization},
 C has structured control flow: [[if]]/[[else]], [[while]],
 [[for]], [[switch]], [[break]], [[continue]], [[return]].
 Assembly has only labels and conditional/unconditional jumps.
+%
 {\em Labelization} is the translation from one to the other:
 an [[if(cond) A else B]] becomes a conditional branch past
 [[A]] to [[B]], with a label at the join point. A [[while]]
@@ -690,6 +702,9 @@ loop becomes a backward jump to the condition test.
                                MOVW  $2, y
                             L2:
 \end{verbatim}
+
+[[BLE]] stands for ``branch if lower or equal'' while [[B]] is just
+(unconditional) ``branch'' (a.k.a. jump).
 
 \subsection{Linearization and three-address code}
 % registerization
@@ -714,12 +729,12 @@ decomposed into byte-level accesses at computed offsets.
 \begin{verbatim}
   C code                    ARM assembly
   ------                    ------------
-  z = x + y * 3;               MOVW  y, R0
-                                MOVW  $3, R1
-                                MUL   R1, R0       // R0 = y * 3
-                                MOVW  x, R1
-                                ADD   R1, R0       // R0 = x + y*3
-                                MOVW  R0, z
+  z = x + y * 3;            MOVW  y, R0
+                            MOVW  $3, R1
+                            MUL   R1, R0       // R0 = y * 3
+                            MOVW  x, R1
+                            ADD   R1, R0       // R0 = x + y*3
+                            MOVW  R0, z
 \end{verbatim}
 
 \subsection{Instruction selection}
@@ -728,7 +743,7 @@ decomposed into byte-level accesses at computed offsets.
 After linearization decomposes expressions into simple
 operations (load, add, multiply, store), the compiler
 must choose which {\em machine instructions} implement
-each operation. This is {\em instruction selection}, and
+best each operation. This is {\em instruction selection}, and
 it is less trivial than it sounds: ARM offers many ways
 to compute the same result. A multiply by~4 can be a
 shift left by~2. An add of a small constant can use an
@@ -746,7 +761,9 @@ tiles each expression tree with instruction patterns and
 picks the minimum-cost tiling. {\sc gcc} and {\sc llvm}
 use elaborate machine-description files that
 automatically generate instruction selectors from
-declarative rules. [[5c]] uses a simpler approach:
+declarative rules. 
+%5c:
+[[5c]] uses a simpler approach:
 hand-written C code that walks the AST and emits
 instructions directly, with ad hoc rules for the special
 cases (shift-for-multiply, immediate folding, combined
@@ -755,6 +772,7 @@ to read, and the ARM's relatively regular instruction set
 means the number of special cases stays manageable.
 
 \subsection{Frameization and stack-frame layout}
+\label{sec:frameization}
 
 % - parameters, arguments, locals, more structured forms than just plain stack
 % => see codegen: tag
@@ -765,8 +783,9 @@ Assembly has only the stack pointer and registers. {\em Frameization}
 is the mapping between the two: the compiler assigns each local
 variable and parameter an offset within the function's {\em stack
 frame}, generates code to set up the frame on entry (adjusting
-the stack pointer), and tears it down on exit. The
-{\em calling convention} defines which registers hold arguments,
+the stack pointer), and tears it down on exit.
+%
+The {\em calling convention} defines which registers hold arguments,
 where the return value goes, and which registers must be saved
 and restored across calls.
 
@@ -776,9 +795,12 @@ operating systems. ARM's {\sc aapcs} (ARM Architecture
 Procedure Call Standard) puts the first four arguments
 in [[R0]]--[[R3]] and the rest on the stack; x86-64
 System~V (Linux, macOS) uses six registers; Windows x64
-uses four different registers. \plan defines its own
+uses four different registers. 
+%plan9-is-cleaner:
+\plan defines its own
 convention ([[R0]] for first argument and return value,
 described in \book{Libcore}'s assembly crash course).
+%
 Getting the calling convention wrong produces bugs that
 are extraordinarily hard to diagnose: the callee reads
 its arguments from the wrong registers, and the program
@@ -789,28 +811,36 @@ crashes far from the actual error.
 \begin{verbatim}
   C code                    ARM assembly
   ------                    ------------
-  int add(int a, int b) {      TEXT add+0(SB), $8   // 8 bytes for locals
-      int sum;                 MOVW a+0(FP), R0     // param a at FP+0
-      sum = a + b;             MOVW b+4(FP), R1     // param b at FP+4
-      return sum;              ADD  R1, R0
-  }                            MOVW R0, sum-4(SP)   // local at SP-4
-                               MOVW R0, .ret+0(FP)  // return value
-                               RET
+  int add(int a, int b) {   TEXT add+0(SB), $8   // 8 bytes for locals
+      int sum;              MOVW a+0(FP), R0     // param a at FP+0
+      sum = a + b;          MOVW b+4(FP), R1     // param b at FP+4
+      return sum;           ADD  R1, R0
+  }                         MOVW R0, sum-4(SP)   // local at SP-4
+                            MOVW R0, .ret+0(FP)  // return value
+                            RET
 \end{verbatim}
+
+[[FP]] stands for ``frame pointer'', [[SP]] ``stack pointer'',
+and [[SB]] ``static base'' which are all {\em virtual registers} in \plan.
+See the \book{Assembler} for a full explanation of the [[TEXT]]
+pseudo-instruction, virtual registers, and the addressing
+modes used here (e.g., [[a+0(FP)]]).
+% ([[SB]], [[SP]], [[FP]]).
 
 \subsection{Optimizations}
 
-%claude:
-After generating assembly, the compiler can improve it.
+%claude: %5c:
+%After generating assembly, the compiler can improve it.
 [[5c]] performs two levels of optimization: {\em AST-level}
 transformations (constant folding, strength reduction,
 algebraic simplification) and {\em assembly-level}
 optimizations (register allocation across basic blocks,
 and peephole optimization to eliminate redundant instructions).
+%modern:
 These are modest compared to what GCC or LLVM do, but
 they are effective and easy to understand.
 
-%claude: %others:
+%claude: %others: %wib:
 To put [[5c]]'s modest optimization in perspective:
 {\sc gcc} runs roughly 200 optimization passes over its
 {\sc ir}, {\sc llvm} runs about 100, and [[5c]] runs
@@ -837,6 +867,7 @@ of}---which is what makes {\sc llvm} so modular.
 The most important property of modern {\sc ir}s is
 {\em Static Single Assignment} ({\sc ssa}), formalized by
 Cytron et al.\ in~1991: every variable is assigned
+%TODO: \cite{ssa}
 exactly once, and when a variable needs to be updated, a
 new version is created. This sounds restrictive but it
 makes dataflow analysis trivial---you can follow any
@@ -844,22 +875,26 @@ value back to its unique definition without searching
 through a list of possible assignments---which enables
 optimizations like constant propagation, dead-code
 elimination, and common-subexpression elimination to be
-expressed as simple graph walks. {\sc gcc} adopted {\sc
+expressed as simple graph walks. 
+%
+{\sc gcc} adopted {\sc
 ssa} in~2004 ({\sc gcc}~4.0); {\sc llvm}'s {\sc ir} has
 been {\sc ssa} from the start.
 
-%claude:
+%claude: %5c: %wib:
 [[5c]] has {\em neither} an {\sc ir} nor {\sc ssa}. It
 goes straight from the AST to an assembly instruction
 list, performing optimizations directly on both. This is
-a deliberate ``worse is better'' simplification: it keeps
+a deliberate
+% ``worse is better''
+simplification: it keeps
 the compiler small (no {\sc ir} data structures to
 maintain, no {\sc ssa} $\phi$-node insertion pass) at the
 cost of missing the cross-function and global
 optimizations that {\sc ssa}-based compilers excel at.
 For the workloads \plan was designed for---operating
 system code, command-line tools, compilers
-themselves---the simpler approach was fast enough.
+themselves---the simpler approach was good enough.
 
 \subsection{Register allocation}
 
@@ -869,14 +904,18 @@ is the most studied optimization in compiler history.
 The AST and linearization phase can use as many temporary
 values as they want, but the {\sc cpu} has a finite
 number of registers (16 on ARM, even fewer effectively
-available after reserving [[SP]], [[LR]], [[PC]], and
-[[SB]]). {\em Register allocation} is the mapping from
+available after reserving [[SP]], %[[LR]],
+[[PC]], and [[SB]]).
+%
+{\em Register allocation} is the mapping from
 an unlimited set of virtual temporaries to this finite
 set, with any overflow {\em spilled} to the stack.
 
 %claude: %cs-history:
 The classical formulation (Gregory Chaitin, {\sc ibm},
-1981) models the problem as {\em graph coloring}: build
+1981)
+%TODO: Cite
+models the problem as {\em graph coloring}: build
 an {\em interference graph} whose nodes are temporaries
 and whose edges connect temporaries that are live at the
 same time; then color the graph with $k$ colors (one per
@@ -890,7 +929,9 @@ once, assigning registers in order of live-range start,
 and is the algorithm of choice for {\sc jit} compilers
 ({\sc jvm} HotSpot's C1, V8's Crankshaft) where
 compilation speed matters more than the last 5\% of code
-quality. [[5c]] uses a simpler per-basic-block allocation
+quality.
+%5c:
+[[5c]] uses a simpler per-basic-block allocation
 that is fast enough for the code sizes \plan targets.
 
 \subsection{Peephole optimization}
@@ -913,15 +954,17 @@ tiny hole: you can only see a few instructions at a time,
 but that is enough to spot and fix local waste.
 
 %claude: %cs-history:
-The idea dates to William McKeeman (1965), and the
-technique is one of the simplest in the compiler: each
+The idea dates to William McKeeman (1965),
+%TODO: \cite{}
+and the technique is one of the simplest in the compiler: each
 rule is a pattern match (``if you see instruction~A
 followed by instruction~B, replace with instruction~C''),
 and the whole pass is a single loop over the instruction
 list. Despite its simplicity, it produces significant
 speedups by removing the overhead that the earlier, more
-structured passes left behind. [[5c]]'s peephole
-optimizer is under 200 lines and is one of the most
+structured passes left behind.
+%5c:
+[[5c]]'s peephole optimizer is under 200 lines and is one of the most
 readable parts of the backend.
 
 \subsection{Undefined behavior}
@@ -941,7 +984,7 @@ and optimize away the overflow check, which sometimes
 causes programs that ``worked'' with older compilers to
 break silently under [[-O2]].
 
-%claude:
+%claude: %5c: %wib:
 [[5c]] is far less aggressive. It rarely exploits {\sc
 ub} for optimization, which means it generates slower
 code but produces fewer surprises---a trade-off the
@@ -960,8 +1003,9 @@ Most compilers treat cross-compilation---generating code
 for a different architecture than the one the compiler
 runs on---as a special configuration that requires
 passing flags like \verb+--target=arm-linux-gnueabihf+.
+%plan9-is-cleaner:
 \plan's toolchain was designed for cross-compilation
-{\em from the start}. The numbered-tool convention
+{\em from the start}. The first character convention
 ([[5c]]/[[5a]]/[[5l]] for ARM, [[8c]]/[[8a]]/[[8l]] for
 x86, [[6c]]/[[6a]]/[[6l]] for AMD64) makes every
 compiler a cross-compiler by default: you compile ARM
@@ -977,7 +1021,9 @@ The modern echo of this philosophy is Zig (Andrew Kelley,
 and has gained significant adoption precisely because
 [[zig cc --target=aarch64-linux]] ``just works'' where
 configuring a {\sc gcc} or Clang cross-toolchain is a
-multi-step ordeal. \plan got this right in the~1990s.
+multi-step ordeal.
+%plan9-is-cleaner:
+\plan got this right in the~1990s.
 
 \subsection{Bootstrapping}
 
@@ -988,7 +1034,9 @@ the compiler. The standard solution is {\em bootstrapping}:
 start with a version compiled by some other means (a
 previous version, a different compiler, or even a
 hand-written translator), then use that to compile the
-``real'' compiler from source. [[5c]] was bootstrapped
+``real'' compiler from source.
+%5c:
+[[5c]] was bootstrapped
 from earlier \plan compilers; Go's compiler, which
 descends from the \plan toolchain, was famously rewritten
 from C to Go in~2015 and bootstrapped via a chain:
@@ -996,8 +1044,10 @@ Go~1.4 (the last C version) compiles Go~1.5 (the first
 Go version), which compiles all subsequent versions.
 
 %claude: %cs-history:
-Ken Thompson's 1984 Turing Award lecture {\em
-``Reflections on Trusting Trust''} revealed a deeper
+Note that Ken Thompson's 1984 Turing Award lecture {\em
+``Reflections on Trusting Trust''}
+%TODO: add also \cite{}
+revealed a deeper
 problem with bootstrapping: a compiler can be modified to
 insert a backdoor into any program it compiles---including
 {\em future versions of itself}---so that the backdoor
@@ -1014,6 +1064,8 @@ remains one of the most cited in computer science and is
 a reminder that trust in software is always, ultimately,
 trust in the toolchain.
 
+%yoann: actually plan9 toolchain can be cross-compiled from goken toolchain (derived from plan9) and itself compiled from gcc/clang
+
 \subsection{The most demanding reader of your code}
 
 %claude: %why-study:
@@ -1023,7 +1075,9 @@ variable's lifetime, verifies that every function call
 matches its declaration, detects unreachable code, warns
 about uninitialized variables, and then transforms the
 result into machine code you could not write by hand---all
-in a fraction of a second. This is easy to take for
+in a fraction of a second.
+%
+This is easy to take for
 granted when the compiler is a black box behind [[make]],
 but the rest of this book opens the box. What you will
 find is that most of the compiler's complexity is
@@ -1036,7 +1090,11 @@ compiler is, in effect, the programmer's most demanding
 colleague---one who never gets tired, never skims, and
 never lets an inconsistency pass.
 
+%yoann: AI era allows maybe to vibe code in english, but still need tools to determinstically translate that in machine code that gets deterministically run by a machine.
+
 \section{[[5c]] command-line interface}
+
+%yoann: add a transition paragraph
 
 % see all the flags, put here main flags
 
@@ -1067,18 +1125,18 @@ The main flags of [[5c]] fall into a few categories:
                  -S         print assembly (text)
 
   Warnings:      -w         enable warnings
-                 -V         enable void* conversion warnings
-                 -F         format specification check
                  -X         abort on first error
+                 -F         format specification check
+                 -T         safe linking (signature-based)
+                 -V         enable void* conversion warnings
 
   Preprocessor:  -D name    define macro
                  -I path    add include path
                  -p         use external /bin/cpp
 
   Debugger:      -a         generate acid declarations
-                 -T         safe linking (signature-based)
 
-  Internals:     -v         verbose mode
+  Debugging:     -v         verbose mode
                  -d         print declarations
                  -t         print type trees
                  -S         print generated assembly
@@ -1087,7 +1145,8 @@ The main flags of [[5c]] fall into a few categories:
 
 %claude:
 A typical build rule uses [[-FTVw]] (format check, safe linking,
-void* warnings, all warnings), as seen in the standard [[mkfile.proto]].
+void* warnings, all warnings), as seen in the standard [[mkfile.proto]]
+in the \plan repository.
 The [[-S]] flag is especially useful for understanding the compiler:
 it dumps the assembly text for each function as it is compiled.
 
@@ -1152,6 +1211,7 @@ and a [[print]] call:
       print("the answer is %d\n", 40 + 2);
   }
 \end{verbatim}
+
 %
 Compiling it with [[5c -S]] produces assembly that shows
 the three translations from the Overview: frameization
@@ -1159,11 +1219,10 @@ the three translations from the Overview: frameization
 [[42]] loaded into a register and pushed as an argument),
 and labelization (no branches here, just a straight-line sequence):
 \begin{verbatim}
-  TEXT main+0(SB), $0
-    MOVW $42, R0
-    MOVW R0, 4(SP)
+  TEXT main+0(SB), 0, $8
     MOVW $s+0(SB), R0
-    MOVW R0, 0(SP)
+    MOVW $42, R1
+    MOVW R1, 8(R13)
     BL   print+0(SB)
     RET
 
@@ -1174,6 +1233,9 @@ and labelization (no branches here, just a straight-line sequence):
   DATA  s+12(SB)/4, $"s %d"
   DATA  s+16(SB)/2, $"\n\z"
 \end{verbatim}
+% actually in principia print is a function pointer so code gen above
+%  is different with some MOVW print+0(SB),R2 at the beginning and BL 0(R2)
+
 %
 The constant expression [[40 + 2]]
 is folded at compile time into [[42]].
@@ -1186,7 +1248,7 @@ directives.
 %claude:
 See the \book{Assembler} for a full explanation of the [[TEXT]],
 [[GLOBL]], and [[DATA]] pseudo-instructions and the addressing
-modes used here ([[SB]], [[SP]], [[FP]]).
+modes used here ([[SB]], [[R13]]).
 
 \section{Input C language}
 
@@ -1220,9 +1282,13 @@ modes used here ([[SB]], [[SP]], [[FP]]).
 
 %claude:
 [[5c]] compiles mostly ANSI C (C89), with a few \plan
-extensions such as anonymous structs/unions and the
+extensions such as anonymous structs/unions
+(see Section~\ref{sec:ext-anonymous-struct-field})
+and the
 [[#pragma]] directives for format-string checking
-and safe linking. 
+(see Section~\ref{sec:ext-format-checking})
+and safe linking
+(see Section ~\ref{sec:safe-linking}). 
 %
 C is a systems programming
 language---pointers, explicit memory management, and
@@ -1258,10 +1324,11 @@ C also introduced a rich set of bit-manipulation operators
 ([[&]], [[|]], [[^]], [[<<]], [[>>]], and their assignment forms),
 making it a natural Domain Specific Language (DSL) for the kind of
 hardware-level code
-that fills the \book{Linker}, \book{Emulator}, and \book{Assembler}.
+that fills the \book{Kernel}, \book{Emulator}, or \book{Linker}.
 Bitfields let structures map directly onto hardware register
 layouts. 
-%
+
+%claude:
 Finally, C's overloaded arithmetic (the same [[+]] works
 for [[int]], [[long]], [[float]], and [[double]]) simplifies
 the surface language at the cost of a complex type-checker
@@ -1279,12 +1346,18 @@ that must insert the right coercions.
 % put code for helloworld.c generated code?
 
 %claude:
-Like [[5a]], [[5c]] generates object files in \plan's AST-based
+Like [[5a]] (see \book{Assembler}),
+[[5c]] generates object files in \plan's AST-based
 format (not machine code). The output is essentially a serialized
 list of assembly instructions---the same [<Prog>] structures
-that the \book{Assembler} describes. The linker [[5l]] then
-performs the actual machine code generation. You can use
-[[5c -S]] to see the assembly in textual form.
+that the \book{Assembler} describes.
+%
+The linker [[5l]] (see \book{Linker}) then
+performs the actual machine code generation.
+
+You can use
+[[5c -S]] to see the assembly in textual form (instead of
+the default serialized form).
 
 \section{The ARM architecture}
 
@@ -1332,7 +1405,6 @@ addressing modes in detail.
 \section{\plan design choices}
 
 %yoann: caller-saved or callee-saved? what is design choice vs constraint? what is arch-specific?
-
 %claude:
 A compiler must make many decisions about how to use the
 target machine's registers. Some of these are {\em hardware
@@ -1340,15 +1412,21 @@ constraints} imposed by the architecture (e.g., which register
 is the program counter), and some are {\em design choices}
 that the compiler or calling convention can decide freely
 (e.g., which registers to use for passing arguments).
-The most important design choice is the {\em calling convention}:
+%
+The most important design choice is the {\em calling convention}
+(see Section~\ref{sec:frameization}):
 which registers are preserved across function calls and which
 are not.
 
 %claude:
-In a {\em caller-saved} (``volatile'') convention, the caller
+In a {\em caller-saved}
+% (``volatile'')
+convention, the caller
 saves any registers it still needs before the call and restores
 them after; the callee is free to clobber them.
-In a {\em callee-saved} (``non-volatile'') convention, the callee
+In a {\em callee-saved}
+% (``non-volatile'')
+convention, the callee
 saves the registers it wants to use on entry and restores them
 before returning; the caller can assume they are untouched.
 In practice, architectures use a mix of both: some registers
@@ -1361,12 +1439,15 @@ are caller-saved and some are callee-saved.
 
   foo:                             foo:
     MOVW $1, R0  // use R0           MOVW R4, -4(SP)  // save R4
-    MOVW R0, -4(SP) // save R0      MOVW $1, R4      // use R4
+    MOVW R0, -4(SP) // save R0       MOVW $1, R4      // use R4
     BL   bar                         BL   bar
-    MOVW -4(SP), R0 // restore      // R4 still valid, no restore needed
+    MOVW -4(SP), R0 // restore       // R4 still valid, no restore needed
     ...                              MOVW -4(SP), R4  // restore R4
                                      RET
 \end{verbatim}
+%yoann1: I think the right part is wrong; if R4 is calleee saved, no need to save and restore?
+
+
 %claude:
 With caller-saved registers, the caller must save and restore
 around every call. With callee-saved registers, the callee
@@ -1376,15 +1457,18 @@ it actually uses the register. Functions that make no calls
 they can use them freely without saving.
 
 %claude:
-On ARM, the split between the two is fixed by the ARM
+On ARM, the split between the two is officially fixed by the ARM
 Procedure Call Standard (APCS): R0--R3 are caller-saved
 (used for arguments and scratch) and R4--R11 are callee-saved.
+%
 This is a hardware constraint that [[5c]] must respect.
+%5c:
 But within that framework, \plan makes its own
 design choices: it reserves certain registers for fixed purposes
 (R12 as the static base [[SB]], R13 as [[SP]], R14 as the link
 register, R15 as [[PC]]), and it uses a leaf-function optimization
 where functions that make no calls can skip saving callee-saved
 registers entirely.
+%yoann1: are you sure 5c respect the constraints? the callee saved R4-R11? also is it really an hardware constraint??
 
 
