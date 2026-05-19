@@ -130,10 +130,16 @@ which in the end are more complicated and usually less efficient than in Git.
 \section{Code organization}
 \label{tab:code-orga}
 
+%TODO
+
 \section{Software architecture}
 \label{sec:archi}
 
+%TODO
+
 \section{Book structure}
+
+%TODO, 3 parts
 
 %###############################################################################
 \part{Foundations}
@@ -143,6 +149,17 @@ which in the end are more complicated and usually less efficient than in Git.
 \chapter{Core Data Structures}
 %******************************************************************************
 \label{chap:core-ds}
+
+\begin{verse}
+\begin{flushright}
+  {\it Show me your code and conceal your data structures, and I shall
+    continue to be mystified. Show me your data structures, and I
+    won't usually need your code; it'll be obvious.\\
+    ~\\
+    Fred Brooks}
+\end{flushright}
+\end{verse}
+
 
 \section{Secure Hash Algorithm (SHA1) hashes}
 
@@ -171,15 +188,6 @@ hasheq(Hash *a, Hash *b)
     return memcmp(a->h, b->h, sizeof(a->h)) == 0;
 }
 @
-
-<<macro [[GETBE32]]>>=
-#define GETBE32(b)\
-        ((((b)[0] & 0xFFul) << 24) | \
-         (((b)[1] & 0xFFul) << 16) | \
-         (((b)[2] & 0xFFul) <<  8) | \
-         (((b)[3] & 0xFFul) <<  0))
-@
-
 
 
 \subsection{Hexadecimal hashes}
@@ -252,6 +260,16 @@ charval(int c)
     return ERROR_NEG1;
 }
 @
+
+
+<<macro [[GETBE32]]>>=
+#define GETBE32(b)\
+        ((((b)[0] & 0xFFul) << 24) | \
+         (((b)[1] & 0xFFul) << 16) | \
+         (((b)[2] & 0xFFul) <<  8) | \
+         (((b)[3] & 0xFFul) <<  0))
+@
+% a hash of a hash :)
 
 %%\section{[[Repository.t]]}
 %\label{sec:object-store-function}
@@ -546,11 +564,15 @@ static Object zcommit = {
 
 \section{Objects}
 
+
 \subsection{[[Objset]]}
+
+% weird DS: mix between array and hash, but not hash with bucket list,
+% here hash with inlined bucket after. tricky. ASCII diagram!
 
 <<struct [[Objset]]>>=
 struct Objset {
-    // hash_array<Hash, ref<Object>>, len = nobj (alloc = sz)
+    // hash_array<Hash, ref<Object>>, used = nobj (allocated = sz)
     Object  **obj;
     int nobj;
     int sz;
@@ -592,6 +614,7 @@ osadd(Objset *s, Object *o)
     probe = GETBE32(o->hash.h) % s->sz;
     while(s->obj[probe]){
         if(hasheq(&s->obj[probe]->hash, &o->hash)){
+            // update the object (old = leak?)
             s->obj[probe] = o;
             return;
         }
@@ -611,7 +634,7 @@ Object **obj;
 int i, sz;
 @
 
-% actually not realloc()
+% actually not exactly realloc()
 <<[[osadd()]] realloc if needed>>=
 if(s->sz < 2*s->nobj){
     sz = s->sz;
@@ -622,12 +645,16 @@ if(s->sz < 2*s->nobj){
     s->obj = eamalloc(s->sz, sizeof(Hash));
     for(i = 0; i < sz; i++)
         if(obj[i])
-            // recurse!
+            // recurse! need to maintain hash invariant
             osadd(s, obj[i]);
     free(obj);
 }
 @
 %ori: sizeof(Hash) again??
+
+% not the classic s->nobj == s->sz but < 2*s->nobj instead because of
+% hashing feature of the array so can have collision and need extra
+% space after for "mini-bucket"
 
 
 <<function [[osfind]]>>=
@@ -663,13 +690,13 @@ oshas(Objset *s, Hash h)
 
 \subsection{[[Objq]]}
 
-% just for commits, and sorted by ctime
+% just for commit objects, and sorted by ctime but in a weird way
 
 % used only in paint() for git/query?
 
 <<struct [[Objq]]>>=
 struct Objq {
-    // growing_array<Qelt> (len = nheap, allocated = heapsz)
+    // growing_array<Qelt> (used = nheap, allocated = heapsz)
     Qelt    *heap;
     int nheap;
     int heapsz;
@@ -685,7 +712,8 @@ struct Qelt {
     int color;
 };
 @
-% color??
+% "color" is generic term so can attach any property to the element,
+% "give a color" to an element.
 
 \subsubsection{[[Objq]] methods}
 
@@ -723,6 +751,7 @@ qput(Objq *q, Object *o, int color)
     q->nheap++;
 }
 @
+% see Objq just for GCommit.
 
 <<[[qput()]] realloc if needed>>=
 if(q->nheap == q->heapsz){
@@ -742,6 +771,7 @@ for(i = q->nheap; i > 0; i = (i-1)/2){
     q->heap[(i-1)/2] = t;
 }
 @
+% (i-1) / 2 ??
 
 
 <<function [[qpop]]>>=
@@ -789,6 +819,60 @@ qpop(Objq *q, Qelt *e)
 
 \section{[[.git/INDEX9]]}
 \label{sec:index}
+
+\subsection{Status character}
+
+% RMAUT (removed, modified, added, untracked, tracked)
+<<enum WalkFlags>>=
+// do not reorder, some code assume Tflg is the last
+enum WalkFlags {
+    Rflg    = 1 << 0,
+    Mflg    = 1 << 1,
+    Aflg    = 1 << 2,
+    Uflg    = 1 << 3,
+    /* everything after this is not an error */
+    Tflg    = 1 << 4,
+};
+@
+% >> >> >> >> >>
+
+<<global [[printflg]](walk.c)>>=
+// bitset<enum<WalkFlags>>
+int printflg;
+@
+
+\subsection{[[Idxent]]}
+
+<<struct [[Idxent]]>>=
+struct Idxent {
+    // ref_own<string>
+    char    *path;
+    Qid qid;
+    int mode;
+    // ??
+    int order;
+    // RMAUT?
+    char    state;
+};
+@
+
+<<function [[idxcmp]]>>=
+int
+idxcmp(void *pa, void *pb)
+{
+    Idxent *a, *b;
+    int c;
+
+    a = (Idxent*)pa;
+    b = (Idxent*)pb;
+    if((c = strcmp(a->path, b->path)) != 0)
+        return c;
+    assert(a->order != b->order);
+    return a-> order < b->order ? -1 : 1;
+}
+@
+
+
 
 %******************************************************************************
 \chapter{Reading from a Repository}
@@ -1054,6 +1138,9 @@ breadc(void *p)
 
 % nothing to parse,  direct data after decompression
 
+% still need to adjust the pointers! ->data = ... derived from all, where
+% is the code?
+
 \subsection{Reading a tree}
 
 <<[[parseobject()]] switch [[o->type]] cases>>=
@@ -1175,20 +1262,8 @@ parsecommit(Object *o)
 %\subsubsection{[[scanword()]]}
 % now in appendix
 
-\subsubsection{[[nextline()]]}
-
-<<function [[nextline (git9/pack.c)]]>>=
-static void
-nextline(char **str, int *nstr)
-{
-    char *s;
-
-    if((s = strchr(*str, '\n')) != nil){
-        *nstr -= s - *str + 1;
-        *str = s + 1;
-    }
-}
-@
+%\subsubsection{[[nextline()]]}
+% now in appendix
 
 \subsubsection{[[parseauthor()]]}
 
@@ -1317,6 +1392,8 @@ for(pfx = try; *pfx; pfx++){
 }
 @
 
+% useful to have "" first entry?
+
 \subsection{[[matchpfx]]}
 
 <<[[readref()]](ref.c) try other prefixes>>=
@@ -1345,6 +1422,7 @@ matchpfx(Hash *h, char *ref)
     return expandprefix(h, pfx, i*4);
 }
 @
+% >>
 % ??
 
 <<function [[expandprefix]]>>=
@@ -1568,7 +1646,6 @@ findrepo(char *buf, int nbuf, int *nrel)
 <<global [[findroot]]>>=
 bool findroot;
 @
-
 <<[[main()]](conf.c) command line processing>>=
 case 'r':   findroot=true;         break;
 @
@@ -1651,7 +1728,6 @@ done:
 <<global [[showall]]>>=
 bool showall;
 @
-
 <<[[main()]](conf.c) command line processing>>=
 case 'a':   showall=true;          break;
 @
@@ -1768,7 +1844,9 @@ Srv gitsrv = {
 @
 % write? readonly fs! even .git/fs/ctl
 
-\section{[[Qxxx]] and [[qroot]]}
+\section{Data structures}
+
+\subsection{[[Qxxx]] and [[qroot]]}
 
 <<emum [[Qxxx]]>>=
 enum Qxxx {
@@ -1803,8 +1881,6 @@ char *qroot[] = {
     "ctl",
 };
 @
-
-\section{Data structures}
 
 \subsection{[[Gitaux]] and [[Crumb]]}
 
@@ -1857,6 +1933,9 @@ crumb(Gitaux *aux, int n)
 % and crumb(1) = the entry just before
 
 
+
+%alt: \subsection{[[Objlist]]}
+% in core DS?
 
 \subsection{[[Objlist]]}
 
@@ -1919,7 +1998,7 @@ olsfree(Objlist *ols)
 
 \subsection{[[Uqid]] and [[Cache]]}
 
-% ??
+% ?? U for ? unique?
 <<struct [[Uqid]]>>=
 struct Uqid {
     vlong   uqid;
@@ -3093,7 +3172,7 @@ main(int argc, char **argv)
     int nrel;
     // ref_own<string>, question
     char *query;
-    // list<ref_own<Hash>>, answer
+    // array<Hash>, answer
     Hash *h;
     <<[[main()]](query.c) other locals>>
 
@@ -3113,7 +3192,9 @@ main(int argc, char **argv)
 
     <<[[main()]](query.c) set [[objpfx]]>>
 
+    // query
     <<[[main()]](query.c) set [[query]] derived from argv>>
+    // answer
     n = resolverefs(&h, query);
     free(query);
     <<[[main()]](query.c) sanity check [[n]] result>>
@@ -3131,6 +3212,8 @@ main(int argc, char **argv)
     exits(nil);
 }
 @
+
+% free(h) ?
 
 % seen %H, Hfmt
 
@@ -3307,7 +3390,8 @@ done:
 %pad: I introduced errorneg1 r; to cleanup the code
 %git9: I think added ~ cos ^ used by rc for concatenation so annoying to escape
 
-% readobject() also here!
+% readref() and readobject()!
+
 
 <<function [[eatspace]]>>=
 void
@@ -3808,72 +3892,47 @@ usage(void)
 }
 @
 
+% -fRMA in git/add?
+
+%alt:\section{Status character}
+% now in core DS
+% RMAUT (removed, modified, added, untracked, tracked)
 
 \section{[[main()]]}
+
 
 <<global [[wdirpath]](walk.c)>>=
 char    wdirpath[1024];
 @
+% working directory
+
+<<global [[isindexed]](walk.c)>>=
+bool isindexed = true;
+@
+<<global [[staleidx]](walk.c)>>=
+bool staleidx = false;
+@
+% see also cleanidx later for checkedin()
 
 <<function [[main (git9/walk.c)]]>>=
 void
 main(int argc, char **argv)
 {
-    char *p, *e, *ln, *base, **argrel, *parts[4], xbuf[8];
-    int i, j, c, line, *argn;
-    fdt wfd;
-    Biobuf *f, *o, *w;
-    Hash h;
-    Dir rn;
+    Biobuf *f; // .git/INDEX9
+    Biobuf *o; // STDOUT
+    <<[[main()]](walk.c) other locals>>
 
     gitinit(repopath, sizeof(repopath), &nrel);
-
     if(getwd(wdirpath, sizeof(wdirpath)) == nil)
         sysfatal("getwd: %r");
-
     // !! chdir !!
     if(chdir(repopath) == ERROR_NEG1)
         sysfatal("chdir: %r");
-
     if(access(".git/fs/ctl", AEXIST) != 0)
         sysfatal("no running git/fs");
 
     ARGBEGIN{
-    case 'q':
-        quiet++;
-        break;
-    case 'c':
-        rstr = "";
-        tstr = "";
-        mstr = "";
-        astr = "";
-        ustr = "";
-        break;
-    case 'f':
-        for(p = EARGF(usage()); *p; p++)
-            switch(*p){
-            case 'T':   printflg |= Tflg;   break;
-            case 'A':   printflg |= Aflg;   break;
-            case 'M':   printflg |= Mflg;   break;
-            case 'R':   printflg |= Rflg;   break;
-            case 'U':   printflg |= Uflg;   break;
-            default:    usage();        break;
-        }
-        break;
-    case 'b':
-        isindexed = 0;
-        base = EARGF(usage());
-        if(resolveref(&h, base) == -1)
-            sysfatal("no such ref '%s'", base);
-        bdir = smprint(".git/fs/object/%H/tree", h);
-        break;
-    case 'I':
-        /* invalidate index */
-        staleidx = 1;
-        break;
-    case 'r':
-        findslashes(EARGF(usage()));
-        break;
+    <<[[main()]](walk.c) command line processing>>
     default:
         usage();
     }ARGEND;
@@ -3881,197 +3940,649 @@ main(int argc, char **argv)
     if(printflg == 0)
         printflg = Tflg | Aflg | Mflg | Rflg;
 
-    argrel = emalloc(argc*sizeof(char*));
-    argn = emalloc(argc*sizeof(int));
-    for(i = 0; i < argc; i++){
-        argrel[i] = reporel(argv[i]);
-        argn[i] = strlen(argrel[i]);
-    }
+    <<[[main()]](walk.c) initializations part 1>>
 
     if(isindexed && !staleidx){
-        if((f = Bopen(".git/INDEX9", OREAD)) == nil){
-            if(access(".git/index9", AEXIST) == 0){
-                fprint(2, "index format conversion needed:\n");
-                fprint(2, "\tcd %s && git/fs\n", repopath);
-                fprint(2, "\t@{cd .git/index9/removed >[2]/dev/null && walk -f | sed 's/^/R NOQID 0 /'} >> .git/INDEX9\n");
-                fprint(2, "\t@{cd .git/fs/HEAD/tree && walk -f | sed 's/^/T NOQID 0 /'} >> .git/INDEX9\n");
-                exits("noindex");
-            }
-            staleidx = 1;
+        f = Bopen(".git/INDEX9", OREAD);
+        if(f == nil){
+            staleidx = true;
             goto Stale;
         }
-
-        nidx = 0;
-        idxsz = 32;
-        idx = emalloc(idxsz*sizeof(Idxent));
-
-        line = 0;
-        while((ln = Brdstr(f, '\n', 1)) != nil){
-            line++;
-            /* allow blank lines */
-            if(ln[0] == 0 || ln[0] == '\n')
-                continue;
-            if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
-                sysfatal(".git/INDEX9:%d: corrupt index", line);
-            cleanname(parts[3]);
-            if(nidx == idxsz){
-                idxsz += idxsz/2;
-                idx = erealloc(idx, idxsz*sizeof(Idxent));
-            }
-            idx[nidx].state = *parts[0];
-            idx[nidx].qid = parseqid(parts[1]);
-            idx[nidx].mode = strtol(parts[2], nil, 8);
-            idx[nidx].path = estrdup(parts[3]);
-            idx[nidx].order = nidx;
-            nidx++;
-            free(ln);
-        }
-        Bterm(f);
-    } else {
+        <<[[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]]>>
+    }
+    else {
 Stale:
-        nwdir = 0;
-        wdirsz = 32;
-        wdir = emalloc(wdirsz*sizeof(Idxent));
-
-        if(chdir(bdir) == -1)
-            sysfatal("chdir: %r");
-
-        /* load whole tree into index when stale */
-        intree = 1;
-        if(staleidx || argc == 0)
-            loadwdir(".");
-        else for(i = 0; i < argc; i++)
-            loadwdir(argrel[i]);
-
-        if(chdir(repopath) == -1)
-            sysfatal("chdir: %r");
-
-        /* use as index */
-        idx = wdir;
-        nidx = nwdir;
-        idxsz = wdirsz;
-
-        cleanidx = 1;
+        <<[[main()]](walk.c) initializations part 2, when stale>>
     }
-    qsort(idx, nidx, sizeof(Idxent), idxcmp);
+    <<[[main()]](walk.c) initializations part 3>>
+    o = Bfdopen(STDOUT, OWRITE);
+    <<[[main()]](walk.c) sanity check [[o]]>>
 
-    nwdir = 0;
-    wdirsz = 32;
-    wdir = emalloc(wdirsz*sizeof(Idxent));
-
-    intree = 0;
-    if(argc == 0)
-        loadwdir(".");
-    else for(i = 0; i < argc; i++)
-        loadwdir(argrel[i]);
-    qsort(wdir, nwdir, sizeof(Idxent), idxcmp);
-
-    if((o = Bfdopen(1, OWRITE)) == nil)
-        sysfatal("open out: %r");
-
-    i = 0;
-    j = 0;
-    while(i < nidx || j < nwdir){
-        /* find the last entry we tracked for a path */
-        while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0){
-            staleidx = 1;
-            i++;
-        }
-        while(j+1 < nwdir && strcmp(wdir[j].path, wdir[j+1].path) == 0)
-            j++;
-        if(i < nidx && !pfxmatch(idx[i].path, argrel, argn, argc)){
-            i++;
-            continue;
-        }
-        if(i >= nidx)
-            c = 1;
-        else if(j >= nwdir)
-            c = -1;
-        else
-            c = strcmp(idx[i].path, wdir[j].path);
-        /* exists in both index and on disk */
-        if(c == 0){
-            if(idx[i].state == 'R'){
-                if(checkedin(&idx[i], 0))
-                    show(o, Rflg, rstr, idx[i].path);
-                else{
-                    idx[i].state = 'U';
-                    staleidx = 1;
-                }
-            }else if(idx[i].state == 'A' && !checkedin(&idx[i], 1))
-                show(o, Aflg, astr, idx[i].path);
-            else if(!samedata(&idx[i], &wdir[j]))
-                show(o, Mflg, mstr, idx[i].path);
-            else
-                show(o, Tflg, tstr, idx[i].path);
-            i++;
-            j++;
-        /* only exists in index */
-        }else if(c < 0){
-            if(checkedin(&idx[i], 0))
-                show(o, Rflg, rstr, idx[i].path);
-            else{
-                idx[i].state = 'U';
-                staleidx = 1;
-            }
-            i++;
-        /* only exists on disk */
-        }else{
-            if(checkedin(&wdir[j], 0)){
-                if(samedata(nil, &wdir[j]))
-                    show(o, Tflg, tstr, wdir[j].path);
-                else
-                    show(o, Mflg, mstr, wdir[j].path);
-            }else if(printflg & Uflg && pfxmatch(wdir[j].path, argrel, argn, argc))
-                show(o, Uflg, ustr, wdir[j].path);
-            j++;
-        }
-    }
+    <<[[main()]](walk.c) walking [[idx]] and [[wdir]]>>
     Bterm(o);
 
     if(isindexed && staleidx)
-    if((wfd = create(".git/INDEX9.new", OWRITE, 0644)) != -1){
-        if((w = Bfdopen(wfd, OWRITE)) == nil){
-            close(wfd);
-            goto Nope;
-        }
-        for(i = 0; i < nidx; i++){
-            while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0)
-                i++;
-            if(idx[i].state == 'U')
-                continue;
-            Bprint(w, "%c %Q %o %s\n",
-                idx[i].state,
-                idx[i].qid, 
-                idx[i].mode,
-                idx[i].path);
-        }
-        Bterm(w);
-        nulldir(&rn);
-        rn.name = "INDEX9";
-        if(remove(".git/INDEX9") == -1)
-            if(access(".git/INDEX9", AEXIST) == 0)
-                goto Nope;
-        if(dirwstat(".git/INDEX9.new", &rn) == -1)
-            sysfatal("rename: %r");
-    }
+       <<[[main()]](walk.c) finalizations, when [[isindexed && staleidx]]>>
 
 Nope:
-    if(!dirty)
-        exits(nil);
+    <<[[main()]](walk.c) after Nope label>>
+}
+@
+%dead:
+%            if(access(".git/index9", AEXIST) == 0){
+%                fprint(2, "index format conversion needed:\n");
+%                fprint(2, "\tcd %s && git/fs\n", repopath);
+%                fprint(2, "\t@{cd .git/index9/removed >[2]/dev/null && walk -f | sed 's/^/R NOQID 0 /'} >> .git/INDEX9\n");
+%                fprint(2, "\t@{cd .git/fs/HEAD/tree && walk -f | sed 's/^/T NOQID 0 /'} >> .git/INDEX9\n");
+%                exits("noindex");
+%            }
 
-    p = xbuf;
-    e = p + sizeof(xbuf);
-    for(i = 0; (1 << i) != Tflg; i++)
-        if(dirty & (1 << i))
-            p = seprint(p, e, "%c", "RMAUT"[i]);
-    *p = '\0';
-    exits(xbuf);
+
+
+<<[[main()]](walk.c) sanity check [[o]]>>=
+if(o == nil)
+    sysfatal("open out: %r");
+@
+
+<<global [[quiet]](walk.c)>>=
+bool quiet;
+@
+<<[[main()]](walk.c) command line processing>>=
+case 'q':
+    quiet=true;
+    break;
+@
+
+
+% -fRMA
+<<[[main()]](walk.c) command line processing>>=
+case 'f':
+    for(p = EARGF(usage()); *p; p++)
+        switch(*p){
+        case 'T':   printflg |= Tflg;   break;
+        case 'A':   printflg |= Aflg;   break;
+        case 'M':   printflg |= Mflg;   break;
+        case 'R':   printflg |= Rflg;   break;
+        case 'U':   printflg |= Uflg;   break;
+        default:    usage();        break;
+    }
+    break;
+@
+
+
+%\section{Data structures}
+%\subsection{[[Idxent]]}
+%alt: move in core DS?
+
+
+\section{Initializations}
+
+\subsection{The index state: [[idx]]}
+
+<<global [[idx]](walk.c)>>=
+// growing_array<Idxent> (used = nidx, allocated = idxsz)
+Idxent  *idx;
+@
+<<global [[idxsz]](walk.c)>>=
+int idxsz;
+@
+<<global [[nidx]](walk.c)>>=
+int nidx;
+@
+
+<<[[main()]](walk.c) realloc [[idx]] if needed>>=
+if(nidx == idxsz){
+    idxsz += idxsz/2;
+    idx = erealloc(idx, idxsz*sizeof(Idxent));
 }
 @
 
 
+<<[[main()]](walk.c) other locals>>=
+char *ln;
+int line;
+char *parts[4];
+@
+
+<<[[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]]>>=
+nidx = 0;
+idxsz = 32;
+idx = emalloc(idxsz*sizeof(Idxent)); // why not eamalloc?
+
+line = 0;
+while((ln = Brdstr(f, '\n', 1)) != nil){
+    line++;
+    /* allow blank lines */
+    if(ln[0] == '\0' || ln[0] == '\n')
+        continue;
+    if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
+        sysfatal(".git/INDEX9:%d: corrupt index", line);
+    // else
+    cleanname(parts[3]);
+    <<[[main()]](walk.c) realloc [[idx]] if needed>>
+
+    idx[nidx].state = *parts[0];
+    idx[nidx].qid = parseqid(parts[1]);
+    idx[nidx].mode = strtol(parts[2], nil, 8);
+    idx[nidx].path = estrdup(parts[3]);
+    idx[nidx].order = nidx;
+    nidx++;
+    free(ln);
+}
+Bterm(f);
+@
+
+
+<<function [[parseqid]]>>=
+Qid
+parseqid(char *s)
+{
+    char *e;
+    Qid q;
+
+    if(strcmp(s, "NOQID") == 0)
+        return (Qid){-1, -1, -1};       
+    e = s;
+    q.path = strtoull(e, &e, 16);
+    if(*e != '.')
+        sysfatal("corrupt qid: %s (%s)", s, e);
+    q.vers = strtoul(e+1, &e, 10);
+    if(*e != '.')
+        sysfatal("corrupt qid: %s (%s)", s, e);
+    q.type = strtoul(e+1, &e, 16);
+    if(*e != '\0')
+        sysfatal("corrupt qid: %s (%x)", s, *e);
+    return q;
+}
+@
+
+
+
+%getfields in Libcore
+
+
+\subsection{The working directory state: [[wdir]]}
+
+
+<<global [[wdir]](walk.c)>>=
+// growing_array<Idxent> (used = nwdir, allocated = wdirsz)
+Idxent  *wdir;
+@
+<<global [[wdirsz]](walk.c)>>=
+int wdirsz;
+@
+<<global [[nwdir]](walk.c)>>=
+int nwdir;
+@
+
+<<global [[intree]](walk.c)>>=
+bool intree;
+@
+
+
+
+
+<<[[main()]](walk.c) initializations part 3>>=
+qsort(idx, nidx, sizeof(Idxent), idxcmp);
+
+nwdir = 0;
+wdirsz = 32;
+wdir = emalloc(wdirsz*sizeof(Idxent));
+
+intree = false;
+if(argc == 0)
+    loadwdir(".");
+else for(i = 0; i < argc; i++)
+    loadwdir(argrel[i]);
+qsort(wdir, nwdir, sizeof(Idxent), idxcmp);
+@
+
+
+
+<<function [[loadwdir]]>>=
+void
+loadwdir(char *path)
+{
+    fdt fd;
+    int i, n;
+    Dir *d, *e;
+
+    d = nil;
+    e = nil;
+    cleanname(path);
+    if(!intree
+    && strncmp(path, ".git", 4) == 0
+    && (path[4] == '/' || path[4] == 0))
+        return;
+    // else
+
+    if((fd = open(path, OREAD)) < 0)
+        goto error;
+    if((e = dirfstat(fd)) == nil)
+        fprint(STDERR, "fstat: %r");
+    if(e->qid.type & QTDIR)
+        while((n = dirread(fd, &d)) > 0){
+            for(i = 0; i < n; i++)
+                loadent(path, &d[i], false);
+            free(d);
+        }
+    else
+        loadent(path, e, true);
+error:
+    free(e);
+    if(fd != -1)
+        close(fd);
+}
+@
+
+<<function [[loadent]]>>=
+void
+loadent(char *dir, Dir *d, bool fullpath)
+{
+    char *path;
+    Idxent *e;
+
+    if(fullpath)
+        path = estrdup(dir);
+    else if((path = smprint("%s/%s", dir, d->name)) == nil)
+        sysfatal("smprint: %r");
+
+    cleanname(path);
+    if(!intree && (printflg & Uflg) == 0 && !indexed(path, d->qid.type & QTDIR)){
+        free(path);
+        return;
+    }
+    if(d->qid.type & QTDIR){
+        loadwdir(path);
+        free(path);
+    }else{
+        if(nwdir == wdirsz){
+            wdirsz += wdirsz/2;
+            wdir = erealloc(wdir, wdirsz*sizeof(Idxent));
+        }
+        e = wdir + nwdir;
+        e->path = path;
+        e->qid = !intree? d->qid : (Qid){-1,-1,-1};
+        e->mode = d->mode;
+        e->order = nwdir;
+        e->state = 'T';
+        nwdir++;
+    }
+}
+@
+
+
+
+
+% git/walk <relative> ?
+<<[[main()]](walk.c) other locals>>=
+char **argrel;
+int *argn;
+@
+<<[[main()]](walk.c) initializations part 1>>=
+argrel = emalloc(argc*sizeof(char*));
+argn = emalloc(argc*sizeof(int));
+for(i = 0; i < argc; i++){
+    argrel[i] = reporel(argv[i]);
+    argn[i] = strlen(argrel[i]);
+}
+@
+
+
+<<function [[reporel]]>>=
+char*
+reporel(char *s)
+{
+    char *p;
+    int n;
+
+    if(*s == '/')
+        s = estrdup(s);
+    else if((s = smprint("%s/%s", wdirpath, s)) == nil)
+        sysfatal("smprint: %r");
+
+    p = cleanname(s);
+    n = strlen(repopath);
+    if(strncmp(s, repopath, n) != 0)
+        sysfatal("path outside repo: %s", s);
+    p += n;
+    if(*p == '/')
+        p++;
+    memmove(s, p, strlen(p)+1);
+    return s;
+}
+@
+
+
+
+\section{Walking}
+
+<<[[main()]](walk.c) other locals>>=
+int i, j;
+int c;
+@
+
+<<[[main()]](walk.c) walking [[idx]] and [[wdir]]>>=
+i = 0;
+j = 0;
+while(i < nidx || j < nwdir){
+    /* find the last entry we tracked for a path */
+    while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0){
+        staleidx = true;
+        i++;
+    }
+    while(j+1 < nwdir && strcmp(wdir[j].path, wdir[j+1].path) == 0)
+        j++;
+
+    if(i < nidx && !pfxmatch(idx[i].path, argrel, argn, argc)){
+        i++;
+        continue;
+    }
+    if(i >= nidx)
+        c = 1;
+    else if(j >= nwdir)
+        c = -1;
+    else
+        c = strcmp(idx[i].path, wdir[j].path);
+
+    /* exists in both index and on disk */
+    if(c == 0){
+        <<[[main()]](walk.c) when walking and exists in both index and disk>>
+        i++;
+        j++;
+    /* only exists in index */
+    }else if(c < 0){
+        <<[[main()]](walk.c) when walking and exists only in index>>
+        i++;
+    /* only exists on disk */
+    }else{
+        <<[[main()]](walk.c) when walking and exists only on disk>>
+        j++;
+    }
+}
+@
+
+
+
+<<function [[pfxmatch]]>>=
+int
+pfxmatch(char *p, char **pfx, int *pfxlen, int npfx)
+{
+    int i;
+
+    if(p == nil)
+        return 0;
+    if(npfx == 0)
+        return 1;
+    for(i = 0; i < npfx; i++){
+        if(strncmp(p, pfx[i], pfxlen[i]) != 0)
+            continue;
+        if(p[pfxlen[i]] == '/' || p[pfxlen[i]] == 0)
+            return 1;
+        if(strcmp(pfx[i], ".") == 0 || *pfx[i] == 0)
+            return 1;
+    }
+    return 0;
+}
+@
+
+\section{Showing}
+
+<<[[main()]](walk.c) when walking and exists in both index and disk>>=
+if(idx[i].state == 'R'){
+    if(checkedin(&idx[i], false))
+        show(o, Rflg, rstr, idx[i].path);
+    else{
+        idx[i].state = 'U';
+        staleidx = true;
+    }
+}else if(idx[i].state == 'A' && !checkedin(&idx[i], true))
+    show(o, Aflg, astr, idx[i].path);
+else if(!samedata(&idx[i], &wdir[j]))
+    show(o, Mflg, mstr, idx[i].path);
+else
+    show(o, Tflg, tstr, idx[i].path);
+@
+
+
+<<[[main()]](walk.c) when walking and exists only in index>>=
+if(checkedin(&idx[i], false))
+    show(o, Rflg, rstr, idx[i].path);
+else{
+    idx[i].state = 'U';
+    staleidx = true;
+}
+@
+
+<<[[main()]](walk.c) when walking and exists only on disk>>=
+if(checkedin(&wdir[j], false)){
+    if(samedata(nil, &wdir[j]))
+        show(o, Tflg, tstr, wdir[j].path);
+    else
+        show(o, Mflg, mstr, wdir[j].path);
+}else if(printflg & Uflg && pfxmatch(wdir[j].path, argrel, argn, argc))
+    show(o, Uflg, ustr, wdir[j].path);
+@
+
+
+
+
+<<function [[show (git9/walk.c)]]>>=
+void
+show(Biobuf *o, int flg, char *str, char *path)
+{
+    char *pa, *pb;
+    int n;
+
+    dirty |= flg;
+    if(!quiet && (printflg & flg)){
+        Bprint(o, str);
+        n = nslash;
+        if(n){
+            for(pa = relapath, pb = path; *pa && *pb; pa++, pb++){
+                if(*pa != *pb)
+                    break;
+                if(*pa == '/'){
+                    n--;
+                    path = pb+1;
+                }
+            }
+            while(n-- > 0)
+                Bprint(o, "../");
+        }
+        Bprint(o, "%s\n", path);
+    }
+}
+@
+
+
+<<global [[cleanidx]]>>=
+bool cleanidx = false;   /* skip tree check for checkedin() */
+@
+
+<<function [[checkedin]]>>=
+bool
+checkedin(Idxent *e, bool change)
+{
+    char *p;
+    int r;
+
+    /* clean index, no need to check tree */
+    if(cleanidx)
+        return e >= &idx[0] && e < &idx[nidx] && e->state != 'R';
+
+    if((p = smprint("%s/%s", bdir, e->path)) == nil)
+        sysfatal("smprint: %r");
+
+    r = access(p, AEXIST);
+    if(r == 0 && change){
+        if(e->state != 'R')
+            e->state = 'T';
+        staleidx = true;
+    }
+    free(p);
+
+    return r == 0;
+}
+@
+
+
+\section{Finalizations}
+
+%XXX
+<<[[main()]](walk.c) other locals>>=
+char *p, *e, *base, xbuf[8];
+Hash h;
+Dir rn;
+@
+
+<<[[main()]](walk.c) other locals>>=
+fdt wfd;
+Biobuf *w;
+@
+
+<<[[main()]](walk.c) finalizations, when [[isindexed && staleidx]]>>=
+if((wfd = create(".git/INDEX9.new", OWRITE, 0644)) != ERROR_NEG1){
+    if((w = Bfdopen(wfd, OWRITE)) == nil){
+        close(wfd);
+        goto Nope;
+    }
+    for(i = 0; i < nidx; i++){
+        while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0)
+            i++;
+        if(idx[i].state == 'U')
+            continue;
+        Bprint(w, "%c %Q %o %s\n",
+            idx[i].state,
+            idx[i].qid, 
+            idx[i].mode,
+            idx[i].path);
+    }
+    Bterm(w);
+    nulldir(&rn);
+    rn.name = "INDEX9";
+    if(remove(".git/INDEX9") == -1)
+        if(access(".git/INDEX9", AEXIST) == 0)
+            goto Nope;
+    if(dirwstat(".git/INDEX9.new", &rn) == -1)
+        sysfatal("rename: %r");
+}
+@
+
+
+<<[[main()]](walk.c) after Nope label>>=
+if(!dirty)
+    exits(nil);
+
+p = xbuf;
+e = p + sizeof(xbuf);
+for(i = 0; (1 << i) != Tflg; i++)
+    if(dirty & (1 << i))
+        p = seprint(p, e, "%c", "RMAUT"[i]);
+*p = '\0';
+exits(xbuf);
+@
+
 \section{Advanced features}
+
+\subsection{[[git/walk -b <base>]]}
+
+<<[[main()]](walk.c) command line processing>>=
+case 'b':
+    isindexed = false;
+    base = EARGF(usage());
+    if(resolveref(&h, base) == ERROR_NEG1)
+        sysfatal("no such ref '%s'", base);
+    bdir = smprint(".git/fs/object/%H/tree", h);
+    break;
+@
+
+\subsection{[[git/walk -I]]}
+
+<<[[main()]](walk.c) command line processing>>=
+case 'I':
+    /* invalidate index */
+    staleidx = true;
+    break;
+@
+
+
+<<[[main()]](walk.c) initializations part 2, when stale>>=
+nwdir = 0;
+wdirsz = 32;
+wdir = emalloc(wdirsz*sizeof(Idxent));
+
+if(chdir(bdir) == -1)
+    sysfatal("chdir: %r");
+
+/* load whole tree into index when stale */
+intree = 1;
+if(staleidx || argc == 0)
+    loadwdir(".");
+else for(i = 0; i < argc; i++)
+    loadwdir(argrel[i]);
+
+if(chdir(repopath) == -1)
+    sysfatal("chdir: %r");
+
+/* use as index */
+idx = wdir;
+nidx = nwdir;
+idxsz = wdirsz;
+
+cleanidx = true;
+@
+
+
+\subsection{[[git/walk -r]]}
+
+<<[[main()]](walk.c) command line processing>>=
+case 'r':
+    findslashes(EARGF(usage()));
+    break;
+@
+
+<<function [[findslashes]]>>=
+void
+findslashes(char *path)
+{
+    char *p;
+
+    p = cleanname(path);
+    if(p[0] == '.'){
+        if(p[1] == '\0')
+            return;
+        else if(p[1] == '.' && (p[2] == '/' || p[2] == '\0'))
+            sysfatal("relative path escapes git root");
+    }
+    
+    snprint(relapath, sizeof relapath, "%s/", p);
+    p = relapath;
+    if(*p == '/')
+        p++;
+
+    for(; *p; p++)
+        if(*p == '/')
+            nslash++;
+}
+@
+
+\subsection{[[git/walk -c]]}
+
+<<[[main()]](walk.c) command line processing>>=
+case 'c':
+    rstr = "";
+    tstr = "";
+    mstr = "";
+    astr = "";
+    ustr = "";
+    break;
+@
+
+%******************************************************************************
+\chapter{[[git/save]]}
+%******************************************************************************
+%alt: just in git/commit chapter
 
 %******************************************************************************
 %%\chapter{Main Functions}
@@ -7814,6 +8325,19 @@ strip(char *s)
     while(e > s && isspace(*--e))
         *e = 0;
     return s;
+}
+@
+
+<<function [[nextline (git9/pack.c)]]>>=
+static void
+nextline(char **str, int *nstr)
+{
+    char *s;
+
+    if((s = strchr(*str, '\n')) != nil){
+        *nstr -= s - *str + 1;
+        *str = s + 1;
+    }
 }
 @
 

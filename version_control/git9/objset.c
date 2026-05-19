@@ -34,6 +34,7 @@ osadd(Objset *s, Object *o)
     probe = GETBE32(o->hash.h) % s->sz;
     while(s->obj[probe]){
         if(hasheq(&s->obj[probe]->hash, &o->hash)){
+            // update the object (old = leak?)
             s->obj[probe] = o;
             return;
         }
@@ -54,7 +55,7 @@ osadd(Objset *s, Object *o)
         s->obj = eamalloc(s->sz, sizeof(Hash));
         for(i = 0; i < sz; i++)
             if(obj[i])
-                // recurse!
+                // recurse! need to maintain hash invariant
                 osadd(s, obj[i]);
         free(obj);
     }

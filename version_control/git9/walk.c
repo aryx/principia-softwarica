@@ -10,7 +10,9 @@ typedef struct Idxent   Idxent;
 #define NCACHE 4096
 /*e: constant [[NCACHE]] */
 
-enum {
+/*s: enum WalkFlags */
+// do not reorder, some code assume Tflg is the last
+enum WalkFlags {
     Rflg    = 1 << 0,
     Mflg    = 1 << 1,
     Aflg    = 1 << 2,
@@ -18,6 +20,7 @@ enum {
     /* everything after this is not an error */
     Tflg    = 1 << 4,
 };
+/*e: enum WalkFlags */
 
 struct Idxed {
     char**  cache;
@@ -43,28 +46,56 @@ char    *bdir = ".git/fs/HEAD/tree";
 
 int nslash;
 int nrel;
-int quiet;
+/*s: global [[quiet]](walk.c) */
+bool quiet;
+/*e: global [[quiet]](walk.c) */
 int dirty;
-int isindexed = 1;
-int intree;
+/*s: global [[isindexed]](walk.c) */
+bool isindexed = true;
+/*e: global [[isindexed]](walk.c) */
+/*s: global [[intree]](walk.c) */
+bool intree;
+/*e: global [[intree]](walk.c) */
+/*s: global [[printflg]](walk.c) */
+// bitset<enum<WalkFlags>>
 int printflg;
+/*e: global [[printflg]](walk.c) */
 
+/*s: global [[idx]](walk.c) */
+// growing_array<Idxent> (used = nidx, allocated = idxsz)
 Idxent  *idx;
+/*e: global [[idx]](walk.c) */
+/*s: global [[idxsz]](walk.c) */
 int idxsz;
+/*e: global [[idxsz]](walk.c) */
+/*s: global [[nidx]](walk.c) */
 int nidx;
+/*e: global [[nidx]](walk.c) */
 
-int cleanidx = 0;   /* skip tree check for checkedin() */
-int staleidx = 0;
+/*s: global [[cleanidx]] */
+bool cleanidx = false;   /* skip tree check for checkedin() */
+/*e: global [[cleanidx]] */
+/*s: global [[staleidx]](walk.c) */
+bool staleidx = false;
+/*e: global [[staleidx]](walk.c) */
 
+/*s: global [[wdir]](walk.c) */
+// growing_array<Idxent> (used = nwdir, allocated = wdirsz)
 Idxent  *wdir;
+/*e: global [[wdir]](walk.c) */
+/*s: global [[wdirsz]](walk.c) */
 int wdirsz;
+/*e: global [[wdirsz]](walk.c) */
+/*s: global [[nwdir]](walk.c) */
 int nwdir;
+/*e: global [[nwdir]](walk.c) */
+
 
 void    loadwdir(char*);
 
 /*s: function [[checkedin]] */
-int
-checkedin(Idxent *e, int change)
+bool
+checkedin(Idxent *e, bool change)
 {
     char *p;
     int r;
@@ -80,7 +111,7 @@ checkedin(Idxent *e, int change)
     if(r == 0 && change){
         if(e->state != 'R')
             e->state = 'T';
-        staleidx = 1;
+        staleidx = true;
     }
     free(p);
 
@@ -239,7 +270,7 @@ mismatch:
 
 /*s: function [[loadent]] */
 void
-loadent(char *dir, Dir *d, int fullpath)
+loadent(char *dir, Dir *d, bool fullpath)
 {
     char *path;
     Idxent *e;
@@ -276,7 +307,8 @@ loadent(char *dir, Dir *d, int fullpath)
 void
 loadwdir(char *path)
 {
-    int fd, i, n;
+    fdt fd;
+    int i, n;
     Dir *d, *e;
 
     d = nil;
@@ -286,19 +318,20 @@ loadwdir(char *path)
     && strncmp(path, ".git", 4) == 0
     && (path[4] == '/' || path[4] == 0))
         return;
+    // else
 
     if((fd = open(path, OREAD)) < 0)
         goto error;
     if((e = dirfstat(fd)) == nil)
-        fprint(2, "fstat: %r");
+        fprint(STDERR, "fstat: %r");
     if(e->qid.type & QTDIR)
         while((n = dirread(fd, &d)) > 0){
             for(i = 0; i < n; i++)
-                loadent(path, &d[i], 0);
+                loadent(path, &d[i], false);
             free(d);
         }
     else
-        loadent(path, e, 1);
+        loadent(path, e, true);
 error:
     free(e);
     if(fd != -1)
@@ -417,36 +450,42 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-    char *p, *e, *ln, *base, **argrel, *parts[4], xbuf[8];
-    int i, j, c, line, *argn;
-    fdt wfd;
-    Biobuf *f, *o, *w;
+    Biobuf *f; // .git/INDEX9
+    Biobuf *o; // STDOUT
+    /*s: [[main()]](walk.c) other locals */
+    char *ln;
+    int line;
+    char *parts[4];
+    /*x: [[main()]](walk.c) other locals */
+    char **argrel;
+    int *argn;
+    /*x: [[main()]](walk.c) other locals */
+    int i, j;
+    int c;
+    /*x: [[main()]](walk.c) other locals */
+    char *p, *e, *base, xbuf[8];
     Hash h;
     Dir rn;
+    /*x: [[main()]](walk.c) other locals */
+    fdt wfd;
+    Biobuf *w;
+    /*e: [[main()]](walk.c) other locals */
 
     gitinit(repopath, sizeof(repopath), &nrel);
-
     if(getwd(wdirpath, sizeof(wdirpath)) == nil)
         sysfatal("getwd: %r");
-
     // !! chdir !!
     if(chdir(repopath) == ERROR_NEG1)
         sysfatal("chdir: %r");
-
     if(access(".git/fs/ctl", AEXIST) != 0)
         sysfatal("no running git/fs");
 
     ARGBEGIN{
+    /*s: [[main()]](walk.c) command line processing */
     case 'q':
-        quiet++;
+        quiet=true;
         break;
-    case 'c':
-        rstr = "";
-        tstr = "";
-        mstr = "";
-        astr = "";
-        ustr = "";
-        break;
+    /*x: [[main()]](walk.c) command line processing */
     case 'f':
         for(p = EARGF(usage()); *p; p++)
             switch(*p){
@@ -458,20 +497,32 @@ main(int argc, char **argv)
             default:    usage();        break;
         }
         break;
+    /*x: [[main()]](walk.c) command line processing */
     case 'b':
-        isindexed = 0;
+        isindexed = false;
         base = EARGF(usage());
-        if(resolveref(&h, base) == -1)
+        if(resolveref(&h, base) == ERROR_NEG1)
             sysfatal("no such ref '%s'", base);
         bdir = smprint(".git/fs/object/%H/tree", h);
         break;
+    /*x: [[main()]](walk.c) command line processing */
     case 'I':
         /* invalidate index */
-        staleidx = 1;
+        staleidx = true;
         break;
+    /*x: [[main()]](walk.c) command line processing */
     case 'r':
         findslashes(EARGF(usage()));
         break;
+    /*x: [[main()]](walk.c) command line processing */
+    case 'c':
+        rstr = "";
+        tstr = "";
+        mstr = "";
+        astr = "";
+        ustr = "";
+        break;
+    /*e: [[main()]](walk.c) command line processing */
     default:
         usage();
     }ARGEND;
@@ -479,43 +530,43 @@ main(int argc, char **argv)
     if(printflg == 0)
         printflg = Tflg | Aflg | Mflg | Rflg;
 
+    /*s: [[main()]](walk.c) initializations part 1 */
     argrel = emalloc(argc*sizeof(char*));
     argn = emalloc(argc*sizeof(int));
     for(i = 0; i < argc; i++){
         argrel[i] = reporel(argv[i]);
         argn[i] = strlen(argrel[i]);
     }
+    /*e: [[main()]](walk.c) initializations part 1 */
 
     if(isindexed && !staleidx){
-        if((f = Bopen(".git/INDEX9", OREAD)) == nil){
-            if(access(".git/index9", AEXIST) == 0){
-                fprint(2, "index format conversion needed:\n");
-                fprint(2, "\tcd %s && git/fs\n", repopath);
-                fprint(2, "\t@{cd .git/index9/removed >[2]/dev/null && walk -f | sed 's/^/R NOQID 0 /'} >> .git/INDEX9\n");
-                fprint(2, "\t@{cd .git/fs/HEAD/tree && walk -f | sed 's/^/T NOQID 0 /'} >> .git/INDEX9\n");
-                exits("noindex");
-            }
-            staleidx = 1;
+        f = Bopen(".git/INDEX9", OREAD);
+        if(f == nil){
+            staleidx = true;
             goto Stale;
         }
-
+        /*s: [[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]] */
         nidx = 0;
         idxsz = 32;
-        idx = emalloc(idxsz*sizeof(Idxent));
+        idx = emalloc(idxsz*sizeof(Idxent)); // why not eamalloc?
 
         line = 0;
         while((ln = Brdstr(f, '\n', 1)) != nil){
             line++;
             /* allow blank lines */
-            if(ln[0] == 0 || ln[0] == '\n')
+            if(ln[0] == '\0' || ln[0] == '\n')
                 continue;
             if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
                 sysfatal(".git/INDEX9:%d: corrupt index", line);
+            // else
             cleanname(parts[3]);
+            /*s: [[main()]](walk.c) realloc [[idx]] if needed */
             if(nidx == idxsz){
                 idxsz += idxsz/2;
                 idx = erealloc(idx, idxsz*sizeof(Idxent));
             }
+            /*e: [[main()]](walk.c) realloc [[idx]] if needed */
+
             idx[nidx].state = *parts[0];
             idx[nidx].qid = parseqid(parts[1]);
             idx[nidx].mode = strtol(parts[2], nil, 8);
@@ -525,8 +576,11 @@ main(int argc, char **argv)
             free(ln);
         }
         Bterm(f);
-    } else {
+        /*e: [[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]] */
+    }
+    else {
 Stale:
+        /*s: [[main()]](walk.c) initializations part 2, when stale */
         nwdir = 0;
         wdirsz = 32;
         wdir = emalloc(wdirsz*sizeof(Idxent));
@@ -549,34 +603,41 @@ Stale:
         nidx = nwdir;
         idxsz = wdirsz;
 
-        cleanidx = 1;
+        cleanidx = true;
+        /*e: [[main()]](walk.c) initializations part 2, when stale */
     }
+    /*s: [[main()]](walk.c) initializations part 3 */
     qsort(idx, nidx, sizeof(Idxent), idxcmp);
 
     nwdir = 0;
     wdirsz = 32;
     wdir = emalloc(wdirsz*sizeof(Idxent));
 
-    intree = 0;
+    intree = false;
     if(argc == 0)
         loadwdir(".");
     else for(i = 0; i < argc; i++)
         loadwdir(argrel[i]);
     qsort(wdir, nwdir, sizeof(Idxent), idxcmp);
-
-    if((o = Bfdopen(1, OWRITE)) == nil)
+    /*e: [[main()]](walk.c) initializations part 3 */
+    o = Bfdopen(STDOUT, OWRITE);
+    /*s: [[main()]](walk.c) sanity check [[o]] */
+    if(o == nil)
         sysfatal("open out: %r");
+    /*e: [[main()]](walk.c) sanity check [[o]] */
 
+    /*s: [[main()]](walk.c) walking [[idx]] and [[wdir]] */
     i = 0;
     j = 0;
     while(i < nidx || j < nwdir){
         /* find the last entry we tracked for a path */
         while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0){
-            staleidx = 1;
+            staleidx = true;
             i++;
         }
         while(j+1 < nwdir && strcmp(wdir[j].path, wdir[j+1].path) == 0)
             j++;
+
         if(i < nidx && !pfxmatch(idx[i].path, argrel, argn, argc)){
             i++;
             continue;
@@ -587,74 +648,85 @@ Stale:
             c = -1;
         else
             c = strcmp(idx[i].path, wdir[j].path);
+
         /* exists in both index and on disk */
         if(c == 0){
+            /*s: [[main()]](walk.c) when walking and exists in both index and disk */
             if(idx[i].state == 'R'){
-                if(checkedin(&idx[i], 0))
+                if(checkedin(&idx[i], false))
                     show(o, Rflg, rstr, idx[i].path);
                 else{
                     idx[i].state = 'U';
-                    staleidx = 1;
+                    staleidx = true;
                 }
-            }else if(idx[i].state == 'A' && !checkedin(&idx[i], 1))
+            }else if(idx[i].state == 'A' && !checkedin(&idx[i], true))
                 show(o, Aflg, astr, idx[i].path);
             else if(!samedata(&idx[i], &wdir[j]))
                 show(o, Mflg, mstr, idx[i].path);
             else
                 show(o, Tflg, tstr, idx[i].path);
+            /*e: [[main()]](walk.c) when walking and exists in both index and disk */
             i++;
             j++;
         /* only exists in index */
         }else if(c < 0){
-            if(checkedin(&idx[i], 0))
+            /*s: [[main()]](walk.c) when walking and exists only in index */
+            if(checkedin(&idx[i], false))
                 show(o, Rflg, rstr, idx[i].path);
             else{
                 idx[i].state = 'U';
-                staleidx = 1;
+                staleidx = true;
             }
+            /*e: [[main()]](walk.c) when walking and exists only in index */
             i++;
         /* only exists on disk */
         }else{
-            if(checkedin(&wdir[j], 0)){
+            /*s: [[main()]](walk.c) when walking and exists only on disk */
+            if(checkedin(&wdir[j], false)){
                 if(samedata(nil, &wdir[j]))
                     show(o, Tflg, tstr, wdir[j].path);
                 else
                     show(o, Mflg, mstr, wdir[j].path);
             }else if(printflg & Uflg && pfxmatch(wdir[j].path, argrel, argn, argc))
                 show(o, Uflg, ustr, wdir[j].path);
+            /*e: [[main()]](walk.c) when walking and exists only on disk */
             j++;
         }
     }
+    /*e: [[main()]](walk.c) walking [[idx]] and [[wdir]] */
     Bterm(o);
 
     if(isindexed && staleidx)
-    if((wfd = create(".git/INDEX9.new", OWRITE, 0644)) != -1){
-        if((w = Bfdopen(wfd, OWRITE)) == nil){
-            close(wfd);
-            goto Nope;
-        }
-        for(i = 0; i < nidx; i++){
-            while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0)
-                i++;
-            if(idx[i].state == 'U')
-                continue;
-            Bprint(w, "%c %Q %o %s\n",
-                idx[i].state,
-                idx[i].qid, 
-                idx[i].mode,
-                idx[i].path);
-        }
-        Bterm(w);
-        nulldir(&rn);
-        rn.name = "INDEX9";
-        if(remove(".git/INDEX9") == -1)
-            if(access(".git/INDEX9", AEXIST) == 0)
-                goto Nope;
-        if(dirwstat(".git/INDEX9.new", &rn) == -1)
-            sysfatal("rename: %r");
-    }
+       /*s: [[main()]](walk.c) finalizations, when [[isindexed && staleidx]] */
+       if((wfd = create(".git/INDEX9.new", OWRITE, 0644)) != ERROR_NEG1){
+           if((w = Bfdopen(wfd, OWRITE)) == nil){
+               close(wfd);
+               goto Nope;
+           }
+           for(i = 0; i < nidx; i++){
+               while(i+1 < nidx && strcmp(idx[i].path, idx[i+1].path) == 0)
+                   i++;
+               if(idx[i].state == 'U')
+                   continue;
+               Bprint(w, "%c %Q %o %s\n",
+                   idx[i].state,
+                   idx[i].qid, 
+                   idx[i].mode,
+                   idx[i].path);
+           }
+           Bterm(w);
+           nulldir(&rn);
+           rn.name = "INDEX9";
+           if(remove(".git/INDEX9") == -1)
+               if(access(".git/INDEX9", AEXIST) == 0)
+                   goto Nope;
+           if(dirwstat(".git/INDEX9.new", &rn) == -1)
+               sysfatal("rename: %r");
+       }
+       /*e: [[main()]](walk.c) finalizations, when [[isindexed && staleidx]] */
 
 Nope:
+    /*s: [[main()]](walk.c) after Nope label */
     if(!dirty)
         exits(nil);
 
@@ -665,6 +737,7 @@ Nope:
             p = seprint(p, e, "%c", "RMAUT"[i]);
     *p = '\0';
     exits(xbuf);
+    /*e: [[main()]](walk.c) after Nope label */
 }
 /*e: function [[main (git9/walk.c)]] */
 /*e: git9/walk.c */

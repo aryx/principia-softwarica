@@ -179,7 +179,7 @@ main(int argc, char **argv)
     int nrel;
     // ref_own<string>, question
     char *query;
-    // list<ref_own<Hash>>, answer
+    // array<Hash>, answer
     Hash *h;
     /*s: [[main()]](query.c) other locals */
     char *p, *e;
@@ -217,6 +217,7 @@ main(int argc, char **argv)
         sysfatal("smprint: %r");
     /*e: [[main()]](query.c) set [[objpfx]] */
 
+    // query
     /*s: [[main()]](query.c) set [[query]] derived from argv */
     // p = concat(argv, " ")
     for(i = 0, n = 0; i < argc; i++)
@@ -227,6 +228,7 @@ main(int argc, char **argv)
     for(i = 0; i < argc; i++)
         p = seprint(p, e, "%s ", argv[i]);
     /*e: [[main()]](query.c) set [[query]] derived from argv */
+    // answer
     n = resolverefs(&h, query);
     free(query);
     /*s: [[main()]](query.c) sanity check [[n]] result */

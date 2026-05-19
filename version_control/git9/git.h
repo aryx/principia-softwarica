@@ -225,7 +225,7 @@ struct Cinfo {
 
 /*s: struct [[Objset]] */
 struct Objset {
-    // hash_array<Hash, ref<Object>>, len = nobj (alloc = sz)
+    // hash_array<Hash, ref<Object>>, used = nobj (allocated = sz)
     Object  **obj;
     int nobj;
     int sz;
@@ -243,7 +243,7 @@ struct Qelt {
 /*e: struct [[Qelt]] */
 /*s: struct [[Objq]] */
 struct Objq {
-    // growing_array<Qelt> (len = nheap, allocated = heapsz)
+    // growing_array<Qelt> (used = nheap, allocated = heapsz)
     Qelt    *heap;
     int nheap;
     int heapsz;
@@ -272,13 +272,18 @@ struct Delta {
     int len;
 };
 
+/*s: struct [[Idxent]] */
 struct Idxent {
+    // ref_own<string>
     char    *path;
     Qid qid;
     int mode;
+    // ??
     int order;
+    // RMAUT?
     char    state;
 };
+/*e: struct [[Idxent]] */
 
 /*s: macro [[GETBE16]] */
 #define GETBE16(b)\
