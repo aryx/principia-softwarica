@@ -19,7 +19,7 @@
 %last:
 % - microgit, in Python, with diff-style doc (=~ LP)
 %   https://www.leshenko.net/p/ugit/#
-%   why not dulwich??
+%   but why not dulwich??
 % - https://evilgeniuslabs.ca/blog/from-cvs-to-git-thirty-years-of-source-control
 
 %------------------------------------------------------------------------------
@@ -31,28 +31,29 @@
 %thx to this manual, I better understand VCSs (and git):
 % - intuition of Torvalds for a stupid content tracker with very
 %   different strategies (e.g., rename handled at query time) 
-% - beauty of design using SHA1 used for so many things (Graydon Hoare?)
+% - beauty of design using SHA1 used for so many things (Graydon Hoare's monotone)
 % - merge and MERGE_HEADS state?
 
 %history LP-ization:
 % * wanted to LPize camp (simplified clone of darcs, also in Haskell)
-% * LPized finally dulwich (clone of git in Python)
-% * port dulwich to OCaml thx to lpized version of dulwich
-% * LPized my ocaml port of dulwich
+%   but unmaintained and slow
+% * LPized finally dulwich (simplified clone of git in Python) in 2016?
+% * port dulwich to OCaml thx to lpized version of dulwich in 2017?
+% * LPized my ocaml port of dulwich in 2018?
 % * switch to git9 that I discovered in 2026 (was created in 2021?)
 %   to be more consistent with the other principia books
 % - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+%    * [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
-% - SEMI distribute parts of the Extra section in the main file
-% - TODO understand main(), LP split main, improve TOC
-% - TODO understand main functions, LP split, cluster, improve TOC
-% - TODO LP split the structures, use datalog for flow to field info
-% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
-% - TODO aspecify advanced features! remove useless features
+% - distribute parts of the Extra section in the main file
+% - understand main(), LP split main, improve TOC
+% - understand main functions, LP split, cluster, improve TOC
+% - LP split the structures, use datalog for flow to field info
+% - nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - aspecify advanced features! remove useless features
 
 
 \begin{document}
@@ -119,7 +120,7 @@ Many of his design decisions seem obvious
 in retrospect but they are not: most VCSs chose different designs
 (for the storage, file permissions, for the way to handle renames, etc.)
 which in the end are more complicated and usually less efficient than in Git.
-\l snapshot-based > changeset?, SHA1 DAG (but Monotone), GMT time, etc.
+\l snapshot-based > changeset?, SHA1 DAG (but Monotone before), GMT time, etc.
 
 %******************************************************************************
 \chapter{Overview}
@@ -177,6 +178,7 @@ struct Hash {
 Hash    Zhash;
 @
 % Zerohash, used for loose error management
+% in plan9 bss section is memset to 0? see \book{Kernel}
 
 
 %alt: \subsection{Hash methods}
@@ -206,6 +208,7 @@ hashcmp(uchar *a, uchar *b, uint nbit)
     return x - y;
 }
 @
+
 
 
 \subsection{Hexadecimal hashes}
@@ -247,7 +250,7 @@ Hfmt(Fmt *fmt)
 
 <<function [[hparse]]>>=
 errorneg1
-hparse(Hash *h, char *b)
+hparse(Hash *h/*OUT*/, char *b)
 {
     int i, c0, c1;
 
@@ -389,10 +392,11 @@ enum Cxxx {
 <<[[Cxxx]] other cases>>=
 Ccache  = 1 << 4,
 @
+% >>
 <<[[Cxxx]] other cases>>=
 Cexist  = 1 << 5,
 @
-
+% >>
 
 \subsection{Reference counting}
 
@@ -400,6 +404,7 @@ Cexist  = 1 << 5,
 // shared objects
 int refs;
 @
+%ocaml: no need, GC handle that for us
 
 <<function [[ref]]>>=
 Object*
@@ -425,6 +430,7 @@ unref(Object *o)
 
 
 <<function [[clear]]>>=
+/// ?? -> <>
 static void
 clear(Object *o)
 {
@@ -491,9 +497,21 @@ struct Dirent {
     // ref_own<string>
     char *name;
     int mode;
+    // hash of GBlob (file) or GTree (dir) but not GCommit
     Hash h;
     <<[[Dirent]] other fields>>
 };
+@
+
+
+<<[[clear()]] switch [[o->type]] cases>>=
+case GTree:
+    if(!o->tree)
+        break;
+    free(o->tree->ent);
+    free(o->tree);
+    o->tree = nil;
+    break;
 @
 
 
@@ -547,15 +565,6 @@ entcmp(void *pa, void *pb)
 @
 
 
-<<[[clear()]] switch [[o->type]] cases>>=
-case GTree:
-    if(!o->tree)
-        break;
-    free(o->tree->ent);
-    free(o->tree);
-    o->tree = nil;
-    break;
-@
 
 
 <<function [[emptydir]]>>=
@@ -566,6 +575,7 @@ emptydir(void)
 
     if(e != nil)
         return ref(e);
+    // else
     e = emalloc(sizeof(Object));
     e->type = GTree;
     e->tree = emalloc(sizeof(Tinfo));
@@ -613,6 +623,7 @@ struct Cinfo {
     vlong   mtime;
 };
 @
+% ctime vs mtime?
 
 % a commit is a tree, parent(s), and a commit message (str, time, author, committer)
 
@@ -653,6 +664,7 @@ struct Objset {
     int sz;
 };
 @
+%ocaml: we will see a lot of this pattern, because no generics in C
 
 % ref cos shared, refcounting
 
@@ -757,10 +769,6 @@ oshas(Objset *s, Hash h)
 
 
 
-%\section{Objects and packs}
-%alt: or delay to Pack chapter?
-%alt: loose and packs?
-
 %alt: \subsection{[[Objlist]]}
 
 \subsection{[[Objq]]}
@@ -777,6 +785,7 @@ struct Objq {
     int heapsz;
 };
 @
+%ocaml: very similar to previous one
 
 <<struct [[Qelt]]>>=
 struct Qelt {
@@ -883,14 +892,16 @@ qpop(Objq *q, Qelt *e)
 }
 @
 
+%\section{Objects and packs}
+%alt: or delay to Pack chapter?
+%alt: loose and packs?
 
-\section{References}
-
-\subsection{Reference names}
-\subsection{[[HEAD]]}
-\subsection{Reference content}
-\subsection{Reference store}
-\subsection{Objectish references}
+%%\section{References}
+%%\subsection{Reference names}
+%%\subsection{[[HEAD]]}
+%%\subsection{Reference content}
+%%\subsection{Reference store}
+%%\subsection{Objectish references}
 
 \section{[[.git/INDEX9]]}
 \label{sec:index}
@@ -1036,7 +1047,7 @@ readobject(Hash h)
     return o;
 }
 @
-
+% no cache(o); here?
 
 \subsection{[[readidxobject()]]}
 
@@ -1140,8 +1151,7 @@ readloose(Biobuf *f, Object *o, int flag)
     int l;
 
     n = decompress(&d, f, nil);
-    if(n == ERROR_NEG1)
-        return ERROR_NEG1;
+    <<[[readloose()]] sanity check [[n]]>>
 
     s = d;
     ed = d + n;
@@ -1162,14 +1172,8 @@ readloose(Biobuf *f, Object *o, int flag)
     }
     // else
     sz = strtol(s, &e, 0);
-    if(e == s || *e++ != '\0'){
-        werrstr("malformed object header");
-        goto error;
-    }
-    if(sz != n - (e - d)){
-        werrstr("mismatched sizes");
-        goto error;
-    }
+    <<[[readloose()]] sanity check [[e]]>>
+    <<[[readloose()]] sanity check [[sz]]>>
     o->all = d;
     o->data = e;
     o->size = sz;
@@ -1184,6 +1188,24 @@ error:
 
 % setting o->all, and o->data!
 
+<<[[readloose()]] sanity check [[n]]>>=
+if(n == ERROR_NEG1)
+    return ERROR_NEG1;
+@
+
+<<[[readloose()]] sanity check [[e]]>>=
+if(e == s || *e++ != '\0'){
+    werrstr("malformed object header");
+    goto error;
+}
+@
+
+<<[[readloose()]] sanity check [[sz]]>>=
+if(sz != n - (e - d)){
+    werrstr("mismatched sizes");
+    goto error;
+}
+@
 
 \subsection{[[parseobject()]] and [[Cparsed]]}
 
@@ -1252,6 +1274,15 @@ bdecompress(Buf *d, Biobuf *b, vlong *csz)
 }
 @
 
+% introduce intermediate func cos of typing
+<<function [[breadc]]>>=
+int
+breadc(void *p)
+{
+    return Bgetc(p);
+}
+@
+
 <<function [[bappend]]>>=
 int
 bappend(void *p, void *src, int len)
@@ -1272,13 +1303,6 @@ bappend(void *p, void *src, int len)
 }
 @
 
-<<function [[breadc]]>>=
-int
-breadc(void *p)
-{
-    return Bgetc(p);
-}
-@
 
 
 \subsection{Reading a blob}
@@ -1429,11 +1453,10 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
     char *p;
     int n, nm;
 
-    if((p = strchr(*str, '\n')) == nil)
-        sysfatal("malformed author line");
+    p = strchr(*str, '\n');
+    <<[[parseauthor()]] sanity check [[p]]>>
     n = p - *str;
-    if(n >= sizeof(buf))
-        sysfatal("overlong author line");
+    <<[[parseauthor()]] sanity check [[n]]>>
     memset(m, 0, sizeof(m));
     memcpy(buf, *str, n);
     buf[n] = '\0';
@@ -1463,6 +1486,14 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 %old: was returning 0 (OK_0 really), but result was never used in caller
 
 
+<<[[parseauthor()]] sanity check [[p]]>>=
+if(p == nil)
+    sysfatal("malformed author line");
+@
+<<[[parseauthor()]] sanity check [[n]]>>=
+if(n >= sizeof(buf))
+    sysfatal("overlong author line");
+@
 
 \section{References}
 
@@ -1474,7 +1505,7 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 
 <<function [[readref (git9/ref.c)]]>>=
 errorneg1
-readref(Hash *h, char *ref)
+readref(Hash *h/*OUT*/, char *ref)
 {
     char buf[256], s[256];
     errorneg1 r;
@@ -1514,6 +1545,8 @@ found:
 }
 @
 %ori: forgot closing open file on .git/HEAD? and also on pfx
+
+% why those extra ref: xxx ? useful?
 
 \subsection{[[.refs/]] prefixes}
 
@@ -1577,7 +1610,7 @@ matchpfx(Hash *h, char *ref)
 
 <<function [[expandprefix]]>>=
 errorneg1
-expandprefix(Hash *rh, Hash h, int npfx)
+expandprefix(Hash *rh/*OUT*/, Hash h, int npfx)
 {
     int i, ndir;
     fdt fd;
@@ -1611,7 +1644,9 @@ expandprefix(Hash *rh, Hash h, int npfx)
 @
 
 
-\subsection{[[resolveref()]]}
+%\subsection{[[resolveref()]]}
+
+% mention at least [<resolveref()>] that also handle ^ and more "commit id expression"
 
 % diff with readref? 
 % resolve also ^
@@ -1714,11 +1749,7 @@ parseqid(char *s)
 
 %getfields in Libcore
 
-
-
-%******************************************************************************
 %alt: \chapter{[[git/save]]}
-%******************************************************************************
 
 %******************************************************************************
 \chapter{Writing to a Repository}
@@ -1738,8 +1769,9 @@ struct Objbuf {
 @
 
 <<function [[writeobj]]>>=
+/// blobify | writetree | mkcommit -> <>
 void
-writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
+writeobj(Hash *h/*OUT*/, char *hdr, int nhdr, char *dat, int ndat)
 {
     Objbuf b = {.off=0, .hdr=hdr, .nhdr=nhdr, .dat=dat, .ndat=ndat};
     char s[64], o[256];
@@ -1761,14 +1793,18 @@ writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
     if(readobject(*h) == nil){
         if((f = Bopen(o, OWRITE)) == nil)
             sysfatal("could not open %s: %r", o);
-        if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == ERROR_NEG1)
-            sysfatal("could not write %s: %r", o);
+        <<[[writeobj()]] compress [[b]] in [[f]]>>
         Bterm(f);
     }
 }
 @
 
 \subsection{Compression}
+
+<<[[writeobj()]] compress [[b]] in [[f]]>>=
+if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == ERROR_NEG1)
+    sysfatal("could not write %s: %r", o);
+@
 
 % can't pass Bwrite because need cast for deflatezlib
 <<function [[bwrite]]>>=
@@ -1820,17 +1856,18 @@ objbytes(void *p, void *buf, int nbuf)
 
 <<function [[blobify]]>>=
 void
-blobify(Dir *d, char *path, int *mode, Hash *bh)
+blobify(Dir *d, char *path, int *mode/*OUT*/, Hash *bh/*OUT*/)
 {
-    char h[64], *buf;
-    int f, nh;
+    char h[64]; // header
+    char *buf; // blob content
+    fdt f;
+    int nh;
 
-    if((d->mode & DMDIR) != 0)
-        sysfatal("not file: %s", path);
+    <<[[blobify()]] sanity check [[d]] is a file entry>>
     *mode = d->mode;
     nh = snprint(h, sizeof(h), "%T %lld", GBlob, d->length) + 1;
-    if((f = open(path, OREAD)) == -1)
-        sysfatal("could not open %s: %r", path);
+    f = open(path, OREAD);
+    <<[[blobify()]] sanity check [[f]]>>
     buf = emalloc(d->length);
     if(readn(f, buf, d->length) != d->length)
         sysfatal("could not read blob %s: %r", path);
@@ -1840,17 +1877,33 @@ blobify(Dir *d, char *path, int *mode, Hash *bh)
 }
 @
 
+% %T
+
+<<[[blobify()]] sanity check [[d]] is a file entry>>=
+if((d->mode & DMDIR) != 0)
+    sysfatal("not file: %s", path);
+@
+
+<<[[blobify()]] sanity check [[f]]>>=
+if(f == -1)
+    sysfatal("could not open %s: %r", path);
+@
+
 
 \subsection{Writing a tree}
 
 % in save.c
 
+% 16+256+20 = ??
+
 <<function [[writetree]]>>=
 int
-writetree(Dirent *ent, int nent, Hash *h)
+writetree(Dirent *ent, int nent, Hash *h/*OUT*/)
 {
-    char *t, *txt, *etxt, hdr[128];
-    int nhdr, n;
+    char hdr[128];
+    int nhdr
+    char *t, *txt, *etxt;
+    int n;
     Dirent *d, *p;
 
     t = emalloc((16+256+20) * nent);
@@ -1866,6 +1919,7 @@ writetree(Dirent *ent, int nent, Hash *h)
     nent = n;
 
     qsort(ent, nent, sizeof(Dirent), entcmp);
+
     for(d = ent; d != ent + nent; d++){
         if(strlen(d->name) >= 255)
             sysfatal("overly long filename: %s", d->name);
@@ -1899,12 +1953,26 @@ gitmode(Dirent *e)
 
 \subsection{Writing a commit}
 
+% assume globals set before!
+
+<<globals [[parents]](save.c)>>=
+Hash    parents[Maxparents];
+int nparents;
+@
+<<const [[Maxparents]]>>=
+Maxparents = 16,
+@
+
+% authorname, ... set later
+
 <<function [[mkcommit]]>>=
 void
-mkcommit(Hash *c, vlong date, Hash tree)
+mkcommit(Hash *c/*OUT*/, vlong date, Hash tree)
 {
-    char *s, h[64];
-    int ns, nh, i;
+    char h[64];
+    int nh;
+    char *s;
+    int ns, i;
     Fmt f;
 
     fmtstrinit(&f);
@@ -1943,6 +2011,9 @@ mkcommit(Hash *c, vlong date, Hash tree)
 
 \section{Repository configuration: [[.git/config]]}
 \label{sec:gitconfig}
+
+%ex:
+% different repository format! flexible!
 
 \section{User configuration: \texttt{\textasciitilde/lib/git/config}}
 
