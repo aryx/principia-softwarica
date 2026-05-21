@@ -269,6 +269,7 @@ charval(int c)
          (((b)[2] & 0xFFul) <<  8) | \
          (((b)[3] & 0xFFul) <<  0))
 @
+% >>
 % a hash of a hash :)
 
 %%\section{[[Repository.t]]}
@@ -820,7 +821,7 @@ qpop(Objq *q, Qelt *e)
 \section{[[.git/INDEX9]]}
 \label{sec:index}
 
-\subsection{Status character}
+\subsection{Status character: [[RMAUT]]}
 
 % RMAUT (removed, modified, added, untracked, tracked)
 <<enum WalkFlags>>=
@@ -849,7 +850,7 @@ struct Idxent {
     char    *path;
     Qid qid;
     int mode;
-    // ??
+    // global counter (used in idxcmp())
     int order;
     // RMAUT?
     char    state;
@@ -868,11 +869,71 @@ idxcmp(void *pa, void *pb)
     if((c = strcmp(a->path, b->path)) != 0)
         return c;
     assert(a->order != b->order);
-    return a-> order < b->order ? -1 : 1;
+    return a->order < b->order ? -1 : 1;
+}
+@
+
+%ori: TODO: factorize
+<<function [[idxcmp (git9/walk.c)]]>>=
+int
+idxcmp(void *pa, void *pb)
+{
+    Idxent *a, *b;
+    int c;
+
+    a = (Idxent*)pa;
+    b = (Idxent*)pb;
+    if((c = strcmp(a->path, b->path)) != 0)
+        return c;
+    /* maintain load order if name is identical */
+    return a->order < b->order ? -1 : 1;
+}
+@
+% no assert here?
+
+
+\subsection{[[idx]]}
+
+% both in walk.c and save.c
+
+<<globals [[idx]](save.c)>>=
+// growing_array<Idxent> (used = nidx, allocated = idxsz)
+Idxent  *idx;
+int idxsz;
+int nidx;
+@
+
+<<[[main()]](save.c) initialize [[idx]]>>=
+nidx = 0;
+idxsz = 32;
+idx = emalloc(idxsz*sizeof(Idxent));
+@
+<<[[main()]](save.c) realloc [[idx]] if needed>>=
+if(nidx == idxsz){
+    idxsz += idxsz/2;
+    idx = realloc(idx, idxsz*sizeof(Idxent));
 }
 @
 
 
+<<globals [[idx]](walk.c)>>=
+// growing_array<Idxent> (used = nidx, allocated = idxsz)
+Idxent  *idx;
+int idxsz;
+int nidx;
+@
+<<[[main()]](walk.c) initialize [[idx]]>>=
+nidx = 0;
+idxsz = 32;
+idx = emalloc(idxsz*sizeof(Idxent)); // why not eamalloc?
+@
+
+<<[[main()]](walk.c) realloc [[idx]] if needed>>=
+if(nidx == idxsz){
+    idxsz += idxsz/2;
+    idx = erealloc(idx, idxsz*sizeof(Idxent));
+}
+@
 
 %******************************************************************************
 \chapter{Reading from a Repository}
@@ -1322,6 +1383,9 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
 % also a readref() in fs.c
 % TODO? merge?
 
+
+\subsection{[[readref()]]}
+
 <<function [[readref (git9/ref.c)]]>>=
 errorneg1
 readref(Hash *h, char *ref)
@@ -1394,7 +1458,7 @@ for(pfx = try; *pfx; pfx++){
 
 % useful to have "" first entry?
 
-\subsection{[[matchpfx]]}
+\subsection{[[matchpfx()]]}
 
 <<[[readref()]](ref.c) try other prefixes>>=
 if((r = matchpfx(h, ref)) != ERROR_NEG1)
@@ -1461,7 +1525,109 @@ expandprefix(Hash *rh, Hash h, int npfx)
 @
 
 
+\subsection{[[resolveref()]]}
+
+% diff with readref? 
+% resolve also ^
+% will see later
+
+
 \section{Index}
+
+% read both in walk.c and save.c
+%ori: TODO: should factorize
+
+<<[[main()]](walk.c) other locals>>=
+char *ln;
+int line;
+char *parts[4];
+@
+
+<<[[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]]>>=
+<<[[main()]](walk.c) initialize [[idx]]>>
+line = 0;
+while((ln = Brdstr(f, '\n', 1)) != nil){
+    line++;
+    /* allow blank lines */
+    if(ln[0] == '\0' || ln[0] == '\n')
+        continue;
+    if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
+        sysfatal(".git/INDEX9:%d: corrupt index", line);
+    // else
+    cleanname(parts[3]);
+    <<[[main()]](walk.c) realloc [[idx]] if needed>>
+    idx[nidx].state = *parts[0];
+    idx[nidx].qid = parseqid(parts[1]);
+    idx[nidx].mode = strtol(parts[2], nil, 8);
+    idx[nidx].path = estrdup(parts[3]);
+    idx[nidx].order = nidx;
+    nidx++;
+    free(ln);
+}
+Bterm(f);
+@
+
+
+
+<<[[main()]](save.c) other locals>>=
+char *ln;
+int line;
+chat *parts[4];
+@
+
+<<[[main()]](save.c) read [[.git/INDEX9]] and set [[idx]]>>=
+<<[[main()]](save.c) initialize [[idx]]>>
+line = 0;
+while((ln = Brdstr(f, '\n', 1)) != nil){
+    line++;
+    if(ln[0] == '\0' || ln[0] == '\n')
+        continue;
+    if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
+        sysfatal(".git/INDEX9:%d: corrupt index", line);
+    cleanname(parts[3]);
+    <<[[main()]](save.c) realloc [[idx]] if needed>>
+    idx[nidx].state = *parts[0];
+    idx[nidx].qid = parseqid(parts[1]);
+    idx[nidx].mode = strtol(parts[2], nil, 8);
+    idx[nidx].path = strdup(parts[3]);
+    idx[nidx].order = nidx;
+    nidx++;
+    free(ln);
+}
+Bterm(f);
+@
+
+
+
+
+
+<<function [[parseqid]]>>=
+Qid
+parseqid(char *s)
+{
+    char *e;
+    Qid q;
+
+    if(strcmp(s, "NOQID") == 0)
+        return (Qid){-1, -1, -1};       
+    e = s;
+    q.path = strtoull(e, &e, 16);
+    if(*e != '.')
+        sysfatal("corrupt qid: %s (%s)", s, e);
+    q.vers = strtoul(e+1, &e, 10);
+    if(*e != '.')
+        sysfatal("corrupt qid: %s (%s)", s, e);
+    q.type = strtoul(e+1, &e, 16);
+    if(*e != '\0')
+        sysfatal("corrupt qid: %s (%x)", s, *e);
+    return q;
+}
+@
+
+
+
+%getfields in Libcore
+
 
 
 %******************************************************************************
@@ -1475,21 +1641,210 @@ expandprefix(Hash *rh, Hash h, int npfx)
 
 \section{Objects}
 
+<<struct [[Objbuf]]>>=
+struct Objbuf {
+    int off;
+    char *hdr;
+    int nhdr;
+    char *dat;
+    int ndat;
+};
+@
+
+<<function [[writeobj]]>>=
+void
+writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
+{
+    Objbuf b = {.off=0, .hdr=hdr, .nhdr=nhdr, .dat=dat, .ndat=ndat};
+    char s[64], o[256];
+    SHA1state *st;
+    Biobuf *f;
+    int fd;
+
+    st = sha1((uchar*)hdr, nhdr, nil, nil);
+    st = sha1((uchar*)dat, ndat, nil, st);
+    sha1(nil, 0, h->h, st);
+
+    snprint(s, sizeof(s), "%H", *h);
+    fd = create(".git/objects", OREAD, DMDIR|0755);
+    close(fd);
+    snprint(o, sizeof(o), ".git/objects/%c%c", s[0], s[1]);
+    fd = create(o, OREAD, DMDIR | 0755);
+    close(fd);
+    snprint(o, sizeof(o), ".git/objects/%c%c/%s", s[0], s[1], s + 2);
+    if(readobject(*h) == nil){
+        if((f = Bopen(o, OWRITE)) == nil)
+            sysfatal("could not open %s: %r", o);
+        if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == ERROR_NEG1)
+            sysfatal("could not write %s: %r", o);
+        Bterm(f);
+    }
+}
+@
+
 \subsection{Compression}
 
-\subsection{Locking}
-\label{sec:lock-writing-file}
+% can't pass Bwrite because need cast for deflatezlib
+<<function [[bwrite]]>>=
+static int
+bwrite(void *p, void *buf, int nbuf)
+{
+    return Bwrite(p, buf, nbuf);
+}
+@
+
+<<function [[objbytes]]>>=
+static int
+objbytes(void *p, void *buf, int nbuf)
+{
+    Objbuf *b;
+    int r, n, o;
+    char *s;
+
+    b = p;
+    n = 0;
+    if(b->off < b->nhdr){
+        r = b->nhdr - b->off;
+        r = (nbuf < r) ? nbuf : r;
+        memcpy(buf, b->hdr, r);
+        b->off += r;
+        nbuf -= r;
+        n += r;
+    }
+    if(b->off < b->ndat + b->nhdr){
+        s = buf;
+        o = b->off - b->nhdr;
+        r = b->ndat - o;
+        r = (nbuf < r) ? nbuf : r;
+        memcpy(s + n, b->dat + o, r);
+        b->off += r;
+        n += r;
+    }
+    return n;
+}
+@
+
+
+%\subsection{Locking}
+%\label{sec:lock-writing-file}
 
 \subsection{Writing a blob}
 
+% save.c
+
+<<function [[blobify]]>>=
+void
+blobify(Dir *d, char *path, int *mode, Hash *bh)
+{
+    char h[64], *buf;
+    int f, nh;
+
+    if((d->mode & DMDIR) != 0)
+        sysfatal("not file: %s", path);
+    *mode = d->mode;
+    nh = snprint(h, sizeof(h), "%T %lld", GBlob, d->length) + 1;
+    if((f = open(path, OREAD)) == -1)
+        sysfatal("could not open %s: %r", path);
+    buf = emalloc(d->length);
+    if(readn(f, buf, d->length) != d->length)
+        sysfatal("could not read blob %s: %r", path);
+    writeobj(bh, h, nh, buf, d->length);
+    free(buf);
+    close(f);
+}
+@
+
+
 \subsection{Writing a tree}
+
+% in save.c
+
+<<function [[writetree]]>>=
+int
+writetree(Dirent *ent, int nent, Hash *h)
+{
+    char *t, *txt, *etxt, hdr[128];
+    int nhdr, n;
+    Dirent *d, *p;
+
+    t = emalloc((16+256+20) * nent);
+    txt = t;
+    etxt = t + (16+256+20) * nent;
+
+    /* sqeeze out deleted entries */
+    n = 0;
+    p = ent;
+    for(d = ent; d != ent + nent; d++)
+        if(d->name)
+            p[n++] = *d;
+    nent = n;
+
+    qsort(ent, nent, sizeof(Dirent), entcmp);
+    for(d = ent; d != ent + nent; d++){
+        if(strlen(d->name) >= 255)
+            sysfatal("overly long filename: %s", d->name);
+        t = seprint(t, etxt, "%o %s", gitmode(d), d->name) + 1;
+        memcpy(t, d->h.h, sizeof(d->h.h));
+        t += sizeof(d->h.h);
+    }
+    nhdr = snprint(hdr, sizeof(hdr), "%T %lld", GTree, (vlong)(t - txt)) + 1;
+
+    writeobj(h, hdr, nhdr, txt, t - txt);
+
+    free(txt);
+    return nent;
+}
+@
+
+<<function [[gitmode]]>>=
+int
+gitmode(Dirent *e)
+{
+    <<[[gitmode()]] if symlink>>
+    <<[[gitmode()]] if submodule>>
+    else if(e->mode & DMDIR)
+        return 0040000;
+    else if(e->mode & 0100)
+        return 0100755;
+    else
+        return 0100644;
+}
+@
 
 \subsection{Writing a commit}
 
+<<function [[mkcommit]]>>=
+void
+mkcommit(Hash *c, vlong date, Hash tree)
+{
+    char *s, h[64];
+    int ns, nh, i;
+    Fmt f;
+
+    fmtstrinit(&f);
+    fmtprint(&f, "tree %H\n", tree);
+    for(i = 0; i < nparents; i++)
+        fmtprint(&f, "parent %H\n", parents[i]);
+    fmtprint(&f, "author %s <%s> %lld +0000\n", authorname, authoremail, date);
+    fmtprint(&f, "committer %s <%s> %lld +0000\n", committername, committeremail, date);
+    fmtprint(&f, "\n");
+    fmtprint(&f, "%s", commitmsg);
+    s = fmtstrflush(&f);
+
+    ns = strlen(s);
+    nh = snprint(h, sizeof(h), "%T %d", GCommit, ns) + 1;
+    writeobj(c, h, nh, s, ns);
+    free(s);
+}
+@
+
 \section{References}
+
+% done manually in the different scripts? simple format anyway
 
 \section{Index}
 
+% done manually in add.rc
 
 %******************************************************************************
 \chapter{[[git/conf]]}
@@ -2554,6 +2909,21 @@ mkols(void)
 }
 @
 
+<<function [[slurpdir]]>>=
+errorneg1
+slurpdir(char *p, Dir **d)
+{
+    int r;
+    fdt f;
+
+    if((f = open(p, OREAD)) == ERROR_NEG1)
+        return ERROR_NEG1;
+    r = dirreadall(f, d);
+    close(f);
+    return r;
+}   
+@
+
 \subsubsection{[[gitwalk1()]] for [[Qobject]]}
 
 <<[[gitwalk1()]] switch [[QDIR(&fid->qid)]] cases>>=
@@ -3308,6 +3678,32 @@ resolverefs(Hash **r, char *ref)
     return ev.nstk;
 }
 @
+% alt: return OK_0, return value of ev.nstk not used I think
+
+\section{[[resolveref()]]}
+
+<<function [[resolveref]]>>=
+/// main(walk.c -b) | main(save.c -p) | (main(log.c) -> showcommits) -> <>
+errorneg1
+resolveref(Hash *r, char *ref)
+{
+    Eval ev;
+
+    if(evalexpr(&ev, ref) == ERROR_NEG1){
+        free(ev.stk);
+        return ERROR_NEG1;
+    }
+    if(ev.nstk != 1){
+        werrstr("ambiguous ref expr");
+        free(ev.stk);
+        return ERROR_NEG1;
+    }
+    *r = ev.stk[0]->hash;
+    free(ev.stk);
+    return OK_0;
+}
+@
+
 
 \section{Commit expression evaluator}
 
@@ -3829,6 +4225,187 @@ if(changes){
 }
 @
 
+<<function [[diffcommits]]>>=
+void
+diffcommits(Hash ah, Hash bh)
+{
+    Object *a, *b, *at, *bt;
+
+    at = nil;
+    bt = nil;
+    if(!hasheq(&ah, &Zhash) && (a = readobject(ah)) != nil){
+        if(a->type != GCommit)
+            sysfatal("not commit: %H", ah);
+        if((at = readobject(a->commit->tree)) == nil)
+            sysfatal("bad hash %H", a->commit->tree);
+        unref(a);
+    }
+    if(!hasheq(&bh, &Zhash) && (b = readobject(bh)) != nil){
+        if(b->type != GCommit)
+            sysfatal("not commit: %H", ah);
+        if((bt = readobject(b->commit->tree)) == nil)
+            sysfatal("bad hash %H", b->commit->tree);
+        unref(b);
+    }
+    difftrees(at, bt);
+    unref(at);
+    unref(bt);
+}
+@
+
+
+<<function [[difftrees]]>>=
+void
+difftrees(Object *a, Object *b)
+{
+    Dirent *ap, *bp, *ae, *be;
+    int c;
+
+    ap = ae = nil;
+    bp = be = nil;
+    if(a != nil){
+        if(a->type != GTree)
+            return;
+        ap = a->tree->ent;
+        ae = ap + a->tree->nent;
+    }
+    if(b != nil){
+        if(b->type != GTree)
+            return;
+        bp = b->tree->ent;
+        be = bp + b->tree->nent;
+    }
+    while(ap != ae && bp != be){
+        c = entcmp(ap, bp);
+        if(c == 0){
+            if(ap->mode == bp->mode && hasheq(&ap->h, &bp->h))
+                goto next;
+            if(ap->mode != bp->mode)
+                print("! %P%s\n", ap->name);
+            else if(!(ap->mode & DMDIR) || !(bp->mode & DMDIR))
+                print("@ %P%s\n", ap->name);
+            if((ap->mode & DMDIR) && (bp->mode & DMDIR)){
+                if(npath >= nelem(path))
+                    sysfatal("path too deep");
+                path[npath++] = ap->name;
+                if((a = readobject(ap->h)) == nil)
+                    sysfatal("bad hash %H", ap->h);
+                if((b = readobject(bp->h)) == nil)
+                    sysfatal("bad hash %H", bp->h);
+                difftrees(a, b);
+                unref(a);
+                unref(b);
+                npath--;
+            }
+next:
+            ap++;
+            bp++;
+        }else if(c < 0) {
+            show(ap, '-');
+            ap++;
+        }else if(c > 0){
+            show(bp, '+');
+            bp++;
+        }
+    }
+    for(; ap != ae; ap++)
+        show(ap, '-');
+    for(; bp != be; bp++)
+        show(bp, '+');
+}
+@
+
+
+<<function [[entcmp]]>>=
+int
+entcmp(void *pa, void *pb)
+{
+    Dirent *ae, *be;
+    uchar *a, *b;
+    int ca, cb;
+
+    ae = pa;
+    be = pb;
+    a = (uchar*)ae->name;
+    b = (uchar*)be->name;
+    /*
+     * If the files have the same name, they're equal.
+     * Otherwise, If they're trees, they sort as thoug
+     * there was a trailing slash.
+     *
+     * Wat.
+     */
+    while(1){
+        ca = *a++;
+        cb = *b++;
+        /*
+         * because these are dir entries in a tree,
+         * the only '/' allowable is the virtual '/'
+         * at the end of the file name.
+         */
+        assert(ca != '/' && cb != '/');
+        if(ca != cb){
+            if(ca == 0 && (ae->mode & DMDIR))
+                ca = '/';
+            if(cb == 0 && (be->mode & DMDIR))
+                cb = '/';
+            return (ca > cb) ? 1 : -1;
+        }
+        if(ca == 0){
+            if(ae->mode & DMDIR)
+                ca = '/';
+            if(be->mode & DMDIR)
+                cb = '/';
+            if(ca == cb)
+                return 0;
+            return (ca > cb) ? 1 : -1;
+        }
+    }
+}
+@
+
+
+
+<<function [[show (git9/query.c)]]>>=
+void
+show(Dirent *e, char m)
+{
+    if(e->mode & DMDIR)
+        showdir(e->h, e->name, m);
+    else
+        print("%c %P%s\n", m, e->name);
+}
+@
+
+<<function [[showdir]]>>=
+/// show -> <>
+void
+showdir(Hash dh, char *dname, char m)
+{
+    Dirent *p, *e;
+    Object *d;
+
+    path[npath++] = dname;
+    if((d = readobject(dh)) == nil)
+        sysfatal("bad hash %H", dh);
+    assert(d->type == GTree);
+    p = d->tree->ent;
+    e = p + d->tree->nent;
+    for(; p != e; p++){
+        if(p->ismod)
+            continue;
+        if(p->mode & DMDIR)
+            showdir(p->h, p->name, m);
+        else
+            print("%c %P%s\n", m, p->name);
+    }
+    print("%c %P\n", m);
+    unref(d);
+    npath--;
+}
+@
+
+
 \subsection{[[git/query -p]], full path listing}
 
 <<global [[fullpath]](query.c)>>=
@@ -3900,7 +4477,9 @@ usage(void)
 
 \section{[[main()]]}
 
-
+<<global [[repopath]](walk.c)>>=
+char    repopath[1024];
+@
 <<global [[wdirpath]](walk.c)>>=
 char    wdirpath[1024];
 @
@@ -4019,99 +4598,14 @@ case 'f':
 
 \subsection{The index state: [[idx]]}
 
-<<global [[idx]](walk.c)>>=
-// growing_array<Idxent> (used = nidx, allocated = idxsz)
-Idxent  *idx;
-@
-<<global [[idxsz]](walk.c)>>=
-int idxsz;
-@
-<<global [[nidx]](walk.c)>>=
-int nidx;
-@
-
-<<[[main()]](walk.c) realloc [[idx]] if needed>>=
-if(nidx == idxsz){
-    idxsz += idxsz/2;
-    idx = erealloc(idx, idxsz*sizeof(Idxent));
-}
-@
-
-
-<<[[main()]](walk.c) other locals>>=
-char *ln;
-int line;
-char *parts[4];
-@
-
-<<[[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]]>>=
-nidx = 0;
-idxsz = 32;
-idx = emalloc(idxsz*sizeof(Idxent)); // why not eamalloc?
-
-line = 0;
-while((ln = Brdstr(f, '\n', 1)) != nil){
-    line++;
-    /* allow blank lines */
-    if(ln[0] == '\0' || ln[0] == '\n')
-        continue;
-    if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
-        sysfatal(".git/INDEX9:%d: corrupt index", line);
-    // else
-    cleanname(parts[3]);
-    <<[[main()]](walk.c) realloc [[idx]] if needed>>
-
-    idx[nidx].state = *parts[0];
-    idx[nidx].qid = parseqid(parts[1]);
-    idx[nidx].mode = strtol(parts[2], nil, 8);
-    idx[nidx].path = estrdup(parts[3]);
-    idx[nidx].order = nidx;
-    nidx++;
-    free(ln);
-}
-Bterm(f);
-@
-
-
-<<function [[parseqid]]>>=
-Qid
-parseqid(char *s)
-{
-    char *e;
-    Qid q;
-
-    if(strcmp(s, "NOQID") == 0)
-        return (Qid){-1, -1, -1};       
-    e = s;
-    q.path = strtoull(e, &e, 16);
-    if(*e != '.')
-        sysfatal("corrupt qid: %s (%s)", s, e);
-    q.vers = strtoul(e+1, &e, 10);
-    if(*e != '.')
-        sysfatal("corrupt qid: %s (%s)", s, e);
-    q.type = strtoul(e+1, &e, 16);
-    if(*e != '\0')
-        sysfatal("corrupt qid: %s (%x)", s, *e);
-    return q;
-}
-@
-
-
-
-%getfields in Libcore
-
+%alt: now in core DS chapter and in Reading chapter
 
 \subsection{The working directory state: [[wdir]]}
 
-
-<<global [[wdir]](walk.c)>>=
+<<globals [[wdir]](walk.c)>>=
 // growing_array<Idxent> (used = nwdir, allocated = wdirsz)
 Idxent  *wdir;
-@
-<<global [[wdirsz]](walk.c)>>=
 int wdirsz;
-@
-<<global [[nwdir]](walk.c)>>=
 int nwdir;
 @
 
@@ -4254,6 +4748,67 @@ reporel(char *s)
 @
 
 
+<<function [[indexed]]>>=
+int
+indexed(char *path, int dir)
+{
+    int lo, hi, mid, r;
+
+    r = -1;
+    lo = 0;
+    hi = nidx-1;
+    while(lo <= hi){
+        mid = (hi + lo) / 2;
+        r = pathcmp(path, idx[mid].path, dir);
+        if(r < 0)
+            hi = mid-1;
+        else if(r > 0)
+            lo = mid+1;
+        else
+            break;
+    }
+    return r == 0;
+}
+@
+
+<<function [[pathcmp]]>>=
+/*
+ * Tricky; we want to know if a file or dir is indexed,
+ * but a dir is only indexed if we have a file with dir/
+ * listed in the index.
+ *
+ * as a result, we need to add a virtual '/' at the end
+ * of the path if we're doing it, so if we have:
+ *  foo.bar/x
+ *  foo/y
+ * and we want to find out if foo is a directory we should
+ * descend into, we need to compare as though foo/ ended
+ * with a '/', or we'll bsearch down do foo.bar, not foo.
+ *
+ * this code resembles entcmp() in util.c, but differs
+ * because we're comparing whole paths.
+ */
+int
+pathcmp(char *sa, char *sb, int sadir)
+{
+    unsigned a, b;
+
+    while(1){
+        a = *sa++;
+        b = *sb++;
+        if(a != b){
+            if(a == 0 && sadir)
+                a = '/';
+            if(a == '/' && b == '/')
+                return 0;
+            return (a > b) ? 1 : -1;
+        }
+        if(a == 0)
+            return 0;
+    }
+}
+@
+
 
 \section{Walking}
 
@@ -4328,6 +4883,14 @@ pfxmatch(char *p, char **pfx, int *pfxlen, int npfx)
 
 \section{Showing}
 
+<<globals [[xxxstr]]>>=
+char    *rstr   = "R ";
+char    *mstr   = "M ";
+char    *astr   = "A ";
+char    *ustr   = "U ";
+char    *tstr   = "T ";
+@
+
 <<[[main()]](walk.c) when walking and exists in both index and disk>>=
 if(idx[i].state == 'R'){
     if(checkedin(&idx[i], false))
@@ -4400,6 +4963,10 @@ show(Biobuf *o, int flg, char *str, char *path)
 bool cleanidx = false;   /* skip tree check for checkedin() */
 @
 
+<<constant [[bdir]]>>=
+char    *bdir = ".git/fs/HEAD/tree";
+@
+
 <<function [[checkedin]]>>=
 bool
 checkedin(Idxent *e, bool change)
@@ -4423,6 +4990,80 @@ checkedin(Idxent *e, bool change)
     free(p);
 
     return r == 0;
+}
+@
+
+
+
+<<function [[samedata]]>>=
+/*
+ * compares whether the indexed entry 'a'
+ * has the same contents and mode as
+ * the entry on disk 'b'; if the indexed
+ * entry is nil, does a deep comparison
+ * of the checked out file and the file
+ * checked in.
+ */
+int
+samedata(Idxent *a, Idxent *b)
+{
+    char *gitpath, ba[IOUNIT], bb[IOUNIT];
+    int fa, fb, na, nb, same;
+    Dir *da, *db;
+
+    if(a != nil){
+        if(a->qid.path == b->qid.path
+        && a->qid.vers == b->qid.vers
+        && a->qid.type == b->qid.type
+        && a->mode == b->mode
+        && a->mode != 0)
+            return 1;
+    }
+
+    same = 0;
+    da = nil;
+    db = nil;
+    if((gitpath = smprint("%s/%s", bdir, b->path)) == nil)
+        sysfatal("smprint: %r");
+    fa = open(gitpath, OREAD);
+    fb = open(b->path, OREAD);
+    if(fa == -1 || fb == -1)
+        goto mismatch;
+    da = dirfstat(fa);
+    db = dirfstat(fb);
+    if(da == nil || db == nil)
+        goto mismatch;
+    if((da->mode&0100) != (db->mode&0100))
+        goto mismatch;
+    if(da->length != db->length)
+        goto mismatch;
+    while(1){
+        if((na = readn(fa, ba, sizeof(ba))) == -1)
+            goto mismatch;
+        if((nb = readn(fb, bb, sizeof(bb))) == -1)
+            goto mismatch;
+        if(na != nb)
+            goto mismatch;
+        if(na == 0)
+            break;
+        if(memcmp(ba, bb, na) != 0)
+            goto mismatch;
+    }
+    if(a != nil){
+        a->qid = db->qid;
+        a->mode = db->mode;
+        staleidx = 1;
+    }
+    same = 1;
+
+mismatch:
+    free(da);
+    free(db);
+    if(fa != -1)
+        close(fa);
+    if(fb != -1)
+        close(fb);
+    return same;
 }
 @
 
@@ -4482,6 +5123,7 @@ for(i = 0; (1 << i) != Tflg; i++)
 *p = '\0';
 exits(xbuf);
 @
+% >>
 
 \section{Advanced features}
 
@@ -4569,6 +5211,8 @@ findslashes(char *path)
 
 \subsection{[[git/walk -c]]}
 
+% does not show status?
+
 <<[[main()]](walk.c) command line processing>>=
 case 'c':
     rstr = "";
@@ -4582,7 +5226,386 @@ case 'c':
 %******************************************************************************
 \chapter{[[git/save]]}
 %******************************************************************************
-%alt: just in git/commit chapter
+%alt: in Committing chapter as a section
+
+\section{Usage}
+
+<<function [[usage (git9/save.c)]]>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: %s -n name -e email -m message -d date [files...]\n", argv0);
+    exits("usage");
+}
+@
+
+%    // assumes run from project root
+
+% in commit.rc later:
+%        hash=`{git/save -n $"name -e $"email -m $"msg $pflags $files || die $status}
+
+% pflags is for parents for merge commits
+
+<<globals [[authorxxx]](save.c)>>=
+// -n
+char    *authorname;
+// -e
+char    *authoremail;
+@
+<<globals [[comitterxxx]](save.c)>>=
+// -N
+char    *committername;
+// -E
+char    *committeremail;
+@
+
+<<global [[commitmsg]](save.c)>>=
+// -m
+char    *commitmsg;
+@
+
+\section{[[main()]]}
+
+
+<<function [[main (git9/save.c)]]>>=
+void
+main(int argc, char **argv)
+{
+    char cwd[1024];
+    int ncwd;
+    Biobuf *f; // .git/.INDEX9
+    vlong date;
+    errorneg1 r;
+    Object *t;
+    Hash th; // tree hash
+    Hash ch; // commit hash
+    int i;
+    <<[[main()]](save.c) other locals>>
+
+    gitinit(nil, 0, nil);
+
+    // assumes run from project root
+    if(access(".git", AEXIST) != 0)
+        sysfatal("could not find git repo: %r");
+    if(getwd(cwd, sizeof(cwd)) == nil)
+        sysfatal("getcwd: %r");
+    ncwd = strlen(cwd);
+    date = time(nil);
+
+    ARGBEGIN{
+    <<[[main()]](save.c) command line processing>>
+    default: usage(); break;
+    }ARGEND;
+
+    <<[[main()]](save.c) sanity check globals after command line processing>>
+    if(committername == nil && committeremail == nil){
+        committername = authorname;
+        committeremail = authoremail;
+    }
+    <<[[main()]](save.c) if [[dstr]]>>
+
+    <<[[main()]](save.c) clean names [[argv]]>>
+    qsort(argv, argc, sizeof(*argv), namecmp);
+
+    t = findroot();
+
+    f = Bopen(".git/INDEX9", OREAD);
+    <<[[main()]](save.c) sanity check [[f]]>>
+    <<[[main()]](save.c) read [[.git/INDEX9]] and set [[idx]]>>
+    qsort(idx, nidx, sizeof(Idxent), idxcmp);
+
+    r = treeify(t, argv, argv + argc, 0, &th);
+    <<[[main()]](save.c) sanity check [[r]]>>
+    mkcommit(&ch, date, th);
+
+    print("%H\n", ch);
+    exits(nil);
+}
+@
+
+
+
+<<[[main()]](save.c) command line processing>>=
+case 'm':
+    commitmsg = EARGF(usage());
+    break;
+@
+<<[[main()]](save.c) command line processing>>=
+case 'n':
+    authorname = EARGF(usage());
+    break;
+case 'e':
+    authoremail = EARGF(usage());
+    break;
+@
+<<[[main()]](save.c) command line processing>>=
+case 'N':
+    committername = EARGF(usage());
+    break;
+case 'E':
+    committeremail = EARGF(usage());
+    break;
+@
+
+
+<<[[main()]](save.c) clean names [[argv]]>>=
+for(i = 0; i < argc; i++){
+    cleanname(argv[i]);
+    if(*argv[i] == '/' && strncmp(argv[i], cwd, ncwd) == 0)
+        argv[i] += ncwd;
+    while(*argv[i] == '/')
+        argv[i]++;
+}
+@
+
+<<function [[namecmp]]>>=
+int
+namecmp(void *pa, void *pb)
+{
+    return strcmp(*(char**)pa, *(char**)pb);
+}
+@
+
+
+
+<<[[main()]](save.c) sanity check globals after command line processing>>=
+if(commitmsg == nil)
+    sysfatal("missing message");
+if(authorname == nil)
+    sysfatal("missing name");
+if(authoremail == nil)
+    sysfatal("missing email");
+if((committername == nil) != (committeremail == nil))
+    sysfatal("partially specified committer");
+@
+
+<<[[main()]](save.c) sanity check [[f]]>>=
+if(f == nil)
+    sysfatal("open index: %r");
+@
+
+<<[[main()]](save.c) sanity check [[r]]>>=
+if(r == ERROR_NEG1)
+    sysfatal("could not commit: %r");
+@
+
+\section{[[findroot()]]}
+
+<<function [[findroot]]>>=
+Object*
+findroot(void)
+{
+    Object *t, *c;
+    Hash h;
+
+    if(resolveref(&h, "HEAD") == ERROR_NEG1)
+        return emptydir();
+    if((c = readobject(h)) == nil || c->type != GCommit)
+        sysfatal("could not read HEAD %H", h);
+    if((t = readobject(c->commit->tree)) == nil)
+        sysfatal("could not read tree for commit %H", h);
+    return t;
+}
+@
+
+\section{[[treeify()]]}
+
+<<function [[treeify]]>>=
+int
+treeify(Object *t, char **path, char **epath, int off, Hash *h)
+{
+    int nent, ne, slash, isdir;
+    char *s, **p, **ep;
+    Dirent *e, *ent;
+    Object *o;
+    Dir *d;
+
+    nent = t->tree->nent;
+    ent = eamalloc(nent, sizeof(*ent));
+    memcpy(ent, t->tree->ent, nent*sizeof(*ent));
+    for(p = path; p != epath; p = ep){
+        s = *p;
+
+        /*
+         * paths have been normalized already,
+         * no leading or double-slashes allowed.
+         */
+        assert(off <= strlen(s));
+        assert(off == 0 || s[off-1] == '/');
+        assert(s[off] != '\0' && s[off] != '/');
+
+        /* get next path element length (from off until '/' or nul) */
+        for(ne = 1; s[off+ne] != '\0' && s[off+ne] != '/'; ne++)
+            ;
+
+        /* truncate at '/' or nul */
+        slash = s[off + ne];
+        s[off + ne] = '\0';
+
+        /* skip over children (having s as prefix) */
+        for(ep = p + 1; slash && ep != epath; ep++){
+            if(strncmp(s, *ep, off + ne) != 0)
+                break;
+            if((*ep)[off+ne] != '\0' && (*ep)[off+ne] != '/')
+                break;
+        }
+
+        d = dirstat(s);
+        e = dirent(&ent, &nent, s + off);
+        if(e->islink)
+            sysfatal("symlinks may not be modified: %s", s);
+        if(e->ismod)
+            sysfatal("submodules may not be modified: %s", s);
+
+        s[off + ne] = slash;
+
+        isdir = d != nil && (d->mode & DMDIR) != 0;
+        /*
+         * exist? slash? dir?   track?
+         * n      _      _      _      -> remove: file gone
+         * y      n      n      y      -> blob: tracked non-dir
+         * y      n      y      n      -> remove: file untracked
+         * y      n      y      n      -> remove: file -> dir
+         * y      n      y      y      -> remove: file -> dir
+         * y      n      y      n      -> untracked dir, cli junk
+         * y      y      y      n      -> recurse
+         * y      y      y      y      -> recurse
+         */
+        if(d == nil || !slash && isdir && tracked(s)){
+            /*
+             * if a tracked file is removed or turned
+             * into a dir, we want to delete it. We
+             * only want to change files passed in, and
+             * not ones along the way, so ignore files
+             * that have a '/'.
+             */
+            e->name = nil;
+            s[off + ne] = slash;
+            continue;
+        } else if(slash && isdir){
+            /*
+             * If we have a list of entries that go into
+             * a directory, create a tree node for this
+             * entry, and recurse down.
+             */
+            e->mode = DMDIR | 0755;
+            o = readobject(e->h);
+            if(o == nil || o->type != GTree)
+                o = emptydir();
+            /*
+             * if after processing deletions, a tree is empty,
+             * mark it for removal from the parent.
+             *
+             * Note, it is still written to the object store,
+             * but this is fine -- and ensures that an empty
+             * repository will continue to work.
+             */
+            if(treeify(o, p, ep, off + ne + 1, &e->h) == 0)
+                e->name = nil;
+        }else if(!slash && !isdir){
+            /*
+             * If the file was explicitly passed in and is
+             * not a dir, we want to either remove it or
+             * track it, depending on the state of the index.
+             */
+            if(tracked(s) && !isdir)
+                blobify(d, s, &e->mode, &e->h);
+            else
+                e->name = nil;
+        }
+        free(d);
+    }
+    if(nent == 0)
+        sysfatal("%.*s: refusing to update empty directory", off, *path);
+    nent = writetree(ent, nent, h);
+    free(ent);
+    return nent;        
+}
+@
+
+<<function [[dirent]]>>=
+Dirent*
+dirent(Dirent **ent, int *nent, char *name)
+{
+    Dirent *d;
+
+    assert(strchr(name, '/') == nil);
+
+    for(d = *ent; d != *ent + *nent; d++)
+        if(d->name && strcmp(d->name, name) == 0)
+            return d;
+    *nent += 1;
+    *ent = erealloc(*ent, *nent * sizeof(Dirent));
+    d = *ent + (*nent - 1);
+    memset(d, 0, sizeof(*d));
+    d->name = estrdup(name);
+    return d;
+}
+@
+
+<<function [[tracked]]>>=
+bool
+tracked(char *path)
+{
+    int r, lo, hi, mid;
+
+    lo = 0;
+    hi = nidx-1;
+    while(lo <= hi){
+        mid = (hi + lo) / 2;
+        r = strcmp(path, idx[mid].path);
+        if(r < 0)
+            hi = mid-1;
+        else if(r > 0)
+            lo = mid+1;
+        else
+            return idx[mid].state != 'R';
+    }
+    // else
+    return false; 
+}
+@
+
+
+\section{[[mkcommit()]]}
+
+% seen before
+
+
+
+\section{Advanced features}
+
+\subsection{[[git/save -p]], merge commits}
+% multiple parents
+
+<<[[main()]](save.c) command line processing>>=
+case 'p':
+    if(nparents >= Maxparents)
+        sysfatal("too many parents");
+    if(resolveref(&parents[nparents++], EARGF(usage())) == -1)
+        sysfatal("invalid parent: %r");
+    break;
+@
+
+% resolveref(), like for git/walk -b base
+
+\subsection{[[git/save -d]], commit date}
+
+<<[[main()]](save.c) other locals>>=
+char *dstr = nil;
+@
+<<[[main()]](save.c) command line processing>>=
+case 'd':
+    dstr = EARGF(usage());
+    break;
+@
+<<[[main()]](save.c) if [[dstr]]>>=
+if(dstr){
+    date=strtoll(dstr, &dstr, 10);
+    if(strlen(dstr) != 0)
+        sysfatal("could not parse date %s", dstr);
+}
+@
 
 %******************************************************************************
 %%\chapter{Main Functions}
@@ -5095,136 +6118,6 @@ fn update{
 \section{[[git/query $branch]]}
 
 \section{[[git/save]]}
-
-% big one
-
-\subsection{Usage}
-
-<<function [[usage (git9/save.c)]]>>=
-void
-usage(void)
-{
-    fprint(STDERR, "usage: %s -n name -e email -m message -d date [files...]\n", argv0);
-    exits("usage");
-}
-@
-
-\subsection{[[main()]]}
-
-<<function [[main (git9/save.c)]]>>=
-void
-main(int argc, char **argv)
-{
-    char *ln, *dstr, *parts[4], cwd[1024];
-    int i, r, line, ncwd;
-    Hash th, ch;
-    vlong date;
-    Biobuf *f;
-    Object *t;
-
-    gitinit(nil, 0, nil);
-
-    if(access(".git", AEXIST) != 0)
-        sysfatal("could not find git repo: %r");
-    if(getwd(cwd, sizeof(cwd)) == nil)
-        sysfatal("getcwd: %r");
-    dstr = nil;
-    date = time(nil);
-    ncwd = strlen(cwd);
-
-    ARGBEGIN{
-    case 'm':
-        commitmsg = EARGF(usage());
-        break;
-    case 'n':
-        authorname = EARGF(usage());
-        break;
-    case 'e':
-        authoremail = EARGF(usage());
-        break;
-    case 'N':
-        committername = EARGF(usage());
-        break;
-    case 'E':
-        committeremail = EARGF(usage());
-        break;
-    case 'd':
-        dstr = EARGF(usage());
-        break;
-    case 'p':
-        if(nparents >= Maxparents)
-            sysfatal("too many parents");
-        if(resolveref(&parents[nparents++], EARGF(usage())) == -1)
-            sysfatal("invalid parent: %r");
-        break;
-    default:
-        usage();
-        break;
-    }ARGEND;
-
-    if(commitmsg == nil)
-        sysfatal("missing message");
-    if(authorname == nil)
-        sysfatal("missing name");
-    if(authoremail == nil)
-        sysfatal("missing email");
-    if((committername == nil) != (committeremail == nil))
-        sysfatal("partially specified committer");
-    if(committername == nil && committeremail == nil){
-        committername = authorname;
-        committeremail = authoremail;
-    }
-    if(dstr){
-        date=strtoll(dstr, &dstr, 10);
-        if(strlen(dstr) != 0)
-            sysfatal("could not parse date %s", dstr);
-    }
-    for(i = 0; i < argc; i++){
-        cleanname(argv[i]);
-        if(*argv[i] == '/' && strncmp(argv[i], cwd, ncwd) == 0)
-            argv[i] += ncwd;
-        while(*argv[i] == '/')
-            argv[i]++;
-    }
-    qsort(argv, argc, sizeof(*argv), namecmp);
-
-    t = findroot();
-    nidx = 0;
-    idxsz = 32;
-    idx = emalloc(idxsz*sizeof(Idxent));
-    if((f = Bopen(".git/INDEX9", OREAD)) == nil)
-        sysfatal("open index: %r");
-    line = 0;
-    while((ln = Brdstr(f, '\n', 1)) != nil){
-        line++;
-        if(ln[0] == 0 || ln[0] == '\n')
-            continue;
-        if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
-            sysfatal(".git/INDEX9:%d: corrupt index", line);
-        if(nidx == idxsz){
-            idxsz += idxsz/2;
-            idx = realloc(idx, idxsz*sizeof(Idxent));
-        }
-        cleanname(parts[3]);
-        idx[nidx].state = *parts[0];
-        idx[nidx].qid = parseqid(parts[1]);
-        idx[nidx].mode = strtol(parts[2], nil, 8);
-        idx[nidx].path = strdup(parts[3]);
-        idx[nidx].order = nidx;
-        nidx++;
-        free(ln);
-    }
-    Bterm(f);
-    qsort(idx, nidx, sizeof(Idxent), idxcmp);
-    r = treeify(t, argv, argv + argc, 0, &th);
-    if(r == -1)
-        sysfatal("could not commit: %r");
-    mkcommit(&ch, date, th);
-    print("%H\n", ch);
-    exits(nil);
-}
-@
-
 
 \section{Advanced features}
 
@@ -5786,6 +6679,7 @@ main(int argc, char **argv)
 \subsection{[[showcommits()]]}
 
 <<function [[showcommits]]>>=
+/// main(log.c) -> <>
 static void
 showcommits(char *c)
 {
@@ -6108,6 +7002,7 @@ for(i = 0; i < npackf; i++){
 
 
 \section{Delta}
+
 
 
 \section{Pack commands}
@@ -7452,6 +8347,11 @@ if(m == 0120000){ /* symlink */
 }
 @
 
+<<[[gitmode()]] if symlink>>=
+if(e->islink)
+    return 0120000;
+@
+
 <<[[gtreegen()]] if [[e->tree->ent[i].islink]]>>=
 if(e->tree->ent[i].islink)
     if((l = walklink(aux, o->data, o->size, 0, &m)) != nil)
@@ -7521,6 +8421,10 @@ if(m == 0160000){ /* module */
     t->mode |= DMDIR;
     t->ismod = true;
 }
+@
+<<[[gitmode()]] if submodule>>=
+else if(e->ismod)
+    return 0160000;
 @
 
 <<[[gtreegen()]] if submodule>>=

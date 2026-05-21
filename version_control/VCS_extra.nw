@@ -326,6 +326,43 @@ hash(void *p, int n)
 }
 @
 
+<<function [[murmurhash2]]>>=
+u64int
+murmurhash2(void *pp, usize n)
+{
+    u32int m = 0x5bd1e995;
+    u32int r = 24;
+    u32int h, k;
+    uchar *w, *e;
+    
+    h = Seed ^ n;
+    e = pp;
+    e += n & -4;
+    for (w = pp; w != e; w += 4) {
+        k = (u32int)w[0] | (u32int)w[1] << 8 | (u32int)w[2] << 16 | (u32int)w[3] << 24;
+        k *= m;
+        k ^= k >> r;
+        k *= m;
+
+        h *= m;
+        h ^= k;
+    }
+
+    switch (n & 0x3) {
+    case 3: h ^= w[2] << 16;
+    case 2: h ^= w[1] << 8;
+    case 1: h ^= w[0] << 0;
+        h *= m;
+    }
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+}
+@
+
 <<function [[addblk]]>>=
 static void
 addblk(Dtab *dt, void *buf, int len, int off, u64int h)
@@ -694,6 +731,66 @@ okrefname(char *s)
     return 0;
 }
 @
+
+<<function [[okref]]>>=
+/*
+ * Checks the rules for valid ref names, as defined in
+ *   git/Documentation/protocol-common.txt.
+ * It does not check that the ref begins with refs/
+ * or is called HEAD, since that's only needed in the
+ * clone protocol.
+ */
+int
+okref(char *ref)
+{
+    int n, slashed;
+    char *p;
+    Rune r;
+
+    slashed = 0;
+    if(*ref == '/' || *ref == '.')
+        return 0;
+    for(p = ref; *p != 0; p += n) {
+        n = chartorune(&r, p);
+        switch(r){
+        case '.':
+            if(p[1]== 0 || p[1] == '.')
+                return 0;
+            if(strcmp(p, ".lock") == 0)
+                return 0;
+            break;
+        case '/':
+            if(p[1] == 0 || p[1] == '.' || p[1] == '/')
+                return 0;
+            slashed = 1;
+            break;
+        case '@':
+            if(p[1] == '{')
+                return 0;
+            break;
+        case ' ':
+        case '~':
+        case '^':
+        case ':':
+        case '?':
+        case '*':
+        case '[':
+        case '\\':
+        case Runeerror:
+        case 0x7f: /* DEL */
+            return 0;
+        default:
+            if(r < 0x20 || isspacerune(r))
+                return 0;
+        }
+    }
+    if(ref == p)
+        return 0;
+    return slashed;
+}
+@
+
+
 
 <<function [[resolveremote]]>>=
 int
@@ -1204,20 +1301,21 @@ int listonly;
 <<function [[fetchpack]]>>
 
 <<function [[usage (git9/get.c)]]>>
-
 <<function [[main (git9/get.c)]]>>
 @
 
 
 \subsection{[[git9/git.h]]}
 
-<<macro [[GETBE16]]>>=
-#define GETBE16(b)\
-        ((((b)[0] & 0xFFul) <<  8) | \
-         (((b)[1] & 0xFFul) <<  0))
-@
+%ori: dead:
+%<<macro [[GETBE16]]>>=
+%#define GETBE16(b)\
+%        ((((b)[0] & 0xFFul) <<  8) | \
+%         (((b)[1] & 0xFFul) <<  0))
+%@
 
 
+% used by searchindex()
 <<macro [[GETBE64]]>>=
 #define GETBE64(b)\
         ((((b)[0] & 0xFFull) << 56) | \
@@ -1230,14 +1328,16 @@ int listonly;
          (((b)[7] & 0xFFull) <<  0))
 @
 
-<<macro [[PUTBE16]]>>=
-#define PUTBE16(b, n)\
-    do{ \
-        (b)[0] = (n) >> 8; \
-        (b)[1] = (n) >> 0; \
-    } while(0)
-@
+%ori: dead:
+%<<macro [[PUTBE16]]>>=
+%#define PUTBE16(b, n)\
+%    do{ \
+%        (b)[0] = (n) >> 8; \
+%        (b)[1] = (n) >> 0; \
+%    } while(0)
+%@
 
+% used in indexpack()
 <<macro [[PUTBE32]]>>=
 #define PUTBE32(b, n)\
     do{ \
@@ -1261,8 +1361,6 @@ int listonly;
         (b)[7] = (n) >> 0; \
     } while(0)
 @
-
-
 
 %-------------------------------------------------------------
 
@@ -1370,11 +1468,9 @@ struct Delta {
 
 <<struct [[Idxent]]>>
 
-<<macro [[GETBE16]]>>
 <<macro [[GETBE32]]>>
 <<macro [[GETBE64]]>>
 
-<<macro [[PUTBE16]]>>
 <<macro [[PUTBE32]]>>
 <<macro [[PUTBE64]]>>
 
@@ -1438,8 +1534,6 @@ void    *erealloc(void *, ulong);
 char    *estrdup(char *);
 int slurpdir(char *, Dir **);
 errorneg1 hparse(Hash *, char *);
-int hassuffix(char *, char *);
-int swapsuffix(char *, int, char *, char *, char *);
 char    *strip(char *);
 int showprogress(int, int);
 u64int  murmurhash2(void*, usize);
@@ -1470,6 +1564,8 @@ void    qclear(Objq*);
 void    qput(Objq*, Object*, int);
 int qpop(Objq*, Qelt*);
 @
+%dead: int hassuffix(char *, char *);
+%dead: int swapsuffix(char *, int, char *, char *, char *);
 
 
 \subsection{[[git9/log.c]]}
@@ -1597,9 +1693,6 @@ nextline(char *p, char *e)
 }
 @
 
-
-
-
 %-------------------------------------------------------------
 
 <<git9/log.c>>=
@@ -1630,20 +1723,15 @@ Pfilt   *pathfilt;
 <<function [[lookup (git9/log.c)]]>>
 
 <<function [[matchesfilter1]]>>
-
 <<function [[matchesfilter]]>>
-
 
 <<function [[nextline]]>>
 
 <<function [[show]]>>
-
 <<function [[showquery]]>>
-
 <<function [[showcommits]]>>
 
 <<function [[usage (git9/log.c)]]>>
-    
 <<function [[main (git9/log.c)]]>>
 @
 
@@ -1662,9 +1750,7 @@ Pfilt   *pathfilt;
 <<function [[osclear]]>>
 
 <<function [[osadd]]>>
-
 <<function [[osfind]]>>
-
 <<function [[oshas]]>>
 @
 
@@ -1856,7 +1942,6 @@ enum {
 <<macro [[max]]>>=
 #define max(x, y) ((x) > (y) ? (x) : (y))
 @
-
 
 
 
@@ -2620,6 +2705,24 @@ error:
     return -1;
 }
 @
+
+
+<<function [[showprogress]]>>=
+int
+showprogress(int x, int pct)
+{
+    if(!interactive)
+        return 0;
+    if(x > pct){
+        pct = x;
+        fprint(2, "\b\b\b\b%3d%%", pct);
+    }
+    return pct;
+}
+@
+
+
+
 
 <<function [[deltaordercmp]]>>=
 static int
@@ -3882,138 +3985,6 @@ enum {
 
 \subsection{[[git9/query.c]]}
 
-
-<<function [[showdir]]>>=
-void
-showdir(Hash dh, char *dname, char m)
-{
-    Dirent *p, *e;
-    Object *d;
-
-
-    path[npath++] = dname;
-    if((d = readobject(dh)) == nil)
-        sysfatal("bad hash %H", dh);
-    assert(d->type == GTree);
-    p = d->tree->ent;
-    e = p + d->tree->nent;
-    for(; p != e; p++){
-        if(p->ismod)
-            continue;
-        if(p->mode & DMDIR)
-            showdir(p->h, p->name, m);
-        else
-            print("%c %P%s\n", m, p->name);
-    }
-    print("%c %P\n", m);
-    unref(d);
-    npath--;
-}
-@
-
-<<function [[show (git9/query.c)]]>>=
-void
-show(Dirent *e, char m)
-{
-    if(e->mode & DMDIR)
-        showdir(e->h, e->name, m);
-    else
-        print("%c %P%s\n", m, e->name);
-}
-@
-
-<<function [[difftrees]]>>=
-void
-difftrees(Object *a, Object *b)
-{
-    Dirent *ap, *bp, *ae, *be;
-    int c;
-
-    ap = ae = nil;
-    bp = be = nil;
-    if(a != nil){
-        if(a->type != GTree)
-            return;
-        ap = a->tree->ent;
-        ae = ap + a->tree->nent;
-    }
-    if(b != nil){
-        if(b->type != GTree)
-            return;
-        bp = b->tree->ent;
-        be = bp + b->tree->nent;
-    }
-    while(ap != ae && bp != be){
-        c = entcmp(ap, bp);
-        if(c == 0){
-            if(ap->mode == bp->mode && hasheq(&ap->h, &bp->h))
-                goto next;
-            if(ap->mode != bp->mode)
-                print("! %P%s\n", ap->name);
-            else if(!(ap->mode & DMDIR) || !(bp->mode & DMDIR))
-                print("@ %P%s\n", ap->name);
-            if((ap->mode & DMDIR) && (bp->mode & DMDIR)){
-                if(npath >= nelem(path))
-                    sysfatal("path too deep");
-                path[npath++] = ap->name;
-                if((a = readobject(ap->h)) == nil)
-                    sysfatal("bad hash %H", ap->h);
-                if((b = readobject(bp->h)) == nil)
-                    sysfatal("bad hash %H", bp->h);
-                difftrees(a, b);
-                unref(a);
-                unref(b);
-                npath--;
-            }
-next:
-            ap++;
-            bp++;
-        }else if(c < 0) {
-            show(ap, '-');
-            ap++;
-        }else if(c > 0){
-            show(bp, '+');
-            bp++;
-        }
-    }
-    for(; ap != ae; ap++)
-        show(ap, '-');
-    for(; bp != be; bp++)
-        show(bp, '+');
-}
-@
-
-<<function [[diffcommits]]>>=
-void
-diffcommits(Hash ah, Hash bh)
-{
-    Object *a, *b, *at, *bt;
-
-    at = nil;
-    bt = nil;
-    if(!hasheq(&ah, &Zhash) && (a = readobject(ah)) != nil){
-        if(a->type != GCommit)
-            sysfatal("not commit: %H", ah);
-        if((at = readobject(a->commit->tree)) == nil)
-            sysfatal("bad hash %H", a->commit->tree);
-        unref(a);
-    }
-    if(!hasheq(&bh, &Zhash) && (b = readobject(bh)) != nil){
-        if(b->type != GCommit)
-            sysfatal("not commit: %H", ah);
-        if((bt = readobject(b->commit->tree)) == nil)
-            sysfatal("bad hash %H", b->commit->tree);
-        unref(b);
-    }
-    difftrees(at, bt);
-    unref(at);
-    unref(bt);
-}
-@
-
-
-
-
 %-------------------------------------------------------------
 
 <<git9/query.c>>=
@@ -4034,7 +4005,6 @@ diffcommits(Hash ah, Hash bh)
 <<function [[Pfmt]]>>
 
 <<function [[showdir]]>>
-
 <<function [[show (git9/query.c)]]>>
 
 <<function [[difftrees]]>>
@@ -4105,26 +4075,6 @@ case Twixt:
 
 
 
-<<function [[resolveref]]>>=
-int
-resolveref(Hash *r, char *ref)
-{
-    Eval ev;
-
-    if(evalexpr(&ev, ref) == -1){
-        free(ev.stk);
-        return -1;
-    }
-    if(ev.nstk != 1){
-        werrstr("ambiguous ref expr");
-        free(ev.stk);
-        return -1;
-    }
-    *r = ev.stk[0]->hash;
-    free(ev.stk);
-    return 0;
-}
-@
 
 <<function [[readrefdir]]>>=
 int
@@ -4207,11 +4157,9 @@ static char *colors[] = {
 <<function [[eatspace]]>>
 
 <<function [[push]]>>
-
 <<function [[pop]]>>
 
 <<function [[isword]]>>
-
 <<function [[word]]>>
 
 <<function [[take]]>>
@@ -4233,15 +4181,12 @@ static char *colors[] = {
 <<function [[readref (git9/ref.c)]]>>
 
 <<function [[evalpostfix]]>>
-
 <<function [[evalexpr]]>>
 
 <<function [[resolverefs]]>>
-
 <<function [[resolveref]]>>
 
 <<function [[readrefdir]]>>
-
 <<function [[listrefs]]>>
 @
 
@@ -4308,356 +4253,6 @@ cleanup(Hash h)
 
 \subsection{[[git9/save.c]]}
 
-<<function [[gitmode]]>>=
-int
-gitmode(Dirent *e)
-{
-    if(e->islink)
-        return 0120000;
-    else if(e->ismod)
-        return 0160000;
-    else if(e->mode & DMDIR)
-        return 0040000;
-    else if(e->mode & 0100)
-        return 0100755;
-    else
-        return 0100644;
-}
-@
-
-<<function [[namecmp]]>>=
-int
-namecmp(void *pa, void *pb)
-{
-    return strcmp(*(char**)pa, *(char**)pb);
-}
-@
-
-
-<<function [[bwrite]]>>=
-static int
-bwrite(void *p, void *buf, int nbuf)
-{
-    return Bwrite(p, buf, nbuf);
-}
-@
-
-<<function [[objbytes]]>>=
-static int
-objbytes(void *p, void *buf, int nbuf)
-{
-    Objbuf *b;
-    int r, n, o;
-    char *s;
-
-    b = p;
-    n = 0;
-    if(b->off < b->nhdr){
-        r = b->nhdr - b->off;
-        r = (nbuf < r) ? nbuf : r;
-        memcpy(buf, b->hdr, r);
-        b->off += r;
-        nbuf -= r;
-        n += r;
-    }
-    if(b->off < b->ndat + b->nhdr){
-        s = buf;
-        o = b->off - b->nhdr;
-        r = b->ndat - o;
-        r = (nbuf < r) ? nbuf : r;
-        memcpy(s + n, b->dat + o, r);
-        b->off += r;
-        n += r;
-    }
-    return n;
-}
-@
-
-<<function [[writeobj]]>>=
-void
-writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
-{
-    Objbuf b = {.off=0, .hdr=hdr, .nhdr=nhdr, .dat=dat, .ndat=ndat};
-    char s[64], o[256];
-    SHA1state *st;
-    Biobuf *f;
-    int fd;
-
-    st = sha1((uchar*)hdr, nhdr, nil, nil);
-    st = sha1((uchar*)dat, ndat, nil, st);
-    sha1(nil, 0, h->h, st);
-
-    snprint(s, sizeof(s), "%H", *h);
-    fd = create(".git/objects", OREAD, DMDIR|0755);
-    close(fd);
-    snprint(o, sizeof(o), ".git/objects/%c%c", s[0], s[1]);
-    fd = create(o, OREAD, DMDIR | 0755);
-    close(fd);
-    snprint(o, sizeof(o), ".git/objects/%c%c/%s", s[0], s[1], s + 2);
-    if(readobject(*h) == nil){
-        if((f = Bopen(o, OWRITE)) == nil)
-            sysfatal("could not open %s: %r", o);
-        if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == -1)
-            sysfatal("could not write %s: %r", o);
-        Bterm(f);
-    }
-}
-@
-
-<<function [[writetree]]>>=
-int
-writetree(Dirent *ent, int nent, Hash *h)
-{
-    char *t, *txt, *etxt, hdr[128];
-    int nhdr, n;
-    Dirent *d, *p;
-
-    t = emalloc((16+256+20) * nent);
-    txt = t;
-    etxt = t + (16+256+20) * nent;
-
-    /* sqeeze out deleted entries */
-    n = 0;
-    p = ent;
-    for(d = ent; d != ent + nent; d++)
-        if(d->name)
-            p[n++] = *d;
-    nent = n;
-
-    qsort(ent, nent, sizeof(Dirent), entcmp);
-    for(d = ent; d != ent + nent; d++){
-        if(strlen(d->name) >= 255)
-            sysfatal("overly long filename: %s", d->name);
-        t = seprint(t, etxt, "%o %s", gitmode(d), d->name) + 1;
-        memcpy(t, d->h.h, sizeof(d->h.h));
-        t += sizeof(d->h.h);
-    }
-    nhdr = snprint(hdr, sizeof(hdr), "%T %lld", GTree, (vlong)(t - txt)) + 1;
-    writeobj(h, hdr, nhdr, txt, t - txt);
-    free(txt);
-    return nent;
-}
-@
-
-<<function [[blobify]]>>=
-void
-blobify(Dir *d, char *path, int *mode, Hash *bh)
-{
-    char h[64], *buf;
-    int f, nh;
-
-    if((d->mode & DMDIR) != 0)
-        sysfatal("not file: %s", path);
-    *mode = d->mode;
-    nh = snprint(h, sizeof(h), "%T %lld", GBlob, d->length) + 1;
-    if((f = open(path, OREAD)) == -1)
-        sysfatal("could not open %s: %r", path);
-    buf = emalloc(d->length);
-    if(readn(f, buf, d->length) != d->length)
-        sysfatal("could not read blob %s: %r", path);
-    writeobj(bh, h, nh, buf, d->length);
-    free(buf);
-    close(f);
-}
-@
-
-<<function [[tracked]]>>=
-int
-tracked(char *path)
-{
-    int r, lo, hi, mid;
-
-    lo = 0;
-    hi = nidx-1;
-    while(lo <= hi){
-        mid = (hi + lo) / 2;
-        r = strcmp(path, idx[mid].path);
-        if(r < 0)
-            hi = mid-1;
-        else if(r > 0)
-            lo = mid+1;
-        else
-            return idx[mid].state != 'R';
-    }
-    return 0; 
-}
-@
-
-<<function [[dirent]]>>=
-Dirent*
-dirent(Dirent **ent, int *nent, char *name)
-{
-    Dirent *d;
-
-    assert(strchr(name, '/') == nil);
-
-    for(d = *ent; d != *ent + *nent; d++)
-        if(d->name && strcmp(d->name, name) == 0)
-            return d;
-    *nent += 1;
-    *ent = erealloc(*ent, *nent * sizeof(Dirent));
-    d = *ent + (*nent - 1);
-    memset(d, 0, sizeof(*d));
-    d->name = estrdup(name);
-    return d;
-}
-@
-
-<<function [[treeify]]>>=
-int
-treeify(Object *t, char **path, char **epath, int off, Hash *h)
-{
-    int nent, ne, slash, isdir;
-    char *s, **p, **ep;
-    Dirent *e, *ent;
-    Object *o;
-    Dir *d;
-
-    nent = t->tree->nent;
-    ent = eamalloc(nent, sizeof(*ent));
-    memcpy(ent, t->tree->ent, nent*sizeof(*ent));
-    for(p = path; p != epath; p = ep){
-        s = *p;
-
-        /*
-         * paths have been normalized already,
-         * no leading or double-slashes allowed.
-         */
-        assert(off <= strlen(s));
-        assert(off == 0 || s[off-1] == '/');
-        assert(s[off] != '\0' && s[off] != '/');
-
-        /* get next path element length (from off until '/' or nul) */
-        for(ne = 1; s[off+ne] != '\0' && s[off+ne] != '/'; ne++)
-            ;
-
-        /* truncate at '/' or nul */
-        slash = s[off + ne];
-        s[off + ne] = '\0';
-
-        /* skip over children (having s as prefix) */
-        for(ep = p + 1; slash && ep != epath; ep++){
-            if(strncmp(s, *ep, off + ne) != 0)
-                break;
-            if((*ep)[off+ne] != '\0' && (*ep)[off+ne] != '/')
-                break;
-        }
-
-        d = dirstat(s);
-        e = dirent(&ent, &nent, s + off);
-        if(e->islink)
-            sysfatal("symlinks may not be modified: %s", s);
-        if(e->ismod)
-            sysfatal("submodules may not be modified: %s", s);
-
-        s[off + ne] = slash;
-
-        isdir = d != nil && (d->mode & DMDIR) != 0;
-        /*
-         * exist? slash? dir?   track?
-         * n      _      _      _      -> remove: file gone
-         * y      n      n      y      -> blob: tracked non-dir
-         * y      n      y      n      -> remove: file untracked
-         * y      n      y      n      -> remove: file -> dir
-         * y      n      y      y      -> remove: file -> dir
-         * y      n      y      n      -> untracked dir, cli junk
-         * y      y      y      n      -> recurse
-         * y      y      y      y      -> recurse
-         */
-        if(d == nil || !slash && isdir && tracked(s)){
-            /*
-             * if a tracked file is removed or turned
-             * into a dir, we want to delete it. We
-             * only want to change files passed in, and
-             * not ones along the way, so ignore files
-             * that have a '/'.
-             */
-            e->name = nil;
-            s[off + ne] = slash;
-            continue;
-        } else if(slash && isdir){
-            /*
-             * If we have a list of entries that go into
-             * a directory, create a tree node for this
-             * entry, and recurse down.
-             */
-            e->mode = DMDIR | 0755;
-            o = readobject(e->h);
-            if(o == nil || o->type != GTree)
-                o = emptydir();
-            /*
-             * if after processing deletions, a tree is empty,
-             * mark it for removal from the parent.
-             *
-             * Note, it is still written to the object store,
-             * but this is fine -- and ensures that an empty
-             * repository will continue to work.
-             */
-            if(treeify(o, p, ep, off + ne + 1, &e->h) == 0)
-                e->name = nil;
-        }else if(!slash && !isdir){
-            /*
-             * If the file was explicitly passed in and is
-             * not a dir, we want to either remove it or
-             * track it, depending on the state of the index.
-             */
-            if(tracked(s) && !isdir)
-                blobify(d, s, &e->mode, &e->h);
-            else
-                e->name = nil;
-        }
-        free(d);
-    }
-    if(nent == 0)
-        sysfatal("%.*s: refusing to update empty directory", off, *path);
-    nent = writetree(ent, nent, h);
-    free(ent);
-    return nent;        
-}
-@
-
-<<function [[mkcommit]]>>=
-void
-mkcommit(Hash *c, vlong date, Hash tree)
-{
-    char *s, h[64];
-    int ns, nh, i;
-    Fmt f;
-
-    fmtstrinit(&f);
-    fmtprint(&f, "tree %H\n", tree);
-    for(i = 0; i < nparents; i++)
-        fmtprint(&f, "parent %H\n", parents[i]);
-    fmtprint(&f, "author %s <%s> %lld +0000\n", authorname, authoremail, date);
-    fmtprint(&f, "committer %s <%s> %lld +0000\n", committername, committeremail, date);
-    fmtprint(&f, "\n");
-    fmtprint(&f, "%s", commitmsg);
-    s = fmtstrflush(&f);
-
-    ns = strlen(s);
-    nh = snprint(h, sizeof(h), "%T %d", GCommit, ns) + 1;
-    writeobj(c, h, nh, s, ns);
-    free(s);
-}
-@
-
-<<function [[findroot]]>>=
-Object*
-findroot(void)
-{
-    Object *t, *c;
-    Hash h;
-
-    if(resolveref(&h, "HEAD") == -1)
-        return emptydir();
-    if((c = readobject(h)) == nil || c->type != GCommit)
-        sysfatal("could not read HEAD %H", h);
-    if((t = readobject(c->commit->tree)) == nil)
-        sysfatal("could not read tree for commit %H", h);
-    return t;
-}
-@
-
 %-------------------------------------------------------------
 
 <<git9/save.c>>=
@@ -4666,28 +4261,20 @@ findroot(void)
 #include "git.h"
 
 typedef struct Objbuf Objbuf;
-struct Objbuf {
-    int off;
-    char *hdr;
-    int nhdr;
-    char *dat;
-    int ndat;
-};
+
+<<struct [[Objbuf]]>>
 
 enum {
     Maxparents = 16,
 };
 
-char    *authorname;
-char    *authoremail;
-char    *committername;
-char    *committeremail;
-char    *commitmsg;
+<<globals [[authorxxx]](save.c)>>
+<<globals [[comitterxxx]](save.c)>>
+<<global [[commitmsg]](save.c)>>
 Hash    parents[Maxparents];
 int nparents;
-Idxent  *idx;
-int idxsz;
-int nidx;
+
+<<globals [[idx]](save.c)>>
 
 <<function [[gitmode]]>>
 
@@ -4696,7 +4283,6 @@ int nidx;
 <<function [[idxcmp]]>>
 
 <<function [[bwrite]]>>
-
 <<function [[objbytes]]>>
 
 <<function [[writeobj]]>>
@@ -4717,7 +4303,6 @@ int nidx;
 <<function [[findroot]]>>
 
 <<function [[usage (git9/save.c)]]>>
-
 <<function [[main (git9/save.c)]]>>
 @
 
@@ -5597,224 +5182,38 @@ int allowwrite;
 
 \subsection{[[git9/util.c]]}
 
-
-<<function [[entcmp]]>>=
-int
-entcmp(void *pa, void *pb)
-{
-    Dirent *ae, *be;
-    uchar *a, *b;
-    int ca, cb;
-
-    ae = pa;
-    be = pb;
-    a = (uchar*)ae->name;
-    b = (uchar*)be->name;
-    /*
-     * If the files have the same name, they're equal.
-     * Otherwise, If they're trees, they sort as thoug
-     * there was a trailing slash.
-     *
-     * Wat.
-     */
-    while(1){
-        ca = *a++;
-        cb = *b++;
-        /*
-         * because these are dir entries in a tree,
-         * the only '/' allowable is the virtual '/'
-         * at the end of the file name.
-         */
-        assert(ca != '/' && cb != '/');
-        if(ca != cb){
-            if(ca == 0 && (ae->mode & DMDIR))
-                ca = '/';
-            if(cb == 0 && (be->mode & DMDIR))
-                cb = '/';
-            return (ca > cb) ? 1 : -1;
-        }
-        if(ca == 0){
-            if(ae->mode & DMDIR)
-                ca = '/';
-            if(be->mode & DMDIR)
-                cb = '/';
-            if(ca == cb)
-                return 0;
-            return (ca > cb) ? 1 : -1;
-        }
-    }
-}
-@
-
-
-
-
-
-
-
-<<function [[slurpdir]]>>=
-int
-slurpdir(char *p, Dir **d)
-{
-    int r, f;
-
-    if((f = open(p, OREAD)) == -1)
-        return -1;
-    r = dirreadall(f, d);
-    close(f);
-    return r;
-}   
-@
-
-<<function [[hassuffix]]>>=
-int
-hassuffix(char *base, char *suf)
-{
-    int nb, ns;
-
-    nb = strlen(base);
-    ns = strlen(suf);
-    if(ns <= nb && strcmp(base + (nb - ns), suf) == 0)
-        return 1;
-    return 0;
-}
-@
-
-<<function [[swapsuffix]]>>=
-int
-swapsuffix(char *dst, int dstsz, char *base, char *oldsuf, char *suf)
-{
-    int bl, ol, sl, l;
-
-    bl = strlen(base);
-    ol = strlen(oldsuf);
-    sl = strlen(suf);
-    l = bl + sl - ol;
-    if(l + 1 > dstsz || ol > bl)
-        return -1;
-    memmove(dst, base, bl - ol);
-    memmove(dst + bl - ol, suf, sl);
-    dst[l] = 0;
-    return l;
-}
-@
-
-
-
-<<function [[showprogress]]>>=
-int
-showprogress(int x, int pct)
-{
-    if(!interactive)
-        return 0;
-    if(x > pct){
-        pct = x;
-        fprint(2, "\b\b\b\b%3d%%", pct);
-    }
-    return pct;
-}
-@
-
-
-
-
-
-<<function [[murmurhash2]]>>=
-u64int
-murmurhash2(void *pp, usize n)
-{
-    u32int m = 0x5bd1e995;
-    u32int r = 24;
-    u32int h, k;
-    uchar *w, *e;
-    
-    h = Seed ^ n;
-    e = pp;
-    e += n & -4;
-    for (w = pp; w != e; w += 4) {
-        k = (u32int)w[0] | (u32int)w[1] << 8 | (u32int)w[2] << 16 | (u32int)w[3] << 24;
-        k *= m;
-        k ^= k >> r;
-        k *= m;
-
-        h *= m;
-        h ^= k;
-    }
-
-    switch (n & 0x3) {
-    case 3: h ^= w[2] << 16;
-    case 2: h ^= w[1] << 8;
-    case 1: h ^= w[0] << 0;
-        h *= m;
-    }
-
-    h ^= h >> 13;
-    h *= m;
-    h ^= h >> 15;
-
-    return h;
-}
-@
-
-
-<<function [[okref]]>>=
-/*
- * Checks the rules for valid ref names, as defined in
- *   git/Documentation/protocol-common.txt.
- * It does not check that the ref begins with refs/
- * or is called HEAD, since that's only needed in the
- * clone protocol.
- */
-int
-okref(char *ref)
-{
-    int n, slashed;
-    char *p;
-    Rune r;
-
-    slashed = 0;
-    if(*ref == '/' || *ref == '.')
-        return 0;
-    for(p = ref; *p != 0; p += n) {
-        n = chartorune(&r, p);
-        switch(r){
-        case '.':
-            if(p[1]== 0 || p[1] == '.')
-                return 0;
-            if(strcmp(p, ".lock") == 0)
-                return 0;
-            break;
-        case '/':
-            if(p[1] == 0 || p[1] == '.' || p[1] == '/')
-                return 0;
-            slashed = 1;
-            break;
-        case '@':
-            if(p[1] == '{')
-                return 0;
-            break;
-        case ' ':
-        case '~':
-        case '^':
-        case ':':
-        case '?':
-        case '*':
-        case '[':
-        case '\\':
-        case Runeerror:
-        case 0x7f: /* DEL */
-            return 0;
-        default:
-            if(r < 0x20 || isspacerune(r))
-                return 0;
-        }
-    }
-    if(ref == p)
-        return 0;
-    return slashed;
-}
-@
-
+%ori: dead:
+%<<function [[hassuffix]]>>=
+%int
+%hassuffix(char *base, char *suf)
+%{
+%    int nb, ns;
+%
+%    nb = strlen(base);
+%    ns = strlen(suf);
+%    if(ns <= nb && strcmp(base + (nb - ns), suf) == 0)
+%        return 1;
+%    return 0;
+%}
+%@
+%<<function [[swapsuffix]]>>=
+%int
+%swapsuffix(char *dst, int dstsz, char *base, char *oldsuf, char *suf)
+%{
+%    int bl, ol, sl, l;
+%
+%    bl = strlen(base);
+%    ol = strlen(oldsuf);
+%    sl = strlen(suf);
+%    l = bl + sl - ol;
+%    if(l + 1 > dstsz || ol > bl)
+%        return -1;
+%    memmove(dst, base, bl - ol);
+%    memmove(dst + bl - ol, suf, sl);
+%    dst[l] = 0;
+%    return l;
+%}
+%@
 
 %-------------------------------------------------------------
 
@@ -5843,13 +5242,9 @@ enum {
 <<function [[charval]]>>
 
 <<function [[emalloc]]>>
-
 <<function [[eamalloc]]>>
-
 <<function [[erealloc]]>>
-
 <<function [[earealloc]]>>
-
 <<function [[estrdup]]>>
 
 <<function [[Hfmt]]>>
@@ -5863,10 +5258,6 @@ enum {
 <<function [[hparse]]>>
 
 <<function [[slurpdir]]>>
-
-<<function [[hassuffix]]>>
-
-<<function [[swapsuffix]]>>
 
 <<function [[strip]]>>
 
@@ -5889,164 +5280,20 @@ enum {
 
 \subsection{[[git9/walk.c]]}
 
-<<constant [[NCACHE]]>>=
-#define NCACHE 4096
-@
-
-
-<<function [[pathcmp]]>>=
-/*
- * Tricky; we want to know if a file or dir is indexed,
- * but a dir is only indexed if we have a file with dir/
- * listed in the index.
- *
- * as a result, we need to add a virtual '/' at the end
- * of the path if we're doing it, so if we have:
- *  foo.bar/x
- *  foo/y
- * and we want to find out if foo is a directory we should
- * descend into, we need to compare as though foo/ ended
- * with a '/', or we'll bsearch down do foo.bar, not foo.
- *
- * this code resembles entcmp() in util.c, but differs
- * because we're comparing whole paths.
- */
-int
-pathcmp(char *sa, char *sb, int sadir)
-{
-    unsigned a, b;
-
-    while(1){
-        a = *sa++;
-        b = *sb++;
-        if(a != b){
-            if(a == 0 && sadir)
-                a = '/';
-            if(a == '/' && b == '/')
-                return 0;
-            return (a > b) ? 1 : -1;
-        }
-        if(a == 0)
-            return 0;
-    }
-}
-@
-
-<<function [[indexed]]>>=
-int
-indexed(char *path, int dir)
-{
-    int lo, hi, mid, r;
-
-    r = -1;
-    lo = 0;
-    hi = nidx-1;
-    while(lo <= hi){
-        mid = (hi + lo) / 2;
-        r = pathcmp(path, idx[mid].path, dir);
-        if(r < 0)
-            hi = mid-1;
-        else if(r > 0)
-            lo = mid+1;
-        else
-            break;
-    }
-    return r == 0;
-}
-@
-
-<<function [[idxcmp (git9/walk.c)]]>>=
-int
-idxcmp(void *pa, void *pb)
-{
-    Idxent *a, *b;
-    int c;
-
-    a = (Idxent*)pa;
-    b = (Idxent*)pb;
-    if((c = strcmp(a->path, b->path)) != 0)
-        return c;
-    /* maintain load order if name is identical */
-    return a->order < b->order ? -1 : 1;
-}
-@
-
-<<function [[samedata]]>>=
-/*
- * compares whether the indexed entry 'a'
- * has the same contents and mode as
- * the entry on disk 'b'; if the indexed
- * entry is nil, does a deep comparison
- * of the checked out file and the file
- * checked in.
- */
-int
-samedata(Idxent *a, Idxent *b)
-{
-    char *gitpath, ba[IOUNIT], bb[IOUNIT];
-    int fa, fb, na, nb, same;
-    Dir *da, *db;
-
-    if(a != nil){
-        if(a->qid.path == b->qid.path
-        && a->qid.vers == b->qid.vers
-        && a->qid.type == b->qid.type
-        && a->mode == b->mode
-        && a->mode != 0)
-            return 1;
-    }
-
-    same = 0;
-    da = nil;
-    db = nil;
-    if((gitpath = smprint("%s/%s", bdir, b->path)) == nil)
-        sysfatal("smprint: %r");
-    fa = open(gitpath, OREAD);
-    fb = open(b->path, OREAD);
-    if(fa == -1 || fb == -1)
-        goto mismatch;
-    da = dirfstat(fa);
-    db = dirfstat(fb);
-    if(da == nil || db == nil)
-        goto mismatch;
-    if((da->mode&0100) != (db->mode&0100))
-        goto mismatch;
-    if(da->length != db->length)
-        goto mismatch;
-    while(1){
-        if((na = readn(fa, ba, sizeof(ba))) == -1)
-            goto mismatch;
-        if((nb = readn(fb, bb, sizeof(bb))) == -1)
-            goto mismatch;
-        if(na != nb)
-            goto mismatch;
-        if(na == 0)
-            break;
-        if(memcmp(ba, bb, na) != 0)
-            goto mismatch;
-    }
-    if(a != nil){
-        a->qid = db->qid;
-        a->mode = db->mode;
-        staleidx = 1;
-    }
-    same = 1;
-
-mismatch:
-    free(da);
-    free(db);
-    if(fa != -1)
-        close(fa);
-    if(fb != -1)
-        close(fb);
-    return same;
-}
-@
-
-
-
-
-
+%ori: dead:
+%<<struct [[Idxed]]>>=
+%struct Idxed {
+%    char**  cache;
+%    int n;
+%    int max;
+%};
+%@
+%<<global [[idxtab]]>>=
+%Idxed   idxtab[NCACHE];
+%@
+%<<constant [[NCACHE]]>>=
+%#define NCACHE 4096
+%@
 
 %-------------------------------------------------------------
 
@@ -6058,29 +5305,15 @@ mismatch:
 typedef struct Idxed    Idxed;
 typedef struct Idxent   Idxent;
 
-<<constant [[NCACHE]]>>
-
 <<enum WalkFlags>>
 
-struct Idxed {
-    char**  cache;
-    int n;
-    int max;
-};
-
-Idxed   idxtab[NCACHE];
-
-char    repopath[1024];
+<<global [[repopath]](walk.c)>>
 <<global [[wdirpath]](walk.c)>>
 char    relapath[1024];
 
-char    *rstr   = "R ";
-char    *mstr   = "M ";
-char    *astr   = "A ";
-char    *ustr   = "U ";
-char    *tstr   = "T ";
+<<globals [[xxxstr]]>>
 
-char    *bdir = ".git/fs/HEAD/tree";
+<<constant [[bdir]]>>
 
 int nslash;
 int nrel;
@@ -6090,16 +5323,12 @@ int dirty;
 <<global [[intree]](walk.c)>>
 <<global [[printflg]](walk.c)>>
 
-<<global [[idx]](walk.c)>>
-<<global [[idxsz]](walk.c)>>
-<<global [[nidx]](walk.c)>>
+<<globals [[idx]](walk.c)>>
 
 <<global [[cleanidx]]>>
 <<global [[staleidx]](walk.c)>>
 
-<<global [[wdir]](walk.c)>>
-<<global [[wdirsz]](walk.c)>>
-<<global [[nwdir]](walk.c)>>
+<<globals [[wdir]](walk.c)>>
 
 
 void    loadwdir(char*);
@@ -6128,7 +5357,6 @@ void    loadwdir(char*);
 <<function [[usage (git9/walk.c)]]>>
 <<function [[main (git9/walk.c)]]>>
 @
-
 
 
 \section{[[diff/]]}
