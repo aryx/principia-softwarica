@@ -5804,9 +5804,9 @@ if(dstr){
 
 <<git9/init.rc>>=
 #!/bin/rc -e
+
 rfork ne
 . /lib/git/common.rc
-
 <<[[init.rc]] command line processing>>
 
 dir=$1
@@ -5907,12 +5907,11 @@ eval `{auxrc/getflags $*} || exec auxrc/usage
 
 <<git9/add.rc>>=
 #!/bin/rc -e
+
 rfork ne
 . /lib/git/common.rc
-
 # for setting $gitroot, $gitrel
 gitup
-
 <<[[add.rc]] command line processing>>
 
 s=A
@@ -6030,6 +6029,7 @@ eval `{auxrc/getflags $*} || exec auxrc/usage
 
 <<git9/commit.rc>>=
 #!/bin/rc -e
+
 rfork ne
 . /lib/git/common.rc
 
@@ -6431,11 +6431,10 @@ eval `{auxrc/getflags $*} || exec auxrc/usage
 
 <<git9/branch.rc>>=
 #!/bin/rc -e
+
 rfork en
 . /lib/git/common.rc
-
 gitup
-
 <<[[branch.rc]] command line processing>>
 
 modified=()
@@ -6612,13 +6611,11 @@ eval `{auxrc/getflags $*} || exec auxrc/usage
 
 <<git9/merge.rc>>=
 #!/bin/rc -e
+
 rfork ne
 . /lib/git/common.rc
-
 <<fn [[merge]](merge.rc)>>
-
 gitup
-
 <<[[merge.rc]] command line processing>>
 
 if(! ~ $#* 1)
@@ -7221,11 +7218,10 @@ eval `{auxrc/getflags $*} || exec auxrc/usage
 
 <<git9/diff.rc>>=
 #!/bin/rc
+
 rfork ne
 . /lib/git/common.rc
-
 gitup
-
 <<[[diff.rc]] command line processing>>
 
 bparam=(-b $commit)
@@ -9309,6 +9305,7 @@ if(~ $#upstream 0){
 @
 %$
 
+
 <<[[init.rc]] set origin in [[.git/config]]>>=
 if(! ~ $#upstream 0){
         echo '[remote "origin"]'
@@ -9331,13 +9328,47 @@ args=''
 eval `{auxrc/getflags $*} || exec auxrc/usage
 @
 
+% fetchonly =~ git fetch? hmm seems to also update working directory
+
 \subsection{[[pull.rc]]}
 
 <<git9/pull.rc>>=
 #!/bin/rc -e
+
 rfork en
 . /lib/git/common.rc
+<<fn [[update]](pull.rc)>>
+gitup
+<<[[pull.rc]] command line processing>>
 
+if(~ $#upstream 0)
+        upstream=origin
+remote=`$nl{git/conf 'remote "'$upstream'".url'}
+if(~ $#remote 0){
+        remote=$upstream
+        upstream=THEM
+}
+
+update $upstream $remote
+if (~ $fetchonly 1)
+        exit
+
+local=`{git/branch}
+remote=`{git/branch | subst '^(refs/)?heads' 'remotes/'$upstream}
+
+# we have local commits, but the remote hasn't changed.
+# in this case, we want to keep the local commits untouched.
+if(~ `{git/query HEAD $remote @} `{git/query $remote}){
+        echo 'up to date' >[1=2]
+        exit
+}
+<<[[pull.rc]] after [[update()]], if not fetch only, when remote and HEAD diverged>>
+@
+%$
+
+\subsection{[[update()]]}
+
+<<fn [[update]](pull.rc)>>=
 fn update{
         upstream=$1
         url=$2
@@ -9371,32 +9402,15 @@ fn update{
         }
         ' |[3] tr '\x0d' '\x0a'
 }
+@
 
-gitup
+% git/get!
 
-<<[[pull.rc]] command line processing>>
+% wow, tricky
 
-if(~ $#upstream 0)
-        upstream=origin
-remote=`$nl{git/conf 'remote "'$upstream'".url'}
-if(~ $#remote 0){
-        remote=$upstream
-        upstream=THEM
-}
+\subsection{merge}
 
-update $upstream $remote
-if (~ $fetchonly 1)
-        exit
-
-local=`{git/branch}
-remote=`{git/branch | subst '^(refs/)?heads' 'remotes/'$upstream}
-
-# we have local commits, but the remote hasn't changed.
-# in this case, we want to keep the local commits untouched.
-if(~ `{git/query HEAD $remote @} `{git/query $remote}){
-        echo 'up to date' >[1=2]
-        exit
-}
+<<[[pull.rc]] after [[update()]], if not fetch only, when remote and HEAD diverged>>
 # The remote repository and our HEAD have diverged: we
 # need to merge.
 if(! ~ `{git/query HEAD $remote @} `{git/query HEAD}){
@@ -9419,26 +9433,32 @@ if(~ $#quiet 0){
 
 git/branch -mnb $remote $local
 exit ''
-
 @
-%$
 
 
-\subsection{Fetching objects locally}
-\subsubsection{Find top common commits}
-\subsubsection{Find missing objects}
-\subsubsection{Iterating over objects}
-\subsubsection{Adding Objects}
+\subsection{[[git/branch -mnb <remote> <local>]]}
 
-\subsection{Fetching references}
-\subsubsection{Refspecs}
-\subsubsection{Selecting the refs}
-\subsubsection{Parsing ref tuples}
-\subsection{Fetching objects in a pack}
+% git/branch -mnb?
+
+
+%%\subsection{Fetching objects locally}
+%%\subsubsection{Find top common commits}
+%%\subsubsection{Find missing objects}
+%%\subsubsection{Iterating over objects}
+%%\subsubsection{Adding Objects}
+%%
+%%\subsection{Fetching references}
+%%\subsubsection{Refspecs}
+%%\subsubsection{Selecting the refs}
+%%\subsubsection{Parsing ref tuples}
+%%\subsection{Fetching objects in a pack}
 
 \section{[[git/get]]}
 
 \subsection{Usage}
+
+%ex: in pull.rc
+%        {git/get $dflag -u $upstream $heads $url >[2=3] || die $status} | awk '
 
 <<function [[usage (git9/get.c)]]>>=
 void
