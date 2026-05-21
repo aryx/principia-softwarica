@@ -3776,28 +3776,6 @@ if(n == ERROR_NEG1)
 @
 
 
-%XXX
-<<[[main()]](query.c) fmtinstall>>=
-fmtinstall('P', Pfmt);
-@
-<<function [[Pfmt]]>>=
-int
-Pfmt(Fmt *f)
-{
-    int i, n;
-
-    n = 0;
-    for(i = 0; i < npath; i++)
-        n += fmtprint(f, "%s/", path[i]);
-    return n;
-}
-@
-<<global [[path]](query.c)>>=
-char *path[128];
-@
-<<global [[npath]](query.c)>>=
-int npath;
-@
 
 \section{Data structures}
 
@@ -3824,7 +3802,7 @@ struct Eval {
 <<function [[resolverefs]]>>=
 // main(get.c) -> <>
 errorneg1
-resolverefs(Hash **r, char *ref)
+resolverefs(Hash **r/*OUT*/, char *ref)
 {
     Eval ev;
     Hash *h;
@@ -3852,7 +3830,7 @@ resolverefs(Hash **r, char *ref)
 <<function [[resolveref]]>>=
 /// main(walk.c -b) | main(save.c -p) | (main(log.c) -> showcommits) -> <>
 errorneg1
-resolveref(Hash *r, char *ref)
+resolveref(Hash *r/*OUT*/, char *ref)
 {
     Eval ev;
 
@@ -3901,16 +3879,16 @@ evalexpr(Eval *ev, char *ref)
 @
 
 <<function [[take]]>>=
-int
+bool
 take(Eval *ev, char *m)
 {
     int l;
 
     l = strlen(m);
     if(strncmp(ev->p, m, l) != 0)
-        return 0;
+        return false;
     ev->p += l;
-    return 1;
+    return true;
 }
 @
 
@@ -4506,6 +4484,27 @@ next:
 @
 
 
+<<[[main()]](query.c) fmtinstall>>=
+fmtinstall('P', Pfmt);
+@
+<<function [[Pfmt]]>>=
+int
+Pfmt(Fmt *f)
+{
+    int i, n;
+
+    n = 0;
+    for(i = 0; i < npath; i++)
+        n += fmtprint(f, "%s/", path[i]);
+    return n;
+}
+@
+<<global [[path]](query.c)>>=
+char *path[128];
+@
+<<global [[npath]](query.c)>>=
+int npath;
+@
 
 
 
@@ -4519,6 +4518,7 @@ show(Dirent *e, char m)
         print("%c %P%s\n", m, e->name);
 }
 @
+
 
 <<function [[showdir]]>>=
 /// show -> <>
@@ -4591,6 +4591,10 @@ if (reverse)
 %******************************************************************************
 \chapter{[[git/walk]]}
 %******************************************************************************
+
+\section{Introduction}
+
+% walk is again a plan 9 idiom.
 
 \section{Usage}
 
@@ -5243,6 +5247,8 @@ if((wfd = create(".git/INDEX9.new", OWRITE, 0644)) != ERROR_NEG1){
             idx[i].path);
     }
     Bterm(w);
+
+
     nulldir(&rn);
     rn.name = "INDEX9";
     if(remove(".git/INDEX9") == -1)
@@ -5407,6 +5413,8 @@ char    *committeremail;
 char    *commitmsg;
 @
 
+% saw also parents and nparents before also used by mkcommit()
+
 \section{[[main()]]}
 
 
@@ -5543,12 +5551,21 @@ findroot(void)
 
     if(resolveref(&h, "HEAD") == ERROR_NEG1)
         return emptydir();
-    if((c = readobject(h)) == nil || c->type != GCommit)
-        sysfatal("could not read HEAD %H", h);
-    if((t = readobject(c->commit->tree)) == nil)
-        sysfatal("could not read tree for commit %H", h);
+    c = readobject(h);
+    <<[[findroot()]] sanity check commit [[c]]>>
+    t = readobject(c->commit->tree);
+    <<[[findroot()]] sanity check tree [[t]]>>
     return t;
 }
+@
+
+<<[[findroot()]] sanity check commit [[c]]>>=
+if(c == nil || c->type != GCommit)
+    sysfatal("could not read HEAD %H", h);
+@
+<<[[findroot()]] sanity check tree [[t]]>>=
+if(t == nil)
+    sysfatal("could not read tree for commit %H", h);
 @
 
 \section{[[treeify()]]}
@@ -5677,6 +5694,7 @@ dirent(Dirent **ent, int *nent, char *name)
     for(d = *ent; d != *ent + *nent; d++)
         if(d->name && strcmp(d->name, name) == 0)
             return d;
+    // else
     *nent += 1;
     *ent = erealloc(*ent, *nent * sizeof(Dirent));
     d = *ent + (*nent - 1);
@@ -5729,6 +5747,7 @@ case 'p':
         sysfatal("invalid parent: %r");
     break;
 @
+% can use multiple -p for multiple parents
 
 % resolveref(), like for git/walk -b base
 
