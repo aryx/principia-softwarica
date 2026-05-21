@@ -500,13 +500,12 @@ showrefs:
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-dl] [-b br] [-u upstream] remote\n", argv0);
-    fprint(2, "\t-b br: only fetch matching branch 'br'\n");
-    fprint(2, "remote:  fetch from this repository\n");
+    fprint(STDERR, "usage: %s [-dl] [-b br] [-u upstream] remote\n", argv0);
+    fprint(STDERR, "\t-b br: only fetch matching branch 'br'\n");
+    fprint(STDERR, "remote:  fetch from this repository\n");
     exits("usage");
 }
 /*e: function [[usage (git9/get.c)]] */
-
 /*s: function [[main (git9/get.c)]] */
 void
 main(int argc, char **argv)
@@ -525,9 +524,7 @@ main(int argc, char **argv)
             if(hparse(&heads[nheads], s) == 0)
                 nheads++;
         break;
-    default:
-        usage();
-        break;
+    default: usage(); break;
     }ARGEND;
 
     gitinit(nil, 0, nil);

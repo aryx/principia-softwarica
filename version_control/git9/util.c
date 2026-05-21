@@ -127,7 +127,6 @@ emalloc(ulong n)
     return v;
 }
 /*e: function [[emalloc]] */
-
 /*s: function [[eamalloc]] */
 void *
 eamalloc(ulong n, ulong sz)
@@ -145,7 +144,6 @@ eamalloc(ulong n, ulong sz)
     return v;
 }
 /*e: function [[eamalloc]] */
-
 /*s: function [[erealloc]] */
 void *
 erealloc(void *p, ulong n)
@@ -159,7 +157,6 @@ erealloc(void *p, ulong n)
     return v;
 }
 /*e: function [[erealloc]] */
-
 /*s: function [[earealloc]] */
 void *
 earealloc(void *p, ulong n, ulong sz)
@@ -177,7 +174,6 @@ earealloc(void *p, ulong n, ulong sz)
     return v;
 }
 /*e: function [[earealloc]] */
-
 /*s: function [[estrdup]] */
 char*
 estrdup(char *s)
@@ -358,48 +354,16 @@ hparse(Hash *h, char *b)
 int
 slurpdir(char *p, Dir **d)
 {
-    int r, f;
+    int r;
+    fdt f;
 
-    if((f = open(p, OREAD)) == -1)
-        return -1;
+    if((f = open(p, OREAD)) == ERROR_NEG1)
+        return ERROR_NEG1;
     r = dirreadall(f, d);
     close(f);
     return r;
 }   
 /*e: function [[slurpdir]] */
-
-/*s: function [[hassuffix]] */
-int
-hassuffix(char *base, char *suf)
-{
-    int nb, ns;
-
-    nb = strlen(base);
-    ns = strlen(suf);
-    if(ns <= nb && strcmp(base + (nb - ns), suf) == 0)
-        return 1;
-    return 0;
-}
-/*e: function [[hassuffix]] */
-
-/*s: function [[swapsuffix]] */
-int
-swapsuffix(char *dst, int dstsz, char *base, char *oldsuf, char *suf)
-{
-    int bl, ol, sl, l;
-
-    bl = strlen(base);
-    ol = strlen(oldsuf);
-    sl = strlen(suf);
-    l = bl + sl - ol;
-    if(l + 1 > dstsz || ol > bl)
-        return -1;
-    memmove(dst, base, bl - ol);
-    memmove(dst + bl - ol, suf, sl);
-    dst[l] = 0;
-    return l;
-}
-/*e: function [[swapsuffix]] */
 
 /*s: function [[strip]] */
 char *

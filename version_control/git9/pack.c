@@ -54,15 +54,28 @@ struct Buf {
 };
 /*e: struct [[Buf]] */
 
+/*s: struct [[Packf]] */
 struct Packf {
+    // .git/objects/pack/xxx.pack
     char    path[128];
+    // option<Biobuf>, opened .git/objects/pack/xxx.pack when Some
+    Biobuf  *pack;
+
+    /*s: [[Pack]] idx fields */
+    // content of .idx file (size = nidx), =~ array<Hash, file-offset-in-pack buf>
+    // ref_own<string>
     char    *idx;
     vlong   nidx;
-
+    /*e: [[Pack]] idx fields */
+    /*s: [[Pack]] extra fields */
+    // openpack()/closepack() reference counting
     int refs;
-    Biobuf  *pack;
+    /*x: [[Pack]] extra fields */
+    // for LRU eviction of opened packs
     vlong   opentm;
+    /*e: [[Pack]] extra fields */
 };
+/*e: struct [[Packf]] */
 
 static int  readpacked(Biobuf *, Object *, int);
 static Object   *readidxobject(Biobuf *, Hash, int);
@@ -74,9 +87,14 @@ Object *lruhead;
 Object *lrutail;
 vlong   ncache;
 vlong   cachemax = 128*MiB;
+/*s: globals [[packf]] */
+// array<ref_own<Packf>> (len = npackf)
 Packf   *packf;
 int npackf;
+/*e: globals [[packf]] */
+/*s: global [[openpacks]] */
 int openpacks;
+/*e: global [[openpacks]] */
 
 /*s: function [[clear]] */
 static void
@@ -197,70 +215,89 @@ cache(Object *o)
 /*e: function [[cache]] */
 
 /*s: function [[loadpack]] */
-static int
+/// refreshpacks -> <>
+static errorneg1
 loadpack(Packf *pf, char *name)
 {
     char buf[128];
-    int i, ifd;
+    int i;
+    fdt ifd;
     Dir *d;
 
     memset(pf, 0, sizeof(Packf));
     snprint(buf, sizeof(buf), ".git/objects/pack/%s.idx", name);
     snprint(pf->path, sizeof(pf->path), ".git/objects/pack/%s.pack", name);
+    /*s: [[loadpack()]] steal loaded info from previous opened pack if same */
     /*
      * if we already have the pack open, just
      * steal the loaded info
      */
     for(i = 0; i < npackf; i++){
         if(strcmp(pf->path, packf[i].path) == 0){
-            pf->pack = packf[i].pack;
             pf->idx = packf[i].idx;
             pf->nidx = packf[i].nidx;
+            pf->pack = packf[i].pack;
             packf[i].idx = nil;
             packf[i].pack = nil;
-            return 0;
+            return OK_0;
         }
     }
-    if((ifd = open(buf, OREAD)) == -1)
-        return -1;
-    if((d = dirfstat(ifd)) == nil){
+    /*e: [[loadpack()]] steal loaded info from previous opened pack if same */
+    // else
+    ifd = open(buf, OREAD);
+    /*s: [[loadpack()]] sanity check [[ifd]] */
+    if(ifd == ERROR_NEG1)
+        return ERROR_NEG1;
+    /*e: [[loadpack()]] sanity check [[ifd]] */
+    d = dirfstat(ifd);
+    /*s: [[loadpack()]] sanity check [[d]] */
+    if(d == nil){
         close(ifd);
-        return -1;
+        return ERROR_NEG1;
     }
+    /*e: [[loadpack()]] sanity check [[d]] */
     pf->nidx = d->length;
     pf->idx = emalloc(pf->nidx);
     if(readn(ifd, pf->idx, pf->nidx) != pf->nidx){
         close(ifd);
         free(pf->idx);
         free(d);
-        return -1;
+        return ERROR_NEG1;
     }
     close(ifd);
     free(d);
-    return 0;
+    return OK_0;
 }
 /*e: function [[loadpack]] */
 
 /*s: function [[refreshpacks]] */
+/// readidxobject | expandprefix -> <> -> loadpack
 static void
 refreshpacks(void)
 {
     Packf *pf, *new;
-    int i, n, l, nnew;
+    int i, n, l;
+    int nnew;
     Dir *d;
 
-    if((n = slurpdir(".git/objects/pack", &d)) == -1)
+    n = slurpdir(".git/objects/pack", &d);
+    /*s: [[refreshpacks()]] sanity check [[n]] */
+    if(n == ERROR_NEG1)
         return;
+    /*e: [[refreshpacks()]] sanity check [[n]] */
     nnew = 0;
     new = eamalloc(n, sizeof(Packf));
+
     for(i = 0; i < n; i++){
         l = strlen(d[i].name);
         if(l > 4 && strcmp(d[i].name + l - 4, ".idx") != 0)
             continue;
-        d[i].name[l - 4] = 0;
+        d[i].name[l - 4] = '\0';
         if(loadpack(&new[nnew], d[i].name) != -1)
             nnew++;
     }
+    /*s: [[refreshpacks()]] free previous [[packf]] */
+    // free the previously loaded one if any
     for(i = 0; i < npackf; i++){
         pf = &packf[i];
         free(pf->idx);
@@ -268,6 +305,7 @@ refreshpacks(void)
             Bterm(pf->pack);
     }
     free(packf);
+    /*e: [[refreshpacks()]] free previous [[packf]] */
     packf = new;
     npackf = nnew;
     free(d);
@@ -278,13 +316,17 @@ refreshpacks(void)
 static Biobuf*
 openpack(Packf *pf)
 {
+    /*s: [[openpack()]] locals */
     vlong t;
     int i, best;
+    /*e: [[openpack()]] locals */
 
     if(pf->pack != nil){
         pf->refs++;
         return pf->pack;
     }
+    // else
+    /*s: [[openpack()]] if too many opened packs */
     /*
      * If we've got more packs open
      * than we want cached, try to
@@ -307,7 +349,7 @@ openpack(Packf *pf)
             }
         }
         if(best == -1){
-            fprint(2, "no available pack slots\n");
+            fprint(STDERR, "no available pack slots\n");
             break;
         }
         Bterm(packf[best].pack);
@@ -316,9 +358,9 @@ openpack(Packf *pf)
     }
     openpacks++;
     pf->opentm = nsec();
+    /*e: [[openpack()]] if too many opened packs */
     pf->refs++;
-    if((pf->pack = Bopen(pf->path, OREAD)) == nil)
-        return nil;
+    pf->pack = Bopen(pf->path, OREAD);
     return pf->pack;
 }
 /*e: function [[openpack]] */
@@ -537,7 +579,7 @@ applydelta(Object *dst, Object *base, char *d, int nd)
 /*e: function [[applydelta]] */
 
 /*s: function [[readrdelta]] */
-static int
+static errorneg1
 readrdelta(Biobuf *f, Object *o, int nd, int flag)
 {
     Object *b;
@@ -560,10 +602,10 @@ readrdelta(Biobuf *f, Object *o, int nd, int flag)
     if(applydelta(o, b, d, n) == -1)
         goto error;
     free(d);
-    return 0;
+    return OK_0;
 error:
     free(d);
-    return -1;
+    return ERROR_NEG1;
 }
 /*e: function [[readrdelta]] */
 
@@ -612,7 +654,8 @@ error:
 /*e: function [[readodelta]] */
 
 /*s: function [[readpacked]] */
-static int
+/// readidxobject -> <>
+static errorneg1
 readpacked(Biobuf *f, Object *o, int flag)
 {
     int c, s, n, t;
@@ -621,29 +664,33 @@ readpacked(Biobuf *f, Object *o, int flag)
 
     p = Boffset(f);
     c = Bgetc(f);
+    /*s: [[readpacked()]] sanity check [[c]] */
     if(c == -1)
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[readpacked()]] sanity check [[c]] */
     l = c & 0xf;
     s = 4;
     t = (c >> 4) & 0x7;
+    /*s: [[readpacked()]] sanity check [[t]] */
     if(!t){
         werrstr("unknown type for byte %x at %lld", c, p);
-        return -1;
+        return ERROR_NEG1;
     }
+    /*e: [[readpacked()]] sanity check [[t]] */
     while(c & 0x80){
         if((c = Bgetc(f)) == -1)
-            return -1;
+            return ERROR_NEG1;
         l |= (vlong)(c & 0x7f) << s;
         s += 7;
     }
+    /*s: [[readpacked()]] sanity check [[l]] */
     if(l >= (1ULL << 32)){
         werrstr("object too big");
-        return -1;
+        return ERROR_NEG1;
     }
+    /*e: [[readpacked()]] sanity check [[l]] */
     switch(t){
-    default:
-        werrstr("invalid object at %lld", Boffset(f));
-        return -1;
+    /*s: [[readpacked()]] switch object type [[t]] cases */
     case GCommit:
     case GTree:
     case GTag:
@@ -652,9 +699,9 @@ readpacked(Biobuf *f, Object *o, int flag)
         b.data = emalloc(b.sz);
         n = snprint(b.data, 64, "%T %lld", t, l) + 1;
         b.len = n;
-        if(bdecompress(&b, f, nil) == -1){
+        if(bdecompress(&b, f, nil) == ERROR_NEG1){
             free(b.data);
-            return -1;
+            return ERROR_NEG1;
         }
         o->len = Boffset(f) - o->off;
         o->type = t;
@@ -662,17 +709,23 @@ readpacked(Biobuf *f, Object *o, int flag)
         o->data = b.data + n;
         o->size = b.len - n;
         break;
+    /*x: [[readpacked()]] switch object type [[t]] cases */
     case GOdelta:
-        if(readodelta(f, o, l, p, flag) == -1)
-            return -1;
+        if(readodelta(f, o, l, p, flag) == ERROR_NEG1)
+            return ERROR_NEG1;
         break;
+    /*x: [[readpacked()]] switch object type [[t]] cases */
     case GRdelta:
-        if(readrdelta(f, o, l, flag) == -1)
-            return -1;
+        if(readrdelta(f, o, l, flag) == ERROR_NEG1)
+            return ERROR_NEG1;
         break;
+    /*e: [[readpacked()]] switch object type [[t]] cases */
+    default:
+        werrstr("invalid object at %lld", Boffset(f));
+        return ERROR_NEG1;
     }
     o->flag |= Cloaded|flag;
-    return 0;
+    return OK_0;
 }
 /*e: function [[readpacked]] */
 
@@ -1092,7 +1145,7 @@ parseobject(Object *o)
 /*e: function [[parseobject]] */
 
 /*s: function [[readidxobject]] */
-/// readobject | ?? -> <>
+/// readobject | readrdelta -> <>
 static Object*
 readidxobject(Biobuf *idx, Hash h, int flag)
 {
@@ -1138,6 +1191,7 @@ readidxobject(Biobuf *idx, Hash h, int flag)
     if(flag & Cidx)
         return nil;
     /*e: [[readidxobject()]] if [[Cidx]] flag */
+    // else
     new = nil;
     if(obj == nil){
         new = emalloc(sizeof(Object));
@@ -1152,13 +1206,15 @@ retry:
     /*s: [[readidxobject()]] look for object in packs */
     for(i = 0; i < npackf; i++){
         o = searchindex(packf[i].idx, packf[i].nidx, h, SHA1dlen*8, nil);
-        if(o != -1){
-            if((f = openpack(&packf[i])) == nil)
+        if(o != ERROR_NEG1){
+            f = openpack(&packf[i]);
+            if(f == nil)
                 goto error;
-            if((r = Bseek(f, o, 0)) != -1)
+            r = Bseek(f, o, 0);
+            if(r != ERROR_NEG1)
                 r = readpacked(f, obj, flag);
             closepack(&packf[i]);
-            if(r == -1)
+            if(r == ERROR_NEG1)
                 goto error;
             parseobject(obj);
             cache(obj);
@@ -1183,7 +1239,9 @@ retry:
         if(retried)
             goto error;
         retried = true;
+        /*s: [[readidxobject()]] when object not found call [[refreshpacks()]] */
         refreshpacks();
+        /*e: [[readidxobject()]] when object not found call [[refreshpacks()]] */
         goto retry;
     }
 errorf:
@@ -1203,12 +1261,18 @@ expandprefix(Hash *rh, Hash h, int npfx)
     char buf[128];
     Dir *d;
 
+    /*s: [[expandprefix()]] call [[refreshpacks()]] */
     refreshpacks();
+    /*e: [[expandprefix()]] call [[refreshpacks()]] */
+
     if(npfx < 8 || npfx % 4 != 0)
         return ERROR_NEG1;
+    /*s: [[expandprefix()]] iterate on [[packf]] */
     for(i = 0; i < npackf; i++)
-        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
+        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != ERROR_NEG1)
             return OK_0;
+    /*e: [[expandprefix()]] iterate on [[packf]] */
+    // else
     sprint(buf, ".git/objects/%x", h.h[0]);
     if((fd = open(buf, OREAD)) == -1)
         return ERROR_NEG1;

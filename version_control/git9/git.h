@@ -25,7 +25,9 @@ typedef struct Idxent   Idxent;
 
 enum {
     Pathmax     = 512,
+    /*s: constant [[Npackcache]] */
     Npackcache  = 32,
+    /*e: constant [[Npackcache]] */
     Hashsz      = 20,
     Pktmax      = 65536,
     KiB     = 1024,
@@ -53,10 +55,13 @@ enum Cxxx {
     Cloaded = 1 << 0,
     Cparsed = 1 << 2,
     /*s: [[Cxxx]] other cases */
-    Cidx    = 1 << 3,
     Ccache  = 1 << 4,
+    /*x: [[Cxxx]] other cases */
     Cexist  = 1 << 5,
+    /*x: [[Cxxx]] other cases */
     Cthin   = 1 << 6,
+    /*x: [[Cxxx]] other cases */
+    Cidx    = 1 << 3,
     /*e: [[Cxxx]] other cases */
 };
 /*e: enum [[Cxxx]] */
@@ -278,18 +283,13 @@ struct Idxent {
     char    *path;
     Qid qid;
     int mode;
-    // ??
+    // global counter (used in idxcmp())
     int order;
     // RMAUT?
     char    state;
 };
 /*e: struct [[Idxent]] */
 
-/*s: macro [[GETBE16]] */
-#define GETBE16(b)\
-        ((((b)[0] & 0xFFul) <<  8) | \
-         (((b)[1] & 0xFFul) <<  0))
-/*e: macro [[GETBE16]] */
 /*s: macro [[GETBE32]] */
 #define GETBE32(b)\
         ((((b)[0] & 0xFFul) << 24) | \
@@ -309,13 +309,6 @@ struct Idxent {
          (((b)[7] & 0xFFull) <<  0))
 /*e: macro [[GETBE64]] */
 
-/*s: macro [[PUTBE16]] */
-#define PUTBE16(b, n)\
-    do{ \
-        (b)[0] = (n) >> 8; \
-        (b)[1] = (n) >> 0; \
-    } while(0)
-/*e: macro [[PUTBE16]] */
 /*s: macro [[PUTBE32]] */
 #define PUTBE32(b, n)\
     do{ \
@@ -415,8 +408,6 @@ void    *erealloc(void *, ulong);
 char    *estrdup(char *);
 int slurpdir(char *, Dir **);
 errorneg1 hparse(Hash *, char *);
-int hassuffix(char *, char *);
-int swapsuffix(char *, int, char *, char *, char *);
 char    *strip(char *);
 int showprogress(int, int);
 u64int  murmurhash2(void*, usize);

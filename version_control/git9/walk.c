@@ -6,10 +6,6 @@
 typedef struct Idxed    Idxed;
 typedef struct Idxent   Idxent;
 
-/*s: constant [[NCACHE]] */
-#define NCACHE 4096
-/*e: constant [[NCACHE]] */
-
 /*s: enum WalkFlags */
 // do not reorder, some code assume Tflg is the last
 enum WalkFlags {
@@ -22,27 +18,25 @@ enum WalkFlags {
 };
 /*e: enum WalkFlags */
 
-struct Idxed {
-    char**  cache;
-    int n;
-    int max;
-};
-
-Idxed   idxtab[NCACHE];
-
+/*s: global [[repopath]](walk.c) */
 char    repopath[1024];
+/*e: global [[repopath]](walk.c) */
 /*s: global [[wdirpath]](walk.c) */
 char    wdirpath[1024];
 /*e: global [[wdirpath]](walk.c) */
 char    relapath[1024];
 
+/*s: globals [[xxxstr]] */
 char    *rstr   = "R ";
 char    *mstr   = "M ";
 char    *astr   = "A ";
 char    *ustr   = "U ";
 char    *tstr   = "T ";
+/*e: globals [[xxxstr]] */
 
+/*s: constant [[bdir]] */
 char    *bdir = ".git/fs/HEAD/tree";
+/*e: constant [[bdir]] */
 
 int nslash;
 int nrel;
@@ -61,16 +55,12 @@ bool intree;
 int printflg;
 /*e: global [[printflg]](walk.c) */
 
-/*s: global [[idx]](walk.c) */
+/*s: globals [[idx]](walk.c) */
 // growing_array<Idxent> (used = nidx, allocated = idxsz)
 Idxent  *idx;
-/*e: global [[idx]](walk.c) */
-/*s: global [[idxsz]](walk.c) */
 int idxsz;
-/*e: global [[idxsz]](walk.c) */
-/*s: global [[nidx]](walk.c) */
 int nidx;
-/*e: global [[nidx]](walk.c) */
+/*e: globals [[idx]](walk.c) */
 
 /*s: global [[cleanidx]] */
 bool cleanidx = false;   /* skip tree check for checkedin() */
@@ -79,16 +69,12 @@ bool cleanidx = false;   /* skip tree check for checkedin() */
 bool staleidx = false;
 /*e: global [[staleidx]](walk.c) */
 
-/*s: global [[wdir]](walk.c) */
+/*s: globals [[wdir]](walk.c) */
 // growing_array<Idxent> (used = nwdir, allocated = wdirsz)
 Idxent  *wdir;
-/*e: global [[wdir]](walk.c) */
-/*s: global [[wdirsz]](walk.c) */
 int wdirsz;
-/*e: global [[wdirsz]](walk.c) */
-/*s: global [[nwdir]](walk.c) */
 int nwdir;
-/*e: global [[nwdir]](walk.c) */
+/*e: globals [[wdir]](walk.c) */
 
 
 void    loadwdir(char*);
@@ -546,10 +532,11 @@ main(int argc, char **argv)
             goto Stale;
         }
         /*s: [[main()]](walk.c) initializations part 2, when has [[.git/INDEX9]] */
+        /*s: [[main()]](walk.c) initialize [[idx]] */
         nidx = 0;
         idxsz = 32;
         idx = emalloc(idxsz*sizeof(Idxent)); // why not eamalloc?
-
+        /*e: [[main()]](walk.c) initialize [[idx]] */
         line = 0;
         while((ln = Brdstr(f, '\n', 1)) != nil){
             line++;
@@ -566,7 +553,6 @@ main(int argc, char **argv)
                 idx = erealloc(idx, idxsz*sizeof(Idxent));
             }
             /*e: [[main()]](walk.c) realloc [[idx]] if needed */
-
             idx[nidx].state = *parts[0];
             idx[nidx].qid = parseqid(parts[1]);
             idx[nidx].mode = strtol(parts[2], nil, 8);

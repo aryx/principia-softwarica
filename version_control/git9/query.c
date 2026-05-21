@@ -37,12 +37,12 @@ Pfmt(Fmt *f)
 /*e: function [[Pfmt]] */
 
 /*s: function [[showdir]] */
+/// show -> <>
 void
 showdir(Hash dh, char *dname, char m)
 {
     Dirent *p, *e;
     Object *d;
-
 
     path[npath++] = dname;
     if((d = readobject(dh)) == nil)
@@ -63,7 +63,6 @@ showdir(Hash dh, char *dname, char m)
     npath--;
 }
 /*e: function [[showdir]] */
-
 /*s: function [[show (git9/query.c)]] */
 void
 show(Dirent *e, char m)

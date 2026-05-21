@@ -105,7 +105,6 @@ matchesfilter1(Pfilt *pf, Object *t, Object *pt)
     return 0;
 }
 /*e: function [[matchesfilter1]] */
-
 /*s: function [[matchesfilter]] */
 int
 matchesfilter(Object *o)
@@ -134,7 +133,6 @@ matchesfilter(Object *o)
     return 0;
 }
 /*e: function [[matchesfilter]] */
-
 
 /*s: function [[nextline]] */
 static char*
@@ -189,7 +187,6 @@ show(Object *o)
     return 1;
 }
 /*e: function [[show]] */
-
 /*s: function [[showquery]] */
 static void
 showquery(char *q)
@@ -213,8 +210,8 @@ showquery(char *q)
     exits(nil);
 }
 /*e: function [[showquery]] */
-
 /*s: function [[showcommits]] */
+/// main(log.c) -> <>
 static void
 showcommits(char *c)
 {
@@ -263,7 +260,6 @@ usage(void)
     exits("usage");
 }
 /*e: function [[usage (git9/log.c)]] */
-    
 /*s: function [[main (git9/log.c)]] */
 void
 main(int argc, char **argv)

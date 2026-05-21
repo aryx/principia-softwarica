@@ -75,7 +75,6 @@ push(Eval *ev, Object *o)
     ev->stk[ev->nstk++] = o;
 }
 /*e: function [[push]] */
-
 /*s: function [[pop]] */
 Object*
 pop(Eval *ev)
@@ -95,7 +94,6 @@ isword(char e)
     return isalnum(e) || e == '/' || e == '-' || e == '_' || e == '.';
 }
 /*e: function [[isword]] */
-
 /*s: function [[word]] */
 bool
 word(Eval *ev, char *b, int nb)
@@ -568,7 +566,6 @@ done:
     return OK_0;
 }
 /*e: function [[evalpostfix]] */
-
 /*s: function [[evalexpr]] */
 errorneg1
 evalexpr(Eval *ev, char *ref)
@@ -619,25 +616,25 @@ resolverefs(Hash **r, char *ref)
     return ev.nstk;
 }
 /*e: function [[resolverefs]] */
-
 /*s: function [[resolveref]] */
-int
+/// main(walk.c -b) | main(save.c -p) | (main(log.c) -> showcommits) -> <>
+errorneg1
 resolveref(Hash *r, char *ref)
 {
     Eval ev;
 
-    if(evalexpr(&ev, ref) == -1){
+    if(evalexpr(&ev, ref) == ERROR_NEG1){
         free(ev.stk);
-        return -1;
+        return ERROR_NEG1;
     }
     if(ev.nstk != 1){
         werrstr("ambiguous ref expr");
         free(ev.stk);
-        return -1;
+        return ERROR_NEG1;
     }
     *r = ev.stk[0]->hash;
     free(ev.stk);
-    return 0;
+    return OK_0;
 }
 /*e: function [[resolveref]] */
 
@@ -675,7 +672,6 @@ next:       free(path);
     return 0;
 }
 /*e: function [[readrefdir]] */
-
 /*s: function [[listrefs]] */
 int
 listrefs(Hash **refs, char ***names)

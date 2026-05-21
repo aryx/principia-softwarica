@@ -4,6 +4,8 @@
 #include "git.h"
 
 typedef struct Objbuf Objbuf;
+
+/*s: struct [[Objbuf]] */
 struct Objbuf {
     int off;
     char *hdr;
@@ -11,30 +13,50 @@ struct Objbuf {
     char *dat;
     int ndat;
 };
+/*e: struct [[Objbuf]] */
 
 enum {
     Maxparents = 16,
 };
 
+/*s: globals [[authorxxx]](save.c) */
+// -n
 char    *authorname;
+// -e
 char    *authoremail;
+/*e: globals [[authorxxx]](save.c) */
+/*s: globals [[comitterxxx]](save.c) */
+// -N
 char    *committername;
+// -E
 char    *committeremail;
+/*e: globals [[comitterxxx]](save.c) */
+/*s: global [[commitmsg]](save.c) */
+// -m
 char    *commitmsg;
+/*e: global [[commitmsg]](save.c) */
 Hash    parents[Maxparents];
 int nparents;
+
+/*s: globals [[idx]](save.c) */
+// growing_array<Idxent> (used = nidx, allocated = idxsz)
 Idxent  *idx;
 int idxsz;
 int nidx;
+/*e: globals [[idx]](save.c) */
 
 /*s: function [[gitmode]] */
 int
 gitmode(Dirent *e)
 {
+    /*s: [[gitmode()]] if symlink */
     if(e->islink)
         return 0120000;
+    /*e: [[gitmode()]] if symlink */
+    /*s: [[gitmode()]] if submodule */
     else if(e->ismod)
         return 0160000;
+    /*e: [[gitmode()]] if submodule */
     else if(e->mode & DMDIR)
         return 0040000;
     else if(e->mode & 0100)
@@ -64,7 +86,7 @@ idxcmp(void *pa, void *pb)
     if((c = strcmp(a->path, b->path)) != 0)
         return c;
     assert(a->order != b->order);
-    return a-> order < b->order ? -1 : 1;
+    return a->order < b->order ? -1 : 1;
 }
 /*e: function [[idxcmp]] */
 
@@ -75,7 +97,6 @@ bwrite(void *p, void *buf, int nbuf)
     return Bwrite(p, buf, nbuf);
 }
 /*e: function [[bwrite]] */
-
 /*s: function [[objbytes]] */
 static int
 objbytes(void *p, void *buf, int nbuf)
@@ -131,7 +152,7 @@ writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
     if(readobject(*h) == nil){
         if((f = Bopen(o, OWRITE)) == nil)
             sysfatal("could not open %s: %r", o);
-        if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == -1)
+        if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == ERROR_NEG1)
             sysfatal("could not write %s: %r", o);
         Bterm(f);
     }
@@ -167,7 +188,9 @@ writetree(Dirent *ent, int nent, Hash *h)
         t += sizeof(d->h.h);
     }
     nhdr = snprint(hdr, sizeof(hdr), "%T %lld", GTree, (vlong)(t - txt)) + 1;
+
     writeobj(h, hdr, nhdr, txt, t - txt);
+
     free(txt);
     return nent;
 }
@@ -196,7 +219,7 @@ blobify(Dir *d, char *path, int *mode, Hash *bh)
 /*e: function [[blobify]] */
 
 /*s: function [[tracked]] */
-int
+bool
 tracked(char *path)
 {
     int r, lo, hi, mid;
@@ -213,7 +236,8 @@ tracked(char *path)
         else
             return idx[mid].state != 'R';
     }
-    return 0; 
+    // else
+    return false; 
 }
 /*e: function [[tracked]] */
 
@@ -383,7 +407,7 @@ findroot(void)
     Object *t, *c;
     Hash h;
 
-    if(resolveref(&h, "HEAD") == -1)
+    if(resolveref(&h, "HEAD") == ERROR_NEG1)
         return emptydir();
     if((c = readobject(h)) == nil || c->type != GCommit)
         sysfatal("could not read HEAD %H", h);
@@ -401,58 +425,72 @@ usage(void)
     exits("usage");
 }
 /*e: function [[usage (git9/save.c)]] */
-
 /*s: function [[main (git9/save.c)]] */
 void
 main(int argc, char **argv)
 {
-    char *ln, *dstr, *parts[4], cwd[1024];
-    int i, r, line, ncwd;
-    Hash th, ch;
+    char cwd[1024];
+    int ncwd;
+    Biobuf *f; // .git/.INDEX9
     vlong date;
-    Biobuf *f;
+    errorneg1 r;
     Object *t;
+    Hash th; // tree hash
+    Hash ch; // commit hash
+    int i;
+    /*s: [[main()]](save.c) other locals */
+    char *ln;
+    int line;
+    char *parts[4];
+    /*x: [[main()]](save.c) other locals */
+    char *dstr = nil;
+    /*e: [[main()]](save.c) other locals */
 
     gitinit(nil, 0, nil);
 
+    // assumes run from project root
     if(access(".git", AEXIST) != 0)
         sysfatal("could not find git repo: %r");
     if(getwd(cwd, sizeof(cwd)) == nil)
         sysfatal("getcwd: %r");
-    dstr = nil;
-    date = time(nil);
     ncwd = strlen(cwd);
+    date = time(nil);
 
     ARGBEGIN{
+    /*s: [[main()]](save.c) command line processing */
     case 'm':
         commitmsg = EARGF(usage());
         break;
+    /*x: [[main()]](save.c) command line processing */
     case 'n':
         authorname = EARGF(usage());
         break;
     case 'e':
         authoremail = EARGF(usage());
         break;
+    /*x: [[main()]](save.c) command line processing */
     case 'N':
         committername = EARGF(usage());
         break;
     case 'E':
         committeremail = EARGF(usage());
         break;
-    case 'd':
-        dstr = EARGF(usage());
-        break;
+    /*x: [[main()]](save.c) command line processing */
     case 'p':
         if(nparents >= Maxparents)
             sysfatal("too many parents");
         if(resolveref(&parents[nparents++], EARGF(usage())) == -1)
             sysfatal("invalid parent: %r");
         break;
-    default:
-        usage();
+    /*x: [[main()]](save.c) command line processing */
+    case 'd':
+        dstr = EARGF(usage());
         break;
+    /*e: [[main()]](save.c) command line processing */
+    default: usage(); break;
     }ARGEND;
 
+    /*s: [[main()]](save.c) sanity check globals after command line processing */
     if(commitmsg == nil)
         sysfatal("missing message");
     if(authorname == nil)
@@ -461,15 +499,20 @@ main(int argc, char **argv)
         sysfatal("missing email");
     if((committername == nil) != (committeremail == nil))
         sysfatal("partially specified committer");
+    /*e: [[main()]](save.c) sanity check globals after command line processing */
     if(committername == nil && committeremail == nil){
         committername = authorname;
         committeremail = authoremail;
     }
+    /*s: [[main()]](save.c) if [[dstr]] */
     if(dstr){
         date=strtoll(dstr, &dstr, 10);
         if(strlen(dstr) != 0)
             sysfatal("could not parse date %s", dstr);
     }
+    /*e: [[main()]](save.c) if [[dstr]] */
+
+    /*s: [[main()]](save.c) clean names [[argv]] */
     for(i = 0; i < argc; i++){
         cleanname(argv[i]);
         if(*argv[i] == '/' && strncmp(argv[i], cwd, ncwd) == 0)
@@ -477,26 +520,36 @@ main(int argc, char **argv)
         while(*argv[i] == '/')
             argv[i]++;
     }
+    /*e: [[main()]](save.c) clean names [[argv]] */
     qsort(argv, argc, sizeof(*argv), namecmp);
 
     t = findroot();
+
+    f = Bopen(".git/INDEX9", OREAD);
+    /*s: [[main()]](save.c) sanity check [[f]] */
+    if(f == nil)
+        sysfatal("open index: %r");
+    /*e: [[main()]](save.c) sanity check [[f]] */
+    /*s: [[main()]](save.c) read [[.git/INDEX9]] and set [[idx]] */
+    /*s: [[main()]](save.c) initialize [[idx]] */
     nidx = 0;
     idxsz = 32;
     idx = emalloc(idxsz*sizeof(Idxent));
-    if((f = Bopen(".git/INDEX9", OREAD)) == nil)
-        sysfatal("open index: %r");
+    /*e: [[main()]](save.c) initialize [[idx]] */
     line = 0;
     while((ln = Brdstr(f, '\n', 1)) != nil){
         line++;
-        if(ln[0] == 0 || ln[0] == '\n')
+        if(ln[0] == '\0' || ln[0] == '\n')
             continue;
         if(getfields(ln, parts, nelem(parts), 0, " \t") != nelem(parts))
             sysfatal(".git/INDEX9:%d: corrupt index", line);
+        cleanname(parts[3]);
+        /*s: [[main()]](save.c) realloc [[idx]] if needed */
         if(nidx == idxsz){
             idxsz += idxsz/2;
             idx = realloc(idx, idxsz*sizeof(Idxent));
         }
-        cleanname(parts[3]);
+        /*e: [[main()]](save.c) realloc [[idx]] if needed */
         idx[nidx].state = *parts[0];
         idx[nidx].qid = parseqid(parts[1]);
         idx[nidx].mode = strtol(parts[2], nil, 8);
@@ -506,11 +559,16 @@ main(int argc, char **argv)
         free(ln);
     }
     Bterm(f);
+    /*e: [[main()]](save.c) read [[.git/INDEX9]] and set [[idx]] */
     qsort(idx, nidx, sizeof(Idxent), idxcmp);
+
     r = treeify(t, argv, argv + argc, 0, &th);
-    if(r == -1)
+    /*s: [[main()]](save.c) sanity check [[r]] */
+    if(r == ERROR_NEG1)
         sysfatal("could not commit: %r");
+    /*e: [[main()]](save.c) sanity check [[r]] */
     mkcommit(&ch, date, th);
+
     print("%H\n", ch);
     exits(nil);
 }

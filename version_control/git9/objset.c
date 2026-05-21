@@ -62,7 +62,6 @@ osadd(Objset *s, Object *o)
     /*e: [[osadd()]] realloc if needed */
 }
 /*e: function [[osadd]] */
-
 /*s: function [[osfind]] */
 Object*
 osfind(Objset *s, Hash h)
@@ -76,7 +75,6 @@ osfind(Objset *s, Hash h)
     return nil;
 }
 /*e: function [[osfind]] */
-
 /*s: function [[oshas]] */
 int
 oshas(Objset *s, Hash h)
