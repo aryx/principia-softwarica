@@ -1323,117 +1323,8 @@ int qpop(Objq*, Qelt*);
 
 \subsection{[[git9/log.c]]}
 
-<<function [[filteradd]]>>=
-void
-filteradd(Pfilt *pf, char *path)
-{
-    char *p, *e;
-    int i;
 
-    if((e = strchr(path, '/')) != nil)
-        p = smprint("%.*s", (int)(e - path), path);
-    else
-        p = strdup(path);
 
-    while(e != nil && *e == '/')
-        e++;
-    for(i = 0; i < pf->nsub; i++){
-        if(strcmp(pf->sub[i].elt, p) == 0){
-            pf->sub[i].show = pf->sub[i].show || (e == nil);
-            if(e != nil)
-                filteradd(&pf->sub[i], e);
-            free(p);
-            return;
-        }
-    }
-    pf->sub = earealloc(pf->sub, pf->nsub+1, sizeof(Pfilt));
-    pf->sub[pf->nsub].elt = p;
-    pf->sub[pf->nsub].show = (e == nil);
-    pf->sub[pf->nsub].nsub = 0;
-    pf->sub[pf->nsub].sub = nil;
-    if(e != nil)
-        filteradd(&pf->sub[pf->nsub], e);
-    pf->nsub++;
-}
-@
-
-<<function [[lookup (git9/log.c)]]>>=
-Hash
-lookup(Pfilt *pf, Object *o)
-{
-    int i;
-
-    if(o == nil)
-        return Zhash;
-    for(i = 0; i < o->tree->nent; i++)
-        if(strcmp(o->tree->ent[i].name, pf->elt) == 0)
-            return o->tree->ent[i].h;
-    return Zhash;
-}
-@
-
-<<function [[matchesfilter1]]>>=
-int
-matchesfilter1(Pfilt *pf, Object *t, Object *pt)
-{
-    Object *a, *b;
-    Hash ha, hb;
-    int i, r;
-
-    if(pf->show)
-        return 1;
-    if(t != nil){
-        if(pt != nil && t->type != pt->type)
-            return 1;
-        if(t->type != GTree)
-            return 0;
-    }
-
-    for(i = 0; i < pf->nsub; i++){
-        ha = lookup(&pf->sub[i], t);
-        hb = lookup(&pf->sub[i], pt);
-        if(hasheq(&ha, &hb))
-            continue;
-        a = readobject(ha);
-        b = readobject(hb);
-        r = matchesfilter1(&pf->sub[i], a, b);
-        unref(a);
-        unref(b);
-        if(r)
-            return 1;
-    }
-    return 0;
-}
-@
-
-<<function [[matchesfilter]]>>=
-int
-matchesfilter(Object *o)
-{
-    Object *t, *p, *pt;
-    int i, r;
-
-    assert(o->type == GCommit);
-    if(pathfilt == nil)
-        return 1;
-    if((t = readobject(o->commit->tree)) == nil)
-        sysfatal("read %H: %r", o->commit->tree);
-    for(i = 0; i < o->commit->nparent; i++){
-        if((p = readobject(o->commit->parent[i])) == nil)
-            sysfatal("read %H: %r", o->commit->parent[i]);
-        if((pt = readobject(p->commit->tree)) == nil)
-            sysfatal("read %H: %r", o->commit->tree);
-        r = matchesfilter1(pathfilt, t, pt);
-        unref(p);
-        unref(pt);
-        if(r)
-            return 1;
-    }
-    if(o->commit->nparent == 0)
-        return matchesfilter1(pathfilt, t, nil);
-    return 0;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1444,22 +1335,18 @@ matchesfilter(Object *o)
 #include "git.h"
 
 typedef struct Pfilt Pfilt;
-struct Pfilt {
-    char    *elt;
-    int show;
-    Pfilt   *sub;
-    int nsub;
-};
+<<strucr [[Pfilt]]>>
 
-Biobuf  *out;
-char    *queryexpr;
+<<global [[out]](log.c)>>
+<<global [[queryexpr]](log.c)>>
 <<global [[commitid]](log.c)>>
-int shortlog;
-int msgcount = -1;
+<<global [[shortlog]](log.c)>>
+<<global [[msgcount]](log.c)>>
 
-Objset  done;
-Objq    objq;
-Pfilt   *pathfilt;
+<<global [[done]](log.c)>>
+<<global [[objq]](log.c)>>
+
+<<global [[pathfilt]](log.c)>>
 
 <<function [[filteradd]]>>
 

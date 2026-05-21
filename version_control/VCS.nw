@@ -6762,6 +6762,8 @@ if not if(test -f .git/merge-parents)
 %******************************************************************************
 \label{chap:inspecting}
 
+
+
 \section{Showing the commit history: [[git log]]}
 %git9: was after git show in ocamlgit, but in git9 git/compat show calls git/log
 
@@ -6775,70 +6777,44 @@ usage(void)
     exits("usage");
 }
 @
+%ori: miss -n
+
+<<global [[commitid]](log.c)>>=
+// option<ref_own<string>> (if None then defaults to "HEAD")
+char    *commitid;
+@
 
 \subsection{[[main()]]}
 
-<<global [[commitid]](log.c)>>=
-char    *commitid;
+
+<<global [[out]](log.c)>>=
+Biobuf  *out;
 @
 
 <<function [[main (git9/log.c)]]>>=
 void
 main(int argc, char **argv)
 {
-    char path[1024], repo[1024], *p, *r;
-    int i, nrel, nrepo;
+    char repo[1024];
+    int nrel, nrepo;
+    <<[[main()]](log.c) other locals>>
 
     ARGBEGIN{
-    case 'e':
-        queryexpr = EARGF(usage());
-        break;
-    case 'c':
-        commitid = EARGF(usage());
-        break;
-    case 's':
-        shortlog++;
-        break;
-    case 'n':
-        msgcount = atoi(EARGF(usage()));
-        break;
-    default:
-        usage();
-        break;
+    <<[[main()]](log.c) command line processing>>
+    default: usage(); break;
     }ARGEND;
 
     gitinit(repo, sizeof(repo), &nrel);
     nrepo = strlen(repo);
 
-    if(argc != 0){
-        if(getwd(path, sizeof(path)) == nil)
-            sysfatal("getwd: %r");
-        if(strncmp(path, repo, nrepo) != 0)
-            sysfatal("path shifted??");
-        p = path + nrepo;
-        pathfilt = emalloc(sizeof(Pfilt));
-        for(i = 0; i < argc; i++){
-            if(*argv[i] == '/'){
-                if(strncmp(argv[i], repo, nrepo) != 0)
-                    continue;
-                r = smprint("./%s", argv[i]+nrepo);
-            }else
-                r = smprint("./%s/%s", p, argv[i]);
-            cleanname(r);
-            filteradd(pathfilt, r);
-            free(r);
-        }
-    }
+    <<[[main()]](log.c) if [[argc]]>>
     // !!chdir!!
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
-    //9front-only
-    //tmfmtinstall();
     out = Bfdopen(STDOUT, OWRITE);
 
-    if(queryexpr != nil)
-        showquery(queryexpr);
+    <<[[main()]](log.c) if [[queryexpr]]>>
     else
         showcommits(commitid);
 
@@ -6846,8 +6822,36 @@ main(int argc, char **argv)
     exits(nil);
 }
 @
+%9front:
+%    //tmfmtinstall();
+
+<<[[main()]](log.c) command line processing>>=
+case 'c':
+    commitid = EARGF(usage());
+    break;
+@
+
+
+<<global [[msgcount]](log.c)>>=
+int msgcount = -1; // infinite
+@
+
+<<[[main()]](log.c) command line processing>>=
+case 'n':
+    msgcount = atoi(EARGF(usage()));
+    break;
+@
 
 \subsection{[[showcommits()]]}
+
+<<global [[objq]](log.c)>>=
+Objq    objq;
+@
+% no color for this one, just a regular queue
+
+<<global [[done]](log.c)>>=
+Objset  done;
+@
 
 <<function [[showcommits]]>>=
 /// main(log.c) -> <>
@@ -6863,10 +6867,8 @@ showcommits(char *c)
         c = "HEAD";
     if(resolveref(&h, c) == -1)
         sysfatal("resolve %s: %r", c);
-    if((o = readobject(h)) == nil)
-        sysfatal("load %H: %r", h);
-    if(o->type != GCommit)
-        sysfatal("%s: not a commit", c);
+    o = readobject(h);
+    <<[[showcommits()]] sanity check [[o]] is a valid commit object>>
 
     qinit(&objq);
     osinit(&done);
@@ -6881,7 +6883,9 @@ showcommits(char *c)
         for(i = 0; i < e.o->commit->nparent; i++){
             if(oshas(&done, e.o->commit->parent[i]))
                 continue;
-            if((p = readobject(e.o->commit->parent[i])) == nil)
+            // else
+            p = readobject(e.o->commit->parent[i]);
+            if(p == nil)
                 sysfatal("load %H: %r", o->commit->parent[i]);
             osadd(&done, p);
             qput(&objq, p, 0);
@@ -6890,33 +6894,33 @@ showcommits(char *c)
     }
 }
 @
+% should be readref() instead of resolveref()?
+% need resolveref() only for query commit expr no?
+
+<<[[showcommits()]] sanity check [[o]] is a valid commit object>>=
+if(o == nil)
+    sysfatal("load %H: %r", h);
+if(o->type != GCommit)
+    sysfatal("%s: not a commit", c);
+@
 
 \subsection{[[show()]]}
 
 <<function [[show]]>>=
-static int
+/// showcommits -> <>
+static void
 show(Object *o)
 {
-    //Tm tm;
     char *p, *q, *e;
 
     assert(o->type == GCommit);
-    if(shortlog){
-        p = o->commit->msg;
-        e = p + o->commit->nmsg;
-        q = nextline(p, e);
-        Bprint(out, "%H ", o->hash);
-        Bwrite(out, p, q - p);
-        Bputc(out, '\n');
-    }else{
-        //9front only
-        //tmtime(&tm, o->commit->mtime, tzload("local"));
+    <<[[show()]] if [[shortlog]]>>
+    else{
         Bprint(out, "Hash:\t%H\n", o->hash);
         Bprint(out, "Author:\t%s\n", o->commit->author);
         if(o->commit->committer != nil
         && strcmp(o->commit->author, o->commit->committer) != 0)
             Bprint(out, "Committer:\t%s\n", o->commit->committer);
-        //Bprint(out, "Date:\t%τ\n", tmfmt(&tm, "WW MMM D hh:mm:ss z YYYY"));
         Bprint(out, "Date:\t%s", ctime(o->commit->mtime));
         Bprint(out, "\n");
         p = o->commit->msg;
@@ -6932,11 +6936,229 @@ show(Object *o)
         Bprint(out, "\n");
     }
     Bflush(out);
-    return 1;
+    return;
+}
+@
+%old: was 'return 1' but I changed return type to void instead
+%9front:
+%    //Tm tm;
+%       //tmtime(&tm, o->commit->mtime, tzload("local"));
+%       //Bprint(out, "Date:\t%τ\n", tmfmt(&tm, "WW MMM D hh:mm:ss z YYYY"));
+ 
+
+\subsection{Advanced features}
+
+\subsubsection{[[git log <files>]], path filtering}
+
+<<strucr [[Pfilt]]>>=
+struct Pfilt {
+    char    *elt;
+    bool show;
+
+    Pfilt   *sub;
+    int nsub;
+
+};
+@
+
+<<global [[pathfilt]](log.c)>>=
+// option<ref_own<Pfilt>>
+Pfilt   *pathfilt;
+@
+
+<<[[main()]](log.c) other locals>>=
+path[1024];
+char *p;
+char *r;
+int i;
+@
+
+<<[[main()]](log.c) if [[argc]]>>=
+if(argc != 0){
+    if(getwd(path, sizeof(path)) == nil)
+        sysfatal("getwd: %r");
+    if(strncmp(path, repo, nrepo) != 0)
+        sysfatal("path shifted??");
+
+    p = path + nrepo;
+    pathfilt = emalloc(sizeof(Pfilt));
+    for(i = 0; i < argc; i++){
+        if(*argv[i] == '/'){
+            if(strncmp(argv[i], repo, nrepo) != 0)
+                continue;
+            r = smprint("./%s", argv[i]+nrepo);
+        }else
+            r = smprint("./%s/%s", p, argv[i]);
+        cleanname(r);
+        filteradd(pathfilt, r);
+        free(r);
+    }
 }
 @
 
-\subsection{[[showquery()]]}
+<<function [[filteradd]]>>=
+void
+filteradd(Pfilt *pf, char *path)
+{
+    char *p, *e;
+    int i;
+
+    if((e = strchr(path, '/')) != nil)
+        p = smprint("%.*s", (int)(e - path), path);
+    else
+        p = strdup(path);
+
+    while(e != nil && *e == '/')
+        e++;
+    for(i = 0; i < pf->nsub; i++){
+        if(strcmp(pf->sub[i].elt, p) == 0){
+            pf->sub[i].show = pf->sub[i].show || (e == nil);
+            if(e != nil)
+                filteradd(&pf->sub[i], e);
+            free(p);
+            return;
+        }
+    }
+    pf->sub = earealloc(pf->sub, pf->nsub+1, sizeof(Pfilt));
+
+    pf->sub[pf->nsub].elt = p;
+    pf->sub[pf->nsub].show = (e == nil);
+    pf->sub[pf->nsub].nsub = 0;
+    pf->sub[pf->nsub].sub = nil;
+    if(e != nil)
+        filteradd(&pf->sub[pf->nsub], e);
+    pf->nsub++;
+}
+@
+
+
+
+<<function [[matchesfilter]]>>=
+bool
+matchesfilter(Object *o)
+{
+    Object *t, *p, *pt;
+    int i;
+    bool r;
+
+    assert(o->type == GCommit);
+    if(pathfilt == nil)
+        return true;
+    t = readobject(o->commit->tree);
+    if(t == nil)
+        sysfatal("read %H: %r", o->commit->tree);
+    for(i = 0; i < o->commit->nparent; i++){
+        p = readobject(o->commit->parent[i]);
+        if(p == nil)
+            sysfatal("read %H: %r", o->commit->parent[i]);
+        pt = readobject(p->commit->tree);
+        if(pt == nil)
+            sysfatal("read %H: %r", o->commit->tree);
+        r = matchesfilter1(pathfilt, t, pt);
+        unref(p);
+        unref(pt);
+        if(r)
+            return true;
+    }
+    if(o->commit->nparent == 0)
+        return matchesfilter1(pathfilt, t, nil);
+    return false;
+}
+@
+
+<<function [[matchesfilter1]]>>=
+bool
+matchesfilter1(Pfilt *pf, Object *t, Object *pt)
+{
+    Object *a, *b;
+    Hash ha, hb;
+    int i, r;
+
+    if(pf->show)
+        return true;
+    if(t != nil){
+        if(pt != nil && t->type != pt->type)
+            return true;
+        if(t->type != GTree)
+            return false;
+    }
+
+    for(i = 0; i < pf->nsub; i++){
+        ha = lookup(&pf->sub[i], t);
+        hb = lookup(&pf->sub[i], pt);
+        if(hasheq(&ha, &hb))
+            continue;
+        a = readobject(ha);
+        b = readobject(hb);
+        r = matchesfilter1(&pf->sub[i], a, b);
+        unref(a);
+        unref(b);
+        if(r)
+            return true;
+    }
+    return false;
+}
+@
+
+<<function [[lookup (git9/log.c)]]>>=
+Hash
+lookup(Pfilt *pf, Object *o)
+{
+    int i;
+
+    if(o == nil)
+        return Zhash;
+    for(i = 0; i < o->tree->nent; i++)
+        if(strcmp(o->tree->ent[i].name, pf->elt) == 0)
+            return o->tree->ent[i].h;
+    return Zhash;
+}
+@
+
+
+
+
+\subsubsection{[[git log -s]], short log}
+
+<<global [[shortlog]](log.c)>>=
+bool shortlog;
+@
+<<[[main()]](log.c) command line processing>>=
+case 's':
+    shortlog=true;
+    break;
+@
+
+<<[[show()]] if [[shortlog]]>>=
+if(shortlog){
+    p = o->commit->msg;
+    e = p + o->commit->nmsg;
+    q = nextline(p, e);
+    Bprint(out, "%H ", o->hash);
+    Bwrite(out, p, q - p);
+    Bputc(out, '\n');
+}
+@
+% just one line
+
+
+\subsubsection{[[git log -e]], commit expression}
+
+<<global [[queryexpr]](log.c)>>=
+char    *queryexpr;
+@
+<<[[main()]](log.c) command line processing>>=
+case 'e':
+    queryexpr = EARGF(usage());
+    break;
+@
+
+<<[[main()]](log.c) if [[queryexpr]]>>=
+if(queryexpr != nil)
+    showquery(queryexpr);
+@
+
+%\subsection{[[showquery()]]}
 
 <<function [[showquery]]>>=
 static void
@@ -6946,10 +7168,13 @@ showquery(char *q)
     Hash *h;
     int n, i;
 
-    if((n = resolverefs(&h, q)) == -1)
+    n = resolverefs(&h, q);
+    if(n == -1)
         sysfatal("resolve: %r");
+
     for(i = 0; i < n && (msgcount == -1 || msgcount > 0); i++){
-        if((o = readobject(h[i])) == nil)
+        o = readobject(h[i]);
+        if(o == nil)
             sysfatal("read %H: %r", h[i]);
         if(matchesfilter(o)){
             show(o);
@@ -6961,10 +7186,8 @@ showquery(char *q)
     exits(nil);
 }
 @
+% do not list the parents this time
 
-\subsection{Advanced features}
-
-\subsubsection{[[git log -s]] short log}
 
 %%\subsection{Printing a commit}
 %%\subsection{Diff summary: [[git log --name-status]]}
@@ -6981,6 +7204,8 @@ showquery(char *q)
 \section{Representing changes}
 \subsection{Tree changes}
 \subsection{File changes}
+
+
 
 
 \section{Showing file differences: [[git diff]]}
