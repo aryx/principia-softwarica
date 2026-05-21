@@ -189,6 +189,24 @@ hasheq(Hash *a, Hash *b)
 }
 @
 
+%ex: hashcmp(h.h, rh->h, npfx)
+
+<<function [[hashcmp]]>>=
+int
+hashcmp(uchar *a, uchar *b, uint nbit)
+{
+    int x, y, i, r;
+
+    i = nbit/8;
+    r = memcmp(a, b, i);
+    if(r != 0 || nbit % 8 == 0)
+        return r;
+    x = a[i] >> (8 - nbit % 8); 
+    y = b[i] >> (8 - nbit % 8); 
+    return x - y;
+}
+@
+
 
 \subsection{Hexadecimal hashes}
 
@@ -334,12 +352,6 @@ enum Gxxx {
 };
 @
 
-%XXX
-<<[[Gxxx]] other cases>>=
-GOdelta = 6,
-GRdelta = 7,
-@
-
 
 \subsection{Object flags: [[Cxxx]]}
 
@@ -362,12 +374,12 @@ enum Cxxx {
 
 %XXX
 <<[[Cxxx]] other cases>>=
-Cidx    = 1 << 3,
 Ccache  = 1 << 4,
-Cexist  = 1 << 5,
-Cthin   = 1 << 6,
 @
-% >>
+<<[[Cxxx]] other cases>>=
+Cexist  = 1 << 5,
+@
+
 
 \subsection{Reference counting}
 
@@ -967,7 +979,7 @@ readobject(Hash h)
 \subsection{[[readidxobject()]]}
 
 <<function [[readidxobject]]>>=
-/// readobject | ?? -> <>
+/// readobject | readrdelta -> <>
 static Object*
 readidxobject(Biobuf *idx, Hash h, int flag)
 {
@@ -981,6 +993,7 @@ readidxobject(Biobuf *idx, Hash h, int flag)
     <<[[readidxobject()]] if [[h]] in object cache>>
     <<[[readidxobject()]] if [[Cthin]] flag>>
     <<[[readidxobject()]] if [[Cidx]] flag>>
+    // else
     new = nil;
     if(obj == nil){
         new = emalloc(sizeof(Object));
@@ -1010,7 +1023,7 @@ retry:
         if(retried)
             goto error;
         retried = true;
-        refreshpacks();
+        <<[[readidxobject()]] when object not found call [[refreshpacks()]]>>
         goto retry;
     }
 errorf:
@@ -1026,9 +1039,20 @@ error:
 % refreshpacks()!
 
 %XXX
+%ori: seems dead, set in caller but immediately reset
+<<[[Cxxx]] other cases>>=
+Cthin   = 1 << 6,
+@
+% >>
 <<[[readidxobject()]] if [[Cthin]] flag>>=
 if(flag & Cthin)
     flag &= ~Cidx;
+@
+
+
+%XXX
+<<[[Cxxx]] other cases>>=
+Cidx    = 1 << 3,
 @
 <<[[readidxobject()]] if [[Cidx]] flag>>=
 if(flag & Cidx)
@@ -1498,12 +1522,12 @@ expandprefix(Hash *rh, Hash h, int npfx)
     char buf[128];
     Dir *d;
 
-    refreshpacks();
+    <<[[expandprefix()]] call [[refreshpacks()]]>>
+
     if(npfx < 8 || npfx % 4 != 0)
         return ERROR_NEG1;
-    for(i = 0; i < npackf; i++)
-        if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != -1)
-            return OK_0;
+    <<[[expandprefix()]] iterate on [[packf]]>>
+    // else
     sprint(buf, ".git/objects/%x", h.h[0]);
     if((fd = open(buf, OREAD)) == -1)
         return ERROR_NEG1;
@@ -2910,7 +2934,7 @@ mkols(void)
 @
 
 <<function [[slurpdir]]>>=
-errorneg1
+int
 slurpdir(char *p, Dir **d)
 {
     int r;
@@ -6917,64 +6941,151 @@ exit ''
 \label{chap:packing}
 %alt: Optimisations, and could also put object cache here
 
-\section{[[Pack.t]]}
+\section{Data structures}
+
+\subsection{[[Packf]] and [[packf]]}
+
+<<struct [[Packf]]>>=
+struct Packf {
+    // .git/objects/pack/xxx.pack
+    char    path[128];
+    // option<Biobuf>, opened .git/objects/pack/xxx.pack when Some
+    Biobuf  *pack;
+
+    <<[[Pack]] idx fields>>
+    <<[[Pack]] extra fields>>
+};
+@
+
+%alt: \subsection{[[packf]]}
+
+% set by refreshpacks(), a repo can have mutliple .pack in its .git/objects/pack/ dir
+<<globals [[packf]]>>=
+// array<ref_own<Packf>> (len = npackf)
+Packf   *packf;
+int npackf;
+@
+
 
 %%\subsection{Pack data}
-%%\subsection{Pack Index}
+
+\subsection{Pack Index}
+
+<<[[Pack]] idx fields>>=
+// content of .idx file (size = nidx), =~ array<Hash, file-offset-in-pack buf>
+// ref_own<string>
+char    *idx;
+vlong   nidx;
+@
+
 %%\subsubsection{Index pack v1}
 %%\subsubsection{Index pack v2}
 
-\section{IO}
 
-\subsection{Reading a pack}
+\section{Searching the pack index}
 
-<<function [[loadpack]]>>=
-static int
-loadpack(Packf *pf, char *name)
+<<function [[searchindex]]>>=
+vlong
+searchindex(char *idx, int nidx, Hash h, int npfx, Hash *hret)
 {
-    char buf[128];
-    int i, ifd;
-    Dir *d;
+    uint lo, hi, hidx;
+    vlong o, oo, nent;
+    int i, r;
+    void *s;
 
-    memset(pf, 0, sizeof(Packf));
-    snprint(buf, sizeof(buf), ".git/objects/pack/%s.idx", name);
-    snprint(pf->path, sizeof(pf->path), ".git/objects/pack/%s.pack", name);
+    o = 8;
+    if(nidx < 8 + 256*4)
+        return -1;
+    if(npfx < 8)
+        return -1;
     /*
-     * if we already have the pack open, just
-     * steal the loaded info
+     * Read the fanout table. The fanout table
+     * contains 256 entries, corresponsding to
+     * the first byte of the hash. Each entry
+     * is a 4 byte big endian integer, containing
+     * the total number of entries with a leading
+     * byte <= the table index, allowing us to
+     * rapidly do a binary search on them.
      */
-    for(i = 0; i < npackf; i++){
-        if(strcmp(pf->path, packf[i].path) == 0){
-            pf->pack = packf[i].pack;
-            pf->idx = packf[i].idx;
-            pf->nidx = packf[i].nidx;
-            packf[i].idx = nil;
-            packf[i].pack = nil;
-            return 0;
-        }
+    if (h.h[0] == 0){
+        lo = 0;
+        hi = GETBE32(idx + o);
+    } else {
+        o += h.h[0]*4 - 4;
+        lo = GETBE32(idx + o);
+        hi = GETBE32(idx + o + 4);
     }
-    if((ifd = open(buf, OREAD)) == -1)
-        return -1;
-    if((d = dirfstat(ifd)) == nil){
-        close(ifd);
-        return -1;
+    if(hi == lo)
+        goto notfound;
+    nent = GETBE32(idx + 8 + 255*4);
+
+    /*
+     * Now that we know the range of hashes that the
+     * entry may exist in, search them
+     */
+    r = -1;
+    s = nil;
+    hidx = -1;
+    o = 8 + 256*4;
+    while(lo < hi){
+        hidx = (hi + lo)/2;
+        s = idx + o + hidx*sizeof(h.h);
+        r = hashcmp(h.h, s, npfx);
+        if(r < 0)
+            hi = hidx;
+        else if(r > 0)
+            lo = hidx + 1;
+        else
+            break;
     }
-    pf->nidx = d->length;
-    pf->idx = emalloc(pf->nidx);
-    if(readn(ifd, pf->idx, pf->nidx) != pf->nidx){
-        close(ifd);
-        free(pf->idx);
-        free(d);
-        return -1;
+    if(r != 0)
+        goto notfound;
+    if(hret != nil)
+        memcpy(hret, s, sizeof(Hash));
+
+    /*
+     * We found the entry. If it's 32 bits, then we
+     * can just return the oset, otherwise the 32
+     * bit entry contains the oset to the 64 bit
+     * entry.
+     */
+    oo = 8;         /* Header */
+    oo += 256*4;        /* Fanout table */
+    oo += Hashsz*nent;  /* Hashes */
+    oo += 4*nent;       /* Checksums */
+    oo += 4*hidx;       /* Offset offset */
+    if(oo < 0 || oo + 4 > nidx)
+        goto err;
+    i = GETBE32(idx + oo);
+    o = i & 0xffffffffULL;
+    /*
+     * Large offsets (i.e. 64-bit) are encoded as an index
+     * into the next table with the MSB bit set.
+     */
+    if(o & (1ull << 31)){
+        o &= 0x7fffffffULL;
+        oo = 8;             /* Header */
+        oo += 256*4;            /* Fanout table */
+        oo += Hashsz*nent;      /* Hashes */
+        oo += 4*nent;           /* Checksums */
+        oo += 4*nent;           /* 32-bit Offsets */
+        oo += 8*o;          /* 64-bit Offset offset */
+        if(oo < 0 || oo + 8 >= nidx)
+            goto err;
+        o = GETBE64(idx + oo);
     }
-    close(ifd);
-    free(d);
-    return 0;
+    return o;
+
+err:
+    werrstr("out of bounds read");
+    return -1;
+notfound:
+    werrstr("not present");
+    return -1;      
 }
 @
 
 
-\subsection{Writing a pack}
 
 \section{Modifications to previous functions and data structures}
 
@@ -6983,13 +7094,15 @@ loadpack(Packf *pf, char *name)
 <<[[readidxobject()]] look for object in packs>>=
 for(i = 0; i < npackf; i++){
     o = searchindex(packf[i].idx, packf[i].nidx, h, SHA1dlen*8, nil);
-    if(o != -1){
-        if((f = openpack(&packf[i])) == nil)
+    if(o != ERROR_NEG1){
+        f = openpack(&packf[i]);
+        if(f == nil)
             goto error;
-        if((r = Bseek(f, o, 0)) != -1)
+        r = Bseek(f, o, 0);
+        if(r != ERROR_NEG1)
             r = readpacked(f, obj, flag);
         closepack(&packf[i]);
-        if(r == -1)
+        if(r == ERROR_NEG1)
             goto error;
         parseobject(obj);
         cache(obj);
@@ -6998,14 +7111,501 @@ for(i = 0; i < npackf; i++){
 }
 @
 
+<<[[readidxobject()]] when object not found call [[refreshpacks()]]>>=
+refreshpacks();
+@
+
+<<[[expandprefix()]] call [[refreshpacks()]]>>=
+refreshpacks();
+@
+
+<<[[expandprefix()]] iterate on [[packf]]>>=
+for(i = 0; i < npackf; i++)
+    if(searchindex(packf[i].idx, packf[i].nidx, h, npfx, rh) != ERROR_NEG1)
+        return OK_0;
+@
+
+
 \subsection{Refs}
+
+
+
+\section{IO}
+
+\subsection{Refreshing packs and loading indexes}
+%alt:\subsection{Loading packs}
+%alt: loading indexes
+
+<<function [[refreshpacks]]>>=
+/// readidxobject | expandprefix -> <> -> loadpack
+static void
+refreshpacks(void)
+{
+    Packf *pf, *new;
+    int i, n, l;
+    int nnew;
+    Dir *d;
+
+    n = slurpdir(".git/objects/pack", &d);
+    <<[[refreshpacks()]] sanity check [[n]]>>
+    nnew = 0;
+    new = eamalloc(n, sizeof(Packf));
+
+    for(i = 0; i < n; i++){
+        l = strlen(d[i].name);
+        if(l > 4 && strcmp(d[i].name + l - 4, ".idx") != 0)
+            continue;
+        d[i].name[l - 4] = '\0';
+        if(loadpack(&new[nnew], d[i].name) != -1)
+            nnew++;
+    }
+    <<[[refreshpacks()]] free previous [[packf]]>>
+    packf = new;
+    npackf = nnew;
+    free(d);
+}
+@
+
+<<[[refreshpacks()]] free previous [[packf]]>>=
+// free the previously loaded one if any
+for(i = 0; i < npackf; i++){
+    pf = &packf[i];
+    free(pf->idx);
+    if(pf->pack != nil)
+        Bterm(pf->pack);
+}
+free(packf);
+@
+
+<<[[refreshpacks()]] sanity check [[n]]>>=
+if(n == ERROR_NEG1)
+    return;
+@
+
+%\subsection{Loading a pack}
+
+<<function [[loadpack]]>>=
+/// refreshpacks -> <>
+static errorneg1
+loadpack(Packf *pf, char *name)
+{
+    char buf[128];
+    int i;
+    fdt ifd;
+    Dir *d;
+
+    memset(pf, 0, sizeof(Packf));
+    snprint(buf, sizeof(buf), ".git/objects/pack/%s.idx", name);
+    snprint(pf->path, sizeof(pf->path), ".git/objects/pack/%s.pack", name);
+    <<[[loadpack()]] steal loaded info from previous opened pack if same>>
+    // else
+    ifd = open(buf, OREAD);
+    <<[[loadpack()]] sanity check [[ifd]]>>
+    d = dirfstat(ifd);
+    <<[[loadpack()]] sanity check [[d]]>>
+    pf->nidx = d->length;
+    pf->idx = emalloc(pf->nidx);
+    if(readn(ifd, pf->idx, pf->nidx) != pf->nidx){
+        close(ifd);
+        free(pf->idx);
+        free(d);
+        return ERROR_NEG1;
+    }
+    close(ifd);
+    free(d);
+    return OK_0;
+}
+@
+
+
+<<[[loadpack()]] sanity check [[ifd]]>>=
+if(ifd == ERROR_NEG1)
+    return ERROR_NEG1;
+@
+<<[[loadpack()]] sanity check [[d]]>>=
+if(d == nil){
+    close(ifd);
+    return ERROR_NEG1;
+}
+@
+<<[[loadpack()]] steal loaded info from previous opened pack if same>>=
+/*
+ * if we already have the pack open, just
+ * steal the loaded info
+ */
+for(i = 0; i < npackf; i++){
+    if(strcmp(pf->path, packf[i].path) == 0){
+        pf->idx = packf[i].idx;
+        pf->nidx = packf[i].nidx;
+        pf->pack = packf[i].pack;
+        packf[i].idx = nil;
+        packf[i].pack = nil;
+        return OK_0;
+    }
+}
+@
+
+
+\subsection{Opening a pack}
+
+<<[[Pack]] extra fields>>=
+// openpack()/closepack() reference counting
+int refs;
+@
+
+<<function [[openpack]]>>=
+static Biobuf*
+openpack(Packf *pf)
+{
+    <<[[openpack()]] locals>>
+
+    if(pf->pack != nil){
+        pf->refs++;
+        return pf->pack;
+    }
+    // else
+    <<[[openpack()]] if too many opened packs>>
+    pf->refs++;
+    pf->pack = Bopen(pf->path, OREAD);
+    return pf->pack;
+}
+@
+% >>
+
+<<function [[closepack]]>>=
+static void
+closepack(Packf *pf)
+{
+    pf->refs--;
+}
+@
+
+
+
+<<[[openpack()]] locals>>=
+vlong t;
+int i, best;
+@
+
+
+<<[[Pack]] extra fields>>=
+// for LRU eviction of opened packs
+vlong   opentm;
+@
+
+
+<<global [[openpacks]]>>=
+int openpacks;
+@
+
+<<constant [[Npackcache]]>>=
+Npackcache  = 32,
+@
+
+<<[[openpack()]] if too many opened packs>>=
+/*
+ * If we've got more packs open
+ * than we want cached, try to
+ * free up the oldest ones.
+ *
+ * If we can't find a slot, this
+ * isn't fatal; we can just use
+ * another fd.
+ */
+while(openpacks >= Npackcache){
+    t = (1ull<<62)-1;
+    best = -1;
+    for(i = 0; i < npackf; i++){
+        if(&packf[i] != pf
+        && packf[i].pack != nil
+        && packf[i].opentm < t
+        && packf[i].refs == 0){
+            t = packf[i].opentm;
+            best = i;
+        }
+    }
+    if(best == -1){
+        fprint(STDERR, "no available pack slots\n");
+        break;
+    }
+    Bterm(packf[best].pack);
+    packf[best].pack = nil;
+    openpacks--;
+}
+openpacks++;
+pf->opentm = nsec();
+@
+
+\subsection{Reading a packed object}
+
+% assumes seek at the right offset before (using index)
+
+% similar to readloose(), but for packed object
+
+<<function [[readpacked]]>>=
+/// readidxobject -> <>
+static errorneg1
+readpacked(Biobuf *f, Object *o, int flag)
+{
+    int c, s, n, t;
+    vlong l, p;
+    Buf b;
+
+    p = Boffset(f);
+    c = Bgetc(f);
+    <<[[readpacked()]] sanity check [[c]]>>
+    l = c & 0xf;
+    s = 4;
+    t = (c >> 4) & 0x7;
+    <<[[readpacked()]] sanity check [[t]]>>
+    while(c & 0x80){
+        if((c = Bgetc(f)) == -1)
+            return ERROR_NEG1;
+        l |= (vlong)(c & 0x7f) << s;
+        s += 7;
+    }
+    <<[[readpacked()]] sanity check [[l]]>>
+    switch(t){
+    <<[[readpacked()]] switch object type [[t]] cases>>
+    default:
+        werrstr("invalid object at %lld", Boffset(f));
+        return ERROR_NEG1;
+    }
+    o->flag |= Cloaded|flag;
+    return OK_0;
+}
+@
+
+
+<<[[readpacked()]] sanity check [[c]]>>=
+if(c == -1)
+    return ERROR_NEG1;
+@
+<<[[readpacked()]] sanity check [[t]]>>=
+if(!t){
+    werrstr("unknown type for byte %x at %lld", c, p);
+    return ERROR_NEG1;
+}
+@
+<<[[readpacked()]] sanity check [[l]]>>=
+if(l >= (1ULL << 32)){
+    werrstr("object too big");
+    return ERROR_NEG1;
+}
+@
+% >>
+
+<<[[readpacked()]] switch object type [[t]] cases>>=
+case GCommit:
+case GTree:
+case GTag:
+case GBlob:
+    b.sz = 64 + l;
+    b.data = emalloc(b.sz);
+    n = snprint(b.data, 64, "%T %lld", t, l) + 1;
+    b.len = n;
+    if(bdecompress(&b, f, nil) == ERROR_NEG1){
+        free(b.data);
+        return ERROR_NEG1;
+    }
+    o->len = Boffset(f) - o->off;
+    o->type = t;
+    o->all = b.data;
+    o->data = b.data + n;
+    o->size = b.len - n;
+    break;
+@
+
+\subsection{Writing a pack}
+
 
 
 \section{Delta}
 
+<<[[Gxxx]] other cases>>=
+GOdelta = 6,
+GRdelta = 7,
+@
+
+
+
+\subsection{[[Odelta]]}
+
+<<[[readpacked()]] switch object type [[t]] cases>>=
+case GOdelta:
+    if(readodelta(f, o, l, p, flag) == ERROR_NEG1)
+        return ERROR_NEG1;
+    break;
+@
+
+<<function [[readodelta]]>>=
+static int
+readodelta(Biobuf *f, Object *o, vlong nd, vlong p, int flag)
+{
+    Object b;
+    char *d;
+    vlong r;
+    int c, n;
+
+    d = nil;
+    if((c = Bgetc(f)) == -1)
+        return -1;
+    r = c & 0x7f;
+    while(c & 0x80 && r < (1ULL<<56)){
+        if((c = Bgetc(f)) == -1)
+            return -1;
+        r = ((r + 1)<<7) | (c & 0x7f);
+    }
+
+    if(r > p || r >= (1ULL<<56)){
+        werrstr("junk offset -%lld (from %lld)", r, p);
+        goto error;
+    }
+    if((n = decompress(&d, f, nil)) == -1)
+        goto error;
+    o->len = Boffset(f) - o->off;
+    if(d == nil || n != nd)
+        goto error;
+    if(Bseek(f, p - r, 0) == -1)
+        goto error;
+    memset(&b, 0, sizeof(Object));
+    if(readpacked(f, &b, flag) == -1)
+        goto error;
+    if(applydelta(o, &b, d, nd) == -1)
+        goto error;
+    clear(&b);
+    free(d);
+    return 0;
+error:
+    free(d);
+    return -1;
+}
+@
+% >>
+
+<<function [[applydelta]]>>=
+static int
+applydelta(Object *dst, Object *base, char *d, int nd)
+{
+    char *r, *b, *ed, *er;
+    vlong o, l,  n, nr, c;
+
+    ed = d + nd;
+    b = base->data;
+    n = readvint(d, ed, &d);
+    if(n == -1 || n >= 1LL << 31 || n != base->size){
+        werrstr("mismatched source size");
+        return -1;
+    }
+
+    nr = readvint(d, ed, &d);
+    if(nr == -1 || nr >= 1LL << 31){
+        werrstr("invalid pack: %r");
+        return -1;
+    }
+    r = emalloc(nr + 64);
+    n = snprint(r, 64, "%T %lld", base->type, nr) + 1;
+    dst->all = r;
+    dst->type = base->type;
+    dst->data = r + n;
+    dst->size = nr;
+    er = dst->data + nr;
+    r = dst->data;
+
+    while(d != ed){
+        c = *d++;
+        /* copy from base */
+        if(c & 0x80){
+            o = 0;
+            l = 0;
+            /* Offset in base */
+            if(d != ed && (c & 0x01)) o |= (*d++ & 0xff) <<  0;
+            if(d != ed && (c & 0x02)) o |= (*d++ & 0xff) <<  8;
+            if(d != ed && (c & 0x04)) o |= (*d++ & 0xff) << 16;
+            if(d != ed && (c & 0x08)) o |= (*d++ & 0xff) << 24;
+
+            /* Length to copy */
+            if(d != ed && (c & 0x10)) l |= (*d++ & 0xff) <<  0;
+            if(d != ed && (c & 0x20)) l |= (*d++ & 0xff) <<  8;
+            if(d != ed && (c & 0x40)) l |= (*d++ & 0xff) << 16;
+            if(l == 0) l = 0x10000;
+
+            if(o < 0 || l < 0 || l > er - r || o + l > base->size){
+                werrstr("garbled delta: out of bounds copy");
+                return -1;
+            }
+            memmove(r, b + o, l);
+            r += l;
+        /* inline data */
+        }else{
+            if(c > ed - d || c > er - r){
+                werrstr("garbled delta: write past object");
+                return -1;
+            }
+            memmove(r, d, c);
+            d += c;
+            r += c;
+        }
+    }
+    if(r != er){
+        werrstr("truncated delta");
+        return -1;
+    }
+
+    return nr;
+}
+@
+
+
+
+
+
+
+\subsection{[[Rdelta]]}
+
+<<[[readpacked()]] switch object type [[t]] cases>>=
+case GRdelta:
+    if(readrdelta(f, o, l, flag) == ERROR_NEG1)
+        return ERROR_NEG1;
+    break;
+@
+
+
+<<function [[readrdelta]]>>=
+static errorneg1
+readrdelta(Biobuf *f, Object *o, int nd, int flag)
+{
+    Object *b;
+    Hash h;
+    char *d;
+    int n;
+
+    d = nil;
+    if(Bread(f, h.h, sizeof(h.h)) != sizeof(h.h))
+        goto error;
+    if(hasheq(&o->hash, &h))
+        goto error;
+    if((n = decompress(&d, f, nil)) == -1)
+        goto error;
+    o->len = Boffset(f) - o->off;
+    if(d == nil || n != nd)
+        goto error;
+    if((b = readidxobject(f, h, flag|Cthin)) == nil)
+        goto error;
+    if(applydelta(o, b, d, n) == -1)
+        goto error;
+    free(d);
+    return OK_0;
+error:
+    free(d);
+    return ERROR_NEG1;
+}
+@
+
 
 
 \section{Pack commands}
+
 
 %%\subsection{[[git pack-objects]]}
 \subsection{[[git repack]]}
@@ -7069,6 +7669,8 @@ main(int argc, char **argv)
 
 %%\subsection{[[git fetch-pack]]}
 %%\subsection{[[git receive-pack]]}
+
+
 
 %******************************************************************************
 \chapter{Exchanging}
@@ -7223,9 +7825,9 @@ exit ''
 void
 usage(void)
 {
-    fprint(2, "usage: %s [-dl] [-b br] [-u upstream] remote\n", argv0);
-    fprint(2, "\t-b br: only fetch matching branch 'br'\n");
-    fprint(2, "remote:  fetch from this repository\n");
+    fprint(STDERR, "usage: %s [-dl] [-b br] [-u upstream] remote\n", argv0);
+    fprint(STDERR, "\t-b br: only fetch matching branch 'br'\n");
+    fprint(STDERR, "remote:  fetch from this repository\n");
     exits("usage");
 }
 @
@@ -7250,9 +7852,7 @@ main(int argc, char **argv)
             if(hparse(&heads[nheads], s) == 0)
                 nheads++;
         break;
-    default:
-        usage();
-        break;
+    default: usage(); break;
     }ARGEND;
 
     gitinit(nil, 0, nil);
@@ -7270,7 +7870,7 @@ main(int argc, char **argv)
 @
 
 
-\section{Object store walker}
+%%\section{Object store walker}
 
 
 
