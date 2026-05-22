@@ -40,12 +40,14 @@ struct Eval {
 };
 /*e: struct [[Eval]] */
 
+/*s: constant [[colors]] */
 static char *colors[] = {
 [Keep] "keep",
 [Drop] "drop",
 [Blank] "blank",
 [Skip] "skip",
 };
+/*e: constant [[colors]] */
 
 /*s: global [[zcommit]](ref.c) */
 static Object zcommit = {
@@ -115,16 +117,16 @@ word(Eval *ev, char *b, int nb)
 /*e: function [[word]] */
 
 /*s: function [[take]] */
-int
+bool
 take(Eval *ev, char *m)
 {
     int l;
 
     l = strlen(m);
     if(strncmp(ev->p, m, l) != 0)
-        return 0;
+        return false;
     ev->p += l;
-    return 1;
+    return true;
 }
 /*e: function [[take]] */
 
@@ -437,7 +439,7 @@ matchpfx(Hash *h, char *ref)
 
 /*s: function [[readref (git9/ref.c)]] */
 errorneg1
-readref(Hash *h, char *ref)
+readref(Hash *h/*OUT*/, char *ref)
 {
     char buf[256], s[256];
     errorneg1 r;
@@ -595,7 +597,7 @@ evalexpr(Eval *ev, char *ref)
 /*s: function [[resolverefs]] */
 // main(get.c) -> <>
 errorneg1
-resolverefs(Hash **r, char *ref)
+resolverefs(Hash **r/*OUT*/, char *ref)
 {
     Eval ev;
     Hash *h;
@@ -619,7 +621,7 @@ resolverefs(Hash **r, char *ref)
 /*s: function [[resolveref]] */
 /// main(walk.c -b) | main(save.c -p) | (main(log.c) -> showcommits) -> <>
 errorneg1
-resolveref(Hash *r, char *ref)
+resolveref(Hash *r/*OUT*/, char *ref)
 {
     Eval ev;
 
@@ -639,40 +641,45 @@ resolveref(Hash *r, char *ref)
 /*e: function [[resolveref]] */
 
 /*s: function [[readrefdir]] */
-int
+errorneg1
 readrefdir(Hash **refs, char ***names, int *nrefs, char *dpath, char *dname)
 {
     Dir *d, *e, *dir;
     char *path, *name, *sep;
     int ndir;
 
-    if((ndir = slurpdir(dpath, &dir)) == -1)
-        return -1;
+    ndir = slurpdir(dpath, &dir);
+    if(ndir == -1)
+        return ERROR_NEG1;
     sep = (*dname == '\0') ? "" : "/";
     e = dir + ndir;
     for(d = dir; d != e; d++){
         path = smprint("%s/%s", dpath, d->name);
         name = smprint("%s%s%s", dname, sep, d->name);
         if(d->mode & DMDIR) {
-            if(readrefdir(refs, names, nrefs, path, name) == -1)
+            // recurse
+            if(readrefdir(refs, names, nrefs, path, name) == ERROR_NEG1)
                 goto noref;
         }else{
             *refs = erealloc(*refs, (*nrefs + 1)*sizeof(Hash));
             *names = erealloc(*names, (*nrefs + 1)*sizeof(char*));
-            if(resolveref(&(*refs)[*nrefs], name) == -1)
+            if(resolveref(&(*refs)[*nrefs], name) == ERROR_NEG1)
                 goto noref;
             (*names)[*nrefs] = name;
             *nrefs += 1;
             goto next;
         }
-noref:      free(name);
-next:       free(path);
+noref:
+      free(name);
+next: 
+      free(path);
     }
     free(dir);
-    return 0;
+    return OK_0;
 }
 /*e: function [[readrefdir]] */
 /*s: function [[listrefs]] */
+/// main(repack.c) -> <>
 int
 listrefs(Hash **refs, char ***names)
 {
@@ -681,9 +688,9 @@ listrefs(Hash **refs, char ***names)
     *refs = nil;
     *names = nil;
     nrefs = 0;
-    if(readrefdir(refs, names, &nrefs, ".git/refs", "") == -1){
+    if(readrefdir(refs, names, &nrefs, ".git/refs", "") == ERROR_NEG1){
         free(*refs);
-        return -1;
+        return ERROR_NEG1;
     }
     return nrefs;
 }

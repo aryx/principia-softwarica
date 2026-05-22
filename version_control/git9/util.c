@@ -29,6 +29,7 @@ emptydir(void)
 
     if(e != nil)
         return ref(e);
+    // else
     e = emalloc(sizeof(Object));
     e->type = GTree;
     e->tree = emalloc(sizeof(Tinfo));
@@ -335,7 +336,7 @@ gitinit(char *root, int nroot, int *nrel)
 
 /*s: function [[hparse]] */
 errorneg1
-hparse(Hash *h, char *b)
+hparse(Hash *h/*OUT*/, char *b)
 {
     int i, c0, c1;
 
@@ -357,7 +358,8 @@ slurpdir(char *p, Dir **d)
     int r;
     fdt f;
 
-    if((f = open(p, OREAD)) == ERROR_NEG1)
+    f = open(p, OREAD);
+    if(f == ERROR_NEG1)
         return ERROR_NEG1;
     r = dirreadall(f, d);
     close(f);
@@ -400,7 +402,7 @@ showprogress(int x, int pct)
         return 0;
     if(x > pct){
         pct = x;
-        fprint(2, "\b\b\b\b%3d%%", pct);
+        fprint(STDERR, "\b\b\b\b%3d%%", pct);
     }
     return pct;
 }
@@ -488,6 +490,7 @@ qpop(Objq *q, Qelt *e)
 /*e: function [[qpop]] */
 
 /*s: function [[murmurhash2]] */
+/// writepack -> readmeta -> loadcommit -> loadtree -> <>
 u64int
 murmurhash2(void *pp, usize n)
 {

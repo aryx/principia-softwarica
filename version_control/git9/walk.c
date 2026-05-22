@@ -701,6 +701,8 @@ Stale:
                    idx[i].path);
            }
            Bterm(w);
+
+
            nulldir(&rn);
            rn.name = "INDEX9";
            if(remove(".git/INDEX9") == -1)

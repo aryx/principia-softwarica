@@ -146,6 +146,7 @@ dtinit(Dtab *dt, Object *obj)
     dt->b = eamalloc(dt->sz, sizeof(Dblock));
     dt->base = (uchar*)obj->data;
     dt->nbase = obj->size;
+
     while(s != e){
         n = nextblk(s, e);
         h = hash(s, n);

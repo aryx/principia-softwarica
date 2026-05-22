@@ -4,24 +4,45 @@
 #include "git.h"
 
 typedef struct Pfilt Pfilt;
+/*s: strucr [[Pfilt]] */
 struct Pfilt {
     char    *elt;
-    int show;
+    bool show;
+
     Pfilt   *sub;
     int nsub;
-};
 
+};
+/*e: strucr [[Pfilt]] */
+
+/*s: global [[out]](log.c) */
 Biobuf  *out;
+/*e: global [[out]](log.c) */
+/*s: global [[queryexpr]](log.c) */
 char    *queryexpr;
+/*e: global [[queryexpr]](log.c) */
 /*s: global [[commitid]](log.c) */
+// option<ref_own<string>> (if None then defaults to "HEAD")
 char    *commitid;
 /*e: global [[commitid]](log.c) */
-int shortlog;
-int msgcount = -1;
+/*s: global [[shortlog]](log.c) */
+bool shortlog;
+/*e: global [[shortlog]](log.c) */
+/*s: global [[msgcount]](log.c) */
+int msgcount = -1; // infinite
+/*e: global [[msgcount]](log.c) */
 
+/*s: global [[done]](log.c) */
 Objset  done;
+/*e: global [[done]](log.c) */
+/*s: global [[objq]](log.c) */
 Objq    objq;
+/*e: global [[objq]](log.c) */
+
+/*s: global [[pathfilt]](log.c) */
+// option<ref_own<Pfilt>>
 Pfilt   *pathfilt;
+/*e: global [[pathfilt]](log.c) */
 
 /*s: function [[filteradd]] */
 void
@@ -47,6 +68,7 @@ filteradd(Pfilt *pf, char *path)
         }
     }
     pf->sub = earealloc(pf->sub, pf->nsub+1, sizeof(Pfilt));
+
     pf->sub[pf->nsub].elt = p;
     pf->sub[pf->nsub].show = (e == nil);
     pf->sub[pf->nsub].nsub = 0;
@@ -73,7 +95,7 @@ lookup(Pfilt *pf, Object *o)
 /*e: function [[lookup (git9/log.c)]] */
 
 /*s: function [[matchesfilter1]] */
-int
+bool
 matchesfilter1(Pfilt *pf, Object *t, Object *pt)
 {
     Object *a, *b;
@@ -81,12 +103,12 @@ matchesfilter1(Pfilt *pf, Object *t, Object *pt)
     int i, r;
 
     if(pf->show)
-        return 1;
+        return true;
     if(t != nil){
         if(pt != nil && t->type != pt->type)
-            return 1;
+            return true;
         if(t->type != GTree)
-            return 0;
+            return false;
     }
 
     for(i = 0; i < pf->nsub; i++){
@@ -100,37 +122,41 @@ matchesfilter1(Pfilt *pf, Object *t, Object *pt)
         unref(a);
         unref(b);
         if(r)
-            return 1;
+            return true;
     }
-    return 0;
+    return false;
 }
 /*e: function [[matchesfilter1]] */
 /*s: function [[matchesfilter]] */
-int
+bool
 matchesfilter(Object *o)
 {
     Object *t, *p, *pt;
-    int i, r;
+    int i;
+    bool r;
 
     assert(o->type == GCommit);
     if(pathfilt == nil)
-        return 1;
-    if((t = readobject(o->commit->tree)) == nil)
+        return true;
+    t = readobject(o->commit->tree);
+    if(t == nil)
         sysfatal("read %H: %r", o->commit->tree);
     for(i = 0; i < o->commit->nparent; i++){
-        if((p = readobject(o->commit->parent[i])) == nil)
+        p = readobject(o->commit->parent[i]);
+        if(p == nil)
             sysfatal("read %H: %r", o->commit->parent[i]);
-        if((pt = readobject(p->commit->tree)) == nil)
+        pt = readobject(p->commit->tree);
+        if(pt == nil)
             sysfatal("read %H: %r", o->commit->tree);
         r = matchesfilter1(pathfilt, t, pt);
         unref(p);
         unref(pt);
         if(r)
-            return 1;
+            return true;
     }
     if(o->commit->nparent == 0)
         return matchesfilter1(pathfilt, t, nil);
-    return 0;
+    return false;
 }
 /*e: function [[matchesfilter]] */
 
@@ -146,13 +172,14 @@ nextline(char *p, char *e)
 /*e: function [[nextline]] */
 
 /*s: function [[show]] */
-static int
+/// showcommits -> <>
+static void
 show(Object *o)
 {
-    //Tm tm;
     char *p, *q, *e;
 
     assert(o->type == GCommit);
+    /*s: [[show()]] if [[shortlog]] */
     if(shortlog){
         p = o->commit->msg;
         e = p + o->commit->nmsg;
@@ -160,15 +187,14 @@ show(Object *o)
         Bprint(out, "%H ", o->hash);
         Bwrite(out, p, q - p);
         Bputc(out, '\n');
-    }else{
-        //9front only
-        //tmtime(&tm, o->commit->mtime, tzload("local"));
+    }
+    /*e: [[show()]] if [[shortlog]] */
+    else{
         Bprint(out, "Hash:\t%H\n", o->hash);
         Bprint(out, "Author:\t%s\n", o->commit->author);
         if(o->commit->committer != nil
         && strcmp(o->commit->author, o->commit->committer) != 0)
             Bprint(out, "Committer:\t%s\n", o->commit->committer);
-        //Bprint(out, "Date:\t%τ\n", tmfmt(&tm, "WW MMM D hh:mm:ss z YYYY"));
         Bprint(out, "Date:\t%s", ctime(o->commit->mtime));
         Bprint(out, "\n");
         p = o->commit->msg;
@@ -184,7 +210,7 @@ show(Object *o)
         Bprint(out, "\n");
     }
     Bflush(out);
-    return 1;
+    return;
 }
 /*e: function [[show]] */
 /*s: function [[showquery]] */
@@ -195,10 +221,13 @@ showquery(char *q)
     Hash *h;
     int n, i;
 
-    if((n = resolverefs(&h, q)) == -1)
+    n = resolverefs(&h, q);
+    if(n == -1)
         sysfatal("resolve: %r");
+
     for(i = 0; i < n && (msgcount == -1 || msgcount > 0); i++){
-        if((o = readobject(h[i])) == nil)
+        o = readobject(h[i]);
+        if(o == nil)
             sysfatal("read %H: %r", h[i]);
         if(matchesfilter(o)){
             show(o);
@@ -224,10 +253,13 @@ showcommits(char *c)
         c = "HEAD";
     if(resolveref(&h, c) == -1)
         sysfatal("resolve %s: %r", c);
-    if((o = readobject(h)) == nil)
+    o = readobject(h);
+    /*s: [[showcommits()]] sanity check [[o]] is a valid commit object */
+    if(o == nil)
         sysfatal("load %H: %r", h);
     if(o->type != GCommit)
         sysfatal("%s: not a commit", c);
+    /*e: [[showcommits()]] sanity check [[o]] is a valid commit object */
 
     qinit(&objq);
     osinit(&done);
@@ -242,7 +274,9 @@ showcommits(char *c)
         for(i = 0; i < e.o->commit->nparent; i++){
             if(oshas(&done, e.o->commit->parent[i]))
                 continue;
-            if((p = readobject(e.o->commit->parent[i])) == nil)
+            // else
+            p = readobject(e.o->commit->parent[i]);
+            if(p == nil)
                 sysfatal("load %H: %r", o->commit->parent[i]);
             osadd(&done, p);
             qput(&objq, p, 0);
@@ -264,35 +298,46 @@ usage(void)
 void
 main(int argc, char **argv)
 {
-    char path[1024], repo[1024], *p, *r;
-    int i, nrel, nrepo;
+    char repo[1024];
+    int nrel, nrepo;
+    /*s: [[main()]](log.c) other locals */
+    char path[1024];
+    char *p;
+    char *r;
+    int i;
+    /*e: [[main()]](log.c) other locals */
 
     ARGBEGIN{
-    case 'e':
-        queryexpr = EARGF(usage());
-        break;
+    /*s: [[main()]](log.c) command line processing */
     case 'c':
         commitid = EARGF(usage());
         break;
-    case 's':
-        shortlog++;
-        break;
+    /*x: [[main()]](log.c) command line processing */
     case 'n':
         msgcount = atoi(EARGF(usage()));
         break;
-    default:
-        usage();
+    /*x: [[main()]](log.c) command line processing */
+    case 's':
+        shortlog=true;
         break;
+    /*x: [[main()]](log.c) command line processing */
+    case 'e':
+        queryexpr = EARGF(usage());
+        break;
+    /*e: [[main()]](log.c) command line processing */
+    default: usage(); break;
     }ARGEND;
 
     gitinit(repo, sizeof(repo), &nrel);
     nrepo = strlen(repo);
 
+    /*s: [[main()]](log.c) if [[argc]] */
     if(argc != 0){
         if(getwd(path, sizeof(path)) == nil)
             sysfatal("getwd: %r");
         if(strncmp(path, repo, nrepo) != 0)
             sysfatal("path shifted??");
+
         p = path + nrepo;
         pathfilt = emalloc(sizeof(Pfilt));
         for(i = 0; i < argc; i++){
@@ -307,16 +352,17 @@ main(int argc, char **argv)
             free(r);
         }
     }
+    /*e: [[main()]](log.c) if [[argc]] */
     // !!chdir!!
     if(chdir(repo) == ERROR_NEG1)
         sysfatal("chdir: %r");
 
-    //9front-only
-    //tmfmtinstall();
     out = Bfdopen(STDOUT, OWRITE);
 
+    /*s: [[main()]](log.c) if [[queryexpr]] */
     if(queryexpr != nil)
         showquery(queryexpr);
+    /*e: [[main()]](log.c) if [[queryexpr]] */
     else
         showcommits(commitid);
 

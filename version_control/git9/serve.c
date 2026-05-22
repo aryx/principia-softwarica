@@ -610,7 +610,7 @@ main(int argc, char **argv)
         break;
     }ARGEND;
 
-    interactive = 0;
+    interactive = false;
     if(rfork(RFNAMEG) == -1)
         sysfatal("rfork: %r");
     if(pathpfx != nil){

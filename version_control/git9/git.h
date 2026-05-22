@@ -30,6 +30,7 @@ enum {
     /*e: constant [[Npackcache]] */
     Hashsz      = 20,
     Pktmax      = 65536,
+
     KiB     = 1024,
     MiB     = 1024*KiB,
 };
@@ -137,6 +138,7 @@ struct Dirent {
     // ref_own<string>
     char *name;
     int mode;
+    // hash of GBlob (file) or GTree (dir) but not GCommit
     Hash h;
     /*s: [[Dirent]] other fields */
     bool_byte islink;
@@ -255,27 +257,32 @@ struct Objq {
 };
 /*e: struct [[Objq]] */
 
+/*s: struct [[Dtab]] */
 struct Dtab {
     Object  *o;
     uchar   *base;
     int nbase;
+
     Dblock  *b;
     int nb;
     int sz;
 };
-
+/*e: struct [[Dtab]] */
+/*s: struct [[Dblock]] */
 struct Dblock {
     uchar   *buf;
     int len;
     int off;
     u64int  hash;
 };
-
+/*e: struct [[Dblock]] */
+/*s: struct [[Delta]] */
 struct Delta {
     int cpy;
     int off;
     int len;
 };
+/*e: struct [[Delta]] */
 
 /*s: struct [[Idxent]] */
 struct Idxent {

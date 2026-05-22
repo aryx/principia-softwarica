@@ -16,7 +16,9 @@ struct Objbuf {
 /*e: struct [[Objbuf]] */
 
 enum {
+    /*s: const [[Maxparents]] */
     Maxparents = 16,
+    /*e: const [[Maxparents]] */
 };
 
 /*s: globals [[authorxxx]](save.c) */
@@ -35,8 +37,10 @@ char    *committeremail;
 // -m
 char    *commitmsg;
 /*e: global [[commitmsg]](save.c) */
+/*s: globals [[parents]](save.c) */
 Hash    parents[Maxparents];
 int nparents;
+/*e: globals [[parents]](save.c) */
 
 /*s: globals [[idx]](save.c) */
 // growing_array<Idxent> (used = nidx, allocated = idxsz)
@@ -129,8 +133,9 @@ objbytes(void *p, void *buf, int nbuf)
 /*e: function [[objbytes]] */
 
 /*s: function [[writeobj]] */
+/// blobify | writetree | mkcommit -> <>
 void
-writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
+writeobj(Hash *h/*OUT*/, char *hdr, int nhdr, char *dat, int ndat)
 {
     Objbuf b = {.off=0, .hdr=hdr, .nhdr=nhdr, .dat=dat, .ndat=ndat};
     char s[64], o[256];
@@ -152,8 +157,10 @@ writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
     if(readobject(*h) == nil){
         if((f = Bopen(o, OWRITE)) == nil)
             sysfatal("could not open %s: %r", o);
+        /*s: [[writeobj()]] compress [[b]] in [[f]] */
         if(deflatezlib(f, bwrite, &b, objbytes, 9, 0) == ERROR_NEG1)
             sysfatal("could not write %s: %r", o);
+        /*e: [[writeobj()]] compress [[b]] in [[f]] */
         Bterm(f);
     }
 }
@@ -161,10 +168,12 @@ writeobj(Hash *h, char *hdr, int nhdr, char *dat, int ndat)
 
 /*s: function [[writetree]] */
 int
-writetree(Dirent *ent, int nent, Hash *h)
+writetree(Dirent *ent, int nent, Hash *h/*OUT*/)
 {
-    char *t, *txt, *etxt, hdr[128];
-    int nhdr, n;
+    char hdr[128];
+    int nhdr;
+    char *t, *txt, *etxt;
+    int n;
     Dirent *d, *p;
 
     t = emalloc((16+256+20) * nent);
@@ -180,6 +189,7 @@ writetree(Dirent *ent, int nent, Hash *h)
     nent = n;
 
     qsort(ent, nent, sizeof(Dirent), entcmp);
+
     for(d = ent; d != ent + nent; d++){
         if(strlen(d->name) >= 255)
             sysfatal("overly long filename: %s", d->name);
@@ -198,17 +208,24 @@ writetree(Dirent *ent, int nent, Hash *h)
 
 /*s: function [[blobify]] */
 void
-blobify(Dir *d, char *path, int *mode, Hash *bh)
+blobify(Dir *d, char *path, int *mode/*OUT*/, Hash *bh/*OUT*/)
 {
-    char h[64], *buf;
-    int f, nh;
+    char h[64]; // header
+    char *buf; // blob content
+    fdt f;
+    int nh;
 
+    /*s: [[blobify()]] sanity check [[d]] is a file entry */
     if((d->mode & DMDIR) != 0)
         sysfatal("not file: %s", path);
+    /*e: [[blobify()]] sanity check [[d]] is a file entry */
     *mode = d->mode;
     nh = snprint(h, sizeof(h), "%T %lld", GBlob, d->length) + 1;
-    if((f = open(path, OREAD)) == -1)
+    f = open(path, OREAD);
+    /*s: [[blobify()]] sanity check [[f]] */
+    if(f == -1)
         sysfatal("could not open %s: %r", path);
+    /*e: [[blobify()]] sanity check [[f]] */
     buf = emalloc(d->length);
     if(readn(f, buf, d->length) != d->length)
         sysfatal("could not read blob %s: %r", path);
@@ -252,6 +269,7 @@ dirent(Dirent **ent, int *nent, char *name)
     for(d = *ent; d != *ent + *nent; d++)
         if(d->name && strcmp(d->name, name) == 0)
             return d;
+    // else
     *nent += 1;
     *ent = erealloc(*ent, *nent * sizeof(Dirent));
     d = *ent + (*nent - 1);
@@ -377,10 +395,12 @@ treeify(Object *t, char **path, char **epath, int off, Hash *h)
 
 /*s: function [[mkcommit]] */
 void
-mkcommit(Hash *c, vlong date, Hash tree)
+mkcommit(Hash *c/*OUT*/, vlong date, Hash tree)
 {
-    char *s, h[64];
-    int ns, nh, i;
+    char h[64];
+    int nh;
+    char *s;
+    int ns, i;
     Fmt f;
 
     fmtstrinit(&f);
@@ -409,10 +429,16 @@ findroot(void)
 
     if(resolveref(&h, "HEAD") == ERROR_NEG1)
         return emptydir();
-    if((c = readobject(h)) == nil || c->type != GCommit)
+    c = readobject(h);
+    /*s: [[findroot()]] sanity check commit [[c]] */
+    if(c == nil || c->type != GCommit)
         sysfatal("could not read HEAD %H", h);
-    if((t = readobject(c->commit->tree)) == nil)
+    /*e: [[findroot()]] sanity check commit [[c]] */
+    t = readobject(c->commit->tree);
+    /*s: [[findroot()]] sanity check tree [[t]] */
+    if(t == nil)
         sysfatal("could not read tree for commit %H", h);
+    /*e: [[findroot()]] sanity check tree [[t]] */
     return t;
 }
 /*e: function [[findroot]] */

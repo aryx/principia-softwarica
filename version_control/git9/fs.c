@@ -18,7 +18,7 @@ enum Qxxx {
     Qobject,
     Qctl,
 
-    // object/
+    // object/xxx/
     Qtree,
     Qcommit,
         Qmsg,
@@ -249,7 +249,6 @@ obj2dir(Dir *d, Crumb *c, Object *o, char *name)
         d->mode &= 0777;
         d->length = o->size;
     }
-
 }
 /*e: function [[obj2dir]] */
 
@@ -439,7 +438,8 @@ objgen(int i, Dir *d, void *p)
     while(ols->idx <= i){
         if(olsnext(ols, &h) == -1)
             return ERROR_NEG1;
-        if((o = readobject(h)) == nil){
+        o = readobject(h);
+        if(o == nil){
             fprint(STDERR, "corrupt object %H\n", h);
             return ERROR_NEG1;
         }

@@ -36,7 +36,7 @@ isloosedir(char *s)
 /*e: function [[isloosedir]] */
 
 /*s: function [[endswith]] */
-int
+bool
 endswith(char *n, char *s)
 {
     int nn, ns;
@@ -140,9 +140,11 @@ mkols(void)
     Objlist *ols;
 
     ols = emalloc(sizeof(Objlist));
-    if((ols->ntop = slurpdir(".git/objects", &ols->top)) == ERROR_NEG1)
+    ols->ntop = slurpdir(".git/objects", &ols->top);
+    if(ols->ntop == ERROR_NEG1)
         sysfatal("read top level: %r");
-    if((ols->npack = slurpdir(".git/objects/pack", &ols->pack)) == ERROR_NEG1)
+    ols->npack = slurpdir(".git/objects/pack", &ols->pack);
+    if(ols->npack == ERROR_NEG1)
         ols->pack = nil;
     ols->fd = -1;
     return ols;

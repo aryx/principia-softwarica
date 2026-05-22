@@ -15,12 +15,16 @@ typedef struct Packf    Packf;
 #define max(x, y) ((x) > (y) ? (x) : (y))
 /*e: macro [[max]] */
 
+/*s: struct [[Metavec]] */
 struct Metavec {
+    // growing_array<ref_own<Meta>> (used = nmeta, allocated = metasz)
     Meta    **meta;
     int nmeta;
     int metasz;
 };
+/*e: struct [[Metavec]] */
 
+/*s: struct [[Meta]] */
 struct Meta {
     Object  *obj;
     vlong   path;
@@ -29,21 +33,29 @@ struct Meta {
     /* The best delta we picked */
     Meta    *head;
     Meta    *prev;
+
+    /*s: [[Meta]] [[delta]] fields */
+    // ref_own<Delta>
     Delta   *delta;
     int ndelta;
     int nchain;
-
+    /*e: [[Meta]] [[delta]] fields */
+    /*s: [[Meta]] [[dtab]] field */
     /* Only used for delta window */
     Dtab    dtab;
+    /*e: [[Meta]] [[dtab]] field */
 
     /* Only used for writing offset deltas */
     vlong   off;
 };
+/*e: struct [[Meta]] */
 
+/*s: struct [[Compout]] */
 struct Compout {
     Biobuf *bfd;
     DigestState *st;
 };
+/*e: struct [[Compout]] */
 
 /*s: struct [[Buf]] */
 struct Buf {
@@ -87,6 +99,7 @@ Object *lruhead;
 Object *lrutail;
 vlong   ncache;
 vlong   cachemax = 128*MiB;
+
 /*s: globals [[packf]] */
 // array<ref_own<Packf>> (len = npackf)
 Packf   *packf;
@@ -97,6 +110,7 @@ int openpacks;
 /*e: global [[openpacks]] */
 
 /*s: function [[clear]] */
+/// ?? -> <>
 static void
 clear(Object *o)
 {
@@ -748,8 +762,10 @@ readloose(Biobuf *f, Object *o, int flag)
     int l;
 
     n = decompress(&d, f, nil);
+    /*s: [[readloose()]] sanity check [[n]] */
     if(n == ERROR_NEG1)
         return ERROR_NEG1;
+    /*e: [[readloose()]] sanity check [[n]] */
 
     s = d;
     ed = d + n;
@@ -770,14 +786,18 @@ readloose(Biobuf *f, Object *o, int flag)
     }
     // else
     sz = strtol(s, &e, 0);
+    /*s: [[readloose()]] sanity check [[e]] */
     if(e == s || *e++ != '\0'){
         werrstr("malformed object header");
         goto error;
     }
+    /*e: [[readloose()]] sanity check [[e]] */
+    /*s: [[readloose()]] sanity check [[sz]] */
     if(sz != n - (e - d)){
         werrstr("mismatched sizes");
         goto error;
     }
+    /*e: [[readloose()]] sanity check [[sz]] */
     o->all = d;
     o->data = e;
     o->size = sz;
@@ -973,11 +993,16 @@ parseauthor(char **str, int *nstr, char **name, vlong *time)
     char *p;
     int n, nm;
 
-    if((p = strchr(*str, '\n')) == nil)
+    p = strchr(*str, '\n');
+    /*s: [[parseauthor()]] sanity check [[p]] */
+    if(p == nil)
         sysfatal("malformed author line");
+    /*e: [[parseauthor()]] sanity check [[p]] */
     n = p - *str;
+    /*s: [[parseauthor()]] sanity check [[n]] */
     if(n >= sizeof(buf))
         sysfatal("overlong author line");
+    /*e: [[parseauthor()]] sanity check [[n]] */
     memset(m, 0, sizeof(m));
     memcpy(buf, *str, n);
     buf[n] = '\0';
@@ -1254,7 +1279,7 @@ error:
 
 /*s: function [[expandprefix]] */
 errorneg1
-expandprefix(Hash *rh, Hash h, int npfx)
+expandprefix(Hash *rh/*OUT*/, Hash h, int npfx)
 {
     int i, ndir;
     fdt fd;
@@ -1382,7 +1407,8 @@ objectcrc(Biobuf *f, Object *o)
 /*e: function [[objectcrc]] */
 
 /*s: function [[indexpack]] */
-int
+/// main(repack.c) | fetchpack -> <>
+errorneg1
 indexpack(char *pack, char *idx, Hash ph)
 {
     char hdr[4*3], buf[8];
@@ -1395,7 +1421,8 @@ indexpack(char *pack, char *idx, Hash ph)
     Hash h;
     int c;
 
-    if((f = Bopen(pack, OREAD)) == nil)
+    f = Bopen(pack, OREAD);
+    if(f == nil)
         return -1;
     if(Bread(f, hdr, sizeof(hdr)) != sizeof(hdr)){
         werrstr("short read on header");
@@ -1413,7 +1440,7 @@ indexpack(char *pack, char *idx, Hash ph)
     obj = eamalloc(nobj, sizeof(Object*));
     valid = eamalloc(nobj, sizeof(char));
     if(interactive)
-        fprint(2, "indexing %d objects:   0%%", nobj);
+        fprint(STDERR, "indexing %d objects:   0%%", nobj);
     while(nvalid != nobj){
         n = 0;
         for(i = 0; i < nobj; i++){
@@ -1718,9 +1745,11 @@ pickdeltas(Meta **meta, int nmeta)
     if(interactive)
         fprint(2, "deltifying %d objects:   0%%", nmeta);
     qsort(meta, nmeta, sizeof(Meta*), deltaordercmp);
+
     for(i = 0; i < nmeta; i++){
         m = meta[i];
         pct = showprogress((i*100) / nmeta, pct);
+
         m->delta = nil;
         m->ndelta = 0;
         if(m->obj->type == GCommit || m->obj->type == GTag)
@@ -1930,8 +1959,9 @@ packoff(char *hdr, vlong off)
 /*e: function [[packoff]] */
 
 /*s: function [[genpack]] */
+/// writepack(odelta = false) -> <>
 static int
-genpack(int fd, Meta **meta, int nmeta, Hash *h, int odelta)
+genpack(fdt fd, Meta **meta, int nmeta, Hash *h, bool odelta)
 {
     int i, nh, nd, res, pct, ret;
     DigestState *st;
@@ -1956,9 +1986,12 @@ genpack(int fd, Meta **meta, int nmeta, Hash *h, int odelta)
     PUTBE32(buf, nmeta);
     if(hwrite(bfd, buf, 4, &st) == -1)
         return -1;
+
     qsort(meta, nmeta, sizeof(Meta*), writeordercmp);
+
     if(interactive)
         fprint(2, "writing %d objects:   0%%", nmeta);
+
     for(i = 0; i < nmeta; i++){
         pct = showprogress((i*100)/nmeta, pct);
         m = meta[i];
@@ -2013,16 +2046,19 @@ error:
 /*e: function [[genpack]] */
 
 /*s: function [[writepack]] */
-int
-writepack(int fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
+/// main(repack.c) -> <>
+errorneg1
+writepack(fdt fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
 {
+    int i;
     Meta **meta;
-    int i, r, nmeta;
+    int nmeta;
+    errorneg1 r;
 
     if((nmeta = readmeta(theirs, ntheirs, ours, nours, &meta)) == -1)
-        return -1;
+        return ERROR_NEG1;
     pickdeltas(meta, nmeta);
-    r = genpack(fd, meta, nmeta, h, 0);
+    r = genpack(fd, meta, nmeta, h, false);
     for(i = 0; i < nmeta; i++)
         freemeta(meta[i]);
     free(meta);

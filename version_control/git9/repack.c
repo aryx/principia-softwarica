@@ -49,45 +49,55 @@ usage(void)
     exits("usage");
 }
 /*e: function [[usage (git9/repack.c)]] */
-
 /*s: function [[main (git9/repack.c)]] */
 void
 main(int argc, char **argv)
 {
-    char path[128], **names;
-    int fd, nrefs;
-    Hash *refs, h;
+    fdt fd;
+    // growing_array<Hash> (len = nrefs)
+    Hash *refs = nil;
+    int nrefs;
+    char **names;
+    Hash h;
     Dir rn;
+    char path[128];
 
     ARGBEGIN{
+    /*s: [[main()]](repack.c) command line processing */
     case 'd':
         chattygit++;
         break;
-    default:
-        usage();
+    /*e: [[main()]](repack.c) command line processing */
+    default: usage();
     }ARGEND;
 
     gitinit(nil, 0, nil);
-    refs = nil;
-    if((nrefs = listrefs(&refs, &names)) == -1)
+    nrefs = listrefs(&refs, &names);
+    /*s: [[main()]](repack.c) sanity check [[nrefs]] */
+    if(nrefs == -1)
         sysfatal("load refs: %r");
-    if((fd = create(TMPPATH("pack.tmp"), OWRITE, 0644)) == -1)
+    /*e: [[main()]](repack.c) sanity check [[nrefs]] */
+    fd = create(TMPPATH("pack.tmp"), OWRITE, 0644);
+    /*s: [[main()]](repack.c) sanity check [[fd]] */
+    if(fd == -1)
         sysfatal("open %s: %r", TMPPATH("pack.tmp"));
+    /*e: [[main()]](repack.c) sanity check [[fd]] */
+
     if(writepack(fd, refs, nrefs, nil, 0, &h) == -1)
         sysfatal("writepack: %r");
-    if(indexpack(TMPPATH("pack.tmp"), TMPPATH("idx.tmp"), h) == -1)
+    if(indexpack(TMPPATH("pack.tmp"), TMPPATH("idx.tmp"), h) == ERROR_NEG1)
         sysfatal("indexpack: %r");
     close(fd);
 
     nulldir(&rn);
     rn.name = path;
     snprint(path, sizeof(path), "%H.pack", h);
-    if(dirwstat(TMPPATH("pack.tmp"), &rn) == -1)
+    if(dirwstat(TMPPATH("pack.tmp"), &rn) == ERROR_NEG1)
         sysfatal("rename pack: %r");
     snprint(path, sizeof(path), "%H.idx", h);
-    if(dirwstat(TMPPATH("idx.tmp"), &rn) == -1)
+    if(dirwstat(TMPPATH("idx.tmp"), &rn) == ERROR_NEG1)
         sysfatal("rename pack: %r");
-    if(cleanup(h) == -1)
+    if(cleanup(h) == ERROR_NEG1)
         sysfatal("cleanup: %r");
     exits(nil);
 }
