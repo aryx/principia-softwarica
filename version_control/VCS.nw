@@ -9319,6 +9319,8 @@ if(~ $#upstream 0){
 %                baseurl = xxx
 % in ~/lib/git/config file
 
+% note that url can be local! can be from a local git clone!
+% (hence servelocal() later)
 
 <<[[init.rc]] set origin in [[.git/config]]>>=
 if(! ~ $#upstream 0){
@@ -9332,6 +9334,7 @@ if(! ~ $#upstream 0){
 \section{Client/server architecture}
 % better in Networking chapter?
 % or introduce just enough and say will explain network code in next chapter
+% moreover client/server also use for local exchange (where a git/serve is forked)
 
 %TODO: put nice pics of see different commands for different zones
 % with stash, pull, push, add, commit, etc.
@@ -9429,18 +9432,8 @@ fn update{
         upstream=$1
         url=$2
         dflag=()
-        if(! ~ $#debug 0)
-                dflag='-d'
-        heads=`$nl{
-                # safe to split in awk, branch names may not
-                # have spaces or newlines.
-                git/query `$nl{
-                        cd .git/refs && \
-                        walk -f -emp heads remotes | \
-                        sort -rn | \
-                        awk '{print $2}'
-                }
-        }
+        <<[[update()]](pull.rc) set [[dflag]]>>
+        <<[[update()]](pull.rc) set [[heads]]>>
         if(! ~ $#heads 0)
                 heads='-h'^$heads
         {git/get $dflag -u $upstream $heads $url >[2=3] || die $status} | awk '
@@ -9460,11 +9453,34 @@ fn update{
 @
 %ori: dead:   dir=$3
 
+% walk -f -emp ? note that it's regular walk! not git/walk
+
 % git/get!
 
 % wow, tricky
 
 % print outfile > "/env/outfile" ?? what does it mean in awk?
+
+
+<<[[update()]](pull.rc) set [[heads]]>>=
+heads=`$nl{
+        # safe to split in awk, branch names may not
+        # have spaces or newlines.
+        git/query `$nl{
+                cd .git/refs && \
+                walk -f -emp heads remotes | \
+                sort -rn | \
+                awk '{print $2}'
+        }
+}
+@
+
+
+<<[[update()]](pull.rc) set [[dflag]]>>=
+if(! ~ $#debug 0)
+        dflag='-d'
+@
+%$
 
 
 \subsection{merge}
@@ -9561,7 +9577,6 @@ main(int argc, char **argv)
         usage();
 
     gitinit(nil, 0, nil);
-
 
     if(gitconnect(&c, argv[0], "upload") == ERROR_NEG1)
         sysfatal("could not dial %s: %r", argv[0]);
@@ -9682,7 +9697,8 @@ if(pid == -1)
 
 
 \subsection{[[fetchpack()]]}
-
+%alt: in separate \section but want git/fs adv features as \subsection
+% and adv features depend on fetchpack
 
 <<function [[fetchpack]]>>=
 int
@@ -10283,13 +10299,16 @@ case 'b':   fetchbranch=EARGF(usage()); break;
 
 
 
+
+
 \section{Pushing changes to another repository: [[git push]]}
 
 \subsection{Usage}
 
 <<[[push.rc]] command line processing>>=
 flagfmt='a:pushall, b:branch branch, f:force, d:debug,
-         r:remove remove, u:upstream upstream' args=''
+         r:remove remove, u:upstream upstream'
+args=''
 eval `{auxrc/getflags $*} || exec auxrc/usage
 @
 
@@ -10297,11 +10316,10 @@ eval `{auxrc/getflags $*} || exec auxrc/usage
 
 <<git9/push.rc>>=
 #!/bin/rc -e
+
 rfork en
 . /lib/git/common.rc
-
 gitup
-
 <<[[push.rc]] command line processing>>
 if(! ~ $#* 0)
         exec auxrc/usage
@@ -10312,6 +10330,7 @@ if(~ $#branch 0)
         branch=`{git/branch}
 if(~ $#branch 0)
         die 'no branches'
+
 if(~ $force 1)
         force=-f
 if(~ $debug 1)
@@ -10319,32 +10338,41 @@ if(~ $debug 1)
 
 if(~ $#upstream 0)
         upstream=origin
-
 remotes=`$nl{git/conf -a 'remote "'$upstream'".url'}
 if(~ $#remotes 0)
         remotes=$upstream
+
 branch=-b^$branch
 if(! ~ $#remove 0)
         remove=-r^$remove
+
 for(remote in $remotes){
         updates=`$nl{git/send $debug $force $branch $remove $remote} || die $status
         for(ln in $updates){
-                u=`{echo $ln}
-                refpath=`{echo $u(2) | subst '^refs/heads/' '.git/refs/remotes/'$upstream'/'}
-                switch($u(1)){
-                case update;
-                        mkdir -p `{basename -d $refpath}
-                        echo $u(4) > $refpath
-                        echo $u(2)^':' $u(3) '=>' $u(4)
-                case delete;
-                        echo $u(2)^': removed'
-                        rm -f $refpath
-                case uptodate;
-                        echo $u(2)^': up to date'
-                }
+               <<[[push.rc]] when iterating [[remotes]] and [[updates]] line [[ln]]>>
         }
 }
 exit ''
+@
+
+% git/send!
+
+
+% ???
+<<[[push.rc]] when iterating [[remotes]] and [[updates]] line [[ln]]>>=
+ u=`{echo $ln}
+ refpath=`{echo $u(2) | subst '^refs/heads/' '.git/refs/remotes/'$upstream'/'}
+ switch($u(1)){
+ case update;
+         mkdir -p `{basename -d $refpath}
+         echo $u(4) > $refpath
+         echo $u(2)^':' $u(3) '=>' $u(4)
+ case delete;
+         echo $u(2)^': removed'
+         rm -f $refpath
+ case uptodate;
+         echo $u(2)^': up to date'
+ }
 @
 
 
@@ -10356,6 +10384,9 @@ exit ''
 
 \subsection{Usage}
 
+%ex: in push.rc:
+%        updates=`$nl{git/send $debug $force $branch $remove $remote} || die $status
+
 <<function [[usage (git9/send.c)]]>>=
 void
 usage(void)
@@ -10364,6 +10395,7 @@ usage(void)
     exits("usage");
 }
 @
+%ori: add -d -f -r xxx -a, -b branch
 
 \subsection{[[main()]]}
 
@@ -10418,9 +10450,15 @@ main(int argc, char **argv)
 }
 @
 
+% similar to git/get, but "receive" this time and sendpack
+% not writepack
+
 %\subsection{[[servelocal("receive")]]}
 
 \subsection{[[sendpack()]]}
+
+% sendpack() has a simpler signature than writepack():
+%   writepack(fdt fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
 
 <<function [[sendpack]]>>=
 int
