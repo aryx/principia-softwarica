@@ -1205,191 +1205,12 @@ parsecaps(char *caps, Conn *c)
 }
 @
 
-<<function [[tracepkt]]>>=
-void
-tracepkt(int v, char *pfx, char *b, int n)
-{
-    char *f;
-    int o, i;
-
-    if(chattygit < v)
-        return;
-    o = 0;
-    f = emalloc(n*4 + 1);
-    for(i = 0; i < n; i++){
-        if(isprint(b[i])){
-            f[o++] = b[i];
-            continue;
-        }
-        f[o++] = '\\';
-        switch(b[i]){
-        case '\\':  f[o++] = '\\';  break;
-        case '\n':  f[o++] = 'n';   break;
-        case '\r':  f[o++] = 'r';   break;
-        case '\v':  f[o++] = 'v';   break;
-        case '\0':  f[o++] = '0';   break;
-        default:
-            f[o++] = 'x';
-            f[o++] = "0123456789abcdef"[(b[i]>>4)&0xf];
-            f[o++] = "0123456789abcdef"[(b[i]>>0)&0xf];
-            break;
-        }
-    }
-    f[o] = '\0';
-    fprint(2, "%s %04x:\t%s\n", pfx, n, f);
-    free(f);
-}
-@
-
-<<function [[readpkt]]>>=
-int
-readpkt(Conn *c, char *buf, int nbuf)
-{
-    char len[5];
-    char *e;
-    int n;
-
-    if(readn(c->rfd, len, 4) != 4){
-        werrstr("pktline: short read from transport");
-        return -1;
-    }
-    len[4] = 0;
-    n = strtol(len, &e, 16);
-    if(n == 0){
-        dprint(1, "=r=> 0000\n");
-        return 0;
-    }
-    if(e != len + 4 || n <= 4)
-        sysfatal("pktline: bad length '%s'", len);
-    n  -= 4;
-    if(n >= nbuf)
-        abort();//sysfatal("pktline: undersize buffer");
-    if(readn(c->rfd, buf, n) != n)
-        return -1;
-    if(n > 4 && strncmp(buf, "ERR ", 4) == 0){
-        if((e = strrchr(buf, '\n')) != nil)
-            *e = '\0';
-        werrstr("%s", buf + 4);
-        return -1;
-    }
-    buf[n] = 0;
-    tracepkt(1, "=r=>", buf, n);
-    return n;
-}
-@
-
-<<function [[writepkt]]>>=
-int
-writepkt(Conn *c, char *buf, int nbuf)
-{
-    char len[5];
 
 
-    snprint(len, sizeof(len), "%04x", nbuf + 4);
-    if(write(c->wfd, len, 4) != 4)
-        return -1;
-    if(write(c->wfd, buf, nbuf) != nbuf)
-        return -1;
-    tracepkt(1, "<=w=", buf, nbuf);
-    return 0;
-}
-@
 
-<<function [[fmtpkt]]>>=
-int
-fmtpkt(Conn *c, char *fmt, ...)
-{
-    char pkt[Pktmax];
-    va_list ap;
-    int n;
 
-    va_start(ap, fmt);
-    n = vsnprint(pkt, sizeof(pkt), fmt, ap);
-    n = writepkt(c, pkt, n);
-    va_end(ap);
-    return n;
-}
-@
 
-<<function [[flushpkt]]>>=
-int
-flushpkt(Conn *c)
-{
-    dprint(1, "<=w= 0000\n");
-    return write(c->wfd, "0000", 4);
-}
-@
 
-<<function [[grab]]>>=
-static void
-grab(char *dst, int n, char *p, char *e)
-{
-    int l;
-
-    l = e - p;
-    if(l >= n)
-        sysfatal("overlong component");
-    memcpy(dst, p, l);
-    dst[l] = 0;
-}
-@
-
-<<function [[parseuri]]>>=
-static int
-parseuri(char *uri, char *proto, char *host, char *port, char *path)
-{
-    char *s, *p, *q;
-    int hasport;
-
-    print("uri: \"%s\"\n", uri);
-
-    p = strstr(uri, "://");
-    if(p == nil)
-        snprint(proto, Nproto, "ssh");
-    else if(strncmp(uri, "git+", 4) == 0)
-        grab(proto, Nproto, uri + 4, p);
-    else
-        grab(proto, Nproto, uri, p);
-    *port = 0;
-    hasport = 1;
-    if(strcmp(proto, "git") == 0)
-        snprint(port, Nport, "9418");
-    else if(strncmp(proto, "https", 5) == 0)
-        snprint(port, Nport, "443");
-    else if(strncmp(proto, "http", 4) == 0)
-        snprint(port, Nport, "80");
-    else if(strncmp(proto, "hjgit", 5) == 0)
-        snprint(port, Nport, "17021");
-    else if(strncmp(proto, "gits", 5) == 0)
-        snprint(port, Nport, "9419");
-    else
-        hasport = 0;
-    s = (p != nil) ? p + 3 : uri;
-    p = nil;
-    if(!hasport){
-        p = strstr(s, ":");
-        if(p != nil)
-            p++;
-    }
-    if(p == nil)
-        p = strstr(s, "/");
-    if(p == nil || strlen(p) == 1){
-        werrstr("missing path");
-        return -1;
-    }
-
-    q = memchr(s, ':', p - s);
-    if(q){
-        grab(host, Nhost, s, q);
-        grab(port, Nport, q + 1, p);
-    }else{
-        grab(host, Nhost, s, p);
-    }
-
-    snprint(path, Npath, "%s", p);
-    return 0;
-}
-@
 
 <<function [[webclone]]>>=
 static int
@@ -1831,12 +1652,11 @@ struct Map {
     Hash    theirs;
 };
 
-int sendall;
-int force;
-int nbranch;
-char **branch;
-char *removed[128];
-int nremoved;
+<<global [[sendall]](send.c)>>
+<<global [[force]](send.c)>>
+<<globals [[branch]](send.c)>>
+<<globals [[removed]](send.c)>>
+
 int npacked;
 int nsent;
 
