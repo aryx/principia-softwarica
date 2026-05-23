@@ -454,8 +454,8 @@ clear(Object *o)
 @
 % leak? no free(o) itself? no remain in memory, but unloaded, unparsed
 
-% no free(o->data)? leak? no cos data = all for Blob? or just pointer
-% passed all without header I think
+% no free(o->data)? leak? NO cos data = all for Blob and just pointer
+% in all without header
 
 
 <<[[clear()]] assert [[o->flag]]>>=
@@ -486,7 +486,7 @@ Tinfo   *tree;
 <<struct [[Tinfo]]>>=
 struct Tinfo {
     /* Tree */
-    // array<ref_own<Dirent>> len = nent
+    // array<ref_own<Dirent>> (len = nent)
     Dirent  *ent;
     int nent;
 };
@@ -639,7 +639,7 @@ case GCommit:
     break;
 @
 
-%TODO: leak msg? or part of data?
+%leak msg? or part of data probably?
 
 <<global [[zcommit]](ref.c)>>=
 static Object zcommit = {
@@ -658,7 +658,7 @@ static Object zcommit = {
 
 <<struct [[Objset]]>>=
 struct Objset {
-    // hash_array<Hash, ref<Object>>, used = nobj (allocated = sz)
+    // hash_array<Hash, ref<Object>> (used = nobj, allocated = sz)
     Object  **obj;
     int nobj;
     int sz;
@@ -767,15 +767,14 @@ oshas(Objset *s, Hash h)
 }
 @
 
-
-
 %alt: \subsection{[[Objlist]]}
+% but seems used only in git/fs so better explain it there
 
 \subsection{Object queue: [[Objq]]}
 
 % just for commit objects, and sorted by ctime but in a weird way
-
-% used only in paint() for git/query?
+% used in paint() for git/query, for fetchpack(), and for git/log too
+% useful for BFS of commit DAG
 
 <<struct [[Objq]]>>=
 struct Objq {
@@ -907,7 +906,7 @@ qpop(Objq *q, Qelt *e)
 \label{sec:index}
 
 % why called an index?
-% (I say I will answer this question here in Overview.nw)
+%TODO: (I say I will answer this question here in Overview.nw)
 
 \subsection{Status character: [[RMAUT]]}
 
@@ -936,6 +935,7 @@ int printflg;
 struct Idxent {
     // ref_own<string>
     char    *path;
+    // option<Qid>? (None = 0)
     Qid qid;
     int mode;
     // global counter (used in idxcmp())
@@ -1044,7 +1044,8 @@ readobject(Hash h)
 {
     Object *o;
 
-    if((o = readidxobject(nil, h, 0)) == nil)
+    o = readidxobject(nil, h, 0);
+    if(o == nil)
         return nil;
     parseobject(o);
     ref(o);
@@ -1052,6 +1053,9 @@ readobject(Hash h)
 }
 @
 % no cache(o); here?
+
+% 0 is for flag.
+% nil because no biobuf to read pack from
 
 \subsection{[[readidxobject()]] part 1}
 
@@ -1140,7 +1144,7 @@ if(flag & Cidx)
 
 <<function [[readloose]]>>=
 /// readobject -> readidxobject | ??? -> <>
-static int
+static errorneg1
 readloose(Biobuf *f, Object *o, int flag)
 {
     struct { char *tag; int type; } *p, types[] = {
@@ -1190,7 +1194,7 @@ error:
 }
 @
 
-% setting o->all, and o->data!
+% setting o->all, and o->data! endptr past the size number
 
 <<[[readloose()]] sanity check [[n]]>>=
 if(n == ERROR_NEG1)
@@ -1314,7 +1318,9 @@ bappend(void *p, void *src, int len)
 % nothing to parse,  direct data after decompression
 
 % still need to adjust the pointers! ->data = ... derived from all, where
-% is the code?
+% is the code? in readloose() just before set Cloaded
+%alt? move code that sets ->data here maybe?
+% and say also used for reading tree/commit in next subsections
 
 \subsection{Reading a tree}
 
@@ -1336,12 +1342,10 @@ parsetree(Object *o)
     nent = 0;
     entsz = 16;
     ent = eamalloc(entsz, sizeof(Dirent));  
+
     o->tree = emalloc(sizeof(Tinfo));
     while(p != ep){
-        if(nent == entsz){
-            entsz *= 2;
-            ent = earealloc(ent, entsz, sizeof(Dirent));    
-        }
+        <<[[parsetree()]] realloc [[ent]] if needed>>
         t = &ent[nent++];
         m = strtol(p, &p, 8);
         if(*p != ' ')
@@ -1377,6 +1381,12 @@ parsetree(Object *o)
 }
 @
 
+<<[[parsetree()]] realloc [[ent]] if needed>>=
+if(nent == entsz){
+    entsz *= 2;
+    ent = earealloc(ent, entsz, sizeof(Dirent));    
+}
+@
 
 \subsection{Reading a commit}
 
@@ -1524,11 +1534,9 @@ readref(Hash *h/*OUT*/, char *ref)
     if(strcmp(ref, "HEAD") == 0){
         snprint(buf, sizeof(buf), ".git/HEAD");
         f = open(buf, OREAD);
-        if(f == ERROR_NEG1)
-            return ERROR_NEG1;
+        <<[[readref]](ref.c) sanity check [[f]]>>
         n = readn(f, s, sizeof(s) - 1);
-        if(n == ERROR_NEG1)
-            return ERROR_NEG1;
+        <<[[readref]](ref.c) sanity check [[n]]>>
         // else
         s[n] = '\0';
         strip(s);
@@ -1551,6 +1559,16 @@ found:
 %ori: forgot closing open file on .git/HEAD? and also on pfx
 
 % why those extra ref: xxx ? useful?
+
+
+<<[[readref]](ref.c) sanity check [[f]]>>=
+if(f == ERROR_NEG1)
+    return ERROR_NEG1;
+@
+<<[[readref]](ref.c) sanity check [[n]]>>=
+if(n == ERROR_NEG1)
+    return ERROR_NEG1;
+@
 
 \subsection{[[.refs/]] prefixes}
 
@@ -1799,7 +1817,8 @@ writeobj(Hash *h/*OUT*/, char *hdr, int nhdr, char *dat, int ndat)
     close(fd);
     snprint(o, sizeof(o), ".git/objects/%c%c/%s", s[0], s[1], s + 2);
     if(readobject(*h) == nil){
-        if((f = Bopen(o, OWRITE)) == nil)
+        f = Bopen(o, OWRITE);
+        if(f == nil)
             sysfatal("could not open %s: %r", o);
         <<[[writeobj()]] compress [[b]] in [[f]]>>
         Bterm(f);
@@ -2310,7 +2329,6 @@ main(int argc, char **argv)
     <<[[main()]](fs.c) command line processing>>
     default: usage(); break;
     }ARGEND;
-
     if(argc != 0)
         usage();
 
@@ -10685,6 +10703,7 @@ readours(Hash **tailp, char ***refp)
 
 %trans: finally can understand git clone! just degenerated
 % case of git pull when have nothing locally so need to fetch everything
+% need fetch every objects
 
 \subsection{Usage}
 
