@@ -21,6 +21,7 @@
 %   https://www.leshenko.net/p/ugit/#
 %   but why not dulwich??
 % - https://evilgeniuslabs.ca/blog/from-cvs-to-git-thirty-years-of-source-control
+%   (but bad black matrix background, need CSS cleaner)
 
 %------------------------------------------------------------------------------
 %history: 
@@ -339,12 +340,6 @@ objcmp(void *pa, void *pb)
     b = *(Object**)pb;
     return memcmp(a->hash.h, b->hash.h, sizeof(a->hash.h));
 }
-@
-
-
-<<[[Object]] extra fields>>=
-Object  *next;
-Object  *prev;
 @
 
 
@@ -753,7 +748,7 @@ oshas(Objset *s, Hash h)
 
 \subsection{Object queue: [[Objq]]}
 
-% just for commit objects, and sorted by ctime but in a weird way
+% just for commit objects, and sorted by ctime (so displayed in that order in git/log)
 % used in paint() for git/query, for fetchpack(), and for git/log too
 % useful for BFS of commit DAG
 
@@ -771,7 +766,9 @@ struct Objq {
 struct Qelt {
     // ref<Object>
     Object  *o;
+
     vlong   ctime;
+
     //enum<Qcolor>
     int color;
 };
@@ -1028,6 +1025,7 @@ readobject(Hash h)
     o = readidxobject(nil, h, 0);
     if(o == nil)
         return nil;
+    // else
     parseobject(o);
     ref(o);
     return o;
@@ -1097,7 +1095,6 @@ error:
 @
 
 % parseobject()!
-
 % refreshpacks()!
 
 
@@ -1154,6 +1151,8 @@ error:
     return ERROR_NEG1;
 }
 @
+
+% set the o->type which will be used later in parseobject(o)
 
 % setting o->all, and o->data! endptr past the size number
 
@@ -1979,6 +1978,7 @@ mkcommit(Hash *c/*OUT*/, vlong date, Hash tree)
     free(s);
 }
 @
+%git9: same than real git format?
 
 \section{References}
 
@@ -2091,7 +2091,8 @@ gitinit(char *root, int nroot, int *nrel)
         findrepo(root, nroot, nrel);
         snprint(repo, sizeof(repo), "%s/.git", root);
     }
-    if((d = dirstat(repo)) == nil)
+    d = dirstat(repo);
+    if(d == nil)
         sysfatal("stat %s: %r", repo);
     gitdirmode = d->mode & 0777;
     free(d);
@@ -2447,6 +2448,7 @@ Objlist *ols;
 Object  *olslast;
 @
 
+%XXX
 % move earlier in Core DS chapter?
 <<struct [[Objlist]]>>=
 struct Objlist {
@@ -2501,6 +2503,7 @@ olsfree(Objlist *ols)
 
 \subsection{[[Uqid]] and [[Cache]]}
 
+%XXX
 % ?? U for ? unique?
 <<struct [[Uqid]]>>=
 struct Uqid {
@@ -2518,6 +2521,7 @@ struct Uqid {
 
 % ?? move in opti?
 
+%XXX
 <<struct [[Cache]]>>=
 struct Cache {
     // growing_array<ref_own<Uqid>> (len = n)
@@ -2528,6 +2532,7 @@ struct Cache {
 @
 % bucket
 
+%XXX
 <<global [[uqidcache]]>>=
 // hash<qid, Uqid>
 Cache   uqidcache[512];
@@ -3006,6 +3011,7 @@ objgen(int i, Dir *d, void *p)
     aux = p;
     c = crumb(aux, 0);
 
+
     if(!aux->ols)
         aux->ols = mkols();
     ols = aux->ols;
@@ -3059,21 +3065,7 @@ mkols(void)
 }
 @
 
-<<function [[slurpdir]]>>=
-int
-slurpdir(char *p, Dir **d)
-{
-    int r;
-    fdt f;
-
-    f = open(p, OREAD);
-    if(f == ERROR_NEG1)
-        return ERROR_NEG1;
-    r = dirreadall(f, d);
-    close(f);
-    return r;
-}   
-@
+% slurpdir in appendix
 
 \subsubsection{[[gitwalk1()]] for [[Qobject]]}
 
@@ -4400,14 +4392,16 @@ diffcommits(Hash ah, Hash bh)
     if(!hasheq(&ah, &Zhash) && (a = readobject(ah)) != nil){
         if(a->type != GCommit)
             sysfatal("not commit: %H", ah);
-        if((at = readobject(a->commit->tree)) == nil)
+        at = readobject(a->commit->tree);
+        if(at == nil)
             sysfatal("bad hash %H", a->commit->tree);
         unref(a);
     }
     if(!hasheq(&bh, &Zhash) && (b = readobject(bh)) != nil){
         if(b->type != GCommit)
             sysfatal("not commit: %H", ah);
-        if((bt = readobject(b->commit->tree)) == nil)
+        bt = readobject(b->commit->tree);
+        if(bt == nil)
             sysfatal("bad hash %H", b->commit->tree);
         unref(b);
     }
@@ -4452,9 +4446,11 @@ difftrees(Object *a, Object *b)
                 if(npath >= nelem(path))
                     sysfatal("path too deep");
                 path[npath++] = ap->name;
-                if((a = readobject(ap->h)) == nil)
+                a = readobject(ap->h);
+                if(a == nil)
                     sysfatal("bad hash %H", ap->h);
-                if((b = readobject(bp->h)) == nil)
+                b = readobject(bp->h);
+                if(b == nil)
                     sysfatal("bad hash %H", bp->h);
                 difftrees(a, b);
                 unref(a);
@@ -4797,9 +4793,11 @@ loadwdir(char *path)
         return;
     // else
 
-    if((fd = open(path, OREAD)) < 0)
+    fd = open(path, OREAD);
+    if(fd < 0)
         goto error;
-    if((e = dirfstat(fd)) == nil)
+    e = dirfstat(fd);
+    if(e == nil)
         fprint(STDERR, "fstat: %r");
     if(e->qid.type & QTDIR)
         while((n = dirread(fd, &d)) > 0){
@@ -13408,6 +13406,17 @@ Cexist  = 1 << 5,
 % >>
 
 
+<<globals [[lruxxx]]>>=
+Object *lruhead;
+Object *lrutail;
+vlong   ncache;
+@
+
+<<[[Object]] extra fields>>=
+Object  *next;
+Object  *prev;
+@
+
 <<function [[cache]]>>=
 void
 cache(Object *o)
@@ -14021,7 +14030,25 @@ endswith(char *n, char *s)
 @
 
 %%\section{Common functions}
-%%\section{File utilities}
+
+\section{File and directory utilities}
+
+<<function [[slurpdir]]>>=
+int
+slurpdir(char *p, Dir **d)
+{
+    int r;
+    fdt f;
+
+    f = open(p, OREAD);
+    if(f == ERROR_NEG1)
+        return ERROR_NEG1;
+    r = dirreadall(f, d);
+    close(f);
+    return r;
+}   
+@
+
 %%\section{Directory utilities}
 %%\section{Generalized IO}
 %%\section{Binary IO}
