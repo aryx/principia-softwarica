@@ -4,29 +4,39 @@
 
 #include "git.h"
 
-char *fetchbranch;
+/*s: global [[upstream]](get.c) */
 char *upstream = "origin";
+/*e: global [[upstream]](get.c) */
+/*s: globals [[heads]](get.c) */
 Hash heads[64];
 int nheads;
-int listonly;
+/*e: globals [[heads]](get.c) */
+/*s: global [[listonly]](get.c) */
+bool listonly;
+/*e: global [[listonly]](get.c) */
+/*s: global [[fetchbranch]](get.c */
+char *fetchbranch;
+/*e: global [[fetchbranch]](get.c */
 
 /*s: function [[okrefname]] */
+/// fetchpack -> <> -> okref
 /*
  * Checks the rules for a refname at
  * git/Documentation/protocol-common.txt
  */
-int
+bool
 okrefname(char *s)
 {
     if(strcmp(s, "HEAD") == 0)
-        return 1;
+        return true;
     if(strncmp(s, "refs/", 5) == 0)
         return okref(s);
-    return 0;
+    return false;
 }
 /*e: function [[okrefname]] */
 
 /*s: function [[resolveremote]] */
+/// fetchpack -> <>
 int
 resolveremote(Hash *h, char *ref)
 {
@@ -64,6 +74,7 @@ resolveremote(Hash *h, char *ref)
 /*e: function [[resolveremote]] */
 
 /*s: function [[rename]] */
+/// fetchpack -> <>
 int
 rename(char *pack, char *idx, Hash h)
 {
@@ -87,8 +98,9 @@ rename(char *pack, char *idx, Hash h)
 /*e: function [[rename]] */
 
 /*s: function [[checkhash]] */
+/// fetchpack -> <>
 int
-checkhash(int fd, vlong sz, Hash *hcomp)
+checkhash(fdt fd, vlong sz, Hash *hcomp)
 {
     DigestState *st;
     Hash hexpect;
@@ -148,7 +160,7 @@ mkoutpath(char *path)
 /*e: function [[mkoutpath]] */
 
 /*s: function [[prefixed]] */
-int
+bool
 prefixed(char *s, char *pfx)
 {
     return strncmp(s, pfx, strlen(pfx)) == 0;
@@ -156,6 +168,7 @@ prefixed(char *s, char *pfx)
 /*e: function [[prefixed]] */
 
 /*s: function [[branchmatch]] */
+/// fetchpack -> <>
 int
 branchmatch(char *br, char *pat)
 {
@@ -190,6 +203,7 @@ fail(char *pack, char *idx, char *msg, ...)
 /*e: function [[fail]] */
 
 /*s: function [[enqueueparent]] */
+/// fetchpack -> <>
 void
 enqueueparent(Objq *q, Object *o)
 {
@@ -208,6 +222,7 @@ enqueueparent(Objq *q, Object *o)
 /*e: function [[enqueueparent]] */
 
 /*s: function [[fmtcaps]] */
+/// fetchpack -> <>
 void
 fmtcaps(Conn *c, char *caps, int ncaps)
 {
@@ -227,6 +242,7 @@ fmtcaps(Conn *c, char *caps, int ncaps)
 /*e: function [[fmtcaps]] */
 
 /*s: function [[sbread]] */
+/// fetchpack -> <>
 int
 sbread(Conn *c, char *buf, int nbuf, char **pbuf)
 {
@@ -319,6 +335,7 @@ fetchpack(Conn *c)
         flushpkt(c);
         goto showrefs;
     }
+    // else
 
     if(writephase(c) == -1)
         sysfatal("write: %r");
@@ -514,27 +531,32 @@ main(int argc, char **argv)
     Conn c;
 
     ARGBEGIN{
-    case 'b':   fetchbranch=EARGF(usage()); break;
+    /*s: [[main()]](get.c) command line processing */
     case 'u':   upstream=EARGF(usage());    break;
-    case 'd':   chattygit++;            break;
-    case 'l':   listonly++;         break;
+    /*x: [[main()]](get.c) command line processing */
     case 'h':
         s = EARGF(usage());
         if(nheads < nelem(heads))
             if(hparse(&heads[nheads], s) == 0)
                 nheads++;
         break;
+    /*x: [[main()]](get.c) command line processing */
+    case 'l':   listonly++;         break;
+    /*x: [[main()]](get.c) command line processing */
+    case 'b':   fetchbranch=EARGF(usage()); break;
+    /*x: [[main()]](get.c) command line processing */
+    case 'd':   chattygit++;    break;
+    /*e: [[main()]](get.c) command line processing */
     default: usage(); break;
     }ARGEND;
-
-    gitinit(nil, 0, nil);
-
     if(argc != 1)
         usage();
 
-    if(gitconnect(&c, argv[0], "upload") == -1)
+    gitinit(nil, 0, nil);
+
+    if(gitconnect(&c, argv[0], "upload") == ERROR_NEG1)
         sysfatal("could not dial %s: %r", argv[0]);
-    if(fetchpack(&c) == -1)
+    if(fetchpack(&c) == ERROR_NEG1)
         sysfatal("fetch failed: %r");
     closeconn(&c);
     exits(nil);

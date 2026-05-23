@@ -64,9 +64,7 @@ main(int argc, char **argv)
 
     ARGBEGIN{
     /*s: [[main()]](repack.c) command line processing */
-    case 'd':
-        chattygit++;
-        break;
+    case 'd':   chattygit++;    break;
     /*e: [[main()]](repack.c) command line processing */
     default: usage();
     }ARGEND;

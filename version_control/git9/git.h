@@ -67,12 +67,18 @@ enum Cxxx {
 };
 /*e: enum [[Cxxx]] */
 
+/*s: enum [[Connxxx]] */
 enum {
     ConnGit,
-    ConnGit9,
-    ConnSsh,
+    /*s: [[Connxxx]] other cases */
     ConnHttp,
+    /*x: [[Connxxx]] other cases */
+    ConnSsh,
+    /*x: [[Connxxx]] other cases */
+    ConnGit9,
+    /*e: [[Connxxx]] other cases */
 };
+/*e: enum [[Connxxx]] */
 
 /*s: struct [[Objlist]] */
 struct Objlist {
@@ -113,25 +119,31 @@ struct Hash {
 };
 /*e: struct [[Hash]] */
 
+/*s: struct [[Conn]] */
 struct Conn {
+    // enum<Connxxx>
     int type;
+
     fdt rfd;
     fdt wfd;
 
-    /* capabilities */
+    /*s: [[Conn]] capability fields */
     char    symfrom[256];
     char    symto[256];
     char    multiack;
     char    sideband;
     char    sideband64k;
     char    report;
-
+    /*e: [[Conn]] capability fields */
+    /*s: [[Conn]] http fields */
     /* only used by http */
     fdt cfd;
     char *url;  /* note, first GET uses a different url */
     char *dir;
     char *direction;
+    /*e: [[Conn]] http fields */
 };
+/*e: struct [[Conn]] */
 
 /*s: struct [[Dirent]] */
 struct Dirent {

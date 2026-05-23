@@ -395,7 +395,8 @@ dialssh(Conn *c, char *host, char *, char *path, char *direction)
 /*e: function [[dialssh]] */
 
 /*s: function [[githandshake]] */
-static int
+/// dialgit | servelocal -> <>
+static errorneg1
 githandshake(Conn *c, char *host, char *path, char *direction)
 {
     char *p, *e, cmd[512];
@@ -406,11 +407,11 @@ githandshake(Conn *c, char *host, char *path, char *direction)
     if(host != nil)
         p = seprint(p + 1, e, "host=%s", host);
     if(writepkt(c, cmd, p - cmd + 1) == -1){
-        fprint(2, "failed to write message\n");
+        fprint(STDERR, "failed to write message\n");
         closeconn(c);
-        return -1;
+        return ERROR_NEG1;
     }
-    return 0;
+    return OK_0;
 }
 /*e: function [[githandshake]] */
 
@@ -458,18 +459,24 @@ initconn(Conn *c, int rd, int wr)
 /*e: function [[initconn]] */
 
 /*s: function [[dialgit]] */
-static int
+/// (main(get.c) | main(send.c)) -> gitconnect -> <>
+static errorneg1
 dialgit(Conn *c, char *host, char *port, char *path, char *direction)
 {
-    char *ds;
-    int fd;
+    char *ds; // dial string
+    fdt fd;
 
-    if((ds = netmkaddr(host, "tcp", port)) == nil)
-        return -1;
+    ds = netmkaddr(host, "tcp", port);
+    /*s: [[dialgit()]] sanity check [[ds]] */
+    if(ds == nil)
+        return ERROR_NEG1;
+    /*e: [[dialgit()]] sanity check [[ds]] */
     dprint(1, "dial %s git-%s-pack %s\n", ds, direction, path);
     fd = dial(ds, nil, nil, nil);
+    /*s: [[dialgit()]] sanity check [[fd]] */
     if(fd == -1)
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[dialgit()]] sanity check [[fd]] */
     c->type = ConnGit;
     c->rfd = fd;
     c->wfd = dup(fd, -1);
@@ -478,23 +485,29 @@ dialgit(Conn *c, char *host, char *port, char *path, char *direction)
 /*e: function [[dialgit]] */
 
 /*s: function [[servelocal]] */
+/// gitconnect -> <>
 static int
 servelocal(Conn *c, char *path, char *direction)
 {
-    int pid, pfd[2];
+    int pid;
+    fdt pfd[2];
 
-    if(pipe(pfd) == -1)
+    if(pipe(pfd) == ERROR_NEG1)
         sysfatal("unable to open pipe: %r");
     pid = fork();
+    /*s: [[servelocal()]] sanity check [[pid]] */
     if(pid == -1)
         sysfatal("unable to fork");
+    /*e: [[servelocal()]] sanity check [[pid]] */
     if(pid == 0){
+        // children
         close(pfd[1]);
         dup(pfd[0], 0);
         dup(pfd[0], 1);
         execl("/bin/git/serve", "serve", "-w", nil);
         sysfatal("exec: %r");
     }
+    // else parent
     close(pfd[0]);
     c->type = ConnGit;
     c->rfd = pfd[1];
@@ -504,52 +517,64 @@ servelocal(Conn *c, char *path, char *direction)
 /*e: function [[servelocal]] */
 
 /*s: function [[localrepo]] */
-static int
+static errorneg1
 localrepo(char *uri, char *path, int npath)
 {
-    int fd;
+    fdt fd;
+
     snprint(path, npath, "%s/.git/../", uri);
     fd = open(path, OREAD);
     if(fd < 0)
-        return -1;
+        return ERROR_NEG1;
     if(fd2path(fd, path, npath) != 0){
         close(fd);
-        return -1;
+        return ERROR_NEG1;
     }
     close(fd);
-    return 0;
+    return OK_0;
 }
 /*e: function [[localrepo]] */
 
 /*s: function [[gitconnect]] */
-/// ??? -> <>
-int
+/// main(get.c) | main(send.c) -> <>
+errorneg1
 gitconnect(Conn *c, char *uri, char *direction)
 {
-    char proto[Nproto], host[Nhost], port[Nport], path[Npath];
+    char path[Npath];
+    /*s: [[gitconnect()]] other locals */
+    char proto[Nproto], host[Nhost], port[Nport];
+    /*e: [[gitconnect()]] other locals */
 
     memset(c, 0, sizeof(Conn));
     c->rfd = c->wfd = c->cfd = -1;
 
-    if(localrepo(uri, path, sizeof(path)) == 0)
+    if(localrepo(uri, path, sizeof(path)) == OK_0)
         return servelocal(c, path, direction);
-
-    if(parseuri(uri, proto, host, port, path) == -1){
+    // else
+    /*s: [[gitconnect()]] when [[uri]] not local repo */
+    if(parseuri(uri, proto, host, port, path) == ERROR_NEG1){
         werrstr("bad uri %s", uri);
-        return -1;
+        return ERROR_NEG1;
     }
-    if(strcmp(proto, "ssh") == 0)
-        return dialssh(c, host, port, path, direction);
-    else if(strcmp(proto, "git") == 0)
+    if(strcmp(proto, "git") == 0)
         return dialgit(c, host, port, path, direction);
-    else if(strcmp(proto, "hjgit") == 0)
-        return dialhjgit(c, host, port, path, direction, 1);
-    else if(strcmp(proto, "gits") == 0)
-        return dialhjgit(c, host, port, path, direction, 0);
+    /*s: [[gitconnect()]] when [[uri]] not local repo, if series on [[proto]] cases */
     else if(strcmp(proto, "http") == 0 || strcmp(proto, "https") == 0)
         return dialhttp(c, host, port, path, direction);
+    /*x: [[gitconnect()]] when [[uri]] not local repo, if series on [[proto]] cases */
+    else if(strcmp(proto, "ssh") == 0)
+        return dialssh(c, host, port, path, direction);
+    /*x: [[gitconnect()]] when [[uri]] not local repo, if series on [[proto]] cases */
+    else if(strcmp(proto, "hjgit") == 0)
+        return dialhjgit(c, host, port, path, direction, 1);
+    /*x: [[gitconnect()]] when [[uri]] not local repo, if series on [[proto]] cases */
+    else if(strcmp(proto, "gits") == 0)
+        return dialhjgit(c, host, port, path, direction, 0);
+    /*e: [[gitconnect()]] when [[uri]] not local repo, if series on [[proto]] cases */
+    // else
     werrstr("unknown protocol %s", proto);
-    return -1;
+    return ERROR_NEG1;
+    /*e: [[gitconnect()]] when [[uri]] not local repo */
 }
 /*e: function [[gitconnect]] */
 
@@ -605,15 +630,19 @@ closeconn(Conn *c)
     close(c->rfd);
     close(c->wfd);
     switch(c->type){
+    /*s: [[closeconn()]] switch [[c->type]] cases */
     case ConnGit:
         break;
+    /*x: [[closeconn()]] switch [[c->type]] cases */
+    case ConnHttp:
+        close(c->cfd);
+        break;
+    /*x: [[closeconn()]] switch [[c->type]] cases */
     case ConnGit9:
     case ConnSsh:
         free(wait());
         break;
-    case ConnHttp:
-        close(c->cfd);
-        break;
+    /*e: [[closeconn()]] switch [[c->type]] cases */
     }
 }
 /*e: function [[closeconn]] */

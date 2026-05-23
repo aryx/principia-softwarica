@@ -32,7 +32,6 @@ findref(char **r, int nr, char *ref)
     return -1;
 }
 /*e: function [[findref]] */
-
 /*s: function [[findkey]] */
 int
 findkey(Map *m, int nm, char *ref)
@@ -240,7 +239,6 @@ usage(void)
     exits("usage");
 }
 /*e: function [[usage (git9/send.c)]] */
-
 /*s: function [[main (git9/send.c)]] */
 void
 main(int argc, char **argv)
@@ -279,13 +277,13 @@ main(int argc, char **argv)
         nbranch++;
         break;
     }ARGEND;
-
-    gitinit(nil, 0, nil);
     if(argc != 1)
         usage();
-    if(gitconnect(&c, argv[0], "receive") == -1)
+
+    gitinit(nil, 0, nil);
+    if(gitconnect(&c, argv[0], "receive") == ERROR_NEG1)
         sysfatal("git connect: %s: %r", argv[0]);
-    if(sendpack(&c) == -1)
+    if(sendpack(&c) == ERROR_NEG1)
         sysfatal("send failed: %r");
     closeconn(&c);
     exits(nil);

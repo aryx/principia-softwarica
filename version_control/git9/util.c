@@ -558,7 +558,7 @@ parseqid(char *s)
  * or is called HEAD, since that's only needed in the
  * clone protocol.
  */
-int
+bool
 okref(char *ref)
 {
     int n, slashed;
