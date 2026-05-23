@@ -6804,6 +6804,7 @@ usage(void)
 %ori: miss -n
 
 <<global [[commitid]](log.c)>>=
+// -c
 // option<ref_own<string>> (if None then defaults to "HEAD")
 char    *commitid;
 @
@@ -9570,6 +9571,7 @@ usage(void)
 %ori: forgot -h!
 
 <<global [[upstream]](get.c)>>=
+// -u
 char *upstream = "origin";
 @
 
@@ -10974,6 +10976,8 @@ grab(char *dst, int n, char *p, char *e)
 
 \section{[[git://]] protocol}
 
+\subsection{[[dialgit()]]}
+
 <<function [[dialgit]]>>=
 /// (main(get.c) | main(send.c)) -> gitconnect -> <>
 static errorneg1
@@ -11036,6 +11040,10 @@ githandshake(Conn *c, char *host, char *path, char *direction)
     return OK_0;
 }
 @
+
+\section{Packet IO}
+
+% not just for git://
 
 \subsection{Writing packets}
 %spirit: usually do read/write order, but here we write first in handshake
@@ -11153,6 +11161,12 @@ usage(void)
 }
 @
 
+<<global [[allowwrite]](serve.c)>>=
+// -w
+bool allowwrite;
+@
+
+
 \subsection{[[main.c]]}
 
 <<function [[main (git9/serve.c)]]>>=
@@ -11163,41 +11177,32 @@ main(int argc, char **argv)
     Conn c;
 
     ARGBEGIN{
-    case 'd':
-        chattygit++;
-        break;
-    case 'r':
-        pathpfx = EARGF(usage());
-        if(*pathpfx != '/')
-            sysfatal("path prefix must begin with '/'");
-        break;
-    case 'w':
-        allowwrite++;
-        break;
-    default:
-        usage();
-        break;
+    <<[[main()]](serve.c) command line processing>>
+    default: usage(); break;
     }ARGEND;
 
     interactive = false;
+
     if(rfork(RFNAMEG) == -1)
+        sysfatal("rfork: %r");
+    if(rfork(RFNOMNT) == -1)
         sysfatal("rfork: %r");
     if(pathpfx != nil){
         if(bind(pathpfx, "/", MREPL) == -1)
             sysfatal("bind: %r");
     }
-    if(rfork(RFNOMNT) == -1)
-        sysfatal("rfork: %r");
 
     initconn(&c, 0, 1);
     if(readpkt(&c, buf, sizeof(buf)) == -1)
         sysfatal("readpkt: %r");
+
     repo = parsecmd(buf, cmd, sizeof(cmd));
     cleanname(repo);
     if(strncmp(repo, "../", 3) == 0)
         fail(&c, "invalid path %s\n", repo);
     if(bind(repo, "/", MREPL) == -1)
         fail(&c, "no such repo: %s", repo);
+
     if(chdir("/") == -1)
         fail(&c, "no such repo");
 
@@ -11213,8 +11218,34 @@ main(int argc, char **argv)
 }
 @
 
-%%\subsection{[[git-upload-pack]]}
-%%\subsection{[[git-receive-pack]]}
+<<[[main()]](serve.c) command line processing>>=
+case 'w':
+    allowwrite=true;
+    break;
+@
+
+\subsection{[[git-upload-pack]]}
+%git9: no actual command with that name, but git has and git9 use as cmd string
+
+\subsection{[[git-receive-pack]]}
+%git9: no actual command with that name, but git has and git9 use as cmd string
+
+
+\subsection{Advanced features}
+
+\subsubsection{[[git/serve -r <prefix>]]}
+
+<<global [[pathpfx]](serve.c)>>=
+char    *pathpfx = nil;
+@
+<<[[main()]](serve.c) command line processing>>=
+case 'r':
+    pathpfx = EARGF(usage());
+    if(*pathpfx != '/')
+        sysfatal("path prefix must begin with '/'");
+    break;
+@
+
 
 %###############################################################################
 \part{Beyond the Basics}
@@ -12714,6 +12745,9 @@ case 'd':   chattygit++;    break;
 case 'd':   chattygit++;    break;
 @
 <<[[main()]](send.c) command line processing>>=
+case 'd':   chattygit++;    break;
+@
+<<[[main()]](serve.c) command line processing>>=
 case 'd':   chattygit++;    break;
 @
 
