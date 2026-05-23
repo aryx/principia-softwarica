@@ -2088,6 +2088,7 @@ main(int argc, char **argv)
     exits(nil);
 }
 @
+%ori: dead nrel? can pass nil instead?
 
 <<signature [[gitinit]]>>=
 void gitinit(char*, int, int*);
@@ -2174,7 +2175,7 @@ findrepo(char *buf, int nbuf, int *nrel)
 @
 %old: was suff -> suffix
 
-% nrel?
+% nrel? seems dead
 
 % search backward, first from full buf until start. reverse search, strrchr (r = reverse)
 
@@ -3776,6 +3777,7 @@ main(int argc, char **argv)
     exits(nil);
 }
 @
+%ori: dead nrel?
 
 % free(h) ?
 
@@ -4667,6 +4669,11 @@ bool staleidx = false;
 @
 % see also cleanidx later for checkedin()
 
+<<global [[nrel]](walk.c)>>=
+int nrel;
+@
+%ori: TODO: use local var like in other file and even remove it?
+
 <<function [[main (git9/walk.c)]]>>=
 void
 main(int argc, char **argv)
@@ -5301,6 +5308,10 @@ exits(xbuf);
 @
 % >>
 
+<<global [[dirty]](walk.c)>>=
+int dirty;
+@
+
 \section{Advanced features}
 
 \subsection{[[git/walk -b <base>]]}
@@ -5358,6 +5369,14 @@ cleanidx = true;
 case 'r':
     findslashes(EARGF(usage()));
     break;
+@
+
+
+<<global [[relapath]](walk.c)>>=
+char    relapath[1024];
+@
+<<global [[nslash]](walk.c)>>=
+int nslash;
 @
 
 <<function [[findslashes]]>>=
@@ -8240,7 +8259,7 @@ case GBlob:
 %ex:    writepack(fd, refs, nrefs, nil, 0, &h)  from repack.c
 
 <<function [[writepack]]>>=
-/// main(repack.c) -> <>
+/// main(repack.c) | (main(send.c) -> sendpack) | servpack -> <> -> genpack
 errorneg1
 writepack(fdt fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
 {
@@ -9382,18 +9401,8 @@ enum {
 };
 @
 
-\subsection{Capabilities}
-
-%alt: move later?
-<<[[Conn]] capability fields>>=
-char    symfrom[256];
-char    symto[256];
-char    multiack;
-char    sideband;
-char    sideband64k;
-char    report;
-@
-
+%alt: \subsection{Capabilities}
+% later
 
 
 \section{Pulling updates from another repository: [[git pull]]}
@@ -9609,6 +9618,8 @@ main(int argc, char **argv)
 
 % counterintuitive to give "upload" direction in get.c
 % (and "receive" in send.c)
+% but gitconnect will talk with a git server (it might even spawn one
+% if local pull), and will ask to upload a pack so that we can get it.
 
 
 <<[[main()]](get.c) command line processing>>=
@@ -9752,7 +9763,7 @@ fetchpack(Conn *c)
 
         if(first && n > strlen(buf)){
             parsecaps(buf + strlen(buf) + 1, c);
-            if(c->symfrom[0] != 0)
+            if(c->symfrom[0] != '\0')
                 print("symref %s %s\n", c->symfrom, c->symto);
         }
         first = 0;
@@ -10200,6 +10211,7 @@ branchmatch(char *br, char *pat)
 }
 @
 
+% also a fail in serve.c
 <<function [[fail]]>>=
 void
 fail(char *pack, char *idx, char *msg, ...)
@@ -10304,7 +10316,7 @@ bool listonly;
 @
 
 <<[[main()]](get.c) command line processing>>=
-case 'l':   listonly++;         break;
+case 'l':   listonly=true;         break;
 @
 
 \subsubsection{[[git/get -b]], fetch branch}
@@ -10445,7 +10457,9 @@ main(int argc, char **argv)
 @
 
 % similar to git/get, but "receive" this time and sendpack
-% not writepack
+% not writepack.
+% it will talk with (or spawn) a git server and will ask to receive
+% a pack from us.
 
 
 
@@ -10453,14 +10467,38 @@ main(int argc, char **argv)
 
 \subsection{[[sendpack()]]}
 
+<<struct [[Map]]>>=
+struct Map {
+    char    *ref;
+    Hash    ours;
+    Hash    theirs;
+};
+@
+
+<<function [[findkey]]>>=
+int
+findkey(Map *m, int nm, char *ref)
+{
+    int i;
+    for(i = 0; i < nm; i++)
+        if(strcmp(m[i].ref, ref) == 0)
+            return i;
+    return -1;
+}
+@
+
+
+
 % sendpack() has a simpler signature than writepack():
 %   writepack(fdt fd, Hash *theirs, int ntheirs, Hash *ours, int nours, Hash *h)
 
 <<function [[sendpack]]>>=
+/// main(send.c) -> <>
 int
 sendpack(Conn *c)
 {
-    int i, n, idx, nsp, send, first;
+    int i, n, idx, nsp, send;
+    bool first;
     int nours, ntheirs, nmap;
     char buf[Pktmax], *sp[3];
     Hash h, *theirs, *ours;
@@ -10468,7 +10506,7 @@ sendpack(Conn *c)
     char **refs;
     Map *map, *m;
 
-    first = 1;
+    first = true;
     nours = readours(&ours, &refs);
     theirs = nil;
     ntheirs = 0;
@@ -10487,7 +10525,7 @@ sendpack(Conn *c)
             break;
         if(first && n > strlen(buf))
             parsecaps(buf + strlen(buf) + 1, c);
-        first = 0;
+        first = false;
 
         if(getfields(buf, sp, nelem(sp), 1, " \t\r\n") != 2)
             sysfatal("invalid ref line %.*s", utfnlen(buf, n), buf);
@@ -10613,17 +10651,6 @@ findref(char **r, int nr, char *ref)
 }
 @
 
-<<function [[findkey]]>>=
-int
-findkey(Map *m, int nm, char *ref)
-{
-    int i;
-    for(i = 0; i < nm; i++)
-        if(strcmp(m[i].ref, ref) == 0)
-            return i;
-    return -1;
-}
-@
 
 
 \subsubsection{[[readours()]]}
@@ -11020,6 +11047,9 @@ case ConnGit:
 
 % direction is "upload" or "receive"
 
+% note that also called from servelocal! when spawned a git/serve
+% locally on a repo
+
 <<function [[githandshake]]>>=
 /// dialgit | servelocal -> <>
 static errorneg1
@@ -11048,6 +11078,9 @@ githandshake(Conn *c, char *host, char *path, char *direction)
 \subsection{Writing packets}
 %spirit: usually do read/write order, but here we write first in handshake
 % so make sense to see write first
+
+% classic packet comm: send first fixed-length lenght of packet
+% and then bytes (Nat Mote did same for semgrep RPC)
 
 <<function [[writepkt]]>>=
 errorneg1
@@ -11134,6 +11167,61 @@ readpkt(Conn *c, char *buf, int nbuf)
 
 \section{Capabilities}
 
+\subsection{[[Conn]] Capabilities}
+
+%alt: move later?
+<<[[Conn]] capability fields>>=
+char    symfrom[256];
+char    symto[256];
+char    multiack;
+char    sideband;
+char    sideband64k;
+char    report;
+@
+
+\subsection{[[parsecaps()]]}
+
+<<function [[parsecaps]]>>=
+void
+parsecaps(char *caps, Conn *c)
+{
+    char *p, *n, *s, *t;
+
+    for(p = caps; p != nil; p = n){
+        n = strchr(p, ' ');
+        if(n != nil)
+            *n++ = 0;
+        if(matchcap(p, "report-status", 1) != nil)
+            c->report = 1;
+        if(matchcap(p, "multi_ack", 1) != nil)
+            c->multiack = 1;
+        else if(matchcap(p, "side-band", 1) != nil)
+            c->sideband = 1;
+        else if(matchcap(p, "side-band-64k", 1) != nil)
+            c->sideband64k = 1;
+        else if((s = matchcap(p, "symref=", 0)) != nil){
+            if((t = strchr(s, ':')) == nil)
+                continue;
+            *t++ = '\0';
+            snprint(c->symfrom, sizeof(c->symfrom), s);
+            snprint(c->symto, sizeof(c->symto), t);
+        }
+    }
+}
+@
+
+<<function [[matchcap]]>>=
+char *
+matchcap(char *s, char *cap, int full)
+{
+    if(strncmp(s, cap, strlen(cap)) == 0)
+        if(!full || strlen(s) == strlen(cap))
+            return s + strlen(cap);
+    return nil;
+}
+@
+
+
 \section{[[git://]] client}
 
 %%\subsection{Fetching remote objects}
@@ -11183,16 +11271,14 @@ main(int argc, char **argv)
 
     interactive = false;
 
+    //TODO: can do RFNAMEG|RFNOMNT and a single call?
     if(rfork(RFNAMEG) == -1)
         sysfatal("rfork: %r");
     if(rfork(RFNOMNT) == -1)
         sysfatal("rfork: %r");
-    if(pathpfx != nil){
-        if(bind(pathpfx, "/", MREPL) == -1)
-            sysfatal("bind: %r");
-    }
+    <<[[main()]](serve.c) if [[pathpfx]]>>
 
-    initconn(&c, 0, 1);
+    initconn(&c, STDIN, STDOUT);
     if(readpkt(&c, buf, sizeof(buf)) == -1)
         sysfatal("readpkt: %r");
 
@@ -11200,9 +11286,10 @@ main(int argc, char **argv)
     cleanname(repo);
     if(strncmp(repo, "../", 3) == 0)
         fail(&c, "invalid path %s\n", repo);
+
+    // sandboxing! chroot.
     if(bind(repo, "/", MREPL) == -1)
         fail(&c, "no such repo: %s", repo);
-
     if(chdir("/") == -1)
         fail(&c, "no such repo");
 
@@ -11224,12 +11311,620 @@ case 'w':
     break;
 @
 
+
+<<function [[initconn]]>>=
+void
+initconn(Conn *c, fdt rd, fdt wr)
+{
+    c->type = ConnGit;
+    c->rfd = rd;
+    c->wfd = wr;
+}
+@
+
+<<function [[parsecmd]]>>=
+char*
+parsecmd(char *buf, char *cmd, int ncmd)
+{
+    int i;
+    char *p;
+
+    for(p = buf, i = 0; *p && i < ncmd - 1; i++, p++){
+        if(*p == ' ' || *p == '\t'){
+            cmd[i] = 0;
+            break;
+        }
+        cmd[i] = *p;
+    }
+    while(*p == ' ' || *p == '\t')
+        p++;
+    return p;
+}
+@
+
+
+<<function [[fail (git9/serve.c)]]>>=
+_Noreturn static void
+fail(Conn *c, char *fmt, ...)
+{
+    char msg[ERRMAX];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprint(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    fmtpkt(c, "ERR %s\n", msg);
+    sysfatal("%s", msg);
+}
+@
+
 \subsection{[[git-upload-pack]]}
 %git9: no actual command with that name, but git has and git9 use as cmd string
+
+% for git pull, ask server to upload to us a pack
+
+%\subsubsection{[[servpack]]}
+
+<<function [[servpack]]>>=
+int
+servpack(Conn *c)
+{
+    Hash *head, *tail, h;
+    int nhead, ntail;
+
+    dprint(1, "negotiating pack\n");
+    if(servnegotiate(c, &head, &nhead, &tail, &ntail) == -1)
+        fail(c, "negotiate: %r");
+    dprint(1, "writing pack\n");
+    if(writepack(c->wfd, head, nhead, tail, ntail, &h) == -1)
+        fail(c, "send: %r");
+    return 0;
+}
+@
+
+\subsubsection{[[servnegociate()]]}
+
+<<function [[servnegotiate]]>>=
+int
+servnegotiate(Conn *c, Hash **head, int *nhead, Hash **tail, int *ntail)
+{
+    char pkt[Pktmax];
+    int n, acked;
+    Object *o;
+    Hash h;
+
+    if(showrefs(c) == -1)
+        return -1;
+
+    *head = nil;
+    *tail = nil;
+    *nhead = 0;
+    *ntail = 0;
+    while(1){
+        if((n = readpkt(c, pkt, sizeof(pkt))) == -1)
+            goto error;
+        if(n == 0)
+            break;
+        if(strncmp(pkt, "want ", 5) != 0){
+            werrstr(" protocol garble %s", pkt);
+            goto error;
+        }
+        if(hparse(&h, &pkt[5]) == -1){
+            werrstr(" garbled want");
+            goto error;
+        }
+        if((o = readobject(h)) == nil){
+            werrstr("requested nonexistent object");
+            goto error;
+        }
+        unref(o);
+        *head = erealloc(*head, (*nhead + 1)*sizeof(Hash));
+        (*head)[*nhead] = h;    
+        *nhead += 1;
+    }
+
+    acked = 0;
+    while(1){
+        if((n = readpkt(c, pkt, sizeof(pkt))) == -1)
+            goto error;
+        if(strncmp(pkt, "done", 4) == 0)
+            break;
+        if(n == 0){
+            if(!acked && fmtpkt(c, "NAK") == -1)
+                    goto error;
+        }
+        if(strncmp(pkt, "have ", 5) != 0){
+            werrstr(" protocol garble %s", pkt);
+            goto error;
+        }
+        if(hparse(&h, &pkt[5]) == -1){
+            werrstr(" garbled have");
+            goto error;
+        }
+        if((o = readobject(h)) == nil)
+            continue;
+        if(!acked){
+            if(fmtpkt(c, "ACK %H", h) == -1)
+                goto error;
+            acked = 1;
+        }
+        unref(o);
+        *tail = erealloc(*tail, (*ntail + 1)*sizeof(Hash));
+        (*tail)[*ntail] = h;    
+        *ntail += 1;
+    }
+    if(!acked && fmtpkt(c, "NAK\n") == -1)
+        goto error;
+    return 0;
+error:
+    fmtpkt(c, "ERR %r\n");
+    free(*head);
+    free(*tail);
+    return -1;
+}
+@
+
+\subsubsection{[[showrefs()]]}
+
+<<function [[showrefs]]>>=
+int
+showrefs(Conn *c)
+{
+    char **names, *s, buf[256];
+    int i, ret, nrefs;
+    Hash head, *refs;
+
+    ret = -1;
+    nrefs = 0;
+    refs = nil;
+    names = nil;
+
+    if((s = gethead(&head,  buf, sizeof(buf))) == nil)
+        memset(&head, 0, sizeof(Hash));
+    if(fmtpkt(c, "%H HEAD%csymref=HEAD:%s no-thin\n", head, 0, s) == -1)
+        goto error;
+    if((nrefs = listrefs(&refs, &names)) == -1)
+        fail(c, "listrefs: %r");
+    for(i = 0; i < nrefs; i++){
+        if(strncmp(names[i], "heads/", strlen("heads/")) != 0)
+            continue;
+        if(fmtpkt(c, "%H refs/%s\n", refs[i], names[i]) == -1)
+            goto error;
+    }
+    if(flushpkt(c) == -1)
+        goto error;
+    ret = 0;
+error:
+    for(i = 0; i < nrefs; i++)
+        free(names[i]);
+    free(names);
+    free(refs);
+    return ret;
+}
+@
+
+<<function [[gethead]]>>=
+char*
+gethead(Hash *h, char *ref, int nref)
+{
+    int fd, n;
+    char *s;
+
+    if((fd = open(".git/HEAD", OREAD)) == -1)
+        return nil;
+    if((n = readn(fd, ref, nref-1)) == -1)
+        return nil;
+    ref[n] = 0;
+    strip(ref);
+    if(strncmp(ref, "ref: ", 5) != 0)
+        return nil;
+    s = ref+5;
+    if(resolveref(h, s) == -1)
+        return nil;
+    return s;
+}
+@
+
+
 
 \subsection{[[git-receive-pack]]}
 %git9: no actual command with that name, but git has and git9 use as cmd string
 
+% for git push, ask server to receive a pack from us
+
+
+%\subsubsection{[[recvpack()]]}
+
+<<function [[recvpack]]>>=
+void
+recvpack(Conn *c)
+{
+    Hash *cur, *upd;
+    char **ref;
+    int nupd;
+
+    if(!allowwrite)
+        fail(c, "read-only repo");
+    if(recvnegotiate(c, &cur, &upd, &ref, &nupd) == -1)
+        fail(c, "negotiate refs: %r");
+    if(nupd != 0 && updatepack(c) == -1)
+        sysfatal("update pack: %r");
+    if(nupd != 0 && updaterefs(c, cur, upd, ref, nupd) == -1)
+        sysfatal("update refs: %r");
+    return;
+}
+@
+%old: was return 0
+
+\subsubsection{[[recvnegociate()]]}
+
+<<function [[recvnegotiate]]>>=
+int
+recvnegotiate(Conn *c, Hash **cur, Hash **upd, char ***ref, int *nupd)
+{
+    char pkt[Pktmax], refpath[512], *sp[4];
+    Hash old, new;
+    int n, i;
+
+    if(showrefs(c) == -1)
+        return -1;
+    *cur = nil;
+    *upd = nil;
+    *ref = nil;
+    *nupd = 0;
+    while(1){
+        if((n = readpkt(c, pkt, sizeof(pkt))) == -1)
+            goto error;
+        if(n == 0)
+            break;
+        if(getfields(pkt, sp, nelem(sp), 1, " \t\n\r") != 3){
+            fmtpkt(c, "ERR  protocol garble %s\n", pkt);
+            goto error;
+        }
+        if(hparse(&old, sp[0]) == -1){
+            fmtpkt(c, "ERR bad old hash %s\n", sp[0]);
+            goto error;
+        }
+        if(hparse(&new, sp[1]) == -1){
+            fmtpkt(c, "ERR bad new hash %s\n", sp[1]);
+            goto error;
+        }
+        if(!validref(sp[2])){
+            fmtpkt(c, "ERR invalid ref %s\n", sp[2]);
+            goto error;
+        }
+        *cur = erealloc(*cur, (*nupd + 1)*sizeof(Hash));
+        *upd = erealloc(*upd, (*nupd + 1)*sizeof(Hash));
+        *ref = erealloc(*ref, (*nupd + 1)*sizeof(Hash));
+        (*cur)[*nupd] = old;
+        (*upd)[*nupd] = new;
+        (*ref)[*nupd] = estrdup(sp[2]);
+        n = snprint(refpath, sizeof(refpath), ".git/%s", sp[2]);
+        if(n >= sizeof(refpath)-1){
+            fmtpkt(c, "ERR invalid ref %s\n", sp[2]);
+            goto error;
+        }
+        if(access(refpath, AWRITE) == -1
+        && access(refpath, AEXIST) == 0){
+            fmtpkt(c, "ERR read-only ref %s\n", sp[2]);
+            goto error;
+        }
+        *nupd += 1;
+    }       
+    return 0;
+error:
+    free(*cur);
+    free(*upd);
+    for(i = 0; i < *nupd; i++)
+        free((*ref)[i]);
+    free(*ref);
+    return -1;
+}
+@
+
+<<function [[validref]]>>=
+int
+validref(char *s)
+{
+    cleanname(s);
+    if(strncmp(s, "refs/", 5) != 0)
+        return 0;
+    return okref(s);
+}
+@
+
+\subsubsection{[[updatepack()]]}
+
+<<function [[updatepack]]>>=
+int
+updatepack(Conn *c)
+{
+    char buf[Pktmax], packtmp[128], idxtmp[128], ebuf[ERRMAX];
+    int n, pfd, packsz;
+    Hash h;
+
+    /* make sure the needed dirs exist */
+    if(mkdir(".git/objects") == -1)
+        return -1;
+    if(mkdir(".git/objects/pack") == -1)
+        return -1;
+    if(mkdir(".git/refs") == -1)
+        return -1;
+    if(mkdir(".git/refs/heads") == -1)
+        return -1;
+    snprint(packtmp, sizeof(packtmp), ".git/objects/pack/recv-%d.pack.tmp", getpid());
+    snprint(idxtmp, sizeof(idxtmp), ".git/objects/pack/recv-%d.idx.tmp", getpid());
+    if((pfd = create(packtmp, ORDWR, 0644)) == -1)
+        return -1;
+    packsz = 0;
+    while(1){
+        n = read(c->rfd, buf, sizeof(buf));
+        if(n == 0)
+            break;
+        if(n == -1){
+            rerrstr(ebuf, sizeof(ebuf));
+            if(strstr(ebuf, "hungup") == nil)
+                return -1;
+            break;
+        }
+        if(write(pfd, buf, n) != n)
+            return -1;
+        packsz += n;
+    }
+    if(checkhash(pfd, packsz, &h) == -1){
+        dprint(1, "hash mismatch\n");
+        goto error_1;
+    }
+    if(indexpack(packtmp, idxtmp, h) == -1){
+        dprint(1, "indexing failed: %r\n");
+        goto error_1;
+    }
+    if(rename(packtmp, idxtmp, h) == -1){
+        dprint(1, "rename failed: %r\n");
+        goto error_2;
+    }
+    return 0;
+
+error_2:    remove(idxtmp);
+error_1:    remove(packtmp);
+    return -1;
+}   
+@
+
+<<function [[mkdir]]>>=
+int
+mkdir(char *dir)
+{
+    char buf[ERRMAX];
+    int f;
+
+    if(access(dir, AEXIST) == 0)
+        return 0;
+    if((f = create(dir, OREAD, DMDIR | 0755)) == -1){
+        rerrstr(buf, sizeof(buf));
+        if(strstr(buf, "exist") == nil)
+            return -1;
+    }
+    close(f);
+    return 0;
+}
+@
+
+
+
+%ori: similar to one in get.c, should factorize in util.c?
+<<function [[rename (git9/serve.c)]]>>=
+int
+rename(char *pack, char *idx, Hash h)
+{
+    char name[128], path[196];
+    Dir st;
+
+    nulldir(&st);
+    st.name = name;
+    snprint(name, sizeof(name), "%H.pack", h);
+    snprint(path, sizeof(path), ".git/objects/pack/%s", name);
+    if(access(path, AEXIST) == 0)
+        fprint(2, "warning, pack %s already pushed\n", name);
+    else if(dirwstat(pack, &st) == -1)
+        return -1;
+    snprint(name, sizeof(name), "%H.idx", h);
+    snprint(path, sizeof(path), ".git/objects/pack/%s", name);
+    if(access(path, AEXIST) == 0)
+        fprint(2, "warning, pack %s already indexed\n", name);
+    else if(dirwstat(idx, &st) == -1)
+        return -1;
+    return 0;
+}
+@
+
+%ori: also similar to other checkhash in get.c, factorize?
+<<function [[checkhash (git9/serve.c)]]>>=
+int
+checkhash(int fd, vlong sz, Hash *hcomp)
+{
+    DigestState *st;
+    Hash hexpect;
+    char buf[Pktmax];
+    vlong n, r;
+    int nr;
+    
+    if(sz < 28){
+        werrstr("undersize packfile");
+        return -1;
+    }
+
+    st = nil;
+    n = 0;
+    if(seek(fd, 0, 0) == -1)
+        sysfatal("packfile seek: %r");
+    while(n != sz - 20){
+        nr = sizeof(buf);
+        if(sz - n - 20 < sizeof(buf))
+            nr = sz - n - 20;
+        r = readn(fd, buf, nr);
+        if(r != nr){
+            werrstr("short read");
+            return -1;
+        }
+        st = sha1((uchar*)buf, nr, nil, st);
+        n += r;
+    }
+    sha1(nil, 0, hcomp->h, st);
+    if(readn(fd, hexpect.h, sizeof(hexpect.h)) != sizeof(hexpect.h))
+        sysfatal("truncated packfile");
+    if(!hasheq(hcomp, &hexpect)){
+        werrstr("bad hash: %H != %H", *hcomp, hexpect);
+        return -1;
+    }
+    return 0;
+}
+@
+
+\subsubsection{[[updaterefs()]] and locking}
+
+<<function [[updaterefs]]>>=
+int
+updaterefs(Conn *c, Hash *cur, Hash *upd, char **ref, int nupd)
+{
+    char refpath[512], buf[128];
+    int i, newidx, hadref, fd, ret;
+    fdt lockfd;
+    vlong newtm;
+    Object *o;
+    Hash h;
+
+    ret = -1;
+    hadref = 0;
+    newidx = -1;
+    /*
+     * Date of Magna Carta.
+     * Wrong because it  was computed using
+     * the proleptic gregorian calendar.
+     */
+    newtm = -23811206400;   
+    if((lockfd = lockrepo()) == -1){
+        snprint(buf, sizeof(buf), "repo locked\n");
+        return -1;
+    }
+    for(i = 0; i < nupd; i++){
+        if(resolveref(&h, ref[i]) == 0){
+            hadref = 1;
+            if(!hasheq(&h, &cur[i])){
+                snprint(buf, sizeof(buf), "old ref changed: %s", ref[i]);
+                goto error;
+            }
+        }
+        if(snprint(refpath, sizeof(refpath), ".git/%s", ref[i]) == sizeof(refpath)){
+            snprint(buf, sizeof(buf), "ref path too long: %s", ref[i]);
+            goto error;
+        }
+        if(hasheq(&upd[i], &Zhash)){
+            remove(refpath);
+            continue;
+        }
+        if((o = readobject(upd[i])) == nil){
+            snprint(buf, sizeof(buf), "update to nonexistent hash %H", upd[i]);
+            goto error;
+        }
+        if(o->type != GCommit){
+            snprint(buf, sizeof(buf), "not commit: %H", upd[i]);
+            goto error;
+        }
+        if(o->commit->mtime > newtm){
+            newtm = o->commit->mtime;
+            newidx = i;
+        }
+        unref(o);
+        if(mkpath(refpath) == -1){
+            snprint(buf, sizeof(buf), "create path: %r");
+            goto error;
+        }
+        if((fd = create(refpath, OWRITE|OTRUNC, 0644)) == -1){
+            snprint(buf, sizeof(buf), "open ref: %r");
+            goto error;
+        }
+        if(fprint(fd, "%H", upd[i]) == -1){
+            snprint(buf, sizeof(buf), "upate ref: %r");
+            close(fd);
+            goto error;
+        }
+        close(fd);
+    }
+    /*
+     * Heuristic:
+     * If there are no valid refs, and HEAD is invalid, then
+     * pick the ref with the newest commits as the default
+     * branch.
+     *
+     * Several people have been caught out by pushing to
+     * a repo where HEAD named differently from what got
+     * pushed, and this is going to be more of a footgun
+     * when 'master', 'main', and 'front' are all in active
+     * use. This should make us pick a useful default in
+     * those cases, instead of silently failing.
+     */
+    if(resolveref(&h, "HEAD") == -1 && hadref == 0 && newidx != -1){
+        if((fd = create(".git/HEAD", OWRITE|OTRUNC, 0644)) == -1){
+            snprint(buf, sizeof(buf), "open HEAD: %r");
+            goto error;
+        }
+        if(fprint(fd, "ref: %s", ref[newidx]) == -1){
+            snprint(buf, sizeof(buf), "write HEAD ref: %r");
+            goto error;
+        }
+        close(fd);
+    }
+    ret = 0;
+error:
+    if(ret != 0)
+        fmtpkt(c, "ERR %s", buf);
+    close(lockfd);
+    werrstr(buf);
+    return ret;
+}
+@
+
+<<function [[lockrepo]]>>=
+fdt
+lockrepo(void)
+{
+    fdt fd;
+    int i;
+
+    for(i = 0; i < 10; i++) {
+        if((fd = create(".git/_lock", ORCLOSE|ORDWR|OTRUNC|OEXCL, 0644))!= -1)
+            return fd;
+        sleep(250);
+    }
+    return ERROR_NEG1;
+}
+@
+
+
+<<function [[mkpath]]>>=
+int
+mkpath(char *path)
+{
+    char *p;
+
+    p = path;
+    /*
+     * we assume that the path has been
+     * checked with validref(), so there
+     * are no double '/' or odd characters.
+     */
+    while(1){
+        p = strchr(p, '/');
+        if(p == nil)
+            return 0;
+        *p = 0;
+        if(mkdir(path) == -1)
+            return -1;
+        *p++ = '/';
+    }
+}
+@
 
 \subsection{Advanced features}
 
@@ -11245,6 +11940,14 @@ case 'r':
         sysfatal("path prefix must begin with '/'");
     break;
 @
+
+<<[[main()]](serve.c) if [[pathpfx]]>>=
+if(pathpfx != nil){
+    if(bind(pathpfx, "/", MREPL) == -1)
+        sysfatal("bind: %r");
+}
+@
+
 
 
 %###############################################################################
@@ -12307,6 +13010,16 @@ else if(strncmp(proto, "https", 5) == 0)
 @
 
 
+
+
+<<[[closeconn()]] switch [[c->type]] cases>>=
+case ConnHttp:
+    close(c->cfd);
+    break;
+@
+
+\subsubsection{[[dialhttp()]]}
+
 <<function [[dialhttp]]>>=
 static int
 dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
@@ -12329,7 +13042,9 @@ dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
     c->type = ConnHttp;
     c->url = smprint("https://%s%s%s%s%s%s%sgit-%s-pack",
         host, hsep, port, psep, path, suff, isep, direction);
+
     c->cfd = webclone(c, geturl);
+
     free(geturl);
     if(c->cfd == -1)
         return -1;
@@ -12344,12 +13059,156 @@ dialhttp(Conn *c, char *host, char *port, char *path, char *direction)
 }
 @
 
+<<function [[webopen]]>>=
+static int
+webopen(Conn *c, char *file, int mode)
+{
+    char path[128];
+    int fd;
 
-<<[[closeconn()]] switch [[c->type]] cases>>=
-case ConnHttp:
-    close(c->cfd);
-    break;
+    snprint(path, sizeof(path), "%s/%s", c->dir, file);
+    if((fd = open(path, mode)) == -1)
+        return -1;
+    return fd;
+}
 @
+
+
+\subsubsection{[[webclone()]]}
+
+<<function [[webclone]]>>=
+static int
+webclone(Conn *c, char *url)
+{
+    char buf[16];
+    int n, conn;
+
+    if((c->cfd = open("/mnt/web/clone", ORDWR)) < 0)
+        goto err;
+    if((n = read(c->cfd, buf, sizeof(buf)-1)) == -1)
+        goto err;
+    buf[n] = 0;
+    conn = atoi(buf);
+
+    /* github will behave differently based on useragent */
+    if(write(c->cfd, Useragent, sizeof(Useragent)) == -1)
+        return -1;
+    dprint(1, "open url %s\n", url);
+    if(fprint(c->cfd, "url %s", url) == -1)
+        goto err;
+    free(c->dir);
+    c->dir = smprint("/mnt/web/%d", conn);
+    return 0;
+err:
+    if(c->cfd != -1)
+        close(c->cfd);
+    return -1;
+}
+@
+
+<<constant [[Useragent]]>>=
+#define Useragent   "useragent git/2.24.1"
+@
+
+%\subsubsection{[[webopen()]]}
+
+\subsubsection{[[issmarthttp()]]}
+
+<<function [[issmarthttp]]>>=
+static int
+issmarthttp(Conn *c, char *direction)
+{
+    char buf[Pktmax+1], svc[128];
+    int fd, n;
+
+    if((fd = webopen(c, "contenttype", OREAD)) == -1)
+        return -1;
+    n = readn(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if(n == -1)
+        return -1;
+    buf[n] = '\0';
+    snprint(svc, sizeof(svc), "application/x-git-%s-pack-advertisement", direction);
+    if(strcmp(svc, buf) != 0){
+        werrstr("dumb http protocol not supported");
+        return -1;
+    }
+
+    if((n = readpkt(c, buf, sizeof(buf))) == -1)
+        sysfatal("http read: %r");
+    buf[n] = 0;
+    snprint(svc, sizeof(svc), "# service=git-%s-pack\n", direction);
+    if(strncmp(svc, buf, n) != 0){
+        werrstr("invalid initial packet line");
+        return -1;
+    }
+    if(readpkt(c, buf, sizeof(buf)) != 0){
+        werrstr("protocol garble: expected flushpkt");
+        return -1;
+    }
+    return 0;
+}
+@
+
+\subsubsection{[[writephase()]]}
+
+<<constant [[Contenthdr]]>>=
+#define Contenthdr  "headers Content-Type: application/x-git-%s-pack-request"
+@
+
+<<constant [[Accepthdr]]>>=
+#define Accepthdr   "headers Accept: application/x-git-%s-pack-result"
+@
+
+
+<<function [[writephase]]>>=
+int
+writephase(Conn *c)
+{
+    char hdr[128];
+    int n;
+
+    dprint(1, "start write phase\n");
+    if(c->type != ConnHttp)
+        return 0;
+
+    if(c->wfd != -1)
+        close(c->wfd);
+    if(c->cfd != -1)
+        close(c->cfd);
+    if((c->cfd = webclone(c, c->url)) == -1)
+        return -1;
+    n = snprint(hdr, sizeof(hdr), Contenthdr, c->direction);
+    if(write(c->cfd, hdr, n) == -1)
+        return -1;
+    n = snprint(hdr, sizeof(hdr), Accepthdr, c->direction);
+    if(write(c->cfd, hdr, n) == -1)
+        return -1;
+    if((c->wfd = webopen(c, "postbody", OWRITE)) == -1)
+        return -1;
+    c->rfd = -1;
+    return 0;
+}
+@
+
+\subsubsection{[[readphase()]]}
+
+<<function [[readphase]]>>=
+int
+readphase(Conn *c)
+{
+    dprint(1, "start read phase\n");
+    if(c->type != ConnHttp)
+        return 0;
+    if(close(c->wfd) == -1)
+        return -1;
+    if((c->rfd = webopen(c, "body", OREAD)) == -1)
+        return -1;
+    c->wfd = -1;
+    return 0;
+}
+@
+
 
 
 
@@ -12383,6 +13242,7 @@ dialssh(Conn *c, char *host, char *, char *path, char *direction)
         dup(pfd[0], 1);
         snprint(cmd, sizeof(cmd), "git-%s-pack", direction);
         dprint(1, "exec ssh '%s' '%s' %s\n", host, cmd, path);
+
         execl("/bin/ssh", "ssh", host, cmd, path, nil);
         sysfatal("exec: %r");
     }
@@ -12427,9 +13287,44 @@ else if(strncmp(proto, "hjgit", 5) == 0)
     snprint(port, Nport, "17021");
 @
 
-\section{Other servers}
 
-\subsection{[[http://]]}
+<<function [[dialhjgit]]>>=
+static int
+dialhjgit(Conn *c, char *host, char *port, char *path, char *direction, int auth)
+{
+    char *ds;
+    int pid, pfd[2];
+
+    if((ds = netmkaddr(host, "tcp", port)) == nil)
+        return -1;
+    if(pipe(pfd) == -1)
+        sysfatal("unable to open pipe: %r");
+    pid = fork();
+    if(pid == -1)
+        sysfatal("unable to fork");
+    if(pid == 0){
+        close(pfd[1]);
+        dup(pfd[0], 0);
+        dup(pfd[0], 1);
+        dprint(1, "exec tlsclient -a %s\n", ds);
+        if(auth)
+            execl("/bin/tlsclient", "tlsclient", "-a", ds, nil);
+        else
+            execl("/bin/tlsclient", "tlsclient", ds, nil);
+        sysfatal("exec: %r");
+    }
+    close(pfd[0]);
+    c->type = ConnGit9;
+    c->rfd = pfd[1];
+    c->wfd = dup(pfd[1], -1);
+    return githandshake(c, host, path, direction);
+}
+@
+
+
+%\section{Other servers}
+
+%\subsection{[[http://]]}
 
 %%\section{Other client/server capabilities}
 %%\subsection{Report status}

@@ -376,7 +376,6 @@ static u32int geartab[] = {
 <<function [[nextblk]]>>
 
 <<function [[dtinit]]>>
-
 <<function [[dtclear]]>>
 
 <<function [[emitdelta]]>>
@@ -483,7 +482,6 @@ static Object*  walklink(Gitaux *, char *, int, int, int*);
 <<function [[main (git9/fs.c)]]>>
 @
 
-
 \subsection{[[git9/get.c]]}
 
 %-------------------------------------------------------------
@@ -547,7 +545,6 @@ static Object*  walklink(Gitaux *, char *, int, int, int*);
 %        (b)[1] = (n) >> 0; \
 %    } while(0)
 %@
-
 
 %-------------------------------------------------------------
 
@@ -716,10 +713,6 @@ int qpop(Objq*, Qelt*);
 
 
 \subsection{[[git9/log.c]]}
-
-
-
-
 
 %-------------------------------------------------------------
 
@@ -939,7 +932,6 @@ enum {
 
 <<function [[olsreadpacked]]>>
 
-
 <<function [[olsreadloose]]>>
 
 <<function [[mkols]]>>
@@ -951,10 +943,6 @@ enum {
 
 
 \subsection{[[git9/pack.c]]}
-
-
-
-
 
 <<function [[crc32]]>>=
 static u32int
@@ -1050,7 +1038,6 @@ vlong   cachemax = 128*MiB;
 <<function [[clear]]>>
 
 <<function [[unref]]>>
-
 <<function [[ref]]>>
 
 <<function [[cache]]>>
@@ -1153,243 +1140,6 @@ vlong   cachemax = 128*MiB;
 
 \subsection{[[git9/proto.c]]}
 
-<<constant [[Useragent]]>>=
-#define Useragent   "useragent git/2.24.1"
-@
-
-<<constant [[Contenthdr]]>>=
-#define Contenthdr  "headers Content-Type: application/x-git-%s-pack-request"
-@
-
-<<constant [[Accepthdr]]>>=
-#define Accepthdr   "headers Accept: application/x-git-%s-pack-result"
-@
-
-<<function [[matchcap]]>>=
-char *
-matchcap(char *s, char *cap, int full)
-{
-    if(strncmp(s, cap, strlen(cap)) == 0)
-        if(!full || strlen(s) == strlen(cap))
-            return s + strlen(cap);
-    return nil;
-}
-@
-
-<<function [[parsecaps]]>>=
-void
-parsecaps(char *caps, Conn *c)
-{
-    char *p, *n, *s, *t;
-
-    for(p = caps; p != nil; p = n){
-        n = strchr(p, ' ');
-        if(n != nil)
-            *n++ = 0;
-        if(matchcap(p, "report-status", 1) != nil)
-            c->report = 1;
-        if(matchcap(p, "multi_ack", 1) != nil)
-            c->multiack = 1;
-        else if(matchcap(p, "side-band", 1) != nil)
-            c->sideband = 1;
-        else if(matchcap(p, "side-band-64k", 1) != nil)
-            c->sideband64k = 1;
-        else if((s = matchcap(p, "symref=", 0)) != nil){
-            if((t = strchr(s, ':')) == nil)
-                continue;
-            *t++ = '\0';
-            snprint(c->symfrom, sizeof(c->symfrom), s);
-            snprint(c->symto, sizeof(c->symto), t);
-        }
-    }
-}
-@
-
-
-
-
-
-
-
-
-<<function [[webclone]]>>=
-static int
-webclone(Conn *c, char *url)
-{
-    char buf[16];
-    int n, conn;
-
-    if((c->cfd = open("/mnt/web/clone", ORDWR)) < 0)
-        goto err;
-    if((n = read(c->cfd, buf, sizeof(buf)-1)) == -1)
-        goto err;
-    buf[n] = 0;
-    conn = atoi(buf);
-
-    /* github will behave differently based on useragent */
-    if(write(c->cfd, Useragent, sizeof(Useragent)) == -1)
-        return -1;
-    dprint(1, "open url %s\n", url);
-    if(fprint(c->cfd, "url %s", url) == -1)
-        goto err;
-    free(c->dir);
-    c->dir = smprint("/mnt/web/%d", conn);
-    return 0;
-err:
-    if(c->cfd != -1)
-        close(c->cfd);
-    return -1;
-}
-@
-
-<<function [[webopen]]>>=
-static int
-webopen(Conn *c, char *file, int mode)
-{
-    char path[128];
-    int fd;
-
-    snprint(path, sizeof(path), "%s/%s", c->dir, file);
-    if((fd = open(path, mode)) == -1)
-        return -1;
-    return fd;
-}
-@
-
-<<function [[issmarthttp]]>>=
-static int
-issmarthttp(Conn *c, char *direction)
-{
-    char buf[Pktmax+1], svc[128];
-    int fd, n;
-
-    if((fd = webopen(c, "contenttype", OREAD)) == -1)
-        return -1;
-    n = readn(fd, buf, sizeof(buf) - 1);
-    close(fd);
-    if(n == -1)
-        return -1;
-    buf[n] = '\0';
-    snprint(svc, sizeof(svc), "application/x-git-%s-pack-advertisement", direction);
-    if(strcmp(svc, buf) != 0){
-        werrstr("dumb http protocol not supported");
-        return -1;
-    }
-
-    if((n = readpkt(c, buf, sizeof(buf))) == -1)
-        sysfatal("http read: %r");
-    buf[n] = 0;
-    snprint(svc, sizeof(svc), "# service=git-%s-pack\n", direction);
-    if(strncmp(svc, buf, n) != 0){
-        werrstr("invalid initial packet line");
-        return -1;
-    }
-    if(readpkt(c, buf, sizeof(buf)) != 0){
-        werrstr("protocol garble: expected flushpkt");
-        return -1;
-    }
-    return 0;
-}
-@
-
-
-
-
-<<function [[dialhjgit]]>>=
-static int
-dialhjgit(Conn *c, char *host, char *port, char *path, char *direction, int auth)
-{
-    char *ds;
-    int pid, pfd[2];
-
-    if((ds = netmkaddr(host, "tcp", port)) == nil)
-        return -1;
-    if(pipe(pfd) == -1)
-        sysfatal("unable to open pipe: %r");
-    pid = fork();
-    if(pid == -1)
-        sysfatal("unable to fork");
-    if(pid == 0){
-        close(pfd[1]);
-        dup(pfd[0], 0);
-        dup(pfd[0], 1);
-        dprint(1, "exec tlsclient -a %s\n", ds);
-        if(auth)
-            execl("/bin/tlsclient", "tlsclient", "-a", ds, nil);
-        else
-            execl("/bin/tlsclient", "tlsclient", ds, nil);
-        sysfatal("exec: %r");
-    }
-    close(pfd[0]);
-    c->type = ConnGit9;
-    c->rfd = pfd[1];
-    c->wfd = dup(pfd[1], -1);
-    return githandshake(c, host, path, direction);
-}
-@
-
-<<function [[initconn]]>>=
-void
-initconn(Conn *c, int rd, int wr)
-{
-    c->type = ConnGit;
-    c->rfd = rd;
-    c->wfd = wr;
-}
-@
-
-
-
-
-
-<<function [[writephase]]>>=
-int
-writephase(Conn *c)
-{
-    char hdr[128];
-    int n;
-
-    dprint(1, "start write phase\n");
-    if(c->type != ConnHttp)
-        return 0;
-
-    if(c->wfd != -1)
-        close(c->wfd);
-    if(c->cfd != -1)
-        close(c->cfd);
-    if((c->cfd = webclone(c, c->url)) == -1)
-        return -1;
-    n = snprint(hdr, sizeof(hdr), Contenthdr, c->direction);
-    if(write(c->cfd, hdr, n) == -1)
-        return -1;
-    n = snprint(hdr, sizeof(hdr), Accepthdr, c->direction);
-    if(write(c->cfd, hdr, n) == -1)
-        return -1;
-    if((c->wfd = webopen(c, "postbody", OWRITE)) == -1)
-        return -1;
-    c->rfd = -1;
-    return 0;
-}
-@
-
-<<function [[readphase]]>>=
-int
-readphase(Conn *c)
-{
-    dprint(1, "start read phase\n");
-    if(c->type != ConnHttp)
-        return 0;
-    if(close(c->wfd) == -1)
-        return -1;
-    if((c->rfd = webopen(c, "body", OREAD)) == -1)
-        return -1;
-    c->wfd = -1;
-    return 0;
-}
-@
-
-
-
 %-------------------------------------------------------------
 
 <<git9/proto.c>>=
@@ -1422,7 +1172,6 @@ enum {
 <<function [[writepkt]]>>
 
 <<function [[fmtpkt]]>>
-
 <<function [[flushpkt]]>>
 
 <<function [[grab]]>>
@@ -1430,7 +1179,6 @@ enum {
 <<function [[parseuri]]>>
 
 <<function [[webclone]]>>
-
 <<function [[webopen]]>>
 
 <<function [[issmarthttp]]>>
@@ -1447,7 +1195,6 @@ enum {
 <<function [[dialgit]]>>
 
 <<function [[servelocal]]>>
-
 <<function [[localrepo]]>>
 
 <<function [[gitconnect]]>>
@@ -1457,7 +1204,6 @@ enum {
 
 <<function [[closeconn]]>>
 @
-
 
 \subsection{[[git9/query.c]]}
 
@@ -1560,7 +1306,6 @@ typedef struct Eval Eval;
 <<function [[listrefs]]>>
 @
 
-
 \subsection{[[git9/repack.c]]}
 
 %-------------------------------------------------------------
@@ -1633,7 +1378,6 @@ enum {
 <<function [[main (git9/save.c)]]>>
 @
 
-
 \subsection{[[git9/send.c]]}
 
 %-------------------------------------------------------------
@@ -1646,19 +1390,12 @@ enum {
 
 typedef struct Map  Map;
 
-struct Map {
-    char    *ref;
-    Hash    ours;
-    Hash    theirs;
-};
+<<struct [[Map]]>>
 
 <<global [[sendall]](send.c)>>
 <<global [[force]](send.c)>>
 <<globals [[branch]](send.c)>>
 <<globals [[removed]](send.c)>>
-
-int npacked;
-int nsent;
 
 <<function [[findref]]>>
 <<function [[findkey]]>>
@@ -1670,577 +1407,12 @@ int nsent;
 <<function [[usage (git9/send.c)]]>>
 <<function [[main (git9/send.c)]]>>
 @
+%ori: dead:
+% int npacked;
+% int nsent;
 
 
 \subsection{[[git9/serve.c]]}
-
-<<function [[fail (git9/serve.c)]]>>=
-_Noreturn static void
-fail(Conn *c, char *fmt, ...)
-{
-    char msg[ERRMAX];
-    va_list ap;
-
-    va_start(ap, fmt);
-    vsnprint(msg, sizeof(msg), fmt, ap);
-    va_end(ap);
-    fmtpkt(c, "ERR %s\n", msg);
-    sysfatal("%s", msg);
-}
-@
-
-<<function [[gethead]]>>=
-char*
-gethead(Hash *h, char *ref, int nref)
-{
-    int fd, n;
-    char *s;
-
-    if((fd = open(".git/HEAD", OREAD)) == -1)
-        return nil;
-    if((n = readn(fd, ref, nref-1)) == -1)
-        return nil;
-    ref[n] = 0;
-    strip(ref);
-    if(strncmp(ref, "ref: ", 5) != 0)
-        return nil;
-    s = ref+5;
-    if(resolveref(h, s) == -1)
-        return nil;
-    return s;
-}
-@
-
-<<function [[showrefs]]>>=
-int
-showrefs(Conn *c)
-{
-    char **names, *s, buf[256];
-    int i, ret, nrefs;
-    Hash head, *refs;
-
-    ret = -1;
-    nrefs = 0;
-    refs = nil;
-    names = nil;
-
-    if((s = gethead(&head,  buf, sizeof(buf))) == nil)
-        memset(&head, 0, sizeof(Hash));
-    if(fmtpkt(c, "%H HEAD%csymref=HEAD:%s no-thin\n", head, 0, s) == -1)
-        goto error;
-    if((nrefs = listrefs(&refs, &names)) == -1)
-        fail(c, "listrefs: %r");
-    for(i = 0; i < nrefs; i++){
-        if(strncmp(names[i], "heads/", strlen("heads/")) != 0)
-            continue;
-        if(fmtpkt(c, "%H refs/%s\n", refs[i], names[i]) == -1)
-            goto error;
-    }
-    if(flushpkt(c) == -1)
-        goto error;
-    ret = 0;
-error:
-    for(i = 0; i < nrefs; i++)
-        free(names[i]);
-    free(names);
-    free(refs);
-    return ret;
-}
-@
-
-<<function [[servnegotiate]]>>=
-int
-servnegotiate(Conn *c, Hash **head, int *nhead, Hash **tail, int *ntail)
-{
-    char pkt[Pktmax];
-    int n, acked;
-    Object *o;
-    Hash h;
-
-    if(showrefs(c) == -1)
-        return -1;
-
-    *head = nil;
-    *tail = nil;
-    *nhead = 0;
-    *ntail = 0;
-    while(1){
-        if((n = readpkt(c, pkt, sizeof(pkt))) == -1)
-            goto error;
-        if(n == 0)
-            break;
-        if(strncmp(pkt, "want ", 5) != 0){
-            werrstr(" protocol garble %s", pkt);
-            goto error;
-        }
-        if(hparse(&h, &pkt[5]) == -1){
-            werrstr(" garbled want");
-            goto error;
-        }
-        if((o = readobject(h)) == nil){
-            werrstr("requested nonexistent object");
-            goto error;
-        }
-        unref(o);
-        *head = erealloc(*head, (*nhead + 1)*sizeof(Hash));
-        (*head)[*nhead] = h;    
-        *nhead += 1;
-    }
-
-    acked = 0;
-    while(1){
-        if((n = readpkt(c, pkt, sizeof(pkt))) == -1)
-            goto error;
-        if(strncmp(pkt, "done", 4) == 0)
-            break;
-        if(n == 0){
-            if(!acked && fmtpkt(c, "NAK") == -1)
-                    goto error;
-        }
-        if(strncmp(pkt, "have ", 5) != 0){
-            werrstr(" protocol garble %s", pkt);
-            goto error;
-        }
-        if(hparse(&h, &pkt[5]) == -1){
-            werrstr(" garbled have");
-            goto error;
-        }
-        if((o = readobject(h)) == nil)
-            continue;
-        if(!acked){
-            if(fmtpkt(c, "ACK %H", h) == -1)
-                goto error;
-            acked = 1;
-        }
-        unref(o);
-        *tail = erealloc(*tail, (*ntail + 1)*sizeof(Hash));
-        (*tail)[*ntail] = h;    
-        *ntail += 1;
-    }
-    if(!acked && fmtpkt(c, "NAK\n") == -1)
-        goto error;
-    return 0;
-error:
-    fmtpkt(c, "ERR %r\n");
-    free(*head);
-    free(*tail);
-    return -1;
-}
-@
-
-<<function [[servpack]]>>=
-int
-servpack(Conn *c)
-{
-    Hash *head, *tail, h;
-    int nhead, ntail;
-
-    dprint(1, "negotiating pack\n");
-    if(servnegotiate(c, &head, &nhead, &tail, &ntail) == -1)
-        fail(c, "negotiate: %r");
-    dprint(1, "writing pack\n");
-    if(writepack(c->wfd, head, nhead, tail, ntail, &h) == -1)
-        fail(c, "send: %r");
-    return 0;
-}
-@
-
-<<function [[validref]]>>=
-int
-validref(char *s)
-{
-    cleanname(s);
-    if(strncmp(s, "refs/", 5) != 0)
-        return 0;
-    return okref(s);
-}
-@
-
-<<function [[recvnegotiate]]>>=
-int
-recvnegotiate(Conn *c, Hash **cur, Hash **upd, char ***ref, int *nupd)
-{
-    char pkt[Pktmax], refpath[512], *sp[4];
-    Hash old, new;
-    int n, i;
-
-    if(showrefs(c) == -1)
-        return -1;
-    *cur = nil;
-    *upd = nil;
-    *ref = nil;
-    *nupd = 0;
-    while(1){
-        if((n = readpkt(c, pkt, sizeof(pkt))) == -1)
-            goto error;
-        if(n == 0)
-            break;
-        if(getfields(pkt, sp, nelem(sp), 1, " \t\n\r") != 3){
-            fmtpkt(c, "ERR  protocol garble %s\n", pkt);
-            goto error;
-        }
-        if(hparse(&old, sp[0]) == -1){
-            fmtpkt(c, "ERR bad old hash %s\n", sp[0]);
-            goto error;
-        }
-        if(hparse(&new, sp[1]) == -1){
-            fmtpkt(c, "ERR bad new hash %s\n", sp[1]);
-            goto error;
-        }
-        if(!validref(sp[2])){
-            fmtpkt(c, "ERR invalid ref %s\n", sp[2]);
-            goto error;
-        }
-        *cur = erealloc(*cur, (*nupd + 1)*sizeof(Hash));
-        *upd = erealloc(*upd, (*nupd + 1)*sizeof(Hash));
-        *ref = erealloc(*ref, (*nupd + 1)*sizeof(Hash));
-        (*cur)[*nupd] = old;
-        (*upd)[*nupd] = new;
-        (*ref)[*nupd] = estrdup(sp[2]);
-        n = snprint(refpath, sizeof(refpath), ".git/%s", sp[2]);
-        if(n >= sizeof(refpath)-1){
-            fmtpkt(c, "ERR invalid ref %s\n", sp[2]);
-            goto error;
-        }
-        if(access(refpath, AWRITE) == -1
-        && access(refpath, AEXIST) == 0){
-            fmtpkt(c, "ERR read-only ref %s\n", sp[2]);
-            goto error;
-        }
-        *nupd += 1;
-    }       
-    return 0;
-error:
-    free(*cur);
-    free(*upd);
-    for(i = 0; i < *nupd; i++)
-        free((*ref)[i]);
-    free(*ref);
-    return -1;
-}
-@
-
-<<function [[rename (git9/serve.c)]]>>=
-int
-rename(char *pack, char *idx, Hash h)
-{
-    char name[128], path[196];
-    Dir st;
-
-    nulldir(&st);
-    st.name = name;
-    snprint(name, sizeof(name), "%H.pack", h);
-    snprint(path, sizeof(path), ".git/objects/pack/%s", name);
-    if(access(path, AEXIST) == 0)
-        fprint(2, "warning, pack %s already pushed\n", name);
-    else if(dirwstat(pack, &st) == -1)
-        return -1;
-    snprint(name, sizeof(name), "%H.idx", h);
-    snprint(path, sizeof(path), ".git/objects/pack/%s", name);
-    if(access(path, AEXIST) == 0)
-        fprint(2, "warning, pack %s already indexed\n", name);
-    else if(dirwstat(idx, &st) == -1)
-        return -1;
-    return 0;
-}
-@
-
-<<function [[checkhash (git9/serve.c)]]>>=
-int
-checkhash(int fd, vlong sz, Hash *hcomp)
-{
-    DigestState *st;
-    Hash hexpect;
-    char buf[Pktmax];
-    vlong n, r;
-    int nr;
-    
-    if(sz < 28){
-        werrstr("undersize packfile");
-        return -1;
-    }
-
-    st = nil;
-    n = 0;
-    if(seek(fd, 0, 0) == -1)
-        sysfatal("packfile seek: %r");
-    while(n != sz - 20){
-        nr = sizeof(buf);
-        if(sz - n - 20 < sizeof(buf))
-            nr = sz - n - 20;
-        r = readn(fd, buf, nr);
-        if(r != nr){
-            werrstr("short read");
-            return -1;
-        }
-        st = sha1((uchar*)buf, nr, nil, st);
-        n += r;
-    }
-    sha1(nil, 0, hcomp->h, st);
-    if(readn(fd, hexpect.h, sizeof(hexpect.h)) != sizeof(hexpect.h))
-        sysfatal("truncated packfile");
-    if(!hasheq(hcomp, &hexpect)){
-        werrstr("bad hash: %H != %H", *hcomp, hexpect);
-        return -1;
-    }
-    return 0;
-}
-@
-
-<<function [[mkdir]]>>=
-int
-mkdir(char *dir)
-{
-    char buf[ERRMAX];
-    int f;
-
-    if(access(dir, AEXIST) == 0)
-        return 0;
-    if((f = create(dir, OREAD, DMDIR | 0755)) == -1){
-        rerrstr(buf, sizeof(buf));
-        if(strstr(buf, "exist") == nil)
-            return -1;
-    }
-    close(f);
-    return 0;
-}
-@
-
-<<function [[mkpath]]>>=
-int
-mkpath(char *path)
-{
-    char *p;
-
-    p = path;
-    /*
-     * we assume that the path has been
-     * checked with validref(), so there
-     * are no double '/' or odd characters.
-     */
-    while(1){
-        p = strchr(p, '/');
-        if(p == nil)
-            return 0;
-        *p = 0;
-        if(mkdir(path) == -1)
-            return -1;
-        *p++ = '/';
-    }
-}
-@
-
-<<function [[updatepack]]>>=
-int
-updatepack(Conn *c)
-{
-    char buf[Pktmax], packtmp[128], idxtmp[128], ebuf[ERRMAX];
-    int n, pfd, packsz;
-    Hash h;
-
-    /* make sure the needed dirs exist */
-    if(mkdir(".git/objects") == -1)
-        return -1;
-    if(mkdir(".git/objects/pack") == -1)
-        return -1;
-    if(mkdir(".git/refs") == -1)
-        return -1;
-    if(mkdir(".git/refs/heads") == -1)
-        return -1;
-    snprint(packtmp, sizeof(packtmp), ".git/objects/pack/recv-%d.pack.tmp", getpid());
-    snprint(idxtmp, sizeof(idxtmp), ".git/objects/pack/recv-%d.idx.tmp", getpid());
-    if((pfd = create(packtmp, ORDWR, 0644)) == -1)
-        return -1;
-    packsz = 0;
-    while(1){
-        n = read(c->rfd, buf, sizeof(buf));
-        if(n == 0)
-            break;
-        if(n == -1){
-            rerrstr(ebuf, sizeof(ebuf));
-            if(strstr(ebuf, "hungup") == nil)
-                return -1;
-            break;
-        }
-        if(write(pfd, buf, n) != n)
-            return -1;
-        packsz += n;
-    }
-    if(checkhash(pfd, packsz, &h) == -1){
-        dprint(1, "hash mismatch\n");
-        goto error_1;
-    }
-    if(indexpack(packtmp, idxtmp, h) == -1){
-        dprint(1, "indexing failed: %r\n");
-        goto error_1;
-    }
-    if(rename(packtmp, idxtmp, h) == -1){
-        dprint(1, "rename failed: %r\n");
-        goto error_2;
-    }
-    return 0;
-
-error_2:    remove(idxtmp);
-error_1:    remove(packtmp);
-    return -1;
-}   
-@
-
-<<function [[lockrepo]]>>=
-int
-lockrepo(void)
-{
-    int fd, i;
-
-    for(i = 0; i < 10; i++) {
-        if((fd = create(".git/_lock", ORCLOSE|ORDWR|OTRUNC|OEXCL, 0644))!= -1)
-            return fd;
-        sleep(250);
-    }
-    return -1;
-}
-@
-
-<<function [[updaterefs]]>>=
-int
-updaterefs(Conn *c, Hash *cur, Hash *upd, char **ref, int nupd)
-{
-    char refpath[512], buf[128];
-    int i, newidx, hadref, fd, ret, lockfd;
-    vlong newtm;
-    Object *o;
-    Hash h;
-
-    ret = -1;
-    hadref = 0;
-    newidx = -1;
-    /*
-     * Date of Magna Carta.
-     * Wrong because it  was computed using
-     * the proleptic gregorian calendar.
-     */
-    newtm = -23811206400;   
-    if((lockfd = lockrepo()) == -1){
-        snprint(buf, sizeof(buf), "repo locked\n");
-        return -1;
-    }
-    for(i = 0; i < nupd; i++){
-        if(resolveref(&h, ref[i]) == 0){
-            hadref = 1;
-            if(!hasheq(&h, &cur[i])){
-                snprint(buf, sizeof(buf), "old ref changed: %s", ref[i]);
-                goto error;
-            }
-        }
-        if(snprint(refpath, sizeof(refpath), ".git/%s", ref[i]) == sizeof(refpath)){
-            snprint(buf, sizeof(buf), "ref path too long: %s", ref[i]);
-            goto error;
-        }
-        if(hasheq(&upd[i], &Zhash)){
-            remove(refpath);
-            continue;
-        }
-        if((o = readobject(upd[i])) == nil){
-            snprint(buf, sizeof(buf), "update to nonexistent hash %H", upd[i]);
-            goto error;
-        }
-        if(o->type != GCommit){
-            snprint(buf, sizeof(buf), "not commit: %H", upd[i]);
-            goto error;
-        }
-        if(o->commit->mtime > newtm){
-            newtm = o->commit->mtime;
-            newidx = i;
-        }
-        unref(o);
-        if(mkpath(refpath) == -1){
-            snprint(buf, sizeof(buf), "create path: %r");
-            goto error;
-        }
-        if((fd = create(refpath, OWRITE|OTRUNC, 0644)) == -1){
-            snprint(buf, sizeof(buf), "open ref: %r");
-            goto error;
-        }
-        if(fprint(fd, "%H", upd[i]) == -1){
-            snprint(buf, sizeof(buf), "upate ref: %r");
-            close(fd);
-            goto error;
-        }
-        close(fd);
-    }
-    /*
-     * Heuristic:
-     * If there are no valid refs, and HEAD is invalid, then
-     * pick the ref with the newest commits as the default
-     * branch.
-     *
-     * Several people have been caught out by pushing to
-     * a repo where HEAD named differently from what got
-     * pushed, and this is going to be more of a footgun
-     * when 'master', 'main', and 'front' are all in active
-     * use. This should make us pick a useful default in
-     * those cases, instead of silently failing.
-     */
-    if(resolveref(&h, "HEAD") == -1 && hadref == 0 && newidx != -1){
-        if((fd = create(".git/HEAD", OWRITE|OTRUNC, 0644)) == -1){
-            snprint(buf, sizeof(buf), "open HEAD: %r");
-            goto error;
-        }
-        if(fprint(fd, "ref: %s", ref[newidx]) == -1){
-            snprint(buf, sizeof(buf), "write HEAD ref: %r");
-            goto error;
-        }
-        close(fd);
-    }
-    ret = 0;
-error:
-    if(ret != 0)
-        fmtpkt(c, "ERR %s", buf);
-    close(lockfd);
-    werrstr(buf);
-    return ret;
-}
-@
-
-<<function [[recvpack]]>>=
-int
-recvpack(Conn *c)
-{
-    Hash *cur, *upd;
-    char **ref;
-    int nupd;
-
-    if(!allowwrite)
-        fail(c, "read-only repo");
-    if(recvnegotiate(c, &cur, &upd, &ref, &nupd) == -1)
-        fail(c, "negotiate refs: %r");
-    if(nupd != 0 && updatepack(c) == -1)
-        sysfatal("update pack: %r");
-    if(nupd != 0 && updaterefs(c, cur, upd, ref, nupd) == -1)
-        sysfatal("update refs: %r");
-    return 0;
-}
-@
-
-<<function [[parsecmd]]>>=
-char*
-parsecmd(char *buf, char *cmd, int ncmd)
-{
-    int i;
-    char *p;
-
-    for(p = buf, i = 0; *p && i < ncmd - 1; i++, p++){
-        if(*p == ' ' || *p == '\t'){
-            cmd[i] = 0;
-            break;
-        }
-        cmd[i] = *p;
-    }
-    while(*p == ' ' || *p == '\t')
-        p++;
-    return p;
-}
-@
 
 %-------------------------------------------------------------
 
@@ -2270,7 +1442,6 @@ parsecmd(char *buf, char *cmd, int ncmd)
 <<function [[recvnegotiate]]>>
 
 <<function [[rename (git9/serve.c)]]>>
-
 <<function [[checkhash (git9/serve.c)]]>>
 
 <<function [[mkdir]]>>
@@ -2289,7 +1460,6 @@ parsecmd(char *buf, char *cmd, int ncmd)
 <<function [[usage (git9/serve.c)]]>>
 <<function [[main (git9/serve.c)]]>>
 @
-
 
 \subsection{[[git9/util.c]]}
 
@@ -2326,6 +1496,10 @@ parsecmd(char *buf, char *cmd, int ncmd)
 %}
 %@
 
+<<global [[interactive]]>>=
+bool interactive = true;
+@
+
 %-------------------------------------------------------------
 
 <<git9/util.c>>=
@@ -2338,7 +1512,7 @@ parsecmd(char *buf, char *cmd, int ncmd)
 Reprog  *authorpat;
 <<global [[Zhash]]>>
 <<global [[chattygit]]>>
-int interactive = 1;
+<<global [[interactive]]>>
 <<global [[gitdirmode]]>>
 
 enum {
@@ -2388,7 +1562,6 @@ enum {
 <<function [[okref]]>>
 @
 
-
 \subsection{[[git9/walk.c]]}
 
 %ori: dead:
@@ -2420,16 +1593,19 @@ typedef struct Idxent   Idxent;
 
 <<global [[repopath]](walk.c)>>
 <<global [[wdirpath]](walk.c)>>
-char    relapath[1024];
+
+<<global [[relapath]](walk.c)>>
+<<global [[nslash]](walk.c)>>
 
 <<globals [[xxxstr]]>>
 
 <<constant [[bdir]]>>
 
-int nslash;
-int nrel;
+<<global [[nrel]](walk.c)>>
 <<global [[quiet]](walk.c)>>
-int dirty;
+
+<<global [[dirty]](walk.c)>>
+
 <<global [[isindexed]](walk.c)>>
 <<global [[intree]](walk.c)>>
 <<global [[printflg]](walk.c)>>
@@ -2440,7 +1616,6 @@ int dirty;
 <<global [[staleidx]](walk.c)>>
 
 <<globals [[wdir]](walk.c)>>
-
 
 void    loadwdir(char*);
 
@@ -2468,7 +1643,6 @@ void    loadwdir(char*);
 <<function [[usage (git9/walk.c)]]>>
 <<function [[main (git9/walk.c)]]>>
 @
-
 
 \section{[[diff/]]}
 
