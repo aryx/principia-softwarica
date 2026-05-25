@@ -32,10 +32,6 @@ enum
     /*e: constants ed.c */
 };
 
-// ??? seems dead
-void    (*oldhup)(int);
-void    (*oldquit)(int);
-
 /*s: globals ed.c */
 char*   tfname; // temporary filename (/tmp/eXXXX)
 /*x: globals ed.c */
@@ -52,9 +48,9 @@ ulong   nlall = 128;
 // where the ints are file offsets in tfname corresponding to different lines
 int*    zero;
 /*x: globals ed.c */
-// ref<int> in zero array, current line pointer
+// ref<int> in zero[], current line pointer
 int*    dot;
-// ref<int> in zero array, last line pointer
+// ref<int> in zero[], last line pointer
 int*    dol;
 /*x: globals ed.c */
 char    line[70];
@@ -1250,10 +1246,10 @@ gdelete(void)
 /*e: function [[gdelete]](ed.c) */
 
 // Get/Put lines
-/*s: function [[getline]](ed.c) */
+/*s: function [[getline_opti]](ed.c) */
 /// printcom | putfile -> <>
 Rune*
-getline(int tl)
+getline_opti(int tl)
 {
     Rune *lp, *bp;
     int nl;
@@ -1272,11 +1268,11 @@ getline(int tl)
     }
     return linebuf;
 }
-/*e: function [[getline]](ed.c) */
-/*s: function [[putline]](ed.c) */
+/*e: function [[getline_opti]](ed.c) */
+/*s: function [[putline_opti]](ed.c) */
 /// main -> commands('r') -> append -> <>
 int
-putline(void)
+putline_opti(void)
 {
     Rune *lp, *bp;
     int nl, tl;
@@ -1306,7 +1302,7 @@ putline(void)
     tline += ((lp-linebuf) + 03) & 077776;
     return nl;
 }
-/*e: function [[putline]](ed.c) */
+/*e: function [[putline_opti]](ed.c) */
 /*s: function [[blkio]](ed.c) */
 void
 blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
@@ -1381,7 +1377,8 @@ init(void)
     oblock = -1;
     ichanged = 0;
     /*e: [[init()]](ed.c) initializing globals */
-    if((tfile = create(tfname, ORDWR, 0600)) < 0){
+    tfile = create(tfname, ORDWR, 0600);
+    if(tfile < 0){
         error_1(T);
         exits(nil);
     }
@@ -1482,6 +1479,54 @@ join(void)
     dot = addr1;
 }
 /*e: function [[join]](ed.c) */
+
+// Get/Put lines simplified versions (not in original ed.c)
+/*s: function [[getline]] */
+Rune*
+getline(int tl)
+{
+
+    //int n;
+
+    if(1) return getline_opti(tl);
+    // else
+
+    //// seek to the line's offset in the temp file
+    //seek(tfile, tl, 0);
+    //
+    //// read bytes up to the next NUL
+    //n = 0;
+    //while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
+    //    n++;
+    //
+    //linebuf[n] = '\0';
+    //return linebuf;
+}
+/*e: function [[getline]] */
+/*s: function [[putline]] */
+int
+putline(void)
+{
+    //int n;
+    //long tl;
+
+    if(1) return putline_opti();
+    // else
+ 
+    //TODO:
+    //tl = tline;                 // current temp-file write offset
+    //n = strlen(linebuf) + 1;    // include terminating '\0'
+    //
+    //if(tline + n >= NBLK * BLKSIZE)
+    //    error("temp file overflow");
+    //
+    //seek(tfile, tline, 0);
+    //write(tfile, linebuf, n);
+    //
+    //tline += n;
+    //return tl;
+}
+/*e: function [[putline]] */
 
 // Search and replace
 /*s: function [[substitute]](ed.c) */
