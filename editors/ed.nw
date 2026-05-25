@@ -293,15 +293,15 @@ Concretely, suppose the user has the following text in the buffer:
 \begin{verbatim}
                               tfile (the temporary file on disk)
                               +--------------------------------+
-                              |hello world\n                   |
-                              |second line\n                   |
-                              |third line\n                    |
+                              |alpha\n                         |
+                              |beta\n                          |
+                              |gamma\n                         |
                               |a deleted line that's still here\n
                               +--------------------------------+
 
    zero (in memory)
    +-------+--------+--------+--------+
-   | unused| 0      | 12     | 24     |
+   | unused| 0      | 6      | 11     |
    +-------+--------+--------+--------+
    index:  0   1        2        3
               line 1   line 2   line 3
@@ -309,10 +309,10 @@ Concretely, suppose the user has the following text in the buffer:
 %
 Three lines are visible to the user, % (the [[$]] address is~3),
 even though the temporary file on disk also contains a fourth
-line at offset~36 that was previously deleted. Editing operations
+line at offset~17 that was previously deleted. Editing operations
 shift entries within [[zero]]: deleting line~2 would move
-[[zero[3]]] (the offset~24) into [[zero[2]]], leaving the actual
-text at offset~12 in [[tfile]] orphaned but harmless. This is
+[[zero[3]]] (the offset~11) into [[zero[2]]], leaving the actual
+text at offset~6 in [[tfile]] orphaned but harmless. This is
 why ``ed never compacts the temp file''---deletes are O(1)
 in [[zero]] and zero work on disk.
 
@@ -1366,36 +1366,52 @@ if(lp >= &linebuf[LBSIZE]) {
 
 %claude:
 Here is a simplified version of [<putline()>] that shows the
-essential logic: seek to [<tline>] in [<tfile>], write the
-contents of [<linebuf>], advance [[tline]], and return the
-old offset (which [<append()>] stores in [<zero>]).
+essential logic: seek to the current write position in [<tfile>],
+write [<linebuf>] as a run of fixed-width [[Rune]] cells
+terminated by a null Rune, advance [<tline>] by the number of
+Runes written (rounded to even), and return the old offset
+(which [<append()>] stores in [<zero>]).
 %
-The real version (shown in the Optimizations section) uses
-block-based I/O for performance.
+The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
+not bytes, and [[tline]] counts cells, not bytes---which is why
+every seek and write needs a [[*sizeof(Rune)]] conversion.
 
 %new: was not in ed.c originally
 <<function [[putline]]>>=
 int
 putline(void)
 {
-    //int n;
-    //long tl;
+    Rune *lp;
+    int n, tl;
 
     if(1) return putline_opti();
     // else
- 
-    //TODO:
-    //tl = tline;                 // current temp-file write offset
-    //n = strlen(linebuf) + 1;    // include terminating '\0'
-    //
-    //if(tline + n >= NBLK * BLKSIZE)
-    //    error("temp file overflow");
-    //
-    //seek(tfile, tline, 0);
-    //write(tfile, linebuf, n);
-    //
-    //tline += n;
-    //return tl;
+
+    fchange = true;
+    tl = tline;                              // current write offset (Rune units)
+
+    // walk linebuf; stop at the null Rune or an embedded '\n'
+    // (the latter happens after dosub() injects \n in a multi-line subst)
+    for(lp = linebuf; *lp; lp++)
+        if(*lp == '\n') {
+            *lp = 0;                         // turn '\n' into null terminator
+            linebp = lp + 1;                 // stash remainder for getsub()
+            break;
+        }
+    n = lp - linebuf + 1;                    // # Runes including terminator
+
+    if(tline + n >= NBLK * BLKSIZE / (int)sizeof(Rune))
+        error(T);
+
+    // tfile stores fixed-width Runes (not UTF-8);
+    // convert Rune offset/count to byte offsets for seek/write
+    seek(tfile, tline * sizeof(Rune), 0);
+    write(tfile, linebuf, n * sizeof(Rune));
+
+    // round up so tline stays even (the low bit of each zero[]
+    // entry is stolen as the "matched" flag by global() and 'k')
+    tline += (n + 1) & ~01;
+    return tl;
 }
 @
 
@@ -1403,8 +1419,12 @@ putline(void)
 
 %yoann: maybe ascii diagram where see content of tfile on disk and some operations
 %claude:
-A short example of how [[zero]] and [[tfile]] evolve. Suppose
-the user types:
+A short example of how [[zero]] and [[tfile]] evolve. To keep the
+picture readable, the diagrams below first pretend [[tfile]] is
+a plain byte stream of [[\n]]-terminated text lines; the real
+on-disk layout (fixed-width [[Rune]] cells, null-Rune terminators,
+even-aligned offsets) is shown at the end of this subsection.
+Suppose the user types:
 \begin{verbatim}
    r foo.txt   (file contains: "alpha\nbeta\ngamma\n")
    2d          (delete line 2)
@@ -1446,6 +1466,68 @@ Notice that [[tfile]] grew by one line ([[delta]]), but the
 referenced by [[zero]]. This is why ed can do bounded edits in
 constant time but the temp file can become arbitrarily large
 during a long session.
+
+\subsubsection{The actual on-disk layout}
+
+%claude:
+The diagrams above use byte offsets and [[\n]]-terminated text
+because that is how most people picture a file on disk. The real
+layout differs in three ways.
+First, [[tfile]] is a stream of fixed-width [[Rune]] cells, not
+bytes: every codepoint occupies [[sizeof(Rune)]] bytes (4 on this
+build), so a 5-character line like ``alpha'' takes 24 bytes on
+disk---5 character cells plus a terminator.
+Second, lines are terminated by a {null Rune} (value~0), not by
+[[\n]]: [<getfile()>] overwrites the trailing [[\n]] with~0 just
+before [<putline()>] writes the line, and [<putfile()>] turns the~0
+back into [[\n]] when writing to an external file.
+Third, [[tline]] starts at~2 (in Rune units), so the first two Rune
+cells of [[tfile]] are reserved and remain zero-filled.
+
+%claude:
+Here is the just-read-three-lines state drawn at the right granularity:
+\begin{verbatim}
+   tfile, as a stream of Rune cells (each cell = sizeof(Rune) bytes):
+
+   Rune slot:    0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  ...
+                +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+                | 0 | 0 | a | l | p | h | a | 0 | * | * | b | e | t | a | 0 | ...
+                +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+                \reserv/ \------ line 1 'alpha\0' ----/  pad  \-- line 2 'beta\0' ...
+                         ^                                    ^
+                         zero[1] = 2                          zero[2] = 10
+
+   zero (Rune-unit offsets, always even):  [_, 2, 10, 18]
+
+   Byte offset on disk = Rune slot * sizeof(Rune). With sizeof(Rune) = 4,
+   the cells above sit at bytes 0, 4, 8, 12, ...
+\end{verbatim}
+%
+The 1--2 cells of padding between consecutive lines come from
+[<putline()>]'s rounding rule, which bumps [[tline]] by an even
+number at least as large as the line length plus one. The exact
+spacing varies with the line; the load-bearing invariant is just
+that every offset is even.
+
+%claude: %plan9-is-cleaner:
+Why fixed-width [[Rune]] storage rather than UTF-8? Four reasons.
+(1)~Every entry in [[zero]] must be even so [<global()>] and [[k]]
+can steal the low bit as a ``matched'' flag; with fixed-width
+Runes and an even-aligned [[tline]] this falls out for free,
+while UTF-8 byte offsets would have arbitrary parity and the
+trick would not work.
+(2)~[<linebuf>], [<genbuf>], and [<rhsbuf>] are already [[Rune]]
+arrays for the regexp engine and the substitution machinery;
+storing [[tfile]] in the same format means [<getline()>] and
+[<putline()>] reduce to a [[memcpy]] between [[linebuf]] and
+disk---no per-character decode or encode pass.
+(3)~A codepoint never straddles a block boundary, which
+simplifies the block-based I/O introduced later.
+(4)~The original 1969 [[ed]] stored 1-byte ASCII; the \plan port
+widened the element type from [[byte]] to [[Rune]] and kept the
+rest of the architecture intact. The cost---a 4$\times$ on-disk
+size blowup for ASCII text---is fine because [[tfile]] is a
+scratch file that gets [[remove()]]'d on [[q]]uit.
 
 \subsection{[[exfile()]]}
 
@@ -1582,33 +1664,33 @@ putfile(void)
 
 %claude:
 [<getline()>] is the dual of [<putline()>]: given a line offset [[tl]]
-in [[tfile]], it seeks to that position and reads characters into
-[[linebuf]] until it hits the null terminator.
-%
-Like [<putline()>], the real version uses block-based I/O.
+(in [[Rune]] units), it seeks to that position in [[tfile]] and
+reads [[Rune]] cells into [<linebuf>] until it hits the null-Rune
+terminator. As in [[putline()]], the [[*sizeof(Rune)]] factor in
+the seek and the read size is what converts the cell-unit offset
+into a byte offset on disk.
 
 %new: was not in ed.c originally
-%alt: can simplify even more and return char* instead of Rune*
 <<function [[getline]]>>=
 Rune*
 getline(int tl)
 {
-
-    //int n;
+    int n;
 
     if(1) return getline_opti(tl);
     // else
 
-    //// seek to the line's offset in the temp file
-    //seek(tfile, tl, 0);
-    //
-    //// read bytes up to the next NUL
-    //n = 0;
-    //while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
-    //    n++;
-    //
-    //linebuf[n] = '\0';
-    //return linebuf;
+    // tfile stores fixed-width Runes; convert Rune offset to bytes
+    seek(tfile, tl * sizeof(Rune), 0);
+
+    // read one Rune at a time until we hit the null-Rune terminator
+    n = 0;
+    while(read(tfile, &linebuf[n], sizeof(Rune)) == sizeof(Rune)
+          && linebuf[n] != 0)
+        n++;
+
+    linebuf[n] = 0;
+    return linebuf;
 }
 @
 

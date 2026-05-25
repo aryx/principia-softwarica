@@ -1485,46 +1485,59 @@ join(void)
 Rune*
 getline(int tl)
 {
-
-    //int n;
+    int n;
 
     if(1) return getline_opti(tl);
     // else
 
-    //// seek to the line's offset in the temp file
-    //seek(tfile, tl, 0);
-    //
-    //// read bytes up to the next NUL
-    //n = 0;
-    //while (read(tfile, &linebuf[n], 1) == 1 && linebuf[n] != '\0')
-    //    n++;
-    //
-    //linebuf[n] = '\0';
-    //return linebuf;
+    // tfile stores fixed-width Runes; convert Rune offset to bytes
+    seek(tfile, tl * sizeof(Rune), 0);
+
+    // read one Rune at a time until we hit the null-Rune terminator
+    n = 0;
+    while(read(tfile, &linebuf[n], sizeof(Rune)) == sizeof(Rune)
+          && linebuf[n] != 0)
+        n++;
+
+    linebuf[n] = 0;
+    return linebuf;
 }
 /*e: function [[getline]] */
 /*s: function [[putline]] */
 int
 putline(void)
 {
-    //int n;
-    //long tl;
+    Rune *lp;
+    int n, tl;
 
     if(1) return putline_opti();
     // else
- 
-    //TODO:
-    //tl = tline;                 // current temp-file write offset
-    //n = strlen(linebuf) + 1;    // include terminating '\0'
-    //
-    //if(tline + n >= NBLK * BLKSIZE)
-    //    error("temp file overflow");
-    //
-    //seek(tfile, tline, 0);
-    //write(tfile, linebuf, n);
-    //
-    //tline += n;
-    //return tl;
+
+    fchange = true;
+    tl = tline;                              // current write offset (Rune units)
+
+    // walk linebuf; stop at the null Rune or an embedded '\n'
+    // (the latter happens after dosub() injects \n in a multi-line subst)
+    for(lp = linebuf; *lp; lp++)
+        if(*lp == '\n') {
+            *lp = 0;                         // turn '\n' into null terminator
+            linebp = lp + 1;                 // stash remainder for getsub()
+            break;
+        }
+    n = lp - linebuf + 1;                    // # Runes including terminator
+
+    if(tline + n >= NBLK * BLKSIZE / (int)sizeof(Rune))
+        error(T);
+
+    // tfile stores fixed-width Runes (not UTF-8);
+    // convert Rune offset/count to byte offsets for seek/write
+    seek(tfile, tline * sizeof(Rune), 0);
+    write(tfile, linebuf, n * sizeof(Rune));
+
+    // round up so tline stays even (the low bit of each zero[]
+    // entry is stolen as the "matched" flag by global() and 'k')
+    tline += (n + 1) & ~01;
+    return tl;
 }
 /*e: function [[putline]] */
 
