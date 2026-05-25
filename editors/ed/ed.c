@@ -153,6 +153,7 @@ jmp_buf savej;
 /*x: globals ed.c */
 bool rescuing;
 /*e: globals ed.c */
+bool opti = false;
 
 // forward declarations
 void    add(int);
@@ -1487,7 +1488,7 @@ getline(int tl)
 {
     int n;
 
-    if(1) return getline_opti(tl);
+    if(opti) return getline_opti(tl);
     // else
 
     // tfile stores fixed-width Runes; convert Rune offset to bytes
@@ -1510,7 +1511,7 @@ putline(void)
     Rune *lp;
     int n, tl;
 
-    if(1) return putline_opti();
+    if(opti) return putline_opti();
     // else
 
     fchange = true;
