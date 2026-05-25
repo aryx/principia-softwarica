@@ -88,9 +88,10 @@ bool fchange;
 char    Q[] = "";
 /*x: globals ed.c */
 //option<char> (0 = None)
-int lastc;
-//option<char> (0 = None)
 int peekc;
+/*x: globals ed.c */
+//option<char> (0 = None)
+int lastc;
 /*x: globals ed.c */
 // optional programmed command (e.g., "r", "a")
 //option<Rune> or list<Rune> when used from global() ?
