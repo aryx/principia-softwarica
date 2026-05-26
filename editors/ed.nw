@@ -4,7 +4,6 @@ This appendix has two purposes. First, it is a concrete
 example of a literate program---a complement to
 Section~\ref{sec:literate-programming},
 which presented literate programming in the abstract.
-\n (Knuth, [[noweb]], chunks, prose-and-code interleaving).
 %
 Reading the source of a real program presented in
 literate form is the best way to see what literate
@@ -13,84 +12,96 @@ programming actually buys you.
 %conventions (\verb+<<chunk name>>=+, \verb+@+, and
 %\verb+[[code]]+ for inline code references) by example.
 %
-Second, it is a {tutorial introduction to a real \plan program}: 
+Second, it is a full explanation of a real \plan program: 
 [[ed]], which is small enough (under 2000~lines of C) to
 fit in one appendix, yet old enough and famous enough
 that almost every modern editors and string-processing tools
 descend from it in some way.
 %
-Reading its source is a quick way to see how a
+Reading its source code is a quick way to see how a
 non-trivial \unix tool was structured in the 1970s.
 
 \section{Introduction}
 
 \subsection{A line editor}
 
-% 'ed', for editor (they do like 2 letters acronyms), is an old editor
-% originally written by Ken Thompson in the 1970's for Unix.
-%% (part of the special "3 weeks" where he wrote editor, assembler, kernel?)
-
-% It is a *line editor*, as opposed to *screen editor* like vi or emacs,
-% or stream editor like sed.
-% ed is very different from emacs, or vi (or sam or acme).
-% edit just one file at a time.
-% Most editors nowaday are screen editors, but still useful to know ed!
-% especially good for scripting
-%said-later: see mkenam in plan9 code.
-% Also if need quick and dirty write a file with a few lines => ed!
-% See also \book{Editor} for screen editor.
-
-%claude:
-[[ed]], short for ``editor,'' is one of the oldest \unix programs,
+[[ed]], short for ``editor''\footnote{
+  \plan and \unix authors did like short command names: 
+  [[ed]], [[mk]], [[rc]], [[db]], etc.},
+is one of the oldest \unix programs,
 originally written by Ken Thompson in the 1970s.
-It is a {\em line editor}: rather than displaying the whole file on screen
-like [[vi]], Emacs, or \plan's [[sam]] and [[acme]],
-[[ed]] works one line at a time, accepting commands from standard input
+%(part of the special "3 weeks" where he wrote editor, assembler, kernel?)
+%claude:
+It is a {\em line editor}: rather than always displaying a file content
+on {screen} like [[vi]], Emacs, or \plan's [[sam]] and [[acme]],
+% or stream editor like sed.
+[[ed]] works mostly one line at a time, accepting commands from standard input
 and printing results to standard output.
 %
-This makes it look primitive compared to modern {screen editors},
-but it has a crucial advantage: it can be scripted.
+This makes it look primitive compared to modern {\em screen editors},
+but it has a crucial advantage: it can be {scripted}.
 You can pipe a sequence of editing commands into [[ed]] from a shell
-script, something that is awkward or impossible with interactive editors.
+script, something that is awkward or impossible with most editors.
+%said-later: see mkenam in plan9 code.
+%Also if need quick and dirty write a file with a few lines => ed!
+% See also \book{Editor} for screen editor.
+% edit just one file at a time.
 
-% s/re/g
-% g/re/p comes from ed!
-% 'wq', 'a', 'i', modes, lots of things in vi coming from ed
-%later: g global re regexp p print
 
 %claude:
-Many ideas that seem to ``belong'' to other tools actually originated in
+Note that many ideas that seem to ``belong'' to other tools actually originated in
 [[ed]]: the [[s/re/replacement/]] syntax used by [[sed]], the [[g/re/p]]
 command that gave [[grep]] its name (``global regular expression print''),
 and commands like [[wq]], [[a]], [[i]] that [[vi]] inherited directly.
-
-% Can already create file content with echo and shell redirection
-% (>, >> for append); can do a lot, but still not as powerful as ed.
+%
+It is thus interesting to see the code and understand the program
+that started it all.
+%Moreover, editor is a fundamental program, see other appendix.
 
 %claude:
 While you can already create and modify files using [[echo]] and shell
 redirection ([[>]], [[>>]]), [[ed]] offers far more power: searching,
 substituting, moving lines, and operating on ranges of lines.
+%claude:
+For a quick hands-on feel, here is a complete [[ed]] session:
+launch [[ed]], open insert mode with [[i]], type two lines, end
+the insertion with a single [[.]] on its own line, print lines~1
+to~2 with [[1,2p]], and quit with [[q]]:
+\begin{verbatim}
+   $ ed
+   i
+   hello
+   world
+   .
+   1,2p
+   hello
+   world
+   q
+\end{verbatim}
+%
+[[ed]] is famously silent: it prints no prompt, and every line
+you type is either a command or part of a text-entry session
+opened by [[i]] or [[a]].
 
 % see also its man page for documentation.
 % see also vol72a with 2 tutorials on ed by Brian Kernighan.
 % Quite complex command ...
-For a tutorial introduction to [[ed]], see Appendix~1 of
+For a full tutorial introduction to [[ed]], see Appendix~1 of
 ``The \unix Programming Environment'' \cite{unix-pike},
 or Kernighan's two tutorials from the Bell Labs technical reports.
 
-\n could cite "Formalizing text editors in Coq" 2020 :) but meh actually
-
+% could cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
 \subsection{Motivations: [[mkenam]]}
 \label{sec:motivations-mkenam}
 
-% ex of powerful ed command used in principia/goken mkenam:
 %claude:
 Here is a real example of [[ed]] used as a code generator in the
-\plan build system. The [[mkenam]] script below transforms a header file
-([[5.out.h]], containing assembler opcode definitions) into a C
-source file ([[enam.c]], containing a string array of opcode names):
+\plan build system.
+%
+The [[mkenam]] script below transforms a header file
+([[5.out.h]]) containing assembler opcode definitions into a C
+source file ([[enam.c]]) containing a string array of opcode names:
 
 <<mkenam>>=
 ed - ../5l/5.out.h <<'!'
@@ -113,10 +124,13 @@ Q
 % no need 'g/ .*$/s///',   I replaced some  ',s/.../' by clearer '1,$s/.../',
 % the last 'Q' could be a 'q'
 
+To understand what this script does, it helps to see
+a concrete example of input and output.
 %claude:
-To make the goal concrete, here is what a snippet of the input
+Here is what a snippet of the input
 file [[5.out.h]] looks like (left) and what the output [[enam.c]]
 is supposed to look like (right):
+
 \begin{verbatim}
    5.out.h (input)            enam.c (generated output)
    ----------------           ---------------------------
@@ -132,22 +146,25 @@ is supposed to look like (right):
    };                              ...
                               };
 \end{verbatim}
-%
-The transformation: keep only lines starting with a tab followed
-by [[A]] (the opcode names), strip that prefix, wrap each name in
-double quotes followed by a comma, and add the
-\verb+char* anames[]+ array header and trailing brace.
+
+
+The transformations from [[5.out.h]] to [[enam.c]] are: 
+keep only lines starting with a tab followed by [[A]] (the opcode names),
+strip that prefix,
+wrap each name in double quotes followed by a comma, and
+add the \verb+char* anames[]+ array header and trailing brace.
 %
 Each time someone modifies [[5.out.y]], the [[enam.c]] can be regenerated
-automatically thanks to the [[mkenam]] script.
+automatically thanks to the [[mkenam]] script called from [[5c/mkfile]].
 
 %claude:
 The script uses [[ed -]] (quiet mode, suppressing character counts)
-and a shell here-document to feed commands.
+and a shell here-document ([[<<?]], see \book{Shell}) to feed commands.
+%
 It first deletes lines not starting with [[A]] ([[v/^	A/d]]),
 then uses [[s///]] substitutions to reshape each remaining line
-into a quoted C string, and finally uses [[i]] and [[a]] to wrap
-the result with the array declaration.
+into a quoted C string, and finally uses [[i]] ([[1i]], meaning insert at line 1) and [[a]] ([[$a]], meaning appending at the end)
+to wrap the result with the array declaration.
 By the end of this appendix, you will understand every command in
 this script.
 
@@ -164,8 +181,8 @@ this script.
 The key advantage of [[ed]] here is that the editing commands are
 plain text, easily embedded in a shell script or a [[mkfile]] rule.
 Try doing the same in Emacs or Visual Studio Code---you would need Emacs Lisp
-macros or complex key-sequence recordings, neither of which compose
-well with the shell.
+macros or complex key-sequence recordings which would not be so easy
+to replay.
 
 % '-' suppress the printing of character counts by e/r/w
 %  remove verbose/interactive mode (default)
@@ -175,18 +192,19 @@ well with the shell.
 
 %claude:
 Note that the \plan version of [[ed]] is Unicode-ready,
-using [[Rune]] throughout for text processing.
+using [[Rune]] (see \book{Libcore}) throughout for text processing,
+as explained in the next section.
+%
 This adds some complexity to the code (conversions between [[char]] and
 [[Rune]], separate buffers for byte I/O vs.\ character manipulation),
 but the overall structure remains simple and elegant.
 
 
 %\section{[[ed]] clones}
-
 %clones:
 % - go: https://github.com/thimc/ed and https://git.mills.io/prologic/ed
 % - rust: https://github.com/sidju/add-ed
-% - in OCaml? yes mine! see next appendix :)
+%ocaml: - in OCaml? yes mine! see next appendix :)
 
 
 \subsection{Unicode in \plan: a primer}
@@ -194,35 +212,44 @@ but the overall structure remains simple and elegant.
 
 %claude:
 [[ed]] reads, edits, and writes text that may contain non-ASCII
-characters (accented letters, CJK glyphs, emoji), so before we
+characters (e.g., accented letters, chinese characters, emoji), so before we
 dive into the code it is worth spending a few paragraphs on how
 \plan represents text. A full treatment lives in \book{Libcore};
 this primer covers just what you need to follow the rest of [[ed]].
 
+%terminology:
+{\em Unicode} is an abstract catalog of characters.
+A {\em codepoint} is the numeric ID of a
+character in that catalog: [[U+0041]] is ``A'' ([[65]] in decimal),
+[[U+00E9]] is ``é'' ([[233]]), and so on up to [[U+10FFFF]] for the
+rarest emoji and historical scripts.
+{\em UTF-8} is one way to store/transmit those code points as bytes.
+
 %claude: %terminology:
-The atomic unit of text is a {codepoint}: an integer naming a
-character in the Unicode catalogue ([[U+0041]] ``A''~=~65,
-[[U+00E9]] ``é''~=~233, and so on up to [[U+10FFFF]] for the
-rarest emoji and historical scripts). \plan stores codepoints
-in two complementary formats.
-A {[[Rune]]} is a fixed-width unsigned integer (32~bits on this
-build) holding one codepoint; [[Rune]] arrays such as
+\plan stores codepoints in two complementary formats.
+A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
+holding one codepoint; [[Rune]] arrays such as
 [[Rune linebuf[LBSIZE]]] are the in-memory format for text
-manipulation. {UTF-8} is a variable-length byte encoding where
+manipulation. 
+%
+{UTF-8} is a {\em variable-length} byte encoding where
 ASCII codepoints take 1~byte, Latin supplements take 2, most
 other scripts 3, and rare codepoints (including emoji) 4;
 UTF-8 lives in [[char]] arrays and is the format for files,
 terminal I/O, and exec arguments.
+%
+\plan is using UTF-8 everywhere text is involved.
 
 %claude:
 The bridge between the two formats is two routines from [[libc]]:
 \begin{verbatim}
-   int chartorune(Rune *r, char *s);   // UTF-8 -> Rune; returns # bytes consumed
-   int runetochar(char *s, Rune *r);   // Rune -> UTF-8; returns # bytes written
+   int chartorune(Rune *r/*OUT*/, char *s); // UTF-8 -> Rune; returns # bytes consumed
+   int runetochar(char *s/*OUT*/, Rune *r);   // Rune -> UTF-8; returns # bytes written
 \end{verbatim}
+
+Both move at most [[UTFmax]]~=~4 bytes per codepoint.
 %
-Both move at most [[UTFmax]]~=~4 bytes per codepoint. For pure
-ASCII text the formats coincide byte-for-byte (the byte is
+For pure ASCII text the formats coincide byte-for-byte (the byte is
 [[0xxxxxxx]] in UTF-8 and the codepoint value in the low byte
 of the [[Rune]]), so an ASCII-only program can pretend the
 distinction does not exist. [[ed]] is more careful because
@@ -239,8 +266,10 @@ bytes [[0xc3 0xa9]]:
    +------------+------------+------------+-----+
         'a'         'é'          'b'        term
 
-                  chartorune ----->
-                  <----- runetochar
+         |                                     ^
+         | runetochar              chartorune  |
+         | (Rune -> UTF-8)         (UTF-8 -> Rune)
+         v                                     |
 
    UTF-8 bytes (on disk / on the wire, e.g. iobuf):
    +------+------+------+------+
@@ -249,29 +278,30 @@ bytes [[0xc3 0xa9]]:
      'a'   \---- 'é' ----/  'b'
      (1B)      (2B)        (1B)
 \end{verbatim}
-%
-[[chartorune]] inspects the top bits of the leading byte to
+%yoann1: in this diagram the arrow directions seems wrong for chartorune and runetochar
+
+%claude:
+[[chartorune()]] inspects the top bits of the leading byte to
 determine how many continuation bytes follow---[[0xxxxxxx]] is
 a 1-byte sequence, [[110xxxxx]] introduces a 2-byte sequence,
 [[1110xxxx]] introduces 3 bytes, [[11110xxx]] introduces 4---and
-assembles the codepoint. [[runetochar]] does the inverse,
+assembles the codepoint. [[runetochar()]] does the inverse,
 selecting the encoding by the codepoint's value range.
 
 %claude:
-The two-format split shapes the rest of [[ed]]. [<linebuf>],
-[<genbuf>], [<rhsbuf>], and the temp file [<tfile>] all store
-[[Rune]] because fixed-width makes the regexp engine, the
-substitution machinery, and offset arithmetic straightforward.
-[<getfile()>] decodes UTF-8 from the edited file into Runes via
-[[Bgetrune]] (a buffered [[chartorune]]); [<putfile()>] reverses
-the direction with [[Bputrune]]. [<filename()>] and
-[<callunix()>] re-encode Runes back to UTF-8 with [[runetochar]]
-to hand them to [[open()]] or [[execl()]]. [<putchr()>] does
-the same when writing to standard output. Every [[chartorune]]
-or [[runetochar]] you spot in the code below marks a boundary
-between [[ed]]'s in-memory Rune world and the byte world of
-files, terminals, and process arguments.
-
+%The two-format split shapes the rest of [[ed]]. [<linebuf>],
+%[<genbuf>], [<rhsbuf>], and the temp file [<tfile>] all store
+%[[Rune]] because fixed-width makes the regexp engine, the
+%substitution machinery, and offset arithmetic straightforward.
+%[<getfile()>] decodes UTF-8 from the edited file into Runes via
+%[[Bgetrune]] (a buffered [[chartorune]]); [<putfile()>] reverses
+%the direction with [[Bputrune]]. [<filename()>] and
+%[<callunix()>] re-encode Runes back to UTF-8 with [[runetochar]]
+%to hand them to [[open()]] or [[execl()]]. [<putchr()>] does
+%the same when writing to standard output. Every [[chartorune]]
+%or [[runetochar]] you spot in the code below marks a boundary
+%between [[ed]]'s in-memory Rune world and the byte world of
+%files, terminals, and process arguments.
 
 \section{Core data structures}
 
@@ -296,7 +326,7 @@ files, terminals, and process arguments.
 
 %claude:
 The data structures in [[ed]] are radically different from modern
-editors.  There is no linked list of lines, no rope, no gap buffer.
+text editors.  There is no linked list of lines, no rope, no gap buffer.
 In fact, the content of the file being edited is not even kept in memory.
 %
 Instead, all text is stored in a {temporary file} on disk
