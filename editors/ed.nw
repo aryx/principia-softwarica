@@ -54,7 +54,7 @@ Note that many ideas that seem to ``belong'' to other tools actually originated 
 command that gave [[grep]] its name (``global regular expression print''),
 and commands like [[wq]], [[a]], [[i]] that [[vi]] inherited directly.
 %
-It is thus interesting to see the code and understand the program
+It is thus interesting to see the code of the program
 that started it all.
 %Moreover, editor is a fundamental program, see other appendix.
 
@@ -92,7 +92,8 @@ or Kernighan's two tutorials from the Bell Labs technical reports.
 
 % could cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
-\subsection{Motivations: [[mkenam]]}
+\subsection{A scriptable editor}
+%alt: \subsection{Motivations: [[mkenam]]}
 \label{sec:motivations-mkenam}
 
 %claude:
@@ -131,7 +132,7 @@ Here is what a snippet of the input
 file [[5.out.h]] looks like (left) and what the output [[enam.c]]
 is supposed to look like (right):
 
-\begin{verbatim}
+\begin{vdiagram}
    5.out.h (input)            enam.c (generated output)
    ----------------           ---------------------------
    enum    As {               char* anames[] =
@@ -145,12 +146,12 @@ is supposed to look like (right):
        ...                         "SUB",
    };                              ...
                               };
-\end{verbatim}
+\end{vdiagram}
 
 
 The transformations from [[5.out.h]] to [[enam.c]] are: 
 keep only lines starting with a tab followed by [[A]] (the opcode names),
-strip that prefix,
+strip that prefix [[A]],
 wrap each name in double quotes followed by a comma, and
 add the \verb+char* anames[]+ array header and trailing brace.
 %
@@ -158,15 +159,15 @@ Each time someone modifies [[5.out.y]], the [[enam.c]] can be regenerated
 automatically thanks to the [[mkenam]] script called from [[5c/mkfile]].
 
 %claude:
-The script uses [[ed -]] (quiet mode, suppressing character counts)
-and a shell here-document ([[<<?]], see \book{Shell}) to feed commands.
+The [[mkenam]] script uses [[ed -]] (quiet mode, suppressing character counts)
+and a shell here-document ([[<<'!']], see the \book{Shell}) to feed commands.
 %
 It first deletes lines not starting with [[A]] ([[v/^	A/d]]),
 then uses [[s///]] substitutions to reshape each remaining line
-into a quoted C string, and finally uses [[i]] ([[1i]], meaning insert at line 1) and [[a]] ([[$a]], meaning appending at the end)
+into a quoted C string, and finally uses [[i]] ([[1i]], meaning insert back at line 1) and [[a]] ([[$a]], meaning appending at the end)
 to wrap the result with the array declaration.
-By the end of this appendix, you will understand every command in
-this script.
+By the end of this appendix, you will fully understand every command in
+this script (and the code behind those commands).
 
 % also how to do that with other tools? can do with sed? can do with vi/emacs?
 % via a script that can run each time you modify 5.out.h and can be called
@@ -192,7 +193,7 @@ to replay.
 
 %claude:
 Note that the \plan version of [[ed]] is Unicode-ready,
-using [[Rune]] (see \book{Libcore}) throughout for text processing,
+using [[Rune]] (see the \book{Libcore}) throughout for text processing,
 as explained in the next section.
 %
 This adds some complexity to the code (conversions between [[char]] and
@@ -211,10 +212,10 @@ but the overall structure remains simple and elegant.
 \label{sec:unicode-primer}
 
 %claude:
-[[ed]] reads, edits, and writes text that may contain non-ASCII
+[[ed]] can read, edit, and write text that contains non-ASCII
 characters (e.g., accented letters, chinese characters, emoji), so before we
-dive into the code it is worth spending a few paragraphs on how
-\plan represents text. A full treatment lives in \book{Libcore};
+dive into its code it is worth spending a few paragraphs on how
+\plan represents text. A full treatment lives in the \book{Libcore};
 this primer covers just what you need to follow the rest of [[ed]].
 
 %terminology:
@@ -223,12 +224,12 @@ A {\em codepoint} is the numeric ID of a
 character in that catalog: [[U+0041]] is ``A'' ([[65]] in decimal),
 [[U+00E9]] is ``é'' ([[233]]), and so on up to [[U+10FFFF]] for the
 rarest emoji and historical scripts.
-{\em UTF-8} is one way to store/transmit those code points as bytes.
+{\em UTF-8} is one way to store/transmit those code points as {\em bytes}.
 
 %claude: %terminology:
 \plan stores codepoints in two complementary formats.
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
-holding one codepoint; [[Rune]] arrays such as
+holding one codepoint; Rune arrays such as
 [[Rune linebuf[LBSIZE]]] are the in-memory format for text
 manipulation. 
 %
@@ -238,7 +239,7 @@ other scripts 3, and rare codepoints (including emoji) 4;
 UTF-8 lives in [[char]] arrays and is the format for files,
 terminal I/O, and exec arguments.
 %
-\plan is using UTF-8 everywhere text is involved.
+\plan is using UTF-8 encoding everywhere text is involved.
 
 %claude:
 The bridge between the two formats is two routines from [[libc]]:
@@ -249,21 +250,22 @@ The bridge between the two formats is two routines from [[libc]]:
 
 Both move at most [[UTFmax]]~=~4 bytes per codepoint.
 %
-For pure ASCII text the formats coincide byte-for-byte (the byte is
-[[0xxxxxxx]] in UTF-8 and the codepoint value in the low byte
-of the [[Rune]]), so an ASCII-only program can pretend the
-distinction does not exist. [[ed]] is more careful because
-the files it edits may contain arbitrary Unicode.
+%For pure ASCII text the formats coincide byte-for-byte (the byte is
+%[[0xxxxxxx]] in UTF-8 and the codepoint value in the low byte
+%of the [[Rune]]), so an ASCII-only program can pretend the
+%distinction does not exist. [[ed]] is more careful because
+%the files it edits may contain arbitrary Unicode.
 
 %claude:
 Here is the three-character string ``aéb'' in both formats.
 ``é'' is codepoint [[U+00E9]], which UTF-8 encodes as the two
 bytes [[0xc3 0xa9]]:
-\begin{verbatim}
+
+\begin{vdiagram}
    Rune array (in memory, e.g. linebuf):
-   +------------+------------+------------+-----+
-   | 0x00000061 | 0x000000e9 | 0x00000062 |  0  |   each cell = sizeof(Rune)
-   +------------+------------+------------+-----+
+   +------------+------------+------------+--------------+
+   | 0x00000061 | 0x000000e9 | 0x00000062 |  0x00000000  |   each cell = sizeof(Rune)
+   +------------+------------+------------+--------------+
         'a'         'é'          'b'        term
 
          |                                     ^
@@ -277,7 +279,7 @@ bytes [[0xc3 0xa9]]:
    +------+------+------+------+
      'a'   \---- 'é' ----/  'b'
      (1B)      (2B)        (1B)
-\end{verbatim}
+\end{vdiagram}
 %yoann1: in this diagram the arrow directions seems wrong for chartorune and runetochar
 
 %claude:
