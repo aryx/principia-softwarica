@@ -66,7 +66,7 @@ substituting, moving lines, and operating on ranges of lines.
 For a quick hands-on feel, here is a complete [[ed]] session:
 launch [[ed]], open insert mode with [[i]], type two lines, end
 the insertion with a single [[.]] on its own line, print lines~1
-to~2 with [[1,2p]], set the remembered filename with
+to~2 with [[1,2p]] ([[ed]] echoes the 2 lines), set the remembered filename with
 [[f hello.txt]] ([[ed]] echoes it back), save the buffer with
 [[w]] ([[ed]] echoes the character count written), and quit
 with [[q]]:
@@ -105,8 +105,8 @@ or Kernighan's two tutorials from the Bell Labs technical reports.
 \label{sec:motivations-mkenam}
 
 %claude:
-Here is a real example of [[ed]] used as a code generator in the
-\plan build system.
+Here is a real example of [[ed]] used as a code generator during the build of
+\plan.
 %
 The [[mkenam]] script below transforms a header file
 ([[5.out.h]]) containing assembler opcode definitions into a C
@@ -471,31 +471,32 @@ Here is the same three-line buffer drawn at the right granularity:
 
    Rune slot:    0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  ...
                 +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-                | 0 | 0 | a | l | p | h | a | 0 | * | * | b | e | t | a | 0 | ...
+                | 0 | 0 | a | l | p | h | a | 0 | b | e | t | a | 0 | g | a | ...
                 +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-                \reserv/ \------ line 1 'alpha\0' ----/  pad  \-- line 2 'beta\0' ...
-                         ^                                    ^
-                         zero[1] = 2                          zero[2] = 10
+                \reserv/ \----- 'alpha\0' -----/\---- 'beta\0' ----/
+                         ^                      ^
+                         zero[1] = 2            zero[2] = 8
 
-   zero (Rune-unit offsets, always even):  [_, 2, 10, 18]
+   zero (Rune-unit offsets):  [_, 2, 8, 13]
 
    Byte offset on disk = Rune slot * sizeof(Rune). With sizeof(Rune) = 4,
    the cells above sit at bytes 0, 4, 8, 12, ...
 \end{verbatim}
 %
-The 1--2 cells of padding between consecutive lines come from
-[<putline()>]'s rounding rule, which bumps [[tline]] by an even
-number at least as large as the line length plus one. The exact
-spacing varies with the line; the load-bearing invariant is just
-that every offset is even.
+The simplified [<putline()>] shown later writes each line as
+exactly [[n+1]] Rune cells (the [[n]] characters plus a null
+terminator), so consecutive lines sit back-to-back with no
+inter-line padding: [[sizeof(Rune)]]~=~4 already makes every byte
+offset a multiple of four.
 
 %claude: %plan9-is-cleaner:
 Why fixed-width [[Rune]] storage rather than UTF-8? Four reasons.
-(1)~Every entry in [[zero]] must be even so [<global()>] and [[k]]
-can steal the low bit as a ``matched'' flag; with fixed-width
-Runes and an even-aligned [[tline]] this falls out for free,
-while UTF-8 byte offsets would have arbitrary parity and the
-trick would not work.
+(1)~With fixed-width Runes, padding each line to an even Rune
+count costs at most one cell, so the actual [[ed.c]] keeps
+[[zero]] entries even and lets [<global()>] and [[k]] steal the
+low bit as a ``matched'' flag (the simplified [<putline()>] shown
+later skips this padding for clarity). UTF-8 byte offsets would have
+arbitrary parity, breaking the trick entirely.
 (2)~[<linebuf>], [<genbuf>], and [<rhsbuf>] are already [[Rune]]
 arrays for the regexp engine and the substitution machinery;
 storing [[tfile]] in the same format means [<getline()>] and
@@ -1565,8 +1566,8 @@ Here is a simplified version of [<putline()>] that shows the
 essential logic: seek to the current write position in [<tfile>],
 write [<linebuf>] as a run of fixed-width [[Rune]] cells
 terminated by a null Rune, advance [<tline>] by the number of
-Runes written (rounded to even), and return the old offset
-(which [<append()>] stores in [<zero>]).
+Runes written, and return the old offset (which [<append()>]
+stores in [<zero>]).
 %
 The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
 not bytes, and [[tline]] counts cells, not bytes---which is why
@@ -1604,9 +1605,13 @@ putline(void)
     seek(tfile, tline * sizeof(Rune), 0);
     write(tfile, linebuf, n * sizeof(Rune));
 
-    // round up so tline stays even (the low bit of each zero[]
-    // entry is stolen as the "matched" flag by global() and 'k')
-    tline += (n + 1) & ~01;
+    // advance past the line just written; no padding needed because
+    // sizeof(Rune) is even, so every byte offset (tline*sizeof(Rune))
+    // stays even regardless of n's parity
+    // (the real ed.c rounds tline up to even to free the low bit of
+    // each zero[] entry for the "matched" flag used by global() and 'k')
+    assert(sizeof(Rune) % 2 == 0);
+    tline += n;
     return tl;
 }
 @
@@ -1618,9 +1623,9 @@ putline(void)
 A short example of how [[zero]] and [[tfile]] evolve. The diagrams
 below use byte offsets and [[\n]]-terminated text for readability,
 as in the earlier picture of [[zero]] in
-Section~\ref{sec:lines-as-file-offsets}; the real on-disk layout
-is fixed-width [[Rune]] cells with even-aligned offsets, but that
-detail does not affect the editing operations shown here.
+Section~\ref{sec:lines-as-file-offsets}; the actual on-disk layout
+is fixed-width [[Rune]] cells, but that detail does not affect
+the editing operations shown here.
 Suppose the user types:
 \begin{verbatim}
    r foo.txt   (file contains: "alpha\nbeta\ngamma\n")
