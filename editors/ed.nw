@@ -66,7 +66,10 @@ substituting, moving lines, and operating on ranges of lines.
 For a quick hands-on feel, here is a complete [[ed]] session:
 launch [[ed]], open insert mode with [[i]], type two lines, end
 the insertion with a single [[.]] on its own line, print lines~1
-to~2 with [[1,2p]], and quit with [[q]]:
+to~2 with [[1,2p]], set the remembered filename with
+[[f hello.txt]] ([[ed]] echoes it back), save the buffer with
+[[w]] ([[ed]] echoes the character count written), and quit
+with [[q]]:
 \begin{verbatim}
    $ ed
    i
@@ -76,9 +79,14 @@ to~2 with [[1,2p]], and quit with [[q]]:
    1,2p
    hello
    world
+   f hello.txt
+   hello.txt
+   w
+   12
    q
 \end{verbatim}
-%
+
+%claude:
 [[ed]] is famously silent: it prints no prompt, and every line
 you type is either a command or part of a text-entry session
 opened by [[i]] or [[a]].
@@ -361,7 +369,7 @@ fdt tfile   = -1;
 % tfile for temporary file, again fundamental!
 
 <<globals ed.c>>=
-// current write file offset in tfile; 
+// current write file offset in tfile in Rune-unit
 int tline;
 @
 
@@ -408,7 +416,7 @@ The temporary file only grows; it is never compacted.
 
 %claude:
 Concretely, suppose the user has the following text in the buffer:
-\begin{verbatim}
+\begin{vdiagram}
                               tfile (the temporary file on disk)
                               +--------------------------------+
                               |alpha\n                         |
@@ -423,16 +431,18 @@ Concretely, suppose the user has the following text in the buffer:
    +-------+--------+--------+--------+
    index:  0   1        2        3
               line 1   line 2   line 3
-\end{verbatim}
+\end{vdiagram}
 %
 Three lines are visible to the user, % (the [[$]] address is~3),
 even though the temporary file on disk also contains a fourth
-line at offset~17 that was previously deleted. Editing operations
-shift entries within [[zero]]: deleting line~2 would move
+line at offset~17 that was previously deleted.
+%
+Editing operations simply shift entries within [[zero]]: deleting line~2 would
+move
 [[zero[3]]] (the offset~11) into [[zero[2]]], leaving the actual
-text at offset~6 in [[tfile]] orphaned but harmless. This is
-why ``ed never compacts the temp file''---deletes are O(1)
-in [[zero]] and zero work on disk.
+text at offset~6 in [[tfile]] orphaned but harmless. 
+%This is why ``ed never compacts the temp file''---deletes are O(1)
+%in [[zero]] and zero work on disk.
 
 \subsubsection{The actual on-disk layout}
 
@@ -440,14 +450,17 @@ in [[zero]] and zero work on disk.
 The diagram above uses byte offsets and [[\n]]-terminated text
 because that is how most people picture a file on disk. The real
 layout differs in three ways.
-First, [[tfile]] is a stream of fixed-width [[Rune]] cells, not
-bytes: every codepoint occupies [[sizeof(Rune)]] bytes (4 on this
-build), so a 5-character line like ``alpha'' takes 24 bytes on
+%
+First, [[tfile]] is a stream of fixed-width [[Rune]] cells
+(see Section~\ref{sec:unicode-primer}, not
+bytes: every codepoint occupies [[sizeof(Rune)]] bytes (usually 4),
+so a 5-character line like ``alpha'' takes 24 bytes on
 disk---5 character cells plus a terminator.
 Second, lines are terminated by a {null Rune} (value~0), not by
-[[\n]]: [<getfile()>] overwrites the trailing [[\n]] with~0 just
-before [<putline()>] writes the line, and [<putfile()>] turns the~0
-back into [[\n]] when writing to an external file.
+[[\n]].
+% [<getfile()>] overwrites the trailing [[\n]] with~0 just
+%before [<putline()>] writes the line, and [<putfile()>] turns the~0
+%back into [[\n]] when writing to an external file.
 Third, [[tline]] starts at~2 (in Rune units), so the first two Rune
 cells of [[tfile]] are reserved and remain zero-filled.
 
@@ -877,10 +890,14 @@ init(void)
 tline = 2;
 @
 %claude:
-[[tline]] starts at~2, not~0. This ensures that no valid line offset
-is ever~0 (used as ``no line'') or~1 (the low bit is stolen by the
-[[global]] and [[mark]] commands as a flag---see [<global()>] and
-[[k]] later).
+Recall that [[tline]] is a Rune-unit offset into [<tfile>] (the
+byte offset on disk is [[tline*sizeof(Rune)]]; see the on-disk
+layout in Section~\ref{sec:lines-as-file-offsets}).
+It starts at~2, not~0, to satisfy two invariants every line offset
+must maintain: it must be non-zero so~0 stays the ``no line''
+sentinel, and it must be even so the low bit of each [[zero[]]]
+entry stays free for [<global()>] and the [[k]] command to use as
+a ``matched'' flag (see those sections later).
 
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
 % but means first 2 bytes of tfile are 0 (first seek will do that)
