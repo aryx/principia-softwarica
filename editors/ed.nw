@@ -349,7 +349,7 @@ an array of integer offsets into that temporary file---one offset
 per line.
 %
 Editing operations like delete and move merely shuffle entries in
-[[zero]]; the temporary file itself only ever grows, never shrinks.
+[[zero]]; the temporary file itself only grows, never shrinks.
 
 \subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
 
@@ -403,6 +403,15 @@ char    savedfile[FNSIZE];
 %claude:
 [<zero>] is the central data structure: a dynamically-growing array
 of [[int]] offsets into [<tfile>], one per line.
+
+<<globals ed.c>>=
+ulong   nlall = 128;
+// growing_array<int>, initial size = (nlall+2+margin)*sizeof(int)
+// where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
+int*    zero;
+@
+
+
 Lines are 1-indexed: [[zero[1]]] is the offset of line~1,
 [[zero[2]]] of line~2, etc. The entry [[zero[0]]] is unused
 (always~0), which is why the array is called ``zero''---it starts
@@ -476,8 +485,7 @@ We will see soon the reason for it.
 %claude:
 Here is the same three-line buffer drawn at the right granularity:
 \begin{verbatim}
-   tfile, as a stream of Rune cells (each cell = sizeof(Rune) bytes):
-
+   tfile (disk), as a stream of Rune cells (each cell = sizeof(Rune) bytes):
    Rune slot:    0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  ...
                 +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
                 | 0 | 0 | a | l | p | h | a | 0 | b | e | t | a | 0 | g | a | ...
@@ -486,12 +494,14 @@ Here is the same three-line buffer drawn at the right granularity:
                          ^                      ^
                          zero[1] = 2            zero[2] = 8
 
-   zero (Rune-unit offsets):  [_, 2, 8, 13]
-
    Byte offset on disk = Rune slot * sizeof(Rune). With sizeof(Rune) = 4,
    the cells above sit at bytes 0, 4, 8, 12, ...
+
+
+   zero (memory) indexes in tfile:  [_, 2, 8, 13]
+
 \end{verbatim}
-%
+
 %The simplified [<putline()>] shown later writes each line as
 %exactly [[n+1]] Rune cells (the [[n]] characters plus a null
 %terminator), so consecutive lines sit back-to-back with no
@@ -519,12 +529,6 @@ Here is the same three-line buffer drawn at the right granularity:
 %size blowup for ASCII text---is fine because [[tfile]] is a
 %scratch file that gets [[remove()]]'d on [[q]]uit.
 
-<<globals ed.c>>=
-ulong   nlall = 128;
-// growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
-// where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
-int*    zero;
-@
 
 % zero is an array of line offsets.
 % The +5 is just for sentinel and safe margin; it should really be +2 at max.
