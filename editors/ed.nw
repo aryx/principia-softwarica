@@ -65,7 +65,7 @@ substituting, moving lines, and operating on ranges of lines.
 %claude:
 For a quick hands-on feel, here is a complete [[ed]] session:
 launch [[ed]], open insert mode with [[i]], type two lines, end
-the insertion with a single [[.]] on its own line, print lines~1
+the insertion with a single [['.']] on its own line, print lines~1
 to~2 with [[1,2p]] ([[ed]] echoes the 2 lines), set the remembered filename with
 [[f hello.txt]] ([[ed]] echoes it back), save the buffer with
 [[w]] ([[ed]] echoes the character count written), and quit
@@ -84,13 +84,17 @@ with [[q]]:
    w
    12
    q
+   $ cat hello.txt
+   hello
+   world
+   $ 
 \end{verbatim}
 
 %claude:
 [[ed]] is famously silent: it prints no prompt, and every line
 you type is either a command or part of a text-entry session
 opened by [[i]] or [[a]].
-
+%
 % see also its man page for documentation.
 % see also vol72a with 2 tutorials on ed by Brian Kernighan.
 % Quite complex command ...
@@ -231,11 +235,12 @@ this primer covers just what you need to follow the rest of [[ed]].
 A {\em codepoint} is the numeric ID of a
 character in that catalog: [[U+0041]] is ``A'' ([[65]] in decimal),
 [[U+00E9]] is ``é'' ([[233]]), and so on up to [[U+10FFFF]] for the
-rarest emoji and historical scripts.
+rarest emoji.% and historical scripts.
 {\em UTF-8} is one way to store/transmit those code points as {\em bytes}.
+%encoding
 
 %claude: %terminology:
-\plan stores codepoints in two complementary formats.
+\plan can store codepoints in two complementary formats.
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
 holding one codepoint; Rune arrays such as
 [[Rune linebuf[LBSIZE]]] are the in-memory format for text
@@ -403,7 +408,7 @@ Lines are 1-indexed: [[zero[1]]] is the offset of line~1,
 (always~0), which is why the array is called ``zero''---it starts
 at the zero-th slot which represents ``before line~1.''
 %
-The crucial insight is that editing operations only modify this
+The crucial insight is that many editing operations only modify this
 array of offsets, never the temporary file itself.
 %
 When you delete a line with [[d]], [[ed]] shifts entries in
@@ -413,6 +418,7 @@ When you read a file with [[r]], [[ed]] appends text to [[tfile]]
 and inserts new offsets into [[zero]].
 %
 The temporary file only grows; it is never compacted.
+% collected, defragmented
 
 %claude:
 Concretely, suppose the user has the following text in the buffer:
@@ -429,7 +435,7 @@ Concretely, suppose the user has the following text in the buffer:
    +-------+--------+--------+--------+
    | unused| 0      | 6      | 11     |
    +-------+--------+--------+--------+
-   index:  0   1        2        3
+index: 0       1        2        3
               line 1   line 2   line 3
 \end{vdiagram}
 %
@@ -445,6 +451,7 @@ text at offset~6 in [[tfile]] orphaned but harmless.
 %in [[zero]] and zero work on disk.
 
 \subsubsection{The actual on-disk layout}
+\label{sec:actual-disk-layout}
 
 %claude:
 The diagram above uses byte offsets and [[\n]]-terminated text
@@ -452,8 +459,8 @@ because that is how most people picture a file on disk. The real
 layout differs in three ways.
 %
 First, [[tfile]] is a stream of fixed-width [[Rune]] cells
-(see Section~\ref{sec:unicode-primer}, not
-bytes: every codepoint occupies [[sizeof(Rune)]] bytes (usually 4),
+(see Section~\ref{sec:unicode-primer}), not bytes:
+every codepoint occupies [[sizeof(Rune)]] bytes (usually 4),
 so a 5-character line like ``alpha'' takes 24 bytes on
 disk---5 character cells plus a terminator.
 Second, lines are terminated by a {null Rune} (value~0), not by
@@ -463,6 +470,8 @@ Second, lines are terminated by a {null Rune} (value~0), not by
 %back into [[\n]] when writing to an external file.
 Third, [[tline]] starts at~2 (in Rune units), so the first two Rune
 cells of [[tfile]] are reserved and remain zero-filled.
+%
+We will see soon the reason for it.
 
 %claude:
 Here is the same three-line buffer drawn at the right granularity:
@@ -483,37 +492,37 @@ Here is the same three-line buffer drawn at the right granularity:
    the cells above sit at bytes 0, 4, 8, 12, ...
 \end{verbatim}
 %
-The simplified [<putline()>] shown later writes each line as
-exactly [[n+1]] Rune cells (the [[n]] characters plus a null
-terminator), so consecutive lines sit back-to-back with no
-inter-line padding: [[sizeof(Rune)]]~=~4 already makes every byte
-offset a multiple of four.
+%The simplified [<putline()>] shown later writes each line as
+%exactly [[n+1]] Rune cells (the [[n]] characters plus a null
+%terminator), so consecutive lines sit back-to-back with no
+%inter-line padding: [[sizeof(Rune)]]~=~4 already makes every byte
+%offset a multiple of four.
 
 %claude: %plan9-is-cleaner:
-Why fixed-width [[Rune]] storage rather than UTF-8? Four reasons.
-(1)~With fixed-width Runes, padding each line to an even Rune
-count costs at most one cell, so the actual [[ed.c]] keeps
-[[zero]] entries even and lets [<global()>] and [[k]] steal the
-low bit as a ``matched'' flag (the simplified [<putline()>] shown
-later skips this padding for clarity). UTF-8 byte offsets would have
-arbitrary parity, breaking the trick entirely.
-(2)~[<linebuf>], [<genbuf>], and [<rhsbuf>] are already [[Rune]]
-arrays for the regexp engine and the substitution machinery;
-storing [[tfile]] in the same format means [<getline()>] and
-[<putline()>] reduce to a [[memcpy]] between [[linebuf]] and
-disk---no per-character decode or encode pass.
-(3)~A codepoint never straddles a block boundary, which
-simplifies the block-based I/O introduced later.
-(4)~The original 1969 [[ed]] stored 1-byte ASCII; the \plan port
-widened the element type from [[byte]] to [[Rune]] and kept the
-rest of the architecture intact. The cost---a 4$\times$ on-disk
-size blowup for ASCII text---is fine because [[tfile]] is a
-scratch file that gets [[remove()]]'d on [[q]]uit.
+%Why fixed-width [[Rune]] storage rather than UTF-8? Four reasons.
+%(1)~With fixed-width Runes, padding each line to an even Rune
+%count costs at most one cell, so the actual [[ed.c]] keeps
+%[[zero]] entries even and lets [<global()>] and [[k]] steal the
+%low bit as a ``matched'' flag (the simplified [<putline()>] shown
+%later skips this padding for clarity). UTF-8 byte offsets would have
+%arbitrary parity, breaking the trick entirely.
+%(2)~[<linebuf>], [<genbuf>], and [<rhsbuf>] which we will see soon
+%are already [[Rune]] arrays for the regexp engine and the substitution machinery;
+%storing [[tfile]] in the same format means [<getline()>] and
+%[<putline()>] reduce to a [[memcpy]] between [[linebuf]] and
+%disk---no per-character decode or encode pass.
+%(3)~A codepoint never straddles a block boundary, which
+%simplifies the block-based I/O introduced later.
+%(4)~The original 1969 [[ed]] stored 1-byte ASCII; the \plan port
+%widened the element type from [[byte]] to [[Rune]] and kept the
+%rest of the architecture intact. The cost---a 4$\times$ on-disk
+%size blowup for ASCII text---is fine because [[tfile]] is a
+%scratch file that gets [[remove()]]'d on [[q]]uit.
 
 <<globals ed.c>>=
 ulong   nlall = 128;
 // growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
-// where the ints are file offsets in tfname corresponding to different lines
+// where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
 int*    zero;
 @
 
@@ -4297,12 +4306,6 @@ onquit(int sig)
 %\ifallcode
 \section{Extra code}
 
-<<plan9 includes>>=
-#include <u.h>
-#include <libc.h>
-@
-
-
 %dead:
 %<<globals ed.c>>=
 %char    WRERR[] = "WRITE ERROR"; // dead?
@@ -4317,7 +4320,8 @@ onquit(int sig)
 /*
  * Editor
  */
-<<plan9 includes>>
+#include <u.h>
+#include <libc.h>
 #include <bio.h>
 #include <regexp.h>
 
