@@ -297,7 +297,7 @@ Here is the three-character string ``aéb'' in both formats.
 bytes [[0xc3 0xa9]]:
 
 \begin{vdiagram}
-   Rune array (in memory, e.g. linebuf):
+   Rune array (in memory, e.g. linebuf[]):
    +------------+------------+------------+--------------+
    | 0x00000061 | 0x000000e9 | 0x00000062 |  0x00000000  |   each cell = sizeof(Rune)
    +------------+------------+------------+--------------+
@@ -1637,10 +1637,10 @@ append(int (*f)(void), int *a)
     int tl;
 
     dot = a;
-    // f() (e.g., getfile()) will modify linebuf
+    // f() (e.g., getfile()) will modify linebuf[]
     while((*f)() == 0) {
         <<[[append()]] grow [[zero]] if [[zero]] too small>>
-        // putline() will use linebuf
+        // putline() will use linebuf[]
         tl = putline();
         nline++;
 
@@ -1774,7 +1774,7 @@ putline(void)
     fchange = true;
     tl = tline;                              // current write offset (Rune units)
 
-    // walk linebuf; stop at the null Rune or an embedded '\n'
+    // walk linebuf[]; stop at the null Rune or an embedded '\n'
     for(lp = linebuf; *lp; lp++) {
         <<[[putline()]] if newline char, adjust and break>>
         // else, nothing, continue loop until *lp == 0 == null Rune
@@ -1786,7 +1786,8 @@ putline(void)
 
     // tfile stores fixed-width Runes (not UTF-8);
     // convert Rune offset/count to byte offsets for seek/write
-    seek(tfile, tline * sizeof(Rune), 0);
+    seek(tfile, tline * sizeof(Rune), SEEK__START);
+    // syscall!
     write(tfile, linebuf, n * sizeof(Rune));
 
     // advance past the line just written, rounding up to an even Rune
@@ -1797,7 +1798,7 @@ putline(void)
     return tl;
 }
 @
-%padism: could use SEEK__START instead of 0
+%padism: SEEK__START instead of 0
 
 %claude:
 The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
@@ -1928,7 +1929,8 @@ putd(void)
 \section{[[w]]riting a file: [[w]]}
 
 %claude:
-Writing is the dual of reading. [<putfile()>] iterates over the
+Writing (as in [[w foo.txt]]) is the dual of reading. [<putfile()>] iterates
+over the
 address range, fetches each line from [[tfile]] via [<getline()>],
 and writes it to the output file via [[Bputrune()]] (from [[libbio]]).
 The [[W]] (uppercase) variant opens the file in append mode.
@@ -1955,6 +1957,7 @@ case 'w':
 
         if((io = create(file, OWRITE, 0666)) < 0)
             error(file);
+    // else
 
     Binit(&iobuf, io, OWRITE);
     wrapp = false;
@@ -1973,10 +1976,10 @@ case 'w':
 
 \subsection{[[putfile()]]}
 
-% dual of getfile, write in iobuf, but all the lines, not just one
+[<putfile()>] is the dual of [<getfile()>]: it writes in [[iobuf]].
+
+% write in iobuf, but all the lines, not just one
 % like in getfile().
-% Key to understand tfile! very simple code actually once understand
-%  what getline() is doing
 <<function [[putfile]](ed.c)>>=
 void
 putfile(void)
@@ -1987,11 +1990,13 @@ putfile(void)
 
     a1 = addr1;
     do {
+        // modifies linebuf[]
         lp = getline(*a1++);
         for(;;) {
             count++;
             c = *lp++;
             if(c == 0) {
+                // a null Rune in tfile converts to \n in the written file
                 if(Bputrune(&iobuf, '\n') < 0)
                     error(Q);
                 break;
@@ -2006,7 +2011,6 @@ putfile(void)
 @
 
 
-
 \subsection{[[getline()]] (simplified)}
 
 %claude:
@@ -2017,7 +2021,7 @@ terminator. As in [[putline()]], the [[*sizeof(Rune)]] factor in
 the seek and the read size is what converts the cell-unit offset
 into a byte offset on disk.
 
-%new: was not in ed.c originally
+%claude: %new: was not in ed.c originally
 <<function [[getline]]>>=
 Rune*
 getline(int tl)
@@ -2028,10 +2032,11 @@ getline(int tl)
     // else
 
     // tfile stores fixed-width Runes; convert Rune offset to bytes
-    seek(tfile, tl * sizeof(Rune), 0);
+    seek(tfile, tl * sizeof(Rune), SEEK__START);
 
     // read one Rune at a time until we hit the null-Rune terminator
     n = 0;
+    // syscall
     while(read(tfile, &linebuf[n], sizeof(Rune)) == sizeof(Rune)
           && linebuf[n] != 0)
         n++;
@@ -2041,6 +2046,9 @@ getline(int tl)
 }
 @
 
+% this is slower than putline which with one write could write many runes;
+% here we read one rune at a time, with many read() syscalls
+
 
 \subsection{Write and quit: [[wq]]}
 
@@ -2048,7 +2056,8 @@ getline(int tl)
 The [[w]] command peeks at the next character to detect [[wq]]
 (write and quit) or [[wQ]] (write and force-quit).
 If the next character is neither [[q]] nor [[Q]], it is pushed
-back with [<peekc>] so [<filename()>] can read it.
+back (``unread'') with [<peekc>] so [<filename()>] called after
+can consume it.
 
 <<[[commands()]] other locals>>=
 int temp;
@@ -2074,14 +2083,15 @@ if(temp)
 
 \section{Main commands}
 
-%toc:
-% classic tutorial on 'ed' is to use commands 'a', 'w', and 'q'
-% so we will do that
-% update: first 'p' which helps to understand
 %claude: %trans:
 With the reading and writing machinery in place, we can now look
 at the basic editing commands. Most of them are short---often just
 a few lines calling the helper functions we have already seen.
+
+%toc:
+% classic tutorial on 'ed' is to use commands 'a', 'w', and 'q'
+% so we will do that
+% update: first 'p' which helps to understand
 
 \subsection{[[p]]rinting lines: [[p]]}
 
@@ -2093,9 +2103,6 @@ The [[p]] command prints lines in the address range.
 [<printcom()>] iterates from [[addr1]] to [[addr2]], calling
 [<getline()>] to fetch each line from [[tfile]] and
 [<putshst()>] to display it.
-Pressing just Enter (newline with no command) prints the next
-line---the [['\n']] case below advances [<dot>] by one
-and prints.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 <<[[commands]] before [['p']] case>>
@@ -2123,6 +2130,7 @@ newline(void)
 }
 @
 
+% just consume and enforce nothing after p command
 
 <<function [[printcom]](ed.c)>>=
 void
@@ -2155,6 +2163,9 @@ nonzero(void)
 
 
 
+Pressing just Enter (newline with no command) prints the next
+line---the [['\n']] case below advances [<dot>] by one
+and prints.
 
 % print also when no command specified? like 1\n ? default to print?
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
@@ -2174,7 +2185,7 @@ case '\n':
 % commands
 %ocaml: I use [[not given]] instead of [[a1==nil]]
 
-\subsection{printing remembered [[f]]ile: [[f]]}
+\subsection{printing the remembered [[f]]ile: [[f]]}
 % "remembered" either by [[r]] or [[w]]
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
@@ -2241,6 +2252,8 @@ add(int i)
 
 % f can be gettty(), a can be addr2
 
+% we saw append(getfile()), this time it's append(gettty,)
+% and we saw gettty before.
 
 \subsection{[[q]]uitting: [[q]]}
 \label{sec:command-q}
@@ -2311,6 +2324,8 @@ rdelete(int *ad1, int *ad2)
 
 % a bit like append(), shift zero entries but in other direction
 
+%TODO: diagram could help
+
 \subsection{[[c]]hanging lines: [[c]]}
 % change
 
@@ -2335,48 +2350,6 @@ The [[m]] (move) and [[t]] (copy, since [[c]] was taken) commands
 share the [<move()>] function. For [[t]], the lines are first
 duplicated to the end of the buffer via [[append(getcopy, ...)]],
 then moved.
-%
-The actual move uses a clever {triple-reverse} algorithm:
-to move a block from position~A to position~B, reverse the
-elements from~A to the block, reverse the block, then reverse
-the whole range.  This rearranges [[zero]] entries in-place
-without any temporary storage.
-
-%yoann: ASCII diagram illustrating triple reverse algo (and maybe add a reference?)
-%claude:
-The triple-reverse trick is well known among C programmers
-but easy to forget. Here is how it rotates a block to the left
-in three reversal passes. Suppose [[zero]] looks like this and
-we want to move lines 4--5 (the block ``DE'') in front of
-line~2 (i.e., between line~1 and the current line~2):
-\begin{verbatim}
-   start:           A B C D E F
-                    1 2 3 4 5 6
-                       ^   ^^^
-                       adt ad1..ad2
-
-   reverse(adt, ad1):     reverse [B C] -> [C B]
-                    A C B D E F
-
-   reverse(ad1, ad2):     reverse [D E] -> [E D]
-                    A C B E D F
-
-   reverse(adt, ad2):     reverse [C B E D] -> [D E B C]
-                    A D E B C F
-                       ^^^
-                       moved!
-\end{verbatim}
-%
-This is the same algorithm Brian Kernighan attributes to Doug
-McIlroy in {\em Programming Pearls}: rotating an array can be
-done in-place in $O(n)$ time and $O(1)$ extra space using three
-reversals, no temporary buffer required. Compare with the naive
-approach (allocate a temp array, copy, shift, copy back) which
-needs $O(n)$ extra memory.
-%
-The opposite case (moving a block forward instead of backward)
-is symmetric: [<move()>] picks one of the two branches based on
-whether the destination is before or after the source.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'm':
@@ -2447,6 +2420,50 @@ getcopy(void)
 }
 @
 
+
+%The actual move uses a clever {triple-reverse} algorithm:
+%to move a block from position~A to position~B, reverse the
+%elements from~A to the block, reverse the block, then reverse
+%the whole range.  This rearranges [[zero]] entries in-place
+%without any temporary storage.
+
+%yoann: ASCII diagram illustrating triple reverse algo (and maybe add a reference?)
+%claude:
+%The triple-reverse trick is well known among C programmers
+%but easy to forget. Here is how it rotates a block to the left
+%in three reversal passes. Suppose [[zero]] looks like this and
+%we want to move lines 4--5 (the block ``DE'') in front of
+%line~2 (i.e., between line~1 and the current line~2):
+%\begin{verbatim}
+%   start:           A B C D E F
+%                    1 2 3 4 5 6
+%                       ^   ^^^
+%                       adt ad1..ad2
+%
+%   reverse(adt, ad1):     reverse [B C] -> [C B]
+%                    A C B D E F
+%
+%   reverse(ad1, ad2):     reverse [D E] -> [E D]
+%                    A C B E D F
+%
+%   reverse(adt, ad2):     reverse [C B E D] -> [D E B C]
+%                    A D E B C F
+%                       ^^^
+%                       moved!
+%\end{verbatim}
+%%
+%This is the same algorithm Brian Kernighan attributes to Doug
+%McIlroy in {\em Programming Pearls}: rotating an array can be
+%done in-place in $O(n)$ time and $O(1)$ extra space using three
+%reversals, no temporary buffer required. Compare with the naive
+%approach (allocate a temp array, copy, shift, copy back) which
+%needs $O(n)$ extra memory.
+%%
+%The opposite case (moving a block forward instead of backward)
+%is symmetric: [<move()>] picks one of the two branches based on
+%whether the destination is before or after the source.
+
+
 <<function [[reverse]](ed.c)>>=
 void
 reverse(int *a1, int *a2)
@@ -2483,7 +2500,8 @@ so every command benefits from the same rich addressing syntax.
 %claude:
 Here is a cheat sheet of the address primitives and how they
 eventually show up in the code:
-\begin{verbatim}
+
+\begin{vdiagram}
    syntax      meaning                      handled by
    ------      --------------------------   -------------------
    N           absolute line N              getnum() in address()
@@ -2495,8 +2513,9 @@ eventually show up in the code:
    A+N  A-N    A offset by N                + and - operators
    A,B         range (addr1=A, addr2=B)     top-level in commands()
    A;B         range with side effect dot=A ';' case in commands()
-\end{verbatim}
-%
+\end{vdiagram}
+
+%claude:
 All these forms feed a single recursive-descent parser. The two
 address separators [[,]] and [[;]] are parsed in [<commands()>]
 itself; everything to the left or right of a separator is parsed
