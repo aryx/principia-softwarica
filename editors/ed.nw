@@ -287,7 +287,7 @@ bytes [[0xc3 0xa9]]:
          | (Rune -> UTF-8)         (UTF-8 -> Rune)
          v                                     |
 
-   UTF-8 bytes (on disk / on the wire, e.g. iobuf):
+   UTF-8 char/byte array (on disk / on the wire, e.g. iobuf):
    +------+------+------+------+
    | 0x61 | 0xc3 | 0xa9 | 0x62 |                   4 bytes total
    +------+------+------+------+
@@ -302,6 +302,20 @@ a 1-byte sequence, [[110xxxxx]] introduces a 2-byte sequence,
 [[1110xxxx]] introduces 3 bytes, [[11110xxx]] introduces 4---and
 assembles the codepoint. [[runetochar()]] does the inverse,
 selecting the encoding by the codepoint's value range.
+
+%claude: %others:
+The Linux/Unix equivalent of \plan's [[Rune]] is [[wchar_t]], a C
+standard type since 1995 (declared in [[<wchar.h>]]). On Linux and
+macOS [[wchar_t]] is 32~bits; on Windows it is only 16~bits---a
+legacy of Microsoft adopting UCS-2 in the early 1990s, before it
+became clear that 16 bits would not fit all of Unicode.
+%The analogs of [[chartorune]]/[[runetochar]] are [[mbrtowc]]/[[wcrtomb]],
+%but those are locale-dependent: [[LC_CTYPE]] must be set to a UTF-8
+%locale for them to behave like \plan's versions. \plan sidesteps
+%this complexity by hardcoding UTF-8 everywhere---there are no
+%locales, [[Rune]] is always 32-bit, and the runelibrary functions
+%are pure.
+
 
 %claude:
 %The two-format split shapes the rest of [[ed]]. [<linebuf>],
@@ -373,9 +387,10 @@ char*   tfname; // temporary filename (/tmp/eXXXX)
 fdt tfile   = -1;
 @
 % tfile for temporary file, again fundamental!
+%padism: fdt
 
 <<globals ed.c>>=
-// current write file offset in tfile in Rune-unit
+// current write file offset in tfile (in Rune-unit)
 int tline;
 @
 
@@ -397,6 +412,8 @@ char    savedfile[FNSIZE];
 @
 
 %said-later: will see also file[FNSIZE] later
+
+% can actually be UTF8 filename?
 
 \subsection{The lines as file offsets: [[zero]]}
 \label{sec:lines-as-file-offsets}
@@ -433,20 +450,15 @@ The temporary file only grows; it is never compacted.
 %claude:
 Concretely, suppose the user has the following text in the buffer:
 \begin{vdiagram}
-                              tfile (the temporary file on disk)
-                              +--------------------------------+
-                              |alpha\n                         |
-                              |beta\n                          |
-                              |gamma\n                         |
-                              |a deleted line that's still here\n
-                              +--------------------------------+
 
-   zero (in memory)
-   +-------+--------+--------+--------+
-   | unused| 0      | 6      | 11     |
-   +-------+--------+--------+--------+
-index: 0       1        2        3
-              line 1   line 2   line 3
+tfile (the temporary file on disk)         zero (in memory)
++--------------------------------+         +-------+--------+--------+--------+
+|alpha\n                         |         | unused| 0      | 6      | 11     |
+|beta\n                          |         +-------+--------+--------+--------+
+|gamma\n                         |   index:  0       1        2        3
+|a deleted line that's still here\n                  line 1   line 2   line 3
++--------------------------------+      
+
 \end{vdiagram}
 %
 Three lines are visible to the user, % (the [[$]] address is~3),
@@ -484,24 +496,30 @@ cells of [[tfile]] are reserved and remain zero-filled.
 We will see soon the reason for it.
 
 %claude:
-Here is the same three-line buffer drawn at the right granularity:
-\begin{verbatim}
-   tfile (disk), as a stream of Rune cells (each cell = sizeof(Rune) bytes):
-   Rune slot:    0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  ...
-                +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-                | 0 | 0 | a | l | p | h | a | 0 | b | e | t | a | 0 | g | a | ...
-                +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-                \reserv/ \----- 'alpha\0' -----/\---- 'beta\0' ----/
-                         ^                      ^
-                         zero[1] = 2            zero[2] = 8
+To make the layout concrete, here is a small two-line buffer with
+lines ``aéb'' and ``c'' (reusing the example from
+Section~\ref{sec:unicode-primer}) drawn at both byte and Rune
+granularity, with [[sizeof(Rune)]]~=~4 and little-endian Rune storage:
+\begin{vdiagram}
+tfile (disk), byte granularity:
+   0           4           8          12          16          20          24          28
+  +-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------+
+  |00 00 00 00|00 00 00 00|61 00 00 00|e9 00 00 00|62 00 00 00|00 00 00 00|63 00 00 00|00 00 00 00|
+  +-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------+
+   slot 0      slot 1      slot 2='a'  slot 3='é'  slot 4='b'  slot 5=\0   slot 6='c'  slot 7=\0
+   reserved    reserved    \-------------- 'aéb\0' ----------------/       \-------- 'c\0' ------/
 
-   Byte offset on disk = Rune slot * sizeof(Rune). With sizeof(Rune) = 4,
-   the cells above sit at bytes 0, 4, 8, 12, ...
+Same tfile, Rune granularity:
+   0   1   2   3   4   5   6   7
+  +---+---+---+---+---+---+---+---+
+  | 0 | 0 |'a'|'é'|'b'| 0 |'c'| 0 |
+  +---+---+---+---+---+---+---+---+
+  \reserv/ \-- 'aéb\0' --/\-'c\0'-/
+           ^              ^
+           zero[1]=2      zero[2]=6
 
-
-   zero (memory) indexes in tfile:  [_, 2, 8, 13]
-
-\end{verbatim}
+zero (memory) holds Rune-slot indexes:  [_, 2, 6]
+\end{vdiagram}
 
 %The simplified [<putline()>] shown later writes each line as
 %exactly [[n+1]] Rune cells (the [[n]] characters plus a null
@@ -574,8 +592,8 @@ Here is the same three-line buffer drawn at the right granularity:
 
 %claude:
 [<dot>] and [<dol>] are pointers into the [<zero>] array.
-Their names match the ed command syntax: [[dot]] is the {current line}
-(what the user refers to as~[[.]]), and [[dol]] is the {last line}
+Their names match the ed command syntax: [[dot]] is the {\em current line}
+(what the user refers to as~[[.]]), and [[dol]] is the {\em last line}
 (what the user refers to as~[[$]], ``dollar'').
 Both are pointers, not indices: [[dot - zero]] gives the
 current line number, and [[dol - zero]] gives the total number
@@ -591,14 +609,15 @@ int*    dol;
 % they match the symbol used to describe those entities in the editor
 % itself with $ (dollar) marking end of file and dot the current line.
 % The user will enter '$' and '.' in commands.
+%padism: those ref<> type annotations
 
 %claude:
 This is where the [[1,$]] address range from the [[mkenam]] script
 in Section~\ref{sec:motivations-mkenam} comes from.
 The substitute command in that script means ``from line~1 to [[$]]
 (the last line), substitute \ldots''---and now we know that [[$]] is
-just the user spelling for [[dol]]. Similarly, the [[.]] in commands
-like [[.s/old/new/]] refers to [[dot]].
+just the user spelling for [[dol]]. 
+% Similarly, the [[.]] in commands like [[.s/<old>/<new>/]]  refers to [[dot]].
 
 %Classic ed addresses include:
 %- 0 (before first line)
@@ -618,17 +637,18 @@ like [[.s/old/new/]] refers to [[dot]].
 %claude:
 There are two distinct line buffers, which can be confusing.
 [<line>] (70 bytes of [[char]]) is a small output buffer used by
-[<putchr()>] to batch [[write()]] system calls---characters accumulate
+[<putchr()>] to batch [[write()]] system calls--- UTF-8 encoded 
+characters accumulate
 in [[line]] and are flushed when a newline is encountered or the
 buffer is nearly full.
 %
-[<linebuf>] ([<LBSIZE>] entries of [[Rune]]) is the main working
+[<linebuf>] ([[LBSIZE]] entries of [[Rune]]) is the main working
 buffer where a single line of edited text is held in Unicode form.
 %
 Functions like [<getfile()>] fill [[linebuf]] from the input file,
 [<putline()>] writes it to [[tfile]], and [<getline()>] reads it back.
 %
-The distinction between [[char]] for I/O and [[Rune]] for text
+The distinction between [[char]] for UTF-8 I/O and [[Rune]] for text
 manipulation runs throughout the code.
 
 <<globals ed.c>>=
@@ -672,6 +692,10 @@ int col;
 
 \section{[[main()]]}
 % main, init, quit
+
+%trans:
+I now switch from the bottom-up approach of the previous section
+to a top-down approach, starting with [[main()]].
 
 %claude:
 The [[main()]] function initializes buffered console I/O, installs
@@ -719,6 +743,31 @@ main(int argc, char *argv[])
 @
 % init(), commands(), quit()
 
+% globp = "r" = automatic command to do first = read file! important command
+%  rarely called explicitely, but important nonetheless
+
+% so when do 'ed foo.txt' -> savedfile = "foo.txt" and start "r" command
+% interpretation, similar to 'ed, and then r foo.txt' as will see soon.
+
+%claude:
+The most tricky part in [[main()]] above is the [[globp = L"r"]] line.
+When a filename argument is given (e.g., [[ed foo.txt]]),
+the filename is copied into [[savedfile]] and [<globp>] is set
+to the Unicode string [["r"]].
+%
+The [[L""]] prefix is standard C syntax for a {\em wide-string literal}
+(see the \book{Compiler}):
+where the bare [["r"]] would be a [[char*]] (one byte plus a null
+terminator), [[L"r"]] is a [[Rune*]]---one [[Rune]] holding the
+codepoint for [['r']] followed by a null [[Rune]] terminator.
+%claude:
+Later, when [<commands()>] calls [<getchr()>], it will read from
+[<globp>] before reading from the console, so the first command
+executed is automatically~[[r]]---as if the user had typed
+[[r foo.txt]].
+This elegant trick avoids duplicating file-reading logic in [[main()]].
+% but why use Rune* for globp? why not char*? all commands are ASCII anyway.
+
 %claude:
 The [[sizeof(int*)]] in the [[zero = malloc(...)]] line is actually
 a bug---it should be [[sizeof(int)]], since [[zero]] holds [[int]]
@@ -728,23 +777,6 @@ on 64-bit systems, pointers are 8~bytes while [[int]] is still 4,
 so the allocation simply over-reserves memory without causing any
 incorrect behavior. Even Ken Thompson wrote slightly buggy C code.
 
-% globp = "r" = automatic command to do first = read file! important command
-%  rarely called explicitely, but important nonetheless
-
-% so when do 'ed foo.txt' -> savedfile = "foo.txt" and start "r" command
-% interpretation, similar to 'ed, and then r foo.txt' as will see soon.
-
-%claude:
-The most interesting trick in [[main]] is [[globp = L"r"]].
-When a filename argument is given (e.g., [[ed foo.txt]]),
-the filename is copied into [[savedfile]] and [[globp]] is set
-to the string [["r"]].
-Later, when [<commands()>] calls [<getchr()>], it will read from
-[[globp]] before reading from the console, so the first command
-executed is automatically~[[r]]---as if the user had typed
-[[r foo.txt]].
-This elegant trick avoids duplicating file-reading logic in [[main]].
-
 \subsection{[[ed -]] and [[vflag]]}
 
 %claude:
@@ -752,7 +784,7 @@ By default [[ed]] is verbose ([[vflag = true]]):
 it prints character counts after [[r]] and [[w]] operations.
 The [[-]] flag (as in [[ed - foo.txt]]) suppresses this,
 which is what you want when [[ed]] is driven by a script
-(as in the [[mkenam]] example above).
+(as in the [[mkenam]] example in Section~\ref{sec:motivations-mkenam}).
 
 <<globals ed.c>>=
 // verbose (a.k.a. interactive) mode
@@ -761,18 +793,21 @@ bool vflag   = true;
 % vflag =~ verbose flag, to print char numbers in operations (e.g., in write)
 %  when passing '-' means disable verbose and be quiet, like I did above
 % in the motivations section for mkenam
+%padism: using bool and true/false, not int for everything
 
 <<[[main()]](ed.c) if [[-]] flag>>=
-if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
+if(*argv && (strcmp(*argv, "-") == 0)) {
     argv++;
     vflag = false;
 }
 @
+%padism: was ORD__EQ at some point
 
 \subsection{[[ed -o]] and [[oflag]]}
 
 %claude:
-The [[-o]] flag turns [[ed]] into a filter: it sets [[savedfile]]
+The [[-o]] flag turns [[ed]] into a {\em filter} (see \book{Utilities}):
+it sets [[savedfile]]
 to [[/fd/1]] (\plan's path for stdout), so that [[w]] writes
 to standard output instead of a file.
 It also sets [[globp = L"a"]] to start in append mode immediately,
@@ -781,7 +816,7 @@ the output stream).
 
 <<globals ed.c>>=
 // output to standard output (instead of editing a file). Useful
-// when ed is used as a filter
+// when ed is used as a filter.
 bool oflag;
 @
 % oflag =~ open flag? mean create if not exist?
@@ -817,7 +852,8 @@ if(oflag) {
 
 %mktemp(template)
 %claude:
-[<mktemp()>] generates a unique temporary filename by replacing
+[<mktemp()>] called early in [[main()]] generates a unique temporary
+filename by replacing
 the trailing [[X]]'s in the template with the process ID digits.
 If the resulting file already exists, it tries replacing the first
 digit with [[a]], [[b]], etc.
@@ -859,6 +895,7 @@ mktemp(char *as)
     return as;
 }
 @
+%padism: the cflow /// -> <>, and could have ERROR_NEG1 too
 
 % so /tmp/e000042 then /tmp/ek0042
 % so can have max 26 tmp files per process?
