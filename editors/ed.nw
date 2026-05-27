@@ -599,9 +599,12 @@ zero (memory) holds Rune-slot indexes:  [_, 2, 6]
 Their names match the ed command syntax: [[dot]] is the {\em current line}
 (what the user refers to as~[[.]]), and [[dol]] is the {\em last line}
 (what the user refers to as~[[$]], ``dollar'').
+%
 Both are pointers, not indices: [[dot - zero]] gives the
 current line number, and [[dol - zero]] gives the total number
-of lines.  When the buffer is empty, [[dol == zero]].
+of lines.  When the buffer is empty, [[dol == zero]], which is
+why you will see often code like [[dol!=zero]] to test for non-empty
+buffer.
 
 <<globals ed.c>>=
 // ref<int> in zero[], current line pointer
@@ -773,7 +776,7 @@ This elegant trick avoids duplicating file-reading logic in [[main()]].
 % but why use Rune* for globp? why not char*? all commands are ASCII anyway.
 
 %claude:
-The [[sizeof(int*)]] in the [[zero = malloc(...)]] line is actually
+The [[sizeof(int*)]] in the [[zero = malloc(...)]] line above is actually
 a bug---it should be [[sizeof(int)]], since [[zero]] holds [[int]]
 file offsets, not pointers. The bug is harmless on architectures
 where pointers and ints have the same size (32-bit systems);
@@ -951,14 +954,17 @@ byte offset on disk is [[tline*sizeof(Rune)]]; see the on-disk
 layout in Section~\ref{sec:lines-as-file-offsets}).
 It starts at~2, not~0, to satisfy two invariants every line offset
 must maintain: it must be non-zero so~0 stays the ``no line''
-sentinel, and it must be even so the low bit of each [[zero[]]]
+{\em sentinel}, and it must be even so the low bit of each [[zero]]
 entry stays free for [<global()>] and the [[k]] command to use as
-a ``matched'' flag (see those sections later).
+a ``matched'' flag (see Section~\ref{sec:low-bit}).
 
 % sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
 % but means first 2 bytes of tfile are 0 (first seek will do that)
 % also 2 because 1 is used to represent a mark! Too clever! Too smart
 % for its own good.
+
+%TODO: error management code not commented much; see Section X
+% for full discussion and code of error_1()
 
 <<globals ed.c>>=
 char    T[] = "TMP";
@@ -970,8 +976,10 @@ char    T[] = "TMP";
 %claude:
 [<quit()>] implements the ``are you sure?'' safety net.
 If there are unsaved changes ([[fchange == true]]) and the buffer
-is non-empty, the first [[q]] prints [[?]] and resets [[fchange]],
-so a second [[q]] will actually exit.  The [[Q]] command bypasses
+is non-empty (using the cryptic [[dol!=zero]]), the first [[q]] 
+prints [[?]] and resets [[fchange]], so a second [[q]] will actually exit.
+%
+The [[Q]] command (see Section~\ref{sec:command-q}) bypasses
 this by clearing [[fchange]] before calling [<quit()>].
 
 <<globals ed.c>>=
@@ -1003,6 +1011,9 @@ quit(void)
 
 \section{Displaying and reading text}
 % buffered output
+
+
+
 %claude:
 All text output in [[ed]] goes through a small buffering layer:
 [<putchr()>] accumulates characters in the [<line>] buffer and
@@ -2107,6 +2118,7 @@ add(int i)
 
 
 \subsection{[[q]]uitting: [[q]]}
+\label{sec:command-q}
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'Q':
@@ -3289,6 +3301,7 @@ for(markp = names; markp < &names[26]; )
 
 
 \subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
+\label{sec:low-bit}
 
 %g/re/cmd
 % => g/re/p => grep :)
