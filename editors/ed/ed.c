@@ -1522,13 +1522,17 @@ putline(void)
     tl = tline;                              // current write offset (Rune units)
 
     // walk linebuf; stop at the null Rune or an embedded '\n'
-    // (the latter happens after dosub() injects \n in a multi-line subst)
-    for(lp = linebuf; *lp; lp++)
+    for(lp = linebuf; *lp; lp++) {
+        /*s: [[putline()]] if newline char, adjust and break */
+        // (the latter happens after dosub() injects \n in a multi-line subst)
         if(*lp == '\n') {
             *lp = 0;                         // turn '\n' into null terminator
             linebp = lp + 1;                 // stash remainder for getsub()
             break;
         }
+        /*e: [[putline()]] if newline char, adjust and break */
+        // else, nothing, continue loop until *lp == 0 == null Rune
+    }
     n = lp - linebuf + 1;                    // # Runes including terminator
 
     if(tline + n >= NBLK * BLKSIZE / (int)sizeof(Rune))
@@ -1928,6 +1932,7 @@ putd(void)
     r = count%10;
     count /= 10;
     if(count)
+        // recurse
         putd();
     putchr(r + L'0');
 }
