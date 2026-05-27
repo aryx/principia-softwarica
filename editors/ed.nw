@@ -71,6 +71,8 @@ redirection ([[>]], [[>>]]), [[ed]] offers far more power: searching,
 substituting, moving lines, and operating on ranges of lines.
 %claude:
 For a quick hands-on feel, here is a complete [[ed]] session:
+
+\label{sec:ed-tutorial-session}
 \begin{verbatim}
    $ ed
    i
@@ -90,6 +92,7 @@ For a quick hands-on feel, here is a complete [[ed]] session:
    world
    $
 \end{verbatim}
+
 %claude:
 The session above launches [[ed]], opens insert mode with [[i]],
 types two lines, ends the insertion with a single [['.']] on its own
@@ -263,21 +266,21 @@ It is an {\em encoding}.
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
 holding one codepoint; Rune arrays such as
 [[Rune linebuf[LBSIZE]]] are the in-memory format for text
-manipulation, the Unicode equivalent of [[char linebuf[LBSIZE]]].
+manipulation, the Unicode equivalent of [[char linebuf[LBSIZE]]]
+in classical old (pre-Unicode) \unix programs.
 %
 {UTF-8} is a {\em variable-length} byte encoding where
 ASCII codepoints take 1~byte, Latin supplements take 2, most
 other scripts 3, and rare codepoints (including emoji) 4;
 UTF-8 lives in [[char]] arrays and is the format for files,
-terminal I/O, and exec arguments.
-%
-\plan is using UTF-8 encoding everywhere text is involved.
+terminal I/O, and exec arguments in \plan,
+which is using UTF-8 encoding everywhere text is involved.
 
 %claude:
 The bridge between the two formats is two routines from [[libc]]:
 \begin{verbatim}
    int chartorune(Rune *r/*OUT*/, char *s); // UTF-8 -> Rune; returns # bytes consumed
-   int runetochar(char *s/*OUT*/, Rune *r);   // Rune -> UTF-8; returns # bytes written
+   int runetochar(char *s/*OUT*/, Rune *r); // Rune -> UTF-8; returns # bytes written
 \end{verbatim}
 
 Both functions move at most [[UTFmax]] (usually set to 4) bytes per codepoint.
@@ -322,7 +325,7 @@ assembles the codepoint. [[runetochar()]] does the inverse,
 selecting the encoding by the codepoint's value range.
 
 %claude: %others:
-The Linux/Unix equivalent of \plan's [[Rune]] is [[wchar_t]], a C
+The modern \unix equivalent of \plan's [[Rune]] is [[wchar_t]], a C
 standard type since 1995 (declared in [[<wchar.h>]]). On Linux and
 macOS [[wchar_t]] is 32~bits; on Windows it is only 16~bits---a
 legacy of Microsoft adopting UCS-2 in the early 1990s, before it
@@ -395,7 +398,7 @@ Every operation that adds text (reading a file, appending user input)
 writes to [[tfile]] and records the offset in [<zero>].
 
 <<globals ed.c>>=
-char*   tfname; // temporary filename (/tmp/eXXXX)
+char*   tfname; // temporary filename ("/tmp/eXXXXXX")
 @
 % fundamental! many operations will append to this temporary
 % file (and adjust zero line indices).
@@ -442,7 +445,7 @@ of [[int]] offsets into [<tfile>], one per line.
 
 <<globals ed.c>>=
 ulong   nlall = 128;
-// growing_array<int>, initial size = (nlall+2+margin)*sizeof(int)
+// growing_array<int(even)|mark|0>, initial size = (nlall+2+margin)*sizeof(int)
 // where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
 int*    zero;
 @
@@ -637,7 +640,7 @@ int*    dol;
 %padism: those ref<> type annotations
 
 %claude:
-This is where the [[1,$]] address range from the [[mkenam]] script
+This is where the [[1,$]] {\em address range} from the [[mkenam]] script
 in Section~\ref{sec:motivations-mkenam} comes from.
 The substitute command in that script means ``from line~1 to [[$]]
 (the last line), substitute \ldots''---and now we know that [[$]] is
@@ -1009,11 +1012,6 @@ this by clearing [[fchange]] before calling [<quit()>].
 <<globals ed.c>>=
 bool fchange;
 @
-<<globals ed.c>>=
-char    Q[] = "";
-@
-% I introduced this []? because rodata pb otherwise?
-% but why need to modify the string?
 
 <<function [[quit]](ed.c)>>=
 /// main | commands('q') | commands('Q') | ... -> <>
@@ -1032,6 +1030,12 @@ quit(void)
 % dol == zero when didn't do anything
 % reset fchange to false so second quit will actually quit.
 
+<<globals ed.c>>=
+char    Q[] = "";
+@
+% I introduced this []? because rodata pb otherwise?
+% but why need to modify the string?
+
 
 \section{Displaying and reading text}
 % buffered output
@@ -1046,16 +1050,18 @@ the routines to display and read text.
 
 %claude:
 All text output in [[ed]] goes through a small buffering layer:
-[<putchr()>] accumulates characters in the [<line>] buffer and
+[<putchr()>] is supposed to print a single Rune but actually accumulates
+the UTF-8 encoded bytes in the [<line>] buffer and
 flushes with a single [[write()]] call when it sees a newline
 (or the buffer is nearly full).
 %
-[<putst()>] below and [<putshst()>] later are wrappers for printing
-[[char]] (UTF-8) strings and [[Rune]] strings respectively.
+[<putst()>] and [<putshst()>] below are wrappers for printing
+[[char]] (UTF-8) strings and [[Rune]] strings respectively
+and printing a final newline.
 
 
 % put string
-% sp =? string pointer?
+% sp = string pointer?
 <<function [[putstr]](ed.c)>>=
 /// commands | getfile | error_1 | ... -> <> 
 void
@@ -1074,18 +1080,32 @@ putst(char *sp)
 }
 @
 % chartorune!
+% char* here is not array for single UTF8 char but instead a series of UTF8 chars
 
 % col? could reset it at the end instead? more logical
 % after putchr the \n
 
 
-% grrr int vs Rune. ac means?
+% put sh st ?? similar to putst, but not char, Rune this time
+<<function [[putshst]](ed.c)>>=
+void
+putshst(Rune *sp)
+{
+    col = 0;
+    while(*sp)
+        putchr(*sp++);
+    putchr(L'\n');
+}
+@
+
+
+% grrr int vs Rune. ac means? why not use Rune?
 %claude:
 %[<putchr()>] buffers output in [<line>] and flushes on newline
 %or when the buffer is nearly full.
 
 <<function [[putchr]](ed.c)>>=
-/// error | putst | ... -> <>
+/// error | putst | putshst | ... -> <>
 void
 putchr(int ac)
 {
@@ -1102,6 +1122,7 @@ putchr(int ac)
 
     if(c == '\n' || lp >= &line[sizeof(line)-5]) {
         linp = line;
+        // the actual output syscall!
         write(oflag? STDERR: STDOUT, line, lp-line);
         return;
     }
@@ -1111,37 +1132,55 @@ putchr(int ac)
 @
 % and this time runetochar, argh
 % why int ac -> int c -> Rune r ... grrrr
+%padism: those // else comment
 
+% runetochar(), and chartorune(), seems a bit weird to convert if convert back.
 
 %claude:
-The [[-5]] margin in the
-comparison accounts for the worst case of [[runetochar()]]:
-a single rune can expand to up to 4~bytes in UTF-8, so the
-check must leave room for one full multi-byte character plus
-the possibility that [[lp]] already advanced past the check.
+%The [[-5]] margin in the
+%comparison accounts for the worst case of [[runetochar()]]:
+%a single rune can expand to up to 4~bytes in UTF-8, so the
+%check must leave room for one full multi-byte character plus
+%the possibility that [[lp]] already advanced past the check.
+
+%claude:
+The picture below shows [<line>] mid-fill during
+a call to [[putshst(L"hello µs")]].
+%
+The key points:
+[<line>] is a flat [[char]] array holding raw UTF-8 bytes
+(not [[Rune]] cells, unlike [<tfile>] or [<linebuf>]), so a single
+codepoint may occupy one to four cells; [<linp>] is the persistent
+fill pointer carried across calls (the local [[lp]] above is initialized
+from it and advanced by [[runetochar()]] before the bounds check
+fires).
+% and the trailing five-byte zone is the high-water margin
+%that absorbs whatever [[runetochar()]] just wrote past the previous check.
 
 %claude:
 \begin{vdiagram}
-   line[]:
+   line[]  (flat char[] of raw UTF-8 bytes; here `µ' = U+03BC
+            = bytes 0xCE 0xBC, so it spans 2 cells):
    +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
-   | h | e | l | l | o |   | w | o | r | l | d |   |     |   |   |   |   |   |
+   | h | e | l | l | o |   |CE |BC |   |   |   |   |      |   |   |   |   |   |
    +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
-   ^                                                ^                          ^
-   line                                            linp                line+sizeof
-                                                                       (line)-5
-                                                    |<--- worst-case --->|
-                                                       4-byte UTF-8 rune
-                                                       + safety margin
+                           \-µ-/
+   ^                               ^                      ^
+   line                            linp                   line+sizeof(line)-5
+                                                         |<--- worst-case --->|
+                                                          4-byte UTF-8 rune
+                                                            + safety margin
 \end{vdiagram}
 
-%yoann: explain quickly diagram above and context/situation
-
+%claude:
 [<linp>] tracks how full the buffer is. The flush check
 [[lp >= &line[sizeof(line)-5]]] reserves 5~bytes at the end of
-the buffer because: (1)~UTF-8 runes can be up to 4~bytes each
-(``hello''~$\mu$~``s'' ends with a 2-byte rune that
-[[runetochar()]] writes after [[lp]] is checked), and (2)~one
-extra byte for safety. Without this margin, a multi-byte rune
+the buffer because: (1)~runes converted to UTF-8 can be up to 4~bytes each,
+%(``hello~$\mu$s'' ends with a 2-byte rune that
+%[[runetochar()]] writes after [[lp]] is checked), 
+and (2)~one extra byte for safety.
+%
+Without this margin, a multi-byte rune
 arriving when the buffer is nearly full could overrun the array.
 
 
@@ -1159,29 +1198,34 @@ redirected to [[STDERR]] to avoid corrupting the data stream.
 
 %claude:
 Character input is layered through [<getchr()>], which checks
-three sources in order: (1) [<peekc>], a one-character pushback
-used when a character needs to be ``unread''; (2) [<globp>], a
-programmed command string (e.g., [["r"]] injected by [[main]]);
-(3) actual console input via [[Bgetrune()]] (from [[libbio]]).
+three sources in order:
+(1) [<peekc>], a one-character pushback used when a character needs
+to be ``unread'';
+(2) [<globp>], a programmed command string (e.g., [[L"r"]] or [[L"a"]]
+injected by [[main()]]);
+(3) actual console input via [[Bgetrune()]] (from [[libbio]], see \book{Libcore}).
+%
 This layering is what makes the [[globp]] trick work---[<commands()>]
 does not need to know whether input comes from the user or from
 a synthetic command.
 
 <<globals ed.c>>=
-//option<char> (0 = None)
+//option<Rune> (0 = None)
 int peekc;
 @
 % classic lexer vars you need when not using lex
+% grrr why not use Rune??
 
 <<globals ed.c>>=
-//option<char> (0 = None)
+//option<Rune> (0 = None)
 int lastc;
 @
+% grrr why not use Rune??
 
 
 <<globals ed.c>>=
-// optional programmed command (e.g., "r", "a")
-//option<Rune> or list<Rune> when used from global() ?
+// optional programmed command (e.g., L"r", L"a" or longer string with global())
+//option<array<Rune>>
 Rune*   globp;
 @
 %alt: move to later and aspectize it below? but
@@ -1192,13 +1236,15 @@ Rune*   globp;
 int
 getchr(void)
 {
-    if(lastc = peekc) {
+    lastc = peekc;
+    if(lastc) {
         peekc = 0;
         return lastc;
     }
     // else
     if(globp) {
-        if((lastc=*globp++) != 0)
+        lastc=*globp++;
+        if(lastc != 0)
             return lastc;
         // else
         globp = nil;
@@ -1210,15 +1256,17 @@ getchr(void)
 }
 @
 % EOF once finished globp?
+%padism: was if(lastc = peekc) and (if (lastc=*globp++) ... but I decomposed
 
 %alt: move linebuf[] here as it's first time used?
 
 % called when can enter text until '.\n'
 % get line from tty (terminal). small wrapper over the raw gety
 %claude:
-[<gettty()>] reads a line of user input (via [<gety()>]) and checks
+[<gettty()>]\footnote{``get from teletype'', an old \unix name for the console},
+reads a line of user input (via [<gety()>]) and checks
 for the special [[.\n]] terminator that ends text-entry mode
-in commands like [[a]] and [[i]].
+in commands like [[a]] and [[i]] (see Section~\ref{sec:ed-tutorial-session}).
 [<gety()>] does the actual character-by-character reading into
 [<linebuf>], stopping at a newline.
 
@@ -1233,11 +1281,12 @@ gettty(void)
     if(rc)
         return rc;
     // else
-    if(linebuf[0] == '.' && linebuf[1] == '\0')
+    if(linebuf[0] == '.' && linebuf[1] == 0)
         return EOF;
     return 0; // OK_0 ?
 }
 @
+%padism: more complex cflow annotation -> -> <>
 
 % special ".\n" here to finish the text entry.
 % OK_0 means you can read more lines
@@ -1252,6 +1301,7 @@ gety(void)
     int c;
     Rune *p = linebuf;
     <<[[gety()]] other locals>>
+
     for(;;) {
         c = getchr();
         if(c == '\n') {
@@ -1260,7 +1310,7 @@ gety(void)
         }
         // else
         if(c == EOF) {
-            <<[[<<get()]] if [[gf]]>>
+            <<[[get()]] if [[gf]]>>
             return c;
         }
         // else
@@ -1279,36 +1329,28 @@ gety(void)
 % How return line read to caller? Via global linebuf? but how end of line?
 % via 0 marker rune in it?
 
+%XXX
 % globp?? aspectize and move later?
 <<[[gety()]] other locals>>=
 Rune *gf = globp;
 @
 
-<<[[<<get()]] if [[gf]]>>=
+<<[[get()]] if [[gf]]>>=
 if(gf)
     peekc = c;
 @
 
 \section{[[commands()]] interpreter loop}
 
-%trans: ok, finally commands!
+%trans: 
+We are now finally ready to see the code of [<commands()>], the main
+interpreter loop.
 %claude:
-[<commands()>] is the main interpreter loop.
-It reads an optional address range into [<addr1>]/[<addr2>],
-then dispatches on the command character via a [[switch]].
-Each command ends with [[continue]] to loop back; falling through
-to [[error(Q)]] after the switch handles unknown commands.
-
-<<globals ed.c>>=
-// ref<int>
-int*    addr1;
-// ref<int>
-int*    addr2;
-@
-% optional line numbers for start/end of command 1,3p
-% but let's ignore for now and see basis commands like p, a, etc.
-% note that some commands like 'r' (and setwide) will set those too,
-% not just interactive.
+It reads an optional {\em address range} into [<addr1>]/[<addr2>]
+and then dispatches on the command character via a [[switch]].
+%
+As we will see soon, most commands end with [[continue]] to loop back;
+falling through to [[error(Q)]] below after the switch handles unknown commands.
 
 <<function [[commands]](ed.c)>>=
 void
@@ -1331,6 +1373,26 @@ commands(void)
 % but why we need error? for(;;) not enough? because the commands
 % are using 'continue' so the error is the default when not continue
 % (but bad I think)
+
+I will defer the explanations about address ranges to
+Section~\ref{sec:command-addresses} but for now it is enough
+to understand that some commands can operate on ranges (as in [[1,3p]])
+and that the two globals below will store the starting and ending
+part of the command address range.
+
+<<globals ed.c>>=
+// ref<int>
+int*    addr1;
+// ref<int>
+int*    addr2;
+@
+% optional line numbers for start/end of command 1,3p
+% but let's ignore for now and see basis commands like p, a, etc.
+% note that some commands like 'r' (and setwide) will set those too,
+% not just interactive.
+
+
+
 
 % int c, but char really.
 
@@ -1456,6 +1518,7 @@ filename(int comm)
     <<[[filename()]] set [[savedfile]] depending on commands>>
 }
 @
+%padism: use of '\0'
 
 <<[[filename()]] read a space and skip extra spaces>>=
 if(c != ' ')
@@ -2051,17 +2114,6 @@ nonzero(void)
 }
 @
 
-% put sh st ?? similar to putst, but not char, Rune this time
-<<function [[putshst]](ed.c)>>=
-void
-putshst(Rune *sp)
-{
-    col = 0;
-    while(*sp)
-        putchr(*sp++);
-    putchr(L'\n');
-}
-@
 
 
 
@@ -2376,6 +2428,7 @@ reverse(int *a1, int *a2)
 
 
 \section{Command addresses}
+\label{sec:command-addresses}
 
 %trans: until now assume simple commands like a, i, q, etc.
 % but ed actually quite powerful and can give addresses before

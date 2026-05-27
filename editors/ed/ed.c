@@ -31,18 +31,18 @@ enum
 };
 
 /*s: globals ed.c */
-char*   tfname; // temporary filename (/tmp/eXXXX)
+char*   tfname; // temporary filename ("/tmp/eXXXXXX")
 /*x: globals ed.c */
 fdt tfile   = -1;
 /*x: globals ed.c */
-// current write file offset in tfile in Rune-unit
+// current write file offset in tfile (in Rune-unit)
 int tline;
 /*x: globals ed.c */
 // for w, r, f
 char    savedfile[FNSIZE];
 /*x: globals ed.c */
 ulong   nlall = 128;
-// growing_array<int>, initial size = (nlall+2+margin)*sizeof(int)
+// growing_array<int(even)|mark|0>, initial size = (nlall+2+margin)*sizeof(int)
 // where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
 int*    zero;
 /*x: globals ed.c */
@@ -68,7 +68,7 @@ Biobuf  bcons;
 bool vflag   = true;
 /*x: globals ed.c */
 // output to standard output (instead of editing a file). Useful
-// when ed is used as a filter
+// when ed is used as a filter.
 bool oflag;
 /*x: globals ed.c */
 // in Linux pid can be very long, so better to have at least 6 X (was 5 before)
@@ -81,14 +81,14 @@ bool fchange;
 /*x: globals ed.c */
 char    Q[] = "";
 /*x: globals ed.c */
-//option<char> (0 = None)
+//option<Rune> (0 = None)
 int peekc;
 /*x: globals ed.c */
-//option<char> (0 = None)
+//option<Rune> (0 = None)
 int lastc;
 /*x: globals ed.c */
-// optional programmed command (e.g., "r", "a")
-//option<Rune> or list<Rune> when used from global() ?
+// optional programmed command (e.g., L"r", L"a" or longer string with global())
+//option<array<Rune>>
 Rune*   globp;
 /*x: globals ed.c */
 // ref<int>
@@ -219,7 +219,7 @@ main(int argc, char *argv[])
 
     USED(argc);
     /*s: [[main()]](ed.c) if [[-]] flag */
-    if(*argv && (strcmp(*argv, "-") == ORD__EQ)) {
+    if(*argv && (strcmp(*argv, "-") == 0)) {
         argv++;
         vflag = false;
     }
@@ -905,13 +905,15 @@ notifyf(void *a, char *s)
 int
 getchr(void)
 {
-    if(lastc = peekc) {
+    lastc = peekc;
+    if(lastc) {
         peekc = 0;
         return lastc;
     }
     // else
     if(globp) {
-        if((lastc=*globp++) != 0)
+        lastc=*globp++;
+        if(lastc != 0)
             return lastc;
         // else
         globp = nil;
@@ -932,6 +934,7 @@ gety(void)
     /*s: [[gety()]] other locals */
     Rune *gf = globp;
     /*e: [[gety()]] other locals */
+
     for(;;) {
         c = getchr();
         if(c == '\n') {
@@ -940,10 +943,10 @@ gety(void)
         }
         // else
         if(c == EOF) {
-            /*s: [[<<get()]] if [[gf]] */
+            /*s: [[get()]] if [[gf]] */
             if(gf)
                 peekc = c;
-            /*e: [[<<get()]] if [[gf]] */
+            /*e: [[get()]] if [[gf]] */
             return c;
         }
         // else
@@ -967,7 +970,7 @@ gettty(void)
     if(rc)
         return rc;
     // else
-    if(linebuf[0] == '.' && linebuf[1] == '\0')
+    if(linebuf[0] == '.' && linebuf[1] == 0)
         return EOF;
     return 0; // OK_0 ?
 }
@@ -1178,7 +1181,7 @@ callunix(void)
 /*e: function [[callunix]](ed.c) */
 
 /*s: function [[quit]](ed.c) */
-/// main | commands('q') | ... -> <>
+/// main | commands('q') | commands('Q') | ... -> <>
 void
 quit(void)
 {
@@ -1533,13 +1536,11 @@ putline(void)
     seek(tfile, tline * sizeof(Rune), 0);
     write(tfile, linebuf, n * sizeof(Rune));
 
-    // advance past the line just written; no padding needed because
-    // sizeof(Rune) is even, so every byte offset (tline*sizeof(Rune))
-    // stays even regardless of n's parity
-    // (the real ed.c rounds tline up to even to free the low bit of
-    // each zero[] entry for the "matched" flag used by global() and 'k')
-    assert(sizeof(Rune) % 2 == 0);
-    tline += n;
+    // advance past the line just written, rounding up to an even Rune
+    // count so tline stays even. zero[] entries are Rune offsets, and
+    // global() and 'k' steal the low bit of each entry as a "matched"
+    // flag (see global() and anymarks). Padding costs at most one Rune.
+    tline += (n + 1) & ~1;
     return tl;
 }
 /*e: function [[putline]] */
@@ -1956,7 +1957,7 @@ putshst(Rune *sp)
 }
 /*e: function [[putshst]](ed.c) */
 /*s: function [[putchr]](ed.c) */
-/// error | putst | ... -> <>
+/// error | putst | putshst | ... -> <>
 void
 putchr(int ac)
 {
@@ -2008,6 +2009,7 @@ putchr(int ac)
 
     if(c == '\n' || lp >= &line[sizeof(line)-5]) {
         linp = line;
+        // the actual output syscall!
         write(oflag? STDERR: STDOUT, line, lp-line);
         return;
     }
