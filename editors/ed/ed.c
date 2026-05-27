@@ -91,9 +91,9 @@ int lastc;
 //option<array<Rune>>
 Rune*   globp;
 /*x: globals ed.c */
-// ref<int>
+// ref<int> in zero[]
 int*    addr1;
-// ref<int>
+// ref<int> in zero[]
 int*    addr2;
 /*x: globals ed.c */
 char    file[FNSIZE];
@@ -325,17 +325,20 @@ commands(void)
             // will set file[]
             filename(c);
         caseread:
-            if((io=open(file, OREAD)) < 0) {
+            io=open(file, OREAD);
+            /*s: [[commands()]] in [[r]] case, sanity check [[io]] */
+            if(io < 0) {
                 lastc = '\n';
                 error(file);
             }
-            /*s: [[commands()]] in [[r]] case if append only file */
+            /*e: [[commands()]] in [[r]] case, sanity check [[io]] */
+            /*s: [[commands()]] in [[r]] case, if append only file */
             if((d = dirfstat(io)) != nil){
                 if(d->mode & DMAPPEND)
                     print("warning: %s is append only\n", file);
                 free(d);
             }
-            /*e: [[commands()]] in [[r]] case if append only file */
+            /*e: [[commands()]] in [[r]] case, if append only file */
             Binit(&iobuf, io, OREAD);
             setwide();
             squeeze(0);
@@ -744,7 +747,7 @@ newline(void)
 }
 /*e: function [[newline]](ed.c) */
 /*s: function [[filename]](ed.c) */
-/// main -> commands('r') -> <>
+/// main -> commands('r' | 'e' | 'f') -> <>
 void
 filename(int comm)
 {
@@ -754,7 +757,7 @@ filename(int comm)
 
     count = 0;
     c = getchr();
-    /*s: [[filename()]] if [[c]] is newline or EOF */
+    /*s: [[filename()]] if [[c]] is newline or EOF, use [[savedfile]] */
     if(c == '\n' || c == EOF) {
         p1 = savedfile;
         if(*p1 == '\0' && comm != 'f')
@@ -764,7 +767,7 @@ filename(int comm)
             ;
         return;
     }
-    /*e: [[filename()]] if [[c]] is newline or EOF */
+    /*e: [[filename()]] if [[c]] is newline or EOF, use [[savedfile]] */
     // else
     /*s: [[filename()]] read a space and skip extra spaces */
     if(c != ' ')

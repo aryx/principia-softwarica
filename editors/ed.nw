@@ -1349,8 +1349,9 @@ interpreter loop.
 It reads an optional {\em address range} into [<addr1>]/[<addr2>]
 and then dispatches on the command character [[c]] via a [[switch]].
 %
-As we will see soon, most commands end with [[continue]] to loop back;
-falling through to [[error(Q)]] below after the switch handles unknown commands.
+As we will see soon, most command [[switch]] cases end with a [[continue]] to
+loop back;
+falling through to [[error(Q)]] below after the switch deals with unknown commands.
 
 <<function [[commands]](ed.c)>>=
 void
@@ -1412,12 +1413,15 @@ case EOF:
 
 % quite tricky, quite long, lots of subsections here.
 %claude:
-Reading a file is the first substantial command, and it involves
-several cooperating functions:
-[<filename()>] parses the filename argument,
-[<setwide()>] sets the address range to the whole buffer,
+Reading a file (as in [[r foo.txt]]) is the first substantial command, and
+it involves several cooperating functions:
+[<filename()>] parses the filename argument in [<file>],
+[<setwide()>] sets the address range to the whole buffer
+(which will have for effect to add the content of [[foo.txt]] to
+the end of [[zero]], after [<dol>]),
 [<append()>] inserts lines by calling a callback in a loop,
 [<getfile()>] (the callback) reads one line from the input file
+(e.g., [[foo.txt]])
 into [<linebuf>], and [<putline()>] writes [[linebuf]] to [<tfile>]
 and returns the offset to store in [<zero>].
 
@@ -1444,11 +1448,9 @@ case 'r':
     // will set file[]
     filename(c);
 caseread:
-    if((io=open(file, OREAD)) < 0) {
-        lastc = '\n';
-        error(file);
-    }
-    <<[[commands()]] in [[r]] case if append only file>>
+    io=open(file, OREAD);
+    <<[[commands()]] in [[r]] case, sanity check [[io]]>>
+    <<[[commands()]] in [[r]] case, if append only file>>
     Binit(&iobuf, io, OREAD);
     setwide();
     squeeze(0);
@@ -1465,7 +1467,8 @@ caseread:
 % append(getfile, addr2) ??
 % exfile() finalize access to the file, will close io, "exit file"
 
-% fchange = c ?
+The sections below will detail each the code of one of the helper functions
+used above.
 % ugly: abuse c, instead of using bool. and why not set fchange
 % just after setting 'c' ? because reading a file actually does
 % not trigger fchange = true; in fact fchange = false when read first file.
@@ -1480,21 +1483,29 @@ Reading the first file into an empty buffer does not count as a
 ``change''---this is what lets you [[q]] without being warned
 after just opening a file.
 
+<<[[commands()]] in [[r]] case, sanity check [[io]]>>=
+if(io < 0) {
+    lastc = '\n';
+    error(file);
+}
+@
+
 \subsection{Reading a [[filename()]]}
 
 % 'int comm' but really char actually, grrrr
 % will modify file[FNSIZE], that can then be further used
 % in commands('r')
 %claude:
-[<filename()>] reads a filename from input and stores it in [<file>].
+[<filename()>] reads a filename from user input and stores it in [<file>].
 If no filename is given (just a newline), it falls back to
 [<savedfile>]---this is how [[r]] with no argument re-reads the
 current file.
+% and how L"r" and setting savedfile in main is enough
 It also updates [[savedfile]] when used from [[e]] or [[f]],
 establishing the ``remembered filename'' for future operations.
 
 <<function [[filename]](ed.c)>>=
-/// main -> commands('r') -> <>
+/// main -> commands('r' | 'e' | 'f') -> <>
 void
 filename(int comm)
 {
@@ -1504,7 +1515,7 @@ filename(int comm)
 
     count = 0;
     c = getchr();
-    <<[[filename()]] if [[c]] is newline or EOF>>
+    <<[[filename()]] if [[c]] is newline or EOF, use [[savedfile]]>>
     // else
     <<[[filename()]] read a space and skip extra spaces>>
     p1 = file;
@@ -1519,7 +1530,9 @@ filename(int comm)
     <<[[filename()]] set [[savedfile]] depending on commands>>
 }
 @
+% grrr why again this rune = c intermediate and int c? use Rune consistently
 %padism: use of '\0'
+
 
 <<[[filename()]] read a space and skip extra spaces>>=
 if(c != ' ')
@@ -1532,7 +1545,7 @@ if(c == '\n')
 
 % this happens when do 'ed foo.c' with globl="r"
 % then the file to read is actually in savedfile set in main() from argv
-<<[[filename()]] if [[c]] is newline or EOF>>=
+<<[[filename()]] if [[c]] is newline or EOF, use [[savedfile]]>>=
 if(c == '\n' || c == EOF) {
     p1 = savedfile;
     if(*p1 == '\0' && comm != 'f')
@@ -1608,8 +1621,9 @@ For each line that [[f]] returns via [<linebuf>], it calls
 [<putline()>] to write it to [<tfile>], then shifts all entries
 in [<zero>] above the insertion point up by one to make room for
 the new offset.
-This shift is the [[while(a1 > rdot)]] loop---the same
-kind of array insertion you see in any sorted-array implementation.
+This shift is the [[while(a1 > rdot)]] loop.
+%---the same
+%kind of array insertion you see in any sorted-array implementation.
 
 <<function [[append]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1644,6 +1658,9 @@ append(int (*f)(void), int *a)
 }
 @
 
+%TODO: could do a diagram here to see the shift and getline putline
+% cooperating with each other
+
 %claude:
 When [[zero]] is full, [[realloc()]] may move it to a new address.
 Every pointer into the old array---[[addr1]], [[addr2]], [[dol]],
@@ -1676,10 +1693,14 @@ if((dol-zero) >= nlall) {
 %    append(getfile, addr2);
 % read a line from iobuf and set linebuf
 %claude:
-[<getfile()>] reads one line from [<iobuf>] into [<linebuf>],
+[<getfile()>] reads one line from [<iobuf>] (the [[Biobuf]]
+initialized from the file to read from the [[r]] command)
+into [<linebuf>],
 counting characters in [<count>].
 It replaces the terminating [[\n]] with a null rune (lines
-in [[tfile]] are null-terminated, not newline-terminated).
+in [[tfile]] are null-terminated, not newline-terminated
+as explained in Section~\ref{sec:actual-disk-layout}).
+%
 It returns~0 on success or [[EOF]] when the file is exhausted.
 
 <<function [[getfile]](ed.c)>>=
@@ -1704,6 +1725,11 @@ getfile(void)
     return 0; // OK_0
 }
 @
+%padism: OK_0
+
+% lp[-1] ??
+
+% note that use Bgetrune and Biobuf so buffered IO for file IO.
 
 <<[[getfile()]] if [[c]] negative, possibly return [[EOF]]>>=
 if(c < 0) {
@@ -1733,19 +1759,8 @@ write [<linebuf>] as a run of fixed-width [[Rune]] cells
 terminated by a null Rune, advance [<tline>] by the number of
 Runes written (rounded up to an even count), and return the old
 offset (which [<append()>] stores in [<zero>]).
-%
-The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
-not bytes, and [[tline]] counts cells, not bytes---which is why
-every seek and write needs a [[*sizeof(Rune)]] conversion.
-%
-The other subtlety is the even-padding of [[tline]]. Each [[zero]]
-entry holds a [[Rune]] offset into [[tfile]] (the value returned
-here), and [<global()>] together with the [[k]] command steal the
-low bit of that entry as a ``matched'' flag (see [<global()>] and
-[<anymarks>]). Keeping every offset even costs at most one
-extra [[Rune]] cell per line and frees the bit for the mark.
 
-%new: was not in ed.c originally
+%claude: new: was not in ed.c originally
 <<function [[putline]]>>=
 int
 putline(void)
@@ -1760,13 +1775,10 @@ putline(void)
     tl = tline;                              // current write offset (Rune units)
 
     // walk linebuf; stop at the null Rune or an embedded '\n'
-    // (the latter happens after dosub() injects \n in a multi-line subst)
-    for(lp = linebuf; *lp; lp++)
-        if(*lp == '\n') {
-            *lp = 0;                         // turn '\n' into null terminator
-            linebp = lp + 1;                 // stash remainder for getsub()
-            break;
-        }
+    for(lp = linebuf; *lp; lp++) {
+        <<[[putline()]] if newline char, adjust and break>>
+        // else, nothing, continue loop until *lp == 0 == null Rune
+    }
     n = lp - linebuf + 1;                    // # Runes including terminator
 
     if(tline + n >= NBLK * BLKSIZE / (int)sizeof(Rune))
@@ -1785,12 +1797,35 @@ putline(void)
     return tl;
 }
 @
+%padism: could use SEEK__START instead of 0
+
+%claude:
+The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
+not bytes, and [[tline]] counts cells, not bytes---which is why
+every seek and write needs a [[*sizeof(Rune)]] conversion.
+
+The other subtlety is the even-padding of [[tline]]. Each [[zero]]
+entry holds a [[Rune]] offset into [[tfile]] (the value returned
+here), and [<global()>] together with the [[k]] command steal the
+low bit of that entry as a ``matched'' flag (see [<global()>] and
+[<anymarks>]). Keeping every offset even costs at most one
+extra [[Rune]] cell per line and frees the bit for the mark.
+
+
+<<[[putline()]] if newline char, adjust and break>>=
+// (the latter happens after dosub() injects \n in a multi-line subst)
+if(*lp == '\n') {
+    *lp = 0;                         // turn '\n' into null terminator
+    linebp = lp + 1;                 // stash remainder for getsub()
+    break;
+}
+@
 
 \subsection{Concrete editing example}
 
 %yoann: maybe ascii diagram where see content of tfile on disk and some operations
 %claude:
-A short example of how [[zero]] and [[tfile]] evolve. The diagrams
+Here is a short example of how [[zero]] and [[tfile]] evolve. The diagrams
 below use byte offsets and [[\n]]-terminated text for readability,
 as in the earlier picture of [[zero]] in
 Section~\ref{sec:lines-as-file-offsets}; the actual on-disk layout
@@ -1875,10 +1910,12 @@ putd(void)
     r = count%10;
     count /= 10;
     if(count)
+        // recurse
         putd();
     putchr(r + L'0');
 }
 @
+%padism: recurse comment
 
 %putd = put dots = print info derived from dot
 % = current line number
@@ -3927,7 +3964,7 @@ writing back to such a file would fail.
 <<[[commands()]] other locals>>=
 Dir *d;
 @
-<<[[commands()]] in [[r]] case if append only file>>=
+<<[[commands()]] in [[r]] case, if append only file>>=
 if((d = dirfstat(io)) != nil){
     if(d->mode & DMAPPEND)
         print("warning: %s is append only\n", file);
