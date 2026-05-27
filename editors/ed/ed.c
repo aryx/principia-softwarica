@@ -2,10 +2,8 @@
 /*
  * Editor
  */
-/*s: plan9 includes */
 #include <u.h>
 #include <libc.h>
-/*e: plan9 includes */
 #include <bio.h>
 #include <regexp.h>
 
@@ -37,15 +35,15 @@ char*   tfname; // temporary filename (/tmp/eXXXX)
 /*x: globals ed.c */
 fdt tfile   = -1;
 /*x: globals ed.c */
-// current write file offset in tfile; 
+// current write file offset in tfile in Rune-unit
 int tline;
 /*x: globals ed.c */
 // for w, r, f
 char    savedfile[FNSIZE];
 /*x: globals ed.c */
 ulong   nlall = 128;
-// growing_array<int>, initial size = (nlall+ 2+margin)*sizeof(int)
-// where the ints are file offsets in tfname corresponding to different lines
+// growing_array<int>, initial size = (nlall+2+margin)*sizeof(int)
+// where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
 int*    zero;
 /*x: globals ed.c */
 // ref<int> in zero[], current line pointer
@@ -1535,9 +1533,13 @@ putline(void)
     seek(tfile, tline * sizeof(Rune), 0);
     write(tfile, linebuf, n * sizeof(Rune));
 
-    // round up so tline stays even (the low bit of each zero[]
-    // entry is stolen as the "matched" flag by global() and 'k')
-    tline += (n + 1) & ~01;
+    // advance past the line just written; no padding needed because
+    // sizeof(Rune) is even, so every byte offset (tline*sizeof(Rune))
+    // stays even regardless of n's parity
+    // (the real ed.c rounds tline up to even to free the low bit of
+    // each zero[] entry for the "matched" flag used by global() and 'k')
+    assert(sizeof(Rune) % 2 == 0);
+    tline += n;
     return tl;
 }
 /*e: function [[putline]] */
