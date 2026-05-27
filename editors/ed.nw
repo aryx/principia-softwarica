@@ -1971,7 +1971,7 @@ case 'w':
     <<[[commands()]] when [['w']] check for [['q']] part2>>
     continue;
 @
-
+%padism: // Fallthrough comment
 
 
 \subsection{[[putfile()]]}
@@ -2556,11 +2556,14 @@ than later at execution time.
 %claude:
 Returning to the [[mkenam]] script in
 Section~\ref{sec:motivations-mkenam}, you can now read the
-address parts of each line. The substitution line is two
+address parts of each line.
+%
+The substitution line is two
 addresses ([[1]] and [[$]]) followed by the [[s]] command;
 the [[v]] line is a global-not-match command (no address part,
 matches operate on the whole buffer); [[1i]] is a single
-address (line~1) followed by [[i]] (insert before).
+address (line~1) followed by [[i]] (insert before); [[$a]] is
+a single address (last line with [[$]]) followed by [[a]] (append after).
 
 \subsection{Reading [[addr1]] and [[addr2]]}
 
@@ -2642,17 +2645,6 @@ It starts from [[dot]] and applies offsets: a bare number
 is relative to line~0 (i.e., absolute), [[.]] and [[$]] set
 the base, [[+]] and [[-]] adjust the sign for subsequent
 operands, and [[/re/]] or [[?re?]] search forward or backward.
-The [[default:]] case handles the return: if no operator is
-pending, push the character back and return the computed address.
-%claude:
-The nested [[do]]-[[do]] structure is subtle. The inner loop
-just skips whitespace. The outer loop chains operators: each
-iteration consumes one operand ([[.]], [[$]], a number, or a
-search), and then loops back to see if another [[+]] or [[-]]
-follows. The variable [[nextopand]] tracks whether a trailing
-operator like [[+]] or [[-]] was seen without a following operand,
-in which case the [[default:]] branch adds an implicit [[1]]
-(so [[3+]] means [[3+1]], i.e., line~4).
 
 <<function [[address]](ed.c)>>=
 int*
@@ -2689,6 +2681,20 @@ address(void)
     return nil;
 }
 @
+
+%claude:
+The nested [[do]]-[[do]] structure above is subtle. The inner loop
+just skips whitespace. The outer loop chains operators: each
+iteration consumes one operand ([[.]], [[$]], a number, or a
+search), and then loops back to see if another [[+]] or [[-]]
+follows. The variable [[nextopand]] tracks whether a trailing
+operator like [[+]] or [[-]] was seen without a following operand,
+in which case the [[default:]] branch adds an implicit [[1]]
+(so [[3+]] means [[3+1]], i.e., line~4).
+
+
+The [[default:]] case handles the return: if no operator is
+pending, push the character back and return the computed address.
 
 <<[[address()]](ed.c) switch [[c]] cases>>=
 default:
@@ -2756,6 +2762,7 @@ Search and replace is where [[ed]]'s real power lies.
 The [[/re/]] and [[?re?]] address forms search forward and backward,
 the [[s]] command performs substitutions, and the [[g]] command
 applies commands to all matching lines.
+%
 The actual regular expression engine is in [[libregexp]]
 (see \book{Libcore}); [[ed]] just reads and compiles patterns via
 [<compile()>] and tests matches via [<match()>].
@@ -2764,7 +2771,8 @@ The actual regular expression engine is in [[libregexp]]
 Before diving in, it helps to see the buffers and pointers that
 the substitute machinery juggles together. A single [[s/re/rhs/]]
 command touches five distinct pieces of state:
-\begin{verbatim}
+
+\begin{vdiagram}
                 +-----------------------------+
      pattern -->|  libregexp Reprog  (NFA)    |   compiled RE
                 +-----------------------------+
@@ -2786,7 +2794,7 @@ command touches five distinct pieces of state:
                 |  [linebuf..loc1) + rhs      |
                 |  expanded + [loc2..end)     |
                 +-----------------------------+
-\end{verbatim}
+\end{vdiagram}
 %
 The flow of a substitution is always the same: (1)~[<getline()>]
 fills [<linebuf>] from [[tfile]]; (2)~[<match()>] runs [[rregexec()]]
@@ -2805,7 +2813,7 @@ where the previous hit ended.
 %claude:
 When [[/re/]] or [[?re?]] appears as an address, [<address()>]
 compiles the pattern and scans through the buffer line by line,
-wrapping around from [[dol]] to [[zero]] (or vice versa for~[[?]]),
+wrapping around from [[dol]] to [[zero]] (or vice versa for~[[??]] backward search),
 until a match is found or we return to where we started.
 
 <<[[address()]](ed.c) switch [[c]] cases>>=
@@ -2813,6 +2821,7 @@ case '?':
     sign = -sign;
     // Fallthrough
 case '/':
+    // read the pattern and compile it in Reprog pattern[]
     compile(c);
     b = a;
     for(;;) {
@@ -2833,13 +2842,16 @@ case '/':
     break;
 @
 
+% at the end we adjusted [[a]] which we saw in code of address is local
+% to represent line number of the address
 
 \subsection{Reading and compiling a regexp: [[compile()]]}
 
 %claude:
-[<compile()>] reads a regular expression delimited by [[eof]]
+[<compile()>] reads a regular expression delimited by the [[eof]] parameter
 (typically [[/]] or [[?]]), handles backslash escapes, and passes
-the result to [[regcomp()]] (from [[libregexp]]).
+the result to [[regcomp()]] (from [[libregexp]], see \book{Libcore}).
+%
 If the delimiter is given with no pattern in between, the
 previously compiled [[pattern]] is reused---this is how
 [[//]] means ``repeat the last search.''
@@ -2855,15 +2867,17 @@ ESIZE   = 256,      /* max size of reg exp */
 % will set pattern
 % eof should be '/' or '?'
 <<function [[compile]](ed.c)>>=
-/// commands('g' | 'v') -> global -> <>
+/// (main -> address) | (commands('g' | 'v') -> global) -> <>
 void
 compile(int eof)
 {
     Rune c;
     char *ep;
+    // UTF8 string
     char expbuf[ESIZE];
 
-    if((c = getchr()) == '\n') {
+    c = getchr();
+    if(c == '\n') {
         peekc = c;
         c = eof;
     }
@@ -2883,7 +2897,8 @@ compile(int eof)
             <<[[compile()]](ed.c) sanity check [[ep]] inside [[expbuf]]>>
             // else
             ep += runetochar(ep, &c);
-            if((c = getchr()) == '\n') {
+            c = getchr();
+            if(c == '\n') {
                 error(Q);
                 return;
             }
@@ -2894,7 +2909,7 @@ compile(int eof)
     } while((c = getchr()) != eof && c != '\n');
     if(c == '\n')
         peekc = c;
-    *ep = '\0';
+    *ep = 0;
 
     // lib_regexp call
     pattern = regcomp(expbuf);
@@ -2908,6 +2923,8 @@ if(ep >= expbuf+sizeof(expbuf)) {
     return;
 }
 @
+
+
 
 \subsection{[[match()]]}
 
@@ -2996,6 +3013,7 @@ substitution on the line).
 <<globals ed.c>>=
 Rune    rhsbuf[LBSIZE/sizeof(Rune)];
 @
+% weird size expression.
 
 <<constants ed.c>>=
 ESCFLG  = Runemax,  /* escape Rune - user defined code */
@@ -3056,10 +3074,12 @@ if(c == '\n' && (!globp || !globp[0])) {
 \subsection{[[s]]ubstitute: [[s]]}
 % s//g like sed!
 
+%trans:
+We are now finally ready to see the code to perform substitutions.
 %claude:
 [<substitute()>] is the most complex command. For each line in the
 address range, it calls [<match()>] to find the pattern, then
-[<dosub()>] to build the replacement in [[genbuf]], copying
+[<dosub()>] to build the replacement in [<genbuf>], copying
 everything before [[loc1]], the replacement text (expanding [[&]]
 and [[\1]]--[[\9]] references), and everything after [[loc2]].
 The result is copied back to [[linebuf]] and written to [[tfile]]
@@ -3146,62 +3166,13 @@ Rune    genbuf[LBSIZE];
 @
 
 %claude:
-[<dosub()>] builds the replacement in [[genbuf]]:
-it copies [[linebuf]] up to [[loc1]] (the match start),
-expands the replacement string from [[rhsbuf]] (handling [[&]]
+[<dosub()>] builds the replacement in [<genbuf>]:
+it copies [<linebuf>] up to [[loc1]] (the match start),
+expands the replacement string from [<rhsbuf>] (handling [[&]]
 for the whole match and [[\1]]--[[\9]] for subgroups via
-[<place()>]), then appends the rest of [[linebuf]] after [[loc2]].
-Finally it copies [[genbuf]] back to [[linebuf]].
-%claude:
-The line [[loc2 = sp - genbuf + linebuf]] is the trickiest part:
-after assembly, [[sp]] points into [[genbuf]] where the tail
-(post-match text) was copied. This arithmetic converts that
-[[genbuf]] offset back into a [[linebuf]] pointer, so that the
-next call to [[match(nil)]] in the [[g]] flag loop will resume
-searching from the correct position in the updated [[linebuf]].
+[<place()>]), then appends the rest of [<linebuf>] after [[loc2]].
+Finally it copies [<genbuf>] back to [<linebuf>].
 
-%claude:
-A concrete trace of [[s/world/earth/]] on [[linebuf = "hello world!"]]
-shows the four phases of [<dosub()>]:
-\begin{verbatim}
-   initial state (after match() on linebuf):
-     linebuf: "hello world!\0"
-               ^      ^    ^
-               |      loc1 loc2
-               lp starts here
-     rhsbuf:  "earth\0"
-     genbuf:  (empty, sp at start)
-
-   phase 1: copy linebuf[..loc1) -> genbuf
-     genbuf:  "hello "
-                     ^sp
-
-   phase 2: expand rhsbuf into genbuf
-     (no & or \N, so plain copy)
-     genbuf:  "hello earth"
-                          ^sp
-
-   phase 3: the famous pointer shuffle
-     loc2 = sp - genbuf + linebuf
-          = 11        - 0       + linebuf
-          -> points into linebuf at offset 11 (the '!')
-     This is where the next match(nil) would start.
-
-   phase 4: copy linebuf[loc2..] -> genbuf, then genbuf -> linebuf
-     genbuf:  "hello earth!\0"
-     linebuf: "hello earth!\0"
-\end{verbatim}
-%
-Phase~3 is subtle because [[loc2]] must end up pointing into the
-\emph{new} [[linebuf]], not the old one. At the moment of the
-assignment, [[linebuf]] still holds the pre-substitution text, but
-we know the new prefix (``hello earth'') will occupy bytes
-[[linebuf[0..11)]] once phase~4 runs. So [[sp-genbuf]] (the
-length of that prefix) plus [[linebuf]] (the base) is the
-correct future location. It is a deliberate compute-first,
-copy-later trick---if the assignment were reordered after the
-final copy, [[sp]] would already have advanced and the
-arithmetic would break.
 
 <<function [[dosub]](ed.c)>>=
 void
@@ -3236,6 +3207,56 @@ dosub(void)
 @
 
 
+%claude:
+The line [[loc2 = sp - genbuf + linebuf]] is the trickiest part:
+after assembly, [[sp]] points into [[genbuf]] where the tail
+(post-match text) was copied. This arithmetic converts that
+[[genbuf]] offset back into a [[linebuf]] pointer, so that the
+next call to [[match(nil)]] in the [[g]] flag loop will resume
+searching from the correct position in the updated [[linebuf]].
+
+%claude:
+A concrete trace of [[s/world/earth/]] on [[linebuf = "hello world!"]]
+shows the four phases of [<dosub()>]:
+\begin{verbatim}
+   initial state (after match() on linebuf):
+     linebuf: "hello world!\0"
+               ^     ^    ^
+               |     loc1 loc2
+               lp starts here
+     rhsbuf:  "earth\0"
+     genbuf:  (empty, sp at start)
+
+   phase 1: copy linebuf[..loc1) -> genbuf
+     genbuf:  "hello "
+                     ^sp
+
+   phase 2: expand rhsbuf into genbuf
+     (no & or \N, so plain copy)
+     genbuf:  "hello earth"
+                          ^sp
+
+   phase 3: the famous pointer shuffle
+     loc2 = sp - genbuf + linebuf
+          = 11        - 0       + linebuf
+          -> points into linebuf at offset 11 (the '!')
+     This is where the next match(nil) would start.
+
+   phase 4: copy linebuf[loc2..] -> genbuf, then genbuf -> linebuf
+     genbuf:  "hello earth!\0"
+     linebuf: "hello earth!\0"
+\end{verbatim}
+%
+Phase~3 is subtle because [[loc2]] must end up pointing into the
+\emph{new} [[linebuf]], not the old one. At the moment of the
+assignment, [[linebuf]] still holds the pre-substitution text, but
+we know the new prefix (``hello earth'') will occupy bytes
+[[linebuf[0..11)]] once phase~4 runs. So [[sp-genbuf]] (the
+length of that prefix) plus [[linebuf]] (the base) is the
+correct future location. It is a deliberate compute-first,
+copy-later trick---if the assignment were reordered after the
+final copy, [[sp]] would already have advanced and the
+arithmetic would break.
 
 
 \subsection{Advanced substitutions}
@@ -3465,55 +3486,6 @@ The two-phase design is necessary because executing commands can
 change the buffer (e.g., [[g/re/d]] deletes lines), so we cannot
 match and execute at the same time.
 
-%claude:
-There is an important subtlety in the phase~2 loop: after each
-[[commands()]] call, [[a1]] is reset to [[zero]] (line~2695)
-rather than just incrementing. This is because [<commands()>] may
-call [<append()>], which may [[realloc]] the [[zero]] array, moving
-it to a new address. All saved pointers into the old array become
-dangling. Resetting [[a1 = zero]] picks up the (possibly new) base,
-and the loop re-scans from the beginning---this is safe because
-each executed line has its mark cleared, so it won't be processed
-again.
-
-%claude:
-Visually, a [[g/foo/d]] on a four-line buffer goes through the
-following two phases. Bit~0 of each [[zero]] entry is stolen as
-the ``matched'' mark; I show it as [[M]] when set, [[.]] when
-clear:
-\begin{verbatim}
-   initial:                after phase 1 (mark):
-   zero[1] = 0x40          zero[1] = 0x40   .   "alpha"
-   zero[2] = 0x48          zero[2] = 0x49   M   "foobar"   <- matched
-   zero[3] = 0x56          zero[3] = 0x56   .   "beta"
-   zero[4] = 0x62          zero[4] = 0x63   M   "foo"      <- matched
-
-   phase 2 iteration:
-     a1 = zero+1          .  skip
-     a1 = zero+2          M  clear mark; dot=a1;
-                              globp = "d\n"; commands();
-                              (runs 'd' -> rdelete shifts entries down)
-                              a1 = zero (restart from base)
-     a1 = zero+1          .  skip (old alpha)
-     a1 = zero+2          .  skip (was beta, shifted down)
-     a1 = zero+3          M  clear mark; delete; a1 = zero
-     a1 = zero+1          .  skip
-     a1 = zero+2          .  skip
-     dol is now zero+2    loop exits
-\end{verbatim}
-%
-Three consequences follow from this design.
-(1)~The marks must live \emph{inside} [[zero]] rather than in a
-parallel bitmap, because [<rdelete()>] shifts [[zero]] entries
-around and a parallel bitmap would go out of sync instantly.
-Putting the mark in the low bit of the offset means delete,
-move, and substitute all carry marks along for free.
-(2)~The low bit is safe to steal because [[tline]] starts at~2
-and grows in multiples of~2 (aligned [[Rune]] boundaries), so
-legitimate offsets never have bit~0 set.
-(3)~The restart-from-[[zero]] loop is O(n$^2$) in the worst case
-(one full pass per matched line), which is why [<gdelete()>]
-exists as a special case for [[g/.../d]].
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'g':
@@ -3592,6 +3564,57 @@ global(int k)
 }
 @
 
+%claude:
+There is an important subtlety in the phase~2 loop: after each
+[[commands()]] call, [[a1]] is reset to [[zero]] (line~2695)
+rather than just incrementing. This is because [<commands()>] may
+call [<append()>], which may [[realloc]] the [[zero]] array, moving
+it to a new address. All saved pointers into the old array become
+dangling. Resetting [[a1 = zero]] picks up the (possibly new) base,
+and the loop re-scans from the beginning---this is safe because
+each executed line has its mark cleared, so it won't be processed
+again.
+
+%claude:
+Visually, a [[g/foo/d]] on a four-line buffer goes through the
+following two phases. Bit~0 of each [[zero]] entry is stolen as
+the ``matched'' mark; I show it as [[M]] when set, [[.]] when
+clear:
+\begin{verbatim}
+   initial:                after phase 1 (mark):
+   zero[1] = 0x40          zero[1] = 0x40   .   "alpha"
+   zero[2] = 0x48          zero[2] = 0x49   M   "foobar"   <- matched
+   zero[3] = 0x56          zero[3] = 0x56   .   "beta"
+   zero[4] = 0x62          zero[4] = 0x63   M   "foo"      <- matched
+
+   phase 2 iteration:
+     a1 = zero+1          .  skip
+     a1 = zero+2          M  clear mark; dot=a1;
+                              globp = "d\n"; commands();
+                              (runs 'd' -> rdelete shifts entries down)
+                              a1 = zero (restart from base)
+     a1 = zero+1          .  skip (old alpha)
+     a1 = zero+2          .  skip (was beta, shifted down)
+     a1 = zero+3          M  clear mark; delete; a1 = zero
+     a1 = zero+1          .  skip
+     a1 = zero+2          .  skip
+     dol is now zero+2    loop exits
+\end{verbatim}
+%
+Three consequences follow from this design.
+(1)~The marks must live \emph{inside} [[zero]] rather than in a
+parallel bitmap, because [<rdelete()>] shifts [[zero]] entries
+around and a parallel bitmap would go out of sync instantly.
+Putting the mark in the low bit of the offset means delete,
+move, and substitute all carry marks along for free.
+(2)~The low bit is safe to steal because [[tline]] starts at~2
+and grows in multiples of~2 (aligned [[Rune]] boundaries), so
+legitimate offsets never have bit~0 set.
+(3)~The restart-from-[[zero]] loop is O(n$^2$) in the worst case
+(one full pass per matched line), which is why [<gdelete()>]
+exists as a special case for [[g/.../d]].
+
+
 % note that commands () will modify addr1, addr2, zero, etc.
 % so that's also why we use the mark and do the matching in phase1
 % separate from phase2.
@@ -3612,21 +3635,22 @@ command (print)''---i.e., {global / regular expression / print}.
 This was such a common idiom that Ken Thompson and the early
 \unix folks pulled it out into its own standalone tool, named
 literally after the ed command: [[g]] - [[re]] - [[p]] $\to$
-[[grep]]. The original [[grep]] manual page even said
-``[[grep]] is derived from a [[g/re/p]] command in the editor [[ed]].''
+[[grep]].
+%The original [[grep]] manual page even said
+%``[[grep]] is derived from a [[g/re/p]] command in the editor [[ed]].''
 
 \section{Advanced features}
 
-%yoann: small paragraph introducing this section's purpose and %toc: maybe
-%claude:
-%toc:
+%claude: %toc:
 The previous sections covered the core editing commands, the
 addressing system, and search-and-replace. This section
-collects the rest: shell escapes ([[!]]), advanced display
-modes ([[l]] for unambiguous listing, [[n]] for numbered
-output), line joining ([[j]]), the [[b]]rowse paginator,
-re-editing the remembered file ([[e]]), and the special
-treatment of append-only files. None of these introduce new
+collects the remaining commands of [[ed]].
+%rest: shell escapes ([[!]]), advanced display
+%modes ([[l]] for unambiguous listing, [[n]] for numbered
+%output), line joining ([[j]]), the [[b]]rowse paginator,
+%re-editing the remembered file ([[e]]), and the special
+%treatment of append-only files.
+None of those commands introduce new
 mechanisms---they are mostly small additions to the command
 dispatcher in [<commands()>].
 
@@ -3639,8 +3663,10 @@ dispatcher in [<commands()>].
 The [[!]] command forks a child process, executes the rest
 of the line via [[/bin/rc -c]], and waits for it to finish.
 In verbose mode it prints [[!]] when the command completes.
+%
 This is less useful on \plan where you typically have multiple
-windows, but essential on a single-terminal system.
+windows, but was essential back in the old \unix days 
+on a single-terminal system.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case '!':
@@ -3949,7 +3975,7 @@ browse(void)
 % edit, reset savedfile and reset tmpfile and reread
 %claude:
 The [[e]] command re-initializes the editor (calling [<init()>]
-to reset [[tfile]] and [[zero]]) and reads a new file,
+to reset [<tfile>] and [<zero>]) and reads a new file,
 effectively starting a fresh editing session.
 [[E]] is the force variant that skips the unsaved-changes check.
 
@@ -4001,9 +4027,9 @@ if((d = dirfstat(io)) != nil){
 % Also did input and output buffer, which are part of default
 % impleme of standard IO in OCaml no?
 %claude:
-The simplified [[putline()]] and [[getline()]] shown earlier do
+The simplified [<putline()>] and [<getline()>] shown earlier do
 a [[seek]]+[[write]]/[[read]] for every single line.
-The real versions use a userland {block cache}: [<getblock()>]
+The original [[ed]] versions use a userland {\em block cache}: [<getblock()>]
 maintains two [[BLKSIZE]]-byte buffers ([[ibuff]] for reads,
 [[obuff]] for writes) and only performs actual I/O when the
 requested block is not already cached.
@@ -4071,10 +4097,6 @@ putline_opti(void)
 
 \subsection{[[getblock()]]}
 
-<<constants ed.c>>=
-NBLK    = 8191,     /* max size of temp file */
-@
-
 % read/write per block, probably because faster granularity for IO?
 % static ibuff/obuff to avoid some IO sometimes? do batched IO
 % for lines when we needed instead of each time?
@@ -4082,64 +4104,14 @@ NBLK    = 8191,     /* max size of temp file */
 [<getblock()>] is the heart of the block cache.
 It converts a line offset [[atl]] into a block number and
 an offset within that block.
-If the requested block is already in [[ibuff]] (the read cache)
-or [[obuff]] (the write cache), it returns a pointer directly
-into the cached buffer---no I/O needed.
-Otherwise, it evicts the oldest cached block (flushing [[ibuff]]
-to disk via [<blkio()>] if it was modified), loads the new block,
-and returns a pointer into it.
-%claude:
-The [[ichanged]] flag is the dirty bit for [[ibuff]]: when a write
-request ([[iof == OWRITE]]) hits the [[ibuff]] cache, [[ichanged]]
-is set via [[ichanged |= iof]]. Later, if [[ibuff]] must be evicted
-for a read, it is flushed first. The [[obuff]] path has no such
-flag---it is always flushed on eviction because it is only used by
-writes, so it is always dirty.
 
-%yoann: maybe ascii diagram so can better understand chose block operations
-%claude:
-\begin{verbatim}
-   tfile (on disk):
-   +-----------+-----------+-----------+-----------+-----...
-   |  block 0  |  block 1  |  block 2  |  block 3  |
-   |  4096 B   |  4096 B   |  4096 B   |  4096 B   |
-   +-----------+-----------+-----------+-----------+-----...
-
-   getblock(atl, iof):
-       bno = atl / (BLKSIZE/sizeof(Rune))    -> which block
-       off = (atl*sizeof(Rune)) & (BLKSIZE-1) -> byte offset within block
-
-   In-memory caches (ed.c globals):
-
-       ibuff[4096]  <- iblock (currently cached read block)
-       obuff[4096]  <- oblock (currently cached write block)
-       ichanged                (dirty bit for ibuff)
-
-   Three cases:
-
-       1. bno == iblock      -> cache hit on read buffer
-                                return &ibuff[off]
-                                if iof==OWRITE, set ichanged
-
-       2. bno == oblock      -> cache hit on write buffer
-                                return &obuff[off]
-
-       3. miss               -> evict the appropriate buffer
-                                (flush if ichanged or oblock>=0),
-                                read or allocate the new block,
-                                return its address
-\end{verbatim}
-%
-The split between [[ibuff]] and [[obuff]] avoids ping-pong: a
-typical [[ed]] session keeps reading lines from one part of
-[[tfile]] (cached in [[ibuff]]) while writing modified lines
-to the growing tail of [[tfile]] (cached in [[obuff]]). With a
-single buffer the cache would constantly be evicted as the
-program alternates reads and writes; with two, both stay warm.
 
 <<globals ed.c>>=
+// index in ibuff
 int iblock;
+// index in obuff
 int oblock;
+
 int ichanged;
 @
 <<[[init()]](ed.c) initializing globals>>=
@@ -4187,6 +4159,71 @@ getblock(int atl, int iof)
     return (Rune*)(obuff+off);
 }
 @
+
+<<constants ed.c>>=
+NBLK    = 8191,     /* max size of temp file */
+@
+
+
+%claude:
+If the requested block is already in [[ibuff]] (the read cache)
+or [[obuff]] (the write cache), it returns a pointer directly
+into the cached buffer---no I/O needed.
+%
+Otherwise, it evicts the oldest cached block (flushing [[ibuff]]
+to disk via [<blkio()>] if it was modified), loads the new block,
+and returns a pointer into it.
+
+%claude:
+The [[ichanged]] flag is the dirty bit for [[ibuff]]: when a write
+request ([[iof == OWRITE]]) hits the [[ibuff]] cache, [[ichanged]]
+is set via [[ichanged |= iof]]. Later, if [[ibuff]] must be evicted
+for a read, it is flushed first. The [[obuff]] path has no such
+flag---it is always flushed on eviction because it is only used by
+writes, so it is always dirty.
+
+%yoann: maybe ascii diagram so can better understand chose block operations
+%claude:
+\begin{verbatim}
+   tfile (on disk):
+   +-----------+-----------+-----------+-----------+-----...
+   |  block 0  |  block 1  |  block 2  |  block 3  |
+   |  4096 B   |  4096 B   |  4096 B   |  4096 B   |
+   +-----------+-----------+-----------+-----------+-----...
+
+   getblock(atl, iof):
+       bno = atl / (BLKSIZE/sizeof(Rune))    -> which block
+       off = (atl*sizeof(Rune)) & (BLKSIZE-1) -> byte offset within block
+
+   In-memory caches (ed.c globals):
+
+       ibuff[4096]  <- iblock (currently cached read block)
+       obuff[4096]  <- oblock (currently cached write block)
+       ichanged                (dirty bit for ibuff)
+
+   Three cases:
+
+       1. bno == iblock      -> cache hit on read buffer
+                                return &ibuff[off]
+                                if iof==OWRITE, set ichanged
+
+       2. bno == oblock      -> cache hit on write buffer
+                                return &obuff[off]
+
+       3. miss               -> evict the appropriate buffer
+                                (flush if ichanged or oblock>=0),
+                                read or allocate the new block,
+                                return its address
+\end{verbatim}
+
+The split between [[ibuff]] and [[obuff]] avoids ping-pong: a
+typical [[ed]] session keeps reading lines from one part of
+[[tfile]] (cached in [[ibuff]]) while writing modified lines
+to the growing tail of [[tfile]] (cached in [[obuff]]).
+%
+With a single buffer the cache would constantly be evicted as the
+program alternates reads and writes; with two, both stay warm.
+
 
 % finally tfile!
 <<function [[blkio]](ed.c)>>=
@@ -4277,7 +4314,8 @@ gdelete(void)
 \label{sec:error-management}
 
 %claude:
-[[ed]]'s error handling is based on [[setjmp]]/[[longjmp]],
+[[ed]]'s error handling is based on [[setjmp]]/[[longjmp]]
+(see the \book{Libcore}),
 which act as a poor man's exception mechanism.
 
 <<globals ed.c>>=
@@ -4287,39 +4325,43 @@ jmp_buf savej;
 
 
 %claude:
-This is an instance of a pattern that shows up in many
-command-interpreter loops across languages, just with different
-plumbing. The comparison is worth spelling out because the
-design problem (\emph{how do I abort a deeply nested command and
-return to the prompt?}) is universal, but the language-level
-answers vary:
-\begin{verbatim}
-   ed (C, 1970s)        setjmp/longjmp across a stack of fn calls
-   sh, bash             setjmp/longjmp (builtin traps use the same)
-   Python REPL          raise SystemExit / KeyboardInterrupt
-   OCaml (utop, orc)    exception / with; see \book{Editor} orc
-   Go                   panic/recover at the REPL boundary
-   Rust                 Result<T,E> bubbled up via '?'
-   Common Lisp          catch/throw or the condition system
-\end{verbatim}
-%
-What they all share is a single ``frame'' registered at the top
-of the command loop where control can land no matter how deeply
-the current command has descended. What differs is (a)~whether
-the mechanism can run destructor-like cleanup on the way out
-(C~[[longjmp]] cannot; Python and OCaml can); and (b)~whether
-the abort is typed, so the handler can distinguish an internal
-bug from a user error.
-%
-[[ed]] has neither: every error is just
-[[longjmp(savej, 1)]] with a string, and cleanup is manual
-([[error_1]] resets the globals by hand). The price of this
-simplicity is paid in [[error_1()]] below, which has to
-enumerate every piece of transient state that might be dirty.
+%This is an instance of a pattern that shows up in many
+%command-interpreter loops across languages, just with different
+%plumbing. 
+%%
+%The comparison is worth spelling out because the
+%design problem (\emph{how do I abort a deeply nested command and
+%return to the prompt?}) is universal, but the language-level
+%answers vary:
+%\begin{verbatim}
+%   ed (C, 1970s)        setjmp/longjmp across a stack of fn calls
+%   sh, bash             setjmp/longjmp (builtin traps use the same)
+%   Python REPL          raise SystemExit / KeyboardInterrupt
+%   OCaml (utop)         exception / with; see \book{Editor} orc
+%   Go                   panic/recover at the REPL boundary
+%   Rust                 Result<T,E> bubbled up via '?'
+%   Common Lisp          catch/throw or the condition system
+%\end{verbatim}
+%%
+%What they all share is a single ``frame'' registered at the top
+%of the command loop where control can land no matter how deeply
+%the current command has descended. 
+%%
+%What differs is (a)~whether
+%the mechanism can run destructor-like cleanup on the way out
+%(C~[[longjmp]] cannot; Python and OCaml can); and (b)~whether
+%the abort is typed, so the handler can distinguish an internal
+%bug from a user error.
+%%
+%[[ed]] has neither: every error is just
+%[[longjmp(savej, 1)]] with a string, and cleanup is manual
+%([[error_1]] resets the globals by hand). The price of this
+%simplicity is paid in [[error_1()]] below, which has to
+%enumerate every piece of transient state that might be dirty.
 
 \subsection{[[error()]]}
 
-Before entering [<commands()>], [[main]] calls [[setjmp(savej)]]
+Before calling [<commands()>], [[main()]] calls [[setjmp(savej)]]
 to save the execution context.
 
 <<[[main()]](ed.c) before [[commands()]]>>=
@@ -4400,50 +4442,53 @@ EOF = -1,
 \subsection{Notes/signals management}
 
 %claude:
-\plan uses {notes} instead of \unix signals.
+\plan uses {notes} instead of \unix signals (see the \book{Kernel}).
+%
 On an ``interrupt'' note, [[ed]] prints a newline and
-jumps back to the command loop via [[notejmp]] (the \plan
-equivalent of [[siglongjmp]]).
+jumps back to the command loop via [[notejmp]]
+%other:
+(the \plan equivalent of [[siglongjmp]]).
+%
 On a ``hangup'' note (terminal disconnected), it calls
 [<rescue()>], which saves the buffer to [[ed.hup]] before
 exiting---a safety net so you do not lose unsaved work.
 
 %claude: %plan9-is-cleaner:
-The difference between \plan notes and \unix signals is worth
-spelling out because it affects what an [[ed]]-like program
-can do in the handler. Signals on \unix are delivered
-asynchronously by the kernel, identified by a small integer
-([[SIGINT]], [[SIGHUP]], \ldots), and the handler runs on the
-current stack with very few things it is allowed to touch
-(see the ``async-signal-safe'' list in [[signal(7)]]).
-Notes on \plan, by contrast, are \emph{strings}
-([[{}"interrupt"{}]], [[{}"hangup"{}]], [[{}"sys: ..."{}]]) that
-the kernel writes to [[/proc/$pid/note]]; the receiving process
-reads them out via its registered [<notifyf()>] callback and
-decides what to do by calling [[noted(NCONT)]] (resume) or
-[[noted(NDFLT)]] (default action).
-\begin{verbatim}
-   \unix signals              \plan notes
-   ------------------------   -------------------------------
-   int id (SIGINT, SIGHUP)    string ("interrupt", "hangup")
-   kernel async delivery      kernel writes /proc/$pid/note
-   handler on the same stack  handler via notified user thread
-   sigjmp_buf + siglongjmp    Label + notejmp (same idea)
-   SA_RESTART / EINTR dance   restartable by default; noted()
-   limited to async-safe fns  fewer restrictions in practice
-\end{verbatim}
-%
-For [[ed]] specifically, three things follow from being on
-\plan. First, the handler can [[strcmp]] the string instead
-of switching on an integer, which is why [<notifyf()>] starts
-with [[strcmp(s, "interrupt")]]. Second, [[notejmp]] replaces
-[[siglongjmp]]: it restores the [[Label]] saved by [[setjmp]]
-and then tells the kernel the note has been handled. Third,
-the [[rescuing]] and [[waiting]] flags exist to short-circuit
-recursive notes: if an interrupt arrives while we are already
-saving [[ed.hup]], or while [[callunix]] is blocked in
-[[waitpid]], we do not want to restart the save or kill the
-child---we just call [[noted(NCONT)]] and resume.
+%The difference between \plan notes and \unix signals is worth
+%spelling out because it affects what an [[ed]]-like program
+%can do in the handler. Signals on \unix are delivered
+%asynchronously by the kernel, identified by a small integer
+%([[SIGINT]], [[SIGHUP]], \ldots), and the handler runs on the
+%current stack with very few things it is allowed to touch
+%(see the ``async-signal-safe'' list in [[signal(7)]]).
+%Notes on \plan, by contrast, are \emph{strings}
+%([[{}"interrupt"{}]], [[{}"hangup"{}]], [[{}"sys: ..."{}]]) that
+%the kernel writes to [[/proc/$pid/note]]; the receiving process
+%reads them out via its registered [<notifyf()>] callback and
+%decides what to do by calling [[noted(NCONT)]] (resume) or
+%[[noted(NDFLT)]] (default action).
+%\begin{verbatim}
+%   \unix signals              \plan notes
+%   ------------------------   -------------------------------
+%   int id (SIGINT, SIGHUP)    string ("interrupt", "hangup")
+%   kernel async delivery      kernel writes /proc/$pid/note
+%   handler on the same stack  handler via notified user thread
+%   sigjmp_buf + siglongjmp    Label + notejmp (same idea)
+%   SA_RESTART / EINTR dance   restartable by default; noted()
+%   limited to async-safe fns  fewer restrictions in practice
+%\end{verbatim}
+%%
+%For [[ed]] specifically, three things follow from being on
+%\plan. First, the handler can [[strcmp]] the string instead
+%of switching on an integer, which is why [<notifyf()>] starts
+%with [[strcmp(s, "interrupt")]]. Second, [[notejmp]] replaces
+%[[siglongjmp]]: it restores the [[Label]] saved by [[setjmp]]
+%and then tells the kernel the note has been handled. Third,
+%the [[rescuing]] and [[waiting]] flags exist to short-circuit
+%recursive notes: if an interrupt arrives while we are already
+%saving [[ed.hup]], or while [[callunix]] is blocked in
+%[[waitpid]], we do not want to restart the save or kill the
+%child---we just call [[noted(NCONT)]] and resume.
 
 <<globals ed.c>>=
 bool rescuing;
@@ -4453,7 +4498,7 @@ bool rescuing;
 void
 notifyf(void *a, char *s)
 {
-    if(strcmp(s, "interrupt") == ORD__EQ){
+    if(strcmp(s, "interrupt") == 0){
         if(rescuing || waiting)
             noted(NCONT);
         putchr(L'\n');
@@ -4461,7 +4506,7 @@ notifyf(void *a, char *s)
         error_1(Q);
         notejmp(a, savej, 0);
     }
-    if(strcmp(s, "hangup") == ORD__EQ){
+    if(strcmp(s, "hangup") == 0){
         if(rescuing)
             noted(NDFLT);
         rescue();
@@ -4471,6 +4516,7 @@ notifyf(void *a, char *s)
 }
 @
 % notejmp??
+%padism: could use ORD__EQ again
 
 <<function [[rescue]](ed.c)>>=
 void
