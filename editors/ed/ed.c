@@ -372,6 +372,7 @@ commands(void)
 
                 if((io = create(file, OWRITE, 0666)) < 0)
                     error(file);
+            // else
 
             Binit(&iobuf, io, OWRITE);
             wrapp = false;
@@ -1025,11 +1026,13 @@ putfile(void)
 
     a1 = addr1;
     do {
+        // modifies linebuf[]
         lp = getline(*a1++);
         for(;;) {
             count++;
             c = *lp++;
             if(c == 0) {
+                // a null Rune in tfile converts to \n in the written file
                 if(Bputrune(&iobuf, '\n') < 0)
                     error(Q);
                 break;
@@ -1055,7 +1058,7 @@ append(int (*f)(void), int *a)
     int tl;
 
     dot = a;
-    // f() (e.g., getfile()) will modify linebuf
+    // f() (e.g., getfile()) will modify linebuf[]
     while((*f)() == 0) {
         /*s: [[append()]] grow [[zero]] if [[zero]] too small */
         if((dol-zero) >= nlall) {
@@ -1075,7 +1078,7 @@ append(int (*f)(void), int *a)
             dot += tl;
         }
         /*e: [[append()]] grow [[zero]] if [[zero]] too small */
-        // putline() will use linebuf
+        // putline() will use linebuf[]
         tl = putline();
         nline++;
 
@@ -1496,10 +1499,11 @@ getline(int tl)
     // else
 
     // tfile stores fixed-width Runes; convert Rune offset to bytes
-    seek(tfile, tl * sizeof(Rune), 0);
+    seek(tfile, tl * sizeof(Rune), SEEK__START);
 
     // read one Rune at a time until we hit the null-Rune terminator
     n = 0;
+    // syscall
     while(read(tfile, &linebuf[n], sizeof(Rune)) == sizeof(Rune)
           && linebuf[n] != 0)
         n++;
@@ -1521,7 +1525,7 @@ putline(void)
     fchange = true;
     tl = tline;                              // current write offset (Rune units)
 
-    // walk linebuf; stop at the null Rune or an embedded '\n'
+    // walk linebuf[]; stop at the null Rune or an embedded '\n'
     for(lp = linebuf; *lp; lp++) {
         /*s: [[putline()]] if newline char, adjust and break */
         // (the latter happens after dosub() injects \n in a multi-line subst)
@@ -1540,7 +1544,8 @@ putline(void)
 
     // tfile stores fixed-width Runes (not UTF-8);
     // convert Rune offset/count to byte offsets for seek/write
-    seek(tfile, tline * sizeof(Rune), 0);
+    seek(tfile, tline * sizeof(Rune), SEEK__START);
+    // syscall!
     write(tfile, linebuf, n * sizeof(Rune));
 
     // advance past the line just written, rounding up to an even Rune
