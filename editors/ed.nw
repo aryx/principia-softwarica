@@ -36,7 +36,8 @@ It is a {\em line editor}: rather than always displaying a file content
 on {screen} like [[vi]], Emacs, or \plan's [[sam]] and [[acme]],
 % or stream editor like sed.
 [[ed]] works mostly one line at a time, accepting commands from standard input
-and printing results to standard output.
+and printing results to standard output (possibly displaying lines of the
+file depending on the input commands).
 %
 This makes it look primitive compared to modern {\em screen editors},
 but it has a crucial advantage: it can be {scripted}.
@@ -47,29 +48,12 @@ script, something that is awkward or impossible with most editors.
 % See also \book{Editor} for screen editor.
 % edit just one file at a time.
 
-
-%claude:
-Note that many ideas that seem to ``belong'' to other tools actually originated in
-[[ed]]: the [[s/re/replacement/]] syntax used by [[sed]], the [[g/re/p]]
-command that gave [[grep]] its name (``global regular expression print''),
-and commands like [[wq]], [[a]], [[i]] that [[vi]] inherited directly.
-%
-It is thus interesting to see the code of the program
-that started it all.
-%Moreover, editor is a fundamental program, see other appendix.
-
 %claude:
 While you can already create and modify files using [[echo]] and shell
 redirection ([[>]], [[>>]]), [[ed]] offers far more power: searching,
 substituting, moving lines, and operating on ranges of lines.
 %claude:
 For a quick hands-on feel, here is a complete [[ed]] session:
-launch [[ed]], open insert mode with [[i]], type two lines, end
-the insertion with a single [['.']] on its own line, print lines~1
-to~2 with [[1,2p]] ([[ed]] echoes the 2 lines), set the remembered filename with
-[[f hello.txt]] ([[ed]] echoes it back), save the buffer with
-[[w]] ([[ed]] echoes the character count written), and quit
-with [[q]]:
 \begin{verbatim}
    $ ed
    i
@@ -87,8 +71,15 @@ with [[q]]:
    $ cat hello.txt
    hello
    world
-   $ 
+   $
 \end{verbatim}
+%claude:
+The session above launches [[ed]], opens insert mode with [[i]],
+types two lines, ends the insertion with a single [['.']] on its own
+line, prints lines~1 to~2 with [[1,2p]] ([[ed]] echoes the 2 lines),
+sets the remembered filename with [[f hello.txt]] ([[ed]] echoes it
+back), saves the buffer with [[w]] ([[ed]] echoes the character count
+written), and quits with [[q]].
 
 %claude:
 [[ed]] is famously silent: it prints no prompt, and every line
@@ -101,6 +92,17 @@ opened by [[i]] or [[a]].
 For a full tutorial introduction to [[ed]], see Appendix~1 of
 ``The \unix Programming Environment'' \cite{unix-pike},
 or Kernighan's two tutorials from the Bell Labs technical reports.
+
+%claude:
+Note that many ideas that seem to ``belong'' to other tools actually originated in
+[[ed]]: the [[s/re/replacement/]] syntax used by [[sed]], the [[g/re/p]]
+command that gave [[grep]] its name (``global regular expression print''),
+and commands like [[w]], [[q]], [[a]], [[i]] that [[vi]] inherited directly.
+%
+It is thus interesting to see the code of the program
+that started it all.
+%Moreover, editor is a fundamental program, see other appendix.
+
 
 % could cite "Formalizing text editors in Coq" 2020 :) but meh actually
 
@@ -195,23 +197,13 @@ The key advantage of [[ed]] here is that the editing commands are
 plain text, easily embedded in a shell script or a [[mkfile]] rule.
 Try doing the same in Emacs or Visual Studio Code---you would need Emacs Lisp
 macros or complex key-sequence recordings which would not be so easy
-to replay.
+and fast to replay.
 
 % '-' suppress the printing of character counts by e/r/w
 %  remove verbose/interactive mode (default)
 
 % Note that use <<'!' Here doc feature from shell
 % but could store ed script in separate file
-
-%claude:
-Note that the \plan version of [[ed]] is Unicode-ready,
-using [[Rune]] (see the \book{Libcore}) throughout for text processing,
-as explained in the next section.
-%
-This adds some complexity to the code (conversions between [[char]] and
-[[Rune]], separate buffers for byte I/O vs.\ character manipulation),
-but the overall structure remains simple and elegant.
-
 
 %\section{[[ed]] clones}
 %clones:
@@ -220,9 +212,18 @@ but the overall structure remains simple and elegant.
 %ocaml: - in OCaml? yes mine! see next appendix :)
 
 
-\subsection{Unicode in \plan: a primer}
+%alt: %\subsection{Unicode in \plan: a primer}
+\subsection{A Unicode editor}
 \label{sec:unicode-primer}
 
+%claude:
+Note that the \plan version of [[ed]] is Unicode-ready.
+%using [[Rune]] (see the \book{Libcore}) throughout for text processing,
+%as explained below.
+%
+%This adds some complexity to the code (conversions between [[char]] and
+%[[Rune]], separate buffers for byte I/O vs.\ character manipulation),
+%but the overall structure remains simple and elegant.
 %claude:
 [[ed]] can read, edit, and write text that contains non-ASCII
 characters (e.g., accented letters, chinese characters, emoji), so before we
@@ -236,15 +237,15 @@ A {\em codepoint} is the numeric ID of a
 character in that catalog: [[U+0041]] is ``A'' ([[65]] in decimal),
 [[U+00E9]] is ``é'' ([[233]]), and so on up to [[U+10FFFF]] for the
 rarest emoji.% and historical scripts.
-{\em UTF-8} is one way to store/transmit those code points as {\em bytes}.
-%encoding
+{\em UTF-8} is one way to store/transmit those code points as {\em bytes};
+It is an {\em encoding}.
 
 %claude: %terminology:
 \plan can store codepoints in two complementary formats.
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
 holding one codepoint; Rune arrays such as
 [[Rune linebuf[LBSIZE]]] are the in-memory format for text
-manipulation. 
+manipulation, the Unicode equivalent of [[char linebuf[LBSIZE]]].
 %
 {UTF-8} is a {\em variable-length} byte encoding where
 ASCII codepoints take 1~byte, Latin supplements take 2, most
@@ -261,7 +262,7 @@ The bridge between the two formats is two routines from [[libc]]:
    int runetochar(char *s/*OUT*/, Rune *r);   // Rune -> UTF-8; returns # bytes written
 \end{verbatim}
 
-Both move at most [[UTFmax]]~=~4 bytes per codepoint.
+Both functions move at most [[UTFmax]] (usually set to 4) bytes per codepoint.
 %
 %For pure ASCII text the formats coincide byte-for-byte (the byte is
 %[[0xxxxxxx]] in UTF-8 and the codepoint value in the low byte
