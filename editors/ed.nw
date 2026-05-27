@@ -521,6 +521,10 @@ Same tfile, Rune granularity:
 zero (memory) holds Rune-slot indexes:  [_, 2, 6]
 \end{vdiagram}
 
+% note that simplified diagram because no padding needed because
+% aeb\0 is 4 runes so tline remain even. But already quite complex
+% so better delay to tline
+
 %The simplified [<putline()>] shown later writes each line as
 %exactly [[n+1]] Rune cells (the [[n]] characters plus a null
 %terminator), so consecutive lines sit back-to-back with no
@@ -1617,12 +1621,19 @@ Here is a simplified version of [<putline()>] that shows the
 essential logic: seek to the current write position in [<tfile>],
 write [<linebuf>] as a run of fixed-width [[Rune]] cells
 terminated by a null Rune, advance [<tline>] by the number of
-Runes written, and return the old offset (which [<append()>]
-stores in [<zero>]).
+Runes written (rounded up to an even count), and return the old
+offset (which [<append()>] stores in [<zero>]).
 %
 The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
 not bytes, and [[tline]] counts cells, not bytes---which is why
 every seek and write needs a [[*sizeof(Rune)]] conversion.
+%
+The other subtlety is the even-padding of [[tline]]. Each [[zero]]
+entry holds a [[Rune]] offset into [[tfile]] (the value returned
+here), and [<global()>] together with the [[k]] command steal the
+low bit of that entry as a ``matched'' flag (see [<global()>] and
+[<anymarks>]). Keeping every offset even costs at most one
+extra [[Rune]] cell per line and frees the bit for the mark.
 
 %new: was not in ed.c originally
 <<function [[putline]]>>=
@@ -1656,13 +1667,11 @@ putline(void)
     seek(tfile, tline * sizeof(Rune), 0);
     write(tfile, linebuf, n * sizeof(Rune));
 
-    // advance past the line just written; no padding needed because
-    // sizeof(Rune) is even, so every byte offset (tline*sizeof(Rune))
-    // stays even regardless of n's parity
-    // (the real ed.c rounds tline up to even to free the low bit of
-    // each zero[] entry for the "matched" flag used by global() and 'k')
-    assert(sizeof(Rune) % 2 == 0);
-    tline += n;
+    // advance past the line just written, rounding up to an even Rune
+    // count so tline stays even. zero[] entries are Rune offsets, and
+    // global() and 'k' steal the low bit of each entry as a "matched"
+    // flag (see global() and anymarks). Padding costs at most one Rune.
+    tline += (n + 1) & ~1;
     return tl;
 }
 @
