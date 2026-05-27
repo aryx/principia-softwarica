@@ -1049,7 +1049,8 @@ All text output in [[ed]] goes through a small buffering layer:
 [<putchr()>] accumulates characters in the [<line>] buffer and
 flushes with a single [[write()]] call when it sees a newline
 (or the buffer is nearly full).
-[<putst()>] and [<putshst()>] are wrappers for printing
+%
+[<putst()>] below and [<putshst()>] later are wrappers for printing
 [[char]] (UTF-8) strings and [[Rune]] strings respectively.
 
 
@@ -1072,7 +1073,7 @@ putst(char *sp)
     putchr(L'\n');
 }
 @
-% chartorune
+% chartorune!
 
 % col? could reset it at the end instead? more logical
 % after putchr the \n
@@ -1080,36 +1081,8 @@ putst(char *sp)
 
 % grrr int vs Rune. ac means?
 %claude:
-[<putchr()>] buffers output in [<line>] and flushes on newline
-or when the buffer is nearly full. The [[-5]] margin in the
-comparison accounts for the worst case of [[runetochar()]]:
-a single rune can expand to up to 4~bytes in UTF-8, so the
-check must leave room for one full multi-byte character plus
-the possibility that [[lp]] already advanced past the check.
-
-%claude:
-\begin{verbatim}
-   line[]:
-   +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
-   | h | e | l | l | o |   | w | o | r | l | d |   |     |   |   |   |   |   |
-   +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
-   ^                                                ^                          ^
-   line                                            linp                line+sizeof
-                                                                       (line)-5
-                                                    |<--- worst-case --->|
-                                                       4-byte UTF-8 rune
-                                                       + safety margin
-\end{verbatim}
-
-%yoann: explain quickly diagram above and context/situation
-
-[<linp>] tracks how full the buffer is. The flush check
-[[lp >= &line[sizeof(line)-5]]] reserves 5~bytes at the end of
-the buffer because: (1)~UTF-8 runes can be up to 4~bytes each
-(``hello''~$\mu$~``s'' ends with a 2-byte rune that
-[[runetochar()]] writes after [[lp]] is checked), and (2)~one
-extra byte for safety. Without this margin, a multi-byte rune
-arriving when the buffer is nearly full could overrun the array.
+%[<putchr()>] buffers output in [<line>] and flushes on newline
+%or when the buffer is nearly full.
 
 <<function [[putchr]](ed.c)>>=
 /// error | putst | ... -> <>
@@ -1138,6 +1111,39 @@ putchr(int ac)
 @
 % and this time runetochar, argh
 % why int ac -> int c -> Rune r ... grrrr
+
+
+%claude:
+The [[-5]] margin in the
+comparison accounts for the worst case of [[runetochar()]]:
+a single rune can expand to up to 4~bytes in UTF-8, so the
+check must leave room for one full multi-byte character plus
+the possibility that [[lp]] already advanced past the check.
+
+%claude:
+\begin{vdiagram}
+   line[]:
+   +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
+   | h | e | l | l | o |   | w | o | r | l | d |   |     |   |   |   |   |   |
+   +---+---+---+---+---+---+---+---+---+---+---+---+...---+---+---+---+---+---+
+   ^                                                ^                          ^
+   line                                            linp                line+sizeof
+                                                                       (line)-5
+                                                    |<--- worst-case --->|
+                                                       4-byte UTF-8 rune
+                                                       + safety margin
+\end{vdiagram}
+
+%yoann: explain quickly diagram above and context/situation
+
+[<linp>] tracks how full the buffer is. The flush check
+[[lp >= &line[sizeof(line)-5]]] reserves 5~bytes at the end of
+the buffer because: (1)~UTF-8 runes can be up to 4~bytes each
+(``hello''~$\mu$~``s'' ends with a 2-byte rune that
+[[runetochar()]] writes after [[lp]] is checked), and (2)~one
+extra byte for safety. Without this margin, a multi-byte rune
+arriving when the buffer is nearly full could overrun the array.
+
 
 % buffered output, display only when newline (or when > 65 and close
 % to reach line[] limit) -5 because rune can be 4 chars
