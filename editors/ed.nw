@@ -42,6 +42,15 @@ descend from it in some way.
 Reading its source code is a quick way to see how a
 non-trivial \unix tool was structured in the 1970s.
 
+%padism:
+Note that the original source code has been slightly modified to
+be arguably easier to read. Moreover, I have sometimes added
+a few comments here and there also in the code.
+%
+The original comments from Ken Thompson are using
+the standard C syntax [[/**/]] while my comments are using
+the [[//]] syntax, so they are easy to differentiate.
+
 %******************************************************************************
 \section{Introduction}
 %******************************************************************************
@@ -2642,7 +2651,8 @@ matching [[foo]] is line~11. The parse proceeds as follows:
      addr2 = 11; given = true
      switch(c='p') -> print lines 7..11
 \end{verbatim}
-%
+
+%claude:
 Two things are worth noticing. First, the address parser is
 strictly left-to-right with no precedence---every operator is
 applied in sequence, so [[1+2-3]] means [[((1+2)-3)]], never
@@ -2793,7 +2803,7 @@ in which case the [[default:]] branch adds an implicit [[1]]
 (so [[3+]] means [[3+1]], i.e., line~4).
 
 
-The [[default:]] case handles the return: if no operator is
+The [[default:]] case below handles the return: if no operator is
 pending, push the character back and return the computed address.
 
 <<[[address()]](ed.c) switch [[c]] cases>>=
@@ -2915,7 +2925,8 @@ where the previous hit ended.
 %claude:
 When [[/re/]] or [[?re?]] appears as an address, [<address()>]
 compiles the pattern and scans through the buffer line by line,
-wrapping around from [[dol]] to [[zero]] (or vice versa for~[[??]] backward search),
+wrapping around from [[dol]] to [[zero]] (or vice versa for~[[?re?]]
+backward search),
 until a match is found or we return to where we started.
 
 <<[[address()]](ed.c) switch [[c]] cases>>=
@@ -3106,7 +3117,7 @@ subexp[0].s.rsp = loc2;
 %claude:
 [<compsub()>] reads the full [[s/re/replacement/]] command.
 It first calls [<compile()>] to handle the left-hand side (the
-pattern), then reads the right-hand side into [[rhsbuf]],
+pattern), then reads the right-hand side into [<rhsbuf>],
 handling backslash escapes and the [[ESCFLG]] marker for group
 references like [[\1]].
 It returns true if the trailing [[g]] flag is present (global
@@ -3187,7 +3198,7 @@ and [[\1]]--[[\9]] references), and everything after [[loc2]].
 The result is copied back to [[linebuf]] and written to [[tfile]]
 via [<putline()>], replacing the old [[zero]] entry.
 %
-With the [[g]] flag, the match/dosub loop repeats on the same
+With the suffix [[g]] flag, the match/dosub loop repeats on the same
 line via [[match(nil)]]; the optional skip count ([[s3/re/.../]])
 skips the first [[n-1]] matches.
 
@@ -3297,7 +3308,7 @@ dosub(void)
             error(Q);
     }
     lp = loc2;
-    loc2 = sp - genbuf + linebuf;
+    loc2 = (sp - genbuf) + linebuf;
     while(*sp++ = *lp++)
         if(sp >= &genbuf[LBSIZE])
             error(Q);
@@ -3307,6 +3318,7 @@ dosub(void)
         ;
 }
 @
+%old: was sp - genbuf + linebuf;
 
 
 %claude:
@@ -3339,8 +3351,8 @@ shows the four phases of [<dosub()>]:
                           ^sp
 
    phase 3: the famous pointer shuffle
-     loc2 = sp - genbuf + linebuf
-          = 11        - 0       + linebuf
+     loc2 = (sp - genbuf) + linebuf
+          =    11         + linebuf
           -> points into linebuf at offset 11 (the '!')
      This is where the next match(nil) would start.
 
@@ -3362,6 +3374,12 @@ arithmetic would break.
 
 
 \subsection{Advanced substitutions}
+
+%trans:
+The code of [<dosub()>], [<compsub()>], and [<substitute()>]
+got simplified before to show just the core code path. Many additional
+search and replace features require additional code as shown
+in the following sections.
 
 \subsubsection{Matched string reference: [[s/.../...&.../]]}
 
@@ -3414,8 +3432,8 @@ if(c == ESCFLG && (c = *rp++) >= '1' && c < MAXSUB+'0') {
 
 %claude:
 The [[u]] command provides a minimal undo: it remembers the
-previous [[zero]] entry ([[subolda]]) before the last substitution
-replaced it with [[subnewa]], and swaps it back.
+previous [[zero]] entry ([<subolda>]) before the last substitution
+replaced it with [<subnewa>], and swaps it back.
 This only undoes the most recent substitution on a single line---far
 from a general undo facility.
 
@@ -3506,7 +3524,7 @@ getsub(void)
 
 % mark something
 %claude:
-The [[k]] command marks a line with a lowercase letter ([[ka]]
+The [[k]] command {\em marks} a line with a lowercase letter ([[ka]]
 through [[kz]]).  The mark is stored in [[names[c-'a']]] as
 the line's [[zero]] entry (with the low bit cleared---since
 that bit is used by [<global()>]).
@@ -3576,7 +3594,7 @@ for(markp = names; markp < &names[26]; )
 %claude:
 The [[g/re/cmd]] command (and its inverse [[v/re/cmd]]) works in
 two phases. In phase~1, it scans all lines in the address range
-and {marks} those that match (or don't match, for [[v]]) the
+and {\em marks} those that match (or don't match, for [[v]]) the
 pattern by setting the low bit of their [[zero]] entry
 ([[*a1 |= 01]]---this is the ``bit-stealing trick'' that
 [[tline]] starting at~2 makes possible).
@@ -3668,8 +3686,10 @@ global(int k)
 
 %claude:
 There is an important subtlety in the phase~2 loop: after each
-[[commands()]] call, [[a1]] is reset to [[zero]] (line~2695)
-rather than just incrementing. This is because [<commands()>] may
+[[commands()]] call, [[a1]] is reset to [[zero]]
+rather than just incrementing.
+%
+This is because [<commands()>] during that recursive call may
 call [<append()>], which may [[realloc]] the [[zero]] array, moving
 it to a new address. All saved pointers into the old array become
 dangling. Resetting [[a1 = zero]] picks up the (possibly new) base,
@@ -3680,7 +3700,7 @@ again.
 %claude:
 Visually, a [[g/foo/d]] on a four-line buffer goes through the
 following two phases. Bit~0 of each [[zero]] entry is stolen as
-the ``matched'' mark; I show it as [[M]] when set, [[.]] when
+the ``matched'' mark; I show it as [[M]] when set, and [['.']] when
 clear:
 \begin{verbatim}
    initial:                after phase 1 (mark):
@@ -3714,7 +3734,8 @@ and grows in multiples of~2 (aligned [[Rune]] boundaries), so
 legitimate offsets never have bit~0 set.
 (3)~The restart-from-[[zero]] loop is O(n$^2$) in the worst case
 (one full pass per matched line), which is why [<gdelete()>]
-exists as a special case for [[g/.../d]].
+exists as a special case for [[g/.../d]]
+(see Section~\ref{sec:gdelete-opti}).
 
 
 % note that commands () will modify addr1, addr2, zero, etc.
@@ -3730,7 +3751,7 @@ exists as a special case for [[g/.../d]].
 
 %yoann: say that by now you finally understand what grep origin is
 %claude:
-With this in hand, the origin of [[grep]] should now be obvious.
+With this in hand, the origin of [[grep]] is now obvious.
 The classic [[ed]] one-liner [[g/re/p]] means ``for every line
 matching the regular expression [[re]], execute the [[p]]
 command (print)''---i.e., {global / regular expression / print}.
@@ -3768,7 +3789,7 @@ The [[!]] command forks a child process, executes the rest
 of the line via [[/bin/rc -c]], and waits for it to finish.
 In verbose mode it prints [[!]] when the command completes.
 %
-This is less useful on \plan where you typically have multiple
+This command is less useful on \plan where you typically have multiple
 windows, but was essential back in the old \unix days 
 on a single-terminal system.
 
@@ -3919,13 +3940,13 @@ if(c == 'p' || c == 'l' || c == 'n') {
 }
 @
 
-%yoann: again can reference grep origin here
+%yoann: again can reference grep origin here? or maybe too much
 %claude:
-The [[p]] suffix (as in [[3p]] or [[/foo/p]]) is the same [[p]]
-that gave [[grep]] its name. The script form
-[[g/re/p]]---``global, regexp, print''---is just the [[g]]
-command from the previous section composed with the [[p]]
-suffix here.
+%The [[p]] suffix (as in [[3p]] or [[/foo/p]]) is the same [[p]]
+%that gave [[grep]] its name. The script form
+%[[g/re/p]]---``global, regexp, print''---is just the [[g]]
+%command from the previous section composed with the [[p]]
+%suffix here.
 
 <<[[printcom()]] reset flags>>=
 listf = false;
@@ -4136,7 +4157,7 @@ if((d = dirfstat(io)) != nil){
 The simplified [<putline()>] and [<getline()>] shown earlier do
 a [[seek]]+[[write]]/[[read]] for every single line.
 %
-The original [[ed]] versions use a userland {\em block cache}: [<getblock()>]
+The original [[ed]] versions use a (userspace) {\em block cache}: [<getblock()>]
 maintains two [[BLKSIZE]]-byte buffers ([[ibuff]] for reads,
 [[obuff]] for writes) and only performs actual I/O when the
 requested block is not already cached.
@@ -4383,12 +4404,13 @@ getline_opti(int tl)
 @
 
 \subsection{[[gdelete()]]}
+\label{sec:gdelete-opti}
 
 %claude:
 The generic [[g/re/cmd]] loop calls [<commands()>] once per
 marked line, which for [[g/re/d]] would result in
 O(n\textsuperscript{2}) shifting in [<rdelete()>].
-[<gdelete()>] special-cases this: it makes a single pass over
+[<gdelete()>] below special-cases this: it makes a single pass over
 [[zero]], copying unmarked entries down and skipping marked ones,
 achieving O(n) deletion.
 
@@ -4494,8 +4516,8 @@ When [<error()>] is called anywhere in the program, it prints
 calls [[longjmp(savej, 1)]] to jump back to just before
 [<commands()>], ready to read the next command.
 %
-This is why [[ed]]'s error messages are so famously cryptic---most
-errors just print [[?]] with an empty string.
+%This is why [[ed]]'s error messages are so famously cryptic---most
+%errors just print [[?]] with an empty string.
 
 <<function [[error]](ed.c)>>=
 void
@@ -4562,7 +4584,7 @@ EOF = -1,
 \subsection{Notes/signals management}
 
 %claude:
-\plan uses {notes} instead of \unix signals (see the \book{Kernel}).
+\plan uses {\em notes} instead of \unix {\em signals} (see the \book{Kernel}).
 %
 On an ``interrupt'' note, [[ed]] prints a newline and
 jumps back to the command loop via [[notejmp]]
