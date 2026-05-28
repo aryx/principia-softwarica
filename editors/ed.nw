@@ -1,3 +1,24 @@
+%******************************************************************************
+% Prelude
+%******************************************************************************
+
+%------------------------------------------------------------------------------
+%history: 
+%------------------------------------------------------------------------------
+
+%thx to LP, I changed for the better a few things:
+%  - simplified putline/getline
+    
+
+%thx to this manual, I better understand ed and more generally plan 9:
+% - learn about Unicode and UTF8 and codepoints and char and encoding
+%   (see unicode primer section)
+% - 
+
+%history LP-ization:
+
+
+%******************************************************************************
 
 %claude:
 This appendix has two purposes. First, it is a concrete
@@ -21,7 +42,9 @@ descend from it in some way.
 Reading its source code is a quick way to see how a
 non-trivial \unix tool was structured in the 1970s.
 
+%******************************************************************************
 \section{Introduction}
+%******************************************************************************
 
 %motivations:
 % could explain why show the code of text editor, like in my other
@@ -226,7 +249,9 @@ and fast to replay.
 % Note that use <<'!' Here doc feature from shell
 % but could store ed script in separate file
 
+%******************************************************************************
 %\section{[[ed]] clones}
+%******************************************************************************
 %clones:
 % - go: https://github.com/thimc/ed and https://git.mills.io/prologic/ed
 % - rust: https://github.com/sidju/add-ed
@@ -353,7 +378,9 @@ became clear that 16 bits would not fit all of Unicode.
 %between [[ed]]'s in-memory Rune world and the byte world of
 %files, terminals, and process arguments.
 
+%******************************************************************************
 \section{Core data structures}
+%******************************************************************************
 
 \begin{verse}
 \begin{flushright}
@@ -442,20 +469,21 @@ char    savedfile[FNSIZE];
 %claude:
 [<zero>] is the central data structure: a dynamically-growing array
 of [[int]] offsets into [<tfile>], one per line.
+%
+Lines are 1-indexed: [[zero[1]]] is the offset of line~1,
+[[zero[2]]] of line~2, etc. The entry [[zero[0]]] is unused
+(always~0), which is why probably the array is called ``zero''---it starts
+at the zero-th slot which represents ``before line~1.''
 
 <<globals ed.c>>=
 ulong   nlall = 128;
-// growing_array<int(even)|mark|0>, initial size = (nlall+2+margin)*sizeof(int)
+// growing_array<int(even)|int+mark|0>, initial size = (nlall+2+margin)*sizeof(int)
 // where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
 int*    zero;
 @
 
 
-Lines are 1-indexed: [[zero[1]]] is the offset of line~1,
-[[zero[2]]] of line~2, etc. The entry [[zero[0]]] is unused
-(always~0), which is why the array is called ``zero''---it starts
-at the zero-th slot which represents ``before line~1.''
-%
+%claude:
 The crucial insight is that many editing operations only modify this
 array of offsets, never the temporary file itself.
 %
@@ -622,8 +650,10 @@ Their names match the ed command syntax: [[dot]] is the {\em current line}
 (what the user refers to as~[[$]], ``dollar'').
 %
 Both are pointers, not indices: [[dot - zero]] gives the
-current line number, and [[dol - zero]] gives the total number
-of lines.  When the buffer is empty, [[dol == zero]], which is
+current line number (thanks to pointer arithmetic), and [[dol - zero]] gives
+the total number of lines.
+%
+When the buffer is empty, [[dol == zero]], which is
 why you will see often code like [[dol!=zero]] to test for non-empty
 buffer.
 
@@ -718,17 +748,21 @@ int col;
 
 
 
+%******************************************************************************
 \section{[[main()]]}
+%******************************************************************************
 % main, init, quit
 
 %trans:
 I now switch from the bottom-up approach of the previous section
 to a top-down approach, starting with [[main()]].
-
 %claude:
-The [[main()]] function initializes buffered console I/O, installs
-a signal handler, processes flags, then enters the main loop:
-[<init()>], [<commands()>], [<quit()>].
+The [[main()]] function initializes
+buffered console I/O (see the \book{Libcore} with the [[libbio]] library
+and [[Biobuf]] data structure),
+installs a signal handler,
+processes flags, then
+enters the main loop: [<init()>], [<commands()>], [<quit()>].
 
 <<globals ed.c>>=
 // console buffered input
@@ -780,7 +814,7 @@ main(int argc, char *argv[])
 %claude:
 The most tricky part in [[main()]] above is the [[globp = L"r"]] line.
 When a filename argument is given (e.g., [[ed foo.txt]]),
-the filename is copied into [[savedfile]] and [<globp>] is set
+the filename is copied into [<savedfile>] and [<globp>] is set
 to the Unicode string [["r"]].
 %
 The [[L""]] prefix is standard C syntax for a {\em wide-string literal}
@@ -835,10 +869,10 @@ if(*argv && (strcmp(*argv, "-") == 0)) {
 
 %claude:
 The [[-o]] flag turns [[ed]] into a {\em filter} (see \book{Utilities}):
-it sets [[savedfile]]
+it sets [<savedfile>]
 to [[/fd/1]] (\plan's path for stdout), so that [[w]] writes
 to standard output instead of a file.
-It also sets [[globp = L"a"]] to start in append mode immediately,
+It also sets [[globp = L"a"]] to start this time in append mode immediately,
 and disables verbose output (since character counts would corrupt
 the output stream).
 
@@ -1037,7 +1071,9 @@ char    Q[] = "";
 % but why need to modify the string?
 
 
+%******************************************************************************
 \section{Displaying and reading text}
+%******************************************************************************
 % buffered output
 
 %trans:
@@ -1200,7 +1236,7 @@ redirected to [[STDERR]] to avoid corrupting the data stream.
 Character input is layered through [<getchr()>], which checks
 three sources in order:
 (1) [<peekc>], a one-character pushback used when a character needs
-to be ``unread'';
+to be ``unread'' (a classic technique used in many lexers in \plan);
 (2) [<globp>], a programmed command string (e.g., [[L"r"]] or [[L"a"]]
 injected by [[main()]]);
 (3) actual console input via [[Bgetrune()]] (from [[libbio]], see \book{Libcore}).
@@ -1340,7 +1376,9 @@ if(gf)
     peekc = c;
 @
 
+%******************************************************************************
 \section{[[commands()]] interpreter loop}
+%******************************************************************************
 
 %trans: 
 We are now finally ready to see the code of [<commands()>], the main
@@ -1409,7 +1447,9 @@ case EOF:
 % in main()
 
 
+%******************************************************************************
 \section{[[r]]eading a file: [[r]]}
+%******************************************************************************
 
 % quite tricky, quite long, lots of subsections here.
 %claude:
@@ -1832,6 +1872,11 @@ as in the earlier picture of [[zero]] in
 Section~\ref{sec:lines-as-file-offsets}; the actual on-disk layout
 is fixed-width [[Rune]] cells, but that detail does not affect
 the editing operations shown here.
+%
+We do keep one detail from the real layout: offsets start at~2,
+because [[tline]] starts at~2 and so the first two cells of [[tfile]]
+are reserved (kept clear for [<global()>]'s mark trick). The first
+line therefore lands at offset~2, not~0.
 Suppose the user types:
 \begin{verbatim}
    r foo.txt   (file contains: "alpha\nbeta\ngamma\n")
@@ -1843,30 +1888,31 @@ Suppose the user types:
 %
 After [[r]] reads the three lines in [[foo.txt]]:
 \begin{verbatim}
-   tfile (offsets):   0      6     11     17
-                      +------+-----+------+
-                      |alpha\|beta\|gamma\|
-                      +------+-----+------+
-   zero:  [_, 0, 6, 11]    (3 lines, dot=3)
+   tfile (offsets):   0  2      8     13     19
+                      +--+------+-----+------+
+                      |..|alpha\|beta\|gamma\|
+                      +--+------+-----+------+
+                       ^^ reserved (bytes 0-1, kept clear)
+   zero:  [_, 2, 8, 13]    (3 lines, dot=3)
 \end{verbatim}
 %
 After [[2d]] (delete line 2: shift entries down in [[zero]],
 do nothing on disk):
 \begin{verbatim}
-   tfile:             unchanged (offset 6 'beta' is orphaned)
-   zero:  [_, 0, 11]       (2 lines, dot=2)
+   tfile:             unchanged (offset 8 'beta' is orphaned)
+   zero:  [_, 2, 13]       (2 lines, dot=2)
 \end{verbatim}
 %
 After [[1a]] then [[delta]] then [[.]] (append ``delta'' after
 line 1, [[putline()]] writes [[delta\n]] to the end of [[tfile]]
-at offset~17, [<append()>] inserts the new offset into [[zero]]):
+at offset~19, [<append()>] inserts the new offset into [[zero]]):
 \begin{verbatim}
-   tfile:             0      6     11     17     23
-                      +------+-----+------+------+
-                      |alpha\|beta\|gamma\|delta\|
-                      +------+-----+------+------+
-                                          ^new
-   zero:  [_, 0, 17, 11]    (3 lines, dot=2)
+   tfile:             0  2      8     13     19     25
+                      +--+------+-----+------+------+
+                      |..|alpha\|beta\|gamma\|delta\|
+                      +--+------+-----+------+------+
+                                              ^new
+   zero:  [_, 2, 19, 13]    (3 lines, dot=2)
 \end{verbatim}
 %
 Notice that [[tfile]] grew by one line ([[delta]]), but the
@@ -1926,7 +1972,9 @@ putd(void)
 
 
 
+%******************************************************************************
 \section{[[w]]riting a file: [[w]]}
+%******************************************************************************
 
 %claude:
 Writing (as in [[w foo.txt]]) is the dual of reading. [<putfile()>] iterates
@@ -2081,7 +2129,9 @@ if(temp)
 
 
 
+%******************************************************************************
 \section{Main commands}
+%******************************************************************************
 
 %claude: %trans:
 With the reading and writing machinery in place, we can now look
@@ -2482,7 +2532,9 @@ reverse(int *a1, int *a2)
 
 
 
+%******************************************************************************
 \section{Command addresses}
+%******************************************************************************
 \label{sec:command-addresses}
 
 %trans: until now assume simple commands like a, i, q, etc.
@@ -2755,7 +2807,9 @@ case '.':
 
 
 
+%******************************************************************************
 \section{Search and replace}
+%******************************************************************************
 % regexp, regular expressions
 %claude:
 Search and replace is where [[ed]]'s real power lies.
@@ -3481,7 +3535,7 @@ pattern by setting the low bit of their [[zero]] entry
 %
 In phase~2, it iterates over [[zero]], and for each marked line,
 clears the mark, sets [<globp>] to the command string (stored in
-[<globuf>]), and calls [<commands()>] recursively.
+the local [[globuf]]), and calls [<commands()>] recursively.
 The two-phase design is necessary because executing commands can
 change the buffer (e.g., [[g/re/d]] deletes lines), so we cannot
 match and execute at the same time.
@@ -3639,7 +3693,9 @@ literally after the ed command: [[g]] - [[re]] - [[p]] $\to$
 %The original [[grep]] manual page even said
 %``[[grep]] is derived from a [[g/re/p]] command in the editor [[ed]].''
 
+%******************************************************************************
 \section{Advanced features}
+%******************************************************************************
 
 %claude: %toc:
 The previous sections covered the core editing commands, the
@@ -4020,7 +4076,9 @@ if((d = dirfstat(io)) != nil){
 
 % bug? not guarded by vflag?
 
+%******************************************************************************
 \section{Optimizations}
+%******************************************************************************
 
 % needed? because when ken thompson wrote it there was no buffer cache in
 % the kernel? So he kinda reimplement one in userland for ed?
@@ -4310,7 +4368,9 @@ gdelete(void)
 
 
 
+%******************************************************************************
 \section{Error management}
+%******************************************************************************
 \label{sec:error-management}
 
 %claude:
@@ -4560,7 +4620,9 @@ onquit(int sig)
 
 
 %\ifallcode
+%******************************************************************************
 \section{Extra code}
+%******************************************************************************
 
 %dead:
 %<<globals ed.c>>=
@@ -4730,7 +4792,9 @@ void    substitute(int);
 
 %\fi
 
+%******************************************************************************
 \section{Index}
+%******************************************************************************
 
 Here is a list of the identifiers used, and where they appear.
 Underlined entries indicate the place of definition.

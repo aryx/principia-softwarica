@@ -42,7 +42,7 @@ int tline;
 char    savedfile[FNSIZE];
 /*x: globals ed.c */
 ulong   nlall = 128;
-// growing_array<int(even)|mark|0>, initial size = (nlall+2+margin)*sizeof(int)
+// growing_array<int(even)|int+mark|0>, initial size = (nlall+2+margin)*sizeof(int)
 // where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
 int*    zero;
 /*x: globals ed.c */
@@ -143,8 +143,11 @@ int nleft;
 /*x: globals ed.c */
 Rune*   linebp;
 /*x: globals ed.c */
+// index in ibuff
 int iblock;
+// index in obuff
 int oblock;
+
 int ichanged;
 /*x: globals ed.c */
 jmp_buf savej;
@@ -627,6 +630,7 @@ address(void)
             sign = -sign;
             // Fallthrough
         case '/':
+            // read the pattern and compile it in Reprog pattern[]
             compile(c);
             b = a;
             for(;;) {
@@ -886,7 +890,7 @@ rescue(void)
 void
 notifyf(void *a, char *s)
 {
-    if(strcmp(s, "interrupt") == ORD__EQ){
+    if(strcmp(s, "interrupt") == 0){
         if(rescuing || waiting)
             noted(NCONT);
         putchr(L'\n');
@@ -894,7 +898,7 @@ notifyf(void *a, char *s)
         error_1(Q);
         notejmp(a, savej, 0);
     }
-    if(strcmp(s, "hangup") == ORD__EQ){
+    if(strcmp(s, "hangup") == 0){
         if(rescuing)
             noted(NDFLT);
         rescue();
@@ -1837,15 +1841,17 @@ getcopy(void)
 /*e: function [[getcopy]](ed.c) */
 
 /*s: function [[compile]](ed.c) */
-/// commands('g' | 'v') -> global -> <>
+/// (main -> address) | (commands('g' | 'v') -> global) -> <>
 void
 compile(int eof)
 {
     Rune c;
     char *ep;
+    // UTF8 string
     char expbuf[ESIZE];
 
-    if((c = getchr()) == '\n') {
+    c = getchr();
+    if(c == '\n') {
         peekc = c;
         c = eof;
     }
@@ -1870,7 +1876,8 @@ compile(int eof)
             /*e: [[compile()]](ed.c) sanity check [[ep]] inside [[expbuf]] */
             // else
             ep += runetochar(ep, &c);
-            if((c = getchr()) == '\n') {
+            c = getchr();
+            if(c == '\n') {
                 error(Q);
                 return;
             }
@@ -1886,7 +1893,7 @@ compile(int eof)
     } while((c = getchr()) != eof && c != '\n');
     if(c == '\n')
         peekc = c;
-    *ep = '\0';
+    *ep = 0;
 
     // lib_regexp call
     pattern = regcomp(expbuf);
