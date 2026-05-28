@@ -223,7 +223,7 @@ strip that prefix [[A]],
 wrap each name in double quotes followed by a comma, and
 add the \verb+char* anames[]+ array header and trailing brace.
 %
-Each time someone modifies [[5.out.y]], the [[enam.c]] can be regenerated
+Each time someone modifies [[5.out.h]], the [[enam.c]] can be regenerated
 automatically thanks to the [[mkenam]] script called from [[5c/mkfile]].
 
 %claude:
@@ -301,7 +301,7 @@ It is an {\em encoding}.
 \plan can store codepoints in two complementary formats.
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
 holding one codepoint; Rune arrays such as
-[[Rune linebuf[LBSIZE]]] area the in-memory format for text
+[[Rune linebuf[LBSIZE]]] are the in-memory format for text
 manipulation, the Unicode equivalent of [[char linebuf[LBSIZE]]]
 in classical old (pre-Unicode) \unix programs.
 %
@@ -318,6 +318,7 @@ The bridge between the two formats is two routines from [[libc]]:
    int chartorune(Rune *r/*OUT*/, char *s); // UTF-8 -> Rune; returns # bytes consumed
    int runetochar(char *s/*OUT*/, Rune *r); // Rune -> UTF-8; returns # bytes written
 \end{verbatim}
+%padism: OUT annot
 
 Both functions move at most [[UTFmax]] (usually set to 4) bytes per codepoint.
 %
@@ -777,7 +778,7 @@ installs a signal handler with [[notify()]],
 processes command-line flags, 
 allocates [<zero>],
 then
-enters the main loop: [<init()>], [<commands()>], [<quit()>].
+executes the main sequence: [<init()>], [<commands()>], [<quit()>].
 
 <<globals ed.c>>=
 // console buffered input
@@ -1357,7 +1358,7 @@ gettty(void)
 % OK_0 means you can read more lines
 % positive means error
 
-Note that there is no easy way to create a line containing just
+Note that there is no easy way in [[ed]] to create a line containing just
 a [['.']] followed by a newline since this special sequence is recognized
 by [[gettty()]] to mark the end of a user input. One needs instead
 to enter some fake text like [['.A']] and then use a substitute command
@@ -1422,8 +1423,8 @@ if(gf)
 We are now finally ready to see the code of [<commands()>], the main
 command interpreter loop.
 %claude:
-In this infinite [[for]] loop,
-it reads first an optional {\em address range} into [<addr1>],[<addr2>]
+In the infinite [[for]] loop below,
+[[commands()]] reads first an optional {\em address range} into [<addr1>],[<addr2>]
 and then dispatches on the command character [[c]] via a [[switch]].
 %
 As we will see soon, most command [[switch]] cases end with a [[continue]] to
@@ -1477,6 +1478,14 @@ int*    addr2;
 
 % will see read [[addr1]] and more important [[c]] later, but
 % essentially getchr() call
+
+One of the command [[switch]] cases handles the [[EOF]] character returned
+by [<getchr()>] when there is no more input (e.g., when the user
+typed [[Ctrl-D]]). In that case [[commands()]]
+simply returns to the caller [[main()]] which will then call
+[[quit()]].
+% can also get EOF with globp when globp finished
+% and also EOF when pipe or >>! finished in script.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case EOF:
@@ -1652,7 +1661,7 @@ if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
 %claude:
 [<setwide()>] sets [[addr1,addr2]] to span the whole buffer
 (line~1 to [<dol>]) when the user did not supply explicit addresses
-(thx to the [<given>] global).
+(which can be checked by inspecting the global [<given>]).
 
 <<function [[setwide]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1920,15 +1929,15 @@ the editing operations shown here.
 %
 We do keep one detail from the real layout: offsets start at~2,
 because [[tline]] starts at~2 and so the first two cells of [[tfile]]
-are reserved (kept clear for [<global()>]'s mark trick). The first
-line therefore lands at offset~2, not~0.
+are reserved (kept clear for [<global()>]'s mark trick).
+%The first line therefore lands at offset~2, not~0.
 Suppose the user types:
 \begin{verbatim}
    r foo.txt   (file contains: "alpha\nbeta\ngamma\n")
    2d          (delete line 2)
    1a          (append after line 1)
    delta       (the new text)
-   .
+   .           (end of new text)
 \end{verbatim}
 %
 After [[r]] reads the three lines in [[foo.txt]]:
@@ -2141,6 +2150,9 @@ getline(int tl)
     return linebuf;
 }
 @
+
+% should check for overflow in linebuf? hmm but the check has been done
+% when writing in tfile so probably fine when get it back.
 
 % this is slower than putline which with one write could write many runes;
 % here we read one rune at a time, with many read() syscalls
