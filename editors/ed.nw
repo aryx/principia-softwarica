@@ -117,12 +117,13 @@ For a quick hands-on feel, here is a complete [[ed]] session:
 \end{verbatim}
 
 %claude:
-The session above launches [[ed]], opens insert mode with [[i]],
+The session above launches [[ed]], opens {\em insert mode} with [[i]],
 types two lines, ends the insertion with a single [['.']] on its own
-line, prints lines~1 to~2 with [[1,2p]] ([[ed]] echoes the 2 lines),
+line, prints lines~1 to~2 with [[1,2p]] made of an {\em address range}
+and the [[p]] command ([[ed]] echoes the 2 lines),
 sets the remembered filename with [[f hello.txt]] ([[ed]] echoes it
 back), saves the buffer with [[w]] ([[ed]] echoes the character count
-written), and quits with [[q]].
+written), and finally quits with [[q]].
 
 %claude:
 [[ed]] is famously silent: it prints no prompt, and every line
@@ -239,9 +240,10 @@ this script (and the code behind those commands).
 %claude:
 The key advantage of [[ed]] here is that the editing commands are
 plain text, easily embedded in a shell script or a [[mkfile]] rule.
-Try doing the same in Emacs or Visual Studio Code---you would need Emacs Lisp
-macros or complex key-sequence recordings which would not be so easy
-and fast to replay.
+%other:
+Try doing the same in Emacs or Visual Studio Code---you would need an Emacs Lisp
+program or complex key-sequence macro recording which would not be so easy
+and fast to replay than [[mkenam]].
 
 % '-' suppress the printing of character counts by e/r/w
 %  remove verbose/interactive mode (default)
@@ -290,7 +292,7 @@ It is an {\em encoding}.
 \plan can store codepoints in two complementary formats.
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
 holding one codepoint; Rune arrays such as
-[[Rune linebuf[LBSIZE]]] are the in-memory format for text
+[[Rune linebuf[LBSIZE]]] area the in-memory format for text
 manipulation, the Unicode equivalent of [[char linebuf[LBSIZE]]]
 in classical old (pre-Unicode) \unix programs.
 %
@@ -468,10 +470,10 @@ char    savedfile[FNSIZE];
 
 %claude:
 [<zero>] is the central data structure: a dynamically-growing array
-of [[int]] offsets into [<tfile>], one per line.
+of [[int]] file offsets into [<tfile>], one per line.
 %
-Lines are 1-indexed: [[zero[1]]] is the offset of line~1,
-[[zero[2]]] of line~2, etc. The entry [[zero[0]]] is unused
+Lines are 1-indexed: [[zero[1]]] is the file offset for line~1,
+[[zero[2]]] for line~2, etc. The entry [[zero[0]]] is unused
 (always~0), which is why probably the array is called ``zero''---it starts
 at the zero-th slot which represents ``before line~1.''
 
@@ -500,13 +502,13 @@ The temporary file only grows; it is never compacted.
 Concretely, suppose the user has the following text in the buffer:
 \begin{vdiagram}
 
-tfile (the temporary file on disk)         zero (in memory)
-+--------------------------------+         +-------+--------+--------+--------+
-|alpha\n                         |         | unused| 0      | 6      | 11     |
-|beta\n                          |         +-------+--------+--------+--------+
-|gamma\n                         |   index:  0       1        2        3
-|a deleted line that's still here\n                  line 1   line 2   line 3
-+--------------------------------+      
+   tfile (the temporary file on disk)         zero (in memory)
+   +--------------------------------+         +-------+--------+--------+--------+
+   |alpha\n                         |         | unused| 0      | 6      | 11     |
+   |beta\n                          |         +-------+--------+--------+--------+
+   |gamma\n                         |   index:  0       1        2        3
+   |a deleted line that's still here\n                  line 1   line 2   line 3
+   +--------------------------------+      
 
 \end{vdiagram}
 %
@@ -514,8 +516,8 @@ Three lines are visible to the user, % (the [[$]] address is~3),
 even though the temporary file on disk also contains a fourth
 line at offset~17 that was previously deleted.
 %
-Editing operations simply shift entries within [[zero]]: deleting line~2 would
-move
+Editing operations simply shift entries within [[zero]]: deleting line~2 
+([[beta\n]]) would move
 [[zero[3]]] (the offset~11) into [[zero[2]]], leaving the actual
 text at offset~6 in [[tfile]] orphaned but harmless. 
 %This is why ``ed never compacts the temp file''---deletes are O(1)
@@ -527,7 +529,7 @@ text at offset~6 in [[tfile]] orphaned but harmless.
 %claude:
 The diagram above uses byte offsets and [[\n]]-terminated text
 because that is how most people picture a file on disk. The real
-layout differs in three ways.
+layout for [[tfile]] differs in three ways.
 %
 First, [[tfile]] is a stream of fixed-width [[Rune]] cells
 (see Section~\ref{sec:unicode-primer}), not bytes:
@@ -539,7 +541,7 @@ Second, lines are terminated by a {null Rune} (value~0), not by
 % [<getfile()>] overwrites the trailing [[\n]] with~0 just
 %before [<putline()>] writes the line, and [<putfile()>] turns the~0
 %back into [[\n]] when writing to an external file.
-Third, [[tline]] starts at~2 (in Rune units), so the first two Rune
+Third, [<tline>] starts at~2 (in Rune units), so the first two Rune
 cells of [[tfile]] are reserved and remain zero-filled.
 %
 We will see soon the reason for it.
@@ -645,7 +647,8 @@ zero (memory) holds Rune-slot indexes:  [_, 2, 6]
 
 %claude:
 [<dot>] and [<dol>] are pointers into the [<zero>] array.
-Their names match the ed command syntax: [[dot]] is the {\em current line}
+Their names match the corresponding ed command syntax:
+[[dot]] is the {\em current line}
 (what the user refers to as~[[.]]), and [[dol]] is the {\em last line}
 (what the user refers to as~[[$]], ``dollar'').
 %
@@ -758,10 +761,13 @@ I now switch from the bottom-up approach of the previous section
 to a top-down approach, starting with [[main()]].
 %claude:
 The [[main()]] function initializes
-buffered console I/O (see the \book{Libcore} with the [[libbio]] library
-and [[Biobuf]] data structure),
-installs a signal handler,
-processes flags, then
+buffered console I/O with [[Binit()]]
+(see the \book{Libcore} with the [[libbio]] library
+and its [[Biobuf]] data structure),
+installs a signal handler with [[notify()]],
+processes command-line flags, 
+allocates [<zero>],
+then
 enters the main loop: [<init()>], [<commands()>], [<quit()>].
 
 <<globals ed.c>>=
@@ -834,7 +840,7 @@ This elegant trick avoids duplicating file-reading logic in [[main()]].
 The [[sizeof(int*)]] in the [[zero = malloc(...)]] line above is actually
 a bug---it should be [[sizeof(int)]], since [[zero]] holds [[int]]
 file offsets, not pointers. The bug is harmless on architectures
-where pointers and ints have the same size (32-bit systems);
+where pointers and integers have the same size (32-bit systems);
 on 64-bit systems, pointers are 8~bytes while [[int]] is still 4,
 so the allocation simply over-reserves memory without causing any
 incorrect behavior. Even Ken Thompson wrote slightly buggy C code.
@@ -842,7 +848,10 @@ incorrect behavior. Even Ken Thompson wrote slightly buggy C code.
 \subsection{[[ed -]] and [[vflag]]}
 
 %claude:
-By default [[ed]] is verbose ([[vflag = true]]):
+By default [[ed]] is verbose\footnote{
+  verbose is a strong word for [[ed]]; even in verbose mode, [[ed]] remains
+  very terse (to not say cryptic).}
+([[vflag = true]]):
 it prints character counts after [[r]] and [[w]] operations.
 The [[-]] flag (as in [[ed - foo.txt]]) suppresses this,
 which is what you want when [[ed]] is driven by a script
@@ -872,13 +881,13 @@ The [[-o]] flag turns [[ed]] into a {\em filter} (see \book{Utilities}):
 it sets [<savedfile>]
 to [[/fd/1]] (\plan's path for stdout), so that [[w]] writes
 to standard output instead of a file.
-It also sets [[globp = L"a"]] to start this time in append mode immediately,
+It also sets [[globp = L"a"]] to start this time in {\em append mode},
 and disables verbose output (since character counts would corrupt
 the output stream).
 
 <<globals ed.c>>=
-// output to standard output (instead of editing a file). Useful
-// when ed is used as a filter.
+// output to standard output (instead of editing a file).
+// Useful when ed is used as a filter.
 bool oflag;
 @
 % oflag =~ open flag? mean create if not exist?
@@ -925,6 +934,7 @@ digit with [[a]], [[b]], etc.
 // the mkstemp man page recommends 6 X
 char template[] = "/tmp/eXXXXXX";
 @
+%bugfix: I've used 6 so goken ed works under Linux
 
 %ex: mktemp("/tmp/eXXXXXX") -> "/tmp/e000042" pid number
 <<function [[mktemp]](ed.c)>>=
@@ -998,14 +1008,16 @@ init(void)
 % dot = dol = zero! important too. zero malloced just before in main()
 
 % close tfile because init can be called not only from main in which
-% case it must closed the previous tmp file and create new one
+% case it must closed the previous tmp file and create new one.
+% tfile is set to -1, and close does not raise exn and return value not checked
+% so fine.
 
 <<[[init()]](ed.c) initializing globals>>=
 tline = 2;
 @
 %claude:
 Recall that [[tline]] is a Rune-unit offset into [<tfile>] (the
-byte offset on disk is [[tline*sizeof(Rune)]]; see the on-disk
+actual byte file offset on disk is [[tline*sizeof(Rune)]]; see the on-disk
 layout in Section~\ref{sec:lines-as-file-offsets}).
 It starts at~2, not~0, to satisfy two invariants every line offset
 must maintain: it must be non-zero so~0 stays the ``no line''
