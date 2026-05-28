@@ -16,6 +16,7 @@ Other forks of Plan 9:
 
  - [9front](http://9front.org/)
  - [9legacy](http://9legacy.org/)
+ - [9legacy-bootable](https://github.com/rsc/plan9)
  - [Nix](https://code.google.com/archive/p/nix-os/)
  - [9atom](http://www.9atom.org/) (DEAD in 2025)
  - [Harvey](https://harvey-os.org/) (DEAD in 2025)
