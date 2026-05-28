@@ -67,8 +67,8 @@ Biobuf  bcons;
 // verbose (a.k.a. interactive) mode
 bool vflag   = true;
 /*x: globals ed.c */
-// output to standard output (instead of editing a file). Useful
-// when ed is used as a filter.
+// output to standard output (instead of editing a file).
+// Useful when ed is used as a filter.
 bool oflag;
 /*x: globals ed.c */
 // in Linux pid can be very long, so better to have at least 6 X (was 5 before)
@@ -343,6 +343,7 @@ commands(void)
             }
             /*e: [[commands()]] in [[r]] case, if append only file */
             Binit(&iobuf, io, OREAD);
+            // will set addr2 to dol
             setwide();
             squeeze(0);
             c = (zero != dol);
@@ -373,9 +374,10 @@ commands(void)
               ((io = open(file, OWRITE)) == -1) ||
               ((seek(io, 0L, SEEK__END)) == -1))
 
-                if((io = create(file, OWRITE, 0666)) < 0)
+                io = create(file, OWRITE, 0666);
+                if(io < 0)
                     error(file);
-            // else
+            // else and fallthrough
 
             Binit(&iobuf, io, OWRITE);
             wrapp = false;
@@ -1041,6 +1043,7 @@ putfile(void)
                     error(Q);
                 break;
             }
+            // else
             if(Bputrune(&iobuf, c) < 0)
                 error(Q);
         }
@@ -1199,6 +1202,7 @@ quit(void)
         fchange = false;
         error(Q);
     }
+    // else
     remove(tfname);
     exits(nil);
 }
@@ -1499,7 +1503,9 @@ getline(int tl)
 {
     int n;
 
+    /*s: [[getline()]] if [[opti]] */
     if(opti) return getline_opti(tl);
+    /*e: [[getline()]] if [[opti]] */
     // else
 
     // tfile stores fixed-width Runes; convert Rune offset to bytes
@@ -1523,7 +1529,9 @@ putline(void)
     Rune *lp;
     int n, tl;
 
+    /*s: [[putline()]] if [[opti]] */
     if(opti) return putline_opti();
+    /*e: [[putline()]] if [[opti]] */
     // else
 
     fchange = true;

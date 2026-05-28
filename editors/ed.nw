@@ -1068,6 +1068,7 @@ quit(void)
         fchange = false;
         error(Q);
     }
+    // else
     remove(tfname);
     exits(nil);
 }
@@ -1075,6 +1076,10 @@ quit(void)
 % why error? because forgot to save and so tell it to the user?
 % dol == zero when didn't do anything
 % reset fchange to false so second quit will actually quit.
+
+Note that [<error()>] internally uses [[longjmp()]] to emulate
+exceptions in C (see Section~\ref{sec:error-management}), which
+is why the control leaves [[quit()]] after the call to [[error()]].
 
 <<globals ed.c>>=
 char    Q[] = "";
@@ -1336,9 +1341,21 @@ gettty(void)
 @
 %padism: more complex cflow annotation -> -> <>
 
+% talk 0 means continue vs EOF means stop, interface required
+% by append()
+
 % special ".\n" here to finish the text entry.
 % OK_0 means you can read more lines
 % positive means error
+
+Note that there is no easy way to create a line containing just
+a [['.']] followed by a newline since this special sequence is recognized
+by [[gettty()]] to mark the end of a user input. One needs instead
+to enter some fake text like [['.A']] and then use a substitute command
+to remove the [['A']]. Fortunately, it is rare to need text with
+a single dot by itself in a line (which is probably why this special sequence
+was chosen).
+% no escape mechanism
 
 % gety and gettty, will modify linebuf for the caller
 <<function [[gety]](ed.c)>>=
@@ -1394,9 +1411,10 @@ if(gf)
 
 %trans: 
 We are now finally ready to see the code of [<commands()>], the main
-interpreter loop.
+command interpreter loop.
 %claude:
-It reads an optional {\em address range} into [<addr1>]/[<addr2>]
+In this infinite [[for]] loop,
+it reads first an optional {\em address range} into [<addr1>],[<addr2>]
 and then dispatches on the command character [[c]] via a [[switch]].
 %
 As we will see soon, most command [[switch]] cases end with a [[continue]] to
@@ -1462,6 +1480,7 @@ case EOF:
 %******************************************************************************
 \section{[[r]]eading a file: [[r]]}
 %******************************************************************************
+\label{sec:readinr-r}
 
 % quite tricky, quite long, lots of subsections here.
 %claude:
@@ -1504,6 +1523,7 @@ caseread:
     <<[[commands()]] in [[r]] case, sanity check [[io]]>>
     <<[[commands()]] in [[r]] case, if append only file>>
     Binit(&iobuf, io, OREAD);
+    // will set addr2 to dol
     setwide();
     squeeze(0);
     c = (zero != dol);
@@ -1621,11 +1641,9 @@ if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
 \subsection{[[setwide()]] and [[squeeze()]]}
 
 %claude:
-[<setwide()>] sets [[addr1]]/[[addr2]] to span the whole buffer
-(line~1 to [<dol>]) when the user did not supply explicit addresses.
-[<squeeze()>] validates that the address range is sane---called
-with~0 when an empty buffer is acceptable (e.g., [[r]]) or~1 when
-at least one line is required (e.g., [[p]]).
+[<setwide()>] sets [[addr1,addr2]] to span the whole buffer
+(line~1 to [<dol>]) when the user did not supply explicit addresses
+(thx to the [<given>] global).
 
 <<function [[setwide]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1644,6 +1662,11 @@ setwide(void)
 % so that commands operate on the whole file (wide)
 
 % + (dol>zero) means zero + 1  when non empty file, so line 1.
+
+
+[<squeeze()>] validates that the address range is sane---called
+with~0 when an empty buffer is acceptable (e.g., for the [[r]] command) or~1 when
+at least one line is required (e.g., for the [[p]] command).
 
 <<function [[squeeze]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1807,7 +1830,7 @@ if(lp >= &linebuf[LBSIZE]) {
 %claude:
 Here is a simplified version of [<putline()>] that shows the
 essential logic: seek to the current write position in [<tfile>],
-write [<linebuf>] as a run of fixed-width [[Rune]] cells
+write [<linebuf>] in [<tfile>] as a run of fixed-width [[Rune]] cells
 terminated by a null Rune, advance [<tline>] by the number of
 Runes written (rounded up to an even count), and return the old
 offset (which [<append()>] stores in [<zero>]).
@@ -1820,7 +1843,7 @@ putline(void)
     Rune *lp;
     int n, tl;
 
-    if(opti) return putline_opti();
+    <<[[putline()]] if [[opti]]>>
     // else
 
     fchange = true;
@@ -1860,8 +1883,9 @@ every seek and write needs a [[*sizeof(Rune)]] conversion.
 The other subtlety is the even-padding of [[tline]]. Each [[zero]]
 entry holds a [[Rune]] offset into [[tfile]] (the value returned
 here), and [<global()>] together with the [[k]] command steal the
-low bit of that entry as a ``matched'' flag (see [<global()>] and
-[<anymarks>]). Keeping every offset even costs at most one
+low bit of that entry as a ``matched'' flag,
+% (see [<global()>] and [<anymarks>]).
+Keeping every offset even costs at most one
 extra [[Rune]] cell per line and frees the bit for the mark.
 
 
@@ -1929,7 +1953,7 @@ at offset~19, [<append()>] inserts the new offset into [[zero]]):
 %
 Notice that [[tfile]] grew by one line ([[delta]]), but the
 ``deleted'' [[beta]] is still on disk---it just is no longer
-referenced by [[zero]]. This is why ed can do bounded edits in
+referenced by [[zero]]. This is why [[ed]] can do bounded edits in
 constant time but the temp file can become arbitrarily large
 during a long session.
 
@@ -2015,9 +2039,10 @@ case 'w':
       ((io = open(file, OWRITE)) == -1) ||
       ((seek(io, 0L, SEEK__END)) == -1))
 
-        if((io = create(file, OWRITE, 0666)) < 0)
+        io = create(file, OWRITE, 0666);
+        if(io < 0)
             error(file);
-    // else
+    // else and fallthrough
 
     Binit(&iobuf, io, OWRITE);
     wrapp = false;
@@ -2036,7 +2061,7 @@ case 'w':
 
 \subsection{[[putfile()]]}
 
-[<putfile()>] is the dual of [<getfile()>]: it writes in [[iobuf]].
+[<putfile()>] is the dual of [<getfile()>]: it writes in [<iobuf>].
 
 % write in iobuf, but all the lines, not just one
 % like in getfile().
@@ -2061,6 +2086,7 @@ putfile(void)
                     error(Q);
                 break;
             }
+            // else
             if(Bputrune(&iobuf, c) < 0)
                 error(Q);
         }
@@ -2070,6 +2096,7 @@ putfile(void)
 }
 @
 
+% grrr why long c; this time? Why not Rune again?
 
 \subsection{[[getline()]] (simplified)}
 
@@ -2079,7 +2106,7 @@ putfile(void)
 reads [[Rune]] cells into [<linebuf>] until it hits the null-Rune
 terminator. As in [[putline()]], the [[*sizeof(Rune)]] factor in
 the seek and the read size is what converts the cell-unit offset
-into a byte offset on disk.
+into a byte file offset on disk.
 
 %claude: %new: was not in ed.c originally
 <<function [[getline]]>>=
@@ -2088,7 +2115,7 @@ getline(int tl)
 {
     int n;
 
-    if(opti) return getline_opti(tl);
+    <<[[getline()]] if [[opti]]>>
     // else
 
     // tfile stores fixed-width Runes; convert Rune offset to bytes
@@ -2260,6 +2287,18 @@ case 'f':
 
 % can also change savedfile with 'f newfile.txt' I think.
 
+This command does not accept any explicit address range before, hence
+the call to [<setnoaddr()>].
+
+<<function [[setnoaddr]](ed.c)>>=
+void
+setnoaddr(void)
+{
+    if(given)
+        error(Q);
+}
+@
+% command that does not accept addresses!
 
 \subsection{printing line number: [[=]]}
 
@@ -2314,6 +2353,11 @@ add(int i)
 
 % f can be gettty(), a can be addr2
 
+We saw before a call to [[append(getfile, ...)]]
+for the [[r]] command in Section~\ref{sec:readinr-r}. This time
+[[add()]] passes instead [<gettty()>] (that
+we also saw before) for the callback to [<append()>].
+
 % we saw append(getfile()), this time it's append(gettty,)
 % and we saw gettty before.
 
@@ -2331,15 +2375,6 @@ case 'q':
 @
 
 
-<<function [[setnoaddr]](ed.c)>>=
-void
-setnoaddr(void)
-{
-    if(given)
-        error(Q);
-}
-@
-% command that does not accept addresses!
 
 
 \subsection{[[d]]eleting lines: [[d]]}
@@ -2543,6 +2578,7 @@ reverse(int *a1, int *a2)
 @
 
 
+%TODO: lots of explanations needed to understand those subtle 3 reverse
 
 %******************************************************************************
 \section{Command addresses}
@@ -4099,10 +4135,12 @@ if((d = dirfstat(io)) != nil){
 %claude:
 The simplified [<putline()>] and [<getline()>] shown earlier do
 a [[seek]]+[[write]]/[[read]] for every single line.
+%
 The original [[ed]] versions use a userland {\em block cache}: [<getblock()>]
 maintains two [[BLKSIZE]]-byte buffers ([[ibuff]] for reads,
 [[obuff]] for writes) and only performs actual I/O when the
 requested block is not already cached.
+%
 This was essential on early \unix systems that lacked a kernel
 buffer cache, and it remains a significant optimization when
 editing large files.
@@ -4124,6 +4162,10 @@ Rune*   linebp;
 
 <<constants ed.c>>=
 BLKSIZE = 4096,     /* block size in temp file */
+@
+
+<<[[putline()]] if [[opti]]>>=
+if(opti) return putline_opti();
 @
 
 % put a line in tfile using linebuf (set by getfile above)
@@ -4309,6 +4351,12 @@ blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
 
 
 \subsection{Optimized [[getline()]]}
+
+
+<<[[getline()]] if [[opti]]>>=
+if(opti) return getline_opti(tl);
+@
+
 % tl for temporary line (file offset in tfile)
 <<function [[getline_opti]](ed.c)>>=
 /// printcom | putfile -> <>
