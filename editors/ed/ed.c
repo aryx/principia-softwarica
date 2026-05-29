@@ -1753,7 +1753,7 @@ dosub(void)
             error(Q);
     }
     lp = loc2;
-    loc2 = sp - genbuf + linebuf;
+    loc2 = (sp - genbuf) + linebuf;
     while(*sp++ = *lp++)
         if(sp >= &genbuf[LBSIZE])
             error(Q);
