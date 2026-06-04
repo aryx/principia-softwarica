@@ -8,13 +8,12 @@
 %
 %thx to LP, I changed for the better a few things:
 %  - simplified putline/getline
+%  - types and comments on many globals (e.g., zero)
 %    
 %thx to this manual, I better understand ed and more generally plan 9:
 % - learn about Unicode and UTF8 and codepoints and char and encoding
 %   (see unicode primer section)
-% - 
-%
-%history LP-ization:
+% - how to handle unicode in a tool like ed
 
 
 %******************************************************************************
@@ -25,15 +24,14 @@ example of a literate program---a complement to
 Section~\ref{sec:literate-programming},
 which presented literate programming in the abstract.
 %
-Reading the source of a real program presented in
-literate form is the best way to see what literate
-programming actually buys you.
-%and to learn the [[noweb]]
+Reading the source of a real program presented in literate form is the best
+way to see what literate programming actually buys you.
+%and to learn the [[noweb/syncweb]]
 %conventions (\verb+<<chunk name>>=+, \verb+@+, and
 %\verb+[[code]]+ for inline code references) by example.
 %
 Second, it is a full explanation of a real \plan program: 
-[[ed]], which is small enough (under 2000~lines of C) to
+[[ed]], which is small enough (under 1700~lines of C) to
 fit in one appendix, yet old enough and famous enough
 that almost every modern editors and string-processing tools
 descend from it in some way.
@@ -53,13 +51,14 @@ the [[//]] syntax, so they are easy to differentiate.
 %******************************************************************************
 \section{Introduction}
 %******************************************************************************
+%spirit: quicker intro than in my other books; it's an appendix
 
 %motivations:
-% could explain why show the code of text editor, like in my other
-% books. Actually quite important as shown in previous boostrap plan9 appendix.
+% could explain why show the code of text editor, like in my other books.
+% Actually quite important as shown in previous boostrap plan9 appendix.
 % editor is fundamental.
 % questions I will try to answer? core DS of editor, reactive program, etc.
-%SEMI ed: why I chose ed and now sam/acme/...
+%SEMI ed: why I chose ed and not sam/acme/...
 %other editors: vi, emacs, sam, vscode, eclipse, ...
 %getting started, about this doc, copyright, acknowledgments
 
@@ -75,14 +74,13 @@ the [[//]] syntax, so they are easy to differentiate.
 
 [[ed]], short for ``editor''\footnote{
   \plan and \unix authors did like short command names: 
-  [[ed]], [[mk]], [[rc]], [[db]], etc.},
+  [[ed]], [[mk]], [[rc]], [[db]], [[ls]], etc.},
 is one of the oldest \unix programs,
 originally written by Ken Thompson in the 1970s.
 %(part of the special "3 weeks" where he wrote editor, assembler, kernel?)
 %
 It is a {\em line editor}: rather than always displaying a file content
 on {screen} like [[vi]], Emacs, or \plan's [[sam]] and [[acme]],
-% or stream editor like sed.
 [[ed]] works mostly one line at a time, accepting commands from standard input
 and printing results to standard output (possibly displaying lines of the
 edited file depending on the input commands).
@@ -99,8 +97,8 @@ script, something that is awkward or impossible with most editors.
 %claude:
 While you can already create and modify files using [[echo]] and shell
 redirection ([[>]], [[>>]]), [[ed]] offers far more power: searching,
-substituting, moving lines, and operating on ranges of lines.
-%claude:
+substituting, moving lines, and operating on {ranges} of lines.
+%
 For a quick hands-on feel, here is a complete [[ed]] session:
 
 \label{sec:ed-tutorial-session}
@@ -125,23 +123,24 @@ For a quick hands-on feel, here is a complete [[ed]] session:
 \end{verbatim}
 
 %claude:
-The session above launches [[ed]], opens {\em insert mode} with [[i]],
+The session above launches [[ed]], starts {\em insert mode} with [[i]],
 types two lines, ends the insertion with a single [['.']] on its own
 line, prints lines~1 to~2 with [[1,2p]] made of an {\em address range}
 and the [[p]] command ([[ed]] echoes the 2 lines),
 sets the {\em remembered filename} with [[f hello.txt]] ([[ed]] echoes it
 back), saves the buffer with [[w]] ([[ed]] echoes the character count
 written), and finally quits with [[q]].
+%alt: use special color for what is entered and what is echoed? or > ?
 
 %claude:
 [[ed]] is famously silent: it prints no prompt, and every line
 you type is either a command or part of a text-entry session
-opened by [[i]] or [[a]].
+opened by [[i]] (or [[a]] for {\em append mode}).
 %
-% see also its man page for documentation.
 For a full tutorial introduction to [[ed]], see Appendix~1 of
 ``The \unix Programming Environment'' \cite{unix-pike},
 or Kernighan's two tutorials from the Bell Labs technical reports.
+See also the man page of [[ed]] at [[docs/man/1/ed]] in my \plan repository.
 
 %claude:
 Note that many ideas that seem to ``belong'' to other tools actually originated in
@@ -160,8 +159,8 @@ that started it all.
 %spirit: give desire to learn ed! quite cool tool actually, I've learned stuff!
 
 %claude:
-Here is a real example of [[ed]] used as a code generator during the build of
-\plan.
+Here is a real example of [[ed]] used as a code generator during
+the build of \plan.
 %
 The [[mkenam]] script below transforms a header file
 ([[5.out.h]]) containing assembler opcode definitions into a C
@@ -191,10 +190,11 @@ Q
 To understand what this script does, it helps to see
 a concrete example of input and output.
 %claude:
-Here is what a snippet of the input
-file [[5.out.h]] looks like (left) and what the output [[enam.c]]
-is supposed to look like (right):
+Here is what a snippet of
+the input file [[5.out.h]] looks like (left) and what
+the output [[enam.c]] is supposed to look like (right):
 
+%example:
 \begin{vdiagram}
    5.out.h (input)            enam.c (generated output)
    ----------------           ---------------------------
@@ -214,9 +214,9 @@ is supposed to look like (right):
 
 The transformations from [[5.out.h]] to [[enam.c]] are: 
 keep only lines starting with a tab followed by [[A]] (the opcode names),
-strip that prefix [[A]],
+remove that prefix [[A]],
 wrap each name in double quotes followed by a comma, and
-add the \verb+char* anames[]+ array header and trailing brace.
+add the \verb+char* anames[]+ array header and enclosing braces.
 %
 Each time someone modifies [[5.out.h]], the [[enam.c]] can be regenerated
 automatically thanks to the [[mkenam]] script called from [[5c/mkfile]].
@@ -224,22 +224,16 @@ automatically thanks to the [[mkenam]] script called from [[5c/mkfile]].
 %claude:
 The [[mkenam]] script uses [[ed -]] (quiet mode, suppressing character counts)
 and a shell here-document ([[<<'!']], see the \book{Shell}) to feed commands.
+% '-' suppress counts by e/r/w and remove verbose/interactive mode (default)
+%alt: could store ed script in separate file instead of using <<
 %
 It first deletes lines not starting with [[A]] ([[v/^	A/d]]),
 then uses [[s///]] substitutions to reshape each remaining line
 into a quoted C string, and finally uses [[i]] ([[1i]], meaning insert back at line 1) and [[a]] ([[$a]], meaning appending at the end)
 to wrap the result with the array declaration.
+%
 By the end of this appendix, you will fully understand every command in
 this script (and the code behind those commands).
-
-% also how to do that with other tools? can do with sed? can do with vi/emacs?
-% via a script that can run each time you modify 5.out.h and can be called
-% from a mkfile (show mkfile part of 5c/)
-% try this in vim/emacs? no need to learn lisp
-% to program this "edit script", just need to know the
-% key command (actually with emacs you could program macro but
-% how to specify it in script with M-x and other special key combinations!)
-% power of text and of script!
 
 %claude:
 The key advantage of [[ed]] here is that the editing commands are
@@ -248,12 +242,13 @@ plain text, easily embedded in a shell script or a [[mkfile]] rule.
 Try doing the same in Emacs or Visual Studio Code---you would need an Emacs Lisp
 program or complex key-sequence macro recording which would not be so easy
 and fast to replay than [[mkenam]].
+% can do with sed?
+% can do with vi? vi probably can do.
+% can do with emacs? to program this "edit script", just need to know the
+% key command; with emacs you could program macro but how to specify it in script
+% with M-x and other special key combinations!
+% => power of text and of script!
 
-% '-' suppress the printing of character counts by e/r/w
-%  remove verbose/interactive mode (default)
-
-% Note that use <<'!' Here doc feature from shell
-% but could store ed script in separate file
 
 %******************************************************************************
 %\section{[[ed]] clones}
@@ -264,6 +259,8 @@ and fast to replay than [[mkenam]].
 % - limbo (but looks autogenerated by c2l)
 %ocaml: - in OCaml? yes mine! see next appendix :)
 
+%modern: ? rust modern ed? like cat/bat and grep/rg? 
+
 
 \subsection{A Unicode editor}
 \label{sec:unicode-primer}
@@ -271,9 +268,6 @@ and fast to replay than [[mkenam]].
 
 %claude:
 Note that the \plan version of [[ed]] is Unicode-ready.
-%using [[Rune]] (see the \book{Libcore}) throughout for text processing,
-%as explained below.
-%
 %This adds some complexity to the code (conversions between [[char]] and
 %[[Rune]], separate buffers for byte I/O vs.\ character manipulation),
 %but the overall structure remains simple and elegant.
@@ -295,6 +289,7 @@ It is an {\em encoding}.
 
 %claude: %terminology:
 \plan can store codepoints in two complementary formats.
+%
 A {\em Rune} is a {\em fixed-width} unsigned integer (usually 32~bits)
 holding one codepoint; Rune arrays such as
 [[Rune linebuf[LBSIZE]]] are the in-memory format for text
@@ -308,10 +303,11 @@ UTF-8 lives in [[char]] arrays and is the format for files
 and terminal I/O %, and exec arguments
 in \plan,
 which is using UTF-8 encoding everywhere text I/O is involved.
+% no other encoding in plan 9, so things are simpler at least
 
 The pros and cons of each format is discussed at length in the \book{Libcore},
-but to summarize UTF-8 is {compact}, which is why it is used when storing
-text on disk, while Runes are {regular}, which is why they are usually used
+but to summarize UTF-8 is {\em compact}, which is why it is used when storing
+text on disk, while Runes are {\em regular}, which is why they are usually used
 when storing text in memory; it is easy to access the
 3rd character in an array of [[Rune]]s while more tricky in an array of
 [[char]]s containing UTF-8.
@@ -325,14 +321,8 @@ The bridge between the two formats is two routines from [[libc]]:
 %padism: OUT annot
 
 Both functions copy at most [[UTFmax]] (usually set to 4) bytes per codepoint.
-%
-%For pure ASCII text the formats coincide byte-for-byte (the byte is
-%[[0xxxxxxx]] in UTF-8 and the codepoint value in the low byte
-%of the [[Rune]]), so an ASCII-only program can pretend the
-%distinction does not exist. [[ed]] is more careful because
-%the files it edits may contain arbitrary Unicode.
 
-%claude:
+%claude: %example:
 Here is the three-character string ``aéb'' in both formats.
 ``é'' is codepoint [[U+00E9]], which UTF-8 encodes as the two
 bytes [[0xc3 0xa9]]:
