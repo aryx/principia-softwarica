@@ -14,6 +14,10 @@
 % - learn about Unicode and UTF8 and codepoints and char and encoding
 %   (see unicode primer section)
 % - how to handle unicode in a tool like ed
+%
+%special tags:
+% %padism:
+% %grrr: for int vs rune confusing types
 
 
 %******************************************************************************
@@ -128,7 +132,7 @@ types two lines, ends the insertion with a single [['.']] on its own
 line, prints lines~1 to~2 with [[1,2p]] made of an {\em address range}
 and the [[p]] command ([[ed]] echoes the 2 lines),
 sets the {\em remembered filename} with [[f hello.txt]] ([[ed]] echoes it
-back), saves the buffer with [[w]] ([[ed]] echoes the character count
+back), saves the {\em buffer} with [[w]] ([[ed]] echoes the character count
 written), and finally quits with [[q]].
 %alt: use special color for what is entered and what is echoed? or > ?
 
@@ -286,6 +290,9 @@ character in that catalog: [[U+0041]] is ``A'' ([[65]] in decimal),
 rarest emoji. % and historical scripts.
 {\em UTF-8} is one way to store/transmit those code points as {\em bytes};
 It is an {\em encoding}.
+%TODO: maybe say in rest of text when I use character usually mean concept of
+% character (unicode character)
+% not C [[char]] (which really is a bad name for byte now)
 
 %claude: %terminology:
 \plan can store codepoints in two complementary formats.
@@ -357,17 +364,19 @@ selecting the encoding by the codepoint's value range.
 
 %claude: %others:
 The modern \unix equivalent of \plan's [[Rune]] is [[wchar_t]], a C
-standard type since 1995 (declared in [[<wchar.h>]]). On Linux and
-macOS [[wchar_t]] is 32~bits; on Windows it is only 16~bits---a
+standard type since 1995 (declared in [[<wchar.h>]]).
+%
+On Linux and macOS [[wchar_t]] is 32~bits;
+on Windows it is only 16~bits---a
 legacy of Microsoft adopting UCS-2 in the early 1990s, before it
 became clear that 16 bits would not fit all of Unicode.
+%claude:
 %The analogs of [[chartorune]]/[[runetochar]] are [[mbrtowc]]/[[wcrtomb]],
 %but those are locale-dependent: [[LC_CTYPE]] must be set to a UTF-8
 %locale for them to behave like \plan's versions. \plan sidesteps
 %this complexity by hardcoding UTF-8 everywhere---there are no
 %locales, [[Rune]] is always 32-bit, and the runelibrary functions
 %are pure.
-
 
 %claude:
 %The two-format split shapes the rest of [[ed]]. [<linebuf>],
@@ -398,27 +407,21 @@ became clear that 16 bits would not fit all of Unicode.
 \end{flushright}
 \end{verse}
 
-% ed core DS is very different from other editors: no Line, Text, Buffer, ...
-% no rope, gap buffer, or other fancy structure to represent set of lines.
-% The content of the file edited is not even in memory!
-% no list of lines! instead everything stored in temp file
-% and in memory just have line offsets in temp file. 
-% So 2 main DS are temp file and array of file offsets
-% representing current state of buffer.
-% FIGURE.
-
-%claude:
 The data structures in [[ed]] are radically different from the one in modern
-text editors.  There is no linked list of lines, no rope, no gap buffer.
+text editors.  There is no linked list of lines, no rope, no gap buffer
+or other fancy data structures to represent a set of lines.
 In fact, the content of the file being edited is not even kept in memory.
 %
 Instead, all text is stored in a {temporary file} on disk
 ([<tfile>]), and the only in-memory data structure is [<zero>],
 an array of integer offsets into that temporary file---one offset
 per line.
-%
+%claude:
 Editing operations like delete and move merely shuffle entries in
 [[zero]]; the temporary file itself only grows, never shrinks.
+% So 2 main DS are temp file and array of file offsets
+% representing current state of {buffer}.
+%said-later: figure.
 
 \subsection{The backing store: [[tfname]], [[tfile]], and [[tline]]}
 
@@ -427,15 +430,13 @@ The temporary file is [[ed]]'s {backing store}.
 [<tfname>] holds its path (e.g., [[/tmp/e000042]]),
 [<tfile>] is the open file descriptor, and [<tline>] tracks the
 current write offset---where the next line will be appended.
+%said-later: actually not direct offset but equivalent to a file offset really
 Every operation that adds text (reading a file, appending user input)
 writes to [[tfile]] and records the offset in [<zero>].
 
 <<globals ed.c>>=
 char*   tfname; // temporary filename ("/tmp/eXXXXXX")
 @
-% fundamental! many operations will append to this temporary
-% file (and adjust zero line indices).
-% tfile is kinda of ed's backing store.
 
 <<globals ed.c>>=
 fdt tfile   = -1;
@@ -450,8 +451,10 @@ int tline;
 
 \subsection{The target file: [[savedfile]]}
 
-%trans: at some point some lines from the temporary file will be copied
-% in a specific file.
+%trans:
+At some point, lines from the temporary file, also called
+the {\em buffer} in [[ed]]'s man page, 
+will be copied in a specific file.
 %claude:
 [<savedfile>] remembers the name of the file being edited---the one
 specified on the command line or set by the [[f]] command.
@@ -464,10 +467,9 @@ FNSIZE  = 128,      /* file name */
 // for w, r, f
 char    savedfile[FNSIZE];
 @
-
 %said-later: will see also file[FNSIZE] later
 
-% can actually be UTF8 filename?
+%char[] is actually UTF-8 filename
 
 \subsection{The lines as file offsets: [[zero]]}
 \label{sec:lines-as-file-offsets}
@@ -480,11 +482,12 @@ Lines are 1-indexed: [[zero[1]]] is the file offset for line~1,
 [[zero[2]]] for line~2, etc. The entry [[zero[0]]] is unused
 (always~0), which is why probably the array is called ``zero''---it starts
 at the zero-th slot which represents ``before line~1.''
+% called zero because zero itself points to zero[0] which is not line1, it's 0.
 
 <<globals ed.c>>=
 ulong   nlall = 128;
-// growing_array<int(even)|int+mark|0>, initial size = (nlall+2+margin)*sizeof(int)
-// where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
+// growing_array<int(even)|int&mark|0>, initial size = (nlall+2+margin)*sizeof(int)
+// where the ints are file offsets (Rune-unit) in tfname, one per line
 int*    zero;
 @
 
@@ -500,9 +503,9 @@ When you read a file with [[r]], [[ed]] appends text to [[tfile]]
 and inserts new offsets into [[zero]].
 %
 The temporary file only grows; it is never compacted.
-% collected, defragmented
+%alt: collected, defragmented
 
-%claude:
+%claude: %example:
 Concretely, suppose the user has the following text in the buffer:
 \begin{vdiagram}
 
@@ -511,11 +514,12 @@ Concretely, suppose the user has the following text in the buffer:
    |alpha\n                         |         | unused| 0      | 6      | 11     |
    |beta\n                          |         +-------+--------+--------+--------+
    |gamma\n                         |   index:  0       1        2        3
-   |a deleted line that's still here\n                  line 1   line 2   line 3
+   |a deleted line still here\n     |                  line 1   line 2   line 3
    +--------------------------------+      
 
 \end{vdiagram}
-%
+
+%claude:
 Three lines are visible to the user, % (the [[$]] address is~3),
 even though the temporary file on disk also contains a fourth
 line at offset~17 that was previously deleted.
@@ -536,8 +540,8 @@ because that is how most people picture a file on disk. The real
 layout for [[tfile]] differs in three ways.
 %
 First, [[tfile]] is a stream of fixed-width [[Rune]] cells
-(see Section~\ref{sec:unicode-primer}), not bytes:
-%TODO? explain why this choice? said-before a bit with regular vs compact
+(see Section~\ref{sec:unicode-primer}), not UTF-8 bytes:
+%said-before: explain why this choice? said-before a bit with regular vs compact
 every codepoint occupies [[sizeof(Rune)]] bytes (usually 4),
 so a 5-character line like ``alpha'' takes 24 bytes on
 disk---5 character cells plus a terminator.
@@ -551,11 +555,12 @@ cells of [[tfile]] are reserved and remain zero-filled.
 %
 We will see soon the reason for it.
 
-%claude:
+%claude: %example:
 To make the layout concrete, here is a small two-line buffer with
 lines ``aéb'' and ``c'' (reusing the example from
 Section~\ref{sec:unicode-primer}) drawn at both byte and Rune
 granularity, with [[sizeof(Rune)]]~=~4 and little-endian Rune storage:
+
 \begin{vdiagram}
 tfile (disk), byte granularity:
    0           4           8          12          16          20          24          28
@@ -577,6 +582,7 @@ Same tfile, Rune granularity:
 zero (memory) holds Rune-slot indexes:  [_, 2, 6]
 \end{vdiagram}
 
+%spirit: %alt:
 % note that simplified diagram because no padding needed because
 % aeb\0 is 4 runes so tline remain even. But already quite complex
 % so better delay to tline
@@ -587,7 +593,7 @@ zero (memory) holds Rune-slot indexes:  [_, 2, 6]
 %inter-line padding: [[sizeof(Rune)]]~=~4 already makes every byte
 %offset a multiple of four.
 
-%claude: %plan9-is-cleaner:
+%claude:
 %Why fixed-width [[Rune]] storage rather than UTF-8? Four reasons.
 %(1)~With fixed-width Runes, padding each line to an even Rune
 %count costs at most one cell, so the actual [[ed.c]] keeps
@@ -608,44 +614,13 @@ zero (memory) holds Rune-slot indexes:  [_, 2, 6]
 %size blowup for ASCII text---is fine because [[tfile]] is a
 %scratch file that gets [[remove()]]'d on [[q]]uit.
 
-
-% zero is an array of line offsets.
-% The +5 is just for sentinel and safe margin; it should really be +2 at max.
-% The lines are not stored in memory; ed just stores lines offsets
-% in the temporary file corresponding to "the buffer" with possibly the
-% content of the file being edited.
-
-% so when you do 'ed foo.txt', it will actually read the content of foo.txt,
-% append its content in temporary file, and zero will have indices as
-% cursor in temporary file. if do 'r foo.txt' again to read again,
-% it will append another copy of foo.txt in this temporary file and further
-% modify zero.
-
-% So when
-% do operating like deleting or moving lines, actually you modify
-% line offsets entries but not actually deleting lines.
-% The temp file only grows. it contains lines, but when you
-% use 'd' to delete line in the editor, it does not delete it
-% in the temp file, only in zero. 
-% temp file just grows during an ed session.
+% if do 'r foo.txt' again to read again, it will append another copy of foo.txt
+% in this temporary file and further modify zero.
 
 % It is a line editor! actually more line file offset editor :)
 % line is string with ending \n! that's what ed manipulates, set of lines.
 
-
-
-% note that line is 1-indexed, so zero[0] is unused
-% (maybe why it's called zero?) and actually the code rely on zero
-% as special value.
-
 % lots of pointer idioms then
-
-%bugfix:
-% was '... * sizeof(int*)' ?? should be sizeof(int) no?
-% yes! BUG! even Ken Thompson wrote buggy C code :)
-
-% called zero because zero itself points to zero[0] which
-% is not line1, it's 0.
 
 \subsection{Cursors: [[dot]] and [[dol]]}
 %alt: Addresses? Line Pointers?
@@ -664,6 +639,7 @@ the total number of lines.
 When the buffer is empty, [[dol == zero]], which is
 why you will see often code like [[dol!=zero]] to test for non-empty
 buffer.
+% note that dol is zero when empty file (not even a single line)
 
 <<globals ed.c>>=
 // ref<int> in zero[], current line pointer
@@ -671,10 +647,6 @@ int*    dot;
 // ref<int> in zero[], last line pointer
 int*    dol;
 @
-% those are called dot and dol, which seems cryptic, but
-% they match the symbol used to describe those entities in the editor
-% itself with $ (dollar) marking end of file and dot the current line.
-% The user will enter '$' and '.' in commands.
 %padism: those ref<> type annotations
 
 %claude:
@@ -691,22 +663,17 @@ just the user spelling for [[dol]].
 %- .
 %- $
 
-% note that dol is zero when empty file (not even a single line)
-
-%TODO: Figure with all those data structures?
+%TODO? Figure with all those data structures
 
 \subsection{Line input and output buffers: [[line]] and [[linebuf]]}
-%alt: move linebuf later? which is with Rune ... confusing
 
-% line input from user? or line output buffer for user?
-% used in putchr() so definitely used for output
 %claude:
 There are two distinct line buffers, which can be confusing.
+%
 [<line>] (70 bytes of [[char]]) is a small output buffer used by
 [<putchr()>] to batch [[write()]] system calls--- UTF-8 encoded 
-characters accumulate
-in [[line]] and are flushed when a newline is encountered or the
-buffer is nearly full.
+characters accumulate in [[line]] and are flushed when a newline
+is encountered or the buffer is nearly full.
 %
 [<linebuf>] ([[LBSIZE]] entries of [[Rune]]) is the main working
 buffer where a single line of edited text is held in Rune form.
@@ -733,7 +700,7 @@ Rune    linebuf[LBSIZE];
 % different from line[], here we have Rune[] not char[]
 
 
-%TODO: Figure with all those data structures?
+%said-before: figure with all those data structures
 
 \subsection{Other globals: [[count]], [[col]], etc.}
 
@@ -741,38 +708,36 @@ Rune    linebuf[LBSIZE];
 [<count>] is a general-purpose counter, most often used to track
 the number of characters read or written (displayed by [<exfile()>]
 in verbose mode).
+%
 [<col>] tracks the current output column, used by the [[l]] (list)
-command to wrap long lines.
+command to wrap long lines (see Section~\ref{sec:command-l}).
 
 <<globals ed.c>>=
 long count;
 @
-% used by putd to display #chars read for instance
 
 <<globals ed.c>>=
 int col;
 @
-%??
-
 
 
 %******************************************************************************
 \section{[[main()]]}
 %******************************************************************************
-% main, init, quit
+%alt: main, init, quit
 
 %trans:
 I now switch from the bottom-up approach of the previous section
-to a top-down approach, starting with [[main()]].
+to a top-down approach, starting with [[main()]], the entry point of [[ed]].
 %claude:
 The [[main()]] function initializes
 buffered console I/O with [[Binit()]]
 (see the \book{Libcore} with the [[libbio]] library
 and its [[Biobuf]] data structure),
-installs a signal handler with [[notify()]],
+installs a signal handler (called notes in \plan) with [[notify()]],
 processes command-line flags, 
 allocates [<zero>],
-then
+and finally
 executes the main sequence: [<init()>][[;]] [<commands()>][[;]] [<quit()>].
 
 <<globals ed.c>>=
@@ -814,13 +779,11 @@ main(int argc, char *argv[])
     quit();
 }
 @
-% init(), commands(), quit()
+%bugfix:
+% was '... * sizeof(int*)' but should be sizeof(int)!
+% yes! BUG! even Ken Thompson wrote buggy C code :)
+%The +5 is just for sentinel and safe margin; it should really be +2 at max.
 
-% globp = "r" = automatic command to do first = read file! important command
-%  rarely called explicitely, but important nonetheless
-
-% so when do 'ed foo.txt' -> savedfile = "foo.txt" and start "r" command
-% interpretation, similar to 'ed, and then r foo.txt' as will see soon.
 
 %claude:
 The most tricky part in [[main()]] above is the [[globp = L"r"]] line.
@@ -834,21 +797,25 @@ where the bare [["r"]] would be a [[char*]] (one byte plus a null
 terminator), [[L"r"]] is a [[Rune*]]---one [[Rune]] holding the
 codepoint for [['r']] followed by a null [[Rune]] terminator.
 %claude:
-Later, when [<commands()>] calls [<getchr()>], it will read from
+Later, when [<commands()>] calls [<getchr()>] to read user input, it will read from
 [<globp>] before reading from the console, so the first command
 executed is automatically~[[r]]---as if the user had typed
 [[r foo.txt]].
+%
 This elegant trick avoids duplicating file-reading logic in [[main()]].
 % but why use Rune* for globp? why not char*? all commands are ASCII anyway.
+% actually some commands could be UTF8 since user input, so better be consistent
 
-%claude:
+%claude: %bugfix:
 The [[sizeof(int*)]] in the [[zero = malloc(...)]] line above is actually
 a bug---it should be [[sizeof(int)]], since [[zero]] holds [[int]]
 file offsets, not pointers. The bug is harmless on architectures
 where pointers and integers have the same size (32-bit systems);
 on 64-bit systems, pointers are 8~bytes while [[int]] is still 4,
 so the allocation simply over-reserves memory without causing any
-incorrect behavior. Even Ken Thompson wrote slightly buggy C code.
+incorrect behavior.
+%
+Even Ken Thompson wrote slightly buggy C code.
 
 \subsection{[[ed -]] and [[vflag]]}
 
@@ -857,7 +824,9 @@ By default [[ed]] is verbose\footnote{
   verbose is a strong word for [[ed]]; even in verbose mode, [[ed]] remains
   very terse (to not say cryptic).}
 ([[vflag = true]]):
-it prints character counts after [[r]] and [[w]] operations.
+it prints character counts after [[r]] and [[w]] operations
+(as shown in the [[ed]] session in Section~\ref{sec:ed-tutorial-session}).
+%
 The [[-]] flag (as in [[ed - foo.txt]]) suppresses this,
 which is what you want when [[ed]] is driven by a script
 (as in the [[mkenam]] example in Section~\ref{sec:motivations-mkenam}).
@@ -866,9 +835,6 @@ which is what you want when [[ed]] is driven by a script
 // verbose (a.k.a. interactive) mode
 bool vflag   = true;
 @
-% vflag =~ verbose flag, to print char numbers in operations (e.g., in write)
-%  when passing '-' means disable verbose and be quiet, like I did above
-% in the motivations section for mkenam
 %padism: using bool and true/false, not int for everything
 
 <<[[main()]](ed.c) if [[-]] flag>>=
@@ -886,6 +852,7 @@ The [[-o]] flag turns [[ed]] into a {\em filter} (see \book{Utilities}):
 it sets [<savedfile>]
 to [[/fd/1]] (\plan's path for stdout), so that [[w]] writes
 to standard output instead of a file.
+%
 It also sets [[globp = L"a"]] to start this time in {\em append mode},
 and disables verbose output (since character counts would corrupt
 the output stream).
@@ -895,7 +862,6 @@ the output stream).
 // Useful when ed is used as a filter.
 bool oflag;
 @
-% oflag =~ open flag? mean create if not exist?
 
 <<[[main()]](ed.c) flags processing cases>>=
 case 'o':
@@ -904,9 +870,6 @@ case 'o':
     break;
 @
 
-% remove verbose/interactive when using -o automatically
-% since we plan to save the temporary file content to stdout! so
-% definitely don't want to pass with stdout
 
 <<[[main()]](ed.c) if [[oflag]]>>=
 if(oflag) {
@@ -917,26 +880,21 @@ if(oflag) {
     globp = L"a";
 }
 @
-% globp = automatic command to do first. so here 'a'ppend mode by default.
-% because will append to stdout
 
-% saved file is fd/1 = stdout
-% so 'w' for writing file will have for effect to write on /fd/1 so
-% output on stdout
 
 \subsection{[[mktemp()]]}
 
-%mktemp(template)
 %claude:
 [<mktemp()>] called early in [[main()]] generates a unique temporary
 filename by replacing
-the trailing [[X]]'s in the template with the process ID digits.
+the trailing [[X]]'s in the template parameter with the process ID digits.
+%
 If the resulting file already exists, it tries replacing the first
 digit with [[a]], [[b]], etc.
 
 <<globals ed.c>>=
 // in Linux pid can be very long, so better to have at least 6 X (was 5 before)
-// the mkstemp man page recommends 6 X
+// the mkstemp Linux man page recommends 6 X
 char template[] = "/tmp/eXXXXXX";
 @
 %bugfix: I've used 6 so goken ed works under Linux
@@ -974,7 +932,8 @@ mktemp(char *as)
 @
 %padism: the cflow /// -> <>, and could have ERROR_NEG1 too
 
-% so /tmp/e000042 then /tmp/ek0042
+% return "/", argh error would better
+
 % so can have max 26 tmp files per process?
 
 % note that we could delete as part of libc, and also
@@ -989,7 +948,9 @@ mktemp(char *as)
 %claude:
 [<init()>] creates (or re-creates) the temporary file and resets
 [<dot>] and [<dol>] to [<zero>] (empty buffer).
-It is called both from [[main()]] at startup and from the [[e]] command,
+%
+It is called both from [[main()]] at startup and from the [[e]] command
+(see Section~\ref{sec:command-e}),
 which is why it closes the previous [<tfile>] first.
 
 <<function [[init]](ed.c)>>=
@@ -1011,33 +972,29 @@ init(void)
 @
 % use tfname set just before in main()
 % dot = dol = zero! important too. zero malloced just before in main()
-
-% close tfile because init can be called not only from main in which
-% case it must closed the previous tmp file and create new one.
-% tfile is set to -1, and close does not raise exn and return value not checked
-% so fine.
+% tfile is set to -1, and close does not raise exn and return value not checked so fine.
 
 <<[[init()]](ed.c) initializing globals>>=
 tline = 2;
 @
+
 %claude:
 Recall that [[tline]] is a Rune-unit offset into [<tfile>] (the
 actual byte file offset on disk is [[tline*sizeof(Rune)]]; see the on-disk
-layout in Section~\ref{sec:lines-as-file-offsets}).
+layout in Section~\ref{sec:actual-disk-layout}).
+%
 It starts at~2, not~0, to satisfy two invariants every line offset
 must maintain: it must be non-zero so~0 stays the ``no line''
 {\em sentinel}, and it must be even so the low bit of each [[zero]]
 entry stays free for [<global()>] and the [[k]] command to use as
 a ``matched'' flag (see Section~\ref{sec:low-bit}).
-
-% sentinel ... so never line offset in zero have the 0 or 1 value, hmmm
-% but means first 2 bytes of tfile are 0 (first seek will do that)
-% also 2 because 1 is used to represent a mark! Too clever! Too smart
-% for its own good.
+%ocaml: too clever abuse int like that! too smart for its own good. simpler in oed
+% with proper record (mutable) type
 
 In most of this appendix I will not comment much the error management
-code, which is often trivial (but important). See
-Section~\ref{sec:error-management} for a full discussion
+code, which is often trivial (but important). 
+%
+See Section~\ref{sec:error-management} for a full discussion
 about error management in [[ed]] and for the code of [<error_1()>]
 called in [[init()]] above.
 
@@ -1049,6 +1006,7 @@ char    T[] = "TMP";
 \subsection{[[quit()]]}
 
 [<quit()>] implements the ``are you sure?'' safety net.
+%
 It is called both from [[main()]] after [<commands()>] finished, 
 or from [[commands()]] itself when the user types the command [[q]] or [[Q]]
 (see Section~\ref{sec:command-q}).
@@ -1079,9 +1037,7 @@ quit(void)
     exits(nil);
 }
 @
-% why error? because forgot to save and so tell it to the user?
-% dol == zero when didn't do anything
-% reset fchange to false so second quit will actually quit.
+%padism: // else (but here subtle because of error())
 
 Note that [<error()>] internally uses [[longjmp()]] to emulate
 exceptions in C (see Section~\ref{sec:error-management}), which
@@ -1097,15 +1053,15 @@ char    Q[] = "";
 %******************************************************************************
 \section{Displaying and reading text}
 %******************************************************************************
-% buffered output
 
 %trans:
 We have now seen the code of the [<init()>] and [<quit()>] functions.
 It remains to see the most important one, [<commands()>] called also
-directly from [[main()]]. However, it is useful to see before
-the routines to display and read text
+directly from [[main()]].
+%
+However, it is useful to see before the routines to display and read text
 (which are different from the routines to read and write files,
-which we will see further later).
+which we will see later).
 
 \subsection{Displaying text}
 
@@ -1123,8 +1079,7 @@ flushes with a single [[write()]] call when it sees a newline
 and printing a final newline.
 
 
-% put string
-% sp = string pointer?
+% putstr = put string, sp = string pointer?
 <<function [[putstr]](ed.c)>>=
 /// commands | getfile | error_1 | ... -> <> 
 void
@@ -1145,8 +1100,7 @@ putst(char *sp)
 % chartorune!
 % char* here is not array for single UTF8 char but instead a series of UTF8 chars
 
-% col? could reset it at the end instead? more logical
-% after putchr the \n
+%alt: col? could reset it at the end instead? more logical after putchr the \n
 
 
 % put sh st ?? similar to putst, but not char, Rune this time
@@ -1162,7 +1116,7 @@ putshst(Rune *sp)
 @
 
 
-% grrr int vs Rune. ac means? why not use Rune?
+%grrr: int vs Rune. ac means? why not use Rune?
 %claude:
 %[<putchr()>] buffers output in [<line>] and flushes on newline
 %or when the buffer is nearly full.
@@ -1193,11 +1147,12 @@ putchr(int ac)
     linp = lp;
 }
 @
-% and this time runetochar, argh
-% why int ac -> int c -> Rune r ... grrrr
+%grrr: and this time runetochar, argh why int ac -> int c -> Rune r ...
 %padism: those // else comment
 
 % runetochar(), and chartorune(), seems a bit weird to convert if convert back.
+
+% actual IO with write syscall accept UTF8 chars, not Rune.
 
 %claude:
 %The [[-5]] margin in the
@@ -1206,7 +1161,7 @@ putchr(int ac)
 %check must leave room for one full multi-byte character plus
 %the possibility that [[lp]] already advanced past the check.
 
-%claude:
+%claude: %example:
 The picture below shows [<line>] mid-fill during
 a call to [[putshst(L"hello µs")]].
 %
@@ -1218,7 +1173,7 @@ fill pointer carried across calls (the local [[lp]] above is initialized
 from it and advanced by [[runetochar()]] before the bounds check
 fires).
 % and the trailing five-byte zone is the high-water margin
-%that absorbs whatever [[runetochar()]] just wrote past the previous check.
+% that absorbs whatever [[runetochar()]] just wrote past the previous check.
 
 %claude:
 \begin{vdiagram}
@@ -1247,17 +1202,14 @@ Without this margin, a multi-byte rune
 arriving when the buffer is nearly full could overrun the array.
 
 
-% buffered output, display only when newline (or when > 65 and close
-% to reach line[] limit) -5 because rune can be 4 chars
-% oflag here because if -o then save on STDOUT edited data, but
-% putchr is really used for display, not for editing
+% but putchr is really used for display, not for editing
 %claude:
 Note the [[oflag]] check: when [[-o]] is active, the edited content
 goes to [[STDOUT]], so diagnostic output from [<putchr()>] is
 redirected to [[STDERR]] to avoid corrupting the data stream.
 
 \subsection{Reading text}
-%alt: Readinc characters
+%alt: Reading characters
 
 %claude:
 Character input from the user
@@ -1267,6 +1219,7 @@ is layered through [<getchr()>], which checks three sources in order:
 to be ``unread'' (a classic technique used in many lexers in \plan);
 (2) [<globp>], a programmed command string (e.g., [[L"r"]] or [[L"a"]]
 injected by [[main()]]);
+%said-later: and later by global() and g command, hence its name (said in comment below)
 (3) actual console input via [[Bgetrune()]] (from [[libbio]], see \book{Libcore}).
 %
 This layering is what makes the [[globp]] trick work---[<commands()>]
@@ -1278,13 +1231,13 @@ a synthetic command.
 int peekc;
 @
 % classic lexer vars you need when not using lex
-% grrr why not use Rune??
+%grrr: why not use Rune?
 
 <<globals ed.c>>=
 //option<Rune> (0 = None)
 int lastc;
 @
-% grrr why not use Rune??
+%grrr: why not use Rune??
 
 
 <<globals ed.c>>=
@@ -1292,10 +1245,9 @@ int lastc;
 //option<array<Rune>>
 Rune*   globp;
 @
-%alt: move to later and aspectize it below? but
-% need to understand it early for the globp = "r" ?
+%alt: move to later and aspectize it? no need to understand early the globp = "r"!
 
-% int vs char vs rune, grrr
+%grrr: int vs char vs rune
 <<function [[getchr]](ed.c)>>=
 int
 getchr(void)
@@ -1319,23 +1271,20 @@ getchr(void)
     return lastc;
 }
 @
-% EOF once finished globp?
 %padism: was if(lastc = peekc) and (if (lastc=*globp++) ... but I decomposed
 
-%alt: move linebuf[] here as it's first time used?
+% EOF once finished globp?
 
-% called when can enter text until '.\n'
-% get line from tty (terminal). small wrapper over the raw gety
 %claude:
 [<gettty()>]\footnote{``get from teletype'', an old \unix name for the console},
 reads a line of user input (via [<gety()>]) and checks
 for the special [[.\n]] terminator that ends text-entry mode
 in commands like [[a]] and [[i]] (see Section~\ref{sec:ed-tutorial-session}).
-[<gety()>] does the actual character-by-character reading into
-[<linebuf>], stopping at a newline.
 
+% rc = return code. 0 means ok (read more lines in append), pos = error
+% see append() fn interface
 <<function [[gettty]](ed.c)>>=
-/// main -> commands('a') -> add -> <>
+/// main -> commands('a'|'i') -> add -> append(<>,...) -> <>
 int
 gettty(void)
 {
@@ -1347,28 +1296,37 @@ gettty(void)
     // else
     if(linebuf[0] == '.' && linebuf[1] == 0)
         return EOF;
-    return 0; // OK_0 ?
+    // else
+    return 0; // OK_0 (for caller to read more lines)
 }
 @
+%grrr:
 %padism: more complex cflow annotation -> -> <>
+%alt: move linebuf[] here as it's first time used?
 
-% talk 0 means continue vs EOF means stop, interface required
-% by append()
+% 0 means continue (read more lines) vs EOF means stop, interface required by append()
+% positive means error. (EOF is negative?)
 
-% special ".\n" here to finish the text entry.
-% OK_0 means you can read more lines
-% positive means error
+<<constants ed.c>>=
+EOF = -1,
+@
+% tricky constant, in oed I had pbs with it when return it vs when not
+
 
 Note that there is no easy way in [[ed]] to create a line containing just
 a [['.']] followed by a newline since this special sequence is recognized
-by [[gettty()]] to mark the end of a user input. One needs instead
-to enter some fake text like [['.A']] and then use a substitute command
-to remove the [['A']]. Fortunately, it is rare to need text with
-a single dot by itself in a line (which is probably why this special sequence
+by [[gettty()]] to mark the end of a user input.
+%
+One needs instead to enter some fake text like [['.A']] and then use a
+substitute command to remove the [['A']]. Fortunately, it is rare to need text
+with a single dot by itself in a line (which is probably why this special sequence
 was chosen).
 % no escape mechanism
 
-% gety and gettty, will modify linebuf for the caller
+[<gety()>] does the actual character-by-character reading into
+[<linebuf>], stopping at a newline.
+
+% gety (and gettty), will modify linebuf for the caller (and return OK_0 or EOF or err)
 <<function [[gety]](ed.c)>>=
 /// gettty -> <>
 int
@@ -1382,7 +1340,7 @@ gety(void)
         c = getchr();
         if(c == '\n') {
             *p = 0;
-            return 0;
+            return 0; // OK_0
         }
         // else
         if(c == EOF) {
@@ -1399,18 +1357,15 @@ gety(void)
     }
 }
 @
-% sometimes need to under a line, or multiple for certain commands,
-% like 'a' or 'i'
+%grrr:
 
-% How return line read to caller? Via global linebuf? but how end of line?
-% via 0 marker rune in it?
+% if(c == 0)?
 
-%XXX
-% globp?? aspectize and move later?
+
+%XXX ???
 <<[[gety()]] other locals>>=
 Rune *gf = globp;
 @
-
 <<[[get()]] if [[gf]]>>=
 if(gf)
     peekc = c;
@@ -1453,6 +1408,7 @@ commands(void)
 % but why we need error? for(;;) not enough? because the commands
 % are using 'continue' so the error is the default when not continue
 % (but bad I think)
+%grrr: int c, but char really, or Rune at least
 
 I will defer the explanations about address ranges to
 Section~\ref{sec:command-addresses} but for now it is enough
@@ -1467,24 +1423,14 @@ int*    addr1;
 // ref<int> in zero[]
 int*    addr2;
 @
-% optional line numbers for start/end of command 1,3p
-% but let's ignore for now and see basis commands like p, a, etc.
 % note that some commands like 'r' (and setwide) will set those too,
-% not just interactive.
+% not just interactive (hence given global later)
 
-
-
-
-% int c, but char really.
-
-% will see read [[addr1]] and more important [[c]] later, but
-% essentially getchr() call
 
 One of the command [[switch]] cases handles the [[EOF]] character returned
-by [<getchr()>] when there is no more input (e.g., when the user
-typed [[Ctrl-D]]). In that case [[commands()]]
-simply returns to the caller [[main()]] which will then call
-[[quit()]].
+by [<getchr()>] when there is no more input (e.g., when the user typed [[Ctrl-D]]).
+In that case [[commands()]] simply returns to the caller [[main()]] which
+will then call [[quit()]].
 % can also get EOF with globp when globp finished
 % and also EOF when pipe or >>! finished in script.
 
@@ -1492,8 +1438,6 @@ simply returns to the caller [[main()]] which will then call
 case EOF:
     return;
 @
-% return so will leave commands() leading to the execution of quit()
-% in main()
 
 
 %******************************************************************************
@@ -3854,6 +3798,7 @@ callunix(void)
 @
 
 \subsection{Advanced [[l]]isting: [[l]]}
+\label{sec:command-l}
 
 %claude:
 The [[l]] (list) command is like [[p]] but makes non-printing
@@ -4110,6 +4055,7 @@ browse(void)
 @
 
 \subsection{[[e]]dit remembered file: [[e]]}
+\label{sec:command-e}
 
 % edit, reset savedfile and reset tmpfile and reread
 %claude:
@@ -4589,10 +4535,6 @@ if(io > 0) {
     close(io);
     io = -1;
 }
-@
-
-<<constants ed.c>>=
-EOF = -1,
 @
 
 \subsection{Notes/signals management}
