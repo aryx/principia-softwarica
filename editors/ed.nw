@@ -1446,7 +1446,7 @@ case EOF:
 %******************************************************************************
 \section{[[r]]eading a file: [[r]]}
 %******************************************************************************
-\label{sec:readinr-r}
+\label{sec:reading-r}
 %spirit: quite tricky, quite long, lots of subsections here.
 
 %claude: %trans:
@@ -1503,12 +1503,17 @@ caseread:
 %grrr: abuse int c; for bool
 %padism: comments to mention globals used otherwise tricky to understand interfaces
 
+% finish with continue; to go again in for(;;) and not fallback to
+% error()
+
 % setwide() set addr1/addr2 to full start/end so operation on whole file
 %  unless given!
-% squeeze(0) = sanity check, because setwide keep user addr1/addr2 if given
-%  and they may be bad range
 % append(getfile, addr2) to add at the end
 % exfile() finalize access to the file, will close io, "exit file"
+
+% squeeze(0) = sanity check, because setwide keep user addr1/addr2 if given
+%  and they may be bad range? actually I think address() check if in range
+%  so seems redundant
 
 %toc:
 The sections below will detail each the code of one of the helper functions
@@ -2164,16 +2169,11 @@ With the reading and writing machinery in place, we can now look
 at the basic editing commands. Most of them are short---often just
 a few lines calling the helper functions we have already seen.
 
-%toc:
-% classic tutorial on 'ed' is to use commands 'a', 'w', and 'q'
-% so we will do that
-% update: first 'p' which helps to understand
+%toc: %spirit: classic tutorial on 'ed' is to use commands 'a', 'w', and 'q'
+%update: first 'p' which helps to understand
 
 \subsection{[[p]]rinting lines: [[p]]}
 
-% printing 3p   1,$p
-% maybe can show address() powerful args for [[p]]
-% see also g/re/p later
 %claude:
 The [[p]] command prints lines in the address range.
 [<printcom()>] iterates from [[addr1]] to [[addr2]], calling
@@ -2188,8 +2188,37 @@ case 'P':
     printcom();
     continue;
 @
+
+%said-before?
 % 'continue' to get to next for(;;) because otherwise fallthrough error(Q)
-% but could be simpler and just break out of switch
+%ocaml: but could be simpler and just break out of switch
+
+<<function [[printcom]](ed.c)>>=
+void
+printcom(void)
+{
+    int *a1;
+
+    nonzero();
+    a1 = addr1;
+    do {
+        <<[[printcom()]] if [[listn]]>>
+        putshst(getline(*a1++));
+    } while(a1 <= addr2);
+    dot = addr2;
+    <<[[printcom()]] reset flags at the end>>
+}
+@
+% but until now nothing really set addr1 and addr2, so it will be 0 0 ?
+% I think no because commands() parsing will set addr1/addr2 to better
+% defaults, often addr1 = addr2 = dot = dol, that is end of buffer
+
+
+The command [[p]] does not accept further arguments beyond
+the address range (as in [[1,3p]]), hence the function below to enforce
+it finishes with a newline (as opposed to [[r]] which can accept
+a filename as in [[r hello.txt]]).
+% also 3p, 1,$p, and even g/re/p later.
 
 <<function [[newline]](ed.c)>>=
 void
@@ -2205,28 +2234,7 @@ newline(void)
     error(Q);
 }
 @
-
 % just consume and enforce nothing after p command
-
-<<function [[printcom]](ed.c)>>=
-void
-printcom(void)
-{
-    int *a1;
-
-    nonzero();
-    a1 = addr1;
-    do {
-        <<[[printcom()]] if [[listn]]>>
-        putshst(getline(*a1++));
-    } while(a1 <= addr2);
-    dot = addr2;
-    <<[[printcom()]] reset flags>>
-}
-@
-% but until now nothing really set addr1 and addr2, so it will be 0 0 ?
-% I think no because commands() parsing will set addr1/addr2 to better
-% defaults, often addr1 = addr2 = dot = dol, that is end of buffer
 
 <<function [[nonzero]](ed.c)>>=
 void
@@ -2238,12 +2246,10 @@ nonzero(void)
 
 
 
-
 Pressing just Enter (newline with no command) prints the next
 line---the [['\n']] case below advances [<dot>] by one
 and prints.
 
-% print also when no command specified? like 1\n ? default to print?
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case '\n':
     if(a1==nil) {
@@ -2257,8 +2263,7 @@ case '\n':
     printcom();
     continue;
 @
-% where this a1 comes from? set in commands() for advanced
-% commands
+% where this a1 comes from? set in commands() for advanced commands
 %ocaml: I use [[not given]] instead of [[a1==nil]]
 
 \subsection{printing the remembered [[f]]ile: [[f]]}
@@ -2272,8 +2277,6 @@ case 'f':
     continue;
 @
 
-% can also change savedfile with 'f newfile.txt' I think.
-
 This command does not accept any explicit address range before, hence
 the call to [<setnoaddr()>].
 
@@ -2285,7 +2288,7 @@ setnoaddr(void)
         error(Q);
 }
 @
-% command that does not accept addresses!
+% only command that does not accept addresses?
 
 \subsection{printing line number: [[=]]}
 
@@ -2306,6 +2309,7 @@ case '=':
 %claude:
 Both [[a]] (append) and [[i]] (insert) use [<add()>], which
 calls [[append(gettty, addr2)]].
+%
 The difference is that [[i]] decrements [[addr1]]/[[addr2]]
 by one, so the new text goes \emph{before} the current line
 instead of after it.
@@ -2321,7 +2325,8 @@ case 'i':
     add(-1);
     continue;
 @
-% ?? why -1 ? seems used like a bool so why not pass 1 simply?
+%alt: why -1 ? seems used like a bool so why not pass true simply?
+% does not even use the value -1
 
 
 <<function [[add]](ed.c)>>=
@@ -2341,12 +2346,9 @@ add(int i)
 % f can be gettty(), a can be addr2
 
 We saw before a call to [[append(getfile, ...)]]
-for the [[r]] command in Section~\ref{sec:readinr-r}. This time
-[[add()]] passes instead [<gettty()>] (that
+for the [[r]] command in Section~\ref{sec:reading-r}.
+This time [[add()]] passes instead [<gettty()>] (that
 we also saw before) for the callback to [<append()>].
-
-% we saw append(getfile()), this time it's append(gettty,)
-% and we saw gettty before.
 
 \subsection{[[q]]uitting: [[q]]}
 \label{sec:command-q}
@@ -2365,13 +2367,13 @@ case 'q':
 
 
 \subsection{[[d]]eleting lines: [[d]]}
-% delete
 
 %claude:
 [<rdelete()>] (``range delete'') removes lines by shifting
 the [<zero>] entries above [<addr2>] down to overwrite the
-deleted range---the mirror image of the upward shift in
-[<append()>].
+deleted range.
+%---the mirror image of the upward shift in [<append()>].
+% a bit like append(), shift zero entries but in other direction
 The text remains in [<tfile>] (it is never reclaimed), only
 the offsets in [[zero]] change.
 
@@ -2383,7 +2385,7 @@ case 'd':
     continue;
 @
 
-% r ? vs gdelete? global delete, right delete? range delete?
+% see also gdelete and g/re/d later
 <<function [[rdelete]](ed.c)>>=
 void
 rdelete(int *ad1, int *ad2)
@@ -2404,14 +2406,10 @@ rdelete(int *ad1, int *ad2)
     fchange = true;
 }
 @
-% note that it does not change tfile! just indices are modified
 
-% a bit like append(), shift zero entries but in other direction
-
-%TODO: diagram could help
+% diagram could help
 
 \subsection{[[c]]hanging lines: [[c]]}
-% change
 
 %claude:
 The [[c]] (change) command is simply delete followed by append:
@@ -2427,13 +2425,42 @@ case 'c':
 @
 
 \subsection{[[m]]oving and copying lines: [[m]] and [[t]]}
-% 't' because 'c' was already used for change
 
 %claude:
-The [[m]] (move) and [[t]] (copy, since [[c]] was taken) commands
-share the [<move()>] function. For [[t]], the lines are first
-duplicated to the end of the buffer via [[append(getcopy, ...)]],
-then moved.
+The [[m]] (move) and [[t]] (transfer, but really copy but [[c]]
+was already taken) commands
+share the [<move()>] function below.
+%
+For [[t]], the lines are first duplicated to the end of the buffer
+via [[append(getcopy, ...)]], then moved.
+
+
+The two commands require an additional {\em destination address}, for instance
+[[3,5t1]] will copy lines 3 to 5 after the first line.
+%
+For example, on the following buffer:
+\begin{verbatim}
+  one
+  two
+  three
+  four
+  five
+  six
+\end{verbatim}
+
+you would then get after [[3,5t1]]:
+
+\begin{verbatim}
+  one
+  three
+  four
+  five
+  two
+  three
+  four
+  five
+  six
+\end{verbatim}
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'm':
@@ -2446,7 +2473,9 @@ case 't':
     move(1);
     continue;
 @
+%TODO: use bool
 
+% call another time address()!! cflag = copy flag, adt = address transfer
 <<function [[move]](ed.c)>>=
 void
 move(int cflag)
@@ -2454,23 +2483,14 @@ move(int cflag)
     int *adt, *ad1, *ad2;
 
     nonzero();
-    if((adt = address())==0)    /* address() guarantees addr is in range */
-        error(Q);
+    adt = address();
+    <<[[move()]] sanity check [[adt]]>>
     newline();
 
-    if(cflag) {
-        int *ozero, delta;
-        ad1 = dol;
-        ozero = zero;
-        append(getcopy, ad1++);
-        ad2 = dol;
-        delta = zero - ozero;
-        ad1 += delta;
-        adt += delta;
-    } else {
+    <<[[move()]](ed.c) if [[cflag]]>>
+    else {
         ad2 = addr2;
-        for(ad1 = addr1; ad1 <= ad2;)
-            *ad1++ &= ~01;
+        <<[[move()]](ed.c) clear the low bit for the range>>
         ad1 = addr1;
     }
     ad2++;
@@ -2493,59 +2513,53 @@ move(int cflag)
 }
 @
 
-<<function [[getcopy]](ed.c)>>=
-int
-getcopy(void)
-{
-    if(addr1 > addr2)
-        return EOF;
-    getline(*addr1++);
-    return 0;
-}
-@
 
 
-%The actual move uses a clever {triple-reverse} algorithm:
-%to move a block from position~A to position~B, reverse the
-%elements from~A to the block, reverse the block, then reverse
-%the whole range.  This rearranges [[zero]] entries in-place
-%without any temporary storage.
-
-%yoann: ASCII diagram illustrating triple reverse algo (and maybe add a reference?)
+%claude:
+The actual move uses a clever {triple-reverse} algorithm:
+to move a block from position~A to position~B, reverse the
+elements from~A to the block, reverse the block, then reverse
+the whole range.  This rearranges [[zero]] entries in-place
+without any temporary storage.
 %claude:
 %The triple-reverse trick is well known among C programmers
-%but easy to forget. Here is how it rotates a block to the left
-%in three reversal passes. Suppose [[zero]] looks like this and
-%we want to move lines 4--5 (the block ``DE'') in front of
-%line~2 (i.e., between line~1 and the current line~2):
-%\begin{verbatim}
-%   start:           A B C D E F
-%                    1 2 3 4 5 6
-%                       ^   ^^^
-%                       adt ad1..ad2
-%
-%   reverse(adt, ad1):     reverse [B C] -> [C B]
-%                    A C B D E F
-%
-%   reverse(ad1, ad2):     reverse [D E] -> [E D]
-%                    A C B E D F
-%
-%   reverse(adt, ad2):     reverse [C B E D] -> [D E B C]
-%                    A D E B C F
-%                       ^^^
-%                       moved!
-%\end{verbatim}
-%%
-%This is the same algorithm Brian Kernighan attributes to Doug
-%McIlroy in {\em Programming Pearls}: rotating an array can be
-%done in-place in $O(n)$ time and $O(1)$ extra space using three
-%reversals, no temporary buffer required. Compare with the naive
-%approach (allocate a temp array, copy, shift, copy back) which
-%needs $O(n)$ extra memory.
-%%
-%The opposite case (moving a block forward instead of backward)
-%is symmetric: [<move()>] picks one of the two branches based on
-%whether the destination is before or after the source.
+%but easy to forget.
+Here is how it rotates a block to the left
+in three reversal passes. Suppose [[zero]] looks like this and
+we want to move lines 4--5 (the block ``DE'') after
+line~1:
+
+\begin{vdiagram}
+   start:           A B C D E F
+                    1 2 3 4 5 6
+                      ^   ^^^
+                    adt++ ad1..ad2
+
+   reverse(adt, ad1):     reverse [B C] -> [C B]
+                    A C B D E F
+
+   reverse(ad1, ad2):     reverse [D E] -> [E D]
+                    A C B E D F
+
+   reverse(adt, ad2):     reverse [C B E D] -> [D E B C]
+                    A D E B C F
+                      ^^^
+                     moved!
+\end{vdiagram}
+
+%claude:
+This is the same algorithm Jon Bentley attributes to Doug
+McIlroy in {\em Programming Pearls}~\cite{programming-pearls}:
+rotating an array can be
+done in-place in $O(n)$ time and $O(1)$ extra space using three
+reversals, no temporary buffer required. Compare with the naive
+approach (allocate a temp array, copy, shift, copy back) which
+needs $O(n)$ extra memory.
+%actually seems invented by Donald Gries and Harlan Mills
+%claude:
+The opposite case (moving a block forward instead of backward)
+is symmetric: [<move()>] picks one of the two branches based on
+whether the destination is before or after the source.
 
 
 <<function [[reverse]](ed.c)>>=
@@ -2565,19 +2579,56 @@ reverse(int *a1, int *a2)
 @
 
 
-%TODO: lots of explanations needed to understand those subtle 3 reverse
+
+
+
+<<[[move()]] sanity check [[adt]]>>=
+if(adt==0)    /* address() guarantees addr is in range */
+    error(Q);
+@
+
+<<[[move()]](ed.c) if [[cflag]]>>=
+if(cflag) {
+    int *ozero, delta;
+
+    ad1 = dol;
+    ozero = zero;
+    append(getcopy, ad1++);
+    ad2 = dol;
+    delta = zero - ozero;
+    ad1 += delta;
+    adt += delta;
+}
+@
+
+<<function [[getcopy]](ed.c)>>=
+int
+getcopy(void)
+{
+    if(addr1 > addr2)
+        return EOF;
+    getline(*addr1++);
+    return OK_0;
+}
+@
+
+
+%XXX or move later?
+<<[[move()]](ed.c) clear the low bit for the range>>=
+for(ad1 = addr1; ad1 <= ad2;)
+    *ad1++ &= ~01; // tricky
+@
+
+
 
 %******************************************************************************
 \section{Command addresses}
 %******************************************************************************
 \label{sec:command-addresses}
 
-%trans: until now assume simple commands like a, i, q, etc.
-% but ed actually quite powerful and can give addresses before
-% the command as 1i or $a (see mkenam.sh) or even 1,3p
-% "each command can be preceded by one or two line numbers ..."
-%claude:
+%claude: %trans:
 Until now I have glossed over how [<addr1>] and [<addr2>] are set.
+%
 In [[ed]], most commands can be preceded by one or two {addresses}:
 a line number ([[3p]]), a range ([[1,5d]]), the current line
 ([[.p]]), the last line ([[$a]]), or even a search ([[/foo/p]]).
@@ -2631,16 +2682,19 @@ matching [[foo]] is line~11. The parse proceeds as follows:
 \end{verbatim}
 
 %claude:
-Two things are worth noticing. First, the address parser is
+Two things are worth noticing.
+%
+First, the address parser is
 strictly left-to-right with no precedence---every operator is
 applied in sequence, so [[1+2-3]] means [[((1+2)-3)]], never
-[[1+(2-3)]]. Second, the search forms [[/re/]] and [[?re?]]
+[[1+(2-3)]].
+%
+Second, the search forms [[/re/]] and [[?re?]]
 are resolved \emph{during} parsing: [<address()>] actually scans
 the buffer and returns a concrete line pointer, which is why
 compiling the regexp happens inline in [[address()]] rather
 than later at execution time.
 
-%yoann: reference again the motivations section; the reader should now understand better the script by now with those 1,$
 %claude:
 Returning to the [[mkenam]] script in
 Section~\ref{sec:motivations-mkenam}, you can now read the
@@ -2659,6 +2713,7 @@ a single address (last line with [[$]]) followed by [[a]] (append after).
 bool given;
 @
 % whether the user explicitly typed an address or not.
+%said-later: mentioned before in setwide
 
 <<[[commands()]] other locals>>=
 int *a1;
@@ -2668,11 +2723,11 @@ int *a1;
 char lastsep; // '\n' or ',' or ';'
 @
 
-% let's go
 %claude:
 The address-parsing loop reads addresses separated by [[,]] or [[;]].
 If no addresses are given, [[addr1 = addr2 = dot]] (the current line).
 If only one address is given, both [[addr1]] and [[addr2]] point to it.
+%
 The [[given]] flag records whether the user typed an explicit address,
 so commands like [<setwide()>] can choose appropriate defaults.
 
@@ -2702,6 +2757,8 @@ for(;;) {
 <<[[commands()]] after address parsing, use defaults if missing addresses>>
 @
 
+% super tricky code
+
 <<[[commands()]] in address parsing, if separator is [[';']]>>=
 if(c == ';')
     dot = a1;
@@ -2729,11 +2786,13 @@ if(addr1 == nil)
 
 %claude:
 [<address()>] parses a single address expression.
+%
 It starts from [[dot]] and applies offsets: a bare number
 is relative to line~0 (i.e., absolute), [[.]] and [[$]] set
 the base, [[+]] and [[-]] adjust the sign for subsequent
 operands, and [[/re/]] or [[?re?]] search forward or backward.
 
+% return pointer in zero[], like dot/dol
 <<function [[address]](ed.c)>>=
 int*
 address(void)
@@ -2769,6 +2828,8 @@ address(void)
     return nil;
 }
 @
+
+%opcnt? nextopand? tricky again
 
 %claude:
 The nested [[do]]-[[do]] structure above is subtle. The inner loop
@@ -2842,13 +2903,13 @@ case '.':
 
 
 
-
 %******************************************************************************
 \section{Search and replace}
 %******************************************************************************
-% regexp, regular expressions
+
 %claude:
 Search and replace is where [[ed]]'s real power lies.
+%
 The [[/re/]] and [[?re?]] address forms search forward and backward,
 the [[s]] command performs substitutions, and the [[g]] command
 applies commands to all matching lines.
@@ -2885,15 +2946,18 @@ command touches five distinct pieces of state:
                 |  expanded + [loc2..end)     |
                 +-----------------------------+
 \end{vdiagram}
+
+%claude:
+The flow of a substitution is always the same: 
+(1)~[<getline()>] fills [<linebuf>] from [[tfile]];
+(2)~[<match()>] runs [[rregexec()]] on [[linebuf]] and records the hit
+as [[loc1]]/[[loc2]] pointers \emph{into} [[linebuf]];
+(3)~[<dosub()>] walks [[linebuf]] and [[rhsbuf]] together, emitting the
+result into [[genbuf]], then copies [[genbuf]] back into [[linebuf]];
+(4)~[<putline()>] writes [[linebuf]] to [[tfile]] and the new offset
+replaces the old one in [[zero]].
 %
-The flow of a substitution is always the same: (1)~[<getline()>]
-fills [<linebuf>] from [[tfile]]; (2)~[<match()>] runs [[rregexec()]]
-on [[linebuf]] and records the hit as [[loc1]]/[[loc2]] pointers
-\emph{into} [[linebuf]]; (3)~[<dosub()>] walks [[linebuf]] and
-[[rhsbuf]] together, emitting the result into [[genbuf]], then
-copies [[genbuf]] back into [[linebuf]]; (4)~[<putline()>] writes
-[[linebuf]] to [[tfile]] and the new offset replaces the old one
-in [[zero]]. The two-buffer dance is what makes the [[g]] flag
+The two-buffer dance is what makes the [[g]] flag
 work: after [[dosub()]] the new [[loc2]] points into the updated
 [[linebuf]], so a fresh [[match(nil)]] can resume scanning right
 where the previous hit ended.
@@ -2903,7 +2967,7 @@ where the previous hit ended.
 %claude:
 When [[/re/]] or [[?re?]] appears as an address, [<address()>]
 compiles the pattern and scans through the buffer line by line,
-wrapping around from [[dol]] to [[zero]] (or vice versa for~[[?re?]]
+{\em wrapping around} from [[dol]] to [[zero]] (or vice versa for~[[?re?]]
 backward search),
 until a match is found or we return to where we started.
 
@@ -2912,7 +2976,7 @@ case '?':
     sign = -sign;
     // Fallthrough
 case '/':
-    // read the pattern and compile it in Reprog pattern[]
+    // read the regexp and compile it in Reprog pattern[]
     compile(c);
     b = a;
     for(;;) {
@@ -2932,15 +2996,14 @@ case '/':
     }
     break;
 @
+%padism: again use of globals are mentioned in comments
 
-% at the end we adjusted [[a]] which we saw in code of address is local
-% to represent line number of the address
 
 \subsection{Reading and compiling a regexp: [[compile()]]}
 
 %claude:
 [<compile()>] reads a regular expression delimited by the [[eof]] parameter
-(typically [[/]] or [[?]]), handles backslash escapes, and passes
+(typically [['/']] or [['?']]), handles backslash escapes, and passes
 the result to [[regcomp()]] (from [[libregexp]], see \book{Libcore}).
 %
 If the delimiter is given with no pattern in between, the
@@ -3006,7 +3069,6 @@ compile(int eof)
     pattern = regcomp(expbuf);
 }
 @
-% see libregexp book
 
 <<[[compile()]](ed.c) sanity check [[ep]] inside [[expbuf]]>>=
 if(ep >= expbuf+sizeof(expbuf)) {
@@ -3021,10 +3083,12 @@ if(ep >= expbuf+sizeof(expbuf)) {
 
 %claude:
 [<match()>] tests whether the given line matches [<pattern>].
+%
 When [[addr]] is non-null, it calls [<getline()>] to load the
 line into [[linebuf]] first; when [[addr]] is null, it retries
 the match from [[loc2]] (the end of the previous match on the
 same line), which is how [[s///g]] finds successive matches.
+%
 On success, [[loc1]] and [[loc2]] bracket the matched region
 in [[linebuf]].
 
@@ -3034,7 +3098,7 @@ MAXSUB  = 9,        /* max number of sub reg exp */
 <<globals ed.c>>=
 Resub   subexp[MAXSUB];
 @
-% see \book{Libcore}
+
 
 <<function [[match]](ed.c)>>=
 bool
@@ -3085,19 +3149,18 @@ loc1 = loc2 = nil;
 <<[[match()]](ed.c) when null [[addr]] use [[loc2]] not [[getline]]>>=
 subexp[0].s.rsp = loc2;
 @
-% see soon match(nil) to redo search on same line from end of last match
 
 
 
 \subsection{Reading and compiling a substitution: [[compsub()]]}
 
-% will be called after 's' as in s/foo/bar/
 %claude:
 [<compsub()>] reads the full [[s/re/replacement/]] command.
 It first calls [<compile()>] to handle the left-hand side (the
 pattern), then reads the right-hand side into [<rhsbuf>],
 handling backslash escapes and the [[ESCFLG]] marker for group
 references like [[\1]].
+%
 It returns true if the trailing [[g]] flag is present (global
 substitution on the line).
 % not to confuse with starting [[g]], global command
@@ -3111,7 +3174,6 @@ Rune    rhsbuf[LBSIZE/sizeof(Rune)];
 ESCFLG  = Runemax,  /* escape Rune - user defined code */
 @
 
-% return true if s/.../.../g global subst
 <<function [[compsub]](ed.c)>>=
 bool
 compsub(void)
@@ -3154,7 +3216,7 @@ if(p >= &rhsbuf[LBSIZE/sizeof(Rune)])
     error(Q);
 @
 
-% ?? pflag??
+%XXX ?? pflag??
 <<[[compsub()]](ed.c) if newline and no [[globp]]>>=
 if(c == '\n' && (!globp || !globp[0])) {
     peekc = c;
@@ -3168,12 +3230,13 @@ if(c == '\n' && (!globp || !globp[0])) {
 
 %trans:
 We are now finally ready to see the code to perform substitutions.
-%claude:
-[<substitute()>] is the most complex command. For each line in the
+%claude: said-before a bit
+[<substitute()>] is the most complex function. For each line in the
 address range, it calls [<match()>] to find the pattern, then
 [<dosub()>] to build the replacement in [<genbuf>], copying
 everything before [[loc1]], the replacement text (expanding [[&]]
 and [[\1]]--[[\9]] references), and everything after [[loc2]].
+%
 The result is copied back to [[linebuf]] and written to [[tfile]]
 via [<putline()>], replacing the old [[zero]] entry.
 %
@@ -3251,13 +3314,15 @@ int subnewa;
 <<[[init()]](ed.c) initializing globals>>=
 subnewa = 0;
 @
+% for subst undo we will see soon
 
 
 <<globals ed.c>>=
 Rune    genbuf[LBSIZE];
 @
+% used for other things such as command [[j]] to join lines
 
-%claude:
+%claude: said before a bit, could maybe factorize text
 [<dosub()>] builds the replacement in [<genbuf>]:
 it copies [<linebuf>] up to [[loc1]] (the match start),
 expands the replacement string from [<rhsbuf>] (handling [[&]]
@@ -3329,7 +3394,7 @@ shows the four phases of [<dosub()>]:
      genbuf:  "hello earth"
                           ^sp
 
-   phase 3: the famous pointer shuffle
+   phase 3: adjust pointers
      loc2 = (sp - genbuf) + linebuf
           =    11         + linebuf
           -> points into linebuf at offset 11 (the '!')
@@ -3339,12 +3404,17 @@ shows the four phases of [<dosub()>]:
      genbuf:  "hello earth!\0"
      linebuf: "hello earth!\0"
 \end{verbatim}
-%
+
+%claude:
 Phase~3 is subtle because [[loc2]] must end up pointing into the
-\emph{new} [[linebuf]], not the old one. At the moment of the
+\emph{new} [[linebuf]], not the old one.
+%
+At the moment of the
 assignment, [[linebuf]] still holds the pre-substitution text, but
 we know the new prefix (``hello earth'') will occupy bytes
-[[linebuf[0..11)]] once phase~4 runs. So [[sp-genbuf]] (the
+[[linebuf[0..11)]] once phase~4 runs.
+%
+So [[sp-genbuf]] (the
 length of that prefix) plus [[linebuf]] (the base) is the
 correct future location. It is a deliberate compute-first,
 copy-later trick---if the assignment were reordered after the
@@ -3356,7 +3426,7 @@ arithmetic would break.
 
 %trans:
 The code of [<dosub()>], [<compsub()>], and [<substitute()>]
-got simplified before to show just the core code path. Many additional
+was simplified before to show just the core code path. Many additional
 search and replace features require additional code as shown
 in the following sections.
 
@@ -3435,7 +3505,6 @@ case 'u':
     dot = addr2;
     continue;
 @
-% but will just undo the last one?
 
 
 \subsubsection{[[g]]lobal subst: [[s/.../.../g]]}
@@ -3500,8 +3569,8 @@ getsub(void)
 
 
 \subsubsection{mar[[k]]: [[k]]}
+% and ka and `a
 
-% mark something
 %claude:
 The [[k]] command {\em marks} a line with a lowercase letter ([[ka]]
 through [[kz]]).  The mark is stored in [[names[c-'a']]] as
@@ -3568,19 +3637,21 @@ for(markp = names; markp < &names[26]; )
 \subsection{[[g]]lobal commands: [[g/re/cmd]] and [[v/re/cmd]]}
 \label{sec:low-bit}
 
-%g/re/cmd
-% => g/re/p => grep :)
 %claude:
 The [[g/re/cmd]] command (and its inverse [[v/re/cmd]]) works in
-two phases. In phase~1, it scans all lines in the address range
+two phases.
+%
+In phase~1, it scans all lines in the address range
 and {\em marks} those that match (or don't match, for [[v]]) the
 pattern by setting the low bit of their [[zero]] entry
 ([[*a1 |= 01]]---this is the ``bit-stealing trick'' that
 [[tline]] starting at~2 makes possible).
+% not same kind of mark than previous section, maybe tag?
 %
 In phase~2, it iterates over [[zero]], and for each marked line,
 clears the mark, sets [<globp>] to the command string (stored in
 the local [[globuf]]), and calls [<commands()>] recursively.
+%
 The two-phase design is necessary because executing commands can
 change the buffer (e.g., [[g/re/d]] deletes lines), so we cannot
 match and execute at the same time.
@@ -3598,6 +3669,7 @@ case 'v':
     global(0);
     continue;
 @
+%TODO: use bool
 
 <<constants ed.c>>=
 GBSIZE  = 256,      /* max size of global command */
@@ -3610,8 +3682,7 @@ global(int k)
     Rune *gp, globuf[GBSIZE];
     int c, *a1;
 
-    if(globp)
-        error(Q);
+    <<[[global()]] sanity check not already in global command>>
 
     setwide();
     squeeze(dol > zero);
@@ -3625,31 +3696,21 @@ global(int k)
     compile(c);
 
     gp = globuf;
-    while((c=getchr()) != '\n') {
-        if(c == EOF)
-            error(Q);
-        if(c == '\\') {
-            c = getchr();
-            if(c != '\n')
-                *gp++ = '\\';
-        }
-        *gp++ = c;
-        if(gp >= &globuf[GBSIZE-2])
-            error(Q);
-    }
+    <<[[global()]] read the global command in [[globuf]]>>
     if(gp == globuf)
         *gp++ = 'p';
     *gp++ = '\n';
     *gp = 0;
 
+    // phase 1
     for(a1=zero; a1<=dol; a1++) {
         *a1 &= ~01;
         if(a1 >= addr1 && a1 <= addr2 && match(a1) == k)
             *a1 |= 01;
     }
-
     <<[[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]]>>
 
+    // phase 2
     for(a1=zero; a1<=dol; a1++) {
         if(*a1 & 01) {
             *a1 &= ~01;
@@ -3657,24 +3718,41 @@ global(int k)
             globp = globuf;
             // recurse!
             commands();
-            a1 = zero; // zero may have grown and move, need update a1
+            a1 = zero; // zero may have grown and move, need restart from zero
         }
     }
 }
 @
+% could start at zero+1  no?
+
+<<[[global()]] read the global command in [[globuf]]>>=
+while((c=getchr()) != '\n') {
+    if(c == EOF)
+        error(Q);
+    if(c == '\\') {
+        c = getchr();
+        if(c != '\n')
+            *gp++ = '\\';
+    }
+    *gp++ = c;
+    if(gp >= &globuf[GBSIZE-2])
+        error(Q);
+}
+@
+
 
 %claude:
 There is an important subtlety in the phase~2 loop: after each
-[[commands()]] call, [[a1]] is reset to [[zero]]
-rather than just incrementing.
+[[commands()]] call, [[a1]] is reset to [[zero]] rather than just incrementing.
 %
 This is because [<commands()>] during that recursive call may
 call [<append()>], which may [[realloc]] the [[zero]] array, moving
-it to a new address. All saved pointers into the old array become
+it to a new address.
+%
+All saved pointers into the old array become
 dangling. Resetting [[a1 = zero]] picks up the (possibly new) base,
 and the loop re-scans from the beginning---this is safe because
-each executed line has its mark cleared, so it won't be processed
-again.
+each executed line has its mark cleared, so it won't be processed again.
 
 %claude:
 Visually, a [[g/foo/d]] on a four-line buffer goes through the
@@ -3701,10 +3779,11 @@ clear:
      a1 = zero+2          .  skip
      dol is now zero+2    loop exits
 \end{verbatim}
-%
+
+%claude:
 Three consequences follow from this design.
 (1)~The marks must live \emph{inside} [[zero]] rather than in a
-parallel bitmap, because [<rdelete()>] shifts [[zero]] entries
+parallel bitmap, because [<rdelete()>] for example shifts [[zero]] entries
 around and a parallel bitmap would go out of sync instantly.
 Putting the mark in the low bit of the offset means delete,
 move, and substitute all carry marks along for free.
@@ -3717,60 +3796,52 @@ exists as a special case for [[g/.../d]]
 (see Section~\ref{sec:gdelete-opti}).
 
 
-% note that commands () will modify addr1, addr2, zero, etc.
-% so that's also why we use the mark and do the matching in phase1
-% separate from phase2.
-% Can't just store list of lineno in phase1, because they will be invalid
-% if the command is g/re/d, to delete, hence the use of marks attached
-% to line offset in zero itself. So that delete and move keep the mark
-
-% Same way see the subtle a1 = zero, so we restart from the start
-% after each commands() because zero may have changed so we must
-% restart from zero but hopefully with one less marked line this time.
-
-%yoann: say that by now you finally understand what grep origin is
 %claude:
 With this in hand, the origin of [[grep]] is now obvious.
 The classic [[ed]] one-liner [[g/re/p]] means ``for every line
 matching the regular expression [[re]], execute the [[p]]
 command (print)''---i.e., {global / regular expression / print}.
+%
 This was such a common idiom that Ken Thompson and the early
-\unix folks pulled it out into its own standalone tool, named
-literally after the [[ed]] command: [[g]] - [[re]] - [[p]] $\to$
-[[grep]].
+\unix folks pulled it out into its own standalone tool
+% named literally after the [[ed]] command: [[g]] - [[re]] - [[p]] $\to$
+%[[grep]].
 %The original [[grep]] manual page even said
 %``[[grep]] is derived from a [[g/re/p]] command in the editor [[ed]].''
+
+
+<<[[global()]] sanity check not already in global command>>=
+if(globp)
+    error(Q);
+@
 
 %******************************************************************************
 \section{Advanced features}
 %******************************************************************************
 
-%claude: %toc:
+%claude: %trans:
 The previous sections covered the core editing commands, the
 addressing system, and search-and-replace. This section
 collects the remaining commands of [[ed]].
-%rest: shell escapes ([[!]]), advanced display
+%rest: %toc: shell escapes ([[!]]), advanced display
 %modes ([[l]] for unambiguous listing, [[n]] for numbered
 %output), line joining ([[j]]), the [[b]]rowse paginator,
 %re-editing the remembered file ([[e]]), and the special
 %treatment of append-only files.
-None of those commands introduce new
+Most of those commands do not introduce new
 mechanisms---they are mostly small additions to the command
 dispatcher in [<commands()>].
 
 \subsection{Running a shell command: [[!]]}
-% still M-! on Emacs?
-% not that GNU ed has a 'red' variant restricted to not support !
-% (and read files only in current dir)
-% not so needed when have multiple windows
+
 %claude:
 The [[!]] command forks a child process, executes the rest
 of the line via [[/bin/rc -c]] (see the \book{Shell}), and waits for it to finish.
 In verbose mode it prints [[!]] when the command completes.
 %
-Th [[!]] command is less useful on \plan where you typically have multiple
+The [[!]] command is less useful on \plan where you typically have multiple
 windows, but was essential back in the old \unix days 
-on a single-terminal system.
+on single-terminal systems.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case '!':
@@ -3818,6 +3889,12 @@ callunix(void)
 }
 @
 
+%other: still M-! on Emacs :)
+%modern: not that GNU ed has a 'red' variant restricted to not support !
+% (and read files only in current dir)
+
+% waitpid in lib9? not part of original plan 9
+
 \subsection{Advanced [[l]]isting: [[l]]}
 \label{sec:command-l}
 
@@ -3825,7 +3902,9 @@ callunix(void)
 The [[l]] (list) command is like [[p]] but makes non-printing
 characters visible: tabs become [[\t]], backspaces [[\b]],
 and other control or high characters are shown as [[\xNNNN]]
-hex escapes.  Long lines are folded at column~72.
+hex escapes.
+%
+Long lines are folded at column~72.
 The [[listf]] flag is checked inside [<putchr()>] to trigger
 this special rendering.
 
@@ -3841,7 +3920,7 @@ case 'l':
     // fallthrough:
 @
 
-% display special chars like newline and tabs
+
 <<[[putchr()]] if [[listf]]>>=
 if(listf) {
     if(c == '\n') {
@@ -3884,67 +3963,15 @@ char    hex[]   = "0123456789abcdef";
 @
 
 
-<<globals ed.c>>=
-bool pflag;
-@
-% ????
-%claude:
-The [[pflag]] mechanism lets commands request an automatic print
-after execution. For example, [[s/foo/bar/p]] sets [[pflag]],
-and at the top of the [<commands()>] loop, if [[pflag]] is set,
-[[dot]] is printed before reading the next command.
-The suffixes [[p]], [[l]], and [[n]] can be appended to many commands
-(handled in [<newline()>]).
-
-<<[[commands()]] in for loop, if [[pflag]]>>=
-if(pflag) {
-    pflag = false;
-    addr1 = addr2 = dot;
-    printcom();
-}
-@
-% some commands trigger automatic implicit 'p' to print the current line
-
-
-<<[[newline()]] if special chars [[pln]]>>=
-if(c == 'p' || c == 'l' || c == 'n') {
-    pflag = true;
-    if(c == 'l')
-        listf = true;
-    else
-    if(c == 'n')
-        listn = true;
-    c = getchr();
-    if(c == '\n')
-        return;
-}
-@
-
-%yoann: again can reference grep origin here? or maybe too much
-%claude:
-%The [[p]] suffix (as in [[3p]] or [[/foo/p]]) is the same [[p]]
-%that gave [[grep]] its name. The script form
-%[[g/re/p]]---``global, regexp, print''---is just the [[g]]
-%command from the previous section composed with the [[p]]
-%suffix here.
-
-<<[[printcom()]] reset flags>>=
-listf = false;
-listn = false;
-pflag = false;
-@
-
-
-
 \subsection{Advanced listing: [[n]]}
 
-%yoann: small intro paragraph for the feature
 %claude:
 The [[n]] suffix prepends the line number before each printed
 line. It is useful when the user is working with addresses and
 wants to remember which line is which without typing [[=]]
 repeatedly. Like [[l]], [[n]] is implemented as a flag set in
 [<newline()>] and consumed by [<printcom()>].
+% consumed becaused used and then reset at the end
 
 <<globals ed.c>>=
 // 'n' flag
@@ -3967,6 +3994,59 @@ if(listn) {
     putchr(L'\t');
 }
 @
+
+\subsection{Automatic listing: the [[...pln]] suffix flag}
+
+<<globals ed.c>>=
+bool pflag;
+@
+
+%claude:
+The [[pflag]] mechanism lets commands request an automatic print
+after execution.
+%
+For example, [[s/foo/bar/p]] sets [[pflag]],
+and at the top of the [<commands()>] loop, if [[pflag]] is set,
+[[dot]] is printed before reading the next command.
+%
+Actually the suffixes [[p]], [[l]], and [[n]] can be appended to many commands
+(handled in [<newline()>]).
+
+<<[[commands()]] in for loop, if [[pflag]]>>=
+if(pflag) {
+    pflag = false;
+    addr1 = addr2 = dot;
+    printcom();
+}
+@
+
+<<[[newline()]] if special chars [[pln]]>>=
+if(c == 'p' || c == 'l' || c == 'n') {
+    pflag = true;
+    if(c == 'l')
+        listf = true;
+    else
+    if(c == 'n')
+        listn = true;
+    c = getchr();
+    if(c == '\n')
+        return;
+}
+@
+
+Note that [[pflag]] is set for commands that internally
+calls [<newline()>], e.g., [[s/foo/p]], [[3dp]],
+but not for commands such as [[g/foo/p]] which use a different
+mechanism ([[globp]] and recursive calls to [<commands()>]).
+
+
+<<[[printcom()]] reset flags at the end>>=
+listf = false;
+listn = false;
+pflag = false;
+@
+% consumed
+
 
 \subsection{[[j]]oining lines: [[j]]}
 
@@ -4011,13 +4091,16 @@ join(void)
 }
 @
 
+% hence LBSIZE pretty big
 
 \subsection{[[b]]rowse: [[b]]}
 
 %claude:
 The [[b]] (browse) command is a paging facility: it prints
 [[bpagesize]] lines (default~20) starting from the current
-address. You can go forward or backward with [[b+]] or [[b-]],
+address.
+%
+You can go forward or backward with [[b+]] or [[b-]],
 and change the page size with [[b30]].
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
@@ -4026,19 +4109,20 @@ case 'b':
     browse();
     continue;
 @
-% ???
 
-% seems used only by browse, "browse pagesize", useful in global?
-% could be a static local
 <<globals ed.c>>=
 int bpagesize = 20;
 @
+%alt: seems used only by browse, "browse pagesize", useful in global?
+% could be a static local
 
+%TODO: forward bool
 <<function [[browse]](ed.c)>>=
 void
 browse(void)
 {
-    int forward, n;
+    int forward;
+    int n;
     static int bformat, bnum; /* 0 */
 
     forward = 1;
@@ -4083,6 +4167,7 @@ browse(void)
 The [[e]] command re-initializes the editor (calling [<init()>]
 to reset [<tfile>] and [<zero>]) and reads a new file,
 effectively starting a fresh editing session.
+%
 [[E]] is the force variant that skips the unsaved-changes check.
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
@@ -4104,11 +4189,15 @@ case 'e':
 
 
 \subsection{Append-only files}
+%alt: move to advanced topics? (but no more such section)
+%  seems very plan9 specific feature
 
-% move to advanced topics. seems very plan9 specific feature
 %claude:
-\plan supports {append-only files} (the [[DMAPPEND]] mode bit),
-used for log files that can only grow.  [[ed]] checks for this
+\plan supports {append-only files} (the [[DMAPPEND]] mode bit,
+see the \book{Kernel}),
+used for log files that can only grow. 
+%
+[[ed]] checks for this
 flag when opening a file for reading and prints a warning, since
 writing back to such a file would fail.
 
@@ -4122,18 +4211,20 @@ if((d = dirfstat(io)) != nil){
     free(d);
 }
 @
-% what are append-only files? a plan9 thing?
 
-% bug? not guarded by vflag?
 
 %******************************************************************************
 \section{Optimizations}
 %******************************************************************************
 
-% needed? because when ken thompson wrote it there was no buffer cache in
+%modern:
+% needed opti? because when Ken Thompson wrote it there was no buffer cache in
 % the kernel? So he kinda reimplement one in userland for ed?
+
+%ocaml:
 % Also did input and output buffer, which are part of default
-% impleme of standard IO in OCaml no?
+% implementation of standard IO in OCaml no?
+
 %claude:
 The simplified [<putline()>] and [<getline()>] shown earlier do
 a [[seek]]+[[write]]/[[read]] for every single line.
@@ -4144,8 +4235,9 @@ maintains two [[BLKSIZE]]-byte buffers ([[ibuff]] for reads,
 requested block is not already cached.
 %
 This was essential on early \unix systems that lacked a kernel
-buffer cache, and it remains a significant optimization when
-editing large files.
+buffer cache, and
+it remains a significant optimization when editing large files.
+% really?
 
 \subsection{Optimized [[putline()]]}
 
@@ -4153,6 +4245,7 @@ editing large files.
 The real [<putline()>] writes [[linebuf]] to [[tfile]] through
 [<getblock()>], handling block boundaries: when the current block
 is full ([[nleft == 0]]), it advances to the next block.
+%
 The offset arithmetic with [[tline]] uses block-aligned addresses.
 
 <<globals ed.c>>=
@@ -4170,11 +4263,8 @@ BLKSIZE = 4096,     /* block size in temp file */
 if(opti) return putline_opti();
 @
 
-% put a line in tfile using linebuf (set by getfile above)
-% quite complicated because do block IO instead of simply seek and write
-% returns ?? tline ??
 <<function [[putline_opti]](ed.c)>>=
-/// main -> commands('r') -> append -> <>
+/// main -> commands('r') -> append -> putline -> <>
 int
 putline_opti(void)
 {
@@ -4214,6 +4304,7 @@ putline_opti(void)
 % read/write per block, probably because faster granularity for IO?
 % static ibuff/obuff to avoid some IO sometimes? do batched IO
 % for lines when we needed instead of each time?
+
 %claude:
 [<getblock()>] is the heart of the block cache.
 It converts a line offset [[atl]] into a block number and
@@ -4235,7 +4326,7 @@ ichanged = 0;
 @
 
 <<function [[getblock]](ed.c)>>=
-/// putline | getline -> <>
+/// putline_opti | getline_opti -> <>
 Rune*
 getblock(int atl, int iof)
 {
@@ -4296,7 +4387,6 @@ for a read, it is flushed first. The [[obuff]] path has no such
 flag---it is always flushed on eviction because it is only used by
 writes, so it is always dirty.
 
-%yoann: maybe ascii diagram so can better understand chose block operations
 %claude:
 \begin{verbatim}
    tfile (on disk):
@@ -4390,7 +4480,8 @@ getline_opti(int tl)
 %claude:
 The generic [[g/re/cmd]] loop calls [<commands()>] once per
 marked line, which for [[g/re/d]] would result in
-O(n\textsuperscript{2}) shifting in [<rdelete()>].
+O(n$^2$) shifting in [<rdelete()>].
+%
 [<gdelete()>] below special-cases this: it makes a single pass over
 [[zero]], copying unmarked entries down and skipping marked ones,
 achieving O(n) deletion.
@@ -4430,7 +4521,6 @@ gdelete(void)
 @
 
 
-
 %******************************************************************************
 \section{Error management}
 %******************************************************************************
@@ -4444,7 +4534,6 @@ which act as a poor man's exception mechanism.
 <<globals ed.c>>=
 jmp_buf savej;
 @
-% kinda like poor's man exception mechanism. Simple but effective.
 
 
 %claude:
@@ -4529,7 +4618,6 @@ error_1(char *s)
 
 
 
-
 % error recovery on input, reset what was read essentially?
 <<[[error_1()]](ed.c)) reset globals>>=
 wrapp = false;
@@ -4571,15 +4659,20 @@ jumps back to the command loop via [[notejmp]]
 On a ``hangup'' note (terminal disconnected), it calls
 [<rescue()>], which saves the buffer to [[ed.hup]] before
 exiting---a safety net so you do not lose unsaved work.
+% very useful! so many times even modern web where lose 30min of
+% work and no rescue!
 
 %claude: %plan9-is-cleaner:
 %The difference between \plan notes and \unix signals is worth
 %spelling out because it affects what an [[ed]]-like program
-%can do in the handler. Signals on \unix are delivered
+%can do in the handler. 
+%
+%Signals on \unix are delivered
 %asynchronously by the kernel, identified by a small integer
 %([[SIGINT]], [[SIGHUP]], \ldots), and the handler runs on the
 %current stack with very few things it is allowed to touch
 %(see the ``async-signal-safe'' list in [[signal(7)]]).
+%
 %Notes on \plan, by contrast, are \emph{strings}
 %([[{}"interrupt"{}]], [[{}"hangup"{}]], [[{}"sys: ..."{}]]) that
 %the kernel writes to [[/proc/$pid/note]]; the receiving process
@@ -4664,7 +4757,7 @@ rescue(void)
 %dup: Assembler.nw
 You now know how the \plan editor [[ed]] works,
 to the smallest details, and more generally how many
-line editors work.
+line editors work and to some extent screen editors such as [[vi]].
 %
 Hopefully, you can now understand every commands in the [[mkenam]]
 script of Section~\ref{sec:motivations-mkenam}, and understand
@@ -4682,8 +4775,6 @@ how each of those commands work internally.
 %void    (*oldhup)(int);
 %void    (*oldquit)(int);
 
-
-
 %-------------------------------------------------------------
 <<ed/ed.c>>=
 /*
@@ -4691,6 +4782,7 @@ how each of those commands work internally.
  */
 #include <u.h>
 #include <libc.h>
+
 #include <bio.h>
 #include <regexp.h>
 
@@ -4755,18 +4847,18 @@ void    substitute(int);
 // Command helpers
 <<function [[printcom]](ed.c)>>
 
+// address parsing
 <<function [[address]](ed.c)>>
 <<function [[getnum]](ed.c)>>
 
-// ???
+// addr1/addr2 set and checks
 <<function [[setwide]](ed.c)>>
 <<function [[setnoaddr]](ed.c)>>
 <<function [[nonzero]](ed.c)>>
 <<function [[squeeze]](ed.c)>>
+
 <<function [[newline]](ed.c)>>
 <<function [[filename]](ed.c)>>
-
-// Writing files
 <<function [[exfile]](ed.c)>>
 
 // Error management
@@ -4860,7 +4952,6 @@ onquit(int sig)
     quit();
 }
 @
-
 
 
 %\fi
