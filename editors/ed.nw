@@ -448,6 +448,7 @@ fdt tfile   = -1;
 // current write file offset in tfile (in Rune-unit)
 int tline;
 @
+% not toffset, tline, because is a slot index in tfile really
 
 \subsection{The target file: [[savedfile]]}
 
@@ -1297,9 +1298,10 @@ gettty(void)
     if(linebuf[0] == '.' && linebuf[1] == 0)
         return EOF;
     // else
-    return 0; // OK_0 (for caller to read more lines)
+    return OK_0; // OK_0 for caller to read more lines
 }
 @
+%padism: OK_0 but really needed here
 %grrr:
 %padism: more complex cflow annotation -> -> <>
 %alt: move linebuf[] here as it's first time used?
@@ -1340,7 +1342,7 @@ gety(void)
         c = getchr();
         if(c == '\n') {
             *p = 0;
-            return 0; // OK_0
+            return OK_0;
         }
         // else
         if(c == EOF) {
@@ -1370,6 +1372,7 @@ Rune *gf = globp;
 if(gf)
     peekc = c;
 @
+% first use of peekc
 
 %******************************************************************************
 \section{[[commands()]] interpreter loop}
@@ -1444,11 +1447,12 @@ case EOF:
 \section{[[r]]eading a file: [[r]]}
 %******************************************************************************
 \label{sec:readinr-r}
+%spirit: quite tricky, quite long, lots of subsections here.
 
-% quite tricky, quite long, lots of subsections here.
-%claude:
-Reading a file (as in [[r foo.txt]]) is the first substantial command, and
-it involves several cooperating functions:
+%claude: %trans:
+Reading a file (as in [[r foo.txt]]) is the first substantial command,
+%toc:
+and it involves several cooperating functions:
 [<filename()>] parses the filename argument in [<file>],
 [<setwide()>] sets the address range to the whole buffer
 (which will have for effect to add the content of [[foo.txt]] to
@@ -1458,6 +1462,9 @@ the end of [[zero]], after [<dol>]),
 (e.g., [[foo.txt]])
 into [<linebuf>], and [<putline()>] writes [[linebuf]] to [<tfile>]
 and returns the offset to store in [<zero>].
+
+% globp = "r" = automatic command to do first = read file! important command
+%  rarely called explicitely, but important nonetheless
 
 <<globals ed.c>>=
 char    file[FNSIZE];
@@ -1470,12 +1477,8 @@ char    file[FNSIZE];
 fdt io;
 Biobuf  iobuf;
 @
+%padism: fdt again
 
-% globp = "r" = automatic command to do first = read file! important command
-%  rarely called explicitely, but important nonetheless
-
-% can also call 'ed', then 'r env.sh'
-% in which case add (append) content of env.sh to current "buffer"
 
 <<[[commands()]] switch [[c]] cases (ed.c)>>=
 case 'r':
@@ -1497,23 +1500,25 @@ caseread:
     fchange = c;
     continue;
 @
+%grrr: abuse int c; for bool
+%padism: comments to mention globals used otherwise tricky to understand interfaces
+
 % setwide() set addr1/addr2 to full start/end so operation on whole file
-% squeeze(0) ??
-% append(getfile, addr2) ??
+%  unless given!
+% squeeze(0) = sanity check, because setwide keep user addr1/addr2 if given
+%  and they may be bad range
+% append(getfile, addr2) to add at the end
 % exfile() finalize access to the file, will close io, "exit file"
 
+%toc:
 The sections below will detail each the code of one of the helper functions
 used above.
-% ugly: abuse c, instead of using bool. and why not set fchange
-% just after setting 'c' ? because reading a file actually does
-% not trigger fchange = true; in fact fchange = false when read first file.
-% but if read a file after having inserted a few things in the buffer, then
-% still marked as changed? (but in that case means fchange was already
-% at false so why changing it again to false?)
+
 %claude:
 The [[fchange = c]] at the end is subtle: [[c]] was saved as
 [[(zero != dol)]] before the append, so [[fchange]] is set to true
 only if the buffer already had content.
+%
 Reading the first file into an empty buffer does not count as a
 ``change''---this is what lets you [[q]] without being warned
 after just opening a file.
@@ -1527,16 +1532,15 @@ if(io < 0) {
 
 \subsection{Reading a [[filename()]]}
 
-% 'int comm' but really char actually, grrrr
-% will modify file[FNSIZE], that can then be further used
-% in commands('r')
 %claude:
 [<filename()>] reads a filename from user input and stores it in [<file>].
+%
 If no filename is given (just a newline), it falls back to
 [<savedfile>]---this is how [[r]] with no argument re-reads the
-current file.
-% and how L"r" and setting savedfile in main is enough
-It also updates [[savedfile]] when used from [[e]] or [[f]],
+current file and how setting [[globp]] to just [[L"r"]]
+and setting [[savedfile]] in [[main()]] was enough.
+%
+[<filename()>] also updates [[savedfile]] when used from [[e]] or [[f]],
 establishing the ``remembered filename'' for future operations.
 
 <<function [[filename]](ed.c)>>=
@@ -1565,7 +1569,8 @@ filename(int comm)
     <<[[filename()]] set [[savedfile]] depending on commands>>
 }
 @
-% grrr why again this rune = c intermediate and int c? use Rune consistently
+%grrr: 'int comm' but really char actually
+%grrr: why again this rune = c intermediate and int c? use Rune consistently
 %padism: use of '\0'
 
 
@@ -1578,7 +1583,7 @@ if(c == '\n')
     error(Q);
 @
 
-% this happens when do 'ed foo.c' with globl="r"
+%said-before: this happens when do 'ed foo.c' with globl="r"
 % then the file to read is actually in savedfile set in main() from argv
 <<[[filename()]] if [[c]] is newline or EOF, use [[savedfile]]>>=
 if(c == '\n' || c == EOF) {
@@ -1607,6 +1612,7 @@ if(savedfile[0] == '\0' || comm == 'e' || comm == 'f') {
 [<setwide()>] sets [[addr1,addr2]] to span the whole buffer
 (line~1 to [<dol>]) when the user did not supply explicit addresses
 (which can be checked by inspecting the global [<given>]).
+% will see explicit address in Section~X
 
 <<function [[setwide]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1619,10 +1625,6 @@ setwide(void)
     }
 }
 @
-% given = whether the user explicitly typed an address or not.
-
-% setwide mean set addr1/addr2 to start/end of the fil
-% so that commands operate on the whole file (wide)
 
 % + (dol>zero) means zero + 1  when non empty file, so line 1.
 
@@ -1630,6 +1632,9 @@ setwide(void)
 [<squeeze()>] validates that the address range is sane---called
 with~0 when an empty buffer is acceptable (e.g., for the [[r]] command) or~1 when
 at least one line is required (e.g., for the [[p]] command).
+% commands like 'p' will fail that assumes at least one line
+% sanity check user input! array bound checking! cos addr1/addr2 can be user
+% input if setwide given
 
 <<function [[squeeze]](ed.c)>>=
 /// main -> commands('r') -> <>
@@ -1640,43 +1645,37 @@ squeeze(int i)
         error(Q);
 }
 @
-% called with squeeze(0) and squeeze(1)
-% squeeze(1) when want at least one line in the buffer, otherwise
-% commands like 'p' will fail that assumes at least one line
 
 
 \subsection{[[append()]] and [[getfile()]]}
 
-% append(getfile, addr2)
-% and addr2 set to dol
-% f can be getfile but also gettty as we will see later.
-% this will add the content of the file after address a
 %claude:
 [<append()>] is the core insertion function. It takes a callback [[f]]
 (either [<getfile()>] for reading files or [<gettty()>] for user input)
-and an address [[a]] (where to insert after).
+and an address [[a]] (where to insert after, for instance [<dol>]).
+%
 For each line that [[f]] returns via [<linebuf>], it calls
 [<putline()>] to write it to [<tfile>], then shifts all entries
 in [<zero>] above the insertion point up by one to make room for
 the new offset.
+%
 This shift is the [[while(a1 > rdot)]] loop.
-%---the same
-%kind of array insertion you see in any sorted-array implementation.
+%---the same kind of array insertion you see in any sorted-array implementation.
 
 <<function [[append]](ed.c)>>=
-/// main -> commands('r') -> <>
+/// main -> commands('r'|'i'|'a') -> add -> <> -> (getfile | gettty) 
 int
 append(int (*f)(void), int *a)
 {
     //ref<int> in zero[]
     int *a1, *a2, *rdot;
     int nline = 0;
-    // file offset in tfile for temporary line just added by putline()
+    // file offset in tfile for temporary line just added by putline() (Rune-unit)
     int tl;
 
     dot = a;
     // f() (e.g., getfile()) will modify linebuf[]
-    while((*f)() == 0) {
+    while((*f)() == OK_0) {
         <<[[append()]] grow [[zero]] if [[zero]] too small>>
         // putline() will use linebuf[]
         tl = putline();
@@ -1697,7 +1696,7 @@ append(int (*f)(void), int *a)
 @
 
 %TODO: could do a diagram here to see the shift and getline putline
-% cooperating with each other
+% cooperating with each other, and also rdot shift
 
 %claude:
 When [[zero]] is full, [[realloc()]] may move it to a new address.
@@ -1706,6 +1705,7 @@ Every pointer into the old array---[[addr1]], [[addr2]], [[dol]],
 i.e., new base minus old base).  This is a classic C [[realloc]]
 pattern: compute the displacement once, then apply it to all
 pointers that referred to the old allocation.
+%ocaml: no need because use int index directly, not pointer
 
 <<[[append()]] grow [[zero]] if [[zero]] too small>>=
 if((dol-zero) >= nlall) {
@@ -1728,8 +1728,6 @@ if((dol-zero) >= nlall) {
 % so append() is the only func growing zero?
 
 %alt: \subsection{[[getfile()]]}
-%    append(getfile, addr2);
-% read a line from iobuf and set linebuf
 %claude:
 [<getfile()>] reads one line from [<iobuf>] (the [[Biobuf]]
 initialized from the file to read from the [[r]] command)
@@ -1760,12 +1758,13 @@ getfile(void)
         count++;
     } while(c != '\n');
     lp[-1] = 0;
-    return 0; // OK_0
+    return OK_0;
 }
 @
 %padism: OK_0
+%grrr:
 
-% lp[-1] ??
+% lp[-1] :)
 
 % note that use Bgetrune and Biobuf so buffered IO for file IO.
 
@@ -1778,7 +1777,7 @@ if(c < 0) {
         return EOF;
 }
 @
-% bad file with missing \n, grrr so ed adds it :)
+% bad file with missing \n, so ed adds it :)
 
 <<[[getfile()]] if overflow [[linebuf]]>>=
 if(lp >= &linebuf[LBSIZE]) {
@@ -1792,14 +1791,16 @@ if(lp >= &linebuf[LBSIZE]) {
 
 %claude:
 Here is a simplified version of [<putline()>] that shows the
-essential logic: seek to the current write position in [<tfile>],
+essential logic:
+seek to the current write position in [<tfile>],
 write [<linebuf>] in [<tfile>] as a run of fixed-width [[Rune]] cells
-terminated by a null Rune, advance [<tline>] by the number of
-Runes written (rounded up to an even count), and return the old
-offset (which [<append()>] stores in [<zero>]).
+terminated by a null Rune,
+advance [<tline>] by the number of Runes written (rounded up to an even count), and
+return the old offset (which [<append()>] stores in an adjusted slot in [<zero>]).
 
 %claude: new: was not in ed.c originally
 <<function [[putline]]>>=
+/// append -> <>
 int
 putline(void)
 {
@@ -1838,20 +1839,26 @@ putline(void)
 @
 %padism: SEEK__START instead of 0
 
+% why need return old tline in putline()?
+% in append():
+%         tl = putline(); ...;         *rdot = tl;
+
 %claude:
 The crucial detail: [[tfile]] is a stream of [[Rune]]-sized cells,
 not bytes, and [[tline]] counts cells, not bytes---which is why
 every seek and write needs a [[*sizeof(Rune)]] conversion.
 
+%claude:
 The other subtlety is the even-padding of [[tline]]. Each [[zero]]
 entry holds a [[Rune]] offset into [[tfile]] (the value returned
 here), and [<global()>] together with the [[k]] command steal the
-low bit of that entry as a ``matched'' flag,
+low bit of that entry as a ``matched'' flag.
 % (see [<global()>] and [<anymarks>]).
 Keeping every offset even costs at most one
 extra [[Rune]] cell per line and frees the bit for the mark.
 
 
+%XXX: could move later?
 <<[[putline()]] if newline char, adjust and break>>=
 // (the latter happens after dosub() injects \n in a multi-line subst)
 if(*lp == '\n') {
@@ -1863,10 +1870,10 @@ if(*lp == '\n') {
 
 \subsection{Concrete editing example}
 
-%yoann: maybe ascii diagram where see content of tfile on disk and some operations
 %claude:
-Here is a short example of how [[zero]] and [[tfile]] evolve. The diagrams
-below use byte offsets and [[\n]]-terminated text for readability,
+Here is a short example of how [<zero>] and [<tfile>] evolve.
+%
+The diagrams below use byte offsets and [[\n]]-terminated text for readability,
 as in the earlier picture of [[zero]] in
 Section~\ref{sec:lines-as-file-offsets}; the actual on-disk layout
 is fixed-width [[Rune]] cells, but that detail does not affect
@@ -1875,8 +1882,9 @@ the editing operations shown here.
 We do keep one detail from the real layout: offsets start at~2,
 because [[tline]] starts at~2 and so the first two cells of [[tfile]]
 are reserved (kept clear for [<global()>]'s mark trick).
-%The first line therefore lands at offset~2, not~0.
+%
 Suppose the user types:
+
 \begin{verbatim}
    r foo.txt   (file contains: "alpha\nbeta\ngamma\n")
    2d          (delete line 2)
@@ -1884,8 +1892,11 @@ Suppose the user types:
    delta       (the new text)
    .           (end of new text)
 \end{verbatim}
-%
+
+
+%claude:
 After [[r]] reads the three lines in [[foo.txt]]:
+
 \begin{verbatim}
    tfile (offsets):   0  2      8     13     19
                       +--+------+-----+------+
@@ -1894,17 +1905,22 @@ After [[r]] reads the three lines in [[foo.txt]]:
                        ^^ reserved (bytes 0-1, kept clear)
    zero:  [_, 2, 8, 13]    (3 lines, dot=3)
 \end{verbatim}
-%
+
+%claude:
 After [[2d]] (delete line 2: shift entries down in [[zero]],
 do nothing on disk):
+
 \begin{verbatim}
    tfile:             unchanged (offset 8 'beta' is orphaned)
    zero:  [_, 2, 13]       (2 lines, dot=2)
 \end{verbatim}
-%
+
+
+%claude:
 After [[1a]] then [[delta]] then [[.]] (append ``delta'' after
 line 1, [[putline()]] writes [[delta\n]] to the end of [[tfile]]
 at offset~19, [<append()>] inserts the new offset into [[zero]]):
+
 \begin{verbatim}
    tfile:             0  2      8     13     19     25
                       +--+------+-----+------+------+
@@ -1913,24 +1929,26 @@ at offset~19, [<append()>] inserts the new offset into [[zero]]):
                                               ^new
    zero:  [_, 2, 19, 13]    (3 lines, dot=2)
 \end{verbatim}
-%
+
+%claude:
 Notice that [[tfile]] grew by one line ([[delta]]), but the
 ``deleted'' [[beta]] is still on disk---it just is no longer
-referenced by [[zero]]. This is why [[ed]] can do bounded edits in
+referenced by [[zero]].
+%
+This is why [[ed]] can do bounded edits in
 constant time but the temp file can become arbitrarily large
 during a long session.
 
 \subsection{[[exfile()]]}
 
-% "exit" file
-% om = open mode
 %claude:
 [<exfile()>] (``exit file'') finalizes an I/O operation:
 it flushes the buffer if writing, closes [<io>], and in verbose
 mode prints the character count via [<putd()>].
 
+%om = open mode
 <<function [[exfile]](ed.c)>>=
-/// main -> commands('r') -> <>
+/// main -> commands('r'|'w') -> <>
 void
 exfile(int om)
 {
@@ -1947,7 +1965,8 @@ exfile(int om)
 }
 @
 
-<<function [[putd]](ex.c)>>=
+%putd? should be called putcount, maybe for put decimal?
+<<function [[putd]](ed.c)>>=
 void
 putd(void)
 {
@@ -1963,21 +1982,14 @@ putd(void)
 @
 %padism: recurse comment
 
-%putd = put dots = print info derived from dot
-% = current line number
-
-% but actually putd() really just print the count global, which
-% can be different things.
-
-
 
 %******************************************************************************
 \section{[[w]]riting a file: [[w]]}
 %******************************************************************************
 
 %claude:
-Writing (as in [[w foo.txt]]) is the dual of reading. [<putfile()>] iterates
-over the
+Writing (as in [[w foo.txt]]) is the dual of reading. [<putfile()>] 
+called below iterates over the
 address range, fetches each line from [[tfile]] via [<getline()>],
 and writes it to the output file via [[Bputrune()]] (from [[libbio]]).
 The [[W]] (uppercase) variant opens the file in append mode.
@@ -2021,14 +2033,16 @@ case 'w':
 @
 %padism: // Fallthrough comment
 
+% those io = and if() are too tricky
 
 \subsection{[[putfile()]]}
 
 [<putfile()>] is the dual of [<getfile()>]: it writes in [<iobuf>].
+% write in iobuf, but all the lines, not just one like in getfile().
+% so dual of append(getfile,), not just getfile()
 
-% write in iobuf, but all the lines, not just one
-% like in getfile().
 <<function [[putfile]](ed.c)>>=
+/// main -> commands('w) -> <>
 void
 putfile(void)
 {
@@ -2038,7 +2052,7 @@ putfile(void)
 
     a1 = addr1;
     do {
-        // modifies linebuf[]
+        // modifies (and returns) linebuf[]
         lp = getline(*a1++);
         for(;;) {
             count++;
@@ -2059,7 +2073,7 @@ putfile(void)
 }
 @
 
-% grrr why long c; this time? Why not Rune again?
+%grrr: why long c; this time? Why not Rune again?
 
 \subsection{[[getline()]] (simplified)}
 
@@ -2067,12 +2081,15 @@ putfile(void)
 [<getline()>] is the dual of [<putline()>]: given a line offset [[tl]]
 (in [[Rune]] units), it seeks to that position in [[tfile]] and
 reads [[Rune]] cells into [<linebuf>] until it hits the null-Rune
-terminator. As in [[putline()]], the [[*sizeof(Rune)]] factor in
+terminator.
+%
+As in [[putline()]], the [[*sizeof(Rune)]] factor in
 the seek and the read size is what converts the cell-unit offset
 into a byte file offset on disk.
 
 %claude: %new: was not in ed.c originally
 <<function [[getline]]>>=
+/// putfile -> <>
 Rune*
 getline(int tl)
 {
@@ -2095,12 +2112,15 @@ getline(int tl)
     return linebuf;
 }
 @
+%alt: could return void, given it always return global linebuf
 
 % should check for overflow in linebuf? hmm but the check has been done
 % when writing in tfile so probably fine when get it back.
 
 % this is slower than putline which with one write could write many runes;
-% here we read one rune at a time, with many read() syscalls
+% here we read one rune at a time, with many read() syscalls, one per rune,
+% but fine with kernel buffer cache. Maybe point to block cache opti
+% in section X when kernel didn't have such cache in 70's.
 
 
 \subsection{Write and quit: [[wq]]}
@@ -2108,6 +2128,7 @@ getline(int tl)
 %claude:
 The [[w]] command peeks at the next character to detect [[wq]]
 (write and quit) or [[wQ]] (write and force-quit).
+%
 If the next character is neither [[q]] nor [[Q]], it is pushed
 back (``unread'') with [<peekc>] so [<filename()>] called after
 can consume it.
@@ -2115,6 +2136,7 @@ can consume it.
 <<[[commands()]] other locals>>=
 int temp;
 @
+%grrr:
 <<[[commands()]] when [['w']] check for [['q']] part1>>=
 temp = getchr();
 if(temp != 'q' && temp != 'Q') {
@@ -2122,15 +2144,14 @@ if(temp != 'q' && temp != 'Q') {
     temp = 0;
 }
 @
+% first use of peekc
+
 <<[[commands()]] when [['w']] check for [['q']] part2>>=
 if(temp == 'Q')
     fchange = false;
 if(temp)
     quit();
 @
-
-
-
 
 
 
@@ -4810,7 +4831,7 @@ void    substitute(int);
 <<function [[match]](ed.c)>>
 
 // Printing text
-<<function [[putd]](ex.c)>>
+<<function [[putd]](ed.c)>>
 <<function [[putstr]](ed.c)>>
 <<function [[putshst]](ed.c)>>
 <<function [[putchr]](ed.c)>>
