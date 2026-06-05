@@ -1,14 +1,22 @@
 #!/bin/rc
+#coupling: with kernel/init/user/boot/<arch/boot.rc, undo what boot does
+rfork nes
+
 # fshalt [-r] [new-kernel] - sync (flush) and, if possible, halt all
 #	file servers and optionally reboot
-rfork nes
+
+################################################################################
+# CLI flags
+################################################################################
+reboot=no
 kern=()
 kerncopy=()
-reboot=no
+
 fn usage {
 	echo usage: $1 '[-r] [new-kernel]' >[1=2]
-	exit usage
+	exit 'usage'
 }
+
 if (! ~ $#* 0)
 	switch ($1) {
 	case -r
@@ -17,6 +25,7 @@ if (! ~ $#* 0)
 	case -*
 		usage $0
 	}
+
 switch ($#*) {
 case 0
 case 1
@@ -25,12 +34,16 @@ case *
 	usage $0
 }
 
-path=(/bin)
-builtin cd /
-9fs boot		# in case of odd namespace
-ramfs			# stash files here that we'll need after the fs halts
+################################################################################
+# Starting to halt
+################################################################################
 
-setrtc
+path=(/bin)
+cd /
+
+##9fs boot		# in case of odd namespace
+##ramfs			# stash files here that we'll need after the fs halts
+##setrtc
 
 # turn off graphics, if any
 if (test -e '#v/vgactl' && test -e '#P/realmode') {
@@ -39,14 +52,21 @@ if (test -e '#v/vgactl' && test -e '#P/realmode') {
 		prompt=''
 		kill rio | rc -i &
 		sleep 2
-		aux/vga -l text
+		vga -l text
 	}
 }
+#`
+
+################################################################################
+# Reboot settings
+################################################################################
 
 fn isbootable {
 	test -e $1 && ~ `{file $1} *' plan 9 boot image' \
 		*' plan 9 executable'* *ELF*' executable'
 }
+#`
+
 fn usekernel {
 	kerncopy=kern
 	cp $1 /tmp/$kerncopy && echo -n using kernel $1...
@@ -69,59 +89,70 @@ if (~ $reboot yes) {
 	}
 }
 
+################################################################################
+# Flushing and syncing
+################################################################################
+
 # start venti flushing
-venti/sync -h localhost >[2]/dev/null &
-venti/sync  >[2]/dev/null &
+##venti/sync -h localhost >[2]/dev/null &
+##venti/sync  >[2]/dev/null &
 
-unmount /mnt/consoles >[2]/dev/null
-kill consolefs | rc			# don't compete with /mnt/consoles
-kill cron | rc				# unlock /cron/lock
-kill watchdog | rc
-sleep 1
-
-f=`{ls /srv/fscons*>[2]/dev/null}
-k=`{ls /srv/kfs*cmd >[2]/dev/null|sort -r}
+##unmount /mnt/consoles >[2]/dev/null
+##kill consolefs | rc			# don't compete with /mnt/consoles
+##kill cron | rc				# unlock /cron/lock
+##kill watchdog | rc
+##sleep 1
 
 echo -n syncing...
-for(i in $f) @ {
-	echo -n $i...
-	{
-		echo
-		dial/drain &
-		sleep 2
-		echo fsys all sync
-		if(! dial/expect -t 120 ': ')
-			echo -n 'not synced...' > /dev/cons
-	} < $i >> $i
-}
 
-# flush the last bit of possible fossil traffic
-if (ls /srv | grep -s fossil) {
-	echo -n venti...
-	venti/sync -h localhost >[2]/dev/null &
-	venti/sync  >[2]/dev/null &
-	sleep 5
-}
+##f=`{ls /srv/fscons*>[2]/dev/null}
+##k=`{ls /srv/kfs*cmd >[2]/dev/null|sort -r}
 
-for (i in $k){
-	echo -n $i... 
-	switch($i){
-	case /srv/kfs.cmd
-		disk/kfscmd sync
-	case *
-		disk/kfscmd -n `{echo $i | sed -n 's%/srv/kfs.(.*).cmd%\1%p'} sync
-	}
-	sleep 2
-}
+##for(i in $f) @ {
+##	echo -n $i...
+##	{
+##		echo
+##		dial/drain &
+##		sleep 2
+##		echo fsys all sync
+##		if(! dial/expect -t 120 ': ')
+##			echo -n 'not synced...' > /dev/cons
+##	} < $i >> $i
+##}
+
+### flush the last bit of possible fossil traffic
+##if (ls /srv | grep -s fossil) {
+##	echo -n venti...
+##	venti/sync -h localhost >[2]/dev/null &
+##	venti/sync  >[2]/dev/null &
+##	sleep 5
+##}
+##for (i in $k){
+##	echo -n $i... 
+##	switch($i){
+##	case /srv/kfs.cmd
+##		disk/kfscmd sync
+##	case *
+##		disk/kfscmd -n `{echo $i | sed -n 's%/srv/kfs.(.*).cmd%\1%p'} sync
+##	}
+##	sleep 2
+##}
+
+#principia specific stuff:
+#TODO: dossrv flush?
+
+################################################################################
+# Final halt
+################################################################################
 
 # halting (binaries we run can't be on the fs we're halting)
-builtin cd /bin
-cp dial/expect echo disk/kfscmd rc sed /tmp
-builtin cd /tmp
-mkdir /tmp/lib
-cp /rc/lib/rcmain /tmp/lib
-bind /tmp /rc
-bind /tmp /bin
+##cd /bin
+##cp dial/expect echo disk/kfscmd rc sed /tmp
+##builtin cd /tmp
+##mkdir /tmp/lib
+##cp /rc/lib/rcmain /tmp/lib
+##bind /tmp /rc
+##bind /tmp /bin
 
 # put this in a shell function so this rc script doesn't get read
 # when it's no longer accessible
@@ -129,29 +160,31 @@ fn x {
 	rfork s
 	echo
 	echo -n halting...
-	for(i in $f) @ {
-		echo -n $i...
-		{
-			echo fsys all halt
-			if(! expect -t 60 ': ')
-				echo -n 'not halted...' > /dev/cons
-		} < $i >> $i
-	}
+	##for(i in $f) @ {
+	##	echo -n $i...
+	##	{
+	##		echo fsys all halt
+	##		if(! expect -t 60 ': ')
+	##			echo -n 'not halted...' > /dev/cons
+	##	} < $i >> $i
+	##}
 	
-	for (i in $k){
-		echo -n $i... 
-		switch($i){
-		case /srv/kfs.cmd
-			kfscmd halt
-		case *
-			kfscmd -n `{echo $i | sed -n 's%/srv/kfs.(.*).cmd%\1%p'} halt
-		}
-	}
+	##for (i in $k){
+	##	echo -n $i... 
+	##	switch($i){
+	##	case /srv/kfs.cmd
+	##		kfscmd halt
+	##	case *
+	##		kfscmd -n `{echo $i | sed -n 's%/srv/kfs.(.*).cmd%\1%p'} halt
+	##	}
+	##}
 	echo
 	echo done halting
 
 	if (~ $reboot yes)
-		echo reboot $kerncopy >'#c/reboot'
+		echo reboot $kerncopy >'/sys/reboot'
+	if not
+	   echo halt >'/sys/reboot'
 }
 
 x
