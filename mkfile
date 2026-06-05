@@ -8,7 +8,7 @@ LIBS=\
  lib_core lib_math lib_strings\
  lib_graphics lib_gui\
  lib_networking\
- # used by plumb, iostats, snapfs, screenlock, and now kernel (for TLS) etc\
+ # used by plumb, iostats, snapfs, screenlock, and now the kernel (for TLS)\
  lib_security\
  # used by compilers/cpp (which is used by pcc) and languages/s9\
  lib_misc/libstdio\
@@ -20,7 +20,9 @@ LIBS=\
  database/libndb\
 
 #TODO: 
-# lib_audio (empty)
+# - lib_audio (empty)
+#missing in subdirs:
+# - graphics/libimg
 
 ###############################################################################
 # Programs
@@ -52,14 +54,13 @@ PROGRAMS=\
  games\
 
 #missing:
-# interpreters/s9
-# security/auth/
-# typesetting (requires (slow) pcc, too slow so skipped for now)
+# - interpreters/s9
+# - security/auth/
+# - typesetting (requires (slow) pcc, too slow so skipped for now)
 
 #missing in subdirs:
-# networking/http
-# graphics/libimg
-# ...
+# - networking/http
+# - ...
 
 # used by mk clean
 TESTS=\
@@ -80,7 +81,7 @@ TESTS=\
 # Kernel
 ###############################################################################
 
-# the programs in the directories below (e.g., bind, mount) are used as 
+# The programs in the directories below (e.g., bind, mount) are used as 
 # an initial /bin/ and mentioned in boot.rc
 BOOTCMDS=\
  # those programs are part of the root image (thx to data2s)\
@@ -162,11 +163,12 @@ kernel:QV:
 
 disk:V: disk-$TARGET
 
-doall:V:
-	mk all
-	mk kernel
-	mk disk
-    mk disksrc
+# The one target that rules them all
+everything:V:
+    mk all
+    mk install
+    mk kernel
+    mk disk
     mk run
 
 # this defines the disk-xxx targets
