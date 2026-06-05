@@ -1360,14 +1360,14 @@ getblock(int atl, int iof)
         return (Rune*)(obuff+off);
     if(iof == OREAD) {
         if(ichanged)
-            blkio(iblock, ibuff, write);
+            blkio(iblock, ibuff, (long (*)(int, void *, long))write);
         ichanged = 0;
         iblock = bno;
-        blkio(bno, ibuff, read);
+        blkio(bno, ibuff, (long (*)(int, void *, long))read);
         return (Rune*)(ibuff+off);
     }
     if(oblock >= 0)
-        blkio(oblock, obuff, write);
+        blkio(oblock, obuff, (long (*)(int, void *, long))write);
     oblock = bno;
     return (Rune*)(obuff+off);
 }
