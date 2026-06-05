@@ -4,6 +4,7 @@
  */
 #include <u.h>
 #include <libc.h>
+
 #include <bio.h>
 #include <regexp.h>
 
@@ -13,6 +14,8 @@ enum
     FNSIZE  = 128,      /* file name */
     /*x: constants ed.c */
     LBSIZE  = 4096,     /* max line size */
+    /*x: constants ed.c */
+    EOF = -1,
     /*x: constants ed.c */
     ESIZE   = 256,      /* max size of reg exp */
     /*x: constants ed.c */
@@ -25,8 +28,6 @@ enum
     BLKSIZE = 4096,     /* block size in temp file */
     /*x: constants ed.c */
     NBLK    = 8191,     /* max size of temp file */
-    /*x: constants ed.c */
-    EOF = -1,
     /*e: constants ed.c */
 };
 
@@ -42,8 +43,8 @@ int tline;
 char    savedfile[FNSIZE];
 /*x: globals ed.c */
 ulong   nlall = 128;
-// growing_array<int(even)|int+mark|0>, initial size = (nlall+2+margin)*sizeof(int)
-// where the ints are file offsets (Rune-unit) in tfname corresponding to different lines
+// growing_array<int(even)|int&mark|0>, initial size = (nlall+2+margin)*sizeof(int)
+// where the ints are file offsets (Rune-unit) in tfname, one per line
 int*    zero;
 /*x: globals ed.c */
 // ref<int> in zero[], current line pointer
@@ -72,7 +73,7 @@ bool vflag   = true;
 bool oflag;
 /*x: globals ed.c */
 // in Linux pid can be very long, so better to have at least 6 X (was 5 before)
-// the mkstemp man page recommends 6 X
+// the mkstemp Linux man page recommends 6 X
 char template[] = "/tmp/eXXXXXX";
 /*x: globals ed.c */
 char    T[] = "TMP";
@@ -132,10 +133,10 @@ bool listf;
 /*x: globals ed.c */
 char    hex[]   = "0123456789abcdef";
 /*x: globals ed.c */
-bool pflag;
-/*x: globals ed.c */
 // 'n' flag
 bool listn;
+/*x: globals ed.c */
+bool pflag;
 /*x: globals ed.c */
 int bpagesize = 20;
 /*x: globals ed.c */
@@ -164,10 +165,10 @@ void    browse(void);
 void    callunix(void);
 void    commands(void);
 void    compile(int);
-int     compsub(void);
+bool     compsub(void);
 void    dosub(void);
 void    error(char*);
-int     match(int*);
+bool     match(int*);
 void    exfile(int);
 void    filename(int);
 Rune*   getblock(int, int);
@@ -566,14 +567,15 @@ printcom(void)
         putshst(getline(*a1++));
     } while(a1 <= addr2);
     dot = addr2;
-    /*s: [[printcom()]] reset flags */
+    /*s: [[printcom()]] reset flags at the end */
     listf = false;
     listn = false;
     pflag = false;
-    /*e: [[printcom()]] reset flags */
+    /*e: [[printcom()]] reset flags at the end */
 }
 /*e: function [[printcom]](ed.c) */
 
+// address parsing
 /*s: function [[address]](ed.c) */
 int*
 address(void)
@@ -632,7 +634,7 @@ address(void)
             sign = -sign;
             // Fallthrough
         case '/':
-            // read the pattern and compile it in Reprog pattern[]
+            // read the regexp and compile it in Reprog pattern[]
             compile(c);
             b = a;
             for(;;) {
@@ -691,7 +693,7 @@ getnum(void)
 }
 /*e: function [[getnum]](ed.c) */
 
-// ???
+// addr1/addr2 set and checks
 /*s: function [[setwide]](ed.c) */
 /// main -> commands('r') -> <>
 void
@@ -727,6 +729,7 @@ squeeze(int i)
         error(Q);
 }
 /*e: function [[squeeze]](ed.c) */
+
 /*s: function [[newline]](ed.c) */
 void
 newline(void)
@@ -803,10 +806,8 @@ filename(int comm)
     /*e: [[filename()]] set [[savedfile]] depending on commands */
 }
 /*e: function [[filename]](ed.c) */
-
-// Writing files
 /*s: function [[exfile]](ed.c) */
-/// main -> commands('r') -> <>
+/// main -> commands('r'|'w') -> <>
 void
 exfile(int om)
 {
@@ -949,7 +950,7 @@ gety(void)
         c = getchr();
         if(c == '\n') {
             *p = 0;
-            return 0;
+            return OK_0;
         }
         // else
         if(c == EOF) {
@@ -970,7 +971,7 @@ gety(void)
 }
 /*e: function [[gety]](ed.c) */
 /*s: function [[gettty]](ed.c) */
-/// main -> commands('a') -> add -> <>
+/// main -> commands('a'|'i') -> add -> append(<>,...) -> <>
 int
 gettty(void)
 {
@@ -982,7 +983,8 @@ gettty(void)
     // else
     if(linebuf[0] == '.' && linebuf[1] == 0)
         return EOF;
-    return 0; // OK_0 ?
+    // else
+    return OK_0; // OK_0 for caller to read more lines
 }
 /*e: function [[gettty]](ed.c) */
 
@@ -1019,10 +1021,11 @@ getfile(void)
         count++;
     } while(c != '\n');
     lp[-1] = 0;
-    return 0; // OK_0
+    return OK_0;
 }
 /*e: function [[getfile]](ed.c) */
 /*s: function [[putfile]](ed.c) */
+/// main -> commands('w) -> <>
 void
 putfile(void)
 {
@@ -1032,7 +1035,7 @@ putfile(void)
 
     a1 = addr1;
     do {
-        // modifies linebuf[]
+        // modifies (and returns) linebuf[]
         lp = getline(*a1++);
         for(;;) {
             count++;
@@ -1054,19 +1057,19 @@ putfile(void)
 /*e: function [[putfile]](ed.c) */
 
 /*s: function [[append]](ed.c) */
-/// main -> commands('r') -> <>
+/// main -> commands('r'|'i'|'a') -> add -> <> -> (getfile | gettty) 
 int
 append(int (*f)(void), int *a)
 {
     //ref<int> in zero[]
     int *a1, *a2, *rdot;
     int nline = 0;
-    // file offset in tfile for temporary line just added by putline()
+    // file offset in tfile for temporary line just added by putline() (Rune-unit)
     int tl;
 
     dot = a;
     // f() (e.g., getfile()) will modify linebuf[]
-    while((*f)() == 0) {
+    while((*f)() == OK_0) {
         /*s: [[append()]] grow [[zero]] if [[zero]] too small */
         if((dol-zero) >= nlall) {
 
@@ -1120,7 +1123,8 @@ add(int i)
 void
 browse(void)
 {
-    int forward, n;
+    int forward;
+    int n;
     static int bformat, bnum; /* 0 */
 
     forward = 1;
@@ -1286,7 +1290,7 @@ getline_opti(int tl)
 }
 /*e: function [[getline_opti]](ed.c) */
 /*s: function [[putline_opti]](ed.c) */
-/// main -> commands('r') -> append -> <>
+/// main -> commands('r') -> append -> putline -> <>
 int
 putline_opti(void)
 {
@@ -1330,7 +1334,7 @@ blkio(int b, uchar *buf, long (*iofcn)(int, void *, long))
 }
 /*e: function [[blkio]](ed.c) */
 /*s: function [[getblock]](ed.c) */
-/// putline | getline -> <>
+/// putline_opti | getline_opti -> <>
 Rune*
 getblock(int atl, int iof)
 {
@@ -1409,8 +1413,10 @@ global(int k)
     Rune *gp, globuf[GBSIZE];
     int c, *a1;
 
+    /*s: [[global()]] sanity check not already in global command */
     if(globp)
         error(Q);
+    /*e: [[global()]] sanity check not already in global command */
 
     setwide();
     squeeze(dol > zero);
@@ -1424,6 +1430,7 @@ global(int k)
     compile(c);
 
     gp = globuf;
+    /*s: [[global()]] read the global command in [[globuf]] */
     while((c=getchr()) != '\n') {
         if(c == EOF)
             error(Q);
@@ -1436,17 +1443,18 @@ global(int k)
         if(gp >= &globuf[GBSIZE-2])
             error(Q);
     }
+    /*e: [[global()]] read the global command in [[globuf]] */
     if(gp == globuf)
         *gp++ = 'p';
     *gp++ = '\n';
     *gp = 0;
 
+    // phase 1
     for(a1=zero; a1<=dol; a1++) {
         *a1 &= ~01;
         if(a1 >= addr1 && a1 <= addr2 && match(a1) == k)
             *a1 |= 01;
     }
-
     /*s: [[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]] */
     /*
      * Special case: g/.../d (avoid n^2 algorithm)
@@ -1457,6 +1465,7 @@ global(int k)
     }
     /*e: [[global()]](ed.c) if [[g/.../d]] command, call optimized [[gdelete()]] */
 
+    // phase 2
     for(a1=zero; a1<=dol; a1++) {
         if(*a1 & 01) {
             *a1 &= ~01;
@@ -1464,7 +1473,7 @@ global(int k)
             globp = globuf;
             // recurse!
             commands();
-            a1 = zero; // zero may have grown and move, need update a1
+            a1 = zero; // zero may have grown and move, need restart from zero
         }
     }
 }
@@ -1498,6 +1507,7 @@ join(void)
 
 // Get/Put lines simplified versions (not in original ed.c)
 /*s: function [[getline]] */
+/// putfile -> <>
 Rune*
 getline(int tl)
 {
@@ -1523,6 +1533,7 @@ getline(int tl)
 }
 /*e: function [[getline]] */
 /*s: function [[putline]] */
+/// append -> <>
 int
 putline(void)
 {
@@ -1784,12 +1795,17 @@ move(int cflag)
     int *adt, *ad1, *ad2;
 
     nonzero();
-    if((adt = address())==0)    /* address() guarantees addr is in range */
+    adt = address();
+    /*s: [[move()]] sanity check [[adt]] */
+    if(adt==0)    /* address() guarantees addr is in range */
         error(Q);
+    /*e: [[move()]] sanity check [[adt]] */
     newline();
 
+    /*s: [[move()]](ed.c) if [[cflag]] */
     if(cflag) {
         int *ozero, delta;
+
         ad1 = dol;
         ozero = zero;
         append(getcopy, ad1++);
@@ -1797,10 +1813,14 @@ move(int cflag)
         delta = zero - ozero;
         ad1 += delta;
         adt += delta;
-    } else {
+    }
+    /*e: [[move()]](ed.c) if [[cflag]] */
+    else {
         ad2 = addr2;
+        /*s: [[move()]](ed.c) clear the low bit for the range */
         for(ad1 = addr1; ad1 <= ad2;)
-            *ad1++ &= ~01;
+            *ad1++ &= ~01; // tricky
+        /*e: [[move()]](ed.c) clear the low bit for the range */
         ad1 = addr1;
     }
     ad2++;
@@ -1844,7 +1864,7 @@ getcopy(void)
     if(addr1 > addr2)
         return EOF;
     getline(*addr1++);
-    return 0;
+    return OK_0;
 }
 /*e: function [[getcopy]](ed.c) */
 
@@ -1943,7 +1963,7 @@ match(int *addr)
 /*e: function [[match]](ed.c) */
 
 // Printing text
-/*s: function [[putd]](ex.c) */
+/*s: function [[putd]](ed.c) */
 void
 putd(void)
 {
@@ -1956,7 +1976,7 @@ putd(void)
         putd();
     putchr(r + L'0');
 }
-/*e: function [[putd]](ex.c) */
+/*e: function [[putd]](ed.c) */
 /*s: function [[putstr]](ed.c) */
 /// commands | getfile | error_1 | ... -> <> 
 void
