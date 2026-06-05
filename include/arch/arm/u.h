@@ -27,6 +27,7 @@ typedef unsigned long   usize;
 /*e: constant [[nil]] */
 /*s: type [[uintptr]] */
 typedef unsigned long   uintptr;
+typedef long            ptrdiff;    /* signed difference of two pointers */
 /*e: type [[uintptr]] */
 
 /*s: type [[Rune]] */

@@ -156,18 +156,18 @@ Bterm(Biobufhdr *bp)
 Biobuf*
 Bfdopen(fdt fd, int mode)
 {
-	Biobuf *bp;
+ Biobuf *bp;
 
-	bp = malloc(sizeof(Biobuf));
-	if(bp == nil)
-		return nil;
-	if(Binits(bp, fd, mode, bp->b, sizeof(bp->b)) != 0){
-		free(bp);
-		return nil;
-	}
-	bp->flag = Bmagic;			/* mark bp open & malloced */
-	setmalloctag(bp, getcallerpc(&fd));
-	return bp;
+ bp = malloc(sizeof(Biobuf));
+ if(bp == nil)
+  return nil;
+ if(Binits(bp, fd, mode, bp->b, sizeof(bp->b)) != 0){
+  free(bp);
+  return nil;
+ }
+ bp->flag = Bmagic;			/* mark bp open & malloced */
+ setmalloctag(bp, getcallerpc(&fd));
+ return bp;
 }
 
 /*e: libbio/binit.c */

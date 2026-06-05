@@ -13,6 +13,7 @@ typedef	long long	vlong;
 typedef	unsigned long long uvlong;
 
 typedef unsigned long	uintptr;
+typedef long		ptrdiff;	/* signed difference of two pointers */
 
 typedef unsigned long	usize;
 

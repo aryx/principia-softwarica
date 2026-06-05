@@ -1068,14 +1068,15 @@ append(int (*f)(void), int *a)
     int tl;
     /*s: [[append()]] other locals */
     /* claude: pointer-relocation delta when realloc() moves the zero[] block.
-     * It is a 64-bit ptrdiff (in int-element units), so it must NOT be an int:
-     * the original code reused `int tl` here and silently truncated it on LP64
-     * systems. glibc's realloc keeps the regrown block nearby, so the delta
-     * stayed within INT_MAX and Linux never tripped this. macOS's malloc can
-     * return a block in a far-away zone, making (a1-zero) overflow a 32-bit
-     * int; the truncated delta then corrupts zero/addr1/addr2/dol/dot and the
-     * next `*rdot = tl` store segfaults. */
-    intptr delta;
+     * It is a signed pointer difference (in int-element units), so it must NOT
+     * be an int: the original code reused `int tl` here and silently truncated
+     * it on LP64 systems. glibc's realloc keeps the regrown block nearby, so
+     * the delta stayed within INT_MAX and Linux never tripped this. macOS's
+     * malloc can return a block in a far-away zone, making (a1-zero) overflow a
+     * 32-bit int; the truncated delta then corrupts zero/addr1/addr2/dol/dot
+     * and the next `*rdot = tl` store segfaults. The block can also move to a
+     * lower address, so the difference must be signed (ptrdiff, not uintptr). */
+    ptrdiff delta;
     /*e: [[append()]] other locals */
 
     dot = a;
