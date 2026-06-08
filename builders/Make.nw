@@ -1941,59 +1941,144 @@ struct Job	*next;
 %trans:?
 % draw diagram showing relations to each other, what includes what?
 
-%claude:
-It is worth pausing here to see how the core data structures
-fit together before [<main()>] starts using them. The diagram
-below shows the {static} side ([<Rule>]s in [<rules>]/[<metarules>],
-indexed by [<S_TARGET>] in the symbol table) versus the {dynamic} side
-([<Node>]s and [<Arc>]s built once a target is requested, with
-[<Job>]s carved out of that graph for the scheduler):
+\section{Putting it together: the data structures for [[hello.mk]]}
+\label{sec:core-ds-overview}
 
+%claude: %trans:
+It is worth pausing here to see how the core data structures fit
+together before [<main()>] starts using them.
+%
+Rather than listing
+fields in the abstract, Figure~\ref{fig:core-ds-hello} shows the actual
+instances [[mk]] creates when it processes the example [[hello.mk]] 
+(see Section~\ref{sec:hello-mk})
+to build [[hello.5]], [[world.5]], and [[hello]].
+
+%claude:
+Everything is reached through
+the global symbol table [<hash>], keyed by a [[(name, space)]] pair:
+the name [[hello]] resolves to its [<Rule>] under [<S_TARGET>] and,
+separately, to its [<Node>] under [<S_NODE>].
+%
+From there hang the
+{static} [<Rule>] lists ([<rules>] and [<metarules>], with tail
+pointers [<lr>] and [<lmr>] for O(1) append) and the {dynamic}
+[<Node>]/[<Arc>] graph instantiated once [[hello]] is requested.
+%
+In the figure, a [[*]] is a pointer field that an arrow follows; a
+[<Word>] list is written in square brackets (e.g. \verb+[prereqs]+) and a
+plain [[char*]] string in quotes (e.g. [["target"]]).
+
+\begin{figure}[!tbp]\centering
 \begin{vdiagram}
-   parsing phase                building phase
-   -------------                --------------
+SYMBOL TABLE: global hash[NHASH=4099], key=(name,space)
+The name "hello" sits in two spaces (target, node); "OBJS" in a third:
 
-   Rule (in rules,               Node (one per file,
-         metarules)                  cached in S_NODE)
-   +------------+               +-------------+
-   | target     |<--+           | name        |
-   | prereqs    |   |           | time        |
-   | recipe     |   |           | flags       |
-   | alltargets |   |           | arcs *------+--+
-   | next *-----+   |           +-------------+  |
-   | chain *----+---+                            v
-   +------------+                          Arc
-                                          +-------+
-       symbol table                       | n *---+--> Node
-         S_TARGET                         | r *---+--> Rule
-       "hello.5"                          | stem  |
-       "world.5"                          | next  |
-                                          +-------+
+  hash[h1] --> Symtab{name:"hello", space:S_TARGET} u.ptr *--> Rule0
+  hash[h2] --> Symtab{name:"hello", space:S_NODE  } u.ptr *--> Node "hello"
+  hash[h3] --> Symtab{name:"OBJS",  space:S_VAR   } u.ptr *--> [hello.5 world.5]
+       (Symtab.next chains hash collisions within one bucket)
 
-       job queue          Job
-       (jobs)           +--------+
-                        | r *----+--> Rule (master)
-                        | n *----+--> Node list
-                        | t,p,stem|    (targets, prereqs)
-                        +--------+
+STATIC: the rule lists  (head pointer + tail pointer lr/lmr)
+
+                          ("hello", S_TARGET)
+  rules     *--+                  v 
+  lr        *--+--> +--------------------------------+ --next--> nil
+                    | Rule0                          |
+                    | target  "hello"                |
+                    | prereqs [hello.5 world.5]      |
+                    | recipe  "5l -o $target $prereq"|
+                    +--------------------------------+
+  metarules *--+
+  lmr       *--+--> +--------------------------------+ --next--> nil
+                    | RuleM                          |
+                    | target  "%.5"                  |
+                    | prereqs [%.c]                  |
+                    | recipe  "5c -c $stem.c"        |
+                    +--------------------------------+
+
+DYNAMIC: the Node/Arc graph built when "hello" is requested
+  Node.arcs *--> Arc;  Arc.n *--> Node;  Arc.r *--> Rule;  Arc.nx = next
+
+  +------------+ arcs +-------------+ nx +-------------+
+  |Node "hello"|----->| Arc         |--->| Arc         |--> nil
+  +------------+      | r *--> Rule0|    | r *--> Rule0|
+      ^               | n *--+      |    | n *--+      |
+   ("hello",S_NODE)   +------|------+    +------|------+
+                             v                  v
+                      +------------+     +------------+
+                      |Node hello.5|     |Node world.5|
+                      +-----+------+     +-----+------+
+                            | arcs             | arcs
+                            v                  v
+                      +-------------+    +-------------+
+                      | Arc         |    | Arc         |
+                      | r *--> RuleM|    | r *--> RuleM|
+                      | stem:"hello"|    | stem:"world"|
+                      | n *--+      |    | n *--+      |
+                      +------|------+    +------|------+
+                             v                  v
+                      +------------+     +------------+
+                      |Node hello.c|     |Node world.c|  (leaves)
+                      +------------+     +------------+
 \end{vdiagram}
-%yoann1: I like the idea of a global DS diagram, but not super useful; maybe take hello.mk as an example and show concrete rules, metarules, target1, Job, Arc, etc with concrete values from hello.ml and the run of mk to build hello.5, world.5, and hello?
+\caption{The core data structures of [[mk]], instantiated for [[hello.mk]].
+%the symbol-table lookup, the static [<Rule>] lists, and the dynamic
+%[<Node>]/[<Arc>] graph built to make [[hello]].
+}
+\label{fig:core-ds-hello}
+\end{figure}
 
 %claude:
-The split is deliberate. [<Rule>]s describe the [[mkfile]] verbatim
+To read Figure~\ref{fig:core-ds-hello}, follow what happens when the
+user types [[mk hello]].
+%
+First, [[mk]] looks up [[hello]] in the [<S_TARGET>] space and
+finds [[Rule0]]; it then instantiates a [<Node>] for each file it
+touches, caching each one in [<S_NODE>] so that a file is never
+visited twice. The regular rule yields the two arcs out of [[hello]]
+(both tagged [[r:Rule0]]), while the meta rule [[%.5: %.c]] matches
+twice, producing one arc per concrete pair with the stem set to
+[[hello]] and [[world]] respectively. Once the graph is complete, the
+build walk [<work()>] descends it depth-first from the requested
+target, recursing into a node's prerequisites before the node itself;
+a [<Job>] is dispatched for a node only once all of its prerequisites
+are up to date. So [[hello.5]] and [[world.5]] are compiled before
+[[hello]] can be linked, turning [[Rule0]] and [[RuleM]]'s recipes
+into the concrete commands [[5c -c hello.c]], [[5c -c world.c]], and
+finally [[5l -o hello hello.5 world.5]].
+
+%claude:
+The static/dynamic split in Figure~\ref{fig:core-ds-hello} is
+deliberate. [<Rule>]s describe the [[mkfile]] verbatim
 and never change after parsing. [<Node>]s and [<Arc>]s are an
-{instantiation} of those rules against the actual files in the
-project: a meta rule [[%.5: %.c]] becomes one arc per concrete pair
-([[hello.5]]\(\to\)[[hello.c]], [[world.5]]\(\to\)[[world.c]]). A
-[<Job>] then captures one in-flight execution---it points back into
-the rule for the recipe and into the node list for graph updates,
-but owns nothing itself.
+{instantiation} of those rules against the actual requested
+targets and files in the project:
+a meta rule [[%.5: %.c]] becomes one arc per concrete pair
+([[hello.5]]\(\to\)[[hello.c]], [[world.5]]\(\to\)[[world.c]]).
+%
+A [<Job>] then captures one in-flight execution---it points back into
+the rule for the recipe and into the node list for graph updates.
+%but owns nothing itself.
 
+%yoann: maybe say note that even though hello.mk section~\ref{sec:hello-mk} contains vars (e.g., OBJS=hello.5 world.5), they are not present in diagram in prereqs because expanded at parsing time as we will see in Section X. (not expanded in recipe though if they were present)
+%claude:
+One detail of Figure~\ref{fig:core-ds-hello} may surprise you: the
+[<Rule>] for [[hello]] lists its prerequisites as the literal words
+[[hello.5 world.5]], even though [[hello.mk]]
+(Section~\ref{sec:hello-mk}) writes them as the variable [[$OBJS]]
+(with [[OBJS=hello.5 world.5]] defined above). This is because [[mk]]
+expands variables in targets and prerequisites at parse time
+(Section~\ref{sec:expand-vars}); by the time a [<Rule>] is built, its
+[[prereqs]] [<Word>] list already holds the expanded filenames, so no
+variable ever reaches the graph.
 
-
-
-
-
+%claude:
+Recipes are the one exception: they are stored verbatim, with their
+[[$]] intact, and expanded only later by the shell at recipe-execution
+time. That is why [[Rule0]]'s recipe still shows [[$target]] and
+[[$prereq]]; an [[$OBJS]] appearing inside a recipe would likewise
+survive untouched all the way into the [<Job>].
 
 
 %******************************************************************************
