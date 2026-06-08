@@ -1952,7 +1952,8 @@ Rather than listing
 fields in the abstract, Figure~\ref{fig:core-ds-hello} shows the actual
 instances [[mk]] creates when it processes the example [[hello.mk]] 
 (see Section~\ref{sec:hello-mk})
-to build [[hello.5]], [[world.5]], and [[hello]].
+to build %[[hello.5]], [[world.5]], and
+[[hello]].
 
 %claude:
 Everything is reached through
@@ -1969,10 +1970,10 @@ In the figure, a [[*]] is a pointer field that an arrow follows; a
 [<Word>] list is written in square brackets (e.g. \verb+[prereqs]+) and a
 plain [[char*]] string in quotes (e.g. [["target"]]).
 
+
 \begin{figure}[!tbp]\centering
 \begin{vdiagram}
 SYMBOL TABLE: global hash[NHASH=4099], key=(name,space)
-The name "hello" sits in two spaces (target, node); "OBJS" in a third:
 
   hash[h1] --> Symtab{name:"hello", space:S_TARGET} u.ptr *--> Rule0
   hash[h2] --> Symtab{name:"hello", space:S_NODE  } u.ptr *--> Node "hello"
@@ -1982,45 +1983,46 @@ The name "hello" sits in two spaces (target, node); "OBJS" in a third:
 STATIC: the rule lists  (head pointer + tail pointer lr/lmr)
 
                           ("hello", S_TARGET)
-  rules     *--+                  v 
-  lr        *--+--> +--------------------------------+ --next--> nil
-                    | Rule0                          |
-                    | target  "hello"                |
+                                   v 
+                    +--------------------------------+ 
+  rules     *--+--> | Rule0                          | --next--> nil
+  lr        *--+    | target  "hello"                |
                     | prereqs [hello.5 world.5]      |
                     | recipe  "5l -o $target $prereq"|
                     +--------------------------------+
-  metarules *--+
-  lmr       *--+--> +--------------------------------+ --next--> nil
-                    | RuleM                          |
-                    | target  "%.5"                  |
+
+                    +--------------------------------+ 
+  metarules *--+--> | RuleM                          | --next--> nil
+  lmr       *--+    | target  "%.5"                  |
                     | prereqs [%.c]                  |
                     | recipe  "5c -c $stem.c"        |
                     +--------------------------------+
 
-DYNAMIC: the Node/Arc graph built when "hello" is requested
-  Node.arcs *--> Arc;  Arc.n *--> Node;  Arc.r *--> Rule;  Arc.nx = next
+DYNAMIC: graph built when "hello" is requested.
 
-  +------------+ arcs +-------------+ nx +-------------+
-  |Node "hello"|----->| Arc         |--->| Arc         |--> nil
-  +------------+      | r *--> Rule0|    | r *--> Rule0|
-      ^               | n *--+      |    | n *--+      |
-   ("hello",S_NODE)   +------|------+    +------|------+
-                             v                  v
-                      +------------+     +------------+
-                      |Node hello.5|     |Node world.5|
-                      +-----+------+     +-----+------+
-                            | arcs             | arcs
-                            v                  v
-                      +-------------+    +-------------+
-                      | Arc         |    | Arc         |
-                      | r *--> RuleM|    | r *--> RuleM|
-                      | stem:"hello"|    | stem:"world"|
-                      | n *--+      |    | n *--+      |
-                      +------|------+    +------|------+
-                             v                  v
-                      +------------+     +------------+
-                      |Node hello.c|     |Node world.c|  (leaves)
-                      +------------+     +------------+
+  +-----------------+ arcs +-------------+ next +-------------+
+  |Node "hello"     |----->| Arc         | ---> | Arc         |--> nil
+  | time=0 NOTMADE  |      | r *--> Rule0|      | r *--> Rule0|
+  +-----------------+      | n *--+      |      | n *--+      |
+      ^                    +------|------+      +------|------+
+   ("hello",S_NODE)               v                    v
+                          +-----------------+ +-----------------+
+                          |Node hello.5     | |Node world.5     |
+                          | time=0 NOTMADE  | | time=0 NOTMADE  |
+                          +--------+--------+ +--------+--------+
+                                   v arcs             v arcs
+                          +-------------+     +-------------+
+                          | Arc         |     | Arc         |
+                          | r *--> RuleM|     | r *--> RuleM|
+                          | stem:"hello"|     | stem:"world"|
+                          | n *--+      |     | n *--+      |
+                          +------|------+     +------|------+
+                                 v                   v
+                          +-----------------+ +-----------------+
+                          |Node hello.c     | |Node world.c     |
+                          | time=900 NOTMADE| | time=900 NOTMADE|
+                          +-----------------+ +-----------------+
+                              (leaves, already on disk)
 \end{vdiagram}
 \caption{The core data structures of [[mk]], instantiated for [[hello.mk]].
 %the symbol-table lookup, the static [<Rule>] lists, and the dynamic
@@ -2029,14 +2031,25 @@ DYNAMIC: the Node/Arc graph built when "hello" is requested
 \label{fig:core-ds-hello}
 \end{figure}
 
+%The name "hello" sits in two spaces (target, node); "OBJS" in a third:
+%
+%A Node also has time
+%(mtime, 0=absent) and flags (NOTMADE until work() makes it MADE):
+%  Node.arcs *--> Arc;  Arc.n *--> Node;  Arc.r *--> Rule;  Arc.nx = next
+
+
 %claude:
-To read Figure~\ref{fig:core-ds-hello}, follow what happens when the
-user types [[mk hello]].
+One way to read Figure~\ref{fig:core-ds-hello} is to follow what happens
+when the user types [[mk hello]].
 %
 First, [[mk]] looks up [[hello]] in the [<S_TARGET>] space and
-finds [[Rule0]]; it then instantiates a [<Node>] for each file it
-touches, caching each one in [<S_NODE>] so that a file is never
-visited twice. The regular rule yields the two arcs out of [[hello]]
+finds [[Rule0]]; it then instantiates a [<Node>] for [[hello]] and
+for each file it
+depends on, caching them in [<S_NODE>] so that a file is never
+visited twice (see Section~\ref{sec:node-cache} for more info on [[S_NODE]]
+and the [[Node]] cache).
+%
+The regular rule yields the two arcs out of [[hello]]
 (both tagged [[r:Rule0]]), while the meta rule [[%.5: %.c]] matches
 twice, producing one arc per concrete pair with the stem set to
 [[hello]] and [[world]] respectively. Once the graph is complete, the
@@ -2066,17 +2079,22 @@ the rule for the recipe and into the node list for graph updates.
 One detail of Figure~\ref{fig:core-ds-hello} may surprise you: the
 [<Rule>] for [[hello]] lists its prerequisites as the literal words
 [[hello.5 world.5]], even though [[hello.mk]]
-(Section~\ref{sec:hello-mk}) writes them as the variable [[$OBJS]]
-(with [[OBJS=hello.5 world.5]] defined above). This is because [[mk]]
+(See Section~\ref{sec:hello-mk}) writes them as the variable [[$OBJS]]
+(with [[OBJS=hello.5 world.5]] defined above in the [[hello.mk]] file).
+This is because [[mk]]
 expands variables in targets and prerequisites at parse time
-(Section~\ref{sec:expand-vars}); by the time a [<Rule>] is built, its
+(See Section~\ref{sec:expand-vars}); by the time a [<Rule>] is built, its
 [[prereqs]] [<Word>] list already holds the expanded filenames, so no
 variable ever reaches the graph.
+%said-later? important for static graph! guarantees!
 
 %claude:
-Recipes are the one exception: they are stored verbatim, with their
-[[$]] intact, and expanded only later by the shell at recipe-execution
-time. That is why [[Rule0]]'s recipe still shows [[$target]] and
+Recipes are the one exception: 
+%they are stored verbatim, with their [[$]] intact, and
+they are
+expanded only later by the shell at recipe-execution time. 
+%
+That is why [[Rule0]]'s recipe still shows [[$target]] and
 [[$prereq]]; an [[$OBJS]] appearing inside a recipe would likewise
 survive untouched all the way into the [<Job>].
 
