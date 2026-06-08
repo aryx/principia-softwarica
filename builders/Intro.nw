@@ -80,7 +80,7 @@ Here are a few questions I hope this book will answer:
 
 \item What are the fundamental concepts of a build system?
 What is the core algorithm behind a build system?
-\n graph of dependencies, DAG, target, prereq, rules, cycle, ambiguous, job
+%said-later: graph of deps, DAG, target, prereq, rules, recipe, cycle, ambiguous, job
 
 \item What are the kinds of dependencies a build system needs to represent
 in order to cover all the use-cases?
@@ -764,24 +764,23 @@ and more generally give the background necessary
 to understand the code I will show later.
 
 \section{Build system principles}
-\n I try to not use too much [[mk]] here, and use "build system", to generalize
+%spirit: try not use too much [[mk]], and use "build system", to generalize
+
+%claude: %BAD:
+%The progression from shell script to build system is not just a
+%matter of convenience---it illustrates a fundamental shift from
+%{imperative} to {declarative} thinking. A shell script says ``do
+%these steps in this order.'' A build system says ``here are the
+%relationships between files; figure out what needs updating.''
+%The key insight is that by describing {what depends on what}
+%rather than {what to do}, the system can automatically determine
+%the minimal set of actions needed after any change.
 
 %trans:
 To understand the goal of a build system, it is useful to remember
 how programmers were compiling projects before Make was invented.
 \l remember -> imagine? compiling -> maintaining? building?
 %without: %history:
-
-%claude:
-The progression from shell script to build system is not just a
-matter of convenience---it illustrates a fundamental shift from
-{imperative} to {declarative} thinking. A shell script says ``do
-these steps in this order.'' A build system says ``here are the
-relationships between files; figure out what needs updating.''
-The key insight is that by describing {what depends on what}
-rather than {what to do}, the system can automatically determine
-the minimal set of actions needed after any change.
-
 Before Make, programmers were using {shell scripts} to {record} the
 compiling and linking commands for a project. For instance, here
 is one such script called [[make.rc]]\footnote{This script
@@ -826,15 +825,15 @@ used to recompile or link those files.
 \n actually as programs become really really big, ninja is better
 
 
-%dup: intro/motiv (but longer version)
-%claude:
-The next sentence is the thesis statement of the entire book.
-Each of its three key words---``concisely,'' ``efficiently,'' and
-``dependencies''---maps directly to a major component of [[mk]]:
-the DSL (conciseness), the job scheduler (efficiency), and the
-dependency graph (the central data structure). The rest of this
-chapter unpacks each word in turn.
+%claude: BAD
+%The next sentence is the thesis statement of the entire book.
+%Each of its three key words---``concisely,'' ``efficiently,'' and
+%``dependencies''---maps directly to a major component of [[mk]]:
+%the DSL (conciseness), the job scheduler (efficiency), and the
+%dependency graph (the central data structure). The rest of this
+%chapter unpacks each word in turn.
 
+%dup: intro/motiv (but longer version)
 Thus, the goal of a build system is to
 describe {\em concisely} and
 maintain {\em efficiently}
@@ -854,6 +853,7 @@ Note that every words in the first sentence of the previous paragraph
 are important.
 The word ``concisely'' led in [[mk]] to the creation of a 
 domain-specific language.
+%said-later: DSL
 The word ``dependencies'' led to the use of a {graph} to represent 
 the relationships between files. Finally,
 the word ``efficiently'' led to the use of a job scheduler to run in
@@ -882,14 +882,14 @@ with a {general-purpose language} the solution to a particular problem.
 \l and also special checks (will see later)
 %trans:
 %claude:
-The author's observation here is subtle and important: the shell
-is already half the solution. It provides concise syntax for
-launching programs, piping, and redirection---exactly what recipes
-need. So [[mk]]'s DSL does not reinvent command execution; it
-only adds the missing piece: a way to declare which files depend
-on which other files. This ``minimal extension'' philosophy---add
-only what the shell cannot express---is a recurring design
-principle throughout [[mk]].
+%The author's observation here is subtle and important: the shell
+%is already half the solution. It provides concise syntax for
+%launching programs, piping, and redirection---exactly what recipes
+%need. So [[mk]]'s DSL does not reinvent command execution; it
+%only adds the missing piece: a way to declare which files depend
+%on which other files. This ``minimal extension'' philosophy---add
+%only what the shell cannot express---is a recurring design
+%principle throughout [[mk]].
 
 The shell script [[make.rc]] above is already a good solution for (2).
 Indeed, a shell can almost be considered a DSL for running commands:
@@ -924,6 +924,7 @@ is the rule.
 A {\em rule} describes a {relation} between two or more files,
 for instance, the relation between an object file [[hello.5]]
 and its source [[hello.c]].
+%said-later: actually for :V: virtual target no deps but still a rule
 \l essence is state dependencies/graph between files and how to achieve it.
 %
 In [[mk]]'s terminology, the object file is called the {\em target},
@@ -946,7 +947,7 @@ Here is the syntax of a rule in [[mk]]'s DSL:
 %     {recipe}
 
 
-Here are the rules corresponding to the script [[make.rc]] shown above
+Here are the concrete rules corresponding to the script [[make.rc]] shown above
 for the toy program mentioned in Section~\ref{sec:getting-started}:
 \l ported to mk, ``program''
 
@@ -994,24 +995,25 @@ to separate the prerequisites from the recipe.
 This syntax is {\em minimalist}. Indeed, there is no
 quotes around filenames or around commands. Moreover, the different
 elements in the list of prerequisites are simply separated by spaces.
+%said-later: no quotes, bracket, types, semicolon, etc.
 \l no keyword, no braces, nothing!
 \l same spirit than shell actually. no need () for calling
 \l no need remember order of options (but then lead to -xxx named arguments)
 \l actually sometimes need quote, for escaping (said later)
 
 %\paragraph{Semantic}
-%trans: syntax, now semantic. just like syntax rule is simple, semantic trivial
-%claude:
-The rule semantics look deceptively simple: compare modification
-times. But as the author's TODO notes hint, the full story is
-more subtle. The comparison is not just between a target and its
-immediate prerequisites---[[mk]] must first recursively ensure
-that the prerequisites themselves are up-to-date. This is why
-a DFS is needed (Section~\ref{sec:algo-dfs}): you must reach the
-leaves and work your way back up, because a target can appear
-``up-to-date'' with its direct prerequisites while a transitive
-dependency deep in the graph has changed.
+%claude: BAD
+%The rule semantics look deceptively simple: compare modification
+%times. But as the author's TODO notes hint, the full story is
+%more subtle. The comparison is not just between a target and its
+%immediate prerequisites---[[mk]] must first recursively ensure
+%that the prerequisites themselves are up-to-date. This is why
+%a DFS is needed (Section~\ref{sec:algo-dfs}): you must reach the
+%leaves and work your way back up, because a target can appear
+%``up-to-date'' with its direct prerequisites while a transitive
+%dependency deep in the graph has changed.
 
+%trans: syntax, now semantic. just like syntax rule is simple, semantic trivial
 The semantic of a rule is also very simple. [[mk]] will check
 \t recursive: mk will check if target up-to-date with prereqs
 \t  by first checking recursively if prereqs up-to-date with their own prereqs
@@ -1036,7 +1038,7 @@ Indeed, one of the design principles of [[mk]] was to leverage existing tools.
 \n and syntax (said later)
 \t MKSHELL can use another shell too
 
-The shell language is {\em embedded} inside [[mk]]'s DSL.
+The shell language is said to be {\em embedded} inside [[mk]]'s DSL.
 \l Not even interpreted. As is. simpler than in make (said later?)
 %
 This is similar to other \unix DSLs, for example Lex~\cite{lex} and
@@ -1096,7 +1098,7 @@ they differ only by the name of the file.
 \t in make.rc, if long list, then can define in a var and loop at least!
 \t but how in mk DSL? how loop? how generalize?
 %
-This is why to factorize rules, 
+This is why, to factorize rules, 
 most build systems provide a way 
 \n [[mk]] allows 
 to use {patterns} inside a rule. 
@@ -1162,8 +1164,9 @@ can be used from the shell command to access the matched string.
 \l special variable good name?
 
 The use of [['%']] to match any sequence of characters
-is similar to the use of [['.*']] in a {\em regular expression},
-or the use of [['*']] in shell globbing (see the \book{Shell}).
+is similar to the use of [['.*']] in a {\em regular expression}
+(see the \book{Libcore}),
+or the use of [['*']] in shell {\em globbing} (see the \book{Shell}).
 \l cite book on regexps?
 \l why not reuse more then?
 %
@@ -1211,6 +1214,7 @@ In [[mk]],
 those variables can contain a list of {\em words}, which
 can correspond to anything: filenames, compiler flags, etc.
 Here is an example of a variable containing two filenames:
+% list of words, like in rc, fundamental (and fit well for need of mk with list of things)
 
 \begin{verbatim}
 OBJS=hello.5 world.5
@@ -1249,7 +1253,7 @@ like in other languages
 (e.g., \verb+char* OBJS[] = {"hello.5", "world.5"};+ in C).
 %
 The next {newline} marks the end of the variable definition\footnote{
-You can also escape newlines, to spread variable definitions over multiple
+You can also {\em escape} newlines, to spread variable definitions over multiple
 lines, as explained in Section~\ref{sec:escaped-newline}.
 }.
 \l  (unless it is {escaped} to scale to larger list, as explained in Section X)
@@ -1274,6 +1278,8 @@ Y=a $X d e f
 \end{verbatim}
 %ocaml-found: scalar vs list context! can be stricter actually
 
+% in rc use ^ instead, and very nice cos do List.map
+
 [[mk]] offers also a special syntax to transform lists,
 as explained in Section~\ref{sec:transform-list}
 \l use pattern! orthogonal power
@@ -1287,32 +1293,32 @@ You can also use variables in patterns in meta rules.
 \t can use before defined? empty then? and when define the can see new value?
 \n also in file inclusion (said later)
 %
-Moreover, [[mk]] imports most variables from the environment,
+Moreover, [[mk]] imports variables from the environment,
 so you can also use variables such as [[$HOME]] in your [[mkfile]]. %$
 \l like the shell, also import and prefix with dollar
 \n or objtype (said later)
 
 
-%claude:
-The distinction below---that [[mk]] variables are really
-constants---has deep implications for the implementation.
-Because [[mk]] must know all variable values before building
-the dependency graph, it expands variables in targets and
-prerequisites {at parse time}. Recipe variables, however, are
-expanded later by the shell (via environment export), which is
-why [[$target]] and [[$stem]] work in recipes without [[mk]]
-doing string substitution itself. This two-phase expansion is
-the source of much confusion in Make (with its [[=]] vs.\ [[:=]]
-distinction); [[mk]] sidesteps the problem by making all
-definitions single-assignment.
+%claude: bad:
+%The distinction below---that [[mk]] variables are really
+%constants---has deep implications for the implementation.
+%Because [[mk]] must know all variable values before building
+%the dependency graph, it expands variables in targets and
+%prerequisites {at parse time}. Recipe variables, however, are
+%expanded later by the shell (via environment export), which is
+%why [[$target]] and [[$stem]] work in recipes without [[mk]]
+%doing string substitution itself. This two-phase expansion is
+%the source of much confusion in Make (with its [[=]] vs.\ [[:=]]
+%distinction); [[mk]] sidesteps the problem by making all
+%definitions single-assignment.
 
 Note that the term ``variable'' in the context of [[mk]] is slightly
 misleading.
-Indeed, in [[mk]], variables are constants.
+Indeed, in [[mk]], variables are actually constants.
 \n actually mk-in-ocaml check if override
 \n even though can be overriden on commandline
 %declaratif:
-Variable definitions are more {binding definitions}.
+Variable definitions are more {\em binding} definitions.
 \t expanded in target and prerequisite and def as parse the file
 \t  (but not in recipe, cos use different mechanism, export env, 
 \t   again to not be intrusive on recipe, embeded DSL, so no extra escaping)
@@ -1340,9 +1346,8 @@ is the file inclusion.
 In [[mk]],
 a {\em file inclusion} is an {instruction} in the [[mkfile]],
 starting with [['<']]. You can include files to load the rules 
-and variables defined in those files files.
-%
-Those files can themselves include other files, recursively.
+and variables defined in those files,
+which can themselves include other files, recursively.
 Here is an example of a file inclusion:
 
 \begin{verbatim}
@@ -1357,12 +1362,13 @@ previously in the [[mkfile]] or in the environment.
 %
 Here, [[$objtype]] %$
 is a special \plan environment variable containing the
-type of architecture of the current machine (e.g., [[arm]], [[386]]).
+type of architecture you are targeting (e.g., [[arm]], [[386]]).
 \t cite? plan9 article? one of my books?
+% there is also cputype
 %
 You can then define for each architecture a specific [[mkfile]] with
 variables such as [[$CC]] or [[$LD]]
-containing the name of the native compiler and linker.
+containing the name of the corresponding compiler and linker.
 %
 Appendix~\ref{sec:mkfile-objtype} presents such an [[mkfile]]
 for the ARM architecture.
@@ -1404,6 +1410,8 @@ $PROG: $OBJS
 @
 %$
 %real-world: include (or -include)
+
+% can mention appendix again with real mkone?
 
 % with variables above, offers already some kind of genericity!
 % in fact many mkfiles are just  < /sys/src/cmd/mkone !
@@ -1473,9 +1481,9 @@ rules are the essence of a build system.
 \l rest is sugar
 %
 Indeed, once the build system has 
-loaded included files,
-expanded variables, and 
-substituted patterns,
+{\em loaded} included files,
+{\em expanded} variables, and 
+{\em substituted} patterns,
 what remains is a set of rules with {concrete} filenames 
 as targets and prerequisites.
 %
@@ -1524,7 +1532,7 @@ for the [[hello]] program of Section~\ref{sec:getting-started}.
 \n when target is hello for mk
 \l when x : y then arc. when x : y z then two arcs. too simple? (said later)
 %
-In this example, the graph is simply a {tree}.
+In this example, the graph is simply a {\em tree}.
 %
 The {\em nodes} in the graph of dependencies correspond to concrete filenames.
 \l pattern and vars has been substituted (said before a bit)
@@ -1655,17 +1663,6 @@ At this point, running [[mk]] should recompile [[world.c]]
 \end{figure}
 
 
-%claude:
-The choice of DFS over BFS is not arbitrary. A breadth-first
-traversal would visit the root first, then its children, then
-grandchildren---but you cannot decide whether the root needs
-rebuilding until you know the status of every descendant.
-DFS naturally solves this: by going deep first, it reaches
-the leaves (source files), confirms they exist, then
-backtracks, checking timestamps at each level. By the time
-the algorithm returns to a node, all its prerequisites have
-already been visited and their status is known.
-
 Once the graph of dependencies is built,
 \l and not so trivial
 the main algorithm behind [[mk]] is to perform a
@@ -1691,8 +1688,9 @@ If the file exists, then the algorithm can continue and the
 DFS can {backtrack} by going back up in the tree (step 4).
 %
 At this point, the algorithm checks whether the modification time 
-of the node is more recent than {all} its prerequisites,
+of the node is more recent than {\em all} its prerequisites,
 which have all been already visited by the DFS by now. 
+%said-later: essence of DFS vs BFS
 \t this is important. need recurse first on children. Indeed
 \t  in example hello is more recent than both objet files, but
 \t  still need to relink it at some point cos very deep there is a 
@@ -1719,6 +1717,18 @@ the graph (step 8 in Figure~\ref{fig:graph-hello-dfs}), because
 the ancestors should now be older than this newly-generated file.
 
 
+%claude:
+The choice of DFS over BFS (Breath-first search) is not arbitrary.
+A BFS traversal would visit the root first, then its children, then
+grandchildren---but you cannot decide whether the root needs
+rebuilding until you know the status of every descendant.
+%
+DFS naturally solves this: by going deep first, it reaches
+the leaves (source files), confirms they exist, then
+backtracks, checking timestamps at each level. By the time
+the algorithm returns to a node, all its prerequisites have
+already been visited and their status is known.
+
 % But subtle, if modify hello.c and world.c, then 
 % recompile both, but then dont want to run 2 times the 
 % linking program. 2 arcs, but one command!
@@ -1730,19 +1740,20 @@ the ancestors should now be older than this newly-generated file.
 % /\  many-to-many
 % \/
 
+%claude: BAD
+%The jump from tree to DAG is where build systems earn their
+%keep. In a tree, each file appears exactly once, so the DFS
+%visits every node once. In a DAG, a shared file like
+%[[common.h]] is reachable from multiple branches. A naive DFS
+%would visit it multiple times, potentially triggering redundant
+%rebuilds. This is why [[mk]] must track which nodes have already
+%been visited---the [[MADE]]/[[BeingMade]] status labels introduced
+%later in Section~\ref{sec:build-status} serve double duty as both
+%build-progress indicators and visited-node markers.
+%In the previous examples, the graph was simply a tree. However,
+
+
 %trans:
-%claude:
-The jump from tree to DAG is where build systems earn their
-keep. In a tree, each file appears exactly once, so the DFS
-visits every node once. In a DAG, a shared file like
-[[common.h]] is reachable from multiple branches. A naive DFS
-would visit it multiple times, potentially triggering redundant
-rebuilds. This is why [[mk]] must track which nodes have already
-been visited---the [[MADE]]/[[BeingMade]] status labels introduced
-later in Section~\ref{sec:build-status} serve double duty as both
-build-progress indicators and visited-node markers.
-In the previous examples, the graph was simply a tree. However,
-%
 most build systems support a more general form of graphs:
 {\em direct acyclic graphs} (DAGs), where
 the same node can be referenced multiple times from different branches.
@@ -1873,14 +1884,14 @@ to check if two recipes are equivalent.
 
 \end{enumerate}
 
-%claude:
-Approach~(3) is elegant because it cleanly separates {what to
-rebuild} (the master rule with a recipe) from {when to rebuild}
-(additional recipe-less rules that contribute extra prerequisites).
-This separation is what makes automatic dependency generation
-practical: tools like [[gcc -MM]] can emit simple ``target:~header''
-lines without needing to know the compilation recipe, and [[mk]]
-merges them with the master rule at graph-construction time.
+%claude: BAD
+%Approach~(3) is elegant because it cleanly separates {what to
+%rebuild} (the master rule with a recipe) from {when to rebuild}
+%(additional recipe-less rules that contribute extra prerequisites).
+%This separation is what makes automatic dependency generation
+%practical: tools like [[gcc -MM]] can emit simple ``target:~header''
+%lines without needing to know the compilation recipe, and [[mk]]
+%merges them with the master rule at graph-construction time.
 
 [[mk]] supports (1) and (3) but not (2).
 \l I dont think mk supports 2. it is using pointer equality, not string equal
@@ -1893,7 +1904,9 @@ dependencies from source files
 \l other? makedepend? furl?
 %
 Indeed, the output of such programs can simply be redirected
-in a [[.depend]] file that can be included from the [[mkfile]].
+in a [[.depend]] file that can be included from the [[mkfile]]
+(hence the need of commands such as [[make depend]] in many projects
+such as the Linux kernel).
 \l would be hard to give recipe, cos flags, but gcc -MM
 \l   could generate a template using metavariable though
 \l So then need to find master recipe again.
@@ -1983,16 +1996,16 @@ parser.h parser.c: parser.y
 \end{verbatim}
 \end{enumerate}
 
-%claude:
-The many-to-one problem is one of the trickiest aspects of build
-system design. A single command ([[yacc]]) produces multiple
-outputs, but the graph models dependencies per-file. If each
-output has its own rule, the build system has no way to know
-that both outputs come from the same invocation, so it runs the
-command twice. The solution---a single rule with multiple
-targets---requires [[mk]] to treat all targets of a rule as a
-unit: when any target is out of date, run the recipe once and
-update the modification times of {all} targets.
+%claude: bad:
+%The many-to-one problem is one of the trickiest aspects of build
+%system design. A single command ([[yacc]]) produces multiple
+%outputs, but the graph models dependencies per-file. If each
+%output has its own rule, the build system has no way to know
+%that both outputs come from the same invocation, so it runs the
+%command twice. The solution---a single rule with multiple
+%targets---requires [[mk]] to treat all targets of a rule as a
+%unit: when any target is out of date, run the recipe once and
+%update the modification times of {all} targets.
 
 However, the semantics for (1) and (2) are different. Indeed,
 with (1), if you modify [[parser.y]], then [[mk]] will
@@ -2021,7 +2034,8 @@ reaches the [[parser.c]] node with an obsolete modification time.
 \l could also each time reread mtime during DFS
 This is why, as you will see later in Section~\ref{sec:multi-targets},
 the arc from [[parser.h]] to [[parser.y]] contains also
-a reference to the [[parser.c]] node.
+a reference to the [[parser.c]] node
+(via an [[alltargets]] field).
 \t so mk put as BEINGMADE alltargets ?
 
 %trans: this conclude examples of graphs? 
@@ -2031,23 +2045,23 @@ a reference to the [[parser.c]] node.
 \label{sec:job-scheduler-principles}
 
 %trans: 
-In the previous sections,
+In the previous sections
 I have described the main features of the DSL of a build system,
 the underlying representation of dependencies in a build system,
 as well as the basic algorithm behind a build system (the DFS).
 I will now focus on the efficiency of a build system.
 
-%trans:
 %claude:
-The job scheduler is the third pillar of [[mk]], corresponding
-to the word ``efficiently'' in the thesis statement. Incrementality
-(only rebuilding what changed) is one dimension of efficiency;
-parallelism is another. The key insight is that the dependency
-graph already contains all the information needed for both:
-timestamps tell you {what} to rebuild, and the graph structure
-tells you {what can run concurrently}---two recipes are
-independent if neither target is an ancestor of the other.
+%The job scheduler is the third pillar of [[mk]], corresponding
+%to the word ``efficiently'' in the thesis statement. Incrementality
+%(only rebuilding what changed) is one dimension of efficiency;
+%parallelism is another. The key insight is that the dependency
+%graph already contains all the information needed for both:
+%timestamps tell you {what} to rebuild, and the graph structure
+%tells you {what can run concurrently}---two recipes are
+%independent if neither target is an ancestor of the other.
 
+%trans:
 A build system maintains dependencies between files efficiently firstly
 by being an {\em incremental} program. Indeed, if you modify
 only one source file, the build system will recompile and
@@ -2109,12 +2123,13 @@ recent than all its prerequisites
 (as shown in Figure~\ref{fig:graph-hello-labels}),
 so [[mk]] will not detect that it needs to re-link too [[hello]].
 %
-However, [[mk]] should not stop there and should declare
+However, [[mk]] should not stop there and should {\em not} declare
 that [[hello]] is up-to-date. Once the job to
 generate [[world.5]] has finished, [[hello]] will not be up-to-date.
 \l but can detect that situation so, as job queue not empty
 This is why the modification time of nodes associated with a job
-should be marked specially in the graph.
+should be marked specially in the graph 
+(as [[BeingMade]] as explained below).
 
 %coupling: same figure in chapter on findint outdated files
 \begin{figure}[!tbp]\centering
@@ -2143,17 +2158,17 @@ Made +------+-+     Made +------+-+
 \end{figure}
 
 
-%claude:
-The three-state machine below ([[NotMade]] $\to$ [[BeingMade]]
-$\to$ [[Made]]) is the key mechanism that ties the DFS to the
-job scheduler. Without [[BeingMade]], the DFS would have to
-block until each recipe finishes---no parallelism. With it,
-the DFS can ``fire and forget'': mark a node [[BeingMade]],
-enqueue its recipe, and continue exploring other branches.
-When the DFS encounters a [[BeingMade]] prerequisite, it knows
-to leave the parent as [[NotMade]]---the parent will be
-reconsidered in the next wave, after the prerequisite's job
-completes and transitions the node to [[Made]].
+%claude: Bad
+%The three-state machine below ([[NotMade]] $\to$ [[BeingMade]]
+%$\to$ [[Made]]) is the key mechanism that ties the DFS to the
+%job scheduler. Without [[BeingMade]], the DFS would have to
+%block until each recipe finishes---no parallelism. With it,
+%the DFS can ``fire and forget'': mark a node [[BeingMade]],
+%enqueue its recipe, and continue exploring other branches.
+%When the DFS encounters a [[BeingMade]] prerequisite, it knows
+%to leave the parent as [[NotMade]]---the parent will be
+%reconsidered in the next wave, after the prerequisite's job
+%completes and transitions the node to [[Made]].
 
 \label{sec:build-status}
 To keep track of the nodes involved in a job, [[mk]] uses
@@ -2163,7 +2178,7 @@ as shown in Figure~\ref{fig:graph-being-made}.
 %
 The algorithm behind [[mk]], exposed previously in Section~\ref{sec:algo-dfs},
 is modified as follows. After the graph is built, every status labels in 
-every nodes is set to [[NotMade]].
+every nodes is set to [[NotMade]] (by [<clrmade()>]).
 %
 During the DFS, if the algorithm reaches a leaf containing an existing
 file, the node is marked as [[Made]] (e.g., [[hello.c]] at step 3, and
@@ -2190,22 +2205,22 @@ is marked as [[BeingMade]], then the status should be kept as [[NotMade]].
 \end{itemize}
 
 %claude:
-The wave model is what trades latency for parallelism. A
-synchronous design (run the DFS once, blocking on each recipe
-in turn) is simpler but only ever uses one processor. The
-wave model lets [[mk]] launch every {independent} recipe in
-the current frontier, then wait for any one to finish, then
-launch whatever became eligible---which on a four-core
-machine can run four compiles concurrently with no extra
-bookkeeping in the rules. The cost of each wave is small:
-the DFS skips already-[[Made]] nodes and only re-examines
-the [[BeingMade]] frontier, so most of the work is done in
-the first wave.
+%The wave model is what trades latency for parallelism. A
+%synchronous design (run the DFS once, blocking on each recipe
+%in turn) is simpler but only ever uses one processor. The
+%wave model lets [[mk]] launch every {independent} recipe in
+%the current frontier, then wait for any one to finish, then
+%launch whatever became eligible---which on a four-core
+%machine can run four compiles concurrently with no extra
+%bookkeeping in the rules. The cost of each wave is small:
+%the DFS skips already-[[Made]] nodes and only re-examines
+%the [[BeingMade]] frontier, so most of the work is done in
+%the first wave.
 
 [[mk]] will run the DFS in a loop multiple times until
 the root node is marked as [[Made]].
-During each of those loops, the DFS will find new jobs
-to run in parallel.
+During each of those loops, of those {\em waves},
+the DFS will find new jobs to run in parallel.
 \l mk needs also to wait for process to finish in this loop.
 \l can have multiple waves before first wait if lots of processors!
 \l FIGURE with waves?
@@ -2246,7 +2261,7 @@ which is useful as [[mk]] is a command you will type a lot
 %dup: intro/getting-started
 However, this assumes the directory contains a file named [[mkfile]].
 %
-Moreover, it assumes the first target in this [[mkfile]] is the file 
+Moreover, it assumes the first target in this [[mkfile]] is the target 
 you want to build.
 %
 To change the default behavior, you can use the [[-f]] flag, as shown in
