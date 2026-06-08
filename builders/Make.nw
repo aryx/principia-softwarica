@@ -481,11 +481,11 @@ Finally, Appendix~\ref{chap:examples} presents examples of [[mkfile]]s.
 
 
 %claude:
-Before diving into the algorithms, it is worth understanding the data
-structures that [[mk]] operates on. A build system is fundamentally a
-graph problem, and the data structures below reflect that: rules
-describe edges, nodes represent files, and a symbol table maps
-names to values.
+%Before diving into the algorithms, it is worth understanding the data
+%structures that [[mk]] operates on. A build system is fundamentally a
+%graph problem, and the data structures below reflect that: rules
+%describe edges, nodes represent files, and a symbol table maps
+%names to values.
 
 %toc:
 In this chapter, I will present the core data structures of [[mk]]:
@@ -595,7 +595,7 @@ The value associated to a key can also be different things:
 a list of words for a variable,
 an integer representing a time for the modification time of a file, etc.
 %
-Thus, the value for a key in [<Symtab>] is a {union} containing
+Thus, the value in [<Symtab>] is a {union} containing
 either an integer (in [[Symtab.u.value]]) or a generic
 pointer (in [[Symtab.u.ptr]]).
 
@@ -616,6 +616,8 @@ of lists, also known as an array of {\em buckets}:
 // hash<(string * enum<Namespace>), 'a> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
 @
+%padism:
+%ocamlism:
 <<constant [[NHASH]]>>=
 #define	NHASH	4099
 @
@@ -647,7 +649,7 @@ that hash to the same slot may belong to entirely different namespaces
 and still chain together, as in the diagram below where a variable
 ([[S_VAR]]) and a target ([[S_TARGET]]) coexist in bucket~17:
 
-\begin{verbatim}
+\begin{vdiagram}
   hash[]
    +------+
  0 |  *---+--> ("CFLAGS",S_VAR)----+
@@ -660,17 +662,17 @@ and still chain together, as in the diagram below where a variable
    +------+   .u.ptr -> Rule         .u.ptr -> Word v
    |  ... |                                        nil
    +------+
-\end{verbatim}
+\end{vdiagram}
 
 %claude:
-[<symlook()>] does linear chain walking, so collisions stay cheap as
-long as buckets are short. The chosen size [[NHASH=4099]] is prime to
-spread keys evenly, and the multiplier [[HASHMUL=79]] is folded byte
-by byte into the running hash. The lazy-create path (when [[install]]
-is non-[[nil]]) means that callers can use [<symlook()>] both as a
-lookup and as a defaulting insert in one call---a common idiom that
-avoids the lookup-then-insert race that would be necessary in a
-threaded implementation.
+%[<symlook()>] does linear chain walking, so collisions stay cheap as
+%long as buckets are short. The chosen size [[NHASH=4099]] is prime to
+%spread keys evenly, and the multiplier [[HASHMUL=79]] is folded byte
+%by byte into the running hash. The lazy-create path (when [[install]]
+%is non-[[nil]]) means that callers can use [<symlook()>] both as a
+%lookup and as a defaulting insert in one call---a common idiom that
+%avoids the lookup-then-insert race that would be necessary in a
+%threaded implementation.
 
 %dup: Linker.nw
 The main interface to the symbol table is the
@@ -730,7 +732,7 @@ If [<symlook()>] does not find the key and the install parameter is not
 <<[[symlook()]] if symbol not found>>=
 if(install == nil)
     return nil;
-
+// else
 s = (Symtab *)Malloc(sizeof(Symtab));
 s->name = sym;
 s->space = space;
@@ -794,7 +796,8 @@ symtraverse(int space, void (*fn)(Symtab*))
 
 %\subsection{[[setvar()]]}
 
-Finally, because setting the value of a variable is a common operation
+Finally, because setting (or overriding) the value of a variable
+is a common operation
 in [[mk]], the function below provides a convenient
 wrapper around [<symlook()>]:
 
@@ -865,8 +868,8 @@ I will also gradually describe more namespaces.
 [<specialvars>] is used to initialize entries in the symbol table
 in [[inithash()]] (called from [<main()>]):
 
-% main -> <>
 <<function [[inithash]]>>=
+/// main -> <>
 void
 inithash(void)
 {
@@ -1042,9 +1045,8 @@ wtos(Word *w, int sep)
 
 %crossref:
 [<wtos()>] relies on the [<Bufblock>] data structure
-described in Appendix~\ref{sec:bufblock}.
-%
-[<Bufblock>] is an implementation of a {\em string buffer}.
+described in Appendix~\ref{sec:bufblock}, which is
+an implementation of a {\em string buffer}.
 It implements efficiently string concatenation to avoid quadratic
 complexity when concatenating a set of strings together.
 \l will use Bufblock many times. 
@@ -1063,8 +1065,8 @@ I describe it in Appendix~\ref{chap:utilities} and not here.
 
 %trans:
 As mentioned in Section~\ref{sec:rule-essence}, the {rule}
-is the most important concepts in a build system, and
-so the most important data structures in [[mk]].
+is the most important concept in a build system, and
+so the most important data structure in [[mk]].
 %
 It represents the content of an [[mkfile]] and it guides
 the creation of the graph of dependencies.
@@ -1138,7 +1140,8 @@ short 		line;		/* source line */
 \l put in Debugging support section?
 
 Those fields will be useful when 
-reporting errors in the [[mkfile]] to the user.
+reporting errors in the [[mkfile]] to the user
+(see Section~\ref{sec:SYNERR}).
 
 
 
@@ -1201,7 +1204,7 @@ a pattern: [['&']], hence the code in the macro below:
 @
 
 The difference between those two special characters
-is explained in the manual page of [[mk]]:
+is explained in the manual page of [[mk]] (in [[docs/man/1/mk]]):
 \begin{itemize}
 
 \item [['%']] matches a maximal length string of any characters
@@ -1270,6 +1273,7 @@ addrule(char *target, Word *prereqs, char *recipe,
         Word *alltargets, int attr, int hline, char *prog)
 {
     Rule *r = nil;
+    bool reuse = false;
     <<[[addrule()]] other locals>>
 
     <<[[addrule()]] find if rule already exists, set [[reuse]], update [[r]]>>
@@ -1284,7 +1288,6 @@ addrule(char *target, Word *prereqs, char *recipe,
     r->attr = attr;
     r->line = hline;
     <<[[addrule()]] set more fields>>
-
     <<[[addrule()]] indexing [[r]] by target in [[S_TARGET]]>>
 
     <<[[addrule()]] if meta rule>>
@@ -1297,12 +1300,13 @@ addrule(char *target, Word *prereqs, char *recipe,
 %ocaml: use record, and no need wrapper constructor, construct directly with
 % the fields
 
+% prog parameter ??
+
 If the rule is a simple rule, [[mk]] populates [<rules>]:
 
 <<[[addrule()]] if simple rule>>=
-<<[[addrule()]] return if reuse, to not add the rule in a list>>
+<<[[addrule()]] return if [[reuse]], to not add the rule in a list>>
 // else
-
 // add_list(r, rules, lr)
 if(rules == nil)
     rules = lr = r;
@@ -1321,10 +1325,9 @@ whether the target contains one of the special pattern character:
 <<[[addrule()]] if meta rule>>=
 if(charin(target, "%&") || (attr&REGEXP)){
     r->attr |= META;
-    <<[[addrule()]] return if reuse, to not add the rule in a list>>
+    <<[[addrule()]] return if [[reuse]], to not add the rule in a list>>
     // else
     <<[[addrule()]] if REGEXP attribute>>
-
     // add_list(r, metarules, lmr)
     if(metarules == nil)
         metarules = lmr = r;
@@ -1348,7 +1351,7 @@ I will explain in Section~\ref{sec:escaped-character}.
 For example, when the target name
 is put inside a quote as in [['myfile%has%weird%characters.doc']],
 the target should not be considered a pattern.
-
+%
 For the rule attribute [<REGEXP>] used above, see Section~\ref{sec:regexp}.
 
 
@@ -1356,16 +1359,16 @@ For the rule attribute [<REGEXP>] used above, see Section~\ref{sec:regexp}.
 \label{sec:indexing-target}
 
 %claude:
-The [[Rule.chain]] field and the [[Rule.next]] field serve
-different purposes and are easy to confuse. [[Rule.next]] links
-{all} rules in the mkfile in order of appearance (a flat list).
-[[Rule.chain]] links only the rules that share the {same target},
-forming a per-target chain stored in the [[S_TARGET]] namespace
-of the symbol table. When [<applyrules()>] looks up a target,
-it follows the [[chain]] to find all rules for that target;
-typically only one (the {master rule}) has a recipe, while
-the others add extra prerequisites (e.g., from [[\texttt{.depend}]]
-files).
+%The [[Rule.chain]] field and the [[Rule.next]] field serve
+%different purposes and are easy to confuse. [[Rule.next]] links
+%{all} rules in the mkfile in order of appearance (a flat list).
+%[[Rule.chain]] links only the rules that share the {same target},
+%forming a per-target chain stored in the [[S_TARGET]] namespace
+%of the symbol table. When [<applyrules()>] looks up a target,
+%it follows the [[chain]] to find all rules for that target;
+%typically only one (the {master rule}) has a recipe, while
+%the others add extra prerequisites (e.g., from [[\texttt{.depend}]]
+%files).
 
 It is useful when building the graph of dependencies to quickly
 know the rule associated to a specific target.
@@ -1404,7 +1407,7 @@ struct Rule	*chain;		/* hashed per target */
 %  the Rule.chain, as shown in Figure X"
 
 
-Here is the code to update the symbol table in <[addrule()]>:
+Here is the code to update the symbol table in [<addrule()>]:
 
 <<[[addrule()]] other locals>>=
 Symtab *sym;
@@ -1453,11 +1456,7 @@ The code below detects whether a previous rule was using the
 same target and prerequisites, in which case [[mk]] needs to
 reuse and overwrite this previously allocated rule:
 
-<<[[addrule()]] other locals>>=
-bool reuse;
-@
 <<[[addrule()]] find if rule already exists, set [[reuse]], update [[r]]>>=
-reuse = false;
 sym = symlook(target, S_TARGET, nil);
 if(sym){
     for(r = sym->u.ptr; r; r = r->chain)
@@ -1467,6 +1466,7 @@ if(sym){
         }
 }
 @
+%old: reuse = false;
 %ocaml: return a warning at least, but overwrite otherwise it will
 % be detected by ambiguous later.
 %ocaml: can have a :O: attribute clearly saying you overwrite! @override spirit.
@@ -1511,7 +1511,7 @@ if(!reuse){
 %old: was after the indexing of S_TARGET, but seems unrelated,
 % so I put it earlier, with the code to set misc fields.
 
-<<[[addrule()]] return if reuse, to not add the rule in a list>>=
+<<[[addrule()]] return if [[reuse]], to not add the rule in a list>>=
 if(reuse)
     return;
 @
@@ -1729,6 +1729,8 @@ struct Arc
 %ocaml: I think you just need the recipe and some flags of the rule,
 % so separate rule vs rule_exec
 
+% shared ? GC ?
+
 As I mentioned in Section~\ref{sec:labeled-tree} 
 and Figure~\ref{fig:graph-hello-labels},
 an arc is labeled with a rule, hence the field [<Arc.r>] above.
@@ -1808,16 +1810,16 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 % and [[jobs]]
 
 %claude:
-A [<Job>] captures everything needed to run a recipe and update
-the graph afterward. It carries more than just the recipe: the
-list of target nodes ([[n]]) is needed so that after the recipe
-completes, [[mk]] can mark all those nodes [<MADE>] and update
-their modification times. The word lists ([[t]] for targets, [[p]]
-for prerequisites) are needed to set the special shell variables
-[[\$target]], [[\$prereq]], and [[\$stem]] before invoking the recipe.
-The separation between the node list and the word lists exists
-because the same information is needed in two forms: nodes for
-graph updates, words for the shell environment.
+%A [<Job>] captures everything needed to run a recipe and update
+%the graph afterward. It carries more than just the recipe: the
+%list of target nodes ([[n]]) is needed so that after the recipe
+%completes, [[mk]] can mark all those nodes [<MADE>] and update
+%their modification times. The word lists ([[t]] for targets, [[p]]
+%for prerequisites) are needed to set the special shell variables
+%[[\$target]], [[\$prereq]], and [[\$stem]] before invoking the recipe.
+%The separation between the node list and the word lists exists
+%because the same information is needed in two forms: nodes for
+%graph updates, words for the shell environment.
 
 %trans:
 Finally, the last core data structure of [[mk]] is the
@@ -1947,7 +1949,7 @@ indexed by [<S_TARGET>] in the symbol table) versus the {dynamic} side
 ([<Node>]s and [<Arc>]s built once a target is requested, with
 [<Job>]s carved out of that graph for the scheduler):
 
-\begin{verbatim}
+\begin{vdiagram}
    parsing phase                building phase
    -------------                --------------
 
@@ -1974,7 +1976,8 @@ indexed by [<S_TARGET>] in the symbol table) versus the {dynamic} side
                         | n *----+--> Node list
                         | t,p,stem|    (targets, prereqs)
                         +--------+
-\end{verbatim}
+\end{vdiagram}
+%yoann1: I like the idea of a global DS diagram, but not super useful; maybe take hello.mk as an example and show concrete rules, metarules, target1, Job, Arc, etc with concrete values from hello.ml and the run of mk to build hello.5, world.5, and hello?
 
 %claude:
 The split is deliberate. [<Rule>]s describe the [[mkfile]] verbatim
@@ -2630,6 +2633,7 @@ populate rules, definitions, or inclusions.
 
 \section{[[parse()]]}
 \label{sec:parse}
+\label{sec:SYNERR}
 
 %trans:
 Before showing the code of [<parse()>],
@@ -12240,6 +12244,7 @@ symstat(void)
 
 % Also call Exit, not exit! so carefully wait for children.
 
+% report line x col when error?
 
 
 
