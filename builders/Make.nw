@@ -1,15 +1,16 @@
 \documentclass[12pt]{report}
-%alt: [12pt, twocolumn, landscape]
 
 % last:
 % - https://blog.janestreet.com/how-we-accidentally-built-a-better-build-system-for-ocaml-index/
 
+\input{../docs/latex/Packages}
+\input{../docs/latex/Noweb}
+\input{../docs/latex/Config}
+\input{../docs/latex/Macros}
+
 %******************************************************************************
 % Prelude
 %******************************************************************************
-\newif\iffinal
-\newif\ifverbose
-\finaltrue\verbosefalse % see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -83,45 +84,7 @@
 % - add figures
 % - add explanations
 
-%------------------------------------------------------------------------------
-% Packages
-%------------------------------------------------------------------------------
 
-%TODO: switch to the simpler
-%\input{latex/Packages}
-%\input{latex/Config}
-%\input{latex/Macros}
-
-\usepackage{xspace}
-\usepackage{verbatim}
-%note: required by 'syncweb -to_tex' for the \t \l \n in this file
-\usepackage{fancyvrb}
-\usepackage{url}
-\usepackage{hyperref}
- \hypersetup{colorlinks=true}
-\usepackage[pageref]{backref}
- \def\backref{{\footnotesize cited page(s)}~}
-\usepackage{booktabs} 
- \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
-\usepackage{graphicx}
-
-\input{../docs/latex/Config}
-\usepackage{../docs/latex/noweb}
-\noweboptions{footnotesizecode,nomargintag}
-%% %note: allow chunk on different pages, less white space at bottom of pages
- \def\nwendcode{\endtrivlist \endgroup}
- \let\nwdocspar=\par
-\usepackage{../docs/latex/syncweb}
-
-%------------------------------------------------------------------------------
-% Macros
-%------------------------------------------------------------------------------
-\input{../docs/latex/Macros}
-
-%------------------------------------------------------------------------------
-% Config
-%------------------------------------------------------------------------------
-\allcodefalse
 % ifallcode is used for:
 %  - forward decl, func decl, extern decl, #ifdef, pragmas (stuff in Extra.nw)
 
@@ -133,7 +96,7 @@
 {\Huge 
 Principia Softwarica: The Build System [[mk]]
 }\\
-{version 0.1}
+{version 1.0}
 }
 
 \author{
@@ -145,28 +108,28 @@ Andrew Hume
 }
 
 \maketitle 
-%\onecolumn
 \hrule
 \input{../docs/latex/Copyright}
 \input{../docs/latex/CopyrightPlan9}
 \hrule
-%\twocolumn
 
 \begingroup
 \hypersetup{linkcolor=blue}
-% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
 \tableofcontents
 \endgroup
 
-%******************************************************************************
-% Body
-%******************************************************************************
+%###############################################################################
 
 %******************************************************************************
 \chapter{Introduction}
 %******************************************************************************
 
 #include "Intro.nw"
+
+%******************************************************************************
+%\chapter{Overview}
+%******************************************************************************
+% in Intro.nw too
 
 \section{Code organization}
 
@@ -6354,71 +6317,73 @@ with a function called [<dorecipe()>].
 The following sections will explain the code of [<mk()>], [<work()>], and
 [<dorecipe()>].
 
-\section{Mtime vs content-hash change detection}
-\label{sec:mtime-vs-hash}
+%\section{DFS vs BFS}
 
-%claude:
-The core question this chapter answers is ``has this file
-changed since the last build?''. Every build system has to
-answer it, and there are only two real strategies. The
-{timestamp} strategy compares the file's last-modified time
-against the mtime of its dependencies: if any dependency is
-newer than the target, the target is out of date. The
-{content-hash} strategy compares a cryptographic hash of
-the file's contents against a recorded hash from the last
-build: if the hash changed, the file changed. The choice
-shapes almost everything else a build system does.
-
-%claude:
-Timestamps are simple, universal, and free. Every \unix
-filesystem records [[mtime]] to one-second resolution, so
-the check is a single [[stat()]] call per file and a few
-integer comparisons. [[mk]] uses this strategy, as do
-[[make]], [[redo]], [[tup]], [[ninja]] (with a bit of
-caching on top), and every build tool written before 2000.
-The weakness is that timestamps are an approximate proxy
-for content: clock skew across machines breaks them, NFS
-atomicity is subtle, restoring files from a backup resets
-their mtime and triggers spurious rebuilds, a touched-but-
-unchanged file forces a rebuild you did not need, and an
-edited-and-saved-back-to-the-same-bytes file does too. The
-failure modes are small in absolute terms and tolerable in
-a local development loop.
-
-%claude:
-Content hashing sidesteps all of that. [[Bazel]] (Google,
-2015, descended from internal Blaze), [[Buck]] (Facebook),
-[[Nix]] (Eelco Dolstra's 2004 thesis work, now a package
-manager), [[Shake]] (Neil Mitchell's Haskell library),
-and [[Pants]] all hash file contents to decide what is
-out of date. Hashing is more expensive---every input needs
-to be read in full every build---but it enables things
-mtime-based systems cannot reach: hermetic remote build
-caches that can serve any user who happens to need the
-same inputs, reproducible builds that detect accidental
-input changes, and distributed execution that runs compile
-jobs on a pool of machines. Hashing is what makes Google's
-build farm and Nix's binary cache possible at all; an
-mtime-based system cannot ever safely share cached outputs
-between users or machines because mtimes are meaningless
-across hosts.
-
-%claude:
-[[mk]] is firmly on the mtime side. The algorithm in
-[<work()>] walks the dependency graph in depth-first order,
-compares [[time(target) < max(time(deps))]] using the
-[[Time]] field on each [[Node]], and marks the target
-[<NOTMADE>] or [<MADE>] accordingly. There is no hash, no
-cache file, no stored ``what did this look like last
-build'' state at all---the filesystem's mtime is the only
-persistence. The simplicity is the point: the whole
-[[mk]] binary is a few thousand lines, most of the state
-fits in one process's memory, and the build loop is
-something you can trace by hand. The sharing and
-reproducibility benefits of hash-based systems are real,
-but they come with thousands of lines of cache management,
-remote-execution protocols, and sandboxing---a different
-kind of tool for a different kind of build.
+%\section{Mtime vs content-hash change detection}
+%\label{sec:mtime-vs-hash}
+%
+%%claude:
+%The core question this chapter answers is ``has this file
+%changed since the last build?''. Every build system has to
+%answer it, and there are only two real strategies. The
+%{timestamp} strategy compares the file's last-modified time
+%against the mtime of its dependencies: if any dependency is
+%newer than the target, the target is out of date. The
+%{content-hash} strategy compares a cryptographic hash of
+%the file's contents against a recorded hash from the last
+%build: if the hash changed, the file changed. The choice
+%shapes almost everything else a build system does.
+%
+%%claude:
+%Timestamps are simple, universal, and free. Every \unix
+%filesystem records [[mtime]] to one-second resolution, so
+%the check is a single [[stat()]] call per file and a few
+%integer comparisons. [[mk]] uses this strategy, as do
+%[[make]], [[redo]], [[tup]], [[ninja]] (with a bit of
+%caching on top), and every build tool written before 2000.
+%The weakness is that timestamps are an approximate proxy
+%for content: clock skew across machines breaks them, NFS
+%atomicity is subtle, restoring files from a backup resets
+%their mtime and triggers spurious rebuilds, a touched-but-
+%unchanged file forces a rebuild you did not need, and an
+%edited-and-saved-back-to-the-same-bytes file does too. The
+%failure modes are small in absolute terms and tolerable in
+%a local development loop.
+%
+%%claude:
+%Content hashing sidesteps all of that. [[Bazel]] (Google,
+%2015, descended from internal Blaze), [[Buck]] (Facebook),
+%[[Nix]] (Eelco Dolstra's 2004 thesis work, now a package
+%manager), [[Shake]] (Neil Mitchell's Haskell library),
+%and [[Pants]] all hash file contents to decide what is
+%out of date. Hashing is more expensive---every input needs
+%to be read in full every build---but it enables things
+%mtime-based systems cannot reach: hermetic remote build
+%caches that can serve any user who happens to need the
+%same inputs, reproducible builds that detect accidental
+%input changes, and distributed execution that runs compile
+%jobs on a pool of machines. Hashing is what makes Google's
+%build farm and Nix's binary cache possible at all; an
+%mtime-based system cannot ever safely share cached outputs
+%between users or machines because mtimes are meaningless
+%across hosts.
+%
+%%claude:
+%[[mk]] is firmly on the mtime side. The algorithm in
+%[<work()>] walks the dependency graph in depth-first order,
+%compares [[time(target) < max(time(deps))]] using the
+%[[Time]] field on each [[Node]], and marks the target
+%[<NOTMADE>] or [<MADE>] accordingly. There is no hash, no
+%cache file, no stored ``what did this look like last
+%build'' state at all---the filesystem's mtime is the only
+%persistence. The simplicity is the point: the whole
+%[[mk]] binary is a few thousand lines, most of the state
+%fits in one process's memory, and the build loop is
+%something you can trace by hand. The sharing and
+%reproducibility benefits of hash-based systems are real,
+%but they come with thousands of lines of cache management,
+%remote-execution protocols, and sandboxing---a different
+%kind of tool for a different kind of build.
 
 \section{[[mk()]]}
 \label{sec:mk}
@@ -8134,7 +8099,7 @@ if(sym == nil)
 
 % because up to date target anyway?
 
-\section{Process management, [[Exit()]]}
+\section{Process lifecycle: [[Exit()]]}
 \l quitting gracefully
 
 When one of the children of [[mk]] returns an error,
@@ -8905,7 +8870,7 @@ if(f < 0) {
 
 
 %******************************************************************************
-\chapter{Debugging and Profiling Support TODO}
+\chapter{Debugging and Profiling Support}
 %******************************************************************************
 \label{chap:debugging-support}
 
@@ -9353,7 +9318,7 @@ prusage(void)
 
 
 %******************************************************************************
-\chapter{Advanced Features TODO}
+\chapter{Advanced Features}
 %******************************************************************************
 \label{chap:advanced}
 
@@ -9734,7 +9699,7 @@ if(buf){
 % we could call wait() in a loop to discards all those processes
 % until no children process.
 
-\section{Dynamic [[mkfile]]: [[<|]]{\em prog}}
+\section{Dynamic [[mkfile]]: [[<| <prog> ]]}
 \label{sec:dynamic-mkfile}
 
 %claude:
@@ -9873,7 +9838,7 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 
 
 
-\section{Substitution variables: [[${]]{\em name}[[:]]{\em pattern}[[=]]{\em subst}[[}]]}
+\section{Substitution variables: [[$<name>:<pattern>=<subst>]]}
 %$
 \label{sec:transform-list}
 \label{sec:var-generator}
@@ -10226,7 +10191,7 @@ attribute(Node *n)
 
 
 
-\subsection{Virtual target: [[:V:]]}
+\subsection{[[V]]irtual targets: [[:V:]]}
 \label{sec:virtual}
 %real-world: .PHONY
 
@@ -10306,7 +10271,7 @@ if((node->flags&VIRTUAL) || (access(node->name, AEXIST) != OK_0)){
 \t but then what if no prereq? then time is 1. important?
 
 
-\subsection{Deleting a target when the recipe returns an error: [[:D:]]}
+\subsection{[[D]]eleting a target when the recipe returns an error: [[:D:]]}
 
 % seems safe, but really the tool involved should not generate
 % the target in the first place.
@@ -10366,7 +10331,7 @@ delete(char *name)
 @
 %ugly: bug if filename contain open parenthesis
 
-\subsection{Not printing the recipe (quiet mode): [[:Q:]]}
+\subsection{[[Q]]uiet mode (not printing the recipe): [[:Q:]]}
 % work with -n too? nflag || !QUIET?
 
 <<[[Rule_attr]] cases>>=
@@ -11597,7 +11562,7 @@ if(aflag)
 @
 %old: weoutofdate = aflag;
 
-\section{Recursive [[mk]]}
+\section{Recursive [[mk]]: [[$MKFLAGS]] and [[$MKARGS]]}
 
 %claude:
 {Recursive [[mk]]} is the pattern of one [[mkfile]]'s recipe
@@ -11943,9 +11908,9 @@ order. [[mk]] implements this core cleanly in about
 what all the larger systems are doing underneath.
 
 
-%******************************************************************************
+%###############################################################################
 \appendix
-%******************************************************************************
+%###############################################################################
 
 %******************************************************************************
 \chapter{Debugging}
@@ -12495,10 +12460,9 @@ maketmp(void)
 
 
 %******************************************************************************
-\chapter{Examples of [[mkfile]]s TODO}
+\chapter{Examples of [[mkfile]]s}
 %******************************************************************************
 \label{chap:examples}
-
 
 %How add to an existing variable? e.g. CFLAGS+= -p?
 % easy, CFLAGS= -xxx $CFLAGS
@@ -12510,26 +12474,237 @@ maketmp(void)
 \section{The [[mkfile]] of [[mk]]}
 % relies on next section
 
+<<mk/mkfile>>=
+TOP=../..
+<$TOP/mkfiles/$objtype/mkfile
+
+TARG=mk
+
+OFILES=\
+    globals.$O\
+    utils.$O\
+    dumpers.$O\
+        archive.$O\
+        bufblock.$O\
+        env.$O\
+        file.$O\
+        graph.$O\
+        lex.$O\
+        main.$O\
+        match.$O\
+        mk.$O\
+        parse.$O\
+        rc.$O\
+        recipe.$O\
+        rule.$O\
+        run.$O\
+        shprint.$O\
+        symtab.$O\
+        var.$O\
+        varsub.$O\
+        word.$O\
+    Plan9.$O\
+
+HFILES=fns.h mk.h
+
+<$TOP/mkfiles/mkone
+@
+
 %bootstrap:
 % can also bootstrap simply using a shell script for the very first time.
 % show the script? (just mk clean; mk > bootstrap.sh), could
 % even be a target of the mkfile :)
 
 
-\section{The [[mkfile]]s of \plan}
-% mentioned in mk.ms ?
+\section{The [[mkfile]]s of \principia}
+%alt: of \plan
 
-\subsection{[[/$objtype/mkfile]] for the ARM} %$
+\subsection{[[$objtype/mkfile]] for the ARM}
 \label{sec:mkfile-objtype}
 
-\subsection{[[/sys/src/mkfile.proto]]}
+<<mkfiles/arm/mkfile>>=
+<$TOP/mkfiles/mkfile.proto
+
+CC=5c
+LD=5l
+O=5
+AS=5a
+@
+
+\subsection{[[mkfiles/mkfile.proto]]}
+
+<<mkfiles/mkfile.proto>>=
+ROOT=$TOP/ROOT
+
+#
+# common mkfile parameters shared by all architectures
+#
+
+OS=58
+CPUS=386 arm
+
+CFLAGS=-FTVw -I$TOP/include/arch/$objtype -I$TOP/include/ALL
+LDFLAGS=-L$ROOT/arch/$objtype/lib
+
+LEX=lex
+YACC=iyacc
+
+# recursive mk will have these set from the parent
+# this is never what we want.  clear them
+#pad: if you remove those settings, you will get an error 
+# in windows/plumb: "don't know how to make '/386/include/u.h^A...."
+
+TARG=
+OFILES=
+HFILES=
+YFILES=
+@
 
 
-\subsection{[[/sys/src/cmd/mkone]]}
+\subsection{[[mkfiles/mkone]]}
 % also mkmany
 
-\subsection{[[/sys/src/cmd/mklib]]}
+<<mkfiles/mkone>>=
+# -*- sh -*-
+YFLAGS=-d
+
+BIN=$ROOT/arch/$objtype/bin
+all:V:  $O.out
+
+
+$O.out: $OFILES $LIB
+        $LD $LDFLAGS -o $target $prereq
+
+
+%.$O:   $HFILES         # don't combine with following %.$O rules
+
+%.$O:   %.c
+        $CC $CFLAGS $stem.c
+
+%.$O:   %.s
+        $AS $AFLAGS $stem.s
+
+
+y.tab.h y.tab.c:        $YFILES
+        $YACC $YFLAGS $prereq
+
+lex.yy.c:       $LFILES
+        $LEX $LFLAGS $prereq
+
+
+install:V:      $BIN/$TARG
+
+$BIN/$TARG:     $O.out
+        cp $prereq $target
+
+installall:V:
+        for(objtype in $CPUS)
+                mk install
+
+uninstall:V:
+        rm -f $BIN/$TARG
+
+allall:V:
+        for(objtype in $CPUS)
+                mk all
+
+clean:V:
+        rm -f *.[$OS] [$OS].out y.tab.? lex.yy.c y.debug y.output $TARG $CLEANFILES
+
+nuke:V:
+        rm -f *.[$OS] [$OS].out y.tab.? lex.yy.c y.debug y.output *.acid $TARG $CLEANFILES
+
+
+
+safeinstall:V: $O.out
+        test -e $BIN/$TARG && mv $BIN/$TARG $BIN/_$TARG
+        cp $prereq $BIN/$TARG
+
+safeinstallall:V:
+        for (objtype in $CPUS)
+                mk safeinstall
+
+
+%.acid: %.$O $HFILES
+        $CC $CFLAGS -a $stem.c >$target
+
+#pad: generate warnings with mk-rc.byte
+#%.man: $MAN/$stem
+#       cp $stem.man $MAN/$stem
+
+man:V:  $TARG.man
+@
+
+\subsection{[[mkfiles/mklib]]}
 % also mksyslib
+
+<<mkfiles/mklib>>=
+YFLAGS=-d
+
+all:V:  $LIB
+
+$LIB:   $OFILES
+        iar vu $LIB $prereq
+
+
+%.$O:   $HFILES         # don't combine with following %.$O rules
+
+%.$O:   %.c
+        $CC $CFLAGS $CFLAGS_EXTRA $stem.c
+
+%.$O:   %.s
+        $AS $AFLAGS $stem.s
+
+
+y.tab.h y.tab.c:        $YFILES
+        $YACC $YFLAGS $prereq
+
+lex.yy.c:       $LFILES
+        $LEX $LFLAGS $prereq
+
+
+install:VQ: $LIB
+
+uninstall:VQ:
+        echo nothing to uninstall
+
+installall:V:
+        for (objtype in $CPUS)
+                mk install
+
+%.all:V:
+        for (objtype in $CPUS)
+                mk $stem
+
+
+clean:V:
+        rm -f *.[$OS] y.tab.? y.output y.error $CLEANFILES
+
+nuke:V:
+        rm -f *.[$OS] y.tab.? y.output y.error $CLEANFILES $LIB
+@
+
+\subsection{[[mkfiles/mkdirs]]}
+% also mkdirsmany
+
+<<mkfiles/mkdirs>>=
+# by using '@' below, rc will create a subprocess for each entry,
+# which avoids the need for a pushd/popd in other shells.
+
+all:VQ:
+        for (i in $DIRS) @{
+            echo $i
+                cd $i
+                mk $MKFLAGS $target
+        }
+
+install uninstall clean nuke:QV:
+        for (i in $DIRS) @{
+            echo $i
+                cd $i
+                mk $MKFLAGS $target
+        }
+@
 
 
 % and then the instances
@@ -12571,11 +12746,8 @@ Here is a list of the identifiers used, and where they appear.
 Underlined entries indicate the place of definition.
 This index is generated automatically.
 
-%\twocolumn does not work
 \nowebindex
 
-
-%\chapter{References} 
 \addcontentsline{toc}{chapter}{References}
 
 \bibliography{../docs/latex/Principia}
