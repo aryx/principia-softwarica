@@ -2701,7 +2701,7 @@ and stores those entities in different globals
 %said-later: also patrules and target1
 %ocaml: return those instead of modifying globals
 %toc:
-[<parse()>] is a complex function that relies on many other
+[<parse()>] is a complex function that relies on many helper
 functions to 
 scan a file,
 identify rules,
@@ -2767,7 +2767,7 @@ int mkinline;
 @
 \t rename just inline? conflicting keyword? rename lineno.
 %ocaml: so many code in this chapter that updates mkinline, ugly; a bit better 
-% in mk-in-ocaml where it is more centralized
+% in omk where it is more centralized
 
 Both globals are used in the following macro to report syntax 
 errors to the user:
@@ -3333,7 +3333,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
     int line = mkinline;
 
     if(esc != '\'')
-        return OK_1;
+        return OK_1; // " and \ are not valid escape for rc, only '
 
     while((c = nextrune(bp, false)) > 0){
         if(c == '\''){
@@ -3407,7 +3407,7 @@ if(c != '\''){
 %trans:
 Once [<parse()>] assembled a line,
 %
-it can analyze the line with [[rhead()]] to return the 
+it can analyze the line with [<rhead()>] to return the 
 special character {separator} involved in the line.
 \l rhead for rule head, or maybe read head because used not only for rule.
 %dup: parsing/parse
@@ -3478,9 +3478,9 @@ at the bottom of Figure~\ref{fig:mk-rhead-overwrite}.
    |foo.5 : foo.c foo.h|          rhead()
    +-------------------+
 
- line     p
-   |      |                         after
-   v------v------------+         *p++ = '\0'
+ line      p
+   |       |                         after
+   v-------v-----------+         *p++ = '\0'
    |foo.5 0 foo.c foo.h|
    +------+------------+
  h          t
@@ -3541,7 +3541,7 @@ if(empty_words(*h) && sep != '<' && sep != '|') {
 \subsubsection{Finding special characters, [[charin()]]}
 
 %trans:
-I mentioned the functions [[charin()]] a few times before.
+I mentioned the functions [<charin()>] a few times before.
 %crossref:
 [<addrule()>] called [[charin()]] to check
 whether the target contains a special pattern character.
@@ -3602,8 +3602,8 @@ operates on a plain string instead of a string buffer.
 \l return chars read to form a rune in n, correspond to advanced in buffer
 In both cases, the string is a sequence of bytes using the UTF-8 encoding
 and terminated by the null character.
-
-[[utfrune()]] is another function from the C library. It checks
+%
+[[utfrune()]] is another function from the C library we mentioned before. It checks
 whether a rune is part of one of the characters in a set of characters.
 \l (called the ``pattern'' above). but confusing with mk pattern.
 
@@ -3758,6 +3758,9 @@ is just the null character
 %crossref:
 (see the code of [<newword()>]).
 
+% why need to return an empty word? caller assume always a valid Word pointer?
+%ocaml: simpler, return a list
+
 \subsubsection{Assembling the next words, [[nextword()]]}
 \l rename nextwords?
 
@@ -3861,13 +3864,14 @@ Thus, there is no difference between writing a rule like
 
 As I mentioned before, [<nextword()>] must handle quoted strings.
 %
-As opposed to [<assline()>], which {inputs} a quoted string,
-or [<charin()>], which {skips} over a quoted string, [<nextword()>]
-{expands} a quoted string and stores the expansion in the buffer [[b]].
+As opposed to [<assline()>], which {\em inputs} a quoted string,
+or [<charin()>], which {\em skips} over a quoted string, [<nextword()>]
+{\em expands} a quoted string and stores the expansion in the buffer [[b]].
 %
 Indeed, [<stow()>] and [<nextword()>] are the last steps in the
-parsing phase; there is no need to keep the quotes (or double
-quotes inside those quotes) anymore. 
+parsing phase; there is no need to keep the quotes (or quote
+quote inside those quotes) anymore. 
+%alt: is expand the right term? unquote better? but the code use expandquote
 
 <<[[nextword()]] switch rune cases>>=
 case '\'':
@@ -3885,7 +3889,7 @@ case '\\':
 \l but missing closing quote should never happen
 \l what if empty quoted string? empty is not false then
 
-<<function [[expandquote]]>>=
+<<function [[expandquote]](rc.c)>>=
 /*
  *	extract an escaped token.  Possible escape chars are single-quote,
  *	double-quote, and backslash.  Only the first is valid for rc. The
@@ -3895,10 +3899,11 @@ char*
 expandquote(char *s, Rune r, Bufblock *buf)
 {
     if (r != '\'') {
+        // " and \ are not valid escape for rc, only '
         rinsert(buf, r);
         return s;
     }
-
+    // else
     while(*s){
         s += chartorune(&r, s);
         if(r == '\'') {
@@ -3953,12 +3958,10 @@ case '$':
     w = varsub(&cp);
     <<[[nextword()]] when in variable case, if w is nil>>
     empty = false;
-
     <<[[nextword()]] when in variable case, if non-space chars before var>>
     <<[[nextword()]] when in variable case, if head is not empty>>
     else
         head = lastw = w;
-
     while(lastw->next)
         lastw = lastw->next;
     break;
@@ -3990,7 +3993,6 @@ varsub(char **s)
 
     <<[[varsub()]] if variable starts with open brace>>
     // else
-
     buf = varname(s);
     <<[[varsub()]] sanity check buf>>
     w = varmatch(buf->start);
@@ -4006,13 +4008,14 @@ varsub(char **s)
 
 Note that if the user mentions a variable not defined anywhere
 (neither in the [[mkfile]] nor in the environment), [<nextword()>]
-will skip over this variable:
+will skip (silently) over this variable:
 
 <<[[varsub()]] sanity check buf>>=
 if(buf == nil)
     return nil;
 @
 \l no error? could
+%ocaml: stricter?
 
 <<[[nextword()]] when in variable case, if w is nil>>=
 if(w == nil){
@@ -4040,7 +4043,8 @@ if(empty)
 %$
 
 [[varname()]] below
-returns a buffer containing the name of a variable in [[s]], and 
+returns a buffer containing the name of a variable in [[s]]
+(without the leading [[$]]), and 
 increments [[s]] to point after the variable name:
 
 <<function [[varname]]>>=
@@ -4117,10 +4121,11 @@ varmatch(char *name)
 \subsubsection{Edge cases}
 
 Note that if a variable is preceded directly by non-space characters,
-as at the middle of Figure~\ref{fig:mk-nextword1} with [['@']],
+like in the middle of Figure~\ref{fig:mk-nextword1} with [['@']],
 the first word in the list of
 words in the value of the variable must be {adjusted}:
-\t introduce figure propery before
+
+% Useful? could remove feature? would be better to do List.map like rc ^ actually
 
 <<[[nextword()]] when in variable case, if non-space chars before var>>=
 if(!isempty(buf)){
@@ -4287,48 +4292,54 @@ I will start in this section with the action to manage rules,
 when the special character returned by [<rhead()>] is [[':']].
 
 
+
+%claude:
+%Before showing the code, I find it useful to look at what the
+%rule action receives after [<rhead()>] and [<rbody()>] are done.
+%For the input
+%
+%\begin{verbatim}
+%   hello.5 world.5:QV: hello.c mk.h
+%       pic $prereq | tbl | troff -ms
+%       cp $target /tmp
+%\end{verbatim}
+%
+%%claude:
+%the parse action sees a flat structure that I can draw as a
+%pseudo-parse-tree (each field already a list of [<Word>]s, not a
+%raw string):
+%
+%%claude:
+%\begin{verbatim}
+%                         rule
+%              ___________/|\_____________________
+%             /            |        |             \
+%         head=            tail=    attr=          body=
+%         {hello.5,       {hello.c, (Q|V)          "\tpic $prereq ...\n"
+%          world.5}        mk.h}                   "\tcp $target ...\n"
+%             |            | |
+%         (Word list)   (Word list)
+%             |            | |
+%             v            v v
+%           [hello.5]    [hello.c]
+%              -> [world.5]  -> [mk.h]
+%\end{verbatim}
+%
+%%claude:
+%Three things to note. The targets and prerequisites are {already}
+%expanded [<Word>] lists---variables, quotes, and backquotes have
+%been resolved by [<nextword()>] by the time [<addrules()>] runs,
+%which is why the dependency graph can be built statically.
+%The [[attr]] bitset comes from the characters between the two
+%[[':']], here [[Q]] (quiet) and [[V]] (virtual), and will be
+%propagated into every [<Rule>] created from this line. The body,
+%in contrast, is a raw string with [[$prereq]] and [[$target]]
+%still visible; those will be substituted at recipe execution time
+%from the shell environment built by [<buildenv()>], not here.
+
 <<[[parse()]] other locals>>=
 char *body;
 @
-%claude:
-Before showing the code, I find it useful to look at what the
-rule action receives after [<rhead()>] and [<rbody()>] are done.
-For the input
-\begin{verbatim}
-   hello.5 world.5:QV: hello.c mk.h
-       pic $prereq | tbl | troff -ms
-       cp $target /tmp
-\end{verbatim}
-the parse action sees a flat structure that I can draw as a
-pseudo-parse-tree (each field already a list of [<Word>]s, not a
-raw string):
-
-\begin{verbatim}
-                         rule
-              ___________/|\_____________________
-             /            |        |             \
-         head=            tail=    attr=          body=
-         {hello.5,       {hello.c, (Q|V)          "\tpic $prereq ...\n"
-          world.5}        mk.h}                   "\tcp $target ...\n"
-             |            | |
-         (Word list)   (Word list)
-             |            | |
-             v            v v
-           [hello.5]    [hello.c]
-              -> [world.5]  -> [mk.h]
-\end{verbatim}
-
-%claude:
-Three things to note. The targets and prerequisites are {already}
-expanded [<Word>] lists---variables, quotes, and backquotes have
-been resolved by [<nextword()>] by the time [<addrules()>] runs,
-which is why the dependency graph can be built statically.
-The [[attr]] bitset comes from the characters between the two
-[[':']], here [[Q]] (quiet) and [[V]] (virtual), and will be
-propagated into every [<Rule>] created from this line. The body,
-in contrast, is a raw string with [[$prereq]] and [[$target]]
-still visible; those will be substituted at recipe execution time
-from the shell environment built by [<buildenv()>], not here.
 
 <<[[parse()]] switch rhead cases>>=
 case ':':
@@ -4343,7 +4354,7 @@ The action above relies on [<rbody()>] to read the body
 of a rule, that is its recipe.
 %
 I will explain [<rbody()>] in the next section.
-
+%
 %dup: core-ds/rule/addrules %crossref:
 I have described [<addrules()>] called above in Section~\ref{sec:multi-targets}.
 %
@@ -4368,8 +4379,8 @@ if(target1 == nil && !(attr&REGEXP)){
         target1 = wdup(targets);
 }
 @
-\n I could mv this before, but addrules is in Core DS and target1
-\n mentioned in main. Also use charin below described in this chapter.
+%alt: I could mv this before, but addrules is in Core DS and target1
+% mentioned in main. Also use charin below described in this chapter.
 
 Note the use of [<charin()>] above to make sure the first target
 is not a {pattern} and so does not contain a special
@@ -4387,10 +4398,11 @@ For the rule attribute [<REGEXP>] used above, see Section~\ref{sec:regexp}.
 
 \subsection{Parsing the recipe: [[rbody()]]}
 
-[[rbody()]], like [<assline()>], takes as a parameter an input buffer [[in]].
+[<rbody()>], like [<assline()>], takes as a parameter an input buffer [[in]].
 %
 The {cursor} in this buffer should now point to the character following
-the newline of the line containing the target and prerequisites of the rule.
+the newline of the line containing the target and prerequisites of the rule
+(consumed by [<assline()>]).
 % FIGURE?
 [[rbody()]] then fills its local string buffer [[buf]] until
 a non-spacing character is found in the first column.
@@ -4444,7 +4456,7 @@ if (r == '\n')
     mkinline++;
 @
 
-If [<rbody()>] find a comment in the first column, this comment can not be
+If [<rbody()>] finds a comment in the first column, this comment can not be
 the start of a rule, definition, or inclusion, so it is
 added in the buffer for the recipe:
 
@@ -4482,6 +4494,7 @@ a variable definition).
 %dup: main/build/parallel-mode (for VIR)
 An attribute often used is the attribute to indicate that
 the target in a rule does not correspond to a filename.
+%
 In that case, [[mk]] should not expect from the recipe to generate such a target.
 \l but in fact mk does not check that, so it is more to skip
 \l the reading of time if by bad luck there is a file named clean in the dir
@@ -4489,12 +4502,12 @@ For instance, many [[mkfile]]s use the target [[clean]] to
 cleanup a directory.
 %dup: main/build/parallel-mode (for VIR)
 In [[mk]]'s terminology, such a target is called a {\em virtual target}
-(see Section~\ref{sec:virtual} for a full explanation)
+(see Section~\ref{sec:virtual} for a full explanation).
 
-%real-world:
+%other:
 In GNU Make, the use of [[.PHONY:]] followed by a string in a
 [[Makefile]] indicates that the string is a virtual target.
-
+%
 In [[mk]], the syntax to add attributes to a rule is to add
 non-spacing characters after the first [[':']] of a rule, and
 to add another [[':']] after the non-spacing characters, 
@@ -4550,9 +4563,6 @@ if((sep == ':') && *p && (*p != ' ') && (*p != '\t')){
         switch(r)
         {
         <<[[rhead()]] when parsing rule attributes, switch rune cases>>
-        //PAD: this is an extension in mk-in-ocaml that I ignore here
-        case 'I':
-            break;
         default:
             SYNERR(-1);
             fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
@@ -4623,8 +4633,8 @@ if(newfd < 0){
 
 
 Note that [[tail]] above contains the list of words on the right
-of [['<']] ([[head]], which contains the list of words on the left,
-should be empty).
+of [['<']] while [[head]], which contains the list of words on the left,
+should be empty.
 %
 Just like for the rules, this list of words is set in [<rhead()>]
 and is the result of a call to [<stow()>], which performs
@@ -4799,6 +4809,7 @@ $A = a b c $D
 # => B contains a b c d e f
 @
 \l say bad practice?
+%ocaml: supported by omk?
 
 \subsection{Overriding variable definitions}
 
@@ -7836,7 +7847,7 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 %ocaml-found: not that you need to pass shellname too! execl accept
 % the path to the program and then a list of arguments, including the
 % program name itself!
-% (I forgot in mk-in-ocaml originally and so the first argument (-e) was
+% (I forgot in omk originally and so the first argument (-e) was
 % skipped and so mk was not stopping at the first error; found via strace)
 
 
@@ -10571,6 +10582,15 @@ if ((r->attr&NOVIRT) && lasta != &head && (lasta->r->attr&VIR))
     continue;
 @
 % really useful?
+
+
+\subsection{[[I]]nteractive recipes: [[:I:]]}
+
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+//PAD: this is an extension in omk that I ignore here
+case 'I':
+    break;
+@
 
 \subsection{Custom-dependency comparison program: [[:P:]]}
 \label{sec:custom-comparison}
