@@ -7688,6 +7688,7 @@ if(jobs == nil){
 
 
 \section{Executing Jobs: [[execsh()]]}
+\label{sec:grandchild-trick}
 
 %claude:
 [<execsh()>] is the bridge between [[mk]] and the shell. The
@@ -9613,30 +9614,40 @@ if(r->attr&REGEXP)
     regsub(pre->s, buf, sizeof(buf), rmatch, NREGEXP);
 @
 
-\section{Shell-command expansion: [[`]]{\em cmd}[[`]]}
+\section{Shell-command expansion: [[`<cmd>`]]}
 \label{sec:backquotes}
 
 %claude:
 Backquote expansion is the [[mkfile]] equivalent of the shell's
-[[$(ls *.c)]]: it runs a command at parse time and substitutes
-its standard output back into the line being assembled. The most
-common use is generating a list of source files
+%[[$(ls *.c)]]: 
+[[`{ls *.c}]] (see the \book{Shell}):
+it runs a command at parse time and substitutes
+its standard output back into the line being assembled.
+%
+The most common use is generating a list of source files
 ([[OFILES=`{ls *.c | sed 's/.c/.o/'}]]), which would otherwise
 require either listing every file by hand or hoping a meta rule
-covers them all. The implementation in [<bquote()>] is subtle
+covers them all.
+
+
+
+%claude:
+The implementation in [<bquote()>] is subtle
 because the same [<Bufblock>] holds the command text on the way
 out and the command's output on the way back: [<bquote()>]
 remembers the start position before invoking [<execsh()>] and
 rewinds [[buf->current]] to that point so the output overwrites
-the command in place. The grandchild-pipe trick from
-Section~\ref{sec:backquotes} is reused here, this time with the
+the command in place.
+%
+The grandchild-pipe trick from
+Section~\ref{sec:grandchild-trick} is reused here, this time with the
 parent capturing the pipe's read end into [[buf]] instead of
 discarding it.
 
 % actually two styles, `{...} or `...`
+% reuse traditional bourne shell `...`, rc changed to `{} cos allows
+% to be nested.
 
-% Useful for `stuff that generates data`. 
-% Useful for globbing! SRC=`ls *.c`.
 % Note that in this last case ls will output one line per C file
 % (there is a difference between running ls from a terminal in inteactive mode
 % and when run outside a terminal. See 'ls *.c /tmp/output; cat /tmp/output')
@@ -9808,19 +9819,26 @@ if(buf){
 % we could call wait() in a loop to discards all those processes
 % until no children process.
 
+
 \section{Dynamic [[mkfile]]: [[<| <prog> ]]}
 \label{sec:dynamic-mkfile}
 
-%claude:
+%claude: %other:
 GNU Make has [[ifdef]]/[[ifeq]]/[[else]] for conditional sections.
-[[mk]] does not, and on purpose. Instead of growing the DSL with a
+[[mk]] does not, and on purpose.
+%
+Instead of growing the DSL with a
 preprocessor, [[mk]] reuses the file-inclusion mechanism but lets
 the included ``file'' be the {output of a program}: [[<|prog]]
 runs [[prog]], pipes its stdout into [<parse()>], and the result is
-a fragment of [[mkfile]] computed at run time. This is how the
+a fragment of [[mkfile]] computed at run time.
+%
+This is how the
 \plan kernel's [[mkfile]]s pull configuration data from a separate
 config program, and how a build can branch on environment without
-adding control flow to the [[mkfile]] grammar. The implementation
+adding control flow to the [[mkfile]] grammar.
+%
+The implementation
 reuses [<parse()>] reentrantly: the recursive [<parse()>] call on
 the pipe descriptor is the same one that handles a normal
 [[<file]] include---one of several places where keeping the parser
@@ -9948,7 +9966,6 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 
 
 \section{Substitution variables: [[$<name>:<pattern>=<subst>]]}
-%$
 \label{sec:transform-list}
 \label{sec:var-generator}
 \label{sec:subst-var}
@@ -9956,12 +9973,18 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 %claude:
 This is [[mk]]'s answer to a real problem: given a list of source
 files, derive the corresponding list of object files without
-listing both. The syntax [[${OFILES:%.c=%.o}]] takes the value
+listing both.
+%
+The syntax [[${OFILES:%.c=%.o}]] takes the value
 of [[$OFILES]], matches each word against [[%.c]], and rewrites
-the [[%]] into [[.o]]. Compared to GNU Make's
+the [[%]] into [[.o]].
+%other:
+Compared to GNU Make's
 [[$(patsubst \%.c,\%.o,$(OFILES))]], it is shorter and reuses
 the same [[%]] pattern character that meta rules use, so there
-is one matching mechanism to learn instead of two. The catch is
+is one matching mechanism to learn instead of two.
+%
+The catch is
 that the parser must recognize [[${]] $\ldots$ [[}]] as
 {atomic}---the [[:]] inside would otherwise look like the rule
 separator [<rhead()>] is hunting for, hence the [[vargen]] flag
@@ -10242,8 +10265,9 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 \n  like META or REGEXP.
 
 %claude:
-A {rule attribute} is a single-letter flag attached to a rule
+A {\em rule attribute} is a single-letter flag attached to a rule
 between two colons, as in [[clean:V:]] for a virtual target.
+%
 Attributes let the user override individual aspects of [[mk]]'s
 default behavior on a per-rule basis without bloating the syntax:
 [[V]] (virtual: do not check for a file with this name),
@@ -10302,7 +10326,8 @@ attribute(Node *n)
 
 \subsection{[[V]]irtual targets: [[:V:]]}
 \label{sec:virtual}
-%real-world: .PHONY
+
+%other: .PHONY
 
 % this is useful
 
@@ -10382,6 +10407,8 @@ if((node->flags&VIRTUAL) || (access(node->name, AEXIST) != OK_0)){
 
 \subsection{[[D]]eleting a target when the recipe returns an error: [[:D:]]}
 
+%other: ??
+
 % seems safe, but really the tool involved should not generate
 % the target in the first place.
 % Note that ocamllex has this problem. 
@@ -10443,6 +10470,8 @@ delete(char *name)
 \subsection{[[Q]]uiet mode (not printing the recipe): [[:Q:]]}
 % work with -n too? nflag || !QUIET?
 
+%other: ?? @ in recipe, but intrusive
+
 <<[[Rule_attr]] cases>>=
 QUIET  = 0x0008,
 @
@@ -10460,6 +10489,8 @@ case 'Q':
 % "continue execution if the recipe draws errors"
 
 % when want that?
+
+%other: ??
 
 <<[[Node_flag]] cases>>=
 NOMINUSE   = 0x1000,
