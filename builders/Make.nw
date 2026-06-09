@@ -6593,7 +6593,9 @@ modified [[world.c]], which should trigger a compilation to regenerate
 % of jobs, and how at each node there is a ready or outofdate boolean value.
 
 %claude:
-[<mk()>] is the heart of the build system. It operates in {waves}:
+[<mk()>] 
+%is the heart of the build system. It
+operates in {\em waves}:
 each call to [<work()>] performs a DFS looking for outdated files.
 When it finds one whose prerequisites are all [<MADE>], it schedules
 the recipe and marks the node [<BEINGMADE>]. When [<work()>] cannot
@@ -6761,7 +6763,7 @@ the children process responsible for building the root target to finish.
 The code of [<mk()>] is small, but subtle.
 %Here are a few additional notes on [<mk()>]:
 For example, the first call to [<waitup()>] in [<work()>] 
-uses the [<EMPTY_CHILDREN_IS_OK>] flag
+uses the flag [<EMPTY_CHILDREN_IS_OK>]
 to indicate that it is ok if [<waitup()>] does not find any children
 process to wait for.
 %
@@ -6798,6 +6800,7 @@ needs such information for advanced features of [[mk]].
 [[clrmade()]] below simply marks all nodes as [<NOTMADE>]:
 
 <<function [[clrmade]]>>=
+/// main -> mk -> <>
 void
 clrmade(Node *n)
 {
@@ -6832,15 +6835,15 @@ the other bits.
 \label{sec:work-waves}
 
 %claude:
-[<work()>] is the DFS traversal that decides what to build.
-For each node, it recurses into children first, then examines
-two booleans: [[weoutofdate]] (is any prerequisite newer than
-this node?) and [[ready]] (are all prerequisites [<MADE>]?).
-A node can be outdated but not ready---for example, if one
-prerequisite is still [<BEINGMADE>] while another has already
-changed. In that case [<work()>] returns without scheduling
-a recipe; the next wave will re-visit the node after the
-pending prerequisite finishes.
+%[<work()>] is the DFS traversal that decides what to build.
+%For each node, it recurses into children first, then examines
+%two booleans: [[weoutofdate]] (is any prerequisite newer than
+%this node?) and [[ready]] (are all prerequisites [<MADE>]?).
+%A node can be outdated but not ready---for example, if one
+%prerequisite is still [<BEINGMADE>] while another has already
+%changed. In that case [<work()>] returns without scheduling
+%a recipe; the next wave will re-visit the node after the
+%pending prerequisite finishes.
 
 [[work()]] below performs a DFS on the graph while looking for
 outdated [<NOTMADE>] nodes:
@@ -6855,8 +6858,8 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
     <<[[work()]] debug>>
     if(node->flags&BEINGMADE)
         return;
+    // else
     <<[[work()]] possibly unpretending node>>
-
     if(node->arcs == nil){
         <<[[work()]] no arcs, a leaf>>
     } else {
@@ -6885,7 +6888,7 @@ the node is a leaf and when it has children.
 %trans:
 The leaf case is easy.
 %
-If a node has no prerequisites and contains an existing file,
+When a node has no prerequisites and it contains an existing file,
 for instance, [[hello.c]] in Figure~\ref{fig:graph-being-made2},
 then this file is already [<MADE>].
 
@@ -7026,7 +7029,7 @@ outofdate(Node *node, Arc *arc, bool eval)
 {
     <<[[outofdate()]] locals>>
 
-    <<[[outofdate()]] if arc->prog>>
+    <<[[outofdate()]] if [[arc->prog]]>>
     else 
      <<[[outofdate()]] if arc node is an archive member>>
      else
@@ -7035,10 +7038,9 @@ outofdate(Node *node, Arc *arc, bool eval)
          * It's a race, and the safer option is to do
          * extra building rather than not enough.
          */
-        return node->time < arc->n->time;
+        return node->time <= arc->n->time;
 }
 @
-%old: was <=, but annoying, so I ignored the comment
 \l inexistent file has zero time (like very very old time)
 \l eval argument? seems used only for :P: prog stuff
 
@@ -7047,7 +7049,7 @@ be extremely fast, it is not uncommon to generate object files and
 executables in the same second.
 %
 Thus, it is important for the modification time of a file to
-be at a granularity finer than the second.
+be at a granularity finer than the second (ideally, nanosecond).
 %note: on very fast machine the <= above test can be actually annoying.
 % For instance in ocaml both the .cmo and .cmi may have
 % been created in the same second by ocamlc, which means
@@ -7056,7 +7058,7 @@ be at a granularity finer than the second.
 % will generate a new .cmi, which then will trigger at the next
 % round another compilation of the .cmo and so on).
 
-
+% nsec? I did change that recently with also new type in Dir
 
 
 \section{Scheduling recipes: [[dorecipe()]]}
@@ -7083,7 +7085,7 @@ must also compute the set of all targets mentioned in the master rule:
 
 % set list of targets (most of the time single one)
 <<[[dorecipe()]] other locals>>=
-// list<string> (last = last_alltargets)
+// list<ref<Word> (last = last_alltargets, head elt to skip)
 Word alltargets;
 @
 %old: ahead -> alltargets (and head -> oldtargets)
@@ -7106,7 +7108,7 @@ and [[nlist]] should contain only one element.
 Finally, [<dorecipe()>] computes also the set of prerequisites:
 
 <<[[dorecipe()]] other locals>>=
-// list<string> (last = last_allprereqs)
+// list<ref<Word>> (last = last_allprereqs, head elt to skip)
 Word allprereqs;
 @
 %old: l (for list) -> allprereqs
@@ -7119,8 +7121,8 @@ This set will be used when exporting the special variable
 %trans:
 Here is finally the code of [[dorecipe()]] leveraging the locals above:
 
-% main -> mk -> work -> ... -> run(newjob())
 <<function [[dorecipe]]>>=
+% main -> mk -> work -> <> -> run(newjob())
 void
 dorecipe(Node *node, bool *did)
 {
@@ -10694,7 +10696,7 @@ Symtab *sym;
 int ret;
 @
 
-<<[[outofdate()]] if arc->prog>>=
+<<[[outofdate()]] if [[arc->prog]]>>=
 if(arc->prog){
     snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
         arc->n->name);
