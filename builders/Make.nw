@@ -2114,30 +2114,25 @@ survive untouched all the way into the [<Job>].
 
 %trans: %dup: Assembler.nw
 I now switch from the bottom-up approach of Chapter~\ref{chap:core-ds}
-to a top-down approach;
+to a top-down approach.
 %toc:
 Indeed,
 I will describe in the following chapters the main functions of [[mk]],
 starting in this chapter with [[main()]], the entry point of [[mk]].
 
-%claude:
-[<main()>] is mostly a sequencer. It does almost no real work itself;
-it threads four phases together: initialize globals, parse the
-[[mkfile]] (filling [<rules>], [<metarules>], and the symbol table),
-build and walk the graph for each target with [<mk()>], and
-optionally print profiling stats before exiting. The interesting
-subtlety is that command-line arguments are processed in {three}
-passes (flags, then [[var=value]] assignments, then the remaining
-target names), with [[$MKFLAGS]] and [[$MKARGS]] saved before the
-[[var=value]] entries are nulled out so recursive [[mk]] calls can
-inherit the original invocation.
+%claude: BAD:
+%[<main()>] is mostly a sequencer. It does almost no real work itself;
+%it threads four phases together: initialize globals, parse the
+%[[mkfile]] (filling [<rules>], [<metarules>], and the symbol table),
+%build and walk the graph for each target with [<mk()>], and
+%optionally print profiling stats before exiting. The interesting
+%subtlety is that command-line arguments are processed in {three}
+%passes (flags, then [[var=value]] assignments, then the remaining
+%target names), with [[$MKFLAGS]] and [[$MKARGS]] saved before the
+%[[var=value]] entries are nulled out so recursive [[mk]] calls can
+%inherit the original invocation.
 
 \section{[[main()]] skeleton}
-
-%dead? used by some tools?
-<<global [[version]]>>=
-static char *version = "@(#)mk general release 4 (plan 9)";
-@
 
 You can see the main components of the building pipeline in the
 [[main()]] skeleton below:
@@ -2147,38 +2142,21 @@ void
 main(int argc, char **argv)
 {
     <<[[main()]] locals>>
-    Symtab* sym;
 
     // Initializing
-
     <<[[main()]] initializations>>
 
     // Parsing the mkfile
-
     <<[[main()]] parsing mkfile, call [[parse()]]>>
 
     // Building the graph, finding out-of-date files
-
     <<[[main()]] initializations before building>>
-
-    //pad-ext: MKSHELL environment var to specify the path to rc
-    //LATER: allow also to change the shell from rc to sh (or something else)
-    sym = symlook("MKSHELL", S_VAR, 0);
-    if(sym != nil) {
-      w = (Word*) sym->u.value;
-      if(w != nil && w->s != nil) {
-        shell->shell = w->s;
-      }
-    }
-
     <<[[main()]] setting the targets, call [[mk()]]>>
 
     // Reporting (optional)
-
     <<[[main()]] print profiling stats if uflag>>
 
     // Exiting
-
     exits(nil);
 }
 @
@@ -2269,6 +2247,15 @@ for(argv++; *argv && (**argv == '-'); argv++)
 @
 %ocaml: use Arg module
 
+This iteration looks for command-line arguments prefixed by [['-']]
+(e.g., [[-f]]).
+\l or debug flags.
+%chunks:
+I will gradually described the cases of the [[switch]] above 
+in the following chapters.
+\l note that modify argv!
+\l also special code for buf? explained later
+
 <<function [[badusage]]>>=
 void
 badusage(void)
@@ -2286,17 +2273,11 @@ badusage(void)
 \l also xxx=yyy
 
 
-This iteration looks for command-line arguments prefixed by [['-']]
-(e.g., [[-f]]).
-\l or debug flags.
-%chunks:
-I will gradually described the cases of the [[switch]] above 
-in the following chapters.
-\l note that modify argv!
-\l also special code for buf? explained later
 
 \section{[[mk <var>=<values>]] arguments processing}
 \label{sec:vardef-command-line}
+
+% diff with obj=arm mk ? same? add tests/mk/
 
 %trans:
 The second step in the processing of command-line arguments
@@ -2347,6 +2328,7 @@ if(tfd >= 0){
     remove(temp);
 }
 @
+% TODO? should be L'=' really
 % abuse parse(), pass true so will get varoverride to true
 %  so those variables will be marked specially S_OVERRIDE
 %old: seek() used to be LSEEK() a macro expanding ultimately to seek
@@ -2354,35 +2336,33 @@ if(tfd >= 0){
 
 %crossref:
 [[utfrune()]], called above, is a function looking for a certain character
-in a string. However, the character and the string use a particular format.
-Indeed, [[utfrune()]] looks for a {rune} in a sequence of UTF-8 
-encoded characters.
+in a string. However, the character and the string use particular formats.
 %
-In \plan, a {\em rune} is the term used to represent a {Unicode} character.
-\l cite unicode?
+Indeed, [[utfrune()]] looks for a {\em Rune} in a sequence of {\em UTF-8}
+encoded bytes (hence its name).
 %
-There are multiple ways to encode a Unicode character (a rune) in
-a sequence of bytes.
+%There are multiple ways to encode a Unicode character in a sequence of bytes.
+%In \plan, a Rune is a fixed-width format to represent a {Unicode} character.
 %
-\plan uses the UTF-8\footnote{
-The popular UTF-8 encoding was actually designed by Rob Pike 
-and Ken Thompson, two of the designers of \plan.
-See \url{http://doc.cat-v.org/bell_labs/utf-8_history} for the history
-of UTF-8.
-} encoding, hence the use of the [[utfrune()]] function above.
+\plan uses the UTF-8
+%\footnote{
+%dup: Libcore.nw
+%The popular UTF-8 encoding was actually designed by Rob Pike 
+%and Ken Thompson, two of the designers of \plan.
+%See \url{http://doc.cat-v.org/bell_labs/utf-8_history} for the history
+%of UTF-8.
+%}
+encoding everywhere text is involved:
+in filenames, in command-line arguments, in files on disk, etc.
 %
-Indeed, \plan supports filenames using Unicode characters, as well
-as command-line arguments using Unicode characters, as long as they are encoded
-with the UTF-8 format
-(see the \book{Libcore} for more information on Unicode and [[utfrune()]]).
-
+See the \book{Libcore} for more info on runes, UTF-8, and more generally Unicode.
 
 The last argument to [<parse()>] above is a boolean indicating
 whether [<parse()>] should accept definitions overwriting previous definitions.
 \l called before mkfile actually, so more marked as non-overwritable
 %
-Obviously, in this case [<main()>] passes [[true]] to [<parse()>]
-in the code above.
+Obviously, in this case [<main()>] passes [[true]] to [<parse()>].
+
 
 
 <<[[main()]] create temporary file if not exist yet and set [[tb]]>>=
@@ -2450,7 +2430,8 @@ in [[argv]] are the targets the user wants to build.
 
 %trans:
 I described before in Section~\ref{sec:getting-started}
-the use of [[-f]] to change the default file used by [[mk]]:
+the use of [[-f]] to change the default file used by [[mk]].
+Here is the code for it:
 
 <<[[main()]] locals>>=
 char *f = nil;
@@ -2516,7 +2497,7 @@ if(f == nil){
 
 %trans:
 Once [<parse()>] processed the [[mkfile]] and modified some globals,
-[[mk]] is ready to build a target by calling [<mk>].
+[[mk]] is ready to build a target by calling [<mk()>].
 %toc:
 There are multiple ways to specify the target to build and how
 to build it, as explained in the following sections,
@@ -2545,6 +2526,7 @@ in the [[mkfile]] as the default target.
 This default target is stored in the following global:
 
 <<global [[target1]]>>=
+// option<list<ref<Word>>>
 Word *target1;
 @
 \l e.g. 'all, 
@@ -2687,7 +2669,7 @@ by [[mk]], the file location is set to [[nil]].
 \l mkinline, meh. could pass -1 or 0 instead
 
 
-
+%yoann: maybe conclusive paragraph and prepare transition?
 
 %******************************************************************************
 \chapter{Parsing the [[mkfile]]}
@@ -11038,6 +11020,26 @@ envupd("nproc", newword(buf));
 
 %\subsection{[[$MKSHELL]]}%$
 % so can use either sh or rc. see plan9port
+
+\section{Shell choice: [[$MKSHELL]]}
+%alt: in Shell env chapter?
+
+% Posix.c, Plan9.c
+
+<<[[main()]] locals>>=
+Symtab* sym;
+@
+<<[[main()]] initializations before building>>=
+//pad-ext: MKSHELL environment var to specify the path to rc
+sym = symlook("MKSHELL", S_VAR, 0);
+if(sym != nil) {
+  w = (Word*) sym->u.value;
+  if(w != nil && w->s != nil) {
+    shell->shell = w->s;
+  }
+}
+@
+
 
 \section{Dealing with archives (libraries)}
 \l aggregate
