@@ -53,6 +53,7 @@ extern void readenv(void);
 // exportenv() is back in plan9.c
 
 /*s: function [[inithash]] */
+/// main -> <>
 void
 inithash(void)
 {

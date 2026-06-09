@@ -23,15 +23,13 @@ addrule(char *target, Word *prereqs, char *recipe,
         Word *alltargets, int attr, int hline, char *prog)
 {
     Rule *r = nil;
+    bool reuse = false;
     /*s: [[addrule()]] other locals */
     Symtab *sym;
     Rule *rr;
-    /*x: [[addrule()]] other locals */
-    bool reuse;
     /*e: [[addrule()]] other locals */
 
     /*s: [[addrule()]] find if rule already exists, set [[reuse]], update [[r]] */
-    reuse = false;
     sym = symlook(target, S_TARGET, nil);
     if(sym){
         for(r = sym->u.ptr; r; r = r->chain)
@@ -64,7 +62,6 @@ addrule(char *target, Word *prereqs, char *recipe,
     /*x: [[addrule()]] set more fields */
     r->prog = prog;
     /*e: [[addrule()]] set more fields */
-
     /*s: [[addrule()]] indexing [[r]] by target in [[S_TARGET]] */
     if(!reuse){
         sym = symlook(target, S_TARGET, r);
@@ -80,10 +77,10 @@ addrule(char *target, Word *prereqs, char *recipe,
     /*s: [[addrule()]] if meta rule */
     if(charin(target, "%&") || (attr&REGEXP)){
         r->attr |= META;
-        /*s: [[addrule()]] return if reuse, to not add the rule in a list */
+        /*s: [[addrule()]] return if [[reuse]], to not add the rule in a list */
         if(reuse)
             return;
-        /*e: [[addrule()]] return if reuse, to not add the rule in a list */
+        /*e: [[addrule()]] return if [[reuse]], to not add the rule in a list */
         // else
         /*s: [[addrule()]] if REGEXP attribute */
         if(attr&REGEXP){
@@ -91,7 +88,6 @@ addrule(char *target, Word *prereqs, char *recipe,
             r->pat = regcomp(target);
         }
         /*e: [[addrule()]] if REGEXP attribute */
-
         // add_list(r, metarules, lmr)
         if(metarules == nil)
             metarules = lmr = r;
@@ -103,12 +99,11 @@ addrule(char *target, Word *prereqs, char *recipe,
     /*e: [[addrule()]] if meta rule */
     else {
         /*s: [[addrule()]] if simple rule */
-        /*s: [[addrule()]] return if reuse, to not add the rule in a list */
+        /*s: [[addrule()]] return if [[reuse]], to not add the rule in a list */
         if(reuse)
             return;
-        /*e: [[addrule()]] return if reuse, to not add the rule in a list */
+        /*e: [[addrule()]] return if [[reuse]], to not add the rule in a list */
         // else
-
         // add_list(r, rules, lr)
         if(rules == nil)
             rules = lr = r;

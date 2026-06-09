@@ -39,7 +39,7 @@ symlook(char *sym, int space, void *install)
     /*s: [[symlook()]] if symbol not found */
     if(install == nil)
         return nil;
-
+    // else
     s = (Symtab *)Malloc(sizeof(Symtab));
     s->name = sym;
     s->space = space;

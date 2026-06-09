@@ -5,10 +5,6 @@
 #define	MKFILE		"mkfile"
 /*e: constant [[MKFILE]] */
 
-/*s: global [[version]] */
-static char *version = "@(#)mk general release 4 (plan 9)";
-/*e: global [[version]] */
-
 // see also globals.c
 
 /*s: global [[uflag]] */
@@ -41,14 +37,14 @@ main(int argc, char **argv)
     /*x: [[main()]] locals */
     Bufblock *whatif = nil;
     /*x: [[main()]] locals */
+    Symtab* sym;
+    /*x: [[main()]] locals */
     Bufblock *buf = newbuf();
     /*x: [[main()]] locals */
     char *s;
     /*e: [[main()]] locals */
-    Symtab* sym;
 
     // Initializing
-
     /*s: [[main()]] initializations */
     Binit(&bout, STDOUT, OWRITE);
     /*x: [[main()]] initializations */
@@ -225,7 +221,6 @@ main(int argc, char **argv)
     /*e: [[main()]] initializations */
 
     // Parsing the mkfile
-
     /*s: [[main()]] parsing mkfile, call [[parse()]] */
     if(f == nil){
         if(access(MKFILE, AREAD) == OK_0)
@@ -243,7 +238,6 @@ main(int argc, char **argv)
     /*e: [[main()]] parsing mkfile, call [[parse()]] */
 
     // Building the graph, finding out-of-date files
-
     /*s: [[main()]] initializations before building */
     catchnotes();
     /*x: [[main()]] initializations before building */
@@ -254,10 +248,8 @@ main(int argc, char **argv)
         timeinit(whatif->start);
         freebuf(whatif);
     }
-    /*e: [[main()]] initializations before building */
-
+    /*x: [[main()]] initializations before building */
     //pad-ext: MKSHELL environment var to specify the path to rc
-    //LATER: allow also to change the shell from rc to sh (or something else)
     sym = symlook("MKSHELL", S_VAR, 0);
     if(sym != nil) {
       w = (Word*) sym->u.value;
@@ -265,7 +257,7 @@ main(int argc, char **argv)
         shell->shell = w->s;
       }
     }
-
+    /*e: [[main()]] initializations before building */
     /*s: [[main()]] setting the targets, call [[mk()]] */
     if(*argv == nil){
         /*s: [[main()]] when no target arguments */
@@ -317,14 +309,12 @@ main(int argc, char **argv)
     /*e: [[main()]] setting the targets, call [[mk()]] */
 
     // Reporting (optional)
-
     /*s: [[main()]] print profiling stats if uflag */
     if(uflag)
         prusage();
     /*e: [[main()]] print profiling stats if uflag */
 
     // Exiting
-
     exits(nil);
 }
 /*e: function [[main]] */

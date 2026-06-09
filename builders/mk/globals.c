@@ -28,6 +28,7 @@ Rule *patrule;
 
 // was in main.c, but used also by parse.c
 /*s: global [[target1]] */
+// option<list<ref<Word>>>
 Word *target1;
 /*e: global [[target1]] */
 

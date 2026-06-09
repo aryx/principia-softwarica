@@ -77,7 +77,7 @@ struct Rule
     // bitset<Rule_attr>
     short 		attr;		/* attributes */
     /*x: [[Rule]] other fields */
-    // ref<list<ref_own<string>>
+    // ref<list<ref_own<Word>>
     Word 		*alltargets;	/* all the targets */
     /*x: [[Rule]] other fields */
     int 		rule;		/* rule number */
