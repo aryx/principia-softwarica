@@ -18,13 +18,13 @@ assline(Biobuf *bp, Bufblock *buf)
 
     resetbuf(buf);
     while ((c = nextrune(bp, true)) >= 0){
-        switch(c)
-        {
+        switch(c) {
         case '\n':
             if (!isempty(buf)) {
                 insert(buf, '\0');
                 return true;
             }
+            // else
             break;		/* skip empty lines */
         /*s: [[assline()]] switch character cases */
         case '#':

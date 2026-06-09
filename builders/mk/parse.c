@@ -55,8 +55,7 @@ parse(char *f, fdt fd, bool varoverride)
         c = rhead(buf->start, &head, &tail,     &attr, &prog);
 
         // Semantic actions (they may read more lines)
-        switch(c)
-        {
+        switch(c) {
         /*s: [[parse()]] switch rhead cases */
         default:
             SYNERR(hline);
@@ -201,7 +200,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     p = charin(line, ":=<");
     if(p == nil)
         return '?';
-
+    // else
     sep = *p;
     *p++ = '\0';
     /*s: [[rhead()]] adjust sep if dynamic mkfile [[<|]] */

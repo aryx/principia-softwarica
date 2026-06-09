@@ -26,12 +26,12 @@ squote(char *cp)
     while(*cp){
         n = chartorune(&r, cp);
         if(r == '\'') {
-            /*s: [[squote()]] return, unless double quote */
+            /*s: [[squote()]] return, unless quote quote */
             n += chartorune(&r, cp+n);
             if(r != '\'')
                 return cp;
             // else, double '', continue while loop
-            /*e: [[squote()]] return, unless double quote */
+            /*e: [[squote()]] return, unless quote quote */
         }
         cp += n;
     }
@@ -110,12 +110,12 @@ expandquote(char *s, Rune r, Bufblock *buf)
     while(*s){
         s += chartorune(&r, s);
         if(r == '\'') {
-            /*s: [[expandquote()]] return, unless double quote */
+            /*s: [[expandquote()]] return, unless quote quote */
             if(*s == '\'')
-                s++; // skip one of the double quotes
+                s++; // skip one of the two quotes
             else
                 return s;
-            /*e: [[expandquote()]] return, unless double quote */
+            /*e: [[expandquote()]] return, unless quote quote */
         }
         rinsert(buf, r);
     }
@@ -123,7 +123,7 @@ expandquote(char *s, Rune r, Bufblock *buf)
 }
 /*e: function [[expandquote]] */
 
-/*s: function [[escapetoken]] */
+/*s: function [[escapetoken]](rc.c) */
 /*
  *	Input an escaped token.  Possible escape chars are single-quote,
  *	double-quote and backslash.  Only the first is a valid escape for
@@ -142,7 +142,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
         if(c == '\''){
             if(preserve)
                 rinsert(buf, c);
-            /*s: [[escapetoken()]] return, unless double quote */
+            /*s: [[escapetoken()]] return, unless quote quote */
             c = Bgetrune(bp);
             if (c < 0)
                 break; // eof
@@ -151,7 +151,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
                 return OK_1;
             }
             // else, '', so continue the while loop
-            /*e: [[escapetoken()]] return, unless double quote */
+            /*e: [[escapetoken()]] return, unless quote quote */
         }
         // else
         rinsert(buf, c);
@@ -161,7 +161,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
     fprint(STDERR, "missing closing %c\n", esc);
     return ERROR_0;
 }
-/*e: function [[escapetoken]] */
+/*e: function [[escapetoken]](rc.c) */
 
 /*s: function [[copysingle]] */
 /*

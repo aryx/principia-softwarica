@@ -2086,7 +2086,6 @@ A [<Job>] then captures one in-flight execution---it points back into
 the rule for the recipe and into the node list for graph updates.
 %but owns nothing itself.
 
-%yoann: maybe say note that even though hello.mk section~\ref{sec:hello-mk} contains vars (e.g., OBJS=hello.5 world.5), they are not present in diagram in prereqs because expanded at parsing time as we will see in Section X. (not expanded in recipe though if they were present)
 %claude:
 One detail of Figure~\ref{fig:core-ds-hello} may surprise you: the
 [<Rule>] for [[hello]] lists its prerequisites as the literal words
@@ -2677,10 +2676,11 @@ by [[mk]], the file location is set to [[nil]].
 That completes [<main()>]. It is essentially the conductor: it reads
 the command line in three passes---flags, then [[<var>=<value>]]
 definitions, then the requested targets---loads the [[mkfile]], and
-hands off to the builder. None of the real work happens here, though;
-[[main()]] only wires together the components that the following
-chapters dissect one by one---beginning, in the next chapter, with the
-parser that reads the [[mkfile]].
+hands off to the builder. 
+%None of the real work happens here, though;
+%[[main()]] only wires together the components that the following
+%chapters dissect one by one---beginning, in the next chapter, with the
+%parser that reads the [[mkfile]].
 
 %******************************************************************************
 \chapter{Parsing the [[mkfile]]}
@@ -2695,10 +2695,10 @@ starting in this chapter with the parsing functions.
 %dup?
 I mentioned before [<parse()>], which 
 takes a path to an [[mkfile]] as a parameter, 
-parses this [[mkfile]] to identify rules, meta rules, and definitions, and 
-stores those entities in different globals
+parses this [[mkfile]] to identify rules, meta rules, and variable definitions,
+and stores those entities in different globals
 ([<rules>], [<metarules>], and the symbol table [<hash>]).
-\n also patrules and target1 (said later)
+%said-later: also patrules and target1
 %ocaml: return those instead of modifying globals
 %toc:
 [<parse()>] is a complex function that relies on many other
@@ -2718,22 +2718,22 @@ as explained in the following sections.
 % have a different meaning so you need a lexer with different states/modes
 % (a la Perl/PHP). Also escaping is tricky. Unicode also is tricky.
 
-%claude:
-Why a hand-written line-oriented parser instead of a yacc grammar
-like Unix Make used? Three reasons. First, recipes are {opaque}
-strings handed verbatim to the shell---they have their own escaping
-and tokenization that does not fit a uniform grammar. Second,
-[[mk]]'s syntax is {context-sensitive} at the line level: a
-[['#']] starts a comment in normal text but is just a character
-inside a quoted filename, and the [[':' '=' '<']] separators have
-meaning only in a rule head, not inside variable values. Third,
-the line is the natural unit for {variable expansion}, which must
-happen at parse time so the dependency graph can be built statically
-(see Chapter~\ref{chap:graph}). The result is a parser organized
-around two layers: [<assline()>] assembles a logical line from
-the input (handling escaped newlines, comments, and quoted regions),
-and [<rhead()>] then dispatches on the separator character to
-populate rules, definitions, or inclusions.
+%claude: bad
+%Why a hand-written line-oriented parser instead of a yacc grammar
+%like Unix Make used? Three reasons. First, recipes are {opaque}
+%strings handed verbatim to the shell---they have their own escaping
+%and tokenization that does not fit a uniform grammar. Second,
+%[[mk]]'s syntax is {context-sensitive} at the line level: a
+%[['#']] starts a comment in normal text but is just a character
+%inside a quoted filename, and the [[':' '=' '<']] separators have
+%meaning only in a rule head, not inside variable values. Third,
+%the line is the natural unit for {variable expansion}, which must
+%happen at parse time so the dependency graph can be built statically
+%(see Chapter~\ref{chap:graph}). The result is a parser organized
+%around two layers: [<assline()>] assembles a logical line from
+%the input (handling escaped newlines, comments, and quoted regions),
+%and [<rhead()>] then dispatches on the separator character to
+%populate rules, definitions, or inclusions.
 
 \section{[[parse()]]}
 \label{sec:parse}
@@ -2812,8 +2812,7 @@ parse(char *f, fdt fd, bool varoverride)
         c = rhead(buf->start, &head, &tail,     &attr, &prog);
 
         // Semantic actions (they may read more lines)
-        switch(c)
-        {
+        switch(c) {
         <<[[parse()]] switch rhead cases>>
         }
     }
@@ -2823,6 +2822,8 @@ parse(char *f, fdt fd, bool varoverride)
 }
 @
 \l leak strdup for infile? when free?
+
+% attr? prog?
 
 The code of [<parse()>] operates in four steps 
 (as shown by the sectioning comments in the code above): 
@@ -2852,7 +2853,7 @@ be used to store one line of the [[mkfile]].
 in [[buf]] (via the function [<assline()>]).
 This is similar to the lexing phase in a compiler (see the \book{Compiler}).
 
-\item {\em Parsing}: [<parse()>]> processes a line to extract its elements:
+\item {\em Parsing}: [<parse()>] processes a line to extract its elements:
 the target and prerequisites around the special character [[':']] in a rule,
 or the variable name and values around the special character [['=']] in
 a variable definition.
@@ -2878,55 +2879,55 @@ I will describe in the next sections the cases of the [[switch]] above.
 \t FIGURE? where start from file and then group in line and
 \t  then expand var? summary of the process.
 
-%claude:
-To answer the author's thinking note above, here is the
-text-to-[<Word>]-list pipeline that each meaningful line of the
-[[mkfile]] traverses. I use the line
-\verb+OFILES=`{echo foo.$O bar.$O} $EXTRA+ as a running example,
-assuming [[O=5]] and [[EXTRA=baz.5]] are already in the symbol table:
+%claude: BAD
+%To answer the author's thinking note above, here is the
+%text-to-[<Word>]-list pipeline that each meaningful line of the
+%[[mkfile]] traverses. I use the line
+%\verb+OFILES=`{echo foo.$O bar.$O} $EXTRA+ as a running example,
+%assuming [[O=5]] and [[EXTRA=baz.5]] are already in the symbol table:
 
-\begin{verbatim}
-   bytes on disk
-       |  Bgetrune (libbio, UTF-8 decoding)
-       v
-   runes, escaped-\n-and-# stripped     <-- nextrune()
-       |
-       v
-   logical line (one Bufblock)          <-- assline()
-       "OFILES=`{echo foo.$O bar.$O} $EXTRA"
-       |
-       v                                <-- rhead()
-   head = "OFILES"     sep = '='    tail = "`{echo foo.$O bar.$O} $EXTRA"
-       |                                 |
-       |                                 | stow() --> nextword() loop
-       |                                 v
-       |                         case '`':  bquote() forks a shell,
-       |                         captures   "foo.5 bar.5"
-       |                         case '$':  varsub() looks up EXTRA,
-       |                         returns    {baz.5}
-       |                                 |
-       |                                 v
-       |                         Word list: [foo.5] -> [bar.5] -> [baz.5]
-       |                                 |
-       +---------------------------------+
-                         |
-                         v
-              symbol table: S_VAR["OFILES"] = {foo.5, bar.5, baz.5}
-\end{verbatim}
-
-%claude:
-Two observations are worth making about this pipeline before I
-dive into the individual stages. First, the split between the
-{line layer} (everything above [<rhead()>]) and the {word layer}
-(everything below) is what lets [[mk]] reuse [<assline()>] /
-[<nextrune()>] unchanged for rules, variable definitions, and
-includes: only the per-line action in [<parse()>] differs.
-Second, variable and backquote expansion happens inside
-[<nextword()>], not as a separate preprocessing pass, because a
-single [['$']] can expand to several words---so the expander
-must be able to push multiple [<Word>]s back into the caller's
-list, which is easier if expansion lives inside the word splitter
-than if it tries to rewrite the raw line.
+%\begin{verbatim}
+%   bytes on disk
+%       |  Bgetrune (libbio, UTF-8 decoding)
+%       v
+%   runes, escaped-\n-and-# stripped     <-- nextrune()
+%       |
+%       v
+%   logical line (one Bufblock)          <-- assline()
+%       "OFILES=`{echo foo.$O bar.$O} $EXTRA"
+%       |
+%       v                                <-- rhead()
+%   head = "OFILES"     sep = '='    tail = "`{echo foo.$O bar.$O} $EXTRA"
+%       |                                 |
+%       |                                 | stow() --> nextword() loop
+%       |                                 v
+%       |                         case '`':  bquote() forks a shell,
+%       |                         captures   "foo.5 bar.5"
+%       |                         case '$':  varsub() looks up EXTRA,
+%       |                         returns    {baz.5}
+%       |                                 |
+%       |                                 v
+%       |                         Word list: [foo.5] -> [bar.5] -> [baz.5]
+%       |                                 |
+%       +---------------------------------+
+%                         |
+%                         v
+%              symbol table: S_VAR["OFILES"] = {foo.5, bar.5, baz.5}
+%\end{verbatim}
+%
+%%claude:
+%Two observations are worth making about this pipeline before I
+%dive into the individual stages. First, the split between the
+%{line layer} (everything above [<rhead()>]) and the {word layer}
+%(everything below) is what lets [[mk]] reuse [<assline()>] /
+%[<nextrune()>] unchanged for rules, variable definitions, and
+%includes: only the per-line action in [<parse()>] differs.
+%Second, variable and backquote expansion happens inside
+%[<nextword()>], not as a separate preprocessing pass, because a
+%single [['$']] can expand to several words---so the expander
+%must be able to push multiple [<Word>]s back into the caller's
+%list, which is easier if expansion lives inside the word splitter
+%than if it tries to rewrite the raw line.
 
 
 %dup: Windows.nw
@@ -2948,7 +2949,7 @@ default:
     Exit();
     break;
 @
-\l explain Exit?
+\l explain Exit? use SYNERR!
 
 %crossref:
 There are two other locals in [<parse()>] that are passed by address
@@ -2983,13 +2984,13 @@ assline(Biobuf *bp, Bufblock *buf)
 
     resetbuf(buf);
     while ((c = nextrune(bp, true)) >= 0){
-        switch(c)
-        {
+        switch(c) {
         case '\n':
             if (!isempty(buf)) {
                 insert(buf, '\0');
                 return true;
             }
+            // else
             break;		/* skip empty lines */
         <<[[assline()]] switch character cases>>
         default:
@@ -3002,6 +3003,7 @@ eof:
     return *(bufcontent(buf)) != '\0';
 }
 @
+%grrr: should be Rune c;
 \l int -> Rune?
 %pad: I introduced and use resetbuf(), isempty(), and bufcontent()
 %ocaml: use Buffer too
@@ -3017,18 +3019,13 @@ operating on a string buffer and are described in Appendix~\ref{sec:bufblock}.
 
 The code of [<assline()>] may look trivial, but as its 
 (inappropriate) name suggests, [<assline()>] does not just
-{read} a line: it {assembles} a line.
+{read} a line: it {\em assembles} a line.
 %
-Indeed, if the current line is a {comment},
-[<assline()>] will
-skip the line to return the next meaningful line to [<parse()>].
+For example, if the current line is a {comment},
+[<assline()>] must
+skip the line and return the next meaningful line to [<parse()>].
 %
-Indeed, as I said in Section~\ref{sec:rule-simple-mkfile},
-[[mk]] allows the user to add comments in his [[mkfile]] by prefixing
-a line with the special character [['#']]. 
-\l like shell, cos reuse syntax
-%
-Moreover, [<assline()>] handles also blank lines, escaped newlines,
+Moreover, [<assline()>] must handle also blank lines (shown above), escaped newlines,
 and certain quoted characters, as explained in the following sections.
 
 %compiler: %dup: parsing/parse
@@ -3132,6 +3129,11 @@ if (c == '\\') {
 }
 @
 
+%claude:
+There is a small self-reference worth noticing here: the escape
+character this code looks for, the backslash, must itself be written
+[['\\']] in the C source, because the backslash is also C's own escape
+character.
 
 When [<nextrune()>] reads an escaped newline, it does not
 return the newline character to the caller [<assline()>].
@@ -3150,19 +3152,24 @@ already went too far in the input buffer by reading an extra
 character (to check whether this character was a newline).
 %
 This is why [[libbio]] provides the function [[Bungetrune()]] called above
-to go back in the input buffer.
+to go back in the input buffer, to ``unread'' the character,
+a classic technique used in many lexers in \plan.
 %
-This is one of the reasons [[mk]] uses the [[libbio]] library instead
-of the reading functions of the C library.
-\l could do with seek though?
+%This is one of the reasons [[mk]] uses the [[libbio]] library instead
+%of the reading functions of the C library.
+%\l could do with seek though?
 
 % FIGURE? with going to far and so going back?
 
 
 \subsubsection{Comments}
 
-As I mentioned before, [<assline()>] recognizes and skips
-comments:
+[<assline()>] also recognizes and skips comments.
+%
+As I said in Section~\ref{sec:rule-simple-mkfile},
+[[mk]] allows the user to add comments in his [[mkfile]] by prefixing
+a line with the special character [['#']]. 
+%said-before: like shell, cos reuse syntax
 
 %ex: with comment? after all just showed briefly before.
 
@@ -3274,7 +3281,7 @@ a comment anymore.
 
 
 You can configure [[mk]] to use either the \plan shell [[rc]]
-(see the \book{Shell}) or a Bourne-alike shell.
+(see the \book{Shell}) or a Bourne-alike shell (e.g., [[bash]]).
 \t actually not anymore?
 %
 However, each shell has its own escaping rules: sometimes a single quote,
@@ -3303,7 +3310,7 @@ the shell-specific [[escapetoken()]] function.
 
 
 The function below is the [[escapetoken()]] for
-[[rc]] in [[mk/rc.c]].
+[[rc]] in [<mk/rc.c>].
 %
 Like [<assline()>], it reads characters from the 
 input buffer [[bp]], and fills the string buffer [[buf]] with
@@ -3313,7 +3320,7 @@ those characters, but this time until the next quote
 
 
 % rc.c
-<<function [[escapetoken]]>>=
+<<function [[escapetoken]](rc.c)>>=
 /*
  *	Input an escaped token.  Possible escape chars are single-quote,
  *	double-quote and backslash.  Only the first is a valid escape for
@@ -3332,7 +3339,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
         if(c == '\''){
             if(preserve)
                 rinsert(buf, c);
-            <<[[escapetoken()]] return, unless double quote>>
+            <<[[escapetoken()]] return, unless quote quote>>
         }
         // else
         rinsert(buf, c);
@@ -3350,9 +3357,15 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 
 Of course, since [["'"]] is now a special character {reserved} to quote
 special characters, how do you quote [[']] itself?
+
+%claude:
+C itself faces this very question, and its answer is visible in the
+code just above: a single quote is written [['\'']], the backslash
+marking the quote as data rather than as syntax.
+
 \t meta, need also quote around quote in english, hence quoting term
 %compiler:
-A common technique found in most programming languages is to {double}
+Another common technique found in many programming languages is to {double}
 the escaping or quoting character
 (as shown for C in the code of [<assline()>] above, where the antislash
 character is doubled).
@@ -3364,9 +3377,9 @@ For example, [[mk]] interprets [['foo''bar']] as a filename
 containing a single quote between the strings [[foo]] and [[bar]]
 ([[foo'bar]]).
 %
-Here is the code to handle double quotes:
+Here is the code to handle two quotes:
 
-<<[[escapetoken()]] return, unless double quote>>=
+<<[[escapetoken()]] return, unless quote quote>>=
 c = Bgetrune(bp);
 if (c < 0)
     break; // eof
@@ -3414,7 +3427,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     p = charin(line, ":=<");
     if(p == nil)
         return '?';
-
+    // else
     sep = *p;
     *p++ = '\0';
     <<[[rhead()]] adjust sep if dynamic mkfile [[<|]]>>
@@ -3468,7 +3481,7 @@ at the bottom of Figure~\ref{fig:mk-rhead-overwrite}.
  line     p
    |      |                         after
    v------v------------+         *p++ = '\0'
-   |foo.5 | foo.c foo.h|
+   |foo.5 0 foo.c foo.h|
    +------+------------+
  h          t
  |          |
@@ -3533,7 +3546,7 @@ I mentioned the functions [[charin()]] a few times before.
 [<addrule()>] called [[charin()]] to check
 whether the target contains a special pattern character.
 %
-[<rhead()>] called [[charin()]] to get
+[<rhead()>] calls [[charin()]] to get
 the position of the [[':']], [['=']], or [['<']] character
 in a line.
 %
@@ -3631,7 +3644,7 @@ squote(char *cp)
     while(*cp){
         n = chartorune(&r, cp);
         if(r == '\'') {
-            <<[[squote()]] return, unless double quote>>
+            <<[[squote()]] return, unless quote quote>>
         }
         cp += n;
     }
@@ -3641,7 +3654,7 @@ squote(char *cp)
 }
 @
 
-<<[[squote()]] return, unless double quote>>=
+<<[[squote()]] return, unless quote quote>>=
 n += chartorune(&r, cp+n);
 if(r != '\'')
     return cp;
@@ -3658,19 +3671,19 @@ if(r != '\'')
 \subsection{Splitting a string in words: [[stow()]]}
 
 %claude:
-[<stow()>] and [<nextword()>] do more than simple splitting on
-whitespace: they also expand variables ([[\$FOO]]) and backtick
-commands ([[`\{cmd\}]]) inline. This is why [<nextword()>] returns
-a {list} of words rather than a single word: expanding a variable
-like [[\$OFILES]] can produce multiple words. The [[restart]] label
-in [<nextword()>] handles re-processing after expansion---a variable's
-value might itself contain variables that need further expansion.
-%claude:
-Crucially, variable expansion inside recipes is {deferred}: the
-recipe text is stored as a raw string and only expanded when
-the recipe is actually executed. This is necessary because special
-variables like [[\$stem]], [[\$target]], and [[\$prereq]] are only
-known at execution time, not at parse time.
+%[<stow()>] and [<nextword()>] do more than simple splitting on
+%whitespace: they also expand variables ([[\$FOO]]) and backtick
+%commands ([[`\{cmd\}]]) inline. This is why [<nextword()>] returns
+%a {list} of words rather than a single word: expanding a variable
+%like [[\$OFILES]] can produce multiple words. The [[restart]] label
+%in [<nextword()>] handles re-processing after expansion---a variable's
+%value might itself contain variables that need further expansion.
+%%claude:
+%Crucially, variable expansion inside recipes is {deferred}: the
+%recipe text is stored as a raw string and only expanded when
+%the recipe is actually executed. This is necessary because special
+%variables like [[\$stem]], [[\$target]], and [[\$prereq]] are only
+%known at execution time, not at parse time.
 
 %trans:
 After [<rhead()>] found the position of the special character in
@@ -3868,6 +3881,7 @@ case '\\':
     }
     break;
 @
+%ocaml: better once and for all in lexer instead of repeated many times
 \l but missing closing quote should never happen
 \l what if empty quoted string? empty is not false then
 
@@ -3888,7 +3902,7 @@ expandquote(char *s, Rune r, Bufblock *buf)
     while(*s){
         s += chartorune(&r, s);
         if(r == '\'') {
-            <<[[expandquote()]] return, unless double quote>>
+            <<[[expandquote()]] return, unless quote quote>>
         }
         rinsert(buf, r);
     }
@@ -3898,9 +3912,9 @@ expandquote(char *s, Rune r, Bufblock *buf)
 \l could lpize again the first if
 %old: b -> buf
 
-<<[[expandquote()]] return, unless double quote>>=
+<<[[expandquote()]] return, unless quote quote>>=
 if(*s == '\'')
-    s++; // skip one of the double quotes
+    s++; // skip one of the two quotes
 else
     return s;
 @
