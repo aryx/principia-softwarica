@@ -60,7 +60,7 @@ dorecipe(Node *node, bool *did)
     Word oldtargets;
     Word *last_oldtargets = &oldtargets;
     /*x: [[dorecipe()]] other locals */
-    Word newprereqs; 
+    Word newprereqs;
     /*e: [[dorecipe()]] other locals */
 
     /*
