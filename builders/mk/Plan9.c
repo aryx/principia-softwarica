@@ -15,6 +15,7 @@ maketmp(void)
 
 // could be in env.c
 /*s: function [[encodenulls]] */
+/// readenv -> <>
 /* break string of values into words at 01's or nulls*/
 static Word *
 encodenulls(char *s, int n)
@@ -42,8 +43,8 @@ encodenulls(char *s, int n)
     return head;
 }
 /*e: function [[encodenulls]] */
-/*s: function [[readenv]] */
-/// inithash -> <>
+/*s: function [[readenv]](plan9.c) */
+/// main -> inithash -> <>
 void
 readenv(void)
 {
@@ -108,8 +109,8 @@ readenv(void)
     }
     close(envdir);
 }
-/*e: function [[readenv]] */
-/*s: function [[exportenv]] */
+/*e: function [[readenv]](plan9.c) */
+/*s: function [[exportenv]](plan9.c) */
 /// execsh -> <>
 /* as well as 01's, change blanks to nulls, so that rc will
  * treat the words as separate arguments
@@ -176,7 +177,7 @@ exportenv(ShellEnvVar *e)
         close(f);
     }
 }
-/*e: function [[exportenv]] */
+/*e: function [[exportenv]](plan9.c) */
 
 // could be in file.c
 /*s: function [[chgtime]] */

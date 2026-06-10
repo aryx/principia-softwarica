@@ -6,7 +6,7 @@
 /*e: constant [[ENVQUANTA]] */
 
 /*s: global [[shellenv]] */
-// growing_array<ShellEnvVar> (endmarker = (nil,nil), size = envinsert.envsize)
+// growing_array<ShellEnvVar> (endmarker = (nil,nil), used = nextv, allocated = envsize)
 ShellEnvVar	*shellenv;
 /*e: global [[shellenv]] */
 /*s: global [[nextv]] */
@@ -136,7 +136,7 @@ initenv(void)
 {
     char **p;
 
-    nextv = 0; // reset envy
+    nextv = 0; // reset shellenv
 
     // internal mk variables
     for(p = specialvars; *p; p++)
@@ -151,7 +151,7 @@ initenv(void)
 /*e: function [[initenv]] */
 
 /*s: function [[buildenv]] */
-/// run -> sched -> <>
+/// main -> mk -> work -> dorecipe -> run -> sched -> <>
 ShellEnvVar*
 buildenv(Job *j, int slot)
 {

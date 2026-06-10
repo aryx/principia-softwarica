@@ -24,7 +24,7 @@ struct RunEvent {
 /*e: struct [[RunEvent]] */
 
 /*s: global [[events]] */
-// growing_array<Runevent> (size = nevents (== nproclimit))
+// growing_array<Runevent> (allocated = nevents (== nproclimit))
 static RunEvent *events;
 /*e: global [[events]] */
 /*s: global [[nevents]] */

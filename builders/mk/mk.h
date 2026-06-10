@@ -56,7 +56,7 @@ struct ShellEnvVar
     // ref<string>, the key
     char 		*name;
 
-    // list<ref_own<string>>, the value
+    // list<ref_own<Word>>, the value
     Word 		*values;
 };
 /*e: struct [[Envy]] */
