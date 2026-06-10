@@ -42,6 +42,7 @@ squote(char *cp)
 /*e: function [[squote]] */
 
 /*s: function [[charin]] */
+/// addrule | rhead -> <>
 /*
  *	Search a string for characters in a pattern set.
  *	Characters in quotes and variable generators are escaped.
@@ -93,7 +94,7 @@ charin(char *cp, char *pat)
 }
 /*e: function [[charin]] */
 
-/*s: function [[expandquote]] */
+/*s: function [[expandquote]](rc.c) */
 /*
  *	extract an escaped token.  Possible escape chars are single-quote,
  *	double-quote, and backslash.  Only the first is valid for rc. The
@@ -103,10 +104,11 @@ char*
 expandquote(char *s, Rune r, Bufblock *buf)
 {
     if (r != '\'') {
+        // " and \ are not valid escape for rc, only '
         rinsert(buf, r);
         return s;
     }
-
+    // else
     while(*s){
         s += chartorune(&r, s);
         if(r == '\'') {
@@ -121,7 +123,7 @@ expandquote(char *s, Rune r, Bufblock *buf)
     }
     return nil;
 }
-/*e: function [[expandquote]] */
+/*e: function [[expandquote]](rc.c) */
 
 /*s: function [[escapetoken]](rc.c) */
 /*
@@ -136,7 +138,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
     int line = mkinline;
 
     if(esc != '\'')
-        return OK_1;
+        return OK_1; // " and \ are not valid escape for rc, only '
 
     while((c = nextrune(bp, false)) > 0){
         if(c == '\''){

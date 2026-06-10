@@ -18,6 +18,7 @@ static int rcmp(Rule *r, char *target, Word *tail);
 
 
 /*s: function [[addrule]] */
+/// (main -> parse | main) -> <>
 void
 addrule(char *target, Word *prereqs, char *recipe, 
         Word *alltargets, int attr, int hline, char *prog)

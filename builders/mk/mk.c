@@ -9,6 +9,7 @@ int runerrs;
 /*e: global [[runerrs]] */
 
 /*s: function [[mk]] */
+/// main -> <> -> graph() ; clrmade(); work()
 void
 mk(char *target)
 {
@@ -67,6 +68,7 @@ mk(char *target)
 /*e: function [[mk]] */
 
 /*s: function [[clrmade]] */
+/// main -> mk -> <>
 void
 clrmade(Node *n)
 {
@@ -96,6 +98,7 @@ unpretend(Node *n)
 /*e: function [[unpretend]] */
 
 /*s: function [[work]] */
+/// main -> mk -> <> -> outofdate(); dorecipe()
 void
 work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 {
@@ -116,6 +119,7 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
     /*e: [[work()]] debug */
     if(node->flags&BEINGMADE)
         return;
+    // else
     /*s: [[work()]] possibly unpretending node */
     if((node->flags&MADE) && (node->flags&PRETENDING) && parent_node
         && outofdate(parent_node, parent_arc, false)){
@@ -135,7 +139,6 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
             return;
     }
     /*e: [[work()]] possibly unpretending node */
-
     if(node->arcs == nil){
         /*s: [[work()]] no arcs, a leaf */
         /* consider no prerequisite case */
@@ -241,6 +244,7 @@ work(Node *node, bool *did,   Node *parent_node, Arc *parent_arc)
 /*e: function [[work]] */
 
 /*s: function [[update]] */
+/// mk -> waitup -> <>
 void
 update(Node *node, bool fake)
 {
@@ -306,7 +310,7 @@ outofdate(Node *node, Arc *arc, bool eval)
     int ret;
     /*e: [[outofdate()]] locals */
 
-    /*s: [[outofdate()]] if arc->prog */
+    /*s: [[outofdate()]] if [[arc->prog]] */
     if(arc->prog){
         snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
             arc->n->name);
@@ -323,7 +327,7 @@ outofdate(Node *node, Arc *arc, bool eval)
             ret = sym->u.value;
         return (ret-1);
     }
-    /*e: [[outofdate()]] if arc->prog */
+    /*e: [[outofdate()]] if [[arc->prog]] */
     else 
      /*s: [[outofdate()]] if arc node is an archive member */
      if(strchr(arc->n->name, '(') && arc->n->time == 0)
@@ -336,7 +340,7 @@ outofdate(Node *node, Arc *arc, bool eval)
          * It's a race, and the safer option is to do
          * extra building rather than not enough.
          */
-        return node->time < arc->n->time;
+        return node->time <= arc->n->time;
 }
 /*e: function [[outofdate]] */
 /*e: mk/mk.c */

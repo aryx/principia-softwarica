@@ -30,6 +30,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 /*e: constructor [[newjob]] */
 
 /*s: function [[dorecipe]] */
+% main -> mk -> work -> <> -> run(newjob())
 void
 dorecipe(Node *node, bool *did)
 {
@@ -42,13 +43,13 @@ dorecipe(Node *node, bool *did)
     Rule *master_rule = nil;
     Arc *master_arc = nil;
     /*x: [[dorecipe()]] other locals */
-    // list<string> (last = last_alltargets)
+    // list<ref<Word> (last = last_alltargets, head elt to skip)
     Word alltargets;
     /*x: [[dorecipe()]] other locals */
     // list<ref<Node>> (next = Node.next)
     Node *nlist = node;
     /*x: [[dorecipe()]] other locals */
-    // list<string> (last = last_allprereqs)
+    // list<ref<Word>> (last = last_allprereqs, head elt to skip)
     Word allprereqs;
     /*x: [[dorecipe()]] other locals */
     char cwd[256];

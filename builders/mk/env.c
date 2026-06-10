@@ -67,6 +67,7 @@ inithash(void)
 /*e: function [[inithash]] */
 
 /*s: function [[envinsert]] */
+/// envupd | ecopy | execinit -> <>
 static void
 envinsert(char *name, Word *value)
 {
@@ -129,6 +130,7 @@ ecopy(Symtab *s)
 /*e: function [[ecopy]] */
 
 /*s: function [[initenv]] */
+/// main -> parse; mk; <>
 void
 initenv(void)
 {
@@ -149,6 +151,7 @@ initenv(void)
 /*e: function [[initenv]] */
 
 /*s: function [[buildenv]] */
+/// run -> sched -> <>
 ShellEnvVar*
 buildenv(Job *j, int slot)
 {

@@ -276,6 +276,10 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 *attr |= NOVIRT;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            //PAD: this is an extension in omk that I ignore here
+            case 'I':
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'P':
                 pp = utfrune(p, ':');
                 if (pp == nil || *pp == 0)
@@ -286,9 +290,6 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 p = pp;
                 break;
             /*e: [[rhead()]] when parsing rule attributes, switch rune cases */
-            //PAD: this is an extension in mk-in-ocaml that I ignore here
-            case 'I':
-                break;
             default:
                 SYNERR(-1);
                 fprint(STDERR, "unknown attribute '%c'\n", p[-1]);

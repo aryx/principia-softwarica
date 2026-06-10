@@ -10,6 +10,7 @@ extern int chgtime(char *name);
 /* table-driven version in bootes dump of 12/31/96 */
 
 /*s: function [[timeof]] */
+/// newnode -> <> -> mkmtime -> (bulktime; dirstat (libc))
 ulong
 timeof(char *name, bool force)
 {

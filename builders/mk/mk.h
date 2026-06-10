@@ -140,7 +140,7 @@ enum Rule_attr {
 /*s: struct [[Arc]] */
 struct Arc
 {
-    // option<ref<Node>>, the other node in the arc (the dependency)
+    // option<ref<Node>>, the other node in the arc (the dependency, None when virtual)
     struct Node *n;
     // ref<Rule>, to generate the target node from the dependent node
     Rule *r;
@@ -383,9 +383,14 @@ enum Dxxx {
 // which have different requirements. I did that in xix/mk first
 // and apparently 9-cc-colombier did something similar but only
 // with MKSHELL defined in the mkfile itself (with some pushshell()/popshell())
-typedef struct Shell {
+/*s: struct [[Shell]] */
+struct Shell {
     char* shell;
     char* shellname;
+} Shell;
+/*e: struct [[Shell]] */
+typedef struct Shell Shell;
+
 //TODO: later
 //    char *shflags;
 //
@@ -397,7 +402,7 @@ typedef struct Shell {
 //    char* (*expandquote)(char *s, Rune r, Bufblock *b);
 //    int (*escapetoken)(Biobuf *bp, Bufblock *buf, int preserve, int esc);
 //    char* (*copyq)(char *s, Rune q, Bufblock *buf);
-} Shell;
+
 //old:
 //extern	char	*termchars;
 //extern	int	IWS;

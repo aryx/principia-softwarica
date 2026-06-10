@@ -6,6 +6,7 @@ static char *shquote(char*, Rune, Bufblock*);
 static char *shbquote(char*, Bufblock*);
 
 /*s: function [[shprint]] */
+/// sched | update -> <> 
 void
 shprint(char *s, ShellEnvVar *env, Bufblock *buf)
 {

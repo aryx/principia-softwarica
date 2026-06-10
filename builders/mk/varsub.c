@@ -9,6 +9,7 @@ static	bool		submatch(char*, Word*, Word*, int*, char**);
 static	Word		*varmatch(char *);
 
 /*s: function [[varsub]] */
+/// nextword -> <>
 Word*
 varsub(char **s)
 {
@@ -20,7 +21,6 @@ varsub(char **s)
         return expandvar(s);
     /*e: [[varsub()]] if variable starts with open brace */
     // else
-
     buf = varname(s);
     /*s: [[varsub()]] sanity check buf */
     if(buf == nil)
@@ -276,6 +276,7 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 
 
 /*s: function [[nextword]] */
+/// stow -> <>
 /*
  *	break out a word from a string handling quotes, executions,
  *	and variable expansions.
@@ -338,7 +339,6 @@ restart:
             }
             /*e: [[nextword()]] when in variable case, if w is nil */
             empty = false;
-
             /*s: [[nextword()]] when in variable case, if non-space chars before var */
             if(!isempty(buf)){
                 bufcpy(buf, w->s, strlen(w->s));
@@ -367,7 +367,6 @@ restart:
             /*e: [[nextword()]] when in variable case, if head is not empty */
             else
                 head = lastw = w;
-
             while(lastw->next)
                 lastw = lastw->next;
             break;

@@ -43,6 +43,7 @@ encodenulls(char *s, int n)
 }
 /*e: function [[encodenulls]] */
 /*s: function [[readenv]] */
+/// inithash -> <>
 void
 readenv(void)
 {
@@ -109,6 +110,7 @@ readenv(void)
 }
 /*e: function [[readenv]] */
 /*s: function [[exportenv]] */
+/// execsh -> <>
 /* as well as 01's, change blanks to nulls, so that rc will
  * treat the words as separate arguments
  */
@@ -303,22 +305,20 @@ mkmtime(char *name, bool force)
 /*e: function [[mkmtime]] */
 
 // could be in run.c
+/*s: global [[rc]] */
 Shell rc = {
   .shellname = "rc",
   .shell = "/bin/rc",
 };
-
-Shell* shell = &rc;
+/*e: global [[rc]] */
 
 /*s: global [[shell]] */
-//char 	*shell =	"/bin/rc";
+Shell* shell = &rc;
 /*e: global [[shell]] */
-/*s: global [[shellname]] */
-//char 	*shellname =	"rc";
-/*e: global [[shellname]] */
 
 // could be in run.c
 /*s: function [[execsh]] */
+/// main -> mk -> work -> dorecipe -> run -> sched -> <>
 int
 execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 {
@@ -341,14 +341,14 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
     /*e: [[execsh()]] if buf then create pipe to save output */
 
     pid1 = rfork(RFPROC|RFFDG|RFENVG);
-    /*s: [[execsh()]] sanity check pid rfork */
+    /*s: [[execsh()]] sanity check pid1 rfork */
     if(pid1 < 0){
         perror("mk rfork");
         Exit();
     }
-    /*e: [[execsh()]] sanity check pid rfork */
-    // child
+    /*e: [[execsh()]] sanity check pid1 rfork */
     if(pid1 == 0){
+        // child
         /*s: [[execsh()]] in child, if buf, close one side of pipe */
         if(buf)
             close(out[0]);
@@ -361,14 +361,14 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
         }
         /*e: [[execsh()]] sanity check err pipe */
         pid2 = fork();
-        /*s: [[execsh()]] sanity check pid fork */
+        /*s: [[execsh()]] sanity check pid2 fork */
         if(pid2 < 0){
             perror("mk fork");
             Exit();
         }
-        /*e: [[execsh()]] sanity check pid fork */
-        // parent of grandchild, the shell interpreter
+        /*e: [[execsh()]] sanity check pid2 fork */
         if(pid2 != 0){
+            // parent of grandchild, the shell interpreter
             // input must come from the pipe
             dup(in[0], STDIN);
             /*s: [[execsh()]] in child, if buf, dup and close */
@@ -411,7 +411,7 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
         close(in[1]); // will flush
         _exits(nil);
     }
-    // parent
+    // else parent
     /*s: [[execsh()]] in parent, if buf, close other side of pipe and read output */
     if(buf){
         close(out[1]);
@@ -433,7 +433,7 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
     return pid1;
 }
 /*e: function [[execsh]] */
-/*s: function [[waitfor]] */
+/*s: function [[xwaitfor]](plan9.c) */
 int
 xwaitfor(char *msg)
 {
@@ -444,13 +444,13 @@ xwaitfor(char *msg)
     w = wait();
     // no more children
     if(w == nil)
-        return -1;
+        return ERROR_NEG1;
     strecpy(msg, msg+ERRMAX, w->msg);
     pid = w->pid;
     free(w);
     return pid;
 }
-/*e: function [[waitfor]] */
+/*e: function [[xwaitfor]](plan9.c) */
 
 // could be in run.c
 /*s: function [[Exit]] */
@@ -487,6 +487,7 @@ notifyf(void *a, char *msg)
 }
 /*e: function [[notifyf]] */
 /*s: function [[catchnotes]] */
+/// main -> <>
 void
 catchnotes()
 {
