@@ -9060,18 +9060,35 @@ if(f < 0) {
 %******************************************************************************
 \label{chap:debugging-support}
 
-% seen file/line fields in Rule, so can report error accurately.
-
 %claude:
-When a recipe fails, [[mk]] must tell the user what went wrong.
-The complication is that recipes contain variable references
-(e.g., [[$CFLAGS]]) that were expanded before the shell saw them.
-The [<shprint()>] function re-expands a recipe with the current
-environment so that the error message shows the actual command
-that was executed, not the template with unexpanded variables.
+A build tool spends most of its life doing the right thing silently, but
+when a recipe fails or a user wonders why a target is being rebuilt, [[mk]]
+needs to explain itself. This chapter gathers the facilities that let it do
+so: echoing the commands it runs ([<shprint()>]), explaining its rebuild
+decisions ([[mk -e]]), previewing work without doing it ([[mk -n]] and
+[[mk -w]]), and reporting how well it kept the processors busy ([[mk -u]]).
+%claude:
+Accurate error reporting is cheap here because the groundwork was laid during
+parsing: every [<Rule>] remembers the [[file]] and [[line]] where it was
+defined (Chapter~\ref{chap:parsing}). When a build fails or the dependency
+graph is dumped, [[mk]] can point at the exact [[mkfile]] location that
+introduced an arc rather than leaving the user to guess which rule was at
+fault.
 
 \section{Printing jobs: [[shprint()]]}
 \l not sure it can be considered a debugging facility, more mandatory
+
+%claude:
+When a recipe runs or fails, [[mk]] wants to show the user the command that
+actually executed. The subtlety is that [[mk]] does \emph{not} expand the
+variable references in a recipe (e.g., [[$CFLAGS]]) before running it: the
+recipe text is handed to the shell verbatim, and the shell interprets the
+variables, drawing their values from the environment [[mk]] exported (see
+[<exportenv()>]). The [<shprint()>] function re-expands the recipe against
+[[mk]]'s own variables purely for display, so the echoed line shows concrete
+values instead of the [[$CFLAGS]] template; references [[mk]] does not know
+about are copied through untouched for the shell to resolve.
+
 
 % With use of variables, can be hard to know what was actually executed
 % so when there is an error, useful to expand those vars.
@@ -9293,6 +9310,15 @@ copysingle(char *s, Bufblock *buf)
 
 \section{Explain mode: [[mk -e]]}
 
+%claude:
+When a build does more (or less) than expected, the question is always
+\emph{why} did [[mk]] decide a target was out of date. The [[-e]] flag answers
+it: for each rebuild, [[mk]] prints the offending prerequisite alongside both
+timestamps (e.g. [[target(time) < prereq(time)]]), or notes that a target had
+no prerequisites at all. It is a window into the outdated-file comparison of
+Chapter~\ref{chap:finding-outdated}, costing just two [[fprint]] calls guarded
+by a flag.
+
 <<global [[explain]]>>=
 bool explain = false;
 @
@@ -9316,6 +9342,14 @@ if(explain)
 @
 
 \section{Dry mode: [[mk -n]]}
+
+%claude:
+Dry mode prints the recipes [[mk]] \emph{would} run without actually running
+them, so you can preview the consequences of a build before committing to it.
+The implementation is a small detour in [<sched()>]: instead of handing the job
+to [<execsh()>], [[mk]] still echoes the recipe but then simply stamps each
+target as [[MADE]] with the current time, letting the rest of the graph walk
+proceed as if the work had succeeded.
 
 % just print recipe, do not execute them
 <<global [[nflag]]>>=
@@ -9342,6 +9376,14 @@ if(nflag || tflag){
 % marked as MADE (and still print recipe)
 
 \section{What-if mode: [[mk -w <file>]]}
+
+%claude:
+What-if mode answers a hypothetical: \emph{if} I were to touch this file, what
+would need rebuilding? Rather than actually modifying the file, [[mk]] pokes its
+time cache, forcing the named file's mtime to ``now'' so the outdated-file
+comparison treats everything downstream of it as stale. Paired with dry mode
+(typically [[mk -n -w prog.h]]) it lets you see the blast radius of a change
+before making it.
 
 % what if I change a file, what needs to be done?
 % usually works with -n, mk -n -wprog.h
@@ -9420,6 +9462,16 @@ timeinit(char *s)
 %\chapter{Profiling Support}
 
 \section{Processor utilization: [[mk -u]]}
+
+%claude:
+The whole point of [[mk]]'s parallel scheduler is to keep the machine busy, so
+[[-u]] measures how well it succeeds. The idea is a histogram indexed by
+\emph{degree of parallelism}: [<usage()>] is called whenever [[nrunning]]
+changes and charges the elapsed time to the [[tslot]] bucket for the number of
+jobs that were running. At the end, [<prusage()>] prints how many seconds were
+spent with zero jobs running, one job, two jobs, and so on --- making it easy
+to see whether the build was actually parallel or mostly serialized on a
+critical path.
 
 % could provide UI like in buck where see all processors
 % and which one are busy and which one are IDLE
