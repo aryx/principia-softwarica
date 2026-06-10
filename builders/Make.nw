@@ -7513,7 +7513,7 @@ struct RunEvent {
 The list of mappings is stored in the following global:
 
 <<global [[events]]>>=
-// growing_array<Runevent> (size = nevents (== nproclimit))
+// growing_array<Runevent> (allocated = nevents (== nproclimit))
 static RunEvent *events;
 @
 %ocaml: use instead map (e.g., hash) from pid to job.
@@ -8443,8 +8443,10 @@ using its own variable lookup. By writing those values into
 [[/env/]] before the [[exec]], [[mk]] makes them available to the
 shell without ever touching the recipe string. This is the
 ``minimal extension'' philosophy at work: [[mk]] does not
-reimplement variable expansion, it just feeds the shell from the
-side. As a side benefit, this is also why [[mk]]'s recipes do not
+reimplement variable expansion, 
+% actually it does a bit for shprint
+it just feeds the shell from the
+side. This is also why [[mk]]'s recipes do not
 need the [[$$i]] double-dollar escape Make requires---there is no
 distinction between Make variables and shell variables to maintain,
 because there is only one expander.
@@ -8477,7 +8479,7 @@ because there is only one expander.
 % or in recipe. Different handling depending on context.
 % See quote from mk manual.
 
-\section{[[Shellenv]] and [[shellenv]]}
+\section{[[ShellEnvVar]] and [[shellenv]]}
 \label{sec:shellenv}
 \n could be in core DS, but used just here, and outside, S_VAR is good enough.
 
@@ -8493,6 +8495,7 @@ the value of all those variables to the shell.
 \t why? faster? because anyway exec excepts an array? not really.
 %
 The structure below maps a variable name to a list of words.
+% why yet another?
 
 <<struct [[Envy]]>>=
 struct ShellEnvVar
@@ -8500,7 +8503,7 @@ struct ShellEnvVar
     // ref<string>, the key
     char 		*name;
 
-    // list<ref_own<string>>, the value
+    // list<ref_own<Word>>, the value
     Word 		*values;
 };
 @
@@ -8512,7 +8515,7 @@ struct ShellEnvVar
 All the variables and their values are stored in the following global:
 
 <<global [[shellenv]]>>=
-// growing_array<ShellEnvVar> (endmarker = (nil,nil), size = envinsert.envsize)
+// growing_array<ShellEnvVar> (endmarker = (nil,nil), used = nextv, allocated = envsize)
 ShellEnvVar	*shellenv;
 @
 %old: envy -> shellenv
@@ -8624,7 +8627,7 @@ initenv(void)
 {
     char **p;
 
-    nextv = 0; // reset envy
+    nextv = 0; // reset shellenv
 
     // internal mk variables
     for(p = specialvars; *p; p++)
@@ -8710,9 +8713,8 @@ through the filesystem under [[/env/]] (see the \book{Kernel}).
 %
 [[readenv()]] below simply iterates over all the files under [[/env/]].
 
-% plan9 specific, in plan9.c
-<<function [[readenv]]>>=
-/// inithash -> <>
+<<function [[readenv]](plan9.c)>>=
+/// main -> inithash -> <>
 void
 readenv(void)
 {
@@ -8832,6 +8834,7 @@ it is more convenient to use the null character as a separator.
 %real-world: xargs and find -print0 and other ugly stuff
 This avoids the need to escape space characters 
 (and later to parse escaped characters).
+%yoann1: maybe can mention standard practice also in \unix world, with xargs -print0 but I'm sure there are more (find?)
 
 
 %flow:
@@ -8846,6 +8849,7 @@ to mark the end of the string.
 
 \label{sec:encodenulls}
 <<function [[encodenulls]]>>=
+/// readenv -> <>
 /* break string of values into words at 01's or nulls*/
 static Word *
 encodenulls(char *s, int n)
@@ -8895,7 +8899,7 @@ Once [<shellenv>] has been initialized, [<sched()>] can call
 values of [[mk]]'s special variable for a specific job:
 
 <<function [[buildenv]]>>=
-/// run -> sched -> <>
+/// main -> mk -> work -> dorecipe -> run -> sched -> <>
 ShellEnvVar*
 buildenv(Job *j, int slot)
 {
@@ -8948,7 +8952,7 @@ by writing in files under [[/env/]].
 [[exportenv()]] below iterates over the entries in [<shellenv>]
 (bound to the [[e]] parameter), and writes into files under [[/env/]]:
 
-<<function [[exportenv]]>>=
+<<function [[exportenv]](plan9.c)>>=
 /// execsh -> <>
 /* as well as 01's, change blanks to nulls, so that rc will
  * treat the words as separate arguments
@@ -9022,6 +9026,7 @@ if(sym == nil && !hasvalue)	/* non-existant null symbol */
 
 However, if you defined a variable but assigned it the empty list,
 [<exportenv()>] will delete this environment variable:
+% useful when?
 
 <<[[exportenv()]] if existing symbol but no value, remove from env>>=
 if (sym != nil && !hasvalue) {	/* Remove from environment */
