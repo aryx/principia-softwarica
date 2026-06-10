@@ -1,0 +1,56 @@
+#!/bin/rc
+# claude: drawterm-check — report which prerequisites for a drawterm/cpu
+# connection into this machine are present. As each layer is brought up its
+# line flips from FAIL to PASS. See the cpu+auth bring-up notes.
+
+echo '== drawterm/cpu readiness on '^`{cat /sys/sysname >[2]/dev/null}^' =='
+echo '   hostowner = '^`{cat /sys/hostowner >[2]/dev/null}
+
+# 1. IP stack + address (the part that already works)
+if(test -e /net/tcp/clone){
+	echo 'PASS  IP stack up'
+	for(i in /net/ipifc/[0-9]*)
+		if(test -e $i/status)
+			echo '      '^$i^': '^`{cat $i/status >[2]/dev/null}
+}
+if not
+	echo 'FAIL  IP stack down — boot.rc must bind #I /net and run ipconfig'
+
+# 2. auth binaries on the disk (built from security/auth)
+if(test -e /bin/factotum && test -e /bin/keyfs && test -e /bin/auth/authsrv)
+	echo 'PASS  auth binaries present (factotum, keyfs, authsrv)'
+if not
+	echo 'FAIL  auth binaries missing — enable security/auth in the build (security/mkfile)'
+
+# 3. capability device #¤ — cpu -R calls auth_chuid() which opens #¤/capuse
+if(bind '#¤' /dev >[2]/dev/null)
+	echo 'PASS  devcap #¤ present'
+if not
+	echo 'FAIL  devcap #¤ missing — cpu auth_chuid will fail; port devcap.c into the kernel or patch cpu.c for the single-user case'
+
+# 4. factotum running and holding a key
+if(test -e /srv/factotum){
+	echo 'PASS  factotum running (/srv/factotum)'
+	if(test -e /mnt/factotum/ctl)
+		echo '      keys: '^`{cat /mnt/factotum/ctl >[2]/dev/null}
+}
+if not
+	echo 'FAIL  factotum not running — start it and load the user key via /mnt/factotum/ctl'
+
+# 5. listeners for cpu (17010) and authsrv (567)
+if(netstat >[2]/dev/null | grep -s 17010)
+	echo 'PASS  listening on 17010 (cpu)'
+if not
+	echo 'FAIL  no cpu listener — listen1 -t tcp!*!17010 /bin/cpu -R &'
+if(netstat >[2]/dev/null | grep -s 567)
+	echo 'PASS  listening on 567 (authsrv)'
+if not
+	echo 'FAIL  no auth listener — listen1 -t tcp!*!567 /bin/auth/authsrv &'
+
+echo
+echo 'End-to-end loopback probe:  cpu -h tcp!127.1!17010'
+echo '  read the error to see the current wall:'
+echo '    "can''t dial"               -> no cpu listener (step 5)'
+echo '    "...factotum..."            -> factotum not running/built (step 2/4)'
+echo '    "#¤/capuse: no capability"  -> devcap missing (step 3)'
+echo '    drops into a shell          -> success'
