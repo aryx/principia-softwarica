@@ -7339,22 +7339,23 @@ for(a = n->arcs; a; a = a->next){
 \chapter{Scheduling Jobs}
 %******************************************************************************
 \label{chap:scheduling}
-\l Fixing outdated files (after finding outdated files)
+%alt: and executing/waiting process
+%alt: and fixing outdated files (after finding outdated files)
 
 %claude:
-The scheduler has three responsibilities split across three
-functions, and the split is worth understanding before diving
-into the code. [<run()>] is the {producer} side: it appends a
-new job to [<jobs>] and, if a processor slot is free, kicks
-[<sched()>] to start it immediately. [<sched()>] is the
-{launcher}: it pops a job, hands it to [<execsh()>] to fork
-a shell, and records the resulting process id in the [<events>]
-slot table. [<waitup()>] is the {reaper}: it blocks on
-[[wait()]], looks the returned pid up in [<events>] to find
-which job finished, calls [<update()>] to mark the targets
-[<MADE>], and then calls [<sched()>] again to launch the next
-queued job. The slot table is the glue: it is the only mapping
-from kernel-level pids back to graph-level nodes.
+%The scheduler has three responsibilities split across three
+%functions, and the split is worth understanding before diving
+%into the code. [<run()>] is the {producer} side: it appends a
+%new job to [<jobs>] and, if a processor slot is free, kicks
+%[<sched()>] to start it immediately. [<sched()>] is the
+%{launcher}: it pops a job, hands it to [<execsh()>] to fork
+%a shell, and records the resulting process id in the [<events>]
+%slot table. [<waitup()>] is the {reaper}: it blocks on
+%[[wait()]], looks the returned pid up in [<events>] to find
+%which job finished, calls [<update()>] to mark the targets
+%[<MADE>], and then calls [<sched()>] again to launch the next
+%queued job. The slot table is the glue: it is the only mapping
+%from kernel-level pids back to graph-level nodes.
 
 %trans:
 In this chapter, you will see the remaining important functions
@@ -7386,7 +7387,7 @@ The following sections will explain the code of
 I presented before and runs the scheduler:
 
 <<function [[run]]>>=
-/// main -> mk -> work -> dorecipe -> <> (-> sched())
+/// main -> mk -> work -> dorecipe -> <> -> sched
 void
 run(Job *j)
 {
@@ -7453,7 +7454,8 @@ nproc(void)
     Symtab *sym;
     Word *w;
 
-    if(sym = symlook("NPROC", S_VAR, nil)) {
+    sym = symlook("NPROC", S_VAR, nil);
+    if(sym) {
         w = sym->u.ptr;
         if (!empty_words(w))
             nproclimit = atoi(w->s);
@@ -7473,6 +7475,7 @@ nproc(void)
 
 
 \section{Scheduling jobs}
+% use different title since also chapter name?
 
 %trans:
 Before showing the code of [<sched()>], 
@@ -7529,47 +7532,48 @@ array is called a {\em slot}.
 The growing array is initialized in [<nproc()>]:
 
 %claude:
-It is easier to see what a {slot} is by drawing [<events>] at a
-single point during a parallel build. Suppose [[mk -P3]] is
-building the tiny project from Section~\ref{sec:graph-applyrules}
-with [[nproclimit=3]]. At the moment shown, the two [[cc -c]]
-jobs for [[hello.o]] and [[world.o]] are already running, the
-[[ar]] job for [[libutil.a]] is waiting on its [[.o]] prereqs
-(which are not in this project so it is ready too), and the
-final link for [[hello]] is still in the [<jobs>] queue because
-its prereq [[hello.o]] is [[BEINGMADE]]:
-
-\begin{verbatim}
-                 events[] (size = nproclimit = 3)
-
-       slot  pid    job                 state
-       ----  -----  ------------------  ------------------
-        0    4217   cc -c hello.c       running  (SIGCHLD
-                                                  will land
-                                                  in pidslot)
-        1    4219   cc -c world.c       running
-        2     0     -                   free  (nextslot()
-                                                returns 2)
-
-                 jobs (linked list, waiting)
-
-       head -> [ link hello   (waits on hello.o BEINGMADE) ]
-            -> [ link world   (waits on world.o BEINGMADE) ]
-            -> nil
-\end{verbatim}
-
-%claude:
-Three details hide in this picture. [<nextslot()>] uses
-[[pid <= 0]] as the ``free'' predicate, so a slot is reclaimed
-simply by zeroing its [[pid]] in [<waitup()>]---no list splicing.
-[<pidslot()>] is the inverse: given the pid reported by [[await()]],
-it scans [<events>] linearly until it finds the match, which is
-fine because [[nproclimit]] is tiny (the number of CPU cores,
-not the number of jobs). And the jobs whose prereqs are still
-[[BEINGMADE]] never reach this table at all---they sit in
-[<jobs>] until [<waitup()>] calls [<update()>] on a finished
-node, which then re-evaluates whether any waiting job can be
-enqueued into [[events]] by a follow-up [<sched()>] call.
+%It is easier to see what a {slot} is by drawing [<events>] at a
+%single point during a parallel build. Suppose [[mk -P3]] is
+%% mk -p3 ???
+%building the tiny project from Section~\ref{sec:graph-applyrules}
+%with [[nproclimit=3]]. At the moment shown, the two [[cc -c]]
+%jobs for [[hello.o]] and [[world.o]] are already running, the
+%[[ar]] job for [[libutil.a]] is waiting on its [[.o]] prereqs
+%(which are not in this project so it is ready too), and the
+%final link for [[hello]] is still in the [<jobs>] queue because
+%its prereq [[hello.o]] is [[BEINGMADE]]:
+%
+%\begin{verbatim}
+%                 events[] (size = nproclimit = 3)
+%
+%       slot  pid    job                 state
+%       ----  -----  ------------------  ------------------
+%        0    4217   cc -c hello.c       running  (SIGCHLD
+%                                                  will land
+%                                                  in pidslot)
+%        1    4219   cc -c world.c       running
+%        2     0     -                   free  (nextslot()
+%                                                returns 2)
+%
+%                 jobs (linked list, waiting)
+%
+%       head -> [ link hello   (waits on hello.o BEINGMADE) ]
+%            -> [ link world   (waits on world.o BEINGMADE) ]
+%            -> nil
+%\end{verbatim}
+%
+%%claude:
+%Three details hide in this picture. [<nextslot()>] uses
+%[[pid <= 0]] as the ``free'' predicate, so a slot is reclaimed
+%simply by zeroing its [[pid]] in [<waitup()>]---no list splicing.
+%[<pidslot()>] is the inverse: given the pid reported by [[await()]],
+%it scans [<events>] linearly until it finds the match, which is
+%fine because [[nproclimit]] is tiny (the number of CPU cores,
+%not the number of jobs). And the jobs whose prereqs are still
+%[[BEINGMADE]] never reach this table at all---they sit in
+%[<jobs>] until [<waitup()>] calls [<update()>] on a finished
+%node, which then re-evaluates whether any waiting job can be
+%enqueued into [[events]] by a follow-up [<sched()>] call.
 
 
 <<[[nproc()]] grow nevents if necessary>>=
@@ -7604,6 +7608,7 @@ nextslot(void)
     for(i = 0; i < nproclimit; i++)
         if(events[i].pid <= 0) 
             return i;
+    // else
     assert(/*out of slots!!*/ false);
     return 0;	/* cyntax */
 }
@@ -7625,7 +7630,7 @@ pidslot(int pid)
             return i;
     // else
     <<[[pidslot()]] if [[DEBUG(D_EXEC)]]>>
-    return -1;
+    return ERROR_NEG1;
 }
 @
 \t this one iterate on all nevents, not just nproclimit
@@ -7641,8 +7646,8 @@ pidslot(int pid)
 %trans:
 Here is finally the code of [[sched()]]:
 
-% main -> mk -> work -> dorecipe -> run -> sched()
 <<function [[sched]]>>=
+/// main -> mk -> work -> dorecipe -> run -> <>
 static void
 sched(void)
 {
@@ -7653,6 +7658,7 @@ sched(void)
     <<[[sched()]] other locals>>
 
     <<[[sched()]] return if no jobs>>
+    // else
 
     // j = pop(jobs)
     j = jobs;
@@ -7669,7 +7675,7 @@ sched(void)
     else {
        <<[[sched()]] if [[DEBUG(D_EXEC)]] print recipe>>
         flags = "-e";
-       <<[[sched()]] reset flags if NOMINUSE rule>>
+       <<[[sched()]] reset flags if [[NOMINUSE]] rule>>
 
         // launching the job!
         events[slot].pid = execsh(flags, j->r->recipe, nil, e);
@@ -7681,9 +7687,9 @@ sched(void)
 }
 @
 
-The most important call in the code above is the call to [<execsh()>].
+The most important call in the code above is the call to [<execsh()>], which
 %dup: (but extended) scheduling scheduling/scheduling/runevent
-[<execsh()>] will create a new shell process that will interpret the 
+will create a new shell process that will interpret the 
 commands from the recipe of a job (stored in [[j->r>recipe]]).
 %
 This is why [<sched()>] above increments [<nrunning>] after the
@@ -7697,7 +7703,8 @@ and [<sched()>] associates this id with the dequeued job in [<events>].
 to pass to the shell as shell arguments.
 %
 [[mk]] passes the [[-e]] flag so that every commands from the recipe returning
-an error will abort the whole execution of the recipe (see the \book{Shell}).
+an error will abort the whole execution of the recipe (see the \book{Shell}),
+a useful default.
 \l why this is good? safe
 \l what is third parameter of execsh? buf, for backquote exec to capture output
 \t SUPER IMPORTANT ACTUALLY, see recursive make with error inside a for
@@ -7735,59 +7742,72 @@ if(jobs == nil){
 \label{sec:grandchild-trick}
 
 %claude:
-[<execsh()>] is the bridge between [[mk]] and the shell. The
-two-fork dance below is not gratuitous: there are two reasonable
-ways to feed a recipe to a shell, and [[mk]] picks the harder
-one for good reasons. The simple way is [[sh -c "recipe text"]],
-which would mean stuffing the recipe through the [[argv]] of
-[[execl()]]; the problem is that the recipe may contain quotes,
-backslashes, and other characters that [[mk]] would have to
-re-escape to survive the shell's command-line parsing. The
-[[mk]] way is to feed the recipe through {standard input}: the
-shell sees raw bytes, no re-escaping is needed, and the recipe
-can be arbitrarily long. The price is that something must
-{produce} those bytes on the writing end of a pipe while the
-shell consumes them, hence the second fork:
+%[<execsh()>] is the bridge between [[mk]] and the shell. The
+%two-fork dance below is not gratuitous: there are two reasonable
+%ways to feed a recipe to a shell, and [[mk]] picks the harder
+%one for good reasons. The simple way is [[sh -c "recipe text"]],
+%which would mean stuffing the recipe through the [[argv]] of
+%[[execl()]]; the problem is that the recipe may contain quotes,
+%backslashes, and other characters that [[mk]] would have to
+%re-escape to survive the shell's command-line parsing. The
+%[[mk]] way is to feed the recipe through {standard input}: the
+%shell sees raw bytes, no re-escaping is needed, and the recipe
+%can be arbitrarily long. The price is that something must
+%{produce} those bytes on the writing end of a pipe while the
+%shell consumes them, hence the second fork:
+%
+%\begin{verbatim}
+%       mk parent
+%           |
+%           | rfork(RFPROC|RFFDG|RFENVG)
+%           v
+%       child (will exec the shell)
+%       in[0] = read end, in[1] = write end of pipe
+%           |
+%           | fork()
+%           v
+%       grandchild
+%       (writes recipe bytes into in[1], then exits)
+%
+%       child after grandchild forks:
+%           dup(in[0], STDIN); close(in[0]); close(in[1]);
+%           execl(shell, ...)
+%\end{verbatim}
+%
+%%claude:
+%The reason the {child} (not the grandchild) execs the shell is
+%that the [[mk]] parent needs to know the shell's pid for
+%[<waitup()>], and only the direct child's pid is reported back
+%through [[rfork()]]. The grandchild that does the writing exits
+%quickly, before the shell finishes; its termination is reaped
+%incidentally by [<waitup()>] and discarded by the
+%[<NOT_A_JOB_PROCESS>] code path.
 
-\begin{verbatim}
-       mk parent
-           |
-           | rfork(RFPROC|RFFDG|RFENVG)
-           v
-       child (will exec the shell)
-       in[0] = read end, in[1] = write end of pipe
-           |
-           | fork()
-           v
-       grandchild
-       (writes recipe bytes into in[1], then exits)
-
-       child after grandchild forks:
-           dup(in[0], STDIN); close(in[0]); close(in[1]);
-           execl(shell, ...)
-\end{verbatim}
-
-%claude:
-The reason the {child} (not the grandchild) execs the shell is
-that the [[mk]] parent needs to know the shell's pid for
-[<waitup()>], and only the direct child's pid is reported back
-through [[rfork()]]. The grandchild that does the writing exits
-quickly, before the shell finishes; its termination is reaped
-incidentally by [<waitup()>] and discarded by the
-[<NOT_A_JOB_PROCESS>] code path.
-
-[<execsh()>] relies on the global below to know which shell to execute.
+[<execsh()>] relies on the globals below to know which shell to execute.
 %
 Under \plan, [[mk]] uses the shell [[rc]] (see the \book{Shell}):
 
-%\subsection{Shell configuration}
-
 <<global [[shell]]>>=
-//char 	*shell =	"/bin/rc";
+Shell* shell = &rc;
 @
-<<global [[shellname]]>>=
-//char 	*shellname =	"rc";
+
+<<struct [[Shell]]>>=
+struct Shell {
+    char* shell;
+    char* shellname;
+} Shell;
 @
+
+<<global [[rc]]>>=
+Shell rc = {
+  .shellname = "rc",
+  .shell = "/bin/rc",
+};
+@
+
+% can change shell, see Section~\ref{sec:mkshell}.
+
+%\subsection{Shell configuration}
 
 We do not want the shell to print a {prompt} before each command
 from the recipe, so [<execsh()>] adds the [[-I]] flag as a shell argument
@@ -7806,6 +7826,7 @@ and feeds this shell with commands from the recipe through this pipe
 
 %plan9.c 
 <<function [[execsh]]>>=
+/// main -> mk -> work -> dorecipe -> run -> sched -> <>
 int
 execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 {
@@ -7817,16 +7838,16 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
     <<[[execsh()]] if buf then create pipe to save output>>
 
     pid1 = rfork(RFPROC|RFFDG|RFENVG);
-    <<[[execsh()]] sanity check pid rfork>>
-    // child
+    <<[[execsh()]] sanity check pid1 rfork>>
     if(pid1 == 0){
+        // child
         <<[[execsh()]] in child, if buf, close one side of pipe>>
         err = pipe(in);
         <<[[execsh()]] sanity check err pipe>>
         pid2 = fork();
-        <<[[execsh()]] sanity check pid fork>>
-        // parent of grandchild, the shell interpreter
+        <<[[execsh()]] sanity check pid2 fork>>
         if(pid2 != 0){
+            // parent of grandchild, the shell interpreter
             // input must come from the pipe
             dup(in[0], STDIN);
             <<[[execsh()]] in child, if buf, dup and close>>
@@ -7849,7 +7870,7 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
         close(in[1]); // will flush
         _exits(nil);
     }
-    // parent
+    // else parent
     <<[[execsh()]] in parent, if buf, close other side of pipe and read output>>
     return pid1;
 }
@@ -7943,13 +7964,13 @@ while(shinput < endshinput){
 
 
 
-<<[[execsh()]] sanity check pid rfork>>=
+<<[[execsh()]] sanity check pid1 rfork>>=
 if(pid1 < 0){
     perror("mk rfork");
     Exit();
 }
 @
-<<[[execsh()]] sanity check pid fork>>=
+<<[[execsh()]] sanity check pid2 fork>>=
 if(pid2 < 0){
     perror("mk fork");
     Exit();
@@ -7970,26 +7991,26 @@ if(err < 0){
 \label{sec:waiting-processes}
 
 %claude:
-The complication of [<waitup()>] comes from a constraint imposed
-by the kernel: under \plan (and \unix), [[wait()]]/[[await()]]
-cannot ask ``has process \emph{X} finished?'' It can only ask
-``has \emph{any} child finished?'' This means [[mk]] cannot
-isolate job processes from {other} children it may have forked
-for unrelated reasons---backquote command substitution
-(Section~\ref{sec:backquotes}), dynamic [[mkfile]] inclusion
-(Section~\ref{sec:dynamic-mkfile}), and custom dependency
-comparison programs (Section~\ref{sec:custom-comparison}) all
-spawn processes that will eventually be reported by [[wait()]]
-on a future [<waitup()>] call. This is why [<waitup()>] has to
-look up every returned pid in the [<events>] slot table and
-gracefully handle the case where the pid is {not} a job---the
-[<NOT_A_JOB_PROCESS>] return value covers exactly that case.
-On Linux, [[waitpid(pid, ...)]] would let [[mk]] target a
-specific child and avoid this whole class of edge cases, but
-\plan's [[await()]] does not offer that.
+%The complication of [<waitup()>] comes from a constraint imposed
+%by the kernel: under \plan (and \unix), [[wait()]]/[[await()]]
+%cannot ask ``has process \emph{X} finished?'' It can only ask
+%``has \emph{any} child finished?'' This means [[mk]] cannot
+%isolate job processes from {other} children it may have forked
+%for unrelated reasons---backquote command substitution
+%(Section~\ref{sec:backquotes}), dynamic [[mkfile]] inclusion
+%(Section~\ref{sec:dynamic-mkfile}), and custom dependency
+%comparison programs (Section~\ref{sec:custom-comparison}) all
+%spawn processes that will eventually be reported by [[wait()]]
+%on a future [<waitup()>] call. This is why [<waitup()>] has to
+%look up every returned pid in the [<events>] slot table and
+%gracefully handle the case where the pid is {not} a job---the
+%[<NOT_A_JOB_PROCESS>] return value covers exactly that case.
+%On Linux, [[waitpid(pid, ...)]] would let [[mk]] target a
+%specific child and avoid this whole class of edge cases, but
+%\plan's [[await()]] does not offer that.
 
 %trans:
-The interface of [[waitup()]] is complex.
+The interface of [<waitup()>] is complex.
 %toc:
 I will focus first on the easy case where I do not care
 about the arguments passed to [[waitup()]],
@@ -8007,8 +8028,8 @@ Indeed, [[waitup()]] can now rely on [<events>] to know which job is associated
 with the waited process. Then, [[waitup()]] can call [<update()>] to update
 the graph of dependencies and [<sched()>] to schedule more jobs:
 
-% mk -> work; <>
 <<function [[waitup]]>>=
+/// mk -> work; <> -> update; sched
 int
 waitup(int echildok, int *retstatus)
 {
@@ -8063,12 +8084,11 @@ again:		/* rogue processes */
 %pad: I added node local.
 
 %flow:
-[<waitup()>] above relies on the helper function [[waitfor()]] below,
+[<waitup()>] above relies on the helper function [[xwaitfor()]] below,
 which calls itself [[wait()]] from the C library (see the \book{Libcore}),
 which itself relies on the [[await()]] system call (see the \book{Kernel}).
 
-%plan9.c
-<<function [[waitfor]]>>=
+<<function [[xwaitfor]](plan9.c)>>=
 int
 xwaitfor(char *msg)
 {
@@ -8079,7 +8099,7 @@ xwaitfor(char *msg)
     w = wait();
     // no more children
     if(w == nil)
-        return -1;
+        return ERROR_NEG1;
     strecpy(msg, msg+ERRMAX, w->msg);
     pid = w->pid;
     free(w);
@@ -8284,6 +8304,7 @@ calling directly [[exits()]]:
 
 %\subsection{[[Exit()]]}
 
+%plan9.c
 <<function [[Exit]]>>=
 void
 Exit(void)
@@ -8301,23 +8322,29 @@ Exit(void)
 \section{Notes (signals) management}
 
 %claude:
-Pressing [[^C]] on a build that is compiling ten files in
-parallel is the dangerous case. Under \plan, the interrupt
-note is delivered to all processes in the same {note group};
-[[mk]] and its forked shells all receive it together. The
-naive response---let [[mk]] [[exit]] right away---is wrong
-for the same reason killing a build with [[Ctrl-C]] in Make
-sometimes leaves half-written object files: a child compiler
-that gets cut mid-write may leave a corrupt file on disk that
-{looks} up-to-date the next time you build, and [[mk]] (or
-Make) will skip recompiling it. The fix in [[killchildren()]]
+Pressing [[Control-C]] on a build that is compiling ten files in
+parallel is the dangerous case. 
+%
+Under \plan, the {\em interrupt note} is delivered to all
+processes in the same {\em note group} (see the \book{Kernel});
+[[mk]] and its forked shells all receive it together.
+%
+The naive response---let [[mk]] [[exit]] right away---is wrong
+for the same reason we don't want [[mk]] to exit right away
+if one shell command returns an error like in the previous section.
+%killing a build with [[Ctrl-C]] in Make
+%sometimes leaves half-written object files: a child compiler
+%that gets cut mid-write may leave a corrupt file on disk that
+%{looks} up-to-date the next time you build, and [[mk]] (or
+%Make) will skip recompiling it. 
+The fix in [<killchildren()>]
 below is to clear the job queue (so no new jobs start), keep
 [<waitup()>] alive long enough for all running children to
 finish their current operation, and only then [<Exit()>].
+%
 This is the same reason ordinary error handling routes
 through [<Exit()>] instead of [[exits()]] directly.
 
-\t [[C-c]] => C-c all? who gets C-c? Which process
 % connected to stdin? mk? shell? which shell?
 % (not shell! shell stdin connected to pipe!)
 
@@ -10546,7 +10573,7 @@ case 'E':
     break;
 @
 
-<<[[sched()]] reset flags if NOMINUSE rule>>=
+<<[[sched()]] reset flags if [[NOMINUSE]] rule>>=
 if (j->r->attr&NOMINUSE)
     flags = nil;
 @
