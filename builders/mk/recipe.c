@@ -30,7 +30,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 /*e: constructor [[newjob]] */
 
 /*s: function [[dorecipe]] */
-% main -> mk -> work -> <> -> run(newjob())
+/// main -> mk -> work -> <> -> run(newjob())
 void
 dorecipe(Node *node, bool *did)
 {

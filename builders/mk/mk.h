@@ -387,9 +387,9 @@ enum Dxxx {
 struct Shell {
     char* shell;
     char* shellname;
-} Shell;
+};
 /*e: struct [[Shell]] */
-typedef struct Shell Shell;
+
 
 //TODO: later
 //    char *shflags;
