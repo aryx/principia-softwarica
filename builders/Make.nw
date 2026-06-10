@@ -6424,7 +6424,18 @@ Arc *a2;
 @
 %old: la -> a2
 
-%yoann: explain this undelete case, when we need it? vacuous detection was wrong?
+%claude:
+The arc loop above marks arcs for removal one at a time, but vacuousness is
+really a property of a \emph{rule}, not of an individual arc. A single
+meta-rule can expand into several arcs (several prerequisites), and if even
+one of those prerequisites is non-vacuous --- a real file the rule genuinely
+needs --- then the rule applies and \emph{all} of its arcs must stay, including
+ones that on their own looked vacuous. So the per-arc detection above is not
+wrong, just too fine-grained. This pass repairs the granularity: it scans the
+surviving arcs and, for any rule that still has a live arc ([[a2->r == a->r]]),
+un-removes the sibling arcs the first loop had flagged. Removal thus becomes
+all-or-nothing per rule, and [[mk]] drops an arc only when every arc that rule
+produced is vacuous.
 
 <<[[vacuous]] possibly undelete some arcs>>=
 /* if a rule generated arcs that DON'T go; no others from that rule go */
@@ -8832,10 +8843,23 @@ null characters), and because certain environment variables reference
 a list of filenames (e.g., [[$PATH]]), %$
 it is more convenient to use the null character as a separator.
 %real-world: xargs and find -print0 and other ugly stuff
-This avoids the need to escape space characters 
+This avoids the need to escape space characters
 (and later to parse escaped characters).
-%yoann1: maybe can mention standard practice also in \unix world, with xargs -print0 but I'm sure there are more (find?)
 
+%claude: %plan9-is-cleaner:
+The \unix world eventually discovered the same trick, but only as a bolted-on
+option in individual tools rather than as a native data format. The canonical
+example is [[find -print0]] piped into [[xargs -0]], which exchange filenames
+separated by null bytes precisely so that names containing spaces or newlines
+survive intact; the GNU coreutils sprouted a parallel family of [[-z]]/[[-0]]
+flags for the same reason ([[sort -z]], [[grep -z]], [[uniq -z]], [[perl -0]],
+[[read -d '']] in [[bash]]). The contrast is not that \plan tools never face
+this problem --- a \plan tool that serialized a filename list into a pipe
+would need exactly the same null-separator convention at both ends. The
+difference is that the environment is a structured store rather than a byte
+stream, so \plan can make null-separated lists the native, built-in format at
+the [[/env]] level; the escaping question simply never arises for environment
+variables, even if it still would for an ad-hoc pipe.
 
 %flow:
 The function below, called from [<readenv()>], recognizes the
