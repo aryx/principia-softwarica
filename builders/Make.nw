@@ -5722,7 +5722,7 @@ in the following sections.
 %which would be a problem for very large graphs but is fine for
 %the [[mkfile]]s [[mk]] is built to handle.
 %
-%%claude:
+%%claude: %other:
 %GNU Make's behavior here is different and arguably worse: it
 %detects cycles dynamically while building, prints
 %``Circular X $\leftarrow$ Y dependency dropped,'' then keeps
@@ -8851,7 +8851,9 @@ The \unix world eventually discovered the same trick, but only as a bolted-on
 option in individual tools rather than as a native data format. The canonical
 example is [[find -print0]] piped into [[xargs -0]], which exchange filenames
 separated by null bytes precisely so that names containing spaces or newlines
-survive intact; the GNU coreutils sprouted a parallel family of [[-z]]/[[-0]]
+survive intact; 
+%
+the GNU coreutils sprouted a parallel family of [[-z]]/[[-0]]
 flags for the same reason ([[sort -z]], [[grep -z]], [[uniq -z]], [[perl -0]],
 [[read -d '']] in [[bash]]). The contrast is not that \plan tools never face
 this problem --- a \plan tool that serialized a filename list into a pipe
@@ -9627,8 +9629,11 @@ and the various rule and variable attributes.
 %claude:
 A [[%]]-style meta rule has a single stem: the one piece of the target
 matched by [[%]]. The [[:R:]] attribute generalizes this by letting the
-target be a full regular expression, compiled with [[regcomp]] from
-[[libregexp]] and matched with [[regexec]]. The parenthesized
+target be a full regular expression, compiled with [[regcomp()]] from
+[[libregexp]] (see the \book{Libcore}) and matched with
+[[regexec()]].
+%
+The parenthesized
 subexpressions then become [[$stem1]] through [[$stem9]] (with [[$stem0]]
 the whole match), usable in both the prerequisites and the recipe. This
 buys two things a [[%]]-rule cannot express: several independent stems ---
@@ -9811,9 +9816,9 @@ if(r->attr&REGEXP)
 \label{sec:backquotes}
 
 %claude:
-Backquote expansion is the [[mkfile]] equivalent of the Bourne shell
+Backquote expansion is the [[mkfile]] equivalent of the Bourne shell ([[sh]])
 %[[$(ls *.c)]]: 
-[[`ls *.c`]] (or in [[rc]] [[`{ls *.c}]], see the \book{Shell}):
+[[`ls *.c`]] (or in [[rc]] \verb+`{ls *.c}+, see the \book{Shell}):
 it runs a command at parse time and substitutes
 its standard output back into the line being assembled.
 %
@@ -9821,16 +9826,18 @@ The most common use is generating a list of source files
 ([[OFILES=`{ls *.c | sed 's/.c/.o/'}]]), which would otherwise
 require either listing every file by hand or hoping a meta rule
 covers them all.
-%
+
+%claude:
 [[mk]] inherits its backquote syntax from [[sh]]: [[`...`]], terminated by
 a closing backquote. That form is notoriously hard to nest --- a backquote
 inside a backquote must be backslash-escaped, and the escaping compounds at
 every level --- which is why bash and the POSIX shells later added the
 [[$(...)]] form ([[$(ls $(dirname x))]] nests cleanly), and why [[rc]]
-switched to [[`{...}]], where the braces delimit the command unambiguously.
+switched to \verb+`{...}+, where the braces delimit the command unambiguously.
+%
 [[mk]] does not understand [[$(...)]], but [<bquote()>] does accept the
-[[rc]] brace form as well: if the character after the backquote is a [[{]]
-it reads up to the matching [[}]], otherwise it reads sh-style up to the
+[[rc]] brace form as well: if the character after the backquote is a \verb+{+
+it reads up to the matching \verb+}+, otherwise it reads sh-style up to the
 next backquote.
 
 
@@ -10228,7 +10235,7 @@ that the parser must recognize [[${]] $\ldots$ [[}]] as
 {atomic}---the [[:]] inside would otherwise look like the rule
 separator [<rhead()>] is hunting for, hence the [[vargen]] flag
 in [<charin()>] that suppresses separator detection between
-[[${]] and [[}]].
+\verb+${+ and \verb+}+.
 
 
 % 2 uses for ${}. One for escaping, or for concatenation
@@ -10503,20 +10510,23 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 \n Advanced? well I know explain all rule attributes here except fake one
 \n  like META or REGEXP.
 
-%claude:
 A {\em rule attribute} is a single-letter flag attached to a rule
 between two colons, as in [[clean:V:]] for a virtual target.
-%
+I described it briefly in Section~\ref{sec:syntax-rule-attributes}.
+%claude:
 Attributes let the user override individual aspects of [[mk]]'s
 default behavior on a per-rule basis without bloating the syntax:
-[[V]] (virtual: do not check for a file with this name),
-[[Q]] (quiet: do not echo the recipe),
-[[D]] (delete the target if the recipe fails),
-[[E]] (execute the recipe shell without [[-e]]),
-[[N]] (no warning if the recipe is empty),
-[[P]] (use a custom program to compare timestamps), and
-[[R]] (the target is a regular expression).
-%
+\begin{itemize}
+\item [[V]] virtual: do not check for a file with this name
+\item [[Q]] quiet: do not echo the recipe
+\item [[D]] delete the target if the recipe fails
+\item [[E]] execute the recipe shell without [[-e]]
+\item [[N]] no warning if the recipe is empty
+\item [[P]] use a custom program to compare timestamps
+\item [[R]] the target is a regular expression
+\end{itemize}
+
+%claude:
 The implementation pattern is the same for all of them:
 [<rhead()>] sets a bit in [[Rule.attr]] when it sees the
 letter, [<attribute()>] propagates the bit from rules onto the
@@ -10809,6 +10819,25 @@ case 'I':
 \label{sec:custom-comparison}
 % big one
 
+%yoann: paragraph intro
+%claude:
+Every attribute so far flips a boolean. [[:P:]] is different: the characters
+after the [[P]] up to the closing colon are a {program name}, and [[mk]] runs
+that program to decide whether a target is out of date instead of comparing
+modification times. It is invoked as [[rc -c prog 'target' 'prereq']] and must
+exit with a null (success) status exactly when [[target]] is up to date with
+respect to [[prereq]]. This is [[mk]]'s hook for {content-based} change
+detection: the classic use is a generated header such as yacc's [[y.tab.h]],
+rewritten on every parser build but usually with byte-for-byte identical
+contents. A rule [[x.tab.h:Pcmp -s: y.tab.h]] runs [[cmp -s]], so [[x.tab.h]]
+counts as up to date whenever the bytes match, sparing every file that
+includes it from a needless recompile.
+%modern:
+It anticipates, in one optional
+attribute, the content-hashing strategy that later build systems like
+% Tup and
+Bazel made their default.
+
 % "the characters after the P until terminating : are taken as a program name.
 % It will be invoked as rc -c prog 'arg1' 'arg2' and should return a null
 % exit status if and only if arg1 is up to date with respect to arg2 ..."
@@ -11085,6 +11114,17 @@ definition can carry an attribute. There is only one, [[U]], covered next.
 
 \subsection{Private variables: [[=U=]]}
 
+%yoann: intro
+%claude:
+Marking a variable with the [[U]] attribute (written [[=U=]]) makes it
+{private} to the [[mkfile]]: it can still be used in rules and other variable
+definitions, but [[mk]] will not export it into the environment of the shell
+processes that run recipes. By default every [[mk]] variable becomes an
+environment variable for recipes; [[U]] (for {unexport}) opts out, by joining
+the [<S_NOEXPORT>] set that [<ecopy()>] consults when assembling each recipe's
+environment. It is the way to keep [[mkfile]] bookkeeping variables from
+leaking into --- or colliding with --- the environment a recipe actually sees.
+
 % U for? unexport?
 
 <<[[rhead()]] when parsing variable attributes, switch rune cases>>=
@@ -11117,9 +11157,7 @@ before the recipe runs. The next subsections cover them: the rule's targets
 and prerequisites (in two flavours each), and a few process-level values
 like [[$pid]] and [[$nproc]].
 
-\subsection{[[$target]] versus [[$alltargets]]}
-% should be oldtargets vs targets, would be more consistent
-% with prereqs vs newprereqs
+\subsection{[[$target]] versus [[$alltarget]]}
 
 %claude:
 [[$alltarget]] is every target named on the left-hand side of the rule;
@@ -11193,7 +11231,8 @@ prerequisites that were actually out of date (newer than the target). The
 distinction earns its keep when updating an archive: given a rule
 [[libc.a: printf.o read.o write.o]] where only [[read.o]] has changed,
 [[$newprereq]] is just [[read.o]], so the recipe can [[ar]] in the one
-modified member instead of rearchiving all three.
+modified member instead of rearchiving all three (see also
+Section~\ref{sec:aggregate} for more on the use of archives and [[mk]]).
 
 <<[[dorecipe()]] other locals>>=
 Word newprereqs;
@@ -11336,7 +11375,7 @@ envupd("nproc", newword(buf));
 By default [[mk]] runs recipes with [[rc]], but a build may prefer [[sh]].
 Setting the [[MKSHELL]] variable to a shell's path overrides [<main()>]'s
 default, so the same [[mk]] binary can drive either shell --- useful when
-porting [[mkfile]]s to \unix, where [[rc]] may not be installed.
+porting [[mkfile]]s to \unix, where [[rc]] is usually not installed.
 
 <<[[main()]] locals>>=
 Symtab* sym;
@@ -11354,15 +11393,18 @@ if(sym != nil) {
 
 
 \section{Dealing with archives (libraries)}
-\l aggregate
+\label{sec:aggregate}
 % meh
 
 %claude:
 \plan, like \unix, packs object files into [[ar]] archives ([[.a]]
 libraries), and [[mk]] can name an individual member as a target with the
-[[lib.a(member.o)]] syntax. Such a target is an {aggregate}: its timestamp is
+[[lib.a(member.o)]] syntax. Such a target is called an {\em aggregate}: 
+ts timestamp is
 not the archive's own mtime but the member's time recorded inside the [[.a]]
-header. [<atimeof()>] reads those per-member times (caching the whole
+header.
+%
+[<atimeof()>] reads those per-member times (caching the whole
 archive's table under [<S_AGG>] so each archive is scanned only once), and
 [<atouch()>] writes them back, letting [[mk]] rebuild only the members whose
 sources changed rather than the entire library.
@@ -11615,21 +11657,22 @@ caching over the costly step of asking the filesystem for modification times.
 \label{sec:pretending}
 
 %claude:
-The motivation for ``pretending'' is historical. On 1970s and
+This optimization has a historical motivation. On 1970s and
 1980s machines disk space was scarce, and users would routinely
 [[rm *.o]] after building a library to reclaim space. The next
 [[mk]] run would then see the [[.o]] files missing and rebuild
 the entire library, even though nothing in the source had
 changed and the [[.a]] file was newer than every [[.c]]. The
-fix is to {pretend} a missing intermediate file is up-to-date,
-{provided} the next level up in the graph is also up-to-date.
-The flags [[CANPRETEND]] and [[PRETENDING]] track this two-step
-state machine: a node ``can pretend'' if its name does not look
-like an archive member, and it is ``pretending'' once [<work()>]
-has actually elided it. The catch is that if anything {below} a
-pretending node turns out to be modified after all, [[mk]] must
-{unpretend} the node and treat it as missing again, hence the
-backtracking pass at the end of the [[work()]] arc loop.
+fix is for [[mk]] to {pretend} a missing intermediate file is
+still present and up-to-date, {provided} the next level up in
+the graph is also up-to-date, so the library is not pointlessly
+rebuilt. The flags [[CANPRETEND]] and [[PRETENDING]] track this
+two-step state machine: a node ``can pretend'' if its name does
+not look like an archive member, and it is ``pretending'' once
+[<work()>] has actually elided it. The catch is that if anything
+{below} a pretending node turns out to be modified after all,
+[[mk]] must {unpretend} the node and treat it as missing again,
+hence the backtracking pass at the end of the [[work()]] arc loop.
 
 % mk -i suppress this behavior
 % pad: mk -I! new mode :) because I don't like the default mode!
@@ -12089,6 +12132,18 @@ captures both before nulling out the [[var=value]] entries in
 [[mkfile]] can then recursively invoke
 [[mk $MKFLAGS $MKARGS target]] and the inner build inherits the same
 [[objtype=arm]], [[-k]], or [[-n]] settings the user originally typed.
+%
+Whether to build a large tree this way at all is a long-running debate.
+Peter Miller's ``Recursive Make Considered
+Harmful''~\cite{recursive-make-harmful} argues that per-directory
+invocations leave each [[mk]] with only a partial dependency graph,
+inviting both redundant work and missed rebuilds, and advocates a single
+monolithic makefile instead; the later ``Non-recursive Make Considered
+Harmful''~\cite{nonrecursive-make-harmful} retorts that the monolithic
+approach does not scale either, and reframes the problem around build
+systems as reusable libraries. \plan stays with recursion, trading a
+globally-perfect graph for the simplicity of one self-contained [[mkfile]]
+per directory.
 
 % if one of the mk return error codes, then should stop mk right?
 % convenient then.
@@ -12145,7 +12200,7 @@ freebuf(buf);
 
 
 
-\section{[[mk -k]]}
+\section{Keep-going mode: [[mk -k]]}
 
 %claude:
 By default [[mk]] stops at the first failed recipe. [[mk -k]] (``keep
