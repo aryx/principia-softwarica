@@ -9622,6 +9622,18 @@ and the various rule and variable attributes.
 \section{Regular-expression rules: [[:R:]]}
 \label{sec:regexp}
 
+%claude:
+A [[%]]-style meta rule has a single stem: the one piece of the target
+matched by [[%]]. The [[:R:]] attribute generalizes this by letting the
+target be a full regular expression, compiled with [[regcomp]] from
+[[libregexp]] and matched with [[regexec]]. The parenthesized
+subexpressions then become [[$stem1]] through [[$stem9]] (with [[$stem0]]
+the whole match), usable in both the prerequisites and the recipe. This
+buys two things a [[%]]-rule cannot express: several independent stems ---
+a target can capture, say, a basename and an object-type suffix as
+separate [[$stem1]] and [[$stem2]] --- and the full power of alternation
+and character classes.
+
 % use libregexp/: regcomp(), regexec(), regsub()
 
 %in sys/src/cmd/mkfile
@@ -9797,9 +9809,9 @@ if(r->attr&REGEXP)
 \label{sec:backquotes}
 
 %claude:
-Backquote expansion is the [[mkfile]] equivalent of the shell's
+Backquote expansion is the [[mkfile]] equivalent of the Bourne shell
 %[[$(ls *.c)]]: 
-[[`{ls *.c}]] (see the \book{Shell}):
+[[`ls *.c`]] (or in [[rc]] [[`{ls *.c}]], see the \book{Shell}):
 it runs a command at parse time and substitutes
 its standard output back into the line being assembled.
 %
@@ -9807,7 +9819,17 @@ The most common use is generating a list of source files
 ([[OFILES=`{ls *.c | sed 's/.c/.o/'}]]), which would otherwise
 require either listing every file by hand or hoping a meta rule
 covers them all.
-
+%
+[[mk]] inherits its backquote syntax from [[sh]]: [[`...`]], terminated by
+a closing backquote. That form is notoriously hard to nest --- a backquote
+inside a backquote must be backslash-escaped, and the escaping compounds at
+every level --- which is why bash and the POSIX shells later added the
+[[$(...)]] form ([[$(ls $(dirname x))]] nests cleanly), and why [[rc]]
+switched to [[`{...}]], where the braces delimit the command unambiguously.
+[[mk]] does not understand [[$(...)]], but [<bquote()>] does accept the
+[[rc]] brace form as well: if the character after the backquote is a [[{]]
+it reads up to the matching [[}]], otherwise it reads sh-style up to the
+next backquote.
 
 
 %claude:
@@ -10016,7 +10038,43 @@ This is how the
 \plan kernel's [[mkfile]]s pull configuration data from a separate
 config program, and how a build can branch on environment without
 adding control flow to the [[mkfile]] grammar.
-%
+
+%claude:
+For example, suppose the compiler flags should depend on the target
+architecture. In GNU Make you reach for a conditional baked into the
+makefile language:
+\begin{verbatim}
+ifeq ($(OBJTYPE),arm)
+CFLAGS=-mfpu=neon
+else
+CFLAGS=-O2
+endif
+\end{verbatim}
+[[mk]] has no such construct. Instead you move the decision into a program
+and include its output:
+\begin{verbatim}
+<|flags
+
+prog: $OFILES
+        $CC $CFLAGS -o prog $OFILES
+\end{verbatim}
+where [[flags]] is any script that writes [[mkfile]] text to stdout:
+\begin{verbatim}
+#!/bin/rc
+if(~ $objtype arm)
+        echo CFLAGS=-mfpu=neon
+if not
+        echo CFLAGS=-O2
+\end{verbatim}
+[[mk]] runs [[flags]], parses the single line it prints (say
+[[CFLAGS=-mfpu=neon]]) exactly as if it had been typed in the [[mkfile]],
+and the branching lives in a language already designed for it --- the
+shell --- instead of in a bolted-on [[mkfile]] preprocessor.
+
+
+
+
+%claude:
 The implementation
 reuses [<parse()>] reentrantly: the recursive [<parse()>] call on
 the pipe descriptor is the same one that handles a normal
@@ -11019,6 +11077,10 @@ expunge(int pid, char *msg)
 % constant with attributes?? just private var
 %  to not transmit to recipe process?
 
+%claude:
+Just as a rule carries attributes between its [[:]] colons, a variable
+definition can carry an attribute. There is only one, [[U]], covered next.
+
 \subsection{Private variables: [[=U=]]}
 
 % U for? unexport?
@@ -11046,9 +11108,27 @@ if(symlook(s->name, S_NOEXPORT, nil))
 
 \section{Advanced [[mk]] variables}
 
+%claude:
+Beyond the [[$stem]] of a meta rule, [[mk]] installs a handful of automatic
+variables into every recipe's environment, each set by [<buildenv()>] just
+before the recipe runs. The next subsections cover them: the rule's targets
+and prerequisites (in two flavours each), and a few process-level values
+like [[$pid]] and [[$nproc]].
+
 \subsection{[[$target]] versus [[$alltargets]]}
 % should be oldtargets vs targets, would be more consistent
 % with prereqs vs newprereqs
+
+%claude:
+[[$alltarget]] is every target named on the left-hand side of the rule;
+[[$target]] is only the subset actually out of date and being rebuilt. For
+an ordinary single-target rule they are equal. The distinction matters for a
+multi-target virtual rule used to dispatch a recursive build, such as
+[[all install clean nuke:V:]] whose recipe loops over subdirectories running
+[[mk $target]]. Running [[mk clean]] then sets [[$target]] to just [[clean]]
+--- the one target that triggered the rule --- so each subdirectory does the
+single action asked, whereas [[$alltarget]] would expand to the whole
+[[all install clean nuke]] list and try to do everything.
 
 \t actually subtle, but when have a rule like
 %all install clean nuke:V:
@@ -11105,8 +11185,16 @@ envupd("alltarget", wdup(j->at));
 
 \subsection{[[$prereq]] versus [[$newprereq]]}
 
+%claude:
+[[$prereq]] is the full prerequisite list; [[$newprereq]] is only those
+prerequisites that were actually out of date (newer than the target). The
+distinction earns its keep when updating an archive: given a rule
+[[libc.a: printf.o read.o write.o]] where only [[read.o]] has changed,
+[[$newprereq]] is just [[read.o]], so the recipe can [[ar]] in the one
+modified member instead of rearchiving all three.
+
 <<[[dorecipe()]] other locals>>=
-Word newprereqs; 
+Word newprereqs;
 @
 %old: ln -> newprereqs, 
 
@@ -11143,6 +11231,13 @@ envupd("newprereq", wdup(j->np));
 \subsection{[[$NREP]]}
 %$
 
+%claude:
+[[$NREP]] caps how many times [[mk]] will re-apply a single meta or regexp
+rule while chaining rules to reach a target --- the guard against
+arbitrarily deep rule application. It is read dynamically by [<nrep()>] at
+the start of each [[mk()]] pass (so an [[mkfile]] can change it on the fly),
+and floored at 1.
+
 <<[[mk()]] initializations>>=
 nrep();		/* it can be updated dynamically */
 @
@@ -11172,6 +11267,11 @@ nrep(void)
 \subsection{[[$pid]]}
 %$
 
+%claude:
+[[$pid]] is the process id of the [[mk]] master process (note that
+[<buildenv()>] runs there, not in the [[execsh()]] child). It is handed to
+recipes that want a unique token --- for instance to name a temporary file
+or coordinate between rules.
 
 <<[[specialvars]] other array elements>>=
 "pid",
@@ -11192,6 +11292,12 @@ envupd("pid", newword(buf));
 
 \subsection{[[$nproc]]}
 %$
+
+%claude:
+[[$nproc]] is the scheduler slot number assigned to this job, a small
+integer below the parallelism limit. A recipe running in parallel can use it
+to pick a per-slot scratch file or output area without colliding with the
+other jobs [[mk]] launched concurrently.
 
 <<[[specialvars]] other array elements>>=
 "nproc",
@@ -11224,6 +11330,12 @@ envupd("nproc", newword(buf));
 
 % Posix.c, Plan9.c
 
+%claude:
+By default [[mk]] runs recipes with [[rc]], but a build may prefer [[sh]].
+Setting the [[MKSHELL]] variable to a shell's path overrides [<main()>]'s
+default, so the same [[mk]] binary can drive either shell --- useful when
+porting [[mkfile]]s to \unix, where [[rc]] may not be installed.
+
 <<[[main()]] locals>>=
 Symtab* sym;
 @
@@ -11242,6 +11354,16 @@ if(sym != nil) {
 \section{Dealing with archives (libraries)}
 \l aggregate
 % meh
+
+%claude:
+\plan, like \unix, packs object files into [[ar]] archives ([[.a]]
+libraries), and [[mk]] can name an individual member as a target with the
+[[lib.a(member.o)]] syntax. Such a target is an {aggregate}: its timestamp is
+not the archive's own mtime but the member's time recorded inside the [[.a]]
+header. [<atimeof()>] reads those per-member times (caching the whole
+archive's table under [<S_AGG>] so each archive is scanned only once), and
+[<atouch()>] writes them back, letting [[mk]] rebuild only the members whose
+sources changed rather than the entire library.
 
 <<[[specialvars]] other array elements>>=
 "newmember",
@@ -11477,6 +11599,13 @@ if(strchr(arc->n->name, '(') && arc->n->time == 0)
 
 \section{Optimizations}
 
+%claude:
+The features in this section do not change what [[mk]] builds, only how
+quickly it decides what to build, or how little disk it needs along the way:
+pretending that deleted intermediate files are still present ([[mk -I]]),
+stamping targets instead of rebuilding them ([[mk -t]]), and two layers of
+caching over the costly step of asking the filesystem for modification times.
+
 %\subsection{Node cache}
 % not really opti, needed to build a graph
 
@@ -11632,6 +11761,14 @@ node->flags &= ~(CANPRETEND|PRETENDING);
 
 \subsection{Touching-mode optimization: [[mk -t]]}
 
+%claude:
+[[mk -t]] (``touch'') marks targets up to date without running their
+recipes, by bumping each target's mtime to now ([[touch()]], or [<atouch()>]
+for archive members). It is the escape hatch for when you {know} a target is
+already current --- say after editing only a comment --- and want to stop
+[[mk]] from rebuilding the world, at the risk of lying to the dependency
+graph if you are wrong.
+
 % when the user knows what he is doing
 
 <<global [[tflag]]>>=
@@ -11698,7 +11835,15 @@ chgtime(char *name)
 \subsection{Time cache}
 \label{sec:time-cache}
 
-% multiple levels of cache ... first in cache, 
+%claude:
+Evaluating the graph means asking ``how old is this file?'' over and over,
+often for the same file. The time cache makes that cheap: the first
+[<timeof()>] for a path consults the filesystem once and stores the answer in
+the [<S_TIME>] symbol table, and every later query for the same name returns
+the cached value. The [[force]] flag bypasses the cache when [[mk]] must see a
+fresh time --- notably right after a recipe has regenerated the file.
+
+% multiple levels of cache ... first in cache,
 % then bulk so will get more hit cache.
 
 
@@ -11744,32 +11889,39 @@ symlook(name, S_TIME, (void*)t);		/* install time in cache */
 
 \subsection{Bulk time optimisation}
 
+%claude:
+The time cache above saves repeated lookups of the {same} file; the bulk
+optimisation goes further by prefilling it. Rather than stat-ing files one at
+a time, [[mk]] reads a whole directory in a single pass and installs an
+[<S_TIME>] entry for every name it finds, turning $N$ system calls into one
+on directories where [[mk]] ends up needing most of the entries anyway.
+
 % in addition to time cache, mk also batch the call to time
 % by reading/caching the dir?
 
 %claude:
-There is a layered cache here. The first layer (Section~\ref{sec:time-cache})
-is per-file: the first call to [<timeof()>] for a given path
-remembers the result. The second layer is per-{directory}: rather
-than [[stat]]-ing each file individually, [[mk]] reads the entire
-directory once and prepopulates [<S_TIME>] for every entry. On
-projects with many files in one directory this turns $N$ system
-calls into one. The trade-off is the {first-touch} cost---if
-[[mk]] only ever needs the time of one file in a 10\,000-file
-directory, the bulk read is wasted---but in practice [[mk]]
-visits most files in a directory anyway during graph construction.
-
-%claude:
-The cautionary tale in the [[%subtle:]] note above is real and
-worth understanding. On a case-insensitive filesystem like VFAT,
-[[dirstat("helloc.c")]] succeeds even when the on-disk name is
-[[HELLOC.C]]. But the bulk read populates [<S_TIME>] under the
-{on-disk} name [[HELLOC.C]], so a later cache lookup for
-[[helloc.c]] misses, returns 0 (``does not exist''), and [[mk]]
-concludes the source is missing. The lesson: any time you cache
-results keyed by a string, you must canonicalize the key the
-{same way} on insert and on lookup, or the cache will silently
-shadow real data.
+%There is a layered cache here. The first layer (Section~\ref{sec:time-cache})
+%is per-file: the first call to [<timeof()>] for a given path
+%remembers the result. The second layer is per-{directory}: rather
+%than [[stat]]-ing each file individually, [[mk]] reads the entire
+%directory once and prepopulates [<S_TIME>] for every entry. On
+%projects with many files in one directory this turns $N$ system
+%calls into one. The trade-off is the {first-touch} cost---if
+%[[mk]] only ever needs the time of one file in a 10\,000-file
+%directory, the bulk read is wasted---but in practice [[mk]]
+%visits most files in a directory anyway during graph construction.
+%
+%%claude:
+%The cautionary tale in the [[%subtle:]] note above is real and
+%worth understanding. On a case-insensitive filesystem like VFAT,
+%[[dirstat("helloc.c")]] succeeds even when the on-disk name is
+%[[HELLOC.C]]. But the bulk read populates [<S_TIME>] under the
+%{on-disk} name [[HELLOC.C]], so a later cache lookup for
+%[[helloc.c]] misses, returns 0 (``does not exist''), and [[mk]]
+%concludes the source is missing. The lesson: any time you cache
+%results keyed by a string, you must canonicalize the key the
+%{same way} on insert and on lookup, or the cache will silently
+%shadow real data.
 
 <<[[mkmtime]] locals>>=
 //char *s, *ss;
@@ -11891,6 +12043,13 @@ dirtime(char *dir, char *path)
 
 \section{Recompiling everything: [[mk -a]]}
 
+%claude:
+[[mk -a]] forces a rebuild of everything regardless of timestamps, by making
+every node test as out of date ([[weoutofdate]]). It also turns on [[-i]] so
+that missing intermediates are rebuilt too rather than pretended present ---
+a clean ``from scratch'' build without the bluntness of [[rm]]-ing the tree
+by hand.
+
 <<global [[aflag]]>>=
 bool aflag = false;
 @
@@ -11919,12 +12078,15 @@ top-level [[/sys/src/mkfile]] descends into [[cmd/]], [[lib/]],
 and so on. The challenge is that the inner [[mk]] should inherit
 the {original} command-line flags and variable assignments
 ({not} the targets, since those were already consumed by the
-outer [[mk]]). [[$MKFLAGS]] and [[$MKARGS]] solve this: [<main()>]
+outer [[mk]]). Consider cross-compiling with [[mk objtype=arm]]: that
+[[objtype=arm]] assignment must reach every subdirectory build, or the inner
+[[mk]]s would quietly compile for the host architecture instead.
+[[$MKFLAGS]] and [[$MKARGS]] solve this: [<main()>]
 captures both before nulling out the [[var=value]] entries in
 [[argv]], and exports them through the symbol table. A child
 [[mkfile]] can then recursively invoke
-[[mk $MKFLAGS $MKARGS target]] and the inner build inherits the same [[-k]], [[-n]],
-or [[CFLAGS=-O2]] settings the user originally typed.
+[[mk $MKFLAGS $MKARGS target]] and the inner build inherits the same
+[[objtype=arm]], [[-k]], or [[-n]] settings the user originally typed.
 
 % if one of the mk return error codes, then should stop mk right?
 % convenient then.
@@ -11982,6 +12144,14 @@ freebuf(buf);
 
 
 \section{[[mk -k]]}
+
+%claude:
+By default [[mk]] stops at the first failed recipe. [[mk -k]] (``keep
+going'') instead presses on, building every target it still can and only
+skipping those downstream of the failure --- the same idea as [[make -k]]. It
+is handy for a full-tree build where you want to see all the breakage in one
+run rather than fixing and restarting repeatedly. The [[runerrs]] counter
+records how many recipes failed, so [[mk]] can still exit nonzero at the end.
 
 \subsection{[[kflag]] and [[runerrs]]}
 
