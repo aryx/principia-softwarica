@@ -928,7 +928,7 @@ file descriptors in the forked child before calling [[exec()]].
 Here is a second mini-shell that handles [[>]] for output redirection
 and [[|]] for a single pipe:
 
-%claude:
+%claude: will need /bin/wc|/bin/wc without space
 <<minishell2.c>>=
 #include <u.h>
 #include <libc.h>
@@ -1190,11 +1190,15 @@ does not need the colon-separated encoding that [[$PATH]]
 uses in [[sh]].
 
 Most shells do not use booleans: control flow is based instead on the
-{\em exit status} of the command you run. 
+{\em exit status} of the command you run. Perhaps confusingly, the exit code 0
+in \unix actually means success (in \plan the empty string means success,
+which can also be confusing).
+%
 In [[rc]], the only comparison
 operator is \texttt{\textasciitilde} (pattern matching on strings), and for
 numerical tests, the external program [[test]] is used
-(see Appendix~\ref{sec:test} for its code).
+(see Appendix~\ref{sec:test} for its code), similar to [[sh]].
+% actually in bash [ ] and test are builtins?)
 
 %A shell is also a kind of universal read-eval-print loop
 %(REPL): you call programs (like functions), pass arguments
@@ -1348,15 +1352,16 @@ characters [[\]] and [[$]]. The same character means
 different things depending on which kind of quote it sits in.
 
 %claude:
-The deeper trap is {word splitting on unquoted variable
-expansion}. In [[sh]] and [[bash]], if [[x]] holds
+The deeper trap is {word splitting on unquoted variable expansion}.
+In [[sh]] and [[bash]], if [[x]] holds
 [[hello world]], then [[ls $x]] runs [[ls hello world]]
 (two arguments), while [[ls "$x"]] runs [[ls 'hello world']]
 (one argument). The rule depends on a global variable
 [[IFS]] that controls which characters split words.
+%
 Forgetting to quote a variable that might contain spaces
 is the source of an enormous class of \unix shell bugs,
-and explains the defensive idiom of writing
+and explains the defensive (ugly) idiom of writing
 \verb+"$@"+ instead of \verb+$@+ in scripts.
 
 %claude:
@@ -1365,7 +1370,8 @@ quoting form: single quotes, with the convention that an
 embedded single quote is written by doubling it
 ([['it''s']]). There are no double quotes, no backslash
 escapes, 
-%no [[IFS]], 
+no [[IFS]],
+%said-later: actually IFS but for ``
 and no word splitting at all---because
 in [[rc]] every variable is already a list of strings, not
 a single string. If [[x]] holds two elements [[hello]] and
@@ -1375,6 +1381,28 @@ stored it that way to begin with. The whole class of
 ``forgot to quote a variable'' bugs simply does not exist,
 which is why [[rc]]'s designers consider it one of the
 best things the shell does differently from [[sh]].
+
+%yoann: also very often in bash script there are things like if eq "x$v" "xyes", why this x prefix?
+
+%claude:
+%cs-history:
+This fragility also explains a defensive idiom common in \unix
+scripts. Where one would ideally just write [[test $v = yes]], %$
+careful authors instead write [[test "x$v" = "xyes"]]. Two %$
+separate problems force the change: an unquoted [[$v]] is %$
+word-split (so an empty or multi-word value breaks the command),
+and even quoted, the old [[test]] inspects the {\em values} of %$
+its arguments, so if [[$v]] is empty or starts with a [[-]] (or %$
+is itself [[=]] or [[!]]), [[test]] mistakes the operand for an
+option. The quotes fix the first problem and the literal [[x]]
+the second.
+
+%claude:
+In [[rc]] the clean form survives: you write [[~ $v yes]] using %$
+the built-in [[~]] (match) operator. There is no word splitting
+(every variable is already a list), and [[~]]'s subject and
+patterns are separate grammatical operands, so neither the quotes
+nor the [[x]] padding has any reason to exist.
 
 \subsection{An interactive interpreter}
 \label{sec:princ-interactive}
@@ -1449,7 +1477,8 @@ At one end of the spectrum is the minimal approach: [[&]]
 forks a child, the shell does not [[wait]] for it, the
 child is isolated just enough that the shell's terminal and
 signals do not interfere with it, and that is the entire
-feature. The user can later type a [[wait]] builtin to reap
+feature. The user can later type a [[wait]] {\em builtin} to reap
+%said-later: builtin in boot.rc
 any finished children, and that is the only way the shell
 tracks them. [[rc]] takes this minimal path: no job table,
 no [[%1]]/[[%2]] job specs, no [[fg]]/[[bg]], no
@@ -1460,7 +1489,7 @@ starts the process, isolates it, and forgets about it.
 At the other end is full {\em job control}, introduced by
 [[csh]] in 1980 and inherited by [[bash]] and [[zsh]]. The
 shell maintains a job table indexed by job number; each
-job is its own process group; [[Ctrl-Z]] sends [[SIGTSTP]]
+job is its own {\em process group}; [[Ctrl-Z]] sends [[SIGTSTP]]
 to the foreground group to suspend it; [[fg]]/[[bg]] resumes
 it in the foreground or background; a [[SIGCHLD]] handler
 updates the table when children change state; the prompt
@@ -1473,7 +1502,7 @@ forth between itself and its children.
 %claude:
 Why does [[rc]] get away with the minimal approach? Largely
 because \plan replaces a lot of what job control gives you
-with cleaner OS primitives. A backgrounded process can be
+with cleaner OS primitives. A backgrounded process can still be
 addressed by its [[pid]] and controlled through
 [[/proc/<pid>/]] (read state, send notes, debug with
 [[acid]]) just as well as through a shell-private job
@@ -1638,7 +1667,7 @@ This will also help you understand the grammar of [[rc]]
 I will present in Chapter~\ref{chap:parsing}.
 %
 Finally, this example will introduce a few concepts specifics to [[rc]]
-that are useful to have in mind while I will explain
+that are useful to have in mind when I explain
 the code of [[rc]] in the rest of the document.
 
 
@@ -1733,8 +1762,7 @@ of initialization files: [[.profile]] for the Bourne shell,
 %said-later: section on all those init scripts for different shells
 In \plan, there is a single initialization script
 [[rcmain]] shared by all users
-(see Section~\ref{sec:rcmain} and
-Chapter~\ref{chap:initialization-real} for details).
+(see Section~\ref{sec:rcmain} for details).
 
 %\subsection{Running commands}
 
@@ -1756,7 +1784,7 @@ three-element list.
 This is a key design difference from [[sh]], where variables
 hold a single string and lists are simulated by splitting
 on [[IFS]] characters.
-%
+%said-before:
 By treating all values as lists, [[rc]] avoids many of the
 quoting pitfalls that plague [[sh]] scripts.
 
@@ -1798,7 +1826,7 @@ the first match.
 %
 Under \plan, with union directories, [[/bin/rc]] is always
 the right path regardless of the architecture.
-
+%
 See Section~\ref{sec:path-management} for the implementation.
 
 \subsection{Quoting}

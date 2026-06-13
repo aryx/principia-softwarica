@@ -7,8 +7,8 @@ void main() {
   int n;
 
   for(;;) {
-    pwrite(1, "$ ", 2, 0LL);
-    n = pread(0, buf, sizeof(buf)-1, 0LL);
+    write(STDOUT, "$ ", 2);
+    n = read(STDIN, buf, sizeof(buf)-1);
     if(n <= 0)
       break;
     buf[n-1] = '\0';  /* strip newline */
@@ -20,5 +20,5 @@ void main() {
     }
     await(buf, sizeof(buf));
   }
-  exits(0);
+  exits(nil);
 }

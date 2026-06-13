@@ -69,6 +69,9 @@
 % - SEMI operator priorities (; vs & vs | vs >)
 % - SEMI $*, variable for return status of process ($status in rc, simpler)
 % - $* vs $@ (actually rc does not have the problem)
+% - default word splitting with IFS when using $xx outside quote
+%   and other special quoting/expansion/splitting rules with quote, double quotes
+%   in sh
 % - TODO escaping nightmares (less pb in rc)
 % - SEMI multiline editing
 % - TODO subshell power? ex?
@@ -89,10 +92,10 @@
 %    * TODO ctor/dtor, builtin, bytecode
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the file before
-% - SEMI nullify, boolify, typeify,    scheckify
-% - SEMI aspecify advanced features!
-% - SEMI add figures
-% - SEMI add explanations
+% - nullify, boolify, typeify,    scheckify
+% - aspecify advanced features!
+% - add figures
+% - add explanations
 
 \begin{document}
 %******************************************************************************
@@ -219,8 +222,10 @@ Total                          &                               &                
 
 %claude:
 Every source file in [[rc]] includes the same set of headers.
-[[rc.h]] defines the main data structures ([<Tree>], [<Code>], [<Word>], [<Var>]),
-[[exec.h]] defines the execution data structures ([<Thread>], [<List>], [<Redir>]),
+[[rc.h]] defines the main data structures,
+% ([<Tree>], [<Code>], [<Word>], [<Var>]),
+[[exec.h]] defines the execution data structures,
+% ([<Thread>], [<List>], [<Redir>]),
 [[fns.h]] contains all function prototypes,
 [[getflags.h]] provides the command-line flag parsing API,
 and [[io.h]] defines the buffered IO layer.
@@ -302,8 +307,8 @@ To access those devices, the kernel provides a {\em filesystem interface}
 %
 An application can [[open()]], [[read()]], [[write()]], or [[close()]]
 \n also seek, actually pread(), pwrite()
-files in this filesystem. Under \unix and \plan, devices are represented
-as files. For example, [[/dev/cons]] (for console) is a file representing
+files in this filesystem. Under \unix and \plan, {\em devices are represented
+as files}. For example, [[/dev/cons]] (for console) is a file representing
 the terminal. 
 %dup: intro/requirements
 To read characters from the keyboard, an application can simply
@@ -404,16 +409,16 @@ some of the bytecodes can create new processes running concurrently
                              +-+----+-----+
                                |    |
                   .------------+----v-----------------.
-                 (      bytecod| interpreter loop      ) (interpreting)
+                 (     bytecode| interpreter loop      ) (interpreting)
                   `------------+----+-----------------'
                                |    |
             +------------------++---+-------------+--------------------+
             |        +---------+|                 |                    |
      +------v-----+  |   +------v-----+   +-------v----+        +------v-----+
      |  Xrdcmds   |  |   |   Xpipe    |   |  Xsimple   |   ...  |    Xif     | bytecodes
-     +-----+------+  |   +--+---------+   +--+-----+---+|       +------------+
-           ||        |      |   |            |     |    |
-           |+--------+---+  |   | +----------v-+   |   +v-----------+
+     +-----+------+  |   +--+---------+   +--+-----+---+        +------------+
+           ||        |      |   |            |     |   |
+           |+--------+---+  |   | +----------v-+   |   v------------+
      +-----+         |   |  |   | |execforkexec|  .|.  |   execcd   | shell builtins
      |            +--v---v--v--+| +------------+   |   +----------+-+
      |            |   start    ||        |         |              |
@@ -487,7 +492,8 @@ Internally, [<compile()>] modifies the global [<codebuf>] to store
 the bytecodes deriving from the tree.
 \n via outcode
 Then, after [<yyparse()>] returned, [<Xrdcmds()>] calls
-[<start()>] to start a new thread with [<codebuf>] as a parameter.
+[<start()>] to start a new thread with this time [<codebuf>] as an
+argument (not [[bootstrap]]).
 %
 [<start()>] then modifies again the global [<runq>], and when [<Xrdcmds()>]
 returns, the main bytecode interpreter loop will process 
@@ -547,6 +553,8 @@ instead of forking a new process.
 You can see the bytecodes and the threads created internally by [[rc]] 
 by running [[rc]] with the [[-r]] flag.
 Here is an example of a {trace} of the simple command [[ls /]]:
+
+% why rc -r? -r stands for?
 
 \begin{verbatim}
 % rc -r
@@ -616,7 +624,7 @@ the initialization of [[rc]],
 the bytecode interpreter loop, and 
 the function [<Xrdcmds()>].
 %
-The following chapters will describe the main components of the compiler pipeline:
+The following chapters will describe the main components of the compilation pipeline:
 Chapter~\ref{chap:input} will present the input routines,
 Chapter~\ref{chap:lexing} the lexer,
 Chapter~\ref{chap:parsing} the parser, and finally
@@ -657,7 +665,11 @@ Appendix~\ref{chap:utilities} contains the code of
 utility functions used by [[rc]] but that are not specific to [[rc]]
 (e.g., a library to manage string buffers).
 %
-Finally, Appendix~\ref{chap:examples} presents examples of [[rc]] scripts.
+Appendix~\ref{chap:examples} presents examples of [[rc]] scripts.
+%claude:
+Finally, Appendix~\ref{chap:shell-companion} presents the source
+code of small utility programs closely tied to the shell (such as
+[[echo]]), used constantly in scripts and interactive sessions.
 
 
 %###############################################################################

@@ -12,11 +12,12 @@ void runcmd(char *cmd) {
 void main() {
   char buf[256];
   char *p;
-  int n, fd, pfd[2];
+  int n;
+  fdt fd, pfd[2];
 
   for(;;) {
-    pwrite(1, "$ ", 2, 0LL);
-    n = pread(0, buf, sizeof(buf)-1, 0LL);
+    write(STDOUT, "$ ", 2);
+    n = read(STDIN, buf, sizeof(buf)-1);
     if(n <= 0)
       break;
     buf[n-1] = '\0';
@@ -26,7 +27,7 @@ void main() {
       while(*p == ' ') p++;
       if(rfork(RFPROC|RFFDG) == 0) {
         fd = create(p, OWRITE, 0666);
-        dup(fd, 1);
+        dup(fd, STDOUT);
         close(fd);
         runcmd(buf);
       }
@@ -37,13 +38,13 @@ void main() {
       pipe(pfd);
       if(rfork(RFPROC|RFFDG) == 0) {
         close(pfd[0]);
-        dup(pfd[1], 1);
+        dup(pfd[1], STDOUT);
         close(pfd[1]);
         runcmd(buf);
       }
       if(rfork(RFPROC|RFFDG) == 0) {
         close(pfd[1]);
-        dup(pfd[0], 0);
+        dup(pfd[0], STDIN);
         close(pfd[0]);
         runcmd(p);
       }
@@ -57,5 +58,5 @@ void main() {
       await(buf, sizeof(buf));
     }
   }
-  exits(0);
+  exits(nil);
 }
