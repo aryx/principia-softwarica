@@ -102,7 +102,7 @@
 {\Huge 
 Principia Softwarica: The Plan~9 Shell [[rc]]
 }\\
-{version 0.1}
+{version 1.0}
 }
 
 \author{
@@ -237,8 +237,6 @@ and [[io.h]] defines the buffered IO layer.
 
 \section{Software architecture}
 
-%yoann: toc: before presenting soft archi of rc itself, useful to see context
-% and how rc fits in the big picture.
 %claude:
 Before describing the internal architecture of [[rc]] itself,
 I will first present the broader context in which [[rc]] operates:
@@ -1741,7 +1739,7 @@ to a top-down approach:
 I will describe in the following chapters the main functions of [[rc]],
 starting in this chapter with [<main()>], the entry point of [[rc]].
 
-\section{Overview}
+\section{[[main()]] skeleton}
 
 %toc:
 %claude:
@@ -1771,7 +1769,15 @@ code bootstrap[17];
 % */
 \swdefs{bootstrap}
 
-<<function main (rc/exec.c)>>=
+<<function [[main]](rc)>>=
+/*
+ * get command line flags.
+ * initialize keywords & traps.
+ * get values from environment.
+ * set $pid, $cflag, $*
+ * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
+ * start interpreting code
+ */
 void main(int argc, char *argv[])
 {
     <<[[main()]] locals>>
@@ -1786,6 +1792,7 @@ void main(int argc, char *argv[])
     <<[[main()]] interpreter loop>>
 }
 @
+%old: was in exec.c, now in main.c
 
 % [[getflags()]]
 \section{Command-line arguments processing}
@@ -2081,8 +2088,6 @@ for(i = argc-1; i!=0; --i)
 %ocaml: no need to call pushlist() here. Already have working argv.
 % no nil in OCaml!
 
-%yoann: maybe ASCII diagram illustrating stack and thread and so on
-% when run a simple rc command with a few args
 %claude:
 For example, after [[rc myscript.rc foo bar]] is initialized,
 the data structures look like this:
@@ -3019,7 +3024,6 @@ case '>':
 % he even included a grammar in the comment. hmm
 
 
-%yoann: maybe paragraph introducing the redirection code
 %claude:
 Redirections and pipes are the most complex part of the lexer.
 Unlike simple operators like [[&&]] or [[||]] which map directly
@@ -3101,7 +3105,6 @@ fdt fd1;	/* details of REDIR PIPE DUP tokens */
 @
 
 
-%yoann: more explanations
 %claude:
 Each redirection character is handled as a case below.
 For a pipe, [[fd0]] defaults to~1 (stdout of the left command)
@@ -3476,7 +3479,6 @@ they terminate commands (like [[;]] in C). This is what
 makes the shell convenient for interactive use --- you do not
 need an explicit semicolon to run a command.
 
-%yoann: small explanation of %union and .y layout
 %claude:
 The [[.y]] file follows the standard [[yacc]] layout:
 a prologue section ([[%{...%}]]) with C includes,
@@ -3797,7 +3799,6 @@ for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
 %ocaml: maybe should have redirection allowed only at the end?
 % so then easy to put it also at the root of the AST.
 
-%yoann: ASCII diagram and explanation when do  ls /tmp/x > foo < bar /tmp/y then want to transform in   (> foo (< bar (ls /tmp/x /tmp/y))) in AST
 %claude:
 For example, when parsing [[grep pattern < input > output]],
 the parser first builds a flat [[ARGLIST]] tree with
@@ -4340,7 +4341,7 @@ After [<yyparse()>] builds the AST, it calls [<compile()>]
 which walks the tree and emits bytecodes into [<codebuf>].
 The bytecodes are then interpreted by the main loop in [<main()>].
 
-\subsection{[[emitxxx()]]}
+\subsection{Emitting bytecodes: [[emitxxx()]]}
 
 % see codebuf in Core DS chapter (could be moved here too)
 
@@ -4394,7 +4395,7 @@ int morecode(void)
 @
 % need return an int? need OK_0? just return;
 
-\subsection{[[compile()]]}
+\subsection{Compiling a line: [[compile()]]}
 
 %claude:
 [<compile()>] allocates a fresh code buffer, then calls
@@ -4443,7 +4444,7 @@ if(nerror){
 
 
 
-\subsection{[[outcode()]]}
+\subsection{Walking the AST: [[outcode()]]}
 
 %ugly
 %claude:
@@ -4816,7 +4817,6 @@ else if(p->f==Xword || p->f==Xdelhere)
          efree((++p)->s);
 @
 
-%yoann: ASCII diagram for a simple command where can see AST with ARGLIST, WORDS, etc on the left and then on the right the corresponding code generation
 %claude:
 For example, [[echo hello world]] produces the following
 AST and bytecodes:
@@ -7320,7 +7320,7 @@ if(strcmp(a->word, "builtin")==0){
 % the function resolution mechanism.
 
 
-\section{[[$ cd]]}
+\section{[[% cd]]}
 %alt: use % cd, which is more rcish (sh use $ and # for root), but less latex friendly
 %$
 
@@ -7427,7 +7427,6 @@ dochdir(char *word)
 @
 
 
-%yoann: explain quickly and reference Windows book
 %claude:
 In \plan, the window manager [[rio]] (see \book{Windows}) tracks
 the current working directory of each window via the
@@ -7453,7 +7452,7 @@ if(flag['i']!=nil){
 @
 
 
-\section{[[$ exit]]}
+\section{[[% exit]]}
 %$
 
 <<function [[execexit]]>>=
@@ -7473,7 +7472,7 @@ execexit(void)
 }
 @
 
-\section{[[$ .]]}
+\section{[[% .]]}
 %$
 
 %claude:
@@ -7622,7 +7621,7 @@ if(first){
 % }
 % @
 
-\section{[[$ eval]]}
+\section{[[% eval]]}
 %$
 
 %ex: eval `{auxrc/getflags $*} || exec auxrc/usage
@@ -7691,7 +7690,7 @@ execcmds(io *f)
 @
 
 
-\section{[[$ wait]]}
+\section{[[% wait]]}
 %$
 % related to job control? because of &? I never used wait ...
 
@@ -7738,7 +7737,7 @@ with these files in both directions: [<Updenv()>] writes
 changed variables to [[/env/]], and [<Vinit()>] reads
 variables from [[/env/]] at startup.
 
-\section{[[Updenv()]]}
+\section{Writing variables to [[/env/]]: [[Updenv()]]}
 
 % called from Xsimple() and Execute()
 % why double? anyway with 'changed' field it should be ok
@@ -7823,7 +7822,7 @@ addenv(var *v)
 
 
 
-\section{[[Vinit()]]}
+\section{Reading variables from [[/env/]]: [[Vinit()]]}
 
 % main -> <>
 %claude:
@@ -7902,282 +7901,6 @@ fdt envdir;
 
 %\section{Functions in the environment}
 % see later with finit
-
-
-%******************************************************************************
-\chapter{Signals}
-%******************************************************************************
-\label{chap:signals}
-
-%claude:
-Signal handling is critical for a shell because the shell
-sits between the user and every running program.
-When the user presses [[^C]], the interrupt signal is sent
-to all processes in the foreground group---including the shell
-itself. If the shell simply died along with the interrupted
-command, the user would lose their terminal session.
-Instead, the shell must catch the signal, cancel the current
-command, and return to its prompt, ready for the next input.
-%
-Beyond [[^C]], a shell must also handle hangup signals
-(so it can clean up or notify background jobs when a terminal
-disconnects), and let users define their own trap handlers
-for scripting (e.g., cleaning up temporary files on exit).
-See \book{Kernel} for how the kernel delivers notes to processes.
-
-\section{Overview}
-
-% code of nohup utility?
-% C-d generate an Xsimple (exit 1) ?
-%claude:
-Under \plan, signals are called {\em notes}.
-When a note is received (e.g., an interrupt from [[^C]]),
-the kernel calls the handler registered by [<Trapinit()>].
-%
-The handler does not execute the trap function immediately
-(which would be unsafe in the middle of interpreting bytecodes).
-Instead, it increments a counter ([[ntrap]]) and the main
-interpreter loop checks this counter after each bytecode
-(see the [[handing trap if necessary]] chunk in [<main()>]).
-%
-Users can define signal handlers with \verb+fn sigint {...}+,
-\verb+fn sighup {...\}+, etc. If no handler is defined,
-the default behavior applies (usually terminating the process).
-
-%claude:
-The full path of a [[^C]] from keystroke to user-defined
-handler is therefore asynchronous in the kernel half and
-synchronous in the interpreter half:
-\begin{verbatim}
-  user        kernel                    rc interpreter loop
-  ----        ------                    -------------------
-   ^C
-    |         deliver "interrupt"
-    |          note to rc
-    |               |
-    |               v
-    |         notifyf(s="interrupt")    (currently running, say,
-    |           trap[SIGINT]++          inside Xsimple of a nested
-    |           ntrap++                 for-loop)
-    |           noted(NCONT)
-    |               |
-    |               v
-    |         rc resumes where interrupted
-    |                                       |
-    |                                       v
-    |                                   finish current bytecode
-    |                                       |
-    |                                       v
-    |                                   main() loop top:
-    |                                     if(ntrap) dotrap();
-    |                                       |
-    |                                       v
-    |                                   dotrap() looks up
-    |                                   vlook("sigint")->fn:
-    |                                     - if user defined one,
-    |                                       start() a new thread
-    |                                       running the fn body
-    |                                     - otherwise, pop threads
-    |                                       via Xreturn() until we
-    |                                       reach the iflag REPL
-\end{verbatim}
-%claude:
-Two design points are worth calling out. First, the
-deferral via [[ntrap]] is the only way to keep the
-interpreter's invariants intact: a bytecode like
-[<Xassign>] is in the middle of re-linking [[argv]],
-freeing old values, and installing new ones; if a shell
-function were run at an arbitrary point inside it, the
-word lists would be in an inconsistent state and the
-heap would leak. The same argument applies to any
-language runtime with safe-points---[[rc]] just happens
-to have very coarse safe-points (once per bytecode)
-because its bytecodes are large compared to a CPU
-instruction. Second, the ``pop threads until [[iflag]]''
-unwinding in [<dotrap>] is how [[^C]] abandons a
-deeply nested script or for-loop and returns to the
-interactive prompt: each [[Xreturn]] pops one frame
-off [[runq]], just as if the function had returned
-normally, and eventually uncovers the bootstrap thread
-that loops in [<Xrdcmds()>]. If no such interactive
-thread exists (for non-interactive [[rc]]), the final
-[[Xreturn]] terminates the shell---which is the
-correct behaviour for [[^C]] in a script.
-
-<<constant [[NSIG]]>>=
-#define	NSIG	32
-@
-
-<<constant [[SIGINT]]>>=
-#define	SIGINT	2
-@
-
-<<constant [[SIGQUIT]]>>=
-#define	SIGQUIT	3
-@
-
-
-% plan9.c
-<<global [[syssigname]]>>=
-char *syssigname[] = {
-    "exit",		/* can't happen */
-    "hangup",
-    "interrupt",
-    "quit",		/* can't happen */
-    "alarm",
-    "kill",
-    "sys: fp: ",
-    "term",
-    0
-};
-@
-
-% plan9.c
-<<global [[signame]]>>=
-char *signame[] = {
-    "sigexit",	
-    "sighup",	
-    "sigint",	
-    "sigquit",
-    "sigalrm",	
-    "sigkill",	
-    "sigfpe",	
-    "sigterm",
-    0
-};
-@
-%old: was Signame but not consistent naming of globals
-
-
-<<global [[ntrap]]>>=
-int ntrap;				/* number of outstanding traps */
-@
-
-<<global [[trap]]>>=
-int trap[NSIG];				/* number of outstanding traps per type */
-@
-
-
-\section{Registering handlers: [[Trapinit()]]}
-
-% main() -> Trapinit()
-<<function [[Trapinit]]>>=
-void
-Trapinit(void)
-{
-    notify(notifyf);
-}
-@
-
-<<function [[notifyf]]>>=
-void
-notifyf(void*, char *s)
-{
-    int i;
-    for(i = 0;syssigname[i];i++) 
-     if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
-        if(strncmp(s, "sys: ", 5)!=0) 
-            interrupted = true;
-        goto Out;
-    }
-    pfmt(err, "rc: note: %s\n", s);
-    noted(NDFLT);
-    return;
-Out:
-    if(strcmp(s, "interrupt")!=0 || trap[i]==0){
-        trap[i]++;
-        ntrap++;
-    }
-    if(ntrap>=32){	/* rc is probably in a trap loop */
-        pfmt(err, "rc: Too many traps (trap %s), aborting\n", s);
-        abort();
-    }
-    noted(NCONT);
-}
-@
-
-\section{Trap dispatch: [[dotrap()]]}
-
-<<[[main()]] handing trap if necessary in interpreter loop>>=
-if(ntrap)
-    dotrap();
-@
-
-
-
-% trap.c
-% main() -> dotrap() after having interpreter one bytecode
-<<function [[dotrap]]>>=
-void
-dotrap(void)
-{
-    int i;
-    struct Var *trapreq;
-    struct Word *starval;
-
-    starval = vlook("*")->val;
-    while(ntrap) 
-     for(i = 0;i!=NSIG;i++) 
-      while(trap[i]){
-        --trap[i];
-        --ntrap;
-        if(getpid()!=mypid) 
-            Exit(getstatus(), __LOC__);
-        trapreq = vlook(signame[i]);
-        if(trapreq->fn){
-            start(trapreq->fn, trapreq->pc, (struct Var *)nil);
-            runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct Word *)nil);
-            runq->local->changed = true;
-            runq->redir = runq->startredir = nil;
-        }
-        else if(i==SIGINT || i==SIGQUIT){
-            /*
-             * run the stack down until we uncover the
-             * command reading loop.  Xreturn will exit
-             * if there is none (i.e. if this is not
-             * an interactive rc.)
-             */
-            while(!runq->iflag) 
-                Xreturn();
-        }
-        else 
-            Exit(getstatus(), __LOC__);
-    }
-}
-@
-
-
-
-
-<<global [[interrupted]]>>=
-bool interrupted = false;
-@
-
-<<function [[Eintr]]>>=
-bool
-Eintr(void)
-{
-    return interrupted;
-}
-@
-
-
-<<[[Xrdcmds()]] calls Noerror() before yyparse()>>=
-Noerror();
-@
-
-<<function [[Noerror]]>>=
-void
-Noerror(void)
-{
-    interrupted = false;
-}
-@
-
-<<[[Xrdcmds()]] reset ntrap>>=
-ntrap = 0;	/* avoid double-interrupts during blocked writes */
-@
 
 
 %******************************************************************************
@@ -8270,7 +7993,6 @@ The bootstrap is essentially the bytecode equivalent of:
 \end{verbatim}
 %OPTIONAL
 
-%yoann: here how it looks in corresponding C
 %claude:
 The two-line script above is encoded as a sequence of
 bytecodes filling the [[bootstrap]] array.
@@ -8384,7 +8106,6 @@ setvar("rcname", newword(argv[0], (word *)nil));
 \section{[[/rc/lib/rcmain]]}
 \label{sec:rcmain}
 
-%yoann: quick intro to the rcmain file
 %claude:
 This is the initialization script sourced by the bootstrap bytecodes.
 % (see Chapter~\ref{chap:initialization-real}).
@@ -8394,6 +8115,8 @@ from the environment, and then dispatches based on how
 [[rc]] was invoked: with [[-c]] (run a command string),
 with [[-i]] (interactive, source the user's profile and
 read from the console), or with a script file argument.
+
+%TODO: LP split!
 
 <<rc/rcmain.rc>>=
 # /lib/rc/rcmain
@@ -9116,6 +8839,284 @@ Closedir(int f)
 
 
 %******************************************************************************
+\chapter{Notes (Signals) Management}
+%******************************************************************************
+\label{chap:signals}
+%alt: section in Advanced topics?
+
+
+%claude:
+Signal handling is critical for a shell because the shell
+sits between the user and every running program.
+When the user presses [[^C]], the interrupt signal is sent
+to all processes in the foreground group---including the shell
+itself. If the shell simply died along with the interrupted
+command, the user would lose their terminal session.
+Instead, the shell must catch the signal, cancel the current
+command, and return to its prompt, ready for the next input.
+%
+Beyond [[^C]], a shell must also handle hangup signals
+(so it can clean up or notify background jobs when a terminal
+disconnects), and let users define their own trap handlers
+for scripting (e.g., cleaning up temporary files on exit).
+See \book{Kernel} for how the kernel delivers notes to processes.
+
+\section{Overview}
+
+% code of nohup utility?
+% C-d generate an Xsimple (exit 1) ?
+%claude:
+Under \plan, signals are called {\em notes}.
+When a note is received (e.g., an interrupt from [[^C]]),
+the kernel calls the handler registered by [<Trapinit()>].
+%
+The handler does not execute the trap function immediately
+(which would be unsafe in the middle of interpreting bytecodes).
+Instead, it increments a counter ([[ntrap]]) and the main
+interpreter loop checks this counter after each bytecode
+(see the [[handing trap if necessary]] chunk in [<main()>]).
+%
+Users can define signal handlers with \verb+fn sigint {...}+,
+\verb+fn sighup {...\}+, etc. If no handler is defined,
+the default behavior applies (usually terminating the process).
+
+%claude:
+The full path of a [[^C]] from keystroke to user-defined
+handler is therefore asynchronous in the kernel half and
+synchronous in the interpreter half:
+\begin{verbatim}
+  user        kernel                    rc interpreter loop
+  ----        ------                    -------------------
+   ^C
+    |         deliver "interrupt"
+    |          note to rc
+    |               |
+    |               v
+    |         notifyf(s="interrupt")    (currently running, say,
+    |           trap[SIGINT]++          inside Xsimple of a nested
+    |           ntrap++                 for-loop)
+    |           noted(NCONT)
+    |               |
+    |               v
+    |         rc resumes where interrupted
+    |                                       |
+    |                                       v
+    |                                   finish current bytecode
+    |                                       |
+    |                                       v
+    |                                   main() loop top:
+    |                                     if(ntrap) dotrap();
+    |                                       |
+    |                                       v
+    |                                   dotrap() looks up
+    |                                   vlook("sigint")->fn:
+    |                                     - if user defined one,
+    |                                       start() a new thread
+    |                                       running the fn body
+    |                                     - otherwise, pop threads
+    |                                       via Xreturn() until we
+    |                                       reach the iflag REPL
+\end{verbatim}
+%claude:
+Two design points are worth calling out. First, the
+deferral via [[ntrap]] is the only way to keep the
+interpreter's invariants intact: a bytecode like
+[<Xassign>] is in the middle of re-linking [[argv]],
+freeing old values, and installing new ones; if a shell
+function were run at an arbitrary point inside it, the
+word lists would be in an inconsistent state and the
+heap would leak. The same argument applies to any
+language runtime with safe-points---[[rc]] just happens
+to have very coarse safe-points (once per bytecode)
+because its bytecodes are large compared to a CPU
+instruction. Second, the ``pop threads until [[iflag]]''
+unwinding in [<dotrap>] is how [[^C]] abandons a
+deeply nested script or for-loop and returns to the
+interactive prompt: each [[Xreturn]] pops one frame
+off [[runq]], just as if the function had returned
+normally, and eventually uncovers the bootstrap thread
+that loops in [<Xrdcmds()>]. If no such interactive
+thread exists (for non-interactive [[rc]]), the final
+[[Xreturn]] terminates the shell---which is the
+correct behaviour for [[^C]] in a script.
+
+<<constant [[NSIG]]>>=
+#define	NSIG	32
+@
+
+<<constant [[SIGINT]]>>=
+#define	SIGINT	2
+@
+
+<<constant [[SIGQUIT]]>>=
+#define	SIGQUIT	3
+@
+
+
+% plan9.c
+<<global [[syssigname]]>>=
+char *syssigname[] = {
+    "exit",		/* can't happen */
+    "hangup",
+    "interrupt",
+    "quit",		/* can't happen */
+    "alarm",
+    "kill",
+    "sys: fp: ",
+    "term",
+    0
+};
+@
+
+% plan9.c
+<<global [[signame]]>>=
+char *signame[] = {
+    "sigexit",	
+    "sighup",	
+    "sigint",	
+    "sigquit",
+    "sigalrm",	
+    "sigkill",	
+    "sigfpe",	
+    "sigterm",
+    0
+};
+@
+%old: was Signame but not consistent naming of globals
+
+
+<<global [[ntrap]]>>=
+int ntrap;				/* number of outstanding traps */
+@
+
+<<global [[trap]]>>=
+int trap[NSIG];				/* number of outstanding traps per type */
+@
+
+
+\section{Registering handlers: [[Trapinit()]]}
+
+% main() -> Trapinit()
+<<function [[Trapinit]]>>=
+void
+Trapinit(void)
+{
+    notify(notifyf);
+}
+@
+
+<<function [[notifyf]]>>=
+void
+notifyf(void*, char *s)
+{
+    int i;
+    for(i = 0;syssigname[i];i++) 
+     if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
+        if(strncmp(s, "sys: ", 5)!=0) 
+            interrupted = true;
+        goto Out;
+    }
+    pfmt(err, "rc: note: %s\n", s);
+    noted(NDFLT);
+    return;
+Out:
+    if(strcmp(s, "interrupt")!=0 || trap[i]==0){
+        trap[i]++;
+        ntrap++;
+    }
+    if(ntrap>=32){	/* rc is probably in a trap loop */
+        pfmt(err, "rc: Too many traps (trap %s), aborting\n", s);
+        abort();
+    }
+    noted(NCONT);
+}
+@
+
+\section{Trap dispatch: [[dotrap()]]}
+
+<<[[main()]] handing trap if necessary in interpreter loop>>=
+if(ntrap)
+    dotrap();
+@
+
+
+
+% trap.c
+% main() -> dotrap() after having interpreter one bytecode
+<<function [[dotrap]]>>=
+void
+dotrap(void)
+{
+    int i;
+    struct Var *trapreq;
+    struct Word *starval;
+
+    starval = vlook("*")->val;
+    while(ntrap) 
+     for(i = 0;i!=NSIG;i++) 
+      while(trap[i]){
+        --trap[i];
+        --ntrap;
+        if(getpid()!=mypid) 
+            Exit(getstatus(), __LOC__);
+        trapreq = vlook(signame[i]);
+        if(trapreq->fn){
+            start(trapreq->fn, trapreq->pc, (struct Var *)nil);
+            runq->local = newvar(strdup("*"), runq->local);
+            runq->local->val = copywords(starval, (struct Word *)nil);
+            runq->local->changed = true;
+            runq->redir = runq->startredir = nil;
+        }
+        else if(i==SIGINT || i==SIGQUIT){
+            /*
+             * run the stack down until we uncover the
+             * command reading loop.  Xreturn will exit
+             * if there is none (i.e. if this is not
+             * an interactive rc.)
+             */
+            while(!runq->iflag) 
+                Xreturn();
+        }
+        else 
+            Exit(getstatus(), __LOC__);
+    }
+}
+@
+
+
+
+
+<<global [[interrupted]]>>=
+bool interrupted = false;
+@
+
+<<function [[Eintr]]>>=
+bool
+Eintr(void)
+{
+    return interrupted;
+}
+@
+
+
+<<[[Xrdcmds()]] calls Noerror() before yyparse()>>=
+Noerror();
+@
+
+<<function [[Noerror]]>>=
+void
+Noerror(void)
+{
+    interrupted = false;
+}
+@
+
+<<[[Xrdcmds()]] reset ntrap>>=
+ntrap = 0;	/* avoid double-interrupts during blocked writes */
+@
+
+
+%******************************************************************************
 \chapter{Advanced Topics}
 %******************************************************************************
 \label{chap:advanced-topics}
@@ -9408,6 +9409,104 @@ Xbackq(void)
 %old: before the `split{} extension:
 % var *ifs = vlook("ifs");
 % stop = ifs->val? ifs->val->word: "";
+
+
+
+\subsection{Command output as a file: \texttt{<\{<cmd>\}}}
+
+<<comword rule other cases>>=
+|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
+@
+
+
+% see man/1/rc:
+% cmp <{old} <{new}
+
+% it is in comword rule because really it resolved in a filename
+% to /dev/fd/xxx connected to output of command.
+
+%claude:
+Process substitution (called ``command output as a file'' in
+Plan~9) lets you use a command's output as if it were
+a file.  \verb+cmp <{old} <{new}+ runs the two commands
+and passes their outputs as filenames to [[cmp]].
+
+This appears in the [[comword]] rule because it
+really resolves to a filename ([[/dev/fd/N]]) connected
+to the command's output via a pipe.
+The implementation forks a child that runs the command
+with its stdout (or stdin for [[>{}]]) connected to
+one end of a pipe, while the parent pushes the filename
+[[/fd/N]] (the other end) as a word onto the argv stack.
+
+<<token declarations>>=
+%token PIPEFD 
+@
+
+% * Xpipefd[type]{... Xreturn}		connect {} to pipe (input or output,
+% * 					depending on type), push /dev/fd/??
+
+<<[[outcode()]] cases>>=
+case PIPEFD:
+    emitf(Xpipefd);
+    emiti(t->rtype);
+    p = emiti(0);
+    outcode(c0, eflag);
+    emitf(Xexit);
+    stuffdot(p);
+    break;
+@
+
+
+
+<<global [[Fdprefix]]>>=
+char *Fdprefix = "/fd/";
+@
+
+<<function [[Xpipefd]]>>=
+void
+Xpipefd(void)
+{
+    struct Thread *p = runq;
+    int pc = p->pc, pid;
+    char name[40];
+    int pfd[2];
+    int sidefd, mainfd;
+    if(pipe(pfd)<0){
+        Xerror("can't get pipe");
+        return;
+    }
+    if(p->code[pc].i==READ){
+        sidefd = pfd[PWR];
+        mainfd = pfd[PRD];
+    }
+    else{
+        sidefd = pfd[PRD];
+        mainfd = pfd[PWR];
+    }
+    switch(pid = fork()){
+    case -1:
+        Xerror("try again");
+        break;
+    case 0: // child
+        clearwaitpids();
+        start(p->code, pc+2, runq->local);
+        close(mainfd);
+        pushredir(ROPEN, sidefd, p->code[pc].i==READ?1:0);
+        runq->ret = 0;
+        break;
+    default: // parent
+        addwaitpid(pid);
+        close(sidefd);
+        pushredir(ROPEN, mainfd, mainfd);	/* isn't this a noop? */
+        strcpy(name, Fdprefix);
+        inttoascii(name+strlen(name), mainfd);
+        pushword(name);
+        p->pc = p->code[pc+1].i;
+        break;
+    }
+}
+@
 
 
 
@@ -9817,6 +9916,70 @@ pstrs(io *f, word *a)
 }
 @
 
+\subsection{Stringification of variables: [[$"<foo>]]} %$
+
+% no ending "? No, it is used for stringification of a variable.
+% a list2str.
+
+%claude:
+The [[$"]] operator converts a list variable into a single
+string with spaces between elements.
+If [[$x]] is [[(a b c)]], then [[$"x]] is [[a b c]]
+as a single word.
+This is the inverse of [[$ifs]]-splitting in command
+substitution: command substitution splits strings into
+lists, while [[$"]] joins lists back into strings.
+
+<<comword rule other cases>>=
+|   '"' word        {$$=tree1('"', $2);}
+@
+
+<<[[outcode()]] cases>>=
+case '"':
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xqdol);
+    break;
+@
+
+
+<<function [[Xqdol]]>>=
+void
+Xqdol(void)
+{
+    word *a, *p;
+    char *s;
+    int n;
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    s = runq->argv->words->word;
+    deglob(s);
+    a = vlook(s)->val;
+    poplist();
+    n = count(a);
+    if(n==0){
+        pushword("");
+        return;
+    }
+    for(p = a;p;p = p->next) n+=strlen(p->word);
+    s = emalloc(n);
+    if(a){
+        strcpy(s, a->word);
+        for(p = a->next;p;p = p->next){
+            strcat(s, " ");
+            strcat(s, p->word);
+        }
+    }
+    else
+        s[0]='\0';
+    pushword(s);
+    efree(s);
+}
+@
+
+
 \subsection{Read-write redirections: [[<> <file>]]}
 
 %claude:
@@ -10054,168 +10217,6 @@ bracket syntax, pipes can also specify which file descriptors
 to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
 (stderr) to [[cmd2]]'s stdin.
 
-\subsection{Command output as a file: \texttt{'<\{<cmd>\}'}}
-
-<<comword rule other cases>>=
-|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
-@
-
-
-% see man/1/rc:
-% cmp <{old} <{new}
-
-% it is in comword rule because really it resolved in a filename
-% to /dev/fd/xxx connected to output of command.
-
-%claude:
-Process substitution (called ``command output as a file'' in
-Plan~9) lets you use a command's output as if it were
-a file.  \verb+cmp <{old} <{new}+ runs the two commands
-and passes their outputs as filenames to [[cmp]].
-
-This appears in the [[comword]] rule because it
-really resolves to a filename ([[/dev/fd/N]]) connected
-to the command's output via a pipe.
-The implementation forks a child that runs the command
-with its stdout (or stdin for [[>{}]]) connected to
-one end of a pipe, while the parent pushes the filename
-[[/fd/N]] (the other end) as a word onto the argv stack.
-
-<<token declarations>>=
-%token PIPEFD 
-@
-
-% * Xpipefd[type]{... Xreturn}		connect {} to pipe (input or output,
-% * 					depending on type), push /dev/fd/??
-
-<<[[outcode()]] cases>>=
-case PIPEFD:
-    emitf(Xpipefd);
-    emiti(t->rtype);
-    p = emiti(0);
-    outcode(c0, eflag);
-    emitf(Xexit);
-    stuffdot(p);
-    break;
-@
-
-
-
-<<global [[Fdprefix]]>>=
-char *Fdprefix = "/fd/";
-@
-
-<<function [[Xpipefd]]>>=
-void
-Xpipefd(void)
-{
-    struct Thread *p = runq;
-    int pc = p->pc, pid;
-    char name[40];
-    int pfd[2];
-    int sidefd, mainfd;
-    if(pipe(pfd)<0){
-        Xerror("can't get pipe");
-        return;
-    }
-    if(p->code[pc].i==READ){
-        sidefd = pfd[PWR];
-        mainfd = pfd[PRD];
-    }
-    else{
-        sidefd = pfd[PRD];
-        mainfd = pfd[PWR];
-    }
-    switch(pid = fork()){
-    case -1:
-        Xerror("try again");
-        break;
-    case 0: // child
-        clearwaitpids();
-        start(p->code, pc+2, runq->local);
-        close(mainfd);
-        pushredir(ROPEN, sidefd, p->code[pc].i==READ?1:0);
-        runq->ret = 0;
-        break;
-    default: // parent
-        addwaitpid(pid);
-        close(sidefd);
-        pushredir(ROPEN, mainfd, mainfd);	/* isn't this a noop? */
-        strcpy(name, Fdprefix);
-        inttoascii(name+strlen(name), mainfd);
-        pushword(name);
-        p->pc = p->code[pc+1].i;
-        break;
-    }
-}
-@
-
-
-
-\subsection{Stringification of variables: [[$"<foo>]]} %$
-
-% no ending "? No, it is used for stringification of a variable.
-% a list2str.
-
-%claude:
-The [[$"]] operator converts a list variable into a single
-string with spaces between elements.
-If [[$x]] is [[(a b c)]], then [[$"x]] is [[a b c]]
-as a single word.
-This is the inverse of [[$ifs]]-splitting in command
-substitution: command substitution splits strings into
-lists, while [[$"]] joins lists back into strings.
-
-<<comword rule other cases>>=
-|   '"' word        {$$=tree1('"', $2);}
-@
-
-<<[[outcode()]] cases>>=
-case '"':
-    emitf(Xmark);
-    outcode(c0, eflag);
-    emitf(Xqdol);
-    break;
-@
-
-
-<<function [[Xqdol]]>>=
-void
-Xqdol(void)
-{
-    word *a, *p;
-    char *s;
-    int n;
-    if(count(runq->argv->words)!=1){
-        Xerror1("variable name not singleton!");
-        return;
-    }
-    s = runq->argv->words->word;
-    deglob(s);
-    a = vlook(s)->val;
-    poplist();
-    n = count(a);
-    if(n==0){
-        pushword("");
-        return;
-    }
-    for(p = a;p;p = p->next) n+=strlen(p->word);
-    s = emalloc(n);
-    if(a){
-        strcpy(s, a->word);
-        for(p = a->next;p;p = p->next){
-            strcat(s, " ");
-            strcat(s, p->word);
-        }
-    }
-    else
-        s[0]='\0';
-    pushword(s);
-    efree(s);
-}
-@
-
-
 \section{Advanced builtins}
 
 % could have echo here. and test. but true that they can also
@@ -10231,7 +10232,7 @@ to shell internals: [[exec]] replaces the shell process,
 manipulates namespaces, [[flag]] queries command-line flags,
 and [[shift]] modifies [[$*]].
 
-\subsection{[[$ exec]]}
+\subsection{[[% exec]]}
 %$
 
 % actually called from Xsimple()
@@ -10245,7 +10246,7 @@ with the given command (no fork).
 It is called from [<Xsimple()>] when the first word
 of the command is [[exec]].
 
-\subsection{[[$ whatis]]}
+\subsection{[[% whatis]]}
 %$
 
 %claude:
@@ -10375,7 +10376,7 @@ Executable(char *file)
 
 
 
-\subsection{[[$ rfork]]}
+\subsection{[[% rfork]]}
 \label{sec:rfork}
 
 %claude:
@@ -10463,7 +10464,7 @@ execnewpgrp(void)
 }
 @
 
-\subsection{[[$ flag]]}
+\subsection{[[% flag]]}
 %$
 
 %claude:
@@ -10504,7 +10505,7 @@ execflag(void)
 }
 @
 
-\subsection{[[$ shift]]}
+\subsection{[[% shift]]}
 %$
 
 %claude:
@@ -10547,7 +10548,7 @@ execshift(void)
 @
 
 
-\subsection{[[$ finit]]}
+\subsection{[[% finit]]}
 %$
 
 %claude:
@@ -10668,7 +10669,7 @@ pointers, to the interpreter that executes them via the
 [[fork]]/[[exec]]/[[wait]] system call pattern---and more
 generally how many shells work.
 
-Despite being only about 6700 lines of C (plus a small Yacc grammar),
+Despite being only about 5700 lines of C (plus a small Yacc grammar),
 [[rc]] implements a complete programming language:
 a hand-written lexer, a Yacc parser, a bytecode compiler,
 and a bytecode interpreter---the same architecture found
@@ -10850,7 +10851,7 @@ important for portable system scripts.
 At the end of the day, the core model remains the one
 that [[rc]] shares with the Bourne shell: fork, exec,
 wait, pipes, and file descriptors. [[rc]] captures
-this essential engine in 6700 lines of C. [[bash]]'s
+this essential engine in 5700 lines of C. [[bash]]'s
 170\,000+ lines add convenience, compatibility, and
 interactive polish---but the fundamental architecture
 is the same one you have studied in this book.
@@ -11621,7 +11622,7 @@ errc(int c)
 
 
 
-\section{Buffered IO}
+\section{Buffered I/O}
 % again, reimplement the same thing
 
 %ocaml: stdlib does that by default
@@ -12061,8 +12062,8 @@ iacvt(int n)
 }
 @
 
-\section{Misc}
-\t delete them, I don't care about other OSes
+\section{\plan and \unix compatibility layer}
+%alt: delete them, don't care about other OSes, but now with goken we care a bit
 
 <<function [[Write]]>>=
 @
@@ -12103,7 +12104,6 @@ Memcpy(void *a, void *b, long n)
 
 \section{[[/usr/glenda/lib/profile]]}
 
-%yoann: plan9 profile script for login session? give context and where do we source this file in the boot process or in rc?
 %claude:
 This is Glenda's (the default \plan user) login profile,
 sourced by [[rcmain]] when [[rc]] is invoked with the
@@ -12223,6 +12223,50 @@ main(int argc, char *argv[])
 }
 @
 
+\section{[[read]]}
+
+% x=`read`
+
+<<function [[main]](read)>>=
+void
+main(int argc, char *argv[])
+{
+	int i, fd;
+	char *s;
+
+	ARGBEGIN{
+	case 'm':
+		multi = 1;
+		break;
+	case 'n':
+		s = ARGF();
+		if(s){
+			nlines = atoi(s);
+			break;
+		}
+		/* fall through */
+	default:
+		fprint(2, "usage: read [-m] [-n nlines] [files...]\n");
+		exits("usage");
+	}ARGEND
+
+	if(argc == 0)
+		lines(0, "<stdin>");
+	else
+		for(i=0; i<argc; i++){
+			fd = open(argv[i], OREAD);
+			if(fd < 0){
+				fprint(2, "read: can't open %s: %r\n", argv[i]);
+				exits("open");
+			}
+			lines(fd, argv[i]);
+			close(fd);
+		}
+
+	exits(status);
+}
+@
+
 \section{[[pwd]]}
 
 %claude:
@@ -12231,7 +12275,7 @@ In \plan, the current directory is a per-process kernel
 state, not an environment variable like [[\$PWD]] in some
 \unix shells.
 
-<<function main (misc/pwd.c)>>=
+<<function [[main]](pwd)>>=
 /*
  * Print working (current) directory
  */
@@ -12282,7 +12326,7 @@ char	**av;
 static char	*tmp;
 @
 
-<<function main (misc/test.c)>>=
+<<function [[main]](test)>>=
 void
 main(int argc, char *argv[])
 {
@@ -12701,12 +12745,8 @@ isnewerthan(char *a, char *b)
 }
 @
 
-\section{[[read]]}
-%TODO read.c
-
-\section{[[sh]], the simple shell}
-\label{sec:sh-simple-shell}
-%alt: be its own appendix?
+\chapter{[[sh]], the simple shell}
+\label{chap:sh-simple-shell}
 
 %claude:
 This is a minimal shell, useful during early stages of
@@ -12821,7 +12861,7 @@ char	*path[] ={"/bin", 0};
 int	ignored;
 @
 
-<<function main (sh/sh.c)>>=
+<<function [[main]](sh)>>=
 void
 main(int argc, char *argv[])
 {
