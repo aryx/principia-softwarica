@@ -402,6 +402,24 @@ outcode(tree *t, bool eflag)
         emitf(Xconc);
         break;
     /*x: [[outcode()]] cases */
+    case '`':
+        emitf(Xmark);
+        if(c0){
+            outcode(c0, 0);
+            emitf(Xglob);
+        } else {
+            emitf(Xmark);
+            emitf(Xword);
+            emits(strdup("ifs"));
+            emitf(Xdol);
+        }
+        emitf(Xbackq);
+        p = emiti(0);
+        outcode(c1, false);
+        emitf(Xexit);
+        stuffdot(p);
+        break;
+    /*x: [[outcode()]] cases */
     case SUBSHELL:
         emitf(Xsubshell);
         p = emiti(0);
@@ -431,24 +449,6 @@ outcode(tree *t, bool eflag)
         emiti(t->rtype);
         p = emiti(0);
         outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        break;
-    /*x: [[outcode()]] cases */
-    case '`':
-        emitf(Xmark);
-        if(c0){
-            outcode(c0, 0);
-            emitf(Xglob);
-        } else {
-            emitf(Xmark);
-            emitf(Xword);
-            emits(strdup("ifs"));
-            emitf(Xdol);
-        }
-        emitf(Xbackq);
-        p = emiti(0);
-        outcode(c1, false);
         emitf(Xexit);
         stuffdot(p);
         break;
