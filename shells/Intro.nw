@@ -715,13 +715,13 @@ At boot, [[init]] (the first process) starts the system.
 On a traditional \unix, [[getty]] opens a
 terminal device (a serial port or virtual console),
 [[login]] authenticates the user and % [[login]]
-starts the user's {\em shell}.
+starts the user's shell.
 %plan9:
 On \plan, [[init]] starts [[rc]] directly, and [[rio]] provides virtual terminals
 (each window is a terminal that gets its own [[rc]], see the \book{Windows}).
 %modern:
 On a modern machine, the terminal emulator plays the role
-of [[getty]]: it creates a {\em pseudo-terminal device}, forks a
+of [[getty]]: it creates a {pseudo-terminal device}, forks a
 shell, and connects the two.
 %
 The shell never knows whether it is talking to
@@ -818,8 +818,8 @@ It does almost nothing---just reads a command name, forks a process,
 and [[exec]]s the program---but it already captures the essence of what
 a shell is: a loop that reads, forks, execs, and waits.
 
-%claude:
-<<minishell.c>>=
+%claude: will need to use /bin/ls to run command; exec() does not look $path
+<<minishell1.c>>=
 #include <u.h>
 #include <libc.h>
 
@@ -848,10 +848,10 @@ void main() {
 %alt: put minishell.c in separate section before or after boot.rc
 
 %claude:
-These rely on {system calls} covered in the \book{Kernel}:
+The code above relies on {system calls} covered in the \book{Kernel}:
 [[rfork()]] creates the child process (its flags say what to copy
 or share---[[RFPROC]] for the process itself, [[RFFDG]] for a private
-file-descriptor group), [[exec()]] replaces it with the named program,
+{\em file-descriptor group}), [[exec()]] replaces it with the named program,
 and [[await()]] makes the parent wait for the child to finish.
 
 
@@ -1102,7 +1102,7 @@ want more, such as the ability to use conditionals or loops.
 %
 Thus, most shells are also full programming languages,
 often referred to as {\em scripting languages},
-with {\em variables} and many {\em control flow} constructs, and even
+with {variables} and many {control flow} constructs, and even
 function definitions.
 %
 A scripting language acts like a {glue}, allowing to combine many
@@ -1189,7 +1189,7 @@ between [[$*]] (all arguments as one string) and [[$@]]
 does not need the colon-separated encoding that [[$PATH]]
 uses in [[sh]].
 
-There are no booleans: control flow is based on the
+Most shells do not use booleans: control flow is based instead on the
 {\em exit status} of the command you run. 
 In [[rc]], the only comparison
 operator is \texttt{\textasciitilde} (pattern matching on strings), and for
@@ -1202,6 +1202,9 @@ numerical tests, the external program [[test]] is used
 %and get results back (via exit status and stdout).
 %The core loop is simply: read a line, parse it,
 %fork, exec, wait, repeat.
+
+%alt: \subsection{Builtins}
+% but explained later with boot.rc
 
 %\subsection{A DSL}
 % now in grammar
@@ -1268,7 +1271,7 @@ A core shell convenience is letting the user write a {pattern}
 that stands for many filenames. Typing [[ls *.c]] should list
 every C file in the current directory without forcing the
 user to enumerate them by hand. {Globbing} (a.k.a. {filename
-expansion}, wildcard matching) is the mechanism that turns [[*.c]] into the
+expansion}, or wildcard matching) is the mechanism that turns [[*.c]] into the
 actual list [[a.c b.c c.c]] before [[ls]] even runs.
 
 %claude:
@@ -1319,7 +1322,7 @@ implements its three-operator subset.
 %tagged with an in-band {GLOB byte} during lexing, then
 %expanded to a [[Word]] list during execution.
 
-\subsection{Quoting}
+\subsection{Quoting and escaping}
 \label{sec:princ-quoting}
 
 %claude:
@@ -1361,7 +1364,9 @@ and explains the defensive idiom of writing
 quoting form: single quotes, with the convention that an
 embedded single quote is written by doubling it
 ([['it''s']]). There are no double quotes, no backslash
-escapes, no [[IFS]], and no word splitting at all---because
+escapes, 
+%no [[IFS]], 
+and no word splitting at all---because
 in [[rc]] every variable is already a list of strings, not
 a single string. If [[x]] holds two elements [[hello]] and
 [[world]], then [[ls $x]] always passes two arguments. If
@@ -1410,13 +1415,14 @@ shows the exact code). If you want line editing, you run [[rc]] inside a [[rio]]
 or [[acme]] window, where the terminal or editor itself
 provides editing, search, and history through its normal
 commands. The shell stays
-around 7000 LOC; the interactive features stay in
+around 5700 LOC; the interactive features stay in
 the tools that already do them well.
 
 %claude:
 This split reflects the broader \plan attitude that text
 editors are the right place to edit text, including command
-lines. In [[rio]], every command lives in a window where
+lines. 
+Moreover, in [[rio]] every command lives in a window where
 you can scroll back through previous output and re-execute
 old commands by selecting them with the mouse. In [[acme]],
 commands and their output share the same buffer as your
@@ -1424,8 +1430,8 @@ source code, and ``running a command'' is just executing
 a line from the buffer. Neither approach needs the shell
 to know what a cursor is. The price is that running [[rc]]
 bare in a vt100 terminal gives a pretty stark experience---
-which is fine if you live in [[acme]], less fine if you do
-not.
+which is fine if you can use [[acme]] and/or [[rio]].
+%less fine if you do not.
 
 \subsection{Asynchronous execution}
 \label{sec:princ-async}
@@ -1451,7 +1457,7 @@ notification when a background job finishes. The shell
 starts the process, isolates it, and forgets about it.
 
 %claude:
-At the other end is full {job control}, introduced by
+At the other end is full {\em job control}, introduced by
 [[csh]] in 1980 and inherited by [[bash]] and [[zsh]]. The
 shell maintains a job table indexed by job number; each
 job is its own process group; [[Ctrl-Z]] sends [[SIGTSTP]]
@@ -1471,7 +1477,7 @@ with cleaner OS primitives. A backgrounded process can be
 addressed by its [[pid]] and controlled through
 [[/proc/<pid>/]] (read state, send notes, debug with
 [[acid]]) just as well as through a shell-private job
-number; [[rfork]] gives finer control over what is shared
+number; [[rfork()]] gives finer control over what is shared
 with the child than a single [[&]]; and [[rio]] makes it
 natural to start each long command in its own window
 instead of multiplexing multiple jobs through one terminal.
@@ -1485,7 +1491,7 @@ redirect its stdin to [[/dev/null]].
 \subsection{The CLI renaissance}
 
 %claude: %comeback:
-The command line is experiencing its biggest growth
+Note that the command line is experiencing its biggest growth
 period in decades. Cloud infrastructure is entirely
 {\sc cli}-driven ([[docker]], [[kubectl]], [[terraform]],
 [[aws]]). Modern terminal emulators are {\sc gpu}-accelerated
@@ -1543,7 +1549,7 @@ makes all of this work.
 
 %trans: %dup: Windows.nw
 I just described the main features of a shell
-and illustrated a few of them with examples from [[bash]], [[rc], or [[zsh]].
+and illustrated a few of them with examples from [[bash]], [[rc]], or [[zsh]].
 %
 I will now focus exclusively on [[rc]] and give more details about
 its command-line interface.
@@ -1681,6 +1687,17 @@ exec /boot/rc -m /boot/rcmain -i
 %#	exec /$cputype/init -t
 
 
+\subsection{Comments}
+
+%claude:
+Comments in [[rc]] start with [[#]] and extend to the end of the line.
+%said-later:
+%This is why the [[#!]] shebang works as described above:
+%the line is simply a comment from [[rc]]'s perspective.
+%
+% so for #! when pass file as argument,
+%  parse file and skip this line because comment
+
 \subsection{[[#!]]}
 
 %claude:
@@ -1704,6 +1721,7 @@ by the shell itself (as in [[rc boot.rc]]).
 
 %claude:
 The [[-m /boot/rcmain]] flag specifies the initialization script.
+%
 By default [[rc]] sources [[/rc/lib/rcmain]] at startup,
 but during boot the root filesystem is not yet mounted, so
 the boot script must use [[-m]] to point to a copy stored
@@ -1712,6 +1730,7 @@ in the boot partition at [[/boot/rcmain]].
 Under \unix, the equivalent mechanism is the cascade
 of initialization files: [[.profile]] for the Bourne shell,
 [[.login]] for the C shell, [[.bashrc]] for Bash, etc.
+%said-later: section on all those init scripts for different shells
 In \plan, there is a single initialization script
 [[rcmain]] shared by all users
 (see Section~\ref{sec:rcmain} and
@@ -1729,12 +1748,15 @@ Chapter~\ref{chap:initialization-real} for details).
 %claude:
 The [[boot.rc]] script above shows a variable assignment:
 [[path=(/bin /boot)]].
+%
 In [[rc]], variables hold \emph{lists} of strings, and
 parentheses are used to create lists: [[(a b c)]] is a
 three-element list.
+%
 This is a key design difference from [[sh]], where variables
 hold a single string and lists are simulated by splitting
 on [[IFS]] characters.
+%
 By treating all values as lists, [[rc]] avoids many of the
 quoting pitfalls that plague [[sh]] scripts.
 
@@ -1747,45 +1769,40 @@ quoting pitfalls that plague [[sh]] scripts.
 % to Linux. Also no need /usr/bin/env ugly intermediate for #!
 
 %claude:
-The variable [[$path]] is a special variable: it tells [[rc]]
+The variable [[$path]] is a {\em special variable}: it tells [[rc]]
 where to look for programs.  When you type [[ls]], the shell
 searches each directory in [[$path]] until it finds an
 executable named [[ls]].
 
+%plan9-is-better:
 In [[sh]] and [[bash]], the equivalent variable is [[$PATH]],
 which encodes the list as a colon-separated string
 (e.g., [[/bin:/usr/bin]]).  In [[rc]], because variables are
 already lists, [[$path]] is simply [[(/ /bin)]]---no
 special separator needed.
 
+%plan9-is-better:
 Under \plan, the path list is typically short because
 the system uses \emph{union directories}: multiple directories
 are bound together into a single mount point like [[/bin]],
 so there is no need for a long search path.
+%
 This also means you never need the [[/usr/bin/env]]
 trick commonly used in \unix shebang lines.
+%
 Under \unix, different systems install programs in different
 locations (e.g., [[/usr/bin/python]] vs.\ [[/usr/local/bin/python]]),
 so script authors write [[#!/usr/bin/env python]] instead of
 hardcoding the path: [[env]] searches [[$PATH]] and runs
 the first match.
+%
 Under \plan, with union directories, [[/bin/rc]] is always
 the right path regardless of the architecture.
 
 See Section~\ref{sec:path-management} for the implementation.
 
-\subsection{Comments}
-
-% so for #! when pass file as argument,
-%  parse file and skip this line because comment
-
-%claude:
-Comments in [[rc]] start with [[#]] and extend to the
-end of the line.
-This is why the [[#!]] shebang works as described above:
-the line is simply a comment from [[rc]]'s perspective.
-
-\subsection{Quoting and escaping}
+\subsection{Quoting}
+% no escaping in rc (except for newline)
 
 % quote for # otherwise comment, escaping
 % also ^?
@@ -1799,8 +1816,8 @@ In [[rc]], single quotes are the only quoting mechanism.
 To include a literal single quote inside a quoted string,
 you double it: [['it''s']].
 There are no backslash escapes and no double quotes
-(the [["|]] character has a different meaning in [[rc]]:
-variable stringification, see Section~\ref{sec:quoting}).
+(the [["]] character has a different meaning in [[rc]]:
+variable stringification, see Section~\ref{sec:stringification}).
 
 \subsection{The environment}
 
@@ -1809,18 +1826,22 @@ variable stringification, see Section~\ref{sec:quoting}).
 
 %claude:
 The [[boot.rc]] script also assigns [[objtype=arm]].
+%
 This is not just a local shell variable: in \plan, all shell
 variables are automatically exported to the environment---there
 is no need for an [[export]] command like in [[bash]]%
 \footnote{If you need environment isolation, [[rfork e]] creates
 a private copy of [[/env/]]; see Section~\ref{sec:rfork}.}.
+%
 When [[mk]] (the build tool) is later run from this shell,
 it inherits [[$objtype]] and uses it to select the correct
 compiler and assembler (e.g., [[5c]], [[5a]], [[5l]] for ARM).
+% actually we should not set $objtype but set $cputype instead
 
 Under \plan, the environment is stored as files in the
 [[/env]] filesystem: each variable becomes a file
 [[/env/varname]] whose content is the variable's value.
+%
 See Chapter~\ref{chap:environment} for the implementation.
 
 \subsection{Builtins}
@@ -1843,6 +1864,7 @@ See Chapter~\ref{chap:environment} for the implementation.
 The last line of [[boot.rc]] is [[exec /boot/rc -m /boot/rcmain -i]].
 [[exec]] is a shell \emph{builtin}: a command that is executed
 inside the shell process rather than in a child.
+%
 Builtins exist because some operations must modify the
 shell's own state.  For example, [[cd]] changes the shell's
 current directory---if [[cd]] were a regular program,
@@ -1853,11 +1875,14 @@ would be unaffected.
 The [[exec]] builtin replaces the current shell process
 with the specified command.  Here it replaces the boot
 shell with an interactive instance of [[rc]] (the [[-i]] flag).
+%
 Without [[exec]], the boot shell would fork a child [[rc]],
 wait for it to finish, and then continue---but there is
 nothing left to do, so the extra process would just waste
 a process slot until the interactive shell exits.
+%
 See Chapter~\ref{chap:builtins} for the full list of builtins.
+% actually not full list, advanced topics contains other builtins
 
 \subsection{Other features}
 
@@ -1871,6 +1896,7 @@ See Chapter~\ref{chap:builtins} for the full list of builtins.
 The [[boot.rc]] script is simple enough that it does not
 use many of [[rc]]'s advanced features: no pipes,
 no control flow, no functions.
+%
 Those features---pipes, redirections, conditionals, loops,
 pattern matching, functions, command substitution, and
 glob patterns---will be presented gradually in
