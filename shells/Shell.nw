@@ -713,8 +713,8 @@ The bytecode is a data structure used both by the compiler and interpreter.
 %toc:
 The following sections will present the remaining data structures
 of the interpreter part of [[rc]]: 
-the thread, and the variable,
-which is itself defined by a list of words.
+the thread and the variable, where the variable
+is itself defined by a list of words.
 
 %dup: ed.nw %padism:
 Note that the original source code of [[rc]] has been slightly modified to
@@ -797,6 +797,7 @@ struct Tree {
     // either<enum<Token_kind>, char>
     int	type;
     // string of the token or AST dump of the whole subtree for certain nodes
+    // option<ref_own<string>>
     char *str;
 
     // array<option<ref_own<Tree>>
@@ -1213,7 +1214,10 @@ if(p->f==Xfalse || p->f==Xtrue
 
 
 
-
+% maybe explain no "tag" in enclosing struct of the union
+% to know how to interpret. because cp[0] always int
+% and after sequence of bytecode and each bytecode has specific format
+% so no need tag.
 
 
 \section{[[Thread]] and [[runq]]eue}
@@ -1227,9 +1231,9 @@ if(p->f==Xfalse || p->f==Xtrue
 % Still thread is maybe confusing.
 % Maybe rename Program? but true that contains code, and pc!
 % So it is a unit of execution (then maybe thread is a good name).
-%trans:
-%claude:
-Once the bytecodes are compiled, [[rc]] needs a data structure
+
+%claude: %trans:
+Once the bytecodes are generated, [[rc]] needs a data structure
 to keep track of the current execution state.
 This is the role of the [<Thread>] structure.
 A [[Thread]] is similar to a {\em stack frame} in a regular program:
@@ -1239,9 +1243,12 @@ and a program counter ([[pc]]) indexing the next bytecode to execute.
 The name ``thread'' might be confusing since these are not
 OS-level threads or processes. They are {\em units of execution}
 inside the [[rc]] interpreter.
+%
 When a bytecode like [<Xpipe()>] or [<Xasync()>] needs to run
 commands concurrently, it creates actual OS processes (with [[fork()]]),
-but within the interpreter itself, threads are managed as a stack.
+but within the interpreter itself, those commands are also represented
+as threads, as units of execution.
+%threads are managed as a stack.
 % like kernel with kstack, concurrent program
 
 <<struct [[Thread]]>>=
@@ -1288,7 +1295,7 @@ thread *ret;		/* who continues when this finishes */
 % important one!!
 %trans:
 %claude:
-The most important field of a thread is [[argv]], the {argument stack}.
+One of the most important field of a thread is [[argv]], the {argument stack}.
 It is a list of lists of words: bytecodes like [<Xmark()>] push
 a new empty list on this stack, and [<Xword()>] pushes
 a word onto the current list.
@@ -1317,7 +1324,7 @@ source order):
 
 %claude:
 \begin{vdiagram}
-  after Xmark                after Xword "/tmp"
+ 1: after Xmark              2: after Xword "/tmp"
 
   argv ---+                  argv ---+
           v                          v
@@ -1328,7 +1335,7 @@ source order):
           v                          v
         (rest of stack)            (rest of stack)
 
-  after Xword "-l"           after Xword "ls"
+ 3: after Xword "-l"         4: after Xword "ls"
 
   argv ---+                  argv ---+
           v                          v
@@ -1343,10 +1350,10 @@ source order):
 %claude:
 Why a two-level list rather than one flat word list?
 Because the interpreter needs to stack arguments: a pipeline
-like [[ls | wc]] must build two argument lists concurrently,
+like [[ls /tmp | wc -l]] must build two argument lists concurrently,
 an [[if]]-condition must suspend the argument list of its
 surrounding command while it evaluates the test, and a
-command substitution like [[echo `{date}]] must evaluate
+command substitution like \verb+echo `{date}+ must evaluate
 an inner thread whose argv pushes don't interfere with the
 outer [[echo]]. [[Xmark]] introduces a new top-of-stack
 whenever we are about to start accumulating a fresh word
@@ -1412,6 +1419,7 @@ Variables in [[rc]] can also hold multiple values
  * i.e. word0->word1->word2->word3->nil
  */
 struct Word {
+    // ref_own<string>
     char *word;
 
     // Extra
@@ -1455,6 +1463,21 @@ count(word *w)
 }
 @
 %ocaml: List.length
+
+<<function [[freewords]]>>=
+void
+freewords(word *w)
+{
+    word *nw;
+    while(w){
+        efree(w->word);
+        nw = w->next;
+        efree((char *)w);
+        w = nw;
+    }
+}
+@
+%ocaml: use gc
 
 
 %claude:
@@ -1501,20 +1524,6 @@ copywords(word *a, word *tail)
 %ocaml: use gc so copy for free, and just use @ to concat
 
 
-<<function [[freewords]]>>=
-void
-freewords(word *w)
-{
-    word *nw;
-    while(w){
-        efree(w->word);
-        nw = w->next;
-        efree((char *)w);
-        w = nw;
-    }
-}
-@
-%ocaml: use gc
 
 
 % diff with freewords???
@@ -1532,6 +1541,7 @@ freelist(word *w)
 }
 @
 
+%yoann: diff freewords and freelist?
 
 \subsection{[[List]] of sequence of words}
 
@@ -1574,7 +1584,7 @@ variable table.
 Variables are needed whenever you write something like [[x=1]] or
 [[path=(/bin /usr/bin)]] in the shell. They are also used
 internally by [[rc]] for {\em special variables} like [[$status]]
-(the exit status of the last command) or [[*]]
+(the exit status of the last command) or [[$*]]
 (the script arguments).
 
 % what need vars for?
@@ -1602,6 +1612,7 @@ struct Var {
 % when have local vars? when need that?
 
 <<[[Var]] extra fields>>=
+// list<ref_own<var>> (head = runq->local list or gvar hash)
 var	*next;		/* next on hash or local list */
 @
 % #define V (struct Var*)nil
@@ -1653,51 +1664,51 @@ vlook(char *name)
 
 
 %claude:
-Pictorially, a lookup for [[x]] inside a function call
-where [[x]] has been declared local walks the current
-thread's [[local]] chain first, and only on miss does it
-hash into [[gvar]]:
-\begin{verbatim}
-          runq (top of thread stack)
-           |
-           v
-        +--------+
-        | thread |  local ---> Var("x") -> Var("tmp") -> nil
-        |  fn f  |                ^
-        +--------+                |
-           |                      | vlook("x") matches here,
-           | ret                  | global "x" is never consulted.
-           v                      |
-        +--------+                |
-        | thread |                |
-        |bootstrap|                |
-        +--------+                |
-                                  |
-           gvar[]       (NVAR = 521 buckets, hashed by name)
-           +---+                  |
-           | 0 |----------------> Var("path") -> Var("home") -> nil
-           +---+
-           | 1 |                  |
-           +---+                  |
-           |...|                  |
-           +---+                  |
-           |hash("x")|----------> Var("x") (global)  -> nil
-           +---+                     ^
-                                     |
-                            found only if no local x above
-\end{verbatim}
-%claude:
-The lookup order matters because [[for x in ...]] and
-[[fn f { x=42; ... }]] introduce names that must shadow
-any pre-existing global [[x]] for the duration of the
-block, and then disappear when the block exits. Making
-[[vlook]] search [[local]] first---and making [[Xlocal]]
-prepend rather than mutate---gives shadowing and
-restoration for free: when the thread pops, its [[local]]
-list is discarded and the global [[x]] is visible again.
-There is no separate ``scope chain'' structure: the
-chain is just [[Thread.local]] walked from the top of
-[[runq]].
+%Pictorially, a lookup for [[x]] inside a function call
+%where [[x]] has been declared local walks the current
+%thread's [[local]] chain first, and only on miss does it
+%hash into [[gvar]]:
+%\begin{verbatim}
+%          runq (top of thread stack)
+%           |
+%           v
+%        +--------+
+%        | thread |  local ---> Var("x") -> Var("tmp") -> nil
+%        |  fn f  |                ^
+%        +--------+                |
+%           |                      | vlook("x") matches here,
+%           | ret                  | global "x" is never consulted.
+%           v                      |
+%        +--------+                |
+%        | thread |                |
+%        |bootstrap|                |
+%        +--------+                |
+%                                  |
+%           gvar[]       (NVAR = 521 buckets, hashed by name)
+%           +---+                  |
+%           | 0 |----------------> Var("path") -> Var("home") -> nil
+%           +---+
+%           | 1 |                  |
+%           +---+                  |
+%           |...|                  |
+%           +---+                  |
+%           |hash("x")|----------> Var("x") (global)  -> nil
+%           +---+                     ^
+%                                     |
+%                            found only if no local x above
+%\end{verbatim}
+%%claude:
+%The lookup order matters because [[for x in ...]] and
+%[[fn f { x=42; ... }]] introduce names that must shadow
+%any pre-existing global [[x]] for the duration of the
+%block, and then disappear when the block exits. Making
+%[[vlook]] search [[local]] first---and making [[Xlocal]]
+%prepend rather than mutate---gives shadowing and
+%restoration for free: when the thread pops, its [[local]]
+%list is discarded and the global [[x]] is visible again.
+%There is no separate ``scope chain'' structure: the
+%chain is just [[Thread.local]] walked from the top of
+%[[runq]].
 
 
 
@@ -1784,7 +1795,9 @@ lexing, parsing, compiling, and interpreting.
 
 %claude:
 The same data is reshaped at each stage. The lexer ([<yylex()>])
-splits the line into a stream of [<Tree>] {tokens}; the parser
+splits the line into a stream of
+% [<Tree>]
+{tokens}; the parser
 ([<yyparse()>]) nests those tokens into an AST of [<Tree>] nodes;
 [<compile()>] flattens the tree into a [<Code>] vector of bytecodes;
 and running that vector rebuilds the arguments as a [<Word>] list
@@ -1846,22 +1859,24 @@ VARIABLES    global table (var.c), consulted by Xsimple via $path:
              gvar[h] *--> Var{ name:"path", val: Word "." -> Word "/bin" -> nil }
 \end{vdiagram}
 \caption{The core data structures of [[rc]], instantiated for
-[[ls -l /tmp]]: the token stream, the AST, the compiled code vector,
-and the runtime [<Thread>] with its argument list.}
+[[ls -l /tmp]].
+%: the token stream, the AST, the compiled code vector,
+%and the runtime [<Thread>] with its argument list.
+}
 \label{fig:core-ds-hello}
 \end{figure}
 
 %claude:
-One way to read Figure~\ref{fig:core-ds-hello} is to follow the line
-top to bottom. The AST leans to the left because the grammar grows a
-command one word at a time ([[simple: simple word]]), so the last
-argument [[/tmp]] sits at the top [<ARGLIST>] and [[ls]] at the
-bottom. [<outcode()>] walks that tree and emits [[Xmark]] followed by
-one [[Xword]] per argument; because each [[Xword]] prepends to the
-current word list (Section~\ref{sec:thread-runq} shows this step by
-step), the words are emitted in reverse so that argv comes out in
-source order. Finally [[Xsimple]] pops the [<List>], looks up [[ls]]
-through the [[$path]] variable, and forks a child to [<exec>] it.
+%One way to read Figure~\ref{fig:core-ds-hello} is to follow the line
+%top to bottom. The AST leans to the left because the grammar grows a
+%command one word at a time ([[simple: simple word]]), so the last
+%argument [[/tmp]] sits at the top [<ARGLIST>] and [[ls]] at the
+%bottom. [<outcode()>] walks that tree and emits [[Xmark]] followed by
+%one [[Xword]] per argument; because each [[Xword]] prepends to the
+%current word list (Section~\ref{sec:thread-runq} shows this step by
+%step), the words are emitted in reverse so that argv comes out in
+%source order. Finally [[Xsimple]] pops the [<List>], looks up [[ls]]
+%through the [[$path]] variable, and forks a child to [<exec>] it.
 
 %claude:
 Each stage is the subject of a later chapter:
