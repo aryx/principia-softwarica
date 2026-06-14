@@ -739,7 +739,7 @@ is responsible for this transformation.
 
 %toc:
 The token kinds in [[rc]] are declared below using
-the [[yacc]] syntax \verb+%token+ (see \book{Compiler}).
+the [[yacc]] syntax \verb+%token+ (see \book{CompilerGenerator}).
 %
 I have grouped them in categories:
 the keyword tokens ([[FOR]], [[WHILE]], [[IF]], etc.),
@@ -791,20 +791,6 @@ and operators (pipes, redirections, etc.).
 All those constructs are represented in the AST using the
 [[Tree]] structure below.
 
-%toc:
-The [[Tree]] structure is a generic tree node with a [[type]] field
-indicating what kind of node it is (e.g., a [[PIPE]], an [[IF]],
-a [[WORD]], or even a single character like [[';']] for sequencing),
-a [[str]] field to store the string content of the token
-(e.g., the command name or the variable name),
-and up to three children.
-%
-Three children are enough to represent all the constructs of [[rc]]:
-for example, an [[if]] uses [[child[0]]] for the condition,
-[[child[1]]] for the then-body, and leaves [[child[2]]] unused.
-A [[for]] uses all three: [[child[0]]] for the variable,
-[[child[1]]] for the list, and [[child[2]]] for the body.
-
 <<struct [[Tree]]>>=
 struct Tree {
 
@@ -838,6 +824,21 @@ struct Tree {
 % type is token kind, or character.
 % Introduced also a few more token without syntax but part of enum.
 
+%toc:
+The [[Tree]] structure is a generic tree node with a [[type]] field
+indicating what kind of node it is (e.g., a [[PIPE]], an [[IF]],
+a [[WORD]], or even a single character like [[';']] for sequencing),
+a [[str]] field to store the string content of the token
+(e.g., the command name or the variable name),
+and up to three children.
+%
+Three children are enough to represent all the constructs of [[rc]]:
+for example, an [[if]] uses [[child[0]]] for the condition,
+[[child[1]]] for the then-body, and leaves [[child[2]]] unused.
+A [[for]] uses all three: [[child[0]]] for the variable,
+[[child[1]]] for the list, and [[child[2]]] for the body.
+
+
 %trans:
 %claude:
 The parser also introduces a few extra node types
@@ -865,7 +866,7 @@ and [[ARGLIST]] groups those arguments into a list.
 %trans:
 %claude:
 All tree nodes allocated during parsing are linked together
-in a global list [[treenodes]] through the [[Tree.next]] field below.
+in a global list [<treenodes>] through the [[Tree.next]] field further below.
 This makes it easy to free all nodes at once
 (via [<freenodes()>]) after the tree has been compiled to bytecodes
 in [<Xrdcmds()>], instead of having to walk the tree recursively.
@@ -880,6 +881,7 @@ tree *treenodes;
 %ocaml: ugly global
 
 <<[[Tree]] extra fields>>=
+// list<ref_own<Tree>> (head = treenodes)
 tree	*next;
 @
 
@@ -1060,6 +1062,7 @@ for instance when a function is defined with [[fn]].
 union Code {
     void	(*f)(void); // Xxxx() bytecode
     int	i;
+    // ref_own<string>
     char	*s;
 };
 @
@@ -1178,7 +1181,7 @@ codefree(code *cp)
     // check ref count
     if(--cp[0].i != 0)
         return;
-
+    // else
     for(p = cp+1; p->f; p++){
         <<[[codefree()]] in loop over code [[cp]], switch bytecode cases>>
     }
@@ -1187,6 +1190,18 @@ codefree(code *cp)
 @
 %ocaml: just use Gc
 
+%yoann: explain no "arg" opcodes so free is simple but will see gradually other cases
+
+%claude:
+[<codefree()>] walks the code vector to release it once its reference
+count reaches zero, and the walk must stay aligned to opcode
+boundaries. Most bytecodes occupy a single slot (just their function
+pointer), but the ones listed here are each followed by one inline
+operand---a jump target, a file descriptor, and so on. The [[p++]]
+skips that slot so the loop does not mistake the operand for the next
+function pointer. Opcodes with no inline operand need nothing, which
+keeps this first version simple; we will add the other cases as we
+meet them.
 
 <<[[codefree()]] in loop over code [[cp]], switch bytecode cases>>=
 if(p->f==Xfalse || p->f==Xtrue
@@ -1218,8 +1233,8 @@ if(p->f==Xfalse || p->f==Xtrue
 %claude:
 Once the bytecodes are compiled, [[rc]] needs a data structure
 to keep track of the current execution state.
-This is the role of the [[Thread]] structure.
-A [[Thread]] is similar to a stack frame in a regular program:
+This is the role of the [<Thread>] structure.
+A [[Thread]] is similar to a {\em stack frame} in a regular program:
 it contains a pointer to a code vector ([[code]])
 and a program counter ([[pc]]) indexing the next bytecode to execute.
 %
@@ -1229,6 +1244,21 @@ inside the [[rc]] interpreter.
 When a bytecode like [<Xpipe()>] or [<Xasync()>] needs to run
 commands concurrently, it creates actual OS processes (with [[fork()]]),
 but within the interpreter itself, threads are managed as a stack.
+% like kernel with kstack, concurrent program
+
+<<struct [[Thread]]>>=
+struct Thread {
+    code *code;		/* code for this thread */
+    int pc;			/* code[pc] is the next instruction */
+
+    <<[[Thread]] other fields>>
+
+    // Extra
+    <<[[Thread]] extra fields>>
+};
+@
+%old: was Union Code *code;
+%dead fld:  tree *treenodes;		/* tree nodes created by this process */
 
 %toc:
 The global [<runq>] (for ``run queue'') points to the top of this stack
@@ -1238,19 +1268,6 @@ when the current thread finishes (via [<Xreturn()>]),
 %
 At the bottom of the stack sits the bootstrap thread, which
 loops forever reading new commands via [<Xrdcmds()>].
-
-<<struct [[Thread]]>>=
-struct Thread {
-    union Code *code;		/* code for this thread */
-    int pc;			/* code[pc] is the next instruction */
-
-    <<[[Thread]] other fields>>
-
-    // Extra
-    <<[[Thread]] extra fields>>
-};
-@
-%dead fld:  tree *treenodes;		/* tree nodes created by this process */
 
 <<global [[runq]]>>=
 // stack<ref_own<Thread>> (next = Thread.ret)
@@ -1281,6 +1298,15 @@ When a bytecode like [<Xsimple()>] needs to run a command,
 it pops the top list from [[argv]] and uses it as the command
 and its arguments.
 
+
+<<[[Thread]] other fields>>=
+// list<list<ref_own<word>>> (next = List.next)
+list *argv;		/* argument stack */
+@
+% list of list of words?
+%ocaml: split Thread.argv and Thread.argv_stack
+
+
 %claude:
 The two-level structure is easier to grasp on a concrete
 example. Running the single command [[ls -l /tmp]] compiles
@@ -1290,7 +1316,9 @@ Here is what [[runq->argv]] looks like after each of those
 four bytecodes has executed (bytecodes push to the
 {front} of the current word list, so words end up in
 source order):
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   after Xmark                after Xword "/tmp"
 
   argv ---+                  argv ---+
@@ -1312,7 +1340,8 @@ source order):
 
   Xsimple then pops the top List, forks, and calls
   exec("ls", {"ls","-l","/tmp",nil}).
-\end{verbatim}
+\end{vdiagram}
+
 %claude:
 Why a two-level list rather than one flat word list?
 Because the interpreter needs to stack arguments: a pipeline
@@ -1326,12 +1355,6 @@ whenever we are about to start accumulating a fresh word
 list; the previous lists sit underneath, ready to be
 restored when the current one is consumed.
 
-<<[[Thread]] other fields>>=
-// list<list<ref_own<word>>> (next = List.next)
-struct List *argv;		/* argument stack */
-@
-% list of list of words?
-%ocaml: split Thread.argv and Thread.argv_stack
 
 % runq->argv->words->next->word
 % todo define macro? argv1()? argv0() ?
@@ -1350,7 +1373,7 @@ the global variable table.
 
 <<[[Thread]] other fields>>=
 // list<ref_own<Var>> (next = Var.next)
-struct Var *local;		/* list of local variables */
+var *local;		/* list of local variables */
 @
 
 
@@ -1546,13 +1569,13 @@ struct List {
 % saw 'local' vars in Thread before?
 %trans:
 %claude:
-I already mentioned local variables in [[Thread.local]] above.
+I already mentioned local variables in [<Thread.local>] above.
 Let me now present the [[Var]] structure itself and the global
 variable table.
 %toc:
 Variables are needed whenever you write something like [[x=1]] or
 [[path=(/bin /usr/bin)]] in the shell. They are also used
-internally by [[rc]] for special variables like [[status]]
+internally by [[rc]] for {\em special variables} like [[$status]]
 (the exit status of the last command) or [[*]]
 (the script arguments).
 
@@ -1560,7 +1583,7 @@ internally by [[rc]] for special variables like [[status]]
 % when do X=1 in shell.
 % also for setting status of special variable like "status".
 %toc:
-A [[Var]] has a [[name]] (the variable name as a string),
+A [[Var]] has a [[name]] (the variable name as a string, without the leading dollar),
 a [[val]] (the variable value as a list of words, since
 in [[rc]] all variables can hold multiple values),
 and a [[next]] pointer for chaining in hash buckets or local lists.
@@ -1570,6 +1593,7 @@ struct Var {
     // key
     char	*name;		/* ascii name */
     // value
+    // ref_own<list<Word>>
     word	*val;		/* value */
 
     <<[[Var]] other fields>>
@@ -1588,13 +1612,47 @@ var	*next;		/* next on hash or local list */
 
 
 %claude:
-The main interface to the variable system consists of
+The main interface to the variable consists of
 [<setvar()>] to assign a value, and [<vlook()>] to look up
 a variable by name.
 %
 [<vlook()>] first searches the local variables of the current
 thread (stored in [[runq->local]]), then falls back to the
 global variable table via [<gvlook()>].
+
+
+<<function [[setvar]]>>=
+void
+setvar(char *name, word *val)
+{
+    var *v = vlook(name);
+    freewords(v->val);
+    v->val = val;
+    v->changed = true;
+}
+@
+% changed is for optimization reason to avoid rewriting in /env/xxx
+
+
+<<function [[vlook]]>>=
+var*
+vlook(char *name)
+{
+    var *v;
+    if(runq)
+        for(v = runq->local;v;v = v->next)
+            if(strcmp(v->name, name)==0) 
+                return v;
+
+    return gvlook(name);
+}
+@
+% use global runq again
+% look for locals first, then gvlook
+% cases where runq is empty? call vlook very early?
+
+
+
 
 %claude:
 Pictorially, a lookup for [[x]] inside a function call
@@ -1642,37 +1700,6 @@ list is discarded and the global [[x]] is visible again.
 There is no separate ``scope chain'' structure: the
 chain is just [[Thread.local]] walked from the top of
 [[runq]].
-
-<<function [[setvar]]>>=
-void
-setvar(char *name, word *val)
-{
-    struct Var *v = vlook(name);
-    freewords(v->val);
-    v->val = val;
-    v->changed = true;
-}
-@
-% changed is for optimization reason to avoid rewriting in /env/xxx
-
-
-<<function [[vlook]]>>=
-var*
-vlook(char *name)
-{
-    var *v;
-    if(runq)
-        for(v = runq->local;v;v = v->next)
-            if(strcmp(v->name, name)==0) 
-                return v;
-
-    return gvlook(name);
-}
-@
-% use global runq again
-% look for locals first, then gvlook
-% cases where runq is empty? call vlook very early?
-
 
 
 
@@ -1746,8 +1773,108 @@ newvar(char *name, var *next)
 
 % special variable, e.g. vlook("home"), vlook("*")
 
+\section{Putting it together: the data structures of [[hello.rc]]}
+\label{sec:core-ds-overview}
 
+%yoann: big ASCII diagram and explanation similar to Make.nw, but for hello.rc which is just ls -l /tmp, see Token, AST, Variable, Word, Thread concrete instances, codebuf, ...
 
+%claude: %trans:
+It is worth pausing here to see how the core data structures fit
+together before [<main()>] starts using them. Rather than listing
+fields in the abstract, Figure~\ref{fig:core-ds-hello} shows the
+actual instances [[rc]] creates for the single command
+[[ls -l /tmp]], as it flows through the four stages of the shell:
+lexing, parsing, compiling, and interpreting.
+
+%claude:
+The same data is reshaped at each stage. The lexer ([<yylex()>])
+splits the line into a stream of [<Tree>] {tokens}; the parser
+([<yyparse()>]) nests those tokens into an AST of [<Tree>] nodes;
+[<compile()>] flattens the tree into a [<Code>] vector of bytecodes;
+and running that vector rebuilds the arguments as a [<Word>] list
+inside the [<Thread>]. In the figure, a [[*]] marks a pointer field
+that an arrow follows.
+
+\begin{figure}[!tbp]\centering
+\begin{vdiagram}
+SOURCE       ls -l /tmp <newline>
+
+(1) LEXING   yylex() returns one token at a time
+             WORD "ls"    WORD "-l"    WORD "/tmp"    '\n'
+
+(2) PARSING  yyparse() nests the tokens into an AST of Tree nodes
+             +-----------------------------+
+             | SIMPLE   str="ls -l /tmp"    |
+             | child[0] *--+                |
+             +-------------|---------------+
+                           v
+             +-----------------------------+
+             | ARGLIST                     |
+             | child[0] *--+   child[1] *------> WORD str="/tmp"
+             +-------------|---------------+
+                           v
+             +-----------------------------+
+             | ARGLIST                     |
+             | child[0] *------> WORD str="ls"
+             | child[1] *------> WORD str="-l"
+             +-----------------------------+
+
+(3) COMPILING  compile()/outcode() flatten the AST into a code vector
+             codebuf:
+               [0]  .i = 1          <- reference count (held by runq->code)
+               [1]  .f = Xmark
+               [2]  .f = Xword      [3]  .s = "/tmp"
+               [4]  .f = Xword      [5]  .s = "-l"
+               [6]  .f = Xword      [7]  .s = "ls"
+               [8]  .f = Xsimple
+               [9]  .f = Xreturn    [10] .f = nil
+             (one Xword per argument, emitted in reverse since each
+              Xword prepends to the current word list)
+
+(4) INTERPRETING  the runq Thread walks the code vector
+             +------------------------+
+    runq *-->| Thread                 |
+             | code  *--> codebuf above
+             | pc         steps [1]..[10]
+             | argv  *--+             |
+             | local = nil            |
+             +---------|-------------+
+                       v
+             +-----------+  words
+             | List      |*-----> Word "ls" -> Word "-l" -> Word "/tmp" -> nil
+             +-----------+
+             (Xmark pushed the List; the three Xword built the Word
+              chain; Xsimple reads it as argv and fork/execs "ls")
+
+VARIABLES    global table (var.c), consulted by Xsimple via $path:
+             gvar[h] *--> Var{ name:"path", val: Word "." -> Word "/bin" -> nil }
+\end{vdiagram}
+\caption{The core data structures of [[rc]], instantiated for
+[[ls -l /tmp]]: the token stream, the AST, the compiled code vector,
+and the runtime [<Thread>] with its argument list.}
+\label{fig:core-ds-hello}
+\end{figure}
+
+%claude:
+One way to read Figure~\ref{fig:core-ds-hello} is to follow the line
+top to bottom. The AST leans to the left because the grammar grows a
+command one word at a time ([[simple: simple word]]), so the last
+argument [[/tmp]] sits at the top [<ARGLIST>] and [[ls]] at the
+bottom. [<outcode()>] walks that tree and emits [[Xmark]] followed by
+one [[Xword]] per argument; because each [[Xword]] prepends to the
+current word list (Section~\ref{sec:thread-runq} shows this step by
+step), the words are emitted in reverse so that argv comes out in
+source order. Finally [[Xsimple]] pops the [<List>], looks up [[ls]]
+through the [[$path]] variable, and forks a child to [<exec>] it.
+
+%claude:
+Each stage is the subject of a later chapter:
+lexing in Chapter~\ref{chap:lexing},
+parsing in Chapter~\ref{chap:parsing},
+and both compilation and interpretation in
+Chapter~\ref{chap:compile-interpret}.
+The two-level [<List>]/[<Word>] structure of [[runq->argv]], only
+sketched here, is explained in Section~\ref{sec:thread-runq}.
 
 
 
