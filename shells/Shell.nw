@@ -6760,10 +6760,12 @@ concstatus(char *s, char *t)
 
 %claude:
 The [[&]] operator runs a command in the background.
+%
 The child's stdin is redirected to [[/dev/null]]
 (so it does not compete with the shell for terminal input),
 and the child is put in a new note group ([[RFNOTEG]])
-so that interrupts sent to the shell do not kill it.
+so that interrupts sent to the shell do not kill it
+(see Chapter~\ref{chap:signals} for more information on notes).
 %
 The parent records the child's PID in [[$apid]]
 (for ``asynchronous PID''), allowing the user to wait for
@@ -8471,10 +8473,12 @@ Under \plan
 %parameter of [[main()]] as in \unix. Instead,
 each environment
 variable is stored as a file under [[/env/]]: the variable
-[[$path]] is stored in [[/env/path]]. This is a more elegant
+[[$path]] is stored in [[/env/path]].
+%
+This is a more elegant
 design than \unix because child processes automatically inherit the
-environment through the namespace, and changes are visible
-to all processes sharing the same namespace.
+environment through the {\em namespace} (see the \book{Kernel}),
+and changes are visible to all processes sharing the same namespace.
 %
 In \unix the environment is part of the process {\em image}: [[exec]]
 copies the [[environ]] array (alongside [[argv]]) into the new process,
@@ -8502,6 +8506,7 @@ to the [[/env/]] filesystem. The [[changed]] flag
 avoids redundant writes.
 
 <<function [[Updenv]]>>=
+/// Xsimple | Execute -> <>
 void
 Updenv(void)
 {
@@ -9600,58 +9605,50 @@ Closedir(int f)
 \label{chap:signals}
 %alt: section in Advanced topics?
 
-
+%terminology:
+Under \plan, signals are called {\em notes}.
 %claude:
-Signal handling is critical for a shell because the shell
+Signal/note handling is critical for a shell because the shell
 sits between the user and every running program.
+%
 When the user presses [[^C]], the interrupt signal is sent
-to all processes in the foreground group---including the shell
-itself. If the shell simply died along with the interrupted
+to all processes in the foreground group\footnote{
+How does the kernel know which processes are ``in front''? \plan has
+no \unix tty process group; instead each terminal or [[rio]] window
+runs its commands in their own {\em note group}, created with
+[[rfork(RFNOTEG)]], and the console driver posts the interrupt note to
+that group---see \book{Kernel}.)
+}---including the shell itself.
+%
+If the shell simply died along with the interrupted
 command, the user would lose their terminal session.
+%
 Instead, the shell must catch the signal, cancel the current
 command, and return to its prompt, ready for the next input.
-%
-Beyond [[^C]], a shell must also handle hangup signals
+
+%claude:
+Beyond [[^C]], a shell must also handle {\em hangup} signals
 (so it can clean up or notify background jobs when a terminal
 disconnects), and let users define their own trap handlers
 for scripting (e.g., cleaning up temporary files on exit).
-See \book{Kernel} for how the kernel delivers notes to processes.
+%
+See the \book{Kernel} for more information on how the
+\plan kernel delivers notes to processes.
 
 
-<<[[Xexit()]] locals>>=
-struct Var *trapreq;
-struct Word *starval;
-static bool beenhere = false;
-@
-
-<<[[Xexit()]] trap management>>=
-if(getpid()==mypid && !beenhere){
-    trapreq = vlook("sigexit");
-    if(trapreq->fn){
-        beenhere = true;
-        --runq->pc;
-        starval = vlook("*")->val;
-        start(trapreq->fn, trapreq->pc, (struct Var *)0);
-        runq->local = newvar(strdup("*"), runq->local);
-        runq->local->val = copywords(starval, (struct Word *)0);
-        runq->local->changed = true;
-        runq->redir = runq->startredir = nil;
-        return;
-    }
-}
-@
 
 \section{Overview}
 
 % code of nohup utility?
 % C-d generate an Xsimple (exit 1) ?
+
 %claude:
-Under \plan, signals are called {\em notes}.
-When a note is received (e.g., an interrupt from [[^C]]),
+When a note is received by the [[rc]] process (e.g., an interrupt from [[^C]]),
 the kernel calls the handler registered by [<Trapinit()>].
 %
 The handler does not execute the trap function immediately
 (which would be unsafe in the middle of interpreting bytecodes).
+%
 Instead, it increments a counter ([[ntrap]]) and the main
 interpreter loop checks this counter after each bytecode
 (see the [[handing trap if necessary]] chunk in [<main()>]).
@@ -9664,7 +9661,9 @@ the default behavior applies (usually terminating the process).
 The full path of a [[^C]] from keystroke to user-defined
 handler is therefore asynchronous in the kernel half and
 synchronous in the interpreter half:
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   user        kernel                    rc interpreter loop
   ----        ------                    -------------------
    ^C
@@ -9696,7 +9695,8 @@ synchronous in the interpreter half:
     |                                     - otherwise, pop threads
     |                                       via Xreturn() until we
     |                                       reach the iflag REPL
-\end{verbatim}
+\end{vdiagram}
+
 %claude:
 Two design points are worth calling out. First, the
 deferral via [[ntrap]] is the only way to keep the
@@ -9705,11 +9705,15 @@ interpreter's invariants intact: a bytecode like
 freeing old values, and installing new ones; if a shell
 function were run at an arbitrary point inside it, the
 word lists would be in an inconsistent state and the
-heap would leak. The same argument applies to any
+heap would leak.
+%
+The same argument applies to any
 language runtime with safe-points---[[rc]] just happens
 to have very coarse safe-points (once per bytecode)
 because its bytecodes are large compared to a CPU
-instruction. Second, the ``pop threads until [[iflag]]''
+instruction.
+%
+Second, the ``pop threads until [[iflag]]''
 unwinding in [<dotrap>] is how [[^C]] abandons a
 deeply nested script or for-loop and returns to the
 interactive prompt: each [[Xreturn]] pops one frame
@@ -9724,17 +9728,16 @@ correct behaviour for [[^C]] in a script.
 #define	NSIG	32
 @
 
-<<constant [[SIGINT]]>>=
-#define	SIGINT	2
-@
-
-<<constant [[SIGQUIT]]>>=
-#define	SIGQUIT	3
-@
-
+%yoann: explain plan9 does not use hardcoded signal number but string instead
+%claude:
+Unlike \unix, where a signal is a small integer, a \plan {\em note} is
+an arbitrary {\em string} delivered to the process (for example
+[["interrupt"]] or [["hangup"]]). [[syssigname]] lists the note strings
+[[rc]] recognizes; the handler matches an incoming note against this
+table to find which one arrived.
 
 % plan9.c
-<<global [[syssigname]]>>=
+<<global [[syssigname]](plan9.c)>>=
 char *syssigname[] = {
     "exit",		/* can't happen */
     "hangup",
@@ -9749,7 +9752,7 @@ char *syssigname[] = {
 @
 
 % plan9.c
-<<global [[signame]]>>=
+<<global [[signame]](plan9.c)>>=
 char *signame[] = {
     "sigexit",	
     "sighup",	
@@ -9764,6 +9767,20 @@ char *signame[] = {
 @
 %old: was Signame but not consistent naming of globals
 
+<<constant [[SIGINT]]>>=
+#define	SIGINT	2
+@
+<<constant [[SIGQUIT]]>>=
+#define	SIGQUIT	3
+@
+
+%yoann: explain number are not related to unix sig numbers, but are corresponding index in signame
+%claude:
+These constants are not the \unix signal numbers; they are simply
+indices into [[signame]] and [[syssigname]] (so [[SIGINT]] is~2 because
+[[signame[2]]] is [["sigint"]] and [[syssigname[2]]] is [["interrupt"]]).
+[[rc]] uses them only to index its own [[trap]] array---\plan has no
+signal numbers at all.
 
 <<global [[ntrap]]>>=
 int ntrap;				/* number of outstanding traps */
@@ -9775,6 +9792,18 @@ int trap[NSIG];				/* number of outstanding traps per type */
 
 
 \section{Registering handlers: [[Trapinit()]]}
+
+%yoann: quick intro and explain the hardcoded sys: (coupling with kernel?)
+%claude:
+[<Trapinit()>] simply registers [<notifyf()>] as the process's note
+handler via [[notify()]]. When a note arrives, [<notifyf()>] matches
+its string against [[syssigname]] and bumps the corresponding [[trap]]
+counter for [<dotrap()>] to act on later. The [["sys: "]] prefix it
+tests for is a \plan kernel convention: the kernel prefixes the notes
+it raises itself (faults, [["sys: fp: ..."]], and the like) with
+[[sys:]], so [[rc]] uses that prefix to tell a kernel-generated error
+from a user-sent note like [["interrupt"]]---only the latter sets
+[[interrupted]].
 
 % main() -> Trapinit()
 <<function [[Trapinit]]>>=
@@ -9812,13 +9841,28 @@ Out:
 }
 @
 
+%yoann: explain quickly NDFLT and NCONT
+%claude:
+[[noted()]] is the \plan call that ends a note handler, and its
+argument says what to do next: [[NCONT]] resumes the process where the
+note interrupted it (here, after recording the trap for [<dotrap()>]),
+while [[NDFLT]] takes the default action---terminating the
+process---used for notes [[rc]] does not recognize.
+
 \section{Trap dispatch: [[dotrap()]]}
+
+%yoann: quick intro
+%claude:
+[<dotrap()>] runs from the interpreter loop whenever [[ntrap]] is
+nonzero---that is, after a note handler has recorded a pending trap.
+It drains the [[trap]] counters and, for each, either runs a
+user-defined handler function (next section), unwinds to the
+interactive prompt on [[^C]] or quit, or exits.
 
 <<[[main()]] handing trap if necessary in interpreter loop>>=
 if(ntrap)
     dotrap();
 @
-
 
 
 % trap.c
@@ -9839,14 +9883,8 @@ dotrap(void)
         --ntrap;
         if(getpid()!=mypid) 
             Exit(getstatus(), __LOC__);
-        trapreq = vlook(signame[i]);
-        if(trapreq->fn){
-            start(trapreq->fn, trapreq->pc, (struct Var *)nil);
-            runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct Word *)nil);
-            runq->local->changed = true;
-            runq->redir = runq->startredir = nil;
-        }
+
+        <<[[dotrap()]] check if trap handled by function>>
         else if(i==SIGINT || i==SIGQUIT){
             /*
              * run the stack down until we uncover the
@@ -9893,6 +9931,51 @@ Noerror(void)
 
 <<[[Xrdcmds()]] reset ntrap>>=
 ntrap = 0;	/* avoid double-interrupts during blocked writes */
+@
+
+
+\section{User-defined signal handlers: [[fn sigint ...]]}
+
+%yoann: quick intro
+%claude:
+A user can handle a note by defining a function named after it, such
+as [[fn sigint {...}]] or [[fn sigexit {...}]]. When [<dotrap()>]
+finds such a function in the variable table (looked up via the name
+[[signame[i]]]), it runs that instead of taking the built-in action;
+this is how scripts clean up on exit or ignore interrupts.
+
+<<[[dotrap()]] check if trap handled by function>>=
+trapreq = vlook(signame[i]);
+if(trapreq->fn){
+    start(trapreq->fn, trapreq->pc, (struct Var *)nil);
+    runq->local = newvar(strdup("*"), runq->local);
+    runq->local->val = copywords(starval, (struct Word *)nil);
+    runq->local->changed = true;
+    runq->redir = runq->startredir = nil;
+}
+@
+
+<<[[Xexit()]] locals>>=
+struct Var *trapreq;
+struct Word *starval;
+static bool beenhere = false;
+@
+
+<<[[Xexit()]] trap management>>=
+if(getpid()==mypid && !beenhere){
+    trapreq = vlook("sigexit");
+    if(trapreq->fn){
+        beenhere = true;
+        --runq->pc;
+        starval = vlook("*")->val;
+        start(trapreq->fn, trapreq->pc, (struct Var *)0);
+        runq->local = newvar(strdup("*"), runq->local);
+        runq->local->val = copywords(starval, (struct Word *)0);
+        runq->local->changed = true;
+        runq->redir = runq->startredir = nil;
+        return;
+    }
+}
 @
 
 
