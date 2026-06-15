@@ -936,6 +936,7 @@ newtree(void)
 % efree = emalloc = wrapper around free but handling error.
 
 <<function [[freenodes]]>>=
+/// Xrdcmds -> <>
 void
 freenodes(void)
 {
@@ -1159,8 +1160,8 @@ union Code {
 
 % FIGURE where see all argv
 
-% Xfn -> <> 
 <<function [[codecopy]]>>=
+/// start | Xfn -> <> 
 code*
 codecopy(code *cp)
 {
@@ -1173,8 +1174,8 @@ codecopy(code *cp)
 % when bytecodes are shared? just for bootstrap? need this reference count?
 % when define functions.
 
-% Xreturn | Xfn | Xdelfn -> <>
 <<function [[codefree]]>>=
+/// Xreturn | Xfn | Xdelfn -> <>
 void
 codefree(code *cp)
 {
@@ -2175,9 +2176,9 @@ start(bootstrap, 1, (var *)nil);
 @
 % starts at 1; 0 is for the reference count
 % modify runq! usually called with pc = 1
-% main | Xrdcmds | ??? -> <>
 
 <<function [[start]]>>=
+/// main | Xrdcmds -> <>
 void
 start(code *c, int pc, var *local)
 {
@@ -2282,7 +2283,6 @@ runs the script.
 % to the simple command (but actually simple commands become
 % Xsimple so this bytecode look at runq->argv)
 
-% main | Xmark ->  <>
 %claude:
 [<pushlist()>] pushes a new empty word list onto [[runq->argv]],
 and [<pushword()>] adds a word to the current top list.
@@ -2291,6 +2291,7 @@ the argument stack and are used extensively by bytecodes
 like [<Xmark()>] and [<Xword()>].
 
 <<function [[pushlist]]>>=
+/// main | Xmark ->  <>
 void
 pushlist(void)
 {
@@ -2544,7 +2545,6 @@ and [<advance()>] consumes that lookahead.
 \section{Reading a character: [[getnext()]]}
 
 % why return an int and not a char? because unicode? then use Rune!
-% yylex -> nextc -> <>
 %claude:
 [<getnext()>] reads one character from the current thread's
 input stream ([[runq->cmdfd]]).
@@ -2556,6 +2556,7 @@ and converting escaped newlines ([[\<newline>]]) into spaces
 to support multi-line commands.
 
 <<function [[getnext]]>>=
+/// yylex -> nextc -> <>
 /*
  * read a character from the input stream
  */	
@@ -2826,8 +2827,8 @@ int future = EOF;
 @
 %ocaml: let ocamllex handles that
 
-% yylex | advance | skipnl | nextis -> <>
 <<function [[nextc]]>>=
+/// yylex | advance | skipnl | nextis -> <>
 /*
  * Look ahead in the input stream
  */
@@ -2847,8 +2848,8 @@ nextc(void)
 % note that calls getnext()! so anything consuming a new character
 %  will get all the backslash and doprompt logic.
 
-% nextis -> <>
 <<function [[advance]]>>=
+/// nextis -> <>
 /*
  * Consume the lookahead character.
  */
@@ -2863,8 +2864,8 @@ advance(void)
 @
 
 
-% yylex -> <>
 <<function [[nextis]]>>=
+/// yylex -> <>
 bool
 nextis(int c)
 {
@@ -2951,31 +2952,23 @@ parser whenever it needs the next token.
 %   function def or call vs array subscript
 % - special handling of [] after redirection and
 %   parsing and AST building inside lexer (hmmm)
+
 %claude:
 The structure of [<yylex()>] is a switch on the next character.
 After skipping whitespace, it dispatches on the character read:
 operators and special characters are handled as individual cases,
 and anything else is treated as a word character.
-%
-There are a few lexing subtleties worth noting:
-newlines are sometimes skipped (via [<skipnl()>]) after certain
-operators to support multi-line commands;
-keywords like [[if]] and [[for]] are recognized as keywords
-only in command position (not as arguments);
-and the [[(]] character is handled specially depending on
-whether it follows a [[$]] (array subscript) or not
-(grouping/function definition).
 
 <<function [[yylex]]>>=
 //@Scheck: called from yyparse()
+/// yyparse -> <>
 int yylex(void)
 {
     int c;
     <<[[yylex()]] other locals>>
 
-    <<[[yylex()]] hack for SUB>>
+    <<[[yylex()]] before read, hack for SUB>>
     <<[[yylex()]] initialisations>>
-
     skipwhite();
 
     switch(c = advance()){
@@ -2990,6 +2983,18 @@ int yylex(void)
 %$
 %todo:    // lastdol = false; factorize code?
 
+%yoann: introduce wordchr and idchr
+%claude:
+[<wordchr()>] and [<idchr()>] below classify input bytes. A {\em word}
+character is anything that is not whitespace, a shell metacharacter %$
+([[#;&|^$=`'{}()<>]]), or [[EOF]]---this is what the lexer gathers
+into a bare word such as a command name or a filename. An {\em
+identifier} character is the stricter set allowed in a variable name %$
+after [[$]]; note that [[/]] is a word character (filenames contain
+slashes) but not an identifier character. Both tests are byte-oriented
+yet UTF-8 safe: every byte of a multibyte rune is $\geq$ [[0x80]]
+while the listed metacharacters are all ASCII, so such a byte always
+fails the [[strchr()]] test and stays part of the word.
 
 % word character
 <<function [[wordchr]]>>=
@@ -3000,6 +3005,8 @@ wordchr(int c)
 }
 @
 %$
+
+% is this unicode ready?
 
 % slash allowed here. A word can be a filename (e.g., path of a command
 % /bin/ls, arg to a command /mnt, etc)
@@ -3021,7 +3028,15 @@ idchr(int c)
 %$
 % slash not allowed here
 
+% for $ variable name
 
+%yoann: say first switch case, EOF, will see far more gradually in this chapter and introduce tok and UTFMax
+%claude:
+The body of [<yylex()>] is one big [[switch]] on the first character
+of the token; we start with the simplest case, [[EOF]], and add the
+cases for quotes, operators, and words gradually through this chapter.
+The [[EOF]] case records the token name in [[tok]], the buffer in which
+the lexer accumulates the text of the current token.
 
 <<[[yylex()]] switch c cases>>=
 case EOF:
@@ -3029,6 +3044,8 @@ case EOF:
     strcpy(tok, "EOF");
     return EOF;
 @
+
+% explain lastdol or preview it?
 
 <<global [[tok]]>>=
 char tok[NTOK + UTFmax];
@@ -3038,13 +3055,30 @@ char tok[NTOK + UTFmax];
 #define	NTOK	8192		/* maximum bytes in a word (token) */
 @
 
+%claude:
+[[tok]] is sized
+[[NTOK + UTFmax]] rather than [[NTOK]] so that appending a final
+multibyte rune when the word is already near the [[NTOK]] limit cannot
+overflow it---[[UTFmax]] is the largest number of bytes a single rune
+can occupy.
+
+%claude:
+There are a few lexing subtleties worth noting as you will see soon:
+newlines are sometimes skipped (via [<skipnl()>]) after certain
+operators to support multi-line commands;
+keywords like [[if]] and [[for]] are recognized as keywords
+only in command position (not as arguments);
+and the [[(]] character is handled specially depending on
+whether it follows a [[$]] (array subscript) or not
+(grouping/function definition).
 
 \section{Spaces and comments ([['#']])}
 
 %claude:
 [<skipwhite()>] skips spaces, tabs, and comments.
 In [[rc]], comments start with [[#]] and extend to the end of the line.
-Note that the [[incomm]] global is needed by [<getnext()>]:
+%
+Note that the [<incomm>] global is needed by [<getnext()>]:
 inside a comment, a backslash-newline should {\em not} be treated
 as a line continuation.
 
@@ -3055,6 +3089,7 @@ bool incomm;
 % is different when inside a comment
 
 <<function [[skipwhite]]>>=
+/// yylex -> | skipnl <>
 void
 skipwhite(void)
 {
@@ -3070,6 +3105,7 @@ skipwhite(void)
                     incomm = false;
                     break;
                 }
+                // else
                 advance();
             }
         }
@@ -3088,8 +3124,16 @@ skipwhite(void)
 
 \section{Newlines}
 
-% will be covered by general code later returning single
-% char.
+%yoann: where is lexer switch case for newline? covered by general code later returning single char?
+%claude:
+There is no dedicated [[case '\n']] in the [<yylex()>] switch: a
+newline is not a word character, so it falls through to the generic
+``not a word character'' path shown later in this chapter, which
+returns the character as a single-byte token---the [['\n']] the
+grammar treats as a command terminator. Lone metacharacters like
+[[;]] are returned the same way.
+
+
 % command terminator
 % subtle! called from grammar, weird
 % normally newlines marks the end of a command line to be processed.
@@ -3101,22 +3145,28 @@ skipwhite(void)
 % we are waiting for something else, for instance with binary operators
 % like ||, &&, even |.
 % We dont want the next newline to be derived as empty command
+
 %claude:
 In [[rc]], a newline normally acts as a command terminator
-(like [[;]] in C). However, after certain operators like
+(like [[;]] in C).
+%
+However, after certain operators like
 [[|]], [[&&]], or [[||]], a newline should be ignored because
 the user is clearly continuing the command on the next line.
 %
 [<skipnl()>] is called by the lexer after those operators
 to consume any whitespace and newlines until meaningful input arrives.
 This is why you can write things like:
+
 \begin{verbatim}
   ls |
   wc -l
 \end{verbatim}
+
 and have it work as expected.
 
 <<function [[skipnl]]>>=
+/// yylex | yyparse -> <>
 void
 skipnl(void)
 {
@@ -3126,7 +3176,7 @@ skipnl(void)
         c = nextc();
         if(c!='\n')
             return;
-        // consume the newline
+        // else consume the newline and continue
         advance();
     }
 }
@@ -3137,6 +3187,138 @@ skipnl(void)
 
 % note that in a loop, so will accept multiple empty lines
 % until non whitespace character
+
+\section{Quoted strings ([['...']])}
+\label{sec:quoting}
+
+%claude:
+In [[rc]], strings are quoted with single quotes.
+To include a literal single quote inside a quoted string,
+you double it: [['it''s']] produces [[it's]].
+%
+The [<inquote>] flag is needed by [<getnext()>] because
+inside a quoted string, backslash-newline should {\em not}
+be treated as a line continuation.
+%
+The [<lastword>] flag tracks whether the previous token
+was a word, which the grammar uses to decide whether
+adjacent tokens should be concatenated.
+% (e.g., [[a^b]]).
+
+<<global [[inquote]]>>=
+bool inquote;
+@
+% used before already, for getnextc to handle backslash differently
+%ocaml: treat backslash differently by using different lexer function
+
+<<[[yylex()]] initialisations>>=
+inquote = false;
+@
+
+
+<<global [[lastword]]>>=
+// used also by syn.y
+bool lastword;	/* was the last token read a word or compound word terminator? */
+@
+% rename last_tok_was_a_word
+
+% could also put lastdol here?
+
+<<[[yylex()]] other locals>>=
+char *w = tok;
+@
+
+%yoann: explain w important in rest of the code
+%claude:
+[[w]] is the write cursor into [<tok>]: as the lexer reads the bytes
+of a word it appends them (via [<addutf()>]) and advances [[w]], so
+[[w]] always points just past the last byte stored. The rest of
+[<yylex()>] relies on it to build up the token text before terminating
+it with a [['\0']] and wrapping [[tok]] in a [[WORD]] node.
+
+<<[[yylex()]] other locals>>=
+struct Tree *t;
+@
+
+%yoann: explain why lexer return AST? should be job of yyparse
+%claude:
+The lexer does not really parse; it just packages each word as a {\em
+leaf} of the AST. The semantic value [[yacc]] passes around
+([[yylval.tree]]) is a [<Tree>], so when [<yylex()>] recognizes a word
+it wraps it in a single [[WORD]] node ([[t]]) and returns that.
+[<yyparse()>] still does the real work of combining these leaves into
+larger trees; having the lexer pre-build the leaves merely avoids a
+separate token-to-node conversion step.
+
+<<[[yylex()]] initialisations>>=
+yylval.tree = nil;
+@
+
+%yoann: trans, can finally show code to handle quotes
+%claude: %trans:
+With [[tok]], the write cursor [[w]], and the quoting flags in place,
+we can finally show the lexer code that scans a single-quoted string.
+
+<<[[yylex()]] switch c cases>>=
+case '\'':
+    inquote = true;
+    lastword = true;
+    lastdol = false;
+    for(;;){
+        c = advance();
+        if(c==EOF)
+            break;
+        if(c=='\''){
+            if(nextc()!='\'')
+                break;
+            // else
+            advance();
+        }
+        w = addutf(w, c);
+    }
+    if(w != nil)
+        *w='\0';
+
+    t = token(tok, WORD);
+    t->quoted = true;
+
+    yylval.tree = t;
+    return t->type; // WORD
+@
+% classic double '' to represent a quote
+%meta, also in C need escape
+
+% addutf in advanced topics, but essentially add character
+% and if character start of unicode char, then consume more chars
+% first.
+
+<<[[Tree]] word specific fields>>=
+bool	quoted;
+@
+%ocaml: use a pair,  Word of string * bool in AST
+
+% maybe say field will be useful later for globbing?
+
+% todo: rename tree_of_token?
+<<function [[token]]>>=
+tree*
+token(char *str, int type)
+{
+    tree *t = newtree();
+
+    t->type = type;
+    t->str = strdup(str);
+    return t;
+}
+@
+
+
+% rc does not use \ to escape?
+% so do echo ';'  not echo \;
+
+% in rc no "", no \, less troubles.
+
+
 
 \section{Operators ([['&']], [['&&']], [['|']], [['||']], [['<']], [['>']], [['$']], \ldots)}
 
@@ -3159,6 +3341,7 @@ case '&':
         strcpy(tok, "&&");
         return ANDAND;
     }
+    // else
     strcpy(tok, "&");
     return '&';
 @
@@ -3175,10 +3358,12 @@ case '$':
         strcpy(tok, "$#");
         return COUNT;
     }
+    // else
     if(nextis('"')){
         strcpy(tok, "$\"");
         return '"';
     }
+    // else
     strcpy(tok, "$");
     return '$';
 @
@@ -3201,7 +3386,7 @@ case '|':
         strcpy(tok, "||");
         return OROR;
     }
-    // FALLTHROUGH
+    // else FALLTHROUGH
 case '<':
 case '>':
     lastdol = false;
@@ -3221,17 +3406,11 @@ The lexer builds a [[Tree]] node right here (rather than
 in the parser), because the bracket syntax [[>[2=1]]]
 requires parsing digits and [[=]] signs that would be
 awkward to express in the [[yacc]] grammar.
+%yoann1: really? that difficult to put in grammar? actually the comment below is a grammar or because digit is lexing level and conflict with word? because only place really where digit is not a word?
 
-<<[[yylex()]] other locals>>=
-char *w = tok;
-@
-<<[[yylex()]] other locals>>=
-struct Tree *t;
-@
 
-<<[[yylex()]] initialisations>>=
-yylval.tree = nil;
-@
+
+
 
 <<[[yylex()]] in switch when redirection character>>=
 /*
@@ -3280,6 +3459,8 @@ fdt fd1;	/* details of REDIR PIPE DUP tokens */
 %ocaml: just put that as additional elements in the constructor for Pipe/Redir
 
 
+%yoann: maybe explain a bit WRITE/READ/APPEND?
+
 <<constant [[WRITE]]>>=
 #define	WRITE	2
 @
@@ -3307,8 +3488,8 @@ see Section~\ref{sec:advanced-redirection}.
 <<[[yylex()]] in switch when redirection character, switch c cases>>=
 case '|':
     t->type = PIPE;
-    t->fd0 = 1; // left fd of pipe (stdout of left cmd)
-    t->fd1 = 0; // right fd of pipe (stdin of right cmd)
+    t->fd0 = STDOUT; // left fd of pipe (stdout of left cmd)
+    t->fd1 = STDIN; // right fd of pipe (stdin of right cmd)
     break;
 @
 
@@ -3321,7 +3502,7 @@ case '>':
     }
     else
         t->rtype = WRITE;
-    t->fd0 = 1;
+    t->fd0 = STDOUT;
     break;
 @
 
@@ -3332,14 +3513,15 @@ case '<':
     <<[[yylex()]] in switch when redirection character, if read/write redirect>>
     else 
         t->rtype = READ;
-    t->fd0 = 0;
+    t->fd0 = STDIN;
     break;
 @
 
 
 
+\section{Remaining non-word characters}
 
-
+%yoann: intro, mention \n talked before, and a few more cases?
 
 <<[[yylex()]] if c is not a word character>>=
 if(!wordchr(c)){
@@ -3355,97 +3537,6 @@ if(!wordchr(c)){
 
 % so newline is handled by this code above.
 
-\section{Quoted strings ([['...']])}
-\label{sec:quoting}
-
-%claude:
-In [[rc]], strings are quoted with single quotes.
-To include a literal single quote inside a quoted string,
-you double it: [['it''s']] produces [[it's]].
-%
-The [[inquote]] flag is needed by [<getnext()>] because
-inside a quoted string, backslash-newline should {\em not}
-be treated as a line continuation.
-%
-The [[lastword]] flag tracks whether the previous token
-was a word, which the grammar uses to decide whether
-adjacent tokens should be concatenated (e.g., [[a^b]]).
-
-<<global [[inquote]]>>=
-bool inquote;
-@
-% used before already, for getnextc to handle backslash differently
-%ocaml: treat backslash differently by using different lexer function
-
-<<[[yylex()]] initialisations>>=
-inquote = false;
-@
-
-
-<<global [[lastword]]>>=
-// used also by syn.y
-bool lastword;	/* was the last token read a word or compound word terminator? */
-@
-% rename last_tok_was_a_word
-
-<<[[yylex()]] switch c cases>>=
-case '\'':
-    inquote = true;
-    lastword = true;
-    lastdol = false;
-    for(;;){
-        c = advance();
-        if(c==EOF)
-            break;
-        if(c=='\''){
-            if(nextc()!='\'')
-                break;
-            advance();
-        }
-        w = addutf(w, c);
-    }
-    if(w != nil)
-        *w='\0';
-
-    t = token(tok, WORD);
-    t->quoted = true;
-
-    yylval.tree = t;
-    return t->type;
-@
-% classic double '' to represent a quote
-%meta, also in C need escape
-
-% addutf in advanced topics, but essentially add character
-% and if character start of unicode char, then consume more chars
-% first.
-
-<<[[Tree]] word specific fields>>=
-bool	quoted;
-@
-%ocaml: use a pair,  Word of string * bool in AST
-
-% todo: rename tree_of_token?
-<<function [[token]]>>=
-tree*
-token(char *str, int type)
-{
-    tree *t = newtree();
-
-    t->type = type;
-    t->str = strdup(str);
-    return t;
-}
-@
-
-
-% rc does not use \ to escape?
-% so do echo ';'  not echo \;
-
-% in rc no "", no \, less troubles.
-
-
-
 \section{Keywords and identifiers ([[if]], [[for]], [[while]], [[switch]], [[fn]], \ldots )}
 
 %claude:
@@ -3453,12 +3544,6 @@ When the lexer encounters a word character (anything not an operator
 or whitespace), it reads characters until a non-word character appears.
 After a [[$]], only identifier characters ([[idchr]]) are accepted,
 which excludes slashes and other path characters.
-%
-Once the word is assembled, [<klook()>] checks whether it matches
-a keyword. Keywords are stored in a small hash table initialized
-by [<kinit()>] at startup. If the word is a keyword,
-[<klook()>] returns the appropriate token type; otherwise it
-returns [[WORD]].
 
 <<[[yylex()]] if c is a word character>>=
 for(;;){
@@ -3492,6 +3577,12 @@ return t->type;
 \t rewrite this if, too hard to read
 
 
+%claude:
+Once the word is assembled, [<klook()>] checks whether it matches
+a keyword. Keywords are stored in a small hash table initialized
+by [<kinit()>] at startup. If the word is a keyword,
+[<klook()>] returns the appropriate token type; otherwise it
+returns [[WORD]].
 
 
 <<function [[klook]]>>=
@@ -3499,7 +3590,7 @@ tree*
 klook(char *name)
 {
     struct Kw *p;
-    tree *t = token(name, WORD);
+    tree *t = token(name, WORD); // default if actually not a keyword
 
     for(p = kw[hash(name, NKW)];p;p = p->next)
         if(strcmp(p->name, name)==0){
@@ -3588,13 +3679,13 @@ Additionally, when two words are adjacent without whitespace
 (caret, the concatenation operator) between them.
 Without this, the lexer would produce three separate tokens
 and there would be no way to distinguish [[-x$flag]] (one argument)
-from [[-x \$flag]] (two arguments).
+from [[-x $flag]] (two arguments).
 
 <<[[yylex()]] other locals>>=
 int d = nextc();
 @
 
-<<[[yylex()]] hack for SUB>>=
+<<[[yylex()]] before read, hack for SUB>>=
 /*
  * Embarassing sneakiness:  if the last token read was a quoted or unquoted
  * WORD then we alter the meaning of what follows.  If the next character
@@ -3609,10 +3700,12 @@ if(lastword){
         strcpy(tok, "( [SUB]");
         return SUB;
     }
+    // else
     if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){
         strcpy(tok, "^");
         return '^';
     }
+    // else fallthrough
 }
 @
 %$
@@ -4750,8 +4843,8 @@ poplist(void)
 % panic? see appendix.
 
 
-% execexec -> <>
 <<function [[popword]]>>=
+/// execexec -> <>
 void
 popword(void)
 {
@@ -5203,8 +5296,8 @@ execforkexec(void)
 
 \subsection{[[exec()]]}
 
-% execforkexec | builtin "exec" -> <>
 <<function [[execexec]]>>=
+/// execforkexec | builtin "exec" -> <>
 void
 execexec(void)
 {
@@ -5357,9 +5450,9 @@ started with [[&]]), its status is recorded but the loop continues.
 %
 If [[wait()]] is interrupted by a signal, [<Waitfor()>] returns
 [[-1]], and the caller ([[Xsimple]]) retries.
-% Xsimple -> <>
 
 <<function [[Waitfor]]>>=
+/// Xsimple -> <>
 int
 Waitfor(int pid, bool _persist)
 {
@@ -5736,7 +5829,7 @@ first redirect stdout to [[foo]], then duplicate fd~2 from fd~1.
 [<doredir()>] solves this by recursing to the end of the list
 before performing any [[dup()]] calls, so the deepest (oldest)
 redirection executes first---restoring the original left-to-right order.
-% execexec -> <>
+
 %claude:
 Concretely, for \verb+cmd > foo >[2=1]+ the stack and recursion
 unroll as follows. At parse/eval time each [[pushredir]] prepends,
@@ -5762,6 +5855,8 @@ call chain that applies the oldest entry first:
         apply: dup(fd_foo, 1); close(fd_foo)
       apply: dup(1, 2)   <- now fd 2 points where foo went
 \end{verbatim}
+
+%claude:
 The same recursion is what makes the [[startredir]] ``inheritance
 point'' work on the rewind path: [<turfredir()>] iterates
 [[while(runq->redir != runq->startredir)]], popping (via
@@ -5769,6 +5864,7 @@ point'' work on the rewind path: [<turfredir()>] iterates
 stopping exactly at the frontier it inherited from its parent.
 
 <<function [[doredir]]>>=
+/// execexec -> <>
 void
 doredir(redir *rp)
 {
@@ -6030,8 +6126,8 @@ struct Redir *startredir;	/* redir inheritance point */
 %ocaml: use list of list for redir instead, so no "inheritance" need
 % just use List.flatten in doredir() instead
 
-% (Xerror | ...) -> Xreturn -> <>
 <<function [[turfredir]]>>=
+/// (Xerror | ...) -> Xreturn -> <>
 void
 turfredir(void)
 {
@@ -8030,7 +8126,6 @@ addenv(var *v)
 
 \section{Reading variables from [[/env/]]: [[Vinit()]]}
 
-% main -> <>
 %claude:
 [<Vinit()>] reads the [[/env/]] directory at startup and
 populates the global variable table.
@@ -8046,6 +8141,7 @@ This is the same insight behind \unix tools like
 [[find -print0]] and [[xargs -0]].
 
 <<function [[Vinit]]>>=
+/// main -> <>
 void
 Vinit(void)
 {
@@ -8515,8 +8611,8 @@ struct Word *globv;
 globlist();
 @
 
-% Xsimple | ... -> <>
 <<function [[globlist]]>>=
+/// Xsimple | ... -> <>
 void
 globlist(void)
 {
@@ -8551,8 +8647,8 @@ globlist1(word *gl)
 %alt: why not add Xglob for SIMPLE cases too? generate a Xglob instead
 %  of calling yourself globlist() in Xsimple ?
 
-% outcode (REDIR and FOR cases) -> <>
 <<function [[Xglob]]>>=
+/// outcode (REDIR and FOR cases) -> <>
 void
 Xglob(void)
 {
@@ -10774,8 +10870,8 @@ iteration.
 union Code rdfns[4];
 @
 
-% "finit" builtin -> <>
 <<function [[execfinit]]>>=
+/// "finit" builtin -> <>
 void
 execfinit(void)
 {
@@ -11119,8 +11215,8 @@ char nl='\n';		/* change to semicolon for bourne-proofing */
 #define	c2	t->child[2]
 @
 
-% simplemung | fnstr -> pfmt %t -> <>
 <<function [[pcmd]]>>=
+/// simplemung | fnstr -> pfmt %t -> <>
 void
 pcmd(io *f, tree *t)
 {
@@ -11238,8 +11334,8 @@ pcmd(io *f, tree *t)
 @
 %$
 
-% pcmd -> <>
 <<function [[pdeglob]]>>=
+/// pcmd -> <>
 void
 pdeglob(io *f, char *s)
 {
