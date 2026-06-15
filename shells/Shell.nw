@@ -4679,10 +4679,9 @@ bytecode and runs the bytecodes through a dispatch loop, in
 the same spirit as a small Lisp, Forth, or PostScript
 implementation. The compiled form lives in a [<codebuf>] of
 [[code]] cells, each holding either an opcode function
-pointer or an inline argument (a string, an integer, or a
-chained-buffer pointer). Running the program means advancing
+pointer or an inline argument (a string or an integer).
+Running the program means advancing
 a [[runq->pc]] index through that buffer.
-%yoann1: what is this chained-buffer pointer?
 
 %claude:
 The argument for tree-walking is simplicity: no separate
@@ -5905,13 +5904,15 @@ it added, without disturbing the parent's state.
 \subsubsection{[[Redir]]}
 
 %claude:
-The [[Redir]] structure records a pending redirection: a [[type]]
-(e.g., [[ROPEN]] for a regular file redirection), a [[from]] file
-descriptor (the one that was opened), and a [[to]] file descriptor
-(the one that should be replaced, such as 1 for stdout).
-The thread's [[redir]] field points to a linked list of these records,
-built up as the interpreter encounters redirection bytecodes.
-%yoann1: maybe give other ex than ROPEN, also saw already enum for redir before with READ/WRITE/APPEND/HERE, here another enum like related to redir?
+The [[Redir]] structure records one redirection the interpreter has to
+carry out. Its [[type]] is a {\em runtime} action enum, distinct from
+the parse-time [[READ]]/[[WRITE]]/[[APPEND]]/[[HERE]] of the lexer: the
+values are [[ROPEN]] ([[dup2(from,to)]] then close [[from]], for a file
+redirection), [[RDUP]] ([[dup2(from,to)]], for \verb+>[2=1]+), and
+[[RCLOSE]] (close [[from]], for \verb+>[2=]+). [[from]] is the
+descriptor that was opened or duplicated and [[to]] the one being
+replaced (e.g.\ 1 for stdout). The thread's [[redir]] field chains
+these records as the interpreter meets redirection bytecodes.
 
 <<struct [[Redir]]>>=
 struct Redir {
@@ -6318,7 +6319,9 @@ Here is the overall picture for [[ls | wc -l]]:
                               |
                            fork()
                          /        \
-                 child rc          parent rc
+                +----------+
+                | child rc |      parent rc
+                +----------+
                  close(pfd[PRD])   close(pfd[PWR])
                  redir: PWR->1     redir: PRD->0
                       |                 |
@@ -6342,7 +6345,6 @@ Here is the overall picture for [[ls | wc -l]]:
                                   wait for child rc
                                   concat statuses
 \end{vdiagram}
-%yoann1: seems there are squares around process in the diagram, should there be a box around child rc?
 
 %claude:
 The child runs [[cmd1]]'s bytecodes and ends with [[Xexit]]
@@ -6786,7 +6788,15 @@ if(!runq->iflast)
 <<[[Thread]] other fields>>=
 bool iflast;		/* static `if not' checking */
 @
-%yoann1: is it really static?
+
+%claude:
+``Static'' here means the check happens at compile time---inside
+[<outcode()>] as the code is generated, not while it runs. It only
+verifies the syntactic structure (that an [[if not]] follows an
+[[if(...)]]) and ignores the runtime exit status. The flag lives on
+[[runq]] rather than in a plain global because [[runq]] is what
+persists across the compile-then-run cycle of consecutive lines, so
+the bit set while compiling one line survives to the next.
 
 <<[[outcode()]] set iflast after switch>>=
 if(t->type!=NOT && t->type!=';')
@@ -7205,18 +7215,19 @@ global variable [[greet]] looks like this:
 \end{verbatim}
 
 %claude:
-The [[end]] slot was emitted as a forward reference in [[outcode()]]
-and patched by [[stuffdot(p)]] once the body had been emitted; at run
-time [<Xfn>] uses it to {\em skip over} the body (\verb+runq->pc = end+)
-so the definition itself is a no-op for the enclosing script. When the
-function is later invoked, [<execfunc()>] calls
-[[start(func->fn, func->pc, ...)]], which creates a new thread that resumes right after
-the [[Xfn]] and runs until the matching [[Xreturn]].
-Because several variables can alias the same code vector (e.g.
-\verb+fn a b c { ... }+ defines three functions with one body), the
-vector is refcounted and [<codecopy>]/[[codefree()]] bump the count
-on entry and drop it on redefinition.
-%yoann1: maybe improve clarity
+The [[end]] slot was emitted as a forward reference by [[outcode()]]
+and patched by [[stuffdot(p)]] once the body had been emitted. At run
+time, defining the function is almost a no-op for the enclosing
+script: [<Xfn>] just records the body's location in the variable and
+uses [[end]] to {\em skip over} the body (\verb+runq->pc = end+).
+The body runs only later, when the function is invoked: [<execfunc()>]
+calls [[start(func->fn, func->pc, ...)]], creating a new thread that
+resumes just after the [[Xfn]] and runs to the matching [[Xreturn]].
+Since several variables can share one body (\verb+fn a b c { ... }+
+defines three functions from a single vector), that vector is
+reference-counted: [<codecopy>] bumps the count for each variable that
+points at it, and [[codefree()]] drops it when a function is redefined
+or deleted.
 
 <<function [[Xfn]]>>=
 void
@@ -7438,7 +7449,10 @@ A subtle feature: if the variable name is a number
 (e.g., [[$1]], [[$2]]), [<Xdol()>] treats it as a positional
 parameter, indexing into [[$*]] instead of looking up
 a named variable.
-%yoann1: then explain used for argument access in function, actually same in Perl?
+%
+This is how a function (or a script) reads its arguments: inside
+\verb+fn f { echo $1 }+, [[$1]] is the first word passed to [[f]],
+[[$2]] the second, and so on, with [[$*]] the whole list.
 
 <<[[outcode()]] cases>>=
 case '$': //$
@@ -7690,17 +7704,24 @@ Here are a few special variables recognized by [[rc]], many of which
 are set in [[rcmain]] (see Section~\ref{sec:rcmain}):
 
 
+%claude:
 \begin{itemize}
-\item [[$prompt]]
-\item [[$status]]
+\item [[$prompt]] --- the two prompt strings (main and continuation), %$
+  printed by the input loop (Section~\ref{sec:display-prompt}).
+\item [[$status]] --- the exit status of the last command, as a %$
+  string ([[rc]]'s answer to the Bourne shell's [[$?]]), set through
+  [<setstatus()>]/[<getstatus()>].
 % $status far clearer than $0
 % and under plan9 string, not int so clearer
-\item [[$home]]
-\item [[$path]]
-\item [[$*]]
-\item [[$ifs]]
+\item [[$home]] --- the user's home directory, used by [[cd]] with no %$
+  argument and to locate [[$home/lib/profile]].
+\item [[$path]] --- the list of directories searched for external %$
+  commands by [<searchpath()>].
+\item [[$*]] --- the argument list of the script or function; %$
+  [[$1]], [[$2]], \ldots index into it (via [<Xdol()>]).
+\item [[$ifs]] --- the field separators used to split the output of a %$
+  backquote substitution \verb+`{...}+ into words.
 \end{itemize}
-%yoann1: expand each item, quick intro to the var, possibly reference to code setting/using it in the document
 
 %vlook("xxx"):
 % cdpath
