@@ -4726,6 +4726,13 @@ which walks the tree and emits bytecodes into [<codebuf>].
 The bytecodes are then interpreted by the main loop in [<main()>].
 
 %yoann: intro to subsections, coupld of helpers, outcode skeleton before feature gen
+%claude:
+This overview introduces the machinery before the per-construct code
+generation that follows. We start with the [<emitf()>] family of
+helpers that append to [<codebuf>], then [<compile()>], which drives
+one line, and finally the skeleton of [<outcode()>], the recursive
+walker. The later sections fill in [<outcode()>]'s cases one construct
+at a time (simple commands, pipes, loops, \ldots).
 
 \subsection{Emitting bytecodes: [[emitxxx()]]}
 
@@ -4817,6 +4824,14 @@ error0 compile(tree *t)
 @
 
 %yoann: overwrite codebuf, but previous one? no free first? leak?
+%claude:
+This overwrite does not leak the previous line's buffer. [<compile()>]
+only fills the global [[codebuf]] as a handoff: the caller
+([<Xrdcmds()>]) immediately passes it to [<start()>], which calls
+[<codecopy>] to take a counted reference (the [[emiti(0)]] above
+seeded the count at~0). That thread then owns the buffer and
+[<codefree()>] releases it when the thread finishes, so by the time
+the next line is compiled the old buffer already has its proper owner.
 
 % note that compile is called for each line entered interactively,
 % and also inline of a script.
@@ -5136,6 +5151,12 @@ can describe the bytecode generation and interpretation
 for simple commands, which is the core of the shell.
 
 %yoann: introduce c0/c1/c2 macros used in bytecode gen code
+%claude:
+Throughout [<outcode()>], [[c0]], [[c1]], and [[c2]] are shorthand for
+the three children of the current node [[t]] ([[t->child[0]]] etc.).
+They keep the per-construct cases terse: for a [[SIMPLE]] node [[c0]]
+is the argument list, for a pipe [[c0]] and [[c1]] are the two sides,
+and so on.
 
 <<constant c0 (rc/code.c)>>=
 #define c0  t->child[0]
@@ -5295,6 +5316,13 @@ Xsimple(void)
 % why the flush?
 
 %yoann: maybe anticipiate question about pipe seeing Waitfor(pid,...) above. If pip wait still only for 1 pid?
+%claude:
+[<Waitfor()>] here waits for the single child this simple command
+forked. A pipeline does not change that: each side of [[cmd1 | cmd2]]
+is itself a simple command waiting for its own exec'd process, and the
+extra step---waiting for the forked child [[rc]] that ran the left
+side---is handled separately by [<Xpipewait>] (the [[Pipe]] subsection
+below). So at this level the shell always waits for exactly one [[pid]].
 
 % <0 means wait was interrupted, but we still do it.
 % What it means? Can not C-c ? if really big command,
@@ -5333,6 +5361,12 @@ Xerror(char *s)
 @
 
 %yoann: in Xerror, when else branch is taken? not always rc argv0?
+%claude:
+The [[else]] branch fires whenever [[argv0]] is neither [["rc"]] nor
+[["/bin/rc"]]---most commonly when [[rc]] is running a script, where
+[[argv0]] is the script's name. The message then reads
+[[rc (script): ...]] so you can tell which script reported the error.
+(A login shell, whose [[argv0]] is [["-rc"]], also takes this branch.)
 
 % a bit like exception. Go up thread/call stack until
 % the top where have interactive thread.
@@ -5340,6 +5374,15 @@ Xerror(char *s)
 
 
 %yoann: diff with Xerror? does not print the %r? useful for what? when use Xerror vs Xerror1 in the code?
+%claude:
+[<Xerror1()>] is the same as [<Xerror()>] but without the [[%r]]:
+[<Xerror()>] appends the system error string ([[%r]]), so it is used
+after a failed system call (an [[exec]] or [[open]] that set the
+kernel's error), whereas [<Xerror1()>] is for [[rc]]'s own logical
+errors that have no associated OS error---like the
+[["empty argument list"]] and [["variable name not singleton"]]
+checks above. Both set the status to [["error"]] and unwind the
+thread stack through [<Xreturn>].
 
 <<function [[Xerror1]]>>=
 void
@@ -5653,10 +5696,23 @@ exitnext(void){
 
 
 %yoann: maybe say finally done with code for simple commands; that was lots of code compared to minishell1.c we saw earlier (Section X), but will pay later; more flexible
+%claude: %trans:
+That completes the code for simple commands---by far the largest piece
+of the interpreter so far, and a striking contrast with the twenty-odd
+lines of the [[minishell1.c]] we wrote in the introduction. The extra
+machinery (a code vector, the [[runq]] thread, the redirection stack,
+the fork optimization) is what buys [[rc]] its flexibility: the pipes,
+redirections, functions, and control flow in the rest of this chapter
+all build on these same pieces.
 
 \section{Operators}
 
 %yoann: quick intro and trans
+%claude: %trans:
+With simple commands handled, the remaining constructs---sequencing,
+pipes, logical operators, and the control-flow keywords---are just
+more cases in [<outcode()>], each emitting a small pattern of
+bytecodes, often with jumps. The next sections walk through them.
 
 \subsection{Basic sequence}
 
@@ -5688,6 +5744,21 @@ with the actual address, so [<Xtrue>] can jump past [[cmd2]]
 if the status is false.
 
 %yoann: maybe recall some basic assembly with label where use p: label so easier to get the code
+%claude:
+This is the classic assembler trick of a {\em forward jump with
+backpatching}. In assembly you would write
+\begin{verbatim}
+        <cmd1>
+        Xtrue L1     # jump past cmd2 if status is false
+        <cmd2>
+   L1:
+\end{verbatim}
+but when [<Xtrue>] is emitted the address of [[L1]] is not yet known
+([[cmd2]] has not been generated). So the compiler emits a placeholder
+slot, remembers its index in [[p]] ([[p = emiti(0)]]), and once it
+reaches the label---after [[cmd2]]---[<stuffdot()>] fills that slot
+with the current position ([[codebuf[p].i = codep]]). Here [[p]] is
+just the unresolved forward reference to [[L1]].
 
 <<[[outcode()]] locals>>=
 int p;
@@ -5771,6 +5842,15 @@ Xbang(void)
 @
 
 %yoann: recall that empty string (or "0") mean success, so "false" mean failure (and maybe confusingly also "true" as it's not the empty string)
+%claude:
+Recall [[rc]]'s status convention: an {\em empty} status string (or
+[["0"]]) means success---the command counts as ``true''---while any
+non-empty string means failure. That is why [<Xbang>] (the [[!]]
+negation) sets the status to [["false"]] for failure and to the empty
+string for success, and why [<truestatus()>] simply tests for
+emptiness. (It is a little confusing that the {\em string} [["true"]]
+would itself count as failure, being non-empty; only the empty string
+is ``true''.)
 
 \subsection{String matching}
 
@@ -6181,6 +6261,11 @@ Xpopredir(void)
 \subsubsection{[[Xread()]]}
 
 %yoann: quick intro
+%claude:
+[<Xread()>] implements input redirection ([[<]], and the
+here-document [[<<]]). It checks the argument is a single word, opens
+the named file read-only, and pushes an [[ROPEN]] redirection so the
+descriptor is duplicated onto the target (stdin by default).
 
 
 <<[[outcode()]] when REDIR case, switch redirection type cases>>=
@@ -6220,10 +6305,22 @@ Xread(void)
 @
 
 %yoann: diff Xwrite? seems very similar
+%claude:
+[<Xread()>] is almost identical to [<Xwrite()>]; the difference is the
+[[open]] mode---[<Xread()>] opens the file read-only, whereas
+[<Xwrite()>] creates and truncates it for writing---and the default
+descriptor each one redirects (stdin versus stdout). The rest (the
+singleton check, the [[ROPEN]] [<pushredir()>], the [<poplist()>]) is
+the same boilerplate.
 
 \subsubsection{[[Xappend()]]}
 
 %yoann: quick intro
+%claude:
+[<Xappend()>] implements [[>>]]. It is [<Xwrite()>] with one change:
+instead of truncating, it opens the existing file (or creates it) and
+seeks to the end before redirecting, so output is appended rather than
+overwriting.
 
 <<[[outcode()]] when REDIR case, switch redirection type cases>>=
 case APPEND:
@@ -6701,6 +6798,13 @@ Xasync(void)
 \section{Control flow statements}
 
 %yoann: quick intro
+%claude: %trans:
+The control-flow keywords---[[if]], [[while]], [[for]], and
+[[switch]]---all compile with the same forward-jump and backpatching
+technique introduced for [[&&]] and [[||]]: emit a condition, a
+conditional jump with a placeholder offset, the body, then patch the
+offset once the body's end is known. The following subsections show
+each one.
 
 \subsection{[[if]]}
 
@@ -6895,6 +6999,26 @@ case FOR:
 @
 
 %yoann: maybe vdiagram where see the jumps in codebuf
+%claude:
+The two jumps are easiest to see laid out as bytecode:
+\begin{vdiagram}
+  for(i in a b c) { body }   compiles to:
+
+         Xmark            (dummy value for Xlocal)
+         Xmark
+         "i"              (the loop variable)
+         Xlocal           bind i, take over the word list
+    p:   Xfor   q         if the list is empty, jump forward to q
+         <body>
+         Xjump  p         else jump back to p for the next iteration
+    q:   Xunlocal         restore i and leave the loop
+\end{vdiagram}
+%claude:
+[<Xfor>] pulls the next word off the list into [[i]] and falls through
+to the body, or---when the list is exhausted---jumps to [[q]]. The
+trailing [[Xjump p]] forms the back-edge. [[p]] is the address of the
+[[Xfor]] (saved by [[p = emitf(Xfor)]]) and [[q]] the forward
+placeholder patched by [<stuffdot()>].
 
 <<function [[Xfor]]>>=
 void
@@ -7168,6 +7292,14 @@ else if(p->f==Xfn){
 @
 
 %yoann: explain fnstr a bit
+%claude:
+[<fnstr()>] turns a function's AST back into source text, used to
+store the definition in the environment (under [[/env/fn#name]]) so
+child processes inherit it. It reuses the [[%t]] AST printer (like
+[<simplemung()>]), but first sets the global newline character [[nl]]
+to [[;]] so the body is serialized with semicolons instead of
+newlines---keeping the whole definition on one logical line that can
+be saved in an [[/env]] file and re-parsed later.
 
 <<function [[fnstr]]>>=
 char*
@@ -7314,6 +7446,11 @@ execfunc(var *func)
 \section{Variables}
 
 %yoann: quick intro and trans, saw already a bit var used in fn
+%claude: %trans:
+We have already met variables in passing---[[$*]] bound as a local
+inside functions, and the special variables of the environment. This
+section collects how variable {\em definitions} and {\em uses}
+compile to bytecode, starting with assignment.
 
 \subsection{Variable definitions ([[<x>=...]])}
 
@@ -7502,6 +7639,12 @@ Xdol(void)
 \subsection{[[$#<var>]]}
 
 %yoann: quick intro
+%claude:
+[[$#x]] gives the number of elements in the list variable [[x]]. It
+compiles like [[$x]] but with [<Xcount>] in place of [<Xdol>]:
+[<Xcount>] looks up the variable and pushes the [[count()]] of its
+word list as a string. (For a numeric name like [[$#1]] it instead
+reports whether that positional argument exists, 1 or 0.)
 
 
 <<[[outcode()]] cases>>=
@@ -7551,7 +7694,6 @@ Xcount(void)
 \subsection{[[$<var>(<idx>)]]}
 
 %yoann: quick intro
-
 %claude:
 Subscripting ([[$x(2)]] or [[$x(2-5)]]) extracts elements
 from a list variable by index or range.
@@ -7632,7 +7774,16 @@ subwords(word *val, int len, word *sub, word *a)
 
 \section{Concatenation: [[<x1> ^ <x2>]]}
 
-%yoann: paragraph intro, powerful concat in rc, pretty good x=foo/ ^ $LIST  and add foo to all elements! List.map!  and if x = $LIST1 ^ $LIST2 ? also recally implicit ^ added for -x$flag, can do  /usr/bin/^$dirs and map!
+%claude:
+Concatenation with [[^]] is far more than string joining. When one
+side is a single word and the other a list, the word is glued onto
+{\em every} element---so [[foo/^$list]] prepends [[foo/]] to each
+member of [[$list]], the shell's equivalent of a map. When both sides
+are equal-length lists, [[^]] joins them element by element (a zip),
+so [[$a^$b]] pairs them up; mismatched non-singleton lengths are an
+error. Most uses are in fact {\em implicit}: the lexer inserts a [[^]]
+between adjacent words that touch, so [[-x$flag]] is really
+[[-x ^ $flag]].
 
 
 <<[[outcode()]] cases>>=
