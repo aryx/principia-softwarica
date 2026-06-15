@@ -4,10 +4,6 @@
 % and even script! 2>&!, tail, head
 % lots of redirections
 
-% pretty good x=foo/ ^ $LIST
-% and add foo to all elements! List.map! 
-% and if x = $LIST1 ^ $LIST2 ?
-
 % sh.c in xv6/users! pretty small! 
 % similar to sh/sh.c in this dir (600 LOC)
 
@@ -4274,23 +4270,23 @@ hangs (with [<mung2()>]) the two children on it:
 \end{vdiagram}
 
 %claude:
-Two subtleties fall out of this shape. First, the
-[[SIMPLE]] pass is not strictly needed for correctness
-but makes code generation uniform: [<outcode()>] can
-handle any command as ``push a mark, walk the [[ARGLIST]]
-chain emitting [[Xword]]s, then [[Xsimple]]''.
-%
-Without the [[SIMPLE]] wrapper, the generator would need a
-separate entry-point for bare [[ARGLIST]] subtrees at
-the top.
-%
-Second, the [[PIPE]] tree is built by the lexer
-rather than the parser because the tree needs [[fd0]]
-and [[fd1]] fields that depend on the concrete bracket
-syntax ([[>[2=1]]], [[|[2]]], etc.).
-%---encoding that in
-%the [[yacc]] grammar would require many more tokens,
-%so the lexer returns a pre-built [[Tree]] instead.
+%Two subtleties fall out of this shape. First, the
+%[[SIMPLE]] pass is not strictly needed for correctness
+%but makes code generation uniform: [<outcode()>] can
+%handle any command as ``push a mark, walk the [[ARGLIST]]
+%chain emitting [[Xword]]s, then [[Xsimple]]''.
+%%
+%Without the [[SIMPLE]] wrapper, the generator would need a
+%separate entry-point for bare [[ARGLIST]] subtrees at
+%the top.
+%%
+%Second, the [[PIPE]] tree is built by the lexer
+%rather than the parser because the tree needs [[fd0]]
+%and [[fd1]] fields that depend on the concrete bracket
+%syntax ([[>[2=1]]], [[|[2]]], etc.).
+%%---encoding that in
+%%the [[yacc]] grammar would require many more tokens,
+%%so the lexer returns a pre-built [[Tree]] instead.
 
 
 % what if second cmd derives the EmptyCommand?
@@ -4672,30 +4668,33 @@ chapter.
 \chapter{Bytecode Generation and Interpretation}
 %******************************************************************************
 \label{chap:compile-interpret}
+%alt: or just Code generation?
 
-% or Code generation? or Bytecode generation?
 %toc:
-I merged bytecode generation and interpretation in one chapter
+I decided to merge the bytecode generation and interpretation in the same chapter
 because it helps to see the bytecodes generated from a given AST node
 together with the functions that interpret those bytecodes.
-We could also group them with the related parsing, but the parser
-can be understood in isolation.
+%
+We could have also grouped them with the related parsing grammar rules,
+but the parser can be understood in isolation.
 
 \section{Bytecode vs tree-walking interpretation}
 \label{sec:bytecode-vs-tree-walking}
 
 %claude:
-Why bytecode at all? Most shells---[[bash]], [[dash]],
-[[zsh]], [[fish]]---execute commands by walking the AST node
-by node, firing a function for each node type. [[rc]] takes
-a different route: it compiles the AST to a stack-machine
+Why bytecode at all? Most shells---[[bash]], [[zsh]]---execute
+commands by walking the AST node
+by node, firing a function for each node type.
+%
+[[rc]] takes a different route: it compiles the AST to a stack-machine
 bytecode and runs the bytecodes through a dispatch loop, in
 the same spirit as a small Lisp, Forth, or PostScript
-implementation. The compiled form lives in a [[codebuf]] of
+implementation. The compiled form lives in a [<codebuf>] of
 [[code]] cells, each holding either an opcode function
 pointer or an inline argument (a string, an integer, or a
 chained-buffer pointer). Running the program means advancing
 a [[runq->pc]] index through that buffer.
+%yoann1: what is this chained-buffer pointer?
 
 %claude:
 The argument for tree-walking is simplicity: no separate
@@ -4718,13 +4717,13 @@ what lets [[rc]] interleave multiple bytecode programs
 calls) without any explicit reentrancy in the C code.
 
 %claude:
-[[csh]] also uses a bytecode-like representation, but its
-opcodes are closer to a tokenized command list. [[rc]]'s
-opcodes go further: each one is a C function that operates
-on a per-thread argument stack, the same way Forth or
-PostScript does. The result is that the C side stays small
-(one [[for]] loop dispatching to the next opcode) while
-the language side stays expressive.
+%[[csh]] also uses a bytecode-like representation, but its
+%opcodes are closer to a tokenized command list. [[rc]]'s
+%opcodes go further: each one is a C function that operates
+%on a per-thread argument stack, the same way Forth or
+%PostScript does. The result is that the C side stays small
+%(one [[for]] loop dispatching to the next opcode) while
+%the language side stays expressive.
 
 \section{Overview}
 
@@ -4733,10 +4732,13 @@ the language side stays expressive.
 Recall the main flow:
 [<main()>] $\rightarrow$ [<Xrdcmds()>] $\rightarrow$ [<yyparse()>]
 $\rightarrow$ [<compile()>].
+% $\rightarrow$ [<outcode()>].
 %
 After [<yyparse()>] builds the AST, it calls [<compile()>]
 which walks the tree and emits bytecodes into [<codebuf>].
 The bytecodes are then interpreted by the main loop in [<main()>].
+
+%yoann: intro to subsections, coupld of helpers, outcode skeleton before feature gen
 
 \subsection{Emitting bytecodes: [[emitxxx()]]}
 
@@ -4749,8 +4751,8 @@ for function pointers (the bytecodes), [<emiti()>] for integers
 (jump offsets, file descriptors), and [<emits()>] for strings
 (inline arguments like the string after [<Xword>]).
 %
-[[codep]] is the current write position in the buffer, and
-[[ncode]] is the allocated capacity.
+[<codep>] is the current write position in the buffer, and
+[<ncode>] is the allocated capacity.
 
 <<global [[codep]]>>=
 // idx in codebuf
@@ -4807,6 +4809,7 @@ its own bytecode sequence ending with [<Xreturn>].
 
 <<function [[compile]]>>=
 //@Scheck: called from syn.y
+/// yyparse -> <> -> outcode
 error0 compile(tree *t)
 {
     ncode = 100;
@@ -4825,6 +4828,8 @@ error0 compile(tree *t)
     return OK_1;
 }
 @
+
+%yoann: overwrite codebuf, but previous one? no free first? leak?
 
 % note that compile is called for each line entered interactively,
 % and also inline of a script.
@@ -4852,17 +4857,6 @@ emits the appropriate sequence of bytecodes for each construct.
 The [[eflag]] parameter propagates the [[-e]] flag (exit on error):
 when set, an [<Xeflag>] bytecode is emitted after certain commands
 to check if they failed and exit accordingly.
-
-<<constant c0 (rc/code.c)>>=
-#define c0  t->child[0]
-@
-<<constant c1 (rc/code.c)>>=
-#define c1  t->child[1]
-@
-<<constant c2 (rc/code.c)>>=
-#define c2  t->child[2]
-@
-%ocaml: just use precise AST and pattern matching to deconstruct
 
 % modify codebuf via all those emitxxx()
 % todo: could return errorcode instead of using nerror global
@@ -4995,11 +4989,12 @@ The exit status of the last command is stored in the
 [[$status]] variable. [<setstatus()>] sets it, and
 [<getstatus()>] and [<truestatus()>] read it.
 %
-In [[rc]], a status is a string (not an integer like in the
+In \plan and [[rc]], a status is a string (not an integer like in \unix and the
 Bourne shell). An empty string or the string [["0"]] means success;
 anything else means failure.
 This mirrors the \plan system call [[exits()]] (see \book{Kernel}),
 which takes a string argument rather than a numeric exit code.
+% actually $status is also a list of string
 
 <<function [[setstatus]]>>=
 void
@@ -5027,9 +5022,10 @@ by [[|]], for example [["0|0"]] if both succeed or
 So [<truestatus()>] considers a status ``true'' if it contains
 only [[0]] and [[|]] characters---meaning every stage of the
 pipeline succeeded.
-%
+
+%claude:
 Why not reduce the pipeline status to a single value earlier?
-Because keeping the full string lets the user inspect [[\$status]]
+Because keeping the full string lets the user inspect [[$status]]
 and see exactly which stage failed (e.g., [["0|error|0"]]
 tells you the middle command had a problem).
 With numeric exit codes (as in \unix), reducing is easy: just
@@ -5037,16 +5033,16 @@ take the maximum or the last non-zero value.
 But with string statuses, there is no natural way to merge
 [["can't open"]] and [["0"]] into a single meaningful string,
 so [[rc]] preserves them all.
-In [[bash]], [[\$?]] only reports the exit status of the
+In [[bash]], [[$?]] only reports the exit status of the
 {\em last} command in the pipeline---a failure in an earlier
 stage is silently lost.
 [[bash]] later added the [[PIPESTATUS]] array to work around
 this, but it requires explicit use.
 
-%claude:
+%claude: %plan9-is-better:
 This is another example of [[rc]] getting the design right
 from the start, while [[bash]] accumulates workarounds:
-pipeline statuses are visible by default in [[\$status]]
+pipeline statuses are visible by default in [[$status]]
 (vs.\ [[PIPESTATUS]] added later in [[bash]]),
 all variables are automatically exported via [[/env/]]
 (vs.\ the error-prone [[export]] command),
@@ -5152,6 +5148,19 @@ stack management, process status, and subprocess tracking---we
 can describe the bytecode generation and interpretation
 for simple commands, which is the core of the shell.
 
+%yoann: introduce c0/c1/c2 macros used in bytecode gen code
+
+<<constant c0 (rc/code.c)>>=
+#define c0  t->child[0]
+@
+<<constant c1 (rc/code.c)>>=
+#define c1  t->child[1]
+@
+<<constant c2 (rc/code.c)>>=
+#define c2  t->child[2]
+@
+%ocaml: just use precise AST and pattern matching to deconstruct
+
 \subsection{Bytecode generation}
 
 % SIMPLE node built in simplemung()
@@ -5160,11 +5169,6 @@ A [[SIMPLE]] command compiles to: [<Xmark>] (start a new
 word list), followed by the bytecodes for the arguments
 (which push words onto the stack), followed by [<Xsimple>]
 (which pops the word list and executes the command).
-%
-Note that [[ARGLIST]] and [[WORDS]] emit their children
-in reverse order: since [<Xword>] prepends to the word list,
-emitting the last word first ensures the list ends up
-in the correct order.
 
 <<[[outcode()]] cases>>=
 case SIMPLE:
@@ -5179,6 +5183,13 @@ case SIMPLE:
 % then this will do some Xword and put in runq->argv a bunch
 %  of words
 % then Xsimple executuon
+
+%claude:
+Note that [[ARGLIST]] and [[WORDS]] emit their children
+in reverse order: since [<Xword>] prepends to the word list,
+emitting the last word first ensures the list ends up
+in the correct order.
+
 
 % ARGLIST is for the parameters of the simple command, the arguments,
 % which are mostly word and so push in the stack (runq->argv)
@@ -5217,7 +5228,9 @@ else if(p->f==Xword || p->f==Xdelhere)
 %claude:
 For example, [[echo hello world]] produces the following
 AST and bytecodes:
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   AST:                          codebuf:
 
   SIMPLE                        Xmark
@@ -5227,12 +5240,13 @@ AST and bytecodes:
   ARGLIST  "world"              Xsimple
    / \
   "echo"  "hello"
-\end{verbatim}
-%
-Note how the arguments are emitted in reverse order
-([[ARGLIST]] emits [[c1]] before [[c0]]), so that after
-[<Xword>] prepends each word to the list, [[argv]] ends
-up in the correct order: [[echo]], [[hello]], [[world]].
+\end{vdiagram}
+
+%claude:
+%Note how the arguments are emitted in reverse order
+%([[ARGLIST]] emits [[c1]] before [[c0]]), so that after
+%[<Xword>] prepends each word to the list, [[argv]] ends
+%up in the correct order: [[echo]], [[hello]], [[world]].
 
 \subsection{[[Xsimple()]]}
 
@@ -5269,7 +5283,6 @@ Xsimple(void)
 
     a = runq->argv->words;
     <<[[Xsimple()]] sanity check a>>
-
     <<[[Xsimple()]] if -x>>
 
     <<[[Xsimple()]] if argv0 is a function>>
@@ -5293,6 +5306,8 @@ Xsimple(void)
 }
 @
 % why the flush?
+
+%yoann: maybe anticipiate question about pipe seeing Waitfor(pid,...) above. If pip wait still only for 1 pid?
 
 % <0 means wait was interrupted, but we still do it.
 % What it means? Can not C-c ? if really big command,
@@ -5329,12 +5344,16 @@ Xerror(char *s)
         Xreturn();
 }
 @
+
+%yoann: in Xerror, when else branch is taken? not always rc argv0?
+
 % a bit like exception. Go up thread/call stack until
 % the top where have interactive thread.
 % As we go back we call Xreturn which will do the appropriate cleanups.
 
 
-% diff with Xerror? does not print the %r
+%yoann: diff with Xerror? does not print the %r? useful for what? when use Xerror vs Xerror1 in the code?
+
 <<function [[Xerror1]]>>=
 void
 Xerror1(char *s)
@@ -5361,12 +5380,7 @@ It forks a child process, and in the child, calls [<execexec()>]
 to replace the child with the actual command.
 If [[exec]] fails (e.g., the command does not exist),
 the child exits with an error; the parent continues normally.
-%
-The [[pushword("exec")]] before [<execexec()>] is a trick:
-[<execexec()>] is also used as the [[exec]] builtin, where
-[[exec]] appears as the first word in [[argv]]. Here we add
-it artificially so [<execexec()>] can [[popword()]] it uniformly.
-% fundamental of a shell! fork exec wait
+
 
 <<function [[execforkexec]]>>=
 int
@@ -5400,6 +5414,14 @@ execforkexec(void)
 % to be consistent with execexec below (which you can not just
 % call exec since it conflicts with syscall)
 %ocaml: let the module system handle conflict.
+
+%claude:
+The [[pushword("exec")]] before [<execexec()>] is a trick:
+[<execexec()>] is also used as the [[exec]] builtin (see Section~\ref{sec:builtin-exec}),
+where [[exec]] appears as the first word in [[argv]]. Here we add
+it artificially so [<execexec()>] can [[popword()]] it uniformly.
+% fundamental of a shell! fork exec wait
+
 
 %clearwaitpids because child process is not responsible for
 % waiting for some child
@@ -5568,7 +5590,7 @@ started with [[&]]), its status is recorded but the loop continues.
 If [[wait()]] is interrupted by a signal, [<Waitfor()>] returns
 [[-1]], and the caller ([[Xsimple]]) retries.
 
-<<function [[Waitfor]]>>=
+<<function [[Waitfor]](plan9.c)>>=
 /// Xsimple -> <>
 int
 Waitfor(int pid, bool _persist)
@@ -5642,7 +5664,12 @@ exitnext(void){
 % popredir does not matter? because all fd will be closed once
 % exit from execed process?
 
+
+%yoann: maybe say finally done with code for simple commands; that was lots of code compared to minishell1.c we saw earlier (Section X), but will pay later; more flexible
+
 \section{Operators}
+
+%yoann: quick intro and trans
 
 \subsection{Basic sequence}
 
@@ -5665,16 +5692,15 @@ case ';':
 
 %claude:
 [[&&]] and [[||]] use a forward jump technique.
-For [[cmd1 &\ cmd2]], the compiler emits:
+%
+For [[cmd1 && cmd2]], the compiler emits:
 the bytecodes of [[cmd1]], then [<Xtrue>] followed by a
 placeholder jump offset, then the bytecodes of [[cmd2]].
 After emitting [[cmd2]], [<stuffdot()>] patches the placeholder
 with the actual address, so [<Xtrue>] can jump past [[cmd2]]
 if the status is false.
-%
-[<Xtrue>] and [<Xfalse>] are symmetric:
-[<Xtrue>] jumps if the status is {\em false} (skip the second command),
-and [<Xfalse>] jumps if the status is {\em true}.
+
+%yoann: maybe recall some basic assembly with label where use p: label so easier to get the code
 
 <<[[outcode()]] locals>>=
 int p;
@@ -5706,6 +5732,10 @@ stuffdot(int a)
 % so this allow to generate a jump forward.
 
 
+%claude:
+[<Xtrue>] and [<Xfalse>] are symmetric:
+[<Xtrue>] jumps if the status is {\em false} (skip the second command),
+and [<Xfalse>] jumps if the status is {\em true}.
 
 <<[[outcode()]] cases>>=
 case OROR:
@@ -5753,6 +5783,7 @@ Xbang(void)
 }
 @
 
+%yoann: recall that empty string (or "0") mean success, so "false" mean failure (and maybe confusingly also "true" as it's not the empty string)
 
 \subsection{String matching}
 
@@ -5764,7 +5795,7 @@ and the patterns can be multi-word (e.g., if they come from
 variable expansion), and they must be kept separate.
 %
 [<Xmatch()>] converts the subject words to a single string
-(joining with spaces), then tries each pattern word
+(joining with spaces), then tries {\em each} pattern word
 against it using [<match()>] (described in Chapter~\ref{chap:globbing}).
 
 <<[[outcode()]] cases>>=
@@ -5774,8 +5805,7 @@ case TWIDDLE:
     emitf(Xmark);
     outcode(c0, eflag);
     emitf(Xmatch);
-    if(eflag)
-        emitf(Xeflag);
+    <<[[outcode()]] emit Xeflag after Xmatch>>
     break;
 @
 % why Xeflag here? no command, just word, so why exit early?
@@ -5821,7 +5851,7 @@ list2str(word *words)
         *s++=' ';
     }
     if(s==value)
-        *s='\0';
+        *s='\0'; // replace last space
     else s[-1]='\0';
     return value;
 }
@@ -5855,7 +5885,7 @@ a [[Redir]] record onto the thread's redirection stack.
 But it does {\em not} actually redirect the file descriptors yet.
 %
 The actual redirection happens later, in [<execexec()>]
-(inside the forked child process), just before [[exec()]]:
+inside the forked child process, just before [[exec()]]:
 [<doredir()>] walks the redirection stack and performs
 the [[dup()]] and [[close()]] calls.
 %
@@ -5876,6 +5906,13 @@ p->redir = p->startredir = runq ? runq->redir : nil;
 % And we often create new threads.
 %ocaml: use list of list instead of having redir and startredir
 
+%claude:
+The [[startredir]] field in [<start()>] deserves attention:
+when a new thread is created, it inherits its parent's redirection
+stack (so subshells see the parent's redirections), but
+[[startredir]] remembers where the inherited portion ends.
+This way, if an error occurs, the thread can pop only the redirections
+it added, without disturbing the parent's state.
 
 \subsubsection{[[Redir]]}
 
@@ -5886,13 +5923,8 @@ descriptor (the one that was opened), and a [[to]] file descriptor
 (the one that should be replaced, such as 1 for stdout).
 The thread's [[redir]] field points to a linked list of these records,
 built up as the interpreter encounters redirection bytecodes.
-%
-The [[startredir]] field in [<start()>] deserves attention:
-when a new thread is created, it inherits its parent's redirection
-stack (so subshells see the parent's redirections), but
-[[startredir]] remembers where the inherited portion ends.
-This way, if an error occurs, the thread can pop only the redirections
-it added, without disturbing the parent's state.
+%yoann: maybe give other ex than ROPEN, also saw already enum for redir before with READ/WRITE/APPEND/HERE, here another enum like related to redir?
+
 <<struct [[Redir]]>>=
 struct Redir {
     // enum<redirection_kind_bis>
@@ -5947,39 +5979,6 @@ first redirect stdout to [[foo]], then duplicate fd~2 from fd~1.
 before performing any [[dup()]] calls, so the deepest (oldest)
 redirection executes first---restoring the original left-to-right order.
 
-%claude:
-Concretely, for \verb+cmd > foo >[2=1]+ the stack and recursion
-unroll as follows. At parse/eval time each [[pushredir]] prepends,
-so the newest redirection sits at the head. Then [<doredir()>]
-recurses to the tail before touching any descriptor, producing a
-call chain that applies the oldest entry first:
-\begin{verbatim}
-  runq->redir (after both Xwrite / Xdup2 have pushed):
-
-      head                                         tail
-       |                                            |
-       v                                            v
-    +--------------+      +--------------+      +---+
-    | >[2=1]       | ---> | > foo        | ---> |nil|
-    | pushed last  |      | pushed first |      +---+
-    +--------------+      +--------------+
-
-  doredir() recursion (left-to-right in source order):
-
-    doredir(>[2=1])
-      doredir(>foo)
-        doredir(nil)     <- returns
-        apply: dup(fd_foo, 1); close(fd_foo)
-      apply: dup(1, 2)   <- now fd 2 points where foo went
-\end{verbatim}
-
-%claude:
-The same recursion is what makes the [[startredir]] ``inheritance
-point'' work on the rewind path: [<turfredir()>] iterates
-[[while(runq->redir != runq->startredir)]], popping (via
-[<Xpopredir>]) only the records pushed since this thread started,
-stopping exactly at the frontier it inherited from its parent.
-
 <<function [[doredir]]>>=
 /// execexec -> <>
 void
@@ -6000,30 +5999,61 @@ doredir(redir *rp)
 % more importantly when do cmd > foo >[2=1] ?  vs cmd >[2=1] > foo ?
 
 %claude:
-The [[ROPEN]] case is the file descriptor plumbing itself.
-It is worth tracing concretely what happens for \verb+ls > out+.
-At parse time [<Xwrite>] calls [[Creat("out")]] and gets back
-some arbitrary free fd (say~3), and pushes [[ROPEN{from=3, to=1}]].
-In the child, [<doredir()>] then maps fd~3 onto fd~1 (stdout)
-via [[dup]], and closes the original fd~3 so [[ls]] inherits a
-clean descriptor table:
-\begin{verbatim}
-  before Xwrite (in parent, after fork):      after doredir (in child):
-    fd 0 -> /dev/cons  (stdin)                  fd 0 -> /dev/cons
-    fd 1 -> /dev/cons  (stdout)                 fd 1 -> out  *** dup'd
-    fd 2 -> /dev/cons  (stderr)                 fd 2 -> /dev/cons
-    fd 3 -> (free)                              fd 3 -> (closed)
+%Concretely, for \verb+cmd > foo >[2=1]+ the stack and recursion
+%unroll as follows. At parse/eval time each [[pushredir]] prepends,
+%so the newest redirection sits at the head. Then [<doredir()>]
+%recurses to the tail before touching any descriptor, producing a
+%call chain that applies the oldest entry first:
+%\begin{verbatim}
+%  runq->redir (after both Xwrite / Xdup2 have pushed):
+%
+%      head                                         tail
+%       |                                            |
+%       v                                            v
+%    +--------------+      +--------------+      +---+
+%    | >[2=1]       | ---> | > foo        | ---> |nil|
+%    | pushed last  |      | pushed first |      +---+
+%    +--------------+      +--------------+
+%
+%  doredir() recursion (left-to-right in source order):
+%
+%    doredir(>[2=1])
+%      doredir(>foo)
+%        doredir(nil)     <- returns
+%        apply: dup(fd_foo, 1); close(fd_foo)
+%      apply: dup(1, 2)   <- now fd 2 points where foo went
+%\end{verbatim}
+%
+%%claude:
+%The same recursion is what makes the [[startredir]] ``inheritance
+%point'' work on the rewind path: [<turfredir()>] iterates
+%[[while(runq->redir != runq->startredir)]], popping (via
+%[<Xpopredir>]) only the records pushed since this thread started,
+%stopping exactly at the frontier it inherited from its parent.
 
-  after Xwrite (Creat'd "out"):
-    fd 0 -> /dev/cons
-    fd 1 -> /dev/cons
-    fd 2 -> /dev/cons
-    fd 3 -> out            Redir{from=3,to=1}
-\end{verbatim}
-The [[if(rp->from != rp->to)]] guard handles the rare case where
-[[Creat()]] happens to hand back exactly the target fd (possible
-when stdout was previously closed), in which case the [[dup]] and
-[[close]] would defeat each other.
+
+%claude:
+%The [[ROPEN]] case is the file descriptor plumbing itself.
+%It is worth tracing concretely what happens for \verb+ls > out+.
+%At parse time [<Xwrite>] calls [[Creat("out")]] and gets back
+%some arbitrary free fd (say~3), and pushes [[ROPEN{from=3, to=1}]].
+%In the child, [<doredir()>] then maps fd~3 onto fd~1 (stdout)
+%via [[dup]], and closes the original fd~3 so [[ls]] inherits a
+%clean descriptor table:
+%\begin{verbatim}
+%  before Xwrite (in parent, after fork):      after doredir (in child):
+%    fd 0 -> /dev/cons  (stdin)                  fd 0 -> /dev/cons
+%    fd 1 -> /dev/cons  (stdout)                 fd 1 -> out  *** dup'd
+%    fd 2 -> /dev/cons  (stderr)                 fd 2 -> /dev/cons
+%    fd 3 -> (free)                              fd 3 -> (closed)
+%
+%  after Xwrite (Creat'd "out"):
+%    fd 0 -> /dev/cons
+%    fd 1 -> /dev/cons
+%    fd 2 -> /dev/cons
+%    fd 3 -> out            Redir{from=3,to=1}
+%\end{verbatim}
+
 
 <<[[doredir()]] switch redir type cases>>=
 case ROPEN:
@@ -6041,6 +6071,11 @@ case ROPEN:
 #define	ROPEN	1			/* dup2(from, to); close(from); */
 @
 
+%claude:
+The [[if(rp->from != rp->to)]] guard handles the rare case where
+[[Creat()]] happens to hand back exactly the target fd (possible
+when stdout was previously closed), in which case the [[dup]] and
+[[close]] would defeat each other.
 
 
 
@@ -6070,6 +6105,8 @@ case REDIR:
     emitf(Xpopredir);
     break;
 @
+
+% aspectize Xglob use
 
 % the popredir is here because when do
 %  cmd1 > foo; cmd2; cmd3
@@ -6154,6 +6191,8 @@ Xpopredir(void)
 
 \subsubsection{[[Xread()]]}
 
+%yoann: quick intro
+
 
 <<[[outcode()]] when REDIR case, switch redirection type cases>>=
 case READ:
@@ -6191,7 +6230,11 @@ Xread(void)
 }
 @
 
+%yoann: diff Xwrite? seems very similar
+
 \subsubsection{[[Xappend()]]}
+
+%yoann: quick intro
 
 <<[[outcode()]] when REDIR case, switch redirection type cases>>=
 case APPEND:
@@ -6282,7 +6325,7 @@ the right side's code, and one for the parent's [<Xpipewait>].
 
 %claude:
 Here is the overall picture for [[ls | wc -l]]:
-\begin{verbatim}
+\begin{vdiagram}
                           pipe(pfd)
                               |
                            fork()
@@ -6310,8 +6353,10 @@ Here is the overall picture for [[ls | wc -l]]:
                                   Xpipewait:
                                   wait for child rc
                                   concat statuses
-\end{verbatim}
-%
+\end{vdiagram}
+%yoann1: seems there are squares around process in the diagram, should there be a box around child rc?
+
+%claude:
 The child runs [[cmd1]]'s bytecodes and ends with [[Xexit]]
 (it must terminate, not return to the parent's thread stack).
 The parent creates a new thread for [[cmd2]] that ends with
@@ -6413,6 +6458,36 @@ Xreturn(void)
 
 % as goes up the call stack, you need to close the opened redirections
 % see turfredir.
+
+% mypid is global set at the very beginning
+<<function [[Xexit]]>>=
+void
+Xexit(void)
+{
+    struct Var *trapreq;
+    struct Word *starval;
+    static bool beenhere = false;
+
+    if(getpid()==mypid && !beenhere){
+        trapreq = vlook("sigexit");
+        if(trapreq->fn){
+            beenhere = true;
+            --runq->pc;
+            starval = vlook("*")->val;
+            start(trapreq->fn, trapreq->pc, (struct Var *)0);
+            runq->local = newvar(strdup("*"), runq->local);
+            runq->local->val = copywords(starval, (struct Word *)0);
+            runq->local->changed = true;
+            runq->redir = runq->startredir = nil;
+            return;
+        }
+    }
+    Exit(getstatus(), __LOC__);
+}
+@
+
+% Xexit vs Exit vs exits
+
 
 
 
@@ -6602,6 +6677,7 @@ Xasync(void)
     fdt null = open("/dev/null", 0);
     int pid;
     char npid[10];
+
     if(null<0){
         Xerror("Can't open /dev/null\n");
         return;
@@ -6613,7 +6689,7 @@ Xasync(void)
         break;
     case 0: // child
         clearwaitpids();
-        pushredir(ROPEN, null, 0);
+        pushredir(ROPEN, null, STDIN);
         // start a new Thread runq->pc+1 so skip pointer to code after &
         start(runq->code, runq->pc+1, runq->local);
         runq->ret = 0;
@@ -6630,38 +6706,11 @@ Xasync(void)
 }
 @
 
-% mypid is global set at the very beginning
-<<function [[Xexit]]>>=
-void
-Xexit(void)
-{
-    struct Var *trapreq;
-    struct Word *starval;
-    static bool beenhere = false;
-
-    if(getpid()==mypid && !beenhere){
-        trapreq = vlook("sigexit");
-        if(trapreq->fn){
-            beenhere = true;
-            --runq->pc;
-            starval = vlook("*")->val;
-            start(trapreq->fn, trapreq->pc, (struct Var *)0);
-            runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct Word *)0);
-            runq->local->changed = true;
-            runq->redir = runq->startredir = nil;
-            return;
-        }
-    }
-    Exit(getstatus(), __LOC__);
-}
-@
-
-% Xexit vs Exit vs exits
-
 
 
 \section{Control flow statements}
+
+%yoann: quick intro
 
 \subsection{[[if]]}
 
@@ -6680,10 +6729,10 @@ If any other command is executed between [[if]] and [[if not]],
 
 <<[[outcode()]] cases>>=
 case IF:
-    outcode(c0, false);
+    outcode(c0, false); // the condition
     emitf(Xif);
     p = emiti(0);
-    outcode(c1, eflag);
+    outcode(c1, eflag); // then body
     emitf(Xwastrue);
     stuffdot(p);
     break;
@@ -6749,6 +6798,7 @@ if(!runq->iflast)
 <<[[Thread]] other fields>>=
 bool iflast;		/* static `if not' checking */
 @
+%yoann1: is it really static?
 
 <<[[outcode()]] set iflast after switch>>=
 if(t->type!=NOT && t->type!=';')
@@ -6810,7 +6860,7 @@ Xjump(void)
 % why Xmark?
 %claude:
 The [[for]] loop is more complex. It first evaluates
-the list to iterate over (or expands [[\$*]] if no list
+the list to iterate over (or expands [[$*]] if no list
 is given), creates a local variable for the loop variable
 (via [<Xlocal>]), and then loops with [<Xfor>].
 %
@@ -6846,6 +6896,8 @@ case FOR:
     break;
 @
 
+%yoann: maybe vdiagram where see the jumps in codebuf
+
 <<function [[Xfor]]>>=
 void
 Xfor(void)
@@ -6878,8 +6930,10 @@ which uses [<match()>] (the same glob matcher used by the
 \verb+~+ operator) to compare.
 If the case matches, execution falls through to the case body;
 otherwise, it jumps to the next case.
-After a case body executes, it jumps to the end of the switch.
+After a case body executes, it jumps to the end of the switch
+(like an implicit [[break;]] in C).
 The comment in [<codeswitch()>] below shows the layout.
+
 
 <<[[outcode()]] cases>>=
 case SWITCH:
@@ -7093,13 +7147,13 @@ the function by setting [[v->fn]] to [[nil]].
 <<[[outcode()]] cases>>=
 case FN:
     emitf(Xmark);
-    outcode(c0, eflag);
+    outcode(c0, eflag); // name(s)
     if(c1){
         emitf(Xfn);
         p = emiti(0);
         emits(fnstr(c1));
         outcode(c1, eflag); // body of the function
-        emitf(Xunlocal);    /* get rid of $* */ //$
+        emitf(Xunlocal);    /* get rid of $* */
         emitf(Xreturn);
         stuffdot(p);
     }
@@ -7114,6 +7168,8 @@ else if(p->f==Xfn){
          p+=2;
       }
 @
+
+%yoann: explain fnstr a bit
 
 <<function [[fnstr]]>>=
 char*
@@ -7142,6 +7198,8 @@ The key move in [<Xfn()>] is that it stores a pointer to the
 executing, plus an offset into it. It does not compile a separate
 closure object. After defining \verb+fn greet { echo hi }+, the
 global variable [[greet]] looks like this:
+
+%claude:
 \begin{verbatim}
   var{ name="greet" }
     |
@@ -7157,6 +7215,8 @@ global variable [[greet]] looks like this:
                  at Xfn    stuffdot patches this
                            to "end of body"
 \end{verbatim}
+
+%claude:
 The [[end]] slot was emitted as a forward reference in [[outcode()]]
 and patched by [[stuffdot(p)]] once the body had been emitted; at run
 time [<Xfn>] uses it to {\em skip over} the body (\verb+runq->pc = end+)
@@ -7168,6 +7228,7 @@ Because several variables can alias the same code vector (e.g.
 \verb+fn a b c { ... }+ defines three functions with one body), the
 vector is refcounted and [<codecopy>]/[[codefree()]] bump the count
 on entry and drop it on redefinition.
+%yoann1: maybe improve clarity
 
 <<function [[Xfn]]>>=
 void
@@ -7253,6 +7314,8 @@ execfunc(var *func)
 
 \section{Variables}
 
+%yoann: quick intro and trans, saw already a bit var used in fn
+
 \subsection{Variable definitions ([[<x>=...]])}
 
 %claude:
@@ -7266,7 +7329,7 @@ through [[child[2]]]: if it eventually reaches a non-assignment
 node, there is a command and the assignments are local.
 %
 Multiple chained assignments like [[A=b C=d cmd]] are supported:
-each creates a local binding, and they are all unlocalized
+each creates a local binding, and they are all ``unlocalized''
 after the command finishes.
 
 <<[[outcode()]] locals>>=
@@ -7387,6 +7450,7 @@ A subtle feature: if the variable name is a number
 (e.g., [[$1]], [[$2]]), [<Xdol()>] treats it as a positional
 parameter, indexing into [[$*]] instead of looking up
 a named variable.
+%yoann1: then explain used for argument access in function, actually same in Perl?
 
 <<[[outcode()]] cases>>=
 case '$': //$
@@ -7433,7 +7497,9 @@ Xdol(void)
 %ocaml: be more strict when array index out of bound
 
 
+\subsection{[[$#<var>]]}
 
+%yoann: quick intro
 
 
 <<[[outcode()]] cases>>=
@@ -7480,6 +7546,9 @@ Xcount(void)
 %ocaml: factorize in a vlook_varname_or_index with code for Xdol?
 % a bit hard to factorize, different logic
 
+\subsection{[[$<var>(<idx>)]]}
+
+%yoann: quick intro
 
 %claude:
 Subscripting ([[$x(2)]] or [[$x(2-5)]]) extracts elements
@@ -7559,6 +7628,10 @@ subwords(word *val, int len, word *sub, word *a)
 @
 
 
+\section{Concatenation: [[<x1> ^ <x2>]]}
+
+%yoann: paragraph intro, powerful concat in rc, pretty good x=foo/ ^ $LIST  and add foo to all elements! List.map!  and if x = $LIST1 ^ $LIST2 ? also recally implicit ^ added for -x$flag, can do  /usr/bin/^$dirs and map!
+
 
 <<[[outcode()]] cases>>=
 case '^':
@@ -7628,22 +7701,18 @@ conclist(word *lp, word *rp, word *tail)
 Here are a few special variables recognized by [[rc]], many of which
 are set in [[rcmain]] (see Section~\ref{sec:rcmain}):
 
+
 \begin{itemize}
 \item [[$prompt]]
-
 \item [[$status]]
 % $status far clearer than $0
 % and under plan9 string, not int so clearer
-
 \item [[$home]]
-
 \item [[$path]]
-
 \item [[$*]]
-
 \item [[$ifs]]
-
 \end{itemize}
+%yoann1: expand each item, quick intro to the var, possibly reference to code setting/using it in the document
 
 %vlook("xxx"):
 % cdpath
@@ -9617,6 +9686,12 @@ if(eflag)
     emitf(Xeflag);
 @
 
+<<[[outcode()]] emit Xeflag after Xmatch>>=
+if(eflag)
+    emitf(Xeflag);
+@
+
+
 % super important actually, explain how useful in recursive make
 % (remember make/mk use rc/sh for recipe, see Build book)
 % where a failure in a subsubdir should stop the entire thing. 
@@ -10654,7 +10729,7 @@ manipulates namespaces, [[flag]] queries command-line flags,
 and [[shift]] modifies [[$*]].
 
 \subsection{[[% exec]]}
-%$
+\label{sec:builtin-exec}
 
 % actually called from Xsimple()
 % but it complicates the code.
@@ -10668,7 +10743,6 @@ It is called from [<Xsimple()>] when the first word
 of the command is [[exec]].
 
 \subsection{[[% whatis]]}
-%$
 
 %claude:
 [<execwhatis()>] is the shell's introspection tool.
