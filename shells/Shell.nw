@@ -4675,9 +4675,10 @@ commands by walking the AST node
 by node, firing a function for each node type.
 %
 [[rc]] takes a different route: it compiles the AST to a stack-machine
-bytecode and runs the bytecodes through a dispatch loop, in
-the same spirit as a small Lisp, Forth, or PostScript
-implementation. The compiled form lives in a [<codebuf>] of
+bytecode and runs the bytecodes through a dispatch loop.
+%, in the same spirit as a small Lisp, Forth, or PostScript
+%implementation.
+The compiled form lives in a [<codebuf>] of
 [[code]] cells, each holding either an opcode function
 pointer or an inline argument (a string or an integer).
 Running the program means advancing
@@ -4687,7 +4688,9 @@ a [[runq->pc]] index through that buffer.
 The argument for tree-walking is simplicity: no separate
 compile step, the parser hands its tree directly to the
 interpreter, and there is one less data structure to
-design. The argument for bytecode---which [[rc]] picks---is
+design (in fact some programs do not even bother to generate an AST).
+%
+The argument for bytecode---which [[rc]] picks---is
 that tree-walking conflates control flow with tree shape,
 which gets awkward for things that do not match the tree
 (jumps out of loops, function returns, signal handlers
@@ -4702,6 +4705,7 @@ of a userspace process control block, and its existence is
 what lets [[rc]] interleave multiple bytecode programs
 (the bootstrap, the user script, sourced files, function
 calls) without any explicit reentrancy in the C code.
+%yoann1: explain more reentrancy issue
 
 %claude:
 %[[csh]] also uses a bytecode-like representation, but its
@@ -4793,12 +4797,12 @@ int morecode(void)
 %claude:
 [<compile()>] allocates a fresh code buffer, then calls
 [<outcode()>] to recursively walk the AST and emit bytecodes.
-It appends [<Xreturn>] at the end so that when the bytecodes
+It appends [<Xreturn()>] at the end so that when the bytecodes
 finish executing, the interpreter returns to the previous thread.
 %
 Note that [<compile()>] is called for {\em each line} entered
 interactively (or each line of a script). So each line gets
-its own bytecode sequence ending with [<Xreturn>].
+its own bytecode sequence ending with [<Xreturn()>].
 % modify codebuf!
 
 <<function [[compile]]>>=
@@ -4825,11 +4829,12 @@ error0 compile(tree *t)
 
 %yoann: overwrite codebuf, but previous one? no free first? leak?
 %claude:
-This overwrite does not leak the previous line's buffer. [<compile()>]
+The new allocation for [[codebuf]] above does not leak the previous
+line's buffer. [<compile()>]
 only fills the global [[codebuf]] as a handoff: the caller
 ([<Xrdcmds()>]) immediately passes it to [<start()>], which calls
 [<codecopy>] to take a counted reference (the [[emiti(0)]] above
-seeded the count at~0). That thread then owns the buffer and
+seeded the count at~0). That thread then {\em owns} the buffer and
 [<codefree()>] releases it when the thread finishes, so by the time
 the next line is compiled the old buffer already has its proper owner.
 
@@ -4863,6 +4868,7 @@ to check if they failed and exit accordingly.
 % modify codebuf via all those emitxxx()
 % todo: could return errorcode instead of using nerror global
 <<function [[outcode]]>>=
+/// main -> Xrdcmds -> yyparse -> compile -> <>
 void
 outcode(tree *t, bool eflag)
 {
@@ -4992,7 +4998,8 @@ The exit status of the last command is stored in the
 [<getstatus()>] and [<truestatus()>] read it.
 %
 In \plan and [[rc]], a status is a string (not an integer like in \unix and the
-Bourne shell). An empty string or the string [["0"]] means success;
+Bourne shell). An empty string or the string [["0"]] means success
+(which can be confusing); 
 anything else means failure.
 This mirrors the \plan system call [[exits()]] (see \book{Kernel}),
 which takes a string argument rather than a numeric exit code.
@@ -5025,6 +5032,26 @@ So [<truestatus()>] considers a status ``true'' if it contains
 only [[0]] and [[|]] characters---meaning every stage of the
 pipeline succeeded.
 
+
+<<function [[truestatus]]>>=
+bool
+truestatus(void)
+{
+    char *s;
+    for(s = getstatus();*s;s++)
+        if(*s!='|' && *s!='0')
+            return false;
+    return true;
+}
+@
+% what is this pipe in status? because when do ls | wc 
+%  then rc combine the return status of both in one string
+%  with | in the middle. so if 0|0 then everthing is file,
+%  but if error in one of then then should return an error.
+% so if return string is empty, or contains only 0 or |, then fine
+
+% children
+
 %claude:
 Why not reduce the pipeline status to a single value earlier?
 Because keeping the full string lets the user inspect [[$status]]
@@ -5054,24 +5081,6 @@ and string exit statuses naturally carry diagnostic information
 (vs.\ opaque numeric codes that require [[strerror()]] or
 a manual to decode).
 
-<<function [[truestatus]]>>=
-bool
-truestatus(void)
-{
-    char *s;
-    for(s = getstatus();*s;s++)
-        if(*s!='|' && *s!='0')
-            return false;
-    return true;
-}
-@
-% what is this pipe in status? because when do ls | wc 
-%  then rc combine the return status of both in one string
-%  with | in the middle. so if 0|0 then everthing is file,
-%  but if error in one of then then should return an error.
-% so if return string is empty, or contains only 0 or |, then fine
-
-% children
 \subsection{Subprocesses management}
 
 \t why need waitpids? anyway do Waitfor(pid, ...) in Xsimple
@@ -5080,8 +5089,8 @@ truestatus(void)
 %claude:
 [[rc]] keeps track of all child processes it has spawned
 in the [[waitpids]] array. This is needed for the [[wait]]
-builtin (which waits for all children) and for proper
-cleanup when [[rc]] exits.
+builtin (which waits for all children, see Section~\ref{sec:builtin-wait})
+and for proper cleanup when [[rc]] exits.
 
 <<global [[waitpids]]>>=
 // growing_array<pid> (but really a list)
@@ -5273,10 +5282,8 @@ It is the heart of [[rc]] and handles three cases, in order:
 \item Otherwise, it forks a child process with [<execforkexec()>]
   and waits for it to finish.
 \end{enumerate}
-%
-The [[while(Waitfor(...) < 0)]] loop retries the wait
-if it was interrupted by a signal (e.g., [[^C]]): the signal
-kills the child, but the parent still needs to reap it.
+
+The skeleton below covers just the last case.
 
 <<function [[Xsimple]]>>=
 void
@@ -5315,9 +5322,12 @@ Xsimple(void)
 @
 % why the flush?
 
-%yoann: maybe anticipiate question about pipe seeing Waitfor(pid,...) above. If pip wait still only for 1 pid?
 %claude:
-[<Waitfor()>] here waits for the single child this simple command
+The [[while(Waitfor(...) < 0)]] loop above retries the wait
+if it was interrupted by a signal (e.g., [[^C]]): the signal
+kills the child, but the parent still needs to reap it.
+%:
+[<Waitfor()>] waits for the single child this simple command
 forked. A pipeline does not change that: each side of [[cmd1 | cmd2]]
 is itself a simple command waiting for its own exec'd process, and the
 extra step---waiting for the forked child [[rc]] that ran the left
@@ -5328,17 +5338,6 @@ below). So at this level the shell always waits for exactly one [[pid]].
 % What it means? Can not C-c ? if really big command,
 % and do C-c, then child should die, then wait interrupted,
 % and then when we do wait again it should return??
-
-<<[[Xsimple()]] sanity check a>>=
-if(a==nil){
-    Xerror1("empty argument list");
-    return;
-}
-@
-% should have at least name of command in arg0!
-% maybe should change error message?
-% Can happen if do A=()\n and then $A\n, then after resolution
-% of dollar argv becomes empty
 
 
 % globlist is for globbing. See advanced topics.
@@ -5362,15 +5361,27 @@ Xerror(char *s)
 
 %yoann: in Xerror, when else branch is taken? not always rc argv0?
 %claude:
-The [[else]] branch fires whenever [[argv0]] is neither [["rc"]] nor
+The [[else]] branch above fires whenever [[argv0]] is neither [["rc"]] nor
 [["/bin/rc"]]---most commonly when [[rc]] is running a script, where
 [[argv0]] is the script's name. The message then reads
 [[rc (script): ...]] so you can tell which script reported the error.
-(A login shell, whose [[argv0]] is [["-rc"]], also takes this branch.)
+%(A login shell, whose [[argv0]] is [["-rc"]], also takes this branch.)
 
 % a bit like exception. Go up thread/call stack until
 % the top where have interactive thread.
 % As we go back we call Xreturn which will do the appropriate cleanups.
+
+
+<<[[Xsimple()]] sanity check a>>=
+if(a==nil){
+    Xerror1("empty argument list");
+    return;
+}
+@
+% should have at least name of command in arg0!
+% maybe should change error message?
+% Can happen if do A=()\n and then $A\n, then after resolution
+% of dollar argv becomes empty
 
 
 %yoann: diff with Xerror? does not print the %r? useful for what? when use Xerror vs Xerror1 in the code?
@@ -5699,7 +5710,7 @@ exitnext(void){
 %claude: %trans:
 That completes the code for simple commands---by far the largest piece
 of the interpreter so far, and a striking contrast with the twenty-odd
-lines of the [[minishell1.c]] we wrote in the introduction. The extra
+lines of the [[minishell1.c]] we saw in Section~\ref{sec:minishell1}. The extra
 machinery (a code vector, the [[runq]] thread, the redirection stack,
 the fork optimization) is what buys [[rc]] its flexibility: the pipes,
 redirections, functions, and control flow in the rest of this chapter
@@ -5743,22 +5754,6 @@ After emitting [[cmd2]], [<stuffdot()>] patches the placeholder
 with the actual address, so [<Xtrue>] can jump past [[cmd2]]
 if the status is false.
 
-%yoann: maybe recall some basic assembly with label where use p: label so easier to get the code
-%claude:
-This is the classic assembler trick of a {\em forward jump with
-backpatching}. In assembly you would write
-\begin{verbatim}
-        <cmd1>
-        Xtrue L1     # jump past cmd2 if status is false
-        <cmd2>
-   L1:
-\end{verbatim}
-but when [<Xtrue>] is emitted the address of [[L1]] is not yet known
-([[cmd2]] has not been generated). So the compiler emits a placeholder
-slot, remembers its index in [[p]] ([[p = emiti(0)]]), and once it
-reaches the label---after [[cmd2]]---[<stuffdot()>] fills that slot
-with the current position ([[codebuf[p].i = codep]]). Here [[p]] is
-just the unresolved forward reference to [[L1]].
 
 <<[[outcode()]] locals>>=
 int p;
@@ -5788,6 +5783,25 @@ stuffdot(int a)
 @
 % stuffdot meaning?
 % so this allow to generate a jump forward.
+
+%claude:
+This is the classic assembler trick of a {\em forward jump with
+backpatching} (see the \book{Assembler}). In assembly you would write
+\begin{verbatim}
+        <cmd1>
+        Xtrue L1     # jump past cmd2 if status is false
+        <cmd2>
+   L1:
+\end{verbatim}
+
+%claude:
+but when [<Xtrue>] is emitted the address of [[L1]] is not yet known
+([[cmd2]] has not been generated). So the compiler emits a placeholder
+slot, remembers its index in [[p]] ([[p = emiti(0)]]), and once it
+reaches the label---after [[cmd2]]---[<stuffdot()>] fills that slot
+with the current position ([[codebuf[p].i = codep]]). Here [[p]] is
+just the unresolved forward reference to [[L1]].
+
 
 
 %claude:
@@ -5848,7 +5862,7 @@ Recall [[rc]]'s status convention: an {\em empty} status string (or
 non-empty string means failure. That is why [<Xbang>] (the [[!]]
 negation) sets the status to [["false"]] for failure and to the empty
 string for success, and why [<truestatus()>] simply tests for
-emptiness. (It is a little confusing that the {\em string} [["true"]]
+emptiness (it can be a little confusing that the {\em string} [["true"]]
 would itself count as failure, being non-empty; only the empty string
 is ``true''.)
 
@@ -5856,14 +5870,10 @@ is ``true''.)
 
 %claude:
 The \verb+~+ operator pushes two word lists onto [[argv]]
-(the subject and the patterns), then calls [<Xmatch>].
+(the {\em subject} and the {\em patterns}), then calls [<Xmatch>].
 Two [<Xmark>] bytecodes are needed because both the subject
 and the patterns can be multi-word (e.g., if they come from
 variable expansion), and they must be kept separate.
-%
-[<Xmatch()>] converts the subject words to a single string
-(joining with spaces), then tries {\em each} pattern word
-against it using [<match()>] (described in Chapter~\ref{chap:globbing}).
 
 <<[[outcode()]] cases>>=
 case TWIDDLE:
@@ -5876,6 +5886,11 @@ case TWIDDLE:
     break;
 @
 % why Xeflag here? no command, just word, so why exit early?
+
+%claude:
+[<Xmatch()>] converts the subject words to a single string
+(joining with spaces), then tries {\em each} pattern word
+against it using [<match()>] (described in Chapter~\ref{chap:globbing}).
 
 <<function [[Xmatch]]>>=
 void
@@ -5947,7 +5962,7 @@ list2str(word *words)
 %claude:
 Redirections in [[rc]] are handled in two phases.
 When the interpreter encounters a redirection bytecode
-(e.g., [<Xwrite>]), it opens the target file and pushes
+(e.g., [<Xwrite>] we will see soon), it opens the target file and pushes
 a [[Redir]] record onto the thread's redirection stack.
 But it does {\em not} actually redirect the file descriptors yet.
 %
@@ -5986,7 +6001,7 @@ it added, without disturbing the parent's state.
 %claude:
 The [[Redir]] structure records one redirection the interpreter has to
 carry out. Its [[type]] is a {\em runtime} action enum, distinct from
-the parse-time [[READ]]/[[WRITE]]/[[APPEND]]/[[HERE]] of the lexer: the
+the {\em parse-time} [[READ]]/[[WRITE]]/[[APPEND]]/[[HERE]] of the lexer: the
 values are [[ROPEN]] ([[dup2(from,to)]] then close [[from]], for a file
 redirection), [[RDUP]] ([[dup2(from,to)]], for \verb+>[2=1]+), and
 [[RCLOSE]] (close [[from]], for \verb+>[2=]+). [[from]] is the
@@ -6142,7 +6157,7 @@ case ROPEN:
 
 %claude:
 The [[if(rp->from != rp->to)]] guard handles the rare case where
-[[Creat()]] happens to hand back exactly the target fd (possible
+[<Creat()>] happens to hand back exactly the target fd (possible
 when stdout was previously closed), in which case the [[dup]] and
 [[close]] would defeat each other.
 
@@ -6204,6 +6219,7 @@ Xwrite(void)
 {
     char *file;
     fdt f;
+
     switch(count(runq->argv->words)){
     default:
         Xerror1("> requires singleton\n");
@@ -6282,6 +6298,7 @@ Xread(void)
 {
     char *file;
     int f;
+
     switch(count(runq->argv->words)){
     default:
         Xerror1("< requires singleton\n");
@@ -6335,6 +6352,7 @@ Xappend(void)
 {
     char *file;
     int f;
+
     switch(count(runq->argv->words)){
     default:
         Xerror1(">> requires singleton");
@@ -6443,13 +6461,6 @@ Here is the overall picture for [[ls | wc -l]]:
                                   concat statuses
 \end{vdiagram}
 
-%claude:
-The child runs [[cmd1]]'s bytecodes and ends with [[Xexit]]
-(it must terminate, not return to the parent's thread stack).
-The parent creates a new thread for [[cmd2]] that ends with
-[[Xreturn]], then falls through to [<Xpipewait>] which waits
-for the child process and concatenates both exit statuses
-into a pipe status string like [["0|0"]].
 
 % when do   % ls | wc -l, what happens?
 % first bootstrapped thread t1, 
@@ -6515,12 +6526,39 @@ case PIPE:
     break;
 @
 
+%claude:
+The child runs [[cmd1]]'s bytecodes and ends with [[Xexit]]
+(it must terminate, not return to the parent's thread stack).
+The parent creates a new thread for [[cmd2]] that ends with
+[[Xreturn]], then falls through to [<Xpipewait>] which waits
+for the child process and concatenates both exit statuses
+into a pipe status string like [["0|0"]].
+
 
 <<[[codefree()]] in loop over code [[cp]], switch bytecode cases>>=
 else if(p->f==Xpipe) 
          p+=4;
 @
 
+
+% mypid is global set at the very beginning
+<<function [[Xexit]]>>=
+void
+Xexit(void)
+{
+    <<[[Xexit()]] locals>>
+
+    <<[[Xexit()]] trap management>>
+    Exit(getstatus(), __LOC__);
+}
+@
+
+
+%yoann: explain quickly Xexit vs Exit vs exits
+
+
+
+%yoann: quick intro to Xreturn (mentionned before, not just for pipe)
 
 <<function [[Xreturn]]>>=
 void
@@ -6546,37 +6584,8 @@ Xreturn(void)
 % as goes up the call stack, you need to close the opened redirections
 % see turfredir.
 
-% mypid is global set at the very beginning
-<<function [[Xexit]]>>=
-void
-Xexit(void)
-{
-    struct Var *trapreq;
-    struct Word *starval;
-    static bool beenhere = false;
 
-    if(getpid()==mypid && !beenhere){
-        trapreq = vlook("sigexit");
-        if(trapreq->fn){
-            beenhere = true;
-            --runq->pc;
-            starval = vlook("*")->val;
-            start(trapreq->fn, trapreq->pc, (struct Var *)0);
-            runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct Word *)0);
-            runq->local->changed = true;
-            runq->redir = runq->startredir = nil;
-            return;
-        }
-    }
-    Exit(getstatus(), __LOC__);
-}
-@
-
-% Xexit vs Exit vs exits
-
-
-
+%yoann: explain PRD/PWR quickly
 
 <<constant [[PRD]]>>=
 /*
@@ -6592,6 +6601,8 @@ Xexit(void)
 @
 %ocaml: pipe returns a pair, and you can bind to clear names as in
 %  let (pipe_read, pipe_write) = Unix.pipe () in
+
+%yoann: can say finally can see runtime part with Xpipe, trans
 
 % * Xpipe[i j]{... Xreturn}{... Xreturn}	construct a pipe between 2 new threads,	wait for both
 
@@ -6882,6 +6893,7 @@ Xifnot(void)
 }
 @
 
+%yoann: transition saying saw dynamic check for ifnot, now see static
 
 <<[[outcode()]] when NOT, sanity check last command was an if>>=
 if(!runq->iflast)
@@ -7457,8 +7469,8 @@ compile to bytecode, starting with assignment.
 %claude:
 Variable assignment has two modes:
 when followed by a command (e.g., [[x=1 cmd]]),
-the assignment is local to that command (using [<Xlocal>]/[<Xunlocal>]);
-when standalone (e.g., [[x=1]]), it is global (using [<Xassign>]).
+the assignment is {\em local} to that command (using [<Xlocal>]/[<Xunlocal>]);
+when standalone (e.g., [[x=1]]), it is {\em global} (using [<Xassign>]).
 %
 The code detects which mode by following the chain of [['=']] nodes
 through [[child[2]]]: if it eventually reaches a non-assignment
@@ -7636,7 +7648,7 @@ Xdol(void)
 %ocaml: be more strict when array index out of bound
 
 
-\subsection{[[$#<var>]]}
+\subsection{Variable count ([[$#<var>]])}
 
 %yoann: quick intro
 %claude:
@@ -7691,7 +7703,7 @@ Xcount(void)
 %ocaml: factorize in a vlook_varname_or_index with code for Xdol?
 % a bit hard to factorize, different logic
 
-\subsection{[[$<var>(<idx>)]]}
+\subsection{Variable subscripting ([[$<var>(<idx>)]])}
 
 %yoann: quick intro
 %claude:
@@ -7771,82 +7783,6 @@ subwords(word *val, int len, word *sub, word *a)
 }
 @
 
-
-\section{Concatenation: [[<x1> ^ <x2>]]}
-
-%claude:
-Concatenation with [[^]] is far more than string joining. When one
-side is a single word and the other a list, the word is glued onto
-{\em every} element---so [[foo/^$list]] prepends [[foo/]] to each
-member of [[$list]], the shell's equivalent of a map. When both sides
-are equal-length lists, [[^]] joins them element by element (a zip),
-so [[$a^$b]] pairs them up; mismatched non-singleton lengths are an
-error. Most uses are in fact {\em implicit}: the lexer inserts a [[^]]
-between adjacent words that touch, so [[-x$flag]] is really
-[[-x ^ $flag]].
-
-
-<<[[outcode()]] cases>>=
-case '^':
-    emitf(Xmark);
-    outcode(c1, eflag);
-    emitf(Xmark);
-    outcode(c0, eflag);
-    emitf(Xconc);
-    break;
-@
-
-<<function [[Xconc]]>>=
-void
-Xconc(void)
-{
-    word *lp = runq->argv->words;
-    word *rp = runq->argv->next->words;
-    word *vp = runq->argv->next->next->words;
-    int lc = count(lp), rc = count(rp);
-    if(lc!=0 || rc!=0){
-        if(lc==0 || rc==0){
-            Xerror1("null list in concatenation");
-            return;
-        }
-        if(lc!=1 && rc!=1 && lc!=rc){
-            Xerror1("mismatched list lengths in concatenation");
-            return;
-        }
-        vp = conclist(lp, rp, vp);
-    }
-    poplist();
-    poplist();
-    runq->argv->words = vp;
-}
-@
-
-<<function [[conclist]]>>=
-word*
-conclist(word *lp, word *rp, word *tail)
-{
-    char *buf;
-    word *v;
-    if(lp->next || rp->next)
-        tail = conclist(lp->next==0? lp: lp->next,
-            rp->next==0? rp: rp->next, tail);
-    buf = emalloc(strlen(lp->word)+strlen((char *)rp->word)+1);
-    strcpy(buf, lp->word);
-    strcat(buf, rp->word);
-    v = newword(buf, tail);
-    efree(buf);
-    return v;
-}
-@
-
-
-%\subsection{Interpolation}
-
-% There is no "" vs '' in rc. Just '' to quote (hence the use of a _quote_
-% character). If you want to construct an argument with space
-% that includes dollars, use ^.
-
-
 \subsection{Special variables}
 \label{sec:special-variables}
 % list them all!
@@ -7878,6 +7814,84 @@ are set in [[rcmain]] (see Section~\ref{sec:rcmain}):
 % cdpath
 % * (TODO aspectize vlook("*") code)
 % sigexit
+
+
+\section{Concatenation: [[<x1> ^ <x2>]]}
+
+%claude:
+Concatenation with [[^]] is far more than string joining. When one
+side is a single word and the other a list, the word is glued onto
+{\em every} element---so [[foo/^$list]] prepends [[foo/]] to each
+member of [[$list]] (the shell's equivalent of a map). When both sides
+are equal-length lists, [[^]] joins them element by element (a zip),
+so [[$a^$b]] pairs them up; mismatched non-singleton lengths are an
+error. Most uses of [[^]] are in fact {\em implicit}: the lexer inserts a [[^]]
+between adjacent words that touch, so [[-x$flag]] is really
+[[-x ^ $flag]].
+
+
+<<[[outcode()]] cases>>=
+case '^':
+    emitf(Xmark);
+    outcode(c1, eflag);
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xconc);
+    break;
+@
+
+<<function [[Xconc]]>>=
+void
+Xconc(void)
+{
+    word *lp = runq->argv->words;
+    word *rp = runq->argv->next->words;
+    word *vp = runq->argv->next->next->words;
+    int lc = count(lp), rc = count(rp);
+
+    if(lc!=0 || rc!=0){
+        if(lc==0 || rc==0){
+            Xerror1("null list in concatenation");
+            return;
+        }
+        if(lc!=1 && rc!=1 && lc!=rc){
+            Xerror1("mismatched list lengths in concatenation");
+            return;
+        }
+        vp = conclist(lp, rp, vp);
+    }
+    poplist();
+    poplist();
+    runq->argv->words = vp;
+}
+@
+
+<<function [[conclist]]>>=
+word*
+conclist(word *lp, word *rp, word *tail)
+{
+    char *buf;
+    word *v;
+
+    if(lp->next || rp->next)
+        tail = conclist(lp->next==0? lp: lp->next,
+            rp->next==0? rp: rp->next, tail);
+    buf = emalloc(strlen(lp->word)+strlen((char *)rp->word)+1);
+    strcpy(buf, lp->word);
+    strcat(buf, rp->word);
+    v = newword(buf, tail);
+    efree(buf);
+    return v;
+}
+@
+
+
+%\subsection{Interpolation}
+
+% There is no "" vs '' in rc. Just '' to quote (hence the use of a _quote_
+% character). If you want to construct an argument with space
+% that includes dollars, use ^.
+
 
 
 %******************************************************************************
@@ -8339,7 +8353,8 @@ execcmds(io *f)
 
 
 \section{[[% wait]]}
-%$
+\label{sec:builtin-wait}
+
 % related to job control? because of &? I never used wait ...
 
 <<function [[execwait]]>>=
@@ -9509,6 +9524,30 @@ Beyond [[^C]], a shell must also handle hangup signals
 disconnects), and let users define their own trap handlers
 for scripting (e.g., cleaning up temporary files on exit).
 See \book{Kernel} for how the kernel delivers notes to processes.
+
+
+<<[[Xexit()]] locals>>=
+struct Var *trapreq;
+struct Word *starval;
+static bool beenhere = false;
+@
+
+<<[[Xexit()]] trap management>>=
+if(getpid()==mypid && !beenhere){
+    trapreq = vlook("sigexit");
+    if(trapreq->fn){
+        beenhere = true;
+        --runq->pc;
+        starval = vlook("*")->val;
+        start(trapreq->fn, trapreq->pc, (struct Var *)0);
+        runq->local = newvar(strdup("*"), runq->local);
+        runq->local->val = copywords(starval, (struct Word *)0);
+        runq->local->changed = true;
+        runq->redir = runq->startredir = nil;
+        return;
+    }
+}
+@
 
 \section{Overview}
 
