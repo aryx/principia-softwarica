@@ -1913,7 +1913,7 @@ it initializes the shell (keywords, traps, environment),
 it sets up the bootstrap bytecodes and the initial thread,
 and then it enters the bytecode interpreter loop.
 %
-I will present here a simplified version of the bootstrap;
+I will present in this chapter a simplified version of the bootstrap;
 the actual bootstrap code (which sources [[rcmain]]) is
 described in Chapter~\ref{chap:initialization-real}.
 
@@ -1923,14 +1923,6 @@ code bootstrap[17];
 % indeed 17 lines below about bootstrap. A bit ugly though
 % see Chapter X for actual boostrap. I will simplify for now.
 % mv comment back in Extra? less confusing with actual bootstrap vs simple one
-%/*
-% * get command line flags.
-% * initialize keywords & traps.
-% * get values from environment.
-% * set $pid, $cflag, $*
-% * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
-% * start interpreting code
-% */
 \swdefs{bootstrap}
 
 <<function [[main]](rc)>>=
@@ -2021,11 +2013,13 @@ It populates the global [<flag>] array declared above.
 
 % or nothing but - in argv0
 %claude:
-When the kernel starts [[rc]] as a login shell, it sets [[argv[0]]]
-to [["-rc"]] (starting with a dash) rather than passing an explicit [[-l]] flag.
-This is a \unix convention: the code below detects this and
-sets [[flag['l']]] accordingly, so that [[rc]] will later
-source the user's profile ([[~$home/lib/profile]]).
+When [[rc]] is started as a login shell, its parent (the login or
+console service that execs it) sets [[argv[0]]] to [["-rc"]]
+(starting with a dash) rather than passing an explicit [[-l]] flag.
+%
+This is a \unix convention: the code below detects the leading dash
+and sets [[flag['l']]] accordingly, so that [[rc]] will later
+source the user's profile ([[$home/lib/profile]]).
 
 <<[[main()]] argc argv processing, modify flags>>=
 if(argv[0][0]=='-')
@@ -2039,13 +2033,13 @@ if(argv[0][0]=='-')
 
 %history: also in bourne shell
 %claude:
-Interactive mode determines whether [[rc]] will display a prompt
-and handle signals differently (e.g., not exiting on [[^C]]).
+Interactive mode determines whether [[rc]] will display a {prompt}
+and handle notes (signals) differently (e.g., not exiting on [[^C]]).
 %
 The logic below is subtle: [[rc]] is interactive by default
 when no script file is given ([[argc==1]]) and standard input
-is a terminal. The [[-I]] flag forces non-interactive mode
-(useful when piping commands into [[rc]] from another program).
+is a terminal. The [[-I]] flag forces non-interactive mode.
+%(useful when piping commands into [[rc]] from another program).
 % mv later? advanced feature? hmm interactive is important notion.
 
 <<[[main()]] argc argv processing, modify flags>>=
@@ -2063,7 +2057,7 @@ Instead, [<Isatty()>] checks whether the file descriptor
 corresponds to [[/dev/cons]] (the console device)
 by inspecting its path with [[fd2path()]].
 
-<<function [[Isatty]]>>=
+<<function [[Isatty]](plan9.c)>>=
 bool
 Isatty(fdt fd)
 {
@@ -2119,19 +2113,20 @@ Vinit();    // read environment variables and add them in gvar
 \section{Bootstrapping bytecodes (simplified)}
 
 %claude:
-As mentioned earlier, [[rc]] does not start by compiling source code;
+As I mentioned earlier, [[rc]] does not start by compiling source code;
 it starts by {\em interpreting} a small series of hand-crafted bytecodes
-called the {bootstrap}.
+called the {\em bootstrap}.
 %
 In its simplest form, the bootstrap just contains [<Xrdcmds>],
 the bytecode that reads a command, compiles it, and starts
 a new thread to execute it.
 The first element is the reference count (set to 1), and
-the last element is a zero sentinel marking the end of the code vector.
+the last element is a zero {sentinel} marking the end of the code vector.
 %
 The actual bootstrap is more complex (see Chapter~\ref{chap:initialization-real}):
 it sources the [[rcmain]] initialization script, which sets up
-the default [[$path]] and runs the user's profile.
+the default [[$path]] and runs the user's profile, but for now
+it is simpler to assume the simpler bootstrap below.
 
 \ifallcode
 <<[[main()]] locals>>=
@@ -2228,7 +2223,7 @@ with the command-line arguments. These arguments are pushed
 in reverse order because [<pushword()>] prepends to the list,
 so the first argument ends up at the top.
 %
-The actual bootstrap code will later assign this list to [[\$*]]
+The actual bootstrap code will later assign this list to [[$*]]
 (the script arguments variable).
 
 <<global [[argv0]]>>=
@@ -2253,7 +2248,7 @@ for(i = argc-1; i!=0; --i)
 % no nil in OCaml!
 
 %claude:
-For example, after [[rc myscript.rc foo bar]] is initialized,
+For example, after [[rc myscript.rc foo bar]] % is initialized,
 the data structures look like this:
 \begin{verbatim}
   runq ----> Thread
@@ -2264,10 +2259,12 @@ the data structures look like this:
                             next  = nil
                ret  = nil   (bottom of stack)
 \end{verbatim}
-%
-The bootstrap code will then assign this word list to [[\$*]]
-and source [[rcmain]], which sets up [[\$path]] and
+
+%claude:
+The real bootstrap code will then assign this word list to [[$*]]
+and source [[rcmain]], which sets up [[$path]] and
 runs the script.
+
 
 % so runq->argv is populated, and as you will see later,
 % bootstrap code assign it in $*!
@@ -2321,15 +2318,13 @@ pushword(char *wd)
 \section{Bytecode interpreter loop}
 
 %claude:
-The heart of [[rc]] is this infinite loop.
+The heart of [[rc]] is the infinite loop below.
 It increments the program counter, then calls the function pointer
 at the previous position. The increment-then-call-at-minus-one
 pattern is a common idiom: the [[pc]] is advanced {\em before}
 calling the bytecode function, so that if the bytecode needs to read
 inline arguments (e.g., a string after [<Xword>]), it can
 read them at [[runq->code[runq->pc]]] and advance [[pc]] itself.
-%
-Between bytecodes, the loop also checks for pending signals (traps).
 
 <<[[main()]] interpreter loop>>=
 for(;;){
@@ -2343,6 +2338,8 @@ for(;;){
 @
 %ocaml: how sure that a function? not typesafe.
 
+%claude:
+Note that between bytecodes, the loop also checks for pending signals (traps).
 
 \n the REPL? not just Xrdcmds, the loop is in main and print in program
 % X(bytecode) read commands
@@ -2361,18 +2358,7 @@ read-eval loop of [[rc]].
 It calls [<yyparse()>] to read and compile one command line,
 then calls [<start()>] to push a new thread executing
 the compiled bytecodes.
-%
-The key subtlety is the [[--p->pc]] before [<start()>]:
-this makes the bootstrap thread re-execute [<Xrdcmds()>]
-when the command thread finishes (via [<Xreturn()>]).
-This is how [[rc]] loops forever reading commands without
-an explicit loop in the bootstrap bytecodes themselves.
-%
-Note that [<yyparse()>] internally calls [<compile()>],
-which modifies the global [<codebuf>]. So when [<Xrdcmds()>]
-calls [[start(codebuf, ...)]],  it starts a thread on the freshly
-compiled bytecodes.
-% should be called Xrdline though.
+
 
 <<function [[Xrdcmds]]>>=
 void
@@ -2418,6 +2404,34 @@ Xrdcmds(void)
 % yyparse() use runq global, and special additional fields:
 % (actually it's yylex())
 
+%claude:
+The key subtlety is the [[--p->pc]] before [<start()>]:
+this makes the bootstrap thread re-execute [<Xrdcmds()>]
+when the command thread finishes (via [<Xreturn()>]).
+This is how [[rc]] loops forever reading commands without
+an explicit loop in the bootstrap bytecodes themselves.
+%
+Note that [<yyparse()>] internally calls [<compile()>],
+which modifies the global [<codebuf>]. So when [<Xrdcmds()>]
+calls [[start(codebuf, ...)]],  it starts a thread on the freshly
+compiled bytecodes.
+% should be called Xrdline though.
+
+
+%OPTIONAL (really?)
+%claude:
+Each thread also carries input-related fields: [[cmdfd]] below is
+the buffered IO handle from which the lexer reads characters,
+[[cmdfile]] is the filename (for error messages), and
+[[iflag]] determines whether this thread displays a prompt.
+%
+These are per-thread fields (not globals) because the [[.]] (dot)
+builtin (see Section~\ref{sec:builtin-dot}) and [[-c]] flag (see Section~\ref{sec:rc-c})
+create new threads that read from
+different sources (a script file, a string), and each
+thread needs its own input state.
+
+
 <<[[Thread]] other fields>>=
 struct Io *cmdfd;	/* file descriptor for Xrdcmd */
 char *cmdfile;		/* file name in Xrdcmd */
@@ -2425,17 +2439,6 @@ bool iflag;		/* interactive? */
 @
 % who sets cmdfd? see below.
 
-%OPTIONAL (really?)
-%claude:
-Each thread also carries input-related fields: [[cmdfd]] is
-the buffered IO handle from which the lexer reads characters,
-[[cmdfile]] is the filename (for error messages), and
-[[iflag]] determines whether this thread displays a prompt.
-%
-These are per-thread fields (not globals) because the [[.]] (dot)
-builtin and [[-c]] flag create new threads that read from
-different sources (a script file, a string), and each
-thread needs its own input state.
 
 <<[[main()]] initialize [[runq]] with bootstrap code>>=
 runq->cmdfd = openfd(STDIN); // reading from stdin
@@ -7653,6 +7656,7 @@ execexit(void)
 @
 
 \section{[[% .]]}
+\label{sec:builtin-dot}
 %$
 
 %claude:
