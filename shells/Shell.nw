@@ -4705,7 +4705,18 @@ of a userspace process control block, and its existence is
 what lets [[rc]] interleave multiple bytecode programs
 (the bootstrap, the user script, sourced files, function
 calls) without any explicit reentrancy in the C code.
-%yoann1: explain more reentrancy issue
+%
+The point is where the execution state lives. A tree-walker keeps it
+in C local variables and the C call stack, so pausing one program to
+run another---a function body, a sourced file, the left side of a
+pipe---means re-entering the interpreter recursively and arranging
+non-local jumps for returns and errors. [[rc]] instead keeps all
+per-program state in a heap-allocated [[runq]] [[Thread]], so the
+single dispatch loop in [<main()>] is never re-entered: starting a
+nested program allocates a new [[Thread]] and points [[runq]] at it
+(its [[ret]] field links back), and finishing restores the previous
+one. Switching execution contexts is a pointer assignment, not a
+recursive C call.
 
 %claude:
 %[[csh]] also uses a bytecode-like representation, but its
@@ -6555,10 +6566,27 @@ Xexit(void)
 
 
 %yoann: explain quickly Xexit vs Exit vs exits
+%claude:
+Three layers sit behind ``exiting.'' [[exits()]] is the \plan libc
+call that actually terminates the process with a status string.
+[<Exit()>] is [[rc]]'s wrapper around it (defined per host): it
+flushes variables to [[/env]] with [<Updenv()>], records the status,
+then calls [[exits()]]. [<Xexit>] is the {\em bytecode}: it runs any
+exit traps and then calls [<Exit()>]. So [<Xexit>] ends the whole
+shell, whereas [<Xreturn>] (next) ends only the current thread.
 
 
 
 %yoann: quick intro to Xreturn (mentionned before, not just for pipe)
+%claude:
+[<Xreturn>] ends the current thread and hands control back to the one
+that started it: it pops this thread's redirections, frees its
+argument lists and code vector ([<codefree()>]), then restores [[runq]]
+to the saved parent [[p->ret]] (exiting the shell if there is no
+parent). Every compiled line ends in an [[Xreturn]] so control returns
+to the read loop, as does every function call and sourced file---it is
+the general ``this program is done'' return, not anything specific to
+pipes.
 
 <<function [[Xreturn]]>>=
 void
@@ -6586,6 +6614,12 @@ Xreturn(void)
 
 
 %yoann: explain PRD/PWR quickly
+%claude:
+[[PRD]] and [[PWR]] just name the two ends of the array filled by
+[[pipe(pfd)]]: [[pfd[PRD]]] is the read end and [[pfd[PWR]]] the write
+end. Naming them keeps the pipe-setup code readable---close the end
+you do not use, [[dup]] the other onto stdin or stdout---instead of
+sprinkling bare 0s and 1s.
 
 <<constant [[PRD]]>>=
 /*
@@ -6603,6 +6637,11 @@ Xreturn(void)
 %  let (pipe_read, pipe_write) = Unix.pipe () in
 
 %yoann: can say finally can see runtime part with Xpipe, trans
+%claude: %trans:
+With the helpers in place, [<Xpipe>] is the runtime half of the pipe:
+the bytecode that actually calls [[pipe()]], forks the child [[rc]],
+wires the two ends onto the right descriptors, and launches a thread
+for each side---the concrete realization of the diagram above.
 
 % * Xpipe[i j]{... Xreturn}{... Xreturn}	construct a pipe between 2 new threads,	wait for both
 
@@ -6894,6 +6933,12 @@ Xifnot(void)
 @
 
 %yoann: transition saying saw dynamic check for ifnot, now see static
+%claude: %trans:
+[<Xifnot>] above is the {\em dynamic} side of [[if not]]: at run time
+it consults the [[ifnot]] flag to decide whether to run the else-body.
+There is also a {\em static} side, checked at compile time in
+[<outcode()>]---a sanity check that an [[if not]] actually follows an
+[[if(...)]], using the [[iflast]] flag discussed earlier.
 
 <<[[outcode()]] when NOT, sanity check last command was an if>>=
 if(!runq->iflast)
