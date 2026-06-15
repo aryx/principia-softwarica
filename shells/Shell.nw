@@ -3750,7 +3750,7 @@ if(lastword){
 %claude:
 Now that we have seen how the lexer produces tokens from the
 input stream, we can describe the parser, which assembles
-those tokens into an abstract syntax tree.
+those tokens into an AST.
 
 \section{Overview}
 
@@ -3760,27 +3760,14 @@ those tokens into an abstract syntax tree.
 % count as indexable elements for the $xxx numbering ($1, $2, etc))
 %claude:
 The parser of [[rc]] is written using [[yacc]]
-(see \book{Compiler} for an introduction to [[yacc]]).
-The grammar is quite compact, which reflects the simplicity
-of the [[rc]] language.
+(see \book{CompilerGenerator} for an introduction to [[yacc]]).
 %
-The top-level rule [[rc]] parses a single line: either
-an empty line (EOF), or a [[line]] followed by a newline.
-When a complete line is parsed, the action calls [<compile()>]
-to transform the AST into bytecodes.
-%
-Note that newlines have a semantic role in [[rc]]:
-they terminate commands (like [[;]] in C). This is what
-makes the shell convenient for interactive use --- you do not
-need an explicit semicolon to run a command.
-
-%claude:
 The [[.y]] file follows the standard [[yacc]] layout:
-a prologue section ([[%{...%}]]) with C includes,
-then declarations ([[\%union]], [[\%token]], [[\%left]], [[\%type]]),
+a prologue section (\verb+%{...%}+) with C includes,
+then declarations ([[%union]], [[%token]], [[%left]], [[%type]]),
 and finally the grammar rules after [[%%]].
-The [[\%union]] declaration tells [[yacc]] that semantic values
-([[yylval]], [[\$1]], [[\$2]], etc.) are [[Tree]] pointers,
+The [[%union]] declaration tells [[yacc]] that semantic values
+([[yylval]], [[$1]], [[$2]], etc.) are [[Tree]] pointers,
 since every grammar rule builds or passes along AST nodes.
 
 <<rc/syn.y>>=
@@ -3821,10 +3808,25 @@ since every grammar rule builds or passes along AST nodes.
 % why right for $? anyway when do $$A semantic? no ambiguity
 % dont want (($ $) A) want ($ ($ A))
 
-
 <<type [[declarations]]>>=
 %type<tree> line cmd simple word comword
 @
+
+
+%claude:
+The grammar is quite compact, which reflects the simplicity
+of the [[rc]] language.
+%
+The top-level rule [[rc]] parses a single line: either
+an empty line (EOF), or a [[line]] followed by a newline.
+When a complete line is parsed, the action calls [<compile()>]
+to transform the AST into bytecodes.
+%
+Note that newlines have a semantic role in [[rc]]:
+they terminate commands (like [[;]] in C). This is what
+makes the shell convenient for interactive use --- you do not
+need an explicit semicolon to run a command.
+
 
 % comword for command word?
 
@@ -3905,6 +3907,41 @@ a [[first]] cannot be a keyword, so that [[if]] in command
 position is recognized as a keyword, but [[echo if]]
 treats [[if]] as a regular word argument.
 
+
+<<line rule>>=
+line:   
+    cmd
+<<line rule other cases>>
+@
+% can have ; and & here (why not in cmd? because newline issue?)
+
+% a (single) command can be a simple "expression"
+<<cmd rule>>=
+cmd: 
+    /*empty*/           {$$=nil;}
+|   simple              {$$=simplemung($1);}
+<<cmd rule other cases>>
+@
+%$
+% can have complex stmt here
+
+% simplemung() shown below later.
+% "mung" means destructive update.
+
+% an expression can be a "progcall" which is a simple serie of words
+% (separated by spaces, curry style :) )
+% with first word has some restrictions (the "function" name)
+<<simple rule>>=
+simple:
+    first
+|   simple word         {$$=tree2(ARGLIST, $1, $2);}
+<<simple rule other cases>>
+@
+% can have redirection here in the other cases
+
+% actually first can correspond to a progran, or a function, or a builtin.
+
+
 %claude:
 Here is what the AST looks like for [[ls -l /tmp]].
 [[simple]] is left-recursive, so each additional argument
@@ -3944,6 +3981,7 @@ hangs the two children on it:
          |                  |
         "ls"               "wc"
 \end{verbatim}
+
 %claude:
 Two subtleties fall out of this shape. First, the
 [[SIMPLE]] pass is not strictly needed for correctness
@@ -3955,46 +3993,14 @@ separate entry-point for bare [[ARGLIST]] subtrees at
 the top. Second, the [[PIPE]] tree is built by the lexer
 rather than the parser because the tree needs [[fd0]]
 and [[fd1]] fields that depend on the concrete bracket
-syntax ([[>[2=1]]], [[|[2]]], etc.)---encoding that in
-the [[yacc]] grammar would require many more tokens,
-so the lexer returns a pre-built [[Tree]] instead.
-
-<<line rule>>=
-line:   
-    cmd
-<<line rule other cases>>
-@
-% can have ; and & here (why not in cmd? because newline issue?)
-
-% a (single) command can be a simple "expression"
-<<cmd rule>>=
-cmd: 
-    /*empty*/           {$$=nil;}
-|   simple              {$$=simplemung($1);}
-<<cmd rule other cases>>
-@
-%$
-% can have complex stmt here
-
-% simplemung() shown below later.
-% "mung" means destructive update.
-
-% an expression can be a "progcall" which is a simple serie of words
-% (separated by spaces, curry style :) )
-% with first word has some restrictions (the "function" name)
-<<simple rule>>=
-simple:
-    first
-|   simple word         {$$=tree2(ARGLIST, $1, $2);}
-<<simple rule other cases>>
-@
-% can have redirection here in the other cases
-
-% actually first can correspond to a progran, or a function, or a builtin.
+syntax ([[>[2=1]]], [[|[2]]], etc.).
+%---encoding that in
+%the [[yacc]] grammar would require many more tokens,
+%so the lexer returns a pre-built [[Tree]] instead.
 
 
 
-
+%yoann: maybe intro to remaining grammar rules related to simple commands, especially keyword in non-first position allowed (useful)
 
 <<other rules>>=
 first:  
@@ -4080,6 +4086,8 @@ tree* simplemung(tree *t)
 % saw ARGLIST above
 %ocaml: build directly AST
 
+%yoann: maybe explain %t handled specially by pfmt Section X
+
 \t why store string in t->str?? who will uses that anyway?
 
 <<[[simplemung()]] percolate redirections up to the root>>=
@@ -4105,13 +4113,13 @@ the command:
   Before simplemung():            After simplemung():
 
   SIMPLE                          > "output" fd0=1
-   |                               |
-  ARGLIST                         < "input" fd0=0
-   / \                             |
-  ARGLIST       > "output"        SIMPLE
-   / \                             |
-  ARGLIST  < "input"              ARGLIST
-   / \                             / \
+     |                              |
+   ARGLIST                        < "input" fd0=0
+   /     \                          |
+ ARGLIST  > "output"              SIMPLE
+   /     \                          |
+ ARGLIST   < "input"              ARGLIST
+   /      \                        /     \
   "grep"  "pattern"              "grep"  "pattern"
 \end{verbatim}
 %
@@ -4130,6 +4138,8 @@ Sequencing ([[;]] and [[&]]) is at the [[line]] level (lowest priority),
 logical operators ([[&&]], [[||]]) and pipes ([[|]]) are at the
 [[cmd]] level, and redirections are at the [[simple]] level
 (highest priority, closest to the command words).
+
+%yoann: mention also %left prio of before
 
 \subsection{Sequences ([[';']], [['&']])}
 
@@ -4193,17 +4203,6 @@ tree* mung1(tree *t, tree *c0)
 %ocaml: build directly
 
 
-<<function [[mung3]]>>=
-//@Scheck: used by syn.y
-tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
-{
-    t->child[0] = c0;
-    t->child[1] = c1;
-    t->child[2] = c2;
-    return t;
-}
-@
-%ocaml: build directly
 
 \subsection{String matching  (\texttt{'\textasciitilde'})}
 
@@ -4226,6 +4225,7 @@ and even for counting: \verb+~ $#list 0+ tests if a list is empty.
 %
 This is a major simplification compared to the Bourne shell,
 which relies on the external [[test]] program (or \verb+[ ]+).
+%yoann1: mention also can use test with rc, for -f, etc. in fact see Appendix~\ref{XX} for its code
 
 <<cmd rule other cases>>=
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
@@ -4345,29 +4345,36 @@ on the {\em next} line:
 \end{verbatim}
 But [[rc]] has already fully processed the first line
 before it even sees [[else]]. It cannot retroactively
-turn [[if(test) cmd1]] into the first half of an if/else.
+turn [[if(test) cmd1]] into the first half of an if/else in an AST.
 %
 The Bourne shell solves this with [[if...then...fi]]:
 the explicit [[fi]] terminator tells the parser when the
 [[if]] block ends, so [[else]] can appear unambiguously between
-[[then]] and [[fi]]. But this requires more keywords.
+[[then]] and [[fi]]. But this requires more keywords ([[then]], [[fi]]).
 %
 [[rc]] takes a different approach: [[if not]] is a completely
 separate command that checks the exit status left by the
 previous [[if]]. No lookahead is needed, no extra keywords,
 and each line is self-contained.
-%
+
+<<cmd rule other cases>>=
+|   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
+|   IF NOT   {skipnl();} cmd  {$$=mung1($2, $4);}
+@
+
+
+<<cmd rule other cases>>=
+|   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
+|   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
+@
+
+
+%claude:
 The [[for]] loop has two forms: [[for(x in a b c)]]
 iterates over the explicit list, and [[for(x)]] iterates
 over [[$*]] (the script arguments).
 
 <<cmd rule other cases>>=
-|   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
-|   IF NOT   {skipnl();} cmd  {$$=mung1($2, $4);}
-
-|   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
-|   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
-
  /*
   * if ``words'' is nil, we need a tree element to distinguish between 
   * for(i in ) and for(i), the former being a loop over the empty set
@@ -4393,6 +4400,19 @@ over [[$*]] (the script arguments).
 
 % for(x) iterate over $*
 % can do before *=`{ ... } for instance
+
+<<function [[mung3]]>>=
+//@Scheck: used by syn.y
+tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
+{
+    t->child[0] = c0;
+    t->child[1] = c1;
+    t->child[2] = c2;
+    return t;
+}
+@
+%ocaml: build directly
+
 
 <<other rules>>=
 paren:  '(' body ')'        {$$=tree1(PCMD, $2);}
@@ -4442,7 +4462,7 @@ the function definition.
 %
 Note that [[words]] (not just a single word) is accepted
 as the function name: this allows defining a function
-for multiple names at once (e.g., \verb+fn sigint sighup {...\}+
+for multiple names at once (e.g., \verb+fn sigint sighup {...}+
 to handle multiple signals with the same handler).
 
 <<cmd rule other cases>>=
@@ -4467,11 +4487,8 @@ to that command only. When [[cmd]] is empty, the assignment is global.
 The assignment appears {\em before} the command, following
 the Bourne shell convention (which was itself motivated by
 programs like [[make]] that accept [[x=y]] on the command line).
-%
-The [[%prec BANG]] directive tells [[yacc]] to resolve
-ambiguities (e.g., [[x=1 ls && echo done]]) using
-the priority of [[BANG]], giving assignment lower priority
-than pipes but higher than logical operators.
+%yoann1: maybe in footnote what is diff between x=y mk and mk x=y in plan9?
+
 
 <<cmd rule other cases>>=
 |   assign cmd                    %prec BANG
@@ -4502,6 +4519,12 @@ than pipes but higher than logical operators.
 %  (between AndAnd and the Pipe)
 % so probably get different results if operator is pipe or &&.
 % ugly.
+
+%claude:
+The [[%prec BANG]] directive tells [[yacc]] to resolve
+ambiguities (e.g., [[x=1 ls && echo done]]) using
+the priority of [[BANG]], giving assignment lower priority
+than pipes but higher than logical operators.
 
 
 % A=1 ls
@@ -4556,7 +4579,7 @@ improvements over the Bourne shell.
 
 
 
-
+%yoann: maybe transition paragraph with \bigskip or last section?
 
 %\chapter{Checking}
 % no type checking
