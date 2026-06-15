@@ -3402,11 +3402,14 @@ Unlike simple operators like [[&&]] or [[||]] which map directly
 to a token, redirections carry extra information: the type
 ([[WRITE]], [[READ]], [[APPEND]], [[HERE]]), and which file
 descriptors are involved ([[fd0]], [[fd1]]).
-The lexer builds a [[Tree]] node right here (rather than
-in the parser), because the bracket syntax [[>[2=1]]]
-requires parsing digits and [[=]] signs that would be
-awkward to express in the [[yacc]] grammar.
-%yoann1: really? that difficult to put in grammar? actually the comment below is a grammar or because digit is lexing level and conflict with word? because only place really where digit is not a word?
+The lexer builds the [[Tree]] node right here, rather than
+in the parser, for a lexical reason rather than mere convenience.
+Inside a redirection like [[>[2=1]]] the [[2]] and [[1]] are file
+descriptors, but everywhere else a digit is an ordinary word character
+that [<wordchr()>] folds into a word. Emitting the digits and brackets
+as separate grammar tokens would clash with that normal word lexing,
+so [[rc]] recognizes the whole bracketed redirection here instead; the
+comment below sketches the little grammar it accepts.
 
 
 
@@ -3460,6 +3463,11 @@ fdt fd1;	/* details of REDIR PIPE DUP tokens */
 
 
 %yoann: maybe explain a bit WRITE/READ/APPEND?
+%claude:
+[[WRITE]], [[READ]], and [[APPEND]] are the tags stored in a
+redirection node's [[rtype]] field to record which kind it is: [[>]]
+(truncate and write), [[<]] (read), and [[>>]] (append). The actual
+numbers are arbitrary, only their distinctness matters
 
 <<constant [[WRITE]]>>=
 #define	WRITE	2
@@ -3522,6 +3530,13 @@ case '<':
 \section{Remaining non-word characters}
 
 %yoann: intro, mention \n talked before, and a few more cases?
+%claude:
+Any character that is not a word character and was not handled by an
+earlier [[switch]] case ends up here: the lexer simply returns it as a
+single-character token. This is the path the newline [['\n']] falls
+through to (as noted earlier), and it likewise covers lone
+metacharacters such as [[;]] and the closing brace and parenthesis
+that the grammar consumes directly.
 
 <<[[yylex()]] if c is not a word character>>=
 if(!wordchr(c)){
