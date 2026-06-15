@@ -1526,22 +1526,6 @@ copywords(word *a, word *tail)
 
 
 
-% diff with freewords???
-<<function [[freelist]]>>=
-void
-freelist(word *w)
-{
-    word *nw;
-    while(w){
-        nw = w->next;
-        efree(w->word);
-        efree((char *)w);
-        w = nw;
-    }
-}
-@
-
-%yoann: diff freewords and freelist?
 
 \subsection{[[List]] of sequence of words}
 
@@ -1569,6 +1553,27 @@ struct List {
 % so it's actually a list of list (so fast concatenation?)
 
 
+%claude:
+[<freelist()>] is functionally identical to [<freewords()>]: both
+walk a word list and free each string and each node. The two names
+are just historical duplication---by convention [<freewords()>]
+releases a variable's value while [<freelist()>] releases the word
+lists popped off the [[argv]] and [[local]] stacks---but neither
+does anything the other does not.
+
+<<function [[freelist]]>>=
+void
+freelist(word *w)
+{
+    word *nw;
+    while(w){
+        nw = w->next;
+        efree(w->word);
+        efree((char *)w);
+        w = nw;
+    }
+}
+@
 
 
 \section{[[Var]]iables}
@@ -2496,15 +2501,16 @@ if(error){
 %******************************************************************************
 \chapter{Input}
 %******************************************************************************
-% so Lexing chapter cleaner
 \label{chap:input}
+%spirit: %alt: so Lexing chapter cleaner
 
 %trans: before yyparse, see routines used by yylex, called from yyparse.
 %toc:
 %claude:
-Recall the main flow from Chapter~\ref{chap:main}:
+Recall the main flow from Figure~\ref{fig:controlflow}:
 [<main()>] $\rightarrow$ [<Xrdcmds()>] $\rightarrow$ [<yyparse()>]
 $\rightarrow$ [<yylex()>].
+%
 Before describing the lexer, I will present the input routines
 it relies on. These routines handle reading characters from
 the current input source (terminal or script file), managing
@@ -2559,20 +2565,21 @@ getnext(void)
     int c;
     <<[[getnext()]] other locals>>
 
-    <<[[getnext()]] peekc handling>>
-    <<[[getnext()]] return if already at EOF>>
-    <<[[getnext()]] prompt management before reading the character>>
+    <<[[getnext()]] before read, peekc handling>>
+    <<[[getnext()]] before read, return if already at EOF>>
+    <<[[getnext()]] before read, prompt management>>
 
     c = rchr(runq->cmdfd);
 
-    <<[[getnext()]] handle backslash>>
-    <<[[getnext()]] prompt management after the character is read>>
-    <<[[getnext()]] if character read is EOF>>
-    <<[[getnext()]] if not EOF but verbose mode, print character read>>
+    <<[[getnext()]] after read, handle backslash>>
+    <<[[getnext()]] after read, prompt management>>
+    <<[[getnext()]] after read, if EOF>>
+    <<[[getnext()]] after read, if not EOF but verbose mode, print character read>>
 
     return c;
 }
 @
+%grrr: int c -> Rune?
 %old: was runq->eof++; ugly
 
 % rchr() in annex? bufio library?
@@ -2587,14 +2594,14 @@ When [<rchr()>] returns [[EOF]], [<getnext()>] sets the
 [<getnext()>] returns [[EOF]] immediately without trying
 to read again. This flag is also checked in [<Xrdcmds()>]
 to decide whether to close the input and return to the
-parent thread (see Chapter~\ref{chap:main}).
+parent thread. % (see Chapter~\ref{chap:main}).
 
 <<constant EOF (rc/io.h)>>=
 #define	EOF	(-1)
 @
 % possibly returned by rchr()
 
-<<[[getnext()]] if character read is EOF>>=
+<<[[getnext()]] after read, if EOF>>=
 if(c==EOF)
     runq->eof = true;
 @
@@ -2606,7 +2613,7 @@ bool eof;		/* is cmdfd at eof? */
 % used for? for next getnext(), but otherwise?
 
 
-<<[[getnext()]] return if already at EOF>>=
+<<[[getnext()]] before read, return if already at EOF>>=
 if(runq->eof)
     return EOF;
 @
@@ -2620,7 +2627,11 @@ if(runq->eof)
 
 %claude:
 A backslash before a newline tells the shell that the
-command continues on the next line.
+command continues on the next line. This lets you spread a long
+command---a pipeline with many stages, or a command with many
+arguments---over several lines for readability, without the shell
+running it as soon as you press return.
+%
 [<getnext()>] detects this sequence and returns a space
 instead of the newline, effectively joining the two lines.
 If the backslash is followed by any other character,
@@ -2631,7 +2642,7 @@ next call.
 % if backslash, dont return backslash char, return after
 % but only if not in a string, hence the !inquote guard below.
 
-<<[[getnext()]] handle backslash>>=
+<<[[getnext()]] after read, handle backslash>>=
 if(!inquote && c=='\\'){
 
     c = rchr(runq->cmdfd);
@@ -2656,7 +2667,7 @@ if(!inquote && c=='\\'){
 static int peekc = EOF;
 @
 
-<<[[getnext()]] peekc handling>>=
+<<[[getnext()]] before read, peekc handling>>=
 if(peekc!=EOF){
     c = peekc;
     peekc = EOF;
@@ -2677,11 +2688,15 @@ the first element is the main prompt (e.g., [["% "]]),
 and the second element is the continuation prompt displayed
 when a command spans multiple lines (e.g., [["\t"]]).
 %
-The prompt is displayed just before reading a character,
-not at the end of executing a command.
-This is done through the global [[doprompt]] flag, which
-is set to [[true]] after each newline (or EOF) and reset
-to [[false]] after the prompt is printed.
+The prompt is printed
+% lazily
+ by the input layer, just before it
+reads the next character---not by the command-execution code when a
+command finishes (You do still see the prompt after each command, but only
+because the shell then loops back to read the next line.).
+%
+The mechanism is the global [[doprompt]] flag, set to [[true]] after each
+newline (or EOF) and reset to [[false]] once the prompt has been printed.
 
 <<global [[doprompt]]>>=
 bool doprompt = true;
@@ -2695,6 +2710,7 @@ char *promptstr;
 @
 
 <<[[Xrdcmds()]] other locals>>=
+// list<ref_own<word> (2 elts)
 word *prompt;
 @
 <<[[Xrdcmds()]] set promptstr if interactive mode>>=
@@ -2709,7 +2725,7 @@ if(runq->iflag){
 
 
 
-<<[[getnext()]] prompt management before reading the character>>=
+<<[[getnext()]] before read, prompt management>>=
 if(doprompt)
     // pprompt() internally set doprompt back to false at the end
     pprompt();
@@ -2724,7 +2740,7 @@ element of [[$prompt]] (the continuation prompt).
 This way, if the lexer needs more input for a multi-line
 command, the next call to [<pprompt()>] will display
 the continuation prompt instead of the main one.
-The main prompt is restored in [<Xrdcmds()>] before each new command.
+The main prompt is restored in [<Xrdcmds()>] before each new command as shown above.
 
 <<function [[pprompt]]>>=
 void
@@ -2773,7 +2789,7 @@ int lineno;			/* linenumber */
 % useful for error reporting I think, when running a script!
 
 
-<<[[getnext()]] prompt management after the character is read>>=
+<<[[getnext()]] after read, prompt management>>=
 doprompt = doprompt || c=='\n' || c==EOF;
 @
 % doprompt case before because when \\n then c becomes space
@@ -2804,43 +2820,6 @@ in the global [[future]]. Multiple calls to [<nextc()>] return
 the same character until [<advance()>] is called to consume it.
 The helper [<nextis()>] combines both: it checks whether the next
 character matches, and consumes it if so.
-
-%claude:
-[[rc]] actually has {two} separate one-character
-lookahead slots, each living at a different layer:
-\begin{verbatim}
-  |-----------------------|
-  |   yylex()             |  wants "next non-space token char"
-  |-----------------------|
-           |
-           v
-  |-----------------------|
-  |   nextc / advance     |  slot: future    (lexer level)
-  |-----------------------|
-           |
-           v
-  |-----------------------|
-  |   getnext()           |  slot: peekc     (char-stream level)
-  |-----------------------|
-           |
-           v
-  |-----------------------|
-  |   rchr(runq->cmdfd)   |  raw bufio read
-  |-----------------------|
-\end{verbatim}
-%claude:
-[[peekc]] is internal to [<getnext()>] and exists only to
-handle the backslash-escape case: when [<getnext()>] reads
-a [['\\']] and then finds that the next byte is {not} a
-newline, it has already consumed a byte it cannot
-``return,'' so it stashes it in [[peekc]] for the next
-call. [[future]], by contrast, is the lookahead for the
-lexer proper---it lets [<yylex()>] probe the next
-character without committing to consume it, which is how
-[[&]] / [[&&]] and [[|]] / [[||]] disambiguation works.
-The two slots never interact: [[future]] is always filled
-by a fresh [<getnext()>] call, and [[peekc]] is an
-invisible fast-path inside that call.
 
 <<global [[future]]>>=
 int future = EOF;
@@ -2897,6 +2876,47 @@ nextis(int c)
 }
 @
 % check and then consume
+
+
+
+%claude:
+[[rc]] actually has {two} separate one-character
+lookahead slots, each living at a different layer:
+
+\begin{vdiagram}
+  |-----------------------|
+  |   yylex()             |  wants "next non-space token char"
+  |-----------------------|
+           |
+           v
+  |-----------------------|
+  |   nextc / advance     |  slot: future    (lexer level)
+  |-----------------------|
+           |
+           v
+  |-----------------------|
+  |   getnext()           |  slot: peekc     (char-stream level)
+  |-----------------------|
+           |
+           v
+  |-----------------------|
+  |   rchr(runq->cmdfd)   |  raw bufio read
+  |-----------------------|
+\end{vdiagram}
+
+%claude:
+[[peekc]] is internal to [<getnext()>] and exists only to
+handle the backslash-escape case: when [<getnext()>] reads
+a [['\\']] and then finds that the next byte is {not} a
+newline, it has already consumed a byte it cannot
+``return,'' so it stashes it in [[peekc]] for the next
+call. [[future]], by contrast, is the lookahead for the
+lexer proper---it lets [<yylex()>] probe the next
+character without committing to consume it, which is how
+[[&]] / [[&&]] and [[|]] / [[||]] disambiguation works.
+The two slots never interact: [[future]] is always filled
+by a fresh [<getnext()>] call, and [[peekc]] is an
+invisible fast-path inside that call.
 
 
 
@@ -4327,7 +4347,7 @@ to handle multiple signals with the same handler).
 % second line is for delfn. if type
 % fn foo   without anything, then means delete the function.
 
-\section{Variables ([[<x> = ...]])}
+\section{Variables ([[<x>=...]])}
 
 % definitions
 %claude:
@@ -5121,7 +5141,8 @@ Xerror1(char *s)
 }
 @
 
-\subsection{Fork}
+\subsection{[[fork()]]}
+%alt: actually rfork, but fork more well known
 
 %claude:
 [<execforkexec()>] implements the fundamental [[fork]]+[[exec]]+[[wait]]
@@ -5180,7 +5201,7 @@ execforkexec(void)
 % with code execexec, so here we want to reuse the same execexec function
 % so we need to recreate the same conditions, the same argv.
 
-\subsection{Exec}
+\subsection{[[exec()]]}
 
 % execforkexec | builtin "exec" -> <>
 <<function [[execexec]]>>=
@@ -5324,7 +5345,8 @@ mkargv(word *a)
 % what is the one at the front??? for runcoms???
 %ocaml: Array.of_list
 
-\subsection{Wait}
+\subsection{[[wait()]]}
+%alt: actually await, but wait more well known
 
 % In the mean time, in the parent process
 %claude:
@@ -11359,7 +11381,7 @@ if(flag['x'])
 \section{Printing characters: [[rc -v]]}
 
 % ndot for not printing the characters procssed from a . (e.g. . rcmain)
-<<[[getnext()]] if not EOF but verbose mode, print character read>>=
+<<[[getnext()]] after read, if not EOF but verbose mode, print character read>>=
 else 
     if(flag['V'] || ndot>=2 && flag['v'])
         pchr(err, c);
