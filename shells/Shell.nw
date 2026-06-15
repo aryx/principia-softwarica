@@ -8466,14 +8466,26 @@ Appendix~\ref{chap:shell-companion}.
 \label{chap:environment}
 
 %claude:
-Under \plan, the environment is not passed via the [[envp]]
-parameter of [[main()]] as in \unix. Instead, each environment
+Under \plan
+%, the environment is not passed via the [[envp]]
+%parameter of [[main()]] as in \unix. Instead,
+each environment
 variable is stored as a file under [[/env/]]: the variable
 [[$path]] is stored in [[/env/path]]. This is a more elegant
-design because child processes automatically inherit the
+design than \unix because child processes automatically inherit the
 environment through the namespace, and changes are visible
 to all processes sharing the same namespace.
 %
+In \unix the environment is part of the process {\em image}: [[exec]]
+copies the [[environ]] array (alongside [[argv]]) into the new process,
+so a child gets its own copy and can never change its parent's
+environment. Under \plan, because [[/env]] is just shared state in the
+namespace, a child {\em can} modify variables that its parent and
+siblings will then see---more flexibility. A process that instead wants
+a private environment forks with [[rfork(RFENVG)]], which gives it its
+own copy of [[/env]].
+
+%claude:
 [[rc]] must synchronize its internal variable table
 with these files in both directions: [<Updenv()>] writes
 changed variables to [[/env/]], and [<Vinit()>] reads
@@ -8525,7 +8537,7 @@ enum {
 bool	changed;
 @
 
-<<function [[addenv]]>>=
+<<function [[addenv]](plan9.c)>>=
 void
 addenv(var *v)
 {
@@ -8574,6 +8586,7 @@ separated by null bytes. [<Vinit()>] reads the file,
 splits on nulls, and calls [<setvar()>] for each variable.
 It then resets the [[changed]] flag so that [<Updenv()>]
 does not write them back immediately.
+%plan9-is-better:
 The null byte separator is the only safe choice: unlike
 spaces or newlines, null bytes cannot appear in filenames
 or variable values, so the encoding is unambiguous.
