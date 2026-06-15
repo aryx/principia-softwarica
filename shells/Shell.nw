@@ -7829,7 +7829,6 @@ are set in [[rcmain]] (see Section~\ref{sec:rcmain}):
 %vlook("xxx"):
 % cdpath
 % * (TODO aspectize vlook("*") code)
-% sigexit
 
 
 \section{Concatenation: [[<x1> ^ <x2>]]}
@@ -9617,7 +9616,7 @@ How does the kernel know which processes are ``in front''? \plan has
 no \unix tty process group; instead each terminal or [[rio]] window
 runs its commands in their own {\em note group}, created with
 [[rfork(RFNOTEG)]], and the console driver posts the interrupt note to
-that group---see \book{Kernel}.)
+that group---see \book{Kernel} and \book{Windows}.)
 }---including the shell itself.
 %
 If the shell simply died along with the interrupted
@@ -9649,12 +9648,12 @@ the kernel calls the handler registered by [<Trapinit()>].
 The handler does not execute the trap function immediately
 (which would be unsafe in the middle of interpreting bytecodes).
 %
-Instead, it increments a counter ([[ntrap]]) and the main
+Instead, it increments a counter ([<ntrap>]) and the main
 interpreter loop checks this counter after each bytecode
 (see the [[handing trap if necessary]] chunk in [<main()>]).
 %
 Users can define signal handlers with \verb+fn sigint {...}+,
-\verb+fn sighup {...\}+, etc. If no handler is defined,
+\verb+fn sighup {...}+, etc. If no handler is defined,
 the default behavior applies (usually terminating the process).
 
 %claude:
@@ -9730,9 +9729,9 @@ correct behaviour for [[^C]] in a script.
 
 %yoann: explain plan9 does not use hardcoded signal number but string instead
 %claude:
-Unlike \unix, where a signal is a small integer, a \plan {\em note} is
+Unlike \unix, where a signal is a small integer, a \plan\ {\em note} is
 an arbitrary {\em string} delivered to the process (for example
-[["interrupt"]] or [["hangup"]]). [[syssigname]] lists the note strings
+[["interrupt"]] or [["hangup"]]). [<syssigname>] lists the note strings
 [[rc]] recognizes; the handler matches an incoming note against this
 table to find which one arrived.
 
@@ -9751,21 +9750,6 @@ char *syssigname[] = {
 };
 @
 
-% plan9.c
-<<global [[signame]](plan9.c)>>=
-char *signame[] = {
-    "sigexit",	
-    "sighup",	
-    "sigint",	
-    "sigquit",
-    "sigalrm",	
-    "sigkill",	
-    "sigfpe",	
-    "sigterm",
-    0
-};
-@
-%old: was Signame but not consistent naming of globals
 
 <<constant [[SIGINT]]>>=
 #define	SIGINT	2
@@ -9776,9 +9760,10 @@ char *signame[] = {
 
 %yoann: explain number are not related to unix sig numbers, but are corresponding index in signame
 %claude:
-These constants are not the \unix signal numbers; they are simply
-indices into [[signame]] and [[syssigname]] (so [[SIGINT]] is~2 because
-[[signame[2]]] is [["sigint"]] and [[syssigname[2]]] is [["interrupt"]]).
+The two constants above are not the \unix signal numbers; they are simply
+indices into [<syssigname>] (so [<SIGINT>] is~2 because
+%[[signame[2]]] is [["sigint"]] and 
+[[syssigname[2]]] is [["interrupt"]]).
 [[rc]] uses them only to index its own [[trap]] array---\plan has no
 signal numbers at all.
 
@@ -9797,13 +9782,8 @@ int trap[NSIG];				/* number of outstanding traps per type */
 %claude:
 [<Trapinit()>] simply registers [<notifyf()>] as the process's note
 handler via [[notify()]]. When a note arrives, [<notifyf()>] matches
-its string against [[syssigname]] and bumps the corresponding [[trap]]
-counter for [<dotrap()>] to act on later. The [["sys: "]] prefix it
-tests for is a \plan kernel convention: the kernel prefixes the notes
-it raises itself (faults, [["sys: fp: ..."]], and the like) with
-[[sys:]], so [[rc]] uses that prefix to tell a kernel-generated error
-from a user-sent note like [["interrupt"]]---only the latter sets
-[[interrupted]].
+its string against [<syssigname>] and bumps the corresponding [<trap>]
+counter for [<dotrap()>] to act on later.
 
 % main() -> Trapinit()
 <<function [[Trapinit]]>>=
@@ -9840,6 +9820,14 @@ Out:
     noted(NCONT);
 }
 @
+
+%claude:
+The [["sys: "]] prefix it
+tests for above is a \plan kernel convention: the kernel prefixes the notes
+it raises itself (faults, [["sys: fp: ..."]], and the like) with
+[[sys:]], so [[rc]] uses that prefix to tell a kernel-generated error
+from a user-sent note like [["interrupt"]]---only the latter sets
+[<interrupted>].
 
 %yoann: explain quickly NDFLT and NCONT
 %claude:
@@ -9902,7 +9890,16 @@ dotrap(void)
 @
 
 
-
+%yoann: explain use of interrupted global and Eintr and Noerror
+%claude:
+[[interrupted]] is how [[rc]] tells a [[^C]] apart from a genuine
+end-of-input. [<notifyf()>] sets it when an interrupt note arrives
+(but not for a [[sys:]] kernel note), and [<Eintr()>] just reports its
+value. The interactive command loop uses it after [<yyparse()>] fails:
+if the read was interrupted, [[rc]] prints a newline and returns to the
+prompt instead of treating the failure as EOF and closing the input.
+[<Noerror()>] clears the flag in [<Xrdcmds()>] before each parse, so it
+reflects only the read just attempted.
 
 <<global [[interrupted]]>>=
 bool interrupted = false;
@@ -9943,6 +9940,22 @@ as [[fn sigint {...}]] or [[fn sigexit {...}]]. When [<dotrap()>]
 finds such a function in the variable table (looked up via the name
 [[signame[i]]]), it runs that instead of taking the built-in action;
 this is how scripts clean up on exit or ignore interrupts.
+
+% plan9.c
+<<global [[signame]](plan9.c)>>=
+char *signame[] = {
+    "sigexit",	
+    "sighup",	
+    "sigint",	
+    "sigquit",
+    "sigalrm",	
+    "sigkill",	
+    "sigfpe",	
+    "sigterm",
+    0
+};
+@
+%old: was Signame but not consistent naming of globals
 
 <<[[dotrap()]] check if trap handled by function>>=
 trapreq = vlook(signame[i]);
