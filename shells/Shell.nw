@@ -8162,7 +8162,7 @@ execexit(void)
 }
 @
 
-\section{[[% .]]}
+\section{[[% .]] (source)}
 \label{sec:builtin-dot}
 
 
@@ -9932,7 +9932,7 @@ ntrap = 0;	/* avoid double-interrupts during blocked writes */
 @
 
 
-\section{User-defined signal handlers: [[fn sigint ...]]}
+\section{User-defined signal handlers: [[fn sig<xxx>]]}
 
 %yoann: quick intro
 %claude:
@@ -10487,6 +10487,71 @@ Xsubshell(void)
 % so they need first to modify the environment with Updenv() before
 % executing.
 
+\subsection{Stringification of variables: [[$"<foo>]]} 
+\label{sec:stringification}
+
+% no ending "? No, it is used for stringification of a variable.
+% a list2str.
+
+%claude:
+The [[$"]] operator converts a list variable into a single
+string with spaces between elements.
+If [[$x]] is [[(a b c)]], then [[$"x]] is [[a b c]]
+as a single word.
+This is the inverse of [[$ifs]]-splitting in command
+substitution: command substitution splits strings into
+lists, while [[$"]] joins lists back into strings.
+
+<<comword rule other cases>>=
+|   '"' word        {$$=tree1('"', $2);}
+@
+
+<<[[outcode()]] cases>>=
+case '"':
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xqdol);
+    break;
+@
+
+
+<<function [[Xqdol]]>>=
+void
+Xqdol(void)
+{
+    word *a, *p;
+    char *s;
+    int n;
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    s = runq->argv->words->word;
+    deglob(s);
+    a = vlook(s)->val;
+    poplist();
+    n = count(a);
+    if(n==0){
+        pushword("");
+        return;
+    }
+    for(p = a;p;p = p->next) n+=strlen(p->word);
+    s = emalloc(n);
+    if(a){
+        strcpy(s, a->word);
+        for(p = a->next;p;p = p->next){
+            strcat(s, " ");
+            strcat(s, p->word);
+        }
+    }
+    else
+        s[0]='\0';
+    pushword(s);
+    efree(s);
+}
+@
+
+
 \subsection{Here documents: [[<< <HERE>]]}
 % >>
 
@@ -10703,6 +10768,8 @@ for \verb+grep foo <<EOF+:
     | h->next|---> nil
     +--------+
 \end{verbatim}
+
+%claude:
 After [<compile()>] finishes emitting bytecode for the whole line,
 [<readhere()>] walks this list: for each entry it [[Creat()]]s the
 temp file, then reads one line at a time from [[runq->cmdfd]] until a
@@ -10797,71 +10864,6 @@ pstrs(io *f, word *a)
     }
 }
 @
-
-\subsection{Stringification of variables: [[$"<foo>]]} 
-\label{sec:stringification}
-
-% no ending "? No, it is used for stringification of a variable.
-% a list2str.
-
-%claude:
-The [[$"]] operator converts a list variable into a single
-string with spaces between elements.
-If [[$x]] is [[(a b c)]], then [[$"x]] is [[a b c]]
-as a single word.
-This is the inverse of [[$ifs]]-splitting in command
-substitution: command substitution splits strings into
-lists, while [[$"]] joins lists back into strings.
-
-<<comword rule other cases>>=
-|   '"' word        {$$=tree1('"', $2);}
-@
-
-<<[[outcode()]] cases>>=
-case '"':
-    emitf(Xmark);
-    outcode(c0, eflag);
-    emitf(Xqdol);
-    break;
-@
-
-
-<<function [[Xqdol]]>>=
-void
-Xqdol(void)
-{
-    word *a, *p;
-    char *s;
-    int n;
-    if(count(runq->argv->words)!=1){
-        Xerror1("variable name not singleton!");
-        return;
-    }
-    s = runq->argv->words->word;
-    deglob(s);
-    a = vlook(s)->val;
-    poplist();
-    n = count(a);
-    if(n==0){
-        pushword("");
-        return;
-    }
-    for(p = a;p;p = p->next) n+=strlen(p->word);
-    s = emalloc(n);
-    if(a){
-        strcpy(s, a->word);
-        for(p = a->next;p;p = p->next){
-            strcat(s, " ");
-            strcat(s, p->word);
-        }
-    }
-    else
-        s[0]='\0';
-    pushword(s);
-    efree(s);
-}
-@
-
 
 \subsection{Read-write redirections: [[<> <file>]]}
 
@@ -13050,6 +13052,8 @@ case con
 \end{verbatim}
 
 \section{[[/rc/bin/man]]}
+
+%\section{[[/rc/bin/kill]]}
 
 %******************************************************************************
 \chapter{Shell Companion Utilities}
