@@ -520,6 +520,7 @@ union Code rdfns[4];
 extern fdt envdir;
 
 /*s: function [[execfinit]] */
+/// "finit" builtin -> <>
 void
 execfinit(void)
 {

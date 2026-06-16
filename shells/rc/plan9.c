@@ -16,7 +16,7 @@
 /*s: global [[Rcmain]] */
 char *Rcmain = "/rc/lib/rcmain";
 /*e: global [[Rcmain]] */
-/*s: function [[Isatty]] */
+/*s: function [[Isatty]](plan9.c) */
 bool
 Isatty(fdt fd)
 {
@@ -32,7 +32,7 @@ Isatty(fdt fd)
     /* might be /mnt/term/dev/cons */
     return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
 }
-/*e: function [[Isatty]] */
+/*e: function [[Isatty]](plan9.c) */
 
 // could be in rc.h
 /*s: enum [[MiscPlan9]] */
@@ -48,6 +48,7 @@ extern fdt envdir;
 
 // could be in env.c
 /*s: function [[Vinit]] */
+/// main -> <>
 void
 Vinit(void)
 {
@@ -102,7 +103,7 @@ Vinit(void)
     close(dir);
 }
 /*e: function [[Vinit]] */
-/*s: function [[addenv]] */
+/*s: function [[addenv]](plan9.c) */
 void
 addenv(var *v)
 {
@@ -137,7 +138,7 @@ addenv(var *v)
         }
     }
 }
-/*e: function [[addenv]] */
+/*e: function [[addenv]](plan9.c) */
 /*s: function [[updenvlocal]] */
 void
 updenvlocal(var *v)
@@ -149,6 +150,7 @@ updenvlocal(var *v)
 }
 /*e: function [[updenvlocal]] */
 /*s: function [[Updenv]] */
+/// Xsimple | Execute -> <>
 void
 Updenv(void)
 {
@@ -218,7 +220,8 @@ havewaitpid(int pid)
     return false;
 }
 /*e: function [[havewaitpid]] */
-/*s: function [[Waitfor]] */
+/*s: function [[Waitfor]](plan9.c) */
+/// Xsimple -> <>
 int
 Waitfor(int pid, bool _persist)
 {
@@ -254,10 +257,10 @@ Waitfor(int pid, bool _persist)
         return -1;
     return 0;
 }
-/*e: function [[Waitfor]] */
+/*e: function [[Waitfor]](plan9.c) */
 
 // could be in trap.c
-/*s: global [[signame]] */
+/*s: global [[signame]](plan9.c) */
 char *signame[] = {
     "sigexit",	
     "sighup",	
@@ -269,8 +272,8 @@ char *signame[] = {
     "sigterm",
     0
 };
-/*e: global [[signame]] */
-/*s: global [[syssigname]] */
+/*e: global [[signame]](plan9.c) */
+/*s: global [[syssigname]](plan9.c) */
 char *syssigname[] = {
     "exit",		/* can't happen */
     "hangup",
@@ -282,7 +285,7 @@ char *syssigname[] = {
     "term",
     0
 };
-/*e: global [[syssigname]] */
+/*e: global [[syssigname]](plan9.c) */
 /*s: global [[interrupted]] */
 bool interrupted = false;
 /*e: global [[interrupted]] */

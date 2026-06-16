@@ -103,7 +103,7 @@ void	error(char *s, char *t);
 // memory management
 Node	*alloc(int (*op)(Node *));
 
-/*s: function main (sh/sh.c) */
+/*s: function [[main]](sh) */
 void
 main(int argc, char *argv[])
 {
@@ -139,7 +139,7 @@ main(int argc, char *argv[])
     }
     exits(status);
 }
-/*e: function main (sh/sh.c) */
+/*e: function [[main]](sh) */
 
 /*s: function [[alloc]] */
 /* alloc - allocate for op and return a node */

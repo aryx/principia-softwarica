@@ -275,6 +275,7 @@ globlist1(word *gl)
 /*e: function [[globlist1]] */
 
 /*s: function [[globlist]] */
+/// Xsimple | ... -> <>
 void
 globlist(void)
 {

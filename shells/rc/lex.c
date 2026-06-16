@@ -76,6 +76,7 @@ yyerror(char *m)
 
 
 /*s: function [[skipwhite]] */
+/// yylex -> | skipnl <>
 void
 skipwhite(void)
 {
@@ -91,6 +92,7 @@ skipwhite(void)
                     incomm = false;
                     break;
                 }
+                // else
                 advance();
             }
         }
@@ -103,6 +105,7 @@ skipwhite(void)
 /*e: function [[skipwhite]] */
 
 /*s: function [[skipnl]] */
+/// yylex | yyparse -> <>
 void
 skipnl(void)
 {
@@ -112,7 +115,7 @@ skipnl(void)
         c = nextc();
         if(c!='\n')
             return;
-        // consume the newline
+        // else consume the newline and continue
         advance();
     }
 }
@@ -160,6 +163,7 @@ addutf(char *p, int c)
 
 /*s: function [[yylex]] */
 //@Scheck: called from yyparse()
+/// yyparse -> <>
 int yylex(void)
 {
     int c;
@@ -171,7 +175,7 @@ int yylex(void)
     int d = nextc();
     /*e: [[yylex()]] other locals */
 
-    /*s: [[yylex()]] hack for SUB */
+    /*s: [[yylex()]] before read, hack for SUB */
     /*
      * Embarassing sneakiness:  if the last token read was a quoted or unquoted
      * WORD then we alter the meaning of what follows.  If the next character
@@ -186,18 +190,19 @@ int yylex(void)
             strcpy(tok, "( [SUB]");
             return SUB;
         }
+        // else
         if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){
             strcpy(tok, "^");
             return '^';
         }
+        // else fallthrough
     }
-    /*e: [[yylex()]] hack for SUB */
+    /*e: [[yylex()]] before read, hack for SUB */
     /*s: [[yylex()]] initialisations */
-    yylval.tree = nil;
-    /*x: [[yylex()]] initialisations */
     inquote = false;
+    /*x: [[yylex()]] initialisations */
+    yylval.tree = nil;
     /*e: [[yylex()]] initialisations */
-
     skipwhite();
 
     switch(c = advance()){
@@ -207,6 +212,31 @@ int yylex(void)
         strcpy(tok, "EOF");
         return EOF;
     /*x: [[yylex()]] switch c cases */
+    case '\'':
+        inquote = true;
+        lastword = true;
+        lastdol = false;
+        for(;;){
+            c = advance();
+            if(c==EOF)
+                break;
+            if(c=='\''){
+                if(nextc()!='\'')
+                    break;
+                // else
+                advance();
+            }
+            w = addutf(w, c);
+        }
+        if(w != nil)
+            *w='\0';
+
+        t = token(tok, WORD);
+        t->quoted = true;
+
+        yylval.tree = t;
+        return t->type; // WORD
+    /*x: [[yylex()]] switch c cases */
     case '&':
         lastdol = false;
         if(nextis('&')){
@@ -214,6 +244,7 @@ int yylex(void)
             strcpy(tok, "&&");
             return ANDAND;
         }
+        // else
         strcpy(tok, "&");
         return '&';
     /*x: [[yylex()]] switch c cases */
@@ -223,10 +254,12 @@ int yylex(void)
             strcpy(tok, "$#");
             return COUNT;
         }
+        // else
         if(nextis('"')){
             strcpy(tok, "$\"");
             return '"';
         }
+        // else
         strcpy(tok, "$");
         return '$';
     /*x: [[yylex()]] switch c cases */
@@ -237,7 +270,7 @@ int yylex(void)
             strcpy(tok, "||");
             return OROR;
         }
-        // FALLTHROUGH
+        // else FALLTHROUGH
     case '<':
     case '>':
         lastdol = false;
@@ -256,8 +289,8 @@ int yylex(void)
         /*s: [[yylex()]] in switch when redirection character, switch c cases */
         case '|':
             t->type = PIPE;
-            t->fd0 = 1; // left fd of pipe (stdout of left cmd)
-            t->fd1 = 0; // right fd of pipe (stdin of right cmd)
+            t->fd0 = STDOUT; // left fd of pipe (stdout of left cmd)
+            t->fd1 = STDIN; // right fd of pipe (stdin of right cmd)
             break;
         /*x: [[yylex()]] in switch when redirection character, switch c cases */
         case '>':
@@ -268,7 +301,7 @@ int yylex(void)
             }
             else
                 t->rtype = WRITE;
-            t->fd0 = 1;
+            t->fd0 = STDOUT;
             break;
         /*x: [[yylex()]] in switch when redirection character, switch c cases */
         case '<':
@@ -287,7 +320,7 @@ int yylex(void)
             /*e: [[yylex()]] in switch when redirection character, if read/write redirect */
             else 
                 t->rtype = READ;
-            t->fd0 = 0;
+            t->fd0 = STDIN;
             break;
         /*e: [[yylex()]] in switch when redirection character, switch c cases */
         }
@@ -344,30 +377,6 @@ int yylex(void)
             skipnl();
         return t->type;
         /*e: [[yylex()]] in switch when redirection character */
-    /*x: [[yylex()]] switch c cases */
-    case '\'':
-        inquote = true;
-        lastword = true;
-        lastdol = false;
-        for(;;){
-            c = advance();
-            if(c==EOF)
-                break;
-            if(c=='\''){
-                if(nextc()!='\'')
-                    break;
-                advance();
-            }
-            w = addutf(w, c);
-        }
-        if(w != nil)
-            *w='\0';
-
-        t = token(tok, WORD);
-        t->quoted = true;
-
-        yylval.tree = t;
-        return t->type;
     /*e: [[yylex()]] switch c cases */
     }
     // else

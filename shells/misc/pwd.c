@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 
-/*s: function main (misc/pwd.c) */
+/*s: function [[main]](pwd) */
 /*
  * Print working (current) directory
  */
@@ -19,5 +19,5 @@ main(int argc, char *argv[])
     print("%s\n", pathname);
     exits(nil);
 }
-/*e: function main (misc/pwd.c) */
+/*e: function [[main]](pwd) */
 /*e: misc/pwd.c */

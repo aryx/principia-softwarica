@@ -11,6 +11,7 @@
 extern char* Rcmain;
 extern bool Isatty(fdt fd);
 
+/*s: function [[main]](rc) */
 /*
  * get command line flags.
  * initialize keywords & traps.
@@ -19,7 +20,6 @@ extern bool Isatty(fdt fd);
  * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
  * start interpreting code
  */
-/*s: function main (rc/exec.c) */
 void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
@@ -123,5 +123,5 @@ void main(int argc, char *argv[])
     }
     /*e: [[main()]] interpreter loop */
 }
-/*e: function main (rc/exec.c) */
+/*e: function [[main]](rc) */
 /*e: rc/main.c */

@@ -69,6 +69,7 @@ Xappend(void)
 {
     char *file;
     int f;
+
     switch(count(runq->argv->words)){
     default:
         Xerror1(">> requires singleton");
@@ -139,10 +140,13 @@ Xeflag(void)
 void
 Xexit(void)
 {
+    /*s: [[Xexit()]] locals */
     struct Var *trapreq;
     struct Word *starval;
     static bool beenhere = false;
+    /*e: [[Xexit()]] locals */
 
+    /*s: [[Xexit()]] trap management */
     if(getpid()==mypid && !beenhere){
         trapreq = vlook("sigexit");
         if(trapreq->fn){
@@ -157,6 +161,7 @@ Xexit(void)
             return;
         }
     }
+    /*e: [[Xexit()]] trap management */
     Exit(getstatus(), __LOC__);
 }
 /*e: function [[Xexit]] */
@@ -214,6 +219,7 @@ Xread(void)
 {
     char *file;
     int f;
+
     switch(count(runq->argv->words)){
     default:
         Xerror1("< requires singleton\n");
@@ -308,6 +314,7 @@ Xwrite(void)
 {
     char *file;
     fdt f;
+
     switch(count(runq->argv->words)){
     default:
         Xerror1("> requires singleton\n");
@@ -349,7 +356,7 @@ list2str(word *words)
         *s++=' ';
     }
     if(s==value)
-        *s='\0';
+        *s='\0'; // replace last space
     else s[-1]='\0';
     return value;
 }
@@ -405,6 +412,7 @@ conclist(word *lp, word *rp, word *tail)
 {
     char *buf;
     word *v;
+
     if(lp->next || rp->next)
         tail = conclist(lp->next==0? lp: lp->next,
             rp->next==0? rp: rp->next, tail);
@@ -425,6 +433,7 @@ Xconc(void)
     word *rp = runq->argv->next->words;
     word *vp = runq->argv->next->next->words;
     int lc = count(lp), rc = count(rp);
+
     if(lc!=0 || rc!=0){
         if(lc==0 || rc==0){
             Xerror1("null list in concatenation");
@@ -724,6 +733,7 @@ Xrdcmds(void)
     struct Thread *p = runq;
     bool error;
     /*s: [[Xrdcmds()]] other locals */
+    // list<ref_own<word> (2 elts)
     word *prompt;
     /*e: [[Xrdcmds()]] other locals */
 
@@ -808,6 +818,7 @@ Xfor(void)
 /*e: function [[Xfor]] */
 
 /*s: function [[Xglob]] */
+/// outcode (REDIR and FOR cases) -> <>
 void
 Xglob(void)
 {

@@ -80,6 +80,7 @@ struct Tree {
     // either<enum<Token_kind>, char>
     int	type;
     // string of the token or AST dump of the whole subtree for certain nodes
+    // option<ref_own<string>>
     char *str;
 
     // array<option<ref_own<Tree>>
@@ -101,6 +102,7 @@ struct Tree {
 
     // Extra
     /*s: [[Tree]] extra fields */
+    // list<ref_own<Tree>> (head = treenodes)
     tree	*next;
     /*e: [[Tree]] extra fields */
 };
@@ -129,6 +131,7 @@ void	freenodes(void);
 union Code {
     void	(*f)(void); // Xxxx() bytecode
     int	i;
+    // ref_own<string>
     char	*s;
 };
 /*e: struct [[Code]] */
@@ -161,6 +164,7 @@ union Code {
  * i.e. word0->word1->word2->word3->nil
  */
 struct Word {
+    // ref_own<string>
     char *word;
 
     // Extra
@@ -181,6 +185,7 @@ struct Var {
     // key
     char	*name;		/* ascii name */
     // value
+    // ref_own<list<Word>>
     word	*val;		/* value */
 
     /*s: [[Var]] other fields */
@@ -192,6 +197,7 @@ struct Var {
     /*e: [[Var]] other fields */
     // Extra
     /*s: [[Var]] extra fields */
+    // list<ref_own<var>> (head = runq->local list or gvar hash)
     var	*next;		/* next on hash or local list */
     /*e: [[Var]] extra fields */
 };

@@ -50,7 +50,6 @@ Xsimple(void)
         return;
     }
     /*e: [[Xsimple()]] sanity check a */
-
     /*s: [[Xsimple()]] if -x */
     if(flag['x'])
         pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
@@ -107,6 +106,7 @@ Xsimple(void)
 /*e: function [[Xsimple]] */
 
 /*s: function [[doredir]] */
+/// execexec -> <>
 void
 doredir(redir *rp)
 {
@@ -137,6 +137,7 @@ doredir(redir *rp)
 /*e: function [[doredir]] */
 
 /*s: function [[execexec]] */
+/// execforkexec | builtin "exec" -> <>
 void
 execexec(void)
 {

@@ -113,6 +113,7 @@ Xasync(void)
     fdt null = open("/dev/null", 0);
     int pid;
     char npid[10];
+
     if(null<0){
         Xerror("Can't open /dev/null\n");
         return;
@@ -124,7 +125,7 @@ Xasync(void)
         break;
     case 0: // child
         clearwaitpids();
-        pushredir(ROPEN, null, 0);
+        pushredir(ROPEN, null, STDIN);
         // start a new Thread runq->pc+1 so skip pointer to code after &
         start(runq->code, runq->pc+1, runq->local);
         runq->ret = 0;

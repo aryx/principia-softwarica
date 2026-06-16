@@ -64,6 +64,7 @@ stuffdot(int a)
 
 /*s: function [[compile]] */
 //@Scheck: called from syn.y
+/// yyparse -> <> -> outcode
 error0 compile(tree *t)
 {
     ncode = 100;
@@ -119,6 +120,7 @@ fnstr(tree *t)
 /*e: function [[fnstr]] */
 
 /*s: function [[outcode]] */
+/// main -> Xrdcmds -> yyparse -> compile -> <>
 void
 outcode(tree *t, bool eflag)
 {
@@ -196,8 +198,10 @@ outcode(tree *t, bool eflag)
         emitf(Xmark);
         outcode(c0, eflag);
         emitf(Xmatch);
+        /*s: [[outcode()]] emit Xeflag after Xmatch */
         if(eflag)
             emitf(Xeflag);
+        /*e: [[outcode()]] emit Xeflag after Xmatch */
         break;
     /*x: [[outcode()]] cases */
     case REDIR:
@@ -260,10 +264,10 @@ outcode(tree *t, bool eflag)
         break;
     /*x: [[outcode()]] cases */
     case IF:
-        outcode(c0, false);
+        outcode(c0, false); // the condition
         emitf(Xif);
         p = emiti(0);
-        outcode(c1, eflag);
+        outcode(c1, eflag); // then body
         emitf(Xwastrue);
         stuffdot(p);
         break;
@@ -332,13 +336,13 @@ outcode(tree *t, bool eflag)
     /*x: [[outcode()]] cases */
     case FN:
         emitf(Xmark);
-        outcode(c0, eflag);
+        outcode(c0, eflag); // name(s)
         if(c1){
             emitf(Xfn);
             p = emiti(0);
             emits(fnstr(c1));
             outcode(c1, eflag); // body of the function
-            emitf(Xunlocal);    /* get rid of $* */ //$
+            emitf(Xunlocal);    /* get rid of $* */
             emitf(Xreturn);
             stuffdot(p);
         }
@@ -420,6 +424,15 @@ outcode(tree *t, bool eflag)
         stuffdot(p);
         break;
     /*x: [[outcode()]] cases */
+    case PIPEFD:
+        emitf(Xpipefd);
+        emiti(t->rtype);
+        p = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
+        break;
+    /*x: [[outcode()]] cases */
     case SUBSHELL:
         emitf(Xsubshell);
         p = emiti(0);
@@ -428,6 +441,12 @@ outcode(tree *t, bool eflag)
         stuffdot(p);
         if(eflag)
             emitf(Xeflag);
+        break;
+    /*x: [[outcode()]] cases */
+    case '"':
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xqdol);
         break;
     /*x: [[outcode()]] cases */
     case DUP:
@@ -442,21 +461,6 @@ outcode(tree *t, bool eflag)
         }
         outcode(c1, eflag);
         emitf(Xpopredir);
-        break;
-    /*x: [[outcode()]] cases */
-    case PIPEFD:
-        emitf(Xpipefd);
-        emiti(t->rtype);
-        p = emiti(0);
-        outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        break;
-    /*x: [[outcode()]] cases */
-    case '"':
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xqdol);
         break;
     /*e: [[outcode()]] cases */
     default:
@@ -563,6 +567,7 @@ iscase(tree *t)
 /*e: function [[iscase]] */
 
 /*s: function [[codecopy]] */
+/// start | Xfn -> <> 
 code*
 codecopy(code *cp)
 {
@@ -572,6 +577,7 @@ codecopy(code *cp)
 /*e: function [[codecopy]] */
 
 /*s: function [[codefree]] */
+/// Xreturn | Xfn | Xdelfn -> <>
 void
 codefree(code *cp)
 {
@@ -579,7 +585,7 @@ codefree(code *cp)
     // check ref count
     if(--cp[0].i != 0)
         return;
-
+    // else
     for(p = cp+1; p->f; p++){
         /*s: [[codefree()]] in loop over code [[cp]], switch bytecode cases */
         if(p->f==Xfalse || p->f==Xtrue

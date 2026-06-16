@@ -59,15 +59,15 @@ struct List {
 
 /*s: struct [[Thread]] */
 struct Thread {
-    union Code *code;		/* code for this thread */
+    code *code;		/* code for this thread */
     int pc;			/* code[pc] is the next instruction */
 
     /*s: [[Thread]] other fields */
     // list<list<ref_own<word>>> (next = List.next)
-    struct List *argv;		/* argument stack */
+    list *argv;		/* argument stack */
     /*x: [[Thread]] other fields */
     // list<ref_own<Var>> (next = Var.next)
-    struct Var *local;		/* list of local variables */
+    var *local;		/* list of local variables */
     /*x: [[Thread]] other fields */
     struct Io *cmdfd;	/* file descriptor for Xrdcmd */
     char *cmdfile;		/* file name in Xrdcmd */

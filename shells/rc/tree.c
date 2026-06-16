@@ -33,6 +33,7 @@ newtree(void)
 /*e: function [[newtree]] */
 
 /*s: function [[freenodes]] */
+/// Xrdcmds -> <>
 void
 freenodes(void)
 {

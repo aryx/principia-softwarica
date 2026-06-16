@@ -44,7 +44,7 @@ int	tio(char *, int);
 int	e(void), e1(void), e2(void), e3(void);
 char	*nxtarg(int);
 
-/*s: function main (misc/test.c) */
+/*s: function [[main]](test) */
 void
 main(int argc, char *argv[])
 {
@@ -68,7 +68,7 @@ main(int argc, char *argv[])
         synbad("unexpected operator/operand: ", c);
     exits(r? nil : "false");
 }
-/*e: function main (misc/test.c) */
+/*e: function [[main]](test) */
 
 /*s: function [[nxtarg]] */
 char *

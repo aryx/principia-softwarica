@@ -22,6 +22,7 @@ char nl='\n';		/* change to semicolon for bourne-proofing */
 /*e: constant [[c2]] */
 
 /*s: function [[pdeglob]] */
+/// pcmd -> <>
 void
 pdeglob(io *f, char *s)
 {
@@ -34,6 +35,7 @@ pdeglob(io *f, char *s)
 /*e: function [[pdeglob]] */
 
 /*s: function [[pcmd]] */
+/// simplemung | fnstr -> pfmt %t -> <>
 void
 pcmd(io *f, tree *t)
 {

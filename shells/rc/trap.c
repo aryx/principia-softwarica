@@ -38,6 +38,8 @@ dotrap(void)
         --ntrap;
         if(getpid()!=mypid) 
             Exit(getstatus(), __LOC__);
+
+        /*s: [[dotrap()]] check if trap handled by function */
         trapreq = vlook(signame[i]);
         if(trapreq->fn){
             start(trapreq->fn, trapreq->pc, (struct Var *)nil);
@@ -46,6 +48,7 @@ dotrap(void)
             runq->local->changed = true;
             runq->redir = runq->startredir = nil;
         }
+        /*e: [[dotrap()]] check if trap handled by function */
         else if(i==SIGINT || i==SIGQUIT){
             /*
              * run the stack down until we uncover the

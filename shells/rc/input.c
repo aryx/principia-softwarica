@@ -32,6 +32,7 @@ int lastc;
 int getnext(void);
 
 /*s: function [[nextc]] */
+/// yylex | advance | skipnl | nextis -> <>
 /*
  * Look ahead in the input stream
  */
@@ -44,6 +45,7 @@ nextc(void)
 }
 /*e: function [[nextc]] */
 /*s: function [[advance]] */
+/// nextis -> <>
 /*
  * Consume the lookahead character.
  */
@@ -59,6 +61,7 @@ advance(void)
 }
 /*e: function [[advance]] */
 /*s: function [[getnext]] */
+/// yylex -> nextc -> <>
 /*
  * read a character from the input stream
  */	
@@ -70,26 +73,26 @@ getnext(void)
     static int peekc = EOF;
     /*e: [[getnext()]] other locals */
 
-    /*s: [[getnext()]] peekc handling */
+    /*s: [[getnext()]] before read, peekc handling */
     if(peekc!=EOF){
         c = peekc;
         peekc = EOF;
         return c;
     }
-    /*e: [[getnext()]] peekc handling */
-    /*s: [[getnext()]] return if already at EOF */
+    /*e: [[getnext()]] before read, peekc handling */
+    /*s: [[getnext()]] before read, return if already at EOF */
     if(runq->eof)
         return EOF;
-    /*e: [[getnext()]] return if already at EOF */
-    /*s: [[getnext()]] prompt management before reading the character */
+    /*e: [[getnext()]] before read, return if already at EOF */
+    /*s: [[getnext()]] before read, prompt management */
     if(doprompt)
         // pprompt() internally set doprompt back to false at the end
         pprompt();
-    /*e: [[getnext()]] prompt management before reading the character */
+    /*e: [[getnext()]] before read, prompt management */
 
     c = rchr(runq->cmdfd);
 
-    /*s: [[getnext()]] handle backslash */
+    /*s: [[getnext()]] after read, handle backslash */
     if(!inquote && c=='\\'){
 
         c = rchr(runq->cmdfd);
@@ -105,19 +108,19 @@ getnext(void)
             c='\\';
         }
     }
-    /*e: [[getnext()]] handle backslash */
-    /*s: [[getnext()]] prompt management after the character is read */
+    /*e: [[getnext()]] after read, handle backslash */
+    /*s: [[getnext()]] after read, prompt management */
     doprompt = doprompt || c=='\n' || c==EOF;
-    /*e: [[getnext()]] prompt management after the character is read */
-    /*s: [[getnext()]] if character read is EOF */
+    /*e: [[getnext()]] after read, prompt management */
+    /*s: [[getnext()]] after read, if EOF */
     if(c==EOF)
         runq->eof = true;
-    /*e: [[getnext()]] if character read is EOF */
-    /*s: [[getnext()]] if not EOF but verbose mode, print character read */
+    /*e: [[getnext()]] after read, if EOF */
+    /*s: [[getnext()]] after read, if not EOF but verbose mode, print character read */
     else 
         if(flag['V'] || ndot>=2 && flag['v'])
             pchr(err, c);
-    /*e: [[getnext()]] if not EOF but verbose mode, print character read */
+    /*e: [[getnext()]] after read, if not EOF but verbose mode, print character read */
 
     return c;
 }
@@ -148,6 +151,7 @@ pprompt(void)
 
 
 /*s: function [[nextis]] */
+/// yylex -> <>
 bool
 nextis(int c)
 {
@@ -229,7 +233,7 @@ tree*
 klook(char *name)
 {
     struct Kw *p;
-    tree *t = token(name, WORD);
+    tree *t = token(name, WORD); // default if actually not a keyword
 
     for(p = kw[hash(name, NKW)];p;p = p->next)
         if(strcmp(p->name, name)==0){

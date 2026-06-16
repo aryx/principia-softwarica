@@ -23,11 +23,11 @@
 /*x: token declarations */
 %token PCMD
 /*x: token declarations */
+%token PIPEFD 
+/*x: token declarations */
 %token SUBSHELL /** @ */
 /*x: token declarations */
 %token DUP
-/*x: token declarations */
-%token PIPEFD 
 /*e: token declarations */
 /*s: priority and associativity declarations */
 /* operator priorities -- lowest first */
@@ -82,10 +82,10 @@ cmd:
 /*x: cmd rule other cases */
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
 |   IF NOT   {skipnl();} cmd  {$$=mung1($2, $4);}
-
+/*x: cmd rule other cases */
 |   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
 |   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
-
+/*x: cmd rule other cases */
  /*
   * if ``words'' is nil, we need a tree element to distinguish between 
   * for(i in ) and for(i), the former being a loop over the empty set
