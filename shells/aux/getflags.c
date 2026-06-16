@@ -1,3 +1,4 @@
+/*s: aux/getflags.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -136,3 +137,4 @@ main(int argc, char *argv[])
     fmtfdflush(&fmt);
     exits(0);
 }
+/*e: aux/getflags.c */

@@ -1,3 +1,4 @@
+/*s: aux/usage.c */
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
@@ -70,3 +71,5 @@ main(void)
     fmtfdflush(&fmt);
     exits("usage");
 }
+
+/*e: aux/usage.c */
