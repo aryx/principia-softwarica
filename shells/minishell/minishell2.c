@@ -1,3 +1,4 @@
+/*s: minishell2.c */
 #include <u.h>
 #include <libc.h>
 
@@ -60,3 +61,4 @@ void main() {
   }
   exits(nil);
 }
+/*e: minishell2.c */
