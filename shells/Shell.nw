@@ -9144,9 +9144,9 @@ fn sigexit
 % note that different from regexp, does not do .* because .
 % used too much in filename for extension, so *.c is better than .*\\.c
 %claude:
-Globbing (also called wildcard expansion or pathname expansion)
+Globbing, also called wildcard expansion or pathname expansion,
 is one of the key features of a shell: when you write [[ls *.c]],
-the shell expands [[*.c]] into the list of matching filenames
+the shell {\em expands} [[*.c]] into the list of matching filenames
 {\em before} passing them to [[ls]].
 %
 This is a deliberate design choice: the expansion is done
@@ -9184,7 +9184,7 @@ right points.
 And at runtime, the actual matching is done
 by [<globlist()>], which walks directories and filters
 filenames against the pattern using [<matchfn()>],
-as explained by the following sections.
+as explained in the following sections.
 
 \section{Lexing globbing characters}
 
@@ -9199,8 +9199,9 @@ these markers when they are no longer needed.
 %claude:
 Concretely, here is how the two patterns [[*.c]] and
 [['*.c']] end up in memory after lexing. Both produce a
-single [[Word]] with a [[word]] field of length~4,
-but the bytes differ:
+single [[Word]], but the bytes differ:
+
+%claude:
 \begin{verbatim}
   wildcard *.c  ->   byte:  \001  '*'  '.'  'c'  '\0'
                             ^^^^   ^
@@ -9214,7 +9215,7 @@ but the bytes differ:
 %  possible?
 
 %claude:
-The in-band marker solves a real tension: the shell
+The {\em in-band} marker solves a real tension: the shell
 needs to carry these strings through [[^]] concatenation,
 variable substitution, and command substitution without
 losing the ``is this [[*]] a wildcard?'' bit. Using a
@@ -9225,8 +9226,8 @@ every string-manipulation function ([[strdup]], [[strcat]],
 (which never contain [[\001]] because that is a
 C0-control code and not a valid start byte for any
 Rune sequence) so that ordinary [[strcpy]] just works.
-The only cost is that [[match]] must skip over the
-marker, and [[deglob]] must strip it once matching is
+The only cost is that [<match()>] must skip over the
+marker, and [<deglob()>] must strip it once matching is
 done.
 
 <<constant [[GLOB]]>>=
@@ -9289,12 +9290,31 @@ Xglob(void)
 
 %yoann: why not add Xglob for SIMPLE cases too? generate a Xglob instead
 %  of calling yourself globlist() in Xsimple ?
+%claude:
+For a simple command, the argument list is globbed by calling
+[[globlist()]] directly inside [[Xsimple]], rather than through a separate
+[[Xglob]] bytecode emitted by the compiler (as the [[REDIR]] and [[FOR]]
+cases do). The reason for the asymmetry is that a simple command is by far
+the most common thing a shell runs, and its arguments always have to be
+globbed right before the [[exec]]. Folding the call into [[Xsimple]] saves
+emitting and dispatching a separate [[Xglob]] bytecode for every command.
+Redirections and [[for]] loops have no such fused instruction to piggyback
+on, so there the compiler emits a standalone [[Xglob]].
 
 <<[[Xsimple()]] initializations, [[globlist()]]>>=
 globlist();
 @
 
 %yoann: explain globv global, what will it contain after globlist?
+%claude:
+[<globv>] is the accumulator for expansion. [<globlist()>] resets it to
+[[nil]], then walks the command's word list calling [<glob()>] on each
+word; [[glob()]] pushes every matching filename (or, when nothing matches,
+the literal word) onto [[globv]]. So when [[globlist()]] returns, [[globv]]
+holds the fully expanded argument list, which is then spliced back in as
+the command's [[argv]]. It is a global rather than a parameter because the
+expansion recurses deeply through [[globdir()]], and a shared accumulator
+saves threading an output list through every recursive call.
 
 <<global [[globv]]>>=
 // list<ref_own<Word>>
@@ -9464,9 +9484,9 @@ globsort(word *left, word *right)
 Walking through [[ls src/*.c]] makes the recursion concrete.
 %
 After lexing, the argument is the byte string
-[[src/\001*.c]]. [<globdir>] is called with [[p]]
+[[src/\001*.c]]. [<globdir()>] is called with [[p]]
 pointing at the start of that pattern and [[namep]]
-pointing at the start of an empty [[globname]] buffer.
+pointing at the start of an empty [<globname>] buffer.
 The loop copies literal bytes into [[globname]] until it
 hits the first [[GLOB]] marker:
 
@@ -9493,14 +9513,17 @@ hits the first [[GLOB]] marker:
 \end{vdiagram}
 
 %claude:
-Two subtleties of this design are worth naming. First,
-[[globdir]] recurses {per component}, not per character:
+Two subtleties of this design are worth naming.
+%
+First, [<globdir()>] recurses {per component}, not per character:
 a pattern like [[*/*.c]] visits every directory in the
 current directory with a first-level call, then for each
 matching directory makes a second-level call that scans
-its entries. This is why [[match]] stops at the first
+its entries. This is why [<match()>] stops at the first
 slash---it only ever matches a single component at a
-time. Second, if nothing matches, [[glob]] returns the
+time.
+%
+Second, if nothing matches, [<glob()>] returns the
 {pattern itself} (with [[GLOB]] bytes stripped) as the
 only result; this is the ``no expansion'' behaviour
 inherited from \unix. It means that in [[rc]], typing
@@ -9735,7 +9758,17 @@ Globsize(char *p)
 
 \section{Directory walking}
 
-%yoann: intro section
+%claude:
+[<globdir()>] needs to read a directory one name at a time, but \plan's
+[[dirread()]] hands back a whole buffer of [[Dir]] structures at once. This
+section bridges the two with a small [[stdio]]-like layer---[<Opendir()>],
+[<Readdir()>], [<Closedir()>]---that returns entries singly, buffering the
+rest in a per-file-descriptor table [[dir[NFD]]] indexed by the open [[fd]].
+%
+The one twist over a plain directory reader is the [[onlydirs]]
+hint: when the pattern still has path components left to match, only
+subdirectories can lead anywhere, so [[Readdir()]] may ask the system to
+skip plain files.
 
 <<constant [[NFD]]>>=
 #define	NFD	50
