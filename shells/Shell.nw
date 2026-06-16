@@ -6537,7 +6537,6 @@ else if(p->f==Xpipe)
 @
 
 
-% mypid is global set at the very beginning
 <<function [[Xexit]]>>=
 void
 Xexit(void)
@@ -8633,9 +8632,6 @@ Vinit(void)
 fdt envdir;
 @
 
-%\section{Functions in the environment}
-% see later with finit
-
 \subsection{Special variables}
 \label{sec:special-variables}
 %alt: in Env chapter? in Init chapter? in Var codegen section?
@@ -8694,6 +8690,100 @@ namespace---so it can use the quieter lowercase spellings.
 
 
 
+
+
+\subsection{[[% finit]]}
+\label{sec:builtin-finit}
+%alt: Functions in the environment
+%alt: move in Environment chapter, in advanced builtins
+
+%claude:
+The [[finit]] builtin re-reads function definitions
+from the [[/env]] filesystem.
+%
+This is Plan~9-specific:
+when another process (e.g., a parent shell) defines a
+function, it appears as a file \verb+/env/fn#name+.
+%
+[[finit]] scans [[/env]] for these \verb+fn#+ files
+and executes them to import the function definitions
+into the current shell.
+%
+It uses a small hand-crafted
+bytecode loop ([[rdfns]]) similar to the bootstrap
+code, with [[Xrdfn]] reading one function file per
+iteration.
+
+<<global [[rdfns]]>>=
+union Code rdfns[4];
+@
+
+<<function [[execfinit]]>>=
+/// "finit" builtin -> <>
+void
+execfinit(void)
+{
+    //TODO: commented for goken for now because Linux does not have a /env
+    // probably need to move to Plan9.c
+    //static bool first = true;
+    //if(first){
+    //    rdfns[0].i = 1;
+    //    rdfns[1].f = Xrdfn;
+    //    rdfns[2].f = Xjump;
+    //    rdfns[3].i = 1;
+    //    first = false;
+    //}
+    //Xpopm(); // pop_list()
+    //envdir = open("/env", 0);
+    //if(envdir<0){
+    //    pfmt(err, "rc: can't open /env: %r\n");
+    //    return;
+    //}
+    //start(rdfns, 1, runq->local);
+}
+@
+\l should call pop_list(), not Xpopm
+
+% really need that? nice that enclosing script
+% can define function that can be used in callee
+% bug could also do it by using '.'
+<<function [[Xrdfn]]>>=
+void
+Xrdfn(void)
+{
+    int f, len;
+    Dir *e;
+    char envname[Maxenvname];
+    static Dir *ent, *allocent;
+    static int nent;
+
+    for(;;){
+        if(nent == 0){
+            free(allocent);
+            nent = dirread(envdir, &allocent);
+            ent = allocent;
+        }
+        if(nent <= 0)
+            break;
+        while(nent){
+            e = ent++;
+            nent--;
+            len = e->length;
+            if(len && strncmp(e->name, "fn#", 3)==0){
+                snprint(envname, sizeof envname, "/env/%s", e->name);
+                if((f = open(envname, 0))>=0){
+                    execcmds(openfd(f));
+                    return;
+                }
+            }
+        }
+    }
+    close(envdir);
+    Xreturn();
+}
+@
+
+%yoann: say we will see soon finit called in /lib/rc/rcmain init script
 
 %******************************************************************************
 \chapter{Initialization}
@@ -8761,8 +8851,9 @@ the right things'' and ``stay backwards compatible with
 %claude:
 [[rc]] takes a much simpler position. Every invocation,
 login or not, runs exactly one file: [[/rc/lib/rcmain]]
-(system-wide, sourced by the bootstrap bytecodes shown
-below). For login shells, [[rcmain]] then sources
+(sourced by the bootstrap bytecodes shown below).
+%
+For login shells, [[rcmain]] then sources
 \verb+~/lib/profile+ for user customization
 (actually [[$home/lib/profile]] because \verb+~+ is not handled
 by [[rc]]).
@@ -8804,34 +8895,29 @@ The bootstrap is essentially the bytecode equivalent of:
 %claude:
 The two-line script above is encoded as a sequence of
 bytecodes filling the [[bootstrap]] array.
-The first group ([[Xmark]], [[Xword "*"]], [[Xassign]])
-assigns the command-line arguments to [[$*]].
-%
-The second group builds the argument list for the [[.]] builtin:
-it pushes [[$*]] (via [[Xdol]]), the path to [[rcmain]],
-and the [[.]] command itself, then calls [[Xsimple]].
+
 
 <<[[main()]] initialize [[boostrap]]>>=
 memset(bootstrap, 0, sizeof bootstrap);
 
 i = 0;
 bootstrap[i++].i=1; // ref count
-// runq->argv is populated with the arguments to rc
-// we just need to add '*=(argv)'
+// runq->argv is populated with the arguments to rc (argv)
+// we just need to add '*=...'
 bootstrap[i++].f = Xmark;
   bootstrap[i++].f = Xword;
-  bootstrap[i++].s="*";
+  bootstrap[i++].s = "*";
 bootstrap[i++].f = Xassign; // will pop_list() x2
 
 bootstrap[i++].f = Xmark;
   bootstrap[i++].f = Xmark;
     bootstrap[i++].f = Xword;
-    bootstrap[i++].s="*";
+    bootstrap[i++].s = "*";
   bootstrap[i++].f = Xdol; // will pop_list()
   bootstrap[i++].f = Xword;
   bootstrap[i++].s = rcmain;
   bootstrap[i++].f = Xword;
-  bootstrap[i++].s=".";
+  bootstrap[i++].s = ".";
 bootstrap[i++].f = Xsimple; // will pop_list()
 
 bootstrap[i++].f = Xexit;
@@ -8839,6 +8925,14 @@ bootstrap[i++].f = Xexit;
 bootstrap[i].i = 0;
 @
 %new: I indented to better see which Xmark correspond to what.
+
+%claude:
+The first group ([[Xmark]], [[Xword "*"]], [[Xassign]])
+assigns the command-line arguments to [[$*]].
+%
+The second group builds the argument list for the [[.]] builtin:
+it pushes [[$*]] (via [[Xdol]]), the path to [[rcmain]],
+and the [[.]] command itself, then calls [[Xsimple]].
 
 % It is Xassign (varname)(vals)
 % but there is only one XMark above. Because runq->argv is initialized
@@ -8891,12 +8985,11 @@ useful for creating unique temporary filenames).
 int mypid;
 @
 
-%yoann: say seen a few code before using mypid
 %claude:
-We have already run into [[mypid]] in earlier code: [<Xexit>] compares
-[[getpid()]] against it so that only the original shell process---not its
-forked children---runs an exit trap. Here is where that global is finally
-given its value, [[getpid()]] at startup.
+%We have already run into [[mypid]] in earlier code: [<Xexit>] compares
+%[[getpid()]] against it so that only the original shell process---not its
+%forked children---runs an exit trap. Here is where that global is finally
+%given its value, [[getpid()]] at startup.
 
 <<[[main()]] locals>>=
 char num[12];
@@ -8914,15 +9007,24 @@ setvar("pid", newword(num, (word *)nil));
 \label{sec:rcmain}
 
 %claude:
-This is finally the initialization script sourced by the bootstrap bytecodes.
+I can finally show the initialization script sourced by the bootstrap bytecodes.
 % (see Chapter~\ref{chap:initialization-real}).
 It sets up default values for the special variables
 [[$home]], [[$ifs]], [[$prompt]], and [[$path]],
-calls [[finit]] to import shell functions from the environment, and then
+calls [[finit]] to import shell functions from the environment
+(see Section~\ref{sec:builtin-finit}), and then
 dispatches based on how [[rc]] was invoked:
 with [[-c]] (run a command string),
 with [[-i]] (interactive, source the user's profile and read from the console),
 or with a script file argument.
+
+%yoann: can also say interesting see a few advanced features or rc, if not, switch, and more
+%claude:
+This short script doubles as a tour of [[rc]]'s control flow. It uses the
+\verb+~+ match operator to test counts (\verb+~ $#home 0+), a [[switch]], and
+especially [[if not]]---[[rc]]'s spelling of ``else'', which binds to the
+preceding [[if]] so that the chain of [[if not if]] reads as a cascade of
+conditionals.
 
 <<rc/rcmain.rc>>=
 # /lib/rc/rcmain, Plan 9 version
@@ -8937,7 +9039,7 @@ case 0
 case 1
         prompt=($prompt '       ')
 }
-<<rcmain.rc possibly set broken prompt>>
+<<[[rcmain.rc]] possibly set broken prompt>>
 
 if(flag p) path=/bin
 if not{
@@ -8945,11 +9047,11 @@ if not{
         if(~ $#path 0) path=(. /bin)
 }
 
-<<rcmain.rc delete [[sigexit]]>>
+<<[[rcmain.rc]] delete [[sigexit]]>>
 
-<<rcmain.rc if [[-c]] flag>>
+<<[[rcmain.rc]] if [[-c]] flag>>
 if not if(flag i){
-        <<rcmain.rc if [[-l]], source user's profile>>
+        <<[[rcmain.rc]] if [[-l]], source user's profile>>
         status=''
         # if arguments, probably a script, source the script (and pass args)
         if(! ~ $#* 0) . $*
@@ -8975,39 +9077,35 @@ its very first program.
 
 %yoann: can maybe explain rc -p, kinda safer rc (use cases?)
 %claude:
-The [[-p]] flag (tested here as [[flag p]]) selects a more cautious
-[[rc]]. Normally the shell calls [[finit]], which imports function
-definitions from [[/env]]---the exported functions of whatever started
+The [[-p]] flag (tested here as [[flag p]], see Section~\ref{sec:builtin-flag}
+for the code of this builtin) selects a more cautious [[rc]].
+%
+Normally the shell calls [[finit]], which imports function
+definitions from [[/env]] (see Section~\ref{sec:builtin-finit})---the exported functions of whatever started
 it---and defaults [[$path]] to [[(. /bin)]], current directory included.
+%
 With [[-p]] neither happens: [[$path]] becomes just [[/bin]] and no
 functions are inherited. This matters in an untrusted context (say a
 set-user-id script), where an attacker-supplied function in the
 environment, or a [[.]] early in [[$path]], could hijack a plain command
 name.
 
-%yoann: can also say interesting see a few advanced features or rc, if not, switch, and more
-%claude:
-This short script doubles as a tour of [[rc]]'s control flow. It uses the
-[[~]] match operator to test counts ([[~ $#home 0]]), a [[switch]], and
-especially [[if not]]---[[rc]]'s spelling of ``else'', which binds to the
-preceding [[if]] so that the chain of [[if not if]] reads as a cascade of
-conditionals.
 
 %yoann: why need pass -i to . '#d/0' ?
 %claude:
-The file \verb+#d/0+ is the [[#d]] file-descriptor device opened at entry
+The file \verb+#d/0+ above is the [[#d]] file-descriptor device opened at entry
 0---the shell's own standard input. Sourcing it with [[. -i]] turns that
 input into an interactive command loop: the [[-i]] flag makes the nested
 [[.]] set [[iflag]] on its [[runq]], so it prints a prompt between
 commands and does not abort on the first error---exactly what is wanted
 when a human is typing. The same file sourced without [[-i]] (the
-[[. '#d/0']] on the line below, for a non-interactive [[rc]] reading a
+[[. '#d/0']] on the lines below and before, for a non-interactive [[rc]] reading a
 piped script) runs silently and stops at end of input.
 
 
 %yoann: one line on rcname use below
 %claude:
-[[$rcname]] records the name [[rc]] was invoked as ([[argv[0]]]); the
+[[$rcname]] below records the name [[rc]] was invoked as ([[argv[0]]]); the
 chunk just below uses it to notice when the shell is a freshly compiled,
 not-yet-installed binary (the default [[?.out]] output name) and warns
 you with a ``broken!'' prompt.
@@ -9015,7 +9113,7 @@ you with a ``broken!'' prompt.
 <<[[main()]] initialisation>>=
 setvar("rcname", newword(argv[0], (word *)nil));
 @
-<<rcmain.rc possibly set broken prompt>>=
+<<[[rcmain.rc]] possibly set broken prompt>>=
 if(~ $rcname ?.out) prompt=('broken! ' '        ')
 @
 
@@ -9027,7 +9125,7 @@ A child shell should not silently inherit and re-run its parent's exit
 handler, so [[fn sigexit]] with an empty body deletes any such inherited
 definition.
 
-<<rcmain.rc delete [[sigexit]]>>=
+<<[[rcmain.rc]] delete [[sigexit]]>>=
 fn sigexit
 @
 
@@ -10084,6 +10182,7 @@ struct Word *starval;
 static bool beenhere = false;
 @
 
+% mypid is global set at the very beginning
 <<[[Xexit()]] trap management>>=
 if(getpid()==mypid && !beenhere){
     trapreq = vlook("sigexit");
@@ -10150,9 +10249,9 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 
 % cflag will contain the -c arguments!
 
-<<rcmain.rc if [[-c]] flag>>=
+<<[[rcmain.rc]] if [[-c]] flag>>=
 if(! ~ $#cflag 0){
-        <<rcmain.rc if [[-l]], source user's profile>>
+        <<[[rcmain.rc]] if [[-l]], source user's profile>>
         status=''
         eval $cflag
 }
@@ -11469,13 +11568,17 @@ execnewpgrp(void)
 @
 
 \subsection{[[% flag]]}
+\label{sec:builtin-flag}
 
 %claude:
 The [[flag]] builtin queries and sets [[rc]]'s own
 command-line flags at runtime.
+%
 [[flag e +]] enables [[-e]] (exit on error),
 [[flag e -]] disables it, and [[flag e]] alone tests
 whether it is set (via the exit status).
+
+%yoann: say used before in /lib/rc/rcmain in Section X to configure rc from rc (e.g., flag p)
 
 <<function [[execflag]]>>=
 void
@@ -11548,91 +11651,6 @@ execshift(void)
     poplist();
 }
 @
-
-
-\subsection{[[% finit]]}
-
-%claude:
-The [[finit]] builtin re-reads function definitions
-from the [[/env]] filesystem.  This is Plan~9-specific:
-when another process (e.g., a parent shell) defines a
-function, it appears as a file \verb+/env/fn#name+.
-[[finit]] scans [[/env]] for these \verb+fn#+ files
-and executes them to import the function definitions
-into the current shell.  It uses a small hand-crafted
-bytecode loop ([[rdfns]]) similar to the bootstrap
-code, with [[Xrdfn]] reading one function file per
-iteration.
-
-<<global [[rdfns]]>>=
-union Code rdfns[4];
-@
-
-<<function [[execfinit]]>>=
-/// "finit" builtin -> <>
-void
-execfinit(void)
-{
-    //TODO: commented for goken for now because Linux does not have a /env
-    // probably need to move to Plan9.c
-    //static bool first = true;
-    //if(first){
-    //    rdfns[0].i = 1;
-    //    rdfns[1].f = Xrdfn;
-    //    rdfns[2].f = Xjump;
-    //    rdfns[3].i = 1;
-    //    first = false;
-    //}
-    //Xpopm(); // pop_list()
-    //envdir = open("/env", 0);
-    //if(envdir<0){
-    //    pfmt(err, "rc: can't open /env: %r\n");
-    //    return;
-    //}
-    //start(rdfns, 1, runq->local);
-}
-@
-\l should call pop_list(), not Xpopm
-
-% really need that? nice that enclosing script
-% can define function that can be used in callee
-% bug could also do it by using '.'
-<<function [[Xrdfn]]>>=
-void
-Xrdfn(void)
-{
-    int f, len;
-    Dir *e;
-    char envname[Maxenvname];
-    static Dir *ent, *allocent;
-    static int nent;
-
-    for(;;){
-        if(nent == 0){
-            free(allocent);
-            nent = dirread(envdir, &allocent);
-            ent = allocent;
-        }
-        if(nent <= 0)
-            break;
-        while(nent){
-            e = ent++;
-            nent--;
-            len = e->length;
-            if(len && strncmp(e->name, "fn#", 3)==0){
-                snprint(envname, sizeof envname, "/env/%s", e->name);
-                if((f = open(envname, 0))>=0){
-                    execcmds(openfd(f));
-                    return;
-                }
-            }
-        }
-    }
-    close(envdir);
-    Xreturn();
-}
-@
-
 
 
 %******************************************************************************
@@ -13126,7 +13144,7 @@ sourced by [[rcmain]] when [[rc]] is invoked with the
 [[-l]] (login shell) flag.
 % (the [[flag l]] test in [[rcmain]] above).
 
-<<rcmain.rc if [[-l]], source user's profile>>=
+<<[[rcmain.rc]] if [[-l]], source user's profile>>=
 if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
 @
 % see /bin/test -r in next appendix
