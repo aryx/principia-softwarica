@@ -10364,6 +10364,7 @@ so you cannot enable it from within a script.
 The check is only inserted after simple commands, not after
 control flow constructs like [[if]] or [[||]], since a false
 condition in [[if(test ...)]] should not abort the script.
+%yoann1: but what about the flag e? it can be enabled from within a script then?
 
 <<[[outcode()]] emit Xeflag after Xsimple>>=
 if(eflag)
@@ -10488,9 +10489,9 @@ in command substitution reads its input rune by rune (the [[rutf]] loop in
 %claude:
 The constructs in this section are where [[rc]] goes past the common shell
 core. Each is a small, self-contained extension---a grammar rule, a
-bytecode, and a runtime function---layered on the machinery already built:
-command and process substitution, subshells, list stringification, and
-here documents.
+bytecode, and a runtime function---layered on the machinery already built.
+%: command and process substitution, subshells, list stringification, and
+%here documents.
 
 \subsection{Command substitution: \texttt{`\{<cmd>\}}}
 % Command output as arguments
@@ -10508,7 +10509,7 @@ Command substitution captures a command's stdout as a list
 of words.  The Bourne shell uses backticks [[`cmd`]],
 which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
 which nests naturally---\plan scripts routinely write things like
-\verb+`{dirname `{cleanname $file}}+.
+\verb+dir=`{dirname `{cleanname $file}}+.
 
 The output is split into words using [[$ifs]]
 (inter-field separators, defaulting to space, tab, newline,
@@ -10678,8 +10679,9 @@ and passes their outputs as filenames to [[cmp]].
 %claude: %modern:
 This is the same capability [[bash]] and [[ksh]] later exposed as
 \verb+<(cmd)+. All of them rely on the [[/dev/fd]] device (here \plan's
-[[/fd]]), which originated at Bell Labs---so process substitution is not a
-modern feature [[rc]] is missing, but one it had early.
+[[/fd]]), which originated in \plan.
+%---so process substitution is not a
+%modern feature [[rc]] is missing, but one it had early.
 
 %claude:
 This appears in the [[comword]] rule because it
@@ -10780,17 +10782,18 @@ Xpipefd(void)
 %claude:
 The [[@]] operator runs a command in a child process,
 so that side effects like [[cd]] or variable assignments
-do not affect the parent. 
+do not affect the parent\footnote{
+This isolation works because [[fork()]] gives the child its own copy of the
+[[/env]] namespace, so the assignments it makes land in that copy.
+Processes that deliberately {\em share} an environment group (an [[rfork]]
+without [[RFENVG]]) would, by contrast, see each other's variable changes.
+}.
 %
 Braces \verb+{...}+ group commands
 but execute them in the current process---so \verb+{cd /tmp; ls}+
 would change the parent's directory.  With \verb+@{cd /tmp; ls}+,
 the directory change is confined to the subshell.
 %
-This isolation works because [[fork]] gives the child its own copy of the
-[[/env]] namespace, so the assignments it makes land in that copy.
-Processes that deliberately {\em share} an environment group (an [[rfork]]
-without [[RFENVG]]) would, by contrast, see each other's variable changes.
 
 This is particularly useful in [[mkfile]] recipes that iterate
 over subdirectories:
@@ -10973,9 +10976,9 @@ script is self-contained and easy to move around.
 A variable would not work as well here: shell variables
 are word lists, so multi-line structure (newlines,
 whitespace, special characters) would be lost.
-A here document feeds the data as a raw byte stream
-to stdin, which is exactly what programs like [[grep]]
-or [[sed]] expect.
+%A here document feeds the data as a raw byte stream
+%to stdin, which is exactly what programs like [[grep]]
+%or [[sed]] expect.
 
 The implementation is clever: during parsing, [[heredoc()]]
 creates a temporary file (in [[/tmp]]) and records the
@@ -11876,13 +11879,14 @@ execshift(void)
 %  - fish features!
 
 %claude:
-You now know how the \plan shell [[rc]] works---from the
-lexer that splits input into tokens, through the Yacc parser
-that builds an AST, the bytecode compiler that emits function
-pointers, to the interpreter that executes them via the
-[[fork]]/[[exec]]/[[wait]] system call pattern---and more
-generally how many shells work.
-
+You now know how the \plan shell [[rc]] works,
+%---from the
+%lexer that splits input into tokens, through the Yacc parser
+%that builds an AST, the bytecode compiler that emits function
+%pointers, to the interpreter that executes them via the
+%[[fork]]/[[exec]]/[[wait]] system call pattern---
+and more generally how many shells work.
+%
 Despite being only about 5700 lines of C (plus a small Yacc grammar),
 [[rc]] implements a complete programming language:
 a hand-written lexer, a Yacc parser, a bytecode compiler,
@@ -11990,11 +11994,11 @@ power in a typical [[rc]] script actually comes from.
 
 
 
-\section{Missing features}
+\section{Missing features?}
 
 [[rc]] is deliberately minimal.
 Many features that other shells provide are instead
-handled by the \plan window manager [[rio]]:
+handled by other programs, for instance the \plan window manager [[rio]]:
 
 \begin{itemize}
 \item {\em Command-line editing and history:}
@@ -12016,20 +12020,21 @@ The [[&]] operator and [[wait $apid]] cover most use cases.
 Not needed because [[fn]] (functions) serve the same purpose
 and are stored persistently in the environment.
 
-\item \emph{POSIX compliance}: [[rc]] deliberately
-ignores the POSIX shell standard, which gives it a
-cleaner syntax but means scripts are not portable.
-%
-Most Linux distributions require [[/bin/sh]] scripts
-to work with any POSIX-compliant shell ([[dash]],
-[[bash --posix]]), and POSIX compliance remains
-important for portable system scripts.
+\item \emph{String manipulation}: [[bash]] % and [[zsh]]
+provide parameter expansion operators for substring
+extraction (\verb|${var:offset:length}|), pattern
+replacement (\verb|${var//pat/rep}|), and case
+conversion. [[rc]]'s position is that these operations
+belong in dedicated tools like [[sed]] and [[awk]],
+not in the shell itself---keeping the shell language
+small and letting each tool do one thing well.
 
 \end{itemize}
 
 This separation of concerns---keeping the shell simple
 and letting the terminal handle interactive features---is
 a characteristic \plan design decision.
+%
 It contrasts with shells like [[bash]] or [[zsh]],
 which include tens of thousands of lines of code
 for features that [[rc]] delegates elsewhere.
@@ -12052,14 +12057,6 @@ instead of text. Nushell follows a similar philosophy
 with typed, tabular data---an interesting departure
 from the \unix tradition of plain-text pipelines.
 
-\item \emph{String manipulation}: [[bash]] % and [[zsh]]
-provide parameter expansion operators for substring
-extraction (\verb|${var:offset:length}|), pattern
-replacement (\verb|${var//pat/rep}|), and case
-conversion. [[rc]]'s position is that these operations
-belong in dedicated tools like [[sed]] and [[awk]],
-not in the shell itself---keeping the shell language
-small and letting each tool do one thing well.
 
 \item \emph{Interactive features}: beyond the readline
 and history that [[rio]] provides, modern shells
@@ -12069,17 +12066,26 @@ highlighting as you type ([[fish]], [[zsh]] with
 plugins), and autosuggestions from history ([[fish]]).
 [[zsh]] has entire plugin ecosystems (oh-my-zsh).
 
-\item \emph{Error handling}: [[rc]]'s model is [[$status]] and [[if not]],
-plus the [[-e]] flag (Section~\ref{sec:rc-e}) for exit-on-error---so
-[[bash]]'s [[set -e]] is nothing new to it. [[bash]] also
-adds [[set -o pipefail]] to propagate failures from the middle of a pipeline; [[rc]]
-needs no such option because its [[$status]] is already a list reporting
-{\em every} stage (a string like [["0|0|1"]]), so a failure anywhere in
-the pipe is visible by construction. The Oil shell (Oils) goes further
-still, with error handling designed to avoid the well-known pitfalls of
-[[set -e]]---which silently stops applying inside [[if]] and [[while]]
-conditions, [[&&]] and [[||]] chains, and most function calls, so it fails
-to abort in exactly the places a programmer expects it to.
+%\item \emph{Error handling}: [[rc]]'s model is [[$status]] and [[if not]],
+%plus the [[-e]] flag (Section~\ref{sec:rc-e}) for exit-on-error---so
+%[[bash]]'s [[set -e]] is nothing new to it. [[bash]] also
+%adds [[set -o pipefail]] to propagate failures from the middle of a pipeline; [[rc]]
+%needs no such option because its [[$status]] is already a list reporting
+%{\em every} stage (a string like [["0|0|1"]]), so a failure anywhere in
+%the pipe is visible by construction. The Oil shell (Oils) goes further
+%still, with error handling designed to avoid the well-known pitfalls of
+%[[set -e]]---which silently stops applying inside [[if]] and [[while]]
+%conditions, [[&&]] and [[||]] chains, and most function calls, so it fails
+%to abort in exactly the places a programmer expects it to.
+
+\item \emph{POSIX compliance}: [[rc]] deliberately
+ignores the POSIX shell standard, which gives it a
+cleaner syntax but means scripts are not portable.
+%
+Most Linux distributions require [[/bin/sh]] scripts
+to work with any POSIX-compliant shell ([[dash]],
+[[bash --posix]]), and POSIX compliance remains
+important for portable system scripts.
 
 
 \end{itemize}
