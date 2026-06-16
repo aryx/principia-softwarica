@@ -8780,7 +8780,6 @@ Xrdfn(void)
 }
 @
 
-%yoann: say we will see soon finit called in /lib/rc/rcmain init script
 %claude: %trans:
 We have now seen how [[finit]] works: it scans [[/env]] for \verb+fn#+
 files and runs each one to recreate the functions a parent shell
@@ -9130,9 +9129,9 @@ fn sigexit
 %******************************************************************************
 \chapter{Globbing}
 %******************************************************************************
-\n could be in advanced topics, but important feature in a shell
-% patterns. wildcards.
 \label{chap:globbing}
+%alt: could be in adv topics, but important feature in a shell
+%alt: patterns. wildcards.
 
 % Give responsibility to shell to interpter '*' not program
 
@@ -9153,19 +9152,20 @@ the shell expands [[*.c]] into the list of matching filenames
 This is a deliberate design choice: the expansion is done
 by the shell, not by the individual programs, which
 factorizes the functionality.
+%said-before: in Intro.nw now
 %history:
-In the original Unix shell, globbing was actually handled
-by a separate external program called [[glob]].
-In MS-DOS, the opposite approach was taken: wildcards are
-passed unexpanded to each program, which must interpret
-them itself. This is generally worse (every program
-must reimplement the logic), but it does allow commands
-like [[ren *.txt *.bak]] to have a meaning---the program
-sees both patterns and can pair them up, something
-that is impossible when the shell expands both arguments
-independently.
+%In the original Unix shell, globbing was actually handled
+%by a separate external program called [[glob]].
+%In MS-DOS, the opposite approach was taken: wildcards are
+%passed unexpanded to each program, which must interpret
+%them itself. This is generally worse (every program
+%must reimplement the logic), but it does allow commands
+%like [[ren *.txt *.bak]] to have a meaning---the program
+%sees both patterns and can pair them up, something
+%that is impossible when the shell expands both arguments
+%independently.
 
-%
+%claude:
 The glob patterns [[*]], [[?]], and \verb+[]+ are different
 from regular expressions: [[*]] matches any string
 (not ``any number of the preceding character''), and [[?]]
@@ -9173,15 +9173,18 @@ matches any single character. This is more practical
 for filenames, where [[*.c]] is more natural than the
 regex [[.*\.c]].
 
-%toc:
-%claude:
+%claude: %toc:
 Globbing touches several phases of the interpreter.
 The lexer marks glob characters with a special escape byte
 so they can be distinguished from literal characters.
+%
 The bytecode generator emits [<Xglob>] instructions at the
-right points. And at runtime, the actual matching is done
+right points.
+%
+And at runtime, the actual matching is done
 by [<globlist()>], which walks directories and filters
-filenames against the pattern using [<matchfn()>].
+filenames against the pattern using [<matchfn()>],
+as explained by the following sections.
 
 \section{Lexing globbing characters}
 
@@ -9206,6 +9209,10 @@ but the bytes differ:
   quoted '*.c'  ->   byte:  '*'  '.'  'c'  '\0'
                             (no GLOB marker, literal star)
 \end{verbatim}
+
+% alt is isquote boolean field? I did that in orc, not simpler?
+%  possible?
+
 %claude:
 The in-band marker solves a real tension: the shell
 needs to carry these strings through [[^]] concatenation,
@@ -9233,6 +9240,7 @@ done.
  */
 #define	GLOB	'\001'
 @
+% need GLOBGLOB?
 
 <<[[yylex()]] when c is a word character, if glob character>>=
 if(c=='*' || c=='[' || c=='?' || c==GLOB)
@@ -9243,36 +9251,56 @@ if(c=='*' || c=='[' || c=='?' || c==GLOB)
 char*
 addtok(char *p, int val)
 {
-    if(p==nil)
-        return nil;
-    if(p >= &tok[NTOK]){
-        *p = '\0';
-        yyerror("token buffer too short");
-        return nil;
-    }
+    <<[[addtok()]] sanity check [[p]]>>
     *p++=val;
     return p;
 }
 @
 % diff with addutf()?
 
+<<[[addtok()]] sanity check [[p]]>>=
+if(p==nil)
+    return nil;
+if(p >= &tok[NTOK]){
+    *p = '\0';
+    yyerror("token buffer too short");
+    return nil;
+}
+@
+
 \section{Expanding globbing characters}
 
 %claude:
 The expansion happens at runtime, not at compile time.
+%
 The [<Xglob>] bytecode (emitted after evaluating
 command arguments) scans the word list in [[argv]]
 and replaces any word containing [[GLOB]] markers with
 the list of matching filenames from the filesystem.
 
-<<global [[globv]]>>=
-struct Word *globv;
+<<function [[Xglob]]>>=
+/// outcode (REDIR and FOR cases) -> <>
+void
+Xglob(void)
+{
+    globlist();
+}
 @
 
+%yoann: why not add Xglob for SIMPLE cases too? generate a Xglob instead
+%  of calling yourself globlist() in Xsimple ?
 
 <<[[Xsimple()]] initializations, [[globlist()]]>>=
 globlist();
 @
+
+%yoann: explain globv global, what will it contain after globlist?
+
+<<global [[globv]]>>=
+// list<ref_own<Word>>
+struct Word *globv;
+@
+
 
 <<function [[globlist]]>>=
 /// Xsimple | ... -> <>
@@ -9307,81 +9335,21 @@ globlist1(word *gl)
 @
 
 
-%alt: why not add Xglob for SIMPLE cases too? generate a Xglob instead
-%  of calling yourself globlist() in Xsimple ?
-
-<<function [[Xglob]]>>=
-/// outcode (REDIR and FOR cases) -> <>
-void
-Xglob(void)
-{
-    globlist();
-}
-@
 
 \section{[[glob()]]}
 
 %claude:
-[<glob()>] takes a pattern string and pushes all matching
-filenames onto [[globv]]. If no files match, the original
+`[<glob()>] takes a pattern string and pushes all matching
+filenames onto [<globv>]. If no files match, the original
 pattern (with [[GLOB]] markers removed) is kept as-is.
-%
-[<globdir()>] is the recursive workhorse: it scans
-the pattern for the first component containing a metacharacter,
-reads the corresponding directory, and recurses for
-each matching entry. The results are sorted alphabetically
-by [<globsort()>].
 
-%claude:
-Walking through [[ls src/*.c]] makes the recursion
-concrete. After lexing, the argument is the byte string
-[[src/\001*.c]]. [<globdir>] is called with [[p]]
-pointing at the start of that pattern and [[namep]]
-pointing at the start of an empty [[globname]] buffer.
-The loop copies literal bytes into [[globname]] until it
-hits the first [[GLOB]] marker:
-\begin{verbatim}
-  step 1 : copy "src/" into globname, advance p past it
-           globname = "src/"
-           p        = "\001*.c"
-           namep    = &globname[4]   (right after the slash)
-
-  step 2 : open directory "src/", iterate entries
-           for each entry name, run match(name, "\001*.c")
-           keeping only those that match "*.c":
-              hello.c      MATCH
-              hello.h      no
-              Makefile     no
-              util.c       MATCH
-
-  step 3 : for each match, copy the name into globname
-           at namep and recurse with newp = "" (the suffix
-           after the matched component is empty).
-           The recursive call sees *p=='\0' and pushes
-           "src/hello.c" and "src/util.c" onto globv.
-\end{verbatim}
-%claude:
-Two subtleties of this design are worth naming. First,
-[[globdir]] recurses {per component}, not per character:
-a pattern like [[*/*.c]] visits every directory in the
-current directory with a first-level call, then for each
-matching directory makes a second-level call that scans
-its entries. This is why [[match]] stops at the first
-slash---it only ever matches a single component at a
-time. Second, if nothing matches, [[glob]] returns the
-{pattern itself} (with [[GLOB]] bytes stripped) as the
-only result; this is the ``no expansion'' behaviour
-inherited from \unix. It means that in [[rc]], typing
-[[echo *.nonsense]] in an empty directory prints
-``[[*.nonsense]]'' literally instead of erroring out,
-which occasionally surprises users but lets scripts
-pass glob patterns around as ordinary strings.
 
 <<global [[globname]]>>=
 char *globname;
 @
 
 <<function [[glob]]>>=
+/// Xglob -> globlist -> globlist1 -> <>
 /*
  * Push all file names matched by p on the current thread's stack.
  * If there are no matches, the list consists of p.
@@ -9398,6 +9366,7 @@ glob(void *ap)
         globv = newword((char *)p, globv);
         return;
     }
+    // else
     globname = emalloc(globlen);
     globname[0]='\0';
     globdir(p, (uchar *)globname);
@@ -9412,57 +9381,12 @@ glob(void *ap)
 @
 \t on Linux emalloc(globlen) is not enough, I get some errors under valgrind
 
-
-
-
-
-
-
-
-
-
-
-
-<<function [[deglob]]>>=
-/*
- * delete all the GLOB marks from s, in place
- */
-void
-deglob(void *as)
-{
-    char *s = as;
-    char *t = s;
-    do{
-        if(*t==GLOB)
-            t++;
-        *s++=*t;
-    }while(*t++);
-}
-@
-
-<<function [[globcmp]]>>=
-int
-globcmp(const void *s, const void *t)
-{
-    return strcmp(*(char**)s, *(char**)t);
-}
-@
-
-<<function [[globsort]]>>=
-void
-globsort(word *left, word *right)
-{
-    char **list;
-    word *a;
-    int n = 0;
-    for(a = left;a!=right;a = a->next) n++;
-    list = (char **)emalloc(n*sizeof(char *));
-    for(a = left,n = 0;a!=right;a = a->next,n++) list[n] = a->word;
-    qsort((void *)list, n, sizeof(void *), globcmp);
-    for(a = left,n = 0;a!=right;a = a->next,n++) a->word = list[n];
-    efree((char *)list);
-}
-@
+%claude:
+[<globdir()>] is the recursive workhorse: it scans
+the pattern for the first component containing a metacharacter,
+reads the corresponding directory, and recurses for
+each matching entry. The results are sorted alphabetically
+by [<globsort()>].
 
 <<function [[globdir]]>>=
 /*
@@ -9473,7 +9397,8 @@ void
 globdir(uchar *p, uchar *namep)
 {
     uchar *t, *newp;
-    int f;
+    fdt f;
+
     /* scan the pattern looking for a component with a metacharacter in it */
     if(*p=='\0'){
         globv = newword(globname, globv);
@@ -9510,6 +9435,118 @@ globdir(uchar *p, uchar *namep)
     Closedir(f);
 }
 @
+
+<<function [[globsort]]>>=
+void
+globsort(word *left, word *right)
+{
+    char **list;
+    word *a;
+    int n = 0;
+
+    for(a = left;a!=right;a = a->next)
+        n++;
+    list = (char **)emalloc(n*sizeof(char *));
+    for(a = left,n = 0;a!=right;a = a->next,n++)
+        list[n] = a->word;
+    qsort((void *)list, n, sizeof(void *), globcmp);
+    for(a = left,n = 0;a!=right;a = a->next,n++)
+        a->word = list[n];
+    efree((char *)list);
+}
+@
+
+
+
+
+
+%claude:
+Walking through [[ls src/*.c]] makes the recursion concrete.
+%
+After lexing, the argument is the byte string
+[[src/\001*.c]]. [<globdir>] is called with [[p]]
+pointing at the start of that pattern and [[namep]]
+pointing at the start of an empty [[globname]] buffer.
+The loop copies literal bytes into [[globname]] until it
+hits the first [[GLOB]] marker:
+
+%claude:
+\begin{vdiagram}
+  step 1 : copy "src/" into globname, advance p past it
+           globname = "src/"
+           p        = "\001*.c"
+           namep    = &globname[4]   (right after the slash)
+
+  step 2 : open directory "src/", iterate entries
+           for each entry name, run match(name, "\001*.c")
+           keeping only those that match "*.c":
+              hello.c      MATCH
+              hello.h      no
+              Makefile     no
+              util.c       MATCH
+
+  step 3 : for each match, copy the name into globname
+           at namep and recurse with newp = "" (the suffix
+           after the matched component is empty).
+           The recursive call sees *p=='\0' and pushes
+           "src/hello.c" and "src/util.c" onto globv.
+\end{vdiagram}
+
+%claude:
+Two subtleties of this design are worth naming. First,
+[[globdir]] recurses {per component}, not per character:
+a pattern like [[*/*.c]] visits every directory in the
+current directory with a first-level call, then for each
+matching directory makes a second-level call that scans
+its entries. This is why [[match]] stops at the first
+slash---it only ever matches a single component at a
+time. Second, if nothing matches, [[glob]] returns the
+{pattern itself} (with [[GLOB]] bytes stripped) as the
+only result; this is the ``no expansion'' behaviour
+inherited from \unix. It means that in [[rc]], typing
+[[echo *.nonsense]] in an empty directory prints
+``[[*.nonsense]]'' literally instead of erroring out,
+which occasionally surprises users but lets scripts
+pass glob patterns around as ordinary strings.
+
+
+
+
+
+
+
+
+
+
+
+
+<<function [[deglob]]>>=
+/// Xlocal | Xcount | ... -> <>
+/*
+ * delete all the GLOB marks from s, in place
+ */
+void
+deglob(void *as)
+{
+    char *s = as;
+    char *t = s;
+    do{
+        if(*t==GLOB)
+            t++;
+        *s++=*t;
+    }while(*t++);
+}
+@
+
+<<function [[globcmp]]>>=
+int
+globcmp(const void *s, const void *t)
+{
+    return strcmp(*(char**)s, *(char**)t);
+}
+@
+
+
 
 
 <<function [[equtf]]>>=
@@ -9566,22 +9603,6 @@ are only matched if the pattern explicitly starts with a dot.
 This prevents [[*]] from matching [[.]] and [[..]], which would
 cause recursive globbing to loop or produce confusing results.
 
-The actual matching is done by [<match()>], which walks the
-pattern and the string in lockstep.
-Non-[[GLOB]] bytes must match literally.
-[[GLOB]] bytes introduce the special characters:
-[[*]] tries every possible suffix via recursion (backtracking),
-[[?]] matches exactly one UTF-8 character, and
-\verb+[...]+ matches a character class with optional
-ranges ([[a-z]]) and complement (\verb+~+).
-Note that [[rc]] uses \verb+~+ instead of [[^]] for complement
-inside character classes, since [[^]] is already the
-concatenation operator.
-
-The [[stop]] parameter is [[/]]: a single glob pattern
-is matched one path component at a time by [<globdir()>],
-so [[match()]] stops at slashes rather than consuming them.
-
 <<function [[matchfn]]>>=
 /*
  * Does the string s match the pattern p
@@ -9600,6 +9621,24 @@ matchfn(void *as, void *ap)
     return match(s, p, '/');
 }
 @
+
+%claude:
+The actual matching is done by [<match()>], which walks the
+pattern and the string in lockstep.
+Non-[[GLOB]] bytes must match literally.
+[[GLOB]] bytes introduce the special characters:
+[[*]] tries every possible suffix via recursion (backtracking),
+[[?]] matches exactly one UTF-8 character, and
+\verb+[...]+ matches a character class with optional
+ranges ([[a-z]]) and complement (\verb+~+).
+Note that [[rc]] uses \verb+~+ instead of [[^]] for complement
+inside character classes, since [[^]] is already the
+concatenation operator.
+
+The [[stop]] parameter is [[/]]: a single glob pattern
+is matched one path component at a time by [<globdir()>],
+so [[match()]] stops at slashes rather than consuming them.
+
 
 <<function [[match]]>>=
 bool
@@ -9694,6 +9733,9 @@ Globsize(char *p)
 }
 @
 
+\section{Directory walking}
+
+%yoann: intro section
 
 <<constant [[NFD]]>>=
 #define	NFD	50
@@ -11569,7 +11611,6 @@ command-line flags at runtime.
 [[flag e -]] disables it, and [[flag e]] alone tests
 whether it is set (via the exit status).
 
-%yoann: say used before in /lib/rc/rcmain in Section X to configure rc from rc (e.g., flag p)
 %claude:
 This builtin is not just an interactive convenience: [[rcmain]] itself
 uses it to read the flags [[rc]] was launched with and branch on them.
