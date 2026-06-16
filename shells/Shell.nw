@@ -8286,6 +8286,7 @@ if(first){
 % @
 
 \section{[[% eval]]}
+\label{sec:builtin-eval}
 
 %claude:
 [[eval]] takes a string and executes it as a command.
@@ -10317,6 +10318,12 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 % cflag will contain the -c arguments!
 
 %yoann: say -c relies simply on builtin eval (see Section X)
+%claude:
+Notice there is no special interpreter support for [[-c]]: it is
+implemented entirely in [[rcmain]]. The flag's argument is stashed in
+[[$cflag]], and the script simply runs \verb+eval $cflag+, handing the
+string to the [[eval]] builtin (Section~\ref{sec:builtin-eval}) to be
+re-parsed and executed like any other command.
 
 <<[[rcmain.rc]] if [[-c]] flag>>=
 if(! ~ $#cflag 0){
@@ -10333,6 +10340,7 @@ if(! ~ $#cflag 0){
 % it it used to read the command from a string instead of stdin
 
 \section{Failing fast: [[rc -e]]}
+\label{sec:rc-e}
 
 % not 'set -e' though so can't set it from the script itself :(
 
@@ -10395,6 +10403,11 @@ else
 @
 
 %yoann: say can finally see code of Xeflag bytecode that abort if status last command  failed (not "true")
+%claude:
+Here, finally, is the [[Xeflag]] bytecode itself. It is tiny: if the
+guard [[eflagok]] is set and the last command's status was not ``true''
+([<truestatus()>] returns false for any status string carrying a non-zero
+digit), it calls [[Xexit]] to abort the shell.
 
 <<function [[Xeflag]]>>=
 void
@@ -10452,12 +10465,32 @@ addutf(char *p, int c)
 @
 
 %yoann: explain why not use the classic chartorune, Bgetrune?
+%claude:
+Why not just call the standard [[chartorune]] or [[Bgetrune]]? Because
+both want their input already buffered---[[chartorune]] decodes from a
+complete in-memory string, [[Bgetrune]] from a [[Biobuf]]. The lexer has
+neither: it pulls bytes one at a time through [<advance()>], which hides
+the pushback slot and the several possible input sources. So [[addutf]]
+decodes a rune incrementally from that stream, fetching each continuation
+byte with [[advance()]] as it goes.
 
 %yoann: say many places we saw before are unicode-ready such as '?' matching one utf8 char in globbing because ?? other places unicode-ready?
+%claude:
+This rune-awareness is not confined to the lexer; it quietly shows up
+wherever [[rc]] inspects characters. The [[?]] glob matches one whole
+UTF-8 rune rather than one byte (see [<match()>]), and the word-splitting
+in command substitution reads its input rune by rune (the [[rutf]] loop in
+[<Xbackq()>]) so that a multi-byte separator is recognized correctly.
 
 \section{Advanced constructs}
 
 %yoann: intro section
+%claude:
+The constructs in this section are where [[rc]] goes past the common shell
+core. Each is a small, self-contained extension---a grammar rule, a
+bytecode, and a runtime function---layered on the machinery already built:
+command and process substitution, subshells, list stringification, and
+here documents.
 
 \subsection{Command substitution: \texttt{`\{<cmd>\}}}
 % Command output as arguments
@@ -10474,8 +10507,8 @@ addutf(char *p, int c)
 Command substitution captures a command's stdout as a list
 of words.  The Bourne shell uses backticks [[`cmd`]],
 which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
-which nests naturally.
-%yoann1: give example like in git9 where do `{dirname `{cleanname ...}}
+which nests naturally---\plan scripts routinely write things like
+\verb+`{dirname `{cleanname $file}}+.
 
 The output is split into words using [[$ifs]]
 (inter-field separators, defaulting to space, tab, newline,
@@ -10511,6 +10544,11 @@ case '`':
 % * Xbackq{... Xreturn}			make thread for {}, push stdout
 
 %yoann: quick intro Xbackq
+%claude:
+[[Xbackq]] is the runtime side of command substitution. It forks the
+command with its standard output wired to a pipe, then the parent reads
+that output rune by rune, breaks it into words at the separator characters,
+and pushes the resulting list onto [[argv]].
 
 <<function [[Xbackq]]>>=
 /*
@@ -10594,6 +10632,15 @@ Xbackq(void)
 % stop = ifs->val? ifs->val->word: "";
 
 %yoann: explain the `$split{} extension and why ifs global not enough
+%claude:
+The [[stop]] separators come from [[argv]], not from a global. That is the
+point of the extended command-substitution grammar that accepts a separator
+word before the brace (the \verb+`<sep>{cmd}+ form): it lets each
+substitution name its own separators. Earlier versions of [[rc]] read the
+global [[$ifs]] directly, which forced you to assign [[$ifs]], run the
+substitution, then restore it---awkward, and broken under nesting, since an
+inner substitution would see the mutated global. Passing the separator as
+an argument keeps it local and composable.
 
 <<comword rule other cases>>=
 |   '`' word brace  {$$=tree2('`', $2, $3);}
@@ -10608,6 +10655,7 @@ if(c0){
 @
 
 \subsection{Process substitution (command output as a file): \texttt{<\{<cmd>\}}}
+\label{sec:process-sub}
 
 <<comword rule other cases>>=
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
@@ -10627,6 +10675,13 @@ lets you use a command's output as if it were
 a file.  \verb+cmp <{old} <{new}+ runs the two commands
 and passes their outputs as filenames to [[cmp]].
 
+%claude: %modern:
+This is the same capability [[bash]] and [[ksh]] later exposed as
+\verb+<(cmd)+. All of them rely on the [[/dev/fd]] device (here \plan's
+[[/fd]]), which originated at Bell Labs---so process substitution is not a
+modern feature [[rc]] is missing, but one it had early.
+
+%claude:
 This appears in the [[comword]] rule because it
 really resolves to a filename ([[/dev/fd/N]]) connected
 to the command's output via a pipe.
@@ -10731,7 +10786,11 @@ Braces \verb+{...}+ group commands
 but execute them in the current process---so \verb+{cd /tmp; ls}+
 would change the parent's directory.  With \verb+@{cd /tmp; ls}+,
 the directory change is confined to the subshell.
-%yoann1: but variable assignment can affect parent in plan9 where can share /env
+%
+This isolation works because [[fork]] gives the child its own copy of the
+[[/env]] namespace, so the assignments it makes land in that copy.
+Processes that deliberately {\em share} an environment group (an [[rfork]]
+without [[RFENVG]]) would, by contrast, see each other's variable changes.
 
 This is particularly useful in [[mkfile]] recipes that iterate
 over subdirectories:
@@ -10773,6 +10832,13 @@ case SUBSHELL:
 % * Xsubshell{... Xexit}		execute {} in a subshell and wait
 
 %yoann: why need Xeflag here too? anyway if failed in c0 we would have already Xexit?
+%claude:
+Why an [[Xeflag]] after the subshell, when a [[-e]] failure inside the body
+already triggers [[Xexit]]? Because that inner [[Xexit]] only terminates the
+{\em child}; it sets the child's exit status but leaves the parent shell
+running. The child's status becomes the subshell's status, so the parent
+needs its own [[Xeflag]] to notice that the subshell failed and honor [[-e]]
+itself.
 
 <<function [[Xsubshell]]>>=
 void
@@ -10888,8 +10954,9 @@ Xqdol(void)
 Here documents let you embed multi-line {\em data} directly
 in a script, avoiding external file dependencies.
 The syntax [[<<TAG]] reads input until a line matching
-[[TAG]] appears.
-%yoann1: say maybe syntax similar to <file file read
+[[TAG]] appears. It is the inline cousin of the [[<file]] input
+redirection: where [[<file]] feeds a command's stdin from a named file,
+[[<<TAG]] feeds it from text written directly in the script.
 
 %claude:
 For example, a phone-lookup script can carry its own
@@ -10916,10 +10983,13 @@ tag and filename in a linked list.  After the entire
 command line is parsed and compiled, [[readhere()]] goes
 back and reads the here-document bodies from the input,
 writing them to those temporary files.  This two-phase
-approach is necessary because a command line can have
-multiple here documents (e.g., [[cmd <<A <<B]]), and
-the bodies appear after the full command line.
-%yoann1: useful to have multiple here documents? worth the complexity added?
+approach is needed even for a single here document: the body text only
+begins on the {\em next} line, after the rest of the command line (other
+redirections, a pipeline) has already been parsed, so the parser must
+record the tag now and come back for the body later. Allowing several
+here documents on one line (e.g., [[cmd <<A <<B]]) then costs almost
+nothing extra---a list rather than one pending entry---even if it is a
+rarely used convenience.
 
 If the here-tag was not quoted, variable substitution
 is performed via [<psubst()>]; otherwise the text is
@@ -11427,6 +11497,13 @@ to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
 (stderr) to [[cmd2]]'s stdin.
 
 %yoann: where is code for advanced pipe management?
+%claude:
+There is no separate code for it: the [<Xpipe()>] bytecode we already saw
+is parameterized by two file descriptors, [[lfd]] and [[rfd]], which it
+reads as operands and uses for the [[pushredir]] on each side. A plain
+[[|]] just compiles to [[lfd]] 1 and [[rfd]] 0; the bracket syntax makes
+the lexer fill [[t->fd0]]/[[t->fd1]] with other numbers, which
+[<outcode()>] then emits in their place.
 
 \section{Advanced builtins}
 
@@ -11439,11 +11516,12 @@ to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
 %These builtins could in principle be external programs
 %(like [[echo]] and [[test]] are), but they need access
 %to shell internals:
+Here are the remaining builtins left over from Chapter~\ref{chap:builtins}:
+less central than [[cd]] or [[.]], but still useful.
 [[exec]] replaces the shell process,
 [[whatis]] inspects variables and functions, [[rfork]]
 manipulates namespaces, [[flag]] queries command-line flags,
 and [[shift]] modifies [[$*]].
-%yoann1: better intro (that I commented), do not repeat what already said many times, so just transition sentence
 
 \subsection{[[% exec]]}
 \label{sec:builtin-exec}
@@ -11683,10 +11761,10 @@ execnewpgrp(void)
 The [[flag]] builtin queries and sets [[rc]]'s own
 command-line flags at runtime.
 %
-[[flag e +]] enables [[-e]] (exit on error),
-[[flag e -]] disables it, and [[flag e]] alone tests
-whether it is set (via the exit status).
-%yoann1: confusing, user type flag e + ?
+You invoke it as a command, with the flag letter and an optional
+[[+]] or [[-]]: typing [[flag e +]] enables [[-e]] (exit on error),
+[[flag e -]] disables it, and [[flag e]] with no sign tests whether it
+is currently set, reporting the answer through the exit status.
 
 %claude:
 This builtin is not just an interactive convenience: [[rcmain]] itself
@@ -11850,7 +11928,11 @@ of middleware, proxy servers, and the decorator pattern.
 S-expressions, Tcl with strings. A single universal type
 eliminates conversion boilerplate and makes composition
 trivial.
-%yoann1: not called homocoinic? other lang with that property?
+Taken one step further---so that a program's own {\em code} is just
+another value of that universal type---the property is called
+{homoiconicity}; Lisp (code as S-expressions) and Tcl (code as strings)
+are the classic examples. [[rc]] stops short of that: its values are
+string lists, but its programs are not.
 
 \end{itemize}
 
@@ -11921,8 +12003,10 @@ and copy-paste previous commands.
 There is no need for a readline library.
 
 \item {\em Filename completion:}
-Provided by [[rio]]'s terminal, not by [[rc]] itself.
-%yoann1: is modify wdir what makes possible rio filename completion because know dir?
+Provided by [[rio]]'s terminal, not by [[rc]] itself. This is possible
+because [[rc]] publishes its current directory to the window: the [[cd]]
+builtin writes the new path to [[/dev/wdir]] when running interactively,
+so [[rio]] always knows which directory to complete filenames against.
 
 \item {\em Job control ([[C-z]], [[bg]], [[fg]]):}
 Less necessary when you have multiple windows.
@@ -11977,15 +12061,6 @@ belong in dedicated tools like [[sed]] and [[awk]],
 not in the shell itself---keeping the shell language
 small and letting each tool do one thing well.
 
-\item \emph{Process substitution}: [[bash]]'s
-\verb|diff <(cmd1) <(cmd2)| uses [[/dev/fd]] to
-present command output as file arguments.
-[[rc]] has the backquote operator \verb|`{cmd}| for
-command substitution into strings, and in \plan,
-the [[<{cmd}]] syntax provides equivalent
-functionality through the [[/fd]] file system.
-%yoann1: but rc has process substitution no?
-
 \item \emph{Interactive features}: beyond the readline
 and history that [[rio]] provides, modern shells
 add programmable completion (context-aware suggestions
@@ -11994,13 +12069,17 @@ highlighting as you type ([[fish]], [[zsh]] with
 plugins), and autosuggestions from history ([[fish]]).
 [[zsh]] has entire plugin ecosystems (oh-my-zsh).
 
-\item \emph{Error handling}: [[rc]]'s error model is
-straightforward: [[$status]] and [[if not]]. [[bash]]
-adds [[set -e]] (exit on error) and [[set -o pipefail]]
-(propagate pipe failures). The Oil shell (Oils) goes
-further with more principled error handling designed
-to avoid the well-known pitfalls of [[set -e]].
-%yoann1: but rc also has -e no? and no need pipefail in rc cos cleaner no?
+\item \emph{Error handling}: [[rc]]'s model is [[$status]] and [[if not]],
+plus the [[-e]] flag (Section~\ref{sec:rc-e}) for exit-on-error---so
+[[bash]]'s [[set -e]] is nothing new to it. [[bash]] also adds [[set -o
+pipefail]] to propagate failures from the middle of a pipeline; [[rc]]
+needs no such option because its [[$status]] is already a list reporting
+{\em every} stage (a string like [["0|0|1"]]), so a failure anywhere in
+the pipe is visible by construction. The Oil shell (Oils) goes further
+still, with error handling designed to avoid the well-known pitfalls of
+[[set -e]]---which silently stops applying inside [[if]] and [[while]]
+conditions, [[&&]] and [[||]] chains, and most function calls, so it fails
+to abort in exactly the places a programmer expects it to.
 
 
 \end{itemize}
