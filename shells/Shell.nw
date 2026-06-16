@@ -12992,7 +12992,7 @@ Memcpy(void *a, void *b, long n)
 %******************************************************************************
 \label{chap:examples}
 
-%alt: \section{[[/rc/lib/rcmain]]}
+%alt: \section{[[/rc/lib/rcmain]]} now in Initialization chapter
 
 
 \section{[[/usr/glenda/lib/profile]]}
@@ -13001,6 +13001,7 @@ Memcpy(void *a, void *b, long n)
 This is Glenda's (the default \plan user) login profile,
 sourced by [[rcmain]] when [[rc]] is invoked with the
 [[-l]] (login shell) flag (the [[flag l]] test in [[rcmain]] above).
+%
 It uses [[bind]] to overlay the user's personal [[bin]]
 directories onto [[/bin]] (so user scripts and binaries
 are found automatically), sets up the font and mail
@@ -13072,8 +13073,11 @@ For more general \plan utilities, see \book{Utilities}.
 
 %claude:
 [[echo]] concatenates its arguments separated by spaces,
-followed by a newline. The [[-n]] flag suppresses the
-trailing newline. Note that it builds the entire output
+followed by a newline.
+%
+The [[-n]] flag suppresses the trailing newline.
+%
+Note that it builds the entire output
 in a single buffer and writes it with one [[write()]] call,
 so the output is atomic---important when multiple processes
 write to the same file descriptor.
@@ -13620,7 +13624,147 @@ isnewerthan(char *a, char *b)
 \section{[[aux/getflags]]}
 % needed by git9, extended in 9front for keyword arg
 
+<<function [[main]](getflags)>>=
+void
+main(int argc, char *argv[])
+{
+    char *flags, *p, *s, *e, buf[512];
+    int i, n;
+    Rune r;
+    Fmt fmt;
+    
+    quotefmtinstall();
+    argv0 = argv[0];    /* for sysfatal */
+    
+    flags = getenv("flagfmt");
+    if(flags == nil){
+        fprint(2, "$flagfmt not set\n");
+        print("exit 'missing flagfmt'");
+        exits(0);
+    }
+
+    fmtfdinit(&fmt, 1, buf, sizeof buf);
+    for(p=skipspace(flags); *p; p=nextarg(p)){
+        s = e = nil;
+        n = chartorune(&r, p);
+        if(p[n] == ':'){
+            s = p + n + 1;
+            e = argname(s);
+        }
+        if(s != e)
+            fmtprint(&fmt, "%.*s=()\n", (int)(e - s), s);
+        else
+            fmtprint(&fmt, "flag%C=()\n", r);
+    }
+    ARGBEGIN{
+    default:
+        if((p = findarg(flags, ARGC())) == nil)
+            usage();
+        p += runelen(ARGC());
+        s = p + 1;
+        e = p + 1;
+        if(*p == ':' && (e = argname(s)) != s)
+            p = e;
+        if(*p == ',' || *p == 0){
+            if(s != e)
+                fmtprint(&fmt, "%.*s=1\n", (int)(e - s), s);
+            else
+                fmtprint(&fmt, "flag%C=1\n", ARGC());
+            break;
+        }
+        n = countargs(p);
+        if(s != e)
+            fmtprint(&fmt, "%.*s=(", (int)(e - s), s);
+        else
+            fmtprint(&fmt, "flag%C=(", ARGC());
+        for(i=0; i<n; i++)
+            fmtprint(&fmt, "%s%q", i ? " " : "", EARGF(usage()));
+        fmtprint(&fmt, ")\n");
+    }ARGEND
+    
+    fmtprint(&fmt, "*=(");
+    for(i=0; i<argc; i++)
+        fmtprint(&fmt, "%s%q", i ? " " : "", argv[i]);
+    fmtprint(&fmt, ")\n");
+    fmtprint(&fmt, "status=''\n");
+    fmtfdflush(&fmt);
+    exits(0);
+}
+@
+
 \section{[[aux/usage]]}
+
+<<function [[main]](usage)>>=
+void
+main(void)
+{
+    Fmt fmt;
+    char buf[512];
+    char *argv0, *args, *flags, *p, *p0;
+    int single;
+    Rune r;
+    
+    argv0 = getenv("0");
+    if((p = strrchr(argv0, '/')) != nil)
+        argv0 = p+1;
+    flags = getenv("flagfmt");
+    args = getenv("args");
+    
+    if(argv0 == nil){
+        fprint(2, "aux/usage: $0 not set\n");
+        exits("$0");
+    }
+    if(flags == nil)
+        flags = "";
+    if(args == nil)
+        args = "";
+
+    fmtfdinit(&fmt, 2, buf, sizeof buf);
+    fmtprint(&fmt, "usage: %s", argv0);
+    if(flags[0]){
+        single = 0;
+        for(p=flags; *p; ){
+            while(isspace(*p))
+                p++;
+            p += chartorune(&r, p);
+            if(*p == ':')
+                while(*p && *p != ',' && !isspace(*p))
+                    p++;
+            if(*p == ',' || *p == 0){
+                if(!single){
+                    fmtprint(&fmt, " [-");
+                    single = 1;
+                }
+                fmtprint(&fmt, "%C", r);
+                if(*p == ',')
+                    p++;
+                continue;
+            }
+            while(isspace(*p))
+                p++;
+            if(single){
+                fmtprint(&fmt, "]");
+                single = 0;
+            }
+            p0 = p;
+            p = strchr(p0, ',');
+            if(p == nil)
+                p = "";
+            else
+                *p++ = 0;
+            fmtprint(&fmt, " [-%C %s]", r, p0);
+        }
+        if(single)
+            fmtprint(&fmt, "]");
+    }
+    if(args)
+        fmtprint(&fmt, " %s", args);
+    fmtprint(&fmt, "\n");
+    fmtfdflush(&fmt);
+    exits("usage");
+}
+@
+
 
 
 \chapter{[[sh]], the simple shell}
@@ -13629,17 +13773,13 @@ isnewerthan(char *a, char *b)
 %claude:
 This is a minimal shell, useful during early stages of
 porting \plan to a new architecture when [[rc]] is not
-yet available. It supports basic command execution,
+yet available.
+%
+It supports basic command execution,
 pipes, redirections, and backgrounding, but has no
 variables, functions, or control flow. Comparing it
 to [[rc]] helps appreciate how much complexity the
 full shell adds.
-
-%/* sh - simple shell - great for early stages of porting */
-
-%TODO? maybe add an explain the sh.c code 
-% (there is another small sh.c I don't remember where)
-% in an appendix?
 
 %helps understand high-level code orga and flow.
 %cmd1 | cmd2 

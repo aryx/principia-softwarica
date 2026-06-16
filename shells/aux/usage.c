@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <ctype.h>
 
+/*s: function [[main]](usage) */
 void
 main(void)
 {
@@ -71,5 +72,5 @@ main(void)
     fmtfdflush(&fmt);
     exits("usage");
 }
-
+/*e: function [[main]](usage) */
 /*e: aux/usage.c */

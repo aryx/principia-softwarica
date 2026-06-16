@@ -72,6 +72,7 @@ countargs(char *p)
     return n;
 }
 
+/*s: function [[main]](getflags) */
 void
 main(int argc, char *argv[])
 {
@@ -137,4 +138,5 @@ main(int argc, char *argv[])
     fmtfdflush(&fmt);
     exits(0);
 }
+/*e: function [[main]](getflags) */
 /*e: aux/getflags.c */
