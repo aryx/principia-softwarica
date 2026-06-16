@@ -8865,7 +8865,12 @@ int mypid;
 @
 
 %yoann: say seen a few code before using mypid
- 
+%claude:
+We have already run into [[mypid]] in earlier code: [<Xexit>] compares
+[[getpid()]] against it so that only the original shell process---not its
+forked children---runs an exit trap. Here is where that global is finally
+given its value, [[getpid()]] at startup.
+
 <<[[main()]] locals>>=
 char num[12];
 @
@@ -8933,15 +8938,52 @@ exit $status
 @
 
 %yoann: say Vinit() done before this, but here it is init of rc programmed in rc!
+%claude:
+Notice the division of labor. The C-level initialization---reading the
+environment into globals ([[Vinit]]), installing keywords and the note
+handler---all ran back in [<main()>] before the bootstrap code fired.
+What you are reading now is the rest of the initialization, written in
+[[rc]] itself: a small script that the freshly built interpreter runs as
+its very first program.
 
 %yoann: can maybe explain rc -p, kinda safer rc (use cases?)
+%claude:
+The [[-p]] flag (tested here as [[flag p]]) selects a more cautious
+[[rc]]. Normally the shell calls [[finit]], which imports function
+definitions from [[/env]]---the exported functions of whatever started
+it---and defaults [[$path]] to [[(. /bin)]], current directory included.
+With [[-p]] neither happens: [[$path]] becomes just [[/bin]] and no
+functions are inherited. This matters in an untrusted context (say a
+set-user-id script), where an attacker-supplied function in the
+environment, or a [[.]] early in [[$path]], could hijack a plain command
+name.
 
 %yoann: can also say interesting see a few advanced features or rc, if not, switch, and more
+%claude:
+This short script doubles as a tour of [[rc]]'s control flow. It uses the
+[[~]] match operator to test counts ([[~ $#home 0]]), a [[switch]], and
+especially [[if not]]---[[rc]]'s spelling of ``else'', which binds to the
+preceding [[if]] so that the chain of [[if not if]] reads as a cascade of
+conditionals.
 
 %yoann: why need pass -i to . '#d/0' ?
+%claude:
+The file \verb+#d/0+ is the [[#d]] file-descriptor device opened at entry
+0---the shell's own standard input. Sourcing it with [[. -i]] turns that
+input into an interactive command loop: the [[-i]] flag makes the nested
+[[.]] set [[iflag]] on its [[runq]], so it prints a prompt between
+commands and does not abort on the first error---exactly what is wanted
+when a human is typing. The same file sourced without [[-i]] (the
+[[. '#d/0']] on the line below, for a non-interactive [[rc]] reading a
+piped script) runs silently and stops at end of input.
 
 
 %yoann: one line on rcname use below
+%claude:
+[[$rcname]] records the name [[rc]] was invoked as ([[argv[0]]]); the
+chunk just below uses it to notice when the shell is a freshly compiled,
+not-yet-installed binary (the default [[?.out]] output name) and warns
+you with a ``broken!'' prompt.
 
 <<[[main()]] initialisation>>=
 setvar("rcname", newword(argv[0], (word *)nil));
@@ -8951,6 +8993,12 @@ if(~ $rcname ?.out) prompt=('broken! ' '        ')
 @
 
 %yoann: one line on why need delete sigexit? who defined it anyway?
+%claude:
+[[finit]] just imported every exported function from the environment, and
+one of those may be [[sigexit]]---the function [[rc]] runs when it exits.
+A child shell should not silently inherit and re-run its parent's exit
+handler, so [[fn sigexit]] with an empty body deletes any such inherited
+definition.
 
 <<rcmain.rc delete [[sigexit]]>>=
 fn sigexit
