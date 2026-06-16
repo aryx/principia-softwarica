@@ -68,7 +68,7 @@ void main(int argc, char *argv[])
     memset(bootstrap, 0, sizeof bootstrap);
 
     i = 0;
-    bootstrap[i++].i=1;
+    bootstrap[i++].i=1; // ref count
     // runq->argv is populated with the arguments to rc
     // we just need to add '*=(argv)'
     bootstrap[i++].f = Xmark;

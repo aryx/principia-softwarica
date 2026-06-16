@@ -1956,10 +1956,14 @@ void main(int argc, char *argv[])
 \section{Command-line arguments processing}
 
 %claude:
-[[rc]] accepts many flags (e.g., [[-i]] for interactive mode,
-[[-l]] for login mode, [[-e]] for exit-on-error).
+[[rc]] accepts many flags (e.g.,
+[[-i]] for interactive mode,
+[[-l]] for login mode,
+[[-e]] for exit-on-error).
+%
 Flags are stored in a global array indexed by the flag character,
 where a non-nil entry means the flag is set.
+%
 Some flags like [[-c]] and [[-m]] take a string argument,
 which is why [[flag]] stores string arrays rather than simple booleans.
 
@@ -2021,17 +2025,20 @@ console service that execs it) sets [[argv[0]]] to [["-rc"]]
 %
 This is a \unix convention: the code below detects the leading dash
 and sets [[flag['l']]] accordingly, so that [[rc]] will later
-source the user's profile ([[$home/lib/profile]]).
+source the user's profile ([[$home/lib/profile]],
+see Appendix~\ref{chap:examples} for an example).
 
 <<[[main()]] argc argv processing, modify flags>>=
 if(argv[0][0]=='-')
     flag['l'] = flagset;
 @
-% if -l or first char is - then means login shell.
-% so read $home/lib/profile
+
+
+
+
+\subsection{Interactive mode: [[rc -i]]}
 
 % or nothing but can detect Isatty
-\subsection{Interactive mode: [[rc -i]]}
 
 %history: also in bourne shell
 %claude:
@@ -2113,6 +2120,7 @@ Vinit();    // read environment variables and add them in gvar
 
 
 \section{Bootstrapping bytecodes (simplified)}
+\label{sec:simplified-bootstrap}
 
 %claude:
 As I mentioned earlier, [[rc]] does not start by compiling source code;
@@ -2122,6 +2130,7 @@ called the {\em bootstrap}.
 In its simplest form, the bootstrap just contains [<Xrdcmds>],
 the bytecode that reads a command, compiles it, and starts
 a new thread to execute it.
+%
 The first element is the reference count (set to 1), and
 the last element is a zero {sentinel} marking the end of the code vector.
 %
@@ -2130,12 +2139,9 @@ it sources the [[rcmain]] initialization script, which sets up
 the default [[$path]] and runs the user's profile, but for now
 it is simpler to assume the simpler bootstrap below.
 
-\ifallcode
 <<[[main()]] locals>>=
 int i;
 @
-\fi
-% simplified bootstrap:
 % Xrdcmds (which will call yyparse()->compile()->outcode()
 %  which will read a line, compile it, and add a Xreturn
 %when want to experiment with simplified bootstrap
@@ -8668,8 +8674,10 @@ fdt envdir;
 \label{chap:initialization-real}
 
 %claude:
-In Chapter~\ref{chap:main}, we showed a simplified version of [[main()]]
-to introduce the interpreter loop. This chapter reveals the
+In Section~\ref{sec:simplified-bootstrap}, I showed a simplified
+[[bootstrap]] to introduce the interpreter loop.
+%
+This chapter reveals the
 real initialization sequence: how [[rc]] fabricates its own
 bootstrap bytecodes, sources the [[rcmain]] script to set up
 the default environment, and transitions into the
@@ -8706,11 +8714,16 @@ sources [[/etc/bash.bashrc]] then [[~/.bashrc]]. A
 non-interactive shell sources nothing unless [[BASH_ENV]]
 is set. The result is that [[~/.bashrc]] is not read by
 login shells unless [[~/.bash_profile]] explicitly sources
-it, which is the source of the famous ``my [[PATH]] works
-in xterm but not in tmux'' class of bug. [[zsh]] has a
+it.
+%, which is the source of the famous ``my [[PATH]] works
+%in xterm but not in tmux'' class of bug.
+%
+[[zsh]] has a
 four-file ladder---[[.zshenv]] then [[.zprofile]] then
 [[.zshrc]] then [[.zlogin]], invoked in that order
-depending on shell type. [[fish]] collapses everything into
+depending on shell type.
+%
+[[fish]] collapses everything into
 a single [[~/.config/fish/config.fish]]. None of these are
 obviously right; they are just compromises between ``run
 the right things'' and ``stay backwards compatible with
@@ -8766,7 +8779,7 @@ and the [[.]] command itself, then calls [[Xsimple]].
 memset(bootstrap, 0, sizeof bootstrap);
 
 i = 0;
-bootstrap[i++].i=1;
+bootstrap[i++].i=1; // ref count
 // runq->argv is populated with the arguments to rc
 // we just need to add '*=(argv)'
 bootstrap[i++].f = Xmark;
@@ -8809,7 +8822,8 @@ which sets up [[$path]] and, for login shells,
 sources the user's [[$home/lib/profile]].
 The [[-m]] flag allows overriding this path, which
 is useful during system bootstrap when the standard
-[[rcmain]] may not be available yet.
+[[rcmain]] may not be available yet
+(like for [[boot.rc]] in Section~\ref{sec:boot-rc}).
 
 <<global [[Rcmain]]>>=
 char *Rcmain = "/rc/lib/rcmain";
@@ -8833,32 +8847,25 @@ rcmain = flag['m'] ? flag['m'][0] : Rcmain;
 
 %claude:
 Before entering the interpreter loop, [[rc]] also sets up
-a few built-in variables: [[$pid]] (the shell's own process id,
-useful for creating unique temporary filenames) and
-[[$rcname]] (the name [[rc]] was invoked as, i.e., [[argv[0]]]).
+a few built-in variables such as [[$pid]] (the shell's own process id,
+useful for creating unique temporary filenames).
+% and[[$rcname]] (the name [[rc]] was invoked as, i.e., [[argv[0]]]).
 
 <<global [[mypid]]>>=
 int mypid;
 @
 
+%yoann: say seen a few code before using mypid
+ 
 <<[[main()]] locals>>=
 char num[12];
 @
 %ocaml: no need for declaration, just do  'let num = int_to_string(mypid)'
-
 <<[[main()]] initialisation>>=
 mypid = getpid();
 inttoascii(num, mypid);
 setvar("pid", newword(num, (word *)nil));
 @
-
-<<[[main()]] initialisation>>=
-setvar("rcname", newword(argv[0], (word *)nil));
-@
-
-
-% cflag will contain the -c arguments!
-
 
 
 
@@ -8866,20 +8873,18 @@ setvar("rcname", newword(argv[0], (word *)nil));
 \label{sec:rcmain}
 
 %claude:
-This is the initialization script sourced by the bootstrap bytecodes.
+This is finally the initialization script sourced by the bootstrap bytecodes.
 % (see Chapter~\ref{chap:initialization-real}).
-It sets up default values for [[$home]], [[$ifs]], [[$prompt]],
-and [[$path]], calls [[finit]] to import shell functions
-from the environment, and then dispatches based on how
-[[rc]] was invoked: with [[-c]] (run a command string),
-with [[-i]] (interactive, source the user's profile and
-read from the console), or with a script file argument.
-
-%TODO: LP split!
+It sets up default values for the special variables
+[[$home]], [[$ifs]], [[$prompt]], and [[$path]],
+calls [[finit]] to import shell functions from the environment, and then
+dispatches based on how [[rc]] was invoked:
+with [[-c]] (run a command string),
+with [[-i]] (interactive, source the user's profile and read from the console),
+or with a script file argument.
 
 <<rc/rcmain.rc>>=
-# /lib/rc/rcmain
-# rcmain: Plan 9 version
+# /lib/rc/rcmain, Plan 9 version
 if(~ $#home 0) home=/
 # space, tab, newline
 if(~ $#ifs 0) ifs=' 	
@@ -8891,8 +8896,7 @@ case 0
 case 1
         prompt=($prompt '       ')
 }
-
-if(~ $rcname ?.out) prompt=('broken! ' '        ')
+<<rcmain.rc possibly set broken prompt>>
 
 if(flag p) path=/bin
 if not{
@@ -8900,17 +8904,15 @@ if not{
         if(~ $#path 0) path=(. /bin)
 }
 
-fn sigexit
+<<rcmain.rc delete [[sigexit]]>>
 
-if(! ~ $#cflag 0){
-        if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
-        status=''
-        eval $cflag
-}
+<<rcmain.rc if [[-c]] flag>>
 if not if(flag i){
-        if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
+        <<rcmain.rc if [[-l]], source user's profile>>
         status=''
+        # if arguments, probably a script, source the script (and pass args)
         if(! ~ $#* 0) . $*
+        # otherwise interactive shell! source stdin
         . -i '#d/0'
 }
 if not if(~ $#* 0) . '#d/0'
@@ -8921,6 +8923,29 @@ if not{
 exit $status
 @
 
+%yoann: say Vinit() done before this, but here it is init of rc programmed in rc!
+
+%yoann: can maybe explain rc -p, kinda safer rc (use cases?)
+
+%yoann: can also say interesting see a few advanced features or rc, if not, switch, and more
+
+%yoann: why need pass -i to . '#d/0' ?
+
+
+%yoann: one line on rcname use below
+
+<<[[main()]] initialisation>>=
+setvar("rcname", newword(argv[0], (word *)nil));
+@
+<<rcmain.rc possibly set broken prompt>>=
+if(~ $rcname ?.out) prompt=('broken! ' '        ')
+@
+
+%yoann: one line on why need delete sigexit? who defined it anyway?
+
+<<rcmain.rc delete [[sigexit]]>>=
+fn sigexit
+@
 
 %******************************************************************************
 \chapter{Globbing}
@@ -10029,6 +10054,7 @@ This keeps [[rc]] simple.
 %claude:
 The [[-c]] flag lets you pass a command string directly
 on the command line, as in [[rc -c 'echo hello']].
+%
 This is how other programs (like [[mk]], see the Build book)
 invoke the shell to execute a recipe:
 they build a command string and pass it via [[-c]]
@@ -10036,6 +10062,16 @@ rather than writing it to a temporary file.
 
 <<[[main()]] initialisation>>=
 setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
+@
+
+% cflag will contain the -c arguments!
+
+<<rcmain.rc if [[-c]] flag>>=
+if(! ~ $#cflag 0){
+        <<rcmain.rc if [[-l]], source user's profile>>
+        status=''
+        eval $cflag
+}
 @
 
 %TODO: this looks like dead code because cflag is not used in this file
@@ -12994,16 +13030,24 @@ Memcpy(void *a, void *b, long n)
 %******************************************************************************
 \label{chap:examples}
 
-%alt: \section{[[/rc/lib/rcmain]]} now in Initialization chapter
+%alt: \section{[[boot.rc]]} in Overview chapter
 
+%alt: \section{[[/rc/lib/rcmain]]} now in Initialization chapter
 
 \section{[[/usr/glenda/lib/profile]]}
 
 %claude:
 This is Glenda's (the default \plan user) login profile,
 sourced by [[rcmain]] when [[rc]] is invoked with the
-[[-l]] (login shell) flag (the [[flag l]] test in [[rcmain]] above).
-%
+[[-l]] (login shell) flag.
+% (the [[flag l]] test in [[rcmain]] above).
+
+<<rcmain.rc if [[-l]], source user's profile>>=
+if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
+@
+% see /bin/test -r in next appendix
+
+%claude:
 It uses [[bind]] to overlay the user's personal [[bin]]
 directories onto [[/bin]] (so user scripts and binaries
 are found automatically), sets up the font and mail
