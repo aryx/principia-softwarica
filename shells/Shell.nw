@@ -548,6 +548,7 @@ instead of forking a new process.
 \t except execforkexec which is confusing!
 
 \subsection{Trace of a simple command: [[ls /]]}
+\label{sec:trace-simple-command-rc-r}
 
 You can see the bytecodes and the threads created internally by [[rc]] 
 by running [[rc]] with the [[-r]] flag.
@@ -12185,9 +12186,13 @@ is the same one you have studied in this book.
 \label{chap:debugging-appendix}
 
 %claude:
-[[rc]] has several built-in debugging aids. The [[-x]] flag traces
-each simple command before execution (printing the command and its
-arguments). The [[-v]] flag echoes each input line before parsing.
+[[rc]] has several built-in debugging aids.
+%
+The [[-x]] flag traces each simple command before execution
+(printing the command and its arguments).
+%
+The [[-v]] flag echoes each input line before parsing.
+%
 This appendix presents the code behind these flags, as well as
 the AST pretty-printer used to serialize function bodies into
 the [[/env/]] filesystem.
@@ -12203,19 +12208,10 @@ the [[/env/]] filesystem.
 char nl='\n';		/* change to semicolon for bourne-proofing */
 @
 
-% TODO ugly and dupe with the one in code.c
-<<constant [[c0]]>>=
-#define	c0	t->child[0]
-@
-<<constant [[c1]]>>=
-#define	c1	t->child[1]
-@
-<<constant [[c2]]>>=
-#define	c2	t->child[2]
-@
+%yoann: quick intro pcmd and pfmt %t and format lib in appendix (not plan9 printf and fmt lib)
 
 <<function [[pcmd]]>>=
-/// simplemung | fnstr -> pfmt %t -> <>
+/// (simplemung | fnstr) -> pfmt %t -> <>
 void
 pcmd(io *f, tree *t)
 {
@@ -12332,6 +12328,20 @@ pcmd(io *f, tree *t)
 }
 @
 
+%yoann: mention c0, c1, c2 duplicated macros like for outcode, could factorize
+
+% TODO ugly and dupe with the one in code.c
+<<constant [[c0]]>>=
+#define	c0	t->child[0]
+@
+<<constant [[c1]]>>=
+#define	c1	t->child[1]
+@
+<<constant [[c2]]>>=
+#define	c2	t->child[2]
+@
+
+
 <<function [[pdeglob]]>>=
 /// pcmd -> <>
 void
@@ -12351,6 +12361,8 @@ pdeglob(io *f, char *s)
 \section{Bytecode generator trace: [[rc -r]]}
 \label{sec:rc-r}
 % also trace threads
+
+%yoann: quick intro, also mention used rc -r in \ref{sec:trace-simple-command-rc-r} (also why letter r?)
 
 % nice output:
 
@@ -12455,6 +12467,8 @@ pfnc(io *fd, thread *t)
 \section{Printing subprocesses status: [[rc -s]]}
 % debugging feature or general feature used by people?
 
+%yoann: quick intro
+
 <<[[Xrdcmds()]] print status if -s>>=
 if(flag['s'] && !truestatus())
     pfmt(err, "status=%v\n", vlook("status")->val);
@@ -12467,12 +12481,16 @@ if(flag['s'] && !truestatus())
 %history: also in bourne shell, to print final command after
 % substitution
 
+%yoann: quick intro
+
 <<[[Xsimple()]] if -x>>=
 if(flag['x'])
     pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
 @
 
-\section{Printing characters: [[rc -v]]}
+\section{Printing characters: [[rc -v]] and [[rc -V]]}
+
+%yoann: quick intro
 
 % ndot for not printing the characters procssed from a . (e.g. . rcmain)
 <<[[getnext()]] after read, if not EOF but verbose mode, print character read>>=
@@ -12481,8 +12499,7 @@ else
         pchr(err, c);
 @
 
-
-\section{Printing all characters: [[rc -V]]}
+%alt:\section{Printing all characters: [[rc -V]]}
 
 % so get also the content of the rcmain
 
@@ -12508,6 +12525,8 @@ print a message and call [[abort()]]---these indicate bugs in
 <<constant [[ERRMAX]]>>=
 #define ERRMAX 128
 @
+
+%yoann: explain where set err?
 
 <<global [[err]]>>=
 io *err;
@@ -12610,7 +12629,9 @@ memory allocation wrappers ([[emalloc]], [[erealloc]]),
 the buffered I/O system (the [[io]] structure and its read/write
 functions), command-line flag parsing ([[getflags]]),
 and string conversion helpers.
+%yoann1: add that general, not specific to rc, hence appendix
 
+\ifallcode
 <<function [[_efgfmt]]>>=
 /* avoid loading any floating-point library code */
 //@Scheck: weird, probably linker trick
@@ -12619,6 +12640,7 @@ int _efgfmt(Fmt *)
     return -1;
 }
 @
+\fi
 
 \section{Memory management}
 
@@ -12637,6 +12659,8 @@ emalloc(long n)
 @
 %old: /*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
 %ocaml: use Gc.
+
+%yoann: mention panic() above so rc specific with rc-specific error management
 
 % plan9
 <<function [[Malloc]]>>=
@@ -12666,7 +12690,7 @@ efree(void *p)
 
 %ocaml: use Arg.ml
 
-% why not use ARGBEGIN/ARGEND? because getflags() is more powerful.
+%yoann: quick intro, why not use classic \plan ARGBEGIN/ARGEND? because getflags() is more powerful? show ex of call, like the one in main() of rc so see string passed, can also maybe relate to aux/getflags this time for rc itself
 
 <<global [[cmdname]]>>=
 char *cmdname;
@@ -12948,22 +12972,55 @@ errc(int c)
 
 %ocaml: stdlib does that by default
 
+%yoann: quicker intro Io and why not use libbio? 
+
+
+<<struct [[Io]]>>=
+struct Io {
+    fdt	fd;
+    byte	*bufp, *ebuf, *strp;
+    byte	buf[NBUF];
+};
+@
+
 <<constant [[NBUF]]>>=
 #define	NBUF	512
 @
 
+<<function [[openfd]]>>=
+io*
+openfd(fdt fd)
+{
+    io *f = new(struct Io);
+    f->fd = fd;
+    f->bufp = f->ebuf = f->buf;
+    f->strp = nil;
+    return f;
+}
+@
+
+
+
 %claude:
 The [[Io]] struct serves three different roles depending on which
 fields are populated, which is why it looks strangely overloaded.
-In fd mode (used by [[openfd]]), [[fd]] is a real file descriptor,
+%
+In fd mode (used by [<openfd()>]), [[fd]] is a real file descriptor,
 [[strp]] is [[nil]], and the inline [[buf]] array is the read/write
-window. In string mode (used by [[openstr]]), [[fd]] is $-1$, [[strp]]
+window.
+%
+In string mode (used by [<openstr()>]), [[fd]] is $-1$, [[strp]]
 owns a heap-grown buffer, and [[bufp]]/[[ebuf]] walk that buffer instead
-of [[buf]]. In core mode (used by [[opencore]]), [[fd]] is also $-1$
+of [[buf]].
+%
+In core mode (used by [<opencore()>]), [[fd]] is also $-1$
 but [[strp]] points to a preloaded read-only buffer of known length.
+%
 The three modes coexist without a tag because [[flush()]] and
 [[emptybuf()]] branch on \verb+f->strp != nil+ and \verb+f->fd == -1+.
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   fd mode (openfd):
     fd  = 5           strp = nil
     +--------- Io ----------+
@@ -12987,30 +13044,11 @@ The three modes coexist without a tag because [[flush()]] and
 
   core mode (opencore, read-only):
     fd = -1, strp owns a fixed-length preloaded buffer.
-\end{verbatim}
+\end{vdiagram}
 The unused inline [[buf]] in string and core modes costs one [[NBUF]]
 per [[Io]] object, but avoids a second allocation in the common fd case.
 
-<<struct [[Io]]>>=
-struct Io {
-    fdt	fd;
-    byte	*bufp, *ebuf, *strp;
-    byte	buf[NBUF];
-};
-@
 
-
-<<function [[openfd]]>>=
-io*
-openfd(fdt fd)
-{
-    io *f = new(struct Io);
-    f->fd = fd;
-    f->bufp = f->ebuf = f->buf;
-    f->strp = nil;
-    return f;
-}
-@
 
 <<enum [[MiscConstants]]>>=
 enum { Stralloc = 100, };
@@ -13063,6 +13101,8 @@ fullbuf(io *f, int c)
 }
 @
 
+
+%yoann: quick intro, important function used by yylex
 
 <<function [[rchr]]>>=
 int
@@ -13139,6 +13179,7 @@ closeio(io *io)
 
 
 <<function [[openstr]]>>=
+/// ??? -> <>
 io*
 openstr(void)
 {
@@ -13153,6 +13194,7 @@ openstr(void)
 @
 
 <<function [[opencore]]>>=
+/// ??? -> <>
 /*
  * Open a corebuffer to read.  EOF occurs after reading len
  * characters from buf.
@@ -13177,6 +13219,8 @@ opencore(char *s, int len)
 
 
 \section{Format}
+
+%yoann: quick intro, why not reuse libc format library?
 
 %ocaml: use Printf, or ocamltarzan generated dumper
 
@@ -13249,7 +13293,7 @@ pfmt(io *f, char *fmt, ...)
 @
 % could add 'x' pcmd for the bytecode
 
-
+% TODO LP split, especially case 't'
 
 
 <<function [[pstr]]>>=
@@ -13355,6 +13399,8 @@ pval(io *f, word *a)
 
 \section{String conversions}
 
+%yoann: quick intro, again why not use libc plan9? atos?
+
 <<global [[bp]]>>=
 char *bp;
 @
@@ -13458,37 +13504,37 @@ bind -a $home/bin/rc /bin
 bind -a $home/bin/$cputype /bin
 bind -c tmp /tmp
 if(! syscall create /tmp/xxx 1 0666 >[2]/dev/null)
-	ramfs	# in case we're running off a cd
+        ramfs   # in case we're running off a cd
 font = /lib/font/bit/pelm/euro.9.font
 upas/fs
 fn cd { builtin cd $* && awd }  # for acme
 switch($service){
 case terminal
-	plumber
-	echo -n accelerated > '#m/mousectl'
-	echo -n 'res 3' > '#m/mousectl'
-	prompt=('term% ' '	')
-	fn term%{ $* }
-	exec rio -i riostart
+        plumber
+        echo -n accelerated > '#m/mousectl'
+        echo -n 'res 3' > '#m/mousectl'
+        prompt=('term% ' '      ')
+        fn term%{ $* }
+        exec rio -i riostart
 case cpu
-	if (test -e /mnt/term/mnt/wsys) { # rio already running
-		bind -a /mnt/term/mnt/wsys /dev
-		if(test -w /dev/label)
-			echo -n $sysname > /dev/label
-	}
-	bind /mnt/term/dev/cons /dev/cons
-	bind /mnt/term/dev/consctl /dev/consctl
-	bind -a /mnt/term/dev /dev
-	prompt=('cpu% ' '	')
-	fn cpu%{ $* }
-	news
-	if (! test -e /mnt/term/mnt/wsys) {	# cpu call from drawterm
-		font=/lib/font/bit/pelm/latin1.8.font
-		exec rio
-	}
+        if (test -e /mnt/term/mnt/wsys) { # rio already running
+                bind -a /mnt/term/mnt/wsys /dev
+                if(test -w /dev/label)
+                        echo -n $sysname > /dev/label
+        }
+        bind /mnt/term/dev/cons /dev/cons
+        bind /mnt/term/dev/consctl /dev/consctl
+        bind -a /mnt/term/dev /dev
+        prompt=('cpu% ' '       ')
+        fn cpu%{ $* }
+        news
+        if (! test -e /mnt/term/mnt/wsys) {     # cpu call from drawterm
+                font=/lib/font/bit/pelm/latin1.8.font
+                exec rio
+        }
 case con
-	prompt=('cpu% ' '	')
-	news
+        prompt=('cpu% ' '       ')
+        news
 }
 \end{verbatim}
 
@@ -13511,6 +13557,7 @@ interactive sessions that understanding their internals
 is worthwhile.
 %
 For more general \plan utilities, see \book{Utilities}.
+%yoann1: maybe can say few of those programs are are actually builtin in other shells
 
 %TODO? add seq.c? basename/cleanname?
 
@@ -13531,13 +13578,13 @@ write to the same file descriptor.
 void
 main(int argc, char *argv[])
 {
-    int nflag;
+    bool nflag;
     int i, len;
     char *buf, *p;
 
-    nflag = 0;
+    nflag = false;
     if(argc > 1 && strcmp(argv[1], "-n") == 0)
-        nflag = 1;
+        nflag = true;
 
     len = 1;
     for(i = 1+nflag; i < argc; i++)
@@ -13558,8 +13605,8 @@ main(int argc, char *argv[])
     if(!nflag)
         *p++ = '\n';
 
-    if(write(1, buf, p-buf) < 0){
-        fprint(2, "echo: write error: %r\n");
+    if(write(STDOUT, buf, p-buf) < 0){
+        fprint(STDERR, "echo: write error: %r\n");
         exits("write error");
     }
 
