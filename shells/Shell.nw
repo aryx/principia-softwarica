@@ -332,12 +332,12 @@ a different shell inside the current one---without changing the kernel.
 
 %\t stdin stdout regular program
 %%plan9:
-%\t under \plan kernel run rc (see \book{Kernel} and Section{boot.rc}).
+%\t under \plan kernel run rc (see book{Kernel} and Section{boot.rc}).
 %%unix:
 %\t Under \unix run init, then login, then shell in terminal. Even virtual
 %\t  terminal in Linux, 
 %\t under windowing system like rio also virtual terminals connected
-%\t stdin and stdout of process (see \book{Windows}).
+%\t stdin and stdout of process (see book{Windows}).
 % Figure X presents archi for plan9.
 
 % shell = stuff around a kernel in a coquillage.
@@ -5475,6 +5475,7 @@ it artificially so [<execexec()>] can [[popword()]] it uniformly.
 % so we need to recreate the same conditions, the same argv.
 
 \subsection{[[exec()]]}
+\label{sec:builtin-exec}
 
 <<function [[execexec]]>>=
 /// execforkexec | builtin "exec" -> <>
@@ -7974,6 +7975,7 @@ implemented by an [[execxxx()]] function ([<execcd()>], [<execexit()>],
 command name matches one in the builtin table.
 
 \section{[[% cd]]}
+\label{sec:builtin-cd}
 %alt: use % cd, which is more rcish (sh use $ and # for root), but less latex friendly
 
 %claude:
@@ -8085,10 +8087,14 @@ dochdir(char *word)
 %claude:
 In \plan, the window manager [[rio]] (see \book{Windows}) tracks
 the current working directory of each window via the
-[[/dev/wdir]] file. When [[cd]] succeeds in an interactive shell,
+[[/dev/wdir]] file.
+%
+When [[cd]] succeeds in an interactive shell,
 it writes the new directory to this file so that [[rio]]
 can display it in the window title or use it when spawning
-new windows. The file descriptor is cached in a static variable
+new windows.
+%
+The file descriptor is cached in a static variable
 and opened only once (the [[-2]] sentinel means ``not yet tried'').
 
 <<[[dochdir()]] locals>>=
@@ -9567,49 +9573,6 @@ globcmp(const void *s, const void *t)
 
 
 
-<<function [[equtf]]>>=
-/*
- * Do p and q point at equal utf codes
- */
-bool
-equtf(uchar *p, uchar *q)
-{
-    Rune pr, qr;
-    if(*p!=*q)
-        return false;
-    
-    chartorune(&pr, (char*)p);
-    chartorune(&qr, (char*)q);
-    return pr == qr;
-}
-@
-
-<<function [[nextutf]]>>=
-/*
- * Return a pointer to the next utf code in the string,
- * not jumping past nuls in broken utf codes!
- */
-uchar*
-nextutf(uchar *p)
-{
-    Rune dummy;
-    return p + chartorune(&dummy, (char*)p);
-}
-@
-
-<<function [[unicode]]>>=
-/*
- * Convert the utf code at *p to a unicode value
- */
-int
-unicode(uchar *p)
-{
-    Rune r;
-
-    chartorune(&r, (char*)p);
-    return r;
-}
-@
 
 \section{Matching one name: [[match()]]}
 \label{sec:match}
@@ -10272,14 +10235,14 @@ In this chapter I present features, flags, builtins, and more generally topics
 that are not essential
 for understanding the core architecture of [[rc]], but that
 are important in practice.  Many of these features---here
-documents, command substitution, process substitution, general
-redirections---are what make a shell truly useful for scripting.
+documents, command substitution, process substitution---are what
+make a shell truly useful for scripting.
 
 %claude:
 Note that in Plan~9, many shell-like features that other
 systems implement inside the shell are instead provided by
 the window manager [[rio]]: command-line editing, history,
-filename completion, and job control.
+filename completion, and job control (see the \book{Windows}).
 This keeps [[rc]] simple.
 
 %\section{Shell-like features implemented outside [[rc]]}
@@ -10312,7 +10275,7 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 % cflag will contain the -c arguments!
 
 %claude:
-There is no special C code to support [[-c]] beyond the code above:
+There is no special C code in [[rc]] to support [[-c]] beyond the code above:
 the feature is
 implemented entirely in [[rcmain]]. The flag's argument is stashed in
 [[$cflag]], and the script simply runs \verb+eval $cflag+, handing the
@@ -10355,10 +10318,10 @@ rather than silently continuing.
 
 %claude:
 Although [[-e]] is passed as a command-line flag, you can also enable it
-from within a script with the [[flag]] builtin (\verb|flag e +|, see Section~\ref{sec:builtin-flag}), which
-makes it largely equivalent to [[bash]]'s [[set -e]]: because [[rc]]
-compiles each command line just before running it, the check is emitted
-for every command read after that point.
+from within a script with the [[flag]] builtin (\verb|flag e +|, see Section~\ref{sec:builtin-flag}), which makes it equivalent to [[bash]]'s [[set -e]].
+%: because [[rc]]
+%compiles each command line just before running it, the check is emitted
+%for every command read after that point.
 
 %claude:
 The check is only inserted after simple commands, not after
@@ -10406,7 +10369,7 @@ else
 Here, finally, is the [[Xeflag]] bytecode itself. It is tiny: if the
 guard [[eflagok]] is set and the last command's status was not ``true''
 ([<truestatus()>] returns false for any status string carrying a non-zero
-digit), it calls [[Xexit]] to abort the shell.
+digit), it calls [<Xexit()>] to abort the shell.
 
 <<function [[Xeflag]]>>=
 void
@@ -10425,8 +10388,21 @@ Xeflag(void)
 
 % very very useful feature!
 
+%claude:
+It is worth stepping back, because error handling is one of the genuinely
+hard problems every language faces, and [[-e]] is only one answer to it.
+The baseline in any shell is to check [[$status]] by hand after each
+command---correct, but verbose and easy to forget. [[-e]] automates that
+check, at the cost of the surprises noted above. Richer languages reach
+instead for exceptions (a failure unwinds the stack until something catches
+it) or for return values that force the caller to acknowledge the error
+(Go's explicit [[err]], Rust's [[Result]], OCaml's [[result]]). A shell
+sits at the low end of this spectrum: a command yields a single string
+status, and [[-e]] is the pragmatic middle ground between ignoring errors
+entirely and checking every one by hand.
 
 \section{Unicode}
+\label{sec:unicode}
 
 %claude:
 Plan~9 was the birthplace of UTF-8, and [[rc]] handles
@@ -10434,7 +10410,8 @@ Unicode transparently.  The key insight is that UTF-8 is
 self-synchronizing: the lexer can consume multi-byte runes
 by reading the first byte (which encodes the length)
 and then pulling the appropriate number of continuation bytes.
-[<addutf()>] does exactly this during lexing: after [[addtok]]
+%
+[<addutf()>] does exactly this during lexing: after [<addtok()>]
 stores the first byte, it reads continuation bytes by checking
 the leading-bit pattern.
 
@@ -10449,7 +10426,7 @@ addutf(char *p, int c)
     p = addtok(p, c);	/* 1-byte UTF runes are special */
     if(c < Runeself)
         return p;
-
+    // else
     m = 0xc0;
     b = 0x80;
     for(i=1; i < UTFmax; i++){
@@ -10464,13 +10441,16 @@ addutf(char *p, int c)
 @
 
 %claude:
-Why not just call the standard [[chartorune]] or [[Bgetrune]]? Because
-both want their input already buffered---[[chartorune]] decodes from a
-complete in-memory string, [[Bgetrune]] from a [[Biobuf]]. The lexer has
+Why not just call the standard [[chartorune()]] or [[Bgetrune()]]? Because
+both want their input already buffered---[[chartorune()]] decodes from a
+complete in-memory string, [[Bgetrune()]] from a [[Biobuf]].
+%
+The lexer has
 neither: it pulls bytes one at a time through [<advance()>], which hides
-the pushback slot and the several possible input sources. So [[addutf]]
-decodes a rune incrementally from that stream, fetching each continuation
-byte with [[advance()]] as it goes.
+the pushback slot and the several possible input sources.
+%
+So [[addutf]] decodes a rune incrementally from that stream, fetching each
+continuation byte with [[advance()]] as it goes.
 
 %claude:
 This rune-awareness is not confined to the lexer; it quietly shows up
@@ -10478,6 +10458,60 @@ wherever [[rc]] inspects characters. The [[?]] glob matches one whole
 UTF-8 rune rather than one byte (see [<match()>]), and the word-splitting
 in command substitution reads its input rune by rune (the [[rutf]] loop in
 [<Xbackq()>]) so that a multi-byte separator is recognized correctly.
+
+
+%claude:
+A few small UTF-8 helpers round out the support. [[equtf]] tests whether
+two byte pointers begin with the same rune, [[nextutf]] advances a pointer
+by one rune (without skipping past a NUL inside a malformed sequence), and
+[[unicode]] decodes the rune at a pointer to its integer code point. They
+are used by the globber's [<match()>], where character-class tests and
+comparisons must work per rune rather than per byte.
+
+<<function [[equtf]]>>=
+/*
+ * Do p and q point at equal utf codes
+ */
+bool
+equtf(uchar *p, uchar *q)
+{
+    Rune pr, qr;
+    if(*p!=*q)
+        return false;
+    
+    chartorune(&pr, (char*)p);
+    chartorune(&qr, (char*)q);
+    return pr == qr;
+}
+@
+
+<<function [[nextutf]]>>=
+/*
+ * Return a pointer to the next utf code in the string,
+ * not jumping past nuls in broken utf codes!
+ */
+uchar*
+nextutf(uchar *p)
+{
+    Rune dummy;
+    return p + chartorune(&dummy, (char*)p);
+}
+@
+
+<<function [[unicode]]>>=
+/*
+ * Convert the utf code at *p to a unicode value
+ */
+int
+unicode(uchar *p)
+{
+    Rune r;
+
+    chartorune(&r, (char*)p);
+    return r;
+}
+@
+
 
 \section{Advanced constructs}
 
@@ -10506,7 +10540,7 @@ which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
 which nests naturally---\plan scripts routinely write things like
 \verb+dir=`{dirname `{cleanname $file}}+.
 
-The output is split into words using [[$ifs]]
+The output is split into words by default using [[$ifs]]
 (inter-field separators, defaulting to space, tab, newline,
 as shown in [[rcmain]] in Section~\ref{sec:rcmain}).
 The implementation forks a child connected via a pipe;
@@ -10552,14 +10586,14 @@ and pushes the resulting list onto [[argv]].
 void
 Xbackq(void)
 {
-    int n, pid;
-    fdt pfd[2];
+    int n;
     char *stop;
-    char utf[UTFmax+1];
+    fdt pfd[2];
+    int pid;
     struct Io *f;
+    String *word; // extensible string
     word *v, *nextv;
-    Rune r;
-    String *word;
+    <<[[Xbackq()]] other locals>>
 
 
     stop = "";
@@ -10589,21 +10623,7 @@ Xbackq(void)
         f = openfd(pfd[PRD]);
         word = s_new();
         v = nil;
-        /* rutf requires at least UTFmax+1 bytes in utf */
-        while((n = rutf(f, utf, &r)) != EOF){
-            utf[n] = '\0';
-            if(utfutf(stop, utf) == nil)
-                s_nappend(word, utf, n);
-            else
-                /*
-                 * utf/r is an ifs rune (e.g., \t, \n), thus
-                 * ends the current word, if any.
-                 */
-                if(s_len(word) > 0){
-                    v = newword(s_to_c(word), v);
-                    s_reset(word);
-                }
-        }
+        <<[[Xbackq()]] read UTF bytes from pipe [[f]] and modify [[word]]>>
         if(s_len(word) > 0)
             v = newword(s_to_c(word), v);
         s_free(word);
@@ -10626,9 +10646,43 @@ Xbackq(void)
 % var *ifs = vlook("ifs");
 % stop = ifs->val? ifs->val->word: "";
 
+
 %claude:
-The [[stop]] separators come from [[argv]], not from a global. That is the
-point of the extended command-substitution grammar that accepts a separator
+This is the word-splitting loop, and it works one rune at a time, not one
+byte at a time (see Section~\ref{sec:unicode}). [[rutf]] pulls the next
+UTF-8 rune from the pipe; [[utfutf]] tests whether that rune appears in the
+[[stop]] separator set. A separator ends the current word; any other rune
+is appended to it.
+
+<<[[Xbackq()]] other locals>>=
+char utf[UTFmax+1];
+Rune r;
+@
+
+<<[[Xbackq()]] read UTF bytes from pipe [[f]] and modify [[word]]>>=
+/* rutf requires at least UTFmax+1 bytes in utf */
+while((n = rutf(f, utf, &r)) != EOF){
+    utf[n] = '\0';
+    if(utfutf(stop, utf) == nil)
+        s_nappend(word, utf, n);
+    else
+        /*
+         * utf/r is an ifs rune (e.g., \t, \n), thus
+         * ends the current word, if any.
+         */
+        if(s_len(word) > 0){
+            v = newword(s_to_c(word), v);
+            s_reset(word);
+        }
+}
+@
+
+%claude:
+In [[Xbackq()]], the [[stop]] separators come from [[runq->argv]], not 
+from a global.
+%
+This is to support also the {\em extended command-substitution}
+grammar that accepts a separator
 word before the brace (the \verb+`<sep>{cmd}+ form): it lets each
 substitution name its own separators. Earlier versions of [[rc]] read the
 global [[$ifs]] directly, which forced you to assign [[$ifs]], run the
@@ -10670,14 +10724,14 @@ a file.  \verb+cmp <{old} <{new}+ runs the two commands
 and passes their outputs as filenames to [[cmp]].
 
 %claude: %modern:
-This is the same capability [[bash]] and [[ksh]] later exposed as
+This is the same capability [[bash]] and [[ksh]] exposes as
 \verb+<(cmd)+. All of them rely on the [[/dev/fd]] device (here \plan's
-[[/fd]]), which originated in \plan.
+[[/fd]]).%, which originated in \plan.
 %---so process substitution is not a
 %modern feature [[rc]] is missing, but one it had early.
 
 %claude:
-This appears in the [[comword]] rule because it
+Syntactically this is treated as just another command word, because it
 really resolves to a filename ([[/dev/fd/N]]) connected
 to the command's output via a pipe.
 The implementation forks a child that runs the command
@@ -10714,10 +10768,12 @@ void
 Xpipefd(void)
 {
     struct Thread *p = runq;
-    int pc = p->pc, pid;
+    int pc = p->pc;
+    int pid;
     char name[40];
-    int pfd[2];
-    int sidefd, mainfd;
+    fdt pfd[2];
+    fdt sidefd, mainfd;
+
     if(pipe(pfd)<0){
         Xerror("can't get pipe");
         return;
@@ -10782,12 +10838,14 @@ Processes that deliberately {\em share} an environment group (an [[rfork]]
 without [[RFENVG]]) would, by contrast, see each other's variable changes.
 }.
 %
-Braces \verb+{...}+ group commands
-but execute them in the current process---so \verb+{cd /tmp; ls}+
-would change the parent's directory.  With \verb+@{cd /tmp; ls}+,
-the directory change is confined to the subshell.
-%
+Braces \verb+{...}+ group commands but run them in the current
+process---so \verb+{cd /tmp; ls}+ would change the parent's directory.
+The [[@]] operator is most useful precisely when paired with them:
+\verb+@{cd /tmp; ls}+ runs the whole group in a subshell, so the [[cd]]
+(and any variable assignment inside) is confined there and the parent is
+left untouched.
 
+%claude:
 This is particularly useful in [[mkfile]] recipes that iterate
 over subdirectories:
 \begin{verbatim}
@@ -10826,19 +10884,8 @@ case SUBSHELL:
 
 % * Xsubshell{... Xexit}		execute {} in a subshell and wait
 
-
-<<[[outcode()]] emit Xeflag in Xsubshell>>=
-if(eflag)
-    emitf(Xeflag);
-@
-
 %claude:
-Why an [[Xeflag]] after the subshell, when a [[-e]] failure inside the body
-already triggers [[Xexit]]? Because that inner [[Xexit]] only terminates the
-{\em child}; it sets the child's exit status but leaves the parent shell
-running. The child's status becomes the subshell's status, so the parent
-needs its own [[Xeflag]] to notice that the subshell failed and honor [[-e]]
-itself.
+With the bytecode emitted, here finally is [[Xsubshell]] itself.
 
 <<function [[Xsubshell]]>>=
 void
@@ -10870,6 +10917,19 @@ Xsubshell(void)
 % so they need first to modify the environment with Updenv() before
 % executing.
 
+<<[[outcode()]] emit Xeflag in Xsubshell>>=
+if(eflag)
+    emitf(Xeflag);
+@
+
+%claude:
+Why an [[Xeflag]] after the subshell, when a [[-e]] failure inside the body
+already triggers [[Xexit]]? Because that inner [[Xexit]] only terminates the
+{\em child}; it sets the child's exit status but leaves the parent shell
+running. The child's status becomes the subshell's status, so the parent
+needs its own [[Xeflag]] to notice that the subshell failed and honor [[-e]]
+itself.
+
 \subsection{Stringification of variables: [[$"<foo>]]} 
 \label{sec:stringification}
 
@@ -10877,13 +10937,13 @@ Xsubshell(void)
 % a list2str.
 
 %claude:
-The [[$"]] operator converts a list variable into a single
-string with spaces between elements.
-If [[$x]] is [[(a b c)]], then [[$"x]] is [[a b c]]
+The [[$"]] operator converts a variable---which in [[rc]] is always a
+list---into a single string, joining the elements with spaces.
+If [[$x]] is [[(a b c)]], then [[$"x]] is [['a b c']]
 as a single word.
 This is the inverse of [[$ifs]]-splitting in command
 substitution: command substitution splits strings into
-lists, while [[$"]] joins lists back into strings.
+lists, while [[$"]] joins a list back into a string.
 
 <<comword rule other cases>>=
 |   '"' word        {$$=tree1('"', $2);}
@@ -10977,19 +11037,16 @@ whitespace, special characters) would be lost.
 %to stdin, which is exactly what programs like [[grep]]
 %or [[sed]] expect.
 
-The implementation is clever: during parsing, [[heredoc()]]
-creates a temporary file (in [[/tmp]]) and records the
-tag and filename in a linked list.  After the entire
-command line is parsed and compiled, [[readhere()]] goes
-back and reads the here-document bodies from the input,
-writing them to those temporary files.  This two-phase
-approach is needed even for a single here document: the body text only
-begins on the {\em next} line, after the rest of the command line (other
-redirections, a pipeline) has already been parsed, so the parser must
-record the tag now and come back for the body later. Allowing several
-here documents on one line (e.g., [[cmd <<A <<B]]) then costs almost
-nothing extra---a list rather than one pending entry---even if it is a
-rarely used convenience.
+The implementation is a clever two-phase trick. The body of a here document
+does not sit where the [[<<TAG]] appears---it starts on the {\em next}
+line, after the rest of the command line (other redirections, a pipeline)
+has been parsed. So [[rc]] cannot capture it on the spot. Instead it splits
+the work: while parsing the command line, each [[<<TAG]] is turned into a
+redirection from a freshly named temporary file and remembered on a pending
+list; once the whole line is compiled, [[rc]] goes back, reads the bodies
+that follow, and writes them into those temporary files. Handling several
+here documents on one line (e.g., [[cmd <<A <<B]]) then falls out for
+free---the pending list simply holds more than one entry.
 
 If the here-tag was not quoted, variable substitution
 is performed via [<psubst()>]; otherwise the text is
@@ -11008,6 +11065,12 @@ if(nextis(c)){
 }
 @
 \t mv c to '<' ?
+
+%claude:
+The pending here documents live on a simple linked list of [[Here]]
+records, each pairing a tag with the temporary filename chosen for its
+body. [[here]] points at the head and [[ehere]] holds the tail pointer, so
+new entries are appended in source order.
 
 <<struct [[Here]]>>=
 struct Here {
@@ -11039,6 +11102,15 @@ struct Here **ehere;
 <<[[compile()]] after outcode and error management, read heredoc>>=
 readhere();
 @
+
+%claude:
+After [<compile()>] finishes emitting bytecode for the whole line,
+[<readhere()>] walks this list: for each entry it [[Creat()]]s the
+temp file, then reads one line at a time from [[runq->cmdfd]] until a
+line matches [[h->tag]], writing the others to the file (with variable
+substitution via [<psubst()>] unless the tag was quoted). At runtime
+the [[HERE]] redirection becomes an ordinary [<Xread>] of the temp
+file, and a matching [<Xdelhere>] bytecode deletes it afterwards.
 
 <<function [[readhere]]>>=
 void
@@ -11135,15 +11207,6 @@ hexnum(char *p, int n)
 }
 @
 
-
-%claude:
-After [<compile()>] finishes emitting bytecode for the whole line,
-[<readhere()>] walks this list: for each entry it [[Creat()]]s the
-temp file, then reads one line at a time from [[runq->cmdfd]] until a
-line matches [[h->tag]], writing the others to the file (with variable
-substitution via [<psubst()>] unless the tag was quoted). At runtime
-the [[HERE]] redirection becomes an ordinary [<Xread>] of the temp
-file, and a matching [<Xdelhere>] bytecode deletes it afterwards.
 
 <<function [[heredoc]]>>=
 //@Scheck: used by syn.y
@@ -11394,7 +11457,9 @@ if(nextis('[')){
 %	echo 'usage: kmem [kernel]' >[1=2]
 
 %claude:
-The [[DUP]] construct performs [[dup2]] between file descriptors.
+The [[DUP]] construct ties two file descriptors together with \plan's
+[[dup]] system call---which, unlike \unix, takes two arguments,
+[[dup(from, to)]], subsuming what \unix splits off into [[dup2]].
 [[>[1=2]]] makes fd~1 point to the same destination as fd~2
 (so stdout goes to stderr).
 [[>[1=]]] (with nothing after the equals) closes fd~1.
@@ -11403,7 +11468,7 @@ This is cleaner than the Bourne shell's \verb+2>&1+ syntax.
 Like other redirections, the implementation uses the
 two-phase approach: [[Xdup]] pushes a [[RDUP]] record
 onto the redir stack (undone by [[Xpopredir]] afterward),
-and the actual [[dup2]] happens in [[doredir()]] when
+and the actual [[dup]] happens in [[doredir()]] when
 a child process is forked.
 
 <<token declarations>>=
@@ -11499,7 +11564,7 @@ to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
 %claude:
 There is no separate code for it: the [<Xpipe()>] bytecode we already saw
 is parameterized by two file descriptors, [[lfd]] and [[rfd]], which it
-reads as operands and uses for the [[pushredir]] on each side. A plain
+reads as operands and uses for the [<pushredir()>] on each side. A plain
 [[|]] just compiles to [[lfd]] 1 and [[rfd]] 0; the bracket syntax makes
 the lexer fill [[t->fd0]]/[[t->fd1]] with other numbers, which
 [<outcode()>] then emits in their place.
@@ -11531,25 +11596,25 @@ and [[shift]] modifies [[$*]].
 % many scripts use it.
 
 %claude:
-The [[exec]] builtin replaces the current shell process
-with the given command (no fork).
-It is called from [<Xsimple()>] when the first word
-of the command is [[exec]].
+The [[exec]] builtin replaces the current shell process with the given
+command (no fork). Its code was in fact already shown, back with the
+simple-command machinery: [<execexec()>] is the very function that runs a
+plain command after the [[fork]], and the [[exec]] builtin simply calls it
+{\em without} forking first.
+
 
 \subsection{[[% whatis]]}
 
 %claude:
-[<execwhatis()>] is the shell's introspection tool.
+[<execwhatis()>] is the shell's {\em introspection} tool.
+%
 Given a name, it checks (in order): is it a variable?
 a function? a builtin? an executable on [[$path]]?
-It prints the definition in a form that can be fed back
+%
+It then prints the definition in a form that can be fed back
 to [[rc]]---variables as [[x=value]], functions as
 \verb+fn name {body}+, builtins as [[builtin name]].
 
-The subtle [[mapfd()]] helper is needed because [[whatis]]
-writes to fd~1, but fd~1 might have been redirected;
-[[mapfd]] walks the redir stack to find where fd~1
-actually points.
 
 <<function [[execwhatis]]>>=
 void
@@ -11624,6 +11689,12 @@ execwhatis(void){   /* mildly wrong -- should fork before writing */
 }
 @
 
+%claude:
+The subtle [[mapfd()]] helper is needed because [[whatis]]
+writes to fd~1, but fd~1 might have been redirected;
+[[mapfd]] walks the redir stack to find where fd~1
+actually points.
+
 <<function [[mapfd]]>>=
 int
 mapfd(int fd)
@@ -11671,7 +11742,8 @@ Executable(char *file)
 %claude:
 The [[rfork]] builtin exposes Plan~9's [[rfork(2)]]
 system call, which selectively shares or unshares
-resources between parent and child.
+resources between parent and child (see the \book{Kernel}).
+%
 The flags control which namespaces to copy or clear:
 [[n]]/[[N]] for the mount namespace, [[e]]/[[E]] for
 environment, [[s]] for note group, [[f]]/[[F]] for
@@ -11707,6 +11779,7 @@ execnewpgrp(void)
 {
     int arg;
     char *s;
+
     switch(count(runq->argv->words)){
     case 1:
         arg = RFENVG|RFNAMEG|RFNOTEG;
@@ -11924,22 +11997,24 @@ between producer and consumer transparently---is the basis
 of middleware, proxy servers, and the decorator pattern.
 
 \item \emph{Uniform data representation}: every value in
-[[rc]] is a list of strings. Lisp does the same with
-S-expressions, Tcl with strings. A single universal type
+[[rc]] is a list of strings, just as every Lisp value is an
+S-expression. A single universal type
 eliminates conversion boilerplate and makes composition
 trivial.
+%
 Taken one step further---so that a program's own {\em code} is just
 another value of that universal type---the property is called
-{homoiconicity}; Lisp (code as S-expressions) and Tcl (code as strings)
-are the classic examples. [[rc]] stops short of that: its values are
-string lists, but its programs are not.
+{\em homoiconicity}; Lisp (code as S-expressions) and Prolog (programs are
+ordinary terms, built and queried at runtime) are the classic examples.
+[[rc]] stops short of that: its values are string lists, but its programs
+are not.
 
 \end{itemize}
 
 \section{Connections to other books}
 
 A shell sits at the intersection of many topics covered
-in other books of \principia:
+in other \principia books:
 
 \begin{itemize}
 
@@ -11951,7 +12026,7 @@ and the [[/env]] and [[/dev/cons]] device files.
 Understanding the kernel will deepen your understanding
 of how pipes are implemented at the OS level,
 how the [[#!]] shebang mechanism works,
-and how notes (signals) are delivered.
+or how notes (signals) are delivered.
 
 \item The \book{Compiler} uses the same compilation
 pipeline as [[rc]]---lexing, parsing, code generation---but
@@ -11979,9 +12054,10 @@ programs---[[grep]], [[sed]], [[awk]], and friends---that
 [[rc]] scripts lean on so heavily.
 %
 The shell itself does almost no string manipulation: it splits
-words, expands variables, and globs filenames, but anything more
-(matching, substitution, field extraction) is delegated to these
-external commands.
+words, expands variables, globs filenames, and does glob-style pattern
+matching with [[~]] (the same [[*]], [[?]], \verb+[]+ wildcards, not full
+regular expressions). Anything more---substitution, field extraction, real
+regular expressions---is delegated to these external commands.
 %
 Seeing how they work explains what most of the
 power in a typical [[rc]] script actually comes from.
@@ -11994,36 +12070,40 @@ power in a typical [[rc]] script actually comes from.
 
 [[rc]] is deliberately minimal.
 Many features that other shells provide are instead
-handled by other programs, for instance the \plan window manager [[rio]]:
+handled by other programs in \plan, for instance the \plan window manager [[rio]]:
 
 \begin{itemize}
 \item {\em Command-line editing and history:}
 Under [[rio]], you can scroll back in the terminal window
 and copy-paste previous commands.
-There is no need for a readline library.
+There is no need for a readline library like in [[bash]].
 
 \item {\em Filename completion:}
 Provided by [[rio]]'s terminal, not by [[rc]] itself. This is possible
 because [[rc]] publishes its current directory to the window: the [[cd]]
-builtin writes the new path to [[/dev/wdir]] when running interactively,
+builtin writes the new path to [[/dev/wdir]] when running interactively
+(see Section~\ref{sec:builtin-cd}),
 so [[rio]] always knows which directory to complete filenames against.
 
 \item {\em Job control ([[C-z]], [[bg]], [[fg]]):}
 Less necessary when you have multiple windows.
-The [[&]] operator and [[wait $apid]] cover most use cases.
+The [[&]] operator and [[wait $apid]] cover most use cases in [[rc]].
 
 \item {\em Aliases:}
 Not needed because [[fn]] (functions) serve the same purpose
 and are stored persistently in the environment.
 
 \item \emph{String manipulation}: [[bash]] % and [[zsh]]
-provide parameter expansion operators for substring
+provide expansion operators for substring
 extraction (\verb|${var:offset:length}|), pattern
 replacement (\verb|${var//pat/rep}|), and case
-conversion. [[rc]]'s position is that these operations
+conversion.
+%
+[[rc]]'s position is that these operations
 belong in dedicated tools like [[sed]] and [[awk]],
 not in the shell itself---keeping the shell language
 small and letting each tool do one thing well.
+% called parameter expansion
 
 \end{itemize}
 
@@ -13343,7 +13423,6 @@ Memcpy(void *a, void *b, long n)
 %alt: \section{[[boot.rc]]} in Overview chapter
 %alt: \section{[[/rc/lib/rcmain]]} now in Initialization chapter
 
-%yoann: intro, say seen boot.rc in Section X and rcmain in Section Y, will now see more examples showcasing more rc features
 %claude:
 We have already read two real [[rc]] scripts in passing: [[boot.rc]]
 (Section~\ref{sec:boot-rc}), which brings up a \plan machine, and
@@ -13490,7 +13569,6 @@ main(int argc, char *argv[])
 
 \section{[[read]]}
 
-%yoann: read intro, x=`read`, not a builtin like in bash
 %claude:
 [[read]] reads one line from standard input and prints it. In \plan it is
 an external program, not a shell builtin: you capture a line with the
@@ -13998,7 +14076,6 @@ isnewerthan(char *a, char *b)
 \section{[[aux/getflags]]}
 % needed by git9, extended in 9front for keyword arg
 
-%yoann: quick intro to program
 %claude:
 [[getflags]] parses command-line flags according to a specification
 string, letting shell scripts do option handling the same disciplined way
@@ -14075,7 +14152,6 @@ main(int argc, char *argv[])
 
 \section{[[aux/usage]]}
 
-%yoann: quick intro to program
 %claude:
 [[usage]] is the companion to [[getflags]]: it prints a standard
 ``usage: ...'' diagnostic and exits non-zero, giving scripts a uniform way
@@ -14780,7 +14856,6 @@ int xwait(Node *np)
 %******************************************************************************
 \label{chap:extra-code}
 
-%yoann: quick intro like in Make.nw but for the shell
 %claude:
 This appendix collects the code chunks the preceding chapters referred to
 but did not show inline: header boilerplate, forward declarations, and the
@@ -14811,7 +14886,6 @@ source, included so that the literate program remains, as it must, the
 \addcontentsline{toc}{chapter}{Glossary}
 \label{sec:glossary}
 
-%yoann: more terms used in Intro.nw and Shell.nw worth adding?
 
 \begin{verbatim}
 LOC = Lines Of Code
