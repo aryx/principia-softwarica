@@ -12208,7 +12208,14 @@ the [[/env/]] filesystem.
 char nl='\n';		/* change to semicolon for bourne-proofing */
 @
 
-%yoann: quick intro pcmd and pfmt %t and format lib in appendix (not plan9 printf and fmt lib)
+%claude:
+[[pcmd]] is the inverse of the parser: it walks an AST and prints it back
+as [[rc]] source text. This is what lets [[rc]] store a function in [[/env]]
+as readable text, and what [[whatis]] uses to echo a function body. The
+recursion rides on a custom [[%t]] format verb, which [[pfmt]]---[[rc]]'s
+own small \verb+printf+ replacement, defined later in this appendix rather
+than borrowed from \plan's [[print]]/[[fmt]] library---dispatches straight
+back into [[pcmd]] for each child node.
 
 <<function [[pcmd]]>>=
 /// (simplemung | fnstr) -> pfmt %t -> <>
@@ -12328,7 +12335,11 @@ pcmd(io *f, tree *t)
 }
 @
 
-%yoann: mention c0, c1, c2 duplicated macros like for outcode, could factorize
+%claude:
+These [[c0]]/[[c1]]/[[c2]] child-accessor macros are the same ones
+[<outcode()>] uses in the code generator; they are redefined here only
+because [[pcmd]] lives in a separate file. A shared header would let both
+sides factor them out.
 
 % TODO ugly and dupe with the one in code.c
 <<constant [[c0]]>>=
@@ -12362,7 +12373,12 @@ pdeglob(io *f, char *s)
 \label{sec:rc-r}
 % also trace threads
 
-%yoann: quick intro, also mention used rc -r in \ref{sec:trace-simple-command-rc-r} (also why letter r?)
+%claude:
+The [[-r]] flag traces the interpreter: before running each bytecode it
+prints the process id, the code array, the program counter, the bytecode's
+name, and its arguments---the output we already saw in
+Section~\ref{sec:trace-simple-command-rc-r}. The [[r]] echoes the [[runq]],
+the running thread it dumps on every cycle.
 
 % nice output:
 
@@ -12467,7 +12483,9 @@ pfnc(io *fd, thread *t)
 \section{Printing subprocesses status: [[rc -s]]}
 % debugging feature or general feature used by people?
 
-%yoann: quick intro
+%claude:
+The [[-s]] flag makes [[rc]] print [[$status]] after any command that
+leaves a non-true status, a convenience when watching a script's progress.
 
 <<[[Xrdcmds()]] print status if -s>>=
 if(flag['s'] && !truestatus())
@@ -12481,7 +12499,9 @@ if(flag['s'] && !truestatus())
 %history: also in bourne shell, to print final command after
 % substitution
 
-%yoann: quick intro
+%claude:
+The [[-x]] flag echoes each simple command, after expansion, just before it
+runs---the shell's equivalent of [[bash]]'s [[set -x]] tracing.
 
 <<[[Xsimple()]] if -x>>=
 if(flag['x'])
@@ -12490,7 +12510,10 @@ if(flag['x'])
 
 \section{Printing characters: [[rc -v]] and [[rc -V]]}
 
-%yoann: quick intro
+%claude:
+The [[-v]] and [[-V]] flags echo input characters as they are read: [[-v]]
+for the user's own typing, [[-V]] for everything, including the characters
+pulled from sourced files like [[rcmain]].
 
 % ndot for not printing the characters procssed from a . (e.g. . rcmain)
 <<[[getnext()]] after read, if not EOF but verbose mode, print character read>>=
@@ -12526,7 +12549,9 @@ print a message and call [[abort()]]---these indicate bugs in
 #define ERRMAX 128
 @
 
-%yoann: explain where set err?
+%claude:
+[[err]] is the buffered output stream for diagnostics; it is set once in
+[<main()>], to [[openfd(STDERR)]], wrapping file descriptor~2.
 
 <<global [[err]]>>=
 io *err;
@@ -12628,8 +12653,9 @@ This appendix collects the utility code that [[rc]] uses throughout:
 memory allocation wrappers ([[emalloc]], [[erealloc]]),
 the buffered I/O system (the [[io]] structure and its read/write
 functions), command-line flag parsing ([[getflags]]),
-and string conversion helpers.
-%yoann1: add that general, not specific to rc, hence appendix
+and string conversion helpers. None of it is specific to a shell---it is
+the support layer almost any C program needs---which is why it is gathered
+here in an appendix rather than woven through the main chapters.
 
 \ifallcode
 <<function [[_efgfmt]]>>=
@@ -12660,7 +12686,11 @@ emalloc(long n)
 %old: /*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
 %ocaml: use Gc.
 
-%yoann: mention panic() above so rc specific with rc-specific error management
+%claude:
+Even this generic wrapper reaches into [[rc]]'s own machinery: on failure
+it calls [[panic()]] (Chapter~\ref{chap:error}) rather than returning
+[[nil]], so an out-of-memory condition becomes one of the fatal errors
+described there.
 
 % plan9
 <<function [[Malloc]]>>=
@@ -12690,7 +12720,17 @@ efree(void *p)
 
 %ocaml: use Arg.ml
 
-%yoann: quick intro, why not use classic \plan ARGBEGIN/ARGEND? because getflags() is more powerful? show ex of call, like the one in main() of rc so see string passed, can also maybe relate to aux/getflags this time for rc itself
+%claude:
+[[getflags]] parses the command line against a {\em specification string}
+that names every accepted flag at once---more declarative than \plan's
+usual [[ARGBEGIN]]/[[ARGEND]] macros, which you wrap a hand-written loop
+around. [[rc]] itself calls it as
+\begin{verbatim}
+  getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
+\end{verbatim}
+where a bare letter is a boolean flag and a letter followed by [[:1]] takes
+one argument. This is the same engine the standalone [[aux/getflags]]
+program (Section~\ref{sec:aux-getflags}) later exposes to shell scripts.
 
 <<global [[cmdname]]>>=
 char *cmdname;
@@ -12972,8 +13012,13 @@ errc(int c)
 
 %ocaml: stdlib does that by default
 
-%yoann: quicker intro Io and why not use libbio? 
-
+%claude:
+[[Io]] is [[rc]]'s own buffered-I/O type: a file descriptor plus a fixed
+buffer and a cursor. \plan already ships such a thing in [[libbio]] (the
+[[Biobuf]]), but [[rc]] rolls its own to stay portable---it builds on \unix
+too---and free of that dependency, at the cost of re-implementing a few
+hundred lines. The same motive recurs for the format and string-conversion
+helpers below.
 
 <<struct [[Io]]>>=
 struct Io {
@@ -13102,7 +13147,10 @@ fullbuf(io *f, int c)
 @
 
 
-%yoann: quick intro, important function used by yylex
+%claude:
+[[rchr]] reads a single byte from a buffer, refilling it from the file
+descriptor when empty. It is the bottom of the input stack: every character
+the lexer ([<yylex()>]) consumes ultimately comes through here.
 
 <<function [[rchr]]>>=
 int
@@ -13220,7 +13268,12 @@ opencore(char *s, int len)
 
 \section{Format}
 
-%yoann: quick intro, why not reuse libc format library?
+%claude:
+[[pfmt]] is a small \verb+printf+-style formatter with verbs specific to
+[[rc]]---[[%t]] for an AST node, [[%v]] for a word list, [[%q]] for a
+quoted word. \plan's [[fmt]] library could host these through
+[[fmtinstall]], but a self-contained formatter avoids that dependency, for
+the same portability reason as [[Io]] above.
 
 %ocaml: use Printf, or ocamltarzan generated dumper
 
@@ -13399,7 +13452,10 @@ pval(io *f, word *a)
 
 \section{String conversions}
 
-%yoann: quick intro, again why not use libc plan9? atos?
+%claude:
+Small integer-to-string and string-to-integer helpers. Like the I/O and
+format code, they duplicate what a C library already offers, again traded
+for keeping [[rc]] self-contained and portable.
 
 <<global [[bp]]>>=
 char *bp;
@@ -13709,8 +13765,11 @@ they are used so frequently in shell scripts and
 interactive sessions that understanding their internals
 is worthwhile.
 %
+Several of them---[[echo]], [[test]], [[read]]---are built into [[bash]]
+and most other shells; \plan keeps them as separate external programs, true
+to its preference for small composable tools over a fat shell.
+%
 For more general \plan utilities, see \book{Utilities}.
-%yoann1: maybe can say few of those programs are are actually builtin in other shells
 
 %TODO? add seq.c? basename/cleanname?
 
@@ -14274,6 +14333,7 @@ isnewerthan(char *a, char *b)
 @
 
 \section{[[aux/getflags]]}
+\label{sec:aux-getflags}
 % needed by git9, extended in 9front for keyword arg
 
 %claude:
