@@ -3176,9 +3176,6 @@ case '&':
     strcpy(tok, "&");
     return '&';
 @
-% skipnl? so newline after && is not considered a command terminator.
-% lexer trick again.
-
 
 
 
@@ -3198,13 +3195,11 @@ case '$':
     strcpy(tok, "$");
     return '$';
 @
-% what is dollar and quote after?
+% what is dollar and quote after? why not introduce new token kind for $"?
 
 <<global [[lastdol]]>>=
 bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
 @
-% dol = dollar
-
 
 
 
@@ -3222,26 +3217,26 @@ case '>':
     lastdol = false;
     <<[[yylex()]] in switch when redirection character>>
 @
-% ugly that does some parsing inside lexer. Should be done in grammar.
-% he even included a grammar in the comment. hmm
-
+%ugly: parsing inside lexer (but hard to move in grammar)
+%ocaml: ? no support for those advanced redirect yet?
 
 %claude:
 Redirections and pipes are the most complex part of the lexer.
+%
 Unlike simple operators like [[&&]] or [[||]] which map directly
 to a token, redirections carry extra information: the type
 ([[WRITE]], [[READ]], [[APPEND]], [[HERE]]), and which file
 descriptors are involved ([[fd0]], [[fd1]]).
+%
 The lexer builds the [[Tree]] node right here, rather than
 in the parser, for a lexical reason rather than mere convenience.
+%
 Inside a redirection like [[>[2=1]]] the [[2]] and [[1]] are file
 descriptors, but everywhere else a digit is an ordinary word character
 that [<wordchr()>] folds into a word. Emitting the digits and brackets
 as separate grammar tokens would clash with that normal word lexing,
 so [[rc]] recognizes the whole bracketed redirection here instead; the
 comment below sketches the little grammar it accepts.
-
-
 
 
 
@@ -3266,16 +3261,12 @@ if(t->type==PIPE)
     skipnl();
 return t->type;
 @
-% ugly to do that in lexer, but then dont want to have [
-% as a separate token
-
-\l could put the skipnl() for PIPE before?
 
 
-
-% MV LATER, anyway used where?
+%alt: mv later, anyway used where?
 %an important set of field are for redirection, when type = REDIR
 % in which case the kind of redirection is in rtype
+
 <<[[Tree]] redirection and pipe specific fields>>=
 //enum<Redirection_kind>
 int	rtype;
@@ -3286,11 +3277,12 @@ int	rtype;
 fdt fd0;
 fdt fd1;	/* details of REDIR PIPE DUP tokens */
 @
+%ocaml: just put that as additional elements in the constructor for Pipe/Redir
+
+%TODO code:
 % why need that in every AST nodes? can not encode info via some child?
 % has fd0 fd1 because redirection (and pipes) in rc is very general. 
 % Can do lots of stuff.
-%ocaml: just put that as additional elements in the constructor for Pipe/Redir
-
 
 %claude:
 [[WRITE]], [[READ]], and [[APPEND]] are the tags stored in a
@@ -3355,13 +3347,14 @@ case '<':
 @
 
 
-
 \section{Remaining non-word characters}
 
 %claude:
 Any character that is not a word character and was not handled by an
 earlier [[switch]] case ends up here: the lexer simply returns it as a
-single-character token. This is the path the newline [['\n']] falls
+single-character token.
+%
+This is the path the newline [['\n']] falls
 through to (as noted earlier), and it likewise covers lone
 metacharacters such as [[;]] and the closing brace and parenthesis
 that the grammar consumes directly.
@@ -3374,11 +3367,12 @@ if(!wordchr(c)){
     return c;
 }
 @
-% why need set tok? anyway it is a single character here
-%  for yyerror? for fn storage?
 %ocaml: be explicit and handle each character in lexer
 
-% so newline is handled by this code above.
+% why need set tok? anyway it is a single character here
+%  for yyerror? for fn storage?
+
+% repeat newline is handled by this code above.
 
 \section{Keywords and identifiers ([[if]], [[for]], [[while]], [[switch]], [[fn]], \ldots )}
 
@@ -3414,11 +3408,8 @@ yylval.tree = t;
 return t->type;
 @
 
-% after a dollar we accept only idchr.
-
 %old:    if(lastdol ? !idchr(c) : !wordchr(c)) break  if inside if, hmmm
-\t rewrite this if, too hard to read
-
+%TODO? rewrite this if, too hard to read
 
 %claude:
 Once the word is assembled, [<klook()>] checks whether it matches
@@ -3426,7 +3417,6 @@ a keyword. Keywords are stored in a small hash table initialized
 by [<kinit()>] at startup. If the word is a keyword,
 [<klook()>] returns the appropriate token type; otherwise it
 returns [[WORD]].
-
 
 <<function [[klook]]>>=
 tree*
@@ -3503,16 +3493,16 @@ kenter(int type, char *name)
 @
 
 
-
-
 \section{Array subscript ([[<arr>(<n>)]])}
-% and automatic carret
 \label{sec:array-subscript}
+% and automatic carret
+%alt: lexing hacks?
 
 % ( vs SUB. Call? vs array subscript.
 % need two tokens otherwise ambiguity in grammar?
 %claude:
 This is one of the trickiest parts of the lexer.
+%
 When a word is immediately followed by [[(]], as in [[$x(1)]],
 it must be treated as an array subscript ([[SUB]]) rather
 than a regular parenthesis.
@@ -3552,23 +3542,6 @@ if(lastword){
 }
 @
 
-% what is this ^ ? it's to concatenate word
-% when we do foo  -x$flag, we do not want to pass 2 args to foo program
-% such as ["-x"; "$flag"].
-% we want one single arg that is the result of a concatenation.
-% enter ^.
-
-% but right now because we skip whitespace and generate 3 tokens
-% (one for '-x', one for '$' which accept comples values, not just
-% a direct varname, and one for 'flag')
-% there is no way to disambigute between -x $ flag and -x$flag
-% hence the implicit caret thing.
-
-
-
-
-
-
 %******************************************************************************
 \chapter{Parsing}
 %******************************************************************************
@@ -3581,13 +3554,13 @@ those tokens into an AST.
 
 \section{Overview}
 
-% I assume you understand yacc! if not read classic book on lex&yacc
-%  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
-%(compared to ocamlyacc can have actions in the middle, and those actions
-% count as indexable elements for the $xxx numbering ($1, $2, etc))
 %claude:
 The parser of [[rc]] is written using [[yacc]]
 (see \book{CompilerGenerator} for an introduction to [[yacc]]).
+% I assume you understand yacc! if not read classic book on lex&yacc
+%  or docs/doc/unix/yacc.pdf
+%(compared to ocamlyacc can have actions in the middle, and those actions
+% count as indexable elements for the $xxx numbering ($1, $2, etc))
 %
 The [[.y]] file follows the standard [[yacc]] layout:
 a prologue section (\verb+%{...%}+) with C includes,
@@ -3683,7 +3656,7 @@ rc:
 
 % newline has a semantic here!
 
-% interesting DSL. must be easy to issue a command.
+%said-before: interesting DSL. must be easy to issue a command.
 % don't want to do 'system("ls");' like in other languages.
 % and want newline to have a special semantic role, a kind of implicit ';'
 % but also want to have multiline statements ... so newline must be allowed
@@ -3691,39 +3664,20 @@ rc:
 % -xxx, /a/b, are treated as regular words! only ;&${[^ are specials
 
 
-
 The following sections will gradually introduce the remaining rules:
 [[line]], [[cmd]], [[word]], etc.
 
-
-
-\ifallcode
 <<type [[declarations]]>>=
 %type<tree> first keyword words
 %type<tree> paren brace body cmdsa cmdsan assign epilog redir
 %type<tree> FOR IN WHILE IF NOT SWITCH FN
 %type<tree> TWIDDLE BANG SUBSHELL  REDIR DUP PIPE    WORD
 @
-\fi
-
-\ifallcode
-<<constant [[YYMAXDEPTH]]>>=
-//@Scheck: used in y.tab.c
-#define	YYMAXDEPTH	500
-@
-
-%pad: put here just to please syncweb -to_tex
-<<rc/x.tab.h>>=
-@
-
-\fi
 
 
 \section{Simple commands ([[<cmd> <arg1>...<argn>]]) }
 
-% a line can have a single command (stmt)
-%toc:
-%claude:
+%claude: %toc:
 The grammar is layered:
 a [[line]] is one or more [[cmd]]s separated by [[;]] or [[&]],
 a [[cmd]] is a [[simple]] command (or a control flow statement),
@@ -3741,7 +3695,7 @@ line:
     cmd
 <<line rule other cases>>
 @
-% can have ; and & here (why not in cmd? because newline issue?)
+%said-later: can have ; and & here (why not in cmd? because newline issue?)
 
 % a (single) command can be a simple "expression"
 <<cmd rule>>=
@@ -3752,8 +3706,7 @@ cmd:
 @
 % can have complex stmt here
 
-% simplemung() shown below later.
-% "mung" means destructive update.
+%said-later: simplemung() shown below later. "mung" means destructive update.
 
 % an expression can be a "progcall" which is a simple serie of words
 % (separated by spaces, curry style :) )
@@ -3814,7 +3767,6 @@ tree* simplemung(tree *t)
     return t;
 }
 @
-% saw ARGLIST above
 %ocaml: build directly AST
 
 %claude:
@@ -3829,8 +3781,6 @@ The [["%t"]] here is not a standard [[printf]] verb: [[rc]]'s own
 to the AST printer [<pcmd()>] (Appendix~\ref{chap:debugging-appendix}).
 So this call renders the whole command subtree back into its textual
 form, which is what gets stored in [[t->str]].
-
-\t why store string in t->str?? who will uses that anyway?
 
 
 %claude:
@@ -3849,7 +3799,6 @@ for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
 @
 %ocaml: maybe should have redirection allowed only at the end?
 % so then easy to put it also at the root of the AST.
-
 
 
 %claude:
@@ -3877,8 +3826,6 @@ the command:
 %claude:
 This way, the bytecode generator encounters the redirections
 first and can set them up before executing the command.
-
-
 
 
 %claude:
@@ -3936,13 +3883,8 @@ words:
 
 
 
-
-
 \section{Operators}
 
-% actually operators are at different levels, line rule, cmd rule,
-% simple rule and so have different priotities.
-% redirection is lower, then pipe and logic operators, then sequence
 %claude:
 Operators are spread across different grammar levels,
 which implicitly defines their priorities.
@@ -3985,8 +3927,6 @@ cmdsa:
 
 % cmdsa = command sequence or and
 
-% x & y is really (x&); y
-
 % newline is also a form of sequence when in the body { } of something
 
 \subsection{Logical operators  ([['&&']], [['||']], [['!']])}
@@ -4007,9 +3947,7 @@ cmdsa:
 % could also just do tree2(BANG, $2) I think
 
 
-
 % redir is in simple/expr, so has more prirority
-
 
 <<function [[mung1]]>>=
 //@Scheck: used by syn.y
@@ -4025,15 +3963,13 @@ tree* mung1(tree *t, tree *c0)
 
 \subsection{String matching  (\texttt{'\textasciitilde'})}
 
-% Fundamental type is list of string. No int, no float, just strings.
-% So fundamental operator is string matching ~.
-% Can be used for arithmetic too,  if(~ $#xxx 0)
 %csh: had expression grammar, so could do $i < 365
 %sh: ugly external 'test' program and '[' but need for -gt, -lt
 %claude:
 The \verb+~+ (twiddle) operator is the fundamental comparison
 operator in [[rc]]. Since all values in [[rc]] are (list of) strings,
 there are no arithmetic comparisons;
+%
 instead, \verb+~+ performs pattern matching:
 \verb+~ $x foo*+ tests whether [[$x]] matches the pattern [[foo*]]%
 \footnote{The [[*]] here is interpreted by the twiddle operator
@@ -4047,7 +3983,6 @@ which relies on the external [[test]] program (or \verb+[ ]+).
 [[rc]] still provides [[test]] (Appendix~\ref{chap:shell-companion}
 gives its code) for the file tests \verb+~+ cannot do, such as
 [[test -f $file]].
-%, but for plain comparison and matching \verb+~+ replaces it.
 
 <<cmd rule other cases>>=
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
@@ -4114,20 +4049,20 @@ hangs (with [<mung2()>]) the two children on it:
 %%the [[yacc]] grammar would require many more tokens,
 %%so the lexer returns a pre-built [[Tree]] instead.
 
-
 % what if second cmd derives the EmptyCommand?
 
 \subsection{Redirections  ([['>']], [['<']])}
 
-% at level of simple, below cmd, so higher prio than ||, &&, ;, etc
 %claude:
 Redirections are at the [[simple]] level in the grammar,
 which means they bind tighter than pipes and logical operators.
+%
 For example, [[ls | grep bi* > foo]] is parsed as
 [[ls | (grep bi* > foo)]], not [[(ls | grep bi*) > foo]]---the
 redirection applies only to [[grep]], not to the whole pipeline.
 If you want to redirect the output of an entire pipeline,
 you need braces: \verb+{ls | grep bi*} > foo+.
+%
 A command can have multiple redirections (e.g., [[ls < foo > bar]]),
 and they can appear mixed with arguments.
 %
@@ -4149,9 +4084,7 @@ redir:
 @
 
 
-
 % other redirections!
-% XXX?
 <<cmd rule other cases>>=
 |   brace epilog        {$$=epimung($1, $2);}
 @
@@ -4161,8 +4094,8 @@ redir:
 % brace redir word.
 % but what is this word after brace? an argument to what?
 
-\t Note that there is no paren in cmd, so if you want to parenthesize
-\t  experssions like  ~ foo foobar, then you need to use braces, not parens!
+% TODO? Note that there is no paren in cmd, so if you want to parenthesize
+%  experssions like  ~ foo foobar, then you need to use braces, not parens!
 
 
 <<other rules>>=
@@ -4192,8 +4125,6 @@ tree* epimung(tree *comp, tree *epi)
 |   redir cmd  %prec BANG
         {$$=mung2($1, $1->child[0], $2);}
 @
-%$
-% really need to support that?
 %ocaml: do not support that
 
 \section{Control flow statements ([[if]], [[if not]], [[while]], [[switch]], [[for]])}
@@ -4223,6 +4154,7 @@ the explicit [[fi]] terminator tells the parser when the
 separate command that checks the exit status left by the
 previous [[if]]. No lookahead is needed, no extra keywords,
 and each line is self-contained.
+% See rc(1) note about it.
 
 <<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
@@ -4233,7 +4165,9 @@ and each line is self-contained.
 Like the lexer's [<skipnl()>] calls after [[&&]], [[||]], and [[|]],
 these rules also swallow a newline so the body can sit on the next
 line---but here the call is a mid-rule grammar action
-([[{skipnl();}]]) rather than lexer code. The difference is who knows
+([[{skipnl();}]]) rather than lexer code.
+%
+The difference is who knows
 that the newline should be ignored: for a binary operator the lexer
 can tell as soon as it scans the operator, whereas after [[if(...)]]
 or [[while(...)]] only the parser knows, once it has reduced the
@@ -4265,14 +4199,6 @@ over [[$*]] (the script arguments).
 |   FOR '(' word ')' {skipnl();} cmd
     {$$=mung3($1, $3, (struct Tree *)0, $6);}
 @
-% why IF NOT? Why not simply ELSE? just to indicate that this thing is
-% fishy. See rc(1) note about it.
-% Also normally else requires lookahead but "the shell cannot afford
-%  to do lookahead since it is an interactive language"
-% It has to process  if(...) cmd NEWLINE.
-% It can not wait to check if there is an else (anyway it can
-% already proceed). But then else is really another separate command,
-% hence the special indication.
 
 % for(x) iterate over $*
 % can do before *=`{ ... } for instance
@@ -4298,6 +4224,7 @@ paren:  '(' body ')'        {$$=tree1(PCMD, $2);}
 <<token declarations>>=
 %token PCMD
 @
+
 % but really like brace for semantic.
 % but different from parens inside the For where it is a list of things then.
 % Also use different token so when pretty print the tree get the
@@ -4308,7 +4235,6 @@ paren:  '(' body ')'        {$$=tree1(PCMD, $2);}
 brace:  '{' body '}'        {$$=tree1(BRACE, $2);}
 @
 %$
-
 
 
 % so multiline, or ;
@@ -4324,9 +4250,6 @@ cmdsan:
 @
 %$
 % cmd sequence or and or newline
-
-
-
 
 
 \section{Functions ([[fn]])}
@@ -4345,15 +4268,12 @@ to handle multiple signals with the same handler).
 |   FN words brace  {$$=tree2(FN, $2, $3);}
 |   FN words        {$$=tree1(FN, $2);}
 @
-%$
-% words? fn with multiple words? can define alias on the same line?
 %ocaml: could be at line level? also why allow words here?
-% second line is for delfn. if type
-% fn foo   without anything, then means delete the function.
+
 
 \section{Variables ([[<x>=...]])}
+%alt: definitions
 
-% definitions
 %claude:
 Variable assignment in [[rc]] is written [[x=value]].
 The interesting aspect is that an assignment can be followed
@@ -4407,10 +4327,6 @@ ambiguities (e.g., [[x=1 ls && echo done]]) using
 the priority of [[BANG]], giving assignment lower priority
 than pipes but higher than logical operators.
 
-
-% A=1 ls
-
-
 % what if do A='*'
 % and then  echo $A
 % will you get the glob?
@@ -4429,11 +4345,6 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 % but then variables contain a single word? not a list?
 % for a list of words use () so X=(a b c d)
 % but then how derive () from word? see below.
-
-
-% no export in rc?
-
-% uses
 
 %claude:
 A [[comword]] is the smallest standalone argument the grammar
@@ -4469,10 +4380,10 @@ improvements over the Bourne shell.
 @
 
 
-
 \bigskip
 %claude: %trans:
 This already completes the grammar of [[rc]] which has a very simple syntax.
+%
 Note that there is no checking or type-checking pass:
 [[rc]] has no types---every value is
 a list of strings---so once [<yyparse()>] has built the AST it is
@@ -4484,7 +4395,7 @@ chapter.
 % no checking at all (just if not but because ugly)
 
 % Bourne says he was doing checks such as detecting cat >x | wc  errors.
-% I could do?
+%ocaml: could do those Bourne checks?
 
 
 %******************************************************************************
@@ -14973,6 +14884,10 @@ source, included so that the literate program remains, as it must, the
 @
 <<rc/y.tab.c>>=
 @
+%pad: put here just to please syncweb -to_tex
+<<rc/x.tab.h>>=
+@
+
 \fi
 
 #include "Shell_extra.nw"
