@@ -4,20 +4,15 @@
 % and even script! 2>&!, tail, head
 % lots of redirections
 
-% sh.c in xv6/users! pretty small! 
-% similar to sh/sh.c in this dir (600 LOC)
-
 %last:
-% - https://github.com/gmarler/AUPv2/blob/master/c5/sh0.c
 % - https://healeycodes.com/building-a-shell
-% - rochkind shell from his book on Unix programming
-%   https://github.com/gmarler/AUPv2/blob/master/c5/sh0.c
 % - https://www.rust-class.org/pages/ps2.html Good Auld Shell
 % - https://www.in-ulm.de/~mascheck/various/ash/
 %   ash variants and history
 % - https://github.com/reubeno/brush bash in rust, but still 41000 LOC
 %   (xix rc is currently 3000 LOC and plan9 rc is 6700 LOC)
 %   note that brush reuse the rust readline library from nushell below
+% - bash in Go https://github.com/mvdan/sh
 % - https://github.com/nushell/nushell relational/typed pipes
 %   also in rust
 % - fish-shell got rewritten in Rust! in less than a year
@@ -4868,7 +4863,8 @@ if(nerror){
 and emits bytecodes. It switches on the node type and
 emits the appropriate sequence of bytecodes for each construct.
 %
-The [[eflag]] parameter propagates the [[-e]] flag (exit on error):
+The [[eflag]] parameter propagates the [[-e]] flag (exit on error,
+see Section~\ref{sec:rc-e})):
 when set, an [<Xeflag>] bytecode is emitted after certain commands
 to check if they failed and exit accordingly.
 
@@ -10307,7 +10303,7 @@ This keeps [[rc]] simple.
 The [[-c]] flag lets you pass a command string directly
 on the command line, as in [[rc -c 'echo hello']].
 %
-This is how other programs (like [[mk]], see the \book{Make})
+This is how other programs (like [[mk]], see the \book{Builder})
 invoke the shell to execute a recipe:
 they build a command string and pass it via [[-c]]
 rather than writing it to a temporary file.
@@ -10320,7 +10316,8 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 
 %yoann: say -c relies simply on builtin eval (see Section X)
 %claude:
-Notice there is no special interpreter support for [[-c]]: it is
+There is no special C code to support [[-c]] beyond the code above:
+the feature is
 implemented entirely in [[rcmain]]. The flag's argument is stashed in
 [[$cflag]], and the script simply runs \verb+eval $cflag+, handing the
 string to the [[eval]] builtin (Section~\ref{sec:builtin-eval}) to be
@@ -10360,11 +10357,14 @@ recipes, so that a failure in any command---especially inside
 a loop iterating over subdirectories---stops the entire build
 rather than silently continuing.
 
+%claude:
 Although [[-e]] is passed as a command-line flag, you can also enable it
-from within a script with the [[flag]] builtin (\verb|flag e +|), which
+from within a script with the [[flag]] builtin (\verb|flag e +|, see Section~\ref{sec:builtin-flag}), which
 makes it largely equivalent to [[bash]]'s [[set -e]]: because [[rc]]
 compiles each command line just before running it, the check is emitted
 for every command read after that point.
+
+%claude:
 The check is only inserted after simple commands, not after
 control flow constructs like [[if]] or [[||]], since a false
 condition in [[if(test ...)]] should not abort the script.
@@ -10830,12 +10830,17 @@ case SUBSHELL:
     outcode(c0, eflag);
     emitf(Xexit);
     stuffdot(p);
-    if(eflag)
-        emitf(Xeflag);
+    <<[[outcode()]] emit Xeflag in Xsubshell>>
     break;
 @
 
 % * Xsubshell{... Xexit}		execute {} in a subshell and wait
+
+
+<<[[outcode()]] emit Xeflag in Xsubshell>>=
+if(eflag)
+    emitf(Xeflag);
+@
 
 %yoann: why need Xeflag here too? anyway if failed in c0 we would have already Xexit?
 %claude:
@@ -14131,6 +14136,13 @@ main(void)
 
 \chapter{[[sh]], the simple shell}
 \label{chap:sh-simple-shell}
+
+% sh.c in xv6/users! pretty small! 
+% similar to sh/sh.c in this dir (600 LOC)
+
+% see also sh from Advanced Unix programming book
+% - rochkind shell from his book on Unix programming
+%   https://github.com/gmarler/AUPv2/blob/master/c5/sh0.c
 
 %claude:
 This is a minimal shell, useful during early stages of
