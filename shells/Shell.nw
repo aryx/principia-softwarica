@@ -2032,12 +2032,8 @@ it is simpler to assume the simpler bootstrap below.
 <<[[main()]] locals>>=
 int i;
 @
-% Xrdcmds (which will call yyparse()->compile()->outcode()
-%  which will read a line, compile it, and add a Xreturn
-%when want to experiment with simplified bootstrap
-% (don't forget to also modify mkfile and put 'rc2' for TARG
-%OPTIONAL
 
+%OPTIONAL
 <<[[main()]] initialize [[boostrap]] (simplified)>>=
 memset(bootstrap, 0, sizeof bootstrap);
 
@@ -2046,14 +2042,14 @@ bootstrap[i++].i = 1; // reference count
 bootstrap[i++].f = Xrdcmds;
 bootstrap[i].i = 0;
 @
-%bootstrap[i++].f = XMark; ? necessary?
-%bootstrap[i++].f = Xexit; ? Xexit never reached I think.
+%alt:
+% bootstrap[i++].f = XMark; ? necessary?
+%said-later: bootstrap[i++].f = Xexit; ? Xexit never reached I think.
 % 1 to reference count? why? they put 0 in compile() for new bytecodes
 %ocaml: no need end of list, no need reference count
 
 \section{Setting [[runq]]}
 
-% [[start()]]
 %claude:
 [<start()>] creates a new thread and pushes it on top of [<runq>].
 The program counter starts at 1 (not 0) because element 0 of
@@ -2066,8 +2062,6 @@ knows where to resume after the current thread finishes.
 <<[[main()]] initialize [[runq]] with bootstrap code>>=
 start(bootstrap, 1, (var *)nil);
 @
-% starts at 1; 0 is for the reference count
-% modify runq! usually called with pc = 1
 
 <<function [[start]]>>=
 /// main | Xrdcmds -> <>
@@ -2095,26 +2089,24 @@ start(code *c, int pc, var *local)
     runq = p;
 }
 @
-% not reset iflast to false?
-\t maybe should call it new_thread() because it does not
-\t  start it right away, and should do the add_stack in the caller.
+%alt: should call it new_thread() because it does not
+%  start it right away, and should do the add_stack in the caller.
 %ocaml: I renamed it mk_thread and do runq := t::!run in the caller. clearer.
 
-% called sometimes with pc different of 1? yes, for async, trap,
-%  pipe, etc.
+% not reset iflast to false?
+
+% called sometimes with pc different of 1? yes, for async, trap,  pipe, etc.
 
 % will go back to previous Thread (put in runq stack) if
 % the new code does some Xreturn.
 % So idea of subcomputation. With then fresh argv, fresh code list.
 
-% When call start()? main, Xrdcmds. Xrdcmds is really
-% a read/eval/print loop.
+% When call start()? main, Xrdcmds. Xrdcmds is really a read/eval/print loop.
 
 % very first time runq should be nil so p->ret points to nil.
 
 \section{Setting [[runq->argv]]}
 
-% now that runq set.
 %claude:
 Now that [<runq>] is set, [<main()>] populates its argument stack
 with the command-line arguments. These arguments are pushed
@@ -2130,7 +2122,7 @@ The actual bootstrap code will later assign this list to [[$*]]
  */
 char *argv0="rc";
 @
-% used by? it is override below, but used by what after?
+% used by? it is overriden below, but used by what after?
 
 <<[[main()]] initialize [[runq->argv]]>>=
 /* prime bootstrap argv */
@@ -2139,8 +2131,7 @@ argv0 = strdup(argv[0]);
 for(i = argc-1; i!=0; --i) 
     pushword(argv[i]);
 @
-% start from end because list/stack so at the end the top of the stack will
-% be the first argument of the command
+
 % does getflags consume argv and argc? Yes! so push only non flags
 %ocaml: no need to call pushlist() here. Already have working argv.
 % no nil in OCaml!
@@ -2162,18 +2153,7 @@ the data structures look like this:
 The real bootstrap code will then assign this word list to [[$*]]
 and source [[rcmain]], which sets up [[$path]] and
 runs the script.
-
-
-% so runq->argv is populated, and as you will see later,
-% bootstrap code assign it in $*!
-
-
-% see pushlist() below
-
-% this list is actually manipulatd by Xmark, etc
-% so runq->argv is the argument to the bytecodes, not just
-% to the simple command (but actually simple commands become
-% Xsimple so this bytecode look at runq->argv)
+% add ref to chapter real bootstrap?
 
 %claude:
 [<pushlist()>] pushes a new empty word list onto [[runq->argv]],
@@ -2195,6 +2175,7 @@ pushlist(void)
     runq->argv = p;
 }
 @
+
 % use runq, assume runq not nil! otherwise segfault
 
 
@@ -2207,10 +2188,10 @@ pushword(char *wd)
     runq->argv->words = newword(wd, runq->argv->words);
 }
 @
-% use global runq
+%ocaml: no need for panic, argv always at least empty list
+
 % note that newword take the old value of the list so indeed
 %  it adds wd in the list of words.
-%ocaml: no need for panic, argv always at least empty list
 
 
 \section{Bytecode interpreter loop}
@@ -2238,9 +2219,8 @@ for(;;){
 
 %claude:
 Note that between bytecodes, the loop also checks for pending signals (traps).
+% add ref to chapter
 
-\n the REPL? not just Xrdcmds, the loop is in main and print in program
-% X(bytecode) read commands
 \section{Reading commands: [[Xrdcmds()]]}
 \label{sec:reading-commands}
 
@@ -2250,9 +2230,11 @@ Note that between bytecodes, the loop also checks for pending signals (traps).
 %  print? hmm partly in yylex for the prompt, the rest the program does it
 %  loop? kinda because do a pc-- below so do its own loop
 %  inside the enclosing interpreter loop
+
 %claude:
 [<Xrdcmds()>] is the bytecode that implements the
 read-eval loop of [[rc]].
+%
 It calls [<yyparse()>] to read and compile one command line,
 then calls [<start()>] to push a new thread executing
 the compiled bytecodes.
@@ -2284,14 +2266,13 @@ Xrdcmds(void)
     freenodes(); // allocated in yyparse()
 }
 @
-% will go back to Xrdcmds because of the Xreturn inserted in
-% the codebuf by compile()
 %ocaml: ugly: use some globals everywhere. treenodes, codebuf
 % so here yyparse call internally compile that modifies codebuf, but hard to see
 
-\l pass local so share ? so after execute a line, the parent
-\l  thread has its local modified too.
-
+% will go back to Xrdcmds because of the Xreturn inserted in
+% the codebuf by compile()
+% pass local so share ? so after execute a line, the parent
+%  thread has its local modified too.
 % flow a bit complicated, but
 % interpreter loop on runq->code -> Xrdcmds() -> yyparse() -> start(codebuf)
 %  will go back in loop with a new runq! and once the command is done
@@ -2306,6 +2287,7 @@ Xrdcmds(void)
 The key subtlety is the [[--p->pc]] before [<start()>]:
 this makes the bootstrap thread re-execute [<Xrdcmds()>]
 when the command thread finishes (via [<Xreturn()>]).
+%
 This is how [[rc]] loops forever reading commands without
 an explicit loop in the bootstrap bytecodes themselves.
 %
@@ -2313,7 +2295,7 @@ Note that [<yyparse()>] internally calls [<compile()>],
 which modifies the global [<codebuf>]. So when [<Xrdcmds()>]
 calls [[start(codebuf, ...)]],  it starts a thread on the freshly
 compiled bytecodes.
-% should be called Xrdline though.
+%alt: should be called Xrdline though.
 
 
 %OPTIONAL (really?)
@@ -2335,7 +2317,7 @@ struct Io *cmdfd;	/* file descriptor for Xrdcmd */
 char *cmdfile;		/* file name in Xrdcmd */
 bool iflag;		/* interactive? */
 @
-% who sets cmdfd? see below.
+%said-later: who sets cmdfd? see below.
 
 
 <<[[main()]] initialize [[runq]] with bootstrap code>>=
@@ -2349,8 +2331,8 @@ runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
 %  someone can alter iflag?
 % those fields can be changed when do '.' ? to source a script?
 % or when -c ? This is why they are fields and not globals?
-
 % note that start() reset those fields.
+
 %claude:
 When [<yyparse()>] returns an error, the behavior depends
 on the mode. In non-interactive mode (or on a genuine EOF),
@@ -2363,7 +2345,8 @@ interrupt ([[^C]]) and goes back to read the next command.
 % will read one line, compile it, execute, and then go to other line.
 % Also means that if modify script while running, might have weird
 % behavior.
-%XXX
+
+%TODO?
 % C-d generates an EOF?
 
 <<[[Xrdcmds()]] if yyparse() returned an error>>=
@@ -2383,12 +2366,11 @@ if(error){
     }
 }
 @
-% mv later?
+%alt: mv later?
 
 % Xreturn does something special? 
 
 % no error reporting? or rely on yyerror also called by yyparse? 
-
 
 
 %******************************************************************************
@@ -2397,9 +2379,7 @@ if(error){
 \label{chap:input}
 %spirit: %alt: so Lexing chapter cleaner
 
-%trans: before yyparse, see routines used by yylex, called from yyparse.
-%toc:
-%claude:
+%claude: %toc: %trans: before yyparse, see routines used by yylex, called from yyparse.
 Recall the main flow from Figure~\ref{fig:controlflow}:
 [<main()>] $\rightarrow$ [<Xrdcmds()>] $\rightarrow$ [<yyparse()>]
 $\rightarrow$ [<yylex()>].
@@ -2412,8 +2392,6 @@ that the lexer needs.
 
 \section{Overview}
 
-% main -> Xrdcmds -> yyparse() -> yylex() -> nextc() -> getnextc() 
-%  which use runq->cmdfd to read stuff.
 %claude:
 The call chain for reading input is shown below:
 \begin{verbatim}
@@ -2427,7 +2405,8 @@ The call chain for reading input is shown below:
                             |
                             +---> read()       system call (terminal or file)
 \end{verbatim}
-%
+
+%claude:
 [<getnext()>] reads a raw character and handles
 escaped newlines (for multi-line commands) and prompt display.
 [<nextc()>] adds a one-character lookahead on top of [<getnext()>],
@@ -2436,16 +2415,15 @@ and [<advance()>] consumes that lookahead.
 
 \section{Reading a character: [[getnext()]]}
 
-% why return an int and not a char? because unicode? then use Rune!
 %claude:
 [<getnext()>] reads one character from the current thread's
 input stream ([[runq->cmdfd]]).
-Besides the actual read (via [<rchr()>], the buffered IO
-read function), it handles three concerns:
+%
+Besides the actual read (via [<rchr()>], the buffered IO read function),
+it handles three concerns:
 returning a previously peeked character ([[peekc]]),
-displaying the prompt before blocking on input,
-and converting escaped newlines ([[\<newline>]]) into spaces
-to support multi-line commands.
+displaying the prompt before blocking on input, and
+converting escaped newlines ([[\<newline>]]) into spaces to support multi-line commands.
 
 <<function [[getnext]]>>=
 /// yylex -> nextc -> <>
@@ -2472,11 +2450,12 @@ getnext(void)
     return c;
 }
 @
-%grrr: int c -> Rune?
 %old: was runq->eof++; ugly
 
-% rchr() in annex? bufio library?
+%grrr: int c -> Rune?
+% why return an int and not a char? because unicode? then use Rune!
 
+% rchr() in annex? bufio library?
 
 
 \subsection{End-of-file management}
@@ -2485,7 +2464,9 @@ getnext(void)
 When [<rchr()>] returns [[EOF]], [<getnext()>] sets the
 [[eof]] flag on the current thread. On subsequent calls,
 [<getnext()>] returns [[EOF]] immediately without trying
-to read again. This flag is also checked in [<Xrdcmds()>]
+to read again.
+%
+This flag is also checked in [<Xrdcmds()>]
 to decide whether to close the input and return to the
 parent thread. % (see Chapter~\ref{chap:main}).
 
@@ -2510,13 +2491,12 @@ bool eof;		/* is cmdfd at eof? */
 if(runq->eof)
     return EOF;
 @
-
 %ocaml: ocamllex handles that already?
 
 \subsection{Multiple lines commands and escaped newlines}
 \label{sec:escaping-newline}
 
-% more on newlines later.
+%trans: more on "regular" newlines later.
 
 %claude:
 A backslash before a newline tells the shell that the
@@ -2554,11 +2534,11 @@ if(!inquote && c=='\\'){
 % return backslash and go back in input stream.
 % but do that via peekc technique. Classic.
 
-%ocaml: ocamllex does the longest match and handle peek internally I think
 
 <<[[getnext()]] other locals>>=
 static int peekc = EOF;
 @
+%ocaml: ocamllex does the longest match and handle peek internally I think
 
 <<[[getnext()]] before read, peekc handling>>=
 if(peekc!=EOF){
@@ -2569,21 +2549,18 @@ if(peekc!=EOF){
 @
 
 
-
 \subsection{Displaying the prompt}
 \label{sec:display-prompt}
 
-% so $prompt is actually a 2 words list, first word = original
-% and second word when it's a multiline command?
 %claude:
 In [[rc]], the [[$prompt]] variable is a two-element list:
-the first element is the main prompt (e.g., [["% "]]),
-and the second element is the continuation prompt displayed
+the first element is the {\em main prompt} (e.g., [["% "]]),
+and the second element is the {\em continuation prompt} displayed
 when a command spans multiple lines (e.g., [["\t"]]).
 %
 The prompt is printed
 % lazily
- by the input layer, just before it
+by the input layer, just before it
 reads the next character---not by the command-execution code when a
 command finishes (You do still see the prompt after each command, but only
 because the shell then loops back to read the next line.).
@@ -2594,10 +2571,8 @@ newline (or EOF) and reset to [[false]] once the prompt has been printed.
 <<global [[doprompt]]>>=
 bool doprompt = true;
 @
-% set to true by default! so first time run rc, will
-% get a prompt.
+% set to true by default! so first time run rc, will get a prompt.
 
-% could be moved in another section?
 <<global [[promptstr]]>>=
 char *promptstr;
 @
@@ -2630,9 +2605,11 @@ if(doprompt)
 The subtlety in [<pprompt()>] is that after printing the current
 prompt string, it switches [[promptstr]] to the {\em second}
 element of [[$prompt]] (the continuation prompt).
+%
 This way, if the lexer needs more input for a multi-line
 command, the next call to [<pprompt()>] will display
 the continuation prompt instead of the main one.
+%
 The main prompt is restored in [<Xrdcmds()>] before each new command as shown above.
 
 <<function [[pprompt]]>>=
@@ -2657,8 +2634,6 @@ pprompt(void)
     doprompt = false;
 }
 @
-% ?? why not % for the prompt? why changing the promptstr here?
-% when multiline command! enter if(ls) ENTER => get a \t prompt
 %ocaml: maybe a bit ugly to couple the prompt stuff and lineno.
 
 % note that print prompt on stderr
@@ -2670,6 +2645,7 @@ pprompt(void)
 
 % so can display in prompt which command we are. useful also for history?
 % to run a past command?
+
 %claude:
 Each thread also tracks the current line number, incremented
 in [<pprompt()>] after each newline. This is used for error
@@ -2679,7 +2655,6 @@ a script is much easier to find than one at an unknown location.
 <<[[Thread]] other fields>>=
 int lineno;			/* linenumber */
 @
-% useful for error reporting I think, when running a script!
 
 
 <<[[getnext()]] after read, prompt management>>=
@@ -2693,7 +2668,6 @@ doprompt = doprompt || c=='\n' || c==EOF;
 % do that also for EOF so once parsed a script, and goes back
 % to Xrdcmds loop, the next getc will print a prompt
 
-
 <<[[getnext()]] when backslash and newline, set doprompt>>=
 doprompt = true;
 @
@@ -2701,7 +2675,7 @@ doprompt = true;
 
 \section{Looking ahead: [[nextc()]] and [[advance()]]}
 
-% often need look ahead in lexing (or the dual: backtracking)
+% the dual: backtracking
 %claude:
 Lexers often need to look one character ahead to decide
 what token to produce. For example, when the lexer sees [[&]],
@@ -2732,7 +2706,7 @@ nextc(void)
     return future;
 }
 @
-% future and peekc??
+%said-later: future and peekc?
 % so return same char until call advance().
 % So can call nextc() from multiple places. nextc() acts then
 % like a global.
@@ -2771,7 +2745,6 @@ nextis(int c)
 % check and then consume
 
 
-
 %claude:
 [[rc]] actually has {two} separate one-character
 lookahead slots, each living at a different layer:
@@ -2802,8 +2775,9 @@ lookahead slots, each living at a different layer:
 handle the backslash-escape case: when [<getnext()>] reads
 a [['\\']] and then finds that the next byte is {not} a
 newline, it has already consumed a byte it cannot
-``return,'' so it stashes it in [[peekc]] for the next
-call. [[future]], by contrast, is the lookahead for the
+``return,'' so it stashes it in [[peekc]] for the next call. 
+%
+[[future]], by contrast, is the lookahead for the
 lexer proper---it lets [<yylex()>] probe the next
 character without committing to consume it, which is how
 [[&]] / [[&&]] and [[|]] / [[||]] disambiguation works.
@@ -2813,18 +2787,17 @@ invisible fast-path inside that call.
 
 
 
-
-
 %******************************************************************************
 \chapter{Lexing}
 %******************************************************************************
 \label{chap:lexing}
 
-%trans:
-% now lexer, yylex, called from yyparse.
+%trans: now lexer, yylex, called from yyparse.
+
 % why not using lex? they like yacc but not lex apparently
 % (because lex != flex? or because of multiline editing tricks
-% that may be harder to implement with lex?)
+% that may be harder to implement with lex?
+
 %claude:
 The lexer of [[rc]] is hand-written (not generated by [[lex]]),
 which gives more control over subtle interactions
@@ -2834,16 +2807,6 @@ The main function is [<yylex()>], called by the [[yacc]]-generated
 parser whenever it needs the next token.
 
 \section{[[yylex()]]}
-
-% lots of ugly lexing tricks:
-% - newline and skipnl() after some operators
-%   but kinda need it
-% - keywords are accepted as word after first word
-%   on the line is parsed (via grammar)
-% - SUB vs (
-%   function def or call vs array subscript
-% - special handling of [] after redirection and
-%   parsing and AST building inside lexer (hmmm)
 
 %claude:
 The structure of [<yylex()>] is a switch on the next character.
@@ -2872,16 +2835,19 @@ int yylex(void)
     <<[[yylex()]] if c is a word character>>
 }
 @
-%todo:    // lastdol = false; factorize code?
+%TODO?   // lastdol = false; factorize code?
 
 %claude:
 [<wordchr()>] and [<idchr()>] below classify input bytes. A {\em word}
 character is anything that is not whitespace, a shell metacharacter
 ([[#;&|^$=`'{}()<>]]), or [[EOF]]---this is what the lexer gathers
-into a bare word such as a command name or a filename. An {\em
-identifier} character is the stricter set allowed in a variable name
+into a bare word such as a command name or a filename. 
+%
+An {\em identifier} character is the stricter set allowed in a variable name
 after [[$]]; note that [[/]] is a word character (filenames contain
-slashes) but not an identifier character. Both tests are byte-oriented
+slashes) but not an identifier character.
+%
+Both tests are byte-oriented
 yet UTF-8 safe: every byte of a multibyte rune is $\geq$ [[0x80]]
 while the listed metacharacters are all ASCII, so such a byte always
 fails the [[strchr()]] test and stays part of the word.
@@ -2894,12 +2860,6 @@ wordchr(int c)
     return !strchr("\n \t#;&|^$=`'{}()<>", c) && c!=EOF;
 }
 @
-
-% is this unicode ready?
-
-% slash allowed here. A word can be a filename (e.g., path of a command
-% /bin/ls, arg to a command /mnt, etc)
-
 
 % identifier character
 <<function [[idchr]]>>=
@@ -2914,9 +2874,6 @@ idchr(int c)
     return c > ' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
 }
 @
-% slash not allowed here
-
-% for $ variable name
 
 %claude:
 The body of [<yylex()>] is one big [[switch]] on the first character
@@ -2949,6 +2906,16 @@ multibyte rune when the word is already near the [[NTOK]] limit cannot
 overflow it---[[UTFmax]] is the largest number of bytes a single rune
 can occupy.
 
+%said-later: lots of ugly lexing tricks:
+% - newline and skipnl() after some operators
+%   but kinda need it
+% - keywords are accepted as word after first word
+%   on the line is parsed (via grammar)
+% - SUB vs (
+%   function def or call vs array subscript
+% - special handling of [] after redirection and
+%   parsing and AST building inside lexer (hmmm)
+
 %claude:
 There are a few lexing subtleties worth noting as you will see soon:
 newlines are sometimes skipped (via [<skipnl()>]) after certain
@@ -2972,8 +2939,6 @@ as a line continuation.
 <<global [[incomm]]>>=
 bool incomm;
 @
-% global used also by getnext (<- nextc), because semantic of \
-% is different when inside a comment
 
 <<function [[skipwhite]]>>=
 /// yylex -> | skipnl <>
@@ -3003,7 +2968,7 @@ skipwhite(void)
     }
 }
 @
-%could be a switch? clearer
+%TODO? could be a switch? clearer
 
 % remember that nextc() does not advance. so basically like
 % access a global next_character.
@@ -3018,19 +2983,6 @@ newline is not a word character, so it falls through to the generic
 returns the character as a single-byte token---the [['\n']] the
 grammar treats as a command terminator. Lone metacharacters like
 [[;]] are returned the same way.
-
-
-% command terminator
-% subtle! called from grammar, weird
-% normally newlines marks the end of a command line to be processed.
-% but when use |, &&, ||, it is common to enter a newline
-% but this newline should be considered a whitespace to skip.
-% But sometimes not. So sometimes in the lexer
-% there are calls to skipnl to consume those whitespace and newlines
-% Do that when knows a newline can not terminate a command because
-% we are waiting for something else, for instance with binary operators
-% like ||, &&, even |.
-% We dont want the next newline to be derived as empty command
 
 %claude:
 In [[rc]], a newline normally acts as a command terminator
@@ -3094,8 +3046,9 @@ adjacent tokens should be concatenated.
 <<global [[inquote]]>>=
 bool inquote;
 @
-% used before already, for getnextc to handle backslash differently
 %ocaml: treat backslash differently by using different lexer function
+
+% used before already, for getnextc to handle backslash differently
 
 <<[[yylex()]] initialisations>>=
 inquote = false;
@@ -3108,7 +3061,7 @@ bool lastword;	/* was the last token read a word or compound word terminator? */
 @
 % rename last_tok_was_a_word
 
-% could also put lastdol here?
+%alt: could also put lastdol here?
 
 <<[[yylex()]] other locals>>=
 char *w = tok;
@@ -3169,7 +3122,7 @@ case '\'':
     return t->type; // WORD
 @
 % classic double '' to represent a quote
-%meta, also in C need escape
+%meta: also in C need escape, but no escape in rc (except for newline)
 
 % addutf in advanced topics, but essentially add character
 % and if character start of unicode char, then consume more chars
@@ -3195,12 +3148,7 @@ token(char *str, int type)
 }
 @
 
-
-% rc does not use \ to escape?
-% so do echo ';'  not echo \;
-
-% in rc no "", no \, less troubles.
-
+%said-later: in rc no "", no \, less troubles.
 
 
 \section{Operators ([['&']], [['&&']], [['|']], [['||']], [['<']], [['>']], [['$']], \ldots)}
