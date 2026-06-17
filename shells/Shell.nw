@@ -4422,8 +4422,7 @@ by node, firing a function for each node type.
 %
 [[rc]] takes a different route: it compiles the AST to a stack-machine
 bytecode and runs the bytecodes through a dispatch loop.
-%, in the same spirit as a small Lisp, Forth, or PostScript
-%implementation.
+%, in the same spirit as a small Lisp, Forth, or PostScript implementation.
 The compiled form lives in a [<codebuf>] of
 [[code]] cells, each holding either an opcode function
 pointer or an inline argument (a string or an integer).
@@ -4475,7 +4474,6 @@ recursive C call.
 
 \section{Overview}
 
-% recall main flow: main() -> ... -> Xrdcmds() -> yyparse() -> compile()
 %claude:
 Recall the main flow:
 [<main()>] $\rightarrow$ [<Xrdcmds()>] $\rightarrow$ [<yyparse()>]
@@ -4496,14 +4494,14 @@ at a time (simple commands, pipes, loops, \ldots).
 
 \subsection{Emitting bytecodes: [[emitxxx()]]}
 
-% see codebuf in Core DS chapter (could be moved here too)
+%alt: see codebuf in Core DS chapter (could be moved here too)
 
 %claude:
 The emit functions append elements to [<codebuf>],
-growing it as needed. There are three variants: [<emitf()>]
-for function pointers (the bytecodes), [<emiti()>] for integers
-(jump offsets, file descriptors), and [<emits()>] for strings
-(inline arguments like the string after [<Xword>]).
+growing it as needed. There are three variants: 
+[<emitf()>] for function pointers (the bytecodes),
+[<emiti()>] for integers (jump offsets, file descriptors), and
+[<emits()>] for strings (inline arguments like the string after [<Xword>]).
 %
 [<codep>] is the current write position in the buffer, and
 [<ncode>] is the allocated capacity.
@@ -4546,7 +4544,7 @@ int morecode(void)
     return OK_0;
 }
 @
-% need return an int? need OK_0? just return;
+% need return an int? need OK_0? just return void
 
 \subsection{Compiling a line: [[compile()]]}
 
@@ -4607,10 +4605,8 @@ if(nerror){
 %ocaml: use exception
 
 
-
 \subsection{Walking the AST: [[outcode()]]}
 
-%ugly
 %claude:
 [<outcode()>] is the main recursive function that walks the AST
 and emits bytecodes. It switches on the node type and
@@ -4645,6 +4641,7 @@ outcode(tree *t, bool eflag)
 @
 %$
 
+%TODO:
 % test t == nil because call outcode on child that can be nil sometimes.
 % Moreover when process a list of commands, at some points the sequence
 % is empty.
@@ -4657,6 +4654,7 @@ outcode(tree *t, bool eflag)
 % - dealing with argv
 % - dealing with return status
 % - dealing with subprocesses
+
 %claude:
 Before describing the compilation of specific AST nodes,
 let me present the bytecodes used to manage the argument stack.
@@ -4691,7 +4689,7 @@ Xmark(void)
     pushlist();
 }
 @
-% why need multiple argv list? Because some bytecodes requires
+%said-before: why need multiple argv list? Because some bytecodes requires
 % multiple things in the stack, but clearly separated.
 % Many things can expand to list of strings, so when you need to operate
 % over 2 list of strings, you need a special mark.
@@ -4747,7 +4745,7 @@ if(p==nil)
 
 \subsection{Process status management}
 
-% was $$ in bash
+% was $? in bash ?
 %claude:
 The exit status of the last command is stored in the
 [[$status]] variable. [<setstatus()>] sets it, and
@@ -4800,13 +4798,6 @@ truestatus(void)
     return true;
 }
 @
-% what is this pipe in status? because when do ls | wc 
-%  then rc combine the return status of both in one string
-%  with | in the middle. so if 0|0 then everthing is file,
-%  but if error in one of then then should return an error.
-% so if return string is empty, or contains only 0 or |, then fine
-
-% children
 
 %claude:
 Why not reduce the pipeline status to a single value earlier?
@@ -4839,9 +4830,8 @@ a manual to decode).
 
 \subsection{Subprocesses management}
 
-\t why need waitpids? anyway do Waitfor(pid, ...) in Xsimple
-\t so why need also to record the current set of child process?
-\t it's annoying because in each child then you need clearwaitpids
+% so why need also to record the current set of child process?
+% it's annoying because in each child then you need clearwaitpids
 %claude:
 [[rc]] keeps track of all child processes it has spawned
 in the [[waitpids]] array. This is needed for the [[wait]]
@@ -4906,8 +4896,8 @@ havewaitpid(int pid)
 }
 @
 
-% or builtins or functions
 \section{Simple commands}
+%alt: or builtins or functions
 
 %claude:
 Now that we have seen the helper infrastructure---argument
@@ -4935,7 +4925,6 @@ and so on.
 
 \subsection{Bytecode generation}
 
-% SIMPLE node built in simplemung()
 %claude:
 A [[SIMPLE]] command compiles to: [<Xmark>] (start a new
 word list), followed by the bytecodes for the arguments
@@ -4954,7 +4943,7 @@ case SIMPLE:
 % Xmark so new argv for this command
 % then this will do some Xword and put in runq->argv a bunch
 %  of words
-% then Xsimple executuon
+% then Xsimple execution
 
 %claude:
 Note that [[ARGLIST]] and [[WORDS]] emit their children
@@ -4966,12 +4955,14 @@ in the correct order.
 % ARGLIST is for the parameters of the simple command, the arguments,
 % which are mostly word and so push in the stack (runq->argv)
 % and also final = argv0
+
 <<[[outcode()]] cases>>=
 case ARGLIST:
     outcode(c1, eflag);
     outcode(c0, eflag);
     break;
 @
+
 % put in reverse order, cos this will lead to some
 % Xword which will populate argv stack, so must be in reverse
 % order so last word emited in codebuf is first in the runq->words stack.
@@ -5023,6 +5014,7 @@ AST and bytecodes:
 \subsection{[[Xsimple()]]}
 
 % * Xsimple(args)			run command and wait
+
 %claude:
 [<Xsimple()>] is the bytecode that executes a simple command.
 It is the heart of [[rc]] and handles three cases, in order:
@@ -5094,7 +5086,6 @@ below). So at this level the shell always waits for exactly one [[pid]].
 % and do C-c, then child should die, then wait interrupted,
 % and then when we do wait again it should return??
 
-
 % globlist is for globbing. See advanced topics.
 
 % actually not an bytecode. Never generated by compile()
@@ -5121,6 +5112,7 @@ The [[else]] branch above fires whenever [[argv0]] is neither [["rc"]] nor
 [[rc (script): ...]] so you can tell which script reported the error.
 %(A login shell, whose [[argv0]] is [["-rc"]], also takes this branch.)
 
+%said-later:
 % a bit like exception. Go up thread/call stack until
 % the top where have interactive thread.
 % As we go back we call Xreturn which will do the appropriate cleanups.
@@ -5175,7 +5167,6 @@ to replace the child with the actual command.
 If [[exec]] fails (e.g., the command does not exist),
 the child exits with an error; the parent continues normally.
 
-
 <<function [[execforkexec]]>>=
 int
 execforkexec(void)
@@ -5206,7 +5197,7 @@ execforkexec(void)
 @
 % why execforkexec? why not just forkexec? 
 % to be consistent with execexec below (which you can not just
-% call exec since it conflicts with syscall)
+% call exec since it conflicts with syscall and also because builtin?
 %ocaml: let the module system handle conflict.
 
 %claude:
@@ -5214,8 +5205,6 @@ The [[pushword("exec")]] before [<execexec()>] is a trick:
 [<execexec()>] is also used as the [[exec]] builtin (see Section~\ref{sec:builtin-exec}),
 where [[exec]] appears as the first word in [[argv]]. Here we add
 it artificially so [<execexec()>] can [[popword()]] it uniformly.
-% fundamental of a shell! fork exec wait
-
 
 %clearwaitpids because child process is not responsible for
 % waiting for some child
@@ -5245,6 +5234,7 @@ execexec(void)
 }
 @
 
+% in perform the redirections, call to
 % doredir!!! now that is in child process, ready to exec,
 %  that is when we can do the change to the file descriptors.
 
@@ -5291,7 +5281,6 @@ searchpath(char *w)
     return path;
 }
 @
-% # is for device path in plan9
 
 <<global [[nullpath]]>>=
 struct Word nullpath = { "", nil};
@@ -5374,7 +5363,6 @@ mkargv(word *a)
 \subsection{[[wait()]]}
 %alt: actually await, but wait more well known
 
-% In the mean time, in the parent process
 %claude:
 Back in the parent process, [<Waitfor()>] loops calling [[wait()]]
 until it reaps the child with the expected [[pid]].
@@ -5414,21 +5402,23 @@ Waitfor(int pid, bool _persist)
     return 0;
 }
 @
-\t remove second argument, it is not used anyway
-
+%TODO?  remove second argument, it is not used anyway? or for unix.c?
 
 
 \subsection{Fork optimization}
+%alt: optimisation then mv to advanced topics when have exit in codebuf?
 
-% it is an optimisation then? mv to advanced topics?
-%  when have exit in codebuf?
 %claude:
 If the next bytecode after [<Xsimple>] is [<Xexit>]
 (possibly preceded by [<Xpopredir>] calls), the shell
 is about to exit anyway, so forking a child and waiting
-for it is pointless. In that case, [<Xsimple>] calls
+for it is pointless.
+%
+In that case, [<Xsimple>] calls
 [<execexec()>] directly, replacing the current process
-with the command. This is the same optimization that
+with the command.
+%
+This is the same optimization that
 the [[exec]] builtin provides, applied automatically.
 This matters in practice for scripts like [[rc -c 'ls']]:
 without this optimization, [[rc]] would fork, exec [[ls]]
@@ -5492,7 +5482,6 @@ case ';':
 
 
 
-
 \subsection{Logical operators}
 
 %claude:
@@ -5519,8 +5508,11 @@ case ANDAND:
     stuffdot(p);
     break;
 @
+
+%yoann:
 % pass false to outcode, cos dont care about checking error status
 %  of first cmd in  cmd1 && cmd2
+% see sec:rc-e
 
 % jump technique
 <<function [[stuffdot]]>>=
@@ -5552,7 +5544,6 @@ slot, remembers its index in [[p]] ([[p = emiti(0)]]), and once it
 reaches the label---after [[cmd2]]---[<stuffdot()>] fills that slot
 with the current position ([[codebuf[p].i = codep]]). Here [[p]] is
 just the unresolved forward reference to [[L1]].
-
 
 
 %claude:
@@ -5690,7 +5681,6 @@ list2str(word *words)
 @
 %ocaml: String.concat " "
 
-
 % see also /bin/test! often used as argument to if()
 
 \subsection{Redirection}
@@ -5709,6 +5699,7 @@ list2str(word *words)
 % So when we see a redir, we need to store in the thread
 % future redirections we will need to do in the child process.
 % Then at some point we execute those redirections:
+
 %claude:
 Redirections in [[rc]] are handled in two phases.
 When the interpreter encounters a redirection bytecode
@@ -5729,13 +5720,9 @@ its stdin/stdout/stderr redirected.
 doredir(runq->redir);
 @
 
-% inherit redir from parent thread? why need that? for subshell stuff?
 <<[[start()]] set redir>>=
 p->redir = p->startredir = runq ? runq->redir : nil;
 @
-% and then why need remember starting point? because in case of
-% error we need to popredir everything that was opened from this thread.
-% And we often create new threads.
 %ocaml: use list of list instead of having redir and startredir
 
 %claude:
@@ -5749,14 +5736,20 @@ it added, without disturbing the parent's state.
 \subsubsection{[[Redir]]}
 
 %claude:
-The [[Redir]] structure records one redirection the interpreter has to
-carry out. Its [[type]] is a {\em runtime} action enum, distinct from
+The [<Redir>] structure records one redirection the interpreter has to
+carry out.
+%
+Its [[type]] is a {\em runtime} action enum, distinct from
 the {\em parse-time} [[READ]]/[[WRITE]]/[[APPEND]]/[[HERE]] of the lexer: the
 values are [[ROPEN]] ([[dup2(from,to)]] then close [[from]], for a file
 redirection), [[RDUP]] ([[dup2(from,to)]], for \verb+>[2=1]+), and
-[[RCLOSE]] (close [[from]], for \verb+>[2=]+). [[from]] is the
+[[RCLOSE]] (close [[from]], for \verb+>[2=]+).
+%
+[[from]] is the
 descriptor that was opened or duplicated and [[to]] the one being
-replaced (e.g.\ 1 for stdout). The thread's [[redir]] field chains
+replaced (e.g.\ 1 for stdout).
+%
+The thread's [[redir]] field chains
 these records as the interpreter meets redirection bytecodes.
 
 <<struct [[Redir]]>>=
@@ -5911,8 +5904,6 @@ The [[if(rp->from != rp->to)]] guard handles the rare case where
 when stdout was previously closed), in which case the [[dup]] and
 [[close]] would defeat each other.
 
-
-
 \subsubsection{Bytecode generation}
 
 %claude:
@@ -5925,6 +5916,7 @@ record from the stack.
 This scoping ensures that in [[cmd1 > foo; cmd2]],
 the redirection applies only to [[cmd1]]---once [[Xpopredir]]
 runs, [[cmd2]] sees the original file descriptors.
+
 <<[[outcode()]] cases>>=
 case REDIR:
     emitf(Xmark);
@@ -5957,6 +5949,7 @@ with [<Creat()>], and pushes an [[ROPEN]] record mapping the newly
 opened file descriptor to the target fd (typically~1 for stdout,
 read from the bytecode stream).
 The actual [[dup()]] will happen later in [<doredir()>].
+
 <<[[outcode()]] when REDIR case, switch redirection type cases>>=
 case WRITE:
     emitf(Xwrite);
@@ -6001,6 +5994,7 @@ This is important because the opened fd (from [[Creat()]] or [[Open()]])
 is a temporary---after [[doredir()]] has [[dup()]]'d it onto the
 target fd in the child process, the parent still holds the original,
 and it must be closed to avoid leaking file descriptors.
+
 <<function [[Xpopredir]]>>=
 void
 Xpopredir(void)
@@ -6126,6 +6120,7 @@ Xappend(void)
 
 \subsubsection{Closing redirection opened files}
 
+%said-before:
 % why need remember the redir when we started? because 
 % if we got an error in the thread, we need to close every redirections
 % that happens since we started this new thread.
@@ -6153,11 +6148,9 @@ turfredir();
 @
 
 
-
 \subsection{Pipe}
-
-% arguably the most important operator
 %\subsubsection{Trace of a pipe}
+
 %claude:
 Pipes are arguably the most important operator in a shell.
 For [[cmd1 | cmd2]], four processes end up being involved:
@@ -6209,7 +6202,6 @@ Here is the overall picture for [[ls | wc -l]]:
 \end{vdiagram}
 
 
-% when do   % ls | wc -l, what happens?
 % first bootstrapped thread t1, 
 % then read, compile, and start new thread t2 for that (which when it will
 % return, we return to the loop).
@@ -6239,11 +6231,9 @@ Here is the overall picture for [[ls | wc -l]]:
 % so see that even if cmd1 | cmd2 there is actually 3 forks!
 
 
-
 <<[[outcode()]] locals>>=
 int q;
 @
-
 
 
 % * Xpipe[i j]{... Xreturn}{... Xreturn}	construct a pipe between 2 new threads,
@@ -6299,7 +6289,6 @@ Xexit(void)
 }
 @
 
-
 %claude:
 Three layers sit behind ``exiting.'' [[exits()]] is the \plan libc
 call that actually terminates the process with a status string.
@@ -6308,7 +6297,6 @@ flushes variables to [[/env]] with [<Updenv()>], records the status,
 then calls [[exits()]]. [<Xexit>] is the {\em bytecode}: it runs any
 exit traps and then calls [<Exit()>]. So [<Xexit>] ends the whole
 shell, whereas [<Xreturn>] (next) ends only the current thread.
-
 
 
 %claude:
@@ -6344,7 +6332,6 @@ Xreturn(void)
 
 % as goes up the call stack, you need to close the opened redirections
 % see turfredir.
-
 
 %claude:
 [[PRD]] and [[PWR]] just name the two ends of the array filled by
@@ -6414,9 +6401,6 @@ Xpipe(void)
     }
 }
 @
-% note that execute left part in a fork, so cant modify stuff there.
-% but for right part there is no fork, so right part can do 
-% some assignments that will be seen after.
 
 % note that the break in the child
 % will return to interpreter loop that will execute this new thread
@@ -6503,14 +6487,6 @@ concstatus(char *s, char *t)
 %ocaml: hmm, just use ^ or sprintf
 
 
-
-
-
-
-
-
-
-
 \subsection{Asynchronous execution}
 \label{sec:async-exec}
 
@@ -6575,7 +6551,6 @@ Xasync(void)
     }
 }
 @
-
 
 
 \section{Control flow statements}
@@ -6800,6 +6775,7 @@ The two jumps are easiest to see laid out as bytecode:
          Xjump  p         else jump back to p for the next iteration
     q:   Xunlocal         restore i and leave the loop
 \end{vdiagram}
+
 %claude:
 [<Xfor>] pulls the next word off the list into [[i]] and falls through
 to the body, or---when the list is exhausted---jumps to [[q]]. The
@@ -6828,7 +6804,7 @@ Xfor(void)
 
 
 \subsection{[[switch]]}
-% mv in advanced topic?
+%alt: in advanced topic
 
 %claude:
 The [[switch]] statement is the most complex control flow
@@ -7037,11 +7013,11 @@ bool	fnchanged;
 @
 %ocaml: put in another type, not with Var
 
-% defs
 \subsection{Function definitions ([[fn <foo> { ... }]])}
 
 % * Xfn(name){... Xreturn}			define function
 % * Xdelfn(name)				delete function definition
+
 %claude:
 When defining a function with \verb+fn foo {body}+,
 [<Xfn>] stores the current code vector (via [<codecopy>])
@@ -7107,7 +7083,6 @@ fnstr(tree *t)
 @
 
 
-
 %claude:
 The key move in [<Xfn()>] is that it stores a pointer to the
 {\em same} bytecode vector the surrounding script is currently
@@ -7116,7 +7091,7 @@ closure object. After defining \verb+fn greet { echo hi }+, the
 global variable [[greet]] looks like this:
 
 %claude:
-\begin{verbatim}
+\begin{vdiagram}
   var{ name="greet" }
     |
     | v->fn ---------+         v->pc -----+
@@ -7130,7 +7105,7 @@ global variable [[greet]] looks like this:
                  pc here   |     v->pc points here       Xreturn ends call
                  at Xfn    stuffdot patches this
                            to "end of body"
-\end{verbatim}
+\end{vdiagram}
 
 %claude:
 The [[end]] slot was emitted as a forward reference by [[outcode()]]
@@ -7138,6 +7113,7 @@ and patched by [[stuffdot(p)]] once the body had been emitted. At run
 time, defining the function is almost a no-op for the enclosing
 script: [<Xfn>] just records the body's location in the variable and
 uses [[end]] to {\em skip over} the body (\verb+runq->pc = end+).
+%
 The body runs only later, when the function is invoked: [<execfunc()>]
 calls [[start(func->fn, func->pc, ...)]], creating a new thread that
 resumes just after the [[Xfn]] and runs to the matching [[Xreturn]].
@@ -7187,7 +7163,7 @@ Xdelfn(void)
     poplist();
 }
 @
-% can delete a list of functions. meh.
+
 
 \subsection{Function uses ([[<foo>(...)]])}
 
@@ -7257,9 +7233,6 @@ after the command finishes.
 <<[[outcode()]] locals>>=
 tree *tt;
 @
-% note that can have A=b C=d cmd
-% so to know if it's a local or global assignment, we need to look
-% at the very right after the '=' nodes.
 
 <<[[outcode()]] cases>>=
 case '=':
@@ -7625,13 +7598,11 @@ conclist(word *lp, word *rp, word *tail)
 }
 @
 
-
 %\subsection{Interpolation}
 
 % There is no "" vs '' in rc. Just '' to quote (hence the use of a _quote_
 % character). If you want to construct an argument with space
 % that includes dollars, use ^.
-
 
 
 %******************************************************************************
@@ -7648,7 +7619,6 @@ and the parent (the shell) would remain in the old directory.
 
 \section{Overview}
 
-% called from Xsimple when first word is actually recognized as a builtin
 %claude:
 Builtins are stored in a simple array of name/function pairs.
 When [<Xsimple()>] detects that the command name matches
@@ -7689,7 +7659,7 @@ builtin builtins[] = {
 struct Builtin *bp;
 @
 
-% 2 ways to call, either directly 'xxx' or via 'builtin xxx'
+
 <<[[Xsimple()]] if argv0 is a builtin>>=
 <<[[Xsimple()]] if argv0 is the builtin keyword>>
 for(bp = builtins;bp->name;bp++)
@@ -7716,10 +7686,6 @@ if(strcmp(a->word, "builtin")==0){
     popword();
 }
 @
-
-% remember that also have function, so if cd is a function
-% but want the builtin, need "builtin" prefix to escape
-% the function resolution mechanism.
 
 %claude: %trans:
 We now look at the most important builtins one at a time, each
@@ -7818,9 +7784,7 @@ appfile(char *dir, char *comp)
 @
 %ocaml: Filename.concat
 
-% /dev/wdir?
 
-%XXX what is this wdirfd???
 <<function [[dochdir]]>>=
 errorneg1
 dochdir(char *word)
@@ -7893,7 +7857,6 @@ execexit(void)
 
 \section{[[% .]] (source)}
 \label{sec:builtin-dot}
-
 
 %claude:
 The [[.]] (dot) builtin ``sources'' a script: it reads and
@@ -8021,9 +7984,6 @@ if(first){
 }
 @
 %ocaml: just build at toplevel in an array directly. no need 'first' contorsion
-
-
-
 
 %dead: no support for sun or ucb
 %        if(strcmp(file, "/dev/stdin")==0){	/* for sun & ucb */
@@ -8154,8 +8114,6 @@ companion to [[&]] (background execution): after [[cmd &]], you call
 [[wait $apid]] to block until the job finishes. This is [[rc]]'s
 minimal substitute for [[bash]]-style job control.
 
-% related to job control? because of &? I never used wait ...
-
 <<function [[execwait]]>>=
 void
 execwait(void)
@@ -8185,7 +8143,8 @@ such as [[read]] and [[test]], are ordinary external programs in \plan
 (you write \verb+x = `{read}+, whose code is in
 Appendix~\ref{chap:shell-companion}.
 
-%\section{No builtins on purpose}
+
+%said-later: \section{No builtins on purpose}
 % read, instead use input=`{read} and shell/misc/read.c program!
 % test
 % see \ref{chap:shell-companion} for the code of those shell companion programs
@@ -8225,7 +8184,6 @@ variables from [[/env/]] at startup.
 
 \section{Writing variables to [[/env/]]: [[Updenv()]]}
 
-% called from Xsimple() and Execute()
 % why double? anyway with 'changed' field it should be ok
 %claude:
 [<Updenv()>] iterates over all global and local variables
@@ -8306,7 +8264,6 @@ addenv(var *v)
     }
 }
 @
-
 
 
 \section{Reading variables from [[/env/]]: [[Vinit()]]}
@@ -8397,7 +8354,6 @@ ordinary variables by name, but ones the shell itself consults to decide
 how it behaves. Here are a few of the most important, many of them given
 their defaults in [[rcmain]] (see Section~\ref{sec:rcmain}):
 
-
 %claude:
 \begin{itemize}
 
@@ -8429,8 +8385,6 @@ their defaults in [[rcmain]] (see Section~\ref{sec:rcmain}):
   backquote substitution \verb+`{...}+ into words.
 \end{itemize}
 
-%vlook("xxx"):
-% cdpath
 % * (TODO aspectize vlook("*") code)
 
 %claude: %plan9-is-cleaner:
@@ -8441,8 +8395,6 @@ environment variables from colliding with the lowercase names a script
 picks for its own scratch variables. [[rc]] has no second class of names
 to stay clear of---every variable already lives in the one [[/env]]
 namespace---so it can use the quieter lowercase spellings.
-
-
 
 
 
