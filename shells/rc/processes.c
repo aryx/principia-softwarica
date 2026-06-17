@@ -188,14 +188,17 @@ Xpipe(void)
 void
 Xbackq(void)
 {
-    int n, pid;
-    int pfd[2];
+    int n;
     char *stop;
-    char utf[UTFmax+1];
+    fdt pfd[2];
+    int pid;
     struct Io *f;
     word *v, *nextv;
+    String *word; // extensible string
+    /*s: [[Xbackq()]] other locals */
+    char utf[UTFmax+1];
     Rune r;
-    String *word;
+    /*e: [[Xbackq()]] other locals */
 
 
     stop = "";
@@ -225,6 +228,7 @@ Xbackq(void)
         f = openfd(pfd[PRD]);
         word = s_new();
         v = nil;
+        /*s: [[Xbackq()]] read UTF bytes from pipe [[f]] and modify [[word]] */
         /* rutf requires at least UTFmax+1 bytes in utf */
         while((n = rutf(f, utf, &r)) != EOF){
             utf[n] = '\0';
@@ -240,6 +244,7 @@ Xbackq(void)
                     s_reset(word);
                 }
         }
+        /*e: [[Xbackq()]] read UTF bytes from pipe [[f]] and modify [[word]] */
         if(s_len(word) > 0)
             v = newword(s_to_c(word), v);
         s_free(word);
@@ -264,10 +269,12 @@ void
 Xpipefd(void)
 {
     struct Thread *p = runq;
-    int pc = p->pc, pid;
+    int pc = p->pc;
+    int pid;
     char name[40];
-    int pfd[2];
-    int sidefd, mainfd;
+    fdt pfd[2];
+    fdt sidefd, mainfd;
+
     if(pipe(pfd)<0){
         Xerror("can't get pipe");
         return;

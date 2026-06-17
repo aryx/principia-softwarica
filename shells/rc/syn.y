@@ -135,6 +135,7 @@ comword:
 |   '(' words ')'   {$$=tree1(PAREN, $2);}
 /*x: comword rule other cases */
 |   '`' brace       {$$=tree2('`', nil, $2);}
+/*x: comword rule other cases */
 |   '`' word brace  {$$=tree2('`', $2, $3);}
 /*x: comword rule other cases */
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}

@@ -69,22 +69,22 @@ void main(int argc, char *argv[])
 
     i = 0;
     bootstrap[i++].i=1; // ref count
-    // runq->argv is populated with the arguments to rc
-    // we just need to add '*=(argv)'
+    // runq->argv is populated with the arguments to rc (argv)
+    // we just need to add '*=...'
     bootstrap[i++].f = Xmark;
       bootstrap[i++].f = Xword;
-      bootstrap[i++].s="*";
+      bootstrap[i++].s = "*";
     bootstrap[i++].f = Xassign; // will pop_list() x2
 
     bootstrap[i++].f = Xmark;
       bootstrap[i++].f = Xmark;
         bootstrap[i++].f = Xword;
-        bootstrap[i++].s="*";
+        bootstrap[i++].s = "*";
       bootstrap[i++].f = Xdol; // will pop_list()
       bootstrap[i++].f = Xword;
       bootstrap[i++].s = rcmain;
       bootstrap[i++].f = Xword;
-      bootstrap[i++].s=".";
+      bootstrap[i++].s = ".";
     bootstrap[i++].f = Xsimple; // will pop_list()
 
     bootstrap[i++].f = Xexit;

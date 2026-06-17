@@ -408,10 +408,13 @@ outcode(tree *t, bool eflag)
     /*x: [[outcode()]] cases */
     case '`':
         emitf(Xmark);
+        /*s: [[outcode()]] in backquote case, if [[c0]] */
         if(c0){
             outcode(c0, 0);
             emitf(Xglob);
-        } else {
+        }
+        /*e: [[outcode()]] in backquote case, if [[c0]] */
+        else {
             emitf(Xmark);
             emitf(Xword);
             emits(strdup("ifs"));
@@ -439,8 +442,10 @@ outcode(tree *t, bool eflag)
         outcode(c0, eflag);
         emitf(Xexit);
         stuffdot(p);
+        /*s: [[outcode()]] emit Xeflag in Xsubshell */
         if(eflag)
             emitf(Xeflag);
+        /*e: [[outcode()]] emit Xeflag in Xsubshell */
         break;
     /*x: [[outcode()]] cases */
     case '"':

@@ -533,7 +533,7 @@ Xqdol(void)
     if(a){
         strcpy(s, a->word);
         for(p = a->next;p;p = p->next){
-            strcat(s, " ");
+            strcat(s, " "); // no ifs here, always space to join
             strcat(s, p->word);
         }
     }

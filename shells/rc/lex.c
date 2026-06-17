@@ -32,7 +32,6 @@ wordchr(int c)
     return !strchr("\n \t#;&|^$=`'{}()<>", c) && c!=EOF;
 }
 /*e: function [[wordchr]] */
-
 /*s: function [[idchr]] */
 int
 idchr(int c)
@@ -45,7 +44,6 @@ idchr(int c)
     return c > ' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
 }
 /*e: function [[idchr]] */
-
 
 /*s: function [[yyerror]] */
 void
@@ -73,7 +71,6 @@ yyerror(char *m)
     setvar("status", newword(m, (word *)nil));
 }
 /*e: function [[yyerror]] */
-
 
 /*s: function [[skipwhite]] */
 /// yylex -> | skipnl <>
@@ -103,7 +100,6 @@ skipwhite(void)
     }
 }
 /*e: function [[skipwhite]] */
-
 /*s: function [[skipnl]] */
 /// yylex | yyparse -> <>
 void
@@ -125,6 +121,7 @@ skipnl(void)
 char*
 addtok(char *p, int val)
 {
+    /*s: [[addtok()]] sanity check [[p]] */
     if(p==nil)
         return nil;
     if(p >= &tok[NTOK]){
@@ -132,12 +129,13 @@ addtok(char *p, int val)
         yyerror("token buffer too short");
         return nil;
     }
+    /*e: [[addtok()]] sanity check [[p]] */
     *p++=val;
     return p;
 }
 /*e: function [[addtok]] */
-
 /*s: function [[addutf]] */
+/// yylex -> <>
 char*
 addutf(char *p, int c)
 {
@@ -147,7 +145,7 @@ addutf(char *p, int c)
     p = addtok(p, c);	/* 1-byte UTF runes are special */
     if(c < Runeself)
         return p;
-
+    // else
     m = 0xc0;
     b = 0x80;
     for(i=1; i < UTFmax; i++){

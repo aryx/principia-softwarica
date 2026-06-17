@@ -6,13 +6,13 @@
 void
 main(int argc, char *argv[])
 {
-    int nflag;
+    bool nflag;
     int i, len;
     char *buf, *p;
 
-    nflag = 0;
+    nflag = false;
     if(argc > 1 && strcmp(argv[1], "-n") == 0)
-        nflag = 1;
+        nflag = true;
 
     len = 1;
     for(i = 1+nflag; i < argc; i++)
@@ -33,8 +33,8 @@ main(int argc, char *argv[])
     if(!nflag)
         *p++ = '\n';
 
-    if(write(1, buf, p-buf) < 0){
-        fprint(2, "echo: write error: %r\n");
+    if(write(STDOUT, buf, p-buf) < 0){
+        fprint(STDERR, "echo: write error: %r\n");
         exits("write error");
     }
 

@@ -16,9 +16,11 @@ extern int Globsize(char *p);
 char *globname;
 /*e: global [[globname]] */
 /*s: global [[globv]] */
+// list<ref_own<Word>>
 struct Word *globv;
 /*e: global [[globv]] */
 /*s: function [[deglob]] */
+/// Xlocal | Xcount | ... -> <>
 /*
  * delete all the GLOB marks from s, in place
  */
@@ -50,11 +52,15 @@ globsort(word *left, word *right)
     char **list;
     word *a;
     int n = 0;
-    for(a = left;a!=right;a = a->next) n++;
+
+    for(a = left;a!=right;a = a->next)
+        n++;
     list = (char **)emalloc(n*sizeof(char *));
-    for(a = left,n = 0;a!=right;a = a->next,n++) list[n] = a->word;
+    for(a = left,n = 0;a!=right;a = a->next,n++)
+        list[n] = a->word;
     qsort((void *)list, n, sizeof(void *), globcmp);
-    for(a = left,n = 0;a!=right;a = a->next,n++) a->word = list[n];
+    for(a = left,n = 0;a!=right;a = a->next,n++)
+        a->word = list[n];
     efree((char *)list);
 }
 /*e: function [[globsort]] */
@@ -67,7 +73,8 @@ void
 globdir(uchar *p, uchar *namep)
 {
     uchar *t, *newp;
-    int f;
+    fdt f;
+
     /* scan the pattern looking for a component with a metacharacter in it */
     if(*p=='\0'){
         globv = newword(globname, globv);
@@ -105,6 +112,7 @@ globdir(uchar *p, uchar *namep)
 }
 /*e: function [[globdir]] */
 /*s: function [[glob]] */
+/// Xglob -> globlist -> globlist1 -> <>
 /*
  * Push all file names matched by p on the current thread's stack.
  * If there are no matches, the list consists of p.
@@ -121,6 +129,7 @@ glob(void *ap)
         globv = newword((char *)p, globv);
         return;
     }
+    // else
     globname = emalloc(globlen);
     globname[0]='\0';
     globdir(p, (uchar *)globname);

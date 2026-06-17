@@ -306,6 +306,7 @@ execshift(void)
     int n;
     word *a;
     var *star;
+
     switch(count(runq->argv->words)){
     default:
         pfmt(err, "Usage: shift [n]\n");
@@ -466,6 +467,7 @@ execnewpgrp(void)
 {
     int arg;
     char *s;
+
     switch(count(runq->argv->words)){
     case 1:
         arg = RFENVG|RFNAMEG|RFNOTEG;
