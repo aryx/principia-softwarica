@@ -1,4 +1,4 @@
-/*s: windows/libcomplete/complete.c */
+/*s: libcomplete/complete.c */
 #include <u.h>
 #include <libc.h>
 #include "complete.h"
@@ -151,4 +151,4 @@ complete(char *dir, char *s)
     return c;
 }
 /*e: function [[complete]] */
-/*e: windows/libcomplete/complete.c */
+/*e: libcomplete/complete.c */

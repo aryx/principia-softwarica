@@ -1,4 +1,4 @@
-/*s: windows/rio/snarf.c */
+/*s: rio/snarf.c */
 #include <u.h>
 #include <libc.h>
 
@@ -78,4 +78,4 @@ getsnarf(void)
     }
 }
 /*e: function [[getsnarf]] */
-/*e: windows/rio/snarf.c */
+/*e: rio/snarf.c */

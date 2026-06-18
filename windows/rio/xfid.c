@@ -1,4 +1,4 @@
-/*s: windows/rio/xfid.c */
+/*s: rio/xfid.c */
 #include <u.h>
 #include <libc.h>
 
@@ -315,9 +315,9 @@ keyboardsend(char *s, int cnt)
 /*e: function [[keyboardsend]] */
 
 
-/*s: enum [[_anon_ (windows/rio/xfid.c)]]2 */
+/*s: enum [[_anon_ (rio/xfid.c)]]2 */
 enum { CWdata, CWflush, NCW };
-/*e: enum [[_anon_ (windows/rio/xfid.c)]]2 */
+/*e: enum [[_anon_ (rio/xfid.c)]]2 */
 
 /*s: function [[xfidwrite]] */
 void
@@ -591,15 +591,15 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 }
 /*e: function [[readwindow]] */
 
-/*s: enum [[_anon_ (windows/rio/xfid.c)]]3 */
+/*s: enum [[_anon_ (rio/xfid.c)]]3 */
 enum { CRdata, CRflush, NCR };
-/*e: enum [[_anon_ (windows/rio/xfid.c)]]3 */
-/*s: enum [[_anon_ (windows/rio/xfid.c)]]4 */
+/*e: enum [[_anon_ (rio/xfid.c)]]3 */
+/*s: enum [[_anon_ (rio/xfid.c)]]4 */
 enum { MRdata, MRflush, NMR };
-/*e: enum [[_anon_ (windows/rio/xfid.c)]]4 */
-/*s: enum [[_anon_ (windows/rio/xfid.c)]]5 */
+/*e: enum [[_anon_ (rio/xfid.c)]]4 */
+/*s: enum [[_anon_ (rio/xfid.c)]]5 */
 enum { WCRdata, WCRflush, NWCR };
-/*e: enum [[_anon_ (windows/rio/xfid.c)]]5 */
+/*e: enum [[_anon_ (rio/xfid.c)]]5 */
 
 /*s: function [[xfidread]] */
 void
@@ -923,4 +923,4 @@ xfidread(Xfid *x)
         }
 }
 /*e: function [[xfidread]] */
-/*e: windows/rio/xfid.c */
+/*e: rio/xfid.c */

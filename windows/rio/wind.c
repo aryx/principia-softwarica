@@ -1,4 +1,4 @@
-/*s: windows/rio/wind.c */
+/*s: rio/wind.c */
 #include <u.h>
 #include <libc.h>
 
@@ -585,4 +585,4 @@ wsetpid(Window *w, int pid, bool dolabel)
     w->notefd = fd;
 }
 /*e: function [[wsetpid]] */
-/*e: windows/rio/wind.c */
+/*e: rio/wind.c */

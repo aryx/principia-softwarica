@@ -1,4 +1,4 @@
-/*s: windows/libplumb/plumbsendtext.c */
+/*s: libplumb/plumbsendtext.c */
 #include <u.h>
 #include <libc.h>
 #include "plumb.h"
@@ -19,4 +19,4 @@ plumbsendtext(int fd, char *src, char *dst, char *wdir, char *data)
     return plumbsend(fd, &m);
 }
 /*e: function [[plumbsendtext]] */
-/*e: windows/libplumb/plumbsendtext.c */
+/*e: libplumb/plumbsendtext.c */

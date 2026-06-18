@@ -1,4 +1,4 @@
-/*s: windows/rio/rio.c */
+/*s: rio/rio.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -261,4 +261,4 @@ void threadmain(int argc, char *argv[])
     threadexitsall(nil);
 }
 /*e: function [[threadmain]] */
-/*e: windows/rio/rio.c */
+/*e: rio/rio.c */

@@ -1,4 +1,4 @@
-/*s: windows/rio/terminal.c */
+/*s: rio/terminal.c */
 #include <u.h>
 #include <libc.h>
 
@@ -17,16 +17,16 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: enum [[_anon_ (windows/rio/wind.c)]] */
+/*s: enum [[_anon_ (rio/wind.c)]] */
 enum
 {
     HiWater	= 640000,	/* max size of history */
     LoWater	= 400000,	/* min size of history after max'ed */
     MinWater	= 20000,	/* room to leave available when reallocating */
 };
-/*e: enum [[_anon_ (windows/rio/wind.c)]] */
+/*e: enum [[_anon_ (rio/wind.c)]] */
 
-/*s: enum [[_anon_ (windows/rio/rio.c)]]2 */
+/*s: enum [[_anon_ (rio/rio.c)]]2 */
 enum
 {
     Cut,
@@ -36,7 +36,7 @@ enum
     Send,
     Scroll,
 };
-/*e: enum [[_anon_ (windows/rio/rio.c)]]2 */
+/*e: enum [[_anon_ (rio/rio.c)]]2 */
 
 /*s: global [[menu2str]] */
 char*		menu2str[] = {
@@ -1233,4 +1233,4 @@ wkeyctl(Window *w, Rune r)
     /*e: [[wkeyctl()]] when not rawing */
 }
 /*e: function [[wkeyctl]] */
-/*e: windows/rio/terminal.c */
+/*e: rio/terminal.c */

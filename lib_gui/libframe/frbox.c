@@ -1,4 +1,4 @@
-/*s: windows/libframe/frbox.c */
+/*s: libframe/frbox.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -196,4 +196,4 @@ _frfindbox(Frame *f, int bn, ulong p, ulong q)
     return bn;
 }
 /*e: function [[_frfindbox]] */
-/*e: windows/libframe/frbox.c */
+/*e: libframe/frbox.c */

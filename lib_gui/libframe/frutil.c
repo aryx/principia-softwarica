@@ -1,4 +1,4 @@
-/*s: windows/libframe/frutil.c */
+/*s: libframe/frutil.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -125,4 +125,4 @@ _frclean(Frame *f, Point pt, int n0, int n1)	/* look for mergeable boxes */
         f->lastlinefull = 1;
 }
 /*e: function [[_frclean]] */
-/*e: windows/libframe/frutil.c */
+/*e: libframe/frutil.c */

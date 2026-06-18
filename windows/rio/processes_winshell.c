@@ -1,4 +1,4 @@
-/*s: windows/rio/processes_winshell.c */
+/*s: rio/processes_winshell.c */
 #include <u.h>
 #include <libc.h>
 
@@ -84,4 +84,4 @@ winshell(void *args)
     }
 }
 /*e: function [[winshell]] */
-/*e: windows/rio/processes_winshell.c */
+/*e: rio/processes_winshell.c */

@@ -1,4 +1,4 @@
-/*s: windows/libframe/frinsert.c */
+/*s: libframe/frinsert.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -318,4 +318,4 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
     /*e: [[frinsert()]] draw tick */
 }
 /*e: function [[frinsert]] */
-/*e: windows/libframe/frinsert.c */
+/*e: libframe/frinsert.c */

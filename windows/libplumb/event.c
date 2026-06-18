@@ -1,4 +1,4 @@
-/*s: windows/libplumb/event.c */
+/*s: libplumb/event.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -121,4 +121,4 @@ eplumb(int key, char *port)
     return estartfn(key, fd, 8192, plumbevent);
 }
 /*e: function [[eplumb]] */
-/*e: windows/libplumb/event.c */
+/*e: libplumb/event.c */

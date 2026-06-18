@@ -1,4 +1,4 @@
-/*s: windows/apps/statusbar.c */
+/*s: apps/statusbar.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -6,9 +6,9 @@
 #include <bio.h>
 #include <event.h>
 
-/*s: enum [[_anon_ (windows/apps/statusbar.c)]] */
+/*s: enum [[_anon_ (apps/statusbar.c)]] */
 enum {PNCTL=3};
-/*e: enum [[_anon_ (windows/apps/statusbar.c)]] */
+/*e: enum [[_anon_ (apps/statusbar.c)]] */
 
 static char* rdenv(char*);
 int newwin(char*);
@@ -30,9 +30,9 @@ static Image *light;
 /*s: global [[dark]] */
 static Image *dark;
 /*e: global [[dark]] */
-/*s: global text (windows/apps/statusbar.c) */
+/*s: global text (apps/statusbar.c) */
 static Image *text;
-/*e: global text (windows/apps/statusbar.c) */
+/*e: global text (apps/statusbar.c) */
 
 /*s: function [[initcolor]] */
 static void
@@ -54,9 +54,9 @@ static vlong n, d;
 /*s: global [[last]] */
 static int last;
 /*e: global [[last]] */
-/*s: global lastp (windows/apps/statusbar.c) */
+/*s: global lastp (apps/statusbar.c) */
 static int lastp = -1;
-/*e: global lastp (windows/apps/statusbar.c) */
+/*e: global lastp (apps/statusbar.c) */
 
 /*s: global [[backup]] */
 static char backup[80];
@@ -124,7 +124,7 @@ drawbar(void)
 }
 /*e: function [[drawbar]] */
 
-/*s: function eresized (windows/apps/statusbar.c) */
+/*s: function eresized (apps/statusbar.c) */
 void
 eresized(int new)
 {
@@ -152,7 +152,7 @@ eresized(int new)
 
     drawbar();
 }
-/*e: function eresized (windows/apps/statusbar.c) */
+/*e: function eresized (apps/statusbar.c) */
 
 /*s: function [[bar]] */
 void
@@ -194,16 +194,16 @@ bar(Biobuf *b)
 /*e: function [[bar]] */
 
 
-/*s: function usage (windows/apps/statusbar.c) */
+/*s: function usage (apps/statusbar.c) */
 static void
 usage(void)
 {
     fprint(2, "usage: aux/statusbar [-kt] [-w minx,miny,maxx,maxy] 'title'\n");
     exits("usage");
 }
-/*e: function usage (windows/apps/statusbar.c) */
+/*e: function usage (apps/statusbar.c) */
 
-/*s: function main (windows/apps/statusbar.c) */
+/*s: function main (apps/statusbar.c) */
 void
 main(int argc, char **argv)
 {
@@ -251,7 +251,7 @@ main(int argc, char **argv)
 
     exits(0);
 }
-/*e: function main (windows/apps/statusbar.c) */
+/*e: function main (apps/statusbar.c) */
 
 
 /*s: function [[rdenv]] */
@@ -401,4 +401,4 @@ postnote(int group, int pid, char *note)
     return 0;
 }
 /*e: function [[postnote]] */
-/*e: windows/apps/statusbar.c */
+/*e: apps/statusbar.c */

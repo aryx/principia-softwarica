@@ -1,4 +1,4 @@
-/*s: windows/rio/time.c */
+/*s: rio/time.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -141,4 +141,4 @@ timerstart(int dt)
     return t;
 }
 /*e: function [[timerstart]] */
-/*e: windows/rio/time.c */
+/*e: rio/time.c */

@@ -1,4 +1,4 @@
-/*s: windows/rio/thread_mouse.c */
+/*s: rio/thread_mouse.c */
 #include <u.h>
 #include <libc.h>
 
@@ -322,4 +322,4 @@ mousethread(void*)
         }
 }
 /*e: function [[mousethread]] */
-/*e: windows/rio/thread_mouse.c */
+/*e: rio/thread_mouse.c */

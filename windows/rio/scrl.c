@@ -1,4 +1,4 @@
-/*s: windows/rio/scrl.c */
+/*s: rio/scrl.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -210,4 +210,4 @@ wscroll(Window *w, int but)
         readmouse(&w->mc);
 }
 /*e: function [[wscroll]] */
-/*e: windows/rio/scrl.c */
+/*e: rio/scrl.c */

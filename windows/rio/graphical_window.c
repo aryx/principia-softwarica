@@ -1,4 +1,4 @@
-/*s: windows/rio/graphical_window.c */
+/*s: rio/graphical_window.c */
 #include <u.h>
 #include <libc.h>
 
@@ -23,4 +23,4 @@ waddraw(Window *w, Rune *r, int nr)
     w->nraw += nr;
 }
 /*e: function [[waddraw]] */
-/*e: windows/rio/graphical_window.c */
+/*e: rio/graphical_window.c */

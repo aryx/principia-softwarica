@@ -1,4 +1,4 @@
-/*s: windows/rio/9p.c */
+/*s: rio/9p.c */
 #include <u.h>
 #include <libc.h>
 
@@ -68,4 +68,4 @@ filsyscancel(Xfid *x)
     }
 }
 /*e: function [[filsyscancel]] */
-/*e: windows/rio/9p.c */
+/*e: rio/9p.c */

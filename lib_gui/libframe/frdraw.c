@@ -1,4 +1,4 @@
-/*s: windows/libframe/frdraw.c */
+/*s: libframe/frdraw.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -224,4 +224,4 @@ _frstrlen(Frame *f, int nb)
     return n;
 }
 /*e: function [[_frstrlen]] */
-/*e: windows/libframe/frdraw.c */
+/*e: libframe/frdraw.c */

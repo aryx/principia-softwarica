@@ -1,4 +1,4 @@
-/*s: windows/rio/thread_keyboard.c */
+/*s: rio/thread_keyboard.c */
 #include <u.h>
 #include <libc.h>
 
@@ -45,4 +45,4 @@ keyboardthread(void*)
     }
 }
 /*e: function [[keyboardthread]] */
-/*e: windows/rio/thread_keyboard.c */
+/*e: rio/thread_keyboard.c */

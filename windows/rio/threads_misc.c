@@ -1,4 +1,4 @@
-/*s: windows/rio/threads_misc.c */
+/*s: rio/threads_misc.c */
 #include <u.h>
 #include <libc.h>
 
@@ -55,4 +55,4 @@ deletethread(void*)
     }
 }
 /*e: function [[deletethread]] */
-/*e: windows/rio/threads_misc.c */
+/*e: rio/threads_misc.c */

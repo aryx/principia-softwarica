@@ -1,4 +1,4 @@
-/*s: windows/rio/fsys.c */
+/*s: rio/fsys.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -648,4 +648,4 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
     return convD2M(&d, buf, nbuf);
 }
 /*e: function [[dostat]] */
-/*e: windows/rio/fsys.c */
+/*e: rio/fsys.c */

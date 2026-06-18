@@ -1,4 +1,4 @@
-/*s: windows/rio/wm.c */
+/*s: rio/wm.c */
 #include <u.h>
 #include <libc.h>
 
@@ -25,7 +25,7 @@
 // Menu
 //----------------------------------------------------------------------------
 
-/*s: enum [[_anon_ (windows/rio/rio.c)]] */
+/*s: enum [[_anon_ (rio/rio.c)]] */
 enum RightMenuCommand
 {
     New,
@@ -39,7 +39,7 @@ enum RightMenuCommand
 
     Hidden,
 };
-/*e: enum [[_anon_ (windows/rio/rio.c)]] */
+/*e: enum [[_anon_ (rio/rio.c)]] */
 
 /*s: global [[menu3str]] */
 char*		menu3str[100] = {
@@ -753,4 +753,4 @@ button3menu(void)
     sweeping = false;
 }
 /*e: function [[button3menu]] */
-/*e: windows/rio/wm.c */
+/*e: rio/wm.c */

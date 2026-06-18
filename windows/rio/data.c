@@ -1,4 +1,4 @@
-/*s: windows/rio/data.c */
+/*s: rio/data.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -12,7 +12,7 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global crosscursor (windows/rio/data.c) */
+/*s: global crosscursor (rio/data.c) */
 Cursor crosscursor = {
     {-7, -7},
     {0x03, 0xC0, 0x03, 0xC0, 0x03, 0xC0, 0x03, 0xC0,
@@ -24,9 +24,9 @@ Cursor crosscursor = {
      0x7F, 0xFE, 0x01, 0x80, 0x01, 0x80, 0x01, 0x80,
      0x01, 0x80, 0x01, 0x80, 0x01, 0x80, 0x00, 0x00, }
 };
-/*e: global crosscursor (windows/rio/data.c) */
+/*e: global crosscursor (rio/data.c) */
 
-/*s: global boxcursor (windows/rio/data.c) */
+/*s: global boxcursor (rio/data.c) */
 Cursor boxcursor = {
     {-7, -7},
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -38,9 +38,9 @@ Cursor boxcursor = {
      0x70, 0x0E, 0x70, 0x0E, 0x70, 0x0E, 0x70, 0x0E,
      0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x00, 0x00, }
 };
-/*e: global boxcursor (windows/rio/data.c) */
+/*e: global boxcursor (rio/data.c) */
 
-/*s: global sightcursor (windows/rio/data.c) */
+/*s: global sightcursor (rio/data.c) */
 Cursor sightcursor = {
     {-7, -7},
     {0x1F, 0xF8, 0x3F, 0xFC, 0x7F, 0xFE, 0xFB, 0xDF,
@@ -52,9 +52,9 @@ Cursor sightcursor = {
      0x7F, 0xFE, 0x41, 0x82, 0x41, 0x82, 0x41, 0x82,
      0x21, 0x84, 0x31, 0x8C, 0x0F, 0xF0, 0x00, 0x00, }
 };
-/*e: global sightcursor (windows/rio/data.c) */
+/*e: global sightcursor (rio/data.c) */
 
-/*s: global whitearrow (windows/rio/data.c) */
+/*s: global whitearrow (rio/data.c) */
 Cursor whitearrow = {
     {0, 0},
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFC, 
@@ -66,9 +66,9 @@ Cursor whitearrow = {
      0xC0, 0x0E, 0xC0, 0x07, 0xCE, 0x0E, 0xDF, 0x1C, 
      0xD3, 0xB8, 0xF1, 0xF0, 0xE0, 0xE0, 0xC0, 0x40, }
 };
-/*e: global whitearrow (windows/rio/data.c) */
+/*e: global whitearrow (rio/data.c) */
 
-/*s: global query (windows/rio/data.c) */
+/*s: global query (rio/data.c) */
 Cursor query = {
     {-7,-7},
     {0x0f, 0xf0, 0x1f, 0xf8, 0x3f, 0xfc, 0x7f, 0xfe, 
@@ -80,7 +80,7 @@ Cursor query = {
      0x01, 0xe0, 0x03, 0xc0, 0x03, 0x80, 0x03, 0x80, 
      0x00, 0x00, 0x03, 0x80, 0x03, 0x80, 0x00, 0x00, }
 };
-/*e: global query (windows/rio/data.c) */
+/*e: global query (rio/data.c) */
 
 /*s: global [[tl]] */
 Cursor tl = {
@@ -194,13 +194,13 @@ Cursor l = {
 };
 /*e: global [[l]] */
 
-/*s: global corners (windows/rio/data.c) */
+/*s: global corners (rio/data.c) */
 Cursor *corners[9] = {
     &tl,    &t,   &tr,
     &l,    nil,   &r,
     &bl,    &b,   &br,
 };
-/*e: global corners (windows/rio/data.c) */
+/*e: global corners (rio/data.c) */
 
 /*s: function [[iconinit]] */
 void
@@ -210,4 +210,4 @@ iconinit(void)
     red        = allocimage(display, Rect(0,0,1,1), RGB24, true, 0xDD0000FF);
 }
 /*e: function [[iconinit]] */
-/*e: windows/rio/data.c */
+/*e: rio/data.c */

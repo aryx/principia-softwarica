@@ -1,4 +1,4 @@
-/*s: windows/rio/fns.h */
+/*s: rio/fns.h */
 
 // thread_keyboard.c (for rio.c)
 void	keyboardthread(void*);
@@ -132,4 +132,4 @@ char* 	estrdup(char*);
 // error.c
 void    derror(Display*, char *); // for main.c
 void	error(char*);
-/*e: windows/rio/fns.h */
+/*e: rio/fns.h */

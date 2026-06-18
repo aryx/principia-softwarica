@@ -1,4 +1,4 @@
-/*s: windows/libframe/frdelete.c */
+/*s: libframe/frdelete.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -124,4 +124,4 @@ frdelete(Frame *f, ulong p0, ulong p1)
     return n - f->nlines;
 }
 /*e: function [[frdelete]] */
-/*e: windows/libframe/frdelete.c */
+/*e: libframe/frdelete.c */

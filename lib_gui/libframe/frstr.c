@@ -1,4 +1,4 @@
-/*s: windows/libframe/frstr.c */
+/*s: libframe/frstr.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -6,9 +6,9 @@
 #include <mouse.h>
 #include <frame.h>
 
-/*s: constant CHUNK (windows/libframe/frstr.c) */
+/*s: constant CHUNK (libframe/frstr.c) */
 #define	CHUNK	16
-/*e: constant CHUNK (windows/libframe/frstr.c) */
+/*e: constant CHUNK (libframe/frstr.c) */
 /*s: function [[ROUNDUP]] */
 #define	ROUNDUP(n)	((n+CHUNK)&~(CHUNK-1))
 /*e: function [[ROUNDUP]] */
@@ -45,4 +45,4 @@ _frinsure(Frame *f, int bn, unsigned n)
     b->ptr = p;
 }
 /*e: function [[_frinsure]] */
-/*e: windows/libframe/frstr.c */
+/*e: libframe/frstr.c */

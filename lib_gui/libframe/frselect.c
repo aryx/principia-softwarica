@@ -1,4 +1,4 @@
-/*s: windows/libframe/frselect.c */
+/*s: libframe/frselect.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -138,4 +138,4 @@ frselectpaint(Frame *f, Point p0, Point p1, Image *col)
     }
 }
 /*e: function [[frselectpaint]] */
-/*e: windows/libframe/frselect.c */
+/*e: libframe/frselect.c */

@@ -1,4 +1,4 @@
-/*s: windows/apps/winwatch.c */
+/*s: apps/winwatch.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -43,14 +43,14 @@ static Image *lightblue;
 
 extern Font *font;
 
-/*s: enum [[_anon_ (windows/apps/winwatch.c)]] */
+/*s: enum [[_anon_ (apps/winwatch.c)]] */
 enum {
     PAD = 3,
     MARGIN = 5
 };
-/*e: enum [[_anon_ (windows/apps/winwatch.c)]] */
+/*e: enum [[_anon_ (apps/winwatch.c)]] */
 
-/*s: function erealloc (windows/apps/winwatch.c) */
+/*s: function erealloc (apps/winwatch.c) */
 static void*
 erealloc(void *v, ulong n)
 {
@@ -59,9 +59,9 @@ erealloc(void *v, ulong n)
         sysfatal("out of memory reallocating %lud", n);
     return v;
 }
-/*e: function erealloc (windows/apps/winwatch.c) */
+/*e: function erealloc (apps/winwatch.c) */
 
-/*s: function emalloc (windows/apps/winwatch.c) */
+/*s: function emalloc (apps/winwatch.c) */
 static void*
 emalloc(ulong n)
 {
@@ -73,9 +73,9 @@ emalloc(ulong n)
     memset(v, 0, n);
     return v;
 }
-/*e: function emalloc (windows/apps/winwatch.c) */
+/*e: function emalloc (apps/winwatch.c) */
 
-/*s: function estrdup (windows/apps/winwatch.c) */
+/*s: function estrdup (apps/winwatch.c) */
 static char*
 estrdup(char *s)
 {
@@ -90,7 +90,7 @@ estrdup(char *s)
 
     return t;
 }
-/*e: function estrdup (windows/apps/winwatch.c) */
+/*e: function estrdup (apps/winwatch.c) */
 
 
 /*s: function [[refreshwin]] */
@@ -201,7 +201,7 @@ geometry(void)
 }
 /*e: function [[geometry]] */
 
-/*s: function redraw (windows/apps/winwatch.c) */
+/*s: function redraw (apps/winwatch.c) */
 static void
 redraw(Image *view, int all)
 {
@@ -219,9 +219,9 @@ redraw(Image *view, int all)
 
     onwin = nwin;
 }
-/*e: function redraw (windows/apps/winwatch.c) */
+/*e: function redraw (apps/winwatch.c) */
 
-/*s: function eresized (windows/apps/winwatch.c) */
+/*s: function eresized (apps/winwatch.c) */
 void
 eresized(int new)
 {
@@ -230,7 +230,7 @@ eresized(int new)
     geometry();
     redraw(view, 1);
 }
-/*e: function eresized (windows/apps/winwatch.c) */
+/*e: function eresized (apps/winwatch.c) */
 
 /*s: function [[click]] */
 static void
@@ -275,16 +275,16 @@ click(Mouse m)
 }
 /*e: function [[click]] */
 
-/*s: function usage (windows/apps/winwatch.c) */
+/*s: function usage (apps/winwatch.c) */
 static void
 usage(void)
 {
     fprint(2, "usage: winwatch [-e exclude] [-f font]\n");
     exits("usage");
 }
-/*e: function usage (windows/apps/winwatch.c) */
+/*e: function usage (apps/winwatch.c) */
 
-/*s: function main (windows/apps/winwatch.c) */
+/*s: function main (apps/winwatch.c) */
 void
 main(int argc, char **argv)
 {
@@ -338,5 +338,5 @@ main(int argc, char **argv)
         }
     }
 }
-/*e: function main (windows/apps/winwatch.c) */
-/*e: windows/apps/winwatch.c */
+/*e: function main (apps/winwatch.c) */
+/*e: apps/winwatch.c */

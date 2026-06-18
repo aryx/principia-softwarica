@@ -1,4 +1,4 @@
-/*s: windows/libframe/frinit.c */
+/*s: libframe/frinit.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -109,4 +109,4 @@ frclear(Frame *f, bool freeall)
     /*e: [[frclear()]] free ticks */
 }
 /*e: function [[frclear]] */
-/*e: windows/libframe/frinit.c */
+/*e: libframe/frinit.c */

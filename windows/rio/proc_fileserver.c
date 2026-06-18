@@ -1,4 +1,4 @@
-/*s: windows/rio/proc_fileserver.c */
+/*s: rio/proc_fileserver.c */
 #include <u.h>
 #include <libc.h>
 
@@ -20,12 +20,12 @@ extern bool	firstmessage;
 extern Fid*		newfid(Filsys*, int);
 extern fdt	clockfd;
 
-/*s: global srvpipe (windows/rio/fsys.c) */
+/*s: global srvpipe (rio/fsys.c) */
 char	srvpipe[64];
-/*e: global srvpipe (windows/rio/fsys.c) */
-/*s: global srvwctl (windows/rio/fsys.c) */
+/*e: global srvpipe (rio/fsys.c) */
+/*s: global srvwctl (rio/fsys.c) */
 char	srvwctl[64];
-/*e: global srvwctl (windows/rio/fsys.c) */
+/*e: global srvwctl (rio/fsys.c) */
 
 /*s: function [[filsysproc]] */
 // main -> filsysinit -> proccreate(<>, fs, ...) -> <>
@@ -251,4 +251,4 @@ filsysmount(Filsys *fs, int id)
     return OK_0;
 }
 /*e: function [[filsysmount]] */
-/*e: windows/rio/proc_fileserver.c */
+/*e: rio/proc_fileserver.c */

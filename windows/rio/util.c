@@ -1,4 +1,4 @@
-/*s: windows/rio/util.c */
+/*s: rio/util.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -135,7 +135,7 @@ min(int a, int b)
 }
 /*e: function [[min]] */
 
-/*s: function max (windows/rio/util.c) */
+/*s: function max (rio/util.c) */
 int
 max(int a, int b)
 {
@@ -143,7 +143,7 @@ max(int a, int b)
         return a;
     return b;
 }
-/*e: function max (windows/rio/util.c) */
+/*e: function max (rio/util.c) */
 
 /*s: function [[runetobyte]] */
 char*
@@ -158,4 +158,4 @@ runetobyte(Rune *r, int n, int *ip)
     return s;
 }
 /*e: function [[runetobyte]] */
-/*e: windows/rio/util.c */
+/*e: rio/util.c */

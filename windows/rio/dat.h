@@ -1,4 +1,4 @@
-/*s: windows/rio/dat.h */
+/*s: rio/dat.h */
 
 // forward decls
 typedef	struct	Window Window;
@@ -73,19 +73,19 @@ enum Qxxx
 /*e: function [[FILE]] */
 
 
-/*s: enum [[_anon_ (windows/rio/dat.h)]]2 */
+/*s: enum [[_anon_ (rio/dat.h)]]2 */
 enum
 {
     Kscrolloneup = KF|0x20,
     Kscrollonedown = KF|0x21,
 };
-/*e: enum [[_anon_ (windows/rio/dat.h)]]2 */
+/*e: enum [[_anon_ (rio/dat.h)]]2 */
 
 /*s: constant [[STACK]] */
 #define	STACK	8192
 /*e: constant [[STACK]] */
 
-/*s: enum [[_anon_ (windows/rio/dat.h)]]3 */
+/*s: enum [[_anon_ (rio/dat.h)]]3 */
 enum
 {
     /*s: constant [[Selborder]] */
@@ -103,7 +103,7 @@ enum
     BIG			= 3,	/* factor by which window dimension can exceed screen */
     /*e: constant [[BIG]] */
 };
-/*e: enum [[_anon_ (windows/rio/dat.h)]]3 */
+/*e: enum [[_anon_ (rio/dat.h)]]3 */
 
 /*s: constant [[DEBUG]] */
 #define DEBUG false
@@ -555,4 +555,4 @@ extern int		nsnarf;
 // error.c
 extern bool		errorshouldabort;
 extern char Eperm[];
-/*e: windows/rio/dat.h */
+/*e: rio/dat.h */

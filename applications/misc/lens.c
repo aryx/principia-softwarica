@@ -1,4 +1,4 @@
-/*s: windows/apps/lens.c */
+/*s: apps/lens.c */
 #include <u.h>
 #include <libc.h>
 
@@ -6,14 +6,14 @@
 #include <window.h>
 #include <event.h>
 
-/*s: enum [[_anon_ (windows/apps/lens.c)]] */
+/*s: enum [[_anon_ (apps/lens.c)]] */
 enum {
     Edge = 5,
     Maxmag = 16
 };
-/*e: enum [[_anon_ (windows/apps/lens.c)]] */
+/*e: enum [[_anon_ (apps/lens.c)]] */
 
-/*s: enum [[_anon_ (windows/apps/lens.c)]]2 */
+/*s: enum [[_anon_ (apps/lens.c)]]2 */
 enum {
     Mzoom,
     Munzoom,
@@ -21,7 +21,7 @@ enum {
     Mredraw,
     Mexit
 };
-/*e: enum [[_anon_ (windows/apps/lens.c)]]2 */
+/*e: enum [[_anon_ (apps/lens.c)]]2 */
 
 /*s: global [[menustr]] */
 static char *menustr[] = {
@@ -34,23 +34,23 @@ static char *menustr[] = {
 };
 /*e: global [[menustr]] */
 
-/*s: global menu (windows/apps/lens.c) */
+/*s: global menu (apps/lens.c) */
 static Menu menu = {
     menustr,
     nil,
     -1
 };
-/*e: global menu (windows/apps/lens.c) */
+/*e: global menu (apps/lens.c) */
 
 /*s: global [[lastp]] */
 static Point lastp;
 /*e: global [[lastp]] */
-/*s: global red (windows/apps/lens.c) */
+/*s: global red (apps/lens.c) */
 static Image *red;
-/*e: global red (windows/apps/lens.c) */
-/*s: global tmp (windows/apps/lens.c) */
+/*e: global red (apps/lens.c) */
+/*s: global tmp (apps/lens.c) */
 static Image *tmp;
-/*e: global tmp (windows/apps/lens.c) */
+/*e: global tmp (apps/lens.c) */
 /*s: global [[grid]] */
 static Image *grid;
 /*e: global [[grid]] */
@@ -93,7 +93,7 @@ drawit(void)
 static int bypp;
 /*e: global [[bypp]] */
 
-/*s: function main (windows/apps/lens.c) */
+/*s: function main (apps/lens.c) */
 void
 main(int argc, char *argv[])
 {
@@ -212,7 +212,7 @@ main(int argc, char *argv[])
             break;
         }
 }
-/*e: function main (windows/apps/lens.c) */
+/*e: function main (apps/lens.c) */
 
 /*s: function [[makegrid]] */
 void
@@ -237,7 +237,7 @@ makegrid(void)
 }
 /*e: function [[makegrid]] */
 
-/*s: function eresized (windows/apps/lens.c) */
+/*s: function eresized (apps/lens.c) */
 void
 eresized(int new)
 {
@@ -253,7 +253,7 @@ eresized(int new)
     }
     drawit();
 }
-/*e: function eresized (windows/apps/lens.c) */
+/*e: function eresized (apps/lens.c) */
 
 /*s: function [[magnify]] */
 void
@@ -313,4 +313,4 @@ magnify(void)
         draw(tmp, tmp->r, grid, nil, mulpt(Pt(xoff, yoff), mag));
 }
 /*e: function [[magnify]] */
-/*e: windows/apps/lens.c */
+/*e: apps/lens.c */

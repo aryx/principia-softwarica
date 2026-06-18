@@ -1,4 +1,4 @@
-/*s: windows/libplumb/mesg.c */
+/*s: libplumb/mesg.c */
 #include <u.h>
 #include <libc.h>
 #include "plumb.h"
@@ -468,4 +468,4 @@ plumbrecv(int fd)
     return m;
 }
 /*e: function [[plumbrecv]] */
-/*e: windows/libplumb/mesg.c */
+/*e: libplumb/mesg.c */

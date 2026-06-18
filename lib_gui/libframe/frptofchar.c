@@ -1,4 +1,4 @@
-/*s: windows/libframe/frptofchar.c */
+/*s: libframe/frptofchar.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -139,4 +139,4 @@ frcharofpt(Frame *f, Point pt)
     return p;
 }
 /*e: function [[frcharofpt]] */
-/*e: windows/libframe/frptofchar.c */
+/*e: libframe/frptofchar.c */

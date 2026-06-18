@@ -1,4 +1,4 @@
-/*s: windows/rio/wctl.c */
+/*s: rio/wctl.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -23,7 +23,7 @@ char	Ebadwr[]		= "bad rectangle in wctl request";
 char	Ewalloc[]		= "window allocation failed in wctl request";
 /*e: global [[Ewalloc]] */
 
-/*s: enum [[_anon_ (windows/rio/wctl.c)]] */
+/*s: enum [[_anon_ (rio/wctl.c)]] */
 /* >= Top are disallowed if mouse button is pressed */
 enum
 {
@@ -40,7 +40,7 @@ enum
     Unhide,
     Delete,
 };
-/*e: enum [[_anon_ (windows/rio/wctl.c)]] */
+/*e: enum [[_anon_ (rio/wctl.c)]] */
 
 /*s: global [[cmds]] */
 static char *cmds[] = {
@@ -60,7 +60,7 @@ static char *cmds[] = {
 };
 /*e: global [[cmds]] */
 
-/*s: enum [[_anon_ (windows/rio/wctl.c)]]2 */
+/*s: enum [[_anon_ (rio/wctl.c)]]2 */
 enum
 {
     Cd,
@@ -80,7 +80,7 @@ enum
     Scrolling,
     Noscrolling,
 };
-/*e: enum [[_anon_ (windows/rio/wctl.c)]]2 */
+/*e: enum [[_anon_ (rio/wctl.c)]]2 */
 
 /*s: global [[params]] */
 static char *params[] = {
@@ -535,4 +535,4 @@ wctlproc(void *v)
     }
 }
 /*e: function [[wctlproc]] */
-/*e: windows/rio/wctl.c */
+/*e: rio/wctl.c */

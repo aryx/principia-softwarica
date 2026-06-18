@@ -1,4 +1,4 @@
-/*s: windows/rio/cursor.c */
+/*s: rio/cursor.c */
 #include <u.h>
 #include <libc.h>
 
@@ -28,4 +28,4 @@ riosetcursor(Cursor *p, bool force)
     lastcursor = p;
 }
 /*e: function [[riosetcursor]] */
-/*e: windows/rio/cursor.c */
+/*e: rio/cursor.c */

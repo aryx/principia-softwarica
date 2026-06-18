@@ -1,4 +1,4 @@
-/*s: windows/rio/error.c */
+/*s: rio/error.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -31,4 +31,4 @@ derror(Display*, char *errorstr)
     error(errorstr);
 }
 /*e: function [[derror]] */
-/*e: windows/rio/error.c */
+/*e: rio/error.c */

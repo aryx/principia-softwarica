@@ -1,4 +1,4 @@
-/*s: windows/rio/globals.c */
+/*s: rio/globals.c */
 #include <u.h>
 #include <libc.h>
 
@@ -105,4 +105,4 @@ int		snarfversion;	/* updated each time it is written */
 /*s: global [[maxtab]] */
 int		maxtab = 0;
 /*e: global [[maxtab]] */
-/*e: windows/rio/globals.c */
+/*e: rio/globals.c */

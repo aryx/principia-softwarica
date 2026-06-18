@@ -1,4 +1,4 @@
-/*s: windows/rio/threads_window.c */
+/*s: rio/threads_window.c */
 
 #include <u.h>
 #include <libc.h>
@@ -506,4 +506,4 @@ winctl(void *arg)
     }
 }
 /*e: function [[winctl]] */
-/*e: windows/rio/threads_window.c */
+/*e: rio/threads_window.c */

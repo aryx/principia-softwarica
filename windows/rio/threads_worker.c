@@ -1,4 +1,4 @@
-/*s: windows/rio/threads_worker.c */
+/*s: rio/threads_worker.c */
 #include <u.h>
 #include <libc.h>
 
@@ -173,4 +173,4 @@ xfidinit(void)
     return cxfidalloc;
 }
 /*e: function [[xfidinit]] */
-/*e: windows/rio/threads_worker.c */
+/*e: rio/threads_worker.c */
