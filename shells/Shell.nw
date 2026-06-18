@@ -7285,14 +7285,14 @@ Xassign(void)
     poplist();
 }
 @
+%ocaml: just use the Gc
+
 % set to nil because dont want poplist to free it. 
 % it has been borrowed by v->val.
-%ocaml: just use the Gc
 
 % no globbing here! cos can do *=(...); for(i) { ... }
 % anyway since we expect a single varname on the left of =,
 % it would not make sense to glob.
-
 % deglob is to remove the \001 inserted during lexing
 
 % FIGURE to understand the double pop_list()?
@@ -7404,7 +7404,6 @@ compiles like [[$x]] but with [[Xcount]] in place of [[Xdol]]:
 word list as a string. (For a numeric name like [[$#1]] it instead
 reports whether that positional argument exists, 1 or 0.)
 
-
 <<[[outcode()]] cases>>=
 case COUNT:
     emitf(Xmark);
@@ -7412,7 +7411,6 @@ case COUNT:
     emitf(Xcount);
     break;
 @
-
 
 <<function [[Xcount]]>>=
 void
@@ -7532,13 +7530,18 @@ subwords(word *val, int len, word *sub, word *a)
 \section{Concatenation: [[<x1> ^ <x2>]]}
 
 %claude:
-Concatenation with [[^]] is far more than string joining. When one
-side is a single word and the other a list, the word is glued onto
+Concatenation with [[^]] is far more than string joining.
+%
+When one side is a single word and the other a list, the word is glued onto
 {\em every} element---so [[foo/^$list]] prepends [[foo/]] to each
-member of [[$list]] (the shell's equivalent of a map). When both sides
+member of [[$list]] (the shell's equivalent of a map).
+%
+When both sides
 are equal-length lists, [[^]] joins them element by element (a zip),
 so [[$a^$b]] pairs them up; mismatched non-singleton lengths are an
-error. Most uses of [[^]] are in fact {\em implicit}: the lexer inserts a [[^]]
+error.
+%
+Most uses of [[^]] are in fact {\em implicit}: the lexer inserts a [[^]]
 between adjacent words that touch, so [[-x$flag]] is really
 [[-x ^ $flag]].
 
@@ -7656,7 +7659,7 @@ builtin builtins[] = {
 %old: was Builtin but conflict with struct def and bad convention
 
 <<[[Xsimple()]] other locals>>=
-struct Builtin *bp;
+builtin *bp;
 @
 
 
@@ -7695,7 +7698,6 @@ command name matches one in the builtin table.
 
 \section{[[% cd]]}
 \label{sec:builtin-cd}
-%alt: use % cd, which is more rcish (sh use $ and # for root), but less latex friendly
 
 %claude:
 [[cd]] with no argument changes to [[$home]].
@@ -7991,7 +7993,6 @@ if(first){
 %            if(fd>=0)
 %                break;
 %        }
-
 %dead: because of code removed above
 % <<function [[Dup1]]>>=
 % int
@@ -8102,7 +8103,6 @@ execcmds(io *f)
 @
 
 
-
 \section{[[% wait]]}
 \label{sec:builtin-wait}
 
@@ -8184,7 +8184,6 @@ variables from [[/env/]] at startup.
 
 \section{Writing variables to [[/env/]]: [[Updenv()]]}
 
-% why double? anyway with 'changed' field it should be ok
 %claude:
 [<Updenv()>] iterates over all global and local variables
 and writes any that have changed (with [[v->changed == true]])
@@ -8234,13 +8233,14 @@ addenv(var *v)
 {
     char envname[Maxenvname];
     word *w;
-    int f;
+    fdt f;
     io *fd;
 
     if(v->changed){
         v->changed = false;
         snprint(envname, sizeof envname, "/env/%s", v->name);
-        if((f = Creat(envname))<0)
+        f = Creat(envname);
+        if(f<0)
             pfmt(err, "rc: can't open %s: %r\n", envname);
         else{
             for(w = v->val;w;w = w->next)
@@ -8248,23 +8248,27 @@ addenv(var *v)
             close(f);
         }
     }
-    if(v->fnchanged){
-        v->fnchanged = false;
-        snprint(envname, sizeof envname, "/env/fn#%s", v->name);
-        if((f = Creat(envname))<0)
-            pfmt(err, "rc: can't open %s: %r\n", envname);
-        else{
-            if(v->fn){
-                fd = openfd(f);
-                pfmt(fd, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
-                closeio(fd);
-            }
-            close(f);
-        }
-    }
+    <<[[addenv()]] if [[fnchanged]]>>
 }
 @
 
+<<[[addenv()]] if [[fnchanged]]>>=
+if(v->fnchanged){
+    v->fnchanged = false;
+    snprint(envname, sizeof envname, "/env/fn#%s", v->name);
+    f = Creat(envname);
+    if(f<0)
+        pfmt(err, "rc: can't open %s: %r\n", envname);
+    else{
+        if(v->fn){
+            fd = openfd(f);
+            pfmt(fd, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
+            closeio(fd);
+        }
+        close(f);
+    }
+}
+@
 
 \section{Reading variables from [[/env/]]: [[Vinit()]]}
 
@@ -8381,11 +8385,11 @@ their defaults in [[rcmain]] (see Section~\ref{sec:rcmain}):
 \item [[$*]] --- the argument list of the script or function;
   [[$1]], [[$2]], \ldots index into it (via [[Xdol()]]).
 
+% * (TODO aspectize vlook("*") code)
+
 \item [[$ifs]] --- the field separators used to split the output of a
   backquote substitution \verb+`{...}+ into words.
 \end{itemize}
-
-% * (TODO aspectize vlook("*") code)
 
 %claude: %plan9-is-cleaner:
 One small but telling difference: [[rc]] spells these [[$home]],
@@ -8453,6 +8457,7 @@ execfinit(void)
 % really need that? nice that enclosing script
 % can define function that can be used in callee
 % bug could also do it by using '.'
+
 <<function [[Xrdfn]]>>=
 void
 Xrdfn(void)
@@ -8591,6 +8596,7 @@ the chain.
 % see main() comment:
 % * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
 %main() -> bootstrap -> execdot -> Xreadcmds() -> yyparse() -> compile() -> outcode() -> back to interpreter loop with new codebuf (chained to bootstrap)
+
 %claude:
 The bootstrap performs two operations encoded as hand-crafted bytecodes:
 first, it assigns the command-line arguments to [[$*]]
@@ -8602,12 +8608,10 @@ The bootstrap is essentially the bytecode equivalent of:
   *=(argv)
   . /rc/lib/rcmain $*
 \end{verbatim}
-%OPTIONAL
 
 %claude:
 The two-line script above is encoded as a sequence of
 bytecodes filling the [[bootstrap]] array.
-
 
 <<[[main()]] initialize [[boostrap]]>>=
 memset(bootstrap, 0, sizeof bootstrap);
@@ -8651,13 +8655,8 @@ and the [[.]] command itself, then calls [[Xsimple]].
 %  with argv[]
 
 
-% show rc foo bar -r
-% great resource to see the bytecodes, argv.
-
-
 \section{Intitialization script and [[rc -m /path/to/rcmain]]}
 
-%plan9.c
 %claude:
 The default initialization script is [[/rc/lib/rcmain]],
 which sets up [[$path]] and, for login shells,
@@ -8680,10 +8679,6 @@ rcmain = flag['m'] ? flag['m'][0] : Rcmain;
 @
 % can change startup script, -m 
 
-% Content of rcmain in Appendix.
-
-\t how endup in REPL after . has finished executing rcmain then ??
-\t  I think because rcmain contains call to finit?
 
 \section{Actual environment}
 
@@ -8714,13 +8709,12 @@ setvar("pid", newword(num, (word *)nil));
 @
 
 
-
 \section{[[/rc/lib/rcmain]]}
 \label{sec:rcmain}
 
 %claude:
 I can finally show the initialization script sourced by the bootstrap bytecodes.
-% (see Chapter~\ref{chap:initialization-real}).
+%
 It sets up default values for the special variables
 [[$home]], [[$ifs]], [[$prompt]], and [[$path]],
 calls [[finit]] to import shell functions from the environment
@@ -8842,16 +8836,6 @@ fn sigexit
 %alt: could be in adv topics, but important feature in a shell
 %alt: patterns. wildcards.
 
-% Give responsibility to shell to interpter '*' not program
-
-%history:
-% was actually an external program in osh: glob (with also if, and goto)
-%pro: factorize functionality
-%cons: ugly corners (see Unix Haters Handbook)
-% handle * expansion (before was delegated to another program called glob)
-% also ? and []
-% note that different from regexp, does not do .* because .
-% used too much in filename for extension, so *.c is better than .*\\.c
 %claude:
 Globbing, also called wildcard expansion or pathname expansion,
 is one of the key features of a shell: when you write [[ls *.c]],
@@ -8861,8 +8845,8 @@ the shell {\em expands} [[*.c]] into the list of matching filenames
 This is a deliberate design choice: the expansion is done
 by the shell, not by the individual programs, which
 factorizes the functionality.
+
 %said-before: in Intro.nw now
-%history:
 %In the original Unix shell, globbing was actually handled
 %by a separate external program called [[glob]].
 %In MS-DOS, the opposite approach was taken: wildcards are
@@ -8873,6 +8857,8 @@ factorizes the functionality.
 %sees both patterns and can pair them up, something
 %that is impossible when the shell expands both arguments
 %independently.
+
+%cons: ugly corners (see Unix Haters Handbook)
 
 %claude:
 The glob patterns [[*]], [[?]], and \verb+[]+ are different
@@ -8920,7 +8906,7 @@ single [[Word]], but the bytes differ:
                             (no GLOB marker, literal star)
 \end{verbatim}
 
-% alt is isquote boolean field? I did that in orc, not simpler?
+%alt: ocaml: is isquote boolean field? I did that in orc, not simpler?
 %  possible?
 
 %claude:
@@ -9184,8 +9170,6 @@ globsort(word *left, word *right)
 
 
 
-
-
 %claude:
 Walking through [[ls src/*.c]] makes the recursion concrete.
 %
@@ -9241,14 +9225,6 @@ pass glob patterns around as ordinary strings.
 
 
 
-
-
-
-
-
-
-
-
 <<function [[deglob]]>>=
 /// Xlocal | Xcount | ... -> <>
 /*
@@ -9274,9 +9250,6 @@ globcmp(const void *s, const void *t)
     return strcmp(*(char**)s, *(char**)t);
 }
 @
-
-
-
 
 
 \section{Matching one name: [[match()]]}
@@ -9391,7 +9364,6 @@ match(void *as, void *ap, int stop)
     return *s=='\0';
 }
 @
-
 
 
 
@@ -9792,9 +9764,8 @@ if(ntrap)
 @
 
 
-% trap.c
-% main() -> dotrap() after having interpreter one bytecode
 <<function [[dotrap]]>>=
+/// main -> <>
 void
 dotrap(void)
 {
@@ -9878,7 +9849,6 @@ finds such a function in the variable table (looked up via the name
 [[signame[i]]]), it runs that instead of taking the built-in action;
 this is how scripts clean up on exit or ignore interrupts.
 
-% plan9.c
 <<global [[signame]](plan9.c)>>=
 char *signame[] = {
     "sigexit",	
@@ -9950,15 +9920,13 @@ the window manager [[rio]]: command-line editing, history,
 filename completion, and job control (see the \book{Windows}).
 This keeps [[rc]] simple.
 
-%\section{Shell-like features implemented outside [[rc]]}
+%said-later: \section{Shell-like features implemented outside [[rc]]}
 % job control: multiple windows
 %  C-z: rio terminal where stopping scroll block the process
 % command-line editing: rio terminal
 % history: ???
 % aliases: ??
 % filename completion: rio terminal (but how does he know the current dir?)
-
-% See also Conclusion
 
 \section{Reading commands from a string: [[rc -c]]}
 \label{sec:rc-c}
@@ -9995,21 +9963,17 @@ if(! ~ $#cflag 0){
 }
 @
 
-%TODO: this looks like dead code because cflag is not used in this file
-% and not used either in rcmain.unix via 'flag' so what is it??
+%this looks like dead code because cflag is not used in this file
+% and not used either in rcmain.unix via 'flag' so what is it?
 % because we pass -c
-% Make.nw for example pass -c in pipecmd() to the shell and it seems
-% it it used to read the command from a string instead of stdin
+% Make.nw for example pass -c in pipecmd() to the shell and it
+% it is used to read the command from a string instead of stdin.
 
 \section{Failing fast: [[rc -e]]}
 \label{sec:rc-e}
 
-% not 'set -e' though so can't set it from the script itself :(
-
 % from man page:
 % -e         Exit if $status is non-null after executing a simple command.
-
-
 % so need add it just in Xsimple, for simple commands (as man page says)
 
 %claude:
@@ -10052,11 +10016,6 @@ It is set to true only after the first [[dot]] command
 finishes, so initialization errors do not cause an immediate
 exit.
 
-% super important actually, explain how useful in recursive make
-% (remember make/mk use rc/sh for recipe, see Build book)
-% where a failure in a subsubdir should stop the entire thing. 
-% Fortunately mk calls rc with -e so any error in a loop for 
-% instance stop the whole thing
 % (but not error  in   X || Y, nor error in if (X), etc, so
 % need do eflag check only a certain places)
 
@@ -10088,23 +10047,27 @@ Xeflag(void)
 % exit at first error!
 % kind of a 'use strict;' :)
 % kind of exception behavior
-% error management is tricky, in every languages and -e is a useful
-% compromise.
-
-% very very useful feature!
+% error management is tricky, in every languages and -e is a useful compromise.
 
 %claude:
 It is worth stepping back, because error handling is one of the genuinely
 hard problems every language faces, and [[-e]] is only one answer to it.
+%
 The baseline in any shell is to check [[$status]] by hand after each
-command---correct, but verbose and easy to forget. [[-e]] automates that
-check, at the cost of the surprises noted above. Richer languages reach
-instead for exceptions (a failure unwinds the stack until something catches
+command---correct, but verbose and easy to forget.
+%
+[[-e]] automates that
+check, at the cost of the surprises noted above.
+%
+Richer languages reach
+instead for {exceptions} (a failure unwinds the stack until something catches
 it) or for return values that force the caller to acknowledge the error
-(Go's explicit [[err]], Rust's [[Result]], OCaml's [[result]]). A shell
-sits at the low end of this spectrum: a command yields a single string
+(Go's explicit [[err]], Rust's [[Result]], OCaml's [[result]]).
+%
+A shell sits at the low end of this spectrum: a command yields a single string
 status, and [[-e]] is the pragmatic middle ground between ignoring errors
 entirely and checking every one by hand.
+% kind of exn mechanism for implem in Xreturn
 
 \section{Unicode}
 \label{sec:unicode}
@@ -10224,19 +10187,15 @@ unicode(uchar *p)
 The constructs in this section are where [[rc]] goes past the common shell
 core. Each is a small, self-contained extension---a grammar rule, a
 bytecode, and a runtime function---layered on the machinery already built.
-%: command and process substitution, subshells, list stringification, and
+%toc: command and process substitution, subshells, list stringification, and
 %here documents.
 
 \subsection{Command substitution: \texttt{`\{<cmd>\}}}
-% Command output as arguments
 % pretty useful, see git9 scripts
 
 % just like easy to run command, pretty easy to capture output
 % of command in a var. Natural extension.
 %history: also in bourne shell
-
-% by using `{} instead of ``
-% it allows to easily nest (see Design chapter in rc paper).
 
 %claude:
 Command substitution captures a command's stdout as a list
@@ -10244,6 +10203,7 @@ of words.  The Bourne shell uses backticks [[`cmd`]],
 which cannot nest; [[rc]] uses \verb+`{cmd}+ with braces,
 which nests naturally---\plan scripts routinely write things like
 \verb+dir=`{dirname `{cleanname $file}}+.
+%(see Design chapter in rc paper).
 
 The output is split into words by default using [[$ifs]]
 (inter-field separators, defaulting to space, tab, newline,
@@ -10274,7 +10234,8 @@ case '`':
     stuffdot(p);
     break;
 @
-% false eflag here
+
+% false to eflag here
 
 % * Xbackq{... Xreturn}			make thread for {}, push stdout
 
@@ -10415,18 +10376,13 @@ if(c0){
 @
 
 
-% see man/1/rc:
-% cmp <{old} <{new}
-
-% it is in comword rule because really it resolved in a filename
-% to /dev/fd/xxx connected to output of command.
 
 %claude:
 Process substitution
-% (called ``command output as a file'' in Plan~9)
 lets you use a command's output as if it were
 a file.  \verb+cmp <{old} <{new}+ runs the two commands
 and passes their outputs as filenames to [[cmp]].
+% see man/1/rc: cmp <{old} <{new}
 
 %claude: %modern:
 This is the same capability [[bash]] and [[ksh]] exposes as
@@ -10439,6 +10395,7 @@ This is the same capability [[bash]] and [[ksh]] exposes as
 Syntactically this is treated as just another command word, because it
 really resolves to a filename ([[/dev/fd/N]]) connected
 to the command's output via a pipe.
+%
 The implementation forks a child that runs the command
 with its stdout (or stdin for [[>{}]]) connected to
 one end of a pipe, while the parent pushes the filename
@@ -10516,22 +10473,7 @@ Xpipefd(void)
 @
 
 
-
 \subsection{Subshell: [[@ <cmd>]]}
-
-% why need that? () not enough? { } not enough?
-% no because side effect done in { } will be propagated, e.g., cd!
-% any side effect in command such as setting variables will not be seen
-% in parent process.
-
-% see mkfile for plan9:
-%.directories:V:
-%	for(i in $DIRS) @{
-%		cd $i
-%		echo $i/
-%		mk $MKFLAGS $stem
-%	}
-\t also why -e does not work here!! does not stop!! because in subshell?
 
 %claude:
 The [[@]] operator runs a command in a child process,
@@ -10570,7 +10512,6 @@ the child's code.
 %token SUBSHELL /** @ */
 @
 
-% @ xxx
 <<cmd rule other cases>>=
 |   SUBSHELL cmd        {$$=mung1($1, $2);}
 @
@@ -10615,7 +10556,6 @@ Xsubshell(void)
 }
 @
 
-
 %in rcsh, the code is Updenv() before ForkExecute() because
 % they do not rely on a fork that will have the same process image
 % in which runq->local will contain the local values of variables,
@@ -10635,11 +10575,9 @@ running. The child's status becomes the subshell's status, so the parent
 needs its own [[Xeflag]] to notice that the subshell failed and honor [[-e]]
 itself.
 
+
 \subsection{Stringification of variables: [[$"<foo>]]} 
 \label{sec:stringification}
-
-% no ending "? No, it is used for stringification of a variable.
-% a list2str.
 
 %claude:
 The [[$"]] operator converts a variable---which in [[rc]] is always a
@@ -10705,15 +10643,10 @@ Xqdol(void)
 
 %history: also in bourne shell
 
-% when write script, and uses data, convenient embed data
-% directly in script, so no external file deps.
 %ocaml: I do the same sometimes in GUI for some resources like icons
 
 % again spirit of interactive REPL. enter data from command line.
-% Yes, but more importantly, ancestor of Bundle! Prog and data
-% in one file. Can have a script with a database (see example
-% of 'tel' command in Bourne paper) included in the file.
-% can mv around the script. no problem.
+% Yes, but more importantly, ancestor of Bundle!
 
 %claude:
 Here documents let you embed multi-line {\em data} directly
@@ -10732,7 +10665,10 @@ database inline:
   Bob   555-5678
   EOF
 \end{verbatim}
-%
+%src: in Bourne paper?
+
+
+%claude:
 The program and its data live in the same file, so the
 script is self-contained and easy to move around.
 A variable would not work as well here: shell variables
@@ -10769,7 +10705,7 @@ if(nextis(c)){
     *w++=c;
 }
 @
-\t mv c to '<' ?
+% mv c to '<' ?
 
 %claude:
 The pending here documents live on a simple linked list of [[Here]]
@@ -10882,11 +10818,6 @@ Xdelhere(void)
     remove(runq->code[runq->pc++].s);
 }
 @
-
-<<function [[Unlink]]>>=
-@
-
-
 
 
 <<global [[ser]]>>=
@@ -11085,9 +11016,6 @@ Xrdwr(void)
 \subsection{General redirections: [[>[2] <file>]]}
 \label{sec:advanced-redirection}
 
-% fancy lexing redirect, see rc manual
-
-% Lexing
 
 %claude:
 The basic redirections [[>]] and [[<]] always use
@@ -11095,6 +11023,7 @@ file descriptors~1 and~0 respectively.
 The bracket syntax [[>[2]]] or [[<[3]]] lets you redirect
 any file descriptor.  For example, [[echo error >[2] /tmp/log]]
 redirects stderr.
+% fancy lexing redirect, see rc manual
 
 The lexer handles the bracket syntax inline: after seeing
 [[>]] or [[<]], if a \verb+[+ follows, it reads the
@@ -11258,13 +11187,12 @@ case RCLOSE:
 
 \subsection{Advanced pipes: [[|[<fd>] ]], [[|[<fd0>=<fd1>] ]]}
 
-% see man/1/rc:
-
 %claude:
 Just as general redirections extend [[>]] and [[<]] with
 bracket syntax, pipes can also specify which file descriptors
 to connect.  [[cmd1 |[2] cmd2]] pipes fd~2 of [[cmd1]]
 (stderr) to [[cmd2]]'s stdin.
+% see man/1/rc:
 
 %claude:
 There is no separate code for it: the [<Xpipe()>] bytecode we already saw
@@ -11276,10 +11204,7 @@ the lexer fill [[t->fd0]]/[[t->fd1]] with other numbers, which
 
 \section{Advanced builtins}
 
-% could have echo here. and test. but true that they can also
-% be external programs.
-
-% has read? How can you read from a script?
+%said-later: could have echo here. and test. and read. but external prog in rc!
 
 %claude:
 %These builtins could in principle be external programs
@@ -11295,10 +11220,8 @@ and [[shift]] modifies [[$*]].
 \subsection{[[% exec]]}
 \label{sec:builtin-exec}
 
-% actually called from Xsimple()
-% but it complicates the code.
-% I was not sure you really need that builtin, but
-% many scripts use it.
+% actually called from Xsimple() but it complicates the code.
+% I was not sure you really need that builtin, but many scripts use it.
 
 %claude:
 The [[exec]] builtin replaces the current shell process with the given
@@ -11326,10 +11249,11 @@ void
 execwhatis(void){   /* mildly wrong -- should fork before writing */
     word *a, *b, *path;
     var *v;
-    struct Builtin *bp;
+    builtin *bp;
     char *file;
     struct Io out[1];
     int found, sep;
+
     a = runq->argv->words->next;
     if(a==0){
         Xerror1("Usage: whatis name ...");
@@ -11401,10 +11325,11 @@ writes to fd~1, but fd~1 might have been redirected;
 actually points.
 
 <<function [[mapfd]]>>=
-int
-mapfd(int fd)
+fdt
+mapfd(fdt fd)
 {
     redir *rp;
+
     for(rp = runq->redir;rp;rp = rp->next){
         switch(rp->type){
         case RCLOSE:
@@ -11587,6 +11512,7 @@ execflag(void)
 %claude:
 [[shift]] removes the first [[n]] elements (default~1)
 from [[$*]], the positional parameters.
+%
 It modifies the variable in place by walking the linked
 list and freeing the removed nodes.
 
@@ -11630,28 +11556,6 @@ execshift(void)
 %******************************************************************************
 \label{chap:conclusion}
 
-% connection to other books:
-% Lex and Yacc to understand what is generated from grammar files.
-% Kernel to understand what is behind fork, exec, wait, chdir.
-% Compiler for deeper.
-
-% future work:more interactive! need readline.
-% However, many of those features are covered by rio's terminals:
-
-%  - interactive filename completion with TAB (readline, need raw mode)
-%    (but apparently rio has some support for it)
-%  - command completion with TAB
-%  - history with arrow keys
-%    (rio has kinda, just go up in the window and copy paste)
-%  - history search (C-r)
-%  - aliases
-%    (just use fn and saves them somewhere so persistent)
-%  - pushd/popd (but could be functions?)
-%  - job control (bg, fg)
-%    (but can do  'wait $apid')
-%  - C-z??? bourne says early-sh had 'wait is interruptible'
-%  - fish features!
-
 %claude:
 You now know how the \plan shell [[rc]] works,
 %---from the
@@ -11675,6 +11579,7 @@ pipes, redirections, subshells, and background jobs.
 The beauty of the \unix process model is that these
 few primitives are enough to build a surprisingly powerful
 command-line environment.
+
 
 \section{Patterns and techniques}
 
@@ -11704,8 +11609,7 @@ of middleware, proxy servers, and the decorator pattern.
 \item \emph{Uniform data representation}: every value in
 [[rc]] is a list of strings, just as every Lisp value is an
 S-expression. A single universal type
-eliminates conversion boilerplate and makes composition
-trivial.
+eliminates conversion boilerplate and makes composition trivial.
 %
 Taken one step further---so that a program's own {\em code} is just
 another value of that universal type---the property is called
@@ -11715,6 +11619,7 @@ ordinary terms, built and queried at runtime) are the classic examples.
 are not.
 
 \end{itemize}
+
 
 \section{Connections to other books}
 
@@ -11773,6 +11678,20 @@ power in a typical [[rc]] script actually comes from.
 
 \section{Missing features?}
 
+%  - interactive filename completion with TAB (readline, need raw mode)
+%    (but apparently rio has some support for it)
+%  - command completion with TAB
+%  - history with arrow keys
+%    (rio has kinda, just go up in the window and copy paste)
+%  - history search (C-r)
+%  - aliases
+%    (just use fn and saves them somewhere so persistent)
+%  - pushd/popd (but could be functions?)
+%  - job control (bg, fg)
+%    (but can do  'wait $apid')
+%  - C-z??? bourne says early-sh had 'wait is interruptible'
+%  - fish features!
+
 [[rc]] is deliberately minimal.
 Many features that other shells provide are instead
 handled by other programs in \plan, for instance the \plan window manager [[rio]]:
@@ -11826,8 +11745,10 @@ for features that [[rc]] delegates elsewhere.
 The \unix shell world has evolved considerably since
 [[rc]] was written. Here are some of the features
 found in modern shells:
+
 \begin{itemize}
 
+%claude:
 \item \emph{Rich data types}: [[rc]] has one data type:
 lists of strings.
 [[bash]] (version 4+) adds indexed arrays, associative
@@ -11838,7 +11759,7 @@ instead of text. Nushell follows a similar philosophy
 with typed, tabular data---an interesting departure
 from the \unix tradition of plain-text pipelines.
 
-
+%claude:
 \item \emph{Interactive features}: beyond the readline
 and history that [[rio]] provides, modern shells
 add programmable completion (context-aware suggestions
@@ -11847,6 +11768,7 @@ highlighting as you type ([[fish]], [[zsh]] with
 plugins), and autosuggestions from history ([[fish]]).
 [[zsh]] has entire plugin ecosystems (oh-my-zsh).
 
+%claude:
 %\item \emph{Error handling}: [[rc]]'s model is [[$status]] and [[if not]],
 %plus the [[-e]] flag (Section~\ref{sec:rc-e}) for exit-on-error---so
 %[[bash]]'s [[set -e]] is nothing new to it. [[bash]] also
@@ -11859,6 +11781,7 @@ plugins), and autosuggestions from history ([[fish]]).
 %conditions, [[&&]] and [[||]] chains, and most function calls, so it fails
 %to abort in exactly the places a programmer expects it to.
 
+%claude:
 \item \emph{POSIX compliance}: [[rc]] deliberately
 ignores the POSIX shell standard, which gives it a
 cleaner syntax but means scripts are not portable.
@@ -11867,7 +11790,6 @@ Most Linux distributions require [[/bin/sh]] scripts
 to work with any POSIX-compliant shell ([[dash]],
 [[bash --posix]]), and POSIX compliance remains
 important for portable system scripts.
-
 
 \end{itemize}
 
@@ -13199,6 +13121,9 @@ iacvt(int n)
 @
 
 <<function [[Seek]]>>=
+@
+
+<<function [[Unlink]]>>=
 @
 
 <<function [[Creat]]>>=
