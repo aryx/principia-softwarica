@@ -877,6 +877,10 @@ newtree(void)
 %@
 %ocaml: use gc
 
+<<macro [[new]]>>=
+#define	new(type)	((type *)emalloc(sizeof(type)))
+@
+
 % efree = emalloc = wrapper around free but handling error.
 
 <<function [[freenodes]]>>=
@@ -11823,25 +11827,23 @@ This appendix presents the code behind these flags, as well as
 the AST pretty-printer used to serialize function bodies into
 the [[/env/]] filesystem.
 
-\section{AST dumper}
-
-% used only for saving functions in the env for now, so could
-%  be moved earlier.
-
-% pcmd.c
-
-<<global [[nl]]>>=
-char nl='\n';		/* change to semicolon for bourne-proofing */
-@
+\section{AST pretty printer}
+%alt: AST dumper but actually not a dumper
+%alt: move earlier? next to chapter on dumping functions?
 
 %claude:
 [[pcmd]] is the inverse of the parser: it walks an AST and prints it back
-as [[rc]] source text. This is what lets [[rc]] store a function in [[/env]]
-as readable text, and what [[whatis]] uses to echo a function body. The
-recursion rides on a custom [[%t]] format verb, which [[pfmt]]---[[rc]]'s
+as [[rc]] source text.
+%
+This is what lets [[rc]] store a function in [[/env]]
+as readable text, and what [[whatis]] uses to echo a function body.
+%
+The recursion rides on a custom [[%t]] format verb, which [[pfmt]]---[[rc]]'s
 own small \verb+printf+ replacement, defined later in this appendix rather
 than borrowed from \plan's [[print]]/[[fmt]] library---dispatches straight
 back into [[pcmd]] for each child node.
+
+% useful also to debug rc itself, putting pfmt %t at the right place
 
 <<function [[pcmd]]>>=
 /// (simplemung | fnstr) -> pfmt %t -> <>
@@ -11961,6 +11963,12 @@ pcmd(io *f, tree *t)
 }
 @
 
+
+<<global [[nl]]>>=
+char nl='\n';		/* change to semicolon for bourne-proofing */
+@
+
+
 %claude:
 These [[c0]]/[[c1]]/[[c2]] child-accessor macros are the same ones
 [<outcode()>] uses in the code generator; they are redefined here only
@@ -12006,8 +12014,7 @@ name, and its arguments---the output we already saw in
 Section~\ref{sec:trace-simple-command-rc-r}. The [[r]] echoes the [[runq]],
 the running thread it dumps on every cycle.
 
-% nice output:
-
+%said-before: nice output:
 %  % ls
 %  pid 20834 cycle 00007F7FF3F00400 1 Xmark
 %  pid 20834 cycle 00007F7FF3F00400 2 Xword ()
@@ -12081,8 +12088,9 @@ struct{
 @
 
 % fnc??
-% called from main interpreter loop, also called from pfmt %?
+
 <<function [[pfnc]]>>=
+/// main -> <>
 void
 pfnc(io *fd, thread *t)
 {
@@ -12107,6 +12115,7 @@ pfnc(io *fd, thread *t)
 % %v below
 
 \section{Printing subprocesses status: [[rc -s]]}
+
 % debugging feature or general feature used by people?
 
 %claude:
@@ -12117,13 +12126,13 @@ leaves a non-true status, a convenience when watching a script's progress.
 if(flag['s'] && !truestatus())
     pfmt(err, "status=%v\n", vlook("status")->val);
 @
+
 % %v? nil or list of strings?
 % why not call getstatus()?
 
 \section{Printing commands: [[rc -x]]}
 
-%history: also in bourne shell, to print final command after
-% substitution
+%history: also in bourne shell, to print final command after substitution
 
 %claude:
 The [[-x]] flag echoes each simple command, after expansion, just before it
@@ -12141,7 +12150,7 @@ The [[-v]] and [[-V]] flags echo input characters as they are read: [[-v]]
 for the user's own typing, [[-V]] for everything, including the characters
 pulled from sourced files like [[rcmain]].
 
-% ndot for not printing the characters procssed from a . (e.g. . rcmain)
+% ndot for not printing the characters processed from a . (e.g. . rcmain)
 <<[[getnext()]] after read, if not EOF but verbose mode, print character read>>=
 else 
     if(flag['V'] || ndot>=2 && flag['v'])
@@ -12149,7 +12158,6 @@ else
 @
 
 %alt:\section{Printing all characters: [[rc -V]]}
-
 % so get also the content of the rcmain
 
 %******************************************************************************
@@ -12161,13 +12169,13 @@ else
 [[rc]] has three levels of error response.
 %
 Syntax and parse errors
-(reported by [[yyerror()]]) are recoverable: [[rc]] prints the error,
+(reported by [<yyerror()>]) are recoverable: [[rc]] prints the error,
 discards the current input line, and returns to the prompt.
 %
-Runtime errors (reported by [[Xerror()]]) set the exit status
+Runtime errors (reported by [<Xerror()>]) set the exit status
 but continue execution.
 %
-Fatal errors (reported by [[panic()]])
+Fatal errors (reported by [<panic()>])
 print a message and call [[abort()]]---these indicate bugs in
 [[rc]] itself, not in the user's script.
 
@@ -12176,7 +12184,7 @@ print a message and call [[abort()]]---these indicate bugs in
 @
 
 %claude:
-[[err]] is the buffered output stream for diagnostics; it is set once in
+[<err>] is the buffered output stream for diagnostics; it is set once in
 [<main()>], to [[openfd(STDERR)]], wrapping file descriptor~2.
 
 <<global [[err]]>>=
@@ -12192,8 +12200,8 @@ flush(err);
 nerror = 0;
 @
 
-% from yylex() (and also yyparse)
 <<function [[yyerror]]>>=
+/// yylex | yyparse | outcode | ... -> <>
 void
 yyerror(char *m)
 {
@@ -12219,8 +12227,8 @@ yyerror(char *m)
     setvar("status", newword(m, (word *)nil));
 }
 @
-\t %q?
-\t could use setstatus()
+% %q?
+% could use setstatus()
 
 % future, peekc, lastc, hmmm
 <<global [[lastc]]>>=
@@ -12277,9 +12285,11 @@ Exit(char *stat, char* _LOC)
 %claude:
 This appendix collects the utility code that [[rc]] uses throughout:
 memory allocation wrappers ([[emalloc]], [[erealloc]]),
-the buffered I/O system (the [[io]] structure and its read/write
-functions), command-line flag parsing ([[getflags]]),
-and string conversion helpers. None of it is specific to a shell---it is
+the buffered I/O system (the [[io]] structure and its read/write functions),
+command-line flag parsing ([[getflags]]), and
+string conversion helpers.
+%
+None of it is specific to a shell---it is
 the support layer almost any C program needs---which is why it is gathered
 here in an appendix rather than woven through the main chapters.
 
@@ -12340,14 +12350,12 @@ efree(void *p)
 %old: /*	pfmt(err, "free %p\n", p); flush(err); /**/
 % nice trick the /**/ at the end :) but can also simply use //
 
-\section{Command-line arguments}
-%: [[getflags()]]
+\section{Command-line arguments: [[getflags()]]}
 % getopt
-
 %ocaml: use Arg.ml
 
 %claude:
-[[getflags]] parses the command line against a {\em specification string}
+[<getflags()>] parses the command line against a {\em specification string}
 that names every accepted flag at once---more declarative than \plan's
 usual [[ARGBEGIN]]/[[ARGEND]] macros, which you wrap a hand-written loop
 around. [[rc]] itself calls it as
@@ -12634,8 +12642,6 @@ errc(int c)
 
 
 \section{Buffered I/O}
-% again, reimplement the same thing
-
 %ocaml: stdlib does that by default
 
 %claude:
@@ -12645,6 +12651,7 @@ buffer and a cursor. \plan already ships such a thing in [[libbio]] (the
 too---and free of that dependency, at the cost of re-implementing a few
 hundred lines. The same motive recurs for the format and string-conversion
 helpers below.
+% with goken and lib9 means we could get rid of this and just use libbio
 
 <<struct [[Io]]>>=
 struct Io {
@@ -12663,6 +12670,7 @@ io*
 openfd(fdt fd)
 {
     io *f = new(struct Io);
+
     f->fd = fd;
     f->bufp = f->ebuf = f->buf;
     f->strp = nil;
@@ -12889,17 +12897,18 @@ opencore(char *s, int len)
 @
 
 
-
-
-
 \section{Format}
 
 %claude:
 [[pfmt]] is a small \verb+printf+-style formatter with verbs specific to
 [[rc]]---[[%t]] for an AST node, [[%v]] for a word list, [[%q]] for a
-quoted word. \plan's [[fmt]] library could host these through
-[[fmtinstall]], but a self-contained formatter avoids that dependency, for
+quoted word.
+%
+\plan's [[fmt]] library could host these through
+[[fmtinstall()]], but a self-contained formatter avoids that dependency, for
 the same portability reason as [[Io]] above.
+
+% again with goken and lib9 means we could get rid of this and just use fmt and fmtinstall
 
 %ocaml: use Printf, or ocamltarzan generated dumper
 
@@ -12907,8 +12916,6 @@ the same portability reason as [[Io]] above.
 int pfmtnest = 0;
 @
 
-% io.c
-% could use fmtinstall instead? or because wanted to be portable to other OSes?
 <<function [[pfmt]]>>=
 void
 pfmt(io *f, char *fmt, ...)
@@ -13112,19 +13119,9 @@ iacvt(int n)
 @
 
 \section{\plan and \unix compatibility layer}
-%alt: delete them, don't care about other OSes, but now with goken we care a bit
+%TODO: delete them, old because don't care about other OSes, but now with goken
+% we care but we can remove thx to lib9 compatible with plan9 libc
 
-<<function [[Write]]>>=
-@
-
-<<function [[Read]]>>=
-@
-
-<<function [[Seek]]>>=
-@
-
-<<function [[Unlink]]>>=
-@
 
 <<function [[Creat]]>>=
 int
@@ -13132,9 +13129,6 @@ Creat(char *file)
 {
     return create(file, 1, 0666L);
 }
-@
-
-<<function [[Dup]]>>=
 @
 
 <<function [[Memcpy]]>>=
@@ -13145,7 +13139,6 @@ Memcpy(void *a, void *b, long n)
 }
 @
 
-
 %******************************************************************************
 \chapter{Examples of [[rc]] scripts}
 %******************************************************************************
@@ -13155,11 +13148,13 @@ Memcpy(void *a, void *b, long n)
 %alt: \section{[[/rc/lib/rcmain]]} now in Initialization chapter
 
 %claude:
-We have already read two real [[rc]] scripts in passing: [[boot.rc]]
-(Section~\ref{sec:boot-rc}), which brings up a \plan machine, and
-[[/rc/lib/rcmain]] (Section~\ref{sec:rcmain}), which finishes [[rc]]'s own
-startup. Both were short and used only a handful of constructs. The login
-[[profile]] script and the few shell-adjacent programs collected here show
+We have already read two real [[rc]] scripts in passing:
+[[boot.rc]] (Section~\ref{sec:boot-rc}), which brings up a \plan machine, and
+[[/rc/lib/rcmain]] (Section~\ref{sec:rcmain}), which finishes [[rc]]'s own startup.
+%
+Both were short and used only a handful of constructs.
+%
+The login [[profile]] script and the few shell-adjacent programs collected here show
 more of the language and its ecosystem in practice.
 
 \section{[[/usr/glenda/lib/profile]]}
@@ -13168,7 +13163,6 @@ more of the language and its ecosystem in practice.
 This is Glenda's (the default \plan user) login profile,
 sourced by [[rcmain]] when [[rc]] is invoked with the
 [[-l]] (login shell) flag.
-% (the [[flag l]] test in [[rcmain]] above).
 
 <<[[rcmain.rc]] if [[-l]], source user's profile>>=
 if(flag l && /bin/test -r $home/lib/profile) . $home/lib/profile
@@ -13224,6 +13218,8 @@ case con
 @
 
 \section{[[/rc/bin/man]]}
+
+%TODO LP split and also make it work!
 
 <</rc/bin/man>>=
 #!/bin/rc
@@ -13505,7 +13501,6 @@ main(int argc, char *argv[])
 @
 
 %alt: \section{[[pwd]]} now in Utilities
-
 
 \section{[[test]]}
 \label{sec:test}
@@ -13968,8 +13963,10 @@ isnewerthan(char *a, char *b)
 %claude:
 [[getflags]] parses command-line flags according to a specification
 string, letting shell scripts do option handling the same disciplined way
-C programs do with [[getflags()]]. Many \plan commands rely on it, and
-\book{Git}'s [[git9]] extended it.
+C programs do with [[getflags()]]. Many \plan commands rely on it.
+%and \book{Git}'s [[git9]] extended it.
+
+% or getopt in GNU world
 
 <<function [[main]](getflags)>>=
 void
@@ -14749,19 +14746,20 @@ int xwait(Node *np)
 This appendix collects the code chunks the preceding chapters referred to
 but did not show inline: header boilerplate, forward declarations, and the
 small uninteresting helpers whose definitions would only have interrupted
-the narrative. Nothing here is new---it is the remainder of [[rc]]'s
+the narrative.
+%
+Nothing here is new---it is the remainder of [[rc]]'s
 source, included so that the literate program remains, as it must, the
 {whole} program and not just its interesting parts.
 
 \ifallcode
-% for syncweb_indexer 
+%pad: put here just to please syncweb -to_tex and for syncweb_indexer 
 <<rc/tests/ls_root.c>>=
 @
 <<rc/y.tab.h>>=
 @
 <<rc/y.tab.c>>=
 @
-%pad: put here just to please syncweb -to_tex
 <<rc/x.tab.h>>=
 @
 
@@ -14779,7 +14777,6 @@ source, included so that the literate program remains, as it must, the
 \addcontentsline{toc}{chapter}{Glossary}
 \label{sec:glossary}
 
-
 \begin{verbatim}
 LOC = Lines Of Code
 CLI = Command-Line Interface
@@ -14792,7 +14789,6 @@ EOF = End Of File
 ASCII = American Standard Code for Information Interchange
 UTF = Unicode Transformation Format
 \end{verbatim}
-
 
 
 \chapter*{Indexes}
