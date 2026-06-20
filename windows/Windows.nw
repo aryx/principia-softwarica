@@ -11225,6 +11225,8 @@ plus what the user has typed. [[org]] is the index of the first
 visible rune; [[frm.nchars]] is how many runes fit in the frame.
 The selection ([[q0]]/[[q1]]) and the output point ([[qh]])
 are indices into this same buffer:
+
+%claude:
 \begin{verbatim}
   Rune buffer r[]:
   +-------+-----+-------+-----------+-----+---------+-------+
@@ -11247,6 +11249,7 @@ are indices into this same buffer:
             +-+--+--------------------------+
          scrollr       Frame (frm)
 \end{verbatim}
+
 %claude:
 Key invariant: [[org <= qh <= nr]].
 Text before [[qh]] was produced by the application (e.g., a shell prompt);
@@ -11298,6 +11301,8 @@ window, with dimensions annotated.
 [[Sb]] is the scrollbar column ([[Scrollwid]] = 12 pixels wide),
 and [[Sg]] is the gap between the scrollbar and the text frame
 ([[Scrollgap]] = 4 pixels wide):
+
+%claude:
 \begin{verbatim}
   +--+----+--------------------------------------+--+
   |  |    |                                      |  |
@@ -11397,1076 +11402,6 @@ Scrollgap 		= 4,	/* gap right of scroll bar */
 
 
 
-\section{Frame widget}
-\label{sec:frame-widget}
-\t maybe write a simplified text widget like I did for rio-in-ocaml
-\t  and then put more complex one in appendix!
-
-
-% text widget really. in Gtk it's called the TextEditor even?
-% In Efuns we use the same term though:
-%   "a frame: a view of a buffer for a window"
-
-% frame(2)
-% used by rio and sam, factorize code for Editable Text (widget)
-% mv in Widgets.nw?
-
-% It is actually not what is around the window. Bad name.
-% Rename maybe TextWidget?
-
-% Complex library. Why need that? Can't simply print lines of text?
-% Libframe handles tabs, fold long lines, handle mouse selection,
-% can insert and delete anywhere and adjust chars around.
-% Also handle unicode with possible variable-size chars (but
-% do that efficiently by storing widths in boxes).
-%ocaml: but should be simpler. code of frinsert is really long.
-%claude:
-The Frame library (used by both [[rio]] and [[sam]]) is a text rendering
-engine that handles line wrapping, tab expansion, cursor display, text
-selection highlighting, and efficient incremental updates when characters
-are inserted or deleted.
-Despite the name ``frame'' (which might suggest a window border),
-it is really a {text widget}.
-%claude:
-The fundamental design decision is to avoid redrawing the entire text
-whenever a character is inserted or deleted. Instead, the library works
-incrementally: the screen content is represented as a sequence of
-``boxes'' ([[Frbox]]), where each box is a run of characters that share
-the same pixel width. When text is inserted, only the boxes after the
-insertion point need to shift, and only the gap between old and new
-positions needs repainting. This makes single-character insertion (the
-common case when typing) very fast, even with thousands of visible characters.
-%claude:
-The box abstraction also solves the variable-width Unicode problem:
-measuring a character's pixel width requires a font lookup, which is
-expensive. By grouping characters into runs and caching the total width
-in [[Frbox.wid]], the library only measures widths when boxes are created
-or split, not on every rendering pass.
-%claude:
-Here is a concrete example of what the box array looks like for
-a terminal showing two lines:
-\begin{verbatim}
-  Display:   % ls -la /tmp
-             drwxrwxrwt  12 root root 4096 ...
-
-  Box array:
-  [0] nrune=11 ptr="% ls -la /t"  wid=88
-  [1] nrune=2  ptr="mp"           wid=16   (split at line wrap)
-  [2] nrune=-1 bc='\n'            wid=5000 (newline break box)
-  [3] nrune=14 ptr="drwxrwxrwt  1" wid=112
-  ...
-\end{verbatim}
-%claude:
-Text boxes are split at line boundaries (when a box would overflow
-the right margin, [<_frcanfit>] determines how many characters fit
-and [<_frsplitbox>] divides it). Tabs and newlines get their own
-special boxes with [[nrune == -1]].
-
-\subsection{[[Frame]]}
-
-%claude:
-The [[Frame]] struct is the state of a text widget instance. It does
-\emph{not} own the text data (which lives in [[Window.r]])---it only
-knows how to display a slice of it, from [[org]] to [[org + nchars]].
-%claude:
-The key fields fall into five groups:
-\begin{itemize}
-\item {\bf Drawing surface:} [[b]] (the image to draw on), [[r]] (the
-text rectangle, clipped to whole lines), [[entire]] (the full
-rectangle including partial lines).
-\item {\bf Text metrics:} [[nchars]] (how many runes are visible),
-[[nlines]] (how many lines have text), [[maxlines]] (how many lines
-fit).
-\item {\bf Selection:} [[p0]], [[p1]] (frame-local selection range,
-in rune indices relative to [[org]]).
-\item {\bf Cursor:} [[tick]], [[tickback]], [[ticked]] (the text cursor
-image and its save buffer).
-\item {\bf Box array:} [[box]], [[nbox]], [[nalloc]] (the cached layout
-of visible text).
-\end{itemize}
-
-<<struct [[Frame]]>>=
-struct Frame
-{
-    Image	*b;		    /* on which frame appears */
-    Rectangle	r;		/* in which text appears */
-
-    Font	*font;		/* of chars in the frame */
-    Display	*display;	/* on which frame appears */
-
-    <<[[Frame]] colors>>
-    <<[[Frame]] text fields>>
-    <<[[Frame]] tick fields>>
-    <<[[Frame]] box fields>>
-    <<[[Frame]] scroll>>
-
-    <<[[Frame]] other fields>>
-};
-@
-% the actual content is in the englobing data structure (e.g., Window.r)
-\l remove display? redundant with b->display anyway
-\l rename b to img?
-
-
-% important field, nchars.
-<<[[Frame]] text fields>>=
-ushort	nchars;		/* # runes in frame */
-@
-% FIGURE ? vs org?
-
-<<[[Frame]] text fields>>=
-ushort	nlines;		/* # lines with text */
-@
-% will be maintained by? frinsert and frdelete?
-
-
-
-\subsection{[[frinit()]]}
-
-% libframe/
-% ... -> new -> wmk() -> <>
-%claude:
-Initialization sets the drawing surface, computes how many lines of
-text fit in the rectangle (clipping the bottom to a whole number of
-font-height rows via [<frsetrects>]), zeros the text counters, sets
-up the color palette, and creates the tick cursor image.
-%claude:
-A subtle ordering dependency: the font must be set before
-[[frsetrects]] because [[frsetrects]] uses [[f->font->height]] to
-compute [[maxlines]]. The author notes that reordering these lines
-caused a segfault during development---an easy mistake because the
-dependency is not obvious from the function signatures.
-
-<<function [[frinit]]>>=
-void
-frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
-{
-    f->font = ft;
-    f->display = b->display;
-    frsetrects(f, r, b);
-
-    f->nchars = 0;
-    f->nlines = 0;
-    <<[[frinit()]] initialize other fields>>
-}
-@
-%old: I reoredered some lines, but f->font must be before frsetrects
-% because frsetrects below use f->font!!
-% (was getting segfault regression with rio because of that)
-
-<<function [[frsetrects]]>>=
-void
-frsetrects(Frame *f, Rectangle r, Image *b)
-{
-    f->b = b;
-    f->entire = r;
-    f->r = r;
-    f->r.max.y -= (r.max.y-r.min.y) % f->font->height;
-    f->maxlines = (r.max.y-r.min.y) / f->font->height;
-}
-@
-%old: I reoredered a bit again
-\l could use Dy
-
-% adjust r to not write on last line that may not contain enough
-% pixels for a full height (hence the modulo)
-
-<<[[Frame]] text fields>>=
-ushort	maxlines;	/* total # lines in frame */
-@
-
-<<[[Frame]] other fields>>=
-Rectangle	entire;		/* of full frame */
-@
-\l why need entire and r? r not enough?
-
-
-%\subsection{[[frclear()]]}
-
-% called when Exited
-
-<<function [[frclear]]>>=
-void
-frclear(Frame *f, bool freeall)
-{
-    <<[[frclear()]] free boxes>>
-    <<[[frclear()]] free ticks>>
-}
-@
-%old: I reordered lines, more logical
-
-
-
-\subsection{Frame colors}
-
-%claude:
-The frame uses five colors indexed by [[BACK]], [[HIGH]], [[BORD]],
-[[TEXT]], and [[HTEXT]]:
-\begin{itemize}
-\item [[BACK]] (white): normal text background.
-\item [[HIGH]] (light grey, [[0xCCCCCC]]): background of selected text.
-\item [[BORD]] (medium grey, [[0x999999]]): scrollbar and border fill.
-\item [[TEXT]] (black): normal text foreground.
-\item [[HTEXT]] (black): selected text foreground (same as TEXT in [[rio]]).
-\end{itemize}
-%claude:
-The key visual trick is that when a window loses focus, [<wsetcols>]
-swaps the text color from black to dark grey ([[0x666666]]), giving the
-``inactive window'' appearance without changing any content---only the
-colors in [[frm.cols]] are modified, followed by a [<frredraw()>].
-This is a lightweight way to indicate which window has keyboard focus.
-
-<<[[Frame]] colors>>=
-Image	*cols[NCOL];	/* text and background colors */
-@
-%ocaml: pass colors to repaint_content function instead
-
-
-% properties
-<<enum [[_anon_ (include/frame.h)]]>>=
-enum FrameColors {
-    BACK, // Background
-    HIGH, // Background highlighted text
-    BORD, // Border
-    TEXT, // Text
-    HTEXT, // Highlited text
-
-    NCOL
-};
-@
-\l rename enums? use full word?
-\t Bord is not the same that window border?
-%ocaml: full color names and use record
-
-% images/colors for the frame
-<<global [[cols]]>>=
-// map<Property, Color>
-static	Image	*cols[NCOL];
-@
-% note that this cols will sometimes be altered when unselect a terminal
-%  window so the main text becomes grey for example
-
-% cols global is passed to frinit() in wmk()
-
-<<[[frinit()]] initialize other fields>>=
-if(cols != nil)
-    memmove(f->cols, cols, sizeof f->cols);
-@
-
-
-%claude:
-The colors are allocated once (guarded by [[cols[0] == nil]]) and
-shared by all windows. White background, light grey highlight for
-selected text, medium grey for the border/scrollbar, and black text.
-These are 1x1 pixel images used as tile patterns in [[draw()]] calls---a
-common Plan~9 idiom for solid color fills where the 1x1 image is
-tiled across the destination rectangle by the graphics system.
-
-<<[[wmk()]] colors initialisation>>=
-if(cols[0] == nil){
-    cols[BACK] = display->white;
-    cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
-    cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
-    cols[TEXT] = display->black;
-    cols[HTEXT] = display->black;
-    <<[[wmk()]] extra colors initialisation>>
-);
-}
-@
-% the cols will be inverted at some point, this is why
-% store cols array in Frame and not use globals.
-
-
-% ?? -> wrepaint
-<<[[wrepaint()]] update cols>>=
-wsetcols(w);
-@
-
-
-% wrepaint | ... -> <>
-%claude:
-The [<wsetcols()>] function implements the visual focus indicator: the
-focused window ([[w == input]]) gets black text, while unfocused
-windows get dark grey text ([[darkgrey]], [[0x666666]]). This is the
-only rendering difference between focused and unfocused windows---the
-background, selection highlight, and border colors remain the same.
-The simplicity of this approach (one color swap plus a repaint) is
-characteristic of [[rio]]'s minimalist design: there are no
-drop shadows, title bar color changes, or border thickness variations
-that other window systems use to indicate focus.
-
-<<function [[wsetcols]]>>=
-void
-wsetcols(Window *w)
-{
-    <<[[wsetcols()]] if holding>>
-    else
-        if(w == input)
-            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
-        else
-            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
-}
-@
-%ocaml: pass set of colors to drawing function instead of modifying fields
-% and just store is_selected in Terminal. Only necessary field.
-
-% invert color, but who then redraw the content?
-
-<<global [[darkgrey]]>>=
-static	Image	*darkgrey;
-@
-% used for alternative BACK
-<<[[wmk()]] extra colors initialisation>>=
-/* greys are multiples of 0x11111100+0xFF, 14* being palest */
-darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
-@
-
-%dead:
-%<<global grey>>
-%static	Image	*grey;
-%@
-%<<[[wmk()]] extra colors initialisation>>
-%grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
-
-% will see far later the code using those cols[]
-
-
-
-\subsection{Frame tick}
-
-%claude:
-The ``tick'' is the text cursor---a narrow 3-pixel-wide image drawn
-at the insertion point ([[q0]]). Rather than repainting the text
-underneath each time the tick moves, [[rio]] saves the pixels under
-the tick into [[tickback]] and restores them when the tick is removed.
-This save/restore approach is the same technique used for the mouse
-cursor in the kernel's graphics layer.
-%claude:
-The [[ticked]] flag tracks whether the tick is currently on screen.
-When the user has an active selection range ([[p0 != p1]]), the tick is
-hidden---there is no blinking cursor inside a highlighted selection.
-The tick reappears when the selection collapses to a point (a single
-click). Note that [[rio]]'s tick does not blink, unlike most modern
-terminals.
-
-<<[[Frame]] tick fields>>=
-Image	*tick;	/* typing tick */
-Image	*tickback;	/* saved image under tick */
-@
-%ocaml: if use painter model where draw each time from scratch
-% on top of each other, then no need tickback
-
-<<[[Frame]] tick fields>>=
-bool	ticked;	/* flag: is tick onscreen? */
-@
-% when selection with mouse, then no tick
-
-<<[[frinit()]] initialize other fields>>=
-if(f->tick == nil && f->cols[BACK] != nil)
-    frinittick(f);
-@
-%ocaml: Common.once
-
-<<constant [[FRTICKW]]>>=
-#define	FRTICKW	3
-@
-%fr tick width
-
-
-%claude:
-The tick image is built procedurally: a [[FRTICKW]]$\times$height
-image filled with the background color, a 1-pixel vertical line in
-the text color down the center, and small squares at the top and bottom
-to make the ends visible. This creates the classic I-beam cursor shape.
-The [[tickback]] image has the same dimensions and stores whatever
-pixels were under the tick before it was drawn.
-
-<<function [[frinittick]]>>=
-void
-frinittick(Frame *f)
-{
-    Image *b = f->display->screenimage;
-    Font *ft = f->font;
-
-    <<[[frinittick()]] free old tick>>
-    f->tick = allocimage(f->display, Rect(0, 0, FRTICKW, ft->height), b->chan, 0, DWhite);
-    <<[[frinittick()]] sanity check tick>>
-    <<[[frinittick()]] free old tickback>>
-    f->tickback = allocimage(f->display, f->tick->r, b->chan, false, DWhite);
-    <<[[frinittick()]] sanity check tickback>>
-    /* background color */
-    draw(f->tick, f->tick->r, f->cols[BACK], nil, ZP);
-    /* vertical line */
-    draw(f->tick, Rect(FRTICKW/2, 0, FRTICKW/2+1, ft->height), f->cols[TEXT], nil, ZP);
-    /* box on each end */
-    draw(f->tick, Rect(0, 0, FRTICKW, FRTICKW), f->cols[TEXT], nil, ZP);
-    draw(f->tick, Rect(0, ft->height-FRTICKW, FRTICKW, ft->height), f->cols[TEXT], nil, ZP);
-}
-@
-%old: put assign with decl for b and ft
-%ocaml: Common.once
-
-% FIGURE screenshot
-
-<<[[frinittick()]] free old tick>>=
-if(f->tick)
-    freeimage(f->tick);
-@
-<<[[frinittick()]] sanity check tick>>=
-if(f->tick == nil)
-    return;
-@
-%ocaml: exn at least?
-<<[[frinittick()]] free old tickback>>=
-if(f->tickback)
-    freeimage(f->tickback);
-@
-<<[[frinittick()]] sanity check tickback>>=
-if(f->tickback == nil){
-    freeimage(f->tick);
-    f->tick = nil;
-    return;
-}
-@
-
-
-<<[[frclear()]] free ticks>>=
-if(freeall){
-    freeimage(f->tick);
-    freeimage(f->tickback);
-    f->tick = nil;
-    f->tickback = nil;
-}
-f->ticked = false;
-@
-%ocaml: Gc
-
-\subsection{Frame boxes}
-
-%claude:
-The frame's content is stored as an array of {boxes} ([[Frbox]]).
-A box is either a run of regular characters (with a [[ptr]] to the
-UTF-8 bytes and a [[wid]] giving the total pixel width) or a
-special break character like a newline or tab (indicated by
-[[nrune < 0]]).
-%claude:
-The box abstraction serves two purposes:
-\begin{enumerate}
-\item {\bf Cached widths:} Measuring character widths requires calling
-into the font subsystem, which involves looking up glyph metrics. By
-grouping characters into runs and storing the total width in
-[[Frbox.wid]], the frame avoids remeasuring characters on every redraw
-or position lookup.
-\item {\bf Efficient updates:} When a character is inserted, only the
-boxes at the insertion point need to be split and adjusted. The rest
-of the array---potentially hundreds of boxes for a full screen of
-text---remains untouched. Similarly, deletion only affects the boxes
-in the deleted range.
-\end{enumerate}
-%claude:
-The box array is a growing array (like a [[vector]] in C++) with
-[[nbox]] used entries and [[nalloc]] total capacity. When boxes are
-added, the array grows by [[SLOP]] (25) entries at a time.
-
-<<[[Frame]] box fields>>=
-// growing_array<Frbox> (size = nalloc, unused after nbox)
-Frbox	*box;
-ushort	nbox;
-ushort nalloc;
-@
-
-<<[[frinit()]] initialize other fields>>=
-f->box = nil;
-f->nbox = 0;
-f->nalloc = 0;
-@
-
-
-\subsubsection{[[Frbox]]}
-
-%claude:
-A box is either a run of printable characters (when [[nrune >= 0]],
-with [[ptr]] pointing to the UTF-8 bytes and [[wid]] caching the
-total pixel width) or a special break character (when [[nrune < 0]],
-with [[bc]] holding the character---tab or newline---and [[minwid]]
-giving the minimum width for tab stops). The [[wid]] field of a tab
-box is initially set to a large sentinel (5000) and recomputed
-contextually by [[_frnewwid]] based on the current x position and
-tab stop alignment.
-
-<<struct [[Frbox]]>>=
-struct Frbox
-{
-    long		wid;		/* in pixels */
-
-    long		nrune;		/* <0 ==> negate and treat as break char */
-    union{
-        // array<byte> UTF8?
-        uchar	*ptr;
-        struct{
-            short	bc;	/* break char */
-            short	minwid;
-        };
-    };
-};
-@
-%ocaml: proper ADT instead of abuse negative integer for nrune
-\l ugly to use short for bc. Why not simply char? or Rune!
-
-% example of boxes?
-% - foo
-% - \n
-% - \b?
-% - artificial break?
-
-% minwid?
-
-% store wid so can know if overflow and need split box.
-% store if special char, e.g. newline or artificial break?
-
-<<function [[NRUNE]]>>=
-#define	NRUNE(b)	((b)->nrune < 0 ? 1 : (b)->nrune)
-@
-
-\subsubsection{Adding boxes}
-
-%claude:
-The box array is a dynamic array with slack: [[_fraddbox]] inserts
-[[n]] empty slots at position [[bn]] by shifting everything after it
-up, growing the allocation by [[SLOP]] (25) extra slots to amortize
-future insertions. [[_frdelbox]] is the inverse: it frees the string
-data in the target boxes ([[_frfreebox]]) then closes the gap by
-shifting the tail down ([[_frclosebox]]).
-
-<<constant [[SLOP]]>>=
-#define	SLOP	25
-@
-
-<<function [[_fraddbox]]>>=
-void
-_fraddbox(Frame *f, int bn, int n)	/* add n boxes after bn, shift the rest up,
-                 * box[bn+n]==box[bn] */
-{
-    int i;
-
-    <<[[_fraddbox()]] sanity check bn>>
-    if(f->nbox+n > f->nalloc)
-        _frgrowbox(f, n+SLOP);
-    for(i=f->nbox; --i>=bn; )
-        f->box[i+n] = f->box[i];
-    f->nbox+=n;
-}
-@
-
-<<function [[_frgrowbox]]>>=
-void
-_frgrowbox(Frame *f, int delta)
-{
-    f->nalloc += delta;
-    f->box = realloc(f->box, f->nalloc*sizeof(Frbox));
-    <<[[_frgrowbox()]] sanity check box>>
-}
-@
-
-
-<<[[_fraddbox()]] sanity check bn>>=
-if(bn > f->nbox)
-    drawerror(f->display, "_fraddbox");
-@
-<<[[_frgrowbox()]] sanity check box>>=
-if(f->box == nil)
-    drawerror(f->display, "_frgrowbox");
-@
-
-\subsubsection{Free boxes}
-
-<<[[frclear()]] free boxes>>=
-if(f->nbox)
-    _frdelbox(f, 0, f->nbox-1);
-if(f->box)
-    free(f->box);
-f->box = nil;
-@
-
-<<function [[_frdelbox]]>>=
-void
-_frdelbox(Frame *f, int n0, int n1)	/* inclusive */
-{
-    <<[[_frdelbox()]] sanity check n0 and n1>>
-    _frfreebox(f, n0, n1);
-    _frclosebox(f, n0, n1);
-}
-@
-
-<<function [[_frfreebox]]>>=
-void
-_frfreebox(Frame *f, int n0, int n1)	/* inclusive */
-{
-    int i;
-
-    <<[[_frfreebox()]] sanity check n0 and n1>>
-    n1++;
-    for(i=n0; i<n1; i++)
-        if(f->box[i].nrune >= 0)
-            free(f->box[i].ptr);
-}
-@
-
-
-<<function [[_frclosebox]]>>=
-void
-_frclosebox(Frame *f, int n0, int n1)	/* inclusive */
-{
-    int i;
-
-    <<[[_frclosebox()]] sanity check n0 and n1>>
-    n1++;
-    for(i=n1; i<f->nbox; i++)
-        f->box[i-(n1-n0)] = f->box[i];
-    f->nbox -= n1-n0;
-}
-@
-
-
-
-<<[[_frdelbox()]] sanity check n0 and n1>>=
-if(n0>=f->nbox || n1>=f->nbox || n1<n0)
-    drawerror(f->display, "_frdelbox");
-@
-<<[[_frfreebox()]] sanity check n0 and n1>>=
-if(n1<n0)
-    return;
-if(n0>=f->nbox || n1>=f->nbox)
-    drawerror(f->display, "_frfreebox");
-@
-<<[[_frclosebox()]] sanity check n0 and n1>>=
-if(n0>=f->nbox || n1>=f->nbox || n1<n0)
-    drawerror(f->display, "_frclosebox");
-@
-
-\subsection{Frame strings}
-
-%claude:
-Each text box owns a heap-allocated UTF-8 string ([[ptr]]). These
-helpers manage the allocations: [[_frallocstr]] rounds up to 16-byte
-chunks via the ROUNDUP macro (which uses bit masking for efficiency),
-and [[_frinsure]] grows a box's string buffer when a merge or insertion
-would overflow it.
-%claude:
-The 16-byte chunk alignment means small strings waste at most 15 bytes,
-while frequent small operations (splitting and merging boxes) avoid
-calling [[malloc]] every time. This is important because a single
-character insertion can trigger several box splits and merges as the
-frame relays out text around the insertion point.
-
-<<constant CHUNK (libframe/frstr.c)>>=
-#define	CHUNK	16
-@
-
-<<function [[ROUNDUP]]>>=
-#define	ROUNDUP(n)	((n+CHUNK)&~(CHUNK-1))
-@
-
-<<function [[_frallocstr]]>>=
-uchar *
-_frallocstr(Frame *f, unsigned n)
-{
-    uchar *p;
-
-    p = malloc(ROUNDUP(n));
-    if(p == nil)
-        drawerror(f->display, "out of memory");
-    return p;
-}
-@
-
-<<function [[_frinsure]]>>=
-void
-_frinsure(Frame *f, int bn, unsigned n)
-{
-    Frbox *b;
-    uchar *p;
-
-    b = &f->box[bn];
-    if(b->nrune < 0)
-        drawerror(f->display, "_frinsure");
-    if(ROUNDUP(b->nrune) > n)	/* > guarantees room for terminal NUL */
-        return;
-    p = _frallocstr(f, n);
-    b = &f->box[bn];
-    memmove(p, b->ptr, NBYTE(b)+1);
-    free(b->ptr);
-    b->ptr = p;
-}
-@
-
-
-\subsection{Frame rune position, point, and box number}
-
-% have:
-%  - type position_text (e.g., q0) (ulong)
-%  - type for position_frame (ulong)
-%  - type for boxnumber (ushort)
-%  - type position_point (Point.t)
-\l should use typedef
-
-% p = position_rune, bn = box number, pt = point
-
-%claude:
-The frame library works with three coordinate systems that all refer to
-the same character in the visible text:
-\begin{itemize}
-\item A {rune index} ([[p]], [[ulong]]): offset from the start of the
-frame (not from [[w->org]]---that translation is done by the caller).
-For example, [[frm.p0 == 5]] means the selection starts at the 5th visible rune.
-\item A {box number} ([[bn]], [[int]]): which [[Frbox]] in the
-[[f->box]] array contains that rune. A box holds a run of characters
-or a single special character (tab, newline).
-\item A {pixel point} ([[pt]], [[Point]]): the (x,y) coordinate
-on screen where that character is drawn.
-\end{itemize}
-%claude:
-The conversion functions are:
-\begin{itemize}
-\item [[frptofchar(p)]] converts a rune index to a Point (by walking
-boxes and measuring widths). Used to position the tick cursor and to
-compute where selection painting should start.
-\item [[frcharofpt(pt)]] converts a Point to a rune index. Used to
-translate mouse click coordinates into text positions.
-\item [[_frfindbox(p)]] finds the box number for a rune index, splitting
-a box if [[p]] does not fall on a box boundary. Used by [<frinsert>] and
-[<frdelete>] to locate their insertion/deletion point in the box array.
-\end{itemize}
-%claude:
-All three functions walk the box array linearly from the beginning.
-For a frame with [[maxlines]] of 50 and an average of 3--5 boxes per
-line, the walks visit 150--250 boxes---fast enough for interactive use.
-
-\subsubsection{[[frptofchar()]]}
-
-% Frame point of p'th rune (point is upper left corner of rune)
-%claude:
-Given a rune index [[p]], return the pixel Point of its upper-left
-corner. The implementation ([<_frptofcharptb>]) walks the box array
-from box [[bn]], consuming runes from [[p]] as it goes. For each box,
-it first checks for line wrap via [[_frcklinewrap]]: if the box would
-overflow the right margin, the point wraps to the start of the next line.
-%claude:
-If [[p]] falls before this box (i.e., [[p >= NRUNE(b)]]), the box's
-rune count is subtracted from [[p]] and [[_fradvance]] moves the point
-past the box. If [[p]] falls inside this box, the function measures
-individual characters with [[stringnwidth]] to find the exact x offset
-within the box. For ASCII characters ([[r < Runeself]]), the UTF-8
-decoding is a single-byte fast path; multibyte runes go through
-[[chartorune]].
-
-<<function [[frptofchar]]>>=
-Point
-frptofchar(Frame *f, ulong p)
-{
-    return _frptofcharptb(f, p, f->r.min, 0);
-}
-@
-
-<<function [[_frptofcharptb]]>>=
-Point
-_frptofcharptb(Frame *f, ulong p, Point pt, int bn)
-{
-    Frbox *b;
-    uchar *s;
-    int w, l;
-    Rune r;
-
-    for(b = &f->box[bn]; bn<f->nbox; bn++,b++){
-        _frcklinewrap(f, &pt, b);
-        l=NRUNE(b);
-        // p is in this box
-        if(p < l){
-            if(b->nrune > 0)
-                for(s=b->ptr; p>0; s+=w, p--){
-                    r = *s;
-                    if(r < Runeself)
-                        w = 1;
-                    else
-                        w = chartorune(&r, (char*)s);
-                    pt.x += stringnwidth(f->font, (char*)s, 1);
-                    <<[[_frptofcharptb()]] sanity check r and pt>>
-                }
-            break; // found it
-        }
-        // else
-        p -= l;
-        _fradvance(f, &pt, b);
-    }
-    return pt;
-}
-@
-\l ugly break, should use if then else
-
-%\subsubsection{[[_fradvance()]]}
-
-<<function [[_fradvance]]>>=
-void
-_fradvance(Frame *f, Point *p, Frbox *b)
-{
-    if(b->nrune<0 && b->bc=='\n'){
-        p->x = f->r.min.x;
-        p->y += f->font->height;
-    }else
-        p->x += b->wid;
-}
-@
-
-% see advantage of boxes here, already computed wid and know where breaks are
-
-<<[[_frptofcharptb()]] sanity check r and pt>>=
-if(r==0 || pt.x > f->r.max.x)
-    drawerror(f->display, "frptofchar");
-@
-
-%\subsubsection{[[_frcklinewrap()]]}
-
-<<function [[_frcklinewrap]]>>=
-void
-_frcklinewrap(Frame *f, Point *p, Frbox *b)
-{
-    if((b->nrune<0? b->minwid : b->wid) > f->r.max.x - p->x){
-        p->x = f->r.min.x;
-        p->y += f->font->height;
-    }
-}
-@
-% so not a box for artificial break? just have to check each time
-% if box overflow?
-
-<<function [[_frcklinewrap0]]>>=
-void
-_frcklinewrap0(Frame *f, Point *p, Frbox *b)
-{
-    if(_frcanfit(f, *p, b) == 0){
-        p->x = f->r.min.x;
-        p->y += f->font->height;
-    }
-}
-@
-
-% return int option, 0 = None
-%claude:
-Given a box and a starting position, [[_frcanfit]] returns how many
-runes from that box fit before the right margin. For break boxes, it
-is a yes/no check (does [[minwid]] fit?). For text boxes, if the
-whole box fits it returns [[nrune]]; otherwise it measures characters
-one by one from the left until the margin is exceeded, returning the
-count that fits. A return of 0 means the box must wrap to the next line.
-
-<<function [[_frcanfit]]>>=
-int
-_frcanfit(Frame *f, Point pt, Frbox *b)
-{
-    int left, w, nr;
-    uchar *p;
-    Rune r;
-
-    left = f->r.max.x - pt.x;
-    if(b->nrune < 0)
-        return b->minwid <= left;
-    if(left >= b->wid)
-        return b->nrune;
-    for(nr=0,p=b->ptr; *p; p+=w,nr++){
-        r = *p;
-        if(r < Runeself)
-            w = 1;
-        else
-            w = chartorune(&r, (char*)p);
-        left -= stringnwidth(f->font, (char*)p, 1);
-        if(left < 0)
-            return nr;
-    }
-    drawerror(f->display, "_frcanfit can't");
-    return 0;
-}
-@
-
-
-
-
-% frptofchar bounded by nb boxes.
-\l when want to do bounded search?
-
-<<function [[_frptofcharnb]]>>=
-Point
-_frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next line */
-{
-    Point pt;
-    int nbox;
-
-    // save
-    nbox = f->nbox;
-    f->nbox = nb;
-    pt = _frptofcharptb(f, p, f->r.min, 0);
-    // restore
-    f->nbox = nbox;
-    return pt;
-}
-@
-\l why not call directly frptofchar?
-
-\subsubsection{[[frcharofpt()]]}
-
-%claude:
-The inverse of [<frptofchar>]: given a pixel Point (typically from a
-mouse click), return the rune index at that position.
-The function works in two passes: first it walks boxes to find the
-right line (comparing [[qt.y]] against [[pt.y]]), then it walks boxes
-on that line to find the right character (comparing [[qt.x]] against
-[[pt.x]]).
-%claude:
-The [[_frgrid]] helper snaps the y coordinate to a line
-boundary so that clicks in the inter-line space (between the baseline
-of one line and the top of the next) map to the correct row. It also
-clamps [[p.x]] to [[r.max.x]], so clicks to the right of the text
-area map to the end of the line.
-
-<<function [[frcharofpt]]>>=
-ulong
-frcharofpt(Frame *f, Point pt)
-{
-    Point qt;
-    int w;
-    uchar *s;
-    Frbox *b;
-    int bn;
-    ulong p;
-    Rune r;
-
-    pt = _frgrid(f, pt);
-
-    qt = f->r.min;
-    // find the line
-    for(b=f->box, bn=0, p=0; bn < f->nbox && qt.y < pt.y; bn++,b++){
-        _frcklinewrap(f, &qt, b);
-        if(qt.y >= pt.y)
-            break;
-        _fradvance(f, &qt, b);
-        p += NRUNE(b);
-    }
-    // find the box in the line
-    for(; bn<f->nbox && qt.x<=pt.x; bn++,b++){
-        _frcklinewrap(f, &qt, b);
-        if(qt.y > pt.y)
-            break;
-        if(qt.x + b->wid > pt.x){
-            if(b->nrune < 0)
-                _fradvance(f, &qt, b);
-            else{
-                s = b->ptr;
-                for(;;){
-                    if((r = *s) < Runeself)
-                        w = 1;
-                    else
-                        w = chartorune(&r, (char*)s);
-                    <<[[frcharofpt()]] sanity check r>>
-                    qt.x += stringnwidth(f->font, (char*)s, 1);
-                    s += w;
-                    if(qt.x > pt.x)
-                        break;
-                    p++;
-                }
-            }
-        }else{
-            p += NRUNE(b);
-            _fradvance(f, &qt, b);
-        }
-    }
-    return p;
-}
-@
-
-<<function [[_frgrid]]>>=
-static
-Point
-_frgrid(Frame *f, Point p)
-{
-    p.y -= f->r.min.y;
-    p.y -= p.y%f->font->height;
-    p.y += f->r.min.y;
-    if(p.x > f->r.max.x)
-        p.x = f->r.max.x;
-    return p;
-}
-@
-
-<<[[frcharofpt()]] sanity check r>>=
-if(r == 0)
-    drawerror(f->display, "end of string in frcharofpt");
-@
-
-\subsubsection{[[_frdrawtext()]]}
-
-% the simple to draw text, just draw the boxes
-
-% frinsert -> <>
-%claude:
-The simplest drawing routine: it walks every box in the frame, checking
-for line wraps via [<_frcklinewrap>], and draws text boxes with
-[[stringbg]] (which renders the string and fills the background in a
-single draw operation, avoiding the flicker that would result from
-clearing the background first and then drawing text on top).
-%claude:
-Break boxes (tabs and newlines) are skipped---their space is filled by
-the caller or by [<frselectpaint>]. Tab boxes have variable width that
-depends on their position, so they are handled by the alignment logic
-elsewhere rather than by this generic draw routine.
-%claude:
-This function is used by [<frinsert>] in Phase~3 to draw the newly
-inserted text into the gap created by shifting existing content down.
-It draws into the temporary [[frame]] structure's box array, not the
-main frame's---the boxes are spliced into the main array afterward.
-
-<<function [[_frdrawtext]]>>=
-void
-_frdrawtext(Frame *f, Point pt, Image *text, Image *back)
-{
-    Frbox *b;
-    int nb;
-    static int x;
-
-    for(nb=0,b=f->box; nb<f->nbox; nb++, b++){
-        _frcklinewrap(f, &pt, b);
-        if(b->nrune >= 0){
-            stringbg(f->b, pt, text, ZP, f->font, (char*)b->ptr, back, ZP);
-        }
-        pt.x += b->wid;
-    }
-}
-@
-
-\subsection{Frame selection}
-
-%claude:
-The frame tracks a selection range ([[p0]], [[p1]]) in character
-coordinates relative to the frame origin (not the buffer origin
-[[w->org]]---the translation is done by [<wsetselect>]).
-When [[p0 == p1]], there is no selection and the tick cursor is shown
-at that position instead.
-%claude:
-The selection is rendered by painting the background of the selected
-range with [[cols[HIGH]]] (light grey) and the text with [[cols[HTEXT]]].
-The [<frdrawsel>] functions handle the common case of extending or
-shrinking a selection incrementally (e.g., as the user drags the mouse),
-only repainting the characters that changed between the old and new
-selection boundaries. This avoids repainting the entire selection on
-every mouse movement.
-
-<<[[Frame]] text fields>>=
-ulong	p0, p1;		/* selection */
-@
-% equivalent of q0 and q1 but translated to frame origin
-
-<<[[frinit()]] initialize other fields>>=
-f->p0 = 0;
-f->p1 = 0;
-@
 
 
 \section{Content modification}
@@ -12494,6 +11429,8 @@ is acceptable.
 %claude:
 Here is a walkthrough of what happens when the user types a single
 character `x' at the cursor. The call chain is:
+
+%claude:
 \begin{enumerate}
 \item [<wkeyctl>] receives the rune from [<winctl>].
 \item [[winsert(w, \&r, 1, w->q0)]] shifts [[r[q0..]]] right by 1,
@@ -12743,875 +11680,8 @@ if(q0 <= w->org + w->frm.nchars)
 % (here 0 because q0 == w->org)
 
 
-<<global [[frame]]>>=
-static Frame		frame;
-@
 
-<<struct [[points_frinsert]]>>=
-struct points_frinsert {
-    Point pt0, pt1;
-};
-@
-
-<<[[frinsert()]] locals>>=
-Point pt0, pt1, opt0, ppt0, ppt1, pt;
-Frbox *b;
-int n, n0, nn0, y;
-ulong cn0;
-Image *col;
-Rectangle r;
-static struct points_frinsert *pts;
-static int nalloc=0;
-int npts;
-@
-
-<<constant [[DELTA]]>>=
-#define	DELTA	25
-@
-
-%claude:
-The [[frinsert]] function is the heart of the frame library and its most
-complex routine. It inserts new runes into the display without redrawing
-everything, working in three phases:
-%claude:
-\textbf{Phase 1: bxscan.}
-The new runes ([[sp]] to [[ep]]) are converted into boxes in a temporary
-[[frame]] structure. [[bxscan]] walks the rune sequence, grouping
-consecutive printable characters into text boxes and creating special
-boxes for tabs and newlines. It also computes [[ppt0]]/[[ppt1]]---the
-pixel coordinates where the insertion will appear on screen.
-%claude:
-\textbf{Phase 2: x-alignment.}
-After inserting text, every existing box after the insertion point shifts
-right. The loop starting at ``Find point where old and new x's line up''
-walks forward through existing boxes, tracking two points: [[pt0]] (where
-each box \emph{is} now) and [[pt1]] (where it \emph{will be} after insertion).
-It records both positions in the [[pts]] array.
-The loop terminates when [[pt1.x==pt0.x]]---meaning the old and new
-layouts have realigned (because a line wrap puts both back to the left
-margin)---or when [[pt1]] falls off the bottom of the frame.
-%claude:
-\textbf{Phase 3: move down.}
-The final loop walks backward through [[pts]], using [[draw]] to blit each
-box from its old position ([[pts[i].pt0]]) to its new position ([[pts[i].pt1]]).
-Going backward avoids overwriting source pixels before they are copied.
-After the moves, the newly inserted text is drawn into the gap left behind,
-and the box array is spliced to include the new boxes from [[bxscan]].
-%claude:
-Here is a visual example of inserting ``XY'' at position~5 in the text
-``Hello World'', where the line is wide enough to hold everything:
-\begin{verbatim}
-  Before:   |H|e|l|l|o| |W|o|r|l|d|
-            0 1 2 3 4 5 6 7 8 9 ...    (rune indices)
-                       ^
-                   insertion point (p0=5)
-
-  Phase 1 (bxscan):   scan "XY" into temp boxes
-                       ppt0 = pixel of pos 5
-                       ppt1 = pixel of pos 7 (after XY)
-
-  Phase 2 (x-alignment): walk from pos 5 in old layout
-            pt0 = where " World" is now
-            pt1 = where " World" will be (shifted right by width of "XY")
-            Record pairs: pts[0] = {pt0=" ", pt1=" shifted"}
-                          pts[1] = {pt0="W", pt1="W shifted"}
-                          ... until pt1.x == pt0.x (line aligned)
-
-  Phase 3 (move down):  blit boxes backward from old to new positions
-            Then draw "XY" in the gap
-
-  After:    |H|e|l|l|o|X|Y| |W|o|r|l|d|
-\end{verbatim}
-
-%claude:
-Here is the full [[frinsert]] code. It is long and dense, but the
-structure follows the three phases described above.
-%claude:
-The critical invariant is that [[pt0]] always tracks where a box
-\emph{currently} is on screen, while [[pt1]] tracks where it
-\emph{will be} after the insertion. The difference between [[pt1]]
-and [[pt0]] is the pixel displacement caused by the inserted text.
-The [[pts]] array stores (old, new) position pairs for the backward
-copy loop in Phase~3.
-%claude:
-The code handles several edge cases:
-\begin{itemize}
-\item Boxes that must be split because they would straddle a line
-boundary after being shifted right (detected by [[_frcanfit]]).
-\item Text that falls off the bottom of the frame ([[pt1.y == r.max.y]]),
-which is truncated and removed from the box array.
-\item The selection ([[p0]]/[[p1]]) that may need extending when the
-insertion point is within it.
-\item Multi-line shifts, where the bulk text below the alignment point
-is moved with two [[draw]] calls instead of box-by-box blitting.
-\end{itemize}
-
-<<function [[frinsert]]>>=
-void
-frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
-{
-    <<[[frinsert()]] locals>>
-
-    if(p0>f->nchars || sp==ep || f->b==nil)
-        return;
-
-    n0 = _frfindbox(f, 0, 0, p0);
-    cn0 = p0;
-    nn0 = n0;
-    pt0 = _frptofcharnb(f, p0, n0);
-    ppt0 = pt0;
-    opt0 = pt0;
-    pt1 = bxscan(f, sp, ep, &ppt0);
-    ppt1 = pt1;
-
-    if(n0 < f->nbox){
-        b = &f->box[n0];
-        _frcklinewrap(f, &pt0, b);	/* for frdrawsel() */
-        _frcklinewrap0(f, &ppt1, b);
-    }
-    f->modified = true;
-    /*
-     * ppt0 and ppt1 are start and end of insertion as they will appear when
-     * insertion is complete. pt0 is current location of insertion position
-     * (p0); pt1 is terminal point (without line wrap) of insertion.
-     */
-
-    <<[[frinsert()]] remove tick>>
-
-    /*
-     * Find point where old and new x's line up
-     * Invariants:
-     *	pt0 is where the next box (b, n0) is now
-     *	pt1 is where it will be after the insertion
-     * If pt1 goes off the rectangle, we can toss everything from there on
-     */
-    for(b = &f->box[n0],npts=0;
-         pt1.x!=pt0.x && pt1.y!=f->r.max.y && n0<f->nbox; b++,n0++,npts++){
-        _frcklinewrap(f, &pt0, b);
-        _frcklinewrap0(f, &pt1, b);
-        if(b->nrune > 0){
-            n = _frcanfit(f, pt1, b);
-            <<[[frinsert()]] sanity check n canfit>>
-            if(n != b->nrune){
-                _frsplitbox(f, n0, n);
-                b = &f->box[n0];
-            }
-        }
-        if(npts == nalloc){
-            pts = realloc(pts, (npts+DELTA)*sizeof(pts[0]));
-            nalloc += DELTA;
-            b = &f->box[n0];
-        }
-        pts[npts].pt0 = pt0;
-        pts[npts].pt1 = pt1;
-        /* has a text box overflowed off the frame? */
-        if(pt1.y == f->r.max.y)
-            break;
-        _fradvance(f, &pt0, b);
-        pt1.x += _frnewwid(f, pt1, b);
-        cn0 += NRUNE(b);
-    }
-    if(pt1.y > f->r.max.y)
-        drawerror(f->display, "frinsert pt1 too far");
-    if(pt1.y==f->r.max.y && n0<f->nbox){
-        f->nchars -= _frstrlen(f, n0);
-        _frdelbox(f, n0, f->nbox-1);
-    }
-    if(n0 == f->nbox)
-        f->nlines = (pt1.y-f->r.min.y)/f->font->height+(pt1.x>f->r.min.x);
-    else if(pt1.y!=pt0.y){
-        int q0, q1;
-
-        y = f->r.max.y;
-        q0 = pt0.y+f->font->height;
-        q1 = pt1.y+f->font->height;
-        f->nlines += (q1-q0)/f->font->height;
-        if(f->nlines > f->maxlines)
-            chopframe(f, ppt1, p0, nn0);
-        if(pt1.y < y){
-            r = f->r;
-            r.min.y = q1;
-            r.max.y = y;
-            if(q1 < y)
-                draw(f->b, r, f->b, nil, Pt(f->r.min.x, q0));
-            r.min = pt1;
-            r.max.x = pt1.x+(f->r.max.x-pt0.x);
-            r.max.y = q1;
-            draw(f->b, r, f->b, nil, pt0);
-        }
-    }
-    /*
-     * Move the old stuff down to make room.  The loop will move the stuff
-     * between the insertion and the point where the x's lined up.
-     * The draw()s above moved everything down after the point they lined up.
-     */
-    for((y=pt1.y==f->r.max.y?pt1.y:0),b = &f->box[n0-1]; --npts>=0; --b){
-        pt = pts[npts].pt1;
-        if(b->nrune > 0){
-            r.min = pt;
-            r.max = r.min;
-            r.max.x += b->wid;
-            r.max.y += f->font->height;
-            draw(f->b, r, f->b, nil, pts[npts].pt0);
-            /* clear bit hanging off right */
-            if(npts==0 && pt.y>pt0.y){
-                /*
-                 * first new char is bigger than first char we're
-                 * displacing, causing line wrap. ugly special case.
-                 */
-                r.min = opt0;
-                r.max = opt0;
-                r.max.x = f->r.max.x;
-                r.max.y += f->font->height;
-                if(f->p0<=cn0 && cn0<f->p1)	/* b+1 is inside selection */
-                    col = f->cols[HIGH];
-                else
-                    col = f->cols[BACK];
-                draw(f->b, r, col, nil, r.min);
-            }else if(pt.y < y){
-                r.min = pt;
-                r.max = pt;
-                r.min.x += b->wid;
-                r.max.x = f->r.max.x;
-                r.max.y += f->font->height;
-                if(f->p0<=cn0 && cn0<f->p1)	/* b+1 is inside selection */
-                    col = f->cols[HIGH];
-                else
-                    col = f->cols[BACK];
-                draw(f->b, r, col, nil, r.min);
-            }
-            y = pt.y;
-            cn0 -= b->nrune;
-        }else{
-            r.min = pt;
-            r.max = pt;
-            r.max.x += b->wid;
-            r.max.y += f->font->height;
-            if(r.max.x >= f->r.max.x)
-                r.max.x = f->r.max.x;
-            cn0--;
-            if(f->p0<=cn0 && cn0<f->p1)	/* b is inside selection */
-                col = f->cols[HIGH];
-            else
-                col = f->cols[BACK];
-            draw(f->b, r, col, nil, r.min);
-            y = 0;
-            if(pt.x == f->r.min.x)
-                y = pt.y;
-        }
-    }
-    /* insertion can extend the selection, so the condition here is different */
-    if(f->p0<p0 && p0<=f->p1)
-        col = f->cols[HIGH];
-    else
-        col = f->cols[BACK];
-
-    frselectpaint(f, ppt0, ppt1, col);
-
-    _frdrawtext(&frame, ppt0, f->cols[TEXT], col);
-
-    _fraddbox(f, nn0, frame.nbox);
-    for(n=0; n<frame.nbox; n++)
-        f->box[nn0+n] = frame.box[n];
-    if(nn0>0 && f->box[nn0-1].nrune>=0 && ppt0.x-f->box[nn0-1].wid>=f->r.min.x){
-        --nn0;
-        ppt0.x -= f->box[nn0].wid;
-    }
-    n0 += frame.nbox;
-    _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
-
-    f->nchars += frame.nchars;
-    if(f->p0 >= p0)
-        f->p0 += frame.nchars;
-    if(f->p0 > f->nchars)
-        f->p0 = f->nchars;
-    if(f->p1 >= p0)
-        f->p1 += frame.nchars;
-    if(f->p1 > f->nchars)
-        f->p1 = f->nchars;
-
-    <<[[frinsert()]] draw tick>>
-}
-@
-
-<<[[frinsert()]] sanity check n canfit>>=
-if(n == 0)
-    drawerror(f->display, "_frcanfit==0");
-@
-
-<<[[Frame]] text fields>>=
-bool	modified;	/* changed since frselect() */
-@
-%old: was ushort
-
-
-\subsubsection{Finding a box boundary: [[_frfindbox()]]}
-
-%claude:
-Given a rune index [[q]], find the box that contains it. If [[q]]
-falls in the middle of a box (not on a boundary), [[_frsplitbox]]
-splits that box so that [[q]] becomes a boundary. This ensures that
-[<frinsert>] and [<frdelete>] can splice the box array cleanly at the
-insertion/deletion point.
-%claude:
-The split works by duplicating the box ([[dupbox]]) and then trimming
-each copy from opposite ends: [[truncatebox]] shortens the first copy
-by dropping its last [[n]] characters (keeping the left portion),
-and [[chopbox]] shortens the second copy by dropping its first [[n]]
-characters (keeping the right portion). Both functions recompute
-[[wid]] by calling [[stringwidth]] on the remaining text.
-%claude:
-For example, splitting the box ``Hello'' at position 3 produces
-two boxes: ``Hel'' and ``lo'', each with its own width and string
-allocation.
-
-<<function [[_frfindbox]]>>=
-/* find box containing q and put q on a box boundary */
-int
-_frfindbox(Frame *f, int bn, ulong p, ulong q)	
-{
-    Frbox *b;
-
-    for(b = &f->box[bn]; bn < f->nbox && p+NRUNE(b) <= q; bn++, b++)
-        p += NRUNE(b);
-    if(p != q)
-        _frsplitbox(f, bn++, (int)(q-p));
-    return bn;
-}
-@
-
-<<function [[_frsplitbox]]>>=
-void
-_frsplitbox(Frame *f, int bn, int n)
-{
-    dupbox(f, bn);
-    truncatebox(f, &f->box[bn], f->box[bn].nrune-n);
-    chopbox(f, &f->box[bn+1], n);
-}
-@
-
-<<function [[dupbox]]>>=
-static
-void
-dupbox(Frame *f, int bn)
-{
-    uchar *p;
-
-    if(f->box[bn].nrune < 0)
-        drawerror(f->display, "dupbox");
-    _fraddbox(f, bn, 1);
-    if(f->box[bn].nrune >= 0){
-        p = _frallocstr(f, NBYTE(&f->box[bn])+1);
-        strcpy((char*)p, (char*)f->box[bn].ptr);
-        f->box[bn+1].ptr = p;
-    }
-}
-@
-
-<<function [[NBYTE]]>>=
-#define	NBYTE(b)	strlen((char*)(b)->ptr)
-@
-
-
-<<function [[truncatebox]]>>=
-static
-void
-truncatebox(Frame *f, Frbox *b, int n)	/* drop last n chars; no allocation done */
-{
-    if(b->nrune<0 || b->nrune<n)
-        drawerror(f->display, "truncatebox");
-    b->nrune -= n;
-    runeindex(b->ptr, b->nrune)[0] = 0;
-    b->wid = stringwidth(f->font, (char *)b->ptr);
-}
-@
-
-<<function [[chopbox]]>>=
-static
-void
-chopbox(Frame *f, Frbox *b, int n)	/* drop first n chars; no allocation done */
-{
-    char *p;
-
-    if(b->nrune<0 || b->nrune<n)
-        drawerror(f->display, "chopbox");
-    p = (char*)runeindex(b->ptr, n);
-    memmove((char*)b->ptr, p, strlen(p)+1);
-    b->nrune -= n;
-    b->wid = stringwidth(f->font, (char *)b->ptr);
-}
-@
-
-<<function [[runeindex]]>>=
-static
-uchar*
-runeindex(uchar *p, int n)
-{
-    int i, w;
-    Rune rune;
-
-    for(i=0; i<n; i++,p+=w)
-        if(*p < Runeself)
-            w = 1;
-        else{
-            w = chartorune(&rune, (char*)p);
-            USED(rune);
-        }
-    return p;
-}
-@
-
-
-
-
-\subsubsection{Runes to boxes: [[bxscan()]]}
-
-%claude:
-The [[bxscan]] function converts a sequence of runes into the frame's
-internal box representation, populating the static [[frame]] structure.
-The outer loop creates one box per iteration: if the current rune is a
-tab or newline, it gets a special box ([[nrune == -1]]) with [[bc]] set
-to the character; otherwise, consecutive printable characters are
-accumulated into a temporary UTF-8 buffer ([[tmp]]) until a tab, newline,
-or buffer overflow is reached, then stored as a text box.
-The function stops after filling [[maxlines]] worth of newlines---there
-is no point scanning text that would fall off the bottom of the frame.
-Finally, [[_frdraw]] lays out the boxes starting at [[*ppt]] and returns
-the endpoint, which becomes [[pt1]] in [[frinsert]].
-
-<<constant [[TMPSIZE]]>>=
-#define	TMPSIZE	256
-@
-
-%claude:
-The [[bxscan]] function is the front end of [<frinsert>]'s three-phase
-pipeline. It iterates over the new runes, building boxes in the static
-[[frame]] structure. For each rune, if it is a tab or newline, a
-break box is created with [[nrune == -1]]; otherwise, consecutive
-printable characters are accumulated into a temporary UTF-8 buffer
-[[tmp]] (up to [[TMPSIZE]] bytes), then stored as a text box with
-a heap-allocated copy.
-%claude:
-The function counts newlines and stops after filling [[maxlines]]
-worth of lines---there is no point scanning text that would not fit
-in the frame anyway. Finally, [[_frdraw]] lays out the boxes starting
-at [[*ppt]], splitting any box that does not fit on the current line,
-and returns the endpoint. This endpoint becomes [[pt1]] in
-[<frinsert>]---the coordinate where the new text ends.
-
-<<function [[bxscan]]>>=
-static
-Point
-bxscan(Frame *f, Rune *sp, Rune *ep, Point *ppt)
-{
-    int w, c, nb, delta, nl, nr, rw;
-    Frbox *b;
-    char *s, tmp[TMPSIZE+3];	/* +3 for rune overflow */
-    uchar *p;
-
-    frame.r = f->r;
-    frame.b = f->b;
-    frame.font = f->font;
-    frame.maxtab = f->maxtab;
-    frame.nbox = 0;
-    frame.nchars = 0;
-    memmove(frame.cols, f->cols, sizeof frame.cols);
-    delta = DELTA;
-    nl = 0;
-    for(nb=0; sp<ep && nl<=f->maxlines; nb++,frame.nbox++){
-        if(nb == frame.nalloc){
-            _frgrowbox(&frame, delta);
-            if(delta < 10000)
-                delta *= 2;
-        }
-        b = &frame.box[nb];
-        c = *sp;
-        if(c=='\t' || c=='\n'){
-            b->bc = c;
-            b->wid = 5000;
-            b->minwid = (c=='\n')? 0 : stringwidth(frame.font, " ");
-            b->nrune = -1;
-            if(c=='\n')
-                nl++;
-            frame.nchars++;
-            sp++;
-        }else{
-            s = tmp;
-            nr = 0;
-            w = 0;
-            while(sp < ep){
-                c = *sp;
-                if(c=='\t' || c=='\n')
-                    break;
-                rw = runetochar(s, sp);
-                if(s+rw >= tmp+TMPSIZE)
-                    break;
-                w += runestringnwidth(frame.font, sp, 1);
-                sp++;
-                s += rw;
-                nr++;
-            }
-            *s++ = 0;
-            p = _frallocstr(f, s-tmp);
-            b = &frame.box[nb];
-            b->ptr = p;
-            memmove(p, tmp, s-tmp);
-            b->wid = w;
-            b->nrune = nr;
-            frame.nchars += nr;
-        }
-    }
-    _frcklinewrap0(f, ppt, &frame.box[0]);
-    return _frdraw(&frame, *ppt);
-}
-@
-
-% frinsert -> bxscan -> <>
-%claude:
-The [[_frdraw]] function does a dry-run layout of the boxes in the
-temporary [[frame]], computing where each box would appear on screen.
-It handles line wrapping (splitting boxes that overflow the right
-margin via [[_frsplitbox]]) and tab-stop computation (via
-[[_frnewwid]]). It also truncates boxes that fall below the bottom
-of the frame. The return value is the endpoint---the pixel Point
-after the last box.
-
-<<function [[_frdraw]]>>=
-Point
-_frdraw(Frame *f, Point pt)
-{
-    Frbox *b;
-    int nb, n;
-
-    for(b=f->box,nb=0; nb<f->nbox; nb++, b++){
-        _frcklinewrap0(f, &pt, b);
-        if(pt.y == f->r.max.y){
-            f->nchars -= _frstrlen(f, nb);
-            _frdelbox(f, nb, f->nbox-1);
-            break;
-        }
-        if(b->nrune > 0){
-            n = _frcanfit(f, pt, b);
-            if(n == 0)
-                drawerror(f->display, "_frcanfit==0");
-            if(n != b->nrune){
-                _frsplitbox(f, nb, n);
-                b = &f->box[nb];
-            }
-            pt.x += b->wid;
-        }else{
-            if(b->bc == '\n'){
-                pt.x = f->r.min.x;
-                pt.y+=f->font->height;
-            }else
-                pt.x += _frnewwid(f, pt, b);
-        }
-    }
-    return pt;
-}
-@
-
-%claude:
-Tab width depends on context---a tab at x=100 is a different width
-than one at x=200, because it must align to the next [[maxtab]]
-boundary. [[_frnewwid0]] computes the tab width for a box at position
-[[pt]]: it rounds up to the next tab stop (relative to the left margin),
-ensuring a minimum width of one space character ([[minwid]]) and
-wrapping to the next line if the tab would overflow the right edge.
-[[_frnewwid]] is a thin wrapper that also stores the result in
-[[b->wid]] so subsequent uses of this box get the cached value.
-
-<<function [[_frnewwid]]>>=
-int
-_frnewwid(Frame *f, Point pt, Frbox *b)
-{
-    b->wid = _frnewwid0(f, pt, b);
-    return b->wid;
-}
-@
-
-<<function [[_frnewwid0]]>>=
-int
-_frnewwid0(Frame *f, Point pt, Frbox *b)
-{
-    int c, x;
-
-    c = f->r.max.x;
-    x = pt.x;
-    if(b->nrune>=0 || b->bc!='\t')
-        return b->wid;
-    if(x+b->minwid > c)
-        x = pt.x = f->r.min.x;
-    x += f->maxtab;
-    x -= (x-f->r.min.x)%f->maxtab;
-    if(x-pt.x<b->minwid || x>c)
-        x = pt.x+b->minwid;
-    return x-pt.x;
-}
-@
-
-<<function [[_frstrlen]]>>=
-int
-_frstrlen(Frame *f, int nb)
-{
-    int n;
-
-    for(n=0; nb<f->nbox; nb++)
-        n += NRUNE(&f->box[nb]);
-    return n;
-}
-@
-
-\subsubsection{Truncating overflow: [[chopframe()]]}
-
-%claude:
-When an insertion causes [[nlines]] to exceed [[maxlines]], the
-frame has overflowed. [[chopframe]] walks forward from the insertion
-point until the pixel position reaches [[f->r.max.y]]
-(the bottom of the frame), counts how many characters fit, then
-deletes all boxes after that point. This truncates the frame to
-exactly [[maxlines]] lines.
-
-<<function [[chopframe]]>>=
-static
-void
-chopframe(Frame *f, Point pt, ulong p, int bn)
-{
-    Frbox *b;
-
-    for(b = &f->box[bn]; ; b++){
-        if(b >= &f->box[f->nbox])
-            drawerror(f->display, "endofframe");
-        _frcklinewrap(f, &pt, b);
-        if(pt.y >= f->r.max.y)
-            break;
-        p += NRUNE(b);
-        _fradvance(f, &pt, b);
-    }
-    f->nchars = p;
-    f->nlines = f->maxlines;
-    if(b<&f->box[f->nbox])				/* BUG */
-        _frdelbox(f, (int)(b-f->box), f->nbox-1);
-}
-@
-
-\subsubsection{Merging boxes: [[_frclean()]]}
-
-%claude:
-After an insertion or deletion, the box array may contain adjacent text
-boxes that could be merged---for instance, if a box was split for an
-insertion and the insertion was later deleted. [[_frclean]] scans boxes
-[[n0]] through [[n1]] and merges any pair of adjacent text boxes that
-fit on the same line (their combined width does not exceed the right
-margin). Merging reduces the box count and speeds up future walks.
-%claude:
-The function also walks the remaining boxes to update
-[[lastlinefull]], which indicates whether the last line of text reaches
-the bottom of the frame. This flag is checked by [<wfill>] to decide
-whether more text needs to be loaded from the rune buffer.
-
-<<function [[_frclean]]>>=
-void
-_frclean(Frame *f, Point pt, int n0, int n1)	/* look for mergeable boxes */
-{
-    Frbox *b;
-    int nb, c;
-
-    c = f->r.max.x;
-    for(nb=n0; nb<n1-1; nb++){
-        b = &f->box[nb];
-        _frcklinewrap(f, &pt, b);
-        while(b[0].nrune>=0 && nb<n1-1 && b[1].nrune>=0 && pt.x+b[0].wid+b[1].wid<c){
-            _frmergebox(f, nb);
-            n1--;
-            b = &f->box[nb];
-        }
-        _fradvance(f, &pt, &f->box[nb]);
-    }
-    for(; nb<f->nbox; nb++){
-        b = &f->box[nb];
-        _frcklinewrap(f, &pt, b);
-        _fradvance(f, &pt, &f->box[nb]);
-    }
-    f->lastlinefull = 0;
-    if(pt.y >= f->r.max.y)
-        f->lastlinefull = 1;
-}
-@
-
-<<function [[_frmergebox]]>>=
-void
-_frmergebox(Frame *f, int bn)		/* merge bn and bn+1 */
-{
-    Frbox *b;
-
-    b = &f->box[bn];
-    _frinsure(f, bn, NBYTE(&b[0])+NBYTE(&b[1])+1);
-    strcpy((char*)runeindex(b[0].ptr, b[0].nrune), (char*)b[1].ptr);
-    b[0].wid += b[1].wid;
-    b[0].nrune += b[1].nrune;
-    _frdelbox(f, bn+1, bn+1);
-}
-@
-
-
-
-\subsection{Incremental delete: [[frdelete()]]}
-
-%claude:
-The [[frdelete]] function is the inverse of [<frinsert>]: it removes
-characters [[p0]] through [[p1]] from the display and collapses
-the remaining text upward. Like [<frinsert>], it works incrementally
-by tracking two positions:
-\begin{itemize}
-\item [[pt0]]: where each surviving box \emph{will be} after deletion
-(shifted left).
-\item [[pt1]]: where each box \emph{currently is}.
-\end{itemize}
-%claude:
-The loop copies boxes from [[pt1]] to [[pt0]] using [[draw]], closing
-the gap left by the deleted text. When the deletion spans multiple
-lines, two bulk [[draw]] calls shift entire line bands upward.
-The vacated area at the bottom (where text used to be but no longer is)
-is filled with the background color.
-%claude:
-The return value is the number of lines freed (old [[nlines]] minus
-new [[nlines]]). The caller uses this to decide whether to call
-[<wfill>] to load more text from the rune buffer into the newly
-available space at the bottom of the frame.
-
-%claude:
-The [[frdelete]] function removes characters [[p0]] through [[p1]].
-Like [<frinsert>], it works by tracking two positions: [[pt0]] (where
-each box will end up after deletion) and [[pt1]] (where it currently
-is). The loop copies boxes from their old positions to their new
-ones, collapsing the gap. When the deletion spans multiple lines,
-two [[draw]] calls shift the bulk text up: one for the partial first
-line and one for the remaining full lines.
-%claude:
-The return value is the number of lines freed, which the caller
-([<wsetorigin>] or [<wdelete>]) uses to decide whether to call [<wfill>]
-to fill in text from below the viewport.
-
-<<function [[frdelete]]>>=
-int
-frdelete(Frame *f, ulong p0, ulong p1)
-{
-    Point pt0, pt1, ppt0;
-    Frbox *b;
-    int n0, n1, n;
-    ulong cn1;
-    Rectangle r;
-    int nn0;
-    Image *col;
-
-    if(p0>=f->nchars || p0==p1 || f->b==nil)
-        return 0;
-    if(p1 > f->nchars)
-        p1 = f->nchars;
-    n0 = _frfindbox(f, 0, 0, p0);
-    if(n0 == f->nbox)
-        drawerror(f->display, "off end in frdelete");
-    n1 = _frfindbox(f, n0, p0, p1);
-    pt0 = _frptofcharnb(f, p0, n0);
-    pt1 = frptofchar(f, p1);
-    if(f->p0 == f->p1)
-        frtick(f, frptofchar(f, f->p0), 0);
-    nn0 = n0;
-    ppt0 = pt0;
-    _frfreebox(f, n0, n1-1);
-    f->modified = 1;
-
-    /*
-     * Invariants:
-     *  - pt0 points to beginning, pt1 points to end
-     *  - n0 is box containing beginning of stuff being deleted
-     *  - n1, b are box containing beginning of stuff to be kept after deletion
-     *  - cn1 is char position of n1
-     *  - f->p0 and f->p1 are not adjusted until after all deletion is done
-     */
-    b = &f->box[n1];
-    cn1 = p1;
-    while(pt1.x!=pt0.x && n1<f->nbox){
-        _frcklinewrap0(f, &pt0, b);
-        _frcklinewrap(f, &pt1, b);
-        n = _frcanfit(f, pt0, b);
-        if(n==0)
-            drawerror(f->display, "_frcanfit==0");
-        r.min = pt0;
-        r.max = pt0;
-        r.max.y += f->font->height;
-        if(b->nrune > 0){
-            if(n != b->nrune){
-                _frsplitbox(f, n1, n);
-                b = &f->box[n1];
-            }
-            r.max.x += b->wid;
-            draw(f->b, r, f->b, nil, pt1);
-            cn1 += b->nrune;
-        }else{
-            r.max.x += _frnewwid0(f, pt0, b);
-            if(r.max.x > f->r.max.x)
-                r.max.x = f->r.max.x;
-            col = f->cols[BACK];
-            if(f->p0<=cn1 && cn1<f->p1)
-                col = f->cols[HIGH];
-            draw(f->b, r, col, nil, pt0);
-            cn1++;
-        }
-        _fradvance(f, &pt1, b);
-        pt0.x += _frnewwid(f, pt0, b);
-        f->box[n0++] = f->box[n1++];
-        b++;
-    }
-    if(n1==f->nbox && pt0.x!=pt1.x)	/* deleting last thing in window; must clean up */
-        frselectpaint(f, pt0, pt1, f->cols[BACK]);
-    if(pt1.y != pt0.y){
-        Point pt2;
-
-        pt2 = _frptofcharptb(f, 32767, pt1, n1);
-        if(pt2.y > f->r.max.y)
-            drawerror(f->display, "frptofchar in frdelete");
-        if(n1 < f->nbox){
-            int q0, q1, q2;
-
-            q0 = pt0.y+f->font->height;
-            q1 = pt1.y+f->font->height;
-            q2 = pt2.y+f->font->height;
-            if(q2 > f->r.max.y)
-                q2 = f->r.max.y;
-            draw(f->b, Rect(pt0.x, pt0.y, pt0.x+(f->r.max.x-pt1.x), q0),
-                f->b, nil, pt1);
-            draw(f->b, Rect(f->r.min.x, q0, f->r.max.x, q0+(q2-q1)),
-                f->b, nil, Pt(f->r.min.x, q1));
-            frselectpaint(f, Pt(pt2.x, pt2.y-(pt1.y-pt0.y)), pt2, f->cols[BACK]);
-        }else
-            frselectpaint(f, pt0, pt2, f->cols[BACK]);
-    }
-    _frclosebox(f, n0, n1-1);
-    if(nn0>0 && f->box[nn0-1].nrune>=0 && ppt0.x-f->box[nn0-1].wid>=(int)f->r.min.x){
-        --nn0;
-        ppt0.x -= f->box[nn0].wid;
-    }
-    _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
-    if(f->p1 > p1)
-        f->p1 -= p1-p0;
-    else if(f->p1 > p0)
-        f->p1 = p0;
-    if(f->p0 > p1)
-        f->p0 -= p1-p0;
-    else if(f->p0 > p0)
-        f->p0 = p0;
-    f->nchars -= p1-p0;
-    if(f->p0 == f->p1)
-        frtick(f, frptofchar(f, f->p0), 1);
-    pt0 = frptofchar(f, f->nchars);
-    n = f->nlines;
-    f->nlines = (pt0.y-f->r.min.y)/f->font->height+(pt0.x>f->r.min.x);
-    return n - f->nlines;
-}
-@
-
+\section{Content rendering}
 
 \subsection{Keeping the cursor visible: [[wshow()]]}
 
@@ -13837,196 +11907,6 @@ scrtemps(void)
 <<[[scrtemps()]] sanity check scrtmp>>=
 if(scrtmp == nil)
     error("scrtemps");
-@
-
-\subsection{Drawing the tick: [[frtick()]]}
-
-%claude:
-The tick (text cursor) is drawn by saving the pixels underneath
-into [[tickback]], then drawing the tick image on top. To remove
-the tick, the saved pixels are restored. This save/restore approach
-is faster than redrawing the text, but it means the tick must be
-removed before any text operation that changes the display under it,
-and redrawn afterward.
-
-<<[[frinsert()]] remove tick>>=
-if(f->p0 == f->p1)
-    frtick(f, frptofchar(f, f->p0), false);
-@
-<<[[frinsert()]] draw tick>>=
-if(f->p0 == f->p1)
-    frtick(f, frptofchar(f, f->p0), true);
-@
-
-% drawing a tick or restoring what was under the tick
-% (a bit like for the mouse cursor)
-
-%claude:
-The tick drawing is a two-phase operation. When [[ticked]] is true:
-save the pixels at [[pt]] into [[tickback]], then draw the [[tick]]
-image on top. When [[ticked]] is false: restore the saved pixels from
-[[tickback]]. The [[pt.x--]] offset makes the tick visually sit just
-left of the character it precedes. If [[r.max.x]] would exceed the
-frame boundary, it is clamped to prevent drawing outside the frame.
-
-<<function [[frtick]]>>=
-void
-frtick(Frame *f, Point pt, bool ticked)
-{
-    Rectangle r;
-
-    if(f->ticked==ticked || f->tick==nil || !ptinrect(pt, f->r))
-        return;
-    pt.x--;	/* looks best just left of where requested */
-    r = Rect(pt.x, pt.y, pt.x + FRTICKW, pt.y + f->font->height);
-    /* can go into left border but not right */
-    if(r.max.x > f->r.max.x)
-        r.max.x = f->r.max.x;
-    if(ticked){
-        draw(f->tickback, f->tickback->r, f->b, nil, pt);
-        draw(f->b, r, f->tick, nil, ZP);
-    }else
-        draw(f->b, r, f->tickback, nil, ZP);
-    f->ticked = ticked;
-}
-@
-% modified f->ticked! this is why need to save old value of ticked
-% before calling frtick sometimes
-
-\subsection{Drawing the text and the selection: [[frdrawsel()]]}
-
-% called also to draw what is not selected
-
-%claude:
-Despite the name, [[frdrawsel]] is used for \emph{both} selected and
-unselected regions---the [[issel]] parameter just controls which colors
-are used. When [[p0 == p1]] (no selection range), it draws or erases
-the tick cursor instead.
-%claude:
-The heavy lifting is in [[frdrawsel0]], which walks the box array from
-[[p0]] to [[p1]], painting each box's background rectangle and then
-rendering the text on top with [[stringnbg]]. It handles partial boxes
-(when the region starts or ends mid-box) by advancing the pointer and
-adjusting the rune count. End-of-line fill is done by detecting when
-[[_frcklinewrap]] wraps to a new line and filling the remainder of the
-previous line with the background color.
-
-<<function [[frdrawsel]]>>=
-void
-frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
-{
-    Image *back, *text;
-
-    if(f->ticked)
-        frtick(f, frptofchar(f, f->p0), false);
-
-    if(p0 == p1){
-        frtick(f, pt, issel);
-        return;
-    }
-    // else
-
-    if(issel){
-        back = f->cols[HIGH];
-        text = f->cols[HTEXT];
-    }else{
-        back = f->cols[BACK];
-        text = f->cols[TEXT];
-    }
-
-    frdrawsel0(f, pt, p0, p1, back, text);
-}
-@
-% pt is point of? p0?
-
-
-%claude:
-The [[frdrawsel0]] workhorse draws a range of text with given
-foreground and background colors. It walks the box array, painting
-each box's background rectangle and rendering text on top. It handles
-three tricky cases: (1)~the region starts mid-box (advance the byte
-pointer and reduce [[nr]]), (2)~the region ends mid-box (reduce [[nr]]
-without advancing), and (3)~line-wrap fill (when wrapping to a new line,
-fill the remainder of the previous line with the background color so
-there is no gap).
-
-<<function [[frdrawsel0]]>>=
-Point
-frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
-{
-    Frbox *b;
-    int nb, nr, w, x, trim;
-    Point qt;
-    uint p;
-    char *ptr;
-
-    p = 0;
-    b = f->box;
-    trim = 0;
-    for(nb=0; nb<f->nbox && p<p1; nb++){
-        //todo: nr = NRUNE(b);
-        nr = b->nrune;
-        if(nr < 0)
-            nr = 1;
-
-        if(p+nr <= p0)
-            goto Continue;
-        if(p >= p0){
-            qt = pt;
-            _frcklinewrap(f, &pt, b);
-            /* fill in the end of a wrapped line */
-            if(pt.y > qt.y)
-                draw(f->b, Rect(qt.x, qt.y, f->r.max.x, pt.y), back, nil, qt);
-        }
-        ptr = (char*)b->ptr;
-        if(p < p0){	/* beginning of region: advance into box */
-            ptr += nbytes(ptr, p0-p);
-            nr -= (p0-p);
-            p = p0;
-        }
-        trim = 0;
-        if(p+nr > p1){	/* end of region: trim box */
-            nr -= (p+nr)-p1;
-            trim = 1;
-        }
-        if(b->nrune<0 || nr==b->nrune)
-            w = b->wid;
-        else
-            w = stringnwidth(f->font, ptr, nr);
-        x = pt.x+w;
-        if(x > f->r.max.x)
-            x = f->r.max.x;
-        draw(f->b, Rect(pt.x, pt.y, x, pt.y+f->font->height), back, nil, pt);
-        if(b->nrune >= 0)
-            stringnbg(f->b, pt, text, ZP, f->font, ptr, nr, back, ZP);
-        pt.x += w;
-        Continue:
-        b++;
-        p += nr;
-    }
-    /* if this is end of last plain text box on wrapped line, fill to end of line */
-    if(p1>p0 &&  b>f->box && b<f->box+f->nbox && b[-1].nrune>0 && !trim){
-        qt = pt;
-        _frcklinewrap(f, &pt, b);
-        if(pt.y > qt.y)
-            draw(f->b, Rect(qt.x, qt.y, f->r.max.x, pt.y), back, nil, qt);
-    }
-    return pt;
-}
-@
-
-<<function [[nbytes]]>>=
-static int
-nbytes(char *s0, int nr)
-{
-    char *s;
-    Rune r;
-
-    s = s0;
-    while(--nr >= 0)
-        s += chartorune(&r, s);
-    return s-s0;
-}
 @
 
 
@@ -20993,9 +18873,2145 @@ runetobyte(Rune *r, int n, int *ip)
 
 
 %******************************************************************************
-%\chapter{Frame Library}
+\chapter{The Frame Library}
 %******************************************************************************
-% really Text Widget
+%alt: in Textual window chapter
+%alt: Text Widget
+
+\section{Frame widget}
+\label{sec:frame-widget}
+\t maybe write a simplified text widget like I did for rio-in-ocaml
+\t  and then put more complex one in appendix!
+
+
+% text widget really. in Gtk it's called the TextEditor even?
+% In Efuns we use the same term though:
+%   "a frame: a view of a buffer for a window"
+
+% frame(2)
+% used by rio and sam, factorize code for Editable Text (widget)
+% mv in Widgets.nw?
+
+% It is actually not what is around the window. Bad name.
+% Rename maybe TextWidget?
+
+% Complex library. Why need that? Can't simply print lines of text?
+% Libframe handles tabs, fold long lines, handle mouse selection,
+% can insert and delete anywhere and adjust chars around.
+% Also handle unicode with possible variable-size chars (but
+% do that efficiently by storing widths in boxes).
+%ocaml: but should be simpler. code of frinsert is really long.
+%claude:
+The Frame library (used by both [[rio]] and [[sam]]) is a text rendering
+engine that handles line wrapping, tab expansion, cursor display, text
+selection highlighting, and efficient incremental updates when characters
+are inserted or deleted.
+Despite the name ``frame'' (which might suggest a window border),
+it is really a {text widget}.
+%claude:
+The fundamental design decision is to avoid redrawing the entire text
+whenever a character is inserted or deleted. Instead, the library works
+incrementally: the screen content is represented as a sequence of
+``boxes'' ([[Frbox]]), where each box is a run of characters that share
+the same pixel width. When text is inserted, only the boxes after the
+insertion point need to shift, and only the gap between old and new
+positions needs repainting. This makes single-character insertion (the
+common case when typing) very fast, even with thousands of visible characters.
+%claude:
+The box abstraction also solves the variable-width Unicode problem:
+measuring a character's pixel width requires a font lookup, which is
+expensive. By grouping characters into runs and caching the total width
+in [[Frbox.wid]], the library only measures widths when boxes are created
+or split, not on every rendering pass.
+%claude:
+Here is a concrete example of what the box array looks like for
+a terminal showing two lines:
+\begin{verbatim}
+  Display:   % ls -la /tmp
+             drwxrwxrwt  12 root root 4096 ...
+
+  Box array:
+  [0] nrune=11 ptr="% ls -la /t"  wid=88
+  [1] nrune=2  ptr="mp"           wid=16   (split at line wrap)
+  [2] nrune=-1 bc='\n'            wid=5000 (newline break box)
+  [3] nrune=14 ptr="drwxrwxrwt  1" wid=112
+  ...
+\end{verbatim}
+%claude:
+Text boxes are split at line boundaries (when a box would overflow
+the right margin, [<_frcanfit>] determines how many characters fit
+and [<_frsplitbox>] divides it). Tabs and newlines get their own
+special boxes with [[nrune == -1]].
+
+\subsection{[[Frame]]}
+
+%claude:
+The [[Frame]] struct is the state of a text widget instance. It does
+\emph{not} own the text data (which lives in [[Window.r]])---it only
+knows how to display a slice of it, from [[org]] to [[org + nchars]].
+%claude:
+The key fields fall into five groups:
+\begin{itemize}
+\item {\bf Drawing surface:} [[b]] (the image to draw on), [[r]] (the
+text rectangle, clipped to whole lines), [[entire]] (the full
+rectangle including partial lines).
+\item {\bf Text metrics:} [[nchars]] (how many runes are visible),
+[[nlines]] (how many lines have text), [[maxlines]] (how many lines
+fit).
+\item {\bf Selection:} [[p0]], [[p1]] (frame-local selection range,
+in rune indices relative to [[org]]).
+\item {\bf Cursor:} [[tick]], [[tickback]], [[ticked]] (the text cursor
+image and its save buffer).
+\item {\bf Box array:} [[box]], [[nbox]], [[nalloc]] (the cached layout
+of visible text).
+\end{itemize}
+
+<<struct [[Frame]]>>=
+struct Frame
+{
+    Image	*b;		    /* on which frame appears */
+    Rectangle	r;		/* in which text appears */
+
+    Font	*font;		/* of chars in the frame */
+    Display	*display;	/* on which frame appears */
+
+    <<[[Frame]] colors>>
+    <<[[Frame]] text fields>>
+    <<[[Frame]] tick fields>>
+    <<[[Frame]] box fields>>
+    <<[[Frame]] scroll>>
+
+    <<[[Frame]] other fields>>
+};
+@
+% the actual content is in the englobing data structure (e.g., Window.r)
+\l remove display? redundant with b->display anyway
+\l rename b to img?
+
+
+% important field, nchars.
+<<[[Frame]] text fields>>=
+ushort	nchars;		/* # runes in frame */
+@
+% FIGURE ? vs org?
+
+<<[[Frame]] text fields>>=
+ushort	nlines;		/* # lines with text */
+@
+% will be maintained by? frinsert and frdelete?
+
+
+
+\subsection{[[frinit()]]}
+
+% libframe/
+% ... -> new -> wmk() -> <>
+%claude:
+Initialization sets the drawing surface, computes how many lines of
+text fit in the rectangle (clipping the bottom to a whole number of
+font-height rows via [<frsetrects>]), zeros the text counters, sets
+up the color palette, and creates the tick cursor image.
+%claude:
+A subtle ordering dependency: the font must be set before
+[[frsetrects]] because [[frsetrects]] uses [[f->font->height]] to
+compute [[maxlines]]. The author notes that reordering these lines
+caused a segfault during development---an easy mistake because the
+dependency is not obvious from the function signatures.
+
+<<function [[frinit]]>>=
+void
+frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
+{
+    f->font = ft;
+    f->display = b->display;
+    frsetrects(f, r, b);
+
+    f->nchars = 0;
+    f->nlines = 0;
+    <<[[frinit()]] initialize other fields>>
+}
+@
+%old: I reoredered some lines, but f->font must be before frsetrects
+% because frsetrects below use f->font!!
+% (was getting segfault regression with rio because of that)
+
+<<function [[frsetrects]]>>=
+void
+frsetrects(Frame *f, Rectangle r, Image *b)
+{
+    f->b = b;
+    f->entire = r;
+    f->r = r;
+    f->r.max.y -= (r.max.y-r.min.y) % f->font->height;
+    f->maxlines = (r.max.y-r.min.y) / f->font->height;
+}
+@
+%old: I reoredered a bit again
+\l could use Dy
+
+% adjust r to not write on last line that may not contain enough
+% pixels for a full height (hence the modulo)
+
+<<[[Frame]] text fields>>=
+ushort	maxlines;	/* total # lines in frame */
+@
+
+<<[[Frame]] other fields>>=
+Rectangle	entire;		/* of full frame */
+@
+\l why need entire and r? r not enough?
+
+
+%\subsection{[[frclear()]]}
+
+% called when Exited
+
+<<function [[frclear]]>>=
+void
+frclear(Frame *f, bool freeall)
+{
+    <<[[frclear()]] free boxes>>
+    <<[[frclear()]] free ticks>>
+}
+@
+%old: I reordered lines, more logical
+
+
+
+\subsection{Frame colors}
+
+%claude:
+The frame uses five colors indexed by [[BACK]], [[HIGH]], [[BORD]],
+[[TEXT]], and [[HTEXT]]:
+\begin{itemize}
+\item [[BACK]] (white): normal text background.
+\item [[HIGH]] (light grey, [[0xCCCCCC]]): background of selected text.
+\item [[BORD]] (medium grey, [[0x999999]]): scrollbar and border fill.
+\item [[TEXT]] (black): normal text foreground.
+\item [[HTEXT]] (black): selected text foreground (same as TEXT in [[rio]]).
+\end{itemize}
+%claude:
+The key visual trick is that when a window loses focus, [<wsetcols>]
+swaps the text color from black to dark grey ([[0x666666]]), giving the
+``inactive window'' appearance without changing any content---only the
+colors in [[frm.cols]] are modified, followed by a [<frredraw()>].
+This is a lightweight way to indicate which window has keyboard focus.
+
+<<[[Frame]] colors>>=
+Image	*cols[NCOL];	/* text and background colors */
+@
+%ocaml: pass colors to repaint_content function instead
+
+
+% properties
+<<enum [[_anon_ (include/frame.h)]]>>=
+enum FrameColors {
+    BACK, // Background
+    HIGH, // Background highlighted text
+    BORD, // Border
+    TEXT, // Text
+    HTEXT, // Highlited text
+
+    NCOL
+};
+@
+\l rename enums? use full word?
+\t Bord is not the same that window border?
+%ocaml: full color names and use record
+
+% images/colors for the frame
+<<global [[cols]]>>=
+// map<Property, Color>
+static	Image	*cols[NCOL];
+@
+% note that this cols will sometimes be altered when unselect a terminal
+%  window so the main text becomes grey for example
+
+% cols global is passed to frinit() in wmk()
+
+<<[[frinit()]] initialize other fields>>=
+if(cols != nil)
+    memmove(f->cols, cols, sizeof f->cols);
+@
+
+
+%claude:
+The colors are allocated once (guarded by [[cols[0] == nil]]) and
+shared by all windows. White background, light grey highlight for
+selected text, medium grey for the border/scrollbar, and black text.
+These are 1x1 pixel images used as tile patterns in [[draw()]] calls---a
+common Plan~9 idiom for solid color fills where the 1x1 image is
+tiled across the destination rectangle by the graphics system.
+
+<<[[wmk()]] colors initialisation>>=
+if(cols[0] == nil){
+    cols[BACK] = display->white;
+    cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
+    cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
+    cols[TEXT] = display->black;
+    cols[HTEXT] = display->black;
+    <<[[wmk()]] extra colors initialisation>>
+);
+}
+@
+% the cols will be inverted at some point, this is why
+% store cols array in Frame and not use globals.
+
+
+% ?? -> wrepaint
+<<[[wrepaint()]] update cols>>=
+wsetcols(w);
+@
+
+
+% wrepaint | ... -> <>
+%claude:
+The [<wsetcols()>] function implements the visual focus indicator: the
+focused window ([[w == input]]) gets black text, while unfocused
+windows get dark grey text ([[darkgrey]], [[0x666666]]). This is the
+only rendering difference between focused and unfocused windows---the
+background, selection highlight, and border colors remain the same.
+The simplicity of this approach (one color swap plus a repaint) is
+characteristic of [[rio]]'s minimalist design: there are no
+drop shadows, title bar color changes, or border thickness variations
+that other window systems use to indicate focus.
+
+<<function [[wsetcols]]>>=
+void
+wsetcols(Window *w)
+{
+    <<[[wsetcols()]] if holding>>
+    else
+        if(w == input)
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
+        else
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
+}
+@
+%ocaml: pass set of colors to drawing function instead of modifying fields
+% and just store is_selected in Terminal. Only necessary field.
+
+% invert color, but who then redraw the content?
+
+<<global [[darkgrey]]>>=
+static	Image	*darkgrey;
+@
+% used for alternative BACK
+<<[[wmk()]] extra colors initialisation>>=
+/* greys are multiples of 0x11111100+0xFF, 14* being palest */
+darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
+@
+
+%dead:
+%<<global grey>>
+%static	Image	*grey;
+%@
+%<<[[wmk()]] extra colors initialisation>>
+%grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
+
+% will see far later the code using those cols[]
+
+
+
+\subsection{Frame tick}
+
+%claude:
+The ``tick'' is the text cursor---a narrow 3-pixel-wide image drawn
+at the insertion point ([[q0]]). Rather than repainting the text
+underneath each time the tick moves, [[rio]] saves the pixels under
+the tick into [[tickback]] and restores them when the tick is removed.
+This save/restore approach is the same technique used for the mouse
+cursor in the kernel's graphics layer.
+%claude:
+The [[ticked]] flag tracks whether the tick is currently on screen.
+When the user has an active selection range ([[p0 != p1]]), the tick is
+hidden---there is no blinking cursor inside a highlighted selection.
+The tick reappears when the selection collapses to a point (a single
+click). Note that [[rio]]'s tick does not blink, unlike most modern
+terminals.
+
+<<[[Frame]] tick fields>>=
+Image	*tick;	/* typing tick */
+Image	*tickback;	/* saved image under tick */
+@
+%ocaml: if use painter model where draw each time from scratch
+% on top of each other, then no need tickback
+
+<<[[Frame]] tick fields>>=
+bool	ticked;	/* flag: is tick onscreen? */
+@
+% when selection with mouse, then no tick
+
+<<[[frinit()]] initialize other fields>>=
+if(f->tick == nil && f->cols[BACK] != nil)
+    frinittick(f);
+@
+%ocaml: Common.once
+
+<<constant [[FRTICKW]]>>=
+#define	FRTICKW	3
+@
+%fr tick width
+
+
+%claude:
+The tick image is built procedurally: a [[FRTICKW]]$\times$height
+image filled with the background color, a 1-pixel vertical line in
+the text color down the center, and small squares at the top and bottom
+to make the ends visible. This creates the classic I-beam cursor shape.
+The [[tickback]] image has the same dimensions and stores whatever
+pixels were under the tick before it was drawn.
+
+<<function [[frinittick]]>>=
+void
+frinittick(Frame *f)
+{
+    Image *b = f->display->screenimage;
+    Font *ft = f->font;
+
+    <<[[frinittick()]] free old tick>>
+    f->tick = allocimage(f->display, Rect(0, 0, FRTICKW, ft->height), b->chan, 0, DWhite);
+    <<[[frinittick()]] sanity check tick>>
+    <<[[frinittick()]] free old tickback>>
+    f->tickback = allocimage(f->display, f->tick->r, b->chan, false, DWhite);
+    <<[[frinittick()]] sanity check tickback>>
+    /* background color */
+    draw(f->tick, f->tick->r, f->cols[BACK], nil, ZP);
+    /* vertical line */
+    draw(f->tick, Rect(FRTICKW/2, 0, FRTICKW/2+1, ft->height), f->cols[TEXT], nil, ZP);
+    /* box on each end */
+    draw(f->tick, Rect(0, 0, FRTICKW, FRTICKW), f->cols[TEXT], nil, ZP);
+    draw(f->tick, Rect(0, ft->height-FRTICKW, FRTICKW, ft->height), f->cols[TEXT], nil, ZP);
+}
+@
+%old: put assign with decl for b and ft
+%ocaml: Common.once
+
+% FIGURE screenshot
+
+<<[[frinittick()]] free old tick>>=
+if(f->tick)
+    freeimage(f->tick);
+@
+<<[[frinittick()]] sanity check tick>>=
+if(f->tick == nil)
+    return;
+@
+%ocaml: exn at least?
+<<[[frinittick()]] free old tickback>>=
+if(f->tickback)
+    freeimage(f->tickback);
+@
+<<[[frinittick()]] sanity check tickback>>=
+if(f->tickback == nil){
+    freeimage(f->tick);
+    f->tick = nil;
+    return;
+}
+@
+
+
+<<[[frclear()]] free ticks>>=
+if(freeall){
+    freeimage(f->tick);
+    freeimage(f->tickback);
+    f->tick = nil;
+    f->tickback = nil;
+}
+f->ticked = false;
+@
+%ocaml: Gc
+
+\subsection{Frame boxes}
+
+%claude:
+The frame's content is stored as an array of {boxes} ([[Frbox]]).
+A box is either a run of regular characters (with a [[ptr]] to the
+UTF-8 bytes and a [[wid]] giving the total pixel width) or a
+special break character like a newline or tab (indicated by
+[[nrune < 0]]).
+%claude:
+The box abstraction serves two purposes:
+\begin{enumerate}
+\item {\bf Cached widths:} Measuring character widths requires calling
+into the font subsystem, which involves looking up glyph metrics. By
+grouping characters into runs and storing the total width in
+[[Frbox.wid]], the frame avoids remeasuring characters on every redraw
+or position lookup.
+\item {\bf Efficient updates:} When a character is inserted, only the
+boxes at the insertion point need to be split and adjusted. The rest
+of the array---potentially hundreds of boxes for a full screen of
+text---remains untouched. Similarly, deletion only affects the boxes
+in the deleted range.
+\end{enumerate}
+%claude:
+The box array is a growing array (like a [[vector]] in C++) with
+[[nbox]] used entries and [[nalloc]] total capacity. When boxes are
+added, the array grows by [[SLOP]] (25) entries at a time.
+
+<<[[Frame]] box fields>>=
+// growing_array<Frbox> (size = nalloc, unused after nbox)
+Frbox	*box;
+ushort	nbox;
+ushort nalloc;
+@
+
+<<[[frinit()]] initialize other fields>>=
+f->box = nil;
+f->nbox = 0;
+f->nalloc = 0;
+@
+
+
+\subsubsection{[[Frbox]]}
+
+%claude:
+A box is either a run of printable characters (when [[nrune >= 0]],
+with [[ptr]] pointing to the UTF-8 bytes and [[wid]] caching the
+total pixel width) or a special break character (when [[nrune < 0]],
+with [[bc]] holding the character---tab or newline---and [[minwid]]
+giving the minimum width for tab stops). The [[wid]] field of a tab
+box is initially set to a large sentinel (5000) and recomputed
+contextually by [[_frnewwid]] based on the current x position and
+tab stop alignment.
+
+<<struct [[Frbox]]>>=
+struct Frbox
+{
+    long		wid;		/* in pixels */
+
+    long		nrune;		/* <0 ==> negate and treat as break char */
+    union{
+        // array<byte> UTF8?
+        uchar	*ptr;
+        struct{
+            short	bc;	/* break char */
+            short	minwid;
+        };
+    };
+};
+@
+%ocaml: proper ADT instead of abuse negative integer for nrune
+\l ugly to use short for bc. Why not simply char? or Rune!
+
+% example of boxes?
+% - foo
+% - \n
+% - \b?
+% - artificial break?
+
+% minwid?
+
+% store wid so can know if overflow and need split box.
+% store if special char, e.g. newline or artificial break?
+
+<<function [[NRUNE]]>>=
+#define	NRUNE(b)	((b)->nrune < 0 ? 1 : (b)->nrune)
+@
+
+\subsubsection{Adding boxes}
+
+%claude:
+The box array is a dynamic array with slack: [[_fraddbox]] inserts
+[[n]] empty slots at position [[bn]] by shifting everything after it
+up, growing the allocation by [[SLOP]] (25) extra slots to amortize
+future insertions. [[_frdelbox]] is the inverse: it frees the string
+data in the target boxes ([[_frfreebox]]) then closes the gap by
+shifting the tail down ([[_frclosebox]]).
+
+<<constant [[SLOP]]>>=
+#define	SLOP	25
+@
+
+<<function [[_fraddbox]]>>=
+void
+_fraddbox(Frame *f, int bn, int n)	/* add n boxes after bn, shift the rest up,
+                 * box[bn+n]==box[bn] */
+{
+    int i;
+
+    <<[[_fraddbox()]] sanity check bn>>
+    if(f->nbox+n > f->nalloc)
+        _frgrowbox(f, n+SLOP);
+    for(i=f->nbox; --i>=bn; )
+        f->box[i+n] = f->box[i];
+    f->nbox+=n;
+}
+@
+
+<<function [[_frgrowbox]]>>=
+void
+_frgrowbox(Frame *f, int delta)
+{
+    f->nalloc += delta;
+    f->box = realloc(f->box, f->nalloc*sizeof(Frbox));
+    <<[[_frgrowbox()]] sanity check box>>
+}
+@
+
+
+<<[[_fraddbox()]] sanity check bn>>=
+if(bn > f->nbox)
+    drawerror(f->display, "_fraddbox");
+@
+<<[[_frgrowbox()]] sanity check box>>=
+if(f->box == nil)
+    drawerror(f->display, "_frgrowbox");
+@
+
+\subsubsection{Free boxes}
+
+<<[[frclear()]] free boxes>>=
+if(f->nbox)
+    _frdelbox(f, 0, f->nbox-1);
+if(f->box)
+    free(f->box);
+f->box = nil;
+@
+
+<<function [[_frdelbox]]>>=
+void
+_frdelbox(Frame *f, int n0, int n1)	/* inclusive */
+{
+    <<[[_frdelbox()]] sanity check n0 and n1>>
+    _frfreebox(f, n0, n1);
+    _frclosebox(f, n0, n1);
+}
+@
+
+<<function [[_frfreebox]]>>=
+void
+_frfreebox(Frame *f, int n0, int n1)	/* inclusive */
+{
+    int i;
+
+    <<[[_frfreebox()]] sanity check n0 and n1>>
+    n1++;
+    for(i=n0; i<n1; i++)
+        if(f->box[i].nrune >= 0)
+            free(f->box[i].ptr);
+}
+@
+
+
+<<function [[_frclosebox]]>>=
+void
+_frclosebox(Frame *f, int n0, int n1)	/* inclusive */
+{
+    int i;
+
+    <<[[_frclosebox()]] sanity check n0 and n1>>
+    n1++;
+    for(i=n1; i<f->nbox; i++)
+        f->box[i-(n1-n0)] = f->box[i];
+    f->nbox -= n1-n0;
+}
+@
+
+
+
+<<[[_frdelbox()]] sanity check n0 and n1>>=
+if(n0>=f->nbox || n1>=f->nbox || n1<n0)
+    drawerror(f->display, "_frdelbox");
+@
+<<[[_frfreebox()]] sanity check n0 and n1>>=
+if(n1<n0)
+    return;
+if(n0>=f->nbox || n1>=f->nbox)
+    drawerror(f->display, "_frfreebox");
+@
+<<[[_frclosebox()]] sanity check n0 and n1>>=
+if(n0>=f->nbox || n1>=f->nbox || n1<n0)
+    drawerror(f->display, "_frclosebox");
+@
+
+\subsection{Frame strings}
+
+%claude:
+Each text box owns a heap-allocated UTF-8 string ([[ptr]]). These
+helpers manage the allocations: [[_frallocstr]] rounds up to 16-byte
+chunks via the ROUNDUP macro (which uses bit masking for efficiency),
+and [[_frinsure]] grows a box's string buffer when a merge or insertion
+would overflow it.
+%claude:
+The 16-byte chunk alignment means small strings waste at most 15 bytes,
+while frequent small operations (splitting and merging boxes) avoid
+calling [[malloc]] every time. This is important because a single
+character insertion can trigger several box splits and merges as the
+frame relays out text around the insertion point.
+
+<<constant CHUNK (libframe/frstr.c)>>=
+#define	CHUNK	16
+@
+
+<<function [[ROUNDUP]]>>=
+#define	ROUNDUP(n)	((n+CHUNK)&~(CHUNK-1))
+@
+
+<<function [[_frallocstr]]>>=
+uchar *
+_frallocstr(Frame *f, unsigned n)
+{
+    uchar *p;
+
+    p = malloc(ROUNDUP(n));
+    if(p == nil)
+        drawerror(f->display, "out of memory");
+    return p;
+}
+@
+
+<<function [[_frinsure]]>>=
+void
+_frinsure(Frame *f, int bn, unsigned n)
+{
+    Frbox *b;
+    uchar *p;
+
+    b = &f->box[bn];
+    if(b->nrune < 0)
+        drawerror(f->display, "_frinsure");
+    if(ROUNDUP(b->nrune) > n)	/* > guarantees room for terminal NUL */
+        return;
+    p = _frallocstr(f, n);
+    b = &f->box[bn];
+    memmove(p, b->ptr, NBYTE(b)+1);
+    free(b->ptr);
+    b->ptr = p;
+}
+@
+
+
+\subsection{Frame rune position, point, and box number}
+
+% have:
+%  - type position_text (e.g., q0) (ulong)
+%  - type for position_frame (ulong)
+%  - type for boxnumber (ushort)
+%  - type position_point (Point.t)
+\l should use typedef
+
+% p = position_rune, bn = box number, pt = point
+
+%claude:
+The frame library works with three coordinate systems that all refer to
+the same character in the visible text:
+\begin{itemize}
+\item A {rune index} ([[p]], [[ulong]]): offset from the start of the
+frame (not from [[w->org]]---that translation is done by the caller).
+For example, [[frm.p0 == 5]] means the selection starts at the 5th visible rune.
+\item A {box number} ([[bn]], [[int]]): which [[Frbox]] in the
+[[f->box]] array contains that rune. A box holds a run of characters
+or a single special character (tab, newline).
+\item A {pixel point} ([[pt]], [[Point]]): the (x,y) coordinate
+on screen where that character is drawn.
+\end{itemize}
+%claude:
+The conversion functions are:
+\begin{itemize}
+\item [[frptofchar(p)]] converts a rune index to a Point (by walking
+boxes and measuring widths). Used to position the tick cursor and to
+compute where selection painting should start.
+\item [[frcharofpt(pt)]] converts a Point to a rune index. Used to
+translate mouse click coordinates into text positions.
+\item [[_frfindbox(p)]] finds the box number for a rune index, splitting
+a box if [[p]] does not fall on a box boundary. Used by [<frinsert>] and
+[<frdelete>] to locate their insertion/deletion point in the box array.
+\end{itemize}
+%claude:
+All three functions walk the box array linearly from the beginning.
+For a frame with [[maxlines]] of 50 and an average of 3--5 boxes per
+line, the walks visit 150--250 boxes---fast enough for interactive use.
+
+\subsubsection{[[frptofchar()]]}
+
+% Frame point of p'th rune (point is upper left corner of rune)
+%claude:
+Given a rune index [[p]], return the pixel Point of its upper-left
+corner. The implementation ([<_frptofcharptb>]) walks the box array
+from box [[bn]], consuming runes from [[p]] as it goes. For each box,
+it first checks for line wrap via [[_frcklinewrap]]: if the box would
+overflow the right margin, the point wraps to the start of the next line.
+%claude:
+If [[p]] falls before this box (i.e., [[p >= NRUNE(b)]]), the box's
+rune count is subtracted from [[p]] and [[_fradvance]] moves the point
+past the box. If [[p]] falls inside this box, the function measures
+individual characters with [[stringnwidth]] to find the exact x offset
+within the box. For ASCII characters ([[r < Runeself]]), the UTF-8
+decoding is a single-byte fast path; multibyte runes go through
+[[chartorune]].
+
+<<function [[frptofchar]]>>=
+Point
+frptofchar(Frame *f, ulong p)
+{
+    return _frptofcharptb(f, p, f->r.min, 0);
+}
+@
+
+<<function [[_frptofcharptb]]>>=
+Point
+_frptofcharptb(Frame *f, ulong p, Point pt, int bn)
+{
+    Frbox *b;
+    uchar *s;
+    int w, l;
+    Rune r;
+
+    for(b = &f->box[bn]; bn<f->nbox; bn++,b++){
+        _frcklinewrap(f, &pt, b);
+        l=NRUNE(b);
+        // p is in this box
+        if(p < l){
+            if(b->nrune > 0)
+                for(s=b->ptr; p>0; s+=w, p--){
+                    r = *s;
+                    if(r < Runeself)
+                        w = 1;
+                    else
+                        w = chartorune(&r, (char*)s);
+                    pt.x += stringnwidth(f->font, (char*)s, 1);
+                    <<[[_frptofcharptb()]] sanity check r and pt>>
+                }
+            break; // found it
+        }
+        // else
+        p -= l;
+        _fradvance(f, &pt, b);
+    }
+    return pt;
+}
+@
+\l ugly break, should use if then else
+
+%\subsubsection{[[_fradvance()]]}
+
+<<function [[_fradvance]]>>=
+void
+_fradvance(Frame *f, Point *p, Frbox *b)
+{
+    if(b->nrune<0 && b->bc=='\n'){
+        p->x = f->r.min.x;
+        p->y += f->font->height;
+    }else
+        p->x += b->wid;
+}
+@
+
+% see advantage of boxes here, already computed wid and know where breaks are
+
+<<[[_frptofcharptb()]] sanity check r and pt>>=
+if(r==0 || pt.x > f->r.max.x)
+    drawerror(f->display, "frptofchar");
+@
+
+%\subsubsection{[[_frcklinewrap()]]}
+
+<<function [[_frcklinewrap]]>>=
+void
+_frcklinewrap(Frame *f, Point *p, Frbox *b)
+{
+    if((b->nrune<0? b->minwid : b->wid) > f->r.max.x - p->x){
+        p->x = f->r.min.x;
+        p->y += f->font->height;
+    }
+}
+@
+% so not a box for artificial break? just have to check each time
+% if box overflow?
+
+<<function [[_frcklinewrap0]]>>=
+void
+_frcklinewrap0(Frame *f, Point *p, Frbox *b)
+{
+    if(_frcanfit(f, *p, b) == 0){
+        p->x = f->r.min.x;
+        p->y += f->font->height;
+    }
+}
+@
+
+% return int option, 0 = None
+%claude:
+Given a box and a starting position, [[_frcanfit]] returns how many
+runes from that box fit before the right margin. For break boxes, it
+is a yes/no check (does [[minwid]] fit?). For text boxes, if the
+whole box fits it returns [[nrune]]; otherwise it measures characters
+one by one from the left until the margin is exceeded, returning the
+count that fits. A return of 0 means the box must wrap to the next line.
+
+<<function [[_frcanfit]]>>=
+int
+_frcanfit(Frame *f, Point pt, Frbox *b)
+{
+    int left, w, nr;
+    uchar *p;
+    Rune r;
+
+    left = f->r.max.x - pt.x;
+    if(b->nrune < 0)
+        return b->minwid <= left;
+    if(left >= b->wid)
+        return b->nrune;
+    for(nr=0,p=b->ptr; *p; p+=w,nr++){
+        r = *p;
+        if(r < Runeself)
+            w = 1;
+        else
+            w = chartorune(&r, (char*)p);
+        left -= stringnwidth(f->font, (char*)p, 1);
+        if(left < 0)
+            return nr;
+    }
+    drawerror(f->display, "_frcanfit can't");
+    return 0;
+}
+@
+
+
+
+
+% frptofchar bounded by nb boxes.
+\l when want to do bounded search?
+
+<<function [[_frptofcharnb]]>>=
+Point
+_frptofcharnb(Frame *f, ulong p, int nb)	/* doesn't do final _fradvance to next line */
+{
+    Point pt;
+    int nbox;
+
+    // save
+    nbox = f->nbox;
+    f->nbox = nb;
+    pt = _frptofcharptb(f, p, f->r.min, 0);
+    // restore
+    f->nbox = nbox;
+    return pt;
+}
+@
+\l why not call directly frptofchar?
+
+\subsubsection{[[frcharofpt()]]}
+
+%claude:
+The inverse of [<frptofchar>]: given a pixel Point (typically from a
+mouse click), return the rune index at that position.
+The function works in two passes: first it walks boxes to find the
+right line (comparing [[qt.y]] against [[pt.y]]), then it walks boxes
+on that line to find the right character (comparing [[qt.x]] against
+[[pt.x]]).
+%claude:
+The [[_frgrid]] helper snaps the y coordinate to a line
+boundary so that clicks in the inter-line space (between the baseline
+of one line and the top of the next) map to the correct row. It also
+clamps [[p.x]] to [[r.max.x]], so clicks to the right of the text
+area map to the end of the line.
+
+<<function [[frcharofpt]]>>=
+ulong
+frcharofpt(Frame *f, Point pt)
+{
+    Point qt;
+    int w;
+    uchar *s;
+    Frbox *b;
+    int bn;
+    ulong p;
+    Rune r;
+
+    pt = _frgrid(f, pt);
+
+    qt = f->r.min;
+    // find the line
+    for(b=f->box, bn=0, p=0; bn < f->nbox && qt.y < pt.y; bn++,b++){
+        _frcklinewrap(f, &qt, b);
+        if(qt.y >= pt.y)
+            break;
+        _fradvance(f, &qt, b);
+        p += NRUNE(b);
+    }
+    // find the box in the line
+    for(; bn<f->nbox && qt.x<=pt.x; bn++,b++){
+        _frcklinewrap(f, &qt, b);
+        if(qt.y > pt.y)
+            break;
+        if(qt.x + b->wid > pt.x){
+            if(b->nrune < 0)
+                _fradvance(f, &qt, b);
+            else{
+                s = b->ptr;
+                for(;;){
+                    if((r = *s) < Runeself)
+                        w = 1;
+                    else
+                        w = chartorune(&r, (char*)s);
+                    <<[[frcharofpt()]] sanity check r>>
+                    qt.x += stringnwidth(f->font, (char*)s, 1);
+                    s += w;
+                    if(qt.x > pt.x)
+                        break;
+                    p++;
+                }
+            }
+        }else{
+            p += NRUNE(b);
+            _fradvance(f, &qt, b);
+        }
+    }
+    return p;
+}
+@
+
+<<function [[_frgrid]]>>=
+static
+Point
+_frgrid(Frame *f, Point p)
+{
+    p.y -= f->r.min.y;
+    p.y -= p.y%f->font->height;
+    p.y += f->r.min.y;
+    if(p.x > f->r.max.x)
+        p.x = f->r.max.x;
+    return p;
+}
+@
+
+<<[[frcharofpt()]] sanity check r>>=
+if(r == 0)
+    drawerror(f->display, "end of string in frcharofpt");
+@
+
+\subsubsection{[[_frdrawtext()]]}
+
+% the simple to draw text, just draw the boxes
+
+% frinsert -> <>
+%claude:
+The simplest drawing routine: it walks every box in the frame, checking
+for line wraps via [<_frcklinewrap>], and draws text boxes with
+[[stringbg]] (which renders the string and fills the background in a
+single draw operation, avoiding the flicker that would result from
+clearing the background first and then drawing text on top).
+%claude:
+Break boxes (tabs and newlines) are skipped---their space is filled by
+the caller or by [<frselectpaint>]. Tab boxes have variable width that
+depends on their position, so they are handled by the alignment logic
+elsewhere rather than by this generic draw routine.
+%claude:
+This function is used by [<frinsert>] in Phase~3 to draw the newly
+inserted text into the gap created by shifting existing content down.
+It draws into the temporary [[frame]] structure's box array, not the
+main frame's---the boxes are spliced into the main array afterward.
+
+<<function [[_frdrawtext]]>>=
+void
+_frdrawtext(Frame *f, Point pt, Image *text, Image *back)
+{
+    Frbox *b;
+    int nb;
+    static int x;
+
+    for(nb=0,b=f->box; nb<f->nbox; nb++, b++){
+        _frcklinewrap(f, &pt, b);
+        if(b->nrune >= 0){
+            stringbg(f->b, pt, text, ZP, f->font, (char*)b->ptr, back, ZP);
+        }
+        pt.x += b->wid;
+    }
+}
+@
+
+\subsection{Frame selection}
+
+%claude:
+The frame tracks a selection range ([[p0]], [[p1]]) in character
+coordinates relative to the frame origin (not the buffer origin
+[[w->org]]---the translation is done by [<wsetselect>]).
+When [[p0 == p1]], there is no selection and the tick cursor is shown
+at that position instead.
+%claude:
+The selection is rendered by painting the background of the selected
+range with [[cols[HIGH]]] (light grey) and the text with [[cols[HTEXT]]].
+The [<frdrawsel>] functions handle the common case of extending or
+shrinking a selection incrementally (e.g., as the user drags the mouse),
+only repainting the characters that changed between the old and new
+selection boundaries. This avoids repainting the entire selection on
+every mouse movement.
+
+<<[[Frame]] text fields>>=
+ulong	p0, p1;		/* selection */
+@
+% equivalent of q0 and q1 but translated to frame origin
+
+<<[[frinit()]] initialize other fields>>=
+f->p0 = 0;
+f->p1 = 0;
+@
+
+\section{Content rendering}
+
+<<global [[frame]]>>=
+static Frame		frame;
+@
+
+<<struct [[points_frinsert]]>>=
+struct points_frinsert {
+    Point pt0, pt1;
+};
+@
+
+<<[[frinsert()]] locals>>=
+Point pt0, pt1, opt0, ppt0, ppt1, pt;
+Frbox *b;
+int n, n0, nn0, y;
+ulong cn0;
+Image *col;
+Rectangle r;
+static struct points_frinsert *pts;
+static int nalloc=0;
+int npts;
+@
+
+<<constant [[DELTA]]>>=
+#define	DELTA	25
+@
+
+%claude:
+The [[frinsert]] function is the heart of the frame library and its most
+complex routine. It inserts new runes into the display without redrawing
+everything, working in three phases:
+%claude:
+\textbf{Phase 1: bxscan.}
+The new runes ([[sp]] to [[ep]]) are converted into boxes in a temporary
+[[frame]] structure. [[bxscan]] walks the rune sequence, grouping
+consecutive printable characters into text boxes and creating special
+boxes for tabs and newlines. It also computes [[ppt0]]/[[ppt1]]---the
+pixel coordinates where the insertion will appear on screen.
+%claude:
+\textbf{Phase 2: x-alignment.}
+After inserting text, every existing box after the insertion point shifts
+right. The loop starting at ``Find point where old and new x's line up''
+walks forward through existing boxes, tracking two points: [[pt0]] (where
+each box \emph{is} now) and [[pt1]] (where it \emph{will be} after insertion).
+It records both positions in the [[pts]] array.
+The loop terminates when [[pt1.x==pt0.x]]---meaning the old and new
+layouts have realigned (because a line wrap puts both back to the left
+margin)---or when [[pt1]] falls off the bottom of the frame.
+%claude:
+\textbf{Phase 3: move down.}
+The final loop walks backward through [[pts]], using [[draw]] to blit each
+box from its old position ([[pts[i].pt0]]) to its new position ([[pts[i].pt1]]).
+Going backward avoids overwriting source pixels before they are copied.
+After the moves, the newly inserted text is drawn into the gap left behind,
+and the box array is spliced to include the new boxes from [[bxscan]].
+%claude:
+Here is a visual example of inserting ``XY'' at position~5 in the text
+``Hello World'', where the line is wide enough to hold everything:
+\begin{verbatim}
+  Before:   |H|e|l|l|o| |W|o|r|l|d|
+            0 1 2 3 4 5 6 7 8 9 ...    (rune indices)
+                       ^
+                   insertion point (p0=5)
+
+  Phase 1 (bxscan):   scan "XY" into temp boxes
+                       ppt0 = pixel of pos 5
+                       ppt1 = pixel of pos 7 (after XY)
+
+  Phase 2 (x-alignment): walk from pos 5 in old layout
+            pt0 = where " World" is now
+            pt1 = where " World" will be (shifted right by width of "XY")
+            Record pairs: pts[0] = {pt0=" ", pt1=" shifted"}
+                          pts[1] = {pt0="W", pt1="W shifted"}
+                          ... until pt1.x == pt0.x (line aligned)
+
+  Phase 3 (move down):  blit boxes backward from old to new positions
+            Then draw "XY" in the gap
+
+  After:    |H|e|l|l|o|X|Y| |W|o|r|l|d|
+\end{verbatim}
+
+%claude:
+Here is the full [[frinsert]] code. It is long and dense, but the
+structure follows the three phases described above.
+%claude:
+The critical invariant is that [[pt0]] always tracks where a box
+\emph{currently} is on screen, while [[pt1]] tracks where it
+\emph{will be} after the insertion. The difference between [[pt1]]
+and [[pt0]] is the pixel displacement caused by the inserted text.
+The [[pts]] array stores (old, new) position pairs for the backward
+copy loop in Phase~3.
+%claude:
+The code handles several edge cases:
+\begin{itemize}
+\item Boxes that must be split because they would straddle a line
+boundary after being shifted right (detected by [[_frcanfit]]).
+\item Text that falls off the bottom of the frame ([[pt1.y == r.max.y]]),
+which is truncated and removed from the box array.
+\item The selection ([[p0]]/[[p1]]) that may need extending when the
+insertion point is within it.
+\item Multi-line shifts, where the bulk text below the alignment point
+is moved with two [[draw]] calls instead of box-by-box blitting.
+\end{itemize}
+
+<<function [[frinsert]]>>=
+void
+frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
+{
+    <<[[frinsert()]] locals>>
+
+    if(p0>f->nchars || sp==ep || f->b==nil)
+        return;
+
+    n0 = _frfindbox(f, 0, 0, p0);
+    cn0 = p0;
+    nn0 = n0;
+    pt0 = _frptofcharnb(f, p0, n0);
+    ppt0 = pt0;
+    opt0 = pt0;
+    pt1 = bxscan(f, sp, ep, &ppt0);
+    ppt1 = pt1;
+
+    if(n0 < f->nbox){
+        b = &f->box[n0];
+        _frcklinewrap(f, &pt0, b);	/* for frdrawsel() */
+        _frcklinewrap0(f, &ppt1, b);
+    }
+    f->modified = true;
+    /*
+     * ppt0 and ppt1 are start and end of insertion as they will appear when
+     * insertion is complete. pt0 is current location of insertion position
+     * (p0); pt1 is terminal point (without line wrap) of insertion.
+     */
+
+    <<[[frinsert()]] remove tick>>
+
+    /*
+     * Find point where old and new x's line up
+     * Invariants:
+     *	pt0 is where the next box (b, n0) is now
+     *	pt1 is where it will be after the insertion
+     * If pt1 goes off the rectangle, we can toss everything from there on
+     */
+    for(b = &f->box[n0],npts=0;
+         pt1.x!=pt0.x && pt1.y!=f->r.max.y && n0<f->nbox; b++,n0++,npts++){
+        _frcklinewrap(f, &pt0, b);
+        _frcklinewrap0(f, &pt1, b);
+        if(b->nrune > 0){
+            n = _frcanfit(f, pt1, b);
+            <<[[frinsert()]] sanity check n canfit>>
+            if(n != b->nrune){
+                _frsplitbox(f, n0, n);
+                b = &f->box[n0];
+            }
+        }
+        if(npts == nalloc){
+            pts = realloc(pts, (npts+DELTA)*sizeof(pts[0]));
+            nalloc += DELTA;
+            b = &f->box[n0];
+        }
+        pts[npts].pt0 = pt0;
+        pts[npts].pt1 = pt1;
+        /* has a text box overflowed off the frame? */
+        if(pt1.y == f->r.max.y)
+            break;
+        _fradvance(f, &pt0, b);
+        pt1.x += _frnewwid(f, pt1, b);
+        cn0 += NRUNE(b);
+    }
+    if(pt1.y > f->r.max.y)
+        drawerror(f->display, "frinsert pt1 too far");
+    if(pt1.y==f->r.max.y && n0<f->nbox){
+        f->nchars -= _frstrlen(f, n0);
+        _frdelbox(f, n0, f->nbox-1);
+    }
+    if(n0 == f->nbox)
+        f->nlines = (pt1.y-f->r.min.y)/f->font->height+(pt1.x>f->r.min.x);
+    else if(pt1.y!=pt0.y){
+        int q0, q1;
+
+        y = f->r.max.y;
+        q0 = pt0.y+f->font->height;
+        q1 = pt1.y+f->font->height;
+        f->nlines += (q1-q0)/f->font->height;
+        if(f->nlines > f->maxlines)
+            chopframe(f, ppt1, p0, nn0);
+        if(pt1.y < y){
+            r = f->r;
+            r.min.y = q1;
+            r.max.y = y;
+            if(q1 < y)
+                draw(f->b, r, f->b, nil, Pt(f->r.min.x, q0));
+            r.min = pt1;
+            r.max.x = pt1.x+(f->r.max.x-pt0.x);
+            r.max.y = q1;
+            draw(f->b, r, f->b, nil, pt0);
+        }
+    }
+    /*
+     * Move the old stuff down to make room.  The loop will move the stuff
+     * between the insertion and the point where the x's lined up.
+     * The draw()s above moved everything down after the point they lined up.
+     */
+    for((y=pt1.y==f->r.max.y?pt1.y:0),b = &f->box[n0-1]; --npts>=0; --b){
+        pt = pts[npts].pt1;
+        if(b->nrune > 0){
+            r.min = pt;
+            r.max = r.min;
+            r.max.x += b->wid;
+            r.max.y += f->font->height;
+            draw(f->b, r, f->b, nil, pts[npts].pt0);
+            /* clear bit hanging off right */
+            if(npts==0 && pt.y>pt0.y){
+                /*
+                 * first new char is bigger than first char we're
+                 * displacing, causing line wrap. ugly special case.
+                 */
+                r.min = opt0;
+                r.max = opt0;
+                r.max.x = f->r.max.x;
+                r.max.y += f->font->height;
+                if(f->p0<=cn0 && cn0<f->p1)	/* b+1 is inside selection */
+                    col = f->cols[HIGH];
+                else
+                    col = f->cols[BACK];
+                draw(f->b, r, col, nil, r.min);
+            }else if(pt.y < y){
+                r.min = pt;
+                r.max = pt;
+                r.min.x += b->wid;
+                r.max.x = f->r.max.x;
+                r.max.y += f->font->height;
+                if(f->p0<=cn0 && cn0<f->p1)	/* b+1 is inside selection */
+                    col = f->cols[HIGH];
+                else
+                    col = f->cols[BACK];
+                draw(f->b, r, col, nil, r.min);
+            }
+            y = pt.y;
+            cn0 -= b->nrune;
+        }else{
+            r.min = pt;
+            r.max = pt;
+            r.max.x += b->wid;
+            r.max.y += f->font->height;
+            if(r.max.x >= f->r.max.x)
+                r.max.x = f->r.max.x;
+            cn0--;
+            if(f->p0<=cn0 && cn0<f->p1)	/* b is inside selection */
+                col = f->cols[HIGH];
+            else
+                col = f->cols[BACK];
+            draw(f->b, r, col, nil, r.min);
+            y = 0;
+            if(pt.x == f->r.min.x)
+                y = pt.y;
+        }
+    }
+    /* insertion can extend the selection, so the condition here is different */
+    if(f->p0<p0 && p0<=f->p1)
+        col = f->cols[HIGH];
+    else
+        col = f->cols[BACK];
+
+    frselectpaint(f, ppt0, ppt1, col);
+
+    _frdrawtext(&frame, ppt0, f->cols[TEXT], col);
+
+    _fraddbox(f, nn0, frame.nbox);
+    for(n=0; n<frame.nbox; n++)
+        f->box[nn0+n] = frame.box[n];
+    if(nn0>0 && f->box[nn0-1].nrune>=0 && ppt0.x-f->box[nn0-1].wid>=f->r.min.x){
+        --nn0;
+        ppt0.x -= f->box[nn0].wid;
+    }
+    n0 += frame.nbox;
+    _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
+
+    f->nchars += frame.nchars;
+    if(f->p0 >= p0)
+        f->p0 += frame.nchars;
+    if(f->p0 > f->nchars)
+        f->p0 = f->nchars;
+    if(f->p1 >= p0)
+        f->p1 += frame.nchars;
+    if(f->p1 > f->nchars)
+        f->p1 = f->nchars;
+
+    <<[[frinsert()]] draw tick>>
+}
+@
+
+<<[[frinsert()]] sanity check n canfit>>=
+if(n == 0)
+    drawerror(f->display, "_frcanfit==0");
+@
+
+<<[[Frame]] text fields>>=
+bool	modified;	/* changed since frselect() */
+@
+%old: was ushort
+
+
+\subsubsection{Finding a box boundary: [[_frfindbox()]]}
+
+%claude:
+Given a rune index [[q]], find the box that contains it. If [[q]]
+falls in the middle of a box (not on a boundary), [[_frsplitbox]]
+splits that box so that [[q]] becomes a boundary. This ensures that
+[<frinsert>] and [<frdelete>] can splice the box array cleanly at the
+insertion/deletion point.
+%claude:
+The split works by duplicating the box ([[dupbox]]) and then trimming
+each copy from opposite ends: [[truncatebox]] shortens the first copy
+by dropping its last [[n]] characters (keeping the left portion),
+and [[chopbox]] shortens the second copy by dropping its first [[n]]
+characters (keeping the right portion). Both functions recompute
+[[wid]] by calling [[stringwidth]] on the remaining text.
+%claude:
+For example, splitting the box ``Hello'' at position 3 produces
+two boxes: ``Hel'' and ``lo'', each with its own width and string
+allocation.
+
+<<function [[_frfindbox]]>>=
+/* find box containing q and put q on a box boundary */
+int
+_frfindbox(Frame *f, int bn, ulong p, ulong q)	
+{
+    Frbox *b;
+
+    for(b = &f->box[bn]; bn < f->nbox && p+NRUNE(b) <= q; bn++, b++)
+        p += NRUNE(b);
+    if(p != q)
+        _frsplitbox(f, bn++, (int)(q-p));
+    return bn;
+}
+@
+
+<<function [[_frsplitbox]]>>=
+void
+_frsplitbox(Frame *f, int bn, int n)
+{
+    dupbox(f, bn);
+    truncatebox(f, &f->box[bn], f->box[bn].nrune-n);
+    chopbox(f, &f->box[bn+1], n);
+}
+@
+
+<<function [[dupbox]]>>=
+static
+void
+dupbox(Frame *f, int bn)
+{
+    uchar *p;
+
+    if(f->box[bn].nrune < 0)
+        drawerror(f->display, "dupbox");
+    _fraddbox(f, bn, 1);
+    if(f->box[bn].nrune >= 0){
+        p = _frallocstr(f, NBYTE(&f->box[bn])+1);
+        strcpy((char*)p, (char*)f->box[bn].ptr);
+        f->box[bn+1].ptr = p;
+    }
+}
+@
+
+<<function [[NBYTE]]>>=
+#define	NBYTE(b)	strlen((char*)(b)->ptr)
+@
+
+
+<<function [[truncatebox]]>>=
+static
+void
+truncatebox(Frame *f, Frbox *b, int n)	/* drop last n chars; no allocation done */
+{
+    if(b->nrune<0 || b->nrune<n)
+        drawerror(f->display, "truncatebox");
+    b->nrune -= n;
+    runeindex(b->ptr, b->nrune)[0] = 0;
+    b->wid = stringwidth(f->font, (char *)b->ptr);
+}
+@
+
+<<function [[chopbox]]>>=
+static
+void
+chopbox(Frame *f, Frbox *b, int n)	/* drop first n chars; no allocation done */
+{
+    char *p;
+
+    if(b->nrune<0 || b->nrune<n)
+        drawerror(f->display, "chopbox");
+    p = (char*)runeindex(b->ptr, n);
+    memmove((char*)b->ptr, p, strlen(p)+1);
+    b->nrune -= n;
+    b->wid = stringwidth(f->font, (char *)b->ptr);
+}
+@
+
+<<function [[runeindex]]>>=
+static
+uchar*
+runeindex(uchar *p, int n)
+{
+    int i, w;
+    Rune rune;
+
+    for(i=0; i<n; i++,p+=w)
+        if(*p < Runeself)
+            w = 1;
+        else{
+            w = chartorune(&rune, (char*)p);
+            USED(rune);
+        }
+    return p;
+}
+@
+
+
+
+
+\subsubsection{Runes to boxes: [[bxscan()]]}
+
+%claude:
+The [[bxscan]] function converts a sequence of runes into the frame's
+internal box representation, populating the static [[frame]] structure.
+The outer loop creates one box per iteration: if the current rune is a
+tab or newline, it gets a special box ([[nrune == -1]]) with [[bc]] set
+to the character; otherwise, consecutive printable characters are
+accumulated into a temporary UTF-8 buffer ([[tmp]]) until a tab, newline,
+or buffer overflow is reached, then stored as a text box.
+The function stops after filling [[maxlines]] worth of newlines---there
+is no point scanning text that would fall off the bottom of the frame.
+Finally, [[_frdraw]] lays out the boxes starting at [[*ppt]] and returns
+the endpoint, which becomes [[pt1]] in [[frinsert]].
+
+<<constant [[TMPSIZE]]>>=
+#define	TMPSIZE	256
+@
+
+%claude:
+The [[bxscan]] function is the front end of [<frinsert>]'s three-phase
+pipeline. It iterates over the new runes, building boxes in the static
+[[frame]] structure. For each rune, if it is a tab or newline, a
+break box is created with [[nrune == -1]]; otherwise, consecutive
+printable characters are accumulated into a temporary UTF-8 buffer
+[[tmp]] (up to [[TMPSIZE]] bytes), then stored as a text box with
+a heap-allocated copy.
+%claude:
+The function counts newlines and stops after filling [[maxlines]]
+worth of lines---there is no point scanning text that would not fit
+in the frame anyway. Finally, [[_frdraw]] lays out the boxes starting
+at [[*ppt]], splitting any box that does not fit on the current line,
+and returns the endpoint. This endpoint becomes [[pt1]] in
+[<frinsert>]---the coordinate where the new text ends.
+
+<<function [[bxscan]]>>=
+static
+Point
+bxscan(Frame *f, Rune *sp, Rune *ep, Point *ppt)
+{
+    int w, c, nb, delta, nl, nr, rw;
+    Frbox *b;
+    char *s, tmp[TMPSIZE+3];	/* +3 for rune overflow */
+    uchar *p;
+
+    frame.r = f->r;
+    frame.b = f->b;
+    frame.font = f->font;
+    frame.maxtab = f->maxtab;
+    frame.nbox = 0;
+    frame.nchars = 0;
+    memmove(frame.cols, f->cols, sizeof frame.cols);
+    delta = DELTA;
+    nl = 0;
+    for(nb=0; sp<ep && nl<=f->maxlines; nb++,frame.nbox++){
+        if(nb == frame.nalloc){
+            _frgrowbox(&frame, delta);
+            if(delta < 10000)
+                delta *= 2;
+        }
+        b = &frame.box[nb];
+        c = *sp;
+        if(c=='\t' || c=='\n'){
+            b->bc = c;
+            b->wid = 5000;
+            b->minwid = (c=='\n')? 0 : stringwidth(frame.font, " ");
+            b->nrune = -1;
+            if(c=='\n')
+                nl++;
+            frame.nchars++;
+            sp++;
+        }else{
+            s = tmp;
+            nr = 0;
+            w = 0;
+            while(sp < ep){
+                c = *sp;
+                if(c=='\t' || c=='\n')
+                    break;
+                rw = runetochar(s, sp);
+                if(s+rw >= tmp+TMPSIZE)
+                    break;
+                w += runestringnwidth(frame.font, sp, 1);
+                sp++;
+                s += rw;
+                nr++;
+            }
+            *s++ = 0;
+            p = _frallocstr(f, s-tmp);
+            b = &frame.box[nb];
+            b->ptr = p;
+            memmove(p, tmp, s-tmp);
+            b->wid = w;
+            b->nrune = nr;
+            frame.nchars += nr;
+        }
+    }
+    _frcklinewrap0(f, ppt, &frame.box[0]);
+    return _frdraw(&frame, *ppt);
+}
+@
+
+% frinsert -> bxscan -> <>
+%claude:
+The [[_frdraw]] function does a dry-run layout of the boxes in the
+temporary [[frame]], computing where each box would appear on screen.
+It handles line wrapping (splitting boxes that overflow the right
+margin via [[_frsplitbox]]) and tab-stop computation (via
+[[_frnewwid]]). It also truncates boxes that fall below the bottom
+of the frame. The return value is the endpoint---the pixel Point
+after the last box.
+
+<<function [[_frdraw]]>>=
+Point
+_frdraw(Frame *f, Point pt)
+{
+    Frbox *b;
+    int nb, n;
+
+    for(b=f->box,nb=0; nb<f->nbox; nb++, b++){
+        _frcklinewrap0(f, &pt, b);
+        if(pt.y == f->r.max.y){
+            f->nchars -= _frstrlen(f, nb);
+            _frdelbox(f, nb, f->nbox-1);
+            break;
+        }
+        if(b->nrune > 0){
+            n = _frcanfit(f, pt, b);
+            if(n == 0)
+                drawerror(f->display, "_frcanfit==0");
+            if(n != b->nrune){
+                _frsplitbox(f, nb, n);
+                b = &f->box[nb];
+            }
+            pt.x += b->wid;
+        }else{
+            if(b->bc == '\n'){
+                pt.x = f->r.min.x;
+                pt.y+=f->font->height;
+            }else
+                pt.x += _frnewwid(f, pt, b);
+        }
+    }
+    return pt;
+}
+@
+
+%claude:
+Tab width depends on context---a tab at x=100 is a different width
+than one at x=200, because it must align to the next [[maxtab]]
+boundary. [[_frnewwid0]] computes the tab width for a box at position
+[[pt]]: it rounds up to the next tab stop (relative to the left margin),
+ensuring a minimum width of one space character ([[minwid]]) and
+wrapping to the next line if the tab would overflow the right edge.
+[[_frnewwid]] is a thin wrapper that also stores the result in
+[[b->wid]] so subsequent uses of this box get the cached value.
+
+<<function [[_frnewwid]]>>=
+int
+_frnewwid(Frame *f, Point pt, Frbox *b)
+{
+    b->wid = _frnewwid0(f, pt, b);
+    return b->wid;
+}
+@
+
+<<function [[_frnewwid0]]>>=
+int
+_frnewwid0(Frame *f, Point pt, Frbox *b)
+{
+    int c, x;
+
+    c = f->r.max.x;
+    x = pt.x;
+    if(b->nrune>=0 || b->bc!='\t')
+        return b->wid;
+    if(x+b->minwid > c)
+        x = pt.x = f->r.min.x;
+    x += f->maxtab;
+    x -= (x-f->r.min.x)%f->maxtab;
+    if(x-pt.x<b->minwid || x>c)
+        x = pt.x+b->minwid;
+    return x-pt.x;
+}
+@
+
+<<function [[_frstrlen]]>>=
+int
+_frstrlen(Frame *f, int nb)
+{
+    int n;
+
+    for(n=0; nb<f->nbox; nb++)
+        n += NRUNE(&f->box[nb]);
+    return n;
+}
+@
+
+\subsubsection{Truncating overflow: [[chopframe()]]}
+
+%claude:
+When an insertion causes [[nlines]] to exceed [[maxlines]], the
+frame has overflowed. [[chopframe]] walks forward from the insertion
+point until the pixel position reaches [[f->r.max.y]]
+(the bottom of the frame), counts how many characters fit, then
+deletes all boxes after that point. This truncates the frame to
+exactly [[maxlines]] lines.
+
+<<function [[chopframe]]>>=
+static
+void
+chopframe(Frame *f, Point pt, ulong p, int bn)
+{
+    Frbox *b;
+
+    for(b = &f->box[bn]; ; b++){
+        if(b >= &f->box[f->nbox])
+            drawerror(f->display, "endofframe");
+        _frcklinewrap(f, &pt, b);
+        if(pt.y >= f->r.max.y)
+            break;
+        p += NRUNE(b);
+        _fradvance(f, &pt, b);
+    }
+    f->nchars = p;
+    f->nlines = f->maxlines;
+    if(b<&f->box[f->nbox])				/* BUG */
+        _frdelbox(f, (int)(b-f->box), f->nbox-1);
+}
+@
+
+\subsubsection{Merging boxes: [[_frclean()]]}
+
+%claude:
+After an insertion or deletion, the box array may contain adjacent text
+boxes that could be merged---for instance, if a box was split for an
+insertion and the insertion was later deleted. [[_frclean]] scans boxes
+[[n0]] through [[n1]] and merges any pair of adjacent text boxes that
+fit on the same line (their combined width does not exceed the right
+margin). Merging reduces the box count and speeds up future walks.
+%claude:
+The function also walks the remaining boxes to update
+[[lastlinefull]], which indicates whether the last line of text reaches
+the bottom of the frame. This flag is checked by [<wfill>] to decide
+whether more text needs to be loaded from the rune buffer.
+
+<<function [[_frclean]]>>=
+void
+_frclean(Frame *f, Point pt, int n0, int n1)	/* look for mergeable boxes */
+{
+    Frbox *b;
+    int nb, c;
+
+    c = f->r.max.x;
+    for(nb=n0; nb<n1-1; nb++){
+        b = &f->box[nb];
+        _frcklinewrap(f, &pt, b);
+        while(b[0].nrune>=0 && nb<n1-1 && b[1].nrune>=0 && pt.x+b[0].wid+b[1].wid<c){
+            _frmergebox(f, nb);
+            n1--;
+            b = &f->box[nb];
+        }
+        _fradvance(f, &pt, &f->box[nb]);
+    }
+    for(; nb<f->nbox; nb++){
+        b = &f->box[nb];
+        _frcklinewrap(f, &pt, b);
+        _fradvance(f, &pt, &f->box[nb]);
+    }
+    f->lastlinefull = 0;
+    if(pt.y >= f->r.max.y)
+        f->lastlinefull = 1;
+}
+@
+
+<<function [[_frmergebox]]>>=
+void
+_frmergebox(Frame *f, int bn)		/* merge bn and bn+1 */
+{
+    Frbox *b;
+
+    b = &f->box[bn];
+    _frinsure(f, bn, NBYTE(&b[0])+NBYTE(&b[1])+1);
+    strcpy((char*)runeindex(b[0].ptr, b[0].nrune), (char*)b[1].ptr);
+    b[0].wid += b[1].wid;
+    b[0].nrune += b[1].nrune;
+    _frdelbox(f, bn+1, bn+1);
+}
+@
+
+
+
+\subsection{Incremental delete: [[frdelete()]]}
+
+%claude:
+The [[frdelete]] function is the inverse of [<frinsert>]: it removes
+characters [[p0]] through [[p1]] from the display and collapses
+the remaining text upward. Like [<frinsert>], it works incrementally
+by tracking two positions:
+\begin{itemize}
+\item [[pt0]]: where each surviving box \emph{will be} after deletion
+(shifted left).
+\item [[pt1]]: where each box \emph{currently is}.
+\end{itemize}
+%claude:
+The loop copies boxes from [[pt1]] to [[pt0]] using [[draw]], closing
+the gap left by the deleted text. When the deletion spans multiple
+lines, two bulk [[draw]] calls shift entire line bands upward.
+The vacated area at the bottom (where text used to be but no longer is)
+is filled with the background color.
+%claude:
+The return value is the number of lines freed (old [[nlines]] minus
+new [[nlines]]). The caller uses this to decide whether to call
+[<wfill>] to load more text from the rune buffer into the newly
+available space at the bottom of the frame.
+
+%claude:
+The [[frdelete]] function removes characters [[p0]] through [[p1]].
+Like [<frinsert>], it works by tracking two positions: [[pt0]] (where
+each box will end up after deletion) and [[pt1]] (where it currently
+is). The loop copies boxes from their old positions to their new
+ones, collapsing the gap. When the deletion spans multiple lines,
+two [[draw]] calls shift the bulk text up: one for the partial first
+line and one for the remaining full lines.
+%claude:
+The return value is the number of lines freed, which the caller
+([<wsetorigin>] or [<wdelete>]) uses to decide whether to call [<wfill>]
+to fill in text from below the viewport.
+
+<<function [[frdelete]]>>=
+int
+frdelete(Frame *f, ulong p0, ulong p1)
+{
+    Point pt0, pt1, ppt0;
+    Frbox *b;
+    int n0, n1, n;
+    ulong cn1;
+    Rectangle r;
+    int nn0;
+    Image *col;
+
+    if(p0>=f->nchars || p0==p1 || f->b==nil)
+        return 0;
+    if(p1 > f->nchars)
+        p1 = f->nchars;
+    n0 = _frfindbox(f, 0, 0, p0);
+    if(n0 == f->nbox)
+        drawerror(f->display, "off end in frdelete");
+    n1 = _frfindbox(f, n0, p0, p1);
+    pt0 = _frptofcharnb(f, p0, n0);
+    pt1 = frptofchar(f, p1);
+    if(f->p0 == f->p1)
+        frtick(f, frptofchar(f, f->p0), 0);
+    nn0 = n0;
+    ppt0 = pt0;
+    _frfreebox(f, n0, n1-1);
+    f->modified = 1;
+
+    /*
+     * Invariants:
+     *  - pt0 points to beginning, pt1 points to end
+     *  - n0 is box containing beginning of stuff being deleted
+     *  - n1, b are box containing beginning of stuff to be kept after deletion
+     *  - cn1 is char position of n1
+     *  - f->p0 and f->p1 are not adjusted until after all deletion is done
+     */
+    b = &f->box[n1];
+    cn1 = p1;
+    while(pt1.x!=pt0.x && n1<f->nbox){
+        _frcklinewrap0(f, &pt0, b);
+        _frcklinewrap(f, &pt1, b);
+        n = _frcanfit(f, pt0, b);
+        if(n==0)
+            drawerror(f->display, "_frcanfit==0");
+        r.min = pt0;
+        r.max = pt0;
+        r.max.y += f->font->height;
+        if(b->nrune > 0){
+            if(n != b->nrune){
+                _frsplitbox(f, n1, n);
+                b = &f->box[n1];
+            }
+            r.max.x += b->wid;
+            draw(f->b, r, f->b, nil, pt1);
+            cn1 += b->nrune;
+        }else{
+            r.max.x += _frnewwid0(f, pt0, b);
+            if(r.max.x > f->r.max.x)
+                r.max.x = f->r.max.x;
+            col = f->cols[BACK];
+            if(f->p0<=cn1 && cn1<f->p1)
+                col = f->cols[HIGH];
+            draw(f->b, r, col, nil, pt0);
+            cn1++;
+        }
+        _fradvance(f, &pt1, b);
+        pt0.x += _frnewwid(f, pt0, b);
+        f->box[n0++] = f->box[n1++];
+        b++;
+    }
+    if(n1==f->nbox && pt0.x!=pt1.x)	/* deleting last thing in window; must clean up */
+        frselectpaint(f, pt0, pt1, f->cols[BACK]);
+    if(pt1.y != pt0.y){
+        Point pt2;
+
+        pt2 = _frptofcharptb(f, 32767, pt1, n1);
+        if(pt2.y > f->r.max.y)
+            drawerror(f->display, "frptofchar in frdelete");
+        if(n1 < f->nbox){
+            int q0, q1, q2;
+
+            q0 = pt0.y+f->font->height;
+            q1 = pt1.y+f->font->height;
+            q2 = pt2.y+f->font->height;
+            if(q2 > f->r.max.y)
+                q2 = f->r.max.y;
+            draw(f->b, Rect(pt0.x, pt0.y, pt0.x+(f->r.max.x-pt1.x), q0),
+                f->b, nil, pt1);
+            draw(f->b, Rect(f->r.min.x, q0, f->r.max.x, q0+(q2-q1)),
+                f->b, nil, Pt(f->r.min.x, q1));
+            frselectpaint(f, Pt(pt2.x, pt2.y-(pt1.y-pt0.y)), pt2, f->cols[BACK]);
+        }else
+            frselectpaint(f, pt0, pt2, f->cols[BACK]);
+    }
+    _frclosebox(f, n0, n1-1);
+    if(nn0>0 && f->box[nn0-1].nrune>=0 && ppt0.x-f->box[nn0-1].wid>=(int)f->r.min.x){
+        --nn0;
+        ppt0.x -= f->box[nn0].wid;
+    }
+    _frclean(f, ppt0, nn0, n0<f->nbox-1? n0+1 : n0);
+    if(f->p1 > p1)
+        f->p1 -= p1-p0;
+    else if(f->p1 > p0)
+        f->p1 = p0;
+    if(f->p0 > p1)
+        f->p0 -= p1-p0;
+    else if(f->p0 > p0)
+        f->p0 = p0;
+    f->nchars -= p1-p0;
+    if(f->p0 == f->p1)
+        frtick(f, frptofchar(f, f->p0), 1);
+    pt0 = frptofchar(f, f->nchars);
+    n = f->nlines;
+    f->nlines = (pt0.y-f->r.min.y)/f->font->height+(pt0.x>f->r.min.x);
+    return n - f->nlines;
+}
+@
+
+
+
+\subsection{Drawing the tick: [[frtick()]]}
+
+%claude:
+The tick (text cursor) is drawn by saving the pixels underneath
+into [[tickback]], then drawing the tick image on top. To remove
+the tick, the saved pixels are restored. This save/restore approach
+is faster than redrawing the text, but it means the tick must be
+removed before any text operation that changes the display under it,
+and redrawn afterward.
+
+<<[[frinsert()]] remove tick>>=
+if(f->p0 == f->p1)
+    frtick(f, frptofchar(f, f->p0), false);
+@
+<<[[frinsert()]] draw tick>>=
+if(f->p0 == f->p1)
+    frtick(f, frptofchar(f, f->p0), true);
+@
+
+% drawing a tick or restoring what was under the tick
+% (a bit like for the mouse cursor)
+
+%claude:
+The tick drawing is a two-phase operation. When [[ticked]] is true:
+save the pixels at [[pt]] into [[tickback]], then draw the [[tick]]
+image on top. When [[ticked]] is false: restore the saved pixels from
+[[tickback]]. The [[pt.x--]] offset makes the tick visually sit just
+left of the character it precedes. If [[r.max.x]] would exceed the
+frame boundary, it is clamped to prevent drawing outside the frame.
+
+<<function [[frtick]]>>=
+void
+frtick(Frame *f, Point pt, bool ticked)
+{
+    Rectangle r;
+
+    if(f->ticked==ticked || f->tick==nil || !ptinrect(pt, f->r))
+        return;
+    pt.x--;	/* looks best just left of where requested */
+    r = Rect(pt.x, pt.y, pt.x + FRTICKW, pt.y + f->font->height);
+    /* can go into left border but not right */
+    if(r.max.x > f->r.max.x)
+        r.max.x = f->r.max.x;
+    if(ticked){
+        draw(f->tickback, f->tickback->r, f->b, nil, pt);
+        draw(f->b, r, f->tick, nil, ZP);
+    }else
+        draw(f->b, r, f->tickback, nil, ZP);
+    f->ticked = ticked;
+}
+@
+% modified f->ticked! this is why need to save old value of ticked
+% before calling frtick sometimes
+
+\subsection{Drawing the text and the selection: [[frdrawsel()]]}
+
+% called also to draw what is not selected
+
+%claude:
+Despite the name, [[frdrawsel]] is used for \emph{both} selected and
+unselected regions---the [[issel]] parameter just controls which colors
+are used. When [[p0 == p1]] (no selection range), it draws or erases
+the tick cursor instead.
+%claude:
+The heavy lifting is in [[frdrawsel0]], which walks the box array from
+[[p0]] to [[p1]], painting each box's background rectangle and then
+rendering the text on top with [[stringnbg]]. It handles partial boxes
+(when the region starts or ends mid-box) by advancing the pointer and
+adjusting the rune count. End-of-line fill is done by detecting when
+[[_frcklinewrap]] wraps to a new line and filling the remainder of the
+previous line with the background color.
+
+<<function [[frdrawsel]]>>=
+void
+frdrawsel(Frame *f, Point pt, ulong p0, ulong p1, bool issel)
+{
+    Image *back, *text;
+
+    if(f->ticked)
+        frtick(f, frptofchar(f, f->p0), false);
+
+    if(p0 == p1){
+        frtick(f, pt, issel);
+        return;
+    }
+    // else
+
+    if(issel){
+        back = f->cols[HIGH];
+        text = f->cols[HTEXT];
+    }else{
+        back = f->cols[BACK];
+        text = f->cols[TEXT];
+    }
+
+    frdrawsel0(f, pt, p0, p1, back, text);
+}
+@
+% pt is point of? p0?
+
+
+%claude:
+The [[frdrawsel0]] workhorse draws a range of text with given
+foreground and background colors. It walks the box array, painting
+each box's background rectangle and rendering text on top. It handles
+three tricky cases: (1)~the region starts mid-box (advance the byte
+pointer and reduce [[nr]]), (2)~the region ends mid-box (reduce [[nr]]
+without advancing), and (3)~line-wrap fill (when wrapping to a new line,
+fill the remainder of the previous line with the background color so
+there is no gap).
+
+<<function [[frdrawsel0]]>>=
+Point
+frdrawsel0(Frame *f, Point pt, ulong p0, ulong p1, Image *back, Image *text)
+{
+    Frbox *b;
+    int nb, nr, w, x, trim;
+    Point qt;
+    uint p;
+    char *ptr;
+
+    p = 0;
+    b = f->box;
+    trim = 0;
+    for(nb=0; nb<f->nbox && p<p1; nb++){
+        //todo: nr = NRUNE(b);
+        nr = b->nrune;
+        if(nr < 0)
+            nr = 1;
+
+        if(p+nr <= p0)
+            goto Continue;
+        if(p >= p0){
+            qt = pt;
+            _frcklinewrap(f, &pt, b);
+            /* fill in the end of a wrapped line */
+            if(pt.y > qt.y)
+                draw(f->b, Rect(qt.x, qt.y, f->r.max.x, pt.y), back, nil, qt);
+        }
+        ptr = (char*)b->ptr;
+        if(p < p0){	/* beginning of region: advance into box */
+            ptr += nbytes(ptr, p0-p);
+            nr -= (p0-p);
+            p = p0;
+        }
+        trim = 0;
+        if(p+nr > p1){	/* end of region: trim box */
+            nr -= (p+nr)-p1;
+            trim = 1;
+        }
+        if(b->nrune<0 || nr==b->nrune)
+            w = b->wid;
+        else
+            w = stringnwidth(f->font, ptr, nr);
+        x = pt.x+w;
+        if(x > f->r.max.x)
+            x = f->r.max.x;
+        draw(f->b, Rect(pt.x, pt.y, x, pt.y+f->font->height), back, nil, pt);
+        if(b->nrune >= 0)
+            stringnbg(f->b, pt, text, ZP, f->font, ptr, nr, back, ZP);
+        pt.x += w;
+        Continue:
+        b++;
+        p += nr;
+    }
+    /* if this is end of last plain text box on wrapped line, fill to end of line */
+    if(p1>p0 &&  b>f->box && b<f->box+f->nbox && b[-1].nrune>0 && !trim){
+        qt = pt;
+        _frcklinewrap(f, &pt, b);
+        if(pt.y > qt.y)
+            draw(f->b, Rect(qt.x, qt.y, f->r.max.x, pt.y), back, nil, qt);
+    }
+    return pt;
+}
+@
+
+<<function [[nbytes]]>>=
+static int
+nbytes(char *s0, int nr)
+{
+    char *s;
+    Rune r;
+
+    s = s0;
+    while(--nr >= 0)
+        s += chartorune(&r, s);
+    return s-s0;
+}
+@
+
 
 %******************************************************************************
 \chapter{Examples of Windowing System Applications}
