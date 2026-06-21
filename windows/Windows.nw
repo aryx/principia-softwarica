@@ -11374,6 +11374,20 @@ w->scrolling = scrolling; // autoscroll
 % saw Window.frm in core DS
 
 %claude:
+The [[frm]] field is a {Frame}, the \plan text widget from the
+[[libframe]] library (Chapter~\ref{chap:frame}). It is not
+rio-specific---[[acme]] and [[sam]] use it too---so I treat it here as a
+black box with a small public interface and defer its internals to the
+appendix. rio only ever calls a handful of its functions:
+[[frinit()]] to set up the widget over an image,
+[[frinsert()]]/[[frdelete()]] to add or remove runes (the widget then
+redraws only the affected lines), [[frselect()]] and [[frdrawsel()]] for
+mouse selection, and [[frcharofpt()]]/[[frptofchar()]] to convert between
+a pixel point and a rune index. The fields rio reads directly are
+[[nchars]] (runes currently displayed), [[nlines]]/[[maxlines]] (visible
+versus maximum lines), and [[p0]]/[[p1]] (the selection range).
+
+%claude:
 The window's drawable area (inset by [[Selborder]]) is divided into
 a scrollbar on the left ([[Scrollwid]] = 12 pixels wide) and the text
 frame on the right, separated by a [[Scrollgap]] (4 pixel) gap.
@@ -11708,10 +11722,12 @@ if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
 \section{Content rendering}
 
 %claude:
-The rendering pipeline is the most complex part of the Frame library.
-Its job is to convert rune insertions and deletions into
-\emph{incremental} screen updates---only redrawing the portion of
-the screen that actually changed.
+Rendering is where rio hands off to the {Frame} library
+(Chapter~\ref{chap:frame}). rio's own job here is small: translate a
+rune-buffer edit into the right [[frinsert]]/[[frdelete]] call, then keep
+the cursor on screen. The Frame library does the hard part---turning that
+edit into an \emph{incremental} screen update that redraws only the lines
+that actually changed.
 %claude:
 Why incremental rendering? Because a textual window can easily have
 50--80 lines of visible text, each containing dozens of characters.
@@ -11719,14 +11735,14 @@ Redrawing all of them on every keystroke would be visibly slow on
 the hardware Plan~9 targets. Instead, inserting one character
 typically only repaints one line (or less), making typing feel instant.
 %claude:
-The key function is [<frinsert>], which is the most complex function in the
-frame library: it must scan the new text into boxes, figure out where
-existing text will shift, and only redraw the affected portion of the
-screen rather than repainting everything.
-The complementary [<frdelete>] removes characters and collapses the display.
+The two entry points are [<frinsert>], which inserts runes and redraws
+only the affected lines, and [<frdelete>], which removes a range and
+collapses the display. Both are detailed in Chapter~\ref{chap:frame};
+here I show only where and how rio calls them.
 %claude:
-The rendering pipeline is driven by six main functions, each building
-on the lower-level ones:
+The pipeline below spans both layers: the [[w...]] functions are rio's
+(this chapter), while [[frinsert]]/[[frdelete]] and their helpers belong
+to the Frame library (Chapter~\ref{chap:frame}):
 \begin{verbatim}
   winsert()/wdelete()     -- modify the rune buffer and cursors
        |
@@ -19962,7 +19978,7 @@ frredraw(Frame *f)
 @
 %ocaml: tick/tickback because does not use a redraw from scratch simple model
 
-\section{Content rendering}
+\section{Incremental rendering}
 
 <<global [[frame]]>>=
 static Frame		frame;
