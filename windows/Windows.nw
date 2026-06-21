@@ -11402,6 +11402,85 @@ Scrollgap 		= 4,	/* gap right of scroll bar */
 
 
 
+\subsection{Frame colors}
+
+%claude:
+The colors are allocated once (guarded by [[cols[0] == nil]]) and
+shared by all windows. White background, light grey highlight for
+selected text, medium grey for the border/scrollbar, and black text.
+These are 1x1 pixel images used as tile patterns in [[draw()]] calls---a
+common Plan~9 idiom for solid color fills where the 1x1 image is
+tiled across the destination rectangle by the graphics system.
+
+<<[[wmk()]] colors initialisation>>=
+if(cols[0] == nil){
+    cols[BACK] = display->white;
+    cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
+    cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
+    cols[TEXT] = display->black;
+    cols[HTEXT] = display->black;
+    <<[[wmk()]] extra colors initialisation>>
+);
+}
+@
+% the cols will be inverted at some point, this is why
+% store cols array in Frame and not use globals.
+
+
+% ?? -> wrepaint
+<<[[wrepaint()]] update cols>>=
+wsetcols(w);
+@
+
+
+% wrepaint | ... -> <>
+%claude:
+The [<wsetcols()>] function implements the visual focus indicator: the
+focused window ([[w == input]]) gets black text, while unfocused
+windows get dark grey text ([[darkgrey]], [[0x666666]]). This is the
+only rendering difference between focused and unfocused windows---the
+background, selection highlight, and border colors remain the same.
+The simplicity of this approach (one color swap plus a repaint) is
+characteristic of [[rio]]'s minimalist design: there are no
+drop shadows, title bar color changes, or border thickness variations
+that other window systems use to indicate focus.
+
+<<function [[wsetcols]]>>=
+void
+wsetcols(Window *w)
+{
+    <<[[wsetcols()]] if holding>>
+    else
+        if(w == input)
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
+        else
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
+}
+@
+%ocaml: pass set of colors to drawing function instead of modifying fields
+% and just store is_selected in Terminal. Only necessary field.
+
+% invert color, but who then redraw the content?
+
+<<global [[darkgrey]]>>=
+static	Image	*darkgrey;
+@
+% used for alternative BACK
+<<[[wmk()]] extra colors initialisation>>=
+/* greys are multiples of 0x11111100+0xFF, 14* being palest */
+darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
+@
+
+%dead:
+%<<global grey>>
+%static	Image	*grey;
+%@
+%<<[[wmk()]] extra colors initialisation>>
+%grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
+
+% will see far later the code using those cols[]
+
+
 
 
 \section{Content modification}
@@ -11680,9 +11759,6 @@ if(q0 <= w->org + w->frm.nchars)
 % (here 0 because q0 == w->org)
 
 
-
-\section{Content rendering}
-
 \subsection{Keeping the cursor visible: [[wshow()]]}
 
 %claude:
@@ -11911,6 +11987,7 @@ if(scrtmp == nil)
 
 
 \subsection{Moving the frame origin}
+
 %claude:
 When the viewport must change (because the target position is
 off-screen), [[\hlink{wsetorigin}]] updates [[org]] and incrementally
@@ -12186,173 +12263,6 @@ wsetselect(Window *w, uint q0, uint q1)
 
 
 
-%claude:
-The [[frselect]] function is the interactive selection loop, called
-when button~1 is pressed. It tracks the mouse until the button is
-released, incrementally painting and unpainting the selection as the
-cursor moves.
-%claude:
-The [[reg]] (region) variable is the key state: it tracks whether the
-current endpoint [[p1]] is above ($-1$), at ($0$), or below ($+1$)
-the anchor point [[p0]]. This determines whether extending the selection
-means painting forward or backward. When the user drags past the anchor
-(the region sign flips), the entire old selection is cleared and rebuilt
-in the opposite direction---this prevents visual artifacts.
-%claude:
-If the mouse moves above or below the frame rectangle, the [[scroll]]
-callback (set to [<framescroll>]) fires, scrolling the viewport and
-extending the selection to follow. The [[scrled]] flag prevents a
-double mouse read when scrolling was triggered, since the scroll
-callback may itself consume mouse events.
-%claude:
-The [[do/while]] loop continues as long as the same button is held.
-On each iteration, it compares the new mouse position [[q]] with the
-previous [[p1]] and only repaints the delta---the range between the
-old and new endpoints. This incremental approach means that even a
-large selection being extended by one character only repaints that
-one character.
-
-<<function [[frselect]]>>=
-void
-frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
-{
-    ulong p0, p1, q;
-    Point mp, pt0, pt1, qt;
-    int reg, b, scrled;
-
-    mp = mc->xy;
-    b = mc->buttons;
-
-    f->modified = 0;
-    frdrawsel(f, frptofchar(f, f->p0), f->p0, f->p1, 0);
-    p0 = p1 = frcharofpt(f, mp);
-    f->p0 = p0;
-    f->p1 = p1;
-    pt0 = frptofchar(f, p0);
-    pt1 = frptofchar(f, p1);
-    frdrawsel(f, pt0, p0, p1, 1);
-    reg = 0;
-    do{
-        scrled = 0;
-        if(f->scroll){
-            if(mp.y < f->r.min.y){
-                (*f->scroll)(f, -(f->r.min.y-mp.y)/(int)f->font->height-1);
-                p0 = f->p1;
-                p1 = f->p0;
-                scrled = 1;
-            }else if(mp.y > f->r.max.y){
-                (*f->scroll)(f, (mp.y-f->r.max.y)/(int)f->font->height+1);
-                p0 = f->p0;
-                p1 = f->p1;
-                scrled = 1;
-            }
-            if(scrled){
-                if(reg != region(p1, p0))
-                    q = p0, p0 = p1, p1 = q;	/* undo the swap that will happen below */
-                pt0 = frptofchar(f, p0);
-                pt1 = frptofchar(f, p1);
-                reg = region(p1, p0);
-            }
-        }
-        q = frcharofpt(f, mp);
-        if(p1 != q){
-            if(reg != region(q, p0)){	/* crossed starting point; reset */
-                if(reg > 0)
-                    frdrawsel(f, pt0, p0, p1, 0);
-                else if(reg < 0)
-                    frdrawsel(f, pt1, p1, p0, 0);
-                p1 = p0;
-                pt1 = pt0;
-                reg = region(q, p0);
-                if(reg == 0)
-                    frdrawsel(f, pt0, p0, p1, 1);
-            }
-            qt = frptofchar(f, q);
-            if(reg > 0){
-                if(q > p1)
-                    frdrawsel(f, pt1, p1, q, 1);
-                else if(q < p1)
-                    frdrawsel(f, qt, q, p1, 0);
-            }else if(reg < 0){
-                if(q > p1)
-                    frdrawsel(f, pt1, p1, q, 0);
-                else
-                    frdrawsel(f, qt, q, p1, 1);
-            }
-            p1 = q;
-            pt1 = qt;
-        }
-        f->modified = 0;
-        if(p0 < p1) {
-            f->p0 = p0;
-            f->p1 = p1;
-        }
-        else {
-            f->p0 = p1;
-            f->p1 = p0;
-        }
-        if(scrled)
-            (*f->scroll)(f, 0);
-        flushimage(f->display, 1);
-        if(!scrled)
-            readmouse(mc);
-        mp = mc->xy;
-    }while(mc->buttons == b);
-}
-@
-
-%claude:
-The [[frselectpaint]] helper fills a rectangular region between two
-Points with a solid color. It handles three cases: single-line
-(one rectangle from [[p0]] to [[p1]]), multi-line (fill the end of
-the first line, fill full middle lines, fill the start of the last
-line), and the degenerate case where [[p0]] is at the frame bottom.
-This is used both to highlight the selection background and to clear
-areas after deletions.
-
-<<function [[frselectpaint]]>>=
-void
-frselectpaint(Frame *f, Point p0, Point p1, Image *col)
-{
-    int n;
-    Point q0, q1;
-
-    q0 = p0;
-    q1 = p1;
-    q0.y += f->font->height;
-    q1.y += f->font->height;
-    n = (p1.y-p0.y)/f->font->height;
-    if(f->b == nil)
-        drawerror(f->display, "frselectpaint b==0");
-    if(p0.y == f->r.max.y)
-        return;
-    if(n == 0)
-        draw(f->b, Rpt(p0, q1), col, nil, ZP);
-    else{
-        if(p0.x >= f->r.max.x)
-            p0.x = f->r.max.x-1;
-        draw(f->b, Rect(p0.x, p0.y, f->r.max.x, q0.y), col, nil, ZP);
-        if(n > 1)
-            draw(f->b, Rect(f->r.min.x, q0.y, f->r.max.x, p1.y),
-                col, nil, ZP);
-        draw(f->b, Rect(f->r.min.x, p1.y, q1.x, q1.y),
-            col, nil, ZP);
-    }
-}
-@
-
-<<function [[region]]>>=
-static
-int
-region(int a, int b)
-{
-    if(a < b)
-        return -1;
-    if(a == b)
-        return 0;
-    return 1;
-}
-@
 
 \subsection{Repainting}
 
@@ -12370,46 +12280,6 @@ if(!w->mouseopen)
 % need to redraw text with different colors when a window is
 % selected or not.
 
-%claude:
-A full repaint draws the entire frame in three bands using
-[<frdrawsel0>] with the appropriate colors: unselected text before
-[[p0]] (black on white), selected text between [[p0]] and [[p1]]
-(black on light grey), and unselected text after [[p1]] (black on
-white again). The tick must be hidden before repainting and restored
-afterward, because the pixels under it change.
-%claude:
-Full repaints are expensive compared to incremental updates, so they
-are only triggered when the colors themselves change (window
-gaining/losing focus) or when the frame is rebuilt from scratch (after
-a resize). Normal typing and selection use the incremental
-[<frinsert>]/[<frdelete>]/[<frdrawsel>] paths.
-
-<<function [[frredraw]]>>=
-void
-frredraw(Frame *f)
-{
-    bool ticked;
-    Point pt;
-
-    if(f->p0 == f->p1){
-        ticked = f->ticked;
-        if(ticked)
-            frtick(f, frptofchar(f, f->p0), false);
-        // redraw the text
-        frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
-        if(ticked)
-            frtick(f, frptofchar(f, f->p0), true);
-        return;
-    }
-    // else, redraw the selection and the text
-
-    pt = frptofchar(f, 0);
-    pt = frdrawsel0(f, pt, 0,     f->p0,     f->cols[BACK], f->cols[TEXT]);
-    pt = frdrawsel0(f, pt, f->p0, f->p1,     f->cols[HIGH], f->cols[HTEXT]);
-    pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
-}
-@
-%ocaml: tick/tickback because does not use a redraw from scratch simple model
 
 % scrollbar is not redrawn here. wscrdraw is called only when
 % things change. No need to redraw when select/unselect a window
@@ -18875,6 +18745,7 @@ runetobyte(Rune *r, int n, int *ip)
 %******************************************************************************
 \chapter{The Frame Library}
 %******************************************************************************
+\label{chap:frame}
 %alt: in Textual window chapter
 %alt: Text Widget
 
@@ -18926,6 +18797,8 @@ or split, not on every rendering pass.
 %claude:
 Here is a concrete example of what the box array looks like for
 a terminal showing two lines:
+
+%claude:
 \begin{verbatim}
   Display:   % ls -la /tmp
              drwxrwxrwt  12 root root 4096 ...
@@ -18937,6 +18810,7 @@ a terminal showing two lines:
   [3] nrune=14 ptr="drwxrwxrwt  1" wid=112
   ...
 \end{verbatim}
+
 %claude:
 Text boxes are split at line boundaries (when a box would overflow
 the right margin, [<_frcanfit>] determines how many characters fit
@@ -18949,6 +18823,7 @@ special boxes with [[nrune == -1]].
 The [[Frame]] struct is the state of a text widget instance. It does
 \emph{not} own the text data (which lives in [[Window.r]])---it only
 knows how to display a slice of it, from [[org]] to [[org + nchars]].
+%
 %claude:
 The key fields fall into five groups:
 \begin{itemize}
@@ -19090,6 +18965,7 @@ The frame uses five colors indexed by [[BACK]], [[HIGH]], [[BORD]],
 \item [[TEXT]] (black): normal text foreground.
 \item [[HTEXT]] (black): selected text foreground (same as TEXT in [[rio]]).
 \end{itemize}
+
 %claude:
 The key visual trick is that when a window loses focus, [<wsetcols>]
 swaps the text color from black to dark grey ([[0x666666]]), giving the
@@ -19133,83 +19009,6 @@ static	Image	*cols[NCOL];
 if(cols != nil)
     memmove(f->cols, cols, sizeof f->cols);
 @
-
-
-%claude:
-The colors are allocated once (guarded by [[cols[0] == nil]]) and
-shared by all windows. White background, light grey highlight for
-selected text, medium grey for the border/scrollbar, and black text.
-These are 1x1 pixel images used as tile patterns in [[draw()]] calls---a
-common Plan~9 idiom for solid color fills where the 1x1 image is
-tiled across the destination rectangle by the graphics system.
-
-<<[[wmk()]] colors initialisation>>=
-if(cols[0] == nil){
-    cols[BACK] = display->white;
-    cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
-    cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
-    cols[TEXT] = display->black;
-    cols[HTEXT] = display->black;
-    <<[[wmk()]] extra colors initialisation>>
-);
-}
-@
-% the cols will be inverted at some point, this is why
-% store cols array in Frame and not use globals.
-
-
-% ?? -> wrepaint
-<<[[wrepaint()]] update cols>>=
-wsetcols(w);
-@
-
-
-% wrepaint | ... -> <>
-%claude:
-The [<wsetcols()>] function implements the visual focus indicator: the
-focused window ([[w == input]]) gets black text, while unfocused
-windows get dark grey text ([[darkgrey]], [[0x666666]]). This is the
-only rendering difference between focused and unfocused windows---the
-background, selection highlight, and border colors remain the same.
-The simplicity of this approach (one color swap plus a repaint) is
-characteristic of [[rio]]'s minimalist design: there are no
-drop shadows, title bar color changes, or border thickness variations
-that other window systems use to indicate focus.
-
-<<function [[wsetcols]]>>=
-void
-wsetcols(Window *w)
-{
-    <<[[wsetcols()]] if holding>>
-    else
-        if(w == input)
-            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
-        else
-            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
-}
-@
-%ocaml: pass set of colors to drawing function instead of modifying fields
-% and just store is_selected in Terminal. Only necessary field.
-
-% invert color, but who then redraw the content?
-
-<<global [[darkgrey]]>>=
-static	Image	*darkgrey;
-@
-% used for alternative BACK
-<<[[wmk()]] extra colors initialisation>>=
-/* greys are multiples of 0x11111100+0xFF, 14* being palest */
-darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
-@
-
-%dead:
-%<<global grey>>
-%static	Image	*grey;
-%@
-%<<[[wmk()]] extra colors initialisation>>
-%grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
-
-% will see far later the code using those cols[]
 
 
 
@@ -19330,6 +19129,7 @@ A box is either a run of regular characters (with a [[ptr]] to the
 UTF-8 bytes and a [[wid]] giving the total pixel width) or a
 special break character like a newline or tab (indicated by
 [[nrune < 0]]).
+%
 %claude:
 The box abstraction serves two purposes:
 \begin{enumerate}
@@ -19948,6 +19748,219 @@ ulong	p0, p1;		/* selection */
 f->p0 = 0;
 f->p1 = 0;
 @
+
+
+
+%claude:
+The [[frselect]] function is the interactive selection loop, called
+when button~1 is pressed. It tracks the mouse until the button is
+released, incrementally painting and unpainting the selection as the
+cursor moves.
+%claude:
+The [[reg]] (region) variable is the key state: it tracks whether the
+current endpoint [[p1]] is above ($-1$), at ($0$), or below ($+1$)
+the anchor point [[p0]]. This determines whether extending the selection
+means painting forward or backward. When the user drags past the anchor
+(the region sign flips), the entire old selection is cleared and rebuilt
+in the opposite direction---this prevents visual artifacts.
+%claude:
+If the mouse moves above or below the frame rectangle, the [[scroll]]
+callback (set to [<framescroll>]) fires, scrolling the viewport and
+extending the selection to follow. The [[scrled]] flag prevents a
+double mouse read when scrolling was triggered, since the scroll
+callback may itself consume mouse events.
+%claude:
+The [[do/while]] loop continues as long as the same button is held.
+On each iteration, it compares the new mouse position [[q]] with the
+previous [[p1]] and only repaints the delta---the range between the
+old and new endpoints. This incremental approach means that even a
+large selection being extended by one character only repaints that
+one character.
+
+<<function [[frselect]]>>=
+void
+frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
+{
+    ulong p0, p1, q;
+    Point mp, pt0, pt1, qt;
+    int reg, b, scrled;
+
+    mp = mc->xy;
+    b = mc->buttons;
+
+    f->modified = 0;
+    frdrawsel(f, frptofchar(f, f->p0), f->p0, f->p1, 0);
+    p0 = p1 = frcharofpt(f, mp);
+    f->p0 = p0;
+    f->p1 = p1;
+    pt0 = frptofchar(f, p0);
+    pt1 = frptofchar(f, p1);
+    frdrawsel(f, pt0, p0, p1, 1);
+    reg = 0;
+    do{
+        scrled = 0;
+        if(f->scroll){
+            if(mp.y < f->r.min.y){
+                (*f->scroll)(f, -(f->r.min.y-mp.y)/(int)f->font->height-1);
+                p0 = f->p1;
+                p1 = f->p0;
+                scrled = 1;
+            }else if(mp.y > f->r.max.y){
+                (*f->scroll)(f, (mp.y-f->r.max.y)/(int)f->font->height+1);
+                p0 = f->p0;
+                p1 = f->p1;
+                scrled = 1;
+            }
+            if(scrled){
+                if(reg != region(p1, p0))
+                    q = p0, p0 = p1, p1 = q;	/* undo the swap that will happen below */
+                pt0 = frptofchar(f, p0);
+                pt1 = frptofchar(f, p1);
+                reg = region(p1, p0);
+            }
+        }
+        q = frcharofpt(f, mp);
+        if(p1 != q){
+            if(reg != region(q, p0)){	/* crossed starting point; reset */
+                if(reg > 0)
+                    frdrawsel(f, pt0, p0, p1, 0);
+                else if(reg < 0)
+                    frdrawsel(f, pt1, p1, p0, 0);
+                p1 = p0;
+                pt1 = pt0;
+                reg = region(q, p0);
+                if(reg == 0)
+                    frdrawsel(f, pt0, p0, p1, 1);
+            }
+            qt = frptofchar(f, q);
+            if(reg > 0){
+                if(q > p1)
+                    frdrawsel(f, pt1, p1, q, 1);
+                else if(q < p1)
+                    frdrawsel(f, qt, q, p1, 0);
+            }else if(reg < 0){
+                if(q > p1)
+                    frdrawsel(f, pt1, p1, q, 0);
+                else
+                    frdrawsel(f, qt, q, p1, 1);
+            }
+            p1 = q;
+            pt1 = qt;
+        }
+        f->modified = 0;
+        if(p0 < p1) {
+            f->p0 = p0;
+            f->p1 = p1;
+        }
+        else {
+            f->p0 = p1;
+            f->p1 = p0;
+        }
+        if(scrled)
+            (*f->scroll)(f, 0);
+        flushimage(f->display, 1);
+        if(!scrled)
+            readmouse(mc);
+        mp = mc->xy;
+    }while(mc->buttons == b);
+}
+@
+
+%claude:
+The [[frselectpaint]] helper fills a rectangular region between two
+Points with a solid color. It handles three cases: single-line
+(one rectangle from [[p0]] to [[p1]]), multi-line (fill the end of
+the first line, fill full middle lines, fill the start of the last
+line), and the degenerate case where [[p0]] is at the frame bottom.
+This is used both to highlight the selection background and to clear
+areas after deletions.
+
+<<function [[frselectpaint]]>>=
+void
+frselectpaint(Frame *f, Point p0, Point p1, Image *col)
+{
+    int n;
+    Point q0, q1;
+
+    q0 = p0;
+    q1 = p1;
+    q0.y += f->font->height;
+    q1.y += f->font->height;
+    n = (p1.y-p0.y)/f->font->height;
+    if(f->b == nil)
+        drawerror(f->display, "frselectpaint b==0");
+    if(p0.y == f->r.max.y)
+        return;
+    if(n == 0)
+        draw(f->b, Rpt(p0, q1), col, nil, ZP);
+    else{
+        if(p0.x >= f->r.max.x)
+            p0.x = f->r.max.x-1;
+        draw(f->b, Rect(p0.x, p0.y, f->r.max.x, q0.y), col, nil, ZP);
+        if(n > 1)
+            draw(f->b, Rect(f->r.min.x, q0.y, f->r.max.x, p1.y),
+                col, nil, ZP);
+        draw(f->b, Rect(f->r.min.x, p1.y, q1.x, q1.y),
+            col, nil, ZP);
+    }
+}
+@
+
+<<function [[region]]>>=
+static
+int
+region(int a, int b)
+{
+    if(a < b)
+        return -1;
+    if(a == b)
+        return 0;
+    return 1;
+}
+@
+
+\subsection{Repainting}
+
+%claude:
+A full repaint draws the entire frame in three bands using
+[<frdrawsel0>] with the appropriate colors: unselected text before
+[[p0]] (black on white), selected text between [[p0]] and [[p1]]
+(black on light grey), and unselected text after [[p1]] (black on
+white again). The tick must be hidden before repainting and restored
+afterward, because the pixels under it change.
+%claude:
+Full repaints are expensive compared to incremental updates, so they
+are only triggered when the colors themselves change (window
+gaining/losing focus) or when the frame is rebuilt from scratch (after
+a resize). Normal typing and selection use the incremental
+[<frinsert>]/[<frdelete>]/[<frdrawsel>] paths.
+
+<<function [[frredraw]]>>=
+void
+frredraw(Frame *f)
+{
+    bool ticked;
+    Point pt;
+
+    if(f->p0 == f->p1){
+        ticked = f->ticked;
+        if(ticked)
+            frtick(f, frptofchar(f, f->p0), false);
+        // redraw the text
+        frdrawsel0(f, frptofchar(f, 0), 0, f->nchars, f->cols[BACK], f->cols[TEXT]);
+        if(ticked)
+            frtick(f, frptofchar(f, f->p0), true);
+        return;
+    }
+    // else, redraw the selection and the text
+
+    pt = frptofchar(f, 0);
+    pt = frdrawsel0(f, pt, 0,     f->p0,     f->cols[BACK], f->cols[TEXT]);
+    pt = frdrawsel0(f, pt, f->p0, f->p1,     f->cols[HIGH], f->cols[HTEXT]);
+    pt = frdrawsel0(f, pt, f->p1, f->nchars, f->cols[BACK], f->cols[TEXT]);
+}
+@
+%ocaml: tick/tickback because does not use a redraw from scratch simple model
 
 \section{Content rendering}
 
