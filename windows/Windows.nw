@@ -3396,7 +3396,7 @@ Drain:
 % at a time. 
 
 
-\section{Window threads}
+\section{Window threads: [[winctl()]]}
 
 % listen to many channels! (and relaying to many channels)
 
@@ -3776,7 +3776,7 @@ int	messagesize = 8192+IOHDRSZ;	/* good start */
 % negociated with kernel in filsysversion in first message
 % IOHDRSZ defined in fcall.h
 
-\subsection{[[filsysproc()]]}
+\subsection{Reading and dispatching: [[filsysproc()]]}
 
 <<function [[filsysproc]]>>=
 // main -> filsysinit -> proccreate(<>, fs, ...) -> <>
@@ -3913,7 +3913,7 @@ if(fcall[x->req.type] == nil)
 % means the kernel is buggy.
 
 
-\subsection{[[filsysversion()]]}
+\subsection{Protocol handshake: [[filsysversion()]]}
 
 %claude:
 The first 9P message a client must send is always [[Tversion]],
@@ -3972,7 +3972,16 @@ if(strncmp(x->req.version, "9P2000", 6) != 0)
 
 
 
-\section{[[Xfid]] allocator thread}
+\section{[[Xfid]] worker pool}
+
+%claude:
+The worker pool is made of two kinds of thread: a single {allocator} thread
+that hands out and recycles [[Xfid]] worker handles, and the {worker}
+threads themselves, each of which executes one dispatched request before
+returning to the pool. Both appear as distinct nodes in
+Figure~\ref{fig:soft-archi-threads}.
+
+\subsection{Allocator thread: [[xfidallocthread()]]}
 
 %ocaml: create each time a new thread so no need arena allocator
 %claude:
@@ -4085,7 +4094,7 @@ if(x->flushtag != -1)
     error("flushtag in free");
 @
 
-\section{[[Xfid]] threads}
+\subsection{Worker threads: [[xfidctl()]]}
 % =~ workers which will handle a file request
 
 % thread callback ...
@@ -14271,7 +14280,7 @@ if(w != oi){
 @
 % But Wakeup does nothing actually
 
-\subsection{Reading}
+\subsection{Reading [[/mnt/wsys/wctl]]}
 
 %claude:
 Reading [[wctl]] uses the same producer/consumer pattern as
@@ -14417,7 +14426,7 @@ case WWread:
 
 
 
-\subsection{Writing (controlling windows)}
+\subsection{Writing [[/mnt/wsys/wctl]] (controlling windows)}
 
 %claude:
 Writing to [[wctl]] accepts commands like ``new'', ``resize'',
@@ -18129,7 +18138,7 @@ case Holdoff:
 @
 
 
-\subsection{[[Wakeup]]}
+\subsection{Waking the window thread: [[Wakeup]]}
 
 <<[[Wctlmesgkind]] cases>>=
 Wakeup,
@@ -18149,7 +18158,7 @@ just to make the window thread re-evaluate its alt conditions
 (e.g., to notice that it is now the current window or that a
 file has been opened).
 
-\subsection{[[Refresh]]}
+\subsection{Restoring the window: [[Refresh]]}
 
 %claude:
 [[Refresh]] is sent when an application closes [[/dev/mouse]],
@@ -18624,45 +18633,29 @@ derror(Display*, char *errorstr)
 %******************************************************************************
 \label{chap:utilities}
 
-%claude:
-The utility functions here fall into three groups. The first is
-{abort-on-failure} wrappers around [[malloc]], [[realloc]], and
+%claude: %toc:
+The utility functions here fall into three groups.
+%
+The first is {abort-on-failure} wrappers around [[malloc]], [[realloc]], and
 [[strdup]]: [<emalloc()>], [<erealloc()>], and [<estrdup()>] call
 [<error()>] if allocation fails, so the rest of [[rio]] can
 assume a non-[[nil]] return and avoid cluttering every call site
 with sanity checks. The pattern is common in \plan programs and
 matches the e-prefix convention in [[libc]] (see the \book{Libcore}).
+%
 The second group is {rune-aware} variants of standard string
 routines ([<runemalloc()>], [<runemove()>], [<strrune()>],
 [<cvttorunes()>]): [[rio]] stores text as [[Rune]] arrays
 internally but has to convert to and from UTF-8 at I/O boundaries,
 so these wrappers centralize the conversion and rune-sized
-arithmetic. The third is [<min>]/[<max>]/[<isalnum>] ---
+arithmetic.
+%
+The third is [<min>]/[<max>]/[<isalnum>] ---
 small helpers that exist because the standard headers either do
 not provide them (no generic [[min]] in C) or provide ASCII-only
 versions that fail on non-ASCII runes.
 
-<<function [[min]]>>=
-int
-min(int a, int b)
-{
-    if(a < b)
-        return a;
-    return b;
-}
-@
-
-<<function max (rio/util.c)>>=
-int
-max(int a, int b)
-{
-    if(a > b)
-        return a;
-    return b;
-}
-@
-
-
+\section{Memory management}
 
 <<function [[erealloc]]>>=
 void*
@@ -18704,6 +18697,31 @@ estrdup(char *s)
 @
 
 
+\section{Arithmetic}
+
+<<function [[min]]>>=
+int
+min(int a, int b)
+{
+    if(a < b)
+        return a;
+    return b;
+}
+@
+
+<<function max (rio/util.c)>>=
+int
+max(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+@
+
+
+
+
 
 % not sure why redefine it
 <<function [[isalnum]]>>=
@@ -18726,7 +18744,7 @@ int isalnum(Rune c)
 @
 %$
 
-
+\section{Unicode}
 
 <<function [[runemalloc]]>>=
 #define	runemalloc(n)		malloc((n)*sizeof(Rune))
