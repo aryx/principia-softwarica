@@ -1145,34 +1145,7 @@ enum {
 };
 @
 
-<<enum [[_anon_ (apps/lens.c)]]2>>=
-enum {
-    Mzoom,
-    Munzoom,
-    Mgrid,
-    Mredraw,
-    Mexit
-};
-@
 
-<<global [[menustr]]>>=
-static char *menustr[] = {
-    "zoom",
-    "unzoom",
-    "grid",
-    "redraw",
-    "exit",
-    nil
-};
-@
-
-<<global menu (apps/lens.c)>>=
-static Menu menu = {
-    menustr,
-    nil,
-    -1
-};
-@
 
 <<global [[lastp]]>>=
 static Point lastp;
@@ -1214,143 +1187,11 @@ static Rectangle	screenr;
 static uchar	*screenbuf;
 @
 
-<<function [[drawit]]>>=
-void
-drawit(void)
-{
-    Rectangle r;
-    border(view, view->r, Edge, red, ZP);
-    magnify();
-    r = insetrect(view->r, Edge);
-    draw(view, r, tmp, nil, tmp->r.min);
-    flushimage(display, true);
-}
-@
 
 <<global [[bypp]]>>=
 static int bypp;
 @
 
-<<function main (apps/lens.c)>>=
-void
-main(int argc, char *argv[])
-{
-    Event e;
-    char buf[5*12];
-    ulong chan;
-    int d;
-
-    USED(argc, argv);
-
-    if(initdraw(nil, nil, "lens") < 0){
-        fprint(2, "lens: initdraw failed: %r\n");
-        exits("initdraw");
-    }
-    einit(Emouse|Ekeyboard);
-
-    red = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DRed);
-    chequer = allocimage(display, Rect(0, 0, 2, 2), GREY1, 1, DBlack);
-
-    draw(chequer, Rect(0, 0, 1, 1), display->white, nil, ZP);
-    draw(chequer, Rect(1, 1, 2, 2), display->white, nil, ZP);
-    lastp = divpt(addpt(view->r.min, view->r.max), 2);
-
-    screenfd = open("/dev/screen", OREAD);
-    if(screenfd < 0){
-        fprint(2, "lens: can't open /dev/screen: %r\n");
-        exits("screen");
-    }
-    if(read(screenfd, buf, sizeof buf) != sizeof buf){
-        fprint(2, "lens: can't read /dev/screen: %r\n");
-        exits("screen");
-    }
-    chan = strtochan(buf);
-    d = chantodepth(chan);
-    if(d < 8){
-        fprint(2, "lens: can't handle screen format %11.11s\n", buf);
-        exits("screen");
-    }
-    bypp = d/8;
-    screenr.min.x = atoi(buf+1*12);
-    screenr.min.y = atoi(buf+2*12);
-    screenr.max.x = atoi(buf+3*12);
-    screenr.max.y = atoi(buf+4*12);
-    screenbuf = malloc(bypp*Dx(screenr)*Dy(screenr));
-    if(screenbuf == nil){
-        fprint(2, "lens: buffer malloc failed: %r\n");
-        exits("malloc");
-    }
-    eresized(0);
-
-    for(;;)
-        switch(event(&e)){
-        case Ekeyboard:
-            switch(e.kbdc){
-            case 'q':
-            case 0x7f:
-            case '\04':
-            caseexit:
-                exits(nil);
-            case '=':
-            case '+':
-            casezoom:
-                if(mag < Maxmag){
-                    mag++;
-                    makegrid();
-                    drawit();
-                }
-                break;
-            case 'g':
-            casegrid:
-                showgrid = !showgrid;
-                makegrid();
-                drawit();
-                break;
-            case '-':
-            case '_':
-            caseunzoom:
-                if(mag > 1){
-                    mag--;
-                    makegrid();
-                    drawit();
-                }
-                break;
-            case '.':
-            case ' ':
-            caseredraw:
-                drawit();
-                break;
-            case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': case'0':
-                mag = e.kbdc-'0';
-                if(mag == 0)
-                    mag = 10;
-                makegrid();
-                drawit();
-                break;
-            }
-            break;
-        case Emouse:
-            if(e.mouse.buttons & 1){
-                lastp = e.mouse.xy;
-                drawit();
-            }
-            if(e.mouse.buttons & 4)
-                switch(emenuhit(3, &e.mouse, &menu)){
-                case Mzoom:
-                    goto casezoom;
-                case Munzoom:
-                    goto caseunzoom;
-                case Mgrid:
-                    goto casegrid;
-                case Mredraw:
-                    goto caseredraw;
-                case Mexit:
-                    goto caseexit;
-                }
-            break;
-        }
-}
-@
 
 <<function [[makegrid]]>>=
 void
@@ -1375,82 +1216,7 @@ makegrid(void)
 }
 @
 
-<<function eresized (apps/lens.c)>>=
-void
-eresized(int new)
-{
-    if(new && getwindow(display, Refnone) < 0){
-        fprint(2, "lens: can't reattach to window: %r\n");
-        exits("attach");
-    }
-    freeimage(tmp);
-    tmp = allocimage(display, Rect(0, 0, Dx(view->r)-Edge, Dy(view->r)-Edge+Maxmag), view->chan, 0, DNofill);
-    if(tmp == nil){
-        fprint(2, "lens: allocimage failed: %r\n");
-        exits("allocimage");
-    }
-    drawit();
-}
-@
 
-<<function [[magnify]]>>=
-void
-magnify(void)
-{
-    int x, y, xx, yy, dd, i;
-    int dx, dy;
-    int xoff, yoff;
-    uchar out[8192];
-    uchar sp[4];
-
-    dx = (Dx(tmp->r)+mag-1)/mag;
-    dy = (Dy(tmp->r)+mag-1)/mag;
-    xoff = lastp.x-Dx(tmp->r)/(mag*2);
-    yoff  = lastp.y-Dy(tmp->r)/(mag*2);
-
-    yy = yoff;
-    dd = dy;
-    if(yy < 0){
-        dd += dy;
-        yy = 0;
-    }
-    if(yy+dd > Dy(screenr))
-        dd = Dy(screenr)-yy;
-    seek(screenfd, 5*12+bypp*yy*Dx(screenr), 0);
-    if(readn(screenfd, screenbuf+bypp*yy*Dx(screenr), bypp*Dx(screenr)*dd) != bypp*Dx(screenr)*dd){
-        fprint(2, "lens: can't read screen: %r\n");
-        return;
-    }
-
-    for(y=0; y<dy; y++){
-        yy = yoff+y;
-        if(yy>=0 && yy<Dy(screenr))
-            for(x=0; x<dx; x++){
-                xx = xoff+x;
-                if(xx>=0 && xx<Dx(screenr))	/* snarf pixel at xx, yy */
-                    for(i=0; i<bypp; i++)
-                        sp[i] = screenbuf[bypp*(yy*Dx(screenr)+xx)+i];
-                else
-                    sp[0] = sp[1] = sp[2] = sp[3] = 0;
-
-                for(xx=0; xx<mag; xx++)
-                    if(x*mag+xx < tmp->r.max.x)
-                        for(i=0; i<bypp; i++)
-                            out[(x*mag+xx)*bypp+i] = sp[i];
-            }
-        else
-            memset(out, 0, bypp*Dx(tmp->r));
-        for(yy=0; yy<mag && y*mag+yy<Dy(tmp->r); yy++){
-            werrstr("no error");
-            if(loadimage(tmp, Rect(0, y*mag+yy, Dx(tmp->r), y*mag+yy+1), out, bypp*Dx(tmp->r)) != bypp*Dx(tmp->r)){
-                exits("load");
-            }
-        }
-    }
-    if (showgrid && mag && grid)
-        draw(tmp, tmp->r, grid, nil, mulpt(Pt(xoff, yoff), mag));
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1559,195 +1325,6 @@ static int lastp = -1;
 static char backup[80];
 @
 
-<<function [[drawbar]]>>=
-void
-drawbar(void)
-{
-    int i, j;
-    int p;
-    char buf[400], bar[200];
-    static char lastbar[200];
-
-    if(n > d || n < 0 || d <= 0)
-        return;
-
-    i = (Dx(rbar)*n)/d;
-    p = (n*100LL)/d;
-
-    if(textmode){
-        if(Dx(rbar) > 150){
-            rbar.min.x = 0;
-            rbar.max.x = 150;
-            return;
-        }
-        bar[0] = '|';
-        for(j=0; j<i; j++)
-            bar[j+1] = '#';
-        for(; j<Dx(rbar); j++)
-            bar[j+1] = '-';
-        bar[j++] = '|';
-        bar[j++] = ' ';
-        sprint(bar+j, "%3d%% ", p);
-        for(i=0; bar[i]==lastbar[i] && bar[i]; i++)
-            ;
-        memset(buf, '\b', strlen(lastbar)-i);
-        strcpy(buf+strlen(lastbar)-i, bar+i);
-        if(buf[0])
-            write(1, buf, strlen(buf));
-        strcpy(lastbar, bar);
-        return;
-    }
-
-    if(lastp == p && last == i)
-        return;
-
-    if(lastp != p){
-        sprint(buf, "%d%%", p);
-        
-        stringbg(view, addpt(view->r.min, Pt(Dx(rbar)-30, 4)), text, ZP, display->defaultfont, buf, light, ZP);
-        lastp = p;
-    }
-
-    if(last != i){
-        if(i > last)
-            draw(view, Rect(rbar.min.x+last, rbar.min.y, rbar.min.x+i, rbar.max.y),
-                dark, nil, ZP);
-        else
-            draw(view, Rect(rbar.min.x+i, rbar.min.y, rbar.min.x+last, rbar.max.y),
-                light, nil, ZP);
-        last = i;
-    }
-    flushimage(display, 1);
-}
-@
-
-<<function eresized (apps/statusbar.c)>>=
-void
-eresized(int new)
-{
-    Point p, q;
-    Rectangle r;
-
-    if(new && getwindow(display, Refnone) < 0)
-        fprint(2,"can't reattach to window");
-
-    r = view->r;
-    draw(view, r, light, nil, ZP);
-    p = string(view, addpt(r.min, Pt(4,4)), text, ZP,
-        display->defaultfont, title);
-
-    p.x = r.min.x+4;
-    p.y += display->defaultfont->height+4;
-
-    q = subpt(r.max, Pt(4,4));
-    rbar = Rpt(p, q);
-
-    ptext = Pt(r.max.x-4-stringwidth(display->defaultfont, "100%"), r.min.x+4);
-    border(view, rbar, -2, dark, ZP);
-    last = 0;
-    lastp = -1;
-
-    drawbar();
-}
-@
-
-<<function [[bar]]>>=
-void
-bar(Biobuf *b)
-{
-    char *p, *f[2];
-    Event e;
-    int k, die, parent, child;
-
-    parent = getpid();
-
-    die = 0;
-    if(textmode)
-        child = -1;
-    else
-    switch(child = rfork(RFMEM|RFPROC)) {
-    case 0:
-        sleep(1000);
-        while(!die && (k = eread(Ekeyboard|Emouse, &e))) {
-            if(nokill==0 && k == Ekeyboard && (e.kbdc == 0x7F || e.kbdc == 0x03)) { /* del, ctl-c */
-                die = 1;
-                postnote(PNPROC, parent, "interrupt");
-                _exits("interrupt");
-            }
-        }
-        _exits(0);
-    }
-
-    while(!die && (p = Brdline(b, '\n'))) {
-        p[Blinelen(b)-1] = '\0';
-        if(tokenize(p, f, 2) != 2)
-            continue;
-        n = strtoll(f[0], 0, 0);
-        d = strtoll(f[1], 0, 0);
-        drawbar();
-    }
-    postnote(PNCTL, child, "kill");
-}
-@
-
-<<function usage (apps/statusbar.c)>>=
-static void
-usage(void)
-{
-    fprint(2, "usage: aux/statusbar [-kt] [-w minx,miny,maxx,maxy] 'title'\n");
-    exits("usage");
-}
-@
-
-<<function main (apps/statusbar.c)>>=
-void
-main(int argc, char **argv)
-{
-    Biobuf b;
-    char *p, *q;
-    int lfd;
-
-    p = "0,0,200,60";
-    
-    ARGBEGIN{
-    case 'w':
-        p = ARGF();
-        break;
-    case 't':
-        textmode = 1;
-        break;
-    case 'k':
-        nokill = 1;
-        break;
-    default:
-        usage();
-    }ARGEND;
-
-    if(argc != 1)
-        usage();
-
-    title = argv[0];
-
-    lfd = dup(0, -1);
-
-    while(q = strchr(p, ','))
-        *q = ' ';
-    Binit(&b, lfd, OREAD);
-    if(textmode || newwin(p) < 0){
-        textmode = 1;
-        rbar = Rect(0, 0, 60, 1);
-    }else{
-        if(initdraw(0, 0, "bar") < 0)
-            exits("initdraw");
-        initcolor();
-        einit(Emouse|Ekeyboard);
-        eresized(0);
-    }
-    bar(&b);
-
-    exits(0);
-}
-@
 
 <<function [[rdenv]]>>=
 /* all code below this line should be in the library, but is stolen from colors instead */
@@ -1940,9 +1517,7 @@ static vlong n, d;
 
 <<function [[bar]]>>
 
-
 <<function usage (apps/statusbar.c)>>
-
 <<function main (apps/statusbar.c)>>
 
 
@@ -2096,31 +1671,6 @@ refreshwin(void)
 }
 @
 
-<<function [[drawnowin]]>>=
-static void
-drawnowin(int i)
-{
-    Rectangle r;
-
-    r = Rect(0,0,(Dx(view->r)-2*MARGIN+PAD)/cols-PAD, font->height);
-    r = rectaddpt(rectaddpt(r, Pt(MARGIN+(PAD+Dx(r))*(i/rows),
-                MARGIN+(PAD+Dy(r))*(i%rows))), view->r.min);
-    draw(view, insetrect(r, -1), lightblue, nil, ZP);
-}
-@
-
-<<function [[drawwin]]>>=
-static void
-drawwin(int i)
-{
-    draw(view, win[i].r, lightblue, nil, ZP);
-    _string(view, addpt(win[i].r.min, Pt(2,0)), display->black, ZP,
-        font, win[i].label, nil, strlen(win[i].label), 
-        win[i].r, nil, ZP, SoverD);
-    border(view, win[i].r, 1, display->black, ZP);	
-    win[i].dirty = 0;
-}
-@
 
 <<function [[geometry]]>>=
 static int
@@ -2148,36 +1698,6 @@ geometry(void)
 }
 @
 
-<<function redraw (apps/winwatch.c)>>=
-static void
-redraw(Image *view, int all)
-{
-    int i;
-
-    all |= geometry();
-    if(all)
-        draw(view, view->r, lightblue, nil, ZP);
-    for(i=0; i<nwin; i++)
-        if(all || win[i].dirty)
-            drawwin(i);
-    if(!all)
-        for(; i<onwin; i++)
-            drawnowin(i);
-
-    onwin = nwin;
-}
-@
-
-<<function eresized (apps/winwatch.c)>>=
-void
-eresized(int new)
-{
-    if(new && getwindow(display, Refmesg) < 0)
-        fprint(2,"can't reattach to window");
-    geometry();
-    redraw(view, 1);
-}
-@
 
 <<function [[click]]>>=
 static void
@@ -2222,71 +1742,6 @@ click(Mouse m)
 }
 @
 
-<<function usage (apps/winwatch.c)>>=
-static void
-usage(void)
-{
-    fprint(2, "usage: winwatch [-e exclude] [-f font]\n");
-    exits("usage");
-}
-@
-
-<<function main (apps/winwatch.c)>>=
-void
-main(int argc, char **argv)
-{
-    char *fontname;
-    int Etimer;
-    Event e;
-
-    fontname = "/lib/font/bit/lucidasans/unicode.8.font";
-    ARGBEGIN{
-    case 'f':
-        fontname = EARGF(usage());
-        break;
-    case 'e':
-        exclude = regcomp(EARGF(usage()));
-        if(exclude == nil)
-            sysfatal("Bad regexp");
-        break;
-    default:
-        usage();
-    }ARGEND
-
-    if(argc)
-        usage();
-
-    initdraw(0, 0, "winwatch");
-    lightblue = allocimagemix(display, DPalebluegreen, DWhite);
-    if(lightblue == nil)
-        sysfatal("allocimagemix: %r");
-    if((font = openfont(display, fontname)) == nil)
-        sysfatal("font '%s' not found", fontname);
-
-    refreshwin();
-    redraw(view, 1);
-    einit(Emouse|Ekeyboard);
-    Etimer = etimer(0, 2500);
-
-    for(;;){
-        switch(eread(Emouse|Ekeyboard|Etimer, &e)){
-        case Ekeyboard:
-            if(e.kbdc==0x7F || e.kbdc=='q')
-                exits(0);
-            break;
-        case Emouse:
-            if(e.mouse.buttons)
-                click(e.mouse);
-            /* fall through  */
-        default:	/* Etimer */
-            refreshwin();
-            redraw(view, 0);
-            break;
-        }
-    }
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -2303,8 +1758,6 @@ extern Point _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *
 
 typedef struct Win Win;
 <<struct [[Win]]>>
-
-
 
 <<global [[exclude]]>>
 <<global [[win]]>>

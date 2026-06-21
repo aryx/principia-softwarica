@@ -14533,16 +14533,30 @@ writewctl(Xfid *x, char *err)
 
 %claude:
 This chapter covers features that go beyond [[rio]]'s basic operation:
-external access to [[rio]]'s filesystem ([[/srv/rio.<user>.<pid>]]),
-command-line window control ([[/srv/riowctl.<user>.<pid>]]),
+external access to [[rio]]'s filesystem ([[/srv/rio.<user>.<pid>]], 
+[[/srv/riowctl.<user>.<pid>]]),
 recursive [[rio]], and terminal editing features like snarf/paste,
 plumbing, auto-completion, and word selection.
 %claude:
 It also covers [[rio]]'s command-line options ([[rio -s]], [[rio -i]],
-[[rio -k]], [[rio -f]]), holding mode, signal handling, the timer
-subsystem, 9P flush support, and security.
+[[rio -k]], [[rio -f]]), additional control messages,
+%holding mode, 9P flush support, and security.
+signal handling, the timer subsystem, 
 
-\section{External mount: [[/srv/rio.<user>.<pid>]]}
+\section{External access}
+
+%yoann: quick intro and %toc:
+%claude: %toc:
+So far, every program that talked to [[rio]]'s filesystem was a child
+process that inherited the pipe's file descriptor. This section covers the
+two ways a process can reach a \emph{running} [[rio]] from the outside,
+both built on \plan's [[/srv]]: the [[/srv/rio.<user>.<pid>]] mount, through
+which any program can open a window, and the
+[[/srv/riowctl.<user>.<pid>]] channel, used to drive [[rio]] from the
+command line. I close with {recursive [[rio]]}---running [[rio]] inside one
+of its own windows---which is just another client of these same mechanisms.
+
+\subsection{External mount: [[/srv/rio.<user>.<pid>]]}
 % essentially a published pipe? so dont have
 % to be children of process who created the pipe
 % so =~ named pipe (but again, no need special file, can do via
@@ -14672,7 +14686,7 @@ if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wct
 }
 @
 
-\section{Command-line control: [[/srv/riowctl.<user>.<pid>]]}
+\subsection{Command-line control: [[/srv/riowctl.<user>.<pid>]]}
 
 % allow to run graphical command from the command line
 % allow also programs to create toplevel windows?
@@ -15242,6 +15256,64 @@ wbottomme(Window *w)
 @
 
 
+\section{Notes (signals)}
+
+% saw some hangup before note when delete a window
+% and want to kill associated process
+%claude:
+When [[rio]] receives a note (signal), [[shutdown()]] first sends
+``hangup'' to all window processes via [[killprocs()]], then checks
+if the note is one of the expected shutdown reasons (delete, hangup,
+kill, exit). For expected notes, it calls [[threadexitsall()]] with
+a lock to prevent multiple threads from racing.
+For unexpected notes, it prints a diagnostic and aborts---a deliberate
+crash to aid debugging.
+
+<<global [[oknotes]]>>=
+char *oknotes[] =
+{
+    "delete",
+    "hangup",
+    "kill",
+    "exit",
+    nil
+};
+@
+
+
+% threadmain -> threadnotify(<>, 1);
+<<function [[shutdown]]>>=
+int
+shutdown(void *, char *msg)
+{
+    int i;
+    static Lock shutdownlk;
+    
+    killprocs();
+    for(i=0; oknotes[i]; i++)
+        if(strncmp(oknotes[i], msg, strlen(oknotes[i])) == 0){
+            lock(&shutdownlk);	/* only one can threadexitsall */
+            threadexitsall(msg);
+        }
+    fprint(STDERR, "rio %d: abort: %s\n", getpid(), msg);
+    abort();
+    exits(msg);
+    return 0;
+}
+@
+
+<<function [[killprocs]]>>=
+void
+killprocs(void)
+{
+    int i;
+
+    for(i=0; i<nwindow; i++)
+        postnote(PNGROUP, windows[i]->pid, "hangup");
+}
+@
+
+
 \section{Recursive [[rio]]}
 \label{sec:recursive-rio}
 
@@ -15393,6 +15465,494 @@ if(w->deleted)
     continue;
 @
 
+
+\section{Timer}
+
+% seems only used by wscrsleep so maybe should be in adv topics,
+%  but maybe it's an interesting thing to show
+%claude:
+The timer subsystem provides cancellable one-shot timers, used
+primarily by [[wscrsleep()]] for scroll bar repeat delays.
+The design uses a dedicated [[timerproc]] that polls at 1ms intervals,
+decrementing each timer's [[dt]] countdown. When a timer fires,
+it sends on the timer's channel; when cancelled, it is recycled
+into a freelist.
+
+<<global [[clockfd]]>>=
+fdt	clockfd;
+@
+
+<<[[filsysinit()]] set clockfd>>=
+clockfd = open("/dev/time", OREAD|OCEXEC);
+@
+
+%  -> <>
+% used to give current date for files /dev/xxx
+<<function [[getclock]]>>=
+static
+uint
+getclock(void)
+{
+    char buf[32];
+
+    seek(clockfd, 0, 0);
+    read(clockfd, buf, sizeof buf);
+    return atoi(buf);
+}
+@
+
+
+
+
+
+
+
+% who uses the timer and timerproc?
+% wscrsleep
+
+
+<<struct [[Timer]]>>=
+struct Timer
+{
+    int		dt;
+    int		cancel;
+    Channel	*c;	/* chan(int) */
+    Timer	*next;
+};
+@
+
+<<[[main()]] threads creation>>=
+timerinit();
+@
+% need be before the other thread? or order does not matter?
+
+<<function [[timerinit]]>>=
+void
+timerinit(void)
+{
+    ctimer = chancreate(sizeof(Timer*), 100);
+    proccreate(timerproc, nil, STACK);
+}
+@
+
+%claude:
+[[timerproc()]] is interesting for its blocking/polling hybrid:
+when no timers are active, it blocks on [[recvp(ctimer)]] waiting
+for work. When timers are active, it polls with [[sleep(1)]] and
+checks for new timer requests with non-blocking [[nbrecv()]].
+The [[goto gotit]] pattern avoids duplicating the timer-insertion code.
+
+<<function [[timerproc]]>>=
+static
+void
+timerproc(void*)
+{
+    int i, nt, na, dt, del;
+    Timer **t, *x;
+    uint old, new;
+
+    rfork(RFFDG);
+    threadsetname("TIMERPROC");
+
+    t = nil;
+    na = 0;
+    nt = 0;
+    old = msec();
+    for(;;){
+        sleep(1);	/* will sleep minimum incr */
+        new = msec();
+        dt = new-old;
+        old = new;
+        if(dt < 0)	/* timer wrapped; go around, losing a tick */
+            continue;
+        for(i=0; i<nt; i++){
+            x = t[i];
+            x->dt -= dt;
+            del = 0;
+            if(x->cancel){
+                timerstop(x);
+                del = 1;
+            }else if(x->dt <= 0){
+                /*
+                 * avoid possible deadlock if client is
+                 * now sending on ctimer
+                 */
+                if(nbsendul(x->c, 0) > 0)
+                    del = 1;
+            }
+            if(del){
+                memmove(&t[i], &t[i+1], (nt-i-1)*sizeof t[0]);
+                --nt;
+                --i;
+            }
+        }
+        if(nt == 0){
+            x = recvp(ctimer);
+    gotit:
+            if(nt == na){
+                na += 10;
+                t = realloc(t, na*sizeof(Timer*));
+                if(t == nil)
+                    abort();
+            }
+            t[nt++] = x;
+            old = msec();
+        }
+        if(nbrecv(ctimer, &x) > 0)
+            goto gotit;
+    }
+}
+@
+
+
+
+
+
+
+<<global [[ctimer]]>>=
+// chan<?> (listener = ?, sender = ?)
+static Channel*	ctimer;	/* chan(Timer*)[100] */
+@
+
+<<global [[timer]]>>=
+static Timer *timer;
+@
+
+<<function [[msec]]>>=
+static
+uint
+msec(void)
+{
+    return nsec()/1000000;
+}
+@
+
+<<function [[timerstop]]>>=
+void
+timerstop(Timer *t)
+{
+    t->next = timer;
+    timer = t;
+}
+@
+
+<<function [[timercancel]]>>=
+void
+timercancel(Timer *t)
+{
+    t->cancel = true;
+}
+@
+
+
+
+%claude:
+Timer allocation uses a freelist ([[timer]]) to avoid repeated
+[[malloc]]/[[free]] for the common case of scroll delays.
+[[timerstart()]] either reuses a freed timer or allocates a new one,
+sets the countdown and sends it to [[timerproc]] via the [[ctimer]]
+channel.
+
+<<function [[timerstart]]>>=
+/*
+ * timeralloc() and timerfree() don't lock, so can only be
+ * called from the main proc.
+ */
+Timer*
+timerstart(int dt)
+{
+    Timer *t;
+
+    t = timer;
+    if(t)
+        timer = timer->next;
+    else{
+        t = emalloc(sizeof(Timer));
+        t->c = chancreate(sizeof(int), 0);
+    }
+    t->next = nil;
+    t->dt = dt;
+    t->cancel = false;
+    sendp(ctimer, t);
+    return t;
+}
+@
+
+
+
+
+\section{Command-line options}
+
+\subsection{Automatic scrolling: [[rio -s]]}
+
+%claude:
+By default, [[rio]] windows only auto-scroll when the user is not
+reading back through the output (i.e., when [[q0]] is at the end).
+The [[-s]] flag makes all new windows scroll unconditionally,
+which is useful for monitoring logs or long-running commands.
+
+<<global [[scrolling]]>>=
+bool		scrolling;
+@
+\t rename autoscroll too (w->autoscroll and global autoscroll)
+
+<<[[main()]] command line processing>>=
+case 's':
+    scrolling = true;
+    break;
+@
+% who uses that then? thread_window to decide or not
+% to read more from process stdout (see 'qh vs q0 || scrolling')
+
+% and then wmk set w->scrolling to default global value in scrolling
+% passed when new()
+
+
+\subsection{Initial command: [[rio -i]]}
+
+%claude:
+The [[-i]] flag runs a command at startup, useful for automated
+setups that create multiple windows with specific programs.
+The command runs in a fresh process with its own environment,
+namespace, file descriptors, and note group.
+
+<<[[main()]] locals>>=
+char *initstr = nil;
+@
+
+<<[[main()]] command line processing>>=
+case 'i':
+    initstr = ARGF();
+    if(initstr == nil)
+        usage();
+    break;
+@
+
+<<[[main()]] if initstr or kdbin>>=
+if(initstr)
+    proccreate(initcmd, initstr, STACK);
+@
+
+% process initcmd -> rename procinitcmd? or initcmdproc?
+<<function [[initcmd]]>>=
+void
+initcmd(void *arg)
+{
+    char *cmd;
+
+    cmd = arg;
+    rfork(RFENVG|RFFDG|RFNOTEG|RFNAMEG);
+    procexecl(nil, "/bin/rc", "rc", "-c", cmd, nil);
+    fprint(STDERR, "rio: exec failed: %r\n");
+    exits("exec");
+}
+@
+
+% RFNOTEG! own note group, so C-c goes to only that group only that process?
+
+\subsection{Fake keyboard input: [[rio -k]]}
+% what for? to help debug app? to automate testing?
+% put in Debugging support chapter? or Debugging chapter
+% if it helps debug only rio itself
+
+%claude:
+The [[-k]] flag creates a special ``keyboard'' window that feeds
+simulated keyboard input to [[rio]] through [[/dev/kbdin]].
+This is used for software keyboard implementations
+(e.g., on touchscreen devices) or testing.
+The keyboard window gets special treatment: it always receives
+mouse input when the pointer is over it, it cannot become the
+``current'' window (to avoid stealing focus from the target),
+and button 6 toggles its visibility.
+
+%\subsubsection{[[rio -k]]}
+
+<<[[main()]] locals>>=
+char *kbdin = nil;
+@
+
+<<[[main()]] command line processing>>=
+case 'k':
+    if(kbdin != nil)
+        usage();
+    kbdin = ARGF();
+    if(kbdin == nil)
+        usage();
+    break;
+@
+
+
+
+<<global [[wkeyboard]]>>=
+Window	*wkeyboard;	/* window of simulated keyboard */
+@
+
+
+
+
+<<global [[kbdargv]]>>=
+char *kbdargv[] = { "rc", "-c", nil, nil };
+@
+
+<<[[main()]] locals>>=
+Image *i;
+Rectangle r;
+@
+
+<<[[main()]] if initstr or kdbin>>=
+if(kbdin){
+    kbdargv[2] = kbdin;
+    r = view->r;
+    r.max.x = r.min.x+300;
+    r.max.y = r.min.y+80;
+    i = allocwindow(desktop, r, Refbackup, DWhite);
+    wkeyboard = new(i, false, scrolling, 0, nil, "/bin/rc", kbdargv);
+    if(wkeyboard == nil)
+        error("can't create keyboard window");
+}
+@
+
+
+
+\subsubsection{[[wkeyboard]]}
+
+<<[[mousethread()]] if wkeyboard and button 6>>=
+if(wkeyboard!=nil && (mouse->buttons & (1<<5))){
+    keyboardhide();
+    break;
+}
+@
+
+<<[[mousethread()]] if wkeyboard and ptinrect>>=
+/* override everything for the keyboard window */
+if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
+    /* make sure it's on top; this call is free if it is */
+    wtopme(wkeyboard);
+    winput = wkeyboard;
+}
+@
+
+<<[[wcurrent()]] if wkeyboard>>=
+if(wkeyboard!=nil && w==wkeyboard)
+    return;
+@
+
+<<[[wclosewin()]] if wkeyboard>>=
+if(w == wkeyboard)
+    wkeyboard = nil;
+@
+
+\subsubsection{[[/mnt/wsys/kdbin]]}
+
+%claude:
+The [[/mnt/wsys/kdbin]] file is write-only and restricted to the
+keyboard window. Writing to it converts the bytes to runes and
+injects them into the keyboard channel, making them appear as
+if the user had typed them on a real keyboard.
+
+<<[[qid]] cases>>=
+Qkbdin,
+@
+<<dirtab array elements>>=
+{ "kbdin",		QTFILE,	Qkbdin,		0200 },
+@
+
+<<[[xfidopen()]] cases>>=
+case Qkbdin:
+    if(w !=  wkeyboard){
+        filsysrespond(x->fs, x, &fc, Eperm);
+        return;
+    }
+    break;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qkbdin:
+    keyboardsend(req->data, cnt);
+    break;
+@
+
+<<function [[keyboardsend]]>>=
+/*
+ * Used by /dev/kbdin
+ */
+void
+keyboardsend(char *s, int cnt)
+{
+    Rune *r;
+    int i, nb, nr;
+
+    r = runemalloc(cnt);
+    /* BUGlet: partial runes will be converted to error runes */
+    cvttorunes(s, cnt, r, &nb, &nr, nil);
+    for(i=0; i<nr; i++)
+        send(keyboardctl->c, &r[i]);
+    free(r);
+}
+@
+
+\subsubsection{Keyboard hide}
+
+% button 6 ???
+%claude:
+Button 6 toggles the keyboard window's visibility. The handler
+forwards both the button-down and button-up mouse events to the
+keyboard window's mouse channel, letting the keyboard program
+handle the toggle logic itself.
+
+<<function [[keyboardhide]]>>=
+/*
+ * Button 6 - keyboard toggle - has been pressed.
+ * Send event to keyboard, wait for button up, send that.
+ * Note: there is no coordinate translation done here; this
+ * is just about getting button 6 to the keyboard simulator.
+ */
+void
+keyboardhide(void)
+{
+    send(wkeyboard->mc.c, mouse);
+    do
+        readmouse(mousectl);
+    while(mouse->buttons & (1<<5));
+    send(wkeyboard->mc.c, mouse);
+}
+@
+
+
+\subsection{Font selection: [[rio -f]]}
+
+%claude:
+The [[-f]] flag overrides the default font. If not specified,
+[[rio]] falls back to the [[font]] environment variable, then to the
+system default Lucida. The font is validated before [[rio]] takes
+over the screen, and published in the environment for child processes.
+
+<<global [[fontname]]>>=
+char		*fontname;
+@
+
+<<[[main()]] command line processing>>=
+case 'f':
+    fontname = ARGF();
+    if(fontname == nil)
+        usage();
+    break;
+@
+
+<<[[main()]] set some globals>>=
+if(fontname == nil)
+    fontname = getenv("font");
+if(fontname == nil)
+    fontname = "/lib/font/bit/lucm/unicode.9.font";
+
+/* check font before barging ahead */
+if(access(fontname, 0) < 0){
+    fprint(STDERR, "rio: can't access %s: %r\n", fontname);
+    exits("font open");
+}
+
+putenv("font", fontname);
+@
 
 \section{Advanced terminal editing}
 
@@ -17129,693 +17689,9 @@ wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
 @
 
 
+\section{Advanced fileserver features}
 
-\section{Automatic scrolling: [[rio -s]]}
-
-%claude:
-By default, [[rio]] windows only auto-scroll when the user is not
-reading back through the output (i.e., when [[q0]] is at the end).
-The [[-s]] flag makes all new windows scroll unconditionally,
-which is useful for monitoring logs or long-running commands.
-
-<<global [[scrolling]]>>=
-bool		scrolling;
-@
-\t rename autoscroll too (w->autoscroll and global autoscroll)
-
-<<[[main()]] command line processing>>=
-case 's':
-    scrolling = true;
-    break;
-@
-% who uses that then? thread_window to decide or not
-% to read more from process stdout (see 'qh vs q0 || scrolling')
-
-% and then wmk set w->scrolling to default global value in scrolling
-% passed when new()
-
-
-\section{Initial command: [[rio -i]]}
-
-%claude:
-The [[-i]] flag runs a command at startup, useful for automated
-setups that create multiple windows with specific programs.
-The command runs in a fresh process with its own environment,
-namespace, file descriptors, and note group.
-
-<<[[main()]] locals>>=
-char *initstr = nil;
-@
-
-<<[[main()]] command line processing>>=
-case 'i':
-    initstr = ARGF();
-    if(initstr == nil)
-        usage();
-    break;
-@
-
-<<[[main()]] if initstr or kdbin>>=
-if(initstr)
-    proccreate(initcmd, initstr, STACK);
-@
-
-% process initcmd -> rename procinitcmd? or initcmdproc?
-<<function [[initcmd]]>>=
-void
-initcmd(void *arg)
-{
-    char *cmd;
-
-    cmd = arg;
-    rfork(RFENVG|RFFDG|RFNOTEG|RFNAMEG);
-    procexecl(nil, "/bin/rc", "rc", "-c", cmd, nil);
-    fprint(STDERR, "rio: exec failed: %r\n");
-    exits("exec");
-}
-@
-
-% RFNOTEG! own note group, so C-c goes to only that group only that process?
-
-\section{Fake keyboard input: [[rio -k]]}
-% what for? to help debug app? to automate testing?
-% put in Debugging support chapter? or Debugging chapter
-% if it helps debug only rio itself
-
-%claude:
-The [[-k]] flag creates a special ``keyboard'' window that feeds
-simulated keyboard input to [[rio]] through [[/dev/kbdin]].
-This is used for software keyboard implementations
-(e.g., on touchscreen devices) or testing.
-The keyboard window gets special treatment: it always receives
-mouse input when the pointer is over it, it cannot become the
-``current'' window (to avoid stealing focus from the target),
-and button 6 toggles its visibility.
-
-\subsection{[[rio -k]]}
-
-<<[[main()]] locals>>=
-char *kbdin = nil;
-@
-
-<<[[main()]] command line processing>>=
-case 'k':
-    if(kbdin != nil)
-        usage();
-    kbdin = ARGF();
-    if(kbdin == nil)
-        usage();
-    break;
-@
-
-
-
-<<global [[wkeyboard]]>>=
-Window	*wkeyboard;	/* window of simulated keyboard */
-@
-
-
-
-
-<<global [[kbdargv]]>>=
-char *kbdargv[] = { "rc", "-c", nil, nil };
-@
-
-<<[[main()]] locals>>=
-Image *i;
-Rectangle r;
-@
-
-<<[[main()]] if initstr or kdbin>>=
-if(kbdin){
-    kbdargv[2] = kbdin;
-    r = view->r;
-    r.max.x = r.min.x+300;
-    r.max.y = r.min.y+80;
-    i = allocwindow(desktop, r, Refbackup, DWhite);
-    wkeyboard = new(i, false, scrolling, 0, nil, "/bin/rc", kbdargv);
-    if(wkeyboard == nil)
-        error("can't create keyboard window");
-}
-@
-
-
-
-\subsection{[[wkeyboard]]}
-
-<<[[mousethread()]] if wkeyboard and button 6>>=
-if(wkeyboard!=nil && (mouse->buttons & (1<<5))){
-    keyboardhide();
-    break;
-}
-@
-
-<<[[mousethread()]] if wkeyboard and ptinrect>>=
-/* override everything for the keyboard window */
-if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
-    /* make sure it's on top; this call is free if it is */
-    wtopme(wkeyboard);
-    winput = wkeyboard;
-}
-@
-
-<<[[wcurrent()]] if wkeyboard>>=
-if(wkeyboard!=nil && w==wkeyboard)
-    return;
-@
-
-<<[[wclosewin()]] if wkeyboard>>=
-if(w == wkeyboard)
-    wkeyboard = nil;
-@
-
-\subsection{[[/mnt/wsys/kdbin]]}
-
-%claude:
-The [[/mnt/wsys/kdbin]] file is write-only and restricted to the
-keyboard window. Writing to it converts the bytes to runes and
-injects them into the keyboard channel, making them appear as
-if the user had typed them on a real keyboard.
-
-<<[[qid]] cases>>=
-Qkbdin,
-@
-<<dirtab array elements>>=
-{ "kbdin",		QTFILE,	Qkbdin,		0200 },
-@
-
-<<[[xfidopen()]] cases>>=
-case Qkbdin:
-    if(w !=  wkeyboard){
-        filsysrespond(x->fs, x, &fc, Eperm);
-        return;
-    }
-    break;
-@
-
-<<[[xfidwrite()]] cases>>=
-case Qkbdin:
-    keyboardsend(req->data, cnt);
-    break;
-@
-
-<<function [[keyboardsend]]>>=
-/*
- * Used by /dev/kbdin
- */
-void
-keyboardsend(char *s, int cnt)
-{
-    Rune *r;
-    int i, nb, nr;
-
-    r = runemalloc(cnt);
-    /* BUGlet: partial runes will be converted to error runes */
-    cvttorunes(s, cnt, r, &nb, &nr, nil);
-    for(i=0; i<nr; i++)
-        send(keyboardctl->c, &r[i]);
-    free(r);
-}
-@
-
-\subsection{Keyboard hide}
-
-% button 6 ???
-%claude:
-Button 6 toggles the keyboard window's visibility. The handler
-forwards both the button-down and button-up mouse events to the
-keyboard window's mouse channel, letting the keyboard program
-handle the toggle logic itself.
-
-<<function [[keyboardhide]]>>=
-/*
- * Button 6 - keyboard toggle - has been pressed.
- * Send event to keyboard, wait for button up, send that.
- * Note: there is no coordinate translation done here; this
- * is just about getting button 6 to the keyboard simulator.
- */
-void
-keyboardhide(void)
-{
-    send(wkeyboard->mc.c, mouse);
-    do
-        readmouse(mousectl);
-    while(mouse->buttons & (1<<5));
-    send(wkeyboard->mc.c, mouse);
-}
-@
-
-
-\section{Font selection: [[rio -f]]}
-
-%claude:
-The [[-f]] flag overrides the default font. If not specified,
-[[rio]] falls back to the [[font]] environment variable, then to the
-system default Lucida. The font is validated before [[rio]] takes
-over the screen, and published in the environment for child processes.
-
-<<global [[fontname]]>>=
-char		*fontname;
-@
-
-<<[[main()]] command line processing>>=
-case 'f':
-    fontname = ARGF();
-    if(fontname == nil)
-        usage();
-    break;
-@
-
-<<[[main()]] set some globals>>=
-if(fontname == nil)
-    fontname = getenv("font");
-if(fontname == nil)
-    fontname = "/lib/font/bit/lucm/unicode.9.font";
-
-/* check font before barging ahead */
-if(access(fontname, 0) < 0){
-    fprint(STDERR, "rio: can't access %s: %r\n", fontname);
-    exits("font open");
-}
-
-putenv("font", fontname);
-@
-
-
-\section{Holding mode}
-
-% ??? why someone wants to write holdon? to stop key event to
-% go to app?
-
-% also a textual window field?
-%claude:
-Holding mode freezes a window's output: when [[w->holding]] is true,
-the [[WCread]] alt is disabled so the window thread stops reading
-from the application's stdout. This lets the user examine output
-without it scrolling away.
-%claude:
-Holding is indicated visually through blue-tinted borders and text
-colors, and the cursor changes to a white arrow.
-It can be toggled by Escape or by writing ``holdon''/``holdoff''
-to [[/dev/consctl]]. The holding counter supports nested holds
-(multiple programs can request it), and entering raw mode
-automatically disables holding.
-<<[[Window]] config fields>>=
-bool	holding;
-@
-%old: bool_byte
-
-% main effect! no sending on /dev/cons
-
-<<[[winctl()]] alts adjustments, if holding>>=
-if(w->holding)
-    alts[WCread].op = CHANNOP;
-@
-
-
-
-% visual effect
-
-<<[[wsetcursor()]] if holding>>=
-if(p==nil && w->holding)
-    p = &whitearrow;
-@
-
-<<[[wborder()]] if holding>>=
-if(w->holding){
-    if(type == Selborder)
-        col = holdcol;
-    else
-        col = paleholdcol;
-}
-@
-
-
-<<[[wsetcols()]] if holding>>=
-if(w->holding)
-    if(w == input)
-        w->frm.cols[TEXT] = w->frm.cols[HTEXT] = holdcol;
-    else
-        w->frm.cols[TEXT] = w->frm.cols[HTEXT] = lightholdcol;
-@
-
-
-
-% for holding mode
-<<global [[holdcol]]>>=
-static	Image	*holdcol;
-@
-
-<<global [[paleholdcol]]>>=
-static	Image	*paleholdcol;
-@
-
-<<global [[lightholdcol]]>>=
-static	Image	*lightholdcol;
-@
-
-<<[[wmk()]] extra colors initialisation>>=
-holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
-lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
-paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue
-@
-
-% how set it up (dev/consctl or special key)
-
-<<[[Wctlmesgkind]] cases>>=
-Holdon,
-Holdoff,
-@
-
-<<[[xfidwrite()]] Qconsctl case>>=
-if(strncmp(req->data, "holdon", 6)==0){
-    if(w->holding++ == 0)
-        wsendctlmesg(w, Holdon, ZR, nil);
-    break;
-}
-if(strncmp(req->data, "holdoff", 7)==0 && w->holding){
-    if(--w->holding == false)
-        wsendctlmesg(w, Holdoff, ZR, nil);
-    break;
-}
-@
-
-<<[[xfidclose()]] Qconsctl case, if holding>>=
-if(w->holding){
-    w->holding = false;
-    wsendctlmesg(w, Holdoff, ZR, nil);
-}
-@
-
-<<[[xfidwrite()]] Qconsctl case, if rawon message and holding mode>>=
-if(w->holding){
-    w->holding = false;
-    wsendctlmesg(w, Holdoff, ZR, nil);
-}
-@
-
-
-
-
-<<[[wkeyctl()]] if holding>>=
-if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
-    if(w->holding)
-        --w->holding;
-    else
-        w->holding++;
-    wrepaint(w);
-    if(r == 0x1B)
-        return;
-}
-@
-% use = false and = true instead?
-
-% wrepaint because wsetborder will change certain colors now!
-<<[[wctlmesg()]] cases>>=
-case Holdon:
-case Holdoff:
-    <<[[wctlmesg()]] break if window was deleted>>
-    wrepaint(w);
-    flushimage(display, true);
-    break;
-@
-
-
-\section{Notes (signals)}
-
-% saw some hangup before note when delete a window
-% and want to kill associated process
-%claude:
-When [[rio]] receives a note (signal), [[shutdown()]] first sends
-``hangup'' to all window processes via [[killprocs()]], then checks
-if the note is one of the expected shutdown reasons (delete, hangup,
-kill, exit). For expected notes, it calls [[threadexitsall()]] with
-a lock to prevent multiple threads from racing.
-For unexpected notes, it prints a diagnostic and aborts---a deliberate
-crash to aid debugging.
-
-<<global [[oknotes]]>>=
-char *oknotes[] =
-{
-    "delete",
-    "hangup",
-    "kill",
-    "exit",
-    nil
-};
-@
-
-
-% threadmain -> threadnotify(<>, 1);
-<<function [[shutdown]]>>=
-int
-shutdown(void *, char *msg)
-{
-    int i;
-    static Lock shutdownlk;
-    
-    killprocs();
-    for(i=0; oknotes[i]; i++)
-        if(strncmp(oknotes[i], msg, strlen(oknotes[i])) == 0){
-            lock(&shutdownlk);	/* only one can threadexitsall */
-            threadexitsall(msg);
-        }
-    fprint(STDERR, "rio %d: abort: %s\n", getpid(), msg);
-    abort();
-    exits(msg);
-    return 0;
-}
-@
-
-<<function [[killprocs]]>>=
-void
-killprocs(void)
-{
-    int i;
-
-    for(i=0; i<nwindow; i++)
-        postnote(PNGROUP, windows[i]->pid, "hangup");
-}
-@
-
-
-\section{Timer}
-
-% seems only used by wscrsleep so maybe should be in adv topics,
-%  but maybe it's an interesting thing to show
-%claude:
-The timer subsystem provides cancellable one-shot timers, used
-primarily by [[wscrsleep()]] for scroll bar repeat delays.
-The design uses a dedicated [[timerproc]] that polls at 1ms intervals,
-decrementing each timer's [[dt]] countdown. When a timer fires,
-it sends on the timer's channel; when cancelled, it is recycled
-into a freelist.
-
-<<global [[clockfd]]>>=
-fdt	clockfd;
-@
-
-<<[[filsysinit()]] set clockfd>>=
-clockfd = open("/dev/time", OREAD|OCEXEC);
-@
-
-%  -> <>
-% used to give current date for files /dev/xxx
-<<function [[getclock]]>>=
-static
-uint
-getclock(void)
-{
-    char buf[32];
-
-    seek(clockfd, 0, 0);
-    read(clockfd, buf, sizeof buf);
-    return atoi(buf);
-}
-@
-
-
-
-
-
-
-
-% who uses the timer and timerproc?
-% wscrsleep
-
-
-<<struct [[Timer]]>>=
-struct Timer
-{
-    int		dt;
-    int		cancel;
-    Channel	*c;	/* chan(int) */
-    Timer	*next;
-};
-@
-
-<<[[main()]] threads creation>>=
-timerinit();
-@
-% need be before the other thread? or order does not matter?
-
-<<function [[timerinit]]>>=
-void
-timerinit(void)
-{
-    ctimer = chancreate(sizeof(Timer*), 100);
-    proccreate(timerproc, nil, STACK);
-}
-@
-
-%claude:
-[[timerproc()]] is interesting for its blocking/polling hybrid:
-when no timers are active, it blocks on [[recvp(ctimer)]] waiting
-for work. When timers are active, it polls with [[sleep(1)]] and
-checks for new timer requests with non-blocking [[nbrecv()]].
-The [[goto gotit]] pattern avoids duplicating the timer-insertion code.
-
-<<function [[timerproc]]>>=
-static
-void
-timerproc(void*)
-{
-    int i, nt, na, dt, del;
-    Timer **t, *x;
-    uint old, new;
-
-    rfork(RFFDG);
-    threadsetname("TIMERPROC");
-
-    t = nil;
-    na = 0;
-    nt = 0;
-    old = msec();
-    for(;;){
-        sleep(1);	/* will sleep minimum incr */
-        new = msec();
-        dt = new-old;
-        old = new;
-        if(dt < 0)	/* timer wrapped; go around, losing a tick */
-            continue;
-        for(i=0; i<nt; i++){
-            x = t[i];
-            x->dt -= dt;
-            del = 0;
-            if(x->cancel){
-                timerstop(x);
-                del = 1;
-            }else if(x->dt <= 0){
-                /*
-                 * avoid possible deadlock if client is
-                 * now sending on ctimer
-                 */
-                if(nbsendul(x->c, 0) > 0)
-                    del = 1;
-            }
-            if(del){
-                memmove(&t[i], &t[i+1], (nt-i-1)*sizeof t[0]);
-                --nt;
-                --i;
-            }
-        }
-        if(nt == 0){
-            x = recvp(ctimer);
-    gotit:
-            if(nt == na){
-                na += 10;
-                t = realloc(t, na*sizeof(Timer*));
-                if(t == nil)
-                    abort();
-            }
-            t[nt++] = x;
-            old = msec();
-        }
-        if(nbrecv(ctimer, &x) > 0)
-            goto gotit;
-    }
-}
-@
-
-
-
-
-
-
-<<global [[ctimer]]>>=
-// chan<?> (listener = ?, sender = ?)
-static Channel*	ctimer;	/* chan(Timer*)[100] */
-@
-
-<<global [[timer]]>>=
-static Timer *timer;
-@
-
-<<function [[msec]]>>=
-static
-uint
-msec(void)
-{
-    return nsec()/1000000;
-}
-@
-
-<<function [[timerstop]]>>=
-void
-timerstop(Timer *t)
-{
-    t->next = timer;
-    timer = t;
-}
-@
-
-<<function [[timercancel]]>>=
-void
-timercancel(Timer *t)
-{
-    t->cancel = true;
-}
-@
-
-
-
-%claude:
-Timer allocation uses a freelist ([[timer]]) to avoid repeated
-[[malloc]]/[[free]] for the common case of scroll delays.
-[[timerstart()]] either reuses a freed timer or allocates a new one,
-sets the countdown and sends it to [[timerproc]] via the [[ctimer]]
-channel.
-
-<<function [[timerstart]]>>=
-/*
- * timeralloc() and timerfree() don't lock, so can only be
- * called from the main proc.
- */
-Timer*
-timerstart(int dt)
-{
-    Timer *t;
-
-    t = timer;
-    if(t)
-        timer = timer->next;
-    else{
-        t = emalloc(sizeof(Timer));
-        t->c = chancreate(sizeof(int), 0);
-    }
-    t->next = nil;
-    t->dt = dt;
-    t->cancel = false;
-    sendp(ctimer, t);
-    return t;
-}
-@
-
-
-
-
-
-\section{Flushing}
+\subsection{Flushing}
 
 %from docs/man/5/flush
 %"When the response to a request is no longer needed, such as when
@@ -18006,7 +17882,7 @@ if(x->flushing){
 }
 @
 
-\section{Security}
+\subsection{Security}
 
 %claude:
 [[rio]]'s security model is minimal. It reads the username from
@@ -18068,10 +17944,151 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 }
 @
 
-\section{[[Wakeup]]}
+
+%******************************************************************************
+\section{Additional control messages}
+
+\subsection{Holding mode}
+
+% ??? why someone wants to write holdon? to stop key event to
+% go to app?
+
+% also a textual window field?
+%claude:
+Holding mode freezes a window's output: when [[w->holding]] is true,
+the [[WCread]] alt is disabled so the window thread stops reading
+from the application's stdout. This lets the user examine output
+without it scrolling away.
+%claude:
+Holding is indicated visually through blue-tinted borders and text
+colors, and the cursor changes to a white arrow.
+It can be toggled by Escape or by writing ``holdon''/``holdoff''
+to [[/dev/consctl]]. The holding counter supports nested holds
+(multiple programs can request it), and entering raw mode
+automatically disables holding.
+<<[[Window]] config fields>>=
+bool	holding;
+@
+%old: bool_byte
+
+% main effect! no sending on /dev/cons
+
+<<[[winctl()]] alts adjustments, if holding>>=
+if(w->holding)
+    alts[WCread].op = CHANNOP;
+@
 
 
-\t distribute
+
+% visual effect
+
+<<[[wsetcursor()]] if holding>>=
+if(p==nil && w->holding)
+    p = &whitearrow;
+@
+
+<<[[wborder()]] if holding>>=
+if(w->holding){
+    if(type == Selborder)
+        col = holdcol;
+    else
+        col = paleholdcol;
+}
+@
+
+
+<<[[wsetcols()]] if holding>>=
+if(w->holding)
+    if(w == input)
+        w->frm.cols[TEXT] = w->frm.cols[HTEXT] = holdcol;
+    else
+        w->frm.cols[TEXT] = w->frm.cols[HTEXT] = lightholdcol;
+@
+
+
+
+% for holding mode
+<<global [[holdcol]]>>=
+static	Image	*holdcol;
+@
+
+<<global [[paleholdcol]]>>=
+static	Image	*paleholdcol;
+@
+
+<<global [[lightholdcol]]>>=
+static	Image	*lightholdcol;
+@
+
+<<[[wmk()]] extra colors initialisation>>=
+holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
+lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
+paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue
+@
+
+% how set it up (dev/consctl or special key)
+
+<<[[Wctlmesgkind]] cases>>=
+Holdon,
+Holdoff,
+@
+
+<<[[xfidwrite()]] Qconsctl case>>=
+if(strncmp(req->data, "holdon", 6)==0){
+    if(w->holding++ == 0)
+        wsendctlmesg(w, Holdon, ZR, nil);
+    break;
+}
+if(strncmp(req->data, "holdoff", 7)==0 && w->holding){
+    if(--w->holding == false)
+        wsendctlmesg(w, Holdoff, ZR, nil);
+    break;
+}
+@
+
+<<[[xfidclose()]] Qconsctl case, if holding>>=
+if(w->holding){
+    w->holding = false;
+    wsendctlmesg(w, Holdoff, ZR, nil);
+}
+@
+
+<<[[xfidwrite()]] Qconsctl case, if rawon message and holding mode>>=
+if(w->holding){
+    w->holding = false;
+    wsendctlmesg(w, Holdoff, ZR, nil);
+}
+@
+
+
+
+
+<<[[wkeyctl()]] if holding>>=
+if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
+    if(w->holding)
+        --w->holding;
+    else
+        w->holding++;
+    wrepaint(w);
+    if(r == 0x1B)
+        return;
+}
+@
+% use = false and = true instead?
+
+% wrepaint because wsetborder will change certain colors now!
+<<[[wctlmesg()]] cases>>=
+case Holdon:
+case Holdoff:
+    <<[[wctlmesg()]] break if window was deleted>>
+    wrepaint(w);
+    flushimage(display, true);
+    break;
+@
+
+
+\subsection{[[Wakeup]]}
+
 <<[[Wctlmesgkind]] cases>>=
 Wakeup,
 @
@@ -18090,9 +18107,7 @@ just to make the window thread re-evaluate its alt conditions
 (e.g., to notice that it is now the current window or that a
 file has been opened).
 
-\section{[[Refresh]]}
-
-\t distribute
+\subsection{[[Refresh]]}
 
 %claude:
 [[Refresh]] is sent when an application closes [[/dev/mouse]],
@@ -18147,7 +18162,6 @@ wrefresh(Window *w, Rectangle)
 @
 
 
-%******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
 \label{chap:conclusion}
@@ -18501,7 +18515,7 @@ char Ebadwrect[] = 	"rectangle outside screen";
 char Ebadoffset[] = 	"window read not on scan line boundary";
 @
 
-\section{[[error()]], [[derror()]]}
+\section{[[error()]]} %, [[derror()]]}
 
 %claude:
 [[error()]] has a two-phase behavior controlled by
@@ -21046,11 +21060,582 @@ nbytes(char *s0, int nr)
 \chapter{Examples of Windowing System Applications}
 %******************************************************************************
 \label{chap:examples}
+%coupling: Windows_extra.nw
 
-% statusbar
-% winwatch
+%yoann: chapter intro, can talk about hellorio we saw before window app, but here windowing system app
+%claude:
+Earlier you met [[hellorio]] (Section~\ref{sec:hellorio}), a minimal window
+\emph{application}: a client that opens a single window and draws into it,
+oblivious to the rest of the screen. The programs in this chapter are
+windowing-\emph{system} applications instead---each reaches past its own
+window into the windowing system as a whole. [[lens]] reads the entire
+screen through [[/dev/screen]] and magnifies a region of it; [[statusbar]]
+mounts [[/mnt/wsys]] itself to carve out a managed strip; and [[winwatch]]
+enumerates every open window through [[/dev/wsys]], reading each one's
+[[label]]. Yet none of them needs any special privilege: they are ordinary
+filesystem clients of the very interfaces built in the previous chapters,
+which is exactly what makes such tools so easy to write under \plan.
 
-% See Windows_extra.nw
+\section{[[lens]]}
+
+<<global [[menustr]]>>=
+static char *menustr[] = {
+    "zoom",
+    "unzoom",
+    "grid",
+    "redraw",
+    "exit",
+    nil
+};
+@
+
+<<global menu (apps/lens.c)>>=
+static Menu menu = {
+    menustr,
+    nil,
+    -1
+};
+@
+
+<<enum [[_anon_ (apps/lens.c)]]2>>=
+enum {
+    Mzoom,
+    Munzoom,
+    Mgrid,
+    Mredraw,
+    Mexit
+};
+@
+
+<<function main (apps/lens.c)>>=
+void
+main(int argc, char *argv[])
+{
+    Event e;
+    char buf[5*12];
+    ulong chan;
+    int d;
+
+    USED(argc, argv);
+
+    if(initdraw(nil, nil, "lens") < 0){
+        fprint(2, "lens: initdraw failed: %r\n");
+        exits("initdraw");
+    }
+    einit(Emouse|Ekeyboard);
+
+    red = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DRed);
+    chequer = allocimage(display, Rect(0, 0, 2, 2), GREY1, 1, DBlack);
+
+    draw(chequer, Rect(0, 0, 1, 1), display->white, nil, ZP);
+    draw(chequer, Rect(1, 1, 2, 2), display->white, nil, ZP);
+    lastp = divpt(addpt(view->r.min, view->r.max), 2);
+
+    screenfd = open("/dev/screen", OREAD);
+    if(screenfd < 0){
+        fprint(2, "lens: can't open /dev/screen: %r\n");
+        exits("screen");
+    }
+    if(read(screenfd, buf, sizeof buf) != sizeof buf){
+        fprint(2, "lens: can't read /dev/screen: %r\n");
+        exits("screen");
+    }
+    chan = strtochan(buf);
+    d = chantodepth(chan);
+    if(d < 8){
+        fprint(2, "lens: can't handle screen format %11.11s\n", buf);
+        exits("screen");
+    }
+    bypp = d/8;
+    screenr.min.x = atoi(buf+1*12);
+    screenr.min.y = atoi(buf+2*12);
+    screenr.max.x = atoi(buf+3*12);
+    screenr.max.y = atoi(buf+4*12);
+    screenbuf = malloc(bypp*Dx(screenr)*Dy(screenr));
+    if(screenbuf == nil){
+        fprint(2, "lens: buffer malloc failed: %r\n");
+        exits("malloc");
+    }
+    eresized(0);
+
+    for(;;)
+        switch(event(&e)){
+        case Ekeyboard:
+            switch(e.kbdc){
+            case 'q':
+            case 0x7f:
+            case '\04':
+            caseexit:
+                exits(nil);
+            case '=':
+            case '+':
+            casezoom:
+                if(mag < Maxmag){
+                    mag++;
+                    makegrid();
+                    drawit();
+                }
+                break;
+            case 'g':
+            casegrid:
+                showgrid = !showgrid;
+                makegrid();
+                drawit();
+                break;
+            case '-':
+            case '_':
+            caseunzoom:
+                if(mag > 1){
+                    mag--;
+                    makegrid();
+                    drawit();
+                }
+                break;
+            case '.':
+            case ' ':
+            caseredraw:
+                drawit();
+                break;
+            case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': case'0':
+                mag = e.kbdc-'0';
+                if(mag == 0)
+                    mag = 10;
+                makegrid();
+                drawit();
+                break;
+            }
+            break;
+        case Emouse:
+            if(e.mouse.buttons & 1){
+                lastp = e.mouse.xy;
+                drawit();
+            }
+            if(e.mouse.buttons & 4)
+                switch(emenuhit(3, &e.mouse, &menu)){
+                case Mzoom:
+                    goto casezoom;
+                case Munzoom:
+                    goto caseunzoom;
+                case Mgrid:
+                    goto casegrid;
+                case Mredraw:
+                    goto caseredraw;
+                case Mexit:
+                    goto caseexit;
+                }
+            break;
+        }
+}
+@
+
+<<function eresized (apps/lens.c)>>=
+void
+eresized(int new)
+{
+    if(new && getwindow(display, Refnone) < 0){
+        fprint(2, "lens: can't reattach to window: %r\n");
+        exits("attach");
+    }
+    freeimage(tmp);
+    tmp = allocimage(display, Rect(0, 0, Dx(view->r)-Edge, Dy(view->r)-Edge+Maxmag), view->chan, 0, DNofill);
+    if(tmp == nil){
+        fprint(2, "lens: allocimage failed: %r\n");
+        exits("allocimage");
+    }
+    drawit();
+}
+@
+
+<<function [[drawit]]>>=
+void
+drawit(void)
+{
+    Rectangle r;
+    border(view, view->r, Edge, red, ZP);
+    magnify();
+    r = insetrect(view->r, Edge);
+    draw(view, r, tmp, nil, tmp->r.min);
+    flushimage(display, true);
+}
+@
+
+<<function [[magnify]]>>=
+void
+magnify(void)
+{
+    int x, y, xx, yy, dd, i;
+    int dx, dy;
+    int xoff, yoff;
+    uchar out[8192];
+    uchar sp[4];
+
+    dx = (Dx(tmp->r)+mag-1)/mag;
+    dy = (Dy(tmp->r)+mag-1)/mag;
+    xoff = lastp.x-Dx(tmp->r)/(mag*2);
+    yoff  = lastp.y-Dy(tmp->r)/(mag*2);
+
+    yy = yoff;
+    dd = dy;
+    if(yy < 0){
+        dd += dy;
+        yy = 0;
+    }
+    if(yy+dd > Dy(screenr))
+        dd = Dy(screenr)-yy;
+    seek(screenfd, 5*12+bypp*yy*Dx(screenr), 0);
+    if(readn(screenfd, screenbuf+bypp*yy*Dx(screenr), bypp*Dx(screenr)*dd) != bypp*Dx(screenr)*dd){
+        fprint(2, "lens: can't read screen: %r\n");
+        return;
+    }
+
+    for(y=0; y<dy; y++){
+        yy = yoff+y;
+        if(yy>=0 && yy<Dy(screenr))
+            for(x=0; x<dx; x++){
+                xx = xoff+x;
+                if(xx>=0 && xx<Dx(screenr))	/* snarf pixel at xx, yy */
+                    for(i=0; i<bypp; i++)
+                        sp[i] = screenbuf[bypp*(yy*Dx(screenr)+xx)+i];
+                else
+                    sp[0] = sp[1] = sp[2] = sp[3] = 0;
+
+                for(xx=0; xx<mag; xx++)
+                    if(x*mag+xx < tmp->r.max.x)
+                        for(i=0; i<bypp; i++)
+                            out[(x*mag+xx)*bypp+i] = sp[i];
+            }
+        else
+            memset(out, 0, bypp*Dx(tmp->r));
+        for(yy=0; yy<mag && y*mag+yy<Dy(tmp->r); yy++){
+            werrstr("no error");
+            if(loadimage(tmp, Rect(0, y*mag+yy, Dx(tmp->r), y*mag+yy+1), out, bypp*Dx(tmp->r)) != bypp*Dx(tmp->r)){
+                exits("load");
+            }
+        }
+    }
+    if (showgrid && mag && grid)
+        draw(tmp, tmp->r, grid, nil, mulpt(Pt(xoff, yoff), mag));
+}
+@
+
+
+\section{[[statusbar]]}
+
+<<function [[drawbar]]>>=
+void
+drawbar(void)
+{
+    int i, j;
+    int p;
+    char buf[400], bar[200];
+    static char lastbar[200];
+
+    if(n > d || n < 0 || d <= 0)
+        return;
+
+    i = (Dx(rbar)*n)/d;
+    p = (n*100LL)/d;
+
+    if(textmode){
+        if(Dx(rbar) > 150){
+            rbar.min.x = 0;
+            rbar.max.x = 150;
+            return;
+        }
+        bar[0] = '|';
+        for(j=0; j<i; j++)
+            bar[j+1] = '#';
+        for(; j<Dx(rbar); j++)
+            bar[j+1] = '-';
+        bar[j++] = '|';
+        bar[j++] = ' ';
+        sprint(bar+j, "%3d%% ", p);
+        for(i=0; bar[i]==lastbar[i] && bar[i]; i++)
+            ;
+        memset(buf, '\b', strlen(lastbar)-i);
+        strcpy(buf+strlen(lastbar)-i, bar+i);
+        if(buf[0])
+            write(1, buf, strlen(buf));
+        strcpy(lastbar, bar);
+        return;
+    }
+
+    if(lastp == p && last == i)
+        return;
+
+    if(lastp != p){
+        sprint(buf, "%d%%", p);
+        
+        stringbg(view, addpt(view->r.min, Pt(Dx(rbar)-30, 4)), text, ZP, display->defaultfont, buf, light, ZP);
+        lastp = p;
+    }
+
+    if(last != i){
+        if(i > last)
+            draw(view, Rect(rbar.min.x+last, rbar.min.y, rbar.min.x+i, rbar.max.y),
+                dark, nil, ZP);
+        else
+            draw(view, Rect(rbar.min.x+i, rbar.min.y, rbar.min.x+last, rbar.max.y),
+                light, nil, ZP);
+        last = i;
+    }
+    flushimage(display, 1);
+}
+@
+
+<<function eresized (apps/statusbar.c)>>=
+void
+eresized(int new)
+{
+    Point p, q;
+    Rectangle r;
+
+    if(new && getwindow(display, Refnone) < 0)
+        fprint(2,"can't reattach to window");
+
+    r = view->r;
+    draw(view, r, light, nil, ZP);
+    p = string(view, addpt(r.min, Pt(4,4)), text, ZP,
+        display->defaultfont, title);
+
+    p.x = r.min.x+4;
+    p.y += display->defaultfont->height+4;
+
+    q = subpt(r.max, Pt(4,4));
+    rbar = Rpt(p, q);
+
+    ptext = Pt(r.max.x-4-stringwidth(display->defaultfont, "100%"), r.min.x+4);
+    border(view, rbar, -2, dark, ZP);
+    last = 0;
+    lastp = -1;
+
+    drawbar();
+}
+@
+
+<<function [[bar]]>>=
+void
+bar(Biobuf *b)
+{
+    char *p, *f[2];
+    Event e;
+    int k, die, parent, child;
+
+    parent = getpid();
+
+    die = 0;
+    if(textmode)
+        child = -1;
+    else
+    switch(child = rfork(RFMEM|RFPROC)) {
+    case 0:
+        sleep(1000);
+        while(!die && (k = eread(Ekeyboard|Emouse, &e))) {
+            if(nokill==0 && k == Ekeyboard && (e.kbdc == 0x7F || e.kbdc == 0x03)) { /* del, ctl-c */
+                die = 1;
+                postnote(PNPROC, parent, "interrupt");
+                _exits("interrupt");
+            }
+        }
+        _exits(0);
+    }
+
+    while(!die && (p = Brdline(b, '\n'))) {
+        p[Blinelen(b)-1] = '\0';
+        if(tokenize(p, f, 2) != 2)
+            continue;
+        n = strtoll(f[0], 0, 0);
+        d = strtoll(f[1], 0, 0);
+        drawbar();
+    }
+    postnote(PNCTL, child, "kill");
+}
+@
+
+<<function usage (apps/statusbar.c)>>=
+static void
+usage(void)
+{
+    fprint(2, "usage: aux/statusbar [-kt] [-w minx,miny,maxx,maxy] 'title'\n");
+    exits("usage");
+}
+@
+
+<<function main (apps/statusbar.c)>>=
+void
+main(int argc, char **argv)
+{
+    Biobuf b;
+    char *p, *q;
+    int lfd;
+
+    p = "0,0,200,60";
+    
+    ARGBEGIN{
+    case 'w':
+        p = ARGF();
+        break;
+    case 't':
+        textmode = 1;
+        break;
+    case 'k':
+        nokill = 1;
+        break;
+    default:
+        usage();
+    }ARGEND;
+
+    if(argc != 1)
+        usage();
+
+    title = argv[0];
+
+    lfd = dup(0, -1);
+
+    while(q = strchr(p, ','))
+        *q = ' ';
+    Binit(&b, lfd, OREAD);
+    if(textmode || newwin(p) < 0){
+        textmode = 1;
+        rbar = Rect(0, 0, 60, 1);
+    }else{
+        if(initdraw(0, 0, "bar") < 0)
+            exits("initdraw");
+        initcolor();
+        einit(Emouse|Ekeyboard);
+        eresized(0);
+    }
+    bar(&b);
+
+    exits(0);
+}
+@
+
+\section{[[winwatch]]}
+
+<<function [[drawnowin]]>>=
+static void
+drawnowin(int i)
+{
+    Rectangle r;
+
+    r = Rect(0,0,(Dx(view->r)-2*MARGIN+PAD)/cols-PAD, font->height);
+    r = rectaddpt(rectaddpt(r, Pt(MARGIN+(PAD+Dx(r))*(i/rows),
+                MARGIN+(PAD+Dy(r))*(i%rows))), view->r.min);
+    draw(view, insetrect(r, -1), lightblue, nil, ZP);
+}
+@
+
+<<function [[drawwin]]>>=
+static void
+drawwin(int i)
+{
+    draw(view, win[i].r, lightblue, nil, ZP);
+    _string(view, addpt(win[i].r.min, Pt(2,0)), display->black, ZP,
+        font, win[i].label, nil, strlen(win[i].label), 
+        win[i].r, nil, ZP, SoverD);
+    border(view, win[i].r, 1, display->black, ZP);	
+    win[i].dirty = 0;
+}
+@
+
+<<function redraw (apps/winwatch.c)>>=
+static void
+redraw(Image *view, int all)
+{
+    int i;
+
+    all |= geometry();
+    if(all)
+        draw(view, view->r, lightblue, nil, ZP);
+    for(i=0; i<nwin; i++)
+        if(all || win[i].dirty)
+            drawwin(i);
+    if(!all)
+        for(; i<onwin; i++)
+            drawnowin(i);
+
+    onwin = nwin;
+}
+@
+
+<<function eresized (apps/winwatch.c)>>=
+void
+eresized(int new)
+{
+    if(new && getwindow(display, Refmesg) < 0)
+        fprint(2,"can't reattach to window");
+    geometry();
+    redraw(view, 1);
+}
+@
+
+<<function usage (apps/winwatch.c)>>=
+static void
+usage(void)
+{
+    fprint(2, "usage: winwatch [-e exclude] [-f font]\n");
+    exits("usage");
+}
+@
+
+<<function main (apps/winwatch.c)>>=
+void
+main(int argc, char **argv)
+{
+    char *fontname;
+    int Etimer;
+    Event e;
+
+    fontname = "/lib/font/bit/lucidasans/unicode.8.font";
+    ARGBEGIN{
+    case 'f':
+        fontname = EARGF(usage());
+        break;
+    case 'e':
+        exclude = regcomp(EARGF(usage()));
+        if(exclude == nil)
+            sysfatal("Bad regexp");
+        break;
+    default:
+        usage();
+    }ARGEND
+
+    if(argc)
+        usage();
+
+    initdraw(0, 0, "winwatch");
+    lightblue = allocimagemix(display, DPalebluegreen, DWhite);
+    if(lightblue == nil)
+        sysfatal("allocimagemix: %r");
+    if((font = openfont(display, fontname)) == nil)
+        sysfatal("font '%s' not found", fontname);
+
+    refreshwin();
+    redraw(view, 1);
+    einit(Emouse|Ekeyboard);
+    Etimer = etimer(0, 2500);
+
+    for(;;){
+        switch(eread(Emouse|Ekeyboard|Etimer, &e)){
+        case Ekeyboard:
+            if(e.kbdc==0x7F || e.kbdc=='q')
+                exits(0);
+            break;
+        case Emouse:
+            if(e.mouse.buttons)
+                click(e.mouse);
+            /* fall through  */
+        default:	/* Etimer */
+            refreshwin();
+            redraw(view, 0);
+            break;
+        }
+    }
+}
+@
+
+
 
 %******************************************************************************
 \chapter{Extra Code}
