@@ -316,9 +316,8 @@ In other operating systems, a \plan proc is similar to a {\em system thread},
 and a \plan thread is similar to a {\em light-weight thread} 
 (or a {\em coroutine}).
 \l and channel is?
-\t both are useful, both have pro and cons, depending on task. explained later.
-\l  pro of light-weight is cheap and no need lock inside same proc cos
-\l  never run in parallel
+%said-later: both are useful, both have pro and cons, depending on task
+%said-later: pro of light-weight is cheap and no need lock inside same proc cos never in //
 
 %dup: Graphics.nw
 \item As I said in the \book{Graphics}, with [[draw]]
@@ -1165,16 +1164,36 @@ proc is blocked, all the threads in the proc are blocked
 However, one advantage of this design is that threads do not need
 to use {locks}, an error-prone concurrency construct,
 for {mutual exclusion} with each other. 
-By construction, only one thread of a proc is running at one time 
+%
+By construction, only one thread of a proc is running at one time
 (but multiple procs can run in parallel).
-\t and then use messages between threds of different procs to {synchronize}, 
-\l  not lock.
-\l single-threaded is a big deal? not really, cos it does not block
+%claude:
+The reason this removes the need for locks is subtle. Because scheduling is
+cooperative, a thread keeps the processor until it explicitly yields---and it
+yields only at well-defined points, typically a [[send]] or [[recv]] on a
+channel. A thread therefore never gives up control in the middle of updating
+a shared structure; by the time another thread of the same proc runs, the
+data is always in a consistent state. That is exactly the guarantee a lock
+would buy you, obtained here for free. Threads in \emph{different} procs can
+genuinely run in parallel and do not share this guarantee, so they coordinate
+by passing messages on channels to {synchronize}, rather than by locking
+shared memory.
+
+%yoann: explain single-threaded is a big deal? not really, cos it does not block
 % heavy computation process from running. It only matters when there
 % are events, but those events are mostly human events (mouse move, key press)
 % and humans are very slow.
 % (actually also every file request, but not for draw, so only
 % for virtual device of mouse and keyboard, so same)
+
+%claude:
+One might worry that running a single thread at a time is a serious
+limitation, but in practice it is not. These threads never perform heavy
+computation that would monopolize the processor; they only react to
+events---a key press, a mouse movement, a file request from a client---and
+hand control back as soon as the event is handled. Such events are driven
+almost entirely by the user, and humans are slow, so the threads spend most
+of their time idle and cooperative scheduling never becomes a bottleneck.
 
 
 The third proc, [[fileserver]], creates a {\em pipe} and reads
@@ -1186,6 +1205,9 @@ filesystem
 Section~\ref{sec:trace-new-window} will give more details
 about this pipe and how [[rio]] and its clients communicate.
 \n use mount with fd (said later)
+%claude:
+I make this {client}/{server} vocabulary precise at the start of
+Chapter~\ref{chap:filesystem-server}.
 
 %trans:
 The last proc,
@@ -2180,7 +2202,7 @@ Window	*w;
 
 
 
-\subsection{Workers and jobs: [[Xfid]]}
+\subsection{Worker request on a [[Fid]]: [[Xfid]]}
 
 %claude:
 The filesystem server proc ([<filsysproc()>]) reads 9P requests from the
@@ -4832,7 +4854,7 @@ if(moving && (mouse->buttons&7)){
 
 
 
-\section{[[Wctlmesg]]}
+\section{Window control message: [[Wctlmesg]]}
 
 %claude:
 The [[Wctlmesg]] structure is the message type sent from the mouse thread
@@ -7552,6 +7574,26 @@ Until now I have presented an application that can create rectangles on
 the screen, move and resize them. But for those rectangles to become
 real {windows}, they need a filesystem server that virtualizes the device
 files ([[/dev/cons]], [[/dev/mouse]], etc.) for each client process.
+
+%claude: %terminology:
+It is worth pinning down the words {client} and {server}, which recur
+throughout this chapter and can feel abstract for a windowing system.
+[[rio]] is a {server}---more precisely a {file server}, since the resource
+it shares is a namespace of files ([[/mnt/wsys/cons]], [[/mnt/wsys/mouse]],
+\ldots) rather than storage or pixels. Its {clients} are the {window
+applications}: a shell, an editor, or [[hellorio]], each running inside a
+window.
+%claude:
+The word ``client'' hides a subtlety, though. A window application never
+speaks 9P itself; it just calls [[open]], [[read]], and [[write]] on
+ordinary-looking files. It is the {kernel}---the mount driver set up when
+the window's namespace was built---that turns those system calls into 9P
+request messages and sends them down the pipe to [[rio]]. So when I say a
+request comes ``from the client,'' the immediate sender is really the
+kernel, acting {on behalf of} the application. The full chain is
+[[application]] \(\to\) kernel mount driver \(\to\) pipe \(\to\) [[rio]],
+and ``client'' names whichever end of it the surrounding text cares about.
+
 %claude:
 This chapter presents the 9P operations that [[rio]] implements:
 [[attach]] (where the kernel, on behalf of the application, connects
@@ -7740,7 +7782,7 @@ Dirtab	*dir;
 
 
 
-\section{[[filsysrespond()]]}
+\section{Replying to the client: [[filsysrespond()]]}
 
 %trans: before seeing attach/... client transmited request
 % (Txxx), see utility function to answer to client (Rxxx).
@@ -8818,7 +8860,7 @@ Qmouse,
 % too.
 \l too much spread?
 
-\subsection{Reading: file server side}
+\subsection{Reading [[/mnt/wsys/mouse]]: file server side}
 % and window.mouseread
 
 % So if client reads /dev/mouse (after it has been opened of course),
@@ -8949,7 +8991,7 @@ case Qmouse:
 % (the kernel maintain a file pointer), but we dont care about this
 % offset!
 
-\subsection{Writing}
+\subsection{Writing [[/mnt/wsys/mouse]]}
 
 % can move the mouse programatically :)
 % but it needs to have the focus apparently and be visible
@@ -9263,7 +9305,7 @@ Qcons,
 
 % utf8! not rune, not char, utf8!
 
-\subsection{Reading: file server side}
+\subsection{Reading [[/mnt/wsys/cons]]: file server side}
 
 %claude:
 Unlike the mouse, the console uses two channels inside the
@@ -9395,7 +9437,7 @@ case Qcons:
 
 % here s and ns are byte and nbyte
 
-\subsection{Writing: file server side}
+\subsection{Writing [[/mnt/wsys/cons]]: file server side}
 
 % So if client writes to /dev/cons, he wants to output strings
 % on the terminal,
