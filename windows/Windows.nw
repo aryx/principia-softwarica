@@ -1196,6 +1196,10 @@ events---a key press, a mouse movement, a file request from a client---and
 hand control back as soon as the event is handled. Such events are driven
 almost entirely by the user, and humans are slow, so the threads spend most
 of their time idle and cooperative scheduling never becomes a bottleneck.
+Crucially, the high-bandwidth work---drawing pixels---does not even reach
+[[rio]]: clients talk to the display server directly through [[/dev/draw]],
+so [[rio]]'s threads only field the comparatively rare mouse and keyboard
+traffic from its virtual device files, which is human-paced.
 
 
 The third proc, [[fileserver]], creates a {\em pipe} and reads
@@ -1344,6 +1348,10 @@ and the [[Filsys]] and [[Fid]] structures that support [[rio]]'s role as a
 \section{Device handles}
 
 %yoann: one line intro
+%claude:
+Before the window data structures themselves, [[rio]] needs handles to the
+three devices every windowing system rests on: the screen, the mouse, and
+the keyboard.
 
 \subsection{Output device: [[display]] and [[view]]}
 
@@ -1408,7 +1416,8 @@ and [[keyboard.h]]) are wrappers that internally create a separate proc
 to read synchronously from [[/dev/mouse]] and [[/dev/cons]], then
 forward events through a channel. This lets [[rio]] receive input
 without blocking its other threads (see Section~\ref{sec:hellorio}).
-%yoann1: then transition to say 2 globals below [<mousctl>] [<keyboardctl>]
+Both handles are kept in the globals [<mousectl>] and [<keyboardctl>]
+shown below.
 
 % structure defined in mouse.h
 <<global [[mousectl]]>>=
@@ -1450,13 +1459,15 @@ Mouse	*mouse;
 % images, which is big building block for windowing systems (but still
 % a lot remains)
 %claude:
-A [[Screen]] (from [[window.h]]) is the graphics
+A [[Screen]]\footnote{The name [[Screen]] is inherited from libdraw, where
+it denotes the surface that images are allocated \emph{on}; despite the
+name, it has nothing to do with the physical screen.}
+(from [[window.h]]) is the graphics
 library's support for
 {overlapping images}---it manages the z-order and repainting of layers
 that overlap each other.
 [[rio]] allocates a [[Screen]] on top of [[view]] to serve as the
 ``desktop'': every window will be a layer on this desktop.
-%yoann1: maybe explain in footnote why called Screen which is confusing since it's mostly about layers
 
 
 %claude:
@@ -1482,14 +1493,14 @@ that overlap each other.
 %repaints are serialized through [[desktop]].
 
 %claude:
-When two windows
-overlap, libdraw's [[Screen]] takes care of clipping one against the
-other---so [[rio]]'s own code never needs an explicit clipping-region pass.
+When two windows overlap, libdraw's [[Screen]] is what works out which
+parts of each window are actually visible and keeps them painted
+correctly---so [[rio]]'s own code never has to track the visible regions
+itself.
 %
-This is the single biggest reason [[rio]]'s C is so short
+This is one of the biggest reasons [[rio]]'s C is so short
 compared to an X11 window manager: the hard part of the job sits in
 \book{Graphics}, not here.
-%yoann1: clipping not really introduced, so maybe confusing paragraph? can be higher-level?
 
 <<global [[desktop]]>>=
 Screen	*desktop;
@@ -1892,6 +1903,27 @@ separates text already sent by the application from text typed by the
 user.
 
 %yoann: ASCII Diagram relating all those fields maybe on concrete example
+%claude:
+These fields are easier to picture on a concrete buffer. Suppose a
+command has just printed the date, the shell has printed a fresh prompt,
+and the user has started typing (but not yet entered) the next command:
+%
+\begin{verbatim}
+   r[] :  "Mon Jun 22\n% "  "echo h"
+          \______________/  \______/
+          program output     typed by the user, not yet sent
+          (incl. the prompt) ^
+                             qh   (output point)
+
+   index  0 .......................... nr-1      (nr runes total)
+
+   org   = index of the first rune drawn at the top of the window;
+           scrolling only moves org.
+   qh    = output point: r[0..qh) was written by programs,
+           r[qh..nr) is what the user has typed but not yet sent.
+   q0,q1 = the current selection r[q0..q1); when q0==q1 it is
+           just the text cursor.
+\end{verbatim}
 
 <<[[Window]] textual window fields>>=
 <<[[Window]] textual window fields, text data>>
@@ -2076,6 +2108,14 @@ Filsys	*filsys;
 
 
 %yoann: explain quickly classic C idiom hash and linked list and bucket and next pointer like in many other \principia books
+%claude:
+[[rio]] tracks its open files with the classic C hash-table idiom found
+throughout \principia: a fixed array of [[Nhash]] {buckets}, where each
+bucket is the head of a singly-linked list of [[Fid]] structures chained
+through their [[next]] field. To find a file, [[rio]] hashes its fid number
+down to a bucket index and walks that short list; new entries are simply
+prepended, so the table never needs resizing---at the cost of longer chains
+when many files are open at once.
 
 
 <<constant [[Nhash]]>>=
@@ -2154,6 +2194,12 @@ bool	busy;
 %ocaml: do not reuse, alloc each time and let Gc handles things. No arena.
 
 %yoann: quick intro newfid for transition
+%claude:
+Before a client can touch a file it must obtain a [[Fid]] for it.
+[[newfid()]] is the lookup-or-allocate routine that bridges a 9P fid
+number and [[rio]]'s in-memory [[Fid]]: it hashes the number into the
+right bucket and returns the matching [[Fid]] if one already exists,
+otherwise reusing a free slot or allocating a fresh one.
 
 % looks more like lookupfid than always newfid
 % ctor
@@ -2406,6 +2452,61 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 % to filsys
 
 %yoann: possible do a putting-together big ASCII diagram with live data structure like we did in Shell.nw and Make.nw?
+\section{Putting it together: [[rio]]'s data structures}
+\label{sec:core-ds-rio}
+
+%claude: %trans:
+Before [[main()]] starts wiring these structures together, it is worth
+seeing how they relate on a concrete example. Rather than listing fields
+in the abstract, Figure~\ref{fig:core-ds-rio} shows the instances [[rio]]
+holds while two windows are open: a focused terminal and a graphical
+client overlapping it. A [[*]] marks a pointer field that an arrow follows.
+
+%claude:
+The three groups mirror [[rio]]'s three roles. The {globals} are the
+handles it holds as a graphical application (the [[display]], its [[view]],
+the [[desktop]] layers, and the mouse and keyboard readers); the
+[[windows]] array is the heart of the windowing system, one [[Window]] per
+managed window; and the [[Filsys]]/[[Fid]] table is the per-client state
+[[rio]] keeps as a 9P file server. Notice where the two sides meet: a
+[[Fid]]'s [[qid]] carries a window id that points back into the [[windows]]
+array, which is how a file request from a client is routed to the right
+window.
+
+\begin{figure}[!tbp]\centering
+\begin{vdiagram}
+GLOBALS    display *--> /dev/draw connection      (set by initdraw())
+           view    *--> Image of rio's whole screen
+           desktop *--> Screen (manager of overlapping layers, on view)
+           mousectl    *--> proc reading /dev/mouse -.
+           keyboardctl *--> proc reading /dev/cons  -+--> event channels
+           filsys  *--> Filsys (the 9P server end of the pipe)
+           input   *--> windows[0]                    (focused window)
+
+WINDOWS    windows *--> [ windows[0], windows[1] ]    nwindow = 2
+                          |           |
+                          v           v
+          +-----------------------+ +-----------------------+
+          | Window (terminal)     | | Window (graphical)    |
+          | id=1 name="window.1"  | | id=2 name="window.2"  |
+          | topped=7 (focused)    | | topped=5              |
+          | mouseopen=false       | | mouseopen=true        |
+          | i *--> layer on       | | i *--> layer (overlaps|
+          |        desktop        | |        windows[0])    |
+          | screenr=(0,0,600,400) | | screenr=(300,200,...) |
+          | r,nr *--> rune buffer | +-----------------------+
+          | org=0 qh=13 q0=q1=19  |
+          +-----------------------+
+
+FILESYSTEM filsys *--> Filsys
+             fids[h] *--> Fid{fid=4,busy} --> Fid{fid=7} --> nil
+                          qid.path encodes (window id, device file);
+                          a worker calls wlookid() to scan windows[]
+                          for the matching id.
+\end{vdiagram}
+\caption{[[rio]]'s live data structures, with two windows open.}
+\label{fig:core-ds-rio}
+\end{figure}
 
 %******************************************************************************
 \chapter{[[main()]]}
