@@ -900,7 +900,8 @@ Indeed, [[rio]] makes heavy use of [[draw]]'s {layers}
 (see Section~\ref{sec:layer-introduction} for an introduction to layers).
 %
 Many of the window management tasks are actually done by [[draw]], not [[rio]].
-For instance, it is the [[draw]] function [[topwindow()]] which
+%
+For instance, it is the [[libdraw]] function [[topwindow()]] which
 does most of the heavy lifting when you click on a window 
 to put it at the top;
 it is [[topwindow()]] that restores the pixels overlapped previously 
@@ -1342,6 +1343,8 @@ and the [[Filsys]] and [[Fid]] structures that support [[rio]]'s role as a
 
 \section{Device handles}
 
+%yoann: one line intro
+
 \subsection{Output device: [[display]] and [[view]]}
 
 % rio is first a graphical app, like other graphical app.
@@ -1349,7 +1352,8 @@ and the [[Filsys]] and [[Fid]] structures that support [[rio]]'s role as a
 % early in main().
 %claude:
 Like any graphical application under \plan, [[rio]] uses the
-global [[display]] (set by [[initdraw()]]) to communicate with the
+global [[display]] (set by [[initdraw()]], see the \book{Graphics})
+to communicate with the
 display server, and the global [[view]] which represents the portion of
 the screen that [[rio]] owns (the full screen, unless running recursively
 inside another [[rio]]).
@@ -1379,8 +1383,8 @@ In turn, [[rio]] will provide each of its client windows with their own
 % get Draw.init to return them
 
 The [[display]] and [[view]] globals are not defined here because
-they are parts of the [[draw]] library and are declared in [[draw.h]],
-but [[viewr]] below is defined in [[rio]] and is essentially
+they are parts of the [[libdraw]] library and are declared in [[draw.h]],
+but [<viewr>] below is defined in [[rio]] and is essentially
 an alias for [[view->r]].
 
 <<global [[viewr]]>>=
@@ -1403,7 +1407,8 @@ input devices. [[Mousectl]] and [[Keyboardctl]] (defined in [[mouse.h]]
 and [[keyboard.h]]) are wrappers that internally create a separate proc
 to read synchronously from [[/dev/mouse]] and [[/dev/cons]], then
 forward events through a channel. This lets [[rio]] receive input
-without blocking its other threads.
+without blocking its other threads (see Section~\ref{sec:hellorio}).
+%yoann1: then transition to say 2 globals below [<mousctl>] [<keyboardctl>]
 
 % structure defined in mouse.h
 <<global [[mousectl]]>>=
@@ -1451,32 +1456,40 @@ library's support for
 that overlap each other.
 [[rio]] allocates a [[Screen]] on top of [[view]] to serve as the
 ``desktop'': every window will be a layer on this desktop.
+%yoann1: maybe explain in footnote why called Screen which is confusing since it's mostly about layers
+
+
 %claude:
-The whole graphics stack that [[rio]] assembles at startup is a small
-three-level tree, which I find easier to picture before the window
-fields arrive:
-%
-\begin{verbatim}
-  view                      (/dev/winname, the physical framebuffer)
-   |
-   +-- background            (solid color, fills view)
-   |
-   +-- desktop : Screen      (overlapping-layers manager on top of view)
-        |
-        +-- windows[0]->i    (w0 Image, client draws here)
-        +-- windows[1]->i    (w1 Image, possibly overlapping w0)
-        +-- windows[2]->i    (w2 Image, topmost if w2->topped is max)
-        +-- ...
-\end{verbatim}
+%The whole graphics stack that [[rio]] assembles at startup is a small
+%three-level tree, which I find easier to picture before the window
+%fields arrive:
+%%
+%\begin{verbatim}
+%  view                      (/dev/winname, the physical framebuffer)
+%   |
+%   +-- background            (solid color, fills view)
+%   |
+%   +-- desktop : Screen      (overlapping-layers manager on top of view)
+%        |
+%        +-- windows[0]->i    (w0 Image, client draws here)
+%        +-- windows[1]->i    (w1 Image, possibly overlapping w0)
+%        +-- windows[2]->i    (w2 Image, topmost if w2->topped is max)
+%        +-- ...
+%\end{verbatim}
+%%claude:
+%[[view]] is the only thing that actually corresponds to framebuffer
+%pixels; everything below it is a window-managed region whose
+%repaints are serialized through [[desktop]].
+
 %claude:
-[[view]] is the only thing that actually corresponds to framebuffer
-pixels; everything below it is a window-managed region whose
-repaints are serialized through [[desktop]]. When two windows
+When two windows
 overlap, libdraw's [[Screen]] takes care of clipping one against the
-other---so [[rio]]'s own code never needs an explicit clipping-region
-pass. This is the single biggest reason [[rio]]'s C is so short
+other---so [[rio]]'s own code never needs an explicit clipping-region pass.
+%
+This is the single biggest reason [[rio]]'s C is so short
 compared to an X11 window manager: the hard part of the job sits in
 \book{Graphics}, not here.
+%yoann1: clipping not really introduced, so maybe confusing paragraph? can be higher-level?
 
 <<global [[desktop]]>>=
 Screen	*desktop;
@@ -1485,7 +1498,7 @@ Screen	*desktop;
 %old: was called wscreen 
 
 %claude:
-The [[background]] and [[red]] globals are
+The [<background>] and [<red>] globals are
 color images (in \plan, everything is an [[Image]], including colors).
 The red color is used to highlight window borders during move/resize
 operations.
@@ -1527,9 +1540,9 @@ Image	*red;
 \label{sec:core-ds-Windows}
 
 %claude:
-The [[Window]] structure is where the complexity of [[rio]] lives.
+The [<Window>] structure is where the complexity of [[rio]] lives.
 This section presents [[Window]] and its associated globals:
-the [[windows]] array holding all managed windows, and the [[input]]
+the [<windows>] array holding all managed windows, and the [<input>]
 pointer tracking which window has the focus.
 
 \subsection{The [[Window]] structure}
@@ -1546,11 +1559,12 @@ pointer tracking which window has the focus.
 % side, no real notion of window. Just a graphical app that thinks
 % it runs outside of rio. have just display and view (via /dev/winname).
 %claude:
-The [[Window]] structure is the central data structure of [[rio]] (much
+The [<Window>] structure is the central data structure of [[rio]] (much
 like [[Proc]] in the \book{Kernel}).
 It is the server-side representation of a client window---the client
 application itself has no notion of a ``window''; it simply sees a
 display and a [[view]] image through [[/dev/winname]].
+
 %claude:
 The structure below groups together nine categories of fields:
 an ID and label (visible through [[/mnt/wsys/winid]] and [[/mnt/wsys/label]]),
@@ -1655,13 +1669,13 @@ static	int	id;
 
 
 %claude:
-The [[i]] field holds the window's public image---the rectangle
+The [[i]] field below holds the window's public image---the rectangle
 of pixels visible on screen.  This is the image returned by
 [[allocwindow()]] in the \book{Graphics} library, and it is named
 after the window (e.g., [["window.2"]]) so that the client application
 can look it up via [[namedimage()]].
 Most of the time [[i]] is a {layer} (a composited image managed by
-the draw device), but when a window is hidden it becomes a plain
+the [[draw]] device), but when a window is hidden it becomes a plain
 off-screen image, since hidden windows are removed from the layer
 stack entirely.
 
@@ -1677,18 +1691,21 @@ Image	*i;
 % the window is hidden!
 
 %claude:
-The [[screenr]] field records the window's physical position on
+The [[screenr]] field below records the window's physical position on
 screen.  The application never sees this value---it works entirely
-in logical coordinates.  When [[rio]] used [[originwindow()]],
+in logical coordinates.
+%TODO: use originwindow again!
+When [[rio]] used [[originwindow()]],
 a window's image coordinates ([[i->r]]) could start at (0,0),
 so [[hellorio]] might see [[i->r = (0,0, 400,300)]] while the
 window actually sits at [[screenr = (100,100, 500,400)]] on screen.
 The application draws into [[i]] using logical coordinates, and the
 draw device maps them to the physical screen.  Likewise, [[rio]]
-converts mouse coordinates from physical to logical (as we saw in
+converts mouse coordinates from physical to logical (as we will see later in
 [<mousethread()>]) before forwarding them to the window, so the
 application receives coordinates consistent with its own [[i->r]].
 %claude:
+%TODO: fix that, use originwindow again
 Today [[originwindow()]] is no longer called, so [[i->r]] and
 [[screenr]] are always equal and the conversion is a no-op,
 but the code still maintains both fields.
@@ -1700,7 +1717,8 @@ but the code still maintains both fields.
 */
 Rectangle	screenr; /* screen coordinates of window */
 @
-\t put back originwindow! cleaner to have origin really at Pt(0,0),
+%TODO: remove coment when
+% put back originwindow! cleaner to have origin really at Pt(0,0),
 % window is more like an abstraction of the screen then.
 % but should do that in gengetwindow anyway, since here we have
 % a border, and gengetwindow will create another window inside
@@ -1729,7 +1747,7 @@ char    *label;   // writable through /mnt/wsys/label
 
 %claude:
 Because multiple threads and procs access [[Window]]s concurrently---the
-mouse thread, the keyboard thread, the window's own [[winctl]] thread,
+mouse thread, the keyboard thread, the window's own [<winctl()>] thread,
 and filesystem worker threads---[[Window]] embeds a [[Ref]] for
 reference counting and a [[QLock]] for mutual exclusion.
 The [[Ref]] prevents a window from being freed while another thread
@@ -1766,9 +1784,9 @@ QLock;
 \subsection{All [[windows]]}
 
 %claude:
-The global [[windows]] array is the essence of the windowing system:
+The global [<windows>] array is the essence of the windowing system:
 it holds all the managed windows.
-The [[topped]] counter is a logical timestamp---each time a window
+The [<topped>] counter is a logical timestamp---each time a window
 gets the focus, it receives the current [[topped]] value (then incremented).
 This allows [<wpointto()>] to find the topmost window at a given point
 by comparing [[topped]] values across all overlapping windows.
@@ -1814,7 +1832,7 @@ int	 	topped;
 \t rename input to current
 
 %claude:
-The [[input]] global plays a role similar to [[up]] in the \book{Kernel}:
+The [<input>] global plays a role similar to [[up]] in the \book{Kernel}:
 just as [[up]] always points to the currently running process,
 [[input]] always points to the window that has the keyboard focus---the
 one that receives typed characters. It is [[nil]] when no window has
@@ -1872,9 +1890,8 @@ buffer ([[r]]/[[nr]]) holding the full text content, two cursor positions
 rune starts the visible portion, and an ``output point'' ([[qh]]) that
 separates text already sent by the application from text typed by the
 user.
-The [[Frame]] structure (from the frame library) handles the rendering
-of visible text---wrapping, selection highlighting, and scrollbar
-interaction.
+
+%yoann: ASCII Diagram relating all those fields maybe on concrete example
 
 <<[[Window]] textual window fields>>=
 <<[[Window]] textual window fields, text data>>
@@ -1943,6 +1960,10 @@ uint		qh; // output point
 
 
 
+%claude:
+The [[Frame]] structure (from the frame library) handles the rendering
+of visible text---wrapping, selection highlighting, and scrollbar
+interaction.
 
 % Frame actually means image with text inside, with lines,
 %  which can be scrolled.
@@ -2006,12 +2027,8 @@ dispatches them to the appropriate window.
 The [[Filsys]] structure holds the two ends of a pipe ([[cfd]] for
 the client side, [[sfd]] for the server side), the user name
 (for security checks), a hash table of [[Fid]] entries tracking
-per-client file state, and a channel to the worker allocator.
-The client side of the pipe is also published in [[/srv/rio.user.pid]]
-for external processes that want to connect to [[rio]]. Child processes
-do not need this [[/srv]] entry---they inherit the pipe's file
-descriptor directly through the fork/exec model of shared file
-descriptors.
+per-client file state. %, and a channel to the worker allocator.
+
 
 <<struct [[Filsys]]>>=
 struct Filsys
@@ -2033,6 +2050,14 @@ struct Filsys
 %dead: int		pid;  was pid of proccreate(filsysproc), but not needed
 %ocaml: use Hashtbl directly for Filsys.fids
 
+%claude:
+The client side of the pipe is also published in [[/srv/rio.<user>.<pid>]]
+for external processes that want to connect to [[rio]]. Child processes
+do not need this [[/srv]] entry---they inherit the pipe's file
+descriptor directly through the fork/exec model of shared file
+descriptors (see Section~\ref{sec:external-access}).
+
+
 % cfd will be published in /srv/rio.user.pid? but not that important
 % cfd will be shared by all the winshell processes that wish to
 % interact with the server!
@@ -2048,6 +2073,9 @@ Filsys	*filsys;
 % this is used only by winshell when calling filsysmount,
 %  which needs to know where the pipe is to communicate like
 %  everybody else with the rio fileserver
+
+
+%yoann: explain quickly classic C idiom hash and linked list and bucket and next pointer like in many other \principia books
 
 
 <<constant [[Nhash]]>>=
@@ -2080,14 +2108,7 @@ While fids are chosen by the client and may be reused, Qids are
 assigned by the server and remain stable for a given file.
 The server must maintain state for each fid (whether it is open, in what
 mode, which [[Qid]] identifies the underlying file).
-The [[Fid.w]] field closes the circle: once a fid is associated
-with a [[Qid]] (during attach or walk), [[rio]] can resolve it
-back to the corresponding [[Window]].
-Note that the 9P ``client'' here is not the application itself---it
-is the kernel acting on behalf of the application.  When [[hellorio]]
-calls [[read()]] on [[/dev/cons]], the kernel translates that into
-a 9P [[Tread]] message sent through the pipe to [[rio]]'s
-[[filsysproc]].
+
 
 <<struct [[Fid]]>>=
 struct Fid
@@ -2132,6 +2153,8 @@ bool	busy;
 @
 %ocaml: do not reuse, alloc each time and let Gc handles things. No arena.
 
+%yoann: quick intro newfid for transition
+
 % looks more like lookupfid than always newfid
 % ctor
 % filsysproc | filsyswalk -> <>
@@ -2174,6 +2197,27 @@ newfid(Filsys *fs, int fid)
 % should be stricter and allows create only at a few places (Attach, Walk)
 
 %claude:
+The [[Fid.w]] field below closes the circle: once a fid is associated
+with a [[Qid]] (during attach or walk), [[rio]] can resolve it
+back to the corresponding [[Window]].
+
+<<[[Fid]] other fields>>=
+Window	*w;
+@
+% at some point requested file will be associated with corresponding window
+% because fid is given a qid (in attach/walk) which will encode
+% the windows id.
+% So full circle here! get back a Window!
+
+%claude:
+Note that the 9P ``client'' here is not the application itself---it
+is the kernel acting on behalf of the application.  When [[hellorio]]
+calls [[read()]] on [[/dev/cons]], the kernel translates that into
+a 9P [[Tread]] message sent through the pipe to [[rio]]'s
+[[filsysproc]].
+%said-again: in Filesystem server chapter I think
+
+%claude:
 The [[Fid.w]] field is the bridge between the filesystem abstraction
 and the windowing system. When a client process accesses a file
 under [[/mnt/wsys/]], the 9P protocol resolves the path to a [[Fid]],
@@ -2189,16 +2233,6 @@ and [[Fid.w]] points to the [[Window]] that owns that file:
                               +---------+               +--------+
 \end{verbatim}
 
-<<[[Fid]] other fields>>=
-Window	*w;
-@
-% at some point requested file will be associated with corresponding window
-% because fid is given a qid (in attach/walk) which will encode
-% the windows id.
-% So full circle here! get back a Window!
-
-
-
 
 
 
@@ -2212,17 +2246,7 @@ client processes may be making concurrent requests.
 So [[filsysproc]] acts as a {master} that dispatches each request to a
 {worker} thread.
 The [[Xfid]] (``extended fid'') structure combines the incoming parsed
-request ([[Fcall]]) with a channel to a worker thread. The master sends
-a function pointer through [[Xfid.c]], telling the worker what operation
-to execute. Workers are pooled via the [[cxfidalloc]]/[[cxfidfree]]
-channels to avoid creating a new thread for every request.
-
-<<[[Filsys]] other fields>>=
-// chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
-Channel	*cxfidalloc;	/* chan(Xfid*) */
-@
-%ocaml: not sure we need an arena of worker, can create thread each time
-% (too slow?)
+request ([[Fcall]]) with a channel to a worker thread. 
 
 
 % saw server will receive 9p request on pipe while reading filsys.sfd.
@@ -2281,6 +2305,19 @@ struct Xfid
 
 % store fs here because will need it to write back answer to client.
 
+%claude:
+The master sends
+a function pointer through [[Xfid.c]], telling the worker what operation
+to execute. Workers are pooled via the [[cxfidalloc]]/[[cxfidfree]]
+channels to avoid creating a new thread for every request.
+
+<<[[Filsys]] other fields>>=
+// chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
+Channel	*cxfidalloc;	/* chan(Xfid*) */
+@
+%ocaml: not sure we need an arena of worker, can create thread each time
+% (too slow?)
+
 
 \subsection{9P callbacks: [[fcall]]}
 
@@ -2338,6 +2375,7 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 % and dispatch. No need intermediate filsysxxx (which then
 % require to pass around lots of information as extra parameter)
 
+
 % create/remove forbidden, other stuff could be aspectized too
 
 
@@ -2367,6 +2405,7 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 % for instance filsysproc does not have access to windows, only
 % to filsys
 
+%yoann: possible do a putting-together big ASCII diagram with live data structure like we did in Shell.nw and Make.nw?
 
 %******************************************************************************
 \chapter{[[main()]]}
@@ -5007,7 +5046,7 @@ name in the graphics layer system.
 
 %claude:
 When [[pid]] is non-zero, the calling process already exists (e.g.,
-an external program that mounted [[/srv/rio.user.pid]])
+an external program that mounted [[/srv/rio.<user>.<pid>]])
 and just needs a window created for it---see the Advanced Topics
 chapter for this external mount mechanism.
 
@@ -5906,6 +5945,7 @@ Remember that in \plan, {devices are filesystems}
 %
 The mouse device, for instance, manages more than one file
 (e.g., [[/dev/mouse]], [[/dev/cursor]]). 
+%
 Some devices such as [[draw]] manage even multiple directories 
 (e.g., [[/dev/draw/1/]], [[/dev/draw/2/]]).
 \n also union-mount for /dev/ (explained later)
@@ -14596,6 +14636,7 @@ It also covers [[rio]]'s command-line options ([[rio -s]], [[rio -i]],
 signal handling, the timer subsystem, 
 
 \section{External access}
+\label{sec:external-access}
 
 %yoann: quick intro and %toc:
 %claude: %toc:
@@ -14609,6 +14650,7 @@ command line. I close with {recursive [[rio]]}---running [[rio]] inside one
 of its own windows---which is just another client of these same mechanisms.
 
 \subsection{External mount: [[/srv/rio.<user>.<pid>]]}
+
 % essentially a published pipe? so dont have
 % to be children of process who created the pipe
 % so =~ named pipe (but again, no need special file, can do via
