@@ -1050,26 +1050,7 @@ by a dashed rectangle.
 \end{figure}
 
 
-\subsubsection{layers and groups}
-
-%claude:
-Figure~\ref{fig:soft-archi-threads} is the single most important
-diagram in this book. If you understand it, you understand [[rio]]'s shape:
-a shared-memory {main-proc} with many cooperative threads (one
-per window, plus keyboard/mouse/worker-allocator),
-two dedicated I/O procs that absorb blocking reads on [[/dev/cons]] and
-[[/dev/mouse]],
-a filesystem proc that runs the 9P loop, and a
-pool of short-lived worker threads that handle one 9P request each.
-%
-Everything inside the dashed rectangle shares one address
-space; everything below it is a separate \plan process
-communicating via the 9P pipe.
-%
-Spend a moment matching the
-windows you see in Figure~\ref{fig:hellorio-and-shell} to the
-window threads in the diagram, then the shell and [[hellorio]]
-processes to the boxes outside [[rio]]'s address space.
+\subsubsection{Layers and components}
 
 Figure~\ref{fig:soft-archi-threads} can be decomposed in four different layers:
 \l confusing to use layer?
@@ -1169,25 +1150,28 @@ proc is blocked, all the threads in the proc are blocked
 \t This is why offload IO to external proc with single thread, so when single thread 
 \l  block, does not bother any other threads in the proc
 \l note that still shares same address space and  so shared channel with thread
-
+%
 \l a bit cumbersome to have separate procs and threads.
-However, one advantage of this design is that threads do not need
-to use {locks}, an error-prone concurrency construct,
-for {mutual exclusion} with each other. 
+However, one huge advantage of this design is that threads do {\em not} need
+to use {\em locks}, an error-prone concurrency construct,
+for {\em mutual exclusion} with each other. 
 %
 By construction, only one thread of a proc is running at one time
 (but multiple procs can run in parallel).
 %claude:
 The reason this removes the need for locks is subtle. Because scheduling is
-cooperative, a thread keeps the processor until it explicitly yields---and it
-yields only at well-defined points, typically a [[send]] or [[recv]] on a
-channel. A thread therefore never gives up control in the middle of updating
+cooperative, a thread keeps the processor until it explicitly {\em yields}---and it
+yields only at well-defined points, typically a [[send()]] or [[recv()]] on a channel.
+%
+A thread therefore never gives up control in the middle of updating
 a shared structure; by the time another thread of the same proc runs, the
 data is always in a consistent state. That is exactly the guarantee a lock
-would buy you, obtained here for free. Threads in \emph{different} procs can
-genuinely run in parallel and do not share this guarantee, so they coordinate
-mostly by passing messages on channels to {synchronize}, rather than by locking
-shared memory.
+would buy you, obtained here for free.
+%
+Threads in \emph{different} procs can
+genuinely run in parallel and do not share this guarantee though, but they
+can coordinate mostly by passing messages on channels to {synchronize}, rather
+than by locking shared memory.
 % Still some QLock sometimes like in Window for main-proc vs filsysproc
 
 %yoann: explain single-threaded is a big deal? not really, cos it does not block
@@ -1202,29 +1186,33 @@ One might worry that running a single thread at a time is a serious
 limitation, but in practice it is not. These threads never perform heavy
 computation that would monopolize the processor; they only react to
 events---a key press, a mouse movement, a file request from a client---and
-hand control back as soon as the event is handled. Such events are driven
+hand control back as soon as the event is handled.
+%
+Such events are driven
 almost entirely by the user, and humans are slow, so the threads spend most
 of their time idle and cooperative scheduling never becomes a bottleneck.
+%
 Crucially, the high-bandwidth work---drawing pixels---does not even reach
 [[rio]]: clients talk to the display server directly through [[/dev/draw]]
-(e.g., [[hellorio]] on /dev/draw/3 in Figure~\ref{fig:soft-archi-threads}),
+(e.g., [[hellorio]] on [[/dev/draw/3]] in Figure~\ref{fig:soft-archi-threads}),
 so [[rio]]'s threads only field the comparatively rare mouse and keyboard
 traffic from its virtual device files, which is human-paced.
 
 \subsubsection{The [[fileserver]] proc and its pipe}
 
 The third proc, [[fileserver]], creates a {\em pipe} and reads
-in a loop one side of the pipe. 
-On the other side of the pipe are clients of [[rio]]'s
-filesystem
+in a loop one side of the pipe.
+%
+On the other side of the pipe are clients of [[rio]]'s filesystem
 ([[hellorio]] and the shell process in Figure~\ref{fig:soft-archi-threads}).
 %
 Section~\ref{sec:trace-new-window} will give more details
-about this pipe and how [[rio]] and its clients communicate.
+about this pipe and how [[rio]] and its ``clients'' communicate.
 \n use mount with fd (said later)
 %claude:
-I make this {client}/{server} vocabulary precise at the start of
+Moreover, I make this {client}/{server} vocabulary precise at the start of
 Chapter~\ref{chap:filesystem-server}.
+%TODO inline explanations instead and dupe
 
 \subsubsection{[[main-proc]]}
 
@@ -1235,7 +1223,7 @@ The last proc,
 It contains many threads.
 %
 I mentioned already the keyboard and mouse threads above.
-Both are created by [[threadmain]], the first thread of [[main-proc]].
+Both are created by [<threadmain()>], the first thread of [[main-proc]].
 %
 Moreover, {\em each window is represented by a thread}.
 %
@@ -1247,6 +1235,7 @@ is also associated with a thread
 Finally, {\em each opened file of [[rio]]'s filesystem is
 represented as a (worker) thread}.
 \l also worker allocator
+%TODO: explain more
 %toc: %trans
 %alt: The next sections will clarify how those threads work together.
 
@@ -1255,6 +1244,27 @@ represented as a (worker) thread}.
 \l terminal emulator together. All threads procs of rio =~ window manager.
 \l input delivery job mainly.
 
+\subsubsection{Summary}
+
+%claude:
+Figure~\ref{fig:soft-archi-threads} is the single most important
+diagram in this book. If you understand it, you understand [[rio]]'s shape:
+a shared-memory [[main-proc]] with many cooperative threads (one
+per window, plus keyboard/mouse/worker-allocator),
+two dedicated I/O procs that ``absorb'' blocking reads on [[/dev/cons]] and
+[[/dev/mouse]],
+a filesystem proc that runs the 9P loop, and a
+pool of short-lived worker threads that handle one 9P request each.
+%
+Everything inside the dashed rectangle shares one address
+space; everything below it is a separate \plan process
+communicating via the 9P pipe.
+%
+Spend a moment matching the
+windows you see in Figure~\ref{fig:hellorio-and-shell} to the
+window threads in Figure~\ref{fig:soft-archi-threads}, and then 
+to the shell and [[hellorio]] processes to 
+the boxes outside [[rio]]'s address space.
 
 %trans:
 %it's a lot to take, I know 
@@ -10123,7 +10133,7 @@ applications to draw on the screen:
 \item [[rio]] is using [[draw]]'s layers to implement overlapping windows 
 (see Section~\ref{sec:layer-introduction})
 
-\item [[draw]] is using a client/server architecture to support 
+\item [[draw]] is using a clients/server architecture to support 
 the multiple clients of [[rio]]
 (see Section~\ref{sec:winname}) % and sec:display-server
 
