@@ -978,6 +978,7 @@ as displayed in Figure~\ref{fig:hellorio-and-shell}.
 As mentioned in Section~\ref{sec:hellorio}, the \plan thread library 
 provides two separate constructs to represent computation: 
 {procs} and {threads}.
+%
 A {\em proc} is a \plan process containing one or more
 {cooperatively-scheduled} {\em threads}.
 %legend:
@@ -1047,6 +1048,9 @@ by a dashed rectangle.
 \caption{[[hellorio]] and a shell running in two different windows.}
 \label{fig:hellorio-and-shell}
 \end{figure}
+
+
+\subsubsection{layers and groups}
 
 %claude:
 Figure~\ref{fig:soft-archi-threads} is the single most important
@@ -1124,6 +1128,8 @@ in the middle of Figure~\ref{fig:soft-archi-threads}
 
 \end{itemize}
 
+\subsubsection{The I/O procs}
+
 I mentioned already the first two procs in
 Section~\ref{sec:hellorio} in the context of the [[hellorio]] 
 program\footnote{In fact, 
@@ -1147,6 +1153,8 @@ sends a message on the [[keyboardctl->c]] or [[mousectl->c]] channels.
 %
 Two threads of [[main-proc]], the keyboard thread and the mouse thread,
 are listening on those channels.
+
+\subsubsection{On procs and threads for concurrency}
 
 %dup? Libcore.nw?
 The use of multiple procs and threads to read one device file is
@@ -1178,8 +1186,9 @@ a shared structure; by the time another thread of the same proc runs, the
 data is always in a consistent state. That is exactly the guarantee a lock
 would buy you, obtained here for free. Threads in \emph{different} procs can
 genuinely run in parallel and do not share this guarantee, so they coordinate
-by passing messages on channels to {synchronize}, rather than by locking
+mostly by passing messages on channels to {synchronize}, rather than by locking
 shared memory.
+% Still some QLock sometimes like in Window for main-proc vs filsysproc
 
 %yoann: explain single-threaded is a big deal? not really, cos it does not block
 % heavy computation process from running. It only matters when there
@@ -1197,10 +1206,12 @@ hand control back as soon as the event is handled. Such events are driven
 almost entirely by the user, and humans are slow, so the threads spend most
 of their time idle and cooperative scheduling never becomes a bottleneck.
 Crucially, the high-bandwidth work---drawing pixels---does not even reach
-[[rio]]: clients talk to the display server directly through [[/dev/draw]],
+[[rio]]: clients talk to the display server directly through [[/dev/draw]]
+(e.g., [[hellorio]] on /dev/draw/3 in Figure~\ref{fig:soft-archi-threads}),
 so [[rio]]'s threads only field the comparatively rare mouse and keyboard
 traffic from its virtual device files, which is human-paced.
 
+\subsubsection{The [[fileserver]] proc and its pipe}
 
 The third proc, [[fileserver]], creates a {\em pipe} and reads
 in a loop one side of the pipe. 
@@ -1214,6 +1225,8 @@ about this pipe and how [[rio]] and its clients communicate.
 %claude:
 I make this {client}/{server} vocabulary precise at the start of
 Chapter~\ref{chap:filesystem-server}.
+
+\subsubsection{[[main-proc]]}
 
 %trans:
 The last proc,
@@ -1242,8 +1255,13 @@ represented as a (worker) thread}.
 \l terminal emulator together. All threads procs of rio =~ window manager.
 \l input delivery job mainly.
 
-%\subsection{Data structures relationships}
-% meh, maybe too much stuff already to digest.
+
+%trans:
+%it's a lot to take, I know 
+%(was even more before preliminary explanations before with complex traces)
+
+%said-later: \subsection{Data structures relationships}
+% meh, maybe too much stuff already to digest, better at the end of Core DS chapter
 
 
 
@@ -1767,26 +1785,24 @@ char    *label;   // writable through /mnt/wsys/label
 %  label can be arbitrary size and /dev/label is writable
 
 %claude:
-Because multiple threads and procs access [[Window]]s concurrently---the
-mouse thread, the keyboard thread, the window's own [<winctl()>] thread,
-and filesystem worker threads---[[Window]] embeds
+Several execution contexts touch a [<Window>] concurrently. Most of
+them---the mouse thread, the keyboard thread, each window's own
+[<winctl()>] thread, and the filesystem worker threads---run inside
+[[rio]]'s {main proc} (see Figure~\ref{fig:soft-archi-threads})
+and are cooperatively scheduled, so they never
+preempt one another; in particular only one worker ever runs at a time
+(the workers exist to keep several requests in flight, not to gain
+parallelism).
+%
+The real exception is [<filsysproc()>], which reads 9P
+requests on the server pipe in a {separate proc}: it runs in parallel with
+the main proc and itself reaches into [[Window]]s while handling some of
+those requests. 
+%
+[[Window]] therefore embeds
 a [[Ref]] for reference counting and
 a [[QLock]] for mutual exclusion.
-%
-The [[Ref]] prevents a window from being freed while another thread
-still holds a pointer to it---for instance, the mouse thread may be
-partway through a resize or delete operation on a window while a
-filesystem worker thread is simultaneously servicing a read on
-that same window's [[/mnt/wsys/cons]].  Without reference counting,
-the window could be deallocated under the worker's feet.
-%
-The [[QLock]] matters because these accesses come from threads in
-{different procs}: unlike the cooperatively-scheduled threads of a single
-proc, which never preempt one another, threads in separate procs genuinely
-run in parallel and so can race on a shared [[Window]]. In particular,
-[[rio]]'s filesystem workers live in their own proc, distinct from the proc
-running the mouse and keyboard threads (see \book{Libcore} for the details
-of these synchronization primitives).
+
 
 \t adv topics? all those wclose, wclosechan, incref/decref are subtle
 <<[[Window]] extra fields>>=
@@ -1806,6 +1822,20 @@ QLock;
 \l need? threads are cooperatif so can have race??
 % have different process though, but still when need lock?
 
+%claude:
+The [[QLock]] guards against that genuine cross-proc parallelism:
+[<filsysproc()>] and a main-proc thread could otherwise update the same
+[[Window]] at the same instant.
+%
+The [[Ref]] keeps a [[Window]] alive while
+a pointer to it is still held across a blocking point---a worker may be
+parked on a channel, or [<filsysproc()>] partway through a request, when the
+mouse thread runs a delete; 
+%
+without the reference count the [[Window]]
+could be freed under their feet
+(see \book{Libcore} for the details of
+the [[Ref]] and [[QLock]] synchronization primitives).
 
 
 
