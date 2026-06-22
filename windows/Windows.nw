@@ -1337,21 +1337,29 @@ In this chapter, I will present the core data structures of [[rio]],
 which are essentially:
 % globals to device handler, Window, and filesystem.
 %claude:
-the device handles for the display, the mouse, and the keyboard
-(like any graphical application);
-the [[Window]] structure, the central data structure of a windowing system,
+the device handles for the display, the mouse, and the keyboard;
+the [<Window>] structure, the central data structure of a windowing system,
 grouping graphics, input, process, and text information for each window;
-and the [[Filsys]] and [[Fid]] structures that support [[rio]]'s role as a
+and the [<Filsys>] and [<Fid>] structures that support [[rio]]'s role as a
 {filesystem server}, maintaining per-client file state for the 9P protocol.
 
+
+%dup: ed.nw %padism:
+Note that the original source code of [[rio]] has been slightly modified to
+be arguably easier to read. Moreover, in addition to my explanations,
+I have also sometimes added a few comments in the code itself.
+%
+The original comments from Rob Pike are using
+the standard C syntax [[/**/]] while my comments are using
+the [[//]] syntax, so they are easy to differentiate.
 
 \section{Device handles}
 
 %yoann: one line intro
 %claude:
-Before the window data structures themselves, [[rio]] needs handles to the
-three devices every windowing system rests on: the screen, the mouse, and
-the keyboard.
+[[rio]] is first of all an ordinary graphical application, so we begin with
+the device handles it shares with any \plan GUI program, before turning to
+the structures specific to a windowing system.
 
 \subsection{Output device: [[display]] and [[view]]}
 
@@ -1359,7 +1367,7 @@ the keyboard.
 % So use display, view, etc. See Graphics.nw and draw.h and initdraw called
 % early in main().
 %claude:
-Like any graphical application under \plan, [[rio]] uses the
+[[rio]] uses the
 global [[display]] (set by [[initdraw()]], see the \book{Graphics})
 to communicate with the
 display server, and the global [[view]] which represents the portion of
@@ -1459,7 +1467,7 @@ Mouse	*mouse;
 % images, which is big building block for windowing systems (but still
 % a lot remains)
 %claude:
-A [[Screen]]\footnote{The name [[Screen]] is inherited from libdraw, where
+A [[Screen]]\footnote{The name [[Screen]] is inherited from [[libdraw]], where
 it denotes the surface that images are allocated \emph{on}; despite the
 name, it has nothing to do with the physical screen.}
 (from [[window.h]]) is the graphics
@@ -1492,16 +1500,6 @@ that overlap each other.
 %pixels; everything below it is a window-managed region whose
 %repaints are serialized through [[desktop]].
 
-%claude:
-When two windows overlap, libdraw's [[Screen]] is what works out which
-parts of each window are actually visible and keeps them painted
-correctly---so [[rio]]'s own code never has to track the visible regions
-itself.
-%
-This is one of the biggest reasons [[rio]]'s C is so short
-compared to an X11 window manager: the hard part of the job sits in
-\book{Graphics}, not here.
-
 <<global [[desktop]]>>=
 Screen	*desktop;
 @
@@ -1509,8 +1507,20 @@ Screen	*desktop;
 %old: was called wscreen 
 
 %claude:
-The [<background>] and [<red>] globals are
-color images (in \plan, everything is an [[Image]], including colors).
+When two windows overlap, libdraw's [[Screen]] is what works out which
+parts of each window are actually visible and keeps them painted
+correctly---so [[rio]]'s own code never has to track the visible regions
+itself.
+% clipping defined anywhere? define it here?
+%
+This is one of the biggest reasons [[rio]]'s C is so short
+compared to other windowing systems: the hard part of the job sits in
+the \book{Graphics}, not here.
+
+
+%claude:
+The [<background>] and [<red>] globals below are
+color images (with [[draw]] everything is an [[Image]], including colors).
 The red color is used to highlight window borders during move/resize
 operations.
 
@@ -1574,7 +1584,7 @@ The [<Window>] structure is the central data structure of [[rio]] (much
 like [[Proc]] in the \book{Kernel}).
 It is the server-side representation of a client window---the client
 application itself has no notion of a ``window''; it simply sees a
-display and a [[view]] image through [[/dev/winname]].
+display and a [[view]] image (through [[/dev/winname]]).
 
 %claude:
 The structure below groups together nine categories of fields:
@@ -1657,7 +1667,7 @@ I will cover the different field categories gradually throughout this
 book. For now, the most important fields are [[id]] (a unique integer
 identifying the window, visible through [[/mnt/wsys/winid]]) and
 [[name]] (used by the graphics layer to find the window's image
-via [[namedimage]], visible through [[/mnt/wsys/winname]]).
+via [[namedimage()]], visible through [[/mnt/wsys/winname]]).
 
 <<[[Window]] id fields>>=
 int	    id;       // visible through /mnt/wsys/winid
@@ -1667,7 +1677,7 @@ char    name[32]; // visible through /mnt/wsys/winname
 \l could rename winname
 
 %claude:
-Each window gets a unique [[id]] from a global counter, incremented
+Each window gets a unique [[id]] from a global counter [<id>], incremented
 in [<wmk()>]. This ID appears in the filesystem path
 [[/mnt/wsys/<id>/]] and identifies the window across the 9P protocol.
 
@@ -1759,17 +1769,24 @@ char    *label;   // writable through /mnt/wsys/label
 %claude:
 Because multiple threads and procs access [[Window]]s concurrently---the
 mouse thread, the keyboard thread, the window's own [<winctl()>] thread,
-and filesystem worker threads---[[Window]] embeds a [[Ref]] for
-reference counting and a [[QLock]] for mutual exclusion.
+and filesystem worker threads---[[Window]] embeds
+a [[Ref]] for reference counting and
+a [[QLock]] for mutual exclusion.
+%
 The [[Ref]] prevents a window from being freed while another thread
 still holds a pointer to it---for instance, the mouse thread may be
 partway through a resize or delete operation on a window while a
 filesystem worker thread is simultaneously servicing a read on
 that same window's [[/mnt/wsys/cons]].  Without reference counting,
 the window could be deallocated under the worker's feet.
-The [[QLock]] serializes access to fields that can be modified from
-different threads (see \book{Libcore} for the details of these
-synchronization primitives).
+%
+The [[QLock]] matters because these accesses come from threads in
+{different procs}: unlike the cooperatively-scheduled threads of a single
+proc, which never preempt one another, threads in separate procs genuinely
+run in parallel and so can race on a shared [[Window]]. In particular,
+[[rio]]'s filesystem workers live in their own proc, distinct from the proc
+running the mouse and keyboard threads (see \book{Libcore} for the details
+of these synchronization primitives).
 
 \t adv topics? all those wclose, wclosechan, incref/decref are subtle
 <<[[Window]] extra fields>>=
@@ -1800,10 +1817,10 @@ it holds all the managed windows.
 The [<topped>] counter is a logical timestamp---each time a window
 gets the focus, it receives the current [[topped]] value (then incremented).
 This allows [<wpointto()>] to find the topmost window at a given point
-by comparing [[topped]] values across all overlapping windows.
+by comparing [[Window.topped]] values across all overlapping windows.
 
 % grown in wmk()
-<<global [[window]]>>=
+<<global [[windows]]>>=
 // growing_array<ref_own<Window>> (size = nwindow+1)
 Window	**windows;
 @
@@ -1902,28 +1919,6 @@ rune starts the visible portion, and an ``output point'' ([[qh]]) that
 separates text already sent by the application from text typed by the
 user.
 
-%yoann: ASCII Diagram relating all those fields maybe on concrete example
-%claude:
-These fields are easier to picture on a concrete buffer. Suppose a
-command has just printed the date, the shell has printed a fresh prompt,
-and the user has started typing (but not yet entered) the next command:
-%
-\begin{verbatim}
-   r[] :  "Mon Jun 22\n% "  "echo h"
-          \______________/  \______/
-          program output     typed by the user, not yet sent
-          (incl. the prompt) ^
-                             qh   (output point)
-
-   index  0 .......................... nr-1      (nr runes total)
-
-   org   = index of the first rune drawn at the top of the window;
-           scrolling only moves org.
-   qh    = output point: r[0..qh) was written by programs,
-           r[qh..nr) is what the user has typed but not yet sent.
-   q0,q1 = the current selection r[q0..q1); when q0==q1 it is
-           just the text cursor.
-\end{verbatim}
 
 <<[[Window]] textual window fields>>=
 <<[[Window]] textual window fields, text data>>
@@ -1991,10 +1986,36 @@ uint		qh; // output point
 % FIGURE! or delay to later?
 
 
+%yoann: ASCII Diagram relating all those fields maybe on concrete example
+%claude:
+These fields are easier to picture on a concrete buffer. Suppose the
+terminal has already scrolled through some history, a command has just
+printed the date, the shell has printed a fresh prompt, and the user has
+typed (but not yet entered) the start of the next command:
+%
+\begin{verbatim}
+   r[] holds, left to right:
+
+     [ ...earlier output... ][ Mon Jun 22\n%  ][ echo hi ]
+       r[0 .. org)             r[org .. qh)      r[qh .. nr)
+       scrolled off the top    visible program   typed by the user,
+                               output + prompt    not yet sent
+                                                          ^
+                                                          q0 == q1
+
+   all markers are indices into r[] (nr runes total):
+     org    -> first rune drawn at the top of the window;
+               scrolling only moves org.
+     qh     -> output point: programs wrote r[0..qh), the user typed
+               r[qh..nr).
+     q0,q1  -> the selection r[q0..q1); here q0==q1, so it is just the
+               text cursor, sitting at the end of what was typed.
+\end{verbatim}
 
 %claude:
-The [[Frame]] structure (from the frame library) handles the rendering
-of visible text---wrapping, selection highlighting, and scrollbar
+The [[Frame]] structure (from the [[libframe]] library,
+see Appendix~\ref{chap:frame}) handles the {rendering}
+of {visible} text---wrapping, selection highlighting, and scrollbar
 interaction.
 
 % Frame actually means image with text inside, with lines,
@@ -2008,6 +2029,15 @@ Frame frm;
 %old: was just Frame; but clearer after naming I think
 
 % will see Frame later.
+
+%yoann: one line intro to scrollr and scrolling field, why bool?
+%claude:
+[[scrollr]] is the rectangle reserved for the window's scrollbar, to the
+left of the text [[Frame]]. The [[scrolling]] flag below is a plain
+[[bool]] because it is just an on/off mode, [[false]] by default: when set,
+the window scrolls automatically to follow new output, so a program writing
+to [[/dev/cons]] never blocks waiting for the user to scroll down (see the
+auto-scroll extension in Section~\ref{sec:auto-scroll}).
 
 <<[[Window]] textual window fields, graphics>>=
 Rectangle	scrollr;
@@ -2044,6 +2074,7 @@ bool	scrolling;
 {filesystem server}.
 In \plan, any process can act as a filesystem server by listening on a pipe
 for {9P} messages (see the \book{Network}).
+%
 [[rio]] serves the [[/mnt/wsys/]] namespace: when a client application
 opens [[/mnt/wsys/cons]] or [[/mnt/wsys/mouse]], those accesses are
 translated into 9P messages sent through a pipe to [[rio]], which
@@ -2056,10 +2087,10 @@ dispatches them to the appropriate window.
 % (named pipe? no, no need yet, pipe here is between rio and filsys?
 %  or kinda named pipe, but managed by mount and srv??)
 %claude:
-The [[Filsys]] structure holds the two ends of a pipe ([[cfd]] for
+The [<Filsys>] structure holds the two ends of a pipe ([[cfd]] for
 the client side, [[sfd]] for the server side), the user name
-(for security checks), a hash table of [[Fid]] entries tracking
-per-client file state. %, and a channel to the worker allocator.
+(for security checks), a hash table of [<Fid>] entries tracking
+per-client file state, and more. %, and a channel to the worker allocator.
 
 
 <<struct [[Filsys]]>>=
@@ -2083,11 +2114,11 @@ struct Filsys
 %ocaml: use Hashtbl directly for Filsys.fids
 
 %claude:
-The client side of the pipe is also published in [[/srv/rio.<user>.<pid>]]
-for external processes that want to connect to [[rio]]. Child processes
-do not need this [[/srv]] entry---they inherit the pipe's file
-descriptor directly through the fork/exec model of shared file
-descriptors (see Section~\ref{sec:external-access}).
+%The client side of the pipe is also published in [[/srv/rio.<user>.<pid>]]
+%for external processes that want to connect to [[rio]]. Child processes
+%do not need this [[/srv]] entry---they inherit the pipe's file
+%descriptor directly through the fork/exec model of shared file
+%descriptors (see Section~\ref{sec:external-access}).
 
 
 % cfd will be published in /srv/rio.user.pid? but not that important
@@ -2096,6 +2127,14 @@ descriptors (see Section~\ref{sec:external-access}).
 
 % [[user]] is needed for security purpose, make sure people making request
 %  to pipe are the same user
+
+%yoann: quick intro global, who uses that global?
+%claude:
+The global [[filsys]] holds [[rio]]'s file-server state: the pipe it
+listens on and the table of files currently open. It is kept global mainly
+for [[winshell]], the code that launches a shell in a new window---it calls
+[[filsysmount]] to attach the new window to [[/mnt/wsys/]], and needs the
+global to find where the server pipe is.
 
 <<global [[filsys]]>>=
 Filsys	*filsys;
@@ -2110,12 +2149,15 @@ Filsys	*filsys;
 %yoann: explain quickly classic C idiom hash and linked list and bucket and next pointer like in many other \principia books
 %claude:
 [[rio]] tracks its open files with the classic C hash-table idiom found
-throughout \principia: a fixed array of [[Nhash]] {buckets}, where each
+throughout \principia: a fixed array of ([[Nhash]]) {buckets} above, where each
 bucket is the head of a singly-linked list of [[Fid]] structures chained
-through their [[next]] field. To find a file, [[rio]] hashes its fid number
-down to a bucket index and walks that short list; new entries are simply
-prepended, so the table never needs resizing---at the cost of longer chains
-when many files are open at once.
+through their [[next]] field below.
+%
+To find a file, [[rio]] hashes its fid number
+down to a bucket index and walks that short list.
+%; new entries are simply
+%prepended, so the table never needs resizing---at the cost of longer chains
+%when many files are open at once.
 
 
 <<constant [[Nhash]]>>=
@@ -2139,9 +2181,10 @@ Fid		*next;
 
 % when userspace filesystem, have notion of fid, Fcall message.
 %claude:
-A {fid} (file ID) is a 9P concept: a 32-bit handle the client uses to refer
+A {fid} (file ID) is a 9P concept: a 32-bit handle the ``client'' uses to refer
 to a file on the server, similar to a file descriptor but at the
 protocol level.
+%said-later: "client" really kernel on behalf of windows
 A [[Qid]] is the server-side file identifier, analogous to an inode
 number in Unix---it uniquely identifies a file on the server.
 While fids are chosen by the client and may be reused, Qids are
@@ -2188,6 +2231,13 @@ Qid		qid;
 % of those cases, the state of the file can be different!
 
 
+%yoann: quick explain busy
+%claude:
+The [[busy]] flag says whether a [[Fid]] slot is currently in use. [[rio]]
+recycles [[Fid]] structures rather than freeing them, so [<newfid()>] looks
+for a slot with [[busy]] cleared to reuse; it is set when a client first
+references a fid and cleared again when the client is done with it.
+
 <<[[Fid]] extra fields>>=
 bool	busy;
 @
@@ -2195,8 +2245,8 @@ bool	busy;
 
 %yoann: quick intro newfid for transition
 %claude:
-Before a client can touch a file it must obtain a [[Fid]] for it.
-[[newfid()]] is the lookup-or-allocate routine that bridges a 9P fid
+Before a client can touch a file it must obtain a [<Fid>] for it.
+[<newfid()>] is the lookup-or-allocate routine that bridges a 9P fid
 number and [[rio]]'s in-memory [[Fid]]: it hashes the number into the
 right bucket and returns the matching [[Fid]] if one already exists,
 otherwise reusing a free slot or allocating a fresh one.
@@ -2244,7 +2294,8 @@ newfid(Filsys *fs, int fid)
 
 %claude:
 The [[Fid.w]] field below closes the circle: once a fid is associated
-with a [[Qid]] (during attach or walk), [[rio]] can resolve it
+with a [[Qid]] (during attach or walk, as shown in Chapter~\ref{chap:filesystem-server}),
+[[rio]] can resolve it
 back to the corresponding [[Window]].
 
 <<[[Fid]] other fields>>=
@@ -2256,20 +2307,23 @@ Window	*w;
 % So full circle here! get back a Window!
 
 %claude:
-Note that the 9P ``client'' here is not the application itself---it
-is the kernel acting on behalf of the application.  When [[hellorio]]
-calls [[read()]] on [[/dev/cons]], the kernel translates that into
-a 9P [[Tread]] message sent through the pipe to [[rio]]'s
-[[filsysproc]].
+Note that the 9P ``client'' I am refering to in this section
+is not the window application itself---it
+is the kernel acting on behalf of the application.
+%
+When [[hellorio]] calls [[read()]] on [[/dev/cons]], the kernel translates that into
+a 9P [[Tread]] message sent through the pipe to [[rio]]'s [[filsysproc]].
 %said-again: in Filesystem server chapter I think
-
+%
 %claude:
 The [[Fid.w]] field is the bridge between the filesystem abstraction
-and the windowing system. When a client process accesses a file
+and the windowing system. When a ``client'' process accesses a file
 under [[/mnt/wsys/]], the 9P protocol resolves the path to a [[Fid]],
 and [[Fid.w]] points to the [[Window]] that owns that file:
-%
-\begin{verbatim}
+
+
+%claude:
+\begin{vdiagram}
   client process             rio fileserver              window
   +----------+               +---------+               +--------+
   | open     |  --9P msg-->  | Fid     |    Fid.w -->  | Window |
@@ -2277,9 +2331,7 @@ and [[Fid.w]] points to the [[Window]] that owns that file:
   | write    |  <--9P msg--  |  .qid   |               |  .ck   |
   +----------+               |  .w ----+---->           |  .mc   |
                               +---------+               +--------+
-\end{verbatim}
-
-
+\end{vdiagram}
 
 
 
@@ -2289,9 +2341,10 @@ and [[Fid.w]] points to the [[Window]] that owns that file:
 The filesystem server proc ([<filsysproc()>]) reads 9P requests from the
 pipe, but it cannot process them all synchronously---multiple windows and
 client processes may be making concurrent requests.
-So [[filsysproc]] acts as a {master} that dispatches each request to a
-{worker} thread.
-The [[Xfid]] (``extended fid'') structure combines the incoming parsed
+So [[filsysproc()]] acts as a {\em master} that dispatches each request to a
+{\em worker} thread.
+%
+The [[Xfid]] (``extended fid'') structure combines the incoming 9P parsed
 request ([[Fcall]]) with a channel to a worker thread. 
 
 
@@ -2326,6 +2379,7 @@ struct Xfid
         // chan<void(*)(Xfid*)> (listener = xfidctl, senders = filsysxxx)
         Channel	*c;	/* chan(void(*)(Xfid*)) */
 
+        // ref<Fid>
         Fid	*f;
 
         Filsys	*fs;
@@ -2342,7 +2396,16 @@ struct Xfid
 % directly the parameter of the constructor to the operation.
 % no need channel for worker, create thread on the fly
 %old: was Fcall; but better to name field.
-\t Xfid.fs ? anyway can use the global filsys instead
+
+%yoann: Xfid.fs ? anyway can use the global filsys instead no?
+%claude:
+[[rio]] only ever has one [[Filsys]] (the global [[filsys]]), so [[Xfid]]'s
+[[fs]] field always points to it and could indeed be replaced by the
+global. It is carried in each [[Xfid]] anyway so that a worker has
+everything it needs to answer a request---including where to write the
+reply---without reaching for a global.
+
+
 % The ref seems to be either 0 or 1, so used just to sanity check things
 % Ref because possibly concurrently access by xallocthread and xfidctl?
 
@@ -2354,7 +2417,9 @@ struct Xfid
 %claude:
 The master sends
 a function pointer through [[Xfid.c]], telling the worker what operation
-to execute. Workers are pooled via the [[cxfidalloc]]/[[cxfidfree]]
+to execute (e.g., [<xfidopen()>], [<xfidread>]).
+%
+Workers are pooled via the [<cxfidalloc>]/[<cxfidfree>]
 channels to avoid creating a new thread for every request.
 
 <<[[Filsys]] other fields>>=
@@ -2380,16 +2445,14 @@ Channel	*cxfidalloc;	/* chan(Xfid*) */
 %  messages on cfd which will be processed by other side of pipe
 %  and dispatched to right method.
 %claude:
-The [[fcall]] dispatch table maps 9P message types
+The [<fcall>] dispatch table maps 9P message types
 ([[Tattach]], [[Twalk]], [[Topen]], [[Tread]], [[Twrite]], etc.)
 to handler functions.
 When a client process executes a file operation (open, read, write)
 on a file under
 [[/mnt/wsys/]], the kernel translates that into a 9P message
 (prefixed with [[T]] for ``transmit''), which [<filsysproc()>]
-dispatches through this table. The handler may return [[nil]] if it
-delegates work to a worker thread, or the [[Xfid]] back if the
-worker can be reused immediately.
+dispatches through this table. 
 
 \t could just pass Xfid no? anyway Fid and Filsys are inside Xfid.
 
@@ -2421,6 +2484,16 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 % and dispatch. No need intermediate filsysxxx (which then
 % require to pass around lots of information as extra parameter)
 
+%claude:
+The handler may return [[nil]] if it
+delegates work to a worker thread, or the [[Xfid]] back if the
+worker can be reused immediately.
+
+%yoann: can say will see gradually those filsysxxx in Chapter X
+%claude:
+Each [[filsysXXX]] handler implements one 9P message type
+([<filsyswalk()>], [<filsysread()>], [<filsysopen()>], and so on); we
+meet them gradually in Chapter~\ref{chap:filesystem-server}.
 
 % create/remove forbidden, other stuff could be aspectized too
 
@@ -2456,7 +2529,8 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 \label{sec:core-ds-rio}
 
 %claude: %trans:
-Before [[main()]] starts wiring these structures together, it is worth
+Before [[main()]] (actually [<threadmain()>]) starts wiring these
+structures together, it is worth
 seeing how they relate on a concrete example. Rather than listing fields
 in the abstract, Figure~\ref{fig:core-ds-rio} shows the instances [[rio]]
 holds while two windows are open: a focused terminal and a graphical
@@ -13551,6 +13625,7 @@ if(w->deleted)
 
 
 \section{Automatic scrolling mode}
+\label{sec:auto-scroll}
 % hard to put in adv topics, this global is pretty important
 %claude:
 The automatic scrolling mode controls a fundamental usability trade-off:
