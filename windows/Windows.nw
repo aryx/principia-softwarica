@@ -3175,10 +3175,10 @@ to whichever thread has work to do.
 
 % listen/dispatch architecture.
 %claude:
-The keyboard thread is a simple {demultiplexer}: it receives runes from
-the I/O proc (via [[keyboardctl->c]]) and forwards them to the [<input>]
-window's [[ck]] channel.
-%yoann1: why demultiplexer? looks more like simple "forwarder"
+The keyboard thread is a simple {forwarder}: it receives runes from
+the I/O proc (via [[keyboardctl->c]]) and passes them to the [<input>]
+window's [[ck]] channel---always the currently focused window, so there is
+no per-rune routing decision to make.
 
 % main -> threadcreate -> <>  (as ?? in threadcreate(<>) <- main)
 <<function [[keyboardthread]]>>=
@@ -3297,6 +3297,11 @@ static Alt alts[NALT+1];
 % small rappel here on libthread maybe? alt =~ select.
 
 %yoann: can say now can see skeleton mousethread
+%claude:
+We can now see the skeleton of [<mousethread()>]: like [[hellorio]], it is
+an [[alt()]] loop (the thread-library analogue of [[select]]) waiting on
+channels. For now there is a single case, [[MMouse]], whose handling is
+filled in below; we will see more cases added gradually in later sections.
 
 <<function [[mousethread]]>>=
 /// main -> threadcreate(<>, nil)
@@ -3451,6 +3456,13 @@ been intentional.
 
 
 %yoann: quick explanation and used in ptinside
+%claude:
+[[Selborder]] is the width, in pixels, of the border drawn around the
+selected window. It is used just above to compute [[inside]]: the pointer
+counts as ``inside'' the window only if it falls within [[screenr]] shrunk
+by [[Selborder]] ([[insetrect()]]), so clicks landing on the border itself
+are reserved for window-management actions (like resizing) rather than
+forwarded to the application.
 
 <<constant [[Selborder]]>>=
 Selborder		= 4,	/* border of selected window */
@@ -3460,6 +3472,11 @@ Selborder		= 4,	/* border of selected window */
 % also abused as an enum with Selborder and Unselborder
 
 %yoann: transition sentence for App and windowing system events
+%claude:
+The mouse thread now splits into two paths, treated in the next two
+subsections: events {forwarded} to the application (when the pointer is
+inside a window that wants them), and events {kept} by [[rio]] itself for
+window management (move, resize, and the menus).
 
 \subsection{Application mouse events}
 
@@ -3498,6 +3515,9 @@ Mouse tmp;
 @
 
 %yoann: transition, can now see app case
+%claude:
+Here is the application case: when [[sending]] is set, the mouse thread
+hands the event off to the window's own thread.
 
 <<[[mousethread()]] if sending>>=
 if(sending){
@@ -3515,6 +3535,12 @@ Sending:
 %ocaml: no need backup mousectl value. Pass data by value in channels.
 
 %yoann: quick intro and reference to chapter X on cursor graphics
+%claude:
+Before handing the event over, the thread picks the right cursor shape: a
+corner cursor when the pointer rests on a border (so the user knows a
+resize is possible), the plain cursor otherwise. The cursor machinery
+itself ([[cornercursor()]], [[wsetcursor()]]) is covered in
+Chapter~\ref{chap:cursor}.
 
 \l could mv later
 <<[[mousethread()]] when sending mouse message to window, set the cursor>>=
@@ -3629,6 +3655,11 @@ at the first hit.
 
 
 %yoann: quick explanation
+%claude:
+On the windowing-system path the thread first updates the cursor shape: if
+the pointer is over some window it may switch to a resize-corner cursor
+([[cornercursor()]]), otherwise it restores the default arrow
+([[riosetcursor()]]).
 
 <<[[mousethread()]] when not sending, set cursor part1>>=
 /* change cursor if over anyone's border */
@@ -3646,6 +3677,13 @@ if(w != nil)
 
 
 %yoann: quick explanation
+%claude:
+If a button is pressed while [[rio]] is keeping the event, the thread
+dispatches on which button. On the focused window (or empty space), left
+does nothing here (text selection is handled in the window thread), middle
+opens the edit menu and right the window menu. A click on an {unfocused}
+window instead tops it---giving it the focus---and may then pass the event
+on.
 
 % hmmm, complicated dispatch function.
 % LP split more? and make more readable the action
@@ -3684,6 +3722,10 @@ if(mouse->buttons){
 %ocaml: use top_win so by construction sure that we set the window
 
 %yoann: say gradually see left, right, middle mouse handling code
+%claude:
+The bodies of the left-, middle-, and right-click cases are filled in
+gradually over the following sections, as each opens its own little
+protocol (text selection, the edit menu, the window menu).
 
 % Drain?
 
@@ -3721,6 +3763,9 @@ Drain:
 % listen to many channels! (and relaying to many channels)
 
 %yoann: transition where say now see most interesting thread of rio
+%claude:
+We now reach the thread that ties the others together, and the most
+interesting one in [[rio]]: the per-window [<winctl()>] thread.
 
 % keyboard listening (and relaying)
 % mouse listening (and relaying)
@@ -3862,7 +3907,11 @@ if(event == -1) {
 @
 
 %yoann: trans and toc sentence with will see Wkey, WMouse and especially Wctl handler!
-
+%claude:
+The event loop has three core cases, matching the [[Wxxx]] enum: [[WKey]],
+[[WMouse]], and [[WCtl]]. The next subsections take them in turn---keyboard
+and mouse forwarding are short, while [[WCtl]], the window-control handler,
+is where most of the window-management logic lives.
 
 \subsection{Keyboard events listening}
 
@@ -4111,6 +4160,8 @@ int	messagesize = 8192+IOHDRSZ;	/* good start */
 % IOHDRSZ defined in fcall.h
 
 %yoann: toc sentence
+%claude:
+With the worker pool in place, we can read the loop that drives it.
 
 \subsection{Reading and dispatching: [[filsysproc()]]}
 
@@ -4408,6 +4459,19 @@ xfidallocthread(void*)
 @
 
 %yoann: why use thread and message there too for allocation? could not just use direct function calls? need this intermediate allocator thread? alternatives?
+%claude:
+Why route allocation through a dedicated thread and channels instead of
+just calling an allocation function directly? Because the free list
+([[xfidfree]]) is shared state whose users live in {different procs}:
+[<filsysproc()>] runs in its own proc while the workers run in the main
+proc. A plain function would therefore need a lock around the pool. Giving
+a single thread sole ownership of the list, and talking to it over
+channels, sidesteps that: only [<xfidallocthread()>] ever touches
+[[xfidfree]], and channels already carry requests safely across the proc
+boundary. This is the CSP model~\cite{csp} on which \plan's threads are
+built (via Rob Pike's Newsqueak and Alef), later popularized by the Go
+proverb: {do not communicate by sharing memory; instead, share memory by
+communicating}.
 
 
 
