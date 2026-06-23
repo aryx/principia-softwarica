@@ -1242,12 +1242,12 @@ represented as a (worker) thread}.
 %claude:
 Figure~\ref{fig:soft-archi-threads} is the single most important
 diagram in this book. If you understand it, you understand [[rio]]'s shape:
-a shared-memory [[main-proc]] with many cooperative threads (one
-per window, plus keyboard/mouse/worker-allocator),
-two dedicated I/O procs that ``absorb'' blocking reads on [[/dev/cons]] and
-[[/dev/mouse]],
+a shared-memory [[main-proc]] with many cooperative threads
+(one per window, plus keyboard/mouse/worker-allocator),
+two dedicated I/O procs that ``absorb'' blocking reads on
+[[/dev/cons]] and [[/dev/mouse]],
 a filesystem proc that runs the 9P loop, and a
-pool of short-lived worker threads that handle one 9P request each.
+{pool} of short-lived worker threads that handle one 9P request each.
 %
 Everything inside the dashed rectangle shares one address
 space; everything below it is a separate \plan process
@@ -2428,6 +2428,7 @@ struct Xfid
         <<[[Xfid]] extra fields>>
 };
 @
+%padism: listener/senders comment and also typed chan<t> (Pike did too)
 %ocaml: no need buf, build directly ADT of answer. no need req too, pass
 % directly the parameter of the constructor to the operation.
 % no need channel for worker, create thread on the fly
@@ -2624,10 +2625,19 @@ FILESYSTEM filsys *--> Filsys
 % see Libcore.nw, quick refresh on threads in plan9 and
 % fact that main is then threadmain.
 
+%dup: Make.nw
+I now switch from the bottom-up approach of Chapter~\ref{chap:core-ds}
+to a top-down approach:
+I will describe in the following chapters the main functions of [[rio]],
+starting in this chapter with [<threadmain()>], the entry point of [[rio]].
+
+\section{[[threadmain()]] skeleton}
+
 %claude:
-The entry point of [[rio]] is [<threadmain()>] (not [[main()]]): the thread library
+The entry point of [[rio]] is [<threadmain()>], not [[main()]]: the thread library
 provides its own [[main()]] that sets up the cooperative scheduler and a
-first proc, then calls [[threadmain()]] as its initial thread.
+first proc, then calls [[threadmain()]] as its initial thread (see the
+\book{Libcore}).
 %
 The initialization follows three phases matching [[rio]]'s three roles:
 first as a graphical application (connecting to the display, mouse, and
@@ -2714,7 +2724,7 @@ The graphics initialization is almost identical to [[hellorio.c]]
 then allocates a [[Screen]] on top of [[view]] to serve as the
 desktop for overlapping windows.
 %
-The call to [[iconinit()]] allocates the grey background and the
+The call to [<iconinit()>] allocates the grey background and the
 red color used to highlight borders during window operations.
 
 
@@ -2731,7 +2741,7 @@ iconinit(); // allocate background and red images
 <<[[main()]] keyboard initialisation>>
 
 desktop = allocscreen(view, background, false);
-<<[[main()]] sanity check desktop>>
+<<[[main()]] sanity check [[desktop]]>>
 
 draw(view, viewr, background, nil, ZP);
 flushimage(display, true);
@@ -2740,7 +2750,7 @@ flushimage(display, true);
 \l could call initdraw instead of geninitdraw
 % background is grey image color?
 
-<<[[main()]] sanity check desktop>>=
+<<[[main()]] sanity check [[desktop]]>>=
 if(desktop == nil)
     error("can't allocate desktop");
 @
@@ -2762,7 +2772,8 @@ iconinit(void)
 %ocaml: use shorter alloc_color() and Color.mk2()
 
 %claude:
-The reason for using [[geninitdraw()]] rather than [[initdraw()]] is
+The reason for using [[geninitdraw()]] rather than [[initdraw()]] 
+like in [[hellorio.c]] is
 that [[rio]] needs to supply its own error handler ([<derror()>]):
 [[initdraw()]] installs a default handler that exits on errors,
 but a windowing system must recover gracefully.
@@ -2773,12 +2784,16 @@ but a windowing system must recover gracefully.
 % It needs to call initmouse, initkeyboard. 
 
 %yoann: say similar to hellorio.c initialization; rio is a graphical app first.
+%claude:
+This is the same setup any \plan graphical program does---[[hellorio]]
+(Section~\ref{sec:hellorio}) opened its mouse the same way. [[rio]] is a
+graphical application first, so before it can manage other windows it
+acquires its own mouse (and, next, keyboard).
 
 % threadmain -> <>
 <<[[main()]] mouse initialisation>>=
 mousectl = initmouse(nil, view);
-if(mousectl == nil)
-    error("can't find mouse");
+<<[[main()]] sanity check [[mousectl]]>>
 mouse = mousectl;
 @
 %ocaml: better interface without nil and use exn
@@ -2789,14 +2804,19 @@ mouse = mousectl;
 % Note that this creates a process! ioproc.
 
 %claude:
-[[initmouse()]] takes [[view]] to store it internally in the
+[[initmouse()]] takes [[view]] as an argument to store it internally in the
 [[Mousectl]] structure, so that later when code calls [[readmouse()]]
 with this control, it can reach for the display and flush any
 buffered draw commands before blocking on the mouse channel.
-This matters because drawing in \plan is buffered: before reading
-mouse input, it is better to ensure the display is up to date
+This matters because drawing in \plan is buffered (see the \book{Graphics}):
+before reading mouse input, it is better to ensure the display is up to date
 with what the program has drawn so far.
 
+
+<<[[main()]] sanity check [[mousectl]]>>=
+if(mousectl == nil)
+    error("can't find mouse");
+@
 
 \section{Keyboard initialization}
 
@@ -2804,38 +2824,43 @@ with what the program has drawn so far.
 Keyboard initialization mirrors mouse initialization: [[initkeyboard()]]
 opens [[/dev/cons]], spawns an I/O proc
 that reads runes and forwards them on a channel, and returns a
-[[Keyboardctl]] handle. The split between a reader proc and a
-channel exists for the same reason as on the mouse side: reading
-from [[/dev/cons]] is a blocking syscall, and running it in a
-thread would stall every other thread in the same proc. Putting
-the blocking read in its own proc isolates the stall and lets
-the thread scheduler keep serving the rest of [[rio]].
+[[Keyboardctl]] handle.
 
 <<[[main()]] keyboard initialisation>>=
 keyboardctl = initkeyboard(nil);
-if(keyboardctl == nil)
-    error("can't find keyboard");
+<<[[main()]] sanity check [[keyboardctl]]>>
 @
 %ocaml: better interface without nil and use exn
+
+%claude: %dup: ??
+The split between a reader proc and a
+channel exists for the same reason as on the mouse side: reading
+from [[/dev/cons]] is a blocking syscall, and running it in a
+thread would stall every other thread in the same proc.
+%
+Putting the blocking read in its own proc isolates the stall and lets
+the thread scheduler keep serving the rest of [[rio]].
 
 % could pass /dev/mouse
 
 % Note that this creates a process too! ioproc.
 
+<<[[main()]] sanity check [[keyboardctl]]>>=
+if(keyboardctl == nil)
+    error("can't find keyboard");
+@
+
 
 \section{Channels creation}
 
-% threads communicate and synchronized between each other through
-% messages on channels
 %alt: locks or mutex or semaphores or monitor
 %claude:
-[[rio]]'s threads communicate exclusively through channels rather than
+[[rio]]'s threads communicate almost exclusively through channels rather than
 shared variables protected by locks.
-The [<exitchan>] is the simplest example: [[threadmain()]] blocks
+%
+The [<exitchan>] is the simplest example: [<threadmain()>] blocks
 on a [[recv()]] on this channel, and the mouse thread sends a
 message when the user selects ``Exit''.
-Many more channels will be created later---each new window gets its own
-set of channels for keyboard, mouse, and control messages.
 
 <<global [[exitchan]]>>=
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
@@ -2855,6 +2880,10 @@ exitchan     = chancreate(sizeof(int), 0);
 % see also winclosechan and deletechan later
 % see also cxfidalloc and cxfidfree later
 % there are also lots of channel creation when create windows
+
+%claude:
+Many more channels will be created later---each new window gets its own
+set of channels for keyboard, mouse, and control messages.
 
 \section{Threads creation}
 
@@ -2883,6 +2912,8 @@ Figure~\ref{fig:soft-archi-threads}): the I/O procs block on
 [[read()]] from device files and forward raw events onto channels,
 while these dispatcher threads receive from those channels and
 route events to the correct window.
+
+%claude:
 Additional threads are created dynamically: each new window gets its
 own [<winctl()>] thread, the worker allocator gets a thread, and each
 filesystem worker gets a thread.
@@ -2966,17 +2997,18 @@ Rescue:
 %claude:
 The pipe connecting clients to [[rio]]'s filesystem server has two
 ends: the client side ([[cfd]], shared with child processes for 9P
-communication) and the server side ([[sfd]], read by [[filsysproc]]).
+communication) and the server side ([[sfd]], read by [<filsysproc()>]).
 The child must close the server end before exec'ing, otherwise the
-child would hold an extra reference to [[sfd]]. If [[filsysproc]]
+child would hold an extra reference to [[sfd]]. If [<filsysproc()>]
 were to exit, the pipe would not fully hang up---because the child's
 copy of [[sfd]] keeps it alive---and the child's 9P requests through
 [[cfd]] would block forever waiting for responses from a dead server.
-The server end is explicitly closed in [<filsysmount()>], and
-[[OCEXEC]] provides an additional safety net.
+%
+The server end is explicitly closed in [<filsysmount()>], but
+[[OCEXEC]] used below provides an additional safety net.
 %claude:
 The standard [[pipe()]] syscall cannot set per-end flags like
-[[OCEXEC]], so [[cexecpipe()]] binds the kernel pipe device
+[[OCEXEC]], so [<cexecpipe()>] binds the kernel pipe device
 [[#|]] directly and opens the two endpoints ([[data]] and
 [[data1]]) independently with different flags.
 
@@ -2992,6 +3024,7 @@ cexecpipe(fdt *p0, fdt *p1)
     if(bind("#|", "/mnt/temp", MREPL) < 0)
         return ERROR_NEG1;
     *p0 = open("/mnt/temp/data", ORDWR);
+    // p1 = sfd = server end of the pipe closed automatically before exec for child
     *p1 = open("/mnt/temp/data1", ORDWR|OCEXEC);
     unmount(nil, "/mnt/temp");
     if(*p0<0 || *p1<0)
@@ -3018,7 +3051,7 @@ cexecpipe(fdt *p0, fdt *p1)
 
 %claude:
 Rather than creating a new thread for every 9P request,
-[[rio]] pools worker threads via two channels: [<cxfidalloc>]
+[[rio]] {\em pools} worker threads via two channels: [<cxfidalloc>]
 to request a worker, and [<cxfidfree>] to return one.
 %
 The allocator thread manages the pool, creating new workers
@@ -3027,15 +3060,15 @@ only when needed:
 
 %claude:
 \begin{verbatim}
-  filsysproc (master)          xfidallocthread (allocator)
-       |                              |
-       |--- recv(cxfidalloc) -------->|  "give me a worker"
-       |<-- Xfid* -------------------|
-       |                              |
-       |    ... dispatch 9P work ...  |
-       |                              |
-       |--- send(cxfidfree, x) ----->|  "worker done, take it back"
-       |                              |
+  filsysproc          xfidallocthread       xfidctl
+  (reads 9P)          (the worker pool)     (a worker)
+      |                     |                   |
+      |- send(cxfidalloc) ->|  "give me one"    |
+      |<- recv Xfid* -------|                   |
+      |                     |                   |
+      |---- send(x->c, op) -------------------->|  runs the handler
+      |                     |                   |
+      |                     |<- send(cxfidfree)-|  "done, recycle me"
 \end{verbatim}
 
 %    filsys = filsysinit(xfidinit());
@@ -3050,7 +3083,7 @@ static	Channel	*cxfidalloc;	/* chan(Xfid*) */
 % as anyway it's stored in filsys
 
 <<global [[cxfidfree]]>>=
-// chan<ref<Xfid>> (listner = ??, sender = ??)
+// chan<ref<Xfid>> (listener = xfidallocthread, sender = xfidctl worker)
 static	Channel	*cxfidfree;	/* chan(Xfid*) */
 @
 
