@@ -2291,8 +2291,8 @@ otherwise reusing a free slot or allocating a fresh one.
 
 % looks more like lookupfid than always newfid
 % ctor
-% filsysproc | filsyswalk -> <>
 <<function [[newfid]]>>=
+/// filsysproc | filsyswalk -> <>
 Fid*
 newfid(Filsys *fs, int fid)
 {
@@ -2326,6 +2326,7 @@ newfid(Filsys *fs, int fid)
     return f;
 }
 @
+%padism: -> <>
 %ocaml: Hashtbl.add and Hashtbl.find
 % also bad to be both a lookup and create_if_not_there.
 % should be stricter and allows create only at a few places (Attach, Walk)
@@ -2647,8 +2648,8 @@ and finally as a filesystem server (setting up the 9P pipe and workers).
 Once everything is ready, [[threadmain()]] blocks on [<exitchan>],
 waiting for the user to select ``Exit'' from the right-click menu.
 
-% main? -> <>
 <<function [[threadmain]]>>=
+/// main -> threadcreate(<>)
 void threadmain(int argc, char *argv[])
 {
     <<[[main()]] locals>>
@@ -2759,8 +2760,8 @@ if(desktop == nil)
 % ref to Error managment appendix?
 % also talk about derror argument to geninitdraw?
 
-% threadmain -> <>
 <<function [[iconinit]]>>=
+/// threadmain -> <>
 void
 iconinit(void)
 {
@@ -2790,7 +2791,6 @@ This is the same setup any \plan graphical program does---[[hellorio]]
 graphical application first, so before it can manage other windows it
 acquires its own mouse (and, next, keyboard).
 
-% threadmain -> <>
 <<[[main()]] mouse initialisation>>=
 mousectl = initmouse(nil, view);
 <<[[main()]] sanity check [[mousectl]]>>
@@ -2944,8 +2944,8 @@ between clients and the server, then spawns [<filsysproc()>] as a
 separate proc (not a thread, because it blocks on [[read()]] of the pipe).
 
 % ctor filsys
-% main -> <>
 <<function [[filsysinit]]>>=
+/// threadmain -> <>
 Filsys*
 filsysinit(Channel *cxfidalloc)
 {
@@ -3091,8 +3091,8 @@ static	Channel	*cxfidfree;	/* chan(Xfid*) */
 % has two channels for new/free.
 
 
-% threadmain -> <>
 <<function [[xfidinit]]>>=
+/// threadmain -> <>
 Channel*
 xfidinit(void)
 {
@@ -3145,11 +3145,12 @@ xfidinit(void)
 A windowing system is fundamentally a {reactive} program: it must respond
 to mouse movements, keyboard presses, window management requests, and
 filesystem operations, all happening concurrently.
-[[rio]] handles this with a producer/consumer architecture built on
-threads and channels.
+[[rio]] handles this with a {\em producer/consumer} architecture built on
+threads and channels as shown in Figure~\ref{fig:soft-archi-threads}.
+%
 Two dispatcher threads (keyboard and mouse) listen for
 hardware events and route them to the appropriate window thread.
-Each window has its own thread ([[winctl]]) that processes events in
+Each window has its own thread ([<winctl()>]) that processes events in
 its own event loop.
 The filesystem server runs as a separate proc
 (because it blocks on I/O) and dispatches 9P requests to worker threads.
@@ -3175,16 +3176,13 @@ to whichever thread has work to do.
 % listen/dispatch architecture.
 %claude:
 The keyboard thread is a simple {demultiplexer}: it receives runes from
-the I/O proc (via [[keyboardctl->c]]) and forwards them to the current
-window's [[ck]] channel. The double-buffering trick (alternating between
-[[buf[0]]] and [[buf[1]]]) avoids overwriting the sent buffer before
-the receiver has consumed it, since [[sendp()]] transmits a pointer.
-The [[nbrecv()]] loop batches multiple pending keystrokes into a single
-message for efficiency.
+the I/O proc (via [[keyboardctl->c]]) and forwards them to the [<input>]
+window's [[ck]] channel.
+%yoann1: why demultiplexer? looks more like simple "forwarder"
 
 % main -> threadcreate -> <>  (as ?? in threadcreate(<>) <- main)
 <<function [[keyboardthread]]>>=
-// main -> threadcreate(<>, nil) -> <>
+/// main -> threadcreate(<>, nil)
 void
 keyboardthread(void*)
 {
@@ -3221,6 +3219,14 @@ keyboardthread(void*)
 % those composed keys are Rune? 
 \l Hmm but then can't intercept when guy just type on Ctlr and release? Quake?
 
+
+%claude:
+The double-buffering trick (alternating between
+[[buf[0]]] and [[buf[1]]]) avoids overwriting the sent buffer before
+the receiver has consumed it, since [[sendp()]] transmits a pointer.
+The [[nbrecv()]] loop batches multiple pending keystrokes into a single
+message for efficiency.
+
 % pretty simple, send key to the window (window ck channel and thread) 
 % with the focus
 
@@ -3253,7 +3259,7 @@ keyboardthread(void*)
 % mouse thread. listen to multiple channels at the same time
 % and can emit on multiple channels when target is ready to receive.
 %claude:
-The mouse thread is more complex than the keyboard thread because
+The mouse thread is far more complex than the keyboard thread because
 mouse events have a dual nature: some belong to the application (e.g.,
 left-click for text selection) and some belong to the window manager
 (e.g., right-click for the system menu, border clicks for move/resize).
@@ -3290,9 +3296,10 @@ static Alt alts[NALT+1];
 
 % small rappel here on libthread maybe? alt =~ select.
 
+%yoann: can say now can see skeleton mousethread
 
 <<function [[mousethread]]>>=
-// main -> threadcreate(<>, nil) -> <>
+/// main -> threadcreate(<>, nil)
 void
 mousethread(void*)
 {
@@ -3350,7 +3357,7 @@ bool sending = false;
 %claude:
 The [[MMouse]] case below is the most complex event handler in [[rio]].
 Two key variables drive the logic: [[winput]] captures which window
-the mouse is currently over (which may differ from [[input]], the
+the mouse is currently over (which may differ from [<input>], the
 keyboard-focused window), and [[xy]] holds the mouse coordinates
 converted from screen-relative (physical) to window-relative
 (logical). The rest is a cascade of conditions deciding whether to
@@ -3381,7 +3388,9 @@ Again:
     }else
         sending = false;
 
+    // Application mouse event
     <<[[mousethread()]] if sending>>
+    // Windowing system mouse event
     <<[[mousethread()]] if not sending>>
 
 <<[[mousethread()]] Drain label>>
@@ -3399,17 +3408,11 @@ Again:
 % FIGURE: with winput->screenr, i->r, screen->r, etc and how they relate.
 
 
-<<constant [[Selborder]]>>=
-Selborder		= 4,	/* border of selected window */
-@
-\l could rename frame_border, but frame is used for editor_widget
-%coupling with Borderwidth in draw.h? why not use same constant?
-% also abused as an enum with Selborder and Unselborder
-
 %claude:
 The conversion code above translates mouse coordinates from
-physical screen space to the window's image space.  Originally,
-[[rio]] used [[originwindow()]] to set each window's image origin
+physical screen space to the window's image space.
+%TODO: use again originwindow!!
+Originally, [[rio]] used [[originwindow()]] to set each window's image origin
 to (0,0), so the application could draw without knowing its screen
 position.  In that design, [[screenr]] held the physical position
 and [[i->r]] started at (0,0):
@@ -3434,7 +3437,9 @@ and [[i->r]] started at (0,0):
 
   xy = (150, 150)           (logical, sent to hellorio)
 \end{verbatim}
-%claude:
+
+
+%claude: TODO use it again
 In the current code, [[originwindow()]] is no longer called
 during normal window creation, so [[i->r]] and [[screenr]] are
 always equal and the conversion is a no-op---the application
@@ -3443,6 +3448,18 @@ coordinates.  It is unclear why [[originwindow()]] was dropped;
 the conversion code was kept, suggesting the change may not have
 been intentional.
 \t understand why originwindow was dropped
+
+
+%yoann: quick explanation and used in ptinside
+
+<<constant [[Selborder]]>>=
+Selborder		= 4,	/* border of selected window */
+@
+\l could rename frame_border, but frame is used for editor_widget
+%coupling with Borderwidth in draw.h? why not use same constant?
+% also abused as an enum with Selborder and Unselborder
+
+%yoann: transition sentence for App and windowing system events
 
 \subsection{Application mouse events}
 
@@ -3480,6 +3497,8 @@ if(inside &&
 Mouse tmp;
 @
 
+%yoann: transition, can now see app case
+
 <<[[mousethread()]] if sending>>=
 if(sending){
 Sending:
@@ -3494,6 +3513,8 @@ Sending:
 }
 @
 %ocaml: no need backup mousectl value. Pass data by value in channels.
+
+%yoann: quick intro and reference to chapter X on cursor graphics
 
 \l could mv later
 <<[[mousethread()]] when sending mouse message to window, set the cursor>>=
@@ -3514,7 +3535,7 @@ if(mouse->buttons == 0){
 \subsection{Windowing system mouse events}
 
 %claude:
-When a mouse event is not forwarded to the application, the mouse thread
+When a mouse event is {\em not} forwarded to the application, the mouse thread
 handles it as a windowing system operation. It first determines which
 window is under the cursor with [<wpointto()>], then dispatches based on
 the button pressed: left-click on an unfocused window brings it to the
@@ -3540,6 +3561,30 @@ break;
 @
 
 % moving??
+
+
+<<function [[wpointto]]>>=
+Window*
+wpointto(Point pt)
+{
+    int i;
+    Window *v, *w;
+
+    w = nil;
+    for(i=0; i<nwindow; i++){
+        v = windows[i];
+        if(ptinrect(pt, v->screenr))
+         if(!v->deleted)
+          if(w==nil || v->topped > w->topped)
+            w = v;
+    }
+    return w;
+}
+@
+% thx to topped can find the topmost one under the cursor
+% (linear in number of windows though)
+%alt: maintain stack of windows?
+
 
 % important function
 %claude:
@@ -3581,28 +3626,9 @@ overlap but not [[A]], both would pass [[ptinrect]] and the
 human-scale desktop but would hurt if [[rio]] managed thousands of
 layers---in that case, I would keep a sorted z-list instead and stop
 at the first hit.
-<<function [[wpointto]]>>=
-Window*
-wpointto(Point pt)
-{
-    int i;
-    Window *v, *w;
 
-    w = nil;
-    for(i=0; i<nwindow; i++){
-        v = windows[i];
-        if(ptinrect(pt, v->screenr))
-         if(!v->deleted)
-          if(w==nil || v->topped > w->topped)
-            w = v;
-    }
-    return w;
-}
-@
-% thx to topped can find the topmost one under the cursor
-% (linear in number of windows though)
-%alt: maintain stack of windows?
 
+%yoann: quick explanation
 
 <<[[mousethread()]] when not sending, set cursor part1>>=
 /* change cursor if over anyone's border */
@@ -3619,7 +3645,7 @@ if(w != nil)
 
 
 
-
+%yoann: quick explanation
 
 % hmmm, complicated dispatch function.
 % LP split more? and make more readable the action
@@ -3628,12 +3654,12 @@ if(w != nil)
 if(mouse->buttons){
     /* w->topped will be zero or less if window has been bottomed */
     if(w==nil || (w==winput && w->topped > 0)){
-        if(mouse->buttons & 1){
+        if(mouse->buttons & 1){       // LEFT-click case
             ;
-        }else if(mouse->buttons & 2){
+        }else if(mouse->buttons & 2){ // MIDDLE-click case
             if(winput && !winput->mouseopen)
                 <<[[mousethread()]] middle click under certain conditions>>
-        }else if(mouse->buttons & 4)
+        }else if(mouse->buttons & 4)  // RIGHT-click case
                 <<[[mousethread()]] right click under certain conditions>>
     }else{
         /* if button 1 event in the window, top the window and wait for button up. */
@@ -3657,6 +3683,7 @@ if(mouse->buttons){
 \l how w can be nil after click on unfocused window? it can not be
 %ocaml: use top_win so by construction sure that we set the window
 
+%yoann: say gradually see left, right, middle mouse handling code
 
 % Drain?
 
@@ -3693,13 +3720,15 @@ Drain:
 
 % listen to many channels! (and relaying to many channels)
 
+%yoann: transition where say now see most interesting thread of rio
+
 % keyboard listening (and relaying)
 % mouse listening (and relaying)
 % ctl listening from rio window manager
 
 % special device file listening (/dev/cons) but will see that later
 %claude:
-Each window has its own [[winctl]] thread that runs an [[alt()]] event
+Each window has its own [<winctl()>] thread that runs an [[alt()]] event
 loop listening on multiple channels simultaneously:
 keyboard events (from the keyboard thread),
 mouse events (from the mouse thread),
@@ -3750,11 +3779,11 @@ enum {
 
 
 %claude:
-[<winctl()>] is the heart of each window. It is the thread where
-keyboard input gets processed, mouse events get interpreted, and
-control messages (resize, delete, hide) take effect. Every window
-gets its own instance, making each window an autonomous concurrent
-entity with its own event loop---the ``active object'' pattern.
+%[<winctl()>] is the heart of each window. It is the thread where
+%keyboard input gets processed, mouse events get interpreted, and
+%control messages (resize, delete, hide) take effect. Every window
+%gets its own instance, making each window an autonomous concurrent
+%entity with its own event loop---the ``active object'' pattern.
 
 % rename winctlthread? more consistent?
 <<function [[winctl]]>>=
@@ -3779,22 +3808,10 @@ winctl(void *arg)
     for(;;){
         <<[[winctl()]] alts adjustments>>
 
-        // to isolate messaging bug
-        //alts[WKey].op = CHANNOP;
-        //alts[WMouse].op = CHANNOP;
-        ////alts[WCtl].op = CHANNOP;
-        //alts[WMouseread].op = CHANNOP;
-        //alts[WCread].op = CHANNOP;
-        //alts[WCwrite].op = CHANNOP;
-        //alts[WWread].op = CHANNOP;
-
         // event loop
         event = alt(alts);
         if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
-        if(event == -1) {
-          fprint(STDERR, "winctl: interrupted %r");
-          exits("interrupted");
-        }
+        <<[[winctl()]] sanity check [[event]]>>
         switch(event){
         <<[[winctl()]] event loop cases>>
         }
@@ -3807,10 +3824,21 @@ winctl(void *arg)
 %old: was char buf[4*12+1]; but just used for threadsetname
 % so even though it looks like size for interface to /dev/mouse, it was not
 \l why plus 1 on NWALT?
+%to debug:
+%        // to isolate messaging bug
+%        //alts[WKey].op = CHANNOP;
+%        //alts[WMouse].op = CHANNOP;
+%        ////alts[WCtl].op = CHANNOP;
+%        //alts[WMouseread].op = CHANNOP;
+%        //alts[WCread].op = CHANNOP;
+%        //alts[WCwrite].op = CHANNOP;
+%        //alts[WWread].op = CHANNOP;
+
+
 
 %claude:
 The [[deleted]] field will be explained in
-Chapter~\ref{chap:window-management}.  Note that after each
+Chapter~\ref{chap:wm}.  Note that after each
 event, [<winctl()>] calls [[flushimage()]] unless the window
 has been deleted.  Most events result in some visual change---text
 appearing, a cursor moving, a border redrawn---and
@@ -3824,6 +3852,16 @@ write to the draw device.
 % m = mouse, c = cons
 % r = read, w = write
 % m = message
+
+
+<<[[winctl()]] sanity check [[event]]>>=
+if(event == -1) {
+  fprint(STDERR, "winctl: interrupted %r");
+  exits("interrupted");
+}
+@
+
+%yoann: trans and toc sentence with will see Wkey, WMouse and especially Wctl handler!
 
 
 \subsection{Keyboard events listening}
@@ -3929,7 +3967,7 @@ The second connection is the mouse. Each window embeds a full
 [[Mousectl]] structure whose [[c]] channel receives mouse events
 from [<mousethread()>].  This is not the same [[Mousectl]] as the
 one used by [[rio]]'s own IO proc for reading [[/dev/mouse]]---that
-one belongs to [[rio]] itself.  Here, each [[Window]] has its own
+one belongs to [[rio]] itself.  Here, each [<Window>] has its own
 [[Mousectl]] because it needs the same fields (a [[Mouse]], a
 channel [[c]], and a [[resizec]]) to forward events to [<winctl()>].
 Not every mouse event reaches the window---only those that the mouse
@@ -3996,8 +4034,8 @@ which carries [<Wctlmesg>] messages---resize, delete, hide, unhide,
 and other window-management commands. Unlike keyboard and mouse events
 that originate from hardware, control messages come from the window
 manager itself (e.g., when the user selects ``Delete'' from the
-right-click menu). When [<wctlmesg()>] returns [[Exited]], the window
-is being destroyed and the thread exits.
+right-click menu).
+
 
 <<[[Window]] control fields>>=
 // chan<Wctlmesg, 20> (listener = winctl, sender = mousethread | ...)
@@ -4019,6 +4057,9 @@ alts[WCtl].op = CHANRCV;
 
 % many calls to wctlsendmesg() that write in w->cctl
 
+%claude:
+When [<wctlmesg()>] returns [[Exited]], the window
+is being destroyed and the thread exits.
 
 <<[[winctl()]] event loop cases>>=
 case WCtl:
@@ -4037,7 +4078,7 @@ The full lifecycle of a window---creation, hiding, unhiding,
 and deletion---involves subtle interactions between the window
 thread, the filesystem workers, and the mouse thread.  I will
 explain [<wctlmesg()>] and its cases in
-Chapter~\ref{chap:window-management}.
+Chapter~\ref{chap:wm}.
 
 %\subsection{[[/mnt/wsys/mouse]]  emitting}
 %\subsection{[[/mnt/wsys/cons]] emitting}
@@ -4069,10 +4110,12 @@ int	messagesize = 8192+IOHDRSZ;	/* good start */
 % negociated with kernel in filsysversion in first message
 % IOHDRSZ defined in fcall.h
 
+%yoann: toc sentence
+
 \subsection{Reading and dispatching: [[filsysproc()]]}
 
 <<function [[filsysproc]]>>=
-// main -> filsysinit -> proccreate(<>, fs, ...) -> <>
+/// main -> filsysinit -> proccreate(<>, fs, ...)
 static
 void
 filsysproc(void *arg)
@@ -4143,7 +4186,7 @@ raw 9P bytes into an [[Fcall]] structure with typed fields
 
 %claude:
 The protocol between [[filsysproc]] and the worker allocator is a
-two-step handshake: [[filsysproc]] sends [[nil]] on [<cxfidalloc()>]
+two-step handshake: [[filsysproc]] sends [[nil]] on [<cxfidalloc>]
 to request a worker, then receives the [<Xfid>] pointer back on the
 same channel. The returned [[Xfid]] may be a recycled one or a freshly
 allocated one with a new worker thread. After dispatching through
@@ -4363,6 +4406,8 @@ xfidallocthread(void*)
     }
 }
 @
+
+%yoann: why use thread and message there too for allocation? could not just use direct function calls? need this intermediate allocator thread? alternatives?
 
 
 
