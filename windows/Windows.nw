@@ -2331,10 +2331,17 @@ newfid(Filsys *fs, int fid)
 % should be stricter and allows create only at a few places (Attach, Walk)
 
 %claude:
-The [[Fid.w]] field below closes the circle: once a fid is associated
-with a [[Qid]] (during attach or walk, as shown in Chapter~\ref{chap:filesystem-server}),
-[[rio]] can resolve it
-back to the corresponding [[Window]].
+The [[Fid.w]] field below closes the circle. A [[Qid]]'s [[path]] is not
+opaque here: [[rio]] packs the {window id} in its high bits and the {kind}
+of device file ([[cons]], [[mouse]], [[wctl]], \dots) in its low byte, so
+the [[qid]] alone says both which window and which of its files a fid
+refers to. During attach or walk (shown in
+Chapter~\ref{chap:filesystem-server}), [[rio]] reads that window id back
+out, resolves it once with [<wlookid()>], and caches the resulting
+[[Window]] pointer in [[w]] (taking a reference). Later operations follow
+[[f->w]] directly rather than rescanning the [[windows]] array, so [[w]]
+is not independent state---it is just the [[qid]]'s window id, already
+resolved.
 
 <<[[Fid]] other fields>>=
 Window	*w;
@@ -2570,11 +2577,9 @@ the [<desktop>] layers, and the mouse and keyboard readers); the
 managed window; and the [<Filsys>]/[<Fid>] table is the per-client state
 [[rio]] keeps as a 9P file server.
 %
-Notice where the two sides meet: a
-[[Fid]]'s [[qid]] carries a window id that points back into the [[windows]]
-array, which is how a file request from a client is routed to the right
-window.
-%yoann1: but we saw also Fid.w field so not only Qid. Or maybe Fid.w itself derives from Qid encoding? maybe need explain Qid encoding?
+Notice where the two sides meet: a [[Fid]]'s [[qid]] encodes the window id,
+and its [[w]] field caches the [[Window]] that id resolves to (as we saw
+above), so a request from a client is routed straight to the right window.
 
 \begin{figure}[!tbp]\centering
 \begin{vdiagram}
