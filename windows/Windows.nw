@@ -2624,15 +2624,18 @@ FILESYSTEM filsys *--> Filsys
 
 % see Libcore.nw, quick refresh on threads in plan9 and
 % fact that main is then threadmain.
+
 %claude:
-The entry point of [[rio]] is [[threadmain()]] (not [[main()]]): the thread library
+The entry point of [[rio]] is [<threadmain()>] (not [[main()]]): the thread library
 provides its own [[main()]] that sets up the cooperative scheduler and a
 first proc, then calls [[threadmain()]] as its initial thread.
+%
 The initialization follows three phases matching [[rio]]'s three roles:
 first as a graphical application (connecting to the display, mouse, and
 keyboard), then as a concurrent application (creating channels and threads),
 and finally as a filesystem server (setting up the 9P pipe and workers).
-Once everything is ready, [[threadmain()]] blocks on [[exitchan]],
+%
+Once everything is ready, [[threadmain()]] blocks on [<exitchan>],
 waiting for the user to select ``Exit'' from the right-click menu.
 
 % main? -> <>
@@ -2686,21 +2689,18 @@ void threadmain(int argc, char *argv[])
 % exitchan later, but a channel! when Exit menu in rio via mouse,
 % this will send on exitchan a message and unblock threadmain.
 
+%dup: hellorio section
+In the rest of this book, I will usually not comment the 
+error-management code. Such code is often trivial (but necessary).
+%
+Appendix~\ref{chap:error} explains the (small) error-management infrastructure
+used in [[rio]].
 
 <<[[main()]] if filsys is nil>>=
 if(filsys == nil)
     fprint(STDERR, "rio: can't create file system server: %r\n");
 @
 %ocaml: exn in callee
-
-<<function [[usage]]>>=
-void
-usage(void)
-{
-    fprint(STDERR, "usage: rio [-f font] [-i initcmd] [-k kbdcmd] [-s]\n");
-    exits("usage");
-}
-@
 
 \section{Graphics initialization}
 
@@ -2709,16 +2709,15 @@ usage(void)
 
 % see Graphics.nw
 %claude:
-The graphics initialization is almost identical to [[hellorio.c]]:
+The graphics initialization is almost identical to [[hellorio.c]]
+(Section~\ref{sec:hellorio}):
 [[rio]] calls [[geninitdraw()]] to connect to the display server,
 then allocates a [[Screen]] on top of [[view]] to serve as the
 desktop for overlapping windows.
+%
 The call to [[iconinit()]] allocates the grey background and the
 red color used to highlight borders during window operations.
-The reason for using [[geninitdraw()]] rather than [[initdraw()]] is
-that [[rio]] needs to supply its own error handler ([>derror()>]):
-[[initdraw()]] installs a default handler that exits on errors,
-but a windowing system must recover gracefully.
+
 
 <<[[main()]] graphics initializations>>=
 if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
@@ -2751,8 +2750,6 @@ if(desktop == nil)
 % ref to Error managment appendix?
 % also talk about derror argument to geninitdraw?
 
-
-
 % threadmain -> <>
 <<function [[iconinit]]>>=
 void
@@ -2765,10 +2762,18 @@ iconinit(void)
 % why iconinit? icon??
 %ocaml: use shorter alloc_color() and Color.mk2()
 
+%claude:
+The reason for using [[geninitdraw()]] rather than [[initdraw()]] is
+that [[rio]] needs to supply its own error handler ([<derror()>]):
+[[initdraw()]] installs a default handler that exits on errors,
+but a windowing system must recover gracefully.
+
 \section{Mouse initialization}
 
 % The windowing system is a graphical application like other graph app!
 % It needs to call initmouse, initkeyboard. 
+
+%yoann: say similar to hellorio.c initialization; rio is a graphical app first.
 
 % threadmain -> <>
 <<[[main()]] mouse initialisation>>=
@@ -2797,10 +2802,10 @@ with what the program has drawn so far.
 \section{Keyboard initialization}
 
 %claude:
-Keyboard initialization mirrors mouse initialization: [<initkeyboard()>]
-opens [[/dev/cons]] (the raw keyboard file), spawns an I/O proc
+Keyboard initialization mirrors mouse initialization: [[initkeyboard()]]
+opens [[/dev/cons]], spawns an I/O proc
 that reads runes and forwards them on a channel, and returns a
-[<Keyboardctl>] handle. The split between a reader proc and a
+[[Keyboardctl]] handle. The split between a reader proc and a
 channel exists for the same reason as on the mouse side: reading
 from [[/dev/cons]] is a blocking syscall, and running it in a
 thread would stall every other thread in the same proc. Putting
@@ -2827,7 +2832,7 @@ if(keyboardctl == nil)
 %claude:
 [[rio]]'s threads communicate exclusively through channels rather than
 shared variables protected by locks.
-The [[exitchan]] is the simplest example: [[threadmain()]] blocks
+The [<exitchan>] is the simplest example: [[threadmain()]] blocks
 on a [[recv()]] on this channel, and the mouse thread sends a
 message when the user selects ``Exit''.
 Many more channels will be created later---each new window gets its own
@@ -2856,17 +2861,7 @@ exitchan     = chancreate(sizeof(int), 0);
 
 %claude:
 [[main()]] creates only two threads at startup: one for the keyboard
-and one for the mouse. These are {dispatcher} threads that listen for
-input events and route them to the appropriate window thread.
-These threads are distinct from the I/O procs that [[initmouse()]]
-and [[initkeyboard()]] create internally (see
-Figure~\ref{fig:soft-archi-threads}): the I/O procs block on
-[[read()]] from device files and forward raw events onto channels,
-while these dispatcher threads receive from those channels and
-route events to the correct window.
-Additional threads are created dynamically: each new window gets its
-own [[winctl]] thread, the worker allocator gets a thread, and each
-filesystem worker gets a thread.
+and one for the mouse.
 
 <<constant [[STACK]]>>=
 #define	STACK	8192
@@ -2879,6 +2874,19 @@ threadcreate(keyboardthread, nil, STACK);
 threadcreate(mousethread, nil, STACK);
 @
 %ocaml: pass keyboardctl, mousectl, etc instead of nil
+
+%claude:
+These are {dispatcher} threads that listen for
+input events and route them to the appropriate window thread.
+These threads are distinct from the I/O procs that [[initmouse()]]
+and [[initkeyboard()]] create internally (see
+Figure~\ref{fig:soft-archi-threads}): the I/O procs block on
+[[read()]] from device files and forward raw events onto channels,
+while these dispatcher threads receive from those channels and
+route events to the correct window.
+Additional threads are created dynamically: each new window gets its
+own [<winctl()>] thread, the worker allocator gets a thread, and each
+filesystem worker gets a thread.
 
 % but convenient to have them in globals?
 
@@ -2896,12 +2904,14 @@ threadcreate(mousethread, nil, STACK);
 %claude:
 The filesystem server is initialized by first creating the worker
 allocator ([<xfidinit()>]), then setting up the server itself
-([[filsysinit()]]).
-[[filsysinit()]] creates the two-way pipe that will carry 9P messages
-between clients and the server, then spawns [<filsysproc()>] as a
-separate proc (not a thread, because it blocks on [[read()]] of the pipe).
+([<filsysinit()>]).
+
 
 \subsection{[[filsysinit()]]}
+
+[<filsysinit()>] creates the two-way pipe that will carry 9P messages
+between clients and the server, then spawns [<filsysproc()>] as a
+separate proc (not a thread, because it blocks on [[read()]] of the pipe).
 
 % ctor filsys
 % main -> <>
@@ -2914,9 +2924,7 @@ filsysinit(Channel *cxfidalloc)
     <<[[filsysinit()]] other locals>>
 
     <<[[filsysinit()]] install dumper>>
-
     fs = emalloc(sizeof(Filsys));
-
     if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
         goto Rescue;
 
@@ -2927,7 +2935,6 @@ filsysinit(Channel *cxfidalloc)
     fs->cxfidalloc = cxfidalloc;
 
     <<[[filsysinit()]] wctl pipe, process, and thread creation>>
-
     proccreate(filsysproc, fs, 10000);
 
     <<[[filsysinit()]] srv pipe>>
@@ -2942,10 +2949,11 @@ Rescue:
 %ocaml: need cxfidalloc? because have arena of workers? 
 % what if create each time a new thread? too slow?
 
+%TODO: switch to STACK above?
 %claude:
-The hardcoded 10000 for [[proccreate()]] is the stack size for the
-filesystem server proc. It could probably reuse the [[STACK]] constant
-(8192)---the difference is minor and likely just an oversight.
+%The hardcoded 10000 for [[proccreate()]] is the stack size for the
+%filesystem server proc. It could probably reuse the [[STACK]] constant
+%(8192)---the difference is minor and likely just an oversight.
 
 % filsysproc later
 
@@ -3011,11 +3019,14 @@ cexecpipe(fdt *p0, fdt *p1)
 
 %claude:
 Rather than creating a new thread for every 9P request,
-[[rio]] pools worker threads via two channels: [[cxfidalloc]]
-to request a worker, and [[cxfidfree]] to return one.
+[[rio]] pools worker threads via two channels: [<cxfidalloc>]
+to request a worker, and [<cxfidfree>] to return one.
+%
 The allocator thread manages the pool, creating new workers
 only when needed:
-%
+%ocaml: orio creates a thread per request no? dynamically?
+
+%claude:
 \begin{verbatim}
   filsysproc (master)          xfidallocthread (allocator)
        |                              |
@@ -15987,6 +15998,16 @@ timerstart(int dt)
 
 \section{Command-line options}
 
+<<function [[usage]]>>=
+void
+usage(void)
+{
+    fprint(STDERR, "usage: rio [-f font] [-i initcmd] [-k kbdcmd] [-s]\n");
+    exits("usage");
+}
+@
+
+
 \subsection{Automatic scrolling: [[rio -s]]}
 
 %claude:
@@ -18715,19 +18736,25 @@ if(DEBUG)
 %******************************************************************************
 \label{chap:error}
 
+%yoann: chapter intro
+
+\section{Error codes}
+
 %claude:
 [[rio]]'s error strings are all lowercase, terse, and stored as
 global [[char]] arrays because they cross a {9P protocol boundary}:
 when [<filsysrespond()>] is called with an error, the string is
-copied into an [[Rerror]] message and sent back through the pipe
+copied into an [[Rerror]] 9P message and sent back through the pipe
 to the client's kernel, which in turn reports it via the client's
-[[errstr()]] or [[%r]] format. The conventions match those of
+[[errstr()]] or [[%r]] format. 
+%
+The conventions match those of
 other \plan fileservers (e.g., ``permission denied'',
-``file does not exist''), which means a client program written
-to expect \plan-style error reporting can display rio-produced
-errors without knowing they came from [[rio]] specifically.
-
-\section{Error codes}
+``file does not exist'').
+%, which means a client program written
+%to expect \plan-style error reporting can display rio-produced
+%errors without knowing they came from [[rio]] specifically.
+%yoann1: why the need to cross 9P protocol boundary impose the use of char arrays globals?
 
 % fsys.c
 <<global [[Eperm]]>>=
@@ -18822,26 +18849,21 @@ char Ebadoffset[] = 	"window read not on scan line boundary";
 \section{[[error()]]} %, [[derror()]]}
 
 %claude:
-[[error()]] has a two-phase behavior controlled by
-[[errorshouldabort]]. Before graphics is fully initialized,
+[<error()>] has a two-phase behavior controlled by
+[<errorshouldabort>]. Before graphics is fully initialized,
 [[errorshouldabort]] is [[false]] and an error just calls
 [[threadexitsall()]] to tear down gracefully---a failure here
-means [[rio]] never reached a usable state, so a clean exit is
-fine. Once everything is set up, [[errorshouldabort]] flips to
+means [[rio]] never reached a usable state, so a clean exit is fine.
+%
+Once everything is set up, [[errorshouldabort]] flips to
 [[true]] and [[error()]] calls [[abort()]] instead of exiting.
+%
 The reason for [[abort()]] rather than [[exits()]] is that
 [[abort()]] leaves a core file (via [[SIGABRT]]-like behavior)
 and puts the process in \plan's ``broken'' state so it can be
 inspected later with [[acid]] (see the \book{Debugger}): you
 lose the running rio, but you gain a post-mortem.
 
-%claude:
-[<derror()>] exists only to adapt [[error()]] to the signature
-[[libdraw]] expects from a user-supplied error callback. It is
-registered via [[geninitdraw()]] so that when the draw library
-encounters a protocol error on [[/dev/draw]], the failure is
-routed through [[rio]]'s own abort-with-core path instead of
-[[libdraw]]'s default.
 
 <<global [[errorshouldabort]]>>=
 bool errorshouldabort = false;
@@ -18869,6 +18891,14 @@ error(char *s)
 % abort? diff with exit? generate a fault so go in broken state so
 % can be debugged!
 
+
+%claude:
+[<derror()>] exists only to adapt [[error()]] to the signature
+[[libdraw]] expects from a user-supplied error callback. It is
+registered via [[geninitdraw()]] so that when the draw library
+encounters a protocol error on [[/dev/draw]], the failure is
+routed through [[rio]]'s own abort-with-core path instead of
+[[libdraw]]'s default.
 
 % main -> ... <- (as ? <- geninitdraw(<>) <- main)
 <<function [[derror]]>>=
