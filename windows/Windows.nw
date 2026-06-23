@@ -2784,7 +2784,6 @@ but a windowing system must recover gracefully.
 % The windowing system is a graphical application like other graph app!
 % It needs to call initmouse, initkeyboard. 
 
-%yoann: say similar to hellorio.c initialization; rio is a graphical app first.
 %claude:
 This is the same setup any \plan graphical program does---[[hellorio]]
 (Section~\ref{sec:hellorio}) opened its mouse the same way. [[rio]] is a
@@ -2803,7 +2802,6 @@ mouse = mousectl;
 
 % Note that this creates a process! ioproc.
 
-%yoann: explain weird mouse = mousectl; above; actually different type but kencc ext &mousectl->Mouse
 %claude:
 The assignment [[mouse = mousectl]] looks ill-typed---[[mouse]] is a
 [[Mouse*]] while [[mousectl]] is a [[Mousectl*]]---but it relies on a kencc
@@ -2886,6 +2884,15 @@ Channel	*exitchan;	/* chan(int) */
 <<[[main()]] communication channels creation>>=
 exitchan     = chancreate(sizeof(int), 0);
 @
+
+%yoann: explain exitchan 0 number? chancreate with 0 elts?
+%claude:
+The [[0]] in [[chancreate(sizeof(int), 0)]] is the channel's {\em buffer
+size}: zero means an {\em unbuffered} (synchronous) channel, so a send
+blocks until a receiver is ready and vice versa. That is exactly right for
+a one-shot ``Exit'' rendezvous, and contrasts with the buffered
+[[keyboardctl->c]] (capacity 20) we saw earlier, where keystrokes had to be
+able to queue up.
 
 % see also winclosechan and deletechan later
 % see also cxfidalloc and cxfidfree later
@@ -3164,7 +3171,7 @@ Each window has its own thread ([<winctl()>]) that processes events in
 its own event loop.
 The filesystem server runs as a separate proc
 (because it blocks on I/O) and dispatches 9P requests to worker threads.
-%claude:
+%claude: %reframe:
 This is similar to how the kernel handles interrupts and processes:
 each thread blocks waiting on a channel, and the scheduler yields
 to whichever thread has work to do.
@@ -3187,12 +3194,12 @@ to whichever thread has work to do.
 %claude:
 The keyboard thread is a simple {forwarder}: it receives runes from
 the I/O proc (via [[keyboardctl->c]]) and passes them to the [<input>]
-window's [[ck]] channel---always the currently focused window, so there is
+window's [[ck]] channel---always the currently focused window. There is
 no per-rune routing decision to make.
 
 % main -> threadcreate -> <>  (as ?? in threadcreate(<>) <- main)
 <<function [[keyboardthread]]>>=
-/// main -> threadcreate(<>, nil)
+/// threadmain -> threadcreate(<>, nil)
 void
 keyboardthread(void*)
 {
@@ -3217,7 +3224,7 @@ keyboardthread(void*)
         rp[i] = L'\0';
 
         if(input != nil)
-            // Dispatch, to current window thread!
+            // Dispatch, to "current" window thread!
             sendp(input->ck, rp);
     }
 }
@@ -3230,12 +3237,50 @@ keyboardthread(void*)
 \l Hmm but then can't intercept when guy just type on Ctlr and release? Quake?
 
 
+%yoann: nbrecv() remains a bit mysterious and keyboardctl->c type is also mysterious but initkeyboard code     kc->c = chancreate(sizeof(Rune), 20); might help or ASCII diagram where see queue of messages and channel? alt to nbrecv is to wait for loop to go back and recv would take the remaining runes? useful to optimize with nbrecv?
+
+Note that [[keyboardctl->c]] is a {\em buffered} channel: [[initkeyboard()]] creates it
+with [[chancreate(sizeof(Rune), 20)]] (see the \book{Graphics}),
+so up to 20 runes can sit queued in it with no receiver waiting. 
+%
+[[nbrecv()]] is a {\em non-blocking} receive:
+it takes a value if one is already there, otherwise returns immediately
+([[<= 0]]) rather than blocking.
+%                                                                                      
+The thread combines the two to {\em batch} keystrokes: it does one blocking
+[[recv()]] for the first rune, then drains whatever else is already queued
+with [[nbrecv()]], packing the runes into a single buffer forwarded to the
+window in one [[sendp()]]:
+%
+\begin{verbatim}
+  ioproc            keyboardctl->c              keyboardthread
+  (reads /dev/cons) (Channel of Rune, cap 20)
+       |
+       |  runes      +---+---+---+- - - +
+       +-----------> | a | b | c |      |
+                     +---+---+---+- - - +
+                          |
+                          |  recv()   -> a   (blocks for the first)
+                          |  nbrecv() -> b   (take the queued ones,
+                          |  nbrecv() -> c    without blocking)
+                          |  nbrecv() -> <=0  (none left: stop)
+                          v
+                  sendp(input->ck, "abc")   one message to the window
+\end{verbatim}
+
+%claude:
+Without [[nbrecv()]] the code would still be correct---it could loop back
+and [[recv()]] each rune one at a time---but it would wake the focused
+window's thread once per keystroke. Batching coalesces a burst of typing
+(or a paste) into a single hand-off, which is the optimization worth making
+here.
+
+
 %claude:
 The double-buffering trick (alternating between
 [[buf[0]]] and [[buf[1]]]) avoids overwriting the sent buffer before
 the receiver has consumed it, since [[sendp()]] transmits a pointer.
-The [[nbrecv()]] loop batches multiple pending keystrokes into a single
-message for efficiency.
+
 
 % pretty simple, send key to the window (window ck channel and thread) 
 % with the focus
@@ -3263,6 +3308,9 @@ message for efficiency.
 % all window thread listen at the same time. Need one thread
 % and then dispatch (demultiplex).
 
+
+
+
 \section{Mouse thread}
 
 % seen event type for hellorio, here event types for
@@ -3270,10 +3318,10 @@ message for efficiency.
 % and can emit on multiple channels when target is ready to receive.
 %claude:
 The mouse thread is far more complex than the keyboard thread because
-mouse events have a dual nature: some belong to the application (e.g.,
+mouse events have a dual nature: some belong to the windown application (e.g.,
 left-click for text selection) and some belong to the window manager
 (e.g., right-click for the system menu, border clicks for move/resize).
-The thread must decide for each event whether to {dispatch} it to the
+The mouse thread must decide for each event whether to {dispatch} it to the
 window thread ([[sending = true]]) or handle it locally as a windowing
 system operation.
 
@@ -3282,7 +3330,7 @@ The enum below indexes into an [[Alt]] array, just like in
 [[hellorio.c]] (Section~\ref{sec:hellorio-input-code}).
 For now, [[MMouse]] is the only real entry, which makes [[alt()]]
 seem like overkill for a simple [[recv()]]---but the [[Alt]] array
-can be extended later with additional channels (e.g., for resize
+will be extended later with additional channels (e.g., for resize
 events).
 
 <<enum [[Mxxx]]>>=
@@ -3306,15 +3354,14 @@ static Alt alts[NALT+1];
 
 % small rappel here on libthread maybe? alt =~ select.
 
-%yoann: can say now can see skeleton mousethread
 %claude:
 We can now see the skeleton of [<mousethread()>]: like [[hellorio]], it is
-an [[alt()]] loop (the thread-library analogue of [[select]]) waiting on
+an [[alt()]] loop (the thread-library analogue of \unix\ [[select()]]) waiting on
 channels. For now there is a single case, [[MMouse]], whose handling is
 filled in below; we will see more cases added gradually in later sections.
 
 <<function [[mousethread]]>>=
-/// main -> threadcreate(<>, nil)
+/// threadmain -> threadcreate(<>, nil)
 void
 mousethread(void*)
 {
@@ -3431,7 +3478,9 @@ Originally, [[rio]] used [[originwindow()]] to set each window's image origin
 to (0,0), so the application could draw without knowing its screen
 position.  In that design, [[screenr]] held the physical position
 and [[i->r]] started at (0,0):
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   screen (view)
   +------------------------------------------+
   |                                          |
@@ -3451,7 +3500,7 @@ and [[i->r]] started at (0,0):
   xy.y = 200 + (0 - 50)  = 150
 
   xy = (150, 150)           (logical, sent to hellorio)
-\end{verbatim}
+\end{vdiagram}
 
 
 %claude: TODO use it again
@@ -3465,7 +3514,6 @@ been intentional.
 \t understand why originwindow was dropped
 
 
-%yoann: quick explanation and used in ptinside
 %claude:
 [[Selborder]] is the width, in pixels, of the border drawn around the
 selected window. It is used just above to compute [[inside]]: the pointer
@@ -3481,7 +3529,6 @@ Selborder		= 4,	/* border of selected window */
 %coupling with Borderwidth in draw.h? why not use same constant?
 % also abused as an enum with Selborder and Unselborder
 
-%yoann: transition sentence for App and windowing system events
 %claude:
 The mouse thread now splits into two paths, treated in the next two
 subsections: events {forwarded} to the application (when the pointer is
@@ -3499,9 +3546,6 @@ the window and either it is a left-click (used for text selection in
 textual windows), or [[mouseopen]] is set (meaning the application
 opened [[/mnt/wsys/mouse]] and wants raw mouse events), or automatic
 scrolling is active.
-When [[mouseopen]] is not set, middle-click and right-click
-are intercepted by the mouse thread for window management actions
-(the edit menu and the system menu).
 
 <<[[mousethread()]] set sending to true for some conditions>>=
 if(inside && 
@@ -3510,6 +3554,12 @@ if(inside &&
 @
 %ocaml: buttons.left clearer than 1. Also more functional by
 % returning boolean insteaf of setting local sending
+
+
+%claude:
+%When [[mouseopen]] is not set, middle-click and right-click
+%are intercepted by the mouse thread for window management actions
+%(the edit menu and the system menu).
 
 % If mouseopen then need relay all mouse messages
 % If not, then relay at least left button because terminal uses
@@ -3520,14 +3570,14 @@ if(inside &&
 \t rename autoscroll
 \l but still, why send to app then?
 
-<<[[mousethread()]] locals>>=
-Mouse tmp;
-@
 
-%yoann: transition, can now see app case
 %claude:
 Here is the application case: when [[sending]] is set, the mouse thread
 hands the event off to the window's own thread.
+
+<<[[mousethread()]] locals>>=
+Mouse tmp;
+@
 
 <<[[mousethread()]] if sending>>=
 if(sending){
@@ -3537,19 +3587,18 @@ Sending:
     tmp = mousectl->Mouse;
     tmp.xy = xy; // logical coordinates
 
-    // Dispatch, to current window thread!
+    // Dispatch, to "current" window thread!
     send(winput->mc.c, &tmp);
     continue;
 }
 @
 %ocaml: no need backup mousectl value. Pass data by value in channels.
 
-%yoann: quick intro and reference to chapter X on cursor graphics
 %claude:
 Before handing the event over, the thread picks the right cursor shape: a
 corner cursor when the pointer rests on a border (so the user knows a
 resize is possible), the plain cursor otherwise. The cursor machinery
-itself ([[cornercursor()]], [[wsetcursor()]]) is covered in
+itself ([<cornercursor()>], [<wsetcursor()>]) is covered in
 Chapter~\ref{chap:cursor}.
 
 \l could mv later
@@ -3624,8 +3673,9 @@ wpointto(Point pt)
 
 % important function
 %claude:
-The loop iterates over all windows, keeps only those whose [[screenr]]
-contains [[pt]], and picks the one with the largest [[topped]] counter.
+The loop above iterates over all [<windows>], keeps only those whose [[screenr]]
+contains [[pt]], and picks the one with the largest [<topped>] counter.
+%
 Because [[topped]] is bumped every time a window is raised
 ([[w->topped = ++topped]]), the window most recently brought to the
 front wins. I find it helpful to trace a concrete case with three
@@ -3664,12 +3714,11 @@ layers---in that case, I would keep a sorted z-list instead and stop
 at the first hit.
 
 
-%yoann: quick explanation
 %claude:
-On the windowing-system path the thread first updates the cursor shape: if
+On the windowing-system path the thread also updates the cursor shape: if
 the pointer is over some window it may switch to a resize-corner cursor
-([[cornercursor()]]), otherwise it restores the default arrow
-([[riosetcursor()]]).
+([<cornercursor()>]), otherwise it restores the default arrow
+([<riosetcursor()>]).
 
 <<[[mousethread()]] when not sending, set cursor part1>>=
 /* change cursor if over anyone's border */
@@ -3686,7 +3735,6 @@ if(w != nil)
 
 
 
-%yoann: quick explanation
 %claude:
 If a button is pressed while [[rio]] is keeping the event, the thread
 dispatches on which button. On the focused window (or empty space), left
@@ -3731,7 +3779,6 @@ if(mouse->buttons){
 \l how w can be nil after click on unfocused window? it can not be
 %ocaml: use top_win so by construction sure that we set the window
 
-%yoann: say gradually see left, right, middle mouse handling code
 %claude:
 The bodies of the left-, middle-, and right-click cases are filled in
 gradually over the following sections, as each opens its own little
@@ -3772,7 +3819,6 @@ Drain:
 
 % listen to many channels! (and relaying to many channels)
 
-%yoann: transition where say now see most interesting thread of rio
 %claude:
 We now reach the thread that ties the others together, and the most
 interesting one in [[rio]]: the per-window [<winctl()>] thread.
@@ -3842,14 +3888,16 @@ enum {
 
 % rename winctlthread? more consistent?
 <<function [[winctl]]>>=
-// ... -> new() -> threadcreate(<>, w)
+/// ... -> new() -> threadcreate(<>, w)
 void
 winctl(void *arg)
 {
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
+    // enum<Wxxx>
     int event;
+    char buf[128];
     <<[[winctl()]] other locals>>
     
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
@@ -3862,7 +3910,6 @@ winctl(void *arg)
 
     for(;;){
         <<[[winctl()]] alts adjustments>>
-
         // event loop
         event = alt(alts);
         if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
@@ -3892,10 +3939,9 @@ winctl(void *arg)
 
 
 %claude:
-The [[deleted]] field will be explained in
-Chapter~\ref{chap:wm}.  Note that after each
-event, [<winctl()>] calls [[flushimage()]] unless the window
-has been deleted.  Most events result in some visual change---text
+Note that after each event, [<winctl()>] calls [[flushimage()]] unless the window
+has been deleted (the [[deleted]] field will be explained in
+Chapter~\ref{chap:wm}).  Most events result in some visual change---text
 appearing, a cursor moving, a border redrawn---and
 [[flushimage()]] batches all pending draw operations into a single
 write to the draw device.
@@ -3916,7 +3962,6 @@ if(event == -1) {
 }
 @
 
-%yoann: trans and toc sentence with will see Wkey, WMouse and especially Wctl handler!
 %claude:
 The event loop has three core cases, matching the [[Wxxx]] enum: [[WKey]],
 [[WMouse]], and [[WCtl]]. The next subsections take them in turn---keyboard
@@ -3928,15 +3973,14 @@ is where most of the window-management logic lives.
 %claude:
 The first connection to wire up is the keyboard. Each window has
 a [[ck]] channel that carries batches of [[Rune]]s from
-[<keyboardthread()>]. When a window has focus, the keyboard thread
-sends typed runes on [[ck]], and [<winctl()>] dispatches each rune
-to [<wkeyctl()>] for processing.
+[<keyboardthread()>]. 
 
 <<[[Window]] keyboard fields>>=
 // chan<Rune, 20> (listener = winctl, sender = keyboardthread)
 Channel	*ck;		/* chan(Rune[10]) */
 @
 % it's Rune[20] actually no? wrong comment?
+
 
 % saw send(input->ck) before in keyboard thread.
 % so trace of key: 
@@ -3954,6 +3998,31 @@ alts[WKey].v = &kbdr;
 alts[WKey].op = CHANRCV;
 @
 
+%yoann: explain passing in .v a Rune** ? maybe ASCII Diagram .c, .v, .op and intuition on how stored in memory a channel and it can work to send/recv on it and what is sendp() vs send()?
+%claude:
+An [[Alt]] entry just says where a receive (or send) should happen: [[.c]]
+is the channel, [[.op]] the direction, and [[.v]] the {\em address} of the
+variable to fill---the same [[&v]] you would pass to [[recv(c, &v)]]. Each
+message on [[w->ck]] is a [[Rune*]] (a pointer to the rune batch), so the
+destination [[kbdr]] is a [[Rune*]] and [[.v = &kbdr]] is a [[Rune**]].
+%
+\begin{verbatim}
+   w->ck:  [ ... | Rune* | ... ]      one pointer per message
+                      |
+        alt() stores it into *.v   ==>   kbdr --> ['a' 'b' 'c' '\0']
+\end{verbatim}
+%claude:
+[[sendp()]] and [[recvp()]] are just conveniences for channels whose
+element is a pointer: they pass (or return) the pointer directly instead of
+its address. Concretely, the keyboard thread's [[sendp(ck, rp)]] is the
+same as [[send(ck, &rp)]], and receiving with [[recvp(ck)]] into [[kbdr]] is
+the same as [[recv(ck, &kbdr)]]---which is exactly what the [[alt()]] entry
+above, with [[.v = &kbdr]], does.
+
+%claude:
+When a window has focus, the keyboard thread
+sends typed runes on [[ck]], and [<winctl()>] dispatches each rune
+to [<wkeyctl()>] for processing.
 
 <<[[winctl()]] event loop cases>>=
 case WKey:
@@ -4024,11 +4093,13 @@ if(w->deleted)
 %claude:
 The second connection is the mouse. Each window embeds a full
 [[Mousectl]] structure whose [[c]] channel receives mouse events
-from [<mousethread()>].  This is not the same [[Mousectl]] as the
-one used by [[rio]]'s own IO proc for reading [[/dev/mouse]]---that
-one belongs to [[rio]] itself.  Here, each [<Window>] has its own
-[[Mousectl]] because it needs the same fields (a [[Mouse]], a
-channel [[c]], and a [[resizec]]) to forward events to [<winctl()>].
+from [<mousethread()>].  This is a {\em second} [[Mousectl]], distinct
+from the global [[mousectl]] that reads the physical [[/dev/mouse]]: that
+one feeds [<mousethread()>], while this per-window copy is how
+[<mousethread()>] forwards events on to a particular window.  A window
+reuses the whole [[Mousectl]] type because it needs the same fields (a
+[[Mouse]], a channel [[c]], and a [[resizec]]) to deliver events to
+[<winctl()>].
 Not every mouse event reaches the window---only those that the mouse
 thread has determined belong to this window (as opposed to
 window-management operations like move or resize).
@@ -4062,10 +4133,6 @@ alts[WMouse].op = CHANRCV;
 % see in mousethread for the application mouse event dispatch:
 %    send(winput->mc.c, &tmp);
 
-
-<<[[winctl()]] other locals>>=
-char buf[128]; // /dev/mouse interface
-@
 
 <<[[winctl()]] event loop cases>>=
 case WMouse:
@@ -4150,33 +4217,29 @@ Chapter~\ref{chap:wm}.
 \section{Filesystem server proc}
 \n actually it's a process but it creates many threads indirectly
 
-
 % why a process? because block on fs->sfd! would block everything else.
 %ocaml: can be a thread thx to ThreadUnix.
 %claude:
 The filesystem server runs as a separate {proc} rather than a thread
 because it blocks on [[read()]] of the pipe---and a blocking thread
 would freeze all other threads in the same proc.
-Each incoming 9P request is parsed, the fid is looked up, and the
-request is dispatched through the [[fcall]] table to the appropriate
-handler.
 
-<<global [[messagesize]]>>=
-int	messagesize = 8192+IOHDRSZ;	/* good start */
-@
-%ocaml: a field in global 'fs' instead of global
 
-% negociated with kernel in filsysversion in first message
-% IOHDRSZ defined in fcall.h
-
-%yoann: toc sentence
 %claude:
-With the worker pool in place, we can read the loop that drives it.
+We start with [<filsysproc()>], the loop that reads requests; it relies on
+a pool of worker threads that we build in the following sections.
 
 \subsection{Reading and dispatching: [[filsysproc()]]}
 
+%yoann: quick intro
+
+%claude:
+Each incoming 9P request is parsed, the fid is looked up, and the
+request is dispatched through the [<fcall>] table to the appropriate
+handler.
+
 <<function [[filsysproc]]>>=
-/// main -> filsysinit -> proccreate(<>, fs, ...)
+/// threadmain -> filsysinit -> proccreate(<>, fs, ...)
 static
 void
 filsysproc(void *arg)
@@ -4230,6 +4293,15 @@ filsysproc(void *arg)
 %ocaml: no newfid here! do it only in Attach or Walk, and for the other
 % cases use lookup_fid, not new_fid
 
+<<global [[messagesize]]>>=
+int	messagesize = 8192+IOHDRSZ;	/* good start */
+@
+%ocaml: a field in global 'fs' instead of global
+
+% negociated with kernel in filsysversion in first message
+% IOHDRSZ defined in fcall.h
+
+
 %claude:
 A few points about this loop:
 \begin{itemize}
@@ -4246,12 +4318,14 @@ raw 9P bytes into an [[Fcall]] structure with typed fields
 \end{itemize}
 
 %claude:
-The protocol between [[filsysproc]] and the worker allocator is a
-two-step handshake: [[filsysproc]] sends [[nil]] on [<cxfidalloc>]
+The protocol between [<filsysproc()>] and the worker allocator is a
+two-step handshake: [<filsysproc()>] sends [[nil]] on [<cxfidalloc>]
 to request a worker, then receives the [<Xfid>] pointer back on the
-same channel. The returned [[Xfid]] may be a recycled one or a freshly
+same channel.
+%
+The returned [<Xfid>] may be a recycled one or a freshly
 allocated one with a new worker thread. After dispatching through
-[[fcall]], if the handler returns non-nil, the worker can be reused
+[<fcall>], if the handler returns non-nil, the worker can be reused
 immediately; if it returns nil, the handler is still running
 asynchronously in the worker thread.
 
@@ -4315,7 +4389,7 @@ if(fcall[x->req.type] == nil)
 %claude:
 The first 9P message a client must send is always [[Tversion]],
 which negotiates the protocol version and maximum message size.
-This is handled directly by [[filsysproc]] without dispatching
+This is handled directly by [<filsysproc()>] without dispatching
 to a worker, since it is a one-time handshake.
 
 <<[[fcall]] other methods>>=
@@ -4371,9 +4445,14 @@ if(strncmp(x->req.version, "9P2000", 6) != 0)
 
 \section{[[Xfid]] worker pool}
 
+%yoann: transition sentence with filsysproc we just saw and xfidalloc for worker
 %claude:
-The worker pool is made of two kinds of thread: a single {allocator} thread
-that hands out and recycles [[Xfid]] worker handles, and the {worker}
+We saw [<filsysproc()>] hand each request off to a worker; here is the pool
+those workers come from.
+
+%claude:
+The worker pool is made of two kinds of thread: a single {\em allocator} thread
+that hands out and recycles [[Xfid]] worker handles, and the {\em worker}
 threads themselves, each of which executes one dispatched request before
 returning to the pool. Both appear as distinct nodes in
 Figure~\ref{fig:soft-archi-threads}.
@@ -4383,12 +4462,12 @@ Figure~\ref{fig:soft-archi-threads}.
 %ocaml: create each time a new thread so no need arena allocator
 %claude:
 The allocator thread manages a pool (arena) of [[Xfid]] worker handles.
-When [<filsysproc()>] requests a worker (Alloc), the allocator either
+When [<filsysproc()>] requests a worker ([[Alloc]]), the allocator either
 recycles one from the free list or creates a new one with its own
-[[xfidctl]] thread. When a worker finishes (Free), it is returned to
-the free list. The two free lists serve different purposes: [[xfid]]
-tracks all ever-allocated workers, while [[xfidfree]] tracks currently
-idle ones.
+[<xfidctl()>] thread.
+%
+When a worker finishes ([[Free]]), it is returned to
+the free list.
 
 <<enum [[Xxxx]]>>=
 enum { 
@@ -4400,6 +4479,15 @@ enum {
 @
 \t rename XFAlloc, XFFree, XNALT like for the other threads
 
+%claude:
+Do not confuse these two {\em lists} with the two {\em channels}
+[<cxfidalloc>]/[<cxfidfree>] seen earlier. The lists are the allocator's
+private bookkeeping---[<xfid>] holds every worker ever created, [<xfidfree>]
+holds the currently idle ones---while the channels are its {\em interface}
+to the rest of [[rio]]: a request on [<cxfidalloc>] makes the allocator take
+a worker from [<xfidfree>] (creating one, recorded in [<xfid>], if none is
+free), and a worker handed back on [<cxfidfree>] goes onto [<xfidfree>].
+
 <<global [[xfid]]>>=
 // list<ref_own<Xfid>> (next = Xfid.next)
 static	Xfid	*xfid;
@@ -4410,13 +4498,25 @@ static	Xfid	*xfid;
 static	Xfid	*xfidfree;
 @
 
+%yoann: explain classic again C-idiom and next pointers but here 2 cos 2 lists
+%claude:
+This is the same intrusive-linked-list idiom as [[Fid.next]], but an
+[[Xfid]] belongs to {\em two} lists at once---the all-workers list and the
+idle list---so it carries one link pointer per list: [[next]] threads it
+onto [<xfid>], [[free]] onto [<xfidfree>].
 
 <<[[Xfid]] extra fields>>=
 Xfid	*next;
 Xfid	*free;
 @
 
-% main -> xfidinit -> threadcreate -> <> (as ?? <- threadcreate(<>) <- xfidinit)
+%yoann: can now finally see xfidallocthread
+%claude:
+We can now read [<xfidallocthread()>] itself: an [[alt()]] loop with the two
+cases [[Alloc]] and [[Free]] above, popping a worker off [<xfidfree>] or
+pushing one back onto it.
+
+% threadmain -> xfidinit -> threadcreate -> <> (as ?? <- threadcreate(<>) <- xfidinit)
 <<function [[xfidallocthread]]>>=
 void
 xfidallocthread(void*)
@@ -4468,18 +4568,27 @@ xfidallocthread(void*)
 }
 @
 
+%yoann: say important call below is [<xfidctl()>]! that will run some xfidxxx for 9p requests work
+%claude:
+The key line in that loop is [[threadcreate(xfidctl, x, ...)]]: every new
+worker runs [<xfidctl()>], the thread that actually executes the [[xfidXXX]]
+handlers doing the 9P work. We turn to it next.
+
 %yoann: why use thread and message there too for allocation? could not just use direct function calls? need this intermediate allocator thread? alternatives?
 %claude:
 Why route allocation through a dedicated thread and channels instead of
 just calling an allocation function directly? Because the free list
-([[xfidfree]]) is shared state whose users live in {different procs}:
+([<xfidfree>]) is shared state whose users live in {different procs}:
 [<filsysproc()>] runs in its own proc while the workers run in the main
-proc. A plain function would therefore need a lock around the pool. Giving
-a single thread sole ownership of the list, and talking to it over
+proc. A plain function would therefore need a lock around the pool.
+%
+Giving a single thread sole {\em ownership} of the list, and talking to it over
 channels, sidesteps that: only [<xfidallocthread()>] ever touches
-[[xfidfree]], and channels already carry requests safely across the proc
-boundary. This is the CSP model~\cite{csp} on which \plan's threads are
-built (via Rob Pike's Newsqueak and Alef), later popularized by the Go
+[<xfidfree>], and channels already carry requests safely across the proc boundary.
+%
+This is the CSP model~\cite{csp} on which \plan's threads are built,
+% (via Rob Pike's Newsqueak and Alef),
+later popularized by the Go
 proverb: {do not communicate by sharing memory; instead, share memory by
 communicating}.
 
@@ -4508,6 +4617,12 @@ if(x->flushtag != -1)
 
 \subsection{Worker threads: [[xfidctl()]]}
 % =~ workers which will handle a file request
+
+%yoann: transition sentence can finally see almost as important as winctl() thread, here work xfidctl thread
+%claude:
+We reach the last of [[rio]]'s key threads, and after [<winctl()>] the most
+important: the worker thread [<xfidctl()>], where the actual file-server
+work happens.
 
 % thread callback ...
 %claude:
@@ -19058,7 +19173,7 @@ encounters a protocol error on [[/dev/draw]], the failure is
 routed through [[rio]]'s own abort-with-core path instead of
 [[libdraw]]'s default.
 
-% main -> ... <- (as ? <- geninitdraw(<>) <- main)
+% threadmain -> ... <- (as ? <- geninitdraw(<>) <- main)
 <<function [[derror]]>>=
 void
 derror(Display*, char *errorstr)
