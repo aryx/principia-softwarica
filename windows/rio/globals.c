@@ -18,7 +18,7 @@
 Mousectl	*mousectl;
 /*e: global [[mousectl]] */
 /*s: global [[mouse]] */
-// alias for &mousectl->Mouse
+// alias for &mousectl->m
 Mouse	*mouse;
 /*e: global [[mouse]] */
 /*s: global [[keyboardctl]] */
