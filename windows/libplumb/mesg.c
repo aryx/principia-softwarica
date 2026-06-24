@@ -62,7 +62,6 @@ Strlen(char *s)
     return strlen(s);
 }
 /*e: function [[Strlen]] */
-
 /*s: function [[Strcpy]] */
 static char*
 Strcpy(char *s, char *t)

@@ -1,8 +1,10 @@
 /*s: apps/statusbar.c */
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
+
 #include <bio.h>
 #include <event.h>
 
@@ -193,7 +195,6 @@ bar(Biobuf *b)
 }
 /*e: function [[bar]] */
 
-
 /*s: function usage (apps/statusbar.c) */
 static void
 usage(void)
@@ -202,7 +203,6 @@ usage(void)
     exits("usage");
 }
 /*e: function usage (apps/statusbar.c) */
-
 /*s: function main (apps/statusbar.c) */
 void
 main(int argc, char **argv)

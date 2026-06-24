@@ -1,10 +1,12 @@
 /*s: libframe/frbox.c */
 #include <u.h>
 #include <libc.h>
+/*s: libframe includes */
 #include <draw.h>
 #include <thread.h>
 #include <mouse.h>
 #include <frame.h>
+/*e: libframe includes */
 
 /*s: constant [[SLOP]] */
 #define	SLOP	25

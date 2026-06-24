@@ -1,6 +1,6 @@
 /*s: include/frame.h */
-#pragma	src	"/sys/src/libframe"
 #pragma	lib	"libframe.a"
+#pragma	src	"/sys/src/libframe"
 
 typedef struct Frbox Frbox;
 typedef struct Frame Frame;
@@ -51,6 +51,10 @@ struct Frame
     Image	*cols[NCOL];	/* text and background colors */
     /*e: [[Frame]] colors */
     /*s: [[Frame]] text fields */
+    ushort	lastlinefull;	/* last line fills frame */
+    /*x: [[Frame]] text fields */
+    ushort	maxtab;		/* max size of tab, in pixels */
+    /*x: [[Frame]] text fields */
     ushort	nchars;		/* # runes in frame */
     /*x: [[Frame]] text fields */
     ushort	nlines;		/* # lines with text */
@@ -60,10 +64,6 @@ struct Frame
     ulong	p0, p1;		/* selection */
     /*x: [[Frame]] text fields */
     bool	modified;	/* changed since frselect() */
-    /*x: [[Frame]] text fields */
-    ushort	lastlinefull;	/* last line fills frame */
-    /*x: [[Frame]] text fields */
-    ushort	maxtab;		/* max size of tab, in pixels */
     /*e: [[Frame]] text fields */
     /*s: [[Frame]] tick fields */
     Image	*tick;	/* typing tick */

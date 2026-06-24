@@ -19,8 +19,6 @@ struct Win {
 };
 /*e: struct [[Win]] */
 
-
-
 /*s: global [[exclude]] */
 static Reprog  *exclude  = nil;
 /*e: global [[exclude]] */
@@ -60,7 +58,6 @@ erealloc(void *v, ulong n)
     return v;
 }
 /*e: function erealloc (apps/winwatch.c) */
-
 /*s: function emalloc (apps/winwatch.c) */
 static void*
 emalloc(ulong n)
@@ -74,7 +71,6 @@ emalloc(ulong n)
     return v;
 }
 /*e: function emalloc (apps/winwatch.c) */
-
 /*s: function estrdup (apps/winwatch.c) */
 static char*
 estrdup(char *s)
@@ -161,7 +157,6 @@ drawnowin(int i)
     draw(view, insetrect(r, -1), lightblue, nil, ZP);
 }
 /*e: function [[drawnowin]] */
-
 /*s: function [[drawwin]] */
 static void
 drawwin(int i)
@@ -220,7 +215,6 @@ redraw(Image *view, int all)
     onwin = nwin;
 }
 /*e: function redraw (apps/winwatch.c) */
-
 /*s: function eresized (apps/winwatch.c) */
 void
 eresized(int new)
@@ -283,7 +277,6 @@ usage(void)
     exits("usage");
 }
 /*e: function usage (apps/winwatch.c) */
-
 /*s: function main (apps/winwatch.c) */
 void
 main(int argc, char **argv)

@@ -1,8 +1,10 @@
 /*s: libplumb/event.c */
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <event.h>
+
 #include "plumb.h"
 
 typedef struct EQueue EQueue;

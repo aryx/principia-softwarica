@@ -1,10 +1,12 @@
 /*s: libframe/frinit.c */
 #include <u.h>
 #include <libc.h>
+/*s: libframe includes */
 #include <draw.h>
 #include <thread.h>
 #include <mouse.h>
 #include <frame.h>
+/*e: libframe includes */
 
 /*s: function [[frinit]] */
 void
@@ -17,6 +19,10 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
     f->nchars = 0;
     f->nlines = 0;
     /*s: [[frinit()]] initialize other fields */
+    f->lastlinefull = 0;
+    /*x: [[frinit()]] initialize other fields */
+    f->maxtab = 8 * stringwidth(ft, "0");
+    /*x: [[frinit()]] initialize other fields */
     if(cols != nil)
         memmove(f->cols, cols, sizeof f->cols);
     /*x: [[frinit()]] initialize other fields */
@@ -29,10 +35,6 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
     /*x: [[frinit()]] initialize other fields */
     f->p0 = 0;
     f->p1 = 0;
-    /*x: [[frinit()]] initialize other fields */
-    f->lastlinefull = 0;
-    /*x: [[frinit()]] initialize other fields */
-    f->maxtab = 8 * stringwidth(ft, "0");
     /*e: [[frinit()]] initialize other fields */
 }
 /*e: function [[frinit]] */
