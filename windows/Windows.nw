@@ -4686,15 +4686,7 @@ over window borders and corners.
 
 %claude:
 The [<crosscursor>] below (a plus sign) appears during window
-creation ([<sweep()>]), [<boxcursor>] during window moves ([<drag()>]),
-[<sightcursor>] when ``Delete'' is selected from the system menu,
-[<whitearrow>] in holding mode, and [<query>] for unknown states.
-The default arrow cursor lives in the draw library, not in [[rio]].
-
-%claude:
-Each cursor is a [[Cursor]] structure (defined in [[cursor.h]])
-containing a {\em hotspot offset}
-and two 16x16 bitmaps. 
+creation ([<sweep()>], see Figure~\ref{fig:new-step1-specify-new-window}).
 
 <<global crosscursor (rio/data.c)>>=
 Cursor crosscursor = {
@@ -4709,8 +4701,10 @@ Cursor crosscursor = {
      0x01, 0x80, 0x01, 0x80, 0x01, 0x80, 0x00, 0x00, }
 };
 @
-% when create new window (sweep())
 
+%claude:
+Each cursor is a [[Cursor]] structure (defined in [[cursor.h]])
+containing a {\em hotspot offset} and two 16x16 bitmaps.
 %claude:
 The hotspot offset tells the system how much
 to shift the bitmap so that the {\em active point} (the pixel that
@@ -4718,8 +4712,10 @@ counts as the click location) aligns with the mouse position.
 For example, [[crosscursor]] has offset [[-7, -7]]: the bitmap
 is shifted 7 pixels up and 7 pixels left, placing the center of
 the plus sign exactly on the mouse pointer:
-%
-\begin{verbatim}
+
+
+%claude:
+\begin{vdiagram}
       +---------------+
       |       ||      |     The bitmap's top-left corner is at
       |       ||      |     mouse position + offset, i.e.,
@@ -4731,14 +4727,21 @@ the plus sign exactly on the mouse pointer:
       +---------------+
                ^
                mouse pointer
-\end{verbatim}
-%
+\end{vdiagram}
+
 %claude:
 The two bitmaps work together for transparency: the first is the
 mask, the second is the image. Where a mask bit is set, the cursor
 pixel is visible (white or black depending on the image bit).
 Where a mask bit is clear, the background shows through---this is
 how cursors get their non-rectangular, transparent outlines.
+%yoann1: explain also 16x16 bitmaps encoded as 32 hexa numbers which leads to ?? bits
+
+%claude:
+[<boxcursor>] appears during window moves ([<drag()>]),
+[<sightcursor>] when ``Delete'' is selected from the system menu,
+[<whitearrow>] in holding mode, and [<query>] for unknown states.
+The default arrow cursor lives in the draw library, not in [[rio]].
 
 
 <<global boxcursor (rio/data.c)>>=
@@ -4806,7 +4809,7 @@ Cursor query = {
 %claude:
 When the mouse hovers over a window border, [[rio]] shows a
 directional cursor indicating which edge or corner is under the mouse.
-The [[corners]] array maps the 3x3 grid of possible positions
+The [<corners>] array maps the 3x3 grid of possible positions
 (top-left, top, top-right, left, center, right, bottom-left, bottom,
 bottom-right) to the corresponding cursor. The center entry is [[nil]]
 because the center is inside the window, not on the border.
@@ -4950,7 +4953,7 @@ operations, when [[rio]] must keep control of the cursor.
 
 %claude:
 Since changing the cursor requires a write to [[/dev/cursor]]---a system
-call---[[riosetcursor]] caches the last cursor set and skips the write
+call---[<riosetcursor()>] caches the last cursor set and skips the write
 if it has not changed. The [[force]] parameter bypasses this
 optimization for cases where the cursor may have been changed externally
 (e.g., after a window gains focus and needs to reassert its cursor).
@@ -4961,11 +4964,13 @@ Cursor	*lastcursor;
 %ocaml: not sure we need this opti
 
 <<function [[riosetcursor]]>>=
+/// cornercursor | ... -> <>
 void
 riosetcursor(Cursor *p, bool force)
 {
     if(!force && p==lastcursor)
         return;
+    // else
     setcursor(mousectl, p);
     lastcursor = p;
 }
@@ -4973,7 +4978,7 @@ riosetcursor(Cursor *p, bool force)
 %ocaml: no mousectl global
 %ocaml: no opti so can simply call Mouse.set_cursor without this wrapper
 
-% setcursor() from mouse.h, will write in /dev/cursor
+%yoann: explain setcursor() from mouse.h, will write in /dev/cursor
 
 % what this force is all about? why sometimes need and sometimes not?
 % seems like an opti.
@@ -4985,13 +4990,13 @@ riosetcursor(Cursor *p, bool force)
 %claude:
 This is the main cursor dispatch function, called from [<mousethread()>]
 on every mouse move. It checks whether the mouse is on the window
-border via [[winborder()]] (point inside [[screenr]] but outside the
+border via [<winborder()>] (point inside [[screenr]] but outside the
 inset rectangle): if so, it picks the appropriate directional cursor
 from the [<corners>] array; otherwise it falls through to
 [<wsetcursor()>], which shows the application's cursor or the default arrow.
 
-% mousethread -> <>
 <<function [[cornercursor]]>>=
+/// mousethread -> <>
 void
 cornercursor(Window *w, Point p, bool force)
 {
@@ -5020,12 +5025,8 @@ winborder(Window *w, Point xy)
 
 % cornercursor -> <>
 %claude:
-The [[whichcorner()]] function maps a point on the window border to an
-index in the 3x3 [[corners]] array. The [[portion]] helper divides
-each axis into three zones using a hardcoded 20-pixel threshold:
-near the start (0), in the middle (1), or near the end (2). The
-result [[3*j + i]] gives the flat array index corresponding to
-the grid position (top-left = 0, top = 1, ..., bottom-right = 8).
+The [<whichcorner()>] function maps a point on the window border to an
+index in the 3x3 [<corners>] array. 
 
 <<function [[whichcorner]]>>=
 int
@@ -5039,6 +5040,13 @@ whichcorner(Window *w, Point p)
 }
 @
 % j = 0 means top, j = 1 means middle, j = 2 means below
+
+%claude:
+The [<portion()>] helper divides
+each axis into three zones using a hardcoded 20-pixel threshold:
+near the start (0), in the middle (1), or near the end (2). The
+result [[3*j + i]] gives the flat array index corresponding to
+the grid position (top-left = 0, top = 1, ..., bottom-right = 8).
 
 % whichcorner -> <>
 <<function [[portion]]>>=
@@ -5060,13 +5068,15 @@ portion(int x, int lo, int hi)
 \subsection{Window cursor: [[wsetcursor()]]}
 
 %claude:
+[<cornercursor()>] above handles the resize-corner shapes; away from a
+corner it defers to the window's own cursor. That per-window cursor is what
+[<wsetcursor()>] sets.
+%
 Each window stores its application-requested cursor in the [[cursor]]
 field, with [[cursorp]] acting as an option: when non-nil, it points
 to [[cursor]] (meaning the app set a custom cursor); when nil, the
-default arrow is used. The [[wsetcursor()]] function checks whether the
-mouse is actually over this window via [<wpointto()>] and whether a
-system menu operation is in progress via [<menuing>], ensuring that
-[[rio]]'s own cursor shapes take priority during window management.
+default arrow is used. 
+
 
 <<[[Window]] mouse fields>>=
 Cursor		cursor;
@@ -5082,7 +5092,15 @@ Cursor		*cursorp;
 % will see later how a window can change its cursor (via
 %  virtual /dev/cursor handler)
 
+
+%claude:
+The [[wsetcursor()]] function checks whether the
+mouse is actually over this window via [<wpointto()>] and whether a
+system menu operation is in progress via [<menuing>], ensuring that
+[[rio]]'s own cursor shapes take priority during window management.
+
 <<function [[wsetcursor]]>>=
+/// mousethread | wcurrent | ... -> <>
 void
 wsetcursor(Window *w, bool force)
 {
