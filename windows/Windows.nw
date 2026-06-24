@@ -3901,7 +3901,7 @@ winctl(void *arg)
         <<[[winctl()]] alts adjustments>>
         // event loop
         event = alt(alts);
-        if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
+        <<[[winctl()]] trace [[w->id]] and [[event]]>>
         <<[[winctl()]] sanity check [[event]]>>
         switch(event){
         <<[[winctl()]] event loop cases>>
@@ -5158,7 +5158,7 @@ code that creates, moves, resizes, hides, and deletes windows.
 %alt: separate program as in X11
 
 In \plan, the window manager and the window server are the same program,
-unlike X11 where they are separate.
+unlike X~Window where they are separate.
 All window management paths converge to the same mechanism: sending a
 [<Wctlmesg>] to the target window's [[cctl]] channel, where its
 [<winctl()>] thread will process it.
@@ -5167,14 +5167,14 @@ All window management paths converge to the same mechanism: sending a
 Window management operations can be triggered from several sources,
 but they all converge to the same mechanism:
 %
-\begin{verbatim}
+\begin{vdiagram}
   Right-click menu ------+
   Border click (move/    |
     resize) -------------+---> wsendctlmesg(w->cctl) ---> winctl
   /mnt/wsys/wctl write --+                                  |
   /srv/riowctl write ----+                             wctlmesg()
-  External mount ---------+                            processes it
-\end{verbatim}
+  External mount --------+                            processes it
+\end{vdiagram}
 %
 %claude:
 This chapter covers each trigger in turn: the right-click system
@@ -5253,21 +5253,6 @@ button3menu(void)
 % No, cos still in mouse_thread context, and readmouse() called from menuhit()
 % will read from the same channel in mousectl.c, not directly from fd.
 
-%claude:
-The [[sweeping]] flag is set while a system menu action is in
-progress. It prevents client applications from interfering---for
-example, an application writing to [[/dev/mouse]] to warp the
-cursor would be disruptive in the middle of a menu interaction.
-
-<<global [[sweeping]]>>=
-bool	sweeping;
-@
-% used to forbid some operations like write on /dev/mouse from app
-% to move the mouse, because sweeping means we are in the middle of
-% some actions from the user where the mouse should not move around
-\l should be menuing? to not confuse with sweep()
-
-
 
 <<global [[menu3]]>>=
 Menu menu3 = { .item = menu3str };
@@ -5324,6 +5309,22 @@ enum RightMenuCommand
 
 % RightMenuCommands is similar to Wctlmesg but it's not the same.
 
+%claude:
+The [[sweeping]] flag is set while a system menu action is in
+progress. It prevents client applications from interfering---for
+example, an application writing to [[/dev/mouse]] to warp the
+cursor would be disruptive in the middle of a menu interaction.
+
+<<global [[sweeping]]>>=
+bool	sweeping;
+@
+% used to forbid some operations like write on /dev/mouse from app
+% to move the mouse, because sweeping means we are in the middle of
+% some actions from the user where the mouse should not move around
+\l should be menuing? to not confuse with sweep()
+
+
+%yoann: transition sentence explaining first case of switch above is below
 
 %claude:
 The code below closes the loop with [[threadmain()]], which blocks on
@@ -5337,19 +5338,20 @@ case Exit:
 @
 % threadmain is listening on exitchan
 
-%toc:
-% we will see handlers for other actions later.
+%yoann: we will see handlers for other actions gradually.
 
 
 \section{Window borders click}
+
+%yoann: trans with other source for wm action, border click
 
 %claude:
 When the mouse is on a window's border and a button is pressed, the
 mouse thread initiates a move or resize operation directly, without
 going through the right-click menu. Left or middle click on the border
 triggers [<bandsize()>] (resize), while right-click triggers [<drag()>] (move).
-The result is sent as a [[Reshaped]] or [[Moved]] message to the
-window's [[winctl]] thread.
+The result is sent as a [<Reshaped>] or [<Moved>] message to the
+window's [<winctl()>] thread.
 
 <<[[mousethread()]] locals>>=
 bool moving = false;
@@ -5404,10 +5406,12 @@ if(moving && (mouse->buttons&7)){
 
 % bandsize and drag later
 
-
+%yoann: say [<Reshaped>] different from [<Reshape>]
 
 
 \section{Window control message: [[Wctlmesg]]}
+
+%yoann: say there are other sources, will show later, but for now need to understand control message.
 
 %claude:
 The [[Wctlmesg]] structure is the message type sent from the mouse thread
@@ -5466,7 +5470,7 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     wcm.r = r;
     wcm.image = image;
 
-    if(DEBUG) fprint(STDERR, "wsendctlmesg: win=%d, type=%d\n", w->id, type);
+    <<[[wsendctlmesg()]] trace [[w->id]] and [[type]]>>
     send(w->cctl, &wcm);
 }
 @
@@ -5480,8 +5484,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 {
     char buf[64];
 
-    if(DEBUG) fprint(STDERR, "wctlmesg: win=%d, type=%d\n", w->id, m);
-
+    <<[[wctlmesg()]] trace [[w->id]] and [[m]]>>
     switch(m){
     <<[[wctlmesg()]] cases>>
     default:
@@ -5499,7 +5502,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 \l  because the switch can change it?
 
 
-
+%yoann: say again will see gradually cases of the switch above
 
 
 
@@ -5551,12 +5554,12 @@ name in the graphics layer system.
 %claude:
 When [[pid]] is non-zero, the calling process already exists (e.g.,
 an external program that mounted [[/srv/rio.<user>.<pid>]])
-and just needs a window created for it---see the Advanced Topics
-chapter for this external mount mechanism.
+and just needs a window created for it---see Section~\ref{sec:external-access}
+for this external mount mechanism.
 
 %ctor!
-% ((right click -> button3menu()) | wctlnew()) -> <>
 <<function [[new]]>>=
+/// ((right click -> button3menu) | wctlnew) -> <>
 Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
@@ -5582,8 +5585,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     windows = erealloc(windows, ++nwindow * sizeof(Window*));
     windows[nwindow-1] = w;
     <<[[new()]] if hideit>>
-
-    if(DEBUG) fprint(STDERR, "new: creating winctl thread for win=%d\n", w->id);
+    <<[[new()]] trace [[w->id]]>>
 
     // create a new thread! for this new window!
     threadcreate(winctl, w, 8192);
@@ -5608,6 +5610,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     return w;
 }
 @
+%TODO use STACK instead of 8192?
 %ocaml: hashtbl instead of growing array
 %ocaml: do channel creation in wmk instead of split creation of things
 % in 2 places
@@ -5626,6 +5629,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 % the pid of winshell (which will then just procexec the shell)
 
 
+%yoann: intro
 
 % seen those channels properties before
 <<[[new()]] channels creation>>=
@@ -5732,6 +5736,7 @@ reported back to the client as [[(10,10)]].
 
 %ctor
 <<function [[wmk]]>>=
+/// new -> <>
 Window*
 wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 {
@@ -5782,6 +5787,8 @@ after [<filsysmount()>] completes (via [<wclose()>]).
 % about incref comment, see call to wclose in winshell after filsysmount
 \l subtle
 
+%yoann: quick sentence
+
 <<[[wmk()]] channels settings>>=
 w->mc = *mc;
 w->ck = ck;
@@ -5789,6 +5796,7 @@ w->cctl = cctl;
 @
 %ocaml: build the channel in wmk, so no need pass them around from new()
 
+%yoann: quick sentence
 
 %\subsection{Window border}
 
@@ -5821,6 +5829,8 @@ wborder(Window *w, int type)
 
 % will see col later
 
+%yoann: quick sentence
+
 <<global [[titlecol]]>>=
 static	Image	*titlecol;
 @
@@ -5848,6 +5858,8 @@ if(w->i == nil)
 w->notefd = -1;
 w->dir = estrdup(startdir);
 @
+
+%yoann: quick intro
 
 <<[[Window]] other fields>>=
 char		*dir; // /dev/wdir
@@ -5879,24 +5891,16 @@ else
 %claude:
 For each new window, [[rio]] forks a new process ([<winshell()>]) that
 will [[exec]] a shell (usually [[rc -i]]).
+%
 Before exec'ing, [[winshell()]] must set up the correct {namespace}:
 it calls [[rfork(RFNAMEG|RFFDG|RFENVG)]] to get a private copy of
 the namespace ([[RFNAMEG]]), file descriptors ([[RFFDG]]), and 
 environment variables ([[RFENVG]]), then
 mounts [[rio]]'s filesystem so that the child's [[/dev/cons]],
 [[/dev/mouse]], and other files are served by [[rio]]'s window.
+%
 This is the key mechanism: the shell thinks it is talking to normal
 device files, but those files are actually virtual files served by [[rio]].
-
-%claude:
-Why private copies? The child needs its own namespace so that
-mounting [[rio]]'s filesystem on [[/dev]] and [[/mnt/wsys]] does
-not affect the parent or other windows. It also needs private
-file descriptors so that closing and reopening [[/dev/cons]] points
-to this window's virtual console, not the parent's. But the
-child still inherits the pipe file descriptor to [[rio]]'s
-filesystem server (via the fork/exec shared-fd model)---[[RFFDG]]
-copies the fd table, so the child keeps a copy of [[cfd]].
 
 <<global [[rcargv]]>>=
 char *rcargv[] = { "rc", "-i", nil };
@@ -5919,11 +5923,10 @@ if(pid == 0){
         arg[3] = argv;
     arg[4] = dir;
 
-    if(DEBUG) fprint(STDERR, "new: creating new winshell\n");
+    <<[[new()]] trace before [[winshell()]]>>
     proccreate(winshell, arg, 8192);
-
     pid = recvul(cpid);
-    if(DEBUG) fprint(STDERR, "new: created winshell=%d\n", pid);
+    <<[[new()]] trace after [[winshell()]]>>
 
     free(arg);
 }
@@ -5947,15 +5950,6 @@ if(pid == 0){
 
 
 
-<<[[new()]] sanity check pid received from winshell>>=
-if(pid == 0){
-    /* window creation failed */
-    wsendctlmesg(w, Deleted, ZR, nil);
-    chanfree(cpid);
-    return nil;
-}
-@
-% this is why you use a cpid! because things can go wrong?
 
 
 % have already half of it, new, wmk, winctl thread creation,
@@ -5966,6 +5960,7 @@ if(pid == 0){
 % the cmd is often "rc -i" (rc -i explicit interactive mode because
 %   rc expect #c/cons or /mnt/term/dev/cons)
 <<function [[winshell]]>>=
+/// new -> proccreate(<>, ...)
 void
 winshell(void *args)
 {
@@ -5984,8 +5979,7 @@ winshell(void *args)
     argv = arg[3];
     dir  = arg[4];
     
-    if(DEBUG) fprint(STDERR, "winshell: cmd = %s\n", cmd);
-
+    <<[[winshell()]] trace [[cmd]]>>
     // copy namespace/file-descriptors/environment-variables (do not share)
     rfork(RFNAMEG|RFFDG|RFENVG);
 
@@ -5994,7 +5988,7 @@ winshell(void *args)
 
     if(wclose(w) == false){	/* remove extra ref hanging from creation */
 
-        if(DEBUG) fprint(STDERR, "winshell: before procexec %s\n", cmd);
+        <<[[winshell()]] trace before [[procexec()]]>>
         notify(nil);
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
@@ -6016,6 +6010,17 @@ winshell(void *args)
 %ocaml-found:
 % redirect stderr! important too because rc for example print its prompt
 %  on stderr (see Shell.nw)
+
+
+%claude:
+Why private copies? The child needs its own namespace so that
+mounting [[rio]]'s filesystem on [[/dev]] and [[/mnt/wsys]] does
+not affect the parent or other windows. It also needs private
+file descriptors so that closing and reopening [[/dev/cons]] points
+to this window's virtual console, not the parent's. But the
+child still inherits the pipe file descriptor to [[rio]]'s
+filesystem server (via the fork/exec shared-fd model)---[[RFFDG]]
+copies the fd table, so the child keeps a copy of [[cfd]].
 
 
 
@@ -6044,7 +6049,7 @@ wsetpid(Window *w, int pid, bool dolabel)
     fdt fd;
 
     w->pid = pid;
-    if(DEBUG) fprint(STDERR, "wsetpid: win=%d pid =%d\n", w->id, w->pid);
+    <<[[wsetpid()]] trace [[w->id]] and [[w->pid]]>>
 
     if(dolabel){
         sprint(buf, "rc %d", pid);
@@ -6061,11 +6066,22 @@ wsetpid(Window *w, int pid, bool dolabel)
 @
 % how can have already a notefd?
 
+
+<<[[new()]] sanity check pid received from winshell>>=
+if(pid == 0){
+    /* window creation failed */
+    wsendctlmesg(w, Deleted, ZR, nil);
+    chanfree(cpid);
+    return nil;
+}
+@
+% this is why you use a cpid! because things can go wrong?
+
 \subsection{Namespace adjustments: [[filsysmount()]]}
 
 %claude:
 This is the key step that makes [[rio]]'s virtualization work.
-[[filsysmount()]] mounts [[rio]]'s client pipe onto [[/mnt/wsys]],
+[<filsysmount()>] mounts [[rio]]'s client pipe onto [[/mnt/wsys]],
 passing the window ID as the mount spec so that [[rio]] knows which
 window the client belongs to. Then it binds [[/mnt/wsys]] before
 [[/dev]], so that [[/dev/cons]], [[/dev/mouse]], etc.\ resolve to
@@ -6092,7 +6108,7 @@ filsysmount(Filsys *fs, int id)
     char buf[32];
     errorneg1 err;
 
-    if(DEBUG) fprint(STDERR, "filsysmount1\n");
+    <<[[filsysmount()]] trace start>>
 
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
     sprint(buf, "%d", id);
@@ -6100,8 +6116,7 @@ filsysmount(Filsys *fs, int id)
     <<[[filsysmount()]] sanity check err mount>>
     err = bind("/mnt/wsys", "/dev", MBEFORE);
     <<[[filsysmount()]] sanity check err bind>>
-
-    if(DEBUG) fprint(STDERR, "filsysmount2\n");
+    <<[[filsysmount()]] trace end>>
     return OK_0;
 }
 @
@@ -6196,7 +6211,7 @@ uint		namecount;
 % also free its public name? Graphics.nw?
 
 <<function [[wsetname]]>>=
-// mousethread -> new -> <>
+/// mousethread -> new -> <>
 void
 wsetname(Window *w)
 {
@@ -6248,12 +6263,6 @@ Once the button is released, the temporary image is replaced by a final
 one with [[Refbackup]] (so the graphics library saves what is underneath
 for proper overlapping).
 
-%claude:
-We finally see the [[menuing]] flag mentioned earlier in
-[<wsetcursor()>]: it is set while [[sweep()]] waits for the user
-to draw a window rectangle. During this time, [[rio]] must not
-honor per-window cursor changes, since the cross cursor must
-stay active.
 
 <<global [[menuing]]>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
@@ -6326,6 +6335,13 @@ sweep(void)
 %ocaml: use state machine with ADT for state so easier to read?
 % the C code in the end has a complex flow. More explicit corner
 % cases like what when not click right directly.
+
+%claude:
+We finally see the [[menuing]] flag mentioned earlier in
+[<wsetcursor()>]: it is set while [[sweep()]] waits for the user
+to draw a window rectangle. During this time, [[rio]] must not
+honor per-window cursor changes, since the cross cursor must
+stay active.
 
 \l why need ugly stuff? cornercursor with force at true not enough?
 \l and why need menuing? to not wsetcursor? but anyway for sure we 
@@ -6964,9 +6980,11 @@ entities, all linked together:
 \section{Window focus}
 % via mouse
 
+%yoann: trans say far simpler operation than window creation, click to focus
+
 % put code of mousethread related to window focus here!!
 %claude:
-Clicking on an unfocused window brings it to the front via [[wtop()]],
+Clicking on an unfocused window brings it to the front via [<wtop()>],
 which calls [[topwindow()]] (from the graphics library) to raise the
 image layer, then [<wcurrent()>] to update the global [<input>] pointer
 and repaint the border colors---the focused window gets a different
@@ -6993,6 +7011,7 @@ wtop(Point pt)
     if(w){
         if(w->topped == topped)
             return nil;
+        // else
         topwindow(w->i); // window.h (was in draw.h)
         wcurrent(w);
         flushimage(display, true);
@@ -7085,7 +7104,7 @@ Unselborder		= 1,	/* border of unselected window */
 Deleting a window is a two-phase process. First, [[rio]] sends a
 ``hangup'' note to the window's process group (via [[notefd]]) and
 starts a timeout proc. If the process exits cleanly, the window
-transitions from Deleted to Exited and the [[winctl]] thread terminates.
+transitions from Deleted to Exited and the [<winctl()>] thread terminates.
 If the process does not exit within the timeout, [<deletethread()>] forces
 cleanup.
 This careful approach avoids blocking the window manager thread while
@@ -7154,13 +7173,13 @@ bool	deleted;
 
 
 %claude:
-The [[Deleted]] handler writes ``hangup'' to [[notefd]]
-([[/proc/<pid>/notepg]]), which sends a note (Plan 9's equivalent of a
-signal) to the entire process group. Then it kicks off
-[[deletetimeoutproc]] as a safety net and calls [<wclosewin()>] to remove
-the window from the screen immediately. The window's thread does not
-exit yet---it waits for the [[Exited]] message that comes later when
-all filesystem references are closed.
+%The [[Deleted]] handler writes ``hangup'' to [[notefd]]
+%([[/proc/<pid>/notepg]]), which sends a note (Plan 9's equivalent of a
+%signal) to the entire process group. Then it kicks off
+%[[deletetimeoutproc]] as a safety net and calls [<wclosewin()>] to remove
+%the window from the screen immediately. The window's thread does not
+%exit yet---it waits for the [[Exited]] message that comes later when
+%all filesystem references are closed.
 
 <<[[wctlmesg()]] cases>>=
 case Deleted:
@@ -7242,11 +7261,13 @@ wclosewin(Window *w)
 %claude:
 The timeout mechanism handles clients that hold a reference to the
 window image (via [[nameimage()]]) and refuse to let go.
-[[deletetimeoutproc]] is a separate process (not a thread) because
+[<deletetimeoutproc()>] is a separate process (not a thread) because
 [[sleep]] is blocking. After 750ms it sends the window name on
-[[deletechan]]. The [[deletethread]] on the other end looks up the
+[<deletechan>]. The [<deletethread()>] on the other end looks up the
 image by name and, if the client still holds it, moves it off-screen
-with [[originwindow]] so at least it is invisible. The [[freeimage]]
+with [[originwindow]] so at least it is invisible.
+%
+The [[freeimage]]
 that follows drops the reference obtained by [[namedimage]], but the
 client may still hold its own reference---the image only truly
 disappears when all references are gone.
@@ -7326,6 +7347,9 @@ When the last reference drops to zero, [<wclose()>] sends the [[Exited]]
 message, which triggers the final cleanup: freeing the frame, closing
 the note file descriptor, freeing all channels, and freeing the
 [[Window]] struct itself.
+%yoann1: clunk term too obscure yet? too early?
+
+
 %claude:
 The [[winclosechan]] channel bridges the filesystem server process
 and the main thread group. The filesystem process cannot directly
@@ -19027,19 +19051,24 @@ architectures.
 Debugging [[rio]] has a particular circular problem: [[rio]] is
 the program that owns the screen and [[/dev/cons]], so any
 [[fprint(STDERR, ...)]] it tries to emit would normally land in
-its own display---which is frozen when [[rio]] misbehaves. Two
-tricks help. First, you can launch [[rio]] from a parent shell
+its own display---which is frozen when [[rio]] misbehaves.
+Two tricks help.
+%
+First, you can launch [[rio]] from a parent shell
 and redirect standard error outside the graphical session:
 [[rio >[2] /tmp/errors]] sends all diagnostics to a file you can
-tail from another window or read from the serial console. Second,
-since [[rio]] can run recursively (Section~\ref{sec:recursive-rio}),
+tail from another window or read from the serial console.
+%
+Second, since [[rio]] can run recursively (Section~\ref{sec:recursive-rio}),
 you can debug a freshly-built [[rio]] from inside a known-working
 [[rio]], keeping a rescue copy of the old binary at a path like
 [[/save/rio_old]] in case the new one refuses to start.
 
 %claude:
 The only built-in debugging facility is the [[DEBUG]] compile-time
-flag in [[fsys.c]]. When enabled, [[filsysproc]] dumps each
+flag in [[fsys.c]].
+%
+When enabled, [[filsysproc]] dumps each
 incoming 9P message on [[STDERR]] and [[filsysrespond()]] dumps
 each reply, using [[fmtinstall('F', fcallfmt)]] to install a
 [[%F]] format specifier for [[Fcall]] structures. Combined with
@@ -19075,6 +19104,43 @@ if(DEBUG)
 <<[[filsysrespond()]] dump Fcall t if debug>>=
 if(DEBUG)
     fprint(STDERR, "rio:->%F\n", fc);
+@
+
+
+%yoann: DEBUG used also for less important traces
+
+<<[[winctl()]] trace [[w->id]] and [[event]]>>=
+if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
+@
+<<[[wsendctlmesg()]] trace [[w->id]] and [[type]]>>=
+if(DEBUG) fprint(STDERR, "wsendctlmesg: win=%d, type=%d\n", w->id, type);
+@
+<<[[wctlmesg()]] trace [[w->id]] and [[m]]>>=
+if(DEBUG) fprint(STDERR, "wctlmesg: win=%d, type=%d\n", w->id, m);
+@
+<<[[new()]] trace [[w->id]]>>=
+if(DEBUG) fprint(STDERR, "new: creating winctl thread for win=%d\n", w->id);
+@
+<<[[new()]] trace before [[winshell()]]>>=
+if(DEBUG) fprint(STDERR, "new: creating new winshell\n");
+@
+<<[[new()]] trace after [[winshell()]]>>=
+if(DEBUG) fprint(STDERR, "new: created winshell=%d\n", pid);
+@
+<<[[winshell()]] trace [[cmd]]>>=
+if(DEBUG) fprint(STDERR, "winshell: cmd = %s\n", cmd);
+@
+<<[[winshell()]] trace before [[procexec()]]>>=
+if(DEBUG) fprint(STDERR, "winshell: before procexec %s\n", cmd);
+@
+<<[[wsetpid()]] trace [[w->id]] and [[w->pid]]>>=
+if(DEBUG) fprint(STDERR, "wsetpid: win=%d pid =%d\n", w->id, w->pid);
+@
+<<[[filsysmount()]] trace start>>=
+if(DEBUG) fprint(STDERR, "filsysmount1\n");
+@
+<<[[filsysmount()]] trace end>>=
+if(DEBUG) fprint(STDERR, "filsysmount2\n");
 @
 
 %******************************************************************************
