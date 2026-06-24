@@ -1,16 +1,18 @@
 /*s: rio/fsys.c */
 #include <u.h>
 #include <libc.h>
+/*s: rio includes */
 #include <draw.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global [[Eexist]] */
 char Eexist[] = "file does not exist";
@@ -24,7 +26,6 @@ char	Ebadfcall[] = "bad fcall type";
 /*s: global [[Eoffset]] */
 char	Eoffset[] = "illegal offset";
 /*e: global [[Eoffset]] */
-
 
 /*s: global [[dirtab]] */
 Dirtab dirtab[]=
@@ -55,11 +56,11 @@ Dirtab dirtab[]=
     /*x: dirtab array elements */
     { "wctl",		QTFILE,	Qwctl,		0600 },
     /*x: dirtab array elements */
+    { "kbdin",		QTFILE,	Qkbdin,		0200 },
+    /*x: dirtab array elements */
     { "snarf",		QTFILE,	Qsnarf,		0600 },
     /*x: dirtab array elements */
     { "wdir",		QTFILE,	Qwdir,		0600 },
-    /*x: dirtab array elements */
-    { "kbdin",		QTFILE,	Qkbdin,		0200 },
     /*e: dirtab array elements */
     { nil, }
 };
@@ -117,7 +118,6 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     /*e: [[fcall]] other methods */
 };
 /*e: global [[fcall]] */
-
 
 /*s: function [[filsysversion]] */
 static
@@ -574,15 +574,16 @@ filsyswstat(Filsys *fs, Xfid *x, Fid*)
 /*e: function [[filsyswstat]] */
 
 /*s: function [[newfid]] */
+/// filsysproc | filsyswalk -> <>
 Fid*
 newfid(Filsys *fs, int fid)
 {
     Fid *f, *ff, **fh;
 
     ff = nil; // free fid
-    fh = &fs->fids[fid&(Nhash-1)];
 
     // lookup_hash(fid, fs->fids)
+    fh = &fs->fids[fid&(Nhash-1)];
     for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
             // found!

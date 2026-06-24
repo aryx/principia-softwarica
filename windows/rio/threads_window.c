@@ -1,21 +1,19 @@
 /*s: rio/threads_window.c */
-
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
 #include <thread.h>
 
-#include <window.h>
-
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <window.h>
 
 /*s: enum [[Wxxx]] */
 enum { 
@@ -158,18 +156,18 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 /*e: function [[wctlmesg]] */
 
 /*s: function [[winctl]] */
-// ... -> new() -> threadcreate(<>, w)
+/// ... -> new() -> threadcreate(<>, w)
 void
 winctl(void *arg)
 {
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
+    // enum<Wxxx>
     int event;
+    char buf[128];
     /*s: [[winctl()]] other locals */
     Rune *kbdr;
-    /*x: [[winctl()]] other locals */
-    char buf[128]; // /dev/mouse interface
     /*x: [[winctl()]] other locals */
     Wctlmesg wcm;
     /*x: [[winctl()]] other locals */
@@ -290,23 +288,15 @@ winctl(void *arg)
         else
             alts[WWread].op = CHANSND;
         /*e: [[winctl()]] alts adjustments */
-
-        // to isolate messaging bug
-        //alts[WKey].op = CHANNOP;
-        //alts[WMouse].op = CHANNOP;
-        ////alts[WCtl].op = CHANNOP;
-        //alts[WMouseread].op = CHANNOP;
-        //alts[WCread].op = CHANNOP;
-        //alts[WCwrite].op = CHANNOP;
-        //alts[WWread].op = CHANNOP;
-
         // event loop
         event = alt(alts);
         if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
+        /*s: [[winctl()]] sanity check [[event]] */
         if(event == -1) {
           fprint(STDERR, "winctl: interrupted %r");
           exits("interrupted");
         }
+        /*e: [[winctl()]] sanity check [[event]] */
         switch(event){
         /*s: [[winctl()]] event loop cases */
         case WKey:

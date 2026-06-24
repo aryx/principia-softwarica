@@ -1,20 +1,21 @@
 /*s: rio/xfid.c */
 #include <u.h>
 #include <libc.h>
-
+/*s: rio includes */
 #include <draw.h>
-#include <marshal.h>
-#include <window.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
-#include <plumb.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <marshal.h>
+#include <window.h>
+#include <plumb.h>
 
 /*s: constant [[MAXSNARF]] */
 #define	MAXSNARF	100*1024
@@ -69,8 +70,6 @@ static	char	*tsnarf;
 /*s: global [[ntsnarf]] */
 static	int	ntsnarf;
 /*e: global [[ntsnarf]] */
-
-
 
 /*s: function [[xfidattach]] */
 void
@@ -204,19 +203,19 @@ xfidopen(Xfid *x)
         }
         break;
     /*x: [[xfidopen()]] cases */
+    case Qkbdin:
+        if(w !=  wkeyboard){
+            filsysrespond(x->fs, x, &fc, Eperm);
+            return;
+        }
+        break;
+    /*x: [[xfidopen()]] cases */
     case Qsnarf:
         if(x->req.mode==ORDWR || x->req.mode==OWRITE){
             if(tsnarf)
                 free(tsnarf);	/* collision, but OK */
             ntsnarf = 0;
             tsnarf = malloc(1);
-        }
-        break;
-    /*x: [[xfidopen()]] cases */
-    case Qkbdin:
-        if(w !=  wkeyboard){
-            filsysrespond(x->fs, x, &fc, Eperm);
-            return;
         }
         break;
     /*e: [[xfidopen()]] cases */
@@ -230,7 +229,6 @@ xfidopen(Xfid *x)
     filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function [[xfidopen]] */
-
 /*s: function [[xfidclose]] */
 void
 xfidclose(Xfid *x)
@@ -294,7 +292,6 @@ xfidclose(Xfid *x)
 }
 /*e: function [[xfidclose]] */
 
-
 /*s: function [[keyboardsend]] */
 /*
  * Used by /dev/kbdin
@@ -313,7 +310,6 @@ keyboardsend(char *s, int cnt)
     free(r);
 }
 /*e: function [[keyboardsend]] */
-
 
 /*s: enum [[_anon_ (rio/xfid.c)]]2 */
 enum { CWdata, CWflush, NCW };
@@ -518,6 +514,10 @@ xfidwrite(Xfid *x)
         flushimage(display, true);
         break;
     /*x: [[xfidwrite()]] cases */
+    case Qkbdin:
+        keyboardsend(req->data, cnt);
+        break;
+    /*x: [[xfidwrite()]] cases */
     case Qsnarf:
         /* always append only */
         if(ntsnarf > MAXSNARF){	/* avoid thrashing when people cut huge text */
@@ -553,10 +553,6 @@ xfidwrite(Xfid *x)
             free(w->dir);
             w->dir = cleanname(p);
         }
-        break;
-    /*x: [[xfidwrite()]] cases */
-    case Qkbdin:
-        keyboardsend(req->data, cnt);
         break;
     /*e: [[xfidwrite()]] cases */
     default:

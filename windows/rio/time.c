@@ -1,16 +1,18 @@
 /*s: rio/time.c */
 #include <u.h>
 #include <libc.h>
+/*s: rio includes */
 #include <draw.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global [[ctimer]] */
 // chan<?> (listener = ?, sender = ?)
@@ -37,7 +39,6 @@ timerstop(Timer *t)
     timer = t;
 }
 /*e: function [[timerstop]] */
-
 /*s: function [[timercancel]] */
 void
 timercancel(Timer *t)
@@ -116,7 +117,6 @@ timerinit(void)
     proccreate(timerproc, nil, STACK);
 }
 /*e: function [[timerinit]] */
-
 /*s: function [[timerstart]] */
 /*
  * timeralloc() and timerfree() don't lock, so can only be

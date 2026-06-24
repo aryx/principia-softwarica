@@ -51,11 +51,11 @@ enum Qxxx
     /*x: [[qid]] cases */
     Qwctl,
     /*x: [[qid]] cases */
+    Qkbdin,
+    /*x: [[qid]] cases */
     Qsnarf,
     /*x: [[qid]] cases */
     Qwdir,
-    /*x: [[qid]] cases */
-    Qkbdin,
     /*e: [[qid]] cases */
 
     QMAX,
@@ -71,7 +71,6 @@ enum Qxxx
 /*s: function [[FILE]] */
 #define	FILE(q)	(((ulong)(q).path) & 0xFF)
 /*e: function [[FILE]] */
-
 
 /*s: enum [[_anon_ (rio/dat.h)]]2 */
 enum
@@ -133,7 +132,6 @@ enum ControlMessage	/* control messages */
     /*e: [[Wctlmesgkind]] cases */
 };
 /*e: enum [[wctlmesgkind]] */
-
 /*s: struct [[Wctlmesg]] */
 struct Wctlmesg
 {
@@ -152,7 +150,6 @@ struct Conswritemesg
     Channel	*cw;		/* chan(Stringpair) */
 };
 /*e: struct [[Conswritemesg]] */
-
 /*s: struct [[Consreadmesg]] */
 struct Consreadmesg
 {
@@ -186,7 +183,6 @@ struct Mousestate
     ulong	counter;	/* serial no. of mouse event */
 };
 /*e: struct [[Mousestate]] */
-
 /*s: struct [[Mouseinfo]] */
 struct Mouseinfo
 {
@@ -295,7 +291,7 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] textual window fields */
     /*s: [[Window]] textual window fields, text data */
-    // growing_array<Rune> (size = Window.maxr)
+    // growing_array<Rune> (allocated = Window.maxr, used = nr)
     Rune		*r;
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
@@ -310,6 +306,7 @@ struct Window
     uint		qh; // output point
     /*e: [[Window]] textual window fields, text cursors */
     /*s: [[Window]] textual window fields, visible text */
+    // index in Window.r
     uint		org;
     /*e: [[Window]] textual window fields, visible text */
     /*s: [[Window]] textual window fields, graphics */
@@ -389,13 +386,13 @@ struct Fid
     // the key
     int		fid;
 
+    // the value
+    Qid		qid;
     // the state
     bool	open;
     int		mode;
 
     /*s: [[Fid]] other fields */
-    Qid		qid;
-    /*x: [[Fid]] other fields */
     Window	*w;
     /*x: [[Fid]] other fields */
     // ref<Dirtab>
@@ -414,7 +411,6 @@ struct Fid
     /*e: [[Fid]] extra fields */
 };
 /*e: struct [[Fid]] */
-
 /*s: struct [[Xfid]] */
 struct Xfid
 {
@@ -427,6 +423,7 @@ struct Xfid
         // chan<void(*)(Xfid*)> (listener = xfidctl, senders = filsysxxx)
         Channel	*c;	/* chan(void(*)(Xfid*)) */
 
+        // ref<Fid>
         Fid	*f;
 
         Filsys	*fs;

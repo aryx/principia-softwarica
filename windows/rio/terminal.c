@@ -1,21 +1,20 @@
 /*s: rio/terminal.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
 #include <thread.h>
 
-#include <plumb.h>
-#include <complete.h>
-
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <plumb.h>
+#include <complete.h>
 
 /*s: enum [[_anon_ (rio/wind.c)]] */
 enum
@@ -49,7 +48,6 @@ char*		menu2str[] = {
  nil
 };
 /*e: global [[menu2str]] */
-
 /*s: global [[menu2]] */
 Menu menu2 = { .item = menu2str };
 /*e: global [[menu2]] */
@@ -387,7 +385,6 @@ wsetorigin(Window *w, uint org, bool exact)
 }
 /*e: function [[wsetorigin]] */
 
-
 /*s: function [[wshow]] */
 void
 wshow(Window *w, uint q0)
@@ -413,7 +410,6 @@ wshow(Window *w, uint q0)
     /*e: [[wshow()]] else, when q0 is out of scope */
 }
 /*e: function [[wshow]] */
-
 
 /*s: function [[wsetselect]] */
 void
@@ -542,7 +538,6 @@ winsert(Window *w, Rune *r, int n, uint q0)
 }
 /*e: function [[winsert]] */
 
-
 /*s: function [[wcontents]] */
 char*
 wcontents(Window *w, int *ip)
@@ -554,7 +549,6 @@ wcontents(Window *w, int *ip)
 //----------------------------------------------------------------------------
 // Cut/copy/paste
 //----------------------------------------------------------------------------
-
 /*s: function [[wsnarf]] */
 void
 wsnarf(Window *w)
@@ -568,7 +562,6 @@ wsnarf(Window *w)
     putsnarf();
 }
 /*e: function [[wsnarf]] */
-
 /*s: function [[wcut]] */
 void
 wcut(Window *w)
@@ -579,7 +572,6 @@ wcut(Window *w)
     wsetselect(w, w->q0, w->q0);
 }
 /*e: function [[wcut]] */
-
 /*s: function [[wpaste]] */
 void
 wpaste(Window *w)
@@ -633,7 +625,6 @@ wframescroll(Window *w, int dl)
     wsetorigin(w, q0, true);
 }
 /*e: function [[wframescroll]] */
-
 /*s: function [[framescroll]] */
 /*
  * called from frame library
@@ -680,7 +671,6 @@ wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
     return cl=='\n' && nest==1;
 }
 /*e: function [[wclickmatch]] */
-
 
 /*s: global [[left1]] */
 static Rune left1[] =  { L'{', L'[', L'(', L'<', L'«', 0 };
@@ -759,7 +749,6 @@ wdoubleclick(Window *w, uint *q0, uint *q1)
         (*q0)--;
 }
 /*e: function [[wdoubleclick]] */
-
 
 /*s: function [[wselect]] */
 void
@@ -854,7 +843,6 @@ wselect(Window *w)
 //----------------------------------------------------------------------------
 // Plumb
 //----------------------------------------------------------------------------
-
 /*s: function [[wplumb]] */
 void
 wplumb(Window *w)
@@ -904,7 +892,6 @@ wplumb(Window *w)
 //----------------------------------------------------------------------------
 // Middle click
 //----------------------------------------------------------------------------
-
 /*s: function [[button2menu]] */
 void
 button2menu(Window *w)
@@ -977,7 +964,6 @@ button2menu(Window *w)
 //----------------------------------------------------------------------------
 // Mouse dispatch
 //----------------------------------------------------------------------------
-
 /*s: function [[wmousectl]] */
 void
 wmousectl(Window *w)
@@ -1023,7 +1009,6 @@ wmousectl(Window *w)
 //----------------------------------------------------------------------------
 // Key dispatch
 //----------------------------------------------------------------------------
-
 /*s: function [[interruptproc]] */
 /*
  * Need to do this in a separate proc because if process we're interrupting

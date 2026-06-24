@@ -23,7 +23,6 @@ error(char *s)
     threadexitsall("error");
 }
 /*e: function [[error]] */
-
 /*s: function [[derror]] */
 void
 derror(Display*, char *errorstr)

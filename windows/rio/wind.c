@@ -1,19 +1,19 @@
 /*s: rio/wind.c */
 #include <u.h>
 #include <libc.h>
-
+/*s: rio includes */
 #include <draw.h>
-#include <window.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
-
 #include <frame.h>
 #include <fcall.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <window.h>
 
 /*s: global [[topped]] */
 static	int		topped;
@@ -29,7 +29,6 @@ static	Image	*cols[NCOL];
 /*s: global [[darkgrey]] */
 static	Image	*darkgrey;
 /*e: global [[darkgrey]] */
-
 
 /*s: global [[titlecol]] */
 static	Image	*titlecol;
@@ -47,7 +46,6 @@ static	Image	*lightholdcol;
 static	Image	*paleholdcol;
 /*e: global [[paleholdcol]] */
 
-
 /*s: function [[wsendctlmesg]] */
 void
 wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
@@ -62,7 +60,6 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     send(w->cctl, &wcm);
 }
 /*e: function [[wsendctlmesg]] */
-
 
 /*s: function [[wborder]] */
 void
@@ -111,7 +108,6 @@ wsetcols(Window *w)
             w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
 }
 /*e: function [[wsetcols]] */
-
 
 /*s: function [[wmk]] */
 Window*
@@ -340,9 +336,6 @@ wclose(Window *w)
 }
 /*e: function [[wclose]] */
 
-
-
-
 /*s: function [[wrepaint]] */
 void
 wrepaint(Window *w)
@@ -364,7 +357,6 @@ wrepaint(Window *w)
 }
 /*e: function [[wrepaint]] */
 
-
 /*s: function [[winborder]] */
 bool
 winborder(Window *w, Point xy)
@@ -373,7 +365,6 @@ winborder(Window *w, Point xy)
            !ptinrect(xy, insetrect(w->screenr, Selborder));
 }
 /*e: function [[winborder]] */
-
 
 /*s: function [[wmovemouse]] */
 /*
@@ -387,7 +378,6 @@ wmovemouse(Window *w, Point p)
     moveto(mousectl, p);
 }
 /*e: function [[wmovemouse]] */
-
 
 /*s: function [[wpointto]] */
 Window*
@@ -465,7 +455,6 @@ wsetcursor(Window *w, bool force)
 }
 /*e: function [[wsetcursor]] */
 
-
 /*s: function [[wtop]] */
 Window*
 wtop(Point pt)
@@ -496,7 +485,6 @@ wtopme(Window *w)
     }
 }
 /*e: function [[wtopme]] */
-
 /*s: function [[wbottomme]] */
 void
 wbottomme(Window *w)

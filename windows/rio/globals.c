@@ -1,19 +1,18 @@
 /*s: rio/globals.c */
 #include <u.h>
 #include <libc.h>
-
+/*s: rio includes */
 #include <draw.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
-
 #include <frame.h>
-
 #include <fcall.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global [[mousectl]] */
 Mousectl	*mousectl;
@@ -36,17 +35,16 @@ Image	*background;
 Image	*red;
 /*e: global [[red]] */
 
-/*s: global [[window]] */
-// growing_array<ref_own<Window>> (size = nwindow+1)
+/*s: global [[windows]] */
+// growing_array<ref_own<Window>> (allocated = nwindow+1)
 Window	**windows;
-/*e: global [[window]] */
+/*e: global [[windows]] */
 /*s: global [[wkeyboard]] */
 Window	*wkeyboard;	/* window of simulated keyboard */
 /*e: global [[wkeyboard]] */
 /*s: global [[nwindow]] */
 int	nwindow;
 /*e: global [[nwindow]] */
-
 
 /*s: global [[exitchan]] */
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
@@ -57,12 +55,10 @@ Channel	*exitchan;	/* chan(int) */
 // chan<ref<Window>> (listener = winclosethread, sender = filsyswalk | filsysclunk )
 Channel	*winclosechan; /* chan(Window*); */
 /*e: global [[winclosechan]] */
-
 /*s: global [[deletechan]] */
 // chan<string> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;
 /*e: global [[deletechan]] */
-
 
 /*s: global [[input]] */
 //option<ref<Window>>, the window with the focus! the window to send input to
@@ -84,7 +80,6 @@ int		nhidden;
 /*s: global [[scrolling]] */
 bool		scrolling;
 /*e: global [[scrolling]] */
-
 
 /*s: global [[startdir]] */
 char		*startdir;

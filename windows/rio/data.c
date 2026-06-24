@@ -1,16 +1,18 @@
 /*s: rio/data.c */
 #include <u.h>
 #include <libc.h>
+/*s: rio includes */
 #include <draw.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global crosscursor (rio/data.c) */
 Cursor crosscursor = {
@@ -25,7 +27,6 @@ Cursor crosscursor = {
      0x01, 0x80, 0x01, 0x80, 0x01, 0x80, 0x00, 0x00, }
 };
 /*e: global crosscursor (rio/data.c) */
-
 /*s: global boxcursor (rio/data.c) */
 Cursor boxcursor = {
     {-7, -7},
@@ -39,7 +40,6 @@ Cursor boxcursor = {
      0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x00, 0x00, }
 };
 /*e: global boxcursor (rio/data.c) */
-
 /*s: global sightcursor (rio/data.c) */
 Cursor sightcursor = {
     {-7, -7},
@@ -53,7 +53,6 @@ Cursor sightcursor = {
      0x21, 0x84, 0x31, 0x8C, 0x0F, 0xF0, 0x00, 0x00, }
 };
 /*e: global sightcursor (rio/data.c) */
-
 /*s: global whitearrow (rio/data.c) */
 Cursor whitearrow = {
     {0, 0},
@@ -67,7 +66,6 @@ Cursor whitearrow = {
      0xD3, 0xB8, 0xF1, 0xF0, 0xE0, 0xE0, 0xC0, 0x40, }
 };
 /*e: global whitearrow (rio/data.c) */
-
 /*s: global query (rio/data.c) */
 Cursor query = {
     {-7,-7},
@@ -95,7 +93,6 @@ Cursor tl = {
      0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 0x00, 0x00, }
 };
 /*e: global [[tl]] */
-
 /*s: global [[t]] */
 static Cursor t = {
     {-7, -8},
@@ -109,7 +106,6 @@ static Cursor t = {
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, }
 };
 /*e: global [[t]] */
-
 /*s: global [[tr]] */
 Cursor tr = {
     {-11, -4},
@@ -123,7 +119,6 @@ Cursor tr = {
      0x00, 0x70, 0x00, 0x70, 0x00, 0x70, 0x00, 0x00, }
 };
 /*e: global [[tr]] */
-
 /*s: global [[r]] */
 Cursor r = {
     {-8, -7},
@@ -137,7 +132,6 @@ Cursor r = {
      0x03, 0x80, 0x03, 0x80, 0x03, 0x80, 0x00, 0x00, }
 };
 /*e: global [[r]] */
-
 /*s: global [[br]] */
 Cursor br = {
     {-11, -11},
@@ -151,7 +145,6 @@ Cursor br = {
      0x00, 0x1e, 0x00, 0x0e, 0x00, 0x3e, 0x00, 0x00, }
 };
 /*e: global [[br]] */
-
 /*s: global [[b]] */
 Cursor b = {
     {-7, -7},
@@ -165,7 +158,6 @@ Cursor b = {
      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, }
 };
 /*e: global [[b]] */
-
 /*s: global [[bl]] */
 Cursor bl = {
     {-4, -11},
@@ -179,7 +171,6 @@ Cursor bl = {
      0x78, 0x00, 0x70, 0x00, 0x7c, 0x00, 0x00, 0x0, }
 };
 /*e: global [[bl]] */
-
 /*s: global [[l]] */
 Cursor l = {
     {-7, -7},
@@ -203,6 +194,7 @@ Cursor *corners[9] = {
 /*e: global corners (rio/data.c) */
 
 /*s: function [[iconinit]] */
+/// threadmain -> <>
 void
 iconinit(void)
 {

@@ -1,18 +1,20 @@
 /*s: rio/rio.c */
 #include <u.h>
 #include <libc.h>
+/*s: rio includes */
 #include <draw.h>
-#include <window.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
-#include <plumb.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <window.h>
+#include <plumb.h>
 
 /*
  *  WASHINGTON (AP) - The Food and Drug Administration warned
@@ -31,7 +33,6 @@ char		*fontname;
 char *kbdargv[] = { "rc", "-c", nil, nil };
 /*e: global [[kbdargv]] */
 
-
 /*s: function [[usage]] */
 void
 usage(void)
@@ -40,7 +41,6 @@ usage(void)
     exits("usage");
 }
 /*e: function [[usage]] */
-
 
 /*s: function [[initcmd]] */
 void
@@ -77,8 +77,6 @@ killprocs(void)
         postnote(PNGROUP, windows[i]->pid, "hangup");
 }
 /*e: function [[killprocs]] */
-
-
 /*s: function [[shutdown]] */
 int
 shutdown(void *, char *msg)
@@ -99,8 +97,8 @@ shutdown(void *, char *msg)
 }
 /*e: function [[shutdown]] */
 
-
 /*s: function [[threadmain]] */
+/// main -> threadcreate(<>)
 void threadmain(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
@@ -157,8 +155,6 @@ void threadmain(int argc, char *argv[])
         maxtab = 4;
     free(s);
     /*x: [[main()]] set some globals */
-    snarffd = open("/dev/snarf", OREAD|OCEXEC);
-    /*x: [[main()]] set some globals */
     if(fontname == nil)
         fontname = getenv("font");
     if(fontname == nil)
@@ -171,6 +167,8 @@ void threadmain(int argc, char *argv[])
     }
 
     putenv("font", fontname);
+    /*x: [[main()]] set some globals */
+    snarffd = open("/dev/snarf", OREAD|OCEXEC);
     /*e: [[main()]] set some globals */
 
     // Rio, a graphical application
@@ -186,21 +184,25 @@ void threadmain(int argc, char *argv[])
 
     /*s: [[main()]] mouse initialisation */
     mousectl = initmouse(nil, view);
+    /*s: [[main()]] sanity check [[mousectl]] */
     if(mousectl == nil)
         error("can't find mouse");
+    /*e: [[main()]] sanity check [[mousectl]] */
     mouse = mousectl;
     /*e: [[main()]] mouse initialisation */
     /*s: [[main()]] keyboard initialisation */
     keyboardctl = initkeyboard(nil);
+    /*s: [[main()]] sanity check [[keyboardctl]] */
     if(keyboardctl == nil)
         error("can't find keyboard");
+    /*e: [[main()]] sanity check [[keyboardctl]] */
     /*e: [[main()]] keyboard initialisation */
 
     desktop = allocscreen(view, background, false);
-    /*s: [[main()]] sanity check desktop */
+    /*s: [[main()]] sanity check [[desktop]] */
     if(desktop == nil)
         error("can't allocate desktop");
-    /*e: [[main()]] sanity check desktop */
+    /*e: [[main()]] sanity check [[desktop]] */
 
     draw(view, viewr, background, nil, ZP);
     flushimage(display, true);

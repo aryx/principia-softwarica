@@ -1,11 +1,10 @@
 /*s: rio/threads_worker.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
@@ -13,6 +12,7 @@
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global [[xfidfree]] */
 // list<ref_own<Xfid>> (next = Xfid.free)
@@ -27,7 +27,7 @@ static	Xfid	*xfid;
 static	Channel	*cxfidalloc;	/* chan(Xfid*) */
 /*e: global [[cxfidalloc]] */
 /*s: global [[cxfidfree]] */
-// chan<ref<Xfid>> (listner = ??, sender = ??)
+// chan<ref<Xfid>> (listener = xfidallocthread, sender = xfidctl worker)
 static	Channel	*cxfidfree;	/* chan(Xfid*) */
 /*e: global [[cxfidfree]] */
 
@@ -164,6 +164,7 @@ xfidallocthread(void*)
 /*e: function [[xfidallocthread]] */
 
 /*s: function [[xfidinit]] */
+/// threadmain -> <>
 Channel*
 xfidinit(void)
 {

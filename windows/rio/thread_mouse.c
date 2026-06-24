@@ -1,20 +1,19 @@
 /*s: rio/thread_mouse.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
 #include <thread.h>
 
-#include <window.h>
-
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <window.h>
 
 /*s: enum [[Mxxx]] */
 enum {
@@ -110,9 +109,8 @@ resized(void)
 }
 /*e: function [[resized]] */
 
-
 /*s: function [[mousethread]] */
-// main -> threadcreate(<>, nil) -> <>
+/// threadmain -> threadcreate(<>, nil)
 void
 mousethread(void*)
 {
@@ -213,6 +211,7 @@ mousethread(void*)
             }else
                 sending = false;
 
+            // Application mouse event
             /*s: [[mousethread()]] if sending */
             if(sending){
             Sending:
@@ -228,11 +227,12 @@ mousethread(void*)
                 tmp = mousectl->Mouse;
                 tmp.xy = xy; // logical coordinates
 
-                // Dispatch, to current window thread!
+                // Dispatch, to "current" window thread!
                 send(winput->mc.c, &tmp);
                 continue;
             }
             /*e: [[mousethread()]] if sending */
+            // Windowing system mouse event
             /*s: [[mousethread()]] if not sending */
             w = wpointto(mouse->xy);
 
@@ -277,14 +277,14 @@ mousethread(void*)
             if(mouse->buttons){
                 /* w->topped will be zero or less if window has been bottomed */
                 if(w==nil || (w==winput && w->topped > 0)){
-                    if(mouse->buttons & 1){
+                    if(mouse->buttons & 1){       // LEFT-click case
                         ;
-                    }else if(mouse->buttons & 2){
+                    }else if(mouse->buttons & 2){ // MIDDLE-click case
                         if(winput && !winput->mouseopen)
                             /*s: [[mousethread()]] middle click under certain conditions */
                             button2menu(winput);
                             /*e: [[mousethread()]] middle click under certain conditions */
-                    }else if(mouse->buttons & 4)
+                    }else if(mouse->buttons & 4)  // RIGHT-click case
                             /*s: [[mousethread()]] right click under certain conditions */
                             button3menu();
                             /*e: [[mousethread()]] right click under certain conditions */

@@ -1,16 +1,18 @@
 /*s: rio/util.c */
 #include <u.h>
 #include <libc.h>
+/*s: rio includes */
 #include <draw.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: function [[cvttorunes]] */
 void
@@ -47,7 +49,6 @@ cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
 }
 /*e: function [[cvttorunes]] */
 
-
 /*s: function [[erealloc]] */
 void*
 erealloc(void *p, uint n)
@@ -58,7 +59,6 @@ erealloc(void *p, uint n)
     return p;
 }
 /*e: function [[erealloc]] */
-
 /*s: function [[emalloc]] */
 void*
 emalloc(uint n)
@@ -72,7 +72,6 @@ emalloc(uint n)
     return p;
 }
 /*e: function [[emalloc]] */
-
 /*s: function [[estrdup]] */
 char*
 estrdup(char *s)
@@ -134,7 +133,6 @@ min(int a, int b)
     return b;
 }
 /*e: function [[min]] */
-
 /*s: function max (rio/util.c) */
 int
 max(int a, int b)

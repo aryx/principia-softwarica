@@ -1,20 +1,19 @@
 /*s: rio/threads_misc.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
 #include <thread.h>
 
-#include <window.h>
-
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <window.h>
 
 /*s: function [[winclosethread]] */
 /* thread to allow fsysproc to synchronize window closing with main proc */
@@ -31,7 +30,6 @@ winclosethread(void*)
     }
 }
 /*e: function [[winclosethread]] */
-
 /*s: function [[deletethread]] */
 /* thread to make Deleted windows that the client still holds disappear offscreen after an interval */
 void

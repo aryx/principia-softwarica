@@ -1,11 +1,10 @@
 /*s: rio/snarf.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
@@ -13,6 +12,7 @@
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global [[snarffd]] */
 fdt		snarffd;
@@ -24,7 +24,6 @@ Rune*	snarf;
 /*s: global [[nsnarf]] */
 int		nsnarf;
 /*e: global [[nsnarf]] */
-
 
 /*s: function [[putsnarf]] */
 /*
@@ -52,7 +51,6 @@ putsnarf(void)
     close(fd);
 }
 /*e: function [[putsnarf]] */
-
 /*s: function [[getsnarf]] */
 void
 getsnarf(void)

@@ -1,11 +1,10 @@
 /*s: rio/9p.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
@@ -13,6 +12,7 @@
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: global [[messagesize]] */
 int	messagesize = 8192+IOHDRSZ;	/* good start */

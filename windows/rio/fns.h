@@ -26,7 +26,6 @@ void	timerstop(Timer*);
 void	timercancel(Timer*);
 Timer*	timerstart(int);
 
-
 // fsys.c (for rio.c and xfid.c and process_winshell.c)
 
 // cursor.c

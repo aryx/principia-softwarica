@@ -1,18 +1,20 @@
 /*s: rio/wctl.c */
 #include <u.h>
 #include <libc.h>
+/*s: rio includes */
 #include <draw.h>
-#include <window.h>
-#include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
-#include <plumb.h>
+#include <thread.h>
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <plumb.h>
+#include <window.h>
 
 #include <ctype.h>
 
@@ -100,7 +102,6 @@ static char *params[] = {
     nil
 };
 /*e: global [[params]] */
-
 
 /*s: function [[word]] */
 static

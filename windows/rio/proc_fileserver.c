@@ -1,11 +1,10 @@
 /*s: rio/proc_fileserver.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
@@ -13,6 +12,7 @@
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 extern Xfid* 	(*fcall[])(Filsys*, Xfid*, Fid*);
 extern char	Ebadfcall[];
@@ -28,7 +28,7 @@ char	srvwctl[64];
 /*e: global srvwctl (rio/fsys.c) */
 
 /*s: function [[filsysproc]] */
-// main -> filsysinit -> proccreate(<>, fs, ...) -> <>
+/// threadmain -> filsysinit -> proccreate(<>, fs, ...)
 static
 void
 filsysproc(void *arg)
@@ -105,6 +105,7 @@ cexecpipe(fdt *p0, fdt *p1)
     if(bind("#|", "/mnt/temp", MREPL) < 0)
         return ERROR_NEG1;
     *p0 = open("/mnt/temp/data", ORDWR);
+    // p1 = sfd = server end of the pipe closed automatically before exec for child
     *p1 = open("/mnt/temp/data1", ORDWR|OCEXEC);
     unmount(nil, "/mnt/temp");
     if(*p0<0 || *p1<0)
@@ -131,8 +132,8 @@ post(char *name, char *envname, fdt srvfd)
 }
 /*e: function [[post]] */
 
-
 /*s: function [[filsysinit]] */
+/// threadmain -> <>
 Filsys*
 filsysinit(Channel *cxfidalloc)
 {
@@ -151,9 +152,7 @@ filsysinit(Channel *cxfidalloc)
     /*s: [[filsysinit()]] install dumper */
     fmtinstall('F', fcallfmt);
     /*e: [[filsysinit()]] install dumper */
-
     fs = emalloc(sizeof(Filsys));
-
     if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
         goto Rescue;
 
@@ -199,7 +198,6 @@ filsysinit(Channel *cxfidalloc)
     threadcreate(wctlthread, c, 4096);
     /*e: [[filsysinit()]] create wctl process and thread */
     /*e: [[filsysinit()]] wctl pipe, process, and thread creation */
-
     proccreate(filsysproc, fs, 10000);
 
     /*s: [[filsysinit()]] srv pipe */

@@ -1,11 +1,10 @@
 /*s: rio/thread_keyboard.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
@@ -13,9 +12,10 @@
 
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
 
 /*s: function [[keyboardthread]] */
-// main -> threadcreate(<>, nil) -> <>
+/// threadmain -> threadcreate(<>, nil)
 void
 keyboardthread(void*)
 {
@@ -40,7 +40,7 @@ keyboardthread(void*)
         rp[i] = L'\0';
 
         if(input != nil)
-            // Dispatch, to current window thread!
+            // Dispatch, to "current" window thread!
             sendp(input->ck, rp);
     }
 }

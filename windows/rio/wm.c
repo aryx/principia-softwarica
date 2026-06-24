@@ -1,20 +1,19 @@
 /*s: rio/wm.c */
 #include <u.h>
 #include <libc.h>
-
-// for dat.h
+/*s: rio includes */
 #include <draw.h>
-#include <mouse.h>
 #include <cursor.h>
+#include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
 #include <fcall.h>
 #include <thread.h>
 
-#include <window.h>
-
 #include "dat.h"
 #include "fns.h"
+/*e: rio includes */
+#include <window.h>
 
 // Most of the functions in this file are executed from
 // a threadmouse() context (via button3menu()). They send
@@ -52,7 +51,6 @@ char*		menu3str[100] = {
  nil
 };
 /*e: global [[menu3str]] */
-
 /*s: global [[menu3]] */
 Menu menu3 = { .item = menu3str };
 /*e: global [[menu3]] */
@@ -83,8 +81,6 @@ goodrect(Rectangle r)
     return 1;
 }
 /*e: function [[goodrect]] */
-
-
 /*s: function [[portion]] */
 int
 portion(int x, int lo, int hi)
@@ -99,7 +95,6 @@ portion(int x, int lo, int hi)
     return 1; // middle
 }
 /*e: function [[portion]] */
-
 /*s: function [[whichcorner]] */
 int
 whichcorner(Window *w, Point p)
@@ -111,7 +106,6 @@ whichcorner(Window *w, Point p)
     return 3*j + i;
 }
 /*e: function [[whichcorner]] */
-
 /*s: function [[cornercursor]] */
 void
 cornercursor(Window *w, Point p, bool force)
@@ -164,7 +158,6 @@ pointto(bool wait)
     return w;
 }
 /*e: function [[pointto]] */
-
 
 /*s: function [[onscreen]] */
 Point
@@ -253,7 +246,6 @@ Rescue:
 /*e: function [[sweep]] */
 
 
-
 /*s: function [[drawedge]] */
 void
 drawedge(Image **bp, Rectangle r)
@@ -267,7 +259,6 @@ drawedge(Image **bp, Rectangle r)
     }
 }
 /*e: function [[drawedge]] */
-
 /*s: function [[drawborder]] */
 void
 drawborder(Rectangle r, bool show)
@@ -347,8 +338,6 @@ drag(Window *w, Rectangle *rp)
 }
 /*e: function [[drag]] */
 
-
-
 /*s: function [[cornerpt]] */
 Point
 cornerpt(Rectangle r, Point p, int which)
@@ -382,7 +371,6 @@ cornerpt(Rectangle r, Point p, int which)
     return p;
 }
 /*e: function [[cornerpt]] */
-
 /*s: function [[whichrect]] */
 Rectangle
 whichrect(Rectangle r, Point p, int which)
@@ -544,7 +532,6 @@ whide(Window *w)
     return 0;
 }
 /*e: function [[whide]] */
-
 /*s: function [[wunhide]] */
 int
 wunhide(int h)
@@ -576,7 +563,6 @@ hide(void)
     whide(w);
 }
 /*e: function [[hide]] */
-
 /*s: function [[unhide]] */
 void
 unhide(int h)
@@ -592,7 +578,6 @@ unhide(int h)
     wunhide(h);
 }
 /*e: function [[unhide]] */
-
 
 /*s: global [[rcargv]] */
 char *rcargv[] = { "rc", "-i", nil };
@@ -703,7 +688,6 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 //----------------------------------------------------------------------------
 // Entry point
 //----------------------------------------------------------------------------
-
 /*s: function [[button3menu]] */
 void
 button3menu(void)
