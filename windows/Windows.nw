@@ -1,8 +1,6 @@
 \documentclass[12pt]{report}
 
 %last:
-% - GUI architectures:
-%   https://martinfowler.com/eaaDev/uiArchs.html
 % - https://jyn.dev/the-terminal-of-the-future related to ls-journey and xterm
 % - X11 in Zig
 %   youtube.com/watch?v=SoiiJfNtGp8&vl=en
@@ -33,6 +31,7 @@
 % - removed deadcode (Qnew, threadrforkflag, mainpid, Filsys.pid, ...)
 % - reoganized the files to better match the chapters by introducing more files:
 %    thread_xxx.c and proc_xxx.c, wm.c, cursor.c, terminal.c, etc.
+% - restored the use of originwindow and logical coordinates
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps (only 6: 0.33%), introduce globals.c/utils.c
@@ -56,12 +55,12 @@
 % - a filesystem server a la Fuse, multithreaded to handle multiple requests
 %   (so need request identifiers, and file state Fid in server too)
 % - better understand need for raw mode for keyboard input in addition to
-%   "edit" mode (with backspace handling and newline only for send)
+%   "edit/cooked" mode (with backspace handling and newline only for send)
 
 %thx to rio in ocaml: many things! 
 % - difference between mouse counter and mouseclicks queue
 % - why pass a channel in mouseread and not a mouse state
-% - 
+
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -91,7 +90,7 @@
 %  - ??
 
 \hyphenation{name-space name-spaces}
-% (not names-pace)
+% (definitely not names-pace)
 
 \begin{document}
 %******************************************************************************
@@ -142,7 +141,6 @@ Rob Pike
 
 %trans:
 Now that you know the principles and the interfaces of [[rio]],
-%
 I can present the code of a toy {window application}: [[hellorio]].
 %
 [[hellorio]] is a simple application written in C displaying initially
@@ -150,7 +148,6 @@ I can present the code of a toy {window application}: [[hellorio]].
 a key, the [[Hello Rio]] message is replaced by the typed character,
 as illustrated in Figure~\ref{fig:hellorio}.
 Finally, you can quit the application by typing the letter [['q']] (for quit).
-\l cleaner than hello world for X11. No need expose ugly stuff! (but resize)
 \n and actually hello-also-non-english-world!
 
 \begin{figure}\begin{center}
@@ -221,6 +218,7 @@ Here is the skeleton of [[hellorio.c]]:
 Image *bgcolor;
 Point mouseloc;
 Rune str[20];
+char buf[50];
 
 <<type EventType (hellorio.c)>>
 
@@ -250,7 +248,7 @@ void threadmain(int argc, char* argv[]) {
 
 void redraw(void) 
 {
-  char buf[50];
+
   draw(view, view->r, bgcolor, nil, ZP);
   runestring(view, mouseloc, display->black, ZP, font, str);
 
@@ -260,6 +258,7 @@ void redraw(void)
   flushimage(display, true);
 }
 @
+\l cleaner than hello world for X11. No need expose ugly stuff! (but resize)
 \l str[20] for size of rune buffer in Keyboardctl.c 
 \l  USED(argc); USED(argv);
 %ocaml: dont have to use global, can pass them to redraw
@@ -271,14 +270,13 @@ Here are a few important things to note about
 the skeleton of [[hellorio.c]], from top to bottom,
 as well as how the code compares to the code of [[hellodraw.c]] 
 in the \book{Graphics}:
-\l put some Line X. would be clearer.
+%alt: put some Line X. would be clearer.
 
 \begin{itemize}
 
 \item In addition to [[draw.h]], [[hellorio.c]] also includes
 [[mouse.h]] and [[keyboard.h]], as it uses the mouse and
 the keyboard.
-
 
 \item [[hellorio.c]] also includes [[thread.h]], a header file
 containing functions related to threads,
@@ -287,19 +285,17 @@ primitives operating on channels (e.g., [[send()]], [[recv()]]).
 \l also Alt
 %dup? Libcore 
 A {\em channel} is essentially a {queue} of {\em messages}.
-\l buffered or unbuffered queue
+%said-later: buffered or unbuffered queue
 %
 Threads communicate and {\em synchronize} with each
-other by exchanging messages through channels
-(see the \book{Libcore}).
-\l based on Alef, Newsqueak, and more generally CSP
+other by exchanging messages through channels (see the \book{Libcore}).
+%said-later: based on Alef, Newsqueak, and more generally CSP
 %
 Even though the code in [[hellorio.c]] does not create
 threads explicitely, some of the functions called from
 [[hellorio.c]] (e.g., [[initmouse()]], [[initkeyboard()]])
-do create threads internally
-(see the \book{Graphics}).
-\n actually procs, not threads, but procs also create (single) threads
+do create threads internally (see the \book{Graphics}).
+%said-later: actually procs, not threads, but procs also create (single) threads
 
 %dup? Libcore
 The \plan thread library defines two separate constructs
