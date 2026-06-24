@@ -106,8 +106,13 @@ void threadmain(int argc, char* argv[]) {
 
 void redraw(void) 
 {
+  char buf[50];
   draw(view, view->r, bgcolor, nil, ZP);
   runestring(view, mouseloc, display->black, ZP, font, str);
+
+  sprint(buf, "%d, %d", mouseloc.x, mouseloc.y);
+  string(view, addpt(mouseloc, Pt(20, 20)), display->black, ZP, font, buf);
+
   flushimage(display, true);
 }
 /*e: rio/tests/hellorio.c */

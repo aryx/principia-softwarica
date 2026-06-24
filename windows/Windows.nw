@@ -250,8 +250,13 @@ void threadmain(int argc, char* argv[]) {
 
 void redraw(void) 
 {
+  char buf[50];
   draw(view, view->r, bgcolor, nil, ZP);
   runestring(view, mouseloc, display->black, ZP, font, str);
+
+  sprint(buf, "%d, %d", mouseloc.x, mouseloc.y);
+  string(view, addpt(mouseloc, Pt(20, 20)), display->black, ZP, font, buf);
+
   flushimage(display, true);
 }
 @
@@ -615,6 +620,14 @@ case EMouse:
 
 This global is then used in [[redraw()]] as a parameter to [[draw()]]
 to display some text at the right location.
+
+%claude:
+[[redraw()]] also prints [[mouseloc]] as text next to the string, so you can
+read off the pointer's position. Those numbers are relative to the {window
+itself}---(0,0) is the window's top-left corner, not the screen's---so the
+same spot inside the window always reports the same coordinates, wherever
+the window happens to sit. We will see later how [[rio]] gives each window
+these logical coordinates.
 
 
 For the keyboard, the program modifies the local [[keys]].
@@ -1735,39 +1748,30 @@ Image	*i;
 The [[screenr]] field below records the window's physical position on
 screen.  The application never sees this value---it works entirely
 in logical coordinates.
-%TODO: use originwindow again!
-When [[rio]] used [[originwindow()]],
-a window's image coordinates ([[i->r]]) could start at (0,0),
-so [[hellorio]] might see [[i->r = (0,0, 400,300)]] while the
-window actually sits at [[screenr = (100,100, 500,400)]] on screen.
-The application draws into [[i]] using logical coordinates, and the
-draw device maps them to the physical screen.  Likewise, [[rio]]
-converts mouse coordinates from physical to logical (as we will see later in
-[<mousethread()>]) before forwarding them to the window, so the
-application receives coordinates consistent with its own [[i->r]].
 %claude:
-%TODO: fix that, use originwindow again
-Today [[originwindow()]] is no longer called, so [[i->r]] and
-[[screenr]] are always equal and the conversion is a no-op,
-but the code still maintains both fields.
+[[rio]] gives each window logical coordinates by calling [[originwindow()]]
+when it creates or resizes the window (see [<wmk()>]): the image's [[i->r]]
+is shifted so that the application's drawable starts at (0,0), regardless of
+where the window sits on screen.
+So [[hellorio]] sees its content based at (0,0) in [[i->r]], while the
+window actually sits at, say, [[screenr = (100,50, 500,350)]] on screen.
+The application draws into [[i]] using these logical coordinates, and the
+draw device maps them to the physical screen.  Likewise, [[rio]] converts
+mouse coordinates from physical to logical (as we will see in
+[<mousethread()>]) before forwarding them, so the application receives mouse
+positions consistent with its own (0,0)-based [[i->r]].
 
+%old: Rio once used originwindow, so screenr could be different from i->r.
+%old: Now they're always the same but the code doesn't assume so.
 <<[[Window]] graphics fields>>=
-/*
- * Rio once used originwindow, so screenr could be different from i->r.
- * Now they're always the same but the code doesn't assume so.
-*/
+// claude: i->r is logical (0,0-based, set via originwindow in wmk); screenr
+// claude: is the physical screen position, so the two now differ.
 Rectangle	screenr; /* screen coordinates of window */
 @
-%TODO: remove coment when
-% put back originwindow! cleaner to have origin really at Pt(0,0),
-% window is more like an abstraction of the screen then.
-% but should do that in gengetwindow anyway, since here we have
-% a border, and gengetwindow will create another window inside
-% the border.
 \t why need that here? already info in draw no?
 
 
-% image->r is physical coord. screenr is logical coord.
+% i->r is logical coord; screenr is physical screen coord.
 
 % screenr is ZR when hidden
 
@@ -3464,20 +3468,15 @@ Again:
 
 \l why store input in local winput? 
 
-% explain logical coordinates, even though rio does not do anymore
-% originwindow, so w->i->r and w->screenr ar the same so cancelled out)
-
 % FIGURE: with winput->screenr, i->r, screen->r, etc and how they relate.
 
 
 %claude:
-The conversion code above translates mouse coordinates from
-physical screen space to the window's image space.
-%TODO: use again originwindow!!
-Originally, [[rio]] used [[originwindow()]] to set each window's image origin
-to (0,0), so the application could draw without knowing its screen
-position.  In that design, [[screenr]] held the physical position
-and [[i->r]] started at (0,0):
+The conversion code above translates mouse coordinates from physical screen
+space to the window's logical space, so the application receives clicks in
+the same coordinate system it draws in. [[rio]] sets up that system with
+[[originwindow()]] when it creates the window (see [<wmk()>]): [[screenr]]
+holds the physical position while [[i->r]] is based at (0,0):
 
 %claude:
 \begin{vdiagram}
@@ -3503,15 +3502,9 @@ and [[i->r]] started at (0,0):
 \end{vdiagram}
 
 
-%claude: TODO use it again
-In the current code, [[originwindow()]] is no longer called
-during normal window creation, so [[i->r]] and [[screenr]] are
-always equal and the conversion is a no-op---the application
-receives raw screen coordinates and draws in those same
-coordinates.  It is unclear why [[originwindow()]] was dropped;
-the conversion code was kept, suggesting the change may not have
-been intentional.
-\t understand why originwindow was dropped
+%history: plan9 once set windows up this way but dropped the originwindow call
+% long ago, leaving this conversion an inert no-op (i->r == screenr); principia
+% restores it (see wmk), so it is live again.
 
 
 %claude:
@@ -5652,6 +5645,67 @@ if(cm==nil || ck==nil || cctl==nil)
 unique [[id]] (monotonically increasing) and a [[topped]] counter that
 tracks stacking order---higher values mean more recently focused.
 
+%claude:
+[[originwindow()]] is a libdraw routine (see the \book{Graphics}); it
+repositions a window's {coordinate system}. Recall that a [[rio]] window
+image is a {layer}---an image allocated on the [[desktop]] [[Screen]] and
+composited over the others by the draw device. A layer has an internal
+rectangle [[r]] (its {logical} coordinates) that is independent of where the
+layer is actually shown on screen. [[originwindow(w, log, scr)]] asks the
+draw device to make the layer's logical origin [[log]] while compositing it
+at screen position [[scr]], and updates [[w->r]] (and [[w->clipr]]) locally
+to match. Afterwards, code drawing into the image works in the logical
+coordinates of [[w->r]], and the draw device's {layer machinery} translates
+them to physical pixels each time it composites the layer onto the
+screen---real conversion work that lives inside the draw device (see the
+\book{Graphics}), which is exactly why [[rio]] itself never has to sit in
+the drawing path.
+
+%claude:
+Just after setting [[w->i]] and capturing the physical position in
+[[w->screenr]], [[wmk()]] gives the window its {logical coordinates} with
+[[originwindow()]]. The shift is to [[Pt(-Borderwidth, -Borderwidth)]], not
+[[(0,0)]]: a client opens this image and insets it by [[Borderwidth]] (in
+libdraw's [[gengetwindow()]]) to skip the border, so pre-shifting the image
+by [[-Borderwidth]] lands the application's drawable exactly at [[(0,0)]].
+[[screenr]] still holds the physical position, and since [[i->r.min]] is now
+[[-Borderwidth]] the [<mousethread()>] conversion delivers mouse positions
+in that same [[(0,0)]]-based frame.
+
+%claude:
+A concrete example makes the chain clearer. Suppose [[Borderwidth]] is~4 and
+[[rio]] placed the window at [[(100,50)-(500,350)]]. Just before the call
+[[i->r]] and [[screenr]] are both that physical rectangle---which is why
+[[i->r.min]] is passed as the on-screen position, and why [[screenr]] is
+captured first, before the shift moves [[i->r]] away:
+%
+\begin{verbatim}
+  originwindow(i, (-4,-4), i->r.min):   shift logical origin to (-4,-4),
+                                        keep showing at i->r.min = (100,50)
+  after it:
+     i->r    = (-4,-4)-(396,296)   logical coords (whole image, border incl.)
+     screenr = (100,50)-(500,350)  physical position (unchanged)
+     client's drawable = insetrect(i->r, 4) = (0,0)-(392,292)
+
+       screen (framebuffer)
+     +-------------------------------------------+
+     | screenr.min (100,50)                      |
+     |   +---- border 4px ----------------+      |
+     |   |  (0,0) content   = screen (104,54)    |
+     |   |     * (10,10)    = screen (114,64)    |
+     |   +-------------------------------+       |
+     +-------------------------------------------+
+
+  draw   logical->screen (draw device):  P - i->r.min + screenr.min
+         (10,10) - (-4,-4) + (100,50) = (114,64)
+  mouse  screen->logical (mousethread):  M + (i->r.min - screenr.min)
+         (114,64) + ((-4,-4) - (100,50)) = (10,10)
+\end{verbatim}
+%
+The two directions are exact inverses: a client drawing at logical
+[[(10,10)]] hits screen pixel [[(114,64)]], and a click on that pixel is
+reported back to the client as [[(10,10)]].
+
 %ctor
 <<function [[wmk]]>>=
 Window*
@@ -5666,6 +5720,9 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 
     w->i = i;
     w->screenr = i->r;
+    // claude: logical (0,0) origin for the client (-Borderwidth undoes the
+    // claude: client-side border inset); screenr keeps the physical position.
+    originwindow(i, Pt(-Borderwidth, -Borderwidth), i->r.min);
     w->cursorp = nil;
 
     w->id = ++id;
@@ -7699,6 +7756,9 @@ wresize(Window *w, Image *i, bool move)
         draw(i, i->r, w->i, nil, w->i->r.min);
     freeimage(w->i);
     w->i = i;
+    // claude: re-establish the logical (0,0) origin on the new image (see wmk);
+    // claude: the content copy above ran first, in physical coordinates.
+    originwindow(i, Pt(-Borderwidth, -Borderwidth), i->r.min);
     wsetname(w); // publish new window name by incrementing namecount
     w->mc.image = i;
 

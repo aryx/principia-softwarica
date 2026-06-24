@@ -226,10 +226,8 @@ struct Window
     // ref_own<Image>, public image for the window (name in /dev/winname)
     Image	*i;
     /*x: [[Window]] graphics fields */
-    /*
-     * Rio once used originwindow, so screenr could be different from i->r.
-     * Now they're always the same but the code doesn't assume so.
-    */
+    // claude: i->r is logical (0,0-based, set via originwindow in wmk); screenr
+    // claude: is the physical screen position, so the two now differ.
     Rectangle	screenr; /* screen coordinates of window */
     /*e: [[Window]] graphics fields */
     

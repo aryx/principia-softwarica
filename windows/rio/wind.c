@@ -142,6 +142,9 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 
     w->i = i;
     w->screenr = i->r;
+    // claude: logical (0,0) origin for the client (-Borderwidth undoes the
+    // claude: client-side border inset); screenr keeps the physical position.
+    originwindow(i, Pt(-Borderwidth, -Borderwidth), i->r.min);
     w->cursorp = nil;
 
     w->id = ++id;
@@ -246,6 +249,9 @@ wresize(Window *w, Image *i, bool move)
         draw(i, i->r, w->i, nil, w->i->r.min);
     freeimage(w->i);
     w->i = i;
+    // claude: re-establish the logical (0,0) origin on the new image (see wmk);
+    // claude: the content copy above ran first, in physical coordinates.
+    originwindow(i, Pt(-Borderwidth, -Borderwidth), i->r.min);
     wsetname(w); // publish new window name by incrementing namecount
     w->mc.image = i;
 
