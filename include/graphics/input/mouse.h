@@ -33,7 +33,7 @@ struct	Mouse
 /*s: struct [[Mousectl]] */
 struct Mousectl
 {
-    Mouse;
+    Mouse m;
 
     // /dev/mouse
     fdt		mfd;		/* to mouse file */ 
