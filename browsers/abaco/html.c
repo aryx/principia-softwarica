@@ -462,7 +462,7 @@ mouselink(Box *b, Page *p, int but)
 	Anchor *a;
 
 	/* eat mouse */
-	while(mousectl->buttons)
+	while(mousectl->m.buttons)
 		readmouse(mousectl);
 
 	if(b->i->anchorid < 0)

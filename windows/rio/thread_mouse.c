@@ -142,7 +142,7 @@ mousethread(void*)
     /*s: [[mousethread()]] alts setup */
     // listen
     alts[MMouse].c = mousectl->c;
-    alts[MMouse].v = &mousectl->Mouse;
+    alts[MMouse].v = &mousectl->m;
     alts[MMouse].op = CHANRCV;
     /*x: [[mousethread()]] alts setup */
     alts[MReshape].c = mousectl->resizec;
@@ -224,7 +224,7 @@ mousethread(void*)
                     wsetcursor(winput, false);
                 /*e: [[mousethread()]] when sending mouse message to window, set the cursor */
 
-                tmp = mousectl->Mouse;
+                tmp = mousectl->m;
                 tmp.xy = xy; // logical coordinates
 
                 // Dispatch, to "current" window thread!
@@ -310,7 +310,7 @@ mousethread(void*)
         Drain:
             do {
                 readmouse(mousectl);
-            } while(mousectl->buttons);
+            } while(mousectl->m.buttons);
             moving = false;
             goto Again;	/* recalculate mouse position, cursor */
         /*e: [[mousethread()]] Drain label */

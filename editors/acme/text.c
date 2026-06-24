@@ -1117,9 +1117,9 @@ xselect(Frame *f, Mousectl *mc, Image *col, uint *p1p)	/* when called, button is
 	Point mp, pt0, pt1, qt;
 	int reg, b;
 
-	mp = mc->xy;
-	b = mc->buttons;
-	msec = mc->msec;
+	mp = mc->m.xy;
+	b = mc->m.buttons;
+	msec = mc->m.msec;
 
 	/* remove tick */
 	if(f->p0 == f->p1)
@@ -1130,7 +1130,7 @@ xselect(Frame *f, Mousectl *mc, Image *col, uint *p1p)	/* when called, button is
 	reg = 0;
 	frtick(f, pt0, 1);
 	do{
-		q = frcharofpt(f, mc->xy);
+		q = frcharofpt(f, mc->m.xy);
 		if(p1 != q){
 			if(p0 == p1)
 				frtick(f, pt0, 0);
@@ -1165,10 +1165,10 @@ xselect(Frame *f, Mousectl *mc, Image *col, uint *p1p)	/* when called, button is
 			frtick(f, pt0, 1);
 		flushimage(f->display, 1);
 		readmouse(mc);
-	}while(mc->buttons == b);
-	if(mc->msec-msec < DELAY && p0!=p1
-	&& abs(mp.x-mc->xy.x)<MINMOVE
-	&& abs(mp.y-mc->xy.y)<MINMOVE) {
+	}while(mc->m.buttons == b);
+	if(mc->m.msec-msec < DELAY && p0!=p1
+	&& abs(mp.x-mc->m.xy.x)<MINMOVE
+	&& abs(mp.y-mc->m.xy.y)<MINMOVE) {
 		if(reg > 0)
 			selrestore(f, pt0, p0, p1);
 		else if(reg < 0)
@@ -1199,13 +1199,13 @@ textselect23(Text *t, uint *q0, uint *q1, Image *high, int mask)
 	int buts;
 	
 	p0 = xselect(t, mousectl, high, &p1);
-	buts = mousectl->buttons;
+	buts = mousectl->m.buttons;
 	if((buts & mask) == 0){
 		*q0 = p0+t->org;
 		*q1 = p1+t->org;
 	}
 
-	while(mousectl->buttons)
+	while(mousectl->m.buttons)
 		readmouse(mousectl);
 	return buts;
 }

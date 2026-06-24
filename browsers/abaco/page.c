@@ -524,7 +524,7 @@ pageselect1(Page *p)	/* when called, button 1 is down */
 	int b, scrled, x, y;
 
 	b = mouse->buttons;
-	mp = mousectl->xy;
+	mp = mousectl->m.xy;
 	opos = getpt(p, mp);
 	do{
 		x = y = 0;
@@ -552,8 +552,8 @@ pageselect1(Page *p)	/* when called, button 1 is down */
 		else
 			readmouse(mousectl);
 
-		mp = mousectl->xy;
-	}while(mousectl->buttons == b);
+		mp = mousectl->m.xy;
+	}while(mousectl->m.buttons == b);
 }
 
 static Rune left1[] =  { L'{', L'[', L'(', L'<', L'«', 0 };
@@ -638,7 +638,7 @@ pageselect(Page *p)
 		mouse->xy.x = x;	/* in case we're calling pageselect1 */
 		mouse->xy.y = y;
 	}
-	if(mousectl->buttons == b)
+	if(mousectl->m.buttons == b)
 		pageselect1(p);
 
 	if(eqpt(p->top, p->bot)){

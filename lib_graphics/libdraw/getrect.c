@@ -55,29 +55,29 @@ getrect(int but, Mousectl *mc)
 
     but = 1<<(but-1);
     setcursor(mc, &sweep);
-    while(mc->buttons)
+    while(mc->m.buttons)
         readmouse(mc);
-    while(!(mc->buttons & but)){
+    while(!(mc->m.buttons & but)){
         readmouse(mc);
-        if(mc->buttons & (7^but))
+        if(mc->m.buttons & (7^but))
             goto Return;
     }
-    r.min = mc->xy;
-    r.max = mc->xy;
+    r.min = mc->m.xy;
+    r.max = mc->m.xy;
     do{
         rc = canonrect(r);
         drawgetrect(rc, 1);
         readmouse(mc);
         drawgetrect(rc, 0);
-        r.max = mc->xy;
-    }while(mc->buttons == but);
+        r.max = mc->m.xy;
+    }while(mc->m.buttons == but);
 
     Return:
     setcursor(mc, nil);
-    if(mc->buttons & (7^but)){
+    if(mc->m.buttons & (7^but)){
         rc.min.x = rc.max.x = 0;
         rc.min.y = rc.max.y = 0;
-        while(mc->buttons)
+        while(mc->m.buttons)
             readmouse(mc);
     }
     return rc;

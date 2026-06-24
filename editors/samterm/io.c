@@ -36,7 +36,7 @@ initio(void){
 		fprint(2, "samterm: mouse init failed: %r\n");
 		threadexitsall("mouse");
 	}
-	mousep = mousectl;
+	mousep = &mousectl->m;
 	keyboardctl = initkeyboard(nil);
 	if(keyboardctl == nil){
 		fprint(2, "samterm: keyboard init failed: %r\n");
@@ -114,7 +114,7 @@ again:
 		alts[RKeyboard].op = CHANNOP;
 
 	alts[RMouse].c = mousectl->c;
-	alts[RMouse].v = &mousectl->Mouse;
+	alts[RMouse].v = &mousectl->m;
 	alts[RMouse].op = CHANRCV;
 	if(block & (1<<RMouse))
 		alts[RMouse].op = CHANNOP;

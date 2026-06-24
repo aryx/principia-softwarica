@@ -29,8 +29,8 @@ frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
     Point mp, pt0, pt1, qt;
     int reg, b, scrled;
 
-    mp = mc->xy;
-    b = mc->buttons;
+    mp = mc->m.xy;
+    b = mc->m.buttons;
 
     f->modified = 0;
     frdrawsel(f, frptofchar(f, f->p0), f->p0, f->p1, 0);
@@ -105,8 +105,8 @@ frselect(Frame *f, Mousectl *mc)	/* when called, button 1 is down */
         flushimage(f->display, 1);
         if(!scrled)
             readmouse(mc);
-        mp = mc->xy;
-    }while(mc->buttons == b);
+        mp = mc->m.xy;
+    }while(mc->m.buttons == b);
 }
 /*e: function [[frselect]] */
 

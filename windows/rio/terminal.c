@@ -763,28 +763,28 @@ wselect(Window *w)
     /*
      * Double-click immediately if it might make sense.
      */
-    b = w->mc.buttons;
+    b = w->mc.m.buttons;
     q0 = w->q0;
     q1 = w->q1;
-    selectq = w->org + frcharofpt(frm, w->mc.xy);
-    if(clickwin==w && w->mc.msec-clickmsec<500)
+    selectq = w->org + frcharofpt(frm, w->mc.m.xy);
+    if(clickwin==w && w->mc.m.msec-clickmsec<500)
     if(q0==q1 && selectq==w->q0){
         wdoubleclick(w, &q0, &q1);
         wsetselect(w, q0, q1);
         flushimage(display, 1);
-        x = w->mc.xy.x;
-        y = w->mc.xy.y;
+        x = w->mc.m.xy.x;
+        y = w->mc.m.xy.y;
         /* stay here until something interesting happens */
         do
             readmouse(&w->mc);
-        while(w->mc.buttons==b && abs(w->mc.xy.x-x)<3 && abs(w->mc.xy.y-y)<3);
-        w->mc.xy.x = x;	/* in case we're calling frselect */
-        w->mc.xy.y = y;
+        while(w->mc.m.buttons==b && abs(w->mc.m.xy.x-x)<3 && abs(w->mc.m.xy.y-y)<3);
+        w->mc.m.xy.x = x;	/* in case we're calling frselect */
+        w->mc.m.xy.y = y;
         q0 = w->q0;	/* may have changed */
         q1 = w->q1;
         selectq = q0;
     }
-    if(w->mc.buttons == b){
+    if(w->mc.m.buttons == b){
         frm->scroll = framescroll;
         frselect(frm, &w->mc);
         /* horrible botch: while asleep, may have lost selection altogether */
@@ -801,20 +801,20 @@ wselect(Window *w)
             q1 = w->org + frm->p1;
     }
     if(q0 == q1){
-        if(q0==w->q0 && clickwin==w && w->mc.msec-clickmsec<500){
+        if(q0==w->q0 && clickwin==w && w->mc.m.msec-clickmsec<500){
             wdoubleclick(w, &q0, &q1);
             clickwin = nil;
         }else{
             clickwin = w;
-            clickmsec = w->mc.msec;
+            clickmsec = w->mc.m.msec;
         }
     }else
         clickwin = nil;
     wsetselect(w, q0, q1);
     flushimage(display, 1);
-    while(w->mc.buttons){
-        w->mc.msec = 0;
-        b = w->mc.buttons;
+    while(w->mc.m.buttons){
+        w->mc.m.msec = 0;
+        b = w->mc.m.buttons;
         if(b & 6){
             if(b & 2){
                 wsnarf(w);
@@ -829,7 +829,7 @@ wselect(Window *w)
         }
         wscrdraw(w);
         flushimage(display, 1);
-        while(w->mc.buttons == b)
+        while(w->mc.m.buttons == b)
             readmouse(&w->mc);
         clickwin = nil;
     }
@@ -970,16 +970,16 @@ wmousectl(Window *w)
 {
     int but;
 
-    if(w->mc.buttons == 1)
+    if(w->mc.m.buttons == 1)
         but = 1;
-    else if(w->mc.buttons == 2)
+    else if(w->mc.m.buttons == 2)
         but = 2;
-    else if(w->mc.buttons == 4)
+    else if(w->mc.m.buttons == 4)
         but = 3;
     else{
-        if(w->mc.buttons == 8)
+        if(w->mc.m.buttons == 8)
             wkeyctl(w, Kscrolloneup);
-        if(w->mc.buttons == 16)
+        if(w->mc.m.buttons == 16)
             wkeyctl(w, Kscrollonedown);
         return;
     }
@@ -991,7 +991,7 @@ wmousectl(Window *w)
     /*e: [[wmousectl()]] goto Return if window was deleted */
 
     /*s: [[wmousectl()]] if pt in scrollbar */
-    if(ptinrect(w->mc.xy, w->scrollr)){
+    if(ptinrect(w->mc.m.xy, w->scrollr)){
         if(but)
             wscroll(w, but);
         goto Return;

@@ -188,7 +188,7 @@ void threadmain(int argc, char *argv[])
     if(mousectl == nil)
         error("can't find mouse");
     /*e: [[main()]] sanity check [[mousectl]] */
-    mouse = mousectl;
+    mouse = &mousectl->m;
     /*e: [[main()]] mouse initialisation */
     /*s: [[main()]] keyboard initialisation */
     keyboardctl = initkeyboard(nil);

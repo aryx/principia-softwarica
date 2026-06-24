@@ -36,7 +36,7 @@ enter(char *ask, char *buf, int len, Mousectl *mc, Keyboardctl *kc, Screen *scr)
 		n++;
 	}
 	if(mc){
-		o = mc->xy;
+		o = mc->m.xy;
 		a[n].op = CHANRCV;
 		a[n].c = mc->c;
 		a[n].v = &m;

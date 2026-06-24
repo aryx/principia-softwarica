@@ -8,6 +8,7 @@ extern void drawsetdebug(bool);
 void main(void) 
 {
   int result;
+  Image *color;
 
   result = initdraw(nil, nil, "Hello Draw");
   if (result < 0) {

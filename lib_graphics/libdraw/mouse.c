@@ -12,7 +12,7 @@ void
 moveto(Mousectl *m, Point pt)
 {
     fprint(m->mfd, "m%d %d", pt.x, pt.y);
-    m->xy = pt;
+    m->m.xy = pt;
 }
 /*e: function [[moveto]] */
 
@@ -24,7 +24,7 @@ readmouse(Mousectl *mc)
     if(mc->image)
         flushimage(mc->image->display, true);
     /*e: [[readmouse()]] flush image before reading mouse */
-    if(recv(mc->c, &mc->Mouse) < 0){
+    if(recv(mc->c, &mc->m) < 0){
         fprint(2, "readmouse: %r\n");
         return ERROR_NEG1;
     }
@@ -80,12 +80,12 @@ _ioproc(void *arg)
             send(mc->c, &m);
 
             /*
-             * mc->Mouse is updated after send so it doesn't have wrong value
+             * mc->m is updated after send so it doesn't have wrong value
              * if we block during send.
-             * This means that programs should receive into mc->Mouse 
+             * This means that programs should receive into mc->m 
              * (see readmouse() above) if they want full synchrony.
              */
-            mc->Mouse = m;
+            mc->m = m;
             break;
         }
     }
@@ -184,7 +184,7 @@ closemouse(Mousectl *mc)
 
     postnote(PNPROC, mc->pid, "kill");
 
-    do ; while(nbrecv(mc->c, &mc->Mouse) > 0);
+    do ; while(nbrecv(mc->c, &mc->m) > 0);
 
     close(mc->mfd);
     close(mc->cfd);

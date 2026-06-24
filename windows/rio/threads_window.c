@@ -223,7 +223,7 @@ winctl(void *arg)
     alts[WKey].op = CHANRCV;
     /*x: [[winctl()]] alts setup */
     alts[WMouse].c = w->mc.c;
-    alts[WMouse].v = &w->mc.Mouse;
+    alts[WMouse].v = &w->mc.m;
     alts[WMouse].op = CHANRCV;
     /*x: [[winctl()]] alts setup */
     alts[WCtl].c = w->cctl;
@@ -310,7 +310,7 @@ winctl(void *arg)
                 w->mouse.counter++;
 
                 /* queue click events */
-                if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
+                if(!w->mouse.qfull && lastb != w->mc.m.buttons) {	/* add to ring */
 
                     //insert_queue(w->mc, w->mouse.queue)
                     mp = &w->mouse.queue[w->mouse.wi];
@@ -318,10 +318,10 @@ winctl(void *arg)
                         w->mouse.wi = 0;
                     if(w->mouse.wi == w->mouse.ri)
                         w->mouse.qfull = true;
-                    mp->Mouse = w->mc;
+                    mp->Mouse = w->mc.m;
                     mp->counter = w->mouse.counter;
 
-                    lastb = w->mc.buttons;
+                    lastb = w->mc.m.buttons;
                 }
             }
             /*e: [[winctl()]] WMouse case if mouseopen */
@@ -359,7 +359,7 @@ winctl(void *arg)
                 if(++w->mouse.ri == nelem(w->mouse.queue))
                     w->mouse.ri = 0;
             } else
-                m = (Mousestate){w->mc.Mouse, w->mouse.counter};
+                m = (Mousestate){w->mc.m, w->mouse.counter};
 
             w->mouse.lastcounter = m.counter;
             // consumed and relay

@@ -151,8 +151,8 @@ menuscan(Image *m, Menu *menu, int button, Mousectl *mc, Rectangle textr, int of
     int i;
 
     paintitem(m, menu, textr, off, lasti, true, save, nil);
-    for(readmouse(mc); mc->buttons & (1<<(button-1)); readmouse(mc)){
-        i = menusel(textr, mc->xy);
+    for(readmouse(mc); mc->m.buttons & (1<<(button-1)); readmouse(mc)){
+        i = menusel(textr, mc->m.xy);
         if(i != -1 && i == lasti)
             continue;
         // else (i == -1 || i != lasti)
@@ -273,7 +273,7 @@ menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
     r = Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing));
     r = insetrect(r, -Margin); // enlarge
     r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
-    r = rectaddpt(r, mc->xy);
+    r = rectaddpt(r, mc->m.xy);
     /*e: [[menuhit()]] set [[r]], the temporary rectangle to draw the menu */
     /*s: [[menuhit()]] set [[menur]], the adjusted rectangle to draw the menu */
     pt = ZP;
@@ -339,14 +339,14 @@ menuhit(int button, Mousectl *mc, Menu *menu, Screen *scr)
     save = allocimage(display, menurect(textr, 0), view->chan, false, -1);
     /*e: [[menuhit()]] allocate [[save]] image */
     /*s: [[menuhit()]] loop while button still pressed and return [[lasti]] */
-    while(mc->buttons & (1<<(button-1))){
+    while(mc->m.buttons & (1<<(button-1))){
         lasti = menuscan(b, menu, button, mc, textr, off, lasti, save);
         if(lasti >= 0)
             break;
-        while(!ptinrect(mc->xy, textr) && (mc->buttons & (1<<(button-1)))){
+        while(!ptinrect(mc->m.xy, textr) && (mc->m.buttons & (1<<(button-1)))){
             /*s: [[menuhit()]] if scrolling and mouse in [[scrollr]] */
-            if(scrolling && ptinrect(mc->xy, scrollr)){
-                noff = ((mc->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
+            if(scrolling && ptinrect(mc->m.xy, scrollr)){
+                noff = ((mc->m.xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
                 noff -= nitemdrawn/2;
                 if(noff < 0)
                     noff = 0;

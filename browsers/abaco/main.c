@@ -110,7 +110,7 @@ threadmain(int argc, char *argv[])
 	mousectl = initmouse(nil, view);
 	if(mousectl == nil)
 		sysfatal("can't initialize mouse: %r");
-	mouse = mousectl;
+	mouse = &mousectl->m;
 	keyboardctl = initkeyboard(nil);
 	if(keyboardctl == nil)
 		sysfatal("can't initialize keyboard: %r");
@@ -261,7 +261,7 @@ mousethread(void *)
 	alts[MResize].v = nil;
 	alts[MResize].op = CHANRCV;
 	alts[MMouse].c = mousectl->c;
-	alts[MMouse].v = &mousectl->Mouse;
+	alts[MMouse].v = &mousectl->m;
 	alts[MMouse].op = CHANRCV;
 	alts[MPlumb].c = cplumb;
 	alts[MPlumb].v = &pm;
@@ -293,7 +293,7 @@ mousethread(void *)
 		case MRefresh:
 			break;
 		case MMouse:
-			m = mousectl->Mouse;
+			m = mousectl->m;
 			if(m.buttons == 0)
 				continue;
 
