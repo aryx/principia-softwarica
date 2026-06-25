@@ -5973,10 +5973,7 @@ if(pid == 0){
 
 % pass w so can communicate back with its winctl thread handler
 
-\t why use intermediate winshell and cpid? why not simply fork
-\t  here so no need also arg[] as can access this information directly.
-\t why proccreate/procexec intermediates?
-\t because of code below? to better handle possible errors in child?
+%yoann: explain why use intermediate winshell and cpid? why not simply fork  here so no need also arg[] as can access this information directly. why proccreate/procexec intermediates? because of code below? to better handle possible errors in child?
 
 % wait for pid. pid will be passed to wsetpid, so know
 % which process we are connected to, and which one to kill if delete
@@ -6133,8 +6130,7 @@ passing the window ID as the mount spec so that [[rio]] knows which
 window the client belongs to. Then it binds [[/mnt/wsys]] before
 [[/dev]], so that [[/dev/cons]], [[/dev/mouse]], etc.\ resolve to
 [[rio]]'s virtual files rather than the real device files.
-After that, the child process simply opens [[/dev/cons]] for
-stdin and stdout---but these are now served by [[rio]].
+%yoann1: can maybe add something like remember that at this point we are in child process in winshell
 
 <<[[winshell()]] adjust namespace>>=
 err = filsysmount(filsys, w->id);
@@ -6172,6 +6168,8 @@ filsysmount(Filsys *fs, int id)
 %  later which window to send request to probably.
 %pad: I added err
 
+The child process can now simply opens [[/dev/cons]] for
+stdin and stdout, but these are now served by [[rio]].
 
 <<[[winshell()]] reassign STDIN/STDOUT after namespace adjustment>>=
 // reassign stdin/stdout to virtualized /dev/cons from filsysmount
@@ -6186,6 +6184,8 @@ err = open("/dev/cons", OWRITE);
 
 % STDERR is done later by dupping STDOUT
 
+
+%yoann: quick sentence saying rest is error management code for winshell, use threadexits
 
 <<[[winshell()]] sanity check err open cons stdin>>=
 if(err < 0){
@@ -6212,6 +6212,7 @@ if(err < 0){
 }
 @
 
+%yoann: quick sentence now error management for filsysmount
 
 
 <<[[filsysmount()]] sanity check err mount>>=
@@ -6241,17 +6242,13 @@ if(err < 0){
 %alt: could pass info via putenv? but anyway have already
 % a mechanism /dev/xxx so why not use it.
 %claude:
-The namespace adjustments handle [[/dev/cons]] and [[/dev/mouse]] but
-not [[/dev/draw]]---virtualizing the drawing protocol would be too slow.
+The namespace adjustments above handle [[/dev/cons]] and [[/dev/mouse]] but
+not [[/dev/draw]]---as I mentioned before, virtualizing the drawing protocol would be too slow.
 Instead, the client directly talks to the display server but needs to
-find its window's image. [[wsetname]] publishes the window's image under
+find its window's image. [<wsetname()>] publishes the window's image under
 a unique name (e.g., [[window.2.0]]), and the client discovers it
 through [[/dev/winname]] via [[geninitdraw()]] (see the \book{Graphics}).
 
-<<[[Window]] id fields>>=
-uint		namecount;
-@
-% counter, per window
 
 % When resize a window, we need to create a new image and client
 % need to grab back again this image. Do we change the name
@@ -6279,6 +6276,14 @@ wsetname(Window *w)
 
 % thx to that, geninitdraw will work!
 
+%yoann: explain this field, probably because resize so will need different name later
+
+<<[[Window]] id fields>>=
+uint		namecount;
+@
+% counter, per window
+
+%yoann: explain when this situation can happen
 
 <<[[wsetname()]] if image name already in use, try another name>>=
 for(i='A'; i<='Z'; i++){
@@ -6301,6 +6306,8 @@ fprint(STDERR, "rio: setname failed: %s\n", err);
 
 \subsection{Mouse action [[sweep()]]}
 % and layer creation
+
+%yoann: transition sentence where say we omitted sweep in call to new() before
 
 %claude:
 [[sweep()]] lets the user interactively draw a rectangle for the new window.
@@ -6385,7 +6392,7 @@ sweep(void)
 % cases like what when not click right directly.
 
 %claude:
-We finally see the [[menuing]] flag mentioned earlier in
+We finally see the [<menuing>] flag mentioned earlier in
 [<wsetcursor()>]: it is set while [[sweep()]] waits for the user
 to draw a window rectangle. During this time, [[rio]] must not
 honor per-window cursor changes, since the cross cursor must
@@ -6457,9 +6464,11 @@ Rescue:
 \label{sec:trace-new-window}
 %alt: in Overview chapter in Soft archi section
 
+%yoann: transition sentence saying will now try to summarize the many steps we saw to solidify by looking at trace leading to creation of windows in Figure fig:hellorio-and-shell
+
 %trans:
 In Figure~\ref{fig:soft-archi-threads},
-[[threadmain]], the first thread of [[main-proc]],
+[<threadmain()>], the first thread of [[main-proc]],
 creates the two IO procs on the left, the [[fileserver]] proc on the right,
 and the keyboard and mouse threads in the middle.
 %toc:
@@ -6468,7 +6477,8 @@ explain the trace leading to the creation of the shell
 and [[hellorio]] processes in Figure~\ref{fig:soft-archi-threads},
 as well as the creation of the associated window threads. 
 %
-In the next section, I will explain the creation of the worker threads.
+%In the next section, I will explain the creation of the worker threads.
+%yoann1: this whole section was before in Soft archi section in Overview chapter but is now in window manager chapter as a summary so probably need to adjust things in the many paragraphs before
 
 %dup: overview/interface/gui
 As I said in Section~\ref{sec:rio-gui}, you create
@@ -7028,15 +7038,11 @@ entities, all linked together:
 \section{Window focus}
 % via mouse
 
-%yoann: trans say far simpler operation than window creation, click to focus
-%claude:
-After all the machinery of window creation, changing focus takes far less
-code: a single click on an unfocused window is all it involves.
-
-% put code of mousethread related to window focus here!!
-%claude:
+%claude: %trans:
+After all the machinery of window creation, changing focus takes far less code.
+%
 Clicking on an unfocused window brings it to the front via [<wtop()>],
-which calls [[topwindow()]] (from the graphics library) to raise the
+which calls [[topwindow()]] (see the \book{Graphics}) to raise the
 image layer, then [<wcurrent()>] to update the global [<input>] pointer
 and repaint the border colors---the focused window gets a different
 border color than unfocused ones.
@@ -7080,7 +7086,7 @@ wtop(Point pt)
 % by window manager
 
 %claude:
-[[wcurrent()]] updates the global [<input>] pointer (the focused window)
+[<wcurrent()>] updates the global [<input>] pointer (the focused window)
 and repaints both the old and new focus windows via [<wrepaint()>].
 The repaint is necessary because [[rio]] draws different border colors
 for focused versus unfocused windows---the focused window gets
@@ -7153,9 +7159,9 @@ Unselborder		= 1,	/* border of unselected window */
 % 2 steps, Deleted, and then Exited
 %claude:
 Deleting a window is a two-phase process. First, [[rio]] sends a
-``hangup'' note to the window's process group (via [[notefd]]) and
+``hangup'' note to the window's process group (via [<Window.notefd>]) and
 starts a timeout proc. If the process exits cleanly, the window
-transitions from Deleted to Exited and the [<winctl()>] thread terminates.
+transitions from [<Deleted>] to [<Exited>] and the [<winctl()>] thread terminates.
 If the process does not exit within the timeout, [<deletethread()>] forces
 cleanup.
 This careful approach avoids blocking the window manager thread while
@@ -7170,12 +7176,9 @@ case Delete:
 \subsection{Menu handler: [[delete()]]}
 
 %claude:
-[[delete()]] is the menu handler: it calls [<pointto()>] with [[wait=true]]
-(wait for the user to complete the click), then sends a [[Deleted]]
-control message to the selected window's [[winctl]] thread.
-The actual cleanup is asynchronous---the [[winctl]] thread handles
-the message by sending a hangup note to the process group and
-starting a timeout.
+[<delete()>] is the menu handler: it calls [<pointto()>] with [[wait=true]]
+(wait for the user to complete the click), then sends a [<Deleted>]
+control message to the selected window's [<winctl()>] thread.
 
 <<function [[delete]]>>=
 void
@@ -7198,30 +7201,6 @@ Deleted,
 @
 
 
-%claude:
-We have already seen [[deleted]] used as a guard in [<winctl()>]
-(to skip [[flushimage]]) and in [<wkeyctl()>] (to discard input).
-Now that I present the deletion logic, its role becomes clearer:
-[[deleted]] is set to [[true]] as soon as a [[Deleted]] control
-message is processed, even though the window's thread has not
-exited yet.  During this interval, the window is being torn
-down---its image has been freed, a hangup note has been sent to
-the client---but pending events may still arrive on its channels.
-The [[deleted]] flag lets every handler bail out early rather than
-operate on a half-destroyed window.
-
-<<[[Window]] config fields>>=
-bool	deleted;
-@
-%old: bool_byte
-\t needed because can still have pending request on window namespace?
-\t  so at least in the fileserver we can give a better response when
-\t  an operation on a deleted window is requested?
-
-% why delete complex? because attached process, because attached img!
-% need to wait for external process, but can not wait too much
-% hence timeout below.
-
 
 %claude:
 %The [[Deleted]] handler writes ``hangup'' to [[notefd]]
@@ -7231,6 +7210,8 @@ bool	deleted;
 %the window from the screen immediately. The window's thread does not
 %exit yet---it waits for the [[Exited]] message that comes later when
 %all filesystem references are closed.
+
+
 
 <<[[wctlmesg()]] cases>>=
 case Deleted:
@@ -7245,19 +7226,21 @@ case Deleted:
 %  the use of an auxilary process to take care of waiting for the
 %  hangup process and clean resources
 
+%claude:
+The actual cleanup is asynchronous---the [<winctl()>] thread handles
+the message by sending a "hangup" note to the process group and
+starting a timeout.
 
-<<[[wctlmesg()]] break if window was deleted>>=
-if(w->deleted)
-    break;
-@
-% how can happen? because can receive cmd from multiple places?
+
 
 %claude:
 [[wclosewin()]] handles the immediate visual cleanup: it marks the window
-as [[deleted]], clears the focus if this was the active window, removes
-it from the [[hidden]] array (in case it was hidden), removes it from
+as deleted, clears the focus if this was the active window, removes
+it from the [<hidden>] array (in case it was hidden), removes it from
 the global [<windows>] array with [[memmove]], and frees the layer image
-so it disappears from the screen. Note that the [[Window]] struct itself
+so it disappears from the screen.
+%
+Note that the [<Window>] struct itself
 is not freed here---that happens later in the [[Exited]] handler, after
 the child process has terminated.
 
@@ -7306,6 +7289,38 @@ wclosewin(Window *w)
 
 % This is when w->i can be nil!!
 
+%claude:
+We have already seen [<Window.deleted>] used as a guard in [<winctl()>]
+(to skip [[flushimage()]]) and in [<wkeyctl()>] (to discard input).
+Now that I present the deletion logic, its role becomes clearer:
+[[deleted]] is set to [[true]] as soon as a [[Deleted]] control
+message is processed, even though the window's thread has not
+exited yet.  During this interval, the window is being torn
+down---its image has been freed, a hangup note has been sent to
+the client---but pending events may still arrive on its channels.
+The [[deleted]] flag lets every handler bail out early rather than
+operate on a half-destroyed window.
+
+<<[[Window]] config fields>>=
+bool	deleted;
+@
+%old: bool_byte
+\t needed because can still have pending request on window namespace?
+\t  so at least in the fileserver we can give a better response when
+\t  an operation on a deleted window is requested?
+
+% why delete complex? because attached process, because attached img!
+% need to wait for external process, but can not wait too much
+% hence timeout below.
+
+
+<<[[wctlmesg()]] break if window was deleted>>=
+if(w->deleted)
+    break;
+@
+% how can happen? because can receive cmd from multiple places?
+
+
 \subsection{Timeout for slow clients: [[deletetimeoutproc()]] and [[deletethread()]]}
 
 \t not sure we need that, does already freeimage in wclosewin
@@ -7313,15 +7328,9 @@ wclosewin(Window *w)
 The timeout mechanism handles clients that hold a reference to the
 window image (via [[nameimage()]]) and refuse to let go.
 [<deletetimeoutproc()>] is a separate process (not a thread) because
-[[sleep]] is blocking. After 750ms it sends the window name on
-[<deletechan>]. The [<deletethread()>] on the other end looks up the
-image by name and, if the client still holds it, moves it off-screen
-with [[originwindow]] so at least it is invisible.
-%
-The [[freeimage]]
-that follows drops the reference obtained by [[namedimage]], but the
-client may still hold its own reference---the image only truly
-disappears when all references are gone.
+[[sleep()]] is blocking. After 750ms it sends the window name on
+[<deletechan>]. 
+
 
 % process
 <<function [[deletetimeoutproc]]>>=
@@ -7349,6 +7358,18 @@ Channel* deletechan;
 <<[[main()]] communication channels creation>>=
 deletechan   = chancreate(sizeof(char*), 0);
 @
+
+
+%claude:
+The [<deletethread()>] on the other end looks up the
+image by name and, if the client still holds it, moves it off-screen
+with [[originwindow()]] so at least it is invisible.
+%
+The [[freeimage()]]
+that follows drops the reference obtained by [[namedimage()]], but the
+client may still hold its own reference---the image only truly
+disappears when all references are gone.
+%yoann1: can say different use of originwindow this time, not for logical coordinate here
 
 <<[[main()]] threads creation>>=
 threadcreate(deletethread, nil, STACK);
@@ -7396,16 +7417,16 @@ The second phase of deletion uses reference counting. Each mount of
 [<xfidattach()>]), and closing such a mount decrements it---the 9P {clunk}
 operation, detailed in Chapter~\ref{chap:filesystem-server}, signalled here
 via [<winclosechan>]. When the last reference drops to zero, [<wclose()>]
-sends the [[Exited]] message, which triggers the final cleanup: freeing the
+sends the [<Exited>] message, which triggers the final cleanup: freeing the
 frame, closing the note file descriptor, freeing all channels, and freeing
-the [[Window]] struct itself.
+the [<Window>] struct itself.
 
 
 %claude:
 The [[winclosechan]] channel bridges the filesystem server process
 and the main thread group. The filesystem process cannot directly
 manipulate window state (different thread group), so it sends the
-window pointer on this channel, and [[winclosethread]] calls [[wclose()]]
+window pointer on this channel, and [<winclosethread()>] calls [[wclose()]]
 in the correct context.
 
 \t who send to that?
@@ -7475,6 +7496,9 @@ if(!w->deleted)
 @
 \l when can this happen? 
 
+
+%yoann: quick transition say finally can see Exited and actual free machinery
+
 <<[[Wctlmesgkind]] cases>>=
 Exited,
 @
@@ -7517,13 +7541,15 @@ case Exited:
 %  but for move pointto() is only the first step so we don't
 %  want a release here.
 %claude:
-[[pointto()]] is the shared ``pick a window'' gesture used by Delete, Move,
-and Resize. It changes the cursor to a gunsight, waits for the user to
+[<pointto()>] is the shared ``pick a window'' gesture used by [<Delete>], [<Move>],
+and [<Reshape>].
+%
+It changes the cursor to a gunsight, waits for the user to
 click, and returns the window under the cursor (or [[nil]] if the user
 clicked on the background or with the wrong button).
 The [[wait]] parameter controls whether the function waits for the
-button to be released before returning. Delete passes [[true]] (wait
-for a full click), while Move passes [[false]] because the same button
+button to be released before returning. [<Delete>] passes [[true]] (wait
+for a full click), while [<Move>] passes [[false]] because the same button
 press will continue into the [<drag()>] phase.
 
 % delete(true) | move -> <>
@@ -7589,10 +7615,8 @@ case Move:
 
 \subsection{Menu handler: [[move()]]}
 
-%claude:
-The [[Moved]] case in [[wctlmesg]] shares its handler with
-[[Reshaped]]---a move is just a reshape where the dimensions stay
-the same and the old content is copied over.
+%yoann: say move in the menu handler
+
 
 <<function [[move]]>>=
 void
@@ -7617,6 +7641,12 @@ move(void)
 % see wctlmesg Moved|Reshaped case
 % because Moved is a special case of Reshaped where same size.
 
+
+%claude:
+The [<Moved>] case in [<wctlmesg()>] shares its handler with
+[<Reshaped>]---a move is just a reshape where the dimensions stay
+the same and the old content is copied over.
+We will see this code soon when we cover a window resize.
 
 \subsection{Mouse action [[drag()]]}
 
@@ -7698,7 +7728,7 @@ if(mouse->buttons!=0 || ni==nil){
 
 % drawborder does delete previous image if there was one
 %claude:
-[[drawborder()]] draws a rubber-band rectangle using four separate edge
+[<drawborder()>] draws a rubber-band rectangle using four separate edge
 images (not a single rectangle), because a single layer would obscure
 the window content underneath. Using four thin strips keeps the interior
 transparent. [<drawedge()>] optimizes updates: if the edge dimensions have
@@ -7750,14 +7780,17 @@ drawedge(Image **bp, Rectangle r)
 
 
 \section{Window resize}
+
 % via menu, or via mouse on border directly
 %claude:
 Resizing reuses [<sweep()>] to let the user draw a new rectangle, then
-sends a [[Reshaped]] message.
-In the [[wctlmesg]] handler, Moved and Reshaped share the same code
+sends a [<Reshaped>] message.
+%
+In the [<wctlmesg()>] handler, [<Moved>] and [<Reshaped>] share the same code
 path: [<wresize()>] replaces the window's image, re-publishes the name
 (so the client can reconnect via [[getwindow()]]), and triggers a
 reflow of the text content for textual windows.
+%yoann1: this duplicate a bit the next paragraph
 
 <<[[button3menu()]] cases>>=
 case Reshape:
@@ -7768,8 +7801,9 @@ case Reshape:
 \subsection{Menu handler: [[resize()]]}
 
 %claude:
-[[resize()]] is almost identical to [<move()>]: select a window with [<pointto()>],
-draw a new rectangle with [<sweep()>], and send a [[Reshaped]] message.
+[<resize()>] is almost identical to [<move()>]: select a window with [<pointto()>],
+draw a new rectangle with [<sweep()>], and send a [<Reshaped>] message.
+%
 The key difference is that [<pointto()>] uses [[wait=true]] here (the user
 completes one click to select, then does a separate sweep gesture),
 and [<sweep()>] lets the user define an entirely new rectangle rather than
@@ -7797,6 +7831,8 @@ resize(void)
 
 % seen Moved Reshaped in section X.
 % A Moved is actually a special case of Reshaped
+
+%yoann: can say finally see handler, that handle Moved and Reshaped
 
 <<[[wctlmesg()]] cases>>=
 case Moved:
@@ -7837,9 +7873,9 @@ bool	 	resized;
 %claude:
 [<wresize()>] swaps the window's image. If this is a move (or the
 dimensions are unchanged), the old content is copied into the new
-image with [[draw]]. The old image is freed, and [<wsetname()>] publishes
+image with [[draw()]]. The old image is freed, and [<wsetname()>] publishes
 the new image under an incremented name so the client can reconnect
-via [[getwindow()]]. The [[resized]] flag and [[mouse.counter]]
+via [[getwindow()]]. The [<Window.resized>] flag and [[mouse.counter]]
 increment ensure the client gets a resize event on its next
 [[/dev/mouse]] read, which prompts it to call [[getwindow()]] to
 pick up the new image.
@@ -7885,18 +7921,13 @@ wresize(Window *w, Image *i, bool move)
 
 % with left or middle click, other way to resize.
 %claude:
-[[bandsize()]] is the alternative resize gesture triggered by clicking
+[<bandsize()>] is the alternative resize gesture triggered by clicking
 on a window's border (rather than using the menu). It determines
 which corner or edge the user grabbed via [<whichcorner()>], snaps the
 cursor to that corner with [<cornerpt()>] and [<wmovemouse()>], then enters
 a tracking loop where [<whichrect()>] computes the new rectangle by
 anchoring the opposite corner/edge and letting the grabbed one follow
 the mouse. This feels like ``pulling'' a corner to resize.
-%claude:
-The minimum size check ([[Dx < 100]] or [[Dy < 3*font->height]])
-prevents the user from shrinking a window below a usable size.
-The ``movement threshold'' check ([[abs(p.x-startp.x) + abs(p.y-startp.y) <= 1]])
-prevents an accidental click on the border from triggering a resize.
 
 % mousethread -> <>
 <<function [[bandsize]]>>=
@@ -7961,9 +7992,15 @@ if(i == nil)
     return nil;
 @
 
+%claude:
+The minimum size check ([[Dx < 100]] or [[Dy < 3*font->height]])
+prevents the user from shrinking a window below a usable size.
+The ``movement threshold'' check ([[abs(p.x-startp.x) + abs(p.y-startp.y) <= 1]])
+prevents an accidental click on the border from triggering a resize.
 
 
 
+%yoann: quick sentence
 
 <<function [[wmovemouse]]>>=
 /*
@@ -7979,7 +8016,7 @@ wmovemouse(Window *w, Point p)
 @
 
 %claude:
-[[whichrect]] and [[cornerpt]] use a 3x3 grid encoding (from [<whichcorner()>]):
+[<whichrect()>] and [<cornerpt()>] use a 3x3 grid encoding (from [<whichcorner()>]):
 0=top-left, 1=top-edge, 2=top-right, 3=left-edge, 5=right-edge,
 6=bottom-left, 7=bottom-edge, 8=bottom-right (4 would be the center,
 which is never used). [<cornerpt()>] snaps the cursor to the actual corner
@@ -8062,13 +8099,9 @@ cornerpt(Rectangle r, Point p, int which)
 \section{Window visibility}
 \label{sec:window-hide}
 % via menu
-%claude:
-Hiding a window is an elegant trick: the window's on-screen layer image
-is replaced with a plain in-memory image (via [[allocimage]], not
-[[allocwindow]]). Since it is no longer a layer, it does not appear on
-screen, but the window's content is preserved. The hidden window is added
-to the [[hidden]] array and appears as an extra entry in the right-click
-system menu so the user can unhide it later.
+
+%yoann: trans: where say see final window manager feature, visibility.
+
 
 <<[[button3menu()]] cases>>=
 case Hide:
@@ -8077,6 +8110,17 @@ case Hide:
 @
 
 \subsection{Menu handler: [[hide()]]}
+
+%claude:
+Hiding a window is an elegant trick: the window's on-screen layer image
+is replaced with a plain in-memory image (via [[allocimage()]], not
+[[allocwindow()]]).
+%
+Since it is no longer a layer, it does not appear on
+screen, but the window's content is preserved. The hidden window is added
+to the [<hidden>] array and appears as an extra entry in the right-click
+system menu so the user can unhide it later.
+%yoann1: duplicate a bit what is said further below before whide
 
 <<function [[hide]]>>=
 void
@@ -8094,11 +8138,11 @@ hide(void)
 \subsection{[[hidden]]}
 
 %claude:
-The [[hidden]] array is a simple fixed-size list of currently hidden
+The [<hidden>] array is a simple fixed-size list of currently hidden
 windows. Its contents are appended to the right-click system menu
 (after the standard New/Reshape/Move/Delete/Hide entries), giving
 the user a way to bring hidden windows back. The menu entries show
-each window's [[label]] (typically [[rc <pid>]]).
+each [<Window.label>] (typically [[rc <pid>]]).
 
 <<global [[hidden]]>>=
 // array<ref<Window>> (size valid = nhidden)
@@ -8117,12 +8161,14 @@ int		nhidden;
 
 
 %claude:
-The hiding trick is in the choice of [[allocimage]] versus
-[[allocwindow]]: [[whide()]] allocates a plain in-memory image (not a
-layer on the desktop) and sends a [[Reshaped]] message with it.
-The [[Reshaped]] handler in [[wctlmesg]] calls [<wresize()>], which
+The hiding trick is in the choice of [<allocimage()>] versus
+[<allocwindow()>]: [<whide()>] allocates a plain in-memory image (not a
+layer on the desktop) and sends a [<Reshaped>] message with it.
+The [<Reshaped>] handler in [<wctlmesg()>] calls [<wresize()>], which
 swaps the window's image---so the window now draws to an off-screen
-buffer. The old layer image is freed, making the window disappear.
+buffer.
+%
+The old layer image is freed, making the window disappear.
 The window's thread continues to run normally, just drawing to an
 invisible image.
 
@@ -8174,6 +8220,7 @@ for(i=0; i<nhidden; i++)
 @
 %ocaml: Hashtbl.remove
 
+%yoann: quick sentence
 
 <<[[button3menu()]] menu3str adjustments with hidden windows>>=
 for(i=0; i<nhidden; i++)
@@ -8187,11 +8234,12 @@ menu3str[i+Hidden] = nil;
 
 %claude:
 Unhiding reverses the trick: [<wunhide()>] allocates a real layer (via
-[[allocwindow]]) and sends a [[Reshaped]] message. The [[Reshaped]]
+[<allocwindow()>]) and sends a [<Reshaped>] message. The [<Reshaped>]
 handler swaps the off-screen image for the new on-screen layer,
 publishes it via [<wsetname()>], and the window reappears.
+%
 The menu integration is handled by the [[default]] case in the
-[[button3menu]] switch---any menu index past the standard entries
+[<button3menu()>] switch---any menu index past the standard entries
 corresponds to a hidden window.
 
 <<[[button3menu()]] cases>>=
@@ -8271,8 +8319,24 @@ the screen, move and resize them. But for those rectangles to become
 real {windows}, they need a filesystem server that virtualizes the device
 files ([[/dev/cons]], [[/dev/mouse]], etc.) for each client process.
 
+%claude: %toc:
+This chapter presents the 9P operations that [[rio]] implements:
+[[attach]] (where the kernel, on behalf of the application, connects
+to [<filsysproc()>] which links the fid to the appropriate [<Window>]),
+[[walk]] (navigating to a file), [[open]], [[read]], [[write]],
+[[stat]], and [[clunk]].
+%
+Each operation has two parts: a [[filsysxxx()]] function that runs
+in the [<filsysproc()>] context and handles the fast path, and an
+[[xfidxxx()]] function that runs in a worker thread for operations that
+may block (like reading [[/dev/cons]] when no data is available)
+in the main-proc context (see Figure~\ref{fig:soft-archi-threads}).
+
+\section{On clients and server}
+%yoann1: better title?
+
 %claude: %terminology:
-It is worth pinning down the words {client} and {server}, which recur
+It is worth pinning down the words ``client'' and ``server'', which recur
 throughout this chapter and can feel abstract for a windowing system.
 [[rio]] is a {server}---more precisely a {file server}, since the resource
 it shares is a namespace of files ([[/mnt/wsys/cons]], [[/mnt/wsys/mouse]],
@@ -8281,7 +8345,7 @@ applications}: a shell, an editor, or [[hellorio]], each running inside a
 window.
 %claude:
 The word ``client'' hides a subtlety, though. A window application never
-speaks 9P itself; it just calls [[open]], [[read]], and [[write]] on
+speaks 9P itself; it just calls [[open()]], [[read()]], and [[write()]] on
 ordinary-looking files. It is the {kernel}---the mount driver set up when
 the window's namespace was built---that turns those system calls into 9P
 request messages and sends them down the pipe to [[rio]]. So when I say a
@@ -8290,16 +8354,6 @@ kernel, acting {on behalf of} the application. The full chain is
 [[application]] \(\to\) kernel mount driver \(\to\) pipe \(\to\) [[rio]],
 and ``client'' names whichever end of it the surrounding text cares about.
 
-%claude:
-This chapter presents the 9P operations that [[rio]] implements:
-[[attach]] (where the kernel, on behalf of the application, connects
-to [[filsysproc]] which links the fid to the appropriate [[Window]]),
-[[walk]] (navigating to a file), [[open]], [[read]], [[write]],
-[[stat]], and [[clunk]].
-Each operation has two layers: a [[filsysxxx()]] function that runs
-in the [[filsysproc]] context and handles the fast path, and an
-[[xfidxxx()]] function that runs in a worker thread for operations that
-may block (like reading [[/dev/cons]] when no data is available).
 
 % so then what happens?
 % filsysproc is reading on fs->sfd, server side of the pipe
