@@ -1289,7 +1289,7 @@ in Chapter~\ref{chap:core-ds}.
 %
 Then, I will use a top-down approach, starting with Chapter~\ref{chap:main}
 with the description of [[main()]] and the core initializations in [[rio]].
-\n actually code of threadmain, but still description of main
+%said-later: actually code of threadmain, but still description of main
 %
 I will continue in Chapter~\ref{chap:processes-threads} by presenting
 the main functions called by the threads and procs of [[rio]].
@@ -1316,9 +1316,9 @@ in Chapter~\ref{chap:virtual-devices}.
 %
 Some virtual devices behave differently depending if the
 window is a graphical or textual window.
-This is why I will describe the specifics of graphical windows
-in Chapter~\ref{chap:graphical-windows}, and of textual
-windows in Chapter~\ref{chap:textual-windows}, including
+This is why I will describe  the specifics of
+graphical windows in Chapter~\ref{chap:graphical-windows}, and of
+textual windows in Chapter~\ref{chap:textual-windows}, including
 the code of the terminal emulator.
 %
 Chapter~\ref{chap:window-files} presents the code to serve
@@ -1326,7 +1326,7 @@ the other files under [[/mnt/wsys]] (e.g., [[/mnt/wsys/ctl]]).
 %
 Chapter~\ref{chap:advanced} presents advanced functionalities
 of [[rio]] that I did not present before to simplify the explanations.
-\l for instance, 
+%
 Finally, Chapter~\ref{chap:conclusion} concludes
 and gives pointers to other books in the \principia series.
 
@@ -1828,7 +1828,7 @@ QLock;
 
 %claude:
 The [[QLock]] guards against that genuine cross-proc parallelism:
-[<filsysproc()>] and a main-proc thread could otherwise update the same
+[<filsysproc()>] and a [[main-proc]] thread could otherwise update the same
 [[Window]] at the same instant.
 %
 The [[Ref]] keeps a [[Window]] alive while
@@ -8272,7 +8272,7 @@ menu3str[i+Hidden] = nil;
 
 %claude:
 Unhiding reverses the trick: [<wunhide()>] allocates a real layer (via
-[<allocwindow()>]) and sends a [<Reshaped>] message. The [<Reshaped>]
+[[allocwindow()]]) and sends a [<Reshaped>] message. The [<Reshaped>]
 handler swaps the off-screen image for the new on-screen layer,
 publishes it via [<wsetname()>], and the window reappears.
 %
@@ -8368,7 +8368,7 @@ Each operation has two parts: a [[filsysxxx()]] function that runs
 in the [<filsysproc()>] context and handles the fast path, and an
 [[xfidxxx()]] function that runs in a worker thread for operations that
 may block (like reading [[/dev/cons]] when no data is available)
-in the main-proc context (see Figure~\ref{fig:soft-archi-threads}).
+in the [[main-proc]] context (see Figure~\ref{fig:soft-archi-threads}).
 
 \section{Clients, server, and the kernel in between}
 
@@ -8409,6 +8409,11 @@ and ``client'' names whichever end of it the surrounding text cares about.
 
 
 \section{Additional data structures}
+
+%yoann: quick intro
+%claude:
+The operations below share two data structures, gathered here first: how a
+[[Qid]] names a file, and the directory table the server walks and lists.
 
 \subsection{Qid file identification: [[Qxxx]]}
 %claude:
@@ -8513,7 +8518,7 @@ particular session on that file.
 \subsection{Directory table: [[Dirtab]] and [[dirtab]]}
 
 %claude:
-The [[Dirtab]] structure is a static directory template: it maps
+The [<Dirtab>] structure is a static directory template: it maps
 a file name (e.g., [["cons"]], [["mouse"]]) to its [[Qxxx]] enum
 value and permissions.  The global [[dirtab]] array lists every
 virtual file that appears under each window's directory.
@@ -8738,12 +8743,16 @@ translates each system call into 9P messages on the pipe:
 \end{verbatim}
 %claude:
 Notice that the lightweight operations ([[attach]], [[walk]]) are
-handled directly by [[filsysproc]], while the heavier ones
-([[open]], [[read]], [[write]]) are dispatched to [[Xfid]] worker
-threads via [[sendp]].
+handled directly by [<filsysproc()>], while the heavier ones
+([[open]], [[read]], [[write]]) are dispatched to [<Xfid>] worker
+threads via [[sendp()]].
 
 
 \subsection{[[filsysattach()]]}
+
+%yoann: transition sentence
+%claude:
+The first operation is {attach}; here is its [<filsysproc()>] half.
 
 \t does not use first argument, so remove it from fcall sig no?
 \t hmm used by filsysopen. But true that anyway it's in the Xfid so could
@@ -8797,6 +8806,11 @@ if(strcmp(x->req.uname, x->fs->user) != 0)
 % to client using x->buf space.
 
 \subsection{[[xfidattach()]]}
+
+%yoann: quick intro
+%claude:
+[<xfidattach()>] is the worker half: it resolves the mount's window id to a
+[<Window>] and links it to the fid, under the [[all]] lock (below).
 
 <<global [[all]]>>=
 QLock	all;			/* BUG */
@@ -8901,7 +8915,7 @@ if(w == nil){
 %claude:
 Walk translates a file path (e.g., ``cons'' or ``mouse'') into a fid
 associated with the correct [[Qid]]. Unlike Unix's one-component-at-a-time
-[[namei]], 9P Walk sends all path elements in a single message for
+[[namei()]], 9P Walk sends all path elements in a single message for
 network efficiency. The server must redo part of the kernel's path
 resolution work, looking up each name in [[dirtab]].
 
@@ -9061,6 +9075,12 @@ if(strcmp(x->req.wname[i], "..") == 0){
 
 \subsection{Error management}
 
+%yoann: quick intro
+%claude:
+[<filsyswalk()>] guards against several error cases, gathered here: walking
+an already-open fid, a missing or non-directory path element, and an
+over-long name.
+
 <<[[filsyswalk()]] sanity check if opened>>=
 if(f->open)
     return filsysrespond(fs, x, &fc, "walk of open file");
@@ -9179,6 +9199,10 @@ Deny:
 
 \subsection{[[xfidopen()]]}
 
+%yoann: transition sentence
+%claude:
+The per-file open logic runs in the worker, [<xfidopen()>].
+
 % how sure that have a x->f->w?  because cant open if not attach?
 <<function [[xfidopen]]>>=
 void
@@ -9208,6 +9232,13 @@ devoted to each virtual device.  Most files need no special
 open logic, but some do---for instance, opening [[Qmouse]] tells
 [[rio]] that this window is a graphical application.
 
+
+%yoann: intro and link to other Section
+%claude:
+Every worker first checks whether the window was deleted out from under it
+(the [[deleted]] flag and the two-phase teardown are covered in the window
+manager, Chapter~\ref{chap:wm}); if so it replies [[Edeleted]] and stops.
+
 <<[[xfidxxx()]] respond error if window was deleted>>=
 if(w->deleted){
     filsysrespond(x->fs, x, &fc, Edeleted);
@@ -9231,6 +9262,11 @@ The \plan designers used a distinct name to keep the protocol
 layer separate from the system call layer.
 
 \subsection{[[filsysclunk()]]}
+
+%yoann: quick intro
+%claude:
+[<filsysclunk()>] is the [<filsysproc()>] half of clunk: it frees the fid,
+delegating to a worker only when the file was actually open.
 
 <<function [[filsysclunk]]>>=
 static
@@ -9267,6 +9303,10 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
 
 \subsection{[[xfidclose()]]}
 
+%yoann: quick intro
+%claude:
+[<xfidclose()>] is the worker half: it runs any per-file close logic, then
+drops the window reference with [<wclose()>].
 
 <<function [[xfidclose]]>>=
 void
@@ -9288,6 +9328,10 @@ xfidclose(Xfid *x)
 % here we do not use wclosechan because we are already in a thread,
 % so can afford to wait for wclose to finish
 
+%yoann: say like for xfidopen, will present cases gradually
+%claude:
+As with [<xfidopen()>], the per-file [<xfidclose()>] cases are presented
+gradually in the device chapters.
 
 \section{Read}
 
@@ -9305,6 +9349,10 @@ to an [[xfidread()]] worker thread.
 
 \subsection{[[filsysread()]]}
 
+%yoann: quick intro
+%claude:
+[<filsysread()>] is that fast path: a directory read is served right here,
+anything else is handed to a worker.
 
 <<function [[filsysread]]>>=
 static
@@ -9350,6 +9398,11 @@ if(b == nil)
     return filsysrespond(fs, x, &fc, "out of memory");
 @
 
+%yoann: quick toc: paragraph
+%claude: %toc:
+The directory case is handled right here in [<filsysread()>]; the device
+files ([[/dev/cons]], [[/dev/mouse]], \dots) are read in the worker
+[<xfidread()>], shown next.
 
 \subsection{Reading a directory}
 
@@ -9386,6 +9439,11 @@ case Qwsysdir:
 %ocaml: exn?
 
 \subsection{[[xfidread()]]}
+
+%yoann: quick intro
+%claude:
+[<xfidread()>] is the worker that serves reads of the device files, blocking
+until data is available.
 
 <<function [[xfidread]]>>=
 void
@@ -9541,7 +9599,11 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
 }
 @
 
-
+%yoann: say no xfid here, direct answer
+%claude:
+Note there is no [[xfidstat()]] worker: [[stat]] never blocks (it only reads
+[[dirtab]] metadata), so [<filsysstat()>] answers directly in the
+[<filsysproc()>] context.
 
 
 \section{Forbidden operations}
