@@ -6508,551 +6508,537 @@ Rescue:
 \label{sec:trace-new-window}
 %alt: in Overview chapter in Soft archi section
 
-%yoann: transition sentence saying will now try to summarize the many steps we saw to solidify by looking at trace leading to creation of windows in Figure fig:hellorio-and-shell
 %claude:
-Window creation touched many pieces; to consolidate them, let us follow the
-whole sequence once more as a single trace, from the user's menu click to a
-running shell in a fresh window.
+We have now seen all the code behind window creation; this section retraces
+it end to end as a summary. Creating a window from the menu puts the mouse
+thread in control (the mouse trace itself comes in
+Section~\ref{sec:trace-mouse-click}), and from there [<new()>] builds five
+things: a new {process} (forked and exec'd in [<winshell()>]); its private
+{namespace} (the [[mount]] and [[bind]] of [<filsysmount()>], detailed in
+the \book{Kernel}); a new [<Window>] structure, linked into [<windows>] by
+[<wmk()>]; a new {window thread}, [<winctl()>], with its channels; and a new
+{image layer}, published under a unique name by [<wsetname()>]. The diagram
+at the end of this section shows the resulting entities and how they link;
+how the per-message traffic is then multiplexed over the shared pipe is left
+to Chapter~\ref{chap:filesystem-server}.
 
-%trans:
-In Figure~\ref{fig:soft-archi-threads},
-[<threadmain()>], the first thread of [[main-proc]],
-creates the two IO procs on the left, the [[fileserver]] proc on the right,
-and the keyboard and mouse threads in the middle.
-%toc:
-In this section, I will
-explain the trace leading to the creation of the shell
-and [[hellorio]] processes in Figure~\ref{fig:soft-archi-threads},
-as well as the creation of the associated window threads. 
+%%yoann: transition sentence saying will now try to summarize the many steps we saw to solidify by looking at trace leading to creation of windows in Figure fig:hellorio-and-shell
+%%claude:
+%Window creation touched many pieces; to consolidate them, let us follow the
+%whole sequence once more as a single trace, from the user's menu click to a
+%running shell in a fresh window.
 %
-%In the next section, I will explain the creation of the worker threads.
+%%trans:
+%In Figure~\ref{fig:soft-archi-threads},
+%[<threadmain()>], the first thread of [[main-proc]],
+%creates the two IO procs on the left, the [[fileserver]] proc on the right,
+%and the keyboard and mouse threads in the middle.
+%%toc:
+%In this section, I will
+%explain the trace leading to the creation of the shell
+%and [[hellorio]] processes in Figure~\ref{fig:soft-archi-threads},
+%as well as the creation of the associated window threads. 
+%%
+%%In the next section, I will explain the creation of the worker threads.
+%
+%%dup: overview/interface/gui
+%As I said in Section~\ref{sec:rio-gui}, you create
+%a new window by first activating the system menu with a right-click,
+%then choosing [[New]] in this menu, and finally by
+%drawing a rectangle with the mouse specifying the dimension of a window.
+%%
+%The trace for those mouse actions will be explained soon in
+%Section~\ref{sec:trace-mouse-click}, but for now, the important
+%thing is that eventually the mouse thread of [[main-proc]] will be in control,
+%with the information about the new window dimension stored in a local variable.
+%%
+%It is the mouse thread that creates windows. 
+%%toc:
+%Each window creation involves the creation of 
+%a new process,
+%a new namespace,
+%a new [[Window]] structure,
+%a new {window thread}, and
+%a new {image layer}, 
+%as explained in the following sections.
+%
+%\subsubsection{A new process}
+%
+%When you create a new window, [[rio]] internally 
+%(1) forks a new process (with [[proccreate()]]), 
+%(2) adjusts the environment in the child process, and finally 
+%(3) executes (with [[procexec()]]) a command (the \plan shell [[/bin/rc]])
+%from this child process.
+%\l new window is automatically textual window with terminal emulator, so shell
+%%
+%This is why the creation of the two windows in 
+%Figure~\ref{fig:hellorio-and-shell} leads to the creation of two processes in
+%Figure~\ref{fig:soft-archi-threads}: [[hellorio]] and the shell process.
+%\l actually should be 3 processes, cos fork from shell (but could exec instead?)
+%
+%
+%The sequence of steps above is a classic idiom in \unix programming.
+%%
+%Indeed, this is for instance the way the shell implements {redirections},
+%as in [[ls > list.txt]]. In that example, the shell adjusts the environment
+%by changing the standard output file descriptor in the child process
+%to point to a text file instead of the [[/dev/cons]] console device file
+%(see the \book{Shell}).
+%%trans:
+%For [[rio]], the adjust-the-environment part consists in changing the 
+%{namespace} in the child process by using 
+%the [[mount()]] and [[bind()]] system calls.
+%%(see the \book{Kernel}). 
+%
+%\subsubsection{A new namespace}
+%\label{sec:new-namespace}
+%
+%%dup? Kernel
+%A {\em namespace} is the \plan equivalent of a {mount-table}
+%in \unix (and its derivatives such as Linux or macOS). 
+%A {\em mount-table} allows to plug together multiple {filesystems}
+%in a single uniform tree.
+%\l literally you mount a fs on top of another fs, like a greffe
+%%real-world: ugly c: d: in Windows.
+%However, in \plan, each process has its own mount-table, its own namespace; 
+%there is not a global mount-table as in \unix.
+%%
+%%dup: (changed) intro/rio  overview/principle/terminal
+%After the call to [[mount()]] mentioned above, the child process of [[rio]] 
+%will see special files in [[/mnt/wsys/]], 
+%thanks to the per-process namespace feature of the \plan kernel.
+%\n really special cos special Qid because of [[extra]] param to mount
+%%
+%Moreover, because of the [[bind()]] call,
+%the same files will also be accessible under [[/dev/]], and 
+%will take precedence over any existing files there, 
+%thanks to the union-mount feature of the \plan kernel.
+%
+%%\paragraph{A \plan namespace refresher, [[bind()]] and [[mount()]]}
+%\n too much detail? could skip in Overview? hard to skip.
+%%trans: 
+%Before showing the actual calls to [[bind()]] and [[mount()]] in [[rio]],
+%%dup? Kernel
+%here are the slightly simplified signatures of [[bind()]]
+%and [[mount()]] from [[syscall.h]]:
+%
+%<<simplified signatures of namespace functions [[syscall.h]]>>=
+%error bind(char *str,   char *path, int flag);
+%error mount(fdt fd, ..., char *path, int flag, char *extra);
+%@
+%\l errorneg1? bind(char *name,   char *old, int flag);
+%\l errorneg1? mount(fdt fd, int afd, char *old, int flag, char *aname)
+%
+%
+%%dup? Kernel
+%[[bind()]] takes as a parameter a string ([[str]]) and a path ([[path]]).
+%\n path is usually a directory, but can also be a file (but path must exist!)
+%%
+%If the string starts with a [[#]], as in [[bind("#m", "/dev/", ...)]],
+%the string must correspond to the code of a device in the \plan kernel, 
+%for instance, [[#m]] is the code of the [[mouse]] device.
+%%
+%In that case, every access from the process to files under path will 
+%be {performed} with the methods of the corresponding device, for instance,
+%[[mousewalk()]] if the process was listing files in [[/dev/]].
+%\l in [[/dev/]]. it is not /dev/mouse or /dev/draw, but /dev/, subtle.
+%%
+%Remember that in \plan, {devices are filesystems}
+%(see the \book{Kernel}).
+%%
+%The mouse device, for instance, manages more than one file
+%(e.g., [[/dev/mouse]], [[/dev/cursor]]). 
+%%
+%Some devices such as [[draw]] manage even multiple directories 
+%(e.g., [[/dev/draw/1/]], [[/dev/draw/2/]]).
+%\n also union-mount for /dev/ (explained later)
+%\n in fact #i not handled by bind but but namei. can do open("#i/...")
+%%real-world:
+%\l Equivalent in Linux is major/minor mknod in plan9. 
+%\l plan9 devices more flexible, multiple files, complex services! see draw.
+%%
+%If the string did not start with a [[#]], every access to
+%files under path are redirected to the path denoted by the string.
+%%
+%In effect, it is like [[path]] becomes an {\em alias} for the 
+%path denoted by [[str]].
+%%real-world:
+%\l kinda symbolic link, but more general (see later)
+%% see 2/bind (and 1/bind)? bof. actually can bind a file (but can not mount)
+%
+%
+%%dup? Kernel.nw
+%With [[mount()]], the kernel delegates the management of
+%a directory neither to a device in the kernel, nor
+%to another directory, but to a {userspace} program.
+%\l or other kernel?
+%%
+%Indeed, [[mount()]] takes as a parameter a file descriptor ([[fd]]) and 
+%a path ([[path]]), 
+%in order to tell the kernel that every access to files under path should
+%be handled by the {process behind the file descriptor}
+%(see the \book{Kernel} and the \book{Network}).
+%\n again depends on flag, can be union dir (said later)
+%%
+%This allows to implement {\em filesystems in user space},
+%a powerful and convenient feature.
+%%
+%Note that the file descriptor argument can be anything; it can correspond to 
+%a pipe to a local process, but also to an opened connection on the network.
+%Thus, filesystems can also be imported (and exported) through 
+%the network in \plan.
+%\l but then fd leads to another kernel? not another userspace program?
+%% see 2/bind (and 1/bind)
+%
+%
+%%dup? Kernel.nw
+%Both [[bind()]] and [[mount()]] operate on an existing path
+%and alter the filesystem tree at this path.
+%%
+%Moreover, in \plan, you can not only {plug} a filesystem on top of another 
+%filesystem at a specific directory, you can also {join} filesystems
+%in a directory. 
+%Indeed, a directory can be the union of two or more filesystems.
+%Such a directory is called a {\em union-mount}.
+%%
+%Both [[bind()]] and [[mount()]] take a flag parameter
+%specifying how to handle the union of the old content of the
+%directory with the new content of the [[bind()]]'ed device (or directory) 
+%or the new [[mount()]]'ed user-space filesystem.
+%%
+%For instance, the flag argument [[MREPL]] (for replace)
+%indicates that the old content should be ignored and replaced 
+%by the new content.
+%%
+%The flag argument [[MAFTER]] indicates that the old content
+%should be kept and should take {precedence} over the new
+%content in case of {name conflicts}.
+%Indeed, two filesystems can contain files with identical names.
+%%
+%Thanks to the union-mount and a series of calls to [[bind()]],
+%the [[/dev]] directory can contain many files and directories
+%managed by multiple devices.
+%
+%%\paragraph{Rio's namespaces}
+%%trans: can now understand specific calls
+%
+%Here are the slightly simplified calls to [[mount()]] and [[bind()]]
+%in the function [<filsysmount()>]
+%called in the child process of [[rio]]
+%when a new window is created:
+%
+%% kernel -> winshell (as x -> proccreate(winshell) <- new <- button3menu) ->
+%%  filsysmount
+%
+%<<[[filsysmount()]] simplified code>>=
+%err = mount(fs->cfd, ..., "/mnt/wsys", MREPL, windowid);
+%...
+%err = bind("/mnt/wsys", "/dev", MBEFORE);
+%@
+%
+%
+%With the call to [[bind()]], [[/dev/]] becomes the union of the old [[/dev/]]
+%directory and the [[/mnt/wsys]] directory.
+%%dup? overview/soft-archi/new-window 
+%The flag argument [[MBEFORE]] indicates that files under [[/mnt/wsys]] 
+%takes precedence over the old files under [[/dev/]].
+%%
+%This means than an access to [[/dev/mouse]] by the process
+%who executed the code above (or the children of this process)
+%will be redirected to an access to [[/mnt/wsys/mouse]], 
+%and not to the old [[/dev/mouse]] file that was managed by the kernel 
+%(and which was there because of a previous call to [[bind("#m", "/dev", ...)]]).
+%%
+%This is why in Figure~\ref{fig:soft-archi-threads}, 
+%the [[hellorio]] and shell processes, at the bottom right, are connected to 
+%files starting with [[/mnt/wsys/]], while [[rio]] itself is connected
+%to files starting with [[/dev/]], at the bottom left.
+%
+%
+%Regarding [[mount()]], the file descriptor argument
+%corresponds to one side of
+%a pipe created by the [[fileserver]] proc (see Section~\ref{sec:thread-archi})
+%and stored in the [[cfd]] (for client file descriptor) field of the 
+%global [<fs>] (for filesystem).
+%%
+%The other side of the pipe is stored in the [[sfd]]
+%(for server file descriptor) field of [[fs]].
+%%
+%Note that file descriptors and namespaces are inherited 
+%by default through [[rfork()]] (or [[proccreate()]]), 
+%and maintained through [[exec()]] (or [[procexec()]]).
+%\n default unless RFFDG flag?
+%Thus, after the child process of [[rio]] has called [<filsysmount()>]
+%and [[exec()]]'ed the shell [[/bin/rc]], this shell process 
+%\n actually it is procexec
+%will still have in its file descriptor table in the kernel
+%a link to the pipe created by the [[fileserver]] proc, and in
+%its mount-table the information about [[/mnt/wsys/]].
+%\l cfd is fd number (e.g., 4) which kernel knows is a pipe
+%%
+%This means that an access from this shell process to [[/mnt/wsys/mouse]]
+%will be converted by the kernel to a 9P request written in the pipe
+%(see the \book{Network}).
+%\l because previous call to mount. mount-table lookup
+%%
+%On the other side of the pipe, the [[fileserver]] proc will read the pipe,
+%decode the 9P request, and return a result to the kernel through
+%the pipe (e.g., an error code).
+%
+%%claude:
+%How can a single pipe serve multiple clients without message corruption?
+%Two things make this work. First, \plan pipes guarantee {atomic writes}
+%up to 64~KB ([[Maxatomic]] in the kernel's queue implementation),
+%and 9P messages are well within this limit, so a complete 9P message
+%from one client is never interleaved with bytes from another.
+%Second, the kernel itself manages the multiplexing: when a client
+%process does a [[read()]] on [[/mnt/wsys/mouse]], the kernel
+%translates it into a 9P [[Tread]] message and writes it atomically
+%into the pipe. Each 9P message carries a unique {\em tag}, so when
+%the [[fileserver]] writes back a response, the kernel matches the
+%tag to know which client process to wake up.
+%\l one pipe, many clients. Kernel manage multiplexing. kernel only
+%\l one to read and write from pipe, and by having 9p request id know
+%\l which syscall to dispatch too, which process to wakeup when 9p request
+%\l answered.
+%\l (see \book{Network}).
+%
+%
+%%dup: with previous paragraph, but good to repeat
+%Thus, it is through a pipe that [[rio]] and its clients are communicating.
+%This communication is indirect. Indeed, the clients are not
+%writing directly into the pipe; they are just performing
+%system calls on (virtual device) files, 
+%as indicated for example by the arrows between the [[hellorio]]
+%process and the kernel in Figure~\ref{fig:soft-archi-threads}.
+%%
+%However, the kernel redirects those system calls to 9P requests 
+%on the pipe created initially
+%by the [[fileserver]] proc and inherited by those clients.
+%%
+%The arrow connecting the [[fileserver]] proc to the kernel
+%on the right of Figure~\ref{fig:soft-archi-threads} is the pipe.
+%
+%Note that [[mount()]] can take an extra argument (called [[extra]]
+%in the signature of [[mount()]] above).
+%%
+%For [[rio]], this argument contains the window identifier
+%(in the [[windowid]] local variable in the code above)
+%of the newly created window.
+%%
+%This extra argument is stored in the process mount-table and
+%passed by the kernel through the 9P request. Thus, 
+%the [[fileserver]] proc can know from which window (and so from
+%which process) a file request comes from.
+%%
+%This is important because the [[fileserver]] proc reads
+%from a pipe that is shared by many processes.
+%\l each process does a special call to mount
+%\l and same file may return something different for each process.
+%\n so drawwalk will return special Qid for each process
+%
+% (the Tread/Rread pipe-multiplexing diagram moved to the Filesystem Server
+%  chapter, near filsysrespond, since it needs 9P tags/messages introduced there)
 
-%dup: overview/interface/gui
-As I said in Section~\ref{sec:rio-gui}, you create
-a new window by first activating the system menu with a right-click,
-then choosing [[New]] in this menu, and finally by
-drawing a rectangle with the mouse specifying the dimension of a window.
+%%claude:
+%Each 9P message carries two identifiers that serve different purposes.
+%The {\em extra} field is a \plan-specific extension to [[mount()]]:
+%it is a string (here, the window identifier) stored in the process
+%mount-table and attached by the kernel to the 9P attach message.
+%It tells the [[fileserver]] which [[Window]] the request belongs to.
+%The {\em tag} is a 9P protocol concept managed by the kernel:
+%it is a small integer that uniquely identifies each outstanding
+%request, so the kernel can match a response back to the specific
+%[[read()]] system call that triggered it---even when multiple
+%requests from different windows are in flight on the same pipe.
+%%claude:
+%In short, [[extra]] tells [[rio]] {\em which window}, while
+%the tag tells the kernel {\em which syscall} to complete.
+%The client processes are unaware of both---they just call [[read()]]
+%on what they think is [[/dev/mouse]] or [[/dev/cons]].
+%The kernel translates each system call into a 9P message and
+%writes it atomically into the pipe (\plan pipes guarantee atomic
+%writes up to 64~KB, well above any 9P message size).
 %
-The trace for those mouse actions will be explained soon in
-Section~\ref{sec:trace-mouse-click}, but for now, the important
-thing is that eventually the mouse thread of [[main-proc]] will be in control,
-with the information about the new window dimension stored in a local variable.
+%% See http://epresence.kmdi.utoronto.ca/1/watch/630.aspx
+%%  mount("/srv/ws", "/dev", M_REPL);
+%%  W = open("/dev/graphics", O_WRITE);
+%%  K = open("/dev/cons", O_READ);
+%%  M = open("/dev/mouse", O_READ);
+%% then this process read/write of those devices will trigger
+%% the rio fileserver, which will then dispatch the request
+%% to the right window thread associated with this process/window,
+%% and do the right action.
 %
-It is the mouse thread that creates windows. 
-%toc:
-Each window creation involves the creation of 
-a new process,
-a new namespace,
-a new [[Window]] structure,
-a new {window thread}, and
-a new {image layer}, 
-as explained in the following sections.
-
-\subsubsection{A new process}
-
-When you create a new window, [[rio]] internally 
-(1) forks a new process (with [[proccreate()]]), 
-(2) adjusts the environment in the child process, and finally 
-(3) executes (with [[procexec()]]) a command (the \plan shell [[/bin/rc]])
-from this child process.
-\l new window is automatically textual window with terminal emulator, so shell
+%%%later:
+%%% then to create new window, mount $wsys /mnt/wys/ 1
+%%% and there you will have new device files. 
+%%% Can then do the same and bind it in -b /dev and boom, 
+%%% you have setup the right environment.
 %
-This is why the creation of the two windows in 
-Figure~\ref{fig:hellorio-and-shell} leads to the creation of two processes in
-Figure~\ref{fig:soft-archi-threads}: [[hellorio]] and the shell process.
-\l actually should be 3 processes, cos fork from shell (but could exec instead?)
-
-
-The sequence of steps above is a classic idiom in \unix programming.
+%\subsubsection{A new [[Window]]}
 %
-Indeed, this is for instance the way the shell implements {redirections},
-as in [[ls > list.txt]]. In that example, the shell adjusts the environment
-by changing the standard output file descriptor in the child process
-to point to a text file instead of the [[/dev/cons]] console device file
-(see the \book{Shell}).
-%trans:
-For [[rio]], the adjust-the-environment part consists in changing the 
-{namespace} in the child process by using 
-the [[mount()]] and [[bind()]] system calls.
-%(see the \book{Kernel}). 
-
-\subsubsection{A new namespace}
-\label{sec:new-namespace}
-
-%dup? Kernel
-A {\em namespace} is the \plan equivalent of a {mount-table}
-in \unix (and its derivatives such as Linux or macOS). 
-A {\em mount-table} allows to plug together multiple {filesystems}
-in a single uniform tree.
-\l literally you mount a fs on top of another fs, like a greffe
-%real-world: ugly c: d: in Windows.
-However, in \plan, each process has its own mount-table, its own namespace; 
-there is not a global mount-table as in \unix.
+%%trans:
+%Now that the process for the new window has been created,
+%and its namespace adjusted,
+%%
+%[[rio]] needs to keep track of the new window (and the new process).
+%%
+%To do so, [[rio]] allocates a new [<Window>] structure,
+%which gathers information about a window.
+%[[rio]] also adds this structure in the global [<windows>],
+%which contains the list of all [[Window]]s
+%(see Section~\ref{sec:core-ds-Windows} for more information).
+%%
+%The [[Window]] structure has many fields. For instance,
+%[[Window.id]] contains the {window identifier}, while
+%[[Window.pid]] contains the {process identifier} of the
+%process associated with the window.
+%%chunks:
+%The other fields will be presented gradually in this document.
 %
-%dup: (changed) intro/rio  overview/principle/terminal
-After the call to [[mount()]] mentioned above, the child process of [[rio]] 
-will see special files in [[/mnt/wsys/]], 
-thanks to the per-process namespace feature of the \plan kernel.
-\n really special cos special Qid because of [[extra]] param to mount
+%\subsubsection{A new thread}
+%\label{sec:new-thread}
+%\l and new channels
 %
-Moreover, because of the [[bind()]] call,
-the same files will also be accessible under [[/dev/]], and 
-will take precedence over any existing files there, 
-thanks to the union-mount feature of the \plan kernel.
-
-%\paragraph{A \plan namespace refresher, [[bind()]] and [[mount()]]}
-\n too much detail? could skip in Overview? hard to skip.
-%trans: 
-Before showing the actual calls to [[bind()]] and [[mount()]] in [[rio]],
-%dup? Kernel
-here are the slightly simplified signatures of [[bind()]]
-and [[mount()]] from [[syscall.h]]:
-
-<<simplified signatures of namespace functions [[syscall.h]]>>=
-error bind(char *str,   char *path, int flag);
-error mount(fdt fd, ..., char *path, int flag, char *extra);
-@
-\l errorneg1? bind(char *name,   char *old, int flag);
-\l errorneg1? mount(fdt fd, int afd, char *old, int flag, char *aname)
-
-
-%dup? Kernel
-[[bind()]] takes as a parameter a string ([[str]]) and a path ([[path]]).
-\n path is usually a directory, but can also be a file (but path must exist!)
+%Each window must deal with inputs from the mouse or the keyboard.
+%%
+%Those inputs, which correspond to two independent activities of the
+%user, are managed in [[rio]] by two independent threads in the left of
+%Figure~\ref{fig:soft-archi-threads}: the mouse and keyboard threads
+%(and associated IO procs).
+%%
+%Those inputs must then find a way to the right of
+%Figure~\ref{fig:soft-archi-threads} until the [[fileserver]] proc,
+%which is connected to the {window processes} (via a pipe).
+%\n more on this later in full trace of mouse click (said later?)
+%%
+%To separate concerns, the mouse and keyboard threads do not
+%communicate directly with the [[fileserver]] proc. 
+%%
+%Instead, they communicate with {\em window threads}
+%(e.g., [[Window 1]] and [[Window 2]] in the middle of 
+%Figure~\ref{fig:soft-archi-threads}). Those threads handle
+%the independent input activities to the independent windows.
+%\n actually also output from worker thread when write on /mnw/wsys/cons
+%{\em Each window is represented by a thread}.
 %
-If the string starts with a [[#]], as in [[bind("#m", "/dev/", ...)]],
-the string must correspond to the code of a device in the \plan kernel, 
-for instance, [[#m]] is the code of the [[mouse]] device.
+%Thus, when you create a new window, [[rio]] creates internally 
+%a new window thread.
+%%
+%Moreover, [[rio]] creates multiple channels to communicate with this new thread.
+%For instance, [[Window.mch]] contains a channel used to exchange messages 
+%between the mouse thread and the window thread.
+%\l Window.ck for keyboard
 %
-In that case, every access from the process to files under path will 
-be {performed} with the methods of the corresponding device, for instance,
-[[mousewalk()]] if the process was listing files in [[/dev/]].
-\l in [[/dev/]]. it is not /dev/mouse or /dev/draw, but /dev/, subtle.
 %
-Remember that in \plan, {devices are filesystems}
-(see the \book{Kernel}).
+%When you move the mouse, the event is transmitted at some point 
+%to the mouse thread of [[rio]], which gets the information 
+%by listening on [[mousectl->c]]
+%%rio-reflection:
+%(this is similar to what [[hellorio]] did in
+%Section~\ref{sec:hellorio-input-code}).
+%%
+%The mouse thread then looks for the window with the focus, 
+%which is stored in the global [<current>] (see Section~\ref{sec:current}),
+%a pointer to a [<Window>] in [<windows>].
+%%
+%It then writes information about the mouse event in [[current->mch]].
+%%
+%On the other side of the channel, a single window thread is listening 
+%on this channel and is ready to receive the mouse input for further processing
+%(for instance, by relaying the event to a {worker thread}, as explained
+%soon in Section~\ref{sec:trace-mouse-click}).
 %
-The mouse device, for instance, manages more than one file
-(e.g., [[/dev/mouse]], [[/dev/cursor]]). 
 %
-Some devices such as [[draw]] manage even multiple directories 
-(e.g., [[/dev/draw/1/]], [[/dev/draw/2/]]).
-\n also union-mount for /dev/ (explained later)
-\n in fact #i not handled by bind but but namei. can do open("#i/...")
-%real-world:
-\l Equivalent in Linux is major/minor mknod in plan9. 
-\l plan9 devices more flexible, multiple files, complex services! see draw.
+%Because the window with the focus can change, the mouse and keyboard
+%threads can communicate with different window threads. This is why
+%in Figure~\ref{fig:soft-archi-threads} the mouse and keyboard threads
+%are connected to all the window threads.
 %
-If the string did not start with a [[#]], every access to
-files under path are redirected to the path denoted by the string.
+%\subsubsection{A new layer}
+%\label{sec:new-layer}
 %
-In effect, it is like [[path]] becomes an {\em alias} for the 
-path denoted by [[str]].
-%real-world:
-\l kinda symbolic link, but more general (see later)
-% see 2/bind (and 1/bind)? bof. actually can bind a file (but can not mount)
-
-
-%dup? Kernel.nw
-With [[mount()]], the kernel delegates the management of
-a directory neither to a device in the kernel, nor
-to another directory, but to a {userspace} program.
-\l or other kernel?
 %
-Indeed, [[mount()]] takes as a parameter a file descriptor ([[fd]]) and 
-a path ([[path]]), 
-in order to tell the kernel that every access to files under path should
-be handled by the {process behind the file descriptor}
-(see the \book{Kernel} and the \book{Network}).
-\n again depends on flag, can be union dir (said later)
+%\n move discussion to trace of drawing operation and initialization?
+%\n  maybe good to repeat there anyway.
 %
-This allows to implement {\em filesystems in user space},
-a powerful and convenient feature.
+%%trans: 
+%The last thing [[rio]] internally creates when you create a new window is
+%a new image layer with the dimension of the window.
+%%
+%This image is stored in the [[Window.img]] field of the window.
+%{\em Each window is associated to one layer}.
+%\l via [[allocwindow()]]
+%%dup: overview/principles/window-vs-graphical
+%As I said in Section~\ref{sec:layer-introduction}, an image layer is a
+%convenient graphics construct that [[rio]] uses to implement overlapping
+%windows.
+%%trans:
+%What we need now is a way to communicate this layer to the window
+%application so that this application can draw in this new layer.
 %
-Note that the file descriptor argument can be anything; it can correspond to 
-a pipe to a local process, but also to an opened connection on the network.
-Thus, filesystems can also be imported (and exported) through 
-the network in \plan.
-\l but then fd leads to another kernel? not another userspace program?
-% see 2/bind (and 1/bind)
-
-
-%dup? Kernel.nw
-Both [[bind()]] and [[mount()]] operate on an existing path
-and alter the filesystem tree at this path.
 %
-Moreover, in \plan, you can not only {plug} a filesystem on top of another 
-filesystem at a specific directory, you can also {join} filesystems
-in a directory. 
-Indeed, a directory can be the union of two or more filesystems.
-Such a directory is called a {\em union-mount}.
+%%dup: overview/interface/fs/screen
+%As mentioned in Section~\ref{sec:winname}, each window application is
+%connected directly to the [[draw]] device,
+%as shown in Figure~\ref{fig:soft-archi-threads} with
+%the [[hellorio process]] connected to [[draw]] via [[/dev/draw/3/]].
+%%dup: overview/interface/fs/screen
+%The drawing operations by the window application do not go through
+%a virtual [[/mnt/wsys/draw]] file that would be managed by [[rio]]
+%(and its [[fileserver]] proc).
+%%
+%However, it is [[rio]] that creates the layer and so knows
+%where the window application should draw.
+%%
+%Fortunately, [[draw]] has an IPC feature allowing multiple processes
+%to share an image or an image layer.
+%%dup: overview/interface/fs/screen
+%By giving a {public name} to the new image layer (with [[nameimage()]]),
+%[[rio]] allows another process to retrieve a handle to the image 
+%(with [[namedimage()]]) if this process knows the name of the image.
+%\l security issues? any process could fetch? could encrypt name.
+%%
+%This unique name is stored in the [[Window.name]] field of the window.
+%%trans:
+%However, we still need a way to communicate this name to the window application.
+%%dup: overview/interface/fs/screen
+%To do so, [[rio]] uses the same mechanism it uses to transmit any 
+%kind of information to its window: a file under [[/mnt/wsys/]], in that case
+%[[/mnt/wsys/winname]], which contains the string in [[Window.name]].
 %
-Both [[bind()]] and [[mount()]] take a flag parameter
-specifying how to handle the union of the old content of the
-directory with the new content of the [[bind()]]'ed device (or directory) 
-or the new [[mount()]]'ed user-space filesystem.
 %
-For instance, the flag argument [[MREPL]] (for replace)
-indicates that the old content should be ignored and replaced 
-by the new content.
+%Note that each window application will read a different string
+%from his [[/mnt/wsys/winname]] file. Indeed, each window process
+%has a different namespace since a unique window identifier 
+%is passed to the [[mount()]] command (see Section~\ref{sec:new-namespace}).
+%%
+%When a window application reads [[/mnt/wsys/winname]],
+%the request goes to the [[fileserver]] proc through a pipe,
+%and [[fileserver]] knows which [[Window.name]] field to read
+%since the window identifier is passed also in the request.
+%\l full trace soon.
 %
-The flag argument [[MAFTER]] indicates that the old content
-should be kept and should take {precedence} over the new
-content in case of {name conflicts}.
-Indeed, two filesystems can contain files with identical names.
+%\bigskip
+%%trans:
+%This concludes the trace of a new window creation. 
+%%
+%Now that [[rio]] has created all the necessary entities to support the
+%new window, I can explain the trace of a mouse click in this new window
+%in the next section.
 %
-Thanks to the union-mount and a series of calls to [[bind()]],
-the [[/dev]] directory can contain many files and directories
-managed by multiple devices.
-
-%\paragraph{Rio's namespaces}
-%trans: can now understand specific calls
-
-Here are the slightly simplified calls to [[mount()]] and [[bind()]]
-in the function [<filsysmount()>]
-called in the child process of [[rio]]
-when a new window is created:
-
-% kernel -> winshell (as x -> proccreate(winshell) <- new <- button3menu) ->
-%  filsysmount
-
-<<[[filsysmount()]] simplified code>>=
-err = mount(fs->cfd, ..., "/mnt/wsys", MREPL, windowid);
-...
-err = bind("/mnt/wsys", "/dev", MBEFORE);
-@
-
-
-With the call to [[bind()]], [[/dev/]] becomes the union of the old [[/dev/]]
-directory and the [[/mnt/wsys]] directory.
-%dup? overview/soft-archi/new-window 
-The flag argument [[MBEFORE]] indicates that files under [[/mnt/wsys]] 
-takes precedence over the old files under [[/dev/]].
-%
-This means than an access to [[/dev/mouse]] by the process
-who executed the code above (or the children of this process)
-will be redirected to an access to [[/mnt/wsys/mouse]], 
-and not to the old [[/dev/mouse]] file that was managed by the kernel 
-(and which was there because of a previous call to [[bind("#m", "/dev", ...)]]).
-%
-This is why in Figure~\ref{fig:soft-archi-threads}, 
-the [[hellorio]] and shell processes, at the bottom right, are connected to 
-files starting with [[/mnt/wsys/]], while [[rio]] itself is connected
-to files starting with [[/dev/]], at the bottom left.
-
-
-Regarding [[mount()]], the file descriptor argument
-corresponds to one side of
-a pipe created by the [[fileserver]] proc (see Section~\ref{sec:thread-archi})
-and stored in the [[cfd]] (for client file descriptor) field of the 
-global [<fs>] (for filesystem).
-%
-The other side of the pipe is stored in the [[sfd]]
-(for server file descriptor) field of [[fs]].
-%
-Note that file descriptors and namespaces are inherited 
-by default through [[rfork()]] (or [[proccreate()]]), 
-and maintained through [[exec()]] (or [[procexec()]]).
-\n default unless RFFDG flag?
-Thus, after the child process of [[rio]] has called [<filsysmount()>]
-and [[exec()]]'ed the shell [[/bin/rc]], this shell process 
-\n actually it is procexec
-will still have in its file descriptor table in the kernel
-a link to the pipe created by the [[fileserver]] proc, and in
-its mount-table the information about [[/mnt/wsys/]].
-\l cfd is fd number (e.g., 4) which kernel knows is a pipe
-%
-This means that an access from this shell process to [[/mnt/wsys/mouse]]
-will be converted by the kernel to a 9P request written in the pipe
-(see the \book{Network}).
-\l because previous call to mount. mount-table lookup
-%
-On the other side of the pipe, the [[fileserver]] proc will read the pipe,
-decode the 9P request, and return a result to the kernel through
-the pipe (e.g., an error code).
-
-%claude:
-How can a single pipe serve multiple clients without message corruption?
-Two things make this work. First, \plan pipes guarantee {atomic writes}
-up to 64~KB ([[Maxatomic]] in the kernel's queue implementation),
-and 9P messages are well within this limit, so a complete 9P message
-from one client is never interleaved with bytes from another.
-Second, the kernel itself manages the multiplexing: when a client
-process does a [[read()]] on [[/mnt/wsys/mouse]], the kernel
-translates it into a 9P [[Tread]] message and writes it atomically
-into the pipe. Each 9P message carries a unique {\em tag}, so when
-the [[fileserver]] writes back a response, the kernel matches the
-tag to know which client process to wake up.
-\l one pipe, many clients. Kernel manage multiplexing. kernel only
-\l one to read and write from pipe, and by having 9p request id know
-\l which syscall to dispatch too, which process to wakeup when 9p request
-\l answered.
-\l (see \book{Network}).
-
-
-%dup: with previous paragraph, but good to repeat
-Thus, it is through a pipe that [[rio]] and its clients are communicating.
-This communication is indirect. Indeed, the clients are not
-writing directly into the pipe; they are just performing
-system calls on (virtual device) files, 
-as indicated for example by the arrows between the [[hellorio]]
-process and the kernel in Figure~\ref{fig:soft-archi-threads}.
-%
-However, the kernel redirects those system calls to 9P requests 
-on the pipe created initially
-by the [[fileserver]] proc and inherited by those clients.
-%
-The arrow connecting the [[fileserver]] proc to the kernel
-on the right of Figure~\ref{fig:soft-archi-threads} is the pipe.
-
-Note that [[mount()]] can take an extra argument (called [[extra]]
-in the signature of [[mount()]] above).
-%
-For [[rio]], this argument contains the window identifier
-(in the [[windowid]] local variable in the code above)
-of the newly created window.
-%
-This extra argument is stored in the process mount-table and
-passed by the kernel through the 9P request. Thus, 
-the [[fileserver]] proc can know from which window (and so from
-which process) a file request comes from.
-%
-This is important because the [[fileserver]] proc reads
-from a pipe that is shared by many processes.
-\l each process does a special call to mount
-\l and same file may return something different for each process.
-\n so drawwalk will return special Qid for each process
-
-%claude:
-The following diagram summarizes the full indirect communication
-path for two different windows. Window~2 reads [[/dev/mouse]]
-and window~3 reads [[/dev/cons]], both going through the same pipe.
-The [[extra]] field (the window identifier from [[mount()]]) tells
-[[rio]] which window each request belongs to, while the [[tag]]
-lets the kernel match responses to the right syscall:
-\begin{verbatim}
-  Window 2         Window 3         Kernel           rio fileserver
-  --------         --------      ---------------     --------------
-     |                |               |                    |
-  read(/dev/mouse)    |               |                    |
-     +------------------------------->|                    |
-     |   extra="2"    |               |                    |
-     |          read(/dev/cons)       |                    |
-     |                +-------------->|                    |
-     |                   extra="3"    |                    |
-     |                |               |                    |
-     |                |               | Tread [tag=3, extra="2", mouse]
-     |                |               +------------------->|
-     |                |               | Tread [tag=5, extra="3", cons]
-     |                |               +------------------->|
-     |                |               |       (pipe)       |
-     |                |               |       dispatch to  |
-     |                |               |       Window 2 & 3 |
-     |                |               |                    |
-     |                |               | Rread [tag=5, data=...]
-     |                |               |<-------------------+
-     |                | cons returns  |                    |
-     |                |<--------------+ (tag=5 -> win 3)   |
-     |                |               |                    |
-     |                |               | Rread [tag=3, data=...]
-     |                |               |<-------------------+
-     |  mouse returns |               |                    |
-     |<-------------------------------+ (tag=3 -> win 2)   |
-     |                |               |                    |
-\end{verbatim}
-
-%claude:
-Each 9P message carries two identifiers that serve different purposes.
-The {\em extra} field is a \plan-specific extension to [[mount()]]:
-it is a string (here, the window identifier) stored in the process
-mount-table and attached by the kernel to the 9P attach message.
-It tells the [[fileserver]] which [[Window]] the request belongs to.
-The {\em tag} is a 9P protocol concept managed by the kernel:
-it is a small integer that uniquely identifies each outstanding
-request, so the kernel can match a response back to the specific
-[[read()]] system call that triggered it---even when multiple
-requests from different windows are in flight on the same pipe.
-%claude:
-In short, [[extra]] tells [[rio]] {\em which window}, while
-the tag tells the kernel {\em which syscall} to complete.
-The client processes are unaware of both---they just call [[read()]]
-on what they think is [[/dev/mouse]] or [[/dev/cons]].
-The kernel translates each system call into a 9P message and
-writes it atomically into the pipe (\plan pipes guarantee atomic
-writes up to 64~KB, well above any 9P message size).
-
-% See http://epresence.kmdi.utoronto.ca/1/watch/630.aspx
-%  mount("/srv/ws", "/dev", M_REPL);
-%  W = open("/dev/graphics", O_WRITE);
-%  K = open("/dev/cons", O_READ);
-%  M = open("/dev/mouse", O_READ);
-% then this process read/write of those devices will trigger
-% the rio fileserver, which will then dispatch the request
-% to the right window thread associated with this process/window,
-% and do the right action.
-
-%%later:
-%% then to create new window, mount $wsys /mnt/wys/ 1
-%% and there you will have new device files. 
-%% Can then do the same and bind it in -b /dev and boom, 
-%% you have setup the right environment.
-
-\subsubsection{A new [[Window]]}
-
-%trans:
-Now that the process for the new window has been created,
-and its namespace adjusted,
-%
-[[rio]] needs to keep track of the new window (and the new process).
-%
-To do so, [[rio]] allocates a new [<Window>] structure,
-which gathers information about a window.
-[[rio]] also adds this structure in the global [<windows>],
-which contains the list of all [[Window]]s
-(see Section~\ref{sec:core-ds-Windows} for more information).
-%
-The [[Window]] structure has many fields. For instance,
-[[Window.id]] contains the {window identifier}, while
-[[Window.pid]] contains the {process identifier} of the
-process associated with the window.
-%chunks:
-The other fields will be presented gradually in this document.
-
-\subsubsection{A new thread}
-\label{sec:new-thread}
-\l and new channels
-
-Each window must deal with inputs from the mouse or the keyboard.
-%
-Those inputs, which correspond to two independent activities of the
-user, are managed in [[rio]] by two independent threads in the left of
-Figure~\ref{fig:soft-archi-threads}: the mouse and keyboard threads
-(and associated IO procs).
-%
-Those inputs must then find a way to the right of
-Figure~\ref{fig:soft-archi-threads} until the [[fileserver]] proc,
-which is connected to the {window processes} (via a pipe).
-\n more on this later in full trace of mouse click (said later?)
-%
-To separate concerns, the mouse and keyboard threads do not
-communicate directly with the [[fileserver]] proc. 
-%
-Instead, they communicate with {\em window threads}
-(e.g., [[Window 1]] and [[Window 2]] in the middle of 
-Figure~\ref{fig:soft-archi-threads}). Those threads handle
-the independent input activities to the independent windows.
-\n actually also output from worker thread when write on /mnw/wsys/cons
-{\em Each window is represented by a thread}.
-
-Thus, when you create a new window, [[rio]] creates internally 
-a new window thread.
-%
-Moreover, [[rio]] creates multiple channels to communicate with this new thread.
-For instance, [[Window.mch]] contains a channel used to exchange messages 
-between the mouse thread and the window thread.
-\l Window.ck for keyboard
-
-
-When you move the mouse, the event is transmitted at some point 
-to the mouse thread of [[rio]], which gets the information 
-by listening on [[mousectl->c]]
-%rio-reflection:
-(this is similar to what [[hellorio]] did in
-Section~\ref{sec:hellorio-input-code}).
-%
-The mouse thread then looks for the window with the focus, 
-which is stored in the global [<current>] (see Section~\ref{sec:current}),
-a pointer to a [<Window>] in [<windows>].
-%
-It then writes information about the mouse event in [[current->mch]].
-%
-On the other side of the channel, a single window thread is listening 
-on this channel and is ready to receive the mouse input for further processing
-(for instance, by relaying the event to a {worker thread}, as explained
-soon in Section~\ref{sec:trace-mouse-click}).
-
-
-Because the window with the focus can change, the mouse and keyboard
-threads can communicate with different window threads. This is why
-in Figure~\ref{fig:soft-archi-threads} the mouse and keyboard threads
-are connected to all the window threads.
-
-\subsubsection{A new layer}
-\label{sec:new-layer}
-
-
-\n move discussion to trace of drawing operation and initialization?
-\n  maybe good to repeat there anyway.
-
-%trans: 
-The last thing [[rio]] internally creates when you create a new window is
-a new image layer with the dimension of the window.
-%
-This image is stored in the [[Window.img]] field of the window.
-{\em Each window is associated to one layer}.
-\l via [[allocwindow()]]
-%dup: overview/principles/window-vs-graphical
-As I said in Section~\ref{sec:layer-introduction}, an image layer is a
-convenient graphics construct that [[rio]] uses to implement overlapping
-windows.
-%trans:
-What we need now is a way to communicate this layer to the window
-application so that this application can draw in this new layer.
-
-
-%dup: overview/interface/fs/screen
-As mentioned in Section~\ref{sec:winname}, each window application is
-connected directly to the [[draw]] device,
-as shown in Figure~\ref{fig:soft-archi-threads} with
-the [[hellorio process]] connected to [[draw]] via [[/dev/draw/3/]].
-%dup: overview/interface/fs/screen
-The drawing operations by the window application do not go through
-a virtual [[/mnt/wsys/draw]] file that would be managed by [[rio]]
-(and its [[fileserver]] proc).
-%
-However, it is [[rio]] that creates the layer and so knows
-where the window application should draw.
-%
-Fortunately, [[draw]] has an IPC feature allowing multiple processes
-to share an image or an image layer.
-%dup: overview/interface/fs/screen
-By giving a {public name} to the new image layer (with [[nameimage()]]),
-[[rio]] allows another process to retrieve a handle to the image 
-(with [[namedimage()]]) if this process knows the name of the image.
-\l security issues? any process could fetch? could encrypt name.
-%
-This unique name is stored in the [[Window.name]] field of the window.
-%trans:
-However, we still need a way to communicate this name to the window application.
-%dup: overview/interface/fs/screen
-To do so, [[rio]] uses the same mechanism it uses to transmit any 
-kind of information to its window: a file under [[/mnt/wsys/]], in that case
-[[/mnt/wsys/winname]], which contains the string in [[Window.name]].
-
-
-Note that each window application will read a different string
-from his [[/mnt/wsys/winname]] file. Indeed, each window process
-has a different namespace since a unique window identifier 
-is passed to the [[mount()]] command (see Section~\ref{sec:new-namespace}).
-%
-When a window application reads [[/mnt/wsys/winname]],
-the request goes to the [[fileserver]] proc through a pipe,
-and [[fileserver]] knows which [[Window.name]] field to read
-since the window identifier is passed also in the request.
-\l full trace soon.
-
-\bigskip
-%trans:
-This concludes the trace of a new window creation. 
-%
-Now that [[rio]] has created all the necessary entities to support the
-new window, I can explain the trace of a mouse click in this new window
-in the next section.
+%%claude:
+%To summarize, creating a new window produces the following
+%entities, all linked together:
 
 %claude:
-To summarize, creating a new window produces the following
-entities, all linked together:
-\begin{verbatim}
+Putting it together, the new [<Window>] is the hub: it ties the shell
+{process} (through its pid), the {image layer} on the [[desktop]], and the
+{window thread} that the mouse and keyboard threads feed through its
+channels.
+
+\begin{vdiagram}
                     rio (main-proc)
                    +---------------------------+
  mouse thread      |                           |
@@ -7060,8 +7046,8 @@ entities, all linked together:
                    |    .id = 2                |
                    |    .pid -------+          |
                    |    .name = "window.2"     |
-                   |    .img ------+|          |
-                   |    .mch       ||          |
+                   |    .i   ------+|          |
+                   |    .mc        ||          |
                    |               ||          |
                    |  window       ||          |
                    |  thread  <----+|          |
@@ -7070,15 +7056,14 @@ entities, all linked together:
               draw (kernel)    |   ||   new process
            +-------------------+   ||  +----------+
            |   layer           |   |+->| /bin/rc  |
-           |  "window.2"      |   |   +----+-----+
+           |  "window.2"       |   |   +----+-----+
            |  (on desktop)     |   |        |
            +-------------------+   |   namespace:
                                    |   /dev/mouse ->
                                    |     /mnt/wsys/mouse
                                    |       -> pipe to rio
                                    |          extra="2"
-\end{verbatim}
-
+\end{vdiagram}
 
 
 
@@ -8600,6 +8585,43 @@ the kernel guarantees that writes of complete messages to a pipe
 are atomic, and the tag/fid fields let the kernel match replies to
 their requests.
 
+%claude:
+This is what lets a {single} pipe serve {many} windows at once. The diagram
+below follows two windows reading different files concurrently: the kernel
+writes each request atomically, stamped with the window id ([[extra]], from
+the [[mount]]) and a unique [[tag]]; [[rio]] may reply in any order, and the
+kernel uses the [[tag]] to wake the right client.
+%
+\begin{vdiagram}
+  Window 2         Window 3         Kernel           rio fileserver
+  --------         --------      ---------------     --------------
+     |                |               |                    |
+  read(/dev/mouse)    |               |                    |
+     +------------------------------->|                    |
+     |   extra="2"    |               |                    |
+     |          read(/dev/cons)       |                    |
+     |                +-------------->|                    |
+     |                   extra="3"    |                    |
+     |                |               |                    |
+     |                |               | Tread [tag=3, extra="2", mouse]
+     |                |               +------------------->|
+     |                |               | Tread [tag=5, extra="3", cons]
+     |                |               +------------------->|
+     |                |               |       (pipe)       |
+     |                |               |       dispatch to  |
+     |                |               |       Window 2 & 3 |
+     |                |               |                    |
+     |                |               | Rread [tag=5, data=...]
+     |                |               |<-------------------+
+     |                | cons returns  |                    |
+     |                |<--------------+ (tag=5 -> win 3)   |
+     |                |               |                    |
+     |                |               | Rread [tag=3, data=...]
+     |                |               |<-------------------+
+     |  mouse returns |               |                    |
+     |<-------------------------------+ (tag=3 -> win 2)   |
+     |                |               |                    |
+\end{vdiagram}
 
 % ... -> <>  called from many Xfid threads, and some filsysxxx too
 <<function [[filsysrespond]]>>=
