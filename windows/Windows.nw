@@ -5156,13 +5156,9 @@ code that creates, moves, resizes, hides, and deletes windows.
 
 In \plan, the window manager and the window server are the same program,
 unlike X~Window where they are separate.
-All window management paths converge to the same mechanism: sending a
-[<Wctlmesg>] to the target [<Window.cctl>] channel, where its
-[<winctl()>] thread will process it.
-%
-Window management operations can be triggered from several sources,
-but they all converge to the same mechanism:
-%yoann1: remove some duplication
+Window management can be triggered from several sources, but they all
+converge to the same mechanism: sending a [<Wctlmesg>] to the target
+[<Window.cctl>] channel, where its [<winctl()>] thread processes it:
 
 %claude:
 \begin{vdiagram}
@@ -5243,6 +5239,13 @@ button3menu(void)
 %  be weird in middle of menu action to get the cursor moved
 
 %yoann: maybe quick reference to menuhit in \book{Graphics} and what it does and what mean the arguments (especially 3) and the menu intro below and use desktop because menuhit internally use layer to overlap menu on top of window (or desktop)
+%claude:
+[[menuhit()]] is a libdraw routine (see the \book{Graphics}): it pops up a
+menu, lets the user pick, and returns the chosen item's index (or [[-1]] if
+none). The [[3]] says it tracks mouse button~3, [[mousectl]] is the mouse to
+follow, [[&menu3]] the menu to show, and [[desktop]] the [[Screen]] on which
+to allocate the menu's image---menuhit draws the menu as its own overlapping
+layer on top of the windows, so it must share [[rio]]'s desktop.
 
 % displaying a menu with menuhit is drawing something! on top of what you
 % are currently! it's part of the drawing library! See Graphics.nw.
@@ -5482,6 +5485,9 @@ struct Wctlmesg
 % (actually why need rectangle, image not enough?)
 
 %yoann: quick intro
+%claude:
+[<wsendctlmesg()>] is the {sender} side: it packs the type, rectangle, and
+image into a [[Wctlmesg]] and sends it on the window's [[cctl]] channel.
 
 <<function [[wsendctlmesg]]>>=
 /// mousethread | new | delete | wclose | move | resize | whide | ... -> <>
@@ -5501,6 +5507,9 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
 %ocaml: ADT so build directly, no need intermediate function
 
 %yoann: quick intro
+%claude:
+[<wctlmesg()>] is the {receiver} side, running in the window's [<winctl()>]
+thread: it switches on the message type and carries out the operation.
 
 % from winctl event loop! to process on the window thread side a  Wctlmesg
 <<function [[wctlmesg]]>>=
@@ -5898,6 +5907,10 @@ if(w->i == nil)
 
 
 %yoann: quick trans and intro
+%claude:
+[[wmk()]]'s last step initializes the window's process-related fields:
+[[notefd]] (the note channel to the window's process, not open yet) and
+[[dir]] (its working directory, copied from [[startdir]]).
 
 <<[[wmk()]] process settings>>=
 w->notefd = -1;
@@ -5974,6 +5987,15 @@ if(pid == 0){
 % pass w so can communicate back with its winctl thread handler
 
 %yoann: explain why use intermediate winshell and cpid? why not simply fork  here so no need also arg[] as can access this information directly. why proccreate/procexec intermediates? because of code below? to better handle possible errors in child?
+%claude:
+Why a separate [<winshell()>] proc and a [[cpid]] channel rather than just
+forking here? Because [[rio]] is a libthread program: it cannot simply
+[[fork()]] inside a thread, so it uses [[proccreate]] to spawn a fresh proc
+in which [<winshell()>] sets up a private namespace (with [[rfork]]), mounts
+[[rio]]'s filesystem, and [[exec]]s the shell. The new process id is handed
+back over [[cpid]] ([[recvul]]) so [[rio]] can remember it---to kill the
+process when the window is deleted---and [[arg]] is just the marshalling
+needed to pass several parameters through [[proccreate]]'s single [[void*]].
 
 % wait for pid. pid will be passed to wsetpid, so know
 % which process we are connected to, and which one to kill if delete
@@ -6124,13 +6146,15 @@ if(pid == 0){
 \subsection{Namespace adjustments: [[filsysmount()]]}
 
 %claude:
+Remember that this runs in the new child proc, [<winshell()>], which has
+just rforked a private namespace---so the bindings below affect only the
+window's own process, not [[rio]] or the other windows.
 This is the key step that makes [[rio]]'s virtualization work.
 [<filsysmount()>] mounts [[rio]]'s client pipe onto [[/mnt/wsys]],
 passing the window ID as the mount spec so that [[rio]] knows which
 window the client belongs to. Then it binds [[/mnt/wsys]] before
 [[/dev]], so that [[/dev/cons]], [[/dev/mouse]], etc.\ resolve to
 [[rio]]'s virtual files rather than the real device files.
-%yoann1: can maybe add something like remember that at this point we are in child process in winshell
 
 <<[[winshell()]] adjust namespace>>=
 err = filsysmount(filsys, w->id);
@@ -6186,6 +6210,10 @@ err = open("/dev/cons", OWRITE);
 
 
 %yoann: quick sentence saying rest is error management code for winshell, use threadexits
+%claude:
+The rest of [<winshell()>] is error handling: on any failure it reports a
+zero pid back to the parent (through [[pidc]]) and bails out with
+[[threadexits]].
 
 <<[[winshell()]] sanity check err open cons stdin>>=
 if(err < 0){
@@ -6213,6 +6241,9 @@ if(err < 0){
 @
 
 %yoann: quick sentence now error management for filsysmount
+%claude:
+[<filsysmount()>] itself checks both of its steps---the [[mount]] and the
+[[bind]]---returning [[-1]] if either fails.
 
 
 <<[[filsysmount()]] sanity check err mount>>=
@@ -6277,6 +6308,11 @@ wsetname(Window *w)
 % thx to that, geninitdraw will work!
 
 %yoann: explain this field, probably because resize so will need different name later
+%claude:
+[[namecount]] is bumped on every [<wsetname()>], giving each published image
+a fresh name ([[window.2.0]], [[window.2.1]], \dots). This matters on resize:
+the window gets a brand-new image, so it needs a new name for the client to
+re-discover it through [[/dev/winname]].
 
 <<[[Window]] id fields>>=
 uint		namecount;
@@ -6284,6 +6320,11 @@ uint		namecount;
 % counter, per window
 
 %yoann: explain when this situation can happen
+%claude:
+The name can still be taken if the previous image under it has not been
+freed yet---for instance a client slow to release its old window image after
+a resize. [<wsetname()>] then appends a letter ([[A]]..[[Z]]) until it finds
+a free name.
 
 <<[[wsetname()]] if image name already in use, try another name>>=
 for(i='A'; i<='Z'; i++){
@@ -6308,6 +6349,9 @@ fprint(STDERR, "rio: setname failed: %s\n", err);
 % and layer creation
 
 %yoann: transition sentence where say we omitted sweep in call to new() before
+%claude:
+Earlier, walking through [[new()]], we passed over how the new window's
+rectangle is chosen. That is [<sweep()>]'s job.
 
 %claude:
 [[sweep()]] lets the user interactively draw a rectangle for the new window.
@@ -6465,6 +6509,10 @@ Rescue:
 %alt: in Overview chapter in Soft archi section
 
 %yoann: transition sentence saying will now try to summarize the many steps we saw to solidify by looking at trace leading to creation of windows in Figure fig:hellorio-and-shell
+%claude:
+Window creation touched many pieces; to consolidate them, let us follow the
+whole sequence once more as a single trace, from the user's menu click to a
+running shell in a fresh window.
 
 %trans:
 In Figure~\ref{fig:soft-archi-threads},
@@ -6478,7 +6526,6 @@ and [[hellorio]] processes in Figure~\ref{fig:soft-archi-threads},
 as well as the creation of the associated window threads. 
 %
 %In the next section, I will explain the creation of the worker threads.
-%yoann1: this whole section was before in Soft archi section in Overview chapter but is now in window manager chapter as a summary so probably need to adjust things in the many paragraphs before
 
 %dup: overview/interface/gui
 As I said in Section~\ref{sec:rio-gui}, you create
@@ -7369,7 +7416,10 @@ The [[freeimage()]]
 that follows drops the reference obtained by [[namedimage()]], but the
 client may still hold its own reference---the image only truly
 disappears when all references are gone.
-%yoann1: can say different use of originwindow this time, not for logical coordinate here
+%claude:
+Note this is a different use of [[originwindow()]] than in [<wmk()>]: there
+it established a {logical} origin for the window, whereas here it just shoves
+the window's screen position off the edge of the display to hide it.
 
 <<[[main()]] threads creation>>=
 threadcreate(deletethread, nil, STACK);
@@ -7498,6 +7548,9 @@ if(!w->deleted)
 
 
 %yoann: quick transition say finally can see Exited and actual free machinery
+%claude:
+We can now see the second message, [[Exited]], and the actual teardown it
+triggers.
 
 <<[[Wctlmesgkind]] cases>>=
 Exited,
@@ -7616,6 +7669,9 @@ case Move:
 \subsection{Menu handler: [[move()]]}
 
 %yoann: say move in the menu handler
+%claude:
+[<move()>] is the system-menu ``Move'' handler: it picks a window, lets the
+user [<drag()>] it to a new position, and sends a [[Moved]] message.
 
 
 <<function [[move]]>>=
@@ -7783,14 +7839,8 @@ drawedge(Image **bp, Rectangle r)
 
 % via menu, or via mouse on border directly
 %claude:
-Resizing reuses [<sweep()>] to let the user draw a new rectangle, then
-sends a [<Reshaped>] message.
-%
-In the [<wctlmesg()>] handler, [<Moved>] and [<Reshaped>] share the same code
-path: [<wresize()>] replaces the window's image, re-publishes the name
-(so the client can reconnect via [[getwindow()]]), and triggers a
-reflow of the text content for textual windows.
-%yoann1: this duplicate a bit the next paragraph
+Resizing a window can be triggered from the menu or by dragging a border;
+either way it ends in a [<Reshaped>] message.
 
 <<[[button3menu()]] cases>>=
 case Reshape:
@@ -7833,6 +7883,11 @@ resize(void)
 % A Moved is actually a special case of Reshaped
 
 %yoann: can say finally see handler, that handle Moved and Reshaped
+%claude:
+Here is the shared handler. [[Moved]] and [[Reshaped]] take the same path
+([[Moved]] is just a resize that keeps the same size): [<wresize()>] adopts
+the new image, re-publishes the window name (so the client reconnects via
+[[getwindow()]]), and reflows the text content for a textual window.
 
 <<[[wctlmesg()]] cases>>=
 case Moved:
@@ -8001,6 +8056,10 @@ prevents an accidental click on the border from triggering a resize.
 
 
 %yoann: quick sentence
+%claude:
+[<wmovemouse()>] does the reverse conversion: given a point in the window's
+logical coordinates it adds [[screenr.min - i->r.min]] to get physical
+screen coordinates, then warps the pointer there with [[moveto()]].
 
 <<function [[wmovemouse]]>>=
 /*
@@ -8101,7 +8160,9 @@ cornerpt(Rectangle r, Point p, int which)
 % via menu
 
 %yoann: trans: where say see final window manager feature, visibility.
-
+%claude:
+The last window-management feature is {visibility}: hiding a window and later
+bringing it back.
 
 <<[[button3menu()]] cases>>=
 case Hide:
@@ -8110,17 +8171,6 @@ case Hide:
 @
 
 \subsection{Menu handler: [[hide()]]}
-
-%claude:
-Hiding a window is an elegant trick: the window's on-screen layer image
-is replaced with a plain in-memory image (via [[allocimage()]], not
-[[allocwindow()]]).
-%
-Since it is no longer a layer, it does not appear on
-screen, but the window's content is preserved. The hidden window is added
-to the [<hidden>] array and appears as an extra entry in the right-click
-system menu so the user can unhide it later.
-%yoann1: duplicate a bit what is said further below before whide
 
 <<function [[hide]]>>=
 void
@@ -8221,6 +8271,9 @@ for(i=0; i<nhidden; i++)
 %ocaml: Hashtbl.remove
 
 %yoann: quick sentence
+%claude:
+The hidden entries start at index [[Hidden]] in [[menu3str]], just past the
+fixed menu items, and the list is [[nil]]-terminated.
 
 <<[[button3menu()]] menu3str adjustments with hidden windows>>=
 for(i=0; i<nhidden; i++)
@@ -8332,8 +8385,7 @@ in the [<filsysproc()>] context and handles the fast path, and an
 may block (like reading [[/dev/cons]] when no data is available)
 in the main-proc context (see Figure~\ref{fig:soft-archi-threads}).
 
-\section{On clients and server}
-%yoann1: better title?
+\section{Clients, server, and the kernel in between}
 
 %claude: %terminology:
 It is worth pinning down the words ``client'' and ``server'', which recur
