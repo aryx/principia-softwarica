@@ -2339,7 +2339,9 @@ the [[qid]] alone says both which window and which of its files a fid
 refers to. During attach or walk (shown in
 Chapter~\ref{chap:filesystem-server}), [[rio]] reads that window id back
 out, resolves it once with [<wlookid()>], and caches the resulting
-[[Window]] pointer in [[w]] (taking a reference). Later operations follow
+[[Window]] pointer in [[w]] (taking a reference).
+%
+Later operations follow
 [[f->w]] directly rather than rescanning the [[windows]] array, so [[w]]
 is not independent state---it is just the [[qid]]'s window id, already
 resolved.
@@ -8341,18 +8343,13 @@ wunhide(int h)
 %    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
 % big missing piece.
 
-% Until now we have an app that can create rectangles on the
-% screen and move/resize/delete them. But for those rectangle
-% to be really window, they must have a process with the right
-% namespaces and the right fileserver to serve this namespace.
-
 % mount is in kernel and does the right thing when the argument
 % is a filedescriptor.
 
-% Require Kernel.nw and Network.nw for this chapter.
-% I assume a lot.
+% Require Kernel.nw and Network.nw for this chapter. I assume a lot.
+
 %claude:
-Until now I have presented an application that can create rectangles on
+Until now, I have presented an application that can create rectangles on
 the screen, move and resize them. But for those rectangles to become
 real {windows}, they need a filesystem server that virtualizes the device
 files ([[/dev/cons]], [[/dev/mouse]], etc.) for each client process.
@@ -8362,7 +8359,7 @@ This chapter presents the 9P operations that [[rio]] implements:
 [[attach]] (where the kernel, on behalf of the application, connects
 to [<filsysproc()>] which links the fid to the appropriate [<Window>]),
 [[walk]] (navigating to a file), [[open]], [[read]], [[write]],
-[[stat]], and [[clunk]].
+[[stat]], and [[clunk]] (similar to closing).
 %
 Each operation has two parts: a [[filsysxxx()]] function that runs
 in the [<filsysproc()>] context and handles the fast path, and an
@@ -8383,13 +8380,13 @@ window.
 %claude:
 The word ``client'' hides a subtlety, though. A window application never
 speaks 9P itself; it just calls [[open()]], [[read()]], and [[write()]] on
-ordinary-looking files. It is the {kernel}---the mount driver set up when
+ordinary-looking files (e.g., [[/dev/cons]]). It is the {kernel}---the mount driver set up when
 the window's namespace was built---that turns those system calls into 9P
 request messages and sends them down the pipe to [[rio]]. So when I say a
 request comes ``from the client,'' the immediate sender is really the
 kernel, acting {on behalf of} the application. The full chain is
-[[application]] \(\to\) kernel mount driver \(\to\) pipe \(\to\) [[rio]],
-and ``client'' names whichever end of it the surrounding text cares about.
+[[application]] \(\to\) kernel mount driver \(\to\) pipe \(\to\) [[rio]].
+%and ``client'' names whichever end of it the surrounding text cares about.
 
 
 % so then what happens?
@@ -8412,16 +8409,24 @@ and ``client'' names whichever end of it the surrounding text cares about.
 
 %yoann: quick intro
 %claude:
-The operations below share two data structures, gathered here first: how a
-[[Qid]] names a file, and the directory table the server walks and lists.
+The operations in the following sections share two data structures,
+gathered here first: how a
+[[Qid]] names a file, and the directory table [<dirtab>] 
+the server walks and lists.
 
 \subsection{Qid file identification: [[Qxxx]]}
+
 %claude:
 Each virtual file under [[/mnt/wsys/]] is identified by a [[Qid]]
-whose path encodes both the window ID and the file type ([[Qxxx]]).
-The [[QID]], [[WIN]], and [[FILE]] macros below pack and unpack these two
-pieces of information into a single integer. This lets the server
+whose ``path'' encodes both the window ID and the file type (encoded by the 
+[[Qxxx]] enum).
+%
+The [<QID()>], [<WIN()>], and [<FILE()>] macros below pack and unpack these two
+pieces of information into a single integer.
+%
+This lets the server
 quickly determine which window and which device file a request targets.
+%yoann1: explain more Qid "path" that is really an integer in plan9, like an inode and called path in the Qid structure
 
 % window id + qxx id  -> final Qid.path
 <<function [[QID]]>>=
@@ -8473,7 +8478,9 @@ For example, if window~2 opens [[/mnt/wsys/cons]], the [[Qid.path]]
 is built by [[QID(2, Qcons)]].  Since [[Qcons]] is~1 in the enum
 and the window ID is shifted left by 8 bits, the resulting path
 is [[0x201]]:
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   qid.path = QID(winid=2, qxxx=Qcons=1)
            = (2 << 8) | 1
            = 0x0201
@@ -8486,7 +8493,7 @@ is [[0x201]]:
 
   WIN(q)  = (path >> 8) & 0xFFFFFF  ->  2      (window 2)
   FILE(q) = path & 0xFF             ->  1      (Qcons)
-\end{verbatim}
+\end{vdiagram}
 
 
 %claude:
