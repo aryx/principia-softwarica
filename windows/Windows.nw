@@ -9738,9 +9738,9 @@ under [[/mnt/wsys/]]. Because [[/mnt/wsys]] is bound before
 [[/dev]], accesses to [[/dev/mouse]], [[/dev/cons]], etc.\ from client
 applications are intercepted by [[rio]].
 For each device, the implementation involves two sides:
-the {producer} side (where the [[winctl]] thread
+the {producer} side (where the [<winctl()>] thread
 offers data when it has events to report) and the {consumer} side
-(where the [[xfidread]] worker thread blocks until data is available,
+(where the [<xfidread()>] worker thread blocks until data is available,
 then formats it as a textual response for the client).
 
 \section{Device virtualization across windowing systems}
@@ -9757,7 +9757,7 @@ protocol; input events arrive as binary protocol messages
 the socket. [[Wayland]] is similar but with a different
 protocol ([[wl_seat]], [[wl_pointer]], [[wl_keyboard]]
 interfaces) and a different socket
-([[$XDG\_RUNTIME\_DIR/wayland-0]]). macOS's Quartz talks to
+([[$XDG_RUNTIME_DIR/wayland-0]]). macOS's Quartz talks to
 [[WindowServer]] via Mach ports and delivers events as
 [[CGEventRef]] structs through run-loop callbacks. Win32
 applications receive events as [[WM_MOUSEMOVE]],
@@ -9782,7 +9782,7 @@ Section~\ref{sec:windowing-system-api}.
 \n simpler than cons
 
 %claude:
-We can now see the [<Qid>] and [<dirtab>] entries for each virtual
+We can now see the [<Qxxx>] and [<dirtab>] entries for each virtual
 device file, along with their [<xfidread()>] and [<xfidwrite()>]
 implementations. I start with the mouse because its protocol is
 simpler than the console's: the mouse only needs to pass a single
@@ -9813,19 +9813,57 @@ Qmouse,
 % then xfidread wait for mouse events to come by listening to mouseread!
 % The winctl itself listen for mouse events on w->mc.c from mousethread
 
+%yoann: quick intro and say channel of channels (but don't duplicate paragraph coming after explaining the pattern)
+
+
+<<[[Window]] other fields>>=
+// chan<chan<Mouse> > (listener = xfidread(Qmouse), sender = winctl)
+Channel		*mouseread;	/* chan(Mousereadmesg) */
+@
+<<[[wmk()]] channels creation>>=
+w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
+@
+%ocaml: typed channels! and nice mouse channel channel type!
+
+<<struct [[Mousereadmesg]]>>=
+struct Mousereadmesg
+{
+    // chan<Mouse> (listener = xfidread(Qmouse), sender = winctl)
+    Channel	*cm;		/* chan(Mouse) */
+};
+@
+%ocaml: no need intermediate structure. Channels are typed.
+
+
+% Why chan of chan? why does not send Mouse directly? because mouse state
+% at sending time is not good anymore at receiving time!
+% See code in winctl where alts is on receive and send!
+% so the first message is really a sync message.
+% we could also send a fake mouse state and by convention ask for
+% another after, but cleaner to pass another channel.
+%
+% But sender send only when he has something he is ready
+% to send and it's queue anyway? It's queued but if too many
+% then head of queue is replaced, so really you want to wait
+% before sending the mouse state.
+
 
 % more a graphical window device.
 %claude:
 The mouse virtual device uses a ``channel of channels'' pattern.
 Consider a concrete scenario: the user moves the mouse rapidly,
 generating positions (100,50), (120,55), (140,60), (160,65).
-The [<winctl>] thread sees all four events via [<mousethread>],
+%
+The [<winctl()>] thread sees all four events via [<mousethread()>],
 but the client application only calls [[read("/dev/mouse")]] now.
 %claude:
-With a naive direct channel, [<winctl>] would have queued all four
+With a naive direct channel, [<winctl()>] would have queued all four
 positions; the client would get the stale (100,50) from the head.
+%
 With the channel-of-channels pattern, no [[Mouse]] value is produced
 until the client asks for one:
+
+%claude:
 \begin{verbatim}
   xfidread (worker)                    winctl (window thread)
   +-----------------+                  +-------------------+
@@ -9840,43 +9878,16 @@ until the client asks for one:
   |      &ms)       |  replyCh        |                   |
   +-----------------+                  +-------------------+
 \end{verbatim}
+
 %claude:
 The first [[send]] on [[w->mouseread]] is really a synchronization
-message saying ``I am ready to receive.'' Only then does [<winctl>]
+message saying ``I am ready to receive.'' Only then does [<winctl()>]
 snapshot the freshest mouse state and send it back on the reply
 channel [[mrm.cm]]. The client gets (160,65)---the position that
 matters---instead of a stale queued value.
 
 
-<<[[Window]] other fields>>=
-// chan<chan<Mouse> > (listener = xfidread(Qmouse), sender = winctl)
-Channel		*mouseread;	/* chan(Mousereadmesg) */
-@
-<<[[wmk()]] channels creation>>=
-w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
-@
-%ocaml: typed channels! and nice mouse channel channel type!
 
-% Why chan of chan? why does not send Mouse directly? because mouse state
-% at sending time is not good anymore at receiving time!
-% See code in winctl where alts is on receive and send!
-% so the first message is really a sync message.
-% we could also send a fake mouse state and by convention ask for
-% another after, but cleaner to pass another channel.
-%
-% But sender send only when he has something he is ready
-% to send and it's queue anyway? It's queued but if too many
-% then head of queue is replaced, so really you want to wait
-% before sending the mouse state.
-
-<<struct [[Mousereadmesg]]>>=
-struct Mousereadmesg
-{
-    // chan<Mouse> (listener = xfidread(Qmouse), sender = winctl)
-    Channel	*cm;		/* chan(Mouse) */
-};
-@
-%ocaml: no need intermediate structure. Channels are typed.
 
 % passing a channel in a Channel!
 % could be a Window field too no? first know if someone wants
@@ -9947,8 +9958,8 @@ Writing to [[/dev/mouse]] lets a program warp the cursor
 programmatically, but only under strict conditions: the window must
 have focus ([[w==input]]) and be visible on screen. The write data
 must start with ``m'' followed by the x and y coordinates. The actual
-cursor movement is routed through [[wsendctlmesg]] with
-[[Movemouse]], so it goes through the [[winctl]] thread and respects the
+cursor movement is routed through [<wsendctlmesg()>] with
+[[Movemouse]], so it goes through the [<winctl()>] thread and respects the
 [<sweeping>] guard---you cannot warp the mouse while the user is in
 the middle of a window management operation.
 
@@ -10241,6 +10252,7 @@ and [[Window]]s).
 The console device is the most complex virtual device because it mediates
 between two asynchronous worlds: the client process reading/writing bytes,
 and the [[winctl]] thread managing runes.
+%yoann1: this asynchronous thing is confusing; clarify the paragraph or stay short
 
 <<[[qid]] cases>>=
 Qcons,
@@ -10253,41 +10265,7 @@ Qcons,
 
 \subsection{Reading [[/mnt/wsys/cons]]: file server side}
 
-%claude:
-Unlike the mouse, the console uses two channels inside the
-[<Consreadmesg>]: [[c1]] to pass the read buffer from the worker to
-[<winctl>], and [[c2]] to pass the filled data back.
-The two-channel protocol is needed because the worker must first tell
-[<winctl>] how many bytes it can accept (via [[c1]]), and then [<winctl>]
-fills that buffer and returns it (via [[c2]]):
-\begin{verbatim}
-  xfidread (worker)                    winctl (window thread)
-  +-----------------+                  +-------------------+
-  |                 |  Consreadmesg    |                   |
-  | send(consread,  |  {c1, c2}       |                   |
-  |   &crm)         +---------------->| recv(consread,    |
-  |                 |  w->consread     |       &crm)       |
-  |                 |                  |                   |
-  | t = malloc(cnt) |  Stringpair     |                   |
-  | send(c1,        |  {t, cnt}       |                   |
-  |  {t, cnt})      +---------------->| recv(c1, &pair)   |
-  |                 |                  | (fill t with      |
-  |                 |  Stringpair     |  typed runes,     |
-  |                 |  {t, actual_n}  |  converted to     |
-  | recv(c2, &pair) |<----------------+  UTF-8 bytes)     |
-  |                 |                  | send(c2, &pair)   |
-  +-----------------+                  +-------------------+
-\end{verbatim}
-%claude:
-The mouse needs only one reply channel because it always returns a
-fixed-size [[Mouse]] struct. The console, however, must negotiate a
-variable-length byte transfer, and the byte/rune boundary does not
-always align---a multibyte UTF-8 rune may span two reads, requiring
-partial rune bookkeeping.
-
-% So if client reads /dev/cons,
-% then we wait for key event to come to us by listening to consread!
-% The winctl itself listen for key events (rune) on w->ck from keyboardthread
+%yoann: quick intro
 
 <<[[Window]] other fields>>=
 // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
@@ -10315,6 +10293,47 @@ struct Consreadmesg
 
 % note that channels are in Runes, but OS interface is in bytes
 % so we will see adjustments because of that.
+
+
+%claude:
+Unlike the mouse, the console uses two channels inside the
+[<Consreadmesg>]: [[c1]] to pass the read buffer from the worker to
+[<winctl>], and [[c2]] to pass the filled data back.
+The two-channel protocol is needed because the worker must first tell
+[<winctl>] how many bytes it can accept (via [[c1]]), and then [<winctl>]
+fills that buffer and returns it (via [[c2]]):
+
+%claude:
+\begin{verbatim}
+  xfidread (worker)                    winctl (window thread)
+  +-----------------+                  +-------------------+
+  |                 |  Consreadmesg    |                   |
+  | send(consread,  |  {c1, c2}       |                   |
+  |   &crm)         +---------------->| recv(consread,    |
+  |                 |  w->consread     |       &crm)       |
+  |                 |                  |                   |
+  | t = malloc(cnt) |  Stringpair     |                   |
+  | send(c1,        |  {t, cnt}       |                   |
+  |  {t, cnt})      +---------------->| recv(c1, &pair)   |
+  |                 |                  | (fill t with      |
+  |                 |  Stringpair     |  typed runes,     |
+  |                 |  {t, actual_n}  |  converted to     |
+  | recv(c2, &pair) |<----------------+  UTF-8 bytes)     |
+  |                 |                  | send(c2, &pair)   |
+  +-----------------+                  +-------------------+
+\end{verbatim}
+
+%claude:
+The mouse needs only one reply channel because it always returns a
+fixed-size [[Mouse]] struct. The console, however, must negotiate a
+variable-length byte transfer, and the byte/rune boundary does not
+always align---a multibyte UTF-8 rune may span two reads, requiring
+partial rune bookkeeping.
+
+% So if client reads /dev/cons,
+% then we wait for key event to come to us by listening to consread!
+% The winctl itself listen for key events (rune) on w->ck from keyboardthread
+
 
 <<struct [[Stringpair]]>>=
 struct Stringpair	/* rune and nrune or byte and nbyte */
@@ -10679,7 +10698,7 @@ Qconsctl,
 
 
 %claude:
-Like [<mouseopen>], [[ctlopen]] enforces exclusive access---only one
+Like [<Window.mouseopen>], [[Window.ctlopen]] enforces exclusive access---only one
 client at a time may open [[/dev/consctl]]. But unlike [[mouseopen]],
 which triggers the switch from textual to graphical mode,
 [[ctlopen]] has no such side effect; it merely gates access to the
@@ -10723,7 +10742,8 @@ case Qconsctl:
 
 %claude:
 The cursor device lets a client application set a custom cursor shape.
-Writing the binary cursor data (hotspot offset plus two 2x16 bitmaps)
+Writing the binary cursor data (hotspot offset plus two 2x16 bitmaps,
+see for example [<boxcursor>])
 stores it in [[w->cursor]] and points [[w->cursorp]] at it; writing less
 than the required [[2*4+2*2*16]] bytes clears the custom cursor,
 reverting to the default arrow. Closing the file also clears it.
@@ -10776,6 +10796,8 @@ case Qcursor:
 
 % security issue? can pass wrong screen id to draw operation?
 % anyway, anybody can access the full screen in display->image, hmm
+
+%yoann: quick intro
 
 \subsection{Trace of a drawing operation}
 \label{sec:trace-draw}
