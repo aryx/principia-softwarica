@@ -8172,7 +8172,7 @@ hide(void)
 }
 @
 
-\subsection{[[hidden]]}
+\subsection{[[hidden]] windows}
 
 %claude:
 The [<hidden>] array is a simple fixed-size list of currently hidden
@@ -8697,7 +8697,7 @@ if(err){
 @
 %ocaml: separate function for error, not abusing filsysrespond last arg
 
-\section{Attach}
+\section{[[attach]]}
 
 %claude:
 Attach is the first 9P operation a client performs after mounting.
@@ -8915,7 +8915,7 @@ if(w == nil){
 @
 % free back the fid with busy to false
 
-\section{Walk}
+\section{[[walk]]}
 
 % Walk is complex.
 % Clone, walk, multiple elements in one request. Subtle API.
@@ -9059,7 +9059,7 @@ if(nf->busy)
 
 
 
-\subsection{[[..]]}
+\subsection{[['..']]}
 
 %claude:
 Walking ``..'' always returns to the window's root directory ([[Qdir]]),
@@ -9128,10 +9128,10 @@ if(i == MAXWELEM){
 @
 
 
-%\section{Flush}
+%\section{[[flush]]}
 % adv topics now
 
-\section{Open}
+\section{[[open]]}
 
 %claude:
 Open illustrates the two-layer pattern clearly. The [[filsysopen()]]
@@ -9253,7 +9253,7 @@ if(w->deleted){
 }
 @
 
-\section{Clunk/Close}
+\section{[[clunk]] (and close)}
 
 %claude:
 In 9P, releasing a file handle is called {clunk}---an English word
@@ -9340,7 +9340,7 @@ xfidclose(Xfid *x)
 As with [<xfidopen()>], the per-file [<xfidclose()>] cases are presented
 gradually in the device chapters.
 
-\section{Read}
+\section{[[read]]}
 
 % This is how to get the content of "." after attached and walked,
 % by reading the fid of a directory.
@@ -9492,7 +9492,7 @@ text, [[Qmouse]] blocks until a mouse event is available,
 % actually off not always respected ... Qmouse does not care about off
 % see read(2) API?
 
-\section{Write}
+\section{[[write]]}
 
 %claude:
 Write is the simplest 9P operation at the [[filsys]] layer: since
@@ -9555,7 +9555,7 @@ xfidwrite(Xfid *x)
 
 
 
-\section{Stats}
+\section{[[stat]]}
 
 %claude:
 The [[stat]] operation returns metadata about a file---name,
@@ -10448,7 +10448,7 @@ case Qcons:
 
 % this time pass full rune, not byte
 
-\subsection{Bytes versus runes, partial runes}
+\subsection{Bytes versus runes and partial runes}
 
 % we have stuff to write! stuff to write in the console,
 % but this time it must be Rune! cant pass half rune to winctl
@@ -14943,19 +14943,20 @@ case Qscreen:
 %old: the caseImage used to be here, but I prefer to put
 % it with the Qwindow case
 
-\section{[[/mnt/wsys/wsys/]]}
+\section{[[/mnt/wsys/wsys/<windid>/]]}
 
 %claude:
 [[/mnt/wsys/wsys/]] is to windows what [[/proc/]] is to processes:
 a directory whose entries are numbered subdirectories, one per window.
 Listing [[/mnt/wsys/wsys/]] returns the IDs of all existing windows
-(sorted numerically). Walking into [[/mnt/wsys/wsys/N/]] gives access
+(sorted numerically). Walking into [[/mnt/wsys/wsys/<winid>/]] gives access
 to the same virtual device files ([[cons]], [[mouse]], [[wctl]], etc.)
-as [[/mnt/wsys/]], but for window~N instead of the caller's own window.
+as [[/mnt/wsys/]], but for window~[[winid]] instead of the caller's own window.
 %claude:
 This is how the [[wctl(1)]] command can create, resize, or delete
 another window from a script. For example, a status bar program can
 enumerate all windows, read their labels, and display a window list.
+
 %claude:
 The implementation is interesting because it uses [[filsyswalk()]]
 to detect numeric path components and switch the fid's window context.
@@ -15469,729 +15470,16 @@ writewctl(Xfid *x, char *err)
 
 %claude:
 This chapter covers features that go beyond [[rio]]'s basic operation:
-external access to [[rio]]'s filesystem ([[/srv/rio.<user>.<pid>]], 
-[[/srv/riowctl.<user>.<pid>]]),
-recursive [[rio]], and terminal editing features like snarf/paste,
-plumbing, auto-completion, and word selection.
-%claude:
-It also covers [[rio]]'s command-line options ([[rio -s]], [[rio -i]],
-[[rio -k]], [[rio -f]]), additional control messages,
+[[rio]]'s command-line options ([[rio -s]], [[rio -i]], [[rio -k]], [[rio -f]])
+additional control messages,
 %holding mode, 9P flush support, and security.
 signal handling, the timer subsystem, 
-
-\section{External access}
-\label{sec:external-access}
-
-%claude: %toc:
-So far, every program that talked to [[rio]]'s filesystem was a child
-process that inherited the pipe's file descriptor. This section covers the
-two ways a process can reach a \emph{running} [[rio]] from the outside,
-both built on \plan's [[/srv]]: the [[/srv/rio.<user>.<pid>]] mount, through
-which any program can open a window, and the
-[[/srv/riowctl.<user>.<pid>]] channel, used to drive [[rio]] from the
-command line. I close with {recursive [[rio]]}---running [[rio]] inside one
-of its own windows---which is just another client of these same mechanisms.
-
-\subsection{External mount: [[/srv/rio.<user>.<pid>]]}
-
-% essentially a published pipe? so dont have
-% to be children of process who created the pipe
-% so =~ named pipe (but again, no need special file, can do via
-% special fileserver; general mechanism!)
-
-% this make fileserver accessible more easily to external
-% processes.
-
-% like a named pipe?
-
-% also allow newwindow() we saw in Graphics.nw!
-
-% Until now done filsysmount() from rio itself
-% in child process where mount(filesys->cfd, ...) and
-% so have access to file descriptor. But for external?
-% enter the /srv mechanism of plan9 to publish those things.
+recursive [[rio]], or
+external access to [[rio]]'s filesystem ([[/srv/rio.<user>.<pid>]], 
+[[/srv/riowctl.<user>.<pid>]]),
 %claude:
-Until now, we have seen [[filsysmount()]] called from within [[rio]]
-itself, in a child process that inherits the pipe's file descriptor.
-But what about external processes that were not spawned by [[rio]]?
-They need a bootstrap mechanism to get a handle on [[rio]]'s filesystem.
-%claude:
-This is where \plan's [[/srv]] comes in. [[filsysinit()]] publishes the
-client end of the pipe in [[/srv/rio.<user>.<pid>]]---\plan's equivalent
-of a named pipe. Any process can open this file, mount it, and gain
-access to [[rio]]'s filesystem, even if it is not a child of [[rio]].
-By mounting with the spec ``new ...'', an external program can create
-a new window for itself---this is what [[newwindow()]] from the
-\book{Graphics} uses.
-
-% mount $sys ...
-
-%claude:
-The [[srvpipe]] global holds the path string [[/srv/rio.<user>.<pid>]],
-personalized with the username and process ID so multiple [[rio]]
-instances don't collide.
-
-% /srv/rio.<user>.<pid>  pipe open for clients to communicate with rio server
-<<global srvpipe (rio/fsys.c)>>=
-char	srvpipe[64];
-@
-
-
-<<[[filsysinit()]] srv pipe>>=
-/*
- * Post srv pipe
- */
-sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
-post(srvpipe, "wsys", fs->cfd);
-@
-
-
-<<function [[post]]>>=
-void
-post(char *name, char *envname, fdt srvfd)
-{
-    fdt fd;
-    char buf[32];
-
-    fd = create(name, OWRITE|ORCLOSE|OCEXEC, 0600);
-    if(fd < 0)
-        error(name);
-    sprint(buf, "%d", srvfd);
-    if(write(fd, buf, strlen(buf)) != strlen(buf))
-        error("srv write");
-
-    putenv(envname, name);
-}
-@
-% why need write srvfd which is fs->cfd?
-% so the file in /srv/.../ just contains a filedescriptor number? enough?
-% or is it working with #s special code?
-%claude:
-The [[post()]] function works with \plan's [[/srv]] device ([[#s]]):
-it creates a file in [[/srv]], writes a file descriptor number into it
-as an ASCII string, and sets [[ORCLOSE]] so the entry is removed when
-[[rio]] exits. The [[#s]] driver is special---when another process opens
-this file, the kernel gives it a new file descriptor connected to the
-same pipe endpoint. The [[putenv()]] call also publishes the path
-in the environment so child processes can find it by name.
-
-
-
-
-<<[[xfidattach()]] other locals>>=
-Rectangle r;
-int pid;
-bool hideit = false;
-bool scrollit;
-char *dir, errbuf[ERRMAX];
-Image *i;
-@
-
-%claude:
-When an external client attaches with a spec string starting with ``new'',
-[[xfidattach()]] parses it with the same [[parsewctl()]] function used
-for [[/dev/wctl]] commands. This allows the client to specify the window
-rectangle, whether it should be hidden, and whether to scroll---the same
-parameters as the ``new'' wctl command.
-The [[pid]] is set to [[-1]] to prevent [[rio]] from spawning a shell
-in the new window, since the external program will use it directly.
-
-<<[[xfidattach()]] if mount "new ...">>=
-if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
-    pid = 0;
-    if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->req.aname, errbuf) < 0)
-        err = errbuf;
-    else {
-        if(!goodrect(r))
-            err = Ebadrect;
-        else{
-            if(hideit)
-                i = allocimage(display, r, view->chan, false, DWhite);
-            else
-                i = allocwindow(desktop, r, Refbackup, DWhite);
-            if(i){
-                border(i, r, Selborder, display->black, ZP);
-                if(pid == 0)
-                    pid = -1;	/* make sure we don't pop a shell! - UGH */
-                w = new(i, hideit, scrolling, pid, nil, nil, nil);
-                flushimage(display, 1);
-                newlymade = true;
-            }else
-                err = Ewindow;
-        }
-   }
-}
-@
-
-\subsection{Command-line control: [[/srv/riowctl.<user>.<pid>]]}
-
-% allow to run graphical command from the command line
-% allow also programs to create toplevel windows?
-%claude:
-While [[/srv/rio.<user>.<pid>]] provides the full 9P filesystem interface,
-[[/srv/riowctl.<user>.<pid>]] is a simpler text-based control channel.
-An external process can write wctl commands (like ``new'') as plain
-text strings to create and manipulate windows from the command line,
-without needing to speak the 9P protocol.
-%claude:
-The architecture uses the same proc/thread split seen elsewhere in [[rio]]:
-[[wctlproc]] runs in its own process doing blocking reads on the pipe,
-and sends the text over a channel to [[wctlthread]] in the main process
-where it is safe to manipulate window state.
-
-<<global [[wctlfd]]>>=
-int	wctlfd;
-@
-
-<<global srvwctl (rio/fsys.c)>>=
-char	srvwctl[64];
-@
-% why need global?
-
-%claude:
-The initialization creates the pipe, publishes it in [[/srv]], then
-starts both the reading process and the dispatching thread.
-
-<<[[filsysinit()]] wctl pipe, process, and thread creation>>=
-/*
- * Create and post wctl pipe
- */
-<<[[filsysinit()]] create wctl pipe>>
-
-/*
- * Start server processes
- */
-<<[[filsysinit()]] create wctl process and thread>>
-@
-
-
-
-<<[[filsysinit()]] other locals>>=
-fdt p0;
-// chan<??> (listener = ??, sender = ??)
-Channel *c;
-@
-
-
-<<[[filsysinit()]] create wctl pipe>>=
-if(cexecpipe(&p0, &wctlfd) < 0)
-    goto Rescue;
-sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
-post(srvwctl, "wctl", p0);
-close(p0);
-@
-% vs /dev/wctl? why need pipe mechanism for that? because
-% /dev/wctl is for stuff who mounted rio, but external process
-% dont have it! so need bootstrap!
-%claude:
-Why not just use [[/dev/wctl]]? Because [[/dev/wctl]] is only available
-to processes that have already mounted [[rio]]'s filesystem.
-The [[/srv/riowctl]] pipe serves as a bootstrap for processes
-that have not (or cannot) mount [[rio]].
-
-<<[[filsysinit()]] create wctl process and thread>>=
-c = chancreate(sizeof(char*), 0);
-if(c == nil)
-    error("wctl channel");
-
-proccreate(wctlproc, c, 4096);
-threadcreate(wctlthread, c, 4096);
-@
-% channel so process and thread can communicate
-
-%claude:
-[[wctlproc]] is the reading half: it sits in its own process doing
-blocking [[read()]] calls on the pipe, and forwards each complete
-command string over the channel. The [[eofs]] counter tolerates a
-burst of zero-length reads (which can happen with pipe semantics)
-before giving up.
-
-<<function [[wctlproc]]>>=
-void
-wctlproc(void *v)
-{
-    Channel *c = v;
-    char *buf;
-    int n, eofs;
-
-    threadsetname("WCTLPROC");
-
-    eofs = 0;
-    for(;;){
-        buf = emalloc(messagesize);
-        // blocking call
-        n = read(wctlfd, buf, messagesize-1);	/* room for \0 */
-        if(n < 0)
-            break;
-        if(n == 0){
-            if(++eofs > 20)
-                break;
-            continue;
-        }
-        eofs = 0;
-
-        buf[n] = '\0';
-        sendp(c, buf);
-    }
-}
-@
-
-
-
-
-%claude:
-[[wctlthread]] is the dispatching half, running in the main process.
-It receives command strings, parses them with [[parsewctl()]], and
-currently only handles the [[New]] command---the other wctl commands
-(resize, move, top, etc.) are handled through [[/dev/wctl]] instead.
-
-<<function [[wctlthread]]>>=
-void
-wctlthread(void *v)
-{
-    Channel *c = v;
-    char *buf, *arg, *dir;
-    int cmd, id, pid, hideit, scrollit;
-    Rectangle rect;
-    char err[ERRMAX];
-
-    threadsetname("WCTLTHREAD");
-
-    for(;;){
-        buf = recvp(c);
-
-        cmd = parsewctl(&arg, ZR, &rect, &pid, &id, &hideit, &scrollit, &dir, buf, err);
-
-        switch(cmd){
-        case New:
-            wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
-        }
-        free(buf);
-    }
-}
-@
-
-
-
-
-
-\t mv before in other /mnt/wsys/ctl?
-
-%claude:
-The wctl command vocabulary covers window lifecycle ([[New]], [[Delete]]),
-geometry ([[Resize]], [[Move]]), z-order ([[Top]], [[Bottom]]),
-visibility ([[Hide]], [[Unhide]]), focus ([[Current]]),
-and scrolling mode ([[Scroll]], [[Noscroll]]).
-Commands at or above [[Top]] are disallowed while a mouse button is
-pressed, to avoid interfering with drag operations.
-
-<<enum [[_anon_ (rio/wctl.c)]]>>=
-/* >= Top are disallowed if mouse button is pressed */
-enum
-{
-    New,
-    Resize,
-    Move,
-    Scroll,
-    Noscroll,
-    Set,
-    Top,
-    Bottom,
-    Current,
-    Hide,
-    Unhide,
-    Delete,
-};
-@
-
-<<global [[cmds]]>>=
-static char *cmds[] = {
-    [New]	= "new",
-    [Resize]	= "resize",
-    [Move]	= "move",
-    [Scroll]	= "scroll",
-    [Noscroll]	= "noscroll",
-    [Set]	= "set",
-    [Top]	= "top",
-    [Bottom]	= "bottom",
-    [Current]	= "current",
-    [Hide]	= "hide",
-    [Unhide]	= "unhide",
-    [Delete]	= "delete",
-    nil
-};
-@
-
-<<enum [[_anon_ (rio/wctl.c)]]2>>=
-enum
-{
-    Cd,
-    Deltax,
-    Deltay,
-    Hidden,
-    Id,
-
-    Maxx,
-    Maxy,
-    Minx,
-    Miny,
-
-    PID,
-    R,
-
-    Scrolling,
-    Noscrolling,
-};
-@
-
-<<global [[params]]>>=
-static char *params[] = {
-    [Cd] 			= "-cd",
-    [Deltax]			= "-dx",
-    [Deltay]			= "-dy",
-    [Hidden]			= "-hide",
-    [Id]			= "-id",
-    [Maxx]			= "-maxx",
-    [Maxy]			= "-maxy",
-    [Minx]			= "-minx",
-    [Miny]			= "-miny",
-    [PID]			= "-pid",
-    [R]				= "-r",
-    [Scrolling]			= "-scroll",
-    [Noscrolling]		= "-noscroll",
-    nil
-};
-@
-
-%claude:
-[[parsewctl()]] is a mini command-line parser shared between
-[[/dev/wctl]], [[/srv/riowctl]], and the ``new'' attach spec.
-It first extracts the command verb, then loops over the
-dash-prefixed parameters. The [[set()]] helper supports relative
-adjustments: a bare number is absolute, [[+n]] adds, [[-n]] subtracts.
-Finally [[rectonscreen()]] clamps the result to the display bounds.
-
-<<function [[goodrect]]>>=
-/*
- * Check that newly created window will be of manageable size
- */
-int
-goodrect(Rectangle r)
-{
-    if(!eqrect(canonrect(r), r))
-        return 0;
-    if(Dx(r)<100 || Dy(r)<3*font->height)
-        return 0;
-    /* must have some screen and border visible so we can move it out of the way */
-    if(Dx(r) >= Dx(view->r) && Dy(r) >= Dy(view->r))
-        return 0;
-    /* reasonable sizes only please */
-    if(Dx(r) > BIG*Dx(view->r))
-        return 0;
-    if(Dy(r) > BIG*Dx(view->r))
-        return 0;
-    return 1;
-}
-@
-
-<<function [[word]]>>=
-static
-int
-word(char **sp, char *tab[])
-{
-    char *s, *t;
-    int i;
-
-    s = *sp;
-    while(isspace(*s))
-        s++;
-    t = s;
-    while(*s!='\0' && !isspace(*s))
-        s++;
-    for(i=0; tab[i]!=nil; i++)
-        if(strncmp(tab[i], t, strlen(tab[i])) == 0){
-            *sp = s;
-            return i;
-    }
-    return -1;
-}
-@
-
-<<function [[set]]>>=
-int
-set(int sign, int neg, int abs, int pos)
-{
-    if(sign < 0)
-        return neg;
-    if(sign > 0)
-        return pos;
-    return abs;
-}
-@
-
-%claude:
-[[newrect()]] generates default positions for new windows using a
-simple cascading scheme: each new window is offset by 16 pixels from
-the previous one, cycling through 10 positions. This avoids stacking
-windows exactly on top of each other.
-
-<<function [[newrect]]>>=
-Rectangle
-newrect(void)
-{
-    static int i = 0;
-    int minx, miny, dx, dy;
-
-    dx = min(600, Dx(view->r) - 2*Borderwidth);
-    dy = min(400, Dy(view->r) - 2*Borderwidth);
-    minx = 32 + 16*i;
-    miny = 32 + 16*i;
-    i++;
-    i %= 10;
-
-    return Rect(minx, miny, minx+dx, miny+dy);
-}
-@
-
-<<function [[shift]]>>=
-void
-shift(int *minp, int *maxp, int min, int max)
-{
-    if(*minp < min){
-        *maxp += min-*minp;
-        *minp = min;
-    }
-    if(*maxp > max){
-        *minp += max-*maxp;
-        *maxp = max;
-    }
-}
-@
-
-<<function [[rectonscreen]]>>=
-Rectangle
-rectonscreen(Rectangle r)
-{
-    shift(&r.min.x, &r.max.x, view->r.min.x, view->r.max.x);
-    shift(&r.min.y, &r.max.y, view->r.min.y, view->r.max.y);
-    return r;
-}
-@
-
-<<function [[riostrtol]]>>=
-/* permit square brackets, in the manner of %R */
-int
-riostrtol(char *s, char **t)
-{
-    int n;
-
-    while(*s!='\0' && (*s==' ' || *s=='\t' || *s=='['))
-        s++;
-    if(*s == '[')
-        s++;
-    n = strtol(s, t, 10);
-    if(*t != s)
-        while((*t)[0] == ']')
-            (*t)++;
-    return n;
-}
-@
-
-<<function [[parsewctl]]>>=
-int
-parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hiddenp, int *scrollingp, char **cdp, char *s, char *err)
-{
-    int cmd, param, xy, sign;
-    char *t;
-
-    *pidp = 0;
-    *hiddenp = 0;
-    *scrollingp = scrolling;
-    *cdp = nil;
-    cmd = word(&s, cmds);
-    if(cmd < 0){
-        strcpy(err, "unrecognized wctl command");
-        return -1;
-    }
-    if(cmd == New)
-        r = newrect();
-
-    strcpy(err, "missing or bad wctl parameter");
-
-    while((param = word(&s, params)) >= 0){
-        switch(param){	/* special cases */
-        case Hidden:
-            *hiddenp = 1;
-            continue;
-        case Scrolling:
-            *scrollingp = 1;
-            continue;
-        case Noscrolling:
-            *scrollingp = 0;
-            continue;
-        case R:
-            r.min.x = riostrtol(s, &t);
-            if(t == s)
-                return -1;
-            s = t;
-            r.min.y = riostrtol(s, &t);
-            if(t == s)
-                return -1;
-            s = t;
-            r.max.x = riostrtol(s, &t);
-            if(t == s)
-                return -1;
-            s = t;
-            r.max.y = riostrtol(s, &t);
-            if(t == s)
-                return -1;
-            s = t;
-            continue;
-        }
-        while(isspace(*s))
-            s++;
-        if(param == Cd){
-            *cdp = s;
-            while(*s && !isspace(*s))
-                s++;
-            if(*s != '\0')
-                *s++ = '\0';
-            continue;
-        }
-        sign = 0;
-        if(*s == '-'){
-            sign = -1;
-            s++;
-        }else if(*s == '+'){
-            sign = +1;
-            s++;
-        }
-        if(!isdigit(*s))
-            return -1;
-        xy = riostrtol(s, &s);
-
-        switch(param){
-        case Minx:
-            r.min.x = set(sign, r.min.x-xy, xy, r.min.x+xy);
-            break;
-        case Miny:
-            r.min.y = set(sign, r.min.y-xy, xy, r.min.y+xy);
-            break;
-        case Maxx:
-            r.max.x = set(sign, r.max.x-xy, xy, r.max.x+xy);
-            break;
-        case Maxy:
-            r.max.y = set(sign, r.max.y-xy, xy, r.max.y+xy);
-            break;
-        case Deltax:
-            r.max.x = set(sign, r.max.x-xy, r.min.x+xy, r.max.x+xy);
-            break;
-        case Deltay:
-            r.max.y = set(sign, r.max.y-xy, r.min.y+xy, r.max.y+xy);
-            break;
-        case Id:
-            if(idp != nil)
-                *idp = xy;
-            break;
-        case PID:
-            if(pidp != nil)
-                *pidp = xy;
-            break;
-        case -1:
-            strcpy(err, "unrecognized wctl parameter");
-            return -1;
-        }
-    }
-
-    *rp = rectonscreen(rectaddpt(r, view->r.min));
-
-    while(isspace(*s))
-        s++;
-    if(cmd!=New && *s!='\0'){
-        strcpy(err, "extraneous text in wctl message");
-        return -1;
-    }
-
-    if(argp)
-        *argp = s;
-
-    return cmd;
-}
-@
-
-%claude:
-[[wctlnew()]] ties the pieces together: it validates the rectangle,
-builds an [[argv]] for [[rc]], allocates the window image (either a
-visible layer on [[desktop]] or a hidden off-screen image),
-and calls [[new()]] to create the window thread and shell process.
-
-<<function [[wctlnew]]>>=
-int
-wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir, char *err)
-{
-    char **argv;
-    Image *i;
-
-    if(!goodrect(rect)){
-        strcpy(err, Ebadwr);
-        return -1;
-    }
-    argv = emalloc(4*sizeof(char*));
-    argv[0] = "rc";
-    argv[1] = "-c";
-    while(isspace(*arg))
-        arg++;
-    if(*arg == '\0'){
-        argv[1] = "-i";
-        argv[2] = nil;
-    }else{
-        argv[2] = arg;
-        argv[3] = nil;
-    }
-    if(hideit)
-        i = allocimage(display, rect, view->chan, false, DWhite);
-    else
-        i = allocwindow(desktop, rect, Refbackup, DWhite);
-    if(i == nil){
-        strcpy(err, Ewalloc);
-        return -1;
-    }
-    border(i, rect, Selborder, red, ZP);
-
-    new(i, hideit, scrollit, pid, dir, "/bin/rc", argv);
-
-    free(argv);	/* when new() returns, argv and args have been copied */
-    return 1;
-}
-@
-
-
-
-
-<<function [[wtopme]]>>=
-void
-wtopme(Window *w)
-{
-    if(w!=nil && w->i!=nil && !w->deleted && w->topped!=topped){
-        topwindow(w->i);
-        flushimage(display, 1);
-        w->topped = ++topped;
-    }
-}
-@
-
-<<function [[wbottomme]]>>=
-void
-wbottomme(Window *w)
-{
-    if(w!=nil && w->i!=nil && !w->deleted){
-        bottomwindow(w->i);
-        flushimage(display, 1);
-        w->topped = - ++topped;
-    }
-}
-@
-
+It also covers advanced terminal editing features like snarf/paste,
+plumbing, auto-completion, and word selection.
 
 \section{Notes (signals)}
 
@@ -18632,6 +17920,720 @@ wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
             nest++;
     }
     return cl=='\n' && nest==1;
+}
+@
+
+
+\section{External access}
+\label{sec:external-access}
+
+%claude: %toc:
+So far, every program that talked to [[rio]]'s filesystem was a child
+process that inherited the pipe's file descriptor. This section covers the
+two ways a process can reach a \emph{running} [[rio]] from the outside,
+both built on \plan's [[/srv]]: the [[/srv/rio.<user>.<pid>]] mount, through
+which any program can open a window, and the
+[[/srv/riowctl.<user>.<pid>]] channel, used to drive [[rio]] from the
+command line. I close with {recursive [[rio]]}---running [[rio]] inside one
+of its own windows---which is just another client of these same mechanisms.
+
+\subsection{External mount: [[/srv/rio.<user>.<pid>]]}
+
+% essentially a published pipe? so dont have
+% to be children of process who created the pipe
+% so =~ named pipe (but again, no need special file, can do via
+% special fileserver; general mechanism!)
+
+% this make fileserver accessible more easily to external
+% processes.
+
+% like a named pipe?
+
+% also allow newwindow() we saw in Graphics.nw!
+
+% Until now done filsysmount() from rio itself
+% in child process where mount(filesys->cfd, ...) and
+% so have access to file descriptor. But for external?
+% enter the /srv mechanism of plan9 to publish those things.
+%claude:
+Until now, we have seen [[filsysmount()]] called from within [[rio]]
+itself, in a child process that inherits the pipe's file descriptor.
+But what about external processes that were not spawned by [[rio]]?
+They need a bootstrap mechanism to get a handle on [[rio]]'s filesystem.
+%claude:
+This is where \plan's [[/srv]] comes in. [[filsysinit()]] publishes the
+client end of the pipe in [[/srv/rio.<user>.<pid>]]---\plan's equivalent
+of a named pipe. Any process can open this file, mount it, and gain
+access to [[rio]]'s filesystem, even if it is not a child of [[rio]].
+By mounting with the spec ``new ...'', an external program can create
+a new window for itself---this is what [[newwindow()]] from the
+\book{Graphics} uses.
+
+% mount $sys ...
+
+%claude:
+The [[srvpipe]] global holds the path string [[/srv/rio.<user>.<pid>]],
+personalized with the username and process ID so multiple [[rio]]
+instances don't collide.
+
+% /srv/rio.<user>.<pid>  pipe open for clients to communicate with rio server
+<<global srvpipe (rio/fsys.c)>>=
+char	srvpipe[64];
+@
+
+
+<<[[filsysinit()]] srv pipe>>=
+/*
+ * Post srv pipe
+ */
+sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
+post(srvpipe, "wsys", fs->cfd);
+@
+
+
+<<function [[post]]>>=
+void
+post(char *name, char *envname, fdt srvfd)
+{
+    fdt fd;
+    char buf[32];
+
+    fd = create(name, OWRITE|ORCLOSE|OCEXEC, 0600);
+    if(fd < 0)
+        error(name);
+    sprint(buf, "%d", srvfd);
+    if(write(fd, buf, strlen(buf)) != strlen(buf))
+        error("srv write");
+
+    putenv(envname, name);
+}
+@
+% why need write srvfd which is fs->cfd?
+% so the file in /srv/.../ just contains a filedescriptor number? enough?
+% or is it working with #s special code?
+%claude:
+The [[post()]] function works with \plan's [[/srv]] device ([[#s]]):
+it creates a file in [[/srv]], writes a file descriptor number into it
+as an ASCII string, and sets [[ORCLOSE]] so the entry is removed when
+[[rio]] exits. The [[#s]] driver is special---when another process opens
+this file, the kernel gives it a new file descriptor connected to the
+same pipe endpoint. The [[putenv()]] call also publishes the path
+in the environment so child processes can find it by name.
+
+
+
+
+<<[[xfidattach()]] other locals>>=
+Rectangle r;
+int pid;
+bool hideit = false;
+bool scrollit;
+char *dir, errbuf[ERRMAX];
+Image *i;
+@
+
+%claude:
+When an external client attaches with a spec string starting with ``new'',
+[[xfidattach()]] parses it with the same [[parsewctl()]] function used
+for [[/dev/wctl]] commands. This allows the client to specify the window
+rectangle, whether it should be hidden, and whether to scroll---the same
+parameters as the ``new'' wctl command.
+The [[pid]] is set to [[-1]] to prevent [[rio]] from spawning a shell
+in the new window, since the external program will use it directly.
+
+<<[[xfidattach()]] if mount "new ...">>=
+if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
+    pid = 0;
+    if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->req.aname, errbuf) < 0)
+        err = errbuf;
+    else {
+        if(!goodrect(r))
+            err = Ebadrect;
+        else{
+            if(hideit)
+                i = allocimage(display, r, view->chan, false, DWhite);
+            else
+                i = allocwindow(desktop, r, Refbackup, DWhite);
+            if(i){
+                border(i, r, Selborder, display->black, ZP);
+                if(pid == 0)
+                    pid = -1;	/* make sure we don't pop a shell! - UGH */
+                w = new(i, hideit, scrolling, pid, nil, nil, nil);
+                flushimage(display, 1);
+                newlymade = true;
+            }else
+                err = Ewindow;
+        }
+   }
+}
+@
+
+\subsection{Command-line control: [[/srv/riowctl.<user>.<pid>]]}
+
+% allow to run graphical command from the command line
+% allow also programs to create toplevel windows?
+%claude:
+While [[/srv/rio.<user>.<pid>]] provides the full 9P filesystem interface,
+[[/srv/riowctl.<user>.<pid>]] is a simpler text-based control channel.
+An external process can write wctl commands (like ``new'') as plain
+text strings to create and manipulate windows from the command line,
+without needing to speak the 9P protocol.
+%claude:
+The architecture uses the same proc/thread split seen elsewhere in [[rio]]:
+[[wctlproc]] runs in its own process doing blocking reads on the pipe,
+and sends the text over a channel to [[wctlthread]] in the main process
+where it is safe to manipulate window state.
+
+<<global [[wctlfd]]>>=
+int	wctlfd;
+@
+
+<<global srvwctl (rio/fsys.c)>>=
+char	srvwctl[64];
+@
+% why need global?
+
+%claude:
+The initialization creates the pipe, publishes it in [[/srv]], then
+starts both the reading process and the dispatching thread.
+
+<<[[filsysinit()]] wctl pipe, process, and thread creation>>=
+/*
+ * Create and post wctl pipe
+ */
+<<[[filsysinit()]] create wctl pipe>>
+
+/*
+ * Start server processes
+ */
+<<[[filsysinit()]] create wctl process and thread>>
+@
+
+
+
+<<[[filsysinit()]] other locals>>=
+fdt p0;
+// chan<??> (listener = ??, sender = ??)
+Channel *c;
+@
+
+
+<<[[filsysinit()]] create wctl pipe>>=
+if(cexecpipe(&p0, &wctlfd) < 0)
+    goto Rescue;
+sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
+post(srvwctl, "wctl", p0);
+close(p0);
+@
+% vs /dev/wctl? why need pipe mechanism for that? because
+% /dev/wctl is for stuff who mounted rio, but external process
+% dont have it! so need bootstrap!
+%claude:
+Why not just use [[/dev/wctl]]? Because [[/dev/wctl]] is only available
+to processes that have already mounted [[rio]]'s filesystem.
+The [[/srv/riowctl]] pipe serves as a bootstrap for processes
+that have not (or cannot) mount [[rio]].
+
+<<[[filsysinit()]] create wctl process and thread>>=
+c = chancreate(sizeof(char*), 0);
+if(c == nil)
+    error("wctl channel");
+
+proccreate(wctlproc, c, 4096);
+threadcreate(wctlthread, c, 4096);
+@
+% channel so process and thread can communicate
+
+%claude:
+[[wctlproc]] is the reading half: it sits in its own process doing
+blocking [[read()]] calls on the pipe, and forwards each complete
+command string over the channel. The [[eofs]] counter tolerates a
+burst of zero-length reads (which can happen with pipe semantics)
+before giving up.
+
+<<function [[wctlproc]]>>=
+void
+wctlproc(void *v)
+{
+    Channel *c = v;
+    char *buf;
+    int n, eofs;
+
+    threadsetname("WCTLPROC");
+
+    eofs = 0;
+    for(;;){
+        buf = emalloc(messagesize);
+        // blocking call
+        n = read(wctlfd, buf, messagesize-1);	/* room for \0 */
+        if(n < 0)
+            break;
+        if(n == 0){
+            if(++eofs > 20)
+                break;
+            continue;
+        }
+        eofs = 0;
+
+        buf[n] = '\0';
+        sendp(c, buf);
+    }
+}
+@
+
+
+
+
+%claude:
+[[wctlthread]] is the dispatching half, running in the main process.
+It receives command strings, parses them with [[parsewctl()]], and
+currently only handles the [[New]] command---the other wctl commands
+(resize, move, top, etc.) are handled through [[/dev/wctl]] instead.
+
+<<function [[wctlthread]]>>=
+void
+wctlthread(void *v)
+{
+    Channel *c = v;
+    char *buf, *arg, *dir;
+    int cmd, id, pid, hideit, scrollit;
+    Rectangle rect;
+    char err[ERRMAX];
+
+    threadsetname("WCTLTHREAD");
+
+    for(;;){
+        buf = recvp(c);
+
+        cmd = parsewctl(&arg, ZR, &rect, &pid, &id, &hideit, &scrollit, &dir, buf, err);
+
+        switch(cmd){
+        case New:
+            wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+        }
+        free(buf);
+    }
+}
+@
+
+
+
+
+
+\t mv before in other /mnt/wsys/ctl?
+
+%claude:
+The wctl command vocabulary covers window lifecycle ([[New]], [[Delete]]),
+geometry ([[Resize]], [[Move]]), z-order ([[Top]], [[Bottom]]),
+visibility ([[Hide]], [[Unhide]]), focus ([[Current]]),
+and scrolling mode ([[Scroll]], [[Noscroll]]).
+Commands at or above [[Top]] are disallowed while a mouse button is
+pressed, to avoid interfering with drag operations.
+
+<<enum [[_anon_ (rio/wctl.c)]]>>=
+/* >= Top are disallowed if mouse button is pressed */
+enum
+{
+    New,
+    Resize,
+    Move,
+    Scroll,
+    Noscroll,
+    Set,
+    Top,
+    Bottom,
+    Current,
+    Hide,
+    Unhide,
+    Delete,
+};
+@
+
+<<global [[cmds]]>>=
+static char *cmds[] = {
+    [New]	= "new",
+    [Resize]	= "resize",
+    [Move]	= "move",
+    [Scroll]	= "scroll",
+    [Noscroll]	= "noscroll",
+    [Set]	= "set",
+    [Top]	= "top",
+    [Bottom]	= "bottom",
+    [Current]	= "current",
+    [Hide]	= "hide",
+    [Unhide]	= "unhide",
+    [Delete]	= "delete",
+    nil
+};
+@
+
+<<enum [[_anon_ (rio/wctl.c)]]2>>=
+enum
+{
+    Cd,
+    Deltax,
+    Deltay,
+    Hidden,
+    Id,
+
+    Maxx,
+    Maxy,
+    Minx,
+    Miny,
+
+    PID,
+    R,
+
+    Scrolling,
+    Noscrolling,
+};
+@
+
+<<global [[params]]>>=
+static char *params[] = {
+    [Cd] 			= "-cd",
+    [Deltax]			= "-dx",
+    [Deltay]			= "-dy",
+    [Hidden]			= "-hide",
+    [Id]			= "-id",
+    [Maxx]			= "-maxx",
+    [Maxy]			= "-maxy",
+    [Minx]			= "-minx",
+    [Miny]			= "-miny",
+    [PID]			= "-pid",
+    [R]				= "-r",
+    [Scrolling]			= "-scroll",
+    [Noscrolling]		= "-noscroll",
+    nil
+};
+@
+
+%claude:
+[[parsewctl()]] is a mini command-line parser shared between
+[[/dev/wctl]], [[/srv/riowctl]], and the ``new'' attach spec.
+It first extracts the command verb, then loops over the
+dash-prefixed parameters. The [[set()]] helper supports relative
+adjustments: a bare number is absolute, [[+n]] adds, [[-n]] subtracts.
+Finally [[rectonscreen()]] clamps the result to the display bounds.
+
+<<function [[goodrect]]>>=
+/*
+ * Check that newly created window will be of manageable size
+ */
+int
+goodrect(Rectangle r)
+{
+    if(!eqrect(canonrect(r), r))
+        return 0;
+    if(Dx(r)<100 || Dy(r)<3*font->height)
+        return 0;
+    /* must have some screen and border visible so we can move it out of the way */
+    if(Dx(r) >= Dx(view->r) && Dy(r) >= Dy(view->r))
+        return 0;
+    /* reasonable sizes only please */
+    if(Dx(r) > BIG*Dx(view->r))
+        return 0;
+    if(Dy(r) > BIG*Dx(view->r))
+        return 0;
+    return 1;
+}
+@
+
+<<function [[word]]>>=
+static
+int
+word(char **sp, char *tab[])
+{
+    char *s, *t;
+    int i;
+
+    s = *sp;
+    while(isspace(*s))
+        s++;
+    t = s;
+    while(*s!='\0' && !isspace(*s))
+        s++;
+    for(i=0; tab[i]!=nil; i++)
+        if(strncmp(tab[i], t, strlen(tab[i])) == 0){
+            *sp = s;
+            return i;
+    }
+    return -1;
+}
+@
+
+<<function [[set]]>>=
+int
+set(int sign, int neg, int abs, int pos)
+{
+    if(sign < 0)
+        return neg;
+    if(sign > 0)
+        return pos;
+    return abs;
+}
+@
+
+%claude:
+[[newrect()]] generates default positions for new windows using a
+simple cascading scheme: each new window is offset by 16 pixels from
+the previous one, cycling through 10 positions. This avoids stacking
+windows exactly on top of each other.
+
+<<function [[newrect]]>>=
+Rectangle
+newrect(void)
+{
+    static int i = 0;
+    int minx, miny, dx, dy;
+
+    dx = min(600, Dx(view->r) - 2*Borderwidth);
+    dy = min(400, Dy(view->r) - 2*Borderwidth);
+    minx = 32 + 16*i;
+    miny = 32 + 16*i;
+    i++;
+    i %= 10;
+
+    return Rect(minx, miny, minx+dx, miny+dy);
+}
+@
+
+<<function [[shift]]>>=
+void
+shift(int *minp, int *maxp, int min, int max)
+{
+    if(*minp < min){
+        *maxp += min-*minp;
+        *minp = min;
+    }
+    if(*maxp > max){
+        *minp += max-*maxp;
+        *maxp = max;
+    }
+}
+@
+
+<<function [[rectonscreen]]>>=
+Rectangle
+rectonscreen(Rectangle r)
+{
+    shift(&r.min.x, &r.max.x, view->r.min.x, view->r.max.x);
+    shift(&r.min.y, &r.max.y, view->r.min.y, view->r.max.y);
+    return r;
+}
+@
+
+<<function [[riostrtol]]>>=
+/* permit square brackets, in the manner of %R */
+int
+riostrtol(char *s, char **t)
+{
+    int n;
+
+    while(*s!='\0' && (*s==' ' || *s=='\t' || *s=='['))
+        s++;
+    if(*s == '[')
+        s++;
+    n = strtol(s, t, 10);
+    if(*t != s)
+        while((*t)[0] == ']')
+            (*t)++;
+    return n;
+}
+@
+
+<<function [[parsewctl]]>>=
+int
+parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hiddenp, int *scrollingp, char **cdp, char *s, char *err)
+{
+    int cmd, param, xy, sign;
+    char *t;
+
+    *pidp = 0;
+    *hiddenp = 0;
+    *scrollingp = scrolling;
+    *cdp = nil;
+    cmd = word(&s, cmds);
+    if(cmd < 0){
+        strcpy(err, "unrecognized wctl command");
+        return -1;
+    }
+    if(cmd == New)
+        r = newrect();
+
+    strcpy(err, "missing or bad wctl parameter");
+
+    while((param = word(&s, params)) >= 0){
+        switch(param){	/* special cases */
+        case Hidden:
+            *hiddenp = 1;
+            continue;
+        case Scrolling:
+            *scrollingp = 1;
+            continue;
+        case Noscrolling:
+            *scrollingp = 0;
+            continue;
+        case R:
+            r.min.x = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            r.min.y = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            r.max.x = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            r.max.y = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            continue;
+        }
+        while(isspace(*s))
+            s++;
+        if(param == Cd){
+            *cdp = s;
+            while(*s && !isspace(*s))
+                s++;
+            if(*s != '\0')
+                *s++ = '\0';
+            continue;
+        }
+        sign = 0;
+        if(*s == '-'){
+            sign = -1;
+            s++;
+        }else if(*s == '+'){
+            sign = +1;
+            s++;
+        }
+        if(!isdigit(*s))
+            return -1;
+        xy = riostrtol(s, &s);
+
+        switch(param){
+        case Minx:
+            r.min.x = set(sign, r.min.x-xy, xy, r.min.x+xy);
+            break;
+        case Miny:
+            r.min.y = set(sign, r.min.y-xy, xy, r.min.y+xy);
+            break;
+        case Maxx:
+            r.max.x = set(sign, r.max.x-xy, xy, r.max.x+xy);
+            break;
+        case Maxy:
+            r.max.y = set(sign, r.max.y-xy, xy, r.max.y+xy);
+            break;
+        case Deltax:
+            r.max.x = set(sign, r.max.x-xy, r.min.x+xy, r.max.x+xy);
+            break;
+        case Deltay:
+            r.max.y = set(sign, r.max.y-xy, r.min.y+xy, r.max.y+xy);
+            break;
+        case Id:
+            if(idp != nil)
+                *idp = xy;
+            break;
+        case PID:
+            if(pidp != nil)
+                *pidp = xy;
+            break;
+        case -1:
+            strcpy(err, "unrecognized wctl parameter");
+            return -1;
+        }
+    }
+
+    *rp = rectonscreen(rectaddpt(r, view->r.min));
+
+    while(isspace(*s))
+        s++;
+    if(cmd!=New && *s!='\0'){
+        strcpy(err, "extraneous text in wctl message");
+        return -1;
+    }
+
+    if(argp)
+        *argp = s;
+
+    return cmd;
+}
+@
+
+%claude:
+[[wctlnew()]] ties the pieces together: it validates the rectangle,
+builds an [[argv]] for [[rc]], allocates the window image (either a
+visible layer on [[desktop]] or a hidden off-screen image),
+and calls [[new()]] to create the window thread and shell process.
+
+<<function [[wctlnew]]>>=
+int
+wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir, char *err)
+{
+    char **argv;
+    Image *i;
+
+    if(!goodrect(rect)){
+        strcpy(err, Ebadwr);
+        return -1;
+    }
+    argv = emalloc(4*sizeof(char*));
+    argv[0] = "rc";
+    argv[1] = "-c";
+    while(isspace(*arg))
+        arg++;
+    if(*arg == '\0'){
+        argv[1] = "-i";
+        argv[2] = nil;
+    }else{
+        argv[2] = arg;
+        argv[3] = nil;
+    }
+    if(hideit)
+        i = allocimage(display, rect, view->chan, false, DWhite);
+    else
+        i = allocwindow(desktop, rect, Refbackup, DWhite);
+    if(i == nil){
+        strcpy(err, Ewalloc);
+        return -1;
+    }
+    border(i, rect, Selborder, red, ZP);
+
+    new(i, hideit, scrollit, pid, dir, "/bin/rc", argv);
+
+    free(argv);	/* when new() returns, argv and args have been copied */
+    return 1;
+}
+@
+
+
+
+
+<<function [[wtopme]]>>=
+void
+wtopme(Window *w)
+{
+    if(w!=nil && w->i!=nil && !w->deleted && w->topped!=topped){
+        topwindow(w->i);
+        flushimage(display, 1);
+        w->topped = ++topped;
+    }
+}
+@
+
+<<function [[wbottomme]]>>=
+void
+wbottomme(Window *w)
+{
+    if(w!=nil && w->i!=nil && !w->deleted){
+        bottomwindow(w->i);
+        flushimage(display, 1);
+        w->topped = - ++topped;
+    }
 }
 @
 
@@ -22075,7 +22077,7 @@ nbytes(char *s0, int nr)
 
 
 %******************************************************************************
-\chapter{Examples of Windowing System Applications}
+\chapter{Windowing System Applications}
 %******************************************************************************
 \label{chap:examples}
 %coupling: Windows_extra.nw
@@ -22083,13 +22085,21 @@ nbytes(char *s0, int nr)
 %claude:
 Earlier you met [[hellorio]] (Section~\ref{sec:hellorio}), a minimal window
 \emph{application}: a client that opens a single window and draws into it,
-oblivious to the rest of the screen. The programs in this chapter are
+oblivious to the rest of the screen.
+%
+The programs in this chapter are
 windowing-\emph{system} applications instead---each reaches past its own
-window into the windowing system as a whole. [[lens]] reads the entire
-screen through [[/dev/screen]] and magnifies a region of it; [[statusbar]]
-mounts [[/mnt/wsys]] itself to carve out a managed strip; and [[winwatch]]
-enumerates every open window through [[/dev/wsys]], reading each one's
-[[label]]. Yet none of them needs any special privilege: they are ordinary
+window into the windowing system as a whole.
+%
+[[lens]] reads the entire
+screen through [[/dev/screen]] and magnifies a region of it;
+%
+[[statusbar]] mounts [[/mnt/wsys]] itself to carve out a managed strip; and
+%
+[[winwatch]] enumerates every open window through [[/dev/wsys]], reading each one's
+[[label]].
+%
+Yet none of them needs any special privilege: they are ordinary
 filesystem clients of the very interfaces built in the previous chapters,
 which is exactly what makes such tools so easy to write under \plan.
 
