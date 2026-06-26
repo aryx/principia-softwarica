@@ -9814,6 +9814,12 @@ Qmouse,
 % The winctl itself listen for mouse events on w->mc.c from mousethread
 
 %yoann: quick intro and say channel of channels (but don't duplicate paragraph coming after explaining the pattern)
+%claude:
+When a client reads [[/mnt/wsys/mouse]], the [<xfidread()>] worker never
+touches the mouse itself: it waits for the window's [<winctl()>] thread to
+hand it an event. The two rendezvous through a {channel of channels}---the
+[[mouseread]] channel set up below carries a [<Mousereadmesg>], which in
+turn holds the channel on which the [[Mouse]] value finally arrives.
 
 
 <<[[Window]] other fields>>=
@@ -10249,10 +10255,11 @@ and [[Window]]s).
 
 % quite complicated
 %claude:
-The console device is the most complex virtual device because it mediates
-between two asynchronous worlds: the client process reading/writing bytes,
-and the [[winctl]] thread managing runes.
-%yoann1: this asynchronous thing is confusing; clarify the paragraph or stay short
+The console device is the most complex virtual device because it bridges
+two mismatched interfaces: the client reads and writes a stream of
+{bytes}, while the [<winctl()>] thread works in {runes} and may have
+nothing to give when the client asks. Reconciling the byte/rune boundary
+and that waiting is what makes the code below intricate.
 
 <<[[qid]] cases>>=
 Qcons,
@@ -10266,6 +10273,11 @@ Qcons,
 \subsection{Reading [[/mnt/wsys/cons]]: file server side}
 
 %yoann: quick intro
+%claude:
+Reading [[/mnt/wsys/cons]] has the same shape as the mouse: the
+[<xfidread()>] worker rendezvous with [<winctl()>] instead of reading
+anything itself. The console handshake is heavier, though---it needs {two}
+inner channels rather than one.
 
 <<[[Window]] other fields>>=
 // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
@@ -10298,9 +10310,9 @@ struct Consreadmesg
 %claude:
 Unlike the mouse, the console uses two channels inside the
 [<Consreadmesg>]: [[c1]] to pass the read buffer from the worker to
-[<winctl>], and [[c2]] to pass the filled data back.
+[<winctl()>], and [[c2]] to pass the filled data back.
 The two-channel protocol is needed because the worker must first tell
-[<winctl>] how many bytes it can accept (via [[c1]]), and then [<winctl>]
+[<winctl()>] how many bytes it can accept (via [[c1]]), and then [<winctl()>]
 fills that buffer and returns it (via [[c2]]):
 
 %claude:
@@ -10411,9 +10423,9 @@ case Qcons:
 %claude:
 Console writing follows the same channel handshake as reading, but
 the data flows in the opposite direction: the client's bytes go from
-[<xfidwrite()>] to [<winctl>]. A critical subtlety is that the data
+[<xfidwrite()>] to [<winctl()>]. A critical subtlety is that the data
 must be converted from UTF-8 bytes to complete runes \emph{before} being
-sent, because [<winctl>] works in rune space---it cannot display half
+sent, because [<winctl()>] works in rune space---it cannot display half
 a multibyte character:
 \begin{verbatim}
   xfidwrite (worker)                   winctl (window thread)
@@ -10438,7 +10450,7 @@ a multibyte character:
 \end{verbatim}
 %claude:
 Note the reversed initiative compared to reading: for writing, it is
-[<winctl>] that sends the [<Conswritemesg>] first (signaling it is
+[<winctl()>] that sends the [<Conswritemesg>] first (signaling it is
 ready to accept output), and then the worker sends the rune data
 through the [[cw]] channel.
 
@@ -10798,6 +10810,13 @@ case Qcursor:
 % anyway, anybody can access the full screen in display->image, hmm
 
 %yoann: quick intro
+%claude:
+Drawing is the one device [[rio]] does {not} demultiplex. Where
+[[/dev/cons]] and [[/dev/mouse]] are virtual files served by the worker
+threads we just saw, each window process opens the kernel's own
+[[/dev/draw]] directly (as [[/dev/draw/<n>]]), so pixels never pass
+through [[rio]]'s file server. That makes drawing more efficient but
+moves the complexity into per-window graphics setup.
 
 \subsection{Trace of a drawing operation}
 \label{sec:trace-draw}
@@ -11489,10 +11508,10 @@ case Rawoff:
 \section{Mouse events}
 
 %claude:
-This section shows the [<winctl>] side of mouse event delivery---the
+This section shows the [<winctl()>] side of mouse event delivery---the
 producer/consumer machinery that sits between [<mousethread>] and
 the client's [[read("/dev/mouse")]]. The previous chapter showed the
-[<xfidread()>] side (part~1); here we see part~2: how [<winctl>]
+[<xfidread()>] side (part~1); here we see part~2: how [<winctl()>]
 queues click events, decides when to offer data, and responds on the
 reply channel.
 
@@ -11507,7 +11526,7 @@ reply channel.
 %claude:
 Each window keeps its own [<Mouseinfo>] struct to buffer mouse events
 destined for the client application. This is the producer's staging
-area: [<winctl>] writes into it when it receives events from
+area: [<winctl()>] writes into it when it receives events from
 [<mousethread>], and reads from it when the client is ready via the
 channel-of-channels protocol described in the previous chapter.
 
@@ -11615,7 +11634,7 @@ struct Mousestate
 %claude:
 This is part~2 of the mouse reading code. Part~1 in the previous
 chapter showed the [<xfidread()>] side---how the worker sends a
-[<Mousereadmesg>] and waits for a reply. Here we see the [<winctl>]
+[<Mousereadmesg>] and waits for a reply. Here we see the [<winctl()>]
 side: the producer that enqueues click events into
 [[w->mouse.queue]], and the consumer that dequeues them (or snapshots
 the current position) when the client is ready.
@@ -11757,7 +11776,7 @@ a client has written [["rawon"]] on [[/mnt/wsys/consctl]]. In that
 mode, [<wkeyctl>] appends each keystroke to [[raw]] instead of
 inserting it into the text buffer. The runes accumulate here until
 the client reads [[/dev/cons]], at which point the [[WCread]] consumer
-in [<winctl>] converts them to UTF-8 bytes and sends them out.
+in [<winctl()>] converts them to UTF-8 bytes and sends them out.
 
 <<[[Window]] graphical window fields>>=
 // growing_array<Rune> (size = Window.nraw)
@@ -12535,7 +12554,7 @@ character `x' at the cursor. The call chain is:
 
 %claude:
 \begin{enumerate}
-\item [<wkeyctl>] receives the rune from [<winctl>].
+\item [<wkeyctl>] receives the rune from [<winctl()>].
 \item [[winsert(w, \&r, 1, w->q0)]] shifts [[r[q0..]]] right by 1,
 inserts `x', increments [[nr]], and bumps [[q0]]/[[q1]] forward.
 \item Since [[q0 >= org]], [[frinsert(\&w->frm, \&r, \&r+1, q0-org)]]
@@ -13336,7 +13355,7 @@ arrow keys still work for scrolling the terminal viewport.
 The keyboard event flow is:
 \begin{enumerate}
 \item [<keyboardthread>] receives a rune from the keyboard device.
-\item [<winctl>] dispatches it to [<wkeyctl>].
+\item [<winctl()>] dispatches it to [<wkeyctl>].
 \item [<wkeyctl>] checks for raw mode, navigation keys, special keys,
 then falls through to ordinary character insertion.
 \end{enumerate}
@@ -13370,11 +13389,11 @@ the application's line-editing library).
 
 %claude:
 Part~1 (Virtual Devices chapter) showed the [<xfidread()>] side that
-sends a [<Consreadmesg>] to [<winctl>].
-Part~2 (Graphical Windows chapter) showed how [<winctl>] handles raw
+sends a [<Consreadmesg>] to [<winctl()>].
+Part~2 (Graphical Windows chapter) showed how [<winctl()>] handles raw
 keystrokes.
 This part~3 covers the textual-window path: how [<wkeyctl>] inserts
-ordinary characters into the rune buffer (producer), and how [<winctl>]
+ordinary characters into the rune buffer (producer), and how [<winctl()>]
 implements line buffering by scanning for newlines before enabling the
 [[WCread]] alternative (consumer).
 %claude:
@@ -13997,7 +14016,7 @@ free(s);
 
 %claude:
 When the application writes to [[/dev/cons]], the data arrives at
-the [<winctl>] thread through the [[conswrite]] channel.
+the [<winctl()>] thread through the [[conswrite]] channel.
 The thread inserts the new runes at the output point ([[qh]]), advances
 [[qh]], and updates the display.
 %claude:
@@ -14026,7 +14045,7 @@ output.
 Part~1 (Virtual Devices chapter) showed how [<xfidwrite()>] converts
 the client's bytes to runes and sends them through the
 channel-of-channels protocol.
-This part~2 is the [<winctl>] consumer: it receives the runes, inserts
+This part~2 is the [<winctl()>] consumer: it receives the runes, inserts
 them at the output point [[qh]] via [<winsert>], advances [[qh]] by the
 number of runes inserted, and updates the display.
 %claude:
