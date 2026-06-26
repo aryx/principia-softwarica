@@ -19142,7 +19142,6 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 @
 
 
-%******************************************************************************
 \section{Additional control messages}
 
 \subsection{Holding mode}
@@ -19358,17 +19357,18 @@ wrefresh(Window *w, Rectangle)
 }
 @
 
-
+%******************************************************************************
 \chapter{Conclusion}
 %******************************************************************************
 \label{chap:conclusion}
 
 %claude:
 You now know how the \plan windowing system [[rio]]
-works---from the hardware interrupt when you click
-the mouse, through the chain of IO procs, threads,
-and channels, all the way to the 9P response that
-unblocks the application.
+works---%
+from the hardware interrupt when you click the mouse,
+through the chain of IO procs, threads, and channels,
+all the way to the 9P response that unblocks the application.
+%
 More generally, you now understand how a windowing
 system manages multiple windows, dispatches input,
 and provides a transparent environment for
@@ -19393,21 +19393,60 @@ automatically works in a windowed environment, and
 [[rio]] gains network transparency for free through 9P.
 
 \section{Patterns and techniques}
+\label{sec:patterns}
 
 %claude:
+Many of the techniques below are {concurrency} design patterns, and
+unusually powerful ones---you will recognize several from Go.
+%cs-history:
+That is no accident: Rob Pike had a hand in [[libthread]], in [[rio]], and
+later in Go, and \plan's concurrent programs like [[rio]] were in effect a
+proving ground for the channel-based style Go would popularize.
+%
 These techniques apply far beyond window managers:
+
+
 \begin{itemize}
 
 \item \emph{Active objects}: one thread per window,
-communicating by message passing. This is how Erlang
-processes and Go services are structured: eliminate locks
-by giving each object exclusive ownership of its state.
+communicating by message passing. In [[rio]] this is the
+[<winctl()>] thread---each window's state (its image, its input
+buffer, its mode) is owned by that one thread and touched only
+through the messages other threads send it, so there are no
+locks and no races. This is how Erlang processes and Go
+services are structured: eliminate locks by giving each object
+exclusive ownership of its state.
+%cs-history:
+The pattern is the {actor} model, traceable to Carl Hewitt in
+the 1970s and made mainstream by Erlang; \plan arrives at it
+not through a language feature but through plain [[libthread]]
+threads selecting over channels with [[alt()]].
+
+\item \emph{Select over channels}: every long-lived thread in
+[[rio]]---[<winctl()>], [<mousethread()>], and the [<xfidread()>]
+workers---sits in an [[alt()]] that waits on several channels at
+once and acts on whichever fires, instead of polling or
+dedicating a thread per source. This is exactly Go's [[select]],
+and the role [[select]]/[[poll]]/[[epoll]] play in event-driven
+servers: one thread cleanly multiplexing many event streams.
 
 \item \emph{Master/worker dispatch}: the [[fileserver]] proc
-dispatches requests to a pool of reusable workers. The same
-architecture is used by web servers (Nginx, Apache prefork)
-and database connection pools: decouple request arrival
-rate from processing capacity.
+reads each 9P request and hands the ones that might block to a
+pool of reusable [[Xfid]] worker threads---recycled rather than
+created per request---so its read loop never stalls waiting on
+a single slow client. The same architecture is used by web
+servers (Nginx, Apache prefork) and database connection pools:
+decouple request arrival rate from processing capacity.
+
+\item \emph{Delegated thread creation}: a worker must run in
+[[main-proc]] to share its globals, but the request to make one
+arrives in the [[fileserver]] proc. [[rio]] bridges this with a
+{worker allocator}: the [[fileserver]] sends on [[cxfidalloc]],
+and [<xfidallocthread()>] (a thread of [[main-proc]]) does the
+actual [[threadcreate]] and hands the new [[Xfid]] back over the
+same channel. Spawning is delegated across procs through a
+channel---a tidy answer to ``create this in another address
+space for me.''
 
 %yoann: maybe add item for the interesting pipe multi clients with tag and atomic and kernel dispatch
 \item \emph{Tag multiplexing}: a single pipe serves many clients at once
@@ -19421,6 +19460,23 @@ reply channel along with a request; the responder uses that
 channel to deliver data. This is how futures and promises
 work, and how RPC systems deliver replies. It decouples
 requester from provider without shared state.
+%cs-history:
+The roots are in Tony Hoare's {Communicating Sequential Processes}, but
+{first-class} channels---the ability to send channels over channels---came
+into their own in Newsqueak, designed by Rob Pike, and passed from there
+through Alef and Limbo into Go. Pike singled this out as what makes channels
+far more than message queues: once a channel is itself a value you can
+communicate, the communication graph is no longer fixed, and processes can
+build entirely new communication structures at runtime.
+
+\item \emph{Synchronous rendezvous}: [[rio]]'s channels are
+unbuffered ([[chancreate(..., 0)]]), so a [[send]] blocks until
+a matching [[recv]]; the communication {is} the synchronization.
+The mouse handshake relies on this---the worker's first message
+is not data but an ``I am ready'' signal, and only a rendezvous,
+never a queue, can guarantee the value handed back is the
+freshest one. These are the original CSP semantics, the same as
+an unbuffered Go channel.
 
 \item \emph{Circular buffer}: the [[Mouseinfo]] queue
 buffers events with wrap-around indexes. This bounded ring
@@ -19429,11 +19485,13 @@ and lock-free queues%
 % like LMAX Disruptor
 ---constant-time enqueue and dequeue with bounded memory.
 
-\item \emph{Async IO offloading}: blocking IO is moved to
-separate procs that forward events through channels. The
-same idea drives Node.js (libuv's thread pool) and Go's
-runtime scheduler: keep the event loop responsive by
-moving blocking work elsewhere.
+\item \emph{Async IO offloading}: the blocking [[read]]s on the
+real [[/dev/cons]] and [[/dev/mouse]] live in dedicated
+[[IO-proc]]s that forward each event through a channel, so the
+cooperatively-scheduled [[main-proc]] never blocks on a syscall
+and the GUI stays live. The same idea drives Node.js (libuv's
+thread pool) and Go's runtime scheduler: keep the event loop
+responsive by moving blocking work elsewhere.
 
 \item \emph{Fork/adjust/exec}: create a process, customize
 its namespace, then exec. This three-phase pattern is how
@@ -19442,6 +19500,28 @@ exec the entrypoint) and how sandboxes are built (fork,
 drop privileges, exec).
 
 \end{itemize}
+
+%claude: %cs-history:
+These patterns speak to a long-running debate: {threads versus events}. The
+{event} camp (John Ousterhout's 1996 ``Why Threads Are a Bad Idea'') builds
+a server as a single thread spinning a [[select]]/[[poll]] loop over
+callbacks and explicit state machines---fast and race-free, but with the
+control flow shredded across callbacks. The {thread} camp (von Behren et
+al., ``Why Events Are a Bad Idea'', 2003) keeps code straight-line and
+blocking, at the cost of stacks and, with preemptive threads, locks and
+races.
+
+%claude:
+[[rio]] refuses to pick a side, and that is the point. Its workers are
+written as {threads}---[<xfidread()>] just [[recv]]s and blocks, in plain
+sequential code---yet the [[alt()]] at the heart of every long-lived thread
+is precisely the {event} loop's [[select]]. \plan's [[libthread]] threads
+are {cooperative}, so there is no preemption and none of the lock-and-race
+tax the thread camp pays; the only truly blocking syscalls are exiled to
+separate IO procs (the offloading pattern above) so they never freeze the
+scheduler. The code reads like threads but behaves like an event loop. This
+CSP-flavoured synthesis---cheap cooperative threads plus channels and a
+[[select]]---is the same bet Go later made mainstream with goroutines.
 
 \section{Connections to other books}
 
