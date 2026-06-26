@@ -2586,6 +2586,9 @@ managed window; and the [<Filsys>]/[<Fid>] table is the per-client state
 Notice where the two sides meet: a [[Fid]]'s [[qid]] encodes the window id,
 and its [[w]] field caches the [[Window]] that id resolves to (as we saw
 above), so a request from a client is routed straight to the right window.
+%
+The lone [[Xfid]] at the bottom is a worker caught mid-request, serving the
+blocking [[/dev/mouse]] read on [[fid]]~7 through its [[f]] back-pointer.
 
 \begin{figure}[!tbp]\centering
 \begin{vdiagram}
@@ -2598,6 +2601,7 @@ GLOBALS    display *--> /dev/draw connection      (set by initdraw())
            input   *--> windows[0]                    (focused window)
 
 WINDOWS    windows *--> [ windows[0], windows[1] ]    nwindow = 2
+                          *           *
                           |           |
                           v           v
           +-----------------------+ +-----------------------+
@@ -2612,11 +2616,23 @@ WINDOWS    windows *--> [ windows[0], windows[1] ]    nwindow = 2
           | org=0 qh=13 q0=q1=19  |
           +-----------------------+
 
-FILESYSTEM filsys *--> Filsys
-             fids[h] *--> Fid{fid=4} --> Fid{fid=7} --> nil
-                           w *--> windows[0]
-                           (qid encodes the window id; w caches the
-                            Window it resolves to, see above)
+FILESYSTEM filsys *--> Filsys (the 9P server end of the pipe)
+           fids[h] *--> Fid{fid=4} --> Fid{fid=7} --> nil   (a hash chain)
+                          *               *
+                          v               v
+          +--------------------------+ +--------------------------+
+          | Fid fid=4                | | Fid fid=7                |
+          | qid.path=QID(1,Qcons)    | | qid.path=QID(2,Qmouse)   |
+          |   -> /dev/cons of win 1  | |   -> /dev/mouse of win 2 |
+          | w *--> windows[0]        | | w *--> windows[1]        |
+          +--------------------------+ +--------------------------+
+                                                    ^
+                                                    | x->f
+                                       +--------------------------+
+                                       | Xfid (in-flight worker)  |
+                                       | req = Tread (mouse,tag=5)|
+                                       | f *--> Fid{fid=7}        |
+                                       +--------------------------+
 \end{vdiagram}
 \caption{[[rio]]'s live data structures, with two windows open.}
 \label{fig:core-ds-rio}
@@ -3833,12 +3849,12 @@ This is the ``active object'' pattern: each window is an independent
 concurrent entity processing its own event stream.
 
 %claude:
-\begin{verbatim}
-                    keyboardthread
-                         |
-                        [ck]  (Rune)
-                         |
-                         v
+\begin{vdiagram}
+                       keyboardthread
+                            |
+                           [ck]  (Rune)
+                            |
+                            v
   mousethread --[mc.c]--> winctl <--[cctl]-- wm / mousethread
                  (Mouse)    |      (Wctlmesg)
                             |
@@ -3848,7 +3864,7 @@ concurrent entity processing its own event stream.
                      |      |      |         (see later chapters)
                      v      v      v
                    client process reads/writes
-\end{verbatim}
+\end{vdiagram}
 
 %claude:
 For now, I will focus on the three core connections---keyboard,
@@ -5155,7 +5171,8 @@ code that creates, moves, resizes, hides, and deletes windows.
 
 In \plan, the window manager and the window server are the same program,
 unlike X~Window where they are separate.
-Window management can be triggered from several sources, but they all
+%
+Window management in [[rio]] can be triggered from several sources, but they all
 converge to the same mechanism: sending a [<Wctlmesg>] to the target
 [<Window.cctl>] channel, where its [<winctl()>] thread processes it:
 
@@ -5163,7 +5180,7 @@ converge to the same mechanism: sending a [<Wctlmesg>] to the target
 \begin{vdiagram}
   Right-click menu ------+
   Border click (move/    |
-    resize) -------------+---> wsendctlmesg(w->cctl) ---> winctl
+    resize) -------------+---> wsendctlmesg(w->cctl) ---> winctl()
   /mnt/wsys/wctl write --+                                  |
   /srv/riowctl write ----+                             wctlmesg()
   External mount --------+                            processes it
@@ -5793,8 +5810,9 @@ A concrete example makes the chain clearer. Suppose [[Borderwidth]] is~4 and
 [[i->r]] and [[screenr]] are both that physical rectangle---which is why
 [[i->r.min]] is passed as the on-screen position, and why [[screenr]] is
 captured first, before the shift moves [[i->r]] away:
-%
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   originwindow(i, (-4,-4), i->r.min):   shift logical origin to (-4,-4),
                                         keep showing at i->r.min = (100,50)
   after it:
@@ -5815,8 +5833,9 @@ captured first, before the shift moves [[i->r]] away:
          (10,10) - (-4,-4) + (100,50) = (114,64)
   mouse  screen->logical (mousethread):  M + (i->r.min - screenr.min)
          (114,64) + ((-4,-4) - (100,50)) = (10,10)
-\end{verbatim}
-%
+\end{vdiagram}
+
+%claude:
 The two directions are exact inverses: a client drawing at logical
 [[(10,10)]] hits screen pixel [[(114,64)]], and a click on that pixel is
 reported back to the client as [[(10,10)]].
@@ -6228,8 +6247,8 @@ if(err < 0){
 @
 
 %claude:
-[<filsysmount()>] itself checks both of its steps---the [[mount]] and the
-[[bind]]---returning [[-1]] if either fails.
+[<filsysmount()>] itself checks both of its steps---the [[mount()]] and the
+[[bind()]]---returning [[-1]] if either fails.
 
 
 <<[[filsysmount()]] sanity check err mount>>=
@@ -6497,11 +6516,11 @@ it end to end as a summary. Creating a window from the menu puts the mouse
 thread in control (the mouse trace itself comes in
 Section~\ref{sec:trace-mouse-click}), and from there [<new()>] builds five
 things: a new {process} (forked and exec'd in [<winshell()>]); its private
-{namespace} (the [[mount]] and [[bind]] of [<filsysmount()>], detailed in
+{namespace} (the [[mount()]] and [[bind()]] of [<filsysmount()>], detailed in
 the \book{Kernel}); a new [<Window>] structure, linked into [<windows>] by
 [<wmk()>]; a new {window thread}, [<winctl()>], with its channels; and a new
 {image layer}, published under a unique name by [<wsetname()>]. The diagram
-at the end of this section shows the resulting entities and how they link;
+below shows the resulting entities and how they link;
 how the per-message traffic is then multiplexed over the shared pipe is left
 to Chapter~\ref{chap:filesystem-server}.
 
@@ -10900,7 +10919,9 @@ The following diagram illustrates those four phases.
 Note that the draw client number ([[/dev/draw/3/]]) is unrelated
 to the window identifier in the layer name ([[window.2]])---it
 simply depends on the order in which processes connect to [[draw]]:
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
                   rio                          draw (kernel)
               +----------+                  +----------------+
   Phase 1:    |          |   initdraw()     |                |
@@ -10927,7 +10948,7 @@ simply depends on the order in which processes connect to [[draw]]:
   draws     +------------------------------>| draw in layer  |
  |          |   /dev/draw/3/data            |                |
  +----------+                               +----------------+
-\end{verbatim}
+\end{vdiagram}
 
 \subsubsection{Phase 1: [[rio]] starts up}
 
@@ -12047,8 +12068,9 @@ border, the mouse thread inside [[rio]], the target window's
 [[/mnt/wsys/mouse]]. It is worth walking through end-to-end because
 the ``r''-prefix trick is the only hint the client gets that anything
 structural changed:
-%
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   user         mousethread    winctl       xfidread         client
    |               |            |              |              |
    | drag border   |            |              |              |
@@ -12073,7 +12095,8 @@ structural changed:
    |               |            |              |<-------------|
    |               |            |              | read winname |
    |               |            |              |<-------------|
-\end{verbatim}
+\end{vdiagram}
+
 %claude:
 The reason rio piggybacks on [[/mnt/wsys/mouse]] instead of using a
 dedicated [[/dev/resize]] file is backward compatibility: every
@@ -12256,7 +12279,7 @@ The selection ([[q0]]/[[q1]]) and the output point ([[qh]])
 are indices into this same buffer:
 
 %claude:
-\begin{verbatim}
+\begin{vdiagram}
   Rune buffer r[]:
   +-------+-----+-------+-----------+-----+---------+-------+
   |       |     |       |           |     |         |       |
@@ -12277,7 +12300,7 @@ are indices into this same buffer:
             |l|  |                          |
             +-+--+--------------------------+
          scrollr       Frame (frm)
-\end{verbatim}
+\end{vdiagram}
 
 %claude:
 Key invariant: [[org <= qh <= nr]].
@@ -12332,7 +12355,7 @@ and [[Sg]] is the gap between the scrollbar and the text frame
 ([[Scrollgap]] = 4 pixels wide):
 
 %claude:
-\begin{verbatim}
+\begin{vdiagram}
   +--+----+--------------------------------------+--+
   |  |    |                                      |  |
   |  | Sb | Sg |        Frame (frm)              |  | <- Selborder
@@ -12341,7 +12364,7 @@ and [[Sg]] is the gap between the scrollbar and the text frame
   |  |    |    |                                 |  |
   +--+----+--------------------------------------+--+
      Scrollwid=12  Scrollgap=4
-\end{verbatim}
+\end{vdiagram}
 
 <<[[wmk()]] textual window settings>>=
 <<[[wmk()]] textual window settings, set scrollbar>>
@@ -12772,7 +12795,9 @@ here I show only where and how rio calls them.
 The pipeline below spans both layers: the [[w...]] functions are rio's
 (this chapter), while [[frinsert]]/[[frdelete]] and their helpers belong
 to the Frame library (Chapter~\ref{chap:frame}):
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   winsert()/wdelete()     -- modify the rune buffer and cursors
        |
        v
@@ -12785,7 +12810,7 @@ to the Frame library (Chapter~\ref{chap:frame}):
        |
        v
   wshow() -> wsetorigin() -> wfill()  -- scroll viewport if needed
-\end{verbatim}
+\end{vdiagram}
 
 \subsection{Updating the visible text: [[frinsert()]]}
 
@@ -14876,8 +14901,9 @@ which makes it hard to picture. Here is a consolidated view of what
 a client sees when it mounts [[/mnt/wsys/]] (files introduced in
 earlier chapters are marked \verb+[done]+, files introduced in this
 chapter are marked \verb+[here]+):
-%
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   /mnt/wsys/                          (Qdir,     per-window root)
   |
   +-- cons          [done]  (Qcons)    text console read/write
@@ -14899,7 +14925,9 @@ chapter are marked \verb+[here]+):
       +-- 2/         |  same tree recursively,
       +-- 3/         |  one subdir per existing window
       +-- ...       -+
-\end{verbatim}
+\end{vdiagram}
+
+
 %claude:
 The whole tree lives inside one process ([[rio]]), and the contents
 of a given file depend on which window the fid is attached to:
@@ -15564,13 +15592,14 @@ writewctl(Xfid *x, char *err)
 
 %claude:
 This chapter covers features that go beyond [[rio]]'s basic operation:
-[[rio]]'s command-line options ([[rio -s]], [[rio -i]], [[rio -k]], [[rio -f]])
+signal handling,
+[[rio]]'s command-line options ([[rio -s]], [[rio -i]], [[rio -k]], [[rio -f]]),
 additional control messages,
 %holding mode, 9P flush support, and security.
-signal handling, the timer subsystem, 
+the timer subsystem, 
 recursive [[rio]], or
 external access to [[rio]]'s filesystem ([[/srv/rio.<user>.<pid>]], 
-[[/srv/riowctl.<user>.<pid>]]),
+[[/srv/riowctl.<user>.<pid>]]).
 %claude:
 It also covers advanced terminal editing features like snarf/paste,
 plumbing, auto-completion, and word selection.
@@ -16002,6 +16031,8 @@ timerstart(int dt)
 
 \section{Command-line options}
 
+%yoann: intro
+
 <<function [[usage]]>>=
 void
 usage(void)
@@ -16292,6 +16323,7 @@ plumbing (inter-application message passing), auto-completion,
 and intelligent word selection.
 These features are accessed through the middle-click menu and
 special key bindings.
+%yoann1: can mention a few of those are handled in shell usually, but rc does very little and better to give those features to window terminal? separation of concerns? is rio a better place than readline? pro/cons (in theory full power of graphics and GUI in rio context compare to readline TUI?)
 
 \subsection{Snarf}
 \label{sec:snarf}
@@ -19271,8 +19303,9 @@ requester from provider without shared state.
 \item \emph{Circular buffer}: the [[Mouseinfo]] queue
 buffers events with wrap-around indexes. This bounded ring
 buffer backs Unix pipes, kernel log buffers, audio drivers,
-and lock-free queues like LMAX Disruptor---constant-time
-enqueue and dequeue with bounded memory.
+and lock-free queues%
+% like LMAX Disruptor
+---constant-time enqueue and dequeue with bounded memory.
 
 \item \emph{Async IO offloading}: blocking IO is moved to
 separate procs that forward events through channels. The
@@ -19303,6 +19336,7 @@ top of [[rio]], using the virtual devices that
 [[rio]] provides. The \book{Widgets} covers the
 higher-level UI components (buttons, scrollbars,
 menus) that applications use inside [[rio]] windows.
+%yoann1: actually libpanel can also work outside rio; mothra is working outside rio
 
 \item \book{Kernel}: [[rio]] depends on the
 kernel's [[devcons]], [[devmouse]], [[devdraw]],
@@ -19337,7 +19371,7 @@ environments do considerably more:
 Quartz, Wayland compositors, Windows DWM) render
 each window into an off-screen buffer and composite
 them on the GPU, enabling transparency, shadows, and
-smooth animations. [[rio]] composites windows in
+smooth animations. [[rio]] composites windows in a very basic way and in
 software using the draw device's layer mechanism.
 
 \item \emph{Window decoration and theming}: most
@@ -19364,11 +19398,13 @@ buffers to the compositor. [[rio]]'s approach---serving
 virtual devices over 9P---achieves network
 transparency more naturally, since 9P can be
 mounted across the network.
+%yoann1: improve paragraph; the idea is to say things are better outside (but still try indeed to say rio is actually not bad and provide limited support for things)
 
 \item \emph{Accessibility}: modern windowing systems
 provide accessibility APIs (screen readers,
 magnification, keyboard navigation) as a core
 feature. [[rio]] does not address accessibility.
+%yoann1: actually lens program in appendix a bit? and nice external program!
 
 \item \emph{Multi-monitor and high-DPI}: modern
 systems handle multiple displays with different
@@ -19387,6 +19423,7 @@ simplicity (programs are unaware of windowing) from
 a single mechanism. Modern systems achieve richer
 visual results, but with far more complex
 architectures.
+%yoann1: instead of mentioning remove [[rio]] which is a bit unclean say can run remote app that display locally?) also say modern systems have far more lines of code!
 
 
 %###############################################################################
@@ -19416,13 +19453,14 @@ you can debug a freshly-built [[rio]] from inside a known-working
 [[/save/rio_old]] in case the new one refuses to start.
 
 %claude:
-The only built-in debugging facility is the [[DEBUG]] compile-time
-flag in [[fsys.c]].
+The only built-in debugging facility is the [[DEBUG]] compile-time flag.
 %
-When enabled, [[filsysproc]] dumps each
-incoming 9P message on [[STDERR]] and [[filsysrespond()]] dumps
-each reply, using [[fmtinstall('F', fcallfmt)]] to install a
-[[%F]] format specifier for [[Fcall]] structures. Combined with
+When enabled, [<filsysproc()>] dumps each
+incoming 9P message on [[STDERR]] and [<filsysrespond()>] dumps
+each reply, using [[fmtinstall('F', fcallfmt)]] to install a [[%F]]
+format specifier for [[Fcall]] structures.
+%
+Combined with
 the stderr redirect above, this gives a readable trace of the
 [[mount]]/[[attach]]/[[walk]]/[[open]]/[[read]]/[[write]] sequence
 for any client running inside [[rio]].
@@ -19446,6 +19484,8 @@ for any client running inside [[rio]].
 fmtinstall('F', fcallfmt);
 @
 % fcallfmt defined in fcall.h?
+
+%yoann: say where is defined the code of fcallfmt? in \book{Libcore} ?
 
 <<[[filsysproc()]] dump Fcall if debug>>=
 if(DEBUG)
@@ -19519,9 +19559,10 @@ the error strings themselves are part of the interface.
 is what 9P carries: when [<filsysrespond()>] is called with an error, the
 string is copied into an [[Rerror]] 9P message and sent back through the
 pipe to the client's kernel, which in turn reports it via the client's
-[[errstr()]] or [[%r]] format.
+[[errstr()]] or [[%r]] format (see the \book{Kernel} and \book{Libcore}).
 %
-They are kept as global [[char]] arrays not because of the protocol but
+They are kept as globals
+% [[char]] arrays not because of the protocol but
 simply because they are shared constants reused by many handlers---the
 standard \plan idiom for error strings.
 %
@@ -19635,7 +19676,8 @@ Once everything is set up, [[errorshouldabort]] flips to
 [[true]] and [[error()]] calls [[abort()]] instead of exiting.
 %
 The reason for [[abort()]] rather than [[exits()]] is that
-[[abort()]] leaves a core file (via [[SIGABRT]]-like behavior)
+[[abort()]] leaves a core file (via [[SIGABRT]]-like behavior,
+see the \book{Libcore})
 and puts the process in \plan's ``broken'' state so it can be
 inspected later with [[acid]] (see the \book{Debugger}): you
 lose the running rio, but you gain a post-mortem.
@@ -19701,14 +19743,16 @@ The first is {abort-on-failure} wrappers around [[malloc]], [[realloc]], and
 assume a non-[[nil]] return and avoid cluttering every call site
 with sanity checks. The pattern is common in \plan programs and
 matches the e-prefix convention in [[libc]] (see the \book{Libcore}).
-%
+
+%claude:
 The second group is {rune-aware} variants of standard string
 routines ([<runemalloc()>], [<runemove()>], [<strrune()>],
 [<cvttorunes()>]): [[rio]] stores text as [[Rune]] arrays
 internally but has to convert to and from UTF-8 at I/O boundaries,
 so these wrappers centralize the conversion and rune-sized
 arithmetic.
-%
+
+%claude:
 The third is [<min>]/[<max>]/[<isalnum>] ---
 small helpers that exist because the standard headers either do
 not provide them (no generic [[min]] in C) or provide ASCII-only
@@ -19920,17 +19964,18 @@ runetobyte(Rune *r, int n, int *ip)
 % do that efficiently by storing widths in boxes).
 %ocaml: but should be simpler. code of frinsert is really long.
 %claude:
-The Frame library (used by both [[rio]] and [[sam]]) is a text rendering
+The Frame library (used by both [[rio]] and the editor [[sam]]) is a text rendering
 engine that handles line wrapping, tab expansion, cursor display, text
 selection highlighting, and efficient incremental updates when characters
 are inserted or deleted.
 Despite the name ``frame'' (which might suggest a window border),
 it is really a {text widget}.
+
 %claude:
 The fundamental design decision is to avoid redrawing the entire text
 whenever a character is inserted or deleted. Instead, the library works
 incrementally: the screen content is represented as a sequence of
-``boxes'' ([[Frbox]]), where each box is a run of characters that share
+``boxes'' ([<Frbox>]), where each box is a run of characters that share
 the same pixel width. When text is inserted, only the boxes after the
 insertion point need to shift, and only the gap between old and new
 positions needs repainting. This makes single-character insertion (the
@@ -22186,12 +22231,12 @@ nbytes(char *s0, int nr)
 %coupling: Windows_extra.nw
 
 %claude:
-Earlier you met [[hellorio]] (Section~\ref{sec:hellorio}), a minimal window
-\emph{application}: a client that opens a single window and draws into it,
+Earlier you met [[hellorio]] (Section~\ref{sec:hellorio}), a minimal
+{\em window application}: a client that opens a single window and draws into it,
 oblivious to the rest of the screen.
 %
 The programs in this chapter are
-windowing-\emph{system} applications instead---each reaches past its own
+{\em windowing-system applications} instead---each reaches past its own
 window into the windowing system as a whole.
 %
 [[lens]] reads the entire
@@ -22203,7 +22248,7 @@ screen through [[/dev/screen]] and magnifies a region of it;
 [[label]].
 %
 Yet none of them needs any special privilege: they are ordinary
-filesystem clients of the very interfaces built in the previous chapters,
+(filesystem) clients of the very interfaces built in the previous chapters,
 which is exactly what makes such tools so easy to write under \plan.
 
 \section{[[lens]]}
