@@ -2616,7 +2616,7 @@ WINDOWS    windows *--> [ windows[0], windows[1] ]    nwindow = 2
           | org=0 qh=13 q0=q1=19  |
           +-----------------------+
 
-FILESYSTEM filsys *--> Filsys (the 9P server end of the pipe)
+FILESYSTEM filsys *--> Filsys
            fids[h] *--> Fid{fid=4} --> Fid{fid=7} --> nil   (a hash chain)
                           *               *
                           v               v
@@ -16323,7 +16323,16 @@ plumbing (inter-application message passing), auto-completion,
 and intelligent word selection.
 These features are accessed through the middle-click menu and
 special key bindings.
-%yoann1: can mention a few of those are handled in shell usually, but rc does very little and better to give those features to window terminal? separation of concerns? is rio a better place than readline? pro/cons (in theory full power of graphics and GUI in rio context compare to readline TUI?)
+
+%claude: %plan9-is-cleaner:
+It is worth noting where these features live. In \unix, line editing,
+history, and completion are usually the job of the {shell}, or of each
+program linking a library like [[readline]]. \plan makes the opposite
+choice: [[rc]] does almost no line editing, and the work moves up into the
+terminal---that is, into [[rio]] itself. Every program that reads
+[[/dev/cons]] then inherits editing, snarf, and plumbing for free, and the
+terminal can draw on the full power of the mouse and the screen rather than
+being confined to the escape-sequence world of a [[readline]]-style TUI.
 
 \subsection{Snarf}
 \label{sec:snarf}
@@ -19331,12 +19340,14 @@ on top of [[libdraw]] and its layering extensions.
 Every window is a [[Screen]] layer, and all drawing
 uses the functions described in the \book{Graphics}.
 
-\item \book{Widgets}: the widget toolkit runs on
-top of [[rio]], using the virtual devices that
-[[rio]] provides. The \book{Widgets} covers the
-higher-level UI components (buttons, scrollbars,
-menus) that applications use inside [[rio]] windows.
-%yoann1: actually libpanel can also work outside rio; mothra is working outside rio
+\item \book{Widgets}: the [[libpanel]] widget toolkit
+is most often used by programs running inside [[rio]]
+windows, through the virtual devices [[rio]] provides.
+It is not tied to [[rio]], however---it draws on any
+[[libdraw]] display, so a program like [[mothra]] (the
+web browser) can use it outside [[rio]] just as well.
+The \book{Widgets} covers these higher-level UI
+components (buttons, scrollbars, menus).
 
 \item \book{Kernel}: [[rio]] depends on the
 kernel's [[devcons]], [[devmouse]], [[devdraw]],
@@ -19389,22 +19400,27 @@ gesture---everything else is left to the programs
 running inside windows.
 
 \item \emph{Display protocols}: X11 provides
-network-transparent graphics through a complex
-client-server protocol with hundreds of request
-types, extensions (GLX, XRender, XInput2), and a
-separate window manager process. Wayland simplifies
-this by having clients render locally and pass
-buffers to the compositor. [[rio]]'s approach---serving
-virtual devices over 9P---achieves network
-transparency more naturally, since 9P can be
-mounted across the network.
-%yoann1: improve paragraph; the idea is to say things are better outside (but still try indeed to say rio is actually not bad and provide limited support for things)
+network-transparent graphics through a large
+client-server protocol---hundreds of request types,
+extensions (GLX, XRender, XInput2), and a separate
+window-manager process; Wayland trims this by having
+clients render locally and hand buffers to the
+compositor. Both do far more than [[rio]]. Yet
+[[rio]]'s much smaller approach is no poor relation:
+by serving virtual devices over 9P it gets network
+transparency almost for free, since 9P mounts across
+the network like any other file tree---even if it
+provides none of the richer rendering those protocols
+add.
 
 \item \emph{Accessibility}: modern windowing systems
 provide accessibility APIs (screen readers,
 magnification, keyboard navigation) as a core
-feature. [[rio]] does not address accessibility.
-%yoann1: actually lens program in appendix a bit? and nice external program!
+feature. [[rio]] builds in none of this---though here
+too its open device interface lets such tools live
+outside it: [[lens]] (Section~\ref{sec:lens}), a
+screen magnifier, is just an external program reading
+the shared screen image.
 
 \item \emph{Multi-monitor and high-DPI}: modern
 systems handle multiple displays with different
@@ -19418,12 +19434,13 @@ single screen at a fixed resolution.
 a windowing system is really a multiplexer for
 devices. By implementing this multiplexer as a file
 server, \plan gets composability (nested [[rio]]),
-network transparency (import a remote [[rio]]), and
-simplicity (programs are unaware of windowing) from
-a single mechanism. Modern systems achieve richer
-visual results, but with far more complex
-architectures.
-%yoann1: instead of mentioning remove [[rio]] which is a bit unclean say can run remote app that display locally?) also say modern systems have far more lines of code!
+network transparency (run a program on a remote
+machine and have it draw into your local windows),
+and simplicity (programs are unaware of windowing)
+from a single mechanism. Modern systems achieve
+richer visual results, but from architectures that
+are far more complex---and run to orders of magnitude
+more code.
 
 
 %###############################################################################
@@ -22252,6 +22269,7 @@ Yet none of them needs any special privilege: they are ordinary
 which is exactly what makes such tools so easy to write under \plan.
 
 \section{[[lens]]}
+\label{sec:lens}
 
 <<global [[menustr]]>>=
 static char *menustr[] = {
