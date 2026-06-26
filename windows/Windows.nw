@@ -4221,6 +4221,10 @@ a pool of worker threads that we build in the following sections.
 \subsection{Reading and dispatching: [[filsysproc()]]}
 
 %yoann: quick intro
+%claude:
+[<filsysproc()>] is the server's main loop. It owns the kernel-facing
+end of the pipe and spends its life blocked in [[read9pmsg()]], waking
+only when a client triggers a new 9P request.
 
 %claude:
 Each incoming 9P request is parsed, the fid is looked up, and the
@@ -6154,7 +6158,7 @@ filsysmount(Filsys *fs, int id)
     <<[[filsysmount()]] trace start>>
 
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
-    sprint(buf, "%d", id);
+    sprint(buf, "%d", id); // mount spec string
     err = mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf);
     <<[[filsysmount()]] sanity check err mount>>
     err = bind("/mnt/wsys", "/dev", MBEFORE);
@@ -7155,6 +7159,8 @@ Unselborder		= 1,	/* border of unselected window */
 
 
 \section{Window deletion}
+\label{sec:window-deletion}
+
 % via menu
 
 % 2 steps, Deleted, and then Exited
@@ -7414,6 +7420,7 @@ deletethread(void*)
 
 
 \subsection{Two-phase teardown: [[Deleted]] and [[Exited]]}
+\label{sec:deleted-and-exited}
 
 %claude:
 The second phase of deletion uses reference counting. Each mount of
@@ -8318,8 +8325,8 @@ files ([[/dev/cons]], [[/dev/mouse]], etc.) for each client process.
 %claude: %toc:
 This chapter presents the 9P operations that [[rio]] implements:
 [[attach]] (where the kernel, on behalf of the application, connects
-to [<filsysproc()>] which links the fid to the appropriate [[Window]]),
-[[walk]] (navigating to a file), [[open]], [[read]], [[write]],
+to [<filsysproc()>]),
+[[walk]] (navigating to the desired file), [[open]], [[read]], [[write]],
 [[stat]], and [[clunk]] (similar to closing).
 %
 Each operation has two parts: a [[filsysxxx()]] function that runs
@@ -8379,14 +8386,21 @@ the server walks and lists.
 %claude:
 Each virtual file under [[/mnt/wsys/]] is identified by a [[Qid]]
 whose ``path'' encodes both the window ID and the file type (encoded by the 
-[[Qxxx]] enum).
+[<Qxxx>] enum).
 %
 The [<QID()>], [<WIN()>], and [<FILE()>] macros below pack and unpack these two
 pieces of information into a single integer.
 %
 This lets the server
 quickly determine which window and which device file a request targets.
-%yoann1: explain more Qid "path" that is really an integer in plan9, like an inode and called path in the Qid structure
+
+%claude: %terminology:
+The integer they pack is the [[Qid]]'s [[path]] field. Despite the name
+it is not a pathname: in \plan, as in the 9P protocol generally, a
+[[Qid]]'s [[path]] is an opaque server-assigned integer that uniquely
+identifies a file---the role a UNIX inode number plays. The server is
+free to compute it however it likes, so [[rio]] simply builds it from the
+window ID and file type instead of from any on-disk inode.
 
 % window id + qxx id  -> final Qid.path
 <<function [[QID]]>>=
@@ -8431,9 +8445,7 @@ such as raw mode), [[Qcursor]] (custom cursors), [[Qwinname]]
 (window control commands), [[Qsnarf]] (the clipboard), and a few
 others.  Each corresponds to a virtual device file that appears
 under [[/mnt/wsys/]].
-
-
-%claude:
+%
 For example, if window~2 opens [[/mnt/wsys/cons]], the [[Qid.path]]
 is built by [[QID(2, Qcons)]].  Since [[Qcons]] is~1 in the enum
 and the window ID is shifted left by 8 bits, the resulting path
@@ -8460,7 +8472,7 @@ is [[0x201]]:
 Recall that a [<Fid>] is the fileserver's record for one open-file
 session.  The [[fid]] number is assigned by the kernel on behalf
 of the client process, and [[rio]] maintains a [<Fid>] struct
-keyed by that number.  Each [[Fid]] carries a [[qid]] field that
+keyed by that number.  Each [[Fid]] carries a [<Fid.qid>] field that
 identifies the actual file: a path like [[/mnt/wsys/cons]] is
 resolved by [[walk]] into a [[Fid]] whose [[qid.path]] encodes
 the window identifier and the device type ([[Qcons]]).
@@ -8470,6 +8482,7 @@ processes---or the same process twice---can open the same file
 independently, each with its own mode and state.
 The [[Qid]] is the file's identity; the [[Fid]] tracks one
 particular session on that file.
+%yoann1: maybe a little bit of duplication given some new paragraphs that precedes in the whole subsection
 
 % Saw before
 %<<[[Fid]] other fields>> =
@@ -8486,8 +8499,10 @@ particular session on that file.
 
 %claude:
 The [<Dirtab>] structure is a static directory template: it maps
-a file name (e.g., [["cons"]], [["mouse"]]) to its [[Qxxx]] enum
-value and permissions.  The global [[dirtab]] array lists every
+a file name (e.g., [["cons"]], [["mouse"]]) to its [<Qxxx>] enum
+value and permissions.
+%
+The global [<dirtab>] array lists every
 virtual file that appears under each window's directory.
 When the fileserver handles a [[walk]] or [[stat]] request, it
 looks up the target name in [[dirtab]] to find the corresponding
@@ -8520,14 +8535,14 @@ Dirtab dirtab[]=
 % does d++ to skip '.'
 
 %claude:
-I will introduce each [[dirtab]] entry---[[mouse]], [[cons]],
+Again, I will introduce each [[dirtab]] entry---[[mouse]], [[cons]],
 [[consctl]], [[cursor]], [[winname]], and so on---in the chapter
 or section devoted to that virtual device.
 
 
 %claude:
 The [[Fid]] struct points back to
-a [[Dirtab]] entry via its [[dir]] field, so once a file is
+a [[Dirtab]] entry via its [<Fid.dir>] field, so once a file is
 walked to, its metadata is readily available.
 
 <<[[Fid]] other fields>>=
@@ -8547,23 +8562,28 @@ Dirtab	*dir;
 % (Txxx), see utility function to answer to client (Rxxx).
 % see docs/man/5/intro, +1 trick, Rerror, etc.
 %claude:
-Before examining the individual 9P operations, here is the utility
+Before examining the individual 9P operations ([[attach]], [[walk]], etc.),
+here is the utility
 function used to send replies. In 9P, the reply message type is always
 the request type plus one ([[Tattach]] \(\to\) [[Rattach]], etc.), unless
 there is an error in which case it is [[Rerror]].
-The response is sent through [[fs->sfd]], the server side of the pipe.
-Even though multiple threads may call [[filsysrespond]] concurrently,
+The response is sent through [<Filsys.sfd>], the server side of the pipe.
+Even though multiple threads may call [<filsysrespond()>] concurrently
+(e.g., [<filsyswalk()>] from the [[fileserver]] proc and [<xfidopen()>]
+from a worker thread in the [[main-proc]])
 the kernel guarantees that writes of complete messages to a pipe
-are atomic, and the tag/fid fields let the kernel match replies to
+are atomic, and the tag/fid fields we will see soon let the kernel match replies to
 their requests.
-
+%yoann1: should we say "multiple procs" instead of multiple threads? you actually can't have multiple threads in the same proc running in parallel
+%
 %claude:
 This is what lets a {single} pipe serve {many} windows at once. The diagram
 below follows two windows reading different files concurrently: the kernel
 writes each request atomically, stamped with the window id ([[extra]], from
-the [[mount]]) and a unique [[tag]]; [[rio]] may reply in any order, and the
-kernel uses the [[tag]] to wake the right client.
-%
+the [[mount]]) and a unique {\em tag}; [[rio]] may reply in any order, and the
+kernel uses the tag to wake the right client.
+
+%claude:
 \begin{vdiagram}
   Window 2         Window 3         Kernel           rio fileserver
   --------         --------      ---------------     --------------
@@ -8595,8 +8615,10 @@ kernel uses the [[tag]] to wake the right client.
      |                |               |                    |
 \end{vdiagram}
 
-% ... -> <>  called from many Xfid threads, and some filsysxxx too
+%yoann: trans: can finally see code of filsysrespond
+
 <<function [[filsysrespond]]>>=
+/// filsysxxx | xfidxxx -> <>
 Xfid*
 filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {
@@ -8660,27 +8682,31 @@ if(err){
 \section{[[attach]]}
 
 %claude:
-Attach is the first 9P operation a client performs after mounting.
-The mount spec string (e.g., ``2'') carries the window ID,
+[[attach]] is the first 9P operation a client performs after mounting.
+The mount spec string (e.g., ``2'', see the code of [<filsysmount()>])
+carries the window ID,
 which [<xfidattach()>] uses to look up the corresponding [<Window>].
 This associates the client's fid with a specific window, so that
-subsequent walk/read/write operations on that fid know which
+subsequent [[walk]]/[[read]]/[[write]] operations on that fid know which
 window they target.
 
 
 %claude:
 Here is the typical sequence of 9P operations for a window.
 The [[mount()]] is done by the spawning process (before it
-[[exec]]s to [[rc]]), which triggers [[Tattach]].  Later, when
+[[exec]]s to [[rc]], in [<filsysmount()>]), which triggers [[Tattach]].  Later, when
 a client like [[hellorio]] opens [[/dev/cons]], the kernel
 translates each system call into 9P messages on the pipe:
-\begin{verbatim}
+
+%claude:
+\begin{vdiagram}
   new window proc    Kernel              rio (filsysproc)    rio (Xfid worker)
   --------------   ----------           ----------------    -----------------
      |                |                       |                    |
-  mount(wsys,...)     |                       |                    |
+  mount(/mnt/wsys,...,|                       |                    |
+        "2")|         |                       |                    |
      +--------------->| Tattach (extra="2")   |                    |
-     |                +---------------------->| filsysattach()     |
+     |                +---------------------->| filsysattach()     | xfidattach()
      |                |    Rattach            |  -> new Fid        |
      |                |<----------------------+                    |
      |                |                       |                    |
@@ -8689,36 +8715,40 @@ translates each system call into 9P messages on the pipe:
   open(/dev/cons)     |                       |                    |
      +--------------->| Twalk (cons)          |                    |
      |                +---------------------->| filsyswalk()       |
-     |                |    Rwalk              |  -> Fid.qid=Qcons  |
+     |                |    Rwalk              |  -> Fid.qid=Qcons,2|
      |                |<----------------------+                    |
      |                | Topen                 |                    |
      |                +---------------------->| filsysopen()       |
      |                |                       +--- sendp --------->|
-     |                |                       |              xfidopen()
-     |                |    Ropen              |                    |
+     |                |                       |                    | xfidopen()
+     |                |    Ropen              |                    |  |
      |                |<----------------------------------------------+
      |                |                       |                    |
   read(fd)            |                       |                    |
      +--------------->| Tread                 |                    |
      |                +---------------------->| filsysread()       |
      |                |                       +--- sendp --------->|
-     |                |                       |              xfidread()
-     |                |    Rread (data=...)    |              Qcons case
+     |                |                       |                    | xfidread()
+     |                |    Rread (data=...)   |                    |  Qcons case
      |                |<----------------------------------------------+
      |<---------------+                       |                    |
      |                |                       |                    |
-\end{verbatim}
+\end{vdiagram}
+
 %claude:
 Notice that the lightweight operations ([[attach]], [[walk]]) are
 handled directly by [<filsysproc()>], while the heavier ones
 ([[open]], [[read]], [[write]]) are dispatched to [<Xfid>] worker
 threads via [[sendp()]].
+%yoann1: actually attach is calling xfidattach
 
 
 \subsection{[[filsysattach()]]}
 
 %claude:
-The first operation is {attach}; here is its [<filsysproc()>] half.
+The first operation is [[attach]]; here is its [<filsysproc()>] half
+called [<filsysattach()>].
+%yoann1: say where filsysproc call filsysattach (via fcall global?)
 
 \t does not use first argument, so remove it from fcall sig no?
 \t hmm used by filsysopen. But true that anyway it's in the Xfid so could
@@ -8733,14 +8763,14 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     <<[[filsysattach()]] locals>>
 
     <<[[filsysattach()]] sanity check same user>>
-
     f->busy = true;
     f->open = false;
 
     f->qid.path = Qdir; // no window id, Qdir valid for all
     f->qid.type = QTDIR;
     f->qid.vers = 0;
-    f->dir = dirtab; // entry for "."
+
+    f->dir = &dirtab[0]; // entry for "."
 
     f->nrpart = 0;
 
@@ -8775,18 +8805,11 @@ if(strcmp(x->req.uname, x->fs->user) != 0)
 
 %claude:
 [<xfidattach()>] is the worker half: it resolves the mount's window id to a
-[<Window>] and links it to the fid, under the [[all]] lock (below).
-
-<<global [[all]]>>=
-QLock	all;			/* BUG */
-@
-% I think it's mainly for wsys/ shared access
-% it protects access to windows and nwindow
+[<Window>] and links it to the fid, under the [<all>] lock (further below).
 
 
-
-% filsysattach !-> <>
 <<function [[xfidattach]]>>=
+/// filsysattach !-> <>
 void
 xfidattach(Xfid *x)
 {
@@ -8798,14 +8821,12 @@ xfidattach(Xfid *x)
 
     fc.qid = x->f->qid;
     qlock(&all);
-
     <<[[xfidattach()]] if mount "new ...">>
     else{
         // mount(fs->cfd, ..., "/mnt/wsys", ..., "2"), winid
         id = atoi(x->req.aname);
         w = wlookid(id);
     }
-
     x->f->w = w;
     <<[[xfidattach()]] sanity check w>>
     if(!newlymade)	/* counteract dec() in winshell() */
@@ -8815,9 +8836,12 @@ xfidattach(Xfid *x)
     filsysrespond(x->fs, x, &fc, nil);
 }
 @
+%padism: !-> (and ?<-) for send/receive "call"
 %ocaml: less split between filsysattach and xfidattach 
 % and clearer answer message than setting f->qid in one func
 % and then fc.qid answer for Attach (not explicit) in other func
+
+%yoann: explain why no fast path in filsysattach and need xfidattach
 
 %dead: old syntax
 %    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
@@ -8858,6 +8882,18 @@ wlookid(int id)
 % to the right window
 
 
+%yoann: explain why need a lock
+
+<<global [[all]]>>=
+QLock	all;			/* BUG */
+@
+% I think it's mainly for wsys/ shared access
+% it protects access to windows and nwindow
+
+
+
+
+
 <<[[xfidattach()]] other locals>>=
 char *err = Eunkid;
 @
@@ -8878,11 +8914,11 @@ if(w == nil){
 % Walk is complex.
 % Clone, walk, multiple elements in one request. Subtle API.
 %claude:
-Walk translates a file path (e.g., ``cons'' or ``mouse'') into a fid
+[[walk]] translates a file path (e.g., ``cons'' or ``mouse'') into a fid
 associated with the correct [[Qid]]. Unlike Unix's one-component-at-a-time
-[[namei()]], 9P Walk sends all path elements in a single message for
+[[namei()]], 9P [[walk]] sends all path elements in a single message for
 network efficiency. The server must redo part of the kernel's path
-resolution work, looking up each name in [[dirtab]].
+resolution work, looking up each name in [<dirtab>].
 
 % Note that because union dir, normal that many of requests to walk
 % should fail. For instance [draw;new] for nwnames should fail!
@@ -8900,9 +8936,9 @@ resolution work, looking up each name in [[dirtab]].
 % complicated ...
 
 %claude:
-The walk function is the most intricate 9P operation because it must
+[[walk]] is the most intricate 9P operation because it must
 handle several cases in one routine: simple name lookup (scanning
-[[dirtab]] for ``cons'' or ``mouse''), fid cloning (when [[fid]] and
+[<dirtab>] for ``cons'' or ``mouse''), fid cloning (when [[fid]] and
 [[newfid]] differ), and ``..'' navigation. The key design choice is
 that [[qid]] and [[dir]] are kept in local variables during the walk
 and only committed to [[f]] if every path component succeeds---a
@@ -8979,12 +9015,15 @@ continue;
 \subsection{Cloning [[fid]]}
 
 %claude:
-When a Walk message carries a [[newfid]] different from [[fid]], the
+When a [[walk]] message carries a [[newfid]] different from [[fid]], the
 server must clone the fid before walking it. This is how the kernel
-implements operations like [[open]] without losing the directory fid:
-it first clones the fid via a walk, then opens the clone. The clone
-copies the window reference and bumps [[incref]] so the window stays
-alive. After cloning, [[f]] is reassigned to [[nf]] so the rest of the
+implements operations like [[open()]] without losing the directory fid:
+it first clones the fid via a walk, then opens the clone (with a separate [[open]]
+message).
+%
+The clone copies the window reference and bumps [[incref()]] so the window stays alive.
+%
+After cloning, [[f]] is reassigned to [[nf]] so the rest of the
 walk operates on the new fid.
 
 <<[[filsyswalk()]] other locals>>=
@@ -9028,7 +9067,7 @@ subdirectories under [[/mnt/wsys/]].
 if(strcmp(x->req.wname[i], "..") == 0){
     type = QTDIR;
     path = Qdir;
-    dir = dirtab;
+    dir = &dirtab[0];
     <<[[filsyswalk()]] when in dotdot, if Qwsysdir adjust path>>
     id = 0;
     <<[[filsyswalk()]] accept label and code>>
@@ -9091,13 +9130,13 @@ if(i == MAXWELEM){
 \section{[[open]]}
 
 %claude:
-Open illustrates the two-layer pattern clearly. The [[filsysopen()]]
+[[open]] illustrates the two-layer pattern clearly. The [<filsysopen()>]
 fast path only validates permissions---it checks the requested mode
-against the [[dirtab]] entry's permission bits, rejecting [[OEXEC]]
+against the [<dirtab>] entry's permission bits, rejecting [[OEXEC]]
 and [[ORCLOSE]] since [[rio]] does not support executing or
 remove-on-close for its virtual files. The actual per-device open
-logic (e.g., setting [[mouseopen]] or [[ctlopen]]) runs in the
-[[xfidopen()]] worker thread, which has access to the window state.
+logic (e.g., setting [<Window.mouseopen>] or [<Window.ctlopen>]) runs in the
+[<xfidopen()>] worker thread, which has access to the window state.
 
 \subsection{[[filsysopen()]]}
 
@@ -9190,16 +9229,16 @@ xfidopen(Xfid *x)
 %old: I put the x->f->w with declaration.
 
 %claude:
-I will present the [[xfidopen()]] switch cases one by one in the chapters
+I will present the [<xfidopen()>] switch cases one by one in the chapters
 devoted to each virtual device.  Most files need no special
 open logic, but some do---for instance, opening [[Qmouse]] tells
-[[rio]] that this window is a graphical application.
+[[rio]] that this window is a graphical application (and set [<Window.mouseopen>]).
 
 
 %claude:
 Every worker first checks whether the window was deleted out from under it
-(the [[deleted]] flag and the two-phase teardown are covered in the window
-manager, Chapter~\ref{chap:wm}); if so it replies [[Edeleted]] and stops.
+(the [<Window.deleted>] flag and the two-phase teardown are covered in the window
+manager, Section~\ref{sec:window-deletion}); if so it replies [<Edeleted>] and stops.
 
 <<[[xfidxxx()]] respond error if window was deleted>>=
 if(w->deleted){
@@ -9213,6 +9252,7 @@ if(w->deleted){
 %claude:
 In 9P, releasing a file handle is called {clunk}---an English word
 meaning a dull thud, as if dropping something.
+%
 The mapping between [[close()]] and [[Tclunk]] is not quite 1-to-1.
 For example, if a process calls [[dup()]] to duplicate a file
 descriptor, the kernel now has two fds pointing to the same
@@ -9301,10 +9341,13 @@ gradually in the device chapters.
 %claude:
 Read is where the two-layer split pays off the most. Directory reads
 (listing the files under [[/mnt/wsys/]]) can be handled entirely in the
-[[filsysproc]] context by iterating over [[dirtab]]---no window state
-is needed. But reading a device file like [[/dev/mouse]] or [[/dev/cons]]
+[<filsysproc()>] context by iterating over [<dirtab>]---no window state
+is needed.
+%
+But reading a device file like [[/dev/mouse]] or [[/dev/cons]]
 requires blocking until data is available, so it must be dispatched
 to an [[xfidread()]] worker thread.
+%yoann1: but I thought thread could not block because they block then the entire proc
 
 \subsection{[[filsysread()]]}
 
@@ -9328,7 +9371,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         sendp(x->c, xfidread);
         return nil;
     }
-    // else, a directory
+    // else, a directory, fast path
 
     o = x->req.offset;
     e = x->req.offset + x->req.count;
@@ -9360,15 +9403,18 @@ if(b == nil)
 The directory case is handled right here in [<filsysread()>]; the device
 files ([[/dev/cons]], [[/dev/mouse]], \dots) are read in the worker
 [<xfidread()>], shown next.
+%yoann1: actually directory read is in next subsection and xfidread further below
 
 \subsection{Reading a directory}
 
 % important case! Qdir! (Qwsysdir will be explained later)
 
 %claude:
-To read a directory, the server iterates over [[dirtab]] and calls
-[[dostat()]] on each entry, which serializes a [[Dir]] structure into
-the 9P wire format via [[convD2M]]. The [[o]] and [[e]] variables
+To read a directory, the server iterates over [<dirtab>] and calls
+[<dostat()>] on each entry, which serializes a [[Dir]] structure into
+the 9P wire format via [[convD2M()]] (see the \book{Libcore}).
+%
+The [[o]] and [[e]] variables
 implement offset-based pagination: the server formats all entries but
 only copies those whose cumulative offset falls within the requested
 range. This is needed because 9P directory reads must be deterministic
@@ -9400,6 +9446,7 @@ case Qwsysdir:
 %claude:
 [<xfidread()>] is the worker that serves reads of the device files, blocking
 until data is available.
+%yoann1: but again, isnt blocking dangerous for a thread?
 
 <<function [[xfidread]]>>=
 void
@@ -9431,8 +9478,9 @@ xfidread(Xfid *x)
 %ocaml: ADT and exhaustive check so no need default case
 
 %claude:
-As with [[xfidopen()]], I will present the [[xfidread()]] cases
+As with [<xfidopen()>], I will present the [<xfidread()>] cases
 one by one in the chapters devoted to each virtual device file.
+%
 Each case has very different behavior: [[Qcons]] returns buffered
 text, [[Qmouse]] blocks until a mouse event is available,
 [[Qwinname]] returns a short string, and so on.
@@ -9444,13 +9492,16 @@ text, [[Qmouse]] blocks until a mouse event is available,
 \section{[[write]]}
 
 %claude:
-Write is the simplest 9P operation at the [[filsys]] layer: since
+[[write]] is the simplest 9P operation: since
 there is no way to write to a directory (the kernel rejects that
-before it reaches the server), [[filsyswrite()]] can unconditionally
-dispatch to the [[xfidwrite()]] worker. All the interesting logic---converting
-bytes to runes for [[Qcons]], parsing mouse warp coordinates for
-[[Qmouse]], interpreting control messages for [[Qconsctl]]---lives
-in the per-device cases of [[xfidwrite()]].
+before it reaches the server), [<filsyswrite()>] can unconditionally
+dispatch to the [<xfidwrite()>] worker.
+%
+All the interesting logic---converting
+bytes to runes for [[Qcons]], 
+parsing mouse warp coordinates for [[Qmouse]],
+interpreting control messages for [[Qconsctl]]---lives
+in the per-device cases of [<xfidwrite()>].
 
 \subsection{[[filsyswrite()]]}
 
@@ -9510,7 +9561,7 @@ xfidwrite(Xfid *x)
 The [[stat]] operation returns metadata about a file---name,
 permissions, size, timestamps---similar to Unix's [[stat()]] system
 call.  In [[rio]], the metadata is synthesized on the fly from the
-[[Dirtab]] entry and the window identifier, since none of these
+[<dirtab>] entry and the window identifier, since none of these
 virtual files exist on disk.
 
 \subsection{[[filsysstat()]]}
@@ -9529,6 +9580,9 @@ filsysstat(Filsys *fs, Xfid *x, Fid *f)
     return x;
 }
 @
+
+
+%yoann: can say finally see dostat mentioned before too for reading directory operation
 
 <<function [[dostat]]>>=
 static
@@ -9557,7 +9611,7 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
 
 %claude:
 Note there is no [[xfidstat()]] worker: [[stat]] never blocks (it only reads
-[[dirtab]] metadata), so [<filsysstat()>] answers directly in the
+[<dirtab>] metadata), so [<filsysstat()>] answers directly in the
 [<filsysproc()>] context.
 
 
@@ -19108,6 +19162,8 @@ dispatches requests to a pool of reusable workers. The same
 architecture is used by web servers (Nginx, Apache prefork)
 and database connection pools: decouple request arrival
 rate from processing capacity.
+
+%yoann: maybe add item for the interesting pipe multi clients with tag and atomic and kernel dispatch 
 
 \item \emph{Channel-of-channels}: a worker sends its own
 reply channel along with a request; the responder uses that
