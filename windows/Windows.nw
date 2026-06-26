@@ -8343,6 +8343,8 @@ in the [<filsysproc()>] context and handles the fast path, and an
 [[xfidxxx()]] function that runs in a worker thread for operations that
 may block (like reading [[/dev/cons]] when no data is available)
 in the [[main-proc]] context (see Figure~\ref{fig:soft-archi-threads}).
+%said-later: but worker thread can't block either but in fact recv() "block" and
+%  IO-proc are the one blocking and worker just route when wokeup from channel
 
 \section{Clients, server, and the kernel in between}
 
@@ -8856,10 +8858,10 @@ xfidattach(Xfid *x)
 %claude:
 Why does [[attach]] need a worker at all, when looking a window up in the
 shared [<windows>] table is something the [[fileserver]] proc does inline
-elsewhere (in [<filsyswalk()>])? Because an attach can do more than look
+elsewhere (in [<filsyswalk()>])? Because an [[attach]] can do more than look
 up: with a ``new'' spec string it actually {creates} a window
 (Section~\ref{sec:external-access}), and window creation must run in the
-[[main-proc]] context. Routing every attach through an [[Xfid]] worker,
+[[main-proc]] context. Routing every [[attach]] through an [[Xfid]] worker,
 which runs in [[main-proc]], keeps one code path valid for both the
 create and the lookup case. So [<filsysattach()>] merely initializes the
 fid and [[sendp()]]s to [<xfidattach()>].
@@ -8909,7 +8911,7 @@ wlookid(int id)
 
 %yoann: explain why need a lock
 %claude:
-[<all>] guards the global window table---the [<windows>] array and its
+[<all>] below guards the global window table---the [<windows>] array and its
 [<nwindow>] count. Two of [[rio]]'s procs reach into it concurrently: the
 [[fileserver]] proc reads it (in [<filsyswalk()>] and [<filsysread()>], to
 resolve and to list windows) while [[main-proc]] threads grow and shrink
@@ -9383,14 +9385,15 @@ worker thread.
 %claude:
 This deserves a pause, because \plan threads are cooperatively scheduled:
 a thread that makes a blocking {syscall} freezes its whole proc (exactly
-why the [[fileserver]] proc is kept separate). The worker gets away with
-waiting because it does {not} wait on a syscall---it waits on a {channel}
-[[recv]]. The genuinely blocking [[read()]] lives elsewhere, up in the
+why the [[fileserver]] proc is kept separate because it reads the pipe).
+The worker gets away with
+waiting because it does {not} wait on a syscall---it waits on a {channel} with
+[[recv()]]. The genuinely blocking [[read()]] lives elsewhere, up in the
 [[IO-proc-keyboard]] reading [[/dev/cons]] (or [[IO-proc-mouse]] reading
 [[/dev/mouse]]), each isolated in its own proc for just this reason; the
 input it collects travels by channel through [[main-proc]]'s keyboard or
 mouse thread and the target window before reaching the worker. A channel
-receive is a cooperative yield point, so the libthread scheduler just runs
+[[recv()]] is a cooperative yield point, so the libthread scheduler just runs
 another thread of [[main-proc]] meanwhile; the proc keeps going.
 
 \subsection{[[filsysread()]]}
@@ -9488,7 +9491,7 @@ case Qwsysdir:
 
 %claude:
 [<xfidread()>] is the worker that serves reads of the device files, waiting
-until data is available. As just noted, that wait is a [[recv]] on a
+until data is available. As just noted, that wait will be a a [[recv()]] on a
 channel, not a blocking syscall, so it yields to the rest of [[main-proc]]
 rather than freezing it.
 
