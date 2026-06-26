@@ -9753,6 +9753,10 @@ filsyswstat(Filsys *fs, Xfid *x, Fid*)
 % [[/mnt/wsys/...]]
 
 %yoann: quick trans sentence where say seen fileserver infra, now see concrete device files
+%claude: %trans:
+The previous chapters built the file-server machinery---[<Filsys>], the
+[<Fid>] table, the [<Xfid>] workers, and the 9P operations that drive them.
+What we never pinned down is which files those operations actually serve.
 
 % remember that /mnt/wsys is unioned in /dev/ so access to /dev/mouse
 % in client is really /mnt/wsys/mouse handled by rio.
@@ -9764,10 +9768,11 @@ applications are intercepted by [[rio]].
 %
 For each device, the implementation involves two sides:
 the {\em producer} side where the [<winctl()>] thread
-offers data when it has events to report, and the {\em consumer} side
+offers data when it has events to report---events it receives in turn from
+the IO procs reading the real kernel [[/dev/mouse]] and [[/dev/cons]]
+(Figure~\ref{fig:soft-archi-threads})---and the {\em consumer} side
 where the [<xfidread()>] worker thread waits until data is available,
 then formats it as a textual response for the client.
-%yoann1: can say winctl has events from IO proc connected to real devices
 
 \section{Device virtualization across windowing systems}
 \label{sec:device-virt-principles}
@@ -9776,27 +9781,22 @@ then formats it as a textual response for the client.
 Every major windowing system has to solve the same
 problem---``get the mouse and keyboard to the right
 application''---and they take very different routes to it.
-[[X11]] clients connect to the display server over a Unix
-socket ([[/tmp/.X11-unix/X0]]) or TCP and speak the X
-protocol; input events arrive as binary protocol messages
-([[KeyPress]], [[ButtonPress]], [[MotionNotify]]) read from
-the socket. [[Wayland]] is similar but with a different
-protocol ([[wl_seat]], [[wl_pointer]], [[wl_keyboard]]
-interfaces) and a different socket
-([[$XDG_RUNTIME_DIR/wayland-0]]). macOS's Quartz talks to
-[[WindowServer]] via Mach ports and delivers events as
-[[CGEventRef]] structs through run-loop callbacks. Win32
-applications receive events as [[WM_MOUSEMOVE]],
-[[WM_KEYDOWN]], etc.\ on a [[WndProc]] message queue. Every
-one of these requires a dedicated client library
-([[Xlib]]/[[xcb]], [[libwayland-client]], [[AppKit]],
-[[user32.dll]]) that knows the protocol.
-%yoann1: are you sure about those concrete names? maybe can remain a bit less specific qhile still conveying useful comparisons?
+[[X11]] clients connect to a display server over a socket and
+speak the X protocol; input arrives as binary messages
+([[KeyPress]], [[ButtonPress]], [[MotionNotify]]). [[Wayland]]
+is similar, with a leaner protocol of its own. macOS's Quartz
+delivers events through its [[WindowServer]] and run-loop
+callbacks, and Win32 applications receive them as
+[[WM_MOUSEMOVE]], [[WM_KEYDOWN]], etc.\ on a message queue.
+What they share is the shape of the solution: each needs a
+dedicated client library---[[Xlib]]/[[xcb]],
+[[libwayland-client]], [[AppKit]], [[user32.dll]]---that speaks
+a custom event protocol to a central server.
 
 %claude:
 [[rio]] does it with no protocol and no client library at
 all. The application just [[open]]s [[/dev/mouse]] or
-[[/dev/cons]] and [[read]]s {textual records}; the file
+[[/dev/cons]] and [[read]]s textual data; the file
 interface is indistinguishable from reading the real kernel
 devices of the same name. The same program that reads
 [[/dev/cons]] inside a window can run outside [[rio]] and
@@ -9804,7 +9804,6 @@ read the real kernel [[/dev/cons]] with no code change,
 which is the concrete meaning of [[rio]]'s ``transparent
 windowing system''~\cite{window-system-should-be-transparent}.
 %property from Section~\ref{sec:windowing-system-api}.
-%yoann1: replace textual records with textual data? record sounds like a specific format no?
 
 \section{[[/mnt/wsys/mouse]]}
 \n simpler than cons
@@ -9889,7 +9888,9 @@ Why this channel of channel pattern?
 Consider a concrete scenario: the user moves the mouse rapidly,
 generating positions (100,50), (120,55), (140,60), (160,65).
 %
-The [<winctl()>] thread sees all four events via [<mousethread()>],
+The [<winctl()>] thread sees all four events, relayed to it by
+[<mousethread()>], which in turn received them from the [[IO-proc-mouse]]
+reading the real [[/dev/mouse]] (Figure~\ref{fig:soft-archi-threads});
 but the client application only calls [[read("/dev/mouse")]] now.
 %claude:
 With a naive direct channel, [<winctl()>] would have queued all four
@@ -9897,7 +9898,6 @@ positions; the client would get the stale (100,50) from the head.
 %
 With the channel-of-channels pattern, no [[Mouse]] value is produced
 until the client asks for one:
-%yoann1: when talking about mousethread can say that this one itsels receive four events from IO proc mouse and reference fig:soft-archi-threads
 
 %claude:
 \begin{vdiagram}
@@ -9931,6 +9931,14 @@ matters---instead of a stale queued value.
 
 
 %yoann: say can now see code and explain the enum and xfidread Qmouse part
+%claude:
+We can now see the code. The [[Qmouse]] case waits with an [[alt()]] on
+two channels at once, and the enum below names its slots: [[MRdata]] for an
+arriving [[Mousereadmesg]] on [[w->mouseread]], and [[MRflush]] for a flush
+(flush handling is deferred to the advanced-topics material). On the
+[[MRdata]] branch it performs the second half of the channel-of-channels
+handshake---[[recv(mrm.cm, &ms)]]---and formats the [[Mouse]] as the text
+the client reads.
 
 <<enum [[_anon_ (rio/xfid.c)]]4>>=
 enum { MRdata, MRflush, NMR };
@@ -9982,6 +9990,15 @@ case Qmouse:
 \l hide even more switch and code after? put alt(alts) how of it?
 
 %yoann: explain a bit more subtelities in code above
+%claude:
+Two subtleties are worth flagging. The [[qlock(&x->active)]] around the
+[[recv]]/[[filsysrespond()]] pair serializes this delivery against a
+concurrent {\em flush} of the same request, so a reply is never written for
+a read the client has already abandoned. And the very same channel doubles
+as a resize notification: [[c]] starts as [['m']] but is switched to
+announce a resize when [[w->resized]] is set---which is why a mouse [[read]]
+can also wake a client that was really waiting to learn its window changed
+size.
 
 %ocaml-found:
 % note that does not care about off. always respond the same thing.
@@ -9996,14 +10013,15 @@ case Qmouse:
 
 %claude:
 Writing to [[/dev/mouse]] lets a program warp the cursor
-programmatically, but only under strict conditions: the window must
+programmatically (to {\em warp} the cursor is to move the pointer to a new
+screen position from software, rather than by physically moving the mouse),
+but only under strict conditions: the window must
 have focus ([[w==input]]) and be visible on screen. The write data
 must start with ``m'' followed by the x and y coordinates. The actual
 cursor movement is routed through [<wsendctlmesg()>] with
 [<Movemouse>], so it goes through the [<winctl()>] thread and respects the
 [<sweeping>] guard---you cannot warp the mouse while the user is in
 the middle of a window management operation.
-%yoann1: define warp in parenthesis as some reader might not know the term
 
 <<[[xfidwrite()]] other locals>>=
 char *p;
@@ -10059,11 +10077,20 @@ to [[rio]] and possibly to the window with the focus, for instance,
 The goal of this section is to describe the full trace of a mouse
 click in the window of [[hellorio]]. 
 \l I assume window already has the focus
-This trace will go through many elements of Figure~\ref{fig:soft-archi-threads}.
+%claude:
+End to end the path is short: the kernel wakes [[IO-proc-mouse]], which
+reads the event and passes it to [<mousethread()>]; that thread routes it
+to the focused window's [<winctl()>] thread, which hands it to the window's
+worker thread ([[Worker 3]]) waiting in [<xfidread()>]; the worker then
+writes the 9P reply straight into the pipe to unblock [[hellorio]]. The
+trace below walks each of these hops on Figure~\ref{fig:soft-archi-threads},
+so it is worth spotting two pieces of that figure first: the {worker
+threads} of [[main-proc]] (one per open file, the bridge between a window
+thread and a client's blocked [[read]]), and the arrows that carry the
+event left-to-right across [[main-proc]].
 \l FIGURE as shown by data flow in Figure X  (path in special color?)
-%Moreover, in this section, I will also explain the creation of the 
+%Moreover, in this section, I will also explain the creation of the
 %last remaining threads of [[main-proc]]: the {worker threads}.
-%yoann1: adjust a bit the paragraph to transition better and saying summary of click end-to-end (like we did before for trace in sec:trace-new-window) and explain a bit more pieced of fig:soft-archi-threads especially worker threads and some arrows in the figure
 
 %claude:
 Here is the data flow of a mouse click from the hardware
@@ -10071,29 +10098,28 @@ to [[hellorio]], through the different threads of [[rio]]:
 
 %claude:
 \begin{vdiagram}
- Mouse      IO-proc     Mouse      Window 2     Worker 3   Fileserver
- device     mouse       thread     thread       thread     proc
+ Mouse      IO-proc-    mouse-      winctl()     Worker 3   pipe->
+ device     mouse       thread()    (win 2)      xfidread() hellorio
+   (hellorio has called read(/dev/mouse); its Worker 3 now waits
+    on w->mouseread for the event traced below)
    |          |           |           |            |          |
    | IRQ      |           |           |            |          |
    +--------->|           |           |            |          |
    |   /dev/mouse         |           |            |          |
    |          | mousectl  |           |            |          |
    |          +---------->|           |            |          |
-   |          |  ->c      | Window.mch|            |          |
+   |          |  ->c      | w->mc.c   |            |          |
    |          |           +---------->|            |          |
    |          |           |           | Window.    |          |
    |          |           |           | mouseread  |          |
    |          |           |           +----------->|          |
-   |          |           |           |            | channel  |
-   |          |           |           |            +--------->|
-   |          |           |           |            |          |
-   |          |           |           |            |   9P Rread
-   |          |           |           |            |   (pipe)
-   |          |           |           |            |          |
-   |          |           |           |            |    hellorio
-   |          |           |           |            |    unblocked
+   |          |           |           |            | filsys-  |
+   |          |           |           |            | respond()|
+   |          |           |           |            +--------->|  Rread
+   |          |           |           |            |          |  (tagged)
+   |          |           |           |            |          |  hellorio
+   |          |           |           |            |          |  unblocked
 \end{vdiagram}
-%yoann1: maybe show hellorio on this diagram too reading /dev/mouse? and use now concrete names winctl(), mousethread() ?
 
 \subsubsection{Mouse initialization}
 
@@ -10169,16 +10195,17 @@ Figure~\ref{fig:soft-archi-threads}.
 This thread will then wait for mouse events by listening
 on a special channel.%, as explained soon.
 %
-Once [[Worker 3]] receives a mouse event, it can communicate
-back (by using another channel) the event to the [[fileserver]] proc,
-which can write back the appropriate 9P answers into the pipe.
+Once [[Worker 3]] receives a mouse event, it writes the 9P answer into the
+pipe {\em itself}, by calling [<filsysrespond()>]---it does not hand the
+event back to the [[fileserver]] proc. The reply is a single atomic message
+stamped with the request's tag, and it can be written even while
+[<filsysproc()>] is busy reading the next request.
 % (see \book{Network})?
 \l then schedules who? hellorio process blocked? Kernel decodes 9P results?
 At this point, the kernel will unblock the [[hellorio]] process
 (actually its mouse IO proc), which can modify the GUI or do
 nothing depending on the mouse event returned from [[/mnt/wsys/mouse]].
 \l actually also here read channel mousectl->c
-%yoann1: actually when worker 3 receives a mouse even, it does not communicate back to filserver proc but instead use filsysrespond and write in pipe directly (atomatically? and concurrently with filsysproc?)
 
 \subsubsection{Mouse event}
 
@@ -10213,13 +10240,12 @@ on [[mousectl->c]].
 %
 %dup: overview/soft-archi/new-window/new-thread
 The mouse thread then looks for the window with the focus
-and relays the message on [[input->mch]].
-%yoann1: sure about mch field name?
+and relays the message on [[input->mc.c]].
 
-\item The [[Window 2]] thread, at the middle 
+\item The [[Window 2]] thread, at the middle
 of Figure~\ref{fig:soft-archi-threads}, which was listening
-on [<Window.mch>] (as well as other channels via [[alt()]])
-receives the message on [<Window.mch>].
+on [[w->mc.c]] (as well as other channels via [[alt()]])
+receives the message on [[w->mc.c]].
 %
 It needs then to transmit this message to [[Worker 3]].
 %
@@ -10236,13 +10262,15 @@ the mouse event through this channel.
 
 \end{enumerate}
 
-At this point, The [[Worker 3]] thread, which was listening on 
-[<Window.mouseread>], receives the mouse event and relays
-it to the [[fileserver]] proc as explained above.
+At this point, the [[Worker 3]] thread, which was listening on
+[<Window.mouseread>], receives the mouse event and replies to the client
+itself: it calls [<filsysrespond()>], which writes an [[Rread]] message---
+stamped with the request's tag so the kernel routes it to the right
+client---directly into the pipe. It never goes back through the
+[[fileserver]] proc.
 \l by using another channel
 %
 This concludes the trace of mouse click.
-%yoann1: again does not relay to fileserver by use filsysrespond Rread with right tag so will go to right place
 
 
 Note that if you click with the mouse outside any window, the
@@ -10323,8 +10351,12 @@ Qcons,
 Reading [[/mnt/wsys/cons]] has the same shape as the mouse: the
 [<xfidread()>] worker rendezvous with [<winctl()>] instead of reading
 anything itself. The console handshake is heavier, though---it needs {two}
-inner channels rather than one.
-%yoann1: explain quickly again why use this channel-of-channel? same reason than for mouse ? seems like you actually want to queue keys typed instead of dropping some like for the mouse and send just the last one. Sure this was really the motivation for this channel of channel pattern?
+inner channels rather than one. And the reason is {not} the mouse's: there
+the extra hop let us drop stale positions and deliver only the latest,
+whereas typed characters must never be dropped---they queue in the window's
+input buffer. Here the two channels instead negotiate a variable-length
+byte transfer (the reader announces how many bytes it can take; [<winctl()>]
+returns at most that many).
 
 <<[[Window]] other fields>>=
 // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
@@ -10360,7 +10392,8 @@ Unlike the mouse, the console uses two channels inside the
 [<winctl()>], and [[c2]] to pass the filled data back.
 The two-channel protocol is needed because the worker must first tell
 [<winctl()>] how many bytes it can accept (via [[c1]]), and then [<winctl()>]
-fills that buffer and returns it (via [[c2]]):
+fills that buffer and returns it (via [[c2]]). The exchange is easiest to
+follow as a picture:
 
 %yoann: say will see better on diagram
 
@@ -10410,6 +10443,13 @@ struct Stringpair	/* rune and nrune or byte and nbyte */
 % when app writes to /dev/cons we receive full runes though
 
 %yoann: explain enum and introduce xfidread Qcons part
+%claude:
+As with the mouse, we can now see the code. The enum below names the
+[[alt()]] slots for the [[Qcons]] read: [[CRdata]] for a [[Consreadmesg]]
+arriving on [[w->consread]], and [[CRflush]] for a flush. On the data
+branch the worker runs the two-channel handshake just diagrammed---it
+allocates the byte buffer, sends it on [[c1]], and receives the filled
+bytes back on [[c2]]---before replying to the client.
 
 <<enum [[_anon_ (rio/xfid.c)]]3>>=
 enum { CRdata, CRflush, NCR };
@@ -10466,6 +10506,14 @@ case Qcons:
 % here s and ns are byte and nbyte
 
 %yoann: explain possible subtelities in xfidread code above
+%claude:
+A couple of subtleties. The buffer is [[malloc]]'d with [[UTFmax]] extra
+bytes so [<winctl()>] has room to prepend a {\em partial rune} left over from
+a previous read (the leftover is remembered in [[w->nrpart]]); a multibyte
+UTF-8 character must never be split across the byte count the client asked
+for. And as in the mouse case, [[qlock(&x->active)]] brackets the
+[[recv]]/[[filsysrespond()]] so the reply cannot race a flush of the same
+request.
 
 
 \subsection{Writing [[/mnt/wsys/cons]]: file server side}
@@ -10803,6 +10851,10 @@ case Qconsctl:
 @
 
 %yoann: say will see the Qconsctl cases later
+%claude:
+The body of the [[Qconsctl]] write case---the raw-mode and hold-mode
+control messages a client can send---is filled in later, with the rest of
+the console-control handling.
 
 <<[[xfidwrite()]] cases>>=
 case Qconsctl:
@@ -10864,6 +10916,10 @@ case Qcursor:
 % does not adjust cnt? off?
 
 %yoann: can say BGLONG are macros in \book{Libcore}
+%claude:
+[[BGLONG]] here unpacks a big-endian 32-bit integer from the raw byte
+stream; it is one of the byte-order extraction macros provided by
+\book{Libcore}.
 
 \section{[[/dev/draw/]] and [[/mnt/wsys/winname]]}
 % actually this one in rio is not demultiplexed!
@@ -10881,8 +10937,10 @@ Drawing is the one device [[rio]] does {not} demultiplex. Where
 threads we just saw, each window process opens the kernel's own
 [[/dev/draw]] directly (as [[/dev/draw/<n>]]), so pixels never pass
 through [[rio]]'s file server. That makes drawing more efficient but
-moves the complexity into per-window graphics setup.
-%yoann1: still introduce winname in this paragraph
+moves the complexity into per-window graphics setup. The one small file
+[[rio]] does still serve here is [[/mnt/wsys/winname]]: it holds the {\em
+name} of the window's image, which a window process reads to attach to its
+own drawing surface on the shared screen.
 
 \subsection{Trace of a drawing operation}
 \label{sec:trace-draw}
@@ -16083,6 +16141,10 @@ timerstart(int dt)
 \section{Command-line options}
 
 %yoann: intro
+%claude:
+[[rio]]'s command-line options are few: a font ([[-f]]), an initial
+command to run in the first window ([[-i]]), a keyboard command ([[-k]]),
+and the [[-s]] flag. The [<usage()>] message below lists them.
 
 <<function [[usage]]>>=
 void
@@ -19554,6 +19616,10 @@ fmtinstall('F', fcallfmt);
 % fcallfmt defined in fcall.h?
 
 %yoann: say where is defined the code of fcallfmt? in \book{Libcore} ?
+%claude:
+[[fcallfmt]] is the [[print]] verb that renders an [[Fcall]] in readable
+form; it belongs to the 9P library (declared in [[fcall.h]]), not to
+[[rio]], and is covered in \book{Libcore}.
 
 <<[[filsysproc()]] dump Fcall if debug>>=
 if(DEBUG)
