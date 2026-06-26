@@ -1848,8 +1848,10 @@ the [[Ref]] and [[QLock]] synchronization primitives).
 %claude:
 The global [<windows>] array is the essence of the windowing system:
 it holds all the managed windows.
+%
 The [<topped>] counter is a logical timestamp---each time a window
 gets the focus, it receives the current [[topped]] value (then incremented).
+%
 This allows [<wpointto()>] to find the topmost window at a given point
 by comparing [[Window.topped]] values across all overlapping windows.
 
@@ -1859,12 +1861,12 @@ by comparing [[Window.topped]] values across all overlapping windows.
 Window	**windows;
 @
 %old: was window but better to be windows!!!
-% essence of windowing system right here!! manage many windows!!
-\l not option<> above, because when delete there is a memmove
+% not option<> above, because when delete there is a memmove
 %alt: called scenegraph in wayland
 %ocaml: Hashtbl
+%said-later: protected by 'all' Qlock for fileserver-proc vs main-proc
 
-% next free window
+% next free window?
 <<global [[nwindow]]>>=
 int	nwindow;
 @
@@ -5570,10 +5572,12 @@ case New:
 % want to access rio (via mount /srv/rio.user.pid ...) see chapter X
 %claude:
 [[new()]] orchestrates the creation of a window in several steps:
-allocate channels, build the [<Window>] structure with [<wmk()>],
-add it to the global [<windows>] array, create a [<winctl()>] thread,
-fork a shell process (if [[pid == 0]]), and register the window's
-name in the graphics layer system.
+allocate channels,
+build the [<Window>] structure with [<wmk()>],
+add it to the global [<windows>] array,
+create a [<winctl()>] thread,
+fork a shell process (if [[pid == 0]]), and
+register the window's name in the graphics layer system.
 
 %claude:
 When [[pid]] is non-zero, the calling process already exists (e.g.,
@@ -5642,6 +5646,11 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 \l why return it? not used in caller anyway
 \l not too late to wsetname? can not have situation that child
 \l  execute too fast its mount?
+
+
+%TODO? explain realloc? also important that windows is array of Window pointer
+% not Window, so if realloc the old Window pointer are still valid, so
+% fileserver-proc and Fid.w are stable
 
 % always growing windows? never reuse when a window is closed?
 
@@ -8469,20 +8478,17 @@ is [[0x201]]:
 
 
 %claude:
-Recall that a [<Fid>] is the fileserver's record for one open-file
-session.  The [[fid]] number is assigned by the kernel on behalf
-of the client process, and [[rio]] maintains a [<Fid>] struct
-keyed by that number.  Each [[Fid]] carries a [<Fid.qid>] field that
-identifies the actual file: a path like [[/mnt/wsys/cons]] is
-resolved by [[walk]] into a [[Fid]] whose [[qid.path]] encodes
-the window identifier and the device type ([[Qcons]]).
-%claude:
+That [[Qid]] does not travel alone: it is stored in a [<Fid>], the
+fileserver's record for one open-file session. The [[fid]] number is
+assigned by the kernel on behalf of the client process, and [[rio]]
+maintains a [<Fid>] struct keyed by that number whose [<Fid.qid>] field
+holds the [[Qid]] [[walk]] resolved for it.
+%
 The reason [[Fid]] and [[Qid]] are kept separate is that multiple
 processes---or the same process twice---can open the same file
 independently, each with its own mode and state.
 The [[Qid]] is the file's identity; the [[Fid]] tracks one
 particular session on that file.
-%yoann1: maybe a little bit of duplication given some new paragraphs that precedes in the whole subsection
 
 % Saw before
 %<<[[Fid]] other fields>> =
@@ -8568,13 +8574,16 @@ function used to send replies. In 9P, the reply message type is always
 the request type plus one ([[Tattach]] \(\to\) [[Rattach]], etc.), unless
 there is an error in which case it is [[Rerror]].
 The response is sent through [<Filsys.sfd>], the server side of the pipe.
-Even though multiple threads may call [<filsysrespond()>] concurrently
-(e.g., [<filsyswalk()>] from the [[fileserver]] proc and [<xfidopen()>]
-from a worker thread in the [[main-proc]])
-the kernel guarantees that writes of complete messages to a pipe
-are atomic, and the tag/fid fields we will see soon let the kernel match replies to
-their requests.
-%yoann1: should we say "multiple procs" instead of multiple threads? you actually can't have multiple threads in the same proc running in parallel
+Many functions call [<filsysrespond()>]: every [[filsysxxx()]] handler
+and every [[xfidxxx()]] worker. These callers live in {different
+procs}---a [[filsysxxx()]] such as [<filsyswalk()>] runs in the
+[[fileserver]] proc while an [[xfidxxx()]] such as [<xfidopen()>] runs in
+a worker thread of the [[main-proc]]---so they genuinely run in parallel
+(threads {within} one proc are scheduled cooperatively and never do).
+%
+This is why the writes must be guarded: the kernel guarantees that writes
+of complete messages to a pipe are atomic, and the tag/fid fields we will
+see soon let the kernel match replies to their requests.
 %
 %claude:
 This is what lets a {single} pipe serve {many} windows at once. The diagram
@@ -8616,6 +8625,9 @@ kernel uses the tag to wake the right client.
 \end{vdiagram}
 
 %yoann: trans: can finally see code of filsysrespond
+%claude: %trans:
+With the atomic-pipe picture in mind, here at last is the code of
+[<filsysrespond()>] itself.
 
 <<function [[filsysrespond]]>>=
 /// filsysxxx | xfidxxx -> <>
@@ -8736,19 +8748,18 @@ translates each system call into 9P messages on the pipe:
 \end{vdiagram}
 
 %claude:
-Notice that the lightweight operations ([[attach]], [[walk]]) are
-handled directly by [<filsysproc()>], while the heavier ones
-([[open]], [[read]], [[write]]) are dispatched to [<Xfid>] worker
-threads via [[sendp()]].
-%yoann1: actually attach is calling xfidattach
+Notice that [[walk]] is handled entirely by [<filsysproc()>], while the
+other operations ([[attach]], [[open]], [[read]], [[write]]) are
+dispatched to [<Xfid>] worker threads via [[sendp()]]---attach included,
+as we are about to see it hand off to [<xfidattach()>].
 
 
 \subsection{[[filsysattach()]]}
 
 %claude:
-The first operation is [[attach]]; here is its [<filsysproc()>] half
-called [<filsysattach()>].
-%yoann1: say where filsysproc call filsysattach (via fcall global?)
+The first operation is [[attach]]; here is its [<filsysproc()>] half,
+[<filsysattach()>]. [<filsysproc()>] reaches it by indexing the global
+[<fcall>] dispatch table with the request type: [[fcall[Tattach]]].
 
 \t does not use first argument, so remove it from fcall sig no?
 \t hmm used by filsysopen. But true that anyway it's in the Xfid so could
@@ -8842,6 +8853,20 @@ xfidattach(Xfid *x)
 % and then fc.qid answer for Attach (not explicit) in other func
 
 %yoann: explain why no fast path in filsysattach and need xfidattach
+%claude:
+Why does [[attach]] need a worker at all, when looking a window up in the
+shared [<windows>] table is something the [[fileserver]] proc does inline
+elsewhere (in [<filsyswalk()>])? Because an attach can do more than look
+up: with a ``new'' spec string it actually {creates} a window
+(Section~\ref{sec:external-access}), and window creation must run in the
+[[main-proc]] context. Routing every attach through an [[Xfid]] worker,
+which runs in [[main-proc]], keeps one code path valid for both the
+create and the lookup case. So [<filsysattach()>] merely initializes the
+fid and [[sendp()]]s to [<xfidattach()>].
+%claude:
+[[walk]] needs no worker because it never creates anything---it only
+resolves an {existing} window---so the [[fileserver]] proc handles it
+itself, taking the [<all>] lock just long enough to look the window up.
 
 %dead: old syntax
 %    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
@@ -8883,6 +8908,14 @@ wlookid(int id)
 
 
 %yoann: explain why need a lock
+%claude:
+[<all>] guards the global window table---the [<windows>] array and its
+[<nwindow>] count. Two of [[rio]]'s procs reach into it concurrently: the
+[[fileserver]] proc reads it (in [<filsyswalk()>] and [<filsysread()>], to
+resolve and to list windows) while [[main-proc]] threads grow and shrink
+it as windows are created and destroyed. Because those two procs run in
+parallel, the shared table needs a lock to keep a reader from seeing it
+mid-update.
 
 <<global [[all]]>>=
 QLock	all;			/* BUG */
@@ -9344,10 +9377,21 @@ Read is where the two-layer split pays off the most. Directory reads
 [<filsysproc()>] context by iterating over [<dirtab>]---no window state
 is needed.
 %
-But reading a device file like [[/dev/mouse]] or [[/dev/cons]]
-requires blocking until data is available, so it must be dispatched
-to an [[xfidread()]] worker thread.
-%yoann1: but I thought thread could not block because they block then the entire proc
+But reading a device file like [[/dev/mouse]] or [[/dev/cons]] may have
+to wait until data is available, so it is dispatched to an [<xfidread()>]
+worker thread.
+%claude:
+This deserves a pause, because \plan threads are cooperatively scheduled:
+a thread that makes a blocking {syscall} freezes its whole proc (exactly
+why the [[fileserver]] proc is kept separate). The worker gets away with
+waiting because it does {not} wait on a syscall---it waits on a {channel}
+[[recv]]. The genuinely blocking [[read()]] lives elsewhere, up in the
+[[IO-proc-keyboard]] reading [[/dev/cons]] (or [[IO-proc-mouse]] reading
+[[/dev/mouse]]), each isolated in its own proc for just this reason; the
+input it collects travels by channel through [[main-proc]]'s keyboard or
+mouse thread and the target window before reaching the worker. A channel
+receive is a cooperative yield point, so the libthread scheduler just runs
+another thread of [[main-proc]] meanwhile; the proc keeps going.
 
 \subsection{[[filsysread()]]}
 
@@ -9400,10 +9444,9 @@ if(b == nil)
 @
 
 %claude: %toc:
-The directory case is handled right here in [<filsysread()>]; the device
-files ([[/dev/cons]], [[/dev/mouse]], \dots) are read in the worker
-[<xfidread()>], shown next.
-%yoann1: actually directory read is in next subsection and xfidread further below
+The directory case is handled by [<filsysread()>] itself, shown in the
+next subsection; the device files ([[/dev/cons]], [[/dev/mouse]], \dots)
+are read in the worker [<xfidread()>], further below.
 
 \subsection{Reading a directory}
 
@@ -9444,9 +9487,10 @@ case Qwsysdir:
 \subsection{[[xfidread()]]}
 
 %claude:
-[<xfidread()>] is the worker that serves reads of the device files, blocking
-until data is available.
-%yoann1: but again, isnt blocking dangerous for a thread?
+[<xfidread()>] is the worker that serves reads of the device files, waiting
+until data is available. As just noted, that wait is a [[recv]] on a
+channel, not a blocking syscall, so it yields to the rest of [[main-proc]]
+rather than freezing it.
 
 <<function [[xfidread]]>>=
 void
@@ -9583,6 +9627,10 @@ filsysstat(Filsys *fs, Xfid *x, Fid *f)
 
 
 %yoann: can say finally see dostat mentioned before too for reading directory operation
+%claude: %trans:
+We have already called [<dostat()>] twice---in the [[Qdir]] case of
+[<filsysread()>] to format each directory entry, and just now in
+[<filsysstat()>]. Here at last is the definition they share.
 
 <<function [[dostat]]>>=
 static
@@ -19163,7 +19211,12 @@ architecture is used by web servers (Nginx, Apache prefork)
 and database connection pools: decouple request arrival
 rate from processing capacity.
 
-%yoann: maybe add item for the interesting pipe multi clients with tag and atomic and kernel dispatch 
+%yoann: maybe add item for the interesting pipe multi clients with tag and atomic and kernel dispatch
+\item \emph{Tag multiplexing}: a single pipe serves many clients at once
+because each request carries a unique {\em tag} and the kernel writes
+whole messages atomically, so the server may reply in any order and the
+kernel still routes each reply back to the right client. The same trick
+lets HTTP/2 interleave many streams over one TCP connection.
 
 \item \emph{Channel-of-channels}: a worker sends its own
 reply channel along with a request; the responder uses that
