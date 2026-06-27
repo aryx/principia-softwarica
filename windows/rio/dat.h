@@ -24,39 +24,39 @@ typedef	struct	Timer Timer;
 enum Qxxx
 {
     Qdir,			/* /dev for this window */
-    /*s: [[qid]] cases */
+    /*s: [[Qxxx]] other cases */
     Qmouse,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qcons,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qconsctl,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qcursor,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwinname,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwindow,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qtext,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwinid,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qlabel,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qscreen,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwsys,		/* directory of window directories */
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwsysdir,		/* window directory, child of wsys */
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwctl,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qkbdin,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qsnarf,
-    /*x: [[qid]] cases */
+    /*x: [[Qxxx]] other cases */
     Qwdir,
-    /*e: [[qid]] cases */
+    /*e: [[Qxxx]] other cases */
 
     QMAX,
 };
@@ -139,6 +139,7 @@ struct Wctlmesg
     int		type;
 
     Rectangle	r;
+    // option<ref<Image>>
     Image	*image;
 };
 /*e: struct [[Wctlmesg]] */

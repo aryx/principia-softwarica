@@ -35,6 +35,7 @@ enum {
 /*e: enum [[Wxxx]] */
 
 /*s: function [[deletetimeoutproc]] */
+/// winctl -> wctlmesg(Deleted) -> proccreate(<>)
 void
 deletetimeoutproc(void *v)
 {
@@ -46,13 +47,15 @@ deletetimeoutproc(void *v)
 /*e: function [[deletetimeoutproc]] */
 
 /*s: function [[wctlmesg]] */
+/// winctl -> <>
 int
 wctlmesg(Window *w, int m, Rectangle r, Image *i)
 {
     char buf[64];
 
+    /*s: [[wctlmesg()]] trace [[w->id]] and [[m]] */
     if(DEBUG) fprint(STDERR, "wctlmesg: win=%d, type=%d\n", w->id, m);
-
+    /*e: [[wctlmesg()]] trace [[w->id]] and [[m]] */
     switch(m){
     /*s: [[wctlmesg()]] cases */
     case Deleted:
@@ -290,7 +293,9 @@ winctl(void *arg)
         /*e: [[winctl()]] alts adjustments */
         // event loop
         event = alt(alts);
+        /*s: [[winctl()]] trace [[w->id]] and [[event]] */
         if(DEBUG) fprint(STDERR, "winctl: win=%d, event=%d\n", w->id, event);
+        /*e: [[winctl()]] trace [[w->id]] and [[event]] */
         /*s: [[winctl()]] sanity check [[event]] */
         if(event == -1) {
           fprint(STDERR, "winctl: interrupted %r");

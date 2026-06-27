@@ -177,14 +177,14 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     if(strcmp(x->req.uname, x->fs->user) != 0)
         return filsysrespond(x->fs, x, &fc, Eperm);
     /*e: [[filsysattach()]] sanity check same user */
-
     f->busy = true;
     f->open = false;
 
     f->qid.path = Qdir; // no window id, Qdir valid for all
     f->qid.type = QTDIR;
     f->qid.vers = 0;
-    f->dir = dirtab; // entry for "."
+
+    f->dir = &dirtab[0]; // entry for "."
 
     f->nrpart = 0;
 
@@ -266,7 +266,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
             if(strcmp(x->req.wname[i], "..") == 0){
                 type = QTDIR;
                 path = Qdir;
-                dir = dirtab;
+                dir = &dirtab[0];
                 /*s: [[filsyswalk()]] when in dotdot, if Qwsysdir adjust path */
                 if(FILE(qid) == Qwsysdir)
                     path = Qwsys;
@@ -440,7 +440,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         sendp(x->c, xfidread);
         return nil;
     }
-    // else, a directory
+    // else, a directory, fast path
 
     o = x->req.offset;
     e = x->req.offset + x->req.count;

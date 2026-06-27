@@ -15,6 +15,7 @@
 /*e: rio includes */
 
 /*s: function [[winshell]] */
+/// new -> proccreate(<>, ...)
 void
 winshell(void *args)
 {
@@ -33,8 +34,9 @@ winshell(void *args)
     argv = arg[3];
     dir  = arg[4];
     
+    /*s: [[winshell()]] trace [[cmd]] */
     if(DEBUG) fprint(STDERR, "winshell: cmd = %s\n", cmd);
-
+    /*e: [[winshell()]] trace [[cmd]] */
     // copy namespace/file-descriptors/environment-variables (do not share)
     rfork(RFNAMEG|RFFDG|RFENVG);
 
@@ -72,7 +74,9 @@ winshell(void *args)
 
     if(wclose(w) == false){	/* remove extra ref hanging from creation */
 
+        /*s: [[winshell()]] trace before [[procexec()]] */
         if(DEBUG) fprint(STDERR, "winshell: before procexec %s\n", cmd);
+        /*e: [[winshell()]] trace before [[procexec()]] */
         notify(nil);
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)

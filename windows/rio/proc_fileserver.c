@@ -217,6 +217,7 @@ Rescue:
 /*e: function [[filsysinit]] */
 
 /*s: function [[filsysmount]] */
+/// winshell -> <>
 /*
  * Called only from a different FD group
  */
@@ -226,10 +227,12 @@ filsysmount(Filsys *fs, int id)
     char buf[32];
     errorneg1 err;
 
+    /*s: [[filsysmount()]] trace start */
     if(DEBUG) fprint(STDERR, "filsysmount1\n");
+    /*e: [[filsysmount()]] trace start */
 
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
-    sprint(buf, "%d", id);
+    sprint(buf, "%d", id); // mount spec string
     err = mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf);
     /*s: [[filsysmount()]] sanity check err mount */
     if(err < 0){
@@ -244,8 +247,9 @@ filsysmount(Filsys *fs, int id)
         return ERROR_NEG1;
     }
     /*e: [[filsysmount()]] sanity check err bind */
-
+    /*s: [[filsysmount()]] trace end */
     if(DEBUG) fprint(STDERR, "filsysmount2\n");
+    /*e: [[filsysmount()]] trace end */
     return OK_0;
 }
 /*e: function [[filsysmount]] */

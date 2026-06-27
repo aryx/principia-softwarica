@@ -47,6 +47,7 @@ static	Image	*paleholdcol;
 /*e: global [[paleholdcol]] */
 
 /*s: function [[wsendctlmesg]] */
+/// mousethread | new | delete | wclose | move | resize | whide | ... -> <>
 void
 wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
 {
@@ -56,7 +57,9 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     wcm.r = r;
     wcm.image = image;
 
+    /*s: [[wsendctlmesg()]] trace [[w->id]] and [[type]] */
     if(DEBUG) fprint(STDERR, "wsendctlmesg: win=%d, type=%d\n", w->id, type);
+    /*e: [[wsendctlmesg()]] trace [[w->id]] and [[type]] */
     send(w->cctl, &wcm);
 }
 /*e: function [[wsendctlmesg]] */
@@ -110,6 +113,7 @@ wsetcols(Window *w)
 /*e: function [[wsetcols]] */
 
 /*s: function [[wmk]] */
+/// new -> <>
 Window*
 wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 {
@@ -139,11 +143,10 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     /*e: [[wmk()]] colors initialisation */
 
     w = emalloc(sizeof(Window));
-
     w->i = i;
     w->screenr = i->r;
-    // claude: logical (0,0) origin for the client (-Borderwidth undoes the
-    // claude: client-side border inset); screenr keeps the physical position.
+    // set logical (0,0) origin for the client (-Borderwidth undoes the
+    // client-side border inset in getgenwindow()); screenr keeps the physical position.
     originwindow(i, Pt(-Borderwidth, -Borderwidth), i->r.min);
     w->cursorp = nil;
 
@@ -206,7 +209,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 /*e: function [[wmk]] */
 
 /*s: function [[wsetname]] */
-// mousethread -> new -> <>
+/// mousethread -> new -> <>
 void
 wsetname(Window *w)
 {
@@ -440,6 +443,7 @@ wcurrent(Window *w)
 /*e: function [[wcurrent]] */
 
 /*s: function [[wsetcursor]] */
+/// mousethread | wcurrent | ... -> <>
 void
 wsetcursor(Window *w, bool force)
 {
@@ -471,6 +475,7 @@ wtop(Point pt)
     if(w){
         if(w->topped == topped)
             return nil;
+        // else
         topwindow(w->i); // window.h (was in draw.h)
         wcurrent(w);
         flushimage(display, true);
@@ -557,6 +562,7 @@ wclosewin(Window *w)
 /*e: function [[wclosewin]] */
 
 /*s: function [[wsetpid]] */
+/// new -> <>
 void
 wsetpid(Window *w, int pid, bool dolabel)
 {
@@ -564,7 +570,9 @@ wsetpid(Window *w, int pid, bool dolabel)
     fdt fd;
 
     w->pid = pid;
+    /*s: [[wsetpid()]] trace [[w->id]] and [[w->pid]] */
     if(DEBUG) fprint(STDERR, "wsetpid: win=%d pid =%d\n", w->id, w->pid);
+    /*e: [[wsetpid()]] trace [[w->id]] and [[w->pid]] */
 
     if(dolabel){
         sprint(buf, "rc %d", pid);

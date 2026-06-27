@@ -19,11 +19,13 @@ Cursor	*lastcursor;
 /*e: global [[lastcursor]] */
 
 /*s: function [[riosetcursor]] */
+/// cornercursor | ... -> <>
 void
 riosetcursor(Cursor *p, bool force)
 {
     if(!force && p==lastcursor)
         return;
+    // else
     setcursor(mousectl, p);
     lastcursor = p;
 }

@@ -11,6 +11,7 @@
 Image *bgcolor;
 Point mouseloc;
 Rune str[20];
+char buf[50];
 
 /*s: type EventType (hellorio.c) */
 enum EventType {
@@ -106,7 +107,7 @@ void threadmain(int argc, char* argv[]) {
 
 void redraw(void) 
 {
-  char buf[50];
+
   draw(view, view->r, bgcolor, nil, ZP);
   runestring(view, mouseloc, display->black, ZP, font, str);
 

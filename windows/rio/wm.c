@@ -107,6 +107,7 @@ whichcorner(Window *w, Point p)
 }
 /*e: function [[whichcorner]] */
 /*s: function [[cornercursor]] */
+/// mousethread -> <>
 void
 cornercursor(Window *w, Point p, bool force)
 {
@@ -584,6 +585,7 @@ char *rcargv[] = { "rc", "-i", nil };
 /*e: global [[rcargv]] */
 
 /*s: function [[new]] */
+/// ((right click -> button3menu) | wctlnew) -> <>
 Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
@@ -631,11 +633,12 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
         w->screenr = ZR;
     }
     /*e: [[new()]] if hideit */
-
+    /*s: [[new()]] trace [[w->id]] */
     if(DEBUG) fprint(STDERR, "new: creating winctl thread for win=%d\n", w->id);
+    /*e: [[new()]] trace [[w->id]] */
 
     // create a new thread! for this new window!
-    threadcreate(winctl, w, 8192);
+    threadcreate(winctl, w, STACK);
 
     if(!hideit)
         wcurrent(w);
@@ -643,7 +646,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     flushimage(display, true);
 
     // create a new process
-    /*s: [[new()]] if pid == 0, create winshell process and set pid */
+    /*s: [[new()]] if pid == 0, create [[winshell]] process and set [[pid]] */
     if(pid == 0){
         arg = emalloc(5 * sizeof(void*));
         arg[0] = w;
@@ -655,15 +658,18 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
             arg[3] = argv;
         arg[4] = dir;
 
+        /*s: [[new()]] trace before [[winshell()]] */
         if(DEBUG) fprint(STDERR, "new: creating new winshell\n");
+        /*e: [[new()]] trace before [[winshell()]] */
         proccreate(winshell, arg, 8192);
-
         pid = recvul(cpid);
+        /*s: [[new()]] trace after [[winshell()]] */
         if(DEBUG) fprint(STDERR, "new: created winshell=%d\n", pid);
+        /*e: [[new()]] trace after [[winshell()]] */
 
         free(arg);
     }
-    /*e: [[new()]] if pid == 0, create winshell process and set pid */
+    /*e: [[new()]] if pid == 0, create [[winshell]] process and set [[pid]] */
     /*s: [[new()]] sanity check pid received from winshell */
     if(pid == 0){
         /* window creation failed */
@@ -689,6 +695,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 // Entry point
 //----------------------------------------------------------------------------
 /*s: function [[button3menu]] */
+/// mousethread -> event loop -> <>
 void
 button3menu(void)
 {
@@ -701,7 +708,8 @@ button3menu(void)
     /*e: [[button3menu()]] menu3str adjustments with hidden windows */
 
     sweeping = true;
-    switch(i = menuhit(3, mousectl, &menu3, desktop)){
+    i = menuhit(3, mousectl, &menu3, desktop);
+    switch(i){
     /*s: [[button3menu()]] cases */
     case Exit:
         send(exitchan, nil);

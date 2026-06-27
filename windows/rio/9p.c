@@ -19,6 +19,7 @@ int	messagesize = 8192+IOHDRSZ;	/* good start */
 /*e: global [[messagesize]] */
 
 /*s: function [[filsysrespond]] */
+/// filsysxxx | xfidxxx -> <>
 Xfid*
 filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {

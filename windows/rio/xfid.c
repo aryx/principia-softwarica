@@ -72,6 +72,7 @@ static	int	ntsnarf;
 /*e: global [[ntsnarf]] */
 
 /*s: function [[xfidattach]] */
+/// filsysattach !-> <>
 void
 xfidattach(Xfid *x)
 {
@@ -92,7 +93,6 @@ xfidattach(Xfid *x)
 
     fc.qid = x->f->qid;
     qlock(&all);
-
     /*s: [[xfidattach()]] if mount "new ..." */
     if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
         pid = 0;
@@ -124,7 +124,6 @@ xfidattach(Xfid *x)
         id = atoi(x->req.aname);
         w = wlookid(id);
     }
-
     x->f->w = w;
     /*s: [[xfidattach()]] sanity check w */
     if(w == nil){
