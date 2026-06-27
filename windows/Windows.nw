@@ -5172,9 +5172,9 @@ operations, when [[rio]] must keep control of the cursor.
 
 %claude:
 Now that I have covered the threads and procs that form [[rio]]'s
-concurrent architecture, I can present the window manager---the
-code that creates, moves, resizes, hides, and deletes windows.
-%yoann1: and also covered cursor management (also important for window manager)
+concurrent architecture---and the cursor management a window manager also
+leans on---I can present the window manager proper: the code that creates,
+moves, resizes, hides, and deletes windows.
 
 \section{Overview}
 
@@ -5354,6 +5354,15 @@ bool	sweeping;
 \l should be menuing? to not confuse with sweep()
 
 %yoann: maybe explain diff with [<menuing>] ?
+%claude:
+[<sweeping>] and [<menuing>] are easy to confuse---both are raised while the
+user drives a window-manager gesture---but they guard different things.
+[<menuing>] is about [[rio]]'s {\em own} cursor: it is set while [[rio]] has
+swapped in a special pointer (the cross or sight cursor) to prompt the user
+to point at or sweep out a window, and it stops the normal cursor logic from
+reverting that pointer. [<sweeping>] instead keeps {\em clients} out of the
+way: while a menu is up or a border is being dragged, it blocks an
+application from, say, warping the mouse through [[/dev/mouse]] mid-gesture.
 
 
 %claude:
@@ -6007,17 +6016,24 @@ if(pid == 0){
 % pass w so can communicate back with its winctl thread handler
 
 %claude:
-Why a separate [<winshell()>] proc and a [[cpid]] channel rather than just
-forking here? Because [[rio]] is a libthread program: it cannot simply
-[[fork()]] inside a thread, so it uses [[proccreate]] to spawn a fresh proc
-in which [<winshell()>] sets up a private namespace (with [[rfork]]), mounts
-[[rio]]'s filesystem, and [[exec]]s the shell as you will see soon.
+Why a separate [<winshell()>] proc rather than just forking here? Because in
+a [[libthread]] program new processes are created with [[proccreate]], not a
+raw [[fork]] or [[rfork]]\footnote{All of a [[libthread]] program's procs
+must stay in one {\em rendezvous group}---that is what makes channels work
+across procs---so a new proc is made with [[proccreate]], an [[rfork]] of
+[[RFPROC|RFMEM]] (never [[RFREND]]) that preserves the group, gives the proc
+its own stack, and registers it with the thread scheduler. A bare
+[[fork]]/[[rfork]] to {\em create} a proc would fall outside that machinery.
+([[rfork]] {\em is} the right tool for adjusting a single process's namespace
+and fds, as [<winshell()>] does next.) See [[thread(2)]] and the
+\book{Libcore}.}. In that proc [<winshell()>] sets up a private namespace
+(with [[rfork]]), mounts [[rio]]'s filesystem, and [[exec]]s the shell as you
+will see soon.
 %
 The new process id is handed
 back over [[cpid]] ([[recvul]]) so [[rio]] can remember it---to kill the
 process when the window is deleted---and [[arg]] is just the marshalling
 needed to pass several parameters through [[proccreate]]'s single [[void*]].
-%yoann1: why can't fork inside a thread? maybe add a footnote explaining it and referencing \book{Libcore} ?
 
 % wait for pid. pid will be passed to wsetpid, so know
 % which process we are connected to, and which one to kill if delete
@@ -6119,8 +6135,8 @@ copies the fd table, so the child keeps a copy of [<Filsys.cfd>].
 Each window tracks the [[pid]] of its child process and keeps
 an open file descriptor to [[/proc/<pid>/notepg]], which allows
 [[rio]] to send notes (signals) to the process group---for
-instance, to interrupt a running command when the window is deleted.
-%yoann1: reference section in adv topics \ref{sec:notes} ?
+instance, to interrupt a running command when the window is deleted
+(see Section~\ref{sec:notes}).
 
 <<[[Window]] process fields>>=
 int		pid;
@@ -6172,16 +6188,17 @@ if(pid == 0){
 \subsection{Namespace adjustments: [[filsysmount()]]}
 
 %claude:
-Remember that this runs in the new child proc, [<winshell()>], which has
-just rforked a private namespace---so the bindings below affect only the
-window's own process, not [[rio]] or the other windows.
-This is the key step that makes [[rio]]'s virtualization work.
+Remember that the namespace setup below runs in the new child proc,
+[<winshell()>], which has just rforked a private namespace---so the bindings
+it makes affect only the window's own process, not [[rio]] or the other
+windows.
 [<filsysmount()>] mounts [[rio]]'s client pipe onto [[/mnt/wsys]],
 passing the window ID as the {\em mount spec} so that [[rio]] knows which
-window the client belongs to. Then it binds [[/mnt/wsys]] before
+window the client belongs to. It then binds [[/mnt/wsys]] before
 [[/dev]], so that [[/dev/cons]], [[/dev/mouse]], etc.\ resolve to
-[[rio]]'s virtual files rather than the real device files.
-%yoann1: what "this" reference at the beginning of this paragraph? Also "This is the key step" ... is slightly unclear, what is "this" again?
+[[rio]]'s virtual files rather than the real device files. This
+bind-before-[[/dev]] is the key step that makes [[rio]]'s virtualization
+work.
 
 <<[[winshell()]] adjust namespace>>=
 err = filsysmount(filsys, w->id);
@@ -7064,31 +7081,28 @@ channels.
 
 \begin{vdiagram}
                     rio (main-proc)
-                   +---------------------------+
- mouse thread      |                           |
-   calls new() --->|  Window struct             |
-                   |    .id = 2                |
-                   |    .pid -------+          |
-                   |    .name = "window.2"     |
-                   |    .i   ------+|          |
-                   |    .mc        ||          |
-                   |               ||          |
-                   |  window       ||          |
-                   |  thread  <----+|          |
-                   +-----------+---||----------+
-                               |   ||
-              draw (kernel)    |   ||   new process
-           +-------------------+   ||  +----------+
-           |   layer           |   |+->| /bin/rc  |
-           |  "window.2"       |   |   +----+-----+
-           |  (on desktop)     |   |        |
-           +-------------------+   |   namespace:
-                                   |   /dev/mouse ->
-                                   |     /mnt/wsys/mouse
-                                   |       -> pipe to rio
-                                   |          extra="2"
+                   +----------------------------+
+ mouse thread      |  Window struct             |
+   calls new() --->|    .id   = 2               |
+                   |    .name = "window.2"      |
+                   |    .pid  ----------+       |
+                   |    .i    ------+   |       |
+                   |    .mc         |   |       |
+                   |    window      |   |       |
+                   |    thread      |   |       |
+                   +----------------|---|-------+
+                                    |   |
+              draw (kernel)         |   |   new process
+           +-------------------+    |   |  +----------+
+           |   layer           |<---+   +->| /bin/rc  |
+           |  "window.2"       |           +----+-----+
+           |  (on desktop)     |                |
+           +-------------------+           namespace:
+                                           /dev/mouse ->
+                                             /mnt/wsys/mouse
+                                               -> pipe to rio
+                                                  extra="2"
 \end{vdiagram}
-%yoann1: I think some arrows seem misplaced above
 
 
 \section{Window focus}
@@ -7373,6 +7387,13 @@ bool	deleted;
 % hence timeout below.
 
 %yoann: say can see first bailout in wctlmesg and explain why bailout here again
+%claude:
+Here is the first of those bail-outs in the flesh: at the top of
+[<wctlmesg()>], before handling any window-control message, [[rio]] checks
+[[w->deleted]] and returns at once. A [<Wctlmesg>] can already be in flight
+from several sources---a menu action, a [[/mnt/wsys/wctl]] write, a pending
+request---when the window is torn down, so each handler must re-check rather
+than assume no message arrives after deletion.
 
 <<[[wctlmesg()]] break if window was deleted>>=
 if(w->deleted)
@@ -8628,16 +8649,16 @@ procs}---a [[filsysxxx()]] such as [<filsyswalk()>] runs in the
 a worker thread of the [[main-proc]]---so they genuinely run in parallel
 (threads {within} one proc are scheduled cooperatively and never do).
 %
-This is why the writes must be guarded: the kernel guarantees that writes
-of complete messages to a pipe are atomic, and the tag/fid fields we will
-see soon let the kernel match replies to their requests.
+This is safe because pipe writes are atomic: the kernel guarantees that a
+complete message written to a pipe lands in one piece, so concurrent replies
+never interleave, and the tag/fid fields we will see soon let the kernel
+match replies to their requests.
 %
 This is what lets a {single} pipe serve {many} windows at once. The diagram
 below follows two windows reading different files concurrently: the kernel
 writes each request atomically, stamped with the window id ([[extra]], from
 the mount spec) and a unique {\em tag}; [[rio]] may reply in any order, and the
 kernel uses the tag to wake the right client.
-%yoann1: the term guarded above is a bit confusing since actually we are not talking about a guard and the help is that writes are atomic
 
 %claude:
 \begin{vdiagram}
@@ -9158,6 +9179,16 @@ if(strcmp(x->req.wname[i], "..") == 0){
 \l but important to share it?
 
 %yoann: can explain why ".." reach 9P and why not handled in kernel instead?
+%claude:
+Why does walking [[..]] reach [[rio]] at all, rather than being resolved by
+the kernel? Because the directory tree under [[/mnt/wsys]] is entirely
+synthetic---[[rio]], not the kernel, invents the per-window directories and
+their contents. The kernel's mount driver knows only the mount {\em point};
+it cannot know that the parent of [[/mnt/wsys/2/cons]] is the window's
+directory, so it forwards every [[walk]] element, [[..]] included, as a 9P
+[[Twalk]] for the server to resolve. (The kernel does shortcut a [[..]] that
+would climb back out of the mount, but within the served tree the server
+owns the answer.)
 
 \subsection{Error management}
 
@@ -9806,19 +9837,16 @@ then formats it as a textual response for the client.
 %claude:
 Every major windowing system has to solve the same
 problem---``get the mouse and keyboard to the right
-application''---and they take very different routes to it.
-X~Window clients connect to a display server over a socket and
-speak the X protocol; input arrives as binary messages
-([[KeyPress]], [[ButtonPress]], [[MotionNotify]]). Wayland
-is similar, with a leaner protocol of its own. macOS's Quartz
-delivers events through its [[WindowServer]] and run-loop
-callbacks, and Win32 applications receive them as
-[[WM_MOUSEMOVE]], [[WM_KEYDOWN]], etc.\ on a message queue.
-What they share is the shape of the solution: each needs a
-dedicated client library---[[Xlib]]/[[xcb]],
-[[libwayland-client]], [[AppKit]], [[user32.dll]]---that speaks
-a custom event protocol to a central server.
-%yoann1: not clear what run-loop callback mean, also not clear how all those approaches differ really (maybe they don't)
+application''---and, [[rio]] aside, they nearly all solve it
+the {\em same} way: the application links a dedicated client
+library that speaks a custom binary protocol to a central
+server. The differences are mostly cosmetic. Under X~Window the
+library is [[Xlib]] or [[xcb]] and events arrive as messages
+like [[KeyPress]] and [[ButtonPress]]; Wayland uses
+[[libwayland-client]] with a leaner protocol; macOS programs
+link [[AppKit]] and talk to a [[WindowServer]]; Win32 programs
+use [[user32.dll]] and receive [[WM_MOUSEMOVE]], [[WM_KEYDOWN]],
+and the like. Same shape, different spellings.
 
 %claude:
 [[rio]] does it with no protocol and no client library at
@@ -9969,7 +9997,10 @@ arriving [<Mousereadmesg>] on [<Window.mouseread>], and [[MRflush]] for a flush
 On the [[MRdata]] branch it performs the second half of the channel-of-channels
 handshake---[[recv(mrm.cm, &ms)]]---and formats the [[Mouse]] as the text
 the client reads.
-%yoann1: what is NMR? end marker for alts array?
+%
+[[NMR]] is not a real case: it is simply the {\em count} of slots, used to
+place the [[CHANEND]] terminator that marks the end of the [[alts]] array
+passed to [[alt()]].
 
 <<enum [[_anon_ (rio/xfid.c)]]4>>=
 enum { MRdata, MRflush, NMR };
@@ -10030,7 +10061,13 @@ as a resize notification: [[c]] starts as [['m']] but is switched to
 announce a resize when [<Window.resized>] is set---which is why a mouse [[read]]
 can also wake a client that was really waiting to learn its window changed
 size.
-%yoann1: flush is explained in sec:9p-flush but maybe give intuition of what is it when is it used and why it interacts with xfidread
+%
+A {\em flush} here is the 9P [[Tflush]] request: the client telling [[rio]]
+to abandon a still-pending read, typically because the program was
+interrupted while blocked in [[read("/dev/mouse")]]. Such a read can block
+indefinitely, so [<xfidread()>] must be ready to be torn down this way---hence
+the [[alt()]] on a flush channel and the [[x->active]] lock; the full
+mechanism is in Section~\ref{sec:9p-flush}.
 
 %ocaml-found:
 % note that does not care about off. always respond the same thing.
@@ -10104,6 +10141,9 @@ case Movemouse:
 %alt: in Overview chapter in soft archi section
 
 %yoann: quick transition sentence
+%claude: %trans:
+We have seen the mouse device's code in isolation; now let us watch a single
+click travel through it, end to end.
 
 When you click or move the mouse, the information is first
 transmitted from the mouse device to the kernel, at the bottom left 
@@ -10492,8 +10532,8 @@ arriving on [<Window.consread>], and [[CRflush]] for a flush.
 %
 On the data branch the worker runs the two-channel handshake just diagrammed---it
 allocates the byte buffer, sends it on [[c1]], and receives the filled
-bytes back on [[c2]]---before replying to the client.
-%yoann1: can maybe again mention flush will be treated fully in sec:9p-flush?
+bytes back on [[c2]]---before replying to the client. (As with the mouse,
+the flush case is deferred to Section~\ref{sec:9p-flush}.)
 
 <<enum [[_anon_ (rio/xfid.c)]]3>>=
 enum { CRdata, CRflush, NCR };
@@ -15759,6 +15799,7 @@ It also covers advanced terminal editing features like snarf/paste,
 plumbing, auto-completion, and word selection.
 
 \section{Notes (signals)}
+\label{sec:notes}
 
 % saw some hangup before note when delete a window
 % and want to kill associated process
