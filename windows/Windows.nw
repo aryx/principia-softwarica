@@ -11648,6 +11648,10 @@ case Qmouse:
 % winctl and xfid threads so safe to update the w fields!
 
 %yoann: quick intro
+%claude:
+Closing [[/dev/mouse]] runs the [[Qmouse]] case of [<xfidclose()>], which
+clears [[w->mouseopen]]: the window stops forwarding mouse events to a client
+and goes back to handling them itself.
 
 <<[[xfidclose()]] cases>>=
 case Qmouse:
@@ -11662,6 +11666,13 @@ case Qmouse:
 % put Refresh here?
 
 %yoann: explain Refresh
+%claude:
+The [<Refresh>] on close needs a word. While the client held [[/dev/mouse]]
+open---usually a graphical program painting its own content---[[rio]] left
+the window image alone: its [<Refresh>] handler skips the redraw whenever
+[[mouseopen]] is set. Clearing [[mouseopen]] just above flips that, so this
+[<Refresh>] is the one that finally repaints [[rio]]'s own view of the
+window, reclaiming whatever the client had drawn.
 
 
 
@@ -11722,6 +11733,12 @@ if(w->rawing){
 % that closes devices and restore to nice default.
 
 %yoann: quick intro
+%claude:
+As with the mouse, a [["rawon"]]/[["rawoff"]] write becomes a [<Wctlmesg>]
+([<Rawon>] or [<Rawoff>]) so the mode change is applied in the [<winctl()>]
+thread. [<Rawon>] has nothing left to do---[[w->rawing]] was already bumped
+in [<xfidwrite()>]---while [<Rawoff>] still has to reprocess any keys that
+were buffered raw, now that cooked mode resumes.
 
 <<[[Wctlmesgkind]] cases>>=
 Rawon,
@@ -11743,13 +11760,12 @@ case Rawoff:
 \section{Mouse events}
 
 %claude:
-This section shows the [<winctl()>] side of mouse event delivery---the
-producer/consumer machinery that sits between [<mousethread>] and
-the client's [[read("/dev/mouse")]]. The previous chapter showed the
-[<xfidread()>] side (part~1); here we see part~2: how [<winctl()>]
-queues click events, decides when to offer data, and responds on the
-reply channel.
-%yoann1: update the part~X now that we renamed those to server-side vs winctl side
+This section shows the {\em window-thread side} of mouse event delivery---the
+producer/consumer machinery that sits between [<mousethread()>] and
+the client's [[read("/dev/mouse")]]. The earlier {\em file-server side}
+showed how the [<xfidread()>] worker waits for an event; here we see how
+[<winctl()>] queues click events, decides when to offer data, and responds on
+the reply channel.
 
 %alt: special APIs for graphical client to access mouse? that
 % request directly to window manager?
@@ -11763,7 +11779,7 @@ reply channel.
 Each window keeps its own [<Mouseinfo>] struct to buffer mouse events
 destined for the client application. This is the producer's staging
 area: [<winctl()>] writes into it when it receives events from
-[<mousethread>], and reads from it when the client is ready via the
+[<mousethread()>], and reads from it when the client is ready via the
 channel-of-channels protocol described in the previous chapter.
 
 <<[[Window]] mouse fields>>=
@@ -19469,8 +19485,45 @@ wrefresh(Window *w, Rectangle)
 
 
 \section{Security}
+\label{sec:security}
 
 %yoann: can we say anything about security model of rio/draw? any process can interfere and grab the window content of another window? how XWindow, macOS, Windows deal with security windowing system context?
+%claude:
+[[rio]] has, frankly, almost no security model {\em between} the windows of
+one user---and that is deliberate: \plan assumes the windows on a terminal
+all belong to the same person, who trusts them. Isolation comes from the
+{\em namespace}, not from access checks. Each client is handed a private
+namespace in which [[/dev/cons]] and [[/dev/mouse]] resolve, through the
+mount spec, to {its own} window's virtual files; a process cannot read
+another window's keystrokes for the simple reason that the other window's
+[[/dev/cons]] is not in its namespace at all.
+
+%claude:
+The drawing path is the leaky part. [[rio]] connects each client straight to
+the kernel's [[/dev/draw]], and that device exposes the whole screen image
+([[display->image]]); a process that goes looking can read or scribble on
+pixels well outside its own window. \plan tolerates this because, once more,
+it is all one user---there is no untrusted code to defend against.
+
+%claude: %modern:
+Other systems span the spectrum. [[X11]] is, if anything, {\em more}
+permissive than [[rio]]: any client on a display can read other windows'
+pixels, grab the keyboard, and synthesise input events, which is why
+keyloggers and screenshot tools need no special privilege under bare X.
+[[Wayland]] was designed largely to close exactly these holes---clients are
+isolated, cannot see each other's buffers or input, and must go through the
+compositor (and desktop ``portals'') even to take a screenshot. macOS and
+Windows sit nearer [[Wayland]], gating screen capture and global input
+behind explicit, user-granted permissions. \plan never took this road; its
+answer to ``what stops one window from spying on another?'' is simply ``they
+are both you.''
+
+%claude:
+The real boundary in \plan is drawn elsewhere: at the {\em file server} and
+the {\em network}. A remote [[rio]] or file tree is reached over an
+authenticated 9P connection (see the \book{Security}), and a process is
+confined by the namespace it is given. Within a single trusted session,
+though, the windows are deliberately porous.
 
 %******************************************************************************
 \chapter{Conclusion}
@@ -19735,7 +19788,14 @@ systems handle multiple displays with different
 resolutions and scale factors. [[rio]] assumes a
 single screen at a fixed resolution.
 
-%yoann: add item about Security?
+\item \emph{Security and isolation}: modern systems
+keep windows from spying on one another---a process
+cannot read another window's pixels, snoop its
+keystrokes, or capture the screen without explicit
+permission (Wayland, macOS, Windows). [[rio]], like
+bare [[X11]], does not: it trusts every window of the
+one user and isolates only their {\em namespaces}, not
+their pixels (Section~\ref{sec:security}).
 
 \end{itemize}
 
