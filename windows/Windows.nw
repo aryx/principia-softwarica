@@ -9953,30 +9953,38 @@ positions; the client would get the stale (100,50) from the head.
 %
 With the channel-of-channels pattern, no [[Mouse]] value is produced
 until the client asks for one:
-%yoann1: any other reason for this channel of channel?
 
 %claude:
 \begin{vdiagram}
   xfidread (worker)                    winctl (window thread)
   +-----------------+                  +-------------------+
-  |                 |  Mousereadmesg   |  (has seen 4      |
-  | client calls    |  {cm: replyCh}  |   mouse events,   |
-  | read("/dev/     |                 |   current pos is  |
-  |      mouse")    +---------------->|   now 160,65)     |
-  |                 |  w->mouseread    |                   |
+  | client's read   |                  | has seen 4 events,|
+  | is pending, so  |  Mousereadmesg   | pos now (160,65); |
+  | the worker is   |  {cm: replyCh}   | offers to send    |
+  | RECEIVING on    |<----------------+  only now that it  |
+  |  w->mouseread   |                  | has data          |
   |                 |                  |                   |
-  |                 | Mouse{160,65}   | send(mrm.cm,      |
-  | recv(replyCh,   |<----------------+   &currentMouse)  |
-  |      &ms)       |  replyCh        |                   |
+  | recv(cm, &ms)   |  Mouse{160,65}   | send(mrm.cm,      |
+  |                 |<----------------+   &currentMouse)   |
   +-----------------+                  +-------------------+
 \end{vdiagram}
 
 %claude:
-The first [[send()]] on [<Window.mouseread>] is really a synchronization
-message saying ``I am ready to receive.'' Only then does [<winctl()>]
-snapshot the freshest mouse state and send it back on the reply
-channel [[mrm.cm]]. The client gets (160,65)---the position that
-matters---instead of a stale queued value.
+The rendezvous runs the opposite way from what you might guess: the
+{\em worker} blocks {\em receiving} on [<Window.mouseread>], while
+[<winctl()>] offers to {\em send} on it only when it actually has a fresh
+event (otherwise that arm of its [[alt()]] is disabled). Because the channel
+is unbuffered, the exchange fires only when both hold---a reader is waiting
+{\em and} [<winctl()>] has data---and [<winctl()>] snapshots the freshest
+mouse state at that instant, handing over the reply channel [[mrm.cm]] and
+then the [[Mouse]] itself. The client gets (160,65)---the position that
+matters---never a stale queued value.
+%claude:
+Freshness is the main payoff, but the rendezvous earns its keep twice more:
+[<winctl()>] never snapshots or queues a mouse state nobody is waiting for,
+and because the worker reaches the data by {\em waiting} on a channel, that
+wait is a single [[alt()]] that can also watch a flush channel and cancel
+the read cleanly (Section~\ref{sec:9p-flush}).
 
 
 
@@ -10437,7 +10445,17 @@ whereas typed characters must never be dropped---they queue in the window's
 input buffer. Here the two channels instead negotiate a variable-length
 byte transfer (the reader announces how many bytes it can take; [<winctl()>]
 returns at most that many).
-%yoann1: but again then why not have those two inner channel directly in Window as 2 fields instead of this channel of channel design pattern?
+%claude:
+You might ask why not put [[c1]] and [[c2]] straight into the [<Window>] as
+two fields and skip the wrapping message. They could be: like [[mrm.cm]],
+they are created once per window (by [<winctl()>]) and reused. What the
+channel-of-channels really buys is the {\em rendezvous}---the unbuffered
+[<Window.consread>] is what synchronises the worker and [<winctl()>] (the
+worker waits to receive on it; [<winctl()>] sends only when a line is ready),
+and it is the single channel the worker's [[alt()]] watches alongside a
+flush. Handing the reply channels over {\em in} that rendezvous keeps them
+bound to it rather than loose in the [<Window>]; it is not that a fresh pair
+is needed per read.
 
 <<[[Window]] other fields>>=
 // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
@@ -10482,21 +10500,21 @@ follow as a picture:
 %claude:
 \begin{vdiagram}
   xfidread (worker)                    winctl (window thread)
-  +-----------------+                  +-------------------+
-  |                 |  Consreadmesg    |                   |
-  | send(consread,  |  {c1, c2}       |                   |
-  |   &crm)         +---------------->| recv(consread,    |
-  |                 |  w->consread     |       &crm)       |
-  |                 |                  |                   |
-  | t = malloc(cnt) |  Stringpair     |                   |
-  | send(c1,        |  {t, cnt}       |                   |
-  |  {t, cnt})      +---------------->| recv(c1, &pair)   |
-  |                 |                  | (fill t with      |
-  |                 |  Stringpair     |  typed runes,     |
-  |                 |  {t, actual_n}  |  converted to     |
-  | recv(c2, &pair) |<----------------+  UTF-8 bytes)     |
-  |                 |                  | send(c2, &pair)   |
-  +-----------------+                  +-------------------+
+  +------------------+                 +--------------------+
+  | client read is   |  Consreadmesg   | has a line of      |
+  | pending, so the  |  {c1, c2}       | input ready, so    |
+  | worker is        |                 | it offers to send: |
+  | RECEIVING on     |<----------------+ send(consread,     |
+  |   consread       |                 |        &crm)       |
+  | recv(consread,   |                 |                    |
+  |   &crm)          |                 |                    |
+  | t = malloc(cnt)  |  Stringpair     |                    |
+  | send(c1,         |  {t, cnt}       |                    |
+  |   {t, cnt})      +---------------->| recv(c1, &pair)    |
+  |                  |  Stringpair     | (fill t: typed     |
+  |                  |  {t, actual_n}  |  runes -> UTF-8)   |
+  | recv(c2, &pair)  |<----------------+ send(c2, &pair)    |
+  +------------------+                 +--------------------+
 \end{vdiagram}
 
 %claude:
