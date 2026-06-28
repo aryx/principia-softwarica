@@ -405,14 +405,6 @@ writewctl(Xfid *x, char *err)
 
     switch(cmd){
     /*s: [[writewctl()]] switch [[cmd]] cases */
-    case New:
-        return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
-    /*x: [[writewctl()]] switch [[cmd]] cases */
-    case Set:
-        if(pid > 0)
-            wsetpid(w, pid, 0);
-        return 1;
-    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Move:
         rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
         rect = rectonscreen(rect);
@@ -485,6 +477,14 @@ writewctl(Xfid *x, char *err)
     /*x: [[writewctl()]] switch [[cmd]] cases */
     case Delete:
         wsendctlmesg(w, Deleted, ZR, nil);
+        return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
+    case New:
+        return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+    /*x: [[writewctl()]] switch [[cmd]] cases */
+    case Set:
+        if(pid > 0)
+            wsetpid(w, pid, 0);
         return 1;
     /*e: [[writewctl()]] switch [[cmd]] cases */
     }
