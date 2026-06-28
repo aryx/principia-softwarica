@@ -16291,6 +16291,23 @@ if(w->deleted)
 @
 
 %yoann: say that's it! only 50 lines or so for recursive rio! Compare to Xnest server in X window or whether can even do it in other windowing system? (Can in wayland? macOS?) powerful to debug like a regular program!
+%claude: %plan9-is-cleaner:
+And that is essentially the whole of it: running [[rio]] inside one of its own
+windows takes almost no special code. A nested [[rio]] is just another
+graphical client of the virtual devices its window already provides, so it
+works for free---the only real plumbing is the few dozen lines above that
+resize the nested screen when its window changes, on top of [[rio]]'s
+8~800 lines in all. Other systems pay far more. To nest a display X11 ships a
+{\em whole separate X server}: the old [[Xnest]], a thin proxy limited to
+whatever the host server can do, or the modern [[Xephyr]], a real
+[[KDrive]]-based server that paints into a host window and supports the newer
+extensions (composite, damage, randr). Either way it is thousands of lines of
+nesting-specific code that is inert without the rest of the X server behind
+it, itself hundreds of thousands of lines. Nesting a Wayland compositor
+likewise means running a second full compositor as a client, and macOS's
+window server is a single system service you do not nest at all. Under \plan
+you just run [[rio]], and you can watch and debug it like any ordinary
+program.
 
 \section{Timer}
 
@@ -16478,7 +16495,11 @@ Timer allocation uses a freelist ([<timer>]) to avoid repeated
 [<timerstart()>] either reuses a freed timer or allocates a new one,
 sets the countdown and sends it to [<timerproc()>] via the [<ctimer>] global
 channel.
-%yoann1: explain more scroll delays?
+%
+The ``scroll delays'' are how [[rio]] paces fast output: when a window
+auto-scrolls, [<wscrsleep()>] arms a short timer between scroll steps so the
+text does not fly past unreadably. That happens constantly under heavy
+output, which is why a freelist is worth the trouble.
 
 <<function [[timerstart]]>>=
 /*
@@ -16550,6 +16571,12 @@ case 's':
 % passed when new()
 
 %yoann: no code to show here using scrolling? why? shown before?
+%claude:
+There is no new code to show for the flag itself: the [<scrolling>] global is
+only the {\em default}. Each window copies it into its own [[w->scrolling]] at
+creation (in [<wmk()>]), and the field is consulted in the terminal's output
+loop---the [[qh < q0 || scrolling]] test seen earlier---to decide whether to
+keep pulling output from the process and scroll.
 
 
 \subsection{Initial command: [[rio -i]]}
@@ -16801,6 +16828,12 @@ putenv("font", fontname);
 @
 
 %yoann: explain what is using this font global env var? Graphics book?
+%claude:
+Setting the [[font]] environment variable is how the choice propagates: \plan's
+[[libdraw]] reads [[$font]] in [[initdraw()]] to pick a program's default font,
+so every graphical client started under [[rio]]---and [[rio]]'s own
+terminals---inherits it unless it overrides the value. The mechanism lives in
+the \book{Graphics}.
 
 \section{Advanced terminal editing}
 
@@ -17901,13 +17934,13 @@ eplumb(int key, char *port)
 Pressing Ctrl-F or Insert triggers filename completion, similar to
 Tab completion in shells. [[namecomplete()]] works backward from the
 cursor to extract the current word and its path prefix, resolves
-relative paths against the window's working directory, and calls
-[[complete()]] from [[libcomplete]] to find matches.
+relative paths against the window's working directory (the per-window
+[[w->dir]], which [[rio]] also exposes as the [[/mnt/wsys/wdir]] file), and
+calls [[complete()]] from [[libcomplete]] to find matches.
 %claude:
 If there is a unique common prefix to advance, the text is inserted.
 If multiple matches exist and no progress can be made, the candidates
 are displayed inline before the current command line.
-%yoann1: should we mention /mnt/wsys/wdir
 
 <<[[wkeyctl()]] special key cases and no special mode>>=
 case 0x06:	/* ^F: file name completion */
@@ -19078,6 +19111,11 @@ riostrtol(char *s, char **t)
 @
 
 %yoann: say can see finally [<parsewctl()>]
+%claude:
+Here, at last, is [<parsewctl()>], the little parser we kept deferring to. It
+turns a [[wctl]] command line---``[[resize -r 0 0 640 480]]'' and the
+like---into a [[cmd]] code plus the parsed rectangle, pid, and flags, and is
+shared by the [[/mnt/wsys/wctl]] writer and the external-access paths.
 
 <<function [[parsewctl]]>>=
 int
