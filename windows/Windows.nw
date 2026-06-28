@@ -9976,7 +9976,7 @@ The rendezvous runs the opposite way from what you might guess: the
 event (otherwise that arm of its [[alt()]] is disabled). Because the channel
 is unbuffered, the exchange fires only when both hold---a reader is waiting
 {\em and} [<winctl()>] has data---and [<winctl()>] snapshots the freshest
-mouse state at that instant, handing over the reply channel [[mrm.cm]] and
+mouse state at that instant, handing over the {\em reply channel} [[mrm.cm]] and
 then the [[Mouse]] itself. The client gets (160,65)---the position that
 matters---never a stale queued value.
 %claude:
@@ -10452,8 +10452,9 @@ they are created once per window (by [<winctl()>]) and reused. What the
 channel-of-channels really buys is the {\em rendezvous}---the unbuffered
 [<Window.consread>] is what synchronises the worker and [<winctl()>] (the
 worker waits to receive on it; [<winctl()>] sends only when a line is ready),
-and it is the single channel the worker's [[alt()]] watches alongside a
-flush. Handing the reply channels over {\em in} that rendezvous keeps them
+and it is the single channel the worker's [[alt()]] watches alongside a flush.
+%
+Handing the reply channels over {\em in} that rendezvous keeps them
 bound to it rather than loose in the [<Window>]; it is not that a fresh pair
 is needed per read.
 
@@ -11568,13 +11569,17 @@ cover those differences.
 %  stringxxx API from draw.h)
 % they care optionally about /mnt/wsys/consctl and /mnt/wys/cons
 %  for reading from the keyboard in "raw" mode.
+
 %claude:
 A graphical window is one where the application draws directly using
 the [[draw]] API rather than using [[/dev/cons]] for text I/O.
+%
 The key difference is [<Window.mouseopen>]: when the application opens
-[[/mnt/wsys/mouse]], [[rio]] stops intercepting middle-click and
+[[/dev/mouse]], [[rio]] stops intercepting middle-click and
 right-click for its own menus and forwards all mouse events to the
-application. Graphical applications may also request ``raw'' keyboard
+application.
+%
+Graphical applications may also request ``raw'' keyboard
 mode via [[/dev/consctl]], receiving keystrokes immediately rather than
 after a newline.
 
@@ -11582,11 +11587,15 @@ after a newline.
 
 %claude:
 This section covers the setup that transforms a window from textual to
-graphical mode. A graphical application typically calls three library
-functions at startup: [[initdraw()]] to connect to the [[draw]] device,
-[[initmouse()]] to open [[/mnt/wsys/mouse]], and optionally
-[[initkeyboard()]] to write [["rawon"]] on [[/mnt/wsys/consctl]].
+graphical mode.
+%
+A graphical application typically calls three library functions at startup:
+[[initdraw()]] to connect to the [[draw]] device,
+[[initmouse()]] to open [[/dev/mouse]], and optionally
+[[initkeyboard()]] to write [["rawon"]] on [[/dev/consctl]].
+%
 Each of these triggers specific behavior in [[rio]]'s filesystem server.
+%yoann1: say I use /dev/xxx here instead of /mnt/wsys/xxx because those functions reference /dev/mouse in their code but really when under rio those calls access /mnt/wys/mouse
 
 % We say setup cos not really creation, since most of the time create first
 % textual window and then setup things to become a graphical window
@@ -11603,7 +11612,7 @@ Each of these triggers specific behavior in [[rio]]'s filesystem server.
 The [[initdraw()]] call is handled entirely by the kernel's [[draw]]
 device, not by [[rio]]'s filesystem server---so there is no [[rio]]
 code to show here. However, [[initdraw()]] is a crucial step: it
-establishes the connection to [[/dev/draw]] and reads [[/mnt/wsys/winname]]
+establishes the connection to [[/dev/draw]] and reads [[/dev/winname]]
 to discover the layer name (see Section~\ref{sec:trace-draw}).
 
 \subsection{[[initmouse()]], mouse-open mode}
@@ -11649,14 +11658,13 @@ case Qmouse:
 
 %yoann: quick intro
 %claude:
-Closing [[/dev/mouse]] runs the [[Qmouse]] case of [<xfidclose()>], which
+Closing [[/mnt/wys/mouse]] runs the [[Qmouse]] case of [<xfidclose()>], which
 clears [[w->mouseopen]]: the window stops forwarding mouse events to a client
 and goes back to handling them itself.
 
 <<[[xfidclose()]] cases>>=
 case Qmouse:
     w->mouseopen = false;
-
     w->resized = false;
     if(w->i != nil)
         wsendctlmesg(w, Refresh, w->i->r, nil);
@@ -11673,6 +11681,7 @@ the window image alone: its [<Refresh>] handler skips the redraw whenever
 [[mouseopen]] is set. Clearing [[mouseopen]] just above flips that, so this
 [<Refresh>] is the one that finally repaints [[rio]]'s own view of the
 window, reclaiming whatever the client had drawn.
+%yoann1: unclear paragraph. also I think I talk about Refresh only in adv topics chapter for advanced control message; maybe need give more intuition about the need for this Refresh and reference section for more info
 
 
 
@@ -11689,13 +11698,17 @@ window, reclaiming whatever the client had drawn.
 % rawon on /dev/consctl, see Graphics.ns
 
 %claude:
-The [[rawing]] field tracks whether the window is in raw keyboard
-mode. When an application writes [["rawon"]] to [[/dev/consctl]],
+The [<Window.rawing>] field tracks whether the window is in ``raw'' keyboard
+mode.
+%
+When an application writes [["rawon"]] to [[/dev/consctl]],
 keystrokes are delivered immediately without waiting for a newline.
 Despite being declared [[bool]], [[rawing]] is actually used as a
 reference count: multiple [["rawon"]] writes increment it, and only
 when the matching [["rawoff"]] brings it back to zero does [[rio]]
-switch modes. This is a dubious design---it is hard to imagine a
+switch modes.
+%
+This is a dubious design---it is hard to imagine a
 legitimate use case for nested raw mode---but it means a stray
 extra [["rawon"]] will not accidentally cancel raw mode on the first
 [["rawoff"]].
@@ -11792,41 +11805,10 @@ The mouse event delivery system uses a circular queue per window
 to buffer click/release events, but only the latest position for
 move events. This is because missing a click matters (the user
 expected an action), but missing intermediate moves does not (only
-the final position matters). The [[counter]]/[[lastcounter]] pair
+the final position matters). The [<Window.counter>/[<Window.lastcounter>] pair
 tracks whether there is a new event: if they differ, the client gets
-the latest state on the next [[read]].
-%claude:
-The shape of the buffer is easier to see when drawn. Here is a
-window whose client has already consumed four mouse events and is
-about to read a fifth, with two more enqueued behind it:
-%
-\begin{vdiagram}
-             ri=4                         wi=7
-              v                            v
-  queue[16]: +---+---+---+---+---+---+---+---+---+---+ ...
-             | . | . | . | . |Mv |Lk |Mv | _ | _ | _ |
-             +---+---+---+---+---+---+---+---+---+---+
-              0   1   2   3   4   5   6   7
-               (already read)  ^^^^^^^^^^^
-                                to deliver
-                                (Lk = left click, Mv = move)
+the latest state on the next [[read()]].
 
-   counter     = 423   <- bumped by winctl on every enqueue
-   lastcounter = 419   <- snapshot client saw on previous read
-   -> counter != lastcounter: there is something new
-\end{vdiagram}
-
-%claude:
-The 16-slot ring is tiny on purpose: if the client falls that far
-behind, [[qfull]] is set and further events are silently dropped
-until [[ri == wi]] again. Move events in particular are coalesced
-at the producer side---winctl overwrites the latest position instead
-of pushing it---so the 16 slots effectively hold up to 16 distinct
-click/release transitions, which is plenty even for a user
-double-clicking frantically. This is the exact opposite of keyboard
-events, where dropping a rune would swallow user input; there
-[[nraw]] is strictly append-and-consume (see the raw-keys queue
-later).
 
 <<struct [[Mouseinfo]]>>=
 struct Mouseinfo
@@ -11846,6 +11828,7 @@ struct Mouseinfo
 %ocaml: use Queue.t, no need ri/wi, no need intermediate structure
 %old: was uchar for qfull
 
+
 <<[[Mouseinfo]] other fields>>=
 ulong	counter;	/* serial no. of last mouse event we received */
 ulong	lastcounter;/* serial no. of last mouse event sent to client */
@@ -11855,6 +11838,46 @@ ulong	lastcounter;/* serial no. of last mouse event sent to client */
 % counter and give current state when read.
 % Also because of resize where increment counter without
 %  producing a thing in the queue?
+
+
+%claude:
+The shape of the buffer is easier to see when drawn. Here is a
+window whose client has already consumed four mouse events and is
+about to read a fifth, with two more enqueued behind it:
+
+%claude:
+\begin{vdiagram}
+             ri=4                         wi=7
+              v                            v
+  queue[16]: +---+---+---+---+---+---+---+---+---+---+ ...
+             | . | . | . | . |Mv |Lk |Mv | _ | _ | _ |
+             +---+---+---+---+---+---+---+---+---+---+
+              0   1   2   3   4   5   6   7
+               (already read)  ^^^^^^^^^^^
+                                to deliver
+                                (Lk = left click, Mv = move)
+
+   counter     = 423   <- bumped by winctl on every enqueue
+   lastcounter = 419   <- snapshot client saw on previous read
+   -> counter != lastcounter: there is something new
+\end{vdiagram}
+
+
+
+%claude:
+The 16-slot ring is tiny on purpose: if the client falls that far
+behind, [<Mouseinfo.qfull>] is set and further events are silently dropped
+until [[ri == wi]] again.
+%
+Move events in particular are coalesced
+at the producer side---[<winctl()>] overwrites the latest position instead
+of pushing it---so the 16 slots effectively hold up to 16 distinct
+click/release transitions, which is plenty even for a user
+double-clicking frantically. This is the exact opposite of keyboard
+events, where dropping a rune would swallow user input; there
+[<Window.nraw>] is strictly append-and-consume (see the raw-keys queue
+later).
+
 
 <<[[Mouseinfo]] other fields>>=
 int	lastb;	/* last button state we received */
@@ -11891,9 +11914,11 @@ chapter showed the [<xfidread()>] side---how the worker sends a
 side: the producer that enqueues click events into
 [[w->mouse.queue]], and the consumer that dequeues them (or snapshots
 the current position) when the client is ready.
+%yoann1: no more part 1, part 2, part 3 now; use server-side, windown thread-side, etc.
 
 \subsubsection{Producer}
 
+%yoann: quick intro
 
 % seen WMouse before
 
@@ -11940,6 +11965,8 @@ if(w->mouseopen) {
 \subsubsection{Consumer}
 % Consumer and producer, like in a pipe
 
+%yoann: quick intro
+
 <<[[Wxxx]] cases>>=
 WMouseread,
 @
@@ -11984,6 +12011,8 @@ else
 %  at the sending time here may not be good for receiving time!
 
 
+%yoann: trans can finally saw we see the important code
+
 <<[[winctl()]] other locals>>=
 Mousestate m;
 @
@@ -12018,7 +12047,7 @@ events: there is no circular queue with click/move distinction, no
 [[counter]]/[[lastcounter]] bookkeeping.  Instead, raw keystrokes
 are simply appended to a growing array [<Window.raw>] and consumed
 one rune at a time. The complexity here is different---it lies in the
-interaction between raw mode and buffered mode, and in the rune/byte
+interaction between raw mode and cooked (buffered) mode, and in the rune/byte
 conversion when the data reaches the client.
 
 \subsection{Raw keys queue}
@@ -12026,7 +12055,7 @@ conversion when the data reaches the client.
 %claude:
 These fields are only relevant when [<Window.rawing>] is true, i.e., when
 a client has written [["rawon"]] on [[/mnt/wsys/consctl]]. In that
-mode, [<wkeyctl>] appends each keystroke to [[raw]] instead of
+mode, [<wkeyctl()>] appends each keystroke to [<Window.raw>] instead of
 inserting it into the text buffer. The runes accumulate here until
 the client reads [[/dev/cons]], at which point the [[WCread]] consumer
 in [<winctl()>] converts them to UTF-8 bytes and sends them out.
@@ -12047,6 +12076,8 @@ uint		nraw;
 
 \subsection{Reading [[/mnt/wsys/cons]]: raw mode}
 
+%yoann: quick intro
+
 \subsubsection{Producer}
 
 % seen keyboard listening code already in section X.
@@ -12054,8 +12085,9 @@ uint		nraw;
 % winctl -> <>
 %claude:
 When raw mode is active, keystrokes bypass the normal insertion
-path and go directly to the [[raw]] queue via [[waddraw]]. The
-condition [[w->mouseopen || w->q0 == w->nr]] distinguishes two
+path and go directly to the [<Window.raw>] queue via [<waddraw()>]. 
+%
+The condition [[w->mouseopen || w->q0 == w->nr]] below distinguishes two
 cases: in a graphical window ([[mouseopen]]), all raw keys are
 queued unconditionally---the application is fully in charge of
 keyboard handling. In a textual window, only keys typed at the very
@@ -12106,10 +12138,10 @@ waddraw(Window *w, Rune *r, int nr)
 
 %claude:
 When the application sends [[Rawoff]], any runes that were accumulated
-in [<Window.raw>] during raw mode are replayed through [<wkeyctl>] in
-normal (line-buffered) mode. Since [[rawing]] is now false, [<wkeyctl>]
+in [<Window.raw>] during raw mode are replayed through [<wkeyctl()>] in
+normal (line-buffered) mode. Since [<Window.rawing>] is now false, [<wkeyctl()>]
 will insert them into the text buffer and process special characters
-normally. The one-at-a-time [[runemove]] shift is inefficient but
+normally. The one-at-a-time [[runemove()]] shift is inefficient but
 the raw queue is typically short.
 
 <<[[wctlmesg()]] When Rawoff, process raw keys in non rawing mode>>=
@@ -12132,6 +12164,8 @@ while(w->nraw > 0){
 
 \subsubsection{Consumer}
 % Consumer and producer, like in a pipe
+
+%yoann: quick intro
 
 <<[[Wxxx]] cases>>=
 WCread, 
@@ -12254,6 +12288,8 @@ case WCread:
 
 % similar issue than in xfid where need store partial rune bytes
 
+%yoann: quick trans and intro
+
 <<[[winctl()]] other locals>>=
 char part[3]; // UTFMAX-1
 int npart = 0;
@@ -12282,11 +12318,15 @@ if(i)
 
 \section{Resize events}
 
+%yoann: trans where say mouse event and raw key event = graphical and last important one is resize
+
 %claude:
 When a window is resized, the client must be notified so it can
 redraw. The notification is piggybacked on the mouse event stream:
-[[wresize]] sets [[w->resized = true]] and increments
-[[w->mouse.counter]]. When the application reads [[/mnt/wsys/mouse]],
+[<wresize()>] sets [[w->resized = true]] and increments
+[[w->mouse.counter]].
+%
+When the application reads [[/mnt/wsys/mouse]],
 the response has a ``r'' prefix instead of ``m'', signaling a resize.
 The application calls [[getwindow()]] to remap the new window image.
 
@@ -12296,7 +12336,7 @@ The application calls [[getwindow()]] to remap the new window image.
 %claude:
 The full handshake ties together four actors: the user dragging a
 border, the mouse thread inside [[rio]], the target window's
-[[winctl]] thread, and the client application blocked on
+[<winctl()>] thread, and the client application blocked on
 [[/mnt/wsys/mouse]]. It is worth walking through end-to-end because
 the ``r''-prefix trick is the only hint the client gets that anything
 structural changed:
@@ -12333,14 +12373,14 @@ structural changed:
 The reason [[rio]] piggybacks on [[/mnt/wsys/mouse]] instead of using a
 dedicated [[/dev/resize]] file is backward compatibility: every
 graphical client already blocks on the mouse stream in its main
-event loop, so no extra select/alt is needed to notice a resize. The
+event loop, so no extra [[select()/alt()]] is needed to notice a resize. The
 ``r'' byte is simply a one-character tag at the start of the same
 text packet that normally carries [[m x y buttons msec]]. [[libdraw]]'s
 [[getwindow()]] wrapper (in \book{Graphics}) hides this from
 applications---they just see a resize event surface through their
 normal mouse channel. The cost is that a resize is invisible to any
-client that is not reading the mouse, and that the [[resized]] flag
-must be cleared in [[xfidread]] so the client does not get the same
+client that is not reading the mouse, and that the [<Window.resized>] flag
+must be cleared in [[xfidread()]] so the client does not get the same
 ``r'' over and over.
 
 <<[[xfidread()]] when Qmouse, adjust c for resize message if resized>>=
@@ -12353,19 +12393,21 @@ if(w->resized)
 
 \section{[[/mnt/wsys/window]]}
 
+%yoann: trans where say saw most important virtual device, now other file really meant for graphical windows
+
 %claude:
 Reading [[/mnt/wsys/window]] returns the window's image ID and
 rectangle (in the same ``12 12 12 12 id'' text format used by
-[[/dev/draw]]). This is how [[getwindow()]] in the draw library
+[[/dev/draw]]). This is how [[getwindow()]] in the [[libdraw]] library
 reconnects to a window image after a resize: it reads this file
 to learn the new window dimensions, then uses the image ID
-to obtain a reference from the draw device.
+to obtain a reference from the [[draw]] device.
 %claude:
 The read has two parts, selected by the file offset. At offset~0
 through [[5*12-1]] (60 bytes), it returns a text header with the
 pixel format and the window rectangle. Past that offset,
-[[readwindow]] returns the raw pixel data of the window image
-via [[unloadimage]]---this lets a program capture a screenshot of
+[[readwindow()]] returns the raw pixel data of the window image
+via [[unloadimage()]]---this lets a program capture a screenshot of
 its own window. The [[caseImage]] label is shared with another
 virtual device ([[Qscreen]]), avoiding code duplication.
 
