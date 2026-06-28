@@ -737,7 +737,7 @@ a scrollbar on the left and an editable text area on the right.
 This library is used by the terminal emulator of [[rio]], and is discussed in 
 Appendix~\ref{chap:frame}. 
 %
-This library is also used by the \plan editor Acme.
+This library is also used by the \plan editor [[acme]].
 
 \item [[windows/libplumb/]]: This library is used to interact
 with the \plan{} {\em plumb} mechanism~\cite{plumb},
@@ -9735,6 +9735,32 @@ Note there is no [[xfidstat()]] worker: [[stat]] never blocks (it only reads
 [<dirtab>] metadata), so [<filsysstat()>] answers directly in the
 [<filsysproc()>] context.
 
+%yoann: quick intro
+
+<<global [[clockfd]]>>=
+fdt	clockfd;
+@
+
+<<[[filsysinit()]] set clockfd>>=
+clockfd = open("/dev/time", OREAD|OCEXEC);
+@
+
+% used to give current date for files /dev/xxx
+<<function [[getclock]]>>=
+/// filsysstat | filsysread -> <>
+static
+uint
+getclock(void)
+{
+    char buf[32];
+
+    seek(clockfd, 0, 0);
+    read(clockfd, buf, sizeof buf);
+    return atoi(buf);
+}
+@
+
+
 
 \section{Forbidden operations}
 
@@ -15938,6 +15964,7 @@ The cases themselves are short. Each does the same work as the matching
 right-click menu entry, by calling the same core functions---[<wtopme()>],
 [<wbottomme()>], [<whide()>], [<wcurrent()>], and so on. Driving a window
 through [[wctl]] and through the menu converge on the same code.
+%yoann1: actually wtopme is a bad example because not called elsewhere really; maybe whide is a better core func candidate here
 
 
 <<[[writewctl()]] switch [[cmd]] cases>>=
@@ -15986,6 +16013,32 @@ case Bottom:
     wbottomme(w);
     return 1;
 @
+
+<<function [[wtopme]]>>=
+void
+wtopme(Window *w)
+{
+    if(w!=nil && w->i!=nil && !w->deleted && w->topped!=topped){
+        topwindow(w->i);
+        flushimage(display, 1);
+        w->topped = ++topped;
+    }
+}
+@
+
+<<function [[wbottomme]]>>=
+void
+wbottomme(Window *w)
+{
+    if(w!=nil && w->i!=nil && !w->deleted){
+        bottomwindow(w->i);
+        flushimage(display, 1);
+        w->topped = - ++topped;
+    }
+}
+@
+
+
 
 <<[[writewctl()]] switch [[cmd]] cases>>=
 case Current:
@@ -16082,12 +16135,13 @@ plumbing, auto-completion, and word selection.
 \section{Notes (signals)}
 \label{sec:notes}
 
-% saw some hangup before note when delete a window
-% and want to kill associated process
+%yoann: say we saw already in previous chapter note management for windows, but here for rio itself. recall also that notes are plan9 equivalent of unix signals. saw some hangup before note when delete a window  and want to kill associated process
+
 %claude:
-When [[rio]] receives a note (signal), [<shutdown()>] first sends
+When [[rio]] itself receives a note, [<shutdown()>] first sends
 ``hangup'' to all window processes via [<killprocs()>], then checks
-if the note is one of the expected shutdown reasons (delete, hangup, kill, exit).
+if the note is one of the expected shutdown
+reasons (``delete'', ``hangup'', ``kill'', ``exit'').
 %
 For expected notes, it calls [[threadexitsall()]] with
 a lock to prevent multiple threads from racing.
@@ -16105,9 +16159,12 @@ char *oknotes[] =
 };
 @
 
+<<[[main()]] error management after everything setup>>=
+threadnotify(shutdown, true);
+@
 
-% threadmain -> threadnotify(<>, 1);
 <<function [[shutdown]]>>=
+/// threadmain -> threadnotify(<>, true)
 int
 shutdown(void *, char *msg)
 {
@@ -16139,6 +16196,8 @@ killprocs(void)
 @
 
 
+%yoann: maybe mention sec:9p-flush also related to interrupt/notes
+
 \section{Recursive [[rio]]}
 \label{sec:recursive-rio}
 
@@ -16164,11 +16223,6 @@ The only additional code is handling the resize event from the
 parent [[rio]], so that the inner [[rio]] can proportionally
 reposition all its windows within the new boundaries.
 
-<<[[Mxxx]] cases>>=
-MReshape,
-@
-% a Mxxx because in plan9 resize events are communicated through
-%  /dev/mouse (ugly)
 %claude:
 In \plan, as we saw before resize events are delivered through [[/dev/mouse]] as
 a special message type (the ``r'' prefix instead of ``m'').
@@ -16184,6 +16238,12 @@ a special message type (the ``r'' prefix instead of ``m'').
 %rather than m; see rio(4) for details.
 
 % so normally MReshape does not happen! only when rio is run under rio!
+
+<<[[Mxxx]] cases>>=
+MReshape,
+@
+% a Mxxx because in plan9 resize events are communicated through
+%  /dev/mouse (ugly)
 
 <<[[mousethread()]] alts setup>>=
 alts[MReshape].c = mousectl->resizec;
@@ -16208,12 +16268,6 @@ should implement. For [[rio]], the logic is more involved:
 it must rebuild the entire [<desktop>], then proportionally scale
 every window's rectangle to fit the new dimensions.
 Each window receives a [<Reshaped>] control message to redraw itself.
-%claude:
-Note the ratio-based scaling: each window's coordinates are expressed
-as a fraction of the old [[view]] size and then mapped onto the new size.
-This preserves the relative layout even when the aspect ratio changes.
-Hidden windows get a plain [[allocimage()]] instead of a
-[<desktop>] layer, since they are not visible.
 
 <<function [[resized]]>>=
 void
@@ -16272,12 +16326,16 @@ resized(void)
 @
 % force redisplay by Reshaped!
 
-% Nice code where see the full state of rio and how to iterate
-%  over it
 %claude:
-This function is a nice summary of [[rio]]'s full state: it iterates
-over all windows, distinguishes hidden from visible ones, and uses
-the [[Reshaped]] message to trigger each window thread's redraw logic.
+Note the ratio-based scaling: each window's coordinates are expressed
+as a fraction of the old [[view]] size and then mapped onto the new size.
+This preserves the relative layout even when the aspect ratio changes.
+Hidden windows get a plain [[allocimage()]] instead of a
+[<desktop>] layer, since they are not visible.
+%claude:
+%Note that [<resized()>] is a nice summary of [[rio]]'s full state: it iterates
+%over all windows, distinguishes hidden from visible ones, and uses
+%the [[Reshaped]] message to trigger each window thread's redraw logic.
 
 
 <<[[resized()]] sanity check desktop>>=
@@ -16290,24 +16348,31 @@ if(w->deleted)
     continue;
 @
 
-%yoann: say that's it! only 50 lines or so for recursive rio! Compare to Xnest server in X window or whether can even do it in other windowing system? (Can in wayland? macOS?) powerful to debug like a regular program!
 %claude: %plan9-is-cleaner:
 And that is essentially the whole of it: running [[rio]] inside one of its own
 windows takes almost no special code. A nested [[rio]] is just another
 graphical client of the virtual devices its window already provides, so it
 works for free---the only real plumbing is the few dozen lines above that
 resize the nested screen when its window changes, on top of [[rio]]'s
-8~800 lines in all. Other systems pay far more. To nest a display X11 ships a
-{\em whole separate X server}: the old [[Xnest]], a thin proxy limited to
-whatever the host server can do, or the modern [[Xephyr]], a real
-[[KDrive]]-based server that paints into a host window and supports the newer
-extensions (composite, damage, randr). Either way it is thousands of lines of
-nesting-specific code that is inert without the rest of the X server behind
-it, itself hundreds of thousands of lines. Nesting a Wayland compositor
+8~800 lines in all.
+%
+Other systems pay far more.
+%
+To nest a display X11 ships a {\em whole separate X server}: the old [[Xnest]]
+%, a thin proxy limited to whatever the host server can do, 
+or the modern [[Xephyr]]
+% a real
+%[[KDrive]]-based server that paints into a host window and 
+%supports the newer extensions (composite, damage, randr)). 
+Either way it is thousands of lines of nesting-specific code that is
+inert without the rest of the X server behind it, itself hundreds of thousands of lines.
+%
+Nesting a Wayland compositor
 likewise means running a second full compositor as a client, and macOS's
-window server is a single system service you do not nest at all. Under \plan
-you just run [[rio]], and you can watch and debug it like any ordinary
-program.
+window server is a single system service you do not nest at all.
+%
+Under \plan you simply just run [[rio]], and you can watch and debug it
+like any ordinary program.
 
 \section{Timer}
 
@@ -16315,54 +16380,27 @@ program.
 %  but maybe it's an interesting thing to show
 %claude:
 The timer subsystem provides cancellable one-shot timers, used
-primarily by [[wscrsleep()]] for scroll bar repeat delays.
+primarily by [<wscrsleep()>] for scroll bar repeat delays.
+%
 The design uses a dedicated [<timerproc()>] that polls at 1ms intervals,
-decrementing each timer's [[dt]] countdown. When a timer fires,
-it sends on the timer's channel; when cancelled, it is recycled
-into a freelist.
+decrementing each [<Timer.dt>] countdown.
+%
+When a timer fires, it sends on the [<ctimer>] channel; when cancelled, it
+is recycled into a freelist ([<timer>]).
 
-<<global [[clockfd]]>>=
-fdt	clockfd;
+%claude:
+The ``scroll delays'' are how [[rio]] paces fast output: when a window
+auto-scrolls, [<wscrsleep()>] arms a short timer between scroll steps so the
+text does not fly past unreadably. That happens constantly under heavy
+output, which is why a freelist is worth the trouble.
+%yoann1: clarify a bit more? only usecase for timer really?
+
+
+<<global [[ctimer]]>>=
+// chan<?> (listener = ?, sender = ?)
+static Channel*	ctimer;	/* chan(Timer*)[100] */
 @
 
-<<[[filsysinit()]] set clockfd>>=
-clockfd = open("/dev/time", OREAD|OCEXEC);
-@
-
-%  -> <>
-% used to give current date for files /dev/xxx
-<<function [[getclock]]>>=
-static
-uint
-getclock(void)
-{
-    char buf[32];
-
-    seek(clockfd, 0, 0);
-    read(clockfd, buf, sizeof buf);
-    return atoi(buf);
-}
-@
-
-
-
-
-
-
-
-% who uses the timer and timerproc?
-% wscrsleep
-
-
-<<struct [[Timer]]>>=
-struct Timer
-{
-    int		dt;
-    int		cancel;
-    Channel	*c;	/* chan(int) */
-    Timer	*next;
-};
-@
 
 <<[[main()]] threads creation>>=
 timerinit();
@@ -16378,8 +16416,79 @@ timerinit(void)
 }
 @
 
+<<global [[timer]]>>=
+// freelist
+static Timer *timer;
+@
+
+<<struct [[Timer]]>>=
+struct Timer
+{
+    int		dt;
+    int		cancel;
+    Channel	*c;	/* chan(int) */
+
+    // ref_own<Timer> (head = timer)
+    Timer	*next;
+};
+@
+
+
 %claude:
-[[timerproc()]] is interesting for its blocking/polling hybrid:
+Timer allocation uses a freelist ([<timer>]) to avoid repeated
+[[malloc]]/[[free]] for the common case of scroll delays.
+%
+[<timerstart()>] either reuses a freed timer or allocates a new one,
+sets the countdown and sends it to [<timerproc()>] via the [<ctimer>] global
+channel.
+
+
+<<function [[timerstart]]>>=
+/*
+ * timeralloc() and timerfree() don't lock, so can only be
+ * called from the main proc.
+ */
+Timer*
+timerstart(int dt)
+{
+    Timer *t;
+
+    t = timer;
+    if(t)
+        timer = timer->next;
+    else{
+        t = emalloc(sizeof(Timer));
+        t->c = chancreate(sizeof(int), 0);
+    }
+    t->next = nil;
+    t->dt = dt;
+    t->cancel = false;
+    sendp(ctimer, t);
+    return t;
+}
+@
+
+
+<<function [[timerstop]]>>=
+void
+timerstop(Timer *t)
+{
+    t->next = timer;
+    timer = t;
+}
+@
+
+<<function [[timercancel]]>>=
+void
+timercancel(Timer *t)
+{
+    t->cancel = true;
+}
+@
+
+
+%claude:
+[<timerproc()>] is interesting for its blocking/polling hybrid:
 when no timers are active, it blocks on [[recvp(ctimer)]] waiting
 for work. When timers are active, it polls with [[sleep(1)]] and
 checks for new timer requests with non-blocking [[nbrecv()]].
@@ -16401,6 +16510,7 @@ timerproc(void*)
     na = 0;
     nt = 0;
     old = msec();
+
     for(;;){
         sleep(1);	/* will sleep minimum incr */
         new = msec();
@@ -16450,79 +16560,12 @@ timerproc(void*)
 
 
 
-
-
-<<global [[ctimer]]>>=
-// chan<?> (listener = ?, sender = ?)
-static Channel*	ctimer;	/* chan(Timer*)[100] */
-@
-
-<<global [[timer]]>>=
-static Timer *timer;
-@
-
 <<function [[msec]]>>=
 static
 uint
 msec(void)
 {
     return nsec()/1000000;
-}
-@
-
-<<function [[timerstop]]>>=
-void
-timerstop(Timer *t)
-{
-    t->next = timer;
-    timer = t;
-}
-@
-
-<<function [[timercancel]]>>=
-void
-timercancel(Timer *t)
-{
-    t->cancel = true;
-}
-@
-
-
-
-%claude:
-Timer allocation uses a freelist ([<timer>]) to avoid repeated
-[[malloc]]/[[free]] for the common case of scroll delays.
-[<timerstart()>] either reuses a freed timer or allocates a new one,
-sets the countdown and sends it to [<timerproc()>] via the [<ctimer>] global
-channel.
-%
-The ``scroll delays'' are how [[rio]] paces fast output: when a window
-auto-scrolls, [<wscrsleep()>] arms a short timer between scroll steps so the
-text does not fly past unreadably. That happens constantly under heavy
-output, which is why a freelist is worth the trouble.
-
-<<function [[timerstart]]>>=
-/*
- * timeralloc() and timerfree() don't lock, so can only be
- * called from the main proc.
- */
-Timer*
-timerstart(int dt)
-{
-    Timer *t;
-
-    t = timer;
-    if(t)
-        timer = timer->next;
-    else{
-        t = emalloc(sizeof(Timer));
-        t->c = chancreate(sizeof(int), 0);
-    }
-    t->next = nil;
-    t->dt = dt;
-    t->cancel = false;
-    sendp(ctimer, t);
-    return t;
 }
 @
 
@@ -16534,7 +16577,9 @@ timerstart(int dt)
 %claude:
 [[rio]]'s command-line options are few: a font ([[-f]]), an initial
 command to run in the first window ([[-i]]), a keyboard command ([[-k]]),
-and the [[-s]] flag. The [<usage()>] message below lists them.
+and the [[-s]] flag for scolling.
+%
+The [<usage()>] message below lists them.
 
 <<function [[usage]]>>=
 void
@@ -16553,6 +16598,7 @@ By default, [[rio]] windows only auto-scroll when the user is not
 reading back through the output (i.e., when [[q0]] is at the end).
 The [[-s]] flag makes all new windows scroll unconditionally,
 which is useful for monitoring logs or long-running commands.
+%yoann1: can say autoscroll is the default in most terminal, like xterm, so plan9 has unusual default here, but surprisingly nice feature because avoid to have to run command and afterward rerun with | less or | more! (eshell in emacs imitates this behavior I think)
 
 <<global [[scrolling]]>>=
 bool		scrolling;
@@ -16573,7 +16619,7 @@ case 's':
 %yoann: no code to show here using scrolling? why? shown before?
 %claude:
 There is no new code to show for the flag itself: the [<scrolling>] global is
-only the {\em default}. Each window copies it into its own [[w->scrolling]] at
+only the {\em default}. Each window copies it into its own [<Window.scrolling>] at
 creation (in [<wmk()>]), and the field is consulted in the terminal's output
 loop---the [[qh < q0 || scrolling]] test seen earlier---to decide whether to
 keep pulling output from the process and scroll.
@@ -16618,6 +16664,8 @@ initcmd(void *arg)
     exits("exec");
 }
 @
+
+%yoann: say -c see \book{Shell}
 
 % RFNOTEG! own note group, so C-c goes to only that group only that process?
 
@@ -16772,6 +16820,7 @@ Button 6 toggles the keyboard window's visibility. The handler
 forwards both the button-down and button-up mouse events to the
 keyboard window's mouse channel, letting the keyboard program
 handle the toggle logic itself.
+%yoann1: what is button 6? how do you trigger it with a classic 3 buttons mouse?
 
 <<function [[keyboardhide]]>>=
 /*
@@ -16854,6 +16903,7 @@ terminal---that is, into [[rio]] itself. Every program that reads
 [[/dev/cons]] then inherits editing, snarf, and plumbing for free, and the
 terminal can draw on the full power of the mouse and the screen rather than
 being confined to the escape-sequence world of a [[readline]]-style TUI.
+%yoann1: define TUI, first time used, not as known as GUI and recent trend
 
 \subsection{Snarf}
 \label{sec:snarf}
@@ -16861,7 +16911,7 @@ being confined to the escape-sequence world of a [[readline]]-style TUI.
 
 %claude:
 ``Snarf'' is \plan's term for copy. The cut/copy/paste operations
-work with a process-local snarf buffer (the [[snarf]] rune array)
+work with a process-local snarf buffer (the [<snarf>] rune array)
 and synchronize with the system-wide clipboard via [[/dev/snarf]].
 %claude:
 When the user types Ctrl-U (or uses the menu), the selected text is
@@ -16894,12 +16944,12 @@ if(r != 0x7F){ // 0x7F = Interrupt key
 \subsubsection{Snarf menu}
 
 %claude:
-The middle-click menu provides the full set of clipboard operations.
-[[Send]] is the interesting one: it pastes the snarf buffer at
-the end of the window's text (position [<Window.nr>]) and appends
-a newline if needed, effectively submitting the text to the shell
-as if the user had typed it and pressed Enter. In raw mode,
-the text goes through [[waddraw()]] instead.
+The middle-click menu provides the full set of clipboard operations
+and has been described before with the code of [<button2menu()>]
+used for textual windows.
+%
+Here are the editing related entries.
+
 
 <<[[button2menu()]] cases>>=
 case Cut:
@@ -16907,17 +16957,30 @@ case Cut:
     wcut(w);
     wscrdraw(w);
     break;
-
+@
+<<[[button2menu()]] cases>>=
 case Snarf:
     wsnarf(w);
     break;
-
+@
+<<[[button2menu()]] cases>>=
 case Paste:
     getsnarf();
     wpaste(w);
     wscrdraw(w);
     break;
+@
 
+
+%claude:
+[[Send]] below is the interesting one: it pastes the snarf buffer at
+the end of the window's text (position [<Window.nr>]) and appends
+a newline if needed, effectively submitting the text to the shell
+as if the user had typed it and pressed Enter.
+%
+In raw mode, the text goes through [<waddraw()>] instead.
+
+<<[[button2menu()]] cases>>=
 case Send:
     getsnarf();
     wsnarf(w);
@@ -16942,7 +17005,9 @@ case Send:
 %claude:
 [<wsnarf()>] copies the selection into the global [<snarf>] buffer,
 bumps the version counter, and publishes to [[/dev/snarf]] so other
-programs can paste it. [[wcut()]] simply deletes the selected range.
+programs can paste it. 
+%
+[<wcut()>] simply deletes the selected range.
 %
 [<wpaste()>] first cuts any existing selection, then inserts the
 snarf buffer at the cursor---in raw mode, insertion at the end goes
@@ -17130,7 +17195,7 @@ int		snarfversion;	/* updated each time it is written */
 
 
 %claude:
-[[putsnarf()]] writes the rune buffer to [[/dev/snarf]] in 256-rune
+[<putsnarf()>] writes the rune buffer to [[/dev/snarf]] in 256-rune
 blocks to avoid hitting [[fprint()]]'s buffer limit.
 It opens a fresh file descriptor each time because [[/dev/snarf]]
 commits on close---writing to the already-open [[snarffd]] would
@@ -17202,6 +17267,7 @@ selects text and chooses ``Plumb'' from the middle-click menu, [[rio]]
 sends the text to the plumber daemon, which routes it to the
 appropriate application based on pattern rules (e.g., a filename
 goes to the editor, a URL to the browser).
+%yoann1: maybe give idea of equivalent mechanism in other OS and how more elegant is plan9 again?
 
 <<[[button2menu()]] cases>>=
 case Plumb:
@@ -17210,9 +17276,11 @@ case Plumb:
 @
 
 %claude:
-[[wplumb()]] constructs a [[Plumbmsg]] with the selected text (or, if
+[<wplumb()>] constructs a [<Plumbmsg>] with the selected text (or, if
 nothing is selected, expands the selection to the surrounding
-whitespace-delimited word). The [[click]] attribute tells the
+whitespace-delimited word).
+%
+The [[click]] attribute tells the
 receiving application where the cursor was within the expanded word,
 so it can interpret sub-parts (like line numbers in ``file.c:42'').
 If [[plumbsend()]] fails, the cursor briefly flashes to the query
@@ -17327,7 +17395,7 @@ A plumb message is a simple text format: six newline-terminated header
 lines (source, destination, working directory, type, attributes,
 data length) followed by the raw data bytes.
 %claude:
-[[plumbopen()]] searches for the plumber in multiple locations:
+[<plumbopen()>] searches for the plumber in multiple locations:
 first [[/mnt/plumb]], then [[/mnt/term/mnt/plumb]] (for remote
 terminals using [[cpu]]), and finally tries to mount [[plumbsrv]]
 from the environment as a last resort.
@@ -17804,8 +17872,10 @@ plumbrecv(int fd)
 %claude:
 The event-based plumbing interface ([[eplumb()]]) integrates plumb
 messages into the graphics event loop. Because a plumb message can be
-larger than a single 9P read, the [[EQueue]] structure buffers partial
-messages until all bytes arrive. [[plumbevent()]] first checks for
+larger than a single 9P read, the [<EQueue>] structure buffers partial
+messages until all bytes arrive.
+%
+[<plumbevent()>] first checks for
 an existing partial message for this event ID, and if not found,
 tries to unpack a complete message---stashing the buffer in the queue
 if the message is incomplete.
@@ -17932,7 +18002,9 @@ eplumb(int key, char *port)
 
 %claude:
 Pressing Ctrl-F or Insert triggers filename completion, similar to
-Tab completion in shells. [[namecomplete()]] works backward from the
+Tab completion in \unix shells.
+%
+[<namecomplete()>] works backward from the
 cursor to extract the current word and its path prefix, resolves
 relative paths against the window's working directory (the per-window
 [[w->dir]], which [[rio]] also exposes as the [[/mnt/wsys/wdir]] file), and
@@ -17956,6 +18028,7 @@ case Kins:		/* Insert: file name completion */
     return;
 @
 
+%yoann: quick explanation of structure
 
 <<struct [[Completion]]>>=
 struct Completion{
@@ -17967,6 +18040,8 @@ struct Completion{
     char **filename;	/* their names */
 };
 @
+
+%yoann: quick intro
 
 % wkeyctl -> <>
 <<function [[namecomplete]]>>=
@@ -18092,10 +18167,12 @@ windfilewidth(Window *w, uint q0, int oneelement)
 % libcomplete
 
 %claude:
-[[complete()]] is a general-purpose filename completion function from
-[[libcomplete]]. It reads the directory, finds entries matching the
+[<complete()>] is a general-purpose filename completion function from
+[[libcomplete]].
+%
+It reads the directory, finds entries matching the
 prefix, computes the longest common prefix among all matches, and
-returns a [[Completion]] struct. The [[advance]] flag indicates whether
+returns a [<Completion>] struct. The [[advance]] flag indicates whether
 forward progress was made; [[complete]] means the match is unique.
 A completed filename gets a trailing ``/'' for directories or `` '' for
 files. When no matches exist, it returns all directory entries so the
@@ -18314,13 +18391,17 @@ case Qwdir:
 
 \subsection{Word selection}
 
+%yoann: trans say last editing feature
+
 %claude:
-[[wselect()]] handles mouse-based text selection, including
+[<wselect()>] handles mouse-based text selection, including
 double-click to select words and bracket matching.
 A double-click is detected when two clicks happen within 500ms
 on the same window at the same position. While the button is held
 after selection, chording with button 2 cuts and button 3 pastes---a
-classic \plan interaction pattern inherited from Sam and Acme.
+classic \plan interaction pattern inherited from [[sam]] and [[acme]].
+
+%yoann: trans and say see a few globals before seeing code of wselect?
 
 <<global [[clickwin]]>>=
 static Window	*clickwin;
@@ -18339,10 +18420,10 @@ static uint	selectq;
 @
 
 
-
 %claude:
-The [[wselect]] function handles button~1 click in a textual window.
-It first calls [<frselect>] to do the interactive mouse-tracking
+The [<wselect>] function handles button~1 click in a textual window.
+%
+It first calls [[frselect]] to do the interactive mouse-tracking
 selection loop, then translates the frame-local selection
 ([[frm.p0]]/[[frm.p1]]) back to buffer-wide coordinates by adding
 [[org]].
@@ -18485,11 +18566,15 @@ Rune *right[] = {
 
 
 %claude:
-[[wdoubleclick()]] implements smart selection: it first tries
-bracket matching (braces, brackets, parentheses, angle brackets,
-guillemets), then line matching on newlines, then quote matching
-(single, double, backtick). If none of these match, it falls back
+[<wdoubleclick()>] implements smart selection:
+it first tries bracket matching (braces, brackets, parentheses, angle brackets,
+guillemets), 
+then line matching on newlines,
+then quote matching (single, double, backtick).
+%
+If none of these match, it falls back
 to extending the selection to cover the full alphanumeric word.
+%
 The [[left]]/[[right]] arrays define the matching pairs---note that
 [[left2]]/[[left3]] are shared between left and right because
 newlines and quotes are their own closing delimiters.
@@ -18624,7 +18709,7 @@ itself, in a child process that inherits the pipe's file descriptor.
 But what about external processes that were not spawned by [[rio]]?
 They need a bootstrap mechanism to get a handle on [[rio]]'s filesystem.
 %claude:
-This is where \plan's [[/srv]] comes in. [[filsysinit()]] publishes the
+This is where \plan's [[/srv]] comes in. [<filsysinit()>] publishes the
 client end of the pipe in [[/srv/rio.<user>.<pid>]]---\plan's equivalent
 of a named pipe. Any process can open this file, mount it, and gain
 access to [[rio]]'s filesystem, even if it is not a child of [[rio]].
@@ -18689,12 +18774,11 @@ post(char *name, char *envname, fdt srvfd)
 
 %claude:
 When an external client attaches with a spec string starting with ``new'',
-[[xfidattach()]] parses it with the same [[parsewctl()]] function used
+[[xfidattach()]] parses it with the same [<parsewctl()>] function used
 for [[/dev/wctl]] commands. This allows the client to specify the window
 rectangle, whether it should be hidden, and whether to scroll---the same
 parameters as the ``new'' wctl command.
-The [[pid]] is set to [[-1]] to prevent [[rio]] from spawning a shell
-in the new window, since the external program will use it directly.
+
 
 <<[[xfidattach()]] other locals>>=
 Rectangle r;
@@ -18733,6 +18817,10 @@ if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wct
 }
 @
 
+%claude:
+The [[pid]] is set to [[-1]] to prevent [[rio]] from spawning a shell
+in the new window, since the external program will use it directly.
+
 \subsection{Command-line control: [[/srv/riowctl.<user>.<pid>]]}
 
 % allow to run graphical command from the command line
@@ -18743,7 +18831,7 @@ While [[/srv/rio.<user>.<pid>]] provides the full 9P filesystem interface,
 An external process can write wctl commands (like ``new'') as plain
 text strings to create and manipulate windows from the command line,
 without needing to speak the 9P protocol.
-%claude:
+%
 The architecture uses the same proc/thread split seen elsewhere in [[rio]]:
 [<wctlproc()>] runs in its own process doing blocking reads on the pipe,
 and sends the text over a channel to [<wctlthread()>] in [[main-proc]]
@@ -18790,6 +18878,8 @@ sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
 post(srvwctl, "wctl", p0);
 close(p0);
 @
+
+
 % vs /dev/wctl? why need pipe mechanism for that? because
 % /dev/wctl is for stuff who mounted rio, but external process
 % dont have it! so need bootstrap!
@@ -18809,8 +18899,10 @@ threadcreate(wctlthread, c, 4096);
 @
 % channel so process and thread can communicate
 
+\subsubsection{[[wctlproc()]]}
+
 %claude:
-[[wctlproc]] is the reading half: it sits in its own process doing
+[<wctlproc()>] is the reading half: it sits in its own process doing
 blocking [[read()]] calls on the pipe, and forwards each complete
 command string over the channel. The [[eofs]] counter tolerates a
 burst of zero-length reads (which can happen with pipe semantics)
@@ -18847,13 +18939,14 @@ wctlproc(void *v)
 @
 
 
+\subsubsection{[[wctlthread()]]}
 
 
 %claude:
 [<wctlthread()>] is the dispatching half, running in [[main-proc]]
 (see Figure~\ref{fig:soft-archi-threads}).
 %
-It receives command strings, parses them with [[parsewctl()]], and
+It receives command strings, parses them with [<parsewctl()>], and
 currently only handles the [[New]] command---the other wctl commands
 (resize, move, top, etc.) are handled through [[/dev/wctl]] instead.
 
@@ -18885,6 +18978,7 @@ wctlthread(void *v)
 
 
 
+\subsubsection{[[parsewctl()]]}
 
 
 \t mv before in other /mnt/wsys/ctl?
@@ -19239,6 +19333,8 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
 }
 @
 
+\subsubsection{[[wctlnew()]]}
+
 %claude:
 [[wctlnew()]] ties the pieces together: it validates the rectangle,
 builds an [[argv]] for [[rc]], allocates the window image (either a
@@ -19288,32 +19384,10 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
 
 
 
-<<function [[wtopme]]>>=
-void
-wtopme(Window *w)
-{
-    if(w!=nil && w->i!=nil && !w->deleted && w->topped!=topped){
-        topwindow(w->i);
-        flushimage(display, 1);
-        w->topped = ++topped;
-    }
-}
-@
-
-<<function [[wbottomme]]>>=
-void
-wbottomme(Window *w)
-{
-    if(w!=nil && w->i!=nil && !w->deleted){
-        bottomwindow(w->i);
-        flushimage(display, 1);
-        w->topped = - ++topped;
-    }
-}
-@
-
 
 \section{Advanced fileserver features}
+
+%yoann: intro
 
 \subsection{Flushing}
 \label{sec:9p-flush}
@@ -19328,12 +19402,14 @@ wbottomme(Window *w)
 When a client process is interrupted while blocked on a read from
 [[rio]] (e.g., reading [[/dev/mouse]] or [[/dev/cons]]), the kernel
 sends a [[Tflush]] 9P message to cancel the pending request.
-This is tricky to implement because the [[Xfid]] thread handling
+This is tricky to implement because the [<Xfid>] thread handling
 the original request may be blocked waiting on a channel.
-%claude:
+%
 The approach uses a combination of reference counting and a
-[[flushc]] notification channel. [[xfidflush()]] finds the [[Xfid]]
-with the matching tag. If the target is not actively running
+[<Xfid.flushc>] notification channel. 
+%
+[<xfidflush()>] finds the [[Xfid]] with the matching tag.
+If the target is not actively running
 (its [[active]] lock can be acquired), it sends directly on [[flushc]].
 If the target is running, it waits for it to finish by queueing on
 the lock. The [[flushing]] flag tells the target to wake up and
@@ -19507,11 +19583,13 @@ if(x->flushing){
 }
 @
 
-\subsection{Security}
+\subsection{Authentification}
+\label{sec:9p-auth}
+%alt: security
 
 %claude:
 [[rio]]'s security model is minimal. It reads the username from
-[[/dev/user]] at startup and stores it in [[fs->user]],
+[[/dev/user]] at startup and stores it in [<Filsys.user>],
 which the filesystem uses to verify that 9P attach requests
 come from the same user.
 %claude:
@@ -19574,6 +19652,8 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 
 \section{Additional control messages}
 
+%yoann: quick intro
+
 \subsection{Holding mode}
 
 % ??? why someone wants to write holdon? to stop key event to
@@ -19592,6 +19672,9 @@ It can be toggled by Escape or by writing ``holdon''/``holdoff''
 to [[/dev/consctl]]. The holding counter supports nested holds
 (multiple programs can request it), and entering raw mode
 automatically disables holding.
+%yoann1: still not super clear usecase for user for this feature
+
+
 <<[[Window]] config fields>>=
 bool	holding;
 @
@@ -19740,6 +19823,8 @@ file has been opened).
 \section{Security}
 \label{sec:security}
 
+%yoann: can maybe transition from auth discussed before in sec:9p-auth
+
 %claude:
 [[rio]] has, frankly, almost no security model {\em between} the windows of
 one user---and that is deliberate: \plan assumes the windows on a terminal
@@ -19758,14 +19843,14 @@ pixels well outside its own window. \plan tolerates this because, once more,
 it is all one user---there is no untrusted code to defend against.
 
 %claude: %modern:
-Other systems span the spectrum. [[X11]] is, if anything, {\em more}
+Other systems span the spectrum. X~Window is, if anything, {\em more}
 permissive than [[rio]]: any client on a display can read other windows'
 pixels, grab the keyboard, and synthesise input events, which is why
 keyloggers and screenshot tools need no special privilege under bare X.
-[[Wayland]] was designed largely to close exactly these holes---clients are
+Wayland was designed largely to close exactly these holes---clients are
 isolated, cannot see each other's buffers or input, and must go through the
 compositor (and desktop ``portals'') even to take a screenshot. macOS and
-Windows sit nearer [[Wayland]], gating screen capture and global input
+Windows sit nearer Wayland, gating screen capture and global input
 behind explicit, user-granted permissions. \plan never took this road; its
 answer to ``what stops one window from spying on another?'' is simply ``they
 are both you.''
@@ -20333,7 +20418,6 @@ bool errorshouldabort = false;
 <<[[main()]] error management after everything setup>>=
 errorshouldabort = true;/* suicide if there's trouble after this */
 <<[[main()]] if initstr or kdbin>>
-threadnotify(shutdown, true);
 @
 
 
