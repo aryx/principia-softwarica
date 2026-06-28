@@ -15008,14 +15008,14 @@ freescrtemps(void)
 
 
 %claude:
-The [[wscrsleep]] helper implements the auto-repeat behavior for
+The [<wscrsleep()>] helper implements the auto-repeat behavior for
 scrollbar dragging. It sets up a two-channel [[alt]]: a timer channel
 and the mouse channel. If the timer fires first (the full [[dt]]
 milliseconds elapsed without mouse activity), the function returns
-and [<wscroll>] scrolls another increment. If a mouse event arrives
+and [<wscroll()>] scrolls another increment. If a mouse event arrives
 first, it checks whether the mouse moved significantly (more than
 2 pixels vertically) or changed buttons; if so, it returns early so
-[<wscroll>] can react to the new position. Small jitter is ignored.
+[<wscroll()>] can react to the new position. Small jitter is ignored.
 %claude:
 This gives the classic ``press and hold to scroll'' behavior: an
 initial 200ms debounce delay (in [<wscroll>]) prevents accidental
@@ -16066,15 +16066,15 @@ case Set:
 \label{chap:advanced}
 
 %claude:
-This chapter covers features that go beyond [[rio]]'s basic operation:
+This chapter covers features and topics that go beyond [[rio]]'s basic operation:
 signal handling,
 [[rio]]'s command-line options ([[rio -s]], [[rio -i]], [[rio -k]], [[rio -f]]),
 additional control messages,
 %holding mode, 9P flush support, and security.
 the timer subsystem, 
 recursive [[rio]], or
-external access to [[rio]]'s filesystem ([[/srv/rio.<user>.<pid>]], 
-[[/srv/riowctl.<user>.<pid>]]).
+external access to [[rio]]'s filesystem (thanks to the [[/srv/rio.<user>.<pid>]]
+and [[/srv/riowctl.<user>.<pid>]] files).
 %claude:
 It also covers advanced terminal editing features like snarf/paste,
 plumbing, auto-completion, and word selection.
@@ -16085,10 +16085,11 @@ plumbing, auto-completion, and word selection.
 % saw some hangup before note when delete a window
 % and want to kill associated process
 %claude:
-When [[rio]] receives a note (signal), [[shutdown()]] first sends
-``hangup'' to all window processes via [[killprocs()]], then checks
-if the note is one of the expected shutdown reasons (delete, hangup,
-kill, exit). For expected notes, it calls [[threadexitsall()]] with
+When [[rio]] receives a note (signal), [<shutdown()>] first sends
+``hangup'' to all window processes via [<killprocs()>], then checks
+if the note is one of the expected shutdown reasons (delete, hangup, kill, exit).
+%
+For expected notes, it calls [[threadexitsall()]] with
 a lock to prevent multiple threads from racing.
 For unexpected notes, it prints a diagnostic and aborts---a deliberate
 crash to aid debugging.
@@ -16169,11 +16170,11 @@ MReshape,
 % a Mxxx because in plan9 resize events are communicated through
 %  /dev/mouse (ugly)
 %claude:
-In \plan, resize events are delivered through [[/dev/mouse]] as
+In \plan, as we saw before resize events are delivered through [[/dev/mouse]] as
 a special message type (the ``r'' prefix instead of ``m'').
-This is somewhat ugly---piggybacking geometry changes onto the mouse
-device---but it means [[rio]] just needs to listen on its existing
-[[mousectl->resizec]] channel.
+%This is somewhat ugly---piggybacking geometry changes onto the mouse
+%device---but it means
+[[rio]] just needs to listen on its existing [[mousectl->resizec]] channel.
 
 %mouse(3)
 %The mouse and cursor files are multiplexed by rio(1) to give the
@@ -16202,17 +16203,17 @@ case MReshape:
 % so get that when run vgactl? or when run rio inside rio and resize
 % sub rio window?
 %claude:
-[[resized()]] is a standard handler that any graphical application
+[<resized()>] is a standard handler that any graphical application
 should implement. For [[rio]], the logic is more involved:
-it must rebuild the entire [[desktop]], then proportionally scale
+it must rebuild the entire [<desktop>], then proportionally scale
 every window's rectangle to fit the new dimensions.
-Each window receives a [[Reshaped]] control message to redraw itself.
+Each window receives a [<Reshaped>] control message to redraw itself.
 %claude:
 Note the ratio-based scaling: each window's coordinates are expressed
 as a fraction of the old [[view]] size and then mapped onto the new size.
 This preserves the relative layout even when the aspect ratio changes.
 Hidden windows get a plain [[allocimage()]] instead of a
-[[desktop]] layer, since they are not visible.
+[<desktop>] layer, since they are not visible.
 
 <<function [[resized]]>>=
 void
@@ -16289,6 +16290,7 @@ if(w->deleted)
     continue;
 @
 
+%yoann: say that's it! only 50 lines or so for recursive rio! Compare to Xnest server in X window or whether can even do it in other windowing system? (Can in wayland? macOS?) powerful to debug like a regular program!
 
 \section{Timer}
 
@@ -16297,7 +16299,7 @@ if(w->deleted)
 %claude:
 The timer subsystem provides cancellable one-shot timers, used
 primarily by [[wscrsleep()]] for scroll bar repeat delays.
-The design uses a dedicated [[timerproc]] that polls at 1ms intervals,
+The design uses a dedicated [<timerproc()>] that polls at 1ms intervals,
 decrementing each timer's [[dt]] countdown. When a timer fires,
 it sends on the timer's channel; when cancelled, it is recycled
 into a freelist.
@@ -16471,11 +16473,12 @@ timercancel(Timer *t)
 
 
 %claude:
-Timer allocation uses a freelist ([[timer]]) to avoid repeated
+Timer allocation uses a freelist ([<timer>]) to avoid repeated
 [[malloc]]/[[free]] for the common case of scroll delays.
-[[timerstart()]] either reuses a freed timer or allocates a new one,
-sets the countdown and sends it to [[timerproc]] via the [[ctimer]]
+[<timerstart()>] either reuses a freed timer or allocates a new one,
+sets the countdown and sends it to [<timerproc()>] via the [<ctimer>] global
 channel.
+%yoann1: explain more scroll delays?
 
 <<function [[timerstart]]>>=
 /*
@@ -16546,6 +16549,8 @@ case 's':
 % and then wmk set w->scrolling to default global value in scrolling
 % passed when new()
 
+%yoann: no code to show here using scrolling? why? shown before?
+
 
 \subsection{Initial command: [[rio -i]]}
 
@@ -16590,6 +16595,8 @@ initcmd(void *arg)
 % RFNOTEG! own note group, so C-c goes to only that group only that process?
 
 \subsection{Fake keyboard input: [[rio -k]]}
+%alt: debugging appendix?
+
 % what for? to help debug app? to automate testing?
 % put in Debugging support chapter? or Debugging chapter
 % if it helps debug only rio itself
@@ -16793,6 +16800,8 @@ if(access(fontname, 0) < 0){
 putenv("font", fontname);
 @
 
+%yoann: explain what is using this font global env var? Graphics book?
+
 \section{Advanced terminal editing}
 
 %claude:
@@ -16898,10 +16907,11 @@ case Send:
 
 
 %claude:
-[[wsnarf()]] copies the selection into the global [[snarf]] buffer,
+[<wsnarf()>] copies the selection into the global [<snarf>] buffer,
 bumps the version counter, and publishes to [[/dev/snarf]] so other
 programs can paste it. [[wcut()]] simply deletes the selected range.
-[[wpaste()]] first cuts any existing selection, then inserts the
+%
+[<wpaste()>] first cuts any existing selection, then inserts the
 snarf buffer at the cursor---in raw mode, insertion at the end goes
 through [[waddraw()]] to bypass the normal output machinery.
 
@@ -17897,6 +17907,7 @@ relative paths against the window's working directory, and calls
 If there is a unique common prefix to advance, the text is inserted.
 If multiple matches exist and no progress can be made, the candidates
 are displayed inline before the current command line.
+%yoann1: should we mention /mnt/wsys/wdir
 
 <<[[wkeyctl()]] special key cases and no special mode>>=
 case 0x06:	/* ^F: file name completion */
@@ -18543,13 +18554,17 @@ wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
 
 %claude: %toc:
 So far, every program that talked to [[rio]]'s filesystem was a child
-process that inherited the pipe's file descriptor. This section covers the
+process that inherited the pipe's file descriptor.
+%
+This section covers the
 two ways a process can reach a \emph{running} [[rio]] from the outside,
-both built on \plan's [[/srv]]: the [[/srv/rio.<user>.<pid>]] mount, through
-which any program can open a window, and the
-[[/srv/riowctl.<user>.<pid>]] channel, used to drive [[rio]] from the
-command line. I close with {recursive [[rio]]}---running [[rio]] inside one
-of its own windows---which is just another client of these same mechanisms.
+both built on \plan's [[/srv]]: 
+the [[/srv/rio.<user>.<pid>]] mount, through which any program can open a window, and
+the [[/srv/riowctl.<user>.<pid>]] channel, used to drive [[rio]] from the
+command line.
+%
+%I close with {recursive [[rio]]}---running [[rio]] inside one
+%of its own windows---which is just another client of these same mechanisms.
 
 \subsection{External mount: [[/srv/rio.<user>.<pid>]]}
 
@@ -18569,8 +18584,9 @@ of its own windows---which is just another client of these same mechanisms.
 % in child process where mount(filesys->cfd, ...) and
 % so have access to file descriptor. But for external?
 % enter the /srv mechanism of plan9 to publish those things.
+
 %claude:
-Until now, we have seen [[filsysmount()]] called from within [[rio]]
+Until now, we have seen [<filsysmount()>] called from within [[rio]]
 itself, in a child process that inherits the pipe's file descriptor.
 But what about external processes that were not spawned by [[rio]]?
 They need a bootstrap mechanism to get a handle on [[rio]]'s filesystem.
@@ -18582,11 +18598,12 @@ access to [[rio]]'s filesystem, even if it is not a child of [[rio]].
 By mounting with the spec ``new ...'', an external program can create
 a new window for itself---this is what [[newwindow()]] from the
 \book{Graphics} uses.
+%TODO: double check
 
 % mount $sys ...
 
 %claude:
-The [[srvpipe]] global holds the path string [[/srv/rio.<user>.<pid>]],
+The [<srvpipe>] global holds the path string [[/srv/rio.<user>.<pid>]],
 personalized with the username and process ID so multiple [[rio]]
 instances don't collide.
 
@@ -18604,6 +18621,14 @@ sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
 post(srvpipe, "wsys", fs->cfd);
 @
 
+%claude:
+The [[post()]] function works with \plan's [[/srv]] device ([[#s]]):
+it creates a file in [[/srv]], writes a file descriptor number into it
+as an ASCII string, and sets [[ORCLOSE]] so the entry is removed when
+[[rio]] exits. The [[#s]] driver is special---when another process opens
+this file, the kernel gives it a new file descriptor connected to the
+same pipe endpoint. The [[putenv()]] call also publishes the path
+in the environment so child processes can find it by name.
 
 <<function [[post]]>>=
 void
@@ -18625,17 +18650,18 @@ post(char *name, char *envname, fdt srvfd)
 % why need write srvfd which is fs->cfd?
 % so the file in /srv/.../ just contains a filedescriptor number? enough?
 % or is it working with #s special code?
+
+
+
+
 %claude:
-The [[post()]] function works with \plan's [[/srv]] device ([[#s]]):
-it creates a file in [[/srv]], writes a file descriptor number into it
-as an ASCII string, and sets [[ORCLOSE]] so the entry is removed when
-[[rio]] exits. The [[#s]] driver is special---when another process opens
-this file, the kernel gives it a new file descriptor connected to the
-same pipe endpoint. The [[putenv()]] call also publishes the path
-in the environment so child processes can find it by name.
-
-
-
+When an external client attaches with a spec string starting with ``new'',
+[[xfidattach()]] parses it with the same [[parsewctl()]] function used
+for [[/dev/wctl]] commands. This allows the client to specify the window
+rectangle, whether it should be hidden, and whether to scroll---the same
+parameters as the ``new'' wctl command.
+The [[pid]] is set to [[-1]] to prevent [[rio]] from spawning a shell
+in the new window, since the external program will use it directly.
 
 <<[[xfidattach()]] other locals>>=
 Rectangle r;
@@ -18646,14 +18672,6 @@ char *dir, errbuf[ERRMAX];
 Image *i;
 @
 
-%claude:
-When an external client attaches with a spec string starting with ``new'',
-[[xfidattach()]] parses it with the same [[parsewctl()]] function used
-for [[/dev/wctl]] commands. This allows the client to specify the window
-rectangle, whether it should be hidden, and whether to scroll---the same
-parameters as the ``new'' wctl command.
-The [[pid]] is set to [[-1]] to prevent [[rio]] from spawning a shell
-in the new window, since the external program will use it directly.
 
 <<[[xfidattach()]] if mount "new ...">>=
 if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
@@ -18694,12 +18712,12 @@ text strings to create and manipulate windows from the command line,
 without needing to speak the 9P protocol.
 %claude:
 The architecture uses the same proc/thread split seen elsewhere in [[rio]]:
-[[wctlproc]] runs in its own process doing blocking reads on the pipe,
-and sends the text over a channel to [[wctlthread]] in the main process
+[<wctlproc()>] runs in its own process doing blocking reads on the pipe,
+and sends the text over a channel to [<wctlthread()>] in [[main-proc]]
 where it is safe to manipulate window state.
 
 <<global [[wctlfd]]>>=
-int	wctlfd;
+fdt	wctlfd;
 @
 
 <<global srvwctl (rio/fsys.c)>>=
@@ -18799,7 +18817,9 @@ wctlproc(void *v)
 
 
 %claude:
-[[wctlthread]] is the dispatching half, running in the main process.
+[<wctlthread()>] is the dispatching half, running in [[main-proc]]
+(see Figure~\ref{fig:soft-archi-threads}).
+%
 It receives command strings, parses them with [[parsewctl()]], and
 currently only handles the [[New]] command---the other wctl commands
 (resize, move, top, etc.) are handled through [[/dev/wctl]] instead.
@@ -18923,7 +18943,7 @@ static char *params[] = {
 @
 
 %claude:
-[[parsewctl()]] is a mini command-line parser shared between
+Later [<parsewctl()>] is a mini command-line parser shared between
 [[/dev/wctl]], [[/srv/riowctl]], and the ``new'' attach spec.
 %
 It first extracts the command verb, then loops over the
@@ -19056,6 +19076,8 @@ riostrtol(char *s, char **t)
     return n;
 }
 @
+
+%yoann: say can see finally [<parsewctl()>]
 
 <<function [[parsewctl]]>>=
 int
@@ -19459,7 +19481,8 @@ Beyond this, [[rio]] provides no authentication---the [[Tauth]]
 handler simply returns ``authentication not required''.
 Any process that can mount [[rio]]'s [[/srv]] pipe gets full access
 to all windows, similar to X11's permissive model.
-As the author notes, even macOS doesn't really improve on this:
+%
+Even macOS doesn't really improve on this:
 its security ultimately relies on app review rather than technical
 isolation.
 
@@ -19481,6 +19504,7 @@ if(fd >= 0){
 fs->user = estrdup(buf);
 @
 %ocaml: let user = cat("/dev/user") |> String.concat "" 
+%haha: Belmondo :)
 
 % useful beyond the /srv/rio.<user>.<pid>? Yes for security
 % the worker and filesystem make sure request match the owner of rio
