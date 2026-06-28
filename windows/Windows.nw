@@ -11595,7 +11595,11 @@ A graphical application typically calls three library functions at startup:
 [[initkeyboard()]] to write [["rawon"]] on [[/dev/consctl]].
 %
 Each of these triggers specific behavior in [[rio]]'s filesystem server.
-%yoann1: say I use /dev/xxx here instead of /mnt/wsys/xxx because those functions reference /dev/mouse in their code but really when under rio those calls access /mnt/wys/mouse
+%
+Throughout I name these files as the application sees them---[[/dev/mouse]],
+[[/dev/consctl]], and so on, the names that appear in the library code.
+Under [[rio]] those names resolve, through the window's namespace, to
+[[rio]]'s own virtual [[/mnt/wsys/mouse]], [[/mnt/wsys/consctl]], etc.
 
 % We say setup cos not really creation, since most of the time create first
 % textual window and then setup things to become a graphical window
@@ -11656,32 +11660,6 @@ case Qmouse:
 % and because of thread model of plan9, no race between
 % winctl and xfid threads so safe to update the w fields!
 
-%yoann: quick intro
-%claude:
-Closing [[/mnt/wys/mouse]] runs the [[Qmouse]] case of [<xfidclose()>], which
-clears [[w->mouseopen]]: the window stops forwarding mouse events to a client
-and goes back to handling them itself.
-
-<<[[xfidclose()]] cases>>=
-case Qmouse:
-    w->mouseopen = false;
-    w->resized = false;
-    if(w->i != nil)
-        wsendctlmesg(w, Refresh, w->i->r, nil);
-    break;
-@
-\l why Refresh ? when close the mouse?
-% put Refresh here?
-
-%yoann: explain Refresh
-%claude:
-The [<Refresh>] on close needs a word. While the client held [[/dev/mouse]]
-open---usually a graphical program painting its own content---[[rio]] left
-the window image alone: its [<Refresh>] handler skips the redraw whenever
-[[mouseopen]] is set. Clearing [[mouseopen]] just above flips that, so this
-[<Refresh>] is the one that finally repaints [[rio]]'s own view of the
-window, reclaiming whatever the client had drawn.
-%yoann1: unclear paragraph. also I think I talk about Refresh only in adv topics chapter for advanced control message; maybe need give more intuition about the need for this Refresh and reference section for more info
 
 
 
@@ -11908,17 +11886,21 @@ struct Mousestate
 % -> winctl
 
 %claude:
-This is part~2 of the mouse reading code. Part~1 in the previous
-chapter showed the [<xfidread()>] side---how the worker sends a
-[<Mousereadmesg>] and waits for a reply. Here we see the [<winctl()>]
-side: the producer that enqueues click events into
-[[w->mouse.queue]], and the consumer that dequeues them (or snapshots
-the current position) when the client is ready.
-%yoann1: no more part 1, part 2, part 3 now; use server-side, windown thread-side, etc.
+This is the {\em window-thread side} of the mouse reading code. The {\em
+file-server side} in the previous chapter showed the [<xfidread()>] worker
+waiting to receive a [<Mousereadmesg>] and then the reply. Here we see the
+[<winctl()>] side: the producer that enqueues click events into
+[[w->mouse.queue]], and the consumer that hands one over (or snapshots the
+current position) when a reader is waiting.
 
 \subsubsection{Producer}
 
 %yoann: quick intro
+%claude:
+The producer is the [[WMouse]] arm of [<winctl()>]: when an event arrives
+from [<mousethread()>] and the client has the mouse open, [<winctl()>] records
+{\em button transitions} (clicks and releases) into the ring buffer, skipping
+pure moves---those are picked up later as the current position.
 
 % seen WMouse before
 
@@ -11966,6 +11948,11 @@ if(w->mouseopen) {
 % Consumer and producer, like in a pipe
 
 %yoann: quick intro
+%claude:
+The consumer is the [[WMouseread]] arm. [<winctl()>] enables it---offers to
+send ([[CHANSND]])---only when the mouse is open and a new event is pending
+([[counter != lastcounter]]); the worker's matching receive then completes
+the rendezvous.
 
 <<[[Wxxx]] cases>>=
 WMouseread,
@@ -12012,6 +11999,10 @@ else
 
 
 %yoann: trans can finally saw we see the important code
+%claude: %trans:
+And here at last is the heart of it: when the rendezvous fires, [<winctl()>]
+dequeues the oldest click---or, if the queue is empty, snapshots the current
+position---and sends it on the reply channel [[mrm.cm]].
 
 <<[[winctl()]] other locals>>=
 Mousestate m;
@@ -12077,6 +12068,11 @@ uint		nraw;
 \subsection{Reading [[/mnt/wsys/cons]]: raw mode}
 
 %yoann: quick intro
+%claude:
+Reading [[/mnt/wsys/cons]] in raw mode has the same producer/consumer shape
+as the mouse, but over [<Window.raw>]: the producer is [<wkeyctl()>] piling up
+keystrokes, and the consumer is [<winctl()>]'s [[WCread]] arm handing them to
+the [<xfidread()>] worker.
 
 \subsubsection{Producer}
 
@@ -12166,9 +12162,13 @@ while(w->nraw > 0){
 % Consumer and producer, like in a pipe
 
 %yoann: quick intro
+%claude:
+The consumer mirrors the mouse's: [<winctl()>]'s [[WCread]] arm, offered only
+when there are raw runes waiting, hands them to the [<xfidread()>] worker
+through the two-channel [<Consreadmesg>] handshake.
 
 <<[[Wxxx]] cases>>=
-WCread, 
+WCread,
 @
 
 <<[[winctl()]] other locals>>=
@@ -12289,6 +12289,12 @@ case WCread:
 % similar issue than in xfid where need store partial rune bytes
 
 %yoann: quick trans and intro
+%claude: %trans:
+One detail deserves its own look. Because the client reads {\em bytes} while
+[<winctl()>] holds {\em runes}, a multibyte rune can overflow the byte count
+the client asked for; these fields stash the leftover bytes until the next
+read---the mirror image of the partial-rune handling on the [<xfidwrite()>]
+side.
 
 <<[[winctl()]] other locals>>=
 char part[3]; // UTFMAX-1
@@ -12319,6 +12325,9 @@ if(i)
 \section{Resize events}
 
 %yoann: trans where say mouse event and raw key event = graphical and last important one is resize
+%claude: %trans:
+Mouse events and raw keys are the two device streams a graphical window
+lives on; the last important one is the {\em resize} notification.
 
 %claude:
 When a window is resized, the client must be notified so it can
@@ -12390,10 +12399,111 @@ if(w->resized)
 
 % also mounter.counter++ in wresize()
 
+\section{Graphical window teardown}
+
+%yoann: intro
+%claude:
+This section mirrors {\em Graphical window setup} at the start of the
+chapter. Setup turned a textual window into a graphical one---opening
+[[/dev/mouse]], switching on [[mouseopen]], and possibly entering raw
+keyboard mode. Teardown undoes that when the application exits or closes
+those files: the window stops diverting events to the client, drops back to
+handling them itself, and repaints its terminal frame, becoming an ordinary
+textual window once more. That last step makes this a natural bridge toward
+the textual-window machinery.
+
+%\subsection{Closing the mouse}
+
+%yoann: quick intro
+%claude:
+Closing [[/mnt/wsys/mouse]] runs the [[Qmouse]] case of [<xfidclose()>], which
+clears [[w->mouseopen]]: the window stops forwarding mouse events to a client
+and goes back to handling them itself.
+
+<<[[xfidclose()]] cases>>=
+case Qmouse:
+    w->mouseopen = false;
+    w->resized = false;
+    if(w->i != nil)
+        wsendctlmesg(w, Refresh, w->i->r, nil);
+    break;
+@
+\l why Refresh ? when close the mouse?
+% put Refresh here?
+
+%\subsection{[[Refresh]]}
+
+%yoann: explain Refresh
+%claude:
+The line worth a word is the [<Refresh>] that [[rio]] sends to itself. While
+the graphical client was running it had been drawing its own content
+straight into the window image (through [[/dev/draw]]), painting over
+[[rio]]'s terminal text. Having just cleared [[mouseopen]], [[rio]] now needs
+to restore its own view of the window, and it asks the [<winctl()>] thread to
+do so through a [<Refresh>] control message:
+
+<<[[Wctlmesgkind]] cases>>=
+Refresh,
+@
+% seems called when close the mouse, maybe to restore frame
+% maybe can put in Textual windows chapter
+
+% xfidclose (Qmouse) -> <>
+<<[[wctlmesg()]] cases>>=
+case Refresh:
+    if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
+        break;
+    if(!w->mouseopen)
+        wrefresh(w, r);
+    flushimage(display, true);
+    break;
+@
+
+%claude:
+The handler's actual repaint is [<wrefresh()>]. It always repaints the window
+border, and---when the mouse is not open---redraws the text frame and
+selection underneath. The [[mouseopen]] test (here and in the handler above)
+is just a guard, so [[rio]] never paints over a client that still owns the
+pixels; on this teardown path it is already false, so the frame is redrawn.
+
+<<function [[wrefresh]]>>=
+void
+wrefresh(Window *w, Rectangle)
+{
+    Frame *frm = &w->frm;
+
+    /* BUG: rectangle is ignored */
+    if(w == input)
+        wborder(w, Selborder);
+    else
+        wborder(w, Unselborder);
+    if(w->mouseopen)
+        return;
+    // else
+
+    draw(w->i, insetrect(w->i->r, Borderwidth), frm->cols[BACK], nil, 
+         w->i->r.min);
+    frm->ticked = false;
+    if(frm->p0 > 0)
+        frdrawsel(frm, frptofchar(frm, 0), 0, frm->p0, 0);
+    if(frm->p1 < frm->nchars)
+        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, frm->nchars, 0);
+    frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 1);
+    w->lastsr = ZR;
+    wscrdraw(w);
+}
+@
+
+
+
 
 \section{[[/mnt/wsys/window]]}
 
 %yoann: trans where say saw most important virtual device, now other file really meant for graphical windows
+%claude: %trans:
+With [[/dev/cons]] and [[/dev/mouse]] behind us---the devices every window
+needs---we turn to a file that exists only for {\em graphical} clients:
+[[/mnt/wsys/window]].
 
 %claude:
 Reading [[/mnt/wsys/window]] returns the window's image ID and
@@ -19471,59 +19581,7 @@ just to make the window thread re-evaluate its alt conditions
 (e.g., to notice that it is now the current window or that a
 file has been opened).
 
-\subsection{Restoring the window: [[Refresh]]}
-
-%claude:
-[[Refresh]] is sent when an application closes [[/dev/mouse]],
-signaling that it is done drawing directly on the window image.
-The handler redraws the entire text frame and borders,
-restoring the window's normal appearance. It skips the refresh
-if the window is deleted, has zero width, or the mouse is still open.
-
-<<[[Wctlmesgkind]] cases>>=
-Refresh,
-@
-% seems called when close the mouse, maybe to restore frame
-% maybe can put in Textual windows chapter
-
-% xfidclose (Qmouse) -> <>
-<<[[wctlmesg()]] cases>>=
-case Refresh:
-    if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
-        break;
-    if(!w->mouseopen)
-        wrefresh(w, r);
-    flushimage(display, true);
-    break;
-@
-
-<<function [[wrefresh]]>>=
-void
-wrefresh(Window *w, Rectangle)
-{
-    Frame *frm = &w->frm;
-
-    /* BUG: rectangle is ignored */
-    if(w == input)
-        wborder(w, Selborder);
-    else
-        wborder(w, Unselborder);
-    if(w->mouseopen)
-        return;
-    // else
-
-    draw(w->i, insetrect(w->i->r, Borderwidth), frm->cols[BACK], nil, 
-         w->i->r.min);
-    frm->ticked = false;
-    if(frm->p0 > 0)
-        frdrawsel(frm, frptofchar(frm, 0), 0, frm->p0, 0);
-    if(frm->p1 < frm->nchars)
-        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, frm->nchars, 0);
-    frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 1);
-    w->lastsr = ZR;
-    wscrdraw(w);
-}
-@
+%alt: \subsection{Restoring the window: [[Refresh]]}
 
 
 \section{Security}
