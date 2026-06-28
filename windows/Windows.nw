@@ -15339,11 +15339,13 @@ trick from Section~\ref{sec:additional-data-structures}
 ([[QID(winid, qxxx)]]) is what lets the server tell them apart. The
 [[/mnt/wsys/wsys/<N>/]] subtree is the one escape hatch: by walking through
 [[wsys/]] to a numeric name, a client can reach any other window's
-files and drive it remotely, which is how the [[wctl(1)]] command and
-tools like [[acme]]'s win interact with specific windows.
-%yoann1: reference appendix for wctl? can't find this wctl command. what are acme's win?
+files and drive it remotely. This is the mechanism behind
+window-management utilities like the [[statusbar]] and [[winwatch]] programs
+in the appendix (Sections~\ref{sec:statusbar} and~\ref{sec:winwatch}).
 
 %yoann: transition, let's see those "windowing-system files" cos window-system related
+%claude: %trans:
+Let us walk through these windowing-system files one at a time.
 
 \section{[[/mnt/wsys/winid]]}
 
@@ -15447,8 +15449,7 @@ in the same format (see the \book{Graphics}) as [[/mnt/wsys/window]].
 %
 This lets programs discover the full desktop geometry, which is
 useful for positioning new windows or for utilities like
-[[lens]] that operate on the whole screen.
-%yoann1: can reference appendix for lens
+[[lens]] (Section~\ref{sec:lens}) that operate on the whole screen.
 
 % read only
 
@@ -15487,10 +15488,11 @@ Listing [[/mnt/wsys/wsys/]] returns the IDs of all existing windows
 to the same virtual device files ([[cons]], [[mouse]], [[wctl]], etc.)
 as [[/mnt/wsys/]], but for window~[[winid]] instead of the caller's own window.
 %claude:
-This is how the [[wctl(1)]] command can create, resize, or delete
-another window from a script. For example, a status bar program can
-enumerate all windows, read their labels, and display a window list.
-%yoann1: where is this wctl(1) command? reference status bar program in appendix
+This is how a script can create, resize, or delete another window: by
+writing commands to its [[wctl]] file (Section~\ref{sec:mnt-wsys-wctl}). For
+example, the [[statusbar]] program in the appendix
+(Section~\ref{sec:statusbar}) enumerates all windows, reads their labels, and
+displays a window list.
 
 
 % https://github.com/sdhand/x11fs
@@ -15565,6 +15567,11 @@ numeric(char *s)
 
 
 %yoann: trans and quick intro
+%claude:
+Listing [[/mnt/wsys/wsys/]] itself means emitting one directory entry per
+window. The [[Qwsys]] read does exactly that: under the [<all>] lock it
+snapshots the current window ids, sorts them, and [<dostat()>]s each as a
+subdirectory.
 
 <<[[filsysread()]] other locals>>=
 int i, j, k;
@@ -15689,7 +15696,12 @@ bool 	wctlready;
 
 
 %yoann: quick intro to Wakeup and reference again adv topics relevant section?
-
+%claude:
+The [<Wakeup>] message carries no data and does no work of its own; it merely
+nudges the [<winctl()>] thread to re-evaluate its [[alt()]] arms, so it
+notices that [[wctlready]] is now set and offers the fresh geometry. We meet
+[<Wakeup>] again, with the other control messages, in
+Section~\ref{sec:wakeup}.
 
 <<[[wcurrent()]] wakeup w and oi>>=
 if(w != oi){
@@ -15717,7 +15729,11 @@ The read blocks until the geometry {\em changes} (a resize,
 move, or focus change sets [<Window.wctlready>] to true and wakes the
 window thread). This makes [[wctl]] useful for programs that want
 to react to window changes---they simply read in a loop.
-%yoann1: can say even reuse (abuse?) the same [<Consreadmesg>]
+%
+It even reuses the console's message type: [[wctlread]] is a
+[[chan(Consreadmesg)]], so the geometry line rides the very same two-channel
+buffer protocol as [[/dev/cons]] reads, rather than getting a message type of
+its own.
 
 <<[[Window]] other fields>>=
 // chan<Consreadmesg> (listener = , sender = )
@@ -15730,14 +15746,13 @@ w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
 
 
 
-\subsubsection{Producer}
-
-%yoann: no code here?
-
 \subsubsection{Consumer}
 
 %yoann: quick intro
-
+%claude:
+The consumer is the [<xfidread()>] [[Qwctl]] case. Like the console read, it
+[[alt()]]s on [[wctlread]] (with a flush), then runs the two-channel handshake
+to copy the geometry line into the client's buffer.
 
 <<enum [[_anon_ (rio/xfid.c)]]5>>=
 enum { WCRdata, WCRflush, NWCR };
@@ -15791,6 +15806,16 @@ case Qwctl:	/* read returns rectangle, hangs if not resized */
 
 
 
+
+\subsubsection{Producer}
+
+%yoann: no code here?
+%claude:
+The producer is [<winctl()>]'s [[WWread]] arm. It offers to send the geometry
+([[CHANSND]]) only when [[wctlready]] is set---after a resize, move, or focus
+change---and disables that arm ([[CHANNOP]]) otherwise, which is exactly what
+makes a [[wctl]] read block until something changes. When it fires it formats
+the rectangle and the current/hidden flags into the line the consumer returns.
 
 % when read by app it's the current status of the window
 
@@ -19627,6 +19652,7 @@ case Holdoff:
 
 
 \subsection{Waking the window thread: [[Wakeup]]}
+\label{sec:wakeup}
 
 <<[[Wctlmesgkind]] cases>>=
 Wakeup,
@@ -23054,6 +23080,7 @@ magnify(void)
 
 
 \section{[[statusbar]]}
+\label{sec:statusbar}
 
 <<function [[drawbar]]>>=
 void
@@ -23246,6 +23273,7 @@ main(int argc, char **argv)
 @
 
 \section{[[winwatch]]}
+\label{sec:winwatch}
 
 <<function [[drawnowin]]>>=
 static void
