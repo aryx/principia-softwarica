@@ -19952,12 +19952,11 @@ You now know how the \plan windowing system [[rio]]
 works---%
 from the hardware interrupt when you click the mouse,
 through the chain of IO procs, threads, and channels,
-all the way to the 9P response that unblocks the application.
+all the way to the 9P response that unblocks the window application.
 %
 More generally, you now understand how a windowing
 system manages multiple windows, dispatches input,
-and provides a transparent environment for
-applications.
+and provides an environment for applications.
 
 %claude:
 [[rio]] is simultaneously three things: a graphical application
@@ -19965,30 +19964,29 @@ applications.
 a window manager (it creates, moves, resizes, and deletes windows),
 and a file server (it serves [[/mnt/wsys/]] files through 9P).
 %
-Each window provides virtual [[/dev/cons]],
-[[/dev/mouse]], and [[/dev/winname]] files,
-so programs running inside a window see the same
-interface as programs running on a bare console---they
-do not even need to know they are running in a window.
+To each window [[rio]] gives its own virtual [[/dev/cons]],
+[[/dev/mouse]], and [[/dev/winname]]; a program running inside a window
+therefore sees exactly the interface it would on a bare console, and need not
+even know it is in a window.
 %claude:
-This multiplexer design has remarkable consequences:
-windows are composable (you can run [[rio]] inside [[rio]]),
-any program that reads and writes [[/dev/]] files
-automatically works in a windowed environment, and
-[[rio]] gains network transparency for free through 9P.
+This multiplexer design has remarkable consequences. Because a window is
+indistinguishable from a bare console, [[rio]] can run inside one of its own
+windows---recursive [[rio]]; any program that reads and writes [[/dev/]] files
+works in a windowed environment unchanged; and [[rio]] gains network
+transparency for free through 9P.
 
 \section{Patterns and techniques}
 \label{sec:patterns}
 
 %claude:
 Many of the techniques below are {concurrency} design patterns, and
-unusually powerful ones---you will recognize several from Go.
+unusually powerful ones---you might recognize several from Go.
 %cs-history:
 That is no accident: Rob Pike had a hand in [[libthread]], in [[rio]], and
 later in Go, and \plan's concurrent programs like [[rio]] were in effect a
 proving ground for the channel-based style Go would popularize.
 %
-These techniques apply far beyond window managers:
+These techniques apply far beyond windowing systems:
 
 
 \begin{itemize}
@@ -20020,7 +20018,7 @@ reads each 9P request and hands the ones that might block to a
 pool of reusable [[Xfid]] worker threads---recycled rather than
 created per request---so its read loop never stalls waiting on
 a single slow client. The same architecture is used by web
-servers (Nginx, Apache prefork) and database connection pools:
+servers (like Nginx) and database connection pools:
 decouple request arrival rate from processing capacity.
 
 \item \emph{Delegated thread creation}: a worker must run in
@@ -20117,21 +20115,24 @@ on top of [[libdraw]] and its layering extensions.
 Every window is a [[Screen]] layer, and all drawing
 uses the functions described in the \book{Graphics}.
 
-\item \book{Widgets}: the [[libpanel]] widget toolkit
-is most often used by programs running inside [[rio]]
-windows, through the virtual devices [[rio]] provides.
-It is not tied to [[rio]], however---it draws on any
-[[libdraw]] display, so a program like [[mothra]] (the
-web browser) can use it outside [[rio]] just as well.
-The \book{Widgets} covers these higher-level UI
-components (buttons, scrollbars, menus).
-
 \item \book{Kernel}: [[rio]] depends on the
 kernel's [[devcons]], [[devmouse]], [[devdraw]],
 and the [[/srv]] mechanism for publishing its file
 server. The kernel's process and namespace model
 makes it possible for each window to have its own
 view of [[/dev]].
+
+\item \book{Widgets}: the [[libpanel]] widget toolkit
+is most often used by programs running inside [[rio]]
+windows, through the virtual devices [[rio]] provides.
+%
+It is not tied to [[rio]], however---it draws on any
+[[libdraw]] display, so a program like [[mothra]] (the
+web browser) can use it outside [[rio]] just as well.
+%
+The \book{Widgets} covers these higher-level UI
+components (buttons, scrollbars, menus).
+
 
 \item \book{Shell}: [[rc]] is the default program
 that runs inside each [[rio]] window. The
@@ -20159,8 +20160,9 @@ environments do considerably more:
 Quartz, Wayland compositors, Windows DWM) render
 each window into an off-screen buffer and composite
 them on the GPU, enabling transparency, shadows, and
-smooth animations. [[rio]] composites windows in a very basic way and in
-software using the draw device's layer mechanism.
+smooth animations. [[rio]] does only the barest version of this: it
+``composites'' in software, stacking overlapping window layers through the
+draw device's layer mechanism---no off-screen buffers, no GPU.
 
 \item \emph{Window decoration and theming}: most
 window managers draw title bars, close/minimize
@@ -20176,19 +20178,19 @@ right-click menu and a mouse-based window creation
 gesture---everything else is left to the programs
 running inside windows.
 
-\item \emph{Display protocols}: X11 provides
-network-transparent graphics through a large
-client-server protocol---hundreds of request types,
-extensions (GLX, XRender, XInput2), and a separate
-window-manager process; Wayland trims this by having
-clients render locally and hand buffers to the
-compositor. Both do far more than [[rio]]. Yet
-[[rio]]'s much smaller approach is no poor relation:
-by serving virtual devices over 9P it gets network
-transparency almost for free, since 9P mounts across
-the network like any other file tree---even if it
-provides none of the richer rendering those protocols
-add.
+%\item \emph{Display protocols}: X11 provides
+%network-transparent graphics through a large
+%client-server protocol---hundreds of request types,
+%extensions (GLX, XRender, XInput2), and a separate
+%window-manager process; Wayland trims this by having
+%clients render locally and hand buffers to the
+%compositor. Both do far more than [[rio]]. Yet
+%[[rio]]'s much smaller approach is no poor relation:
+%by serving virtual devices over 9P it gets network
+%transparency almost for free, since 9P mounts across
+%the network like any other file tree---even if it
+%provides none of the richer rendering those protocols
+%add.
 
 \item \emph{Accessibility}: modern windowing systems
 provide accessibility APIs (screen readers,
