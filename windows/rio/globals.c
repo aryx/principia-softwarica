@@ -88,7 +88,7 @@ char		*startdir;
 bool	sweeping;
 /*e: global [[sweeping]] */
 /*s: global [[wctlfd]] */
-int	wctlfd;
+fdt	wctlfd;
 /*e: global [[wctlfd]] */
 /*s: global [[menuing]] */
 bool menuing;/* menu action is pending; waiting for window to be indicated */
