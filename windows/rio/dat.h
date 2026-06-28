@@ -123,12 +123,12 @@ enum ControlMessage	/* control messages */
     Rawon,
     Rawoff,
     /*x: [[Wctlmesgkind]] cases */
+    Refresh,
+    /*x: [[Wctlmesgkind]] cases */
     Holdon,
     Holdoff,
     /*x: [[Wctlmesgkind]] cases */
     Wakeup,
-    /*x: [[Wctlmesgkind]] cases */
-    Refresh,
     /*e: [[Wctlmesgkind]] cases */
 };
 /*e: enum [[wctlmesgkind]] */

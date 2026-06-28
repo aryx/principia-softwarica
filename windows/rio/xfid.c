@@ -169,8 +169,8 @@ xfidopen(Xfid *x)
             filsysrespond(x->fs, x, &fc, Einuse);
             return;
         }
+        // else
         w->mouseopen = true;
-
         /*
          * Reshaped: there's a race if the appl. opens the
          * window, is resized, and then opens the mouse,
@@ -263,7 +263,6 @@ xfidclose(Xfid *x)
     /*x: [[xfidclose()]] cases */
     case Qmouse:
         w->mouseopen = false;
-
         w->resized = false;
         if(w->i != nil)
             wsendctlmesg(w, Refresh, w->i->r, nil);

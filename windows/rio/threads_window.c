@@ -23,7 +23,7 @@ enum {
     /*s: [[Wxxx]] cases */
     WMouseread,
     /*x: [[Wxxx]] cases */
-    WCread, 
+    WCread,
     /*x: [[Wxxx]] cases */
     WCwrite,
     /*x: [[Wxxx]] cases */
@@ -129,6 +129,14 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         /*e: [[wctlmesg()]] When Rawoff, process raw keys in non rawing mode */
         break;
     /*x: [[wctlmesg()]] cases */
+    case Refresh:
+        if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
+            break;
+        if(!w->mouseopen)
+            wrefresh(w, r);
+        flushimage(display, true);
+        break;
+    /*x: [[wctlmesg()]] cases */
     case Holdon:
     case Holdoff:
         /*s: [[wctlmesg()]] break if window was deleted */
@@ -140,14 +148,6 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         break;
     /*x: [[wctlmesg()]] cases */
     case Wakeup:
-        break;
-    /*x: [[wctlmesg()]] cases */
-    case Refresh:
-        if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
-            break;
-        if(!w->mouseopen)
-            wrefresh(w, r);
-        flushimage(display, true);
         break;
     /*e: [[wctlmesg()]] cases */
     default:

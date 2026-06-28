@@ -404,12 +404,15 @@ writewctl(Xfid *x, char *err)
     }
 
     switch(cmd){
+    /*s: [[writewctl()]] switch [[cmd]] cases */
     case New:
         return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Set:
         if(pid > 0)
             wsetpid(w, pid, 0);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Move:
         rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
         rect = rectonscreen(rect);
@@ -429,24 +432,30 @@ writewctl(Xfid *x, char *err)
         border(i, rect, Selborder, red, ZP);
         wsendctlmesg(w, Reshaped, i->r, i);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Scroll:
         w->scrolling = 1;
         wshow(w, w->nr);
         wsendctlmesg(w, Wakeup, ZR, nil);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Noscroll:
         w->scrolling = 0;
         wsendctlmesg(w, Wakeup, ZR, nil);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Top:
         wtopme(w);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Bottom:
         wbottomme(w);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Current:
         wcurrent(w);
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Hide:
         switch(whide(w)){
         case -1:
@@ -459,6 +468,7 @@ writewctl(Xfid *x, char *err)
             break;
         }
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Unhide:
         for(j=0; j<nhidden; j++)
             if(hidden[j] == w)
@@ -472,9 +482,11 @@ writewctl(Xfid *x, char *err)
             return -1;
         }
         return 1;
+    /*x: [[writewctl()]] switch [[cmd]] cases */
     case Delete:
         wsendctlmesg(w, Deleted, ZR, nil);
         return 1;
+    /*e: [[writewctl()]] switch [[cmd]] cases */
     }
     strcpy(err, "invalid wctl message");
     return -1;
