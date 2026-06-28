@@ -9736,6 +9736,10 @@ Note there is no [[xfidstat()]] worker: [[stat]] never blocks (it only reads
 [<filsysproc()>] context.
 
 %yoann: quick intro
+%claude:
+The directory listings above stamp each entry with a modification time. That
+time comes from [[/dev/time]], opened once into [<clockfd>] and read by
+[<getclock()>].
 
 <<global [[clockfd]]>>=
 fdt	clockfd;
@@ -15961,10 +15965,9 @@ is shown in Section~\ref{sec:external-access}.
 %yoann: can say cases below are pretty simple and reproduce what we saw already before when click in menu by calling core functions
 %claude:
 The cases themselves are short. Each does the same work as the matching
-right-click menu entry, by calling the same core functions---[<wtopme()>],
-[<wbottomme()>], [<whide()>], [<wcurrent()>], and so on. Driving a window
-through [[wctl]] and through the menu converge on the same code.
-%yoann1: actually wtopme is a bad example because not called elsewhere really; maybe whide is a better core func candidate here
+right-click menu entry, by calling the same core functions---[<whide()>],
+[<wcurrent()>], and so on. Driving a window through [[wctl]] and through the
+menu converge on the same code.
 
 
 <<[[writewctl()]] switch [[cmd]] cases>>=
@@ -16136,6 +16139,14 @@ plumbing, auto-completion, and word selection.
 \label{sec:notes}
 
 %yoann: say we saw already in previous chapter note management for windows, but here for rio itself. recall also that notes are plan9 equivalent of unix signals. saw some hangup before note when delete a window  and want to kill associated process
+%claude: %terminology:
+A {\em note} is \plan's equivalent of a \unix signal: a short string
+delivered asynchronously to a process.
+%claude:
+We have already seen [[rio]] on the {\em sending} side---posting a ``hangup''
+note to a window's process group to kill it when the window is deleted. This
+section is the other side: what happens when a note arrives at [[rio]] {\em
+itself}, so it can tear down its windows and exit cleanly.
 
 %claude:
 When [[rio]] itself receives a note, [<shutdown()>] first sends
@@ -16197,6 +16208,12 @@ killprocs(void)
 
 
 %yoann: maybe mention sec:9p-flush also related to interrupt/notes
+%claude:
+Notes also tie back to the [[Tflush]] handling of
+Section~\ref{sec:9p-flush}: when a user interrupts a program blocked in a
+[[read]], the note that unwinds the program is what makes the kernel send
+[[rio]] a [[Tflush]], cancelling the pending [<xfidread()>] so no stale reply
+is delivered.
 
 \section{Recursive [[rio]]}
 \label{sec:recursive-rio}
@@ -16389,11 +16406,11 @@ When a timer fires, it sends on the [<ctimer>] channel; when cancelled, it
 is recycled into a freelist ([<timer>]).
 
 %claude:
-The ``scroll delays'' are how [[rio]] paces fast output: when a window
-auto-scrolls, [<wscrsleep()>] arms a short timer between scroll steps so the
-text does not fly past unreadably. That happens constantly under heavy
-output, which is why a freelist is worth the trouble.
-%yoann1: clarify a bit more? only usecase for timer really?
+The ``scroll delays'' pace a window's output. Without them, a program that
+spews output would scroll the screen as fast as the lines arrive---an
+unreadable blur. So when a window auto-scrolls, [<wscrsleep()>] waits a brief,
+cancellable moment before scrolling, letting a burst accumulate and roll by
+at a rate you can read. The freelist keeps that frequent little wait cheap.
 
 
 <<global [[ctimer]]>>=
@@ -16598,7 +16615,15 @@ By default, [[rio]] windows only auto-scroll when the user is not
 reading back through the output (i.e., when [[q0]] is at the end).
 The [[-s]] flag makes all new windows scroll unconditionally,
 which is useful for monitoring logs or long-running commands.
-%yoann1: can say autoscroll is the default in most terminal, like xterm, so plan9 has unusual default here, but surprisingly nice feature because avoid to have to run command and afterward rerun with | less or | more! (eshell in emacs imitates this behavior I think)
+
+%claude: %plan9-is-cleaner:
+\plan's default is the unusual one. Most terminals (xterm and the rest)
+always jump to the bottom on new output; \plan instead holds your view in
+place while you are reading back, and only follows the tail once you return
+to the end. It is a small thing that proves surprisingly pleasant---you can
+read a streaming command's output without having to re-run it through
+[[less]] or [[more]] to keep it from scrolling away. Emacs's [[eshell]]
+imitates the same behaviour.
 
 <<global [[scrolling]]>>=
 bool		scrolling;
@@ -16666,6 +16691,10 @@ initcmd(void *arg)
 @
 
 %yoann: say -c see \book{Shell}
+%claude:
+The [[-c]] flag tells [[rc]] to run the command string that follows instead of
+reading from standard input---the same [[-c]] every shell has, covered in the
+\book{Shell}.
 
 % RFNOTEG! own note group, so C-c goes to only that group only that process?
 
@@ -16820,7 +16849,13 @@ Button 6 toggles the keyboard window's visibility. The handler
 forwards both the button-down and button-up mouse events to the
 keyboard window's mouse channel, letting the keyboard program
 handle the toggle logic itself.
-%yoann1: what is button 6? how do you trigger it with a classic 3 buttons mouse?
+%
+[[rio]] reports mouse buttons as a bitmask, and the numbering runs past the
+usual three: 1--3 are the physical buttons, 4 and 5 the two scroll-wheel
+directions, and 6 a further ``button'' that an ordinary three-button mouse
+never generates. It is meant for devices that show an {\em on-screen}
+keyboard (the \plan touch ports), where something has to toggle that keyboard
+on and off.
 
 <<function [[keyboardhide]]>>=
 /*
@@ -16902,8 +16937,9 @@ choice: [[rc]] does almost no line editing, and the work moves up into the
 terminal---that is, into [[rio]] itself. Every program that reads
 [[/dev/cons]] then inherits editing, snarf, and plumbing for free, and the
 terminal can draw on the full power of the mouse and the screen rather than
-being confined to the escape-sequence world of a [[readline]]-style TUI.
-%yoann1: define TUI, first time used, not as known as GUI and recent trend
+being confined to the escape-sequence world of a [[readline]]-style {\em text
+user interface} (TUI)---the keyboard-driven, character-cell cousin of the
+GUI.
 
 \subsection{Snarf}
 \label{sec:snarf}
@@ -17267,7 +17303,17 @@ selects text and chooses ``Plumb'' from the middle-click menu, [[rio]]
 sends the text to the plumber daemon, which routes it to the
 appropriate application based on pattern rules (e.g., a filename
 goes to the editor, a URL to the browser).
-%yoann1: maybe give idea of equivalent mechanism in other OS and how more elegant is plan9 again?
+
+%claude: %plan9-is-cleaner:
+Other systems have pieces of this. macOS has Services and ``data
+detectors'' (click a detected address or date and it opens in the right app);
+Windows and the Linux desktops route by file type and URL scheme
+([[xdg-open]], MIME associations, registered handlers). \plan's plumber is
+more general and more uniform: rather than file-type and URL-scheme tables
+scattered across the system, a single user-editable rules file matches {\em
+arbitrary} text and decides where it goes, and any program can send or
+receive on the plumb channels. One small, inspectable mechanism instead of a
+dozen special cases.
 
 <<[[button2menu()]] cases>>=
 case Plumb:
@@ -18029,6 +18075,12 @@ case Kins:		/* Insert: file name completion */
 @
 
 %yoann: quick explanation of structure
+%claude:
+The [<Completion>] struct holds the result of one completion attempt:
+[[advance]] says whether the typed prefix can be extended, [[complete]]
+whether it now names a real file or directory, [[string]] the text to insert,
+and [[filename]] the candidate list to display when there is no unique
+advance.
 
 <<struct [[Completion]]>>=
 struct Completion{
@@ -18042,6 +18094,10 @@ struct Completion{
 @
 
 %yoann: quick intro
+%claude:
+[<namecomplete()>] does the work: it walks back from the cursor to find the
+word being typed, splits it into a directory path and a partial name, and
+hands them to [[complete()]] to fill in the [<Completion>] above.
 
 % wkeyctl -> <>
 <<function [[namecomplete]]>>=
@@ -18392,6 +18448,8 @@ case Qwdir:
 \subsection{Word selection}
 
 %yoann: trans say last editing feature
+%claude: %trans:
+The last of the terminal's editing features is mouse selection.
 
 %claude:
 [<wselect()>] handles mouse-based text selection, including
@@ -18402,6 +18460,10 @@ after selection, chording with button 2 cuts and button 3 pastes---a
 classic \plan interaction pattern inherited from [[sam]] and [[acme]].
 
 %yoann: trans and say see a few globals before seeing code of wselect?
+%claude:
+Before [<wselect()>] itself, a couple of file-scope globals carry the state
+double-click detection needs across calls: which window was last clicked, and
+when.
 
 <<global [[clickwin]]>>=
 static Window	*clickwin;
@@ -19388,6 +19450,10 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
 \section{Advanced fileserver features}
 
 %yoann: intro
+%claude:
+This section collects the file-server corners deferred until now: how a
+client abandons a request it no longer wants (9P [[Tflush]]), and how [[rio]]
+handles 9P authentication.
 
 \subsection{Flushing}
 \label{sec:9p-flush}
@@ -19653,6 +19719,9 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 \section{Additional control messages}
 
 %yoann: quick intro
+%claude:
+A few [<Wctlmesg>] kinds remain that did not fit the earlier flows. The first
+is {\em holding mode}.
 
 \subsection{Holding mode}
 
@@ -19672,7 +19741,14 @@ It can be toggled by Escape or by writing ``holdon''/``holdoff''
 to [[/dev/consctl]]. The holding counter supports nested holds
 (multiple programs can request it), and entering raw mode
 automatically disables holding.
-%yoann1: still not super clear usecase for user for this feature
+
+%claude:
+The use case is a pause button. When a program floods the window faster than
+you can read---a build log, a chatty server---you press Escape to {\em hold}
+it: [[rio]] stops reading the program's stdout, so the text stops scrolling
+and, because that stdout pipe soon fills, the program itself blocks. You read
+at leisure, then unhold to let it run on. It is stronger than scrollback,
+which only lets you look back while new output keeps piling up.
 
 
 <<[[Window]] config fields>>=
@@ -19824,6 +19900,10 @@ file has been opened).
 \label{sec:security}
 
 %yoann: can maybe transition from auth discussed before in sec:9p-auth
+%claude: %trans:
+The authentication of Section~\ref{sec:9p-auth} guards [[rio]]'s {\em network}
+boundary. Step back now to the wider question it raises: what protects one
+window from another?
 
 %claude:
 [[rio]] has, frankly, almost no security model {\em between} the windows of
