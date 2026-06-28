@@ -8449,6 +8449,7 @@ kernel, acting {on behalf of} the application. The full chain is
 
 
 \section{Additional data structures}
+\label{sec:sec:additional-data-structures}
 
 %claude:
 The operations in the following sections share two data structures,
@@ -14672,9 +14673,11 @@ it---useful for resending a previous command by selecting it and clicking
 Send.
 \item {\bf Scroll:} Toggle automatic scrolling mode (see below).
 \end{itemize}
+
 %claude:
 The window is reference-counted ([[incref]]/[[wclose]])
 to prevent it from being freed while the menu is displayed.
+%
 After the menu action, a [[Wakeup]] message is sent to the
 window's control thread to ensure it reprocesses any pending events.
 
@@ -15283,16 +15286,19 @@ do not even know they are windowed.
 This chapter covers the remaining files under [[/mnt/wsys/]], which
 serve a different purpose. They are the ``reflective'' part of [[rio]],
 analogous to how [[/proc]] lets programs inspect and control kernel
-processes. Through these files, programs can discover their own window
-identity ([[winid]], [[label]]), query the screen ([[screen]]),
-access other windows ([[wsys/]]), and control windows
-programmatically ([[wctl]]).
+processes (see the \book{Kernel} and \book{Debugger}).
+%
+Through these files, programs can
+discover their own window identity ([[/mnt/wsys/winid]], [[/mnt/wsys/label]]),
+query the screen ([[/mnt/wsys/screen]]),
+access other windows ([[/mnt/wsys/wsys/]]), and
+control windows programmatically ([[/mnt/wsys/wctl]]).
 
 \section{Overview}
 
 %claude:
 The full shape of the per-window filesystem that [[rio]] serves is
-the union of all the [[dirtab]] entries scattered across the book,
+the union of all the [<dirtab>] entries scattered across the book,
 which makes it hard to picture. Here is a consolidated view of what
 a client sees when it mounts [[/mnt/wsys/]] (files introduced in
 earlier chapters are marked \verb+[done]+, files introduced in this
@@ -15331,21 +15337,22 @@ opening [[/mnt/wsys/cons]] in window~2 is not the same file as opening
 it in window~3, even though the path string is identical. The [[Qid.path]]
 trick from Section~\ref{sec:additional-data-structures}
 ([[QID(winid, qxxx)]]) is what lets the server tell them apart. The
-[[wsys/N/]] subtree is the one escape hatch: by walking through
+[[/mnt/wsys/wsys/<N>/]] subtree is the one escape hatch: by walking through
 [[wsys/]] to a numeric name, a client can reach any other window's
 files and drive it remotely, which is how the [[wctl(1)]] command and
 tools like [[acme]]'s win interact with specific windows.
-%yoann1: reference appendix for wctl? can't find this wctl command
+%yoann1: reference appendix for wctl? can't find this wctl command. what are acme's win?
 
-%yoann: transition
+%yoann: transition, let's see those "windowing-system files" cos window-system related
 
 \section{[[/mnt/wsys/winid]]}
 
 %claude:
 Reading [[/mnt/wsys/winid]] returns the numeric window ID as a string.
 A program uses this to discover its own window identity, typically
-to construct paths like [[/mnt/wsys/wsys/N/wctl]] when it needs
+to construct paths like [[/mnt/wsys/wsys/<id>/wctl]] when it needs
 to control a specific window (including its own).
+%
 The implementation is straightforward---a single [[sprint()]]:
 
 <<[[Qxxx]] other cases>>=
@@ -15375,11 +15382,13 @@ Since [[rio]] windows have no title bar, the label is not displayed on
 screen---it appears only in the system menu's list of hidden windows
 (see Section~\ref{sec:window-hide}), and it can be read by tools
 that query window state via [[wctl]].
+
 %claude:
 By default, [[initdraw()]] sets the label to the string passed as its
 third argument (e.g., [["Hello Rio"]] in [[hellorio.c]]).
 A program can change its label at any time by writing to
 [[/mnt/wsys/label]].
+%
 The read path returns the label with proper offset handling;
 the write path replaces the entire label (writes at non-zero offsets
 are rejected to keep the implementation simple):
@@ -15432,15 +15441,13 @@ case Qlabel:
 %claude:
 Unlike the other [[/mnt/wsys/]] files, [[/mnt/wsys/screen]] is not
 per-window: every window sees the same global screen.
+%
 Reading it returns the image ID and rectangle of the entire display
-in the same format as [[/dev/window]] (see the \book{Graphics}).
+in the same format (see the \book{Graphics}) as [[/mnt/wsys/window]].
+%
 This lets programs discover the full desktop geometry, which is
 useful for positioning new windows or for utilities like
 [[lens]] that operate on the whole screen.
-%claude:
-The implementation delegates to the same [[caseImage]] code path used
-by [[/mnt/wsys/window]], passing [[display->image]] instead of the
-window's own image:
 %yoann1: can reference appendix for lens
 
 % read only
@@ -15465,6 +15472,11 @@ case Qscreen:
 %old: the caseImage used to be here, but I prefer to put
 % it with the Qwindow case
 
+%claude:
+The implementation delegates to the same [[caseImage]] code path used
+by [[/mnt/wsys/window]], passing [[display->image]] instead of the
+window's own image:
+
 \section{[[/mnt/wsys/wsys/<windid>/]]}
 
 %claude:
@@ -15480,14 +15492,6 @@ another window from a script. For example, a status bar program can
 enumerate all windows, read their labels, and display a window list.
 %yoann1: where is this wctl(1) command? reference status bar program in appendix
 
-%claude:
-The implementation is interesting because it uses [[filsyswalk()]]
-to detect numeric path components and switch the fid's window context.
-When a walk reaches [[Qwsys]] and the next component is a number,
-the code looks up the window by ID, updates [[f->w]] to point to
-the target window, and continues the walk from [[Qwsysdir]]---at
-that point, the fid behaves as though the client had mounted
-that window's own [[/mnt/wsys/]]:
 
 % https://github.com/sdhand/x11fs
 
@@ -15500,24 +15504,14 @@ Qwsys,		/* directory of window directories */
 % QTDIR!
 
 
-<<function [[idcmp]]>>=
-static
-int
-idcmp(void *a, void *b)
-{
-    return *(int*)a - *(int*)b;
-}
-@
-
-
-<<[[filsysread()]] other locals>>=
-int i, j, k;
-int len;
-int *ids;
-Dirtab dt;
-char buf[16];
-@
-
+%claude:
+The implementation is interesting because it uses [<filsyswalk()>]
+to detect numeric path components and switch the fid's window context.
+When a walk reaches [[Qwsys]] and the next component is a number,
+the code looks up the window by ID, updates [[f->w]] to point to
+the target window, and continues the walk from [[Qwsysdir]]---at
+that point, the fid behaves as though the client had mounted
+that window's own [[/mnt/wsys/]]:
 
 <<[[filsyswalk()]] if Qwsys, then goto Accept>>=
 if(qid.path == Qwsys){
@@ -15544,6 +15538,18 @@ if(qid.path == Qwsys){
 @
 % again, why not wclose(w) directly? why winclosechan?
 
+
+% see filsyswalk
+<<[[Qxxx]] other cases>>=
+Qwsysdir,		/* window directory, child of wsys */
+@
+
+<<[[filsyswalk()]] when in dotdot, if Qwsysdir adjust path>>=
+if(FILE(qid) == Qwsysdir)
+    path = Qwsys;
+@
+
+
 % -> <>
 <<function [[numeric]]>>=
 static
@@ -15557,6 +15563,16 @@ numeric(char *s)
 }
 @
 
+
+%yoann: trans and quick intro
+
+<<[[filsysread()]] other locals>>=
+int i, j, k;
+int len;
+int *ids;
+Dirtab dt;
+char buf[16];
+@
 
 <<[[filsysread()]] cases>>=
 case Qwsys:
@@ -15587,16 +15603,15 @@ case Qwsys:
 @
 
 
-
-% see filsyswalk
-<<[[Qxxx]] other cases>>=
-Qwsysdir,		/* window directory, child of wsys */
+<<function [[idcmp]]>>=
+static
+int
+idcmp(void *a, void *b)
+{
+    return *(int*)a - *(int*)b;
+}
 @
 
-<<[[filsyswalk()]] when in dotdot, if Qwsysdir adjust path>>=
-if(FILE(qid) == Qwsysdir)
-    path = Qwsys;
-@
 
 
 \section{[[/mnt/wsys/wctl]]}
@@ -15604,18 +15619,18 @@ if(FILE(qid) == Qwsysdir)
 % Adv topics? Debugging support chapter?
 % allow to command an app? a la watir/selenium/... ?
 %claude:
-The [[wctl]] file is the programmatic interface to window management,
+The [[/mnt/wsys/wctl]] file is the programmatic interface to window management,
 the most powerful file in [[/mnt/wsys/]].
 Reading [[wctl]] returns the window's current geometry, focus status,
 and visibility (hidden or visible) as a single line.
-Writing [[wctl]] accepts commands such as [[new]], [[resize]], [[move]],
-[[delete]], [[hide]], [[unhide]], [[top]], [[bottom]], [[scroll]],
-and [[noscroll]].
+Writing [[wctl]] accepts commands such as ``new'', ``resize'', ``move'',
+``delete'', ``hide'', ``unhide'', ``top'', ``bottom'', ``scroll'',
+and ``noscroll''.
 %claude:
 This file is how tools like the [[wctl(1)]] command interact with
 [[rio]] from the shell---for example, [[echo resize -r 0 0 640 480 > /mnt/wsys/wctl]]
 resizes the current window.
-Combined with [[/mnt/wsys/wsys/N/wctl]], a script can control any
+Combined with [[/mnt/wsys/wsys/<winid>/wctl]], a script can control any
 window, enabling automation and scripting of window layouts in a way
 that is natural under \plan: everything is a file.
 
@@ -15673,7 +15688,7 @@ bool 	wctlready;
 % exclusive access to wctlopen
 
 
-
+%yoann: quick intro to Wakeup and reference again adv topics relevant section?
 
 
 <<[[wcurrent()]] wakeup w and oi>>=
@@ -15696,10 +15711,24 @@ if(w != oi){
 Reading [[wctl]] uses the same producer/consumer pattern as
 [[/mnt/wsys/cons]]: the worker thread (consumer) blocks on
 [<Window.wctlread>] until the window thread (producer) sends the current
-geometry. The read blocks until the geometry {\em changes} (a resize,
-move, or focus change sets [[wctlready]] to true and wakes the
+geometry.
+%
+The read blocks until the geometry {\em changes} (a resize,
+move, or focus change sets [<Window.wctlready>] to true and wakes the
 window thread). This makes [[wctl]] useful for programs that want
 to react to window changes---they simply read in a loop.
+%yoann1: can say even reuse (abuse?) the same [<Consreadmesg>]
+
+<<[[Window]] other fields>>=
+// chan<Consreadmesg> (listener = , sender = )
+Channel		*wctlread;	/* chan(Consreadmesg) */
+@
+% abuse Consreadmesg
+<<[[wmk()]] channels creation>>=
+w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+@
+
+
 
 \subsubsection{Producer}
 
@@ -15764,15 +15793,6 @@ case Qwctl:	/* read returns rectangle, hangs if not resized */
 
 
 % when read by app it's the current status of the window
-
-<<[[Window]] other fields>>=
-// chan<Consreadmesg> (listener = , sender = )
-Channel		*wctlread;	/* chan(Consreadmesg) */
-@
-% abuse Consreadmesg
-<<[[wmk()]] channels creation>>=
-w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
-@
 
 
 <<[[winctl()]] other locals>>=
@@ -15847,7 +15867,7 @@ Writing to [[wctl]] accepts commands like ``new'', ``resize'',
 ``scroll'', ``noscroll'', and ``set''. The [<parsewctl()>] function
 tokenizes the command string and extracts the rectangle, window ID,
 and other parameters. Commands that affect window geometry
-([[Move]], [[Resize]]) use the same [[wsendctlmesg]] path as mouse
+([[Move]], [[Resize]]) use the same [<wsendctlmesg()>] path as mouse
 operations---the window thread handles all geometry changes uniformly,
 regardless of whether they came from the mouse or the filesystem.
 
@@ -15904,77 +15924,7 @@ writewctl(Xfid *x, char *err)
     }
 
     switch(cmd){
-    case New:
-        return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
-    case Set:
-        if(pid > 0)
-            wsetpid(w, pid, 0);
-        return 1;
-    case Move:
-        rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
-        rect = rectonscreen(rect);
-        /* fall through */
-    case Resize:
-        if(!goodrect(rect)){
-            strcpy(err, Ebadwr);
-            return -1;
-        }
-        if(eqrect(rect, w->screenr))
-            return 1;
-        i = allocwindow(desktop, rect, Refbackup, DWhite);
-        if(i == nil){
-            strcpy(err, Ewalloc);
-            return -1;
-        }
-        border(i, rect, Selborder, red, ZP);
-        wsendctlmesg(w, Reshaped, i->r, i);
-        return 1;
-    case Scroll:
-        w->scrolling = 1;
-        wshow(w, w->nr);
-        wsendctlmesg(w, Wakeup, ZR, nil);
-        return 1;
-    case Noscroll:
-        w->scrolling = 0;
-        wsendctlmesg(w, Wakeup, ZR, nil);
-        return 1;
-    case Top:
-        wtopme(w);
-        return 1;
-    case Bottom:
-        wbottomme(w);
-        return 1;
-    case Current:
-        wcurrent(w);
-        return 1;
-    case Hide:
-        switch(whide(w)){
-        case -1:
-            strcpy(err, "window already hidden");
-            return -1;
-        case 0:
-            strcpy(err, "hide failed");
-            return -1;
-        default:
-            break;
-        }
-        return 1;
-    case Unhide:
-        for(j=0; j<nhidden; j++)
-            if(hidden[j] == w)
-                break;
-        if(j == nhidden){
-            strcpy(err, "window not hidden");
-            return -1;
-        }
-        if(wunhide(j) == 0){
-            strcpy(err, "hide failed");
-            return -1;
-        }
-        return 1;
-    case Delete:
-        wsendctlmesg(w, Deleted, ZR, nil);
-        return 1;
+    <<[[writewctl()]] switch [[cmd]] cases>>
     }
     strcpy(err, "invalid wctl message");
     return -1;
@@ -15983,6 +15933,101 @@ writewctl(Xfid *x, char *err)
 
 % nice summary of all Wctlmesgkind
 
+
+
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case New:
+    return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Set:
+    if(pid > 0)
+        wsetpid(w, pid, 0);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Move:
+    rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
+    rect = rectonscreen(rect);
+    /* fall through */
+case Resize:
+    if(!goodrect(rect)){
+        strcpy(err, Ebadwr);
+        return -1;
+    }
+    if(eqrect(rect, w->screenr))
+        return 1;
+    i = allocwindow(desktop, rect, Refbackup, DWhite);
+    if(i == nil){
+        strcpy(err, Ewalloc);
+        return -1;
+    }
+    border(i, rect, Selborder, red, ZP);
+    wsendctlmesg(w, Reshaped, i->r, i);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Scroll:
+    w->scrolling = 1;
+    wshow(w, w->nr);
+    wsendctlmesg(w, Wakeup, ZR, nil);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Noscroll:
+    w->scrolling = 0;
+    wsendctlmesg(w, Wakeup, ZR, nil);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Top:
+    wtopme(w);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Bottom:
+    wbottomme(w);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Current:
+    wcurrent(w);
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Hide:
+    switch(whide(w)){
+    case -1:
+        strcpy(err, "window already hidden");
+        return -1;
+    case 0:
+        strcpy(err, "hide failed");
+        return -1;
+    default:
+        break;
+    }
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Unhide:
+    for(j=0; j<nhidden; j++)
+        if(hidden[j] == w)
+            break;
+    if(j == nhidden){
+        strcpy(err, "window not hidden");
+        return -1;
+    }
+    if(wunhide(j) == 0){
+        strcpy(err, "hide failed");
+        return -1;
+    }
+    return 1;
+@
+<<[[writewctl()]] switch [[cmd]] cases>>=
+case Delete:
+    wsendctlmesg(w, Deleted, ZR, nil);
+    return 1;
+@
 
 
 %******************************************************************************
