@@ -20,6 +20,7 @@ error(char *s)
     fprint(STDERR, "rio: %s: %r\n", s);
     if(errorshouldabort)
         abort();
+    // else
     threadexitsall("error");
 }
 /*e: function [[error]] */
