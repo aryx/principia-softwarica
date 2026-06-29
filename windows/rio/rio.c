@@ -78,6 +78,7 @@ killprocs(void)
 }
 /*e: function [[killprocs]] */
 /*s: function [[shutdown]] */
+/// threadmain -> threadnotify(<>, true)
 int
 shutdown(void *, char *msg)
 {
@@ -237,6 +238,8 @@ void threadmain(int argc, char *argv[])
     /*e: [[main()]] if filsys is nil */
     else{
         /*s: [[main()]] error management after everything setup */
+        threadnotify(shutdown, true);
+        /*x: [[main()]] error management after everything setup */
         errorshouldabort = true;/* suicide if there's trouble after this */
         /*s: [[main()]] if initstr or kdbin */
         if(initstr)
@@ -253,7 +256,6 @@ void threadmain(int argc, char *argv[])
                 error("can't create keyboard window");
         }
         /*e: [[main()]] if initstr or kdbin */
-        threadnotify(shutdown, true);
         /*e: [[main()]] error management after everything setup */
 
         // blocks until get exit message on exitchan

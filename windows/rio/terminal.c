@@ -920,17 +920,17 @@ button2menu(Window *w)
         wcut(w);
         wscrdraw(w);
         break;
-
+    /*x: [[button2menu()]] cases */
     case Snarf:
         wsnarf(w);
         break;
-
+    /*x: [[button2menu()]] cases */
     case Paste:
         getsnarf();
         wpaste(w);
         wscrdraw(w);
         break;
-
+    /*x: [[button2menu()]] cases */
     case Send:
         getsnarf();
         wsnarf(w);

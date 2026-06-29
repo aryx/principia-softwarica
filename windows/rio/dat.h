@@ -477,6 +477,8 @@ struct Timer
     int		dt;
     int		cancel;
     Channel	*c;	/* chan(int) */
+
+    // ref_own<Timer> (head = timer)
     Timer	*next;
 };
 /*e: struct [[Timer]] */

@@ -610,6 +610,7 @@ newfid(Filsys *fs, int fid)
 /*e: function [[newfid]] */
 
 /*s: function [[getclock]] */
+/// filsysstat | filsysread -> <>
 static
 uint
 getclock(void)

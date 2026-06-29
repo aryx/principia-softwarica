@@ -19,6 +19,7 @@
 static Channel*	ctimer;	/* chan(Timer*)[100] */
 /*e: global [[ctimer]] */
 /*s: global [[timer]] */
+// freelist
 static Timer *timer;
 /*e: global [[timer]] */
 
@@ -63,6 +64,7 @@ timerproc(void*)
     na = 0;
     nt = 0;
     old = msec();
+
     for(;;){
         sleep(1);	/* will sleep minimum incr */
         new = msec();
