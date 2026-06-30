@@ -458,7 +458,7 @@ and gives pointers to other books in the \principia series.
 Some appendices present the code of non-functional properties:
 code to help debug [[mk]] itself in Appendix~\ref{chap:debugging-appendix} and
 code to profile [[mk]] itself in Appendix~\ref{chap:profiling-appendix}.
-%old: and code to manage errors in Appendix~\ref{chap:error}.
+%alt: and code to manage errors in Appendix~\ref{chap:error}.
 %
 Appendix~\ref{chap:utilities} contains the code of
 utility functions used by [[mk]] but that are not specific to [[mk]]
@@ -653,7 +653,7 @@ struct Symtab	*next;
 
 %dup:
 The end of the list is represented by the null pointer ([[nil]] in \plan).
-% but no S in mk
+%code: but no S macro in mk?
 
 %claude:
 A {single} bucket can hold entries from different namespaces, because
@@ -709,7 +709,7 @@ symlook(char *sym, int space, void *install)
 }
 @
 %ocaml: just use Hashtbl.find
-%compiler: called lookup in 5c (and 5a)
+%alt: called lookup in 5c (and 5a)
 %code: define symexists() that uses install == nil, cleaner?
 %  and return bool? #define symexists(sym, space) symlook(sym, space, nil) != nil
 
@@ -1401,20 +1401,14 @@ to a set of rules chained together by an extra field in [<Rule>]:
 struct Rule	*chain;		/* hashed per target */
 @
 
-% FIGURE note that Rule.chain is different than Rule.next! And also Sym.next!
-% Here in same list because same target.
-% For Sym.next in same list because same hashed (name x namespace).
-% Can even have symbol in different namespace in the same bucket in Sym.next.
-% "Rules are linked together with Rule.next so you can iterate
-%  over all the rules in a mkfile.
-%  Some rules share the same target and are chainted together with
-%  the Rule.chain, as shown in Figure X"
-
+%said-later: Rule.chain, Rule.next! And also Sym.next!
 
 %claude:
 The [<Rule.chain>] field and the [<Rule.next>] field serve
-different purposes and are easy to confuse. [[Rule.next]] links
-{all} rules in the mkfile in order of appearance (a flat list).
+different purposes and are easy to confuse.
+%
+[[Rule.next]] links {all} rules in the mkfile in order of
+appearance (a flat list).
 %
 [[Rule.chain]] links only the rules that share the {same target},
 forming a per-target chain stored in the [[S_TARGET]] namespace
@@ -1678,14 +1672,15 @@ newnode(char *name)
     return node;
 }
 @
+%code: rename false to USE_CACHE_IS_OK, vs FORCE_READ_NO_CACHE
+
+%alt: node cache? put now?
 
 % owning name after call! => call strdup in caller
 
 % pass false, cos ok to use cache. nothing has been generated so nothing
 %  can have invalidate the cache.
 
-%code: rename false to USE_CACHE_IS_OK, vs FORCE_READ_NO_CACHE
-%alt: node cache? put now?
 
 A node is also labeled with a set of {\em node attributes}:
 % seen rule attributes before
@@ -1752,7 +1747,7 @@ struct Arc
     <<[[Arc]] extra fields>>
 };
 @
-\n option Rule? I dont think so, every call to newarc have a defined rule arg
+%code:  option Rule? I dont think so, every call to newarc have a defined rule arg
 %ocaml: I think you just need the recipe and some flags of the rule,
 % so separate rule vs rule_exec
 
@@ -1769,7 +1764,6 @@ as explained in Section~\ref{sec:virtual}).
 In that case, we still want the node corresponding to the target of the rule
 to be connected to a rule, especially its recipe.
 %alt: could have rule in Node, actually master rule in Node.
-\l seen Rule before.
 
 The head of the list of arcs of a node is stored in [<Node.arcs>],
 but the arcs are chained together with the following field:
@@ -1789,17 +1783,16 @@ In that case, [[mk]] needs to remember in the arc
 connecting [[hello.5]] to [[hello.c]] the {\em stem}
 that was used to instantiate the meta rule (here [[hello]]):
 
-% so can set $stem for the actual value for the recipe to run
 <<[[Arc]] other fields>>=
 // option<ref_own<string>>, what '%' matched?
 char		*stem;
 @
-\l why need that? Node.name is not expanded already?
-%  yes, in graph, but in recipe still need to set dollar stem in env
-\l here not in Rule because Rule is generic template; Here it is instantiated.
-% Also used because in dorecipe we also use alltargets, which is not
-%  expanded.
 %ocaml: do a rule_exec containing all necessary information
+
+%Why need that? Node.name is not expanded already?
+%  yes, in graph, but in recipe still need to set dollar stem in env
+% here not in Rule because Rule is generic template; Here it is instantiated.
+% Also used because in dorecipe we also use alltargets, which is not expanded.
 
 The function below constructs a new arc
 that can be added later to the list of arcs of a source node.
@@ -1829,38 +1822,24 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     return a;
 }
 @
-\l assert r ? (but not assert n)
+%code: assert r ? (but not assert n)
 
 
 
 
 \section{[[Job]]s}
-% and [[jobs]]
-
-%claude:
-%A [<Job>] captures everything needed to run a recipe and update
-%the graph afterward. It carries more than just the recipe: the
-%list of target nodes ([[n]]) is needed so that after the recipe
-%completes, [[mk]] can mark all those nodes [<MADE>] and update
-%their modification times. The word lists ([[t]] for targets, [[p]]
-%for prerequisites) are needed to set the special shell variables
-%[[\$target]], [[\$prereq]], and [[\$stem]] before invoking the recipe.
-%The separation between the node list and the word lists exists
-%because the same information is needed in two forms: nodes for
-%graph updates, words for the shell environment.
+%alt: and [[jobs]]
 
 %trans:
 Finally, the last core data structure of [[mk]] is the
-%
 description of a job.
 %
 As I mentioned in Section~\ref{sec:job-scheduler-principles}, a job must contain
-all the information needed to run a recipe and to update
-the graph of dependencies: a rule (and its recipe), 
-a list of nodes to update, and the value of special
-variables such as [[$target]], [[$prereq]], or
-[[$stem]]:
-
+all the information needed to
+run a recipe and to update the graph of dependencies: 
+a rule (and its recipe), 
+a list of nodes to update, and 
+the value of special variables such as [[$target]], [[$prereq]], or [[$stem]]:
 
 <<struct [[Job]]>>=
 struct Job
@@ -1886,33 +1865,46 @@ struct Job
 };
 @
 %ocaml: I think you just need the recipe and some flags of the rule.
-\l why need targets? info is already in node. To ease envupd?
-\l why so short field names suddenly? avoid confusion with the one in Rule? meh
-\l not owned, ref to words in rules or the graph
-%$
+%said-later: why need targets? info is already in node. To ease envupd?
+%code: why so short field names suddenly? avoid confusion with the one in Rule? meh
+% not owned, ref to words in rules or the graph
+
+
+%claude:
+%A [<Job>] captures everything needed to run a recipe and update
+%the graph afterward.
+%
+%It carries more than just the recipe: 
+The list of target nodes ([[n]]) is needed so that after the recipe
+completes, [[mk]] can mark all those nodes [<MADE>] and update
+their modification times.
+%
+The word lists ([[t]] for targets, [[p]] for prerequisites)
+are needed to set the special shell variables
+[[\$target]], [[\$prereq]], and [[\$stem]] before invoking the recipe.
+%
+The separation between the node list and the word lists exists
+because the same information is needed in two forms: 
+nodes for graph updates, words for the shell environment.
 
 % reference rule, node (so Arc) (and Word but less important)
-
-% have list of nodes because finishing a job will modify
-% the graph! put some MADE
-
-% targets! prerequisites! plural!
 
 % stem again? propagated from Arc? to pass to shell for dollar stem setting
 %ocaml: factorize in rule_exec
 
 The list of target nodes of a job are chained together through
 an extra field in [<Node>]:
-\t list because rules may have multiple targers, as in Figure X
-\t  and important modify time of all nodes!
+%said-later: list because rules may have multiple targers, as in Figure X
+%  and important modify time of all nodes!
 
 \label{sec:nodes}
 <<[[Node]] extra fields>>=
 // list<ref<Node>> (head = Job.n)
 struct Node	*next;		/* list for a rule */
 @
+
 % list of all targets for a job (with a master rule), as when done
-%  will need to mark as done multiple files (and check they are there)
+% will need to mark as done multiple files (and check they are there)
 % usually have set of nodes via Arc, but here, no need target (parent) node.
 
 %trans-dull:
@@ -1945,19 +1937,19 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 %old: 
 % - tar -> oldtargets, atar -> alltargets, pre -> allprereqs, npre -> newprereqs
 % - change order of parameters, put alltargets first
-\t rename fields, aspectize setting certain fields
+%code: rename fields, aspectize setting certain fields
 
 
 This job can then be added to the job queue, which is stored in the
-global [[jobs]]:
+global [<jobs>]:
 
 <<global [[jobs]]>>=
 // list<ref_own<jobs>> (next = Job.next)
 Job *jobs;
 @
-\n here cos used by mk(). Cant delayed.
-\t actually aspectized now, so maybe could delay? or maybe useful
-\t  to know there is a list of jobs
+%alt: here cos used by mk(). Cant delayed.
+% actually aspectized now, so maybe could delay? or maybe useful
+% to know there is a list of jobs
 %ocaml: not sure you need a global, can be a local in run.ml?
 % also use a Queue
 
@@ -1965,9 +1957,6 @@ Job *jobs;
 // list<ref_own<Job>> (head = jobs)
 struct Job	*next;
 @
-
-%trans:?
-% draw diagram showing relations to each other, what includes what?
 
 \section{Putting it together: the data structures for [[hello.mk]]}
 \label{sec:core-ds-overview}
@@ -2053,18 +2042,26 @@ DYNAMIC: graph built when "hello" is requested.
                               (leaves, already on disk)
 \end{vdiagram}
 \caption{The core data structures of [[mk]], instantiated for [[hello.mk]].
-%the symbol-table lookup, the static [<Rule>] lists, and the dynamic
-%[<Node>]/[<Arc>] graph built to make [[hello]].
+%alt: the symbol-table lookup, the static [<Rule>] lists, and the dynamic
+% [<Node>]/[<Arc>] graph built to make [[hello]].
 }
 \label{fig:core-ds-hello}
 \end{figure}
+%yoann1: put also Rule.chain and Sym.next in figure?
+
+% Here in same list because same target.
+% For Sym.next in same list because same hashed (name x namespace).
+% Can even have symbol in different namespace in the same bucket in Sym.next.
+% "Rules are linked together with Rule.next so you can iterate
+%  over all the rules in a mkfile.
+%  Some rules share the same target and are chainted together with
+%  the Rule.chain, as shown in Figure X"
 
 %The name "hello" sits in two spaces (target, node); "OBJS" in a third:
 %
 %A Node also has time
 %(mtime, 0=absent) and flags (NOTMADE until work() makes it MADE):
 %  Node.arcs *--> Arc;  Arc.n *--> Node;  Arc.r *--> Rule;  Arc.nx = next
-
 
 %claude:
 One way to read Figure~\ref{fig:core-ds-hello} is to follow what happens
