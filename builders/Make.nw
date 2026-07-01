@@ -7341,21 +7341,6 @@ for(a = n->arcs; a; a = a->next){
 %alt: and executing/waiting process
 %alt: and fixing outdated files (after finding outdated files)
 
-%claude:
-%The scheduler has three responsibilities split across three
-%functions, and the split is worth understanding before diving
-%into the code. [<run()>] is the {producer} side: it appends a
-%new job to [<jobs>] and, if a processor slot is free, kicks
-%[<sched()>] to start it immediately. [<sched()>] is the
-%{launcher}: it pops a job, hands it to [<execsh()>] to fork
-%a shell, and records the resulting process id in the [<events>]
-%slot table. [<waitup()>] is the {reaper}: it blocks on
-%[[wait()]], looks the returned pid up in [<events>] to find
-%which job finished, calls [<update()>] to mark the targets
-%[<MADE>], and then calls [<sched()>] again to launch the next
-%queued job. The slot table is the glue: it is the only mapping
-%from kernel-level pids back to graph-level nodes.
-
 %trans:
 In this chapter, you will see the remaining important functions
 of [[mk]] that I introduced in Figure~\ref{fig:controlflow}.
@@ -7365,7 +7350,7 @@ I mentioned
 which {enqueues} a job, and
 [<waitup()>] (called from [<mk()>]),
 which {waits} for a job to finish.
-\l (and which calls update() to change the building status of a node to MADE)
+% (and which calls update() to change the building status of a node to MADE)
 %
 Both functions eventually call [<sched()>], which takes a job from
 the job queue and {schedules} it for execution by a shell with [<execsh()>].
@@ -7373,13 +7358,35 @@ the job queue and {schedules} it for execution by a shell with [<execsh()>].
 The following sections will explain the code of
 [<run()>],
 [<waitup()>],
-\l update
+% update
 [<sched()>], and 
 [<execsh()>].
 
-\section{Enqueuing jobs: [[run()]]}
 
-%\subsection{[[run()]]}
+%claude:
+%The scheduler has three responsibilities split across three
+%functions, and the split is worth understanding before diving
+%into the code.
+%
+%[<run()>] is the {producer} side: it appends a
+%new job to [<jobs>] and, if a processor slot is free, kicks
+%[<sched()>] to start it immediately.
+%
+%[<sched()>] is the {launcher}: it pops a job, hands it to [<execsh()>] to fork
+%a shell, and records the resulting process id in the [<events>]
+%slot table.
+%
+%[<waitup()>] is the {reaper}: it blocks on
+%[[wait()]], looks the returned pid up in [<events>] to find
+%which job finished, calls [<update()>] to mark the targets
+%[<MADE>], and then calls [<sched()>] again to launch the next
+%queued job.
+%
+%The slot table is the glue: it is the only mapping
+%from kernel-level pids back to graph-level nodes.
+
+\section{Enqueuing jobs: [[run()]]}
+%alt: \subsection{[[run()]]}
 
 %crossref:
 [[run()]] simply adds a job in the global job queue [<jobs>]
@@ -7407,9 +7414,9 @@ run(Job *j)
 }
 @
 %ocaml: use Queue.add, faster, at least he should have a ljob ...
-\l j->next = nil  redundant since does it already in newjob
+%code: j->next = nil  redundant since does it already in newjob
 
-%\subsection{[[nrunning]] and [[nproclimit]]}
+%alt: \subsection{[[nrunning]] and [[nproclimit]]}
 
 [<run()>] relies on the two globals below:
 
@@ -7423,7 +7430,7 @@ static int nproclimit;
 
 [<nrunning>] counts the number of processes currently running a recipe, while
 [<nproclimit>] sets a limit on the number of processes to run at the same time.
-\l that mk should not go over
+% that mk should not go over
 %
 This last global usually corresponds to the number of processors on the machine.
 %
@@ -7435,7 +7442,6 @@ schedule one of the enqueued jobs.
 
 
 You can modify [<nproclimit>] by modifying the [[$NPROC]] environment variable.
-%$
 Indeed, [[mk]] at startup time reads the environment 
 (with [<readenv()>]) and looks for this variable to setup [<nproclimit>]
 with the code below:
@@ -7443,8 +7449,9 @@ with the code below:
 <<[[mk()]] initializations>>=
 nproc();	/* it can be updated dynamically */
 @
-\n mk not main, so run for each mkfile, but not a big difference, could be
-\n  in main honestly, but must be after parsing the mkfile
+
+%  mk not main, so run for each mkfile, but not a big difference, could be
+%  in main honestly, but must be after parsing the mkfile
 
 <<function [[nproc]]>>=
 void
@@ -7467,14 +7474,14 @@ nproc(void)
 }
 @
 %pad: use empty_words
-\n like [[nrep()]]
-\l can also be modified in mkfile, by doing NPROC=xxx but stupid.
-\l is it setup by \plan by default at init time? after kernel boots?
 
+% like [[nrep()]]
+% can also be modified in mkfile, by doing NPROC=xxx but stupid.
+% is it setup by \plan by default at init time? after kernel boots?
 
 
 \section{Scheduling jobs}
-% use different title since also chapter name?
+%alt: use different title since also chapter name?
 
 %trans:
 Before showing the code of [<sched()>], 
@@ -7496,7 +7503,7 @@ This is why [<sched()>], in addition to executing new processes,
 needs also to remember the mapping between a process and a job.
 %
 [[RunEvent]] below records a single mapping between a process id and a job:
-\l see \book{Kernel}, process identifier
+% see \book{Kernel}, process identifier
 
 <<struct [[RunEvent]]>>=
 struct RunEvent {
@@ -7507,7 +7514,7 @@ struct RunEvent {
     Job *job;
 };
 @
-%bug? seems that job never freed
+%code: bug? seems that job never freed
 
 The list of mappings is stored in the following global:
 
@@ -7516,14 +7523,16 @@ The list of mappings is stored in the following global:
 static RunEvent *events;
 @
 %ocaml: use instead map (e.g., hash) from pid to job.
+
 <<global [[nevents]]>>=
 static int nevents;
 @
-\t should be always == nproclimit, so maybe can remove it
-\l  or sometimes nproclimit can go down, in which case we dont really
-\l  but useless opti
-\t  just remember old_nproclimit in nproc() so know if need realloc
-\t  but anyway should not call nproc, and realloc does not matter.
+
+% should be always == nproclimit, so maybe can remove it
+%  or sometimes nproclimit can go down, in which case we dont really
+%  but useless opti
+%  just remember old_nproclimit in nproc() so know if need realloc
+%  but anyway should not call nproc, and realloc does not matter.
 
 [<events>] is a {growing array}. The index of a mapping in this
 array is called a {\em slot}.
@@ -7574,7 +7583,6 @@ The growing array is initialized in [<nproc()>]:
 %node, which then re-evaluates whether any waiting job can be
 %enqueued into [[events]] by a follow-up [<sched()>] call.
 
-
 <<[[nproc()]] grow nevents if necessary>>=
 if(nproclimit > nevents){
     if(nevents)
@@ -7588,9 +7596,10 @@ if(nproclimit > nevents){
 }
 @
 %ocaml: no need, Hashtbl.t grows as needed
-\t replace nproclimit by != nevents
-\t nproc called from mk, so code above should never call the Realloc part.
-\l so nevents should be = to nproclimit at the end
+
+%code: replace nproclimit by != nevents
+% nproc called from mk, so code above should never call the Realloc part.
+% so nevents should be = to nproclimit at the end
 
 
 [<sched()>] relies on a few helper functions to operate on [<events>].
@@ -7632,12 +7641,12 @@ pidslot(int pid)
     return ERROR_NEG1;
 }
 @
-\t this one iterate on all nevents, not just nproclimit
-% but should be the same between two runs of mk
-% so maybe could simplify.
-\t use nproclimit, not nevents above, more consistent
 %ocaml: use Hashtbl.find
 
+% this one iterate on all nevents, not just nproclimit
+% but should be the same between two runs of mk
+% so maybe could simplify.
+% use nproclimit, not nevents above, more consistent
 
 
 \subsection{[[sched()]]}
@@ -7704,16 +7713,17 @@ to pass to the shell as shell arguments.
 [[mk]] passes the [[-e]] flag so that every commands from the recipe returning
 an error will abort the whole execution of the recipe (see the \book{Shell}),
 a useful default.
-\l why this is good? safe
-\l what is third parameter of execsh? buf, for backquote exec to capture output
-\t SUPER IMPORTANT ACTUALLY, see recursive make with error inside a for
-\t look, you want to abort the whole thing!
+
+% why this is good? safe
+% what is third parameter of execsh? buf, for backquote exec to capture output
+% SUPER IMPORTANT ACTUALLY, see recursive make with error inside a for
+% look, you want to abort the whole thing!
 
 The last argument to [<execsh()>] ([['e']]) contains the {environment}
 in which to execute the shell.
 %
 This environment will contain the values for the special [[mk]] variables
-(e.g., [[$target]], [[$prereq]], [[$stem]]) and user variables. %$
+(e.g., [[$target]], [[$prereq]], [[$stem]]) and user variables.
 %crossref:
 This environment is built by [<buildenv()>] called above, which I will present
 in Chapter~\ref{chap:shellenv}.
@@ -7732,63 +7742,24 @@ if(jobs == nil){
     return;
 }
 @
-\n usage() is for profiling
-\l explain usage?
-\t usage -> processor_usage_profile()
+% usage() is for profiling
+% explain usage?
+%code: usage -> processor_usage_profile()
 
 
 \section{Executing Jobs: [[execsh()]]}
 \label{sec:grandchild-trick}
 
-%claude:
-%[<execsh()>] is the bridge between [[mk]] and the shell. The
-%two-fork dance below is not gratuitous: there are two reasonable
-%ways to feed a recipe to a shell, and [[mk]] picks the harder
-%one for good reasons. The simple way is [[sh -c "recipe text"]],
-%which would mean stuffing the recipe through the [[argv]] of
-%[[execl()]]; the problem is that the recipe may contain quotes,
-%backslashes, and other characters that [[mk]] would have to
-%re-escape to survive the shell's command-line parsing. The
-%[[mk]] way is to feed the recipe through {standard input}: the
-%shell sees raw bytes, no re-escaping is needed, and the recipe
-%can be arbitrarily long. The price is that something must
-%{produce} those bytes on the writing end of a pipe while the
-%shell consumes them, hence the second fork:
-%
-%\begin{verbatim}
-%       mk parent
-%           |
-%           | rfork(RFPROC|RFFDG|RFENVG)
-%           v
-%       child (will exec the shell)
-%       in[0] = read end, in[1] = write end of pipe
-%           |
-%           | fork()
-%           v
-%       grandchild
-%       (writes recipe bytes into in[1], then exits)
-%
-%       child after grandchild forks:
-%           dup(in[0], STDIN); close(in[0]); close(in[1]);
-%           execl(shell, ...)
-%\end{verbatim}
-%
-%%claude:
-%The reason the {child} (not the grandchild) execs the shell is
-%that the [[mk]] parent needs to know the shell's pid for
-%[<waitup()>], and only the direct child's pid is reported back
-%through [[rfork()]]. The grandchild that does the writing exits
-%quickly, before the shell finishes; its termination is reaped
-%incidentally by [<waitup()>] and discarded by the
-%[<NOT_A_JOB_PROCESS>] code path.
-
 [<execsh()>] relies on the globals below to know which shell to execute.
 %
 Under \plan, [[mk]] uses the shell [[rc]] (see the \book{Shell}):
 
-<<global [[shell]]>>=
+<<global [[shell]](plan9.c)>>=
 Shell* shell = &rc;
 @
+
+% saw before (rc.c) is chunk because can also have (sh.c)
+% this time (Plan9.c) because can also have (Unix.c) or Posix.c
 
 <<struct [[Shell]]>>=
 struct Shell {
@@ -7797,7 +7768,7 @@ struct Shell {
 };
 @
 
-<<global [[rc]]>>=
+<<global [[rc]](plan9.c)>>=
 Shell rc = {
   .shellname = "rc",
   .shell = "/bin/rc",
@@ -7806,25 +7777,24 @@ Shell rc = {
 
 % can change shell, see Section~\ref{sec:mkshell}.
 
-%\subsection{Shell configuration}
+%alt: \subsection{Shell configuration}
 
 We do not want the shell to print a {prompt} before each command
 from the recipe, so [<execsh()>] adds the [[-I]] flag as a shell argument
 (in addition to [[-e]] added by [<sched()>]):
-\l unless you added :E: for NOMINUSE
+%said-later: unless you added :E: for NOMINUSE
 
-<<global [[shflags]]>>=
+<<global [[shflags]](rc.c)>>=
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
 @
 
-%\subsection{[[execsh()]]}
+%alt: \subsection{[[execsh()]]}
 
 [[execsh()]] below essentially forks a shell interpreter, creates a pipe, 
 and feeds this shell with commands from the recipe through this pipe
 (via another forked process):
 
-%plan9.c 
-<<function [[execsh]]>>=
+<<function [[execsh]](plan9.c)>>=
 /// main -> mk -> work -> dorecipe -> run -> sched -> <>
 int
 execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
@@ -7880,14 +7850,14 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
 %   shell must be in child1
 %old: 
 % - args -> shargs, cmd -> shinput
-\n put flags after cmd in argument of execsh, more logical? no! cmd is input!
+
+%code: put flags after cmd in argument of execsh, more logical? no! cmd is input!
 
 %ocaml-found: not that you need to pass shellname too! execl accept
 % the path to the program and then a list of arguments, including the
 % program name itself!
 % (I forgot in omk originally and so the first argument (-e) was
 % skipped and so mk was not stopping at the first error; found via strace)
-
 
 [<execsh()>] relies on the 
 [[rfork()]], 
@@ -7902,30 +7872,75 @@ as well as on the
 [[perror()]] 
 functions from the C library (see the \book{Libcore}), which are
 thin wrappers around syscalls.
-\t diff rfork and fork, RFENVG vs RFREND ??? RFENVG so not share env var
-\t  and good because will modify those vars in the child! based on
-\t  modif in mkfile (hmm but ENV anyway done by /env/ no? NO! shared namespace)
-\t  but anyway call rfork(RFENVG) in readenv, so does not matter no?
-\t and why call _exits instead of exits?
+
+
+% diff rfork and fork, RFENVG vs RFREND ??? RFENVG so not share env var
+%  and good because will modify those vars in the child! based on
+%  modif in mkfile (hmm but ENV anyway done by /env/ no? NO! shared namespace)
+%  but anyway call rfork(RFENVG) in readenv, so does not matter no?
+% and why call _exits instead of exits?
+
+
+%claude:
+%[<execsh()>] is the bridge between [[mk]] and the shell. The
+%two-fork dance below is not gratuitous: there are two reasonable
+%ways to feed a recipe to a shell, and [[mk]] picks the harder
+%one for good reasons. The simple way is [[sh -c "recipe text"]],
+%which would mean stuffing the recipe through the [[argv]] of
+%[[execl()]]; the problem is that the recipe may contain quotes,
+%backslashes, and other characters that [[mk]] would have to
+%re-escape to survive the shell's command-line parsing. The
+%[[mk]] way is to feed the recipe through {standard input}: the
+%shell sees raw bytes, no re-escaping is needed, and the recipe
+%can be arbitrarily long. The price is that something must
+%{produce} those bytes on the writing end of a pipe while the
+%shell consumes them, hence the second fork:
+%
+%\begin{verbatim}
+%       mk parent
+%           |
+%           | rfork(RFPROC|RFFDG|RFENVG)
+%           v
+%       child (will exec the shell)
+%       in[0] = read end, in[1] = write end of pipe
+%           |
+%           | fork()
+%           v
+%       grandchild
+%       (writes recipe bytes into in[1], then exits)
+%
+%       child after grandchild forks:
+%           dup(in[0], STDIN); close(in[0]); close(in[1]);
+%           execl(shell, ...)
+%\end{verbatim}
+%
+%%claude:
+%The reason the {child} (not the grandchild) execs the shell is
+%that the [[mk]] parent needs to know the shell's pid for
+%[<waitup()>], and only the direct child's pid is reported back
+%through [[rfork()]]. The grandchild that does the writing exits
+%quickly, before the shell finishes; its termination is reaped
+%incidentally by [<waitup()>] and discarded by the
+%[<NOT_A_JOB_PROCESS>] code path.
 
 
 %dup: (a bit different) scheduling/execsh
 [<execsh()>] creates two processes: one for the shell, and one
 whose only job is to feed the shell through a pipe.
 %alt: sh -e 'cmd' ? but then need escape mess?
-\t why this approach? for escaping mess? simpler design?
-\l good, but then pb with :I:
-\l  because feed stdin and then close, that means programs called from
+% why this approach? for escaping mess? simpler design?
+% good, but then pb with :I:
+%  because feed stdin and then close, that means programs called from
 %   shell can not read from stdin :( for instance make sync works but
 %   mk sync does not. so added :I: in mk-ocaml
-\l FIGURE? cos 2 forks below.
+% FIGURE? cos 2 forks below.
 %
 By relying on this last process, [[mk]] can continue to schedule
 jobs without having to wait for the shell to finish reading
 the commands from the recipe.
-\l can do stuff in //. Make originally didn't (apparently).
-\l and sometimes multiple lines and stop before each line so bad
-\l can also pass a buf for bquote (backquote execution), to store
+% can do stuff in //. Make originally didn't (apparently).
+% and sometimes multiple lines and stop before each line so bad
+% can also pass a buf for bquote (backquote execution), to store
 %  stdout instead of just displaying it gradually
 
 
@@ -7936,12 +7951,12 @@ shell interpreter in the direct child, not the grandchild.
 Indeed, the parent process of the child, the [[mk]] process,
 knows only about the process id of the child. It is this process id
 that is stored later in [<events>] and looked for by [<waitup()>].
-\t also not child of mk, grandchild, so does not interfere with waitup!
+% also not child of mk, grandchild, so does not interfere with waitup!
 %
 The parent process does not know about the process id of the grandchild.
 Moreover, this grandchild will terminate quickly, before the shell finishes
 executing the recipe.
-\l exportenv! so set in child the variables in environment
+% exportenv! so set in child the variables in environment
 
 Here is the code to feed the shell in the grandchild:
 
@@ -7958,7 +7973,6 @@ while(shinput < endshinput){
 }
 @
 %old: p -> endshinput (and before cmd -> shinput)
-
 
 
 
@@ -7983,30 +7997,8 @@ if(err < 0){
 @
 
 
-
-
-
 \section{Waiting for jobs to finish}
 \label{sec:waiting-processes}
-
-%claude:
-%The complication of [<waitup()>] comes from a constraint imposed
-%by the kernel: under \plan (and \unix), [[wait()]]/[[await()]]
-%cannot ask ``has process \emph{X} finished?'' It can only ask
-%``has \emph{any} child finished?'' This means [[mk]] cannot
-%isolate job processes from {other} children it may have forked
-%for unrelated reasons---backquote command substitution
-%(Section~\ref{sec:backquotes}), dynamic [[mkfile]] inclusion
-%(Section~\ref{sec:dynamic-mkfile}), and custom dependency
-%comparison programs (Section~\ref{sec:custom-comparison}) all
-%spawn processes that will eventually be reported by [[wait()]]
-%on a future [<waitup()>] call. This is why [<waitup()>] has to
-%look up every returned pid in the [<events>] slot table and
-%gracefully handle the case where the pid is {not} a job---the
-%[<NOT_A_JOB_PROCESS>] return value covers exactly that case.
-%On Linux, [[waitpid(pid, ...)]] would let [[mk]] target a
-%specific child and avoid this whole class of edge cases, but
-%\plan's [[await()]] does not offer that.
 
 %trans:
 The interface of [<waitup()>] is complex.
@@ -8017,11 +8009,11 @@ and describe later the use of those arguments and the
 different edge cases of [[waitup()]].
 
 \subsection{[[waitup()]]}
-\l wait user process?
+% wait user process?
 
 %trans: %dup: scheduling/scheduling/sched %flow:
 Once [<sched()>] scheduled a job and modified [<events>],
-[<mk()>] can call [[waitup()]] to wait for a job to finish.
+[<mk()>] can call [<waitup()>] to wait for a job to finish.
 %
 Indeed, [[waitup()]] can now rely on [<events>] to know which job is associated
 with the waited process. Then, [[waitup()]] can call [<update()>] to update
@@ -8082,6 +8074,8 @@ again:		/* rogue processes */
 % - fake was called [[uarg]] (for update arg)
 %pad: I added node local.
 
+
+
 %flow:
 [<waitup()>] above relies on the helper function [[xwaitfor()]] below,
 which calls itself [[wait()]] from the C library (see the \book{Libcore}),
@@ -8111,11 +8105,10 @@ xwaitfor(char *msg)
 wait for a child. Indeed, [[wait()]] returns a [[Waitmsg]] data structure
 (see the \book{Libcore}), which allows easy access to the
 pid and returned string of the child process.
-\l await just store information in buffer string, so need parse it
-
+% await just store information in buffer string, so need parse it
 
 \subsection{[[update()]]}
-\l Update the graph of dependencies
+%alt: Update the graph of dependencies
 
 [[update()]], called in [<waitup()>], 
 marks the target nodes of a job as [<MADE>]
@@ -8144,7 +8137,7 @@ update(Node *node, bool fake)
 %old: 
 % - I changed the order of the parameter, better put node before
 % - I reorg code so easier to aspectize fake and virtual
-\t pass true to timeof, to force, to not use the cache because indeed
+%code: pass true to timeof, to force, to not use the cache because indeed
 %  time probably changed
 
 I will present the use of the [[fake]] parameter later in
@@ -8172,7 +8165,7 @@ enum WaitupParam {
 };
 @
 %pad: I added the enum above; use of 1 and -1, -2, -3 was cryptic
-\l could transform in a bool, and get rid of the ERROR2 ERROR3, unify
+%code: could transform in a bool, and get rid of the ERROR2 ERROR3, unify
 
 The return value of [<waitup()>], of the type below, describes
 a few possible scenarios:
@@ -8185,6 +8178,26 @@ enum WaitupResult {
 };
 @
 %pad: I added that, those 1, -1 was cryptic
+
+%claude:
+%The complication of [<waitup()>] comes from a constraint imposed
+%by the kernel: under \plan (and \unix), [[wait()]]/[[await()]]
+%cannot ask ``has process \emph{X} finished?'' It can only ask
+%``has \emph{any} child finished?'' This means [[mk]] cannot
+%isolate job processes from {other} children it may have forked
+%for unrelated reasons---backquote command substitution
+%(Section~\ref{sec:backquotes}), dynamic [[mkfile]] inclusion
+%(Section~\ref{sec:dynamic-mkfile}), and custom dependency
+%comparison programs (Section~\ref{sec:custom-comparison}) all
+%spawn processes that will eventually be reported by [[wait()]]
+%on a future [<waitup()>] call. This is why [<waitup()>] has to
+%look up every returned pid in the [<events>] slot table and
+%gracefully handle the case where the pid is {not} a job---the
+%[<NOT_A_JOB_PROCESS>] return value covers exactly that case.
+%On Linux, [[waitpid(pid, ...)]] would let [[mk]] target a
+%specific child and avoid this whole class of edge cases, but
+%\plan's [[await()]] does not offer that.
+
 
 %flow:
 To understand [<NOT_A_JOB_PROCESS>] above, it is important
@@ -8204,12 +8217,12 @@ will create processes that are not related to a job.
 %
 Those processes will interfere with the call to [[wait()]].
 The end of those processes must also be processed by [<waitup()>].
-\l but they will popup in waitup (unless you called waitpid yourself before)
+% but they will popup in waitup (unless you called waitpid yourself before)
 %alt: could have another waitxx function, to not interfere with job processes
 %
 In fact, the second parameter of [<waitup()>] ([[retstatus]])
 is used only by those advanced features and processes.
-\l used for <| and :P:
+% used for <| and :P:
 % INOUT. for IN it is a pid and OUT it is the return status (ugly)
 % put here because can have only one call to wait. wait is waiting
 %  indiscrimently, so have to centralize in one place.
@@ -8267,8 +8280,8 @@ if(buf[0]){
 if(sym == nil)
     continue;	/* not interested in this node */
 @
-\t should never happen I think, cos node list is made with
-\t  node we are interested in
+%code: should never happen I think, cos node list is made with
+%  node we are interested in
 
 % because up to date target anyway?
 
@@ -8281,31 +8294,30 @@ When one of the children of [[mk]] returns an error,
 %
 For example, if a C file in a project contains a syntax error,
 then [[5c]] run from [[mk]]
-\l actually from forked rc shell
+% actually from forked rc shell
 will exit with an error.
 %
 We do not want however [[mk]] to exit immediately.
 Indeed, there may still be other jobs running in parallel, 
 for example, compiling other C files in the same project.
-\t sure that children are killed under plan9? maybe just unix?
+% sure that children are killed under plan9? maybe just unix?
 If [[mk]] was exiting, those other jobs may get a signal
 that abruptly interrupts them. In those cases, the files generated
 by those jobs (e.g., object files for a compiler or assembler) 
 may become corrupted.
-\l  or source file if interrupt yacc or lex (or ocamllex!)
-\l or when [[mk]] detects an error
-\n Saw pb with mk-rc.byte when didnt implement that; I got many corrupted cmo.
+%  or source file if interrupt yacc or lex (or ocamllex!)
+% or when [[mk]] detects an error
+% Saw pb with mk-rc.byte when didnt implement that; I got many corrupted cmo.
 %
 Thus, is is important before exiting to let those other
 jobs finish quietly.
 %
-This is why [[mk]] calls [[Exit()]] below instead of
+This is why [[mk]] calls [<Exit()>] below instead of
 calling directly [[exits()]]:
 
-%\subsection{[[Exit()]]}
+%alt: \subsection{[[Exit()]]}
 
-%plan9.c
-<<function [[Exit]]>>=
+<<function [[Exit]](plan9.c)>>=
 void
 Exit(void)
 {
@@ -8314,7 +8326,7 @@ Exit(void)
     exits("error");
 }
 @
-\l Malloc, Realloc, they call Exit in case of error.
+% Malloc, Realloc, they call Exit in case of error.
 % there should be no calls directly to exits (except in main
 % when everything went fine)
 
@@ -8324,6 +8336,7 @@ Exit(void)
 %claude:
 Pressing [[Control-C]] on a build that is compiling ten files in
 parallel is the dangerous case. 
+%alt: use [[^C]] ?
 %
 Under \plan, the {\em interrupt note} is delivered to all
 processes in the same {\em note group} (see the \book{Kernel});
@@ -8350,7 +8363,7 @@ through [<Exit()>] instead of [[exits()]] directly.
 
 %trans:
 % good to wait in Exit, but what if too long recipe? % enter C-c!
-\t But then need to do the right thing! What could go wrong?
+% But then need to do the right thing! What could go wrong?
 
 <<[[main()]] initializations before building>>=
 catchnotes();
@@ -8378,7 +8391,7 @@ notifyf(void *a, char *msg)
     return -1;
 }
 @
-% 0 -> IGNORE_NOTE?
+%code: 0 -> IGNORE_NOTE?
 
 
 <<[[notifyf()]] sanity check not too many notes>>=
@@ -8413,7 +8426,7 @@ killchildren(char *msg)
 % so at some point should get WEmptyChild
 % (or WNotJobProcessDone but would be weird)
 
-\l why not send also postnote to job child process?
+% why not send also postnote to job child process?
 
 %******************************************************************************
 \chapter{The Shell Environment}
