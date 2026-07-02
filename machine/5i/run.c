@@ -1188,23 +1188,55 @@ Ib(instruction inst)
      * signed, but masking with & 0xffffff only extracts the low 24
      * bits without sign-extending them. For a forward branch (bit 23
      * clear) this is harmless, but for a backward branch (bit 23 set,
-     * e.g. offset -1 encoded as 0xffffff) v is left as a large
+     * e.g. offset -1 encoded as 0xffffff) v was left as a large
      * positive number (16777215) instead of being sign-extended to
-     * -1. The target address computed below then ends up ~64MB past
-     * where it should be, sending REGPC far outside any mapped
-     * segment. The next ifetch() at that address then indexes
-     * iprof[(addr-textbase)/PROFGRAN] wildly out of bounds (that
-     * check happens before page_of_vaddr()'s segment-bounds check),
-     * corrupting 5i's own memory and crashing the interpreter itself
-     * instead of the emulated program. Concretely this was hit by
-     * "BL exit(SB)" landing immediately after the BL instruction
-     * (offset -1 word = -4 bytes): the trace showed the bogus target
-     * "BL #4001054" instead of the correct 0x1054. Sign-extending v
-     * here restores the negative offset before it's scaled by <<2 and
-     * added to REGPC. */
-    if(v & 0x800000)
-        v |= ~0xffffff; // sign-extend the 24-bit offset
-    v = reg.r[REGPC] + (v << 2) + 8;
+     * -1, sending REGPC ~64MB past where it should be and, from
+     * there, crashing 5i itself (see ifetch()'s iprof[] bounds
+     * check). Concretely this was hit by "BL exit(SB)" landing
+     * immediately after the BL instruction (offset -1 word = -4
+     * bytes): the trace showed the bogus target "BL #4001054" instead
+     * of the correct 0x1054. This is a regression from commit
+     * a7b36079 (2018), which replaced the shift-based sign-extending
+     * form below (see the "%old:" note in Machine.nw) with the bare
+     * "(v << 2) + 8" that dropped the sign-extension. Restoring the
+     * original form here: shifting left by 8 moves the offset's sign
+     * bit (23) up to bit 31, and the following arithmetic right shift
+     * by 6 both sign-extends it back down and rescales it by <<2 (8
+     * - 6 = 2) in one step.
+     *
+     * It's tempting to "simplify" (v << 8) >> 6 to v << 2 on the
+     * grounds that 8 - 6 = 2, but that's treating << and >> as if
+     * they were plain multiply/divide by a power of two on unbounded
+     * integers, which they are not: v is a fixed-width 32-bit long,
+     * and >> here is an ARITHMETIC shift, which behaves differently
+     * depending on what bit currently sits in position 31. Walking
+     * v = 0xffffff (our -1 example) through both forms shows they
+     * diverge:
+     *
+     *   v                    = 0x00ffffff  (16777215, bit 31 clear)
+     *   v << 2               = 0x03fffffc  (still bit 31 clear: no
+     *                          sign bit anywhere near position 31, so
+     *                          the later ">> 6" step, if it were
+     *                          applied, would just shift in zeros)
+     *   v << 8               = 0xffffff00  (bit 23's 1 has now been
+     *                          pushed all the way up into bit 31,
+     *                          which flips the *sign* of the 32-bit
+     *                          value: this is -256, not +4294967040)
+     *   (v << 8) >> 6         = 0xfffffffc  (arithmetic shift copies
+     *                          that new bit-31 sign bit back down as
+     *                          it shifts, giving -4)
+     *
+     * So (v << 8) >> 6 == -4 (correct: -1 word == -4 bytes), while
+     * v << 2 == 0x3fffffc, a large positive number -- not v << 2's
+     * value shifted differently, but a genuinely different result.
+     * The "8 - 6 = 2" algebra only holds if the intermediate << 8
+     * doesn't change which bit lands in the sign position; here it
+     * deliberately does, since that bit-31 handoff is the entire
+     * sign-extension mechanism, not an incidental side effect to
+     * cancel out. */
+    v = reg.r[REGPC] + 8 +
+        ((v << 8)
+          >> 6);
     /*s: [[Ib()]] trace */
     if(trace)
         itrace("B%s\t#%lux", cond[reg.instr_cond], v);
@@ -1222,12 +1254,12 @@ Ibl(instruction inst)
 
     v = inst & 0xffffff;
     /* claude: same missing sign-extension bug as Ib() above (see the
-     * comment there) -- a backward BL (bit 23 of the 24-bit offset
-     * set) was computing a wildly wrong forward target instead of a
-     * negative one, sending REGPC outside any mapped segment. */
-    if(v & 0x800000)
-        v |= ~0xffffff; // sign-extend the 24-bit offset
-    v = reg.r[REGPC] + (v << 2) + 8;
+     * comment there) -- restoring the original shift-based
+     * sign-extending form instead of the buggy "(v << 2) + 8" from
+     * commit a7b36079. */
+    v = reg.r[REGPC] + 8 +
+           ((v << 8)
+               >> 6);
     /*s: [[Ibl()]] trace */
     if(trace)
         itrace("BL%s\t#%lux", cond[reg.instr_cond], v);
