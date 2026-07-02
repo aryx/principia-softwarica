@@ -523,7 +523,7 @@ whide(Window *w)
     for(j=0; j<nhidden; j++)
         if(hidden[j] == w)	/* already hidden */
             return -1;
-
+    // else
     i = allocimage(display, w->screenr, w->i->chan, false, DWhite);
     if(i){
         hidden[nhidden++] = w;
