@@ -25,7 +25,18 @@ ifetch(uintptr addr)
     if(icache.on)
         updateicache(addr);
     /*e: [[ifetch()]] instruction cache handling */
-    iprof[(addr-textbase)/PROFGRAN]++;
+    /* claude: iprof[] is sized only for the Text segment
+     * (initmemory() allocates (end-base)/PROFGRAN entries), but until
+     * now this increment ran unconditionally on any addr, before
+     * page_of_vaddr() below gets a chance to validate it against the
+     * mapped segments. A PC that strays outside Text (e.g. from the
+     * Ib()/Ibl() branch-offset sign-extension bug) turned this into
+     * an out-of-bounds write that corrupted or crashed 5i itself
+     * (host-level fault) instead of getting page_of_vaddr()'s
+     * graceful "User TLB miss" error. Guard it with the same bound so
+     * a bad PC always goes through that graceful path. */
+    if(addr >= textbase && addr < memory.seg[Text].end)
+        iprof[(addr-textbase)/PROFGRAN]++;
 
     va = page_of_vaddr(addr); // get page
     va += addr&(BY2PG-1); // restore offset in page

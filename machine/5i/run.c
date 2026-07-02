@@ -1184,6 +1184,26 @@ Ib(instruction inst)
     long v;
 
     v = inst & 0xffffff; // 24 bits
+    /* claude: the ARM B/BL 24-bit offset field is two's-complement
+     * signed, but masking with & 0xffffff only extracts the low 24
+     * bits without sign-extending them. For a forward branch (bit 23
+     * clear) this is harmless, but for a backward branch (bit 23 set,
+     * e.g. offset -1 encoded as 0xffffff) v is left as a large
+     * positive number (16777215) instead of being sign-extended to
+     * -1. The target address computed below then ends up ~64MB past
+     * where it should be, sending REGPC far outside any mapped
+     * segment. The next ifetch() at that address then indexes
+     * iprof[(addr-textbase)/PROFGRAN] wildly out of bounds (that
+     * check happens before page_of_vaddr()'s segment-bounds check),
+     * corrupting 5i's own memory and crashing the interpreter itself
+     * instead of the emulated program. Concretely this was hit by
+     * "BL exit(SB)" landing immediately after the BL instruction
+     * (offset -1 word = -4 bytes): the trace showed the bogus target
+     * "BL #4001054" instead of the correct 0x1054. Sign-extending v
+     * here restores the negative offset before it's scaled by <<2 and
+     * added to REGPC. */
+    if(v & 0x800000)
+        v |= ~0xffffff; // sign-extend the 24-bit offset
     v = reg.r[REGPC] + (v << 2) + 8;
     /*s: [[Ib()]] trace */
     if(trace)
@@ -1201,6 +1221,12 @@ Ibl(instruction inst)
     Symbol s;
 
     v = inst & 0xffffff;
+    /* claude: same missing sign-extension bug as Ib() above (see the
+     * comment there) -- a backward BL (bit 23 of the 24-bit offset
+     * set) was computing a wildly wrong forward target instead of a
+     * negative one, sending REGPC outside any mapped segment. */
+    if(v & 0x800000)
+        v |= ~0xffffff; // sign-extend the 24-bit offset
     v = reg.r[REGPC] + (v << 2) + 8;
     /*s: [[Ibl()]] trace */
     if(trace)
