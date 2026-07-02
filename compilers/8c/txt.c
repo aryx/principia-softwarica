@@ -143,6 +143,7 @@ gclean(void)
 /*e: function [[gclean]](x86) */
 
 /*s: function [[nextpc]] */
+/// gins | gclean | ... -> <>
 void
 nextpc(void)
 {
@@ -164,22 +165,25 @@ nextpc(void)
 /*e: function [[nextpc]] */
 
 /*s: function [[gargs]] */
+/// cgenrel -> <>
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
-    long regs;
     Node fnxargs[20], *fnxp;
+    long regs; // to save cursafe
 
-    regs = cursafe;
+    regs = cursafe; // save
 
     fnxp = fnxargs;
+    // step1
     garg1(n, tn1, tn2, 0, &fnxp);	/* compile fns to temps */
 
     curarg = 0;
     fnxp = fnxargs;
+    // step2
     garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
 
-    cursafe = regs;
+    cursafe = regs; // restore
 }
 /*e: function [[gargs]] */
 
@@ -430,6 +434,7 @@ err:
 /*e: function [[regfree]](x86) */
 
 /*s: function [[regsalloc]] */
+/// garg1 -> <>
 void
 regsalloc(Node *n, Node *nn)
 {
@@ -1414,6 +1419,7 @@ gbranch(int o)
 /*e: function [[gbranch]](x86) */
 
 /*s: function [[patch]] */
+/// gmove | gen | ... -> <>
 void
 patch(Prog *op, long pc)
 {
