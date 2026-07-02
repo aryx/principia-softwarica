@@ -1227,7 +1227,7 @@ void Abort(void);
 <<rc/main.c>>=
 <<includes>>
 
-// Rcmain and Isatty are back in plan9.c
+// Rcmain and Isatty are back in {plan9,unix}.c
 extern char* Rcmain;
 extern bool Isatty(fdt fd);
 
@@ -1328,6 +1328,7 @@ extern int nwaitpids;
 // to avoid conflict for wait(), waitpid() signatures
 #define NOPLAN9DEFINES
 #include "rc.h"
+#include "fns.h"
 #include "io.h"
 #include "exec.h"
 #include "getflags.h"
@@ -1336,7 +1337,8 @@ extern int nwaitpids;
 #include <errno.h>
 
 // system-specific globals defined here but used in other files
-char *Rcmain = "/usr/lib/rcmain";
+//goken: was /usr/lib/rcmain
+char *Rcmain = "#9/etc/rcmain.unix";
 char *Fdprefix = "/dev/fd/";
 
 //******************************************************************************
@@ -1358,8 +1360,66 @@ enval(char *s)
   return v;
 }
 
+// from plan9port/sys/.../rc/var.c
+void
+bigpath(var *v)
+{
+ /* convert $PATH to $path */
+ char *p, *q;
+ word **l, *w;
+
+ if(v->val == nil){
+  setvar("path", nil);
+  return;
+ }
+ p = v->val->word;
+ w = nil;
+ l = &w;
+ /*
+  * Doesn't handle escaped colon nonsense.
+  */
+ if(p[0] == 0)
+  p = nil;
+ while(p){
+  q = strchr(p, ':');
+  if(q)
+   *q = 0;
+  *l = newword(p[0] ? p : ".", nil);
+  l = &(*l)->next;
+  if(q){
+   *q = ':';
+   p = q+1;
+  }else
+   p = nil;
+ }
+ setvar("path", w);
+}
+
+// from plan9port (I commented some parts)
+// TODO? merge in Vinit()?
+void
+pathinit(void)
+{
+ var *v;
+    char* s;
+
+ //v = gvlook("path");
+ //v->changefn = littlepath;
+ v = gvlook("PATH");
+ //v->changefn = bigpath;
+ bigpath(v);
+
+    //TODO: done in Vinit instead
+    //s = getenv("RCMAIN");
+    //if (s != nil) {
+    //  Rcmain = s;
+    //}
+    Rcmain = unsharp(Rcmain);
+}
+
 // set in Vinit()
 char **environp;
+
 
 void
 Vinit(void)
@@ -1382,7 +1442,7 @@ Vinit(void)
       setvar(*env, wd);
       //TODO: should generalize this in main.c so it also applies for Plan9
       if(strcmp(*env, "RCMAIN") == 0) {
-        Rcmain = strdup(wd->word);
+          Rcmain = strdup(wd->word);
       }
       *s='=';
       break;
@@ -1390,6 +1450,7 @@ Vinit(void)
       break;
     }
   }
+  pathinit();
 }
 
 //TODO: should be set in execfinit
@@ -1546,7 +1607,7 @@ char *sigmsg[] = {
 // weird bugs like the $status was containing weird strings and so
 // failing mk even if the command was run correctly.
 // Anyway, simpler to uncomment and use the Waitfor() below.
-void
+int
 Waitfor(int pid, bool persist)
 {
  int wpid, sig;
@@ -1660,7 +1721,12 @@ Noerror(void)
 // Directories
 //******************************************************************************
 
-#define	NDIR	14		/* should get this from param.h */
+// bugfix: was 14, matching V7 Unix's 14-char filename limit.
+// Modern filesystems allow up to 255-char filenames (NAME_MAX).
+// Globsize() uses NDIR to size the globname buffer; with NDIR=14,
+// a directory containing e.g. "getnetconninfo.c" (18 chars) would
+// overflow the buffer during Readdir()'s strcpy(), corrupting the heap.
+#define	NDIR	256
 int
 Globsize(char *p)
 {
@@ -1698,7 +1764,7 @@ Opendir(name)
 }
 
 int
-Readdir(int f, char *p, int onlydirs)
+Readdir(int f, void *p, int onlydirs)
 {
   struct dirent *dp = readdir(dirlist[f]);
 
@@ -1785,14 +1851,13 @@ void
 Exit(char *stat, char* loc)
 {
   int n = 0;
-  USED(loc);
-  //if(flag['s'])
-  //  fprint(STDERR, "Exit from %s: %s\n", loc, stat);
+  if(flag['s'])
+     fprint(STDERR, "Exit from %s: %s\n", loc, stat);
 
   while(*stat){
     if(*stat!='|'){
       if(*stat<'0' || '9'<*stat)
- exit(1);
+          exit(1);
       else n = n*10+*stat-'0';
     }
     stat++;

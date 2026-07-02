@@ -7,7 +7,7 @@
 #include "io.h"
 /*e: includes */
 
-// Rcmain and Isatty are back in plan9.c
+// Rcmain and Isatty are back in {plan9,unix}.c
 extern char* Rcmain;
 extern bool Isatty(fdt fd);
 
