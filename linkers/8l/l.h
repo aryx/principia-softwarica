@@ -1,4 +1,4 @@
-/*s: linkers/8l/l.h */
+/*s: 8l/l.h */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
@@ -481,4 +481,4 @@ void mylog(char*, ...);
 #pragma	varargck	type	"P"	Prog*
 #pragma	varargck	type	"R"	int
 #pragma	varargck	type	"A"	int
-/*e: linkers/8l/l.h */
+/*e: 8l/l.h */

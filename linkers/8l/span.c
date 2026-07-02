@@ -1,4 +1,4 @@
-/*s: linkers/8l/span.c */
+/*s: 8l/span.c */
 #include	"l.h"
 
 /*s: function [[span]](x86) */
@@ -1490,4 +1490,4 @@ asmdyn()
     DBG("export table entries = %d\n", exports);
 }
 /*e: function [[asmdyn]] */
-/*e: linkers/8l/span.c */
+/*e: 8l/span.c */

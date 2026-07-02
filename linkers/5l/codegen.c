@@ -1,4 +1,4 @@
-/*s: linkers/5l/codegen.c */
+/*s: 5l/codegen.c */
 #include	"l.h"
 #include	"m.h"
 
@@ -1341,4 +1341,4 @@ asmout(Prog *p, Optab *o)
 }
 /*e: function [[asmout]](arm) */
 
-/*e: linkers/5l/codegen.c */
+/*e: 5l/codegen.c */

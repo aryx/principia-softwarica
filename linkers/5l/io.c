@@ -1,4 +1,4 @@
-/*s: linkers/5l/io.c */
+/*s: 5l/io.c */
 #include	"l.h"
 
 /*s: global [[buf]] */
@@ -135,4 +135,4 @@ cflush(void)
 }
 /*e: function [[cflush]] */
 
-/*e: linkers/5l/io.c */
+/*e: 5l/io.c */

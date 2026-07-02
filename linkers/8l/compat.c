@@ -1,4 +1,4 @@
-/*s: linkers/8l/compat.c */
+/*s: 8l/compat.c */
 #include	"l.h"
 
 /*s: function [[malloc]] */
@@ -49,4 +49,4 @@ fileexists(char *s)
     return stat(s, dirbuf, sizeof(dirbuf)) >= 0;
 }
 /*e: function [[fileexists]] */
-/*e: linkers/8l/compat.c */
+/*e: 8l/compat.c */

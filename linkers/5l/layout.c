@@ -1,4 +1,4 @@
-/*s: linkers/5l/layout.c */
+/*s: 5l/layout.c */
 #include	"l.h"
 #include	"m.h"
 
@@ -431,4 +431,4 @@ addpool(Prog *p, Adr *a)
 }
 /*e: function [[addpool]](arm) */
 
-/*e: linkers/5l/layout.c */
+/*e: 5l/layout.c */

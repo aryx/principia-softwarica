@@ -1,4 +1,4 @@
-/*s: linkers/5l/float.c */
+/*s: 5l/float.c */
 #include	"l.h"
 
 /*s: function [[ieeedtof]] */
@@ -89,4 +89,4 @@ chipfloat(Ieee *e)
 }
 /*e: function [[chipfloat]](arm) */
 
-/*e: linkers/5l/float.c */
+/*e: 5l/float.c */

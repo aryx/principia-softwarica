@@ -1,4 +1,4 @@
-/*s: linkers/5l/globals.c */
+/*s: 5l/globals.c */
 #include	"l.h"
 #include	"m.h"
 
@@ -165,4 +165,4 @@ char*	EXPTAB;
 Prog	undefp;
 /*e: global [[undefp]] */
 
-/*e: linkers/5l/globals.c */
+/*e: 5l/globals.c */

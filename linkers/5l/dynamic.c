@@ -1,4 +1,4 @@
-/*s: linkers/5l/dynamic.c */
+/*s: 5l/dynamic.c */
 #include	"l.h"
 
 // forward decls
@@ -409,4 +409,4 @@ asmdyn()
 }
 /*e: function [[asmdyn]] */
 
-/*e: linkers/5l/dynamic.c */
+/*e: 5l/dynamic.c */

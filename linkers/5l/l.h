@@ -1,4 +1,4 @@
-/*s: linkers/5l/l.h */
+/*s: 5l/l.h */
 #include    <u.h>
 #include    <libc.h>
 #include    <bio.h>
@@ -469,4 +469,4 @@ void  mylog(char*, ...);
 void listinit(void);
 void    prasm(Prog*);
 
-/*e: linkers/5l/l.h */
+/*e: 5l/l.h */

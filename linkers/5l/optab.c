@@ -1,4 +1,4 @@
-/*s: linkers/5l/optab.c */
+/*s: 5l/optab.c */
 #include	"l.h"
 #include	"m.h"
 
@@ -292,4 +292,4 @@ Optab	optab[] =
     { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4 },
 };
 /*e: global optab (linkers/5l/optab.c)(arm) */
-/*e: linkers/5l/optab.c */
+/*e: 5l/optab.c */

@@ -1,4 +1,4 @@
-/*s: linkers/8l/utils.c */
+/*s: 8l/utils.c */
 #include "l.h"
 
 /*s: function [[log]] */
@@ -130,4 +130,4 @@ copyp(Prog *q)
 }
 /*e: function [[copyp]] */
 
-/*e: linkers/8l/utils.c */
+/*e: 8l/utils.c */

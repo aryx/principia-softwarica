@@ -1,4 +1,4 @@
-/*s: linkers/8l/pass.c */
+/*s: 8l/pass.c */
 #include	"l.h"
 
 void	xfol(Prog*);
@@ -827,4 +827,4 @@ export(void)
     free(esyms);
 }
 /*e: function [[export]](x86) */
-/*e: linkers/8l/pass.c */
+/*e: 8l/pass.c */

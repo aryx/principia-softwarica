@@ -1,4 +1,4 @@
-/*s: linkers/misc/strip.c */
+/*s: misc/strip.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -178,4 +178,4 @@ main(int argc, char* argv[])
     exits(0);
 }
 /*e: function main (linkers/misc/strip.c) */
-/*e: linkers/misc/strip.c */
+/*e: misc/strip.c */

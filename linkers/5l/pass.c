@@ -1,4 +1,4 @@
-/*s: linkers/5l/pass.c */
+/*s: 5l/pass.c */
 #include	"l.h"
 
 // Code and data passes.
@@ -371,4 +371,4 @@ patch(void)
 }
 /*e: function [[patch]](arm) */
 
-/*e: linkers/5l/pass.c */
+/*e: 5l/pass.c */

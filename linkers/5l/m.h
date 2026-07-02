@@ -1,4 +1,4 @@
-/*s: linkers/5l/m.h */
+/*s: 5l/m.h */
 
 typedef struct  Optab   Optab;
 typedef struct  Oprange Oprange;
@@ -156,4 +156,4 @@ Optab*  oplook(Prog*);
 // codegen.c
 void    asmout(Prog*, Optab*);
 
-/*e: linkers/5l/m.h */
+/*e: 5l/m.h */

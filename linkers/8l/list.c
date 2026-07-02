@@ -1,4 +1,4 @@
-/*s: linkers/8l/list.c */
+/*s: 8l/list.c */
 #include	"l.h"
 
 int	Aconv(Fmt*);
@@ -328,4 +328,4 @@ diag(char *fmt, ...)
     }
 }
 /*e: function [[diag]] */
-/*e: linkers/8l/list.c */
+/*e: 8l/list.c */

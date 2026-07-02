@@ -1,4 +1,4 @@
-/*s: linkers/5l/profile.c */
+/*s: 5l/profile.c */
 #include	"l.h"
 
 // Profiling.
@@ -265,4 +265,4 @@ doprof2(void)
 }
 /*e: function [[doprof2]](arm) */
 
-/*e: linkers/5l/profile.c */
+/*e: 5l/profile.c */

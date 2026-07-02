@@ -1,4 +1,4 @@
-/*s: linkers/5l/utils.c */
+/*s: 5l/utils.c */
 #include "l.h"
 
 // Utilities.
@@ -225,4 +225,4 @@ void setmalloctag(void *v, ulong pc)
 }
 /*e: function [[setmalloctag]] */
 
-/*e: linkers/5l/utils.c */
+/*e: 5l/utils.c */

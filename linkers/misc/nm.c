@@ -1,4 +1,4 @@
-/*s: linkers/misc/nm.c */
+/*s: misc/nm.c */
 /*
  * nm.c -- drive nm
  */
@@ -367,4 +367,4 @@ error(char *fmt, ...)
     errs = "errors";
 }
 /*e: function [[error]] */
-/*e: linkers/misc/nm.c */
+/*e: misc/nm.c */

@@ -1,4 +1,4 @@
-/*s: linkers/8l/globals.c */
+/*s: 8l/globals.c */
 #include	"l.h"
 
 /*s: global [[buf]] */
@@ -188,4 +188,4 @@ char*	EXPTAB;
 Prog	undefp;
 /*e: global [[undefp]] */
 
-/*e: linkers/8l/globals.c */
+/*e: 8l/globals.c */

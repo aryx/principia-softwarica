@@ -1,4 +1,4 @@
-/*s: linkers/5l/hist.c */
+/*s: 5l/hist.c */
 #include	"l.h"
 
 /*s: function [[addhist]] */
@@ -52,4 +52,4 @@ histtoauto(void)
 }
 /*e: function [[histtoauto]] */
 
-/*e: linkers/5l/hist.c */
+/*e: 5l/hist.c */

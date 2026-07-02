@@ -1,4 +1,4 @@
-/*s: linkers/5l/main.c */
+/*s: 5l/main.c */
 #include	"l.h"
 
 /*s: function usage, linker */
@@ -298,4 +298,4 @@ out:
 }
 /*e: function [[main]](arm) */
 
-/*e: linkers/5l/main.c */
+/*e: 5l/main.c */

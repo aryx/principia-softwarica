@@ -1,4 +1,4 @@
-/*s: linkers/misc/ar.c */
+/*s: misc/ar.c */
 /*
  * ar - portable (ascii) format version
  */
@@ -1396,4 +1396,4 @@ armalloc(int n)
     return 0;
 }
 /*e: function [[armalloc]] */
-/*e: linkers/misc/ar.c */
+/*e: misc/ar.c */

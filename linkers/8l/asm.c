@@ -1,4 +1,4 @@
-/*s: linkers/8l/asm.c */
+/*s: 8l/asm.c */
 #include	"l.h"
 
 /*s: constant [[Dbufslop]] */
@@ -590,4 +590,4 @@ rnd(long v, long r)
     return v;
 }
 /*e: function [[rnd]] */
-/*e: linkers/8l/asm.c */
+/*e: 8l/asm.c */

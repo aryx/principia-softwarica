@@ -1,4 +1,4 @@
-/*s: linkers/5l/error.c */
+/*s: 5l/error.c */
 #include "l.h"
 
 /*s: global [[nerrors]] */
@@ -42,4 +42,4 @@ diag(char *fmt, ...)
     }
 }
 /*e: function [[diag]] */
-/*e: linkers/5l/error.c */
+/*e: 5l/error.c */

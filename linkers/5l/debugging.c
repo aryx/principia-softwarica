@@ -1,4 +1,4 @@
-/*s: linkers/5l/debugging.c */
+/*s: 5l/debugging.c */
 #include	"l.h"
 
 // Symbol table.
@@ -243,4 +243,4 @@ asmlc(void)
 }
 /*e: function [[asmlc]] */
 
-/*e: linkers/5l/debugging.c */
+/*e: 5l/debugging.c */

@@ -1,4 +1,4 @@
-/*s: linkers/5l/obj.c */
+/*s: 5l/obj.c */
 #include	"l.h"
 #include	<ar.h>
 
@@ -834,4 +834,4 @@ objfile(char *file)
 }
 /*e: function [[objfile]] */
 
-/*e: linkers/5l/obj.c */
+/*e: 5l/obj.c */

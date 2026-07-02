@@ -1,4 +1,4 @@
-/*s: linkers/5l/datagen.c */
+/*s: 5l/datagen.c */
 #include	"l.h"
 
 /*s: constant [[Dbufslop]] */
@@ -242,4 +242,4 @@ datblk(long s, long n, bool sstring)
 }
 /*e: function [[datblk]](arm) */
 
-/*e: linkers/5l/datagen.c */
+/*e: 5l/datagen.c */

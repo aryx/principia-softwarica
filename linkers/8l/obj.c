@@ -1,4 +1,4 @@
-/*s: linkers/8l/obj.c */
+/*s: 8l/obj.c */
 #include	"l.h"
 #include	<ar.h>
 
@@ -1807,4 +1807,4 @@ readundefs(char *f, int t)
     Bterm(b);
 }
 /*e: function [[readundefs]] */
-/*e: linkers/8l/obj.c */
+/*e: 8l/obj.c */

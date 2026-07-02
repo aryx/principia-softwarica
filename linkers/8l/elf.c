@@ -1,4 +1,4 @@
-/*s: linkers/8l/elf.c */
+/*s: 8l/elf.c */
 /*
  * emit 32- or 64-bit elf headers for any architecture.
  * this is a component of ?l.
@@ -173,4 +173,4 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
         elf32sectab(putl);
 }
 /*e: function [[elf32]] */
-/*e: linkers/8l/elf.c */
+/*e: 8l/elf.c */

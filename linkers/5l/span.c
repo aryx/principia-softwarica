@@ -1,4 +1,4 @@
-/*s: linkers/5l/span.c */
+/*s: 5l/span.c */
 #include	"l.h"
 #include	"m.h"
 
@@ -669,4 +669,4 @@ oplook(Prog *p)
 }
 /*e: function [[oplook]](arm) */
 
-/*e: linkers/5l/span.c */
+/*e: 5l/span.c */

@@ -1,4 +1,4 @@
-/*s: linkers/misc/size.c */
+/*s: misc/size.c */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
@@ -52,4 +52,4 @@ main(int argc, char *argv[])
     exits(err);
 }
 /*e: function main (linkers/misc/size.c) */
-/*e: linkers/misc/size.c */
+/*e: misc/size.c */

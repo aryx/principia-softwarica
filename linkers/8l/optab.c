@@ -1,4 +1,4 @@
-/*s: linkers/8l/optab.c */
+/*s: 8l/optab.c */
 #include	"l.h"
 
 /*s: global [[ynone]](x86) */
@@ -751,4 +751,4 @@ Optab optab[] =
     0
 };
 /*e: global [[optab]](x86) */
-/*e: linkers/8l/optab.c */
+/*e: 8l/optab.c */

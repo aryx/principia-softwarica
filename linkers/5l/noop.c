@@ -1,4 +1,4 @@
-/*s: linkers/5l/noop.c */
+/*s: 5l/noop.c */
 #include	"l.h"
 
 // Code transformations.
@@ -414,4 +414,4 @@ nocache(Prog *p)
     p->to.class = 0;
 }
 /*e: function [[nocache]](arm) */
-/*e: linkers/5l/noop.c */
+/*e: 5l/noop.c */

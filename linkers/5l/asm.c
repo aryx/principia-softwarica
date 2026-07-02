@@ -1,4 +1,4 @@
-/*s: linkers/5l/asm.c */
+/*s: 5l/asm.c */
 #include	"l.h"
 #include	"m.h"
 
@@ -222,4 +222,4 @@ asmb(void)
 }
 /*e: function [[asmb]](arm) */
 
-/*e: linkers/5l/asm.c */
+/*e: 5l/asm.c */

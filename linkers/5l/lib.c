@@ -1,4 +1,4 @@
-/*s: linkers/5l/lib.c */
+/*s: 5l/lib.c */
 #include	"l.h"
 
 /*s: global [[library]] */
@@ -185,4 +185,4 @@ addlib(char *obj)
     libraryp++;
 }
 /*e: function [[addlib]] */
-/*e: linkers/5l/lib.c */
+/*e: 5l/lib.c */

@@ -1,4 +1,4 @@
-/*s: linkers/5l/fmt.c */
+/*s: 5l/fmt.c */
 #include "l.h"
 
 // Printing.
@@ -355,4 +355,4 @@ prasm(Prog *p)
 }
 /*e: function [[prasm]](arm) */
 
-/*e: linkers/5l/fmt.c */
+/*e: 5l/fmt.c */
