@@ -25,6 +25,7 @@ void	setinclude(char*);
 /*e: constant [[CPP]] */
 #endif
 
+/*s: comment known debug flags lex.c */
 /*
  * known debug flags
  *	-a		acid declaration output
@@ -52,6 +53,7 @@ void	setinclude(char*);
  *	-X		abort on error
  *	-.		Inhibit search for includes in source directory
  */
+/*e: comment known debug flags lex.c */
 
 /*s: function [[main]] */
 //@Scheck: not dead, entry point :)
