@@ -43,7 +43,13 @@ symlook(char *sym, int space, void *install)
     s = (Symtab *)Malloc(sizeof(Symtab));
     s->name = sym;
     s->space = space;
-    s->u.ptr = install;
+    switch (space) {
+    case S_TIME:
+        s->u.time = *(double*)install;
+    default:
+        s->u.ptr = install;
+        break;
+    }
 
     // add_list(s, hash)
     s->next = hash[h];

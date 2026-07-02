@@ -11,11 +11,12 @@ extern int chgtime(char *name);
 
 /*s: function [[timeof]] */
 /// newnode -> <> -> mkmtime -> (bulktime; dirstat (libc))
-ulong
+double
 timeof(char *name, bool force)
 {
     /*s: [[timeof()]] locals */
-    ulong t;
+    //old: was ulong
+    double t;
     /*x: [[timeof()]] locals */
     Symtab *sym;
     /*e: [[timeof()]] locals */
@@ -31,13 +32,13 @@ timeof(char *name, bool force)
     /*s: [[timeof()]] check time cache */
     sym = symlook(name, S_TIME, nil);
     if (sym)
-        return sym->u.value;		/* uggh */
+        return sym->u.time;		/* uggh */
     /*e: [[timeof()]] check time cache */
     t = mkmtime(name, false);
     /*s: [[timeof()]] update time cache */
     if(t == 0)
         return 0;
-    symlook(name, S_TIME, (void*)t);		/* install time in cache */
+    symlook(name, S_TIME, &t);		/* install time in cache */
     /*e: [[timeof()]] update time cache */
     return t;
     /*e: [[timeof()]] if not force, use time cache */
@@ -78,7 +79,8 @@ delete(char *name)
 void
 timeinit(char *s)
 {
-    ulong t;
+    //old: was ulong
+    double t;
     char *cp;
     Rune r;
     int c, n;
@@ -95,7 +97,7 @@ timeinit(char *s)
         c = *s;
         *s = '\0';
 
-        symlook(strdup(cp), S_TIME, (void *)t)->u.value = t;
+        symlook(strdup(cp), S_TIME, &t)->u.time = t;
 
         if (c)
             *s++ = c;

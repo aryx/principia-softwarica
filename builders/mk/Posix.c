@@ -76,20 +76,20 @@ exportenv(Envy *e)
   environ = p;
 }
 
-int
+pidt
 xwaitfor(char *msg)
 {
   int status;
-  int pid;
+  pidt pid;
 
   *msg = 0;
   pid = wait(&status);
   if(pid > 0) {
     if(status&0x7f) {
       if(status&0x80)
- snprint(msg, ERRMAX, "signal %d, core dumped", status&0x7f);
+        snprint(msg, ERRMAX, "signal %d, core dumped", status&0x7f);
       else
- snprint(msg, ERRMAX, "signal %d", status&0x7f);
+        snprint(msg, ERRMAX, "signal %d", status&0x7f);
     } else if(status&0xff00)
       snprint(msg, ERRMAX, "exit(%d)", (status>>8)&0xff);
   }
@@ -138,18 +138,18 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
     if(pid != 0){
       dup2(in[0], 0);
       if(buf){
- dup2(out[1], 1);
- close(out[1]);
+        dup2(out[1], 1);
+        close(out[1]);
       }
       close(in[0]);
       close(in[1]);
       if (e)
- exportenv(e);
+        exportenv(e);
       if(shflags)
- // to debug mk/rc you can add "-r", "-s", "-x", "-v" after shflags below
- execl(shell->shell, shell->shellname, shflags, args, nil);
+        // to debug mk/rc you can add "-r", "-s", "-x", "-v" after shflags below
+        execl(shell->shell, shell->shellname, shflags, args, nil);
       else
- execl(shell->shell, shell->shellname, args, nil);
+        execl(shell->shell, shell->shellname, args, nil);
       perror(shell->shell);
       _exits("exec");
     }
@@ -161,7 +161,7 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
     while(cmd < p){
       n = write(in[1], cmd, p-cmd);
       if(n < 0)
- break;
+        break;
       cmd += n;
     }
     close(in[1]);
@@ -172,10 +172,10 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
     tot = 0;
     for(;;){
       if (buf->current >= buf->end)
- growbuf(buf);
+        growbuf(buf);
       n = read(out[0], buf->current, buf->end-buf->current);
       if(n <= 0)
- break;
+        break;
       buf->current += n;
       tot += n;
     }
@@ -228,7 +228,7 @@ pipecmd(char *cmd, Envy *e, int *fd)
 void
 Exit(void)
 {
-  while(wait(0) >= 0)
+  while(wait(nil) >= 0)
     ;
   exits("error");
 }
@@ -246,6 +246,8 @@ static  struct
     SIGSEGV,       "sys: segmentation violation",
     0,             0
   };
+
+extern void killchildren(char *msg);
 
 static void
 notifyf(int sig)
@@ -313,17 +315,24 @@ rcopy(char **to, Resub *match, int n)
   }
 }
 
-ulong
+//old: the precision was ulong, so at the second granularity which is
+// not enough on fast machines that can compile many files in one
+// second. On those machines we need sub-second mtime granularity!
+double
 mkmtime(char *name, bool _force)
 {
   Dir *buf;
-  ulong t;
+  //old: ulong t;
+  double t;
 
   buf = dirstat(name);
   if(buf == nil)
     return 0;
-  t = buf->mtime;
+  //old: t = buf->mtime;
+  t = buf->mtime_;
   free(buf);
+  //if (name != nil)
+  //    print("mkmtime: %s, time = %f", name, t);
   return t;
 }
 

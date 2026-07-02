@@ -251,7 +251,7 @@ bulkmtime(char *dir)
 }
 /*e: function [[bulkmtime]] */
 /*s: function [[mkmtime]] */
-ulong
+double
 mkmtime(char *name, bool force)
 {
     Dir *d;
@@ -300,8 +300,8 @@ mkmtime(char *name, bool force)
     /*e: [[mkmtime()]] check if inexistent file */
     t = d->mtime;
     free(d);
-
-    return t;
+    // TODO: have a double mtime field like in goken
+    return (double) t;
 }
 /*e: function [[mkmtime]] */
 

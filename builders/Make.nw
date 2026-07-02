@@ -563,6 +563,7 @@ struct Symtab
     union{
         void*	ptr;
         uintptr	value;
+        double  time; // new: for S_TIME
     } u;
 
     // Extra
@@ -756,7 +757,13 @@ if(install == nil)
 s = (Symtab *)Malloc(sizeof(Symtab));
 s->name = sym;
 s->space = space;
-s->u.ptr = install;
+switch (space) {
+case S_TIME:
+    s->u.time = *(double*)install;
+default:
+    s->u.ptr = install;
+    break;
+}
 
 // add_list(s, hash)
 s->next = hash[h];
@@ -1635,7 +1642,8 @@ struct Node
     // ref_own<string>, usually a filename, or a virtual target like 'clean'
     char*		name; 
     // option<Time> (None = 0, for nonexistent files and virtual targets)
-    ulong		time; // last mtime of file 
+    // old: was ulong; but need subsecond precision on fast machines
+    double		time; // last mtime of file 
 
     <<[[Node]] arcs field>>
     <<[[Node]] other fields>>
@@ -5606,7 +5614,7 @@ is labeled with the modification time of the file it represents.
 
 <<function [[timeof]]>>=
 /// newnode -> <> -> mkmtime -> (bulktime; dirstat (libc))
-ulong
+double
 timeof(char *name, bool force)
 {
     <<[[timeof()]] locals>>
@@ -5629,7 +5637,7 @@ the [[force]] argument.
 %alt: \subsection{[[mkmtime()]]}
 
 <<function [[mkmtime]]>>=
-ulong
+double
 mkmtime(char *name, bool force)
 {
     Dir *d;
@@ -5641,8 +5649,8 @@ mkmtime(char *name, bool force)
     <<[[mkmtime()]] check if inexistent file>>
     t = d->mtime;
     free(d);
-
-    return t;
+    // TODO: have a double mtime field like in goken
+    return (double) t;
 }
 @
 %old: I moved assign [[d]] outside if.
@@ -9382,7 +9390,8 @@ case 'e':
 
 <<[[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date>>=
 if(explain)
-    fprint(STDOUT, "%s(%ld) < %s(%ld)\n",
+    //old: was %ld before
+    fprint(STDOUT, "%s(%.4f) < %s(%.4f)\n",
         n->name, n->time, a->n->name, a->n->time);
 @
 
@@ -9484,7 +9493,8 @@ those files as stale.
 void
 timeinit(char *s)
 {
-    ulong t;
+    //old: was ulong
+    double t;
     char *cp;
     Rune r;
     int c, n;
@@ -9501,7 +9511,7 @@ timeinit(char *s)
         c = *s;
         *s = '\0';
 
-        symlook(strdup(cp), S_TIME, (void *)t)->u.value = t;
+        symlook(strdup(cp), S_TIME, &t)->u.time = t;
 
         if (c)
             *s++ = c;
@@ -11549,7 +11559,8 @@ static void
 atimes(char *ar)
 {
     struct ar_hdr h;
-    ulong at, t;
+    ulong at;
+    ulong t;
     int fd, i;
     char buf[BIGBLOCK];
     Dir *d;
@@ -11580,7 +11591,7 @@ atimes(char *ar)
             i--;
         h.name[i+1]=0;		/* can stomp on date field */
         snprint(buf, sizeof buf, "%s(%s)", ar, h.name);
-        symlook(strdup(buf), S_TIME, (void*)t)->u.value = t;
+        symlook(strdup(buf), S_TIME, (void*)t)->u.time = t;
         t = atol(h.size);
         if(t&01) t++;
         seek(fd, t, 1);
@@ -11702,7 +11713,12 @@ hence the backtracking pass at the end of the [[work()]] arc loop.
 % put to true by default? and have 'I' instead to do the opti?
 
 <<global [[iflag]]>>=
-bool iflag = false;
+//new: default was false in plan9 but better to default to true
+// which removes the "missing-intermediates" optimization which
+// causes weird behavior (e.g., when compiling principia/libc/
+// it will not compile some directories because another dir
+// already created a libc.a)
+bool iflag = true;
 @
 <<[[main()]] -xxx switch cases>>=
 case 'i':
@@ -11908,7 +11924,8 @@ S_TIME,		/* file -> time */
 @
 
 <<[[timeof()]] locals>>=
-ulong t;
+//old: was ulong
+double t;
 @
 
 <<[[timeof()]] if not force, use time cache>>=
@@ -11926,14 +11943,14 @@ Symtab *sym;
 <<[[timeof()]] check time cache>>=
 sym = symlook(name, S_TIME, nil);
 if (sym)
-    return sym->u.value;		/* uggh */
+    return sym->u.time;		/* uggh */
 @
 % comment?
 
 <<[[timeof()]] update time cache>>=
 if(t == 0)
     return 0;
-symlook(name, S_TIME, (void*)t);		/* install time in cache */
+symlook(name, S_TIME, &t);		/* install time in cache */
 @
 
 % other opti about bulktime later.

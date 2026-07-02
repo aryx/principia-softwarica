@@ -170,7 +170,8 @@ struct Node
     // ref_own<string>, usually a filename, or a virtual target like 'clean'
     char*		name; 
     // option<Time> (None = 0, for nonexistent files and virtual targets)
-    ulong		time; // last mtime of file 
+    // old: was ulong; but need subsecond precision on fast machines
+    double		time; // last mtime of file 
 
     /*s: [[Node]] arcs field */
     // list<ref_own<Arc>> (next = Arc.next)
@@ -271,6 +272,7 @@ struct Symtab
     union{
         void*	ptr;
         uintptr	value;
+        double  time; // new: for S_TIME
     } u;
 
     // Extra

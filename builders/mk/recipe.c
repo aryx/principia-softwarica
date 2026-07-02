@@ -178,7 +178,8 @@ dorecipe(Node *node, bool *did)
                     /*e: [[dorecipe()]] when outofdate node, update list of newprereqs */
                     /*s: [[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date */
                     if(explain)
-                        fprint(STDOUT, "%s(%ld) < %s(%ld)\n",
+                        //old: was %ld before
+                        fprint(STDOUT, "%s(%.4f) < %s(%.4f)\n",
                             n->name, n->time, a->n->name, a->n->time);
                     /*e: [[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date */
                 }

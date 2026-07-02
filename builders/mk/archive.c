@@ -88,7 +88,8 @@ static void
 atimes(char *ar)
 {
     struct ar_hdr h;
-    ulong at, t;
+    ulong at;
+    ulong t;
     int fd, i;
     char buf[BIGBLOCK];
     Dir *d;
@@ -119,7 +120,7 @@ atimes(char *ar)
             i--;
         h.name[i+1]=0;		/* can stomp on date field */
         snprint(buf, sizeof buf, "%s(%s)", ar, h.name);
-        symlook(strdup(buf), S_TIME, (void*)t)->u.value = t;
+        symlook(strdup(buf), S_TIME, (void*)t)->u.time = t;
         t = atol(h.size);
         if(t&01) t++;
         seek(fd, t, 1);

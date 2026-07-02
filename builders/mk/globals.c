@@ -39,7 +39,12 @@ bool nflag = false;
 bool tflag = false;
 /*e: global [[tflag]] */
 /*s: global [[iflag]] */
-bool iflag = false;
+//new: default was false in plan9 but better to default to true
+// which removes the "missing-intermediates" optimization which
+// causes weird behavior (e.g., when compiling principia/libc/
+// it will not compile some directories because another dir
+// already created a libc.a)
+bool iflag = true;
 /*e: global [[iflag]] */
 /*s: global [[kflag]] */
 bool kflag = false;
