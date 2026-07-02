@@ -11,7 +11,8 @@
 /*
  * Start executing the given code at the given pc with the given redirection
  */
-char *argv0="rc";
+//OLD: conflict with argv0 defined in lib9
+//char *argv0="rc";
 /*e: global [[argv0]] */
 
 /*s: function [[start]] */

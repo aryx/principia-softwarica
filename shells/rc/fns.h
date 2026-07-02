@@ -45,8 +45,10 @@ void	Updenv(void);
 void	Vinit(void);
 
 // processes.c
-int	Waitfor(int, bool);
 void	Execute(word*,  word*);
+
+// unix.c
+int	Waitfor(int, bool);
 
 // code.c
 error0	compile(tree*);
