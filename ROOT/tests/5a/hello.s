@@ -26,9 +26,9 @@ later:
         MOVW $0, R1
         MOVW R1, 16(R13)
         MOVW R1, 20(R13)
-        MOVW $9 /*PWRITE*/, R0
+        MOVW $11 /*PWRITE*/, R0
         /* system call */
-        SWI 0
+        SWI $0
         BL exit(SB)
         RET /* not reached */
 loop:
@@ -41,7 +41,7 @@ TEXT exit(SB), $4
         MOVW R1, 4(R13)
         MOVW $3 /*EXITS*/, R0
         /* system call */
-        SWI 0
+        SWI $0
         RET /* not reached */
         
                         
