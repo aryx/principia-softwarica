@@ -9,15 +9,6 @@
 
 // Opendir, Closedir and so on are back in plan9.c
 
-/*s: function [[Unlink]] */
-/*e: function [[Unlink]] */
-/*s: function [[Write]] */
-/*e: function [[Write]] */
-/*s: function [[Read]] */
-/*e: function [[Read]] */
-/*s: function [[Seek]] */
-/*e: function [[Seek]] */
-
 /*s: function [[Creat]] */
 int
 Creat(char *file)
@@ -25,10 +16,6 @@ Creat(char *file)
     return create(file, 1, 0666L);
 }
 /*e: function [[Creat]] */
-
-/*s: function [[Dup]] */
-/*e: function [[Dup]] */
-
 
 /*s: function [[Memcpy]] */
 void

@@ -70,7 +70,9 @@ void	globlist(void);
 bool	match(void*, void*, int);
 
 // utils.c
+/*s: macro [[new]] */
 #define	new(type)	((type *)emalloc(sizeof(type)))
+/*e: macro [[new]] */
 void *emalloc(long);
 void efree(void *);
 void	Memcpy(void*, void*, long);

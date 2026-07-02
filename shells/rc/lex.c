@@ -46,6 +46,7 @@ idchr(int c)
 /*e: function [[idchr]] */
 
 /*s: function [[yyerror]] */
+/// yylex | yyparse | outcode | ... -> <>
 void
 yyerror(char *m)
 {

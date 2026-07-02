@@ -98,6 +98,7 @@ io*
 openfd(fdt fd)
 {
     io *f = new(struct Io);
+
     f->fd = fd;
     f->bufp = f->ebuf = f->buf;
     f->strp = nil;

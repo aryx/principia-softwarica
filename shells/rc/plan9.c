@@ -109,13 +109,14 @@ addenv(var *v)
 {
     char envname[Maxenvname];
     word *w;
-    int f;
+    fdt f;
     io *fd;
 
     if(v->changed){
         v->changed = false;
         snprint(envname, sizeof envname, "/env/%s", v->name);
-        if((f = Creat(envname))<0)
+        f = Creat(envname);
+        if(f<0)
             pfmt(err, "rc: can't open %s: %r\n", envname);
         else{
             for(w = v->val;w;w = w->next)
@@ -123,10 +124,12 @@ addenv(var *v)
             close(f);
         }
     }
+    /*s: [[addenv()]] if [[fnchanged]] */
     if(v->fnchanged){
         v->fnchanged = false;
         snprint(envname, sizeof envname, "/env/fn#%s", v->name);
-        if((f = Creat(envname))<0)
+        f = Creat(envname);
+        if(f<0)
             pfmt(err, "rc: can't open %s: %r\n", envname);
         else{
             if(v->fn){
@@ -137,6 +140,7 @@ addenv(var *v)
             close(f);
         }
     }
+    /*e: [[addenv()]] if [[fnchanged]] */
 }
 /*e: function [[addenv]](plan9.c) */
 /*s: function [[updenvlocal]] */

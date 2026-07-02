@@ -36,7 +36,7 @@ Xsimple(void)
     /*s: [[Xsimple()]] other locals */
     var *v;
     /*x: [[Xsimple()]] other locals */
-    struct Builtin *bp;
+    builtin *bp;
     /*e: [[Xsimple()]] other locals */
 
     /*s: [[Xsimple()]] initializations, [[globlist()]] */

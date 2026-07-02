@@ -11,7 +11,7 @@
 extern char* Rcmain;
 extern bool Isatty(fdt fd);
 
-/*s: function [[main]](rc) */
+/*s: function [[main]] */
 /*
  * get command line flags.
  * initialize keywords & traps.
@@ -123,5 +123,5 @@ void main(int argc, char *argv[])
     }
     /*e: [[main()]] interpreter loop */
 }
-/*e: function [[main]](rc) */
+/*e: function [[main]] */
 /*e: rc/main.c */

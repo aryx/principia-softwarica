@@ -62,6 +62,7 @@ struct{
 /*e: global [[fname]] */
 
 /*s: function [[pfnc]] */
+/// main -> <>
 void
 pfnc(io *fd, thread *t)
 {

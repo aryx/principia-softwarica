@@ -54,10 +54,11 @@ appfile(char *dir, char *comp)
 /*e: function [[appfile]] */
 
 /*s: function [[mapfd]] */
-int
-mapfd(int fd)
+fdt
+mapfd(fdt fd)
 {
     redir *rp;
+
     for(rp = runq->redir;rp;rp = rp->next){
         switch(rp->type){
         case RCLOSE:
@@ -230,10 +231,11 @@ void
 execwhatis(void){   /* mildly wrong -- should fork before writing */
     word *a, *b, *path;
     var *v;
-    struct Builtin *bp;
+    builtin *bp;
     char *file;
     struct Io out[1];
     int found, sep;
+
     a = runq->argv->words->next;
     if(a==0){
         Xerror1("Usage: whatis name ...");

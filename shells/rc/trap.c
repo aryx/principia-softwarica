@@ -23,6 +23,7 @@ extern char *signame[];
 
 // generic part independent of plan9
 /*s: function [[dotrap]] */
+/// main -> <>
 void
 dotrap(void)
 {
