@@ -1,4 +1,4 @@
-/*s: assemblers/5a/a.h */
+/*s: 5a/a.h */
 #include "../aa/aa.h"
 #include <5.out.h>
 
@@ -67,4 +67,4 @@ void    outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
 /*e: signature [[outcode]](arm) */
 void    outhist(void);
 
-/*e: assemblers/5a/a.h */
+/*e: 5a/a.h */

@@ -1,4 +1,4 @@
-/*s: assemblers/aa/hist.c */
+/*s: aa/hist.c */
 #include "aa.h"
 
 /*s: function [[linehist]] */
@@ -92,4 +92,4 @@ prfile(long l)
 }
 /*e: function [[prfile]] */
 
-/*e: assemblers/aa/hist.c */
+/*e: aa/hist.c */

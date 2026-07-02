@@ -1,4 +1,4 @@
-/*s: assemblers/5a/main.c */
+/*s: 5a/main.c */
 #include "a.h"
 
 // forward decls
@@ -212,4 +212,4 @@ cclean(void)
 }
 /*e: function [[cclean]](arm) */
 
-/*e: assemblers/5a/main.c */
+/*e: 5a/main.c */

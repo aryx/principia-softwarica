@@ -1,4 +1,4 @@
-/*s: assemblers/aa/globals.c */
+/*s: aa/globals.c */
 #include "aa.h"
 
 /*s: global [[hash]] */
@@ -105,4 +105,4 @@ long	nhunk = 0;
 long	thunk;
 /*e: global [[thunk]] */
 
-/*e: assemblers/aa/globals.c */
+/*e: aa/globals.c */

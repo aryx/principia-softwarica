@@ -1,4 +1,4 @@
-/*s: assemblers/misc/data2s.c */
+/*s: misc/data2s.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -41,4 +41,4 @@ main(int argc, char *argv[])
     exits(0);
 }
 /*e: function [[main]] */
-/*e: assemblers/misc/data2s.c */
+/*e: misc/data2s.c */

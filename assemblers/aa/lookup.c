@@ -1,4 +1,4 @@
-/*s: assemblers/aa/lookup.c */
+/*s: aa/lookup.c */
 #include "aa.h"
 
 // syminit() in lookup() depends on LNAME token defined in a.y,
@@ -61,4 +61,4 @@ lookup(void)
     /*e: [[lookup()]] if symbol name not found */
 }
 /*e: function [[lookup]] */
-/*e: assemblers/aa/lookup.c */
+/*e: aa/lookup.c */

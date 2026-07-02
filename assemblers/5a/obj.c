@@ -1,4 +1,4 @@
-/*s: assemblers/5a/obj.c */
+/*s: 5a/obj.c */
 #include "a.h"
 
 /*s: function [[zname]](arm) */
@@ -275,4 +275,4 @@ outhist(void)
 }
 /*e: function [[outhist]](arm) */
 
-/*e: assemblers/5a/obj.c */
+/*e: 5a/obj.c */

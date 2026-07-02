@@ -1,4 +1,4 @@
-/*s: assemblers/5a/lex.c */
+/*s: 5a/lex.c */
 #include "a.h"
 #include "y.tab.h"
 
@@ -613,4 +613,4 @@ l1:
 /*e: function [[yylex]] */
 
 // #include "../cc/macbody"
-/*e: assemblers/5a/lex.c */
+/*e: 5a/lex.c */

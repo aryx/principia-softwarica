@@ -1,4 +1,4 @@
-/*s: assemblers/aa/macbody.c */
+/*s: aa/macbody.c */
 #include "aa.h"
 
 // forward decls
@@ -902,4 +902,4 @@ macend(void)
 }
 /*e: function [[macend]] */
 
-/*e: assemblers/aa/macbody.c */
+/*e: aa/macbody.c */

@@ -1,4 +1,4 @@
-/*s: assemblers/aa/lexbody.c */
+/*s: aa/lexbody.c */
 #include "aa.h"
 
 /*
@@ -562,4 +562,4 @@ pop:
 }
 /*e: function [[filbuf]] */
 
-/*e: assemblers/aa/lexbody.c */
+/*e: aa/lexbody.c */
