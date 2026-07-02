@@ -55,6 +55,7 @@ symlook(char *sym, int space, void *install)
 /*e: function [[symlook]] */
 
 /*s: function [[symtraverse]] */
+/// initenv | dumpv -> <>
 void
 symtraverse(int space, void (*fn)(Symtab*))
 {

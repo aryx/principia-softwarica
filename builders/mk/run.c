@@ -374,6 +374,7 @@ pidslot(int pid)
 
 
 /*s: function [[pnew]] */
+/// waitup -> <>
 static void
 pnew(int pid, int status)
 {

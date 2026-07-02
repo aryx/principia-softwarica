@@ -201,6 +201,7 @@ applyrules(char *target, char *cnt)
 /*e: function [[applyrules]] */
 
 /*s: function [[nrep]] */
+/// mk -> nrep
 void
 nrep(void)
 {

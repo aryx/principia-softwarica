@@ -1,12 +1,12 @@
 /*s: mk/rc.c */
 #include	"mk.h"
 
-/*s: global [[termchars]] */
+/*s: global [[termchars]](rc.c) */
 char	*termchars = "=' \t";	/*used in parse.c to isolate assignment attribute*/
-/*e: global [[termchars]] */
-/*s: global [[shflags]] */
+/*e: global [[termchars]](rc.c) */
+/*s: global [[shflags]](rc.c) */
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
-/*e: global [[shflags]] */
+/*e: global [[shflags]](rc.c) */
 
 /*
  *	This file contains functions that depend on rc's syntax.  Most
@@ -14,6 +14,7 @@ char	*shflags = "-I";	/* rc flag to force non-interactive mode */
  */
 
 /*s: function [[squote]] */
+/// charin -> <>
 /*
  *	skip a token in single quotes.
  */
@@ -185,6 +186,7 @@ copysingle(char *s, Bufblock *buf)
 /*e: function [[copysingle]] */
 
 /*s: function [[copyq]] */
+/// shprint -> <>
 /*
  *	check for quoted strings.  backquotes are handled here; single quotes above.
  *	s points to char after opening quote, q.

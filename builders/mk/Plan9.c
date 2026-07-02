@@ -306,19 +306,19 @@ mkmtime(char *name, bool force)
 /*e: function [[mkmtime]] */
 
 // could be in run.c
-/*s: global [[rc]] */
+/*s: global [[rc]](plan9.c) */
 Shell rc = {
   .shellname = "rc",
   .shell = "/bin/rc",
 };
-/*e: global [[rc]] */
+/*e: global [[rc]](plan9.c) */
 
-/*s: global [[shell]] */
+/*s: global [[shell]](plan9.c) */
 Shell* shell = &rc;
-/*e: global [[shell]] */
+/*e: global [[shell]](plan9.c) */
 
 // could be in run.c
-/*s: function [[execsh]] */
+/*s: function [[execsh]](plan9.c) */
 /// main -> mk -> work -> dorecipe -> run -> sched -> <>
 int
 execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
@@ -433,7 +433,7 @@ execsh(char *shargs, char *shinput, Bufblock *buf, ShellEnvVar *e)
     /*e: [[execsh()]] in parent, if buf, close other side of pipe and read output */
     return pid1;
 }
-/*e: function [[execsh]] */
+/*e: function [[execsh]](plan9.c) */
 /*s: function [[xwaitfor]](plan9.c) */
 int
 xwaitfor(char *msg)
@@ -454,7 +454,7 @@ xwaitfor(char *msg)
 /*e: function [[xwaitfor]](plan9.c) */
 
 // could be in run.c
-/*s: function [[Exit]] */
+/*s: function [[Exit]](plan9.c) */
 void
 Exit(void)
 {
@@ -462,7 +462,7 @@ Exit(void)
         ;
     exits("error");
 }
-/*e: function [[Exit]] */
+/*e: function [[Exit]](plan9.c) */
 
 // back in run.c
 extern void killchildren(char *msg);
@@ -504,7 +504,7 @@ expunge(int pid, char *msg)
 /*e: function [[expunge]] */
 
 // could be in run.c
-/*s: function [[pipecmd]] */
+/*s: function [[pipecmd]](plan9.c) */
 int
 pipecmd(char *cmd, ShellEnvVar *e, int *fd)
 {
@@ -544,7 +544,7 @@ pipecmd(char *cmd, ShellEnvVar *e, int *fd)
     }
     return pid;
 }
-/*e: function [[pipecmd]] */
+/*e: function [[pipecmd]](plan9.c) */
 
 // could be in graph.c
 /*s: function [[rcopy]] */

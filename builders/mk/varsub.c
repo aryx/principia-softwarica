@@ -135,6 +135,7 @@ expandvar(char **s)
 /*e: function [[expandvar]] */
 
 /*s: function [[extractpat]] */
+/// subsub -> <>
 static Word*
 extractpat(char *s, char **r, char *term, char *end)
 {
@@ -242,6 +243,7 @@ subsub(Word *v, char *s, char *end)
 /*e: function [[subsub]] */
 
 /*s: function [[submatch]] */
+/// subsub -> <>
 static bool
 submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 {

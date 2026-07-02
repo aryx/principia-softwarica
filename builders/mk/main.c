@@ -56,7 +56,6 @@ main(int argc, char **argv)
         bufcpy(buf, argv[0], strlen(argv[0]));
         insert(buf, ' ');
         /*e: [[main()]] add [[argv[0]]] in [[buf]] */
-
         switch(argv[0][1]) {
         /*s: [[main()]] -xxx switch cases */
         case 'f':
