@@ -1,4 +1,4 @@
-/*s: rc/getflags.c */
+/*s: rc/getflags_.c */
 #include <u.h>
 #include <libc.h>
 #include "getflags.h"
@@ -281,4 +281,4 @@ errc(int c)
     }
 }
 /*e: function [[errc]] */
-/*e: rc/getflags.c */
+/*e: rc/getflags_.c */
