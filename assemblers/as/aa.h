@@ -12,7 +12,7 @@
 
 #include <common.out.h>
 
-#pragma lib "../aa/aa.a$O"
+#pragma lib "../as/aa.a$O"
 
 //----------------------------------------------------------------------------
 // Data structures and constants
