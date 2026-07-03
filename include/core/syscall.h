@@ -261,6 +261,7 @@ extern	long	dirreadall(int, Dir**);
 
 extern  char*   getwd(char*, int);
 extern	int	access(char*, int); // ???
+extern	bool	fileexists(char*); // new: used to be in linkers/
 extern  char*   mktemp(char*);
 /*e: signatures directory syscall wrapper */
 
