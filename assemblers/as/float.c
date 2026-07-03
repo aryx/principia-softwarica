@@ -1,4 +1,4 @@
-/*s: aa/float.c */
+/*s: as/float.c */
 #include "aa.h"
 
 /*s: function [[ieeedtod]] */
@@ -33,4 +33,4 @@ ieeedtod(Ieee *ieee, double native)
 }
 /*e: function [[ieeedtod]] */
 
-/*e: aa/float.c */
+/*e: as/float.c */

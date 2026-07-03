@@ -1,4 +1,4 @@
-/*s: aa/lexbody.c */
+/*s: as/lexbody.c */
 #include "aa.h"
 
 /*
@@ -109,7 +109,7 @@ newfile(char *s, fdt f)
 }
 /*e: function [[newfile]] */
 
-// this was hard to factorize in aa/, so this is copy pasted
+// this was hard to factorize in as/, so this is copy pasted
 // in each assembler (8a/, va/, etc)
 //long
 //yylex(void)
@@ -562,4 +562,4 @@ pop:
 }
 /*e: function [[filbuf]] */
 
-/*e: aa/lexbody.c */
+/*e: as/lexbody.c */

@@ -1,4 +1,4 @@
-/*s: aa/aa.h */
+/*s: as/aa.h */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -280,4 +280,4 @@ enum    /* keep in synch with ../cc/cc.h */
     Unix    = 1<<1,
 };
 /*e: enum platform */
-/*e: aa/aa.h */
+/*e: as/aa.h */

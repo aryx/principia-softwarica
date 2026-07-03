@@ -1,4 +1,4 @@
-/*s: aa/utils.c */
+/*s: as/utils.c */
 #include "aa.h"
 
 /*s: function [[gethunk]] */
@@ -118,4 +118,4 @@ pathchar(void)
 /*e: function [[pathchar]] */
 
 
-/*e: aa/utils.c */
+/*e: as/utils.c */

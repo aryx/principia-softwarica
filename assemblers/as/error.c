@@ -1,4 +1,4 @@
-/*s: aa/error.c */
+/*s: as/error.c */
 #include "aa.h"
 
 /*s: function [[errorexit]] */
@@ -47,4 +47,4 @@ yyerror(char *a, ...)
 }
 /*e: function [[yyerror]] */
 
-/*e: aa/error.c */
+/*e: as/error.c */

@@ -1,4 +1,4 @@
-/*s: aa/lookup.c */
+/*s: as/lookup.c */
 #include "aa.h"
 
 // syminit() in lookup() depends on LNAME token defined in a.y,
@@ -61,4 +61,4 @@ lookup(void)
     /*e: [[lookup()]] if symbol name not found */
 }
 /*e: function [[lookup]] */
-/*e: aa/lookup.c */
+/*e: as/lookup.c */
