@@ -205,7 +205,6 @@ main(int argc, char **argv)
     }
     insert(buf, '\0');
     symlook("MKARGS", S_VAR, (void *) stow(buf->start));
-
     freebuf(buf);
     /*e: [[main()]] set MKARGS variable */
     /*e: [[main()]] set variables for recursive mk */
@@ -220,6 +219,18 @@ main(int argc, char **argv)
     /*e: [[main()]] initializations */
 
     // Parsing the mkfile
+    /*s: [[main()]] initializations before parsing */
+    //pad-ext: MKSHELL environment var to specify the path to rc
+    //note: shell->shell must be set before parsing the mkfile as mkfile
+    // can contain `{...} command that requires to run the shell
+    sym = symlook("MKSHELL", S_VAR, 0);
+    if(sym != nil) {
+      w = (Word*) sym->u.value;
+      if(w != nil && w->s != nil) {
+        shell->shell = w->s;
+      }
+    }
+    /*e: [[main()]] initializations before parsing */
     /*s: [[main()]] parsing mkfile, call [[parse()]] */
     if(f == nil){
         if(access(MKFILE, AREAD) == OK_0)
@@ -246,15 +257,6 @@ main(int argc, char **argv)
         insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
-    }
-    /*x: [[main()]] initializations before building */
-    //pad-ext: MKSHELL environment var to specify the path to rc
-    sym = symlook("MKSHELL", S_VAR, 0);
-    if(sym != nil) {
-      w = (Word*) sym->u.value;
-      if(w != nil && w->s != nil) {
-        shell->shell = w->s;
-      }
     }
     /*e: [[main()]] initializations before building */
     /*s: [[main()]] setting the targets, call [[mk()]] */
