@@ -7,7 +7,7 @@ Node*	nodfconst(double);
 void	regaalloc1(Node*, Node*);
 void	regaalloc(Node*, Node*);
 void	naddr(Node*, Adr*);
-int	samaddr(Node*, Node*);
+bool	samaddr(Node*, Node*);
 
 /*s: function [[ginit]](x86) */
 void

@@ -3,7 +3,7 @@
 
 void	gen(Node*);
 void	usedset(Node*, int);
-int		bcomplex(Node*, Node*);
+bool		bcomplex(Node*, Node*);
 
 /*s: function [[codgen]] */
 // main -> compile -> yyparse -> xdecl -> <>

@@ -245,7 +245,7 @@ extern	Prog	zprog;
 extern	char	reg[NREG+NFREG];
 extern	long	exregoffset;
 extern	long	exfregoffset;
-extern	int	suppress;
+extern	bool	suppress;
 
 /*s: function [[LOAD]](arm) */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
@@ -303,16 +303,16 @@ void	gen(Node*);
 void	noretval(int);
 void	usedset(Node*, int);
 void	xcom(Node*);
-int	bcomplex(Node*, Node*);
+bool	bcomplex(Node*, Node*);
 
 /*
  * cgen.c
  */
 void	cgen(Node*, Node*);
-void	cgenrel(Node*, Node*, int);
+void	cgenrel(Node*, Node*, bool);
 void	reglcgen(Node*, Node*, Node*);
 void	lcgen(Node*, Node*);
-void	bcgen(Node*, int);
+void	bcgen(Node*, bool);
 void	boolgen(Node*, int, Node*);
 void	sugen(Node*, Node*, long);
 void	layout(Node*, Node*, int, int, Node*);
@@ -346,10 +346,10 @@ void	gmove(Node*, Node*);
 void	gmover(Node*, Node*);
 void	gins(int a, Node*, Node*);
 void	gopcode(int, Node*, Node*, Node*);
-int		samaddr(Node*, Node*);
+bool	samaddr(Node*, Node*);
 void	gbranch(int);
 void	patch(Prog*, long);
-int		sconst(Node*);
+bool	sconst(Node*);
 int		sval(long);
 void	gpseudo(int, Sym*, Node*);
 
@@ -364,7 +364,7 @@ void	casf(void);
 void	bitload(Node*, Node*, Node*, Node*, Node*);
 void	bitstore(Node*, Node*, Node*, Node*, Node*);
 long	outstring(char*, long);
-int		mulcon(Node*, Node*);
+bool	mulcon(Node*, Node*);
 Multab*	mulcon0(long);
 void	nullwarn(Node*, Node*);
 void	gextern(Sym*, Node*, long, long);

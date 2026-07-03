@@ -178,7 +178,7 @@ int	imports;
 int	exports;
 /*e: global [[exports]] */
 
-int	allexport;
+bool	allexport;
 
 /*s: global [[EXPTAB]] */
 char*	EXPTAB;

@@ -23,7 +23,7 @@ Prog*	elitrl;
 /*e: global [[elitrl]](arm) */
 
 void	checkpool(Prog*);
-void 	flushpool(Prog*, int);
+void 	flushpool(Prog*, bool);
 void    addpool(Prog*, Adr*);
 
 

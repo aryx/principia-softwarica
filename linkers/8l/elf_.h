@@ -1,4 +1,4 @@
-/*s: 8l/elf.h */
+/*s: 8l/elf_.h */
 #include <elf.h>
 
 // vs include/elf.h? and libmach/elf.h?
@@ -18,4 +18,4 @@ enum {
 typedef void (*Putl)(long);
 
 void	elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl));
-/*e: 8l/elf.h */
+/*e: 8l/elf_.h */

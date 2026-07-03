@@ -51,7 +51,7 @@ int	mnstring;
 Multab	multab[20];
 /*e: global [[multab]](arm) */
 /*s: global [[hintabsize]](arm) */
-int	hintabsize;
+//int	hintabsize; // defined in mul.c
 /*e: global [[hintabsize]](arm) */
 /*s: global [[nodrat]] */
 Node*	nodrat;

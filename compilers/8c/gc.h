@@ -254,7 +254,7 @@ extern	long	regbits;
 //extern	long	exregbits;
 
 extern	int	change;
-extern	int	suppress;
+extern	bool	suppress;
 
 extern	Reg*	firstr;
 extern	Reg*	lastr;
@@ -366,8 +366,8 @@ int	copyu(Prog*, Adr*, Adr*);
 /*
  * com64
  */
-int	cond(int);
-int	com64(Node*);
+bool	cond(int);
+bool	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
 

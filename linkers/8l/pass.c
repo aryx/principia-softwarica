@@ -142,7 +142,8 @@ xfol(Prog *p)
 {
     Prog *q;
     int i;
-    enum as a;
+    //enum as a;
+    int a;
 
 loop:
     if(p == P)

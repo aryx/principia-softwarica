@@ -4,9 +4,9 @@
 
 int	compile(char*, char**, int);
 void	syminit(Sym*);
-int	mpatov(char*, vlong*);
+bool	mpatov(char*, vlong*);
 long	getr(void);
-long	escchar(long, int, int);
+long	escchar(long, int, bool);
 void	cinit(void);
 
 int	Oconv(Fmt*);

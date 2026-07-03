@@ -6,7 +6,7 @@
 #include    <common.out.h>
 #include    <5.out.h>
 
-#include    "../8l/elf.h"
+#include    "../8l/elf_.h"
 
 //----------------------------------------------------------------------------
 // Data structures and constants
@@ -328,11 +328,11 @@ extern  int     histfrogp;
 extern  int     histgen;
 
 // library
-extern  int xrefresolv;
+extern  bool xrefresolv;
 
 // advanced topics
-extern  int armv4;
-extern  int vfp;
+extern  bool armv4;
+extern  bool vfp;
 extern  bool doexp;
 extern  bool dlm;
 extern  char*   EXPTAB;
@@ -459,7 +459,8 @@ Prog* prg(void);
 // and malloc/free/setmalloctag overwrite
 long    atolwhex(char*);
 long    rnd(long, long);
-int     fileexists(char*);
+//old: now in libc.h
+//bool     fileexists(char*);
 void  mylog(char*, ...);
 /*s: macro [[DBG]] */
 #define DBG if(debug['v']) mylog

@@ -871,8 +871,8 @@ extern	int	packflg;
 extern	int	fproundflg;
 extern	bool	profileflg;
 extern	int	ncontin;
-extern	int	canreach;
-extern	int	warnreach;
+extern	bool	canreach;
+extern	bool	warnreach;
 extern	Bits	zbits;
 
 extern	char	*onames[], *tnames[], *gnames[];
@@ -977,7 +977,7 @@ Node*	doinit(Sym*, Type*, long, Node*);
 //@Scheck: useful, used by cc.y
 void	adecl(int, Type*, Sym*);
 void	argmark(Node*, int);
-Node*	dcllabel(Sym*, int);
+Node*	dcllabel(Sym*, bool);
 Node*	dodecl(void(*)(int, Type*, Sym*), int, Type*, Node*);
 //@Scheck: useful, used by cc.y
 Sym*	mkstatic(Sym*);
@@ -989,8 +989,16 @@ void	markdcl(void);
 //@Scheck: useful, used by cc.y
 void	pdecl(int, Type*, Sym*);
 Node*	revertdcl(void);
+
+// conflict with unix functions when compiled in goken
+#undef round
+#define	round	ccround
+#undef log2
+#define	log2	cclog2
 long	round(long, int);
-int	sametype(Type*, Type*);
+int	log2(uvlong);
+
+bool	sametype(Type*, Type*);
 ulong	sign(Sym*);
 ulong	signature(Type*);
 void	sualign(Type*);
@@ -1002,9 +1010,9 @@ Node*	contig(Sym*, Node*, long);
  */
 void	ccom(Node*);
 void	complex(Node*);
-int	tcom(Node*);
-int	tcoma(Node*, Node*, Type*, int);
-int	tcomo(Node*, int);
+bool	tcom(Node*);
+bool	tcoma(Node*, Node*, Type*, bool);
+bool	tcomo(Node*, int);
 void	constas(Node*, Type*, Type*);
 Node*	uncomma(Node*);
 
@@ -1017,25 +1025,25 @@ void	evconst(Node*);
 /*
  * funct.c
  */
-int	isfunct(Node*);
+bool	isfunct(Node*);
 void	dclfunct(Type*, Sym*);
 
 /*
  * sub.c
  */
-void	arith(Node*, int);
-int	deadheads(Node*);
+void	arith(Node*, bool);
+bool	deadheads(Node*);
 Type*	dotsearch(Sym*, Type*, Node*, long*);
 Node*	invert(Node*);
 int	bitno(long);
 void	makedot(Node*, Type*, long);
-int	mixedasop(Type*, Type*);
+bool	mixedasop(Type*, Type*);
 Node*	new(int, Node*, Node*);
 Node*	new1(int, Node*, Node*);
-int	nilcast(Type*, Type*);
-int	nocast(Type*, Type*);
+bool	nilcast(Type*, Type*);
+bool	nocast(Type*, Type*);
 void	prtree(Node*, char*);
-void	prtree1(Node*, int, int);
+void	prtree1(Node*, int, bool);
 void	relcon(Node*, Node*);
 int	relindex(int);
 //@Scheck: useful, used by cc.y
@@ -1043,16 +1051,15 @@ int	simpleg(long);
 Type*	garbt(Type*, long);
 int	simplec(long);
 Type*	simplet(long);
-int	stcompat(Node*, Type*, Type*, long[]);
-int	tcompat(Node*, Type*, Type*, long[]);
+bool	stcompat(Node*, Type*, Type*, long[]);
+bool	tcompat(Node*, Type*, Type*, long[]);
 void	tinit(void);
 Type*	typ(int, Type*);
 Type*	copytyp(Type*);
 void	typeext(Type*, Node*);
 void	typeext1(Type*, Node*);
-int	side(Node*);
+bool	side(Node*);
 int	vconst(Node*);
-int	log2(uvlong);
 int	vlog(Node*);
 int	topbit(ulong);
 void	simplifyshift(Node*);
@@ -1116,7 +1123,7 @@ extern	schar	ewidth[];
 /*
  * com64
  */
-int	com64(Node*);
+bool	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
 vlong	convvtox(vlong, int);
@@ -1127,7 +1134,7 @@ vlong	convvtox(vlong, int);
 /*
  * machcap
  */
-int	machcap(Node*);
+bool	machcap(Node*);
 
 #pragma	varargck	argpos	warn	2
 #pragma	varargck	argpos	diag	2

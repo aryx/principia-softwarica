@@ -5,7 +5,7 @@
 
 #include	<common.out.h>
 #include	<8.out.h>
-#include	"elf.h"
+#include	"elf_.h"
 
 /*s: macro [[DBG]] */
 #define DBG if(debug['v']) mylog
@@ -409,7 +409,7 @@ extern	Adr*	reloca;
 extern	bool	dlm;
 extern	int	imports, nimports;
 extern	int	exports, nexports;
-bool allexport;
+extern  bool allexport;
 extern	char*	EXPTAB;
 extern	Prog	undefp;
 
@@ -446,7 +446,8 @@ void	dynreloc(Sym*, ulong, int);
 
 void	errorexit(void);
 void	export(void);
-int	fileexists(char*);
+//old: now in libc.h
+//bool	fileexists(char*);
 
 
 void	follow(void);

@@ -92,8 +92,12 @@ typedef int errorn; // 1 or more means error
 // Exception
 //----------------------------------------------------------------------------
 
+/*s: signature [[setjmp]] */
 extern  int     setjmp(jmp_buf);
+/*e: signature [[setjmp]] */
+/*s: signature [[longjmp]] */
 extern  void    longjmp(jmp_buf, int);
+/*e: signature [[longjmp]] */
 
 // ??
 extern  void    notejmp(void*, jmp_buf, int);

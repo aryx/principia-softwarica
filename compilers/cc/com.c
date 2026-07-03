@@ -1,9 +1,9 @@
 /*s: cc/com.c */
 #include "cc.h"
 
-int	tcomd(Node*);
-int	tcomx(Node*);
-int	tlvalue(Node*);
+bool	tcomd(Node*);
+bool	tcomx(Node*);
+bool	tlvalue(Node*);
 
 typedef struct Com Com;
 typedef struct Big Big;

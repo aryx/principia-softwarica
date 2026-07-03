@@ -1,7 +1,7 @@
 /*s: 8c/cgen.c */
 #include "gc.h"
 
-void	bcgen(Node*, int);
+void	bcgen(Node*, bool);
 
 /*s: function [[cgen]](x86) */
 void
