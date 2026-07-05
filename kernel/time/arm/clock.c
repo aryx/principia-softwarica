@@ -173,9 +173,12 @@ clockinit(void)
         t0 = arch_lcycles();
     }while(tn->clo == tstart);
     tend = tstart + 10000;
+    /* claude: signed "has passed" compare instead of exact-match: under
+     * emulation (QEMU) clo can jump by more than 1 between two reads and
+     * skip tend, so != would spin for a full 2^32 counter wrap */
     do{
         t1 = arch_lcycles();
-    }while(tn->clo != tend);
+    }while((long)(tn->clo - tend) < 0);
     t1 -= t0;
 
     cpu->cpuhz = 100 * t1;
@@ -224,6 +227,14 @@ arch_timerset(Tfast next)
     else{
         tn = (Systimers*)SYSTIMERS;
         tn->c3 = (ulong)(now + period);
+        /* claude: the systimer fires on an exact compare match, so if clo
+         * passed c3 before the write above landed (large interrupt latency
+         * under emulation), the next tick would be a 2^32 us wrap away.
+         * push the compare forward until it is safely in the future; use
+         * MaxPeriod so a slow emulator gets a full tick of breathing room
+         * instead of an interrupt storm (this path never runs on real hw). */
+        while((long)(tn->c3 - tn->clo) <= 0)
+            tn->c3 = tn->clo + MaxPeriod;
     }
 }
 /*e: function [[arch_timerset]](arm) */
