@@ -1,0 +1,133 @@
+claude: this document was written by Claude Code (2026-07-05)
+
+How to debug the 9pi kernel under QEMU
+=======================================
+(notes from the session where Claude diagnosed why 9pi booted on a real
+raspberry pi1 but hung under qemu; kept here as a reusable playbook)
+
+Basic invocation
+----------------
+QEMU's raspi1ap machine is the same SoC as the pi1 (BCM2835, ARM1176).
+There is no VideoCore firmware in QEMU, so three things differ from a real
+SD-card boot:
+
+ - -kernel loads raw images at 0x10000 (generic ARM convention) but 9pi is
+   linked -H6 -T0x80008000, i.e. physical 0x8000.  Use the generic loader
+   to force the address and entry point:
+     -device loader,file=kernel/COMPILE/9/bcm/9pi,addr=0x8000,cpu-num=0,force-raw=on
+ - the SD card must be a power-of-2 size:
+     cp dosdisk.img /tmp/sd.img && qemu-img resize -f raw /tmp/sd.img 1G
+ - serial0 is the PL011 (uart0); the mini uart that uartmini.c drives is
+   serial1.  So: -serial null -serial mon:stdio
+
+Full command:
+  qemu-system-arm -M raspi1ap \
+    -device loader,file=kernel/COMPILE/9/bcm/9pi,addr=0x8000,cpu-num=0,force-raw=on \
+    -drive file=/tmp/sd.img,if=sd,format=raw \
+    -serial null -serial mon:stdio \
+    -device usb-kbd -device usb-mouse
+
+Caveat: no network is possible; the pi1's ethernet is a USB LAN9512 chip
+that QEMU does not model.
+
+Observing a headless guest
+--------------------------
+The console output goes to the emulated framebuffer, not the serial port,
+so a "silent" guest may actually be printing happily.  Run headless with
+the human monitor on stdio and feed it commands through a subshell:
+
+  (sleep 30; echo 'screendump /tmp/s.ppm'; sleep 1; echo 'quit') | \
+  qemu-system-arm -M raspi1ap -display none ... -monitor stdio
+
+  convert /tmp/s.ppm /tmp/s.png     # then look at the image
+
+Taking screendumps at increasing times (30s, 90s, 180s) turns the
+framebuffer into a crude progress log.
+
+Where is the CPU? (info registers)
+----------------------------------
+'info registers' in the monitor gives the PC and mode.  Useful facts for
+reading the output on this kernel:
+
+ - R15 = PC.  0x80xxxxxx means the MMU is on and we are in kernel virtual
+   space (KZERO), i.e. start.s and mmu setup already worked.
+ - R10 always holds the Cpu/Mach pointer (0x80002000), R9 holds `up`
+   (nil until userinit) -- the 5c compiler reserves these globally.
+ - PSR bit 7 (0x80) set = IRQs masked.  '--C- A S svc32' at the end shows
+   the mode; if it stays svc32 with IRQs enabled but nothing happens,
+   interrupts are not being delivered.
+
+Sampling 'info registers' every couple of seconds is a poor man's
+profiler: repeated hits in the same 40-byte window = a spin loop; hits all
+over = the system is running, just slow.
+
+Resolving PCs to function names (docs/scripts/aout_syms.py)
+-----------------------------------------------------------
+The shipped 9pi is -H6 (headerless, no symbol table).  Relink the same
+objects without -H6 to get a plan9 a.out with a symtab (the load address
+stays the same, no need to boot it -- it is just a symbol map):
+
+  5l -f -o /tmp/9pi.sym -R4096 -T0x80008000 -l <same .5 files and .a libs>
+
+then:  python3 docs/scripts/aout_syms.py /tmp/9pi.sym 80074c18 80085220 ...
+  80074c18 -> genrandom +0x14
+  80085220 -> memset +0x58
+
+This instantly turned "mystery spin loop at 0x80074c00" into "the
+genrandom entropy kproc, which spins by design".
+
+Inspecting memory and MMIO registers (xp)
+-----------------------------------------
+'xp' in the monitor reads PHYSICAL memory, so subtract KZERO from kernel
+virtual addresses.  Two tricks that paid off:
+
+ - dump the Cpu struct twice and diff:
+     xp /64wx 0x2000        (Mach/Cpu lives at phys 0x2000)
+   If nothing changes between two dumps seconds apart, cpu->ticks is
+   frozen: the clock interrupt is dead.  Every driver timeout of the form
+   "while(cpu->ticks - now < HZ)" then spins forever.
+
+ - read the device registers the driver is fighting with:
+     xp /8wx 0x20003000     (systimer: CS CLO CHI C0 C1 C2 C3)
+   Seeing CLO advancing but C3 stuck in the past told us the compare
+   register was never re-armed.
+
+Counting exceptions (-d int)
+----------------------------
+  qemu-system-arm ... -d int -D /tmp/int.log
+  grep -c 'Taking exception 5' /tmp/int.log     # IRQs taken
+
+One IRQ in 15 seconds = dead clock.  3000 in 60s = alive (~55 ticks/s).
+The log also shows the early banked-mode setup (svc->irq->svc etc. mode
+switches from start.s), which confirms the vectors are sane.
+
+Device trace events (--trace)
+-----------------------------
+QEMU device models have named trace points; list them with:
+  qemu-system-arm -M raspi1ap -trace help | grep -i systmr
+
+The smoking gun for the clock bug was:
+  --trace 'bcm2835_systmr*' :
+    timer write: offset 0x18 data 0xf9e5  -> "timer #3 expiring in 9781 us"   OK
+    (fires, kernel acks CS)
+    timer write: offset 0x18 data 0x325bd -> "expiring in 4294967231 us"      BUG
+
+i.e. the re-armed compare value had already been passed by the counter, so
+the equality-match systimer would only fire again after a full 2^32 us
+wrap.  Root cause: under TCG, virtual time = host wall clock, and
+interrupt emulation latency (>100us) exceeds the race window that on real
+700MHz silicon is nanoseconds.  Hence the two fixes in
+kernel/time/arm/clock.c (signed comparisons + re-push c3 until it lands in
+the future).
+
+Misc
+----
+ - 'info qtree' shows where the sd-card device is attached (it is on the
+   Arasan sdhci bus by default, which is what emmc.c drives -- good).
+ - -icount shift=N makes virtual time follow the instruction count, which
+   hides latency races but is much slower and its clock warping breaks
+   other exact-equality loops; with the clock.c fixes plain TCG is fine.
+ - the guest is genuinely slow under TCG: the genrandom kproc burns ~half
+   the CPU by design (entropy from timing jitter), and the ARM1176 cycle
+   counter does not advance under QEMU, so "cpu0: 0MHz" is cosmetic and
+   cpuhz calibration measures zero.  Expect ~3 min wall to reach devreset.
