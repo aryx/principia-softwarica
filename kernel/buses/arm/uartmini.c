@@ -454,17 +454,23 @@ uartconsinit(void)
     int n;
     char *p, *cmd;
 
-    if((p = getconf("console")) == nil)
-        return;
-    n = strtoul(p, &cmd, 0);
-    if(p == cmd)
-        return;
-    switch(n){
-    default:
-        return;
-    case 0:
+    /* claude: getconf() is gutted (always nil), so honour it if present but
+     * default to the mini uart console when unset. Lets QEMU serial capture
+     * boot messages/panics. Original getconf-gated logic kept below. */
+    if((p = getconf("console")) == nil){
         uart = &miniuart;
-        break;
+        cmd = "";
+    } else {
+        n = strtoul(p, &cmd, 0);
+        if(p == cmd)
+            return;
+        switch(n){
+        default:
+            return;
+        case 0:
+            uart = &miniuart;
+            break;
+        }
     }
 
     if(!uart->enabled)
