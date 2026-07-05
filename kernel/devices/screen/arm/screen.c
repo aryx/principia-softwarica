@@ -243,7 +243,12 @@ arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, bool *softscree
 void
 arch_blankscreen(bool blank)
 {
-    fbblank(blank);
+    /* claude: disabled: this second framebuffer-mailbox call trips QEMU's
+     * MMIO re-entrancy guard ("Blocked re-entrant IO on bcm2835-fb") and
+     * the emulated display never refreshes again; only screen blanking is
+     * lost. Re-enable if blanking matters on real hardware. */
+    USED(blank);
+    //fbblank(blank);
 }
 
 void arch_flushmemscreen(Rectangle) { }
