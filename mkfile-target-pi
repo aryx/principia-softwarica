@@ -1,9 +1,34 @@
 KERNELDIR=kernel/COMPILE/9/bcm
 KERNEL=kernel/COMPILE/9/bcm/9pi
 
-run:QV:
+# QEMU's raspi1ap machine is the same SoC as the Raspberry Pi 1 (BCM2835,
+# ARM1176), so we can boot 9pi under emulation instead of flashing an SD card.
+# Two quirks (see docs/qemu_arm_debug.txt for the full story):
+#  - 9pi is linked -H6 -T0x80008000 (phys load 0x8000); there is no VideoCore
+#    firmware in QEMU to place it, so we use the generic loader device to force
+#    the load address and entry point.
+#  - the emulated SD controller only accepts a power-of-2 card size, and
+#    dosdisk.img is 512MiB+512B, so we boot a padded copy (QEMU_SD) instead.
+QEMU_SD=qemu-sd.img
+
+$QEMU_SD: dosdisk.img
+	cp dosdisk.img $QEMU_SD
+	qemu-img resize -f raw $QEMU_SD 1G
+
+# the mini-uart console (serial1) is put on stdio+monitor; the framebuffer
+# opens in a window. Ctrl-A C toggles the terminal between the serial console
+# and the qemu monitor.
+run:V: $QEMU_SD
+	qemu-system-arm -M raspi1ap -device loader,'file='$KERNEL',addr=0x8000,cpu-num=0,force-raw=on' -drive 'file='$QEMU_SD',if=sd,format=raw' -serial null -serial mon:stdio -device usb-kbd -device usb-mouse $QEMU_EXTRA_OPTIONS
+
+# headless variant: no framebuffer window, everything on the terminal
+run-nogui:V: $QEMU_SD
+	qemu-system-arm -M raspi1ap -device loader,'file='$KERNEL',addr=0x8000,cpu-num=0,force-raw=on' -drive 'file='$QEMU_SD',if=sd,format=raw' -serial null -serial mon:stdio -display none $QEMU_EXTRA_OPTIONS
+
+# boot on real hardware instead of QEMU
+run-realpi:V:
 	echo copy what is in dosdisk.img to your Raspberry Pi SD card
-    echo for example with 'dd if=dosdisk.img of=/dev/sda'
-    echo and then insert this SD card in your Raspberry Pi.
+	echo for example with 'dd if=dosdisk.img of=/dev/sda'
+	echo and then insert this SD card in your Raspberry Pi.
 
 #qemu-system-arm -M raspi2 -bios $KERNEL^2
