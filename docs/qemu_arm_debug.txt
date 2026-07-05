@@ -120,6 +120,45 @@ interrupt emulation latency (>100us) exceeds the race window that on real
 kernel/time/arm/clock.c (signed comparisons + re-push c3 until it lands in
 the future).
 
+Diagnosing a spontaneous reboot loop (-d cpu_reset)
+---------------------------------------------------
+After the clock and framebuffer fixes the kernel printed its whole boot
+banner and "NNNM memory" but then silently reset, over and over (~285ms
+per cycle, banner reprinted 100+ times in 30s).  No panic text, so it was
+not a kernel-detected fault.
+
+  qemu-system-arm ... -d cpu_reset -D /tmp/rst.log
+
+logs a full register dump at every CPU reset.  Two things to read off it:
+
+ - is it the guest asking to reset, or QEMU dying?  The initial power-on
+   does 3 resets (loader + entry setup); a *reboot* shows up as regular
+   reset events much later, interleaved with the mode-switch/IRQ trace.
+   Pairs of resets ~6 lines apart = one reboot (the SoC resets twice).
+
+ - the register dump at the reset IS the guilty store's operands, frozen.
+   Here R03=7e100000 (= busio 0x7E000000 + 0x100000, the power-manager
+   *bus* address) and R02/R06/R11 all had 0x5A... in the top byte -- the
+   watchdog Password (0x5A<<24).  So the guest was writing the watchdog
+   registers.  R15 (PC) and R14 (LR) name the culprit; feed them to
+   aout_syms.py:
+     8004b124 -> wdogfeed +0x28
+     80064218 -> timerintr +0x1a0
+   i.e. timerintr() was calling wdogfeed() every tick.  watchdoglink()
+   (registered from the generated pi.c links()) had put wdogfeed on the
+   100Hz clock0link list.  On real hw feeding the dog every 10ms keeps its
+   5s countdown alive; QEMU's bcm2835 power-manager instead performs the
+   reset on the Rstc CfgReset *write itself* (no countdown modelled), so
+   every feed = a reset.  Fix: don't register wdogfeed under emulation
+   (kernel/init/arm/watchdog.c).  This was the last blocker to reaching a
+   shell.
+
+Lesson: a silent reset with no panic is almost always the guest poking a
+reset/power register.  -d cpu_reset + aout_syms(PC,LR) finds it in one
+run; you do not need to bisect with iprints (though adding a couple of
+iprint()s across main()'s tail is a fast way to confirm which phase the
+reset lands in -- here, inside init0() right after spllo enabled IRQs).
+
 Misc
 ----
  - 'info qtree' shows where the sd-card device is attached (it is on the
@@ -130,4 +169,21 @@ Misc
  - the guest is genuinely slow under TCG: the genrandom kproc burns ~half
    the CPU by design (entropy from timing jitter), and the ARM1176 cycle
    counter does not advance under QEMU, so "cpu0: 0MHz" is cosmetic and
-   cpuhz calibration measures zero.  Expect ~3 min wall to reach devreset.
+   cpuhz calibration measures zero.
+
+Current status (after clock + fbblank + watchdog fixes)
+-------------------------------------------------------
+The kernel now boots all the way to an interactive rc shell prompt (%)
+within a few seconds, headless, with:
+
+  qemu-system-arm -M raspi1ap \
+    -device loader,file=.../9pi,addr=0x8000,cpu-num=0,force-raw=on \
+    -drive file=sd.img,if=sd,format=raw -serial null -serial mon:stdio \
+    -display none
+
+Remaining problem: the SD/dos root is only partly readable --
+  dev 3 sector 215271, read: 0, should be 4608
+  bind: /rc/bin: '/rc' I/O error
+so boot.rc reaches a shell but /rc/bin never binds.  This is an emmc.c /
+sdhci read-path issue (the reads now actually reach the card, unlike
+before, but return short), independent of the three fixes above.
