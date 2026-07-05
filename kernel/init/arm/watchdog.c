@@ -83,7 +83,15 @@ wdogoff(void)
 void
 watchdoglink(void)
 {
-    addclock0link(wdogfeed, Arch_HZ);
+    /* claude: disabled under emulation: wdogfeed() writes the power-manager
+     * Rstc register with the CfgReset config bits every clock tick to feed
+     * the hardware watchdog. QEMU's bcm2835 power-manager model performs the
+     * CPU reset on that Rstc write itself (it does not model the countdown),
+     * so feeding the dog every 10ms hard-resets the machine on every tick and
+     * the kernel never gets past init0. Re-enable on real hardware, where the
+     * 5s countdown makes this a safety net rather than a suicide. */
+    USED(wdogfeed);
+    //addclock0link(wdogfeed, Arch_HZ);
 }
 /*e: function [[watchdoglink]](arm) */
 /*e: init/arm/watchdog.c */
