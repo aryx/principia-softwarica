@@ -227,8 +227,8 @@ TEXT _startpg2(SB), 1, $-4
      */
     MRC CpSC, 0, R0, C(CpID), C(CpIDidct), CpIDmpid
     AND $(MAXCPUS-1), R0            /* mask out non-cpu-id bits */
-    BL  ,cpustart(SB)
-    B   ,0(PC)
+    BL  cpustart(SB)
+    B   0(PC)
 /*e: function [[_startpg2]](raspberry pi2)(arm) */
 
 /*s: function [[cpidget]](raspberry pi2)(arm) */
