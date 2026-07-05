@@ -14,6 +14,7 @@ The code of the original Plan 9 is available at <https://9p.io/plan9/>.
 
 Other forks of Plan 9:
 
+ - [agent9](https://github.com/Alino/agent9)
  - [9front](http://9front.org/)
  - [9legacy](http://9legacy.org/)
  - [9legacy-bootable](https://github.com/rsc/plan9)
