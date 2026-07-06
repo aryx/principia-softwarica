@@ -24,11 +24,14 @@ Full command:
   qemu-system-arm -M raspi1ap \
     -device loader,file=kernel/COMPILE/9/bcm/9pi,addr=0x8000,cpu-num=0,force-raw=on \
     -drive file=/tmp/sd.img,if=sd,format=raw \
-    -serial null -serial mon:stdio \
-    -device usb-kbd -device usb-mouse
+    -serial null -serial mon:stdio
 
 Caveat: no network is possible; the pi1's ethernet is a USB LAN9512 chip
 that QEMU does not model.
+
+Do NOT add '-device usb-kbd -device usb-mouse'. They look harmless (we
+have no keyboard/mouse otherwise) but they wedge the boot: see the FIQ
+storm section below. The serial console is all we need for a shell.
 
 Observing a headless guest
 --------------------------
@@ -159,6 +162,40 @@ run; you do not need to bisect with iprints (though adding a couple of
 iprint()s across main()'s tail is a fast way to confirm which phase the
 reset lands in -- here, inside init0() right after spllo enabled IRQs).
 
+A FIQ storm at "dossrv: serving" (emulated usb-kbd/usb-mouse)
+------------------------------------------------------------
+Symptom: with '-device usb-kbd -device usb-mouse' the boot printed its
+banner and reached "dossrv: serving #s/dos" and then froze -- no prompt,
+forever.  The tempting guess is a dead clock (a stalled tsleep in the
+emmc/dma path), but -d int said the opposite:
+
+  grep -c 'Taking exception' int.log      # ~1.9 million in 40s (!)
+  grep 'Taking exception 6' int.log | wc  # nearly all of them: FIQ
+
+i.e. an *interrupt storm*, not a stall.  On the pi the dwcotg USB host
+controller (usbdwc.c) is wired to FIQ, not IRQ.  The last visible serial
+line is "dossrv: serving" only because the boot.rc commands between dossrv
+and 'usbd' (mount, bind, ramfs, mkdir, echo>hostowner) print nothing; the
+storm actually begins when 'usbd' brings up the dwcotg controller and
+QEMU's emulated USB devices start asserting the FIQ line faster than the
+driver can quiesce it under emulation.  At ~2M FIQs/s the CPU never makes
+forward progress, so it looks hung.
+
+Fix: don't attach USB devices under QEMU (mkfile-target-pi 'run' target no
+longer passes usb-kbd/usb-mouse).  We don't need them -- the console is the
+serial line and boot.rc runs rc on '#d/0', not rio.  With no devices
+attached 'usbd' finds an empty root hub, returns quietly, and the boot
+reaches '%' every time.  Verified: 3/3 headless boots reach the prompt and
+accept typed commands (echo, ls) over serial.  On real hardware the same
+kernel boots fine with USB attached, so this is purely a QEMU dwcotg/FIQ
+modelling artifact.
+
+Lesson mirror of the reset section: a "hang" that is really a *flood* looks
+identical from the serial console (nothing happens).  -d int distinguishes
+them in one run -- near-zero exceptions = a stall to chase in the sleeping
+driver; millions = an interrupt nobody is acking, and 'Taking exception 6'
+points straight at FIQ (the USB controller here).
+
 Misc
 ----
  - 'info qtree' shows where the sd-card device is attached (it is on the
@@ -171,19 +208,32 @@ Misc
    counter does not advance under QEMU, so "cpu0: 0MHz" is cosmetic and
    cpuhz calibration measures zero.
 
-Current status (after clock + fbblank + watchdog fixes)
--------------------------------------------------------
-The kernel now boots all the way to an interactive rc shell prompt (%)
-within a few seconds, headless, with:
+Current status (after clock + fbblank + watchdog + partition fixes)
+------------------------------------------------------------------
+The kernel boots all the way to an interactive rc shell prompt (%) within a
+few seconds and accepts typed commands over the serial console. Just run
+'mk run' (see mkfile-target-pi), or by hand:
 
   qemu-system-arm -M raspi1ap \
     -device loader,file=.../9pi,addr=0x8000,cpu-num=0,force-raw=on \
-    -drive file=sd.img,if=sd,format=raw -serial null -serial mon:stdio \
+    -drive file=qemu-sd.img,if=sd,format=raw -serial null -serial mon:stdio \
     -display none
 
-Remaining problem: the SD/dos root is only partly readable --
-  dev 3 sector 215271, read: 0, should be 4608
+The dossrv "read: 0" story (fixed, and it was NOT a QEMU bug)
+------------------------------------------------------------
+For a while boot.rc reached a shell but printed, for files past ~100MB:
+  dev 3 sector 215271, read: 0, should be 4608   (from dossrv devio.c)
   bind: /rc/bin: '/rc' I/O error
-so boot.rc reaches a shell but /rc/bin never binds.  This is an emmc.c /
-sdhci read-path issue (the reads now actually reach the card, unlike
-before, but return short), independent of the three fixes above.
+and once the image filled up this broke mount/bind before rc even started.
+
+This was NOT emmc/sdhci: it happened on real hardware too. 'read: 0' with no
+kernel 'emmcio:' error means devsd.c sdbio() returned 0 at a *partition*
+boundary (bno >= pp->end), i.e. dossrv read past the end of its own
+partition. The dos partition was 204801 sectors (100MB) but 'mk disk' runs
+mkfs.vfat on the full 512MB image, so the FAT (totsec 1048572) overflowed its
+partition; any file placed beyond 100MB was unreachable. Diagnosed purely
+statically by parsing the MBR table and the FAT boot sector of dosdisk.img
+(no boot needed). Fix: make the partition span the whole 512MB --
+arm/boot.rc now hardcodes 'part dos 1 1048577' (like 386/boot.rc) instead of
+'fdisk -p' reading the stale MBR table, and MISC/pc/bootsector's table was
+corrected to match. Keep these in sync with IMGSIZE in mkfile-host-Linux.
