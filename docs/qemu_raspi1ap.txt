@@ -58,9 +58,14 @@ buffer  mailbox call trips QEMU's MMIO re-entrancy guard and the emulated
         hardware it still blanks the screen.
 
 Console kernel/buses/arm/uartmini.c: getconf() is currently gutted (always
-        nil), so the console selection now defaults to the mini-UART when
-        `console` is unset, which is what QEMU's second serial captures.  Set
-        `console=` in plan9.ini to override.
+        nil), so *under emulation* the console defaults to the mini-UART when
+        `console` is unset, which is what QEMU's second serial captures.  On
+        real hardware attaching the mini-UART console wedges the raw /dev/cons
+        shell (the first command prints, then the mini-UART output path stalls
+        and later console writes block -> the console freezes after one `ls`),
+        so on hardware we leave the console on the framebuffer, matching master.
+        rio is unaffected either way -- it owns its windows and never touches
+        /dev/cons.  Set `console=0` in plan9.ini to force the serial console.
 
 USB HID kernel/buses/arm/usbdwc.c (+ usbd.c): getting usb-kbd/usb-mouse to work
         took several fixes -- breaking a QEMU-only ~2M/s FIQ interrupt storm
@@ -72,11 +77,12 @@ USB HID kernel/buses/arm/usbdwc.c (+ usbd.c): getting usb-kbd/usb-mouse to work
         ~25-30s/device to ~5-6s and cured a runaway key-repeat (a tapped key
         printing forever).  Real hardware keeps split transactions.
 
-Emul.   The above emulation-only paths all agree from one probe: emulating()
-detect  in usbdwc.c (declared in kernel/core/arm/fns.h) reads the dwc2 Synopsys
-        id -- QEMU reports rev 2.94a (0x4f54294a), real BCM2835 reports 2.80a
-        (0x4f54280a).  Any other id is treated as hardware, so the gating never
-        fires on a real board.
+Emul.   All four emulation-only paths above -- the USB split-transaction skip,
+detect  the watchdog feed, the framebuffer blank, and the mini-UART console
+        default -- agree from one probe: emulating() in usbdwc.c (declared in
+        kernel/core/arm/fns.h) reads the dwc2 Synopsys id.  QEMU reports rev
+        2.94a (0x4f54294a), real BCM2835 reports 2.80a (0x4f54280a).  Any other
+        id is treated as hardware, so the gating never fires on a real board.
 
 Boot/   kernel/init/user/boot/arm/boot.rc hardcodes `part dos 1 1048577` to span
 build   the whole 512 MiB FAT image (the stale MBR table declared only 100 MB,
@@ -91,31 +97,38 @@ Current status
    or graphical.
  - Graphical mode: USB keyboard types cleanly and the USB mouse tracks (both
    enumerate behind QEMU's emulated LAN9514 hub in ~5-6s).
- - One 9pi image is intended for both QEMU and a real Pi 1; the emulation-only
-   workarounds are gated at run time.  Real-hardware re-validation after these
-   changes is still pending (the watchdog and framebuffer-blank paths in
-   particular only run on real silicon).
+ - One 9pi image runs on both QEMU and a real Pi 1; the emulation-only
+   workarounds are gated at run time from the emulating() probe.
+ - Validated on a real Raspberry Pi 1 (2026-07-07): boots, and rio runs fine --
+   keyboard, mouse, framebuffer and the (real) watchdog all work, confirming
+   emulating() reads false on silicon.  The USB HID uses the real split-
+   transaction path there, so enumeration is near-instant.
 
 Limitations
 -----------
  - No networking: the Pi 1's ethernet is a USB LAN9512 chip that QEMU does not
    model, so #l/ether never appears.
- - No window system: boot.rc runs rc directly on the console (`. -i '#d/0'`),
-   not rio.  The framebuffer shows the text console; there is no GUI desktop
-   yet.  The mouse device is not even bound into /dev by this boot.rc (do
-   `bind -a '#m' /dev` by hand to read /dev/mouse).
+ - No window system by default: boot.rc runs rc directly on the console
+   (`. -i '#d/0'`), not rio.  rio does work when started by hand (verified on
+   real hardware), but the default boot leaves you at the raw framebuffer
+   console; the mouse device is not even bound into /dev by this boot.rc (do
+   `bind -a '#m' /dev` by hand to read /dev/mouse).  Note the raw console under
+   QEMU also shows some rough edges after the first command; rio is the smooth
+   path.
  - Slow under TCG: the genrandom kproc spins by design (entropy from timing
    jitter) and burns ~half the emulated CPU; the ARM1176 cycle counter does not
    advance, so `cpu0: 0MHz` is cosmetic and cpuhz calibration measures zero.
- - The watchdog and framebuffer-blank behaviours diverge by target by design
-   (they are the emulation-gated paths); everything else is shared.
+ - Four behaviours diverge by target by design (the emulation-gated paths: USB
+   split transactions, watchdog feed, framebuffer blank, mini-UART console);
+   everything else is shared between QEMU and real hardware.
 
 Possible future work
 ---------------------
- - Re-verify the whole image on a real Raspberry Pi 1 (the reason emulation is
-   now auto-detected rather than hardcoded).
- - Start rio for a real graphical environment, and have boot.rc bind the mouse
-   device so /dev/mouse exists without manual steps.
+ - Start rio from boot.rc for a graphical environment out of the box, and bind
+   the mouse device so /dev/mouse exists without manual steps.  rio already
+   works when started by hand on real hardware.
+ - Investigate the raw-console (non-rio) roughness after the first command; it
+   is independent of the emulation gating (rio bypasses /dev/cons entirely).
  - Networking under emulation: QEMU will not grow a LAN9512 model, but a
    different emulated NIC (or slirp via a modelled controller) could give the
    guest a network; needs a matching driver.
