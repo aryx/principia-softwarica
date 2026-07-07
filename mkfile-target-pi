@@ -39,6 +39,19 @@ run:V: $QEMU_SD
 run-nogui:V: $QEMU_SD
 	qemu-system-arm -M raspi1ap -device loader,'file='$KERNEL',addr=0x8000,cpu-num=0,force-raw=on' -drive 'file='$QEMU_SD',if=sd,format=raw' -serial null -serial mon:stdio -display none $QEMU_EXTRA_OPTIONS </dev/tty
 
+# claude: debug/trace variant. Boots headless with the interactive serial shell,
+# plus QEMU exception logging (-d int; FIQ is exception 6) and event tracing, all
+# written to qemu-trace.log (gitignored) so they do not drown the console. The
+# default traces are the two subsystems that were key to bringing the kernel up:
+# the dwc2 USB host controller (the FIQ storm, split transactions) and the
+# bcm2835 system timer (the compare-match wrap). List available events with
+# 'qemu-system-arm --trace help'; add more with QEMU_EXTRA_OPTIONS, e.g.
+#   mk run-trace 'QEMU_EXTRA_OPTIONS=--trace bcm2835_gpio_*'
+# tail -f qemu-trace.log in another terminal while you drive the shell here.
+# See docs/qemu_arm_debug.txt for how to read these traces.
+run-trace:V: $QEMU_SD
+	qemu-system-arm -M raspi1ap -device loader,'file='$KERNEL',addr=0x8000,cpu-num=0,force-raw=on' -drive 'file='$QEMU_SD',if=sd,format=raw' -serial null -serial mon:stdio -display none -d int -D qemu-trace.log --trace 'usb_dwc2_*' --trace 'bcm2835_systmr*' -device usb-kbd -device usb-mouse $QEMU_EXTRA_OPTIONS </dev/tty
+
 # claude: automated regression test. Boots 9pi headless under QEMU and drives the
 # emulated usb keyboard/mouse over QMP, asserting the boot sequence, that the
 # kernel banner appears once (no watchdog reset loop -> emulation detected), clean
