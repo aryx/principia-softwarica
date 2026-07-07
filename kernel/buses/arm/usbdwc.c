@@ -57,6 +57,11 @@ struct Ctlr {
     int sofchan;    /* bitmap of channels waiting for sof */
     int wakechan;   /* bitmap of channels to wakeup after fiq */
     int debugchan;  /* bitmap of channels for interrupt debug */
+    /* claude: the interrupt mask chanwait() is waiting for on channel N. We
+     * cannot let chandone() read hc->hcintmsk, because the fiq clears hcintmsk
+     * to break the QEMU sticky-Hcintr storm (see fiqintr). hcint itself is left
+     * intact, so chandone tests hcint against this saved mask instead. */
+    ulong   chanmask[16];
     Rendez  *chanintr;  /* sleep till interrupt on channel N */
 };
 /*e: struct [[Ctlr]]([[(buses/arm/usbdwc.c)(arm)]]) */
@@ -75,6 +80,19 @@ static Ctlr dwc;
 /*s: global [[debug]]([[(buses/arm/usbdwc.c)(arm)]]) */
 static int debug;
 /*e: global [[debug]]([[(buses/arm/usbdwc.c)(arm)]]) */
+
+/* claude: set when running under QEMU's dwc2 model (detected in reset() from the
+ * Synopsys id). QEMU does not implement split transactions -- it routes a packet
+ * to a device behind a hub purely by device address, ignoring HCSPLT -- and its
+ * usb-kbd ignores SET_IDLE. So under emulation we must NOT drive the split state
+ * machine: a start-split/complete-split has no counterpart in the model, so each
+ * interrupt poll instead eats a ~1s sofwait/chanwait timeout (keyboard and mouse
+ * then lag by seconds), and, worse, the periodic idle re-reports that would let
+ * us recover a missed key-up never arrive -- so a tapped key auto-repeats until
+ * the next keypress ('ddddd' then 'eeeee'). With split left disabled the transfer
+ * completes directly, like a root-port device: fast and reliable. Real hardware,
+ * where the device really is behind a high-speed hub, keeps split (emulation==0). */
+static int emulation;
 
 /*s: global [[Ebadlen]](arm) */
 static char Ebadlen[] = "bad usb request length";
@@ -180,7 +198,9 @@ chansetup(Hostchan *hc, Ep *ep)
         hcc |= Lspddev;
         /* fall through */
     case Fullspeed:
-        if(ep->dev->hub > 1){
+        /* claude: skip split under emulation (see the [[emulation]] global);
+         * QEMU routes by address and has no split state machine. */
+        if(!emulation && ep->dev->hub > 1){
             hc->hcsplt = Spltena | POS_ALL | ep->dev->hub<<OHubaddr |
                 ep->dev->port;
             break;
@@ -219,7 +239,9 @@ sofwait(Ctlr *ctlr, int n)
         ctlr->sofchan |= 1<<n;
         r->gintmsk |= Sofintr;
         fiunlock(ctlr);
-        sleep(&ctlr->chanintr[n], sofdone, r);
+        /* claude: bounded, like chanwait -- never let a split transfer wedge
+         * the whole boot if the sof wakeup is missed under emulation. */
+        tsleep(&ctlr->chanintr[n], sofdone, r, 1000);
     }while((r->hfnum & 7) == 6);
 }
 /*e: function [[sofwait]](arm) */
@@ -233,7 +255,9 @@ chandone(void *a)
     hc = a;
     if(hc->hcint == (Chhltd|Ack))
         return 0;
-    return (hc->hcint & hc->hcintmsk) != 0;
+    /* claude: test against the saved wait mask, not hc->hcintmsk, which the
+     * fiq may already have cleared to break the QEMU Hcintr storm. */
+    return (hc->hcint & dwc.chanmask[hc - dwc.regs->hchan]) != 0;
 }
 /*e: function [[chandone]](arm) */
 
@@ -252,8 +276,12 @@ restart:
         filock(ctlr);
         r->haintmsk |= 1<<n;
         hc->hcintmsk = mask;
+        ctlr->chanmask[n] = mask;   /* claude: for chandone(), see struct Ctlr */
         fiunlock(ctlr);
-        sleep(&ctlr->chanintr[n], chandone, hc);
+        /* claude: bounded wait. The completion wakeup can be lost under QEMU
+         * (the fiq clears hcintmsk before we register the sleep); the 1s
+         * timeout lets us recheck hc->hcint rather than hang forever. */
+        tsleep(&ctlr->chanintr[n], chandone, hc, 1000);
         hc->hcintmsk = 0;
         intr = hc->hcint;
         if(intr & Chhltd)
@@ -478,7 +506,15 @@ chanio(Ep *ep, Hostchan *hc, int dir, int pid, void *a, int len)
         }
         n = hc->hcdma - hcdma;
         if(n == 0){
-            if((hc->hctsiz & Pktcnt) != (hctsiz & Pktcnt))
+            /* claude: a zero-length transfer that the controller reports as
+             * complete (Xfercomp) is done -- e.g. the status stage of a
+             * control transfer. The original code only broke when the packet
+             * count changed, but QEMU's dwc2 does not decrement hctsiz.Pktcnt
+             * for a 0-length packet, so we would loop and re-issue the transfer.
+             * For SET_ADDRESS that retry is fatal: the device has already moved
+             * to its new address, so the re-issued status packet (still aimed
+             * at address 0) finds no device and wedges enumeration. */
+            if((i & Xfercomp) || (hc->hctsiz & Pktcnt) != (hctsiz & Pktcnt))
                 break;
             else
                 continue;
@@ -736,11 +772,27 @@ fiqintr(Ureg*, void *a)
     filock(ctlr);
     intr = r->gintsts;
     if(intr & Hcintr){
+        /* claude: gate the host-channel interrupt to channels we actually
+         * have in use (chanbusy). From Richard Miller's later bcm usbdwc.c. */
+        r->haintmsk &= ctlr->chanbusy;
         haint = r->haint & r->haintmsk;
         for(i = 0; haint; i++){
             if(haint & 1){
                 if(chanintr(ctlr, i) == 0){
                     r->haintmsk &= ~(1<<i);
+                    /* claude: also clear this channel's hcintmsk, not just its
+                     * haintmsk bit. On real hardware masking haintmsk is enough
+                     * to deassert gintsts.Hcintr, but QEMU's dwc2 model derives
+                     * haint (and hence Hcintr) from (hcint & hcintmsk) and only
+                     * re-evaluates it on host-channel register writes -- a write
+                     * to HAINTMSK is ignored. So without touching hcintmsk here,
+                     * gintsts.Hcintr stays stuck asserted after we handle a
+                     * completed transfer, and the FIQ re-fires ~2M/s, starving
+                     * the very process that would clear hcint -- a QEMU-only
+                     * deadlock that wedges the boot when USB devices are present.
+                     * Clearing hcintmsk re-evaluates haint -> lowers Hcintr;
+                     * chanwait reads hc->hcint (untouched) so no status is lost. */
+                    r->hchan[i].hcintmsk = 0;
                     wakechan |= 1<<i;
                 }
             }
@@ -755,6 +807,9 @@ fiqintr(Ureg*, void *a)
             ctlr->sofchan = 0;
         }
     }
+    /* claude: only ever wake channels that are still in use (same reason as
+     * the haintmsk mask above; from Richard Miller's later bcm usbdwc.c) */
+    wakechan &= ctlr->chanbusy;
     if(wakechan){
         ctlr->wakechan |= wakechan;
         armtimerset(1);
@@ -777,6 +832,8 @@ irqintr(Ureg*, void *a)
     wakechan = ctlr->wakechan;
     ctlr->wakechan = 0;
     fiunlock(ctlr);
+    /* claude: match fiqintr -- don't wake a channel that was freed meanwhile */
+    wakechan &= ctlr->chanbusy;
     for(i = 0; wakechan; i++){
         if(wakechan & 1)
             wakeup(&ctlr->chanintr[i]);
@@ -1057,6 +1114,11 @@ reset(Hci *hp)
     if((id>>16) != ('O'<<8 | 'T'))
         return -1;
     dprint("usbotg: rev %d.%3.3x\n", (id>>12)&0xF, id&0xFFF);
+    /* claude: QEMU's dwc2 model reports Synopsys id 2.94a (0x4f54294a); the real
+     * BCM2835 core is 2.80a (0x4f54280a). Match QEMU's exact id so we only relax
+     * the split-transaction path under emulation, never on real hardware (any
+     * other id -- including a different real board -- leaves emulation == 0). */
+    emulation = (id == 0x4f54294a);
 
     arch_intrenable(IRQtimerArm, irqintr, ctlr, 0, "dwc");
 

@@ -29,9 +29,12 @@ Full command:
 Caveat: no network is possible; the pi1's ethernet is a USB LAN9512 chip
 that QEMU does not model.
 
-Do NOT add '-device usb-kbd -device usb-mouse'. They look harmless (we
-have no keyboard/mouse otherwise) but they wedge the boot: see the FIQ
-storm section below. The serial console is all we need for a shell.
+'-device usb-kbd -device usb-mouse' work: they enumerate behind QEMU's
+emulated LAN9514 hub (like a real pi1) in ~5-6s, the keyboard types cleanly
+and the mouse tracks. They originally wedged the boot in an FIQ storm, then
+enumerated slowly with a runaway key-repeat bug; both are fixed in the dwcotg
+driver -- see the FIQ storm section below and the USB-HID section at the end
+(the key fix is disabling split transactions under emulation).
 
 Observing a headless guest
 --------------------------
@@ -181,20 +184,126 @@ QEMU's emulated USB devices start asserting the FIQ line faster than the
 driver can quiesce it under emulation.  At ~2M FIQs/s the CPU never makes
 forward progress, so it looks hung.
 
-Fix: don't attach USB devices under QEMU (mkfile-target-pi 'run' target no
-longer passes usb-kbd/usb-mouse).  We don't need them -- the console is the
-serial line and boot.rc runs rc on '#d/0', not rio.  With no devices
-attached 'usbd' finds an empty root hub, returns quietly, and the boot
-reaches '%' every time.  Verified: 3/3 headless boots reach the prompt and
-accept typed commands (echo, ls) over serial.  On real hardware the same
-kernel boots fine with USB attached, so this is purely a QEMU dwcotg/FIQ
-modelling artifact.
+Fix (first cut): the 'run' target dropped usb-kbd/usb-mouse so the boot
+reached '%'.  That was a workaround; the storm is now actually fixed in the
+driver (see "Making USB HID work" below) and the devices are back.
 
 Lesson mirror of the reset section: a "hang" that is really a *flood* looks
 identical from the serial console (nothing happens).  -d int distinguishes
 them in one run -- near-zero exceptions = a stall to chase in the sleeping
 driver; millions = an interrupt nobody is acking, and 'Taking exception 6'
 points straight at FIQ (the USB controller here).
+
+Making USB HID work under QEMU (dwcotg + the sticky Hcintr model)
+-----------------------------------------------------------------
+Getting usb-kbd/usb-mouse to actually enumerate took a chain of fixes, all
+rooted in one QEMU-vs-real-hardware difference.  QEMU's dwc2 model
+(hw/usb/hcd-dwc2.c) derives GINTSTS.Hcintr from (HCINT & HCINTMSK) per
+channel and only re-evaluates it on a *host-channel* register write; a write
+to HAINTMSK is ignored, and GINTSTS.Hcintr is sticky.  Real silicon gates
+Hcintr through HAINTMSK combinationally.  So the driver's habit of "mask the
+channel in haintmsk and let the sleeping proc clean up HCINT later" leaves
+Hcintr stuck asserted under QEMU -> the ~2M/s FIQ storm.  Trace it with
+  --trace 'usb_dwc2_*'   (filter out the SOF spam)
+which also shows the packet-level story (find_device, handle_packet, status).
+
+The fixes, all in kernel/buses/arm/usbdwc.c unless noted:
+ - fiqintr: when a channel completes, clear its hc->hcintmsk (not just the
+   haintmsk bit).  That write re-evaluates haint -> lowers Hcintr -> stops
+   the storm.  hcint is left intact so the waiting proc still sees the
+   result.
+ - chandone/chanwait: test hcint against a *saved* wait mask (Ctlr.chanmask),
+   not the live hcintmsk that the fiq just cleared, else the completion
+   wakeup is lost.  Also make the waits bounded (tsleep 1s) so nothing wedges
+   the boot forever.
+ - chanio: a 0-length transfer reported Xfercomp is done.  QEMU does not
+   decrement hctsiz.Pktcnt for a 0-length packet, so the old "loop until
+   Pktcnt changes" re-issued the SET_ADDRESS status stage -- fatal once the
+   device had moved to its new address (device_not_found, then a hang).
+ - usbd (kernel/buses/user/usb/usbd/usbd.c): the pi's built-in LAN9514 hub
+   sits between the root port and the device (QEMU models it too, as
+   "QEMU QEMU USB Hub").  QEMU's hub descriptor is 10 bytes for an 8-port hub
+   (it omits the deprecated PortPwrCtrlMask high byte); usbd's "descr. too
+   small" check demanded 11 and refused to bring the hub up, so nothing
+   behind it enumerated.  Relaxed to require only the DeviceRemovable map.
+ - sofwait: bounded the split-transaction SOF wait too (same tsleep 1s).
+
+With those, 'cat /dev/usb/ep3.0/ctl' shows the QEMU USB Keyboard/Mouse as a
+hid device and the usb/kb driver attaches -- but enumeration took ~25-30s per
+device and, once up, the keyboard was unusable: a single tap on 'd' printed a
+runaway 'ddddd...' until the next key, then 'eeeee...'.  Both symptoms have
+the same root cause, and the same fix.
+
+The split-transaction disable (the real fix)
+--------------------------------------------
+The pi's keyboard/mouse are full-speed devices sitting behind the high-speed
+LAN9514 hub, so real hardware reaches them with *split transactions*: a
+start-split on one microframe, a complete-split a few microframes later,
+scheduled around the SOF (start-of-frame).  QEMU does not model any of this.
+Its dwc2 routes a packet to a device purely by the address in HCCHAR.Devaddr
+and forwards it through the emulated hub; the HCSPLT register is stored but
+never interpreted (hw/usb/hcd-dwc2.c has no split state machine).  So on real
+hardware the split path is mandatory, but under QEMU it is pure overhead:
+ - each interrupt poll pays a ~1s sofwait/chanwait timeout (the SOF handshake
+   the driver waits for has no counterpart in the model) -> the ~25-30s
+   enumeration and seconds-per-poll input lag; and
+ - worse, the usb-kbd model ignores SET_IDLE, so it only reports on *change*.
+   The driver relies on periodic idle re-reports to recover a key-up edge it
+   missed (see the Dwcidle comment in usb/kb).  Under QEMU those re-reports
+   never come, so a dropped key-up is never noticed: repeatproc keeps
+   auto-repeating the stuck key -> 'ddddd'.
+
+Fix (kernel/buses/arm/usbdwc.c): detect emulation and don't drive the split
+state machine at all.  QEMU's dwc2 reports Synopsys id 2.94a (0x4f54294a);
+the real BCM2835 core is 2.80a (0x4f54280a).  reset() sets a static
+'emulation' flag on the exact QEMU id (any other id, including a different
+real board, leaves it 0), and chansetup() then leaves HCSPLT=0 under
+emulation even for a device behind a hub.  The transfer completes directly,
+like a root-port device: enumeration drops to ~5-6s total and every key/mouse
+report is delivered promptly, so taps are single characters and the mouse
+tracks.  Real hardware is untouched.
+
+Verify headlessly with the QMP injection recipe in the next section: a single
+send-key of 'd','e','f' echoes exactly "def" (not "dddeeefff"), and wiggling
+the mouse while 'cat /dev/mouse' runs prints one 'm x y b msec' record per
+motion event.
+
+Injecting keyboard and mouse input programmatically (QMP)
+---------------------------------------------------------
+To test HID without a human at the window, expose the QEMU Machine Protocol on
+a unix socket and drive the *same* input subsystem the GUI window feeds:
+
+  qemu-system-arm -M raspi1ap ... -device usb-kbd -device usb-mouse \
+    -qmp unix:/tmp/q.sock,server,nowait
+
+Then, after the QMP greeting, send {"execute":"qmp_capabilities"} once and:
+
+ - Keyboard -- 'send-key' presses (and releases) a chord of qcodes:
+     {"execute":"send-key",
+      "arguments":{"keys":[{"type":"qcode","data":"d"}]}}
+   qcodes are QEMU key names: letters "a".."z", "ret", "spc", "delete"
+   (interrupt), "minus", "slash", "apostrophe", ...  For a shifted glyph send
+   the chord together, e.g. '#' on a US layout is shift+3:
+     "keys":[{"type":"qcode","data":"shift"},{"type":"qcode","data":"3"}]
+
+ - Mouse -- 'input-send-event' with a relative-axis event per axis; the
+   usb-mouse turns these into HID reports:
+     {"execute":"input-send-event",
+      "arguments":{"events":[
+        {"type":"rel","data":{"axis":"x","value":20}}]}}
+     {"execute":"input-send-event",
+      "arguments":{"events":[
+        {"type":"rel","data":{"axis":"y","value":10}}]}}
+   Use "type":"btn" with {"button":"left"|"right"|"middle","down":true|false}
+   for clicks, and "type":"abs" (value in the 0..0x7fff range) for absolute
+   positioning with a usb-tablet.  To observe the reports in the guest:
+     bind -a '#m' /dev      # this minimal boot.rc does not bind the mouse dev
+     cat /dev/mouse         # prints 'm <x> <y> <buttons> <msec>' per event
+
+A self-contained Python driver (open the unix socket, do the readline/write
+JSON handshake, sleep for enumeration, then send-key / input-send-event) is
+docs/scripts/qmp_inject.py.  The protocol is line-oriented JSON and stable
+across QEMU versions, so any language works.
 
 Misc
 ----

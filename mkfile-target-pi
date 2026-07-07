@@ -23,15 +23,17 @@ $QEMU_SD: dosdisk.img
 # serial console never receives your keystrokes and the shell looks frozen even
 # though it prints the '%' prompt. Reading straight from /dev/tty bypasses mk's
 # pipe and gives qemu the real keyboard.
-# claude: do NOT add '-device usb-kbd -device usb-mouse' here. When usbd starts
-# the dwcotg host controller (usbdwc.c), QEMU's emulated USB devices flood the
-# controller's FIQ line and the driver cannot quiesce it under emulation: the
-# boot wedges just after 'dossrv: serving' in a ~2M/s FIQ storm (visible as
-# 'Taking exception 6 [FIQ]' with -d int). We don't need them anyway -- the
-# console is the serial line (boot.rc runs rc on '#d/0'), not rio -- so leave
-# them out. On real hardware the same boot works fine with USB attached.
+# claude: usb-kbd/usb-mouse attach behind QEMU's emulated LAN9514 hub (same as
+# a real pi1). They used to wedge the boot in a ~2M/s FIQ storm; that is now
+# fixed in usbdwc.c (the dwcotg driver), so they enumerate (~5-6s) and the
+# usb/kb HID driver picks them up -- run 'cat /dev/usb/ep3.0/ctl' to see them.
+# The keyboard types cleanly and the mouse tracks: usbdwc.c detects emulation
+# (from the dwc2 Synopsys id) and skips split transactions, which QEMU does not
+# model -- driving them caused ~25-30s enumeration and a runaway key-repeat.
+# See docs/qemu_arm_debug.txt for the full story and a QMP input-injection
+# recipe for headless HID testing.
 run:V: $QEMU_SD
-	qemu-system-arm -M raspi1ap -device loader,'file='$KERNEL',addr=0x8000,cpu-num=0,force-raw=on' -drive 'file='$QEMU_SD',if=sd,format=raw' -serial null -serial mon:stdio $QEMU_EXTRA_OPTIONS </dev/tty
+	qemu-system-arm -M raspi1ap -device loader,'file='$KERNEL',addr=0x8000,cpu-num=0,force-raw=on' -drive 'file='$QEMU_SD',if=sd,format=raw' -serial null -serial mon:stdio -device usb-kbd -device usb-mouse $QEMU_EXTRA_OPTIONS </dev/tty
 
 # headless variant: no framebuffer window, everything on the terminal
 run-nogui:V: $QEMU_SD

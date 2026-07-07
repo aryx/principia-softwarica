@@ -83,7 +83,13 @@ confighub(Hub *h)
 Config:
 	h->nport = dd->bNbrPorts;
 	nmap = 1 + h->nport/8;
-	if(nr < 7 + 2*nmap){
+	/* claude: only the DeviceRemovable bitmap (nmap bytes after the 7-byte
+	 * fixed part) is required. The trailing PortPwrCtrlMask is deprecated in
+	 * USB 2.0 and QEMU's emulated hub omits its high byte (sending a 10-byte
+	 * descriptor for an 8-port hub, not 11), which the old "7 + 2*nmap" check
+	 * rejected as "descr. too small" -- so on QEMU the built-in hub never came
+	 * up and devices behind it (e.g. usb-kbd) were never enumerated. */
+	if(nr < 7 + nmap){
 		fprint(2, "%s: %s: descr. too small\n", argv0, h->dev->dir);
 		return -1;
 	}
@@ -95,13 +101,18 @@ Config:
 	h->pwrmode = dd->wHubCharacteristics[0] & 3;
 	h->compound = (dd->wHubCharacteristics[0] & (1<<2))!=0;
 	h->leds = (dd->wHubCharacteristics[0] & (1<<7)) != 0;
-	PortPwrCtrlMask = dd->DeviceRemovable + nmap;
+	/* claude: absent (short descriptor) => no individual port power control */
+	if(nr >= 7 + 2*nmap)
+		PortPwrCtrlMask = dd->DeviceRemovable + nmap;
+	else
+		PortPwrCtrlMask = nil;
 	for(i = 1; i <= h->nport; i++){
 		pp = &h->port[i];
 		offset = i/8;
 		mask = 1<<(i%8);
 		pp->removable = (dd->DeviceRemovable[offset] & mask) != 0;
-		pp->pwrctl = (PortPwrCtrlMask[offset] & mask) != 0;
+		pp->pwrctl = PortPwrCtrlMask != nil &&
+			(PortPwrCtrlMask[offset] & mask) != 0;
 	}
 	return 0;
 }
