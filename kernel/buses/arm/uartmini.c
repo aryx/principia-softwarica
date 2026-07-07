@@ -455,9 +455,19 @@ uartconsinit(void)
     char *p, *cmd;
 
     /* claude: getconf() is gutted (always nil), so honour it if present but
-     * default to the mini uart console when unset. Lets QEMU serial capture
-     * boot messages/panics. Original getconf-gated logic kept below. */
+     * default to the mini uart console when unset -- ONLY under emulation, where
+     * it lets QEMU's serial capture boot messages/panics the framebuffer can't.
+     * On real hardware attaching the mini-uart console wedges the raw /dev/cons
+     * shell: the first command's output goes through, then the mini-uart output
+     * path stalls on real silicon and every later console write (the prompt, an
+     * echoed newline) blocks -> the console freezes after the first 'ls'. Master
+     * attaches no serial console when unset and does not have this problem, so we
+     * match it on hardware (pass console=0 to force the serial console there).
+     * rio is unaffected either way -- it owns its own windows and never touches
+     * /dev/cons. See [[emulating]]. Original getconf-gated logic kept below. */
     if((p = getconf("console")) == nil){
+        if(!emulating())
+            return;
         uart = &miniuart;
         cmd = "";
     } else {
