@@ -1,0 +1,122 @@
+Principia Softwarica on QEMU's raspi1ap (Raspberry Pi 1)
+========================================================
+
+This is a high-level summary of running the ARM kernel (9pi) under QEMU's
+`raspi1ap` machine: what was changed, what works today, the known limitations,
+and possible future work.  For the blow-by-blow debugging story (traces,
+register-level analysis, the FIQ storm, the dossrv partition bug, ...) see the
+companion playbook docs/qemu_arm_debug.txt.  Helper scripts live in
+docs/scripts/ (aout_syms.py for symbol resolution, qmp_inject.py for headless
+HID input injection).
+
+Goal
+----
+Boot the same `9pi` image that runs on a real Raspberry Pi 1 under
+`qemu-system-arm -M raspi1ap` (BCM2835 / ARM1176), both headless (serial
+console) and graphical (framebuffer window with a working USB keyboard and
+mouse), without a separate emulation build.  Emulation is detected at run time,
+so one image self-adapts to both targets.
+
+How to run
+----------
+  source env.sh
+  mk kernel                # build 9pi (loaded directly by QEMU, no disk step)
+  mk run                   # graphical: framebuffer window + usb kbd/mouse
+  mk run-nogui             # headless: everything on the serial console
+  mk run-realpi            # prints how to flash dosdisk.img to a real SD card
+
+Verified with QEMU 8.2.2.  The kernel is linked -H6 -T0x80008000 (phys load
+0x8000); there is no VideoCore firmware under QEMU to place it, so it is loaded
+with `-device loader,...,force-raw=on`.  The emulated SD controller only accepts
+a power-of-2 card size, so `mk run` boots a 1 GiB padded copy of dosdisk.img
+(qemu-sd.img).  See mkfile-target-pi.
+
+What was changed (all tagged `claude:` in the source)
+-----------------------------------------------------
+Timer   kernel/time/arm/clock.c: the BCM2835 system timer fires on *exact*
+        compare match.  Under emulation latency the naive `while(clo != tend)`
+        calibration and a compare value written slightly in the past could miss
+        the match and wrap ~4295s away, freezing cpu->ticks so every driver
+        timeout span forever.  Switched to signed `(long)(clo - tend) < 0`
+        comparisons and re-push the compare until it is in the future.  The
+        race is nanoseconds wide on real silicon, so this is harmless there.
+
+Watchdog kernel/init/arm/watchdog.c: wdogfeed() writes the power-manager Rstc
+        register every clock tick to refresh a 5s hardware-watchdog countdown.
+        QEMU's power-manager model performs the CPU reset on that write itself
+        (no countdown modelled), so feeding the dog reset the machine every
+        10ms.  Now wdogfeed() no-ops under emulation but is registered and feeds
+        normally on real hardware -- the watchdog is live on the pi again.
+
+Frame   kernel/devices/screen/arm/screen.c: arch_blankscreen()'s framebuffer-
+buffer  mailbox call trips QEMU's MMIO re-entrancy guard and the emulated
+        display then never refreshes.  Skipped under emulation; on real
+        hardware it still blanks the screen.
+
+Console kernel/buses/arm/uartmini.c: getconf() is currently gutted (always
+        nil), so the console selection now defaults to the mini-UART when
+        `console` is unset, which is what QEMU's second serial captures.  Set
+        `console=` in plan9.ini to override.
+
+USB HID kernel/buses/arm/usbdwc.c (+ usbd.c): getting usb-kbd/usb-mouse to work
+        took several fixes -- breaking a QEMU-only ~2M/s FIQ interrupt storm
+        (sticky GINTSTS.Hcintr), bounding transfer waits, a 0-length-transfer
+        completion fix, and relaxing usbd's hub-descriptor size check for
+        QEMU's 10-byte 8-port hub descriptor.  The decisive fix: QEMU does not
+        model split transactions, so under emulation the driver skips them
+        (routing is by device address anyway).  That took enumeration from
+        ~25-30s/device to ~5-6s and cured a runaway key-repeat (a tapped key
+        printing forever).  Real hardware keeps split transactions.
+
+Emul.   The above emulation-only paths all agree from one probe: emulating()
+detect  in usbdwc.c (declared in kernel/core/arm/fns.h) reads the dwc2 Synopsys
+        id -- QEMU reports rev 2.94a (0x4f54294a), real BCM2835 reports 2.80a
+        (0x4f54280a).  Any other id is treated as hardware, so the gating never
+        fires on a real board.
+
+Boot/   kernel/init/user/boot/arm/boot.rc hardcodes `part dos 1 1048577` to span
+build   the whole 512 MiB FAT image (the stale MBR table declared only 100 MB,
+        so files past 100 MB were unreachable via dossrv); MISC/pc/bootsector's
+        table was corrected to match.  mkfile-target-pi adds the `run` targets
+        and reads QEMU's stdin from /dev/tty so the serial shell is interactive
+        under mk.  mkfile-host-Linux builds the full-size FAT image.
+
+Current status
+--------------
+ - Boots to an interactive rc shell prompt (%) within a few seconds, headless
+   or graphical.
+ - Graphical mode: USB keyboard types cleanly and the USB mouse tracks (both
+   enumerate behind QEMU's emulated LAN9514 hub in ~5-6s).
+ - One 9pi image is intended for both QEMU and a real Pi 1; the emulation-only
+   workarounds are gated at run time.  Real-hardware re-validation after these
+   changes is still pending (the watchdog and framebuffer-blank paths in
+   particular only run on real silicon).
+
+Limitations
+-----------
+ - No networking: the Pi 1's ethernet is a USB LAN9512 chip that QEMU does not
+   model, so #l/ether never appears.
+ - No window system: boot.rc runs rc directly on the console (`. -i '#d/0'`),
+   not rio.  The framebuffer shows the text console; there is no GUI desktop
+   yet.  The mouse device is not even bound into /dev by this boot.rc (do
+   `bind -a '#m' /dev` by hand to read /dev/mouse).
+ - Slow under TCG: the genrandom kproc spins by design (entropy from timing
+   jitter) and burns ~half the emulated CPU; the ARM1176 cycle counter does not
+   advance, so `cpu0: 0MHz` is cosmetic and cpuhz calibration measures zero.
+ - The watchdog and framebuffer-blank behaviours diverge by target by design
+   (they are the emulation-gated paths); everything else is shared.
+
+Possible future work
+---------------------
+ - Re-verify the whole image on a real Raspberry Pi 1 (the reason emulation is
+   now auto-detected rather than hardcoded).
+ - Start rio for a real graphical environment, and have boot.rc bind the mouse
+   device so /dev/mouse exists without manual steps.
+ - Networking under emulation: QEMU will not grow a LAN9512 model, but a
+   different emulated NIC (or slirp via a modelled controller) could give the
+   guest a network; needs a matching driver.
+ - raspi2/raspi3 support (SMP, different peripheral base, PL011 vs mini-UART).
+ - Reduce the genrandom CPU burn under emulation (a cheaper entropy source when
+   emulating()), and revisit the "0MHz" cpuhz calibration.
+ - If a future QEMU models dwc2 split transactions, the emulation split-skip
+   can be dropped and enumeration would match hardware exactly.
