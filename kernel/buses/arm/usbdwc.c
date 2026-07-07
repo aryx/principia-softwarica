@@ -81,18 +81,33 @@ static Ctlr dwc;
 static int debug;
 /*e: global [[debug]]([[(buses/arm/usbdwc.c)(arm)]]) */
 
-/* claude: set when running under QEMU's dwc2 model (detected in reset() from the
- * Synopsys id). QEMU does not implement split transactions -- it routes a packet
- * to a device behind a hub purely by device address, ignoring HCSPLT -- and its
- * usb-kbd ignores SET_IDLE. So under emulation we must NOT drive the split state
- * machine: a start-split/complete-split has no counterpart in the model, so each
- * interrupt poll instead eats a ~1s sofwait/chanwait timeout (keyboard and mouse
- * then lag by seconds), and, worse, the periodic idle re-reports that would let
- * us recover a missed key-up never arrive -- so a tapped key auto-repeats until
- * the next keypress ('ddddd' then 'eeeee'). With split left disabled the transfer
- * completes directly, like a root-port device: fast and reliable. Real hardware,
- * where the device really is behind a high-speed hub, keeps split (emulation==0). */
-static int emulation;
+/* claude: true when running under QEMU's raspi1ap machine rather than real
+ * BCM2835 silicon, detected from the dwc2 Synopsys id -- a passive read-only id
+ * register that is valid before the block is powered (reset() already reads it
+ * this way). QEMU's dwc2 reports rev 2.94a (0x4f54294a); real hardware reports
+ * 2.80a (0x4f54280a); any other id (including a different real board) is treated
+ * as hardware. Cached on first call. Exported (see fns.h) so the emulation-only
+ * workarounds spread across subsystems -- the split-transaction skip below, the
+ * watchdog feed, and the framebuffer blank -- all agree from one probe, letting a
+ * single 9pi image boot correctly on both QEMU and a real Raspberry Pi.
+ *
+ * The split-transaction skip matters because QEMU does not implement split
+ * transactions: it routes a packet to a device behind a hub purely by device
+ * address, ignoring HCSPLT, and its usb-kbd ignores SET_IDLE. Driving the split
+ * state machine under emulation therefore eats a ~1s sofwait/chanwait timeout per
+ * interrupt poll (keyboard and mouse lag by seconds) and, worse, the periodic
+ * idle re-reports that would recover a missed key-up never arrive -- so a tapped
+ * key auto-repeats until the next keypress ('ddddd' then 'eeeee'). With split
+ * disabled the transfer completes directly, like a root-port device. */
+int
+emulating(void)
+{
+    static int cached = -1;
+
+    if(cached < 0)
+        cached = ((Dwcregs*)USBREGS)->gsnpsid == 0x4f54294a;
+    return cached;
+}
 
 /*s: global [[Ebadlen]](arm) */
 static char Ebadlen[] = "bad usb request length";
@@ -198,9 +213,9 @@ chansetup(Hostchan *hc, Ep *ep)
         hcc |= Lspddev;
         /* fall through */
     case Fullspeed:
-        /* claude: skip split under emulation (see the [[emulation]] global);
-         * QEMU routes by address and has no split state machine. */
-        if(!emulation && ep->dev->hub > 1){
+        /* claude: skip split under emulation (see [[emulating]]); QEMU routes
+         * by address and has no split state machine. */
+        if(!emulating() && ep->dev->hub > 1){
             hc->hcsplt = Spltena | POS_ALL | ep->dev->hub<<OHubaddr |
                 ep->dev->port;
             break;
@@ -1114,11 +1129,6 @@ reset(Hci *hp)
     if((id>>16) != ('O'<<8 | 'T'))
         return -1;
     dprint("usbotg: rev %d.%3.3x\n", (id>>12)&0xF, id&0xFFF);
-    /* claude: QEMU's dwc2 model reports Synopsys id 2.94a (0x4f54294a); the real
-     * BCM2835 core is 2.80a (0x4f54280a). Match QEMU's exact id so we only relax
-     * the split-transaction path under emulation, never on real hardware (any
-     * other id -- including a different real board -- leaves emulation == 0). */
-    emulation = (id == 0x4f54294a);
 
     arch_intrenable(IRQtimerArm, irqintr, ctlr, 0, "dwc");
 

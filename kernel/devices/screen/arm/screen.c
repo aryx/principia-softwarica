@@ -243,12 +243,14 @@ arch_attachscreen(Rectangle *r, ulong *chan, int* d, int *width, bool *softscree
 void
 arch_blankscreen(bool blank)
 {
-    /* claude: disabled: this second framebuffer-mailbox call trips QEMU's
-     * MMIO re-entrancy guard ("Blocked re-entrant IO on bcm2835-fb") and
-     * the emulated display never refreshes again; only screen blanking is
-     * lost. Re-enable if blanking matters on real hardware. */
-    USED(blank);
-    //fbblank(blank);
+    /* claude: skip under emulation. This framebuffer-mailbox call trips QEMU's
+     * MMIO re-entrancy guard ("Blocked re-entrant IO on bcm2835-fb") and the
+     * emulated display never refreshes again; on real hardware it just blanks
+     * the screen, so gate on emulation (see [[emulating]]) rather than disable
+     * outright -- real pi keeps working blanking from the same image. */
+    if(emulating())
+        return;
+    fbblank(blank);
 }
 
 void arch_flushmemscreen(Rectangle) { }

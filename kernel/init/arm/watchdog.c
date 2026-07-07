@@ -62,6 +62,15 @@ wdogfeed(void)
 {
     u32int *r;
 
+    /* claude: skip under emulation. On real hardware this Rstc write refreshes a
+     * 5s watchdog countdown (a safety net). QEMU's bcm2835 power-manager model
+     * performs the CPU reset on the Rstc write *itself* -- it does not model the
+     * countdown -- so feeding the dog every 10ms would hard-reset the machine on
+     * every clock tick, and the kernel would never get past init0. We gate the
+     * write rather than the registration so real hardware keeps a live watchdog
+     * from the same 9pi image (see [[emulating]]). */
+    if(emulating())
+        return;
     r = (u32int*)POWERREGS;
     r[Wdog] = Password | (Wdogtime * Wdogfreq);
     r[Rstc] = Password | (r[Rstc] & ~CfgMask) | CfgReset;
@@ -83,15 +92,9 @@ wdogoff(void)
 void
 watchdoglink(void)
 {
-    /* claude: disabled under emulation: wdogfeed() writes the power-manager
-     * Rstc register with the CfgReset config bits every clock tick to feed
-     * the hardware watchdog. QEMU's bcm2835 power-manager model performs the
-     * CPU reset on that Rstc write itself (it does not model the countdown),
-     * so feeding the dog every 10ms hard-resets the machine on every tick and
-     * the kernel never gets past init0. Re-enable on real hardware, where the
-     * 5s countdown makes this a safety net rather than a suicide. */
-    USED(wdogfeed);
-    //addclock0link(wdogfeed, Arch_HZ);
+    /* claude: register unconditionally; wdogfeed() itself no-ops under emulation
+     * (QEMU resets the CPU on the Rstc write). Real hardware gets a live watchdog. */
+    addclock0link(wdogfeed, Arch_HZ);
 }
 /*e: function [[watchdoglink]](arm) */
 /*e: init/arm/watchdog.c */

@@ -59,6 +59,11 @@ extern void intrsoff(void);
 extern void archreboot(void);
 extern void archreset(void);
 
+/* claude: true under QEMU's raspi1ap machine, false on real BCM2835 hardware
+ * (detected from the dwc2 Synopsys id; defined in buses/arm/usbdwc.c). Gates the
+ * emulation-only workarounds so one 9pi image boots on both QEMU and real pi. */
+extern int emulating(void);
+
 extern void clockinit(void);
 extern void clockshutdown(void);
 
