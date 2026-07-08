@@ -197,7 +197,7 @@ iprofile(void)
         p = n;
     }
 
-    qsort(prof, i, sizeof(Prof), profcmp);
+    qsort(aprof, i, sizeof(Prof), profcmp);
 
     total = 0;
     for(b = 0; b < i; b++)
@@ -217,7 +217,7 @@ iprofile(void)
         printsource(aprof[b].s.value);
         Bputc(bout, '\n');
     }
-    memset(prof, 0, sizeof(Prof)*i);
+    memset(aprof, 0, sizeof(Prof)*i);
 }
 /*e: function [[iprofile]] */
 /*e: machine/5i/stats.c */
