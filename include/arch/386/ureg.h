@@ -5,6 +5,7 @@ struct Ureg
  ulong	si;		/* ... */
  ulong	bp;		/* ... */
  ulong	nsp;
+
  ulong	bx;		/* ... */
  ulong	dx;		/* ... */
  ulong	cx;		/* ... */
