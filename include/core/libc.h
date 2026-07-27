@@ -169,6 +169,7 @@ extern  char*   strstr(char*, char*);
 extern  char*   strcat(char*, char*);
 /*e: signatures of [[strxxx]] functions */
 
+//?? why in string section? should be in rune or ascii section?
 extern  int tolower(int);
 extern  int toupper(int);
 
