@@ -1,4 +1,4 @@
-/*s: machine/5i/mem.c */
+/*s: 5i/mem.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -355,4 +355,4 @@ page_of_vaddr(uintptr addr)
     return nil;		/*to stop compiler whining*/
 }
 /*e: function [[page_of_vaddr]] */
-/*e: machine/5i/mem.c */
+/*e: 5i/mem.c */

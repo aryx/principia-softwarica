@@ -1,4 +1,4 @@
-/*s: machine/5i/arm.h */
+/*s: 5i/arm.h */
 /*
  * arm.h
  */
@@ -406,4 +406,4 @@ enum
     /*e: constant [[SIGNBIT]] */
 };
 /*e: enum [[_anon_ (machine/5i/arm.h)]]7 */
-/*e: machine/5i/arm.h */
+/*e: 5i/arm.h */

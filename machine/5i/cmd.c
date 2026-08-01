@@ -1,4 +1,4 @@
-/*s: machine/5i/cmd.c */
+/*s: 5i/cmd.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -724,4 +724,4 @@ cmd(void)
     }
 }
 /*e: function [[cmd]] */
-/*e: machine/5i/cmd.c */
+/*e: 5i/cmd.c */

@@ -1,4 +1,4 @@
-/*s: machine/5i/globals.c */
+/*s: 5i/globals.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -77,4 +77,4 @@ int	datasize;
 /*s: global [[textbase]] */
 uintptr	textbase;
 /*e: global [[textbase]] */
-/*e: machine/5i/globals.c */
+/*e: 5i/globals.c */

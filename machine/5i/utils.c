@@ -1,4 +1,4 @@
-/*s: machine/5i/utils.c */
+/*s: 5i/utils.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -107,4 +107,4 @@ erealloc(void *a, ulong oldsize, ulong size)
     return n;
 }
 /*e: function [[erealloc]] */
-/*e: machine/5i/utils.c */
+/*e: 5i/utils.c */

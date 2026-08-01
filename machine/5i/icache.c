@@ -1,4 +1,4 @@
-/*s: machine/5i/icache.c */
+/*s: 5i/icache.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -16,4 +16,4 @@ updateicache(uintptr addr)
 }
 /*e: function [[updateicache]] */
 
-/*e: machine/5i/icache.c */
+/*e: 5i/icache.c */

@@ -1,4 +1,4 @@
-/*s: machine/5i/bpt.c */
+/*s: 5i/bpt.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -140,4 +140,4 @@ brkchk(ulong addr, int type)
     }	
 }
 /*e: function [[brkchk]] */
-/*e: machine/5i/bpt.c */
+/*e: 5i/bpt.c */

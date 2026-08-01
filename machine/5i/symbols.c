@@ -1,4 +1,4 @@
-/*s: machine/5i/symbols.c */
+/*s: 5i/symbols.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -112,4 +112,4 @@ stktrace(int modif)
     }
 }
 /*e: function [[stktrace]] */
-/*e: machine/5i/symbols.c */
+/*e: 5i/symbols.c */

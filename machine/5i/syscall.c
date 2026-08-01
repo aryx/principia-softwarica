@@ -1,4 +1,4 @@
-/*s: machine/5i/syscall.c */
+/*s: 5i/syscall.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -773,4 +773,4 @@ Ssyscall(instruction _unused)
     Bflush(bout);
 }
 /*e: function [[Ssyscall]] */
-/*e: machine/5i/syscall.c */
+/*e: 5i/syscall.c */

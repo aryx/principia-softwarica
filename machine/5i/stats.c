@@ -1,4 +1,4 @@
-/*s: machine/5i/stats.c */
+/*s: 5i/stats.c */
 /*s: basic includes */
 #include <u.h>
 #include <libc.h>
@@ -220,4 +220,4 @@ iprofile(void)
     memset(aprof, 0, sizeof(Prof)*i);
 }
 /*e: function [[iprofile]] */
-/*e: machine/5i/stats.c */
+/*e: 5i/stats.c */
