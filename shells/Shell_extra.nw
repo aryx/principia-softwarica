@@ -1145,6 +1145,8 @@ extern fdt envdir;
 
 <<global [[pfmtnest]]>>
 
+extern int needsrcquote(int c);
+
 // forward decls
 void pdec(io*, int);
 void poct(io*, unsigned int);
@@ -1500,77 +1502,129 @@ Xrdfn(void)
 //	start(rdfns, 1, runq->local);
 //}
 //
-//int
-//cmpenv(const void *aa, const void *ab)
-//{
-//	char **a = aa, **b = ab;
-//
-//	return strcmp(*a, *b);
-//}
-//
-//char **
-//mkenv(void)
-//{
-//	char **env, **ep, *p, *q;
-//	struct var **h, *v;
-//	struct word *a;
-//	int nvar = 0, nchr = 0, sep;
-//
-//	/*
-//	 * Slightly kludgy loops look at locals then globals.
-//	 * locals no longer exist - geoff
-//	 */
-//	for(h = gvar-1; h != &gvar[NVAR]; h++)
-//	for(v = h >= gvar? *h: runq->local; v ;v = v->next){
-//		if((v==vlook(v->name)) && v->val){
-//			nvar++;
-//			nchr+=strlen(v->name)+1;
-//			for(a = v->val;a;a = a->next)
-//				nchr+=strlen(a->word)+1;
-//		}
-//		if(v->fn){
-//			nvar++;
-//			nchr+=strlen(v->name)+strlen(v->fn[v->pc-1].s)+8;
-//		}
-//	}
-//	env = (char **)emalloc((nvar+1)*sizeof(char *)+nchr);
-//	ep = env;
-//	p = (char *)&env[nvar+1];
-//	for(h = gvar-1; h != &gvar[NVAR]; h++)
-//	for(v = h >= gvar? *h: runq->local;v;v = v->next){
-//		if((v==vlook(v->name)) && v->val){
-//			*ep++=p;
-//			q = v->name;
-//			while(*q) *p++=*q++;
-//			sep='=';
-//			for(a = v->val;a;a = a->next){
-//				*p++=sep;
-//				sep = SEP;
-//				q = a->word;
-//				while(*q) *p++=*q++;
-//			}
-//			*p++='\0';
-//		}
-//		if(v->fn){
-//			*ep++=p;
-//			*p++='#'; *p++='('; *p++=')';	/* to fool Bourne */
-//			*p++='f'; *p++='n'; *p++=' ';
-//			q = v->name;
-//			while(*q) *p++=*q++;
-//			*p++=' ';
-//			q = v->fn[v->pc-1].s;
-//			while(*q) *p++=*q++;
-//			*p++='\0';
-//		}
-//	}
-//	*ep = 0;
-//	qsort((void *)env, nvar, sizeof ep[0], cmpenv);
-//	return env;	
-//}
+/* claude: cmpenv/mkenv/Updenv were commented out, leaving Updenv() a
+ * no-op -- so "VAR=val cmd", and any rc variable assignment at all,
+ * never reached a child process. Restored below, with the fixes noted.
+ *
+ * The Unix half of Updenv has to do something structurally different
+ * from rc/plan9.c's. There, addenv() WRITES each changed variable to
+ * /env/<name>, and the kernel shares that directory with children, so
+ * the shell pushes updates one variable at a time. Unix has no such
+ * shared namespace: the environment is a flat char** snapshot copied at
+ * exec time, so the whole block must be rebuilt and handed to
+ * execvp(3) via the global `environ`. That is why plan9.c can track
+ * v->changed and skip unchanged variables while this cannot.
+ *
+ * rc/processes.c's Execute() already calls Updenv() immediately before
+ * exec(), and BOOT/lib9's exec() is execvp(), which reads `environ` --
+ * so setting it here is all that is needed; no call site changes.
+ */
+
+static int
+cmpenv(const void *aa, const void *ab)
+{
+    char **a = (char **)aa, **b = (char **)ab;
+
+    return strcmp(*a, *b);
+}
+
+/* Build a fresh environ-style block from rc's variables.
+ *
+ * Multi-word rc values are joined with SEP ('\1'), which is exactly
+ * what enval() above splits on when rc READS the environment back in
+ * Vinit() -- so a list-valued variable survives a round trip through a
+ * child rc. '\0' (Plan9's own /env separator) could not be used: it
+ * would terminate the C string.
+ *
+ * Functions are exported too, encoded as "#()fn name body" -- the
+ * leading "#()" is the historical trick that makes the entry look like
+ * a comment to a Bourne shell that inherits it. Xrdfn() above is the
+ * reader for that form.
+ */
+static char **
+mkenv(void)
+{
+    char **env, **ep, *p, *q;
+    var **h, *v;
+    word *a;
+    int nvar = 0, nchr = 0, sep;
+
+    /*
+     * Slightly kludgy loops look at locals then globals: h == gvar-1 is
+     * the sentinel meaning "the local list", every h >= gvar is a
+     * hash bucket of globals.
+     * claude: guarded against runq == nil, which plan9.c's Updenv also
+     * checks before touching runq->local -- Updenv is reachable with no
+     * running command.
+     */
+    for(h = gvar-1; h != &gvar[NVAR]; h++)
+    for(v = h >= gvar? *h: (runq? runq->local : nil); v ;v = v->next){
+        if((v==vlook(v->name)) && v->val){
+            nvar++;
+            nchr+=strlen(v->name)+1;
+            for(a = v->val;a;a = a->next)
+                nchr+=strlen(a->word)+1;
+        }
+        if(v->fn){
+            nvar++;
+            nchr+=strlen(v->name)+strlen(v->fn[v->pc-1].s)+8;
+        }
+    }
+    env = (char **)emalloc((nvar+1)*sizeof(char *)+nchr);
+    ep = env;
+    p = (char *)&env[nvar+1];
+    for(h = gvar-1; h != &gvar[NVAR]; h++)
+    for(v = h >= gvar? *h: (runq? runq->local : nil);v;v = v->next){
+        if((v==vlook(v->name)) && v->val){
+            *ep++=p;
+            q = v->name;
+            while(*q) *p++=*q++;
+            sep='=';
+            for(a = v->val;a;a = a->next){
+                *p++=sep;
+                sep = SEP;
+                q = a->word;
+                while(*q) *p++=*q++;
+            }
+            *p++='\0';
+        }
+        if(v->fn){
+            *ep++=p;
+            *p++='#'; *p++='('; *p++=')';	/* to fool Bourne */
+            *p++='f'; *p++='n'; *p++=' ';
+            q = v->name;
+            while(*q) *p++=*q++;
+            *p++=' ';
+            q = v->fn[v->pc-1].s;
+            while(*q) *p++=*q++;
+            *p++='\0';
+        }
+    }
+    *ep = 0;
+    qsort((void *)env, nvar, sizeof ep[0], cmpenv);
+    return env;
+}
+
+/* claude: the block we last installed, so it can be freed on the next
+ * call. Deliberately NOT freeing whatever environ pointed at initially
+ * -- that one came from the kernel via Vinit()'s `extern char
+ * **environ`, and is not ours to free. Updenv runs before every exec
+ * and after every assignment (rc/simple.c), so without this the shell
+ * would grow a fresh copy of its whole environment per command.
+ */
+static char **prevenv = nil;
 
 void
 Updenv(void)
 {
+    extern char **environ;
+    char **env;
+
+    env = mkenv();
+    environ = env;
+    if(prevenv != nil)
+        efree((char *)prevenv);
+    prevenv = env;
 }
 
 //******************************************************************************

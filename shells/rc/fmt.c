@@ -11,6 +11,8 @@
 int pfmtnest = 0;
 /*e: global [[pfmtnest]] */
 
+extern int needsrcquote(int c);
+
 // forward decls
 void pdec(io*, int);
 void poct(io*, unsigned int);
