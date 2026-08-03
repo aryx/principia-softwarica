@@ -1,6 +1,6 @@
 /*s: mk/archive.c */
 #include	"mk.h"
-#include	<ar.h>
+#include	<obj/ar.h>
 
 static void atimes(char *);
 static char *split(char*, char**);
