@@ -12,6 +12,19 @@
 //  - print.c overrides _fmtlock(), _fmtunlock() that were in libc/fmt/
 //  - devcons.s overrides the sysfatal() that was in libc/9sys/
 
+// used to be in <arch>/u.h but common to all arch
+// alt: in ucommon.h to factorize with libc.h
+typedef	unsigned short	ushort;
+typedef	unsigned char	uchar;
+typedef unsigned long	ulong;
+typedef unsigned int	uint;
+typedef signed char		schar;
+typedef	long long	vlong;
+typedef	unsigned long long uvlong;
+#define nil		((void*)0)
+typedef	uint		Rune;
+
+
 // pad specific, could be in u.h
 /*s: pad basic types */
 typedef int bool;

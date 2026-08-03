@@ -1,7 +1,8 @@
 /*s: misc/trace.c */
 #include <u.h>
-#include <tos.h>
 #include <libc.h>
+
+#include <tos.h>
 #include <thread.h>
 #include <ip.h>
 #include <bio.h>

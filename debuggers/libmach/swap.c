@@ -1,5 +1,6 @@
 /*s: libmach/swap.c */
 #include <u.h>
+#include <libc.h> // just for the common uxxx types now in libc.h
 
 /*s: function [[beswab]] */
 /*

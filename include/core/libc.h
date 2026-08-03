@@ -19,6 +19,19 @@ typedef struct IOchunk IOchunk;
 // Foundations
 //******************************************************************************
 
+// used to be in <arch>/u.h but common to all arch
+// alt: <ucommon.h>, which could help factorize code with kernel lib.h
+// but not worth it.
+typedef	unsigned short	ushort;
+typedef	unsigned char	uchar;
+typedef unsigned long	ulong;
+typedef unsigned int	uint;
+typedef signed char		schar;
+typedef	long long	vlong;
+typedef	unsigned long long uvlong;
+#define nil		((void*)0)
+typedef	uint		Rune;
+
 //----------------------------------------------------------------------------
 // Pad's core types
 //----------------------------------------------------------------------------

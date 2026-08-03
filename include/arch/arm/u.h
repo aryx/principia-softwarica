@@ -1,10 +1,6 @@
 /*s: include/arch/arm/u.h */
 
 /*s: type [[uxxx]] */
-typedef unsigned short  ushort;
-typedef unsigned char   uchar;
-typedef unsigned long   ulong;
-typedef unsigned int    uint;
 /*e: type [[uxxx]] */
 /*s: type [[uxxxint]] */
 typedef unsigned char u8int;
@@ -13,17 +9,15 @@ typedef unsigned int    u32int;
 typedef unsigned long long u64int;
 /*e: type [[uxxxint]] */
 /*s: type [[xxxvlong]] */
-typedef long long   vlong;
-typedef unsigned long long uvlong;
 /*e: type [[xxxvlong]] */
 
-typedef signed char schar;
+typedef int int32;
+
 /*s: type [[usize]] */
 typedef unsigned long   usize;
 /*e: type [[usize]] */
 
 /*s: constant [[nil]] */
-#define nil     ((void*)0)
 /*e: constant [[nil]] */
 /*s: type [[uintptr]] */
 typedef unsigned long   uintptr;
@@ -31,7 +25,6 @@ typedef long            ptrdiff;    /* signed difference of two pointers */
 /*e: type [[uintptr]] */
 
 /*s: type [[Rune]] */
-typedef uint        Rune;
 /*e: type [[Rune]] */
 /*s: type [[mpdigit]] */
 typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
@@ -75,8 +68,8 @@ union FPdbleword
     double  x;
 
     struct {    /* little endian */
-        ulong lo;
-        ulong hi;
+        unsigned long lo;
+        unsigned long hi;
     };
 };
 /*e: type [[FPdbleword]] */

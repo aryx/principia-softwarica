@@ -1,23 +1,9 @@
 // called u.h mainly because of all those uxxx typedefs
 
-#define nil		((void*)0)
-
-typedef	unsigned short	ushort;
-typedef	unsigned char	uchar;
-typedef unsigned long	ulong;
-typedef unsigned int	uint;
-
-typedef signed char		schar;
-
-typedef	long long	vlong;
-typedef	unsigned long long uvlong;
-
 typedef unsigned long	uintptr;
 typedef long		ptrdiff;	/* signed difference of two pointers */
 
 typedef unsigned long	usize;
-
-typedef	uint		Rune;
 
 typedef union FPdbleword FPdbleword;
 
@@ -33,6 +19,8 @@ typedef unsigned short	u16int;
 typedef unsigned int	u32int;
 typedef unsigned long long u64int;
 // and unsigned long? u32bit too?
+
+typedef int int32;
 
 /* FCR */
 #define	FPINEX	(1<<5)
@@ -60,8 +48,8 @@ union FPdbleword
 {
 	double	x;
 	struct {	/* little endian */
-		ulong lo;
-		ulong hi;
+		unsigned long lo;
+		unsigned long hi;
 	};
 };
 

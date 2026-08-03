@@ -1,5 +1,6 @@
 /*s: time/mul64fract.c */
 #include <u.h>
+#include "../port/lib.h"  // for the uvlong type now here
 
 // default implementation for mul64fract
 
