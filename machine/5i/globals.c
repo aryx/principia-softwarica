@@ -8,8 +8,6 @@
 #include "arm.h"
 /*e: basic includes */
 
-#include <tos.h>
-
 //in run.c
 //Inst itab[];
 

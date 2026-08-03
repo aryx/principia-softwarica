@@ -38,18 +38,23 @@ ifetch(uintptr addr)
     if(addr >= textbase && addr < memory.seg[Text].end)
         iprof[(addr-textbase)/PROFGRAN]++;
 
+
     va = page_of_vaddr(addr); // get page
     va += addr&(BY2PG-1); // restore offset in page
 
+    // claude: va[3]<<24|... is still computed as a plain (32-bit) int
+    // and can look "negative" when va[3]>=0x80, but instruction is now
+    // u32int (not ulong), so that bit pattern is reinterpreted, not
+    // sign-extended, on return -- see the typedef comment in arm.h
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
 /*e: function [[ifetch]] */
 
 /*s: function [[getmem_4]] */
-ulong
+u32int
 getmem_4(uintptr addr)
 {
-    ulong val;
+    u32int val;
     int i;
 
     val = 0;
@@ -74,11 +79,11 @@ getmem_2(uintptr addr)
 /*e: function [[getmem_2]] */
 
 /*s: function [[getmem_w]] */
-ulong
+u32int
 getmem_w(uintptr addr)
 {
     byte *va;
-    ulong w;
+    u32int w;
 
     if(addr&3) {
         w = getmem_w(addr & ~3);
@@ -96,6 +101,7 @@ getmem_w(uintptr addr)
     va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
+    // claude: see the comment in ifetch() above -- same reasoning
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
 /*e: function [[getmem_w]] */

@@ -13,7 +13,11 @@ typedef	struct	Tlb			Tlb;
 typedef	struct	Breakpoint	Breakpoint;
 
 /*s: typedef instruction */
-typedef ulong instruction;
+// claude: u32int, not ulong -- an ARM instruction word is always 32
+// bits; on some 64-bit host with gcc ulong is 64 bits, and composing the word
+// byte-by-byte (ifetch/getmem_w) then returning it as a wider signed-
+// looking value sign-extends it, corrupting the top 32 bits
+typedef u32int instruction;
 /*e: typedef instruction */
 
 /*s: enum [[breakpoint_kind]] */
@@ -208,7 +212,13 @@ struct Inst
 /*s: struct [[Registers]] */
 struct Registers
 {
-    long	r[16];
+    // claude: u32int, not long -- an ARM register is always 32 bits;
+    // otherwise ALU helpers (run.c's shift()/dpex()/Idp0..3) compute a 32-bit
+    // result (a rotate, an ASR) using shifts that only stay within 32
+    // bits if the type itself is 32 bits, corrupting the top 32 bits
+    // otherwise -- see run.c's Idp3() comment for the concrete crash
+    // this caused (a plain `SUB $8,R13,R13` corrupting R13).
+    u32int	r[16];
     /*s: [[Registers]] other fields */
     uintptr		ar;    // reg.r[REGPC]
 
@@ -226,8 +236,8 @@ struct Registers
     // enum<compare_op>
     int	compare_op;
     /*x: [[Registers]] other fields */
-    long	cc1;
-    long	cc2;
+    u32int	cc1;
+    u32int	cc2;
     /*e: [[Registers]] other fields */
 };
 /*e: struct [[Registers]] */
@@ -301,20 +311,20 @@ void		initstk(int, char**);
 // for syscalls.c
 char*		memio(char*, ulong, int, int);
 // for run.c
-void		Ssyscall(ulong);
+void		Ssyscall(instruction);
 // for run.c
-ulong		ifetch(ulong);
+u32int		ifetch(ulong);
 // used to be in libmach/, but I copy pasted it in run.c
 //int	arm_class(instruction);
 
 void		updateicache(ulong addr);
 
 ulong		getmem_2(ulong);
-ulong		getmem_4(ulong);
+u32int		getmem_4(ulong);
 uchar		getmem_b(ulong);
 ushort		getmem_h(ulong);
 uvlong		getmem_v(ulong);
-ulong		getmem_w(ulong);
+u32int		getmem_w(ulong);
 void		putmem_b(ulong, uchar);
 void		putmem_h(ulong, ushort);
 void		putmem_v(ulong, uvlong);
@@ -346,7 +356,7 @@ void		tlbsum(void);
 void*		emalloc(ulong);
 void*		erealloc(void*, ulong, ulong);
 
-void		fatal(int, char*, ...);
+void		fatal(bool, char*, ...);
 void		itrace(char*, ...);
 
 // from libc.h
@@ -360,7 +370,8 @@ extern	Tlb			tlb;
 
 extern	Inst		itab[];
 
-extern	instruction	dot;
+//TODO? use instruction instead of uintptr?
+extern	uintptr		dot;
 extern	int		count;
 
 extern	Biobuf*		bout;
@@ -375,8 +386,8 @@ extern	bool	trace;
 extern	bool	sysdbg;
 extern	bool	calltree;
 extern	Breakpoint*	bplist;
-extern	int		atbpt;
-extern	int		membpt;
+extern	bool		atbpt;
+extern	bool		membpt;
 
 extern	jmp_buf	errjmp;
 
