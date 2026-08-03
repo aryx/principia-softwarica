@@ -22,7 +22,7 @@ char in[8192];
 /*e: global [[in]](tee.c) */
 
 // forward decls
-bool intignore(void*, char*);
+int intignore(void*, char*);
 
 /*s: function [[main]](tee.c) */
 void
@@ -82,7 +82,8 @@ main(int argc, char **argv)
 /*e: function [[main]](tee.c) */
 
 /*s: function [[intignore]](tee.c) */
-bool
+//TODO: restore bool return but need modify atnotify in goken lib9
+int
 intignore(void *a, char *msg)
 {
     USED(a);
