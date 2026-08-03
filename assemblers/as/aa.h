@@ -10,7 +10,7 @@
 //#include "8.out.h" in 8a/a.h
 //#include "5.out.h" in 5a/a.h
 
-#include <common.out.h>
+#include <obj/common.out.h>
 
 #pragma lib "../as/aa.a$O"
 
@@ -211,6 +211,9 @@ extern  int  peekc;
 extern  Hist*   hist;
 extern  Hist*   ehist;
 extern  long    lineno;
+// claude: line of the statement being parsed, immune to the yacc
+// newline-lookahead timing; see the yylex wrapper in 5a/lex.c
+extern  int32   stmtline;
 
 // debugging
 extern  bool    debug[256];

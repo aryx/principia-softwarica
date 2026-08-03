@@ -522,6 +522,11 @@ loop:
         return EOF;
     /*e: [[filbuf()]] if no more input files in the stack */
 
+    // claude: macro expansion buffers have no file (f == FD_NONE); pop
+    // them without emitting a spurious history record (like cck/lexbody),
+    // otherwise the object file grows an extra AHISTORY per macro use
+    if(i->f == FD_NONE)
+        goto pop;
     // system call! fill the buffer
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     /*s: [[filbuf()]] if no more character to read */

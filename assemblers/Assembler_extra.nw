@@ -163,7 +163,7 @@ enum    /* keep in synch with ../cc/cc.h */
 //#include "8.out.h" in 8a/a.h
 //#include "5.out.h" in 5a/a.h
 
-#include <common.out.h>
+#include <obj/common.out.h>
 
 #pragma lib "../as/aa.a$O"
 
@@ -243,6 +243,9 @@ extern  int  peekc;
 extern  Hist*   hist;
 extern  Hist*   ehist;
 extern  long    lineno;
+// claude: line of the statement being parsed, immune to the yacc
+// newline-lookahead timing; see the yylex wrapper in 5a/lex.c
+extern  int32   stmtline;
 
 // debugging
 extern  bool    debug[256];
@@ -872,7 +875,7 @@ void	macend(void);
 
 <<5a/a.h>>=
 #include "../as/aa.h"
-#include <5.out.h>
+#include <obj/5.out.h>
 
 //----------------------------------------------------------------------------
 // Data structures and constants
@@ -945,6 +948,27 @@ void    outhist(void);
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
 <<function [[yylex]]>>
+
+// claude: line of the statement being parsed, recorded by outcode()
+// in the object file. outcode() runs when yacc reduces the instruction
+// rule, which may or may not have consumed the newline lookahead
+// depending on the LALR tables (yacc default reductions), so lineno
+// there is off by one for some rules and not others (SWI vs MOVW for
+// instance). The wrapper below updates stmtline on every token except
+// the end-of-statement ';' (a newline), so when outcode runs it holds
+// the line of the statement's last token, deterministically.
+int32 stmtline;
+
+long
+yylex(void)
+{
+    long t;
+
+    t = yylex0();
+    if(t != ';')
+        stmtline = lineno;
+    return t;
+}
 
 // #include "../cc/macbody"
 @

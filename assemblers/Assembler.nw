@@ -2641,6 +2641,11 @@ loop:
     i = iostack;
     <<[[filbuf()]] if no more input files in the stack>>
 
+    // claude: macro expansion buffers have no file (f == FD_NONE); pop
+    // them without emitting a spurious history record (like cck/lexbody),
+    // otherwise the object file grows an extra AHISTORY per macro use
+    if(i->f == FD_NONE)
+        goto pop;
     // system call! fill the buffer
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     <<[[filbuf()]] if no more character to read>>
@@ -2841,7 +2846,7 @@ Here is finally the skeleton of [[yylex()]]:
 <<function [[yylex]]>>=
 /// main -> assemble -> yyparse -> <>
 long
-yylex(void)
+yylex0(void)
 {
     int c;
     <<[[yylex()]] locals>>
@@ -3222,6 +3227,10 @@ dc:
     *cp = '\0';
     yylval.lval = strtol(symb, nil, 10);
 
+    // claude: swallow the C integer suffixes, same reason as the
+    // ncu: case in the hex/octal path above (e.g. 1024u in mem.h)
+    while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+        c = GETC();
     peekc = c;
     return LCONST;
 @
@@ -3305,6 +3314,15 @@ for(;;) {
     break;
 }
 //XxX: goto ncu;
+// claude: swallow the C integer suffixes (the ncu: label of
+// the XxX comments above, kept by the kencc lexbody). Without
+// this, 5a cannot assemble the bcm kernel at all: mem.h has
+// '#define KiB 1024u', so after macro expansion the lexer
+// stops at 1024 and returns the 'u' as a stray name token,
+// giving a syntax error where the kencc 5a accepts the file.
+// See tests/s/variants/usuffix_arm.s.
+while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+    c = GETC();
 peekc = c;
 return LCONST;
 @
@@ -6008,14 +6026,27 @@ reg:
 [[regi]] (register integer) returns directly the register number:
 
 <<type [[declarations]](arm)>>=
-%type   <lval>  regi
+%type   <lval>  regi regi_nosp
 @
 %old: was called spreg, but prefer regi
 \l lval but really enum<registr>
 
 
 <<regi rule(arm)>>=
+/* claude: regi is the register-operand nonterminal (plan9's spreg):
+ * it accepts SP as the R13 alias. regi_nosp (plan9's sreg) drops SP
+ * but keeps PC=R15, and is what the offset memory-base 'con (regi_nosp)'
+ * uses -- SP is excluded there so it does not collide with the
+ * 'con (LPC)' PC-relative branch rule (reintroducing SP into the
+ * shared regi caused a reduce/reduce conflict). This split existed
+ * here until an Oct 2015 make-sync simplification (principia 38a4d330)
+ * merged the two and dropped the LSP/LPC aliases, silently removing
+ * SP/PC-as-register support. See tests/s/variants. */
 regi:
+  regi_nosp
+| LSP { $$ = REGSP; }
+
+regi_nosp:
   LREG
 @
 \swdefs{regi}
@@ -6055,6 +6086,7 @@ Asm5 allows also the [[R(xx)]] syntax to specify a register:
       print("register value out of range\n");
   $$ = $3;
  }
+| LPC { $$ = REGPC; }
 @
 %$
 \l expr! see later
@@ -6398,7 +6430,7 @@ Both are using the [<D_OREG>] operand kind I introduced before:
 <<operand rules(arm)>>=
 ioreg:
   ireg
-| con '(' regi ')'
+| con '(' regi_nosp ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;
@@ -7620,10 +7652,12 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
     Bputc(&obuf, opcode);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
-    Bputc(&obuf, lineno);
-    Bputc(&obuf, lineno>>8);
-    Bputc(&obuf, lineno>>16);
-    Bputc(&obuf, lineno>>24);
+    // claude: stmtline, not lineno: deterministic wrt the yacc
+    // newline-lookahead timing, see the yylex wrapper in lex.c
+    Bputc(&obuf, stmtline);
+    Bputc(&obuf, stmtline>>8);
+    Bputc(&obuf, stmtline>>16);
+    Bputc(&obuf, stmtline>>24);
     outopd(g1, sf);
     outopd(g2, st);
 
@@ -8732,7 +8766,8 @@ char *op;
 @
 
 <<[[outhist()]] adjust p and op if p is relative filename>>=
-if(p && p[0] != '/' && h->local_line == 0 && pathname && pathname[0] == '/') {
+// claude: -r produces reproducible output: don't embed the cwd in history
+if(!debug['r'] && p && p[0] != '/' && h->local_line == 0 && pathname && pathname[0] == '/') {
     op = p; // save p
     p = pathname; // start with cwd
 } else {
@@ -8949,11 +8984,14 @@ comma:
 <<struct [[ieee]]>>=
 /*
  * this is the simulated IEEE floating point
+ * claude: must be int32, not long: the linkers copy the raw bytes of
+ * this struct into the data segment (datblk() D_FCONST), so 64-bit
+ * longs corrupt the emitted doubles (caught by tests/s/variants)
  */
 struct	ieee
 {
-    long	l;	/* contains ls-man	0xffffffff */
-    long	h;	/* contains sign	0x80000000
+    int32	l;	/* contains ls-man	0xffffffff */
+    int32	h;	/* contains sign	0x80000000
                     exp		0x7ff00000
                     ms-man	0x000fffff */
 };
@@ -9210,7 +9248,7 @@ ieeedtod(Ieee *ieee, double native)
     fr = modf(fr*f, &ho);
     ieee->l = ho;
     ieee->l <<= 16;
-    ieee->l |= (long)(fr*f);
+    ieee->l |= (int32)(fr*f);
 }
 @
 

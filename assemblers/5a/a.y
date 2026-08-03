@@ -59,7 +59,7 @@
 /*x: type [[declarations]](arm) */
 %type   <genval>   ximm
 /*x: type [[declarations]](arm) */
-%type   <lval>  regi
+%type   <lval>  regi regi_nosp
 /*x: type [[declarations]](arm) */
 %type   <lval>  rcon
 /*x: type [[declarations]](arm) */
@@ -312,7 +312,20 @@ gen:
 /*e: more gen rule */
 /*e: gen rule */
 /*s: regi rule(arm) */
+/* claude: regi is the register-operand nonterminal (plan9's spreg):
+ * it accepts SP as the R13 alias. regi_nosp (plan9's sreg) drops SP
+ * but keeps PC=R15, and is what the offset memory-base 'con (regi_nosp)'
+ * uses -- SP is excluded there so it does not collide with the
+ * 'con (LPC)' PC-relative branch rule (reintroducing SP into the
+ * shared regi caused a reduce/reduce conflict). This split existed
+ * here until an Oct 2015 make-sync simplification (principia 38a4d330)
+ * merged the two and dropped the LSP/LPC aliases, silently removing
+ * SP/PC-as-register support. See tests/s/variants. */
 regi:
+  regi_nosp
+| LSP { $$ = REGSP; }
+
+regi_nosp:
   LREG
 /*x: regi rule(arm) */
 | LR '(' expr ')'
@@ -321,6 +334,7 @@ regi:
       print("register value out of range\n");
   $$ = $3;
  }
+| LPC { $$ = REGPC; }
 /*e: regi rule(arm) */
 /*s: ximm rule */
 ximm:
@@ -390,7 +404,7 @@ shift:
 /*x: operand rules(arm) */
 ioreg:
   ireg
-| con '(' regi ')'
+| con '(' regi_nosp ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;

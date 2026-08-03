@@ -981,7 +981,8 @@ outhist(void)
         p = h->filename;
         op = nil;
         // relative file?
-        if(p && p[0] != c && h->local_line == 0 && pathname){
+        // claude: -r produces reproducible output: don't embed the cwd in history
+        if(!debug['r'] && p && p[0] != c && h->local_line == 0 && pathname){
             if(pathname[0] == c){
                 op = p;
                 p = pathname;
@@ -1042,7 +1043,7 @@ outhist(void)
 /*s: function [[yylex]] */
 /// main -> assemble -> yyparse -> <>
 long
-yylex(void)
+yylex0(void)
 {
     int c;
     /*s: [[yylex()]] locals */
@@ -1225,6 +1226,15 @@ l1:
             break;
         }
         //XxX: goto ncu;
+        // claude: swallow the C integer suffixes (the ncu: label of
+        // the XxX comments above, kept by the kencc lexbody). Without
+        // this, 5a cannot assemble the bcm kernel at all: mem.h has
+        // '#define KiB 1024u', so after macro expansion the lexer
+        // stops at 1024 and returns the 'u' as a stray name token,
+        // giving a syntax error where the kencc 5a accepts the file.
+        // See tests/s/variants/usuffix_arm.s.
+        while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+            c = GETC();
         peekc = c;
         return LCONST;
         /*e: [[yylex()]] in number case, 0xxx handling */
@@ -1256,6 +1266,10 @@ l1:
         *cp = '\0';
         yylval.lval = strtol(symb, nil, 10);
 
+        // claude: swallow the C integer suffixes, same reason as the
+        // ncu: case in the hex/octal path above (e.g. 1024u in mem.h)
+        while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+            c = GETC();
         peekc = c;
         return LCONST;
     /*e: [[yylex()]] in number case, decimal dc label handling */
@@ -1353,6 +1367,19 @@ l1:
     return c;
 }
 /*e: function [[yylex]] */
+
+int32 stmtline;
+
+long
+yylex(void)
+{
+    long t;
+
+    t = yylex0();
+    if(t != ';')
+        stmtline = lineno;
+    return t;
+}
 
 // #include "../cc/macbody"
 /*e: assemblers/8a/lex.c */

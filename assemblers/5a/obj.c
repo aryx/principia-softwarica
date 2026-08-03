@@ -187,10 +187,12 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
     Bputc(&obuf, opcode);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
-    Bputc(&obuf, lineno);
-    Bputc(&obuf, lineno>>8);
-    Bputc(&obuf, lineno>>16);
-    Bputc(&obuf, lineno>>24);
+    // claude: stmtline, not lineno: deterministic wrt the yacc
+    // newline-lookahead timing, see the yylex wrapper in lex.c
+    Bputc(&obuf, stmtline);
+    Bputc(&obuf, stmtline>>8);
+    Bputc(&obuf, stmtline>>16);
+    Bputc(&obuf, stmtline>>24);
     outopd(g1, sf);
     outopd(g2, st);
 
@@ -220,7 +222,8 @@ outhist(void)
         p = h->filename;
 
         /*s: [[outhist()]] adjust p and op if p is relative filename */
-        if(p && p[0] != '/' && h->local_line == 0 && pathname && pathname[0] == '/') {
+        // claude: -r produces reproducible output: don't embed the cwd in history
+        if(!debug['r'] && p && p[0] != '/' && h->local_line == 0 && pathname && pathname[0] == '/') {
             op = p; // save p
             p = pathname; // start with cwd
         } else {

@@ -1,6 +1,6 @@
 /*s: 5a/a.h */
 #include "../as/aa.h"
-#include <5.out.h>
+#include <obj/5.out.h>
 
 //----------------------------------------------------------------------------
 // Data structures and constants
