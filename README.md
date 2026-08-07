@@ -32,8 +32,7 @@ The specificity of my fork is to see Plan 9 as a great educational
 platform to learn about programming and computer science. The code of
 Plan 9 is so elegant and small that you can realistically understand
 the whole operating system. In fact, I explained the whole code in my
-Principia Softwarica book series (see
-<https://principia-softwarica.org>).
+Principia Softwarica book series (see <https://principia-softwarica.org>).
 
 This fork, because it is used to support my Principia Softwarica
 book series, contains only the essential programs used by a programmer
@@ -43,6 +42,22 @@ I've selected only what I consider to be the essence of an operating system.
 Moreover, this fork supports only the ARM and x86 architectures. Even though
 the original Plan 9 supported more architectures, I think ARM and x86 are
 enough for the educational purpose of Principia Softwarica.
+
+## AI disclaimer
+
+99.9% of the code in this repository was derived from Plan 9
+fourth edition and was written by humans
+(Ken Thompson, Rob Pike, and many other Plan 9 contributors),
+and for the most part written more than 30 years ago.
+What I did was essentially to reorganize the code for
+my Principia Softwarica book series.
+Many of the explanations in those books were written using AI assistance
+but the code itself (and its organization in chapters, sections,
+appendix in those books) was not.
+
+The 0.1% of code that was written using AI is clearly marked with a
+special `claude:` comment at the front and part of a commit authored
+by Claude code.
 
 ## Building
 
