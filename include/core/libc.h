@@ -32,6 +32,15 @@ typedef	unsigned long long uvlong;
 #define nil		((void*)0)
 typedef	uint		Rune;
 
+//TODO: use consitently uint32 (or even better u32) instead of u32int
+typedef u64int uint64;
+typedef u32int uint32;
+typedef u16int uint16;
+typedef u8int uint8;
+
+// for goken
+extern	char*	getgoos(void);
+
 //----------------------------------------------------------------------------
 // Pad's core types
 //----------------------------------------------------------------------------
