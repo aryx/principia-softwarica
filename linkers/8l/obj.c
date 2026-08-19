@@ -1,6 +1,6 @@
 /*s: 8l/obj.c */
 #include	"l.h"
-#include	<ar.h>
+#include	<obj/ar.h>
 
 /*s: global [[curauto]] */
 // list<ref<Auto>> (next = Auto.link)
@@ -255,7 +255,15 @@ main(int argc, char *argv[])
 
     /*s: [[main()]] adjust HEADTYPE if debug flags(x86) */
     if(HEADTYPE == -1) {
+      // claude: pick the default output format from the host OS, like 7l does
+      // via getgoos(): Linux -> ELF, otherwise Plan 9. This lets `8l foo.8`
+      // produce a runnable Linux binary without an explicit -H7, matching the
+      // ELF-by-default behavior of 6l and il.
+      char *goos;
       HEADTYPE = H_PLAN9;
+      goos = getgoos();
+      if(goos != nil && strcmp(goos, "linux") == 0)
+          HEADTYPE = H_ELF;
     }
     /*e: [[main()]] adjust HEADTYPE if debug flags(x86) */
     switch(HEADTYPE) {
@@ -300,8 +308,10 @@ main(int argc, char *argv[])
         break;
     case H_ELF:	/* elf executable */
         HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+        // claude: 0x08048000+HEADR matches the traditional Linux x86 ELF
+        // load address (and what 8lk uses), not the old 0x80100020
         if(INITTEXT == -1)
-            INITTEXT = 0x80100020L;
+            INITTEXT = 0x08048000+HEADR;
         if(INITDAT == -1)
             INITDAT = 0;
         if(INITRND == -1)
@@ -312,6 +322,16 @@ main(int argc, char *argv[])
         HEADR = 32L;
         if(INITTEXT == -1)
             INITTEXT = 4096+32;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4096;
+        break;
+    case H_PE:	/* PE (Windows) executable, matching 6l's HEADTYPE==10 */
+        peinit();
+        HEADR = PERESERVE;
+        if(INITTEXT == -1)
+            INITTEXT = PEBASE+0x1000;
         if(INITDAT == -1)
             INITDAT = 0;
         if(INITRND == -1)
@@ -483,6 +503,20 @@ main(int argc, char *argv[])
             doprof2();
     /*e: [[main()]] call doprofxxx() if profiling */
     span();
+    if(HEADTYPE == H_PE) {
+        /* claude: dopepe()/peimports() lays out the .idata section (needs
+         * the real textsize/datsize/bsssize from the span() above) and
+         * defines the __imp_<name> import symbols. This ?l has no separate
+         * relocation pass -- asmand()/vaddr() resolve symbol addresses
+         * directly during instruction encoding -- so code already spanned
+         * above still has the placeholder (zero) address for any __imp_*
+         * reference; re-running span() re-encodes those now that the real
+         * addresses are known. Instruction sizes are unchanged (disp32 is
+         * always 4 bytes), so this converges immediately. Matches 6l's
+         * obj.c HEADTYPE==10 handling. */
+        dopepe();
+        span();
+    }
     doinit();
 
     // write to cout, finally
@@ -790,11 +824,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     }
 
     // factorize!
-    while(nhunk < sizeof(Auto))
-        gethunk();
-    u = (Auto*)hunk;
-    nhunk -= sizeof(Auto);
-    hunk += sizeof(Auto);
+    u = malloc(sizeof(Auto));
 
     u->link = curauto;
     curauto = u;
@@ -904,7 +934,11 @@ addhist(long line, int type)
     int i, j, k;
     /*e: [[addhist()]] other locals */
 
-    s = malloc(sizeof(Sym));
+    /* claude: mallocz (zeroed): addhist only sets s->name below; every
+     * other Sym field (value/type/sig/file/subtype/...) is left implicitly
+     * zero, which the old bump allocator guaranteed. With direct lib9
+     * malloc they would be garbage in the history symbol. */
+    s = mallocz(sizeof(Sym), 1);
 
     u = malloc(sizeof(Auto));
     u->asym = s;
@@ -916,7 +950,15 @@ addhist(long line, int type)
     curhist = u;
 
     /*s: [[addhist()]] set symbol name to filename using compact encoding */
-    s->name = malloc(2*(histfrogp+1) + 1);
+    /* claude: mallocz (zeroed), not malloc: the loop below fills only
+     * name[1 .. 2*histfrogp]; name[0] (a leading byte emitted by
+     * putsymb) and the trailing double-NUL terminator are left for the
+     * allocator to zero. The original plan9 code relies on malloc
+     * returning zeroed memory; lib9's malloc on this host does not, so
+     * putsymb() read uninitialized bytes and ran past the buffer,
+     * emitting garbage 'z'/'Z' history records that differed run-to-run
+     * and between the two lineages (the last arm unstripped mismatch). */
+    s->name = mallocz(2*(histfrogp+1) + 1, 1);
     j = 1;
     for(i=0; i<histfrogp; i++) {
         k = histfrog[i]->value;
@@ -1164,12 +1206,15 @@ loop:
     /*e: [[ldobj()]] if ANAME or ASIGNAME(x86) */
 
     //TODO: factorize
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
+    /* claude: mallocz (zeroed), not plain malloc: only as/line/back/from/to
+     * are set below; forwd/pc/width/ft/tt/mark/link/pcond are left
+     * implicitly zero here (link/pcond get filled in later, once this Prog
+     * is appended to the list; ft/tt are an oclass cache that must start
+     * "unset"; mark is read by later passes before ever being written by
+     * this one). The old bump allocator (gethunk) handed back zeroed
+     * memory; with the direct-malloc path this alloc must zero itself,
+     * same reasoning as 5l's ldobj() (see linkers/5l/obj.c). */
+    p = mallocz(sizeof(Prog), 1);
     p->as = o;
     p->line = bloc[2] | (bloc[3] << 8) | (bloc[4] << 16) | (bloc[5] << 24);
     p->back = 2;

@@ -606,6 +606,9 @@ vaddr(Adr *a)
             case SCONST:
                 v += s->value;
                 break;
+            case SFIXED:
+                v += s->value;
+                break;
             default:
                 v += INITDAT + s->value;
             }

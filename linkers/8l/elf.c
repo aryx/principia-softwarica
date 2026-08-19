@@ -9,7 +9,7 @@ long	entryvalue(void);
 
 // specific to each archi, defined in asm.c
 void    strnput(char*, int);
-void    lputl(long);
+void    lputl(int32);
 
 /*s: enum _anon_ (linkers/8l/elf.c) */
 enum {
@@ -58,8 +58,8 @@ elfstrtab(void)
 
 /*s: function [[elf32phdr]] */
 void
-elf32phdr(void (*putl)(long), ulong type, ulong off, ulong vaddr, ulong paddr,
-    ulong filesz, ulong memsz, ulong prots, ulong align)
+elf32phdr(void (*putl)(int32), uint32 type, uint32 off, uint32 vaddr, uint32 paddr,
+    uint32 filesz, uint32 memsz, uint32 prots, uint32 align)
 {
     putl(type);
     putl(off);
@@ -74,9 +74,9 @@ elf32phdr(void (*putl)(long), ulong type, ulong off, ulong vaddr, ulong paddr,
 
 /*s: function [[elf32shdr]] */
 void
-elf32shdr(void (*putl)(long), ulong name, ulong type, ulong flags, ulong vaddr,
-    ulong off, ulong sectsz, ulong link, ulong addnl, ulong align,
-    ulong entsz)
+elf32shdr(void (*putl)(int32), uint32 name, uint32 type, uint32 flags, uint32 vaddr,
+    uint32 off, uint32 sectsz, uint32 link, uint32 addnl, uint32 align,
+    uint32 entsz)
 {
     putl(name);
     putl(type);
@@ -93,13 +93,15 @@ elf32shdr(void (*putl)(long), ulong name, ulong type, ulong flags, ulong vaddr,
 
 /*s: function [[elf32sectab]] */
 static void
-elf32sectab(void (*putl)(long))
+elf32sectab(void (*putl)(int32))
 {
     seek(cout, HEADR+textsize+datsize+symsize, 0);
     elf32shdr(putl, Stitext, Progbits, Salloc|Sexec, INITTEXT,
         HEADR, textsize, 0, 0, 0x10000, 0);
+    // claude: like the phdr, the data section file offset must be
+    // page-aligned to match INITDAT (rnd() ported from the k variant)
     elf32shdr(putl, Stidata, Progbits, Salloc|SwriteElf, INITDAT,
-        HEADR+textsize, datsize, 0, 0, 0x10000, 0);
+        rnd(HEADR+textsize, INITRND), datsize, 0, 0, 0x10000, 0);
     elf32shdr(putl, Stistrtab, Strtab, 1 << 5, 0,
         HEADR+textsize+datsize+symsize+3*Shdr32sz, 14, 0, 0, 1, 0);
     elfstrtab();
@@ -111,8 +113,8 @@ elf32sectab(void (*putl)(long))
 void
 elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
 {
-    ulong phydata;
-    void (*putw)(long), (*putl)(long);
+    uint32 phydata;
+    void (*putw)(int32), (*putl)(int32);
 
     if(bo == ELFDATA2MSB){
         putw = wput;
@@ -136,7 +138,21 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
         putl(HEADR+textsize+datsize+symsize); /* offset to first shdr */
     else
         putl(0);
-    putl(0L);			/* flags */
+    // claude: the kencc lk/elf.c switches on thechar here, but this
+    // shared elf.c only sees 8l's l.h (relative include) which does
+    // not declare thechar; the mach parameter is the ELF machine type
+    // and the EABI flags word is a property of exactly that, so switch
+    // on mach instead.
+    //old: putl(0L);			/* flags */
+    switch(mach) {
+    case ARM:
+        // version5 EABI soft-float, like the kencc 5l
+        putl(0x5000200);		/* flags */
+        break;
+    default:
+        putl(0L);			/* flags */
+        break;
+    }
     putw(Ehdr32sz);
     putw(Phdr32sz);
     putw(3 + addpsects);		/* # of Phdrs */
@@ -161,7 +177,9 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
      * correct for INITDAT and INITDATP.
      */
     phydata = INITDAT - (INITTEXT - INITTEXTP);
-    elf32phdr(putl, PT_LOAD, HEADR+textsize, INITDAT, phydata,
+    // claude: file offset must be page-aligned like INITDAT (see the
+    // matching rnd() in asm.c's asmb(), which is where this is written)
+    elf32phdr(putl, PT_LOAD, rnd(HEADR+textsize, INITRND), INITDAT, phydata,
         datsize, datsize+bsssize, R|W|X, INITRND); /* data */
     elf32phdr(putl, NOPTYPE, HEADR+textsize+datsize, 0, 0,
         symsize, lcsize, R, 4);			/* symbol table */

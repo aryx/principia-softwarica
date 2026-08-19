@@ -28,27 +28,27 @@ errorexit(void)
 /*e: function [[errorexit]] */
 
 /*s: function [[gethunk]] */
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 5L*NHUNK) {
-        nh = 5L*NHUNK;
-        if(thunk >= 25L*NHUNK)
-            nh = 25L*NHUNK;
-    }
-    h = sbrk(nh);
-    if(h == (char*)-1) {
-        diag("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
+//void
+//gethunk(void)
+//{
+//    char *h;
+//    long nh;
+//
+//    nh = NHUNK;
+//    if(thunk >= 5L*NHUNK) {
+//        nh = 5L*NHUNK;
+//        if(thunk >= 25L*NHUNK)
+//            nh = 25L*NHUNK;
+//    }
+//    h = sbrk(nh);
+//    if(h == (char*)-1) {
+//        diag("out of memory");
+//        errorexit();
+//    }
+//    hunk = h;
+//    nhunk = nh;
+//    thunk += nh;
+//}
 /*e: function [[gethunk]] */
 
 #undef sym // ugly hack for x86
@@ -85,7 +85,12 @@ lookup(char *symb, int v)
 
     // else
     /*s: [[lookup()]] if symbol name not found */
-    sym = malloc(sizeof(Sym));
+    /* claude: mallocz (zeroed): only name/version/value/type/sig/link are
+     * set below; file/subtype/become/frame are left implicitly zero (the
+     * bump allocator used to hand back zeroed memory). With the direct
+     * lib9-malloc path they would be garbage -- e.g. a stale s->file makes
+     * putsymb() emit a wrong file index in the symbol table. */
+    sym = mallocz(sizeof(Sym), 1);
     sym->name = malloc(len + 1); // +1 again?
     memmove(sym->name, symb, len);
     sym->version = v;

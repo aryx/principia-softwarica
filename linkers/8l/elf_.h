@@ -1,5 +1,5 @@
 /*s: 8l/elf_.h */
-#include <elf.h>
+#include <exec/elf.h>
 
 // vs include/elf.h? and libmach/elf.h?
 
@@ -15,7 +15,7 @@ enum {
 };
 /*e: enum ElfHeaderSizes */
 
-typedef void (*Putl)(long);
+typedef void (*Putl)(int32);
 
 void	elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl));
 /*e: 8l/elf_.h */

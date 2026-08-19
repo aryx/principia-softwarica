@@ -1,5 +1,7 @@
 \section{x86}
 
+%TODO: lpize lk/pe.h! and pe.c
+
 
 % ----------------------------------------------------------
 % x86 only now
@@ -24,7 +26,7 @@ short   frame;
  *	-H2 -T4128 -R4096		is plan9 format
  *	-H3 -Tx -Rx			is MS-DOS .COM
  *	-H4 -Tx -Rx			is fake MS-DOS .EXE
- *	-H5 -T0x80100020 -R4096		is ELF
+ *	-H7 -T0x08048000+HEADR -R4096	is ELF
  */
 enum headtype {
     H_GARBAGE = 0,
@@ -32,7 +34,11 @@ enum headtype {
     H_PLAN9 = 2, // default
     H_COM = 3,
     H_EXE = 4,
-    H_ELF = 5,
+    // claude: kept as 7 (not 5) to match 5l/7l/8lk's numbering, since
+    // scripts/tests uniformly pass -H7 for ELF across all archs
+    H_ELF = 7,
+    // claude: matches 6l's HEADTYPE==10 for PE (Windows), see linkers/lk/pe.c
+    H_PE = 10,
 };
 @
 
@@ -53,6 +59,11 @@ enum section
 
     SIMPORT,
     SEXPORT,
+
+    // claude: a symbol whose value is already a final absolute address, not
+    // an offset from INITDAT like plain SDATA/SBSS -- used for the PE
+    // __imp_* import-table symbols lk/pe.c defines (see vaddr() in span.c)
+    SFIXED,
 };
 @
 
@@ -700,11 +711,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     }
 
     // factorize!
-    while(nhunk < sizeof(Auto))
-        gethunk();
-    u = (Auto*)hunk;
-    nhunk -= sizeof(Auto);
-    hunk += sizeof(Auto);
+    u = malloc(sizeof(Auto));
 
     u->link = curauto;
     curauto = u;
@@ -2381,7 +2388,7 @@ Sconv(Fmt *fp)
 <<function [[wputl]](x86)>>=
 /* these need to take long arguments to be compatible with elf.c */
 void
-wputl(long w)
+wputl(int32 w)
 {
     cput(w);
     cput(w>>8);
@@ -2391,7 +2398,7 @@ wputl(long w)
 
 <<function [[wput]](x86)>>=
 void
-wput(long w)
+wput(int32 w)
 {
     cput(w>>8);
     cput(w);
@@ -2400,7 +2407,7 @@ wput(long w)
 
 <<function [[lput]](x86)>>=
 void
-lput(long l)
+lput(int32 l)
 {
     cput(l>>24);
     cput(l>>16);
@@ -2411,7 +2418,7 @@ lput(long l)
 
 <<function [[lputl]](x86)>>=
 void
-lputl(long l)
+lputl(int32 l)
 {
     cput(l);
     cput(l>>8);
@@ -3045,8 +3052,10 @@ case H_EXE:	/* fake MS-DOS .EXE */
     break;
 case H_ELF:	/* elf executable */
     HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+    // claude: 0x08048000+HEADR matches the traditional Linux x86 ELF
+    // load address (and what 8lk uses), not the old 0x80100020
     if(INITTEXT == -1)
-        INITTEXT = 0x80100020L;
+        INITTEXT = 0x08048000+HEADR;
     if(INITDAT == -1)
         INITDAT = 0;
     if(INITRND == -1)
@@ -3063,12 +3072,21 @@ case H_COFF:
     textsize = rnd(HEADR+textsize, 4096)-HEADR;
     seek(cout, textsize+HEADR, 0);
     break;
-case H_ELF: // like H_PLAN9
-    seek(cout, HEADR+textsize, 0);
+case H_ELF:
+    // claude: ELF on Linux requires vaddr modulo page == file offset
+    // modulo page, so round up to a page boundary here to match
+    // INITDAT (see span.c) and the PT_LOAD file offset in elf.c
+    seek(cout, rnd(HEADR+textsize, INITRND), 0);
     break;
 case H_COM:
 case H_EXE:
     seek(cout, HEADR+rnd(textsize, INITRND), 0);
+    break;
+case H_PE:
+    // claude: PE requires vaddr modulo page == file offset modulo
+    // page, same reasoning as the H_ELF case above and 6l's own
+    // HEADTYPE==10 case in asm.c
+    seek(cout, rnd(HEADR+textsize, INITRND), 0);
     break;
 @
 
@@ -3079,10 +3097,25 @@ case H_COFF:
     break;
 //case H_PLAN9:
 case H_ELF:
-    seek(cout, HEADR+textsize+datsize, 0);
+    // claude: like the data section's own seek a few lines up in
+    // this same function, the symbol table must follow the data
+    // section at its REAL (page-rounded) end, not at the
+    // unrounded HEADR+textsize+datsize. Without rnd(), this seek
+    // lands *before* the data section (which was actually written
+    // starting at rnd(HEADR+textsize,INITRND)), so asmsym()'s
+    // output overwrites the tail of the just-written data section
+    // -- confirmed by dumping a linked 386 binary and finding
+    // compiler debug-symbol strings ("frame"/"lv"/"rv") sitting at
+    // the address a string literal should have been.
+    seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
     break;
 case H_COM:
 case H_EXE:
+    debug['s'] = 1;
+    break;
+case H_PE:
+    // claude: no symbol table for PE yet (lk/pe.c has no .symdat
+    // writer), matching 6l's HEADTYPE==10 case
     debug['s'] = 1;
     break;
 @
@@ -3205,6 +3238,9 @@ case H_EXE:
     break;
 case H_ELF:
     elf32(I386, ELFDATA2LSB, 0, nil);
+    break;
+case H_PE:
+    asmbpe();
     break;
 @
 
@@ -3367,6 +3403,20 @@ dodata();
 dostkoff();
 <<[[main()]] call doprofxxx() if profiling>>
 span();
+if(HEADTYPE == H_PE) {
+    /* claude: dopepe()/peimports() lays out the .idata section (needs
+     * the real textsize/datsize/bsssize from the span() above) and
+     * defines the __imp_<name> import symbols. This ?l has no separate
+     * relocation pass -- asmand()/vaddr() resolve symbol addresses
+     * directly during instruction encoding -- so code already spanned
+     * above still has the placeholder (zero) address for any __imp_*
+     * reference; re-running span() re-encodes those now that the real
+     * addresses are known. Instruction sizes are unchanged (disp32 is
+     * always 4 bytes), so this converges immediately. Matches 6l's
+     * obj.c HEADTYPE==10 handling. */
+    dopepe();
+    span();
+}
 doinit();
 
 // write to cout, finally
@@ -3473,6 +3523,16 @@ case H_PLAN9:	/* plan 9 */
     HEADR = 32L;
     if(INITTEXT == -1)
         INITTEXT = 4096+32;
+    if(INITDAT == -1)
+        INITDAT = 0;
+    if(INITRND == -1)
+        INITRND = 4096;
+    break;
+case H_PE:	/* PE (Windows) executable, matching 6l's HEADTYPE==10 */
+    peinit();
+    HEADR = PERESERVE;
+    if(INITTEXT == -1)
+        INITTEXT = PEBASE+0x1000;
     if(INITDAT == -1)
         INITDAT = 0;
     if(INITRND == -1)
@@ -3627,7 +3687,15 @@ default:
 % obsolete?
 <<[[main()]] adjust HEADTYPE if debug flags(x86)>>=
 if(HEADTYPE == -1) {
+  // claude: pick the default output format from the host OS, like 7l does
+  // via getgoos(): Linux -> ELF, otherwise Plan 9. This lets `8l foo.8`
+  // produce a runnable Linux binary without an explicit -H7, matching the
+  // ELF-by-default behavior of 6l and il.
+  char *goos;
   HEADTYPE = H_PLAN9;
+  goos = getgoos();
+  if(goos != nil && strcmp(goos, "linux") == 0)
+      HEADTYPE = H_ELF;
 }
 @
 
@@ -3666,12 +3734,15 @@ loop:
     <<[[ldobj()]] if ANAME or ASIGNAME(x86)>>
 
     //TODO: factorize
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
+    /* claude: mallocz (zeroed), not plain malloc: only as/line/back/from/to
+     * are set below; forwd/pc/width/ft/tt/mark/link/pcond are left
+     * implicitly zero here (link/pcond get filled in later, once this Prog
+     * is appended to the list; ft/tt are an oclass cache that must start
+     * "unset"; mark is read by later passes before ever being written by
+     * this one). The old bump allocator (gethunk) handed back zeroed
+     * memory; with the direct-malloc path this alloc must zero itself,
+     * same reasoning as 5l's ldobj() (see linkers/5l/obj.c). */
+    p = mallocz(sizeof(Prog), 1);
     p->as = o;
     p->line = bloc[2] | (bloc[3] << 8) | (bloc[4] << 16) | (bloc[5] << 24);
     p->back = 2;
@@ -4071,13 +4142,13 @@ case AFCOMDP:
 %-------------------------------------------------------------
 
 <<8l/elf_.h>>=
-#include <elf.h>
+#include <exec/elf.h>
 
 // vs include/elf.h? and libmach/elf.h?
 
 <<enum ElfHeaderSizes>>
 
-typedef void (*Putl)(long);
+typedef void (*Putl)(int32);
 
 void	elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl));
 @
@@ -4145,9 +4216,10 @@ enum misc1 {
 #include	<libc.h>
 #include	<bio.h>
 
-#include	<common.out.h>
-#include	<8.out.h>
+#include	<obj/common.out.h>
+#include	<obj/8.out.h>
 #include	"elf_.h"
+#include	"../lk/pe.h"
 
 <<macro [[DBG]]>>
 
@@ -4228,7 +4300,6 @@ extern	Prog*	firstp;
 extern	char	fnuxi8[8];
 extern	char	fnuxi4[4];
 extern	Sym*	hash[NHASH];
-extern	char*	hunk;
 extern	char	inuxi1[1];
 extern	char	inuxi2[2];
 extern	char	inuxi4[4];
@@ -4239,7 +4310,6 @@ extern	char	reg[D_NONE];
 extern	Prog*	lastp;
 extern	long	lcsize;
 extern	int	nerrors;
-extern	long	nhunk;
 extern	long	nsymbol;
 //@Scheck: used by TName, not useless
 extern	char*	noname;
@@ -4249,6 +4319,10 @@ extern	long	symsize;
 extern	Prog*	textp;
 extern	long	textsize;
 extern	long	thunk;
+// claude: needed so shared ../lk/pe.c (peinit()/asmbpe()) can switch on
+// architecture; elf.c avoids this by taking the ELF machine type as a
+// parameter instead, but pe.c (also used as-is by 6l) reads thechar directly
+extern	char	thechar;
 extern	Prog	zprg;
 extern	int	dtype;
 
@@ -4288,6 +4362,9 @@ void	dodata(void);
 void	doinit(void);
 void	dostkoff(void);
 void	dynreloc(Sym*, ulong, int);
+// claude: needed so shared ../lk/pe.c (asmbpe()) can call it; elf.c already
+// forward-declares its own copy locally since it doesn't include this via l.h
+long	entryvalue(void);
 
 void	errorexit(void);
 void	export(void);
@@ -4296,14 +4373,13 @@ void	export(void);
 
 
 void	follow(void);
-void	gethunk(void);
 long	ieeedtof(Ieee*);
 void	import(void);
 
 void	listinit(void);
 Sym*	lookup(char*, int);
-void	lput(long);
-void	lputl(long);
+void	lput(int32);
+void	lputl(int32);
 void	main(int, char*[]);
 
 void	patch(void);
@@ -4316,8 +4392,8 @@ void	strnput(char*, int);
 void	undef(void);
 void	undefsym(Sym*);
 
-void	wput(long);
-void	wputl(long);
+void	wput(int32);
+void	wputl(int32);
 void	xdefine(char*, int, long);
 
 void mylog(char*, ...);
@@ -4554,6 +4630,20 @@ int	Sconv(Fmt*);
 
 <<8l/compat.c>>=
 #include	"l.h"
+
+/*
+ * claude: same fix as compilers/cc/compat.c — the "fake malloc" below
+ * (a zeroed bump arena over hunk/nhunk, plus a no-op free and no-op
+ * setmalloctag) is DISABLED via #if 0. It made malloc() unusable inside
+ * gethunk(): gethunk()->malloc()->gethunk() recursed forever. Original
+ * Plan 9 avoided that because gethunk() used sbrk(), but macOS sbrk() is
+ * hard-capped at ~4MB and then returns -1, so large links (e.g. 8.jpg)
+ * died with "out of memory". We now use the real libc malloc/free
+ * directly: gethunk() refills the arena with the real malloc() (see
+ * utils.c), the malloc() call sites get honest heap allocation, and the
+ * free() call sites (pass.c, obj.c, span.c) become real frees instead of
+ * leaks. (The syncweb chunk markers are kept; only the code is disabled.)
+ */
 
 <<function [[malloc]]>>
 
@@ -4895,6 +4985,9 @@ vaddr(Adr *a)
                 ckoff(s, v);
             case STEXT:
             case SCONST:
+                v += s->value;
+                break;
+            case SFIXED:
                 v += s->value;
                 break;
             default:
@@ -5758,8 +5851,8 @@ elfstrtab(void)
 
 <<function [[elf32phdr]]>>=
 void
-elf32phdr(void (*putl)(long), ulong type, ulong off, ulong vaddr, ulong paddr,
-    ulong filesz, ulong memsz, ulong prots, ulong align)
+elf32phdr(void (*putl)(int32), uint32 type, uint32 off, uint32 vaddr, uint32 paddr,
+    uint32 filesz, uint32 memsz, uint32 prots, uint32 align)
 {
     putl(type);
     putl(off);
@@ -5774,9 +5867,9 @@ elf32phdr(void (*putl)(long), ulong type, ulong off, ulong vaddr, ulong paddr,
 
 <<function [[elf32shdr]]>>=
 void
-elf32shdr(void (*putl)(long), ulong name, ulong type, ulong flags, ulong vaddr,
-    ulong off, ulong sectsz, ulong link, ulong addnl, ulong align,
-    ulong entsz)
+elf32shdr(void (*putl)(int32), uint32 name, uint32 type, uint32 flags, uint32 vaddr,
+    uint32 off, uint32 sectsz, uint32 link, uint32 addnl, uint32 align,
+    uint32 entsz)
 {
     putl(name);
     putl(type);
@@ -5793,13 +5886,15 @@ elf32shdr(void (*putl)(long), ulong name, ulong type, ulong flags, ulong vaddr,
 
 <<function [[elf32sectab]]>>=
 static void
-elf32sectab(void (*putl)(long))
+elf32sectab(void (*putl)(int32))
 {
     seek(cout, HEADR+textsize+datsize+symsize, 0);
     elf32shdr(putl, Stitext, Progbits, Salloc|Sexec, INITTEXT,
         HEADR, textsize, 0, 0, 0x10000, 0);
+    // claude: like the phdr, the data section file offset must be
+    // page-aligned to match INITDAT (rnd() ported from the k variant)
     elf32shdr(putl, Stidata, Progbits, Salloc|SwriteElf, INITDAT,
-        HEADR+textsize, datsize, 0, 0, 0x10000, 0);
+        rnd(HEADR+textsize, INITRND), datsize, 0, 0, 0x10000, 0);
     elf32shdr(putl, Stistrtab, Strtab, 1 << 5, 0,
         HEADR+textsize+datsize+symsize+3*Shdr32sz, 14, 0, 0, 1, 0);
     elfstrtab();
@@ -5811,8 +5906,8 @@ elf32sectab(void (*putl)(long))
 void
 elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
 {
-    ulong phydata;
-    void (*putw)(long), (*putl)(long);
+    uint32 phydata;
+    void (*putw)(int32), (*putl)(int32);
 
     if(bo == ELFDATA2MSB){
         putw = wput;
@@ -5836,7 +5931,21 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
         putl(HEADR+textsize+datsize+symsize); /* offset to first shdr */
     else
         putl(0);
-    putl(0L);			/* flags */
+    // claude: the kencc lk/elf.c switches on thechar here, but this
+    // shared elf.c only sees 8l's l.h (relative include) which does
+    // not declare thechar; the mach parameter is the ELF machine type
+    // and the EABI flags word is a property of exactly that, so switch
+    // on mach instead.
+    //old: putl(0L);			/* flags */
+    switch(mach) {
+    case ARM:
+        // version5 EABI soft-float, like the kencc 5l
+        putl(0x5000200);		/* flags */
+        break;
+    default:
+        putl(0L);			/* flags */
+        break;
+    }
     putw(Ehdr32sz);
     putw(Phdr32sz);
     putw(3 + addpsects);		/* # of Phdrs */
@@ -5861,7 +5970,9 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
      * correct for INITDAT and INITDATP.
      */
     phydata = INITDAT - (INITTEXT - INITTEXTP);
-    elf32phdr(putl, PT_LOAD, HEADR+textsize, INITDAT, phydata,
+    // claude: file offset must be page-aligned like INITDAT (see the
+    // matching rnd() in asm.c's asmb(), which is where this is written)
+    elf32phdr(putl, PT_LOAD, rnd(HEADR+textsize, INITRND), INITDAT, phydata,
         datsize, datsize+bsssize, R|W|X, INITRND); /* data */
     elf32phdr(putl, NOPTYPE, HEADR+textsize+datsize, 0, 0,
         symsize, lcsize, R, 4);			/* symbol table */
@@ -6009,7 +6120,7 @@ long	entryvalue(void);
 
 // specific to each archi, defined in asm.c
 void    strnput(char*, int);
-void    lputl(long);
+void    lputl(int32);
 
 <<enum _anon_ (linkers/8l/elf.c)>>
 
@@ -6036,7 +6147,7 @@ void    lputl(long);
 
 <<8l/obj.c>>=
 #include	"l.h"
-#include	<ar.h>
+#include	<obj/ar.h>
 
 <<global [[curauto]]>>
 

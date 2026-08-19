@@ -48,7 +48,7 @@ entryvalue(void)
 /*s: function [[wputl]](x86) */
 /* these need to take long arguments to be compatible with elf.c */
 void
-wputl(long w)
+wputl(int32 w)
 {
     cput(w);
     cput(w>>8);
@@ -57,7 +57,7 @@ wputl(long w)
 
 /*s: function [[wput]](x86) */
 void
-wput(long w)
+wput(int32 w)
 {
     cput(w>>8);
     cput(w);
@@ -66,7 +66,7 @@ wput(long w)
 
 /*s: function [[lput]](x86) */
 void
-lput(long l)
+lput(int32 l)
 {
     cput(l>>24);
     cput(l>>16);
@@ -77,7 +77,7 @@ lput(long l)
 
 /*s: function [[lputl]](x86) */
 void
-lputl(long l)
+lputl(int32 l)
 {
     cput(l);
     cput(l>>8);
@@ -173,12 +173,21 @@ asmb(void)
         textsize = rnd(HEADR+textsize, 4096)-HEADR;
         seek(cout, textsize+HEADR, 0);
         break;
-    case H_ELF: // like H_PLAN9
-        seek(cout, HEADR+textsize, 0);
+    case H_ELF:
+        // claude: ELF on Linux requires vaddr modulo page == file offset
+        // modulo page, so round up to a page boundary here to match
+        // INITDAT (see span.c) and the PT_LOAD file offset in elf.c
+        seek(cout, rnd(HEADR+textsize, INITRND), 0);
         break;
     case H_COM:
     case H_EXE:
         seek(cout, HEADR+rnd(textsize, INITRND), 0);
+        break;
+    case H_PE:
+        // claude: PE requires vaddr modulo page == file offset modulo
+        // page, same reasoning as the H_ELF case above and 6l's own
+        // HEADTYPE==10 case in asm.c
+        seek(cout, rnd(HEADR+textsize, INITRND), 0);
         break;
     /*e: [[asmb()]] switch HEADTYPE (to position after text) cases(x86) */
     default:
@@ -224,10 +233,25 @@ asmb(void)
             break;
         //case H_PLAN9:
         case H_ELF:
-            seek(cout, HEADR+textsize+datsize, 0);
+            // claude: like the data section's own seek a few lines up in
+            // this same function, the symbol table must follow the data
+            // section at its REAL (page-rounded) end, not at the
+            // unrounded HEADR+textsize+datsize. Without rnd(), this seek
+            // lands *before* the data section (which was actually written
+            // starting at rnd(HEADR+textsize,INITRND)), so asmsym()'s
+            // output overwrites the tail of the just-written data section
+            // -- confirmed by dumping a linked 386 binary and finding
+            // compiler debug-symbol strings ("frame"/"lv"/"rv") sitting at
+            // the address a string literal should have been.
+            seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
             break;
         case H_COM:
         case H_EXE:
+            debug['s'] = 1;
+            break;
+        case H_PE:
+            // claude: no symbol table for PE yet (lk/pe.c has no .symdat
+            // writer), matching 6l's HEADTYPE==10 case
             debug['s'] = 1;
             break;
         /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(x86) */
@@ -251,7 +275,9 @@ asmb(void)
     } else {
         /*s: [[asmb()]] if dynamic module and no symbol table generation */
         if(dlm){
-            seek(cout, HEADR+textsize+datsize, 0);
+            // claude: same rnd() fix as the H_ELF case above -- see there
+            // for why the unrounded HEADR+textsize+datsize is wrong.
+            seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
             asmdyn();
             cflush();
         }
@@ -401,6 +427,9 @@ asmb(void)
         break;
     case H_ELF:
         elf32(I386, ELFDATA2LSB, 0, nil);
+        break;
+    case H_PE:
+        asmbpe();
         break;
     /*e: [[asmb()]] switch HEADTYPE (for header generation) cases(x86) */
     }

@@ -3,9 +3,10 @@
 #include	<libc.h>
 #include	<bio.h>
 
-#include	<common.out.h>
-#include	<8.out.h>
+#include	<obj/common.out.h>
+#include	<obj/8.out.h>
 #include	"elf_.h"
+#include	"../lk/pe.h"
 
 /*s: macro [[DBG]] */
 #define DBG if(debug['v']) mylog
@@ -203,6 +204,11 @@ enum section
 
     SIMPORT,
     SEXPORT,
+
+    // claude: a symbol whose value is already a final absolute address, not
+    // an offset from INITDAT like plain SDATA/SBSS -- used for the PE
+    // __imp_* import-table symbols lk/pe.c defines (see vaddr() in span.c)
+    SFIXED,
 };
 /*e: enum [[sxxx]](x86) */
 /*s: enum [[yxxx]](x86) */
@@ -321,7 +327,7 @@ enum misc1 {
  *	-H2 -T4128 -R4096		is plan9 format
  *	-H3 -Tx -Rx			is MS-DOS .COM
  *	-H4 -Tx -Rx			is fake MS-DOS .EXE
- *	-H5 -T0x80100020 -R4096		is ELF
+ *	-H7 -T0x08048000+HEADR -R4096	is ELF
  */
 enum headtype {
     H_GARBAGE = 0,
@@ -329,7 +335,11 @@ enum headtype {
     H_PLAN9 = 2, // default
     H_COM = 3,
     H_EXE = 4,
-    H_ELF = 5,
+    // claude: kept as 7 (not 5) to match 5l/7l/8lk's numbering, since
+    // scripts/tests uniformly pass -H7 for ELF across all archs
+    H_ELF = 7,
+    // claude: matches 6l's HEADTYPE==10 for PE (Windows), see linkers/lk/pe.c
+    H_PE = 10,
 };
 /*e: enum [[headtype]](x86) */
 
@@ -381,7 +391,6 @@ extern	Prog*	firstp;
 extern	char	fnuxi8[8];
 extern	char	fnuxi4[4];
 extern	Sym*	hash[NHASH];
-extern	char*	hunk;
 extern	char	inuxi1[1];
 extern	char	inuxi2[2];
 extern	char	inuxi4[4];
@@ -392,7 +401,6 @@ extern	char	reg[D_NONE];
 extern	Prog*	lastp;
 extern	long	lcsize;
 extern	int	nerrors;
-extern	long	nhunk;
 extern	long	nsymbol;
 //@Scheck: used by TName, not useless
 extern	char*	noname;
@@ -402,6 +410,10 @@ extern	long	symsize;
 extern	Prog*	textp;
 extern	long	textsize;
 extern	long	thunk;
+// claude: needed so shared ../lk/pe.c (peinit()/asmbpe()) can switch on
+// architecture; elf.c avoids this by taking the ELF machine type as a
+// parameter instead, but pe.c (also used as-is by 6l) reads thechar directly
+extern	char	thechar;
 extern	Prog	zprg;
 extern	int	dtype;
 
@@ -443,6 +455,9 @@ void	dodata(void);
 void	doinit(void);
 void	dostkoff(void);
 void	dynreloc(Sym*, ulong, int);
+// claude: needed so shared ../lk/pe.c (asmbpe()) can call it; elf.c already
+// forward-declares its own copy locally since it doesn't include this via l.h
+long	entryvalue(void);
 
 void	errorexit(void);
 void	export(void);
@@ -451,14 +466,13 @@ void	export(void);
 
 
 void	follow(void);
-void	gethunk(void);
 long	ieeedtof(Ieee*);
 void	import(void);
 
 void	listinit(void);
 Sym*	lookup(char*, int);
-void	lput(long);
-void	lputl(long);
+void	lput(int32);
+void	lputl(int32);
 void	main(int, char*[]);
 
 void	patch(void);
@@ -471,8 +485,8 @@ void	strnput(char*, int);
 void	undef(void);
 void	undefsym(Sym*);
 
-void	wput(long);
-void	wputl(long);
+void	wput(int32);
+void	wputl(int32);
 void	xdefine(char*, int, long);
 
 void mylog(char*, ...);
