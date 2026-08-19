@@ -3,12 +3,18 @@
  * Assume plan 9 by default; if Unix is defined, assume unix.
  * Please don't litter the code with ifdefs.  The five below should be enough.
  */
-#ifndef Unix
-/* plan 9 */
-#include <u.h>
-#include <libc.h>
-
-// could be in trap.c
+// claude: NSIG/SIGINT/SIGQUIT below are rc's own trap-slot indices
+// into signame[]/syssigname[] (signame[2]=="sigint", signame[3]==
+// "sigquit" -- see rc/plan9.c's/rc/goken.c's notifyf()), not real
+// kernel signal numbers, so there's no reason they'd need to differ
+// between the two branches below -- moved out of the #ifndef Unix
+// block they used to live in only, now that unix.h (right below) is
+// just u.h+libc.h and no longer brings in a real <signal.h> of its
+// own with a conflicting NSIG/SIGINT/SIGQUIT. Previously only the
+// plan9 branch defined these, which meant a -DUnix build (rc/goken.c
+// self-hosting rc with goken's own toolchain, CFLAGS_EXTRA=-DUnix
+// unconditional in rc/mkfile) failed on trap.c with "name not
+// declared: NSIG".
 /*s: constant [[NSIG]] */
 #define	NSIG	32
 /*e: constant [[NSIG]] */
@@ -18,6 +24,11 @@
 /*s: constant [[SIGQUIT]] */
 #define	SIGQUIT	3
 /*e: constant [[SIGQUIT]] */
+
+#ifndef Unix
+/* plan 9 */
+#include <u.h>
+#include <libc.h>
 
 //???
 //#define fcntl(fd, op, arg) /* unix compatibility */
@@ -30,10 +41,14 @@
 #else
 #include "unix.h"
 
-// magic incantation for cpp (found by chatGPT)
-#define STR2(x) #x
-#define STR(x) STR2(x)
-#define __LOC__ __FILE__ ":" STR(__LINE__)
+// claude: was __FILE__ ":" STR(__LINE__) via a #-stringize/__LINE__
+// trick -- goken's own compilers implement neither __LINE__/__FILE__
+// nor the # stringize operator (confirmed: no match anywhere in
+// compilers/cc/*.c), and __LOC__ is only ever read by Exit()'s `-s`
+// debug fprint, not correctness-relevant. Same static placeholder as
+// the plan9 branch above rather than a new #ifdef axis to keep real
+// line info on the one toolchain that supports it.
+#define __LOC__ "NO__LOC__INFO"
 
 #endif
 
