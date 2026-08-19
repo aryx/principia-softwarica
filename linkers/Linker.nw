@@ -849,7 +849,12 @@ h %= NHASH;
 % 
 
 <<[[lookup()]] if symbol name not found>>=
-sym = malloc(sizeof(Sym));
+/* claude: mallocz (zeroed): only name/version/value/type/sig/link are
+ * set below; file/subtype/become/frame are left implicitly zero (the
+ * bump allocator used to hand back zeroed memory). With the direct
+ * lib9-malloc path they would be garbage -- e.g. a stale s->file makes
+ * putsymb() emit a wrong file index in the symbol table. */
+sym = mallocz(sizeof(Sym), 1);
 sym->name = malloc(len + 1); // +1 again?
 memmove(sym->name, symb, len);
 sym->version = v;
@@ -1612,6 +1617,10 @@ which is the executable format used by \plan:
 enum Headtype {
      H_NOTHING = 0,
      H_PLAN9 = 2, // a.k.a H_AOUT
+     // claude: raw image, no a.out header, segments padded to pages
+     // (-H6 -R4096). This is how the bcm (raspberry pi) kernel is
+     // linked; kencc's 5l has it as case 6, an LP refactor dropped it.
+     H_RAW = 6,
      H_ELF = 7,
 };
 @
@@ -1703,6 +1712,11 @@ default:
     diag("unknown -H option");
     errorexit();
 }
+// claude: default the physical text address to the virtual one,
+// like the kencc 5l; it is emitted as p_paddr in the ELF program
+// headers (it stayed -1 = 0xffffffff without this)
+if (INITTEXTP == -1)
+    INITTEXTP = INITTEXT;
 <<[[main()]] sanity check INITXXX>>
 DBG("HEADER = -H%d -T0x%lux -D0x%lux -R0x%lux\n",
         HEADTYPE, INITTEXT, INITDAT, INITRND);
@@ -1873,14 +1887,52 @@ firstp = prg();
 lastp = firstp;
 
 // Loading (populates firstp, datap, and hash)
-while(*argv)
+//
+// claude: also record every -lXXX argument, and any plain filename
+// ending in ".a" (a library given as a direct path instead of
+// -lXXX -- e.g. principia's own kernel mkfiles pass $LIB this way),
+// into library[] (the same array loadlib() below rescans for
+// symbols later marked SXREF) as it goes by -- initdiv() (noop.c,
+// arm's software-divide helper lowering) needs to re-trigger a
+// library scan for _div/_divu/_mod/_modu after noops() runs, which
+// is *after* this loop and loadlib() below have both already
+// completed once; with neither form ever recorded anywhere,
+// initdiv()'s own loadlib() call had nothing to scan. Neither form
+// needs re-adding here for its *own* sake: objfile() already knows
+// how to resolve both (its own "-l" prefix handling, or just
+// open()ing the path directly), this only makes the same string
+// available for a *second* pass later. See
+// tests/c/regressions/arm_div_from_lib.c.
+while(*argv) {
+    char *arg, *dot;
+
+    arg = *argv;
+    dot = strrchr(arg, '.');
+    if(libraryp < nelem(library) &&
+       ((arg[0] == '-' && arg[1] == 'l') ||
+        (dot != nil && strcmp(dot, ".a") == 0)))
+        library[libraryp++] = arg;
     objfile(*argv++);
+}
 <<[[main()]] load implicit libraries>>
 
 // skip first empty instruction
 firstp = firstp->link;
 if(firstp == P)
     goto out;
+
+// claude: if the program uses arm's software divide/modulo helpers
+// (_div/_divu/_mod/_modu -- arm has no hardware integer divide),
+// resolve them now, while a library pull-in (loadlib(), inside
+// initdiv()) is still safe -- i.e. before patch()/dodata()/
+// follow()/noops() below, all of which assume every object is
+// already loaded. initdiv()'s own lazy call from inside noops()
+// (for programs that reach it directly, without going through this
+// early path) stays as a fallback that only diagnoses "undefined"
+// rather than actually loading anything at that point, since it's
+// too late to do so safely by then. See
+// tests/c/regressions/arm_div_from_lib.c.
+needsdiv();
 
 // Resolving
 <<[[main()]] resolving phase>>
@@ -2923,7 +2975,15 @@ loop:
     <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
     // else
 
-    p = malloc(sizeof(Prog));
+    /* claude: mallocz (zeroed), not plain malloc: only the fields decoded
+     * from the object below are set (as/scond/reg/line/from/to/link/cond);
+     * p->optab, p->mark, p->align, p->pc etc. are left implicitly zero and
+     * MUST be, or oplook() reads a stale p->optab and misclassifies even the
+     * zero-width ATEXT (breaking the text layout so TEXT symbols never get an
+     * address and the -H7 ELF e_entry comes out 0). The old bump allocator
+     * handed back zeroed memory; with the direct-malloc path this alloc must
+     * zero itself. */
+    p = mallocz(sizeof(Prog), 1);
     p->as = o;
     <<[[ldobj()]] read one instruction in p>>
     p->link = P;
@@ -3878,8 +3938,9 @@ while its optional size is stored in the second operand ([<Instr.to>]):
 case AGLOBL:
     s = p->from.sym;
     <<[[ldobj()]] sanity check for AGLOBL symbol s>>
-    s->type = SBSS; // for now; will be set maybe to SDATA in dodata()
-    s->value = (p->to.offset > 0) ? p->to.offset : 0;
+    // keep the largest size seen across the repeated GLOBLs
+    if(p->to.offset > s->value)
+        s->value = p->to.offset;
     break;
 @
 %old: 
@@ -3905,8 +3966,29 @@ if(s == S) {
     diag("GLOBL must have a name\n%P", p);
     errorexit();
 }
-if(!(s->type == SNONE || s->type == SXREF))
+/* claude: a symbol may legitimately be GLOBL'd in more than one
+ * object, and that is NOT a redefinition. The compiler emits
+ * some global BSS symbols -- notably the shared scratch area
+ * '.rathole' -- as an AGLOBL in *every* object that uses them,
+ * expecting the linker to merge the declarations and keep the
+ * largest size. plan9 and the kencc 5l only report a redefinition
+ * when the symbol already has a *non-BSS* type (it is also a TEXT
+ * or DATA symbol); a repeated BSS GLOBL just widens it. This LP
+ * refactor tightened the guard to "anything already typed" and
+ * overwrote the size instead of taking the max, so linking any
+ * two objects sharing such a symbol failed with
+ * "redefinition: .rathole" -- and every libc archive member has
+ * one, so no real program linked. Restore the kencc/plan9 logic.
+ * See tests/l/variants/rathole_arm. */
+if(s->type == SNONE || s->type == SXREF) {
+    s->type = SBSS;
+    s->value = 0;
+}
+if(s->type != SBSS) {
     diag("redefinition: %s\n%P", s->name, p);
+    s->type = SBSS;
+    s->value = 0;
+}
 @
 %ocaml: s == S impossible by construction
 %old: the second check used to be written differently, but I prefer
@@ -5003,9 +5085,18 @@ Here is the responsible code:
 
 patch();
 <<[[main()]] call doprofxxx() if profiling>>
-noops();
-
+/* claude: match the kencc pass order: dodata(); follow(); noops();
+ * span(). follow() (xfol) collapses the unreachable fall-through RET
+ * the compiler emits after every function's real RET -- 5c emits
+ * 'RET; RET' and relies on the linker to drop the dead one. principia
+ * had dropped the follow() call entirely, so every function kept a
+ * duplicate 'B (R14)' (~4 bytes each): the second of the two arm
+ * linker mismatches (the other was BIG). follow() must run BEFORE
+ * noops(), which rewrites ARET into B/MOVW and would hide the
+ * terminal RET from xfol's detection. */
 dodata();
+follow();
+noops();
 dotext();
 @
 %old: I modified the original code, to simplify, to look more symetric
@@ -6725,10 +6816,18 @@ otxt = c;
 \l could do just long otxt = INITTEXT;
 
 <<[[dotext()]] detect if large procedure>>=
-if(c - otxt >= 1L<<17) {
-    diag("Procedure %s too large\n", TNAME);
-    errorexit();
-}
+/* claude: a procedure past 1<<17 (128K) bytes is NOT a
+ * fatal error. The kencc 5lk only sets a flag for an extra
+ * span pass here and keeps going (linkers/5lk/span.c); ARM
+ * B/BL reach +-32MB and the old large-SBRA branch-splitting
+ * is commented out in both lineages, so that extra pass is
+ * a no-op on the output and such procedures link fine.
+ * principia had turned this into diag()+errorexit(), so
+ * linking anything with a >128K function failed where 5lk
+ * succeeded (e.g. libsec's _sha2block64 pulled into ftp, or
+ * a heavily unrolled function). Just track otxt and keep
+ * going to stay byte-identical to 5lk. See tests/c/variants
+ * bigfunc_arm. */
 otxt = c;
 @
 % >>
@@ -8102,7 +8201,7 @@ via the global [<cout>]:
 
 <<function [[lputl]](arm)>>=
 void
-lputl(long l)
+lputl(int32 l)
 {
 
     cbp[3] = l>>24;
@@ -8147,7 +8246,7 @@ the lower bits of a number have the higher address (as in the x86):
 
 <<function [[lput]](arm)>>=
 void
-lput(long l)
+lput(int32 l)
 {
 
     cbp[0] = l>>24;
@@ -8315,6 +8414,15 @@ instructions as you will see in Section~\ref{sec:pool}.
 
 <<[[optab]] entries>>=
 { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4 },
+/* claude: a WORD may hold the address of an external symbol, e.g.
+ * the constant-pool word for 'MOVW $fmtalloc(SB), Rx' -- its operand
+ * classifies as C_LEXT (a large external ref), not C_LCON/C_ADDR.
+ * kencc's 5l has this third AWORD row; an LP refactor dropped it
+ * here, so any object with such a WORD failed to link with
+ * "illegal combination WORD 0 0 17" (17 == C_LEXT). Every libc
+ * object that takes the address of a global does this.
+ * See tests/l/variants. */
+{ AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4 },
 @
 %pad: I originally thought the following was a dead rule:
 % { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
@@ -9015,7 +9123,7 @@ The simplest instructions are probably the one involving
 only registers, e.g., [[ADD R1, R2, R3]]:
 
 <<[[optab]] entries>>=
-//          From    Middle  To       
+//          From    Middle  To
 { AADD,     C_REG,  C_REG,  C_REG,       1, 4 },
 { AADD,     C_REG,  C_NONE, C_REG,       1, 4 },
 
@@ -12136,7 +12244,11 @@ addhist(long line, int type)
     Sym *s;
     <<[[addhist()]] other locals>>
 
-    s = malloc(sizeof(Sym));
+    /* claude: mallocz (zeroed): addhist only sets s->name below; every
+     * other Sym field (value/type/sig/file/subtype/...) is left implicitly
+     * zero, which the old bump allocator guaranteed. With direct lib9
+     * malloc they would be garbage in the history symbol. */
+    s = mallocz(sizeof(Sym), 1);
 
     u = malloc(sizeof(Auto));
     u->asym = s;
@@ -12339,7 +12451,15 @@ the corresponding path element symbol:
 int i, j, k;
 @
 <<[[addhist()]] set symbol name to filename using compact encoding>>=
-s->name = malloc(2*(histfrogp+1) + 1);
+/* claude: mallocz (zeroed), not malloc: the loop below fills only
+ * name[1 .. 2*histfrogp]; name[0] (a leading byte emitted by
+ * putsymb) and the trailing double-NUL terminator are left for the
+ * allocator to zero. The original plan9 code relies on malloc
+ * returning zeroed memory; lib9's malloc on this host does not, so
+ * putsymb() read uninitialized bytes and ran past the buffer,
+ * emitting garbage 'z'/'Z' history records that differed run-to-run
+ * and between the two lineages (the last arm unstripped mismatch). */
+s->name = mallocz(2*(histfrogp+1) + 1, 1);
 j = 1;
 for(i=0; i<histfrogp; i++) {
     k = histfrog[i]->value;
@@ -13840,7 +13960,9 @@ if(dlm){
 
 <<[[asmb()]] if dynamic module and no symbol table generation>>=
 if(dlm){
-    seek(cout, HEADR+textsize+datsize, 0);
+    // claude: same rnd() fix as the H_ELF case above -- see there
+    // for why the unrounded HEADR+textsize+datsize is wrong.
+    seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
     asmdyn();
     cflush();
 }
@@ -14336,8 +14458,15 @@ xdefine("setR12", SDATA, 0L+BIG);
 @
 
 <<constant [[BIG]]>>=
-//BIG       = (1<<12)-4,
-BIG     = 0,
+/* claude: BIG is the SB (R12/setR12) bias -- setR12 points BIG bytes
+ * into the data segment so SB-relative offsets reach +/-BIG, and
+ * aclass() subtracts BIG from a symbol's offset. It MUST match
+ * kencc's (1<<12)-4; principia had set it to 0 (SB = data start),
+ * which is internally consistent and works but changes constant-load
+ * instruction selection (near C_FEXT/C_SEXT vs far C_LEXT) for every
+ * load, making arm executables ~3% larger and byte-different from
+ * kencc across the whole corpus. */
+BIG     = (1<<12)-4,
 @
 
 % having BIG set to a page is good because STR/LDR
@@ -14904,30 +15033,63 @@ nopout(Prog *p)
 % - https://github.com/cameronswinoga/yabfc/wiki/Generating-executable-files-from-scratch
 
 <<[[main()]] switch HEADTYPE cases(arm)>>=
-case H_ELF:	/* elf executable */
-    HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+// claude: raw kernel image, no header (see enum Headtype). HEADR=0;
+// the caller passes -T and -R (the bcm kernel uses -T0x80008000
+// -R4096). Matches kencc's case 6.
+case H_RAW:
+    HEADR = 0;
     if(INITTEXT == -1)
-        INITTEXT = 4096+HEADR;
+        INITTEXT = 0;
     if(INITDAT == -1)
         INITDAT = 0;
     if(INITRND == -1)
         INITRND = 4;
     break;
+case H_ELF:	/* elf executable */
+    HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+    // claude: 0x8000 text base and page rounding like the kencc
+    // lineage (the arm Linux convention; 4096+HEADR with -R4 gave
+    // a layout that qemu-user tolerates but that diverges from the
+    // proven kencc 5l output), see tests/s/variants
+    if(INITTEXT == -1)
+        INITTEXT = 0x8000+HEADR;
+    if(INITDAT == -1)
+        INITDAT = 0;
+    if(INITRND == -1)
+        INITRND = 4096;
+    break;
 @
 
 <<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>=
+// claude: raw image (-H6), data segment padded to a page, like kencc
+case H_RAW:
+    OFFSET = rnd(HEADR+textsize, INITRND);
+    seek(cout, OFFSET, SEEK__START);
+    break;
 case H_ELF:
-    OFFSET = HEADR+textsize;
+    // claude: ELF on Linux requires vaddr modulo page == file offset
+    // modulo page, so round up to a page boundary here to match
+    // INITDAT (see span.c) and the PT_LOAD file offset in elf.c
+    OFFSET = rnd(HEADR+textsize, INITRND);
     seek(cout, OFFSET, 0);
     break;
 @
 
 <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>=
+// claude: raw image (-H6): symbols go after the page-padded data,
+// continuing from the OFFSET set for the text above. Like kencc.
+case H_RAW:
+    OFFSET += rnd(datsize, INITRND);
+    seek(cout, OFFSET, SEEK__START);
+    break;
 case H_ELF:
     break;
 @
 
 <<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>=
+// claude: raw image (-H6) has HEADR==0, so emit no header at all
+case H_RAW:
+    break;
 case H_ELF:
     debug['S'] = 1;			/* symbol table */
     elf32(ARM, ELFDATA2LSB, 0, nil);
@@ -16079,6 +16241,46 @@ initdiv(void)
             if(p->from.sym == s5)
                 prog_modu = p;
         }
+    // claude: if _div/_divu/_mod/_modu's definitions live inside a
+    // library (-lXXX) rather than being named directly on the link
+    // command line, the scan above finds nothing (loadlib()'s own
+    // one-shot library-scanning pass, already run once by now, had no
+    // reason yet to pull them in) -- mark whichever ones are still
+    // missing SXREF (same as the dlm branch above already does) and
+    // run loadlib() again, then rescan. Safe here specifically because
+    // initdiv() is guaranteed to run *before* patch()/dodata()/
+    // follow()/noops() (see main.c's needsdiv() pre-scan, called right
+    // after the first loadlib()) -- calling loadlib() any later (e.g.
+    // from noops()'s own lazy call below, for a program that somehow
+    // reaches it with prog_div still P) would let newly-library-loaded
+    // code skip patch()'s branch resolution and dodata()/follow()'s
+    // passes entirely, corrupting relocations instead of just failing
+    // to link (confirmed: an earlier version of this fix that only
+    // did this from noops() got past "undefined: _div" only to hit
+    // "illegal combination"/"bad rrr" span() errors instead). See
+    // tests/c/regressions/arm_div_from_lib.c.
+    if(prog_div == P || prog_divu == P || prog_mod == P || prog_modu == P) {
+        if(prog_div == P)
+            sdiv(s2);
+        if(prog_divu == P)
+            sdiv(s3);
+        if(prog_mod == P)
+            sdiv(s4);
+        if(prog_modu == P)
+            sdiv(s5);
+        loadlib();
+        for(p = firstp; p != P; p = p->link)
+            if(p->as == ATEXT) {
+                if(p->from.sym == s2)
+                    prog_div = p;
+                if(p->from.sym == s3)
+                    prog_divu = p;
+                if(p->from.sym == s4)
+                    prog_mod = p;
+                if(p->from.sym == s5)
+                    prog_modu = p;
+            }
+    }
     if(prog_div == P) {
         diag("undefined: %s", s2->name);
         prog_div = curtext;
@@ -17870,27 +18072,27 @@ NHUNK       = 100000,
 % not sure why don't use libc malloc and do low-level sbrk ...
 % to optimize things? as they do no free?
 <<function [[gethunk]]>>=
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 5L*NHUNK) {
-        nh = 5L*NHUNK;
-        if(thunk >= 25L*NHUNK)
-            nh = 25L*NHUNK;
-    }
-    h = sbrk(nh);
-    if(h == (char*)-1) {
-        diag("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
+//void
+//gethunk(void)
+//{
+//    char *h;
+//    long nh;
+//
+//    nh = NHUNK;
+//    if(thunk >= 5L*NHUNK) {
+//        nh = 5L*NHUNK;
+//        if(thunk >= 25L*NHUNK)
+//            nh = 25L*NHUNK;
+//    }
+//    h = sbrk(nh);
+//    if(h == (char*)-1) {
+//        diag("out of memory");
+//        errorexit();
+//    }
+//    hunk = h;
+//    nhunk = nh;
+//    thunk += nh;
+//}
 @
 %pad: could be static, but then 8l would not compile
 
@@ -17906,22 +18108,22 @@ gethunk(void)
 /*
  * fake malloc
  */
-void*
-malloc(ulong n)
-{
-    void *p;
-
-    // upper_round(n, 8)
-    while(n & 7)
-        n++;
-
-    while(nhunk < n)
-        gethunk();
-    p = hunk;
-    nhunk -= n;
-    hunk += n;
-    return p;
-}
+//void*
+//malloc(ulong n)
+//{
+//    void *p;
+//
+//    // upper_round(n, 8)
+//    while(n & 7)
+//        n++;
+//
+//    while(nhunk < n)
+//        gethunk();
+//    p = hunk;
+//    nhunk -= n;
+//    hunk += n;
+//    return p;
+//}
 @
 
 
@@ -17929,11 +18131,11 @@ malloc(ulong n)
 
 % no free ...  hmmm
 <<function [[free]]>>=
-void
-free(void *p)
-{
-    USED(p);
-}
+//void
+//free(void *p)
+//{
+//    USED(p);
+//}
 @
 
 
@@ -17941,11 +18143,11 @@ free(void *p)
 % not sure why but if redefine malloc and free then have to
 % redefine this func too, otherwise get a link error
 <<function [[setmalloctag]]>>=
-//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
-void setmalloctag(void *v, ulong pc)
-{
-    USED(v); USED(pc);
-}
+////@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
+//void setmalloctag(void *v, ulong pc)
+//{
+//    USED(v); USED(pc);
+//}
 @
 
 
@@ -18019,7 +18221,7 @@ cput(int c)
 % used only by elf.c
 <<function [[wputl]](arm)>>=
 void
-wputl(long l)
+wputl(int32 l)
 {
 
     cbp[0] = l;
@@ -18035,7 +18237,7 @@ wputl(long l)
 
 <<function [[wput]](arm)>>=
 void
-wput(long l)
+wput(int32 l)
 {
 
     cbp[0] = l>>8;

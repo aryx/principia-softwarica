@@ -665,8 +665,8 @@ enum misc_constants {
 #include    <libc.h>
 #include    <bio.h>
 
-#include    <common.out.h>
-#include    <5.out.h>
+#include    <obj/common.out.h>
+#include    <obj/5.out.h>
 
 #include    "../8l/elf_.h"
 
@@ -768,6 +768,8 @@ extern  int     histgen;
 
 // library
 extern  bool xrefresolv;
+extern	char*	library[50];
+extern	int	libraryp;
 
 // advanced topics
 extern  bool armv4;
@@ -813,6 +815,7 @@ void    follow(void);
 void    noops(void);
 void    divsig(void);
 void    initdiv(void);
+void    needsdiv(void);
 void    nocache(Prog*);
 
 // layout.c
@@ -869,10 +872,10 @@ void    ckoff(Sym*, long);
 
 // io.c
 void    cput(int);
-void    lput(long);
-void    lputl(long l);
-void    wput(long);
-void    wputl(long);
+void    lput(int32);
+void    lputl(int32 l);
+void    wput(int32);
+void    wputl(int32);
 void    cflush(void);
 byte* readsome(fdt f, byte *buf, byte *good, byte *stop, int max);
 
@@ -1421,7 +1424,7 @@ typedef struct Reloc Reloc;
 
 <<5l/obj.c>>=
 #include	"l.h"
-#include	<ar.h>
+#include	<obj/ar.h>
 
 // Reading object files.
 
@@ -1504,6 +1507,31 @@ typedef struct Reloc Reloc;
 <<function [[divsig]](arm)>>
 
 <<function [[sdiv]](arm)>>
+
+// claude: cheap pre-scan for whether the program uses any of arm's
+// software divide/modulo pseudo-ops, callable early (from main.c,
+// right after the first loadlib(), before patch()) so initdiv() -- if
+// it needs to pull _div/_divu/_mod/_modu from a library -- still can
+// safely, before dodata()/follow()/noops() assume every object is
+// already loaded. Deliberately just a scan, not the real rewrite:
+// noops() itself still does that later, in its own pass over the same
+// opcodes; this only decides whether to call initdiv() early. See
+// initdiv()'s own comment on why this split exists.
+void
+needsdiv(void)
+{
+    Prog *p;
+
+    for(p = firstp; p != P; p = p->link)
+        switch(p->as) {
+        case ADIV:
+        case ADIVU:
+        case AMOD:
+        case AMODU:
+            initdiv();
+            return;
+        }
+}
 
 <<function [[initdiv]](arm)>>
 

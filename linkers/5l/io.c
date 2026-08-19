@@ -62,7 +62,7 @@ cput(int c)
 
 /*s: function [[wput]](arm) */
 void
-wput(long l)
+wput(int32 l)
 {
 
     cbp[0] = l>>8;
@@ -76,7 +76,7 @@ wput(long l)
 
 /*s: function [[wputl]](arm) */
 void
-wputl(long l)
+wputl(int32 l)
 {
 
     cbp[0] = l;
@@ -90,7 +90,7 @@ wputl(long l)
 
 /*s: function [[lput]](arm) */
 void
-lput(long l)
+lput(int32 l)
 {
 
     cbp[0] = l>>24;
@@ -106,7 +106,7 @@ lput(long l)
 
 /*s: function [[lputl]](arm) */
 void
-lputl(long l)
+lputl(int32 l)
 {
 
     cbp[3] = l>>24;

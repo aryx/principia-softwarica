@@ -149,20 +149,41 @@ main(int argc, char *argv[])
             INITRND = 4096; // 1 page
         break;
     /*x: [[main()]] switch HEADTYPE cases(arm) */
-    case H_ELF:	/* elf executable */
-        HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+    // claude: raw kernel image, no header (see enum Headtype). HEADR=0;
+    // the caller passes -T and -R (the bcm kernel uses -T0x80008000
+    // -R4096). Matches kencc's case 6.
+    case H_RAW:
+        HEADR = 0;
         if(INITTEXT == -1)
-            INITTEXT = 4096+HEADR;
+            INITTEXT = 0;
         if(INITDAT == -1)
             INITDAT = 0;
         if(INITRND == -1)
             INITRND = 4;
+        break;
+    case H_ELF:	/* elf executable */
+        HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+        // claude: 0x8000 text base and page rounding like the kencc
+        // lineage (the arm Linux convention; 4096+HEADR with -R4 gave
+        // a layout that qemu-user tolerates but that diverges from the
+        // proven kencc 5l output), see tests/s/variants
+        if(INITTEXT == -1)
+            INITTEXT = 0x8000+HEADR;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4096;
         break;
     /*e: [[main()]] switch HEADTYPE cases(arm) */
     default:
         diag("unknown -H option");
         errorexit();
     }
+    // claude: default the physical text address to the virtual one,
+    // like the kencc 5l; it is emitted as p_paddr in the ELF program
+    // headers (it stayed -1 = 0xffffffff without this)
+    if (INITTEXTP == -1)
+        INITTEXTP = INITTEXT;
     /*s: [[main()]] sanity check INITXXX */
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
@@ -222,8 +243,33 @@ main(int argc, char *argv[])
     lastp = firstp;
 
     // Loading (populates firstp, datap, and hash)
-    while(*argv)
+    //
+    // claude: also record every -lXXX argument, and any plain filename
+    // ending in ".a" (a library given as a direct path instead of
+    // -lXXX -- e.g. principia's own kernel mkfiles pass $LIB this way),
+    // into library[] (the same array loadlib() below rescans for
+    // symbols later marked SXREF) as it goes by -- initdiv() (noop.c,
+    // arm's software-divide helper lowering) needs to re-trigger a
+    // library scan for _div/_divu/_mod/_modu after noops() runs, which
+    // is *after* this loop and loadlib() below have both already
+    // completed once; with neither form ever recorded anywhere,
+    // initdiv()'s own loadlib() call had nothing to scan. Neither form
+    // needs re-adding here for its *own* sake: objfile() already knows
+    // how to resolve both (its own "-l" prefix handling, or just
+    // open()ing the path directly), this only makes the same string
+    // available for a *second* pass later. See
+    // tests/c/regressions/arm_div_from_lib.c.
+    while(*argv) {
+        char *arg, *dot;
+
+        arg = *argv;
+        dot = strrchr(arg, '.');
+        if(libraryp < nelem(library) &&
+           ((arg[0] == '-' && arg[1] == 'l') ||
+            (dot != nil && strcmp(dot, ".a") == 0)))
+            library[libraryp++] = arg;
         objfile(*argv++);
+    }
     /*s: [[main()]] load implicit libraries */
     if(!debug['l'])
         loadlib();
@@ -233,6 +279,19 @@ main(int argc, char *argv[])
     firstp = firstp->link;
     if(firstp == P)
         goto out;
+
+    // claude: if the program uses arm's software divide/modulo helpers
+    // (_div/_divu/_mod/_modu -- arm has no hardware integer divide),
+    // resolve them now, while a library pull-in (loadlib(), inside
+    // initdiv()) is still safe -- i.e. before patch()/dodata()/
+    // follow()/noops() below, all of which assume every object is
+    // already loaded. initdiv()'s own lazy call from inside noops()
+    // (for programs that reach it directly, without going through this
+    // early path) stays as a fallback that only diagnoses "undefined"
+    // rather than actually loading anything at that point, since it's
+    // too late to do so safely by then. See
+    // tests/c/regressions/arm_div_from_lib.c.
+    needsdiv();
 
     // Resolving
     /*s: [[main()]] resolving phase */
@@ -269,9 +328,18 @@ main(int argc, char *argv[])
         else
             doprof2();
     /*e: [[main()]] call doprofxxx() if profiling */
-    noops();
-
+    /* claude: match the kencc pass order: dodata(); follow(); noops();
+     * span(). follow() (xfol) collapses the unreachable fall-through RET
+     * the compiler emits after every function's real RET -- 5c emits
+     * 'RET; RET' and relies on the linker to drop the dead one. principia
+     * had dropped the follow() call entirely, so every function kept a
+     * duplicate 'B (R14)' (~4 bytes each): the second of the two arm
+     * linker mismatches (the other was BIG). follow() must run BEFORE
+     * noops(), which rewrites ARET into B/MOVW and would hide the
+     * terminal RET from xfol's detection. */
     dodata();
+    follow();
+    noops();
     dotext();
     /*e: [[main()]] resolving phase */
 

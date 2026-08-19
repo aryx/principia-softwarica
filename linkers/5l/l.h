@@ -3,8 +3,8 @@
 #include    <libc.h>
 #include    <bio.h>
 
-#include    <common.out.h>
-#include    <5.out.h>
+#include    <obj/common.out.h>
+#include    <obj/5.out.h>
 
 #include    "../8l/elf_.h"
 
@@ -186,6 +186,10 @@ enum Mark {
 enum Headtype {
      H_NOTHING = 0,
      H_PLAN9 = 2, // a.k.a H_AOUT
+     // claude: raw image, no a.out header, segments padded to pages
+     // (-H6 -R4096). This is how the bcm (raspberry pi) kernel is
+     // linked; kencc's 5l has it as case 6, an LP refactor dropped it.
+     H_RAW = 6,
      H_ELF = 7,
 };
 /*e: enum [[headtype]](arm) */
@@ -217,8 +221,15 @@ enum rxxx {
 /*s: enum [[misc_constant]](arm) */
 enum misc_constants {
     /*s: constant [[BIG]] */
-    //BIG       = (1<<12)-4,
-    BIG     = 0,
+    /* claude: BIG is the SB (R12/setR12) bias -- setR12 points BIG bytes
+     * into the data segment so SB-relative offsets reach +/-BIG, and
+     * aclass() subtracts BIG from a symbol's offset. It MUST match
+     * kencc's (1<<12)-4; principia had set it to 0 (SB = data start),
+     * which is internally consistent and works but changes constant-load
+     * instruction selection (near C_FEXT/C_SEXT vs far C_LEXT) for every
+     * load, making arm executables ~3% larger and byte-different from
+     * kencc across the whole corpus. */
+    BIG     = (1<<12)-4,
     /*e: constant [[BIG]] */
 
     /*s: constant [[STRINGSZ]] */
@@ -329,6 +340,8 @@ extern  int     histgen;
 
 // library
 extern  bool xrefresolv;
+extern	char*	library[50];
+extern	int	libraryp;
 
 // advanced topics
 extern  bool armv4;
@@ -386,6 +399,7 @@ void    follow(void);
 void    noops(void);
 void    divsig(void);
 void    initdiv(void);
+void    needsdiv(void);
 void    nocache(Prog*);
 
 // layout.c
@@ -442,10 +456,10 @@ void    ckoff(Sym*, long);
 
 // io.c
 void    cput(int);
-void    lput(long);
-void    lputl(long l);
-void    wput(long);
-void    wputl(long);
+void    lput(int32);
+void    lputl(int32 l);
+void    wput(int32);
+void    wputl(int32);
 void    cflush(void);
 byte* readsome(fdt f, byte *buf, byte *good, byte *stop, int max);
 

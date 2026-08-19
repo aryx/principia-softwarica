@@ -12,8 +12,17 @@ Optab	optab[] =
     { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0 },
     /*x: [[optab]] entries */
     { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4 },
+    /* claude: a WORD may hold the address of an external symbol, e.g.
+     * the constant-pool word for 'MOVW $fmtalloc(SB), Rx' -- its operand
+     * classifies as C_LEXT (a large external ref), not C_LCON/C_ADDR.
+     * kencc's 5l has this third AWORD row; an LP refactor dropped it
+     * here, so any object with such a WORD failed to link with
+     * "illegal combination WORD 0 0 17" (17 == C_LEXT). Every libc
+     * object that takes the address of a global does this.
+     * See tests/l/variants. */
+    { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4 },
     /*x: [[optab]] entries */
-    //          From    Middle  To       
+    //          From    Middle  To
     { AADD,     C_REG,  C_REG,  C_REG,       1, 4 },
     { AADD,     C_REG,  C_NONE, C_REG,       1, 4 },
 

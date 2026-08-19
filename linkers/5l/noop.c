@@ -356,6 +356,31 @@ sdiv(Sym *s)
 }
 /*e: function [[sdiv]](arm) */
 
+// claude: cheap pre-scan for whether the program uses any of arm's
+// software divide/modulo pseudo-ops, callable early (from main.c,
+// right after the first loadlib(), before patch()) so initdiv() -- if
+// it needs to pull _div/_divu/_mod/_modu from a library -- still can
+// safely, before dodata()/follow()/noops() assume every object is
+// already loaded. Deliberately just a scan, not the real rewrite:
+// noops() itself still does that later, in its own pass over the same
+// opcodes; this only decides whether to call initdiv() early. See
+// initdiv()'s own comment on why this split exists.
+void
+needsdiv(void)
+{
+    Prog *p;
+
+    for(p = firstp; p != P; p = p->link)
+        switch(p->as) {
+        case ADIV:
+        case ADIVU:
+        case AMOD:
+        case AMODU:
+            initdiv();
+            return;
+        }
+}
+
 /*s: function [[initdiv]](arm) */
 void
 initdiv(void)
@@ -386,6 +411,46 @@ initdiv(void)
             if(p->from.sym == s5)
                 prog_modu = p;
         }
+    // claude: if _div/_divu/_mod/_modu's definitions live inside a
+    // library (-lXXX) rather than being named directly on the link
+    // command line, the scan above finds nothing (loadlib()'s own
+    // one-shot library-scanning pass, already run once by now, had no
+    // reason yet to pull them in) -- mark whichever ones are still
+    // missing SXREF (same as the dlm branch above already does) and
+    // run loadlib() again, then rescan. Safe here specifically because
+    // initdiv() is guaranteed to run *before* patch()/dodata()/
+    // follow()/noops() (see main.c's needsdiv() pre-scan, called right
+    // after the first loadlib()) -- calling loadlib() any later (e.g.
+    // from noops()'s own lazy call below, for a program that somehow
+    // reaches it with prog_div still P) would let newly-library-loaded
+    // code skip patch()'s branch resolution and dodata()/follow()'s
+    // passes entirely, corrupting relocations instead of just failing
+    // to link (confirmed: an earlier version of this fix that only
+    // did this from noops() got past "undefined: _div" only to hit
+    // "illegal combination"/"bad rrr" span() errors instead). See
+    // tests/c/regressions/arm_div_from_lib.c.
+    if(prog_div == P || prog_divu == P || prog_mod == P || prog_modu == P) {
+        if(prog_div == P)
+            sdiv(s2);
+        if(prog_divu == P)
+            sdiv(s3);
+        if(prog_mod == P)
+            sdiv(s4);
+        if(prog_modu == P)
+            sdiv(s5);
+        loadlib();
+        for(p = firstp; p != P; p = p->link)
+            if(p->as == ATEXT) {
+                if(p->from.sym == s2)
+                    prog_div = p;
+                if(p->from.sym == s3)
+                    prog_divu = p;
+                if(p->from.sym == s4)
+                    prog_mod = p;
+                if(p->from.sym == s5)
+                    prog_modu = p;
+            }
+    }
     if(prog_div == P) {
         diag("undefined: %s", s2->name);
         prog_div = curtext;

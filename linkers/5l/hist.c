@@ -11,7 +11,11 @@ addhist(long line, int type)
     int i, j, k;
     /*e: [[addhist()]] other locals */
 
-    s = malloc(sizeof(Sym));
+    /* claude: mallocz (zeroed): addhist only sets s->name below; every
+     * other Sym field (value/type/sig/file/subtype/...) is left implicitly
+     * zero, which the old bump allocator guaranteed. With direct lib9
+     * malloc they would be garbage in the history symbol. */
+    s = mallocz(sizeof(Sym), 1);
 
     u = malloc(sizeof(Auto));
     u->asym = s;
@@ -23,7 +27,15 @@ addhist(long line, int type)
     curhist = u;
 
     /*s: [[addhist()]] set symbol name to filename using compact encoding */
-    s->name = malloc(2*(histfrogp+1) + 1);
+    /* claude: mallocz (zeroed), not malloc: the loop below fills only
+     * name[1 .. 2*histfrogp]; name[0] (a leading byte emitted by
+     * putsymb) and the trailing double-NUL terminator are left for the
+     * allocator to zero. The original plan9 code relies on malloc
+     * returning zeroed memory; lib9's malloc on this host does not, so
+     * putsymb() read uninitialized bytes and ran past the buffer,
+     * emitting garbage 'z'/'Z' history records that differed run-to-run
+     * and between the two lineages (the last arm unstripped mismatch). */
+    s->name = mallocz(2*(histfrogp+1) + 1, 1);
     j = 1;
     for(i=0; i<histfrogp; i++) {
         k = histfrog[i]->value;

@@ -226,10 +226,23 @@ dotext(void)
                 if(p->from.sym != S)
                     p->from.sym->value = c;
                 /*s: [[dotext()]] detect if large procedure */
-                if(c - otxt >= 1L<<17) {
-                    diag("Procedure %s too large\n", TNAME);
-                    errorexit();
-                }
+                //old:
+                //if(c - otxt >= 1L<<17) {
+                //    diag("Procedure %s too large\n", TNAME);
+                //    errorexit();
+                //}
+                /* claude: a procedure past 1<<17 (128K) bytes is NOT a
+                 * fatal error. The kencc 5lk only sets a flag for an extra
+                 * span pass here and keeps going (linkers/5lk/span.c); ARM
+                 * B/BL reach +-32MB and the old large-SBRA branch-splitting
+                 * is commented out in both lineages, so that extra pass is
+                 * a no-op on the output and such procedures link fine.
+                 * principia had turned this into diag()+errorexit(), so
+                 * linking anything with a >128K function failed where 5lk
+                 * succeeded (e.g. libsec's _sha2block64 pulled into ftp, or
+                 * a heavily unrolled function). Just track otxt and keep
+                 * going to stay byte-identical to 5lk. See tests/c/variants
+                 * bigfunc_arm. */
                 otxt = c;
                 /*e: [[dotext()]] detect if large procedure */
             } else {
