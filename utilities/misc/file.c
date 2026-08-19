@@ -4,7 +4,6 @@
 #include <libc.h>
 /*e: plan9 includes */
 #include <bio.h>
-#include <ctype.h>
 #include <mach.h>
 
 /*

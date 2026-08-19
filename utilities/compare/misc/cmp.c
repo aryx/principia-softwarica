@@ -3,8 +3,6 @@
 #include <u.h>
 #include <libc.h>
 /*e: plan9 includes */
-#include <ctype.h>
-
 /*s: constant [[BUF]](cmp.c) */
 #define     BUF     65536
 /*e: constant [[BUF]](cmp.c) */

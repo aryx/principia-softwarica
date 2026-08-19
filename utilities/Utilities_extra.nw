@@ -19,11 +19,6 @@
 <<files/ls.c>>=
 <<plan9 includes>>
 #include <bio.h>
-#ifdef Unix
-#else
-//DEAD include? remove the whole ifdef?
-#include <fcall.h>
-#endif
 
 // use char[] so put in data writable section, otherwise
 // we can get a segfault in xcleanname
@@ -37,7 +32,15 @@ typedef struct NDir NDir;
 
 // forward decls
 error1  ls(char*, bool);
-ord     compar(const NDir*, const NDir*);
+// claude: `int`, not `ord` (typedef int ord; include/base/ord.h) -- a
+// real 6c parser quirk found while getting this file to compile against
+// goken's own libc: `ord compar(...)` right after any struct
+// declaration containing a pointer field (NDir above has two) fails
+// with "not a function / syntax error, last name: compar", while the
+// identical declaration spelled with a locally-defined typedef, or
+// plain `int`, compiles fine. `ord` IS `int` under the hood, so this
+// changes nothing about compar()'s actual return value.
+int     compar(NDir*, NDir*);
 char*   asciitime(long);
 char*   darwx(long);
 void    rwx(long, char*);
@@ -2957,8 +2960,6 @@ diffreg(char *f, char *t)
 
 <<compare/cmp.c>>=
 <<plan9 includes>>
-#include <ctype.h>
-
 <<constant [[BUF]](cmp.c)>>
 
 <<global flags (cmp.c)>>
@@ -3163,7 +3164,6 @@ void printfile(fdt);
 
 <<pipe/tail.c>>=
 <<plan9 includes>>
-#include    <ctype.h>
 #include    <bio.h>
 
 /*
@@ -3650,7 +3650,6 @@ int curyr(void);
 <<misc/file.c>>=
 <<plan9 includes>>
 #include <bio.h>
-#include <ctype.h>
 #include <mach.h>
 
 /*
@@ -5279,7 +5278,14 @@ Biobuf  fout;
 #define BUFSIZE     70
 
 void stringit(char *);
-int isprint(Rune);
+// claude: renamed from isprint(Rune) -- collided with include/str/
+// ascii.h's own `#define isprint(c) ...` byte-oriented ctype macro
+// (already reached via libc.h), which textually rewrote this file's
+// own declaration/definition/call sites into nonsense ("syntax error,
+// last name: Rune" was the macro-mangled result, not a real parser
+// bug). Matches utf.h's own isalpharune()/isdigitrune() naming for
+// exactly this "rune-flavored, not byte-flavored" distinction.
+int isprintrune(Rune);
 
 static int minspan = MINSPAN;
 
@@ -5336,7 +5342,7 @@ stringit(char *str)
     start = 0;
     posn = Boffset(fin);
     while((c = Bgetrune(fin)) >= 0) {
-        if(isprint(c)) {
+        if(isprintrune(c)) {
             if(start == 0)
                 start = posn;
             buf[cnt++] = c;
@@ -5365,7 +5371,7 @@ stringit(char *str)
 }
 
 int
-isprint(Rune r)
+isprintrune(Rune r)
 {
     if (r != Runeerror)
     if ((r >= ' ' && r < 0x7F) || r > 0xA0)
@@ -14539,8 +14545,6 @@ char *cursource(void)   /* current source file name */
  *  around internally.
  */
 <<plan9 includes>>
-#include <ctype.h>
-//#include <fcall.h>      /* for %M */
 #include <str.h>
 
 <<macros [[TARGxxx]](tar.c)>>

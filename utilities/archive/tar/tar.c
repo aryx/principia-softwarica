@@ -10,8 +10,6 @@
 #include <u.h>
 #include <libc.h>
 /*e: plan9 includes */
-#include <ctype.h>
-//#include <fcall.h>      /* for %M */
 #include <str.h>
 
 /*s: macros [[TARGxxx]](tar.c) */

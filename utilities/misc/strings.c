@@ -12,7 +12,14 @@ Biobuf  fout;
 #define BUFSIZE     70
 
 void stringit(char *);
-int isprint(Rune);
+// claude: renamed from isprint(Rune) -- collided with include/str/
+// ascii.h's own `#define isprint(c) ...` byte-oriented ctype macro
+// (already reached via libc.h), which textually rewrote this file's
+// own declaration/definition/call sites into nonsense ("syntax error,
+// last name: Rune" was the macro-mangled result, not a real parser
+// bug). Matches utf.h's own isalpharune()/isdigitrune() naming for
+// exactly this "rune-flavored, not byte-flavored" distinction.
+int isprintrune(Rune);
 
 static int minspan = MINSPAN;
 
@@ -69,7 +76,7 @@ stringit(char *str)
     start = 0;
     posn = Boffset(fin);
     while((c = Bgetrune(fin)) >= 0) {
-        if(isprint(c)) {
+        if(isprintrune(c)) {
             if(start == 0)
                 start = posn;
             buf[cnt++] = c;
@@ -98,7 +105,7 @@ stringit(char *str)
 }
 
 int
-isprint(Rune r)
+isprintrune(Rune r)
 {
     if (r != Runeerror)
     if ((r >= ' ' && r < 0x7F) || r > 0xA0)
