@@ -88,7 +88,7 @@ estrdup(char *s)
 
 /*s: function [[isalnum]] */
 //@Scheck: not dead, but conflict with the one in ctype.h
-int isalnum(Rune c)
+int isalnum_(Rune c)
 {
     /*
      * Hard to get absolutely right.  Use what we know about ASCII

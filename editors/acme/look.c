@@ -312,7 +312,7 @@ search(Text *ct, Rune *r, uint n)
 int
 isfilec(Rune r)
 {
-	if(isalnum(r))
+	if(isalnum_(r))
 		return TRUE;
 	if(runestrchr(L".-+/:", r))
 		return TRUE;
@@ -566,9 +566,9 @@ expand(Text *t, uint q0, uint q1, Expand *e)
 		return TRUE;
 
 	if(q0 == q1){
-		while(q1<t->file->nc && isalnum(textreadc(t, q1)))
+		while(q1<t->file->nc && isalnum_(textreadc(t, q1)))
 			q1++;
-		while(q0>0 && isalnum(textreadc(t, q0-1)))
+		while(q0>0 && isalnum_(textreadc(t, q0-1)))
 			q0--;
 	}
 	e->q0 = q0;

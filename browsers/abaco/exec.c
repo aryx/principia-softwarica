@@ -75,7 +75,7 @@ lookup(Rune *r, int n)
 int
 isexecc(int c)
 {
-	if(isalnum(c))
+	if(isalnum_(c))
 		return 1;
 	return c=='<' || c=='|' || c=='>';
 }
@@ -314,9 +314,9 @@ expand(Text *t, uint q0, uint q1, Expand *e)
 			e->jump = FALSE;
 	}
 	if(q0 == q1){
-		while(q1<t->rs.nr && isalnum(t->rs.r[q1]))
+		while(q1<t->rs.nr && isalnum_(t->rs.r[q1]))
 			q1++;
-		while(q0>0 && isalnum(t->rs.r[q0-1]))
+		while(q0>0 && isalnum_(t->rs.r[q0-1]))
 			q0--;
 	}
 	e->q0 = q0;

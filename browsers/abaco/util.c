@@ -172,7 +172,7 @@ copyrunestr(Runestr *a, Runestr *b)
 }
 
 int
-isalnum(Rune c)
+isalnum_(Rune c)
 {
 	/*
 	 * Hard to get absolutely right.  Use what we know about ASCII
@@ -857,7 +857,7 @@ latin1:
 
 static
 int
-isspace(char c)
+isspace_(char c)
 {
 	return c==' ' || c== '\t' || c=='\r' || c=='\n';
 }
@@ -873,12 +873,12 @@ findctype(char *b, int l, char *keyword, char *s)
 	if(!p)
 		return -1;
 	p += strlen(keyword);
-	while(*p && isspace(*p))
+	while(*p && isspace_(*p))
 		p++;
 	if(*p != '=')
 		return -1;
 	p++;
-	while(*p && isspace(*p))
+	while(*p && isspace_(*p))
 		p++;
 	if(!*p)
 		return -1;

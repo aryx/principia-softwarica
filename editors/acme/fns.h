@@ -53,7 +53,7 @@ void	get(Text*, Text*, Text*, int, int, Rune*, int);
 void	put(Text*, Text*, Text*, int, int, Rune*, int);
 void	putfile(File*, int, int, Rune*, int);
 void	fontx(Text*, Text*, Text*, int, int, Rune*, int);
-int	isalnum(Rune);
+int	isalnum_(Rune);
 void	execute(Text*, uint, uint, int, Text*);
 int	search(Text*, Rune*, uint);
 void	look3(Text*, uint, uint, int);

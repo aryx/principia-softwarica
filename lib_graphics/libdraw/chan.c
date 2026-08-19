@@ -36,11 +36,11 @@ chantostr(char *buf, ulong cc)
 
 /*s: function [[isspace]] */
 /* avoid pulling in ctype when using with drawterm etc. */
-static int
-isspace(char c)
-{
-    return c==' ' || c== '\t' || c=='\r' || c=='\n';
-}
+//static int
+//isspace(char c)
+//{
+//    return c==' ' || c== '\t' || c=='\r' || c=='\n';
+//}
 /*e: function [[isspace]] */
 
 /*s: function [[strtochan]] */

@@ -7,6 +7,7 @@
 #include <str.h> // was string.h
 /*e: libstring includes */
 
+#undef isspace
 /*s: macro [[isspace]] */
 #define isspace(c) ((c)==' ' || (c)=='\t' || (c)=='\n')
 /*e: macro [[isspace]] */

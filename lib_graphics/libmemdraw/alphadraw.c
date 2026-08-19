@@ -1369,7 +1369,7 @@ writebyte(Param *p, byte *w, Buffer src)
     // will iterate over all the pixels in one line in src
     int i;
 
-    bool isalpha, isgrey;
+    bool isalpha_, isgrey;
     byte ff;
     int adelta;
     ulong u, mask;
@@ -1387,12 +1387,12 @@ writebyte(Param *p, byte *w, Buffer src)
     nb = img->depth/8;
     mask = (nb==4) ? 0 : ~((1<<img->depth)-1); // >>
 
-    isalpha = img->flags&Falpha;
+    isalpha_ = img->flags&Falpha;
     isgrey = img->flags&Fgrey;
 
     /*s: [[writebyte()]] alpha handling part1 */
     adelta = src.delta;
-    if(isalpha && (alpha == nil || alpha == &ones)){
+    if(isalpha_ && (alpha == nil || alpha == &ones)){
         ff = 0xFF;
         alpha = &ff;
         adelta = 0;
@@ -1417,7 +1417,7 @@ writebyte(Param *p, byte *w, Buffer src)
             blu += delta;
         }
         /*s: [[writebyte()]] alpha handling part2 */
-        if(isalpha){
+        if(isalpha_){
             u |= ((*alpha >> (8-img->nbits[CAlpha])) & img->mask[CAlpha]) << img->shift[CAlpha];
             alpha += adelta;
         }

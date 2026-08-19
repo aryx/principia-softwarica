@@ -13,11 +13,11 @@
 #define EOF -1			/* token code for end of file */
 /*e: constant [[EOF]] */
 /*s: function [[ispunct]] */
-#define ispunct(c)		(c=='|' || c=='&' || c==';' || c=='<' || \
+#define ispunct_(c)		(c=='|' || c=='&' || c==';' || c=='<' || \
                  c=='>' || c=='(' || c==')' || c=='\n')
 /*e: function [[ispunct]] */
 /*s: function [[isspace]] */
-#define isspace(c)		(c==' ' || c=='\t')
+#define isspace_(c)		(c==' ' || c=='\t')
 /*e: function [[isspace]] */
 /*s: function [[execute]] */
 #define execute(np)		(ignored = (np? (*(np)->op)(np) : 0))
@@ -308,9 +308,9 @@ gettoken(void)
     int c;
 
     while((c = getch()) != EOF)
-        if(!isspace(c))
+        if(!isspace_(c))
             break;
-    if(c==EOF || ispunct(c))
+    if(c==EOF || ispunct_(c))
         return c;
     token = sfree;
     do{
@@ -319,7 +319,7 @@ gettoken(void)
             exits("string storage overflow");
         }
         *sfree++ = c;
-    }while((c=getch()) != EOF && !ispunct(c) && !isspace(c));
+    }while((c=getch()) != EOF && !ispunct_(c) && !isspace_(c));
     *sfree++ = 0;
     putback = c;
     return WORD;

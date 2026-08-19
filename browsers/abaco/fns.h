@@ -41,7 +41,7 @@ int validurl(Rune *);
 int runeeq(Rune *, uint, Rune *, uint);
 int min(int, int);
 int max(int, int);
-int isalnum(Rune);
+int isalnum_(Rune);
 Rune* skipbl(Rune *, int, int *);
 Rune* findbl(Rune *r, int, int *);
 char* estrdup(char *);

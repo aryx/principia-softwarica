@@ -41,7 +41,7 @@ isregexc(int r)
 {
 	if(r == 0)
 		return FALSE;
-	if(isalnum(r))
+	if(isalnum_(r))
 		return TRUE;
 	if(utfrune("^+-.*?#,;[]()$", r)!=nil)
 		return TRUE;

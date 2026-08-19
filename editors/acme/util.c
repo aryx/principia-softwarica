@@ -301,7 +301,7 @@ bytetorune(char *s, int *ip)
 }
 
 int
-isalnum(Rune c)
+isalnum_(Rune c)
 {
 	/*
 	 * Hard to get absolutely right.  Use what we know about ASCII

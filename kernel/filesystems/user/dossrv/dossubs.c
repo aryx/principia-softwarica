@@ -400,11 +400,11 @@ int
 classifyname(char *buf)
 {
     char *p, *dot;
-    int c, isextended, is8dot3, islower, ndot;
+    int c, isextended, is8dot3, islower_, ndot;
 
     p = buf;
     isextended = 0;
-    islower = 0;
+    islower_ = 0;
     dot = nil;
     ndot = 0;
     while(c = (uchar)*p){
@@ -418,14 +418,14 @@ classifyname(char *buf)
         else if(!isdos[c])
             return Invalid;
         if('a' <= c && c <= 'z')
-            islower = 1;
+            islower_ = 1;
         p++;
     }
 
     is8dot3 = (ndot==0 && p-buf <= 8) || (ndot==1 && dot-buf <= 8 && p-(dot+1) <= 3);
     
     if(!isextended && is8dot3){
-        if(islower)
+        if(islower_)
             return ShortLower;
         return Short;
     }

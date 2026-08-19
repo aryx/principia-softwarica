@@ -220,7 +220,7 @@ wbswidth(Window *w, Rune c)
         }
         /*s: [[wbswidth()]] if [[c == 0x17]] */
         if(c == 0x17){
-            eq = isalnum(r);
+            eq = isalnum_(r);
             if(eq && skipping)	/* found one; stop skipping */
                 skipping = false;
             else if(!eq && !skipping)
@@ -742,10 +742,10 @@ wdoubleclick(Window *w, uint *q0, uint *q1)
         }
     }
     /* try filling out word to right */
-    while(*q1<w->nr && isalnum(w->r[*q1]))
+    while(*q1<w->nr && isalnum_(w->r[*q1]))
         (*q1)++;
     /* try filling out word to left */
-    while(*q0>0 && isalnum(w->r[*q0-1]))
+    while(*q0>0 && isalnum_(w->r[*q0-1]))
         (*q0)--;
 }
 /*e: function [[wdoubleclick]] */

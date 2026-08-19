@@ -176,7 +176,7 @@ textbswidth(Text *t, Rune c)
 			break;
 		}
 		if(c == 0x17){
-			eq = isalnum(r);
+			eq = isalnum_(r);
 			if(eq && skipping)	/* found one; stop skipping */
 				skipping = FALSE;
 			else if(!eq && !skipping)
@@ -745,10 +745,10 @@ textdoubleclick(Text *t, uint *q0, uint *q1)
 		}
 	}
 	/* try filling out word to right */
-	while(*q1<t->rs.nr && isalnum(t->rs.r[*q1]))
+	while(*q1<t->rs.nr && isalnum_(t->rs.r[*q1]))
 		(*q1)++;
 	/* try filling out word to left */
-	while(*q0>0 && isalnum(t->rs.r[*q0-1]))
+	while(*q0>0 && isalnum_(t->rs.r[*q0-1]))
 		(*q0)--;
 }
 
