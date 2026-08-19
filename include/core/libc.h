@@ -40,6 +40,13 @@ typedef u8int uint8;
 
 // for goken
 extern	char*	getgoos(void);
+// included by default, like in goken, which requires to rename
+// a few functions and locals like isalpha_, islower_
+// (but maybe dupe that should be removed)
+#include <ctype.h>
+// was in fcall.h but useful outside fcall.h
+int dirmodefmt(Fmt*);
+
 
 //----------------------------------------------------------------------------
 // Pad's core types

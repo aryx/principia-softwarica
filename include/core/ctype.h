@@ -1,4 +1,7 @@
 /*s: include/core/ctype.h */
+#ifndef _CTYPEH_
+#define _CTYPEH_ 1
+
 #pragma	src	"/sys/src/libc/port"
 #pragma	lib	"libc.a"
 
@@ -40,4 +43,5 @@ extern unsigned char	_ctype[];
 /*s: macro [[toascii]] */
 #define	toascii(c)	((c)&0177)
 /*e: macro [[toascii]] */
+#endif
 /*e: include/core/ctype.h */
