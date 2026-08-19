@@ -38,7 +38,7 @@ Bconv(Fmt *fp)
         if(str[0])
             strcat(str, " ");
         if(var[i].sym == S) {
-            snprint(ss, sizeof(ss), "$%ld", var[i].offset);
+            snprint(ss, sizeof(ss), "$%d", var[i].offset);
             s = ss;
         } else
             s = var[i].sym->name;
@@ -102,7 +102,7 @@ Dconv(Fmt *fp)
     i = a->type;
     if(i >= D_INDIR) {
         if(a->offset)
-            snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
+            snprint(str, sizeof(str), "%d(%R)", a->offset, i-D_INDIR);
         else
             snprint(str, sizeof(str), "(%R)", i-D_INDIR);
         goto brk;
@@ -111,7 +111,7 @@ Dconv(Fmt *fp)
 
     default:
         if(a->offset)
-            snprint(str, sizeof(str), "$%ld,%R", a->offset, i); // $
+            snprint(str, sizeof(str), "$%d,%R", a->offset, i); // $
         else
             snprint(str, sizeof(str), "%R", i);
         break;
@@ -121,31 +121,31 @@ Dconv(Fmt *fp)
         break;
 
     case D_BRANCH:
-        snprint(str, sizeof(str), "%ld(PC)", a->offset-pc);
+        snprint(str, sizeof(str), "%d(PC)", a->offset-pc);
         break;
 
     case D_EXTERN:
-        snprint(str, sizeof(str), "%s+%ld(SB)", a->sym->name, a->offset);
+        snprint(str, sizeof(str), "%s+%d(SB)", a->sym->name, a->offset);
         break;
 
     case D_STATIC:
-        snprint(str, sizeof(str), "%s<>+%ld(SB)", a->sym->name, a->offset);
+        snprint(str, sizeof(str), "%s<>+%d(SB)", a->sym->name, a->offset);
         break;
 
     case D_AUTO:
-        snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
+        snprint(str, sizeof(str), "%s+%d(SP)", a->sym->name, a->offset);
         break;
 
     case D_PARAM:
         if(a->sym)
-            snprint(str, sizeof(str), "%s+%ld(FP)", a->sym->name, a->offset);
+            snprint(str, sizeof(str), "%s+%d(FP)", a->sym->name, a->offset);
         else
-            snprint(str, sizeof(str), "%ld(FP)", a->offset);
+            snprint(str, sizeof(str), "%d(FP)", a->offset);
         break;
 
 
     case D_CONST:
-        snprint(str, sizeof(str), "$%ld", a->offset); //$
+        snprint(str, sizeof(str), "$%d", a->offset); //$
         break;
 
     case D_FCONST:

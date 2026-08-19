@@ -58,12 +58,16 @@ typedef	Rune	TRune;	/* target system type */
 #define	BITS	5
 /*e: constant [[BITS]] */
 /*s: constant [[NVAR]] */
-#define	NVAR	(BITS*sizeof(ulong)*8)
+// claude: uint32, not ulong: the bits code (blsh, /32, %32) assumes
+// 32-bit words; 64-bit ulongs make NVAR 320 and blsh(160+) writes past
+// b[BITS] (stack smash on functions with many variables, e.g.
+// libsec blake2sblock.c)
+#define	NVAR	(BITS*sizeof(uint32)*8)
 /*e: constant [[NVAR]] */
 /*s: struct [[Bits]] */
 struct	Bits
 {
-    ulong	b[BITS];
+    uint32	b[BITS];
 };
 /*e: struct [[Bits]] */
 
@@ -119,7 +123,9 @@ struct	Node
     // (also (ab)used as a bool to mark label definitions (true = already defined))
     char	complex; 
     /*x: [[Node]] code generation fields */
-    long	xoffset;
+    // claude: must be int32, not long: offset arithmetic relies on 32-bit
+    // overflow; see tests/c/misc/minus_one_index.c on 64-bit hosts
+    int32	xoffset;
     /*x: [[Node]] code generation fields */
     long	pc;
     /*x: [[Node]] code generation fields */
@@ -819,6 +825,14 @@ extern	long	autoffset;
 extern	int	blockno;
 extern	Decl*	dclstack;
 extern	char	debug[256];
+/* claude: gcc/clang-style optimization level, set by -O (see lex.c);
+ * 0 disables regopt() entirely (cc2/pgen.c), >=2 also enables the
+ * peephole pass inside it (5c/8c's own reg.c). Defaults to 3 (full
+ * optimization, i.e. today's pre-existing no-flags-given behavior).
+ * -N is a legacy alias for -O0, folded into this after arg parsing
+ * (see lex.c). Mirrors compilers/cck/cc.h's optlevel -- see
+ * docs/claude_notes/notes_frontend_optlevels.txt. */
+extern	int	optlevel;
 extern	Hist*	ehist;
 extern	bool	firstbit;
 extern	Sym*	firstarg;
@@ -1115,8 +1129,8 @@ long	outstring(char*, long);
 long	outlstring(TRune*, long);
 void	xcom(Node*);
 long	exreg(Type*);
-long	align(long, Type*, int);
-long	maxround(long, long);
+int32	align(int32, Type*, int);
+int32	maxround(int32, int32);
 
 extern	schar	ewidth[];
 

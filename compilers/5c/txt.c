@@ -118,6 +118,20 @@ ginit(void)
     /* keep two external registers */
     reg[REGEXT] = 1; // R10
     reg[REGEXT-1] = 1; // R9
+    /* claude: these two must also be marked reserved in resvreg, or
+     * gclean()'s "reg N left allocated" sanity check flags R9/R10 at
+     * the end of EVERY function (they are reserved here but never
+     * freed), so 5c fails on all input. The kencc 5c takes the
+     * 'memmove(resvreg, reg)' snapshot *after* these two reservations;
+     * the principia "compilers/5c/: mk sync" of 2018-01-17 (commit
+     * dae86be2) reordered the ginit LP chunks so the snapshot (above)
+     * now runs before them. Rather than move the marker-wrapped
+     * memmove, replicate its effect on resvreg for R9/R10 explicitly.
+     * Repro: tests/c/variants/reg_alloc_arm.c (any function triggers
+     * it). Was latent because the principia arm 5c had never been run
+     * over real code until the arm corpus sweep. */
+    resvreg[REGEXT] = 1;
+    resvreg[REGEXT-1] = 1;
     /*e: [[ginit()]] reg and resvreg initialisation */
 }
 /*e: function [[ginit]](arm) */
@@ -1127,7 +1141,17 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     int et;
     Adr ta;
     /*s: [[gopcode()]] locals */
-    bool btrue;
+    /* claude: must be int, not bool: btrue holds 'o & BTRUE' and
+     * BTRUE is 0x1000 (bit 12), which has no bits in the low byte, so
+     * a char-width bool truncates it to 0. That silently disabled the
+     * float-comparison NaN-safe branch substitutions below (ABMI/ABPL/
+     * ABGT/ABHI for <,>=,>,<= on floats), so 5c emitted the signed/
+     * unsigned integer conditions (LT/GE/HI/LS) for float compares --
+     * different bytes from kencc, and wrong for NaN (e.g. NaN>0 gave 1
+     * via ABHI instead of 0). kencc declares this 'int true'. Was
+     * latent until the arm corpus sweep (48 float files differed).
+     * Repro: tests/c/variants/float_cmp_arm.c. */
+    int btrue;
     /*e: [[gopcode()]] locals */
 
     et = (f1 != Z && f1->type != T)? f1->type->etype : TLONG;

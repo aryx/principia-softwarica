@@ -449,7 +449,8 @@ outhist(Biobuf *b)
         //	p += 2;
         //	c = *p;
         //}
-        if(p && p[0] != c && h->offset == 0 && pathname){
+        // claude: -r produces reproducible output: don't embed the cwd in history
+        if(!debug['r'] && p && p[0] != c && h->offset == 0 && pathname){
             /* on windows skip drive specifier in pathname */
             //if(systemtype(Windows) && pathname[1] == ':') {
             //	op = p;
@@ -504,7 +505,7 @@ void
 zname(Biobuf *b, Sym *s, int t)
 {
     char *n, bf[7];
-    ulong sig;
+    uint32 sig;
 
     n = s->name;
     /*s: [[zname()]] if generate signature for symbol s */
@@ -540,7 +541,7 @@ zname(Biobuf *b, Sym *s, int t)
 char*
 zaddr(char *bp, Adr *a, int s)
 {
-    long l;
+    int32 l;
     Ieee e;
 
     bp[0] = a->type;
@@ -606,10 +607,10 @@ zaddr(char *bp, Adr *a, int s)
 
 /*s: function [[align]](arm) */
 /// ??? -> <>
-long
-align(long i, Type *t, int op)
+int32
+align(int32 i, Type *t, int op)
 {
-    long o;
+    int32 o;
     Type *v;
     int w;
 
@@ -679,8 +680,8 @@ align(long i, Type *t, int op)
 /*e: function [[align]](arm) */
 
 /*s: function [[maxround]] */
-long
-maxround(long max, long v)
+int32
+maxround(int32 max, int32 v)
 {
     v = round(v, SZ_LONG);
     if(v > max)

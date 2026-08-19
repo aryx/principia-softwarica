@@ -1,8 +1,8 @@
 /*s: 5c/gc.h */
 #include	"../cc/cc.h"
 
-#include	<common.out.h>
-#include	<5.out.h>
+#include	<obj/common.out.h>
+#include	<obj/5.out.h>
 
 /*
  * 5c/arm
@@ -57,7 +57,8 @@ struct	Adr
     // enum<Operand_kind> (D_NONE by default)
     char	type;
 
-    long	offset; // generic value, offset or simple constant
+    // claude: int32, not long, like in the kencc lineage (see changes.txt)
+    int32	offset; // generic value, offset or simple constant
     char	sval[NSNAME];
     double	dval;
     Ieee	ieee;
@@ -161,7 +162,7 @@ struct	Var
     char	symkind;
     //enum<type_kind>
     char	etype;
-    long	offset;
+    int32	offset;
 };
 /*e: struct [[Var]] */
 

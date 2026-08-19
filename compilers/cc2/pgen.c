@@ -101,7 +101,11 @@ void codgen(Node *n, Node *nn)
     gbranch(ORETURN);
 
     /*s: [[codgen()]] register optimisation */
-    if(!debug['N'] || debug['R'] || debug['P'])
+    /* claude: gated on optlevel (see cc.h) rather than plain debug['N'],
+     * so -O0/-O1/-O2/-O3 (lex.c) control it; -N still works, folded
+     * into optlevel right after arg parsing. Mirrors compilers/cck/
+     * pgen.c -- see docs/claude_notes/notes_frontend_optlevels.txt. */
+    if(optlevel >= 1 || debug['R'] || debug['P'])
         regopt(sp);
     /*e: [[codgen()]] register optimisation */
     

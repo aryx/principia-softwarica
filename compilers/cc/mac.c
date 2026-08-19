@@ -318,7 +318,12 @@ macdef(void)
     for(;;) {
         /*s: [[macdef()]] when lexing the body, if identifier */
         // identifier
-        if(isalpha(c) || c == '_') {
+        // claude: was `if(isalpha(c) || c == '_')` unconditionally --
+        // see src/cmd/cc/macbody's identical fix for the full writeup.
+        // Must not treat a letter inside a string/char literal
+        // (ischr != 0) as a candidate macro-parameter identifier to
+        // substitute.
+        if(!ischr && (isalpha(c) || c == '_')) {
             np = symb;
             *np++ = c;
             c = getc();

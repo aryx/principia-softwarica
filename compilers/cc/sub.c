@@ -214,7 +214,11 @@ int simplec(long b)
 
     b &= BCLASS;
     switch(b) {
-    case 0: 
+    // claude: 0 (no class bits) must be CXXX, not CAUTO: grouping it with
+    // BAUTO broke every multi-token type ("unsigned long x;" etc.), which
+    // reaches here through simplec(gctnlist-bits) with b == 0
+    case 0:
+        return CXXX;
     case BAUTO:
         return CAUTO;
     case BEXTERN:
@@ -1367,7 +1371,21 @@ warn(Node *n, char *fmt, ...)
     char buf[STRINGSZ];
     va_list arg;
 
-    if(debug['w'] || debug['W']) {
+    /* claude: was `if(debug['w'] || debug['W'])` (warnings opt-in,
+     * off by default unless -w or the stricter -W). Flipped:
+     * warnings are real diagnostics (a silently-dropped high bit in a
+     * constant is a genuine miscompilation footgun -- see
+     * docs/claude_notes/notes_shared_frontend_bugs.txt's "unsuffixed
+     * hex constant" entry, found via exactly this class of warning
+     * being invisible by default), so they should behave like any
+     * modern tool's WARN level: visible unless explicitly silenced.
+     * `-q` (unused by any debug[] flag in this frontend before now)
+     * suppresses them; -W's existing "promote to a hard error
+     * instead" behavior (below) is unchanged. `-w` no longer does
+     * anything here (kept available, unused, rather than repurposed,
+     * since no build script in this tree passed it either way).
+     */
+    if(!debug['q']) {
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);

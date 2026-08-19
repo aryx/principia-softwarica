@@ -451,11 +451,18 @@ ulstmnt:
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 /*e: ulstmnt rule */
 /*s: label rule */
-|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
-/*x: label rule */
 label:
     LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
 |   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+/*x: label rule */
+/* claude: LNAME ':' must be an alternative of label, not of ulstmnt
+ * (where it sat before this chunk's header, so yacc attached it to the
+ * still-open ulstmnt production). As a ulstmnt, a goto label parsed as
+ * a standalone statement, so 'if(c) err: f();' attached only the bare
+ * label to the if and hoisted f() out of it: both branches executed
+ * f(). See tests/c/variants/label_if.c.
+ */
+|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
 /*e: label rule */
 /*x: statements rules */
 forexpr:

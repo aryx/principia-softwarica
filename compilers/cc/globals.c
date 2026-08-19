@@ -28,6 +28,11 @@ Decl*	dclstack;
 /*s: global [[debug]] */
 char	debug[256];
 /*e: global [[debug]] */
+/* claude: gcc/clang-style optimization level, see cc.h's own comment
+ * and docs/claude_notes/notes_frontend_optlevels.txt -- ported from
+ * compilers/cck/, not part of the original syncweb-documented book,
+ * so deliberately left without syncweb chunk markers of its own. */
+int	optlevel;
 /*s: global [[ehist]] */
 Hist*	ehist;
 /*e: global [[ehist]] */

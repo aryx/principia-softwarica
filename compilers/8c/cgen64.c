@@ -1,8 +1,8 @@
 /*s: 8c/cgen64.c */
 #include "gc.h"
 
-long	lo64v(Node*);
-long	hi64v(Node*);
+int32	lo64v(Node*);
+int32	hi64v(Node*);
 
 /*s: function [[zeroregm]](x86) */
 void
@@ -33,24 +33,25 @@ vaddr(Node *n, int a)
 /*e: function [[vaddr]](x86) */
 
 /*s: function [[hi64v]](x86) */
-long
+// claude: int32, not long, so the value is truncated to its 32-bit half
+int32
 hi64v(Node *n)
 {
     if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        return (long)(n->vconst) & ~0L;
+        return (int32)(n->vconst) & ~0L;
     else
-        return (long)((uvlong)n->vconst>>32) & ~0L;
+        return (int32)((uvlong)n->vconst>>32) & ~0L;
 }
 /*e: function [[hi64v]](x86) */
 
 /*s: function [[lo64v]](x86) */
-long
+int32
 lo64v(Node *n)
 {
     if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        return (long)((uvlong)n->vconst>>32) & ~0L;
+        return (int32)((uvlong)n->vconst>>32) & ~0L;
     else
-        return (long)(n->vconst) & ~0L;
+        return (int32)(n->vconst) & ~0L;
 }
 /*e: function [[lo64v]](x86) */
 

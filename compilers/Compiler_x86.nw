@@ -26,7 +26,8 @@ Prog*	link;
 <<struct [[Adr]](x86)>>=
 struct	Adr
 {
-    long	offset;
+    // claude: int32, not long, like in the kencc lineage (see changes.txt)
+    int32	offset;
     double	dval;
     char	sval[NSNAME];
     Sym*	sym;
@@ -1089,7 +1090,7 @@ cgen(Node *n, Node *nn)
             diag(n, "DOT and no offset");
             break;
         }
-        nod.xoffset += (long)r->vconst;
+        nod.xoffset += (int32)r->vconst;
         nod.type = n->type;
         cgen(&nod, nn);
         break;
@@ -1559,7 +1560,7 @@ sugen(Node *n, Node *nn, long w)
             diag(n, "DOT and no offset");
             break;
         }
-        nod1.xoffset += (long)r->vconst;
+        nod1.xoffset += (int32)r->vconst;
         nod1.type = n->type;
         sugen(&nod1, nn, w);
         break;
@@ -2260,6 +2261,11 @@ mulgen1(ulong v, Node *n)
     int i, o;
     Mparam *p;
     Node nod, nods;
+
+    if(v == 0){
+        zeroregm(n);
+        return 1;
+    }
 
     for(i = 0; i < nelem(multab); i++) {
         p = &multab[i];
@@ -3147,7 +3153,8 @@ outhist(Biobuf *b)
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = 0;
-        if(p && p[0] != c && h->offset == 0 && pathname){
+        // claude: -r produces reproducible output: don't embed the cwd in history
+        if(!debug['r'] && p && p[0] != c && h->offset == 0 && pathname){
             if(pathname[0] == c){
                 op = p;
                 p = pathname;
@@ -3205,7 +3212,7 @@ void
 zname(Biobuf *b, Sym *s, int t)
 {
     char *n;
-    ulong sig;
+    uint32 sig;
 
     if(debug['T'] && t == D_EXTERN && s->sig != SIGDONE && s->type != types[TENUM] && s != symrathole){
         sig = sign(s);
@@ -3237,7 +3244,7 @@ zname(Biobuf *b, Sym *s, int t)
 void
 zaddr(Biobuf *b, Adr *a, int s)
 {
-    long l;
+    int32 l;
     int i, t;
     char *n;
     Ieee e;
@@ -3701,24 +3708,25 @@ vaddr(Node *n, int a)
 @
 
 <<function [[hi64v]](x86)>>=
-long
+// claude: int32, not long, so the value is truncated to its 32-bit half
+int32
 hi64v(Node *n)
 {
     if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        return (long)(n->vconst) & ~0L;
+        return (int32)(n->vconst) & ~0L;
     else
-        return (long)((uvlong)n->vconst>>32) & ~0L;
+        return (int32)((uvlong)n->vconst>>32) & ~0L;
 }
 @
 
 <<function [[lo64v]](x86)>>=
-long
+int32
 lo64v(Node *n)
 {
     if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        return (long)((uvlong)n->vconst>>32) & ~0L;
+        return (int32)((uvlong)n->vconst>>32) & ~0L;
     else
-        return (long)(n->vconst) & ~0L;
+        return (int32)(n->vconst) & ~0L;
 }
 @
 
@@ -6601,7 +6609,7 @@ Dconv(Fmt *fp)
     i = a->type;
     if(i >= D_INDIR) {
         if(a->offset)
-            snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
+            snprint(str, sizeof(str), "%d(%R)", a->offset, i-D_INDIR);
         else
             snprint(str, sizeof(str), "(%R)", i-D_INDIR);
         goto brk;
@@ -6610,7 +6618,7 @@ Dconv(Fmt *fp)
 
     default:
         if(a->offset)
-            snprint(str, sizeof(str), "$%ld,%R", a->offset, i); // $
+            snprint(str, sizeof(str), "$%d,%R", a->offset, i); // $
         else
             snprint(str, sizeof(str), "%R", i);
         break;
@@ -6620,31 +6628,31 @@ Dconv(Fmt *fp)
         break;
 
     case D_BRANCH:
-        snprint(str, sizeof(str), "%ld(PC)", a->offset-pc);
+        snprint(str, sizeof(str), "%d(PC)", a->offset-pc);
         break;
 
     case D_EXTERN:
-        snprint(str, sizeof(str), "%s+%ld(SB)", a->sym->name, a->offset);
+        snprint(str, sizeof(str), "%s+%d(SB)", a->sym->name, a->offset);
         break;
 
     case D_STATIC:
-        snprint(str, sizeof(str), "%s<>+%ld(SB)", a->sym->name, a->offset);
+        snprint(str, sizeof(str), "%s<>+%d(SB)", a->sym->name, a->offset);
         break;
 
     case D_AUTO:
-        snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
+        snprint(str, sizeof(str), "%s+%d(SP)", a->sym->name, a->offset);
         break;
 
     case D_PARAM:
         if(a->sym)
-            snprint(str, sizeof(str), "%s+%ld(FP)", a->sym->name, a->offset);
+            snprint(str, sizeof(str), "%s+%d(FP)", a->sym->name, a->offset);
         else
-            snprint(str, sizeof(str), "%ld(FP)", a->offset);
+            snprint(str, sizeof(str), "%d(FP)", a->offset);
         break;
 
 
     case D_CONST:
-        snprint(str, sizeof(str), "$%ld", a->offset); //$
+        snprint(str, sizeof(str), "$%d", a->offset); //$
         break;
 
     case D_FCONST:
@@ -6999,8 +7007,8 @@ struct Idx
 <<8c/gc.h>>=
 #include	"../cc/cc.h"
 
-#include	<common.out.h>
-#include	<8.out.h>
+#include	<obj/common.out.h>
+#include	<obj/8.out.h>
 
 /*
  * 8c/386
@@ -8698,7 +8706,8 @@ gpseudo(int a, Sym *s, Node *n)
 int
 sconst(Node *n)
 {
-    long v;
+    // claude: int32, not long: vconst can downcast to negative on 64-bit
+    int32 v;
 
     if(n->op == OCONST && !typefd[n->type->etype]) {
         v = n->vconst;
@@ -9776,10 +9785,10 @@ gextern(Sym *s, Node *a, long o, long w)
 
 
 <<function [[align]](x86)>>=
-long
-align(long i, Type *t, int op)
+int32
+align(int32 i, Type *t, int op)
 {
-    long o;
+    int32 o;
     Type *v;
     int w;
 
@@ -10435,7 +10444,7 @@ brk:
      * pass 7
      * peep-hole on basic block
      */
-    if(!debug['R'] || debug['P'])
+    if((optlevel >= 2 && !debug['R']) || debug['P'])	/* claude: -O (see cc.h/lex.c) */
         peep();
 
     /*
@@ -11068,8 +11077,8 @@ int	BtoR(long);
 <<8c/cgen64.c>>=
 #include "gc.h"
 
-long	lo64v(Node*);
-long	hi64v(Node*);
+int32	lo64v(Node*);
+int32	hi64v(Node*);
 
 <<function [[zeroregm]](x86)>>
 

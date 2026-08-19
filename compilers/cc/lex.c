@@ -42,6 +42,12 @@ void	setinclude(char*);
  *	-m		print add/sub/mul trees
  *	-n		print acid to file (%.c=%.acid) (with -a or -aa)
  *	-o file		output file
+ *	-O n		claude: optimization level 0..3 (default 3); 0 disables
+ *			regopt() (register alloc + peephole) entirely, 1
+ *			keeps register alloc but skips peephole, 2 and 3
+ *			enable both (no distinct 3rd lever yet -- see
+ *			docs/claude_notes/notes_frontend_optlevels.txt).
+ *			-N is a legacy alias for -O0.
  *	-p		use standard cpp ANSI preprocessor (not on windows)
  *	-r		print registerization
  *	-s		print structure offsets (with -a or -aa)
@@ -89,6 +95,7 @@ void main(int argc, char *argv[])
     /*x: [[main()]] remaining initialisation */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     /*e: [[main()]] remaining initialisation */
+    optlevel = 3;
 
     ARGBEGIN {
     /*s: [[main()]] command line processing */
@@ -120,6 +127,16 @@ void main(int argc, char *argv[])
         if(p)
             setinclude(p);
         break;
+    case 'O':			/* claude: gcc/clang-style optimization level */
+        p = ARGF();
+        if(p) {
+            optlevel = atoi(p);
+            if(optlevel < 0)
+                optlevel = 0;
+            if(optlevel > 3)
+                optlevel = 3;
+        }
+        break;
     /*x: [[main()]] command line processing */
     default:
         c = ARGC();
@@ -128,6 +145,8 @@ void main(int argc, char *argv[])
         break;
     /*e: [[main()]] command line processing */
     } ARGEND
+    if(debug['N'])		/* claude: -N is a legacy alias for -O0 */
+        optlevel = 0;
 
     if(argc < 1 && outfile == nil) {
         print("usage: %cc [-options] files\n", thechar);

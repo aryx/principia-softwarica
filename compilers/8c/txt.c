@@ -1451,7 +1451,8 @@ gpseudo(int a, Sym *s, Node *n)
 int
 sconst(Node *n)
 {
-    long v;
+    // claude: int32, not long: vconst can downcast to negative on 64-bit
+    int32 v;
 
     if(n->op == OCONST && !typefd[n->type->etype]) {
         v = n->vconst;

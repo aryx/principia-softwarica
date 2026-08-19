@@ -49,6 +49,21 @@ pathchar(void)
  return '/';
 }
 
+/*
+ * claude: the "fake mallocs" below (malloc->alloc, a no-op free, and a
+ * no-op setmalloctag) are DISABLED via #if 0. Original Plan 9 routed
+ * malloc() through the compiler's own hunk arena (alloc()) so that library
+ * code shared the arena and never had to free. But that made malloc()
+ * unusable *inside* the arena: gethunk() must obtain raw memory from the OS,
+ * and with the wrapper in place gethunk()->malloc()->alloc()->gethunk()
+ * recurses forever (an instant stack overflow on the first source file).
+ * Plan 9, Linux and macOS all provide a perfectly good libc malloc/free, so
+ * we now use them directly: gethunk() refills the arena with the real
+ * malloc(), and the handful of malloc()/free() call sites (dcl.c, mywait
+ * above) get honest heap allocation. See compilers/cc/utils.c:gethunk().
+ * (The syncweb chunk markers are kept; only the code is disabled.)
+ */
+#ifdef NOT_DEFINED
 /*s: function [[malloc]] */
 /*
  * fake mallocs
@@ -73,4 +88,5 @@ void setmalloctag(void*, ulong)
 {
 }
 /*e: function [[setmalloctag]] */
+#endif
 /*e: cc/compat.c */

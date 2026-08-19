@@ -2092,7 +2092,8 @@ struct	Adr
     // enum<Operand_kind> (D_NONE by default)
     char	type;
 
-    long	offset; // generic value, offset or simple constant
+    // claude: int32, not long, like in the kencc lineage (see changes.txt)
+    int32	offset; // generic value, offset or simple constant
     char	sval[NSNAME];
     double	dval;
     Ieee	ieee;
@@ -2199,10 +2200,13 @@ void main(int argc, char *argv[])
     memset(debug, 0, sizeof(debug));
     <<[[main()]] xxxinit()>>
     <<[[main()]] remaining initialisation>>
+    optlevel = 3;
 
     ARGBEGIN {
     <<[[main()]] command line processing>>
     } ARGEND
+    if(debug['N'])		/* claude: -N is a legacy alias for -O0 */
+        optlevel = 0;
 
     if(argc < 1 && outfile == nil) {
         print("usage: %cc [-options] files\n", thechar);
@@ -2314,6 +2318,16 @@ case 'I':
     p = ARGF();
     if(p)
         setinclude(p);
+    break;
+case 'O':			/* claude: gcc/clang-style optimization level */
+    p = ARGF();
+    if(p) {
+        optlevel = atoi(p);
+        if(optlevel < 0)
+            optlevel = 0;
+        if(optlevel > 3)
+            optlevel = 3;
+    }
     break;
 @
 
@@ -5174,7 +5188,12 @@ int i;
 
 <<[[macdef()]] when lexing the body, if identifier>>=
 // identifier
-if(isalpha(c) || c == '_') {
+// claude: was `if(isalpha(c) || c == '_')` unconditionally --
+// see src/cmd/cc/macbody's identical fix for the full writeup.
+// Must not treat a letter inside a string/char literal
+// (ischr != 0) as a candidate macro-parameter identifier to
+// substitute.
+if(!ischr && (isalpha(c) || c == '_')) {
     np = symb;
     *np++ = c;
     c = getc();
@@ -6891,7 +6910,9 @@ OGOTO,
 @
 
 <<label rule>>=
-|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
+label:
+    LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
+|   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
 @
 %$
 % what? it's in label rule? with case and default??
@@ -6992,9 +7013,14 @@ OCASE, // for default too, in which case Node.left is null
 % note that 'labels' with an 's' before, so can have case 1: case 2: ...
 
 <<label rule>>=
-label:
-    LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
-|   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+/* claude: LNAME ':' must be an alternative of label, not of ulstmnt
+ * (where it sat before this chunk's header, so yacc attached it to the
+ * still-open ulstmnt production). As a ulstmnt, a goto label parsed as
+ * a standalone statement, so 'if(c) err: f();' attached only the bare
+ * label to the if and hoisted f() out of it: both branches executed
+ * f(). See tests/c/variants/label_if.c.
+ */
+|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
 @
 %$
 %ocaml: OCASE(l=option(expr), r=null)
@@ -8455,7 +8481,11 @@ int simplec(long b)
 
     b &= BCLASS;
     switch(b) {
-    case 0: 
+    // claude: 0 (no class bits) must be CXXX, not CAUTO: grouping it with
+    // BAUTO broke every multi-token type ("unsigned long x;" etc.), which
+    // reaches here through simplec(gctnlist-bits) with b == 0
+    case 0:
+        return CXXX;
     case BAUTO:
         return CAUTO;
     case BEXTERN:
@@ -9854,7 +9884,21 @@ warn(Node *n, char *fmt, ...)
     char buf[STRINGSZ];
     va_list arg;
 
-    if(debug['w'] || debug['W']) {
+    /* claude: was `if(debug['w'] || debug['W'])` (warnings opt-in,
+     * off by default unless -w or the stricter -W). Flipped:
+     * warnings are real diagnostics (a silently-dropped high bit in a
+     * constant is a genuine miscompilation footgun -- see
+     * docs/claude_notes/notes_shared_frontend_bugs.txt's "unsuffixed
+     * hex constant" entry, found via exactly this class of warning
+     * being invisible by default), so they should behave like any
+     * modern tool's WARN level: visible unless explicitly silenced.
+     * `-q` (unused by any debug[] flag in this frontend before now)
+     * suppresses them; -W's existing "promote to a hard error
+     * instead" behavior (below) is unchanged. `-w` no longer does
+     * anything here (kept available, unused, rather than repurposed,
+     * since no build script in this tree passed it either way).
+     */
+    if(!debug['q']) {
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);
@@ -11699,7 +11743,10 @@ case OCOM:
         if(tcompat(n, l->type, r->type, tand))
             goto bad;
     }
-    arith(n, false);
+    // claude: true, not false: ~ performs the integer promotions, so
+    // ~(uchar)c must be typed int (NOTL), not uchar (NOTB+MOVBLZX
+    // which wrongly computes (uchar)~c); matches kencc's arith(n, 1)
+    arith(n, true);
     break;
 @
 
@@ -14212,7 +14259,9 @@ long	offset;
 %todo: hmm seems used for CEXREG, flow fron exreg -> o -> xdecl -> offset field.
 
 <<[[Node]] code generation fields>>=
-long	xoffset;
+// claude: must be int32, not long: offset arithmetic relies on 32-bit
+// overflow; see tests/c/misc/minus_one_index.c on 64-bit hosts
+int32	xoffset;
 @
 %ocaml: extra hashtbl in Codegen5.env.offsets, no need store in node
 % because can rely on global symbol table without name conflict (thx to blockid)
@@ -17863,7 +17912,7 @@ case ODOT:
             diag(n, "DOT and no offset");
             break;
         }
-        nod.xoffset += (long)r->vconst;
+        nod.xoffset += (int32)r->vconst;
         nod.type = n->type;
         cgen(&nod, nn);
     }
@@ -17976,7 +18025,7 @@ sugen(Node *n, Node *nn, long w)
                 diag(n, "DOT and no offset");
                 break;
             }
-            nod1.xoffset += (long)r->vconst;
+            nod1.xoffset += (int32)r->vconst;
             nod1.type = n->type;
             sugen(&nod1, nn, w);
         }
@@ -18547,7 +18596,17 @@ case OHS:
 % ugly, need to be more than node_kind max OEND
 
 <<[[gopcode()]] locals>>=
-bool btrue;
+/* claude: must be int, not bool: btrue holds 'o & BTRUE' and
+ * BTRUE is 0x1000 (bit 12), which has no bits in the low byte, so
+ * a char-width bool truncates it to 0. That silently disabled the
+ * float-comparison NaN-safe branch substitutions below (ABMI/ABPL/
+ * ABGT/ABHI for <,>=,>,<= on floats), so 5c emitted the signed/
+ * unsigned integer conditions (LT/GE/HI/LS) for float compares --
+ * different bytes from kencc, and wrong for NaN (e.g. NaN>0 gave 1
+ * via ABHI instead of 0). kencc declares this 'int true'. Was
+ * latent until the arm corpus sweep (48 float files differed).
+ * Repro: tests/c/variants/float_cmp_arm.c. */
+int btrue;
 @
 <<[[gopcode()]] initialisation>>=
 btrue = o & BTRUE;
@@ -20108,10 +20167,10 @@ override this for packed structs.
 
 <<function [[align]](arm)>>=
 /// ??? -> <>
-long
-align(long i, Type *t, int op)
+int32
+align(int32 i, Type *t, int op)
 {
-    long o;
+    int32 o;
     Type *v;
     int w;
 
@@ -20176,8 +20235,8 @@ align(long i, Type *t, int op)
 % mostly identical to 386 except for Aaut3 case, not sure why
 
 <<function [[maxround]]>>=
-long
-maxround(long max, long v)
+int32
+maxround(int32 max, int32 v)
 {
     v = round(v, SZ_LONG);
     if(v > max)
@@ -20610,7 +20669,10 @@ doswit(Node *n)
         if(isv)
             q->val = c->val;
         else
-            q->val = (long)c->val;	/* cast ensures correct value for 32-bit switch on 64-bit architecture */
+            // claude: int32, not long: a 64-bit long keeps hex constants
+            // like 0xC0A1E5CE positive, changing the switch sort order;
+            // see tests/c/misc/switch_hex.c
+            q->val = (int32)c->val;	/* cast ensures correct value for 32-bit switch on 64-bit architecture */
         q++;
     }
     qsort(iq, nc, sizeof(C1), swcmp);
@@ -20666,7 +20728,7 @@ doswit(Node *n)
         for(j = i; j < nc; j++){
             if((iq[j].val>>32) != iqh[nh].val)
                 break;
-            q->val = (long)iq[j].val;
+            q->val = (int32)iq[j].val;
             q->label = iq[j].label;
             q++;
         }
@@ -20989,7 +21051,7 @@ bytes depending on the addressing mode.
 char*
 zaddr(char *bp, Adr *a, int s)
 {
-    long l;
+    int32 l;
     Ieee e;
 
     bp[0] = a->type;
@@ -21080,7 +21142,7 @@ void
 zname(Biobuf *b, Sym *s, int t)
 {
     char *n, bf[7];
-    ulong sig;
+    uint32 sig;
 
     n = s->name;
     <<[[zname()]] if generate signature for symbol s>>
@@ -21127,7 +21189,8 @@ outhist(Biobuf *b)
         //	p += 2;
         //	c = *p;
         //}
-        if(p && p[0] != c && h->offset == 0 && pathname){
+        // claude: -r produces reproducible output: don't embed the cwd in history
+        if(!debug['r'] && p && p[0] != c && h->offset == 0 && pathname){
             /* on windows skip drive specifier in pathname */
             //if(systemtype(Windows) && pathname[1] == ':') {
             //	op = p;
@@ -21421,7 +21484,10 @@ case OAND:
         *n = *r;
         break;
     }
-    // Fallthrough, goto commute
+    // claude: must be a real goto: the fallthrough lands in the
+    // OASHR/OASHL/OLSHR case (bogus "stupid shift" warnings on AND
+    // masks and no commutative-constant rewrite for OAND)
+    goto commute;
 @
 
 
@@ -24255,7 +24321,11 @@ optimization in [[5c]].
 \subsection{[[regopt()]]}
 
 <<[[codgen()]] register optimisation>>=
-if(!debug['N'] || debug['R'] || debug['P'])
+/* claude: gated on optlevel (see cc.h) rather than plain debug['N'],
+ * so -O0/-O1/-O2/-O3 (lex.c) control it; -N still works, folded
+ * into optlevel right after arg parsing. Mirrors compilers/cck/
+ * pgen.c -- see docs/claude_notes/notes_frontend_optlevels.txt. */
+if(optlevel >= 1 || debug['R'] || debug['P'])
     regopt(sp);
 @
 % N = no opti
@@ -24834,7 +24904,7 @@ is used alone (to isolate register allocation effects).
  * pass 7
  * peep-hole on basic block
  */
-if(!debug['R'] || debug['P'])
+if((optlevel >= 2 && !debug['R']) || debug['P'])	/* claude: -O (see cc.h/lex.c) */
     peep();
 @
 
@@ -24939,7 +25009,7 @@ information through the control-flow graph.
 <<struct [[Bits]]>>=
 struct	Bits
 {
-    ulong	b[BITS];
+    uint32	b[BITS];
 };
 @
 
@@ -25067,7 +25137,11 @@ represented by a single bit in the [[Bits]] bitset that the
 dataflow analysis manipulates.
 
 <<constant [[NVAR]]>>=
-#define	NVAR	(BITS*sizeof(ulong)*8)
+// claude: uint32, not ulong: the bits code (blsh, /32, %32) assumes
+// 32-bit words; 64-bit ulongs make NVAR 320 and blsh(160+) writes past
+// b[BITS] (stack smash on functions with many variables, e.g.
+// libsec blake2sblock.c)
+#define	NVAR	(BITS*sizeof(uint32)*8)
 @
 %5 * 4 * 8
 
@@ -25088,7 +25162,7 @@ struct	Var
     char	symkind;
     //enum<type_kind>
     char	etype;
-    long	offset;
+    int32	offset;
 };
 @
 % yet another etype
@@ -30255,6 +30329,20 @@ CEXREG, // extern register, kenccext (used in kernel for mips)
 /* keep two external registers */
 reg[REGEXT] = 1; // R10
 reg[REGEXT-1] = 1; // R9
+/* claude: these two must also be marked reserved in resvreg, or
+ * gclean()'s "reg N left allocated" sanity check flags R9/R10 at
+ * the end of EVERY function (they are reserved here but never
+ * freed), so 5c fails on all input. The kencc 5c takes the
+ * 'memmove(resvreg, reg)' snapshot *after* these two reservations;
+ * the principia "compilers/5c/: mk sync" of 2018-01-17 (commit
+ * dae86be2) reordered the ginit LP chunks so the snapshot (above)
+ * now runs before them. Rather than move the marker-wrapped
+ * memmove, replicate its effect on resvreg for R9/R10 explicitly.
+ * Repro: tests/c/variants/reg_alloc_arm.c (any function triggers
+ * it). Was latent because the principia arm 5c had never been run
+ * over real code until the arm corpus sweep. */
+resvreg[REGEXT] = 1;
+resvreg[REGEXT-1] = 1;
 @
 \t how is it that it uses R9 for registers.c extreme case ???
 %starts at R10 not R11 because R11 is used by linker?
@@ -31566,7 +31654,7 @@ ieeedtod(Ieee *ieee, double native)
     fr = modf(fr*f, &ho);
     ieee->l = ho;
     ieee->l <<= 16;
-    ieee->l |= (long)(fr*f);
+    ieee->l |= (int32)(fr*f);
 }
 @
 
@@ -33175,6 +33263,12 @@ char	debug[256];
  *	-m		print add/sub/mul trees
  *	-n		print acid to file (%.c=%.acid) (with -a or -aa)
  *	-o file		output file
+ *	-O n		claude: optimization level 0..3 (default 3); 0 disables
+ *			regopt() (register alloc + peephole) entirely, 1
+ *			keeps register alloc but skips peephole, 2 and 3
+ *			enable both (no distinct 3rd lever yet -- see
+ *			docs/claude_notes/notes_frontend_optlevels.txt).
+ *			-N is a legacy alias for -O0.
  *	-p		use standard cpp ANSI preprocessor (not on windows)
  *	-r		print registerization
  *	-s		print structure offsets (with -a or -aa)
@@ -33538,7 +33632,7 @@ Bconv(Fmt *fp)
         if(str[0])
             strcat(str, " ");
         if(var[i].sym == S) {
-            snprint(ss, sizeof(ss), "$%ld", var[i].offset);
+            snprint(ss, sizeof(ss), "$%d", var[i].offset);
             s = ss;
         } else
             s = var[i].sym->name;
@@ -33700,7 +33794,7 @@ Dconv(Fmt *fp)
         break;
 
     case D_BRANCH:
-        snprint(str, sizeof(str), "%ld(PC)", a->offset-pc);
+        snprint(str, sizeof(str), "%d(PC)", a->offset-pc);
         break;
 
     case D_FCONST:
@@ -33817,28 +33911,28 @@ Nconv(Fmt *fp)
     a = va_arg(fp->args, Adr*);
     s = a->sym;
     if(s == S) {
-        snprint(str, sizeof(str), "%ld", a->offset);
+        snprint(str, sizeof(str), "%d", a->offset);
         goto out;
     }
     switch(a->symkind) {
     case N_NONE:
-        snprint(str, sizeof(str), "%ld", a->offset);
+        snprint(str, sizeof(str), "%d", a->offset);
         break;
 
     case N_EXTERN:
-        snprint(str, sizeof(str), "%s+%ld(SB)", s->name, a->offset);
+        snprint(str, sizeof(str), "%s+%d(SB)", s->name, a->offset);
         break;
 
     case N_INTERN:
-        snprint(str, sizeof(str), "%s<>+%ld(SB)", s->name, a->offset);
+        snprint(str, sizeof(str), "%s<>+%d(SB)", s->name, a->offset);
         break;
 
     case N_LOCAL:
-        snprint(str, sizeof(str), "%s-%ld(SP)", s->name, -a->offset);
+        snprint(str, sizeof(str), "%s-%d(SP)", s->name, -a->offset);
         break;
 
     case N_PARAM:
-        snprint(str, sizeof(str), "%s+%ld(FP)", s->name, a->offset);
+        snprint(str, sizeof(str), "%s+%d(FP)", s->name, a->offset);
         break;
 
     default:
@@ -34772,6 +34866,16 @@ nhunk = 0;
 
 
 <<function [[gethunk]]>>=
+/*
+ * claude: INVARIANT — gethunk() hands out ZEROED memory.
+ *
+ * alloc()/allocn() carve chunks out of the `hunk` buffer refilled here
+ * without clearing them, so the whole compiler relies on freshly
+ * allocated nodes having all fields zero (e.g. Node.left/right/type NULL,
+ * Sym links NULL). Original Plan 9 got this for free: sbrk() returns
+ * fresh kernel pages, which are always zero-filled. Any replacement
+ * allocator MUST preserve that guarantee, hence the memset() below.
+ */
 void
 gethunk(void)
 {
@@ -34782,11 +34886,33 @@ gethunk(void)
     if(thunk >= 10L*NHUNK)
         nh = 10L*NHUNK;
 
-    h = (char*)sbrk(nh);
-    if(h == (char*)-1) {
+    /* claude: was sbrk(nh) in original Plan 9 code.
+     *
+     * On macOS, sbrk() is deprecated and hard-capped: it satisfies only a
+     * ~4MB reservation and then returns -1 for every further request,
+     * regardless of free RAM. Small source files compile fine, but once
+     * the arena has chewed through that quota gethunk() fails and the
+     * compile dies with "out of memory" — this bit us on
+     * principia/lib_graphics/libimg/torgbv.c with 8c.
+     *
+     * We now refill the arena with the real libc malloc(). This is only
+     * possible because the old compat.c malloc->alloc wrapper has been
+     * removed (see compilers/cc/compat.c); with that wrapper in place this
+     * call recursed gethunk->malloc->alloc->gethunk forever. malloc() is
+     * uncapped on macOS/Linux/Plan 9, so torgbv.c and friends now build.
+     *
+     * Two adjustments versus sbrk(): malloc() returns nil (not (char*)-1)
+     * on failure, and — unlike sbrk's fresh kernel pages — malloc() does
+     * NOT zero its memory, so we memset() the chunk to uphold gethunk's
+     * zeroed-memory invariant (see the note above this function).
+     */
+    /*old: h = (char*)sbrk(nh); */
+    h = (char*)malloc(nh);
+    if(h == nil) {
         yyerror("out of memory");
         errorexit();
     }
+    memset(h, 0, nh);
     hunk = h;
     nhunk = nh;
     thunk += nh;

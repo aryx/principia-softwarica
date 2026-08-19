@@ -413,7 +413,7 @@ regopt(Prog *p)
      * pass 7
      * peep-hole on basic block
      */
-    if(!debug['R'] || debug['P'])
+    if((optlevel >= 2 && !debug['R']) || debug['P'])	/* claude: -O (see cc.h/lex.c) */
         peep();
     /*e: [[regopt()]] pass 7 */
     /*s: [[regopt()]] pass 8 */

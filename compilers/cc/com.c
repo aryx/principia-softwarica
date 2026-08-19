@@ -418,7 +418,10 @@ tcomo(Node *n, int f)
             if(tcompat(n, l->type, r->type, tand))
                 goto bad;
         }
-        arith(n, false);
+        // claude: true, not false: ~ performs the integer promotions, so
+        // ~(uchar)c must be typed int (NOTL), not uchar (NOTB+MOVBLZX
+        // which wrongly computes (uchar)~c); matches kencc's arith(n, 1)
+        arith(n, true);
         break;
     /*x: [[tcomo()]] switch node kind cases */
     case OANDAND:
@@ -1366,7 +1369,10 @@ loop:
             *n = *r;
             break;
         }
-        // Fallthrough, goto commute
+        // claude: must be a real goto: the fallthrough lands in the
+        // OASHR/OASHL/OLSHR case (bogus "stupid shift" warnings on AND
+        // masks and no commutative-constant rewrite for OAND)
+        goto commute;
     /*x: [[ccom()]] switch node kind cases */
     case OASHR:
     case OASHL:

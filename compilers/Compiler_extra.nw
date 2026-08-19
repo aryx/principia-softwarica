@@ -97,6 +97,14 @@ extern	long	autoffset;
 extern	int	blockno;
 extern	Decl*	dclstack;
 extern	char	debug[256];
+/* claude: gcc/clang-style optimization level, set by -O (see lex.c);
+ * 0 disables regopt() entirely (cc2/pgen.c), >=2 also enables the
+ * peephole pass inside it (5c/8c's own reg.c). Defaults to 3 (full
+ * optimization, i.e. today's pre-existing no-flags-given behavior).
+ * -N is a legacy alias for -O0, folded into this after arg parsing
+ * (see lex.c). Mirrors compilers/cck/cc.h's optlevel -- see
+ * docs/claude_notes/notes_frontend_optlevels.txt. */
+extern	int	optlevel;
 extern	Hist*	ehist;
 extern	bool	firstbit;
 extern	Sym*	firstarg;
@@ -393,8 +401,8 @@ long	outstring(char*, long);
 long	outlstring(TRune*, long);
 void	xcom(Node*);
 long	exreg(Type*);
-long	align(long, Type*, int);
-long	maxround(long, long);
+int32	align(int32, Type*, int);
+int32	maxround(int32, int32);
 
 extern	schar	ewidth[];
 
@@ -490,6 +498,11 @@ pragfpround(void)
 <<global [[blockno]]>>
 <<global [[dclstack]]>>
 <<global [[debug]]>>
+/* claude: gcc/clang-style optimization level, see cc.h's own comment
+ * and docs/claude_notes/notes_frontend_optlevels.txt -- ported from
+ * compilers/cck/, not part of the original syncweb-documented book,
+ * so deliberately left without syncweb chunk markers of its own. */
+int	optlevel;
 <<global [[ehist]]>>
 <<global [[firstbit]]>>
 <<global [[firstarg]]>>
@@ -658,11 +671,27 @@ pathchar(void)
  return '/';
 }
 
+/*
+ * claude: the "fake mallocs" below (malloc->alloc, a no-op free, and a
+ * no-op setmalloctag) are DISABLED via #if 0. Original Plan 9 routed
+ * malloc() through the compiler's own hunk arena (alloc()) so that library
+ * code shared the arena and never had to free. But that made malloc()
+ * unusable *inside* the arena: gethunk() must obtain raw memory from the OS,
+ * and with the wrapper in place gethunk()->malloc()->alloc()->gethunk()
+ * recurses forever (an instant stack overflow on the first source file).
+ * Plan 9, Linux and macOS all provide a perfectly good libc malloc/free, so
+ * we now use them directly: gethunk() refills the arena with the real
+ * malloc(), and the handful of malloc()/free() call sites (dcl.c, mywait
+ * above) get honest heap allocation. See compilers/cc/utils.c:gethunk().
+ * (The syncweb chunk markers are kept; only the code is disabled.)
+ */
+#ifdef NOT_DEFINED
 <<function [[malloc]]>>
 
 <<function [[free]]>>
 
 <<function [[setmalloctag]]>>
+#endif
 @
 
 % on pathchar() :) why DOS used '\' instead of '/'
@@ -1732,8 +1761,8 @@ bool		bcomplex(Node*, Node*);
 <<5c/gc.h>>=
 #include	"../cc/cc.h"
 
-#include	<common.out.h>
-#include	<5.out.h>
+#include	<obj/common.out.h>
+#include	<obj/5.out.h>
 
 /*
  * 5c/arm
