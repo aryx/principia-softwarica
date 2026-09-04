@@ -54,8 +54,6 @@ PROGRAMS=\
  games\
  typesetting
 
-#notes: typesetting requires (slow) pcc
-
 #missing:
 # - interpreters/s9
 # - security/auth/
