@@ -1,6 +1,12 @@
 #ifndef _UTF_H_
 #define _UTF_H_ 1
-#pragma lib "/$M/lib/ape/libutf.a"
+/* claude: was the hardcoded absolute Plan9 path "/$M/lib/ape/libutf.a"
+ * -- unlike stdio.h/errno.h/etc.'s bare "libap.a", an absolute path
+ * here means the linker never even consults -L, so this never worked
+ * on this cross-compiled fork. Bare name, like the other APE libs
+ * (see APE/lib/utf/, now built alongside ap/bsd/9).
+ */
+#pragma lib "libutf.a"
 #pragma src "/sys/src/ape/lib/utf"
 
 #if defined(__cplusplus)
