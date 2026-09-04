@@ -3,7 +3,16 @@ TOP=../..
 
 TARG=pic
 
-OFILES=picy.$O\
+# claude: was picy.$O (via a "mv y.tab.c picy.c" rule below) -- every
+# other yacc user in this repo (hoc, rc, cc, acid, this dir's own eqn
+# sibling) just uses y.tab.$O directly. Renaming added a second graph
+# edge into the same "y.tab.h y.tab.c: $YFILES" recipe that every
+# other .$O here already reaches via HFILES, which could race under
+# this repo's $NPROC-driven parallel builds (corrupting whichever .c
+# file read y.tab.h/.c mid-write, seen as "name not declared" for
+# random pic.y tokens). Matching the rest of the repo removes the
+# extra edge instead of just papering over the race.
+OFILES=y.tab.$O\
 	picl.$O\
 	main.$O\
 	print.$O\
@@ -34,18 +43,7 @@ CFLAGS=-FTV -c -I$TOP/APE/include -I$TOP/APE/include/$objtype
 LDFLAGS=-L$TOP/ROOT/arch/$objtype/lib/ape -L$TOP/ROOT/arch/$objtype/lib
 YFLAGS=-S -d
 
-# claude: depend on y.tab.h too, not just y.tab.c -- both are produced
-# by the SAME "y.tab.h y.tab.c: $YFILES" recipe (in mkone) that every
-# other .$O here also reaches via HFILES. Naming only y.tab.c reaches
-# that recipe through a second, separate graph edge; under -j (this
-# repo sets $NPROC) that diamond occasionally raced picy.c's rename
-# against y.tab.h/.c still being written, corrupting whichever .c file
-# read it mid-write ("name not declared" for random pic.y tokens).
-# Naming both here collapses it back to a single edge everyone shares.
-picy.c:	y.tab.c y.tab.h
-	mv $prereq(1) $target
-
 picl.c:	picl.lx
 	$LEX -t $prereq > $target
 
-CLEANFILES=picy.c picl.c
+CLEANFILES=picl.c
