@@ -52,11 +52,13 @@ PROGRAMS=\
  utilities\
  applications\
  games\
+ typesetting
+
+#notes: typesetting requires (slow) pcc
 
 #missing:
 # - interpreters/s9
 # - security/auth/
-# - typesetting (requires (slow) pcc, too slow so skipped for now)
 
 #missing in subdirs:
 # - networking/http
