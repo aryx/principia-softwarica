@@ -1,0 +1,818 @@
+References research: Kernel_x86.nw, Kernel_arm.nw, Machine.nw
+=============================================================
+
+Scope notes
+-----------
+- kernel/Kernel_x86.nw is the old "x86 (32 bits) edition" material that
+  used to be in the main text of Kernel.nw. It is still in SRC_ORIG
+  (synced) but its #include in Kernel.nw is commented out
+  (Kernel.nw:48982), so its %ref: lines would not render in the PDF
+  today. The entries below are still tied to real x86 code
+  (kernel/*/386/).
+- kernel/Kernel_arm.nw is an appendix (#include'd at Kernel.nw:48826)
+  that mostly holds FILE SKELETONS; the bodies of the interesting ARM
+  functions (mmuinit, arch_tas, cas32, trap, clock...) live in
+  Kernel.nw, which is outside this assignment. Only the peripheral
+  drivers (DMA, GPIO, mini UART, eMMC, USB, ATAGs, coprocessor access)
+  have their bodies here, so the ARM entries are mostly datasheet/spec
+  references tied to those chunks.
+- machine/Machine.nw is the book on 5i, the Plan 9 user-mode ARM
+  emulator (interpreter + built-in adb-like debugger + profiler).
+  It has the richest set of classic-paper hooks.
+- Existing bib keys used/mentioned: x86-refman (Intel 80386 PRM, 1986),
+  arm-refman (Seal, ARM ARM, 2001), lions, taocp, blit.
+
+
+=====================================================================
+kernel/Kernel_x86.nw
+=====================================================================
+
+### Kernel_x86.nw : <<function [[tas]](x86)>>
+(line ~609, section "[[arch_tas()]] (x86)")
+Algorithm/idea: test-and-set via an atomic exchange (XCHG), the
+  hardware primitive under the spin lock.
+Verified: MOVL $0xDEADDEAD,AX; XCHGL AX,(BX) -- returns old key; lock()
+  in concurrency/taslock.c spins on it (tas()==0 means acquired).
+  XCHG with memory is implicitly LOCKed on x86.
+CONFIDENCE: high
+Proposed lines:
+%ref: E. W. Dijkstra, "Solution of a problem in concurrent programming
+%  control", CACM 8(9):569, 1965 (N processes sharing one memory with
+%  no atomic read-modify-write, so mutual exclusion takes a clever
+%  protocol of plain loads and stores; the 386's XCHG does the whole
+%  job in one bus-locked instruction, which is all arch_tas needs).
+
+### Kernel_x86.nw : <<function [[mb386]](x86)>>
+(line ~666, section "[[arch_coherence()]] (x86)")
+Algorithm/idea: memory barriers / memory consistency models.
+Verified: three variants chosen at archinit time: mb386 (IRET is
+  serializing), mb586 (CPUID is serializing), mfence (SSE2 MFENCE,
+  emitted as raw bytes 0f ae f0). arch_coherence points to one of them.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. Lamport, "How to make a multiprocessor computer that correctly
+%  executes multiprocess programs", IEEE Trans. Computers
+%  C-28(9):690-691, 1979 (a two-page paper defining "sequential
+%  consistency": what programmers assume and what caches and write
+%  buffers silently break; arch_coherence is how the kernel puts it
+%  back where it matters).
+%ref: P. Sewell, S. Sarkar, S. Owens, F. Zappa Nardelli, M. O. Myreen,
+%  "x86-TSO: a rigorous and usable programmer's model for x86
+%  multiprocessors", CACM 53(7):89-97, 2010 (x86 only lets a load pass
+%  an earlier store sitting in the store buffer; the 386 had no fence
+%  instruction, hence mb386 abusing IRET and mb586 abusing CPUID as
+%  serializing instructions before SSE2's MFENCE).
+
+### Kernel_x86.nw : <<function [[i8259init]](x86)>>
+(line ~1129, section "IRQs (x86)" / commented "Interrupt controller [[i8259]]")
+Algorithm/idea: programming the cascaded 8259A PIC pair (ICW1-ICW4,
+  OCW3, master/slave on IRQ2, vector offset 32).
+Verified: outb of ICW1..ICW4 to Int0ctl/Int0aux and Int1ctl/Int1aux,
+  slave on level 2, VectorPIC offset, OCW3 to read ISR; i8259isr sends
+  EOI.
+CONFIDENCE: medium (datasheet title/edition from memory; no year given)
+Proposed lines:
+%ref: Intel, "8259A Programmable Interrupt Controller (8259A/8259A-2)"
+%  datasheet (a chip designed for the 8080/8085, which is why ICW4 has
+%  an "8086 mode" bit; two of them are cascaded, the slave on master
+%  line 2, and i8259init moves their vectors to VectorPIC=32 so they
+%  do not collide with the CPU's exception vectors 0-31).
+
+### Kernel_x86.nw : <<global [[vectortable]](x86)>>
+(line ~1341, section "Interrupt [[vectortable]] and [[idt]] (x86)")
+Algorithm/idea: IDT, exception vs interrupt vectors, error-code-pushing
+  exceptions.
+Verified: each entry is CALL _strayintr/_strayintrx + BYTE vector; the
+  x variant is for exceptions where the CPU pushes an error code;
+  excname[] lists the 32 Intel-reserved exceptions; trap() is the single
+  C entry point.
+CONFIDENCE: high (bib key x86-refman exists; chapter number from
+  memory, medium)
+Proposed lines:
+%ref: Intel, "Intel 80386 Programmer's Reference Manual", 1986,
+%  chapter 9 "Exceptions and Interrupts" (the IDT and its gates, and
+%  the table of which exceptions push an error code: the reason
+%  vectortable calls _strayintrx for some vectors and _strayintr, which
+%  pushes a dummy, for the others, so trap() always sees one Ureg
+%  layout) [bib: x86-refman].
+
+### Kernel_x86.nw : <<global [[gdt]](x86)>>
+(line ~2088, section "Segmentation and [[gdt]] (x86)")
+Algorithm/idea: hardware protection rings; segmentation as the road not
+  taken.
+Verified: all code/data descriptors are flat (base 0, limit 4GB,
+  SEGG) and differ only by SEGPL(0) vs SEGPL(3); segmentation is used
+  purely for kernel/user privilege, paging does the rest (author's own
+  % note above the section says so).
+CONFIDENCE: high
+Proposed lines:
+%ref: M. D. Schroeder, J. H. Saltzer, "A hardware architecture for
+%  implementing protection rings", CACM 15(3):157-170, 1972 (Multics
+%  ran its protection rings in software on the Honeywell 645; this
+%  paper puts them in hardware; the 386 inherited four rings, and the
+%  gdt uses only two, SEGPL(0) for the kernel and SEGPL(3) for users).
+%ref: J. B. Dennis, "Segmentation and the design of multiprogrammed
+%  computer systems", JACM 12(4):589-602, 1965 (the MIT view behind
+%  Multics: one segment per procedure or data object, named and shared
+%  by segment number; road not taken: every descriptor here is flat,
+%  base 0 and limit 4GB, and paging does the real work).
+
+### Kernel_x86.nw : <<function [[mmuwalk]](x86)>>
+(line ~2190, section "Pagination and [[mmupd]], [[mmupt]] (x86)")
+Algorithm/idea: two-level page-table walk (paging, invented on Atlas).
+Verified: pd[PDX(va)] then table[PTX(va)], allocating a 2nd-level page
+  on demand; PTESIZE entries are 4MB big pages.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Kilburn, D. B. G. Edwards, M. J. Lanigan, F. H. Sumner,
+%  "One-level storage system", IRE Trans. Electronic Computers
+%  EC-11(2):223-235, 1962 (Manchester's Atlas made a small core memory
+%  and a big drum look like one store, inventing pages and page
+%  faults; Atlas kept one associative register per physical page,
+%  where the 386 walks a two-level table in memory, pd[PDX(va)] then
+%  pt[PTX(va)], exactly what mmuwalk does in software).
+%ref: Intel 80386 Programmer's Reference Manual, 1986, section 5.2
+%  "Page Translation" (the 10+10+12 bit split behind PDX and PTX, and
+%  the PTE bits PTEVALID, PTEWRITE, PTEUSER) [bib: x86-refman].
+
+### Kernel_x86.nw : <<function [[mmupdalloc]](x86)>>
+(line ~2304, same section)
+Algorithm/idea: per-CPU cache of pre-initialized objects (page
+  directories already containing the kernel mappings copied from
+  cpu->pdproto).
+Verified: mmupdalloc pops cpu->mmupdpool if non-empty, else memmove's
+  pdproto into a fresh page; mmupdfree pushes back up to 10.
+CONFIDENCE: high (paper); the link is an analogy, noted as such
+Proposed lines:
+%ref: J. Bonwick, "The slab allocator: an object-caching kernel memory
+%  allocator", USENIX Summer 1994 (for SunOS 5.4: keep freed kernel
+%  objects already constructed so reuse skips initialization; the
+%  small cpu->mmupdpool is the same trick, keeping page directories
+%  that already hold the kernel mappings copied from cpu->pdproto).
+
+### Kernel_x86.nw : <<function [[flushpg]](x86)>>
+(line ~2471, same section)
+Algorithm/idea: TLB invalidation; multiprocessor TLB consistency.
+Verified: invlpg(va) on 486+, else reload CR3 (full flush). Only the
+  local CPU is flushed; there is no cross-CPU shootdown IPI -- instead
+  every context switch reloads CR3 (taskswitch/putcr3 in mmuswitch,
+  mmuflushtlb in procsave), which flushes non-global entries.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. L. Black, R. F. Rashid, D. B. Golub, C. R. Hill, R. V. Baron,
+%  "Translation lookaside buffer consistency: a software approach",
+%  ASPLOS III, 1989 (from Mach on shared-memory multiprocessors, whose
+%  TLBs were not kept coherent by hardware: a CPU changing a mapping
+%  must interrupt the others to "shoot down" stale entries; flushpg
+%  only invalidates the local TLB and the kernel relies instead on the
+%  CR3 reload that each switch does in mmuswitch/procsave).
+
+### Kernel_x86.nw : <<function [[gotolabel]](x86)>>
+(line ~2621, section "Scheduling", subsection "[[arch_gotolabel()]] (x86)")
+Algorithm/idea: context switch as setjmp/longjmp on a (sp, pc) label.
+Verified: setlabel stores SP and return PC and returns 0; gotolabel
+  restores them and returns 1 -- exactly V6 UNIX's savu/retu pair
+  used by swtch().
+CONFIDENCE: high (book); chapter not given
+Proposed lines:
+%ref: J. Lions, "A Commentary on the UNIX Operating System", 1977
+%  (V6 UNIX on the PDP-11 switched processes with savu/retu, which save
+%  and restore only the stack and frame pointers, the source of the
+%  famous "You are not expected to understand this" comment in swtch;
+%  setlabel/gotolabel are the same trick with an explicit Label of
+%  (sp, pc), returning 0 on save and 1 on the jump back, like
+%  setjmp/longjmp) [bib: lions].
+
+### Kernel_x86.nw : <<function [[i8253init]](x86)>>
+(line ~2797, section "Preemptive scheduling", subsection "Clock interrupt (x86)")
+Algorithm/idea: periodic clock interrupt for time-slicing.
+Verified: programs PIT counter 0 at Freq/Arch_HZ (100 Hz) in square
+  wave mode; i8253clock -> timerintr() drives preemption.
+CONFIDENCE: high
+Proposed lines:
+%ref: F. J. Corbato, M. Merwin-Daggett, R. C. Daley, "An experimental
+%  time-sharing system", AFIPS Spring Joint Computer Conference, 1962
+%  (CTSS at MIT: an IBM 7090 given an interval-timer clock so the
+%  supervisor could take the CPU back from a user program that never
+%  gives it up; i8253init sets the PC's timer chip to fire Arch_HZ=100
+%  times per second for the same purpose, via timerintr()).
+
+### Kernel_x86.nw : <<global [[_multibootheader]](x86)>>
+(line ~2936, chapter "Initialization", subsection "Loading the kernel in physical memory (x86)")
+Algorithm/idea: Multiboot boot protocol header.
+Verified: magic 0x1BADB002, flags 0x00010003 (bit 16 = a.out kludge
+  address fields), checksum = -(magic+flags), then header/load/
+  load_end/bss_end/entry addresses -- the Multiboot 0.6 layout,
+  needed because Plan 9's a.out is not ELF.
+CONFIDENCE: medium (authors/version from memory)
+Proposed lines:
+%ref: B. Ford, E. S. Boleyn (and later Y. K. Okuji et al.), "Multiboot
+%  Specification", version 0.6.96, Free Software Foundation (written so
+%  any compliant loader such as GRUB can boot any OS kernel; loaders
+%  expect ELF, and Plan 9's kernel is an a.out, so flag bit 16, the
+%  "a.out kludge", tells GRUB to use the explicit load_addr,
+%  load_end_addr, bss_end_addr and entry_addr fields of this header).
+
+### Kernel_x86.nw : <<function [[mapfree]](x86)>>
+(line ~3519, section "Kernel initialization (x86)", subsection "Memory detection (x86)")
+Algorithm/idea: resource map allocator: sorted array of (addr,size)
+  holes, first-fit allocation, coalescing free.
+Verified: mapfree merges with the previous and/or next hole, else
+  shifts the tail of the array to insert; mapalloc is first-fit (plus
+  alignment and optional fixed address, returning the alignment slop to
+  the map). This is V6 UNIX's malloc(map,size)/mfree (coremap/swapmap)
+  almost verbatim, extended with alignment.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Lions, "A Commentary on the UNIX Operating System", 1977 (V6
+%  managed both core and swap space with malloc(map,size)/mfree over
+%  sorted arrays of (size,addr) holes named coremap and swapmap; this
+%  code is that pair almost verbatim, with alignment and a fixed-
+%  address request added to mapalloc) [bib: lions].
+%ref: D. E. Knuth, "The Art of Computer Programming", vol. 1, section
+%  2.5 "Dynamic Storage Allocation" (first-fit, used by mapalloc, and
+%  merging a freed area with its neighbors, the two-sided merge at the
+%  top of mapfree) [bib: taocp].
+
+### Kernel_x86.nw : <<function [[mathemu]](x86)>>
+(line ~5961, section "Floating point (x86)", subsection "[[mathxxx()]]")
+Algorithm/idea: lazy FPU context switching via the
+  "coprocessor not available" trap (CR0.TS / fpoff).
+Verified: procsave saves only if FPactive and leaves the FPU off;
+  mathemu (VectorCNA handler) does fpinit on first use (FPinit) or
+  fprestore (FPinactive) on demand.
+CONFIDENCE: high (Intel chapter number medium)
+Proposed lines:
+%ref: Intel 80386 Programmer's Reference Manual, 1986, chapter 11
+%  "Coprocessing and Multiprocessing" (the 387 was a separate chip, and
+%  the CR0.TS "task switched" bit makes the next FP instruction trap
+%  (exception 7, VectorCNA) so an OS can switch FP state lazily:
+%  procsave leaves the FPU off, and mathemu restores or initializes it
+%  only when the process really uses floating point) [bib: x86-refman].
+%ref: J. Stecklina, T. Prescher, "LazyFP: Leaking FPU register state
+%  using microarchitectural side-channels", arXiv:1806.07480, 2018
+%  (speculative execution could read FP registers left in place for
+%  the previous owner, the very state lazy switching leaves around;
+%  after it, Linux and others switched to eager save/restore).
+
+
+=====================================================================
+kernel/Kernel_arm.nw  (appendix; mostly peripheral drivers)
+=====================================================================
+
+### Kernel_arm.nw : <<function [[setupcpop]](arm)>>
+(line ~249, section "[[arch/arm/]]")
+Algorithm/idea: generate an MRC/MCR instruction at runtime (the
+  coprocessor fields are immediates in the encoding), then call it;
+  requires D-cache writeback + I-cache invalidate.
+Verified: builds opcode|op1<<21|crn<<16|cp<<8|op2<<5|crm followed by a
+  MOV R14,R15 return, cachedwbse + cacheiinv, and cprd/cpwr call it
+  through a function pointer.
+CONFIDENCE: high for ARM ARM; medium for the relevance of the Blit
+  paper (lineage/analogy only)
+Proposed lines:
+%ref: D. Seal (ed.), "ARM Architecture Reference Manual", 2001 (MRC/MCR
+%  encode the coprocessor number and registers as immediate bits of
+%  the instruction, so a generic cprd(cp,op1,crn,crm,op2) cannot be
+%  written in assembly once; setupcpop assembles the word at run time,
+%  and must clean the D-cache and invalidate the I-cache first so the
+%  CPU fetches the new code, not stale bytes) [bib: arm-refman].
+%ref: R. Pike, B. Locanthi, J. Reiser, "Hardware/software tradeoffs for
+%  bitmap graphics on the Blit", Software-Practice and Experience
+%  15(2):131-151, 1985 (on the Blit terminal's 68000, bitblt compiled
+%  its inner loop on the fly; the same Bell Labs habit of generating
+%  instructions at run time, here for a single coprocessor access).
+
+### Kernel_arm.nw : <<function [[dmastart]](arm)>>
+(line ~4354, section "[[buses/arm/]]")
+Algorithm/idea: descriptor ("control block") driven DMA with software
+  cache coherence for a non-coherent DMA engine.
+Verified: fills a Cb (ti, sourcead, destad, txfrlen, stride,
+  nextconbk), writes its bus address to Conblkad, sets Active;
+  cachedwbse before memory->device, cachedinvse before device->memory.
+CONFIDENCE: high (chapter number from memory, medium)
+Proposed lines:
+%ref: Broadcom, "BCM2835 ARM Peripherals", 2012, chapter 4 "DMA
+%  Controller" (the engine does not read registers for a transfer but
+%  a Cb "control block" in memory, which can chain via nextconbk; it
+%  sees memory through the GPU's bus addresses, hence dmaaddr and
+%  dmaioaddr, and it bypasses the ARM caches, hence the cachedwbse
+%  before a memory->device copy and cachedinvse before device->memory).
+
+### Kernel_arm.nw : <<function [[gpiosel]](arm)>>
+(line ~4586, section "[[buses/arm/]]" (uartmini.c))
+Algorithm/idea: GPIO alternate-function select and the pull-up/down
+  clocking sequence.
+Verified: 3 bits per pin in GPFSEL[pin/10]; gpiopull writes GPPUD,
+  waits, pulses GPPUDCLK[pin/32], waits, clears -- the documented
+  sequence. Same file drives the AUX mini UART (miniuart, AUXREGS).
+CONFIDENCE: high (chapter numbers from memory, medium)
+Proposed lines:
+%ref: Broadcom, "BCM2835 ARM Peripherals", 2012, chapter 6 "General
+%  Purpose I/O" (each pin has a 3-bit function field, ten per GPFSEL
+%  register, hence pin/10 and (pin%10)*3 in gpiosel; pull-ups need the
+%  odd "write GPPUD, wait, clock GPPUDCLK, wait, clear" sequence that
+%  gpiopull follows) and chapter 2 "Auxiliaries" (the mini UART,
+%  AUXREGS, used as the console).
+
+### Kernel_arm.nw : <<global [[cmdinfo]](arm)>>
+(line ~5903, section "[[devices/storage/arm/]]")
+Algorithm/idea: SD card command protocol (CMDn index -> response type,
+  data direction, CRC/index checks).
+Verified: table indexed by SD command number: CMD0, 2 (R2/136-bit), 3,
+  7 (R1b busy), 8, 9, 12, 13, 16, 17/18 (read single/multi), 24/25
+  (write single/multi), ACMD41 and CMD55.
+CONFIDENCE: medium (spec titles from memory; no version given)
+Proposed lines:
+%ref: SD Association, "SD Specifications Part 1: Physical Layer
+%  Simplified Specification" (SD grew out of MultiMediaCard; each
+%  command CMDn has a fixed response type, R1, R1b for busy, R2 for
+%  136 bits, and application commands such as ACMD41 must be prefixed
+%  by CMD55; cmdinfo encodes exactly that table, indexed by n).
+%ref: SD Association, "SD Specifications Part A2: SD Host Controller
+%  Simplified Specification" (the standard host-controller register
+%  interface that the BCM2835 EMMC block implements with variations).
+
+### Kernel_arm.nw : <<function [[ctltrans]](arm)>>
+(line ~3495, section "[[buses/arm/]]" (usbdwc.c))
+Algorithm/idea: USB control transfer = SETUP stage, optional DATA
+  stage, STATUS stage in the opposite direction, with DATA0/DATA1
+  toggling.
+Verified: chanio(..., SETUP, req, Rsetuplen), then data in/out with
+  DATA1, then a zero-length DATA1 status transaction in the reverse
+  direction; Rd2h bit of bmRequestType selects direction.
+CONFIDENCE: high (spec); chapter numbers medium
+Proposed lines:
+%ref: Compaq, HP, Intel, Lucent, Microsoft, NEC, Philips, "Universal
+%  Serial Bus Specification", Revision 2.0, 2000 (every device answers
+%  control requests on endpoint 0 in three stages: an 8-byte SETUP
+%  packet (chapter 9), an optional DATA stage, and a zero-length STATUS
+%  in the other direction, with DATA0/DATA1 toggles to detect lost
+%  packets (chapter 8); ctltrans issues these stages by hand because
+%  the DWC controller does not sequence them).
+
+### Kernel_arm.nw : <<function [[ataginit]](arm)>>
+(line ~6808, section "[[init/arm/]]")
+Algorithm/idea: ARM Linux boot protocol tagged list (ATAGs) passed by
+  the firmware.
+Verified: walks Atag records (size in words, tag) from AtagCore to
+  AtagNone, using AtagMem for memory size and AtagCmdline for boot
+  args; falls back to a plain plan9.ini text if no AtagCore.
+CONFIDENCE: medium (document is informal; author/title from memory)
+Proposed lines:
+%ref: R. King, "Booting ARM Linux", Linux kernel
+%  Documentation/arm/Booting (the ARM convention for a boot loader to
+%  pass a list of tagged records, ATAG_CORE ... ATAG_NONE, holding
+%  memory size and command line; the Pi firmware builds it for Linux,
+%  and ataginit reads the same AtagMem and AtagCmdline tags).
+
+
+=====================================================================
+machine/Machine.nw  (5i, the ARM emulator)
+=====================================================================
+
+### Machine.nw : <<function [[run]]>>
+(line ~3263, section "[[run()]]")
+Algorithm/idea: the stored-program fetch-decode-execute cycle.
+Verified: do { ar = PC; instr = ifetch(ar); decode; if(cond) execute;
+  PC += 4; } while(--count).
+CONFIDENCE: high
+Proposed lines:
+%ref: J. von Neumann, "First Draft of a Report on the EDVAC", Moore
+%  School, University of Pennsylvania, 1945 (ENIAC was programmed by
+%  rewiring; for its successor EDVAC, with mercury delay-line memory,
+%  von Neumann described keeping the orders in the same memory as the
+%  numbers and having a central control fetch and obey them one after
+%  another; run() is that control: ifetch, arm_class, (*ip->func)(),
+%  then PC += 4).
+
+### Machine.nw : <<global [[itab]]>>
+(line ~2233, section "[[Inst]] and [[itab]]")
+Algorithm/idea: interpreter dispatch through a table of handler
+  function pointers.
+Verified: run() does (*itab[arm_class(instr)].func)(instr): decode to
+  an index, then an indirect call; no threading, no predecoding.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. R. Bell, "Threaded code", CACM 16(6):370-372, 1973 (from DEC's
+%  PDP-11 FORTRAN: compile a program to a list of routine addresses,
+%  each routine ending with a jump to the next, so there is no central
+%  loop; road not taken: 5i goes back to run() after each
+%  (*itab[op].func)() call).
+%ref: M. A. Ertl, D. Gregg, "The structure and performance of efficient
+%  interpreters", Journal of Instruction-Level Parallelism 5, 2003
+%  (measures why a single shared dispatch point, like the indirect
+%  call in run(), makes branch predictors miss, and why threaded code
+%  predicts better).
+
+### Machine.nw : <<function [[arm_class]]>>
+(line ~3375, section "[[arm_class()]]")
+Algorithm/idea: hand-written instruction decoder (bits 25-27 first,
+  then refine); re-decoded on every execution.
+Verified: switch on (w>>25)&7 then per-class bit tests, copied from
+  libmach/5db.c; nothing caches the decode, so a loop body is decoded
+  again each iteration.
+CONFIDENCE: high for Ramsey-Fernandez; medium for Bedichek (venue/year
+  confident, content summary from memory)
+Proposed lines:
+%ref: N. Ramsey, M. F. Fernandez, "Specifying representations of
+%  machine instructions", ACM TOPLAS 19(3):492-524, 1997 (the New
+%  Jersey Machine-Code Toolkit generates encoders and decoders for
+%  MIPS, SPARC and x86 from a declarative description of bit fields;
+%  road not taken: arm_class is a hand-written decoder copied from the
+%  libmach/5db.c disassembler).
+%ref: R. Bedichek, "Some efficient architecture simulation techniques",
+%  USENIX Winter Conference, 1990 (a fast simulator decodes each
+%  instruction once and caches the decoded form; road not taken: 5i
+%  calls arm_class again every time a loop body runs).
+
+### Machine.nw : <<[[run()]] switch [[reg.compare_op]] to set [[execute]]>>
+(line ~5449, section "Control flow", subsection "ARM Conditional execution")
+Algorithm/idea: lazy condition codes: store the operands and the kind
+  of the last flag-setting operation, compute N/Z/C/V only when a
+  condition is tested.
+Verified: flag-setting ops store reg.cc1, reg.cc2, reg.compare_op
+  (CCcmp/CCtst/CCteq); runcmp/runteq/runtst evaluate the 4-bit
+  condition from them. Differs from QEMU in that no V flag is ever
+  materialized (signed conditions are evaluated as C comparisons of
+  cc1/cc2).
+CONFIDENCE: high
+Proposed lines:
+%ref: F. Bellard, "QEMU, a fast and portable dynamic translator",
+%  USENIX Annual Technical Conference (FREENIX track), 2005 (for x86
+%  guests, whose flags are set by almost every instruction and rarely
+%  read, QEMU records only the operands and the kind of the last
+%  operation (CC_SRC, CC_DST, CC_OP) and derives the flags on demand;
+%  5i's cc1, cc2 and compare_op are the same idea, evaluated by
+%  runcmp/runteq/runtst, but they never compute an overflow V flag).
+
+### Machine.nw : <<function [[shift]]>>
+(line ~4136, section "Arithmetic and logic", subsection "[[shift()]]")
+Algorithm/idea: ARM barrel-shifter operand with shifter carry-out,
+  including the shift-by-0 special cases (LSR #32, ASR #32, RRX).
+Verified: four shift types set reg.cout; sc==0 cases map to
+  "LSR #32 / ASR #32 / RRX" per the encoding.
+CONFIDENCE: medium (section naming from the ARMv5 manual, from memory)
+Proposed lines:
+%ref: D. Seal (ed.), "ARM Architecture Reference Manual", 2001,
+%  "Addressing Mode 1 - Data-processing operands" (the ARM1 put a
+%  barrel shifter on the second operand of every data-processing
+%  instruction, so a shift is free; the manual gives the carry-out of
+%  each shift type, and the special meaning of a 0 shift amount, LSR
+%  #32, ASR #32 and RRX, which the "if sc is 0" case of shift()
+%  implements) [bib: arm-refman].
+
+### Machine.nw : <<function [[getmem_w]]>>
+(line ~6042, section "[[getmem_xxx()]]")
+Algorithm/idea: ARMv4/v5 unaligned LDR semantics (load the aligned word
+  and rotate right by 8*(addr&3)).
+Verified: if(addr&3) reads getmem_w(addr&~3) and rotates by 8 bits per
+  misaligned byte. That is the architected pre-ARMv6 behavior, not a
+  host-portability trick.
+CONFIDENCE: medium (exact section not given)
+Proposed lines:
+%ref: D. Seal (ed.), "ARM Architecture Reference Manual", 2001, LDR
+%  instruction (before ARMv6, a word load from an unaligned address
+%  read the aligned word and rotated it right by 8 times addr&3,
+%  which is what getmem_w does with its rotate loop; this is required
+%  ARM behavior, not a workaround in 5i) [bib: arm-refman].
+
+### Machine.nw : <<function [[dotlb]]>>
+(line ~5833, section "[[Tlb]]")
+Algorithm/idea: simulated fully-associative TLB with random
+  replacement, used only to measure hit rates.
+Verified: linear search of tlbent[0..tlbsize) for the page tag; on miss
+  tlbent[lnrand(tlbsize)] = vaddr; default 24 entries; tlbsum prints
+  the hit rate.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. A. Belady, "A study of replacement algorithms for a
+%  virtual-storage computer", IBM Systems Journal 5(2):78-101, 1966
+%  (written on IBM's experimental M44/44X paging machine; it defines
+%  the optimal MIN policy and shows that RANDOM, the policy dotlb uses
+%  through lnrand(), is a reasonable baseline).
+%ref: D. W. Clark, J. S. Emer, "Performance of the VAX-11/780
+%  translation buffer: simulation and measurement", ACM TOCS
+%  3(1):31-62, 1985 (measured the TLB of a real VAX with a hardware
+%  monitor and compared it with trace-driven simulation; tlbsum's hit
+%  rate is the simulation half, with tlbsize, 24 here, as the knob).
+
+### Machine.nw : <<struct [[Icache]]>>
+(line ~5944, section "The instruction cache")
+Algorithm/idea: simulated instruction cache (line size, tag array,
+  pluggable hash) for profiling.
+Verified: the struct is present but updateicache() is a stub
+  (USED(addr)) for ARM -- leftover from the MIPS emulator vi.
+CONFIDENCE: high (paper); low value since the code is a stub
+Proposed lines:
+%ref: A. J. Smith, "Cache memories", ACM Computing Surveys
+%  14(3):473-530, 1982 (the classic survey of what the Icache struct
+%  describes: line size, a mapping from address to tag slot, the hash
+%  field here, and miss or stall counts; for ARM 5i leaves
+%  updateicache as a stub, a leftover of the MIPS emulator vi).
+
+### Machine.nw : <<function [[Ssyscall]]>>
+(line ~6411, section "Syscalls Emulation" (chapter intro, before [[memio()]]))
+Algorithm/idea: user-mode emulation: trap SWI and forward the system
+  call to the host OS instead of emulating a kernel.
+Verified: call = reg.r[REGARG]; (*systab[call])(); each sys*() copies
+  pointer args with memio() and calls the host syscall.
+CONFIDENCE: high
+Proposed lines:
+%ref: F. Bellard, "QEMU, a fast and portable dynamic translator",
+%  USENIX Annual Technical Conference (FREENIX track), 2005 (QEMU's
+%  user-mode emulation runs one Linux binary for a different CPU by
+%  catching its system calls and passing them to the host kernel;
+%  Ssyscall/systab do the same for Plan 9 with SWI, using memio to copy
+%  pointer arguments; QEMU translates guest code to host code, which
+%  5i does not: it interprets).
+
+### Machine.nw : <<function [[cmd]]>>
+(line ~3031, section "[[cmd()]]")
+Algorithm/idea: adb-style debugger command language (address, then
+  ':' run/step/breakpoints, '$' inspect, '?' '/' formats, '=').
+Verified: the switch on *p with ':' dispatching to colon(); Debugger
+  chapter prose says it is modeled on db and ultimately adb.
+CONFIDENCE: medium (title certain; year/venue from memory)
+Proposed lines:
+%ref: S. R. Bourne, J. F. Maranzano, "A tutorial introduction to ADB",
+%  Bell Laboratories, UNIX Seventh Edition manual vol. 2, 1979 (adb,
+%  the V7 debugger by the author of the Bourne shell, uses terse
+%  "address, then command" syntax: :r to run, :b for breakpoints, $r
+%  and $c for registers and stack, ? and / to print memory; cmd() and
+%  colon() keep that syntax, inherited through Plan 9's db).
+
+### Machine.nw : <<function [[itrace]]>>
+(line ~9231, appendix chapter "Debugging")
+Algorithm/idea: interpretive instruction tracing (print every executed
+  instruction with its address) -- the oldest debugging technique.
+Verified: called under if(trace) from every I* handler and from run()
+  for skipped instructions; prints ar, instr, opcode index, mnemonic.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Gill, "The diagnosis of mistakes in programmes on the EDSAC",
+%  Proc. Royal Society of London A 206(1087):538-554, 1951 (on
+%  Cambridge's EDSAC, one of the first stored-program computers, Gill
+%  wrote a "checking routine" that interpreted the user's program one
+%  order at a time and printed what each did: the first debugger, and
+%  exactly what itrace prints for each instruction 5i interprets).
+
+### Machine.nw : <<global [[membpt]]>>
+(line ~8567, section "Breakpoints", subsection "Memory breakpoint")
+Algorithm/idea: data breakpoints (watchpoints) checked in software on
+  every load/store.
+Verified: getmem_x/putmem_x call brkchk(addr, Read|Write) when membpt
+  is set; no limit on count or alignment.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Wahbe, "Efficient data breakpoints", ASPLOS V, 1992 (on real
+%  hardware a watchpoint needs a few debug registers, write-protected
+%  pages, or patching every store with a check; the paper measures
+%  these options; in an interpreter the check is almost free: getmem
+%  and putmem call brkchk() whenever membpt is set).
+
+### Machine.nw : <<function [[isum]]>>
+(line ~8698, chapter "Profiler")
+Algorithm/idea: exact dynamic instruction-mix statistics.
+Verified: every executed instruction does reg.ip->count++ in run();
+  isum prints per-opcode counts and aggregates by type (memory,
+  arithmetic, branch, syscall). Delay-slot lines are MIPS (vi)
+  leftovers, always 0 on ARM.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, "An empirical study of FORTRAN programs",
+%  Software-Practice and Experience 1(2):105-133, 1971 (Knuth counted
+%  how often each statement of real FORTRAN programs ran and found
+%  that a tiny part of the code takes most of the time; isum gives the
+%  same kind of exact dynamic counts, per ARM opcode, from
+%  reg.ip->count++ in run()).
+%ref: B. Cmelik, D. Keppel, "Shade: a fast instruction-set simulator for
+%  execution profiling", ACM SIGMETRICS 1994 (at Sun: simulate SPARC
+%  and MIPS code in order to profile it, but fast, by translating
+%  guest code to host code; 5i profiles the same way but interprets).
+
+### Machine.nw : <<function [[iprofile]]>>
+(line ~8867, chapter "Profiler")
+Algorithm/idea: flat per-function profile from per-address counts,
+  sorted by count.
+Verified: iprof[(pc-textbase)/PROFGRAN]++ in ifetch (exact, every
+  fetch), summed between consecutive text symbols, qsort'ed. No call
+  graph, no sampling.
+  (Side note, not a ref: the qsort call passes `prof` (libc's prof()
+  function) instead of `aprof` -- looks like a leftover of the
+  prof->aprof rename; the author may want to check.)
+CONFIDENCE: high
+Proposed lines:
+%ref: S. L. Graham, P. B. Kessler, M. K. McKusick, "gprof: a call graph
+%  execution profiler", SIGPLAN Symposium on Compiler Construction,
+%  1982 (for BSD UNIX on the VAX: sample the PC at clock ticks and have
+%  the compiler record caller/callee arcs; iprofile instead has exact
+%  per-instruction counts, iprof[] filled by ifetch, summed per
+%  function, but no call graph).
+
+
+=====================================================================
+Considered but rejected
+=====================================================================
+- Kernel_x86 [[tas]]: Anderson 1990 (IEEE TPDS spin-lock alternatives)
+  and Rudolph-Segall 1984 (test-and-test-and-set) -- the spin loop is
+  port code (lock() in Kernel.nw / concurrency/taslock.c), cite there.
+- Kernel_x86 [[fault386]]: Denning 1970 "Virtual Memory" (Computing
+  Surveys) -- belongs at the portable fault() in Kernel.nw.
+- Kernel_x86 vpt/vpd recursive page-table mapping: the chunks are
+  *TODO variants not used by the code, and I know no citable original.
+- Kernel_x86 [[rtc2sec]]/[[yrsize]] (date arithmetic): trivial, no
+  worthwhile reference.
+- Kernel_x86 [[halt]] (STI;HLT interrupt shadow): Intel-manual detail
+  only, no paper.
+- Kernel_x86 [[taskswitch]]/[[Tss]]: 80386 PRM ch. 7 multitasking is
+  road-not-taken (hardware task switch unused); low value.
+- Kernel_x86 [[notify]]/[[noted]]: notes are port-level design (plan9
+  paper, bib key plan9) -- cite in Kernel.nw.
+- Kernel_arm [[ainc]]/[[adec]] (splhi atomicity on uniprocessor) and
+  LL/SC (Jensen-Hagensen-Broughton 1987 LLNL report): the LDREX/STREX
+  code is in Kernel.nw/libc, not here.
+- Kernel_arm vcore mailbox ([[vcreq]]): only informal firmware wiki
+  documentation, nothing stable to cite.
+- Kernel_arm DWC OTG USB controller registers: no public spec.
+- Machine [[page_of_vaddr]] demand loading: Kilburn 1962 already
+  proposed for the kernel; would duplicate.
+- Machine [[stktrace]]: frame-size-from-symbol-table unwinding is
+  covered by the Debugger book; no classic paper.
+- Machine OADD carry via 64-bit widening: Warren "Hacker's Delight"
+  overflow sections -- but 5i never computes V, so the fit is poor.
+- Machine: J. C. Gibson's 1970 "instruction mix" report -- not sure
+  of the exact report details, omitted.
+
+Missing bib keys noticed: none needed for existing \cite{}s, but these
+would be new if promoted to the bib: kilburn-atlas, dennis-segmentation,
+saltzer-rings, lamport-sc, x86-tso, bonwick-slab, black-tlb, corbato-ctss,
+belady-replacement, clark-emer-tlb, smith-caches, bellard-qemu,
+bell-threaded, ertl-gregg, ramsey-njmctk, bedichek-sim, gill-edsac,
+wahbe-watchpoints, knuth-fortran, shade, gprof, adb-tutorial,
+von-neumann-edvac, bcm2835-peripherals, usb2-spec, sd-spec.
+
+
+=====================================================================
+ADDENDUM: classic founding papers (per the author's clarification)
+=====================================================================
+The Machine.nw overview "Computer principles" / "Emulator principles"
+subsections have no code chunks. For these entries the proposed
+placement is right after the \section/\subsection line (before the
+first %claude: paragraph) instead of before a <<chunk>>=. Each one
+is the section where the book introduces the concept.
+
+### Machine.nw : \section{Computer principles}
+(line ~683)
+Algorithm/idea: processor/memory/switch decomposition, and the
+  ISP notation: an instruction set described as an interpreter.
+Verified: the section's ASCII diagram (processor = control unit + ALU
+  + registers, bus, memory, I/O) is the PMS-level view. 5i's run()
+  loop is an executable ISP description of ARM.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. G. Bell, A. Newell, "Computer Structures: Readings and
+%  Examples", McGraw-Hill, 1971 (two notations for describing any
+%  computer: PMS, the Processor-Memory-Switch block diagram drawn
+%  above, and ISP, which writes an instruction set as an interpreter
+%  loop, fetch, decode, execute: the loop 5i implements in C).
+
+### Machine.nw : \subsection{Von Newmann architecture}
+(line ~724)
+Algorithm/idea: the stored-program computer (instructions and data in
+  the same memory).
+Verified: the subsection itself; the stored-program %-note is already
+  there (only a URL, no \cite).
+CONFIDENCE: high
+Proposed lines:
+%ref: A. W. Burks, H. H. Goldstine, J. von Neumann, "Preliminary
+%  discussion of the logical design of an electronic computing
+%  instrument", Institute for Advanced Study, 1946 (the design of the
+%  IAS machine at Princeton, which turned the 1945 EDVAC draft into a
+%  concrete plan copied by many early computers; instructions and data
+%  share one memory, as the Text and Data segments of 5i's memory do).
+
+### Machine.nw : \subsection{Interrupts}
+(line ~975)
+Algorithm/idea: program interruption by external events.
+Verified: the subsection describes interrupts, the vector table, and
+  SWI as a software interrupt (the only one 5i emulates, in Ssyscall).
+CONFIDENCE: medium. I am confident the paper exists (Brooks, on the
+  Stretch interrupt system, EJCC 1957). The exact title is from
+  memory. Omit if the author cannot check it.
+Proposed lines:
+%ref: F. P. Brooks, Jr., "A program-controlled program interruption
+%  system", Eastern Joint Computer Conference, 1957 (for IBM's Stretch
+%  supercomputer: let an external event or an error stop the running
+%  program and jump to a handler chosen from a table, with masking;
+%  the vector table and SWI described here descend from this idea).
+(Possible second home: Kernel_x86.nw <<struct [[Vctl]](x86)>>. I did
+ not duplicate it there.)
+
+### Machine.nw : \subsection{Virtual memory}
+(line ~991)
+Algorithm/idea: paging.
+Verified: the subsection introduces VM, the TLB, and faults. 5i's own
+  page table (Segment.table + page_of_vaddr demand-loading) and dotlb
+  are shown later.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Kilburn, D. B. G. Edwards, M. J. Lanigan, F. H. Sumner,
+%  "One-level storage system", IRE Trans. Electronic Computers
+%  EC-11(2):223-235, 1962 (Manchester's Atlas made a small core memory
+%  and a big drum look like one store, inventing pages and page
+%  faults; 5i does a tiny version: page_of_vaddr loads a page from the
+%  executable the first time it is touched).
+%ref: P. J. Denning, "Virtual memory", ACM Computing Surveys
+%  2(3):153-189, 1970 (the survey that gave the field its vocabulary,
+%  from address translation to page replacement and working sets).
+
+### Machine.nw : <<function [[ifetch]]>>
+(line ~5894, section "[[ifetch()]]"; alternatively \subsection{Endianess} ~1022)
+Algorithm/idea: byte order (little-endian reassembly of words).
+Verified: returns va[3]<<24|va[2]<<16|va[1]<<8|va[0]. getmem_h/w/v do
+  the same, so 5i works on hosts of either endianness.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. Cohen, "On holy wars and a plea for peace", IEEE Computer
+%  14(10):48-54, 1981 (written about byte order in network protocols;
+%  it borrowed "big-endian" and "little-endian" from Swift's
+%  Gulliver's Travels, whose two nations went to war over which end
+%  of an egg to break; ifetch and getmem_x assemble little-endian
+%  words byte by byte so 5i runs on hosts of either kind).
+
+### Machine.nw : \section{Emulator principles}
+(line ~1197)
+Algorithm/idea: "emulation" as a technique for running one ISA's
+  programs on another machine.
+Verified: the section defines an emulator as an interpreter of machine
+  code, and 5i is one.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. G. Tucker, "Emulation of large systems", CACM 8(12):753-761,
+%  1965 (IBM needed its new System/360 to run customers' programs for
+%  older IBM 7000-series machines; it used microcode plus software and
+%  coined the word "emulation"; 5i emulates the ARM in plain C).
+
+### Machine.nw : \subsection{Emulator vs simulator}
+(line ~1210, label sec:princ-emu-vs-sim)
+Algorithm/idea: architecture (ISA) versus implementation. An
+  emulator reproduces the first, a cycle simulator the second.
+Verified: the subsection makes exactly this functional-vs-timing
+  split, and 5i models no pipeline or cache timing.
+CONFIDENCE: high
+Proposed lines:
+%ref: G. M. Amdahl, G. A. Blaauw, F. P. Brooks, Jr., "Architecture of
+%  the IBM System/360", IBM Journal of R&D 8(2):87-101, 1964 (System/360
+%  was one instruction set for a whole line of machines of very
+%  different speed and price, and this paper defined "architecture" as
+%  the programmer-visible machine, separate from any implementation;
+%  an emulator such as 5i reproduces the architecture, a
+%  cycle-accurate simulator reproduces an implementation).
+
+### Machine.nw : \section{The ARM architecture}
+(line ~1678)
+Algorithm/idea: RISC design; ARM's origin.
+Verified: the section presents ARM as a RISC: fixed 32-bit instructions,
+  16 registers, load/store only, and conditional execution.
+CONFIDENCE: high for Patterson-Ditzel. Furber's book is certain; the
+  edition/year is medium.
+Proposed lines:
+%ref: D. A. Patterson, D. R. Ditzel, "The case for the reduced
+%  instruction set computer", ACM SIGARCH Computer Architecture News
+%  8(6):25-33, 1980 (argued against the growing complexity of
+%  instruction sets like the VAX's: few simple, fixed-size, load/store
+%  instructions suit single-chip VLSI and compilers better; Berkeley's
+%  RISC work influenced Acorn's small team that designed the ARM1).
+%ref: S. Furber, "ARM System-on-Chip Architecture", 2nd ed.,
+%  Addison-Wesley, 2000 (by a designer of the ARM1: why every
+%  instruction has a condition field, the one run() checks, and why
+%  the second operand goes through a barrel shifter, the one shift()
+%  emulates).
+
+### Kernel_x86.nw : \section{The [[x86]] machine}
+(line ~85, before <<include/arch/386/ureg.h>>=)
+Algorithm/idea: origins of the x86 architecture.
+Verified: the section introduces the 386 register set (Ureg). The
+  segment registers and the odd register set are 8086 legacy.
+CONFIDENCE: medium (authors and venue from memory; I believe it is
+  IEEE Computer, Oct. 1980)
+Proposed lines:
+%ref: S. P. Morse, B. W. Ravenel, S. Mazor, W. B. Pohlman, "Intel
+%  microprocessors: 8008 to 8086", IEEE Computer 13(10), 1980 (by the
+%  8086's designer: a 16-bit CPU reaching 1MB through segment
+%  registers, kept for compatibility with the 8080; the cs, ds, es,
+%  fs, gs fields saved in Ureg and the gdt selectors are that legacy).
+
+Addendum rejects:
+- DYSEAC/UNIVAC 1103 as the first interrupts: I cannot name a specific
+  paper with confidence, so I omitted it.
+- Wilkes, Wheeler, Gill, "The Preparation of Programs for an Electronic
+  Digital Computer", 1951: it is certain, but Gill 1951 at itrace
+  already covers interpretive tracing.
+- Hennessy et al. MIPS papers (delay slots in isum): the delay-slot
+  lines are vi leftovers, so they are not worth a ref.
+
+New bib keys implied by the addendum: bell-newell, burks-goldstine-
+vonneumann, brooks-interrupts, denning-vm, cohen-endian, tucker-
+emulation, amdahl-s360, patterson-ditzel-risc, furber-arm, morse-8086.

@@ -1,0 +1,831 @@
+Academic references for the compiler books
+===========================================
+Books: compilers/Intro.nw (Introduction + Overview/principles),
+compilers/Compiler.nw, compilers/Compiler_x86.nw,
+generators/CompilerGenerator_c.nw (lex and yacc)
+
+Research only; no .nw or source files were edited. Every parenthetical
+follows the BRIEF addendum ("teaching value"): it names the original
+problem or machine, which idea maps to which function here, and where
+Plan 9 differs.
+
+About Thompson's design paper: compilers/docs/compiler.ms is Ken
+Thompson, "Plan 9 C Compilers". Its footnote says it first appeared, in a
+different form, in Proc. Summer 1990 UKUUG Conference, pp. 41-51, London.
+That UKUUG version is the paper known as "A New C Compiler" (CONFIDENCE:
+medium on that title; the venue and pages are verified from the
+footnote). After the first full citation, the entries use the short form
+"Plan 9 C Compilers", section X. The paper's own reference list contains
+[Set70] Sethi-Ullman, [Aho87] Dragon book ch. 8, [Dav91] Davidson-Whalley,
+[Joh79] yacc and [Szy78] Szymanski, which confirms several entries below.
+
+Prose anchors: when the spot is prose rather than a chunk, the %ref:
+lines go right BEFORE the %claude:/%tag line of the named paragraph (given
+as \subsection plus the paragraph's first words).
+
+
+======================================================================
+compilers/Intro.nw  (Overview / "Compiler principles": the founding
+classics of each phase)
+======================================================================
+
+### Intro.nw : \item "The Portable C Compiler [[pcc]] (1979), written by"
+(line ~175, section "Other compilers"; the item already has a
+commented-out %~\cite{pcc}, and there is no pcc bib key)
+Algorithm/idea: pcc's two-pass split: machine-independent parsing,
+               then table-driven code generation
+Verified: this is historical prose, and the item mentions pcc's "dense"
+          code-generation tables. Johnson's POPL paper describes those
+          tables and the split into passes.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. C. Johnson, "A portable compiler: theory and practice", Proc.
+%  5th ACM POPL, 1978, pp. 97-104 (how pcc was split so that only the
+%  code-generation templates change per machine; those are the "dense"
+%  tables the item mentions; 5c instead copies the whole back end
+%  per architecture: 5c/, 8c/, ...).
+
+### Intro.nw : subsection "Frontend", paragraph "The frontend transforms
+source text into a structured"
+(line ~536, section "Compiler principles")
+Algorithm/idea: syntax-directed translation, and the lexer as a
+               coroutine of the parser
+Verified: in 5c, yyparse (generated from cc.y) pulls tokens by calling
+          yylex, and the grammar actions build Nodes. That is Irons'
+          scheme, with Conway's lexer/parser split.
+CONFIDENCE: high
+Proposed lines:
+%ref: E. T. Irons, "A syntax directed compiler for ALGOL 60",
+%  Communications of the ACM 4(1):51-55, 1961 (the first compiler
+%  driven by the grammar: a semantic action is attached to each
+%  syntax rule, which is exactly what every {...} action in cc.y is).
+%ref: M. E. Conway, "Design of a separable transition-diagram
+%  compiler", Communications of the ACM 6(7):396-408, 1963 (a COBOL
+%  compiler split into a lexer and a parser that run as coroutines;
+%  the paper introduced the word "coroutine". Here yyparse calls
+%  yylex for each token, the same separation done with a plain
+%  function call).
+
+### Intro.nw : subsection "Scope resolution", paragraph "C has nested
+blocks, and a variable in an inner block can"
+(line ~573, section "Compiler principles")
+Algorithm/idea: block structure and lexical scope
+Verified: the paragraph describes pushing and popping declarations on
+          block entry and exit, which is what markdcl/revertdcl do with
+          dclstack (see the revertdcl entry in Compiler.nw).
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Naur (ed.), "Report on the algorithmic language ALGOL 60",
+%  Communications of the ACM 3(5):299-314, 1960 (where block structure
+%  and nested lexical scope come from; C's {...} blocks inherit them
+%  via BCPL and B, and 5c implements them with the dclstack of
+%  [[Decl]]s and its DMARK sentinels).
+
+### Intro.nw : subsection "Linearization and three-address code",
+paragraph "C expressions can be arbitrarily nested"
+(line ~725, section "Compiler principles"; the author's own note just
+above reads "% - expression like x+y*z decomposed into multi mov, add,
+etc. Fortran!". The %TODO at line 8, "Backus invented Fortran", is an
+alternative anchor.)
+Algorithm/idea: translating arithmetic formulas into straight-line
+               instruction sequences
+Verified: this is prose; the 5c counterpart is cgen with its
+          Sethi-Ullman ordering (see the xcom entry in Compiler.nw).
+CONFIDENCE: high
+Proposed lines:
+%ref: J. W. Backus et al., "The FORTRAN automatic coding system", Proc.
+%  Western Joint Computer Conference, 1957, pp. 188-198 (the first
+%  optimizing compiler, for the IBM 704; FORmula TRANslation is
+%  literally this linearization of x+y*z into loads and arithmetic.
+%  It had to produce code close to hand-written assembly before
+%  programmers would accept it).
+
+### Intro.nw : subsection "Instruction selection", paragraph "Classical
+compiler textbooks describe {\em tree pattern matching}"
+(line ~766, section "Compiler principles")
+Algorithm/idea: optimal instruction selection by dynamic programming
+               over expression trees, later automated as tree tiling
+Verified: the prose writes "(BURG, Aho and Johnson 1976)", which mixes
+          two works. Aho-Johnson 1976 is the dynamic-programming
+          optimality result; BURG is Fraser-Henry-Proebsting 1992. Worth
+          a prose fix (see side notes at the end).
+CONFIDENCE: high
+Proposed lines:
+%ref: A. V. Aho and S. C. Johnson, "Optimal code generation for
+%  expression trees", Journal of the ACM 23(3):488-501, 1976 (dynamic
+%  programming picks the cheapest instruction cover of each subtree;
+%  it generalizes Sethi-Ullman to real instruction sets. 5c's xcom and
+%  cgen make the same choices with hand-written C rules).
+%ref: C. W. Fraser, R. R. Henry, T. A. Proebsting, "BURG -- fast
+%  optimal instruction selection and tree parsing", SIGPLAN Notices
+%  27(4):68-76, 1992 (the generator the prose calls BURG: it compiles
+%  tree-pattern rules with costs into a tiling matcher).
+
+### Intro.nw : subsection "Frameization and stack-frame layout",
+paragraph "C has function parameters, local variables, and return values."
+(line ~789, section "Compiler principles")
+Algorithm/idea: stack of activation records (frames) for recursive
+               procedures; subroutine call and return linkage
+Verified: 5c gives each function one frame (the TEXT ..., $framesize
+          in the prose's example); locals are at SP offsets and params
+          at FP offsets. Per the coordinator, Dijkstra is the right fit
+          here. Wheeler is optional because the assembler/linker
+          references already place it at CALL/RET.
+CONFIDENCE: high (Dijkstra). Wheeler: high that the paper exists, medium
+          on the details, so the pages are omitted.
+Proposed lines:
+%ref: E. W. Dijkstra, "Recursive programming", Numerische Mathematik
+%  2:312-318, 1960 (written for his ALGOL 60 compiler on the
+%  Electrologica X1: every call pushes a fresh activation record on
+%  one run-time stack, which is what makes recursion work; each
+%  5c "TEXT f(SB), $n" frame is one such record).
+%ref: D. J. Wheeler, "The use of sub-routines in programmes", Proc.
+%  ACM National Meeting, 1952 (EDSAC's subroutine linkage, the
+%  "Wheeler jump"; ARM's BL and link register are its descendants).
+%  [optional: the assembler/linker books already cite it]
+
+### Intro.nw : subsection "Optimizations", paragraph "[[5c]] performs
+two levels of optimization"
+(line ~842, section "Compiler principles")
+Algorithm/idea: the founding papers of flow analysis and of the
+               classic optimization catalogue
+Verified: this is prose. 5c's pieces are the AST rewrites (acom,
+          constant folding) and regopt's flow graph (loopit, prop).
+CONFIDENCE: high (Allen 1970). Allen-Cocke 1972: high that it exists, and
+          I cite it as a chapter in Rustin (ed.), Design and Optimization
+          of Compilers, Prentice-Hall, 1972.
+Proposed lines:
+%ref: F. E. Allen, "Control flow analysis", SIGPLAN Notices 5(7):1-19,
+%  1970 (IBM, for optimizing FORTRAN: basic blocks, the flow graph,
+%  dominators and loops, the vocabulary regopt uses in its Reg nodes
+%  and loopit; Allen received the 2006 Turing Award for this line of
+%  work).
+%ref: F. E. Allen and J. Cocke, "A catalogue of optimizing
+%  transformations", in R. Rustin (ed.), Design and Optimization of
+%  Compilers, Prentice-Hall, 1972 (the canonical list: constant
+%  folding, strength reduction, code motion, ...; 5c does the cheap
+%  local ones and skips the loop transformations).
+
+### Intro.nw : subsection "Intermediate representations and SSA",
+paragraph "The most important property of modern {\sc ir}s is"
+(line ~875, section "Compiler principles"; this fills the "%TODO:
+\cite{ssa}" there, and there is no bib key)
+Algorithm/idea: SSA form and efficient phi placement
+Verified: this is prose only; 5c has no SSA, as the next paragraph says.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Cytron, J. Ferrante, B. K. Rosen, M. N. Wegman, F. K. Zadeck,
+%  "Efficiently computing static single assignment form and the
+%  control dependence graph", ACM TOPLAS 13(4):451-490, 1991 (IBM
+%  Research; places phi nodes via dominance frontiers, the step that
+%  made SSA cheap enough for production compilers).
+
+### Intro.nw : subsection "Register allocation", paragraph "The classical
+formulation (Gregory Chaitin, {\sc ibm},"
+(line ~923, section "Compiler principles"; this fills the "%TODO: Cite"
+there)
+Algorithm/idea: register allocation as graph colouring, and linear scan
+Verified: this is prose. The concrete 5c counterpart is in the regopt
+          entries of Compiler.nw.
+CONFIDENCE: high
+Proposed lines:
+%ref: G. J. Chaitin, M. A. Auslander, A. K. Chandra, J. Cocke,
+%  M. E. Hopkins, P. W. Markstein, "Register allocation via coloring",
+%  Computer Languages 6(1):47-57, 1981 (done for IBM's PL.8 compiler
+%  for the 801, the first RISC machine, whose many registers made
+%  good allocation pay off; nodes are live ranges and colours are
+%  registers).
+%ref: M. Poletto and V. Sarkar, "Linear scan register allocation",
+%  ACM TOPLAS 21(5):895-913, 1999 (one pass over live intervals
+%  sorted by start point: the fast alternative for JITs).
+
+### Intro.nw : subsection "Peephole optimization", paragraph "The idea
+dates to William McKeeman (1965),"
+(line ~965, section "Compiler principles"; this fills the "%TODO:
+\cite{}" there)
+Algorithm/idea: peephole optimization
+Verified: this is prose. The chunk-level entry on peep(arm) in Compiler.nw
+          explains how 5c's version differs.
+CONFIDENCE: high
+Proposed lines:
+%ref: W. M. McKeeman, "Peephole optimization", Communications of the
+%  ACM 8(7):443-444, 1965 (a one-page paper that coined the term:
+%  slide a small window over the compiler's output and replace
+%  wasteful instruction patterns, such as a store immediately
+%  followed by a reload of the same location).
+
+### Intro.nw : subsection "Bootstrapping", paragraph "Note that Ken
+Thompson's 1984 Turing Award lecture"
+(line ~1055, section "Compiler principles"; this fills the "%TODO: add
+also \cite{}" there)
+Algorithm/idea: the self-reproducing compiler Trojan, and its
+               countermeasure
+Verified: this is prose.
+CONFIDENCE: high
+Proposed lines:
+%ref: K. Thompson, "Reflections on trusting trust", Communications of
+%  the ACM 27(8):761-763, 1984 (Turing Award lecture; the attack was
+%  built on the Unix C compiler, and it hinges on how the compiler
+%  recognizes the login program and itself).
+%ref: D. A. Wheeler, "Fully countering trusting trust through diverse
+%  double-compiling", PhD dissertation, George Mason University, 2009
+%  (the defence the paragraph describes).
+
+### Intro.nw : section "Input C language", paragraph "C's main innovation
+over Fortran and Pascal was {\em pointer"
+(line ~1321; the %\subsection{C innovations} comment is just above)
+Algorithm/idea: where C's pointer arithmetic came from
+Verified: this is prose. Ritchie's paper gives the BCPL -> B -> C
+          lineage of the address algebra. Adding BCPL puts the claim of
+          "C's main innovation" in context (see side notes).
+CONFIDENCE: high
+Proposed lines:
+%ref: D. M. Ritchie, "The development of the C language", Proc. 2nd
+%  ACM History of Programming Languages Conf. (HOPL-II), SIGPLAN
+%  Notices 28(3):201-208, 1993 (Ritchie's own account, from B on the
+%  PDP-7 to C on the PDP-11; it explains how p+n and the array/pointer
+%  duality came from B and BCPL, and how the first C compiler grew).
+%ref: M. Richards, "BCPL: a tool for compiler writing and system
+%  programming", Proc. AFIPS Spring Joint Computer Conf., 1969
+%  (BCPL already had word-address arithmetic with the ! operator; C
+%  added types, so p+1 scales by sizeof(*p)).
+
+
+======================================================================
+compilers/Compiler.nw
+======================================================================
+
+### Compiler.nw : section "Software architecture", paragraph "Unlike a
+textbook compiler with separate preprocessing,"
+(line ~314)
+Algorithm/idea: the design paper of the whole compiler
+Verified: the call chain in that paragraph (yyparse -> codgen -> gen ->
+          cgen -> regopt -> peep) is the pass structure the paper
+          describes section by section: Lexical analysis, Parsing,
+          Typing, Machine-independent optimization, Arithmetic rewrites,
+          Addressability, Code generation, Registerization, Machine code
+          optimization.
+CONFIDENCE: high (venue from the compiler.ms footnote); medium on the
+          UKUUG title
+Proposed lines:
+%ref: K. Thompson, "A New C Compiler", Proc. Summer 1990 UKUUG Conf.,
+%  London, pp. 41-51; revised as "Plan 9 C Compilers" (in
+%  compilers/docs/) (Ken's own tour of the same passes, in this
+%  same order: a good companion to read next to this chapter).
+%  [no bib key yet]
+
+### Compiler.nw : <<function [[lookup]]>>
+(line ~1382, section "[[Sym]]bols and [[hash]] table")
+Algorithm/idea: hash table with separate chaining
+Verified: lookup computes h = h*3 + c over the name, then h %= NHASH, and
+          walks the chain hash[h], rejecting on the first character
+          before calling strcmp. A new Sym goes at the head of the chain.
+CONFIDENCE: high (Luhn 1953 as the origin of chaining is stated in
+          Knuth's historical notes to 6.4)
+Proposed lines:
+%ref: D. E. Knuth, The Art of Computer Programming, Vol. 3: Sorting and
+%  Searching, Addison-Wesley, 1973, Section 6.4 (hashing; its history
+%  notes trace chaining to an internal IBM memo by H. P. Luhn in 1953.
+%  lookup is textbook chaining with a cheap h*3+c hash and a
+%  first-character test before strcmp).
+
+### Compiler.nw : <<function [[revertdcl]]>>
+(line ~1814, section "Declarations, namespaces, and scope: [[Decl]]")
+Algorithm/idea: shallow binding: the Sym holds the current meaning, and
+               an undo stack restores the shadowed ones
+Verified: push1 copies the old type/class/offset of the Sym into a Decl
+          before overwriting them. markdcl pushes a DMARK. revertdcl pops
+          back to the DMARK and copies the saved fields back.
+CONFIDENCE: high that the paper exists. The analogy is mine, so the
+          parenthetical is worded as one.
+Proposed lines:
+%ref: H. G. Baker, "Shallow binding in Lisp 1.5", Communications of the
+%  ACM 21(7):565-569, 1978 (Lisp's value-cell trick at run time: the
+%  symbol holds the current value and a stack keeps the shadowed
+%  ones. 5c does the same at compile time: [[Sym]] fields are the
+%  value cell, [[dclstack]] is the stack, [[revertdcl]] the unwind.
+%  Baker's own contribution, "rerooting" between environments, is
+%  not needed in a compiler).
+
+### Compiler.nw : section "Hand-written vs generated lexers", paragraph
+"There is a long-running debate in compiler construction"
+(line ~3020; the prose names "Lesk, 1975" but does not \cite it)
+Algorithm/idea: generated lexers (the road 5c did not take)
+Verified: 5c's yylex is hand-written, and the paragraph contrasts it
+          with lex.
+CONFIDENCE: high
+Proposed lines:
+%ref: M. E. Lesk and E. Schmidt, "Lex - A Lexical Analyzer Generator",
+%  Bell Labs CSTR 39, 1975 (Schmidt was a summer student at the time,
+%  later Google's CEO; lex turns regular expressions into DFA tables.
+%  Its internals are in the lex/yacc companion code, and 5c's
+%  hand-written yylex avoids it).   [bib key: lex]
+
+### Compiler.nw : section "Generated parser vs hand-written recursive
+descent", paragraph "The Lexing chapter had a similar discussion"
+(line ~5925; the prose names "Stephen Johnson, Bell Labs, 1975" but does
+not \cite it)
+Algorithm/idea: an LALR(1) parser generated from cc.y
+Verified: cc.y is compiled by yacc into yyparse.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. C. Johnson, "Yacc: Yet Another Compiler-Compiler", Bell Labs
+%  CSTR 32, 1975 (the manual and design paper in one; its sections on
+%  ambiguity, precedence and error recovery explain the %left/%right
+%  block and the minimal error handling of cc.y).   [bib key: yacc]
+
+### Compiler.nw : section "No intermediate representation", paragraph
+"Every mainstream compiler in 2026 has at least one"
+(line ~13749; the prose says SSA was "invented by Cytron, Ferrante,
+Rosen, Wegman, and Zadeck at IBM in 1988")
+Algorithm/idea: the 1988 origin of SSA (Cytron 1991 is placed in Intro.nw)
+Verified: this is prose, and the 1988 date refers to these two POPL
+          papers.
+CONFIDENCE: high
+Proposed lines:
+%ref: B. Alpern, M. N. Wegman, F. K. Zadeck, "Detecting equality of
+%  variables in programs", Proc. 15th ACM POPL, 1988, and B. K. Rosen,
+%  M. N. Wegman, F. K. Zadeck, "Global value numbers and redundant
+%  computations", same conference (the two IBM papers that introduced
+%  SSA, as a tool for value numbering; 5c has neither SSA nor
+%  global value numbering).
+
+### Compiler.nw : <<function [[patch]]>>
+(line ~14182, section "Functions: [[codgen()]]", subsection "[[patch()]]")
+Algorithm/idea: backpatching of forward branches
+Verified: gbranch emits a branch whose target is not yet known, the
+          caller keeps sp = p, and patch(sp, pc) later fills in
+          to.offset.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. V. Aho, M. S. Lam, R. Sethi, J. D. Ullman, Compilers:
+%  Principles, Techniques, and Tools, 2nd ed., 2006, Section 6.7
+%  "Backpatching" (the one-pass trick: emit the jump now and fill in
+%  its target once the label exists. The Dragon book threads the holes
+%  on lists; 5c keeps each hole in a local such as sp and calls
+%  patch(sp, pc)).   [bib key: dragon-book]
+
+### Compiler.nw : <<function [[xcom]](arm)>>
+(line ~15428, section "Addressability and complexity: [[xcom()]]")
+Algorithm/idea: hand-written, bottom-up addressability labelling as
+               instruction selection
+Verified: n->addable is set bottom-up from the children's labels (20
+          const, 10 name, 11 reg, 12 indirect, <10 = needs a register),
+          as the "Addressability" section of Thompson's paper describes.
+          Thompson explicitly rejects generating it from a machine
+          description.
+CONFIDENCE: high
+Proposed lines:
+%ref: K. Thompson, "Plan 9 C Compilers", section "Addressability" (the
+%  table indexed by the left and right children's labels that xcom
+%  encodes as [[addable]]; a new port starts with "leaves addressable
+%  and nothing else", which gives poor but correct code).
+%ref: A. V. Aho, M. Ganapathi, S. W. K. Tjiang, "Code generation using
+%  tree matching and dynamic programming", ACM TOPLAS 11(4):491-516,
+%  1989 (road not taken: twig generates this matcher from tree
+%  patterns with costs. Thompson found it "hardly worth the effort"
+%  for a code generator of under 500 lines).
+
+### Compiler.nw : <<[[xcom()]] set complex if addable less than 10>>
+(line ~15659, section "Addressability and complexity", subsection
+"Complexity: [[complex]]")
+Algorithm/idea: Sethi-Ullman register-need numbering
+Verified: equal child labels give label+1, unequal ones give the max,
+          addressable leaves get 0, and a computed node gets at least 1.
+          A function call is FNX=100, Thompson's "infinite". The prose
+          names Sethi and Ullman without a \cite.
+CONFIDENCE: high (the citation is confirmed in compiler.ms as [Set70])
+Proposed lines:
+%ref: R. Sethi and J. D. Ullman, "The generation of optimal code for
+%  arithmetic expressions", Journal of the ACM 17(4):715-728, 1970
+%  (for a machine with k interchangeable registers: the label is the
+%  number of registers a tree needs, and evaluating the bigger-label
+%  child first is optimal. 5c keeps the labelling as [[complex]] but
+%  uses it only to order cgen's recursion, with FNX=100 standing in
+%  for "a call clobbers everything").
+
+### Compiler.nw : <<function [[boolgen]](arm)>>
+(line ~18618, section "Boolean expressions")
+Algorithm/idea: jumping code / short-circuit translation of conditions
+Verified: boolgen's result is a branch (a pc position), not a value, and
+          it uses comrel/invrel to negate relations. Thompson: "an
+          expanded version of that described in chapter 8 of Aho, Sethi,
+          and Ullman", with "extensive use of De Morgan's rule".
+CONFIDENCE: high
+Proposed lines:
+%ref: A. V. Aho, R. Sethi, J. D. Ullman, Compilers: Principles,
+%  Techniques, and Tools, 1986, Section 8.4 "Boolean expressions"
+%  (2nd ed. Section 6.6) (a condition compiles to "where the pc goes",
+%  not to a 0/1 value. Thompson calls boolgen "an expanded version" of
+%  it, pushing negations inward with De Morgan via [[invrel]]).
+
+### Compiler.nw : <<function [[swit2]](arm)>>
+(line ~20772, section "Advanced assembly generation", subsection "Switch")
+Algorithm/idea: case statements as a jump table when dense, linear tests
+               when small, binary search otherwise
+Verified: doswit qsorts the cases. swit2 uses a table when nc>=3 and
+          range < 2*nc, an OEQ chain when nc<5, and otherwise splits at
+          the median. The x86 swit1 (Compiler_x86.nw ~9621) never uses a
+          table.
+CONFIDENCE: medium (the paper exists; pages omitted)
+Proposed lines:
+%ref: R. L. Bernstein, "Producing good code for the case statement",
+%  Software--Practice and Experience 15(10), 1985 (choosing between a
+%  jump table and a comparison tree by case density. swit2's rule is
+%  "table if range < 2*nc, linear if nc < 5, else split at the
+%  median"; 8c's swit1 never builds a table).
+
+### Compiler.nw : <<function [[mulcon0]](arm)>>
+(line ~22935, section "Immediate operands", subsection "Multiplication")
+Algorithm/idea: multiplication by a constant as a short chain of
+               shift/add/sub steps
+Verified: mulcon0 checks a cache (the multab ring), then a sorted table of
+          hard cases (hintab, binary search), then a recursive search
+          capped at maxmulops. The result is a small "code" string.
+CONFIDENCE: high (the paper); pages from memory
+Proposed lines:
+%ref: R. Bernstein, "Multiplication by integer constants", Software--
+%  Practice and Experience 16(7):641-652, 1986 (a search for the
+%  cheapest add/subtract/shift chain for any constant. mulcon0 caps
+%  the chain at 3 steps and precomputes the awkward constants in
+%  [[hintab]]; ARM's barrel shifter makes each step one instruction).
+
+### Compiler.nw : <<function [[acom]]>>
+(line ~23659, section "Associative-commutative arithmetic optimisations")
+Algorithm/idea: flatten +,-,* trees into weighted terms, merge them, and
+               factor common multipliers
+Verified: acom1 spreads multipliers into term[] (term[0] is the
+          constant), and acom2 sorts, merges and refactors. This matches
+          Thompson's "Arithmetic rewrites" section.
+CONFIDENCE: high for Thompson. Breuer: medium (I am confident the paper
+          exists, less sure how close its method is).
+Proposed lines:
+%ref: K. Thompson, "Plan 9 C Compilers", section "Arithmetic rewrites"
+%  (his example 4+8*a+16*b+5 -> 9+8*(a+2*b): such sums come from array
+%  indexing, where the element size is the common factor acom pulls
+%  out).
+%ref: M. A. Breuer, "Generation of optimal code for expressions via
+%  factorization", Communications of the ACM 12(6), 1969 (an early
+%  study of factoring expressions to save multiplications).
+
+### Compiler.nw : <<function [[regopt]](arm)>>
+(line ~24337, section "Register allocation optimisations")
+Algorithm/idea: the registerization pass as a whole
+Verified: it matches Thompson's "Registerization" section: four dataflow
+          bit sets (set-behind, used-ahead, and the call-crossing
+          variants), a cost for each lifetime, loop weighting, a sort,
+          and greedy assignment. One difference: the paper says loop
+          costs are "multiplied by three for every level of loop
+          nesting", but loopmark adds LOOP=3 to r->loop, and paint1
+          multiplies by r->loop.
+CONFIDENCE: high
+Proposed lines:
+%ref: K. Thompson, "Plan 9 C Compilers", section "Registerization"
+%  (the design of the 9 passes in one page; note that the paper says
+%  costs are "multiplied by three" per loop level, while loopmark
+%  adds LOOP=3 to a per-instruction weight).
+
+### Compiler.nw : <<[[regopt()]] pass 3>>
+(line ~24697, section "Register allocation optimisations", subsection
+"Pass 3")
+Algorithm/idea: iterative bit-vector dataflow to a fixed point (liveness)
+Verified: prop() runs backward from the RET nodes and is repeated while
+          "change" is nonzero, doing and/or of set/use1/use2 into
+          refbehind/refahead and calbehind/calahead.
+CONFIDENCE: high (the CP/M link is well known)
+Proposed lines:
+%ref: G. A. Kildall, "A unified approach to global program
+%  optimization", Proc. 1st ACM POPL, 1973, pp. 194-206 (the
+%  lattice-and-fixed-point framework for all dataflow problems, by
+%  the future author of CP/M. Pass 3 is its simplest instance:
+%  backward liveness on [[Bits]], iterated until [[change]] is 0).
+
+### Compiler.nw : <<function [[prop]](arm)>>
+(line ~25532, section "Register allocation optimisations", subsection
+"[[XXX]]")
+Algorithm/idea: "life crosses a call" bits, used to price caller-save
+               spills
+Verified: prop sets calbehind at ABL, so the costs can account for a
+          variable that is live across a call. Thompson cites [Dav91] as
+          his argument for caller-saves.
+CONFIDENCE: high (the reference is taken from compiler.ms)
+Proposed lines:
+%ref: J. W. Davidson and D. B. Whalley, "Methods for saving and
+%  restoring register values across function calls", Software--
+%  Practice and Experience 21(2):149-165, 1991 (measured caller- vs.
+%  callee-saves. Thompson cites it for choosing caller-saves: then
+%  the allocator can price a register live across a BL, which is
+%  what the cal* bits computed here are for).
+
+### Compiler.nw : <<function [[paint1]](arm)>>
+(line ~25808, section "Register allocation optimisations")
+Algorithm/idea: register allocation by loop-weighted usage counts
+Verified: paint1 walks one connected live region, adding CREF*r->loop
+          per reference and subtracting CLOAD*r->loop per needed
+          load/store. Pass 5 keeps the regions with positive cost and
+          qsorts them.
+CONFIDENCE: high for the paper. Freiburghouse's authorship of the Multics
+          PL/I compiler paper (FJCC 1969) is well documented; I do not
+          claim the usage-count paper was written for that compiler.
+Proposed lines:
+%ref: R. A. Freiburghouse, "Register allocation via usage counts",
+%  Communications of the ACM 17(11):638-642, 1974 (by one of the
+%  Multics PL/I compiler authors: rank variables by use counts
+%  weighted by loop depth and give the registers to the top ones.
+%  paint1 computes that count per live region rather than per
+%  variable, minus the loads and stores it saves).
+
+### Compiler.nw : <<[[regopt()]] pass 6>>
+(line ~24864, section "Register allocation optimisations", subsection
+"pass 6")
+Algorithm/idea: greedy assignment in decreasing-cost order (graph
+               colouring is the road not taken)
+Verified: pass 6 walks the sorted region[]: paint2 collects the
+          registers busy in the region, allreg picks a free one, and
+          paint3 rewrites the code. No interference graph is built. The
+          prose names Chaitin without a \cite.
+CONFIDENCE: high
+Proposed lines:
+%ref: G. J. Chaitin, "Register allocation & spilling via graph
+%  coloring", Proc. SIGPLAN '82 Symp. on Compiler Construction,
+%  SIGPLAN Notices 17(6):98-105, 1982 (road not taken: IBM's 801/PL.8
+%  allocator builds an interference graph and colours it, spilling
+%  when stuck. Pass 6 simply takes regions in cost order and gives
+%  each a register that is free across it).
+
+### Compiler.nw : <<function [[loopit]]>>
+(line ~25676, section "Register allocation optimisations")
+Algorithm/idea: dominators in one pass over reverse postorder, then
+               natural-loop marking from back edges
+Verified: idom[i] = rpolca() over the predecessors with a smaller rpo
+          number, in one pass that ignores back edges. As the code
+          comment on postorder says, that is exact only on reducible
+          graphs. loophead/loopmark then mark the loop bodies.
+          Hecht-Ullman is already cited in that code comment, so it is
+          not repeated here.
+CONFIDENCE: medium. Cooper-Harvey-Kennedy: sure of the paper and year,
+          volume and pages omitted. Prosser: sure of the paper and venue,
+          pages omitted.
+Proposed lines:
+%ref: R. T. Prosser, "Applications of Boolean matrices to the analysis
+%  of flow diagrams", Proc. Eastern Joint Computer Conf., 1959 (where
+%  "dominator" comes from, in an analysis of flowcharts; [[idom]] here
+%  is that relation, used to find loop heads).
+%ref: K. D. Cooper, T. J. Harvey, K. Kennedy, "A simple, fast dominance
+%  algorithm", Software--Practice and Experience, 2001 (rpolca is
+%  their "intersect": climb idom[] by rpo number until the two
+%  candidates meet. They iterate to handle irreducible graphs; loopit
+%  does a single pass).
+%ref: T. Lengauer and R. E. Tarjan, "A fast algorithm for finding
+%  dominators in a flowgraph", ACM TOPLAS 1(1):121-141, 1979 (road
+%  not taken: near-linear and exact on any graph, but far more code).
+
+### Compiler.nw : <<function [[peep]](arm)>>
+(line ~26110, section "Peephole optimizer: [[peep()]]")
+Algorithm/idea: peephole optimization repeated to a fixed point
+Verified: peep's loop1 repeats while t>0, applying shiftprop, constprop,
+          copyprop and subprop, then excise. copyprop and subprop follow
+          the flow graph (uniqs/uniqp) instead of a fixed window. This
+          matches Thompson's "Machine code optimization" section:
+          removing moves by relabelling, most of them moves that
+          registerization inserted.
+CONFIDENCE: high
+Proposed lines:
+%ref: W. M. McKeeman, "Peephole optimization", Communications of the
+%  ACM 8(7):443-444, 1965 (the original fixed-window idea. peep is
+%  less local: subprop/copyprop follow the flow graph to delete a
+%  MOV by renaming, and as Thompson notes most of those MOVs were
+%  inserted by regopt itself).
+%ref: J. W. Davidson and C. W. Fraser, "The design and application of
+%  a retargetable peephole optimizer", ACM TOPLAS 2(2):191-202, 1980
+%  (road not taken: rules derived from a machine description; 5c
+%  hand-writes a peep.c per architecture).
+
+### Compiler.nw : <<zedlist rule>>
+(line ~29980, section "C extensions", subsection "Unnamed structure
+elements")
+Algorithm/idea: the user-level specification of the Plan 9 C extensions
+Verified: comp.ms (lines ~1111-1160) documents anonymous structure and
+          union members accessed by type name, which is what edecl and
+          dotsearch implement.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "How to Use the Plan 9 C Compiler", Plan 9 Programmer's
+%  Manual, Vol. 2 (the user's side of these extensions: "Lock;"
+%  embeds a Lock and makes p->locked work, the poor man's inheritance
+%  that the Plan 9 kernel uses everywhere).   [no bib key yet;
+%  compilers/docs/comp.ms]
+
+
+======================================================================
+compilers/Compiler_x86.nw  (an appendix-style code dump, so only a few
+entries)
+======================================================================
+
+### Compiler_x86.nw : <<function [[mulparam]](x86)>>
+(line ~2008, section "x86")
+Algorithm/idea: multiplication by a constant via LEA scales plus shifts
+Verified: mulparam scores a fixed menu (malgs) of t << n +/- o patterns
+          with t in {1,3,5,9,15,25,27,45,81}, the values LEA/SHL can
+          build in 3 or fewer instructions.
+CONFIDENCE: medium (a loose fit; optional if the ARM entry is enough)
+Proposed lines:
+%ref: R. Bernstein, "Multiplication by integer constants", Software--
+%  Practice and Experience 16(7):641-652, 1986 (8c's version: the
+%  386's only cheap multipliers are LEA's scales 2/4/8 (+1 gives
+%  3/5/9), so mulparam scores a fixed menu of such factors instead of
+%  searching).
+
+### Compiler_x86.nw : <<function [[sdiv2]](x86)>>
+(line ~2560, section "x86")
+Algorithm/idea: signed division by 2^k as a biased arithmetic shift
+Verified: sext builds the sign mask, which is ANDed with (1<<v)-1 and
+          added before SARL v. For v==1 there is a CMPL/SBBL trick, and
+          c<0 is negated. smod2 is the matching remainder.
+CONFIDENCE: high
+Proposed lines:
+%ref: H. S. Warren Jr., Hacker's Delight, Addison-Wesley, 2002,
+%  Section 10-1 "Signed division by a known power of 2" (a plain SAR
+%  rounds toward minus infinity, but C wants rounding toward zero, so
+%  2^k-1 is added to negative dividends first: sext makes the mask,
+%  sdiv2 adds it before SARL).
+
+
+======================================================================
+generators/CompilerGenerator_c.nw  (lex and yacc; the book has no prose,
+so the tool papers are worth one ref each)
+======================================================================
+
+### CompilerGenerator_c.nw : <<function main (generators/lex/lmain.c)>>
+(line ~3136, section "[[generators/lex/]]", subsection "lmain.c")
+Algorithm/idea: the lex tool, a founding lexer generator
+Verified: main runs parse -> cfoll/cgoto -> layout, the pipeline the
+          paper describes.
+CONFIDENCE: high
+Proposed lines:
+%ref: M. E. Lesk and E. Schmidt, "Lex - A Lexical Analyzer Generator",
+%  Bell Labs CSTR 39, 1975 (written with Eric Schmidt, then a summer
+%  student and later Google's CEO: pairs of regular expression and C
+%  action become one DFA. yyparse (parser.y) reads the pairs, cfoll
+%  and cgoto build the automaton, and layout emits its tables).
+%  [bib key: lex]
+
+### CompilerGenerator_c.nw : <<function cfoll>>
+(line ~2235, section "[[generators/lex/]]", subsection "sub2.c")
+Algorithm/idea: regex to DFA directly through positions and followpos
+               (no epsilon-NFA)
+Verified: for each leaf (char, string, ccl) cfoll calls follow(v) and
+          stores foll[v], the positions that can follow it. first() and
+          follow() use nullstr[] for concatenation and loop back on
+          STAR/PLUS.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. McNaughton and H. Yamada, "Regular expressions and state
+%  graphs for automata", IRE Trans. on Electronic Computers
+%  EC-9(1):39-47, 1960 (written to design sequential switching
+%  circuits from regular expressions: number every symbol occurrence
+%  (a "position") and compute which positions can follow which. That
+%  is first(), follow() and the foll[] sets built here).
+%ref: A. V. Aho, M. S. Lam, R. Sethi, J. D. Ullman, Compilers, 2nd ed.,
+%  2006, Section 3.9 (the same construction as "followpos", converting
+%  a regular expression directly to a DFA).   [bib key: dragon-book]
+
+### CompilerGenerator_c.nw : <<function cgoto>>
+(line ~2432, section "[[generators/lex/]]", subsection "sub2.c")
+Algorithm/idea: subset construction; each DFA state is a set of positions
+Verified: nextstate() unions foll[] of the positions matching c into
+          tmpstat, and notin() looks for an earlier state with the same
+          set. That linear search is why the comment says 70% of the
+          time is spent there.
+CONFIDENCE: high
+Proposed lines:
+%ref: M. O. Rabin and D. Scott, "Finite automata and their decision
+%  problems", IBM Journal of Research and Development 3(2):114-125,
+%  1959 (introduced nondeterministic automata and showed that a
+%  machine whose states are sets of states simulates one; it won the
+%  1976 Turing Award. cgoto/nextstate build those sets and notin
+%  deduplicates them by linear search).
+
+### CompilerGenerator_c.nw : <<function layout>>
+(line ~2941, section "[[generators/lex/]]", subsection "sub2.c")
+Algorithm/idea: sparse table compression by row displacement with a check
+               array, plus fall-back states
+Verified: for each state, layout finds the first offset ("startup") where
+          no transition collides in verify[], then stores
+          verify=state+1 and advance=next+1. yysvec keeps the base and the
+          sfall fall-back state. yacc's apack (~6080) uses the same
+          first-fit idea.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. E. Tarjan and A. C.-C. Yao, "Storing a sparse table",
+%  Communications of the ACM 22(11):606-611, 1979 (analyses this
+%  "row displacement" scheme: overlay all rows in one array at
+%  non-colliding offsets, with a check entry naming the owner. Here
+%  those are yycrank, stoff[] and verify[]. Lex (1975) did it first-fit
+%  before the analysis existed; yacc's apack does the same).
+
+### CompilerGenerator_c.nw : <<function main (generators/yacc/yacc.c)>>
+(line ~4144, section "[[generators/yacc/]]", subsection "yacc.c")
+Algorithm/idea: the yacc tool, a founding parser generator
+Verified: main runs setup, cpres, cempty, cpfir, stagen, output, go2out,
+          hideprod, summary and callopt.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. C. Johnson, "Yacc: Yet Another Compiler-Compiler", Bell Labs
+%  CSTR 32, 1975 (grammar plus C actions in, an LALR(1) table-driven
+%  parser out. The pipeline is: setup reads the grammar, stagen builds
+%  the states, output/callopt pack the tables; its "Ambiguity and
+%  Conflicts" section is precftn).   [bib key: yacc]
+
+### CompilerGenerator_c.nw : <<function stagen>>
+(line ~4739, section "[[generators/yacc/]]", subsection "yacc.c")
+Algorithm/idea: LALR(1) states: LR(0) cores carrying LR(1) lookaheads,
+               with states merged by core
+Verified: closure() adds lookaheads from pfirst/pempty (Knuth-style LR(1)
+          closure). state() sorts the items, compares only the item
+          pointers (the core), and on a match unions the lookaheads,
+          setting tystate=MUSTDO when they grow. That is LALR(1) by core
+          merging and re-propagation.
+CONFIDENCE: high (DeRemer's 1969 MIT thesis came first; the 1971 CACM
+          paper is the one I am sure of)
+Proposed lines:
+%ref: D. E. Knuth, "On the translation of languages from left to
+%  right", Information and Control 8(6):607-639, 1965 (LR(k): items,
+%  closure and lookahead, done in closure() here. Knuth's full tables
+%  were far too big for 1960s memories).
+%ref: F. L. DeRemer, "Simple LR(k) grammars", Communications of the
+%  ACM 14(7):453-460, 1971 (the practical fix: build the small LR(0)
+%  machine and add lookaheads afterwards. yacc's state() merges
+%  states with equal cores and unions their lookaheads, which gives
+%  LALR(1)).
+%ref: F. DeRemer and T. Pennello, "Efficient computation of LALR(1)
+%  look-ahead sets", ACM TOPLAS 4(4):615-649, 1982 (road not taken:
+%  computing lookaheads through relations instead of re-closing
+%  states, the method Bison uses).
+
+### CompilerGenerator_c.nw : <<function precftn>>
+(line ~6247, section "[[generators/yacc/]]", subsection "yacc.c")
+Algorithm/idea: resolving shift/reduce conflicts with precedence and
+               associativity
+Verified: precftn compares PLEVEL(toklev[t]) with PLEVEL(levprd[r]):
+          higher means shift, lower means reduce, and an equal level
+          goes by ASSOC (left reduce, right shift, nonassoc error).
+          Level 0 counts as a real conflict. This is the machinery
+          behind cc.y's %left/%right block (Compiler.nw ~6096).
+CONFIDENCE: high
+Proposed lines:
+%ref: A. V. Aho, S. C. Johnson, J. D. Ullman, "Deterministic parsing of
+%  ambiguous grammars", Communications of the ACM 18(8):441-452, 1975
+%  (shows that an ambiguous expression grammar plus precedence rules
+%  gives smaller, faster parsers than the stratified unambiguous one.
+%  precftn is the rule: compare [[toklev]] with [[levprd]], and use
+%  %left/%right to break ties).
+
+
+======================================================================
+Considered but rejected
+======================================================================
+- Hecht & Ullman 1973 (postorder/loopit): already cited in the postorder
+  code comment.
+- Granlund & Montgomery 1994 (8c multiplier/sdiv/udiv): already cited in the
+  <<function [[TN]](x86)>> code comment.
+- Codegen prologue chunks (codgen / TEXT frame): the Frameization prose in
+  Intro.nw is the clearer anchor for Dijkstra, and Wheeler stays with the
+  assembler.
+- Aho-Johnson-Ullman 1975 on cc.y's <<priority and associativity
+  declarations>>: placed on precftn, where the algorithm lives. It could be
+  repeated on cc.y.
+- Szymanski 1978: cited by Thompson, but it belongs to the assembler and
+  linker books.
+- Clinger 1990 / Steele-White 1990 (float literals): 5c just calls strtod.
+- yacc cpfir/cempty (FIRST/nullable) and apack/gin/stin: the first two are
+  textbook-routine, and the table packing is covered by the lex layout entry.
+- Aho & Ullman "Optimization of LR(k) parsers" (callopt default reductions):
+  not confident enough of the details.
+- Glanville & Graham 1978: redundant with Aho-Johnson / AGT.
+- Prosser's C macro-expansion algorithm: an unpublished X3J11 note.
+- "Aho and Ullman's acommute" (the forsith quote in acom): no specific
+  source found.
+- Kernighan & Ritchie 1978 for "Input C language": the Ritchie HOPL paper
+  teaches more at that spot.
+
+Missing bib keys noticed: Thompson "Plan 9 C Compilers"/"A New C Compiler"
+(compilers/docs/compiler.ms; suggest plan9-c-compilers), Pike "How to Use
+the Plan 9 C Compiler" (compilers/docs/comp.ms), pcc (Intro has a
+commented-out \cite{pcc}), ssa (Intro has "%TODO: \cite{ssa}"), Chaitin,
+McKeeman, and Trusting Trust (the Intro TODOs). Existing keys reused:
+dragon-book (2nd ed.), lex, yacc.
+
+Side notes for the author (prose issues found while verifying; not refs):
+- Compiler.nw "Register allocation optimisations" says loops "weight 5x via
+  the log5 sampling". The code (loopmark: r->loop += LOOP, with LOOP=3) and
+  Thompson's paper ("multiplied by three") both disagree.
+- Intro.nw "Register allocation", the last %5c: sentence says "5c uses a
+  simpler per-basic-block allocation", but regopt is global (a flow graph
+  across basic blocks, loop-weighted, greedy).
+- Intro.nw "Instruction selection" writes "(BURG, Aho and Johnson 1976)".
+  BURG is Fraser-Henry-Proebsting 1992; Aho-Johnson 1976 is the DP
+  optimality paper.
+- Intro.nw "C's main innovation ... pointer arithmetic": BCPL already had
+  address arithmetic, so C's addition is typed arithmetic that scales by
+  the pointee size.

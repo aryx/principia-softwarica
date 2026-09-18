@@ -1,0 +1,1019 @@
+References for windows/Windows.nw, windows/Intro.nw, lib_gui/Widgets.nw,
+browsers/Browser.nw
+=========================================================================
+
+Method: every entry below was checked against the chunk body in the .nw
+(or the synced C file). For the Plan 9 design papers I also read local
+copies: windows/docs/{8½.ms, concurrent_window_system.pdf,
+transparent_wsys.pdf, rio_slides.pdf}, and the sam and acme papers under
+/media/pad/extradrive1/pad/work/OS-PLAN9/plan9front-hg/sys/doc/. Where
+an entry below says "the paper says X", that is what I read there.
+Existing bib keys are given as [bib: key].
+
+For prose anchors (Intro.nw and the principles sections), the %ref:
+lines go on the line right before the paragraph whose first words are
+quoted.
+
+
+=========================================================================
+windows/Windows.nw
+=========================================================================
+
+### Windows.nw : <<function [[mousethread]]>>
+(line ~3386, section "Mouse thread")
+Algorithm/idea: handling the mouse with a process that loops reading
+  mouse states, instead of with a state machine driven by events.
+Verified: mousethread() is an endless alt() loop on mousectl->c; the
+  modal helpers it calls (sweep, drag, menuhit) each run their own
+  "while(mouse->buttons...) readmouse()" loop instead of keeping
+  event-driven state.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. Cardelli and R. Pike, "Squeak: a Language for Communicating
+%  with Mice", SIGGRAPH '85 (Computer Graphics 19(3):199-204), 1985
+%  (for the Blit, a small language whose processes talked over
+%  channels, used to write menus and scroll bars without
+%  event-handling state machines; [[mousethread()]] and its
+%  [[readmouse()]] loops are that idea, written in C with libthread).
+
+### Windows.nw : <<function [[winctl]]>>
+(line ~3904, section "Window threads: [[winctl()]]")
+Algorithm/idea: one process per window, joined to the multiplexer by
+  synchronous channels (keyboard, mouse, control).
+Verified: every window runs its own winctl() thread, which alt()s over
+  w->ck (runes), w->mc.c (Mouse), w->cctl (Wctlmesg), and later the
+  cons/mouse read/write channels. This is the design of Pike's 1989
+  paper, where each client gets a K (chan of int) and M (chan of Mouse)
+  from the window system.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "A Concurrent Window System", Computing Systems
+%  2(2):133-153, 1989 [bib: concurrent-window-system] (the whole window
+%  system in under 300 lines of Newsqueak: each window is a process fed
+%  by a keyboard channel and a mouse channel, which is [[winctl()]]
+%  with [[w->ck]] and [[w->mc.c]]; the paper also explains why this
+%  beats the event-queue interface of X and NeWS).
+
+### Windows.nw : <<[[winctl()]] alts adjustments>>  (the one at line ~14600)
+(line ~14600, section "Application output events")
+Algorithm/idea: guarded alternatives: disable an arm of alt() when its
+  guard is false (here, flow control of application output).
+Verified: before each alt(), alts[WCwrite].op is set to CHANNOP when
+  !scrolling && !mouseopen && qh > org+nchars, so a writer on
+  /dev/cons blocks until the user scrolls. That is a guarded input
+  command; Plan 9 builds the guard by switching op to CHANNOP instead
+  of writing "guard -> communication".
+CONFIDENCE: high
+Proposed lines:
+%ref: E. W. Dijkstra, "Guarded commands, nondeterminacy and formal
+%  derivation of programs", CACM 18(8):453-457, 1975 (where the
+%  "guard -> action" alternative comes from; Hoare's CSP turned the
+%  action into a communication, and libthread writes the guard by
+%  hand, as the [[CHANNOP]]/[[CHANSND]] switch on [[alts[WCwrite].op]]).
+
+### Windows.nw : <<function [[filsysproc]]>>
+(line ~4258, section "Filesystem server proc")
+Algorithm/idea: put each blocking system call in its own proc; keep all
+  shared data in one proc whose threads switch only at channel
+  operations, so they need no locks.
+Verified: filsysproc() is created with proccreate() and blocks in
+  read9pmsg(); it passes requests on channels to Xfid threads in the
+  main proc. This is Pike's "Process vs. thread" slide word for word
+  (1. blocking calls -> procs, 2. data shared by threads of one proc
+  needs no locks).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Rio: Design of a Concurrent Window System", slides,
+%  Bell Labs, 2000 [bib: rio-slides] (the "Process vs. thread" slide
+%  gives the rule this chunk follows: a proc for every blocking call
+%  such as [[read9pmsg()]], and all shared data in one proc whose
+%  threads switch only at channel operations, so it needs no locks).
+
+### Windows.nw : <<function [[xfidctl]]>>
+(line ~4645, section "[[Xfid]] worker pool")
+Algorithm/idea: pool of anonymous worker threads, each of which receives
+  a function pointer over a channel and runs it.
+Verified: the xfidctl() loop (f = recvp(x->c); (*f)(x); decref; sendp
+  (cxfidfree, x)) and xfidallocthread()'s emalloc/chancreate/
+  threadcreate(xfidctl, x, 16384) are the same code as on the "Xfids
+  (2)" and "Xfids (3)" slides. (The prose right above already
+  \cite{csp}s Hoare's book for the ownership argument; this ref is for
+  the pool itself.)
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Rio: Design of a Concurrent Window System", slides,
+%  Bell Labs, 2000 [bib: rio-slides] (the "Xfids" slides show this
+%  loop almost line for line: one Xfid carries one 9P message, and the
+%  9P proc hands it over with [[sendp(x->c, xfidread)]], sending code
+%  to run rather than data).
+  (If the author prefers one rio-slides ref, keep this one and drop
+  the [[filsysproc]] entry.)
+
+### Windows.nw : <<struct [[Mousereadmesg]]>>
+(line ~9937, section "[[/mnt/wsys/mouse]]")
+Algorithm/idea: first-class channels: send a reply channel inside a
+  message (channel of channels).
+Verified: Mousereadmesg holds a Channel *cm (chan(Mouse)); xfidread
+  receives it from w->mouseread and then does recv(mrm.cm, &ms). This
+  is not possible in Hoare 1978 CSP, where you name processes, not
+  channels.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "The Implementation of Newsqueak", Software--Practice
+%  and Experience 20(7):649-659, 1990 (Newsqueak made channels values
+%  that can be sent over channels, which Hoare's 1978 CSP could not
+%  do because it named processes; [[Mousereadmesg.cm]] is such a
+%  channel, sent to get a fresh [[Mouse]] back).
+%ref: R. Milner, J. Parrow and D. Walker, "A Calculus of Mobile
+%  Processes, I and II", Information and Computation 100(1):1-77, 1992
+%  (the pi-calculus: the theory of channels whose names travel over
+%  channels; it came after Newsqueak).
+
+### Windows.nw : <<function [[filsysmount]]>>
+(line ~6211, section "Window creation")
+Algorithm/idea: give each window its own /dev by mounting the window
+  system's 9P service in the child's private name space.
+Verified: mount(fs->cfd, -1, "/mnt/wsys", MREPL, "<id>") then
+  bind("/mnt/wsys", "/dev", MBEFORE). The 8½ paper describes the same
+  step as a single mount(cfd, "/dev", MBEFORE, buf); rio mounts at
+  /mnt/wsys first and then unions it before /dev, and passes the window
+  id as the mount spec (8½ passed a null string in the basic case).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "8 1/2, the Plan 9 Window System", USENIX Summer Conf.,
+%  1991, pp. 257-265 [bib: eight-and-a-half] (describes this step: the
+%  child copies the parent's name space, then mounts the window
+%  system's pipe before [[/dev]] so its [[cons]] and [[mouse]] hide
+%  the real ones; [[rio]] mounts on [[/mnt/wsys]] first and then does
+%  [[bind]] with [[MBEFORE]], passing the window id as the mount spec).
+
+### Windows.nw : <<function [[sweep]]>>
+(line ~6408, section "Window creation")
+Algorithm/idea: rubber-banding: continuous feedback of a shape
+  following the pointer while a button is held.
+Verified: while(mouse->buttons == 4) readmouse(); r=canonrect(Rpt(p0,p));
+  allocate a grey window image + red border at r, free the previous
+  one. Unlike the classic XOR rubber band, rio redraws with a real
+  layer (allocwindow) and lets the layer code restore what was
+  underneath.
+CONFIDENCE: high
+Proposed lines:
+%ref: I. E. Sutherland, "Sketchpad: A Man-Machine Graphical
+%  Communication System", AFIPS Spring Joint Computer Conf. 23:329-346,
+%  1963 (the first rubber-band lines, drawn with a light pen on the
+%  TX-2 display; [[sweep()]] makes a rubber-band rectangle, not with
+%  XOR drawing but by allocating a new layer at each mouse move; mux
+%  on the Blit used the same button-3 gesture to make a window).
+
+### Windows.nw : <<function [[winsert]]>>
+(line ~13084, section "Content modification")
+Algorithm/idea: text buffer as a flat array, shifting the tail on each
+  insert (road not taken: buffer gap).
+Verified: runemove(w->r+q0+n, w->r+q0, w->nr-q0) then copy; the
+  surrounding prose already names the gap buffer and says rio skips
+  it, but does not cite anything.
+CONFIDENCE: medium (existence of the book is certain; the chapter
+  title, "The Internal Sub-Editor", is from memory)
+Proposed lines:
+%ref: C. A. Finseth, "The Craft of Text Editing: Emacs for the Modern
+%  World", Springer, 1991, chapter "The Internal Sub-Editor" (road not
+%  taken: the buffer gap of Emacs-family editors keeps a hole at the
+%  cursor so typing there moves nothing; [[winsert()]] instead
+%  [[runemove()]]s the tail, which is free when you insert at the end,
+%  as a terminal almost always does).
+
+### Windows.nw : <<[[winsert()]] adjust cursors>>
+(line ~13112, section "Content modification")
+Algorithm/idea: the "output point": boundary between text the host has
+  seen and text still being typed.
+Verified: q0/q1 advance with <= but qh with <, so output inserted at qh
+  goes before typed input; WCwrite inserts at qh and advances it. The
+  transparent paper defines this exact concept for mux ("Mux has no
+  current line; instead there is ... the output point"), including
+  "prompt always appears at the output point". The paper also says mux
+  kept only ~10,000 characters per window (rio's HiWater is 640000).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Window Systems Should Be Transparent", Computing Systems
+%  1(3), 1988 [bib: window-system-should-be-transparent] (defines the
+%  output point [[qh]] for mux, the Blit window system: host output is
+%  inserted there, typed text after it, so a prompt never splits a
+%  half-typed line; mux kept about 10,000 characters per window, rio's
+%  [[HiWater]] keeps 640,000).
+
+### Windows.nw : <<global [[menu2str]]>>
+(line ~14802, section "Mouse events" in chapter "Textual Windows")
+Algorithm/idea: the mux button-2 editing menu (cut/paste/snarf/send/
+  scroll) and the "send" command.
+Verified: menu2str = cut, paste, snarf, plumb, send, scroll. The
+  transparent paper gives mux's menu as cut, paste, snarf, send,
+  scroll, and defines send (snarf the selection, append after the
+  output point as if typed, add a newline). rio only adds "plumb".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Window Systems Should Be Transparent", Computing Systems
+%  1(3), 1988 (mux's button-2 menu was cut/paste/snarf/send/scroll,
+%  which is [[menu2str]] without [[plumb]]; the paper explains that
+%  [[Send]], which re-executes a command selected anywhere on the
+%  screen, is "central to mux's convenience").
+
+### Windows.nw : <<function [[wscroll]]>>
+(line ~15047, section "Scroll bar interaction")
+Algorithm/idea: Blit/mux three-button scroll bar where each button acts
+  differently depending on the y position.
+Verified: button 1 -> wbacknl(org, lines from y), button 2 ->
+  p0 = nr*y/h absolute jump, button 3 -> frcharofpt at y becomes org;
+  200ms first delay then wscrsleep repeat. Pike's paper says the mux
+  scroll bar is "probably the least satisfactory part of the user
+  interface" and that it should change the cursor to show what each
+  button does. rio does not change the cursor either.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Window Systems Should Be Transparent", Computing Systems
+%  1(3), 1988 (the author himself calls this three-button, position-
+%  dependent scroll bar "probably the least satisfactory part" of mux
+%  and "a topic for further research"; [[wscroll()]] keeps the design
+%  and adds the 200ms delay before auto-repeat).
+
+### Windows.nw : <<function [[timerproc]]>>
+(line ~16611, section "Timer")
+Algorithm/idea: timer facility; this one is the naive scheme (unsorted
+  array, decrement every timer each tick).
+Verified: every sleep(1), loop i<nt: x->dt -= dt; fire via nbsendul
+  when <= 0, memmove to delete. O(n) per tick, which is Varghese-Lauck's
+  "scheme 1"; fine here because rio has at most a few timers
+  (scroll-repeat only).
+CONFIDENCE: high
+Proposed lines:
+%ref: G. Varghese and T. Lauck, "Hashed and Hierarchical Timing Wheels:
+%  Data Structures for the Efficient Implementation of a Timer
+%  Facility", SOSP 1987 (road not taken: [[timerproc()]] is the
+%  simplest scheme, an unsorted array that it walks every millisecond
+%  to decrement each [[dt]]; timing wheels make each tick O(1), but
+%  [[rio]] rarely has more than one timer, the scroll-repeat one).
+
+### Windows.nw : <<function [[wsnarf]]>>
+(line ~17146, section "Advanced terminal editing", subsection "Snarf")
+Algorithm/idea: modeless cut/copy/paste through a global buffer.
+Verified: wsnarf copies w->r[q0..q1] into the global snarf rune array
+  and calls putsnarf() to publish to /dev/snarf; wcut/wpaste are the
+  other two verbs.
+CONFIDENCE: high (existence and topic); medium (issue/pages, so pages
+  omitted)
+Proposed lines:
+%ref: L. Tesler, "A Personal History of Modeless Text Editing and
+%  Cut/Copy-Paste", ACM interactions 19(4), 2012 (cut, copy and paste
+%  came from Tesler and Mott's Gypsy editor on the Xerox Alto in the
+%  mid-1970s; mux called copy "snarf", and [[wsnarf()]] keeps the Blit
+%  name for the same operation).
+
+### Windows.nw : <<function [[wplumb]]>>
+(line ~17429, section "Advanced terminal editing", subsection "Plumb")
+Algorithm/idea: plumbing: rule-based routing of selected text to
+  applications.
+Verified: builds a Plumbmsg with the selection (or the word around the
+  click, with a "click" attribute giving the offset) and plumbsend()s
+  it. The bib entry exists and is cited in "Code organization" (line
+  745), not in this section.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Plumbing and Other Utilities", USENIX Annual Technical
+%  Conf., 2000 [bib: plumb] (the plumber's rules match text such as
+%  "file.c:42", and the [[click]] attribute set by [[wplumb()]] lets a
+%  rule take the whole word around the click even if only one
+%  character was selected).
+
+### Windows.nw : <<function [[wselect]]>>
+(line ~18595, section "Advanced terminal editing", subsection "Word
+selection")
+Algorithm/idea: mouse chording: pressing button 2 or 3 while button 1
+  is still held cuts or pastes.
+Verified: after frselect, "while(w->mc.m.buttons)" with b==1|2 ->
+  wsnarf+wcut, b==1|4 -> wpaste. The acme paper says acme binds
+  Cut and Paste to chords "so these common operations can be done
+  without moving the mouse".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Acme: A User Interface for Programmers", USENIX Winter
+%  Conf., 1994 (where the cut and paste chords come from: keep button 1
+%  down on the selection and click 2 to cut or 3 to paste, without
+%  moving the mouse to a menu; [[wselect()]] has the same chords).
+
+### Windows.nw : <<function [[wdoubleclick]]>>
+(line ~18734, section "Advanced terminal editing", subsection "Word
+selection")
+Algorithm/idea: double-click selection that matches brackets, quotes and
+  lines ("programmer's double click").
+Verified: left[]/right[] tables of brackets, newline, quotes;
+  wclickmatch counts nesting; otherwise extends over alnum. The sam
+  paper describes exactly this: double click in a word selects the
+  word, just inside a bracket selects the bracketed text "handling
+  nested brackets correctly", likewise parentheses and quotes.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "The Text Editor sam", Software--Practice and Experience
+%  17(11):813-845, 1987 (the double-click rules come from sam and its
+%  predecessor jim on the Blit: inside a bracket, [[wclickmatch()]]
+%  selects up to the matching one, counting nesting; the paper admits
+%  these rules "reflect a bias toward programmers", since a word
+%  processor would select sentences instead).
+
+### Windows.nw : <<function [[cvttorunes]]>>
+(line ~20772, section "Unicode" in appendix chapter "Utilities")
+Algorithm/idea: UTF-8 decoding; the fast path for bytes < Runeself
+  relies on UTF-8 being ASCII-transparent.
+Verified: if(*q < Runeself) one byte = one rune, else chartorune(); the
+  comment says the caller guarantees no partial rune at the end.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike and K. Thompson, "Hello World or Kalimera kosme or
+%  Konnichi wa sekai", USENIX Winter Conf., 1993, pp. 43-50 (how Plan 9
+%  switched to UTF-8, the encoding Thompson designed for it in 1992;
+%  the [[*q < Runeself]] shortcut works because an ASCII byte in UTF-8
+%  is always the character itself and never part of a longer one).
+  (Note: the real title uses Greek and Japanese script; in a .nw
+  %-comment a transliteration or "Hello World or ..." is safer.)
+
+### Windows.nw : <<struct [[Frbox]]>>
+(line ~21263, section "Boxes, strings, and coordinates")
+Algorithm/idea: the frame as a list of boxes tiling the window, with
+  special one-character boxes for newline and tab.
+Verified: the sam paper's "Screen update" section: "A Frame contains a
+  list of Boxes, each of which defines a horizontal strip of text";
+  invariant: drawing str in the box reproduces its image; "Two special
+  kinds of Boxes contain a single character: either a newline or a
+  tab", newline box extends to the right edge, tab width depends on
+  position with minimum width of a blank. Frbox differs: nrune<0 +
+  bc/minwid instead of str; no stored Rectangle (positions recomputed
+  with _fradvance); wid cached.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "The Text Editor sam", Software--Practice and Experience
+%  17(11):813-845, 1987, section "Screen update" (libframe was written
+%  for sam's terminal program on the Blit; the paper's Boxes, strips
+%  of text with newline and tab each in a box of their own, are
+%  [[Frbox]], where [[nrune < 0]] marks a newline or tab and
+%  [[minwid]] is the tab's minimum width).
+
+### Windows.nw : <<function [[frdelete]]>>
+(line ~22806, section "Incremental rendering")
+Algorithm/idea: incremental deletion by copying tiles with bitblt over
+  the "Z-shape" and switching to two block copies once columns align.
+Verified: loop "while(pt1.x!=pt0.x && n1<f->nbox)" copies each box
+  image from pt1 to pt0 with draw(); then, if lines changed, two draw()
+  calls move the rest up, frselectpaint clears the bottom, _frclean
+  merges adjacent boxes. Exactly the paper's algorithm ("tiles are
+  copied ... until the old and new x coordinates are the same ... a
+  sequence of at most two bitblts ... merge horizontally adjacent
+  Boxes"). The paper also says frinsert makes four passes.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "The Text Editor sam", Software--Practice and Experience
+%  17(11):813-845, 1987 (the paper describes this function: remove the
+%  "Z-shape" of deleted text, copy the following tiles back one by one
+%  with bitblt until old and new x line up, move the rest with at most
+%  two big copies, then merge neighboring boxes; here the copies are
+%  [[draw()]] calls and the merge is [[_frclean()]]).
+
+
+=========================================================================
+windows/Intro.nw  (prose anchors)
+=========================================================================
+
+### Intro.nw : section "The \plan windowing system: [[rio]]", paragraph
+"There is another reason [[rio]] rewards study: it is a small
+masterpiece of" (line ~294)
+Algorithm/idea: CSP as the root of rio's procs/threads/channels.
+Verified: the previous paragraph cites concurrent-window-system and 8½
+  but not Hoare; the only \cite{csp} in the book (Windows.nw 4601) is
+  the 1985 book, not the 1978 paper.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. A. R. Hoare, "Communicating Sequential Processes", CACM
+%  21(8):666-677, 1978 (the paper behind [[rio]]'s design: sequential
+%  processes that share nothing and synchronize only by input/output
+%  commands; Newsqueak, Alef and then libthread's [[send]], [[recv]]
+%  and [[alt]] are its descendants, with channels instead of process
+%  names).
+
+### Intro.nw : section "Windowing system principles", paragraph
+"In addition to windows, a windowing system traditionally uses"
+(line ~1009)
+Algorithm/idea: origins of the mouse, windows and WIMP; the later
+  post-WIMP idea.
+Verified: prose only; no \cite at this spot (Alto is cited at line 28).
+CONFIDENCE: high
+Proposed lines:
+%ref: D. C. Engelbart and W. K. English, "A research center for
+%  augmenting human intellect", AFIPS Fall Joint Computer Conf.
+%  33:395-410, 1968 (NLS, shown in the 1968 "Mother of All Demos":
+%  the first mouse, split-screen windows and pointing at text; rio's
+%  three-button mouse descends from it through the Alto and the Blit).
+%ref: A. Kay and A. Goldberg, "Personal Dynamic Media", IEEE Computer
+%  10(3):31-41, 1977 (Smalltalk on the Alto: overlapping windows and
+%  pop-up menus, the W and M of WIMP).
+%ref: A. van Dam, "Post-WIMP User Interfaces", CACM 40(2):63-67, 1997
+%  (named the "post-WIMP" interfaces this paragraph mentions).
+
+### Intro.nw : subsection "The window", paragraph "A window is multiple
+things at the same time." (line ~1113)
+Algorithm/idea: graphics terminology: window (region of the world) vs
+  viewport (region of the screen).
+Verified: the footnote cites pike-layers for "misnomer"; the author's
+  own % note says "he cites NewMan-Sproull-79; a window is actually
+  the whole virtual world".
+CONFIDENCE: high
+Proposed lines:
+%ref: W. M. Newman and R. F. Sproull, "Principles of Interactive
+%  Computer Graphics", McGraw-Hill, 1973 (2nd ed. 1979) (the book that
+%  fixed the terms: the "window" is the part of the drawing's world
+%  coordinates you choose to look at, the "viewport" is where on the
+%  screen it goes; a rio window is a viewport in this sense).
+
+### Intro.nw : subsection "Display server", paragraph "One of the first
+display server was Rob Pike's Blit terminal" (line ~1291)
+Algorithm/idea: the Blit as a display server multiplexed over a serial
+  line; X as the networked display server.
+Verified: prose names both systems and their authors without citing
+  them here (blit and x-window are cited elsewhere in the Intro).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "The Blit: A Multiplexed Graphics Terminal", AT&T Bell
+%  Labs Technical Journal 63(8), part 2:1607-1631, 1984 [bib: blit]
+%  (a 68000 terminal with an 800x1024 bitmap screen, connected to a
+%  Unix host by a slow serial line; the host sent programs and drawing
+%  requests down the line, which makes it an early display server).
+%ref: R. W. Scheifler and J. Gettys, "The X Window System", ACM Trans.
+%  on Graphics 5(2):79-109, 1986 [bib: x-window] (the network protocol
+%  design; the paper also argues that the window manager should be an
+%  ordinary client).
+
+### Intro.nw : subsection "Stacking, tiling, and compositing", paragraph
+"In a {stacking} system, windows live on an abstract Z-axis" (line ~1346)
+Algorithm/idea: overlapping windows and the repaint-on-expose cost;
+  layers as the alternative that keeps obscured pixels.
+Verified: prose explains X11 Expose; rio/draw avoid it because
+  allocwindow(..., Refbackup, ...) layers keep obscured pixels
+  off-screen (see sweep()/drag() in Windows.nw). pike-layers is cited
+  in the Intro at 1116/2034, not here.
+CONFIDENCE: high (Pike); medium (Teitelman venue)
+Proposed lines:
+%ref: W. Teitelman, "A Display Oriented Programmer's Assistant",
+%  IJCAI 1977 (Interlisp on the Alto, an early system with
+%  overlapping windows).
+%ref: R. Pike, "Graphics in Overlapping Bitmap Layers", ACM Trans. on
+%  Graphics 2(2):135-160, 1983 [bib: pike-layers] (the Blit's answer to
+%  the Expose problem: the obscured part of each window is kept in an
+%  off-screen bitmap, so the program never redraws it; [[rio]] gets the
+%  same thing from [[Refbackup]] in [[allocwindow()]]).
+
+### Intro.nw : same subsection, paragraph "A {tiling} system forbids
+overlap." (line ~1365)
+Algorithm/idea: tiled vs overlapping windows.
+CONFIDENCE: high (Bly-Rosenberg); medium (Cedar article pages omitted)
+Proposed lines:
+%ref: W. Teitelman, "A Tour Through Cedar", IEEE Software 1(2), 1984
+%  (Cedar, at Xerox PARC, tiled its "viewers" in columns, like Oberon
+%  later).
+%ref: S. A. Bly and J. K. Rosenberg, "A Comparison of Tiled and
+%  Overlapping Windows", CHI '86, pp. 101-106 (an early user study of
+%  this choice; which one wins depends on the task).
+
+### Intro.nw : same subsection, paragraph "In a compositing system,"
+(line ~1387)
+Algorithm/idea: alpha compositing of per-window off-screen buffers.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Porter and T. Duff, "Compositing Digital Images", SIGGRAPH '84
+%  (Computer Graphics 18(3):253-259), 1984 (written for film special
+%  effects at Lucasfilm: an alpha channel per pixel plus the "over"
+%  operator, which is what every compositor does to combine window
+%  buffers; the same algebra is inside Plan 9's [[draw()]]; see the
+%  Graphics book).
+
+### Intro.nw : subsection "Input focus", paragraph "[[rio]] sits on the
+click-to-focus side." (line ~1607)
+Algorithm/idea: click-to-focus rationale.
+Verified: the transparent paper says mux requires a click because it is
+  sometimes useful to type into a mostly obscured window and to move the
+  cursor out of the way without changing windows; wtop() raises the
+  window and makes it current in one click.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Window Systems Should Be Transparent", Computing Systems
+%  1(3), 1988 [bib: window-system-should-be-transparent] (gives mux's
+%  reasons for click-to-focus: you may want to type into a mostly
+%  hidden window, or move the pointer out of the way without changing
+%  the current window; in [[rio]] one button-1 click raises the window
+%  and gives it the keyboard, see [[wtop()]]).
+
+### Intro.nw : subsection "Terminal emulator", paragraph "In X~Window,
+terminal emulators (e.g., [[xterm]], [[rxvt]])" (line ~1693)
+Algorithm/idea: pseudo-terminals (road not taken) vs 8½'s per-window
+  /dev/cons.
+Verified: the author writes "I must admit I do not fully understand how
+  it works" about PTYs here, so a textbook pointer helps. The 8½ paper
+  says clients "close file descriptors 0, 1, and 2 and open
+  /dev/cons", which is what rio's winshell does.
+CONFIDENCE: medium (APUE chapter number is from memory: "Pseudo
+  Terminals" is ch. 19 in the 1992 edition)
+Proposed lines:
+%ref: W. R. Stevens, "Advanced Programming in the UNIX Environment",
+%  Addison-Wesley, 1992, chapter "Pseudo Terminals" [bib: unix-stevens]
+%  (road not taken: a PTY is a kernel pipe pair that pretends to be a
+%  serial terminal, with a line discipline in between, so programs
+%  written for teletypes keep working).
+%ref: R. Pike, "8 1/2, the Plan 9 Window System", USENIX Summer Conf.,
+%  1991 [bib: eight-and-a-half] (Plan 9 needs no pseudo-terminal: each
+%  window's [[/dev/cons]] is a file served by the window system, which
+%  also does the line editing).
+
+
+=========================================================================
+lib_gui/Widgets.nw
+=========================================================================
+
+### Widgets.nw : section "Other widget libraries", paragraph "The widget
+library lineage goes back to the Xerox Alto and Smalltalk" (line ~313)
+Algorithm/idea: Smalltalk/Alto origin of widgets; MVC.
+Verified: prose claims MVC was invented with Smalltalk on the Alto; no
+  cite here.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. Kay and A. Goldberg, "Personal Dynamic Media", IEEE Computer
+%  10(3):31-41, 1977 (the Dynabook plan and Smalltalk on the Alto,
+%  where windows, menus and scroll bars first became objects that
+%  users could program).
+%ref: G. E. Krasner and S. T. Pope, "A Cookbook for Using the
+%  Model-View-Controller User Interface Paradigm in Smalltalk-80",
+%  Journal of Object-Oriented Programming 1(3):26-49, 1988 (the first
+%  published description of MVC, which Reenskaug designed at PARC in
+%  1979; [[libpanel]] has no separate model, since a [[Panel]] is
+%  view and controller at once).
+%ref: B. A. Myers, "A Brief History of Human-Computer Interaction
+%  Technology", ACM interactions 5(2):44-54, 1998 (short, well-sourced
+%  dates for windows, menus, toolkits and UIMSs).
+
+### Widgets.nw : section "Widget library principles", subsection "The
+widget", paragraph "A {widget} (a contraction of ``window gadget'')"
+(line ~423)
+Algorithm/idea: widget as an object with draw/hit/size methods (OO in
+  C with function pointers).
+CONFIDENCE: high
+Proposed lines:
+%ref: A. Goldberg and D. Robson, "Smalltalk-80: The Language and its
+%  Implementation", Addison-Wesley, 1983 (the "Blue Book": screen
+%  elements as classes whose subclasses redefine display and
+%  mouse-handling methods; [[Panel]]'s [[draw]], [[hit]] and
+%  [[getsize]] function pointers are that vtable, written by hand
+%  in C).
+
+### Widgets.nw : subsection "The event loop", paragraph "A graphical
+application cannot simply execute a sequence of" (line ~457)
+Algorithm/idea: explicit event loop (libpanel + libevent's event()) vs
+  the concurrent alternative (road not taken, used by rio itself).
+Verified: hellopanel's main loop is for(;;) plmouse(root, emouse())
+  style over libevent; Pike 1989 argues against event streams in favour
+  of per-device channels.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "A Concurrent Window System", Computing Systems 2(2),
+%  1989 [bib: concurrent-window-system] (road not taken inside Plan 9:
+%  the paper says event-driven clients "tend to be written as state
+%  machines", which are "powerful but inconvenient", and gives each
+%  device its own channel instead; [[rio]] is built that way, while
+%  [[libpanel]] keeps the classic [[event()]] loop).
+
+### Widgets.nw : <<function [[plpack]]>>
+(line ~2597, chapter "Layout")
+Algorithm/idea: Tk's packer: two passes (request sizes up the tree,
+  then carve strips off the remaining cavity going down).
+Verified: plpack = pl_sizereq (bottom-up) + pl_setrect (top-down);
+  PACKN/E/S/W take a strip off one side of the remaining space; Duff's
+  own manual says the design is "modeled strongly on Ousterhout's
+  Tcl/Tk".
+CONFIDENCE: high (paper); medium (pages omitted)
+Proposed lines:
+%ref: J. K. Ousterhout, "An X11 Toolkit Based on the Tcl Language",
+%  USENIX Winter Conf., 1991 (Tk's "packer" puts each child against
+%  one side of the space still free, then passes the rest to the
+%  next child; Tom Duff copied this into [[pl_setrect()]], with
+%  [[PACKN]], [[PACKE]], [[PACKS]] and [[PACKW]] as the sides).
+
+### Widgets.nw : <<function [[pl_getshare]]>>
+(line ~3162, chapter "Layout")
+Algorithm/idea: distributing leftover space among EXPAND children
+  (boxes and glue, equal stretch).
+Verified: pl_getshare counts EXPAND siblings per axis; pl_sizesibs'
+  EXPAND case gives each l = slack/share and decrements share, so
+  slack is split equally with the remainder going to the last one.
+  Only stretch, never shrink, and every EXPAND child has the same
+  stretchability, unlike TeX glue.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, "The TeXbook", Addison-Wesley, 1984, chapter 12
+%  "Glue" (TeX also lays out in two passes: natural sizes up the tree,
+%  then stretch or shrink each box's glue to fill its space; an
+%  [[EXPAND]] panel is glue that can only stretch, and every such
+%  panel stretches by the same amount, [[slack/share]]).
+
+### Widgets.nw : <<function [[pl_foldsize]]>>
+(line ~6720, section "Message")
+Algorithm/idea: greedy (first-fit) line breaking; road not taken:
+  total-fit line breaking.
+Verified: inner do-while adds words while lwid<=wid, breaks at the last
+  fitting word; a single word too long takes the whole line.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth and M. F. Plass, "Breaking Paragraphs into Lines",
+%  Software--Practice and Experience 11(11):1119-1184, 1981 (road not
+%  taken: [[pl_foldsize()]] breaks greedily, putting as many words on
+%  each line as fit; TeX instead picks the breaks for the whole
+%  paragraph with dynamic programming, to avoid very loose lines).
+
+### Widgets.nw : <<struct [[Popup]]>>
+(line ~5999, section "Popup menu")
+Algorithm/idea: Blit-style pop-up menus per mouse button, with a
+  save-under image; vs pull-down and pie menus.
+Verified: Popup.pop[3] (one menu per button), Popup.save (screen area
+  saved under the menu and restored on dismissal).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Window Systems Should Be Transparent", Computing Systems
+%  1(3), 1988 (why Plan 9 uses pop-ups: they appear where the pointer
+%  already is, so "no mouse motion is required", while "the Macintosh
+%  user soon tires of the hand waving" needed to reach pull-down
+%  menus; libpanel has both, see [[Pulldown]] below).
+%ref: J. Callahan, D. Hopkins, M. Weiser and B. Shneiderman, "An
+%  Empirical Comparison of Pie vs. Linear Menus", CHI '88, pp. 95-100
+%  (road not taken: pie menus place items around the pointer, all at
+%  the same distance, and users picked from them faster than from
+%  linear menus like [[plmenu()]]'s).
+
+
+=========================================================================
+browsers/Browser.nw
+=========================================================================
+
+### Browser.nw : section "Web browser principles", paragraph "The {\em
+World Wide Web} (or just {\em the web}) is a {\em distributed" (line ~436)
+Algorithm/idea: the founding documents of the web.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Berners-Lee, "Information Management: A Proposal", CERN,
+%  March 1989 (written to keep track of people and projects at CERN;
+%  his boss wrote "vague but exciting" on it; the web in this book
+%  stays close to it: URLs, HTTP, HTML and nothing more).
+%ref: T. Berners-Lee, R. Cailliau, A. Luotonen, H. F. Nielsen and
+%  A. Secret, "The World-Wide Web", CACM 37(8):76-82, 1994 (the design
+%  as its authors described it in 1994, around the time Mosaic
+%  appeared).
+
+### Browser.nw : subsection "A viewer for hypertext documents", paragraph
+"The web was not the first hypertext system; almost every idea in it"
+(line ~492)
+Algorithm/idea: founding hypertext documents (Memex, hypertext, NLS).
+Verified: prose names Bush 1945, Nelson 1965, Engelbart 1968 without
+  citations.
+CONFIDENCE: high
+Proposed lines:
+%ref: V. Bush, "As We May Think", The Atlantic Monthly 176(1):101-108,
+%  July 1945 (the Memex, a desk of microfilm in which a reader makes
+%  and follows "trails" between documents: a link that a reader
+%  follows, 45 years before the web).
+%ref: T. H. Nelson, "Complex Information Processing: A File Structure
+%  for the Complex, the Changing and the Indeterminate", Proc. ACM 20th
+%  National Conf., 1965, pp. 84-100 (where the word "hypertext" first
+%  appears).
+%ref: D. C. Engelbart and W. K. English, "A Research Center for
+%  Augmenting Human Intellect", AFIPS Fall Joint Computer Conf.
+%  33:395-410, 1968 (NLS, the first working hypertext, with links you
+%  click with a mouse).
+
+### Browser.nw : subsection "The URL as universal name", paragraph
+"A {\em URL} (Uniform Resource Locator) is the universal name of a"
+(line ~516)
+Algorithm/idea: URL syntax origins.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Berners-Lee, "Universal Resource Identifiers in WWW",
+%  RFC 1630, 1994, and T. Berners-Lee, L. Masinter and M. McCahill,
+%  "Uniform Resource Locators (URL)", RFC 1738, 1994 (the first URL
+%  specifications; Berners-Lee later said the [[//]] after the scheme
+%  was unnecessary and that he regretted it).
+
+### Browser.nw : <<function [[resolve_relative]](webfs)>>
+(line ~5609, section "Webfs's URL algebra ([[webfs/url.c]], RFC 3986)")
+Algorithm/idea: resolving a relative reference against a base URL.
+Verified: the code's comments say "See RFC2396 sec 5.2" with steps 2,
+  4-5, 6; merge_relative_path says "RFC2396 sec 5.2 step 6" (6a-6f
+  string rewriting). The .nw prose (lines ~5585 and ~5762) says RFC
+  3986, but RFC 3986 replaced step 6 with merge (5.2.3) +
+  remove_dot_segments (5.2.4). So the code is RFC 2396.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Fielding, "Relative Uniform Resource Locators", RFC 1808, 1995
+%  (the first algorithm for resolving a relative link such as
+%  [[../images/foo.png]] against the page's URL, part by part).
+%ref: T. Berners-Lee, R. Fielding and L. Masinter, "Uniform Resource
+%  Identifiers (URI): Generic Syntax", RFC 2396, 1998 (what this code
+%  follows: section 5.2 steps 2-6 and the Appendix B regular
+%  expression used by [[spliturl()]]; the later RFC 3986 of 2005 does
+%  step 6 differently, with remove_dot_segments).
+
+### Browser.nw : <<function [[dohttp]](hget.c)>>
+(line ~6638, section "Building the request ([[GET]], [[HEAD]])")
+Algorithm/idea: HTTP/1.0 request/response.
+Verified: dfprint(fd, "GET %s HTTP/1.0\r\nHost: %s\r\n" ...) plus
+  optional Range/If-Range/Authorization/Cookie lines; status switch on
+  200/206/301-307/401. Host and Range are HTTP/1.1 headers sent on a
+  1.0 request.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Berners-Lee, R. Fielding and H. Frystyk, "Hypertext Transfer
+%  Protocol -- HTTP/1.0", RFC 1945, 1996 (written after the fact, to
+%  describe what servers already did; the first HTTP of 1991 was just
+%  "GET /path" with no headers and no status line; [[dohttp()]] speaks
+%  1.0 but also sends the 1.1 [[Host:]] and [[Range:]] headers, since
+%  servers with virtual hosts need [[Host:]]).
+
+### Browser.nw : <<function [[wwwauthenticate]](webfs)>>
+(line ~8351, section "Authentication (basic, digest, [[www-authenticate]])")
+Algorithm/idea: HTTP Basic authentication, with the password taken from
+  factotum.
+Verified: only "basic" accepted; auth_getuserpasswd(nil, "proto=pass
+  service=http server=%q realm=%q") -> enc64("user:pass") ->
+  "Basic %s". No Digest despite the section title.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Franks et al., "HTTP Authentication: Basic and Digest Access
+%  Authentication", RFC 2617, 1999 (Basic, already in HTTP/1.0, only
+%  base64-encodes "user:pass", so anyone watching the connection can
+%  decode it; this code implements only Basic, not Digest).
+%ref: R. Cox, E. Grosse, R. Pike, D. Presotto and S. Quinlan,
+%  "Security in Plan 9", USENIX Security Symposium, 2002 (factotum, the
+%  agent that holds the user's keys; [[webfs]] asks it with
+%  [[auth_getuserpasswd()]] and never stores passwords itself).
+
+### Browser.nw : <<function [[_iotlsdial]](webfs)>>
+(line ~8926, section "HTTPS: [[tlsClient]] and [[/net/tls]]")
+Algorithm/idea: TLS client handshake over a dialed TCP connection; SNI.
+Verified: dial() then tlsClient(fd, &conn) with conn.serverName set (a
+  claude-added SNI line); the "BUG: check cert here?" comment shows the
+  server certificate is not verified.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. Freier, P. Karlton and P. Kocher, "The SSL Protocol Version
+%  3.0", Netscape, 1996 (published as RFC 6101 in 2011); T. Dierks and
+%  C. Allen, "The TLS Protocol Version 1.0", RFC 2246, 1999 (TLS is
+%  SSL 3.0 standardized by the IETF under a new name).
+%ref: S. Blake-Wilson et al., "Transport Layer Security (TLS)
+%  Extensions", RFC 3546, 2003, section 3.1 (Server Name Indication:
+%  the client names the host so that one IP address can serve many
+%  HTTPS sites; that is what [[conn.serverName]] does; without a
+%  certificate check, as the BUG comment notes, TLS here encrypts but
+%  does not prove who the server is).
+
+### Browser.nw : subsection "MIME types and content dispatch", paragraph
+"HTTP responses include a [[Content-Type:]] response header" (line ~821)
+Algorithm/idea: MIME types.
+CONFIDENCE: high
+Proposed lines:
+%ref: N. Borenstein and N. Freed, "MIME (Multipurpose Internet Mail
+%  Extensions)", RFC 1341, 1992 (made for sending pictures and
+%  non-ASCII text by email; the web took its [[Content-Type:]]
+%  [[type/subtype]] labels unchanged).
+
+### Browser.nw : <<function [[filetype]](mothra)>>
+(line ~14255, section "MIME sniffing ([[snoop.c]])")
+Algorithm/idea: content sniffing from the first bytes.
+Verified: reads up to 4 KiB, pipes it to /bin/file -m, re-emits the
+  peeked bytes through a second child so the caller's fd is unchanged.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. Barth, J. Caballero and D. Song, "Secure Content Sniffing for
+%  Web Browsers, or How to Stop Papers from Reviewing Themselves", IEEE
+%  Symposium on Security and Privacy, 2009 (browsers that guessed types
+%  from content could be fooled into running an uploaded "PDF" as HTML;
+%  mothra hands the guessing to [[file -m]], which is safe here only
+%  because mothra runs no scripts).
+
+### Browser.nw : subsection "Character encodings", paragraph "The web
+browser receives bytes from the requested server, but" (line ~854)
+Algorithm/idea: UTF-8 as the internal encoding everything converts to
+  (tcs/uhtml convert into it).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike and K. Thompson, "Hello World or Kalimera kosme or
+%  Konnichi wa sekai", USENIX Winter Conf., 1993, pp. 43-50 (how Plan 9
+%  moved to UTF-8, which Thompson designed for it; this is why [[tcs]]
+%  only needs to convert each legacy charset to and from UTF-8, not to
+%  every other charset).
+
+### Browser.nw : subsection "HTML as the document format", paragraph
+"HTML descends from SGML, IBM's heavy markup language of the 1970s,"
+(line ~977)
+Algorithm/idea: generalized (descriptive) markup; HTML 2.0.
+Verified: prose says SGML is "IBM's ... language of the 1970s"; strictly,
+  IBM's was GML (Goldfarb, Mosher, Lorie, 1969); SGML is the ISO
+  standard (ISO 8879, 1986) that grew from it.
+CONFIDENCE: high (paper exists); medium (pages omitted)
+Proposed lines:
+%ref: C. F. Goldfarb, "A Generalized Approach to Document Markup",
+%  ACM SIGPLAN/SIGOA Symposium on Text Manipulation, 1981 (from IBM's
+%  GML, 1969: mark up what the text is, a heading or a paragraph, and
+%  not how to print it; this became SGML, ISO 8879, 1986, and HTML's
+%  [[<h1>]] and [[<p>]] come from it).
+%ref: T. Berners-Lee and D. Connolly, "Hypertext Markup Language --
+%  2.0", RFC 1866, 1995 (the first HTML specification, written after
+%  years of use; mothra parses roughly this level).
+
+### Browser.nw : <<function [[isdomainmatch]](webcookies)>>
+(line ~10305, section "Domain matching and expiry")
+Algorithm/idea: cookie domain matching.
+Verified: the code comment and body implement RFC 2109 section 2:
+  exact match, or name ends with a pattern that starts with '.', so
+  x.y.com matches .y.com but not y.com. The .nw prose (lines ~10231 and
+  ~1189) says RFC 6265 and that ".example.com" matches "example.com",
+  which this code does not do (name shorter than pattern -> no match).
+  (The webfs copy at ~10915 is the same function; one ref is enough.)
+CONFIDENCE: high
+Proposed lines:
+%ref: Netscape, "Persistent Client State: HTTP Cookies" (preliminary
+%  specification), 1994, and D. Kristol and L. Montulli, "HTTP State
+%  Management Mechanism", RFC 2109, 1997 (Lou Montulli invented cookies
+%  at Netscape for a shopping cart; [[isdomainmatch()]] is RFC 2109's
+%  rule, where x.y.com matches .y.com but not y.com; the current
+%  RFC 6265, 2011, ignores the leading dot).
+%ref: D. M. Kristol, "HTTP Cookies: Standards, Privacy, and Politics",
+%  ACM Trans. on Internet Technology 1(2), 2001 (one of the RFC's
+%  authors on why the standard struggled to catch up with what browsers
+%  already did).
+
+### Browser.nw : <<function [[uencodeform]](mothra)>>
+(line ~15879, section "Form encoding")
+Algorithm/idea: application/x-www-form-urlencoded; ISINDEX.
+Verified: name=value joined by '&' with %U percent-encoding; an INDEX
+  case emits a bare value (the pre-forms <isindex> search).
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Berners-Lee and D. Connolly, "Hypertext Markup Language --
+%  2.0", RFC 1866, 1995, section 8.2.1 (defines this encoding:
+%  [[name=value]] pairs joined by [[&]] and percent-escaped; the
+%  [[INDEX]] case is the older [[<isindex>]] search box, which sent a
+%  single value with no name).
+
+### Browser.nw : <<function [[mencodeform]](mothra)>>
+(line ~15950, section "Form encoding")
+Algorithm/idea: multipart/form-data for file upload.
+CONFIDENCE: high
+Proposed lines:
+%ref: E. Nebel and L. Masinter, "Form-based File Upload in HTML",
+%  RFC 1867, 1995 (added [[<input type=file>]] and
+%  [[multipart/form-data]], reusing MIME's multipart boundaries from
+%  email, because percent-encoding a binary file was too costly).
+
+### Browser.nw : <<function [[resample]](resize)>>
+(line ~14958, section "[[resize]] for scaling")
+Algorithm/idea: bilinear interpolation in 12-bit fixed point;
+  nearest-neighbor by rounding the fraction.
+Verified: s00..s11 = products of (0x1000 - t) and t weights, >>24; -n
+  forces tx/ty to 0 or 0x1000. Point-sampled: when shrinking by a large
+  factor, most source pixels are never read (aliasing).
+CONFIDENCE: high
+Proposed lines:
+%ref: G. Wolberg, "Digital Image Warping", IEEE Computer Society Press,
+%  1990 (the standard book on resampling; [[resample()]] is its
+%  bilinear interpolation, in 12-bit fixed point).
+%ref: D. P. Mitchell and A. N. Netravali, "Reconstruction Filters in
+%  Computer Graphics", SIGGRAPH '88 (Computer Graphics 22(4):221-228)
+%  (road not taken: bilinear reads only 4 source pixels per output
+%  pixel, so shrinking a photo 10 times ignores most pixels and
+%  aliases; a wider filter, such as this paper's cubic, reads them
+%  all).
+
+### Browser.nw : <<function [[doftp]](hget.c)>>
+(line ~17093, section "FTP protocol support ([[doftp]] in hget, ftp in
+[[webfs/url.c]])")
+Algorithm/idea: FTP: separate control and data connections; passive
+  mode.
+Verified: control connection with USER/PASS, "first try passive mode,
+  then active" (passive(), then active), RETR over the data connection,
+  REST for restart.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. Bhushan, "A File Transfer Protocol", RFC 114, 1971 (FTP is
+%  older than TCP: it was written for the ARPANET's NCP, which is why
+%  commands travel on one connection and file data on another);
+%  J. Postel and J. Reynolds, "File Transfer Protocol", RFC 959, 1985
+%  (the version [[doftp()]] speaks; it tries [[PASV]] before active
+%  mode because a client behind a firewall or NAT often cannot accept
+%  the server's incoming data connection).
+
+### Browser.nw : chapter "Tables", section "Why full table layout is
+hard (column widths, rowspan, colspan)", paragraph "Three complications
+make table layout an order of magnitude more code" (line ~14625)
+Algorithm/idea: HTML table model (road not taken by mothra).
+CONFIDENCE: high
+Proposed lines:
+%ref: D. Raggett, "HTML Tables", RFC 1942, 1996 (road not taken: the
+%  first table specification, with [[rowspan]], [[colspan]] and column
+%  widths computed from each cell's minimum and maximum width; that
+%  computation is the two passes this paragraph describes).
+
+### Browser.nw : section "Why a file server for the network", paragraph
+"A library would have been the obvious choice." (line ~8980)
+Algorithm/idea: a service exposed as a file server instead of a
+  library; lineage from /proc to /net to /mnt/web.
+Verified: 8½'s references include Killian 1984; Presotto-Winterbottom
+  is the /net paper.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. J. Killian, "Processes as Files", USENIX Summer Conf., 1984
+%  (Eighth Edition Unix's [[/proc]]: a debugger reads a process's memory
+%  with [[open]] and [[read]] instead of the [[ptrace]] system call; one
+%  of the first kernel services turned into files).
+%ref: D. Presotto and P. Winterbottom, "The Organization of Networks in
+%  Plan 9", USENIX Winter Conf., 1993, pp. 271-287 (Plan 9's [[/net]],
+%  with its [[clone]], [[ctl]] and [[data]] files; [[webfs]]'s
+%  [[/mnt/web/clone]], [[ctl]] and [[body]] copy that layout one level
+%  up, for URLs instead of TCP connections).
+
+
+=========================================================================
+Considered but rejected
+=========================================================================
+- Windows.nw wtop()/Window focus: click-to-focus ref placed once, in
+  Intro.nw "Input focus" instead.
+- Windows.nw topwindow()/layers (Pike 1983): the algorithm lives in the
+  Graphics book (libmemlayer); rio only calls it. Placed in Intro
+  stacking paragraph instead.
+- Windows.nw recursive rio (resized()): Intro already cites 8½ and the
+  concurrent window system for recursion.
+- Windows.nw 9P fileserver chapter (attach/walk/flush): no classic
+  paper beyond the Plan 9 papers already cited in the Intro.
+- Windows.nw namecomplete(): TENEX-style completion, but no paper I am
+  sure describes it (TENEX CACM 1972 is about paging).
+- Windows.nw Holding mode / Blit "hold": nothing solid tying mux or 8½
+  to hold mode.
+- Windows.nw cursors (16x16 set/clr bitmaps): no classic ref.
+- Windows.nw frinsert(): same sam-paper section as frdelete; one entry
+  is enough (the frdelete parenthetical could mention frinsert's "four
+  passes").
+- Windows.nw Xfid pool CSP ownership argument: already \cite{csp}.
+- Menu "last item under the cursor" (menuhit): lives in libdraw
+  (Graphics book).
+- Widgets.nw plmouse/priority dispatch: Myers, "A New Model for
+  Handling Input" (ACM TOIS 1990) is related but the link is too loose.
+- Widgets.nw textwin.c (twreplace): appendix only.
+- Widgets.nw copy/paste: Tesler placed on rio's wsnarf instead.
+- Browser.nw GIF/JPEG/PNG (Welch 1984 LZW, Wallace 1991 JPEG): the
+  decoders are external programs, not in the book.
+- Browser.nw HTML tokenizer (pl_gettoken): the WHATWG HTML5 parsing
+  algorithm is a spec, not a paper; mothra's parser is ad hoc.
+- Browser.nw strtotime (RFC 822/850/1123 dates): appendix, low value.
+- Browser.nw word wrap/reflow: done by libpanel's rtext, covered by the
+  Knuth-Plass entry in Widgets.nw.
+- Browser.nw gzip/content-encoding, proxy, caching: stub sections, no
+  code.
+- HTTP/0.9 (Berners-Lee 1991 "The Original HTTP as defined in 1991",
+  w3.org): mentioned in the dohttp parenthetical but no separate %ref:
+  line, since its exact title/date are less certain.
+
+=========================================================================
+Missing bib keys noticed / factual issues spotted while verifying
+=========================================================================
+Missing bib keys (if the author wants \cite instead of %ref:): sam
+(Pike 1987), acme (Pike 1994), squeak (Cardelli-Pike 1985), newsqueak
+(Pike 1990), hoare-csp-1978, dijkstra-guarded-1975, sketchpad,
+engelbart-1968, kay-goldberg-1977, porter-duff (maybe already in the
+Graphics book under another key), utf8-pike-thompson, killian-proc,
+networks-plan9 (Presotto-Winterbottom), security-plan9 (factotum),
+tk-ousterhout, knuth-plass, texbook, krasner-pope-mvc, bush-1945,
+nelson-1965, berners-lee-1989.
+Bib inconsistency: window-system-should-be-transparent has pages
+279--296, but the Concurrent Window System paper gives Computing Systems
+1(3) pp. 153-158; check the original before keeping pages. The blit
+entry is a 1983 techreport; the journal version is BLTJ 63(8) 1984.
+
+Factual issues in existing prose (not edited, for the author to check):
+- Widgets.nw ~line 524: "Rob Pike carried it almost unchanged into
+  [[libpanel]]": libpanel is Tom Duff's (the same book says so at
+  ~193).
+- Widgets.nw retained/immediate-mode section: "Casey Muratori's
+  {\em Dear ImGui} in~2014": Muratori named "IMGUI" (2005); Dear
+  ImGui is by Omar Cornut (2014).
+- Widgets.nw ~2148: "capture/target/bubble model, invented for
+  Smalltalk": I could not confirm this; capture/bubble comes from the
+  DOM Level 2 Events spec (Netscape capture + IE bubble). Check.
+- Browser.nw ~5585 and ~5762: say RFC 3986 section 5.2 / "step 6"; the
+  code implements RFC 2396 section 5.2 step 6 (RFC 3986 has no step 6,
+  it uses remove_dot_segments).
+- Browser.nw ~10231 and ~1189: cookie matching is described as
+  RFC 6265 and ".example.com matches example.com"; the code
+  (isdomainmatch) is RFC 2109 and does not match the bare domain.
+- Browser.nw ~8331: "mothra defers to the kernel's auth(2) factotum":
+  it is webfs, not mothra, and factotum is a user-level agent, not
+  part of the kernel.
+- Browser.nw ~8329 section title mentions digest; only Basic is
+  implemented.

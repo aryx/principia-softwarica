@@ -1,0 +1,1278 @@
+References for the "tools" books (research only; no .nw edited)
+================================================================
+
+Books covered: builders/Make.nw (+ builders/Intro.nw), shells/Shell.nw
+(+ shells/Intro.nw), editors/ed.nw, utilities/Utilities.nw,
+debuggers/Debugger.nw, debuggers/db.nw, debuggers/Debugger_x86.nw,
+profilers/Profiler.nw, version_control/VCS.nw (+ Intro.nw, Overview.nw),
+version_control/VCS_dulwich.nw.
+
+Conventions:
+- "chunk" entries go right before the <<chunk>>= line.
+- "PROSE" entries (Intro/Overview principles sections) go right before
+  the named paragraph (its %claude:/first line); subsection + first words
+  are given.
+- Existing bib keys are given as "bib: key"; entries without a key need
+  a new bib entry (listed at the end).
+- Line numbers are approximate (as of 2026-09-18).
+
+Founding classic per field (the author's priority), and where it goes:
+  build systems ... Feldman 1979 (Make)        -> builders/Intro.nw DFS
+  shells .......... Pouzin 1965 (RUNCOM/SHELL) -> shells/Intro.nw
+  line editors .... Deutsch & Lampson 1967 (QED) -> ed.nw
+  regexps ......... Kleene 1956, Thompson 1968   -> Utilities grep, ed
+  debugging ....... Gill 1951 (EDSAC)            -> Debugger.nw principles
+  profiling ....... Knuth 1971 (FORTRAN study)   -> Profiler.nw principles
+  version control . Rochkind 1975 (SCCS)         -> VCS Overview "Delta"
+  diff ............ Hunt & McIlroy 1976          -> VCS Overview "diff"
+  hashing-as-names  Merkle 1979/1987             -> VCS Overview objects
+
+
+######################################################################
+## builders/Intro.nw
+######################################################################
+
+### builders/Intro.nw : PROSE, \subsubsection{Depth-first search}
+(line ~1662, paragraph "Once the graph of dependencies is built, the main
+algorithm behind [[mk]] is to perform a {\em depth-first search}"; the
+author left "% cite cormen?" right there)
+Algorithm/idea: DFS of the dependency DAG as the core of a build tool.
+Verified: work() (Make.nw ~6849) is a recursive post-order DFS; Feldman's
+  own abstract says "Make does a depth-first search of this graph".
+CONFIDENCE: high
+Proposed lines:
+%ref: S. I. Feldman, "Make -- A Program for Maintaining Computer
+%  Programs", Software: Practice and Experience 9(4):255-265, 1979
+%  (bib: make) (the founding build-tool paper, written after a
+%  colleague lost a morning debugging a program he had fixed but not
+%  recompiled; its abstract already says "the description file
+%  really defines the graph of dependencies; Make does a depth-first
+%  search of this graph" -- exactly what [[work()]] does).
+%ref: R. E. Tarjan, "Depth-first search and linear graph algorithms",
+%  SIAM Journal on Computing 1(2):146-160, 1972 (the paper that made
+%  DFS a general tool: classifies tree, back and cross edges; a back
+%  edge is a cycle, which is what [[cyclechk()]] looks for).
+%ref: T. H. Cormen, C. E. Leiserson, R. L. Rivest, C. Stein,
+%  "Introduction to Algorithms", MIT Press, Section 22.3-22.4
+%  (DFS with white/gray/black colors and topological sort: a build
+%  order is a reverse post-order of the DAG).
+
+### builders/Intro.nw : PROSE, \subsection{A job scheduler}
+(line ~2055, paragraph "A build system maintains dependencies between
+files efficiently firstly by being an {\em incremental} program.")
+Algorithm/idea: a build system = scheduler + "is it up to date?" rebuilder.
+Verified: outofdate() (Make.nw ~7039) is a pure mtime comparison; mk
+  schedules in DFS order. build-alacarte is in the bib but cited nowhere.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. Mokhov, N. Mitchell, S. Peyton Jones, "Build Systems a la
+%  Carte", ICFP 2018 (bib: build-alacarte) (splits every build system
+%  into a scheduler and a rebuilder; in its taxonomy Make -- and so
+%  [[mk]] -- is a topological scheduler with a modification-time
+%  rebuilder, while Bazel or Shake use content hashes; useful to place
+%  [[outofdate()]] on the map).
+
+
+######################################################################
+## builders/Make.nw
+######################################################################
+
+### Make.nw : <<function [[cyclechk]]>>
+(line ~5787, section "Checking the graph and the rules" / "Cycle detection")
+Algorithm/idea: cycle detection by DFS with an "on the recursion stack" mark.
+Verified: sets CYCLE on entry, clears it on exit, reports if seen set:
+  that is the "gray" state of the three-color DFS; the permanent "black"
+  (done) state is NOT kept, so shared subgraphs are re-walked (cost is
+  number of paths, not nodes) -- the author's own %-note wonders about it.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. E. Tarjan, "Depth-first search and linear graph algorithms",
+%  SIAM Journal on Computing 1(2):146-160, 1972 (a cycle exists iff DFS
+%  meets a back edge, i.e. a node still on the recursion stack -- the
+%  [[CYCLE]] flag; Tarjan also keeps a "finished" mark so each node is
+%  visited once, which [[cyclechk()]] omits, re-walking shared subgraphs).
+%ref: A. B. Kahn, "Topological sorting of large networks", CACM
+%  5(11):558-562, 1962 (road not taken: sorting by repeatedly removing
+%  nodes with no remaining prerequisites finds cycles as a leftover, and
+%  was written for PERT charts of 1960s engineering projects).
+
+### Make.nw : <<function [[outofdate]]>>
+(line ~7039, section "Exploring the graph: [[work()]]")
+Algorithm/idea: the timestamp rule "target older than a prerequisite".
+Verified: returns node->time <= arc->n->time (ties rebuild, as the C
+  comment says); nonexistent files have time 0.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. I. Feldman, "Make -- A Program for Maintaining Computer
+%  Programs", Software: Practice and Experience 9(4):255-265, 1979
+%  (bib: make) (the rule itself: a target is rebuilt when it "has not
+%  been modified since its generators were"; [[mk]] adds the choice of
+%  treating equal times as out of date, safer on fast machines where
+%  a compile finishes within the same second).
+
+### Make.nw : <<function [[match]]>>
+(line ~5407, section "Finding matching metarules" / "Matching a pattern")
+Algorithm/idea: %-pattern metarules instead of Make's suffix rules.
+Verified: match() finds the literal prefix, then the % stem, then checks
+  the suffix; & variant excludes '/' and '.'.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. G. Hume, "Mk: a successor to make", USENIX Summer Conference,
+%  1987 (bib: mk-successor) (introduces "pattern-matching metarules
+%  rather than suffix transformation rules": Make could only say
+%  ".c.o:", i.e. rewrite one suffix into another; [[mk]]'s [[%]]
+%  matches anywhere in the name and binds [[$stem]], an idea GNU Make
+%  later copied as its pattern rules).
+
+### Make.nw : <<function [[ambiguous]]>>
+(line ~6050, section "Ambiguous rules detection")
+Algorithm/idea: rule priority (simple rule beats metarule) and ambiguity.
+Verified: chunk "give priority to simple rules over meta rules"; errors
+  when two recipes remain.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. G. Hume, "Mk: a successor to make", USENIX Summer Conference,
+%  1987 (bib: mk-successor) (states the two rules implemented here:
+%  "any non-metarule takes precedence over a metarule", and more than
+%  one applicable recipe is an ambiguity error; Make instead silently
+%  used the first matching suffix rule).
+
+### Make.nw : <<global [[iflag]]>>
+(line ~11717, section "Missing-intermediates optimization: [[mk -I]]")
+Algorithm/idea: a missing intermediate need not be rebuilt if targets
+  downstream are up to date w.r.t. the sources.
+Verified: the PRETENDING machinery in work()/clrmade(); Hume's paper has
+  a whole section "Missing intermediates" (with the -i flag at the time).
+CONFIDENCE: medium (flag letter changed between paper and code: paper
+  says -i suppresses it; check against this code's semantics before use)
+Proposed lines:
+%ref: A. G. Hume, "Mk: a successor to make", USENIX Summer Conference,
+%  1987 (bib: mk-successor) (section "Missing intermediates": the
+%  motivation was keeping only one copy of each object file, inside the
+%  library archive, deleting the loose .o files without triggering a
+%  rebuild of everything).
+
+### Make.nw : <<function [[sched]]>>
+(line ~7669, section "Scheduling Jobs" / "[[sched()]]")
+Algorithm/idea: greedy list scheduling of ready jobs onto nproc slots.
+Verified: pops the head of the FIFO [[jobs]] list into the next free
+  slot (nextslot()); no priority, no critical-path estimate.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. L. Graham, "Bounds for certain multiprocessing anomalies",
+%  Bell System Technical Journal 45(9):1563-1581, 1966 (list scheduling:
+%  whenever a processor is free, start any ready task; Graham proved it
+%  is never worse than twice optimal, and showed the "anomalies" where
+%  more processors make things slower -- the policy [[sched()]] uses,
+%  with the [[jobs]] list as the list).
+%ref: T. C. Hu, "Parallel sequencing and assembly line problems",
+%  Operations Research 9(6):841-848, 1961 (road not taken: start the
+%  job on the longest remaining path first -- critical-path priority,
+%  born on assembly lines; [[mk]] just takes jobs in DFS order).
+
+### Make.nw : <<[[applyrules()]] if regexp rule then continue if some conditions>>
+(line ~9827, section "Regular-expression rules: [[:R:]]")
+Algorithm/idea: regular-expression metarules via libregexp (regexec +
+  regsub with \1..\9 submatches).
+Verified: calls regexec(r->pat, node->name, rmatch, NREGEXP) then
+  regsub(); the matching engine itself lives in libregexp (Libcore).
+CONFIDENCE: high
+Proposed lines:
+%ref: A. G. Hume, "Mk: a successor to make", USENIX Summer Conference,
+%  1987 (bib: mk-successor) (section "More on metarules": the second
+%  kind of metarule uses full egrep-style expressions, with the warning
+%  that they are "significantly slower than % metarules" -- here each
+%  candidate target costs a [[regexec()]] instead of a [[strcmp]]).
+(Note: cite Thompson 1968 in the Libcore libregexp chapter, not here.)
+
+### Make.nw : <<function [[symlook]]>>   (optional, low priority)
+(line ~695, section "Symbol table" / "[[hash]]")
+Algorithm/idea: chained hash table with a multiplicative string hash
+  (h = h*79 + c, namespace folded into the seed), NHASH=4099 (prime).
+Verified: chunk <<[[symlook()]] compute hash value>> and HASHMUL 79.
+CONFIDENCE: high (but the same hash appears in many books: put the
+  Knuth ref only in the book where the hash table is first introduced,
+  probably Assembler/Linker)
+Proposed lines:
+%ref: D. E. Knuth, "The Art of Computer Programming, Vol. 3: Sorting
+%  and Searching", Addison-Wesley, 1973, Section 6.4 (bib: taocp)
+%  (hashing with chaining; why a prime table size like [[NHASH]]=4099
+%  spreads multiplicative hash values better than a power of two).
+
+
+######################################################################
+## shells/Intro.nw
+######################################################################
+
+### shells/Intro.nw : PROSE, \subsection{Running commands}
+(line ~740, paragraph "The first job of a shell is to allow the user to
+run commands" -- its footnote already cites runcom = Pouzin's 2000 web
+recollection)
+Algorithm/idea: the shell as an ordinary user program that runs commands.
+Verified: rc is a user program that forks/execs (Xsimple/execforkexec).
+CONFIDENCE: medium (exact title/number of the 1965 Multics document;
+  I am confident of the title words "The SHELL" and of Pouzin/1965)
+Proposed lines:
+%ref: L. Pouzin, "The SHELL: A Global Tool for Calling and Chaining
+%  Procedures in the System", Multics design document, 1965 (the
+%  founding document, and the origin of the word "shell": Pouzin had
+%  written RUNCOM for CTSS in 1963-64 so he could chain commands while
+%  away; here he proposes making the command language an ordinary
+%  replaceable program -- which [[rc]] still is).
+
+### shells/Intro.nw : PROSE, \subsection{Combining commands: the pipe}
+(line ~920, paragraph "Pipes are one of the greatest innovations
+introduced by \unix")
+Algorithm/idea: the pipe.
+Verified: Xpipe (Shell.nw ~6378) = pipe() + fork() + dup onto 0/1.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. M. Ritchie, "The Evolution of the Unix Time-sharing System",
+%  AT&T Bell Laboratories Technical Journal 63(8):1577-1593, 1984
+%  (tells how McIlroy's 1964 memo -- "we should have some ways of
+%  coupling programs like garden hose" -- became the [[pipe]] call and
+%  the [[|]] syntax in a single night in 1973, and why every tool was
+%  then rewritten to be a filter).
+
+### shells/Intro.nw : PROSE, \subsection{An interactive interpreter}
+(line ~1445, paragraph "[[rc]] takes the opposite position: the shell
+does as little interactive work as possible.")
+Algorithm/idea: line editing and history belong to the window system,
+  not the shell.
+Verified: rc has no line editor; the prose already mentions rio/acme in
+  commented lines.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "8 1/2, the Plan 9 Window System", USENIX Summer
+%  Conference, 1991 (bib: eight-and-a-half) (the window system gives
+%  every window editable text, so any command line can be edited and
+%  re-sent with the mouse; that is why [[rc]] needs no readline).
+
+
+######################################################################
+## shells/Shell.nw
+######################################################################
+
+### Shell.nw : <<rc/syn.y>>
+(line ~3586, section "Parsing" / "Overview")
+Algorithm/idea: a real yacc (LALR) grammar for the shell, vs Bourne's
+  hand-written parser.
+Verified: rc/syn.y is a yacc grammar (yacc already cited in the Intro).
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Duff, "Rc -- The Plan 9 Shell", 1990 (bib: rc-plan9) (section
+%  "Design Principles": "nobody really knows what the Bourne shell's
+%  grammar is. Even examination of the source code is little help" --
+%  the reason [[rc]] has a yacc grammar you can read in one page).
+%ref: S. R. Bourne, "The UNIX Shell", Bell System Technical Journal
+%  57(6):1971-1990, 1978 (the shell rc replaces; its parser was
+%  hand-written recursive descent in C disguised as Algol 68 by macros,
+%  and its input was re-scanned after substitution, the design choice
+%  Duff's paper argues against).
+
+### Shell.nw : <<priority and associativity declarations>>
+(line ~3610, section "Parsing" / "Overview")
+Algorithm/idea: resolving an ambiguous grammar with precedence and
+  associativity declarations instead of rewriting it.
+Verified: %left/%right lines for ^, |, &&, ||, etc. in syn.y.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. V. Aho, S. C. Johnson, J. D. Ullman, "Deterministic parsing
+%  of ambiguous grammars", CACM 18(8):441-452, 1975 (the idea behind
+%  yacc's [[%left]]/[[%right]]: keep the short ambiguous expression
+%  grammar and let precedence rules settle each shift/reduce conflict,
+%  instead of a longer grammar with one nonterminal per precedence
+%  level).
+
+### Shell.nw : <<[[main()]] interpreter loop>>
+(line ~2221, section "Bytecode interpreter loop")
+Algorithm/idea: threaded code: the program is an array of routine
+  addresses, and the "interpreter" is a loop calling the next one.
+Verified: runq->pc++; (*runq->code[runq->pc-1].f)(); Code cells hold a
+  function pointer or an inline operand (struct Code ~1005). This is
+  "call threading" (one indirect call per op), not Bell's jump-threading.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. R. Bell, "Threaded code", CACM 16(6):370-372, 1973 (written
+%  for the PDP-11: compile a program to a list of routine addresses
+%  and let each routine jump to the next; [[rc]]'s [[Code]] array is
+%  that list, but [[rc]] returns to this [[for]] loop after each
+%  routine instead of jumping directly, trading a little speed for
+%  portable C; same model as Forth).
+
+### Shell.nw : <<function [[execforkexec]]>>
+(line ~5182, section "Simple commands" / "[[exec()]]")
+Algorithm/idea: process creation split into fork + exec.
+Verified: forks, and the child execs the command (search in $path).
+CONFIDENCE: high
+Proposed lines:
+%ref: D. M. Ritchie, K. Thompson, "The UNIX Time-Sharing System",
+%  CACM 17(7):365-375, 1974 (the fork/exec split and the shell
+%  described as an ordinary program: between [[fork]] and [[exec]] the
+%  child can rearrange its own file descriptors, which is how all
+%  redirections and pipes of this chapter are implemented).
+
+### Shell.nw : <<function [[Xbackq]]>>
+(line ~10260, section "Command substitution")
+Algorithm/idea: `{cmd} as a unary operator whose operand is already
+  parsed, and output split into a list, never re-scanned.
+Verified: Xbackq forks the pre-compiled code, reads the pipe, splits on
+  $ifs into words.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Duff, "Rc -- The Plan 9 Shell", 1990 (bib: rc-plan9) (section
+%  "Design Principles": rc "is not a macro processor"; in Bourne's
+%  `...` the command is a string re-parsed later, so nesting needs
+%  backslashes exponential in the depth; with `{...} it is parsed
+%  once, with the enclosing command, and [[Xbackq()]] only runs it).
+
+### Shell.nw : <<function [[Xifnot]]>>
+(line ~6643, section "Control flow statements" / "[[if]]")
+Algorithm/idea: "if not" as a separate statement testing a flag left
+  by the previous if.
+Verified: global ifnot set by Xif/Xwastrue, checked by Xifnot; outcode
+  sanity-checks that the last command was an if.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Duff, "Rc -- The Plan 9 Shell", 1990 (bib: rc-plan9) (Duff
+%  calls this his "admittedly feeble solution": an interactive shell
+%  must run [[if(...) cmd]] as soon as the newline is typed, so it
+%  cannot wait to see whether an [[else]] follows; hence a separate
+%  statement and the [[ifnot]] flag).
+
+### Shell.nw : <<function [[Xpipefd]]>>
+(line ~10440, section "Process substitution")
+Algorithm/idea: <{cmd} names a pipe end as a file (/fd/N).
+Verified: pipe()+fork(); passes "/fd/%d" (Fdprefix) as the argument.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Duff, "Rc -- The Plan 9 Shell", 1990 (bib: rc-plan9) (section
+%  "Pipeline branching", e.g. [[cmp <{old} <{new}]]; it works only
+%  because Plan 9 names every open file descriptor in [[/fd/]], so a
+%  pipe end can be passed to any program as an ordinary file name).
+
+### Shell.nw : <<function [[match]]>>
+(line ~9314, section "Matching one name: [[match()]]")
+Algorithm/idea: glob matching; * handled by recursive backtracking.
+Verified: the prose says "[[*]] tries every possible suffix via recursion
+  (backtracking)": exponential on patterns like a*a*a*b.
+CONFIDENCE: high (web article, not a paper)
+Proposed lines:
+%ref: R. Cox, "Glob Matching Can Be Simple And Fast Too",
+%  research.swtch.com/glob, 2017 (road not taken: recursion on each
+%  [[*]] is exponential for patterns like [[a*a*a*b]]; since a later
+%  [[*]] can absorb whatever an earlier one would, remembering only the
+%  last [[*]] position makes matching linear -- rc, like many shells
+%  of its time, backtracks).
+
+### Shell.nw : <<function [[heredoc]]>>   (medium value)
+(line ~10859, section "Here documents")
+Algorithm/idea: here documents copied into a temp file then opened as
+  stdin, with $var substitution.
+Verified: heredoc() writes the collected lines to a /tmp file (psubst
+  substitutes variables).
+CONFIDENCE: medium (that here documents originate in the Bourne shell)
+Proposed lines:
+%ref: S. R. Bourne, "An Introduction to the UNIX Shell", Unix
+%  Programmer's Manual Vol 2a, 1979 (bib: sh) (here documents, [[<<]],
+%  come from the Bourne shell; the text between the two markers is
+%  saved to a temporary file, then opened as standard input -- same
+%  implementation here).
+
+### Shell.nw : <<function [[nextutf]]>>   (skip if Libcore already has it)
+(line ~10168, section "Unicode")
+Algorithm/idea: UTF-8 decoding by leading-byte length.
+Verified: nextutf/equtf step by UTF-8 sequence length.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, K. Thompson, "Hello World or Kalimera kosme or Konnichiwa
+%  Sekai", USENIX Winter Conference, 1993 (the UTF-8 paper: an encoding
+%  designed on a diner placemat so that ASCII bytes never appear inside
+%  a multi-byte character; that property is why [[rc]]'s lexer can keep
+%  scanning for [[|]] or [[;]] byte by byte and only [[nextutf()]] needs
+%  to know about sequence lengths).
+
+
+######################################################################
+## editors/ed.nw
+######################################################################
+
+### ed.nw : PROSE, \subsection{A line editor}
+(line ~85, paragraph "[[ed]], short for ``editor'' ... is one of the
+oldest \unix programs, originally written by Ken Thompson in the 1970s.")
+Algorithm/idea: QED, the ancestor of ed (line addressing, /re/, s///).
+Verified: ed's command/address language is the QED subset Thompson kept.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. P. Deutsch, B. W. Lampson, "An online editor", CACM
+%  10(12):793-799, 1967 (QED, written for the SDS 940 time-sharing
+%  system at Berkeley and used from teletypes, hence one line at a
+%  time; Thompson reimplemented QED for CTSS and Multics before
+%  distilling it into [[ed]]).
+%ref: D. M. Ritchie, "An incomplete history of the QED text editor",
+%  web page, Bell Labs (the chain QED -> Thompson's QED -> [[ed]] ->
+%  [[sam]], by someone who used them all).
+
+### ed.nw : <<function [[compile]](ed.c)>>
+(line ~3045, section "Reading and compiling a regexp: [[compile()]]")
+Algorithm/idea: compile a regexp once, then match every line with it.
+Verified: collects the pattern, calls regcomp() from libregexp; match()
+  calls rregexec(). Differs from Thompson: no machine code; libregexp
+  builds an NFA program run by a VM tracking submatches (Pike's
+  extension, from sam).
+CONFIDENCE: high
+Proposed lines:
+%ref: K. Thompson, "Regular expression search algorithm", CACM
+%  11(6):419-422, 1968 (written for QED on the IBM 7094: compiles the
+%  expression into 7094 machine code that simulates all NFA states in
+%  parallel, so matching is linear in the line length; [[regcomp()]]
+%  still compiles once per pattern, but to a program for a small
+%  interpreter instead of machine code).
+%ref: R. Cox, "Regular Expression Matching: the Virtual Machine
+%  Approach", research.swtch.com/regexp2, 2009 (explains the Thompson
+%  VM with submatch tracking that Rob Pike wrote for [[sam]] and that
+%  became [[libregexp]]; the [[subexp]] array here is its output).
+
+### ed.nw : <<function [[reverse]](ed.c)>>
+(line ~2587, section "[[m]]oving and copying lines")
+Algorithm/idea: block move by three reversals.
+Verified: move() calls reverse() three times on the line-pointer array
+  (prose already cites programming-pearls; the author's % note says the
+  trick is due to Gries and Mills).
+CONFIDENCE: medium (report number)
+Proposed lines:
+%ref: D. Gries, H. D. Mills, "Swapping sections", Technical Report
+%  TR 81-452, Cornell University, 1981 (the original analysis of
+%  swapping two adjacent blocks in place; the three-reversal version
+%  that [[move()]] uses is one of their algorithms -- note that [[ed]]
+%  only reverses an array of line offsets, never the text itself).
+
+### ed.nw : <<globals ed.c>> declaring [[zero]]   (medium value)
+(line ~495, section "The lines as file offsets: [[zero]]")
+Algorithm/idea: text in a scratch file, memory holds only one offset
+  per line.
+Verified: zero[] is an int array of offsets into tfile.
+CONFIDENCE: medium (chapter title from memory)
+Proposed lines:
+%ref: B. W. Kernighan, P. J. Plauger, "Software Tools", Addison-Wesley,
+%  1976 (bib: software-tools), chapter "Editing" (rebuilds a small
+%  [[ed]] with the same design: text in a scratch file, an array of
+%  line pointers in memory -- a design forced by the PDP-11's 64K
+%  address space, and kept because moving lines means moving integers).
+
+
+######################################################################
+## utilities/Utilities.nw
+######################################################################
+
+### Utilities.nw : PROSE, \subsection{The \unix philosophy}
+(line ~410, paragraph "%claude: %cs-history: McIlroy articulated this
+motto in the foreword to the 1978 Bell System Technical Journal issue")
+Algorithm/idea: the Unix philosophy statement.
+CONFIDENCE: high
+Proposed lines:
+%ref: M. D. McIlroy, E. N. Pinson, B. A. Tague, "UNIX Time-Sharing
+%  System: Foreword", Bell System Technical Journal 57(6):1899-1904,
+%  1978 (the four maxims, starting with "make each program do one
+%  thing well"; the rest of the utilities in this book are the
+%  examples it had in mind).
+
+### Utilities.nw : PROSE, \subsection{``Worse is better''}
+(line ~430, paragraph "In~1989, the software engineer Richard Gabriel
+wrote an essay")
+CONFIDENCE: medium (publication venue: talk at EuroPAL 1990, printed
+  in AI Expert, June 1991)
+Proposed lines:
+%ref: R. P. Gabriel, "Lisp: Good News, Bad News, How to Win Big", AI
+%  Expert, June 1991 (the "worse is better" section is one part of a
+%  talk about why Lisp was losing; its example is how Unix handles a
+%  system call interrupted by a signal: return an error and let the
+%  caller retry, instead of the "right thing" of resuming it).
+
+### Utilities.nw : PROSE, \subsection{Text streams as a universal interface}
+(line ~480, paragraph "The glue that makes utility composition possible
+... Jon Bentley's {\em Programming Pearls} column from~1986")
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Bentley, D. E. Knuth, M. D. McIlroy, "Programming Pearls: A
+%  Literate Program", CACM 29(6):471-483, 1986 (bib: literate-pearl)
+%  (Knuth's WEB program and McIlroy's review with the six-line
+%  [[tr | sort | uniq | sort | sed]] pipeline).
+
+### Utilities.nw : PROSE, \subsection{Pipes and composition}
+(line ~507, paragraph "The mechanism that connects those text streams
+is the {\em pipe} ... suggested by Doug McIlroy in a 1964 memo")
+CONFIDENCE: high
+Proposed lines:
+%ref: D. M. Ritchie, "The Evolution of the Unix Time-sharing System",
+%  AT&T Bell Laboratories Technical Journal 63(8):1577-1593, 1984
+%  (McIlroy's 1964 "garden hose" memo, the 1973 night pipes went in,
+%  and why the original [[>]]-based syntax was replaced by [[|]]).
+
+### Utilities.nw : PROSE, \subsection{Tiny languages}
+(line ~541, paragraph "Many of the utilities in this book are not just
+programs but {\em tiny domain-specific languages}.")
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Bentley, "Programming Pearls: Little Languages", CACM
+%  29(8):711-721, 1986 (names the idea, with Bell Labs examples: [[pic]],
+%  [[eqn]], [[awk]], and the [[yacc]]/[[lex]] tools used to build them).
+
+### Utilities.nw : <<grep grammar>>
+(line ~3107, section "[[grep]]" / "Regexp grammar")
+Algorithm/idea: regular expressions as an algebra: union, concatenation,
+  star (Kleene).
+Verified: grep.y grammar with alternation, concatenation, *, +, ?.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. C. Kleene, "Representation of events in nerve nets and finite
+%  automata", in Automata Studies, Princeton University Press, 1956
+%  (where regular expressions come from: Kleene wanted to describe
+%  which input sequences can fire a McCulloch-Pitts neuron network;
+%  the three operators of this grammar -- [[|]], concatenation, [[*]] --
+%  are his, the star is still called the Kleene star).
+
+### Utilities.nw : <<function [[re2cat]](grep)>>
+(line ~3185, section "Regexp grammar")
+Algorithm/idea: Thompson's construction: build an NFA fragment per
+  sub-expression and patch dangling "next" pointers.
+Verified: Re2 = {beg,end}; patchnext() fills the unresolved next links
+  of the left fragment with the right one (re2cat), re2star/re2or add
+  Talt/Tor nodes -- exactly fragments + patch lists.
+CONFIDENCE: high
+Proposed lines:
+%ref: K. Thompson, "Regular expression search algorithm", CACM
+%  11(6):419-422, 1968 (builds the automaton bottom-up while parsing,
+%  one small fragment per operator, concatenating by patching the
+%  loose ends of one fragment to the start of the next -- what
+%  [[re2cat()]] and [[patchnext()]] do; Thompson emitted IBM 7094
+%  code, [[grep]] emits a graph of [[Re]] nodes).
+%ref: R. Cox, "Regular Expression Matching Can Be Simple And Fast",
+%  swtch.com/~rsc/regexp/regexp1.html, 2007 (modern retelling with the
+%  same fragment/patch-list code, and why backtracking matchers are
+%  exponential where this is linear).
+
+### Utilities.nw : <<function [[search]](grep)>>
+(line ~3434, section "[[search()]]")
+Algorithm/idea: lazily built DFA: states = sets of NFA nodes, created
+  on first use, transitions cached in State.next[256].
+Verified: s = s->next[c], with increment() computing and caching a
+  missing transition (prose worked example ~3360-3430).
+CONFIDENCE: high (Rabin-Scott), medium (Aho 1980 details)
+Proposed lines:
+%ref: M. O. Rabin, D. Scott, "Finite automata and their decision
+%  problems", IBM Journal of Research and Development 3(2):114-125,
+%  1959 (the subset construction: a DFA state is a set of NFA states;
+%  [[State.re]] is literally that set, and [[next[c]]] is the DFA
+%  transition; Rabin and Scott got the Turing award for this paper).
+%ref: A. V. Aho, "Pattern matching in strings", in R. V. Book (ed.),
+%  Formal Language Theory: Perspectives and Open Problems, Academic
+%  Press, 1980 (describes the idea used by Aho's [[egrep]]: build DFA
+%  states only when the input first needs them, so only states
+%  reached by the actual text ever exist -- [[grep]]'s
+%  [[increment()]]).
+
+### Utilities.nw : <<function [[gzip]]>>
+(line ~6092, section "[[gzip]]")
+Algorithm/idea: gzip container around deflate (LZ77 + Huffman).
+Verified: writes the magic/header by hand, calls deflate() from
+  libflate, appends CRC-32 and size; the compressor itself lives in
+  libflate (Libcore).
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Deutsch, "GZIP file format specification version 4.3", RFC
+%  1952, 1996, and "DEFLATE Compressed Data Format Specification
+%  version 1.3", RFC 1951, 1996 (the header bytes written here, and
+%  the format [[deflate()]] produces).
+%ref: J. Ziv, A. Lempel, "A universal algorithm for sequential data
+%  compression", IEEE Transactions on Information Theory 23(3):337-343,
+%  1977, and D. A. Huffman, "A method for the construction of
+%  minimum-redundancy codes", Proceedings of the IRE 40(9):1098-1101,
+%  1952 (the two halves of deflate: replace repeats by (distance,
+%  length) pairs, then code symbols with fewer bits for frequent ones;
+%  Huffman found his algorithm as an MIT term paper to avoid a final
+%  exam) -- move these two to Libcore's libflate chunks if that book
+%  has them.
+
+### Utilities.nw : <<function [[crcread]](gzip.c)>>
+(line ~6147, section "[[gzip]]")
+Algorithm/idea: CRC-32 computed with a 256-entry table while reading.
+Verified: crctab = mkcrctab(GZCRCPOLY=0xedb88320, the bit-reversed
+  CRC-32 polynomial); blockcrc() over each read buffer.
+CONFIDENCE: high
+Proposed lines:
+%ref: W. W. Peterson, D. T. Brown, "Cyclic codes for error detection",
+%  Proceedings of the IRE 49(1):228-235, 1961 (CRCs as polynomial
+%  division, designed to catch the burst errors of magnetic tape and
+%  telephone lines -- the same reason [[gzip]] appends one).
+%ref: D. V. Sarwate, "Computation of cyclic redundancy checks via table
+%  look-up", CACM 31(8):1008-1013, 1988 (processing a byte at a time
+%  with a precomputed 256-entry table, the [[crctab]] built by
+%  [[mkcrctab()]]).
+
+### Utilities.nw : <<struct [[Blk]](dc.c)>>
+(line ~8450, section "[[dc]]" / "Data structures")
+Algorithm/idea: arbitrary-precision decimal arithmetic, base-100 digits.
+Verified: prose: numbers are base-100 digit bytes with the scale last.
+CONFIDENCE: high (Morris & Cherry doc), high (Knuth section)
+Proposed lines:
+%ref: R. Morris, L. L. Cherry, "DC -- An Interactive Desk Calculator",
+%  Unix Programmer's Manual, 7th edition, Volume 2, 1979 (the design
+%  document of this program: arbitrary precision, numbers kept as
+%  base-100 digits, least significant first, in dynamically allocated
+%  strings -- the [[Blk]] here).
+%ref: D. E. Knuth, "The Art of Computer Programming, Vol. 2:
+%  Seminumerical Algorithms", Addison-Wesley, Section 4.3.1 (bib:
+%  taocp) ("the classical algorithms": schoolbook addition,
+%  subtraction, multiplication and long division on digit arrays, in
+%  any radix -- dc uses radix 100 because two decimal digits fit in a
+%  byte).
+(Note: the prose at ~8400 says dc's original was "by Lorinda Cherry"
+and bc was "Morris and Cherry"; the V7 documents credit dc to Morris &
+Cherry and bc to Cherry & Morris -- worth double-checking.)
+
+### Utilities.nw : <<grammar bc.y>>
+(line ~10199, section "[[bc]]" / "Grammar")
+Algorithm/idea: a compiler whose target language is dc.
+Verified: grammar actions emit dc command strings.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. L. Cherry, R. Morris, "BC -- An Arbitrary Precision
+%  Desk-Calculator Language", Unix Programmer's Manual, 7th edition,
+%  Volume 2, 1979 (bc is a yacc front end that compiles C-like
+%  statements into [[dc]] programs and pipes them to [[dc]]: an early
+%  "compile to a stack VM" design, with [[dc]] as the VM).
+
+
+######################################################################
+## debuggers/Debugger.nw
+######################################################################
+
+### Debugger.nw : PROSE, \subsection{Controlling another program}
+(line ~832, paragraph "A {debugger} is a program that controls another
+program. One naive approach is full interpretation")
+Algorithm/idea: debugging by interpretation (tracing routines) vs
+  running natively; the founding debugging paper.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Gill, "The diagnosis of mistakes in programmes on the EDSAC",
+%  Proceedings of the Royal Society of London A 206(1087):538-554, 1951
+%  (the first paper on debugging: on the EDSAC, Gill's "checking
+%  routines" interpreted the program one order at a time, printing
+%  what it did -- the "naive" full-interpretation approach; it also
+%  describes post-mortem dumps, the ancestor of [[acid]]'s core
+%  inspection).
+
+### Debugger.nw : PROSE, \subsection{Breakpoint}
+(line ~931, paragraph "A {breakpoint} stops execution at a specific
+address.")
+Algorithm/idea: breakpoint = trap instruction patched over code.
+CONFIDENCE: medium (volume/pages)
+Proposed lines:
+%ref: T. G. Evans, D. L. Darley, "On-line debugging techniques: a
+%  survey", AFIPS Fall Joint Computer Conference, 1966 (surveys the
+%  first interactive debuggers of the late 1950s-60s, such as DDT on
+%  the TX-0 and PDP-1, which already planted a trap over the
+%  instruction at the breakpoint address -- the mechanism of [[bpset()]]).
+
+### Debugger.nw : PROSE, \subsection{The Heisenbug}
+(line ~1238, paragraph "A {\em Heisenbug} (Jim Gray, 1986")
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Gray, "Why do computers stop and what can be done about it?",
+%  Tandem Computers Technical Report 85.7, 1985 (introduces
+%  "Bohrbugs" and "Heisenbugs" -- crediting the latter to Bruce
+%  Lindsay -- in a study of why Tandem's fault-tolerant systems failed;
+%  note the report is dated June 1985, presented at a 1986 symposium).
+
+### Debugger.nw : <<function [[attachproc]]>>
+(line ~6424, section "Mapping process memory: [[attachproc()]]")
+Algorithm/idea: debug another process through files (/proc/<pid>/mem,
+  regs, ctl) instead of a ptrace system call.
+Verified: attachproc opens /proc/<pid>/mem (and regs) to build the Map.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. J. Killian, "Processes as Files", USENIX Summer Conference,
+%  1984 (introduced [[/proc]] in 8th Edition Research Unix to replace
+%  [[ptrace]], which moved one word per system call: reading the
+%  target's memory becomes [[seek]]+[[read]] on a file, which is all
+%  [[attachproc()]] needs; Plan 9 extended it with [[ctl]] and text
+%  control messages).
+
+### Debugger.nw : <<struct [[Mach]]>>
+(line ~3184, section "Architecture description: [[Mach]]")
+Algorithm/idea: a retargetable debugger: machine dependencies isolated
+  in small tables of data and functions.
+Verified: Mach (registers, sizes) + Machdata (bpinst, disassembler,
+  follow, stack trace) per architecture; acid -m.
+CONFIDENCE: high
+Proposed lines:
+%ref: N. Ramsey, D. R. Hanson, "A retargetable debugger", PLDI 1992
+%  (ldb, for lcc, isolates machine dependencies in a small table-driven
+%  part, contemporaneous with [[libmach]]'s [[Mach]]/[[Machdata]]; ldb
+%  goes further with PostScript symbol tables emitted by the compiler).
+
+### Debugger.nw : <<function [[varsym]]>>
+(line ~5290, section "Importing target symbols")
+Algorithm/idea: acid's founding idea: target symbols become variables
+  of the debugger's language.
+Verified: varsym turns each program symbol into an acid Lsym.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Winterbottom, "Acid: A Debugger Built From A Language", USENIX
+%  Winter Conference, 1994, pp. 211-222 (written after adding the Alef
+%  language showed that [[db]] could not follow new data structures:
+%  the key idea is that "variables in the language represent the
+%  symbols, state, and resources" of the target -- what [[varsym()]]
+%  sets up; the paper compares with DUEL, an expression language
+%  added on top of gdb).
+
+### Debugger.nw : <<lib/acid/coverage.acid>>
+(line ~11521, section "Code coverage")
+Algorithm/idea: basic-block coverage with no compiler support, by
+  planting a breakpoint at every basic-block entry.
+Verified: follow() gives successors; both targets of each branch added
+  to bblock; breakpoints removed on first hit.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Winterbottom, "Acid: A Debugger Built From A Language", USENIX
+%  Winter Conference, 1994 (section "Code Coverage": the same library
+%  run on [[ls]]; the point made there is that coverage is usually a
+%  compiler feature -- counters compiled into each basic block -- while
+%  here it is 100 lines of [[acid]] using only [[follow()]] and
+%  breakpoints).
+
+### Debugger.nw : <<lib/acid/leak.acid>>
+(line ~11302, section "Memory leak detection")
+Algorithm/idea: conservative reachability from roots (every aligned word
+  in data/bss/stack/registers that looks like a heap pointer).
+Verified: prose (~11285) says "exactly how Boehm's conservative garbage
+  collector ... works" but has no \cite.
+CONFIDENCE: high
+Proposed lines:
+%ref: H.-J. Boehm, M. Weiser, "Garbage collection in an uncooperative
+%  environment", Software: Practice and Experience 18(9):807-820, 1988
+%  (conservative collection for C: with no type information, treat any
+%  word that looks like a heap address as a pointer; [[dumpmem()]]
+%  prints exactly those words, the reachability is then done offline).
+%ref: R. Hastings, B. Joyce, "Purify: Fast detection of memory leaks and
+%  access errors", USENIX Winter Conference, 1992 (road not taken: find
+%  leaks by instrumenting the object code; [[leak.acid]] needs no
+%  instrumentation because the pool allocator already tags blocks).
+
+### Debugger.nw : <<function [[gc]]>>
+(line ~9719, section "Garbage collection" / "Mark-and-sweep")
+Algorithm/idea: mark-and-sweep GC of acid's own values.
+Verified: clears marks on gcl list, marks from every Lsym in hash[],
+  frees unmarked.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. McCarthy, "Recursive functions of symbolic expressions and
+%  their computation by machine, Part I", CACM 3(4):184-195, 1960 (the
+%  Lisp paper; its section on free storage describes the first
+%  mark-and-sweep collector, for the IBM 704: mark everything reachable
+%  from the base registers, then sweep the rest onto the free list --
+%  here the roots are the symbol table [[hash]]).
+
+### Debugger.nw : <<function [[threadmain]]>>  (ratrace)
+(line ~2335, section "[[/bin/ratrace]]" / "Entry point")
+Algorithm/idea: syscall tracing from a kernel-provided
+  /proc/<pid>/syscall stream, not via debugger breakpoints.
+Verified: reader() threads read the per-process syscall file.
+CONFIDENCE: medium (IWP9 edition/year: the paper is SAND2011-6029C,
+  examples dated 2010; the repo copy is debuggers/docs/ratrace-iwp95e.pdf)
+Proposed lines:
+%ref: R. Minnich, "Easy system call tracing for Plan 9", 5th
+%  International Workshop on Plan 9 (IWP9), 2010 (why [[ratrace]]
+%  exists: tracing with [[acid]] needs breakpoints patched into the
+%  target's code and follows forks badly, so the kernel was given a
+%  syscall-trace file and [[ratrace]] became a few hundred lines).
+
+### Debugger.nw : <<function [[armclass]](arm)>>
+(line ~14031, section "ARM Disassembler" / "[[armclass()]]")
+Algorithm/idea: instruction decoding by bit fields of the 32-bit word.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. Seal (ed.), "ARM Architecture Reference Manual", 2nd ed.,
+%  Addison-Wesley, 2000 (the encoding tables [[armclass()]] follows:
+%  condition in bits 31-28, instruction class mostly from bits 27-25,
+%  which is why a few shifts and masks classify every instruction).
+
+
+######################################################################
+## debuggers/db.nw
+######################################################################
+
+### db.nw : <<function [[command]]>>
+(line ~1097, section "[[/bin/db]]" / "Interpreter: [[command()]]")
+Algorithm/idea: adb's terse "address,count command" language.
+Verified: command() parses optional address, optional count, command
+  char -- the adb grammar.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. F. Maranzano, S. R. Bourne, "A Tutorial Introduction to ADB",
+%  Unix Programmer's Manual, 7th edition, Volume 2, 1979 (adb, by the
+%  author of the Bourne shell, is the ancestor of [[db]]: the
+%  [[address,count?format]] syntax that [[command()]] parses, where
+%  [[?]] reads the executable and [[/]] the memory image).
+
+
+######################################################################
+## debuggers/Debugger_x86.nw
+######################################################################
+
+### Debugger_x86.nw : <<struct [[Optable]](x86)>>
+(line ~530, section "[[libmach/8db.c]]")
+Algorithm/idea: table-driven x86 disassembly (one table per opcode byte
+  and per ModR/M reg field: optab0F, optab80, optabD8, ...).
+CONFIDENCE: high
+Proposed lines:
+%ref: Intel, "80386 Programmer's Reference Manual", 1986 (the opcode
+%  map of Appendix A, where a byte like 0x80 or 0xD8 is not an opcode
+%  but a group selected by the reg field of the next (ModR/M) byte --
+%  hence the [[optab80]], [[optabD8]], ... sub-tables).
+
+
+######################################################################
+## profilers/Profiler.nw
+######################################################################
+
+### Profiler.nw : PROSE, \section{Profiler principles}, paragraph
+"%claude: %cs-history: The combination of instrumentation and sampling
+in a single tool was pioneered by [[gprof]]" (line ~388)
+Algorithm/idea: founding profiling papers.
+Verified: prose claims gprof is "the reason we have the term 'profile'
+  in the first place" -- that is wrong: Knuth's 1971 paper already uses
+  "profile" (and the term predates it). Suggest fixing the sentence.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, "An empirical study of FORTRAN programs", Software:
+%  Practice and Experience 1(2):105-133, 1971 (the founding profiling
+%  study: Knuth instrumented FORTRAN programs from Stanford and
+%  Lockheed to count statement executions, found that under 4% of a
+%  program takes over half its time, and argued every compiler should
+%  offer such "profiles" -- the [[5l -p]] idea).
+%ref: S. L. Graham, P. B. Kessler, M. K. McKusick, "gprof: A Call Graph
+%  Execution Profiler", SIGPLAN Symposium on Compiler Construction,
+%  SIGPLAN Notices 17(6):120-126, 1982 (bib key gprof is USED at line
+%  ~186 but MISSING from Principia.bib) (combines PC sampling with
+%  counted call arcs, then propagates time from callees to callers
+%  assuming every call costs the same -- an approximation [[prof]]
+%  avoids by timing each call path).
+
+### Profiler.nw : PROSE, \subsection{Instrumentation profilers}
+(line ~627, paragraph "An {instrumentation profiler} modifies the
+program so that extra code runs at each function entry and exit.")
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, F. R. Stevenson, "Optimal measurement points for
+%  program frequency counts", BIT 13(3):313-322, 1973 (road not taken:
+%  a counter on every edge is redundant, counts on a spanning-tree
+%  complement give the rest by flow conservation; [[5l -p]] simply
+%  instruments every function entry and exit).
+
+### Profiler.nw : PROSE, \subsection{Flat list, call tree, flamegraph}
+(line ~817, paragraph "The {call tree} adds caller-callee relationships")
+Algorithm/idea: call graph (gprof) vs calling-context tree (prof).
+CONFIDENCE: high
+Proposed lines:
+%ref: G. Ammons, T. Ball, J. R. Larus, "Exploiting hardware performance
+%  counters with flow and context sensitive profiling", PLDI 1997
+%  (names the "calling context tree": one node per distinct call path,
+%  not per function, so [[main->f->g]] and [[main->h->g]] get separate
+%  times -- the tree of records [[_profin()]] builds and [[prof -d]]
+%  prints).
+
+### Profiler.nw : PROSE, same subsection, paragraph
+"%claude: %cs-history: The {flamegraph} (Brendan Gregg, 2011)" (line ~830)
+CONFIDENCE: high
+Proposed lines:
+%ref: B. Gregg, "The Flame Graph", Communications of the ACM
+%  59(6):48-57, 2016 (invented while debugging a MySQL performance
+%  problem, from sampled stack traces; the article also explains why
+%  x-order is alphabetical, not time).
+
+### Profiler.nw : <<function [[graph]]>>
+(line ~2578, section "Call graph, [[prof -d]]")
+Algorithm/idea: printing a calling-context tree, cutting recursion.
+Verified: walks data[] tree (per-path records), stops when the PC is
+  already on the stack-allocated Pc chain.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. L. Graham, P. B. Kessler, M. K. McKusick, "gprof: A Call Graph
+%  Execution Profiler", SIGPLAN Notices 17(6):120-126, 1982 (gprof
+%  collapses recursion by merging each strongly connected component of
+%  the call graph into one node; [[graph()]] works on a tree of call
+%  paths instead and just prints [[...]] when a PC repeats in the
+%  chain).
+(If the gprof ref is placed in the principles paragraph above, keep
+only one of the two.)
+
+
+######################################################################
+## version_control/Intro.nw and Overview.nw
+######################################################################
+
+### Overview.nw : PROSE, \subsection{Storing past versions}
+(line ~62, paragraph "The first requirement of a VCS is to store past
+versions of a file"; the author's % note under the next paragraph says
+"Some fs can do that. in fact plan9 used that! \cite?")
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Quinlan, "A Cached WORM File System", Software: Practice and
+%  Experience 21(12):1289-1299, 1991 (the Plan 9 dump: every night the
+%  whole file system is frozen onto write-once optical disk and
+%  reachable as [[/n/dump/YYYY/MMDD/]], so on Plan 9 "cd to yesterday"
+%  replaced much of what people use a VCS for).
+
+### Overview.nw : PROSE, \subsubsection{Delta}
+(line ~130, currently empty; anchor for whoever writes it)
+CONFIDENCE: high
+Proposed lines:
+%ref: M. J. Rochkind, "The Source Code Control System", IEEE
+%  Transactions on Software Engineering SE-1(4):364-370, 1975 (bib:
+%  sccs) (the first VCS, written at Bell Labs on an IBM 370 and PDP-11;
+%  stores all versions interleaved in one file, each line tagged with
+%  the deltas that insert or delete it).
+%ref: W. F. Tichy, "RCS -- A System for Version Control", Software:
+%  Practice and Experience 15(7):637-654, 1985 (bib: rcs) (reverse
+%  deltas: store the newest version whole, older ones as diffs back,
+%  since the newest is the one most often checked out; Git's packs,
+%  Packing chapter, also delta from recent to old).
+
+### Overview.nw : PROSE, \subsubsection{[[diff]]}
+(line ~217, the author's "% cite paper" is right there)
+CONFIDENCE: high
+Proposed lines:
+%ref: J. W. Hunt, M. D. McIlroy, "An Algorithm for Differential File
+%  Comparison", Computing Science Technical Report 41, Bell
+%  Laboratories, 1976 (the algorithm of Unix [[diff]], whose C code
+%  under [[diff/diffreg.c]] still has the "k-candidates" comment:
+%  longest common subsequence of lines, found by hashing lines and
+%  only considering pairs of equal lines).
+%ref: E. W. Myers, "An O(ND) difference algorithm and its variations",
+%  Algorithmica 1(2):251-266, 1986 (the algorithm of GNU diff and Git:
+%  a shortest edit script found by a greedy walk whose cost is
+%  proportional to the number of differences D, fast when files are
+%  similar -- the usual case in a VCS).
+
+### Overview.nw : PROSE, \subsubsection{Merging} under
+\subsection{Concurrent development} (line ~290, the author's
+"% 3 way merge. % cite paper?" )
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Khanna, K. Kunal, B. C. Pierce, "A Formal Investigation of
+%  Diff3", FSTTCS 2007 (diff3 was used for decades before anyone
+%  specified what it does; this paper does, and shows it is less
+%  well-behaved than people assume -- the algorithm behind [[merge3]]).
+
+### Overview.nw : PROSE, \subsection{Object store}
+(line ~509, paragraph "To really understand Git, you need to realize
+that at its core, Git is a simple {\em content-addressable storage
+system}")
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Quinlan, S. Dorward, "Venti: a new approach to archival
+%  storage", USENIX FAST 2002 (Plan 9's own content-addressed store,
+%  three years before Git: blocks named by their SHA-1, written once,
+%  shared automatically when identical; the same "hash as name" idea
+%  as Git's object store).
+
+### Overview.nw : PROSE, same subsection, paragraph "SHA1 is a complex
+{cryptographic hash function}. It is outside the scope of this book"
+(line ~563; says a collision "in practice should never happen")
+CONFIDENCE: high
+Proposed lines:
+%ref: M. Stevens, E. Bursztein, P. Karpman, A. Albertini, Y. Markov,
+%  "The first collision for full SHA-1", CRYPTO 2017 (two different PDF
+%  files with the same SHA-1; after it Git added collision detection
+%  and began its move to SHA-256).
+
+### Overview.nw : PROSE, paragraph "Figure~\ref{fig:objects-sha1-dag}
+presents the Git objects (and their relationships)" (line ~598; the
+author's \l note at ~497 asks "(SHA1 (double DAG) Merkel Tree?)")
+Algorithm/idea: hash tree: a tree/commit hash covers everything below.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. C. Merkle, "A digital signature based on a conventional
+%  encryption function", CRYPTO '87, LNCS 293:369-378, 1988 (hash
+%  trees, first in Merkle's 1979 Stanford PhD thesis: a parent's hash
+%  covers its children's hashes, so one root hash authenticates a whole
+%  tree -- here one commit id covers every file of the snapshot and,
+%  through [[parent]], the whole history).
+
+
+######################################################################
+## version_control/VCS.nw  (git9, C)
+######################################################################
+
+### VCS.nw : <<function [[osadd]]>>
+(line ~670, section "Object set: [[Objset]]")
+Algorithm/idea: open addressing with linear probing; hash = first 4
+  bytes of the SHA-1.
+Verified: probe = GETBE32(o->hash.h) % s->sz; probe = (probe+1) % sz.
+CONFIDENCE: high
+Proposed lines:
+%ref: W. W. Peterson, "Addressing for random-access storage", IBM
+%  Journal of Research and Development 1(2):130-146, 1957 (linear
+%  probing, first analyzed for records on the IBM 305 RAMAC disk;
+%  no hash function is needed here since a SHA-1 is already uniformly
+%  random, so its first 4 bytes are used directly).
+%ref: D. E. Knuth, "The Art of Computer Programming, Vol. 3",
+%  Section 6.4, Algorithm L (bib: taocp) (linear probing and its
+%  analysis -- famously Knuth's first research result, 1962).
+
+### VCS.nw : <<struct [[Objq]]>>
+(line ~753, section "Object queue: [[Objq]]"; the author's "% (i-1) / 2 ??"
+under <<[[qput()]] resort by [[ctime]]>>)
+Algorithm/idea: binary max-heap in an array (newest commit first).
+Verified: qput sifts up with parent (i-1)/2; qpop sifts down.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. W. J. Williams, "Algorithm 232: Heapsort", CACM 7(6):347-348,
+%  1964 (introduces the binary heap stored in an array with no
+%  pointers: the parent of slot i is slot (i-1)/2 -- the answer to the
+%  "(i-1)/2 ??" in [[qput()]] -- here keyed on commit time so history
+%  walks pop the newest commit first).
+
+### VCS.nw : <<function [[paint]]>>
+(line ~4228, section "[[paint()]]")
+Algorithm/idea: merge base / LCA in a DAG by coloring from both heads,
+  newest-first.
+Verified: keep/drop/skip Objsets, queue by ctime, lca() and range() use
+  it.
+CONFIDENCE: medium (road not taken, for context only)
+Proposed lines:
+%ref: M. A. Bender, M. Farach-Colton, G. Pemmasani, S. Skiena,
+%  P. Sumazin, "Lowest common ancestors in trees and directed acyclic
+%  graphs", Journal of Algorithms 57(2):75-94, 2005 (in a DAG, unlike a
+%  tree, two nodes may have several "lowest" common ancestors, which is
+%  why Git merges can have several merge bases; [[paint()]] is a simple
+%  graph search, not one of the preprocessing algorithms of the paper).
+
+### VCS.nw : <<function [[decompress]]>>
+(line ~1203, section "Reading from a Repository" / "Decompression")
+Algorithm/idea: zlib stream (deflate + Adler-32) per loose object.
+Verified: bdecompress calls inflatezlib() from libflate.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Deutsch, J.-L. Gailly, "ZLIB Compressed Data Format
+%  Specification version 3.3", RFC 1950, 1996 (the 2-byte header and
+%  Adler-32 trailer around a deflate stream, RFC 1951, that
+%  [[inflatezlib()]] decodes; gzip, see the Utilities, wraps the same
+%  deflate data with a different header and a CRC-32).
+
+### VCS.nw : <<function [[searchindex]]>>
+(line ~7825, section "Searching the pack index")
+Algorithm/idea: 256-entry fan-out table on the first byte, then binary
+  search on sorted hashes.
+Verified: reads fanout[h[0]-1..h[0]], then lo/hi bisection.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, "The Art of Computer Programming, Vol. 3",
+%  Section 6.2.1 (bib: taocp) (binary search -- Knuth notes the first
+%  published description dates from 1946 but the first bug-free one
+%  from 1962; the fan-out table first narrows the search to hashes
+%  sharing the first byte, saving about 8 of the ~20 probes).
+
+### VCS.nw : <<function [[nextblk]]>>
+(line ~7764, section "Data structures" / "[[Dtab]] and [[Dblock]]")
+Algorithm/idea: content-defined chunking with a rolling "gear" hash:
+  block boundaries depend on content, so an insertion only changes
+  nearby blocks.
+Verified: gh = (gh<<1) + geartab[*p++]; cut when (gh & Splitmask)==0,
+  bounded by Minchunk/Maxchunk.
+CONFIDENCE: high (LBFS, FastCDC)
+Proposed lines:
+%ref: A. Muthitacharoen, B. Chen, D. Mazieres, "A Low-bandwidth Network
+%  File System", SOSP 2001 (content-defined chunks: cut a file where a
+%  rolling hash of the last bytes hits a magic value, so inserting a
+%  byte shifts only one boundary; LBFS used Rabin fingerprints over a
+%  48-byte window).
+%ref: W. Xia et al., "FastCDC: a Fast and Efficient Content-Defined
+%  Chunking Approach for Data Deduplication", USENIX ATC 2016 (the
+%  cheaper "gear" hash used by [[nextblk()]]: shift left and add a
+%  random 32-bit value per byte from [[geartab]], so old bytes fall off
+%  the top and no explicit window is needed).
+
+### VCS.nw : <<function [[deltify]]>>
+(line ~8561, section "Writing packs" / "[[pickdeltas()]]")
+Algorithm/idea: delta = sequence of copy(offset,len) from the base and
+  insert(literal bytes), found by block hashing then extending matches.
+Verified: lookup() finds a base block with the same hash, stretch()
+  extends it, emitdelta(copy or insert).
+CONFIDENCE: high
+Proposed lines:
+%ref: W. F. Tichy, "The string-to-string correction problem with block
+%  moves", ACM Transactions on Computer Systems 2(4):309-321, 1984
+%  (shows that for storing versions, "copy this block of the old file"
+%  plus "insert these bytes" beats insert/delete edit scripts; Git's
+%  pack delta format is exactly these two operations).
+%ref: J. J. Hunt, K.-P. Vo, W. F. Tichy, "Delta algorithms: an
+%  empirical analysis", ACM TOSEM 7(2):192-214, 1998 (compares diff-
+%  based and copy/insert deltas on real version histories; copy/insert
+%  deltas on bytes, as in [[deltify()]], win).
+
+### VCS.nw : PROSE, \subsection{Edit distance basic algorithm (O($n^2$)
+in space/time)} (line ~12111, empty; and the commented
+"%\subsection{Myers algorithm" right below)
+CONFIDENCE: high
+Proposed lines:
+%ref: R. A. Wagner, M. J. Fischer, "The string-to-string correction
+%  problem", JACM 21(1):168-173, 1974 (the O(nm) dynamic-programming
+%  table of edit distances between prefixes).
+(For the Myers subsection, reuse the Myers 1986 ref above.)
+
+### VCS.nw : <<function [[main]](diff)>>
+(line ~12158, section "Supporting Programs" / "[[diff]]")
+Algorithm/idea: Hunt-McIlroy LCS diff with Stone's k-candidates.
+Verified: version_control/diff/diffreg.c header comment: "Uses an
+  algorithm due to Harold Stone ... The cleverness lies in routine
+  stone", lines hashed and sorted into equivalence classes; the sort is
+  commented "shellsort CACM #201". (diffreg.c's chunks are not in the
+  book; main() is the closest chunk.)
+CONFIDENCE: high
+Proposed lines:
+%ref: J. W. Hunt, M. D. McIlroy, "An Algorithm for Differential File
+%  Comparison", Computing Science Technical Report 41, Bell
+%  Laboratories, 1976 (the algorithm of this [[diff]], whose inner loop
+%  [[stone()]] is named after Harold Stone who suggested it).
+%ref: J. W. Hunt, T. G. Szymanski, "A fast algorithm for computing
+%  longest common subsequences", CACM 20(5):350-353, 1977 (the
+%  published analysis of the same "k-candidates" idea: fast when few
+%  line pairs are equal, as in source code).
+
+### VCS.nw : <<function [[main (diff/merge3.c)]](diff)>>
+(line ~12362, section "[[merge3]]")
+Algorithm/idea: three-way merge from two diffs against the base.
+Verified: merge3.c collects the two Diffs and merges overlapping changes.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Khanna, K. Kunal, B. C. Pierce, "A Formal Investigation of
+%  Diff3", FSTTCS 2007 (diff3's algorithm made precise: align both
+%  versions with the base, keep regions changed on one side only, flag
+%  regions changed on both -- what [[merge()]] in merge3.c does).
+(If placed in the Overview, keep only one.)
+
+### VCS.nw : <<function [[murmurhash2]]>>   (low priority)
+(line ~12030, section "Murmurhash2")
+CONFIDENCE: medium (no paper; web/code only)
+Proposed lines:
+%ref: A. Appleby, "MurmurHash2", 2008, public-domain code (a fast
+%  non-cryptographic hash made of multiply-and-rotate steps; used here
+%  only to bucket delta blocks, where SHA-1 would be much slower).
+
+
+######################################################################
+## version_control/VCS_dulwich.nw  (Python)
+######################################################################
+
+### VCS_dulwich.nw : <<class Tree>>
+(line ~726, section "Objects" / "[[Tree]] and [[TreeEntry]]")
+Algorithm/idea: Merkle hash tree.
+CONFIDENCE: high
+Proposed lines: (same Merkle ref as Overview.nw; include only if
+VCS_dulwich is typeset as a separate book)
+%ref: R. C. Merkle, "A digital signature based on a conventional
+%  encryption function", CRYPTO '87, LNCS 293:369-378, 1988 (a tree's
+%  id is the SHA-1 of its entries, which contain its children's ids,
+%  so one hash covers the whole directory).
+
+### VCS_dulwich.nw : <<function pack.create_delta>>
+(line ~11574, section "Pack" / "Delta")
+Algorithm/idea: copy/insert delta computed with difflib.SequenceMatcher
+  (Ratcliff-Obershelp style longest-matching-block recursion).
+Verified: SequenceMatcher(a=base_buf, b=target_buf).get_opcodes();
+  'equal' -> copy op, 'replace'/'insert' -> insert op; deletes dropped.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. W. Ratcliff, D. E. Metzener, "Pattern Matching: The Gestalt
+%  Approach", Dr. Dobb's Journal, July 1988 (the algorithm behind
+%  Python's [[difflib.SequenceMatcher]]: take the longest common block,
+%  recurse on the left and right leftovers; it does not guarantee a
+%  minimal diff, which does not matter for a delta).
+%ref: W. F. Tichy, "The string-to-string correction problem with block
+%  moves", ACM TOCS 2(4):309-321, 1984 (why only copy and insert
+%  operations are needed: deleted bytes are simply never copied).
+
+### VCS_dulwich.nw : <<function patch.unified_diff>>   (optional)
+(line ~4738, section "[[git diff]]")
+CONFIDENCE: high
+Proposed lines:
+%ref: E. W. Myers, "An O(ND) difference algorithm and its variations",
+%  Algorithmica 1(2):251-266, 1986 (road not taken: real [[git diff]]
+%  uses Myers' minimal diff; dulwich reuses [[difflib]], whose
+%  Ratcliff-Obershelp matching gives diffs that are readable but not
+%  always minimal).
+
+### VCS_dulwich.nw : <<class _CommitTimeQueue>>
+(line ~4943, section "Graph walker")
+Algorithm/idea: priority queue by commit time (heapq on -commit_time).
+CONFIDENCE: high
+Proposed lines:
+%ref: J. W. J. Williams, "Algorithm 232: Heapsort", CACM 7(6):347-348,
+%  1964 (the array-based binary heap behind Python's [[heapq]];
+%  pushing [[-commit_time]] turns its min-heap into newest-first).
+
+### VCS_dulwich.nw : <<function objects._decompress>>
+(line ~1988)
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Deutsch, J.-L. Gailly, "ZLIB Compressed Data Format
+%  Specification version 3.3", RFC 1950, 1996 (Gailly also co-wrote
+%  gzip and the zlib library that Python's [[zlib]] module wraps).
+
+
+######################################################################
+Considered but rejected
+######################################################################
+- Make.nw work(): Feldman already placed at the Intro DFS paragraph and
+  at outofdate(); no third copy.
+- Make.nw bulk time / time cache (dirtime): no classic reference.
+- Make.nw :P: custom comparison program, archive members (atimeof): only
+  the mk-plan9 manual, which is already the Intro's reference.
+- Make.nw mtime-vs-hash commented section (~6475): commented out; if
+  revived, cite build-alacarte there instead of the Intro.
+- Shell.nw Var/list-of-words: Duff "no rescanning" principle already
+  used at Xbackq; avoid 4+ copies of rc-plan9.
+- Shell.nw /env (Updenv): no specific paper about /env I am sure of.
+- Shell.nw notes/signals: nothing classic beyond the Plan 9 paper.
+- ed.nw "A Unicode editor": UTF-8 paper belongs to Libcore (and is
+  offered for Shell.nw nextutf).
+- ed.nw g/re/p: origin of grep is anecdotal (McIlroy/Thompson), no paper.
+- Utilities.nw sort/diff/patch/hoc/sed/tr sections: no code yet (empty
+  sections); when written: Hoare 1962 Quicksort (Computer Journal
+  5(1):10-16) for sort, Hunt-McIlroy for diff, Kernighan-Pike UPE ch. 8
+  (bib: unix-pike) for hoc.
+- Utilities.nw cal: Gregorian 1752 switch; no paper.
+- Utilities.nw awk: already \cite{aho-weinberger-kernighan}.
+- Debugger.nw DDT (Kotok, MIT, 1961): not confident of a citable form;
+  covered indirectly by Evans & Darley.
+- Debugger.nw armfoll() software single-step: no classic paper known.
+- Debugger.nw stk()/i386trace() stack unwinding via SP-PC tables: no
+  paper I am sure of.
+- Debugger.nw truss.acid: covered by the ratrace/Minnich entry.
+- Profiler.nw trace (EDF deadlines in redraw()): Liu & Layland, JACM
+  20(1):46-61, 1973 belongs to the Kernel book's edf.c, not the viewer.
+- Profiler.nw DTrace (Cantrill et al., USENIX ATC 2004): only in a
+  comparison table, no chunk.
+- Profiler.nw Knuth "premature optimization" quote (~98): source is
+  Knuth, "Structured programming with go to statements", Computing
+  Surveys 6(4):261-301, 1974 -- could become a \cite in the prose.
+- VCS.nw object cache LRU: no founding paper worth it.
+- VCS_dulwich rename detection (_similarity_score): block-count
+  similarity; Broder 1997 resemblance is related but not what is done.
+- VCS Intro "there are no \plan VCSs" (~139): Venti/dump refs placed in
+  Overview instead.
+
+Missing bib keys noticed
+------------------------
+- gprof: \cite{gprof} used at profilers/Profiler.nw ~186 but NOT defined
+  in docs/latex/Principia.bib.
+- No bib entries yet for: Winterbottom acid 1994 (paper is in
+  debuggers/docs/acidpaper.ms), Minnich ratrace (debuggers/docs/
+  ratrace-iwp95e.pdf), Killian /proc 1984, Thompson 1968, Ritchie &
+  Thompson 1974, Ritchie 1984, Bourne BSTJ 1978, Quinlan WORM 1991,
+  Venti 2002, Hunt-McIlroy 1976, Myers 1986, Merkle, Gill 1951,
+  Knuth 1971, Deutsch-Lampson 1967.
+- Existing but unused: build-alacarte (suggested above).

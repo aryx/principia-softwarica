@@ -1,0 +1,703 @@
+References for lib_graphics/Graphics.nw (+ Graphics_extra.nw)
+==============================================================
+
+Research only; nothing in the .nw or C sources was edited.
+Line numbers are those of the `<<chunk>>=` (or \subsection) line at the
+time of writing. Each entry was checked against the chunk body in
+Graphics.nw (which syncs with libdraw/, libmemdraw/, libmemlayer/), and,
+for the Blit-era papers, against the text of lib_graphics/docs/
+(blit-1983.pdf, pike-bitmap-1983.ps).
+
+Parentheticals follow the BRIEF addendum ("teaching value"): what the
+paper was written for, which idea maps to which function here, and
+where Plan 9 differs.
+
+General finding: the Plan 9 rasterizer is less "textbook" than the
+prose suggests. There is NO Bresenham anywhere (every non-axis-aligned
+line, even radius 0, is filled as a polygon), polygons use a
+rational-arithmetic active-edge scanline fill, ellipses use an integer
+midpoint walker, Beziers use integer de Casteljau subdivision, and the
+image "compression" is an LZ77 variant, not run-length (see the prose
+errors listed at the end).
+
+Placement note: the Overview's "Graphics system principles" section
+has only ONE chunk (<<function [[set_pixel]](imaginary)>>). For the
+founding papers whose concept is introduced in a chunk-less principles
+subsection, I propose placing the %ref: lines right after the
+\subsection{...} line (marked "PLACEMENT: after \subsection" below).
+If the author prefers %ref: only before chunks, those entries can move
+to the first related chunk named in each entry.
+
+
+==============================================================
+Graphics.nw -- PART 1: founding classics (Principles, core DS)
+==============================================================
+
+### Graphics.nw : \section{Graphics system principles}
+(line ~989, chapter "Overview"; PLACEMENT: after \section, no chunk)
+Algorithm/idea: the field's first textbook, where most of this book's
+  vocabulary (display file vs raster, clipping, windowing, rubber-band
+  interaction, RasterOp in the 2nd edition) was first written down.
+Verified: Pike's layers paper cites it as [new79]; it is also where the
+  Cohen-Sutherland clipper (see _memimageline entry) was first published.
+CONFIDENCE: high
+Proposed lines:
+%ref: W. M. Newman and R. F. Sproull, "Principles of Interactive Computer
+%  Graphics", McGraw-Hill, 1973; 2nd ed. 1979 (the first textbook of the
+%  field, written when most displays were still vector; the 2nd edition,
+%  cited by Pike, adds raster displays and RasterOp, i.e., bitblt).
+
+### Graphics.nw : \subsection{Vector graphics (shapes)}
+(line ~1258, section "Graphics system principles";
+ PLACEMENT: after \subsection, no chunk)
+Algorithm/idea: the founding interactive graphics system: shapes
+  (lines, circle arcs) kept as a structured list and redrawn on a
+  vector display; also the first clipping ("windowing") and the first
+  constraint-based drawing.
+Verified: concept-level only; Plan 9 is the opposite design (raster,
+  no retained shape list: a line is rasterized into pixels as soon as
+  the 'L' message arrives in drawmesg).
+CONFIDENCE: high
+Proposed lines:
+%ref: I. E. Sutherland, "Sketchpad: A man-machine graphical communication
+%  system", AFIPS Spring Joint Computer Conference, 1963 (MIT PhD thesis
+%  on the TX-2 at Lincoln Laboratory, drawing with a light pen on a vector
+%  display that redrew the whole list of lines and arcs continuously;
+%  \plan keeps no such list: shapes become pixels immediately).
+
+### Graphics.nw : <<function [[set_pixel]](imaginary)>>
+(line ~1230, section "Graphics system principles", subsection
+ "Raster graphics (pixels)")
+Algorithm/idea: the frame buffer: a memory area holding one value per
+  pixel, scanned out to a TV-style raster display.
+Verified: set_pixel writes 3 bytes at 0xA0000000 + y*1024*3 + x*3; the
+  Alto did exactly this with its display bitmap in main memory.
+CONFIDENCE: high (Alto, Noll paper exists); medium on Noll's exact
+  hardware, which is therefore not named
+Proposed lines:
+%ref: A. M. Noll, "Scanned-Display Computer Graphics", Communications of
+%  the ACM 14(3):143-150, 1971 (at Bell Labs, a decade before the Blit:
+%  a computer memory holding the picture point by point, played to a TV
+%  raster display, instead of a vector display drawing lines).
+%ref: C. P. Thacker, E. M. McCreight, B. W. Lampson, R. F. Sproull,
+%  D. R. Boggs, "Alto: A Personal Computer", Xerox PARC CSL-79-11, 1979
+%  (bib: alto; the display bitmap is just part of main memory, 1 bit per
+%  pixel, so drawing is storing words, as in set_pixel).
+
+### Graphics.nw : \subsection{[[bitblt()]] and compositing}
+(line ~1355, section "Graphics system principles";
+ PLACEMENT: after \subsection, no chunk. The prose there already has
+ \cite{pike-bitblt} (SIGGRAPH'84 course notes, co-authored by Ingalls);
+ this adds the original.)
+Algorithm/idea: bitblt, the one raster operator from which text,
+  scrolling, menus and windows are built.
+Verified: in Plan 9 it survives as draw()/memimagedraw (see entry below);
+  the author's own % note says "Inventor = Dan Ingalls Diana Merry".
+CONFIDENCE: high
+Proposed lines:
+%ref: D. H. H. Ingalls, "The Smalltalk Graphics Kernel", Byte 6(8):168-194,
+%  August 1981 (BitBlt, invented with Diana Merry at Xerox PARC for the
+%  Alto's Smalltalk: one operation that copies a rectangle combining source
+%  and destination bits with one of 16 boolean rules; draw() replaces the
+%  rules by Porter-Duff operators and adds a mask).
+
+### Graphics.nw : \subsection{Fonts}
+(line ~1460, section "Graphics system principles";
+ PLACEMENT: after \subsection, next to Figure fig:font-vector)
+Algorithm/idea: vector (stroke) fonts, the alternative illustrated by
+  the "letter m defined by a list of shapes" figure.
+Verified: road not taken: Plan 9 fonts are bitmaps (Subfont.bits).
+CONFIDENCE: high
+Proposed lines:
+%ref: A. V. Hershey, "Calligraphy for Computers", NWL Report No. 2101, U.S.
+%  Naval Weapons Laboratory, Dahlgren, Virginia, 1967 (glyphs as short
+%  pen strokes, for plotters and vector CRTs; still used for plotter and
+%  CAD text; road not taken: \plan fonts are pre-rendered bitmaps).
+
+### Graphics.nw : \subsection{The PostScript imaging model}
+(line ~1572, section "Graphics system principles";
+ PLACEMENT: after \subsection, no chunk)
+Algorithm/idea: the "stencil and paint" imaging model: every mark is
+  paint applied through a stencil (a path, a glyph, an image mask).
+Verified: draw(dst, r, src, mask, p) is paint (src) through a stencil
+  (mask); what Plan 9 drops is the path/transform half of the model.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Warnock and D. K. Wyatt, "A Device Independent Graphics Imaging
+%  Model for Use with Raster Devices", SIGGRAPH '82, Computer Graphics
+%  16(3):313-320, 1982 (Xerox PARC work before Adobe and PostScript: paint
+%  through a stencil; draw's src/mask pair is the same idea, minus paths
+%  and coordinate transforms).
+
+### Graphics.nw : <<struct [[Point]]>>
+(line ~2846, chapter "Core Data Structures", section "Geometry")
+Algorithm/idea: homogeneous coordinates / transformation matrices, the
+  standard way graphics systems translate, scale and rotate.
+Verified: road not taken: Point is two ints; the only transformation in
+  the whole library is translation (addpt, rectaddpt, Memlayer.delta,
+  the sp/p0 alignment in draw). No scaling, rotation or matrices anywhere.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. G. Roberts, "Homogeneous Matrix Representation and Manipulation
+%  of N-Dimensional Constructs", MIT Lincoln Laboratory MS-1405, 1965 (one
+%  matrix product for translate, scale, rotate and perspective; road not
+%  taken: \plan's only transformation is translation, via addpt).
+
+### Graphics.nw : <<struct [[Rectangle]]>>
+(line ~2987, section "Geometry", subsection "[[Rectangle]]")
+Algorithm/idea: half-open rectangles (min included, max excluded).
+Verified: ptinrect/rectXrect use < against max, >= against min;
+  Dx = max.x-min.x. Pike's layers paper defines the Blit's Rectangle
+  exactly this way ("Rectangles are half-open ... Two abutting rectangles
+  ... have no point in common ... These curious definitions simplify
+  drawing objects in pieces, which is essential to the layer
+  primitives"), with fields origin/corner.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Graphics in Overlapping Bitmap Layers", ACM Transactions
+%  on Graphics 2(2):135-160, 1983 (bib: pike-layers; the Blit's Point and
+%  half-open Rectangle, fields origin/corner instead of min/max, chosen so
+%  that a shape cut into abutting pieces draws each pixel exactly once).
+%ref: E. W. Dijkstra, "Why numbering should start at zero", EWD831, 1982
+%  (a handwritten note making the same [min,max) argument for integer
+%  ranges: lengths are max-min, adjacent ranges share no element).
+
+### Graphics.nw : <<struct [[Memimage]]>>
+(line ~3678, section "[[Image]] (and [[Memimage]])")
+Algorithm/idea: the Blit's Bitmap = {base, width in words, rect}: a
+  rectangle with its own coordinate system inside a word-aligned block
+  of storage, possibly a sub-bitmap of a bigger one.
+Verified: Memimage has r (rectangle in local coords), a Memdata pointer
+  "shared by windows in this image" and a width in words; the layers
+  paper: "A Bitmap may be contained in another Bitmap ... such as
+  representing the portion of the screen occupied by a layer".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Graphics in Overlapping Bitmap Layers", ACM TOG 2(2), 1983
+%  (bib: pike-layers; the Blit's Bitmap {base, width, rect}: Memdata, width
+%  and r here; a window's Memimage shares the screen's Memdata just as a
+%  Blit layer was a Bitmap inside the screen Bitmap).
+
+
+==============================================================
+Graphics.nw -- PART 2: per-algorithm references
+==============================================================
+
+### Graphics.nw : <<enum [[drawop]]>>
+(line ~4601, chapter "Core Data Structures", section "[[Drawop]]")
+Algorithm/idea: Porter-Duff compositing algebra, 12 operators encoded
+  as a 4-bit set of regions (SinD, DinS, SoutD, DoutS).
+Verified: enum values are exactly the Porter-Duff region decomposition;
+  alphacalc11 computes dst = src*ma + dst*(1 - sa*ma) with src colour
+  NOT multiplied by sa, i.e. Plan 9 pixels are premultiplied, as in the
+  paper. Plan 9 has no "plus" operator. The Principles prose (~line
+  1412) \cite{porter-duff}s it, but that key is MISSING from
+  Principia.bib; this chunk is where the operators live.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Porter and T. Duff, "Compositing Digital Images", SIGGRAPH '84,
+%  Computer Graphics 18(3):253-259, 1984 (at Lucasfilm, to render film
+%  elements separately and combine them later: each pixel carries an alpha,
+%  colors are premultiplied, and the 12 operators are the subsets of the 4
+%  regions, the 4 bits of SinD|DinS|SoutD|DoutS; Duff later wrote rc).
+
+### Graphics.nw : <<function [[memimagedraw]]>>
+(line ~8957, section "[[draw()]]", subsubsection "[[memimagedraw()]]")
+Algorithm/idea: a single generalized raster operator
+  dst = (src IN mask) OP dst, with replicated (tiled) src/mask, as the
+  one primitive under every shape.
+Verified: memimagedraw takes dst, r, src, p0, mask, p1, op; clipping
+  (drawclip), replication (Frepl) and compositing all funnel through it;
+  lines/polygons/ellipses end up as fillline/erect -> memdraw calls. The
+  book's own % note (~line 9670) says Keith Packard cites draw's model.
+CONFIDENCE: high (Guibas-Stolfi); medium on the exact wording of
+  Packard's acknowledgement of Plan 9
+Proposed lines:
+%ref: L. J. Guibas and J. Stolfi, "A Language for Bitmap Manipulation",
+%  ACM Transactions on Graphics 1(3):191-214, 1982 (Xerox PARC: bitblt
+%  seen as an algebra, with masks and repeating textures as first-class
+%  operands; draw's mask and Frepl source are the same generalizations).
+%ref: K. Packard, "Design and Implementation of the X Rendering
+%  Extension", USENIX Annual Technical Conference, FREENIX Track, 2001
+%  (X Render, 18 years after the Blit, adopts draw's
+%  dst = (src IN mask) OP dst; its descendant is Cairo).
+
+### Graphics.nw : <<function [[MUL]]>>
+(line ~10595, section "Compositing pixels", subsection
+ "Compositing pixels: [[alphacalcxx()]]")
+Algorithm/idea: exact rounded x*y/255 for 8-bit channels without a
+  division: t = x*y+128; (t + (t>>8)) >> 8.
+Verified: #define MUL(x, y, t) (t = (x)*(y)+128, (t+(t>>8))>>8); the
+  MUL13/MUL02/MUL0123 variants apply the same trick to two channels
+  packed in one 32-bit word. The book's % comment next to it is just
+  "?????", so this ref answers it.
+CONFIDENCE: high that the column exists and derives this; issue number
+  and pages omitted
+Proposed lines:
+%ref: J. F. Blinn, "Three Wrongs Make a Right", IEEE Computer Graphics and
+%  Applications (Jim Blinn's Corner), November 1995 (why 255 and not 256:
+%  alpha 255 must mean exactly 1; three cheap approximations, +128, >>8
+%  added back, >>8, whose errors cancel into exactly round(x*y/255)).
+
+### Graphics.nw : <<function [[_memimageline]]>>
+(line ~10867, section "Lines", subsection "Algorithm")
+Algorithm/idea: clip by deciding which pixels to write, not by moving
+  the endpoints, so a line cut into pieces by the layer code draws the
+  same pixels as the whole line; explicitly NOT Cohen-Sutherland.
+Verified: the C comment in the chunk: "We can't use Sutherland-Cohen
+  clipping because lines are wide ... we do all math with the original
+  p0 and p1, but clip when deciding what pixels to draw ... get the same
+  set of pixels regardless of the dicing". Pike's layers paper makes the
+  same point for the Blit's lline ("portions of a line may be
+  'undrawn' ... the DDA being a strict function of x, instead of the
+  distance from the starting point"). Answers the author's % note
+  "Explain previous comment about clipping?".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Graphics in Overlapping Bitmap Layers", ACM TOG 2(2), 1983
+%  (bib: pike-layers; the Blit's lline, called once per visible piece of a
+%  layer by layerop, had to light the same pixels whatever the pieces:
+%  hence the math on the original p0/p1 and clipping pixel by pixel here).
+%ref: D. Cohen and I. Sutherland, 1967 (unpublished; first described in
+%  W. M. Newman and R. F. Sproull, "Principles of Interactive Computer
+%  Graphics", McGraw-Hill, 1973) (road not taken, as the comment says: a
+%  4-bit outcode per endpoint moves the endpoints to the window edge,
+%  fine for thin lines, wrong for wide ones).
+
+### Graphics.nw : <<[[_memimageline()]] when arbitrary lines>>
+(line ~11033, section "Lines", subsubsection "General case")
+Algorithm/idea: thick line = 4-vertex polygon (plus caps) filled by the
+  scanline polygon filler, in 1/1024 sub-pixel fixed point.
+Verified: icossin2 gives the direction, the 4 corners are offset by
+  (2*radius+1)/2 perpendicular to it, then _memfillpolysc(..., 10, ...)
+  (fixshift 10 = ICOSSCALE 1024). Even radius 0 goes through here:
+  memdraw has no Bresenham at all (the author's own note: "no bresenham
+  actually"). The Blit's line code WAS a Bresenham-style DDA (the layers
+  paper cites [bre65]), so this is a change of approach between the
+  Blit and Plan 9.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. E. Bresenham, "Algorithm for computer control of a digital
+%  plotter", IBM Systems Journal 4(1):25-30, 1965 (for a pen plotter whose
+%  motors could only step to a neighboring grid point, the same problem as
+%  lighting pixels; used by the Blit, but road not taken in memdraw, which
+%  fills every slanted line as a polygon, even a 1-pixel wide one).
+%ref: Adobe Systems, "PostScript Language Reference Manual", Addison-Wesley,
+%  1985 (bib: postscript; same idea: stroking a line is filling the outline
+%  of the thick line, with butt, round and projecting caps, here Endsquare,
+%  Enddisc, and the extra Endarrow).
+
+### Graphics.nw : <<function [[xscan]]>>
+(line ~11554, section "Polygons", subsubsection "[[xscan()]]")
+Algorithm/idea: scanline polygon fill with an edge table sorted by y and
+  an active-edge list sorted by x; edge coherence (x advances by a
+  constant dz per scanline); nonzero vs even-odd winding rule; pixels
+  sampled at their centers.
+Verified: edges sorted with qsort(ycompare); active list kept sorted by
+  zsort (bubble sort because "they should be almost sorted already");
+  x updated incrementally with an exact rational remainder
+  (z += dz; zerr += dzrem; carry when zerr >= den) -- a Bresenham-style
+  error term per edge, not floating point; cnt += d and
+  (cnt & wind) == 0 gives nonzero winding for wind = ~0 and even-odd for
+  wind = 1; y starts at (iy << fixshift) + onehalf, i.e. pixel centers.
+CONFIDENCE: high (Wylie, Heckbert); medium (Newell-Sequin volume/issue;
+  Smith memo number)
+Proposed lines:
+%ref: C. Wylie, G. W. Romney, D. C. Evans, A. Erdahl, "Half-tone
+%  perspective drawings by computer", AFIPS Fall Joint Computer
+%  Conference, 1967 (Utah, for shaded 3D pictures: scan the image row by
+%  row, and an edge's crossing moves by a constant amount from one row
+%  to the next, the dz of each Seg; xscan keeps the remainder exact).
+%ref: P. S. Heckbert, "Concave Polygon Scan Conversion", in Graphics Gems,
+%  Academic Press, 1990 (the edge table plus active edge list version,
+%  like xscan with ycompare and zsort, but in floating point).
+%ref: M. E. Newell and C. H. Sequin, "The Inside Story on
+%  Self-Intersecting Polygons", Lambda 1(2), 1980 (optional: the nonzero
+%  and even-odd rules, selected here by wind = ~0 or 1 in (cnt & wind)).
+(Optional extra, only if the author wants the pixel-center point made:
+%ref: A. R. Smith, "A Pixel Is Not A Little Square", Microsoft Technical
+%  Memo 6, 1995 (a pixel is a point sample; xscan samples each row at its
+%  center, onehalf, not by area coverage).)
+
+### Graphics.nw : <<struct [[State]]>>
+(line ~12085, section "Ellipses"; the %claude: paragraph describing the
+ midpoint method sits just above <<struct [[ParamEllipse]]>>, so the
+ refs could go before either chunk)
+Algorithm/idea: integer midpoint ellipse walker driven by the residual
+  e(x,y) = b^2 x^2 + a^2 y^2 - a^2 b^2 evaluated at half-integer points,
+  with forward differences (dxe, dye, d2xe, d2ye) so the loop only adds;
+  thick outlines = region between two concentric ellipses, or for very
+  thick skinny ones a disc brushed along the curve.
+Verified: State fields and step() test e(x+1,y-1/2), e(x+1/2,y),
+  e(x+1/2,y-1) exactly as the comments say; memellipse walks an inner
+  and outer State in parallel; bellipse brushes a disc. ellipse.c is
+  unsigned; its style and "criterion for very thick" comment match Doug
+  McIlroy's work on exact raster ellipses, and Pike's layers paper
+  thanks McIlroy for guiding him "through the mazes of integer
+  geometry".
+CONFIDENCE: high that both papers exist and describe this class of
+  algorithm; medium that ellipse.c is literally McIlroy's code (the
+  parenthetical below says "lineage", not "author")
+Proposed lines:
+%ref: M. L. V. Pitteway, "Algorithm for drawing ellipses or hyperbolae
+%  with a digital plotter", The Computer Journal 10(3):282-289, 1967 (again
+%  a pen plotter: choose between two steps by the sign of the conic's
+%  equation at the point halfway between them, the e(x+1/2,y-1/2) of step).
+%ref: M. D. McIlroy, "Getting Raster Ellipses Right", ACM Transactions on
+%  Graphics 11(3):259-275, 1992 (by the inventor of Unix pipes, at Bell
+%  Labs: exact integer midpoint ellipses; the Bell Labs lineage of this
+%  code, whose State updates use only additions).
+
+### Graphics.nw : <<function [[bpts1]]>>
+(line ~25840, chapter "Advanced Topics", section "Advanced shapes",
+ subsection "Bezier curves", subsubsection "Algorithm")
+Algorithm/idea: de Casteljau subdivision at t = 1/2 until the control
+  polygon is flat, in exact integer arithmetic.
+Verified: p01, p12, p23, p012, p123, p0123 are the de Casteljau
+  midpoints, kept unhalved by multiplying coordinates by 8 at each level
+  (scale*8), rescaling when scale > 4096; flatness test = squared
+  distance of p1 and p2 to segment p0-p3 <= 1 (psdist).
+CONFIDENCE: high (Bezier book, Lane-Riesenfeld); de Casteljau's report
+  is cited without a title on purpose
+Proposed lines:
+%ref: P. de Casteljau, internal report, Citroen, 1959 (unpublished), and
+%  P. Bezier, "Numerical Control: Mathematics and Applications", Wiley,
+%  1972 (two car makers designing body panels, Citroen and Renault: the
+%  midpoint recurrence p01, p012, p0123 is de Casteljau's).
+%ref: J. M. Lane and R. F. Riesenfeld, "A Theoretical Development for the
+%  Computer Generation and Display of Piecewise Polynomial Surfaces",
+%  IEEE Trans. PAMI 2(1):35-46, 1980 (split at the middle until flat, then
+%  draw straight segments: bpts1, with psdist as the flatness test).
+
+### Graphics.nw : <<function [[_bezsplinepts]]>>
+(line ~25915, same subsection)
+Algorithm/idea: a uniform quadratic B-spline through the control points,
+  converted to cubic Bezier segments (degree elevation).
+Verified: each segment goes from (p0+p1)/2 to (p1+p2)/2 with inner
+  controls (p0+5p1)/6 and (5p1+p2)/6, i.e. the quadratic Bezier
+  ((p0+p1)/2, p1, (p1+p2)/2) raised to degree 3; open curves are clamped
+  at the ends (a = p0, b = (p0+2p1)/3); a closed curve (first == last)
+  is periodic. So bezspline is NOT a cubic B-spline or Catmull-Rom.
+CONFIDENCE: high
+Proposed lines:
+%ref: G. M. Chaikin, "An algorithm for high speed curve generation",
+%  Computer Graphics and Image Processing 3(4):346-349, 1974, and
+%  R. F. Riesenfeld, "On Chaikin's algorithm", CGIP 4(3):304-310, 1975
+%  (Chaikin cut the corners of the control polygon again and again;
+%  Riesenfeld showed the limit is the uniform quadratic B-spline, the
+%  curve drawn here, which bezspline converts to cubic Beziers directly).
+
+### Graphics.nw : <<struct [[Cachefont]]>>
+(line ~12800, chapter "Fonts", section "Additional data structures")
+Algorithm/idea: a Unicode font as a text file of rune ranges -> subfont
+  files, loaded lazily.
+Verified: Cachefont = {min, max, offset, name, subfontname}; loadchar
+  finds the range, loads the Subfont on demand.
+CONFIDENCE: medium (the paper certainly exists; I am fairly but not
+  fully sure its discussion of fonts covers the range->subfont format)
+Proposed lines:
+%ref: R. Pike and K. Thompson, "Hello World or ... (in Greek and
+%  Japanese)", USENIX Winter Conference, 1993 (the UTF-8 paper: moving
+%  \plan to Unicode, including fonts made of many small subfonts, one per
+%  range of runes, loaded only when a rune of the range is drawn).
+%  [Title shortened on purpose: keep Unicode out of the .nw file.]
+
+### Graphics.nw : <<struct [[Fontchar]]>>
+(line ~12916, chapter "Fonts", subsection "[[Subfont]] and [[Fontchar]]")
+Algorithm/idea: "strike" font: all glyphs side by side in one bitmap,
+  plus a table of x offsets (glyph c spans info[c].x .. info[c+1].x),
+  drawn with one bitblt/draw per character.
+Verified: Subfont.bits + info[n+1] sentinel, and the draw() in the
+  Subfont comment.
+CONFIDENCE: medium (strike fonts with an xTable are the Alto/Smalltalk
+  format; I am not certain the Byte article, rather than the Blue Book,
+  is where it is described in detail)
+Proposed lines:
+%ref: A. Goldberg and D. Robson, "Smalltalk-80: The Language and its
+%  Implementation", Addison-Wesley, 1983 (Smalltalk's "strike" fonts: one
+%  wide bitmap with every glyph side by side, and an xTable of left edges,
+%  the info[c].x here; characters are drawn by BitBlt from the strike).
+
+### Graphics.nw : <<function [[cachechars]]>>
+(line ~14489, section "Character cache", subsection "Loading characters")
+Algorithm/idea: glyph cache = hash table probed over a bounded window of
+  NFLOOK slots, with least-recently-used eviction inside the window,
+  i.e. an NFLOOK-way set-associative cache with LRU (ages).
+Verified: sh = (17*r) & (ncache-NFLOOK-1); probe NFLOOK consecutive
+  entries; on a miss "toss out oldest entry" (min age) in that window;
+  fontresize grows the cache when the evicted entry is too recent
+  (thrashing detection).
+CONFIDENCE: high
+Proposed lines:
+%ref: W. W. Peterson, "Addressing for Random-Access Storage", IBM Journal
+%  of Research and Development 1(2):130-146, 1957 (hashing with linear
+%  probing, invented to find records on IBM's new disk drives; here the
+%  probe stops after NFLOOK slots and a full window evicts instead).
+%ref: A. J. Smith, "Cache Memories", ACM Computing Surveys 14(3):473-530,
+%  1982 (hardware caches between CPU and memory: an address maps to a set
+%  of a few slots, the least recently used is replaced; NFLOOK and
+%  Cacheinfo.age make the glyph cache exactly such a set-associative cache).
+
+### Graphics.nw : <<function [[menuhit]]>>
+(line ~18974, chapter "Graphical Application Support", section "Menus")
+Algorithm/idea: press-drag-release pop-up menu (appears on button down,
+  selects on button up), inherited from the Blit.
+Verified: loop "while(mc->m.buttons & (1<<(button-1)))" tracks the item
+  under the mouse; release returns lasti. The Blit paper: "a menu that
+  appears when the button is depressed and makes a selection when the
+  button is lifted"; "there is only one type of menu: a list of strings".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "The Blit: A Multiplexed Graphics Terminal", AT&T Bell
+%  Laboratories Technical Journal 63(8), 1984 (bib: blit; the 68000
+%  terminal where this menu comes from: one kind of menu, a list of
+%  strings, shown on button press, chosen on release, as in menuhit).
+
+### Graphics.nw : <<[[menuhit()]] set lasthit>>
+(line ~19331, section "Menus", subsection "Last hit")
+Algorithm/idea: the menu pops up with the previously chosen item under
+  the cursor, so repeating a command costs zero mouse travel.
+Verified: menu->lasthit saved on return; the menu is placed so that
+  menurect(textr, lasti) is under the mouse (moveto to its center).
+CONFIDENCE: high (both papers); the Fitts link is a justification, not
+  something the code cites -- optional entry, drop if it feels like
+  spraying.
+Proposed lines:
+%ref: P. M. Fitts, "The information capacity of the human motor system in
+%  controlling the amplitude of movement", Journal of Experimental
+%  Psychology 47(6):381-391, 1954 (subjects tapping between two metal
+%  plates with a stylus: pointing time grows with distance over target
+%  size; lasthit makes the distance to a repeated choice zero).
+%ref: J. Callahan, D. Hopkins, M. Weiser, B. Shneiderman, "An empirical
+%  comparison of pie vs. linear menus", CHI '88 (road not taken: pie menus
+%  put every item at the same short distance from the cursor).
+
+### Graphics.nw : <<function [[_layerop]]>>
+(line ~22960, chapter "Overlapping Layers", section "Drawing and Layers")
+Algorithm/idea: recursive subdivision of a rectangle against the layers
+  in front of it, calling the drawing op on the screen for visible
+  pieces and on the backing store ("save") for obscured ones.
+Verified: _layerop walks front->layer->rear, splits r into
+  below/above/right/left pieces around each intersecting front layer
+  with RECUR, sends the covered remainder to i->layer->save. This is
+  Pike's Rlayerop()/layerop() almost line for line (the paper: layerop
+  "first clips the target Rectangle to the Layer, then calls the
+  recursive routine Rlayerop() to do the subdivision"), generalized from
+  bitblt to draw. The chapter only has "% See \cite{pike-layers}!".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Graphics in Overlapping Bitmap Layers", ACM TOG 2(2):135-160,
+%  1983 (bib: pike-layers; written for the Blit so that a program could keep
+%  drawing into a half-hidden window: Rlayerop there, _layerop here, with
+%  the same recursive split; obscured parts were a list of Obscured bitmaps
+%  per layer, here one save image per Memlayer).
+
+### Graphics.nw : <<[[memoptdraw()]] if 1 bit mask, src, and dest>>
+(line ~23954, chapter "Non 32-Bits Images", section "1-Bit images")
+Algorithm/idea: classic bitblt inner loop: left/right partial-byte edge
+  masks, full bytes in between, reversed traversal when source and
+  destination overlap.
+Verified: lm = 0xFF>>(min.x&7), rm = 0xFF<<(8-(max.x&7)),
+  *dp ^= (*dp ^ *sp) & *mp & lm; dir = -1 when src and dst share data
+  and dst is after src. Unlike a full bitblt it only handles the
+  bit-ALIGNED case (no shifting); everything else goes to alphadraw.
+CONFIDENCE: high (Pike-Locanthi-Reiser); medium on how much detail the
+  Blue Book's BitBlt chapter gives on edge masks (I believe its
+  Smalltalk simulation of BitBlt has both edge masks and the overlap
+  check)
+Proposed lines:
+%ref: A. Goldberg and D. Robson, "Smalltalk-80: The Language and its
+%  Implementation", Addison-Wesley, 1983, chapter 18 (BitBlt written out in
+%  Smalltalk: masks for the partial words at both edges, lm and rm here,
+%  and a copy direction chosen when source and destination overlap, dir).
+%ref: R. Pike, B. Locanthi, J. Reiser, "Hardware/Software Trade-offs for
+%  Bitmap Graphics on the Blit", Software--Practice and Experience
+%  15(2):131-151, 1985 (the Blit's bitblt on a 68000, generating machine
+%  code on the fly for each call; this aligned-only path needs none of the
+%  shifting that made it hard).
+
+### Graphics.nw : <<function [[RGB2K]]>>
+(line ~24643, chapter "Non 32-Bits Images", section "Gray-scale images")
+Algorithm/idea: luminance Y = .299R + .587G + .114B (NTSC / YIQ), in
+  fixed point with a >>19.
+Verified: ((156763*r + 307758*g + 59769*b) >> 19); 156763/2^19 = .299,
+  307758/2^19 = .587, 59769/2^19 = .114.
+CONFIDENCE: medium (section number of Foley 2nd ed.)
+Proposed lines:
+%ref: J. D. Foley, A. van Dam, S. K. Feiner, J. F. Hughes, "Computer
+%  Graphics: Principles and Practice", 2nd ed., 1990, section 13.3.3,
+%  "The YIQ color model" (bib: cgpp-foley; Y is the signal a 1950s
+%  black-and-white TV shows from a color broadcast, weighting green most
+%  because the eye is most sensitive to it).
+
+### Graphics.nw : <<struct [[Memcmap]]>>
+(line ~24711, section "Images with a color map", subsection "[[Memcmap]]")
+Algorithm/idea: 8-bit pixels as indices into a colour lookup table, the
+  way early frame buffers got colour out of little memory.
+Verified: CMAP8 pixels index cmap2rgb[3*256]; rgb2cmap[16*16*16] is the
+  reverse table.
+CONFIDENCE: medium (paper exists as given; I am fairly but not fully
+  sure SuperPaint's frame buffer was 8 bits with a colormap)
+Proposed lines:
+%ref: R. Shoup, "SuperPaint: An Early Frame Buffer Graphics System", IEEE
+%  Annals of the History of Computing 23(2):32-37, 2001 (the 1973 Xerox
+%  PARC paint program and its 8-bit frame buffer, whose colour lookup table
+%  turned each byte into a full color, as cmap2rgb does for CMAP8).
+
+### Graphics.nw : <<function [[rgb2cmap]]>>
+(line ~24791, section "Images with a color map", subsection "Conversions")
+Algorithm/idea: map an RGB colour to a FIXED, image-independent 256-entry
+  palette (rgbv) by exhaustive nearest-neighbour search.
+Verified: loops over all 256 entries computing squared RGB distance; the
+  palette itself is generated by cmap2rgb / drawcmap (4x4x4 cube with 4
+  sub-levels), never adapted to the image; the rgb2cmap[16*16*16] table
+  in Memcmap precomputes this search at 4 bits per channel.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Heckbert, "Color Image Quantization for Frame Buffer Display",
+%  SIGGRAPH '82, Computer Graphics 16(3):297-307, 1982 (for the 8-bit
+%  colormapped frame buffers of the time, CMAP8 here: choose 256 colors per
+%  image by "median cut"; road not taken: rgbv is one fixed palette for
+%  all images, and the nearest color is found by brute force).
+
+### Graphics.nw : <<enum [[Refresh]]>>
+(line ~27068, chapter "Advanced Topics", section "Refresh methods")
+Algorithm/idea: who repaints obscured pixels: server-side backing store
+  (Refbackup, the layers way) vs asking the client to redraw damaged
+  rectangles (Refnone + /dev/draw/x/refresh, the X Expose way).
+Verified: Refbackup = Memlayer.save image; Refnone = save == nil and
+  drawrefreshscreen queues Refresh{dimage, r} for the client to read.
+  The author's % notes in the layers chapter already compare with X11
+  and mention the "Sundew paper".
+CONFIDENCE: high (Scheifler-Gettys); medium (SunDew chapter title)
+Proposed lines:
+%ref: R. W. Scheifler and J. Gettys, "The X Window System", ACM
+%  Transactions on Graphics 5(2):79-109, 1986 (bib: x-window; MIT Project
+%  Athena: the server sends Expose events and the client repaints, the
+%  Refnone model; X's backing store is only a hint).
+%ref: J. Gosling, "SunDew: A Distributed and Extensible Window System", in
+%  "Methodology of Window Management", Springer, 1986 (bib:
+%  methodology-window-management; the future NeWS, arguing memory is cheap
+%  enough to keep hidden window contents, the Refbackup model).
+
+### Graphics.nw : <<function [[writeimage]]>>
+(line ~28807, chapter "Advanced Topics", section "Optimisations",
+ subsection "Image compression", subsubsection "Writing compressed images")
+Algorithm/idea: LZ77 sliding-window compression, LZSS-style
+  literal/copy flags, with hash chains to find matches.
+Verified: window NMEM = 1024 bytes; matches NMATCH..NRUN = 3..34 bytes;
+  output is either a literal run (flag byte c >= 128, then c-127 literal
+  bytes, up to NDUMP = 128) or a 2-byte copy ((len-3)<<2 | offs>>8,
+  offs&255: 5-bit length, 10-bit offset); candidate positions found by a
+  hash of the next 3 bytes (hupdate, HSHIFT) with doubly-linked hash
+  chains recycled as the window slides. Decoder: cloadmemimage /
+  creadmemimage. Textbook LZ77/LZSS; not run-length, not LZW.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Ziv and A. Lempel, "A Universal Algorithm for Sequential Data
+%  Compression", IEEE Transactions on Information Theory IT-23(3):337-343,
+%  1977 (an information-theory paper, with no program in it: replace a
+%  string by a pointer (offset, length) to its previous occurrence in a
+%  sliding window, here NMEM = 1024 bytes back, NMATCH..NRUN long).
+%ref: J. A. Storer and T. G. Szymanski, "Data Compression via Textual
+%  Substitution", Journal of the ACM 29(4):928-951, 1982 (LZSS: mix literals
+%  and pointers, use a pointer only when it saves space, here 3 bytes or
+%  more; not LZW, T. Welch 1984, which Unix compress and GIF use).
+
+
+==============================================================
+Graphics_extra.nw
+==============================================================
+
+### Graphics_extra.nw : <<global [[dither]]>>
+(line ~5960, section "[[windows/apps/]]", subsection*
+ "[[windows/apps/colors.c]]"; appendix code listing)
+Algorithm/idea: ordered dithering with the 4x4 Bayer matrix, to show the
+  256-level grey ramp on an 8-bit colormapped screen.
+Verified: dither[16] = {0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5} is the
+  standard 4x4 Bayer index matrix; main() paints a 4x4 tile mixing two
+  adjacent grey levels (step 17) with it.
+CONFIDENCE: high
+Proposed lines:
+%ref: B. E. Bayer, "An optimum method for two-level rendition of
+%  continuous-tone pictures", IEEE International Conference on
+%  Communications, 1973 (Kodak's Bryce Bayer, of the Bayer color filter in
+%  every camera sensor: the threshold matrix used here to fake the 16 grey
+%  levels between two colormap entries with a 4x4 pattern).
+
+
+==============================================================
+Considered but rejected
+==============================================================
+- Floyd-Steinberg error diffusion (1976): real, in libimg/torgbv.c, but
+  libimg is not in the book (commented out at line ~2031).
+- Shoup/Noll/Alto as separate entries at the Colors principles
+  subsection: merged into set_pixel and Memcmap instead.
+- Bresenham 1977 circles: memdraw's ellipse is a general midpoint
+  ellipse walker, not the circle algorithm; covered by Pitteway/McIlroy.
+- Wu 1991 antialiased lines / Crow 1977 aliasing: nothing antialiased in
+  memdraw; would be pure road-not-taken spraying.
+- Sutherland-Hodgman polygon clipping: xscan clips spans to clipr per
+  scanline instead; no polygon clipping to cite.
+- memarc wedge-mask technique: clever (full ellipse IN polygon wedge via
+  GREY1 masks) but I know no classic paper for it.
+- icossin/icossin2 (Mathematics appendix): table lookup + linear
+  interpolation; CORDIC (Volder 1959) would only be a road-not-taken, in
+  an appendix.
+- Cursor (16x16 set/clr planes, software save-under): Alto/Blit lineage,
+  but no specific paper describes this code.
+- Replication (Frepl tiling): the Blit's 16x16 "texture" and Smalltalk's
+  halftone are the ancestors, already covered by Guibas-Stolfi.
+- Van Aken, "An efficient ellipse-drawing algorithm", IEEE CG&A 1984:
+  real midpoint-ellipse paper, but Pitteway + McIlroy suffice.
+- Knuth TAOCP vol. 3 section 6.4 for cachechars: replaced by the original
+  (Peterson 1957).
+- addcoord delta-encoding of polygon points (1 or 3 bytes): ad hoc
+  varint, no classic source.
+- addflush bounding-box merging with a "waste" heuristic: ad hoc.
+- Cox, "Plan 9 in Technicolor" slides (1999, in lib_graphics/docs/): not a
+  paper; the author's own note calls it "meh".
+- The 8 1/2 paper (bib eight-and-a-half): about /dev/bitblt, i.e. the
+  pre-draw interface; belongs to Windows.nw.
+
+==============================================================
+Missing bib keys noticed
+==============================================================
+- porter-duff: \cite{porter-duff} is used at Graphics.nw ~line 1412 but
+  there is no porter-duff entry in docs/latex/Principia.bib. Suggested:
+  Thomas Porter and Tom Duff, "Compositing Digital Images", SIGGRAPH '84,
+  Computer Graphics 18(3):253-259, 1984.
+- pike-layers: bib says booktitle SIGGRAPH, pages 331-356. The Blit
+  paper's own reference list gives "Trans. on Graph., 2, 2, pp. 135-160,
+  1983" (ACM TOG 2(2):135-160). Worth double-checking.
+- pike-bitblt: bib title is "Bitmap Graphics, Course Notes" (SIGGRAPH '84,
+  Pike/Guibas/Ingalls; matches the PDF metadata), but the %claude:
+  paragraph near Graphics.nw line ~925 calls pike-bitbltd-1984.pdf
+  "Bitblt Considered Harmful", which is probably wrong.
+- The bib's "# TODO hardware/software tradeofs for bitmap graphics on
+  the Blit" = Pike, Locanthi, Reiser, SP&E 15(2):131-151, 1985 (used above).
+- Candidate new keys if the author prefers \cite over %ref: for the
+  most reused ones: sketchpad, newman-sproull, ingalls-bitblt,
+  smalltalk-blue-book, warnock-wyatt, mcilroy-ellipses, lz77.
+
+==============================================================
+Prose errors found while verifying (not refs, but worth fixing)
+==============================================================
+- Chapter "Image IO" intro (~line 15834): "The compression uses a
+  simple run-length scheme": wrong, it is LZ77 (see writeimage entry).
+- Section "Image format" (~line 16359): "a byte <128 means copy the next
+  n+1 literal bytes; a byte >=128 means repeat the next byte n-127
+  times" is backwards and wrong. Per cloadmemimage: c >= 128 means
+  c-127 literal bytes follow; c < 128 means copy (c>>2)+3 bytes from
+  offset ((c&3)<<8 | next byte)+1 back in the 1024-byte window.
+- Subsection "Image compression" (~line 28427): same inversion ("byte
+  < 128: copy the next n+1 bytes verbatim ... byte >= 128 ... n-125").
+- Section "Writing images to the disk" (~line 16648): "run-length
+  compression via writeimagefile": LZ77, and done by writeimage itself.
+- Section "Character cache" / cachechars prose: the hash is
+  (17*r) & (ncache-NFLOOK-1) (a mask, not "mod"); and the Fonts
+  data-structures intro calls Font.cache "a circular buffer", but it is
+  a hashed, NFLOOK-way LRU cache.
+- Principles "Rasterization" subsection praises Bresenham without saying
+  that Plan 9 does not use it; a one-line caveat (or the road-not-taken
+  %ref above) would avoid misleading readers.

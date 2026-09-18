@@ -1,0 +1,807 @@
+Academic references for kernel/Kernel.nw
+=========================================
+(research only; nothing in the .nw or C sources was edited)
+
+The only \cite{}s in Kernel.nw are in the Introduction (lions, minix,
+xinu, bach-unix, tannenbaum-os, ...). No entry below repeats a citation
+that already sits next to its chunk. Line numbers are approximate (as
+of 2026-09-18).
+
+Scope: 37 entries in total. 29 are attached to a chunk and 8 to a
+Principles (sub)section. The chunk entries are grouped by chapter:
+Concurrency, Memory, Processes, Virtual Memory, Scheduling, Time,
+Namespaces, Devices/Queue, IPC, Fileservers and /proc. The Principles
+entries come last. Those sections contain no chunks, so their %ref:
+lines go right after the \label{...} line and before the first
+%claude: paragraph.
+
+Following the ADDENDUM, each parenthetical says three things: what
+machine or problem the paper was written for, which of its ideas maps
+to which function or field here, and where Plan 9 differs.
+
+======================================================================
+Kernel.nw -- chunk-level entries
+======================================================================
+
+----------------------------------------------------------------------
+Concurrency
+----------------------------------------------------------------------
+
+### Kernel.nw : <<struct [[Lock]]>>
+(line ~6677, section "Spin [[Lock]]")
+Algorithm/idea: the mutual-exclusion problem.
+Verified: a Lock is a single `key` word, set atomically by
+  arch_tas(). Dijkstra solves the same problem using only atomic loads
+  and stores.
+CONFIDENCE: high
+Proposed lines:
+%ref: E. W. Dijkstra, "Solution of a problem in concurrent programming
+%  control", CACM 8(9):569, 1965 (N computers sharing one store, whose
+%  only atomic operations are a load and a store: the first N-process
+%  mutual exclusion. Hardware later added test-and-set, which is why
+%  key needs only one arch_tas() instead of Dijkstra's protocol).
+
+### Kernel.nw : <<function [[lock]]>>
+(line ~6697, section "Spin [[Lock]]")
+Algorithm/idea: test-and-test-and-set spinning.
+Verified: after a failed arch_tas(), the inner `while(l->key)` loop
+  spins on plain reads and calls arch_tas() again only after key reads
+  0. That is TTAS, with no backoff and no queue. lockloop() only prints
+  a diagnostic after 10^8 spins. (The arch agent also suggested these
+  refs for this chunk.)
+CONFIDENCE: high (Anderson, MCS); medium (the Rudolph-Segall venue
+  and year)
+Proposed lines:
+%ref: L. Rudolph and Z. Segall, "Dynamic decentralized cache schemes for
+%  MIMD parallel processors", ISCA 1984 (on snooping-cache
+%  multiprocessors, spinning on a plain read of the lock hits in the
+%  local cache and costs no bus traffic. Hence the inner while(l->key)
+%  before retrying arch_tas()).
+%ref: T. E. Anderson, "The performance of spin lock alternatives for
+%  shared-memory multiprocessors", IEEE Trans. Parallel and Distributed
+%  Systems 1(1):6-16, 1990 (measured on a Sequent Symmetry: when a TTAS
+%  lock is released, every waiter misses and retries at once. Anderson
+%  proposes exponential backoff and queue locks. Plan 9 has neither and
+%  relies on short critical sections).
+%ref: J. M. Mellor-Crummey and M. L. Scott, "Algorithms for scalable
+%  synchronization on shared-memory multiprocessors", ACM TOCS
+%  9(1):21-65, 1991 (road not taken: in MCS locks each waiter spins on a
+%  flag in its own queue node, so a release touches only one cache
+%  line).
+
+### Kernel.nw : <<struct [[RWlock]]>>
+(line ~7221, section "Readers/Writer [[RWLock]]")
+Algorithm/idea: the readers-writers problem.
+Verified: rlock() admits a reader only when `!q->writer && q->head ==
+  nil`, and wunlock() readies the whole run of QueueingR processes at
+  the head of the queue. The result is a FIFO policy that starves
+  neither side.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. J. Courtois, F. Heymans, D. L. Parnas, "Concurrent control with
+%  `readers' and `writers'", CACM 14(10):667-668, 1971 (a one-page paper
+%  that names the problem and solves it twice with Dijkstra semaphores:
+%  once favoring readers, which can starve writers, and once favoring
+%  writers. RWlock does neither: readers and writers wait in one FIFO
+%  queue, head/tail, so a waiting writer blocks later readers).
+
+### Kernel.nw : <<struct [[Ref]]>>
+(line ~7466, section "Atomic [[Ref]]erences and [[Counter]]")
+Algorithm/idea: reference counting.
+Verified: incref()/decref() update `ref` under a Lock. Page, Chan,
+  Pgrp, Segment and KImage embed a Ref, and each is freed when decref()
+  returns 0 (see putpage(), cclose(), putseg()).
+CONFIDENCE: high
+Proposed lines:
+%ref: G. E. Collins, "A method for overlapping and erasure of lists",
+%  CACM 3(12):655-657, 1960 (written for LISP-style list processing, so
+%  that shared sublists could be freed without McCarthy's garbage
+%  collector, published the same year. Plan 9 counts references on
+%  kernel objects instead of list cells, and putpage() or cclose()
+%  plays the role of "erasure").
+
+----------------------------------------------------------------------
+Memory
+----------------------------------------------------------------------
+
+### Kernel.nw : <<function [[xallocz]]>>
+(line ~8107, section "Long-lived structure allocator: [[xalloc()]]")
+Algorithm/idea: first fit on an address-sorted free list, with
+  coalescing on free (the free side is xhole(), line ~8201).
+Verified: xallocz() carves each request from the first hole in
+  `sorted_holes` that is big enough. xhole() inserts in address order
+  and merges with the neighbouring holes below and above. The Hole
+  descriptors live in a fixed side table (`unused_slots`), not inside
+  the free memory, and there are no boundary tags.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, The Art of Computer Programming, Vol. 1, Section 2.5
+%  "Dynamic Storage Allocation" (Algorithm A is first fit, as in the
+%  sorted_holes loop of xallocz(). Algorithm B frees into an
+%  address-sorted list and merges with both neighbours, as xhole()
+%  does. Knuth keeps the list links inside the free blocks, while xalloc
+%  keeps them in a fixed table of Hole descriptors, hence the "no free
+%  holes, leaked" message).
+  [bib key exists: taocp]
+
+----------------------------------------------------------------------
+Processes
+----------------------------------------------------------------------
+
+### Kernel.nw : <<enum [[rfork]]>>
+(line ~11080, section "[[sysrfork()]]")
+Algorithm/idea: fork, with a flag per resource saying whether to share
+  it, copy it, or start clean.
+Verified: RFPROC, RFMEM, RFNAMEG/RFCNAMEG, RFFDG/RFCFDG,
+  RFENVG/RFCENVG, RFNOTEG and RFREND match the rfork section of the
+  paper.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, D. Presotto, S. Dorward, B. Flandrena, K. Thompson,
+%  H. Trickey, P. Winterbottom, "Plan 9 from Bell Labs", Computing
+%  Systems 8(3):221-254, 1995 (the rfork section: one call with one bit
+%  per resource replaces fork plus a separate thread API. RFMEM gives
+%  lightweight processes that share data, and RFNAMEG gives a private
+%  name space. Linux clone(2), 1996, followed the same idea).
+  [bib key exists: plan9]
+
+----------------------------------------------------------------------
+Virtual Memory
+----------------------------------------------------------------------
+
+### Kernel.nw : <<function [[fault]]>>
+(line ~15058, section "Page fault")
+Algorithm/idea: demand paging.
+Verified: fault() finds the segment and calls fixfault(). fixfault()
+  zero-fills a page, reads it in with pio() (from the executable image
+  or the swap file), or copies it (copy on write). The faulting
+  instruction is then restarted. (The arch agent also suggested Denning
+  1970 for this chunk.)
+CONFIDENCE: high
+Proposed lines:
+%ref: P. J. Denning, "Virtual memory", ACM Computing Surveys
+%  2(3):153-189, 1970 (written right after the "thrashing" crises of
+%  the 1960s time-sharing systems. It fixed the vocabulary this chapter
+%  uses: page fault, demand paging, replacement policy, working set.
+%  fault(), then fixfault(), then pio() is the textbook demand-paging
+%  path).
+(Kilburn 1962 / Atlas goes to the "Virtual memory and address spaces"
+ Principles subsection below. It could move here if the author prefers
+ refs next to the code.)
+
+### Kernel.nw : <<[[fixfault()]] if write and more than one ref then copy page>>
+(line ~15488, section "Copy on write")
+Algorithm/idea: copy on write.
+Verified: a write fault on a page with ref > 1 calls newpage(), then
+  copypage(), then putpage(), so the writer gets a private copy.
+  conf.copymode can select "copy on reference" instead.
+CONFIDENCE: medium (TENEX's copy-on-write pages are well known; the
+  "first" claim is the soft part, so the text avoids it)
+Proposed lines:
+%ref: D. G. Bobrow, J. D. Burchfiel, D. L. Murphy, R. S. Tomlinson,
+%  "TENEX, a paged time sharing system for the PDP-10", CACM
+%  15(3):135-143, 1972 (BBN built a custom paging box for a DEC PDP-10.
+%  Its page map offered a copy-on-write access mode, so forked processes
+%  could share pages until one of them wrote. The ref > 1 test and
+%  copypage() here do the same in software, from a write fault).
+
+### Kernel.nw : <<function [[pageout]]>>
+(line ~17011, section "Swapping")
+Algorithm/idea: page replacement by aging on reference bits, an
+  approximation of LRU, working set and WSClock.
+Verified: pageout() clears PG_REF and stamps `gen = genclock` on each
+  referenced page, then evicts pages whose age exceeds genage.
+  gentick() advances genclock once per round-robin pass of pager()
+  over the process table and sets genage to the mean age it observed.
+  There is no per-process virtual time and no fixed window tau.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. A. Belady, "A study of replacement algorithms for a
+%  virtual-storage computer", IBM Systems Journal 5(2):78-101, 1966
+%  (simulations for IBM's experimental M44/44X paging machine. They
+%  showed that the optimal policy MIN needs the future, and that
+%  approximating "least recently used" is what matters in practice.
+%  PG_REF plus gen is such an approximation).
+%ref: P. J. Denning, "The working set model for program behavior",
+%  CACM 11(5):323-333, 1968 (written against thrashing: keep the pages
+%  a process used in the last tau time units. Here genage replaces tau,
+%  and it is one global average, recomputed by gentick(), not a
+%  per-process window).
+%ref: R. W. Carr and J. L. Hennessy, "WSCLOCK -- a simple and effective
+%  algorithm for virtual memory management", SOSP 1981 (the closest
+%  classic: a clock hand sweeps the frames, clears reference bits and
+%  compares each page's age with a threshold. pager() sweeps processes
+%  and their segments instead of a circular list of frames).
+
+----------------------------------------------------------------------
+Scheduling
+----------------------------------------------------------------------
+
+### Kernel.nw : <<function [[updatecpu]]>>
+(line ~19363, section "Adjusting priority")
+Algorithm/idea: decay-usage scheduling.
+Verified: cpuavg is scaled by (D-n)/D, the linear approximation of
+  ((D-1)/D)^n that the code comment explains, and the same filter is
+  applied to 1 - cpuavg while the process runs. The computation is
+  lazy: it happens per process when the process is switched in or out.
+CONFIDENCE: medium (for the chapter number)
+Proposed lines:
+%ref: M. J. Bach, The Design of the UNIX Operating System, Prentice
+%  Hall 1986, Chapter 8 "Process Scheduling and Time" (in System V, the
+%  clock handler decays every process's p_cpu once per second and
+%  recomputes its priority from it. updatecpu() keeps the same kind of
+%  decaying average, but computes it lazily, only when a process is
+%  switched in or out, from lastupdate).
+  [bib key exists: bach-unix]
+
+### Kernel.nw : <<function [[reprioritize]]>>
+(line ~19435, section "Adjusting priority")
+Algorithm/idea: priority as the ratio of a fair share to actual use.
+Verified: fairshare = ncpu*1000*1000/load, and
+  priority = min(basepri, fairshare/cpuavg). The share is per process,
+  not per user.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Kay and P. Lauder, "A fair share scheduler", CACM 31(1):44-55,
+%  1988 (built at the University of Sydney so that one student running
+%  many processes on a shared teaching machine could not crowd out the
+%  others: shares go to users. reprioritize() applies the same "entitled
+%  vs. consumed" ratio, but per process, with fairshare = ncpu/load).
+
+### Kernel.nw : <<struct [[Label]]>>
+(line ~18335, section "Context switch")
+Algorithm/idea: a kernel context switch that saves only SP and PC and
+  "returns twice".
+Verified: a Label is {sp, pc}. sched() and sleep() use
+  `if(arch_setlabel(&up->sched)) ... else arch_gotolabel(&cpu->sched)`,
+  the same pattern as V6's savu()/retu() in swtch().
+CONFIDENCE: medium (I cite the discussion, not a chapter or line
+  number)
+Proposed lines:
+%ref: J. Lions, Lions' Commentary on UNIX 6th Edition, with Source Code,
+%  1977 (on the PDP-11, swtch() saved the stack and frame pointers with
+%  savu() and resumed another process with retu(). This is the code
+%  that carries the comment "You are not expected to understand this".
+%  arch_setlabel()/arch_gotolabel() on up->sched and cpu->sched are the
+%  same trick, with the scheduler running on its own stack).
+  [bib key exists: lions]
+
+### Kernel.nw : <<struct [[Rendez]]>>
+(line ~18870, section "Cooperative scheduling", subsection [[Rendez]])
+Algorithm/idea: condition variables with Mesa semantics.
+Verified: a Rendez holds a single sleeper `p`. sleep(r, f, arg) tests
+  f under the lock, and the code comment warns "When we awaken the
+  condition may no longer be true", which is Mesa semantics.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. A. R. Hoare, "Monitors: an operating system structuring
+%  concept", CACM 17(10):549-557, 1974 (the condition variable, with
+%  wait and signal. In Hoare's version, signal hands the monitor
+%  directly to the waiter, so the condition is guaranteed to hold when
+%  it resumes).
+%ref: B. W. Lampson and D. D. Redell, "Experience with processes and
+%  monitors in Mesa", CACM 23(2):105-117, 1980 (from building Xerox's
+%  Pilot OS. Mesa's NOTIFY is only a hint, so a waiter must re-check its
+%  condition. That is why sleep() takes a condition function f(arg)
+%  rather than a bare wait. The paper also describes priority
+%  inversion; see lock() under EDF).
+
+### Kernel.nw : <<function [[sleep]]>>
+(line ~18922, section "Cooperative scheduling", subsection [[sleep()]])
+Algorithm/idea: sleep/wakeup without races on a shared-memory
+  multiprocessor, where the waker may be an interrupt handler.
+Verified: sleep() takes lock(r) and then lock(&up->rlock), publishes
+  r->p = up before testing f(arg), and releases both locks only after
+  arch_setlabel(). This is the protocol, with the same lock order, as
+  in the paper, which ships as kernel/docs/sleep.ms. The Intro mentions
+  that file but nothing \cites it at the chunk.
+CONFIDENCE: high (venue and pages come from the footnote in sleep.ms)
+Proposed lines:
+%ref: R. Pike, D. Presotto, K. Thompson, G. Holzmann, "Process sleep and
+%  wakeup on a shared-memory multiprocessor", Proc. Spring 1991 EurOpen
+%  Conf., Tromso, 161-166 (UNIX's sleep(chan)/wakeup(chan) relied on
+%  raising the interrupt priority, which fails once another CPU can run
+%  wakeup(). The paper derives this exact code, checked with Holzmann's
+%  protocol verifier: r->p is set before f(arg) is tested, and the locks
+%  are taken in the order r, then p->rlock. Copy in kernel/docs/sleep.ms).
+  [no bib key yet]
+
+### Kernel.nw : <<processes/edf.c>>
+(line ~41971, section "Real-time scheduling", subsection
+ [[processes/edf.c]])
+Algorithm/idea: Earliest Deadline First scheduling, with an admission
+  test.
+Verified: edf.c orders released tasks by deadline d.
+  testschedulability() walks the merged release and deadline events of
+  the admitted tasks and checks the accumulated demand H against time.
+  This is a processor-demand test, not the U <= 1 bound, since D may be
+  smaller than T.
+CONFIDENCE: high (Liu & Layland); medium (Mullender & McKie: I know
+  the chapter exists, but did not check the pages)
+Proposed lines:
+%ref: C. L. Liu and J. W. Layland, "Scheduling algorithms for
+%  multiprogramming in a hard-real-time environment", JACM 20(1):46-61,
+%  1973 (periodic control tasks with a period T and a cost C. It proves
+%  that the "deadline driven" policy, EDF, is optimal, and introduces
+%  rate-monotonic scheduling. Its U <= 1 test assumes D = T, which is why
+%  testschedulability() simulates demand to allow D < T).
+%ref: S. Mullender and J. McKie, "Real time in a real operating system",
+%  in Computer Systems: Theory, Technology, and Applications (a tribute
+%  to Roger Needham), Springer, 2004 (the design of this EDF scheduler).
+
+### Kernel.nw : <<[[lock()]] optional priority-inversion for real-time process>>
+(line ~41856, section "Real-time scheduling")
+Algorithm/idea: priority inversion.
+Verified: on a uniprocessor, an admitted EDF process that spins on a
+  lock sets up->edf->d = todget(nil), which makes it yield. The lock
+  holder gets no priority boost.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. Sha, R. Rajkumar, J. P. Lehoczky, "Priority inheritance
+%  protocols: an approach to real-time synchronization", IEEE Trans.
+%  Computers 39(9):1175-1185, 1990 (road not taken: raise the lock
+%  holder to the waiter's priority. Its absence nearly lost the Mars
+%  Pathfinder lander in 1997. Plan 9 does the reverse: the waiter gives
+%  up its own deadline).
+
+----------------------------------------------------------------------
+Time
+----------------------------------------------------------------------
+
+### Kernel.nw : <<function [[tadd]]>>
+(line ~20142, section "Timers")
+Algorithm/idea: the timer queue.
+Verified: tadd() does an O(n) sorted insert into the per-CPU
+  timers[cpuno] list. Only the head of the list is programmed into the
+  hardware, with arch_timerset().
+CONFIDENCE: high
+Proposed lines:
+%ref: G. Varghese and T. Lauck, "Hashed and hierarchical timing wheels:
+%  data structures for the efficient implementation of a timer
+%  facility", SOSP 1987 (written at DEC for network protocols, which
+%  keep a retransmission timer per connection. tadd() is their "scheme
+%  2", an ordered list with O(n) insertion. Timing wheels, the road not
+%  taken, make insertion O(1). A kernel with few timers does not need
+%  them).
+
+### Kernel.nw : <<function [[todset]]>>
+(line ~21088, section "Time of day")
+Algorithm/idea: slewing the clock, i.e. spreading a correction over
+  time instead of stepping it.
+Verified: with t < 0, todset() spreads `delta` over n*HZ ticks (from
+  sstart to send), and todget() applies it. todget() also clamps its
+  result so time never goes backward. The feedback loop that computes
+  the corrections is a user-space daemon; it writes the 'd' command to
+  /dev/bintime.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. L. Mills, "Internet time synchronization: the Network Time
+%  Protocol", IEEE Trans. Communications 39(10):1482-1493, 1991 (clocks
+%  synchronized across the Internet. NTP corrects small errors by
+%  slewing, never by stepping. This kernel provides only the slew
+%  (todset() with t < 0, like BSD adjtime(2)). The NTP-like control
+%  loop runs in a user-space time-sync program).
+
+----------------------------------------------------------------------
+Namespaces
+----------------------------------------------------------------------
+
+### Kernel.nw : <<struct [[Pgrp]]>>
+(line ~26958, section "Mount table")
+Algorithm/idea: a per-process name space, i.e. one mount table per
+  process group.
+Verified: a Pgrp is a hash table of Mhead entries. It is shared or
+  copied according to RFNAMEG/RFCNAMEG, and namec() consults it at each
+  step of a walk.
+CONFIDENCE: high (the citation details come from the references in
+  docs/articles/lexnames.ms)
+Proposed lines:
+%ref: R. Pike, D. Presotto, K. Thompson, H. Trickey, P. Winterbottom,
+%  "The use of name spaces in Plan 9", Operating Systems Review
+%  27(2):72-76, 1993 (the central idea of Plan 9: each process group
+%  assembles its own view of the world with bind and mount, so /dev/cons
+%  can be a different window for each process. Pgrp is that view, and
+%  Linux mount namespaces, 2002, are the late imitation).
+  [bib key exists: namespaces-plan9]
+
+### Kernel.nw : <<[[walk()]] if c is a union mount, find and adjust type and dev>>
+(line ~27772, section "Union mount")
+Algorithm/idea: union directories.
+Verified: when the walk fails in the first channel, walk() tries each
+  following Mount in mh->mount, in order. The first hit wins. There is
+  no copy-up and there are no whiteouts.
+CONFIDENCE: high (the citation comes from docs/articles/lexnames.ms)
+Proposed lines:
+%ref: J.-S. Pendry and M. K. McKusick, "Union mounts in 4.4BSD-Lite",
+%  Proc. USENIX 1995 Technical Conf., New Orleans (BSD copied Plan 9's
+%  union directories, which replace $PATH with bind -a /rc/bin /bin, and
+%  added copy-up of modified files and whiteouts for deleted ones.
+%  walk() only tries the mounts one by one).
+
+### Kernel.nw : <<[[Path]] mtpt fields>>
+(line ~27631, section "Path mount points and [['..']]")
+Algorithm/idea: resolving ".." lexically rather than physically.
+Verified: Path.mtpt records the mounted-on channel for each path
+  element, and undomount() uses it on ".." to climb back up. The
+  author's own note says "see lexnames.ps".
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Pike, "Lexical file names in Plan 9, or getting dot-dot right",
+%  Proc. USENIX Annual Technical Conf., San Diego, 2000 (in UNIX,
+%  symbolic links make `cd ..` and pwd disagree, and bind causes the
+%  same problem. The fix: remember how you got here. That memory is
+%  Path.mtpt, and undomount() uses it on ".." to go back across the
+%  mount point. Copy in docs/articles/lexnames.ms).
+  [no bib key yet]
+
+----------------------------------------------------------------------
+Devices / Queue / Block
+----------------------------------------------------------------------
+
+### Kernel.nw : <<struct [[Dev]]>>
+(line ~6129, section "[[Dev]] and [[devtab]]")
+Algorithm/idea: a table of per-driver operation vectors, like UNIX's
+  device switch and Sun's vnode/VFS operations.
+Verified: a Dev is a struct of function pointers (attach, walk, stat,
+  open, read, write...) reached through devtab[]. Each driver is a
+  small in-kernel file server.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. R. Kleiman, "Vnodes: an architecture for multiple file system
+%  types in Sun UNIX", Proc. USENIX Summer 1986 Conf. (Sun needed NFS
+%  and the local UFS to coexist, so file operations became a table of
+%  function pointers per vnode. A Dev is such a table, but every device,
+%  not only file systems, implements it, and it speaks 9P semantics:
+%  attach, walk, stat).
+%ref: B. Welch, "A comparison of three distributed file system
+%  architectures: Vnode, Sprite, and Plan 9", Computing Systems
+%  7(2):175-199, 1994.
+
+### Kernel.nw : <<struct [[Queue]]>>
+(line ~30625, chapter "[[Queue]]")
+Algorithm/idea: queues of message blocks with flow control, a
+  simplified descendant of Ritchie's STREAMS.
+Verified: a Queue holds a Block list with a `limit`, the Qflow and
+  Qstarve bits, rr/wr Rendez points, and a kick callback. There are no
+  stream modules and no put procedures.
+CONFIDENCE: high (both references are listed in docs/articles/9.ms)
+Proposed lines:
+%ref: D. M. Ritchie, "A stream input-output system", AT&T Bell Labs
+%  Technical Journal 63(8), 1984 (written for 8th Edition terminal and
+%  network drivers: a stack of modules, each with a pair of queues
+%  exchanging message blocks, with flow control through high and low
+%  water marks. Plan 9 kept the flow-controlled block queue, Qflow and
+%  limit, and dropped the modules).
+%ref: D. Presotto, "Multiprocessor streams for Plan 9", Proc. UKUUG
+%  Summer 1990 Conf., 11-19 (the earlier Plan 9 streams, which these
+%  plain queues later replaced).
+
+### Kernel.nw : <<struct [[Block]]>>
+(line ~32878, section "[[Block]]")
+Algorithm/idea: a network buffer with headroom and read/write pointers,
+  analogous to BSD mbufs and Linux sk_buff.
+Verified: a Block has base/lim/rp/wp. padblock() prepends headers into
+  the headroom, and blocks chain through `next`.
+CONFIDENCE: medium (I did not check which chapter of the FreeBSD book
+  covers mbufs)
+Proposed lines:
+%ref: M. K. McKusick, G. V. Neville-Neil, R. N. M. Watson, The Design
+%  and Implementation of the FreeBSD Operating System, 2nd ed., 2014,
+%  the discussion of mbufs (the BSD equivalent. It too leaves room in
+%  front so each protocol layer can prepend its header without copying,
+%  as padblock() does with rp. A Block is one contiguous buffer, not a
+%  small mbuf chained to a cluster).
+  [bib key exists: mckusick-freebsd]
+
+----------------------------------------------------------------------
+IPC
+----------------------------------------------------------------------
+
+### Kernel.nw : <<struct [[Pipe]]>>
+(line ~34333, section "Pipes")
+Algorithm/idea: pipes.
+Verified: a Pipe is two Queues, q[0] and q[1], so Plan 9 pipes are
+  bidirectional.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. M. Ritchie, "The evolution of the Unix time-sharing system",
+%  AT&T Bell Labs Technical Journal 63(8), 1984 (tells how Doug McIlroy
+%  pushed pipes into 3rd Edition UNIX in 1973. Those pipes carried data
+%  in one direction, through an inode-backed buffer. Plan 9's Pipe is
+%  bidirectional: two Queues, q[0] and q[1], one per direction).
+
+### Kernel.nw : <<function [[semacquire]]>>
+(line ~35463, section "Shared segment and semaphore")
+Algorithm/idea: counting semaphores (Dijkstra's P) with a user-space
+  fast path, as with futexes.
+Verified: canacquire() decrements the counter with a compare-and-swap
+  on a word in user memory. The process queues and sleeps in the
+  kernel only on contention, and it re-checks after setting `waiting`
+  so that no wakeup is lost.
+CONFIDENCE: high (Dijkstra, Franke); medium (Mullender & Cox venue)
+Proposed lines:
+%ref: E. W. Dijkstra, "Cooperating sequential processes", EWD123,
+%  Technological University Eindhoven, 1965 (written while building the
+%  THE system on the Electrologica X8: semaphores and their P and V
+%  operations. canacquire() is P's "decrement if positive", and
+%  semrelease() is V).
+%ref: H. Franke, R. Russell, M. Kirkwood, "Fuss, futexes and furwocks:
+%  fast userlevel locking in Linux", Ottawa Linux Symposium 2002 (the
+%  same split: an atomic operation on a user-space word, with the kernel
+%  entered only to sleep or wake a waiter).
+%ref: S. Mullender and R. Cox, "Semaphores in Plan 9", 3rd Intl.
+%  Workshop on Plan 9 (IWP9), 2008 (the design of these syscalls, used
+%  by libc's lock.c).
+
+### Kernel.nw : <<syscall rendezvous>>
+(line ~35701, section "[[sysrendezvous()]]")
+Algorithm/idea: a symmetric, synchronous rendezvous that exchanges
+  values.
+Verified: the first process to arrive with a given tag sleeps in the
+  Rgrp hash. The second one swaps rendval with it and readies it, and
+  each returns the other's value.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. A. R. Hoare, "Communicating sequential processes", CACM
+%  21(8):666-677, 1978 (makes input and output primitive: P!x in one
+%  process and Q?y in the other meet, both wait, and x is copied into
+%  y. sysrendezvous() is that meeting, with an arbitrary tag instead of
+%  a process name and one word exchanged in each direction).
+  [bib key csp is the 1985 book, not this paper]
+
+----------------------------------------------------------------------
+Fileservers (the 9P client)
+----------------------------------------------------------------------
+
+### Kernel.nw : <<function [[mountio]]>>
+(line ~43128, section "Fileservers" in Advanced Topics)
+Algorithm/idea: remote procedure calls multiplexed by tag over one
+  connection.
+Verified: mountio() marshals the request with convS2M() and writes it.
+  Waiters then take turns as the single reader (m->rip), and
+  mountmux() routes each reply to its sender by tag. Flush handles
+  interrupted calls.
+CONFIDENCE: high
+Proposed lines:
+%ref: A. D. Birrell and B. J. Nelson, "Implementing remote procedure
+%  calls", ACM TOCS 2(1):39-59, 1984 (Cedar RPC over the Xerox PARC
+%  Ethernet: stubs marshal the arguments, and a call identifier pairs
+%  each reply with its call. Here convS2M() is the stub, the 9P tag is
+%  the call id, and mountmux() delivers each reply to its sleeping
+%  caller).
+
+----------------------------------------------------------------------
+/proc
+----------------------------------------------------------------------
+
+### Kernel.nw : <<global [[procdir]]>>
+(line ~44120, section "[[/proc/]]")
+Algorithm/idea: processes as files.
+Verified: procdir lists the per-process files (ctl, mem, note, regs,
+  status...), and devproc serves them as a Dev.
+CONFIDENCE: high (the citation comes from docs/articles/9.ms and
+  lexnames.ms)
+Proposed lines:
+%ref: T. J. Killian, "Processes as files", Proc. USENIX Summer 1984
+%  Conf., Salt Lake City, 203-207 (8th Edition UNIX replaced the
+%  ptrace() system call with a /proc directory, so that debuggers read
+%  a process's memory with ordinary read(). Plan 9 goes further: the
+%  control files ctl and note take text commands, as in
+%  echo kill > /proc/n/ctl).
+  [no bib key yet]
+
+======================================================================
+Kernel.nw -- Principles (sub)sections
+======================================================================
+(These sections contain no chunks. Place the %ref: lines right after
+the \label{...} line.)
+
+### Kernel.nw : \subsection{Kernel mode vs user mode}
+(line ~759, label sec:princ-modes)
+Algorithm/idea: hardware privilege levels (protection rings).
+Verified: the prose explains privileged versus restricted mode. On the
+  ARM, the kernel uses only two levels, SVC and USR.
+CONFIDENCE: high
+Proposed lines:
+%ref: M. D. Schroeder and J. H. Saltzer, "A hardware architecture for
+%  implementing protection rings", CACM 15(3):157-170, 1972 (Multics
+%  first ran on the GE-645, where rings were simulated in software. The
+%  Honeywell 6180 put eight nested rings into hardware. Kernel mode
+%  versus user mode is the two-ring special case that every later CPU
+%  kept).
+
+### Kernel.nw : \subsection{Virtual memory and address spaces}
+(line ~820, label sec:princ-vm)
+Algorithm/idea: paged virtual memory (the founding classic of the
+  field).
+Verified: the prose describes the MMU, page tables, demand paging and
+  swap, all of which appeared first on the Atlas.
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Kilburn, D. B. G. Edwards, M. J. Lanigan, F. H. Sumner,
+%  "One-level storage system", IRE Trans. Electronic Computers
+%  EC-11(2):223-235, 1962 (on the Manchester Atlas, a small core memory
+%  plus a large drum appeared to the program as one big store. Hardware
+%  page-address registers translated each access, and a miss trapped to
+%  a supervisor routine that fetched the page from the drum. That is
+%  the page fault, and the drum is today's swap file).
+
+### Kernel.nw : \subsection{Paging versus segmentation}
+(line ~915, label sec:princ-paging-vs-segmentation)
+Algorithm/idea: segmented virtual memory (Multics), the road not
+  taken.
+Verified: the prose presents Multics segments as the alternative to
+  paging. Plan 9's Segment is only a range of pages.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. C. Daley and J. B. Dennis, "Virtual memory, processes, and
+%  sharing in MULTICS", CACM 11(5):306-312, 1968 (on the GE-645, every
+%  procedure and data file is a named segment, shared by being mapped
+%  into several address spaces, with paging underneath. Plan 9 kept only
+%  the word: a Segment is a paged address range such as text, data or
+%  stack, not a hardware segment).
+
+### Kernel.nw : \subsection{Files, descriptors, and the file-system interface}
+(line ~1316, label sec:princ-files)
+Algorithm/idea: the uniform file-descriptor interface, with devices as
+  special files.
+Verified: the prose explains descriptors and why read and write work
+  the same way on files, pipes and devices. Plan 9 pushes the same
+  idea further with Chan and Dev.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. M. Ritchie and K. Thompson, "The UNIX time-sharing system",
+%  CACM 17(7):365-375, 1974 (the PDP-11 system whose "special files"
+%  in /dev made devices readable with the same calls as files, and
+%  whose fork/exec split this book keeps. Plan 9 extends "a device is a
+%  file" to "every kernel service is a file server", a Dev).
+
+### Kernel.nw : \subsection{Monolithic versus microkernel}
+(line ~1401, label sec:princ-monolithic-micro)
+Algorithm/idea: a minimal nucleus with message passing, where the OS
+  services are ordinary processes (the first microkernel).
+Verified: the prose defines a microkernel as scheduling, IPC and memory
+  management, with everything else in user-space servers. Plan 9 is
+  monolithic, but file servers can live in user space and speak 9P.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Brinch Hansen, "The nucleus of a multiprogramming system",
+%  CACM 13(4):238-241,250, 1970 (for the Danish RC 4000 computer: the
+%  nucleus offers only processes and message buffers, and even the
+%  "operating system" is replaceable user processes. Plan 9 keeps
+%  drivers in the kernel, but a user-level 9P server mounted through
+%  devmnt gets much of the same flexibility).
+
+### Kernel.nw : \subsection{Capabilities versus access-control lists}
+(line ~1502, label sec:princ-capabilities)
+Algorithm/idea: capabilities and the access matrix.
+Verified: the prose explicitly credits Dennis and Van Horn (MIT, 1966).
+CONFIDENCE: high
+Proposed lines:
+%ref: J. B. Dennis and E. C. Van Horn, "Programming semantics for
+%  multiprogrammed computations", CACM 9(3):143-155, 1966 (an abstract
+%  machine for MIT's time-sharing projects, in which each computation
+%  holds a "C-list" of capabilities, unforgeable pointers carrying
+%  rights. An open file descriptor, an index into Fgrp, is the weak
+%  modern echo).
+%ref: B. W. Lampson, "Protection", Proc. 5th Princeton Symp. on
+%  Information Sciences and Systems, 1971; reprinted in Operating
+%  Systems Review 8(1):18-24, 1974 (the access matrix, with subjects as
+%  rows and objects as columns. An ACL stores a column, a capability
+%  list stores a row).
+
+### Kernel.nw : \subsection{The kernel as a concurrent program}
+(line ~1559, label sec:princ-kernel-as-concurrent)
+Algorithm/idea: a kernel structured as cooperating sequential
+  processes synchronized by semaphores, in layers.
+Verified: the prose credits "semaphores (Dijkstra, 1965, for the THE
+  operating system)" and Hoare's 1974 monitors.
+CONFIDENCE: high
+Proposed lines:
+%ref: E. W. Dijkstra, "The structure of the `THE'-multiprogramming
+%  system", CACM 11(5):341-346, 1968 (a batch system for the
+%  Electrologica X8 at Eindhoven, built as six layers of sequential
+%  processes that synchronize only through semaphores, so it could be
+%  argued correct layer by layer. This is the "kernel as a concurrent
+%  program" view).
+(Hoare 1974 is placed at <<struct [[Rendez]]>> and EWD123 at
+ <<function [[semacquire]]>>. Either could move here instead.)
+
+### Kernel.nw : \section{Scheduling principles}
+(line ~17609, label sec:princ-scheduling)
+Algorithm/idea: time-sharing and the multilevel feedback queue.
+Verified: the prose says "Multilevel feedback queues, first introduced
+  in the CTSS system at MIT in 1962". Plan 9's runq[] descends from it:
+  Npriq levels, scanned top-down by runproc(), with processes moved
+  between levels by updatecpu() and reprioritize().
+CONFIDENCE: high (Corbato); medium (Strachey venue and pages)
+Proposed lines:
+%ref: C. Strachey, "Time sharing in large fast computers", Proc. Intl.
+%  Conf. on Information Processing (IFIP), UNESCO, Paris, 1959 (the
+%  first proposal to share one expensive machine among many users by
+%  switching between their programs. The idea behind this whole
+%  chapter).
+%ref: F. J. Corbato, M. Merwin-Daggett, R. C. Daley, "An experimental
+%  time-sharing system", AFIPS Spring Joint Computer Conf. 21:335-344,
+%  1962 (CTSS on MIT's IBM 7090: a timer interrupt preempts jobs, and a
+%  multilevel queue gives long jobs lower levels with longer quanta.
+%  Plan 9's runq[] has the levels, but a single quantum for all of
+%  them).
+
+======================================================================
+Considered but rejected
+======================================================================
+- Pool allocator (poolalloc, best fit): the algorithm lives in libc's
+  pool.c and belongs in the Libcore book. The kernel only configures
+  mainmem and imagmem.
+- Page coloring (Kessler & Hill 1992): on the ARM, NCOLOR=1 and
+  getpgcolor() returns 0, so the code is dead here.
+- waserror/nexterror as exceptions (Goodenough 1975): the code is in an
+  appendix chapter and the fit is loose.
+- /bin/tprof PC sampling (gprof, Graham et al. 1982): better placed in
+  the Profiler book.
+- The decaying averages in accounttime() and the load average: a
+  trivial EWMA, with no classic paper tied to the code.
+- The Queue as a bounded buffer (EWD123, Hoare 1974): redundant with
+  the semacquire and Rendez refs.
+- Hashing in lookpage, pidhash and MOUNTH: generic chaining.
+- executeio() sorting swap writes by disk address: it is only a qsort,
+  not elevator scheduling.
+- Daley & Dennis at <<struct [[Segment]]>>: misleading there, so it
+  went to the "Paging versus segmentation" Principles subsection.
+- Corbato at <<function [[runproc]]>>: the prose of "Scheduling
+  principles" already names CTSS, so the ref goes there.
+- Thompson, "UNIX Implementation", BSTJ 1978, for the device switch:
+  I am not sure which section covers cdevsw. Kleiman and Welch are used
+  instead.
+- Lamport 1978 (logical clocks): irrelevant, since the kernel keeps
+  only a local wall clock.
+- Presotto & Winterbottom, "The Organization of Networks in Plan 9",
+  1993: networking belongs in the Network book.
+- The names paper at "Namespace principles": kept at
+  <<struct [[Pgrp]]>> instead, to cite it only once.
+
+======================================================================
+Missing bib keys noticed
+======================================================================
+The following have no entry in docs/latex/Principia.bib:
+- Pike et al., sleep/wakeup (EurOpen 1991)
+- Pike, "Lexical File Names" (2000)
+- Killian (1984)
+- Ritchie, Streams (1984)
+- Ritchie, "Evolution of the Unix Time-sharing System" (1984)
+- Presotto (1990)
+- Welch (1994)
+- Kleiman (1986)
+- Hoare, CSP in CACM (1978); the csp key is the 1985 book
+- Hoare, monitors (1974)
+- Lampson & Redell (1980)
+- Dijkstra: EWD123, CACM 1965, THE 1968
+- Courtois et al. (1971)
+- Rudolph & Segall (1984)
+- Anderson (1990)
+- Mellor-Crummey & Scott (1991)
+- Collins (1960)
+- Strachey (1959)
+- Corbato (1962)
+- Kay & Lauder (1988)
+- Kilburn (1962)
+- Belady (1966)
+- Denning (1968 and 1970)
+- Carr & Hennessy (1981)
+- Daley & Dennis (1968)
+- Bobrow (TENEX, 1972)
+- Liu & Layland (1973)
+- Mullender & McKie (2004)
+- Sha et al. (1990)
+- Varghese & Lauck (1987)
+- Mills (1991)
+- Pendry & McKusick (1995)
+- Birrell & Nelson (1984)
+- Franke et al. (2002)
+- Mullender & Cox (2008)
+- Ritchie & Thompson, CACM (1974)
+- Brinch Hansen (1970)
+- Dennis & Van Horn (1966)
+- Lampson, "Protection" (1971)
+- Schroeder & Saltzer (1972)

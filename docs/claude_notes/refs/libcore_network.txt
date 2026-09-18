@@ -1,0 +1,1060 @@
+Academic references for the core-library and network books
+===========================================================
+Books: lib_core/Libcore.nw, lib_core/Libcore_big.nw,
+lib_networking/Network.nw, lib_networking/Network_v6.nw,
+networking/Network_apps.nw
+
+Research only; no .nw or source files were edited. Each entry was checked
+against the chunk body in the .nw file (and against the synced C file when
+the helper lives in an _extra.nw appendix). The parentheticals follow the
+BRIEF addendum: they say what problem or machine the paper was written for,
+which idea maps to which function here, and where Plan 9 differs.
+
+Two of the Plan 9 papers are in the repo, and the venues below come from
+their own footnotes:
+  docs/articles/utf.ms      -> Pike & Thompson, Winter 1993 USENIX, pp. 43-50
+  networking/docs/net/net.ms -> Presotto & Winterbottom, Winter 1993 USENIX,
+                               pp. 271-280
+  networking/docs/il/il.ms   -> Presotto & Winterbottom, "The IL Protocol"
+                               (Plan 9 Programmer's Manual, 2nd ed., 1995)
+  docs/articles/lexnames.ms  -> Pike, "Lexical File Names in Plan 9"
+                               (the file has no venue footnote; see the
+                               entry for how sure I am of the venue)
+
+Problems I found in the existing prose while checking the code (not
+refs, but the author should know about them):
+  * Libcore.nw, qsort prose (~line 1831) says qsorts "recurses on the
+    smaller partition and loops on the larger, which limits stack depth
+    to O(log n)". The code does the OPPOSITE: `if(j >= n) { qsorts(a, j,
+    p); ...}` recurses on the LEFT part when it is the LARGER one, and
+    loops on the smaller one. So the worst-case stack depth is O(n).
+  * Libcore.nw, pool prose (~lines 4027, 4154) calls the free tree
+    "balanced". treeinsert/treedelete in libc/port/pool.c
+    (Libcore_extra.nw) do no rebalancing at all. It is a plain,
+    unbalanced binary search tree keyed on size.
+  * Network.nw, balancetree prose (~line 8533) says "AVL-style
+    rotations". The code does only single rotations and has no
+    double-rotation case, so it is weaker than AVL. The ref entry below
+    says so.
+
+
+======================================================================
+lib_core/Libcore.nw
+======================================================================
+
+### Libcore.nw : <<function [[qsorts]]>>
+(line ~1934, section "Complex types", subsection "Arrays (and [[qsort()]])")
+Algorithm/idea: quicksort (partition-exchange sort)
+Verified: swaps the pivot to a[0], runs Hoare-style pi/pj scans inward and
+          swaps, puts the pivot in place at pj, then recurses on one side
+          and loops on the other. It recurses on the LARGER side (see the
+          prose problem above), unlike Sedgewick's advice.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. A. R. Hoare, "Algorithm 64: Quicksort", Communications of the
+%  ACM 4(7):321, 1961; and "Quicksort", The Computer Journal 5(1):10-16,
+%  1962 (Hoare came up with it in Moscow, where he needed to sort the
+%  words of a sentence before looking them up in a Russian-English
+%  dictionary on tape. The two pointers scanning toward each other are
+%  his, and they are exactly [[pi]] and [[pj]] here).
+%ref: R. Sedgewick, "Implementing Quicksort programs", Communications of
+%  the ACM 21(10):847-857, 1978 (recurse on the SMALLER subfile and loop
+%  on the larger to keep the stack at O(log n). [[qsorts]] does the
+%  reverse: it recurses on the larger side when [[j >= n]]).
+
+### Libcore.nw : <<function [[pivot]]>>
+(line ~1905, same subsection)
+Algorithm/idea: median-of-three pivot selection
+Verified: samples the elements at n/6, n/2 and 5n/6 and returns the median,
+          but only when n > 10 (below that, qsorts takes the middle
+          element). There is no insertion-sort cutoff for small n.
+CONFIDENCE: high
+Proposed lines:
+%ref: R. C. Singleton, "Algorithm 347: An efficient algorithm for sorting
+%  with minimal storage", Communications of the ACM 12(3):185-187, 1969
+%  (median of the first, middle and last elements, which protects
+%  against already-sorted input. [[pivot]] samples at 1/6, 1/2 and 5/6
+%  instead).
+%ref: J. L. Bentley and M. D. McIlroy, "Engineering a sort function",
+%  Software--Practice and Experience 23(11):1249-1265, 1993 (road not
+%  taken: this rewrite of the Unix qsort adds a "ninther" pivot for large
+%  arrays, an insertion-sort cutoff and a fat three-way partition for
+%  equal keys. Plan 9's qsort has none of these).
+
+### Libcore.nw : <<struct [[Btail]]>>
+(line ~4131, section "Data structures" of chapter Memory Management)
+Algorithm/idea: boundary tags (the block size stored at both ends)
+Verified: Btail repeats Bhdr's size at the end of each block. B2PT/T2HDR
+          step back from a header to the left neighbor's header in O(1),
+          which is what blockmerge needs to coalesce on free.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, The Art of Computer Programming, Vol. 1: Fundamental
+%  Algorithms, Addison-Wesley, 1968, Section 2.5 "Dynamic Storage
+%  Allocation" (Algorithm C, "liberation with boundary tags": putting
+%  the size and a free bit at BOTH ends of a block lets [[free]] find the
+%  left neighbor without a search. That is [[Btail]] plus [[B2PT]]).
+%ref: K. C. Knowlton, "A fast storage allocator", Communications of the
+%  ACM 8(10):623-625, 1965 (road not taken: the buddy system, which
+%  rounds sizes up to powers of two so that a block's neighbor, its
+%  "buddy", can be found from its address alone, with no tags).
+
+### Libcore.nw : <<struct [[Free]]>>
+(line ~4189, same section)
+Algorithm/idea: best fit through a binary search tree keyed on size
+Verified: left/right form a BST on size, and next/prev chain the blocks of
+          equal size. treelookupgt returns the smallest size >= the
+          request (best fit). treedelete replaces a node that has two
+          children by its in-order successor. The tree is NOT balanced
+          (see above).
+CONFIDENCE: high
+Proposed lines:
+%ref: T. N. Hibbard, "Some combinatorial properties of certain trees with
+%  applications to searching and sorting", Journal of the ACM 9(1):13-28,
+%  1962 (the first analysis of the binary search tree, and the origin of
+%  deleting a two-child node by moving its in-order successor up, as
+%  [[treedelete]] does. Like Hibbard's trees, [[Pool]]'s free tree is
+%  never rebalanced).
+
+### Libcore.nw : <<function [[dofmt]]>>
+(line ~4959, section "[[dofmt()]]")
+Algorithm/idea: format-directed output (a format string of literal text
+                plus conversion directives)
+Verified: dofmt copies literal text until '%', then looks the verb up in
+          the fmtinstall-able table (_fmtdispatch). The user-installable
+          verbs are Plan 9's own addition.
+CONFIDENCE: high for the paper. The ancestry claim (FORMAT -> printf) is
+          the usual story, so the parenthetical avoids naming the
+          intermediate languages.
+Proposed lines:
+%ref: J. W. Backus et al., "The FORTRAN automatic coding system", Proc.
+%  Western Joint Computer Conference, pp. 188-198, 1957 (the FORMAT
+%  statement, e.g. FORMAT(I5, F10.2), was written to lay out numbers on
+%  the IBM 704's printer. It is the ancestor of printf's %-directives.
+%  FORTRAN's list of directives was fixed. [[fmtinstall]] lets a program
+%  add its own verbs).
+
+### Libcore.nw : <<function [[chartorune]]>>
+(line ~5693, section "Runes")
+Algorithm/idea: UTF-8 decoding
+Verified: the T(i)/RuneX(i) macros give the prefix byte for an i-byte
+          sequence and the largest rune it can hold. The loop checks the
+          continuation bytes (10xxxxxx). The length test rejects
+          overlong forms (the prose writes the test as "l <= RuneX(i)"), and
+          there is a check that rejects surrogates.
+CONFIDENCE: high (the venue and pages are from the utf.ms footnote)
+Proposed lines:
+%ref: R. Pike and K. Thompson, "Hello World or Kalimera kosme or
+%  Konnichi wa Sekai", Proc. Winter 1993 USENIX Conference, pp. 43-50,
+%  1993 (in repo: docs/articles/utf.ms. The encoding was designed on a
+%  diner placemat in September 1992 to replace X/Open's FSS-UTF. The
+%  leading byte gives the sequence length, which is [[T]] here, and
+%  bytes below 0x80 are always ASCII, so [[strchr]] and friends still
+%  work).
+%ref: F. Yergeau, "UTF-8, a transformation format of ISO 10646", RFC
+%  3629, 2003 (where the rules this code enforces became normative:
+%  overlong forms are illegal and surrogates are excluded).
+
+### Libcore.nw : <<function [[strstr]]>>
+(line ~5472, section "Plain C strings")
+Algorithm/idea: naive substring search (road-not-taken refs)
+Verified: strchr finds each occurrence of the first character, then the
+          code compares the rest byte by byte. The worst case is O(nm).
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, J. H. Morris and V. R. Pratt, "Fast pattern matching
+%  in strings", SIAM Journal on Computing 6(2):323-350, 1977; and R. S.
+%  Boyer and J S. Moore, "A fast string searching algorithm",
+%  Communications of the ACM 20(10):762-772, 1977 (roads not taken:
+%  KMP never re-reads a text character, and Boyer-Moore compares the
+%  pattern from its END so that it can skip ahead. [[strstr]] keeps the
+%  naive loop, which is fine for short system strings).
+
+### Libcore.nw : <<function [[regcomp1]]>>
+(line ~7185, section "Compilation: [[regcomp()]]")
+Algorithm/idea: regular expressions compiled to an automaton, encoded as
+                a program
+Verified: regcomp1 turns the pattern into an array of Reinst (RUNE, OR,
+          LBRA/RBRA, CCLASS, END...). This is Thompson's construction,
+          with bytecode where Thompson emitted IBM 7094 machine code.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. C. Kleene, "Representation of events in nerve nets and finite
+%  automata", in Automata Studies, C. E. Shannon and J. McCarthy (eds.),
+%  Princeton University Press, 1956 (regular expressions were invented to
+%  describe what McCulloch-Pitts neuron networks can recognize. The
+%  operators union, concatenation and star are the [[OR]], implicit CAT
+%  and [[STAR]] tokens parsed here).
+
+### Libcore.nw : <<function [[regcomp1]]>>  (second, optional entry)
+(same line)
+Algorithm/idea: operator-precedence parsing with an operand stack and an
+                operator stack (shunting-yard)
+Verified: regcomp.c's operator()/operand()/evaluntil() (the chunks are
+          in Libcore_extra.nw) push onto andstack/atorstack and reduce by
+          precedence, inserting an implicit CAT between operands.
+CONFIDENCE: medium (I am sure of the idea and the 1961 Mathematisch
+          Centrum report. I leave out the report number and exact title.)
+Proposed lines:
+%ref: E. W. Dijkstra, Algol 60 translator report, Mathematisch Centrum,
+%  Amsterdam, 1961 (the "shunting-yard" algorithm, written for the
+%  Electrologica X1: operands and operators go onto two stacks and are
+%  reduced by precedence, like [[andstack]] and [[atorstack]] in
+%  [[regcomp1]]).
+
+### Libcore.nw : <<function [[regexec1]]>>
+(line ~7334, section "Execution: [[regexec()]]")
+Algorithm/idea: Thompson NFA simulation, as a Pike VM with submatch
+                tracking
+Verified: two Relist arrays (current and next) of threads (pc plus a
+          Resub). Every thread advances once per input character, and
+          _renewthread drops duplicate pcs, so the time is O(nm) with no
+          backtracking.
+CONFIDENCE: high
+Proposed lines:
+%ref: K. Thompson, "Regular expression search algorithm", Communications
+%  of the ACM 11(6):419-422, 1968 (written for the QED editor on CTSS:
+%  follow every NFA state at once, one input character at a time, never
+%  backtracking. The current and next lists here are his CLIST/NLIST,
+%  and each list entry also carries a [[Resub]] for submatches).
+%ref: R. Cox, "Regular Expression Matching: the Virtual Machine
+%  Approach", swtch.com/~rsc/regexp/regexp2.html, 2009 (a modern
+%  retelling that names this design the "Pike VM" and credits it to
+%  Rob Pike's sam and this libregexp).
+
+### Libcore.nw : <<function [[NaN]]>>
+(line ~8393, section "Floats", subsection "Special numbers")
+Algorithm/idea: IEEE 754 special values (NaN, infinities)
+Verified: NaN sets the exponent to all ones (2047<<20 in the high word)
+          and makes the mantissa non-zero. Inf does the same with a zero
+          mantissa.
+CONFIDENCE: high
+Proposed lines:
+%ref: IEEE Standard for Binary Floating-Point Arithmetic, ANSI/IEEE Std
+%  754-1985 (the all-ones exponent that [[NANEXP]] tests is reserved for
+%  infinities and NaNs. William Kahan designed the standard around what
+%  the Intel 8087 coprocessor would implement).
+%ref: D. Goldberg, "What every computer scientist should know about
+%  floating-point arithmetic", ACM Computing Surveys 23(1):5-48, 1991
+%  (the standard tutorial: ulps, guard digits, and why NaN != NaN).
+
+### Libcore.nw : <<function [[strtod]]>>
+(line ~8520, section "Floats", subsection "Parsing")
+Algorithm/idea: correctly rounded decimal-to-binary conversion
+Verified: the decimal digits are normalized to .5xxx by divascii/mulascii,
+          then the code binary-searches the Prec-word mantissa, comparing
+          each candidate exactly with fpcmp, and rounds half-to-even at
+          Sigbit. It uses no fast path and no floating-point estimate.
+CONFIDENCE: high
+Proposed lines:
+%ref: W. D. Clinger, "How to read floating point numbers accurately",
+%  Proc. ACM PLDI '90, SIGPLAN Notices 25(6):92-101, 1990 (the first
+%  proof that input can always be rounded correctly, using bignums only
+%  when floating point cannot decide. [[strtod]] always uses
+%  multi-precision: it binary-searches the mantissa ([[low]], [[mid]],
+%  [[hig]]) and compares each guess exactly, which is simpler and slower
+%  than Clinger).
+%ref: G. L. Steele Jr. and J. L. White, "How to print floating-point
+%  numbers accurately", same proceedings, pp. 112-126, 1990 (the reverse
+%  direction, done by [[fltfmt.c]], which this book does not show).
+
+### Libcore.nw : <<function [[pow]]>>
+(line ~9220, section "Floats", subsection "[[pow()]]")
+Algorithm/idea: right-to-left binary exponentiation (repeated squaring)
+Verified: `if(i & 1) xy *= x; i >>= 1; x *= x;`. The twist is that it
+          works on the frexp mantissa and adds the exponents (ex/ey)
+          separately, so the intermediate values never overflow.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, The Art of Computer Programming, Vol. 2: Seminumerical
+%  Algorithms, Addison-Wesley, 1969, Section 4.6.3 "Evaluation of Powers"
+%  (Algorithm A, the right-to-left binary method. Knuth traces the idea
+%  back to Pingala's Sanskrit work on prosody, around 200 B.C.
+%  [[pow]] runs it on [[frexp]] mantissas and tracks the exponents in
+%  [[ex]] and [[ey]] separately, so it never overflows early).
+
+### Libcore.nw : <<function [[sinus]]>>
+(line ~9415, section "Trigonometry")
+Algorithm/idea: argument reduction plus a minimax rational approximation
+                with tabulated coefficients
+Verified: the C files name their tables: sin.c "#3370 from Hart & Cheney
+          (18.80D)", tan.c #4285, atan.c #5077, exp.c #1069, log.c #2705,
+          sinh.c #2029. The prose names Hart but does not \cite it (the
+          bib key `hart` exists).
+CONFIDENCE: high
+Proposed lines:
+%ref: J. F. Hart et al., Computer Approximations, Wiley, 1968 (bib key
+%  hart. Thousands of approximations are tabulated by index number.
+%  [[sin]] uses #3370, [[tan]] #4285, [[atan]] #5077, [[exp]] #1069,
+%  [[log]] #2705 and [[sinh]] #2029, as the C comments say. That is why
+%  the coefficients look like magic).
+%ref: C. Hastings Jr., Approximations for Digital Computers, Princeton
+%  University Press, 1955 (the founding book of the genre: approximations
+%  fitted at RAND, mostly by hand, for early computers such as the
+%  JOHNNIAC).
+NOTE: "at RAND ... JOHNNIAC" is from memory; CONFIDENCE for that
+      detail is medium. The safe form is just "(the founding book of the
+      genre, written at RAND)".
+
+### Libcore.nw : <<function [[lrand]]>>
+(line ~10133, section "Random numbers")
+Algorithm/idea: additive (lagged-Fibonacci) generator
+Verified: x = (*rng_feed + *rng_tap) & MASK over a 607-entry ring, with
+          feed and tap 273 apart. The source credits "D. P. Mitchell &
+          J. A. Reeds" (unpublished).
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, The Art of Computer Programming, Vol. 2: Seminumerical
+%  Algorithms, Addison-Wesley, 1969, Section 3.2.2 (the additive
+%  generator X[n] = X[n-24] + X[n-55] mod m, due to G. J. Mitchell and
+%  D. P. Moore in 1958. [[lrand]] uses the same idea with lags 607 and
+%  273 ([[LEN]], [[TAP]]), and the source comment credits D. P. Mitchell
+%  and J. A. Reeds).
+
+### Libcore.nw : <<function [[isrand]]>>
+(line ~10190, same section)
+Algorithm/idea: Lehmer multiplicative congruential generator (the
+                "minimal standard"), computed without overflow by
+                Schrage's method
+Verified: x = A*lo - R*hi with A = 48271, M = 2^31-1, Q = M/A = 44488 and
+          R = M%A = 3399, and a correction when the result is negative.
+          It is used only to seed the 607-entry ring.
+CONFIDENCE: high for Lehmer and Park-Miller; medium for the exact Schrage
+          venue
+Proposed lines:
+%ref: D. H. Lehmer, "Mathematical methods in large-scale computing
+%  units", Proc. 2nd Symposium on Large-Scale Digital Calculating
+%  Machinery (Harvard, 1949), 1951 (the first congruential generator,
+%  x[n+1] = a x[n] mod m, first run on ENIAC. [[isrand]] is that
+%  recurrence).
+%ref: S. K. Park and K. W. Miller, "Random number generators: good ones
+%  are hard to find", Communications of the ACM 31(10):1192-1201, 1988
+%  (the "minimal standard" with m = 2^31-1. Its multiplier 16807 was
+%  later replaced by 48271, the [[A]] here. The [[Q]]/[[R]] split that
+%  avoids 32-bit overflow is Schrage's trick, explained in this paper).
+
+### Libcore.nw : <<function [[inflate]]>>
+(line ~10695, section "Inflation (decompression)")
+Algorithm/idea: DEFLATE format
+Verified: a loop over blocks that reads BFINAL/BTYPE and dispatches to
+          stored, fixed-Huffman or dynamic-Huffman decoding. The prose
+          mentions RFC 1951 but does not cite it.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Deutsch, "DEFLATE Compressed Data Format Specification version
+%  1.3", RFC 1951, 1996 (writes down the format Phil Katz designed for
+%  PKZIP 2.0, 1993: a sequence of blocks, each stored raw or LZ77 plus
+%  Huffman, with 3-bit block headers that [[inflate]] reads).
+
+### Libcore.nw : <<function [[hufftab]]>>
+(line ~10919, section "Inflation (decompression)", subsection "Huffman
+tree decoding")
+Algorithm/idea: canonical Huffman codes, decoded from code lengths only
+Verified: hufftab rebuilds the codes from bitcount[] alone (mincode =
+          code<<1 for each length) and stores maxcode[]/last[] per
+          length, plus a flat lookup table of flatbits bits. Its own
+          comment says it relies on the fact that "shorter codes are
+          assigned smaller lexical prefixes", which is the canonical
+          property.
+CONFIDENCE: medium (I am confident the paper exists and is the origin of
+          canonical codes; volume and pages are from memory)
+Proposed lines:
+%ref: E. S. Schwartz and B. Kallick, "Generating a canonical prefix
+%  encoding", Communications of the ACM 7(3):166-169, 1964 (if codes of
+%  each length are handed out in numerical order, the code lengths alone
+%  determine the whole code. That is why a DEFLATE block sends only
+%  lengths, and why [[hufftab]] can rebuild the codes with the
+%  [[mincode]] recurrence).
+
+### Libcore.nw : <<function [[lzcomp]]>>
+(line ~11276, section "Deflation (compression)", subsection "LZ77
+matching")
+Algorithm/idea: LZ77 sliding-window matching with hash chains
+Verified: hashit hashes the next 3 bytes (MinMatch). hash[]/nexts[]
+          chain the earlier positions with the same hash. lzmatch walks
+          the chain up to maxcheck. Matches shorter than MinMatch are
+          sent as literals (the LZSS rule), and matching is lazy
+          (prevlen/prevoff). hashit (in Libcore_extra.nw) is
+          multiplicative: ((c & 0xffffff) * 0x6b43a9b5) >> (32-HashLog).
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Ziv and A. Lempel, "A universal algorithm for sequential data
+%  compression", IEEE Transactions on Information Theory IT-23(3):337-343,
+%  1977 (LZ77: replace a repeated string by a (distance, length) pointer
+%  back into a sliding window of the recent input. Here the window is
+%  [[lz->hist]] and the pointers are the [[m]]/[[runlen]] results of
+%  [[lzmatch]]).
+%ref: J. A. Storer and T. G. Szymanski, "Data compression via textual
+%  substitution", Journal of the ACM 29(4):928-951, 1982 (LZSS: send a
+%  literal whenever a pointer would cost more, which is DEFLATE's
+%  [[MinMatch]] of 3. Finding matches by chaining hash buckets
+%  ([[hash]], [[nexts]]) and the multiplicative [[hashit]] are the
+%  hashing of Knuth Vol. 3, Section 6.4).
+
+### Libcore.nw : <<function [[mkprecode]]>>
+(line ~11494, section "Deflation (compression)", subsection "Huffman tree
+construction")
+Algorithm/idea: minimum-redundancy (Huffman) codes, limited to maxbits
+                bits (boundary package-merge)
+Verified: the source comment already cites Katajainen, Moffat and Turpin,
+          1995. The chains, lists and nextchain are the lazy "boundary"
+          form of package-merge.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. A. Huffman, "A method for the construction of minimum-redundancy
+%  codes", Proceedings of the IRE 40(9):1098-1101, 1952 (written as a
+%  term paper in Fano's MIT information-theory class: merge the two
+%  least frequent symbols, repeat. [[mkprecode]] must also cap code
+%  lengths at 15 bits, which plain Huffman cannot do).
+%ref: L. L. Larmore and D. S. Hirschberg, "A fast algorithm for optimal
+%  length-limited Huffman codes", Journal of the ACM 37(3):464-473, 1990
+%  (package-merge, the algorithm that [[nextchain]] runs in the
+%  low-memory "boundary" form of Katajainen, Moffat and Turpin, already
+%  cited in the C comment).
+
+### Libcore.nw : <<function [[adler32]]>>
+(line ~12133, section "Checksums")
+Algorithm/idea: Fletcher-style checksum (two running sums)
+Verified: s1 += byte, s2 += s1, both mod 65521 (ADLERBASE, the largest
+          prime below 2^16). The loop is unrolled by 16, and the modulo is
+          done only every ADLERITERS (5552) bytes.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. G. Fletcher, "An arithmetic checksum for serial transmissions",
+%  IEEE Transactions on Communications COM-30(1):247-252, 1982 (written at
+%  Lawrence Livermore for serial links: a sum of bytes plus a sum of those
+%  sums, so that swapped bytes are detected, which a plain sum misses.
+%  That is [[s1]]/[[s2]]. Mark Adler's variant, specified in RFC 1950
+%  (1996), uses the prime 65521 as modulus instead of 255 or 65535).
+
+### Libcore.nw : <<function [[blockcrc]]>>
+(line ~12207, same section)
+Algorithm/idea: CRC-32, computed a byte at a time with a table
+Verified: crc = crctab[(crc ^ byte) & 0xff] ^ (crc >> 8), the reflected
+          form. mkcrctab (Libcore_extra.nw) builds the 256 entries by
+          shifting 8 times with the polynomial passed in (0xEDB88320 for
+          gzip).
+CONFIDENCE: high
+Proposed lines:
+%ref: W. W. Peterson and D. T. Brown, "Cyclic codes for error detection",
+%  Proceedings of the IRE 49(1):228-235, 1961 (treat the message as a
+%  polynomial over GF(2) and send the remainder of its division by a
+%  generator. The paper showed how to do this in hardware with a shift
+%  register, which is the inner loop of [[mkcrctab]]).
+%ref: D. V. Sarwate, "Computation of cyclic redundancy checks via table
+%  look-up", Communications of the ACM 31(8):1008-1013, 1988 (precompute
+%  8 shift-register steps into a 256-entry table so that software handles
+%  a whole byte at once: the single line of [[blockcrc]]).
+
+### Libcore.nw : <<function [[cleanname]]>>
+(line ~14277, section "Normalizing a filename: [[cleanname()]]")
+Algorithm/idea: lexical path normalization (".." handled on the string,
+                not by walking the file system)
+Verified: collapses repeated '/', removes ".", and handles ".." against
+          the output pointer d, keeping any "#dev" prefix. The author left
+          the note "% cite \plan paper on dotdot?" right above.
+CONFIDENCE: high for the paper. The venue (USENIX 2000) is from memory,
+          because lexnames.ms has no venue footnote: medium on the venue.
+Proposed lines:
+%ref: R. Pike, "Lexical File Names in Plan 9, or Getting Dot-Dot Right",
+%  Proc. USENIX Annual Technical Conference, 2000 (in repo:
+%  docs/articles/lexnames.ms. Because of bind and mount, ".." has to mean
+%  "remove the last element of the name you used", worked out on the
+%  string. [[cleanname]] is that rule; the kernel applies the same rule
+%  to the name kept with each channel).
+%ref: R. C. Daley and P. G. Neumann, "A general-purpose file system for
+%  secondary storage", Proc. AFIPS Fall Joint Computer Conference, 1965
+%  (Multics: the origin of tree-structured directories and path names,
+%  written with ">" where Unix and Plan 9 use "/").
+
+### Libcore.nw : <<function [[encrypt]]>>
+(line ~15428, section "Cryptography")
+Algorithm/idea: DES block cipher (Feistel network)
+Verified: key_setup plus block_cipher on 8-byte DES blocks. The buffer
+          pointer advances by 7, so consecutive blocks overlap by one
+          byte, and a final partial block is handled by overlapping it
+          with the previous one. That is not one of the standard FIPS 81
+          modes (ECB/CBC/...).
+CONFIDENCE: high
+Proposed lines:
+%ref: National Bureau of Standards, "Data Encryption Standard", FIPS PUB
+%  46, 1977 (DES: 16 rounds of a Feistel network on 64-bit blocks with a
+%  56-bit key. [[encrypt]] walks the buffer 7 bytes at a time, so its
+%  8-byte DES blocks overlap. This is a Plan 9 chaining scheme, not one
+%  of the standard modes).
+%ref: H. Feistel, "Cryptography and computer privacy", Scientific
+%  American 228(5):15-23, 1973 (the IBM Lucifer design, from which DES
+%  came, and the Feistel round structure inside [[block_cipher]]).
+
+### Libcore.nw : <<function [[lock]]>>
+(line ~15840, section "Locks")
+Algorithm/idea: mutual exclusion from a counting semaphore plus an atomic
+                counter fast path
+Verified: ainc(&key) == 1 means we took the lock with no syscall.
+          Otherwise semacquire(&sem, 1) blocks in the kernel. unlock does
+          adec and calls semrelease only if there were waiters.
+CONFIDENCE: high for Dijkstra; medium for the Mullender-Cox venue details
+Proposed lines:
+%ref: E. W. Dijkstra, "Cooperating sequential processes", Technological
+%  University Eindhoven, EWD123, 1965 (semaphores and their P and V
+%  operations, invented for the THE multiprogramming system on the
+%  Electrologica X8. [[semacquire]]/[[semrelease]] are P and V, and the
+%  [[ainc]] fast path avoids the kernel call when nobody else holds
+%  the lock).
+%ref: S. Mullender and R. Cox, "Semaphores in Plan 9", 3rd International
+%  Workshop on Plan 9 (IWP9), 2008 (why [[semacquire]] was added and how
+%  [[lock]] was rebuilt on it, replacing spin-and-sleep).
+
+### Libcore.nw : <<type [[RWLock]]>>
+(line ~16054, section "Read-write locks")
+Algorithm/idea: the readers-writers problem
+Verified: one FIFO queue of QueuingR/QueuingW waiters. A new reader waits
+          whenever the queue is non-empty, and wunlock wakes either one
+          writer or the whole run of readers at the head. This is a
+          FIFO-fair policy, neither of Courtois et al.'s two priorities.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. J. Courtois, F. Heymans and D. L. Parnas, "Concurrent control
+%  with `readers' and `writers'", Communications of the ACM
+%  14(10):667-668, 1971 (the problem and two semaphore solutions, one
+%  giving readers priority and one giving writers priority, each able to
+%  starve the other side. [[RWLock]] takes a third way: arrival order
+%  in one queue, with readers woken in batches).
+
+### Libcore.nw : <<type [[Rendez]]>>
+(line ~16250, section "Rendez-vous")
+Algorithm/idea: condition variables tied to a lock (monitors), with Mesa
+                semantics
+Verified: rsleep must hold the QLock, queues itself, and hands the QLock
+          to the next waiter. rwakeup does not run the sleeper: it moves
+          it to the FRONT of the QLock's queue, so the woken process runs
+          only after it gets the lock again and must re-check its
+          condition.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. A. R. Hoare, "Monitors: an operating system structuring
+%  concept", Communications of the ACM 17(10):549-557, 1974 (condition
+%  variables inside a monitor. In Hoare's version, signal hands the lock
+%  straight to the waiter).
+%ref: B. W. Lampson and D. D. Redell, "Experience with processes and
+%  monitors in Mesa", Communications of the ACM 23(2):105-117, 1980 (in
+%  Mesa, notify is only a hint: the woken process waits for the lock and
+%  must re-check its condition. This is what [[rwakeup]] does by moving
+%  the sleeper onto the [[QLock]]'s queue).
+
+### Libcore.nw : <<struct [[Channel]]>>
+(line ~18766, section "Core data structures" of chapter Channels and
+Cooperative Threads)
+Algorithm/idea: channels as first-class, typed-by-size values
+Verified: s = buffer size (0 = synchronous rendezvous), e = element size,
+          v[] = the circular buffer (f, n), and qentry[] = the Alts waiting
+          on the channel.
+CONFIDENCE: high
+Proposed lines:
+%ref: L. Cardelli and R. Pike, "Squeak: a language for communicating
+%  with mice", SIGGRAPH '85, Computer Graphics 19(3):199-204, 1985
+%  (channels were first used to tame the mouse and keyboard events of a
+%  window system).
+%ref: R. Pike, "The Implementation of Newsqueak", Software--Practice and
+%  Experience 20(7):649-659, 1990 (channels become values that can be
+%  passed around. Newsqueak channels were only synchronous. The buffer
+%  [[v]] with [[s]] > 0 comes later, from Alef).
+
+### Libcore.nw : <<function [[proccreate]]>>
+(line ~19121, section "Core data structures")
+Algorithm/idea: two-level concurrency. Procs are scheduled by the kernel,
+                and threads are coroutines inside a proc.
+Verified: proccreate makes a new rfork'd Proc with its own ready queue.
+          threadcreate adds a Thread to the current Proc.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Winterbottom, "Alef Language Reference Manual", Plan 9
+%  Programmer's Manual, 2nd ed., 1995 (Alef's "proc" and "task"
+%  statements: a proc is a kernel process with shared memory, and a task
+%  is a coroutine inside a proc. [[proccreate]] and [[threadcreate]] are
+%  that split turned into a C library).
+
+### Libcore.nw : <<function [[_sched]]>>
+(line ~19844, section "Threads scheduler")
+Algorithm/idea: coroutines (symmetric transfer of control through saved
+                contexts)
+Verified: `if(setjmp(t->sched)==0) longjmp(p->sched, 1)` suspends the
+          running thread into the scheduler. The scheduler then
+          longjmps into the next ready thread's saved jmp_buf.
+CONFIDENCE: high
+Proposed lines:
+%ref: M. E. Conway, "Design of a separable transition-diagram compiler",
+%  Communications of the ACM 6(7):396-408, 1963 (coins the word
+%  "coroutine", for a COBOL compiler whose passes run as coroutines
+%  instead of writing intermediate files to tape. Here the saved
+%  "return address" is a [[jmp_buf]], and every transfer goes through
+%  [[_sched]]).
+
+### Libcore.nw : <<function [[alt]]>>
+(line ~19996, section "[[alt()]]")
+Algorithm/idea: guarded non-deterministic choice among communications
+Verified: scans the Alt array for entries whose channel can proceed. If
+          none can, enqueues on all of them and sleeps. send and recv are
+          single-entry alts.
+CONFIDENCE: high
+Proposed lines:
+%ref: C. A. R. Hoare, "Communicating sequential processes",
+%  Communications of the ACM 21(8):666-677, 1978 (input and output
+%  commands and the guarded "alternative command". [[alt]] is that
+%  command. In CSP'78 a process names the other PROCESS it talks to,
+%  whereas here it names a [[Channel]]. The 1985 book, bib key csp, is
+%  the later version).
+%ref: E. W. Dijkstra, "Guarded commands, nondeterminacy and formal
+%  derivation of programs", Communications of the ACM 18(8):453-457,
+%  1975 (the guarded if...fi that Hoare's alternative command extends
+%  with communication).
+
+### Libcore.nw : <<function [[alt]]>>  (second entry)
+(same line)
+Algorithm/idea: picking uniformly at random among the ready cases in one
+                pass (reservoir sampling with a reservoir of size 1)
+Verified: `if(nrand(++n) == 0) ca = xa;` over the ready entries. The k-th
+          ready entry replaces the choice with probability 1/k, so each
+          of them is chosen with equal probability. The same line is in
+          altexec.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. E. Knuth, The Art of Computer Programming, Vol. 2: Seminumerical
+%  Algorithms, Addison-Wesley, 1969, Section 3.4.2 (Algorithm R, reservoir
+%  sampling, credited to Alan G. Waterman: pick records from a magnetic
+%  tape of unknown length in one pass. [[alt]] is the size-1 case:
+%  [[nrand(++n) == 0]] keeps each ready channel with probability 1/n);
+%  see also J. S. Vitter, "Random sampling with a reservoir", ACM
+%  Transactions on Mathematical Software 11(1):37-57, 1985.
+
+### Libcore.nw : <<function [[dial]]>>
+(line ~22624, section "[[dial()]]")
+Algorithm/idea: network connections through files (clone, ctl, data) and
+                textual net!host!service addresses
+Verified: dial goes through _dial/dialimpl, asks the connection server
+          (cs) to translate the address, then opens /net/<proto>/clone
+          and writes "connect ..." to the ctl file.
+CONFIDENCE: high (venue and pages are from net.ms)
+Proposed lines:
+%ref: D. Presotto and P. Winterbottom, "The Organization of Networks in
+%  Plan 9", Proc. Winter 1993 USENIX Conference, pp. 271-280, 1993 (in
+%  repo: networking/docs/net/net.ms. The paper describes the whole
+%  sequence behind [[dial]]: cs translates the address, then clone and
+%  ctl files are used in place of the BSD socket calls. Bib key
+%  network-plan9 is cited in Network.nw but is missing from
+%  Principia.bib).
+
+### Libcore.nw : <<struct [[Plink]]>>
+(line ~23127, chapter Profiling Support, section "Data structures")
+Algorithm/idea: a calling-context tree, which keeps counts and time per
+                call PATH, not per call edge
+Verified: _profin looks for the callee pc among pp->down/link (the
+          children of the current context), creates a child if there is
+          none, and moves pp to it. _profout adds the elapsed cycles to
+          p->time. Recursion makes the tree deeper, because recursive
+          calls are not folded.
+CONFIDENCE: high
+Proposed lines:
+%ref: G. Ammons, T. Ball and J. R. Larus, "Exploiting hardware
+%  performance counters with flow and context sensitive profiling", Proc.
+%  ACM PLDI '97, 1997 (names the "calling context tree": one node per
+%  distinct call path. [[Plink]] with [[old]]/[[down]]/[[link]] is such
+%  a tree. Unlike gprof's call graph, it keeps exact inclusive time per
+%  context and does not have to estimate it).
+NOTE: gprof (Graham, Kessler, McKusick, SIGPLAN '82) is left out here
+      because Profiler.nw already covers it. Add it as a second line only
+      if the Profiler book does not cite it.
+
+
+======================================================================
+lib_core/Libcore_big.nw
+======================================================================
+
+### Libcore_big.nw : <<global [[_base2]]>>
+(line ~3, subsection "[[port/runebase.c]]")
+Algorithm/idea: a table from accented letters to base letters (the first
+                character of their canonical decomposition)
+Verified: pairs such as (0x00c0 'A-grave', 0x0041 'A'), sorted by code
+          point, searched by _runebsearch in tobaserune/isbaserune.
+CONFIDENCE: medium (the Annex exists and defines canonical
+          decomposition; that Plan 9 generated the table from it is my
+          inference)
+Proposed lines:
+%ref: M. Davis and M. Duerst, "Unicode Normalization Forms", Unicode
+%  Standard Annex #15 (the table is the first character of each
+%  letter's canonical decomposition (NFD), e.g. U+00C0 -> U+0041 U+0300.
+%  [[tobaserune]] keeps the base and drops the accent, for
+%  accent-insensitive matching).
+
+
+======================================================================
+lib_networking/Network.nw
+======================================================================
+
+### Network.nw : <<function [[defmask]]>>
+(line ~1808, section "IP addresses", subsection "Network mask")
+Algorithm/idea: classful IPv4 addressing (the class is read from the top
+                bits of the address)
+Verified: classmask[ip[IPv4off]>>6] returns 255.0.0.0 for 00/01, 255.255.0.0
+          for 10 and 255.255.255.0 for 11.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Postel, "Internet Protocol", RFC 791, 1981, Section 3.2
+%  (address classes A, B and C, told apart by the leading bits of the
+%  first byte, which is what [[defmask]] tests with [[>>6]]).
+%ref: V. Fuller, T. Li, J. Yu and K. Varadhan, "Classless Inter-Domain
+%  Routing (CIDR)", RFC 1519, 1993 (road not taken: classes were dropped
+%  in 1993 because class B networks were running out. [[defmask]] is only
+%  a default, and explicit masks in [[ipifcadd]] do the CIDR work).
+
+### Network.nw : <<struct [[Ip4hdr]]>>
+(line ~1941, section "IP header")
+Algorithm/idea: the IPv4 datagram header
+Verified: vihl, tos, length, id, frag, ttl, proto, cksum, src, dst, in
+          RFC 791 order. The prose names RFC 791 but does not cite it.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Postel (ed.), "Internet Protocol", RFC 791, 1981 (the wire
+%  format of [[Ip4hdr]]. [[id]]/[[frag]] exist so that any gateway can
+%  cut a datagram to fit a smaller network, and [[ttl]] bounds how long
+%  a packet can loop).
+%ref: D. D. Clark, "The design philosophy of the DARPA Internet
+%  protocols", Proc. ACM SIGCOMM '88, pp. 106-114, 1988 (why the header
+%  looks like this: the first goal was to survive the loss of networks
+%  and gateways, so all connection state is kept in the end hosts and
+%  none in the datagram path).
+
+### Network.nw : <<function [[ipoput4]]>>
+(line ~6931, section "IO", subsection "Writing: [[ipoput4()]]")
+Algorithm/idea: packet switching. Each datagram is routed on its own by
+                looking up its destination.
+Verified: ipoput4 calls v4lookup for EACH packet (it caches per Conv),
+          fills in the header, fragments if the packet is larger than the
+          interface MTU, and hands the packet to the medium. No state is
+          kept per connection.
+CONFIDENCE: high
+Proposed lines:
+%ref: P. Baran, "On Distributed Communications: I. Introduction to
+%  Distributed Communications Networks", RAND Memorandum RM-3420-PR,
+%  1964 (written for a military network that could survive a nuclear
+%  attack: cut messages into small "message blocks" and route each one
+%  on its own through a mesh of nodes. [[ipoput4]] does this: a
+%  [[v4lookup]] per datagram and no circuit state).
+
+### Network.nw : <<function [[ptclcsum]]>>
+(line ~6762, section "IP header", subsection "Checksum")
+Algorithm/idea: the Internet checksum (16-bit one's-complement sum) over
+                a chain of blocks
+Verified: sums each block with ptclbsum. If a block starts at an odd byte
+          offset, its partial sum goes into hisum and is byte-swapped
+          back at the end ((hisum&0xff)<<8 | hisum>>8). The carries are
+          folded in only at the end (while(losum>>16)).
+CONFIDENCE: high
+Proposed lines:
+%ref: R. Braden, D. Borman and C. Partridge, "Computing the Internet
+%  Checksum", RFC 1071, 1988 (the properties that [[ptclcsum]] relies
+%  on: the one's-complement sum does not depend on byte order, so a
+%  block starting at an odd offset can be summed alone and byte-swapped
+%  later ([[hisum]]), and carries can be added at the end instead of
+%  after every word).
+
+### Network.nw : <<function [[ip4reassemble]]>>
+(line ~7390, section "IO", subsection "Reading: [[ipiput4()]]")
+Algorithm/idea: IP fragment reassembly
+Verified: keeps one Fragment4 per (src, dst, id). The fragments' Blocks
+          are kept in a list sorted by offset, and overlapping bytes
+          before and after each new fragment are trimmed. The datagram is
+          complete when the list covers 0..end with no gap.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. D. Clark, "IP datagram reassembly algorithms", RFC 815, 1982
+%  (the textbook method keeps a list of "holes" still missing.
+%  [[ip4reassemble]] keeps the fragments themselves in offset order and
+%  trims overlaps, which gives the same result with a different
+%  structure).
+%ref: C. A. Kent and J. C. Mogul, "Fragmentation considered harmful",
+%  Proc. ACM SIGCOMM '87, 1987 (losing one fragment loses the whole
+%  datagram, which is why the [[Fragment4]] timeout exists and why IPv6
+%  forbids fragmentation by routers).
+
+### Network.nw : <<struct [[Etherhdr]]>>
+(line ~6526, section "Ethernet header")
+Algorithm/idea: Ethernet framing (DIX / Ethernet II: dst, src, type)
+Verified: d[6], s[6], t[2]. The type field selects IPv4, ARP or IPv6.
+CONFIDENCE: high for Metcalfe-Boggs and Abramson; medium for the exact
+          title of the DIX "Blue Book"
+Proposed lines:
+%ref: R. M. Metcalfe and D. R. Boggs, "Ethernet: distributed packet
+%  switching for local computer networks", Communications of the ACM
+%  19(7):395-404, 1976 (the experimental 3 Mb/s Ethernet at Xerox PARC:
+%  one shared coaxial cable, carrier sense, collision detection with
+%  random backoff, and 8-bit addresses. The 48-bit [[d]]/[[s]] and the
+%  [[t]] field shown here came with the 1980 DEC-Intel-Xerox
+%  specification).
+%ref: N. Abramson, "The ALOHA system: another alternative for computer
+%  communications", Proc. AFIPS Fall Joint Computer Conference, 1970
+%  (the radio packet network in Hawaii whose "send, and retransmit
+%  after a random delay if there is a collision" rule Ethernet adopted).
+
+### Network.nw : <<struct [[Arp]]>>
+(line ~7749, chapter "Finding Machines Locally: ARP")
+Algorithm/idea: Address Resolution Protocol
+Verified: a hash table and cache of Arpent entries (ip -> mac). Packets
+          sent before the address is known wait in hold. rxmitproc
+          retransmits unanswered requests.
+CONFIDENCE: high
+Proposed lines:
+%ref: D. C. Plummer, "An Ethernet Address Resolution Protocol", RFC 826,
+%  1982 (the experimental Ethernet's 8-bit addresses could be derived
+%  from the IP address, but 48-bit addresses cannot, so hosts broadcast
+%  "who has this IP?" and cache the reply. [[Arpent]] is a cache entry,
+%  and [[hold]] keeps the packets that are waiting for the reply).
+
+### Network.nw : <<function [[v4lookup]]>>
+(line ~8098, section "[[v4lookup()]]")
+Algorithm/idea: longest-prefix-match route lookup (road-not-taken ref)
+Verified: hashes the top bits (V4H) into one of the v4root trees, then
+          descends a tree of address RANGES: left and right for ranges
+          that do not overlap, mid for more specific ranges nested
+          inside. The last range that matched is the answer.
+CONFIDENCE: high for Morrison. Sklower: high for the paper, medium for
+          the exact venue wording.
+Proposed lines:
+%ref: D. R. Morrison, "PATRICIA -- Practical Algorithm To Retrieve
+%  Information Coded in Alphanumeric", Journal of the ACM 15(4):514-534,
+%  1968; and K. Sklower, "A tree-based packet routing table for Berkeley
+%  Unix", Proc. Winter 1991 USENIX Conference, 1991 (road not taken: BSD
+%  stores routes in a PATRICIA radix trie. [[v4lookup]] instead keeps
+%  address RANGES in a binary tree, with the [[mid]] link pointing to
+%  ranges nested inside).
+
+### Network.nw : <<function [[balancetree]]>>
+(line ~8541, section "Route managment", subsection "Balancing")
+Algorithm/idea: height-balanced BST by rotations (AVL)
+Verified: compares the depths of left and right and does ONE single
+          rotation when they differ by more than 1. There is no double
+          rotation, so the zig-zag case is not rebalanced correctly.
+          The prose calls it "AVL-style".
+CONFIDENCE: high
+Proposed lines:
+%ref: G. M. Adelson-Velsky and E. M. Landis, "An algorithm for the
+%  organization of information", Soviet Mathematics Doklady 3:1259-1263,
+%  1962 (the first self-balancing search tree: keep the two subtree
+%  heights within 1 using
+%  single AND double rotations. [[balancetree]] has only the single
+%  rotations, so the tree may stay somewhat unbalanced).
+
+### Network.nw : <<struct [[Udp4hdr]]>>
+(line ~9772, section "Protocol header" of chapter UDP)
+Algorithm/idea: UDP datagrams, with a pseudo-header in the checksum
+Verified: the struct puts the IP fields before the UDP ports, length and
+          checksum. udpkick fills in a pseudo-header (addresses, proto,
+          length) and computes ptclcsum over it and the data.
+CONFIDENCE: high
+Proposed lines:
+%ref: J. Postel, "User Datagram Protocol", RFC 768, 1980 (the whole
+%  specification is three pages: ports, a length and an optional
+%  checksum over a "pseudo-header" of IP addresses. That is why
+%  [[Udp4hdr]] starts with IP fields that [[udpkick]] fills in before it
+%  calls [[ptclcsum]]).
+
+### Network.nw : <<struct [[Ilcb]]>>
+(line ~10736, section "Protocol data structures", subsection "[[Ilcb]]")
+Algorithm/idea: adaptive retransmission timeout from a smoothed RTT and
+                its mean deviation
+Verified: ilrttcalc (in Network_extra.nw / il.c) does delay += rtt -
+          (delay>>LogAGain) with LogAGain = 3 (gain 1/8) and mdev +=
+          |rtt-pt| - (mdev>>LogDGain) with LogDGain = 2 (gain 1/4), the
+          gains Jacobson uses. Two differences: IL splits the RTT into a
+          fixed delay plus a byte rate (rttlen/rate), and ilbackoff
+          multiplies the timeout by 1.5 per retransmission, not 2.
+CONFIDENCE: high
+Proposed lines:
+%ref: V. Jacobson, "Congestion avoidance and control", Proc. ACM SIGCOMM
+%  '88, pp. 314-329, 1988 (written after the 1986 Internet "congestion
+%  collapse". Its RTT estimator keeps a smoothed mean with gain 1/8 and
+%  a mean deviation with gain 1/4: exactly [[delay]] with
+%  [[LogAGain]]=3 and [[mdev]] with [[LogDGain]]=2. IL also models a
+%  per-byte [[rate]] and backs off by a factor of 1.5 instead of 2).
+
+### Network.nw : <<struct [[Ilhdr]]>>
+(line ~10866, section "Protocol header" of chapter IL)
+Algorithm/idea: IL, Plan 9's reliable datagram protocol for 9P
+Verified: an IP header followed by ilsum, illen, iltype, ilspec,
+          ilsrc/ildst ports, ilid and ilack, as in the paper. The chapter has the author note "% see il.ps".
+CONFIDENCE: high (paper in repo)
+Proposed lines:
+%ref: D. Presotto and P. Winterbottom, "The IL Protocol", Plan 9
+%  Programmer's Manual, 2nd ed., 1995 (in repo: networking/docs/il/il.ms.
+%  9P needs reliable, in-order, DELIMITED messages. TCP does not keep
+%  message boundaries, and UDP is not reliable, so IL gives each message
+%  an [[ilid]] and acknowledges them with [[ilack]]).
+
+### Network.nw : <<global [[ilcksum]]>>
+(line ~11673, section "Features", subsection "Reliable datagram service")
+Algorithm/idea: the end-to-end argument (check integrity at the endpoints
+                even though the link layer checks too)
+Verified: IL checksums its data even though Ethernet already has a CRC
+          and IP checksums its header. The author's note: "the ip checksum
+          is on its header, here its on its data".
+CONFIDENCE: high
+Proposed lines:
+%ref: J. H. Saltzer, D. P. Reed and D. D. Clark, "End-to-end arguments in
+%  system design", ACM Transactions on Computer Systems 2(4):277-288,
+%  1984 (the "careful file transfer" example: only the endpoints can
+%  check that data arrived intact, because a hop-by-hop check misses
+%  errors made inside routers and host memory. That is why IL checksums
+%  its payload ([[ilcksum]]) although Ethernet already has a CRC).
+
+### Network.nw : <<function [[tcpinit]]>>
+(line ~11782, chapter "Standard Reliable Communication: TCP")
+Algorithm/idea: TCP
+Verified: tcpinit only registers the Proto methods. The book does not
+          show tcp.c. The chapter prose already names RFC 793 in a
+          %-comment.
+CONFIDENCE: high
+Proposed lines:
+%ref: V. G. Cerf and R. E. Kahn, "A protocol for packet network
+%  intercommunication", IEEE Transactions on Communications
+%  COM-22(5):637-648, 1974 (the founding paper of the Internet:
+%  gateways between different packet networks, and one "TCP" doing
+%  both routing and reliability. It was split into TCP and IP in 1978,
+%  which is why [[tcp->ipproto]] is set to [[IP_TCPPROTO]]).
+%ref: J. Postel (ed.), "Transmission Control Protocol", RFC 793, 1981
+%  (the state machine and sliding window that [[tcp.c]] implements).
+
+### Network.nw : <<function [[Fsprotoclone]]>>
+(line ~4302, section "User/Kernel Bridge / IP device", subsection
+"[[/net/x/clone]]")
+Algorithm/idea: allocating a connection by opening a "clone" file
+                (the file-system replacement for socket())
+Verified: opening /net/<proto>/clone calls Fsprotoclone, which finds or
+          allocates a free Conv, and the open is redirected to that
+          conversation's ctl file. The author's note: "% see 'network
+          plan9'.ps".
+CONFIDENCE: high
+Proposed lines:
+%ref: D. Presotto and P. Winterbottom, "The Organization of Networks in
+%  Plan 9", Proc. Winter 1993 USENIX Conference, pp. 271-280, 1993 (in
+%  repo: networking/docs/net/net.ms. Every protocol is a directory of
+%  numbered conversations, and opening [[clone]] reserves the next
+%  free one: this chunk. Bib key network-plan9 is cited in the Intro
+%  but missing from Principia.bib).
+
+### Network.nw : <<struct [[Ipmulti]]>>
+(line ~12318, chapter "Advanced Topics", section "Multicast")
+Algorithm/idea: IP multicast host membership
+Verified: an Ipmulti records a (multicast address, interface address)
+          membership for a Conv. addmulti/remmulti tell the medium, which
+          programs the NIC filter (see dp8390 multicast in the NE2000
+          appendix).
+CONFIDENCE: high
+Proposed lines:
+%ref: S. E. Deering, "Host extensions for IP multicasting", RFC 1112,
+%  1989 (from Deering's Stanford thesis work: a host "joins" a
+%  class-D group and the network interface learns which Ethernet
+%  multicast addresses to accept. That is [[Ipmulti]] plus the
+%  [[Medium]] multicast methods).
+
+
+======================================================================
+lib_networking/Network_v6.nw
+======================================================================
+
+### Network_v6.nw : <<struct [[Ip6hdr]]>>
+(line ~153, no section; appendix-style file)
+Algorithm/idea: the IPv6 header
+Verified: vcf (version, class, flow), ploadlen, proto (next header), ttl
+          (hop limit), 16-byte src and dst: the fixed 40 bytes of
+          IPV6HDR_LEN. It has no checksum field and no fragment fields.
+CONFIDENCE: high
+Proposed lines:
+%ref: S. Deering and R. Hinden, "Internet Protocol, Version 6 (IPv6)
+%  Specification", RFC 2460, 1998 (the header has a fixed 40 bytes, no
+%  header checksum, and routers never fragment. These are lessons from
+%  IPv4, such as Kent and Mogul's "Fragmentation considered harmful".
+%  The IPv4 header fields [[id]]/[[frag]]/[[cksum]] have no equivalent
+%  in [[Ip6hdr]]).
+
+### Network_v6.nw : <<enum [[_anon_ (include/net/ip.h)]]>>
+(line ~105)
+Algorithm/idea: IPv6 Neighbor Discovery (replaces ARP) and its protocol
+                constants
+Verified: V6nd_* option types 1-5 and the router/host/node timing
+          constants (Maxv6initraintvl = 16000, V6reachabletime = 30000,
+          V6retranstimer = 1000 ...). The comment itself says "new since
+          rfc2461".
+CONFIDENCE: high
+Proposed lines:
+%ref: T. Narten, E. Nordmark and W. Simpson, "Neighbor Discovery for IP
+%  Version 6 (IPv6)", RFC 2461, 1998 (ARP rebuilt on top of ICMPv6
+%  multicast, together with router advertisements. The option numbers
+%  [[V6nd_srclladdr]]... and the timers [[Maxv6initraintvl]],
+%  [[V6reachabletime]] and [[V6retranstimer]] are the constants from
+%  the RFC's section 10).
+
+
+======================================================================
+networking/Network_apps.nw
+======================================================================
+
+No entries. The book is a stub. Its one code chapter only has snoopy's
+printusage/usage. Nothing there implements a recognizable algorithm, and
+tying the BSD Packet Filter (McCanne & Jacobson, Winter 1993 USENIX) to a
+usage message would be spraying.
+
+
+======================================================================
+Considered but rejected
+======================================================================
+- Libcore dofmt/Fmt: Pike's print(2) has no paper of its own; FORTRAN
+  1957 was kept instead.
+- Libcore sqrt (Newton/Heron): too elementary to be worth a ref.
+- Libcore fltfmt.c / Steele-White as its own entry: fltfmt is not in the
+  book; kept only as a companion line under strtod.
+- Libcore memmove/memset ARM (Duff's device etc.): no classic technique
+  specifically used.
+- Libcore _runebsearch: plain binary search.
+- Libcore libbio: no founding paper I am confident about (Lesk's
+  "portable I/O package" details are uncertain).
+- Libcore tm2sec/localtime: calendar arithmetic, no classic paper.
+- Libcore rendezvous(2) syscall: the Plan 9 papers mention it but have no
+  specific section; Ada rendezvous is a false cousin.
+- Libcore gprof (Graham-Kessler-McKusick 1982) at Plink: belongs to
+  Profiler.nw (already discusses gprof).
+- Libcore Wilson et al. 1995 allocator survey: a survey, not a founding
+  paper. The author already links it in a %last: comment.
+- Libcore Hart as a separate entry per file (exp, log, atan...): folded
+  into the single sinus entry.
+- Libcore Green-Smith-Klem 1959 additive generator: not confident about
+  the attribution details; Knuth 3.2.2 cited instead.
+- Network iphash (XOR mod the prime 521): trivial division hashing;
+  McKenney-Dove 1992 demultiplexing paper not confident enough on details.
+- Network v4prefix / IPv4-mapped addresses (RFC 2373): low teaching
+  value.
+- Network Karn-Partridge 1987 (RTT ambiguity): IL does not implement
+  Karn's rule visibly (rttack is not cleared on retransmission), so the
+  citation would mislead.
+- Network Nagle RFC 896, slow start, fast retransmit: live in tcp.c,
+  which the book does not show.
+- Network DNS (Mockapetris RFC 882/883, 1983; RFC 1034/1035, 1987): the
+  DNS chapter has no code chunk. Suggest a \cite in "Name resolution
+  principles" instead of a %ref (the prose already names 1034/1035).
+- Network 9P / exportfs chapters: no code chunks.
+- Network NE2000/dp8390 (ring buffer, multicast hash filter): hardware
+  details, no classic paper.
+- Network Ritchie's STREAMS (1984) for Block: Block is defined in the
+  Kernel book, not here.
+- Network Deering-Cheriton 1990 TOCS multicast routing: about routing,
+  not the host side this chunk implements.
+
+Missing bib keys noticed:
+- network-plan9 is \cite'd in Network.nw (line ~524) but has NO entry in
+  docs/latex/Principia.bib, so it would appear as "?" in the PDF.
+- Candidate new keys if these refs are promoted to \cite: utf-plan9
+  (Pike-Thompson 1993), lexnames (Pike 2000), il-plan9 (Presotto-
+  Winterbottom 1995), thompson-regex (1968), hoare-quicksort,
+  hoare-csp78 (the existing csp key is the 1985 book), newsqueak
+  (Pike 1990), jacobson88, cerf-kahn74, metcalfe-boggs76, end-to-end84,
+  baran64.
+- The hart key exists but Libcore.nw names Hart without \cite{hart}.
