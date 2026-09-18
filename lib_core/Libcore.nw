@@ -1835,9 +1835,12 @@ This implementation uses a {\em median-of-three} pivot,
 sampling at positions 1/6, 1/2, and 5/6 of the array and
 choosing the median---a good approximation of the true
 median that avoids worst-case behavior on common inputs.
-After partitioning, it recurses on the smaller partition
-and loops on the larger, which limits stack depth to
-$O(\log n)$ even in the worst case.
+After partitioning, it recurses on one partition and loops
+on the other. Note that it recurses on the {\em larger}
+partition ([[if(j >= n)]]), the opposite of the classic
+advice (recurse on the smaller one to bound the stack to
+$O(\log n)$), so in the worst case the stack depth is
+$O(n)$.
 %
 Note also the two swap functions: [<swapi()>] swaps in
 [[long]]-sized chunks (fast, for aligned data) and [<swapb()>]
@@ -4024,7 +4027,7 @@ Pool *imagmem = &sbrkmem;
 Every allocated block is preceded by a [[Bhdr]] (block header)
 containing a magic number and the block's total size. Free blocks
 extend this with left/right/next/prev pointers to form a
-balanced binary tree of free blocks. The magic numbers
+binary tree of free blocks. The magic numbers
 ([[ALLOC_MAGIC]], [[FREE_MAGIC]], [[NOT_MAGIC]], etc.) detect
 heap corruption---writing past the end of an allocation will
 overwrite the next block's magic, which the allocator checks
@@ -4046,7 +4049,7 @@ high addr
   |          magic1, size=40 }  |
   +-----------------------------+
   |  prev, next  (free list)    |  chains equal-size blocks
-  |  left, right (free tree)    |  balanced tree keyed on size
+  |  left, right (free tree)    |  binary tree keyed on size
   +-----------------------------+  <- fb (Free*)
   |  Bhdr { FREE_MAGIC, 40 }    |
   +=============================+  <- B2NB(alloc block) = T2HDR +sizeof(Btail)
@@ -4151,12 +4154,14 @@ struct Btail {
 
 %claude:
 The two pointer pairs are not redundant: [[left]]/[[right]]
-form a balanced binary search tree keyed on block \emph{size},
+form a binary search tree keyed on block \emph{size},
 while [[next]]/[[prev]] form a doubly-linked list of blocks
 that share the same size. Only one block per size sits in the
 tree---the ``representative''---and the others hang off it via
 [[next]]/[[prev]]. A request for [[n]] bytes walks the tree
-once in $O(\log k)$ (where $k$ is the number of distinct sizes),
+once (in $O(\log k)$ on average, where $k$ is the number of
+distinct sizes; the tree is never rebalanced, so the worst
+case is $O(k)$),
 then pops the first element from the sibling list in $O(1)$.
 Here is a snapshot of [[freeroot]] with free blocks of sizes
 $64$, $128$, and $256$ (two of them):

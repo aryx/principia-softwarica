@@ -931,10 +931,10 @@ the design of [[draw]]: [[lib_graphics/docs/blit-1983.pdf]]
 [[lib_graphics/docs/pike-bitmap-1983.pdf]] (``Graphics in
 Overlapping Bitmap Layers'', the paper referenced by
 [[\cite{pike-layers}]] above),
-[[lib_graphics/docs/pike-bitbltd-1984.pdf]] (``Bitblt
-Considered Harmful'', the paper that led to the
-\verb+draw+ operator replacing a family of [[bitblt]]
-variants), and [[lib_graphics/docs/draw-slides-cox.pdf]]
+[[lib_graphics/docs/pike-bitbltd-1984.pdf]] (``Bitmap
+Graphics'', the SIGGRAPH'84 course notes by Pike, Guibas,
+and Ingalls on [[bitblt]] and the algorithms built on it),
+and [[lib_graphics/docs/draw-slides-cox.pdf]]
 (Russ Cox's slide deck on the modern \plan [[draw]]
 implementation).
 %
@@ -1349,8 +1349,11 @@ polygon row by row, computing the intersections of each
 horizontal scan line with the polygon edges. Modern
 {\sc gpu}s have dedicated hardware rasterizers that
 process billions of triangles per second, but the
-conceptual lineage starts with Bresenham's integer trick
-on an {\sc ibm}~7090 plotter.
+conceptual lineage starts with Bresenham's integer trick,
+invented to drive a pen plotter. Note that \plan's
+[[memdraw]] does not use Bresenham: it draws even thin lines
+by filling a polygon, as we will see in
+Chapter~\ref{chap:drawing-shapes}.
 
 \subsection{[[bitblt()]] and compositing}
 \label{sec:bitblt}
@@ -10676,9 +10679,11 @@ extern void fillarc(Image*, Point, int, int, Image*, Point, int, int);
 \section{Lines}
 
 %claude:
-A line is drawn by building a rectangular ``brush'' of the
-specified radius around the endpoint, then sweeping it along
-the line using the [[_memimageline]] algorithm. The [[end0]]
+A slanted line is not drawn with Bresenham's algorithm:
+[[_memimageline]] computes the corners of the thick segment
+(a rectangle of width $2 \times radius+1$ rotated along the
+line) and fills it with the polygon filler, even for a
+1-pixel-wide line. The [[end0]]
 and [[end1]] parameters control line caps: square (default),
 disc (rounded), or arrow. If the line is perfectly horizontal
 or vertical, a fast path just calls [[draw]] directly.
@@ -15831,7 +15836,8 @@ chunks (limited by the command buffer size), while
 [<readimage()>] reads \plan's native image file format (which
 includes a text header with dimensions and channel format,
 followed by optionally compressed pixel data). The
-compression uses a simple run-length scheme.
+compression is an LZ77-style scheme: literal bytes mixed with
+back-references into the last 1024 bytes of pixel data.
 
 <<signatures image IO functions>>=
 extern int      loadimage(Image*, Rectangle, byte*, int);
@@ -16352,13 +16358,16 @@ if(ndata < l*Dy(r))
 
 
 \section{Image format}
+\label{sec:image-format}
 
 %claude:
 The \plan image file format is a text header (channel
 format string, rectangle) followed by pixel data, optionally
-compressed. The compression is a simple scheme: a byte $<128$
-means ``copy the next $n+1$ literal bytes''; a byte $\ge 128$
-means ``repeat the next byte $n-127$ times''. [[readimage]]
+compressed. The compression is an LZ77-style scheme: a byte
+$c \ge 128$ means ``copy the next $c-127$ literal bytes''; a
+byte $c < 128$ is a back-reference, meaning ``copy
+[[(c>>2)+3]] bytes from an offset (the low 2 bits of $c$ and
+the next byte) back in the last 1024 bytes''. [[readimage]]
 reads a file in this format, creating an [[Image]] and loading
 its pixels via [[cloadimage]] (compressed load).
 
@@ -16647,8 +16656,9 @@ Err1:
 [[writeimage]] writes an [[Image]] to a file in \plan's
 native image format: a text header (channel, rectangle)
 followed by compressed pixel data. It first unloads the
-pixels from the server with [[unloadimage]], then applies
-run-length compression via [[writeimagefile]]. The
+pixels from the server with [[unloadimage]], then compresses
+them itself with an LZ77-style scheme (see
+Section~\ref{sec:image-format}). The
 \verb+topng </dev/screen >screen.png+ idiom does a
 screen grab by reading the screen image and converting the
 format.
@@ -28426,10 +28436,11 @@ static  int     waste;
 
 %claude:
 The image compression uses a simple LZ-like scheme operating
-on scan lines. Each output byte is either a literal run
-(byte $< 128$: copy the next $n+1$ bytes verbatim) or a
-back-reference (byte $\ge 128$: repeat $n-125$ bytes from
-a position found by hashing). [[cloadimage]] sends compressed
+on scan lines. Each code byte starts either a literal run
+(byte $c \ge 128$: copy the next $c-127$ bytes verbatim) or a
+back-reference (byte $c < 128$: copy [[(c>>2)+3]] bytes from
+an earlier position in the 1024-byte window, which the
+compressor finds by hashing). [[cloadimage]] sends compressed
 data to the kernel via \verb+'Y'+ commands; [[writememimage]]
 compresses scan lines for writing to disk. The match length
 ranges from [[NMATCH]] (3) to [[NRUN]] (34) bytes.
